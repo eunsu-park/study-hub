@@ -12,6 +12,7 @@ This repository is a personal study project. Some content was written by me, som
 
 | 폴더 | 내용 | 레슨 수 |
 |------|------|---------|
+| [Algorithm/](./Algorithm/00_Overview.md) | 알고리즘/자료구조, 코딩테스트 준비 | 16개 |
 | [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅 | 19개 |
 | [CPP/](./CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 | 18개 |
 | [Docker/](./Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 10개 |
@@ -32,9 +33,11 @@ This repository is a personal study project. Some content was written by me, som
 
 1. **프로그래밍 입문**: C_Programming (01~05)
 2. **C++ 학습**: CPP (01~09) - C 기초 후 진행 권장
-3. **웹 개발**: WebDev (01~09) - HTML/CSS/JS 입문
-4. **버전 관리**: Git (01~05)
-5. **리눅스 기초**: Linux (01~03)
-6. **개발 환경**: Docker (01~04)
-7. **데이터베이스**: PostgreSQL (01~07)
-8. **서버 관리**: Linux (06~12)
+3. **알고리즘 기초**: Algorithm (01~05) - 복잡도, 배열/문자열, 정렬/탐색
+4. **웹 개발**: WebDev (01~09) - HTML/CSS/JS 입문
+5. **버전 관리**: Git (01~05)
+6. **리눅스 기초**: Linux (01~03)
+7. **개발 환경**: Docker (01~04)
+8. **데이터베이스**: PostgreSQL (01~07)
+9. **서버 관리**: Linux (06~12)
+10. **알고리즘 심화**: Algorithm (06~15) - 그래프, DP, 실전 문제풀이
