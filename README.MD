@@ -14,10 +14,12 @@ This repository is a personal study project. Some content was written by me, som
 |------|------|---------|
 | [Algorithm/](./Algorithm/00_Overview.md) | 알고리즘/자료구조, 코딩테스트 준비 | 30개 |
 | [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅 | 19개 |
+| [Computer_Architecture/](./Computer_Architecture/00_Overview.md) | 컴퓨터 구조, CPU, 메모리, 병렬처리 | 18개 |
 | [CPP/](./CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 | 18개 |
 | [Docker/](./Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 10개 |
 | [Git/](./Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 10개 |
 | [Linux/](./Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 26개 |
+| [Network/](./Network/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 | 17개 |
 | [PostgreSQL/](./PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 | 18개 |
 | [Python/](./Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 | 14개 |
 | [Spanish/](./Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 | 9개 |
