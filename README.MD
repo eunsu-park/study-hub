@@ -13,20 +13,24 @@ This repository is a personal study project. Some content was written by me, som
 | 폴더 | 내용 | 레슨 수 |
 |------|------|---------|
 | [Algorithm/](./Algorithm/00_Overview.md) | 알고리즘/자료구조, 코딩테스트 준비 | 30개 |
-| [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅 | 19개 |
-| [Computer_Architecture/](./Computer_Architecture/00_Overview.md) | 컴퓨터 구조, CPU, 메모리, 병렬처리 | 18개 |
-| [CPP/](./CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 | 18개 |
-| [Docker/](./Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 10개 |
-| [Git/](./Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 10개 |
-| [Linux/](./Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 26개 |
-| [Network/](./Network/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 | 17개 |
-| [OpenCV_ComputerVision/](./OpenCV_ComputerVision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 얼굴인식 | 20개 |
-| [OS_Theory/](./OS_Theory/00_Overview.md) | 운영체제, 프로세스, 메모리, 파일시스템 | 18개 |
-| [PostgreSQL/](./PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 | 18개 |
-| [Python/](./Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 | 14개 |
-| [Spanish/](./Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 | 9개 |
-| [System_Design/](./System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 | 18개 |
-| [WebDev/](./WebDev/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 13개 |
+| [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅 | 20개 |
+| [Computer_Architecture/](./Computer_Architecture/00_Overview.md) | 컴퓨터 구조, CPU, 메모리, 병렬처리 | 19개 |
+| [CPP/](./CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 | 19개 |
+| [Data_Analysis/](./Data_Analysis/00_Overview.md) | NumPy, Pandas, 시각화, 통계분석 | 12개 |
+| [Docker/](./Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 11개 |
+| [Git/](./Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 11개 |
+| [Linux/](./Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 27개 |
+| [Machine_Learning/](./Machine_Learning/00_Overview.md) | 회귀, 분류, 앙상블, 클러스터링, sklearn | 15개 |
+| [Network/](./Network/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 | 18개 |
+| [Numerical_Simulation/](./Numerical_Simulation/00_Overview.md) | 수치해석, ODE/PDE, CFD, FDTD, MHD, 몬테카를로 | 21개 |
+| [OpenCV_ComputerVision/](./OpenCV_ComputerVision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 얼굴인식 | 21개 |
+| [OS_Theory/](./OS_Theory/00_Overview.md) | 운영체제, 프로세스, 메모리, 파일시스템 | 19개 |
+| [PostgreSQL/](./PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 | 19개 |
+| [Python/](./Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 | 15개 |
+| [Spanish/](./Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 | 10개 |
+| [Statistics_Advanced/](./Statistics_Advanced/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 | 15개 |
+| [System_Design/](./System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 | 19개 |
+| [WebDev/](./WebDev/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 14개 |
 
 ---
 
