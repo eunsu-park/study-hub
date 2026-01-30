@@ -95,6 +95,42 @@ print(f"Pandas: {pd.__version__}")
 
 ---
 
+## 실습 예제
+
+`examples/` 폴더에 데이터 분석 핵심 기법을 Python으로 구현한 예제 파일이 있습니다.
+
+### 예제 파일 목록
+
+| 파일명 | 주제 | 핵심 내용 |
+|--------|------|----------|
+| [01_numpy_basics.py](./examples/01_numpy_basics.py) | NumPy 기초 | 배열 생성, 인덱싱, 연산, 선형대수 |
+| [02_pandas_basics.py](./examples/02_pandas_basics.py) | Pandas 기초 | DataFrame, 필터링, groupby, merge, 피벗 |
+| [03_visualization.py](./examples/03_visualization.py) | 데이터 시각화 | 선, 막대, 산점도, 히스토그램, 히트맵 |
+| [04_statistics.py](./examples/04_statistics.py) | 통계 분석 | 기술통계, 상관관계, 가설검정, ANOVA |
+| [05_data_cleaning.py](./examples/05_data_cleaning.py) | 데이터 전처리 | 결측치, 이상치, 정규화, 인코딩 |
+
+### 예제 실행 방법
+
+```bash
+# 필수 라이브러리 설치
+pip install numpy pandas matplotlib seaborn scipy scikit-learn
+
+# 특정 예제 실행
+python examples/01_numpy_basics.py
+
+# 시각화 예제 (GUI 필요)
+python examples/03_visualization.py
+```
+
+### 예제 특징
+
+- 각 예제는 독립적으로 실행 가능
+- 샘플 데이터 포함 (외부 데이터 불필요)
+- 단계별 주석으로 학습 가능
+- 실행 결과를 콘솔/그래프로 출력
+
+---
+
 ## 참고 자료
 
 ### 공식 문서

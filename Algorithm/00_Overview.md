@@ -201,6 +201,85 @@ python3 --version
 
 ---
 
+## 실습 예제
+
+`examples/` 폴더에 모든 레슨에 대한 **Python과 C 두 버전**의 예제가 있습니다.
+
+### 폴더 구조
+
+```
+examples/
+├── python/           # Python 예제 (29개)
+│   ├── 01_complexity.py
+│   ├── 02_array_string.py
+│   ├── ...
+│   └── 29_practice.py
+│
+└── c/                # C 예제 (29개 + Makefile)
+    ├── 01_complexity.c
+    ├── 02_array_string.c
+    ├── ...
+    ├── 29_practice.c
+    └── Makefile
+```
+
+### 예제 파일 목록
+
+| 번호 | 주제 | Python | C |
+|------|------|--------|---|
+| 01 | 복잡도 분석 | [01_complexity.py](./examples/python/01_complexity.py) | [01_complexity.c](./examples/c/01_complexity.c) |
+| 02 | 배열/문자열 | [02_array_string.py](./examples/python/02_array_string.py) | [02_array_string.c](./examples/c/02_array_string.c) |
+| 03 | 스택/큐 | [03_stack_queue.py](./examples/python/03_stack_queue.py) | [03_stack_queue.c](./examples/c/03_stack_queue.c) |
+| 04 | 해시테이블 | [04_hash_table.py](./examples/python/04_hash_table.py) | [04_hash_table.c](./examples/c/04_hash_table.c) |
+| 05 | 정렬 | [05_sorting.py](./examples/python/05_sorting.py) | [05_sorting.c](./examples/c/05_sorting.c) |
+| 06 | 탐색 | [06_searching.py](./examples/python/06_searching.py) | [06_searching.c](./examples/c/06_searching.c) |
+| 07 | 분할정복 | [07_divide_conquer.py](./examples/python/07_divide_conquer.py) | [07_divide_conquer.c](./examples/c/07_divide_conquer.c) |
+| 08 | 백트래킹 | [08_backtracking.py](./examples/python/08_backtracking.py) | [08_backtracking.c](./examples/c/08_backtracking.c) |
+| 09 | 트리/BST | [09_tree_bst.py](./examples/python/09_tree_bst.py) | [09_tree_bst.c](./examples/c/09_tree_bst.c) |
+| 10 | 힙 | [10_heap.py](./examples/python/10_heap.py) | [10_heap.c](./examples/c/10_heap.c) |
+| 11 | 트라이 | [11_trie.py](./examples/python/11_trie.py) | [11_trie.c](./examples/c/11_trie.c) |
+| 12 | 그래프 기초 | [12_graph_basic.py](./examples/python/12_graph_basic.py) | [12_graph_basic.c](./examples/c/12_graph_basic.c) |
+| 13 | 위상정렬 | [13_topological_sort.py](./examples/python/13_topological_sort.py) | [13_topological_sort.c](./examples/c/13_topological_sort.c) |
+| 14 | 최단경로 | [14_shortest_path.py](./examples/python/14_shortest_path.py) | [14_shortest_path.c](./examples/c/14_shortest_path.c) |
+| 15 | MST | [15_mst.py](./examples/python/15_mst.py) | [15_mst.c](./examples/c/15_mst.c) |
+| 16 | LCA | [16_lca.py](./examples/python/16_lca.py) | [16_lca.c](./examples/c/16_lca.c) |
+| 17 | SCC | [17_scc.py](./examples/python/17_scc.py) | [17_scc.c](./examples/c/17_scc.c) |
+| 18 | 동적 프로그래밍 | [18_dp.py](./examples/python/18_dp.py) | [18_dp.c](./examples/c/18_dp.c) |
+| 19 | 탐욕 | [19_greedy.py](./examples/python/19_greedy.py) | [19_greedy.c](./examples/c/19_greedy.c) |
+| 20 | 비트마스크 DP | [20_bitmask_dp.py](./examples/python/20_bitmask_dp.py) | [20_bitmask_dp.c](./examples/c/20_bitmask_dp.c) |
+| 21 | 정수론 | [21_number_theory.py](./examples/python/21_number_theory.py) | [21_number_theory.c](./examples/c/21_number_theory.c) |
+| 22 | 문자열 | [22_string_algorithm.py](./examples/python/22_string_algorithm.py) | [22_string_algorithm.c](./examples/c/22_string_algorithm.c) |
+| 23 | 세그먼트 트리 | [23_segment_tree.py](./examples/python/23_segment_tree.py) | [23_segment_tree.c](./examples/c/23_segment_tree.c) |
+| 24 | 펜윅 트리 | [24_fenwick_tree.py](./examples/python/24_fenwick_tree.py) | [24_fenwick_tree.c](./examples/c/24_fenwick_tree.c) |
+| 25 | 네트워크 플로우 | [25_network_flow.py](./examples/python/25_network_flow.py) | [25_network_flow.c](./examples/c/25_network_flow.c) |
+| 26 | 기하 | [26_geometry.py](./examples/python/26_geometry.py) | [26_geometry.c](./examples/c/26_geometry.c) |
+| 27 | 게임 이론 | [27_game_theory.py](./examples/python/27_game_theory.py) | [27_game_theory.c](./examples/c/27_game_theory.c) |
+| 28 | 고급 DP | [28_advanced_dp.py](./examples/python/28_advanced_dp.py) | [28_advanced_dp.c](./examples/c/28_advanced_dp.c) |
+| 29 | 실전 | [29_practice.py](./examples/python/29_practice.py) | [29_practice.c](./examples/c/29_practice.c) |
+
+### 예제 실행 방법
+
+```bash
+# Python 예제 실행
+python examples/python/01_complexity.py
+python examples/python/23_segment_tree.py
+
+# Python 전체 실행
+for f in examples/python/*.py; do python "$f"; done
+
+# C 예제 컴파일 및 실행
+cd examples/c
+make                    # 전체 컴파일
+./01_complexity         # 개별 실행
+make run-23             # Makefile로 실행
+make test               # 전체 테스트
+
+# 개별 C 파일 컴파일
+gcc -Wall -std=c11 -O2 01_complexity.c -o 01_complexity -lm
+```
+
+---
+
 ## 관련 자료
 
 ### 다른 폴더와의 연계

@@ -161,6 +161,45 @@ plt.show()
 
 ---
 
+## 실습 예제
+
+`examples/` 폴더에 핵심 수치 해법을 Python으로 구현한 예제 파일이 있습니다.
+
+### 예제 파일 목록
+
+| 파일명 | 주제 | 핵심 내용 |
+|--------|------|----------|
+| [01_root_finding.py](./examples/01_root_finding.py) | 근 찾기 | 이분법, 뉴턴-랩슨, 할선법, 고정점 반복 |
+| [02_numerical_integration.py](./examples/02_numerical_integration.py) | 수치 적분 | 사다리꼴, 심프슨, 롬베르그, 가우스 구적 |
+| [03_ode_euler.py](./examples/03_ode_euler.py) | 오일러 방법 | 전진/후진 오일러, 수정 오일러, 연립 ODE |
+| [04_runge_kutta.py](./examples/04_runge_kutta.py) | 룽게-쿠타 | RK2, RK4, 적응형 RK45, 로렌츠 시스템 |
+| [05_monte_carlo.py](./examples/05_monte_carlo.py) | 몬테카를로 | π 추정, MC 적분, 중요도 샘플링, 옵션 가격 |
+| [06_finite_difference.py](./examples/06_finite_difference.py) | 유한 차분 | 열방정식, 파동방정식, 2D 라플라스 |
+
+### 예제 실행 방법
+
+```bash
+# 필수 라이브러리 설치
+pip install numpy scipy matplotlib
+
+# 특정 예제 실행
+python examples/01_root_finding.py
+
+# 시각화 포함 예제 (GUI 필요)
+python examples/05_monte_carlo.py
+python examples/06_finite_difference.py
+```
+
+### 예제 구조
+
+각 예제 파일은 다음 구조를 따릅니다:
+1. 이론 설명 주석
+2. 알고리즘 구현 함수
+3. 테스트 및 비교 실험
+4. 결과 출력/시각화
+
+---
+
 ## 참고 자료
 
 ### 교재

@@ -13,7 +13,7 @@ This repository is a personal study project. Some content was written by me, som
 | 폴더 | 내용 | 레슨 수 |
 |------|------|---------|
 | [Algorithm/](./Algorithm/00_Overview.md) | 알고리즘/자료구조, 코딩테스트 준비 | 30개 |
-| [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅 | 20개 |
+| [C_Programming/](./C_Programming/00_Overview.md) | C 언어 기초 ~ 임베디드, 디버깅, 포인터 심화 | 21개 |
 | [Computer_Architecture/](./Computer_Architecture/00_Overview.md) | 컴퓨터 구조, CPU, 메모리, 병렬처리 | 19개 |
 | [CPP/](./CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 | 19개 |
 | [Data_Analysis/](./Data_Analysis/00_Overview.md) | NumPy, Pandas, 시각화, 통계분석 | 12개 |

@@ -125,6 +125,42 @@ sudo -u postgres psql
 
 ---
 
+## 실습 예제
+
+`examples/` 폴더에 핵심 SQL 문법을 실습할 수 있는 예제 파일이 있습니다.
+
+### 예제 파일 목록
+
+| 파일명 | 주제 | 핵심 내용 |
+|--------|------|----------|
+| [01_basic_crud.sql](./examples/01_basic_crud.sql) | CRUD 기본 | CREATE, INSERT, SELECT, UPDATE, DELETE |
+| [02_joins.sql](./examples/02_joins.sql) | JOIN | INNER, LEFT, RIGHT, FULL, CROSS, SELF JOIN |
+| [03_aggregation.sql](./examples/03_aggregation.sql) | 집계 함수 | COUNT, SUM, AVG, GROUP BY, HAVING, ROLLUP |
+| [04_subqueries.sql](./examples/04_subqueries.sql) | 서브쿼리/CTE | 스칼라, 인라인 뷰, EXISTS, WITH, 재귀 CTE |
+| [05_window_functions.sql](./examples/05_window_functions.sql) | 윈도우 함수 | ROW_NUMBER, RANK, LAG, LEAD, 프레임 절 |
+
+### 예제 실행 방법
+
+```bash
+# Docker PostgreSQL 접속
+docker exec -it postgres-study psql -U postgres
+
+# 예제 파일 실행
+\i examples/01_basic_crud.sql
+
+# 또는 터미널에서 직접 실행
+psql -U postgres -d study_db -f examples/01_basic_crud.sql
+```
+
+### 예제 사용 팁
+
+1. **순서대로 실행**: 01부터 시작 (테이블 생성 포함)
+2. **개별 실행**: 각 파일의 특정 섹션만 복사해서 실행 가능
+3. **결과 확인**: 각 쿼리 실행 후 SELECT로 결과 확인
+4. **초기화**: 테이블 삭제 후 다시 시작 가능
+
+---
+
 ## 관련 자료
 
 - [Docker 학습](../Docker/00_Overview.md) - PostgreSQL 컨테이너로 실행
