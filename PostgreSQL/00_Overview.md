@@ -43,24 +43,24 @@ CRUD 기본 ────────▶ 뷰와 인덱스 ────▶ 백업/
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_PostgreSQL_기초.md](./01_PostgreSQL_기초.md) | ⭐ | 개념, 설치, psql 기본 |
-| [02_데이터베이스_관리.md](./02_데이터베이스_관리.md) | ⭐ | DB 생성/삭제, 사용자, 권한 |
-| [03_테이블과_데이터타입.md](./03_테이블과_데이터타입.md) | ⭐⭐ | CREATE TABLE, 자료형, 제약조건 |
-| [04_CRUD_기본.md](./04_CRUD_기본.md) | ⭐ | SELECT, INSERT, UPDATE, DELETE |
-| [05_조건과_정렬.md](./05_조건과_정렬.md) | ⭐⭐ | WHERE, ORDER BY, LIMIT |
+| [01_PostgreSQL_Basics.md](./01_PostgreSQL_Basics.md) | ⭐ | 개념, 설치, psql 기본 |
+| [02_Database_Management.md](./02_Database_Management.md) | ⭐ | DB 생성/삭제, 사용자, 권한 |
+| [03_Tables_and_Data_Types.md](./03_Tables_and_Data_Types.md) | ⭐⭐ | CREATE TABLE, 자료형, 제약조건 |
+| [04_CRUD_Basics.md](./04_CRUD_Basics.md) | ⭐ | SELECT, INSERT, UPDATE, DELETE |
+| [05_Conditions_and_Sorting.md](./05_Conditions_and_Sorting.md) | ⭐⭐ | WHERE, ORDER BY, LIMIT |
 | [06_JOIN.md](./06_JOIN.md) | ⭐⭐ | INNER, LEFT, RIGHT, FULL JOIN |
-| [07_집계와_그룹.md](./07_집계와_그룹.md) | ⭐⭐ | COUNT, SUM, GROUP BY, HAVING |
-| [08_서브쿼리와_CTE.md](./08_서브쿼리와_CTE.md) | ⭐⭐⭐ | 서브쿼리, WITH 절 |
-| [09_뷰와_인덱스.md](./09_뷰와_인덱스.md) | ⭐⭐⭐ | VIEW, INDEX, EXPLAIN |
-| [10_함수와_프로시저.md](./10_함수와_프로시저.md) | ⭐⭐⭐ | PL/pgSQL, 사용자 정의 함수 |
-| [11_트랜잭션.md](./11_트랜잭션.md) | ⭐⭐⭐ | ACID, BEGIN, COMMIT, 격리 수준 |
-| [12_트리거.md](./12_트리거.md) | ⭐⭐⭐ | 트리거 생성 및 활용 |
-| [13_백업과_운영.md](./13_백업과_운영.md) | ⭐⭐⭐⭐ | pg_dump, 모니터링, 운영 |
-| [14_JSON_JSONB_기능.md](./14_JSON_JSONB_기능.md) | ⭐⭐⭐ | JSON 연산자, 인덱싱, 스키마 검증 |
-| [15_쿼리_최적화_심화.md](./15_쿼리_최적화_심화.md) | ⭐⭐⭐⭐ | EXPLAIN ANALYZE, 인덱스 전략 |
-| [16_복제와_고가용성.md](./16_복제와_고가용성.md) | ⭐⭐⭐⭐⭐ | 스트리밍 복제, 논리 복제, 페일오버 |
-| [17_윈도우_함수_분석.md](./17_윈도우_함수_분석.md) | ⭐⭐⭐ | OVER, ROW_NUMBER, RANK, LEAD/LAG |
-| [18_테이블_파티셔닝.md](./18_테이블_파티셔닝.md) | ⭐⭐⭐⭐ | Range/List/Hash 파티셔닝 |
+| [07_Aggregation_and_Grouping.md](./07_Aggregation_and_Grouping.md) | ⭐⭐ | COUNT, SUM, GROUP BY, HAVING |
+| [08_Subqueries_and_CTE.md](./08_Subqueries_and_CTE.md) | ⭐⭐⭐ | 서브쿼리, WITH 절 |
+| [09_Views_and_Indexes.md](./09_Views_and_Indexes.md) | ⭐⭐⭐ | VIEW, INDEX, EXPLAIN |
+| [10_Functions_and_Procedures.md](./10_Functions_and_Procedures.md) | ⭐⭐⭐ | PL/pgSQL, 사용자 정의 함수 |
+| [11_Transactions.md](./11_Transactions.md) | ⭐⭐⭐ | ACID, BEGIN, COMMIT, 격리 수준 |
+| [12_Triggers.md](./12_Triggers.md) | ⭐⭐⭐ | 트리거 생성 및 활용 |
+| [13_Backup_and_Operations.md](./13_Backup_and_Operations.md) | ⭐⭐⭐⭐ | pg_dump, 모니터링, 운영 |
+| [14_JSON_JSONB.md](./14_JSON_JSONB.md) | ⭐⭐⭐ | JSON 연산자, 인덱싱, 스키마 검증 |
+| [15_Query_Optimization.md](./15_Query_Optimization.md) | ⭐⭐⭐⭐ | EXPLAIN ANALYZE, 인덱스 전략 |
+| [16_Replication_HA.md](./16_Replication_HA.md) | ⭐⭐⭐⭐⭐ | 스트리밍 복제, 논리 복제, 페일오버 |
+| [17_Window_Functions.md](./17_Window_Functions.md) | ⭐⭐⭐ | OVER, ROW_NUMBER, RANK, LEAD/LAG |
+| [18_Table_Partitioning.md](./18_Table_Partitioning.md) | ⭐⭐⭐⭐ | Range/List/Hash 파티셔닝 |
 
 ---
 

@@ -45,32 +45,32 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_리눅스_기초.md](./01_리눅스_기초.md) | ⭐ | 리눅스 개념, 배포판, 터미널, 기본 명령어 |
-| [02_파일시스템_탐색.md](./02_파일시스템_탐색.md) | ⭐ | 디렉토리 구조, 경로, ls, cd, find |
-| [03_파일과_디렉토리_관리.md](./03_파일과_디렉토리_관리.md) | ⭐ | touch, mkdir, cp, mv, rm, tar |
-| [04_텍스트_처리.md](./04_텍스트_처리.md) | ⭐⭐ | grep, sed, awk, 파이프, 리다이렉션 |
-| [05_권한과_소유권.md](./05_권한과_소유권.md) | ⭐⭐ | chmod, chown, 특수 권한, umask |
-| [06_사용자와_그룹_관리.md](./06_사용자와_그룹_관리.md) | ⭐⭐ | useradd, sudo, 사용자/그룹 관리 |
-| [07_프로세스_관리.md](./07_프로세스_관리.md) | ⭐⭐ | ps, top, kill, systemctl |
-| [08_패키지_관리.md](./08_패키지_관리.md) | ⭐⭐ | apt, yum/dnf, 저장소 관리 |
-| [09_쉘_스크립팅.md](./09_쉘_스크립팅.md) | ⭐⭐⭐ | 변수, 조건문, 반복문, 실무 스크립트 |
-| [10_네트워크_기초.md](./10_네트워크_기초.md) | ⭐⭐⭐ | ip, ssh, 포트 확인, 원격 접속 |
-| [11_시스템_모니터링.md](./11_시스템_모니터링.md) | ⭐⭐⭐ | df, free, 로그, cron |
-| [12_보안과_방화벽.md](./12_보안과_방화벽.md) | ⭐⭐⭐⭐ | SSH 보안, ufw, firewalld, fail2ban |
-| [13_systemd_심화.md](./13_systemd_심화.md) | ⭐⭐⭐⭐ | 서비스 유닛, 타이머, 소켓, journald |
-| [14_성능_튜닝.md](./14_성능_튜닝.md) | ⭐⭐⭐⭐ | sysctl, 커널 파라미터, perf, flamegraph |
-| [15_컨테이너_내부_구조.md](./15_컨테이너_내부_구조.md) | ⭐⭐⭐⭐ | cgroups, namespaces, 컨테이너 런타임 |
-| [16_저장소_관리.md](./16_저장소_관리.md) | ⭐⭐⭐⭐ | LVM, RAID, 파일시스템, LUKS 암호화 |
+| [01_Linux_Basics.md](./01_Linux_Basics.md) | ⭐ | 리눅스 개념, 배포판, 터미널, 기본 명령어 |
+| [02_Filesystem_Navigation.md](./02_Filesystem_Navigation.md) | ⭐ | 디렉토리 구조, 경로, ls, cd, find |
+| [03_File_Directory_Management.md](./03_File_Directory_Management.md) | ⭐ | touch, mkdir, cp, mv, rm, tar |
+| [04_Text_Processing.md](./04_Text_Processing.md) | ⭐⭐ | grep, sed, awk, 파이프, 리다이렉션 |
+| [05_Permissions_Ownership.md](./05_Permissions_Ownership.md) | ⭐⭐ | chmod, chown, 특수 권한, umask |
+| [06_User_Group_Management.md](./06_User_Group_Management.md) | ⭐⭐ | useradd, sudo, 사용자/그룹 관리 |
+| [07_Process_Management.md](./07_Process_Management.md) | ⭐⭐ | ps, top, kill, systemctl |
+| [08_Package_Management.md](./08_Package_Management.md) | ⭐⭐ | apt, yum/dnf, 저장소 관리 |
+| [09_Shell_Scripting.md](./09_Shell_Scripting.md) | ⭐⭐⭐ | 변수, 조건문, 반복문, 실무 스크립트 |
+| [10_Network_Basics.md](./10_Network_Basics.md) | ⭐⭐⭐ | ip, ssh, 포트 확인, 원격 접속 |
+| [11_System_Monitoring.md](./11_System_Monitoring.md) | ⭐⭐⭐ | df, free, 로그, cron |
+| [12_Security_and_Firewall.md](./12_Security_and_Firewall.md) | ⭐⭐⭐⭐ | SSH 보안, ufw, firewalld, fail2ban |
+| [13_Systemd_Advanced.md](./13_Systemd_Advanced.md) | ⭐⭐⭐⭐ | 서비스 유닛, 타이머, 소켓, journald |
+| [14_Performance_Tuning.md](./14_Performance_Tuning.md) | ⭐⭐⭐⭐ | sysctl, 커널 파라미터, perf, flamegraph |
+| [15_Container_Internals.md](./15_Container_Internals.md) | ⭐⭐⭐⭐ | cgroups, namespaces, 컨테이너 런타임 |
+| [16_Storage_Management.md](./16_Storage_Management.md) | ⭐⭐⭐⭐ | LVM, RAID, 파일시스템, LUKS 암호화 |
 | [17_SELinux_AppArmor.md](./17_SELinux_AppArmor.md) | ⭐⭐⭐⭐ | SELinux 정책, AppArmor 프로파일, 트러블슈팅 |
-| [18_로그_관리.md](./18_로그_관리.md) | ⭐⭐⭐ | journald, rsyslog, logrotate, 원격 로그 |
-| [19_백업_및_복구.md](./19_백업_및_복구.md) | ⭐⭐⭐⭐ | rsync, Borg Backup, 재해복구 전략 |
-| [20_커널_관리.md](./20_커널_관리.md) | ⭐⭐⭐⭐ | 커널 컴파일, 모듈, DKMS, GRUB |
-| [21_가상화_KVM.md](./21_가상화_KVM.md) | ⭐⭐⭐⭐ | libvirt, virsh, VM 관리, 스냅샷 |
-| [22_Ansible_기초.md](./22_Ansible_기초.md) | ⭐⭐⭐ | 인벤토리, playbook, roles, Vault |
-| [23_고급_네트워킹.md](./23_고급_네트워킹.md) | ⭐⭐⭐⭐ | VLAN, bonding, iptables/nftables |
-| [24_클라우드_통합.md](./24_클라우드_통합.md) | ⭐⭐⭐ | cloud-init, AWS CLI, 메타데이터 |
-| [25_고가용성_클러스터.md](./25_고가용성_클러스터.md) | ⭐⭐⭐⭐⭐ | Pacemaker, Corosync, DRBD |
-| [26_트러블슈팅_가이드.md](./26_트러블슈팅_가이드.md) | ⭐⭐⭐ | 부팅, 네트워크, 디스크, 성능 문제 해결 |
+| [18_Log_Management.md](./18_Log_Management.md) | ⭐⭐⭐ | journald, rsyslog, logrotate, 원격 로그 |
+| [19_Backup_Recovery.md](./19_Backup_Recovery.md) | ⭐⭐⭐⭐ | rsync, Borg Backup, 재해복구 전략 |
+| [20_Kernel_Management.md](./20_Kernel_Management.md) | ⭐⭐⭐⭐ | 커널 컴파일, 모듈, DKMS, GRUB |
+| [21_Virtualization_KVM.md](./21_Virtualization_KVM.md) | ⭐⭐⭐⭐ | libvirt, virsh, VM 관리, 스냅샷 |
+| [22_Ansible_Basics.md](./22_Ansible_Basics.md) | ⭐⭐⭐ | 인벤토리, playbook, roles, Vault |
+| [23_Advanced_Networking.md](./23_Advanced_Networking.md) | ⭐⭐⭐⭐ | VLAN, bonding, iptables/nftables |
+| [24_Cloud_Integration.md](./24_Cloud_Integration.md) | ⭐⭐⭐ | cloud-init, AWS CLI, 메타데이터 |
+| [25_High_Availability_Cluster.md](./25_High_Availability_Cluster.md) | ⭐⭐⭐⭐⭐ | Pacemaker, Corosync, DRBD |
+| [26_Troubleshooting_Guide.md](./26_Troubleshooting_Guide.md) | ⭐⭐⭐ | 부팅, 네트워크, 디스크, 성능 문제 해결 |
 
 ---
 
@@ -79,7 +79,7 @@
 ### 1단계: 리눅스 입문 (초급)
 
 ```
-01_리눅스_기초 → 02_파일시스템_탐색 → 03_파일과_디렉토리_관리
+01_Linux_Basics → 02_Filesystem_Navigation → 03_File_Directory_Management
 ```
 
 터미널 사용법과 기본 명령어를 익힙니다.
@@ -87,8 +87,8 @@
 ### 2단계: 실무 활용 (중급)
 
 ```
-04_텍스트_처리 → 05_권한과_소유권 → 06_사용자와_그룹_관리
-    → 07_프로세스_관리 → 08_패키지_관리
+04_Text_Processing → 05_Permissions_Ownership → 06_User_Group_Management
+    → 07_Process_Management → 08_Package_Management
 ```
 
 파일 처리, 권한 관리, 시스템 운영 기초를 배웁니다.
@@ -96,7 +96,7 @@
 ### 3단계: 서버 관리자 (고급)
 
 ```
-09_쉘_스크립팅 → 10_네트워크_기초 → 11_시스템_모니터링 → 12_보안과_방화벽
+09_Shell_Scripting → 10_Network_Basics → 11_System_Monitoring → 12_Security_and_Firewall
 ```
 
 자동화, 네트워크, 모니터링, 보안까지 서버 관리 전반을 다룹니다.
@@ -104,7 +104,7 @@
 ### 4단계: 시스템 심화 (전문가)
 
 ```
-13_systemd_심화 → 14_성능_튜닝 → 15_컨테이너_내부_구조 → 16_저장소_관리
+13_Systemd_Advanced → 14_Performance_Tuning → 15_Container_Internals → 16_Storage_Management
 ```
 
 systemd, 성능 최적화, 컨테이너 원리, 스토리지 관리를 학습합니다.
@@ -112,7 +112,7 @@ systemd, 성능 최적화, 컨테이너 원리, 스토리지 관리를 학습합
 ### 5단계: 엔터프라이즈 운영 (전문가)
 
 ```
-17_SELinux_AppArmor → 18_로그_관리 → 19_백업_및_복구 → 20_커널_관리
+17_SELinux_AppArmor → 18_Log_Management → 19_Backup_Recovery → 20_Kernel_Management
 ```
 
 보안 모듈, 로그 관리, 백업 전략, 커널 관리를 다룹니다.
@@ -120,8 +120,8 @@ systemd, 성능 최적화, 컨테이너 원리, 스토리지 관리를 학습합
 ### 6단계: 인프라 엔지니어링 (전문가)
 
 ```
-21_가상화_KVM → 22_Ansible_기초 → 23_고급_네트워킹 → 24_클라우드_통합
-    → 25_고가용성_클러스터 → 26_트러블슈팅_가이드
+21_Virtualization_KVM → 22_Ansible_Basics → 23_Advanced_Networking → 24_Cloud_Integration
+    → 25_High_Availability_Cluster → 26_Troubleshooting_Guide
 ```
 
 가상화, 자동화, 고급 네트워킹, 클라우드, HA, 트러블슈팅을 마스터합니다.

@@ -658,7 +658,7 @@ sudo sealert -a /var/log/audit/audit.log
 
 ## 다음 단계
 
-- [18_로그_관리.md](./18_로그_관리.md) - journald, rsyslog, logrotate 학습
+- [18_Log_Management.md](./18_Log_Management.md) - journald, rsyslog, logrotate 학습
 
 ---
 

@@ -42,75 +42,75 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_복잡도_분석.md](./01_복잡도_분석.md) | ⭐ | Big O, 시간/공간 복잡도, 분석 기법 |
-| [02_배열과_문자열.md](./02_배열과_문자열.md) | ⭐ | 2포인터, 슬라이딩 윈도우, 프리픽스 합 |
-| [03_스택과_큐_활용.md](./03_스택과_큐_활용.md) | ⭐ | 괄호 검사, 후위표기법, 모노토닉 스택 |
-| [04_해시테이블.md](./04_해시테이블.md) | ⭐⭐ | 해시 함수, 충돌 해결, 해시맵/셋 구현 |
-| [05_정렬_알고리즘.md](./05_정렬_알고리즘.md) | ⭐⭐ | 버블/선택/삽입/병합/퀵/힙 정렬 |
+| [01_Complexity_Analysis.md](./01_Complexity_Analysis.md) | ⭐ | Big O, 시간/공간 복잡도, 분석 기법 |
+| [02_Arrays_and_Strings.md](./02_Arrays_and_Strings.md) | ⭐ | 2포인터, 슬라이딩 윈도우, 프리픽스 합 |
+| [03_Stacks_and_Queues.md](./03_Stacks_and_Queues.md) | ⭐ | 괄호 검사, 후위표기법, 모노토닉 스택 |
+| [04_Hash_Tables.md](./04_Hash_Tables.md) | ⭐⭐ | 해시 함수, 충돌 해결, 해시맵/셋 구현 |
+| [05_Sorting_Algorithms.md](./05_Sorting_Algorithms.md) | ⭐⭐ | 버블/선택/삽입/병합/퀵/힙 정렬 |
 
 ### 탐색과 분할정복 (06-08)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [06_탐색_알고리즘.md](./06_탐색_알고리즘.md) | ⭐⭐ | 이진탐색, 파라메트릭 서치, 해시 탐색 |
-| [07_분할정복.md](./07_분할정복.md) | ⭐⭐ | 병합정렬, 퀵정렬, 빠른 거듭제곱 |
-| [08_백트래킹.md](./08_백트래킹.md) | ⭐⭐⭐ | N-Queens, 순열/조합, 가지치기 |
+| [06_Searching_Algorithms.md](./06_Searching_Algorithms.md) | ⭐⭐ | 이진탐색, 파라메트릭 서치, 해시 탐색 |
+| [07_Divide_and_Conquer.md](./07_Divide_and_Conquer.md) | ⭐⭐ | 병합정렬, 퀵정렬, 빠른 거듭제곱 |
+| [08_Backtracking.md](./08_Backtracking.md) | ⭐⭐⭐ | N-Queens, 순열/조합, 가지치기 |
 
 ### 트리 자료구조 (09-11)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [09_트리와_이진탐색트리.md](./09_트리와_이진탐색트리.md) | ⭐⭐ | 트리 순회, BST 연산, 균형 트리 |
-| [10_힙과_우선순위큐.md](./10_힙과_우선순위큐.md) | ⭐⭐ | 힙 구조, 힙 정렬, K번째 원소 |
-| [11_트라이.md](./11_트라이.md) | ⭐⭐⭐ | 접두사 트리, 자동완성, XOR 트라이 |
+| [09_Trees_and_BST.md](./09_Trees_and_BST.md) | ⭐⭐ | 트리 순회, BST 연산, 균형 트리 |
+| [10_Heaps_and_Priority_Queues.md](./10_Heaps_and_Priority_Queues.md) | ⭐⭐ | 힙 구조, 힙 정렬, K번째 원소 |
+| [11_Trie.md](./11_Trie.md) | ⭐⭐⭐ | 접두사 트리, 자동완성, XOR 트라이 |
 
 ### 그래프 (12-17)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [12_그래프_기초.md](./12_그래프_기초.md) | ⭐⭐ | 그래프 표현, DFS, BFS |
-| [13_위상정렬.md](./13_위상정렬.md) | ⭐⭐⭐ | Kahn, DFS 기반, 사이클 탐지 |
-| [14_최단경로.md](./14_최단경로.md) | ⭐⭐⭐ | Dijkstra, Bellman-Ford, Floyd-Warshall |
-| [15_최소신장트리.md](./15_최소신장트리.md) | ⭐⭐⭐ | Kruskal, Prim, Union-Find |
-| [16_LCA와_트리쿼리.md](./16_LCA와_트리쿼리.md) | ⭐⭐⭐ | Binary Lifting, Sparse Table |
-| [17_강한연결요소.md](./17_강한연결요소.md) | ⭐⭐⭐⭐ | Tarjan, Kosaraju, 2-SAT |
+| [12_Graph_Basics.md](./12_Graph_Basics.md) | ⭐⭐ | 그래프 표현, DFS, BFS |
+| [13_Topological_Sort.md](./13_Topological_Sort.md) | ⭐⭐⭐ | Kahn, DFS 기반, 사이클 탐지 |
+| [14_Shortest_Path.md](./14_Shortest_Path.md) | ⭐⭐⭐ | Dijkstra, Bellman-Ford, Floyd-Warshall |
+| [15_Minimum_Spanning_Tree.md](./15_Minimum_Spanning_Tree.md) | ⭐⭐⭐ | Kruskal, Prim, Union-Find |
+| [16_LCA_and_Tree_Queries.md](./16_LCA_and_Tree_Queries.md) | ⭐⭐⭐ | Binary Lifting, Sparse Table |
+| [17_Strongly_Connected_Components.md](./17_Strongly_Connected_Components.md) | ⭐⭐⭐⭐ | Tarjan, Kosaraju, 2-SAT |
 
 ### DP와 수학 (18-22)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [18_동적_프로그래밍.md](./18_동적_프로그래밍.md) | ⭐⭐⭐ | 메모이제이션, 냅색, LCS, LIS |
-| [19_탐욕_알고리즘.md](./19_탐욕_알고리즘.md) | ⭐⭐ | 활동 선택, 허프만 코딩, 탐욕 vs DP |
-| [20_비트마스크_DP.md](./20_비트마스크_DP.md) | ⭐⭐⭐ | 비트 연산, TSP, 집합 DP |
-| [21_수학과_정수론.md](./21_수학과_정수론.md) | ⭐⭐⭐ | 모듈러, GCD/LCM, 소수, 조합론 |
-| [22_문자열_알고리즘.md](./22_문자열_알고리즘.md) | ⭐⭐⭐ | KMP, Rabin-Karp, Z-알고리즘 |
+| [18_Dynamic_Programming.md](./18_Dynamic_Programming.md) | ⭐⭐⭐ | 메모이제이션, 냅색, LCS, LIS |
+| [19_Greedy_Algorithms.md](./19_Greedy_Algorithms.md) | ⭐⭐ | 활동 선택, 허프만 코딩, 탐욕 vs DP |
+| [20_Bitmask_DP.md](./20_Bitmask_DP.md) | ⭐⭐⭐ | 비트 연산, TSP, 집합 DP |
+| [21_Math_and_Number_Theory.md](./21_Math_and_Number_Theory.md) | ⭐⭐⭐ | 모듈러, GCD/LCM, 소수, 조합론 |
+| [22_String_Algorithms.md](./22_String_Algorithms.md) | ⭐⭐⭐ | KMP, Rabin-Karp, Z-알고리즘 |
 
 ### 고급 자료구조 (23-24)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [23_세그먼트_트리.md](./23_세그먼트_트리.md) | ⭐⭐⭐⭐ | 구간 쿼리, Lazy Propagation |
-| [24_펜윅_트리.md](./24_펜윅_트리.md) | ⭐⭐⭐ | BIT, 구간 합, 2D 펜윅 |
+| [23_Segment_Tree.md](./23_Segment_Tree.md) | ⭐⭐⭐⭐ | 구간 쿼리, Lazy Propagation |
+| [24_Fenwick_Tree.md](./24_Fenwick_Tree.md) | ⭐⭐⭐ | BIT, 구간 합, 2D 펜윅 |
 
 ### 고급 그래프 (25)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [25_네트워크_플로우.md](./25_네트워크_플로우.md) | ⭐⭐⭐⭐ | Ford-Fulkerson, 이분 매칭 |
+| [25_Network_Flow.md](./25_Network_Flow.md) | ⭐⭐⭐⭐ | Ford-Fulkerson, 이분 매칭 |
 
 ### 특수 주제 (26-28)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [26_기하_알고리즘.md](./26_기하_알고리즘.md) | ⭐⭐⭐ | CCW, 볼록껍질, 선분 교차 |
-| [27_게임_이론.md](./27_게임_이론.md) | ⭐⭐⭐ | 님 게임, 스프라그-그런디, 미니맥스 |
-| [28_고급_DP_최적화.md](./28_고급_DP_최적화.md) | ⭐⭐⭐⭐ | CHT, D&C 최적화, Knuth 최적화 |
+| [26_Computational_Geometry.md](./26_Computational_Geometry.md) | ⭐⭐⭐ | CCW, 볼록껍질, 선분 교차 |
+| [27_Game_Theory.md](./27_Game_Theory.md) | ⭐⭐⭐ | 님 게임, 스프라그-그런디, 미니맥스 |
+| [28_Advanced_DP_Optimization.md](./28_Advanced_DP_Optimization.md) | ⭐⭐⭐⭐ | CHT, D&C 최적화, Knuth 최적화 |
 
 ### 마무리
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [29_실전_문제풀이.md](./29_실전_문제풀이.md) | ⭐⭐⭐⭐ | 유형별 접근법, LeetCode/백준 추천 |
+| [29_Problem_Solving.md](./29_Problem_Solving.md) | ⭐⭐⭐⭐ | 유형별 접근법, LeetCode/백준 추천 |
 
 ---
 
@@ -118,47 +118,47 @@
 
 ### 1단계: 기초 자료구조 (1주)
 ```
-01_복잡도_분석 → 02_배열과_문자열 → 03_스택과_큐_활용 → 04_해시테이블
+01 → 02 → 03 → 04
 ```
 
 ### 2단계: 정렬과 탐색 (1주)
 ```
-05_정렬_알고리즘 → 06_탐색_알고리즘 → 07_분할정복 → 08_백트래킹
+05 → 06 → 07 → 08
 ```
 
 ### 3단계: 트리 (1주)
 ```
-09_트리와_이진탐색트리 → 10_힙과_우선순위큐 → 11_트라이
+09 → 10 → 11
 ```
 
 ### 4단계: 그래프 기초 (1~2주)
 ```
-12_그래프_기초 → 13_위상정렬 → 14_최단경로 → 15_최소신장트리
+12 → 13 → 14 → 15
 ```
 
 ### 5단계: 고급 그래프 (1주)
 ```
-16_LCA와_트리쿼리 → 17_강한연결요소
+16 → 17
 ```
 
 ### 6단계: DP와 수학 (2주)
 ```
-18_동적_프로그래밍 → 19_탐욕_알고리즘 → 20_비트마스크_DP → 21_수학과_정수론 → 22_문자열_알고리즘
+18 → 19 → 20 → 21 → 22
 ```
 
 ### 7단계: 고급 자료구조 (1주)
 ```
-23_세그먼트_트리 → 24_펜윅_트리
+23 → 24
 ```
 
 ### 8단계: 고급 그래프 및 특수 주제 (2주+)
 ```
-25_네트워크_플로우 → 26_기하_알고리즘 → 27_게임_이론 → 28_고급_DP_최적화
+25 → 26 → 27 → 28
 ```
 
 ### 마무리
 ```
-29_실전_문제풀이 (다른 단계와 병렬로 진행 권장)
+29 (다른 단계와 병렬로 진행 권장)
 ```
 
 ---
@@ -342,4 +342,3 @@ g++ -Wall -std=c++17 -O2 01_complexity.cpp -o 01_complexity
 - **1초**: O(n log n) 이하 (n ≤ 10^6)
 - **2초**: O(n²) 가능 (n ≤ 5000)
 - **5초**: O(n²) 가능 (n ≤ 10000)
-

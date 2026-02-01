@@ -43,26 +43,26 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_환경설정.md](./01_환경설정.md) | ⭐ | 개발 환경 구축, 컴파일러 설치 |
-| [02_C_기초_빠른복습.md](./02_C_기초_빠른복습.md) | ⭐ | 변수, 자료형, 연산자, 제어문, 함수 |
-| [03_프로젝트_계산기.md](./03_프로젝트_계산기.md) | ⭐ | 함수, switch-case, scanf |
-| [04_프로젝트_숫자맞추기.md](./04_프로젝트_숫자맞추기.md) | ⭐ | 반복문, 랜덤, 조건문 |
-| [05_프로젝트_주소록.md](./05_프로젝트_주소록.md) | ⭐⭐ | 구조체, 배열, 파일 I/O |
-| [06_프로젝트_동적배열.md](./06_프로젝트_동적배열.md) | ⭐⭐ | malloc, realloc, free |
-| [07_프로젝트_연결리스트.md](./07_프로젝트_연결리스트.md) | ⭐⭐⭐ | 포인터, 동적 자료구조 |
-| [08_프로젝트_파일암호화.md](./08_프로젝트_파일암호화.md) | ⭐⭐ | 파일 처리, 비트 연산 |
-| [09_프로젝트_스택과큐.md](./09_프로젝트_스택과큐.md) | ⭐⭐ | 자료구조, LIFO/FIFO |
-| [10_프로젝트_해시테이블.md](./10_프로젝트_해시테이블.md) | ⭐⭐⭐ | 해싱, 충돌 처리 |
-| [11_프로젝트_뱀게임.md](./11_프로젝트_뱀게임.md) | ⭐⭐⭐ | 터미널 제어, 게임 루프 |
-| [12_프로젝트_미니쉘.md](./12_프로젝트_미니쉘.md) | ⭐⭐⭐⭐ | fork, exec, 파이프 |
-| [13_프로젝트_멀티스레드.md](./13_프로젝트_멀티스레드.md) | ⭐⭐⭐⭐ | pthread, 동기화 |
-| [14_임베디드_기초.md](./14_임베디드_기초.md) | ⭐ | Arduino, GPIO 기초 |
-| [15_비트연산_심화.md](./15_비트연산_심화.md) | ⭐⭐ | 비트 마스킹, 레지스터 |
-| [16_프로젝트_GPIO제어.md](./16_프로젝트_GPIO제어.md) | ⭐⭐ | LED, 버튼, 디바운싱 |
-| [17_프로젝트_시리얼통신.md](./17_프로젝트_시리얼통신.md) | ⭐⭐ | UART, 명령어 파싱 |
-| [18_디버깅과_메모리분석.md](./18_디버깅과_메모리분석.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
-| [19_고급임베디드_프로토콜.md](./19_고급임베디드_프로토콜.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
-| [20_포인터_심화.md](./20_포인터_심화.md) | ⭐⭐⭐ | 포인터 산술, 다중 포인터, 함수 포인터, 동적 메모리 |
+| [01_Environment_Setup.md](./01_Environment_Setup.md) | ⭐ | 개발 환경 구축, 컴파일러 설치 |
+| [02_C_Basics_Review.md](./02_C_Basics_Review.md) | ⭐ | 변수, 자료형, 연산자, 제어문, 함수 |
+| [03_Project_Calculator.md](./03_Project_Calculator.md) | ⭐ | 함수, switch-case, scanf |
+| [04_Project_Number_Guessing.md](./04_Project_Number_Guessing.md) | ⭐ | 반복문, 랜덤, 조건문 |
+| [05_Project_Address_Book.md](./05_Project_Address_Book.md) | ⭐⭐ | 구조체, 배열, 파일 I/O |
+| [06_Project_Dynamic_Array.md](./06_Project_Dynamic_Array.md) | ⭐⭐ | malloc, realloc, free |
+| [07_Project_Linked_List.md](./07_Project_Linked_List.md) | ⭐⭐⭐ | 포인터, 동적 자료구조 |
+| [08_Project_File_Encryption.md](./08_Project_File_Encryption.md) | ⭐⭐ | 파일 처리, 비트 연산 |
+| [09_Project_Stack_Queue.md](./09_Project_Stack_Queue.md) | ⭐⭐ | 자료구조, LIFO/FIFO |
+| [10_Project_Hash_Table.md](./10_Project_Hash_Table.md) | ⭐⭐⭐ | 해싱, 충돌 처리 |
+| [11_Project_Snake_Game.md](./11_Project_Snake_Game.md) | ⭐⭐⭐ | 터미널 제어, 게임 루프 |
+| [12_Project_Mini_Shell.md](./12_Project_Mini_Shell.md) | ⭐⭐⭐⭐ | fork, exec, 파이프 |
+| [13_Project_Multithreading.md](./13_Project_Multithreading.md) | ⭐⭐⭐⭐ | pthread, 동기화 |
+| [14_Embedded_Basics.md](./14_Embedded_Basics.md) | ⭐ | Arduino, GPIO 기초 |
+| [15_Bit_Operations.md](./15_Bit_Operations.md) | ⭐⭐ | 비트 마스킹, 레지스터 |
+| [16_Project_GPIO_Control.md](./16_Project_GPIO_Control.md) | ⭐⭐ | LED, 버튼, 디바운싱 |
+| [17_Project_Serial_Communication.md](./17_Project_Serial_Communication.md) | ⭐⭐ | UART, 명령어 파싱 |
+| [18_Debugging_Memory_Analysis.md](./18_Debugging_Memory_Analysis.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
+| [19_Advanced_Embedded_Protocols.md](./19_Advanced_Embedded_Protocols.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
+| [20_Advanced_Pointers.md](./20_Advanced_Pointers.md) | ⭐⭐⭐ | 포인터 산술, 다중 포인터, 함수 포인터, 동적 메모리 |
 
 ---
 

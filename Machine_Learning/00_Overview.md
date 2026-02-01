@@ -22,20 +22,20 @@ ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차�
 
 | 파일 | 주제 | 핵심 내용 |
 |------|------|----------|
-| 01 | ML 개요 | 지도/비지도/강화학습, ML 워크플로우, 편향-분산 트레이드오프 |
-| 02 | 선형회귀 | 단순/다중 회귀, 경사하강법, 정규화(Ridge/Lasso) |
-| 03 | 로지스틱 회귀 | 이진 분류, 시그모이드 함수, 다중 분류(Softmax) |
-| 04 | 모델 평가 | 정확도, 정밀도, 재현율, F1-score, ROC-AUC |
-| 05 | 교차검증과 하이퍼파라미터 | K-Fold CV, GridSearchCV, RandomizedSearchCV |
-| 06 | 결정트리 | CART, 엔트로피, 지니 불순도, 가지치기 |
-| 07 | 앙상블 - 배깅 | Random Forest, 특성 중요도, OOB 에러 |
-| 08 | 앙상블 - 부스팅 | AdaBoost, Gradient Boosting, XGBoost, LightGBM |
-| 09 | SVM | 서포트 벡터, 마진, 커널 트릭 |
-| 10 | k-NN과 나이브베이즈 | 거리 기반 분류, 확률 기반 분류 |
-| 11 | 클러스터링 | K-Means, DBSCAN, 계층적 군집화 |
-| 12 | 차원축소 | PCA, t-SNE, 특성 선택 |
-| 13 | 파이프라인과 실무 | sklearn Pipeline, ColumnTransformer, 모델 저장 |
-| 14 | 실전 프로젝트 | Kaggle 문제 해결, 분류/회귀 실습 |
+| [01_ML_Overview.md](./01_ML_Overview.md) | ML 개요 | 지도/비지도/강화학습, ML 워크플로우, 편향-분산 트레이드오프 |
+| [02_Linear_Regression.md](./02_Linear_Regression.md) | 선형회귀 | 단순/다중 회귀, 경사하강법, 정규화(Ridge/Lasso) |
+| [03_Logistic_Regression.md](./03_Logistic_Regression.md) | 로지스틱 회귀 | 이진 분류, 시그모이드 함수, 다중 분류(Softmax) |
+| [04_Model_Evaluation.md](./04_Model_Evaluation.md) | 모델 평가 | 정확도, 정밀도, 재현율, F1-score, ROC-AUC |
+| [05_Cross_Validation_Hyperparameters.md](./05_Cross_Validation_Hyperparameters.md) | 교차검증과 하이퍼파라미터 | K-Fold CV, GridSearchCV, RandomizedSearchCV |
+| [06_Decision_Trees.md](./06_Decision_Trees.md) | 결정트리 | CART, 엔트로피, 지니 불순도, 가지치기 |
+| [07_Ensemble_Bagging.md](./07_Ensemble_Bagging.md) | 앙상블 - 배깅 | Random Forest, 특성 중요도, OOB 에러 |
+| [08_Ensemble_Boosting.md](./08_Ensemble_Boosting.md) | 앙상블 - 부스팅 | AdaBoost, Gradient Boosting, XGBoost, LightGBM |
+| [09_SVM.md](./09_SVM.md) | SVM | 서포트 벡터, 마진, 커널 트릭 |
+| [10_kNN_and_Naive_Bayes.md](./10_kNN_and_Naive_Bayes.md) | k-NN과 나이브베이즈 | 거리 기반 분류, 확률 기반 분류 |
+| [11_Clustering.md](./11_Clustering.md) | 클러스터링 | K-Means, DBSCAN, 계층적 군집화 |
+| [12_Dimensionality_Reduction.md](./12_Dimensionality_Reduction.md) | 차원축소 | PCA, t-SNE, 특성 선택 |
+| [13_Pipelines_and_Practice.md](./13_Pipelines_and_Practice.md) | 파이프라인과 실무 | sklearn Pipeline, ColumnTransformer, 모델 저장 |
+| [14_Practical_Projects.md](./14_Practical_Projects.md) | 실전 프로젝트 | Kaggle 문제 해결, 분류/회귀 실습 |
 
 ---
 

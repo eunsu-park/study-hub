@@ -40,20 +40,20 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_타입_힌팅.md](./01_타입_힌팅.md) | ⭐⭐ | Type Hints, typing 모듈, mypy |
-| [02_데코레이터.md](./02_데코레이터.md) | ⭐⭐ | 함수/클래스 데코레이터, @wraps |
-| [03_컨텍스트_매니저.md](./03_컨텍스트_매니저.md) | ⭐⭐ | with문, contextlib |
-| [04_이터레이터와_제너레이터.md](./04_이터레이터와_제너레이터.md) | ⭐⭐⭐ | __iter__, yield, itertools |
-| [05_클로저와_스코프.md](./05_클로저와_스코프.md) | ⭐⭐⭐ | LEGB, nonlocal, 클로저 패턴 |
-| [06_메타클래스.md](./06_메타클래스.md) | ⭐⭐⭐ | type, __new__, __init_subclass__ |
-| [07_디스크립터.md](./07_디스크립터.md) | ⭐⭐⭐⭐ | __get__, __set__, property 구현 |
-| [08_비동기_프로그래밍.md](./08_비동기_프로그래밍.md) | ⭐⭐⭐⭐ | async/await, asyncio |
-| [09_함수형_프로그래밍.md](./09_함수형_프로그래밍.md) | ⭐⭐⭐⭐ | map, filter, functools |
-| [10_성능_최적화.md](./10_성능_최적화.md) | ⭐⭐⭐⭐ | 프로파일링, 최적화 기법 |
-| [11_테스트_및_품질_관리.md](./11_테스트_및_품질_관리.md) | ⭐⭐⭐ | pytest, fixtures, mocking, coverage |
-| [12_패키징_및_배포.md](./12_패키징_및_배포.md) | ⭐⭐⭐ | pyproject.toml, Poetry, PyPI |
-| [13_데이터클래스.md](./13_데이터클래스.md) | ⭐⭐ | @dataclass, field(), frozen |
-| [14_패턴_매칭.md](./14_패턴_매칭.md) | ⭐⭐⭐ | match/case, 구조 패턴, 가드 |
+| [01_Type_Hints.md](./01_Type_Hints.md) | ⭐⭐ | Type Hints, typing 모듈, mypy |
+| [02_Decorators.md](./02_Decorators.md) | ⭐⭐ | 함수/클래스 데코레이터, @wraps |
+| [03_Context_Managers.md](./03_Context_Managers.md) | ⭐⭐ | with문, contextlib |
+| [04_Iterators_and_Generators.md](./04_Iterators_and_Generators.md) | ⭐⭐⭐ | __iter__, yield, itertools |
+| [05_Closures_and_Scope.md](./05_Closures_and_Scope.md) | ⭐⭐⭐ | LEGB, nonlocal, 클로저 패턴 |
+| [06_Metaclasses.md](./06_Metaclasses.md) | ⭐⭐⭐ | type, __new__, __init_subclass__ |
+| [07_Descriptors.md](./07_Descriptors.md) | ⭐⭐⭐⭐ | __get__, __set__, property 구현 |
+| [08_Async_Programming.md](./08_Async_Programming.md) | ⭐⭐⭐⭐ | async/await, asyncio |
+| [09_Functional_Programming.md](./09_Functional_Programming.md) | ⭐⭐⭐⭐ | map, filter, functools |
+| [10_Performance_Optimization.md](./10_Performance_Optimization.md) | ⭐⭐⭐⭐ | 프로파일링, 최적화 기법 |
+| [11_Testing_and_Quality.md](./11_Testing_and_Quality.md) | ⭐⭐⭐ | pytest, fixtures, mocking, coverage |
+| [12_Packaging_and_Distribution.md](./12_Packaging_and_Distribution.md) | ⭐⭐⭐ | pyproject.toml, Poetry, PyPI |
+| [13_Dataclasses.md](./13_Dataclasses.md) | ⭐⭐ | @dataclass, field(), frozen |
+| [14_Pattern_Matching.md](./14_Pattern_Matching.md) | ⭐⭐⭐ | match/case, 구조 패턴, 가드 |
 
 ---
 

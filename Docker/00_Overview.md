@@ -37,16 +37,16 @@ Docker 기초 ──────▶ Dockerfile ──────▶ Kubernetes 
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Docker_기초.md](./01_Docker_기초.md) | ⭐ | Docker 개념, 설치, 기본 명령어 |
-| [02_이미지와_컨테이너.md](./02_이미지와_컨테이너.md) | ⭐ | 이미지 관리, 컨테이너 실행/관리 |
+| [01_Docker_Basics.md](./01_Docker_Basics.md) | ⭐ | Docker 개념, 설치, 기본 명령어 |
+| [02_Images_and_Containers.md](./02_Images_and_Containers.md) | ⭐ | 이미지 관리, 컨테이너 실행/관리 |
 | [03_Dockerfile.md](./03_Dockerfile.md) | ⭐⭐ | Dockerfile 작성, 이미지 빌드 |
 | [04_Docker_Compose.md](./04_Docker_Compose.md) | ⭐⭐ | 다중 컨테이너, docker-compose.yml |
-| [05_실전_예제.md](./05_실전_예제.md) | ⭐⭐⭐ | 웹앱 컨테이너화, DB 연동 |
-| [06_Kubernetes_입문.md](./06_Kubernetes_입문.md) | ⭐⭐⭐ | K8s 개념, Pod, Deployment, Service |
-| [07_Kubernetes_보안.md](./07_Kubernetes_보안.md) | ⭐⭐⭐⭐ | RBAC, NetworkPolicy, Secrets, PodSecurity |
-| [08_Kubernetes_심화.md](./08_Kubernetes_심화.md) | ⭐⭐⭐⭐ | Ingress, StatefulSet, DaemonSet, PV/PVC |
-| [09_Helm_패키지관리.md](./09_Helm_패키지관리.md) | ⭐⭐⭐ | Helm 차트, values.yaml, 릴리스 관리 |
-| [10_CI_CD_파이프라인.md](./10_CI_CD_파이프라인.md) | ⭐⭐⭐⭐ | GitHub Actions, 이미지 빌드, K8s 배포 |
+| [05_Practical_Examples.md](./05_Practical_Examples.md) | ⭐⭐⭐ | 웹앱 컨테이너화, DB 연동 |
+| [06_Kubernetes_Intro.md](./06_Kubernetes_Intro.md) | ⭐⭐⭐ | K8s 개념, Pod, Deployment, Service |
+| [07_Kubernetes_Security.md](./07_Kubernetes_Security.md) | ⭐⭐⭐⭐ | RBAC, NetworkPolicy, Secrets, PodSecurity |
+| [08_Kubernetes_Advanced.md](./08_Kubernetes_Advanced.md) | ⭐⭐⭐⭐ | Ingress, StatefulSet, DaemonSet, PV/PVC |
+| [09_Helm_Package_Management.md](./09_Helm_Package_Management.md) | ⭐⭐⭐ | Helm 차트, values.yaml, 릴리스 관리 |
+| [10_CI_CD_Pipelines.md](./10_CI_CD_Pipelines.md) | ⭐⭐⭐⭐ | GitHub Actions, 이미지 빌드, K8s 배포 |
 
 ---
 

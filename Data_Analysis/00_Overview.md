@@ -20,17 +20,17 @@ NumPy 기초 → NumPy 고급 → Pandas 기초 → Pandas 데이터 조작 → 
 
 | 파일 | 주제 | 핵심 내용 |
 |------|------|----------|
-| 01 | NumPy 기초 | 배열 생성, 인덱싱/슬라이싱, 브로드캐스팅, 기본 연산 |
-| 02 | NumPy 고급 | 선형대수, 통계함수, 난수 생성, 성능 최적화 |
-| 03 | Pandas 기초 | Series, DataFrame, 데이터 로딩(CSV/Excel/JSON) |
-| 04 | Pandas 데이터 조작 | 필터링, 정렬, 그룹화, 병합(merge/join/concat) |
-| 05 | Pandas 고급 | 피벗테이블, 멀티인덱스, 시계열 데이터 처리 |
-| 06 | 데이터 전처리 | 결측치 처리, 이상치 탐지, 정규화, 인코딩 |
-| 07 | 기술통계와 EDA | 기술통계량, 분포 분석, 탐색적 데이터 분석 |
-| 08 | 데이터 시각화 기초 | Matplotlib 기초, 다양한 차트 유형 |
-| 09 | 데이터 시각화 고급 | Seaborn, 고급 시각화 기법, 대시보드 |
-| 10 | 통계 분석 기초 | 확률분포, 가설검정, 신뢰구간, 상관분석 |
-| 11 | 실전 프로젝트 | Kaggle 데이터셋 EDA, 종합 실습 |
+| [01_NumPy_Basics.md](./01_NumPy_Basics.md) | NumPy 기초 | 배열 생성, 인덱싱/슬라이싱, 브로드캐스팅, 기본 연산 |
+| [02_NumPy_Advanced.md](./02_NumPy_Advanced.md) | NumPy 고급 | 선형대수, 통계함수, 난수 생성, 성능 최적화 |
+| [03_Pandas_Basics.md](./03_Pandas_Basics.md) | Pandas 기초 | Series, DataFrame, 데이터 로딩(CSV/Excel/JSON) |
+| [04_Pandas_Data_Manipulation.md](./04_Pandas_Data_Manipulation.md) | Pandas 데이터 조작 | 필터링, 정렬, 그룹화, 병합(merge/join/concat) |
+| [05_Pandas_Advanced.md](./05_Pandas_Advanced.md) | Pandas 고급 | 피벗테이블, 멀티인덱스, 시계열 데이터 처리 |
+| [06_Data_Preprocessing.md](./06_Data_Preprocessing.md) | 데이터 전처리 | 결측치 처리, 이상치 탐지, 정규화, 인코딩 |
+| [07_Descriptive_Stats_EDA.md](./07_Descriptive_Stats_EDA.md) | 기술통계와 EDA | 기술통계량, 분포 분석, 탐색적 데이터 분석 |
+| [08_Data_Visualization_Basics.md](./08_Data_Visualization_Basics.md) | 데이터 시각화 기초 | Matplotlib 기초, 다양한 차트 유형 |
+| [09_Data_Visualization_Advanced.md](./09_Data_Visualization_Advanced.md) | 데이터 시각화 고급 | Seaborn, 고급 시각화 기법, 대시보드 |
+| [10_Statistical_Analysis_Basics.md](./10_Statistical_Analysis_Basics.md) | 통계 분석 기초 | 확률분포, 가설검정, 신뢰구간, 상관분석 |
+| [11_Practical_Projects.md](./11_Practical_Projects.md) | 실전 프로젝트 | Kaggle 데이터셋 EDA, 종합 실습 |
 
 ---
 

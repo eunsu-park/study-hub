@@ -40,14 +40,14 @@
 ## 선수 지식
 
 - **필수**
-  - 네트워크 기초 (HTTP, DNS, TCP/IP) → [Network/](../Network/00_Overview.md)
+  - 네트워크 기초 (HTTP, DNS, TCP/IP) → [Networking/](../Networking/00_Overview.md)
   - 데이터베이스 기초 (SQL, 트랜잭션) → [PostgreSQL/](../PostgreSQL/00_Overview.md)
   - 프로그래밍 언어 1개 이상
 
 - **권장**
   - Linux 기본 명령어 → [Linux/](../Linux/00_Overview.md)
   - Docker 기초 → [Docker/](../Docker/00_Overview.md)
-  - REST API 개념 → [WebDev/](../WebDev/00_Overview.md)
+  - REST API 개념 → [Web_Development/](../Web_Development/00_Overview.md)
 
 ---
 
@@ -57,59 +57,59 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_시스템_설계_개요.md](./01_시스템_설계_개요.md) | ⭐ | 시스템 설계란, 면접 평가 기준, 문제 접근 프레임워크 |
-| [02_확장성_기초.md](./02_확장성_기초.md) | ⭐⭐ | 수직/수평 확장, CAP 정리, PACELC |
-| [03_네트워크_기초_복습.md](./03_네트워크_기초_복습.md) | ⭐⭐ | DNS, CDN, HTTP/2/3, REST vs gRPC |
+| [01_System_Design_Overview.md](./01_System_Design_Overview.md) | ⭐ | 시스템 설계란, 면접 평가 기준, 문제 접근 프레임워크 |
+| [02_Scalability_Basics.md](./02_Scalability_Basics.md) | ⭐⭐ | 수직/수평 확장, CAP 정리, PACELC |
+| [03_Network_Fundamentals_Review.md](./03_Network_Fundamentals_Review.md) | ⭐⭐ | DNS, CDN, HTTP/2/3, REST vs gRPC |
 
 ### 로드밸런싱과 프록시 (04-05)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [04_로드_밸런싱.md](./04_로드_밸런싱.md) | ⭐⭐⭐ | L4/L7 로드 밸런서, 분배 알고리즘, 헬스 체크 |
-| [05_리버스_프록시와_API_게이트웨이.md](./05_리버스_프록시와_API_게이트웨이.md) | ⭐⭐⭐ | 리버스 프록시, API Gateway, Rate Limiting |
+| [04_Load_Balancing.md](./04_Load_Balancing.md) | ⭐⭐⭐ | L4/L7 로드 밸런서, 분배 알고리즘, 헬스 체크 |
+| [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md) | ⭐⭐⭐ | 리버스 프록시, API Gateway, Rate Limiting |
 
 ### 캐싱 (06-07)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [06_캐싱_전략.md](./06_캐싱_전략.md) | ⭐⭐⭐ | Cache-Aside, Write-Through, 캐시 무효화 |
-| [07_분산_캐시_시스템.md](./07_분산_캐시_시스템.md) | ⭐⭐⭐ | Redis, Memcached, 일관성 해싱 |
+| [06_Caching_Strategies.md](./06_Caching_Strategies.md) | ⭐⭐⭐ | Cache-Aside, Write-Through, 캐시 무효화 |
+| [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) | ⭐⭐⭐ | Redis, Memcached, 일관성 해싱 |
 
 ### 데이터베이스 확장 (08-10)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [08_데이터베이스_확장.md](./08_데이터베이스_확장.md) | ⭐⭐⭐ | 파티셔닝, 샤딩 전략, 리밸런싱 |
-| [09_데이터베이스_복제.md](./09_데이터베이스_복제.md) | ⭐⭐⭐ | 리더 복제, Quorum, 장애 복구 |
-| [10_데이터_일관성_패턴.md](./10_데이터_일관성_패턴.md) | ⭐⭐⭐ | 일관성 모델, 최종 일관성, 강한 일관성 |
+| [08_Database_Scaling.md](./08_Database_Scaling.md) | ⭐⭐⭐ | 파티셔닝, 샤딩 전략, 리밸런싱 |
+| [09_Database_Replication.md](./09_Database_Replication.md) | ⭐⭐⭐ | 리더 복제, Quorum, 장애 복구 |
+| [10_Data_Consistency_Patterns.md](./10_Data_Consistency_Patterns.md) | ⭐⭐⭐ | 일관성 모델, 최종 일관성, 강한 일관성 |
 
 ### 메시지 큐 (11-12)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [11_메시지_큐_기초.md](./11_메시지_큐_기초.md) | ⭐⭐⭐ | 비동기 처리, Kafka, RabbitMQ |
-| [12_메시지_시스템_비교.md](./12_메시지_시스템_비교.md) | ⭐⭐⭐⭐ | Kafka vs RabbitMQ, 사용 사례 |
+| [11_Message_Queue_Basics.md](./11_Message_Queue_Basics.md) | ⭐⭐⭐ | 비동기 처리, Kafka, RabbitMQ |
+| [12_Message_System_Comparison.md](./12_Message_System_Comparison.md) | ⭐⭐⭐⭐ | Kafka vs RabbitMQ, 사용 사례 |
 
 ### 마이크로서비스 (13-14)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [13_마이크로서비스_기초.md](./13_마이크로서비스_기초.md) | ⭐⭐⭐⭐ | 모놀리스 vs MSA, 서비스 분리 |
-| [14_마이크로서비스_패턴.md](./14_마이크로서비스_패턴.md) | ⭐⭐⭐⭐ | 서비스 메시, Circuit Breaker, Saga |
+| [13_Microservices_Basics.md](./13_Microservices_Basics.md) | ⭐⭐⭐⭐ | 모놀리스 vs MSA, 서비스 분리 |
+| [14_Microservices_Patterns.md](./14_Microservices_Patterns.md) | ⭐⭐⭐⭐ | 서비스 메시, Circuit Breaker, Saga |
 
 ### 분산 시스템 (15-16)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [15_분산_시스템_개념.md](./15_분산_시스템_개념.md) | ⭐⭐⭐⭐ | 분산 시스템 특성, 장애 모델 |
-| [16_합의_알고리즘.md](./16_합의_알고리즘.md) | ⭐⭐⭐⭐⭐ | Raft, Paxos, 리더 선출 |
+| [15_Distributed_Systems_Concepts.md](./15_Distributed_Systems_Concepts.md) | ⭐⭐⭐⭐ | 분산 시스템 특성, 장애 모델 |
+| [16_Consensus_Algorithms.md](./16_Consensus_Algorithms.md) | ⭐⭐⭐⭐⭐ | Raft, Paxos, 리더 선출 |
 
 ### 실전 설계 (17-18)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [17_실전_설계_예제_1.md](./17_실전_설계_예제_1.md) | ⭐⭐⭐ | URL 단축기, 페이스트빈 설계 |
-| [18_실전_설계_예제_2.md](./18_실전_설계_예제_2.md) | ⭐⭐⭐⭐ | 채팅 시스템, 알림 시스템 설계 |
+| [17_Design_Example_1.md](./17_Design_Example_1.md) | ⭐⭐⭐ | URL 단축기, 페이스트빈 설계 |
+| [18_Design_Example_2.md](./18_Design_Example_2.md) | ⭐⭐⭐⭐ | 채팅 시스템, 알림 시스템 설계 |
 
 ---
 
@@ -117,37 +117,37 @@
 
 ### 1단계: 기초 다지기 (1주)
 ```
-01_시스템_설계_개요 → 02_확장성_기초 → 03_네트워크_기초_복습
+01_System_Design_Overview → 02_Scalability_Basics → 03_Network_Fundamentals_Review
 ```
 시스템 설계의 핵심 개념과 면접 접근법을 익힙니다.
 
 ### 2단계: 트래픽 처리 (1주)
 ```
-04_로드_밸런싱 → 05_리버스_프록시와_API_게이트웨이
+04_Load_Balancing → 05_Reverse_Proxy_API_Gateway
 ```
 트래픽 분산과 API 관리 방법을 학습합니다.
 
 ### 3단계: 캐싱 마스터 (1주)
 ```
-06_캐싱_전략 → 07_분산_캐시_시스템
+06_Caching_Strategies → 07_Distributed_Cache_Systems
 ```
 성능 최적화의 핵심인 캐싱을 깊이 있게 다룹니다.
 
 ### 4단계: 데이터베이스 확장 (1~2주)
 ```
-08_데이터베이스_확장 → 09_데이터베이스_복제 → 10_데이터_일관성_패턴
+08_Database_Scaling → 09_Database_Replication → 10_Data_Consistency_Patterns
 ```
 대용량 데이터 처리를 위한 DB 확장 전략을 익힙니다.
 
 ### 5단계: 메시지 큐와 마이크로서비스 (2주)
 ```
-11_메시지_큐_기초 → 12_메시지_시스템_비교 → 13_마이크로서비스_기초 → 14_마이크로서비스_패턴
+11_Message_Queue_Basics → 12_Message_System_Comparison → 13_Microservices_Basics → 14_Microservices_Patterns
 ```
 비동기 처리와 분산 아키텍처 패턴을 학습합니다.
 
 ### 6단계: 분산 시스템과 실전 설계 (2~3주)
 ```
-15_분산_시스템_개념 → 16_합의_알고리즘 → 17_실전_설계_예제_1 → 18_실전_설계_예제_2
+15_Distributed_Systems_Concepts → 16_Consensus_Algorithms → 17_Design_Example_1 → 18_Design_Example_2
 ```
 분산 시스템 이론과 실전 설계 문제를 다룹니다.
 
@@ -222,7 +222,7 @@
 
 | 폴더 | 관련 내용 |
 |------|----------|
-| [Network/](../Network/00_Overview.md) | DNS, HTTP, TCP/IP, 네트워크 보안 |
+| [Networking/](../Networking/00_Overview.md) | DNS, HTTP, TCP/IP, 네트워크 보안 |
 | [PostgreSQL/](../PostgreSQL/00_Overview.md) | 데이터베이스, 트랜잭션, 복제 |
 | [Docker/](../Docker/00_Overview.md) | 컨테이너화, 마이크로서비스 배포 |
 | [Linux/](../Linux/00_Overview.md) | 서버 관리, 성능 모니터링 |

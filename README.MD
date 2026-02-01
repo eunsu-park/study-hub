@@ -21,16 +21,16 @@ This repository is a personal study project. Some content was written by me, som
 | [Git/](./Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 11개 |
 | [Linux/](./Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 27개 |
 | [Machine_Learning/](./Machine_Learning/00_Overview.md) | 회귀, 분류, 앙상블, 클러스터링, sklearn | 15개 |
-| [Network/](./Network/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 | 18개 |
+| [Networking/](./Networking/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 | 18개 |
 | [Numerical_Simulation/](./Numerical_Simulation/00_Overview.md) | 수치해석, ODE/PDE, CFD, FDTD, MHD, 몬테카를로 | 21개 |
-| [OpenCV_ComputerVision/](./OpenCV_ComputerVision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 얼굴인식 | 21개 |
+| [Computer_Vision/](./Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 얼굴인식 | 21개 |
 | [OS_Theory/](./OS_Theory/00_Overview.md) | 운영체제, 프로세스, 메모리, 파일시스템 | 19개 |
 | [PostgreSQL/](./PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 | 19개 |
 | [Python/](./Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 | 15개 |
 | [Spanish/](./Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 | 10개 |
-| [Statistics_Advanced/](./Statistics_Advanced/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 | 15개 |
+| [Statistics/](./Statistics/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 | 15개 |
 | [System_Design/](./System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 | 19개 |
-| [WebDev/](./WebDev/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 14개 |
+| [Web_Development/](./Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 14개 |
 
 ---
 

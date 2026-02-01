@@ -42,44 +42,44 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_컴퓨터_시스템_개요.md](./01_컴퓨터_시스템_개요.md) | ⭐ | 컴퓨터 역사, 폰 노이만 구조, 하드웨어 구성 |
-| [02_데이터_표현_기초.md](./02_데이터_표현_기초.md) | ⭐ | 이진수, 8진수, 16진수, 진법 변환 |
-| [03_정수와_실수_표현.md](./03_정수와_실수_표현.md) | ⭐⭐ | 2의 보수, IEEE 754 부동소수점 |
-| [04_논리_게이트.md](./04_논리_게이트.md) | ⭐ | AND, OR, NOT, 불 대수 |
-| [05_조합_논리_회로.md](./05_조합_논리_회로.md) | ⭐⭐ | 가산기, 멀티플렉서, 디코더 |
+| [01_Computer_System_Overview.md](./01_Computer_System_Overview.md) | ⭐ | 컴퓨터 역사, 폰 노이만 구조, 하드웨어 구성 |
+| [02_Data_Representation_Basics.md](./02_Data_Representation_Basics.md) | ⭐ | 이진수, 8진수, 16진수, 진법 변환 |
+| [03_Integer_Float_Representation.md](./03_Integer_Float_Representation.md) | ⭐⭐ | 2의 보수, IEEE 754 부동소수점 |
+| [04_Logic_Gates.md](./04_Logic_Gates.md) | ⭐ | AND, OR, NOT, 불 대수 |
+| [05_Combinational_Logic.md](./05_Combinational_Logic.md) | ⭐⭐ | 가산기, 멀티플렉서, 디코더 |
 
 ### CPU 아키텍처 (06-10)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [06_순차_논리_회로.md](./06_순차_논리_회로.md) | ⭐⭐ | 플립플롭, 레지스터, 카운터 |
-| [07_CPU_구조_기초.md](./07_CPU_구조_기초.md) | ⭐⭐ | ALU, 레지스터 파일, 데이터패스 |
-| [08_제어장치.md](./08_제어장치.md) | ⭐⭐⭐ | 하드와이어드/마이크로프로그램 제어 |
-| [09_명령어_집합_아키텍처.md](./09_명령어_집합_아키텍처.md) | ⭐⭐⭐ | CISC vs RISC, 주소 지정 방식 |
-| [10_어셈블리_언어_기초.md](./10_어셈블리_언어_기초.md) | ⭐⭐⭐ | x86/ARM 기초, 기본 명령어 |
+| [06_Sequential_Logic.md](./06_Sequential_Logic.md) | ⭐⭐ | 플립플롭, 레지스터, 카운터 |
+| [07_CPU_Architecture_Basics.md](./07_CPU_Architecture_Basics.md) | ⭐⭐ | ALU, 레지스터 파일, 데이터패스 |
+| [08_Control_Unit.md](./08_Control_Unit.md) | ⭐⭐⭐ | 하드와이어드/마이크로프로그램 제어 |
+| [09_Instruction_Set_Architecture.md](./09_Instruction_Set_Architecture.md) | ⭐⭐⭐ | CISC vs RISC, 주소 지정 방식 |
+| [10_Assembly_Language_Basics.md](./10_Assembly_Language_Basics.md) | ⭐⭐⭐ | x86/ARM 기초, 기본 명령어 |
 
 ### 성능 향상 기법 (11-13)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [11_파이프라이닝.md](./11_파이프라이닝.md) | ⭐⭐⭐ | 파이프라인 단계, 해저드, 포워딩 |
-| [12_분기_예측.md](./12_분기_예측.md) | ⭐⭐⭐ | 정적/동적 분기 예측, BTB |
-| [13_슈퍼스칼라와_비순차_실행.md](./13_슈퍼스칼라와_비순차_실행.md) | ⭐⭐⭐⭐ | ILP, 레지스터 리네이밍 |
+| [11_Pipelining.md](./11_Pipelining.md) | ⭐⭐⭐ | 파이프라인 단계, 해저드, 포워딩 |
+| [12_Branch_Prediction.md](./12_Branch_Prediction.md) | ⭐⭐⭐ | 정적/동적 분기 예측, BTB |
+| [13_Superscalar_Out_of_Order.md](./13_Superscalar_Out_of_Order.md) | ⭐⭐⭐⭐ | ILP, 레지스터 리네이밍 |
 
 ### 메모리 시스템 (14-16)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [14_메모리_계층_구조.md](./14_메모리_계층_구조.md) | ⭐⭐ | 지역성, SRAM/DRAM, 메모리 계층 |
-| [15_캐시_메모리.md](./15_캐시_메모리.md) | ⭐⭐⭐ | 직접/연관/집합연관 사상, 교체 정책 |
-| [16_가상_메모리.md](./16_가상_메모리.md) | ⭐⭐⭐⭐ | 페이지 테이블, TLB, 페이지 교체 |
+| [14_Memory_Hierarchy.md](./14_Memory_Hierarchy.md) | ⭐⭐ | 지역성, SRAM/DRAM, 메모리 계층 |
+| [15_Cache_Memory.md](./15_Cache_Memory.md) | ⭐⭐⭐ | 직접/연관/집합연관 사상, 교체 정책 |
+| [16_Virtual_Memory.md](./16_Virtual_Memory.md) | ⭐⭐⭐⭐ | 페이지 테이블, TLB, 페이지 교체 |
 
 ### 입출력 및 병렬 처리 (17-18)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [17_입출력_시스템.md](./17_입출력_시스템.md) | ⭐⭐⭐ | 인터럽트, DMA, 버스 |
-| [18_병렬_처리와_멀티코어.md](./18_병렬_처리와_멀티코어.md) | ⭐⭐⭐⭐ | SIMD/MIMD, 캐시 일관성, Amdahl |
+| [17_IO_Systems.md](./17_IO_Systems.md) | ⭐⭐⭐ | 인터럽트, DMA, 버스 |
+| [18_Parallel_Processing_Multicore.md](./18_Parallel_Processing_Multicore.md) | ⭐⭐⭐⭐ | SIMD/MIMD, 캐시 일관성, Amdahl |
 
 ---
 
@@ -87,32 +87,32 @@
 
 ### 1단계: 기초 개념 (1주)
 ```
-01_컴퓨터_시스템_개요 → 02_데이터_표현_기초 → 03_정수와_실수_표현
+01_Computer_System_Overview → 02_Data_Representation_Basics → 03_Integer_Float_Representation
 ```
 
 ### 2단계: 디지털 논리 (1주)
 ```
-04_논리_게이트 → 05_조합_논리_회로 → 06_순차_논리_회로
+04_Logic_Gates → 05_Combinational_Logic → 06_Sequential_Logic
 ```
 
 ### 3단계: CPU 아키텍처 (2주)
 ```
-07_CPU_구조_기초 → 08_제어장치 → 09_명령어_집합_아키텍처 → 10_어셈블리_언어_기초
+07_CPU_Architecture_Basics → 08_Control_Unit → 09_Instruction_Set_Architecture → 10_Assembly_Language_Basics
 ```
 
 ### 4단계: 성능 향상 (1~2주)
 ```
-11_파이프라이닝 → 12_분기_예측 → 13_슈퍼스칼라와_비순차_실행
+11_Pipelining → 12_Branch_Prediction → 13_Superscalar_Out_of_Order
 ```
 
 ### 5단계: 메모리 시스템 (1~2주)
 ```
-14_메모리_계층_구조 → 15_캐시_메모리 → 16_가상_메모리
+14_Memory_Hierarchy → 15_Cache_Memory → 16_Virtual_Memory
 ```
 
 ### 6단계: 입출력 및 병렬 (1주)
 ```
-17_입출력_시스템 → 18_병렬_처리와_멀티코어
+17_IO_Systems → 18_Parallel_Processing_Multicore
 ```
 
 ---

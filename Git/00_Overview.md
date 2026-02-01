@@ -36,16 +36,16 @@ Git 기초 ────────▶ GitHub 시작 ────▶ Git 고급
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Git_기초.md](./01_Git_기초.md) | ⭐ | Git 개념, 설치, 초기 설정 |
-| [02_기본_명령어.md](./02_기본_명령어.md) | ⭐ | status, add, commit, log |
-| [03_브랜치.md](./03_브랜치.md) | ⭐⭐ | 브랜치 생성, 병합, 충돌 해결 |
-| [04_GitHub_시작하기.md](./04_GitHub_시작하기.md) | ⭐ | 원격 저장소, push, pull, clone |
-| [05_GitHub_협업.md](./05_GitHub_협업.md) | ⭐⭐ | Pull Request, 코드 리뷰, Fork |
-| [06_Git_고급.md](./06_Git_고급.md) | ⭐⭐⭐ | rebase, cherry-pick, stash, reset |
+| [01_Git_Basics.md](./01_Git_Basics.md) | ⭐ | Git 개념, 설치, 초기 설정 |
+| [02_Basic_Commands.md](./02_Basic_Commands.md) | ⭐ | status, add, commit, log |
+| [03_Branches.md](./03_Branches.md) | ⭐⭐ | 브랜치 생성, 병합, 충돌 해결 |
+| [04_GitHub_Getting_Started.md](./04_GitHub_Getting_Started.md) | ⭐ | 원격 저장소, push, pull, clone |
+| [05_GitHub_Collaboration.md](./05_GitHub_Collaboration.md) | ⭐⭐ | Pull Request, 코드 리뷰, Fork |
+| [06_Git_Advanced.md](./06_Git_Advanced.md) | ⭐⭐⭐ | rebase, cherry-pick, stash, reset |
 | [07_GitHub_Actions.md](./07_GitHub_Actions.md) | ⭐⭐⭐ | CI/CD, 워크플로우 자동화 |
-| [08_Git_워크플로우_전략.md](./08_Git_워크플로우_전략.md) | ⭐⭐⭐ | Git Flow, GitHub Flow, trunk-based |
-| [09_고급_Git_기법.md](./09_고급_Git_기법.md) | ⭐⭐⭐⭐ | hooks, submodules, worktrees |
-| [10_모노레포_관리.md](./10_모노레포_관리.md) | ⭐⭐⭐⭐ | Nx, Turborepo, 의존성 관리 |
+| [08_Git_Workflow_Strategies.md](./08_Git_Workflow_Strategies.md) | ⭐⭐⭐ | Git Flow, GitHub Flow, trunk-based |
+| [09_Advanced_Git_Techniques.md](./09_Advanced_Git_Techniques.md) | ⭐⭐⭐⭐ | hooks, submodules, worktrees |
+| [10_Monorepo_Management.md](./10_Monorepo_Management.md) | ⭐⭐⭐⭐ | Nx, Turborepo, 의존성 관리 |
 
 ---
 

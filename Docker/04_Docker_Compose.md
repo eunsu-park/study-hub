@@ -586,4 +586,4 @@ services:
 
 ## 다음 단계
 
-[05_실전_예제.md](./05_실전_예제.md)에서 실제 프로젝트에 Docker를 적용해봅시다!
+[05_Practical_Examples.md](./05_Practical_Examples.md)에서 실제 프로젝트에 Docker를 적용해봅시다!

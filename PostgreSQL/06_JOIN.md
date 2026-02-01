@@ -508,4 +508,4 @@ JOIN orders o ON u.id = o.user_id;
 
 ## 다음 단계
 
-[07_집계와_그룹.md](./07_집계와_그룹.md)에서 집계 함수와 GROUP BY를 배워봅시다!
+[07_Aggregation_and_Grouping.md](./07_Aggregation_and_Grouping.md)에서 집계 함수와 GROUP BY를 배워봅시다!

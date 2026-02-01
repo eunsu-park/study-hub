@@ -34,26 +34,26 @@
 
 | 파일 | 주제 | 핵심 내용 |
 |------|------|----------|
-| 01 | 수치해석 기초 | 부동소수점, 오차 분석, 수치 미분/적분 |
-| 02 | 선형대수 복습 | 행렬 연산, 고유값, 분해(LU, QR, SVD) |
-| 03 | 상미분방정식 기초 | ODE 개념, 초기값 문제, 해석적 해 |
-| 04 | ODE 수치해법 | Euler, RK2, RK4, 적응형 스텝 |
-| 05 | ODE 고급 | 강성(stiff) 문제, 암시적 방법, scipy.integrate |
-| 06 | 연립 ODE와 시스템 | Lotka-Volterra, 진자, 혼돈계 (Lorenz) |
-| 07 | 편미분방정식 개요 | PDE 분류, 경계조건, 초기조건 |
-| 08 | 유한차분법 기초 | 격자, 이산화, 안정성 조건 (CFL) |
-| 09 | 열방정식 | 1D/2D 열전도, 명시적/암시적 방법 |
-| 10 | 파동방정식 | 1D/2D 파동, 경계 반사, 흡수 경계 |
-| 11 | 라플라스/포아송 | 정상상태, 반복법 (Jacobi, Gauss-Seidel, SOR) |
-| 12 | 이류방정식 | Upwind, Lax-Wendroff, 수치 분산/확산 |
-| 13 | CFD 기초 | 유체역학 개념, Navier-Stokes 소개 |
-| 14 | 비압축성 유동 | 유선함수-와도, 압력-속도 결합, SIMPLE |
-| 15 | 전자기학 수치해석 | Maxwell 방정식, FDTD 기초 |
-| 16 | FDTD 구현 | 1D/2D 전자기파 시뮬레이션, 흡수경계(PML) |
-| 17 | MHD 기초 이론 | 자기유체역학 개념, 이상 MHD 방정식 |
-| 18 | MHD 수치해법 | 보존형, Godunov 방법, MHD 리만 문제 |
-| 19 | 플라즈마 시뮬레이션 | PIC 방법 기초, 입자-격자 상호작용 |
-| 20 | 몬테카를로 시뮬레이션 | 난수 생성, MC 적분, Ising 모델, 옵션 가격, 분산 감소 |
+| [01_Numerical_Analysis_Basics.md](./01_Numerical_Analysis_Basics.md) | 수치해석 기초 | 부동소수점, 오차 분석, 수치 미분/적분 |
+| [02_Linear_Algebra_Review.md](./02_Linear_Algebra_Review.md) | 선형대수 복습 | 행렬 연산, 고유값, 분해(LU, QR, SVD) |
+| [03_ODE_Basics.md](./03_ODE_Basics.md) | 상미분방정식 기초 | ODE 개념, 초기값 문제, 해석적 해 |
+| [04_ODE_Numerical_Methods.md](./04_ODE_Numerical_Methods.md) | ODE 수치해법 | Euler, RK2, RK4, 적응형 스텝 |
+| [05_ODE_Advanced.md](./05_ODE_Advanced.md) | ODE 고급 | 강성(stiff) 문제, 암시적 방법, scipy.integrate |
+| [06_ODE_Systems.md](./06_ODE_Systems.md) | 연립 ODE와 시스템 | Lotka-Volterra, 진자, 혼돈계 (Lorenz) |
+| [07_PDE_Overview.md](./07_PDE_Overview.md) | 편미분방정식 개요 | PDE 분류, 경계조건, 초기조건 |
+| [08_Finite_Difference_Basics.md](./08_Finite_Difference_Basics.md) | 유한차분법 기초 | 격자, 이산화, 안정성 조건 (CFL) |
+| [09_Heat_Equation.md](./09_Heat_Equation.md) | 열방정식 | 1D/2D 열전도, 명시적/암시적 방법 |
+| [10_Wave_Equation.md](./10_Wave_Equation.md) | 파동방정식 | 1D/2D 파동, 경계 반사, 흡수 경계 |
+| [11_Laplace_Poisson.md](./11_Laplace_Poisson.md) | 라플라스/포아송 | 정상상태, 반복법 (Jacobi, Gauss-Seidel, SOR) |
+| [12_Advection_Equation.md](./12_Advection_Equation.md) | 이류방정식 | Upwind, Lax-Wendroff, 수치 분산/확산 |
+| [13_CFD_Basics.md](./13_CFD_Basics.md) | CFD 기초 | 유체역학 개념, Navier-Stokes 소개 |
+| [14_Incompressible_Flow.md](./14_Incompressible_Flow.md) | 비압축성 유동 | 유선함수-와도, 압력-속도 결합, SIMPLE |
+| [15_Electromagnetics_Numerical.md](./15_Electromagnetics_Numerical.md) | 전자기학 수치해석 | Maxwell 방정식, FDTD 기초 |
+| [16_FDTD_Implementation.md](./16_FDTD_Implementation.md) | FDTD 구현 | 1D/2D 전자기파 시뮬레이션, 흡수경계(PML) |
+| [17_MHD_Basics.md](./17_MHD_Basics.md) | MHD 기초 이론 | 자기유체역학 개념, 이상 MHD 방정식 |
+| [18_MHD_Numerical_Methods.md](./18_MHD_Numerical_Methods.md) | MHD 수치해법 | 보존형, Godunov 방법, MHD 리만 문제 |
+| [19_Plasma_Simulation.md](./19_Plasma_Simulation.md) | 플라즈마 시뮬레이션 | PIC 방법 기초, 입자-격자 상호작용 |
+| [20_Monte_Carlo_Simulation.md](./20_Monte_Carlo_Simulation.md) | 몬테카를로 시뮬레이션 | 난수 생성, MC 적분, Ising 모델, 옵션 가격, 분산 감소 |
 
 ---
 
@@ -84,40 +84,40 @@ pip install mayavi
 ## 권장 학습 순서
 
 ### 1단계: 기초 (1-2주)
-- 01_수치해석_기초.md
-- 02_선형대수_복습.md
+- 01_Numerical_Analysis_Basics.md
+- 02_Linear_Algebra_Review.md
 
 ### 2단계: ODE (2-3주)
-- 03_상미분방정식_기초.md
-- 04_ODE_수치해법.md
-- 05_ODE_고급.md
-- 06_연립_ODE와_시스템.md
+- 03_ODE_Basics.md
+- 04_ODE_Numerical_Methods.md
+- 05_ODE_Advanced.md
+- 06_ODE_Systems.md
 
 ### 3단계: PDE 기초 (2-3주)
-- 07_편미분방정식_개요.md
-- 08_유한차분법_기초.md
-- 09_열방정식.md
-- 10_파동방정식.md
+- 07_PDE_Overview.md
+- 08_Finite_Difference_Basics.md
+- 09_Heat_Equation.md
+- 10_Wave_Equation.md
 
 ### 4단계: 정상상태와 이류 (1-2주)
-- 11_라플라스_포아송.md
-- 12_이류방정식.md
+- 11_Laplace_Poisson.md
+- 12_Advection_Equation.md
 
 ### 5단계: CFD (2-3주)
-- 13_CFD_기초.md
-- 14_비압축성_유동.md
+- 13_CFD_Basics.md
+- 14_Incompressible_Flow.md
 
 ### 6단계: 전자기 (2주)
-- 15_전자기학_수치해석.md
-- 16_FDTD_구현.md
+- 15_Electromagnetics_Numerical.md
+- 16_FDTD_Implementation.md
 
 ### 7단계: MHD와 플라즈마 (3-4주)
-- 17_MHD_기초_이론.md
-- 18_MHD_수치해법.md
-- 19_플라즈마_시뮬레이션.md
+- 17_MHD_Basics.md
+- 18_MHD_Numerical_Methods.md
+- 19_Plasma_Simulation.md
 
 ### 8단계: 확률적 시뮬레이션 (2주)
-- 20_몬테카를로_시뮬레이션.md
+- 20_Monte_Carlo_Simulation.md
 
 ---
 

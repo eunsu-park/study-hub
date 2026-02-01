@@ -49,49 +49,49 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_운영체제_개요.md](./01_운영체제_개요.md) | ⭐ | OS 정의, 역할, 역사, 커널 구조 |
-| [02_프로세스_개념.md](./02_프로세스_개념.md) | ⭐⭐ | 프로세스 메모리 구조, PCB, 상태 전이 |
-| [03_스레드와_멀티스레딩.md](./03_스레드와_멀티스레딩.md) | ⭐⭐ | 스레드 vs 프로세스, 멀티스레딩 모델 |
+| [01_OS_Overview.md](./01_OS_Overview.md) | ⭐ | OS 정의, 역할, 역사, 커널 구조 |
+| [02_Process_Concepts.md](./02_Process_Concepts.md) | ⭐⭐ | 프로세스 메모리 구조, PCB, 상태 전이 |
+| [03_Threads_and_Multithreading.md](./03_Threads_and_Multithreading.md) | ⭐⭐ | 스레드 vs 프로세스, 멀티스레딩 모델 |
 
 ### CPU 스케줄링 (04-06)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [04_CPU_스케줄링_기초.md](./04_CPU_스케줄링_기초.md) | ⭐⭐ | CPU/I/O burst, 스케줄링 목표, 스케줄러 종류 |
-| [05_스케줄링_알고리즘.md](./05_스케줄링_알고리즘.md) | ⭐⭐⭐ | FCFS, SJF, SRTF, Priority, RR, 간트 차트 |
-| [06_고급_스케줄링.md](./06_고급_스케줄링.md) | ⭐⭐⭐ | MLFQ, 멀티프로세서 스케줄링, 실시간 스케줄링 |
+| [04_CPU_Scheduling_Basics.md](./04_CPU_Scheduling_Basics.md) | ⭐⭐ | CPU/I/O burst, 스케줄링 목표, 스케줄러 종류 |
+| [05_Scheduling_Algorithms.md](./05_Scheduling_Algorithms.md) | ⭐⭐⭐ | FCFS, SJF, SRTF, Priority, RR, 간트 차트 |
+| [06_Advanced_Scheduling.md](./06_Advanced_Scheduling.md) | ⭐⭐⭐ | MLFQ, 멀티프로세서 스케줄링, 실시간 스케줄링 |
 
 ### 프로세스 동기화 (07-09)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [07_동기화_기초.md](./07_동기화_기초.md) | ⭐⭐⭐ | 경쟁 상태, 임계 구역, Peterson's Solution |
-| [08_동기화_도구.md](./08_동기화_도구.md) | ⭐⭐⭐ | 뮤텍스, 세마포어, 모니터, 고전 동기화 문제 |
-| [09_데드락.md](./09_데드락.md) | ⭐⭐⭐ | 데드락 조건, 예방, 회피, 탐지, 은행원 알고리즘 |
+| [07_Synchronization_Basics.md](./07_Synchronization_Basics.md) | ⭐⭐⭐ | 경쟁 상태, 임계 구역, Peterson's Solution |
+| [08_Synchronization_Tools.md](./08_Synchronization_Tools.md) | ⭐⭐⭐ | 뮤텍스, 세마포어, 모니터, 고전 동기화 문제 |
+| [09_Deadlock.md](./09_Deadlock.md) | ⭐⭐⭐ | 데드락 조건, 예방, 회피, 탐지, 은행원 알고리즘 |
 
 ### 메모리 관리 (10-13)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [10_메모리_관리_기초.md](./10_메모리_관리_기초.md) | ⭐⭐ | 주소 바인딩, 스와핑, 메모리 할당 개요 |
-| [11_연속_메모리_할당.md](./11_연속_메모리_할당.md) | ⭐⭐⭐ | First-fit, Best-fit, 단편화, 압축 |
-| [12_페이징.md](./12_페이징.md) | ⭐⭐⭐ | 페이지 테이블, TLB, 다단계 페이징 |
-| [13_세그멘테이션.md](./13_세그멘테이션.md) | ⭐⭐⭐ | 세그먼트 테이블, 페이징과 비교 |
+| [10_Memory_Management_Basics.md](./10_Memory_Management_Basics.md) | ⭐⭐ | 주소 바인딩, 스와핑, 메모리 할당 개요 |
+| [11_Contiguous_Memory_Allocation.md](./11_Contiguous_Memory_Allocation.md) | ⭐⭐⭐ | First-fit, Best-fit, 단편화, 압축 |
+| [12_Paging.md](./12_Paging.md) | ⭐⭐⭐ | 페이지 테이블, TLB, 다단계 페이징 |
+| [13_Segmentation.md](./13_Segmentation.md) | ⭐⭐⭐ | 세그먼트 테이블, 페이징과 비교 |
 
 ### 가상 메모리 (14-15)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [14_가상_메모리.md](./14_가상_메모리.md) | ⭐⭐⭐ | 요구 페이징, 페이지 폴트, 유효/무효 비트 |
-| [15_페이지_교체.md](./15_페이지_교체.md) | ⭐⭐⭐ | FIFO, LRU, LFU, Clock, 스레싱 |
+| [14_Virtual_Memory.md](./14_Virtual_Memory.md) | ⭐⭐⭐ | 요구 페이징, 페이지 폴트, 유효/무효 비트 |
+| [15_Page_Replacement.md](./15_Page_Replacement.md) | ⭐⭐⭐ | FIFO, LRU, LFU, Clock, 스레싱 |
 
 ### 파일 시스템과 I/O (16-18)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [16_파일_시스템_기초.md](./16_파일_시스템_기초.md) | ⭐⭐ | 파일 개념, 디렉토리 구조, 접근 방법 |
-| [17_파일_시스템_구현.md](./17_파일_시스템_구현.md) | ⭐⭐⭐ | 할당 방법, FAT, inode, 저널링 |
-| [18_IO와_IPC.md](./18_IO와_IPC.md) | ⭐⭐⭐ | I/O 하드웨어, DMA, IPC 통신 |
+| [16_File_System_Basics.md](./16_File_System_Basics.md) | ⭐⭐ | 파일 개념, 디렉토리 구조, 접근 방법 |
+| [17_File_System_Implementation.md](./17_File_System_Implementation.md) | ⭐⭐⭐ | 할당 방법, FAT, inode, 저널링 |
+| [18_IO_and_IPC.md](./18_IO_and_IPC.md) | ⭐⭐⭐ | I/O 하드웨어, DMA, IPC 통신 |
 
 ---
 
@@ -99,35 +99,35 @@
 
 ### 1단계: 운영체제 기초 (1주)
 ```
-01_운영체제_개요 → 02_프로세스_개념 → 03_스레드와_멀티스레딩
+01_OS_Overview → 02_Process_Concepts → 03_Threads_and_Multithreading
 ```
 운영체제의 기본 개념과 프로세스/스레드의 차이를 이해합니다.
 
 ### 2단계: CPU 스케줄링 (1~2주)
 ```
-04_CPU_스케줄링_기초 → 05_스케줄링_알고리즘 → 06_고급_스케줄링
+04_CPU_Scheduling_Basics → 05_Scheduling_Algorithms → 06_Advanced_Scheduling
 ```
 CPU 스케줄링의 목표와 다양한 알고리즘을 학습합니다.
 
 ### 3단계: 프로세스 동기화 (1~2주)
 ```
-07_동기화_기초 → 08_동기화_도구 → 09_데드락
+07_Synchronization_Basics → 08_Synchronization_Tools → 09_Deadlock
 ```
 동시성 문제와 해결 방법을 심도 있게 학습합니다.
 
 ### 4단계: 메모리 관리 (1~2주)
 ```
-10_메모리_관리_기초 → 11_연속_메모리_할당 → 12_페이징 → 13_세그멘테이션
+10_Memory_Management_Basics → 11_Contiguous_Memory_Allocation → 12_Paging → 13_Segmentation
 ```
 
 ### 5단계: 가상 메모리 (1주)
 ```
-14_가상_메모리 → 15_페이지_교체
+14_Virtual_Memory → 15_Page_Replacement
 ```
 
 ### 6단계: 파일/I/O (1주)
 ```
-16_파일_시스템_기초 → 17_파일_시스템_구현 → 18_IO와_IPC
+16_File_System_Basics → 17_File_System_Implementation → 18_IO_and_IPC
 ```
 
 ---
@@ -221,7 +221,7 @@ cat /proc/[PID]/status
 | [Linux/](../Linux/00_Overview.md) | 리눅스 시스템 프로그래밍, 프로세스 관리 |
 | [Computer_Architecture/](../Computer_Architecture/00_Overview.md) | CPU 구조, 메모리 계층, 인터럽트 |
 | [C_Programming/](../C_Programming/00_Overview.md) | 시스템 호출, 멀티스레드 프로그래밍 |
-| [Network/](../Network/00_Overview.md) | 소켓 프로그래밍, I/O 모델 |
+| [Networking/](../Networking/00_Overview.md) | 소켓 프로그래밍, I/O 모델 |
 
 ### 외부 자료
 
