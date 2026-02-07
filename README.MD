@@ -60,7 +60,7 @@ flask run --port 5050
 | [CPP/](./content/ko/CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 / C++ Intro to Modern C++, Design Patterns | 18 |
 | [Data_Analysis/](./content/ko/Data_Analysis/00_Overview.md) | NumPy, Pandas, 시각화, 통계분석 / NumPy, Pandas, Visualization, Statistics | 11 |
 | [Data_Engineering/](./content/ko/Data_Engineering/00_Overview.md) | 데이터 파이프라인, Airflow, Spark, Kafka, dbt / Data Pipelines | 14 |
-| [Deep_Learning/](./content/ko/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, ViT | 23 |
+| [Deep_Learning/](./content/ko/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, ViT | 24 |
 | [Docker/](./content/ko/Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 10 |
 | [Foundation_Models/](./content/ko/Foundation_Models/00_Overview.md) | Scaling Laws, LLaMA, Mistral, DINOv2, SAM, PEFT, RAG | 25 |
 | [Git/](./content/ko/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 / Git, GitHub, Workflows, Monorepo | 10 |
@@ -79,7 +79,7 @@ flask run --port 5050
 | [Spanish/](./content/ko/Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 / Spanish Grammar, Vocabulary, Subjunctive | 11 |
 | [Statistics/](./content/ko/Statistics/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 / Advanced Stats, Bayesian, Time Series | 14 |
 | [System_Design/](./content/ko/System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 / System Design, Scalability, Distributed Systems | 18 |
-| [Web_Development/](./content/ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 15 |
+| [Web_Development/](./content/ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO, Flask | 16 |
 
 ---
 

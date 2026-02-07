@@ -47,6 +47,7 @@ HTML 기초 ────▶ CSS 기초 ─────────▶ JS 기초
 | [13_Build_Tools_Environment.md](./13_Build_Tools_Environment.md) | ⭐⭐⭐ | npm/yarn, Vite, webpack 기초 |
 | [14_CSS_Animations.md](./14_CSS_Animations.md) | ⭐⭐ | transition, transform, @keyframes |
 | [15_JS_Modules.md](./15_JS_Modules.md) | ⭐⭐⭐ | ES Modules, import/export, 동적 import |
+| [16_Flask_Basics.md](./16_Flask_Basics.md) | ⭐⭐⭐ | Flask 라우팅, 템플릿, 폼, DB 연동, REST API |
 
 ---
 

@@ -98,6 +98,12 @@ Understanding                                         ▼
 |----------|------------|------------|-------|
 | [23_Object_Detection.md](./23_Object_Detection.md) | ⭐⭐⭐⭐ | YOLO, Faster R-CNN, DETR, Mask R-CNN, SAM | PyTorch only |
 
+### Visualization/Tools (PyTorch only)
+
+| Filename | Difficulty | Key Topics | Notes |
+|----------|------------|------------|-------|
+| [24_TensorBoard.md](./24_TensorBoard.md) | ⭐⭐ | Training visualization, metric logging, hyperparameter tracking, profiling | PyTorch only |
+
 ---
 
 ## NumPy vs PyTorch Comparison Guide

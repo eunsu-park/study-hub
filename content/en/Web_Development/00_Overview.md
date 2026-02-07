@@ -105,8 +105,9 @@ git --version
 | 13 | 13_Build_Tools_Environment.md | Build tools and environment | ⭐⭐⭐ | 3h |
 | 14 | 14_CSS_Animations.md | CSS animations | ⭐⭐ | 2h |
 | 15 | 15_JS_Modules.md | JavaScript modules | ⭐⭐⭐ | 2h |
+| 16 | 16_Flask_Basics.md | Flask routing, templates, forms, DB integration, REST API | ⭐⭐⭐ | 3h |
 
-**Total estimated learning time: ~42 hours**
+**Total estimated learning time: ~45 hours**
 
 ---
 

@@ -35,7 +35,7 @@ Check the `00_Overview.md` in each topic for learning roadmaps and detailed tabl
 | [CPP/](./ko/CPP/00_Overview.md) | C++ 입문 ~ 모던 C++, 디자인패턴 / C++ to Modern C++ | 18 |
 | [Data_Analysis/](./ko/Data_Analysis/00_Overview.md) | NumPy, Pandas, 시각화, 통계분석 / Visualization, Statistics | 11 |
 | [Data_Engineering/](./ko/Data_Engineering/00_Overview.md) | 데이터 파이프라인, Airflow, Spark, Kafka, dbt / Data Pipelines | 14 |
-| [Deep_Learning/](./ko/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, ViT | 23 |
+| [Deep_Learning/](./ko/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, ViT | 24 |
 | [Docker/](./ko/Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD | 10 |
 | [Foundation_Models/](./ko/Foundation_Models/00_Overview.md) | Scaling Laws, LLaMA, Mistral, DINOv2, SAM, PEFT, RAG | 25 |
 | [Git/](./ko/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 / Workflows, Monorepo | 10 |
@@ -54,7 +54,7 @@ Check the `00_Overview.md` in each topic for learning roadmaps and detailed tabl
 | [Spanish/](./ko/Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 / Grammar, Vocabulary | 11 |
 | [Statistics/](./ko/Statistics/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 / Bayesian, Time Series | 14 |
 | [System_Design/](./ko/System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 / Scalability, Distributed | 18 |
-| [Web_Development/](./ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO | 15 |
+| [Web_Development/](./ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO, Flask | 16 |
 
 ## 보기 방법 / How to View
 
