@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Study Viewer{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Pygments syntax highlighting -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/highlight.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="{{ url_for('index', lang=lang) }}" class="logo">Study Viewer</a>
+                <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+                    <span></span>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('index', lang=lang) }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+                    <span class="nav-icon">📚</span>
+                    <span class="nav-text">Topics</span>
+                </a>
+                <a href="{{ url_for('dashboard', lang=lang) }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="{{ url_for('bookmarks', lang=lang) }}" class="nav-item {% if request.endpoint == 'bookmarks' %}active{% endif %}">
+                    <span class="nav-icon">🔖</span>
+                    <span class="nav-text">Bookmarks</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-search">
+                <form action="{{ url_for('search_page', lang=lang) }}" method="get">
+                    <input type="search" name="q" placeholder="Search..." value="{{ request.args.get('q', '') }}">
+                </form>
+            </div>
+
+            <!-- Language Selector -->
+            <div class="sidebar-lang">
+                <select id="lang-select" class="lang-selector" onchange="switchLanguage(this.value)">
+                    {% for language in languages %}
+                    <option value="{{ language.code }}" {% if language.code == lang %}selected{% endif %}>
+                        {{ language.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-icon light">☀️</span>
+                    <span class="theme-icon dark">🌙</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <button class="menu-toggle" id="menu-toggle" aria-label="Open menu">
+                    <span></span>
+                </button>
+                {% block header %}{% endblock %}
+            </header>
+
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // Language switcher
+        function switchLanguage(newLang) {
+            const currentPath = window.location.pathname;
+            const currentLang = '{{ lang }}';
+            // Replace the language in the URL path
+            const newPath = currentPath.replace('/' + currentLang + '/', '/' + newLang + '/');
+            window.location.href = newPath + window.location.search;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

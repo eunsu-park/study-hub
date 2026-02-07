@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Study Viewer{% endblock %}
+
+{% block header %}
+<h1>Dashboard</h1>
+<p class="header-subtitle">Your learning progress</p>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Overall Progress -->
+    <section class="dashboard-section overall-progress">
+        <h2>Overall Progress</h2>
+        <div class="overall-stats">
+            <div class="stat-card">
+                <span class="stat-value">{{ overall.read }}</span>
+                <span class="stat-label">Lessons Read</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">{{ overall.total }}</span>
+                <span class="stat-label">Total Lessons</span>
+            </div>
+            <div class="stat-card highlight">
+                <span class="stat-value">{{ overall.percentage }}%</span>
+                <span class="stat-label">Complete</span>
+            </div>
+        </div>
+        <div class="progress-bar xlarge">
+            <div class="progress-fill" style="width: {{ overall.percentage }}%"></div>
+        </div>
+    </section>
+
+    <!-- Topic Progress -->
+    <section class="dashboard-section topics-progress">
+        <h2>Progress by Topic</h2>
+        <div class="topics-progress-list">
+            {% for topic in topics|sort(attribute='progress.percentage', reverse=True) %}
+            <div class="topic-progress-item">
+                <div class="topic-info">
+                    <a href="{{ url_for('topic', lang=lang, name=topic.name) }}" class="topic-name">
+                        {{ topic.display_name }}
+                    </a>
+                    <span class="topic-stats">{{ topic.progress.read }}/{{ topic.progress.total }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill {% if topic.progress.percentage == 100 %}complete{% endif %}"
+                         style="width: {{ topic.progress.percentage }}%"></div>
+                </div>
+                <span class="progress-percentage">{{ topic.progress.percentage }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

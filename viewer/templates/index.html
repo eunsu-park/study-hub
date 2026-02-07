@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Study Viewer - Topics{% endblock %}
+
+{% block header %}
+<h1>Topics</h1>
+<p class="header-subtitle">{{ topics|length }} topics available</p>
+{% endblock %}
+
+{% block content %}
+<div class="topics-grid">
+    {% for topic in topics %}
+    <a href="{{ url_for('topic', lang=lang, name=topic.name) }}" class="topic-card">
+        <div class="topic-card-header">
+            <h2 class="topic-name">{{ topic.display_name }}</h2>
+            <span class="lesson-count">{{ topic.lesson_count }} lessons</span>
+        </div>
+        <div class="topic-card-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ topic.progress.percentage }}%"></div>
+            </div>
+            <span class="progress-text">{{ topic.progress.read }}/{{ topic.progress.total }} completed</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Search{% if query %}: {{ query }}{% endif %} - Study Viewer{% endblock %}
+
+{% block header %}
+<h1>Search</h1>
+{% endblock %}
+
+{% block content %}
+<div class="search-page">
+    <form action="{{ url_for('search_page', lang=lang) }}" method="get" class="search-form">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search lessons..." autofocus>
+        <button type="submit">Search</button>
+    </form>
+
+    {% if query %}
+    <div class="search-results">
+        <p class="results-count">{{ results|length }} results for "{{ query }}"</p>
+
+        {% if results %}
+        <div class="results-list">
+            {% for result in results %}
+            <a href="{{ url_for('lesson', lang=lang, name=result.topic, filename=result.filename) }}" class="result-item">
+                <div class="result-header">
+                    <span class="result-topic">{{ result.topic.replace('_', ' ') }}</span>
+                    <h3 class="result-title">{{ result.title }}</h3>
+                </div>
+                <p class="result-snippet">{{ result.snippet|safe }}</p>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-results">
+            <p>No results found. Try different keywords.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="search-hint">
+        <p>Enter a search term to find lessons across all topics.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
