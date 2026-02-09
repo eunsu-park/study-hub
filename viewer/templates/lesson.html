@@ -12,25 +12,55 @@
 </nav>
 {% endblock %}
 
+{# Unified toolbar macro: renders nav + actions at both top and bottom #}
+{% macro lesson_toolbar(position) %}
+<div class="lesson-toolbar lesson-toolbar--{{ position }}">
+    <div class="toolbar-nav toolbar-nav--prev">
+        {% if prev_lesson %}
+        <a href="{{ url_for('lesson', lang=lang, name=topic, filename=prev_lesson.filename) }}" class="nav-prev">
+            <span class="nav-label">Previous</span>
+            <span class="nav-title">{{ prev_lesson.title or prev_lesson.display_name }}</span>
+        </a>
+        {% else %}
+        <span class="nav-placeholder"></span>
+        {% endif %}
+    </div>
+    <div class="toolbar-actions">
+        <button class="btn btn-read {% if is_read %}active{% endif %}" data-action="mark-read" title="Mark as read">
+            <span class="icon">{% if is_read %}✓{% else %}○{% endif %}</span>
+            <span class="text">{% if is_read %}Read{% else %}Mark as read{% endif %}</span>
+        </button>
+        <button class="btn btn-bookmark {% if is_bookmarked %}active{% endif %}" data-action="bookmark" title="Bookmark">
+            <span class="icon">🔖</span>
+            <span class="text">{% if is_bookmarked %}Bookmarked{% else %}Bookmark{% endif %}</span>
+        </button>
+        <button class="btn btn-copy-link" data-action="copy-link" title="Copy link">
+            <span class="icon">🔗</span>
+            <span class="text">Copy link</span>
+        </button>
+        <a href="{{ url_for('topic', lang=lang, name=topic) }}" class="btn btn-topic-link" title="Back to topic list">
+            <span class="icon">📋</span>
+            <span class="text">Topic list</span>
+        </a>
+    </div>
+    <div class="toolbar-nav toolbar-nav--next">
+        {% if next_lesson %}
+        <a href="{{ url_for('lesson', lang=lang, name=topic, filename=next_lesson.filename) }}" class="nav-next">
+            <span class="nav-label">Next</span>
+            <span class="nav-title">{{ next_lesson.title or next_lesson.display_name }}</span>
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
 {% block content %}
 <article class="lesson-article" data-lang="{{ lang }}" data-topic="{{ topic }}" data-filename="{{ filename }}">
     <header class="lesson-header">
         <h1>{{ title }}</h1>
-        <div class="lesson-actions-bar">
-            <button class="btn btn-read {% if is_read %}active{% endif %}" id="mark-read-btn" title="Mark as read">
-                <span class="icon">{% if is_read %}✓{% else %}○{% endif %}</span>
-                <span class="text">{% if is_read %}Read{% else %}Mark as read{% endif %}</span>
-            </button>
-            <button class="btn btn-bookmark {% if is_bookmarked %}active{% endif %}" id="bookmark-btn" title="Bookmark">
-                <span class="icon">🔖</span>
-                <span class="text">{% if is_bookmarked %}Bookmarked{% else %}Bookmark{% endif %}</span>
-            </button>
-            <button class="btn btn-copy-link" id="copy-link-btn" title="Copy link">
-                <span class="icon">🔗</span>
-                <span class="text">Copy link</span>
-            </button>
-        </div>
     </header>
+
+    {{ lesson_toolbar('top') }}
 
     {% if toc %}
     <nav class="toc" id="toc">
@@ -43,77 +73,71 @@
         {{ content|safe }}
     </div>
 
-    <footer class="lesson-footer">
-        <nav class="lesson-nav">
-            {% if prev_lesson %}
-            <a href="{{ url_for('lesson', lang=lang, name=topic, filename=prev_lesson.filename) }}" class="nav-prev">
-                <span class="nav-label">Previous</span>
-                <span class="nav-title">{{ prev_lesson.title or prev_lesson.display_name }}</span>
-            </a>
-            {% else %}
-            <span class="nav-placeholder"></span>
-            {% endif %}
+    {{ lesson_toolbar('bottom') }}
 
-            {% if next_lesson %}
-            <a href="{{ url_for('lesson', lang=lang, name=topic, filename=next_lesson.filename) }}" class="nav-next">
-                <span class="nav-label">Next</span>
-                <span class="nav-title">{{ next_lesson.title or next_lesson.display_name }}</span>
-            </a>
-            {% endif %}
-        </nav>
-    </footer>
+    <div class="toolbar-keyboard-hint">
+        <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to navigate between lessons
+    </div>
 </article>
+
+<!-- Scroll to top floating button -->
+<button class="scroll-to-top" id="scroll-to-top" title="Scroll to top" aria-label="Scroll to top">↑</button>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Initialize lesson page
     document.addEventListener('DOMContentLoaded', function() {
         const article = document.querySelector('.lesson-article');
         const lang = article.dataset.lang;
         const topic = article.dataset.topic;
         const filename = article.dataset.filename;
 
-        // Mark as read button
-        const readBtn = document.getElementById('mark-read-btn');
-        readBtn.addEventListener('click', async function() {
-            const isRead = !this.classList.contains('active');
-            const response = await fetch('/api/mark-read', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lang, topic, filename, is_read: isRead })
+        // Mark as read - sync all instances
+        document.querySelectorAll('[data-action="mark-read"]').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const isRead = !this.classList.contains('active');
+                const response = await fetch('/api/mark-read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lang, topic, filename, is_read: isRead })
+                });
+                if (response.ok) {
+                    document.querySelectorAll('[data-action="mark-read"]').forEach(b => {
+                        b.classList.toggle('active', isRead);
+                        b.querySelector('.icon').textContent = isRead ? '✓' : '○';
+                        b.querySelector('.text').textContent = isRead ? 'Read' : 'Mark as read';
+                    });
+                }
             });
-            if (response.ok) {
-                this.classList.toggle('active', isRead);
-                this.querySelector('.icon').textContent = isRead ? '✓' : '○';
-                this.querySelector('.text').textContent = isRead ? 'Read' : 'Mark as read';
-            }
         });
 
-        // Bookmark button
-        const bookmarkBtn = document.getElementById('bookmark-btn');
-        bookmarkBtn.addEventListener('click', async function() {
-            const response = await fetch('/api/bookmark', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lang, topic, filename })
+        // Bookmark - sync all instances
+        document.querySelectorAll('[data-action="bookmark"]').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const response = await fetch('/api/bookmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lang, topic, filename })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    document.querySelectorAll('[data-action="bookmark"]').forEach(b => {
+                        b.classList.toggle('active', data.bookmarked);
+                        b.querySelector('.text').textContent = data.bookmarked ? 'Bookmarked' : 'Bookmark';
+                    });
+                }
             });
-            if (response.ok) {
-                const data = await response.json();
-                this.classList.toggle('active', data.bookmarked);
-                this.querySelector('.text').textContent = data.bookmarked ? 'Bookmarked' : 'Bookmark';
-            }
         });
 
-        // Copy link button
-        const copyBtn = document.getElementById('copy-link-btn');
-        copyBtn.addEventListener('click', function() {
-            navigator.clipboard.writeText(window.location.href);
-            const originalText = this.querySelector('.text').textContent;
-            this.querySelector('.text').textContent = 'Copied!';
-            setTimeout(() => {
-                this.querySelector('.text').textContent = originalText;
-            }, 2000);
+        // Copy link - independent feedback per button
+        document.querySelectorAll('[data-action="copy-link"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                navigator.clipboard.writeText(window.location.href);
+                const textEl = this.querySelector('.text');
+                const originalText = textEl.textContent;
+                textEl.textContent = 'Copied!';
+                setTimeout(() => { textEl.textContent = originalText; }, 2000);
+            });
         });
 
         // Add copy buttons to code blocks
@@ -132,6 +156,29 @@
                 setTimeout(() => copyBtn.textContent = 'Copy', 2000);
             });
             wrapper.querySelector('pre').appendChild(copyBtn);
+        });
+
+        // Scroll to top button
+        const scrollBtn = document.getElementById('scroll-to-top');
+        window.addEventListener('scroll', function() {
+            scrollBtn.classList.toggle('visible', window.scrollY > 300);
+        });
+        scrollBtn.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Keyboard shortcuts: ← → for lesson navigation
+        document.addEventListener('keydown', function(e) {
+            const tag = document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            if (e.key === 'ArrowLeft') {
+                const prevLink = document.querySelector('.nav-prev');
+                if (prevLink) { prevLink.click(); }
+            } else if (e.key === 'ArrowRight') {
+                const nextLink = document.querySelector('.nav-next');
+                if (nextLink) { nextLink.click(); }
+            }
         });
     });
 </script>

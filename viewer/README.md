@@ -12,6 +12,9 @@ A Flask-based Markdown study material viewer.
 - 북마크 / Bookmarks
 - 다크/라이트 모드 / Dark/Light mode
 - 다국어 지원 (한국어/영어) / Multilingual support (Korean/English)
+- 레슨 상/하단 통합 툴바 (네비게이션 + 액션 버튼) / Unified top/bottom lesson toolbar (navigation + action buttons)
+- 키보드 단축키 (←/→ 레슨 이동) / Keyboard shortcuts (←/→ lesson navigation)
+- 맨 위로 스크롤 플로팅 버튼 / Scroll-to-top floating button
 
 ## 설치 및 실행 / Installation & Running
 
