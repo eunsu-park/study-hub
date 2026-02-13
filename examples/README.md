@@ -48,10 +48,24 @@ examples/
 ├── Numerical_Simulation/   # 수치해석 Python 예제 / Numerical analysis examples (6 files)
 ├── PostgreSQL/             # SQL 예제 / examples (5 files)
 ├── Reinforcement_Learning/ # RL Python 예제 / examples (10 files)
+├── Shell_Script/           # Bash 스크립팅 예제 / scripting examples (27 files)
+│   ├── 02_parameter_expansion/  # 매개변수 확장 / Parameter expansion
+│   ├── 03_arrays/               # 배열 / Arrays
+│   ├── 05_function_library/     # 함수 라이브러리 / Function libraries
+│   ├── 06_io_redirection/       # I/O 리다이렉션 / I/O redirection
+│   ├── 08_regex/                # 정규표현식 / Regex
+│   ├── 09_process_management/   # 프로세스 관리 / Process management
+│   ├── 10_error_handling/       # 에러 처리 / Error handling
+│   ├── 11_argument_parsing/     # 인자 파싱 / Argument parsing
+│   ├── 13_testing/              # 테스팅 / Testing (Bats)
+│   ├── 14_task_runner/          # 태스크 러너 / Task runner
+│   ├── 15_deployment/           # 배포 자동화 / Deployment
+│   └── 16_monitoring/           # 모니터링 / Monitoring
+│
 └── Web_Development/        # HTML/CSS/JS 프로젝트 / projects (17 files)
 ```
 
-**총 예제 파일 / Total example files: 279**
+**총 예제 파일 / Total example files: 306**
 
 ## 빌드 방법 / How to Build
 
@@ -106,6 +120,7 @@ jupyter notebook
 | Numerical_Simulation | 6 | Python | 수치해석, ODE, Monte Carlo / Numerical analysis |
 | PostgreSQL | 5 | SQL | CRUD, JOIN, 윈도우 함수 / Window functions |
 | Reinforcement_Learning | 10 | Python | Q-Learning, DQN, PPO, A2C |
+| Shell_Script | 27 | Bash | 매개변수 확장, 배열, I/O, 정규식, 프로세스, 에러처리, 테스팅, 배포, 모니터링 / Parameter expansion, Arrays, I/O, Regex, Process, Error handling, Testing, Deployment, Monitoring |
 | Web_Development | 17 | HTML/CSS/JS/TS | 웹 프로젝트, TypeScript / Web projects |
 
 ## 예제와 학습 자료 매핑 / Mapping Examples to Study Materials

@@ -78,6 +78,7 @@ flask run --port 5050
 | [PostgreSQL/](./content/ko/PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 / SQL Basics to Replication, Partitioning | 18 |
 | [Python/](./content/ko/Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 / Advanced Python, Testing, Packaging | 16 |
 | [Reinforcement_Learning/](./content/ko/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, Multi-Agent RL | 12 |
+| [Shell_Script/](./content/ko/Shell_Script/00_Overview.md) | Bash 심화, 매개변수 확장, 프로세스 관리, 테스팅, 배포 자동화 / Advanced Bash, Parameter Expansion, Process Mgmt, Testing, Deployment | 16 |
 | [Spanish/](./content/ko/Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, 지역 변형 / Spanish Grammar, Vocabulary, Subjunctive | 11 |
 | [Statistics/](./content/ko/Statistics/00_Overview.md) | 심화통계, 베이지안, 시계열, 실험설계 / Advanced Stats, Bayesian, Time Series | 14 |
 | [System_Design/](./content/ko/System_Design/00_Overview.md) | 시스템 설계, 확장성, 분산시스템 / System Design, Scalability, Distributed Systems | 18 |
@@ -108,10 +109,10 @@ Check the `00_Overview.md` file in each folder for learning roadmaps and detaile
 
 - 모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
   All study materials are maintained in both **Korean (ko)** and **English (en)**
-- 30개 토픽 모두 한/영 번역 완료
-  All 30 topics fully translated to Korean/English
-- 신규 자료 작성 시 한/영 동시 작성 원칙
-  New materials are written in both languages simultaneously
+- 31개 토픽 모두 한/영 번역 완료
+  All 31 topics fully translated to Korean/English
+- 신규 자료는 영문 원본 작성 후 한국어 번역
+  New materials are authored in English, then translated to Korean
 
 ## 라이센스 / License
 
