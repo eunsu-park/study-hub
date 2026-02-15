@@ -68,6 +68,27 @@ examples/
 ├── Reinforcement_Learning/ # RL Python 예제 / examples (10 files)
 ├── Foundation_Models/      # 파운데이션 모델 예제 / Foundation model examples (8 files)
 ├── Mathematical_Methods/  # 물리수학 Python 예제 / Math methods examples (13 files)
+├── MHD/                   # MHD Python 예제 / MHD examples (32 files)
+│   ├── 01_equilibria/         # 평형 / Equilibria
+│   ├── 02_stability/          # 안정성 / Stability analysis
+│   ├── 03_instabilities/      # 불안정성 / Instabilities
+│   ├── 04_reconnection/       # 자기재결합 / Reconnection
+│   ├── 05_turbulence/         # 난류 / Turbulence
+│   ├── 06_dynamo/             # 다이나모 / Dynamo
+│   ├── 07_astrophysics/       # 천체물리 / Astrophysics
+│   ├── 08_fusion/             # 핵융합 / Fusion
+│   ├── 09_solvers/            # 수치 솔버 / Solvers
+│   └── 10_projects/           # 종합 프로젝트 / Projects
+│
+├── Plasma_Physics/        # 플라즈마 물리 Python 예제 / Plasma physics examples (26 files)
+│   ├── 01_fundamentals/       # 기초 매개변수 / Fundamental parameters
+│   ├── 02_particle_motion/    # 입자 운동 / Particle motion
+│   ├── 03_kinetic/            # 운동론 / Kinetic theory
+│   ├── 04_waves/              # 플라즈마 파동 / Plasma waves
+│   ├── 05_fluid/              # 유체 모델 / Fluid models
+│   ├── 06_diagnostics/        # 진단 / Diagnostics
+│   └── 07_projects/           # 프로젝트 / Projects
+│
 ├── Python/                # Python 고급 예제 / Advanced Python examples (16 files)
 ├── Security/              # 보안 Python 예제 / Security examples (12 files)
 │   ├── 02_cryptography/       # AES, RSA, ECDSA
@@ -101,7 +122,7 @@ examples/
 └── Web_Development/        # HTML/CSS/JS 프로젝트 / projects (46 files)
 ```
 
-**총 예제 파일 / Total example files: 443**
+**총 예제 파일 / Total example files: 501**
 
 ## 빌드 방법 / How to Build
 
@@ -166,8 +187,10 @@ jupyter notebook
 | Machine_Learning | 15 | Python/Jupyter | sklearn, 분류, 회귀, 클러스터링 / Classification, Regression, Clustering |
 | Math_for_AI | 13 | Python | 선형대수, SVD/PCA, 최적화, 확률, 정보이론, 텐서, 그래프, 어텐션 / Linear Algebra, Optimization, Probability, Attention |
 | Mathematical_Methods | 13 | Python | 급수, 복소수, 선형대수, 푸리에, ODE/PDE, 특수함수, 텐서 / Series, Complex, Linear Algebra, Fourier, ODE/PDE, Special Functions, Tensors |
+| MHD | 32 | Python | 평형, 안정성, 불안정성, 재결합, 난류, 다이나모, 천체물리, 핵융합 / Equilibria, Stability, Reconnection, Turbulence, Dynamo, Fusion |
 | MLOps | 5 | Python | MLflow, 모델 서빙, 드리프트 감지 / Model serving, Drift detection |
 | Numerical_Simulation | 6 | Python | 수치해석, ODE, Monte Carlo / Numerical analysis |
+| Plasma_Physics | 26 | Python | 디바이 차폐, 입자 운동, 란다우 감쇠, 플라즈마 파동, 유체 모델, 진단 / Debye shielding, Particle motion, Landau damping, Waves, Fluid, Diagnostics |
 | PostgreSQL | 5 | SQL | CRUD, JOIN, 윈도우 함수 / Window functions |
 | Python | 16 | Python | 타입 힌트, 데코레이터, 제너레이터, 비동기, 메타클래스, 테스팅 / Type Hints, Decorators, Generators, Async, Metaclasses, Testing |
 | Reinforcement_Learning | 10 | Python | Q-Learning, DQN, PPO, A2C |

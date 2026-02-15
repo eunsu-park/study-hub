@@ -11,10 +11,10 @@ This repository is a personal study project. Some content was written by me, som
 ```
 03_Study/
 ├── content/          # 학습 자료 (한국어/영어 Markdown)
-│   ├── ko/           # 한국어 자료 (32개 토픽)
-│   └── en/           # 영어 자료 (32개 토픽)
+│   ├── ko/           # 한국어 자료 (34개 토픽)
+│   └── en/           # 영어 자료 (34개 토픽)
 │
-├── examples/         # 예제 코드 (23개 토픽)
+├── examples/         # 예제 코드 (25개 토픽)
 │   ├── Algorithm/    # Python, C, C++ 예제
 │   ├── C_Programming/
 │   └── ...
@@ -25,10 +25,10 @@ This repository is a personal study project. Some content was written by me, som
 ```
 03_Study/
 ├── content/          # Study materials (Korean/English Markdown)
-│   ├── ko/           # Korean materials (32 topics)
-│   └── en/           # English materials (32 topics)
+│   ├── ko/           # Korean materials (34 topics)
+│   └── en/           # English materials (34 topics)
 │
-├── examples/         # Example code (23 topics)
+├── examples/         # Example code (25 topics)
 │   ├── Algorithm/    # Python, C, C++ examples
 │   ├── C_Programming/
 │   └── ...
@@ -70,11 +70,13 @@ flask run --port 5050
 | [Machine_Learning/](./content/ko/Machine_Learning/00_Overview.md) | 회귀, 분류, 앙상블, 클러스터링, sklearn / Regression, Classification, Ensemble, Clustering | 14 |
 | [Math_for_AI/](./content/ko/Math_for_AI/00_Overview.md) | AI/ML/DL 수학, 선형대수, 최적화, 확률, 정보이론, Transformer 수학 / Math for AI/ML/DL | 18 |
 | [Mathematical_Methods/](./content/ko/Mathematical_Methods/00_Overview.md) | 물리과학 수학, 선형대수, 편미분, 푸리에, PDE, 구면조화함수, 텐서 / Math Methods for Physical Sciences | 18 |
+| [MHD/](./content/ko/MHD/00_Overview.md) | 자기유체역학, 평형, 안정성, 자기재결합, 난류, 다이나모, 핵융합 / MHD Equilibria, Stability, Reconnection, Turbulence, Dynamo, Fusion | 18 |
 | [MLOps/](./content/ko/MLOps/00_Overview.md) | MLflow, Kubeflow, 모델 서빙, 드리프트 감지 / Model Serving, Drift Detection | 12 |
 | [Model_Implementations/](./content/ko/Model_Implementations/00_Overview.md) | 딥러닝 모델 from-scratch 구현 / Deep Learning Models from Scratch (NumPy, PyTorch) | 12 |
 | [Networking/](./content/ko/Networking/00_Overview.md) | 네트워크, OSI/TCP-IP, 라우팅, 보안 / Networking, OSI/TCP-IP, Routing, Security | 17 |
 | [Numerical_Simulation/](./content/ko/Numerical_Simulation/00_Overview.md) | 수치해석, ODE/PDE, CFD, FDTD, MHD, 몬테카를로 / Numerical Analysis, Monte Carlo | 20 |
 | [OS_Theory/](./content/ko/OS_Theory/00_Overview.md) | 운영체제, 프로세스, 메모리, 파일시스템 / OS, Processes, Memory, Filesystem | 18 |
+| [Plasma_Physics/](./content/ko/Plasma_Physics/00_Overview.md) | 플라즈마 물리, 디바이 차폐, 입자 운동, 블라소프 방정식, 란다우 감쇠, 플라즈마 파동 / Plasma Physics, Debye Shielding, Vlasov, Landau Damping | 16 |
 | [PostgreSQL/](./content/ko/PostgreSQL/00_Overview.md) | SQL 기초 ~ 복제, 파티셔닝 / SQL Basics to Replication, Partitioning | 18 |
 | [Python/](./content/ko/Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 / Advanced Python, Testing, Packaging | 16 |
 | [Reinforcement_Learning/](./content/ko/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, Multi-Agent RL | 12 |
@@ -110,8 +112,8 @@ Check the `00_Overview.md` file in each folder for learning roadmaps and detaile
 
 - 모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
   All study materials are maintained in both **Korean (ko)** and **English (en)**
-- 32개 토픽 모두 한/영 번역 완료
-  All 32 topics fully translated to Korean/English
+- 34개 토픽 모두 한/영 번역 완료
+  All 34 topics fully translated to Korean/English
 - 신규 자료는 영문 원본 작성 후 한국어 번역
   New materials are authored in English, then translated to Korean
 
