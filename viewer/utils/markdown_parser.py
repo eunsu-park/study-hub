@@ -1,4 +1,4 @@
-"""Markdown parsing utilities with syntax highlighting."""
+"""Markdown parsing utilities with syntax highlighting and LaTeX support."""
 import re
 import markdown
 from markdown.extensions.codehilite import CodeHiliteExtension
@@ -6,10 +6,50 @@ from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
 from markdown.extensions.toc import TocExtension
 
+# LaTeX protection: prevent markdown from mangling $...$ and $$...$$ blocks
+_LATEX_PLACEHOLDER = "\x00LATEX%d\x00"
+
+
+def _protect_latex(content: str) -> tuple[str, list[str]]:
+    """Extract LaTeX blocks and replace with placeholders before markdown processing."""
+    blocks = []
+
+    # First, protect fenced code blocks from LaTeX extraction
+    code_blocks = []
+    def save_code(m):
+        code_blocks.append(m.group(0))
+        return f"\x00CODE{len(code_blocks) - 1}\x00"
+    content = re.sub(r'```[\s\S]*?```', save_code, content)
+
+    # Protect $$...$$ (display math) first
+    def save_display(m):
+        blocks.append(m.group(0))
+        return _LATEX_PLACEHOLDER % (len(blocks) - 1)
+    content = re.sub(r'\$\$[\s\S]+?\$\$', save_display, content)
+
+    # Protect $...$ (inline math)
+    def save_inline(m):
+        blocks.append(m.group(0))
+        return _LATEX_PLACEHOLDER % (len(blocks) - 1)
+    content = re.sub(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)', save_inline, content)
+
+    # Restore code blocks
+    for i, code in enumerate(code_blocks):
+        content = content.replace(f"\x00CODE{i}\x00", code)
+
+    return content, blocks
+
+
+def _restore_latex(html: str, blocks: list[str]) -> str:
+    """Restore LaTeX blocks from placeholders after markdown processing."""
+    for i, block in enumerate(blocks):
+        html = html.replace(_LATEX_PLACEHOLDER % i, block)
+    return html
+
 
 def parse_markdown(content: str) -> dict:
     """
-    Parse Markdown content to HTML with syntax highlighting.
+    Parse Markdown content to HTML with syntax highlighting and LaTeX support.
 
     Returns:
         dict: {
@@ -18,6 +58,12 @@ def parse_markdown(content: str) -> dict:
             "title": extracted title (first H1)
         }
     """
+    # Extract title before any processing
+    title = extract_title(content)
+
+    # Protect LaTeX from markdown processing
+    content, latex_blocks = _protect_latex(content)
+
     md = markdown.Markdown(
         extensions=[
             "fenced_code",
@@ -40,8 +86,8 @@ def parse_markdown(content: str) -> dict:
     html = md.convert(content)
     toc = md.toc
 
-    # Extract title from first H1
-    title = extract_title(content)
+    # Restore LaTeX blocks
+    html = _restore_latex(html, latex_blocks)
 
     return {
         "html": html,
