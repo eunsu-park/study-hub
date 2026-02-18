@@ -14,7 +14,9 @@ Shell_Script/
 ├── 09_process_management/     # Parallel execution and cleanup
 ├── 10_error_handling/         # Error framework and safe operations
 ├── 11_argument_parsing/       # getopts, getopt, CLI tools
+├── 13_disaster_recovery/      # Disaster recovery backup/restore
 ├── 13_testing/                # Bats tests and test runner
+├── 14_perf_diagnosis/         # Performance bottleneck diagnosis
 ├── 14_task_runner/            # Makefile-like task runner project
 ├── 15_deployment/             # Deployment automation scripts
 ├── 16_monitoring/             # System monitoring dashboard
@@ -335,6 +337,65 @@ cd 11_argument_parsing
 ./cli_tool.sh --help
 ```
 
+### 13_disaster_recovery/
+
+Disaster recovery backup and restore scripts.
+
+#### dr_backup.sh
+Automated disaster recovery backup script (~120 lines):
+- Full system backup (filesystem, databases, config)
+- PostgreSQL database dumps with pg_dump
+- Compression (gzip) and encryption (gpg)
+- Remote backup transfer via rsync
+- Backup rotation policy (daily/weekly/monthly)
+- Email notifications on success/failure
+- Comprehensive logging with timestamps
+- Incremental backup support
+
+**Features:**
+- Configurable backup sources
+- Database backup with custom format
+- Secure GPG encryption
+- Remote transfer to backup server
+- Automatic cleanup of old backups
+- Error handling and validation
+
+**Run:**
+```bash
+cd 13_disaster_recovery
+./dr_backup.sh                  # Full backup
+./dr_backup.sh -n               # Local only (no remote)
+./dr_backup.sh -i               # Incremental backup
+./dr_backup.sh --help           # Show usage
+```
+
+#### dr_restore.sh
+Restore from disaster recovery backups (~100 lines):
+- List available backups by date
+- Selective restoration (all/filesystem/database/config)
+- Backup integrity verification with checksums
+- Decryption and decompression
+- Database restoration with pg_restore
+- Dry-run mode for safety
+- Comprehensive logging
+
+**Features:**
+- Interactive backup selection
+- SHA256 checksum verification
+- Selective component restore
+- Safe dry-run testing
+- Automatic decryption/decompression
+
+**Run:**
+```bash
+cd 13_disaster_recovery
+./dr_restore.sh --list                      # List backups
+./dr_restore.sh -d 20240215_120000          # Restore specific backup
+./dr_restore.sh -t database                 # Restore databases only
+./dr_restore.sh -n -d 20240215_120000       # Dry-run mode
+./dr_restore.sh -v -d 20240215_120000       # Verify integrity
+```
+
 ### 13_testing/
 
 Shell script testing with Bats framework.
@@ -354,6 +415,48 @@ cd 13_testing
 ./run_tests.sh          # Run all tests
 bats test_math_lib.bats # Run Bats tests directly
 ```
+
+### 14_perf_diagnosis/
+
+Performance bottleneck diagnosis tools.
+
+#### bottleneck_finder.sh
+System performance bottleneck analyzer (~150 lines):
+- CPU usage analysis with mpstat/top
+- Load average monitoring (1/5/15 min)
+- Memory and swap usage analysis
+- Disk I/O statistics with iostat
+- Network interface statistics
+- Process resource consumption
+- Automatic bottleneck detection
+- Color-coded warnings (green/yellow/red)
+
+**Features:**
+- Comprehensive system metrics collection
+- Configurable thresholds (warning/critical)
+- Top CPU and memory consumers
+- Zombie process detection
+- Network connection analysis
+- Summary report with recommendations
+- Export to file capability
+
+**Run:**
+```bash
+cd 14_perf_diagnosis
+./bottleneck_finder.sh                      # Full analysis
+./bottleneck_finder.sh -a cpu               # CPU analysis only
+./bottleneck_finder.sh -a memory            # Memory analysis only
+./bottleneck_finder.sh -o report.txt        # Export to file
+./bottleneck_finder.sh -v                   # Verbose mode
+```
+
+**Analysis Types:**
+- `cpu`: CPU usage, load average, top consumers
+- `memory`: RAM/swap usage, memory consumers
+- `disk`: Disk space, I/O statistics
+- `network`: Interface stats, connections
+- `process`: Process counts, top CPU/memory users
+- `all`: Complete system analysis (default)
 
 ### 14_task_runner/
 
@@ -492,9 +595,11 @@ Suggested order to study these examples:
 7. **10_error_handling/** - Error frameworks and safe operations
 8. **11_argument_parsing/** - CLI tool development
 9. **13_testing/** - Bats testing framework
-10. **14_task_runner/** - Complete task runner project
-11. **15_deployment/** - Deployment automation
-12. **16_monitoring/** - System monitoring dashboard
+10. **13_disaster_recovery/** - Backup and restore automation
+11. **14_task_runner/** - Complete task runner project
+12. **14_perf_diagnosis/** - Performance analysis tools
+13. **15_deployment/** - Deployment automation
+14. **16_monitoring/** - System monitoring dashboard
 
 ## Additional Resources
 

@@ -11,12 +11,12 @@ content/
 ├── ko/                    # 한국어 자료 (번역본) / Korean (translated)
 │   ├── Algorithm/         # 29개 레슨 / 29 lessons
 │   ├── C_Programming/     # 22개 레슨 / 22 lessons
-│   └── ...                # 총 34개 토픽 / 34 topics total
+│   └── ...                # 총 38개 토픽 / 38 topics total
 │
 └── en/                    # 영어 자료 (원본) / English (original)
     ├── Algorithm/
     ├── C_Programming/
-    └── ...                # 총 34개 토픽 / 34 topics total
+    └── ...                # 총 38개 토픽 / 38 topics total
 ```
 
 ## 토픽 목록 / Topic List

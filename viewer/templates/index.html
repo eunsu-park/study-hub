@@ -1,27 +1,116 @@
 {% extends "base.html" %}
 
-{% block title %}Study Viewer - Topics{% endblock %}
+{% block title %}Study Viewer - Home{% endblock %}
 
 {% block header %}
-<h1>Topics</h1>
-<p class="header-subtitle">{{ topics|length }} topics available</p>
+<h1>Home</h1>
+<p class="header-subtitle">Your learning hub</p>
 {% endblock %}
 
 {% block content %}
-<div class="topics-grid">
-    {% for topic in topics %}
-    <a href="{{ url_for('topic', lang=lang, name=topic.name) }}" class="topic-card">
-        <div class="topic-card-header">
-            <h2 class="topic-name">{{ topic.display_name }}</h2>
-            <span class="lesson-count">{{ topic.lesson_count }} lessons</span>
-        </div>
-        <div class="topic-card-progress">
-            <div class="progress-bar">
-                <div class="progress-fill" style="width: {{ topic.progress.percentage }}%"></div>
+<div class="home">
+    <!-- Overall Progress -->
+    <section class="home-section">
+        <h2>Overview</h2>
+        <div class="overall-stats">
+            <div class="stat-card highlight">
+                <span class="stat-value">{{ overall.percentage }}%</span>
+                <span class="stat-label">Complete</span>
             </div>
-            <span class="progress-text">{{ topic.progress.read }}/{{ topic.progress.total }} completed</span>
+            <div class="stat-card">
+                <span class="stat-value">{{ overall.read }}/{{ overall.total }}</span>
+                <span class="stat-label">Lessons Read</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value">{{ bookmark_count }}</span>
+                <span class="stat-label">Bookmarks</span>
+            </div>
         </div>
-    </a>
-    {% endfor %}
+        <div class="progress-bar xlarge">
+            <div class="progress-fill" style="width: {{ overall.percentage }}%"></div>
+        </div>
+    </section>
+
+    <!-- Continue Learning -->
+    {% if in_progress %}
+    <section class="home-section">
+        <h2>Continue Learning</h2>
+        <div class="continue-list">
+            {% for topic in in_progress %}
+            <a href="{{ url_for('topic', lang=lang, name=topic.name) }}" class="continue-item">
+                <div class="continue-info">
+                    <span class="continue-name">{{ topic.display_name }}</span>
+                    <span class="continue-stats">{{ topic.progress.read }}/{{ topic.progress.total }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ topic.progress.percentage }}%"></div>
+                </div>
+                <span class="progress-percentage">{{ topic.progress.percentage }}%</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Recently Read -->
+    <section class="home-section">
+        <h2>Recently Read</h2>
+        {% if recent_reads %}
+        <div class="recent-list">
+            {% for item in recent_reads %}
+            <a href="{{ url_for('lesson', lang=lang, name=item.topic, filename=item.filename) }}" class="recent-item">
+                <div class="recent-info">
+                    <span class="recent-topic">{{ item.topic.replace('_', ' ') }}</span>
+                    <span class="recent-title">{{ item.title }}</span>
+                </div>
+                <span class="recent-time">{{ item.read_at|timeago }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="home-empty">No lessons read yet. Start exploring topics below!</p>
+        {% endif %}
+    </section>
+
+    <!-- Bookmarks -->
+    {% if bookmarks %}
+    <section class="home-section">
+        <div class="home-section-header">
+            <h2>Bookmarks</h2>
+            <a href="{{ url_for('bookmarks', lang=lang) }}" class="home-section-link">View all</a>
+        </div>
+        <div class="recent-list">
+            {% for item in bookmarks %}
+            <a href="{{ url_for('lesson', lang=lang, name=item.topic, filename=item.filename) }}" class="recent-item">
+                <div class="recent-info">
+                    <span class="recent-topic">{{ item.topic.replace('_', ' ') }}</span>
+                    <span class="recent-title">{{ item.title }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- All Topics -->
+    <section class="home-section">
+        <h2>All Topics ({{ topics|length }})</h2>
+        <div class="topics-grid">
+            {% for topic in topics %}
+            <a href="{{ url_for('topic', lang=lang, name=topic.name) }}" class="topic-card">
+                <div class="topic-card-header">
+                    <h2 class="topic-name">{{ topic.display_name }}</h2>
+                    <span class="lesson-count">{{ topic.lesson_count }} lessons</span>
+                </div>
+                <div class="topic-card-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ topic.progress.percentage }}%"></div>
+                    </div>
+                    <span class="progress-text">{{ topic.progress.read }}/{{ topic.progress.total }} completed</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
 </div>
 {% endblock %}

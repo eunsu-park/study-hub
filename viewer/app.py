@@ -1,5 +1,6 @@
 """Study Materials Web Viewer - Flask Application with Multi-language Support."""
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from functools import wraps
 
@@ -19,6 +20,26 @@ CONTENT_DIR = Config.CONTENT_DIR
 SUPPORTED_LANGS = set(Config.SUPPORTED_LANGUAGES)
 DEFAULT_LANG = Config.DEFAULT_LANGUAGE
 LANGUAGE_NAMES = Config.LANGUAGE_NAMES
+
+
+@app.template_filter("timeago")
+def timeago_filter(dt):
+    """Format a datetime as a relative time string."""
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    diff = now - dt
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return "just now"
+    elif seconds < 3600:
+        return f"{int(seconds // 60)}m ago"
+    elif seconds < 86400:
+        return f"{int(seconds // 3600)}h ago"
+    elif seconds < 604800:
+        return f"{int(seconds // 86400)}d ago"
+    else:
+        return dt.strftime("%Y-%m-%d")
 
 
 def get_content_dir(lang: str) -> Path:
@@ -120,16 +141,62 @@ def root():
 @app.route("/<lang>/")
 @validate_lang
 def index(lang: str):
-    """Home page - list all topics."""
+    """Home page - learning hub with stats, recent activity, and topics grid."""
     topics = get_topics(lang)
     for topic in topics:
         topic["progress"] = get_progress(lang, topic["name"])
+
+    # Overall progress
+    total_lessons = sum(t["lesson_count"] for t in topics)
+    total_read = LessonRead.query.filter_by(language=lang).count()
+    overall = {
+        "total": total_lessons,
+        "read": total_read,
+        "percentage": round(total_read / total_lessons * 100) if total_lessons > 0 else 0,
+    }
+
+    # Continue learning (1~99% progress topics, max 5)
+    in_progress = [t for t in topics if 0 < t["progress"]["percentage"] < 100]
+    in_progress.sort(key=lambda t: t["progress"]["read"], reverse=True)
+
+    # Recently read lessons (latest 5)
+    recent_reads = LessonRead.query.filter_by(language=lang) \
+        .order_by(LessonRead.read_at.desc()).limit(5).all()
+    recent_items = []
+    for r in recent_reads:
+        lessons = get_lessons(lang, r.topic)
+        info = next((l for l in lessons if l["filename"] == r.filename), None)
+        if info:
+            recent_items.append({
+                "topic": r.topic, "filename": r.filename,
+                "title": info["title"], "read_at": r.read_at,
+            })
+
+    # Recent bookmarks (latest 5)
+    recent_bookmarks = Bookmark.query.filter_by(language=lang) \
+        .order_by(Bookmark.created_at.desc()).limit(5).all()
+    bookmark_items = []
+    for b in recent_bookmarks:
+        lessons = get_lessons(lang, b.topic)
+        info = next((l for l in lessons if l["filename"] == b.filename), None)
+        if info:
+            bookmark_items.append({
+                "topic": b.topic, "filename": b.filename,
+                "title": info["title"],
+            })
+
+    bookmark_count = Bookmark.query.filter_by(language=lang).count()
 
     response = make_response(render_template(
         "index.html",
         topics=topics,
         lang=lang,
         languages=get_available_languages(),
+        overall=overall,
+        in_progress=in_progress[:5],
+        recent_reads=recent_items,
+        bookmarks=bookmark_items,
+        bookmark_count=bookmark_count,
     ))
     response.set_cookie("lang", lang, max_age=60*60*24*365)
     return response
@@ -311,6 +378,19 @@ def api_bookmark():
         db.session.add(bookmark)
         db.session.commit()
         return jsonify({"success": True, "bookmarked": True})
+
+
+@app.route("/api/clear-user-data", methods=["POST"])
+def api_clear_user_data():
+    """Delete all reading history and bookmarks."""
+    deleted_reads = LessonRead.query.delete()
+    deleted_bookmarks = Bookmark.query.delete()
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "deleted_reads": deleted_reads,
+        "deleted_bookmarks": deleted_bookmarks,
+    })
 
 
 @app.route("/api/search")
