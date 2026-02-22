@@ -16,7 +16,7 @@ This topic is designed to take you from basic data manipulation through explorat
 
 ## Learning Roadmap
 
-The 25 lessons follow a structured progression:
+The 29 lessons follow a structured progression:
 
 ### Phase 1: Data Tools (L01-L06)
 Master the fundamental libraries for data manipulation and preprocessing.
@@ -35,6 +35,9 @@ Master specialized techniques: ANOVA, regression, Bayesian methods, time series,
 
 ### Phase 6: Practical Integration (L25)
 Apply everything in comprehensive real-world projects.
+
+### Phase 7: Advanced Methods (L26-L29)
+Bayesian advanced topics, causal inference, survival analysis, and modern data tools.
 
 ---
 
@@ -67,6 +70,10 @@ Apply everything in comprehensive real-world projects.
 | 23 | [Nonparametric Statistics](./23_Nonparametric_Statistics.md) | ⭐⭐⭐ | Rank tests, bootstrap, permutation tests |
 | 24 | [Experimental Design](./24_Experimental_Design.md) | ⭐⭐⭐ | A/B testing, randomization, DOE principles |
 | 25 | [Practical Projects](./25_Practical_Projects.md) | ⭐⭐⭐⭐ | End-to-end data science projects |
+| 26 | [Bayesian Advanced](./26_Bayesian_Advanced.md) | ⭐⭐⭐⭐ | HMC/NUTS, variational inference, hierarchical models, model comparison |
+| 27 | [Causal Inference](./27_Causal_Inference.md) | ⭐⭐⭐⭐ | DAGs, propensity score, DID, RDD, instrumental variables |
+| 28 | [Survival Analysis](./28_Survival_Analysis.md) | ⭐⭐⭐⭐ | Kaplan-Meier, Cox PH, parametric models, competing risks |
+| 29 | [Modern Data Tools](./29_Modern_Data_Tools.md) | ⭐⭐⭐ | Polars, DuckDB, Arrow interoperability, performance benchmarks |
 
 ---
 
@@ -145,10 +152,8 @@ This topic connects closely with other areas in the study guide:
 ### Next Steps
 - **[Machine Learning](../Machine_Learning/)**: Predictive modeling with scikit-learn
 - **[Deep Learning](../Deep_Learning/)**: Neural networks with PyTorch
-- **[Statistics](../Statistics/)**: Deeper statistical theory
 
 ### Related Applications
-- **[Data Analysis](../Data_Analysis/)**: Lighter introduction to NumPy/Pandas
 - **[Data Engineering](../Data_Engineering/)**: Large-scale data pipelines
 - **[MLOps](../MLOps/)**: Deploying models to production
 

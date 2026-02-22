@@ -11,12 +11,12 @@ content/
 ├── ko/                    # 한국어 자료 (번역본) / Korean (translated)
 │   ├── Algorithm/         # 29개 레슨 / 29 lessons
 │   ├── C_Programming/     # 22개 레슨 / 22 lessons
-│   └── ...                # 총 38개 토픽 / 38 topics total
+│   └── ...                # 총 39개 토픽 / 39 topics total
 │
 └── en/                    # 영어 자료 (원본) / English (original)
     ├── Algorithm/
     ├── C_Programming/
-    └── ...                # 총 38개 토픽 / 38 topics total
+    └── ...                # 총 39개 토픽 / 39 topics total
 ```
 
 ## 토픽 목록 / Topic List
@@ -58,7 +58,7 @@ Example code files are located in the [`examples/`](../examples/README.md) folde
   New materials are authored in English, then translated to Korean
 - 기존 토픽은 한국어 원본 기반으로 작성됨 (Shell_Script부터 영문 원본)
   Original topics were authored in Korean (Shell_Script onwards in English)
-- Data_Analysis + Statistics → Data_Science로 통합 (25개 레슨)
-  Data_Analysis + Statistics merged into Data_Science (25 lessons)
+- Data_Analysis + Statistics → Data_Science로 통합 (29개 레슨)
+  Data_Analysis + Statistics merged into Data_Science (29 lessons)
 - Model_Implementations → Deep_Learning에 통합 (42개 레슨)
   Model_Implementations merged into Deep_Learning (42 lessons)

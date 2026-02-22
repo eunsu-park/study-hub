@@ -1003,3 +1003,13 @@ Key integrations covered in this project:
 - [Spark Performance Tuning](https://spark.apache.org/docs/latest/sql-performance-tuning.html)
 - [dbt Best Practices](https://docs.getdbt.com/guides/best-practices)
 - [Data Engineering Cookbook](https://github.com/andkret/Cookbook)
+
+---
+
+## Example Code
+
+Runnable example project with Docker Compose, synthetic data, and all pipeline components:
+
+**[`examples/Data_Engineering/practical_pipeline/`](../../../examples/Data_Engineering/practical_pipeline/)**
+
+Includes Airflow DAGs, Spark jobs, dbt models, and Great Expectations suites — all adapted for local execution.

@@ -40,8 +40,13 @@
 | [12_dbt_Transformation.md](./12_dbt_Transformation.md) | dbt 변환 도구 | ⭐⭐⭐ | 모델, 소스, 테스트, 문서화, Jinja 템플릿 |
 | [13_Data_Quality_Governance.md](./13_Data_Quality_Governance.md) | 데이터 품질과 거버넌스 | ⭐⭐⭐ | 품질 차원, Great Expectations, 카탈로그, 리니지 |
 | [14_Practical_Pipeline_Project.md](./14_Practical_Pipeline_Project.md) | 실전 파이프라인 프로젝트 | ⭐⭐⭐⭐ | E2E 설계, Airflow+Spark+dbt, 품질 검증, 모니터링 |
+| [15_Airflow_TaskFlow_API.md](./15_Airflow_TaskFlow_API.md) | Airflow TaskFlow API | ⭐⭐⭐ | @task 데코레이터, 동적 매핑, TaskGroups, 테스트 |
+| [16_Kafka_Streams_ksqlDB.md](./16_Kafka_Streams_ksqlDB.md) | Kafka Streams와 ksqlDB | ⭐⭐⭐ | Faust 스트림 처리, 윈도우 집계, ksqlDB 푸시/풀 쿼리 |
+| [17_Spark_Structured_Streaming.md](./17_Spark_Structured_Streaming.md) | Spark Structured Streaming | ⭐⭐⭐⭐ | 무한 테이블, 워터마킹, 상태 기반 처리, Kafka 통합 |
+| [18_CDC_Debezium.md](./18_CDC_Debezium.md) | CDC와 Debezium | ⭐⭐⭐ | 로그 기반 CDC, Debezium+Kafka Connect, 이벤트 형식, 아웃박스 패턴 |
+| [19_Lakehouse_Practical_Patterns.md](./19_Lakehouse_Practical_Patterns.md) | Lakehouse 실전 패턴 | ⭐⭐⭐⭐ | 메달리온 아키텍처, MERGE/SCD2, 컴팩션, 타임 트래블, Iceberg |
 
-**총 레슨**: 14개
+**총 레슨**: 19개
 
 ---
 
@@ -125,6 +130,13 @@ pip install prefect
 
 ### Phase 6: 실전 프로젝트 (14)
 14. **E2E 파이프라인**: Airflow + Spark + dbt 통합
+
+### Phase 7: 심화 주제 (15-19)
+15. **Airflow TaskFlow API**: 모던 Airflow 패턴
+16. **Kafka Streams와 ksqlDB**: SQL로 스트림 처리
+17. **Spark Structured Streaming**: 실시간 Spark
+18. **CDC와 Debezium**: 변경 데이터 캡처
+19. **Lakehouse 패턴**: 프로덕션 Delta Lake / Iceberg
 
 ---
 

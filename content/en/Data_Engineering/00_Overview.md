@@ -40,8 +40,13 @@ Data Engineering Overview → Data Modeling → ETL/ELT Concepts
 | [12_dbt_Transformation.md](./12_dbt_Transformation.md) | dbt Transformation Tool | ⭐⭐⭐ | Models, sources, tests, documentation, Jinja templates |
 | [13_Data_Quality_Governance.md](./13_Data_Quality_Governance.md) | Data Quality and Governance | ⭐⭐⭐ | Quality dimensions, Great Expectations, catalog, lineage |
 | [14_Practical_Pipeline_Project.md](./14_Practical_Pipeline_Project.md) | Practical Pipeline Project | ⭐⭐⭐⭐ | E2E design, Airflow+Spark+dbt, quality validation, monitoring |
+| [15_Airflow_TaskFlow_API.md](./15_Airflow_TaskFlow_API.md) | Airflow TaskFlow API | ⭐⭐⭐ | @task decorator, dynamic mapping, TaskGroups, testing |
+| [16_Kafka_Streams_ksqlDB.md](./16_Kafka_Streams_ksqlDB.md) | Kafka Streams & ksqlDB | ⭐⭐⭐ | Faust stream processing, windowed aggregation, ksqlDB push/pull queries |
+| [17_Spark_Structured_Streaming.md](./17_Spark_Structured_Streaming.md) | Spark Structured Streaming | ⭐⭐⭐⭐ | Unbounded tables, watermarking, stateful processing, Kafka integration |
+| [18_CDC_Debezium.md](./18_CDC_Debezium.md) | CDC with Debezium | ⭐⭐⭐ | Log-based CDC, Debezium+Kafka Connect, event format, outbox pattern |
+| [19_Lakehouse_Practical_Patterns.md](./19_Lakehouse_Practical_Patterns.md) | Lakehouse Practical Patterns | ⭐⭐⭐⭐ | Medallion architecture, MERGE/SCD2, compaction, time travel, Iceberg |
 
-**Total Lessons**: 14
+**Total Lessons**: 19
 
 ---
 
@@ -125,6 +130,13 @@ pip install prefect
 
 ### Phase 6: Practical Project (14)
 14. **E2E Pipeline**: Airflow + Spark + dbt integration
+
+### Phase 7: Advanced Topics (15-19)
+15. **Airflow TaskFlow API**: Modern Airflow patterns
+16. **Kafka Streams & ksqlDB**: Stream processing with SQL
+17. **Spark Structured Streaming**: Real-time Spark
+18. **CDC with Debezium**: Change data capture
+19. **Lakehouse Patterns**: Production Delta Lake / Iceberg
 
 ---
 

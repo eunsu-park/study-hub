@@ -690,3 +690,13 @@ Configure online store and integrate with real-time inference.
 - [Feast Documentation](https://docs.feast.dev/)
 - [Feature Store for ML](https://www.featurestore.org/)
 - [Tecton Feature Platform](https://www.tecton.ai/)
+
+---
+
+## Example Code
+
+Standalone Feast feature store examples with materialization and serving:
+
+**[`examples/MLOps/feature_store/`](../../../examples/MLOps/feature_store/)**
+
+Bridges L11 theory with L12 practical project — same entity/feature schema, runnable offline and online retrieval demos.

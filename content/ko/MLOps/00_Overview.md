@@ -45,6 +45,9 @@ Feature Store ← 드리프트/모니터링 ← TorchServe/Triton ← 모델 서
 | [10_Drift_Detection_Monitoring.md](./10_Drift_Detection_Monitoring.md) | 드리프트 & 모니터링 | ⭐⭐⭐ | 데이터/모델 드리프트, Evidently AI, 알림 설정 |
 | [11_Feature_Stores.md](./11_Feature_Stores.md) | Feature Store | ⭐⭐⭐ | Feast, 온라인/오프라인 스토어, 피처 서빙 |
 | [12_Practical_MLOps_Project.md](./12_Practical_MLOps_Project.md) | 실전 MLOps 프로젝트 | ⭐⭐⭐⭐ | E2E 파이프라인, 자동 재학습, 프로젝트 구조 |
+| [13_CICD_for_ML.md](./13_CICD_for_ML.md) | ML을 위한 CI/CD | ⭐⭐⭐ | ML 파이프라인 CI/CD, 데이터/모델 검증 게이트, 배포 전략, 롤백 |
+| [14_DVC_Data_Version_Control.md](./14_DVC_Data_Version_Control.md) | DVC 데이터 버전 관리 | ⭐⭐⭐ | DVC 파이프라인, 실험 추적, CML, 원격 저장소 |
+| [15_LLMOps.md](./15_LLMOps.md) | LLMOps | ⭐⭐⭐⭐ | 프롬프트 버전 관리, RAG 운영, LLM 평가, 가드레일, 비용 관리 |
 
 ---
 
@@ -133,6 +136,11 @@ print(f"Feast: {feast.__version__}")
 ### 6단계: 실전 프로젝트 (12)
 - E2E MLOps 파이프라인 구축
 - 자동 재학습 시스템
+
+### 7단계: 심화 주제 (13-15)
+- ML 시스템을 위한 CI/CD 파이프라인
+- DVC를 이용한 데이터 버전 관리
+- LLMOps: LLM 기반 애플리케이션 운영
 
 ---
 

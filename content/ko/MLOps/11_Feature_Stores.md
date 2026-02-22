@@ -690,3 +690,13 @@ get_historical_features를 사용하여 Point-in-time 정확한 학습 데이터
 - [Feast Documentation](https://docs.feast.dev/)
 - [Feature Store for ML](https://www.featurestore.org/)
 - [Tecton Feature Platform](https://www.tecton.ai/)
+
+---
+
+## 예제 코드
+
+구체화(Materialization)와 서빙을 포함한 독립 실행 가능한 Feast 피처 스토어(Feature Store) 예제:
+
+**[`examples/MLOps/feature_store/`](../../../examples/MLOps/feature_store/)**
+
+L11 이론과 L12 실습 프로젝트를 연결 — 동일한 엔티티/피처 스키마, 실행 가능한 오프라인/온라인 조회 데모.

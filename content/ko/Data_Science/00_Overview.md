@@ -16,7 +16,7 @@
 
 ## 학습 로드맵
 
-25개의 강의는 구조화된 진행을 따릅니다:
+29개의 강의는 구조화된 진행을 따릅니다:
 
 ### 1단계: 데이터 도구 (L01-L06)
 데이터 조작과 전처리를 위한 기본 라이브러리를 숙달합니다.
@@ -35,6 +35,9 @@
 
 ### 6단계: 실전 통합 (L25)
 종합적인 실제 프로젝트에서 모든 것을 적용합니다.
+
+### 7단계: 심화 방법론 (L26-L29)
+베이지안 심화, 인과 추론, 생존 분석, 모던 데이터 도구.
 
 ---
 
@@ -67,6 +70,10 @@
 | 23 | [비모수 통계](./23_Nonparametric_Statistics.md) | ⭐⭐⭐ | 순위 검정, 부트스트랩, 순열 검정 |
 | 24 | [실험 설계](./24_Experimental_Design.md) | ⭐⭐⭐ | A/B 테스팅, 무작위화, DOE 원리 |
 | 25 | [실전 프로젝트](./25_Practical_Projects.md) | ⭐⭐⭐⭐ | 종단간 데이터 과학 프로젝트 |
+| 26 | [베이지안 심화](./26_Bayesian_Advanced.md) | ⭐⭐⭐⭐ | HMC/NUTS, 변분 추론, 계층 모델, 모델 비교 |
+| 27 | [인과 추론](./27_Causal_Inference.md) | ⭐⭐⭐⭐ | DAG, 성향 점수, DID, RDD, 도구 변수 |
+| 28 | [생존 분석](./28_Survival_Analysis.md) | ⭐⭐⭐⭐ | Kaplan-Meier, Cox PH, 모수적 모델, 경쟁 위험 |
+| 29 | [모던 데이터 도구](./29_Modern_Data_Tools.md) | ⭐⭐⭐ | Polars, DuckDB, Arrow 상호운용, 성능 벤치마크 |
 
 ---
 
@@ -145,10 +152,8 @@ print("Statsmodels version:", sm.__version__)
 ### 다음 단계
 - **[Machine Learning](../Machine_Learning/)**: scikit-learn을 사용한 예측 모델링
 - **[Deep Learning](../Deep_Learning/)**: PyTorch를 사용한 신경망
-- **[Statistics](../Statistics/)**: 더 깊은 통계 이론
 
 ### 관련 응용
-- **[Data Analysis](../Data_Analysis/)**: NumPy/Pandas에 대한 가벼운 소개
 - **[Data Engineering](../Data_Engineering/)**: 대규모 데이터 파이프라인
 - **[MLOps](../MLOps/)**: 프로덕션에 모델 배포
 

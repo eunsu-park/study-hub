@@ -1003,3 +1003,13 @@ volumes:
 - [Spark Performance Tuning](https://spark.apache.org/docs/latest/sql-performance-tuning.html)
 - [dbt Best Practices](https://docs.getdbt.com/guides/best-practices)
 - [Data Engineering Cookbook](https://github.com/andkret/Cookbook)
+
+---
+
+## 예제 코드
+
+Docker Compose, 합성 데이터, 모든 파이프라인 구성 요소를 포함한 실행 가능한 예제 프로젝트:
+
+**[`examples/Data_Engineering/practical_pipeline/`](../../../examples/Data_Engineering/practical_pipeline/)**
+
+Airflow DAG, Spark 작업, dbt 모델, Great Expectations 스위트 포함 — 모두 로컬 실행에 맞게 조정되었습니다.

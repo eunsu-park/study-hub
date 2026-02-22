@@ -945,3 +945,13 @@ Build a complete customer churn prediction MLOps system from scratch using the s
 - [Made With ML - MLOps](https://madewithml.com/)
 - [Full Stack Deep Learning](https://fullstackdeeplearning.com/)
 - [MLOps Community](https://mlops.community/)
+
+---
+
+## Example Code
+
+Runnable end-to-end MLOps project with synthetic data and Docker Compose infrastructure:
+
+**[`examples/MLOps/practical_project/`](../../../examples/MLOps/practical_project/)**
+
+Includes Feast feature store, MLflow training, FastAPI serving, and Evidently drift detection — all adapted for local execution.

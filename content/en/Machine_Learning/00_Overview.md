@@ -12,8 +12,10 @@ Machine learning is a collection of algorithms that learn patterns from data to 
 ML Overview → Linear Regression → Logistic Regression → Model Evaluation → Cross-Validation/Hyperparameters
                                                 ↓
                 Practical Projects ← Pipelines ← Dimensionality Reduction ← Clustering ← k-NN/Naive Bayes
-                                                                                        ↑
-        Decision Trees → Ensemble(Bagging) → Ensemble(Boosting) → SVM ────────────────┘
+                        ↓                                                                  ↑
+                Feature Engineering → Explainability → Imbalanced Data        Decision Trees → Ensemble(Bagging)
+                        ↓                                                         → Ensemble(Boosting) → SVM ──┘
+                Time Series ML → AutoML → Anomaly Detection
 ```
 
 ---
@@ -36,6 +38,12 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
 | [12_Dimensionality_Reduction.md](./12_Dimensionality_Reduction.md) | Dimensionality Reduction | PCA, t-SNE, Feature Selection |
 | [13_Pipelines_and_Practice.md](./13_Pipelines_and_Practice.md) | Pipelines & Practice | sklearn Pipeline, ColumnTransformer, Model Saving |
 | [14_Practical_Projects.md](./14_Practical_Projects.md) | Practical Projects | Kaggle Problem Solving, Classification/Regression Practice |
+| [15_Feature_Engineering.md](./15_Feature_Engineering.md) | Feature Engineering | Numerical/Categorical/Temporal Transforms, Feature Selection, Featuretools |
+| [16_Model_Explainability.md](./16_Model_Explainability.md) | Model Explainability | SHAP, LIME, PDP/ICE, Fairness Metrics |
+| [17_Imbalanced_Data.md](./17_Imbalanced_Data.md) | Imbalanced Data | SMOTE/ADASYN, Cost-sensitive Learning, Threshold Optimization |
+| [18_Time_Series_ML.md](./18_Time_Series_ML.md) | Time Series ML | Lag/Rolling Features, TimeSeriesSplit, Prophet, Tree-based Forecasting |
+| [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML & Hyperparameter Optimization | Optuna, Auto-sklearn, FLAML, H2O AutoML |
+| [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | Anomaly Detection | Isolation Forest, LOF, One-Class SVM, PyOD |
 
 ---
 
@@ -101,6 +109,11 @@ print(f"LightGBM: {lightgbm.__version__}")
 ### Stage 6: Practice & Projects (13-14)
 - Building pipelines
 - Real-world problem solving
+
+### Stage 7: Advanced Topics (15-20)
+- Feature engineering and model explainability
+- Handling imbalanced data and time series
+- AutoML, hyperparameter optimization, anomaly detection
 
 ---
 

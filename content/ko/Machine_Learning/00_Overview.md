@@ -12,8 +12,10 @@
 ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차검증/하이퍼파라미터
                                               ↓
                     실전 프로젝트 ← 파이프라인 ← 차원축소 ← 클러스터링 ← k-NN/나이브베이즈
-                                                                              ↑
-        결정트리 → 앙상블(배깅) → 앙상블(부스팅) → SVM ─────────────────────────┘
+                        ↓                                                      ↑
+                특성 공학 → 설명 가능성 → 불균형 데이터             결정트리 → 앙상블(배깅)
+                        ↓                                            → 앙상블(부스팅) → SVM ──┘
+                시계열 ML → AutoML → 이상 탐지
 ```
 
 ---
@@ -36,6 +38,12 @@ ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차�
 | [12_Dimensionality_Reduction.md](./12_Dimensionality_Reduction.md) | 차원축소 | PCA, t-SNE, 특성 선택 |
 | [13_Pipelines_and_Practice.md](./13_Pipelines_and_Practice.md) | 파이프라인과 실무 | sklearn Pipeline, ColumnTransformer, 모델 저장 |
 | [14_Practical_Projects.md](./14_Practical_Projects.md) | 실전 프로젝트 | Kaggle 문제 해결, 분류/회귀 실습 |
+| [15_Feature_Engineering.md](./15_Feature_Engineering.md) | 특성 공학 | 수치형/범주형/시간형 변환, 특성 선택, Featuretools |
+| [16_Model_Explainability.md](./16_Model_Explainability.md) | 모델 설명 가능성 | SHAP, LIME, PDP/ICE, 공정성 지표 |
+| [17_Imbalanced_Data.md](./17_Imbalanced_Data.md) | 불균형 데이터 | SMOTE/ADASYN, 비용 민감 학습, 임계값 최적화 |
+| [18_Time_Series_ML.md](./18_Time_Series_ML.md) | 시계열 ML | 지연/롤링 특성, TimeSeriesSplit, Prophet, 트리 기반 예측 |
+| [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML과 하이퍼파라미터 최적화 | Optuna, Auto-sklearn, FLAML, H2O AutoML |
+| [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | 이상 탐지 | Isolation Forest, LOF, One-Class SVM, PyOD |
 
 ---
 
@@ -101,6 +109,11 @@ print(f"LightGBM: {lightgbm.__version__}")
 ### 6단계: 실무와 프로젝트 (13-14)
 - 파이프라인 구축
 - 실전 문제 해결
+
+### 7단계: 심화 주제 (15-20)
+- 특성 공학과 모델 설명 가능성
+- 불균형 데이터 처리와 시계열
+- AutoML, 하이퍼파라미터 최적화, 이상 탐지
 
 ---
 

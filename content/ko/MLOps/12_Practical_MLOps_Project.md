@@ -945,3 +945,13 @@ jobs:
 - [Made With ML - MLOps](https://madewithml.com/)
 - [Full Stack Deep Learning](https://fullstackdeeplearning.com/)
 - [MLOps Community](https://mlops.community/)
+
+---
+
+## 예제 코드
+
+합성 데이터와 Docker Compose 인프라를 포함한 실행 가능한 E2E MLOps 프로젝트:
+
+**[`examples/MLOps/practical_project/`](../../../examples/MLOps/practical_project/)**
+
+Feast 피처 스토어(Feature Store), MLflow 학습, FastAPI 서빙, Evidently 드리프트 감지 포함 — 모두 로컬 실행에 맞게 조정되었습니다.

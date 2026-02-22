@@ -40,12 +40,27 @@ examples/
 │   ├── student_management/     # 학생 관리 프로젝트 / Student management project
 │   └── Makefile                # Build system
 │
-├── Computer_Vision/        # OpenCV/Python 예제 / examples (21 files)
-├── Data_Science/           # 데이터 과학 예제 / Data science examples (17 files)
-│   ├── data_analysis/      # NumPy, Pandas, 시각화 / Visualization (7)
-│   └── statistics/         # 통계학 예제 / Statistics (10)
-├── Data_Engineering/       # Airflow/Spark/Kafka 예제 / examples (6 files)
-├── Deep_Learning/          # PyTorch 예제 / examples (50 files)
+├── Claude_Ecosystem/      # Claude 생태계 예제 / Claude ecosystem examples (16 files)
+│   ├── 03_claude_md/          # CLAUDE.md, settings 예제 / examples
+│   ├── 05_hooks/              # Hook 설정 예제 / Hook config examples
+│   ├── 06_skills/             # 커스텀 스킬 / Custom skills
+│   ├── 07_subagents/          # 서브에이전트 정의 / Subagent definitions
+│   ├── 13_mcp_server/         # MCP 서버 구현 / MCP server implementations
+│   ├── 16_tool_use/           # API 도구 사용 / API tool use
+│   └── 17_agent_sdk/          # Agent SDK 예제 / Agent SDK examples
+│
+├── Computer_Vision/        # OpenCV/Python 예제 / examples (23 files)
+├── Data_Science/           # 데이터 과학 예제 / Data science examples (24 files)
+│   ├── data_analysis/      # NumPy, Pandas, 시각화, Polars/DuckDB / Visualization (8)
+│   └── statistics/         # 통계학 예제 / Statistics (13)
+├── Data_Engineering/       # Airflow/Spark/Kafka/CDC/Lakehouse 예제 / examples (33 files)
+│   ├── airflow/            # TaskFlow API
+│   ├── cdc/                # Debezium CDC
+│   ├── kafka/              # Kafka Streams, ksqlDB
+│   ├── lakehouse/          # Delta Lake patterns
+│   ├── practical_pipeline/ # 실습 파이프라인 프로젝트 / Practical pipeline project (L14)
+│   └── spark/              # Structured Streaming
+├── Deep_Learning/          # PyTorch 예제 / examples (47 files)
 │   ├── numpy/              # NumPy 기초 구현 / basic implementation (5)
 │   ├── pytorch/            # PyTorch 구현 / implementation (22)
 │   └── implementations/   # 모델 구현 코드 / Model implementation code (15)
@@ -74,17 +89,22 @@ examples/
 │   ├── 13_custom_commands/    # 사용자 정의 명령 / Custom commands
 │   └── 16_projects/           # 프로젝트 / Projects
 │
-├── IoT_Embedded/           # Raspberry Pi/MQTT 예제 / examples (12 files)
+├── IoT_Embedded/           # Raspberry Pi/MQTT 예제 / examples (14 files)
 │   ├── edge_ai/            # TFLite, ONNX 추론 / inference
 │   ├── networking/         # WiFi, BLE, MQTT, HTTP
 │   ├── projects/           # 스마트홈, 이미지분석, 클라우드IoT / Smart home, Image analysis, Cloud IoT
 │   └── raspberry_pi/       # GPIO, 센서 / sensors
 │
 ├── LLM_and_NLP/            # NLP/HuggingFace 예제 / examples (15 files)
-├── Machine_Learning/       # sklearn/Jupyter 예제 / examples (15 files)
+├── Machine_Learning/       # sklearn/Jupyter 예제 / examples (21 files)
 ├── Math_for_AI/            # AI 수학 Python 예제 / AI math examples (13 files)
-├── MLOps/                  # MLflow/서빙 예제 / serving examples (5 files)
-├── Numerical_Simulation/   # 수치해석 Python 예제 / Numerical analysis examples (10 files)
+├── MLOps/                  # MLflow/CI/CD/DVC/LLMOps 예제 / examples (32 files)
+│   ├── cicd/               # ML CI/CD 파이프라인 / ML CI/CD pipeline
+│   ├── dvc/                # DVC 데이터 버전 관리 / DVC data version control
+│   ├── feature_store/      # Feast 피처 스토어 예제 / Feature store examples (L11)
+│   ├── llmops/             # LLMOps 모니터링 / LLMOps monitoring
+│   └── practical_project/  # E2E MLOps 실습 프로젝트 / E2E MLOps project (L12)
+├── Numerical_Simulation/   # 수치해석 Python 예제 / Numerical analysis examples (8 files)
 ├── Programming/           # 프로그래밍 개념 예제 / Programming concepts examples (13 files)
 │   ├── 02_paradigms/          # 패러다임 비교 / Paradigm comparison
 │   ├── 05_oop/                # OOP, SOLID / OOP principles
@@ -100,7 +120,7 @@ examples/
 │   ├── 08_primary_standby_compose.yml  # Primary-Standby replication setup
 │   ├── 09_primary_standby_setup.sh     # Automated replication setup script
 │   └── README.md                       # PostgreSQL examples guide
-├── Reinforcement_Learning/ # RL Python 예제 / examples (20 files)
+├── Reinforcement_Learning/ # RL Python 예제 / examples (14 files)
 ├── Foundation_Models/      # 파운데이션 모델 예제 / Foundation model examples (8 files)
 ├── Mathematical_Methods/  # 물리수학 Python 예제 / Math methods examples (13 files)
 ├── MHD/                   # MHD Python 예제 / MHD examples (32 files)
@@ -139,13 +159,13 @@ examples/
 │   ├── 15_secure_api/         # Flask 보안 API 프로젝트 / Secure API project
 │   └── 16_scanner/            # 취약점 스캐너 / Vulnerability scanner
 │
-├── Signal_Processing/      # 신호 처리 Python 예제 / Signal processing examples (15 files)
+├── Signal_Processing/      # 신호 처리 Python 예제 / Signal processing examples (19 files)
 │   ├── 01_signals_classification.py  # 신호 분류 / Signal classification
 │   ├── 02_convolution.py             # 컨볼루션 / Convolution
 │   ├── ...                           # 03-15: 푸리에, 샘플링, FFT, Z변환, 필터, 적응, 영상
 │   └── README.md
 │
-├── Software_Engineering/   # 소프트웨어 공학 예제 / SE examples (8 files)
+├── Software_Engineering/   # 소프트웨어 공학 예제 / SE examples (9 files)
 │   ├── 04_user_story_template.md   # 사용자 스토리 / User stories
 │   ├── 05_uml_class_diagram.py     # UML 클래스 다이어그램 / UML class diagram
 │   ├── 06_estimation_calculator.py # 추정 계산기 / Estimation calculator
@@ -155,7 +175,7 @@ examples/
 │   ├── 13_ci_cd_pipeline.yml       # CI/CD 파이프라인 / GitHub Actions
 │   └── 14_adr_template.md          # ADR 템플릿 / ADR template
 │
-├── Shell_Script/           # Bash 스크립팅 예제 / scripting examples (27 files)
+├── Shell_Script/           # Bash 스크립팅 예제 / scripting examples (30 files)
 │   ├── 02_parameter_expansion/  # 매개변수 확장 / Parameter expansion
 │   ├── 03_arrays/               # 배열 / Arrays
 │   ├── 05_function_library/     # 함수 라이브러리 / Function libraries
@@ -177,7 +197,7 @@ examples/
     │   └── app.js              # Application logic and components
 ```
 
-**총 예제 파일 / Total example files: 642**
+**총 예제 파일 / Total example files: 766** (32개 토픽 / 32 topics)
 
 ## 빌드 방법 / How to Build
 
@@ -228,33 +248,37 @@ jupyter notebook
 
 | 토픽 / Topic | 파일 수 / Files | 언어 / Language | 설명 / Description |
 |--------------|-----------------|-----------------|-------------------|
-| Algorithm | 89 | Python, C, C++ | 자료구조, 알고리즘 / Data structures, Algorithms |
+| Algorithm | 92 | Python, C, C++ | 자료구조, 알고리즘 / Data structures, Algorithms |
 | C_Programming | 85 | C | 시스템 프로그래밍 프로젝트, 네트워크, IPC / System programming projects, Network, IPC |
+| Claude_Ecosystem | 16 | Python/JSON | Claude Code, MCP 서버, Agent SDK / Claude Code, MCP Servers, Agent SDK |
+| Compiler_Design | 11 | Python | 렉서, 파서, AST, 타입 체커, 바이트코드 VM / Lexer, Parser, AST, Type Checker, Bytecode VM |
+| Computer_Vision | 23 | Python | OpenCV, 이미지 처리 / Image processing |
 | CPP | 30 | C++ | Modern C++, STL, 스마트 포인터, 스레딩, 디자인 패턴, 학생관리 프로젝트 / Modern C++, STL, Smart Pointers, Threading, Design Patterns, Student Management Project |
-| Computer_Vision | 21 | Python | OpenCV, 이미지 처리 / Image processing |
-| Data_Science | 17 | Python | NumPy, Pandas, 시각화, 통계학 / Visualization, Statistics |
-| Data_Engineering | 6 | Python | Airflow, Spark, Kafka |
-| Deep_Learning | 50 | Python | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, 모델 구현 / Model Implementations |
+| Data_Engineering | 33 | Python/SQL/YAML/JSON | Airflow, Spark, Kafka, CDC, Lakehouse, 실습 파이프라인 / Practical Pipeline |
+| Data_Science | 24 | Python | NumPy, Pandas, 시각화, 통계학, 베이지안, 인과추론, 생존분석, Polars/DuckDB / Visualization, Statistics, Bayesian, Causal, Survival, Polars/DuckDB |
+| Database_Theory | 11 | Python | 관계형 모델, 정규화, B+트리, MVCC, 쿼리 옵티마이저 / Relational, Normalization, B+Tree, MVCC, Query Optimizer |
+| Deep_Learning | 47 | Python | PyTorch, CNN, RNN, Transformer, GAN, VAE, Diffusion, 모델 구현 / Model Implementations |
 | Docker | 15 | Docker/YAML | Multi-stage build, Compose, Kubernetes, CI/CD |
 | Foundation_Models | 8 | Python | Scaling Laws, 토크나이저, LoRA, RAG, 양자화, 증류 / Tokenizer, LoRA, RAG, Quantization, Distillation |
-| IoT_Embedded | 12 | Python | Raspberry Pi, MQTT, Edge AI |
+| IoT_Embedded | 14 | Python | Raspberry Pi, MQTT, Edge AI |
 | LaTeX | 19 | LaTeX | 문서 조판, 수학, TikZ, Beamer, 참고문헌, 빌드 / Document typesetting, Math, TikZ, Beamer, Bibliography, Build |
+| Linux | 3 | Bash | 재해복구, 성능 진단 / Disaster recovery, Performance diagnostics |
 | LLM_and_NLP | 15 | Python | BERT, GPT, RAG, LangChain |
-| Machine_Learning | 15 | Python/Jupyter | sklearn, 분류, 회귀, 클러스터링 / Classification, Regression, Clustering |
+| Machine_Learning | 21 | Python/Jupyter | sklearn, 분류, 회귀, 앙상블, Feature Engineering, SHAP/LIME, AutoML, 이상탐지 / Classification, Regression, Ensemble, Explainability, AutoML, Anomaly Detection |
 | Math_for_AI | 13 | Python | 선형대수, SVD/PCA, 최적화, 확률, 정보이론, 텐서, 그래프, 어텐션 / Linear Algebra, Optimization, Probability, Attention |
 | Mathematical_Methods | 13 | Python | 급수, 복소수, 선형대수, 푸리에, ODE/PDE, 특수함수, 텐서 / Series, Complex, Linear Algebra, Fourier, ODE/PDE, Special Functions, Tensors |
 | MHD | 32 | Python | 평형, 안정성, 불안정성, 재결합, 난류, 다이나모, 천체물리, 핵융합 / Equilibria, Stability, Reconnection, Turbulence, Dynamo, Fusion |
-| MLOps | 5 | Python | MLflow, 모델 서빙, 드리프트 감지 / Model serving, Drift detection |
-| Numerical_Simulation | 10 | Python | 수치해석, ODE, Monte Carlo, Spectral, FEM / Numerical analysis |
+| MLOps | 32 | Python/YAML/JSON | MLflow, CI/CD, DVC, LLMOps, Feast Feature Store, E2E 실습 프로젝트 / Practical Project |
+| Numerical_Simulation | 8 | Python | 수치해석, ODE, Monte Carlo / Numerical analysis |
 | Plasma_Physics | 26 | Python | 디바이 차폐, 입자 운동, 란다우 감쇠, 플라즈마 파동, 유체 모델, 진단 / Debye shielding, Particle motion, Landau damping, Waves, Fluid, Diagnostics |
 | Programming | 13 | Python | 패러다임, OOP, 함수형, 디자인 패턴, 클린 코드, 테스팅, 동시성 / Paradigms, OOP, Functional, Design Patterns, Clean Code, Testing, Concurrency |
 | PostgreSQL | 10 | SQL/Docker/Bash | CRUD, JOIN, 윈도우 함수, FTS, RLS, Primary-Standby 복제 / Window functions, FTS, RLS, Primary-Standby replication |
 | Python | 16 | Python | 타입 힌트, 데코레이터, 제너레이터, 비동기, 메타클래스, 테스팅 / Type Hints, Decorators, Generators, Async, Metaclasses, Testing |
-| Reinforcement_Learning | 20 | Python | Q-Learning, DQN, PPO, A2C, Model-Based RL, SAC |
+| Reinforcement_Learning | 14 | Python | Q-Learning, DQN, PPO, A2C, Model-Based RL, SAC |
 | Security | 12 | Python | 암호학, 해싱, TLS, 인증, OWASP, 인젝션 방어, API 보안, 취약점 스캐너 / Cryptography, Hashing, TLS, Auth, OWASP, Injection defense, API Security, Vulnerability Scanner |
-| Signal_Processing | 15 | Python | 신호 분류, 컨볼루션, 푸리에, 샘플링, FFT, Z변환, 필터 설계, 다중률, 적응 필터, 스펙트로그램, 영상 필터링 / Signals, Convolution, Fourier, Sampling, FFT, Z-Transform, Filter Design, Multirate, Adaptive, Spectrogram, Image Filtering |
-| Software_Engineering | 8 | Python/MD/YAML | 사용자 스토리, UML, 추정, 코드 메트릭, 간트 차트, 기술 부채, CI/CD, ADR / User Stories, UML, Estimation, Code Metrics, Gantt Chart, Tech Debt, CI/CD, ADR |
-| Shell_Script | 27 | Bash | 매개변수 확장, 배열, I/O, 정규식, 프로세스, 에러처리, 테스팅, 배포, 모니터링 / Parameter expansion, Arrays, I/O, Regex, Process, Error handling, Testing, Deployment, Monitoring |
+| Shell_Script | 30 | Bash | 매개변수 확장, 배열, I/O, 정규식, 프로세스, 에러처리, 테스팅, 배포, 모니터링 / Parameter expansion, Arrays, I/O, Regex, Process, Error handling, Testing, Deployment, Monitoring |
+| Signal_Processing | 19 | Python | 신호 분류, 컨볼루션, 푸리에, 샘플링, FFT, Z변환, 필터 설계, 다중률, 적응 필터, 스펙트로그램, 영상 필터링 / Signals, Convolution, Fourier, Sampling, FFT, Z-Transform, Filter Design, Multirate, Adaptive, Spectrogram, Image Filtering |
+| Software_Engineering | 9 | Python/MD/YAML | 사용자 스토리, UML, 추정, 코드 메트릭, 간트 차트, 기술 부채, CI/CD, ADR / User Stories, UML, Estimation, Code Metrics, Gantt Chart, Tech Debt, CI/CD, ADR |
 | Web_Development | 50 | HTML/CSS/JS/TS | 웹 프로젝트, TypeScript, SPA 라우터 / Web projects, SPA router |
 
 ## 예제와 학습 자료 매핑 / Mapping Examples to Study Materials

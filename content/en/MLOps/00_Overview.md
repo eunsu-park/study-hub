@@ -45,6 +45,9 @@ Practical MLOps Project (E2E Pipeline)
 | [10_Drift_Detection_Monitoring.md](./10_Drift_Detection_Monitoring.md) | Drift & Monitoring | ⭐⭐⭐ | Data/model drift, Evidently AI, alert configuration |
 | [11_Feature_Stores.md](./11_Feature_Stores.md) | Feature Store | ⭐⭐⭐ | Feast, online/offline stores, feature serving |
 | [12_Practical_MLOps_Project.md](./12_Practical_MLOps_Project.md) | Practical MLOps Project | ⭐⭐⭐⭐ | E2E pipeline, automated retraining, project structure |
+| [13_CICD_for_ML.md](./13_CICD_for_ML.md) | CI/CD for ML | ⭐⭐⭐ | ML pipeline CI/CD, data/model validation gates, deployment strategies, rollback |
+| [14_DVC_Data_Version_Control.md](./14_DVC_Data_Version_Control.md) | DVC Data Version Control | ⭐⭐⭐ | DVC pipelines, experiment tracking, CML, remote storage |
+| [15_LLMOps.md](./15_LLMOps.md) | LLMOps | ⭐⭐⭐⭐ | Prompt versioning, RAG operations, LLM evaluation, guardrails, cost management |
 
 ---
 
@@ -133,6 +136,11 @@ print(f"Feast: {feast.__version__}")
 ### Stage 6: Practical Project (12)
 - Build E2E MLOps pipeline
 - Implement automated retraining system
+
+### Stage 7: Advanced Topics (13-15)
+- CI/CD pipelines for ML systems
+- Data version control with DVC
+- LLMOps: operating LLM-based applications
 
 ---
 
