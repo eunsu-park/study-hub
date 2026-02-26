@@ -7,6 +7,8 @@
 - Understand the Yee lattice structure
 - Learn the Courant condition for electromagnetic waves
 
+**Why This Lesson Matters:** Maxwell's equations unify electricity, magnetism, and light into a single framework. Unlike fluids, electromagnetic waves travel at the speed of light and can propagate through vacuum. Numerical methods for electromagnetics (particularly FDTD) are used to design antennas, waveguides, photonic crystals, and to analyze electromagnetic compatibility. The staggered Yee lattice -- where E and H fields are offset by half a grid cell -- is an elegant discretization that automatically satisfies Gauss's laws and has become the industry standard.
+
 ---
 
 ## 1. Review of Maxwell's Equations
@@ -1041,6 +1043,25 @@ Computational Electromagnetics Essentials:
    - Conductors: σ > 0
    - Lossy media: Modified Ca, Cb coefficients
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Wave Equation Derivation
+Starting from Faraday's law (∇×E = -∂B/∂t) and the Ampère-Maxwell law (∇×B = μ₀ε₀ ∂E/∂t) in vacuum with no sources, derive the wave equation for E: ∇²E = (1/c²) ∂²E/∂t². Show each algebraic step clearly and identify where the vector identity ∇×(∇×F) = ∇(∇·F) - ∇²F is used.
+
+### Exercise 2: 1D FDTD Dielectric Interface
+Implement the 1D FDTD code from this lesson and add a dielectric half-space at x = L/2 with relative permittivity εr = 4 (simulating glass). Launch a Gaussian pulse from x = L/4. Record the incident, reflected, and transmitted electric field amplitudes at suitable probe points. Compare the reflection coefficient |r| = (√εr1 - √εr2)/(√εr1 + √εr2) and transmission coefficient |t| = 2√εr1/(√εr1 + √εr2) from your simulation against the Fresnel formulas for normal incidence.
+
+### Exercise 3: Courant Number and Stability
+Using the 1D FDTD code, run three simulations with Courant numbers S = 0.5, 0.99, and 1.01. For each, plot the maximum field amplitude as a function of time step up to n = 500. Quantify: (a) the maximum amplitude reached for the stable cases, and (b) how many time steps elapse before the S = 1.01 case becomes visibly unstable. Explain the physical meaning of the Courant condition.
+
+### Exercise 4: Numerical Dispersion Measurement
+Run a long 1D FDTD simulation (Nx = 1000, n_steps = 5000) with a sinusoidal source at frequency f = 5 GHz. After the simulation reaches steady state, measure the wavelength of the standing wave pattern in the domain. Compare the measured wavelength λ_FDTD = c/f_num to the analytical wavelength λ = c/f to quantify the dispersion error. Repeat for grid spacings dx = λ/10 and dx = λ/20 and observe how dispersion error changes with resolution.
+
+### Exercise 5: 2D TM Mode Scattering by a Cylinder
+Extend the 2D FDTD TM mode code to simulate plane wave scattering by a perfectly conducting (PEC) circular cylinder of radius r = 10 mm in a 200×200 grid with dx = dy = 1 mm. Place the cylinder at the center and launch a line source (uniform in y) from one side. Plot the scattered field pattern at t = 300 steps and identify the shadow region, specular reflection, and forward scattering. How does the scattering pattern change if the cylinder radius is doubled?
 
 ---
 

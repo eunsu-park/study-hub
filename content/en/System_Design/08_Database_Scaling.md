@@ -1,14 +1,27 @@
 # Database Scaling
 
-## Overview
+**Previous**: [Distributed Cache Systems](./07_Distributed_Cache_Systems.md) | **Next**: [Database Replication](./09_Database_Replication.md)
 
-This document covers database scaling strategies. You will learn the difference between partitioning and sharding, various sharding strategies (Range, Hash, Directory), shard key selection, hotspot prevention, and rebalancing.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why database scaling becomes necessary as data volume and query throughput grow beyond single-node capacity
+2. Distinguish between partitioning (single database) and sharding (multiple databases) and describe when each is appropriate
+3. Compare sharding strategies -- range-based, hash-based, and directory-based -- and evaluate their trade-offs for different access patterns
+4. Select an effective shard key by analyzing query patterns, data distribution, and growth projections
+5. Identify and prevent hotspot problems caused by uneven data distribution or skewed access patterns
+6. Design a rebalancing strategy that redistributes data across shards with minimal downtime
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 2-3 hours
 **Prerequisites**: [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md), [PostgreSQL Folder](../PostgreSQL/00_Overview.md)
 
 ---
+
+Databases are often the hardest component to scale because, unlike stateless application servers, they hold state that must remain consistent and durable. When a single database can no longer keep up -- whether limited by storage capacity, write throughput, or query latency -- you need to split the data across multiple machines. Sharding is powerful but introduces complexity in routing, joins, and rebalancing that every senior engineer must understand.
 
 ## Table of Contents
 
@@ -19,8 +32,7 @@ This document covers database scaling strategies. You will learn the difference 
 5. [Hotspot Prevention](#5-hotspot-prevention)
 6. [Rebalancing](#6-rebalancing)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -853,25 +865,43 @@ Phase 7: Cleanup
 
 ---
 
-## 8. Next Steps
+## Hands-On Exercises
 
-After understanding database scaling, learn about database replication.
+### Exercise 1: Sharding Strategy Comparison
 
-### Next Lesson
-- [09_Database_Replication.md](./09_Database_Replication.md)
+Use `examples/System_Design/08_sharding_sim.py` to explore sharding behavior.
 
-### Related Lessons
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - Consistent Hashing
-- [PostgreSQL/18_Table_Partitioning.md](../PostgreSQL/18_Table_Partitioning.md)
+**Tasks:**
+1. Run all demos and compare hash-based, range-based, and directory-based sharding
+2. Create a realistic dataset: 10,000 user records with IDs and creation timestamps
+3. Shard by user_id (hash) and by creation_date (range). Which gives better balance?
+4. Implement a cross-shard query: "find all users created in January" — compare query complexity for hash vs. range sharding
 
-### Recommended Practice
-1. PostgreSQL partitioning hands-on
-2. Implement a sharding router
-3. Implement consistent hashing
+### Exercise 2: Shard Rebalancing
+
+Implement a shard rebalancing algorithm for adding a new node.
+
+**Tasks:**
+1. Start with 4 hash-based shards and 10,000 keys
+2. Add a 5th shard. Implement a migration plan that moves the minimum number of keys
+3. Use consistent hashing (from `07_consistent_hashing.py`) to determine the new key-to-shard mapping
+4. Simulate the migration with a "live" system: reads continue working during migration, writes go to both old and new shard until migration completes
+5. Report: keys moved, migration duration (simulated), and data inconsistency window
+
+### Exercise 3: Hot Shard Detection and Mitigation
+
+Build a monitoring system that detects and mitigates hot shards.
+
+**Tasks:**
+1. Create a load tracker that counts requests per shard per time window
+2. Simulate a hot-spot: one shard receives 5× the traffic of others (e.g., a viral user's data)
+3. Implement detection: alert when any shard exceeds 2× the average load
+4. Implement mitigation: split the hot shard into 2 sub-shards using a secondary hash
+5. Verify that the load rebalances after splitting
 
 ---
 
-## 9. References
+## 8. References
 
 ### Books
 - Designing Data-Intensive Applications - Ch. 6
@@ -884,6 +914,10 @@ After understanding database scaling, learn about database replication.
 ### Case Studies
 - [Instagram Sharding](https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c)
 - [Pinterest Sharding](https://medium.com/pinterest-engineering/sharding-pinterest-how-we-scaled-our-mysql-fleet-3f341e96ca6f)
+
+---
+
+**Previous**: [Distributed Cache Systems](./07_Distributed_Cache_Systems.md) | **Next**: [Database Replication](./09_Database_Replication.md)
 
 ---
 

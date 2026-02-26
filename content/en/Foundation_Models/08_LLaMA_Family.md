@@ -907,3 +907,128 @@ print(processor.decode(output[0]))
 - [LLaMA GitHub](https://github.com/facebookresearch/llama)
 - [HuggingFace LLaMA](https://huggingface.co/meta-llama)
 - [LLaMA 3 Recipes](https://github.com/meta-llama/llama-recipes)
+
+---
+
+## Exercises
+
+### Exercise 1: RoPE vs Absolute Position Encoding
+
+Compare Rotary Position Encoding (RoPE) with learned absolute position encoding on the following dimensions:
+
+| Dimension | Absolute PE | RoPE |
+|-----------|------------|------|
+| Extrapolation beyond training length | ? | ? |
+| How position is encoded | ? | ? |
+| Relative distance representation | ? | ? |
+| Memory cost | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Dimension | Absolute PE | RoPE |
+|-----------|------------|------|
+| **Extrapolation beyond training length** | Poor — positions beyond the trained maximum have no learned embedding, causing degraded performance | Better — RoPE's mathematical structure (rotation in complex plane) generalizes more gracefully to longer sequences; can be further extended with YaRN or LongRoPE scaling |
+| **How position is encoded** | Adds a learned or fixed vector to each token embedding (position information is in the embedding space) | Multiplies query and key vectors by a rotation matrix based on position (position information is encoded in the attention dot-product relationship) |
+| **Relative distance representation** | Indirect — relative distance is computed from absolute positions, requiring the model to learn this relationship | Direct — RoPE encodes relative distance explicitly: the dot product between RoPE-rotated Q and K depends only on their relative position, not absolute positions |
+| **Memory cost** | Requires storing learned embedding matrix of size (max_len × dim) | No additional parameters — computed on-the-fly via rotation matrices |
+
+The key practical advantage of RoPE: `Q_m · K_n ∝ f(m-n)` — relative distance is "baked in" to the attention computation, making it easier for the model to learn position-independent patterns.
+
+</details>
+
+---
+
+### Exercise 2: GQA Memory Savings Calculation
+
+LLaMA 2 70B uses Grouped Query Attention (GQA) with 64 query heads and 8 KV heads.
+
+1. How much memory does the KV cache require per token per layer for this model (assuming fp16, head_dim=128)?
+2. If Multi-Head Attention (MHA) were used instead (64 KV heads), how much more memory would the KV cache require?
+3. For a batch of 32 sequences, each 4096 tokens long, with 80 transformer layers, what is the total KV cache memory saving from GQA vs MHA?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. KV cache with GQA (8 KV heads):**
+```
+Per token per layer = 2 (K+V) × 8 KV heads × 128 head_dim × 2 bytes (fp16)
+= 2 × 8 × 128 × 2 = 4,096 bytes = 4 KB
+```
+
+**2. KV cache with MHA (64 KV heads):**
+```
+Per token per layer = 2 × 64 × 128 × 2 = 32,768 bytes = 32 KB
+```
+MHA requires 8× more KV cache than GQA.
+
+**3. Total savings for batch=32, seq_len=4096, 80 layers:**
+
+GQA total: 4 KB × 32 × 4096 × 80 = 4,096 × 10,485,760 bytes ≈ **40.96 GB**
+MHA total: 32 KB × 32 × 4096 × 80 = 32,768 × 10,485,760 bytes ≈ **327.68 GB**
+
+**Savings: ~286.72 GB** — GQA enables serving the 70B model at this batch/sequence size on far fewer GPUs than MHA would require.
+
+</details>
+
+---
+
+### Exercise 3: SwiGLU vs GELU Analysis
+
+LLaMA uses SwiGLU instead of GELU as the activation function. SwiGLU computes:
+
+```python
+SwiGLU(x, W, V, b, c) = Swish(xW + b) ⊙ (xV + c)
+```
+
+1. What does the element-wise multiplication `⊙` (gating) accomplish that a standard activation function cannot?
+2. Why might a gating mechanism be beneficial for a language model's feed-forward layers, which act as "key-value memories"?
+3. SwiGLU requires two weight matrices (W and V) instead of one. If the original FFN had hidden_dim=4×d_model, how does LLaMA adjust the hidden dimension to keep parameter count similar?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. What gating accomplishes:**
+The element-wise multiplication creates a **conditional computation** mechanism: the gate `Swish(xW)` acts as a learnable filter that can "turn off" or scale down specific dimensions of the value projection `(xV)`. This allows the network to be selective about which information flows through — effectively implementing input-dependent feature selection. A standard activation function applies the same nonlinearity regardless of context.
+
+**2. Why gating benefits FFN "key-value memories":**
+In the key-value memory interpretation, each FFN hidden unit corresponds to a "key" pattern and a "value" to write. The gate allows the network to dynamically suppress irrelevant memories based on the current input. For language models processing diverse contexts (code, reasoning, factual recall), being able to selectively activate relevant knowledge stores is more expressive than always applying the full hidden layer uniformly.
+
+**3. Dimension adjustment:**
+Standard FFN: 2 matrices of shape (d_model × 4·d_model) → total params = 2 × d × 4d = 8d²
+
+SwiGLU FFN: 3 matrices (W, V, and output projection) each of shape (d_model × h) → total = 3 × d × h
+
+To match: 3dh ≈ 8d² → h ≈ 8d/3 ≈ 2.67×d_model
+
+LLaMA sets the FFN hidden dimension to ~(8/3)×d_model (rounded to a multiple of 256 for hardware efficiency), so instead of 4× expansion it uses ~2.67× expansion with 3 matrices — approximately the same total parameter count.
+
+</details>
+
+---
+
+### Exercise 4: LLaMA Version Selection
+
+A researcher has the following use cases. For each, recommend the most appropriate LLaMA version and size and explain your reasoning.
+
+1. Running inference on a Raspberry Pi 5 with 8GB RAM for a smart home assistant.
+2. Fine-tuning on a medical QA dataset with a single A100 80GB GPU for a hospital chatbot.
+3. Deploying a general-purpose chat assistant on a server with 4× H100 80GB GPUs.
+4. Processing 50K-token legal documents for contract analysis.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Raspberry Pi / edge device (8GB RAM):**
+- **LLaMA 3.2 1B** — The 1B model is specifically designed for on-device inference on mobile/edge hardware (optimized for Qualcomm, MediaTek chips). With 4-bit quantization, ~0.5GB memory footprint. LLaMA 3.2 was explicitly designed for edge deployment.
+
+**2. Single A100 80GB, medical fine-tuning:**
+- **LLaMA 3 8B** with QLoRA — The 8B model fits comfortably in fp16 (16GB), leaving ample room for fine-tuning memory overhead. QLoRA (4-bit base + LoRA adapters) reduces memory to ~6GB, enabling larger batch sizes. LLaMA 3 8B has better base performance than LLaMA 2 for domain adaptation.
+
+**3. 4× H100 server, general chat:**
+- **LLaMA 3.1 70B** — The 70B model in bf16 requires ~140GB, which fits across 4×H100 with tensor parallelism. This size provides GPT-4-competitive performance for general chat. LLaMA 3.1 specifically added strong instruction-following and tool use capabilities suitable for a production assistant.
+
+**4. 50K-token document processing:**
+- **LLaMA 3.1 8B or 70B** — LLaMA 3.1 natively supports 128K context window, which is essential for 50K-token documents. LLaMA 3 (without .1) only supports 8K context natively and would require expensive context extension techniques for such long documents. Choose 8B for cost, 70B for accuracy.
+
+</details>

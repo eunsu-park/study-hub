@@ -1,5 +1,17 @@
 # Weights & Biases (W&B)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Weights & Biases의 핵심 기능인 Experiments, Sweeps, Artifacts, Tables, Reports를 설명하고 각각을 언제 사용해야 하는지 서술할 수 있다
+2. `wandb.init`, `wandb.log`, `wandb.finish`를 사용하여 학습 루프(training loop)에 메트릭(metric), 하이퍼파라미터(hyperparameter), 모델 체크포인트(checkpoint) 추적을 추가할 수 있다
+3. 그리드(grid), 랜덤(random), 베이지안(Bayesian) 탐색 전략을 사용한 자동 하이퍼파라미터 최적화를 위해 W&B Sweeps를 구성하고 실행할 수 있다
+4. W&B Artifacts를 사용하여 데이터셋과 모델을 버전 관리하고 재현 가능한 실험 계보(lineage) 추적을 구현할 수 있다
+5. 실험 결과와 시각화를 동료와 공유하는 W&B Reports를 생성할 수 있다
+
+---
+
 ## 1. W&B 개요
 
 Weights & Biases는 ML 실험 추적, 하이퍼파라미터 튜닝, 모델 관리를 위한 플랫폼입니다.
@@ -72,7 +84,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     iris.data, iris.target, test_size=0.2, random_state=42
 )
 
-# W&B 초기화
+# W&B 초기화 — 이후 모든 wandb.log() 호출이 이 run에 연결됨;
+# config는 스냅샷으로 저장되므로 나중에 파라미터를 변경해도 로깅된 기록에 영향 없음
 wandb.init(
     project="iris-classification",    # 프로젝트 이름
     name="random-forest-baseline",    # 실행 이름
@@ -85,7 +98,8 @@ wandb.init(
     notes="Initial baseline experiment"
 )
 
-# config 접근
+# wandb.config을 통해 접근 — 하이퍼파라미터의 단일 진실 공급원(single source of truth)을 보장하여
+# Sweeps가 코드 변경 없이 값을 오버라이드 가능
 config = wandb.config
 
 # 모델 학습
@@ -137,7 +151,8 @@ model = nn.Sequential(
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=wandb.config.get("lr", 0.001))
 
-# W&B에서 모델 그래프 추적
+# wandb.watch가 autograd에 훅을 걸어 그래디언트와 파라미터 노름을 자동 기록 —
+# 수동 계측 없이 기울기 소실/폭발(vanishing/exploding gradient) 진단 가능
 wandb.watch(model, criterion, log="all", log_freq=100)
 
 # 학습 루프
@@ -172,7 +187,8 @@ for epoch in range(wandb.config.get("epochs", 10)):
         "val_accuracy": val_accuracy
     })
 
-    # 체크포인트 저장
+    # 개선 시에만 저장 — 중복 체크포인트 저장 방지;
+    # wandb.save가 클라우드로 업로드하므로 머신이 선점(preempt)되어도 체크포인트 보존
     if val_accuracy > best_accuracy:
         torch.save(model.state_dict(), "best_model.pth")
         wandb.save("best_model.pth")
@@ -278,7 +294,9 @@ import wandb
 # Sweep 설정
 sweep_config = {
     "name": "hyperparam-sweep",
-    "method": "bayes",  # random, grid, bayes
+    # 베이지안(Bayesian) 방법이 메트릭을 파라미터의 함수로 모델링 — 유망한 영역을
+    # 더 밀도 있게 탐색하여 random/grid보다 빠르게 수렴
+    "method": "bayes",
     "metric": {
         "name": "val_accuracy",
         "goal": "maximize"
@@ -309,6 +327,8 @@ sweep_config = {
             "max": 0.5
         }
     },
+    # Hyperband 조기 종료(early termination)로 성능이 낮은 실행을 조기에 중단 —
+    # 현재 최고 성능을 이길 가능성이 낮은 실행의 컴퓨팅 비용을 절약
     "early_terminate": {
         "type": "hyperband",
         "min_iter": 5,
@@ -439,7 +459,8 @@ dataset_artifact = wandb.Artifact(
 dataset_artifact.add_file("data/train.csv")
 dataset_artifact.add_dir("data/images/")
 
-# 원격 참조 추가 (다운로드 없이 참조만)
+# add_reference는 데이터가 아닌 포인터를 저장 — 대규모 데이터셋 복제를 피하면서도
+# 계보 그래프(lineage graph)에서 추적 가능
 dataset_artifact.add_reference("s3://bucket/large_data/")
 
 # 업로드
@@ -477,13 +498,14 @@ model_artifact = wandb.Artifact(
 torch.save(model.state_dict(), "model.pth")
 model_artifact.add_file("model.pth")
 
-# 설정 파일도 함께
+# 설정 파일을 모델과 함께 번들링 — 추론이 동일한 하이퍼파라미터를 사용하도록 보장
 model_artifact.add_file("config.yaml")
 
 # 업로드
 wandb.log_artifact(model_artifact)
 
-# 모델을 특정 별칭으로 연결
+# 별칭(alias)은 가변 포인터(git tag와 유사) — "production"이 항상 현재 서빙 버전을 가리켜
+# 다운스트림 소비자가 버전에 무관하게 사용 가능
 wandb.run.link_artifact(model_artifact, "model-registry/churn-model", aliases=["latest", "production"])
 
 wandb.finish()
@@ -598,7 +620,8 @@ MLflow와 W&B 동시 사용
 import mlflow
 import wandb
 
-# 두 플랫폼 모두 초기화
+# 이중 추적: MLflow는 모델 레지스트리/서빙, W&B는 시각화/협업 —
+# 각 플랫폼의 강점이 상호 보완
 wandb.init(project="dual-tracking")
 mlflow.set_experiment("dual-tracking")
 

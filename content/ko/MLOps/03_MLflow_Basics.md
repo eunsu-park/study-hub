@@ -1,5 +1,17 @@
 # MLflow 기초
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. MLflow의 네 가지 핵심 컴포넌트인 Tracking, Projects, Models, Model Registry를 설명하고 각각이 ML 라이프사이클에서 수행하는 역할을 서술할 수 있다
+2. 머신러닝 학습 실행에서 파라미터(parameter), 메트릭(metric), 아티팩트(artifact)를 로깅하여 MLflow로 실험 추적(experiment tracking)을 구현할 수 있다
+3. MLflow의 모델 포맷을 사용하여 ML 모델을 패키징하고 MLflow 모델 서버로 로컬에서 서빙할 수 있다
+4. MLflow Model Registry를 사용하여 모델 버전을 관리하고 스테이징(staging)에서 프로덕션(production)으로의 스테이지 전환(stage transition)을 관리할 수 있다
+5. 중앙 집중식 MLflow 트래킹 서버를 설정하고 팀 기반 ML 워크플로우에 통합할 수 있다
+
+---
+
 ## 1. MLflow 개요
 
 MLflow는 머신러닝 라이프사이클을 관리하기 위한 오픈소스 플랫폼입니다. 실험 추적, 모델 패키징, 배포를 통합적으로 지원합니다.

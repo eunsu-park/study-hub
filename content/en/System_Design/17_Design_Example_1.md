@@ -1,12 +1,21 @@
 # Practical Design Examples 1
 
+**Previous**: [Consensus Algorithms](./16_Consensus_Algorithms.md) | **Next**: [Practical Design Examples 2](./18_Design_Example_2.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-In this chapter, we design three systems that frequently appear in system design interviews: URL Shortener, Pastebin, and Rate Limiter. Each example follows the sequence of requirements definition, capacity estimation, high-level design, and detailed design.
+1. Apply a structured design methodology (requirements, capacity estimation, high-level design, detailed design) to real-world system problems
+2. Design a URL shortener service addressing key generation, collision avoidance, redirection performance, and analytics
+3. Design a Pastebin-like content storage service handling variable-size payloads, expiration policies, and access control
+4. Design a rate limiter using token bucket, sliding window, and fixed window algorithms, evaluating each algorithm's trade-offs
+5. Perform back-of-the-envelope capacity estimation for storage, bandwidth, and QPS requirements
+6. Identify and resolve bottlenecks in each design through caching, database partitioning, and replication strategies
 
 ---
+
+System design interviews test whether you can synthesize everything you know about distributed systems into a coherent, working architecture under time pressure. The three systems in this lesson -- URL shortener, Pastebin, and rate limiter -- are among the most commonly asked because they are deceptively simple on the surface yet touch on hashing, storage trade-offs, caching, and distributed coordination at scale. Working through these examples builds the structured thinking you will apply to any design problem.
 
 ## Table of Contents
 
@@ -827,9 +836,7 @@ Design a Rate Limiter with the following requirements:
 
 ---
 
-## Next Steps
-
-In [18_Design_Example_2.md](./18_Design_Example_2.md), let's design News Feed, Chat System, and Notification System!
+**Previous**: [Consensus Algorithms](./16_Consensus_Algorithms.md) | **Next**: [Practical Design Examples 2](./18_Design_Example_2.md)
 
 ---
 

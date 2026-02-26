@@ -1,5 +1,28 @@
 # 템플릿
 
+**이전**: [STL 알고리즘과 반복자](./11_STL_Algorithms_Iterators.md) | **다음**: [예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 단일 및 다중 타입 매개변수를 사용하여 함수 템플릿(Function Template)과 클래스 템플릿(Class Template)을 정의한다
+2. 암묵적 타입 추론(Type Deduction)과 명시적 템플릿 인자 지정을 구별한다
+3. 비타입 템플릿 매개변수(Non-Type Template Parameter)를 사용하여 컴파일 타임 상수를 템플릿에 내장한다
+4. 특정 타입에 대한 동작을 커스터마이즈하기 위해 전체 특수화(Full Specialization)와 부분 특수화(Partial Specialization)를 작성한다
+5. 임의의 인자 개수를 받는 함수를 위한 가변 인자 템플릿(Variadic Template)과 폴드 표현식(Fold Expression)을 구현한다
+6. SFINAE와 `if constexpr`을 적용하여 조건부로 템플릿 인스턴스화(Instantiation)를 활성화한다
+7. C++20 개념(Concept)을 정의하고 사용하여 명확한 오류 메시지와 함께 템플릿 매개변수를 제약한다
+8. 헤더 전용(Header-Only) 컴파일 모델을 사용하여 템플릿 코드를 올바르게 구성한다
+
+---
+
+> **비유 — 컴파일러의 쿠키 커터**: C++ 템플릿은 쿠키 커터(틀)와 같습니다. 모양을 한 번 정의해 두면, 컴파일러가 사용하는 모든 타입(`int`, `double`, `std::string`)에 대해 구체적인 버전을 찍어냅니다. 틀 자체는 쿠키가 아닙니다 — 컴파일러가 컴파일 타임에 실제로 타입 안전한 코드를 생성하기 위해 사용하는 청사진으로, 런타임 오버헤드가 전혀 없습니다.
+
+템플릿은 C++에서 제네릭 프로그래밍(Generic Programming)의 토대입니다. 템플릿 없이는 지원하고 싶은 모든 데이터 타입에 대해 모든 함수와 클래스를 중복으로 작성해야 합니다 — 유지보수의 악몽이죠. 템플릿을 사용하면 컴파일러가 그 중복 작업을 대신 해주어 타입 안전한 특수화된 코드를 생성하고, 개발자는 로직을 한 번만 작성하면 됩니다. 템플릿은 전체 STL의 기반이며 현대적인 메타프로그래밍(Metaprogramming) 기법의 토대를 형성합니다.
+
 ## 1. 템플릿이란?
 
 템플릿은 타입에 독립적인 일반화된 코드를 작성하는 C++의 강력한 기능입니다.
@@ -1087,4 +1110,8 @@ Stack 예제를 참고하여 Queue 클래스 템플릿을 작성하세요.
 
 ## 다음 단계
 
-[13_Exceptions_and_File_IO.md](./13_Exceptions_and_File_IO.md)에서 예외 처리와 파일 I/O를 배워봅시다!
+[예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md)에서 예외 처리와 파일 I/O를 배워봅시다!
+
+---
+
+**이전**: [STL 알고리즘과 반복자](./11_STL_Algorithms_Iterators.md) | **다음**: [예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md)

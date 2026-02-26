@@ -5,6 +5,19 @@
 > **선수지식**: Lessons 01-10 (문서 생성, 참고문헌)
 > **목표**: 자동화된 컴파일 워크플로우, 빌드 시스템, 버전 관리, CI/CD, 현대적인 LaTeX 개발 환경 마스터
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `latexmk`를 설정하여 BibTeX 및 색인 생성을 포함한 다중 패스 컴파일(multi-pass compilation)을 단일 명령으로 자동화할 수 있다
+2. LaTeX 프로젝트를 위한 Makefile 또는 빌드 스크립트(build script)를 구성하여 의존성(dependency)과 정리(clean-up) 대상을 처리할 수 있다
+3. 생성 파일에 대한 `.gitignore` 규칙을 포함하여 LaTeX 컴파일을 Git 워크플로우(workflow)에 통합할 수 있다
+4. CI/CD 파이프라인(예: GitHub Actions)을 설정하여 푸시(push) 시 PDF 문서를 자동으로 컴파일하고 게시할 수 있다
+5. 순방향/역방향 검색(forward/inverse search)과 실시간 미리 보기(live preview)가 있는 LaTeX 인식 편집기(VS Code with LaTeX Workshop, 또는 Neovim)를 구성할 수 있다
+6. 맞춤법 검사(spell-checking)와 린팅(linting) 도구(`chktex`, `lacheck`)를 적용하여 문서 품질을 자동으로 개선할 수 있다
+
+---
+
 ## 소개
 
 전문적인 LaTeX 워크플로우는 수동 컴파일 이상이 필요합니다. 다음이 필요합니다:
@@ -1167,5 +1180,5 @@ git push
 
 **탐색**
 
-- 이전: [14_Document_Classes.md](14_Document_Classes.md)
-- 다음: [16_Practical_Projects.md](16_Practical_Projects.md)
+- 이전: [문서 클래스 및 템플릿(Document Classes & Templates)](14_Document_Classes.md)
+- 다음: [실전 프로젝트(Practical Projects)](16_Practical_Projects.md)

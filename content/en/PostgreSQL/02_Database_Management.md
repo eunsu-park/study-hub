@@ -1,5 +1,25 @@
 # Database Management
 
+**Previous**: [PostgreSQL Basics](./01_PostgreSQL_Basics.md) | **Next**: [Tables and Data Types](./03_Tables_and_Data_Types.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the hierarchical structure of a PostgreSQL server (server, database, schema, table)
+2. Create, list, rename, and drop databases with appropriate options
+3. Explain the role of template databases (`template0`, `template1`)
+4. Create and manage roles (users and groups) with specific privileges
+5. Apply the GRANT/REVOKE system to control access at the database, schema, and table level
+6. Configure schemas to logically organize objects within a database
+7. Apply the principle of least privilege when designing a permission model
+
+---
+
+In any production environment, properly managing databases, users, and permissions is just as important as writing correct SQL. A misconfigured role or an overly permissive grant can expose sensitive data or allow accidental deletions. This lesson covers the administrative commands you need to set up a secure, well-organized PostgreSQL environment from day one.
+
 ## 1. Database Basic Concepts
 
 In PostgreSQL, a database is the top-level container that holds tables, views, functions, and more.
@@ -57,10 +77,12 @@ CREATE DATABASE mydb
 ### Template Databases
 
 ```sql
--- template1: Default template (customizable)
+-- template1 is the default template — any extensions or objects you add to template1
+-- will appear in every new database. Customize it for org-wide defaults.
 CREATE DATABASE mydb TEMPLATE template1;
 
--- template0: Clean template (use when changing encoding)
+-- template0 is the pristine, unmodified template — use it when you need a different
+-- encoding or locale, since template1 inherits the cluster's original settings
 CREATE DATABASE mydb TEMPLATE template0 ENCODING 'UTF8';
 ```
 
@@ -280,7 +302,8 @@ GRANT ALL PRIVILEGES ON TABLE users TO myuser;
 -- Permissions on all tables in schema
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO myuser;
 
--- Auto-grant permissions on future tables
+-- Without DEFAULT PRIVILEGES, new tables require manual GRANT every time.
+-- This sets up automatic grants so newly created tables inherit the permission.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT SELECT ON TABLES TO myuser;
 ```
@@ -469,10 +492,12 @@ ORDER BY r.rolname;
 ### Principle of Least Privilege
 
 ```sql
--- Grant only necessary permissions
+-- Least privilege: grant only the operations the app actually performs.
+-- If a compromised app_user has DELETE or DROP, an attacker inherits that power.
 GRANT SELECT, INSERT, UPDATE ON users TO app_user;
 
--- Avoid ALL PRIVILEGES when possible
+-- Avoid ALL PRIVILEGES when possible — it includes TRUNCATE, REFERENCES, TRIGGER
+-- which most application users never need
 -- GRANT ALL PRIVILEGES ON ... -- Not recommended
 ```
 
@@ -495,6 +520,4 @@ ALTER ROLE myuser VALID UNTIL '2025-12-31';
 
 ---
 
-## Next Steps
-
-Learn about table creation and data types in detail in [03_Tables_and_Data_Types.md](./03_Tables_and_Data_Types.md)!
+**Previous**: [PostgreSQL Basics](./01_PostgreSQL_Basics.md) | **Next**: [Tables and Data Types](./03_Tables_and_Data_Types.md)

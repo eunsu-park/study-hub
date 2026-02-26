@@ -12,6 +12,8 @@ typedef struct {
 } DynamicArray;
 
 // 동적 배열 생성
+// Why: two-step allocation (struct then buffer) lets us report partial failure —
+// if the data buffer fails, we free the struct and return NULL cleanly
 DynamicArray* array_create(size_t initial_capacity) {
     DynamicArray* arr = malloc(sizeof(DynamicArray));
     if (!arr) return NULL;
@@ -31,7 +33,12 @@ DynamicArray* array_create(size_t initial_capacity) {
 int array_push(DynamicArray* arr, int value) {
     if (arr->size >= arr->capacity) {
         // 용량 2배로 확장
+        // Why: doubling capacity gives amortized O(1) push — growing by a fixed
+        // amount would make N pushes cost O(N^2) due to repeated copying
         size_t new_capacity = arr->capacity * 2;
+        // Why: realloc result goes to a temp pointer because if realloc fails it
+        // returns NULL but does NOT free the original — assigning directly to
+        // arr->data would leak the old buffer
         int* new_data = realloc(arr->data, new_capacity * sizeof(int));
 
         if (!new_data) return 0;  // 실패
@@ -81,6 +88,8 @@ void array_print(DynamicArray* arr) {
 }
 
 // 메모리 해제
+// Why: freeing in reverse order of allocation (data first, then struct) prevents
+// dangling pointer access — if we freed the struct first, arr->data would be invalid
 void array_destroy(DynamicArray* arr) {
     if (arr) {
         free(arr->data);

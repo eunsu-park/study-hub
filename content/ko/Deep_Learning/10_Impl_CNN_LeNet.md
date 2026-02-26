@@ -1,5 +1,18 @@
 # 03. CNN (LeNet)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. LeNet-5의 역사적 의의를 설명하고, CNN 설계에 도입한 아키텍처 혁신을 서술합니다.
+2. 입력 크기, 커널 크기, 패딩(Padding), 스트라이드(Stride)가 주어졌을 때 합성곱 층의 출력 공간 차원을 계산합니다.
+3. LeNet-5에서 평균 풀링(Average Pooling, 서브샘플링)의 역할을 설명하고 공간 해상도를 어떻게 줄이는지 설명합니다.
+4. PyTorch를 사용하여 LeNet-5를 처음부터 구현하고, 각 층의 파라미터와 활성화 함수(Activation Function)를 올바르게 지정합니다.
+5. MNIST 데이터셋에서 LeNet-5를 훈련하고 정확도와 손실 지표를 사용하여 분류 성능을 평가합니다.
+6. 학습된 합성곱 필터와 특성 맵(Feature Map)을 분석하여 각 층이 표현하는 것에 대한 직관을 개발합니다.
+
+---
+
 ## 개요
 
 LeNet-5는 Yann LeCun이 1998년에 제안한 최초의 성공적인 Convolutional Neural Network입니다. 손글씨 숫자 인식(MNIST)에서 뛰어난 성능을 보여주었으며, 현대 CNN의 기초가 되었습니다.
@@ -177,4 +190,4 @@ Layer 4+: 전체 객체 (의미론적)
 
 - LeCun et al. (1998). "Gradient-Based Learning Applied to Document Recognition"
 - [CS231n: Convolutional Neural Networks](https://cs231n.github.io/convolutional-networks/)
-- [07_CNN_Basics.md](./07_CNN_Basics.md)
+- [CNN 기초 (Convolutional Neural Networks)](./07_CNN_Basics.md)

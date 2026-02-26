@@ -1,5 +1,17 @@
 # ML Project Lifecycle
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe each phase of the ML project lifecycle — problem definition, data collection, feature engineering, model training, validation, deployment, and monitoring — and explain how they connect
+2. Translate business objectives into well-scoped ML problems by defining target variables, success metrics, and operational constraints
+3. Implement data validation and quality checks at each stage of the ML pipeline to ensure data integrity
+4. Apply best practices for feature engineering and model validation to build reproducible, reliable ML systems
+5. Design a retraining strategy based on monitoring signals such as data drift and performance degradation
+
+---
+
 ## 1. ML Project Phases Overview
 
 Machine learning projects require managing the entire lifecycle from data collection to monitoring, beyond just training models.
@@ -119,6 +131,7 @@ class DataPipeline:
 
     def extract(self) -> Dict[str, pd.DataFrame]:
         """Extract data from various sources"""
+        # Separate extraction per source — allows independent retry and schema validation
         data = {}
 
         # Extract from database
@@ -143,14 +156,14 @@ class DataPipeline:
     def transform(self, raw_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Data transformation and preprocessing"""
 
-        # Join data
+        # Left join preserves all transactions even if event tracking was incomplete
         df = raw_data["transactions"].merge(
             raw_data["user_events"],
             on="user_id",
             how="left"
         )
 
-        # Handle missing values
+        # Order matters: handle missing before outliers, since nulls can skew outlier detection
         df = self.handle_missing(df)
 
         # Handle outliers
@@ -163,6 +176,8 @@ class DataPipeline:
 
     def validate(self, df: pd.DataFrame) -> bool:
         """Data quality validation"""
+        # Validation as a separate step (not inside transform) — enables fail-fast
+        # before expensive downstream processing
         validations = {
             "row_count": len(df) > self.config["min_rows"],
             "null_ratio": df.isnull().mean().max() < 0.1,
@@ -174,11 +189,12 @@ class DataPipeline:
 
     def load(self, df: pd.DataFrame, destination: str):
         """Save processed data"""
-        # Add version information
+        # Embed version metadata in the data itself — enables lineage tracing
+        # without relying on filename conventions alone
         df["_data_version"] = self.config["version"]
         df["_processed_at"] = datetime.now()
 
-        # Save
+        # Parquet over CSV — columnar format gives 3-10x compression and schema enforcement
         df.to_parquet(
             f"{destination}/data_v{self.config['version']}.parquet",
             index=False
@@ -189,6 +205,7 @@ class DataPipeline:
 
 ```yaml
 # dvc.yaml - DVC pipeline definition
+# Declaring deps/outs lets DVC skip unchanged stages — saves hours on large pipelines
 stages:
   prepare_data:
     cmd: python src/data/prepare.py
@@ -204,12 +221,14 @@ stages:
     deps:
       - src/train.py
       - data/processed/train.parquet
+    # params tracked separately so DVC detects hyperparameter changes even if code is unchanged
     params:
       - train.epochs
       - train.learning_rate
     outs:
       - models/model.pkl
     metrics:
+      # cache: false keeps metrics in git (not DVC storage) for easy diff across commits
       - metrics/train_metrics.json:
           cache: false
 ```
@@ -254,14 +273,15 @@ class FeatureEngineer:
 
     def create_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Create features"""
+        # Build into a new DataFrame to avoid mutating the original and to track feature lineage
         features = pd.DataFrame()
 
-        # Time-based features
+        # Time-based features — capture cyclical behavioral patterns (e.g., weekend vs weekday usage)
         features["hour"] = df["timestamp"].dt.hour
         features["day_of_week"] = df["timestamp"].dt.dayofweek
         features["is_weekend"] = features["day_of_week"].isin([5, 6]).astype(int)
 
-        # Aggregate features
+        # Rolling aggregates capture recent behavioral trends, more predictive than lifetime totals
         features["total_purchases_30d"] = self.rolling_aggregate(
             df, "purchase_amount", window=30, agg="sum"
         )
@@ -269,12 +289,12 @@ class FeatureEngineer:
             df, "session_duration", window=7, agg="mean"
         )
 
-        # Ratio features
+        # Ratio features — normalize by time to make users with different tenure comparable
         features["purchase_frequency"] = (
             df["purchase_count"] / df["days_since_signup"]
         ).fillna(0)
 
-        # Interaction features
+        # Interaction features — cross-feature ratios often reveal non-linear relationships
         features["value_per_session"] = (
             df["total_purchase_value"] / df["session_count"]
         ).fillna(0)
@@ -284,6 +304,8 @@ class FeatureEngineer:
     def encode_categoricals(self, df: pd.DataFrame) -> pd.DataFrame:
         """Encode categorical variables"""
         for col in self.config["categorical_features"]:
+            # fit_transform only on first call; transform-only on inference
+            # to prevent data leakage from test/production data
             if col not in self.encoders:
                 self.encoders[col] = LabelEncoder()
                 df[col] = self.encoders[col].fit_transform(df[col])
@@ -308,6 +330,8 @@ class FeatureEngineer:
 
     def save_transformers(self, path: str):
         """Save encoders/scalers"""
+        # Persist transformers alongside the model — required for consistent
+        # encoding/scaling during inference without re-fitting
         import joblib
         joblib.dump({
             "encoders": self.encoders,
@@ -327,7 +351,7 @@ from feast import FeatureStore
 # Initialize Feature Store
 fs = FeatureStore(repo_path="./feature_repo")
 
-# Get features (for training - offline)
+# Offline store for training — uses point-in-time joins to prevent future data leakage
 training_df = fs.get_historical_features(
     entity_df=entity_df,  # entity_id, event_timestamp
     features=[
@@ -338,7 +362,7 @@ training_df = fs.get_historical_features(
     ]
 ).to_df()
 
-# Get features (for inference - online)
+# Online store for inference — pre-materialized key-value lookup for low-latency (<10ms) serving
 feature_vector = fs.get_online_features(
     features=[
         "user_features:total_purchases",
@@ -378,11 +402,12 @@ class ModelTrainer:
         params: dict
     ):
         """Training with MLflow tracking"""
+        # Context manager ensures the run is closed even if training crashes mid-way
         with mlflow.start_run():
-            # Log parameters
+            # Log params first — if training fails, you can still diagnose which config caused it
             mlflow.log_params(params)
 
-            # Log data information
+            # Record dataset sizes to detect silent data pipeline issues across runs
             mlflow.log_param("train_size", len(X_train))
             mlflow.log_param("val_size", len(X_val))
 
@@ -398,19 +423,22 @@ class ModelTrainer:
             metrics = self.calculate_metrics(y_val, val_predictions, val_proba)
             mlflow.log_metrics(metrics)
 
-            # Save model
+            # Log model with signature — signature enforces input schema at serving time,
+            # catching schema mismatches before they cause silent prediction errors
             mlflow.sklearn.log_model(
                 model, "model",
                 signature=mlflow.models.infer_signature(X_train, val_predictions)
             )
 
-            # Save feature importance
+            # Feature importance aids debugging and builds trust with stakeholders
             self.log_feature_importance(model, X_train.columns)
 
             return model, metrics
 
     def hyperparameter_tuning(self, X, y, n_trials: int = 100):
         """Hyperparameter tuning using Optuna"""
+        # Optuna over GridSearch — uses Bayesian optimization to find good params
+        # in far fewer trials than exhaustive search
         def objective(trial):
             params = {
                 "n_estimators": trial.suggest_int("n_estimators", 50, 300),
@@ -440,9 +468,12 @@ class ModelTrainer:
 # training_pipeline.yaml
 pipeline:
   name: "churn-prediction-training"
+  # Schedule during off-peak hours to avoid competing with serving workloads for GPU/CPU
   schedule: "0 2 * * *"  # Daily at 2 AM
 
   stages:
+    # Validation separate from feature engineering — fail fast on bad data before
+    # spending compute on feature computation
     - name: data_validation
       script: src/validate_data.py
       inputs:
@@ -524,6 +555,8 @@ class ModelValidator:
         min_improvement: float = 0.01
     ) -> Dict[str, Any]:
         """Compare with baseline model"""
+        # Always compare against production baseline — prevents deploying a model
+        # that passes absolute thresholds but is worse than what's already serving
         results = {"improved": True, "details": {}}
 
         for metric_name in new_metrics:
@@ -637,7 +670,8 @@ class ModelDeployer:
         archive_current: bool = True
     ):
         """Promote model to production"""
-        # Archive current production model
+        # Archive before promoting — ensures exactly one production version exists
+        # and preserves rollback history
         if archive_current:
             current_prod = self.get_production_model(model_name)
             if current_prod:
@@ -658,7 +692,8 @@ class ModelDeployer:
 
     def rollback(self, model_name: str):
         """Rollback to previous version"""
-        # Find most recent archived version
+        # Pick the most recent archived version — most likely to be compatible
+        # with current feature schema and data distribution
         versions = self.client.search_model_versions(
             f"name='{model_name}'"
         )
@@ -742,17 +777,18 @@ class RetrainingTrigger:
             "reasons": []
         }
 
-        # 1. Check performance degradation
+        # 1. Performance degradation — the most direct signal; catches concept drift
         if metrics.get("accuracy", 1.0) < self.config["min_accuracy"]:
             triggers["should_retrain"] = True
             triggers["reasons"].append("accuracy_degradation")
 
-        # 2. Check data drift
+        # 2. Data drift (PSI) — an early warning before performance drops;
+        # detects distribution shift even when labels aren't available yet
         if metrics.get("psi", 0) > self.config["max_psi"]:
             triggers["should_retrain"] = True
             triggers["reasons"].append("data_drift")
 
-        # 3. Time-based retraining
+        # 3. Time-based retraining — safety net for gradual drift that metrics may miss
         days_since_training = metrics.get("days_since_training", 0)
         if days_since_training > self.config["max_days_without_training"]:
             triggers["should_retrain"] = True

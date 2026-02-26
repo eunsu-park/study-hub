@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the autoregressive (causal) language modeling objective and describe how GPT differs from BERT in architecture, pretraining, and use cases.
+2. Describe the causal self-attention mechanism and explain how the causal mask enforces the autoregressive property during training.
+3. Implement the GPT decoder architecture from scratch in PyTorch, including causal masked multi-head attention, layer normalization, and positional embeddings.
+4. Generate text using autoregressive sampling strategies (greedy, top-k, nucleus sampling) and explain the trade-offs between generation quality and diversity.
+5. Fine-tune a GPT model on a downstream generation task (e.g., text summarization, dialogue) and evaluate output quality.
+6. Trace the evolution from GPT-1 to GPT-2 and GPT-3, identifying the scaling decisions (model size, data, compute) that drove capability improvements.
+
+---
+
 ## Overview
 
 GPT (Generative Pre-trained Transformer) is an autoregressive language model developed by OpenAI. It generates text **left-to-right** and became the foundation of modern LLMs.

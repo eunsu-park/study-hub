@@ -1,5 +1,26 @@
 # Class Basics
 
+**Previous**: [Pointers and References](./06_Pointers_and_References.md) | **Next**: [Advanced Classes](./08_Classes_Advanced.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a class is and how it combines data and behavior into a single type
+2. Apply `public`, `private`, and `protected` access specifiers to enforce encapsulation
+3. Implement constructors (default, parameterized) and use member initializer lists
+4. Design destructors to release resources when objects go out of scope
+5. Apply the `this` pointer for disambiguation and method chaining
+6. Distinguish between `const` and non-`const` member functions and explain why getters should be `const`
+7. Organize class declarations across header (`.h`) and implementation (`.cpp`) files
+8. Compare `struct` and `class` in C++ and explain convention-based usage
+
+---
+
+Classes are the gateway to object-oriented programming in C++. They let you model real-world entities -- a bank account, a sensor, a game character -- as self-contained units that bundle their data with the operations that act on it. Once you internalize how constructors initialize objects, how access specifiers protect invariants, and how destructors clean up resources, you will have the conceptual foundation for virtually every C++ library and framework you encounter.
+
 ## 1. What is a Class?
 
 A class is a user-defined type that combines data and functions.

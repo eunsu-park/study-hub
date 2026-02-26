@@ -16,6 +16,9 @@
 # - Sufficient disk space for base backup
 ###############################################################################
 
+# Why: set -e and set -u make the script fail-fast on any error or undefined
+# variable. For replication setup, partial completion is worse than no completion
+# — a half-configured standby can silently diverge from the primary.
 set -e  # Exit on error
 set -u  # Exit on undefined variable
 
@@ -85,8 +88,10 @@ EOF
 configure_pg_hba() {
     log_info "Configuring pg_hba.conf for replication..."
 
-    # Add replication entry to pg_hba.conf
-    # In production, restrict to specific IP addresses
+    # Why: pg_hba.conf controls WHO can connect and HOW they authenticate.
+    # The "all" source address is acceptable for dev/testing but in production
+    # this MUST be restricted to the standby's IP to prevent unauthorized
+    # replication connections from draining WAL data.
     local HBA_ENTRY="host replication $REPLICATION_USER all md5"
 
     # Check if entry already exists
@@ -116,7 +121,11 @@ create_base_backup() {
     log_warn "Removing old standby data directory..."
     docker exec postgres-standby rm -rf /var/lib/postgresql/data/* 2>/dev/null || true
 
-    # Create base backup using pg_basebackup
+    # Why: pg_basebackup runs FROM the standby TO the standby (connecting to the
+    # primary remotely) because it needs to write the backup directly to the standby's
+    # data directory. -Fp (plain format) writes a usable data directory directly.
+    # -Xs (stream WAL) ensures no WAL gaps during the backup. -R auto-creates
+    # standby.signal and primary_conninfo for immediate streaming after restore.
     log_info "Running pg_basebackup..."
     docker exec postgres-standby bash -c "PGPASSWORD='$REPLICATION_PASSWORD' pg_basebackup \
         -h postgres-primary \
@@ -137,7 +146,9 @@ create_base_backup() {
 configure_standby() {
     log_info "Configuring standby for streaming replication..."
 
-    # Create standby.signal file (PostgreSQL 12+)
+    # Why: standby.signal replaced the old recovery.conf approach in PostgreSQL 12.
+    # Its mere presence tells PostgreSQL to start in standby mode. This is simpler
+    # and avoids the confusing recovery.conf vs postgresql.conf split of settings.
     docker exec postgres-standby touch /var/lib/postgresql/data/standby.signal
 
     # Configure primary_conninfo in postgresql.auto.conf

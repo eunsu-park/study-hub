@@ -1,5 +1,25 @@
 # 가상 머신 (EC2 / Compute Engine)
 
+**이전**: [리전과 가용 영역](./03_Regions_Availability_Zones.md) | **다음**: [서버리스 함수](./05_Serverless_Functions.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. AWS EC2와 GCP Compute Engine의 서비스 기능 및 용어를 비교할 수 있습니다
+2. 워크로드 요구사항(컴퓨팅, 메모리, GPU)에 따라 적합한 인스턴스 유형을 선택할 수 있습니다
+3. 콘솔과 CLI를 사용하여 가상 머신을 설정하고 실행할 수 있습니다
+4. 과금 모델(온디맨드, 예약, 스팟/선점형)을 설명하고 비용 효율적인 옵션을 선택할 수 있습니다
+5. 가변 트래픽 부하를 처리하기 위한 오토 스케일링 그룹(Auto Scaling Group)을 구현할 수 있습니다
+6. VM 인스턴스에 스토리지 볼륨을 연결하고 네트워킹을 구성할 수 있습니다
+7. SSH 키 페어와 보안 그룹을 적용하여 VM 접근을 제어할 수 있습니다
+
+---
+
+가상 머신은 클라우드 컴퓨팅에서 가장 기본적인 구성 요소입니다. 웹 애플리케이션을 호스팅하든, 배치 작업을 실행하든, 머신러닝 모델을 학습시키든, 어느 시점에서든 반드시 VM을 사용하게 됩니다. VM 프로비저닝(Provisioning), 사이징(Sizing), 과금 방식을 마스터하는 것이 비용 효율적이고 확장 가능한 클라우드 아키텍처를 구축하는 첫 번째 단계입니다.
+
 ## 1. 가상 머신 개요
 
 가상 머신(VM)은 클라우드에서 가장 기본적인 컴퓨팅 리소스입니다.
@@ -547,6 +567,177 @@ gcloud compute instances describe web-server \
 
 - [05_Serverless_Functions.md](./05_Serverless_Functions.md) - 서버리스 함수
 - [08_Block_and_File_Storage.md](./08_Block_and_File_Storage.md) - 블록 스토리지 (EBS/PD)
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 인스턴스 유형(Instance Type) 선택
+
+각 워크로드(workload)에 가장 적합한 EC2 인스턴스 패밀리(family)를 매핑하고 이유를 설명하세요:
+
+1. 프로모션 중 10배까지 급증할 수 있지만 야간에는 조용한 가변적 트래픽의 웹 애플리케이션
+2. 빠른 쿼리를 위해 200 GB 데이터셋을 전체 RAM에 로드하는 인메모리(in-memory) 분석 엔진
+3. 몇 시간 동안 집중적인 수학 시뮬레이션을 수행하는 배치 작업(GPU 없이 순수 CPU)
+4. GPU 가속이 필요한 딥러닝 모델 학습 작업
+
+<details>
+<summary>정답 보기</summary>
+
+1. **t 패밀리 (예: t3.medium 또는 t3.large)** — 버스터블(burstable) 인스턴스는 조용한 기간에 CPU 크레딧을 축적하고 급증 시 소비합니다. 지속적으로 높은 CPU가 필요하지 않은 가변적 워크로드에 비용 효율적입니다. 지속적인 대규모 급증에는 Auto Scaling Group과 m 패밀리 온디맨드 인스턴스가 더 적합합니다.
+
+2. **r 패밀리 (예: r5.2xlarge 또는 r6i.2xlarge)** — 메모리 최적화 인스턴스는 높은 RAM 대 vCPU 비율을 제공합니다. 200 GB 데이터셋에는 256 GB RAM을 제공하는 r5.8xlarge 또는 유사 인스턴스가 필요합니다.
+
+3. **c 패밀리 (예: c5.2xlarge 또는 c6i.4xlarge)** — 컴퓨팅 최적화 인스턴스는 CPU 집약적 워크로드에 대해 달러당 최고의 vCPU 성능을 제공합니다. c5/c6i 패밀리는 과학적 모델링, HPC, 비디오 인코딩에 특화되어 있습니다.
+
+4. **p 또는 g 패밀리 (예: V100 GPU가 있는 p3.2xlarge, 또는 T4 GPU가 있는 g4dn.xlarge)** — GPU 인스턴스. `p` 인스턴스(p3/p4)는 딥러닝 학습용 고성능 NVIDIA GPU를 사용합니다. `g` 인스턴스(g4dn/g5)는 소규모 모델 학습과 추론(inference)에 더 비용 효율적입니다.
+
+</details>
+
+### 연습 문제 2: SSH 키 페어(Key Pair) 생성 및 인스턴스 연결
+
+다음 단계를 위한 완전한 CLI 명령어 순서를 설명하세요:
+1. `my-web-key`라는 새 EC2 키 페어를 생성하고 개인 키 파일을 저장합니다.
+2. 해당 키 페어로 t3.micro Amazon Linux 2023 인스턴스를 시작합니다(AMI ID로 `ami-0c55b159cbfafe1f0`을 사용하세요).
+3. 키 파일을 사용하여 인스턴스에 SSH로 연결합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+# 1단계: 키 페어 생성 및 개인 키 저장
+aws ec2 create-key-pair \
+    --key-name my-web-key \
+    --query 'KeyMaterial' \
+    --output text > my-web-key.pem
+
+# 올바른 권한 설정 (SSH에 필요)
+chmod 400 my-web-key.pem
+
+# 2단계: 키 페어로 인스턴스 시작
+aws ec2 run-instances \
+    --image-id ami-0c55b159cbfafe1f0 \
+    --instance-type t3.micro \
+    --key-name my-web-key \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=WebServer}]'
+
+# 새 인스턴스의 공개 IP 주소 조회
+aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=WebServer" \
+    --query 'Reservations[0].Instances[0].PublicIpAddress' \
+    --output text
+
+# 3단계: 인스턴스에 SSH 연결
+# <PUBLIC_IP>를 이전 명령어에서 얻은 실제 IP로 교체하세요
+ssh -i my-web-key.pem ec2-user@<PUBLIC_IP>
+```
+
+**참고사항**:
+- `chmod 400`은 필수입니다. SSH는 전 세계가 읽을 수 있는 키 파일 사용을 거부합니다.
+- Amazon Linux 2023의 기본 사용자는 `ec2-user`입니다. Ubuntu는 `ubuntu`입니다.
+- SSH가 작동하려면 보안 그룹이 사용자 IP에서 인바운드 TCP 포트 22를 허용해야 합니다.
+
+</details>
+
+### 연습 문제 3: Auto Scaling Group 시나리오
+
+웹 애플리케이션이 현재 단일 EC2 `m5.large` 인스턴스에서 실행됩니다. 트래픽 분석에 따르면 평일 오전 9시~오후 6시에는 인스턴스 4대, 야간/주말에는 1대만 필요합니다. 이를 자동으로 처리하는 Auto Scaling 설정을 설계하세요.
+
+원하는 용량(desired)/최소(min)/최대(max) 용량 설정과 사용할 스케일링 정책 유형을 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**Auto Scaling Group 설정**:
+- **최소 용량(Minimum capacity)**: 1 — 오프피크 시간에도 최소 하나의 인스턴스로 요청을 처리합니다.
+- **최대 용량(Maximum capacity)**: 5 — 우발적인 스케일링 루프로 인한 비용 폭증을 방지합니다.
+- **원하는 용량(Desired capacity)**: 1 (초기) — 최솟값에서 시작하고 스케일링 정책이 조정합니다.
+
+**스케일링 정책**: 트래픽 패턴이 예측 가능하고 시간 기반이므로 **스케줄 스케일링(Scheduled Scaling)**이 이상적입니다:
+
+```bash
+# 평일 오전 9시에 인스턴스 4대로 확장
+aws autoscaling put-scheduled-update-group-action \
+    --auto-scaling-group-name my-asg \
+    --scheduled-action-name scale-up-weekday \
+    --recurrence "0 9 * * 1-5" \
+    --desired-capacity 4
+
+# 평일 오후 6시에 인스턴스 1대로 축소
+aws autoscaling put-scheduled-update-group-action \
+    --auto-scaling-group-name my-asg \
+    --scheduled-action-name scale-down-weekday \
+    --recurrence "0 18 * * 1-5" \
+    --desired-capacity 1
+```
+
+**권장 추가 사항**: 스케줄된 시간 외의 예상치 못한 트래픽 급증에 대비하여 CPU 사용률에 대한 **타깃 추적(Target Tracking)** 정책(예: 평균 CPU 60% 유지)을 안전망으로 추가합니다.
+
+</details>
+
+### 연습 문제 4: 가격 모델(Pricing Model) 결정
+
+데이터 분석 팀이 매일 밤 배치 처리 클러스터를 실행할 계획입니다:
+- 매일 밤 11시~오전 5시(6시간) 실행
+- 실행 중 `c5.2xlarge` 인스턴스 20대 필요
+- 실행 중단 후 재시작 가능 (작업이 체크포인트됨)
+- 18개월 동안 일관되게 실행 중
+
+이 인스턴스에 어떤 가격 모델을 사용해야 하며, 온디맨드(On-Demand) 대비 대략 얼마나 절약할 수 있습니까?
+
+<details>
+<summary>정답 보기</summary>
+
+**권장 가격 모델**: **스팟 인스턴스(Spot Instances)**
+
+**이유**:
+- 작업이 체크포인트되어 중단을 허용합니다 — 이것이 스팟의 핵심 전제 조건입니다.
+- 스팟 인스턴스는 온디맨드 대비 최대 **90% 할인**을 제공합니다.
+- `us-east-1`의 `c5.2xlarge` 온디맨드 가격은 약 $0.34/시간입니다. 90% 할인 시 스팟 가격은 약 $0.034/시간입니다.
+
+**비용 비교** (근사치, 실제 가격은 변동될 수 있음):
+- 온디맨드: 20대 × $0.34/시간 × 6시간 × 30일 = **월 약 $1,224**
+- 스팟 (90% 할인): 20대 × $0.034/시간 × 6시간 × 30일 = **월 약 $122**
+- **절감액: 월 약 $1,100 (연간 약 $13,200)**
+
+**예약 인스턴스(Reserved Instances)가 아닌 이유?** 예약 인스턴스는 1~3년 약정이 필요하며 지속적인 사용을 기준으로 가격이 책정됩니다. 이 인스턴스는 하루에 6시간만 실행됩니다(25% 가동률). 25% 가동률 VM의 예약 인스턴스는 스팟 대비 비용 효율적이지 않습니다.
+
+**모범 사례**: 여러 인스턴스 유형과 AZ를 사용하는 스팟 플릿(Spot Fleet)을 사용하여 중단 가능성을 최소화합니다.
+
+</details>
+
+### 연습 문제 5: GCP 커스텀 머신 타입(Custom Machine Type) vs AWS 동등물
+
+GCP 워크로드에 정확히 6 vCPU와 20 GB RAM이 필요합니다. 이 정확한 구성을 가진 표준 GCP 머신 타입은 없습니다.
+
+1. `asia-northeast3-a` 존에서 이 사양으로 커스텀 머신 타입 인스턴스를 생성하는 `gcloud` 명령어를 작성하세요.
+2. AWS EC2에서 동등한 접근 방식은 무엇이며, AWS가 커스텀 인스턴스 타입을 제공하지 않는 이유는 무엇입니까?
+
+<details>
+<summary>정답 보기</summary>
+
+1. **GCP 커스텀 머신 타입**:
+```bash
+gcloud compute instances create custom-instance \
+    --zone=asia-northeast3-a \
+    --custom-cpu=6 \
+    --custom-memory=20GB \
+    --image-family=ubuntu-2204-lts \
+    --image-project=ubuntu-os-cloud
+```
+
+GCP는 커스텀 메모리가 256 MB의 배수여야 합니다. 20 GB(20480 MB)는 유효한 배수입니다.
+
+2. **AWS 동등 접근 방식**: AWS는 커스텀 인스턴스 타입을 제공하지 않습니다. AWS에서는 사전 정의된 타입 카탈로그에서 선택합니다. 6 vCPU / 20 GB RAM에 가장 가까운 타입을 찾아야 합니다:
+   - `c5.xlarge` = 4 vCPU, 8 GB (너무 작음)
+   - `m5.2xlarge` = 8 vCPU, 32 GB (과잉 프로비저닝이지만 가장 근접한 균형 잡힌 옵션)
+   - `c5.2xlarge` = 8 vCPU, 16 GB (컴퓨팅 중심, CPU 약간 초과)
+
+   **AWS에 커스텀 타입이 없는 이유?** AWS는 특정 인스턴스 패밀리를 중심으로 물리적 하드웨어와 하이퍼바이저(hypervisor) 설정을 최적화하여 예측 가능한 성능 보장과 규모의 경제를 실현합니다. GCP는 존(zone) 내 리소스 한도 내에서 임의의 조합을 허용하는 더 유연한 할당 모델을 사용합니다.
+
+   **실질적 영향**: GCP의 커스텀 머신 타입은 정밀한 사이징(right-sizing)과 미사용 vCPU 또는 RAM에 대한 비용 지불을 방지합니다. AWS에서는 일반적으로 가장 가까운 사용 가능한 크기로 과잉 프로비저닝해야 합니다.
+
+</details>
 
 ---
 

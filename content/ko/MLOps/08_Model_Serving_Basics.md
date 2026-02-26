@@ -1,5 +1,17 @@
 # 모델 서빙 기초
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 배치 추론(batch inference), 온라인 추론(online inference), 스트리밍 추론(streaming inference)의 세 가지 모델 서빙 패러다임을 설명하고 주어진 사용 사례에 적합한 패턴을 선택할 수 있다
+2. FastAPI를 사용하여 입력 유효성 검사(input validation)와 오류 처리를 갖춘 예측 엔드포인트(prediction endpoint)를 구현한 REST API 모델 서버를 구축할 수 있다
+3. 적절한 리소스 할당(resource allocation)과 헬스 체크(health check) 설정으로 Docker를 사용하여 모델 서버를 컨테이너화하고 배포할 수 있다
+4. 프로덕션에서 안전한 모델 롤아웃을 위한 카나리 배포(canary deployment)와 블루-그린 배포(blue-green deployment) 전략을 구현할 수 있다
+5. 운영 모니터링을 위해 모델 서빙 엔드포인트에 지연 시간(latency), 처리량(throughput), 예측 분포(prediction distribution) 메트릭을 추가할 수 있다
+
+---
+
 ## 1. 모델 서빙 개념
 
 모델 서빙은 학습된 ML 모델을 프로덕션 환경에서 예측 서비스로 제공하는 것입니다.

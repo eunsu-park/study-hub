@@ -1,10 +1,28 @@
 # Ensemble Learning - Bagging
 
-## Overview
-
-Bagging (Bootstrap Aggregating) is an ensemble technique that combines multiple base models and aggregates their results. Random Forest is the most representative algorithm.
+**Previous**: [Decision Trees](./06_Decision_Trees.md) | **Next**: [Ensemble Learning - Boosting](./08_Ensemble_Boosting.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the ensemble learning principle and why combining multiple weak learners produces a strong learner
+2. Describe how bootstrap sampling works and calculate the expected out-of-bag (OOB) ratio
+3. Implement a bagging classifier from scratch using bootstrap sampling and majority voting
+4. Compare Random Forest with standard bagging and explain how random feature selection reduces tree correlation
+5. Interpret both impurity-based and permutation-based feature importance scores
+6. Apply OOB error as a built-in validation estimate without a separate holdout set
+7. Distinguish between Random Forest, Extra Trees, and Voting classifiers and identify appropriate use cases
+
+---
+
+A single decision tree is fast and interpretable but fragile -- small changes in the data can produce a completely different tree. Bagging solves this instability by training many trees on slightly different random samples and averaging their predictions, dramatically reducing variance while preserving the ability to capture complex patterns.
+
+---
+
+> **The wisdom of a committee.** Imagine asking 100 people to guess the number of jelly beans in a jar. Each person's guess may be wildly off, but the *average* of all guesses is remarkably close to the truth -- this is the "wisdom of crowds" effect. Bagging (Bootstrap Aggregating) applies the same principle: train many diverse models on slightly different random samples of the data, then average their predictions. Each individual model may overfit to its sample, but the ensemble cancels out the individual errors.
 
 ## 1. Basic Concepts of Ensemble Learning
 

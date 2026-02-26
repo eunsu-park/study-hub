@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the vanishing gradient problem in vanilla RNNs using the Backpropagation Through Time (BPTT) formulation and describe why it limits learning of long-term dependencies.
+2. Describe the LSTM architecture — input, forget, and output gates plus the cell state — and explain how the cell state enables long-range gradient flow.
+3. Describe the GRU architecture — reset and update gates — and explain the trade-offs between GRU and LSTM in terms of capacity and computational cost.
+4. Implement LSTM and GRU cells from scratch in PyTorch without using built-in RNN modules, then validate against PyTorch's `nn.LSTM`/`nn.GRU`.
+5. Build a sequence-to-sequence model using stacked LSTM/GRU layers and apply it to a time-series or NLP task.
+6. Compare the performance and training dynamics of vanilla RNN, LSTM, and GRU on a benchmark sequence task and interpret the results.
+
+---
+
 ## Overview
 
 LSTM (Long Short-Term Memory) and GRU (Gated Recurrent Unit) are Recurrent Neural Network (RNN) variants that solve the **vanishing gradient problem**. They effectively learn long-term dependencies through gating mechanisms.

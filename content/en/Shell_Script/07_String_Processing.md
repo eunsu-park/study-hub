@@ -2,9 +2,26 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [06_IO_and_Redirection.md](./06_IO_and_Redirection.md) | **Next**: [08_Regex_in_Bash.md](./08_Regex_in_Bash.md)
+**Previous**: [I/O and Redirection](./06_IO_and_Redirection.md) | **Next**: [Regular Expressions in Bash](./08_Regex_in_Bash.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply built-in parameter expansion for substring extraction, replacement, and case conversion
+2. Use `printf` for formatted output including padding, alignment, and type-safe formatting
+3. Perform character transliteration and deletion with `tr`
+4. Extract fields from structured text using `cut` with delimiter and character-range modes
+5. Merge and join files column-wise using `paste` and relational `join`
+6. Format tabular output with the `column` command
+7. Query and transform JSON data using `jq` filters, conditionals, and pipelines
+8. Build multi-stage text processing pipelines combining built-in and external tools
+
+---
+
+Shell scripts constantly process text: parsing log files, extracting fields from CSV data, transforming configuration formats, and generating reports. Bash provides built-in string operations for simple tasks, but real-world pipelines require combining them with tools like `tr`, `cut`, `jq`, and `printf`. Knowing when to use built-in expansion versus an external tool is the key to writing scripts that are both fast and readable.
 
 ## 1. Built-in String Operations Review
 
@@ -1090,4 +1107,4 @@ Create a validation tool that:
 - Generates validation report in multiple formats
 - Can fix common issues automatically (trim spaces, convert case)
 
-**Previous**: [06_IO_and_Redirection.md](./06_IO_and_Redirection.md) | **Next**: [08_Regex_in_Bash.md](./08_Regex_in_Bash.md)
+**Previous**: [I/O and Redirection](./06_IO_and_Redirection.md) | **Next**: [Regular Expressions in Bash](./08_Regex_in_Bash.md)

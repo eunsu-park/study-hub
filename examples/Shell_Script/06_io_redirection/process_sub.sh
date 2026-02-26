@@ -40,7 +40,8 @@ EOF
     cat /tmp/file2.txt
     echo
 
-    # Using process substitution - compare sorted versions
+    # Why: <() creates a virtual file from command output, letting diff compare
+    # two command outputs directly without creating intermediate temp files.
     echo "Diff output (process substitution):"
     if diff <(sort /tmp/file1.txt) <(sort /tmp/file2.txt); then
         echo "Files are identical"
@@ -110,7 +111,8 @@ demo_avoid_subshell() {
 
     echo
 
-    # Solution: Use process substitution (no subshell)
+    # Why: piping into while creates a subshell, losing variable changes.
+    # Redirecting from <() keeps the loop in the current shell, preserving state.
     echo "Solution - process substitution (preserved):"
     count=0
     while read -r line; do
@@ -133,6 +135,8 @@ demo_multiple_streams() {
     seq 1 5 > /tmp/numbers.txt
     echo -e "one\ntwo\nthree\nfour\nfive" > /tmp/words.txt
 
+    # Why: reading from separate FDs (3 and 4) lets us iterate two files
+    # in lockstep — something a single stdin redirect cannot achieve.
     while IFS= read -r num <&3 && IFS= read -r word <&4; do
         echo "  $num: $word"
     done 3< /tmp/numbers.txt 4< /tmp/words.txt
@@ -156,6 +160,8 @@ demo_write_process_sub() {
         echo "banana"
         echo "cherry"
         echo "date"
+    # Why: >() (write process substitution) lets tee fan out a single stream
+    # to multiple concurrent consumers — avoiding sequential re-reads of the data.
     } | tee >(grep 'a' > /tmp/has_a.txt) \
             >(grep 'e' > /tmp/has_e.txt) \
             >(wc -l > /tmp/count.txt) \

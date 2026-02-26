@@ -1,15 +1,17 @@
 # SELinux와 AppArmor
 
+**이전**: [스토리지 관리](./16_Storage_Management.md) | **다음**: [로그 관리](./18_Log_Management.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- 필수 접근 제어(MAC)의 개념과 필요성
-- SELinux 모드와 정책 관리
-- AppArmor 프로파일 작성 및 관리
-- 보안 모듈 트러블슈팅
-
-**난이도**: ⭐⭐⭐⭐ (고급)
+1. 임의적 접근 제어(DAC, Discretionary Access Control)와 강제적 접근 제어(MAC, Mandatory Access Control)의 차이를 설명한다
+2. SELinux 모드를 구성하고 파일, 프로세스, 포트에 대한 보안 컨텍스트(security context)를 관리한다
+3. SELinux 불리언(boolean)을 사용하여 커스텀 모듈 작성 없이 정책 기능을 토글한다
+4. audit2why로 SELinux 거부(denial)를 진단하고 restorecon 또는 커스텀 정책으로 해결한다
+5. AppArmor 프로파일을 작성하고 관리하여 애플리케이션 접근을 제한한다
+6. aa-genprof와 aa-logprof를 사용하여 AppArmor 프로파일을 자동으로 생성한다
 
 ---
 
@@ -24,6 +26,8 @@
 7. [실무 시나리오](#7-실무-시나리오)
 
 ---
+
+전통적인 Unix 권한(DAC)에는 치명적인 약점이 있습니다: 공격자가 root로 실행되는 프로세스를 탈취하면 시스템 전체를 장악하게 됩니다. 강제적 접근 제어(Mandatory Access Control)는 root조차 우회할 수 없는 정책을 적용하여 이 허점을 닫습니다. SELinux와 AppArmor는 Linux에서 가장 널리 사용되는 두 가지 MAC 구현체로, 대부분의 엔터프라이즈 배포판에 기본으로 활성화되어 있습니다. 이를 구성하고 트러블슈팅할 줄 아는 것은 안전한 프로덕션 서버와 "일단 되게 만들려고" 비활성화해버린 서버의 차이를 만듭니다.
 
 ## 1. 필수 접근 제어 개요
 
@@ -658,7 +662,7 @@ sudo sealert -a /var/log/audit/audit.log
 
 ## 다음 단계
 
-- [18_Log_Management.md](./18_Log_Management.md) - journald, rsyslog, logrotate 학습
+- [로그 관리](./18_Log_Management.md) - journald, rsyslog, logrotate 학습
 
 ---
 

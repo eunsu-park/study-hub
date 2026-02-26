@@ -1,5 +1,26 @@
 # 집계와 그룹
 
+**이전**: [JOIN](./06_JOIN.md) | **다음**: [서브쿼리와 CTE](./08_Subqueries_and_CTE.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. COUNT, SUM, AVG, MIN, MAX 다섯 가지 핵심 집계 함수(aggregate function)를 적용할 수 있습니다
+2. GROUP BY를 사용하여 행을 그룹으로 분할하고 그룹별 통계를 계산할 수 있습니다
+3. HAVING으로 그룹 결과를 필터링하고, WHERE와의 차이점을 설명할 수 있습니다
+4. GROUP BY와 JOIN을 결합하여 관련 테이블 간 데이터를 집계할 수 있습니다
+5. DATE_TRUNC와 EXTRACT를 사용하여 날짜 기반 집계를 수행할 수 있습니다
+6. CASE 표현식과 FILTER 절을 사용하여 조건부 집계(conditional aggregation)를 작성할 수 있습니다
+7. ROLLUP과 CUBE를 사용하여 소계와 총계를 생성할 수 있습니다
+8. SQL 쿼리 실행 순서(FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT)를 설명할 수 있습니다
+
+---
+
+데이터베이스는 방대한 양의 데이터를 간결하고 실용적인 수치로 요약하는 데 탁월합니다. "지역별 총 매출은 얼마인가?" 또는 "어떤 상품 카테고리의 평균 매출이 가장 높은가?"와 같은 질문에는 집계 함수와 그룹화가 필요합니다. 이러한 연산을 숙달하면 단순한 거래 테이블을 비즈니스 의사결정을 이끄는 대시보드, 보고서, KPI로 변환할 수 있습니다.
+
 ## 1. 집계 함수 (Aggregate Functions)
 
 집계 함수는 여러 행의 값을 하나의 결과로 계산합니다.
@@ -73,6 +94,8 @@ SELECT COUNT(DISTINCT region) FROM sales;
 ## 4. SUM - 합계
 
 ```sql
+-- 집계 함수는 수백만 행을 단일 결과로 압축 — 데이터베이스가 서버 측에서 계산하므로
+-- 모든 행을 애플리케이션으로 전송하는 비용을 절감
 -- 총 매출액
 SELECT SUM(amount) FROM sales;
 -- 4653000
@@ -147,7 +170,8 @@ FROM sales;
 ### 기본 GROUP BY
 
 ```sql
--- 카테고리별 매출
+-- GROUP BY는 행을 그룹으로 분할하여 각 집계(COUNT, SUM)가 그룹별로 독립 실행됨
+-- 하나의 쿼리로 "카테고리별 합계"를 구하는 방법
 SELECT
     category,
     COUNT(*) AS count,
@@ -221,7 +245,9 @@ ORDER BY category, region;
 
 ## 10. HAVING - 그룹 필터링
 
-WHERE는 그룹화 전, HAVING은 그룹화 후 필터링합니다.
+WHERE는 그룹화 전 개별 행을 필터링하고, HAVING은 집계 후 그룹을 필터링합니다.
+HAVING은 SUM, COUNT 같은 집계 함수 조건에 사용합니다 — WHERE는 그룹이 형성되기 전에
+실행되므로 집계 함수를 참조할 수 없습니다.
 
 ```sql
 -- 총 매출 50만원 이상인 카테고리만
@@ -236,14 +262,15 @@ HAVING SUM(amount) >= 500000;
 ### WHERE + HAVING
 
 ```sql
--- 서울, 부산 지역에서 총 매출 100만원 이상인 상품
+-- WHERE + HAVING 협력: WHERE가 먼저 데이터셋을 축소(더 저렴)한 후
+-- HAVING이 집계된 그룹을 필터링 — 성능을 위해 가능한 조건은 WHERE로 이동
 SELECT
     product,
     SUM(amount) AS total_amount
 FROM sales
-WHERE region IN ('서울', '부산')  -- 그룹화 전 필터
+WHERE region IN ('서울', '부산')  -- 그룹화 전 필터 (행 수준)
 GROUP BY product
-HAVING SUM(amount) >= 1000000     -- 그룹화 후 필터
+HAVING SUM(amount) >= 1000000     -- 그룹화 후 필터 (그룹 수준)
 ORDER BY total_amount DESC;
 ```
 
@@ -343,6 +370,8 @@ FROM sales;
 ### FILTER (PostgreSQL 9.4+)
 
 ```sql
+-- FILTER는 CASE+SUM보다 가독성이 좋고, "~인 경우만 집계"로 읽히며
+-- 플래너가 동등한 CASE 표현식보다 더 잘 최적화할 수 있음
 SELECT
     COUNT(*) FILTER (WHERE category = '전자기기') AS electronics_count,
     COUNT(*) FILTER (WHERE category = '가구') AS furniture_count,
@@ -523,6 +552,4 @@ LIMIT/OFFSET   ← 결과 제한
 
 ---
 
-## 다음 단계
-
-[08_Subqueries_and_CTE.md](./08_Subqueries_and_CTE.md)에서 서브쿼리와 WITH 절을 배워봅시다!
+**이전**: [JOIN](./06_JOIN.md) | **다음**: [서브쿼리와 CTE](./08_Subqueries_and_CTE.md)

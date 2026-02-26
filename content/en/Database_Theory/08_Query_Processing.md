@@ -9,6 +9,19 @@
 > **Prerequisites**: Relational algebra (Lesson 03), SQL basics, understanding of disk I/O
 > **Objective**: Understand how a DBMS transforms a SQL query into an efficient execution plan, master the cost models for selection and join algorithms, and grasp query optimization techniques
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the query processing pipeline — parsing, translation, optimization, and execution — and explain the role of each stage.
+2. Calculate the I/O cost of selection algorithms (linear scan, primary index, secondary index) using disk block cost models.
+3. Compare the cost characteristics of join algorithms (nested loop, block nested loop, sort-merge, hash join) and select the appropriate algorithm for a given scenario.
+4. Explain how a query optimizer uses statistics and cost estimation to enumerate and evaluate alternative query plans.
+5. Apply algebraic equivalence rules to transform query trees and produce more efficient execution plans.
+6. Interpret a query execution plan (e.g., EXPLAIN output) to diagnose performance bottlenecks in SQL queries.
+
+---
+
 ## 1. Introduction
 
 When you write a SQL query, the database does not simply execute it as written. Between your SQL statement and the actual disk accesses lies a sophisticated pipeline of **parsing**, **optimization**, and **execution**. Understanding this pipeline is crucial for writing efficient queries and diagnosing performance problems.

@@ -588,16 +588,26 @@ $$M_A \sim \frac{v_{up}}{v_A}$$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Lundquist number range
+# Lundquist 수 S = Lv_A/η는 넓은 범위에 걸쳐 있습니다: 실험실 플라즈마에서
+# S~10⁶, 태양 코로나에서 S~10¹⁴. 이 넓은 범위를 고려해 logspace를 사용하면
+# 모든 영역이 로그 플롯에서 동등하게 표현됩니다.
 S = np.logspace(4, 16, 100)
 
-# Sweet-Parker reconnection rate
+# M_SP = S^(-1/2): Sweet-Parker 속도는 S가 커질수록 급격히 감소합니다.
+# 확산 영역이 전류 시트의 전체 길이 L까지 확장되어야 하므로, 높은 S에서
+# 재결합이 매우 느려지기 때문입니다. S~10¹⁴에서 M_A~10⁻⁷으로, 관측값보다
+# 수 자릿수 낮습니다 — 이것이 재결합률 문제의 핵심입니다.
 M_SP = S**(-0.5)
 
-# Petschek reconnection rate
+# M_P = π/(8 ln S): Petschek의 S에 대한 약한(로그) 의존성은 느린 충격파
+# 기하학에서 비롯됩니다. 확산 영역의 크기가 L과 무관하게 δ~η/v_A로 고정되고,
+# 느린 충격파가 대부분의 에너지 변환을 담당합니다.
+# S=10¹⁴에서 ln(10¹⁴)≈32이므로 M_P≈0.012 — 관측된 플레어 속도에 가깝습니다.
 M_P = np.pi / (8 * np.log(S))
 
-# Hall reconnection rate (approximately constant)
+# Hall 재결합률 ~0.1은 S가 d_i ≪ L을 만족할 만큼 충분히 크면 S와 무관합니다:
+# 이온 분리가 저항률과 무관하게 ~d_i 크기의 확산 영역을 생성하므로,
+# 재결합률은 저항 확산이 아닌 이온 동역학으로 결정됩니다 — 재결합률 문제 해결.
 M_Hall = 0.1 * np.ones_like(S)
 
 # Plot
@@ -646,11 +656,16 @@ x = np.linspace(-2, 2, 40)
 y = np.linspace(-2, 2, 40)
 X, Y = np.meshgrid(x, y)
 
-# Magnetic field components for X-point (normalized)
+# Bx = X, By = -Y는 가장 단순한 X-점 자기장으로, 임의의 2D 영점을
+# 1차까지 Taylor 전개하면 얻어집니다. 부호는 ∇·B = 0
+# (∂Bx/∂x + ∂By/∂y = 1 - 1 = 0)을 보장하면서, X-점을 특징짓는
+# 안장점 위상을 생성합니다: 자기장 선은 쌍곡선 xy = const입니다.
 Bx = X
 By = -Y
 
-# Field magnitude
+# B_mag은 원점(영점)에서 정확히 0이며 거리에 비례하여 선형 증가합니다;
+# 컬러 맵으로 시각화하면 재결합 중 확산 영역(낮은-B 영역)이
+# 어디에 형성되어야 하는지를 즉시 보여줍니다.
 B_mag = np.sqrt(Bx**2 + By**2)
 
 # Create figure with field lines and strength
@@ -734,10 +749,15 @@ import matplotlib.pyplot as plt
 # Lundquist number
 S = np.logspace(2, 14, 100)
 
-# Sweet-Parker aspect ratio
+# δ/L = S⁻¹은 Sweet-Parker 종횡비입니다: 확산 영역 폭 δ는
+# 저항 확산이 층 안으로의 자기장 이류와 균형을 이룰 만큼 얇아야 합니다.
+# S=10¹⁴(태양 코로나)에서 δ/L ~ 10⁻¹⁴ — 물리적으로 비현실적으로
+# 얇은 전류 시트로, 무충돌 모델의 필요성을 동기화합니다.
 delta_over_L = S**(-1)
 
-# Sheet length to width ratio
+# L/δ = S는 역 종횡비입니다: 이 수가 클수록 전류 시트가 더 길게 늘어나고
+# 재결합이 더 느려집니다. 자기장이 이완되기 전에 유출이 더 긴 거리를
+# 이동해야 하기 때문입니다.
 L_over_delta = S
 
 # Plot
@@ -756,6 +776,9 @@ ax.grid(True, alpha=0.3)
 
 # Right: reconnection rate vs aspect ratio
 ax = axes[1]
+# M_A = S⁻¹/² = (δ/L)^(1/2): 재결합률은 종횡비의 제곱근과 같습니다.
+# 더 넓은(덜 늘어난) 확산 영역일수록 더 빠르게 재결합한다는 것을 보여주며 —
+# 이것이 Sweet-Parker 병목의 기하학적 원인입니다.
 M_A = S**(-0.5)
 ax.loglog(delta_over_L, M_A, linewidth=2, color='green')
 ax.set_xlabel('Aspect ratio $\\delta/L$', fontsize=14)
@@ -793,16 +816,24 @@ x = np.linspace(-3, 3, 60)
 y = np.linspace(-2, 2, 40)
 X, Y = np.meshgrid(x, y)
 
-# In-plane reconnecting field (X-point)
+# tanh(Y)는 Harris 전류 시트와 유사한 면내 자기장을 생성합니다:
+# -B₀(시트 아래)에서 +B₀(시트 위)로 부드럽게 전환되며,
+# GEM Challenge 시뮬레이션에서 사용되는 표준 전류 시트 평형과 일치합니다.
 Bx = np.tanh(Y)
+# exp(-Y²) 포락선은 By가 전류 시트에서 멀어질수록 감쇠하게 하여,
+# X-점 구조가 무한대까지 확장되지 않고 국소화된 재결합 영역에 한정되도록 합니다.
 By = -np.tanh(X / 2) * np.exp(-Y**2)
 
-# Out-of-plane Hall field (quadrupolar)
-# Model: Bz proportional to xy near origin, decaying with distance
+# 사중극 Hall 자기장 B_z ∝ X·Y는 Hall 재결합의 가장 중요한 관측 신호입니다:
+# Ohm 법칙의 J×B Hall 항이 X-점의 각 사분면에서 반대 부호의 면외 전류를 생성하여
+# Cluster 및 MMS 우주선 데이터로 확인된 특징적인 네 엽(four-lobe) 패턴을 만들기
+# 때문에 발생합니다.
 r2 = X**2 + Y**2
 Bz = X * Y * np.exp(-r2 / 2)
 
-# Current sheet profile
+# J_z = -tanh(Y)/cosh²(Y)는 Harris 전류 시트 전류 프로파일입니다:
+# y=0(전류 층) 근처에 집중되어 있고 지수적으로 감쇠하며,
+# 얇은 전류 시트의 자기 일관적 운동학적 평형을 반영합니다.
 J_z = -np.tanh(Y) / np.cosh(Y)**2
 
 # Create figure

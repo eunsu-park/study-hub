@@ -123,10 +123,12 @@ class LightController:
 
             # 릴레이 초기화
             if not simulate and HARDWARE_AVAILABLE:
-                # 실제 하드웨어: gpiozero 사용
+                # Why: Most relay modules are active-low: the relay closes when
+                # GPIO goes LOW. Setting active_high=False inverts the logic so
+                # that on()/off() in Python match physical on/off.
                 relay = OutputDevice(
                     light.gpio_pin,
-                    active_high=False,  # Active Low 릴레이
+                    active_high=False,
                     initial_value=False
                 )
                 self.relays[light.id] = relay
@@ -380,6 +382,9 @@ class EnvironmentMonitor:
             return
 
         self.running = True
+        # Why: daemon=True ensures the monitoring thread doesn't prevent program
+        # exit. Without it, a forgotten stop() call would hang the process
+        # forever, which is a real risk on headless IoT devices.
         self.thread = threading.Thread(
             target=self._monitor_loop,
             args=(interval,),
@@ -484,7 +489,9 @@ class SmartHomeMQTT:
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
 
-        # Last Will and Testament (LWT) 설정
+        # Why: LWT (Last Will and Testament) is an MQTT feature where the broker
+        # publishes a pre-registered message if the client disconnects ungracefully.
+        # This lets other devices detect that the gateway is offline without polling.
         self.client.will_set(
             self.TOPICS["system"],
             json.dumps({"status": "offline"}),
@@ -692,6 +699,9 @@ class AutomationEngine:
 
         logging.info("AutomationEngine 초기화")
 
+    # Why: Separating condition and action as callables implements a lightweight
+    # rule engine. New automation behaviors can be added at runtime without
+    # modifying the engine itself — a plugin architecture for home automation.
     def add_rule(self, name: str, condition: Callable, action: Callable):
         """
         규칙 추가

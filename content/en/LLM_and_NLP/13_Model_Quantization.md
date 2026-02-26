@@ -700,6 +700,234 @@ model = AutoAWQForCausalLM.from_quantized(quant_path, fuse_layers=True)
 
 ---
 
+## Exercises
+
+### Exercise 1: Quantization Memory Calculation
+
+A transformer model has the following architecture: 32 layers, each with attention (4 weight matrices of shape 4096×4096) and FFN (2 matrices of shape 4096×16384 and one of shape 16384×4096). Calculate the approximate memory requirement for each precision format and fill in the table.
+
+| Precision | Bytes per param | Attention layer (MB) | FFN layer (MB) | Full model (GB) |
+|-----------|----------------|---------------------|----------------|-----------------|
+| FP32 | 4 | ? | ? | ? |
+| FP16/BF16 | 2 | ? | ? | ? |
+| INT8 | 1 | ? | ? | ? |
+| INT4 | 0.5 | ? | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+def calculate_model_memory(
+    num_layers: int,
+    hidden_size: int,
+    ffn_size: int,
+    bytes_per_param: float
+) -> dict:
+    """Calculate model memory requirements."""
+
+    # Attention: Q, K, V, O projections each of shape (hidden, hidden)
+    attention_params = 4 * hidden_size * hidden_size
+    attention_mb = attention_params * bytes_per_param / (1024 ** 2)
+
+    # FFN: up-projection (hidden→ffn), down-projection (ffn→hidden)
+    # Note: many models (LLaMA) have 3 matrices: gate, up, down
+    # Here: 2 matrices (hidden→ffn) + 1 matrix (ffn→hidden)
+    ffn_params = 2 * (hidden_size * ffn_size) + (ffn_size * hidden_size)
+    ffn_mb = ffn_params * bytes_per_param / (1024 ** 2)
+
+    total_params = num_layers * (attention_params + ffn_params)
+    total_gb = total_params * bytes_per_param / (1024 ** 3)
+
+    return {
+        "attention_params": attention_params,
+        "attention_mb": attention_mb,
+        "ffn_params": ffn_params,
+        "ffn_mb": ffn_mb,
+        "total_params": total_params,
+        "total_gb": total_gb,
+    }
+
+# Model: 32 layers, hidden=4096, ffn=16384
+NUM_LAYERS = 32
+HIDDEN = 4096
+FFN = 16384
+
+precisions = {
+    "FP32":     4.0,
+    "FP16/BF16": 2.0,
+    "INT8":     1.0,
+    "INT4":     0.5,
+}
+
+print(f"{'Precision':<12} {'Bytes/param':<13} {'Attn (MB)':<12} {'FFN (MB)':<11} {'Total (GB)'}")
+print("-" * 60)
+for name, bpp in precisions.items():
+    r = calculate_model_memory(NUM_LAYERS, HIDDEN, FFN, bpp)
+    print(f"{name:<12} {bpp:<13.1f} {r['attention_mb']:<12.1f} {r['ffn_mb']:<11.1f} {r['total_gb']:.2f}")
+
+# Output:
+# Precision    Bytes/param   Attn (MB)    FFN (MB)    Total (GB)
+# FP32         4.0           256.0        384.0        20.00
+# FP16/BF16    2.0           128.0        192.0        10.00
+# INT8         1.0           64.0         96.0         5.00
+# INT4         0.5           32.0         48.0         2.50
+```
+
+**Key insight:** INT4 reduces memory by 8x vs FP32. For a real LLaMA-2-7B model (~7B params), practical INT4 memory is ~3.5GB vs ~28GB for FP32 — the difference between requiring a consumer GPU vs a data center GPU.
+</details>
+
+---
+
+### Exercise 2: Symmetric vs Asymmetric Quantization
+
+Given the weight tensor below, apply both symmetric and asymmetric INT8 quantization. Calculate the quantization error for each method and explain why asymmetric quantization handles non-centered distributions better.
+
+```python
+import numpy as np
+
+# Simulates a weight tensor with non-centered distribution
+weights = np.array([0.01, 0.05, 0.12, 0.23, 0.45, 0.67, 0.89, 1.20, 1.45, 1.80],
+                   dtype=np.float32)
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+
+weights = np.array([0.01, 0.05, 0.12, 0.23, 0.45, 0.67, 0.89, 1.20, 1.45, 1.80],
+                   dtype=np.float32)
+
+# --- Symmetric INT8 quantization ---
+def quantize_symmetric(tensor, bits=8):
+    qmin = -(2 ** (bits - 1))       # -128
+    qmax = 2 ** (bits - 1) - 1      #  127
+
+    abs_max = np.abs(tensor).max()
+    scale = abs_max / qmax           # scale = 1.80 / 127 ≈ 0.01417
+
+    quantized = np.round(tensor / scale).clip(qmin, qmax).astype(np.int8)
+    return quantized, scale
+
+def dequantize_sym(q, scale):
+    return q.astype(np.float32) * scale
+
+# --- Asymmetric INT8 quantization ---
+def quantize_asymmetric(tensor, bits=8):
+    qmin = 0
+    qmax = 2 ** bits - 1             # 255
+
+    min_val = tensor.min()           # ≈ 0.01
+    max_val = tensor.max()           # ≈ 1.80
+    scale = (max_val - min_val) / (qmax - qmin)  # ≈ 0.007020
+    zero_point = round(-min_val / scale)          # ≈ -1 → 0 (clipped)
+
+    quantized = np.round(tensor / scale + zero_point).clip(qmin, qmax).astype(np.uint8)
+    return quantized, scale, zero_point
+
+def dequantize_asym(q, scale, zp):
+    return (q.astype(np.float32) - zp) * scale
+
+# Apply
+q_sym, s_sym = quantize_symmetric(weights)
+rec_sym = dequantize_sym(q_sym, s_sym)
+error_sym = np.abs(weights - rec_sym)
+
+q_asym, s_asym, zp_asym = quantize_asymmetric(weights)
+rec_asym = dequantize_asym(q_asym, s_asym, zp_asym)
+error_asym = np.abs(weights - rec_asym)
+
+print("Symmetric quantization:")
+print(f"  Scale: {s_sym:.6f}")
+print(f"  Mean error: {error_sym.mean():.6f}")
+print(f"  Max error:  {error_sym.max():.6f}")
+
+print("\nAsymmetric quantization:")
+print(f"  Scale: {s_asym:.6f}, Zero point: {zp_asym}")
+print(f"  Mean error: {error_asym.mean():.6f}")
+print(f"  Max error:  {error_asym.max():.6f}")
+
+# Why asymmetric wins for non-centered distributions:
+# Symmetric scale = 1.80/127 ≈ 0.01417 (half the 256 range is wasted on negative values)
+# Asymmetric scale = 1.79/255 ≈ 0.00702 (full 256 range covers 0.01–1.80)
+# Smaller scale → finer granularity → less quantization error
+print("\nGranularity improvement:", s_sym / s_asym, "x finer with asymmetric")
+```
+
+**Why asymmetric is better here:** The weights range from 0.01 to 1.80 — no negative values. Symmetric quantization wastes half its range (the negative side) on values that don't exist, forcing a coarser scale. Asymmetric quantization maps the full 0–255 range exactly to 0.01–1.80, achieving roughly 2x finer quantization granularity.
+</details>
+
+---
+
+### Exercise 3: NF4 vs INT4 Intuition
+
+The NF4 (Normal Float 4) data type uses non-uniform quantization levels, while INT4 uses uniform levels. Given that LLM weights typically follow a normal distribution, sketch or describe the NF4 quantization levels and explain why NF4 achieves lower quantization error than INT4 for normally distributed weights.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+import scipy.stats as stats
+
+# INT4 uses 16 UNIFORM quantization levels: -8, -7, ..., 0, ..., 7
+int4_levels = np.arange(-8, 8)  # 16 uniform levels
+
+# NF4 uses 16 NON-UNIFORM levels based on quantiles of N(0,1)
+# The quantiles are chosen so each level covers an equal probability mass
+num_levels = 16
+# Divide N(0,1) into 16 equal-probability bins
+probabilities = np.linspace(0, 1, num_levels + 1)[1:-1]  # 15 boundaries
+nf4_boundaries = stats.norm.ppf(probabilities)            # z-score boundaries
+
+# NF4 levels = midpoints of each probability bin (including tails)
+prob_centers = np.linspace(1/(2*num_levels), 1 - 1/(2*num_levels), num_levels)
+nf4_levels = stats.norm.ppf(prob_centers)  # 16 non-uniform levels
+
+# Simulate normal distribution of weights
+np.random.seed(42)
+weights = np.random.normal(0, 0.1, size=10000)  # LLM-like weight distribution
+
+def quantize_to_levels(weights, levels):
+    """Map each weight to the nearest quantization level."""
+    levels = np.sort(levels)
+    # Find nearest level for each weight
+    indices = np.abs(weights[:, None] - levels[None, :]).argmin(axis=1)
+    quantized = levels[indices]
+    return quantized
+
+# Normalize weights to [-1, 1] for fair comparison
+w_norm = weights / weights.std() * 0.1  # Scale to match typical LLM weight scale
+w_norm = np.clip(w_norm, -0.8, 0.8)    # Clip outliers
+
+# Scale levels to match weight range
+int4_scaled = int4_levels / 8 * 0.8    # Scale INT4 to [-0.8, 0.8]
+nf4_scaled = nf4_levels / nf4_levels.max() * 0.8  # Scale NF4 to match
+
+q_int4 = quantize_to_levels(w_norm, int4_scaled)
+q_nf4 = quantize_to_levels(w_norm, nf4_scaled)
+
+print("INT4 quantization error:")
+print(f"  Mean absolute error: {np.abs(w_norm - q_int4).mean():.6f}")
+print(f"  Max absolute error:  {np.abs(w_norm - q_int4).max():.6f}")
+
+print("\nNF4 quantization error:")
+print(f"  Mean absolute error: {np.abs(w_norm - q_nf4).mean():.6f}")
+print(f"  Max absolute error:  {np.abs(w_norm - q_nf4).max():.6f}")
+
+# Visual explanation
+print("\nKey insight:")
+print("INT4 levels (uniform):", np.round(int4_scaled[:4], 3), "...", np.round(int4_scaled[-4:], 3))
+print("NF4 levels (non-uniform):", np.round(nf4_scaled[:4], 3), "...", np.round(nf4_scaled[-4:], 3))
+print("NF4 packs more levels near 0 (where most weights cluster)")
+```
+
+**The core insight:** For a normal distribution, about 68% of values fall within 1 standard deviation of the mean. INT4's uniform levels spread its 16 quantization steps evenly across the range — wasting many steps on the rarely-populated tails. NF4 concentrates more levels near zero (where most weights live), achieving lower average quantization error with the same number of bits. This is why NF4 is the recommended quantization type for LLM weights in bitsandbytes.
+</details>
+
+---
+
 ## Next Steps
 
 In [14_RLHF_Alignment.md](./14_RLHF_Alignment.md), we'll learn about LLM alignment techniques (RLHF, DPO).

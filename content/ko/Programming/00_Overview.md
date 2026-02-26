@@ -7,7 +7,7 @@
 이 토픽은 언어 독립적인 다음 내용을 제공합니다:
 - **핵심 개념**: 계산적 사고(Computational thinking), 추상화(Abstraction), 알고리즘, 자료구조
 - **패러다임**: 명령형(Imperative), 객체지향(Object-oriented), 함수형(Functional), 선언형(Declarative) 프로그래밍 접근법
-- **코드 품질**: 클린 코드 원칙, 디자인 패턴, SOLID 원칙, 리팩토링
+- **코드 품질**: 클린 코드 원칙, 디자인 패턴, SOLID 원칙
 - **전문적 실천법**: 테스팅, 디버깅, 성능 최적화, API 설계, 버전 관리 워크플로우
 - **소프트웨어 아키텍처**: 모놀리스, 마이크로서비스, 계층형 아키텍처, 아키텍처 패턴
 - **윤리와 커리어**: 개발자 실천법, 오픈 소스, 소프트웨어 윤리, 지속적 학습
@@ -18,16 +18,16 @@
 |---|-------|-------------|
 | 01 | [What Is Programming](01_What_Is_Programming.md) | 계산적 사고, 추상화, 문제 해결, 알고리즘 |
 | 02 | [Programming Paradigms](02_Programming_Paradigms.md) | 명령형, OOP, 함수형, 선언형 접근법 |
-| 03 | [Data Structures Fundamentals](03_Data_Structures_Fundamentals.md) | 배열, 리스트, 스택, 큐, 트리, 그래프, 해시 테이블 |
-| 04 | [Algorithms Fundamentals](04_Algorithms_Fundamentals.md) | 복잡도 분석, 검색, 정렬, 재귀 |
-| 05 | [Clean Code Principles](05_Clean_Code_Principles.md) | 네이밍, 함수, 주석, 포맷팅, 에러 처리 |
-| 06 | [Design Patterns](06_Design_Patterns.md) | 생성, 구조, 행위 패턴; Gang of Four |
-| 07 | [SOLID Principles](07_SOLID_Principles.md) | 단일 책임, 개방-폐쇄, 리스코프 치환, 인터페이스 분리, 의존성 역전 |
-| 08 | [Testing Fundamentals](08_Testing_Fundamentals.md) | 단위, 통합, E2E 테스팅; TDD, BDD; 테스트 더블 |
-| 09 | [Debugging Techniques](09_Debugging_Techniques.md) | 디버깅 전략, 도구, 로깅, 프로파일링 |
-| 10 | [Refactoring](10_Refactoring.md) | 코드 스멜, 리팩토링 기법, 언제 어떻게 리팩토링할지 |
-| 11 | [Concurrency and Parallelism](11_Concurrency_and_Parallelism.md) | 스레드, 프로세스, 비동기, 경쟁 조건, 동기화 |
-| 12 | [Performance Optimization](12_Performance_Optimization.md) | 프로파일링, 알고리즘 최적화, 캐싱, 메모리 관리 |
+| 03 | [데이터 타입과 추상화](03_Data_Types_and_Abstraction.md) | 원시/복합 타입, 타입 시스템, ADT, 제네릭 |
+| 04 | [제어 흐름 패턴](04_Control_Flow_Patterns.md) | 조건문, 반복문, 이터레이션, 재귀, 제너레이터 |
+| 05 | [OOP 원칙](05_OOP_Principles.md) | 캡슐화, 상속, 다형성, 합성, SOLID |
+| 06 | [함수형 프로그래밍](06_Functional_Programming.md) | 순수 함수, 불변성, 고차 함수, 합성 |
+| 07 | [디자인 패턴](07_Design_Patterns.md) | 생성, 구조, 행위 패턴; Gang of Four |
+| 08 | [클린 코드와 코드 스멜](08_Clean_Code.md) | 네이밍, 함수, 기술 부채, 코드 스멜, 포맷팅 |
+| 09 | [에러 처리](09_Error_Handling.md) | 예외, 에러 타입, 방어적 프로그래밍, 로깅 |
+| 10 | [테스팅 기초](10_Testing_Fundamentals.md) | 단위, 통합, E2E 테스팅; TDD, BDD; 테스트 더블 |
+| 11 | [디버깅 및 프로파일링](11_Debugging_and_Profiling.md) | 디버깅 전략, 프로파일링 도구, 성능 분석 |
+| 12 | [동시성 및 병렬성](12_Concurrency_and_Parallelism.md) | 스레드, 프로세스, 비동기, 경쟁 조건, 동기화 |
 | 13 | [API Design](13_API_Design.md) | REST, RPC, GraphQL; 버전 관리, 문서화, 모범 사례 |
 | 14 | [Version Control Workflows](14_Version_Control_Workflows.md) | Git 워크플로우, 브랜칭 전략, 코드 리뷰, CI/CD |
 | 15 | [Software Architecture](15_Software_Architecture.md) | 모놀리스, 마이크로서비스, 계층형/육각형/클린 아키텍처 |
@@ -49,10 +49,10 @@
 
 이 토픽은 점진적으로 구성되어 있습니다:
 
-1. **기초 (레슨 1-4)**: 핵심 개념, 패러다임, 자료구조, 알고리즘
-2. **코드 품질 (레슨 5-7)**: 클린 코드, 디자인 패턴, SOLID 원칙
-3. **개발 실천법 (레슨 8-10)**: 테스팅, 디버깅, 리팩토링
-4. **고급 주제 (레슨 11-12)**: 동시성과 성능 최적화
+1. **기초 (레슨 1-4)**: 핵심 개념, 패러다임, 데이터 타입, 제어 흐름
+2. **설계 (레슨 5-7)**: OOP 원칙, 함수형 프로그래밍, 디자인 패턴
+3. **코드 품질 (레슨 8-10)**: 클린 코드, 에러 처리, 테스팅
+4. **고급 주제 (레슨 11-12)**: 디버깅, 프로파일링, 동시성, 병렬성
 5. **전문가 기술 (레슨 13-16)**: API 설계, 버전 관리, 아키텍처, 윤리
 
 레슨을 순차적으로 따라가거나 필요에 따라 특정 주제로 바로 이동할 수 있습니다.

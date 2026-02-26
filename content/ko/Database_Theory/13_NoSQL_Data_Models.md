@@ -8,14 +8,17 @@
 
 **난이도**: ⭐⭐⭐
 
-**학습 목표**:
-- 관계형 모델이 웹 스케일에서 어려움을 겪는 이유 설명
-- CAP 정리와 형식적 증명 스케치를 진술하고 해석
-- BASE와 ACID 일관성 모델 대조
-- 키-값, 문서, 와이드 컬럼, 그래프 패러다임을 사용하여 데이터 모델 설계
-- 각 NoSQL 패러다임에서 기본 쿼리 작성
-- 적절한 데이터 모델을 선택하기 위한 의사결정 프레임워크 적용
-- 폴리글랏 지속성(Polyglot Persistence)과 그 아키텍처적 함의 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 관계형 모델이 웹 스케일에서 어려움을 겪는 이유 설명
+2. CAP 정리와 형식적 증명 스케치를 진술하고 해석
+3. BASE와 ACID 일관성 모델 대조
+4. 키-값, 문서, 와이드 컬럼, 그래프 패러다임을 사용하여 데이터 모델 설계
+5. 각 NoSQL 패러다임에서 기본 쿼리 작성
+6. 적절한 데이터 모델을 선택하기 위한 의사결정 프레임워크 적용
+7. 폴리글랏 지속성(Polyglot Persistence)과 그 아키텍처적 함의 이해
 
 ---
 
@@ -242,6 +245,9 @@ BASE는 Eric Brewer가 ACID의 대립으로 제안한 역약어(backronym)입니
 | **기본적으로 가용(Basically Available)** | 시스템은 가용성(CAP 의미에서)을 보장 |
 | **소프트 상태(Soft state)** | 최종 일관성 전파로 인해 입력 없이도 시스템의 상태가 시간이 지나면서 변할 수 있음 |
 | **최종적으로 일관됨(Eventually consistent)** | 새로운 업데이트 없이 충분한 시간이 주어지면, 모든 복제본은 동일한 상태로 수렴 |
+
+> **비유 -- 마을에 뉴스가 퍼지는 것**:
+> 인터넷이나 TV가 없는 작은 마을을 상상해 보세요. 뉴스는 오직 입소문으로만 퍼집니다. 어떤 일이 발생하면(새 가게가 열리면), 근처 사람들이 먼저 알게 됩니다. 다음 몇 시간 동안 그들이 이웃에게 말하고, 이웃이 또 이웃에게 전합니다. 어느 시점에서는 일부 주민만 뉴스를 알고 다른 주민은 모르는 상태 -- 마을은 "소프트 상태(soft state)"에 있습니다. 그러나 새로운 사건 없이 충분한 시간이 주어지면, *모든 사람이* 결국 같은 이야기를 듣게 됩니다. 이것이 최종 일관성(eventual consistency)입니다: 모든 사람을 동시에 업데이트하는 단일 방송은 없지만(ACID의 "전부 아니면 전무" 커밋과 달리), 시스템은 시간이 지남에 따라 일관된 상태로 수렴합니다. 트레이드오프는 같은 순간에 두 주민에게 물으면 서로 다른 답을 얻을 수 있다는 것입니다 -- 소셜 미디어 "좋아요" 카운터에는 허용 가능하지만 은행 잔고에는 허용할 수 없습니다.
 
 ### 3.3 상세 비교
 
@@ -505,7 +511,10 @@ Index       →     Index
 **CRUD 연산**:
 
 ```javascript
-// INSERT
+// INSERT — 고객 데이터가 주문 문서 안에 직접 임베딩됨.
+// 이것은 의도적인 비정규화(denormalization): 고객의 이름과 이메일을 복제하여
+// 주문을 표시할 때 두 번째 쿼리(JOIN에 해당)가 필요 없게 만듦.
+// 트레이드오프: Alice가 이메일을 변경하면 모든 주문 문서를 업데이트해야 함.
 db.orders.insertOne({
   customer: { name: "Alice", email: "alice@example.com" },
   items: [
@@ -518,22 +527,29 @@ db.orders.insertOne({
 });
 
 // FIND (쿼리)
-// Alice의 모든 대기 중인 주문 찾기
+// 점 표기법(dot notation) "customer.name"은 임베딩된 문서 안으로 접근 —
+// MongoDB가 중첩 필드(nested field)를 네이티브로 인덱싱하기 때문에 가능.
+// 관계형 DB에서는 orders와 customers 테이블 사이의 JOIN이 필요할 것임.
 db.orders.find({
   "customer.name": "Alice",
   "status": "pending"
 });
 
-// total > 100인 주문 찾기, 날짜순 정렬
+// total > 100인 주문 찾기, 날짜순 정렬.
+// sort + limit 패턴은 {total: 1, created_at: -1}에 복합 인덱스가 있을 때
+// 효율적 — MongoDB가 인덱스를 사용하여 메모리 내 정렬을 피함.
 db.orders.find({ total: { $gt: 100 } })
          .sort({ created_at: -1 })
          .limit(10);
 
-// 특정 제품을 포함하는 주문 찾기
+// 배열 내부 쿼리: "items.product"는 items 배열의 모든 요소에서 매칭.
+// MongoDB는 배열 필드에 대해 자동으로 "멀티키 인덱스(multikey index)"를
+// 생성하므로, items가 배열임에도 인덱스를 사용할 수 있음.
 db.orders.find({ "items.product": "Widget" });
 
 // UPDATE
-// 주문 상태를 배송됨으로 설정
+// $set은 지정된 필드만 수정; 다른 필드는 그대로 유지.
+// $currentDate는 자동으로 타임스탬프를 설정 — 감사 추적(audit trail)에 유용.
 db.orders.updateOne(
   { _id: ObjectId("...") },
   {
@@ -542,29 +558,38 @@ db.orders.updateOne(
   }
 );
 
-// 기존 주문에 항목 추가
+// $push는 배열에 제자리(in-place)에서 추가 — 전체 문서를 읽기-수정-쓰기할 필요 없음.
+// 이것은 문서 수준에서 원자적(atomic) (MongoDB는 단일 문서 원자성을 보장).
 db.orders.updateOne(
   { _id: ObjectId("...") },
   { $push: { items: { product: "Doohickey", qty: 3, price: 5.99 } } }
 );
 
-// DELETE
+// DELETE — deleteMany는 한 번의 작업으로 모든 매칭 문서를 제거.
+// 관계형 FK처럼 연쇄 삭제(cascading delete)가 없으므로 관련 정리는 앱이 처리해야 함.
 db.orders.deleteMany({ status: "cancelled" });
 ```
 
 **집계 파이프라인**: MongoDB의 복잡한 데이터 처리 프레임워크:
 
 ```javascript
-// 최근 30일간 제품 카테고리별 수익
+// 최근 30일간 제품 카테고리별 수익.
+// 집계 파이프라인은 UNIX 파이프처럼 순차적 단계를 통해 문서를 처리:
+// 각 단계가 데이터를 변환하고 다음 단계로 전달.
 db.orders.aggregate([
-  // 단계 1: 최근 주문 필터
+  // 단계 1: 초기에 필터링 — 파이프라인 상단의 $match는 인덱스를 사용하며
+  // 후속 모든 단계의 데이터 볼륨을 줄임 (SQL의 WHERE와 유사).
   { $match: {
     created_at: { $gte: new Date(Date.now() - 30*24*60*60*1000) },
     status: { $ne: "cancelled" }
   }},
-  // 단계 2: items 배열 펼치기 (항목당 하나의 문서)
+  // 단계 2: $unwind는 items 배열을 "펼침" — 각 배열 요소가 자체 문서가 됨.
+  // 개별 제품별로 그룹화해야 하지만 items가 주문 문서 안에 임베딩되어 있기
+  // 때문에(비정규화) 이 작업이 필요.
   { $unwind: "$items" },
-  // 단계 3: 제품별로 그룹화하고 수익 합계
+  // 단계 3: 제품별로 그룹화하고 집계값 계산.
+  // items가 임베딩되어 있기(별도 컬렉션이 아닌) 때문에 JOIN 없이
+  // 계산 가능 — 비정규화(denormalization)의 트레이드오프가 여기서 보상됨.
   { $group: {
     _id: "$items.product",
     total_revenue: { $sum: { $multiply: ["$items.qty", "$items.price"] } },
@@ -585,12 +610,16 @@ db.orders.aggregate([
 **임베딩** (비정규화):
 
 ```json
+// 주문을 사용자 문서 안에 임베딩 — 한 번의 읽기로 사용자와 모든 주문을 가져옴.
+// JOIN에 해당하는 작업을 피함.
+// 트레이드오프: 주문이 추가될 때마다 문서가 커지며, MongoDB의 16MB 문서
+// 크기 제한이 있음. 임베딩 항목 수가 제한적일 때(one-to-few) 적합.
 {
   "_id": "user_1001",
   "name": "Alice",
   "orders": [
-    { "order_id": "O001", "total": 44.97, "items": [...] },
-    { "order_id": "O002", "total": 89.50, "items": [...] }
+    { "order_id": "O001", "total": 44.97, "items": ["..."] },
+    { "order_id": "O002", "total": 89.50, "items": ["..."] }
   ]
 }
 ```
@@ -598,12 +627,14 @@ db.orders.aggregate([
 **참조** (정규화):
 
 ```json
-// Users 컬렉션
+// Users 컬렉션 — 사용자 문서는 작고 안정적으로 유지됨.
 { "_id": "user_1001", "name": "Alice" }
 
-// Orders 컬렉션
-{ "_id": "O001", "user_id": "user_1001", "total": 44.97, "items": [...] }
-{ "_id": "O002", "user_id": "user_1001", "total": 89.50, "items": [...] }
+// Orders 컬렉션 — 주문이 외래 키(foreign key)처럼 ID로 사용자를 참조.
+// 사용자의 주문을 가져오려면 두 번째 쿼리(또는 $lookup)가 필요.
+// 사용자당 주문 수가 무제한일 때 이 방식이 더 적합.
+{ "_id": "O001", "user_id": "user_1001", "total": 44.97, "items": ["..."] }
+{ "_id": "O002", "user_id": "user_1001", "total": 89.50, "items": ["..."] }
 ```
 
 **결정 기준**:
@@ -715,14 +746,18 @@ Apache Cassandra는 단일 장애 지점이 없는 고가용성을 위해 설계
 **CQL (Cassandra Query Language)**:
 
 ```sql
--- 키스페이스 생성 (데이터베이스와 유사)
+-- 키스페이스 생성 (데이터베이스와 유사).
+-- NetworkTopologyStrategy에서 데이터센터당 3개의 복제본을 설정하면
+-- DC에서 노드 2개가 장애가 나도 모든 파티션의 복사본 1개는 생존.
 CREATE KEYSPACE ecommerce
 WITH replication = {
   'class': 'NetworkTopologyStrategy',
   'dc1': 3, 'dc2': 3
 };
 
--- 복합 기본 키로 테이블 생성
+-- 복합 기본 키로 테이블 생성.
+-- 파티션 키(partition key) 선택은 Cassandra에서 가장 중요한 설계 결정:
+-- 데이터 분산과 쿼리 효율성 모두를 결정함.
 CREATE TABLE ecommerce.orders (
   customer_id UUID,
   order_date TIMESTAMP,
@@ -733,26 +768,36 @@ CREATE TABLE ecommerce.orders (
   PRIMARY KEY ((customer_id), order_date, order_id)
 ) WITH CLUSTERING ORDER BY (order_date DESC);
 
--- PRIMARY KEY는 두 부분으로 구성:
---   파티션 키: (customer_id) → 어느 노드가 데이터를 저장할지 결정
---   클러스터링 키: order_date, order_id → 파티션 내 정렬 순서 결정
+-- PRIMARY KEY 구조 분석:
+--   파티션 키: (customer_id) — Cassandra가 이 값을 해싱하여 어느 노드가
+--     데이터를 저장할지 결정. 한 고객의 모든 주문이 동일한 노드에 위치하므로
+--     "고객 X의 모든 주문 가져오기"가 단일 노드 읽기(빠름)가 됨.
+--   클러스터링 키: order_date, order_id — 파티션 내에서 행이 이 컬럼 순서대로
+--     디스크에 정렬 저장됨. DESC 순서는 가장 최근 주문이 물리적으로 먼저
+--     위치하므로 "최근 N개 주문"이 순차 디스크 읽기가 됨.
 
 -- 데이터 삽입
 INSERT INTO ecommerce.orders (customer_id, order_date, order_id, total, status)
 VALUES (uuid(), '2024-11-15', uuid(), 44.97, 'shipped');
 
--- 파티션 키로 쿼리 (빠름 - 하나의 노드로 감)
+-- 파티션 키로 쿼리 (빠름 — 코디네이터가 customer_id를 해싱하여 정확한
+-- 노드를 찾음; 다른 노드는 접촉하지 않음). O(1) 노드 조회.
 SELECT * FROM ecommerce.orders
 WHERE customer_id = 550e8400-e29b-41d4-a716-446655440000;
 
--- 클러스터링 키 범위로 쿼리 (빠름 - 파티션 내 순차 읽기)
+-- 클러스터링 키 범위로 쿼리 (빠름 — order_date가 클러스터링 키이므로
+-- 이 파티션 내의 행들이 디스크에서 날짜순으로 정렬되어 있음. Cassandra는
+-- 연속된 바이트 범위를 읽음 — 랜덤 탐색이 아닌 순차 스캔).
 SELECT * FROM ecommerce.orders
 WHERE customer_id = 550e8400-e29b-41d4-a716-446655440000
   AND order_date >= '2024-01-01'
   AND order_date < '2025-01-01';
 
--- 파티션 키 없이 쿼리 (느림 - ALLOW FILTERING 필요, 모든 노드 스캔)
--- 안티패턴: 프로덕션에서 피하세요!
+-- 파티션 키 없이 쿼리 (느림 — Cassandra는 'pending' 주문이 어느 노드에
+-- 있는지 알 수 없으므로 모든 노드에 브로드캐스트하여 모든 파티션을 스캔해야 함.
+-- 이 전체 클러스터 스캔을 인정하기 위해 ALLOW FILTERING이 필요함).
+-- 안티패턴: 프로덕션에서 피하세요! 이 쿼리가 필요하면
+-- status를 파티션 키로 하는 별도 테이블을 생성하세요.
 SELECT * FROM ecommerce.orders WHERE status = 'pending' ALLOW FILTERING;
 ```
 

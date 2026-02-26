@@ -1,5 +1,18 @@
 # Dynamic Programming
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the two core conditions for Dynamic Programming — optimal substructure and overlapping subproblems — and identify when DP applies
+2. Implement both top-down (memoization) and bottom-up (tabulation) DP approaches and compare their trade-offs
+3. Solve classic 1D DP problems such as Fibonacci, coin change, and longest increasing subsequence
+4. Solve 2D DP problems including the knapsack problem and grid path counting
+5. Apply string DP techniques to solve longest common subsequence (LCS) and edit distance problems
+6. Design DP solutions for state machine and digit DP problem patterns
+
+---
+
 ## Overview
 
 Dynamic Programming (DP) is an algorithm design technique that solves complex problems by breaking them down into simpler subproblems. It improves efficiency by storing results of overlapping subproblems.
@@ -14,7 +27,8 @@ Dynamic Programming (DP) is an algorithm design technique that solves complex pr
 4. [1D DP](#4-1d-dp)
 5. [2D DP](#5-2d-dp)
 6. [String DP](#6-string-dp)
-7. [Practice Problems](#7-practice-problems)
+7. [State Machine DP and Digit DP](#7-state-machine-dp-and-digit-dp)
+8. [Practice Problems](#8-practice-problems)
 
 ---
 
@@ -92,8 +106,9 @@ int memo[100];
 
 int fib(int n) {
     if (n <= 1) return n;
-    if (memo[n] != -1) return memo[n];
+    if (memo[n] != -1) return memo[n];  // Return cached result — avoids O(2^n) recomputation
 
+    // Store before returning so any future call to fib(n) is O(1)
     memo[n] = fib(n-1) + fib(n-2);
     return memo[n];
 }
@@ -241,17 +256,22 @@ dp[6]=min(dp[5]+1, dp[3]+1, dp[2]+1)=2  (3+3)
 ```cpp
 // C++
 int coinChange(vector<int>& coins, int amount) {
-    vector<int> dp(amount + 1, amount + 1);  // Initialize with impossible value
-    dp[0] = 0;
+    // Initialize to amount+1 (an impossible value) instead of INT_MAX
+    // to avoid overflow when we do dp[i-coin]+1 later.
+    vector<int> dp(amount + 1, amount + 1);
+    dp[0] = 0;  // Base case: zero coins needed to make amount 0
 
     for (int i = 1; i <= amount; i++) {
         for (int coin : coins) {
             if (coin <= i) {
+                // Try using this coin type: one more coin than the optimal
+                // solution for the smaller sub-amount (i - coin).
                 dp[i] = min(dp[i], dp[i - coin] + 1);
             }
         }
     }
 
+    // If dp[amount] is still the sentinel value, no valid combination exists
     return dp[amount] > amount ? -1 : dp[amount];
 }
 ```
@@ -291,8 +311,13 @@ Answer: 4 ways (1+1+1+1+1, 1+1+1+2, 1+2+2, 5)
 ```python
 def coin_combinations(coins, amount):
     dp = [0] * (amount + 1)
-    dp[0] = 1
+    dp[0] = 1  # One way to make 0: use no coins
 
+    # Outer loop over coins, inner loop over amounts — this order ensures
+    # each coin type is counted only once per combination (unordered sets).
+    # If we swapped the loops (outer amount, inner coin) we would count
+    # every permutation of the same coins as a distinct way, giving permutation
+    # counts instead of combination counts.
     for coin in coins:
         for i in range(coin, amount + 1):
             dp[i] += dp[i - coin]
@@ -515,7 +540,14 @@ int knapsackOptimized(int W, vector<int>& weights, vector<int>& values) {
     vector<int> dp(W + 1, 0);
 
     for (int i = 0; i < n; i++) {
-        for (int w = W; w >= weights[i]; w--) {  // Reverse order!
+        // Iterate capacity in REVERSE (W down to weights[i]).
+        // Forward iteration would let dp[w - weights[i]] already reflect item i
+        // being added earlier in the same pass, so the same item could fill
+        // multiple slots — that is unbounded knapsack (items reusable).
+        // Reverse iteration ensures dp[w - weights[i]] still holds the value
+        // from the PREVIOUS item's pass, enforcing the 0/1 constraint
+        // (each item used at most once).
+        for (int w = W; w >= weights[i]; w--) {
             dp[w] = max(dp[w], dp[w - weights[i]] + values[i]);
         }
     }
@@ -650,13 +682,19 @@ Answer: 3 (ADH)
 // C++
 int longestCommonSubsequence(string s1, string s2) {
     int m = s1.length(), n = s2.length();
+    // Extra row/column of zeros acts as the base case:
+    // LCS of any string with an empty string is 0.
     vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
 
     for (int i = 1; i <= m; i++) {
         for (int j = 1; j <= n; j++) {
             if (s1[i-1] == s2[j-1]) {
+                // Characters match: extend the LCS found without either character
+                // (dp[i-1][j-1]) by 1.  We look at i-1/j-1 (not i/j) because
+                // the matching characters are now consumed.
                 dp[i][j] = dp[i-1][j-1] + 1;
             } else {
+                // No match: best LCS either excludes s1[i-1] or excludes s2[j-1]
                 dp[i][j] = max(dp[i-1][j], dp[i][j-1]);
             }
         }
@@ -709,14 +747,21 @@ int minDistance(string word1, string word2) {
     int m = word1.length(), n = word2.length();
     vector<vector<int>> dp(m + 1, vector<int>(n + 1));
 
-    for (int i = 0; i <= m; i++) dp[i][0] = i;
-    for (int j = 0; j <= n; j++) dp[0][j] = j;
+    // Base cases: transforming an empty string requires as many insertions
+    // (or deletions) as the other string has characters.
+    for (int i = 0; i <= m; i++) dp[i][0] = i;  // Delete all i chars of word1
+    for (int j = 0; j <= n; j++) dp[0][j] = j;  // Insert all j chars of word2
 
     for (int i = 1; i <= m; i++) {
         for (int j = 1; j <= n; j++) {
             if (word1[i-1] == word2[j-1]) {
+                // Characters already match: no operation needed at this position
                 dp[i][j] = dp[i-1][j-1];
             } else {
+                // Try all three operations and take the cheapest:
+                // Delete word1[i-1]  → cost of aligning word1[0..i-2] with word2[0..j-1]
+                // Insert word2[j-1]  → cost of aligning word1[0..i-1] with word2[0..j-2]
+                // Replace word1[i-1] → cost of aligning word1[0..i-2] with word2[0..j-2]
                 dp[i][j] = 1 + min({dp[i-1][j],      // Delete
                                     dp[i][j-1],      // Insert
                                     dp[i-1][j-1]});  // Replace
@@ -752,7 +797,239 @@ def min_distance(word1, word2):
 
 ---
 
-## 7. Practice Problems
+## 7. State Machine DP and Digit DP
+
+Beyond the classic 1D/2D patterns, two advanced DP paradigms solve a wide class of problems elegantly: **State Machine DP** and **Digit DP**.
+
+### 7.1 State Machine DP
+
+#### Concept
+
+In State Machine DP, we model the problem as a finite state machine where:
+- **States** are nodes (e.g., "holding stock", "cooldown", "no stock")
+- **Transitions** are edges with associated costs or rewards
+- The DP table tracks the optimal value at each state for each time step
+
+```
+Why this is powerful: Many problems that seem complex become
+straightforward once you draw the state diagram. The recurrence
+relations fall directly out of the transitions.
+
+General pattern:
+  dp[i][state] = best value at step i while in "state"
+
+Transitions:
+  dp[i][next_state] = optimize(dp[i-1][prev_state] + transition_cost)
+```
+
+#### Example: Best Time to Buy and Sell Stock with Cooldown
+
+**Problem**: Given stock prices, find the maximum profit. After selling, you must wait one day (cooldown) before buying again.
+
+```
+State Machine:
+
+  ┌──────────┐   buy    ┌──────────┐   sell   ┌──────────┐
+  │          │ ───────► │          │ ───────► │          │
+  │  REST    │          │  HOLD    │          │ COOLDOWN │
+  │ (no stk) │ ◄─────── │ (have stk)│          │ (wait 1d)│
+  └──────────┘   wait   └──────────┘          └──────────┘
+       ▲                     │ hold                │
+       │                     └──────┘              │
+       │              (keep holding)               │
+       └───────────────────────────────────────────┘
+                         wait (cooldown → rest)
+
+States:
+  REST     = not holding, free to buy
+  HOLD     = currently holding stock
+  COOLDOWN = just sold, must wait one day
+
+Transitions:
+  REST[i]     = max(REST[i-1], COOLDOWN[i-1])
+  HOLD[i]     = max(HOLD[i-1], REST[i-1] - price[i])
+  COOLDOWN[i] = HOLD[i-1] + price[i]
+```
+
+```python
+def max_profit_with_cooldown(prices):
+    """
+    State Machine DP for stock trading with cooldown.
+
+    Why three states: The cooldown constraint means we cannot
+    simply track "buy" and "sell" — we need an explicit cooldown
+    state to enforce the one-day waiting period after selling.
+
+    Time: O(n), Space: O(1)
+    """
+    if len(prices) <= 1:
+        return 0
+
+    # Initial states on day 0
+    rest = 0                    # Not holding, haven't done anything
+    hold = -prices[0]           # Bought on day 0
+    cooldown = float('-inf')    # Cannot be in cooldown on day 0
+
+    for i in range(1, len(prices)):
+        new_rest = max(rest, cooldown)           # Stay resting or finish cooldown
+        new_hold = max(hold, rest - prices[i])   # Keep holding or buy today
+        new_cooldown = hold + prices[i]          # Sell today → enter cooldown
+
+        rest, hold, cooldown = new_rest, new_hold, new_cooldown
+
+    # Answer: best of resting or just finished cooldown (never end while holding)
+    return max(rest, cooldown)
+
+
+# Example
+prices = [1, 2, 3, 0, 2]
+print(max_profit_with_cooldown(prices))  # Output: 3
+# Explanation: buy@1, sell@3, cooldown, buy@0, sell@2 → profit = 2 + 1 = 3
+```
+
+#### Other State Machine DP Problems
+
+```
+1. Stock with transaction fee → 2 states: HOLD, REST
+   REST[i] = max(REST[i-1], HOLD[i-1] + price[i] - fee)
+   HOLD[i] = max(HOLD[i-1], REST[i-1] - price[i])
+
+2. Stock with at most K transactions → 2K+1 states
+   dp[i][j] where j encodes (transaction_count, holding_or_not)
+
+3. House Robber on a circle → 2 runs of linear House Robber
+   (state machine with "robbed" / "skipped" states)
+```
+
+### 7.2 Digit DP
+
+#### Concept
+
+Digit DP is a technique for counting numbers in a range [0, N] (or [L, R]) that satisfy some digit-level constraint. Instead of iterating over all numbers, we process the number **digit by digit**, tracking:
+
+- `pos`: current digit position (from most significant to least)
+- `tight`: whether we are still bounded by N's digits (if True, the current digit can be at most N's digit at this position)
+- `state`: problem-specific state (e.g., last digit, digit sum mod k, etc.)
+
+```
+Why Digit DP:
+Brute force over all numbers up to N = O(N), which is too slow
+when N can be 10^18. Digit DP processes log10(N) digits,
+with a small state space → typically O(log N × |states|).
+
+Template:
+  count(pos, tight, state) =
+    for digit d in 0 .. (N[pos] if tight else 9):
+      count(pos+1, tight && (d == N[pos]), transition(state, d))
+```
+
+#### Example: Count Numbers up to N with No Consecutive Equal Digits
+
+**Problem**: Given N, count how many numbers from 1 to N have no two adjacent digits that are the same.
+
+For example, N=20: valid numbers are 1-9 (all single digit), 10, 12-19, 20.
+Invalid: 11. Count = 19.
+
+```python
+from functools import lru_cache
+
+def count_no_consecutive_equal(N):
+    """
+    Digit DP: Count numbers in [1, N] with no consecutive equal digits.
+
+    Why we track last_digit: To check the "no consecutive equal"
+    constraint, we only need to know the immediately preceding digit.
+    This keeps the state space small: 10 possible last digits + 1
+    sentinel for "no digit placed yet".
+
+    State:
+      pos   — current digit position (0-indexed from MSD)
+      tight — still bounded by N?
+      last  — the last digit placed (-1 if none yet)
+      started — have we placed a nonzero digit? (handles leading zeros)
+
+    Time: O(log N × 10 × 10 × 2 × 2) ≈ O(log N × 400)
+    """
+    digits = [int(c) for c in str(N)]
+    n = len(digits)
+
+    @lru_cache(maxsize=None)
+    def dp(pos, tight, last, started):
+        """Return count of valid numbers from position pos onward."""
+        if pos == n:
+            return 1 if started else 0  # Must have placed at least one digit
+
+        limit = digits[pos] if tight else 9
+        count = 0
+
+        for d in range(0, limit + 1):
+            # Skip consecutive equal digits
+            if started and d == last:
+                continue
+
+            new_tight = tight and (d == limit)
+
+            if not started and d == 0:
+                # Leading zero: don't count as "started", reset last
+                count += dp(pos + 1, new_tight, -1, False)
+            else:
+                count += dp(pos + 1, new_tight, d, True)
+
+        return count
+
+    return dp(0, True, -1, False)
+
+
+# Examples
+print(count_no_consecutive_equal(20))    # 19 (only "11" is invalid)
+print(count_no_consecutive_equal(100))   # 90 (11, 22, 33, ..., 99 are invalid → 10 invalid)
+print(count_no_consecutive_equal(1000))  # 819
+```
+
+#### Counting Numbers in a Range [L, R]
+
+A common trick: count valid numbers in [1, R] minus [1, L-1].
+
+```python
+def count_in_range(L, R):
+    """Count numbers in [L, R] with no consecutive equal digits."""
+    return count_no_consecutive_equal(R) - count_no_consecutive_equal(L - 1)
+```
+
+#### Other Digit DP Problems
+
+```
+1. Count numbers whose digit sum = S
+   State: (pos, tight, current_sum)
+
+2. Count numbers divisible by K
+   State: (pos, tight, remainder_mod_k)
+
+3. Count numbers with at most D distinct digits
+   State: (pos, tight, bitmask_of_used_digits)
+
+4. Count numbers that are "lucky" (contain only 4 and 7)
+   State: (pos, tight)
+```
+
+### 7.3 Comparison
+
+```
+┌────────────────┬──────────────────────────┬──────────────────────────┐
+│                │ State Machine DP         │ Digit DP                 │
+├────────────────┼──────────────────────────┼──────────────────────────┤
+│ Key Idea       │ Model as FSM transitions │ Process number digit by  │
+│                │                          │ digit with tight bound   │
+│ State Space    │ Small (2-5 states)       │ pos × tight × custom     │
+│ Time           │ O(n × states)            │ O(log N × state_size)    │
+│ Typical Use    │ Sequence optimization    │ Counting in [L, R]       │
+│ Examples       │ Stock trading, robber    │ Digit sum, divisibility  │
+└────────────────┴──────────────────────────┴──────────────────────────┘
+```
+
+---
+
+## 8. Practice Problems
 
 ### Recommended Problems
 

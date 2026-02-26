@@ -1,5 +1,24 @@
 # 02. Raspberry Pi Setup
 
+**Previous**: [IoT Overview](./01_IoT_Overview.md) | **Next**: [Python GPIO Control](./03_Python_GPIO_Control.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Select the appropriate Raspberry Pi model for a given IoT project
+2. Install Raspberry Pi OS using the Raspberry Pi Imager
+3. Configure SSH access and perform initial system setup
+4. Navigate the GPIO pin layout and distinguish BCM from BOARD numbering
+5. Set up a Python virtual environment with common IoT libraries
+6. Create a systemd service for automatic application startup
+
+---
+
+Every IoT project needs a physical platform to run on, and the Raspberry Pi is the most accessible gateway into embedded development. Setting it up properly -- choosing the right model, configuring the OS, and understanding the GPIO pin layout -- ensures a stable foundation for all the sensor, networking, and AI projects that follow in this course.
+
+---
+
 Raspberry Pi is a single-board computer designed for educational and project purposes, providing GPIO pins suitable for IoT development. This lesson covers Raspberry Pi models, OS installation, initial configuration, and GPIO basics.
 
 ---
@@ -416,14 +435,6 @@ while True:
 - ✅ **Python Environment**: Virtual environment and library installation
 - ✅ **System Management**: Systemd service setup, automatic startup
 
-### Next Steps
-
-| Next Lesson | Topic | Content |
-|-------------|-------|---------|
-| **03. Python GPIO Control** | GPIO programming with Python | RPi.GPIO and gpiozero library usage, LED/button control, sensor integration |
-| **04. WiFi Networking** | Network programming basics | Python socket programming, HTTP client, network device communication |
-| **05. BLE Connectivity** | Bluetooth Low Energy communication | BLE protocol basics, sensor data collection via BLE |
-
 ### Hands-On Exercise
 
 1. **LED Control**:
@@ -458,3 +469,60 @@ while True:
 - [GPIO Pinout Reference](https://pinout.xyz/)
 - [RPi.GPIO Documentation](https://sourceforge.net/p/raspberry-gpio-python/wiki/Home/)
 - [systemd Service Configuration Guide](https://www.freedesktop.org/software/systemd/man/systemd.service.html)
+
+---
+
+## Exercises
+
+### Exercise 1: Model Selection Justification
+
+You are planning three separate IoT deployments. For each scenario below, identify the most appropriate Raspberry Pi model and explain your reasoning:
+
+1. A portable wearable that monitors body temperature and transmits to a smartphone. Size and power consumption are critical.
+2. A gateway device that collects data from 20 sensors, runs a local MQTT broker, and streams video to a cloud server.
+3. A learning project where you want to experiment with GPIOs, Python, and a desktop GUI — budget is limited.
+
+Write your answers as a short paragraph for each scenario, referencing the model comparison table in Section 1.
+
+### Exercise 2: Headless Setup and SSH Hardening
+
+Set up a Raspberry Pi in headless mode (no monitor or keyboard) and harden SSH access:
+
+1. Use Raspberry Pi Imager to write Raspberry Pi OS Lite to an SD card with SSH enabled and WiFi pre-configured.
+2. Boot the Pi, find its IP address using `nmap` or `arp`, and connect via SSH.
+3. Generate an Ed25519 key pair on your host machine and copy the public key to the Pi using `ssh-copy-id`.
+4. Edit `/etc/ssh/sshd_config` to disable password authentication (`PasswordAuthentication no`) and restart the SSH service.
+5. Verify that you can still log in using the key, and that password login is rejected.
+
+### Exercise 3: GPIO Pin Mapping
+
+Study the 40-pin GPIO header layout in Section 4.1 and answer the following without looking at any reference:
+
+1. Which physical pin numbers carry 5V power? Which carry 3.3V?
+2. GPIO17 uses BCM numbering. What is its physical (BOARD) pin number?
+3. Which GPIO pins support hardware PWM?
+4. Which pins are used for I2C communication, and what are their BCM numbers?
+
+Then write a short Python snippet that uses `RPi.GPIO` in BOARD mode to blink an LED connected to physical pin 11.
+
+### Exercise 4: systemd Service for Auto-Start
+
+Create a systemd service that runs a Python sensor script automatically on boot:
+
+1. Write a Python script (`/home/pi/iot_project/temperature_logger.py`) that reads the CPU temperature using `vcgencmd measure_temp`, logs it with a timestamp to `/home/pi/iot_project/temp_log.csv`, and sleeps for 30 seconds in a loop.
+2. Create a systemd service file at `/etc/systemd/system/temp_logger.service` referencing that script.
+3. Enable and start the service, then verify it is running with `systemctl status`.
+4. Reboot the Pi and confirm the service starts automatically by checking the log file after boot.
+
+### Exercise 5: Network Monitoring and Automatic Reconnection
+
+Write a Python script that monitors internet connectivity and automatically restarts the network if it goes down:
+
+1. Use `subprocess` to ping `8.8.8.8` every 60 seconds.
+2. If the ping fails, log the disconnection time to a file and restart the networking service using `sudo systemctl restart networking`.
+3. After reconnection, log the reconnection time and calculate how long the outage lasted.
+4. Wrap the script in a systemd service so it runs continuously in the background. Test by temporarily disabling the WiFi interface with `sudo ip link set wlan0 down`.
+
+---
+
+**Previous**: [IoT Overview](./01_IoT_Overview.md) | **Next**: [Python GPIO Control](./03_Python_GPIO_Control.md)

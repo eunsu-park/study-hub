@@ -1229,5 +1229,5 @@ def transfer_b_to_a(amount):
 
 ## 내비게이션
 
-**이전 레슨**: [11_Debugging_and_Profiling.md](11_Debugging_and_Profiling.md)
+**이전 레슨**: [디버깅 및 프로파일링(Debugging & Profiling)](11_Debugging_and_Profiling.md)
 **다음 레슨**: [13_Performance_Optimization.md](13_Performance_Optimization.md)

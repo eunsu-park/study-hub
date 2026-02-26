@@ -1,15 +1,18 @@
 # Advanced Networking
 
+**Previous**: [Ansible Basics](./22_Ansible_Basics.md) | **Next**: [Cloud Integration](./24_Cloud_Integration.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- VLAN configuration and 802.1Q tagging
-- NIC Bonding/Teaming
-- Bridge networking
-- Advanced iptables and nftables
-
-**Difficulty**: ⭐⭐⭐⭐ (Advanced)
+1. Create and configure 802.1Q VLAN interfaces to segment network traffic
+2. Set up NIC bonding with modes like active-backup and 802.3ad (LACP) for redundancy
+3. Configure Linux bridge interfaces for connecting VMs and containers to the network
+4. Write advanced iptables rules including stateful filtering, rate limiting, and NAT
+5. Translate iptables configurations to the modern nftables syntax
+6. Implement policy-based and multipath routing for multi-ISP environments
+7. Shape traffic with the tc command using HTB queuing disciplines
 
 ---
 
@@ -24,6 +27,8 @@ Through this document, you will learn:
 7. [Traffic Control (tc)](#7-traffic-control-tc)
 
 ---
+
+Modern data centers and cloud environments demand far more from networking than basic IP configuration. VLANs isolate broadcast domains, bonding provides link redundancy, bridges connect virtual machines to physical networks, and firewalls enforce security boundaries. Mastering these advanced networking concepts allows you to design infrastructure that is resilient, secure, and performant under real-world conditions.
 
 ## 1. VLAN Configuration
 
@@ -710,10 +715,6 @@ tc qdisc show dev eth0
 
 ---
 
-## Next Steps
-
-- [24_Cloud_Integration.md](./24_Cloud_Integration.md) - cloud-init, AWS CLI
-
 ---
 
 ## References
@@ -722,3 +723,7 @@ tc qdisc show dev eth0
 - [nftables Wiki](https://wiki.nftables.org/)
 - [Netplan Documentation](https://netplan.io/)
 - `man ip`, `man nft`, `man tc`
+
+---
+
+**Previous**: [Ansible Basics](./22_Ansible_Basics.md) | **Next**: [Cloud Integration](./24_Cloud_Integration.md)

@@ -1,5 +1,17 @@
 # 20. Instruction Tuning
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Instruction Tuning이 사전 학습된 LLM을 텍스트 완성 모델에서 지시 수행(instruction-following) 어시스턴트로 변환하는 방법을 설명할 수 있다
+2. 표준화된 프롬프트 템플릿(Alpaca, ShareGPT)을 사용하여 인스트럭션 튜닝 데이터셋을 구성하고 고품질 예시를 큐레이션할 수 있다
+3. Hugging Face Trainer API를 사용하여 인스트럭션 데이터로 지도 파인튜닝(Supervised Fine-Tuning, SFT)을 구현할 수 있다
+4. 인스트럭션 튜닝에서 데이터셋 다양성과 품질의 역할을 분석하고 FLAN, Alpaca, Dolly 데이터셋을 비교할 수 있다
+5. 자동화된 벤치마크를 사용하여 인스트럭션 튜닝된 모델을 평가하고 제로샷(zero-shot) 일반화의 한계를 설명할 수 있다
+
+---
+
 ## 개요
 
 Instruction Tuning은 pre-trained LLM을 자연어 지시사항을 따르도록 fine-tuning하는 방법입니다. 이를 통해 모델이 다양한 태스크를 zero-shot으로 수행할 수 있게 됩니다.
@@ -663,4 +675,224 @@ mixed_dataset = create_instruction_mix(datasets, weights, total_size=50000)
 2. Wang et al. (2022). "Self-Instruct: Aligning Language Models with Self-Generated Instructions"
 3. Xu et al. (2023). "WizardLM: Empowering Large Language Models to Follow Complex Instructions"
 4. Taori et al. (2023). "Stanford Alpaca"
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 지시 형식 설계
+"파이썬 리스트가 정렬되어 있는지 확인하는 방법"에 대한 동일한 질문/답변 쌍을 세 가지 다른 형식(Alpaca, ShareGPT, JSON 구조화 출력)으로 포맷하세요. 각 형식이 가장 적합한 사용 사례를 식별하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**Alpaca 형식** (단일 턴 지시-응답):
+```json
+{
+  "instruction": "파이썬 리스트가 정렬되어 있는지 확인하는 방법을 알려주세요.",
+  "input": "",
+  "output": "파이썬 리스트가 정렬되어 있는지 확인하는 몇 가지 방법이 있습니다:\n\n1. **한 줄 표현식** (O(n), 조기 종료):\n```python\nis_sorted = all(lst[i] <= lst[i+1] for i in range(len(lst)-1))\n```\n\n2. **정렬과 비교** (O(n log n)):\n```python\nis_sorted = lst == sorted(lst)\n```\n\n첫 번째 방법이 더 효율적입니다. 정렬되지 않은 쌍을 찾자마자 멈추지만, 두 번째 방법은 이미 정렬되지 않은 경우에도 항상 전체 리스트를 정렬합니다."
+}
+```
+적합한 경우: 단일 턴 질의응답(QA) 쌍, 지시 따르기 태스크.
+
+**ShareGPT 형식** (다중 턴 대화):
+```json
+{
+  "conversations": [
+    {
+      "from": "human",
+      "value": "Hey, I'm trying to check if my Python list is sorted. Is there a quick way to do this?"
+    },
+    {
+      "from": "gpt",
+      "value": "Yes! There are a few ways depending on your needs:\n\n1. **One-liner** (O(n), early termination):\n```python\nis_sorted = all(lst[i] <= lst[i+1] for i in range(len(lst)-1))\n```\n\n2. **Simple comparison** (O(n log n)):\n```python\nis_sorted = lst == sorted(lst)\n```\n\nWhich would you prefer?"
+    },
+    {
+      "from": "human",
+      "value": "What's the difference between them?"
+    },
+    {
+      "from": "gpt",
+      "value": "The key difference is efficiency: the first stops as soon as it finds an out-of-order pair (best case O(1)), while the second always sorts the entire list even if it's already unsorted."
+    }
+  ]
+}
+```
+적합한 경우: 대화형 모델 훈련, 후속 질문 처리.
+
+**JSON 구조화 출력 형식**:
+```json
+{
+  "instruction": "How do I check if a Python list is sorted? Provide a structured response.",
+  "input": "list = [1, 2, 3, 4, 5]",
+  "output": "{\"solution\": \"all(lst[i] <= lst[i+1] for i in range(len(lst)-1))\", \"complexity\": \"O(n)\", \"alternative\": \"lst == sorted(lst)\", \"explanation\": \"Iterates through pairs, returns False on first out-of-order element\"}"
+}
+```
+적합한 경우: 구조화된 데이터(JSON, XML)를 출력해야 하는 모델 훈련, 도구 사용 시나리오.
+
+</details>
+
+### 연습 문제 2: 데이터셋 다양성 대 품질 트레이드오프
+FLAN은 1,836개의 다양한 태스크를 사용하고, Alpaca는 단일 셀프-인스트럭트(self-instruct) 파이프라인에서 생성된 52,000개의 예제를 사용합니다. 각 접근법의 강점을 설명하고, 특정 배포 환경에서 어떤 약점이 더 중요한지 드러낼 수 있는 평가 방법을 제안하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**FLAN의 강점**:
+- 극도의 태스크 다양성: 1,836개 벤치마크에 걸쳐 분류, 요약, 번역, 상식 추론 등을 다룹니다.
+- 학술 NLP 벤치마크의 잘 선별된 인간 검증 태스크.
+- 태스크 형식 변형을 통해 제로샷(zero-shot) 일반화를 명시적으로 테스트합니다.
+- **약점**: 태스크 공식화가 학술/벤치마크 스타일입니다. 실제 사용자 쿼리는 대화체이고 비공식적이며 벤치마크 템플릿과 맞지 않습니다. FLAN으로 훈련된 모델은 "Classify the sentiment: [text]"에는 답할 수 있지만 "이 리뷰가 긍정적인가요 부정적인가요?"에는 어려움을 겪을 수 있습니다.
+
+**Alpaca의 강점**:
+- 실제 사용자 쿼리와 유사한 자연스러운 지시 스타일의 52,000개 예제.
+- 175개의 시드(seed) 예제에서 셀프-인스트럭트를 통해 생성된 다양한 지시 유형.
+- 실제 사용에 맞는 대화체 실용적 형식.
+- **약점**: GPT-3/GPT-4가 자동 생성 — 편향이 상속되고, 일관성이 부족하며, 품질이 다양합니다. 단일 모델 "교사"는 관점 다양성이 제한됩니다.
+
+**어떤 약점이 더 중요한지 드러내는 평가**:
+*고객 지원 챗봇* 배포 시:
+1. **테스트셋 1 (FLAN 약점)**: 비공식 언어의 100개 대화체 고객 쿼리("내 주문이 늦어요, 어떻게 해요?" vs. "문제: [배송 지연]. 카테고리: [배송 문제]") — 학술적 형식이 자연스러운 언어로 일반화되는지 측정.
+2. **테스트셋 2 (Alpaca 약점)**: 잘못된 전제가 있는 100개 엣지 케이스("디지털 아이템을 환불받을 수 있나요? 예 또는 아니오로만") — 제약 조건 하에서 지시 따르기 정확도 측정.
+3. **테스트셋 3 (두 가지 모두)**: 대화 중간에 태스크 전환이 있는 다중 턴 대화 — 단일 턴 데이터(Alpaca) 또는 프롬프트당 단일 태스크(FLAN) 훈련이 실제 대화로 일반화되는지 테스트.
+
+더 큰 격차를 드러내는 테스트가 해당 배포 환경에 더 적합한 데이터셋 접근법을 결정합니다.
+
+</details>
+
+### 연습 문제 3: 손실 마스킹 구현
+지시 튜닝에서 훈련 손실은 지시 토큰이 아닌 **응답** 토큰에서만 계산되어야 합니다. 마스킹 로직을 구현하세요.
+
+```python
+def create_labels_with_masking(
+    input_ids: list,
+    instruction_length: int
+) -> list:
+    """
+    Create labels for instruction tuning where
+    instruction tokens are masked (set to -100)
+    and only response tokens contribute to the loss.
+
+    Args:
+        input_ids: Full tokenized sequence [instruction + response]
+        instruction_length: Number of instruction tokens to mask
+
+    Returns:
+        labels: Same length as input_ids, with -100 for masked positions
+    """
+    IGNORE_INDEX = -100
+    # Implement here
+    pass
+
+# Example:
+# input_ids = [101, 234, 567, 789, 012, 345, 678]  (7 tokens)
+# instruction_length = 3  (first 3 are instruction tokens)
+# Expected labels = [-100, -100, -100, 789, 012, 345, 678]
+# Why: loss is only computed on tokens 4-7 (the response)
+```
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+def create_labels_with_masking(
+    input_ids: list,
+    instruction_length: int
+) -> list:
+    """
+    Create labels for instruction tuning where
+    instruction tokens are masked (set to -100)
+    """
+    IGNORE_INDEX = -100
+    labels = list(input_ids)  # Copy to avoid modifying original
+
+    # Mask all instruction tokens
+    for i in range(instruction_length):
+        labels[i] = IGNORE_INDEX
+
+    return labels
+
+
+# Example verification:
+input_ids = [101, 234, 567, 789, 012, 345, 678]
+labels = create_labels_with_masking(input_ids, instruction_length=3)
+# labels = [-100, -100, -100, 789, 12, 345, 678]  ✓
+
+
+# Extended version for chat templates (mask system + instruction turns)
+def create_labels_for_conversation(
+    tokenizer,
+    conversation: list,
+    model_response_roles: list = ["assistant", "gpt"]
+) -> dict:
+    """
+    Create labels for multi-turn conversations.
+    Only assistant turns contribute to loss.
+
+    conversation: [{"role": "user", "value": "..."}, {"role": "assistant", "value": "..."}]
+    """
+    IGNORE_INDEX = -100
+
+    # Tokenize full conversation
+    full_text = tokenizer.apply_chat_template(conversation, tokenize=False)
+    input_ids = tokenizer(full_text, return_tensors="pt").input_ids[0]
+    labels = input_ids.clone()
+
+    # Find and mask non-assistant tokens
+    # Strategy: tokenize each turn separately, find positions in full sequence
+    offset = 0
+    for turn in conversation:
+        turn_tokens = tokenizer(turn["value"], return_tensors="pt").input_ids[0]
+        turn_len = len(turn_tokens)
+
+        if turn["role"] not in model_response_roles:
+            # Mask this turn (instruction/system/user)
+            labels[offset:offset + turn_len] = IGNORE_INDEX
+
+        offset += turn_len
+
+    return {"input_ids": input_ids, "labels": labels}
+```
+
+**지시 토큰을 마스킹하는 이유**:
+- 마스킹 없이: 모델은 "Translate: Hello"와 "Bonjour" 모두를 예측하도록 훈련됩니다. 지시 토큰이 손실에 동등하게 기여하므로 지시를 따르기보다 그대로 반복하는 것을 학습할 수 있습니다.
+- 마스킹 있이: 모델은 지시 맥락이 주어졌을 때 올바른 응답만 예측하는 법을 학습합니다. 지시는 생성할 출력이 아닌 주의를 기울일 입력임을 학습합니다.
+
+</details>
+
+### 연습 문제 4: Evol-Instruct 품질 분석
+WizardLM의 Evol-Instruct(진화적 지시 생성)는 지시 복잡도를 점진적으로 높입니다. "복잡도"가 항상 바람직한지 평가하고, 모델 품질을 저하시킬 수 있는 사례를 식별하세요.
+
+시드 지시: "리스트를 정렬하는 함수를 작성하세요"
+
+3단계 진화를 추적하고 추가된 복잡도가 모델 훈련에 해를 끼칠 수 있는 단계 하나를 식별하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**진화 추적**:
+
+**레벨 0 (시드)**: "리스트를 정렬하는 함수를 작성하세요"
+- 간단하고, 명확하며, 기본적인 파이썬 태스크.
+
+**레벨 1 (제약 추가)**: "특정 키로 딕셔너리 리스트를 정렬하는 함수를 작성하되, 누락된 키를 우아하게 처리하세요"
+- 좋은 복잡도 증가: 현실적인 실제 시나리오 추가, 오류 처리 테스트.
+- 훈련 가치: 높음 — 우아한 저하(graceful degradation)를 가르칩니다.
+
+**레벨 2 (다중 요구사항)**: "지정된 정렬 순서(키별 오름차순/내림차순)로 여러 키로 딕셔너리 리스트를 정렬하고, 누락된 키는 None으로 처리하여 끝에 배치하며, O(n log n) 시간 복잡도 보장 및 단위 테스트 포함"
+- 적당한 복잡도 증가: 현실적이지만 더 긴 출력 필요.
+- 훈련 가치: 중간 — 훈련 컨텍스트 윈도우에 비해 너무 길 수 있음.
+
+**레벨 3 (잠재적으로 유해)**: "다음을 수행하는 범용 정렬 함수 구현: (1) 비교 가능한 모든 이터러블 객체 허용, (2) 비용이 많이 드는 비교에 대한 메모이제이션이 있는 커스텀 비교 함수 지원, (3) 입력 크기 휴리스틱에 따라 전환되는 QuickSort와 TimSort 내부 구현, (4) 독스트링에 상세한 복잡도 분석 제공, (5) 스레딩 락으로 동시 접근 처리, (6) 정렬 안정성 보장 증명, (7) 엣지 케이스를 다루는 10개 단위 테스트 포함"
+- **문제점**: 이것은 하나의 프롬프트에 비합리적으로 복잡한 응답입니다.
+- **훈련에 해로운 이유**:
+  1. 예상 "출력"이 수백 줄의 코드 — 모델은 단일 턴 프롬프트에서 극히 긴 출력을 생성하는 법을 학습해야 하는데, 이는 실제 사용자가 상호작용하는 방식이 아닙니다.
+  2. 지시에 모순된 요구사항 포함 (QuickSort는 안정적이지 않음; "안정 정렬 + QuickSort" 요구사항은 모순되거나 복잡한 해결책 필요).
+  3. 올바른 답은 아키텍처 지식이 필요 (정렬에 스레딩 락은 일반적으로 안티패턴); 이것으로 훈련하면 불필요한 복잡도를 추가하는 것을 가르칩니다.
+  4. 지나치게 복잡한 예제로 훈련된 모델은 프로덕션에서 요청하지 않은 복잡도를 추가할 수 있습니다("과잉 엔지니어링" 동작).
+
+**결론**: Evol-Instruct는 1-2 레벨에서는 유용하지만, 자동 생성된 3+ 레벨 예제는 훈련 전 전문가 검증이 필요한 경우가 많습니다.
+
+</details>
 5. Zheng et al. (2023). "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena"

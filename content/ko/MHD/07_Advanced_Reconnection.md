@@ -144,9 +144,16 @@ S_c = 1e4
 
 # Growth rate scaling
 # Below S_c: resistive growth (very slow)
+# γ ∝ S^{-1} — 저항성 찢기(resistive tearing)는 전류 시트를 가로지르는
+# 저항성 확산 시간이 작용해야 하므로 성장이 느림; 낮은 S에서는 시트가
+# 확산적으로 안정되어 어떤 섭동도 알프벤 시간 척도로 감쇠된다.
 gamma_resistive = 0.01 * S**(-1)
 
 # Above S_c: plasmoid instability
+# γ ∝ S^{1/4} — 이 S 스케일링은 핵심 물리를 담고 있다: 룬드키스트 수가
+# 커질수록 Sweet-Parker 시트가 더 얇아지고(δ ~ L/S), 찢기 불안정성에
+# 더 취약해진다. S^{1/4} 법칙은 Sweet-Parker 폭 전류 시트의 선형
+# 안정성 해석에서 나온다.
 gamma_plasmoid = np.where(S > S_c, 0.1 * S**(1/4), gamma_resistive)
 
 # Alfven time (normalized)
@@ -178,12 +185,21 @@ ax.grid(True, alpha=0.3)
 ax = axes[1]
 
 # Sweet-Parker
+# M_A ~ S^{-1/2} — 재결합률이 전체 전류 시트에 걸친 저항성 확산에
+# 의해 제한됨; 이것이 Sweet-Parker를 태양 및 천체물리학 매개변수에서
+# 절망적으로 느리게 만드는 병목이다.
 M_SP = S**(-0.5)
 
 # Plasmoid-mediated
+# M_A ~ S^{-1/8} — 플라스모이드가 시트를 N ~ S^{1/4}개의 구간으로
+# 쪼개고, 각 구간은 더 짧아 더 빠르다. 지수 -1/8 = 1/4 - 3/8은
+# 다수의 병렬 X-점에서 얻는 이득이 각 국소 율을 압도함을 반영한다.
 M_plasmoid = np.where(S > S_c, 0.01 * S**(-1/8), M_SP)
 
 # Hall reconnection (constant)
+# 비충돌성(Hall) 재결합에서 율이 ~0.1에서 포화되는 이유: Hall 항이
+# 이온 관성 길이에서 이온을 전자로부터 분리시켜, Rm에 무관하게
+# 훨씬 두꺼운 유효 확산 영역을 가능하게 하기 때문이다.
 M_Hall = 0.1 * np.ones_like(S)
 
 ax.loglog(S, M_SP, label='Sweet-Parker: $M_A \\propto S^{-1/2}$',
@@ -523,6 +539,9 @@ sigma = np.logspace(-1, 4, 100)
 v_A_nonrel = 1  # Normalized to c
 
 # Relativistic Alfven speed
+# v_A = c√(σ/(1+σ)) — 분모의 +1은 정지 질량 에너지 밀도 ρc²를 반영하며,
+# 자기 지배 플라즈마에서도 가속에 저항한다; σ→∞이면 v_A→c이지만
+# 인과율에 의해 결코 초과하지 않는다.
 v_A_rel = np.sqrt(sigma / (1 + sigma))  # In units of c
 
 # Outflow speed (approximate, from simulations)
@@ -530,9 +549,15 @@ v_A_rel = np.sqrt(sigma / (1 + sigma))  # In units of c
 v_out_nonrel = v_A_nonrel * np.ones_like(sigma)
 
 # Relativistic: v_out ~ c for large sigma
+# 0.9 인자는 재결합 중 일부 자기 에너지가 집단 운동 에너지가 아닌
+# 엔탈피(열 에너지)로 변환되기 때문이다 — 이 손실로 인해 유출 속도가
+# 정확히 v_A에 도달할 수 없다.
 v_out_rel = 0.9 * v_A_rel  # Slightly less than v_A due to compression
 
 # Lorentz factor of outflow
+# Γ = (1 - v²/c²)^{-1/2}는 v→c일 때 발산하므로, c 근처에서 v의 작은
+# 증가도 Γ의 큰 도약을 만든다 — 상대론적 재결합이 펄서 바람에서 입자를
+# 에너지화하는 데 매우 효과적인 핵심 이유다.
 gamma_out_rel = 1 / np.sqrt(1 - v_out_rel**2)
 
 # Plot
@@ -701,6 +726,11 @@ def magnetic_field_null_3d(x, y, z):
     Create a spine-fan null:
     Eigenvalues: (+a, +a, -2a) to satisfy div B = 0
     """
+    # 고유값 비율 (+a, +a, -2a)은 ∇·B = a+a-2a = 0을 만족하도록 선택됨
+    # — 발산 없음 조건(divergence-free constraint)은 선택이 아닌 기본 법칙이다.
+    # 두 양의 고유값은 팬 평면(fan plane)을 정의하고(자기장이 x-y 평면에서
+    # 영점으로 수렴), 하나의 음의 고유값은 스파인(spine)을 정의하여(자기장이
+    # z를 따라 발산), 고전적인 스파인-팬 위상 구조를 만든다.
     a = 1.0
     Bx = a * x
     By = a * y
@@ -724,6 +754,9 @@ fig = plt.figure(figsize=(14, 12))
 ax = fig.add_subplot(111, projection='3d')
 
 # Quiver plot (subsample for clarity)
+# skip=2로 서브샘플링하는 이유: 전체 15³ 격자는 ~3375개의 화살표를 생성하여
+# 플롯을 압도하고 위상학적 구조를 가린다; 더 성긴 샘플링으로도 전역 자기장
+# 패턴을 혼잡 없이 충분히 드러낼 수 있다.
 skip = 2
 ax.quiver(X[::skip, ::skip, ::skip], Y[::skip, ::skip, ::skip], Z[::skip, ::skip, ::skip],
           Bx[::skip, ::skip, ::skip], By[::skip, ::skip, ::skip], Bz[::skip, ::skip, ::skip],
@@ -733,12 +766,17 @@ ax.quiver(X[::skip, ::skip, ::skip], Y[::skip, ::skip, ::skip], Z[::skip, ::skip
 ax.scatter([0], [0], [0], color='red', s=200, marker='o', label='Null point')
 
 # Spine (along z-axis, Bz direction)
+# 스파인은 영점을 통과하는 유일한 자기장 선이다; 다른 모든 자기장 선은
+# 팬 평면으로 점근하며, 스파인은 3D 영점에서의 재결합이 위상학적으로
+# 조직되는 축이 된다.
 z_spine = np.linspace(-2, 2, 50)
 x_spine = np.zeros_like(z_spine)
 y_spine = np.zeros_like(z_spine)
 ax.plot(x_spine, y_spine, z_spine, 'r-', linewidth=3, label='Spine (field line through null)')
 
 # Fan plane (z=0 plane)
+# 팬은 2D 분리 표면이다: 팬을 가로지르는 자기장 선은 위상학적 연결성이
+# 바뀌어, 팬이 3D 구성에서 전류 집중 및 재결합의 선호 지점이 된다.
 theta_fan = np.linspace(0, 2*np.pi, 100)
 r_fan = 1.5
 x_fan = r_fan * np.cos(theta_fan)

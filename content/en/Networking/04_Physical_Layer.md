@@ -1,12 +1,26 @@
 # Physical Layer
 
-## Overview
-
-The Physical Layer is the lowest layer in the OSI model, responsible for converting bits (0s and 1s) into actual physical signals (electrical, optical, wireless) for transmission. In this lesson, we'll learn about the role of the physical layer, types of transmission media, signal characteristics, bandwidth and transmission speed, and actual cable and connector types.
+**Previous**: [TCP/IP Model](./03_TCP_IP_Model.md) | **Next**: [Data Link Layer](./05_Data_Link_Layer.md)
 
 **Difficulty**: ⭐ (Beginner)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of the Physical Layer in converting bits to physical signals
+2. Compare guided (wired) and unguided (wireless) transmission media
+3. Distinguish between UTP, STP, and fiber optic cables and select the right one for a given scenario
+4. Explain the difference between analog and digital signals and describe common modulation techniques
+5. Calculate channel capacity using the Nyquist and Shannon formulas
+6. Identify Ethernet cable categories (Cat5e through Cat8) and their speed/distance specifications
+7. Compare Wi-Fi standards (802.11n/ac/ax) and frequency bands (2.4 GHz vs 5 GHz)
+
+---
+
+The Physical Layer is where networking meets the real world. No matter how elegant the protocols above it, every bit of data ultimately becomes an electrical pulse on a copper wire, a flash of light in a fiber strand, or a radio wave through the air. Choosing the right cable, understanding signal degradation, and knowing the limits of your transmission medium directly determines network speed, reliability, and reach.
 
 ## Table of Contents
 
@@ -441,6 +455,8 @@ The Physical Layer is the lowest layer in the OSI model, responsible for convert
 ```
 
 ### Signal Conversion
+
+> **Why do different encoding schemes exist?** The core problem is: how do you represent 0s and 1s on a wire? **NRZ** is simplest (high=1, low=0) but the receiver loses clock sync during long runs of the same bit. **Manchester** solves this by guaranteeing a transition every bit period — the price is double the bandwidth. **4B/5B** strikes a balance: encode 4 data bits as 5 wire bits to limit consecutive identical symbols, then use NRZ for transmission. Each scheme trades bandwidth efficiency for clock recovery reliability. **Analog modulation** (ASK/FSK/PSK/QAM) solves a different problem: transmitting digital data over analog media (radio, phone lines) by encoding bits into carrier wave properties.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1266,9 +1282,7 @@ C = B × log2(1 + S/N)
 
 ---
 
-## Next Steps
-
-- [05_Data_Link_Layer.md](./05_Data_Link_Layer.md) - Data Link Layer and MAC Addresses
+**Previous**: [TCP/IP Model](./03_TCP_IP_Model.md) | **Next**: [Data Link Layer](./05_Data_Link_Layer.md)
 
 ---
 

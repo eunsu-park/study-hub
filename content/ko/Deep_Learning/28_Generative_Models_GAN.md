@@ -49,15 +49,23 @@ G 학습: D가 가짜를 진짜로 판별하도록 유도
 ### Min-Max 게임
 
 ```python
-# GAN 목적 함수 (min-max game)
-# min_G max_D V(D, G) = E[log D(x)] + E[log(1 - D(G(z)))]
+# GAN 목적 함수 (민맥스 게임):
+#
+#   min_G max_D  V(D, G) = E_x[log D(x)] + E_z[log(1 - D(G(z)))]
+#
+# 기호 정의:
+#   D(·)  — 판별자(Discriminator): 이미지를 실제일 확률로 매핑
+#   G(·)  — 생성자(Generator): 잠재 노이즈 z를 합성 이미지로 매핑
+#   x     — 실제 데이터 분포 p_data에서 추출한 샘플
+#   z     — 사전 노이즈 분포(일반적으로 N(0, I))에서 추출한 샘플
+#   E_x   — 실제 데이터에 대한 기대값;  E_z — 노이즈에 대한 기대값
 
 # D의 목표: V(D, G) 최대화
-#   - D(x) → 1 (진짜를 진짜로)
-#   - D(G(z)) → 0 (가짜를 가짜로)
+#   - D(x) → 1 (실제를 실제로 분류)
+#   - D(G(z)) → 0 (가짜를 가짜로 분류)
 
 # G의 목표: V(D, G) 최소화
-#   - D(G(z)) → 1 (D가 가짜를 진짜로 판단하게)
+#   - D(G(z)) → 1 (D가 가짜를 실제로 분류하도록)
 ```
 
 ---
@@ -154,6 +162,9 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
             # 가짜 이미지
             z = torch.randn(batch_size, latent_dim, device=device)
             fake_imgs = generator(z)
+            # .detach()는 필수: D의 손실이 G로 역전파되면 안 됩니다.
+            # detach 없이는 optimizer_D.step()이 D를 업데이트하면서 동시에
+            # G의 생성 품질을 낮추는 방향으로도 작용 — 적대적 게임이 깨집니다.
             fake_output = discriminator(fake_imgs.detach())
             d_loss_fake = criterion(fake_output, fake_labels)
 
@@ -162,13 +173,19 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
             optimizer_D.step()
 
             # ==================
-            # Generator 학습
+            # 생성자 학습
             # ==================
             optimizer_G.zero_grad()
 
-            # D가 가짜를 진짜로 판단하도록
+            # D를 다시 통과 (이번에는 detach 없이, D의 출력에서
+            # G의 매개변수까지 그래디언트가 흐르도록).
+            # *실제* 레이블을 사용하는 이유: G는 D가 가짜를 실제로 믿길 원합니다.
+            # 이것이 "비포화(Non-saturating)" 손실입니다: log(1 - D(G(z)))를
+            # 최소화하는 대신 (D가 확신할 때 포화됨) log(D(G(z)))를
+            # 최대화합니다 — 같은 최적점이지만 G가 아직 미숙한 학습 초기에
+            # 더 강한 그래디언트를 제공합니다.
             fake_output = discriminator(fake_imgs)
-            g_loss = criterion(fake_output, real_labels)  # 진짜 레이블 사용
+            g_loss = criterion(fake_output, real_labels)
 
             g_loss.backward()
             optimizer_G.step()
@@ -678,6 +695,21 @@ for epoch in range(epochs):
 5. 생성 이미지 주기적으로 확인
 ```
 
+### 모드 붕괴(Mode Collapse)
+
+모드 붕괴는 GAN의 가장 흔한 실패 모드입니다: **G가 전체 데이터 분포를 커버하지 않고 소수의 출력 유형만 생성**하게 됩니다.
+
+**왜 발생하는가**: G가 D를 안정적으로 속이는 단일 출력(또는 소수)을 찾으면, 다양화할 인센티브가 없습니다. D가 결국 이를 알아채고 결정 경계를 이동하지만, G는 단순히 다른 좁은 모드로 점프 — 수렴이 아닌 진동이 발생합니다.
+
+**모드 붕괴의 징후**:
+- 다른 노이즈 입력에서 생성된 이미지들이 거의 동일하게 보임
+- FID 점수가 개선되다가 정체되거나 진동
+
+**완화 방법**:
+- **WGAN/WGAN-GP**: 바서스타인 거리(Wasserstein Distance)는 D가 확신할 때에도 의미 있는 그래디언트를 제공하여, G가 더 많은 모드를 커버하도록 유도
+- **스펙트럴 정규화(Spectral Normalization)**: D의 립시츠(Lipschitz) 상수를 제한하여, D가 너무 날카로워져 G를 궁지에 모는 것을 방지
+- **다양성 정규화**: 서로 다른 z 입력이 유사한 출력을 생성할 때 G에 페널티 부여
+
 ### 손실 함수 비교
 
 | 손실 함수 | 장점 | 단점 |
@@ -689,6 +721,47 @@ for epoch in range(epochs):
 
 ---
 
+## 연습 문제
+
+### 연습 1: 민맥스 게임(Min-Max Game) 설명하기
+
+GAN 학습이 민맥스 게임(min-max game)으로 정식화되는 이유를 자신의 말로 설명하세요:
+1. 판별자(Discriminator)가 최대화하는 목표는 무엇이며 그 이유는?
+2. 생성자(Generator)가 최소화하는 목표는 무엇이며 그 이유는?
+3. 학습 초기에 "포화되지 않는(non-saturating)" 생성자 손실(`-log D(G(z))`)이 원래 공식(`log(1 - D(G(z)))`)보다 잘 동작하는 이유는? 힌트: D가 확신을 가질 때 기울기(gradient)에 어떤 일이 일어나는지 생각해보세요.
+
+### 연습 2: DCGAN 가중치 초기화 구현
+
+DCGAN 논문은 모든 Conv와 BatchNorm 가중치를 `mean=0.0, std=0.02`의 정규 분포로 초기화해야 한다고 명시합니다. `DCGANGenerator`의 `_init_weights` 메서드를 검토하고 답하세요:
+1. GAN 안정성을 위해 커스텀 가중치 초기화가 PyTorch 기본 초기화보다 중요한 이유는?
+2. `DCGANGenerator`를 수정하여 `nn.init.constant_`를 사용해 `BatchNorm` bias도 `0`으로 초기화하세요. 이 변경 사항이 `DCGANDiscriminator._init_weights`에서 이미 수행하는 것과 일치하는지 확인하세요.
+
+### 연습 3: MNIST에서 Vanilla GAN 학습
+
+제공된 `Generator`, `Discriminator`, 학습 루프 코드를 사용하여 MNIST 데이터셋에서 GAN을 학습하세요:
+1. `latent_dim=100`, `batch_size=64`, `epochs=50`, `lr=0.0002`로 설정하세요.
+2. `show_generated_images`를 사용하여 10 에폭마다 생성된 16개 이미지의 그리드를 저장하세요.
+3. 학습 전반에 걸친 판별자 손실과 생성자 손실 곡선을 플롯하세요.
+4. 관찰하고 설명하세요: 둘 중 어느 손실이 수렴하나요? 학습 동작이 적대적 게임에 대해 무엇을 알려주나요?
+
+### 연습 4: WGAN과 Vanilla GAN 비교
+
+학습 루프의 BCE 손실을 Wasserstein 손실로 교체하세요:
+1. 판별자 스텝마다 가중치 클리핑(`clamp_(-0.01, 0.01)`)을 사용하는 WGAN 학습 루프를 구현하세요.
+2. 판별자(Discriminator)에서 `Sigmoid` 활성화 함수를 제거하세요 (WGAN은 제약 없는 "critic"을 사용합니다).
+3. MNIST에서 Vanilla GAN과 WGAN을 각각 20 에폭씩 학습하세요.
+4. 생성 이미지 품질과 학습 안정성을 비교하세요. 어느 버전이 더 안정적인 손실 곡선을 보이는지 문서화하세요.
+
+### 연습 5: 잠재 공간 보간(Latent Space Interpolation) 구현 및 평가
+
+학습된 MNIST GAN을 사용하여:
+1. 두 개의 랜덤 잠재 벡터 `z1`과 `z2`를 샘플링하세요.
+2. 10 스텝으로 `z1`과 `z2` 사이의 선형 보간과 구면 보간(`slerp`) 모두 구현하세요.
+3. 두 보간 방법의 이미지 시퀀스를 생성하고 시각화하세요.
+4. 구면 보간이 가우시안 잠재 공간에서 선형 보간보다 더 부드러운 전환을 만드는 이유를 설명하세요. 힌트: 랜덤 가우시안 벡터의 기대 노름(norm)과 선형 보간 중간에 어떤 일이 일어나는지 생각해보세요.
+
+---
+
 ## 다음 단계
 
-[30_Generative_Models_VAE.md](./30_Generative_Models_VAE.md)에서 VAE (Variational Autoencoder)를 학습합니다.
+[생성 모델 - VAE (Variational Autoencoder)](./30_Generative_Models_VAE.md)에서 VAE (Variational Autoencoder)를 학습합니다.

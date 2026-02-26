@@ -1,18 +1,28 @@
 # Other Application Protocols
 
-## Overview
+**Previous**: [HTTP and HTTPS](./13_HTTP_and_HTTPS.md) | **Next**: [Network Security Basics](./15_Network_Security_Basics.md)
 
-Besides HTTP, networks use various application layer protocols. This chapter covers DHCP, FTP, email protocols (SMTP, POP3, IMAP), SSH, Telnet, WebSocket, and more.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the DHCP DORA process and describe how IP addresses are leased and renewed
+2. Compare FTP active and passive modes and identify their firewall implications
+3. Distinguish between SMTP, POP3, and IMAP and describe their roles in email delivery
+4. Explain SSH public key authentication and demonstrate tunneling use cases
+5. Describe why Telnet is insecure and identify SSH as its replacement
+6. Compare WebSocket bidirectional communication with HTTP request-response and explain the upgrade handshake
+7. Recall the default port numbers for major application-layer protocols
+
+---
 
 **Difficulty**: ⭐⭐
 
-**Learning Objectives**:
-- Understand each protocol's role and operating principles
-- Familiarize with protocol-specific port numbers
-- Identify security considerations
-- Learn practical usage methods
+The internet runs on far more than just web pages. Every time your laptop gets an IP address, you send an email, transfer a file, or open a remote terminal, a specialized application-layer protocol is at work. This lesson surveys the most important protocols beyond HTTP -- the ones that make networks functional for everyday tasks.
 
----
+> **The Right Tool for the Job**: Each protocol in this lesson exists because it solves a specific communication problem that HTTP cannot (or should not) handle. DHCP solves *"How does a device join a network when it has no address yet?"* FTP solves *"How do you efficiently transfer large files with directory navigation?"* SMTP/POP3/IMAP solve *"How do you deliver messages asynchronously across unreliable links to recipients who may be offline?"* SSH solves *"How do you operate a remote machine securely when every keystroke matters?"* WebSocket solves *"How do you push server events to a client in real time without constant polling?"* Understanding the *problem* each protocol addresses makes it easy to remember which one to choose -- and why alternatives fall short.
 
 ## Table of Contents
 
@@ -23,8 +33,7 @@ Besides HTTP, networks use various application layer protocols. This chapter cov
 5. [Telnet](#5-telnet)
 6. [WebSocket](#6-websocket)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -216,21 +225,23 @@ FTP (File Transfer Protocol) is a protocol for transferring files between client
 
 ### FTP Main Commands
 
+> **Why does FTP use separate text commands instead of binary opcodes?** FTP was designed in the early 1970s when human-readable protocols made debugging easy -- you could literally telnet to port 21 and type commands. This text-based control channel also means FTP is trivial to script and automate. The trade-off is verbosity, but control messages are tiny compared to file data, so it barely matters.
+
 | Command | Description | Example |
 |------|------|------|
-| USER | Send username | `USER username` |
-| PASS | Send password | `PASS password` |
-| LIST | Directory listing | `LIST` |
-| CWD | Change directory | `CWD /home/user` |
-| PWD | Print working directory | `PWD` |
-| RETR | Download file | `RETR file.txt` |
-| STOR | Upload file | `STOR file.txt` |
-| DELE | Delete file | `DELE file.txt` |
-| MKD | Create directory | `MKD newdir` |
-| RMD | Remove directory | `RMD olddir` |
-| PASV | Passive mode | `PASV` |
-| PORT | Active mode | `PORT 192,168,1,100,4,1` |
-| QUIT | Close connection | `QUIT` |
+| USER | Send username -- initiates the authentication handshake; the server needs identity before granting any access | `USER username` |
+| PASS | Send password -- completes authentication; sent in cleartext, which is why SFTP is preferred today | `PASS password` |
+| LIST | Directory listing -- lets clients browse remote files before deciding what to download | `LIST` |
+| CWD | Change directory -- navigates the remote filesystem; FTP mimics a shell so users can explore | `CWD /home/user` |
+| PWD | Print working directory -- confirms where you are after CWD, preventing accidental uploads to the wrong path | `PWD` |
+| RETR | Download file -- "retrieve" from server to client over the data connection | `RETR file.txt` |
+| STOR | Upload file -- "store" from client to server; the complement of RETR | `STOR file.txt` |
+| DELE | Delete file -- remote file management without needing a shell | `DELE file.txt` |
+| MKD | Create directory -- organize remote files before uploading | `MKD newdir` |
+| RMD | Remove directory -- clean up remote structure | `RMD olddir` |
+| PASV | Passive mode -- tells the server to listen instead of connect back, solving the NAT/firewall problem where clients cannot accept inbound connections | `PASV` |
+| PORT | Active mode -- tells the server which client port to connect to for data; works only when the client has a public IP with no firewall | `PORT 192,168,1,100,4,1` |
+| QUIT | Close connection -- cleanly terminates the session so the server can free resources | `QUIT` |
 
 ### FTP Response Codes
 
@@ -360,16 +371,18 @@ Recommendation: Use SFTP (SSH-based, single port)
 
 ### SMTP Main Commands
 
+> **Why does SMTP use a multi-step command sequence instead of sending the entire email at once?** Each command triggers a server response code, creating checkpoints that catch errors early. If the recipient address is invalid, the server rejects at RCPT TO -- before the client wastes bandwidth uploading a large attachment. This "envelope first, content second" design also separates routing information from message body, letting relay servers forward mail based on the envelope alone.
+
 | Command | Description |
 |------|------|
-| HELO/EHLO | Client identification (EHLO is extended SMTP) |
-| MAIL FROM | Specify sender |
-| RCPT TO | Specify recipient |
-| DATA | Start mail content |
-| QUIT | Close connection |
-| AUTH | Authentication |
-| STARTTLS | Start TLS encryption |
-| RSET | Reset transaction |
+| HELO/EHLO | Client identification (EHLO is extended SMTP). Why introduce yourself? The server uses this to decide which features (AUTH, STARTTLS, SIZE limits) to advertise. EHLO replaced HELO to enable feature negotiation. |
+| MAIL FROM | Specify sender -- defines the "envelope from" address used for bounce handling (distinct from the "From:" header visible to readers) |
+| RCPT TO | Specify recipient -- can be repeated for multiple recipients; the server validates each one before accepting the message body |
+| DATA | Start mail content -- signals the transition from envelope commands to the actual message body, ended by a lone "." on a line |
+| QUIT | Close connection -- lets the server finalize queuing and free the TCP socket |
+| AUTH | Authentication -- proves the sender's identity to prevent open relaying; without this, anyone could use the server to send spam |
+| STARTTLS | Start TLS encryption -- upgrades the plaintext connection to encrypted mid-session, protecting credentials and message content from eavesdropping |
+| RSET | Reset transaction -- abandons the current message without disconnecting, useful when a client detects an error mid-composition |
 
 ### POP3 (Post Office Protocol v3)
 
@@ -555,37 +568,62 @@ SSH (Secure Shell) is a protocol that provides encrypted remote access over netw
 # Basic connection
 ssh user@hostname
 ssh -p 2222 user@hostname    # Specify port
+# Why change the port? Moving SSH off port 22 reduces automated brute-force
+# login attempts from bots that scan default ports across the internet.
 
 # Generate keys
 ssh-keygen -t ed25519 -C "email@example.com"
+# Why ed25519? It uses elliptic curve cryptography that provides equivalent
+# security to RSA-3072 with much shorter keys (256 bits), making handshakes
+# faster and key management simpler.
 ssh-keygen -t rsa -b 4096
+# Why 4096 bits? RSA-2048 is considered the minimum for security through 2030;
+# 4096 provides extra margin for long-lived keys at the cost of slightly
+# slower handshakes.
 
 # Copy public key
 ssh-copy-id user@hostname
 ssh-copy-id -i ~/.ssh/id_ed25519.pub user@hostname
+# Why use ssh-copy-id? It safely appends your public key to the remote
+# authorized_keys file with correct permissions (600), avoiding the common
+# mistake of setting overly permissive file modes that SSH refuses to honor.
 
 # File transfer (SCP)
 scp file.txt user@host:/path/
 scp user@host:/path/file.txt ./
 scp -r directory/ user@host:/path/
+# Why SCP over FTP? SCP reuses the existing SSH encrypted channel, so there
+# is no need to open additional ports or configure separate credentials.
 
 # SFTP
 sftp user@hostname
+# Why SFTP over SCP? SFTP supports resumable transfers, directory listings,
+# and remote file operations (rename, delete) -- capabilities SCP lacks.
 ```
 
 ### SSH Tunneling
+
+> **Why tunnel through SSH instead of opening ports directly?** SSH tunneling solves two problems at once: it encrypts traffic that would otherwise travel in plaintext, and it bypasses firewall restrictions by piggybacking on port 22 -- which is almost always permitted. This is why database access in production environments typically goes through SSH jump servers rather than exposing database ports to the network.
 
 ```bash
 # Local port forwarding
 # Local 8080 → via remote server → target server 80
 ssh -L 8080:target.example.com:80 user@jump.example.com
+# Why local forwarding? You need to access a service (e.g., internal DB) that
+# is unreachable from your machine but reachable from the jump server. The
+# tunnel makes it appear as if the service is running on localhost.
 
 # Remote port forwarding
 # Remote server 8080 → local machine 80
 ssh -R 8080:localhost:80 user@remote.example.com
+# Why remote forwarding? You want to expose a local dev server to the
+# internet without configuring NAT or port forwarding on your router.
 
 # Dynamic port forwarding (SOCKS proxy)
 ssh -D 1080 user@proxy.example.com
+# Why dynamic forwarding? It creates a general-purpose SOCKS proxy, routing
+# all traffic through the SSH server -- useful for encrypting browsing on
+# untrusted networks or accessing geo-restricted content.
 ```
 
 ```
@@ -893,13 +931,7 @@ Host: example.com
 
 ---
 
-## 8. Next Steps
-
-In [15_Network_Security_Basics.md](./15_Network_Security_Basics.md), let's learn about network security basics including firewalls, NAT, and VPNs!
-
----
-
-## 9. References
+## 8. References
 
 ### RFC Documents
 
@@ -924,3 +956,7 @@ In [15_Network_Security_Basics.md](./15_Network_Security_Basics.md), let's learn
 | HTTP | 80 | 443 (HTTPS) |
 | POP3 | 110 | 995 |
 | IMAP | 143 | 993 |
+
+---
+
+**Previous**: [HTTP and HTTPS](./13_HTTP_and_HTTPS.md) | **Next**: [Network Security Basics](./15_Network_Security_Basics.md)

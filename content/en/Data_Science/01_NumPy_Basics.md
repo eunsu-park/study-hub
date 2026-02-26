@@ -2,9 +2,24 @@
 
 [Next: NumPy Advanced](./02_NumPy_Advanced.md)
 
-## Overview
+---
 
-NumPy (Numerical Python) is the core library for numerical computing in Python. It provides multidimensional array objects and various functions for array operations.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create NumPy arrays from lists, special constructors, and sequential generators
+2. Describe array attributes including shape, dtype, ndim, and memory layout
+3. Apply basic indexing, slicing, boolean indexing, and fancy indexing to select array elements
+4. Implement array reshaping, flattening, and transposition operations
+5. Apply element-wise arithmetic, universal functions (ufuncs), and aggregation functions
+6. Explain broadcasting rules and apply them to operations between arrays of different shapes
+7. Combine and split arrays using stacking, concatenation, and splitting functions
+8. Distinguish between views and copies and identify when each is created
+
+---
+
+NumPy (Numerical Python) is the foundation upon which nearly every scientific and data-oriented Python library is built. Whether you are preprocessing data for machine learning, running statistical analyses, or performing large-scale simulations, efficient numerical computation starts here. Mastering NumPy arrays and their operations will dramatically accelerate your data workflows compared to plain Python lists.
 
 ---
 
@@ -35,6 +50,9 @@ print(arr3.shape)  # (2, 2, 2)
 
 ```python
 # Array filled with zeros
+# Use zeros (not np.empty) when you need a known initial state — np.empty allocates
+# memory without initializing it, so values are whatever was previously in that memory,
+# making bugs very hard to reproduce and diagnose.
 zeros = np.zeros((3, 4))
 print(zeros)
 
@@ -51,6 +69,9 @@ eye = np.eye(3)
 print(eye)
 
 # Empty array (uninitialized values)
+# Only use np.empty when you will immediately overwrite every element and raw
+# performance is critical — it skips initialization and is therefore faster, but unsafe
+# if any element is ever read before being explicitly written.
 empty = np.empty((2, 3))
 ```
 
@@ -58,10 +79,15 @@ empty = np.empty((2, 3))
 
 ```python
 # arange: range specification
+# Use arange when the step size is what matters (e.g., every 2 units).
+# Caution: with floating-point steps, rounding can cause the endpoint count to vary.
 arr = np.arange(0, 10, 2)  # From 0 to less than 10, step 2
 print(arr)  # [0 2 4 6 8]
 
 # linspace: evenly spaced division
+# Use linspace when the number of points is what matters (e.g., you need exactly 100
+# samples between two bounds). linspace always includes the endpoint and guarantees
+# the exact count — it computes step size from the count, not the other way around.
 arr = np.linspace(0, 1, 5)  # 0 to 1 divided into 5 equal parts
 print(arr)  # [0.   0.25 0.5  0.75 1.  ]
 
@@ -369,6 +395,8 @@ print(np.argmax(arr))  # 5 (index of maximum)
 ## 6. Broadcasting
 
 Broadcasting is a core NumPy feature that enables operations between arrays of different sizes.
+
+The key mental model: NumPy **virtually copies** the smaller array along any dimension of size 1 to match the larger array's shape — without actually allocating the extra memory. This means you get the concise syntax of writing `arr + row` instead of manually tiling `row` into a 2-D array, while paying no extra memory cost.
 
 ### 6.1 Broadcasting Rules
 

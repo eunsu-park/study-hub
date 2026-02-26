@@ -9,6 +9,19 @@
 > **Prerequisites**: Functional dependencies, attribute closure, minimal cover (Lesson 05)
 > **Objective**: Understand normalization from 1NF through BCNF, master decomposition algorithms, verify lossless-join and dependency-preservation properties, and apply normalization to real-world schemas
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the three types of update anomalies (insertion, deletion, update) in unnormalized schemas and explain how normalization resolves them.
+2. Determine whether a relation satisfies 1NF, 2NF, 3NF, or BCNF by checking for atomic values, partial dependencies, and transitive dependencies.
+3. Apply the BCNF decomposition algorithm to produce a lossless-join decomposition of a schema.
+4. Apply the 3NF synthesis algorithm to produce a lossless-join, dependency-preserving decomposition.
+5. Verify lossless-join and dependency-preservation properties for a given decomposition using formal tests.
+6. Evaluate the trade-offs between BCNF and 3NF decomposition strategies and choose an appropriate normalization target for a given schema.
+
+---
+
 ## 1. Introduction
 
 Normalization is the process of organizing a relational database schema to reduce redundancy and eliminate certain types of data anomalies. Introduced by Edgar F. Codd in 1970, it provides a systematic, theory-driven approach to schema design.

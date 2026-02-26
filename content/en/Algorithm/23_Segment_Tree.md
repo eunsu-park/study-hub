@@ -1,5 +1,17 @@
 # Segment Tree
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the structure of a segment tree, including how nodes represent intervals and why the height is O(log n)
+2. Build a segment tree in O(n) time and implement point updates and range sum/min/max queries in O(log n)
+3. Implement lazy propagation to support range updates efficiently in O(log n) time
+4. Apply segment trees to solve problems that require repeated range queries with interleaved updates
+5. Analyze the trade-offs between segment trees and simpler structures like prefix sums or Fenwick trees
+
+---
+
 ## Overview
 
 A segment tree is a data structure that processes range queries and point updates in O(log n) time. It is used for various queries such as range sum, minimum, maximum, and more.
@@ -19,6 +31,8 @@ A segment tree is a data structure that processes range queries and point update
 ---
 
 ## 1. Segment Tree Concept
+
+A segment tree is like a tournament bracket — each internal node summarizes the "competition result" (sum, min, or max) of the elements in its subtree. Just as a bracket tells you the winner of any sub-tournament in O(log n) steps, a segment tree answers any range query in O(log n) by combining the precomputed results of at most O(log n) nodes.
 
 ### 1.1 Basic Idea
 
@@ -79,17 +93,23 @@ Characteristics:
 class SegmentTree:
     def __init__(self, arr):
         self.n = len(arr)
-        self.tree = [0] * (4 * self.n)  # Allocate 4n for safety
+        # Allocate 4n nodes: a complete binary tree over n leaves has at most 4n nodes
+        # when n is not a power of 2 — using 4n avoids out-of-bounds access without
+        # computing the exact size needed
+        self.tree = [0] * (4 * self.n)
         self._build(arr, 1, 0, self.n - 1)
 
     def _build(self, arr, node, start, end):
-        """Build tree - O(n)"""
+        """Build tree - O(n): each element is visited exactly once as a leaf"""
         if start == end:
-            self.tree[node] = arr[start]
+            self.tree[node] = arr[start]  # Leaf node stores the element directly
         else:
             mid = (start + end) // 2
+            # Build left and right subtrees first, then combine — post-order construction
             self._build(arr, 2 * node, start, mid)
             self._build(arr, 2 * node + 1, mid + 1, end)
+            # Each internal node stores the aggregate of its children, so any range
+            # query can be answered by combining O(log n) pre-computed node values
             self.tree[node] = self.tree[2 * node] + self.tree[2 * node + 1]
 
     def update(self, idx, val):
@@ -98,13 +118,15 @@ class SegmentTree:
 
     def _update(self, node, start, end, idx, val):
         if start == end:
-            self.tree[node] = val
+            self.tree[node] = val  # Update the leaf — this is the single source of truth
         else:
             mid = (start + end) // 2
             if idx <= mid:
                 self._update(2 * node, start, mid, idx, val)
             else:
                 self._update(2 * node + 1, mid + 1, end, idx, val)
+            # Re-aggregate on the way back up — only O(log n) ancestors need updating,
+            # not the entire array like a naive approach would require
             self.tree[node] = self.tree[2 * node] + self.tree[2 * node + 1]
 
     def query(self, left, right):
@@ -112,15 +134,16 @@ class SegmentTree:
         return self._query(1, 0, self.n - 1, left, right)
 
     def _query(self, node, start, end, left, right):
-        # Out of range
+        # Node's interval is completely outside the query range — contribute nothing
         if right < start or end < left:
             return 0
 
-        # Completely included
+        # Node's interval is completely inside the query range — use the precomputed value
+        # directly without descending further; this is what gives O(log n) query time
         if left <= start and end <= right:
             return self.tree[node]
 
-        # Partially included
+        # Partial overlap: split and combine both halves
         mid = (start + end) // 2
         left_sum = self._query(2 * node, start, mid, left, right)
         right_sum = self._query(2 * node + 1, mid + 1, end, left, right)
@@ -146,33 +169,39 @@ class SegmentTreeIterative:
         self.n = len(arr)
         self.tree = [0] * (2 * self.n)
 
-        # Initialize leaf nodes
+        # Leaves occupy indices [n, 2n-1]; this avoids storing a root at index 0
+        # and makes parent/child arithmetic clean: parent(i) = i//2, children = 2i, 2i+1
         for i in range(self.n):
             self.tree[self.n + i] = arr[i]
 
-        # Build internal nodes
+        # Build internal nodes bottom-up: each node is the sum of its two children.
+        # Processing right-to-left ensures children are always filled before their parent.
         for i in range(self.n - 1, 0, -1):
             self.tree[i] = self.tree[2 * i] + self.tree[2 * i + 1]
 
     def update(self, idx, val):
-        """Point update"""
-        idx += self.n
+        """Point update — walk from leaf to root, re-aggregating each ancestor"""
+        idx += self.n  # Translate array index to tree index
         self.tree[idx] = val
 
         while idx > 1:
-            idx //= 2
+            idx //= 2  # Move to parent
+            # Parent always equals the sum of its two children — recompute directly
             self.tree[idx] = self.tree[2 * idx] + self.tree[2 * idx + 1]
 
     def query(self, left, right):
-        """Range sum [left, right]"""
+        """Range sum [left, right] — process boundaries inward until they meet"""
         left += self.n
         right += self.n
         result = 0
 
         while left <= right:
+            # If left is a right child, it is not fully covered by its parent —
+            # include it directly and advance past it
             if left % 2 == 1:
                 result += self.tree[left]
                 left += 1
+            # Symmetrically, if right is a left child, include it and retreat
             if right % 2 == 0:
                 result += self.tree[right]
                 right -= 1
@@ -435,6 +464,9 @@ class LazySegmentTree:
     def __init__(self, arr):
         self.n = len(arr)
         self.tree = [0] * (4 * self.n)
+        # lazy[node] stores the "pending addition" not yet pushed to children.
+        # This defers work: instead of updating all n leaves in a range immediately,
+        # we record the intent at a high-level node and push down only when needed.
         self.lazy = [0] * (4 * self.n)
         self._build(arr, 1, 0, self.n - 1)
 
@@ -448,36 +480,41 @@ class LazySegmentTree:
             self.tree[node] = self.tree[2 * node] + self.tree[2 * node + 1]
 
     def _propagate(self, node, start, end):
-        """Propagate lazy value to children"""
+        """Push pending lazy update to this node and schedule it for children"""
         if self.lazy[node] != 0:
-            # Apply lazy to current node
+            # Applying lazy[node] to a range of (end - start + 1) elements means
+            # the range sum increases by lazy[node] * count — no need to visit each leaf
             self.tree[node] += self.lazy[node] * (end - start + 1)
 
-            # Propagate lazy to children if they exist
+            # Pass the deferred update down to children — they will apply it
+            # only when they are actually visited, preserving O(log n) per operation
             if start != end:
                 self.lazy[2 * node] += self.lazy[node]
                 self.lazy[2 * node + 1] += self.lazy[node]
 
-            self.lazy[node] = 0
+            self.lazy[node] = 0  # This node's pending update is now applied
 
     def update_range(self, left, right, val):
         """Add val to range [left, right]"""
         self._update_range(1, 0, self.n - 1, left, right, val)
 
     def _update_range(self, node, start, end, left, right, val):
+        # Always propagate before reading or modifying this node, so tree[node]
+        # reflects the true value and children receive accurate lazy deltas
         self._propagate(node, start, end)
 
-        # Out of range
         if right < start or end < left:
-            return
+            return  # Completely outside the update range — nothing to do
 
-        # Completely included
         if left <= start and end <= right:
+            # Completely inside — store the update in lazy instead of descending further.
+            # _propagate immediately applies it to tree[node] so the node is up-to-date,
+            # while children remain untouched until they are queried or updated.
             self.lazy[node] += val
             self._propagate(node, start, end)
             return
 
-        # Partially included
+        # Partial overlap: recurse into both children and re-aggregate afterward
         mid = (start + end) // 2
         self._update_range(2 * node, start, mid, left, right, val)
         self._update_range(2 * node + 1, mid + 1, end, left, right, val)
@@ -488,13 +525,14 @@ class LazySegmentTree:
         return self._query(1, 0, self.n - 1, left, right)
 
     def _query(self, node, start, end, left, right):
+        # Flush any deferred lazy value before reading this node's sum
         self._propagate(node, start, end)
 
         if right < start or end < left:
             return 0
 
         if left <= start and end <= right:
-            return self.tree[node]
+            return self.tree[node]  # Already up-to-date after propagation above
 
         mid = (start + end) // 2
         return (self._query(2 * node, start, mid, left, right) +

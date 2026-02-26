@@ -32,8 +32,14 @@ import torch
 import torch.nn as nn
 
 class QNetwork(nn.Module):
+    """왜 신경망으로 Q를 근사하는가: 테이블 Q-learning은 모든 (상태, 행동) 쌍의 값을 저장해야
+    하므로 상태 공간이 크거나 연속적이면 불가능. 신경망은 유사한 상태 간 일반화(generalization)가
+    가능하여 Atari(84x84x4 픽셀 입력) 같은 고차원 환경에서도 학습 가능."""
+
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
+        # 왜 모든 행동값을 한번에 출력하는가: 단일 순전파(forward pass)로 모든 행동의
+        # Q(s,a)를 얻으면 argmax 선택이 O(1) — 행동별로 순전파하면 O(|A|)
         self.network = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU(),
@@ -43,7 +49,7 @@ class QNetwork(nn.Module):
         )
 
     def forward(self, state):
-        return self.network(state)  # 모든 행동의 Q값 출력
+        return self.network(state)  # 모든 행동의 Q값을 동시에 출력
 ```
 
 ---
@@ -64,7 +70,13 @@ from collections import deque
 import random
 
 class ReplayBuffer:
+    # 왜 경험 리플레이(experience replay)인가: 연속 전이(transition)는 매우 상관되어 있음
+    # (s_t와 s_{t+1}이 거의 동일). 상관된 배치로 학습하면 최근 경험에 과적합(overfit)하고
+    # 이전 지식을 잊음. 큰 버퍼에서 무작위 샘플링하면 이 상관을 깨고 i.i.d.에 가까운
+    # 학습 분포를 제공.
     def __init__(self, capacity=100000):
+        # 왜 maxlen이 있는 deque인가: 버퍼가 가득 차면 자동으로 가장 오래된 경험을
+        # 제거하여 메모리 한도 내에서 최신 데이터를 유지
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done):
@@ -93,24 +105,40 @@ class ReplayBuffer:
 **문제:** Q(s,a;θ) 업데이트 시 타겟 y = r + γ max Q(s',a';θ)도 변함
 **해결:** 타겟 네트워크 θ⁻를 고정하고 주기적으로 업데이트
 
+**DQN 손실 함수(Loss Function):**
+
+$$L(\theta) = \mathbb{E}\left[(r + \gamma \max_{a'} Q(s', a'; \theta^-) - Q(s, a; \theta))^2\right]$$
+
+여기서:
+- $\theta$ = 온라인 네트워크(online network) 매개변수 (매 스텝 업데이트)
+- $\theta^-$ = 타겟 네트워크(target network) 매개변수 ($\theta$의 동결된 복사본, N 스텝마다 업데이트)
+- $r + \gamma \max_{a'} Q(s', a'; \theta^-)$ = TD 타겟 (안정성을 위해 동결된 $\theta^-$로 계산)
+
+**왜 타겟 네트워크(target network)가 필요한가?** 타겟 네트워크 없이는 예측값 $Q(s,a;\theta)$와 타겟값 $r + \gamma \max_{a'} Q(s',a';\theta)$가 각 경사 하강(gradient step)마다 동시에 변합니다. 이것이 "이동 타겟(moving target)" 문제를 일으켜 — 네트워크가 계속 변하는 타겟을 쫓으며 진동하거나 발산합니다. $\theta^-$를 동결하면 타겟이 현재 매개변수로부터 분리되어, N 스텝 동안 지도 회귀(supervised regression) 문제로 변환됩니다.
+
 ```python
 class DQNAgent:
     def __init__(self, state_dim, action_dim, lr=1e-4):
         self.q_network = QNetwork(state_dim, action_dim)
         self.target_network = QNetwork(state_dim, action_dim)
 
-        # 타겟 네트워크 초기화 (동일한 가중치)
+        # 왜 동일 초기화인가: 타겟 네트워크가 같은 지점에서 시작하여
+        # 초기 TD 타겟이 온라인 네트워크와 일관되도록 보장
         self.target_network.load_state_dict(self.q_network.state_dict())
 
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=lr)
         self.gamma = 0.99
 
     def update_target_network(self):
-        """타겟 네트워크 하드 업데이트"""
+        """하드 업데이트(Hard update): N 스텝마다 전체 가중치를 한번에 복사.
+        왜 하드 업데이트인가: 간단하며 정확히 N 스텝 동안 타겟이 안정적 —
+        온라인 네트워크에 고정된 회귀 타겟(regression target)을 제공."""
         self.target_network.load_state_dict(self.q_network.state_dict())
 
     def soft_update_target(self, tau=0.005):
-        """타겟 네트워크 소프트 업데이트"""
+        """소프트 업데이트(Soft update): 매 스텝 가중치를 점진적으로 혼합.
+        왜 소프트 업데이트(Polyak averaging)인가: 하드 업데이트의 급격한 변화를 피하여
+        일부 환경에서 더 부드러운 타겟으로 안정성을 향상시킬 수 있음."""
         for target_param, param in zip(
             self.target_network.parameters(),
             self.q_network.parameters()
@@ -162,6 +190,9 @@ class DQNAgent:
         self.buffer = ReplayBuffer(buffer_size)
 
     def choose_action(self, state, training=True):
+        # 왜 감소하는 epsilon-greedy인가: 초기에는 Q 추정이 무작위이므로 많은 탐험으로
+        # 다양한 전이를 발견. Q가 개선되면 점차 활용으로 전환.
+        # 테스트 시(training=False)에는 순수 탐욕적(pure greedy) 사용.
         if training and np.random.random() < self.epsilon:
             return np.random.randint(self.action_dim)
 
@@ -174,35 +205,48 @@ class DQNAgent:
         self.buffer.push(state, action, reward, next_state, done)
 
     def learn(self):
+        # 왜 최소 버퍼 확인인가: 버퍼가 차기 전의 매우 작은 배치는 상관된 최근 전이에서
+        # 높은 분산의 경사(gradient)를 생성
         if len(self.buffer) < self.batch_size:
             return None
 
-        # 배치 샘플링
+        # 왜 무작위 배치 샘플링인가: 연속 전이 간의 시간적 상관을 깨서
+        # i.i.d. 학습 세트에 근사
         states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
 
-        # 현재 Q값
+        # 왜 gather인가: 네트워크는 모든 행동의 Q를 출력하므로 gather로 실제
+        # 수행된 행동의 Q값만 추출
         current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze()
 
-        # 타겟 Q값 (타겟 네트워크 사용)
+        # 왜 여기서 타겟 네트워크를 사용하는가: 동결된 theta^-로 TD 타겟을 계산하여
+        # "이동 타겟(moving target)" 문제를 방지 — target_update_freq 스텝 동안
+        # 타겟이 고정되어 표준 지도 회귀(supervised regression) 문제로 변환
         with torch.no_grad():
             next_q = self.target_network(next_states).max(1)[0]
+            # 왜 (1 - dones)인가: 종료 상태(terminal state)에는 미래 보상이 없으므로
+            # 부트스트랩 값을 0으로 만들어 존재하지 않는 미래 리턴을 환상하는 것을 방지
             target_q = rewards + self.gamma * next_q * (1 - dones)
 
-        # 손실 계산 및 업데이트
+        # MSE 손실: L(theta) = E[(target_q - current_q)^2]
         loss = nn.MSELoss()(current_q, target_q)
 
         self.optimizer.zero_grad()
         loss.backward()
-        # 그래디언트 클리핑 (안정성)
+        # 왜 경사 클리핑(gradient clipping)인가: 심층 네트워크는 특히 Q 추정이 부정확한
+        # 학습 초기에 경사 폭발(exploding gradient)이 발생 가능. 클리핑으로 업데이트를
+        # 제한하여 치명적인 매개변수 점프를 방지.
         torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), 10)
         self.optimizer.step()
 
-        # 타겟 네트워크 업데이트
+        # 왜 주기적 하드 업데이트인가: N 스텝마다 온라인 가중치를 타겟 네트워크에 복사.
+        # 더 잦은 업데이트는 온라인 네트워크를 빠르게 추적하지만 안정성 감소;
+        # 덜 잦은 업데이트는 더 안정적이지만 새 지식 반영이 느림.
         self.learn_step += 1
         if self.learn_step % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
 
-        # Epsilon 감소
+        # 왜 epsilon_min 하한값인가: 항상 약간의 탐험을 유지하여
+        # 차선 정책(suboptimal policy)에 영구 고정되는 것을 방지
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         return loss.item()
@@ -261,11 +305,17 @@ def train_dqn(env_name='CartPole-v1', n_episodes=500):
 # Double DQN: y = r + γ Q(s', argmax_a' Q(s', a'; θ); θ⁻)
 
 def compute_double_dqn_target(self, rewards, next_states, dones):
+    # 왜 Double DQN인가: 일반 DQN은 행동 선택과 평가 모두에 max_a' Q(s', a'; theta^-)를
+    # 사용. max 연산자는 양의 편향(positive bias)을 가짐 — Q 추정에 잡음이 있으면 max가
+    # 가장 과대추정된 값을 선택. 선택(온라인 네트워크)과 평가(타겟 네트워크)를 분리하면
+    # 편향이 크게 감소하여 더 정확한 Q값과 더 나은 정책으로 이어짐.
     with torch.no_grad():
-        # Q 네트워크로 행동 선택
+        # 왜 온라인 네트워크로 선택하는가: 온라인 네트워크가 가장 최신 추정을 가지므로
+        # 최적 행동 식별에 더 적합
         next_actions = self.q_network(next_states).argmax(1, keepdim=True)
 
-        # 타겟 네트워크로 Q값 평가
+        # 왜 타겟 네트워크로 평가하는가: 선택된 행동이 약간 틀리더라도
+        # 타겟 네트워크가 더 편향이 적은(less biased) Q 추정을 제공
         next_q = self.target_network(next_states).gather(1, next_actions).squeeze()
 
         target_q = rewards + self.gamma * next_q * (1 - dones)
@@ -283,10 +333,16 @@ Q(s, a) = V(s) + A(s, a) - mean(A(s, ·))
 
 ```python
 class DuelingQNetwork(nn.Module):
+    """왜 Dueling 아키텍처인가: 많은 상태에서 어떤 행동을 취하든 가치가 비슷함
+    (예: 장애물이 없으면 모든 행동이 거의 동등). V(s)와 A(s,a)를 분리하면
+    행동 선택이 중요하지 않은 상태에서 상태 가치를 독립적으로 학습하여
+    샘플 효율성(sample efficiency) 향상."""
+
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
 
-        # 공유 특징 추출
+        # 왜 공유 특징인가: V와 A 모두 상태를 이해해야 하므로 초기 레이어를
+        # 공유하면 중복 계산을 피하고 특징 재사용(feature reuse) 향상
         self.feature = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU()
@@ -311,7 +367,9 @@ class DuelingQNetwork(nn.Module):
         value = self.value_stream(features)
         advantage = self.advantage_stream(features)
 
-        # Q = V + A - mean(A)
+        # 왜 mean(A)를 빼는가: 분해를 식별 가능(identifiable)하게 만듦 — 중심화
+        # 없이는 V와 A가 유일하게 결정되지 않음(어떤 상수도 둘 사이를 이동 가능).
+        # 평균을 빼면 A의 평균이 0이 되어 V가 진정한 상태 가치를 나타냄.
         q_values = value + advantage - advantage.mean(dim=1, keepdim=True)
         return q_values
 ```
@@ -322,10 +380,19 @@ TD 오류가 큰 경험을 더 자주 샘플링합니다.
 
 ```python
 class PrioritizedReplayBuffer:
+    """왜 우선순위 리플레이(prioritized replay)인가: 균일 샘플링은 네트워크가 이미 잘
+    예측하는 전이를 재생하며 시간을 낭비. TD 오류에 비례하여 샘플링하면 놀라운/예측이
+    부정확한 전이에 학습을 집중하여 수렴을 가속화."""
+
     def __init__(self, capacity, alpha=0.6, beta=0.4):
         self.capacity = capacity
-        self.alpha = alpha  # 우선순위 지수
-        self.beta = beta    # 중요도 샘플링 지수
+        # 왜 alpha인가: 우선순위 사용 정도를 제어 (alpha=0 → 균일, alpha=1 → TD 오류에
+        # 완전 비례). 0.6이 일반적인 균형점.
+        self.alpha = alpha
+        # 왜 beta인가: 중요도 샘플링(importance sampling) 보정 — 우선순위 샘플링은
+        # 높은 오류 전이를 과다 샘플링하여 편향 도입. Beta가 학습 중 0.4에서 1.0으로
+        # 점진적으로 증가하여 학습 종료 시 완전히 편향을 보정.
+        self.beta = beta
         self.buffer = []
         self.priorities = np.zeros(capacity)
         self.position = 0
@@ -368,7 +435,9 @@ class AtariDQN(nn.Module):
     def __init__(self, n_actions):
         super().__init__()
 
-        # 입력: 84x84x4 (4 프레임 스택)
+        # 왜 4-프레임 스택인가: 단일 프레임에는 속도 정보가 없음 — 4개의 연속
+        # 프레임을 쌓으면 네트워크가 움직임(방향과 속도)을 추론할 수 있어
+        # Pong, Breakout 같은 게임에서 핵심적
         self.conv = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -386,7 +455,9 @@ class AtariDQN(nn.Module):
 
     def forward(self, x):
         # x shape: (batch, 4, 84, 84)
-        x = x / 255.0  # 정규화
+        # 왜 [0,1]로 정규화하는가: [0, 255] 픽셀 값은 매우 큰 활성화를 생성;
+        # 255로 나누면 입력이 경사 하강(gradient descent)에 안정적인 범위로 유지
+        x = x / 255.0
         x = self.conv(x)
         x = x.view(x.size(0), -1)
         return self.fc(x)

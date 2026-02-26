@@ -14,9 +14,13 @@ import sqlite3
 import os
 
 app = Flask(__name__)
-CORS(app)  # CORS 활성화 (웹 클라이언트 지원)
+# Why: CORS is required because IoT dashboards are usually served from a
+# different origin than the API, and browsers block cross-origin requests by default.
+CORS(app)
 
 # === 데이터베이스 설정 ===
+# Why: Supporting both SQLite and in-memory storage lets the same codebase run
+# in production (persistent disk) and in quick demos/tests (volatile memory).
 DB_PATH = "iot_data.db"
 USE_SQLITE = True  # False로 설정하면 메모리 저장소 사용
 
@@ -226,7 +230,9 @@ def post_sensor_data(sensor_id):
     }
 
     if USE_SQLITE:
-        # 센서 자동 등록 (존재하지 않는 경우)
+        # Why: Auto-registering unknown sensors on first POST removes the manual
+        # provisioning step. IoT devices can start sending data immediately after
+        # flashing, which drastically simplifies fleet onboarding.
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM sensors WHERE id = ?", (sensor_id,))
@@ -258,7 +264,9 @@ def post_sensor_data(sensor_id):
 
         memory_store['sensor_readings'].append(reading)
 
-        # 최근 1000개만 유지
+        # Why: Capping the in-memory list prevents unbounded memory growth when
+        # sensors publish at high frequency. 1000 readings is enough for a demo
+        # while keeping the server from OOM-killing itself.
         if len(memory_store['sensor_readings']) > 1000:
             memory_store['sensor_readings'].pop(0)
 
@@ -588,7 +596,9 @@ def send_device_command(device_id):
     if 'command' not in data:
         return jsonify({"error": "Command required"}), 400
 
-    # 명령 생성 (실제로는 MQTT 발행 등)
+    # Why: In production this endpoint would publish to MQTT, bridging the
+    # HTTP world (user dashboards) and the MQTT world (constrained devices).
+    # Keeping device commands behind a REST endpoint gives you access control for free.
     command = {
         "device_id": device_id,
         "command": data['command'],

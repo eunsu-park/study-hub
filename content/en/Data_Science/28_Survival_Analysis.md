@@ -2,9 +2,23 @@
 
 [Previous: Causal Inference](./27_Causal_Inference.md) | [Next: Modern Data Tools](./29_Modern_Data_Tools.md)
 
-## Overview
+---
 
-Survival analysis models time-to-event data where some observations are censored (event not yet observed). This lesson covers the Kaplan-Meier estimator, log-rank test, Cox proportional hazards model, parametric models, competing risks, and practical applications using the lifelines library.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define survival time, censoring types (right, left, interval), and the survival and hazard functions
+2. Estimate and plot nonparametric survival curves using the Kaplan-Meier estimator
+3. Compare survival distributions between groups using the log-rank test
+4. Fit a Cox proportional hazards model, interpret hazard ratios, and check the PH assumption
+5. Compare parametric survival models (Exponential, Weibull, Log-Normal) using AIC/BIC and select the best fit
+6. Explain the Accelerated Failure Time (AFT) model as an alternative to Cox PH and interpret acceleration factors
+7. Describe the competing risks framework and explain why Kaplan-Meier is biased when multiple event types exist
+
+---
+
+Many questions in data science involve not just whether something happens, but when. How long until a customer churns? When will a machine fail? How does a new drug extend patient survival? Standard regression cannot handle the defining feature of time-to-event data: censoring, where we know an event has not yet occurred but not when it will. Survival analysis provides specialized tools that correctly account for incomplete observations, giving you unbiased estimates of timing and risk.
 
 ---
 

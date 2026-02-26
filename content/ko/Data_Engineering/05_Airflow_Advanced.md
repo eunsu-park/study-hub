@@ -1,5 +1,18 @@
 # Airflow 심화
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. XCom을 사용하여 Airflow 태스크 간 데이터를 공유하고, 외부 저장소와 비교한 XCom의 한계를 이해할 수 있다
+2. Python을 사용하여 동적 DAG(Dynamic DAG)를 프로그래밍 방식으로 생성하여 가변적인 태스크 수나 데이터 소스를 처리할 수 있다
+3. 센서(Sensor)를 구현하여 외부 조건을 기다리는 이벤트 기반 워크플로우를 구축할 수 있다
+4. 커스텀 훅(Hook)과 오퍼레이터(Operator)를 작성하여 Airflow의 통합 기능을 확장할 수 있다
+5. TaskGroup을 사용하여 복잡한 DAG를 구조화하고, BranchPythonOperator로 분기(Branching)를 적용할 수 있다
+6. 에러 처리, 재시도(Retry), 알림(Alerting)에 대한 Airflow 모범 사례를 적용하여 프로덕션 수준의 파이프라인을 설계하고 구현할 수 있다
+
+---
+
 ## 개요
 
 이 문서에서는 Airflow의 고급 기능인 XCom을 통한 데이터 공유, 동적 DAG 생성, Sensor, Hook, TaskGroup 등을 다룹니다. 이러한 기능을 활용하면 더 유연하고 강력한 파이프라인을 구축할 수 있습니다.
@@ -21,10 +34,12 @@ def push_data(**kwargs):
     """XCom으로 데이터 푸시"""
     ti = kwargs['ti']
 
-    # 방법 1: xcom_push 사용
+    # 방법 1: 명시적 키로 xcom_push — 태스크가 여러 개의 별개 값
+    # (예: 상태 + 메트릭)을 게시해야 할 때 사용한다.
     ti.xcom_push(key='my_key', value={'status': 'success', 'count': 100})
 
-    # 방법 2: return 값 (key='return_value'로 자동 저장)
+    # 방법 2: return 값 — 하나의 출력이 일반적인 경우에 더 간단하다.
+    # key='return_value'로 자동 저장된다.
     return {'result': 'completed', 'rows': 500}
 
 
@@ -32,15 +47,18 @@ def pull_data(**kwargs):
     """XCom에서 데이터 가져오기"""
     ti = kwargs['ti']
 
-    # 방법 1: 특정 key로 가져오기
+    # 명시적 키로 가져오기 — 상위 태스크가 여러 값을 푸시했고
+    # 특정 값이 필요할 때 반드시 사용한다.
     custom_data = ti.xcom_pull(key='my_key', task_ids='push_task')
     print(f"Custom data: {custom_data}")
 
-    # 방법 2: return 값 가져오기
-    return_value = ti.xcom_pull(task_ids='push_task')  # key='return_value' 기본값
+    # 반환 값 가져오기 (키 생략 시 'return_value' 기본값) —
+    # 단순한 태스크 간 통신을 위한 가장 일반적인 패턴이다.
+    return_value = ti.xcom_pull(task_ids='push_task')
     print(f"Return value: {return_value}")
 
-    # 방법 3: 여러 Task에서 가져오기
+    # 여러 태스크에서 한 번에 가져오기 — 하위 태스크가 병렬 상위
+    # 태스크들의 결과를 집계하는 팬인(fan-in) 패턴에 유용하다.
     multiple_results = ti.xcom_pull(task_ids=['task1', 'task2'])
 
 
@@ -89,9 +107,12 @@ sql_task = PostgresOperator(
 ### 1.3 XCom 제한 사항 및 대안
 
 ```python
-# XCom 제한: 기본 1GB (DB에 저장되므로 작은 데이터만 권장)
+# XCom 제한: 값은 메타데이터 DB에 직렬화된다 (기본 1GB).
+# 큰 XCom 값은 DB를 부풀리고, UI를 느리게 하며, 직렬화 중 OOM 오류를
+# 일으킬 수 있다. 경험상: XCom 값은 ~50 KB 미만으로 유지한다.
 
-# 대용량 데이터 처리 방법
+# 권장 패턴: XCom으로 *경로*(포인터)를 전달하고, 실제 데이터는
+# 외부 스토리지(S3, GCS)에 저장한다. 이렇게 하면 데이터 크기와 XCom 한계를 분리한다.
 class LargeDataHandler:
     """대용량 데이터 전달 패턴"""
 
@@ -100,9 +121,10 @@ class LargeDataHandler:
         """데이터를 외부 스토리지에 저장하고 경로만 XCom으로 전달"""
         import pandas as pd
 
-        # S3, GCS 등에 저장
+        # 외부 스토리지(S3/GCS)는 임의의 큰 파일을 처리하고;
+        # XCom은 ~50바이트의 경로 문자열만 저장한다.
         data.to_parquet(path)
-        return path  # 경로만 반환
+        return path
 
     @staticmethod
     def load_from_storage(path: str):
@@ -115,23 +137,25 @@ class LargeDataHandler:
 def produce_large_data(**kwargs):
     import pandas as pd
 
-    # 대용량 데이터 생성
     df = pd.DataFrame({'col': range(1000000)})
 
-    # S3에 저장하고 경로만 반환
+    # 날짜 파티션 경로는 같은 파일을 덮어써 중복을 만들지 않으므로
+    # 멱등성 재실행을 보장한다.
     path = f"s3://bucket/data/{kwargs['ds']}/output.parquet"
     df.to_parquet(path)
 
-    return path  # XCom에는 경로만 저장
+    # DataFrame이 아닌 경로 문자열(~50바이트)만 XCom에 저장된다.
+    return path
 
 
 def consume_large_data(**kwargs):
     import pandas as pd
 
     ti = kwargs['ti']
+    # 경로를 가져온 후 스토리지에서 실제 데이터를 읽는다 —
+    # 메타데이터 DB를 가볍게 유지하고 파이프라인의 확장성을 보장한다.
     path = ti.xcom_pull(task_ids='produce_task')
 
-    # 경로에서 데이터 로드
     df = pd.read_parquet(path)
     print(f"Loaded {len(df)} rows from {path}")
 ```
@@ -203,7 +227,9 @@ def create_dag(config: dict) -> DAG:
     return dag
 
 
-# DAG들을 globals()에 등록 (Airflow가 인식하도록)
+# DAG들을 globals()에 등록: Airflow의 DagBag 파서는 모듈의
+# 전역 네임스페이스에서 DAG 객체를 검사 — DAG가 globals()에 없으면
+# 스케줄러는 그것을 인식하지 못한다. 이 루프는 설정 항목당 하나의 DAG를 생성한다.
 for config in DAG_CONFIGS:
     dag_id = config['dag_id']
     globals()[dag_id] = create_dag(config)
@@ -309,8 +335,12 @@ with DAG(
     start = EmptyOperator(task_id='start')
     end = EmptyOperator(task_id='end')
 
-    # 동적으로 Task 생성
+    # 동적으로 태스크 생성: TABLES 목록에 새 테이블을 추가하면
+    # ETL 태스크가 자동으로 생성 — 오퍼레이터 보일러플레이트를 복사할 필요 없다.
     for table in TABLES:
+        # 기본 인자 `table_name=table`이 루프 변수를 값으로 캡처한다;
+        # 없으면 Python의 늦은 바인딩 클로저로 인해 모든 태스크가
+        # 마지막 테이블을 참조하게 된다.
         def process_table(table_name=table, **kwargs):
             print(f"Processing table: {table_name}")
 
@@ -320,6 +350,7 @@ with DAG(
             op_kwargs={'table_name': table},
         )
 
+        # 팬아웃 / 팬인: 모든 테이블 태스크가 시작/끝 사이에서 병렬로 실행된다.
         start >> task >> end
 ```
 
@@ -340,26 +371,33 @@ from datetime import datetime, timedelta
 
 with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='@daily') as dag:
 
-    # 1. FileSensor - 파일 존재 확인
+    # 1. FileSensor — 직접 제어하지 않는 스케줄로 파일을 드롭하는 외부 시스템
+    # (예: 벤더 SFTP 업로드)을 기다릴 때 사용한다. 파일이 나타날 때까지
+    # DAG를 블록하여 "파일을 찾을 수 없음" 실패를 방지한다.
     wait_for_file = FileSensor(
         task_id='wait_for_file',
         filepath='/data/input/{{ ds }}/data.csv',
-        poke_interval=60,           # 확인 주기 (초)
-        timeout=3600,               # 타임아웃 (초)
-        mode='poke',                # poke 또는 reschedule
+        poke_interval=60,           # 60초마다 확인 — 반응성과 I/O 부하 균형
+        timeout=3600,               # 1시간 후 포기
+        mode='poke',                # 워커 슬롯 점유; 짧은 예상 대기에 사용
     )
 
-    # 2. ExternalTaskSensor - 다른 DAG의 Task 완료 대기
+    # 2. ExternalTaskSensor — DAG를 합치지 않고 크로스-DAG 의존성을 생성한다.
+    # execution_delta=0은 "같은 논리적 날짜 대기"를 의미하며,
+    # 연쇄된 일별 파이프라인에서 가장 일반적인 패턴이다.
     wait_for_upstream = ExternalTaskSensor(
         task_id='wait_for_upstream',
         external_dag_id='upstream_dag',
         external_task_id='final_task',
-        execution_delta=timedelta(hours=0),  # 같은 execution_date
+        execution_delta=timedelta(hours=0),
         timeout=7200,
-        mode='reschedule',          # 워커 반환 후 재스케줄
+        # reschedule 모드: 확인 사이에 워커 슬롯을 해제하며, 상위 DAG가
+        # 완료되는 데 몇 시간이 걸릴 수 있을 때 중요하다.
+        mode='reschedule',
     )
 
-    # 3. HttpSensor - HTTP 엔드포인트 확인
+    # 3. HttpSensor — 요청을 보내기 전에 API가 사용 가능해질 때까지
+    # 기다리는 데 유용하다 (예: 배포 후).
     wait_for_api = HttpSensor(
         task_id='wait_for_api',
         http_conn_id='my_api',
@@ -370,7 +408,9 @@ with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='
         timeout=600,
     )
 
-    # 4. SqlSensor - SQL 조건 확인
+    # 4. SqlSensor — 데이터베이스 조건을 폴링한다. Airflow를 사용하지 않는
+    # 상위 배치 작업(예: 제어 테이블에 "완료" 행을 기록하는 Spark 작업)을
+    # 기다리는 데 이상적이다.
     wait_for_data = SqlSensor(
         task_id='wait_for_data',
         conn_id='my_postgres',
@@ -379,7 +419,7 @@ with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='
             FROM staging_table
             WHERE date = '{{ ds }}'
         """,
-        poke_interval=300,
+        poke_interval=300,          # 5분 간격: DB 친화적인 폴링 속도
         timeout=3600,
     )
 
@@ -400,6 +440,8 @@ import boto3
 class S3KeySensorCustom(BaseSensorOperator):
     """S3 키 존재 확인 커스텀 Sensor"""
 
+    # bucket_key를 템플릿화하여 날짜를 하드코딩하지 않고
+    # {{ ds }}로 날짜 파티션 파일을 기다릴 수 있다.
     template_fields = ['bucket_key']
 
     @apply_defaults
@@ -420,14 +462,18 @@ class S3KeySensorCustom(BaseSensorOperator):
         """조건 확인 (True 반환 시 성공)"""
         self.log.info(f"Checking for s3://{self.bucket_name}/{self.bucket_key}")
 
-        # S3 클라이언트 생성
         s3 = boto3.client('s3')
 
         try:
+            # head_object는 list_objects보다 저렴하다: 파일 내용을 다운로드하지 않고
+            # 프리픽스를 스캔하지 않아 단일 키를 메타데이터와 함께 확인한다.
             s3.head_object(Bucket=self.bucket_name, Key=self.bucket_key)
             self.log.info("File found!")
             return True
         except s3.exceptions.ClientError as e:
+            # 404 = 파일이 아직 없음 → False를 반환하여 계속 대기한다.
+            # 다른 오류(403 권한, 500 서버 오류)는 예상치 못한 것으로
+            # 태스크를 즉시 실패시키기 위해 전파되어야 한다.
             if e.response['Error']['Code'] == '404':
                 self.log.info("File not found, waiting...")
                 return False
@@ -464,14 +510,17 @@ sensor_modes = {
     }
 }
 
-# 권장 설정
+# 긴 대기 센서의 권장 프로덕션 설정:
 wait_for_file = FileSensor(
     task_id='wait_for_file',
     filepath='/data/input.csv',
-    poke_interval=300,      # 5분마다 확인
-    timeout=86400,          # 24시간 타임아웃
-    mode='reschedule',      # 긴 대기에는 reschedule
-    soft_fail=True,         # 타임아웃 시 스킵 (실패 대신)
+    poke_interval=300,      # 5분: 합리적인 지연 시간에 충분히 짧고,
+                            # 재시도로 스케줄러에 부하를 주지 않을 만큼 충분히 길다
+    timeout=86400,          # 24시간: 일별 파일에 넉넉한 타임아웃
+    mode='reschedule',      # poke 사이에 워커 슬롯을 해제한다 — 워커 용량이
+                            # 제한적일 때 필수적이다
+    soft_fail=True,         # 타임아웃 시 "실패" 대신 "스킵"으로 표시하여
+                            # 하위 태스크가 trigger_rule로 처리 방법을 결정할 수 있게 한다
 )
 ```
 
@@ -585,6 +634,9 @@ import requests
 class MyCustomHook(BaseHook):
     """커스텀 API Hook"""
 
+    # 이 클래스 속성들은 Airflow의 커넥션 UI가 필드를 자동으로 채우고
+    # 커넥션 타입을 검증할 수 있게 한다 — 없으면 사용자가 정확한
+    # conn_id 형식을 직접 기억해야 한다.
     conn_name_attr = 'my_custom_conn_id'
     default_conn_name = 'my_custom_default'
     conn_type = 'http'
@@ -598,6 +650,8 @@ class MyCustomHook(BaseHook):
 
     def get_conn(self):
         """Connection 설정 로드"""
+        # 자격 증명은 DAG 코드가 아닌 Airflow의 암호화된 커넥션 저장소에 보관된다 —
+        # 시크릿을 버전 관리에서 제외하기 위함이다.
         conn = self.get_connection(self.my_custom_conn_id)
         self.base_url = f"https://{conn.host}"
         self.api_key = conn.password
@@ -605,6 +659,9 @@ class MyCustomHook(BaseHook):
 
     def make_request(self, endpoint: str, method: str = 'GET', data: dict = None) -> Any:
         """API 요청"""
+        # 지연 커넥션(lazy connection): 자격 증명은 훅 인스턴스화 시점이 아닌
+        # 요청이 실제로 만들어질 때만 로드된다 — 훅이 생성되었지만 사용되지
+        # 않는 경우(예: 스킵된 분기)의 불필요한 DB 조회를 방지한다.
         self.get_conn()
 
         headers = {
@@ -621,6 +678,8 @@ class MyCustomHook(BaseHook):
             json=data
         )
 
+        # raise_for_status()는 HTTP 4xx/5xx를 Python 예외로 변환하며,
+        # Airflow가 이를 잡아 태스크의 재시도 정책에 따라 재시도한다.
         response.raise_for_status()
         return response.json()
 
@@ -649,7 +708,9 @@ with DAG('taskgroup_example', start_date=datetime(2024, 1, 1), schedule_interval
 
     start = EmptyOperator(task_id='start')
 
-    # TaskGroup으로 관련 Task 그룹화
+    # TaskGroup은 관련 태스크를 UI에서 시각적으로 접어서 복잡한 DAG를
+    # 탐색하기 쉽게 만든다. 또한 개별 태스크가 아닌 *그룹* 단위로
+    # 의존성을 설정할 수 있게 한다 (extract_group >> transform_group).
     with TaskGroup(group_id='extract_group') as extract_group:
         extract_users = PythonOperator(
             task_id='extract_users',
@@ -715,6 +776,8 @@ with DAG('nested_taskgroup', ...) as dag:
 ```python
 from airflow.utils.task_group import TaskGroup
 
+# 새 소스를 추가하려면 이 목록에 추가하기만 하면 된다 — 아래 루프가
+# extract→load 파이프라인을 자동으로 생성한다.
 SOURCES = ['mysql', 'postgres', 'mongodb']
 
 with DAG('dynamic_taskgroup', ...) as dag:
@@ -723,9 +786,13 @@ with DAG('dynamic_taskgroup', ...) as dag:
 
     task_groups = []
     for source in SOURCES:
+        # 각 소스는 자체 TaskGroup을 갖는다: 장애를 격리하고
+        # (MongoDB 오류가 MySQL 파이프라인을 막지 않음) UI에서
+        # 소스별 진행 상황을 한눈에 볼 수 있다.
         with TaskGroup(group_id=f'process_{source}') as tg:
             extract = PythonOperator(
                 task_id='extract',
+                # 기본 인자 `s=source`는 루프 변수를 값으로 캡처한다
                 python_callable=lambda s=source: print(f"Extract from {s}")
             )
             load = PythonOperator(
@@ -738,6 +805,7 @@ with DAG('dynamic_taskgroup', ...) as dag:
 
     end = EmptyOperator(task_id='end')
 
+    # 모든 소스 그룹이 start와 end 사이에서 병렬로 실행된다
     start >> task_groups >> end
 ```
 
@@ -780,10 +848,13 @@ with DAG('branch_example', ...) as dag:
     process_small = EmptyOperator(task_id='process_small')
     skip_processing = EmptyOperator(task_id='skip_processing')
 
-    # 분기 후 합류
+    # 분기 후 합류: 선택되지 않은 분기가 "스킵"으로 표시되기 때문에
+    # trigger_rule이 여기서 필수적이다. 기본 'all_success' 규칙은
+    # 스킵을 성공이 아닌 것으로 취급한다. 'none_failed_min_one_success'는
+    # 선택된 분기가 성공하는 한 합류 태스크가 실행되도록 허용한다.
     join = EmptyOperator(
         task_id='join',
-        trigger_rule='none_failed_min_one_success'  # 하나라도 성공하면 실행
+        trigger_rule='none_failed_min_one_success'
     )
 
     count_data >> branch >> [process_large, process_small, skip_processing] >> join
@@ -797,9 +868,11 @@ from airflow.operators.python import ShortCircuitOperator
 def check_condition(**kwargs):
     """조건 확인 - False 반환 시 이후 Task 스킵"""
     ds = kwargs['ds']
-    # 주말이면 스킵
+    # ShortCircuit vs Branch: "실행할까?" 라는 단일 게이트(예/아니오)가
+    # 있을 때 ShortCircuit을 사용하고, 여러 대안 경로 중 하나를 선택해야
+    # 할 때 Branch를 사용한다.
     day_of_week = datetime.strptime(ds, '%Y-%m-%d').weekday()
-    return day_of_week < 5  # 평일만 True
+    return day_of_week < 5  # True → 계속 실행; False → 모든 하위 태스크 스킵
 
 
 with DAG('shortcircuit_example', ...) as dag:

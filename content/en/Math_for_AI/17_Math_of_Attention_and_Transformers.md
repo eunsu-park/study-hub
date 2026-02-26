@@ -30,31 +30,31 @@ import matplotlib.pyplot as plt
 
 def softmax(z):
     """
-    소프트맥스 함수 (수치 안정성 포함)
+    Softmax function (with numerical stability)
 
     Parameters:
     -----------
     z : ndarray
-        입력 벡터
+        Input vector
 
     Returns:
     --------
     probs : ndarray
-        확률 분포
+        Probability distribution
     """
-    # 수치 안정성: 최댓값 빼기
+    # Numerical stability: subtract maximum value
     z_shifted = z - np.max(z)
     exp_z = np.exp(z_shifted)
     probs = exp_z / np.sum(exp_z)
     return probs
 
-# 예제
+# Example
 z = np.array([1.0, 2.0, 3.0, 4.0, 1.0])
 probs = softmax(z)
 
-print("입력 z:", z)
-print("소프트맥스(z):", probs)
-print("합:", np.sum(probs))
+print("Input z:", z)
+print("softmax(z):", probs)
+print("Sum:", np.sum(probs))
 ```
 
 ### 1.2 Interpretation as Smooth Argmax
@@ -67,12 +67,12 @@ It assigns high probability to large $z_i$ values but also considers other candi
 
 ```python
 def visualize_softmax_vs_argmax():
-    """소프트맥스와 argmax 비교"""
+    """Compare softmax and argmax"""
     z = np.linspace(-3, 3, 100)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
-    # 1D 케이스: 두 개 원소
+    # 1D case: two elements
     for i, z1 in enumerate([-2, 0, 2]):
         z_vec = np.array([z1, 0])
         soft_probs = softmax(z_vec)
@@ -85,7 +85,7 @@ def visualize_softmax_vs_argmax():
     axes[0].legend()
     axes[0].grid(True, axis='y')
 
-    # 온도 효과
+    # Temperature effect
     temperatures = [0.1, 1.0, 10.0]
     z_vec = np.array([1.0, 2.0, 3.0, 4.0])
 
@@ -99,7 +99,7 @@ def visualize_softmax_vs_argmax():
     axes[1].legend()
     axes[1].grid(True)
 
-    # 분포 변화
+    # Distribution shift
     max_val = 3.0
     z_other = np.linspace(-2, 2, 100)
 
@@ -108,7 +108,7 @@ def visualize_softmax_vs_argmax():
         for z_o in z_other:
             z_vec = np.array([max_val, z_o])
             p = softmax(z_vec / temp)
-            probs.append(p[0])  # 최댓값의 확률
+            probs.append(p[0])  # Probability of the maximum value
 
         axes[2].plot(z_other, probs, label=f'τ={temp}')
 
@@ -120,7 +120,7 @@ def visualize_softmax_vs_argmax():
 
     plt.tight_layout()
     plt.savefig('softmax_properties.png', dpi=150, bbox_inches='tight')
-    print("소프트맥스 특성 시각화 저장 완료")
+    print("Softmax properties visualization saved")
 
 visualize_softmax_vs_argmax()
 ```
@@ -148,7 +148,7 @@ Matrix form: $J = \text{diag}(\mathbf{p}) - \mathbf{p}\mathbf{p}^T$, where $\mat
 
 ```python
 def softmax_jacobian(z):
-    """소프트맥스의 야코비안"""
+    """Jacobian of softmax"""
     p = softmax(z)
     n = len(p)
     J = np.diag(p) - np.outer(p, p)
@@ -156,9 +156,9 @@ def softmax_jacobian(z):
 
 z = np.array([1.0, 2.0, 3.0])
 J = softmax_jacobian(z)
-print("소프트맥스 야코비안:")
+print("Softmax Jacobian:")
 print(J)
-print("\n행의 합 (0이어야 함):", np.sum(J, axis=1))
+print("\nRow sums (should be 0):", np.sum(J, axis=1))
 ```
 
 ## 2. Scaled Dot-Product Attention
@@ -183,44 +183,44 @@ $$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)
 ```python
 def scaled_dot_product_attention(Q, K, V, mask=None):
     """
-    스케일드 닷-프로덕트 어텐션
+    Scaled dot-product attention
 
     Parameters:
     -----------
     Q : ndarray, shape (n, d_k)
-        쿼리 행렬
+        Query matrix
     K : ndarray, shape (m, d_k)
-        키 행렬
+        Key matrix
     V : ndarray, shape (m, d_v)
-        값 행렬
+        Value matrix
     mask : ndarray, shape (n, m), optional
-        어텐션 마스크 (0: 차단, 1: 허용)
+        Attention mask (0: block, 1: allow)
 
     Returns:
     --------
     output : ndarray, shape (n, d_v)
-        어텐션 출력
+        Attention output
     attention_weights : ndarray, shape (n, m)
-        어텐션 가중치
+        Attention weights
     """
     d_k = Q.shape[-1]
 
-    # 유사도 점수
+    # Similarity scores
     scores = Q @ K.T / np.sqrt(d_k)
 
-    # 마스킹 (옵션)
+    # Masking (optional)
     if mask is not None:
         scores = np.where(mask == 0, -1e9, scores)
 
-    # 소프트맥스
+    # Softmax
     attention_weights = np.apply_along_axis(softmax, axis=1, arr=scores)
 
-    # 가중 합
+    # Weighted sum
     output = attention_weights @ V
 
     return output, attention_weights
 
-# 예제
+# Example
 np.random.seed(42)
 n, m, d_k, d_v = 4, 5, 8, 8
 
@@ -230,14 +230,14 @@ V = np.random.randn(m, d_v)
 
 output, attn_weights = scaled_dot_product_attention(Q, K, V)
 
-print("쿼리 shape:", Q.shape)
-print("키 shape:", K.shape)
-print("값 shape:", V.shape)
-print("\n어텐션 출력 shape:", output.shape)
-print("어텐션 가중치 shape:", attn_weights.shape)
-print("\n어텐션 가중치 (각 행의 합=1):")
+print("Query shape:", Q.shape)
+print("Key shape:", K.shape)
+print("Value shape:", V.shape)
+print("\nAttention output shape:", output.shape)
+print("Attention weights shape:", attn_weights.shape)
+print("\nAttention weights (each row sums to 1):")
 print(attn_weights)
-print("행의 합:", np.sum(attn_weights, axis=1))
+print("Row sums:", np.sum(attn_weights, axis=1))
 ```
 
 ### 2.2 Need for Scaling: Variance Analysis
@@ -252,7 +252,7 @@ $$\text{Var}(q \cdot k) = \text{Var}\left(\sum_{i=1}^{d_k} q_i k_i\right) = d_k$
 
 ```python
 def demonstrate_scaling_effect():
-    """스케일링 효과 시각화"""
+    """Visualize scaling effect"""
     np.random.seed(42)
     d_k_values = [8, 32, 128, 512]
     n_samples = 1000
@@ -260,15 +260,15 @@ def demonstrate_scaling_effect():
     fig, axes = plt.subplots(2, len(d_k_values), figsize=(16, 8))
 
     for idx, d_k in enumerate(d_k_values):
-        # 랜덤 쿼리와 키 생성
+        # Generate random queries and keys
         Q = np.random.randn(n_samples, d_k)
         K = np.random.randn(1, d_k)
 
-        # 닷 프로덕트
+        # Dot product
         scores_unscaled = Q @ K.T
         scores_scaled = scores_unscaled / np.sqrt(d_k)
 
-        # 히스토그램
+        # Histogram
         axes[0, idx].hist(scores_unscaled.flatten(), bins=50, alpha=0.7)
         axes[0, idx].set_title(f'd_k={d_k}, Unscaled')
         axes[0, idx].set_xlabel('Dot product value')
@@ -279,14 +279,14 @@ def demonstrate_scaling_effect():
         axes[1, idx].set_xlabel('Scaled value')
         axes[1, idx].axvline(0, color='r', linestyle='--')
 
-        # 분산 출력
+        # Print variance
         var_unscaled = np.var(scores_unscaled)
         var_scaled = np.var(scores_scaled)
         print(f"d_k={d_k}: Var(unscaled)={var_unscaled:.2f}, Var(scaled)={var_scaled:.2f}")
 
     plt.tight_layout()
     plt.savefig('scaling_effect.png', dpi=150, bbox_inches='tight')
-    print("\n스케일링 효과 시각화 저장 완료")
+    print("\nScaling effect visualization saved")
 
 demonstrate_scaling_effect()
 ```
@@ -327,52 +327,52 @@ where $W^O \in \mathbb{R}^{hd_v \times d_{\text{model}}}$
 ```python
 def multi_head_attention(Q, K, V, num_heads, W_Q, W_K, W_V, W_O, mask=None):
     """
-    멀티헤드 어텐션
+    Multi-head attention
 
     Parameters:
     -----------
     Q, K, V : ndarray, shape (n, d_model)
-        쿼리, 키, 값
+        Query, key, value
     num_heads : int
-        헤드 수
+        Number of heads
     W_Q, W_K, W_V : list of ndarray
-        각 헤드의 투영 행렬
+        Projection matrices for each head
     W_O : ndarray, shape (h*d_v, d_model)
-        출력 투영 행렬
+        Output projection matrix
     mask : ndarray, optional
-        어텐션 마스크
+        Attention mask
 
     Returns:
     --------
     output : ndarray, shape (n, d_model)
-        멀티헤드 어텐션 출력
+        Multi-head attention output
     all_attention_weights : list
-        각 헤드의 어텐션 가중치
+        Attention weights for each head
     """
     head_outputs = []
     all_attention_weights = []
 
     for i in range(num_heads):
-        # 각 헤드에 대한 투영
+        # Projection for each head
         Q_i = Q @ W_Q[i]
         K_i = K @ W_K[i]
         V_i = V @ W_V[i]
 
-        # 스케일드 닷-프로덕트 어텐션
+        # Scaled dot-product attention
         head_out, attn_weights = scaled_dot_product_attention(Q_i, K_i, V_i, mask)
 
         head_outputs.append(head_out)
         all_attention_weights.append(attn_weights)
 
-    # 헤드 연결
+    # Concatenate heads
     concatenated = np.concatenate(head_outputs, axis=-1)
 
-    # 출력 투영
+    # Output projection
     output = concatenated @ W_O
 
     return output, all_attention_weights
 
-# 예제
+# Example
 d_model = 64
 num_heads = 8
 d_k = d_v = d_model // num_heads  # 8
@@ -380,7 +380,7 @@ d_k = d_v = d_model // num_heads  # 8
 n = 10
 X = np.random.randn(n, d_model)
 
-# 가중치 초기화
+# Weight initialization
 W_Q = [np.random.randn(d_model, d_k) * 0.1 for _ in range(num_heads)]
 W_K = [np.random.randn(d_model, d_k) * 0.1 for _ in range(num_heads)]
 W_V = [np.random.randn(d_model, d_v) * 0.1 for _ in range(num_heads)]
@@ -390,10 +390,10 @@ mha_output, attn_weights_list = multi_head_attention(
     X, X, X, num_heads, W_Q, W_K, W_V, W_O
 )
 
-print(f"입력 shape: {X.shape}")
-print(f"멀티헤드 어텐션 출력 shape: {mha_output.shape}")
-print(f"헤드 수: {num_heads}")
-print(f"각 헤드의 어텐션 가중치 shape: {attn_weights_list[0].shape}")
+print(f"Input shape: {X.shape}")
+print(f"Multi-head attention output shape: {mha_output.shape}")
+print(f"Number of heads: {num_heads}")
+print(f"Attention weights shape for each head: {attn_weights_list[0].shape}")
 ```
 
 ### 3.2 Meaning of Subspace Projection
@@ -436,19 +436,19 @@ $$PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)$$
 ```python
 def sinusoidal_positional_encoding(max_len, d_model):
     """
-    사인/코사인 위치 인코딩
+    Sinusoidal positional encoding
 
     Parameters:
     -----------
     max_len : int
-        최대 시퀀스 길이
+        Maximum sequence length
     d_model : int
-        모델 차원
+        Model dimension
 
     Returns:
     --------
     PE : ndarray, shape (max_len, d_model)
-        위치 인코딩 행렬
+        Positional encoding matrix
     """
     PE = np.zeros((max_len, d_model))
 
@@ -460,7 +460,7 @@ def sinusoidal_positional_encoding(max_len, d_model):
 
     return PE
 
-# 시각화
+# Visualization
 max_len = 100
 d_model = 128
 
@@ -474,7 +474,7 @@ plt.ylabel('Dimension')
 plt.title('Sinusoidal Positional Encoding')
 plt.tight_layout()
 plt.savefig('positional_encoding.png', dpi=150, bbox_inches='tight')
-print("위치 인코딩 시각화 저장 완료")
+print("Positional encoding visualization saved")
 ```
 
 ### 4.3 Mathematical Properties of Positional Encoding
@@ -506,35 +506,35 @@ $$\begin{pmatrix} q_{2i}' \\ q_{2i+1}' \end{pmatrix} = \begin{pmatrix} \cos(m\th
 ```python
 def rotary_position_embedding(q, k, positions, d_model):
     """
-    RoPE (간단한 버전)
+    RoPE (simplified version)
 
     Parameters:
     -----------
     q, k : ndarray, shape (n, d_model)
-        쿼리와 키
+        Query and key
     positions : ndarray, shape (n,)
-        각 토큰의 위치
+        Position of each token
     d_model : int
-        모델 차원
+        Model dimension
 
     Returns:
     --------
     q_rot, k_rot : ndarray
-        회전된 쿼리와 키
+        Rotated query and key
     """
     assert d_model % 2 == 0
 
-    # 주파수
+    # Frequencies
     inv_freq = 1.0 / (10000 ** (np.arange(0, d_model, 2) / d_model))
 
-    # 각도
+    # Angles
     angles = positions[:, np.newaxis] * inv_freq[np.newaxis, :]  # (n, d_model/2)
 
-    # 사인/코사인
+    # Sine/cosine
     cos_angles = np.cos(angles)
     sin_angles = np.sin(angles)
 
-    # 회전 적용
+    # Apply rotation
     def apply_rotation(x, cos, sin):
         x_rot = np.zeros_like(x)
         x_rot[:, 0::2] = x[:, 0::2] * cos - x[:, 1::2] * sin
@@ -546,7 +546,7 @@ def rotary_position_embedding(q, k, positions, d_model):
 
     return q_rot, k_rot
 
-# 예제
+# Example
 n = 10
 d_model = 64
 positions = np.arange(n)
@@ -556,15 +556,15 @@ k = np.random.randn(n, d_model)
 
 q_rot, k_rot = rotary_position_embedding(q, k, positions, d_model)
 
-print("원본 쿼리 shape:", q.shape)
-print("회전된 쿼리 shape:", q_rot.shape)
+print("Original query shape:", q.shape)
+print("Rotated query shape:", q_rot.shape)
 
-# 상대 위치 의존성 확인
+# Verify relative position dependency
 attn_original = q @ k.T
 attn_rope = q_rot @ k_rot.T
 
-print("\n원본 어텐션 점수 (pos=0 기준):", attn_original[0, :5])
-print("RoPE 어텐션 점수 (pos=0 기준):", attn_rope[0, :5])
+print("\nOriginal attention scores (relative to pos=0):", attn_original[0, :5])
+print("RoPE attention scores (relative to pos=0):", attn_rope[0, :5])
 ```
 
 ### 4.5 ALiBi (Attention with Linear Biases)
@@ -623,39 +623,39 @@ $$\text{Attention}(Q, K, V) = \phi(Q) (\phi(K)^T V)$$
 ```python
 def linear_attention(Q, K, V, phi=lambda x: np.maximum(0, x) + 1):
     """
-    선형 어텐션 (간단한 근사)
+    Linear attention (simple approximation)
 
     Parameters:
     -----------
     Q, K : ndarray, shape (n, d_k)
-        쿼리와 키
+        Query and key
     V : ndarray, shape (n, d_v)
-        값
+        Value
     phi : function
-        특징 맵 함수
+        Feature map function
 
     Returns:
     --------
     output : ndarray, shape (n, d_v)
-        어텐션 출력
+        Attention output
     """
-    # 특징 맵 적용
+    # Apply feature map
     Q_phi = phi(Q)
     K_phi = phi(K)
 
-    # K^T V 먼저 계산 (n x d_v)
+    # Compute K^T V first (n x d_v)
     KV = K_phi.T @ V  # (d_k, d_v)
 
-    # Q와 곱셈
+    # Multiply with Q
     output = Q_phi @ KV  # (n, d_v)
 
-    # 정규화
+    # Normalize
     normalizer = Q_phi @ np.sum(K_phi, axis=0, keepdims=True).T
     output = output / (normalizer + 1e-6)
 
     return output
 
-# 비교
+# Comparison
 n, d_k, d_v = 1000, 64, 64
 Q = np.random.randn(n, d_k)
 K = np.random.randn(n, d_k)
@@ -663,19 +663,19 @@ V = np.random.randn(n, d_v)
 
 import time
 
-# 표준 어텐션
+# Standard attention
 start = time.time()
 output_standard, _ = scaled_dot_product_attention(Q, K, V)
 time_standard = time.time() - start
 
-# 선형 어텐션
+# Linear attention
 start = time.time()
 output_linear = linear_attention(Q, K, V)
 time_linear = time.time() - start
 
-print(f"표준 어텐션 시간: {time_standard:.4f}s")
-print(f"선형 어텐션 시간: {time_linear:.4f}s")
-print(f"속도 향상: {time_standard / time_linear:.2f}x")
+print(f"Standard attention time: {time_standard:.4f}s")
+print(f"Linear attention time: {time_linear:.4f}s")
+print(f"Speedup: {time_standard / time_linear:.2f}x")
 ```
 
 ### 5.4 KV-Cache: Autoregressive Decoding
@@ -714,22 +714,22 @@ $$\text{Mask}_{ij} = \begin{cases}
 
 ```python
 def create_causal_mask(seq_len):
-    """인과적 마스크 생성"""
+    """Create causal mask"""
     mask = np.tril(np.ones((seq_len, seq_len)))
     return mask
 
 seq_len = 5
 causal_mask = create_causal_mask(seq_len)
-print("인과적 마스크:")
+print("Causal mask:")
 print(causal_mask)
 
-# 어텐션에 적용
+# Apply to attention
 Q = np.random.randn(seq_len, 8)
 K = np.random.randn(seq_len, 8)
 V = np.random.randn(seq_len, 8)
 
 output_causal, attn_causal = scaled_dot_product_attention(Q, K, V, mask=causal_mask)
-print("\n인과적 어텐션 가중치:")
+print("\nCausal attention weights:")
 print(attn_causal)
 ```
 

@@ -1,14 +1,24 @@
 # Project 6: File Encryption Tool
 
-## Learning Objectives
-
-What you will learn through this project:
-- Bit operations (AND, OR, XOR, NOT, shift)
-- Byte-level file processing
-- Command-line argument handling (argc, argv)
-- Basic encryption principles
+**Previous**: [Project 5: Linked List](./07_Project_Linked_List.md) | **Next**: [Project 7: Stack and Queue](./09_Project_Stack_Queue.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply bitwise operators (AND, OR, XOR, NOT, shift) and explain their truth tables
+2. Explain the self-inverse property of XOR (`A ^ B ^ B == A`) and why it enables symmetric encryption
+3. Implement byte-level file processing using `fread`, `fwrite`, `fgetc`, and `fputc` with binary mode
+4. Design a command-line tool that parses `argc` and `argv` to accept mode, filenames, and a key
+5. Build an encrypted file format with a magic number, version, key hash, and original-size header
+6. Implement a simple hash function (djb2) for key verification during decryption
+7. Identify the security limitations of XOR encryption and explain why it is unsuitable for production use
+
+---
+
+Bit operations are the lowest level of computation you can do in C -- flipping individual ones and zeros inside a byte. They may seem abstract until you realize that encryption, compression, network protocols, and hardware drivers all depend on them. This project puts bitwise operators to practical use by building a file encryption tool that can scramble and restore any file with a password.
 
 ## XOR Encryption Principle
 

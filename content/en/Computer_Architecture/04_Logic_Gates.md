@@ -1,12 +1,24 @@
 # Logic Gates
 
-## Overview
-
-Logic gates are the fundamental building blocks of digital circuits, taking one or more input signals, performing logical operations, and generating output signals. In this lesson, we will learn about the types of basic logic gates, truth table construction, Boolean algebra laws, and methods for simplifying logic expressions.
+**Previous**: [Integer and Floating-Point Representation](./03_Integer_Float_Representation.md) | **Next**: [Combinational Logic Circuits](./05_Combinational_Logic.md)
 
 **Difficulty**: ⭐ (Beginner)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the function of each basic logic gate (AND, OR, NOT, NAND, NOR, XOR, XNOR)
+2. Construct truth tables for any combination of gates
+3. Prove that NAND and NOR are universal gates by implementing AND, OR, and NOT from each
+4. Simplify Boolean expressions using algebraic rules (identity, null, idempotent, absorption, consensus)
+5. Apply De Morgan's theorems to transform logic expressions between AND/OR forms
+
+---
+
+Logic gates are the atoms of digital computing. Every operation your CPU performs -- from adding two numbers to rendering a video frame -- is ultimately built from combinations of simple gates that output 0 or 1. Understanding gates is understanding the physical foundation on which all of computing rests.
 
 ## Table of Contents
 

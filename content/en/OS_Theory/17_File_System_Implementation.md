@@ -1,10 +1,24 @@
 # File System Implementation ⭐⭐⭐⭐
 
-## Overview
-
-Learn how file systems store and manage data on disks. Covers key concepts needed for actual implementation including block allocation methods, inode structure, journaling, and RAID.
+**Previous**: [File System Basics](./16_File_System_Basics.md) | **Next**: [I/O and IPC](./18_IO_and_IPC.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare contiguous, linked, and indexed file allocation methods with their trade-offs
+2. Explain the FAT (File Allocation Table) structure and its limitations for large disks
+3. Describe the inode-based allocation used in Unix/Linux and calculate maximum file sizes
+4. Explain journaling and how it prevents file system corruption after crashes
+5. Distinguish between write-ahead logging modes (journal, ordered, writeback) in ext4
+6. Compare RAID levels (0, 1, 5, 6, 10) by capacity, performance, and fault tolerance
+7. Trace the complete process of file deletion from directory entry removal to block deallocation
+
+---
+
+When you save a file, the OS must decide where on disk to place it, how to track its blocks, and how to recover if the power fails mid-write. File system implementation answers these questions -- and the choices directly affect speed, reliability, and maximum file size. From the simple FAT used on USB drives to the journaling ext4 powering Linux servers, the techniques in this lesson are at work on every storage device you use.
 
 ## Table of Contents
 

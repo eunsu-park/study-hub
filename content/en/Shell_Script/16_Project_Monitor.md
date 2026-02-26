@@ -2,9 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Previous**: [15_Project_Deployment.md](./15_Project_Deployment.md)
+**Previous**: [Project: Deployment Automation](./15_Project_Deployment.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Build a real-time terminal dashboard using `tput` for cursor control, color formatting, and responsive layout
+2. Implement system metric collectors that parse CPU, memory, disk, and network data from `/proc` and standard Unix utilities
+3. Configure a threshold-based alerting system with cooldown periods to prevent notification spam
+4. Send alert notifications to Slack or Discord webhooks and via email from a shell script
+5. Write a log aggregation module that parses system logs, detects error patterns, and summarizes findings
+6. Integrate monitoring scripts with cron for periodic health checks and automated HTML report generation
+7. Handle terminal resize events (`SIGWINCH`) to adapt the dashboard layout dynamically
+
+---
+
+When a production server runs out of disk space at 3 AM or CPU usage spikes during a traffic surge, you need monitoring in place before the problem occurs. Commercial tools like Datadog and Prometheus are powerful but require infrastructure of their own. A bash-based monitoring tool runs on any server with zero dependencies, gives you full control over what metrics to collect and how to alert, and serves as a capstone project that integrates terminal UI, signal handling, process management, and system internals from every previous lesson.
 
 ## 1. Overview
 
@@ -1216,6 +1232,68 @@ EOF
 }
 ```
 
+## Exercises
+
+### Exercise 1: Implement Cross-Platform Metric Collectors
+
+The monitoring tool uses `/proc` files which are Linux-only. Add macOS support by detecting the OS and using the appropriate command:
+- Write `get_cpu_usage()` that uses `/proc/stat` on Linux and `top -l 1` (parsed with `awk`) on macOS
+- Write `get_memory_info()` that reads `/proc/meminfo` on Linux and `vm_stat` on macOS
+- Write `get_disk_info()` that uses `df -h` on both but handles the different column layouts
+- Test each function on your system and verify it returns a numeric percentage
+
+Wrap each function with an OS check using `uname -s`:
+```bash
+OS=$(uname -s)
+case "$OS" in
+    Linux)  ... ;;
+    Darwin) ... ;;
+    *) echo "Unsupported OS: $OS" >&2; return 1 ;;
+esac
+```
+
+### Exercise 2: Build a Threshold Alert System with Cooldown
+
+Implement a standalone `alerter.sh` that:
+- Accepts `CPU_THRESHOLD`, `MEM_THRESHOLD`, and `DISK_THRESHOLD` environment variables (defaults: 80, 85, 90)
+- Checks current CPU, memory, and disk percentages by calling the metric functions from Exercise 1
+- For each threshold exceeded, prints an alert message like `ALERT: CPU at 92% (threshold: 80%)`
+- Implements a cooldown: once an alert fires, stores the timestamp in `/tmp/alert_cooldown_<metric>` and skips firing again until 5 minutes have elapsed
+- Logs all alerts (including skipped cooldown alerts) to `/var/log/monitor_alerts.log` with a timestamp
+
+Test by temporarily lowering a threshold below your current usage to trigger an alert, then running again within 5 minutes to confirm the cooldown suppresses the second alert.
+
+### Exercise 3: Add Terminal Resize Handling
+
+Extend the dashboard to respond to terminal resize events:
+- Install a `trap 'redraw_dashboard' SIGWINCH` handler
+- The `redraw_dashboard` function should read the new terminal dimensions with `tput lines` and `tput cols`
+- Clear and redraw the entire dashboard using the new dimensions
+- If the terminal is too small (fewer than 24 lines or 80 columns), display a single message: `"Terminal too small. Resize to at least 80x24."`
+- Use `tput cup 0 0` (move cursor to top-left) rather than `clear` to avoid screen flicker on redraw
+
+Test by running the dashboard and resizing your terminal window — the layout should adapt without losing history or flickering.
+
+### Exercise 4: Generate an Automated HTML Report
+
+Write a `generate_report.sh` that produces a self-contained HTML report of system health:
+- Collect one snapshot of CPU, memory, disk, and load average
+- List the top 5 processes by CPU usage (from `ps aux --sort=-%cpu`)
+- Check the last 50 lines of `/var/log/syslog` (or `/var/log/system.log` on macOS) for lines matching `ERROR|WARN|CRIT`
+- Write all findings into a styled HTML file with a table for metrics, a table for top processes, and a `<pre>` block for log excerpts
+- Include the generation timestamp and hostname in the report header
+
+Set up a cron job that runs this script every day at 7 AM and saves the output to `/var/reports/$(date +%Y%m%d)_report.html`.
+
+### Exercise 5: Write Integration Tests for the Monitor
+
+Write a Bats test suite `test_monitor.bats` that tests the monitoring tool's key behaviors without actually requiring elevated privileges or specific hardware:
+- Test that `get_cpu_usage` returns a value between 0 and 100
+- Test that `get_memory_info` returns three space-separated values (used, total, percent)
+- Test that `get_disk_info` returns at least one line of output
+- Test that the alert system fires when a threshold of 0 is set (guaranteed to trigger)
+- Mock the metric functions to return fixed values (e.g., CPU=95) and verify the alert message content matches the expected format
+
 ---
 
-**Previous**: [15_Project_Deployment.md](./15_Project_Deployment.md)
+**Previous**: [Project: Deployment Automation](./15_Project_Deployment.md)

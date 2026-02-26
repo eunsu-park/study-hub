@@ -317,6 +317,264 @@ code_tool = {
 }
 ```
 
+## 3.5 도구 사용 심화: 멀티 프로바이더 패턴
+
+현대 LLM은 단순한 텍스트 생성을 넘어 도구 사용(tool use, 함수 호출이라고도 함)을 통해 현실 세계에서 행동을 취할 수 있는 추론 엔진(reasoning engine)으로 진화했습니다. 이 섹션에서는 다양한 프로바이더(provider)의 구현 방식을 종합적으로 비교하고, 견고한 도구 사용 에이전트를 구축하기 위한 고급 패턴을 다룹니다.
+
+### 에이전트 루프(Agentic Loop)
+
+프로바이더에 관계없이 모든 도구 사용 LLM은 동일한 기본 루프를 따릅니다:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    에이전트 도구 사용 루프                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────┐                                              │
+│  │  사용자  │                                              │
+│  │  메시지  │                                              │
+│  └────┬─────┘                                              │
+│       │                                                    │
+│       ▼                                                    │
+│  ┌──────────┐    tool_use     ┌──────────┐                │
+│  │   LLM    │───────────────>│   도구   │                │
+│  │  (사고)  │                 │  실행기  │                │
+│  │          │<───────────────│          │                │
+│  └──────────┘   tool_result   └──────────┘                │
+│       │                                                    │
+│       │  (LLM이 최종 텍스트 응답을 생성할 때까지 반복)     │
+│       │                                                    │
+│       ▼                                                    │
+│  ┌──────────┐                                              │
+│  │  최종    │                                              │
+│  │  응답    │                                              │
+│  └──────────┘                                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Claude 도구 사용(Tool Use) API
+
+Claude는 도구 사용과 도구 결과가 명시적인 메시지 콘텐츠 타입인 구조화된 콘텐츠 블록(content block) 방식을 사용합니다:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+# 도구 정의는 파라미터에 JSON Schema를 사용
+tools = [
+    {
+        "name": "get_weather",
+        "description": "Get current weather for a location. Returns temperature, conditions, and humidity.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City and state/country, e.g. 'San Francisco, CA'"
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "Temperature unit (default: celsius)"
+                }
+            },
+            "required": ["location"]
+        }
+    },
+    {
+        "name": "calculate",
+        "description": "Evaluate a mathematical expression.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expression": {
+                    "type": "string",
+                    "description": "Math expression to evaluate, e.g. '(4 + 5) * 3'"
+                }
+            },
+            "required": ["expression"]
+        }
+    }
+]
+
+# 도구 구현
+def execute_tool(name, input_data):
+    if name == "get_weather":
+        # 프로덕션에서는 실제 날씨 API 호출
+        return f'{{"temp": 22, "condition": "Sunny", "humidity": 45}}'
+    elif name == "calculate":
+        try:
+            return str(eval(input_data["expression"]))
+        except Exception as e:
+            return f"Error: {e}"
+    return "Unknown tool"
+
+# 에이전트 루프: 더 이상 도구 사용이 없을 때까지 반복 호출
+messages = [{"role": "user", "content": "What's the weather in Tokyo? Also, what's 15% of 340?"}]
+
+while True:
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        tools=tools,
+        messages=messages
+    )
+
+    # 어시스턴트 응답 수집
+    messages.append({"role": "assistant", "content": response.content})
+
+    # 도구 실행이 필요한지 확인
+    if response.stop_reason == "tool_use":
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use":
+                result = execute_tool(block.name, block.input)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result
+                })
+
+        messages.append({"role": "user", "content": tool_results})
+    else:
+        # 최종 텍스트 응답 -- 루프 종료
+        for block in response.content:
+            if hasattr(block, "text"):
+                print(block.text)
+        break
+```
+
+### 프로바이더 비교: 도구 사용(Tool Use) API
+
+| 특성 | OpenAI | Claude (Anthropic) | Gemini (Google) |
+|------|--------|-------------------|-----------------|
+| **파라미터 이름** | `tools` | `tools` | `tools` |
+| **스키마 형식** | `parameters`에 JSON Schema | `input_schema`에 JSON Schema | OpenAPI 스타일 스키마 |
+| **도구 호출 신호** | `finish_reason: "tool_calls"` | `stop_reason: "tool_use"` | `finish_reason: "TOOL_CALL"` |
+| **호출 형식** | `tool_calls[].function` | 콘텐츠 블록 `type: "tool_use"` | candidate의 `function_call` |
+| **결과 형식** | `role: "tool"` 메시지 | `tool_result` 콘텐츠 블록 | `function_response` 파트 |
+| **다중 도구** | 한 응답에서 병렬 호출 | 한 응답에서 병렬 호출 | 순차적 (한 번에 하나) |
+| **스트리밍** | 지원 | 지원 | 지원 |
+| **도구 선택** | `tool_choice: "auto"/"required"/"none"` | `tool_choice: {"type": "auto"/"any"/"tool"}` | `tool_config` |
+
+### 도구 정의 모범 사례
+
+```python
+# 좋음: 예시와 엣지 케이스를 포함한 상세한 설명
+good_tool = {
+    "name": "search_database",
+    "description": (
+        "Search the product database by name, category, or price range. "
+        "Returns up to 10 matching products sorted by relevance. "
+        "Use this when the user asks about product availability, pricing, "
+        "or specifications. Do NOT use for order status queries."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search query string (e.g. 'red running shoes size 10')"
+            },
+            "max_price": {
+                "type": "number",
+                "description": "Maximum price filter in USD. Omit for no limit."
+            },
+            "category": {
+                "type": "string",
+                "enum": ["electronics", "clothing", "home", "sports"],
+                "description": "Product category to filter by"
+            }
+        },
+        "required": ["query"]
+    }
+}
+
+# 나쁨: 모호한 설명, 사용 시점 안내 없음
+bad_tool = {
+    "name": "search",
+    "description": "Search for things",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "q": {"type": "string"}
+        },
+        "required": ["q"]
+    }
+}
+```
+
+### ReAct 패턴 (Reasoning + Acting)
+
+ReAct 패턴은 사고(thought)와 행동(action) 단계를 번갈아 수행하여 LLM의 추론 과정을 명시적으로 만듭니다:
+
+```
+User: "프랑스의 인구를 찾고, GDP가 2.78조 달러일 때
+       1인당 GDP를 계산해주세요."
+
+Step 1:
+  Thought: 먼저 프랑스 인구를 찾아야 합니다. 검색하겠습니다.
+  Action: search("France population 2024")
+  Observation: 프랑스 인구는 약 6,817만 명 (2024년)
+
+Step 2:
+  Thought: 인구(6,817만)와 GDP(2.78조 달러)를 확보했습니다.
+           1인당 GDP = GDP / 인구를 계산해야 합니다.
+  Action: calculate("2780000000000 / 68170000")
+  Observation: 40779.17
+
+Step 3:
+  Thought: 필요한 모든 정보를 확보했습니다.
+  Final Answer: 프랑스 인구는 약 6,817만 명입니다.
+                GDP 2.78조 달러 기준, 1인당 GDP는
+                약 $40,779입니다.
+```
+
+### 도구 사용 안전성(Tool Use Safety)
+
+```python
+# 1. 실행 전 파라미터 검증
+def safe_execute(tool_name, params, allowed_tools):
+    """안전 검사와 함께 도구 실행."""
+    # 허용 목록 검사
+    if tool_name not in allowed_tools:
+        return {"error": f"Tool '{tool_name}' is not permitted"}
+
+    # 스키마 검증
+    from jsonschema import validate, ValidationError
+    try:
+        validate(instance=params, schema=allowed_tools[tool_name]["input_schema"])
+    except ValidationError as e:
+        return {"error": f"Invalid parameters: {e.message}"}
+
+    # 속도 제한
+    if rate_limiter.is_exceeded(tool_name):
+        return {"error": "Rate limit exceeded for this tool"}
+
+    # 샌드박스에서 실행 (타임아웃, 리소스 제한)
+    try:
+        result = execute_with_timeout(tool_name, params, timeout=30)
+        return {"result": result}
+    except TimeoutError:
+        return {"error": "Tool execution timed out"}
+
+# 2. 비정제 LLM 출력을 시스템 명령에 절대 전달하지 않음
+# 나쁨: os.system(llm_generated_command)
+# 좋음: 검증된 입력으로 파라미터화된 API 사용
+
+# 3. 감사를 위해 모든 도구 호출 로깅
+import logging
+logger = logging.getLogger("tool_use")
+
+def audited_execute(tool_name, params, user_id):
+    logger.info(f"Tool call: {tool_name}, params: {params}, user: {user_id}")
+    result = safe_execute(tool_name, params)
+    logger.info(f"Tool result: {tool_name}, success: {'error' not in result}")
+    return result
+```
+
 ---
 
 ## 4. LangChain Agent
@@ -751,6 +1009,308 @@ result = executor.invoke({"input": query})
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: 도구 정의 품질
+
+아래는 데이터베이스 조회 함수에 대한 두 가지 도구 정의입니다. 최소 네 가지 차이점을 파악하고, 두 번째 정의가 더 나은 이유를 설명하고, 오류 처리 안내도 추가한 개선된 버전을 작성하세요.
+
+```python
+# 도구 A (품질 낮음)
+tool_a = {
+    "name": "db_lookup",
+    "description": "데이터베이스에서 데이터 조회",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"}
+        },
+        "required": ["query"]
+    }
+}
+
+# 도구 B (더 나은 품질)
+tool_b = {
+    "name": "lookup_customer",
+    "description": (
+        "ID 또는 이메일 주소로 고객 정보를 조회합니다. "
+        "고객 이름, 이메일, 계정 상태, 주문 이력을 반환합니다. "
+        "고객 신원 확인이나 계정 정보 확인 시 사용하세요. "
+        "상품 검색에는 사용하지 마세요 — search_products를 대신 사용하세요."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "identifier": {
+                "type": "string",
+                "description": "고객 ID (예: 'CUST-12345') 또는 이메일 주소"
+            },
+            "include_orders": {
+                "type": "boolean",
+                "description": "주문 이력 포함 여부 (기본값: false)"
+            }
+        },
+        "required": ["identifier"]
+    }
+}
+```
+
+<details>
+<summary>정답 보기</summary>
+
+**차이점과 도구 B가 더 나은 이유:**
+
+1. **이름 구체성**: `db_lookup` vs `lookup_customer` — B는 자기 설명적. LLM이 설명 없이도 어떤 데이터를 반환하는지 알 수 있음
+2. **설명 품질**: A는 "데이터 조회"(모호). B는 반환되는 데이터, 사용 시기, 사용하지 말아야 할 경우를 설명 — 잘못된 도구 사용 방지
+3. **파라미터(parameter) 이름**: `query`는 일반적. `identifier`는 LLM에게 입력이 ID나 이메일이어야 한다고 알려줌
+4. **파라미터 설명**: A는 필드 설명 없음. B는 정확한 형식(`CUST-12345`)과 대안(이메일) 설명
+5. **선택적 파라미터(optional parameter)**: B는 선택적 `include_orders` 플래그와 기본 동작 문서화
+
+**오류 처리 안내가 추가된 개선 버전:**
+```python
+tool_best = {
+    "name": "lookup_customer",
+    "description": (
+        "고객 ID 또는 이메일로 고객 계정 정보를 조회합니다. "
+        "반환 항목: customer_id, 이름, 이메일, 상태('active'|'suspended'|'closed'), "
+        "가입일, 선택적으로 주문 이력(최근 10건). "
+        "고객 신원 확인, 계정 상태 확인, 구매 이력 조회에 사용하세요. "
+        "사용하지 말 것: 상품 검색(search_products 사용), "
+        "주문 추적(track_order 사용), 대량 조회. "
+        "고객을 찾을 수 없으면 null 반환 — 오류로 처리하지 마세요."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "identifier": {
+                "type": "string",
+                "description": (
+                    "고객 ID (형식: 'CUST-XXXXX') 또는 이메일 주소. "
+                    "이메일은 대소문자 구분 없음. "
+                    "예시: 'CUST-12345' 또는 'john.doe@example.com'"
+                )
+            },
+            "include_orders": {
+                "type": "boolean",
+                "description": (
+                    "true이면 최근 10건의 주문 포함. "
+                    "응답 크기가 증가 — 주문 이력이 필요한 경우만 true로 설정. "
+                    "기본값: false"
+                )
+            }
+        },
+        "required": ["identifier"],
+        "additionalProperties": False
+    }
+}
+```
+
+**핵심 원칙:** 도구 설명은 LLM의 결정을 명확하게 만들어야 합니다. LLM에게 필요한 것: 도구의 기능, 사용 시기, 사용하지 말아야 할 경우, 출력 형식, 오류/null 결과 해석 방법.
+</details>
+
+---
+
+### 연습 문제 2: ReAct 추적(Trace) 분석
+
+아래는 결함이 있는 ReAct 에이전트 추적입니다. 모든 문제점을 파악하고 올바른 추적을 다시 작성하세요.
+
+```
+질문: 프랑스 GDP(약 2조 7,800억 달러)의 15%는 얼마인가?
+
+단계 1:
+Thought: 2조 7,800억 달러의 15%를 계산해야 한다.
+Action: search
+Action Input: 프랑스 GDP 15퍼센트
+
+단계 2:
+Observation: 프랑스 GDP는 2조 7,800억 달러. GDP의 15%는 국방에 쓰인다.
+Thought: 답은 국방비다.
+Final Answer: 프랑스는 GDP의 15%를 국방에 지출한다.
+```
+
+<details>
+<summary>정답 보기</summary>
+
+**파악된 문제점:**
+
+1. **산술에 잘못된 도구 사용**: 에이전트가 미리 존재하는 수학 문제 답을 찾기 위해 `search`를 사용했습니다. 이는 불안정하며 환각(hallucination) 위험을 도입합니다.
+2. **질문 오해**: 질문은 2조 7,800억 달러의 15%를 *계산*하도록 요청합니다. 에이전트는 "GDP의 15%"를 검색하여 다른 사실(국방비)을 찾았습니다.
+3. **상관관계와 질문 혼동**: 검색 결과에 "GDP의 15%"가 언급된다고 해서 질문에 대한 답은 아닙니다.
+4. **잘못된 최종 답**: 2조 7,800억 × 15% = 4,170억 달러이지, "국방비"가 아닙니다.
+
+**수정된 추적:**
+```
+질문: 프랑스 GDP(약 2조 7,800억 달러)의 15%는 얼마인가?
+
+단계 1:
+Thought: 질문에 프랑스 GDP(2조 7,800억 달러)가 직접 제공되어 있고
+         15%를 계산하도록 요청받았습니다. 검색이 필요 없습니다 —
+         2조 7,800억 × 0.15를 계산하면 됩니다.
+Action: calculator
+Action Input: 2780000000000 * 0.15
+
+단계 2:
+Observation: 417000000000
+
+Thought: 계산이 완료되었습니다. 2조 7,800억(2,780,000,000,000)의 15%는
+         417,000,000,000으로, 4,170억 달러입니다.
+Final Answer: 프랑스 GDP 2조 7,800억 달러의 15%는 약 4,170억 달러입니다.
+```
+
+**교훈:**
+- 질문 자체에 필요한 데이터가 있으면 검색 대신 계산 도구를 사용하세요
+- 관찰(observation)이 질문에 직접 답하는지 확인하세요
+- 최종 답에 단위(억, 조)를 포함하여 해석 가능하게 만드세요
+</details>
+
+---
+
+### 연습 문제 3: 오류 처리가 있는 다중 도구 에이전트
+
+Claude 도구 사용 API를 활용하여 세 가지 경우를 처리하는 강건한 에이전트 루프를 구현하세요: 성공적인 도구 실행, 도구 오류, 알 수 없는 도구. 에이전트는 오류에서 우아하게 복구하고 질문에 계속 답하려고 해야 합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import anthropic
+import json
+from typing import Any
+
+client = anthropic.Anthropic()
+
+# 도구 구현
+def get_weather(location: str, unit: str = "celsius") -> dict:
+    """시뮬레이션된 날씨 API."""
+    weather_db = {
+        "서울": {"temp_c": 15, "condition": "부분 흐림", "humidity": 65},
+        "도쿄": {"temp_c": 22, "condition": "맑음", "humidity": 40},
+    }
+    data = weather_db.get(location)
+    if data is None:
+        raise ValueError(f"'{location}' 위치를 날씨 데이터베이스에서 찾을 수 없습니다")
+
+    temp = data["temp_c"] if unit == "celsius" else data["temp_c"] * 9/5 + 32
+    return {"location": location, "temperature": temp, "unit": unit,
+            "condition": data["condition"], "humidity": data["humidity"]}
+
+def calculate(expression: str) -> float:
+    """안전한 수학 계산기."""
+    # 안전한 수학 연산만 허용
+    allowed_chars = set("0123456789+-*/.() ")
+    if not all(c in allowed_chars for c in expression):
+        raise ValueError(f"안전하지 않은 표현식: 기본 수학 연산만 허용됩니다")
+    return eval(expression)
+
+# 도구 레지스트리(registry)
+TOOLS = {
+    "get_weather": get_weather,
+    "calculate": calculate,
+}
+
+TOOL_SCHEMAS = [
+    {
+        "name": "get_weather",
+        "description": "도시의 현재 날씨를 가져옵니다. 온도, 날씨 상태, 습도를 반환합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "도시 이름"},
+                "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+            },
+            "required": ["location"]
+        }
+    },
+    {
+        "name": "calculate",
+        "description": "수학 표현식을 계산합니다. 기본 산술(+, -, *, /, 괄호)만 지원합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string", "description": "수학 표현식"}
+            },
+            "required": ["expression"]
+        }
+    }
+]
+
+def execute_tool(name: str, params: dict) -> tuple[str, bool]:
+    """
+    도구를 실행하고 (결과_문자열, 성공 여부)를 반환합니다.
+    절대 예외를 발생시키지 않음 — 오류는 LLM이 적응할 수 있도록 문자열로 반환됩니다.
+    """
+    if name not in TOOLS:
+        return f"오류: 알 수 없는 도구 '{name}'. 사용 가능한 도구: {list(TOOLS.keys())}", False
+
+    try:
+        result = TOOLS[name](**params)
+        return json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else str(result), True
+    except Exception as e:
+        return f"{name} 실행 오류: {str(e)}", False
+
+def run_agent(user_message: str, max_turns: int = 10) -> str:
+    """
+    오류 복구 기능이 있는 강건한 에이전트 루프.
+    모델의 최종 텍스트 응답을 반환합니다.
+    """
+    messages = [{"role": "user", "content": user_message}]
+
+    for turn in range(max_turns):
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            tools=TOOL_SCHEMAS,
+            messages=messages
+        )
+
+        # 어시스턴트 응답을 이력에 추가
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    result_str, success = execute_tool(block.name, block.input)
+
+                    if not success:
+                        print(f"[도구 오류] {block.name}: {result_str}")
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result_str,
+                        # 오류를 모델에 신호하여 다른 방법을 시도하도록 함
+                        **({"is_error": True} if not success else {})
+                    })
+
+            messages.append({"role": "user", "content": tool_results})
+
+        elif response.stop_reason == "end_turn":
+            # 최종 텍스트 추출
+            for block in response.content:
+                if hasattr(block, "text"):
+                    return block.text
+            return "응답이 생성되지 않았습니다"
+
+        else:
+            return f"예상치 못한 종료 이유: {response.stop_reason}"
+
+    return f"에이전트가 {max_turns}번의 턴을 초과했습니다"
+
+# 테스트
+result = run_agent("서울의 온도는 화씨로 얼마인가요? 그 온도의 15%는 얼마인가요?")
+print(result)
+```
+
+**주요 설계 결정:**
+- `execute_tool`은 절대 예외를 발생시키지 않음 — LLM이 해석하고 적응할 수 있는 문자열 오류를 반환
+- 도구 결과의 `is_error: True`가 Claude에 도구 실패를 알려 다른 방법 시도 유도
+- `max_turns`로 무한 루프 방지
+- 도구 레지스트리(registry) 패턴으로 에이전트 루프를 변경하지 않고도 도구를 쉽게 추가/제거 가능
+</details>
+
+---
+
 ## 다음 단계
 
-[16_Evaluation_Metrics.md](./16_Evaluation_Metrics.md)에서 LLM 평가 지표와 벤치마크를 학습합니다.
+[LLM 평가 지표 (Evaluation Metrics)](./16_Evaluation_Metrics.md)에서 LLM 평가 지표와 벤치마크를 학습합니다.

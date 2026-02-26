@@ -45,32 +45,32 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Linux_Basics.md](./01_Linux_Basics.md) | ⭐ | 리눅스 개념, 배포판, 터미널, 기본 명령어 |
-| [02_Filesystem_Navigation.md](./02_Filesystem_Navigation.md) | ⭐ | 디렉토리 구조, 경로, ls, cd, find |
-| [03_File_Directory_Management.md](./03_File_Directory_Management.md) | ⭐ | touch, mkdir, cp, mv, rm, tar |
-| [04_Text_Processing.md](./04_Text_Processing.md) | ⭐⭐ | grep, sed, awk, 파이프, 리다이렉션 |
-| [05_Permissions_Ownership.md](./05_Permissions_Ownership.md) | ⭐⭐ | chmod, chown, 특수 권한, umask |
-| [06_User_Group_Management.md](./06_User_Group_Management.md) | ⭐⭐ | useradd, sudo, 사용자/그룹 관리 |
-| [07_Process_Management.md](./07_Process_Management.md) | ⭐⭐ | ps, top, kill, systemctl |
-| [08_Package_Management.md](./08_Package_Management.md) | ⭐⭐ | apt, yum/dnf, 저장소 관리 |
-| [09_Shell_Scripting.md](./09_Shell_Scripting.md) | ⭐⭐⭐ | 변수, 조건문, 반복문, 실무 스크립트 |
-| [10_Network_Basics.md](./10_Network_Basics.md) | ⭐⭐⭐ | ip, ssh, 포트 확인, 원격 접속 |
-| [11_System_Monitoring.md](./11_System_Monitoring.md) | ⭐⭐⭐ | df, free, 로그, cron |
-| [12_Security_and_Firewall.md](./12_Security_and_Firewall.md) | ⭐⭐⭐⭐ | SSH 보안, ufw, firewalld, fail2ban |
-| [13_Systemd_Advanced.md](./13_Systemd_Advanced.md) | ⭐⭐⭐⭐ | 서비스 유닛, 타이머, 소켓, journald |
-| [14_Performance_Tuning.md](./14_Performance_Tuning.md) | ⭐⭐⭐⭐ | sysctl, 커널 파라미터, perf, flamegraph |
-| [15_Container_Internals.md](./15_Container_Internals.md) | ⭐⭐⭐⭐ | cgroups, namespaces, 컨테이너 런타임 |
-| [16_Storage_Management.md](./16_Storage_Management.md) | ⭐⭐⭐⭐ | LVM, RAID, 파일시스템, LUKS 암호화 |
-| [17_SELinux_AppArmor.md](./17_SELinux_AppArmor.md) | ⭐⭐⭐⭐ | SELinux 정책, AppArmor 프로파일, 트러블슈팅 |
-| [18_Log_Management.md](./18_Log_Management.md) | ⭐⭐⭐ | journald, rsyslog, logrotate, 원격 로그 |
-| [19_Backup_Recovery.md](./19_Backup_Recovery.md) | ⭐⭐⭐⭐ | rsync, Borg Backup, 재해복구 전략 |
-| [20_Kernel_Management.md](./20_Kernel_Management.md) | ⭐⭐⭐⭐ | 커널 컴파일, 모듈, DKMS, GRUB |
-| [21_Virtualization_KVM.md](./21_Virtualization_KVM.md) | ⭐⭐⭐⭐ | libvirt, virsh, VM 관리, 스냅샷 |
-| [22_Ansible_Basics.md](./22_Ansible_Basics.md) | ⭐⭐⭐ | 인벤토리, playbook, roles, Vault |
-| [23_Advanced_Networking.md](./23_Advanced_Networking.md) | ⭐⭐⭐⭐ | VLAN, bonding, iptables/nftables |
-| [24_Cloud_Integration.md](./24_Cloud_Integration.md) | ⭐⭐⭐ | cloud-init, AWS CLI, 메타데이터 |
-| [25_High_Availability_Cluster.md](./25_High_Availability_Cluster.md) | ⭐⭐⭐⭐⭐ | Pacemaker, Corosync, DRBD |
-| [26_Troubleshooting_Guide.md](./26_Troubleshooting_Guide.md) | ⭐⭐⭐ | 부팅, 네트워크, 디스크, 성능 문제 해결 |
+| [리눅스 기초](./01_Linux_Basics.md) | ⭐ | 리눅스 개념, 배포판, 터미널, 기본 명령어 |
+| [파일시스템 탐색](./02_Filesystem_Navigation.md) | ⭐ | 디렉토리 구조, 경로, ls, cd, find |
+| [파일과 디렉토리 관리](./03_File_Directory_Management.md) | ⭐ | touch, mkdir, cp, mv, rm, tar |
+| [텍스트 처리](./04_Text_Processing.md) | ⭐⭐ | grep, sed, awk, 파이프, 리다이렉션 |
+| [권한과 소유권](./05_Permissions_Ownership.md) | ⭐⭐ | chmod, chown, 특수 권한, umask |
+| [사용자와 그룹 관리](./06_User_Group_Management.md) | ⭐⭐ | useradd, sudo, 사용자/그룹 관리 |
+| [프로세스 관리](./07_Process_Management.md) | ⭐⭐ | ps, top, kill, systemctl |
+| [패키지 관리](./08_Package_Management.md) | ⭐⭐ | apt, yum/dnf, 저장소 관리 |
+| [쉘 스크립팅](./09_Shell_Scripting.md) | ⭐⭐⭐ | 변수, 조건문, 반복문, 실무 스크립트 |
+| [네트워크 기초](./10_Network_Basics.md) | ⭐⭐⭐ | ip, ssh, 포트 확인, 원격 접속 |
+| [시스템 모니터링](./11_System_Monitoring.md) | ⭐⭐⭐ | df, free, 로그, cron |
+| [보안과 방화벽](./12_Security_and_Firewall.md) | ⭐⭐⭐⭐ | SSH 보안, ufw, firewalld, fail2ban |
+| [systemd 심화](./13_Systemd_Advanced.md) | ⭐⭐⭐⭐ | 서비스 유닛, 타이머, 소켓, journald |
+| [Linux 성능 튜닝](./14_Performance_Tuning.md) | ⭐⭐⭐⭐ | sysctl, 커널 파라미터, perf, flamegraph |
+| [컨테이너 내부 구조](./15_Container_Internals.md) | ⭐⭐⭐⭐ | cgroups, namespaces, 컨테이너 런타임 |
+| [저장소 관리](./16_Storage_Management.md) | ⭐⭐⭐⭐ | LVM, RAID, 파일시스템, LUKS 암호화 |
+| [SELinux와 AppArmor](./17_SELinux_AppArmor.md) | ⭐⭐⭐⭐ | SELinux 정책, AppArmor 프로파일, 트러블슈팅 |
+| [로그 관리](./18_Log_Management.md) | ⭐⭐⭐ | journald, rsyslog, logrotate, 원격 로그 |
+| [백업 및 복구](./19_Backup_Recovery.md) | ⭐⭐⭐⭐ | rsync, Borg Backup, 재해복구 전략 |
+| [커널 관리](./20_Kernel_Management.md) | ⭐⭐⭐⭐ | 커널 컴파일, 모듈, DKMS, GRUB |
+| [가상화 (KVM)](./21_Virtualization_KVM.md) | ⭐⭐⭐⭐ | libvirt, virsh, VM 관리, 스냅샷 |
+| [Ansible 기초](./22_Ansible_Basics.md) | ⭐⭐⭐ | 인벤토리, playbook, roles, Vault |
+| [고급 네트워킹](./23_Advanced_Networking.md) | ⭐⭐⭐⭐ | VLAN, bonding, iptables/nftables |
+| [클라우드 통합](./24_Cloud_Integration.md) | ⭐⭐⭐ | cloud-init, AWS CLI, 메타데이터 |
+| [고가용성 클러스터](./25_High_Availability_Cluster.md) | ⭐⭐⭐⭐⭐ | Pacemaker, Corosync, DRBD |
+| [트러블슈팅 가이드](./26_Troubleshooting_Guide.md) | ⭐⭐⭐ | 부팅, 네트워크, 디스크, 성능 문제 해결 |
 
 ---
 

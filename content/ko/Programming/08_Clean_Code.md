@@ -1323,5 +1323,5 @@ function validateAndProcessForm(formData) {
 
 ---
 
-**이전**: [07_Design_Patterns.md](07_Design_Patterns.md)
-**다음**: [09_Error_Handling.md](09_Error_Handling.md)
+**이전**: [디자인 패턴](07_Design_Patterns.md)
+**다음**: [에러 처리 전략(Error Handling Strategies)](09_Error_Handling.md)

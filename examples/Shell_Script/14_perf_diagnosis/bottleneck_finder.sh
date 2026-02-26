@@ -82,6 +82,8 @@ print_status() {
     local threshold_crit="$3"
     local unit="${4:-%}"
 
+    # Why: bc -l handles floating-point comparison that bash's [[ ]] cannot.
+    # The -l flag loads the math library for decimal precision.
     if (( $(echo "$value >= $threshold_crit" | bc -l) )); then
         echo -e "${RED}${value}${unit} [CRITICAL]${NC}"
     elif (( $(echo "$value >= $threshold_warn" | bc -l) )); then
@@ -126,6 +128,8 @@ analyze_cpu() {
     echo ""
     echo "Load Average:"
     local load_1min load_5min load_15min
+    # Why: reading /proc/loadavg directly avoids spawning uptime + awk.
+    # The trailing _ _ variables consume and discard unused fields cleanly.
     read -r load_1min load_5min load_15min _ _ < /proc/loadavg
 
     echo -n "  1-min:  "
@@ -377,7 +381,8 @@ main() {
         esac
     done
 
-    # Redirect output if file specified
+    # Why: process substitution with exec redirects ALL subsequent stdout
+    # through tee, writing to both terminal and file without changing any code.
     if [[ -n "$OUTPUT_FILE" ]]; then
         exec > >(tee "$OUTPUT_FILE")
     fi

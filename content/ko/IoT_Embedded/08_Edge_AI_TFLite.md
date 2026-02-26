@@ -1,14 +1,23 @@
 # 08. Edge AI - TensorFlow Lite
 
+**이전**: [HTTP REST for IoT](./07_HTTP_REST_for_IoT.md) | **다음**: [Edge AI (ONNX)](./09_Edge_AI_ONNX.md)
+
 ## 학습 목표
 
-- Edge AI 개념과 장점 이해
-- TensorFlow Lite 개요 파악
-- 모델 변환 (.tflite) 방법 학습
-- 라즈베리파이에서 추론 수행
-- 이미지 분류 예제 구현
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. Edge AI 개념을 설명하고 클라우드 기반 AI 추론과 비교할 수 있다
+2. 모델 학습부터 엣지 배포까지 TensorFlow Lite 워크플로우를 설명할 수 있다
+3. 다양한 양자화(quantization) 옵션으로 Keras 모델을 TFLite 포맷으로 변환할 수 있다
+4. TFLite 인터프리터를 사용하여 Raspberry Pi에서 추론을 실행할 수 있다
+5. 엣지 하드웨어에서 로컬로 실행되는 이미지 분류기를 구축할 수 있다
+6. Edge AI 결과를 MQTT와 통합하여 IoT 데이터 파이프라인을 구성할 수 있다
 
 ---
+
+클라우드가 아닌 엣지 장치에서 AI 모델을 처리하면 네트워크 지연을 없애고, 개인정보를 보호하며, 인터넷이 끊겨도 시스템이 동작하게 합니다. 공장 바닥에서 실시간 결함 감지나 보안 카메라의 인물 감지와 같은 IoT 애플리케이션에서는, 클라우드 왕복에 수백 밀리초를 기다리는 것은 선택지가 될 수 없습니다. TensorFlow Lite는 Raspberry Pi만큼 작은 장치에서도 신경망을 실행할 수 있게 해줍니다.
+
+> **비유: 지점 사무소** -- 클라우드 AI는 모든 결정을 본사에 보내는 것과 같습니다 — 정확하지만 느리고 비용이 많이 듭니다. Edge AI는 일상적인 결정(이것이 사람인가? 이 온도가 비정상인가?)을 현장에서 밀리초 단위로 처리하고, 비정상적인 경우에만 본사에 보고하는 지역 지점 사무소입니다. TensorFlow Lite는 지점 사무소에 딱 맞는 소형 툴킷입니다.
 
 ## 1. Edge AI 개념
 
@@ -291,6 +300,12 @@ class TFLiteModel:
     def predict(self, input_data: np.ndarray) -> np.ndarray:
         """추론 수행"""
         # 입력 설정
+        # astype(self.input_dtype) 중요 이유: INT8 양자화 모델은 int8 입력을
+        # 기대함. float32 데이터를 INT8 모델에 전달하면 TFLite가 오류를
+        # 발생시키지 않음 -- 바이트를 조용히 재해석하여 유효해 보이지만
+        # 잘못된 예측 결과(garbage output)를 생성. 항상 모델이 기대하는
+        # dtype으로 변환해야 함. 예상치 못한 분류 결과가 나올 때
+        # input_details[0]['dtype']을 확인할 것.
         self.interpreter.set_tensor(
             self.input_details[0]['index'],
             input_data.astype(self.input_dtype)
@@ -434,7 +449,12 @@ class ImageClassifier:
         # NumPy 배열로 변환
         input_data = np.array(image, dtype=np.float32)
 
-        # 정규화 (-1 ~ 1)
+        # [-1, 1] 정규화 이유: MobileNet이 정확히 이 공식으로 [-1, 1] 범위로
+        # 스케일링된 픽셀값으로 훈련되었음. 다른 정규화 방식(예: /255.0은
+        # [0, 1] 범위)을 사용하면 오류 없이 잘못된 결과를 생성함 -- 모델이
+        # 여전히 클래스 확률을 출력하지만, 입력 분포가 모델이 학습한 것과
+        # 일치하지 않아 의미 없는 값이 됨. 항상 모델의 훈련 파이프라인과
+        # 동일한 전처리를 사용해야 함.
         input_data = (input_data - 127.5) / 127.5
 
         # 배치 차원 추가
@@ -551,6 +571,7 @@ class RealtimeClassifier:
         image = image.resize((self.input_width, self.input_height))
 
         input_data = np.array(image, dtype=np.float32)
+        # [-1, 1] 범위 이유: MobileNet 훈련 시 사용된 정규화와 일치해야 함 (5.1 참조)
         input_data = (input_data - 127.5) / 127.5
         input_data = np.expand_dims(input_data, axis=0)
 
@@ -660,6 +681,7 @@ class AIEdgeNode:
         image = image.resize((self.input_shape[2], self.input_shape[1]))
 
         input_data = np.array(image, dtype=np.float32)
+        # [-1, 1] 범위 이유: MobileNet 훈련 시 사용된 정규화와 일치해야 함 (5.1 참조)
         input_data = (input_data - 127.5) / 127.5
         input_data = np.expand_dims(input_data, axis=0)
 
@@ -737,8 +759,8 @@ if __name__ == "__main__":
 
 ## 다음 단계
 
-- [09_Edge_AI_ONNX.md](09_Edge_AI_ONNX.md): ONNX Runtime으로 Edge AI
-- [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md): 영상 분석 프로젝트
+- [Edge AI - ONNX Runtime](09_Edge_AI_ONNX.md): ONNX Runtime으로 Edge AI
+- [영상 분석 프로젝트](11_Image_Analysis_Project.md): 영상 분석 프로젝트
 
 ---
 

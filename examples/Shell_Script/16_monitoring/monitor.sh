@@ -35,7 +35,8 @@ NC='\033[0m'
 # Terminal Control
 # ============================================================================
 
-# Save cursor position and hide cursor
+# Why: smcup saves the terminal's alternate screen buffer, so when the
+# dashboard exits it restores the user's original scrollback intact.
 init_terminal() {
     tput smcup      # Save screen
     tput civis      # Hide cursor
@@ -67,8 +68,9 @@ get_terminal_size() {
 # ============================================================================
 
 get_cpu_usage() {
+    # Why: platform-specific branches are unavoidable because Linux and macOS
+    # expose CPU metrics through completely different tools and /proc layouts.
     if [[ "$OS_TYPE" == "Linux" ]]; then
-        # Linux: use top or /proc/stat
         if command -v top &> /dev/null; then
             top -bn2 -d 0.1 | grep '^%Cpu' | tail -n1 | awk '{print int(100 - $8)}'
         else
@@ -284,6 +286,8 @@ draw_dashboard() {
     move_cursor $((proc_row + 2)) 4
     printf "${BOLD}%-15s %5s  %5s${NC}" "COMMAND" "CPU%" "MEM%"
 
+    # Why: reading from <() avoids a pipeline subshell, so the line counter
+    # persists across iterations — essential for positioning each row correctly.
     local line=0
     while IFS= read -r process; do
         move_cursor $((proc_row + 3 + line)) 4
@@ -303,6 +307,8 @@ draw_dashboard() {
 main() {
     # Initialize
     init_terminal
+    # Why: trapping EXIT + signals ensures the terminal is always restored,
+    # even on Ctrl-C — without this, the cursor stays hidden after exit.
     trap cleanup_terminal EXIT INT TERM
 
     # Main monitoring loop

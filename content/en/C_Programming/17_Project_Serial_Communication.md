@@ -1,13 +1,24 @@
 # Project 16: Serial Communication
 
+**Previous**: [Project 15: GPIO Control](./16_Project_GPIO_Control.md) | **Next**: [Debugging and Memory Analysis](./18_Debugging_Memory_Analysis.md)
+
 Learn bidirectional data exchange with PC using UART serial communication.
 
 ## Learning Objectives
-- Understand UART communication principles
-- Serial data transmission and reception
-- String parsing
-- Command interpreter implementation
-- Debugging techniques
+
+After completing this lesson, you will be able to:
+
+1. Explain UART communication parameters including baud rate, data bits, parity, and stop bits
+2. Transmit formatted data over serial using `Serial.print()`, `Serial.write()`, and `sprintf()`
+3. Receive and buffer serial input character by character into complete lines
+4. Parse command strings with arguments using `strtok()` and `atoi()`
+5. Design and implement a simple binary communication protocol with framing, checksums, and a state machine receiver
+6. Use debug macros and serial logging to diagnose embedded program behavior
+7. Build a terminal-style command interface with help, status, and device control commands
+
+---
+
+Serial communication is the oldest and most universal way for an embedded device to talk to the outside world. Long before Wi-Fi and Bluetooth, engineers debugged hardware by reading text scrolling across a serial terminal. Understanding UART gives you a reliable debugging channel and a foundation for every higher-level protocol you will encounter later.
 
 ## Prerequisites
 - Arduino basic structure

@@ -1925,4 +1925,4 @@ B6 → Exit
 
 ---
 
-[이전: 08_Semantic_Analysis.md](./08_Semantic_Analysis.md) | [다음: 10_Runtime_Environments.md](./10_Runtime_Environments.md) | [개요](./00_Overview.md)
+[이전: 의미 분석](./08_Semantic_Analysis.md) | [다음: 런타임 환경](./10_Runtime_Environments.md) | [개요](./00_Overview.md)

@@ -464,10 +464,18 @@ k = 2 * np.pi * np.fft.fftfreq(N, d=L/N)
 k[0] = 1e-10  # Avoid division by zero
 
 # Power spectrum: E(k) ~ k^{-5/3}
+# Navier-Stokes 방정식을 발전시키는 대신 K41 스펙트럼을 직접 지정하는
+# 이유: 구조 함수(structure function)에 대한 깨끗한 테스트 케이스를
+# 얻기 위해서다; 여기서 목표는 ζ_p를 측정하는 것이지 동역학을
+# 시뮬레이션하는 것이 아니다.
 P_k = k**(-5/3)
 P_k[0] = 0  # Zero mean
 
 # Random phases
+# 균일하게 랜덤한 위상(phase)을 부여하면 합성 장이 통계적으로 균질하고
+# 등방적이 됨 — K41 이론이 바탕으로 하는 동일한 가정이다 —
+# 따라서 우리의 측정에서 ζ_p의 p/3으로부터의 이탈은 물리적 간헐성이
+# 아니라 유한 샘플 노이즈에 의한 것이다.
 phase = np.exp(2j * np.pi * np.random.rand(N))
 
 # Velocity in Fourier space
@@ -480,6 +488,9 @@ v = np.fft.ifft(v_k).real
 v = v / np.std(v)
 
 # Compute structure functions
+# 지수 간격의 지연(lag)을 사용하는 이유: 관성 범위(작은 ℓ)와 에너지 포함
+# 스케일(큰 ℓ) 모두를 포착하기 위해서다 — 선형 간격이면 자기 유사성이
+# 성립하는 관성 범위에 샘플 대부분을 낭비하게 된다.
 lags = np.logspace(np.log10(L/N), np.log10(L/4), 30)
 orders = [1, 2, 3, 4, 5, 6]
 S_p = {p: [] for p in orders}
@@ -491,6 +502,9 @@ for lag in lags:
     delta_v = v[lag_idx:] - v[:-lag_idx]
 
     for p in orders:
+        # p제곱 전에 절댓값을 취하는 것이 필수적인 이유: 그렇지 않으면
+        # 홀수 차수 S_p는 대칭에 의해 0이 되고(장의 평균이 0이므로),
+        # 속도 증분 PDF에 관한 정보를 전혀 얻을 수 없게 된다.
         S_p[p].append(np.mean(np.abs(delta_v)**p))
 
 # Convert to arrays
@@ -522,6 +536,10 @@ ax.grid(True, alpha=0.3)
 ax = axes[1]
 
 # Fit power-law to extract exponents
+# 로그-로그 공간에서의 선형 피팅이 직접 스케일링 지수 ζ_p를 제공한다;
+# 높은 p에서 K41 선 p/3으로부터의 ζ_p 이탈이 간헐성(intermittency)을
+# 진단한다 — 희귀한 강한 사건(전류 시트)이 작은 부피를 차지하더라도
+# 높은 차수 모멘트에 불균형하게 기여하기 때문이다.
 zeta_p = []
 for p in orders:
     # Fit log(S_p) vs log(ell)
@@ -637,17 +655,30 @@ f_ion = 0.5        # Ion gyrofrequency (spectral break)
 f_electron = 50    # Electron scales
 
 # Energy-containing range: flat or slightly rising
+# 약한 양의 기울기는 대규모 에너지 저장소(태양풍 흐름, CME 구조)를
+# 표현하며, 이 에너지가 관성 범위로 주입된다; 난류 자체는 더 높은
+# 주파수에 위치한다.
 E_energy = np.where(f < f_inertial, 1e2 * (f / f_inertial)**0.5, 0)
 
 # Inertial range: -5/3 slope
+# Kolmogorov/GS95의 -5/3 기울기가 약 2 십진배(decade)에 걸쳐 유지되는
+# 이유: 이 범위에서 에너지는 소산 없이 전달되기 때문이다 — 대규모
+# 소스와 이온 스케일 싱크 사이의 "파이프라인"이다.
 E_inertial = np.where((f >= f_inertial) & (f < f_ion),
                       1e2 * (f / f_inertial)**(-5/3), 0)
 
 # Dissipation range (ion scales): -2.8 slope
+# 이온 스케일에서 ~-2.8로의 가파른 변화는 운동학적 감쇠(이온 Landau 감쇠,
+# cyclotron 공명)의 시작을 반영한다: 파장 λ ~ ρ_i인 파동이 이온과
+# 공명하며 에너지를 열로 전달하여, -5/3 관성 범위를 만든 자기 유사
+# 캐스케이드를 끊는다.
 E_dissipation = np.where((f >= f_ion) & (f < f_electron),
                          1e2 * (f_ion / f_inertial)**(-5/3) * (f / f_ion)**(-2.8), 0)
 
 # Electron dissipation: steeper
+# 전자 스케일에서 기울기가 ~-4로 더 가파르게 되는 이유: 전자도 요동을
+# 감쇠시키기 시작하기 때문이다; 남은 에너지는 전자 가열로 소산되며,
+# 이것이 태양풍에서 전자와 이온이 다르게 가열되는 이유다.
 E_electron = np.where(f >= f_electron,
                       1e2 * (f_ion / f_inertial)**(-5/3) * (f_electron / f_ion)**(-2.8) * (f / f_electron)**(-4), 0)
 
@@ -655,6 +686,9 @@ E_electron = np.where(f >= f_electron,
 E_total = E_energy + E_inertial + E_dissipation + E_electron
 
 # Add noise to make it realistic
+# 곱셈적 로그 정규 노이즈는 실제 단일 지점 우주선 측정의 분산을 모방한다:
+# 스펙트럼은 앙상블로부터의 잡음 있는 샘플이며, 산란은 신호에 비례한다
+# (덧셈적이 아님).
 np.random.seed(42)
 E_total *= 10**(np.random.normal(0, 0.1, len(f)))
 
@@ -731,15 +765,27 @@ import matplotlib.pyplot as plt
 k = np.logspace(-1, 2, 200)
 
 # Kolmogorov (hydrodynamic)
+# k^{-5/3}은 차원 분석에서 나온다: 관성 범위에서 유일하게 관련된 양은
+# ε(에너지 플럭스)와 k이며, E(k) ~ ε^{2/3} k^{-5/3}이 된다.
 E_K41 = k**(-5/3)
 
 # Iroshnikov-Kraichnan (MHD, isotropic)
+# IK는 등방적 알프벤파(Alfvén wave) 충돌을 가정한다; 각 상호작용은
+# (v_ℓ/v_A)² 비율만큼 약화되어 캐스케이드가 느려지고 스펙트럼이
+# 얕아진다(k^{-3/2}). IK는 물리를 부분적으로만 맞추고 비등방성의
+# 결정적 역할을 무시한다.
 E_IK = k**(-3/2)
 
 # Goldreich-Sridhar (MHD, anisotropic, perpendicular)
+# GS95는 수직 방향에서 k^{-5/3}을 회복한다: 수직 소용돌이는 Kolmogorov처럼
+# 캐스케이드하는 반면 평행 동역학은 알프벤파 전파(임계 균형)에 의해
+# 제한되기 때문이다 — K41과의 차이는 수직 기울기가 아닌 비등방성
+# (k_∥ ∝ k_⊥^{2/3})에 있다.
 E_GS = k**(-5/3)
 
 # Normalize at k=1
+# k=1에서 정규화하면 이론 간의 진폭 차이가 아닌 기울기 차이를 플롯이
+# 드러낼 수 있다.
 E_K41 = E_K41 / E_K41[np.argmin(np.abs(k - 1))]
 E_IK = E_IK / E_IK[np.argmin(np.abs(k - 1))]
 E_GS = E_GS / E_GS[np.argmin(np.abs(k - 1))]
@@ -785,9 +831,17 @@ import matplotlib.pyplot as plt
 k_perp = np.logspace(-1, 2, 100)
 
 # Goldreich-Sridhar anisotropy relation
+# k_∥ ∝ k_⊥^{2/3}는 임계 균형(critical balance)의 특징이다: 각 수직
+# 스케일 ℓ_⊥에서 알프벤 교차 시간 τ_A = ℓ_∥/v_A가 소용돌이 전복 시간
+# τ_nl = ℓ_⊥/δv와 같아진다. 이 균형을 위반하는 소용돌이는 즉시
+# 캐스케이드하거나(τ_nl < τ_A) 파동적이 되므로(τ_nl > τ_A), 난류는
+# 정확히 이 비등방성 곡선에 머물도록 자기 조직화된다.
 k_para_GS = k_perp**(2/3)
 
 # Isotropic (IK)
+# IK는 k_∥ = k_⊥ (구면 대칭 에너지 분포)를 가정하며, 알프벤파가 B_0을
+# 따라 우선적으로 에너지를 운반한다는 사실을 무시한다; 이것이 IK가
+# 잘못된 스펙트럼을 예측하는 근본적인 결함이다.
 k_para_iso = k_perp
 
 # Plot
@@ -809,6 +863,9 @@ ax.grid(True, alpha=0.3, which='both')
 
 # Panel 2: Aspect ratio
 ax = axes[1]
+# k_∥/k_⊥ = k_⊥^{-1/3} → 0 (k_⊥ → ∞일 때), 즉 작은 스케일 소용돌이는
+# B_0을 따라 매우 길게 늘어난다(실공간에서 ℓ_∥ ≫ ℓ_⊥); 이 비등방성이
+# MHD 난류를 등방적 Navier-Stokes 난류와 근본적으로 다르게 만든다.
 aspect_GS = k_para_GS / k_perp  # = k_perp^{-1/3}
 aspect_iso = np.ones_like(k_perp)
 

@@ -1,5 +1,22 @@
 # 함수형 프로그래밍 (Functional Programming)
 
+**이전**: [비동기 프로그래밍](./08_Async_Programming.md) | **다음**: [성능 최적화](./10_Performance_Optimization.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 함수형 프로그래밍(Functional Programming)의 핵심 원칙을 설명하고, 명령형 프로그래밍(Imperative Programming)과의 차이를 비교할 수 있습니다
+2. 일급 함수(First-Class Function)를 작성하고 활용할 수 있습니다 — 함수를 값으로 전달하고 반환하는 것을 포함하여
+3. 고차 함수(Higher-Order Function) (`map`, `filter`, `reduce`)를 사용하여 컬렉션(Collection)을 변환할 수 있습니다
+4. 람다 표현식(Lambda Expression)을 적절히 사용하고, 일반 함수가 더 적합한 경우를 판단할 수 있습니다
+5. `functools` 모듈로 부분 적용(Partial Application), 메모이제이션(Memoization), 함수 오버로딩(Function Overloading)을 구현할 수 있습니다
+6. 순수 함수(Pure Function)와 비순수 함수(Impure Function)를 구분하고, 파이썬에서 불변성(Immutability) 패턴을 적용할 수 있습니다
+7. 함수 합성(Function Composition)과 체이닝(Chaining)을 활용하여 데이터 처리 파이프라인(Pipeline)을 구축할 수 있습니다
+8. `itertools`의 조합/순열(Combinatoric), 그룹화(Grouping), 무한 이터레이터(Infinite Iterator) 유틸리티를 효과적으로 활용할 수 있습니다
+
+---
+
 ## 1. 함수형 프로그래밍이란?
 
 함수형 프로그래밍은 순수 함수와 불변 데이터를 중심으로 프로그램을 구성하는 패러다임입니다.
@@ -865,4 +882,4 @@ print(add_three(1)(2, 3))     # 6
 
 ## 다음 단계
 
-[10_Performance_Optimization.md](./10_Performance_Optimization.md)에서 파이썬 성능 최적화 기법을 배워봅시다!
+[성능 최적화 (Performance Optimization)](./10_Performance_Optimization.md)에서 파이썬 성능 최적화 기법을 배워봅시다!

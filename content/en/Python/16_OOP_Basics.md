@@ -1,14 +1,25 @@
 # Object-Oriented Programming Basics
 
+**Previous**: [Python Basics](./15_Python_Basics.md)
+
 > **Note**: This lesson is for prerequisite knowledge review. If you lack OOP fundamentals before starting advanced lessons (decorators, metaclasses, etc.), study this content first.
 
 ## Learning Objectives
-- Understand the concepts of classes and objects (instances)
-- Utilize constructors, instance/class variables, and methods
-- Grasp the principles of inheritance, polymorphism, and encapsulation
-- Use basic special methods (magic methods)
+
+After completing this lesson, you will be able to:
+
+1. Explain the relationship between classes and objects (instances) and create instances from class definitions
+2. Write constructors (`__init__`) and distinguish between instance variables, class variables, and the role of `self`
+3. Implement instance methods, class methods (`@classmethod`), and static methods (`@staticmethod`)
+4. Apply single and multiple inheritance, use `super()`, and explain the Method Resolution Order (MRO)
+5. Implement encapsulation using naming conventions (public, protected, private) and the `@property` decorator
+6. Describe polymorphism and duck typing and write code that operates on objects through a common interface
+7. Overload operators and implement container protocols using special (magic) methods
+8. Define abstract base classes with the `abc` module to enforce interface contracts
 
 ---
+
+Object-oriented programming is the dominant paradigm for structuring medium-to-large Python applications. Understanding how to model real-world concepts as classes with well-defined interfaces, how inheritance enables code reuse, and how encapsulation protects internal state will prepare you for the advanced patterns -- decorators, metaclasses, and descriptors -- covered in later lessons.
 
 ## 1. Classes and Objects
 
@@ -793,12 +804,76 @@ print(circle.describe())  # Area: 28.27..., Perimeter: 18.84...
 | `_name` | protected | Internal use recommended |
 | `__name` | private | Name mangling applied |
 
-### Next Steps
+---
 
-After completing OOP basics, proceed to:
-- [02_Decorators.md](./02_Decorators.md): Decorators
-- [06_Metaclasses.md](./06_Metaclasses.md): Metaclasses
-- [07_Descriptors.md](./07_Descriptors.md): Descriptors
+## Exercises
+
+### Exercise 1: Class Fundamentals
+
+Build a class from scratch to solidify your understanding of the object model.
+
+1. Define a `BankAccount` class with:
+   - Instance variables: `owner` (str), `balance` (float, default 0.0)
+   - Class variable: `interest_rate` (float, default 0.02)
+   - Methods: `deposit(amount)`, `withdraw(amount)`, `apply_interest()`, `__str__`
+2. Add validation to `deposit` and `withdraw`: both amounts must be positive; `withdraw` must check for sufficient funds. Raise `ValueError` with a descriptive message on failure.
+3. Add a class method `from_dict(cls, data)` that creates a `BankAccount` from a dictionary `{"owner": "Alice", "balance": 500.0}`.
+4. Add a static method `is_valid_amount(amount)` that returns `True` if `amount > 0`.
+5. Create two accounts, deposit and withdraw from them, apply interest, and demonstrate that `interest_rate` changes apply to all instances via `BankAccount.interest_rate = 0.03`.
+
+### Exercise 2: Inheritance Hierarchy
+
+Build a three-level inheritance hierarchy to practice `super()` and method overriding.
+
+1. Define a base class `Employee` with:
+   - `__init__(self, name, emp_id, base_salary)`
+   - `calculate_pay()` → returns `base_salary`
+   - `__str__` → e.g., `"Employee Alice (E001): $3000.00/month"`
+2. Create `Manager(Employee)` that adds `team_size` and overrides `calculate_pay()` to add a $500 bonus for each team member.
+3. Create `Contractor(Employee)` that adds `hourly_rate` and `hours_worked`, and overrides `calculate_pay()` to ignore `base_salary` and return `hourly_rate * hours_worked`.
+4. Write a function `payroll_report(employees)` that accepts a list of any mix of `Employee`, `Manager`, and `Contractor` objects and prints a formatted pay summary.
+5. Verify with `isinstance()` and `issubclass()` that the hierarchy is correct, and print the MRO for `Manager`.
+
+### Exercise 3: Encapsulation with Properties
+
+Use the `@property` decorator to enforce invariants without breaking the attribute access interface.
+
+1. Create a `Circle` class where `radius` is a property:
+   - The getter returns the stored radius.
+   - The setter raises `ValueError` if the radius is negative.
+   - Add computed properties `area` and `circumference` (read-only).
+2. Create a `Rectangle` class with `width` and `height` as properties (both must be positive). Add a computed property `aspect_ratio = width / height`.
+3. Add a `scale(factor)` method to both classes that multiplies the relevant dimension(s) by `factor`. Verify that the validation in the setter triggers if `factor` is negative.
+4. Demonstrate name mangling: add a private `__id` attribute (generated with `uuid.uuid4()` in `__init__`) and show that it cannot be accessed as `obj.__id` but can be accessed via `obj._ClassName__id`.
+5. Explain when you would choose `@property` over a plain attribute. Give two real-world examples where validation or computation at access time is necessary.
+
+### Exercise 4: Magic Methods and Operator Overloading
+
+Implement a rich `Fraction` class using magic methods.
+
+1. Create a `Fraction` class that stores `numerator` and `denominator` as integers:
+   - `__init__`: store reduced form using `math.gcd`; raise `ZeroDivisionError` if denominator is 0.
+   - `__str__`: `"3/4"`
+   - `__repr__`: `"Fraction(3, 4)"`
+2. Implement arithmetic operators: `__add__`, `__sub__`, `__mul__`, `__truediv__`. Each should return a new `Fraction` in reduced form.
+3. Implement comparison operators: `__eq__`, `__lt__`, `__le__`, `__gt__`, `__ge__` (use cross-multiplication for comparison).
+4. Implement `__abs__`, `__neg__`, and `__float__` (converts to a Python float).
+5. Verify that `Fraction` objects can be stored in a set and used as dictionary keys by implementing `__hash__`. Demonstrate: `{Fraction(1,2), Fraction(2,4)}` should have only one element.
+
+### Exercise 5: Abstract Base Classes and Polymorphism
+
+Design a plugin-style system using abstract base classes.
+
+1. Using `abc.ABC` and `@abstractmethod`, define an abstract class `DataExporter` with abstract methods:
+   - `export(data: list, filepath: str) -> None`
+   - `get_extension() -> str`
+   - A concrete method `validate(data)` that raises `TypeError` if `data` is not a list.
+2. Implement two concrete exporters:
+   - `CSVExporter`: writes data (list of dicts) to a CSV file using the `csv` module.
+   - `JSONExporter`: writes data to a JSON file using the `json` module with `indent=2`.
+3. Write a function `export_all(data, filepath_base, exporters)` that takes a list of `DataExporter` instances and calls each one, appending the correct extension to `filepath_base`.
+4. Demonstrate duck typing: write a `MarkdownExporter` that does NOT inherit from `DataExporter` but implements `export()` and `get_extension()`. Show that it works with `export_all` due to duck typing.
+5. Use `isinstance()` to check which exporters in a mixed list are true subclasses of `DataExporter` vs. duck-typed implementations. Reflect on when to enforce the abstract base class contract vs. rely on duck typing.
 
 ---
 
@@ -807,3 +882,7 @@ After completing OOP basics, proceed to:
 - [Python OOP Official Documentation](https://docs.python.org/3/tutorial/classes.html)
 - [Real Python - OOP](https://realpython.com/python3-object-oriented-programming/)
 - [Data Model Documentation](https://docs.python.org/3/reference/datamodel.html)
+
+---
+
+**Previous**: [Python Basics](./15_Python_Basics.md)

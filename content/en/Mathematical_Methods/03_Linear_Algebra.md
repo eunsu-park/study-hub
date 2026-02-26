@@ -50,23 +50,23 @@ $$
 ```python
 import numpy as np
 
-# 행렬 기본 연산
+# Basic matrix operations
 A = np.array([[1, 2], [3, 4]])
 B = np.array([[5, 6], [7, 8]])
 
 print("A =\n", A)
 print("B =\n", B)
 
-# 행렬 곱셈
+# Matrix multiplication
 print("\nAB =\n", A @ B)
 print("BA =\n", B @ A)
 print("AB ≠ BA:", not np.allclose(A @ B, B @ A))
 
-# 행렬 곱의 성질
+# Properties of matrix multiplication
 C = np.array([[1, 0], [2, 3]])
 print("\n(AB)C =\n", (A @ B) @ C)
 print("A(BC) =\n", A @ (B @ C))
-print("결합법칙 성립:", np.allclose((A @ B) @ C, A @ (B @ C)))
+print("Associativity holds:", np.allclose((A @ B) @ C, A @ (B @ C)))
 ```
 
 ### 1.2 Transpose and Conjugate Transpose
@@ -89,17 +89,17 @@ $$
 $$
 
 ```python
-# 전치 행렬
+# Transpose matrix
 A = np.array([[1, 2, 3], [4, 5, 6]])
 print("A =\n", A)
 print("A^T =\n", A.T)
 
-# 복소 행렬의 켤레 전치
+# Conjugate transpose of a complex matrix
 Z = np.array([[1+2j, 3-1j], [4j, 2+3j]])
 print("\nZ =\n", Z)
 print("Z† =\n", Z.conj().T)
 
-# (AB)^T = B^T A^T 확인
+# Verify (AB)^T = B^T A^T
 B = np.array([[1, 2], [3, 4], [5, 6]])
 print("\n(AB)^T =\n", (A @ B).T)
 print("B^T A^T =\n", B.T @ A.T)
@@ -126,8 +126,8 @@ $$
 **Unitary matrix**: $A^\dagger A = AA^\dagger = I$ (complex extension of orthogonal matrices)
 
 ```python
-# 직교 행렬 예: 2D 회전 행렬
-theta = np.pi / 4  # 45도 회전
+# Orthogonal matrix example: 2D rotation matrix
+theta = np.pi / 4  # 45-degree rotation
 R = np.array([[np.cos(theta), -np.sin(theta)],
               [np.sin(theta),  np.cos(theta)]])
 
@@ -135,11 +135,11 @@ print("R =\n", R)
 print("R^T R =\n", np.round(R.T @ R, 10))
 print("det(R) =", np.linalg.det(R))  # det = +1 (proper rotation)
 
-# 에르미트 행렬 예
+# Hermitian matrix example
 H = np.array([[2, 1-1j], [1+1j, 3]])
 print("\nH =\n", H)
 print("H† =\n", H.conj().T)
-print("에르미트:", np.allclose(H, H.conj().T))
+print("Hermitian:", np.allclose(H, H.conj().T))
 ```
 
 ---
@@ -188,19 +188,19 @@ $$
 import numpy as np
 from numpy.linalg import det
 
-# 행렬식 계산
+# Determinant computation
 A = np.array([[2, 1, 3],
               [0, -1, 2],
               [4, 3, 1]])
 
 print("det(A) =", det(A))
 
-# 여인수 전개를 수동으로 계산 (1행 기준)
+# Manual cofactor expansion (along row 1)
 # det = 2*(-1-6) - 1*(0-8) + 3*(0+4)
 manual = 2*(-1*1 - 2*3) - 1*(0*1 - 2*4) + 3*(0*3 - (-1)*4)
-print("수동 계산:", manual)
+print("Manual computation:", manual)
 
-# 행렬식의 성질 확인
+# Verify properties of the determinant
 B = np.array([[1, 2, 0],
               [3, 1, -1],
               [2, 0, 4]])
@@ -225,19 +225,19 @@ The **sign** of $\det(A)$ indicates orientation:
 ```python
 import matplotlib.pyplot as plt
 
-# 2D에서의 행렬식 = 넓이
+# Determinant = area in 2D
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 변환 전: 단위 정사각형
+# Before transformation: unit square
 square = np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]).T
 
 A = np.array([[2, 1], [0, 3]])  # det = 6
 
-# 변환 후
+# After transformation
 transformed = A @ square
 
-for ax, shape, title in [(axes[0], square, '단위 정사각형 (넓이=1)'),
-                          (axes[1], transformed, f'변환 후 (넓이=|det|={abs(det(A)):.0f})')]:
+for ax, shape, title in [(axes[0], square, 'Unit square (area=1)'),
+                          (axes[1], transformed, f'After transform (area=|det|={abs(det(A)):.0f})')]:
     ax.fill(shape[0], shape[1], alpha=0.3, color='blue')
     ax.plot(shape[0], shape[1], 'b-', linewidth=2)
     ax.set_xlim(-1, 8)
@@ -251,7 +251,7 @@ for ax, shape, title in [(axes[0], square, '단위 정사각형 (넓이=1)'),
 plt.tight_layout()
 plt.savefig('determinant_area.png', dpi=100, bbox_inches='tight')
 plt.close()
-print(f"det(A) = {det(A):.0f}: 넓이가 {abs(det(A)):.0f}배 확대")
+print(f"det(A) = {det(A):.0f}: area scaled by {abs(det(A)):.0f}x")
 ```
 
 ---
@@ -291,11 +291,11 @@ print("A =\n", A)
 print("A^{-1} =\n", A_inv)
 print("A @ A^{-1} =\n", np.round(A @ A_inv, 10))
 
-# 수반 행렬을 이용한 수동 계산
+# Manual computation using the adjugate matrix
 d = det(A)  # 2*3 - 1*5 = 1
-adj_A = np.array([[3, -1], [-5, 2]])  # 여인수 전치
+adj_A = np.array([[3, -1], [-5, 2]])  # transpose of cofactor matrix
 manual_inv = adj_A / d
-print("\n수동 계산:\n", manual_inv)
+print("\nManual computation:\n", manual_inv)
 ```
 
 ### 3.2 Gaussian Elimination
@@ -311,40 +311,40 @@ Solve the system of linear equations $A\mathbf{x} = \mathbf{b}$ by performing ro
 
 ```python
 def gauss_eliminate(A_aug, verbose=True):
-    """가우스 소거법으로 연립방정식을 풉니다.
+    """Solve a system of equations by Gaussian elimination.
 
-    A_aug: 확대 행렬 [A | b]
+    A_aug: augmented matrix [A | b]
     """
     A = A_aug.astype(float).copy()
     n = A.shape[0]
 
-    # 전진 소거 (forward elimination)
+    # Forward elimination
     for col in range(n):
-        # 피봇 선택 (부분 피봇팅)
+        # Pivot selection (partial pivoting)
         max_row = col + np.argmax(np.abs(A[col:, col]))
         if max_row != col:
             A[[col, max_row]] = A[[max_row, col]]
 
         if abs(A[col, col]) < 1e-12:
-            print(f"경고: 피봇이 0에 가깝습니다 (열 {col})")
+            print(f"Warning: pivot is near zero (column {col})")
             continue
 
-        # 아래 행들 소거
+        # Eliminate rows below
         for row in range(col + 1, n):
             factor = A[row, col] / A[col, col]
             A[row] -= factor * A[col]
 
     if verbose:
-        print("상삼각 행렬:\n", np.round(A, 4))
+        print("Upper triangular matrix:\n", np.round(A, 4))
 
-    # 후진 대입 (back substitution)
+    # Back substitution
     x = np.zeros(n)
     for i in range(n - 1, -1, -1):
         x[i] = (A[i, -1] - A[i, i+1:n] @ x[i+1:n]) / A[i, i]
 
     return x
 
-# 예제: 3x3 연립방정식
+# Example: 3x3 system of equations
 # 2x + y - z = 8
 # -3x - y + 2z = -11
 # -2x + y + 2z = -3
@@ -355,10 +355,10 @@ b = np.array([8, -11, -3])
 
 A_aug = np.column_stack([A, b])
 x = gauss_eliminate(A_aug)
-print(f"\n해: x = {x}")
-print(f"검증 Ax = {A @ x}")
+print(f"\nSolution: x = {x}")
+print(f"Verify Ax = {A @ x}")
 
-# NumPy 내장 함수와 비교
+# Compare with NumPy built-in
 x_np = np.linalg.solve(A, b)
 print(f"NumPy solve: {x_np}")
 ```
@@ -377,11 +377,11 @@ where $A_i$ is the matrix obtained by replacing the $i$-th column of $A$ with $\
 
 ```python
 def cramer(A, b):
-    """크래머 법칙으로 Ax = b를 풉니다."""
+    """Solve Ax = b using Cramer's rule."""
     n = len(b)
     d = det(A)
     if abs(d) < 1e-12:
-        raise ValueError("행렬식이 0: 유일한 해가 존재하지 않음")
+        raise ValueError("Determinant is 0: no unique solution exists")
 
     x = np.zeros(n)
     for i in range(n):
@@ -390,14 +390,14 @@ def cramer(A, b):
         x[i] = det(A_i) / d
     return x
 
-# 예제
+# Example
 A = np.array([[2, 1, -1],
               [-3, -1, 2],
               [-2, 1, 2]])
 b = np.array([8, -11, -3])
 
 x = cramer(A, b)
-print(f"크래머 법칙 해: {x}")
+print(f"Cramer's rule solution: {x}")
 ```
 
 ### 3.4 Rank of a Matrix
@@ -414,9 +414,9 @@ $$
 - $\text{rank}(A) < \text{rank}(A|b)$: No solution (inconsistent)
 
 ```python
-# 계수 예제
+# Rank examples
 A_full = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 10]])  # rank 3
-A_deficient = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # rank 2 (3행 = 행1 + 2*행2 아님, 하지만 1+3=2*2)
+A_deficient = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])  # rank 2 (row3 != row1 + 2*row2, but 1+3=2*2)
 
 print(f"rank(A_full) = {np.linalg.matrix_rank(A_full)}")
 print(f"rank(A_deficient) = {np.linalg.matrix_rank(A_deficient)}")
@@ -453,14 +453,14 @@ This is an $n$-th degree polynomial in $\lambda$, called the **characteristic po
 import numpy as np
 from numpy.linalg import eig
 
-# 2x2 행렬의 고유값/고유벡터
+# Eigenvalues/eigenvectors of a 2x2 matrix
 A = np.array([[4, 2], [1, 3]])
 
 eigenvalues, eigenvectors = eig(A)
-print("고유값:", eigenvalues)
-print("고유벡터 (열벡터):\n", eigenvectors)
+print("Eigenvalues:", eigenvalues)
+print("Eigenvectors (as columns):\n", eigenvectors)
 
-# 검증: Av = λv
+# Verify: Av = λv
 for i in range(len(eigenvalues)):
     lam = eigenvalues[i]
     v = eigenvectors[:, i]
@@ -497,11 +497,11 @@ $$
 ```python
 import sympy as sp
 
-# SymPy를 이용한 해석적 계산
+# Analytic computation using SymPy
 A_sym = sp.Matrix([[3, 1], [0, 2]])
-print("특성 다항식:", A_sym.charpoly().as_expr())
-print("고유값:", A_sym.eigenvals())  # {3: 1, 2: 1} (고유값: 중복도)
-print("고유벡터:", A_sym.eigenvects())
+print("Characteristic polynomial:", A_sym.charpoly().as_expr())
+print("Eigenvalues:", A_sym.eigenvals())  # {3: 1, 2: 1} (eigenvalue: multiplicity)
+print("Eigenvectors:", A_sym.eigenvects())
 ```
 
 ### 4.3 Matrix Diagonalization
@@ -521,24 +521,24 @@ $$
 - **Coupled ODEs**: Decouple $\dot{\mathbf{x}} = A\mathbf{x}$ into independent scalar ODEs
 
 ```python
-# 대각화 예제
+# Diagonalization example
 A = np.array([[4, 2], [1, 3]])
 eigenvalues, P = eig(A)
 D = np.diag(eigenvalues)
 
-print("P (고유벡터 행렬):\n", P)
-print("D (대각 행렬):\n", D)
+print("P (eigenvector matrix):\n", P)
+print("D (diagonal matrix):\n", D)
 
-# 검증: A = P D P^{-1}
+# Verify: A = P D P^{-1}
 P_inv = np.linalg.inv(P)
 A_reconstructed = P @ D @ P_inv
 print("\nP D P^{-1} =\n", np.round(A_reconstructed, 10))
-print("A와 일치:", np.allclose(A, A_reconstructed))
+print("Matches A:", np.allclose(A, A_reconstructed))
 
-# 응용: A^10 계산
+# Application: compute A^10
 A_power_10 = P @ np.diag(eigenvalues**10) @ P_inv
 print(f"\nA^10 =\n{np.round(A_power_10.real, 2)}")
-print(f"직접 계산:\n{np.round(np.linalg.matrix_power(A, 10).astype(float), 2)}")
+print(f"Direct computation:\n{np.round(np.linalg.matrix_power(A, 10).astype(float), 2)}")
 ```
 
 ### 4.4 Properties of Symmetric and Hermitian Matrices
@@ -556,26 +556,26 @@ print(f"직접 계산:\n{np.round(np.linalg.matrix_power(A, 10).astype(float), 2
    - Diagonalizable by a unitary matrix $U$: $U^\dagger A U = D$, $U^\dagger = U^{-1}$
 
 ```python
-# 실대칭 행렬의 성질
+# Properties of real symmetric matrices
 A_sym = np.array([[4, 1, 2],
                    [1, 3, 1],
                    [2, 1, 5]])
 
 eigenvalues, eigenvectors = eig(A_sym)
-print("대칭 행렬의 고유값:", eigenvalues)
-print("모두 실수:", np.allclose(eigenvalues.imag, 0))
+print("Eigenvalues of symmetric matrix:", eigenvalues)
+print("All real:", np.allclose(eigenvalues.imag, 0))
 
-# 고유벡터의 직교성 확인
-print("\n고유벡터 내적:")
+# Verify orthogonality of eigenvectors
+print("\nEigenvector dot products:")
 for i in range(3):
     for j in range(i+1, 3):
         dot = eigenvectors[:, i] @ eigenvectors[:, j]
         print(f"  v{i+1} · v{j+1} = {dot:.6e}")
 
-# 직교 행렬로 대각화
+# Diagonalization with orthogonal matrix
 Q = eigenvectors
 print(f"\nQ^T Q =\n{np.round(Q.T @ Q, 10)}")
-print("Q는 직교 행렬:", np.allclose(Q.T @ Q, np.eye(3)))
+print("Q is orthogonal:", np.allclose(Q.T @ Q, np.eye(3)))
 ```
 
 ### 4.5 Summary of Major Matrix Decompositions
@@ -627,31 +627,31 @@ $$
 
 ```python
 def check_definiteness(A):
-    """대칭 행렬의 정치성을 판별합니다."""
-    eigenvalues = np.linalg.eigvalsh(A)  # 대칭 행렬 전용
-    print(f"고유값: {eigenvalues}")
+    """Determine the definiteness of a symmetric matrix."""
+    eigenvalues = np.linalg.eigvalsh(A)  # specialized for symmetric matrices
+    print(f"Eigenvalues: {eigenvalues}")
 
     if all(eigenvalues > 0):
-        return "양정치 (positive definite)"
+        return "positive definite"
     elif all(eigenvalues >= 0):
-        return "양반정치 (positive semidefinite)"
+        return "positive semidefinite"
     elif all(eigenvalues < 0):
-        return "음정치 (negative definite)"
+        return "negative definite"
     elif all(eigenvalues <= 0):
-        return "음반정치 (negative semidefinite)"
+        return "negative semidefinite"
     else:
-        return "부정치 (indefinite)"
+        return "indefinite"
 
-# 예제
+# Examples
 matrices = {
-    "양정치": np.array([[2, -1], [-1, 2]]),
-    "부정치": np.array([[1, 3], [3, 1]]),
-    "양반정치": np.array([[1, 1], [1, 1]]),
+    "positive definite": np.array([[2, -1], [-1, 2]]),
+    "indefinite": np.array([[1, 3], [3, 1]]),
+    "positive semidefinite": np.array([[1, 1], [1, 1]]),
 }
 
 for name, M in matrices.items():
     result = check_definiteness(M)
-    print(f"{name} 행렬: {result}\n")
+    print(f"{name} matrix: {result}\n")
 ```
 
 ### 5.3 Principal Axis Theorem
@@ -671,48 +671,48 @@ where $\mathbf{y} = Q^T \mathbf{x}$ (principal axis coordinates).
 ```python
 import matplotlib.pyplot as plt
 
-# 이차곡면과 주축 변환 시각화
+# Visualization of quadratic surface and principal axis transformation
 A = np.array([[5, 2], [2, 2]])
 eigenvalues, Q = np.linalg.eigh(A)
 
-print(f"원래 이차형식: 5x² + 4xy + 2y²")
-print(f"고유값: λ₁={eigenvalues[0]:.2f}, λ₂={eigenvalues[1]:.2f}")
-print(f"주축 좌표: {eigenvalues[0]:.2f}y₁² + {eigenvalues[1]:.2f}y₂²")
+print(f"Original quadratic form: 5x² + 4xy + 2y²")
+print(f"Eigenvalues: λ₁={eigenvalues[0]:.2f}, λ₂={eigenvalues[1]:.2f}")
+print(f"Principal axis coordinates: {eigenvalues[0]:.2f}y₁² + {eigenvalues[1]:.2f}y₂²")
 
-# 타원 시각화
+# Ellipse visualization
 theta = np.linspace(0, 2*np.pi, 200)
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 원래 좌표계에서의 타원 (5x² + 4xy + 2y² = 1)
-# 매개변수 표현 이용
+# Ellipse in original coordinates (5x² + 4xy + 2y² = 1)
+# Using parametric representation
 t = np.linspace(0, 2*np.pi, 200)
-# 주축 좌표에서 타원: λ₁y₁² + λ₂y₂² = 1
+# Ellipse in principal axis coordinates: λ₁y₁² + λ₂y₂² = 1
 y1 = np.cos(t) / np.sqrt(eigenvalues[0])
 y2 = np.sin(t) / np.sqrt(eigenvalues[1])
-# 원래 좌표로 변환: x = Q y
+# Transform back to original coordinates: x = Q y
 xy = Q @ np.array([y1, y2])
 
 axes[0].plot(xy[0], xy[1], 'b-', linewidth=2)
-# 주축 방향
+# Principal axis directions
 for i in range(2):
     v = Q[:, i] / np.sqrt(eigenvalues[i])
     axes[0].arrow(0, 0, v[0], v[1], head_width=0.03, color=['red', 'green'][i],
-                  linewidth=2, label=f'주축 {i+1} (λ={eigenvalues[i]:.2f})')
+                  linewidth=2, label=f'Principal axis {i+1} (λ={eigenvalues[i]:.2f})')
 axes[0].set_aspect('equal')
 axes[0].grid(True, alpha=0.3)
 axes[0].legend()
-axes[0].set_title('원래 좌표계: 5x² + 4xy + 2y² = 1')
+axes[0].set_title('Original coordinates: 5x² + 4xy + 2y² = 1')
 
-# 주축 좌표에서의 타원 (축 정렬)
+# Ellipse in principal axis coordinates (axis-aligned)
 y1 = np.cos(t) / np.sqrt(eigenvalues[0])
 y2 = np.sin(t) / np.sqrt(eigenvalues[1])
 axes[1].plot(y1, y2, 'b-', linewidth=2)
-axes[1].axhline(y=0, color='green', linewidth=1.5, label=f'y₂축 (λ={eigenvalues[1]:.2f})')
-axes[1].axvline(x=0, color='red', linewidth=1.5, label=f'y₁축 (λ={eigenvalues[0]:.2f})')
+axes[1].axhline(y=0, color='green', linewidth=1.5, label=f'y₂-axis (λ={eigenvalues[1]:.2f})')
+axes[1].axvline(x=0, color='red', linewidth=1.5, label=f'y₁-axis (λ={eigenvalues[0]:.2f})')
 axes[1].set_aspect('equal')
 axes[1].grid(True, alpha=0.3)
 axes[1].legend()
-axes[1].set_title(f'주축 좌표: {eigenvalues[0]:.2f}y₁² + {eigenvalues[1]:.2f}y₂² = 1')
+axes[1].set_title(f'Principal axis coordinates: {eigenvalues[0]:.2f}y₁² + {eigenvalues[1]:.2f}y₂² = 1')
 
 plt.tight_layout()
 plt.savefig('principal_axes.png', dpi=100, bbox_inches='tight')
@@ -744,26 +744,26 @@ $$
 In the principal axis coordinate system, angular momentum simplifies to $L_i = I_i \omega_i$.
 
 ```python
-# 관성 텐서 예제: 정육면체 꼭짓점에 질량이 있는 경우
-# 정육면체 꼭짓점 좌표 (변의 길이 2, 중심 원점)
+# Inertia tensor example: masses at vertices of a cube
+# Cube vertex coordinates (side length 2, center at origin)
 vertices = np.array([
     [ 1,  1,  1], [ 1,  1, -1], [ 1, -1,  1], [ 1, -1, -1],
     [-1,  1,  1], [-1,  1, -1], [-1, -1,  1], [-1, -1, -1]
 ], dtype=float)
 
-m = 1.0  # 각 꼭짓점의 질량
+m = 1.0  # mass at each vertex
 
-# 관성 텐서 계산
+# Compute inertia tensor
 I_tensor = np.zeros((3, 3))
 for r in vertices:
     I_tensor += m * (np.dot(r, r) * np.eye(3) - np.outer(r, r))
 
-print("관성 텐서:\n", I_tensor)
+print("Inertia tensor:\n", I_tensor)
 
-# 대각화 → 주관성 모멘트
+# Diagonalization → principal moments of inertia
 eigenvalues, eigenvectors = np.linalg.eigh(I_tensor)
-print(f"\n주관성 모멘트: I₁={eigenvalues[0]:.2f}, I₂={eigenvalues[1]:.2f}, I₃={eigenvalues[2]:.2f}")
-print("주축 방향:\n", eigenvectors)
+print(f"\nPrincipal moments: I₁={eigenvalues[0]:.2f}, I₂={eigenvalues[1]:.2f}, I₃={eigenvalues[2]:.2f}")
+print("Principal axes:\n", eigenvectors)
 ```
 
 ### 6.2 Coupled Oscillations
@@ -783,10 +783,10 @@ K\mathbf{v} = \omega^2 M\mathbf{v}
 $$
 
 ```python
-# 연성 진동 예제: 두 질량-스프링 계
-# m₁ = m₂ = m, 스프링 상수 k₁ = k₂ = k₃ = k
-# 운동방정식: m*x₁'' = -k*x₁ + k*(x₂-x₁) = -2k*x₁ + k*x₂
-#             m*x₂'' = -k*(x₂-x₁) - k*x₂ = k*x₁ - 2k*x₂
+# Coupled oscillation example: two mass-spring system
+# m₁ = m₂ = m, spring constants k₁ = k₂ = k₃ = k
+# Equations of motion: m*x₁'' = -k*x₁ + k*(x₂-x₁) = -2k*x₁ + k*x₂
+#                      m*x₂'' = -k*(x₂-x₁) - k*x₂ = k*x₁ - 2k*x₂
 
 m, k = 1.0, 1.0
 
@@ -794,21 +794,21 @@ M_mat = m * np.eye(2)
 K_mat = np.array([[2*k, -k],
                    [-k, 2*k]])
 
-# 일반화 고유값 문제: K v = ω² M v
-# M = mI이므로 (1/m)K v = ω² v
+# Generalized eigenvalue problem: K v = ω² M v
+# Since M = mI, this becomes (1/m)K v = ω² v
 eigenvalues, eigenvectors = np.linalg.eigh(K_mat / m)
 omega = np.sqrt(eigenvalues)
 
-print("강성 행렬 K:\n", K_mat)
-print(f"\n고유진동수: ω₁ = {omega[0]:.4f}, ω₂ = {omega[1]:.4f}")
-print(f"주기: T₁ = {2*np.pi/omega[0]:.4f}, T₂ = {2*np.pi/omega[1]:.4f}")
-print(f"\n고유모드 1 (동상): {eigenvectors[:, 0]}")
-print(f"고유모드 2 (역상): {eigenvectors[:, 1]}")
+print("Stiffness matrix K:\n", K_mat)
+print(f"\nNatural frequencies: ω₁ = {omega[0]:.4f}, ω₂ = {omega[1]:.4f}")
+print(f"Periods: T₁ = {2*np.pi/omega[0]:.4f}, T₂ = {2*np.pi/omega[1]:.4f}")
+print(f"\nMode 1 (in-phase): {eigenvectors[:, 0]}")
+print(f"Mode 2 (out-of-phase): {eigenvectors[:, 1]}")
 
-# 시간 발전 시각화
+# Time evolution visualization
 t = np.linspace(0, 20, 500)
-# 초기 조건: x₁(0) = 1, x₂(0) = 0, 속도 0
-# 모드 좌표로 분해
+# Initial conditions: x₁(0) = 1, x₂(0) = 0, zero velocity
+# Decompose into modal coordinates
 eta = eigenvectors.T @ np.array([1, 0])
 x = np.zeros((2, len(t)))
 for i in range(2):
@@ -817,9 +817,9 @@ for i in range(2):
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(t, x[0], label='x₁(t)', linewidth=1.5)
 ax.plot(t, x[1], label='x₂(t)', linewidth=1.5)
-ax.set_xlabel('시간 t')
-ax.set_ylabel('변위')
-ax.set_title('연성 진동: 맥놀이(beat) 현상')
+ax.set_xlabel('Time t')
+ax.set_ylabel('Displacement')
+ax.set_title('Coupled oscillations: beat phenomenon')
 ax.legend()
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -842,7 +842,7 @@ $$
 These are Hermitian ($\sigma_i^\dagger = \sigma_i$), and each has eigenvalues $\pm 1$.
 
 ```python
-# 파울리 행렬
+# Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
 sigma_y = np.array([[0, -1j], [1j, 0]])
 sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
@@ -850,18 +850,18 @@ sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
 for name, sigma in [('σ_x', sigma_x), ('σ_y', sigma_y), ('σ_z', sigma_z)]:
     vals, vecs = np.linalg.eigh(sigma)
     print(f"{name}:")
-    print(f"  에르미트: {np.allclose(sigma, sigma.conj().T)}")
-    print(f"  고유값: {vals}")
+    print(f"  Hermitian: {np.allclose(sigma, sigma.conj().T)}")
+    print(f"  Eigenvalues: {vals}")
     print(f"  tr(σ) = {np.trace(sigma):.0f}, det(σ) = {np.linalg.det(sigma):.0f}")
     print()
 
-# 교환 관계: [σ_i, σ_j] = 2i ε_ijk σ_k
+# Commutation relations: [σ_i, σ_j] = 2i ε_ijk σ_k
 comm_xy = sigma_x @ sigma_y - sigma_y @ sigma_x
 print("[σ_x, σ_y] = 2i σ_z:")
 print(np.round(comm_xy, 10))
 print("2i σ_z:")
 print(2j * sigma_z)
-print("일치:", np.allclose(comm_xy, 2j * sigma_z))
+print("Matches:", np.allclose(comm_xy, 2j * sigma_z))
 ```
 
 ---
@@ -874,22 +874,22 @@ print("일치:", np.allclose(comm_xy, 2j * sigma_z))
 import numpy as np
 from scipy import linalg
 
-# ===== 기본 연산 =====
+# ===== Basic operations =====
 A = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 10]])
 
-# 행렬식, 역행렬
+# Determinant and inverse
 print(f"det(A) = {np.linalg.det(A):.4f}")
 print(f"A^(-1) =\n{np.linalg.inv(A)}")
 
-# 고유값 분해
+# Eigenvalue decomposition
 vals, vecs = np.linalg.eig(A)
-print(f"\n고유값: {vals}")
+print(f"\nEigenvalues: {vals}")
 
-# ===== 다양한 행렬 분해 =====
+# ===== Various matrix decompositions =====
 
-# LU 분해
+# LU decomposition
 P, L, U = linalg.lu(A)
-print(f"\nLU 분해:")
+print(f"\nLU decomposition:")
 print(f"P =\n{P}")
 print(f"L =\n{np.round(L, 4)}")
 print(f"U =\n{np.round(U, 4)}")
@@ -897,17 +897,17 @@ print(f"PLU = A: {np.allclose(P @ L @ U, A)}")
 
 # SVD (Singular Value Decomposition)
 U_svd, s, Vt = np.linalg.svd(A)
-print(f"\n특이값: {s}")
+print(f"\nSingular values: {s}")
 
-# QR 분해
+# QR decomposition
 Q, R = np.linalg.qr(A)
-print(f"\nQR 분해: Q 직교성 {np.allclose(Q.T @ Q, np.eye(3))}")
+print(f"\nQR decomposition: Q orthogonality {np.allclose(Q.T @ Q, np.eye(3))}")
 
-# 연립방정식 풀기
+# Solving a system of equations
 b = np.array([1, 2, 3])
 x = np.linalg.solve(A, b)
-print(f"\nAx = b의 해: {x}")
-print(f"검증: Ax = {A @ x}")
+print(f"\nSolution of Ax = b: {x}")
+print(f"Verify: Ax = {A @ x}")
 ```
 
 ### 7.2 Symbolic Computation with SymPy
@@ -915,21 +915,21 @@ print(f"검증: Ax = {A @ x}")
 ```python
 import sympy as sp
 
-# 기호 행렬
+# Symbolic matrix
 a, b, c, d = sp.symbols('a b c d')
 M = sp.Matrix([[a, b], [c, d]])
 
-print("일반 2x2 행렬:")
+print("General 2x2 matrix:")
 print(f"  det = {M.det()}")
 print(f"  trace = {M.trace()}")
-print(f"  특성 다항식: {M.charpoly().as_expr()}")
+print(f"  Characteristic polynomial: {M.charpoly().as_expr()}")
 
-# 케일리-해밀턴 정리: 모든 행렬은 자신의 특성 다항식을 만족
+# Cayley-Hamilton theorem: every matrix satisfies its own characteristic polynomial
 # A² - (a+d)A + (ad-bc)I = 0
 lam = sp.Symbol('lambda')
 char_poly = M.charpoly(lam)
-print(f"\n특성 다항식 p(λ) = {char_poly.as_expr()}")
-print("케일리-해밀턴: p(M) = 0 확인")
+print(f"\nCharacteristic polynomial p(λ) = {char_poly.as_expr()}")
+print("Cayley-Hamilton: verify p(M) = 0")
 result = M**2 - (a+d)*M + (a*d - b*c)*sp.eye(2)
 print(f"  p(M) = {sp.simplify(result)}")
 ```

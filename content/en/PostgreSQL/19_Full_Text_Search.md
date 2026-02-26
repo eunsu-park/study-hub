@@ -1,12 +1,24 @@
 # 19. Full-Text Search
 
+**Previous**: [Table Partitioning](./18_Table_Partitioning.md) | **Next**: [Security and Access Control](./20_Security_Access_Control.md)
+
+---
+
 ## Learning Objectives
-- Understand PostgreSQL full-text search architecture
-- Use tsvector and tsquery data types effectively
-- Create GIN indexes for fast text search
-- Implement weighted search with ranking
-- Configure multilingual search support
-- Utilize pg_trgm for fuzzy matching
+
+After completing this lesson, you will be able to:
+
+1. Explain why full-text search outperforms LIKE/ILIKE for text retrieval in terms of indexing, stemming, and ranking
+2. Create and manipulate tsvector (document representation) and tsquery (query representation) data types
+3. Configure text search dictionaries, stop words, and stemming for different languages
+4. Build GIN and GiST indexes on tsvector columns and compare their trade-offs
+5. Rank search results using ts_rank, ts_rank_cd, and weighted search with setweight
+6. Implement advanced search features including phrase search, prefix matching, and highlighted snippets
+7. Use the pg_trgm extension for fuzzy matching, typo tolerance, and LIKE query acceleration
+
+---
+
+Every application with user-generated content eventually needs a search feature. While LIKE queries work for small datasets, they become painfully slow on large tables and cannot understand language -- "running" will not match "run," and there is no way to rank results by relevance. PostgreSQL's built-in full-text search provides linguistic-aware indexing with stemming, stop-word removal, boolean operators, and relevance ranking -- all without an external search engine like Elasticsearch. For many applications, this built-in capability is more than sufficient, and it keeps your architecture simple.
 
 ## Table of Contents
 1. [Full-Text Search Overview](#1-full-text-search-overview)
@@ -95,7 +107,8 @@
 ### 2.1 tsvector — Document Representation
 
 ```sql
--- Basic conversion
+-- tsvector normalizes text linguistically: "foxes" → "fox", "jumped" → "jump"
+-- This is why FTS matches word variants that LIKE '%fox%' would miss entirely
 SELECT to_tsvector('english', 'The quick brown foxes jumped over the lazy dogs');
 -- Result: 'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2
 
@@ -138,7 +151,8 @@ SELECT websearch_to_tsquery('english', 'cats or dogs');
 ### 2.3 The Match Operator (@@)
 
 ```sql
--- tsvector @@ tsquery
+-- @@ is the core FTS operator: it checks whether a document (tsvector) satisfies a query (tsquery)
+-- Unlike LIKE, @@ can use GIN indexes and understands linguistic equivalence (stem matching)
 SELECT to_tsvector('english', 'The fat cats sat on the mat')
        @@ to_tsquery('english', 'cat & mat');
 -- Result: true
@@ -171,7 +185,8 @@ ORDER BY rank DESC;
 ### 2.4 Stored tsvector Column
 
 ```sql
--- Add a generated tsvector column for better performance
+-- Pre-compute tsvector in a STORED column — avoids re-parsing text on every query.
+-- setweight assigns 'A' (highest) to title matches and 'B' to body, so title hits rank higher.
 ALTER TABLE articles ADD COLUMN search_vector tsvector
     GENERATED ALWAYS AS (
         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -256,10 +271,12 @@ ALTER TEXT SEARCH CONFIGURATION my_english
 ### 4.1 GIN Index for Full-Text Search
 
 ```sql
--- Create GIN index on tsvector column
+-- GIN index maps each lexeme to the rows containing it — turns @@ from a sequential scan
+-- into a bitmap index scan, making FTS viable on million-row tables
 CREATE INDEX idx_articles_search ON articles USING GIN (search_vector);
 
--- Or on expression (slower to build, no stored column needed)
+-- Expression index: no stored column needed, but rebuilds tsvector during index creation
+-- and cannot benefit from pre-computed weights (A/B/C/D)
 CREATE INDEX idx_articles_body_gin ON articles
     USING GIN (to_tsvector('english', body));
 
@@ -496,7 +513,8 @@ ORDER BY ndoc DESC;
 ### 7.1 Trigram Basics
 
 ```sql
--- Enable extension
+-- pg_trgm complements FTS: FTS requires exact lexeme matches (after stemming),
+-- but pg_trgm handles typos and partial strings using 3-character subsequences
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Show trigrams
@@ -666,11 +684,11 @@ WHERE search_en @@ websearch_to_tsquery('english', 'search term')
 
 ---
 
-## Next Steps
-- [20. Security and Access Control](./20_Security_Access_Control.md)
-- [15. Query Optimization](./15_Query_Optimization.md)
-
 ## References
 - [PostgreSQL Full-Text Search](https://www.postgresql.org/docs/current/textsearch.html)
 - [pg_trgm Module](https://www.postgresql.org/docs/current/pgtrgm.html)
 - [Text Search Functions](https://www.postgresql.org/docs/current/functions-textsearch.html)
+
+---
+
+**Previous**: [Table Partitioning](./18_Table_Partitioning.md) | **Next**: [Security and Access Control](./20_Security_Access_Control.md)

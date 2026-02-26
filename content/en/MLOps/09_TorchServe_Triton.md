@@ -1,5 +1,17 @@
 # 09. TorchServe & Triton Inference Server
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the TorchServe architecture including its frontend, backend, model store, and worker components, and explain how requests are processed
+2. Package a PyTorch model into a `.mar` archive file and deploy it with TorchServe using custom request handlers
+3. Explain the Triton Inference Server architecture and its support for multiple backends (PyTorch, TensorFlow, ONNX, TensorRT)
+4. Configure Triton model repositories with ensemble pipelines and dynamic batching to maximize GPU throughput
+5. Compare TorchServe and Triton Inference Server across performance, flexibility, and operational complexity to select the appropriate tool for a deployment scenario
+
+---
+
 ## 1. TorchServe Overview
 
 TorchServe is the official tool for serving PyTorch models in production environments.
@@ -80,11 +92,13 @@ class CustomHandler(BaseHandler):
 
     def initialize(self, context):
         """Model initialization"""
+        # Called once at startup, not per-request — load model and allocate GPU memory here
+        # to avoid 100-500ms overhead on every inference call
         self.manifest = context.manifest
         properties = context.system_properties
         model_dir = properties.get("model_dir")
 
-        # Device setup
+        # Auto-detect GPU — falls back to CPU so the same handler works in both environments
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
@@ -93,6 +107,8 @@ class CustomHandler(BaseHandler):
         serialized_file = self.manifest["model"]["serializedFile"]
         model_pt_path = f"{model_dir}/{serialized_file}"
 
+        # TorchScript model — serialized computation graph that doesn't need Python at runtime,
+        # enabling faster inference and C++ deployment
         self.model = torch.jit.load(model_pt_path, map_location=self.device)
         self.model.eval()
 
@@ -132,6 +148,8 @@ class CustomHandler(BaseHandler):
 
     def inference(self, data):
         """Perform inference"""
+        # torch.no_grad() disables gradient tracking — reduces memory usage by ~50%
+        # and speeds up inference since backprop is never needed at serving time
         with torch.no_grad():
             outputs = self.model(data)
             probabilities = F.softmax(outputs, dim=1)
@@ -430,6 +448,8 @@ output [
   }
 ]
 
+# Multiple instances on the same GPU — overlaps compute and data transfer,
+# keeping the GPU busy while one instance waits for I/O
 instance_group [
   {
     count: 2
@@ -438,8 +458,11 @@ instance_group [
   }
 ]
 
+# Dynamic batching groups incoming requests into batches — amortizes GPU kernel launch
+# overhead across multiple inputs, increasing throughput 3-5x with minimal latency cost
 dynamic_batching {
   preferred_batch_size: [8, 16, 32]
+  # 100us max wait — balances batch size vs latency; increase for throughput-critical workloads
   max_queue_delay_microseconds: 100
 }
 

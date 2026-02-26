@@ -2,9 +2,24 @@
 
 [이전: NumPy 기초](./01_NumPy_Basics.md) | [다음: Pandas 기초](./03_Pandas_Basics.md)
 
-## 개요
+---
 
-NumPy의 고급 기능인 선형대수, 통계 함수, 난수 생성, 구조화된 배열, 그리고 성능 최적화 기법을 다룹니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `np.linalg`를 이용해 행렬 곱셈, 분해(decomposition), 선형 방정식 풀이를 구현하다
+2. NumPy로 기술 통계량(descriptive statistics), 상관계수(correlation coefficients), 공분산 행렬(covariance matrix)을 계산하다
+3. 새로운 방식의 난수 생성기(`default_rng`)를 적용하여 다양한 확률 분포에서 샘플링하다
+4. 이종 표 형식 데이터(heterogeneous tabular data)를 위한 구조화된 배열(structured arrays)과 레코드 배열(record arrays)을 설명하다
+5. C-order와 Fortran-order 메모리 레이아웃을 비교하고 성능에 미치는 영향을 설명하다
+6. 벡터화(vectorized) 연산을 수행하고, Python 루프보다 빠른 이유를 설명하다
+7. `np.where`, 마스크 배열(masked arrays), `np.take`/`np.put` 등 고급 인덱싱 기법을 적용하다
+8. 바이너리(`.npy`/`.npz`) 및 텍스트(CSV) 형식으로 배열을 저장·불러오기 하고, 대용량 데이터셋에 메모리 매핑(memory mapping)을 사용하다
+
+---
+
+배열 생성과 조작에 익숙해졌다면, 다음 단계는 NumPy의 강력한 계산 도구를 활용하는 것입니다. 선형 방정식 풀이부터 재현 가능한 난수 샘플 생성까지, 이 고급 기능들은 NumPy를 완전한 수치 컴퓨팅 환경으로 만들어 줍니다. 메모리 레이아웃과 벡터화를 이해하면 단순 Python 루프보다 수십 배 빠른 코드를 작성할 수 있습니다.
 
 ---
 

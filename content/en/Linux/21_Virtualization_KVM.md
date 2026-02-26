@@ -1,15 +1,18 @@
 # Virtualization (KVM)
 
+**Previous**: [Kernel Management](./20_Kernel_Management.md) | **Next**: [Ansible Basics](./22_Ansible_Basics.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- KVM/QEMU virtualization concepts and architecture
-- VM management using libvirt and virsh
-- Virtual network configuration
-- Snapshots and migration
-
-**Difficulty**: Advanced
+1. Explain the KVM/QEMU architecture and how libvirt provides a unified management layer
+2. Verify hardware virtualization support and install the KVM virtualization stack
+3. Create virtual machines using virt-install with custom CPU, memory, disk, and network options
+4. Manage VM lifecycle operations (start, stop, snapshot, migrate) with virsh commands
+5. Configure virtual networking including NAT, bridged, and isolated networks
+6. Perform live and offline VM migration between hosts
+7. Manage storage pools, volumes, and disk images with virsh and qemu-img
 
 ---
 
@@ -24,6 +27,8 @@ Through this document, you will learn:
 7. [Snapshots and Migration](#7-snapshots-and-migration)
 
 ---
+
+KVM turns the Linux kernel itself into a hypervisor, providing near-native performance for virtual machines without the cost of proprietary solutions. Whether you are running development environments, consolidating servers, or building private cloud infrastructure, KVM is the foundation of virtualization on Linux. This lesson teaches you to create, manage, and migrate VMs using the same tools that power OpenStack and major hosting providers.
 
 ## 1. KVM/QEMU Overview
 
@@ -698,10 +703,6 @@ virsh console vm-name
 
 ---
 
-## Next Steps
-
-- [22_Ansible_Basics.md](./22_Ansible_Basics.md) - Infrastructure automation
-
 ---
 
 ## References
@@ -710,3 +711,7 @@ virsh console vm-name
 - [KVM Documentation](https://www.linux-kvm.org/page/Documents)
 - [Red Hat Virtualization Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/configuring_and_managing_virtualization/index)
 - `man virsh`, `man virt-install`, `man qemu-img`
+
+---
+
+**Previous**: [Kernel Management](./20_Kernel_Management.md) | **Next**: [Ansible Basics](./22_Ansible_Basics.md)

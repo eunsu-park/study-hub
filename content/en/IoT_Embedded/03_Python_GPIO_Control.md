@@ -1,5 +1,25 @@
 # 03. Python GPIO Control
 
+**Previous**: [Raspberry Pi Setup](./02_Raspberry_Pi_Setup.md) | **Next**: [WiFi Networking](./04_WiFi_Networking.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Choose between RPi.GPIO and gpiozero libraries based on project needs
+2. Control digital outputs (LEDs) using both libraries
+3. Read digital inputs (buttons) using polling and interrupt methods
+4. Implement PWM for analog-like control such as LED brightness
+5. Interface with common sensors (DHT11, PIR, HC-SR04)
+6. Build an integrated multi-sensor monitoring system
+7. Apply best practices for GPIO cleanup, debouncing, and error handling
+
+---
+
+GPIO pins are what transform a Raspberry Pi from a miniature computer into a powerful IoT controller. Learning to read sensors and control actuators through Python code is the bridge between software and the physical world -- it is the skill that makes every subsequent lesson on networking, MQTT, and edge AI practically useful rather than purely theoretical.
+
+---
+
 This lesson covers Python-based GPIO control on Raspberry Pi. We'll learn two main libraries (RPi.GPIO and gpiozero), implement digital output (LED), digital input (button), PWM control, and sensor integration (DHT11, PIR, ultrasonic).
 
 ---
@@ -693,14 +713,6 @@ with SensorSystem() as system:
 - ✅ **Practical Project**: Integrated multi-sensor monitoring system
 - ✅ **Best Practices**: GPIO cleanup, debouncing, error handling
 
-### Next Steps
-
-| Next Lesson | Topic | Content |
-|-------------|-------|---------|
-| **04. WiFi Networking** | Network communication | Python socket programming, HTTP client, device communication |
-| **05. BLE Connectivity** | Bluetooth Low Energy | BLE protocol basics, sensor data collection via BLE |
-| **06. MQTT Protocol** | IoT messaging protocol | MQTT broker setup, pub/sub messaging patterns |
-
 ### Hands-On Exercises
 
 1. **Traffic Light System**:
@@ -741,3 +753,60 @@ with SensorSystem() as system:
 - [RPi.GPIO Documentation](https://sourceforge.net/p/raspberry-gpio-python/wiki/Home/)
 - [Adafruit DHT Library](https://github.com/adafruit/Adafruit_CircuitPython_DHT)
 - [GPIO Pin Reference](https://pinout.xyz/)
+
+---
+
+## Exercises
+
+### Exercise 1: Traffic Light Controller
+
+Build a traffic light system using three LEDs (red on GPIO17, yellow on GPIO27, green on GPIO22):
+
+1. Wire each LED through a 220Ω resistor to GND.
+2. Implement the standard UK traffic light sequence: red (3 s) → red+yellow (1 s) → green (3 s) → yellow (1 s) → repeat.
+3. Use the `gpiozero` library and implement the sequence inside a `while True` loop with proper cleanup in a `finally` block.
+4. Add a pedestrian button on GPIO4 (pull-up). When pressed, interrupt the current phase and jump to red within 5 seconds.
+
+### Exercise 2: PWM-Based Dimmer with Button Speed Control
+
+Connect a single LED to GPIO18 (a hardware PWM pin) and two buttons:
+
+1. Wire the LED through a 220Ω resistor. Connect button A to GPIO27 (pull-up) and button B to GPIO23 (pull-up).
+2. Using `RPi.GPIO` PWM at 1000 Hz, start the LED at 50% brightness.
+3. Use interrupts (not polling) so that pressing button A increases brightness by 10% (clamped at 100%) and pressing button B decreases brightness by 10% (clamped at 0%).
+4. Print the current duty cycle to the console each time a button is pressed.
+
+### Exercise 3: DHT11 Environmental Monitor with Alert
+
+Wire a DHT11 sensor to GPIO4 and build a monitoring application:
+
+1. Read temperature and humidity every 5 seconds using `adafruit_dht`.
+2. Implement retry logic: if the read fails with `RuntimeError`, wait 2 seconds and retry up to 3 times before logging the failure and moving on.
+3. Connect an alert LED to GPIO17. Turn it on when temperature exceeds 28°C or humidity exceeds 75%.
+4. Append each successful reading to a CSV file (`env_log.csv`) with columns: `timestamp`, `temperature`, `humidity`, `alert`.
+
+### Exercise 4: Ultrasonic Parking Assistant
+
+Wire an HC-SR04 sensor (TRIG → GPIO18, ECHO → GPIO24) and build a proximity alert system:
+
+1. Measure distance every 0.5 seconds using the `gpiozero` `DistanceSensor`.
+2. Connect three LEDs (green: GPIO17, yellow: GPIO27, red: GPIO22) as distance indicators:
+   - Green on: distance > 50 cm (safe)
+   - Yellow on: 20–50 cm (caution)
+   - Red on: < 20 cm (danger)
+3. At distances under 20 cm, also blink the red LED at 5 Hz using `gpiozero`'s `blink()` method.
+4. Print a formatted distance reading to the console on each measurement.
+
+### Exercise 5: Integrated Security System
+
+Combine a PIR sensor, ultrasonic sensor, DHT11, and three LEDs into a security monitoring system using object-oriented design:
+
+1. Create a `SecuritySystem` class that holds all device references.
+2. The system has two modes toggled by a button (GPIO27): **armed** and **disarmed**. A green LED (GPIO17) indicates disarmed; a red LED (GPIO22) indicates armed.
+3. In armed mode, motion detected by the PIR (GPIO23) triggers an alarm: blink the red LED at 10 Hz and log the event with a timestamp to `security_log.txt`.
+4. Regardless of mode, log temperature and humidity from DHT11 every 60 seconds to `env_log.csv`.
+5. If the ultrasonic sensor detects an object closer than 15 cm, treat it as an intrusion even in disarmed mode and log the event separately.
+
+---
+
+**Previous**: [Raspberry Pi Setup](./02_Raspberry_Pi_Setup.md) | **Next**: [WiFi Networking](./04_WiFi_Networking.md)

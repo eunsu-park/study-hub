@@ -1,14 +1,27 @@
 # Network Fundamentals Review
 
-## Overview
+**Previous**: [Scalability Basics](./02_Scalability_Basics.md) | **Next**: [Load Balancing](./04_Load_Balancing.md)
 
-This document reviews essential network concepts for system design. You'll learn DNS operation and DNS-based load balancing, CDN Push/Pull models, features of HTTP/2 and HTTP/3, and criteria for choosing between REST and gRPC.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how DNS resolution works and how DNS-based load balancing distributes traffic across servers
+2. Compare CDN push and pull models and determine which suits a given content delivery scenario
+3. Describe the key improvements in HTTP/2 (multiplexing, server push, header compression) over HTTP/1.1
+4. Explain how HTTP/3 and QUIC address head-of-line blocking at the transport layer
+5. Compare REST and gRPC, identifying when each protocol is the better choice for inter-service communication
+6. Evaluate the networking trade-offs involved in designing a globally distributed system
 
 **Difficulty**: ⭐⭐
 **Estimated Study Time**: 2-3 hours
 **Prerequisites**: [Networking folder](../Networking/00_Overview.md) basics
 
 ---
+
+Networking is the invisible plumbing of every distributed system. A single web page load can involve dozens of DNS lookups, CDN edge hits, and HTTP round trips -- and each of those steps introduces latency, failure modes, and design choices. Before you can reason about load balancers, caches, or databases at scale, you need a solid grasp of the network layer that connects them all.
 
 ## Table of Contents
 
@@ -17,8 +30,7 @@ This document reviews essential network concepts for system design. You'll learn
 3. [HTTP/2 and HTTP/3](#3-http2-and-http3)
 4. [REST vs gRPC](#4-rest-vs-grpc)
 5. [Practice Problems](#5-practice-problems)
-6. [Next Steps](#6-next-steps)
-7. [References](#7-references)
+6. [References](#6-references)
 
 ---
 
@@ -797,23 +809,44 @@ Implementation:
 
 ---
 
-## 6. Next Steps
+## Hands-On Exercises
 
-Now that you've reviewed network fundamentals, dive deeper into load balancing.
+### Exercise 1: DNS Resolution Tracer
 
-### Next Lesson
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - L4/L7 load balancers, distribution algorithms
+Build a simple DNS resolution simulator that demonstrates recursive vs. iterative queries.
 
-### Related Lessons
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md) - Proxy patterns
+**Tasks:**
+1. Create a hierarchy of DNS servers: Root → TLD (.com) → Authoritative (example.com)
+2. Implement `recursive_resolve(domain)` where each server queries the next level and returns the final answer
+3. Implement `iterative_resolve(domain)` where the resolver follows referrals itself
+4. Track and compare the number of messages exchanged in each mode
+5. Add a caching layer and show how subsequent lookups are faster
 
-### Recommended Learning
-- [Networking/12_DNS.md](../Networking/12_DNS.md) - DNS details
-- [Networking/13_HTTP_and_HTTPS.md](../Networking/13_HTTP_and_HTTPS.md) - HTTP details
+### Exercise 2: HTTP/1.1 vs HTTP/2 Comparison
+
+Simulate the performance difference between HTTP/1.1 sequential requests and HTTP/2 multiplexing.
+
+**Tasks:**
+1. Model a page that needs 10 resources (CSS, JS, images) with varying sizes
+2. Simulate HTTP/1.1: max 6 parallel connections, each resource blocks its connection
+3. Simulate HTTP/2: all 10 requests multiplexed on 1 connection, interleaved frames
+4. Calculate total page load time for each protocol
+5. Show how head-of-line blocking affects HTTP/1.1 when one resource is slow
+
+### Exercise 3: REST vs gRPC Payload Comparison
+
+Compare message sizes and serialization overhead between JSON (REST) and Protocol Buffers (gRPC).
+
+**Tasks:**
+1. Define a sample data structure (e.g., user profile with name, age, email, addresses list)
+2. Serialize it as JSON (`json.dumps`) and measure byte size
+3. Simulate protobuf encoding (use a simplified binary encoding or actual `struct.pack`)
+4. Compare payload sizes for 1, 10, and 100 records
+5. Discuss when the size difference matters (high-throughput microservices vs. simple APIs)
 
 ---
 
-## 7. References
+## 6. References
 
 ### RFC Documents
 - RFC 7540 - HTTP/2
@@ -830,6 +863,10 @@ Now that you've reviewed network fundamentals, dive deeper into load balancing.
 - [WebPageTest](https://www.webpagetest.org/) - HTTP version testing
 - [Postman](https://www.postman.com/) - REST API testing
 - [grpcurl](https://github.com/fullstorydev/grpcurl) - gRPC testing
+
+---
+
+**Previous**: [Scalability Basics](./02_Scalability_Basics.md) | **Next**: [Load Balancing](./04_Load_Balancing.md)
 
 ---
 

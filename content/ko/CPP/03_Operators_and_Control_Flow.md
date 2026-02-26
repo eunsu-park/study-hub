@@ -1,5 +1,25 @@
 # 연산자와 제어문
 
+**이전**: [변수와 자료형](./02_Variables_and_Types.md) | **다음**: [함수](./04_Functions.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. C++ 표현식에서 산술(arithmetic), 대입(assignment), 비교(comparison), 논리(logical), 비트(bitwise) 연산자를 적용할 수 있습니다
+2. 전위(prefix)와 후위(postfix) 증감 연산자의 동작 차이를 구분할 수 있습니다
+3. 논리 표현식에서의 단락 평가(short-circuit evaluation)를 설명하고 부수 효과(side effect) 영향을 파악할 수 있습니다
+4. `if`, `else if`, `else`, `switch` 문을 사용해 분기(branching) 로직을 구현할 수 있습니다
+5. `for`, `while`, `do-while` 반복문(C++11의 범위 기반 `for` 포함)을 설계할 수 있습니다
+6. `break`와 `continue`를 사용해 반복 실행 흐름을 제어할 수 있습니다
+7. 연산자 우선순위(operator precedence) 규칙을 파악하고 괄호로 의도를 명확히 표현할 수 있습니다
+
+---
+
+연산자와 제어문은 모든 프로그램의 핸들과 엑셀러레이터입니다. 연산자 없이는 값을 계산하거나 비교하거나 조합할 수 없고, 제어문 없이는 결정을 내리거나 작업을 반복할 수 없습니다. 이 둘이 함께 정적인 선언 목록을 동적이고 반응적인 로직으로 변환하며, 이후에 접하게 될 모든 고급 C++ 기능은 궁극적으로 이 기본 요소들 위에 구축됩니다.
+
 ## 1. 산술 연산자
 
 ### 기본 산술 연산자
@@ -695,6 +715,92 @@ int main() {
 
 ---
 
+## 연습 문제
+
+### 연습 1: 연산자 평가 결과 예측
+
+코드를 실행하지 않고 각 출력문의 결과를 예측하세요. 그 후 컴파일하여 답을 확인하세요.
+
+```cpp
+#include <iostream>
+
+int main() {
+    int a = 10, b = 3;
+
+    // 실행 전에 각 출력을 예측하세요
+    std::cout << a / b << std::endl;          // ?
+    std::cout << a % b << std::endl;          // ?
+    std::cout << (double)a / b << std::endl;  // ?
+
+    int x = 5;
+    std::cout << x++ << std::endl;  // ?
+    std::cout << x   << std::endl;  // ?
+    std::cout << ++x << std::endl;  // ?
+
+    // 예측: 다음 코드는 0을 출력할까요, 1을 출력할까요?
+    int counter = 0;
+    if (false && (++counter > 0)) {}
+    if (true  || (++counter > 0)) {}
+    std::cout << counter << std::endl;  // ?
+
+    return 0;
+}
+```
+
+예측 후, `counter`가 그 값을 갖는 이유를 단락 평가(short-circuit evaluation)를 사용해 설명하세요.
+
+### 연습 2: 비트 연산자(Bitwise Operator)를 이용한 권한 플래그
+
+비트 연산자를 사용하여 간단한 권한 시스템을 구현하세요. 세 가지 플래그(`READ = 1`, `WRITE = 2`, `EXECUTE = 4`)를 정의하고 다음을 수행하는 프로그램을 작성하세요:
+
+1. READ와 WRITE가 설정된 권한 변수를 생성합니다.
+2. EXECUTE가 설정되어 있는지 확인합니다 (설정되지 않아야 합니다).
+3. 비트 OR를 사용하여 EXECUTE 권한을 부여합니다.
+4. `&= ~WRITE`를 사용하여 WRITE 권한을 제거합니다.
+5. 최종 권한을 사람이 읽기 좋은 형식으로 출력합니다.
+
+```cpp
+#include <iostream>
+
+int main() {
+    const int READ    = 1;  // 001
+    const int WRITE   = 2;  // 010
+    const int EXECUTE = 4;  // 100
+
+    int perms = READ | WRITE;  // 초기: READ + WRITE
+
+    // 여기에 단계를 추가하세요 ...
+
+    return 0;
+}
+```
+
+### 연습 3: switch를 이용한 성적 계산기
+
+`score / 10`에 대한 `switch` 문을 사용하여 숫자 점수(0–100)를 문자 등급으로 변환하는 함수 `char letterGrade(int score)`를 작성하세요. 10과 9는 `'A'`, 8은 `'B'`, 7은 `'C'`, 6은 `'D'`, 나머지는 `'F'`로 매핑합니다. 경계값(59, 60, 89, 90, 100)을 포함한 최소 다섯 가지 다른 점수로 테스트하세요.
+
+### 연습 4: 반복문 패턴 도전
+
+중첩된 `for` 반복문을 사용하여 주어진 `size`에 대해 다음 다이아몬드 패턴을 출력하세요 (여기서는 `size = 4`의 경우):
+
+```
+   *
+  ***
+ *****
+*******
+ *****
+  ***
+   *
+```
+
+윗 절반(중간 행 포함)은 `2*i - 1`개의 별로 된 행을 가져야 하고(`i`는 1부터 `size`까지), 아랫 절반은 이를 대칭으로 반영합니다. `std::cout`, 반복문, 그리고 필요한 경우 `continue` 또는 `break`만 사용하세요 — 문자열 조작 함수는 사용하지 마세요.
+
+### 연습 5: 입력 검증 반복문
+
+`do-while` 반복문을 사용하여 사용자가 [1, 100] 범위의 정수를 입력할 때까지 반복적으로 입력을 요청하는 완전한 프로그램을 작성하세요. 유효한 값이 입력되면 삼항 연산자(ternary operator)를 사용하여 `"낮음"(1–33)`, `"중간"(34–66)`, `"높음"(67–100)`으로 분류하고 결과를 출력하세요.
+
+---
+
 ## 다음 단계
 
-[04_Functions.md](./04_Functions.md)에서 함수를 배워봅시다!
+[함수](./04_Functions.md)에서 함수를 배워봅시다!

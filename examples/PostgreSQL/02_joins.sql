@@ -55,7 +55,9 @@ SELECT
 FROM employees e
 LEFT JOIN departments d ON e.dept_id = d.dept_id;
 
--- 부서가 없는 직원만
+-- Why: This is the "anti-join" pattern — LEFT JOIN + WHERE IS NULL finds rows
+-- in the left table that have NO match in the right table. It is typically
+-- more readable (and sometimes faster) than NOT EXISTS or NOT IN.
 SELECT
     e.first_name,
     e.last_name
@@ -140,7 +142,9 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES emp
 UPDATE employees SET manager_id = 4 WHERE emp_id IN (1, 2);
 UPDATE employees SET manager_id = 1 WHERE emp_id IN (5, 6);
 
--- 직원과 관리자 조회
+-- Why: A self-join is the only way to resolve hierarchical relationships stored
+-- within a single table. LEFT JOIN (not INNER) ensures top-level employees
+-- with no manager (manager_id IS NULL) still appear in the result.
 SELECT
     e.emp_id,
     e.first_name || ' ' || e.last_name AS employee_name,
@@ -164,7 +168,10 @@ CREATE TABLE projects (
     budget NUMERIC(12, 2)
 );
 
--- 직원-프로젝트 연결 테이블 (다대다 관계)
+-- Why: A junction (bridge) table is the standard way to model many-to-many
+-- relationships in relational databases. The composite primary key (emp_id, project_id)
+-- enforces that each employee-project pair is unique, and doubles as an index
+-- for lookups from either direction.
 CREATE TABLE employee_projects (
     emp_id INTEGER REFERENCES employees(emp_id),
     project_id INTEGER REFERENCES projects(project_id),
@@ -224,7 +231,9 @@ JOIN departments d USING (dept_id);
 -- 10. 조인 + 집계
 -- =============================================================================
 
--- 부서별 직원 수와 평균 급여
+-- Why: LEFT JOIN from departments ensures departments with zero employees still
+-- appear (with count=0). Using COUNT(e.emp_id) instead of COUNT(*) correctly
+-- returns 0 for empty departments because COUNT of NULL is 0.
 SELECT
     d.dept_name,
     COUNT(e.emp_id) AS employee_count,
@@ -255,7 +264,9 @@ ORDER BY member_count DESC;
 -- CREATE INDEX idx_employee_projects_emp ON employee_projects(emp_id);
 -- CREATE INDEX idx_employee_projects_proj ON employee_projects(project_id);
 
--- 실행 계획 확인
+-- Why: EXPLAIN ANALYZE runs the actual query (not just planning) to show real
+-- execution times and row counts. This reveals whether PostgreSQL chose a nested
+-- loop, hash join, or merge join — helping you decide if indexes are needed.
 EXPLAIN ANALYZE
 SELECT
     e.first_name,

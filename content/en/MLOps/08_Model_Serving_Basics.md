@@ -1,5 +1,17 @@
 # 08. Model Serving Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the three model serving paradigms — batch inference, online inference, and streaming inference — and select the appropriate pattern for a given use case
+2. Build a REST API model server using FastAPI, implementing prediction endpoints with input validation and error handling
+3. Containerize a model server with Docker and deploy it with proper resource allocation and health check configurations
+4. Implement canary deployment and blue-green deployment strategies for safe model rollouts in production
+5. Instrument a model serving endpoint with latency, throughput, and prediction distribution metrics for operational monitoring
+
+---
+
 ## 1. Model Serving Concepts
 
 Model serving is providing trained ML models as prediction services in production environments.
@@ -40,10 +52,16 @@ Model serving is providing trained ML models as prediction services in productio
 Model serving methods
 """
 
+# Choose the serving pattern based on the latency budget, not convenience:
+# batch trades freshness for cost efficiency (one GPU job for millions of rows),
+# online pays per-request infrastructure cost in exchange for sub-second response,
+# streaming sits between them for use cases where seconds of lag are acceptable but batch delay is not.
 serving_methods = {
     "batch_inference": {
         "description": "Process large amounts of data in bulk",
         "latency": "High (minutes~hours)",
+        # Best when results can be pre-computed ahead of need (e.g., overnight churn scores);
+        # GPU/CPU utilization is far higher than online serving because there is no idle waiting.
         "use_cases": ["Recommendation system pre-computation", "Report generation", "Data pipelines"],
         "pros": ["High throughput", "Cost efficient"],
         "cons": ["Not real-time", "Data latency"]
@@ -51,6 +69,8 @@ serving_methods = {
     "online_inference": {
         "description": "Real-time request-response",
         "latency": "Low (ms)",
+        # Required when the prediction must react to an event happening right now (fraud, search);
+        # keeping a model server always-on means paying for idle capacity to guarantee low p99 latency.
         "use_cases": ["Fraud detection", "Search ranking", "Chatbots"],
         "pros": ["Real-time response", "Latest data"],
         "cons": ["Infrastructure cost", "Complex operations"]
@@ -58,6 +78,8 @@ serving_methods = {
     "streaming_inference": {
         "description": "Process continuous data streams",
         "latency": "Medium (seconds)",
+        # Unlike batch, streaming processes each event as it arrives rather than accumulating a file;
+        # unlike online, it is event-driven so there is no idle server — only triggered compute.
         "use_cases": ["IoT anomaly detection", "Real-time analytics"],
         "pros": ["Continuous processing", "Event-driven"],
         "cons": ["Complex architecture"]
@@ -84,7 +106,9 @@ from typing import Dict, Any
 
 app = Flask(__name__)
 
-# Load model (at application startup)
+# Load model once at startup, not per-request
+# Avoids 100-500ms model deserialization overhead on every prediction call;
+# joblib.load reads and unpickles the file from disk each time if called inside the handler.
 model = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
 
@@ -101,6 +125,8 @@ def predict():
         data = request.get_json()
         features = data.get("features")
 
+        # Validate input before reaching the model: a missing key here would cause an
+        # opaque TypeError deep inside sklearn; explicit 400 responses are debuggable.
         if features is None:
             return jsonify({"error": "Missing 'features' in request"}), 400
 
@@ -112,10 +138,12 @@ def predict():
 
         # Prediction
         prediction = model.predict(df_scaled)[0]
+        # .tolist() converts numpy float32/float64 to Python float;
+        # json.dumps raises TypeError on numpy scalars, so this conversion must happen before serialization.
         probability = model.predict_proba(df_scaled)[0].tolist()
 
         return jsonify({
-            "prediction": int(prediction),
+            "prediction": int(prediction),  # int() for the same reason: numpy int64 is not JSON-serializable
             "probability": probability,
             "model_version": "1.0.0"
         })
@@ -169,7 +197,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Define Pydantic models
+# Define Pydantic models for request/response validation
+# Pydantic validates types and required fields before the handler runs; this means
+# malformed requests are rejected with a structured 422 error before touching the model,
+# keeping model code free of defensive type-checking boilerplate.
 class PredictionInput(BaseModel):
     """Prediction input schema"""
     age: float = Field(..., description="Customer age")
@@ -202,7 +233,8 @@ class BatchOutput(BaseModel):
     predictions: List[int]
     probabilities: List[List[float]]
 
-# Load model
+# Initialize as None so the /health endpoint can report model_loaded=False
+# if startup fails — enables the orchestrator to withhold traffic until the model is ready.
 model = None
 scaler = None
 
@@ -210,6 +242,8 @@ scaler = None
 async def load_model():
     """Load model at application startup"""
     global model, scaler
+    # Loading here (not per-request) amortizes deserialization cost across all requests;
+    # the startup event also blocks the app from accepting traffic until this completes.
     model = joblib.load("model.pkl")
     scaler = joblib.load("scaler.pkl")
     print("Model loaded successfully")
@@ -222,6 +256,8 @@ async def health():
 @app.post("/predict", response_model=PredictionOutput)
 async def predict(input_data: PredictionInput):
     """Single prediction"""
+    # 503 (not 500) signals a temporary unavailability; load balancers can retry on 503
+    # whereas 500 implies a permanent bug — the distinction matters for upstream retry logic.
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -230,6 +266,8 @@ async def predict(input_data: PredictionInput):
 
     # Preprocess and predict
     df_scaled = scaler.transform(df)
+    # int() and .tolist() convert numpy types to Python native types;
+    # Pydantic's JSON serializer does not handle numpy.int64/float32 and will raise a ValueError.
     prediction = int(model.predict(df_scaled)[0])
     probability = model.predict_proba(df_scaled)[0].tolist()
 

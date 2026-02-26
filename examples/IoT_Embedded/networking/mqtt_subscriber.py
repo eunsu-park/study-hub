@@ -21,6 +21,9 @@ from datetime import datetime
 # Default configuration
 DEFAULT_BROKER = "localhost"
 DEFAULT_PORT = 1883
+# Why: '#' is a multi-level wildcard (matches sensor/temp, sensor/room1/temp, etc.)
+# while '+' is single-level (device/abc/status but not device/a/b/status).
+# Using wildcards lets one subscriber collect data from many devices.
 DEFAULT_TOPICS = ["sensor/#", "device/+/status"]
 
 class MQTTSubscriber:
@@ -94,6 +97,9 @@ class MQTTSubscriber:
         print(f"Disconnected from broker (rc={rc})")
         self.connected = False
 
+    # Why: Custom handlers decouple message routing from the core subscriber.
+    # Each handler is matched by topic pattern, enabling a plugin-style
+    # architecture where new alert types can be added without modifying the subscriber.
     def add_handler(self, topic_pattern: str, handler):
         """Add custom message handler for topic pattern"""
         self.message_handlers[topic_pattern] = handler

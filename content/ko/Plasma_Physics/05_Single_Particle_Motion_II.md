@@ -409,6 +409,8 @@ def magnetic_field_gradient(x, y, z):
     Creates a gradient in x-direction
     """
     B0 = 1e-3  # Tesla
+    # alpha = 0.1은 B가 약 10 m에 걸쳐 두 배가 됨을 의미합니다 — 유도 중심(guiding-center)
+    # 근사가 성립할 만큼 충분히 작습니다 (r_L << 기울기 척도 L = B/|∇B| = 1/alpha = 10 m)
     alpha = 0.1  # gradient parameter (1/m)
 
     Bx = 0
@@ -437,6 +439,10 @@ def equations_of_motion_gradb(t, state, q, m):
     return np.array([vx, vy, vz, ax, ay, az])
 
 def rk4_step(f, t, y, dt, q, m):
+    # RK4는 단순한 방법(Euler, RK2)보다 선택됩니다. Lorentz 힘은
+    # 자이로 시간 규모에서 강성(stiff)이므로; RK4의 O(dt^5) 국소 오차는
+    # 우리가 시뮬레이션하는 많은 사이클에 걸쳐 자이로궤도가 인위적으로
+    # 에너지를 획득하거나 손실하는 것을 방지합니다.
     """4th-order Runge-Kutta step"""
     k1 = f(t, y, q, m)
     k2 = f(t + dt/2, y + dt*k1/2, q, m)
@@ -457,10 +463,15 @@ def simulate_gradb_drift(particle_type='proton', v_perp=1e5, v_para=1e4,
 
     # Initial conditions
     x0, y0, z0 = 0.0, 0.0, 0.0
+    # 속도를 x-z 평면에서 시작: v_perp는 자이로운동을 일으키고, v_para는 나선 궤도를 줍니다.
+    # vx = v_perp (vz가 아닌)에서 시작하여 초기 자이로 평면이 x-y가 되도록 하여
+    # y 방향으로 grad-B 드리프트가 명확하게 보이게 합니다.
     vx0, vy0, vz0 = v_perp, 0.0, v_para
     state = np.array([x0, y0, z0, vx0, vy0, vz0])
 
     # Time array
+    # dt = 1e-8 s는 B0 = 1e-3 T에서 양성자 자이로주기(gyroperiod)의 약 1/10으로 선택됩니다
+    # (T_gyro = 2π m/qB ~ 6.5e-8 s). 이는 자이로운동의 정확한 해상도를 보장합니다.
     num_steps = int(duration / dt)
     times = np.linspace(0, duration, num_steps)
 
@@ -528,7 +539,9 @@ plt.tight_layout()
 plt.savefig('gradb_drift_simulation.png', dpi=150)
 print("Saved: gradb_drift_simulation.png")
 
-# Calculate drift velocity
+# 전체 시뮬레이션에서 알짜 y-변위를 측정하여 드리프트 속도를 계산합니다.
+# 총 변위를 총 시간으로 나누면 평균 드리프트 속도를 얻으며, 완전한 사이클에 걸쳐
+# 합이 0이 되는 진동하는 자이로운동을 걸러냅니다.
 y_drift_p = traj_p[-1, 1] - traj_p[0, 1]
 y_drift_e = traj_e[-1, 1] - traj_e[0, 1]
 v_drift_p = y_drift_p / t_p[-1]
@@ -550,6 +563,9 @@ def magnetic_field_dipole(r, theta, phi, M=1e15):
     B_phi = 0
     M: magnetic moment (A·m^2)
     """
+    # r을 클램핑하여 원점에서 1/r^3 특이점을 방지합니다; 물리적으로 쌍극자
+    # 공식은 소스 외부(r >> 소스 반경)에서만 유효하므로, r_safe는 적분기가
+    # r = 0 내부로 진입할 경우 수치 충돌을 방지합니다.
     r_safe = max(r, 0.1)  # avoid singularity
 
     B_r = (2 * M / r_safe**3) * np.cos(theta)
@@ -627,10 +643,15 @@ def simulate_dipole_drift(particle_type='proton', r0=1e6, theta0=np.pi/4,
     B_mag = np.linalg.norm(B_cart)
     b_hat = B_cart / B_mag
 
-    # Perpendicular direction
+    # 수직 방향: x-hat을 B에 수직인 평면에 투영한 후 정규화합니다.
+    # 이는 B가 x 방향과 정확히 일치하지 않는 한, 완전한 외적 형식 없이
+    # 잘 정의된 수직 기저 벡터를 제공합니다.
     perp1 = np.array([1, 0, 0]) - np.dot([1, 0, 0], b_hat) * b_hat
     perp1 /= np.linalg.norm(perp1)
 
+    # 초기 속도를 유도 중심(guiding-center) 성분으로 분해하여 t=0에서
+    # 피치각이 물리적으로 의미 있도록 합니다: v_para는 B를 따르고,
+    # v_perp는 자이로운동을 시작합니다.
     v0 = v_para * b_hat + v_perp * perp1
     vx0, vy0, vz0 = v0
 
@@ -723,16 +744,22 @@ def compute_drift_velocities(B=1e-3, E=1e-2, grad_B=1e-5, R_c=1.0,
     else:
         q, m = q_e, m_e
 
-    # E×B drift
+    # E×B 드리프트 — 전하와 질량에 독립적이므로 두 종(species)이 동일하게 드리프트하여
+    # 전류가 생성되지 않습니다; 이 공식에는 E와 B가 수직이어야 합니다.
     v_ExB = E / B
 
-    # Grad-B drift
+    # Grad-B 드리프트: m*v_perp^2 / (2|q|B^2) * (|∇B|/B).
+    # ∇B/B = 1/L 비율은 역 기울기 척도 길이입니다; 작은 L(강한 기울기)은
+    # 더 큰 드리프트를 줍니다 — 유도 중심 전개와 일치합니다.
     v_gradB = (m * v_perp**2) / (2 * abs(q) * B**2) * (grad_B / B)
 
-    # Curvature drift
+    # 곡률 드리프트(curvature drift): v_para^2를 사용합니다 (v_perp^2가 아닌).
+    # 원심력은 곡선 자기력선을 따른 평행 운동에 의존하기 때문입니다 (수직 자이로운동이 아닌).
     v_curv = (m * v_para**2) / (abs(q) * B**2 * R_c)
 
-    # Combined grad-B + curvature
+    # 결합된 grad-B + 곡률: 현실적인 기하학에서 두 드리프트는 항상 공존합니다
+    # (환형 1/R 장은 곡률과 ∇B 모두를 가짐). 따라서 이를 합산하면
+    # 토카막 수송 분석에서 사용되는 물리적으로 올바른 유도 중심 드리프트를 얻습니다.
     v_gc = (m / (abs(q) * B**2)) * (v_perp**2/2 + v_para**2) * (grad_B / B)
 
     # Polarization drift
@@ -847,20 +874,27 @@ def calculate_drift_currents(n=1e19, B=2.0, T=1e3, grad_B=0.2,
     # Convert temperature to SI
     T_J = T * q_p  # Joules
 
-    # Thermal velocity
+    # 열속도(thermal velocity) — 여기서 완전성을 위해 계산되지만 전류 공식에서는
+    # 사용되지 않습니다. 드리프트 전류 표현은 이미 Maxwellian에 대해 평균화되어
+    # (v_perp^2 → k_B T / m), 명시적인 v_th가 불필요하기 때문입니다.
     v_th_p = np.sqrt(2 * T_J / m_p)
     v_th_e = np.sqrt(2 * T_J / m_e)
 
-    # E×B drift (no current)
+    # E×B 드리프트는 전류를 생성하지 않습니다. 두 종이 같은 방향으로 같은 속도로
+    # 드리프트하기 때문입니다 (전하/질량이 소거됨). 반대 전하끼리 상쇄됩니다.
     J_ExB = 0.0
 
-    # Grad-B current (diamagnetic)
+    # Grad-B 전류: J = n * (q_i v_gradB,i + q_e v_gradB,e).
+    # 각 종은 nkT/B^2 * ∇B를 기여합니다 (크기 같음, 전하 부호 반대,
+    # 드리프트 방향도 반대). 따라서 상쇄되지 않고 더해집니다 — 반자성 전류(diamagnetic current).
     J_gradB = n * 2 * T_J / B**2 * grad_B
 
-    # Polarization current (ions only)
+    # 편극 전류(polarization current)는 거의 전적으로 이온에서 옵니다: m_i/m_e ~ 1836이므로
+    # 전자 기여는 무시할 수 있습니다. 이온 질량만 공식에 들어갑니다.
     J_pol = n * m_p / B**2 * dE_dt
 
-    # Gravitational current
+    # 중력 전류(gravitational current): 이온이 지배합니다 (m_i >> m_e). 공식에서 m_p를
+    # 사용하는 이유는 더 무거운 이온의 경우에도 양성자 근사가 여기서 설명적이기 때문입니다.
     J_grav = n * m_p * g / B
 
     return {

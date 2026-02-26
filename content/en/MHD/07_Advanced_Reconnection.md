@@ -144,9 +144,16 @@ S_c = 1e4
 
 # Growth rate scaling
 # Below S_c: resistive growth (very slow)
+# γ ∝ S^{-1} because resistive tearing requires the resistive diffusion
+# time to act across the current sheet; at low S the sheet is diffusively
+# stable and any perturbation decays on the Alfvén time.
 gamma_resistive = 0.01 * S**(-1)
 
 # Above S_c: plasmoid instability
+# γ ∝ S^{1/4} — this S-scaling encodes the key physics: as the Lundquist
+# number rises, the Sweet-Parker sheet becomes thinner (δ ~ L/S), making
+# it more susceptible to tearing.  The S^{1/4} law comes from linear
+# stability analysis of a Sweet-Parker-width current sheet.
 gamma_plasmoid = np.where(S > S_c, 0.1 * S**(1/4), gamma_resistive)
 
 # Alfven time (normalized)
@@ -178,12 +185,21 @@ ax.grid(True, alpha=0.3)
 ax = axes[1]
 
 # Sweet-Parker
+# M_A ~ S^{-1/2} because the reconnection rate is limited by resistive
+# diffusion across the entire current sheet — the bottleneck that makes
+# Sweet-Parker hopelessly slow for solar and astrophysical parameters.
 M_SP = S**(-0.5)
 
 # Plasmoid-mediated
+# M_A ~ S^{-1/8} — plasmoids break the sheet into N ~ S^{1/4} segments,
+# each shorter and thus faster.  The exponent -1/8 = 1/4 - 3/8 reflects
+# the gain from having many parallel X-points overcoming each local rate.
 M_plasmoid = np.where(S > S_c, 0.01 * S**(-1/8), M_SP)
 
 # Hall reconnection (constant)
+# In collisionless (Hall) reconnection the rate saturates at ~0.1 because
+# the Hall term decouples ions from electrons at the ion inertial length,
+# enabling a much thicker effective diffusion region independent of Rm.
 M_Hall = 0.1 * np.ones_like(S)
 
 ax.loglog(S, M_SP, label='Sweet-Parker: $M_A \\propto S^{-1/2}$',
@@ -523,6 +539,9 @@ sigma = np.logspace(-1, 4, 100)
 v_A_nonrel = 1  # Normalized to c
 
 # Relativistic Alfven speed
+# v_A = c√(σ/(1+σ)) — the +1 in the denominator accounts for the rest-mass
+# energy density ρc², which resists acceleration even in a magnetically
+# dominated plasma; as σ→∞, v_A→c but never exceeds it (causality).
 v_A_rel = np.sqrt(sigma / (1 + sigma))  # In units of c
 
 # Outflow speed (approximate, from simulations)
@@ -530,9 +549,15 @@ v_A_rel = np.sqrt(sigma / (1 + sigma))  # In units of c
 v_out_nonrel = v_A_nonrel * np.ones_like(sigma)
 
 # Relativistic: v_out ~ c for large sigma
+# Factor 0.9 accounts for the fact that some magnetic energy is converted
+# to enthalpy (thermal energy) rather than bulk kinetic energy during
+# reconnection — the outflow cannot reach exactly v_A because of this loss.
 v_out_rel = 0.9 * v_A_rel  # Slightly less than v_A due to compression
 
 # Lorentz factor of outflow
+# Γ = (1 - v²/c²)^{-1/2} diverges as v→c, so even a small increase in
+# v near c produces a large jump in Γ — the key reason that relativistic
+# reconnection is so effective at energizing particles in pulsar winds.
 gamma_out_rel = 1 / np.sqrt(1 - v_out_rel**2)
 
 # Plot
@@ -701,6 +726,11 @@ def magnetic_field_null_3d(x, y, z):
     Create a spine-fan null:
     Eigenvalues: (+a, +a, -2a) to satisfy div B = 0
     """
+    # The eigenvalue ratio (+a, +a, -2a) is chosen so that ∇·B = a+a-2a = 0
+    # — the divergence-free constraint is a fundamental law, not an option.
+    # Two positive eigenvalues define the fan plane (field converges toward
+    # the null in x-y), while the one negative eigenvalue defines the spine
+    # (field diverges along z), giving the classic spine-fan topology.
     a = 1.0
     Bx = a * x
     By = a * y
@@ -724,6 +754,9 @@ fig = plt.figure(figsize=(14, 12))
 ax = fig.add_subplot(111, projection='3d')
 
 # Quiver plot (subsample for clarity)
+# We subsample by skip=2 because the full 15³ grid produces ~3375 arrows,
+# which overwhelms the plot and hides the topological structure; a coarser
+# sampling still reveals the global field pattern without clutter.
 skip = 2
 ax.quiver(X[::skip, ::skip, ::skip], Y[::skip, ::skip, ::skip], Z[::skip, ::skip, ::skip],
           Bx[::skip, ::skip, ::skip], By[::skip, ::skip, ::skip], Bz[::skip, ::skip, ::skip],
@@ -733,12 +766,18 @@ ax.quiver(X[::skip, ::skip, ::skip], Y[::skip, ::skip, ::skip], Z[::skip, ::skip
 ax.scatter([0], [0], [0], color='red', s=200, marker='o', label='Null point')
 
 # Spine (along z-axis, Bz direction)
+# The spine is the unique field line that passes through the null; all other
+# field lines asymptote to the fan plane, making the spine the axis about
+# which reconnection at a 3D null is topologically organized.
 z_spine = np.linspace(-2, 2, 50)
 x_spine = np.zeros_like(z_spine)
 y_spine = np.zeros_like(z_spine)
 ax.plot(x_spine, y_spine, z_spine, 'r-', linewidth=3, label='Spine (field line through null)')
 
 # Fan plane (z=0 plane)
+# The fan is a 2D separatrix surface: field lines that cross the fan change
+# their topological connectivity, making the fan the preferred site for
+# current buildup and reconnection in 3D configurations.
 theta_fan = np.linspace(0, 2*np.pi, 100)
 r_fan = 1.5
 x_fan = r_fan * np.cos(theta_fan)

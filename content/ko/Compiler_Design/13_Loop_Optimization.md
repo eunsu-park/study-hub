@@ -12,15 +12,18 @@
 
 **전제 조건**: [09. 중간 표현](./09_Intermediate_Representations.md), [12. 최적화 -- 지역 최적화와 전역 최적화](./12_Optimization_Local_and_Global.md)
 
-**학습 목표**:
-- 지배 분석(dominance analysis)과 후방 엣지(back edge)를 사용하여 자연 루프(natural loop) 식별
-- 지배자 트리(dominator tree) 구성 및 지배 경계(dominance frontier) 계산
-- 루프 불변 코드 이동(LICM)을 적용하여 계산을 루프 밖으로 끌어올리기
-- 강도 감소를 통한 귀납 변수(induction variable) 인식 및 최적화
-- 루프 언롤링(loop unrolling)과 그 트레이드오프 이해
-- 루프 변환 적용: 결합(fusion), 분리(fission), 교환(interchange), 타일링(tiling)
-- 벡터화의 기초와 다면체 모델 설명
-- 루프 병렬화 기회 추론
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 지배 분석(dominance analysis)과 후방 엣지(back edge)를 사용하여 자연 루프(natural loop) 식별
+2. 지배자 트리(dominator tree) 구성 및 지배 경계(dominance frontier) 계산
+3. 루프 불변 코드 이동(LICM)을 적용하여 계산을 루프 밖으로 끌어올리기
+4. 강도 감소를 통한 귀납 변수(induction variable) 인식 및 최적화
+5. 루프 언롤링(loop unrolling)과 그 트레이드오프 이해
+6. 루프 변환 적용: 결합(fusion), 분리(fission), 교환(interchange), 타일링(tiling)
+7. 벡터화의 기초와 다면체 모델 설명
+8. 루프 병렬화 기회 추론
 
 ---
 

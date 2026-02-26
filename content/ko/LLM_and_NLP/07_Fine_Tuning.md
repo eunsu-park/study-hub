@@ -552,6 +552,267 @@ trainer.train()
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: LoRA 파라미터 수 분석
+
+LoRA가 쿼리 및 값 프로젝션 행렬에 적용된 BERT-base 모델(12 레이어, d_model=768, num_heads=12)에 대해 다음을 계산하세요: (a) 랭크 r=8에서 학습 가능한 파라미터 수, (b) 학습되는 총 파라미터의 비율, (c) 전체 파인튜닝과의 비교.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+# BERT-base 아키텍처 파라미터
+num_layers = 12
+d_model = 768
+d_k = d_model // 12  # = 64, 헤드당 차원
+num_heads = 12
+
+# 쿼리 및 값 프로젝션 차원
+# W_q: (d_model, d_model) = (768, 768)
+# W_v: (d_model, d_model) = (768, 768)
+
+# BERT-base의 총 파라미터 (근사값)
+d_ff = 3072
+vocab_size = 30522
+
+embeddings = vocab_size * d_model + 512 * d_model + 2 * d_model  # 토큰 + 위치 + 세그먼트
+per_layer = (4 * d_model**2) + (2 * d_model * d_ff) + (4 * d_model)  # 어텐션 + FFN + 정규화
+pooler = d_model * d_model + d_model
+
+total_bert = embeddings + (num_layers * per_layer) + pooler
+print(f"BERT-base 총 파라미터: {total_bert:,}")
+# ≈ 109,482,240 (110M)
+
+# 랭크 r=8에서 LoRA 파라미터
+r = 8
+lora_r = r
+
+# W_q와 W_v에 적용된 각 LoRA 레이어에 대해:
+# A 행렬: (d_model, r) — d_model → r 매핑
+# B 행렬: (r, d_model) — r → d_model 매핑
+lora_params_per_matrix = d_model * r + r * d_model  # A + B
+lora_targets = 2  # query와 value 모두
+
+# 모든 12개 레이어에 적용
+total_lora_params = num_layers * lora_targets * lora_params_per_matrix
+print(f"LoRA 파라미터 (r={r}): {total_lora_params:,}")
+# = 12 * 2 * (768*8 + 8*768) = 12 * 2 * 12288 = 294,912
+
+percentage = total_lora_params / total_bert * 100
+print(f"학습 가능 비율: {percentage:.3f}%")
+# ≈ 0.27%
+
+# 비교
+print(f"\n전체 파인튜닝: {total_bert:,} 파라미터 (100%)")
+print(f"LoRA 파인튜닝: {total_lora_params:,} 파라미터 ({percentage:.2f}%)")
+print(f"감소: 학습 가능한 파라미터가 {total_bert / total_lora_params:.0f}배 적음")
+# ~371배 적은 파라미터
+
+# PEFT로 검증
+from peft import LoraConfig, get_peft_model, TaskType
+from transformers import AutoModelForSequenceClassification
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    "bert-base-uncased", num_labels=2
+)
+lora_config = LoraConfig(
+    r=8, lora_alpha=32,
+    target_modules=["query", "value"],
+    lora_dropout=0.1,
+    task_type=TaskType.SEQ_CLS
+)
+lora_model = get_peft_model(model, lora_config)
+lora_model.print_trainable_parameters()
+# trainable params: 294,912 || all params: 109,482,240 || trainable%: 0.27%
+```
+
+**LoRA가 작동하는 이유**:
+
+LoRA는 가중치 업데이트 `ΔW = BA`(`B ∈ R^{d×r}`, `A ∈ R^{r×d}`)가 되도록 저랭크 행렬 `A`와 `B`를 추가합니다. 포워드 패스 중: `h = W₀x + BAx = (W₀ + BA)x`. `A`와 `B`만 업데이트되고 `W₀`는 동결됩니다.
+
+가설은 태스크 적응의 내재적 차원이 `d`보다 훨씬 낮다는 것이므로, 랭크-8 업데이트가 필요한 적응의 대부분을 포착합니다. 이는 많은 벤치마크에서 경험적으로 검증되었습니다.
+
+</details>
+
+### 연습 문제 2: NER을 위한 토큰 정렬
+
+NER(Named Entity Recognition) 파인튜닝의 까다로운 측면 중 하나는 WordPiece 토큰화가 단어를 여러 서브워드 토큰으로 분리할 수 있지만, NER 레이블은 단어 수준에서 할당된다는 것입니다. NER 레이블을 서브워드 토큰에 적절히 정렬하는 함수를 작성하고, 구체적인 예시를 통해 추적하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from transformers import BertTokenizer
+
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+# 예시: 단어 수준의 NER
+words = ['Barack', 'Obama', 'was', 'born', 'in', 'Hawaii']
+ner_labels = [1, 2, 0, 0, 0, 5]  # B-PER, I-PER, O, O, O, B-LOC
+# 0=O, 1=B-PER, 2=I-PER, 3=B-ORG, 4=I-ORG, 5=B-LOC, 6=I-LOC
+
+def align_labels_with_tokens(words, labels, tokenizer):
+    """
+    단어 수준의 NER 레이블을 서브워드 토큰에 정렬.
+    규칙:
+    - 특수 토큰([CLS], [SEP])은 -100 레이블 (손실에서 무시)
+    - 단어의 첫 번째 서브워드는 단어의 레이블을 받음
+    - 같은 단어의 이후 서브워드는 -100 (무시)
+    """
+    tokenized = tokenizer(
+        words,
+        is_split_into_words=True,
+        return_offsets_mapping=False,
+        truncation=True,
+    )
+
+    word_ids = tokenized.word_ids()  # 각 토큰 위치를 단어 인덱스에 매핑
+
+    aligned_labels = []
+    previous_word_id = None
+
+    for word_id in word_ids:
+        if word_id is None:
+            # 특수 토큰 ([CLS], [SEP], [PAD])
+            aligned_labels.append(-100)
+        elif word_id != previous_word_id:
+            # 새 단어의 첫 번째 서브워드: 단어의 레이블 사용
+            aligned_labels.append(labels[word_id])
+        else:
+            # 연속 서브워드: 손실에서 무시
+            aligned_labels.append(-100)
+
+        previous_word_id = word_id
+
+    return tokenized, aligned_labels, word_ids
+
+tokenized, aligned_labels, word_ids = align_labels_with_tokens(
+    words, ner_labels, tokenizer
+)
+
+# 정렬 표시
+tokens = tokenizer.convert_ids_to_tokens(tokenized['input_ids'])
+label_names = ['O', 'B-PER', 'I-PER', 'B-ORG', 'I-ORG', 'B-LOC', 'I-LOC']
+
+print(f"{'토큰':<15} {'단어 ID':<10} {'레이블':<15} {'레이블명'}")
+print("-" * 50)
+for token, word_id, label in zip(tokens, word_ids, aligned_labels):
+    label_str = label_names[label] if label != -100 else "무시"
+    word_id_str = str(word_id) if word_id is not None else "특수"
+    print(f"{token:<15} {word_id_str:<10} {str(label):<15} {label_str}")
+
+# 출력:
+# 토큰            단어 ID    레이블          레이블명
+# --------------------------------------------------
+# [CLS]           특수       -100            무시
+# barack          0          1               B-PER
+# ##ob            0          -100            무시  ← 서브워드
+# ##ama           0          -100            무시  ← 서브워드
+# was             2          0               O
+# born            3          0               O
+# in              4          0               O
+# hawaii          5          5               B-LOC
+# [SEP]           특수       -100            무시
+```
+
+**이것이 중요한 이유**: "Barack"의 세 서브워드 ("barack", "##ob", "##ama") 모두에 `B-PER`을 단순히 할당하면, 모델은 `##ama`에 대해 `B-PER`을 예측하려고 할 것입니다. 그러나 실제로 개체는 단어 중간에서 시작하지 않습니다. 연속 서브워드에 `-100`을 사용하면 첫 번째 서브워드 예측에만 학습을 올바르게 집중시킵니다.
+
+</details>
+
+### 연습 문제 3: 파인튜닝 전략 선택
+
+아래 각 시나리오에 대해 가장 적합한 파인튜닝 전략을 선택하고 근거를 제시하세요:
+
+1. 레이블이 지정된 영화 리뷰 10만 개와 A100 GPU 4개가 있는 경우
+2. 16GB RAM이 있는 노트북에서 고객 지원을 위해 70억 파라미터 LLM을 적응시켜야 하는 경우
+3. 전문화된 의료 분류 태스크에 레이블이 지정된 예제가 50개만 있는 경우
+4. 선호도 데이터(선택/거부 쌍)로 명령 따르기를 파인튜닝해야 하는 경우
+
+<details>
+<summary>정답 보기</summary>
+
+**시나리오 1: 전체 파인튜닝(Full Fine-tuning)**
+
+- 10만 개의 샘플은 과적합 없이 모든 파라미터를 업데이트하기에 충분합니다.
+- A100 GPU 4개(각 40GB VRAM)로 전체 모델을 메모리에 맞출 수 있습니다.
+- 데이터가 풍부할 때 전체 파인튜닝이 최대 유연성과 일반적으로 최고의 성능을 제공합니다.
+
+```python
+# 전체 파인튜닝 설정
+args = TrainingArguments(
+    per_device_train_batch_size=32,  # 4개 GPU를 활용하는 큰 배치
+    num_train_epochs=3,
+    learning_rate=2e-5,
+    fp16=True,  # 속도를 위한 혼합 정밀도
+)
+```
+
+**시나리오 2: QLoRA (Quantized LoRA)**
+
+- fp16의 70억 파라미터 모델은 가중치만으로도 ~14GB가 필요해 노트북에 겨우 맞습니다.
+- 4비트 양자화(quantization)는 ~3.5GB로 줄여 활성화와 LoRA 어댑터를 위한 공간을 남깁니다.
+- LoRA는 추가적인 학습 가능 파라미터의 ~0.3%만 추가합니다.
+
+```python
+from transformers import BitsAndBytesConfig
+from peft import LoraConfig
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    quantization_config=bnb_config
+)
+lora_config = LoraConfig(r=16, target_modules=["q_proj", "v_proj"])
+model = get_peft_model(model, lora_config)
+```
+
+**시나리오 3: Prompt Tuning 또는 동결 모델로 퓨샷 학습**
+
+- 50개의 예제는 신뢰할 수 있는 전체 파인튜닝이나 LoRA 파인튜닝에 너무 적습니다 (과적합 위험 높음).
+- 프롬프트 튜닝은 소프트 프롬프트 토큰만 학습하여 (~파라미터의 1%) 과적합 가능성을 크게 줄입니다.
+- 대안: 그레이디언트 업데이트 없이 퓨샷 인-컨텍스트 러닝(in-context learning)으로 사전학습된 모델 사용.
+
+```python
+from peft import PromptTuningConfig, TaskType, get_peft_model
+
+config = PromptTuningConfig(
+    task_type=TaskType.SEQ_CLS,
+    num_virtual_tokens=20,  # 적은 수의 학습 가능한 프롬프트 토큰
+    prompt_tuning_init="TEXT",
+    prompt_tuning_init_text="Classify the following medical text: "
+)
+model = get_peft_model(frozen_model, config)
+```
+
+**시나리오 4: SFT + DPO (Direct Preference Optimization)**
+
+- 명령 따르기는 모델에게 어떤 출력이 선호되는지 가르쳐야 합니다.
+- 1단계: SFT(Supervised Fine-Tuning)로 선택된 응답에서 대상 행동 학습
+- 2단계: DPO는 보상 모델 없이 (선택, 거부) 쌍을 사용하여 선호도 정렬을 직접 최적화합니다.
+
+```python
+from trl import SFTTrainer, DPOTrainer
+
+# 1단계: 지도 파인튜닝 (SFT)
+sft_trainer = SFTTrainer(model=model, train_dataset=instruction_dataset)
+sft_trainer.train()
+
+# 2단계: 선호도 정렬을 위한 DPO
+dpo_trainer = DPOTrainer(
+    model=sft_model,
+    ref_model=sft_model_copy,  # 기준 모델 (동결)
+    train_dataset=preference_dataset,  # {prompt, chosen, rejected}
+    beta=0.1,
+)
+dpo_trainer.train()
+```
+
+</details>
+
 ## 다음 단계
 
-[08_Prompt_Engineering.md](./08_Prompt_Engineering.md)에서 효과적인 프롬프트 작성 기법을 학습합니다.
+[프롬프트 엔지니어링](./08_Prompt_Engineering.md)에서 효과적인 프롬프트 작성 기법을 학습합니다.

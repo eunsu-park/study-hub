@@ -14,14 +14,17 @@ Claude Code is not just an AI assistant that answers questions -- it is a develo
 - Familiarity with Git workflows and CI/CD concepts
 - Experience with testing frameworks (pytest, Jest, etc.)
 
-**Learning Objectives**:
-- Execute multi-file refactoring safely with Claude Code
-- Practice test-driven development using Claude as a coding partner
-- Integrate Claude Code into CI/CD pipelines for automated code review
-- Explore and understand large, unfamiliar codebases systematically
-- Build database schemas and API endpoints with Claude assistance
-- Maintain documentation in sync with code changes
-- Apply these workflows to a complete feature implementation
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Execute multi-file refactoring safely with Claude Code
+2. Practice test-driven development using Claude as a coding partner
+3. Integrate Claude Code into CI/CD pipelines for automated code review
+4. Explore and understand large, unfamiliar codebases systematically
+5. Build database schemas and API endpoints with Claude assistance
+6. Maintain documentation in sync with code changes
+7. Apply these workflows to a complete feature implementation
 
 ---
 

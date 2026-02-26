@@ -3,6 +3,8 @@
  * 동적 임포트 (Code Splitting) 예제
  */
 
+// Why: This module is loaded only via dynamic import(), making it a separate webpack chunk
+// that demonstrates code-splitting - it is never included in the initial bundle
 export function loadExtraContent(container) {
     const extraContent = document.createElement('div');
     extraContent.className = 'extra-content';

@@ -13,15 +13,18 @@ The **Model Context Protocol (MCP)** is an open standard developed by Anthropic 
 - Basic understanding of client-server architecture
 - Familiarity with JSON and APIs
 
-**Learning Objectives**:
-- Explain what MCP is and why it exists
-- Describe the MCP architecture (clients, servers, transport layers)
-- Distinguish between the three MCP primitives: Resources, Tools, and Prompts
-- Configure pre-built MCP servers for common services (GitHub, PostgreSQL, Slack)
-- Connect MCP servers to Claude Code using stdio and HTTP transports
-- Set up authentication for MCP servers
-- Navigate the third-party MCP server ecosystem
-- Evaluate security considerations when connecting AI to external systems
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what MCP is and why it exists
+2. Describe the MCP architecture (clients, servers, transport layers)
+3. Distinguish between the three MCP primitives: Resources, Tools, and Prompts
+4. Configure pre-built MCP servers for common services (GitHub, PostgreSQL, Slack)
+5. Connect MCP servers to Claude Code using stdio and HTTP transports
+6. Set up authentication for MCP servers
+7. Navigate the third-party MCP server ecosystem
+8. Evaluate security considerations when connecting AI to external systems
 
 ---
 

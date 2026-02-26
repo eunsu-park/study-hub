@@ -1,11 +1,24 @@
 # 16. Replication & High Availability
 
+**Previous**: [Query Optimization](./15_Query_Optimization.md) | **Next**: [Window Functions](./17_Window_Functions.md)
+
+---
+
 ## Learning Objectives
-- Understand PostgreSQL replication architecture and types
-- Configure and manage streaming replication
-- Use logical replication for selective data replication
-- Implement failover strategies and automation
-- Design high availability clusters
+
+After completing this lesson, you will be able to:
+
+1. Compare physical (streaming) and logical replication and identify appropriate use cases for each
+2. Configure a primary-standby streaming replication setup including WAL settings and replication slots
+3. Set up logical replication with publications and subscriptions for selective table replication
+4. Monitor replication lag, slot status, and WAL accumulation using system views
+5. Perform manual failover and switchover operations and recover old primaries with pg_rewind
+6. Design a high availability architecture using Patroni, etcd, and HAProxy
+7. Integrate connection pooling (PgBouncer) with a replicated cluster
+
+---
+
+Downtime costs money and erodes user trust. For any application where availability matters -- which is nearly every production system -- a single PostgreSQL server is a single point of failure. Replication creates copies of your data on standby servers that can serve read traffic, provide disaster recovery, and take over within seconds when the primary fails. This lesson covers the full spectrum from basic streaming replication to production-grade high availability with automatic failover.
 
 ## Table of Contents
 1. [Replication Overview](#1-replication-overview)
@@ -52,7 +65,9 @@
 ### 1.3 WAL (Write-Ahead Logging) Basics
 
 ```sql
--- Check WAL settings
+-- WAL (Write-Ahead Log) is already written for crash recovery — replication simply
+-- ships these same WAL records to standbys, so it adds minimal overhead to the primary.
+-- This dual-purpose design is why PostgreSQL replication is efficient by default.
 SHOW wal_level;           -- replica or logical
 SHOW max_wal_senders;     -- Number of WAL sender processes
 SHOW max_replication_slots;
@@ -93,10 +108,10 @@ SELECT pg_walfile_name(pg_current_wal_lsn());  -- WAL file name
 ```bash
 # postgresql.conf (Primary)
 listen_addresses = '*'
-wal_level = replica
-max_wal_senders = 5
-wal_keep_size = 1GB
-max_replication_slots = 5
+wal_level = replica          # minimum level for streaming replication
+max_wal_senders = 5          # one sender process per standby + headroom for pg_basebackup
+wal_keep_size = 1GB          # retain WAL segments so slow standbys can catch up without slot
+max_replication_slots = 5    # slots prevent WAL recycling — always create one per standby
 
 # Synchronous replication settings (optional)
 synchronous_commit = on
@@ -130,9 +145,11 @@ pg_basebackup -h primary_host -U replicator -D /var/lib/postgresql/data \
 
 ```bash
 # postgresql.conf (Standby)
-hot_standby = on                  # Allow read queries
-hot_standby_feedback = on         # Prevent query conflicts
-max_standby_streaming_delay = 30s # Query wait time
+hot_standby = on                  # Allow read queries while replaying WAL
+hot_standby_feedback = on         # Tells primary about standby queries — prevents
+                                  # primary from vacuuming rows the standby still needs
+max_standby_streaming_delay = 30s # How long a standby query can block WAL replay
+                                  # before being cancelled — balance freshness vs query stability
 ```
 
 ```bash
@@ -758,12 +775,12 @@ SELECT
 
 ---
 
-## Next Steps
-- [17. Window Functions and Analytics](./17_Window_Functions.md)
-- [18. Table Partitioning](./18_Table_Partitioning.md)
-
 ## References
 - [PostgreSQL Replication](https://www.postgresql.org/docs/current/high-availability.html)
 - [Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 - [Patroni Documentation](https://patroni.readthedocs.io/)
 - [pg_basebackup](https://www.postgresql.org/docs/current/app-pgbasebackup.html)
+
+---
+
+**Previous**: [Query Optimization](./15_Query_Optimization.md) | **Next**: [Window Functions](./17_Window_Functions.md)

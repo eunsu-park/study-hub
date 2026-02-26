@@ -99,7 +99,9 @@ class MDP:
         # 행동 공간
         self.actions = ['left', 'right']
 
-        # 할인율
+        # 할인율 (discount factor)
+        # γ=0.9이면 10단계 후의 보상은 즉각 보상의 0.9^10 ≈ 35% 가치만 가짐 —
+        # 이로써 에이전트가 먼 미래와 현재를 동등하게 취급하지 않도록 방지
         self.gamma = 0.9
 
         # 전이 확률: P[s][a] = [(확률, 다음상태, 보상, 종료여부), ...]
@@ -110,12 +112,16 @@ class MDP:
         P = {}
 
         # 상태 s0에서의 전이
+        # 벽 충돌에 -1 보상: 음수 보상을 통해 에이전트가 벽 충돌이
+        # 시간 낭비임을 학습하고 회피하도록 유도
         P['s0'] = {
             'left': [(1.0, 's0', -1, False)],      # 벽에 부딪힘
             'right': [(1.0, 's1', 0, False)]       # s1으로 이동
         }
 
         # 상태 s1에서의 전이
+        # 80/20 확률적 분할은 현실의 불확실성을 모델링 — 에이전트는 통제 불가능한
+        # 미끄러짐을 고려한 강건한 정책(robust policy)을 학습해야 함
         P['s1'] = {
             'left': [(1.0, 's0', 0, False)],       # s0으로 이동
             'right': [(0.8, 's2', 0, False),       # 80%: s2로 이동
@@ -128,7 +134,8 @@ class MDP:
             'right': [(1.0, 'terminal', +10, True)] # 목표 도달!
         }
 
-        # 종료 상태
+        # 종료 상태는 모든 행동을 흡수하고 보상 0을 반환 —
+        # 에이전트가 목표를 "탈출"해 리턴을 인위적으로 부풀리는 것을 방지
         P['terminal'] = {
             'left': [(1.0, 'terminal', 0, True)],
             'right': [(1.0, 'terminal', 0, True)]
@@ -144,6 +151,8 @@ class MDP:
         """환경에서 한 스텝 실행 (확률적 전이)"""
         transitions = self.P[state][action]
         probs = [t[0] for t in transitions]
+        # p= 인수를 사용하는 np.random.choice는 한 번의 호출로 전체 확률 분포를 샘플링 —
+        # 수동 루프 없이 다중 결과 확률적 전이를 올바르게 처리
         idx = np.random.choice(len(transitions), p=probs)
         prob, next_state, reward, done = transitions[idx]
         return next_state, reward, done
@@ -234,11 +243,15 @@ def compute_state_value(mdp, policy, state, gamma, depth=100):
     (여러 에피소드의 평균 리턴)
     """
     returns = []
+    # 1000 에피소드는 통계적으로 안정된 평균을 제공 — 더 적으면 분산이 크고,
+    # 더 많으면 정확하지만 계산 낭비
     n_episodes = 1000
 
     for _ in range(n_episodes):
         s = state
         episode_return = 0
+        # 할인을 1.0에서 시작하면 첫 보상이 할인 없이 반영됨 (r * γ^0 = r) —
+        # 이후 매 스텝마다 gamma를 곱해 γ^k 가중치를 자동으로 구현
         discount = 1.0
 
         for _ in range(depth):
@@ -254,6 +267,8 @@ def compute_state_value(mdp, policy, state, gamma, depth=100):
 
         returns.append(episode_return)
 
+    # 에피소드 평균으로 E_π[G_t | S_t=state]를 근사 —
+    # 큰 수의 법칙(law of large numbers)에 의해 진짜 V^π(state)로 수렴
     return np.mean(returns)
 ```
 
@@ -270,11 +285,14 @@ def compute_action_value(mdp, policy, state, action, gamma, depth=100):
     n_episodes = 1000
 
     for _ in range(n_episodes):
-        # 첫 행동은 주어진 action
+        # 첫 행동은 주어진 action으로 고정 — 이것이 Q(s,a)와 V(s)의 핵심 차이:
+        # 첫 행동을 고정하고, 이후 모든 단계는 정책이 결정
         s = state
         next_s, reward, done = mdp.step(s, action)
 
         episode_return = reward
+        # 할인을 gamma에서 시작 (1.0이 아님): 첫 보상은 이미 위에서 수집했으므로
+        # 이후 보상은 k≥1에 해당하여 γ^k로 스케일링
         discount = gamma
         s = next_s
 
@@ -345,6 +363,8 @@ def bellman_expectation_v(mdp, policy, V, state, gamma):
 
     V(s) = Σ_a π(a|s) * Σ_{s',r} P(s',r|s,a) * [r + γV(s')]
     """
+    # 종료 상태의 가치는 항상 0 — 앞으로 수집할 보상이 없으므로,
+    # 이 베이스 케이스로 재귀가 무한 루프에 빠지는 것을 방지
     if state == 'terminal':
         return 0
 
@@ -355,8 +375,12 @@ def bellman_expectation_v(mdp, policy, V, state, gamma):
 
         for prob, next_state, reward, done in mdp.get_transitions(state, action):
             if done:
+                # 종료 상태로 전이 시 미래 가치는 0 — 즉각 보상만 반영하고
+                # γ * V(terminal)은 더하지 않음
                 value += action_prob * prob * reward
             else:
+                # 이중 합산(행동 → 결과)이 완전한 기댓값을 계산:
+                # E_π[r + γV(s')] = Σ_a π(a|s) Σ_{s'} P(s'|s,a)[r + γV(s')]
                 value += action_prob * prob * (reward + gamma * V.get(next_state, 0))
 
     return value
@@ -374,7 +398,8 @@ def bellman_expectation_q(mdp, policy, Q, state, action, gamma):
         if done:
             value += prob * reward
         else:
-            # 다음 상태에서의 기대 가치
+            # V(s') = Σ_a' π(a'|s') Q(s',a') — 다음 상태에서 Q를 다시 V로 변환하면
+            # Q를 기존 Q 추정값만으로 완전히 표현할 수 있음
             next_value = sum(
                 policy.get_action_prob(next_state, a) * Q.get((next_state, a), 0)
                 for a in mdp.actions
@@ -414,6 +439,8 @@ def bellman_optimality_v(mdp, V, state, gamma):
     if state == 'terminal':
         return 0
 
+    # -inf로 초기화하면 실제 행동 가치가 무조건 이를 대체 —
+    # 0으로 초기화하면 모든 행동이 음의 보상을 줄 때 잘못된 결과를 낳음
     max_value = float('-inf')
 
     for action in mdp.actions:
@@ -425,6 +452,8 @@ def bellman_optimality_v(mdp, V, state, gamma):
             else:
                 action_value += prob * (reward + gamma * V.get(next_state, 0))
 
+        # max는 정책의 가중 평균을 대체 — 최적성이란 모든 행동을 평균하는 것이 아니라
+        # 항상 최선의 단일 행동을 선택한다는 의미
         max_value = max(max_value, action_value)
 
     return max_value
@@ -442,6 +471,8 @@ def bellman_optimality_q(mdp, Q, state, action, gamma):
         if done:
             value += prob * reward
         else:
+            # 다음 행동의 max는 최적성 원리를 구현: s'에서는 에이전트가
+            # 이후 항상 최선의 행동을 취한다고 가정
             max_next_q = max(Q.get((next_state, a), 0) for a in mdp.actions)
             value += prob * (reward + gamma * max_next_q)
 
@@ -582,6 +613,8 @@ class GridWorld:
         전이 확률 반환
         80% 의도한 방향, 10%씩 좌우로 미끄러짐
         """
+        # 종료 상태에 대한 조기 반환으로 action_deltas 인덱싱을 회피 —
+        # 흡수 상태(absorbing state) 계약을 깔끔하게 유지
         if self.is_terminal(state):
             return [(1.0, state, 0, True)]
 
@@ -590,18 +623,22 @@ class GridWorld:
         # 의도한 방향
         intended_delta = self.action_deltas[action]
 
-        # 좌우 미끄러짐 방향
+        # 미끄러짐 방향은 의도한 행동에 수직 — 실제 환경에서 불확실성은 직교 방향으로
+        # 발생하는 것이 일반적이며(뒤로 밀리는 것은 드묾), 물리적 미끄러짐 역학을 반영
         if action in ['up', 'down']:
             slip_actions = ['left', 'right']
         else:
             slip_actions = ['up', 'down']
 
-        # 각 방향에 대한 전이 추가
+        # 세 결과를 하나의 리스트로 묶어 전이 로직 중복 없이
+        # 확률 가중 방향에 대해 균일하게 반복 처리
         directions = [(0.8, action), (0.1, slip_actions[0]), (0.1, slip_actions[1])]
 
         for prob, dir_action in directions:
             delta = self.action_deltas[dir_action]
             next_state = self._move(state, delta)
+            # 보상은 의도한 상태가 아닌 결과 상태에서 평가 —
+            # 미끄러져서 장애물에 도달해도 페널티를 받음
             reward = self.get_reward(state, action, next_state)
             done = self.is_terminal(next_state)
             transitions.append((prob, next_state, reward, done))

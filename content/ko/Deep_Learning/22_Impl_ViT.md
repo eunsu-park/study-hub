@@ -4,6 +4,19 @@
 
 # 22. Vision Transformer (ViT)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ViT의 핵심 아이디어(이미지를 플래튼된 패치의 시퀀스로 처리하는 것)를 설명하고, 이것이 이미지 분류를 시퀀스 모델링 문제로 어떻게 재구성하는지 서술합니다.
+2. 패치 크기가 주어졌을 때 입력 이미지에서 생성되는 패치 수를 계산하고, 각 패치 토큰의 임베딩 차원을 결정합니다.
+3. ViT 아키텍처에서 [CLS] 토큰과 1D 학습 가능한 위치 임베딩(Positional Embedding)의 역할을 설명합니다.
+4. PyTorch에서 패치 임베딩(Patch Embedding), 트랜스포머 인코더 블록(Transformer Encoder Block), 분류 헤드(Classification Head)를 포함하여 ViT 파이프라인 전체를 처음부터 구현합니다.
+5. 사전 훈련된 ViT 모델을 다운스트림 이미지 분류 데이터셋에 파인튜닝하고, CNN 베이스라인과 성능을 비교합니다.
+6. CNN과 비교하여 ViT의 데이터 요구사항과 연산 트레이드오프를 식별하고, ViT가 대규모 사전 훈련으로부터 큰 이점을 얻는 이유를 설명합니다.
+
+---
+
 ## 개요
 
 Vision Transformer (ViT)는 Transformer 아키텍처를 이미지 분류에 적용한 모델입니다. 이미지를 패치로 분할하고, 각 패치를 토큰처럼 처리합니다. "An Image is Worth 16x16 Words" (Dosovitskiy et al., 2020)
@@ -186,4 +199,4 @@ Global Average Pooling:
 
 - Dosovitskiy et al. (2020). "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
 - [timm ViT](https://github.com/rwightman/pytorch-image-models)
-- [21_Vision_Transformer.md](./21_Vision_Transformer.md)
+- [Vision Transformer (ViT)](./21_Vision_Transformer.md)

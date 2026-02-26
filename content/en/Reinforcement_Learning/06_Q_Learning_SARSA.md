@@ -79,10 +79,13 @@ class QLearning:
         if done:
             target = reward
         else:
-            # Off-policy: Use max Q value for next state
+            # Off-policy key: always use the MAX over next actions, not the
+            # action we actually took — this lets us learn the optimal policy
+            # even while exploring with a noisy epsilon-greedy behavior policy
             target = reward + self.gamma * np.max(self.q_table[next_state])
 
-        # TD update
+        # Bellman residual: positive means the outcome was better than expected,
+        # so we nudge Q upward; alpha governs how quickly we revise past estimates
         td_error = target - self.q_table[state, action]
         self.q_table[state, action] += self.alpha * td_error
 
@@ -107,7 +110,9 @@ def train_qlearning(env, agent, n_episodes=1000):
             # Step in environment
             next_state, reward, done, _ = env.step(action)
 
-            # Update Q table (independent of next action)
+            # Q-Learning update does NOT need to know the next action —
+            # this independence is what makes it off-policy and reusable with
+            # experience replay (we can re-use old transitions from a buffer)
             agent.update(state, action, reward, next_state, done)
 
             state = next_state
@@ -115,7 +120,9 @@ def train_qlearning(env, agent, n_episodes=1000):
 
         rewards_history.append(total_reward)
 
-        # Epsilon decay (optional)
+        # Decay epsilon so the agent shifts from exploration to exploitation
+        # over time; the floor of 0.01 keeps a tiny exploration rate forever
+        # to handle rare but important state-action pairs
         agent.epsilon = max(0.01, agent.epsilon * 0.995)
 
     return rewards_history
@@ -174,6 +181,9 @@ def train_sarsa(env, agent, n_episodes=1000):
 
     for episode in range(n_episodes):
         state = env.reset()
+        # Select the first action before entering the loop so that (s, a) is
+        # always ready at the top of each iteration — this matches the (S,A,R,S,A)
+        # tuple structure that SARSA requires
         action = agent.choose_action(state)  # Select initial action
         total_reward = 0
         done = False
@@ -182,13 +192,16 @@ def train_sarsa(env, agent, n_episodes=1000):
             # Step in environment
             next_state, reward, done, _ = env.step(action)
 
-            # Select next action (before update)
+            # next_action must be chosen BEFORE the update so the Q target
+            # reflects the policy we're actually following, not a hypothetical one
             next_action = agent.choose_action(next_state)
 
             # SARSA update (needs next action)
             agent.update(state, action, reward, next_state, next_action, done)
 
             state = next_state
+            # Reuse next_action rather than re-sampling — sampling twice would
+            # mean the action we update on differs from the one we execute
             action = next_action
             total_reward += reward
 
@@ -402,6 +415,9 @@ def train_frozen_lake():
         n_actions=env.action_space.n,
         alpha=0.1,
         gamma=0.99,
+        # Start with pure exploration (epsilon=1.0) so the agent visits every
+        # cell before committing to a policy — critical on FrozenLake where
+        # the sparse reward requires broad exploration to find the goal
         epsilon=1.0
     )
 
@@ -423,6 +439,9 @@ def train_frozen_lake():
             total_reward += reward
 
         rewards.append(total_reward)
+        # Slower decay (0.9995 vs 0.995) gives more exploration time —
+        # FrozenLake's stochastic transitions require many visits per state
+        # to build reliable Q-value estimates
         agent.epsilon = max(0.01, agent.epsilon * 0.9995)
 
         if (episode + 1) % 1000 == 0:

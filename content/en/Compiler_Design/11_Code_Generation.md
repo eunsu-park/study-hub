@@ -2199,4 +2199,4 @@ Test with a program that allocates an array, fills it with squares, and prints t
 
 ---
 
-[Previous: 10_Runtime_Environments.md](./10_Runtime_Environments.md) | [Next: 12_Optimization_Local_and_Global.md](./12_Optimization_Local_and_Global.md) | [Overview](./00_Overview.md)
+[Previous: Runtime Environments](./10_Runtime_Environments.md) | [Next: Optimization — Local and Global](./12_Optimization_Local_and_Global.md) | [Overview](./00_Overview.md)

@@ -1,8 +1,24 @@
 # 시계열 머신러닝(Time Series Machine Learning)
 
-## 개요
+**이전**: [불균형 데이터 처리](./17_Imbalanced_Data.md) | **다음**: [AutoML과 하이퍼파라미터 최적화](./19_AutoML_Hyperparameter_Optimization.md)
 
-이 레슨에서는 시계열(Time Series) 예측 및 분류를 위한 머신러닝 접근법을 다룹니다. 고전적인 통계적 방법(ARIMA, SARIMA — Data_Science L20-21 참조)과 달리, ML 접근법은 시간적 특징(Temporal Features)을 공학적으로 설계하고 트리 기반 모델(Tree-Based Models), Prophet, 또는 특수 분류기(Specialized Classifiers)를 사용하여 예측을 지도 학습(Supervised Learning) 문제로 변환합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 지연 특징(lag features)을 사용하여 시계열 예측 문제를 지도 학습(supervised learning)으로 재구성하는 방법을 설명할 수 있습니다
+2. 지연값, 롤링 통계량(rolling statistics), 달력 성분, 푸리에 항(Fourier terms)을 포함한 시간적 특징을 설계할 수 있습니다
+3. TimeSeriesSplit과 워크포워드 검증(walk-forward validation)을 적용하여 교차검증에서 시간적 데이터 누수(temporal data leakage)를 방지할 수 있습니다
+4. 시계열 예측을 위해 트리 기반 모델(GradientBoosting, XGBoost, LightGBM)을 훈련할 수 있습니다
+5. 다중 스텝 예측 전략(재귀적, 직접, 다중 출력)을 비교하고 각각의 오차 특성을 설명할 수 있습니다
+6. 비즈니스 예측에서 Prophet과 트리 기반 접근법을 언제 사용해야 하는지 설명할 수 있습니다
+7. MAE, RMSE, MAPE, sMAPE, MASE를 사용하여 예측을 평가하고 각 지표의 강점을 해석할 수 있습니다
+
+---
+
+ARIMA와 같은 고전적 시계열 방법은 선형 자기상관(linear autocorrelation) 구조를 이용하여 단일 시계열을 모델링합니다. 하지만 수십 개의 외생 특징(exogenous features), 비선형 관계, 또는 수백 개의 관련 시계열이 있다면 어떨까요? 머신러닝 접근법은 예측을 테이블형 지도 학습 문제로 재구성합니다 -- 시간적 특징을 설계하고, 그래디언트 부스팅 트리에 입력하여, 이미 알고 있는 동일한 도구를 활용합니다. 이 레슨에서는 특징 엔지니어링부터 적절한 시간적 검증까지, 이러한 전환을 언제 그리고 어떻게 수행하는지 보여줍니다.
 
 ---
 

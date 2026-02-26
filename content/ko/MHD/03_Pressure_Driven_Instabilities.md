@@ -448,16 +448,25 @@ def rayleigh_taylor_growth_rate(k, g, rho1, rho2, B0, kx_frac=0):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Wavenumber along field
+    # kx는 자기장 방향을 따른 파동 벡터 성분입니다;
+    # 이 성분만이 자기장선을 늘이고 구부리므로, kx ≠ 0인 섭동만이
+    # 자기 장력 안정화를 느낍니다.
     kx = kx_frac * k
 
-    # Atwood number
+    # Atwood 수 A = (ρ₂-ρ₁)/(ρ₂+ρ₁)는 밀도 대비를 정규화합니다:
+    # A=1은 진공 위의 무거운 유체의 극한 경우(최대 구동)이고,
+    # A→0은 거의 같은 밀도(소멸하는 RT 구동)를 의미합니다.
     A = (rho2 - rho1) / (rho2 + rho1)
 
-    # Alfvén speed squared
+    # vA² = B₀²/(μ₀(ρ₁+ρ₂))는 두 유체 층이 모두 자기 장력이 가속해야 하는
+    # 관성에 기여하기 때문에 밀도의 합을 사용합니다;
+    # 이것은 결합 시스템의 알벤 속도입니다.
     vA2 = B0**2 / (mu0 * (rho1 + rho2))
 
-    # Dispersion relation: ω² = -gkA + vA²kx²
+    # 분산 관계 ω² = -gkA + vA²kx²는 경쟁을 보여줍니다:
+    # -gkA (중력) 항은 불안정성을 구동하고, vA²kx² (B를 따른 자기 장력)는
+    # k∥B인 모드를 안정화합니다 — 하지만 k⊥B (kx=0) 섭동은
+    # 장의 영향을 받지 않고 불안정한 상태를 유지합니다.
     omega_sq = -g * k * A + vA2 * kx**2
 
     if omega_sq < 0:
@@ -587,7 +596,11 @@ def ballooning_stability_boundary(s_vals):
     --------
     alpha_crit: critical alpha for marginal stability
     """
-    # Empirical fit: α_crit ≈ 0.6 * s
+    # 선형 근사 α_crit ≈ 0.6s는 (s,α) 평면에서 완전한 ballooning 고유값 문제의
+    # 선행 차수 전개에서 나옵니다: 더 높은 전단(s)은 이웃한 플럭스 표면을
+    # 분리하고 플루트형 교환 구동을 억제하여 더 큰 압력 구배(α)가 모드가
+    # 불안정해지기 전에 허용됩니다. 계수 0.6은 ballooning 방정식의
+    # 수치 해에 대한 경험적 맞춤값입니다.
     alpha_crit = 0.6 * s_vals
 
     return alpha_crit
@@ -612,10 +625,15 @@ def compute_alpha_parameter(r, p, q, B0, R0):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Numerical derivative
+    # 중심 유한 차분은 해석적 형태를 요구하지 않고 2차 정확도를 제공합니다.
+    # 이는 수치적으로 계산된 압력 프로파일에서 사용할 수 없을 수 있습니다.
     dr = 0.001
     dpdx = (p(r + dr) - p(r - dr)) / (2*dr)
 
+    # α = -(2μ₀R₀²q²/B₀²)(dp/dr)은 ballooning 방정식에 나타나는
+    # 무차원 압력 구배입니다. q² 인수는 더 높은-q 플럭스 표면이
+    # 폴로이달 회로당 더 많은 토로이달 길이를 가져 불안정화 곡률-압력 상호작용을
+    # 증폭시킴을 반영합니다; R₀²/B₀²는 복원 장력에 대한 곡률 구동의 척도를 설정합니다.
     alpha = -(2*mu0*R0**2*q**2/B0**2) * dpdx
 
     return alpha
@@ -836,21 +854,30 @@ def evaluate_mercier_criterion(r, q, p, Bp, R0):
     # Compute derivatives numerically
     dr = 0.001
 
-    # Shear contribution
+    # D_S = (1/4)(r q'/q)²는 항상 ≥ 0입니다: 자기 전단(q'/q)은
+    # 인접한 플럭스 표면이 일관적으로 움직이는 것을 방지하여 교환을 안정화합니다
+    # — 1/4 프리팩터는 압력 구동을 이기는 데 필요한 최소 전단을 정량화하는
+    # Mercier 계수입니다.
     dqdx = (q(r + dr) - q(r - dr)) / (2*dr)
     D_S = 0.25 * ((r / q(r)) * dqdx)**2
 
-    # Magnetic well contribution
+    # D_W는 자기 우물을 포착합니다: dp/dr < 0 (바깥쪽으로 감소하는 압력)이고
+    # B_p가 유한하면, D_W는 음수가 되어 불안정화 교환 구동을 나타냅니다;
+    # (1 + 2q²) 인수는 곡률의 폴로이달 및 토로이달 부분 모두를 고려합니다.
     dpdx = (p(r + dr) - p(r - dr)) / (2*dr)
     D_W = (mu0 * r / Bp(r)**2) * dpdx * (1 + 2*q(r)**2)
 
-    # Geodesic curvature
+    # D_G = r²/(R₀²q²)는 측지선 곡률 보정입니다: 토러스에서 자기장선의
+    # 비원형 폴로이달 궤적은 직선 원통에는 없는 추가 안정화 곡률 성분을 더합니다.
     D_G = r**2 / (R0**2 * q(r)**2)
 
     # Total
     D_I = D_S + D_W + D_G
 
-    # Stability criterion
+    # 임계값 1/4은 Mercier 안정성 기준입니다: D_I > 1/4은
+    # 결합된 전단 + 측지선 안정화가 압력 구동을 초과한다는 것을 의미합니다.
+    # 이것은 필요(충분하지 않음) 조건 — D_I > 1/4을 통과해도
+    # 국소 분석으로 포착되지 않는 전역 모드를 배제하지 않습니다.
     stable = D_I > 0.25
 
     return D_I, D_S, D_W, D_G, stable

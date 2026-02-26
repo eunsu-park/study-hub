@@ -2,9 +2,25 @@
 
 [Previous: Confidence Intervals](./13_Confidence_Intervals.md) | [Next: ANOVA](./15_ANOVA.md)
 
-## Overview
+---
 
-This chapter goes beyond basic hypothesis testing to cover **Power**, **Effect Size**, **Sample Size Determination**, and the **Multiple Testing Problem**.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between Type I error, Type II error, and statistical power, and visualize their relationships
+2. Calculate and interpret effect sizes (Cohen's d, Hedges' g, Glass's delta) for group comparisons
+3. Perform power analysis to determine the minimum sample size needed for a study
+4. Explain why multiple testing inflates the family-wise error rate and calculate the theoretical FWER
+5. Apply Bonferroni, Holm, and Benjamini-Hochberg corrections to a set of p-values
+6. Compare FWER-controlling and FDR-controlling methods in terms of conservatism and discovery rates
+7. Implement comprehensive hypothesis testing workflows using `pingouin` and `statsmodels`
+
+---
+
+> **How surprised should you be?** Think of a p-value as a "surprise meter." You assume nothing interesting is happening (the null hypothesis), then ask: "If that were true, how surprising is the data I just saw?" A tiny p-value means the data would be *very* surprising under the null -- surprising enough that you start doubting the assumption itself. The p-value doesn't tell you the probability of the hypothesis being true; it tells you how incompatible the data is with the null scenario.
+
+Knowing that a result is "statistically significant" is only the beginning. How large is the effect? Was the study powerful enough to detect it? And when you run dozens of tests at once, how many of your "discoveries" are false alarms? This lesson equips you with the tools to answer these deeper questions -- power analysis for planning studies, effect sizes for measuring practical importance, and multiple-testing corrections for controlling error rates across many simultaneous comparisons.
 
 ---
 
@@ -87,6 +103,11 @@ def visualize_errors(mu_0, mu_1, sigma, n, alpha=0.05):
     ax.axvline(critical_lower, color='red', linestyle='--', lw=1.5)
 
     # Calculate β and Power
+    # Why this formula equals β: we integrate the alternative distribution between the
+    # two rejection boundaries.  The area under alt_dist in that middle region is the
+    # probability that the test statistic falls in the "fail to reject" zone *even though
+    # H₁ is true* — that is the definition of a Type II error.  Power = 1 - β is the
+    # complementary probability: correctly rejecting H₀ when H₁ is true.
     beta = alt_dist.cdf(critical_upper) - alt_dist.cdf(critical_lower)
     power = 1 - beta
 
@@ -157,6 +178,11 @@ def effect_sizes(group1, group2):
     d = cohens_d(group1, group2)
 
     # Hedges' g (small sample correction)
+    # Why correct Cohen's d? With small samples, the pooled standard deviation tends to
+    # underestimate the population σ, making |d| slightly inflated.  The correction
+    # factor 1 - 3/(4N-9) shrinks d toward zero to account for this bias.
+    # As N grows, the factor approaches 1 and Hedges' g converges to Cohen's d —
+    # so for large samples (n > 20 per group) the two measures are virtually identical.
     n1, n2 = len(group1), len(group2)
     correction = 1 - (3 / (4*(n1+n2) - 9))
     g = d * correction
@@ -553,9 +579,17 @@ def benjamini_hochberg(p_values, alpha=0.05):
     sorted_p = p_values[sorted_indices]
 
     # BH threshold: (i/n) * α
+    # Why rank-scaled thresholds? The BH procedure controls the *expected* fraction of
+    # false discoveries among all rejections (FDR), not the probability of any false
+    # discovery (FWER).  By giving higher-ranked (smaller) p-values a proportionally
+    # tighter threshold, it allows more discoveries than Bonferroni while bounding the
+    # proportion of those discoveries that are spurious.
     bh_thresholds = (np.arange(1, n+1) / n) * alpha
 
-    # Rejection decision
+    # Rejection decision: find the largest rank where p ≤ threshold, then reject all
+    # hypotheses ranked up to that point (not just those below their own threshold).
+    # This "keep going until the last crossing" rule is what makes BH coherent —
+    # rejecting a weaker hypothesis also requires rejecting all stronger ones.
     below_threshold = sorted_p <= bh_thresholds
     if np.any(below_threshold):
         max_i = np.max(np.where(below_threshold)[0])

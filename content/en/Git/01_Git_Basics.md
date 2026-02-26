@@ -1,5 +1,26 @@
 # Git Basics
 
+**Next**: [Basic Commands](./02_Basic_Commands.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a distributed version control system (DVCS) is and why it matters
+2. Distinguish between Git (the tool) and GitHub (the hosting service)
+3. Install and configure Git on macOS, Linux, or Windows
+4. Initialize a new Git repository with `git init`
+5. Describe the three-area architecture: working directory, staging area, and repository
+6. Perform the basic workflow: `add`, `commit`, and view history with `git log`
+
+---
+
+Whether you are working alone on a personal project or collaborating with a large team, losing track of changes is one of the most common and costly mistakes in software development. Git gives you a complete, replayable history of every modification, the ability to work on multiple ideas in parallel, and a safety net that lets you undo almost anything. Learning Git is the single most impactful productivity skill a developer can acquire.
+
+> **Analogy -- A Time Machine for Code**: Imagine writing an essay and wishing you could go back to the version from yesterday, or see exactly what changed between Tuesday and Thursday. Git is that time machine. Every `git commit` creates a snapshot -- a save point you can return to at any time. Unlike "undo" in a text editor (which only goes back linearly), Git lets you branch into parallel timelines, compare any two snapshots, and even merge alternate histories together.
+
 ## 1. What is Git?
 
 Git is a **Distributed Version Control System (DVCS)**. It tracks changes to files and enables multiple people to collaborate.

@@ -5,6 +5,19 @@
 > **선수지식**: TikZ 기초(레슨 10), 기본 수학
 > **목표**: 고급 TikZ 기법 숙달 및 출판 품질의 데이터 시각화와 복잡한 다이어그램 생성을 위한 PGFPlots 학습
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `\foreach` 루프를 사용하여 반복적인 그래픽 요소(graphical element)와 복잡한 패턴(pattern)을 프로그래밍 방식으로 생성할 수 있다
+2. TikZ의 트리 드로잉 라이브러리(tree-drawing library)를 사용하여 트리(tree)와 그래프(graph) 구조를 만들 수 있다
+3. PGFPlots 패키지를 사용하여 수학 함수와 데이터셋을 출판 품질의 서식으로 플로팅(plotting)할 수 있다
+4. TikZ 장식(decoration), 패턴(pattern), 음영(shading)을 적용하여 다이어그램의 미적 완성도를 높일 수 있다
+5. 신경망 구조(neural network architecture)와 유한 상태 기계(finite state machine) 같은 복잡한 기술 다이어그램을 구성할 수 있다
+6. PGFPlots 차트와 TikZ 주석(annotation)을 결합하여 학술지 제출용 그림을 제작할 수 있다
+
+---
+
 ## 소개
 
 TikZ 기초를 바탕으로 이 레슨은 정교한 그래픽을 만들기 위한 고급 기법을 다룹니다. 데이터 시각화를 위한 PGFPlots, foreach 루프, 트리, 장식, 패턴과 같은 고급 TikZ 기능 및 신경망, 상태 기계, 출판 품질의 플롯과 같은 복잡한 다이어그램을 만드는 방법을 배웁니다.
@@ -1049,5 +1062,5 @@ TikZ는 강력한 트리 그리기 기능을 제공합니다.
 
 ---
 
-**이전**: [10_TikZ_Basics.md](10_TikZ_Basics.md)
-**다음**: [12_Beamer_Presentations.md](12_Beamer_Presentations.md)
+**이전**: [TikZ 그래픽 기초(TikZ Graphics Basics)](10_TikZ_Basics.md)
+**다음**: [Beamer 프레젠테이션(Beamer Presentations)](12_Beamer_Presentations.md)

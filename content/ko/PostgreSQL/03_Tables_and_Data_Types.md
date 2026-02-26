@@ -1,5 +1,25 @@
 # 테이블과 데이터타입
 
+**이전**: [데이터베이스 관리](./02_Database_Management.md) | **다음**: [CRUD 기본](./04_CRUD_Basics.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 적절한 컬럼 정의와 함께 `CREATE TABLE`을 사용하여 테이블을 생성할 수 있습니다
+2. PostgreSQL의 숫자형 타입(INTEGER, NUMERIC, SERIAL)을 구별하고 적합한 타입을 선택할 수 있습니다
+3. 문자형 타입(CHAR, VARCHAR, TEXT)과 날짜/시간 타입(DATE, TIMESTAMP, TIMESTAMPTZ)을 비교할 수 있습니다
+4. BOOLEAN, JSONB, UUID, 배열(array), ENUM을 포함한 특수 데이터 타입을 적용할 수 있습니다
+5. 데이터 무결성을 강제하기 위한 제약조건(PRIMARY KEY, NOT NULL, UNIQUE, CHECK, FOREIGN KEY)을 구현할 수 있습니다
+6. ALTER TABLE을 사용하여 기존 테이블을 수정할 수 있습니다 (컬럼 추가/삭제, 타입 변경, 제약조건 관리)
+7. 적절한 외래 키(Foreign Key) 관계를 갖춘 다중 테이블 스키마(schema)를 설계할 수 있습니다
+
+---
+
+테이블은 모든 관계형 데이터베이스의 근본적인 구성 요소입니다. 애플리케이션이 저장하는 모든 데이터 — 사용자 프로필, 상품 카탈로그, 금융 거래 — 는 결국 신중하게 선택된 컬럼, 데이터 타입(Data Type), 제약조건(Constraint)을 갖춘 테이블 안에 존재합니다. 설계 단계에서 스키마를 올바르게 정의하면, 미묘한 데이터 손상부터 느린 쿼리까지 나중에 발생할 수 있는 수많은 문제를 예방할 수 있습니다.
+
 ## 1. 테이블 기본 개념
 
 테이블은 데이터를 행(row)과 열(column)로 구성하여 저장하는 구조입니다.
@@ -86,7 +106,9 @@ CREATE TABLE orders (
     order_date DATE
 );
 
--- PostgreSQL 10+ 에서는 IDENTITY 권장
+-- IDENTITY(SQL 표준)가 SERIAL보다 PG 10+에서 선호됨 — SERIAL은 느슨하게 결합된
+-- 별도 시퀀스를 생성하지만, IDENTITY는 시퀀스를 컬럼 생명주기에 연결하여
+-- 시퀀스를 깨뜨리는 수동 삽입을 방지
 CREATE TABLE orders (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_date DATE
@@ -103,10 +125,12 @@ CREATE TABLE orders (
 | `DECIMAL(p, s)` | NUMERIC과 동일 |
 
 ```sql
+-- 금융/화폐 데이터에는 NUMERIC 사용 — 정확한 계산 (반올림 오류 없음).
+-- REAL/DOUBLE PRECISION은 빠르지만 근사값; float에서 0.1 + 0.2 ≠ 0.3
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     price NUMERIC(10, 2),      -- 최대 10자리, 소수점 2자리 (예: 99999999.99)
-    weight REAL,               -- 부동 소수점
+    weight REAL,               -- 부동 소수점 (반올림이 허용되는 측정값에 사용)
     rating DOUBLE PRECISION    -- 더 정밀한 부동 소수점
 );
 
@@ -403,7 +427,10 @@ CREATE TABLE products (
     category_id INTEGER REFERENCES categories(id)
 );
 
--- 상세 옵션
+-- 비즈니스 규칙에 따라 ON DELETE 동작 선택:
+-- CASCADE: 부모 없이 자식 데이터가 무의미할 때 (예: 주문 없는 주문항목)
+-- SET NULL: 자식이 독립적으로 존재 가능할 때 (예: 카테고리 삭제 시 상품)
+-- RESTRICT: 자식이 있으면 삭제 차단 (가장 안전한 기본값)
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -597,6 +624,6 @@ CREATE TABLE order_items (
 
 ---
 
-## 다음 단계
+---
 
-[04_CRUD_기본.md](./04_CRUD_기본.md)에서 데이터 삽입, 조회, 수정, 삭제를 배워봅시다!
+**이전**: [데이터베이스 관리](./02_Database_Management.md) | **다음**: [CRUD 기본](./04_CRUD_Basics.md)

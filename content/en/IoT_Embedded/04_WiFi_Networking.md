@@ -1,5 +1,24 @@
 # 04. WiFi Networking
 
+**Previous**: [Python GPIO Control](./03_Python_GPIO_Control.md) | **Next**: [BLE Connectivity](./05_BLE_Connectivity.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Configure WiFi networks on Raspberry Pi using wpa_supplicant
+2. Implement TCP server and client communication in Python
+3. Implement UDP server and client communication for real-time data
+4. Use the requests library for HTTP communication with IoT APIs
+5. Build retry and batch transmission logic for reliable data delivery
+6. Scan local networks to discover IoT devices and open ports
+
+---
+
+An IoT device that cannot communicate is just a sensor logging to nowhere. WiFi networking transforms your Raspberry Pi from an isolated data collector into a connected node that can report readings, receive commands, and participate in a larger system. Mastering socket programming and HTTP communication gives you the building blocks for every protocol covered in the lessons ahead.
+
+---
+
 This lesson covers WiFi network configuration on Raspberry Pi and Python socket programming for IoT device communication. We'll learn network setup, TCP/UDP communication, and HTTP client implementation.
 
 ---
@@ -716,14 +735,6 @@ ESP32 is another popular IoT platform. Here's a comparison with Raspberry Pi:
 - ✅ **Network Scanning**: WiFi network scanner, IoT device scanner
 - ✅ **Platform Comparison**: Raspberry Pi vs ESP32
 
-### Next Steps
-
-| Next Lesson | Topic | Content |
-|-------------|-------|---------|
-| **05. BLE Connectivity** | Bluetooth Low Energy | BLE protocol, GATT structure, sensor communication |
-| **06. MQTT Protocol** | IoT messaging protocol | Mosquitto broker, pub/sub patterns, QoS levels |
-| **07. HTTP REST for IoT** | RESTful API design | Flask server, API design, request validation |
-
 ### Hands-On Exercises
 
 1. **Temperature Monitoring Server**:
@@ -763,3 +774,60 @@ ESP32 is another popular IoT platform. Here's a comparison with Raspberry Pi:
 - [requests Library](https://requests.readthedocs.io/)
 - [Raspberry Pi Network Configuration](https://www.raspberrypi.org/documentation/configuration/wireless/)
 - [wpa_supplicant Configuration](https://w1.fi/wpa_supplicant/)
+
+---
+
+## Exercises
+
+### Exercise 1: WiFi Signal Monitor
+
+Write a Python script that continuously monitors WiFi signal strength and connection quality:
+
+1. Use `subprocess` to call `iwconfig wlan0` every 10 seconds and parse the signal level (dBm) and link quality from the output using `re`.
+2. Log each reading to a CSV file with columns: `timestamp`, `ssid`, `signal_dbm`, `quality`.
+3. Print a warning to the console when signal drops below -70 dBm.
+4. If the network disconnects entirely (no SSID returned), log the disconnection time. When it reconnects, log the reconnection time and compute the downtime duration.
+
+### Exercise 2: Multi-Client TCP Sensor Server
+
+Build a TCP server on the Raspberry Pi that accepts connections from multiple sensor clients simultaneously:
+
+1. Implement the `TCPServer` class from Section 2.1, extending it to support concurrent clients using `threading.Thread`.
+2. Each client sends JSON messages of the form `{"sensor_id": "...", "value": ..., "unit": "..."}`.
+3. The server maintains an in-memory dictionary of the latest reading per `sensor_id` and prints a status summary every 30 seconds.
+4. Write a `TCPClient` script that sends 10 simulated temperature readings at 2-second intervals, then disconnects cleanly.
+5. Test by running the server on the Pi and at least two client instances.
+
+### Exercise 3: HTTP Sensor Reporter with Retry
+
+Extend the `SensorDataSender` class from Section 3.2 to make it production-grade:
+
+1. Add a persistent local queue using `collections.deque` with a maximum size of 500 readings.
+2. If an HTTP POST fails (any exception or non-200 status), place the data back in the queue instead of discarding it.
+3. Implement exponential back-off for retries: first retry after 5 s, then 10 s, 20 s, up to a maximum of 5 minutes.
+4. Add a separate thread that periodically flushes queued readings in batches of 10 when connectivity is restored.
+5. Log all retry attempts and batch transmissions to a rotating log file using Python's `logging.handlers.RotatingFileHandler`.
+
+### Exercise 4: Network Device Scanner with Service Detection
+
+Extend the `NetworkScanner` from Section 4 into a full IoT device discovery tool:
+
+1. Scan the subnet (default: `192.168.1.0/24`) for live hosts using parallel `socket` connections.
+2. For each live host, scan the common IoT ports listed in Section 4: 22 (SSH), 80 (HTTP), 443 (HTTPS), 1883 (MQTT), 8883 (MQTT-TLS), 8080 (HTTP-Alt), 23 (Telnet).
+3. Attempt a reverse DNS lookup for each discovered host using `socket.gethostbyaddr()`.
+4. Output a formatted table: IP address, hostname, and a comma-separated list of open services.
+5. Schedule the scan to run every 5 minutes and alert (print to console) when a new device appears on the network that was not present in the previous scan.
+
+### Exercise 5: Raspberry Pi vs ESP32 Protocol Benchmark
+
+Conduct a practical comparison of TCP and UDP communication overhead:
+
+1. Set up a UDP server on the Raspberry Pi (port 9999) that echoes received messages back to the sender with a server-side timestamp.
+2. Write a UDP client that sends 1000 messages of 100 bytes each, records the round-trip time (RTT) for each, and computes min/max/mean/std RTT.
+3. Repeat the experiment using TCP (create an equivalent TCP server and client).
+4. Compare results: which protocol has lower average RTT? Which has more consistent latency (lower std)? Under what IoT scenarios would you prefer each?
+5. Write a 200-word summary explaining your findings and connecting them to the Raspberry Pi vs ESP32 comparison in Section 5.
+
+---
+
+**Previous**: [Python GPIO Control](./03_Python_GPIO_Control.md) | **Next**: [BLE Connectivity](./05_BLE_Connectivity.md)

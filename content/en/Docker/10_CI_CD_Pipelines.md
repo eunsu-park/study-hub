@@ -1,11 +1,21 @@
 # 10. CI/CD Pipelines
 
+**Previous**: [Helm Package Management](./09_Helm_Package_Management.md) | **Next**: [Container Networking](./11_Container_Networking.md)
+
 ## Learning Objectives
-- Understanding CI/CD concepts and workflows
-- Building automation with GitHub Actions
-- Docker image build and registry push
-- Implementing Kubernetes automated deployment
-- Understanding GitOps patterns
+
+After completing this lesson, you will be able to:
+
+1. Explain CI/CD concepts and describe the stages of a typical deployment pipeline
+2. Write GitHub Actions workflows to automate testing, building, and deployment
+3. Implement Docker image build automation with multi-platform support and registry push
+4. Configure Kubernetes deployment automation with rolling updates and health checks
+5. Design advanced pipelines with matrix builds, caching, and environment promotion
+6. Apply GitOps patterns using ArgoCD for declarative, Git-driven deployments
+
+---
+
+Building and deploying containers manually works for learning, but production teams need automated pipelines that test, build, and deploy on every code change. CI/CD (Continuous Integration / Continuous Deployment) pipelines eliminate human error, enforce quality gates, and enable rapid, reliable releases. This lesson covers the full pipeline from code push to production deployment, using GitHub Actions for automation and GitOps for declarative infrastructure management.
 
 ## Table of Contents
 1. [CI/CD Overview](#1-cicd-overview)
@@ -14,7 +24,8 @@
 4. [Kubernetes Deployment Automation](#4-kubernetes-deployment-automation)
 5. [Advanced Pipelines](#5-advanced-pipelines)
 6. [GitOps](#6-gitops)
-7. [Practice Exercises](#7-practice-exercises)
+7. [Docker CI/CD Best Practices](#7-docker-cicd-best-practices)
+8. [Practice Exercises](#8-practice-exercises)
 
 ---
 
@@ -144,7 +155,7 @@ jobs:
     # 1. Code checkout
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Full history (for tags, etc.)
+        fetch-depth: 0  # Full history (for tags, etc.) — needed for changelog generation and semver tag detection
 
     # 2. Language setup
     - uses: actions/setup-node@v4
@@ -161,11 +172,11 @@ jobs:
       with:
         go-version: '1.21'
 
-    # 3. Caching
+    # 3. Caching — reuses downloaded dependencies across runs, cutting minutes off CI builds
     - uses: actions/cache@v4
       with:
         path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}  # Cache key tied to lockfile — busts cache only when deps change
         restore-keys: |
           ${{ runner.os }}-node-
 
@@ -214,7 +225,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: false  # Continue other matrix jobs even if one fails — gives a complete picture of compatibility
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [18, 20, 22]
@@ -342,10 +353,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set up QEMU
+    - name: Set up QEMU  # Required for cross-platform builds (e.g., building ARM64 images on AMD64 runners)
       uses: docker/setup-qemu-action@v3
 
-    - name: Set up Docker Buildx
+    - name: Set up Docker Buildx  # Buildx enables BuildKit features: layer caching, multi-platform, and secret mounts
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Container Registry
@@ -372,12 +383,12 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }}
+        platforms: linux/amd64,linux/arm64  # Build for both architectures — supports servers and Apple Silicon/ARM-based cloud instances
+        push: ${{ github.event_name != 'pull_request' }}  # Don't push on PRs — avoids polluting the registry with unmerged code
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha  # Pull previous build layers from GitHub Actions cache — speeds up CI builds
+        cache-to: type=gha,mode=max  # mode=max caches ALL layers (not just final) for maximum reuse
 ```
 
 ### 3.2 Multi-Stage Dockerfile
@@ -389,7 +400,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy dependencies first (caching optimization)
+# Copy dependencies first (caching optimization) — this layer is cached until package.json changes, saving rebuild time
 COPY package*.json ./
 RUN npm ci --only=production
 
@@ -402,11 +413,11 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Non-root user
+# Non-root user — limits damage if the container is compromised; attacker cannot modify system files
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# Copy build results only
+# Copy build results only — excludes source code, devDependencies, and build tools from the production image
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
@@ -432,7 +443,7 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight
+    - cron: '0 0 * * *'  # Daily at midnight — catches newly disclosed CVEs in images that haven't been rebuilt
 
 jobs:
   # Image vulnerability scan
@@ -549,10 +560,10 @@ jobs:
     - name: Deploy to staging
       run: |
         kubectl apply -f k8s/ -n staging
-        kubectl rollout status deployment/myapp -n staging --timeout=300s
+        kubectl rollout status deployment/myapp -n staging --timeout=300s  # Blocks until all pods are healthy — fails the workflow if deployment is broken
 
   deploy-production:
-    needs: [build, deploy-staging]
+    needs: [build, deploy-staging]  # Production deploys only after staging succeeds — prevents shipping untested code
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -637,7 +648,7 @@ jobs:
           --set image.repository=ghcr.io/${{ github.repository }} \
           -f ./charts/myapp/values-prod.yaml \
           --wait \
-          --timeout 5m
+          --timeout 5m  # --wait blocks until all resources are ready — ensures the deploy step fails if pods never become healthy
 
     - name: Verify deployment
       run: |
@@ -1156,9 +1167,9 @@ spec:
 
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
-      allowEmpty: false
+      prune: true  # Remove resources deleted from Git — prevents orphaned objects from accumulating in the cluster
+      selfHeal: true  # Revert manual kubectl changes — ensures Git remains the single source of truth
+      allowEmpty: false  # Safety net: refuse to sync if Git repo returns zero resources (likely a misconfiguration)
     syncOptions:
       - Validate=true
       - CreateNamespace=true
@@ -1249,7 +1260,333 @@ jobs:
 
 ---
 
-## 7. Practice Exercises
+## 7. Docker CI/CD Best Practices
+
+This section consolidates practical patterns for building, testing, and shipping Docker images in CI/CD pipelines -- the "glue" between sections 3-6.
+
+### 7.1 Multi-Stage Dockerfile for CI/CD
+
+A well-structured multi-stage Dockerfile separates concerns and enables efficient CI pipelines:
+
+```dockerfile
+# Dockerfile.ci
+# ── Stage 1: Dependencies ──────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./  # Copy lockfile first — this layer is cached until dependencies change, saving minutes on rebuilds
+RUN npm ci
+
+# ── Stage 2: Test ──────────────────────────────────────────
+FROM deps AS test
+COPY . .
+RUN npm run lint
+RUN npm run test -- --coverage
+# Test stage produces coverage artifacts but is NOT shipped
+
+# ── Stage 3: Build ─────────────────────────────────────────
+FROM deps AS build
+COPY . .
+RUN npm run build
+# Only production build artifacts survive this stage
+
+# ── Stage 4: Production ───────────────────────────────────
+FROM node:20-alpine AS production
+WORKDIR /app
+
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001
+
+COPY --from=build --chown=appuser:appgroup /app/dist ./dist
+COPY --from=build --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=build --chown=appuser:appgroup /app/package.json ./
+
+USER appuser  # Non-root user — limits damage if the container is compromised
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1  # Built-in health check — Docker restarts the container if it becomes unresponsive
+
+CMD ["node", "dist/main.js"]
+```
+
+Why separate stages matter in CI:
+- **deps**: Cached independently -- only rebuilt when `package*.json` changes
+- **test**: Runs in CI but never shipped to production (smaller attack surface)
+- **build**: Produces optimized artifacts
+- **production**: Minimal image with only runtime dependencies
+
+### 7.2 Docker Compose for Integration Tests in CI
+
+Running integration tests with real dependencies (databases, caches, queues) in CI:
+
+```yaml
+# docker-compose.ci.yaml
+services:
+  app:
+    build:
+      context: .
+      target: test        # Build only up to the test stage — never ship test dependencies to production
+    depends_on:
+      postgres:
+        condition: service_healthy  # Wait for DB to accept connections before running tests — prevents flaky failures
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://test:test@postgres:5432/testdb
+      REDIS_URL: redis://redis:6379
+    command: npm run test:integration
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: testdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+```
+
+```yaml
+# In your GitHub Actions workflow:
+- name: Run integration tests with Docker Compose
+  run: |
+    docker compose -f docker-compose.ci.yaml up \
+      --build --abort-on-container-exit --exit-code-from app
+
+    # --abort-on-container-exit: Stop all when any container exits
+    # --exit-code-from app: Use app container's exit code as workflow result
+
+- name: Cleanup
+  if: always()
+  run: docker compose -f docker-compose.ci.yaml down -v
+```
+
+### 7.3 Image Tagging Strategy
+
+A consistent tagging strategy prevents deployment confusion and enables reliable rollbacks:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Image Tagging Strategy                        │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Tag Type        Example             When to Use         │
+│  ──────────────  ──────────────────  ──────────────────  │
+│  Git SHA         myapp:a1b2c3d       Every build (unique │
+│                                      and traceable)      │
+│                                                          │
+│  Semver          myapp:1.2.3         Release tags only   │
+│                  myapp:1.2           (major.minor alias) │
+│                                                          │
+│  Branch          myapp:main          Latest on branch    │
+│                  myapp:develop       (mutable -- careful)│
+│                                                          │
+│  latest          myapp:latest        Convenience only    │
+│                                      (never in prod!)    │
+│                                                          │
+│  Recommended production practice:                        │
+│  Always deploy by Git SHA or Semver tag, NEVER by        │
+│  :latest or branch name.                                 │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+The `docker/metadata-action` generates these tags automatically:
+
+```yaml
+- uses: docker/metadata-action@v5
+  with:
+    images: ghcr.io/${{ github.repository }}
+    tags: |
+      type=sha,prefix=                    # a1b2c3d
+      type=semver,pattern={{version}}      # 1.2.3
+      type=semver,pattern={{major}}.{{minor}}  # 1.2
+      type=ref,event=branch               # main, develop
+      type=raw,value=latest,enable={{is_default_branch}}
+```
+
+### 7.4 Vulnerability Scanning Pipeline
+
+Integrating security scanning at multiple stages catches issues early:
+
+```yaml
+# .github/workflows/docker-security.yaml
+name: Docker Security Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6 AM
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build image
+      run: docker build -t myapp:scan .
+
+    # Trivy: fast, comprehensive, widely adopted
+    - name: Trivy vulnerability scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: myapp:scan
+        format: table
+        exit-code: 1               # Fail the build on findings — blocks deployment of vulnerable images
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true       # Skip vulns with no fix available — avoids blocking on issues you cannot resolve yet
+
+    # Hadolint: Dockerfile best-practice linter
+    - name: Lint Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        failure-threshold: warning
+
+    # Dockle: container image security checker
+    - name: Dockle image audit
+      run: |
+        VERSION=$(curl -s https://api.github.com/repos/goodwithtech/dockle/releases/latest | jq -r .tag_name)
+        curl -sSL "https://github.com/goodwithtech/dockle/releases/download/${VERSION}/dockle_${VERSION#v}_Linux-64bit.tar.gz" | tar xz
+        ./dockle --exit-code 1 --exit-level warn myapp:scan
+```
+
+### 7.5 Complete Docker CI/CD Workflow
+
+Bringing it all together -- a production-ready workflow:
+
+```yaml
+# .github/workflows/docker-complete.yaml
+name: Docker CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── Lint & Test ──────────────────────────────────────────
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Lint Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+
+    - name: Integration tests via Compose
+      run: |
+        docker compose -f docker-compose.ci.yaml up \
+          --build --abort-on-container-exit --exit-code-from app
+      # Real DB + Redis integration tests
+
+    - name: Cleanup
+      if: always()
+      run: docker compose -f docker-compose.ci.yaml down -v
+
+  # ── Build & Push ─────────────────────────────────────────
+  build:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: docker/setup-qemu-action@v3       # ARM64 support — enables cross-platform builds on x86 runners
+    - uses: docker/setup-buildx-action@v3
+
+    - name: Login to GHCR
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha,prefix=
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=ref,event=branch
+
+    - name: Build and push
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ── Security Scan ────────────────────────────────────────
+  security:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}
+        format: sarif
+        output: trivy.sarif
+        severity: CRITICAL,HIGH
+
+    - name: Upload SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: trivy.sarif
+
+  # ── Deploy ───────────────────────────────────────────────
+  deploy:
+    needs: [build, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deploy to production
+      run: |
+        echo "Deploy ${{ needs.build.outputs.image-tags }}"
+        # Replace with your actual deployment command
+```
+
+---
+
+## 8. Practice Exercises
 
 ### Exercise 1: Basic CI Pipeline
 ```yaml
@@ -1297,12 +1634,6 @@ jobs:
 
 ---
 
-## Next Steps
-
-- [07_Kubernetes_Security](07_Kubernetes_Security.md) - Review security
-- [08_Kubernetes_Advanced](08_Kubernetes_Advanced.md) - Advanced K8s features
-- [09_Helm_Package_Management](09_Helm_Package_Management.md) - Helm charts
-
 ## References
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
@@ -1312,4 +1643,81 @@ jobs:
 
 ---
 
-[← Previous: Helm Package Management](09_Helm_Package_Management.md) | [Table of Contents](00_Overview.md)
+## Exercises
+
+### Exercise 1: Build a Basic GitHub Actions CI Workflow
+
+Create a workflow that runs tests and builds a Docker image on every push.
+
+1. In a GitHub repository, create `.github/workflows/ci.yml`
+2. Configure the workflow to trigger on `push` to `main` and on `pull_request`
+3. Add a job with the following steps:
+   - Check out the code with `actions/checkout@v4`
+   - Set up Docker Buildx with `docker/setup-buildx-action@v3`
+   - Build (but do not push) the Docker image: `docker build -t myapp:test .`
+   - Run a smoke test: `docker run --rm myapp:test echo "Image works"`
+4. Push a commit and observe the workflow run in the GitHub Actions tab
+5. Introduce a deliberate error in the Dockerfile and push again — confirm the workflow fails
+
+### Exercise 2: Push an Image to a Registry
+
+Extend the CI workflow to build and push a versioned image to Docker Hub (or GitHub Container Registry).
+
+1. Add repository secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (or use `GITHUB_TOKEN` for GHCR)
+2. Add a Docker login step using `docker/login-action@v3`
+3. Add a metadata step using `docker/metadata-action@v4` to generate tags from the branch name and Git SHA:
+   ```yaml
+   - uses: docker/metadata-action@v4
+     id: meta
+     with:
+       images: yourusername/myapp
+       tags: |
+         type=ref,event=branch
+         type=sha,prefix=sha-
+   ```
+4. Update the build step to push using the generated tags: `push: true` and `tags: ${{ steps.meta.outputs.tags }}`
+5. Push a commit and verify the image appears in your registry with the correct tags
+
+### Exercise 3: Add a Multi-Stage Pipeline with Environment Promotion
+
+Create separate test and deploy jobs that run sequentially.
+
+1. Split the workflow into two jobs: `test` and `deploy`
+2. Make `deploy` depend on `test` with `needs: test`
+3. In the `test` job: check out code, build the image, run unit tests inside the container
+4. In the `deploy` job: log in to the registry and push the image, but only when the trigger is a push to `main` (add `if: github.ref == 'refs/heads/main'`)
+5. Add a matrix strategy to the `test` job to run tests on multiple Node.js versions: `matrix: node: [18, 20]`
+6. Push to a feature branch and confirm only `test` runs; merge to `main` and confirm `deploy` also runs
+
+### Exercise 4: Cache Docker Build Layers
+
+Use GitHub Actions cache to speed up Docker builds.
+
+1. Add the GitHub Actions cache backend to the `docker/build-push-action`:
+   ```yaml
+   cache-from: type=gha
+   cache-to: type=gha,mode=max
+   ```
+2. Push a commit and record the workflow duration
+3. Push a second commit with a small code change (not a dependency change)
+4. Compare the two durations — the second run should be significantly faster due to cache hits
+5. Add a `--no-cache` flag to the build step in a third push and observe the duration returns to the original (cache is bypassed)
+
+### Exercise 5: GitOps Deployment with ArgoCD
+
+Connect a Git repository to ArgoCD for declarative continuous deployment.
+
+1. Install ArgoCD on your minikube cluster:
+   ```bash
+   kubectl create namespace argocd
+   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+   ```
+2. Access the ArgoCD UI: `kubectl port-forward svc/argocd-server -n argocd 8080:443`
+3. Create an ArgoCD `Application` manifest that points to a Git repository containing Kubernetes manifests
+4. Apply the manifest: `kubectl apply -f argocd-app.yaml`
+5. In the ArgoCD UI, observe the application syncing — the cluster state matches the Git repo state
+6. Edit a manifest in the Git repo (e.g., change `replicas` from 1 to 2), push the change, and watch ArgoCD automatically sync the cluster
+
+---
+
+**Previous**: [Helm Package Management](./09_Helm_Package_Management.md) | **Next**: [Container Networking](./11_Container_Networking.md)

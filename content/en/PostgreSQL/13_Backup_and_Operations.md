@@ -1,5 +1,26 @@
 # Backup and Operations
 
+**Previous**: [Triggers](./12_Triggers.md) | **Next**: [JSON/JSONB Features](./14_JSON_JSONB.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the importance of backup strategies and distinguish between logical and physical backups
+2. Use pg_dump and pg_dumpall to perform selective and full cluster backups
+3. Restore databases using psql and pg_restore with various format options
+4. Configure WAL archiving and perform physical backups with pg_basebackup
+5. Write automated backup scripts with retention policies and cron scheduling
+6. Monitor database health using pg_stat_activity, lock queries, and cache hit ratios
+7. Perform routine maintenance tasks including VACUUM, ANALYZE, and REINDEX
+8. Configure PostgreSQL logging for slow query detection and connection auditing
+
+---
+
+A database without a tested backup strategy is a disaster waiting to happen. Hardware failures, human errors, and software bugs can strike at any time, and when they do, your backup is the difference between a minor inconvenience and catastrophic data loss. Beyond backups, day-to-day operations -- monitoring performance, managing connections, and running maintenance tasks -- keep your PostgreSQL installation healthy and responsive. This lesson covers the essential DBA toolkit that every PostgreSQL practitioner needs.
+
 ## 1. Importance of Backup
 
 Database backup is the most important task to prevent data loss.
@@ -532,15 +553,4 @@ CALL run_maintenance();
 
 ---
 
-## Conclusion
-
-This concludes the PostgreSQL learning materials.
-
-**Review of Learning Sequence**:
-1. Basics → DB management → Tables → CRUD → Conditions/sorting
-2. JOIN → Aggregation → Subqueries → Views/indexes
-3. Functions → Transactions → Triggers → Backup/operations
-
-For deeper learning:
-- [PostgreSQL Official Documentation](https://www.postgresql.org/docs/)
-- [PostgreSQL Tutorial](https://www.postgresqltutorial.com/)
+**Previous**: [Triggers](./12_Triggers.md) | **Next**: [JSON/JSONB Features](./14_JSON_JSONB.md)

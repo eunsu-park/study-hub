@@ -65,7 +65,8 @@ log_success() {
 # State Management
 # ============================================================================
 
-# Track if we've already alerted for this issue
+# Why: state-based alert deduplication prevents the same alert from firing
+# every cron interval — operators get one notification per incident, not a flood.
 has_alerted() {
     local key=$1
 
@@ -212,6 +213,8 @@ check_process() {
     local process_name=$1
     local alert_key="process_${process_name}"
 
+    # Why: pgrep -x matches the exact process name (not substrings), preventing
+    # false positives like "sshd-session" matching a check for "ssh".
     if pgrep -x "$process_name" > /dev/null; then
         log_info "Process is running: $process_name"
         clear_alert "$alert_key"
@@ -233,6 +236,8 @@ check_http_endpoint() {
     local alert_key="http_${name}"
 
     if command -v curl &> /dev/null; then
+        # Why: --fail returns non-zero on HTTP 4xx/5xx, --silent suppresses
+        # progress, --max-time prevents hanging on unresponsive endpoints.
         if curl --silent --fail --max-time "$timeout" "$url" > /dev/null 2>&1; then
             log_info "HTTP endpoint is healthy: $name ($url)"
             clear_alert "$alert_key"
@@ -357,6 +362,8 @@ main() {
     log_info "Checks passed: $checks_passed"
     log_info "Checks failed: $checks_failed"
 
+    # Why: exit code reflects overall health so cron/systemd can trigger alerts
+    # or restart actions based on the script's return value alone.
     if [[ $checks_failed -eq 0 ]]; then
         log_success "All health checks passed"
         exit 0

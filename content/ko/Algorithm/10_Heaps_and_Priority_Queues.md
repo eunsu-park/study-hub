@@ -1,5 +1,18 @@
 # 힙과 우선순위 큐 (Heap and Priority Queue)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 최대 힙(max-heap)과 최소 힙(min-heap)의 힙 속성(heap property)을 설명하고, 인덱스 산술을 사용하여 완전 이진 트리를 배열로 효율적으로 표현할 수 있다
+2. 힙 삽입(sift-up)과 최댓값/최솟값 추출(sift-down) 연산을 구현하고, 각 단계를 추적하여 힙 속성이 복원됨을 확인할 수 있다
+3. 힙 생성(heapify) 알고리즘을 사용하여 임의의 배열로부터 O(n) 시간에 힙을 구성하고, n번의 개별 삽입보다 효율적인 이유를 설명할 수 있다
+4. 힙 정렬(Heap Sort)을 구현하고 O(n log n) 시간 복잡도와 O(1) 공간 복잡도를 분석할 수 있다
+5. 우선순위 큐(priority queue, Python heapq 또는 C++ priority_queue)를 사용하여 k번째 최대 원소, k개의 정렬된 리스트 병합, 작업 스케줄링 등의 문제를 해결할 수 있다
+6. 최대 힙과 최소 힙(max-heap + min-heap)을 조합하여 실시간 중간값(running median)을 효율적으로 유지하는 솔루션을 설계할 수 있다
+
+---
+
 ## 개요
 
 힙은 완전 이진 트리 기반의 자료구조로, 최댓값/최솟값을 O(1)에 접근하고 O(log n)에 삽입/삭제할 수 있습니다.
@@ -100,13 +113,17 @@ int heap[MAX_SIZE];
 int heapSize = 0;
 
 void insert(int value) {
+    // 완전 이진 트리 형태를 유지하기 위해 끝에 새 원소를 배치;
+    // 완전 트리는 낭비 없이 배열에 완벽히 매핑됨
     heap[heapSize] = value;
     int i = heapSize;
     heapSize++;
 
-    // Bubble up
+    // 버블 업: 최대 힙 속성이 만족될 때까지 부모와 반복 비교;
+    // 각 교환은 새 값을 올바른 위치로 한 레벨씩 이동 —
+    // 트리 높이가 log n이므로 최대 O(log n)번 교환
     while (i > 0 && heap[(i - 1) / 2] < heap[i]) {
-        int parent = (i - 1) / 2;
+        int parent = (i - 1) / 2;  // 배열 공식으로 도출된 부모 인덱스
         int temp = heap[i];
         heap[i] = heap[parent];
         heap[parent] = temp;
@@ -195,6 +212,9 @@ class MaxHeap:
             return None
 
         max_val = self.heap[0]
+        # 완전 트리 형태를 유지하기 위해 마지막 원소를 루트로 이동;
+        # 끝에서 제거는 O(1)이지만 중간에서 제거는 모든 원소를
+        # 시프트해야 함
         self.heap[0] = self.heap[-1]
         self.heap.pop()
 
@@ -209,13 +229,17 @@ class MaxHeap:
         while True:
             left = 2 * i + 1
             right = 2 * i + 2
-            largest = i
+            largest = i  # 현재 노드가 가장 크다고 가정
 
+            # 노드와 두 자식 중 가장 큰 것을 찾음;
+            # 가장 큰 자식과 교환하여 힙 속성을 지역적으로 보존
             if left < n and self.heap[left] > self.heap[largest]:
                 largest = left
             if right < n and self.heap[right] > self.heap[largest]:
                 largest = right
 
+            # 현재 노드가 이미 가장 크면 힙 속성이 복원됨 —
+            # 매번 리프까지 반복하지 않고 조기 종료
             if largest == i:
                 break
 
@@ -251,6 +275,8 @@ void heapify(vector<int>& arr, int n, int i) {
 
     if (largest != i) {
         swap(arr[i], arr[largest]);
+        // 교환된 자식 위치의 서브트리를 재귀적으로 수정 —
+        // 한 번의 교환이 한 레벨 아래의 힙 속성을 위반할 수 있음
         heapify(arr, n, largest);
     }
 }
@@ -258,7 +284,10 @@ void heapify(vector<int>& arr, int n, int i) {
 void buildHeap(vector<int>& arr) {
     int n = arr.size();
 
-    // 마지막 비-리프 노드부터
+    // 마지막 비-리프 노드(n/2 - 1)부터 시작하여 위로 진행;
+    // 리프 노드는 이미 유효한 힙이므로 건너뜀.
+    // 이 상향식 접근법은 O(n)이며, n번의 개별 삽입은 O(n log n)인 이유는
+    // 대부분의 heapify 호출이 깊이가 작은 리프 근처에서 수행되기 때문
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
@@ -337,14 +366,18 @@ void heapSort(vector<int>& arr) {
 def heap_sort(arr):
     n = len(arr)
 
-    # 최대 힙 구성
+    # 1단계: O(n)에 제자리 최대 힙 구성;
+    # 이후 가장 큰 원소가 arr[0]에 위치하는 것이 보장됨
     for i in range(n // 2 - 1, -1, -1):
         heapify(arr, n, i)
 
-    # 하나씩 추출
+    # 2단계: 현재 최댓값을 정렬된 꼬리에 반복 배치.
+    # 루트를 arr[i]와 교환하여 최댓값을 최종 위치에 놓고,
+    # 축소된 힙에 heapify를 적용하여 다음 반복을 위한 속성을 복원 —
+    # O(1) 추가 공간으로 O(n log n) 달성
     for i in range(n - 1, 0, -1):
-        arr[0], arr[i] = arr[i], arr[0]
-        heapify(arr, i, 0)
+        arr[0], arr[i] = arr[i], arr[0]  # 현재 최댓값을 정렬 영역으로 이동
+        heapify(arr, i, 0)               # 길이 i의 미정렬 접두사를 재힙화
 
     return arr
 ```
@@ -472,19 +505,27 @@ import heapq
 
 class MedianFinder:
     def __init__(self):
-        self.small = []  # 최대 힙 (작은 절반)
+        self.small = []  # 최대 힙 (작은 절반) — heapq가 최소 힙만 지원하므로 음수로 저장
         self.large = []  # 최소 힙 (큰 절반)
 
     def add_num(self, num):
+        # 항상 small에 먼저 push하여 새 원소가 현재 중앙값 경계와
+        # 비교된 후 어느 절반에 속할지 결정
         heapq.heappush(self.small, -num)
+        # small의 최댓값을 large로 이동 — 파티션을 균형 잡고
+        # small의 모든 원소가 large의 모든 원소보다 작거나 같게 보장
         heapq.heappush(self.large, -heapq.heappop(self.small))
 
+        # 크기 재균형: small은 하나의 추가 원소를 가질 수 있지만(홀수 개수용),
+        # large는 절대 더 커서는 안 됨; 중앙값은 항상 small의 top에 위치
         if len(self.large) > len(self.small):
             heapq.heappush(self.small, -heapq.heappop(self.large))
 
     def find_median(self):
+        # 홀수 합계: small이 하나 더 많은 원소를 가짐 — top이 정확한 중앙값
         if len(self.small) > len(self.large):
             return -self.small[0]
+        # 짝수 합계: 중앙값은 두 중간 원소의 평균
         return (-self.small[0] + self.large[0]) / 2
 ```
 

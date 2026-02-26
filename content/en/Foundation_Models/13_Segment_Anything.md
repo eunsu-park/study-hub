@@ -785,3 +785,116 @@ for slice_idx in range(medical_image.shape[0]):
 - [SAM 2 GitHub](https://github.com/facebookresearch/segment-anything-2)
 - [Grounding SAM](https://github.com/IDEA-Research/Grounded-Segment-Anything)
 - [HuggingFace SAM](https://huggingface.co/facebook/sam-vit-huge)
+
+---
+
+## Exercises
+
+### Exercise 1: SAM Architecture Asymmetry
+SAM's Image Encoder (ViT-H, 632M parameters) is vastly larger than its Mask Decoder (2-layer Transformer, ~4M parameters). Explain the design rationale for this extreme size asymmetry. What practical advantage does it provide in interactive annotation workflows?
+
+<details>
+<summary>Show Answer</summary>
+
+**Design rationale**: The Image Encoder is run only **once per image**, regardless of how many prompts the user provides. All the heavy computation — extracting rich, dense image features — is amortized over all subsequent interactions. The Mask Decoder, by contrast, is run **once per prompt** (and can be re-run dozens of times as the user refines their selection), so it must be extremely fast.
+
+**Practical advantage in interactive annotation**:
+1. **Pre-computation**: The image embedding (64×64×256) is computed once and cached.
+2. **Instant response**: Each new prompt (point click, box draw) only requires running the 4M-parameter decoder, which takes milliseconds.
+3. **Real-time interactivity**: Users can iteratively add foreground/background points and see instant mask refinements without noticeable latency.
+4. **Decoupled compute**: In a web service, image embeddings can be computed in the background on a GPU server, while the lightweight decoder can even run client-side.
+
+This asymmetry is what enables SAM to feel "interactive" rather than batch-processing.
+
+</details>
+
+### Exercise 2: SA-1B Data Engine Analysis
+SAM's training data (SA-1B: 1.1B masks on 11M images) was collected using a three-phase data engine. Analyze the progression across phases and explain why this bootstrapped approach was necessary.
+
+| Phase | Method | Masks Collected |
+|-------|--------|-----------------|
+| 1 | Assisted Manual | 4.3M |
+| 2 | Semi-Automatic | 5.9M |
+| 3 | Fully Automatic | 1.1B |
+
+Answer: Why can't Phase 3 (Fully Automatic) be used from the start? What does each phase contribute that enables the next?
+
+<details>
+<summary>Show Answer</summary>
+
+**Why Phase 3 can't start from scratch**: Fully automatic generation requires a model capable of high-quality, reliable segmentation across diverse images. This model doesn't exist at the beginning — it must be trained first. The bootstrap problem: you need good data to train a good model, but you need a good model to generate good data.
+
+**Phase 1 (Assisted Manual → 4.3M masks)**:
+- Professional annotators use a primitive SAM prototype to label images.
+- SAM proposes masks, humans correct and refine them.
+- Creates the initial high-quality training set to train the first real SAM model.
+- **Contribution**: Establishes ground truth quality and trains the first capable model.
+
+**Phase 2 (Semi-Automatic → 5.9M masks)**:
+- A stronger SAM (trained on Phase 1 data) automatically generates confident masks.
+- Human annotators only label objects the model is uncertain about.
+- Increases mask diversity — the model handles common objects automatically, humans focus on rare/difficult cases.
+- **Contribution**: Scales up data while maintaining quality, improves model for rare object classes.
+
+**Phase 3 (Fully Automatic → 1.1B masks)**:
+- A mature SAM model generates masks using a 32×32 grid of points on each image.
+- No human annotation needed — masks are filtered by quality (IoU, stability) automatically.
+- **Contribution**: Provides the scale needed for a true foundation model.
+
+The bootstrapped approach transforms the data collection problem from O(humans × images) to O(model quality × images), making billion-scale annotation economically feasible.
+
+</details>
+
+### Exercise 3: Prompt Types and Multi-mask Output
+SAM generates 3 mask candidates when `multimask_output=True`. Explain why outputting multiple masks is useful, and describe a scenario where you would use `multimask_output=False` vs `True`. Also explain what the IoU score represents for each mask output.
+
+```python
+masks, scores, logits = predictor.predict(
+    point_coords=np.array([[500, 375]]),
+    point_labels=np.array([1]),
+    multimask_output=True,  # Returns 3 masks
+)
+# masks.shape: (3, H, W)
+# scores.shape: (3,)
+# logits.shape: (3, 256, 256)
+
+# When would you use the logits for a subsequent call?
+# Answer: ???
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Why 3 masks**: A single point click is inherently ambiguous. Clicking on a person's face could mean: (1) just the face, (2) the head, or (3) the whole person. SAM's 3 outputs typically correspond to different levels of granularity (fine → medium → coarse). This lets the model be correct at multiple scales simultaneously, allowing the user or downstream system to select the appropriate level.
+
+**`multimask_output=False`** (single mask): Use when you have additional context that resolves ambiguity — e.g., when combining point + box prompts (box already constrains the extent), or during iterative refinement when you've already established which mask level you want via the `mask_input` parameter.
+
+**`multimask_output=True`** (3 masks): Use when a single point is the only input and ambiguity is high. Let downstream logic (highest IoU score, or user selection in an interactive UI) pick the best mask.
+
+**IoU scores**: Each score is SAM's predicted confidence that this mask accurately covers the intended object — specifically, the predicted Intersection over Union between the generated mask and the hypothetical ground-truth mask. A higher score indicates the model is more confident this mask correctly segments the target.
+
+**Using `logits` for subsequent calls**: The raw logits (pre-sigmoid, shape 256×256) from a previous prediction can be passed as `mask_input` in the next call. This tells SAM "here's my previous estimate" — SAM can then refine the mask given additional point prompts. This is the iterative refinement workflow where each new point click uses the previous mask as a prior, rather than starting from scratch.
+
+</details>
+
+### Exercise 4: SAM vs SAM 2 Architecture Extension
+SAM 2 adds Memory Encoder, Memory Bank, and Memory Attention modules to handle video. Explain why simply applying frame-by-frame SAM inference to a video (without these components) produces poor results for object tracking, and describe the role of each new component.
+
+<details>
+<summary>Show Answer</summary>
+
+**Why frame-by-frame SAM fails for video tracking**:
+- SAM treats each frame independently — no information passes between frames.
+- Object appearance changes across frames (lighting, pose, occlusion, motion blur). A new prompt would be needed for each frame, which is impractical.
+- Temporal consistency is not guaranteed: the mask could jump to a different object or fail on frames where the object is partially occluded (since there's no memory of what the object looked like before occlusion).
+- No propagation: the user's single prompt on frame 0 provides no guidance to SAM on frame 50.
+
+**Role of each SAM 2 component**:
+
+1. **Memory Encoder**: Encodes the segmented mask and image features from past frames into compact memory representations. It compresses "what the object looked like at time t" into a fixed-size memory entry.
+
+2. **Memory Bank**: Stores a fixed-size queue of memory entries from previous frames (recent frames and the prompted frame). Acts as a temporal context buffer — the model can "look back" at how the object appeared in earlier frames.
+
+3. **Memory Attention**: A cross-attention module that conditions the current frame's image features on the Memory Bank. For each patch in the current frame, it attends to past object representations to ask "does this region look like the object I've seen before?" This enables robust tracking through occlusions and appearance changes by leveraging temporal context.
+
+</details>

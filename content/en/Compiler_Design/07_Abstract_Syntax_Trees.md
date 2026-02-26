@@ -2025,4 +2025,4 @@ Identify cases where round-tripping may fail (e.g., comments, whitespace, parent
 
 ---
 
-[Previous: 06_Bottom_Up_Parsing.md](./06_Bottom_Up_Parsing.md) | [Next: 08_Semantic_Analysis.md](./08_Semantic_Analysis.md) | [Overview](./00_Overview.md)
+[Previous: Bottom-Up Parsing](./06_Bottom_Up_Parsing.md) | [Next: Semantic Analysis](./08_Semantic_Analysis.md) | [Overview](./00_Overview.md)

@@ -575,11 +575,15 @@ def magnetopause_standoff(v_sw, n_sw, B_0=3.12e-5, R_E=6371e3):
     mu_0 = 4 * np.pi * 1e-7
     m_p = 1.673e-27  # proton mass (kg)
 
-    # Dynamic pressure
+    # 동압(Dynamic Pressure) = ρv²: 자기권 장 압력으로 균형을 이루어야 하는
+    # 태양풍 플라즈마의 충돌 압력(Ram Pressure) — 이것이 자기권계면(Magnetopause)
+    # 위치를 결정하는 근본적인 경쟁임
     rho_sw = n_sw * m_p
     P_dyn = rho_sw * v_sw**2
 
-    # Standoff distance
+    # 1/6 지수는 쌍극자 장 B ∝ r^{-3}에서 유래; 제곱하면 B² ∝ r^{-6},
+    # 따라서 B²/(2μ₀) = P_dyn을 균형 맞추고 r에 대해 풀면 r ∝ P_dyn^{-1/6}
+    # — 약한 의존성으로, r_mp를 절반으로 줄이려면 64배 압력 증가가 필요함
     r_mp = R_E * (B_0**2 / (2 * mu_0 * P_dyn))**(1/6)
 
     return r_mp / R_E  # Return in Earth radii
@@ -715,17 +719,26 @@ def dst_evolution(Dst_0, v_sw_series, B_z_series, dt, a=1e-3, b=0.5, tau=8*3600)
     for i in range(N):
         Dst_series[i] = Dst
 
-        # Solar wind electric field (in mV/m)
+        # 남향 성분을 취함 (B_z < 0): 남향 IMF만이 주간측(Dayside) 재결합을 유발하여
+        # 자기권계면을 열고 태양풍 에너지가 링 전류를 에너지화하도록 허용;
+        # 북향 IMF는 자기권계면을 닫고 재결합이 중단됨
         B_s = max(-B_z_series[i], 0) * 1e9  # Convert to nT, take southward component
+        # E_sw = v_sw * B_s는 행성간 전기장(Interplanetary Electric Field) (mV/m):
+        # IMF에서 자기권으로 플럭스가 전달되는 속도를 나타내므로,
+        # 더 강한 전기장 → 더 빠른 링 전류 주입
         E_sw = v_sw_series[i] / 1e3 * B_s / 1e6  # mV/m
 
-        # Injection function
+        # 임계값 b ≈ 0.5 mV/m: 이 미만에서는 자기권계면이 충분히 닫혀
+        # 재결합이 무시할 수 있고 링 전류가 구동되지 않음;
+        # 이는 매우 약한 태양풍 전기장에 대한 비물리적 Dst 응답을 피함
         if E_sw > b:
             Q = a * (E_sw - b)
         else:
             Q = 0
 
-        # Burton equation
+        # -Dst/tau 감쇠 항은 차지 교환(Charge Exchange)에 의한 링 전류 손실을 모델링:
+        # 에너지화된 이온이 냉각된 중성 수소와 교환; τ ≈ 8시간은 이온이 중성화되어
+        # 방사선 벨트에서 손실되기 전의 평균 수명
         dDst_dt = Q - Dst / tau
 
         Dst += dDst_dt * dt
@@ -803,9 +816,14 @@ def cme_transit_time(v_0, v_sw=400e3, gamma_inv=86400, r_target=1.496e11):
     t = 0
     dt = 600  # 10 min
     r = 0
+    # CME 시작 영역을 넘어선 태양권에서만 항력 기반 모델이 유효하기 때문에
+    # 태양 표면이 아닌 0.1 AU에서 적분을 시작; CME는 이미 태양 근처에서 가속/감속됨
     r_0 = 0.1 * r_target  # Start at 0.1 AU (close to Sun)
 
     while r < r_target:
+        # 속도는 v_sw를 향해 지수적으로 감소: 빠른 CME는 주변 태양풍의
+        # 공기역학적 항력(Aerodynamic Drag)에 의해 감속되고, 느린 CME는 가속 —
+        # 둘 다 γ^{-1} ≈ 1일의 시간 스케일로 v_sw로 수렴함
         v = v_sw + (v_0 - v_sw) * np.exp(-t / gamma_inv)
         r += v * dt
         t += dt
@@ -856,15 +874,21 @@ def gic_estimate(dB_dt, rho_earth=1000, L=100e3):
     """
     mu_0 = 4 * np.pi * 1e-7
 
-    # Induced electric field (rough estimate)
-    # E ~ (dB/dt) * sqrt(ρ/(2πμ₀f))
-    # For quasi-DC, use simplified scaling
+    # 유도 전기장(Induced Electric Field)은 √(ρ_earth/μ₀)에 비례:
+    # 지면 저항률(Ground Resistivity)이 GIC를 증폭시키는 이유는 고저항 지각
+    # (예: 캐나다의 선캄브리아 순상지)이 유도된 전류를 지면을 통해 분산시키는 대신
+    # 표면 도체(전력선)를 통해 흐르도록 강제하기 때문 —
+    # 이것이 퀘벡과 핀란드가 전도성 지질을 가진 저위도 지역보다 더 취약한 이유
     E = (dB_dt * 1e-9 / 60) * np.sqrt(rho_earth / mu_0) / 1000  # V/km
 
-    # Voltage over line
+    # 선로 전압(Voltage Over Line): 더 긴 선로가 공간적으로 확장된 유도 전기장을
+    # 더 많이 축적하므로 1000 km 대륙 횡단 송전선이 짧은 도시 배전선보다
+    # 훨씬 더 위험에 처함
     V = E * L / 1e3  # V
 
-    # Current (assuming line resistance R ~ 0.1 Ω)
+    # GIC = V/R: 전력 변압기(Power Transformer)의 낮은 저항 (~0.1 Ω)은
+    # 작은 유도 전압도 큰 준-DC 전류를 구동한다는 것을 의미하며,
+    # 이는 철심을 포화시키고 반주기 왜곡, 무효 전력 수요, 발열을 일으킴
     R_line = 0.1  # Ω
     GIC = V / R_line  # A
 

@@ -14,13 +14,16 @@ Getting the most out of Claude Code requires more than just knowing the features
 - Familiarity with permission modes ([Lesson 4](./04_Permission_Modes.md))
 - Experience with hooks and skills ([Lessons 5-6](./05_Hooks.md))
 
-**Learning Objectives**:
-- Write effective prompts that get accurate, useful results
-- Manage context efficiently across long sessions
-- Apply security best practices when working with Claude Code
-- Establish team collaboration patterns with shared configuration
-- Optimize performance for faster, more focused sessions
-- Recognize and avoid common anti-patterns that waste time and tokens
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Write effective prompts that get accurate, useful results
+2. Manage context efficiently across long sessions
+3. Apply security best practices when working with Claude Code
+4. Establish team collaboration patterns with shared configuration
+5. Optimize performance for faster, more focused sessions
+6. Recognize and avoid common anti-patterns that waste time and tokens
 
 ---
 

@@ -89,7 +89,8 @@ show_progress() {
     for ((i=0; i<filled; i++)); do bar+="█"; done
     for ((i=0; i<empty; i++)); do bar+="░"; done
 
-    # Print progress (use \r to overwrite previous line)
+    # Why: \r returns the cursor to the start of the line, letting us redraw
+    # the progress bar in-place — creating smooth animation without scrolling.
     printf "\r${CYAN}%s:${NC} [%s] %3d%% (%d/%d)" \
         "$label" "$bar" "$percent" "$current" "$total"
 
@@ -114,11 +115,11 @@ run_with_spinner() {
     local spin='-\|/'
     local i=0
 
-    # Run command in background
+    # Why: backgrounding the command and polling with kill -0 lets us overlay
+    # a spinner animation without blocking on the actual work.
     "$@" &> /dev/null &
     pid=$!
 
-    # Show spinner while command runs
     while kill -0 "$pid" 2>/dev/null; do
         i=$(((i+1) % 4))
         printf "\r${CYAN}${spin:$i:1}${NC} Working..."
@@ -246,6 +247,8 @@ parse_arguments() {
                 INPUT_DIR="$2"
                 shift 2
                 ;;
+            # Why: -- signals "end of options" per POSIX convention. Everything
+            # after it is treated as a positional arg, even if it starts with -.
             --)
                 shift
                 positional_args+=("$@")

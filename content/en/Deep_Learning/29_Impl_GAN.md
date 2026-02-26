@@ -4,6 +4,19 @@
 
 # 29. Generative Adversarial Networks (GAN)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Formulate the GAN minimax objective and explain the roles of the generator and discriminator in the adversarial training game.
+2. Derive the optimal discriminator D*(x) for a fixed generator and use it to show that the GAN objective minimizes Jensen-Shannon divergence.
+3. Identify and explain common GAN training instabilities — mode collapse, vanishing gradients, and non-convergence — and describe techniques to mitigate them.
+4. Implement a DCGAN (Deep Convolutional GAN) from scratch in PyTorch using transposed convolutions in the generator and strided convolutions in the discriminator.
+5. Train a GAN on an image dataset and evaluate generated sample quality using visual inspection and the Fréchet Inception Distance (FID) metric.
+6. Compare GAN variants (DCGAN, WGAN, Conditional GAN) and explain the architectural or loss modifications each introduces to improve training stability.
+
+---
+
 ## Overview
 
 Generative Adversarial Networks (GAN) learn to generate realistic data through an adversarial game between a Generator and a Discriminator. "Generative Adversarial Networks" (Goodfellow et al., 2014)

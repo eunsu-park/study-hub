@@ -28,6 +28,9 @@ from datetime import datetime
 # BLE 라이브러리 임포트 (선택적)
 # ============================================================================
 
+# Why: Graceful import fallback lets this script run as a teaching tool on any
+# machine. Students without Bluetooth hardware still see realistic output
+# through the simulation path.
 try:
     from bleak import BleakScanner, BleakClient
     BLEAK_AVAILABLE = True
@@ -60,6 +63,9 @@ class BLE_UUID:
     HUMIDITY = "00002a6f-0000-1000-8000-00805f9b34fb"
     HEART_RATE_MEASUREMENT = "00002a37-0000-1000-8000-00805f9b34fb"
 
+    # Why: The BLE spec defines a "Bluetooth Base UUID" so that standard 16-bit
+    # service IDs can be represented as full 128-bit UUIDs. This conversion is
+    # needed when the BLE library reports only 128-bit UUIDs.
     @staticmethod
     def uuid_16_to_128(uuid_16: str) -> str:
         """
@@ -117,6 +123,9 @@ def simulate_ble_scan(timeout: float = 10.0) -> List[SimulatedBLEDevice]:
     return devices
 
 
+# Why: Returning raw bytes (not Python floats) mimics the real BLE GATT protocol,
+# where each characteristic packs data into a fixed binary format defined by the
+# Bluetooth SIG. This teaches students to use struct.unpack for BLE payloads.
 def simulate_read_characteristic(char_uuid: str) -> bytes:
     """
     BLE 특성 읽기 시뮬레이션
@@ -353,6 +362,9 @@ async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
 # BLE 알림 수신
 # ============================================================================
 
+# Why: A factory function is used because bleak's start_notify() expects a
+# callback with a fixed signature (sender, data). The closure captures the
+# sensor_type, letting one factory produce type-specific decoders.
 def create_notification_handler(sensor_type: str):
     """
     알림 핸들러 생성

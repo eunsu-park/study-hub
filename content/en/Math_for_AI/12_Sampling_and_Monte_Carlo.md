@@ -56,25 +56,25 @@ where $\sigma^2 = \text{Var}_{p(x)}[f(x)]$.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 몬테카를로로 원주율 π 추정
+# Estimate pi using Monte Carlo
 def estimate_pi(n_samples):
-    """단위 사각형 내 랜덤 점을 생성하고 단위 원 내부 비율로 π 추정"""
+    """Generate random points in a unit square and estimate π from the fraction inside the unit circle"""
     x = np.random.uniform(-1, 1, n_samples)
     y = np.random.uniform(-1, 1, n_samples)
     inside_circle = (x**2 + y**2) <= 1
     pi_estimate = 4 * np.mean(inside_circle)
     return pi_estimate
 
-# 샘플 수에 따른 수렴
+# Convergence with increasing sample size
 sample_sizes = [10, 100, 1000, 10000, 100000]
 estimates = [estimate_pi(n) for n in sample_sizes]
 
-print("몬테카를로 π 추정:")
+print("Monte Carlo π estimation:")
 for n, est in zip(sample_sizes, estimates):
     error = abs(est - np.pi)
-    print(f"N={n:6d}: π ≈ {est:.6f}, 오차 = {error:.6f}")
+    print(f"N={n:6d}: π ≈ {est:.6f}, error = {error:.6f}")
 
-# 수렴 시각화
+# Visualize convergence
 n_trials = 100
 sample_range = np.logspace(1, 5, 50, dtype=int)
 errors = []
@@ -84,11 +84,11 @@ for n in sample_range:
     errors.append(np.std(trial_estimates))
 
 plt.figure(figsize=(10, 6))
-plt.loglog(sample_range, errors, 'b-', label='실제 표준 오차')
+plt.loglog(sample_range, errors, 'b-', label='Actual standard error')
 plt.loglog(sample_range, 1/np.sqrt(sample_range), 'r--', label=r'$O(1/\sqrt{N})$')
-plt.xlabel('샘플 수 (N)')
-plt.ylabel('표준 오차')
-plt.title('몬테카를로 추정의 수렴 속도')
+plt.xlabel('Number of samples (N)')
+plt.ylabel('Standard error')
+plt.title('Convergence rate of Monte Carlo estimation')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
@@ -107,25 +107,25 @@ plt.show()
 2. Compute $x = F^{-1}(u)$
 
 ```python
-# 역변환 샘플링 예제: 지수분포
+# Inverse transform sampling example: exponential distribution
 def inverse_transform_exponential(n_samples, lambda_param=1.0):
-    """지수분포 Exp(λ)에서 샘플링"""
+    """Sample from exponential distribution Exp(λ)"""
     u = np.random.uniform(0, 1, n_samples)
     # F^(-1)(u) = -ln(1-u)/λ
     x = -np.log(1 - u) / lambda_param
     return x
 
-# 검증
+# Verification
 samples = inverse_transform_exponential(10000, lambda_param=2.0)
 
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-plt.hist(samples, bins=50, density=True, alpha=0.7, label='샘플링 결과')
+plt.hist(samples, bins=50, density=True, alpha=0.7, label='Sampling result')
 x_range = np.linspace(0, 5, 100)
-plt.plot(x_range, 2 * np.exp(-2 * x_range), 'r-', linewidth=2, label='이론 PDF')
+plt.plot(x_range, 2 * np.exp(-2 * x_range), 'r-', linewidth=2, label='Theoretical PDF')
 plt.xlabel('x')
-plt.ylabel('밀도')
-plt.title('역변환 샘플링: 지수분포')
+plt.ylabel('Density')
+plt.title('Inverse transform sampling: Exponential distribution')
 plt.legend()
 
 plt.subplot(1, 2, 2)
@@ -152,29 +152,29 @@ When direct sampling from the target distribution $p(x)$ is difficult, use a pro
 **Acceptance rate**: $\frac{1}{M}$
 
 ```python
-# 기각 샘플링 예제: 베타분포 Beta(2, 5)
+# Rejection sampling example: Beta distribution Beta(2, 5)
 def target_pdf(x):
-    """목표 분포: Beta(2, 5)"""
+    """Target distribution: Beta(2, 5)"""
     if 0 <= x <= 1:
-        return 30 * x * (1-x)**4  # 정규화된 Beta(2,5)
+        return 30 * x * (1-x)**4  # Normalized Beta(2,5)
     return 0
 
 def proposal_pdf(x):
-    """제안 분포: Uniform(0, 1)"""
+    """Proposal distribution: Uniform(0, 1)"""
     return 1.0 if 0 <= x <= 1 else 0
 
-# M 찾기 (최대값)
+# Find M (maximum value)
 x_grid = np.linspace(0, 1, 1000)
 M = max(target_pdf(x) / proposal_pdf(x) for x in x_grid)
 print(f"M = {M:.2f}")
 
 def rejection_sampling(n_samples):
-    """기각 샘플링 구현"""
+    """Rejection sampling implementation"""
     samples = []
     n_rejected = 0
 
     while len(samples) < n_samples:
-        x = np.random.uniform(0, 1)  # 제안 분포에서 샘플
+        x = np.random.uniform(0, 1)  # Sample from proposal distribution
         u = np.random.uniform(0, 1)
 
         if u <= target_pdf(x) / (M * proposal_pdf(x)):
@@ -183,18 +183,18 @@ def rejection_sampling(n_samples):
             n_rejected += 1
 
     acceptance_rate = n_samples / (n_samples + n_rejected)
-    print(f"수락률: {acceptance_rate:.2%} (이론값: {1/M:.2%})")
+    print(f"Acceptance rate: {acceptance_rate:.2%} (theoretical: {1/M:.2%})")
     return np.array(samples)
 
 samples = rejection_sampling(10000)
 
 plt.figure(figsize=(10, 6))
-plt.hist(samples, bins=50, density=True, alpha=0.7, label='샘플링 결과')
+plt.hist(samples, bins=50, density=True, alpha=0.7, label='Sampling result')
 x_range = np.linspace(0, 1, 100)
-plt.plot(x_range, [target_pdf(x) for x in x_range], 'r-', linewidth=2, label='목표 PDF')
+plt.plot(x_range, [target_pdf(x) for x in x_range], 'r-', linewidth=2, label='Target PDF')
 plt.xlabel('x')
-plt.ylabel('밀도')
-plt.title('기각 샘플링: Beta(2, 5)')
+plt.ylabel('Density')
+plt.title('Rejection sampling: Beta(2, 5)')
 plt.legend()
 plt.show()
 ```
@@ -243,23 +243,23 @@ $$
 $$
 
 ```python
-# 중요도 샘플링 예제
+# Importance sampling example
 def target_unnormalized(x):
-    """정규화되지 않은 목표 분포: 혼합 가우스"""
+    """Unnormalized target distribution: mixture of Gaussians"""
     return 0.3 * np.exp(-0.5 * ((x-2)/0.5)**2) + \
            0.7 * np.exp(-0.5 * ((x+2)/1.0)**2)
 
 def proposal(x):
-    """제안 분포: N(0, 3)"""
+    """Proposal distribution: N(0, 3)"""
     return np.exp(-0.5 * (x/3)**2) / (3 * np.sqrt(2*np.pi))
 
 def f(x):
-    """계산하려는 함수: x^2"""
+    """Function to compute: x^2"""
     return x**2
 
-# 일반 몬테카를로 (목표 분포에서 직접 샘플링이 가능하다고 가정)
+# Naive Monte Carlo (assuming direct sampling from target is possible)
 def naive_monte_carlo(n_samples):
-    # 기각 샘플링으로 목표 분포에서 샘플
+    # Sample from target distribution via rejection sampling
     samples = []
     while len(samples) < n_samples:
         x = np.random.normal(0, 3)
@@ -269,24 +269,24 @@ def naive_monte_carlo(n_samples):
     samples = np.array(samples)
     return np.mean(f(samples))
 
-# 중요도 샘플링
+# Importance sampling
 def importance_sampling(n_samples):
-    # 제안 분포에서 샘플
+    # Sample from proposal distribution
     samples = np.random.normal(0, 3, n_samples)
     weights = target_unnormalized(samples) / proposal(samples)
-    weights = weights / np.sum(weights)  # 자기정규화
+    weights = weights / np.sum(weights)  # Self-normalization
     return np.sum(f(samples) * weights * n_samples)
 
-# 비교
+# Comparison
 n_trials = 100
 n_samples = 1000
 
 naive_results = [naive_monte_carlo(n_samples) for _ in range(n_trials)]
 is_results = [importance_sampling(n_samples) for _ in range(n_trials)]
 
-print(f"일반 MC: 평균 = {np.mean(naive_results):.4f}, 표준편차 = {np.std(naive_results):.4f}")
-print(f"중요도 샘플링: 평균 = {np.mean(is_results):.4f}, 표준편차 = {np.std(is_results):.4f}")
-print(f"분산 감소율: {np.var(naive_results) / np.var(is_results):.2f}x")
+print(f"Naive MC: mean = {np.mean(naive_results):.4f}, std = {np.std(naive_results):.4f}")
+print(f"Importance sampling: mean = {np.mean(is_results):.4f}, std = {np.std(is_results):.4f}")
+print(f"Variance reduction ratio: {np.var(naive_results) / np.var(is_results):.2f}x")
 ```
 
 ### 3.4 Connection to Reinforcement Learning
@@ -330,25 +330,25 @@ $$
 4. Accept $x_{t+1} = x'$ with probability $\alpha$, otherwise $x_{t+1} = x_t$
 
 ```python
-# 메트로폴리스-헤이스팅스 구현
+# Metropolis-Hastings implementation
 def target_distribution(x):
-    """목표 분포: 이봉 분포 (bimodal)"""
+    """Target distribution: bimodal distribution"""
     return np.exp(-0.5 * ((x-3)/0.8)**2) + np.exp(-0.5 * ((x+3)/0.8)**2)
 
 def metropolis_hastings(n_samples, proposal_std=1.0):
-    """MH 알고리즘 (대칭 제안 분포)"""
+    """MH algorithm (symmetric proposal distribution)"""
     samples = np.zeros(n_samples)
-    x = 0.0  # 초기 상태
+    x = 0.0  # Initial state
     n_accepted = 0
 
     for i in range(n_samples):
-        # 제안 생성 (대칭 가우스)
+        # Generate proposal (symmetric Gaussian)
         x_proposed = x + np.random.normal(0, proposal_std)
 
-        # 수락 확률 계산 (대칭 제안이므로 q 항 소거)
+        # Compute acceptance probability (q terms cancel due to symmetry)
         acceptance_prob = min(1, target_distribution(x_proposed) / target_distribution(x))
 
-        # 수락/거부 결정
+        # Accept/reject decision
         if np.random.uniform() < acceptance_prob:
             x = x_proposed
             n_accepted += 1
@@ -356,42 +356,42 @@ def metropolis_hastings(n_samples, proposal_std=1.0):
         samples[i] = x
 
     acceptance_rate = n_accepted / n_samples
-    print(f"수락률: {acceptance_rate:.2%}")
+    print(f"Acceptance rate: {acceptance_rate:.2%}")
     return samples
 
-# 샘플링
+# Sampling
 samples = metropolis_hastings(50000, proposal_std=2.0)
 
-# 번인(burn-in) 제거
+# Remove burn-in
 burn_in = 5000
 samples_burned = samples[burn_in:]
 
 plt.figure(figsize=(15, 5))
 
-# 궤적
+# Trace plot
 plt.subplot(1, 3, 1)
 plt.plot(samples[:1000])
-plt.xlabel('반복')
+plt.xlabel('Iteration')
 plt.ylabel('x')
-plt.title('MCMC 궤적 (처음 1000개)')
-plt.axvline(burn_in, color='r', linestyle='--', label='번인 종료')
+plt.title('MCMC trace (first 1000)')
+plt.axvline(burn_in, color='r', linestyle='--', label='End of burn-in')
 
-# 히스토그램
+# Histogram
 plt.subplot(1, 3, 2)
-plt.hist(samples_burned, bins=50, density=True, alpha=0.7, label='MCMC 샘플')
+plt.hist(samples_burned, bins=50, density=True, alpha=0.7, label='MCMC samples')
 x_range = np.linspace(-6, 6, 200)
 plt.plot(x_range, target_distribution(x_range) /
-         (np.sqrt(2*np.pi*0.8**2) * 2), 'r-', linewidth=2, label='목표 분포')
+         (np.sqrt(2*np.pi*0.8**2) * 2), 'r-', linewidth=2, label='Target distribution')
 plt.xlabel('x')
-plt.ylabel('밀도')
-plt.title('샘플 분포')
+plt.ylabel('Density')
+plt.title('Sample distribution')
 plt.legend()
 
-# 자기상관
+# Autocorrelation
 plt.subplot(1, 3, 3)
 from statsmodels.graphics.tsaplots import plot_acf
 plot_acf(samples_burned[::10], lags=50, ax=plt.gca())
-plt.title('자기상관 함수 (ACF)')
+plt.title('Autocorrelation function (ACF)')
 plt.tight_layout()
 plt.show()
 ```
@@ -405,11 +405,11 @@ Used when conditional distributions $p(x_i | x_{-i})$ are known for multivariate
 2. Sample $x_i^{(t+1)} \sim p(x_i | x_1^{(t+1)}, \ldots, x_{i-1}^{(t+1)}, x_{i+1}^{(t)}, \ldots, x_d^{(t)})$
 
 ```python
-# 깁스 샘플링: 이변량 가우스
+# Gibbs sampling: bivariate Gaussian
 def gibbs_sampling_bivariate_gaussian(n_samples, rho=0.9):
-    """이변량 가우스 N([0,0], [[1,ρ],[ρ,1]])에서 샘플링"""
+    """Sample from bivariate Gaussian N([0,0], [[1,ρ],[ρ,1]])"""
     samples = np.zeros((n_samples, 2))
-    x, y = 0.0, 0.0  # 초기값
+    x, y = 0.0, 0.0  # Initial values
 
     for i in range(n_samples):
         # x | y ~ N(ρy, 1-ρ²)
@@ -421,18 +421,18 @@ def gibbs_sampling_bivariate_gaussian(n_samples, rho=0.9):
     return samples
 
 samples = gibbs_sampling_bivariate_gaussian(10000, rho=0.9)
-samples = samples[1000:]  # 번인 제거
+samples = samples[1000:]  # Remove burn-in
 
 plt.figure(figsize=(10, 5))
 plt.subplot(1, 2, 1)
 plt.scatter(samples[:, 0], samples[:, 1], alpha=0.3, s=1)
 plt.xlabel('x')
 plt.ylabel('y')
-plt.title('깁스 샘플링: 이변량 가우스 (ρ=0.9)')
+plt.title('Gibbs sampling: bivariate Gaussian (ρ=0.9)')
 plt.axis('equal')
 
 plt.subplot(1, 2, 2)
-# 이론적 등고선
+# Theoretical contours
 from scipy.stats import multivariate_normal
 x_grid = np.linspace(-4, 4, 100)
 y_grid = np.linspace(-4, 4, 100)
@@ -443,7 +443,7 @@ plt.contour(X, Y, rv.pdf(pos), levels=10)
 plt.scatter(samples[:, 0], samples[:, 1], alpha=0.1, s=1, c='red')
 plt.xlabel('x')
 plt.ylabel('y')
-plt.title('이론 분포와 비교')
+plt.title('Comparison with theoretical distribution')
 plt.axis('equal')
 plt.tight_layout()
 plt.show()
@@ -490,7 +490,7 @@ $$
 import torch
 import torch.nn as nn
 
-# 재매개변수화 트릭 구현
+# Reparameterization trick implementation
 class VAEEncoder(nn.Module):
     def __init__(self, input_dim, latent_dim):
         super().__init__()
@@ -505,27 +505,27 @@ class VAEEncoder(nn.Module):
         return mu, logvar
 
     def reparameterize(self, mu, logvar):
-        """재매개변수화 트릭"""
+        """Reparameterization trick"""
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)  # ε ~ N(0, 1)
         z = mu + std * eps           # z = μ + σε
         return z
 
-# 기울기 흐름 테스트
+# Gradient flow test
 encoder = VAEEncoder(input_dim=10, latent_dim=2)
 x = torch.randn(32, 10)
 
 mu, logvar = encoder(x)
 z = encoder.reparameterize(mu, logvar)
 
-# 임의의 손실 함수
+# Arbitrary loss function
 loss = (z ** 2).sum()
 loss.backward()
 
-print("기울기가 성공적으로 계산됨:")
-print(f"  mu의 기울기: {encoder.fc_mu.weight.grad is not None}")
-print(f"  logvar의 기울기: {encoder.fc_logvar.weight.grad is not None}")
-print(f"  기울기 norm: {encoder.fc_mu.weight.grad.norm():.4f}")
+print("Gradients computed successfully:")
+print(f"  Gradient of mu: {encoder.fc_mu.weight.grad is not None}")
+print(f"  Gradient of logvar: {encoder.fc_logvar.weight.grad is not None}")
+print(f"  Gradient norm: {encoder.fc_mu.weight.grad.norm():.4f}")
 ```
 
 ### 5.3 Reparameterization for Other Distributions
@@ -554,31 +554,31 @@ $$
 
 ```python
 def vae_loss(x, x_recon, mu, logvar):
-    """VAE 손실 함수 (ELBO)"""
-    # 재구성 손실 (log p(x|z))
+    """VAE loss function (ELBO)"""
+    # Reconstruction loss (log p(x|z))
     recon_loss = nn.functional.binary_cross_entropy(x_recon, x, reduction='sum')
 
-    # KL 발산 (가우스 가정 하에 해석적 계산)
+    # KL divergence (analytically computed under Gaussian assumption)
     # KL(N(μ,σ²) || N(0,1)) = -0.5 * Σ(1 + log(σ²) - μ² - σ²)
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     return recon_loss + kl_loss
 
-# 전체 VAE 학습 루프 (간략화)
+# Full VAE training loop (simplified)
 def train_vae(encoder, decoder, data_loader, optimizer, epochs):
     for epoch in range(epochs):
         for x in data_loader:
-            # 인코더
+            # Encoder
             mu, logvar = encoder(x)
             z = encoder.reparameterize(mu, logvar)
 
-            # 디코더
+            # Decoder
             x_recon = decoder(z)
 
-            # 손실 계산 및 역전파
+            # Compute loss and backpropagate
             loss = vae_loss(x, x_recon, mu, logvar)
             optimizer.zero_grad()
-            loss.backward()  # 재매개변수화 덕분에 기울기 계산 가능!
+            loss.backward()  # Gradients flow thanks to reparameterization!
             optimizer.step()
 ```
 
@@ -621,7 +621,7 @@ $$
 **Bayesian interpretation**: Dropout can be viewed as approximate Bayesian inference (Gal & Ghahramani, 2016).
 
 ```python
-# MC Dropout으로 불확실성 추정
+# Uncertainty estimation with MC Dropout
 class MCDropoutModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -631,13 +631,13 @@ class MCDropoutModel(nn.Module):
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
-        x = self.dropout(x)  # 추론 시에도 dropout 적용
+        x = self.dropout(x)  # Apply dropout even at inference time
         x = self.fc2(x)
         return x
 
 def predict_with_uncertainty(model, x, n_samples=100):
-    """MC Dropout으로 예측 불확실성 추정"""
-    model.train()  # Dropout 활성화
+    """Estimate prediction uncertainty with MC Dropout"""
+    model.train()  # Enable dropout
     predictions = []
 
     with torch.no_grad():
@@ -650,12 +650,12 @@ def predict_with_uncertainty(model, x, n_samples=100):
     std = predictions.std(dim=1)
     return mean, std
 
-# 테스트
+# Test
 model = MCDropoutModel()
 x_test = torch.randn(10, 10)
 mean, std = predict_with_uncertainty(model, x_test, n_samples=100)
-print(f"예측 평균: {mean[:5]}")
-print(f"예측 표준편차 (불확실성): {std[:5]}")
+print(f"Prediction mean: {mean[:5]}")
+print(f"Prediction std (uncertainty): {std[:5]}")
 ```
 
 ---

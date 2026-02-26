@@ -2026,4 +2026,4 @@ def test_round_trip(source: str):
 
 ---
 
-[이전: 06_Bottom_Up_Parsing.md](./06_Bottom_Up_Parsing.md) | [다음: 08_Semantic_Analysis.md](./08_Semantic_Analysis.md) | [개요](./00_Overview.md)
+[이전: 상향식 파싱](./06_Bottom_Up_Parsing.md) | [다음: 의미 분석](./08_Semantic_Analysis.md) | [개요](./00_Overview.md)

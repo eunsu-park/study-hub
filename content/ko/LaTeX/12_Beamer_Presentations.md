@@ -5,6 +5,19 @@
 > **선수지식**: 기본 LaTeX 문서 구조(레슨 1), 그림 및 표(레슨 5)
 > **목표**: 오버레이, 테마, 애니메이션 및 고급 기능을 사용하여 전문적인 프레젠테이션을 만들기 위한 Beamer 클래스 숙달
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 프레임(frame), 표지(title slide), 목차(table-of-contents) 내비게이션이 있는 체계적인 Beamer 프레젠테이션을 만들 수 있다
+2. 내장 Beamer 테마(theme), 색상 테마(color theme), 글꼴 테마(font theme)를 적용하여 일관된 시각적 스타일을 구현할 수 있다
+3. 오버레이 지정자(overlay specification: `\pause`, `\only`, `\uncover`)를 사용하여 슬라이드 내용을 점진적으로 구성할 수 있다
+4. 그림, 표, 수식을 적절한 크기로 Beamer 프레임에 삽입할 수 있다
+5. Beamer 템플릿을 커스터마이징하여 독자적인 기관 또는 개인 프레젠테이션 테마를 만들 수 있다
+6. Beamer 프레젠테이션을 발표자 노트(speaker notes)가 포함된 PDF 유인물(handout)로 내보내고 배포할 수 있다
+
+---
+
 ## 소개
 
 Beamer는 프레젠테이션 슬라이드(슬라이드쇼)를 만들기 위한 LaTeX 문서 클래스입니다. PowerPoint나 Google Slides와 달리 Beamer 프레젠테이션은 코드를 사용하여 생성되므로 일관된 타이포그래피, 쉬운 버전 제어, 수식의 원활한 통합 및 슬라이드 콘텐츠에 대한 프로그래밍 방식 제어가 보장됩니다. Beamer는 수학, 물리학, 컴퓨터 과학 및 공학 분야의 학술 및 기술 프레젠테이션 표준입니다.
@@ -1163,5 +1176,5 @@ Beamer는 LaTeX의 타이포그래피, 수학 및 버전 제어 장점을 갖춘
 
 ---
 
-**이전**: [11_TikZ_Advanced.md](11_TikZ_Advanced.md)
+**이전**: [고급 TikZ 및 PGFPlots(Advanced TikZ & PGFPlots)](11_TikZ_Advanced.md)
 **다음**: [13_Bibliography_Management.md](13_Bibliography_Management.md)

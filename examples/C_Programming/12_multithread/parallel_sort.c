@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <time.h>
 
+// Why: below this threshold, thread creation overhead exceeds the parallelism
+// benefit — spawning a thread costs ~10-50us, which dominates for small arrays
 #define THRESHOLD 10000  // 이보다 작으면 단일 스레드
 
 typedef struct {
@@ -19,6 +21,8 @@ void merge(int* arr, int left, int mid, int right) {
     int n1 = mid - left + 1;
     int n2 = right - mid;
 
+    // Why: temporary arrays are needed because merge overwrites the original —
+    // in-place merge is possible but complex and has worse cache performance
     int* L = malloc(n1 * sizeof(int));
     int* R = malloc(n2 * sizeof(int));
 
@@ -63,7 +67,9 @@ void* merge_sort_parallel(void* arg) {
 
     int mid = left + (right - left) / 2;
 
-    // 왼쪽 절반: 새 스레드
+    // Why: only one half spawns a new thread while the other reuses the current
+    // thread — this halves thread creation overhead compared to spawning two new
+    // threads, and the current thread stays busy instead of idling during join
     SortTask left_task = { arr, left, mid };
     pthread_t left_thread;
     pthread_create(&left_thread, NULL, merge_sort_parallel, &left_task);

@@ -1,19 +1,27 @@
 # Security Threats and Response
 
-## Overview
+**Previous**: [Network Security Basics](./15_Network_Security_Basics.md) | **Next**: [Practical Network Tools](./17_Practical_Network_Tools.md)
 
-Network security threats continuously evolve. This chapter covers major network attack types, operating principles, and effective response strategies.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Classify network attacks as passive or active and map them to the OSI layer they target
+2. Explain how sniffing and ARP spoofing work and identify effective countermeasures
+3. Distinguish between IP spoofing, DNS spoofing, and email spoofing techniques
+4. Describe the mechanics of DoS/DDoS attacks (SYN Flood, UDP Flood, amplification) and layered defense strategies
+5. Explain Man-in-the-Middle (MITM) attacks including SSL stripping and Evil Twin, and how HSTS and VPN mitigate them
+6. Identify web application threats (SQL Injection, XSS, CSRF) and apply defensive coding practices
+7. Compare IDS and IPS deployment models and differentiate signature-based from anomaly-based detection
+8. Outline the NIST incident response lifecycle (Preparation through Lessons Learned)
+
+---
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Learning Objectives**:
-- Understand major network attack types and principles
-- Identify sniffing, spoofing, and DoS/DDoS attacks
-- Learn web security threat concepts (SQL Injection, XSS)
-- Understand Intrusion Detection/Prevention Systems (IDS/IPS)
-- Establish effective security response strategies
-
----
+Understanding how to defend a network starts with understanding how attackers think. From passive eavesdropping to sophisticated distributed denial-of-service campaigns, the threat landscape is broad and constantly evolving. This lesson walks through the most common attack vectors, explains their mechanics in detail, and pairs each with practical countermeasures -- giving you the knowledge to both recognize and respond to real-world security incidents.
 
 ## Table of Contents
 
@@ -26,8 +34,7 @@ Network security threats continuously evolve. This chapter covers major network 
 7. [Intrusion Detection Systems](#7-intrusion-detection-systems)
 8. [Security Response Strategies](#8-security-response-strategies)
 9. [Practice Problems](#9-practice-problems)
-10. [Next Steps](#10-next-steps)
-11. [References](#11-references)
+10. [References](#10-references)
 
 ---
 
@@ -214,14 +221,14 @@ Sniffing is a passive attack that intercepts network traffic to gather informati
 
 ### Sniffing Countermeasures
 
-| Countermeasure | Description |
+| Countermeasure | Why It Works |
 |----------|------|
-| Use encryption | HTTPS, SSH, VPN encrypted communication |
-| Dynamic ARP Inspection (DAI) | Verify ARP packets on switch |
-| Static ARP table | Fix ARP entries for critical servers |
-| 802.1X | Port-based network access control |
-| Network segregation | Isolate sensitive traffic with VLANs |
-| IDS/IPS | Detect abnormal ARP traffic |
+| Use encryption | HTTPS, SSH, VPN encrypt the payload so even if an attacker captures packets, the data is unreadable without the session key |
+| Dynamic ARP Inspection (DAI) | Switches validate ARP packets against a trusted DHCP snooping binding table, blocking the fake ARP replies that redirect traffic to the attacker |
+| Static ARP table | Hardcoding IP-to-MAC mappings for critical servers makes them immune to ARP poisoning because the OS ignores conflicting ARP broadcasts |
+| 802.1X | Requires authentication before a port becomes active, preventing an unauthorized device from even joining the network to sniff |
+| Network segregation | VLANs confine broadcast domains so an attacker on one VLAN cannot see traffic from another, limiting the scope of any successful sniff |
+| IDS/IPS | Detects patterns like duplicate ARP replies or MAC address flapping that indicate ARP spoofing in progress, enabling rapid response |
 
 ---
 
@@ -336,13 +343,13 @@ Spoofing is an attack that forges identity to exploit trust.
 
 ### Spoofing Countermeasures
 
-| Spoofing Type | Countermeasure |
-|------------|----------|
-| IP Spoofing | Ingress/egress filtering, BCP38 |
-| MAC Spoofing | 802.1X, port security |
-| ARP Spoofing | DAI, static ARP, ARP watch |
-| DNS Spoofing | DNSSEC, DoH/DoT, DNS monitoring |
-| Email Spoofing | SPF, DKIM, DMARC |
+| Spoofing Type | Countermeasure | Why It Works |
+|------------|----------|----------|
+| IP Spoofing | Ingress/egress filtering, BCP38 | Routers drop packets whose source IP does not belong to the originating network, eliminating the ability to forge addresses at the source |
+| MAC Spoofing | 802.1X, port security | Port security limits each switch port to specific MAC addresses; 802.1X authenticates devices before granting access, making impersonation impossible without valid credentials |
+| ARP Spoofing | DAI, static ARP, ARP watch | DAI cross-references ARP packets against DHCP bindings; static entries cannot be overwritten by broadcasts; ARP watch alerts on changes to critical mappings |
+| DNS Spoofing | DNSSEC, DoH/DoT, DNS monitoring | DNSSEC cryptographically signs DNS records so forged responses fail validation; DoH/DoT encrypt queries to prevent interception and injection |
+| Email Spoofing | SPF, DKIM, DMARC | SPF specifies which servers may send for a domain; DKIM cryptographically signs message headers; DMARC tells receivers what to do when SPF/DKIM fail -- together they make forging a sender address verifiably detectable |
 
 ---
 
@@ -418,7 +425,18 @@ DoS (Denial of Service) attacks disrupt normal services by exhausting system or 
 │                                        │ impossible│           │
 │                                        └───────────┘           │
 │                                                                 │
-│  Countermeasures: SYN Cookies, connection limits, firewall filtering│
+│  Countermeasures:                                                   │
+│  - SYN Cookies: Instead of allocating memory for each SYN, the     │
+│    server encodes connection state into the SYN-ACK sequence number │
+│    itself. No memory is consumed until the client completes the     │
+│    handshake with a valid ACK — defeating the attack's core         │
+│    strategy of exhausting the connection table.                     │
+│  - Connection limits: Caps half-open connections per source IP,     │
+│    because legitimate clients rarely open more than a handful       │
+│    simultaneously while attackers flood thousands.                  │
+│  - Firewall filtering: Drops SYN packets from spoofed IPs using    │
+│    ingress filtering (BCP38), removing the anonymity that lets      │
+│    attackers avoid rate limits tied to their real address.           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -449,7 +467,16 @@ DoS (Denial of Service) attacks disrupt normal services by exhausting system or 
 │  - Bandwidth saturation                                         │
 │  - Source IP spoofing easy                                      │
 │                                                                 │
-│  Countermeasures: Rate limiting, blackhole routing, minimize UDP services│
+│  Countermeasures:                                                      │
+│  - Rate limiting: Each UDP packet to an unlistened port forces the     │
+│    server to generate an ICMP "port unreachable" reply, consuming     │
+│    CPU. Rate-limiting ICMP responses caps this CPU drain.             │
+│  - Blackhole routing: Redirects flood traffic to a null route (drop), │
+│    sacrificing reachability of the target IP to protect the rest      │
+│    of the network from bandwidth saturation.                          │
+│  - Minimize UDP services: Every open UDP port is an attack surface;   │
+│    closing unnecessary ones eliminates the server's obligation to     │
+│    process and respond to those packets entirely.                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -484,14 +511,24 @@ DoS (Denial of Service) attacks disrupt normal services by exhausting system or 
 │  └────────────────────────────────────────────────────────────┘│
 │                                                                 │
 │  Countermeasures:                                               │
-│  - Block open resolvers                                         │
-│  - BCP38 (ingress filtering)                                    │
-│  - Response Rate Limiting (RRL)                                 │
+│  - Block open resolvers: Amplification attacks rely on publicly │
+│    accessible DNS/NTP servers that respond to any source IP.    │
+│    Restricting queries to authorized clients removes the        │
+│    amplifier that turns 60-byte requests into 3,000-byte floods.│
+│  - BCP38 (ingress filtering): ISPs drop packets with spoofed   │
+│    source IPs at the network edge. Since amplification depends  │
+│    on forging the victim's IP as the source, filtering at the   │
+│    source network prevents the attack before it starts.         │
+│  - Response Rate Limiting (RRL): DNS servers throttle identical  │
+│    responses to the same destination, so even if an amplifier   │
+│    is exploited, the flood volume is capped to manageable levels.│
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### DDoS Attack Response
+
+> **Why layered defense?** No single countermeasure can handle all DDoS attack types. Volumetric attacks (UDP floods) overwhelm bandwidth -- only upstream providers with massive capacity can absorb them. Protocol attacks (SYN floods) exhaust server state tables -- only local devices with connection-level awareness can apply SYN cookies. Application-layer attacks (HTTP floods) mimic legitimate requests -- only application-aware tools (WAF, CAPTCHA) can distinguish them. Each layer handles what the others cannot, creating defense in depth.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -639,14 +676,14 @@ MITM (Man-in-the-Middle) attacks intercept communication between two parties to 
 
 ### MITM Countermeasures
 
-| Countermeasure | Description |
+| Countermeasure | Why It Works |
 |----------|------|
-| Use TLS/SSL | End-to-end encryption prevents eavesdropping |
-| Certificate validation | Verify server certificate validity |
-| HSTS | Force HTTPS usage |
-| Certificate Pinning | Allow only specific certificates |
-| VPN | Use tunnels on public networks |
-| 2FA | Prevent credential theft |
+| Use TLS/SSL | End-to-end encryption means even if the attacker intercepts packets, they cannot decrypt the content without the session key negotiated during the handshake |
+| Certificate validation | Verifying the server's certificate against trusted CAs detects impostor servers; a MITM cannot forge a valid certificate without compromising the CA |
+| HSTS | Browsers remember that a site requires HTTPS and refuse HTTP connections, preventing SSL stripping attacks that downgrade the connection before encryption starts |
+| Certificate Pinning | The client only accepts a pre-configured certificate or public key, so even if an attacker obtains a rogue CA-signed certificate, it will be rejected |
+| VPN | Encrypts all traffic from the device to the VPN server, making the local network (where MITM typically happens) irrelevant since the attacker sees only opaque ciphertext |
+| 2FA | Even if the attacker captures a password through MITM, they cannot authenticate without the second factor (TOTP token, hardware key), limiting the damage of intercepted credentials |
 
 ---
 
@@ -1117,13 +1154,7 @@ ResultSet rs = pstmt.executeQuery();
 
 ---
 
-## 10. Next Steps
-
-In [17_Practical_Network_Tools.md](./17_Practical_Network_Tools.md), let's learn about practical network tools like ping, traceroute, and Wireshark!
-
----
-
-## 11. References
+## 10. References
 
 ### Security Frameworks
 
@@ -1143,3 +1174,7 @@ In [17_Practical_Network_Tools.md](./17_Practical_Network_Tools.md), let's learn
 - [SANS Reading Room](https://www.sans.org/reading-room/)
 - [Krebs on Security](https://krebsonsecurity.com/)
 - [The Hacker News](https://thehackernews.com/)
+
+---
+
+**Previous**: [Network Security Basics](./15_Network_Security_Basics.md) | **Next**: [Practical Network Tools](./17_Practical_Network_Tools.md)

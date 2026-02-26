@@ -9,9 +9,19 @@
 
 ---
 
+**Why This Lesson Matters:** The Laplace and Poisson equations appear whenever a system reaches steady state. Unlike parabolic and hyperbolic PDEs where time marches forward, elliptic equations describe equilibrium configurations where every point in the domain simultaneously influences every other point. This global coupling means the solution cannot be obtained by time-stepping; instead, we must solve the entire domain at once, which leads naturally to large sparse linear systems and iterative solvers.
+
 ## 1. Laplace/Poisson Equation Theory
 
 ### 1.1 Definition
+
+The Laplace equation describes steady-state phenomena with no sources, while the Poisson equation includes a source term $f(x,y)$:
+
+$$\nabla^2 u = \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} = 0 \quad \text{(Laplace)}$$
+
+$$\nabla^2 u = \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} = f(x,y) \quad \text{(Poisson)}$$
+
+A key property of the Laplace equation is the **mean value property**: the value at any interior point equals the average of its neighbors. This is exactly what the Jacobi iterative method exploits numerically.
 
 ```
 Laplace Equation (homogeneous):

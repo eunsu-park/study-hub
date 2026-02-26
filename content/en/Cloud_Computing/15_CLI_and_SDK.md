@@ -1,5 +1,24 @@
 # CLI & SDK
 
+**Previous**: [Security Services](./14_Security_Services.md) | **Next**: [Infrastructure as Code](./16_Infrastructure_as_Code.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Install and configure the AWS CLI and gcloud CLI on major operating systems
+2. Authenticate and manage multiple profiles/configurations for different environments
+3. Perform common cloud operations (create, list, describe, delete resources) from the command line
+4. Use output formatting and filtering (--query, --filter) to extract specific information
+5. Integrate cloud SDKs (Boto3, Google Cloud Client Libraries) into Python scripts
+6. Automate repetitive cloud tasks using CLI scripts and SDK programs
+
+---
+
+The web console is fine for exploration, but real cloud work happens on the command line and in code. CLI tools and SDKs let you script repeatable operations, integrate cloud management into CI/CD pipelines, and build applications that interact with cloud services programmatically. Proficiency with these tools is what separates a console clicker from a cloud engineer.
+
 ## 1. CLI Overview
 
 ### 1.1 AWS CLI vs gcloud CLI
@@ -558,6 +577,286 @@ except Forbidden:
 
 - [16_Infrastructure_as_Code.md](./16_Infrastructure_as_Code.md) - Terraform
 - [17_Monitoring_Logging_Cost.md](./17_Monitoring_Logging_Cost.md) - Monitoring
+
+---
+
+## Exercises
+
+### Exercise 1: CLI Profile Management
+
+You work with three AWS environments: `dev`, `staging`, and `production`. Each environment uses a different AWS account and region. Describe how to configure your AWS CLI so you can switch between them, and write the commands to list all S3 buckets in the `production` account without changing your default profile permanently.
+
+<details>
+<summary>Show Answer</summary>
+
+**Configuration steps:**
+
+```bash
+# Configure each profile
+aws configure --profile dev
+# Enter dev account key, secret, region (ap-northeast-2), format (json)
+
+aws configure --profile staging
+# Enter staging account credentials
+
+aws configure --profile production
+# Enter production account credentials
+
+# Verify all profiles are set
+aws configure list-profiles
+```
+
+**~/.aws/credentials** (result):
+```ini
+[default]
+aws_access_key_id = ...
+aws_secret_access_key = ...
+
+[dev]
+aws_access_key_id = AKIA...DEV
+aws_secret_access_key = ...
+
+[staging]
+aws_access_key_id = AKIA...STG
+aws_secret_access_key = ...
+
+[production]
+aws_access_key_id = AKIA...PRD
+aws_secret_access_key = ...
+```
+
+**List S3 buckets in production without changing the default:**
+```bash
+# Option 1: --profile flag
+aws s3 ls --profile production
+
+# Option 2: environment variable (temporary, for the current shell session)
+export AWS_PROFILE=production
+aws s3 ls
+
+# Option 3: per-command environment variable
+AWS_PROFILE=production aws s3 ls
+```
+
+Best practice: Use `--profile` in scripts so the profile is explicit and not dependent on shell state.
+
+</details>
+
+---
+
+### Exercise 2: JMESPath Query Filtering
+
+You need a report of all running EC2 instances in the `Production` environment tag, showing only their Instance ID, instance type, and public IP. Write the AWS CLI command with `--query` and `--output table`.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+aws ec2 describe-instances \
+    --filters "Name=tag:Environment,Values=Production" \
+              "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].[InstanceId, InstanceType, PublicIpAddress]' \
+    --output table
+```
+
+Explanation of the JMESPath expression:
+- `Reservations[*]` — iterate all reservation groups (AWS groups instances by launch request)
+- `.Instances[*]` — iterate instances within each reservation
+- `.[InstanceId, InstanceType, PublicIpAddress]` — select a multi-value array (becomes table columns)
+
+**Equivalent gcloud command:**
+```bash
+gcloud compute instances list \
+    --filter="status=RUNNING AND labels.environment=production" \
+    --format="table(name,machineType.basename(),networkInterfaces[0].accessConfigs[0].natIP)"
+```
+
+Note: gcloud uses `--filter` (server-side) and `--format` (client-side formatting), while AWS CLI uses `--filters` (server-side) and `--query` (client-side JMESPath).
+
+</details>
+
+---
+
+### Exercise 3: Boto3 Automation Script
+
+Write a Python script using boto3 that:
+1. Lists all S3 buckets in the account
+2. For each bucket, prints its name and the number of objects it contains
+3. Handles the case where a bucket might be in a different region (use `us-east-1` as the default region for the S3 client)
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import boto3
+from botocore.exceptions import ClientError
+
+def count_bucket_objects(s3_client, bucket_name):
+    """Count objects in a bucket using paginator to handle large buckets."""
+    paginator = s3_client.get_paginator('list_objects_v2')
+    count = 0
+    try:
+        for page in paginator.paginate(Bucket=bucket_name):
+            count += page.get('KeyCount', 0)
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'NoSuchBucket':
+            return None
+        elif error_code in ('AccessDenied', '403'):
+            return 'ACCESS_DENIED'
+        else:
+            raise
+    return count
+
+def main():
+    # S3 is global; us-east-1 is the standard endpoint
+    s3 = boto3.client('s3', region_name='us-east-1')
+
+    response = s3.list_buckets()
+    buckets = response.get('Buckets', [])
+
+    print(f"{'Bucket Name':<50} {'Object Count':>15}")
+    print("-" * 66)
+
+    for bucket in buckets:
+        name = bucket['Name']
+        count = count_bucket_objects(s3, name)
+        if count == 'ACCESS_DENIED':
+            count_str = 'access denied'
+        elif count is None:
+            count_str = 'not found'
+        else:
+            count_str = str(count)
+        print(f"{name:<50} {count_str:>15}")
+
+if __name__ == '__main__':
+    main()
+```
+
+Key points:
+- Always use a paginator for `list_objects_v2` — buckets can contain millions of objects
+- Catch `ClientError` specifically rather than broad `Exception` to distinguish error types
+- `list_buckets` is a global operation; individual bucket operations may need region-specific clients if you encounter redirect errors
+
+</details>
+
+---
+
+### Exercise 4: gcloud Output Formatting
+
+You want to create a shell script that extracts the external IP addresses of all running Compute Engine instances tagged with `http-server` in the `asia-northeast3` region. The output should be plain IP addresses, one per line (for use in another script).
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+gcloud compute instances list \
+    --filter="status=RUNNING AND tags.items=http-server AND zone:asia-northeast3" \
+    --format="value(networkInterfaces[0].accessConfigs[0].natIP)"
+```
+
+The `value()` format outputs raw values with no headers or decorators — ideal for shell script consumption.
+
+**Using the output in a script:**
+```bash
+#!/bin/bash
+# health-check.sh — check HTTP health of all http-server instances
+
+ips=$(gcloud compute instances list \
+    --filter="status=RUNNING AND tags.items=http-server AND zone:asia-northeast3" \
+    --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+
+for ip in $ips; do
+    if curl -sf --max-time 5 "http://$ip/health" > /dev/null; then
+        echo "OK: $ip"
+    else
+        echo "FAIL: $ip"
+    fi
+done
+```
+
+Alternative format options:
+- `--format="json"` — full JSON for programmatic processing
+- `--format="csv(name,natIP)"` — CSV with column headers
+- `--format="table(name,zone,natIP)"` — human-readable table
+
+</details>
+
+---
+
+### Exercise 5: SDK Error Handling
+
+A junior developer wrote this GCP Python code to download a file from Cloud Storage. Identify the problems and write an improved version with proper error handling.
+
+```python
+# Original (problematic) code
+from google.cloud import storage
+
+client = storage.Client()
+bucket = client.bucket('my-bucket')
+blob = bucket.blob('data/report.csv')
+blob.download_to_filename('/tmp/report.csv')
+print("Downloaded!")
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Problems with the original:**
+1. No error handling — if the bucket or blob doesn't exist, it crashes with an unhandled exception
+2. No authentication check — if `GOOGLE_APPLICATION_CREDENTIALS` is not set, the error message is confusing
+3. No feedback on what went wrong or where to look
+
+**Improved version:**
+```python
+from google.cloud import storage
+from google.api_core.exceptions import NotFound, Forbidden, GoogleAPICallError
+from google.auth.exceptions import DefaultCredentialsError
+
+def download_blob(bucket_name: str, source_blob_name: str, destination_file: str) -> bool:
+    """
+    Download a blob from Cloud Storage.
+    Returns True on success, False on failure.
+    """
+    try:
+        client = storage.Client()
+    except DefaultCredentialsError:
+        print("ERROR: No credentials found. Set GOOGLE_APPLICATION_CREDENTIALS "
+              "or run 'gcloud auth application-default login'")
+        return False
+
+    try:
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(source_blob_name)
+        blob.download_to_filename(destination_file)
+        print(f"Downloaded gs://{bucket_name}/{source_blob_name} -> {destination_file}")
+        return True
+
+    except NotFound:
+        print(f"ERROR: gs://{bucket_name}/{source_blob_name} not found. "
+              f"Check bucket name and object path.")
+        return False
+    except Forbidden:
+        print(f"ERROR: Permission denied accessing gs://{bucket_name}/{source_blob_name}. "
+              f"Check service account IAM roles.")
+        return False
+    except GoogleAPICallError as e:
+        print(f"ERROR: GCP API call failed: {e.message}")
+        return False
+
+# Usage
+success = download_blob('my-bucket', 'data/report.csv', '/tmp/report.csv')
+if not success:
+    exit(1)
+```
+
+Key improvements:
+- Separate credential initialization from the API call so errors are clearly attributed
+- Catch specific exception types (`NotFound`, `Forbidden`) for actionable error messages
+- Return a boolean so callers can handle failures programmatically
+- Include the full GCS path in error messages for easy debugging
+
+</details>
 
 ---
 

@@ -16,6 +16,8 @@ function initAccordion() {
 
     if (!button || !content) return;
 
+    // Why: Toggling aria-expanded tells assistive technology whether content is visible,
+    // while the hidden attribute handles visual show/hide - both must stay in sync
     button.addEventListener('click', () => {
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
 
@@ -39,6 +41,8 @@ function initTabs() {
         tab.addEventListener('click', () => activateTab(tab, tabs, panels));
     });
 
+    // Why: Arrow key navigation follows the WAI-ARIA tabs pattern, where left/right arrows move
+    // between tabs and Home/End jump to first/last - matching user expectations from native widgets
     // 키보드 네비게이션
     tablist.addEventListener('keydown', (e) => {
         const currentTab = document.activeElement;
@@ -154,6 +158,8 @@ function initModal() {
         }
     });
 
+    // Why: Focus trap keeps keyboard navigation confined within the modal, preventing users
+    // from tabbing into obscured background content - a WCAG 2.1 requirement for modal dialogs
     // 포커스 트랩
     modal.addEventListener('keydown', (e) => {
         if (e.key !== 'Tab') return;
@@ -174,6 +180,8 @@ function initModal() {
     });
 }
 
+// Why: Saving and restoring focus ensures the user returns to their previous position after
+// closing the modal, maintaining context and meeting WCAG focus management guidelines
 function openModal(modal, overlay) {
     // 현재 포커스 저장
     previousFocusElement = document.activeElement;
@@ -288,6 +296,8 @@ function initFormValidation() {
     const emailInput = document.getElementById('email');
     const emailError = document.getElementById('email-error');
 
+    // Why: Validating on blur (not every keystroke) avoids premature error messages,
+    // while re-validating on input only when already invalid gives instant feedback during correction
     // 실시간 이메일 유효성 검사
     emailInput?.addEventListener('blur', () => {
         validateEmail(emailInput, emailError);

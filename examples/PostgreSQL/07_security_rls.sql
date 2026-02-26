@@ -96,7 +96,9 @@ GRANT USAGE, SELECT ON SEQUENCE app.projects_id_seq TO app_user;
 -- Readonly: Read-only access (SELECT)
 GRANT SELECT ON TABLE app.projects TO app_readonly;
 
--- Grant schema-level privileges for future tables
+-- Why: ALTER DEFAULT PRIVILEGES applies to tables created IN THE FUTURE.
+-- Without this, every new table in the 'app' schema would require manual
+-- GRANT statements — easy to forget and a security risk if privileges are assumed.
 ALTER DEFAULT PRIVILEGES IN SCHEMA app
     GRANT ALL PRIVILEGES ON TABLES TO app_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA app
@@ -193,7 +195,10 @@ INSERT INTO app.tenant_data (tenant_id, data) VALUES
 -- Enable RLS
 ALTER TABLE app.tenant_data ENABLE ROW LEVEL SECURITY;
 
--- Create policy using session variable
+-- Why: Using a session variable (GUC) for tenant isolation means the application
+-- sets the tenant context once per connection (SET app.current_tenant_id = '1'),
+-- and all subsequent queries are automatically filtered. This is safer than
+-- relying on application code to add WHERE tenant_id = ? to every query.
 CREATE POLICY tenant_isolation_policy ON app.tenant_data
     FOR ALL
     TO PUBLIC
@@ -240,7 +245,10 @@ CREATE TABLE app.audit_log (
     changed_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create audit trigger function
+-- Why: SECURITY DEFINER makes this function execute with the privileges of its
+-- owner (typically the superuser), not the calling user. This ensures the audit
+-- log is always writable regardless of the caller's permissions, preventing
+-- users from bypassing audit logging by lacking INSERT on the audit table.
 CREATE OR REPLACE FUNCTION app.audit_trigger_func()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -311,7 +319,10 @@ CREATE TABLE app.sensitive_data (
 -- 6.1 Password Hashing
 -- ============================================================================
 
--- Insert user with hashed password (using bcrypt)
+-- Why: bcrypt ('bf') is chosen over SHA-256 because bcrypt is deliberately slow
+-- (configurable cost factor), making brute-force attacks impractical. The cost
+-- factor 8 means 2^8=256 iterations — higher values are more secure but slower.
+-- gen_salt generates a unique random salt per row to prevent rainbow table attacks.
 INSERT INTO app.sensitive_data (username, password_hash)
 VALUES ('alice', crypt('alice_secret_password', gen_salt('bf')));
 
@@ -421,7 +432,10 @@ SELECT encode(digest('sensitive-data', 'sha256'), 'hex') AS sha256_hash;
 -- HMAC for message authentication
 SELECT encode(hmac('message', 'secret-key', 'sha256'), 'hex') AS hmac_sha256;
 
--- Example: API key hashing for secure storage
+-- Why: API keys are stored as SHA-256 hashes (not plaintext) so that a database
+-- breach does not expose usable credentials. The key_prefix column stores only
+-- the first few characters for user identification in dashboards — enough to
+-- recognize the key without exposing the full secret.
 CREATE TABLE app.api_keys (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,

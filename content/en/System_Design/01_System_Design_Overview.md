@@ -1,14 +1,27 @@
 # System Design Overview
 
-## Overview
+**Next**: [Scalability Basics](./02_Scalability_Basics.md)
 
-This document covers the basic concepts of System Design and interview approaches. You'll learn the foundational framework for designing large-scale systems and back-of-the-envelope calculation methods.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what system design is and why it matters for building large-scale software systems
+2. Describe the evaluation criteria used in system design interviews
+3. Apply a structured four-step framework to approach any system design problem
+4. Perform back-of-the-envelope calculations for estimating capacity, storage, and bandwidth
+5. Recall commonly used performance numbers (latency, throughput, storage) for quick estimation
+6. Sketch a high-level architecture diagram for a simple system given a set of requirements
 
 **Difficulty**: ⭐
 **Estimated Study Time**: 2 hours
 **Prerequisites**: Programming basics, basic web service concepts
 
 ---
+
+Every application you use daily -- from social media feeds to ride-sharing services -- relies on carefully designed systems that handle millions of requests per second without breaking a sweat. System design is the discipline that makes this possible, and it is also one of the most heavily tested skills in senior engineering interviews. This lesson gives you the foundational vocabulary, estimation toolkit, and structured thinking framework you will use throughout the rest of the course.
 
 ## Table of Contents
 
@@ -18,8 +31,7 @@ This document covers the basic concepts of System Design and interview approache
 4. [Back-of-the-envelope Calculations](#4-back-of-the-envelope-calculations)
 5. [Commonly Used Numbers](#5-commonly-used-numbers)
 6. [Practice Problems](#6-practice-problems)
-7. [Next Steps](#7-next-steps)
-8. [References](#8-references)
+7. [References](#7-references)
 
 ---
 
@@ -561,25 +573,7 @@ Consider HA (redundancy) = 120 × 2 = 240
 
 ---
 
-## 7. Next Steps
-
-Now that you understand system design basics, learn about scalability concepts.
-
-### Next Lesson
-- [02_Scalability_Basics.md](./02_Scalability_Basics.md) - Horizontal/vertical scaling, CAP theorem
-
-### Related Lessons
-- [03_Network_Fundamentals_Review.md](./03_Network_Fundamentals_Review.md) - DNS, CDN, HTTP
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - Traffic distribution
-
-### Recommended Practice
-1. Estimate scale of frequently used services
-2. Draw system architectures on whiteboard
-3. Practice explaining design process out loud
-
----
-
-## 8. References
+## 7. References
 
 ### Books
 - System Design Interview - Alex Xu
@@ -593,6 +587,10 @@ Now that you understand system design basics, learn about scalability concepts.
 ### Practice Sites
 - [Pramp](https://www.pramp.com/) - Mock interviews
 - [Interviewing.io](https://interviewing.io/)
+
+---
+
+**Next**: [Scalability Basics](./02_Scalability_Basics.md)
 
 ---
 

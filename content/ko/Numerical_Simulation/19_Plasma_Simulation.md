@@ -8,6 +8,8 @@
 - 1D 정전기 PIC 시뮬레이션 구현
 - Two-stream 불안정성 시뮬레이션
 
+**이 레슨이 중요한 이유:** Particle-In-Cell (PIC) 방법은 유체 모델(속도 분포 함수를 평균화하는)과 완전한 운동론 이론(kinetic theory, 해석적으로 다루기 어려운) 사이의 간극을 연결합니다. 공간 격자 위에서 개별 입자를 추적함으로써, PIC은 유체 모델이 놓치는 비평형(non-equilibrium) 현상 -- 파동-입자 상호작용(wave-particle interaction), 란다우 감쇠(Landau damping), 플라즈마 불안정성(plasma instability) -- 을 포착합니다. PIC은 레이저-플라즈마 상호작용, 입자 가속기, 우주선 대전(spacecraft charging), 우주 플라즈마의 운동론적 난류(kinetic turbulence) 모델링의 주요 도구입니다.
+
 ---
 
 ## 1. PIC 방법 소개
@@ -155,7 +157,15 @@ def pic_scales():
 
 ## 2. 입자 푸시: Boris 알고리즘
 
+Boris 알고리즘은 플라즈마 물리에서 가장 널리 사용되는 입자 적분기(particle integrator)이며, 그럴 만한 이유가 있습니다: 2차 정확도(second-order accurate)이고, 시간 역행 가능(time-reversible)하며, 순수 자기장(전기장 없음)에서 에너지를 정확히 보존합니다. 핵심 아이디어는 Lorentz 힘을 전기장 가속과 자기장 회전으로 분리하여, 각각을 적합한 스킴으로 처리하는 것입니다.
+
 ### 2.1 운동 방정식
+
+Lorentz 힘 하에서의 하전 입자 운동 방정식은:
+
+$$m\frac{d\mathbf{v}}{dt} = q(\mathbf{E} + \mathbf{v} \times \mathbf{B})$$
+
+자기력 $q\mathbf{v} \times \mathbf{B}$는 항상 속도에 수직이므로, 방향은 바꾸지만 속력은 바꾸지 않습니다 -- 이것이 Boris 회전 단계가 $|\mathbf{v}|$를 정확히 보존하도록 설계된 이유입니다. 전기력 $q\mathbf{E}$는 속력과 방향 모두를 변화시키며, 단순한 반단계 가속(half-step acceleration)으로 처리합니다.
 
 ```
 하전 입자의 운동 방정식:
@@ -1085,17 +1095,315 @@ em_pic_overview()
 
 ## 8. 연습 문제
 
-### 연습 1: Boris 알고리즘
-균일 전기장 E = E₀x 와 자기장 B = B₀z 에서의 입자 운동을 시뮬레이션하시오. E×B 드리프트를 확인하시오.
+### 연습 1: Boris 알고리즘(Boris Algorithm) - E×B 드리프트
+균일한 전기장 E = E₀x̂와 자기장 B = B₀ẑ에서 Boris 알고리즘으로 입자 운동을 시뮬레이션하시오. E×B 드리프트를 수치적으로 확인하시오.
 
-### 연습 2: CIC vs NGP
-같은 입자 분포에 대해 CIC와 NGP 전하 할당을 비교하시오. 어느 것이 더 매끄러운 전하 밀도를 주는가?
+<details><summary>정답 보기</summary>
 
-### 연습 3: 열평형
-단일 종 플라즈마의 PIC 시뮬레이션에서 Maxwell 분포가 유지되는지 확인하시오. 수치적 가열이 발생하는가?
+E×B 드리프트 이론값: v_drift = E×B/B² = E₀/B₀ (y방향)
 
-### 연습 4: 두 빔 불안정성
-Two-stream 시뮬레이션에서 드리프트 속도 v₀를 변화시키며 성장률 γ를 측정하시오. 이론값과 비교하시오.
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def boris_ExB_drift():
+    """Boris 알고리즘으로 E×B 드리프트 시뮬레이션"""
+    # 물리 파라미터
+    q = 1.0;  m = 1.0    # 전하, 질량
+    E0 = 0.1;  B0 = 1.0  # 전기장, 자기장 크기
+
+    # E×B 드리프트 이론값
+    v_drift_theory = E0 / B0
+    print(f"E×B 드리프트 이론값: v_y = E₀/B₀ = {v_drift_theory:.4f}")
+
+    # 초기 조건
+    pos = np.array([0.0, 0.0, 0.0])
+    vel = np.array([0.0, 0.0, 0.0])
+
+    # 시뮬레이션 파라미터
+    dt = 0.01; n_steps = 2000
+    omega_c = q * B0 / m  # 사이클로트론 주파수
+
+    positions = [pos.copy()]
+    velocities = [vel.copy()]
+
+    for _ in range(n_steps):
+        # Boris 알고리즘
+        E = np.array([E0, 0.0, 0.0])
+        B = np.array([0.0, 0.0, B0])
+
+        # 절반 전기장 킥
+        v_minus = vel + (q/m) * E * dt/2
+
+        # 자기장 회전
+        t = (q/m) * B * dt/2
+        s = 2 * t / (1 + np.dot(t, t))
+        v_prime = v_minus + np.cross(v_minus, t)
+        v_plus  = v_minus + np.cross(v_prime, s)
+
+        # 나머지 절반 전기장 킥
+        vel = v_plus + (q/m) * E * dt/2
+        pos = pos + vel * dt
+
+        positions.append(pos.copy())
+        velocities.append(vel.copy())
+
+    positions  = np.array(positions)
+    velocities = np.array(velocities)
+
+    # 드리프트 속도 측정 (장기 평균)
+    v_y_avg = np.mean(velocities[500:, 1])
+    print(f"시뮬레이션 E×B 드리프트: v_y ≈ {v_y_avg:.4f}")
+    print(f"오차: {abs(v_y_avg - v_drift_theory)/v_drift_theory * 100:.2f}%")
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(positions[:, 0], positions[:, 1], 'b-', linewidth=0.5)
+    plt.xlabel('x'); plt.ylabel('y')
+    plt.title(f'E×B 드리프트 궤적 (드리프트 방향: y, v_drift={v_drift_theory:.2f})')
+    plt.grid(True); plt.axis('equal')
+    plt.tight_layout()
+    plt.savefig('ExB_drift.png', dpi=150)
+    plt.close()
+
+boris_ExB_drift()
+```
+
+Boris 알고리즘의 핵심 장점은 자기 모멘트(magnetic moment) μ = mv²_⊥/(2B)를 보존하는 심플렉틱(symplectic) 구조입니다. E×B 드리프트는 전하 부호와 무관하며, 전자와 이온이 같은 방향으로 드리프트합니다. 이것이 E×B 드리프트가 전류를 발생시키지 않는 이유입니다.
+</details>
+
+### 연습 2: CIC vs NGP 전하 할당 비교
+같은 입자 분포에 대해 CIC(Cloud-In-Cell)와 NGP(Nearest-Grid-Point) 전하 할당을 비교하시오. 어느 방법이 더 매끄러운 전하 밀도를 제공하는가?
+
+<details><summary>정답 보기</summary>
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def charge_assignment_comparison():
+    """CIC vs NGP 전하 할당 비교"""
+    N_grid = 64    # 격자 점 수
+    N_part = 1000  # 입자 수
+    L = 1.0        # 도메인 길이
+    dx = L / N_grid
+
+    # 임의 입자 위치 (가우시안 분포)
+    np.random.seed(42)
+    x_part = np.random.normal(L/2, L/10, N_part) % L
+
+    # NGP (Nearest-Grid-Point): 가장 가까운 격자점에 전하 할당
+    def ngp_assign(x_part, N_grid, dx, L):
+        rho = np.zeros(N_grid)
+        for xp in x_part:
+            j = int(xp / dx) % N_grid
+            rho[j] += 1.0
+        return rho / dx
+
+    # CIC (Cloud-In-Cell): 선형 보간으로 인접 격자점에 분배
+    def cic_assign(x_part, N_grid, dx, L):
+        rho = np.zeros(N_grid)
+        for xp in x_part:
+            j = int(xp / dx) % N_grid
+            frac = (xp / dx) - int(xp / dx)  # 소수 부분
+            rho[j]           += (1 - frac)
+            rho[(j+1) % N_grid] += frac
+        return rho / dx
+
+    rho_ngp = ngp_assign(x_part, N_grid, dx, L)
+    rho_cic = cic_assign(x_part, N_grid, dx, L)
+
+    # 이론적 분포 (가우시안)
+    x_grid = np.linspace(0, L, N_grid, endpoint=False)
+    from scipy.stats import norm
+    rho_theory = N_part * norm.pdf(x_grid, L/2, L/10)
+
+    # 고주파 노이즈 비교
+    noise_ngp = np.std(rho_ngp - np.convolve(rho_ngp, np.ones(5)/5, mode='same'))
+    noise_cic = np.std(rho_cic - np.convolve(rho_cic, np.ones(5)/5, mode='same'))
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(x_grid, rho_theory, 'k-', linewidth=2, label='이론 (가우시안)')
+    plt.plot(x_grid, rho_ngp, 'r-', alpha=0.7, label=f'NGP (노이즈={noise_ngp:.2f})')
+    plt.plot(x_grid, rho_cic, 'b-', alpha=0.7, label=f'CIC (노이즈={noise_cic:.2f})')
+    plt.xlabel('x'); plt.ylabel('전하 밀도 ρ')
+    plt.title('CIC vs NGP 전하 할당')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('charge_assignment.png', dpi=150)
+    plt.close()
+
+    print(f"NGP 고주파 노이즈: {noise_ngp:.2f}")
+    print(f"CIC 고주파 노이즈: {noise_cic:.2f}")
+    print(f"CIC가 NGP보다 약 {noise_ngp/noise_cic:.1f}배 더 매끄럽습니다")
+
+charge_assignment_comparison()
+```
+
+CIC는 NGP보다 훨씬 매끄러운 전하 밀도를 제공합니다. NGP는 입자가 격자점을 지날 때 격자력(grid heating)이 발생하는 반면, CIC는 연속적인 전하 분배로 이를 완화합니다. 더 높은 차수의 형상 함수(B-spline)를 사용하면 더 매끄러운 결과를 얻을 수 있지만 계산 비용이 증가합니다.
+</details>
+
+### 연습 3: 맥스웰 분포 열평형(Thermal Equilibrium) 검증
+단일 종 플라즈마 PIC 시뮬레이션에서 초기 맥스웰(Maxwell) 속도 분포가 유지되는지 확인하시오. 수치적 가열(numerical heating)이 발생하는지 조사하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def thermal_equilibrium_test():
+    """PIC 시뮬레이션에서 맥스웰 분포 유지 검증"""
+    N_part = 10000; N_grid = 128
+    vth = 1.0    # 열속도 (정규화)
+    L = 10.0; dx = L / N_grid; dt = 0.1
+
+    np.random.seed(42)
+    # 초기 맥스웰 속도 분포
+    vx = np.random.normal(0, vth, N_part)
+    x  = np.random.uniform(0, L, N_part)
+
+    T_initial = np.mean(vx**2)  # 초기 온도 (kT/m 단위)
+
+    n_steps = 100
+    T_history = [T_initial]
+
+    for step in range(n_steps):
+        # 간략화된 PIC: 전기장 없이 자유 스트리밍만
+        x = (x + vx * dt) % L
+        T_current = np.mean(vx**2)
+        T_history.append(T_current)
+
+    T_final = T_history[-1]
+    heating = (T_final - T_initial) / T_initial * 100
+
+    # 속도 분포 비교 (초기 vs 최종)
+    v_bins = np.linspace(-4*vth, 4*vth, 50)
+    v_theory = (np.exp(-v_bins**2/(2*vth**2)) /
+                (np.sqrt(2*np.pi) * vth) * N_part * (v_bins[1]-v_bins[0]))
+
+    plt.figure(figsize=(12, 4))
+    plt.subplot(1,2,1)
+    plt.hist(vx, bins=v_bins, alpha=0.7, label='시뮬레이션')
+    plt.plot(v_bins, v_theory, 'r-', linewidth=2, label='맥스웰 이론')
+    plt.xlabel('vx'); plt.ylabel('입자 수')
+    plt.title('속도 분포 (t=최종)'); plt.legend()
+
+    plt.subplot(1,2,2)
+    plt.plot(T_history, 'b-')
+    plt.axhline(T_initial, color='r', linestyle='--', label=f'초기 T={T_initial:.4f}')
+    plt.xlabel('시간 스텝'); plt.ylabel('온도 T = <vx²>')
+    plt.title(f'수치 가열: {heating:.2f}%'); plt.legend()
+    plt.tight_layout()
+    plt.savefig('thermal_equilibrium.png', dpi=150)
+    plt.close()
+
+    print(f"초기 온도: T = {T_initial:.4f}")
+    print(f"최종 온도: T = {T_final:.4f}")
+    print(f"수치 가열: {heating:.2f}%")
+    print("\n수치 가열 원인:")
+    print("1. 유한 격자 크기 → 격자력(aliasing)")
+    print("2. 유한 시간 스텝 → 위상 오차")
+    print("3. 적은 입자 수 → 통계 노이즈")
+
+thermal_equilibrium_test()
+```
+
+자유 스트리밍(전기장 없음)에서는 수치 가열이 최소화됩니다. 실제 PIC에서는 포아송 방정식 풀기 → 전기장 계산 → 입자 밀기 과정에서 격자 주파수 이상의 파동이 에너지를 임의로 흡수하여 수치 가열이 발생합니다. 이를 줄이기 위해 입자당 디바이 길이 해상도 λ_D/dx ≥ 1을 유지해야 합니다.
+</details>
+
+### 연습 4: 두 빔 불안정성(Two-Stream Instability) 성장률 측정
+두 빔 불안정성(Two-stream instability) 시뮬레이션에서 드리프트 속도 v₀를 변화시키며 성장률 γ를 측정하시오. 이론값과 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+두 빔 불안정성 이론 성장률: γ_max ≈ ω_p/2√2 (비상대론적, 동일 밀도 두 빔)
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def two_stream_growth_rate():
+    """두 빔 불안정성 성장률 측정"""
+    N_part = 5000; N_grid = 64
+    L = 10.0; dx = L / N_grid; dt = 0.05
+    omega_p = 1.0  # 플라즈마 주파수 (정규화)
+
+    # 이론 성장률
+    gamma_theory = omega_p / (2 * np.sqrt(2))
+    print(f"이론 성장률: γ_max = ω_p/(2√2) = {gamma_theory:.4f}")
+
+    def simulate_two_stream(v0, n_steps=500):
+        np.random.seed(42)
+        vth = 0.1 * v0  # 열속도 (작게)
+        # 두 빔: +v0와 -v0
+        x   = np.random.uniform(0, L, N_part)
+        vx1 = np.random.normal( v0, vth, N_part//2)
+        vx2 = np.random.normal(-v0, vth, N_part//2)
+        vx  = np.concatenate([vx1, vx2])
+
+        # 전기장 에너지 이력 (불안정성 성장 지표)
+        E_history = []
+
+        for step in range(n_steps):
+            # 전하 밀도 (CIC)
+            rho = np.zeros(N_grid)
+            for i, xi in enumerate(x):
+                j = int(xi/dx) % N_grid
+                frac = (xi/dx) - int(xi/dx)
+                rho[j]           += 1 - frac
+                rho[(j+1)%N_grid] += frac
+            rho = rho / N_part * N_grid - 1.0  # 배경 차감
+
+            # 전기장 (FFT 포아송)
+            rho_hat = np.fft.rfft(rho)
+            k = np.fft.rfftfreq(N_grid, d=dx/(2*np.pi))
+            k[0] = 1e-10  # DC 방지
+            E_hat = -1j * rho_hat / k
+            Ex = np.fft.irfft(E_hat)
+
+            # 입자 밀기
+            for i, xi in enumerate(x):
+                j = int(xi/dx) % N_grid
+                frac = (xi/dx) - int(xi/dx)
+                E_at_p = (1-frac)*Ex[j] + frac*Ex[(j+1)%N_grid]
+                vx[i] += (omega_p**2 * dx) * E_at_p * dt
+                x[i]   = (xi + vx[i] * dt) % L
+
+            E_field_energy = np.sum(Ex**2) * dx / 2
+            E_history.append(E_field_energy)
+
+        return np.array(E_history)
+
+    v0_values = [1.0, 2.0, 3.0]
+    plt.figure(figsize=(10, 4))
+    for v0 in v0_values:
+        E_hist = simulate_two_stream(v0, n_steps=200)
+        t = np.arange(len(E_hist)) * dt
+
+        # 성장 구간에서 지수 성장률 추정
+        try:
+            log_E = np.log(E_hist[10:100])
+            slope, _ = np.polyfit(t[10:100], log_E, 1)
+            gamma_meas = slope / 2  # 에너지 → 진폭 변환
+        except:
+            gamma_meas = float('nan')
+
+        plt.semilogy(t, E_hist, label=f'v₀={v0} (γ≈{gamma_meas:.3f})')
+        print(f"v₀ = {v0:.1f}: 측정 성장률 γ ≈ {gamma_meas:.4f}, "
+              f"이론 γ = {gamma_theory:.4f}")
+
+    plt.xlabel('시간 t'); plt.ylabel('전기장 에너지')
+    plt.title('두 빔 불안정성 성장')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('two_stream_growth.png', dpi=150)
+    plt.close()
+
+two_stream_growth_rate()
+```
+
+두 빔 불안정성은 서로 반대 방향으로 이동하는 두 전자 빔의 상대 드리프트 에너지가 정전기 파동의 성장으로 전환되는 현상입니다. 이론 성장률 γ_max = ω_p/(2√2)는 드리프트 속도 v₀와 무관하게 일정하지만, 불안정한 파수 범위는 v₀에 따라 달라집니다. PIC 시뮬레이션에서 측정된 성장률이 이론값과 잘 일치하면 코드가 올바르게 구현된 것을 의미합니다.
+</details>
 
 ---
 
@@ -1155,6 +1463,25 @@ PIC 시뮬레이션 핵심:
    - 위상 공간 분포
    - 분산 관계
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: Boris 알고리즘(Boris Algorithm)으로 E×B 드리프트(Drift) 검증
+boris_pusher 함수를 사용하여 수직 균일 자기장에서 양성자(proton, 전하 q = +e, 질량 mp = 1.673×10⁻²⁷ kg) 운동을 시뮬레이션하세요: x 방향 전기장 E = 1000 V/m, z 방향 자기장 B = 0.01 T. 이론적 E×B 드리프트 속도는 전하와 질량에 무관하게 y 방향으로 vd = E/B입니다. 10 사이클로트론 주기(cyclotron periods) 동안 시뮬레이션을 실행하고, 안내 중심(guiding center) 궤적을 기록하여 드리프트 속도가 이론값 vd = E×B / B² = E/B와 일치함을 검증하세요. 또한 순수 자기장(전기장 없음)에서 Boris 알고리즘이 운동 에너지(kinetic energy)를 보존함을 확인하세요.
+
+### 연습 2: CIC(Cloud-In-Cell)와 NGP(Nearest Grid Point) 전하 밀도 비교
+100개 격자 셀의 1D 도메인에 열속도 vth = 1인 맥스웰-볼츠만(Maxwell-Boltzmann) 속도 분포를 갖는 전자 10,000개를 초기화하세요. NGP와 CIC 보간(interpolation) 방식을 모두 사용하여 격자 위의 전하 밀도를 계산하세요. 두 밀도 프로파일을 같은 축에 그리고 각 방법의 고주파 잡음 수준(표준 편차 대비 평균 밀도)을 계산하세요. 동일한 입자 수에 대해 CIC가 NGP보다 약 √(N_cell)배만큼 잡음을 줄임을 보이세요.
+
+### 연습 3: Langmuir 파(Langmuir Wave) 주파수 측정
+Nx = 64 셀, L = 4λD (Debye 길이), N = 10,000 전자, 파수(wavenumber) k = 2π/L에서 진폭 δn/n = 0.01인 정현파(sinusoidal) 밀도 섭동을 갖는 1D 정전기(electrostatic) PIC 시뮬레이션을 초기화하세요. 정전기 필드 에너지를 시간의 함수로 기록하세요. 필드 에너지 시계열의 FFT를 사용하여 진동 주파수 ωpe를 측정하세요. 측정된 주파수를 정규화 단위(normalized units, ωpe = 1)에서의 이론적 플라즈마 주파수(plasma frequency) ωpe = √(ne²/(ε₀me))와 비교하세요. Bohm-Gross 분산 관계(Bohm-Gross dispersion) ω² = ωpe²(1 + 3k²λD²)에서 ωpe보다 10% 보정이 발생하는 파수 k는 얼마인가요?
+
+### 연습 4: 이중 스트림 불안정성(Two-Stream Instability) 성장률 측정
+표류 속도(drift velocity) v₀ ∈ {1.0, 2.0, 3.0, 5.0} (열속도로 정규화)로 이중 스트림 불안정성(two-stream instability) 시뮬레이션을 실행하세요. 각 v₀에 대해 초기 지수적 성장 단계 동안 필드 에너지에 지수 함수를 피팅(E_field ∝ exp(2γt))하여 선형 성장률(linear growth rate) γ를 측정하세요. 측정된 γ를 v₀의 함수로 그리고 이중 빔 분산 관계(two-beam dispersion relation)에서 얻은 이론적 최대 성장률 γmax ≈ (√3/2)ωpe와 비교하세요. 어느 v₀에서 성장률이 포화(saturate)되며, 이를 유발하는 물리적 효과는 무엇인가요?
+
+### 연습 5: 입자 수(Particle Number)와 수치 가열(Numerical Heating)
+단일 종(single-species) 맥스웰-볼츠만 플라즈마(불안정성 유발 없음)에 대해 N_ppc ∈ {10, 50, 200} 셀당 입자 수로 500 플라즈마 주기(plasma periods) 동안 세 가지 PIC 시뮬레이션을 실행하세요. 이상적인 시뮬레이션에서는 수치 가열(numerical heating)이 없을 때 총 운동 에너지가 일정하게 유지되어야 합니다. 세 경우 모두에 대해 시간에 따른 총 운동 에너지를 그려보세요. 수치 가열률(단위 플라즈마 주기당 에너지 증가)을 측정하고 이것이 1/N_ppc에 비례하여 감소함을 검증하세요. 500 주기 동안 수치 가열을 초기 에너지의 1% 미만으로 유지하려면 최소 N_ppc는 얼마여야 하나요?
 
 ---
 

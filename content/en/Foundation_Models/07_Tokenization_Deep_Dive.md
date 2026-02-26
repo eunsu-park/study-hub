@@ -1,5 +1,18 @@
 # 07. Tokenization Deep Dive
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Trace the evolution from word-level to character-level to subword tokenization, and explain the trade-offs in vocabulary size, sequence length, and out-of-vocabulary (OOV) handling.
+2. Implement the BPE (Byte-Pair Encoding) algorithm from scratch, explaining the iterative merge process, vocabulary construction, and byte-level BPE extension.
+3. Compare BPE, WordPiece, and Unigram LM tokenization algorithms in terms of their selection criteria, training objectives, and suitability for different languages and tasks.
+4. Analyze how vocabulary size and tokenization fertility affect model performance on multilingual, code, and mathematical content.
+5. Configure and train a custom tokenizer using the HuggingFace Tokenizers library, applying normalization, pre-tokenization, and post-processing rules.
+6. Evaluate tokenization quality using metrics such as fertility and vocabulary coverage, and identify when tokenization choices create systematic disadvantages for specific languages or domains.
+
+---
+
 ## Overview
 
 Tokenization is the process of converting text into token sequences that models can process. It's a critical preprocessing step that directly impacts Foundation Model performance and efficiency.
@@ -932,3 +945,177 @@ if __name__ == "__main__":
 
 ### Related Lessons
 - [../LLM_and_NLP/01_NLP_Basics.md](../LLM_and_NLP/01_NLP_Basics.md)
+
+---
+
+## Exercises
+
+### Exercise 1: BPE Algorithm Trace
+
+Trace the BPE algorithm by hand on the following toy corpus. The initial vocabulary consists of individual characters plus a special end-of-word symbol `</w>`.
+
+**Corpus (with word frequencies):**
+```
+("low", 5), ("lower", 2), ("newest", 6), ("widest", 3)
+```
+
+Starting from the character-level representation:
+```
+l o w </w>        (×5)
+l o w e r </w>    (×2)
+n e w e s t </w>  (×6)
+w i d e s t </w>  (×3)
+```
+
+Perform **3 merge operations** and show the vocabulary and corpus representation after each merge.
+
+<details>
+<summary>Show Answer</summary>
+
+**Initial character pair frequencies:**
+Count all adjacent pairs across all words (weighted by frequency):
+
+- `e s`: 6+3 = 9 (in "newest", "widest")
+- `s t`: 6+3 = 9 (in "newest", "widest")
+- `e w`: 6 (in "newest")
+- `n e`: 6 (in "newest")
+- `l o`: 5+2 = 7 (in "low", "lower")
+- `o w`: 5+2 = 7 (in "low", "lower")
+- `w </w>`: 5 (in "low")
+- others lower
+
+**Merge 1: `e s` (count 9)**
+New token: `es`
+```
+l o w </w>         (×5)
+l o w e r </w>     (×2)
+n e w es t </w>    (×6)
+w i d es t </w>    (×3)
+```
+
+**Merge 2: `es t` (count 9)**
+New token: `est`
+```
+l o w </w>          (×5)
+l o w e r </w>      (×2)
+n e w est </w>      (×6)
+w i d est </w>      (×3)
+```
+
+**Merge 3: `l o` (count 7)**
+New token: `lo`
+```
+lo w </w>           (×5)
+lo w e r </w>       (×2)
+n e w est </w>      (×6)
+w i d est </w>      (×3)
+```
+
+After 3 merges, the vocabulary includes: `{l, o, w, e, r, n, s, t, i, d, </w>, es, est, lo}`
+
+</details>
+
+---
+
+### Exercise 2: Tokenization Fertility Analysis
+
+The concept of **fertility** (tokens per character) measures how efficiently a tokenizer represents text.
+
+Given a tokenizer that produces the following tokenizations:
+
+| Text | Tokens |
+|------|--------|
+| "Hello" | ["Hello"] |
+| "Anthropic" | ["Anthrop", "ic"] |
+| "나는 학교에 갑니다" (Korean: "I go to school") | ["나", "는", " ", "학", "교", "에", " ", "갑", "니", "다"] |
+| "x = y ** 2 + z" | ["x", " =", " y", " **", " ", "2", " +", " z"] |
+
+1. Calculate the fertility for each text.
+2. Which text type has the highest fertility, indicating the tokenizer disadvantages it?
+3. What practical consequence does high fertility have for language models?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Fertility calculations (tokens / characters):**
+
+| Text | Characters | Tokens | Fertility |
+|------|-----------|--------|-----------|
+| "Hello" | 5 | 1 | 0.2 |
+| "Anthropic" | 9 | 2 | 0.22 |
+| "나는 학교에 갑니다" | 10 | 10 | 1.0 |
+| "x = y ** 2 + z" | 15 | 8 | 0.53 |
+
+**2. Korean text has the highest fertility (1.0)**, meaning every character becomes a separate token. This indicates the tokenizer (trained primarily on English) is severely disadvantaged for Korean.
+
+English text ("Hello", "Anthropic") has fertility < 0.25 — whole words or large word-pieces are single tokens.
+
+**3. Practical consequences of high fertility:**
+
+- **Sequence length explosion**: Korean text that would be 10 characters becomes 10 tokens, while equivalent English content might be 3 tokens. This means Korean documents use up context window much faster.
+- **Cost disadvantage**: APIs priced per token charge more for the same information content in high-fertility languages.
+- **Performance disadvantage**: The model must learn to compose meaning from many individual characters instead of semantic subword units, making it harder to learn language-level patterns.
+- **Context window waste**: A model with 4K context can hold far fewer Korean words than English words.
+
+</details>
+
+---
+
+### Exercise 3: WordPiece vs BPE Selection Criterion
+
+BPE and WordPiece both build vocabulary by merging pairs, but use different selection criteria.
+
+1. Explain the **BPE selection criterion** (what makes a pair "best" to merge).
+2. Explain the **WordPiece selection criterion** (what makes a pair "best" to merge).
+3. Given pairs A="un" (freq 100) and B="##ion" (freq 50), and individual frequencies: "u"=500, "n"=400, "#"="200", "#i"=150, "##o"=100, "##n"=80 — which pair would WordPiece prefer to merge? Show your calculation.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. BPE selection criterion:**
+BPE selects the pair with the **highest raw co-occurrence frequency** in the current corpus. It is purely frequency-based: merge the most common adjacent pair.
+
+**2. WordPiece selection criterion:**
+WordPiece selects the pair that **maximizes the increase in language model likelihood** when the pair is merged. This is approximated by:
+```
+score(A, B) = freq(AB) / (freq(A) × freq(B))
+```
+This is essentially a pointwise mutual information (PMI) measure — it favors pairs that co-occur much more than would be expected by chance, not just common pairs.
+
+**3. WordPiece calculation:**
+
+For pair A = "un" (combined frequency 100):
+- freq("u") = 500, freq("n") = 400
+- score("un") = 100 / (500 × 400) = 100 / 200,000 = **0.0005**
+
+For pair B = "##io" (note: WordPiece uses `##` prefix for continuation): Let's approximate using the given values — "##i" × "##on" is closest:
+- Using freq("##i") = 150, freq("##on") as composed of "##o"=100, "##n"=80
+- score("##ion") = 50 / (150 × 80) = 50 / 12,000 ≈ **0.00417**
+
+WordPiece would prefer to merge **"##ion"** because its score (0.00417) >> "un" (0.0005), even though "un" has twice the raw frequency. WordPiece captures that "##ion" constituent parts co-occur in a very specific pattern (suffix formation), while "u" and "n" frequently appear near each other for many unrelated reasons.
+
+</details>
+
+---
+
+### Exercise 4: Tokenization Failure Cases
+
+Identify the tokenization problem and explain why it occurs for each case:
+
+1. **Arithmetic**: A model trained with a standard BPE tokenizer fails on `12345 + 67890 =` while succeeding on `12 + 67 =`.
+2. **Prompting sensitivity**: The prompt `"Translate: Hello"` works but `"Translate:Hello"` (no space) breaks the translation quality significantly.
+3. **Multilingual mixing**: A model performs poorly on sentences that mix English and Korean, despite performing well on each language individually.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Arithmetic with large numbers:**
+BPE tokenizers merge common character sequences into single tokens. Small numbers like "12" and "67" are likely individual tokens. But "12345" may be tokenized as `["12", "34", "5"]` or even `["123", "45"]` — varying splits that don't align with digit positional values. The model must learn to "unfold" these inconsistent representations to do arithmetic, which is much harder. Digit-splitting (treating each digit as a separate token) specifically addresses this for code and math models.
+
+**2. Prompting sensitivity to whitespace:**
+BPE tokenizers treat word boundaries as significant. `"Translate: Hello"` might tokenize `Hello` as a familiar word-initial token. `"Translate:Hello"` (no space) forces a different byte sequence, causing `Hello` to be tokenized differently (e.g., split differently or merged with the colon). The model was trained on text with natural word boundaries, so unusual spacing creates out-of-distribution tokenizations that degrade performance.
+
+**3. Multilingual mixing:**
+Tokens at the boundary of language switches (e.g., English word immediately followed by Korean character) create tokenizations that never appeared in training. BPE vocabularies are typically trained per-language or with strong English dominance. Switching languages mid-sentence creates partial matches that cause unusual byte-level fallbacks or single-character decompositions exactly at the switching point — the model has no learned patterns for these specific token sequences.
+
+</details>

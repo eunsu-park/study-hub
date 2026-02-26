@@ -6,12 +6,15 @@ The foundation of image processing is reading, displaying, and saving image file
 
 **Difficulty**: ⭐ (Beginner)
 
-**Learning Objectives**:
-- Master `cv2.imread()`, `cv2.imshow()`, `cv2.imwrite()` functions
-- Understand and utilize IMREAD flags
-- Understand image coordinate system (y, x order)
-- Access and modify pixels
-- Set ROI (Region of Interest) and copy images
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Master `cv2.imread()`, `cv2.imshow()`, `cv2.imwrite()` functions
+2. Understand and utilize IMREAD flags
+3. Understand image coordinate system (y, x order)
+4. Access and modify pixels
+5. Set ROI (Region of Interest) and copy images
 
 ---
 
@@ -36,10 +39,10 @@ The foundation of image processing is reading, displaying, and saving image file
 ```python
 import cv2
 
-# Basic usage (read as color)
+# imread returns None silently on failure (no exception) — always guard against
+# this; skipping the check leads to cryptic AttributeError crashes later
 img = cv2.imread('image.jpg')
 
-# Check if read failed (always do this!)
 if img is None:
     print("Error: Cannot read image.")
 else:
@@ -78,22 +81,19 @@ else:
 ```python
 import cv2
 
-# 1. IMREAD_COLOR (default, 1)
-# - Read as color (ignore alpha channel)
-# - Always converts to 3-channel BGR
+# IMREAD_COLOR: always produces a 3-channel BGR array regardless of source format
+# (even for grayscale JPEGs) — this consistency simplifies downstream processing
 img_color = cv2.imread('image.png', cv2.IMREAD_COLOR)
 img_color = cv2.imread('image.png', 1)  # Same
 img_color = cv2.imread('image.png')     # Can omit (default)
 
-# 2. IMREAD_GRAYSCALE (0)
-# - Read as grayscale
-# - Returns 2D array
+# IMREAD_GRAYSCALE: returns a 2D array — saves 2/3 of memory vs COLOR for tasks
+# that don't need color (edge detection, thresholding, template matching)
 img_gray = cv2.imread('image.png', cv2.IMREAD_GRAYSCALE)
 img_gray = cv2.imread('image.png', 0)  # Same
 
-# 3. IMREAD_UNCHANGED (-1)
-# - Read as original (including alpha channel)
-# - Use when PNG transparency information is needed
+# IMREAD_UNCHANGED: the only flag that preserves the alpha channel —
+# essential when you need transparency data (compositing, masking operations)
 img_unchanged = cv2.imread('image.png', cv2.IMREAD_UNCHANGED)
 img_unchanged = cv2.imread('image.png', -1)  # Same
 
@@ -227,11 +227,13 @@ cv2.destroyAllWindows()
 import cv2
 
 img = cv2.imread('image.jpg')
-original = img.copy()
+original = img.copy()  # Keep a pristine copy — img will be modified in-loop
 
 while True:
     cv2.imshow('Interactive', img)
-    key = cv2.waitKey(1) & 0xFF  # Use only lower 8 bits
+    # & 0xFF masks the return value to 8 bits: on Linux, waitKey() can return
+    # values > 255 due to keyboard modifier flags; masking ensures reliable comparison
+    key = cv2.waitKey(1) & 0xFF
 
     if key == 27:  # ESC
         break
@@ -319,17 +321,17 @@ import cv2
 
 img = cv2.imread('input.jpg')
 
-# JPEG quality (0-100, default 95)
+# JPEG is lossy: quality=95 is near-lossless (good for archiving); quality=30
+# cuts file size dramatically at the cost of visible artifacts — use for thumbnails
 cv2.imwrite('high_quality.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 cv2.imwrite('low_quality.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 30])
 
-# PNG compression level (0-9, default 3)
-# 0 = no compression (fast, large file)
-# 9 = maximum compression (slow, small file)
+# PNG is lossless — compression only affects speed/file size, never quality
+# Use compression=0 when writing many frames in a loop (speed matters more)
 cv2.imwrite('fast_compress.png', img, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 cv2.imwrite('max_compress.png', img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
-# WebP quality (0-100)
+# WebP offers better compression than JPEG at equivalent visual quality
 cv2.imwrite('output.webp', img, [cv2.IMWRITE_WEBP_QUALITY, 80])
 ```
 
@@ -546,6 +548,8 @@ print(f"item(): {time.time() - start:.4f}s")
 
 ## 6. ROI and Image Copying
 
+Processing only the relevant sub-region of an image instead of the full frame is one of the most effective ways to reduce compute cost. ROI also makes operations like copy-paste compositing, face blurring, and targeted color correction straightforward.
+
 ### ROI (Region of Interest)
 
 ```
@@ -602,14 +606,15 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# Copy ROI (important: use .copy())
+# .copy() creates an independent array — without it, roi is a view into img,
+# and modifying it would unexpectedly change the source region too
 roi = img[50:150, 100:200].copy()
 
-# Paste to another location
+# Paste to another location — NumPy assigns by value, so this is a true copy
 img[200:300, 300:400] = roi  # Sizes must match!
 
-# Copy region within image
-# Copy top-left 100x100 to bottom-right
+# Copy region within image — copy() is critical here: without it, reading the
+# source and writing to the destination could overlap and corrupt the result
 src_region = img[0:100, 0:100].copy()
 img[-100:, -100:] = src_region
 

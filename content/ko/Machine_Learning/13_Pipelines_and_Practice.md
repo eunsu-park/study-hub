@@ -1,8 +1,24 @@
 # 파이프라인과 실무 (Pipeline & Practice)
 
-## 개요
+**이전**: [차원 축소](./12_Dimensionality_Reduction.md) | **다음**: [실전 프로젝트](./14_Practical_Projects.md)
 
-sklearn의 Pipeline과 ColumnTransformer를 사용하면 전처리와 모델링을 하나의 워크플로우로 통합할 수 있습니다. 모델 저장과 배포까지 포함한 실무 노하우를 다룹니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. sklearn 파이프라인(Pipeline)이 데이터 누수(data leakage)를 방지하고 ML 워크플로우를 단순화하는 이유를 설명할 수 있습니다
+2. 전처리, 특성 추출, 모델 학습을 단일 객체로 연결하는 파이프라인(pipeline)을 구축할 수 있습니다
+3. ColumnTransformer를 적용하여 수치형 및 범주형 특성에 서로 다른 전처리 단계를 적용할 수 있습니다
+4. 올바른 하이퍼파라미터 튜닝을 위해 파이프라인(Pipeline)을 교차 검증(cross-validation) 및 GridSearchCV와 통합할 수 있습니다
+5. BaseEstimator와 TransformerMixin을 사용하여 커스텀 변환기(custom transformer)를 구현할 수 있습니다
+6. joblib을 사용하여 학습된 파이프라인을 버전 메타데이터와 함께 저장하고 불러올 수 있습니다
+7. 분류 및 회귀 문제를 위한 재사용 가능한 파이프라인 템플릿(pipeline template)을 설계할 수 있습니다
+
+---
+
+모델 학습 방법을 아는 것은 절반에 불과합니다 -- 프로덕션 환경에서는 전처리부터 예측까지의 전체 체인이 재현 가능하고, 누수가 없으며, 이식 가능해야 합니다. Sklearn의 Pipeline과 ColumnTransformer는 모든 변환 단계를 단일 객체로 캡슐화하여 교차 검증(cross-validated), 직렬화(serialized), 배포(deployed)가 하나의 단위로 이루어질 수 있도록 해결합니다. 이 레슨은 노트북 실험과 프로덕션 수준의 ML 코드 사이의 간극을 연결합니다.
 
 ---
 

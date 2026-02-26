@@ -8,16 +8,19 @@ Modern applications serve users across the globe, generate massive volumes of da
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Learning Objectives**:
-- Compare shared-nothing, shared-disk, and shared-memory architectures
-- Design horizontal, vertical, and hybrid fragmentation strategies
-- Analyze synchronous vs asynchronous replication and quorum-based protocols
-- Explain distributed query processing and optimization
-- Trace through the Two-Phase Commit (2PC) and Three-Phase Commit (3PC) protocols
-- Describe the Paxos and Raft consensus algorithms at a conceptual level
-- Apply distributed concurrency control techniques
-- Select appropriate partitioning strategies (range, hash, consistent hashing)
-- Reason about CAP theorem implications in distributed system design
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare shared-nothing, shared-disk, and shared-memory architectures
+2. Design horizontal, vertical, and hybrid fragmentation strategies
+3. Analyze synchronous vs asynchronous replication and quorum-based protocols
+4. Explain distributed query processing and optimization
+5. Trace through the Two-Phase Commit (2PC) and Three-Phase Commit (3PC) protocols
+6. Describe the Paxos and Raft consensus algorithms at a conceptual level
+7. Apply distributed concurrency control techniques
+8. Select appropriate partitioning strategies (range, hash, consistent hashing)
+9. Reason about CAP theorem implications in distributed system design
 
 ---
 

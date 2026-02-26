@@ -34,37 +34,37 @@ Transformer 복습 ──────▶ HuggingFace ──────▶ LangC
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_NLP_Basics.md](./01_NLP_Basics.md) | ⭐⭐ | 토큰화, 정규화, 어휘 구축 |
-| [02_Word2Vec_GloVe.md](./02_Word2Vec_GloVe.md) | ⭐⭐ | 단어 임베딩, Skip-gram, CBOW |
-| [03_Transformer_Review.md](./03_Transformer_Review.md) | ⭐⭐⭐ | Attention, Encoder-Decoder |
+| [NLP 기초](./01_NLP_Basics.md) | ⭐⭐ | 토큰화, 정규화, 어휘 구축 |
+| [Word2Vec과 GloVe](./02_Word2Vec_GloVe.md) | ⭐⭐ | 단어 임베딩, Skip-gram, CBOW |
+| [Transformer 복습](./03_Transformer_Review.md) | ⭐⭐⭐ | Attention, Encoder-Decoder |
 
 ### 사전학습 모델
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [04_BERT_Understanding.md](./04_BERT_Understanding.md) | ⭐⭐⭐ | MLM, NSP, 양방향 인코더 |
-| [05_GPT_Understanding.md](./05_GPT_Understanding.md) | ⭐⭐⭐ | 자기회귀 모델, 텍스트 생성 |
-| [06_HuggingFace_Basics.md](./06_HuggingFace_Basics.md) | ⭐⭐ | Transformers 라이브러리, Pipeline |
-| [07_Fine_Tuning.md](./07_Fine_Tuning.md) | ⭐⭐⭐ | 분류, QA, 요약 파인튜닝 |
+| [BERT 이해](./04_BERT_Understanding.md) | ⭐⭐⭐ | MLM, NSP, 양방향 인코더 |
+| [GPT 이해](./05_GPT_Understanding.md) | ⭐⭐⭐ | 자기회귀 모델, 텍스트 생성 |
+| [HuggingFace 기초](./06_HuggingFace_Basics.md) | ⭐⭐ | Transformers 라이브러리, Pipeline |
+| [파인튜닝](./07_Fine_Tuning.md) | ⭐⭐⭐ | 분류, QA, 요약 파인튜닝 |
 
 ### LLM 활용
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [08_Prompt_Engineering.md](./08_Prompt_Engineering.md) | ⭐⭐ | 프롬프트 설계, Few-shot, CoT |
-| [09_RAG_Basics.md](./09_RAG_Basics.md) | ⭐⭐⭐ | 검색 증강 생성, 청킹 전략 |
-| [10_LangChain_Basics.md](./10_LangChain_Basics.md) | ⭐⭐⭐ | 체인, 에이전트, 메모리 |
-| [11_Vector_Databases.md](./11_Vector_Databases.md) | ⭐⭐⭐ | Chroma, Pinecone, FAISS |
-| [12_Practical_Chatbot.md](./12_Practical_Chatbot.md) | ⭐⭐⭐⭐ | 대화형 AI 시스템 구축 |
+| [프롬프트 엔지니어링](./08_Prompt_Engineering.md) | ⭐⭐ | 프롬프트 설계, Few-shot, CoT |
+| [RAG 기초](./09_RAG_Basics.md) | ⭐⭐⭐ | 검색 증강 생성, 청킹 전략 |
+| [LangChain 기초](./10_LangChain_Basics.md) | ⭐⭐⭐ | 체인, 에이전트, 메모리 |
+| [벡터 데이터베이스](./11_Vector_Databases.md) | ⭐⭐⭐ | Chroma, Pinecone, FAISS |
+| [실전 챗봇 프로젝트](./12_Practical_Chatbot.md) | ⭐⭐⭐⭐ | 대화형 AI 시스템 구축 |
 
 ### LLM 심화
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [13_Model_Quantization.md](./13_Model_Quantization.md) | ⭐⭐⭐ | INT8/INT4, GPTQ, AWQ, bitsandbytes, QLoRA |
-| [14_RLHF_Alignment.md](./14_RLHF_Alignment.md) | ⭐⭐⭐⭐ | PPO, Reward Model, DPO, Constitutional AI |
-| [15_LLM_Agents.md](./15_LLM_Agents.md) | ⭐⭐⭐⭐ | ReAct, Tool Use, AutoGPT, LangChain Agent |
-| [16_Evaluation_Metrics.md](./16_Evaluation_Metrics.md) | ⭐⭐⭐ | BLEU, ROUGE, BERTScore, Human Eval, Benchmarks |
+| [모델 양자화 (Model Quantization)](./13_Model_Quantization.md) | ⭐⭐⭐ | INT8/INT4, GPTQ, AWQ, bitsandbytes, QLoRA |
+| [RLHF와 LLM 정렬 (Alignment)](./14_RLHF_Alignment.md) | ⭐⭐⭐⭐ | PPO, Reward Model, DPO, Constitutional AI |
+| [LLM 에이전트 (LLM Agents)](./15_LLM_Agents.md) | ⭐⭐⭐⭐ | ReAct, Tool Use, AutoGPT, LangChain Agent |
+| [LLM 평가 지표 (Evaluation Metrics)](./16_Evaluation_Metrics.md) | ⭐⭐⭐ | BLEU, ROUGE, BERTScore, Human Eval, Benchmarks |
 
 ---
 

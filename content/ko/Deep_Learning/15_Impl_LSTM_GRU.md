@@ -1,5 +1,18 @@
 # 06. LSTM / GRU
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 시간 역전파(Backpropagation Through Time, BPTT) 공식을 사용하여 Vanilla RNN에서의 기울기 소실 문제(Vanishing Gradient Problem)를 설명하고, 이것이 장기 의존성 학습을 어떻게 제한하는지 서술합니다.
+2. LSTM 아키텍처(입력 게이트, 망각 게이트, 출력 게이트 및 셀 상태(Cell State))를 설명하고, 셀 상태가 어떻게 장거리 기울기 흐름을 가능하게 하는지 설명합니다.
+3. GRU 아키텍처(리셋 게이트, 업데이트 게이트)를 설명하고, 용량과 연산 비용 측면에서 GRU와 LSTM 간의 트레이드오프를 설명합니다.
+4. PyTorch의 내장 RNN 모듈을 사용하지 않고 LSTM과 GRU 셀을 처음부터 구현하고, PyTorch의 `nn.LSTM`/`nn.GRU`와 비교 검증합니다.
+5. 적층 LSTM/GRU 층을 사용하여 시퀀스-투-시퀀스(Sequence-to-Sequence) 모델을 구축하고 시계열 또는 NLP 작업에 적용합니다.
+6. 벤치마크 시퀀스 작업에서 Vanilla RNN, LSTM, GRU의 성능과 학습 역학을 비교하고 결과를 해석합니다.
+
+---
+
 ## 개요
 
 LSTM(Long Short-Term Memory)과 GRU(Gated Recurrent Unit)는 **vanishing gradient 문제**를 해결한 순환 신경망(RNN) 변형입니다. 게이트 메커니즘을 통해 장기 의존성(long-term dependency)을 효과적으로 학습합니다.

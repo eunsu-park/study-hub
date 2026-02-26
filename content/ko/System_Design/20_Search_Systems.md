@@ -1,10 +1,26 @@
 # 20. 검색 시스템
 
+**이전**: [관측 가능성과 모니터링](./19_Observability_Monitoring.md)
+
 난이도: ⭐⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-검색(Search)은 대부분의 애플리케이션에서 기본적인 구성 요소입니다. 이 레슨에서는 검색 엔진이 내부적으로 어떻게 작동하는지 다룹니다 — 역색인(inverted index)과 텍스트 분석부터 분산 검색 아키텍처 및 랭킹 알고리즘까지. 가장 널리 채택된 솔루션인 Elasticsearch를 중심으로 설명합니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 역색인(Inverted Index)이 어떻게 작동하는지 설명하고, 수십억 개의 문서에서 1초 미만의 전문 검색(full-text search)을 가능하게 하는 이유를 설명할 수 있다
+2. 텍스트 분석 파이프라인(토큰화, 정규화, 어간 추출, 불용어 처리)을 설명하고 검색 품질에 미치는 영향을 설명할 수 있다
+3. 적절한 샤드 수, 레플리카 전략, 노드 역할을 고려하여 Elasticsearch 클러스터 아키텍처를 설계할 수 있다
+4. match, bool, multi-match, function-score 쿼리를 사용하여 다양한 검색 요구 사항을 충족하는 Elasticsearch 쿼리를 작성할 수 있다
+5. BM25 랭킹 알고리즘과 관련성 향상 기법(필드 가중치, 감쇠 함수, 커스텀 스코어링)을 설명할 수 있다
+6. 인덱스 샤딩(index sharding), 라우팅, 캐싱, 계층형 스토리지 전략을 통해 검색 시스템을 수평 확장할 수 있다
+7. 엣지 n-그램(edge n-gram)과 완성 제안기(completion suggester)를 사용하여 자동완성 및 입력 중 검색(search-as-you-type) 기능을 구현할 수 있다
+
+---
+
+검색은 소프트웨어 사용 방식에 너무 깊이 내재되어 있어서, 관련 없는 결과가 나오거나 느리게 느껴지거나 명백한 일치 항목을 놓치는 등 제대로 작동하지 않으면 사용자는 즉시 알아챕니다. 이커머스 상품 검색부터 Kibana의 로그 탐색까지, 모든 검색 창 뒤에는 역색인과 신중하게 조율된 랭킹 알고리즘이 자리하고 있습니다. 검색 내부 구조를 이해하면 코퍼스(corpus)가 수억 개의 문서로 증가하더라도 밀리초 안에 올바른 결과를 반환하는 시스템을 설계할 수 있습니다.
 
 ---
 
@@ -697,9 +713,9 @@ Performance checklist:
 
 ---
 
-## 다음 단계
-- [19. 관측 가능성과 모니터링](./19_Observability_Monitoring.md)
-- [15. 분산 시스템 개념](./15_Distributed_Systems_Concepts.md)
+**이전**: [관측 가능성과 모니터링](./19_Observability_Monitoring.md)
+
+---
 
 ## 참고 자료
 - [Elasticsearch: The Definitive Guide](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)

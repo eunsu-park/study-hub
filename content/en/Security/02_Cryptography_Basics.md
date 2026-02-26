@@ -8,14 +8,17 @@ Cryptography is the practice of securing communication and data so that only int
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Understand the difference between symmetric and asymmetric encryption
-- Implement AES-GCM and ChaCha20-Poly1305 encryption in Python
-- Understand RSA, ECDSA, and Ed25519 for asymmetric cryptography
-- Implement Diffie-Hellman and ECDH key exchange
-- Create and verify digital signatures
-- Recognize and avoid common cryptographic pitfalls
-- Apply modern cryptographic recommendations
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the difference between symmetric and asymmetric encryption
+2. Implement AES-GCM and ChaCha20-Poly1305 encryption in Python
+3. Understand RSA, ECDSA, and Ed25519 for asymmetric cryptography
+4. Implement Diffie-Hellman and ECDH key exchange
+5. Create and verify digital signatures
+6. Recognize and avoid common cryptographic pitfalls
+7. Apply modern cryptographic recommendations
 
 ---
 

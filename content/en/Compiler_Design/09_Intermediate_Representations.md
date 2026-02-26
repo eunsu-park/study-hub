@@ -1925,4 +1925,4 @@ Write test cases that generate TAC for a function that computes the sum of an ar
 
 ---
 
-[Previous: 08_Semantic_Analysis.md](./08_Semantic_Analysis.md) | [Next: 10_Runtime_Environments.md](./10_Runtime_Environments.md) | [Overview](./00_Overview.md)
+[Previous: Semantic Analysis](./08_Semantic_Analysis.md) | [Next: Runtime Environments](./10_Runtime_Environments.md) | [Overview](./00_Overview.md)

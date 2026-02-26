@@ -19,7 +19,9 @@ import time
 import argparse
 import os
 
-# Try to import TFLite runtime
+# Why: tflite-runtime is a lightweight (~5 MB) alternative to the full TensorFlow
+# package (~500 MB). Trying it first saves disk and RAM on edge devices. The
+# full TF fallback ensures the code still works on development machines.
 try:
     from tflite_runtime.interpreter import Interpreter
 except ImportError:
@@ -38,7 +40,9 @@ class TFLiteClassifier:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
 
-        # Load model
+        # Why: allocate_tensors() must be called exactly once after loading.
+        # It pre-allocates all internal buffers so that repeated invoke() calls
+        # don't trigger per-inference allocations — critical for real-time on edge.
         print(f"Loading model: {model_path}")
         self.interpreter = Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
@@ -72,7 +76,9 @@ class TFLiteClassifier:
         # Convert to numpy array
         input_data = np.array(image, dtype=np.float32)
 
-        # Normalize (MobileNet style: -1 to 1)
+        # Why: MobileNet models expect inputs in [-1, 1] rather than [0, 255].
+        # Using the wrong normalization silently produces garbage predictions
+        # — this is the most common edge-AI deployment bug.
         input_data = (input_data - 127.5) / 127.5
 
         # Add batch dimension
@@ -125,7 +131,9 @@ class TFLiteClassifier:
         # Create dummy input
         dummy_input = np.random.rand(*self.input_shape).astype(np.float32)
 
-        # Warmup
+        # Why: The first few inferences are slower due to lazy kernel compilation
+        # and cache warming. Discarding warmup runs gives a realistic steady-state
+        # measurement that matches real deployment latency.
         for _ in range(10):
             self.interpreter.set_tensor(self.input_details[0]['index'], dummy_input)
             self.interpreter.invoke()

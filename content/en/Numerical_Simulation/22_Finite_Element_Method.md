@@ -26,6 +26,8 @@
 
 ### 1.1 What is the Finite Element Method?
 
+**Why FEM?** Finite difference methods work beautifully on regular grids but struggle with complex geometries (curved boundaries, holes, irregular shapes). FEM overcomes this limitation by dividing the domain into flexible elements (triangles, tetrahedra) that can conform to any shape. Additionally, FEM has a rigorous mathematical foundation (variational principles, Galerkin projection) that provides guaranteed error bounds and convergence rates. This combination of geometric flexibility and mathematical rigor makes FEM the dominant method in structural mechanics, heat transfer, and solid mechanics.
+
 The Finite Element Method (FEM) is a powerful numerical technique for solving partial differential equations (PDEs). Unlike finite difference methods that approximate derivatives directly, FEM:
 
 1. Converts the PDE into a **weak (variational) form**
@@ -773,29 +775,272 @@ The errors decrease as O(h²), confirming theoretical predictions.
 
 ---
 
-## 9. Practice Problems
+## Exercises
 
-### Problem 1: Variable Coefficient
+### Exercise 1: Variable Coefficient Problem
 Solve the variable coefficient problem:
 ```
 -(a(x) u'(x))' = f(x),  x ∈ (0, 1)
 u(0) = u(1) = 0
 ```
-with a(x) = 1 + x and f(x) = 1. Implement FEM and compare with a numerical reference.
+with a(x) = 1 + x and f(x) = 1. Implement FEM by modifying the element stiffness matrix to incorporate a(x), then compare your numerical solution with a high-resolution reference.
 
-**Hint:** Weak form is ∫ a(x) u'(x) v'(x) dx = ∫ f(x) v(x) dx.
+<details><summary>Show Answer</summary>
 
-### Problem 2: Mixed Boundary Conditions
-Solve -u'' = 1 with u(0) = 0 (Dirichlet) and u'(1) = -0.5 (Neumann). Compare with exact solution.
+The weak form becomes ∫ a(x) u'(x) v'(x) dx = ∫ f(x) v(x) dx. For each element [xₑ, xₑ₊₁], approximate a(x) by its value at the midpoint a_mid = a((xₑ + xₑ₊₁)/2), giving the modified local stiffness matrix:
 
-### Problem 3: Quadratic Elements
-Extend the 1D FEM code to use quadratic basis functions (3 nodes per element: two endpoints + midpoint). Compare convergence rate with linear elements.
+```python
+def fem_1d_variable_coeff(N, a_func, f_func):
+    """FEM for -(a(x)u')' = f(x) with homogeneous Dirichlet BC."""
+    h = 1.0 / N
+    x = np.linspace(0, 1, N+1)
+    A = lil_matrix((N+1, N+1))
+    f = np.zeros(N+1)
 
-### Problem 4: 2D Poisson on Unit Square
-Implement 2D FEM for -Δu = 1 on the unit square [0,1]×[0,1] with u=0 on boundary. Use a structured triangular mesh and verify the solution.
+    for e in range(N):
+        x_mid = (x[e] + x[e+1]) / 2
+        a_mid = a_func(x_mid)
+        f_mid = f_func(x_mid)
 
-### Problem 5: Higher-Order Convergence
-Test convergence for the equation -u'' = f(x) where f(x) is chosen such that the exact solution u(x) = x(1-x) sin(πx). Verify that L² error is O(h²) for linear elements.
+        # Modified element stiffness: a_mid * (1/h) * [[1,-1],[-1,1]]
+        A_elem = (a_mid / h) * np.array([[ 1, -1], [-1,  1]])
+        for i_loc in range(2):
+            for j_loc in range(2):
+                A[e + i_loc, e + j_loc] += A_elem[i_loc, j_loc]
+        f[e]   += f_mid * h / 2
+        f[e+1] += f_mid * h / 2
+
+    # Dirichlet BC
+    A[0, :] = 0; A[0, 0] = 1; f[0] = 0
+    A[N, :] = 0; A[N, N] = 1; f[N] = 0
+
+    u = spsolve(A.tocsr(), f)
+    return x, u
+
+x, u = fem_1d_variable_coeff(N=40, a_func=lambda x: 1+x, f_func=lambda x: np.ones_like(x))
+# Reference: fine-mesh solution
+x_ref, u_ref = fem_1d_variable_coeff(N=400, a_func=lambda x: 1+x, f_func=lambda x: np.ones_like(x))
+# Interpolate reference onto coarse mesh for comparison
+u_ref_coarse = np.interp(x, x_ref, u_ref)
+print(f"L∞ error vs reference: {np.max(np.abs(u - u_ref_coarse)):.4e}")
+```
+
+For a(x) = 1 + x, no simple analytical solution exists, so comparison with a highly refined mesh serves as the reference. The solution profile is skewed toward x = 1 where stiffness is higher, concentrating the bending toward the softer end.
+</details>
+
+### Exercise 2: Mixed Boundary Conditions
+Solve -u'' = 1 with u(0) = 0 (Dirichlet) and u'(1) = -0.5 (Neumann). Find the exact solution analytically and verify your FEM solution converges at O(h²).
+
+<details><summary>Show Answer</summary>
+
+```python
+def fem_1d_mixed_bc(N):
+    """Solve -u'' = 1, u(0)=0, u'(1) = -0.5."""
+    h = 1.0 / N
+    x = np.linspace(0, 1, N+1)
+    A = assemble_stiffness_1d(N)
+    f = np.zeros(N+1)
+
+    for e in range(N):
+        x_mid = (x[e] + x[e+1]) / 2
+        f[e]   += 1.0 * h / 2   # f(x)=1
+        f[e+1] += 1.0 * h / 2
+
+    # Neumann BC at x=1: add g=u'(1)=-0.5 to rhs (natural BC)
+    f[N] += -0.5   # +g₁ v(1) term from integration by parts
+
+    # Dirichlet BC at x=0
+    A = A.tolil()
+    A[0, :] = 0; A[0, 0] = 1; f[0] = 0
+    A = A.tocsr()
+
+    u = spsolve(A, f)
+    return x, u
+
+# Exact solution: -u'' = 1 => u = -x²/2 + C1*x + C2
+# u(0)=0 => C2=0; u'(1)=-1+C1=-0.5 => C1=0.5
+# => u(x) = -x²/2 + 0.5*x = x(1-x)/2
+def u_exact_mixed(x):
+    return x * (1 - x) / 2
+
+for N in [10, 20, 40, 80]:
+    x, u = fem_1d_mixed_bc(N)
+    err = np.max(np.abs(u - u_exact_mixed(x)))
+    print(f"N={N:3d}: L∞ error = {err:.4e}")
+```
+
+Exact solution: u(x) = x(1-x)/2 (same as the pure Dirichlet case with f=1 and u(1)=0, but now the u'(1)=-0.5 Neumann condition is satisfied naturally). The Neumann condition is a "natural" boundary condition in the weak form — it appears automatically in the right-hand side without modifying the stiffness matrix rows. The method converges at O(h²) as expected.
+</details>
+
+### Exercise 3: Quadratic Elements
+Extend the 1D FEM code to use quadratic (P2) basis functions with 3 nodes per element (two endpoints + midpoint). Solve -u'' = π² sin(πx) and compare the L² convergence rate against linear (P1) elements.
+
+<details><summary>Show Answer</summary>
+
+For P2 elements each element has nodes [xₑ, xₑ₊½, xₑ₊₁]. The reference-element basis functions on ξ ∈ [-1, 1] are:
+- φ₁(ξ) = ξ(ξ-1)/2, φ₂(ξ) = 1-ξ², φ₃(ξ) = ξ(ξ+1)/2
+
+The element stiffness matrix is computed by numerical integration:
+
+```python
+def fem_p2_convergence():
+    from numpy.polynomial.legendre import leggauss
+    gauss_pts, gauss_wts = leggauss(3)  # 3-point Gauss quadrature
+
+    def p2_basis(xi):
+        phi  = np.array([xi*(xi-1)/2, 1-xi**2, xi*(xi+1)/2])
+        dphi = np.array([(2*xi-1)/2,  -2*xi,   (2*xi+1)/2])
+        return phi, dphi
+
+    results_p1 = []
+    results_p2 = []
+    h_vals = []
+
+    for N in [5, 10, 20, 40]:
+        h = 1.0 / N
+        h_vals.append(h)
+
+        # P1 FEM (existing solver)
+        x_p1, u_p1 = fem_1d_poisson(N, lambda x: np.pi**2 * np.sin(np.pi * x))
+        err_p1 = np.max(np.abs(u_p1 - np.sin(np.pi * x_p1)))
+        results_p1.append(err_p1)
+
+        # P2 FEM (2*N+1 global nodes, N elements with 3 nodes each)
+        n_nodes = 2*N + 1
+        x_p2 = np.linspace(0, 1, n_nodes)
+        A = lil_matrix((n_nodes, n_nodes))
+        f = np.zeros(n_nodes)
+
+        for e in range(N):
+            x_left = x_p2[2*e]; x_right = x_p2[2*e+2]
+            nodes_e = [2*e, 2*e+1, 2*e+2]
+            A_e = np.zeros((3, 3)); f_e = np.zeros(3)
+            for gp, gw in zip(gauss_pts, gauss_wts):
+                phi, dphi = p2_basis(gp)
+                x_phys = x_left + (gp+1)/2 * h
+                J = h / 2   # Jacobian
+                A_e += gw * J * np.outer(dphi, dphi) / J**2
+                f_e += gw * J * np.pi**2 * np.sin(np.pi * x_phys) * phi
+            for i_loc, i_g in enumerate(nodes_e):
+                for j_loc, j_g in enumerate(nodes_e):
+                    A[i_g, j_g] += A_e[i_loc, j_loc]
+                f[i_g] += f_e[i_loc]
+
+        A[0, :] = 0; A[0, 0] = 1; f[0] = 0
+        A[-1, :] = 0; A[-1, -1] = 1; f[-1] = 0
+        u_p2 = spsolve(A.tocsr(), f)
+        err_p2 = np.max(np.abs(u_p2 - np.sin(np.pi * x_p2)))
+        results_p2.append(err_p2)
+
+        print(f"N={N:3d}: P1 L∞={err_p1:.3e}, P2 L∞={err_p2:.3e}")
+
+fem_p2_convergence()
+```
+
+P1 elements converge at O(h²) while P2 elements converge at O(h⁴) — two orders higher. This demonstrates the general FEM result that P_k elements achieve O(h^{k+1}) convergence for the L∞ error on smooth problems.
+</details>
+
+### Exercise 4: FEM for a Reaction-Diffusion Equation
+Solve the reaction-diffusion equation:
+```
+-u''(x) + c·u(x) = f(x),  x ∈ (0, 1),  u(0) = u(1) = 0
+```
+with c = 10 and f(x) = 1. Derive the weak form, implement FEM (adding a mass matrix term), and verify convergence.
+
+<details><summary>Show Answer</summary>
+
+The weak form is ∫₀¹ u'v' dx + c ∫₀¹ u v dx = ∫₀¹ f v dx, giving matrix system (A + c M)u = f, where M is the mass matrix with Mᵢⱼ = ∫ φᵢ φⱼ dx.
+
+```python
+def fem_1d_reaction_diffusion(N, c, f_func):
+    """Solve -u'' + c*u = f with homogeneous Dirichlet BC."""
+    h = 1.0 / N
+    x = np.linspace(0, 1, N+1)
+
+    # Stiffness matrix
+    A = assemble_stiffness_1d(N)
+
+    # Mass matrix: element mass matrix (h/6)*[[2,1],[1,2]]
+    M = lil_matrix((N+1, N+1))
+    M_elem = (h / 6) * np.array([[2, 1], [1, 2]])
+    for e in range(N):
+        for i_loc in range(2):
+            for j_loc in range(2):
+                M[e + i_loc, e + j_loc] += M_elem[i_loc, j_loc]
+
+    # Combined system matrix
+    K = A + c * M.tocsr()
+    f = np.zeros(N+1)
+    for e in range(N):
+        x_mid = (x[e] + x[e+1]) / 2
+        f_mid = f_func(x_mid)
+        f[e] += f_mid * h / 2; f[e+1] += f_mid * h / 2
+
+    # Apply Dirichlet BC
+    K = K.tolil()
+    K[0, :] = 0; K[0, 0] = 1; f[0] = 0
+    K[N, :] = 0; K[N, N] = 1; f[N] = 0
+    K = K.tocsr()
+
+    u = spsolve(K, f)
+    return x, u
+
+# Solve and check convergence
+import math
+c_val = 10
+for N in [10, 20, 40, 80]:
+    x, u = fem_1d_reaction_diffusion(N, c_val, lambda x: np.ones_like(x))
+    # Reference (very fine mesh)
+    x_ref, u_ref = fem_1d_reaction_diffusion(400, c_val, lambda x: np.ones_like(x))
+    u_ref_c = np.interp(x, x_ref, u_ref)
+    print(f"N={N:3d}: L∞ vs reference = {np.max(np.abs(u - u_ref_c)):.4e}")
+```
+
+The mass matrix element integral for linear hat functions over [xₑ, xₑ₊₁] gives the 2×2 matrix (h/6)[[2,1],[1,2]]. Including the reaction term c·u increases the diagonal entries, stabilizing the solution and preventing it from going negative. The method still converges at O(h²).
+</details>
+
+### Exercise 5: Convergence Rate Verification
+For the equation -u'' = f(x) on (0,1) with u(0) = u(1) = 0, choose f(x) so that the exact solution is u(x) = x(1-x) sin(πx). Compute f(x) analytically, then run the FEM solver for N = 5, 10, 20, 40, 80 and verify that the L² error decreases at rate O(h²).
+
+<details><summary>Show Answer</summary>
+
+```python
+def manufactured_solution_test():
+    """Method of manufactured solutions for FEM verification."""
+    # Exact solution: u(x) = x(1-x)*sin(pi*x)
+    def u_exact(x):
+        return x * (1 - x) * np.sin(np.pi * x)
+
+    # f = -u'': compute analytically
+    # u'  = (1-2x)*sin(pi*x) + pi*x*(1-x)*cos(pi*x)
+    # u'' = -2*sin(pi*x) + 2*pi*(1-2x)*cos(pi*x) - pi^2*x*(1-x)*sin(pi*x)
+    def f_manufactured(x):
+        return (2 * np.sin(np.pi * x)
+                - 2 * np.pi * (1 - 2*x) * np.cos(np.pi * x)
+                + np.pi**2 * x * (1-x) * np.sin(np.pi * x))
+
+    N_values = [5, 10, 20, 40, 80]
+    h_values, errors_L2 = [], []
+
+    for N in N_values:
+        h = 1.0 / N
+        x, u = fem_1d_poisson(N, f_manufactured)
+        u_ex = u_exact(x)
+        error_L2 = np.sqrt(np.sum((u - u_ex)**2) * h)
+        h_values.append(h); errors_L2.append(error_L2)
+        print(f"N={N:3d}, h={h:.4f}: L² error = {error_L2:.4e}")
+
+    # Check convergence rate
+    rates = [np.log(errors_L2[i]/errors_L2[i+1]) / np.log(h_values[i]/h_values[i+1])
+             for i in range(len(N_values)-1)]
+    print(f"Convergence rates: {[f'{r:.2f}' for r in rates]}")
+    print("Expected: ~2.0 for linear elements")
+
+manufactured_solution_test()
+```
+
+The method of manufactured solutions is a systematic way to verify a FEM implementation: choose an exact solution, derive the right-hand side analytically, and confirm the numerical error converges at the expected rate. For linear (P1) elements, the L² error converges at O(h²) ≈ 2.0, confirming correct implementation.
+</details>
 
 ---
 

@@ -1,5 +1,24 @@
 # Metaclasses
 
+**Previous**: [Closures & Scope](./05_Closures_and_Scope.md) | **Next**: [Descriptors](./07_Descriptors.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why classes in Python are themselves objects and identify `type` as the default metaclass
+2. Create classes dynamically using the three-argument form of `type(name, bases, dict)`
+3. Implement a custom metaclass by subclassing `type` and overriding `__new__` and `__init__`
+4. Distinguish between `__new__` (class creation) and `__init__` (class initialization) in a metaclass
+5. Apply metaclass patterns: singleton, class registry, attribute validation, and automatic method generation
+6. Use `__init_subclass__` as a simpler alternative to metaclasses for subclass hooks
+7. Resolve metaclass conflicts when using multiple inheritance
+8. Identify when metaclasses are appropriate versus simpler alternatives (decorators, mixins, `__init_subclass__`)
+
+---
+
+Most Python developers never need to write a metaclass, yet metaclasses power some of the most widely used frameworks in the ecosystem -- Django's ORM, SQLAlchemy's declarative models, and Python's own `abc.ABCMeta`. Understanding how classes are created gives you insight into the deepest layer of Python's object model and equips you to read framework source code, build plugin architectures, and enforce invariants at class definition time rather than at runtime.
+
 ## 1. Classes are Objects Too
 
 In Python, everything is an object. Classes are no exception.
@@ -97,6 +116,8 @@ print(cat.meow())     # Meow!
 
 ## 3. Defining Metaclasses
 
+> **Analogy:** a regular class is a cookie cutter that stamps out instances (cookies). A metaclass is the machine that manufactures the cookie cutters themselves. You rarely need to build the machine, but when you do, you control the shape of every cutter it produces.
+
 A metaclass is a class that creates classes.
 
 ### Basic Metaclass Structure
@@ -131,7 +152,9 @@ class MyClass(metaclass=MyMeta):
 ```python
 class LoggingMeta(type):
     def __new__(mcs, name, bases, namespace):
-        # Can modify namespace before class creation
+        # Pre-creation namespace modification lets the metaclass inject default attributes
+        # or validate class structure before any instances exist — changes here become
+        # part of the class object itself, not just instance state
         namespace['created_by'] = 'LoggingMeta'
         return super().__new__(mcs, name, bases, namespace)
 
@@ -179,7 +202,9 @@ class PluginMeta(type):
 
     def __new__(mcs, name, bases, namespace):
         cls = super().__new__(mcs, name, bases, namespace)
-        if name != 'Plugin':  # Exclude base class
+        if name != 'Plugin':  # Exclude base class — it defines the interface but shouldn't
+                              # appear in the registry; only concrete implementations should
+                              # be discoverable by plugin consumers
             mcs.plugins[name] = cls
         return cls
 
@@ -266,6 +291,9 @@ class Plugin:
     plugins = {}
 
     def __init_subclass__(cls, **kwargs):
+        # Simpler than a metaclass — no need to subclass type; preferred for most
+        # subclass hooks since Python 3.6+.  Use a metaclass only when you need
+        # to intercept __new__ or control the class object construction itself.
         super().__init_subclass__(**kwargs)
         # Called when subclass is created
         cls.plugins[cls.__name__] = cls
@@ -453,7 +481,9 @@ Django ORM uses metaclasses.
 # Django style (simplified)
 class ModelMeta(type):
     def __new__(mcs, name, bases, namespace):
-        # Collect fields
+        # Iterates namespace instead of __annotations__ to also capture fields defined
+        # as class-level assignments without type hints — this mirrors Django's approach
+        # where Field instances are the source of truth, not the type annotation
         fields = {}
         for key, value in namespace.items():
             if isinstance(value, Field):
@@ -509,6 +539,4 @@ Write a metaclass that prohibits attribute changes after instance creation.
 
 ---
 
-## Next Steps
-
-Check out [07_Descriptors.md](./07_Descriptors.md) to learn about descriptors for controlling attribute access!
+**Previous**: [Closures & Scope](./05_Closures_and_Scope.md) | **Next**: [Descriptors](./07_Descriptors.md)

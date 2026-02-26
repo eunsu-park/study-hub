@@ -1,12 +1,21 @@
 # 19. Observability and Monitoring
 
+**Previous**: [Practical Design Examples 2](./18_Design_Example_2.md) | **Next**: [Search Systems](./20_Search_Systems.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Observability is the ability to understand a system's internal state from its external outputs. In this lesson, we cover the three pillars of observability — metrics, logs, and traces — along with practical tools and frameworks for monitoring distributed systems at scale.
+1. Define observability and distinguish it from traditional monitoring, explaining why it matters for distributed systems
+2. Describe the three pillars of observability (metrics, logs, traces) and how they complement each other during incident investigation
+3. Design a metrics pipeline using Prometheus-style pull-based collection, time-series storage, and Grafana dashboards
+4. Architect a centralized logging system using the ELK stack or Loki for ingestion, indexing, and querying at scale
+5. Implement distributed tracing with OpenTelemetry to correlate requests across service boundaries
+6. Define SLIs, SLOs, and error budgets, and design alerting strategies that minimize noise while catching real incidents
 
 ---
+
+When a user reports that "the app is slow," an observable system lets you pinpoint in minutes whether the bottleneck is a saturated database connection pool, a slow third-party API, or a garbage collection pause on a specific pod. Without observability, teams resort to guesswork and deploy "fix attempts" blindly. Google's SRE practices, which formalized SLIs, SLOs, and error budgets, have shown that investing in observability directly reduces mean time to recovery and on-call burnout across the industry.
 
 ## Table of Contents
 
@@ -676,9 +685,9 @@ Example answer:
 
 ---
 
-## Next Steps
-- [20. Search Systems](./20_Search_Systems.md)
-- [13. Microservices Basics](./13_Microservices_Basics.md)
+**Previous**: [Practical Design Examples 2](./18_Design_Example_2.md) | **Next**: [Search Systems](./20_Search_Systems.md)
+
+---
 
 ## References
 - [Google SRE Book: Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)

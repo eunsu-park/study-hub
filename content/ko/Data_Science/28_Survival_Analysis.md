@@ -2,9 +2,21 @@
 
 [이전: 인과 추론](./27_Causal_Inference.md) | [다음: 현대 데이터 도구](./29_Modern_Data_Tools.md)
 
-## 개요
+## 학습 목표
 
-생존 분석(Survival Analysis)은 일부 관측값이 중도 절단(censored, 사건이 아직 관측되지 않음)된 시간-사건(time-to-event) 데이터를 모델링합니다. 이 레슨에서는 카플란-마이어 추정량(Kaplan-Meier estimator), 로그 순위 검정(log-rank test), 콕스 비례 위험 모형(Cox proportional hazards model), 모수적 모형(parametric models), 경쟁 위험(competing risks), 그리고 lifelines 라이브러리를 이용한 실전 응용을 다룹니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 생존 시간(survival time), 중도 절단 유형(우중도 절단·좌중도 절단·구간 중도 절단), 생존 함수와 위험 함수를 정의할 수 있다
+2. 카플란-마이어(Kaplan-Meier) 추정량을 사용하여 비모수적 생존 곡선을 추정하고 시각화할 수 있다
+3. 로그 순위 검정(log-rank test)을 사용하여 그룹 간 생존 분포를 비교할 수 있다
+4. 콕스 비례 위험 모형(Cox proportional hazards model)을 적합하고 위험비(hazard ratio)를 해석하며 PH 가정을 검정할 수 있다
+5. 지수(Exponential)·와이블(Weibull)·로그 정규(Log-Normal) 등 모수적 생존 모형을 AIC/BIC로 비교하여 최적 분포를 선택할 수 있다
+6. 가속 실패 시간 모형(AFT, Accelerated Failure Time)을 콕스 PH의 대안으로 설명하고 가속 인자(acceleration factor)를 해석할 수 있다
+7. 경쟁 위험(competing risks) 프레임워크를 설명하고 여러 사건 유형이 존재할 때 카플란-마이어가 편향되는 이유를 설명할 수 있다
+
+---
+
+데이터 과학의 많은 질문은 어떤 일이 일어나는지뿐만 아니라 언제 일어나는지에 관한 것입니다. 고객이 언제 이탈할까? 기계는 언제 고장날까? 새로운 약이 환자 생존을 얼마나 연장할까? 표준 회귀는 시간-사건(time-to-event) 데이터의 핵심 특성인 중도 절단(censoring) — 사건이 아직 발생하지 않았다는 것은 알지만 언제 발생할지는 모르는 상황 — 을 처리할 수 없습니다. 생존 분석(Survival Analysis)은 불완전한 관측을 올바르게 반영하는 전문 도구를 제공하여 시점과 위험에 대한 비편향 추정치를 산출합니다.
 
 ---
 

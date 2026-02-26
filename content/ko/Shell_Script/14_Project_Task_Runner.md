@@ -2,11 +2,25 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [13_Testing.md](./13_Testing.md) | **다음**: [15_Project_Deployment.md](./15_Project_Deployment.md)
-
-이 레슨에서는 순수 bash로 완전한 작업 실행기를 구축합니다 — 의존성 해결(dependency resolution), 병렬 실행(parallel execution), 자동 도움말 생성 기능을 갖춘 Makefile과 유사한 도구입니다.
+**이전**: [셸 스크립트 테스팅](./13_Testing.md) | **다음**: [배포 자동화](./15_Project_Deployment.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `task::name` bash 함수로 정의된 작업을 탐색하고 실행하는 작업 실행기를 구축할 수 있습니다.
+2. 의존성 해결(dependency resolution)을 구현하여 작업이 실행 전에 선행 조건을 자동으로 실행하도록 할 수 있습니다.
+3. 위상 정렬(topological sort)을 작성하여 순환 의존성(circular dependency)을 감지하고 올바른 실행 순서를 결정할 수 있습니다.
+4. 백그라운드 작업과 `wait`를 사용하여 독립적인 작업의 병렬 실행(parallel execution)을 추가할 수 있습니다.
+5. 작업 함수 정의 위의 `##` 주석을 추출하여 도움말 텍스트를 자동으로 생성할 수 있습니다.
+6. 색상 및 타임스탬프가 포함된 출력 포맷을 적용하여 작업 실행 중 명확한 피드백을 제공할 수 있습니다.
+7. 실행을 중단하고 어떤 작업이 왜 실패했는지 보고하는 에러 처리(error handling)를 구현할 수 있습니다.
+
+---
+
+이 레슨에서는 순수 bash로 완전한 작업 실행기를 구축합니다 — 의존성 해결(dependency resolution), 병렬 실행(parallel execution), 자동 도움말 생성 기능을 갖춘 Makefile과 유사한 도구입니다.
 
 ## 1. 개요
 
@@ -699,6 +713,67 @@ task::build() {
     # ... build ...
 }
 ```
+
+## 연습 문제
+
+### 연습 1: 러너에 새 작업 추가하기
+
+제공된 `task.sh` 구현을 시작점으로 사용하여 다음 두 작업을 추가하세요:
+
+```bash
+## Generate API documentation
+task::docs() {
+    depends_on "build"
+    # Your implementation here
+}
+
+## Run the application locally
+task::run() {
+    depends_on "build"
+    # Your implementation here
+}
+```
+
+- `task::docs`는 `build`에 의존하고 "Generating docs..."를 출력한 다음 `docs/` 디렉토리를 생성해야 함
+- `task::run`은 `build`에 의존하고 2초 sleep으로 앱 시작을 시뮬레이션해야 함
+
+`./task.sh docs`와 `./task.sh run`을 실행하여 두 새 작업에 대해 의존성 해결이 올바르게 작동하는지 확인하세요.
+
+### 연습 2: 순환 의존성 감지하기
+
+현재 구현은 순환 의존성(circular dependency)을 감지하지 않아 무한 루프에 빠집니다. 순환 의존성 감지를 추가하세요:
+- 작업 실행 전, 현재 호출 스택에 있는 작업의 `TASK_VISITING` 배열 유지
+- `TASK_VISITING`에 이미 있는 작업에 대해 `execute_task`가 호출되면, `"Circular dependency detected: build → test → build"` 같은 오류를 출력하고 코드 1로 종료
+- `task::build`가 `task::test`에 의존하고 `task::test`가 `task::build`에 의존하도록 순환 의존성을 추가한 다음 `./task.sh build`를 실행하여 테스트
+
+### 연습 3: --dry-run 플래그 구현하기
+
+태스크 러너(task runner)에 `--dry-run`(`-n`) 플래그를 추가하세요:
+- dry-run이 활성화되면, `execute_task`가 실제로 작업 함수를 실행하는 대신 `[DRY RUN] Would execute: <task>`를 출력해야 함
+- 의존성은 여전히 올바른 순서로 해결되고 표시되어야 함
+- `TASK_EXECUTED` 중복 제거(deduplication)는 dry-run 모드에서도 여전히 작동해야 함
+
+`./task.sh --dry-run deploy`를 실행하고 실제로 명령어가 실행되지 않으면서 전체 의존성 체인(clean → deps → build → test → package → deploy)이 출력되는지 확인하세요.
+
+### 연습 4: 작업 타이밍 구현하기
+
+작업별 실행 타이밍을 추가하세요:
+- 각 작업 함수 호출 전에 `date +%s%N`(나노초)을 사용하여 시작 시간 기록
+- 작업 완료 후 종료 시간 기록
+- 밀리초 단위로 지속 시간 계산
+- 완료 로그 줄에 표시: `✓ Task 'build' completed in 1234ms`
+
+구현 후, `./task.sh all`을 실행하고 각 작업이 0이 아닌 지속 시간을 표시하는지 확인하세요.
+
+### 연습 5: 태스크 러너를 위한 Bats 테스트 작성하기
+
+`task.sh`의 핵심 동작을 테스트하는 Bats 테스트 스위트(test suite) `test_task_runner.bats`를 작성하세요:
+- `./task.sh --list` 실행이 최소한 `clean`, `build`, `test`를 출력하는지 테스트
+- `./task.sh unknown_task` 실행이 0이 아닌 코드로 종료되고 오류를 출력하는지 테스트
+- `./task.sh build` 실행이 `clean`과 `deps`도 실행하는지 테스트 (즉, 의존성이 실행됨)
+- `./task.sh build build`(동일한 작업 두 번) 실행이 `build`를 한 번만 실행하는지 테스트 (중복 제거)
+
+필요에 따라 모킹(mocking) 또는 임시 스크립트 파일을 사용하여 테스트를 부작용에서 격리하세요.
 
 ---
 

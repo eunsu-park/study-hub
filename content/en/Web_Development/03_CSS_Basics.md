@@ -1,5 +1,26 @@
 # CSS Basics
 
+**Previous**: [HTML Forms and Tables](./02_HTML_Forms_Tables.md) | **Next**: [CSS Layout](./04_CSS_Layout.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of CSS in web development and compare inline, internal, and external stylesheets
+2. Write CSS rules using the selector-property-value syntax
+3. Distinguish between basic selectors (universal, tag, class, ID), combinator selectors, and pseudo-class/pseudo-element selectors
+4. Apply the CSS box model (content, padding, border, margin) to control element sizing and spacing
+5. Describe how specificity determines which CSS rule wins when multiple rules target the same element
+6. Identify which CSS properties are inherited and control inheritance with inherit, initial, and unset
+7. Implement colors, typography, backgrounds, gradients, and shadows
+8. Apply a CSS reset to normalize cross-browser default styles
+
+---
+
+If HTML provides the bones of a web page, CSS provides its entire visual identity. A single HTML document can look like a brutalist text dump or a polished magazine layout depending solely on the CSS applied to it. Learning CSS gives you precise control over every pixel users see, from font choices and color palettes to spacing, shadows, and animations.
+
+> **Analogy:** Think of HTML and CSS as building and decorating a room. HTML builds the walls and furniture (structure), and CSS is the interior designer who chooses wall colors, furniture upholstery, and lighting. Selectors are how the designer points at a specific wall ("the one next to the window"), and properties are the design choices applied to it.
+
 ## 1. What is CSS?
 
 CSS (Cascading Style Sheets) is a language that defines the style of HTML elements.
@@ -1011,6 +1032,6 @@ Create a horizontal menu and add hover effects.
 
 ---
 
-## Next Steps
+---
 
-Let's learn Flexbox and Grid in [04_CSS_Layout.md](./04_CSS_Layout.md)!
+**Previous**: [HTML Forms and Tables](./02_HTML_Forms_Tables.md) | **Next**: [CSS Layout](./04_CSS_Layout.md)

@@ -1,15 +1,18 @@
 # Cloud Integration
 
+**Previous**: [Advanced Networking](./23_Advanced_Networking.md) | **Next**: [High Availability Cluster](./25_High_Availability_Cluster.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Instance initialization using cloud-init
-- AWS CLI installation and configuration
-- EC2 metadata service utilization
-- Linux operations in cloud environments
-
-**Difficulty**: ⭐⭐⭐ (Intermediate-Advanced)
+1. Write cloud-init user-data configurations to automate instance bootstrapping
+2. Install and configure the AWS CLI with profiles and credential management
+3. Query EC2 instance metadata using IMDSv2 for secure self-discovery
+4. Use IAM instance profiles to grant AWS permissions without static credentials
+5. Retrieve secrets from AWS SSM Parameter Store in startup scripts
+6. Work with GCP and Azure CLIs for multi-cloud Linux operations
+7. Build production-ready bootstrap scripts that configure instances at launch
 
 ---
 
@@ -24,6 +27,8 @@ Through this document, you will learn:
 7. [Cloud-Native Operations](#7-cloud-native-operations)
 
 ---
+
+Cloud computing has fundamentally changed how Linux servers are provisioned and managed. Instead of carefully installing a single server, you launch dozens of instances from templates and configure them automatically at boot. Understanding cloud-init, metadata services, and cloud CLIs is essential because these are the building blocks of infrastructure-as-code in every major cloud platform.
 
 ## 1. cloud-init Overview
 
@@ -779,10 +784,6 @@ echo "Instance Type: $INSTANCE_TYPE"
 
 ---
 
-## Next Steps
-
-- [25_High_Availability_Cluster.md](./25_High_Availability_Cluster.md) - Pacemaker, Corosync, DRBD
-
 ---
 
 ## References
@@ -791,3 +792,7 @@ echo "Instance Type: $INSTANCE_TYPE"
 - [AWS CLI Documentation](https://docs.aws.amazon.com/cli/)
 - [EC2 Instance Metadata](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html)
 - `man cloud-init`, `aws help`
+
+---
+
+**Previous**: [Advanced Networking](./23_Advanced_Networking.md) | **Next**: [High Availability Cluster](./25_High_Availability_Cluster.md)

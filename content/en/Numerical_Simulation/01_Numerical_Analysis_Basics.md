@@ -1,8 +1,22 @@
 # Numerical Analysis Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain IEEE 754 floating-point representation and identify how round-off and truncation errors arise.
+2. Define absolute error, relative error, and machine epsilon, and analyze their impact on numerical computations.
+3. Implement numerical differentiation using finite difference approximations and assess their accuracy.
+4. Apply numerical integration methods (trapezoidal rule, Simpson's rule) and compare their convergence rates.
+5. Analyze the trade-off between step size and numerical error in differentiation and integration.
+
+---
+
 ## Overview
 
 Numerical analysis studies methods for approximately solving mathematical problems using computers. We will learn about floating-point representation, error analysis, numerical differentiation and integration, which form the foundation of simulation.
+
+**Why This Lesson Matters:** Every numerical simulation is built on floating-point arithmetic, and every floating-point operation introduces a tiny error. These errors can accumulate, cancel, or amplify in ways that produce wildly incorrect results. Understanding how computers represent numbers, where errors come from, and how to control them is not optional -- it is the difference between a simulation that gives trustworthy predictions and one that silently produces garbage.
 
 ---
 
@@ -125,18 +139,26 @@ analyze_condition_number()
 
 ## 3. Numerical Differentiation
 
+Differentiation is the foundation of all PDE solvers. We approximate derivatives using values at discrete grid points. The three main formulas differ in accuracy and the points they use:
+
+- **Forward difference**: $f'(x) \approx \frac{f(x+h) - f(x)}{h} + O(h)$ -- first-order accurate
+- **Backward difference**: $f'(x) \approx \frac{f(x) - f(x-h)}{h} + O(h)$ -- first-order accurate
+- **Central difference**: $f'(x) \approx \frac{f(x+h) - f(x-h)}{2h} + O(h^2)$ -- second-order accurate
+
+The central difference is more accurate because the first-order error terms from the Taylor expansion cancel by symmetry.
+
 ### 3.1 Finite Difference Method
 
 ```python
 def numerical_derivatives(f, x, h=1e-5):
     """Various finite difference formulas"""
-    # Forward difference
+    # Forward difference: uses f at x and x+h only (one-sided, O(h))
     forward = (f(x + h) - f(x)) / h
 
-    # Backward difference
+    # Backward difference: uses f at x and x-h only (one-sided, O(h))
     backward = (f(x) - f(x - h)) / h
 
-    # Central difference - more accurate
+    # Central difference: symmetric about x, error terms cancel → O(h²)
     central = (f(x + h) - f(x - h)) / (2 * h)
 
     return forward, backward, central
@@ -174,6 +196,8 @@ print(f"  Error: {abs(approx_second - true_second):.2e}")
 
 ### 3.3 Effect of Step Size
 
+There is a fundamental tension between truncation error (decreases with smaller $h$) and rounding error (increases with smaller $h$ because we subtract nearly equal numbers). The optimal step size balances these two: for the central difference, $h_{\text{opt}} \approx \varepsilon_{\text{mach}}^{1/3} \approx 6 \times 10^{-6}$ for float64.
+
 ```python
 def analyze_step_size():
     """Error analysis based on step size"""
@@ -210,7 +234,11 @@ plt.show()
 
 ## 4. Numerical Integration
 
+Numerical integration (quadrature) is needed whenever an integral cannot be evaluated analytically. The basic idea: approximate the integrand by a polynomial on each subinterval and integrate the polynomial exactly. Higher-order polynomials give faster convergence: the trapezoidal rule uses linear interpolation ($O(h^2)$), Simpson's rule uses quadratic interpolation ($O(h^4)$), and Gauss quadrature achieves even higher orders.
+
 ### 4.1 Trapezoidal Rule
+
+The trapezoidal rule approximates the area under the curve by connecting adjacent points with straight lines. On each subinterval $[x_i, x_{i+1}]$, the area is $h \cdot (f_i + f_{i+1})/2$, like a trapezoid.
 
 ```python
 def trapezoidal(f, a, b, n):
@@ -232,6 +260,8 @@ print(f"  Error: {abs(result - 2.0):.2e}")
 ```
 
 ### 4.2 Simpson's Rule
+
+Simpson's rule fits a quadratic through each group of three consecutive points, achieving $O(h^4)$ convergence -- two orders better than the trapezoidal rule for the same number of points. This dramatic improvement comes because quadratics exactly integrate cubic polynomials (a happy cancellation in the error analysis).
 
 ```python
 def simpson(f, a, b, n):
@@ -357,3 +387,221 @@ exercise_2()
 | Error types | Truncation error, rounding error, condition number |
 | Numerical differentiation | Forward/backward/central difference, step size selection |
 | Numerical integration | Trapezoidal (O(h²)), Simpson (O(h⁴)) |
+
+## Exercises
+
+### Exercise 1: Machine Epsilon and Precision Loss
+
+Explain what machine epsilon (ε_mach) represents for `float64` and `float32`. Then demonstrate the catastrophic cancellation problem: compute `(a + b) - a` for `a = 1e15` and `b = 1.0`, explain why the result is incorrect, and show how to rewrite the expression to avoid the issue.
+
+<details>
+<summary>Show Answer</summary>
+
+Machine epsilon is the smallest positive number ε such that `1.0 + ε ≠ 1.0` in floating-point arithmetic. It bounds the relative rounding error of a single operation.
+
+```python
+import numpy as np
+
+# Machine epsilon values
+print(f"float64 machine epsilon: {np.finfo(np.float64).eps:.2e}")  # ~2.22e-16
+print(f"float32 machine epsilon: {np.finfo(np.float32).eps:.2e}")  # ~1.19e-07
+
+# Catastrophic cancellation
+a = 1e15
+b = 1.0
+
+# Incorrect: a and b differ by 15 orders of magnitude
+result_bad = (a + b) - a
+print(f"\n(a + b) - a = {result_bad}")   # 0.0  -- precision of b is lost
+
+# Correct: subtract before adding
+result_good = b + (a - a)
+print(f"b + (a - a) = {result_good}")    # 1.0  -- mathematically equivalent, numerically stable
+
+# When a >> b, use stable_form = b directly
+# The key insight: reorder operations to avoid adding small to large
+```
+
+The root cause: when `a` is stored as a float64, it has only about 15-16 significant decimal digits. Adding `b = 1.0` to `a = 1e15` requires aligning decimal points, pushing `b`'s bits below the representable range, so `b` is lost entirely.
+
+</details>
+
+### Exercise 2: Forward vs. Central Difference Error Scaling
+
+For `f(x) = cos(x)` at `x = 0.7`, compute numerical derivatives using the forward difference (`O(h)`) and central difference (`O(h²)`) formulas at step sizes `h = 10⁻¹, 10⁻³, 10⁻⁵, 10⁻⁷`. For each method, compute the error relative to the analytical value `f'(x) = -sin(x)` and verify that the error ratios match the expected convergence orders when `h` is reduced by a factor of 100.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+
+x = 0.7
+true_val = -np.sin(x)
+h_values = [1e-1, 1e-3, 1e-5, 1e-7]
+
+print(f"True derivative: {true_val:.10f}\n")
+print(f"{'h':>8}  {'Forward error':>14}  {'Central error':>14}")
+print("-" * 42)
+
+prev_fwd, prev_cen = None, None
+for h in h_values:
+    fwd  = (np.cos(x + h) - np.cos(x)) / h
+    cen  = (np.cos(x + h) - np.cos(x - h)) / (2 * h)
+    e_fwd = abs(fwd - true_val)
+    e_cen = abs(cen - true_val)
+    print(f"{h:8.0e}  {e_fwd:14.2e}  {e_cen:14.2e}", end="")
+    if prev_fwd is not None:
+        # Ratio should be ~100 (O(h)) and ~10000 (O(h²)) when h shrinks 100x
+        print(f"  [fwd ratio: {prev_fwd/e_fwd:.0f}, cen ratio: {prev_cen/e_cen:.0f}]", end="")
+    print()
+    prev_fwd, prev_cen = e_fwd, e_cen
+```
+
+Expected output pattern:
+- Forward difference error ratios ≈ 100 (error shrinks linearly with h → O(h))
+- Central difference error ratios ≈ 10000 (error shrinks quadratically with h → O(h²))
+
+Note: at very small h (≈ 1e-7 for forward, ≈ 1e-5 for central) rounding errors begin to dominate and the ratios break down.
+
+</details>
+
+### Exercise 3: Composite Simpson's Rule Convergence
+
+Implement composite Simpson's rule and numerically verify its O(h⁴) convergence order by computing `∫₀^1 x³ e^x dx` for n = 4, 8, 16, 32, 64 subintervals. The exact value is `e - 2 ≈ 0.71828...`. Compute the estimated convergence order from successive error ratios.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+from scipy.integrate import quad
+
+def simpson(f, a, b, n):
+    """Composite Simpson's 1/3 rule (n must be even)."""
+    if n % 2 != 0:
+        n += 1
+    h = (b - a) / n
+    x = np.linspace(a, b, n + 1)
+    y = f(x)
+    return h / 3 * (y[0] + 4 * np.sum(y[1:-1:2]) + 2 * np.sum(y[2:-1:2]) + y[-1])
+
+f = lambda x: x**3 * np.exp(x)
+exact, _ = quad(f, 0, 1)   # ≈ e - 2
+
+print(f"Exact value: {exact:.10f}")
+print(f"\n{'n':>6}  {'Approx':>14}  {'Error':>12}  {'Order':>8}")
+print("-" * 46)
+
+prev_error = None
+for n in [4, 8, 16, 32, 64]:
+    approx = simpson(f, 0, 1, n)
+    error  = abs(approx - exact)
+    if prev_error is not None:
+        order = np.log2(prev_error / error)
+        print(f"{n:>6}  {approx:14.10f}  {error:12.2e}  {order:8.2f}")
+    else:
+        print(f"{n:>6}  {approx:14.10f}  {error:12.2e}  {'—':>8}")
+    prev_error = error
+```
+
+The convergence orders printed should be close to **4.0**, confirming O(h⁴) = O((1/n)⁴). Each doubling of n reduces the error by a factor of ~16.
+
+</details>
+
+### Exercise 4: Condition Number and Linear System Sensitivity
+
+Create a nearly-singular 2×2 matrix with condition number > 10⁵ and solve `Ax = b` twice: once with the exact `b` and once with `b` perturbed by a small vector of magnitude ≈ 10⁻⁶. Show that the relative error in the solution can be much larger than the relative error in `b`, quantify this amplification using the condition number bound, and verify with NumPy.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+
+# Hilbert matrix (notoriously ill-conditioned)
+n = 5
+A = np.array([[1 / (i + j + 1) for j in range(n)] for i in range(n)])
+cond = np.linalg.cond(A)
+print(f"Condition number of 5x5 Hilbert matrix: {cond:.2e}")
+
+# Exact right-hand side: x_true = [1, 1, 1, 1, 1]
+x_true = np.ones(n)
+b_exact = A @ x_true
+
+# Perturbed right-hand side
+rng = np.random.default_rng(0)
+delta_b = rng.standard_normal(n)
+delta_b *= 1e-6 / np.linalg.norm(delta_b)   # ||δb|| ≈ 1e-6
+
+b_perturbed = b_exact + delta_b
+
+# Solve both systems
+x_exact     = np.linalg.solve(A, b_exact)
+x_perturbed = np.linalg.solve(A, b_perturbed)
+
+rel_b_error = np.linalg.norm(delta_b) / np.linalg.norm(b_exact)
+rel_x_error = np.linalg.norm(x_perturbed - x_exact) / np.linalg.norm(x_exact)
+
+print(f"\nRelative error in b:  {rel_b_error:.2e}")
+print(f"Relative error in x:  {rel_x_error:.2e}")
+print(f"Amplification factor: {rel_x_error / rel_b_error:.1f}")
+print(f"Condition number:     {cond:.2e}")
+print(f"\nTheory: ||δx||/||x|| ≤ κ(A) * ||δb||/||b||")
+print(f"Bound:  {cond * rel_b_error:.2e}  (actual: {rel_x_error:.2e})")
+```
+
+The relative error in `x` can be up to `κ(A)` times larger than the relative error in `b`. For the 5×5 Hilbert matrix, κ ≈ 5×10⁵, so a perturbation of magnitude 10⁻⁶ in `b` can produce an error of order 10⁻¹ in `x`.
+
+</details>
+
+### Exercise 5: Optimal Step Size for Central Difference
+
+For `f(x) = sin(x)` at `x = 1.0`, use central differences with step sizes ranging from `h = 10⁻¹` to `h = 10⁻¹⁵` and plot error vs. h on a log-log scale. Identify the approximate optimal step size where truncation error and rounding error balance, and derive the theoretical optimal `h_opt ≈ (ε_mach)^(1/3)`.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+f      = np.sin
+x      = 1.0
+f_true = np.cos(x)   # exact derivative
+
+h_values = np.logspace(-1, -15, 150)
+errors   = [abs((f(x + h) - f(x - h)) / (2 * h) - f_true) for h in h_values]
+
+# Theoretical analysis:
+# Truncation error  ≈ h² |f'''(x)| / 6   → grows with h²
+# Rounding error    ≈ ε_mach |f(x)| / h  → grows as 1/h
+# Optimal balance:  h_opt ≈ (ε_mach)^(1/3) ≈ 6e-6
+
+eps   = np.finfo(float).eps
+h_opt = eps ** (1/3)
+print(f"Machine epsilon:  {eps:.2e}")
+print(f"Theoretical h_opt ≈ ε^(1/3) = {h_opt:.2e}")
+
+plt.figure(figsize=(9, 5))
+plt.loglog(h_values, errors, 'b-', linewidth=1.5, label='Actual error')
+plt.axvline(h_opt, color='r', linestyle='--', label=f'Theoretical h_opt ≈ {h_opt:.0e}')
+plt.xlabel('Step size h')
+plt.ylabel('Absolute error')
+plt.title('Central Difference Error vs Step Size')
+plt.legend()
+plt.grid(True, which='both', alpha=0.4)
+plt.show()
+
+# Observed minimum
+min_idx = np.argmin(errors)
+print(f"Observed optimal h ≈ {h_values[min_idx]:.2e}  (min error: {errors[min_idx]:.2e})")
+```
+
+The error curve shows two regimes:
+- **Left of minimum** (large h): dominated by truncation error, slope ≈ +2 on log-log plot.
+- **Right of minimum** (small h): dominated by rounding error, slope ≈ −1 on log-log plot.
+
+The theoretical optimal step is `h_opt = (ε_mach)^{1/3} ≈ 6×10⁻⁶`, giving a minimum error near `ε_mach^{2/3} ≈ 4×10⁻¹¹`.
+
+</details>

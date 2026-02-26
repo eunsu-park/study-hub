@@ -7,6 +7,8 @@
    기본 스타일
    ============================================ */
 
+/* Why: Universal reset with border-box ensures padding/border are included in element width,
+   preventing unexpected overflow when combining percentage widths with fixed padding */
 * {
     margin: 0;
     padding: 0;
@@ -107,6 +109,8 @@ a[target="_blank"] {
     color: #e74c3c;
 }
 
+/* Why: Visual indicator (↗) signals the link opens in a new tab, improving UX by setting
+   user expectations before clicking - a common accessibility best practice */
 a[target="_blank"]::after {
     content: " ↗";
 }
@@ -116,6 +120,8 @@ a[target="_blank"]::after {
    ============================================ */
 
 /* 호버 효과 */
+/* Why: Combining transition with :hover transform creates a tactile "lift" effect that
+   signals interactivity without JavaScript, improving perceived responsiveness */
 .btn {
     display: inline-block;
     padding: 10px 20px;
@@ -210,6 +216,8 @@ a[target="_blank"]::after {
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 
+/* Why: Custom focus ring via border+shadow maintains WCAG focus visibility requirement
+   while allowing design control - never remove outline without providing an alternative */
 .form-input:focus {
     outline: none;
     border-color: #3498db;
@@ -283,6 +291,8 @@ a[target="_blank"]::after {
     background-color: #ecf0f1;
 }
 
+/* Why: content-box (CSS default) adds padding/border on top of width, causing unexpected
+   overflow; border-box includes them, which is why the universal reset uses border-box */
 .content-box {
     box-sizing: content-box;
     /* 실제 너비 = 200 + 40 + 10 = 250px */
@@ -473,6 +483,8 @@ a[target="_blank"]::after {
     padding: 10px;
 }
 
+/* Why: Fixed positioning relative to the viewport keeps this element visible during scroll,
+   ideal for floating action buttons or persistent notifications */
 .pos-fixed-demo {
     position: fixed;
     bottom: 20px;

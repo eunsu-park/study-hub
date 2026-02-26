@@ -44,6 +44,7 @@ ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차�
 | [18_Time_Series_ML.md](./18_Time_Series_ML.md) | 시계열 ML | 지연/롤링 특성, TimeSeriesSplit, Prophet, 트리 기반 예측 |
 | [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML과 하이퍼파라미터 최적화 | Optuna, Auto-sklearn, FLAML, H2O AutoML |
 | [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | 이상 탐지 | Isolation Forest, LOF, One-Class SVM, PyOD |
+| [21_Advanced_Ensemble.md](./21_Advanced_Ensemble.md) | 고급 앙상블 | 스태킹, 블렌딩, 메타 학습기, 다양한 기저 학습기, 대회 전략 |
 
 ---
 

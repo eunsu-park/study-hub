@@ -1,5 +1,24 @@
 # System Monitoring
 
+**Previous**: [Network Basics](./10_Network_Basics.md) | **Next**: [Security and Firewall](./12_Security_and_Firewall.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Retrieve system information using uname, hostnamectl, and lsb_release
+2. Inspect CPU details and monitor CPU usage with lscpu, top, and vmstat
+3. Monitor memory utilization using free and /proc/meminfo
+4. Check disk usage and partition information with df, du, lsblk, and fdisk
+5. View and analyze system logs using traditional log files and journalctl
+6. Schedule recurring tasks with cron and interpret crontab syntax
+7. Interpret load averages and diagnose system performance with vmstat and iostat
+8. Write monitoring scripts that report system status and alert on thresholds
+
+---
+
+A server that is not being monitored is a server waiting to fail. System monitoring lets you spot problems before they become outages -- a filling disk, a memory leak, a spike in CPU usage, or a failing service. The tools in this lesson form the foundation of observability on Linux, and they work on everything from a Raspberry Pi to a thousand-node cloud cluster.
+
 ## 1. System Information
 
 ### uname - Kernel Information
@@ -567,6 +586,4 @@ ps aux --sort=-%mem | head -6
 
 ---
 
-## Next Steps
-
-Let's learn about system security in [12_Security_and_Firewall.md](./12_Security_and_Firewall.md)!
+**Previous**: [Network Basics](./10_Network_Basics.md) | **Next**: [Security and Firewall](./12_Security_and_Firewall.md)

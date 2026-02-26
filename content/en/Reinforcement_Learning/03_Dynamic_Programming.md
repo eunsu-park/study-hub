@@ -72,12 +72,15 @@ def policy_evaluation(mdp, policy: Dict, gamma: float = 0.9,
     Returns:
         V: State value function {state: value}
     """
-    # Initialize value function
+    # Start with zero values — any initial estimate works because the Bellman
+    # operator is a contraction mapping that converges regardless of initialization
     V = {s: 0.0 for s in mdp.get_states()}
 
     iteration = 0
     while True:
-        delta = 0  # Track maximum change
+        # delta tracks the largest single-state change this sweep — using max (not sum)
+        # gives a worst-case bound, so convergence means every state has stabilized
+        delta = 0
         iteration += 1
 
         # Update for all states
@@ -96,12 +99,16 @@ def policy_evaluation(mdp, policy: Dict, gamma: float = 0.9,
                     if done:
                         new_v += action_prob * prob * reward
                     else:
+                        # Using V[next_s] from the current sweep (not a separate copy)
+                        # is the "in-place" variant — it converges faster because later
+                        # states in the loop already benefit from earlier updates this iteration
                         new_v += action_prob * prob * (reward + gamma * V[next_s])
 
             V[s] = new_v
             delta = max(delta, abs(v - new_v))
 
-        # Check convergence
+        # theta is the convergence threshold: stopping when delta < theta guarantees
+        # the value function is within theta/(1-gamma) of the true V^π
         if delta < theta:
             print(f"Policy evaluation converged: {iteration} iterations")
             break
@@ -200,7 +207,8 @@ def policy_improvement(mdp, V: Dict, gamma: float = 0.9) -> Tuple[Dict, bool]:
             new_policy[s] = {a: 1/len(mdp.actions) for a in mdp.actions}
             continue
 
-        # Calculate Q values for each action
+        # Recompute Q values from V rather than storing a separate Q table —
+        # this saves memory and ensures Q is always consistent with the current V
         q_values = {}
         for a in mdp.actions:
             q = 0
@@ -215,11 +223,15 @@ def policy_improvement(mdp, V: Dict, gamma: float = 0.9) -> Tuple[Dict, bool]:
         best_action = max(q_values, key=q_values.get)
         best_q = q_values[best_action]
 
-        # Find tied actions (considering numerical errors)
+        # Tie-breaking with 1e-8 tolerance handles floating-point noise — without this,
+        # two mathematically equal actions might be treated as different, causing
+        # unnecessary policy oscillation between iterations
         best_actions = [a for a, q in q_values.items()
                         if abs(q - best_q) < 1e-8]
 
-        # Generate deterministic policy (or uniform among ties)
+        # Distribute probability equally among tied best actions — this produces a
+        # deterministic policy in the common case (one winner) but degrades gracefully
+        # when multiple actions are genuinely equivalent
         new_policy[s] = {a: 0.0 for a in mdp.actions}
         for a in best_actions:
             new_policy[s][a] = 1.0 / len(best_actions)
@@ -271,7 +283,8 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
         V: Optimal value function
         policy: Optimal policy
     """
-    # Initialize with uniform random policy
+    # A uniform random policy is a safe starting point — it's unlikely to be optimal
+    # but guarantees every state gets explored during the first evaluation pass
     policy = create_uniform_policy(mdp)
 
     iteration = 0
@@ -279,7 +292,8 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
         iteration += 1
         print(f"\n=== Policy Iteration {iteration} ===")
 
-        # 1. Policy Evaluation
+        # 1. Policy Evaluation — run to full convergence before improving;
+        # this is the key difference from value iteration (which evaluates only once)
         V = policy_evaluation(mdp, policy, gamma, theta)
 
         # 2. Policy Improvement
@@ -303,12 +317,15 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
                         q += prob * (reward + gamma * V[next_s])
                 q_values[a] = q
 
-            # Greedy policy
+            # Greedy policy: commit fully (probability 1.0) to the best action —
+            # a deterministic greedy policy is always at least as good as the mixed policy
             best_action = max(q_values, key=q_values.get)
             new_policy[s] = {a: 0.0 for a in mdp.actions}
             new_policy[s][best_action] = 1.0
 
-            # Check policy change
+            # policy_stable tracks whether any state changed its best action —
+            # if no state changed, the policy is already greedy w.r.t. its own V, which
+            # means it is optimal (Policy Improvement Theorem)
             old_best = max(old_policy[s], key=old_policy[s].get)
             if old_best != best_action:
                 policy_stable = False
@@ -399,7 +416,9 @@ def value_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
 
             v = V[s]
 
-            # Bellman optimality equation: max over actions
+            # Bellman optimality equation: taking max instead of a policy-weighted average
+            # implicitly performs policy improvement every sweep — this collapses the
+            # evaluation + improvement loop into a single update per state
             q_values = []
             for a in mdp.actions:
                 q = 0
@@ -420,7 +439,9 @@ def value_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
             print(f"\nValue iteration converged: {iteration} iterations")
             break
 
-    # Extract optimal policy
+    # Extract optimal policy after V has converged — policy extraction is a separate
+    # pass rather than storing π during iteration, because we only care about the
+    # final greedy policy, not the implicit intermediate policies
     policy = {}
     for s in mdp.get_states():
         if mdp.is_terminal(s):
@@ -557,20 +578,25 @@ import gymnasium as gym
 import numpy as np
 
 def dp_frozen_lake():
-    """Frozen Lake 환경에서 DP 적용"""
+    """Apply DP to the Frozen Lake environment"""
 
-    # 환경 생성 (미끄러지지 않는 버전)
+    # is_slippery=False removes stochastic transitions so DP converges in very few
+    # iterations — use is_slippery=True to test robustness against wind/slip noise
     env = gym.make('FrozenLake-v1', is_slippery=False)
 
     n_states = env.observation_space.n
     n_actions = env.action_space.n
+    # gamma=0.99 instead of 0.9: with a 4x4 grid the goal is up to 6 steps away,
+    # so a higher gamma is needed to propagate the reward signal back to the start
     gamma = 0.99
     theta = 1e-8
 
     # P[s][a] = [(prob, next_state, reward, done), ...]
+    # Accessing env.unwrapped.P is the standard way to read the model from Gymnasium —
+    # without .unwrapped, wrappers may intercept attribute access
     P = env.unwrapped.P
 
-    # 가치 반복
+    # Value iteration
     V = np.zeros(n_states)
 
     for iteration in range(1000):
@@ -579,9 +605,11 @@ def dp_frozen_lake():
         for s in range(n_states):
             v = V[s]
 
-            # 각 행동의 가치 계산
+            # Compute value for each action
             q_values = []
             for a in range(n_actions):
+                # (not done) is 1 for non-terminal and 0 for terminal, so V[next_s]
+                # is automatically zeroed out at terminal states without a separate if-branch
                 q = sum(prob * (reward + gamma * V[next_s] * (not done))
                         for prob, next_s, reward, done in P[s][a])
                 q_values.append(q)
@@ -590,10 +618,10 @@ def dp_frozen_lake():
             delta = max(delta, abs(v - V[s]))
 
         if delta < theta:
-            print(f"수렴: {iteration + 1} iterations")
+            print(f"Converged: {iteration + 1} iterations")
             break
 
-    # 최적 정책 추출
+    # Extract optimal policy
     policy = np.zeros(n_states, dtype=int)
     for s in range(n_states):
         q_values = []
@@ -603,25 +631,26 @@ def dp_frozen_lake():
             q_values.append(q)
         policy[s] = np.argmax(q_values)
 
-    # 결과 시각화
+    # Visualize results
     action_names = ['←', '↓', '→', '↑']
-    print("\n최적 정책 (4x4 그리드):")
+    print("\nOptimal policy (4x4 grid):")
     for i in range(4):
         row = ""
         for j in range(4):
             s = i * 4 + j
-            if s in [5, 7, 11, 12]:  # 구멍
+            if s in [5, 7, 11, 12]:  # holes
                 row += "  H  "
-            elif s == 15:  # 목표
+            elif s == 15:  # goal
                 row += "  G  "
             else:
                 row += f"  {action_names[policy[s]]}  "
         print(row)
 
-    print("\n가치 함수:")
+    print("\nValue function:")
     print(V.reshape(4, 4).round(3))
 
-    # 정책 테스트
+    # Test policy on a fresh environment to measure real-world performance —
+    # re-instantiating env avoids state leakage from the training phase
     env = gym.make('FrozenLake-v1', is_slippery=False)
     success = 0
     n_tests = 100
@@ -638,13 +667,13 @@ def dp_frozen_lake():
         if reward > 0:
             success += 1
 
-    print(f"\n성공률: {success}/{n_tests} = {success/n_tests*100:.1f}%")
+    print(f"\nSuccess rate: {success}/{n_tests} = {success/n_tests*100:.1f}%")
 
     env.close()
     return V, policy
 
 
-# 실행
+# Run
 if __name__ == "__main__":
     V, policy = dp_frozen_lake()
 ```

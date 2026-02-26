@@ -33,8 +33,10 @@ public:
     Logger(Logger&&) = delete;
     Logger& operator=(Logger&&) = delete;
 
+    // Why: Meyer's Singleton uses a local static variable, which C++11 guarantees is
+    // initialized exactly once in a thread-safe manner — no manual locking needed
     static Logger& instance() {
-        static Logger instance;  // Thread-safe in C++11+
+        static Logger instance;
         return instance;
     }
 
@@ -56,6 +58,8 @@ void demo_singleton() {
 // ============ Observer Pattern ============
 class Subject {
 private:
+    // Why: std::function provides type-erased callable storage, so observers can be
+    // lambdas, function pointers, or functors — no need for a shared Observer interface
     std::vector<std::function<void(const std::string&)>> observers_;
 
 public:
@@ -127,6 +131,8 @@ public:
 
 class Sorter {
 private:
+    // Why: unique_ptr enforces exclusive ownership of the strategy — when a new strategy
+    // is set, the old one is automatically destroyed, preventing memory leaks
     std::unique_ptr<SortStrategy> strategy_;
 
 public:
@@ -226,6 +232,8 @@ void demo_raii() {
 }
 
 // ============ CRTP (Curiously Recurring Template Pattern) ============
+// Why: CRTP achieves static polymorphism — the compiler resolves draw()/area() calls
+// at compile time, avoiding the vtable indirection cost of virtual functions
 template<typename Derived>
 class Shape {
 public:

@@ -452,7 +452,13 @@ def kink_growth_rate(q_edge, Btheta, rho):
     mu0 = 4*np.pi*1e-7
 
     if q_edge < 1:
-        # Unstable
+        # Alfvénic 계수 Bθ/√(μ₀ρ) = v_A(폴로이달 Alfvén 속도)가
+        # 성장률 척도를 결정합니다: kink 불안정성은 자기장 자체에 의해
+        # 구동·안정화되는 이상 MHD 모드이므로 그 시간 척도는 자연히
+        # 폴로이달 Alfvén 통과 시간 τ_A = a/v_A가 됩니다.
+        # √(1 - q²)는 q가 안정 한계 q=1 아래로 얼마나 내려갔는지를
+        # 나타냅니다: q→0이면 폴로이달 Alfvén 구동이 최대로 실현되고,
+        # q→1이면 모드가 한계 안정에 도달하여 γ→0이 됩니다.
         gamma = (Btheta / np.sqrt(mu0 * rho)) * np.sqrt(1 - q_edge**2)
         stable = False
     else:
@@ -633,12 +639,17 @@ def tearing_growth_rate(Delta_prime, eta, rs, Btheta):
     if Delta_prime <= 0:
         return 0.0  # Stable
 
-    # Resistive diffusion time
+    # τ_R = μ₀rs²/η는 공명 표면에서의 저항 확산 시간입니다:
+    # 두께 rs인 층을 저항이 얼마나 빨리 확산할 수 있는지를 나타내는 "시계"
+    # 역할을 합니다. 모든 tearing 성장률은 1/τ_R에 비례하는데,
+    # 재결합에는 자기장 선을 끊기 위한 저항 확산이 반드시 필요하기 때문입니다.
     tau_R = mu0 * rs**2 / eta
 
-    # Scaling (constant-psi)
-    # γ ~ (η/τA)^(3/5) Δ'^(4/5) / rs
-    # Simplified estimate
+    # constant-ψ (Furth-Killeen-Rosenbluth) 스케일링 γ ∝ η^(3/5)Δ'^(4/5)은
+    # 외부 이상 MHD 해(Δ'로 특징됨)를 내부 저항 층에 정합시키는 과정에서
+    # 도출됩니다: 분수 지수는 얇은 tearing 층 내에서 관성과 저항이 모두
+    # 경쟁하며 어느 쪽도 무시할 수 없음을 반영합니다. η^(3/5)은 저항이 줄어들면
+    # 성장이 느려지지만, 단순 확산(η^1)보다는 빠름을 의미합니다.
     gamma = (eta / (mu0 * rs**2))**(3/5) * (Delta_prime * rs)**(4/5)
 
     return gamma
@@ -847,13 +858,25 @@ def rutherford_equation(t, w, Delta_prime_func, eta, Js, rs):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Resistive time
+    # τ_R = μ₀rs²/η는 저항 확산 시간입니다: 자기 위상(topology)을 변화시키기
+    # 위해서는 저항이 반드시 필요하므로 분모에 나타납니다 — 저항 확산이
+    # 빠를수록(η가 크고 τ_R이 작을수록) 자기장 선이 더 빨리 미끄러져
+    # 섬이 더 빠르게 성장합니다.
     tau_R = mu0 * rs**2 / eta
 
-    # Δ'(w)
+    # Δ'(w)는 이제 섬 폭에 의존합니다. 넓은 섬은 내부의 전류 밀도 프로파일을
+    # 평탄화하여 구동 항을 줄이기 때문입니다; 이것이 포화로 이어지는
+    # 비선형 피드백 메커니즘입니다.
     Delta_p = Delta_prime_func(w)
 
-    # Rutherford equation
+    # Rutherford 방정식 dw/dt ∝ Δ'(w)·w/τ_R의 두 가지 핵심 특성:
+    # 1. w에 대한 선형 의존성: 선형 위상(지수 성장)과 달리,
+    #    비선형 섬은 대수적으로만 성장합니다(w ∝ t). 외부 이상 영역이
+    #    w 증가에 따라 추가적인 자유 에너지 방출 없이 섬을 완전히
+    #    수용하기 때문입니다.
+    # 2. 포화: Δ'(w) → 0 (w = w_sat에서) 이면 dw/dt → 0 — 더 이상
+    #    전류 구배에 의해 재결합이 구동되지 않는 자기 일관적 폭에서
+    #    섬이 안정화됩니다.
     dwdt = (rs * Delta_p * w) / tau_R
 
     return dwdt
@@ -869,6 +892,11 @@ def Delta_prime_saturating(w, Delta0, w_sat):
     if w >= w_sat:
         return 0.0
     else:
+        # (1 - w²/w_sat²) 인자는 섬이 전류 밀도 프로파일을 평탄화하는
+        # 방식을 단순화한 모델입니다: 넓은 섬일수록 tearing 모드를 구동하는
+        # 전류 구배를 더 많이 제거하여, w = w_sat에서 성장이 멈출 때까지
+        # Δ'를 점진적으로 줄입니다. 보다 정교한 모델(w의 다항식)은 포화
+        # 수준이 약간 다르지만, 같은 정성적 비선형 거동을 나타냅니다.
         return Delta0 * (1 - (w/w_sat)**2)
 
 def plot_island_evolution():

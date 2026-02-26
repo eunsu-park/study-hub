@@ -5,6 +5,19 @@
 > **Prerequisites**: Lessons 01-06 (document structure, formatting)
 > **Objective**: Understand standard and specialized document classes, create professional templates for academic papers, theses, CVs, and publications
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between standard document classes (`article`, `report`, `book`, `letter`) and select the appropriate one for a document type
+2. Configure specialized classes such as `memoir`, `KOMA-Script`, and journal-specific classes for professional publications
+3. Build a complete academic paper template including abstract, sections, bibliography, and journal-compliant formatting
+4. Create a thesis or dissertation template that meets institutional requirements for front matter, chapters, and appendices
+5. Design a curriculum vitae (CV) or résumé using the `moderncv` or similar class
+6. Adapt an existing LaTeX template by modifying class options, packages, and layout parameters to meet new requirements
+
+---
+
 ## Introduction
 
 The **document class** is the foundation of every LaTeX document, specified in the very first line:
@@ -1131,5 +1144,5 @@ Mastering document classes and templates allows you to produce professional docu
 
 **Navigation**
 
-- Previous: [13_Custom_Commands.md](13_Custom_Commands.md)
-- Next: [15_Automation_and_Build.md](15_Automation_and_Build.md)
+- Previous: [Custom Commands & Environments](13_Custom_Commands.md)
+- Next: [Build Systems & Automation](15_Automation_and_Build.md)

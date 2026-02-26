@@ -1,5 +1,26 @@
 # Subqueries and CTE
 
+**Previous**: [Aggregation and Grouping](./07_Aggregation_and_Grouping.md) | **Next**: [Views and Indexes](./09_Views_and_Indexes.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a subquery is and identify where it can appear (WHERE, FROM, SELECT)
+2. Write scalar, multi-row, and correlated subqueries
+3. Use EXISTS / NOT EXISTS and compare their behavior to IN / NOT IN
+4. Apply FROM-clause subqueries (inline views) to build intermediate result sets
+5. Rewrite complex subqueries as CTEs using the WITH clause for improved readability
+6. Chain multiple CTEs in a single query
+7. Implement recursive CTEs (WITH RECURSIVE) for hierarchical data traversal
+8. Choose between subqueries, CTEs, and JOINs based on readability and performance needs
+
+---
+
+As your SQL questions grow more complex, you will often need the answer to one question before you can ask another. Subqueries let you embed one query inside another, while Common Table Expressions (CTEs) let you name and reuse intermediate results. Together, they are the tools that turn a single SQL statement into a structured, multi-step reasoning process.
+
 ## 1. What is a Subquery?
 
 A subquery is another query contained within a query.
@@ -188,6 +209,8 @@ WHERE price = (
 ```
 
 ---
+
+> **Analogy -- SQL Thinks in Sets**: A subquery is like a question within a question: "What is the average salary of employees in departments that have more than 10 people?" You answer the inner question first (which departments?), then use that answer for the outer question. A CTE (Common Table Expression) is like giving that inner answer a name so you can refer to it multiple times -- like writing an intermediate result on a whiteboard before using it in the final calculation.
 
 ## 7. CTE (Common Table Expression)
 
@@ -513,6 +536,4 @@ ORDER BY aa.diff DESC;
 
 ---
 
-## Next Steps
-
-Learn about VIEW and INDEX in [09_Views_and_Indexes.md](./09_Views_and_Indexes.md)!
+**Previous**: [Aggregation and Grouping](./07_Aggregation_and_Grouping.md) | **Next**: [Views and Indexes](./09_Views_and_Indexes.md)

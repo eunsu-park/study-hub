@@ -1,14 +1,27 @@
 # 로드 밸런싱
 
-## 개요
+**이전**: [네트워크 기초 복습](./03_Network_Fundamentals_Review.md) | **다음**: [리버스 프록시와 API 게이트웨이](./05_Reverse_Proxy_API_Gateway.md)
 
-이 문서에서는 로드 밸런싱(Load Balancing)의 핵심 개념을 다룹니다. L4/L7 로드 밸런서의 차이, 다양한 트래픽 분배 알고리즘, Sticky Session, 그리고 헬스 체크 메커니즘을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 로드 밸런서가 하는 일과 수평 확장(horizontally scaled) 시스템에서 왜 필수적인지 설명할 수 있다
+2. 레이어 4(Layer 4)와 레이어 7(Layer 7) 로드 밸런서를 구분하고, 주어진 시나리오에 적합한 유형을 선택할 수 있다
+3. 분배 알고리즘(라운드 로빈(round robin), 가중 라운드 로빈(weighted round robin), 최소 연결(least connections), IP 해시(IP hash))과 각각의 트레이드오프(trade-off)를 비교할 수 있다
+4. 고정 세션(sticky session)이 어떻게 동작하는지 설명하고, 필요한 경우와 오히려 해가 되는 경우를 구분할 수 있다
+5. 비정상 백엔드 서버를 감지하고 우회하기 위한 헬스 체크(health check) 메커니즘을 구현할 수 있다
+6. 액티브-패시브(active-passive) 또는 액티브-액티브(active-active) 구성을 사용하여 고가용성(highly available) 로드 밸런서를 설계할 수 있다
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [03_Network_Fundamentals_Review.md](./03_Network_Fundamentals_Review.md)
 
 ---
+
+매초 수백만 개의 요청이 서비스에 쏟아질 때, 단 하나의 서버로는 그 폭주를 감당할 수 없다. 로드 밸런서는 들어오는 각 요청을 어느 백엔드 서버가 처리할지 결정하는 교통 경찰 역할을 한다. 어떤 서버도 과부하에 시달리지 않고 다른 서버들이 놀지 않도록 트래픽을 고르게 분산하는 것이다. 이 분배를 얼마나 잘 하느냐에 따라 응답성 좋은 애플리케이션과, 자신의 성공에 짓눌려 무너지는 애플리케이션이 갈린다.
 
 ## 목차
 
@@ -19,8 +32,7 @@
 5. [헬스 체크](#5-헬스-체크)
 6. [고가용성 구성](#6-고가용성-구성)
 7. [연습 문제](#7-연습-문제)
-8. [다음 단계](#8-다음-단계)
-9. [참고 자료](#9-참고-자료)
+8. [참고 자료](#8-참고-자료)
 
 ---
 
@@ -237,6 +249,14 @@
 
 ## 3. 분배 알고리즘
 
+> **비유 -- Netflix 대기열과 마트 계산대(Netflix Queue and the Grocery Store)**
+>
+> 마트에 계산대가 다섯 개 있다고 상상해 보자. **라운드 로빈(round-robin)** 로드 밸런서는 새로 들어오는 손님을 순서대로 다음 계산대로 안내하는 직원과 같다 -- 1번, 2번, 3번, 4번, 5번, 다시 1번. 단순하지만, 3번 계산대에 이미 카트 가득 물건을 담은 손님이 있다는 사실은 무시한다.
+>
+> **최소 연결(least-connections)** 방식은 항상 줄이 가장 짧은 계산대로 안내하는 똑똑한 직원과 같다. **가중치(weighted)** 분배는 경험 많은 계산원이 배치된 계산대가 두 배의 처리 속도를 낼 수 있을 때, 그쪽으로 두 명을 보내고 느린 계산대로는 한 명을 보내는 방식이다.
+>
+> Netflix는 이와 유사한 로직을 엄청난 규모로 사용한다: 재생 버튼을 누르는 순간, 로드 밸런서는 수백 대의 스트리밍 서버 중 어느 서버가 영상을 전송할지 결정한다 -- 서버 부하, 지리적 근접성, 사용 가능한 대역폭을 모두 고려하면서, 이 모든 과정이 밀리초 단위로 이루어진다.
+
 ### 3.1 Round Robin
 
 ```
@@ -342,6 +362,32 @@
 │  적합: 요청 처리 시간이 다양할 때, 장기 연결 (WebSocket)        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+**의사 코드(Pseudocode):**
+
+```python
+def least_connections_route(servers, request):
+    # 라운드 로빈(stateless)과 달리 least-connections는 실시간 연결 수를
+    # 추적해야 함 — 더 정확하지만 동시성 환경에서 원자적 업데이트 필요
+    min_server = None
+    min_score = float('inf')
+
+    for server in servers:
+        if not server.healthy:
+            continue
+        # 가중치 변형: 용량으로 정규화하여 강력한 서버(연결 10개)가
+        # 약한 서버(연결 3개)보다 여전히 선호될 수 있도록 함
+        score = server.active_connections / server.weight
+
+        if score < min_score:
+            min_score = score
+            min_server = server
+
+    # 전달 전에 원자적으로 증가 — 두 개의 동시 요청이 같은
+    # "가장 부하가 적은" 서버를 선택하는 것을 방지
+    min_server.active_connections += 1
+    forward(request, min_server)
 ```
 
 ### 3.4 IP Hash
@@ -935,25 +981,41 @@ Liveness 실패 시: 컨테이너 재시작
 
 ---
 
-## 8. 다음 단계
+## 실습 과제
 
-로드 밸런싱을 이해했다면, 리버스 프록시와 API 게이트웨이를 학습하세요.
+### 실습 1: 로드 밸런서 알고리즘 비교
 
-### 다음 레슨
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md)
+`examples/System_Design/04_load_balancer.py`를 사용하여 로드 밸런서 동작을 탐구하세요.
 
-### 관련 레슨
-- [02_Scalability_Basics.md](./02_Scalability_Basics.md) - Stateless 아키텍처
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - 세션 저장소
+**과제:**
+1. 모든 데모를 실행하고 각 알고리즘별 분배 결과를 관찰하세요
+2. 새로운 시나리오를 추가하세요: 서버 5대 중 하나의 가중치(weight)가 나머지의 3배인 경우. 연결 지속 시간이 무작위(1~20초)인 1000개 요청에 대해 가중 라운드 로빈(Weighted Round Robin)과 최소 연결(Least Connections)을 비교하세요
+3. 새로운 알고리즘을 구현하세요: **가중 최소 연결(Weighted Least Connections)** — 서버 가중치와 활성 연결 수를 결합합니다
+4. 장기 실행(10초) 요청과 단기(1초) 요청이 혼합된 경우로 테스트하세요. 어떤 알고리즘이 가장 균형 잡힌 분배를 달성하나요?
 
-### 추천 실습
-1. Nginx로 로드밸런서 구성해보기
-2. HAProxy 설정 실습
-3. AWS ALB/NLB 비교 테스트
+### 실습 2: 헬스 체크(Health Check) 시뮬레이터
+
+로드 밸런서에 헬스 체크 기능을 추가하여 확장하세요.
+
+**과제:**
+1. 성공/실패 횟수에 따라 서버를 정상(healthy)/비정상(unhealthy)으로 표시하는 `health_check()` 메서드를 추가하세요
+2. 설정 가능한 임계값을 구현하세요: N번 연속 실패 후 비정상 처리, M번 연속 성공 후 정상 처리
+3. t=10에 서버 하나가 장애를 일으키고 t=30에 복구되는 시나리오를 시뮬레이션하세요
+4. 메트릭(metric)을 추적하세요: 서버별 처리 요청 수, 전환 중 드롭된 요청 수, 감지된 총 다운타임
+
+### 실습 3: 장애 조치(Failover)가 있는 세션 어피니티(Session Affinity)
+
+우아한 장애 조치(graceful failover)를 갖춘 IP 해시(IP-hash) 로드 밸런싱을 구현하세요.
+
+**과제:**
+1. 예제 코드의 `IPHashLB`에서 시작하세요
+2. 서버가 다운되면 일관된 해싱(consistent hashing)을 사용하여 해당 서버의 클라이언트만 나머지 서버에 재분배하세요 (`07_consistent_hashing.py` 참고)
+3. 서버가 복구되면 클라이언트를 한꺼번에가 아니라 점진적으로 다시 마이그레이션하세요
+4. 장애 조치 시 서버를 변경하는 클라이언트 비율을 모듈러 해시(modular hash) 방식과 비교하여 측정하세요
 
 ---
 
-## 9. 참고 자료
+## 8. 참고 자료
 
 ### 도구
 - [Nginx](https://nginx.org/) - 웹 서버 & 로드밸런서
@@ -970,7 +1032,4 @@ Liveness 실패 시: 컨테이너 재시작
 
 ---
 
-**문서 정보**
-- 최종 수정: 2024년
-- 난이도: ⭐⭐⭐
-- 예상 학습 시간: 2-3시간
+**이전**: [네트워크 기초 복습](./03_Network_Fundamentals_Review.md) | **다음**: [리버스 프록시와 API 게이트웨이](./05_Reverse_Proxy_API_Gateway.md)

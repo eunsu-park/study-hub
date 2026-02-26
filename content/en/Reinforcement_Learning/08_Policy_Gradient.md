@@ -56,12 +56,18 @@ class DiscretePolicy(nn.Module):
 
     def forward(self, state):
         logits = self.network(state)
+        # Softmax converts raw scores to a valid probability distribution —
+        # working in probability space lets us sample stochastic actions naturally
         return F.softmax(logits, dim=-1)
 
     def get_action(self, state):
         probs = self.forward(state)
+        # Categorical wraps the probabilities so we can sample AND compute
+        # the exact log-probability of the chosen action in one step
         dist = torch.distributions.Categorical(probs)
         action = dist.sample()
+        # We store log_prob rather than prob because the policy gradient theorem
+        # uses ∇ log π — log turns products into sums and keeps gradients stable
         log_prob = dist.log_prob(action)
         return action.item(), log_prob
 ```
@@ -157,12 +163,15 @@ class REINFORCE:
         """Compute discounted returns"""
         returns = []
         G = 0
+        # Traverse rewards in reverse so each G already includes all future rewards —
+        # a single backward pass avoids recomputing the full sum from scratch each step
         for r in reversed(self.rewards):
             G = r + self.gamma * G
             returns.insert(0, G)
 
         returns = torch.tensor(returns)
-        # Normalization (optional but recommended)
+        # Normalize returns to zero-mean unit-variance — this acts as a
+        # dynamic baseline that stabilizes gradients across episodes of different lengths
         returns = (returns - returns.mean()) / (returns.std() + 1e-8)
         return returns
 
@@ -172,6 +181,8 @@ class REINFORCE:
         # Compute policy loss
         policy_loss = []
         for log_prob, G in zip(self.log_probs, returns):
+            # Negative sign converts gradient ascent (maximize J) into gradient
+            # descent (minimize loss) so standard optimizers like Adam work unchanged
             policy_loss.append(-log_prob * G)  # Negative (gradient ascent)
 
         loss = torch.stack(policy_loss).sum()
@@ -289,16 +300,22 @@ class REINFORCEWithBaseline:
         values = torch.cat(self.values).squeeze()
         log_probs = torch.stack(self.log_probs)
 
-        # Advantage = Return - Baseline (Value)
+        # detach() stops gradients from flowing into the value network through
+        # the advantage — policy and value are trained with separate objectives
+        # and should not interfere with each other's gradients
         advantages = returns - values.detach()
 
-        # Policy loss
+        # Policy loss: scale log-prob by advantage so good-outcome actions get
+        # stronger gradient updates; mean (not sum) keeps the loss scale
+        # independent of episode length
         policy_loss = -(log_probs * advantages).mean()
 
-        # Value loss
+        # MSE against the actual returns teaches the value network to predict
+        # how much total reward to expect from each state — this is supervised learning
         value_loss = F.mse_loss(values, returns)
 
-        # Policy update
+        # Two separate optimizers prevent the value gradient from corrupting
+        # the policy parameters and vice versa
         self.policy_optimizer.zero_grad()
         policy_loss.backward()
         self.policy_optimizer.step()
@@ -453,6 +470,76 @@ def shape_reward(reward, state, next_state, done):
 ```
 ∇_θ J(θ) = E[∇_θ log π_θ(a|s) · (G - b)]
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Log-Derivative Trick Derivation
+
+Derive the policy gradient theorem from first principles.
+
+1. Start from the objective J(θ) = E_τ[R(τ)] and expand the expectation as an integral over trajectories.
+2. Show that ∇_θ p(τ;θ) = p(τ;θ) · ∇_θ log p(τ;θ) (the log-derivative identity).
+3. Factor log p(τ;θ) into contributions from the policy and the environment dynamics.
+4. Explain why the environment transition probabilities P(s'|s, a) disappear from the final gradient expression.
+5. Write the final form ∇_θ J(θ) = E[∑_t ∇_θ log π_θ(a_t|s_t) · G_t] in your own words.
+
+### Exercise 2: Implement Vanilla REINFORCE
+
+Implement and train a REINFORCE agent on CartPole-v1 without using the `REINFORCEWithBaseline` class.
+
+1. Use the `DiscretePolicy` class from Section 2.1.
+2. Implement the `compute_returns()` method with discounted returns (γ = 0.99).
+3. Do NOT normalize the returns (keep raw G_t values).
+4. Train for 500 episodes and plot the episode reward over time.
+5. Observe the high variance in the learning curve — describe what you see and why it occurs.
+
+```python
+# Starter code
+import gymnasium as gym
+import matplotlib.pyplot as plt
+
+env = gym.make('CartPole-v1')
+# ... your implementation here
+```
+
+### Exercise 3: Baseline Effect on Variance
+
+Empirically compare the effect of different baselines on training stability.
+
+1. Train three separate agents for 500 episodes each on CartPole-v1:
+   - Agent A: REINFORCE with no baseline (raw returns G_t)
+   - Agent B: REINFORCE with return normalization (zero-mean, unit-variance G_t)
+   - Agent C: REINFORCE with learned value baseline V(s)
+2. Record the episode rewards for all three agents.
+3. Plot the rolling mean (window = 50 episodes) and standard deviation for each agent.
+4. Compute the variance of the 100-episode reward at the end of training.
+5. Explain the results: why does subtracting a baseline not change the expected gradient but reduce its variance?
+
+### Exercise 4: Gaussian Policy for Continuous Control
+
+Extend the REINFORCE algorithm to a continuous action environment.
+
+1. Use `ContinuousREINFORCE` from Section 6.1 on the `Pendulum-v1` environment (1D continuous action in [-2, 2]).
+2. Inspect the `GaussianPolicy`: verify that `log_std` is a learnable parameter and explain why it is initialized to zero (std = 1).
+3. Add a call to `np.clip(action, env.action_space.low, env.action_space.high)` before `env.step()` — explain why this is necessary.
+4. Train for 300 episodes. Plot the evolution of `policy.log_std.item()` (the learned standard deviation) alongside the episode reward.
+5. What does the change in standard deviation tell you about the agent's exploration behavior over time?
+
+### Exercise 5: Entropy Regularization Ablation
+
+Investigate how the entropy coefficient affects exploration and convergence.
+
+1. Modify the `REINFORCE` update method to add an entropy bonus:
+   ```python
+   total_loss = policy_loss - entropy_coef * entropy_bonus
+   ```
+   where `entropy_bonus = compute_entropy(probs)` from Section 7.1.
+2. Train four agents on CartPole-v1 with `entropy_coef` ∈ {0.0, 0.01, 0.1, 0.5}.
+3. For each run, record: (a) mean reward of last 50 episodes, (b) episodes to reach mean reward ≥ 195.
+4. Plot training curves for all four settings on the same figure.
+5. Explain the trade-off: what goes wrong when entropy_coef is too large? Too small?
 
 ---
 

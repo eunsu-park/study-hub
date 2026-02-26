@@ -10,6 +10,8 @@ word_frequency() {
     echo
 
     local input_file="${1:-}"
+    # Why: declare -A is mandatory for associative arrays in bash — without it
+    # the variable is treated as an indexed array and string keys silently fail.
     declare -A word_count
 
     # Read from file or stdin
@@ -39,6 +41,9 @@ word_frequency() {
         [[ -z "$word" ]] && continue
 
         # Increment count
+        # Why: the || fallback handles the first occurrence where ++ on an unset
+        # key returns 1 (true) but the (( )) evaluates 0→1 which is fine; the
+        # guard ensures the key exists if set -e would otherwise abort.
         ((word_count[$word]++)) || word_count[$word]=1
     done
 
@@ -56,6 +61,8 @@ load_config() {
     echo "=== Config File Loader ==="
     echo
 
+    # Why: -g makes this associative array global even though it's declared
+    # inside a function — necessary for the config to survive after load_config returns.
     declare -gA config
 
     # Create a sample config file
@@ -130,6 +137,8 @@ phonebook() {
     # Lookup entry
     lookup_contact() {
         local name="$1"
+        # Why: ${var+x} tests key existence (set vs unset), not emptiness. This
+        # correctly distinguishes "key not found" from "key maps to empty string".
         if [[ -n "${phonebook[$name]+x}" ]]; then
             echo "  $name: ${phonebook[$name]}"
         else

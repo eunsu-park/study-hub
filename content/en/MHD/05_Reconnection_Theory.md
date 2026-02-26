@@ -588,16 +588,27 @@ where $v_{up}$ is the velocity of upward-moving flare ribbons (tracing reconnect
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Lundquist number range
+# Lundquist number S = Lv_A/η spans many orders of magnitude: S~10⁶ for
+# laboratory plasmas, S~10¹⁴ for the solar corona.  The wide range motivates
+# using logspace so that all regimes are equally represented on the log plot.
 S = np.logspace(4, 16, 100)
 
-# Sweet-Parker reconnection rate
+# M_SP = S^(-1/2): Sweet-Parker rate falls steeply with S because the diffusion
+# region must extend the full current-sheet length L, making reconnection
+# extremely slow at high S.  For S~10¹⁴ this gives M_A~10⁻⁷, orders of
+# magnitude below observed rates — the core of the reconnection rate problem.
 M_SP = S**(-0.5)
 
-# Petschek reconnection rate
+# M_P = π/(8 ln S): Petschek's weak (logarithmic) dependence on S comes from
+# the slow-shock geometry where the diffusion region size is fixed at δ~η/v_A
+# independent of L, and the slow shocks carry most of the energy conversion.
+# At S=10¹⁴, ln(10¹⁴)≈32, giving M_P≈0.012 — close to observed flare rates.
 M_P = np.pi / (8 * np.log(S))
 
-# Hall reconnection rate (approximately constant)
+# Hall reconnection rate ~0.1 is independent of S once S is large enough that
+# d_i ≪ L: the ion decoupling creates a diffusion region of fixed size ~d_i
+# regardless of resistivity, so the reconnection rate is set by ion dynamics
+# rather than by resistive diffusion — resolving the reconnection rate problem.
 M_Hall = 0.1 * np.ones_like(S)
 
 # Plot
@@ -646,11 +657,16 @@ x = np.linspace(-2, 2, 40)
 y = np.linspace(-2, 2, 40)
 X, Y = np.meshgrid(x, y)
 
-# Magnetic field components for X-point (normalized)
+# Bx = X, By = -Y is the simplest X-point magnetic field, obtained by
+# Taylor-expanding any 2D null to first order.  The signs ensure ∇·B = 0
+# (∂Bx/∂x + ∂By/∂y = 1 - 1 = 0) while creating the saddle-point topology
+# that characterizes an X-point: field lines are hyperbolas xy = const.
 Bx = X
 By = -Y
 
-# Field magnitude
+# B_mag vanishes exactly at the origin (the null point) and grows linearly
+# with distance; visualizing it as a color map immediately shows where the
+# diffusion region (low-B region) must form during reconnection.
 B_mag = np.sqrt(Bx**2 + By**2)
 
 # Create figure with field lines and strength
@@ -734,10 +750,15 @@ import matplotlib.pyplot as plt
 # Lundquist number
 S = np.logspace(2, 14, 100)
 
-# Sweet-Parker aspect ratio
+# δ/L = S⁻¹ is the Sweet-Parker aspect ratio: the diffusion region width δ
+# must be thin enough that resistive diffusion balances the advection of field
+# into the layer.  At S=10¹⁴ (solar corona), δ/L ~ 10⁻¹⁴ — an astronomically
+# thin sheet, which is physically implausible and motivates collisionless models.
 delta_over_L = S**(-1)
 
-# Sheet length to width ratio
+# L/δ = S is the inverse aspect ratio: the larger this number, the more
+# elongated the current sheet and the slower the reconnection, because
+# outflow must travel a longer distance before the field can relax.
 L_over_delta = S
 
 # Plot
@@ -756,6 +777,9 @@ ax.grid(True, alpha=0.3)
 
 # Right: reconnection rate vs aspect ratio
 ax = axes[1]
+# M_A = S⁻¹/² = (δ/L)^(1/2): the reconnection rate equals the square root
+# of the aspect ratio, showing that a wider (less elongated) diffusion region
+# reconnects faster — this is the geometric origin of the Sweet-Parker bottleneck.
 M_A = S**(-0.5)
 ax.loglog(delta_over_L, M_A, linewidth=2, color='green')
 ax.set_xlabel('Aspect ratio $\\delta/L$', fontsize=14)
@@ -793,16 +817,26 @@ x = np.linspace(-3, 3, 60)
 y = np.linspace(-2, 2, 40)
 X, Y = np.meshgrid(x, y)
 
-# In-plane reconnecting field (X-point)
+# tanh(Y) produces a Harris-sheet-like in-plane field: it transitions smoothly
+# from -B₀ (below the sheet) to +B₀ (above), matching the standard current
+# sheet equilibrium used in GEM Challenge simulations.
 Bx = np.tanh(Y)
+# The exp(-Y²) envelope ensures By decays away from the current sheet,
+# confining the X-point structure to a localized reconnection region rather
+# than extending to infinity.
 By = -np.tanh(X / 2) * np.exp(-Y**2)
 
-# Out-of-plane Hall field (quadrupolar)
-# Model: Bz proportional to xy near origin, decaying with distance
+# The quadrupolar Hall field B_z ∝ X·Y is the most important observational
+# signature of Hall reconnection: it arises because the J×B Hall term in
+# Ohm's law generates out-of-plane currents with opposite signs in each
+# quadrant of the X-point, creating the characteristic four-lobe pattern
+# confirmed by Cluster and MMS spacecraft data.
 r2 = X**2 + Y**2
 Bz = X * Y * np.exp(-r2 / 2)
 
-# Current sheet profile
+# J_z = -tanh(Y)/cosh²(Y) is the Harris sheet current profile: it is
+# concentrated near y=0 (the current layer) and decays exponentially away,
+# reflecting the self-consistent kinetic equilibrium of a thin current sheet.
 J_z = -np.tanh(Y) / np.cosh(Y)**2
 
 # Create figure

@@ -36,7 +36,9 @@ CREATE TABLE employees (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 인덱스 생성
+-- Why: Creating indexes on FK columns (dept_id) and frequently-queried columns (email)
+-- upfront because JOIN and WHERE lookups on these columns would otherwise trigger
+-- full sequential scans as the table grows.
 CREATE INDEX idx_employees_dept ON employees(dept_id);
 CREATE INDEX idx_employees_email ON employees(email);
 
@@ -69,7 +71,9 @@ VALUES
     ('지훈', '조', 'cho.jh@company.com', '2019-09-20', 58000, 3),
     ('소영', '윤', 'yoon.sy@company.com', '2021-12-01', 47000, 4);
 
--- RETURNING 절로 삽입된 데이터 확인
+-- Why: RETURNING avoids a separate SELECT after INSERT to get the auto-generated
+-- emp_id. This is a single round-trip instead of two, which is especially valuable
+-- in application code where you need the new ID immediately.
 INSERT INTO employees (first_name, last_name, email, salary, dept_id)
 VALUES ('새직원', '테스트', 'test@company.com', 40000, 1)
 RETURNING emp_id, first_name, last_name;
@@ -132,7 +136,9 @@ FROM employees
 ORDER BY salary DESC
 LIMIT 5;
 
--- 페이지네이션 (2페이지, 페이지당 3개)
+-- Why: OFFSET-based pagination is simple but gets slower as OFFSET grows (PostgreSQL
+-- must scan and discard all skipped rows). For deep pages, consider keyset pagination
+-- (WHERE emp_id > last_seen_id ORDER BY emp_id LIMIT 3) instead.
 SELECT first_name, last_name, salary
 FROM employees
 ORDER BY emp_id
@@ -177,7 +183,9 @@ UPDATE employees
 SET salary = salary * 1.1
 WHERE dept_id = 1;
 
--- 서브쿼리를 이용한 수정
+-- Why: Using a subquery to resolve dept_name→dept_id keeps the update decoupled
+-- from magic numbers. If department IDs change, the query still works correctly
+-- as long as the name is unique.
 UPDATE employees
 SET salary = salary * 1.05
 WHERE dept_id = (SELECT dept_id FROM departments WHERE dept_name = 'Engineering');
@@ -199,7 +207,10 @@ WHERE emp_id = 9;
 -- 전체 삭제 (주의!)
 -- DELETE FROM employees;
 
--- TRUNCATE (빠른 전체 삭제, 트랜잭션 불가)
+-- Why: TRUNCATE is O(1) regardless of table size (it deallocates data pages directly),
+-- while DELETE scans every row and writes WAL for each. Use TRUNCATE for bulk
+-- cleanup, but note it acquires ACCESS EXCLUSIVE lock and cannot be rolled back
+-- in some contexts.
 -- TRUNCATE TABLE employees RESTART IDENTITY;
 
 -- RETURNING으로 삭제된 데이터 확인
@@ -237,7 +248,9 @@ INSERT INTO departments (dept_name, location)
 VALUES ('Engineering', 'Incheon')
 ON CONFLICT (dept_name) DO NOTHING;
 
--- 중복 시 업데이트
+-- Why: UPSERT (INSERT ON CONFLICT DO UPDATE) is atomic — it avoids the race condition
+-- of checking existence then inserting separately. EXCLUDED refers to the row that
+-- would have been inserted, letting us merge new values cleanly.
 INSERT INTO departments (dept_name, location)
 VALUES ('Engineering', 'Incheon')
 ON CONFLICT (dept_name)

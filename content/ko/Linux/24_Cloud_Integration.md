@@ -1,13 +1,18 @@
 # 클라우드 통합
 
+**이전**: [고급 네트워킹](./23_Advanced_Networking.md) | **다음**: [고가용성 클러스터](./25_High_Availability_Cluster.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- cloud-init을 이용한 인스턴스 초기화
-- AWS CLI 설치 및 설정
-- EC2 메타데이터 서비스 활용
-- 클라우드 환경에서의 Linux 운영
+1. cloud-init user-data 설정을 작성하여 인스턴스 부트스트래핑(Bootstrapping)을 자동화한다
+2. AWS CLI를 설치하고 프로파일(Profile) 및 자격증명(Credential) 관리를 포함하여 설정한다
+3. 안전한 자기 탐색(Self-Discovery)을 위해 IMDSv2를 사용하여 EC2 인스턴스 메타데이터를 조회한다
+4. IAM 인스턴스 프로파일(Instance Profile)을 사용하여 정적 자격증명 없이 AWS 권한을 부여한다
+5. 시작 스크립트에서 AWS SSM 파라미터 스토어(Parameter Store)로 시크릿(Secret)을 가져온다
+6. 멀티 클라우드 Linux 운영을 위해 GCP 및 Azure CLI를 사용한다
+7. 인스턴스 시작 시 설정을 적용하는 프로덕션 수준의 부트스트랩 스크립트를 구축한다
 
 **난이도**: ⭐⭐⭐ (중급-고급)
 
@@ -24,6 +29,8 @@
 7. [클라우드 네이티브 운영](#7-클라우드-네이티브-운영)
 
 ---
+
+클라우드 컴퓨팅은 Linux 서버의 프로비저닝과 관리 방식을 근본적으로 바꿨습니다. 서버 한 대를 공들여 설치하던 방식 대신, 이제는 템플릿으로부터 수십 개의 인스턴스를 시작하고 부팅 시 자동으로 설정합니다. cloud-init, 메타데이터 서비스, 클라우드 CLI를 이해하는 것은 필수입니다. 이것들이 모든 주요 클라우드 플랫폼에서 코드로서의 인프라(Infrastructure-as-Code)를 구성하는 기본 빌딩 블록이기 때문입니다.
 
 ## 1. cloud-init 개요
 
@@ -781,7 +788,7 @@ echo "Instance Type: $INSTANCE_TYPE"
 
 ## 다음 단계
 
-- [25_High_Availability_Cluster.md](./25_High_Availability_Cluster.md) - Pacemaker, Corosync, DRBD
+- [고가용성 클러스터](./25_High_Availability_Cluster.md) - Pacemaker, Corosync, DRBD
 
 ---
 

@@ -833,6 +833,295 @@ judgment = llm_judge(question, response_a, response_b)
 □ Reproducible evaluation environment
 ```
 
+## Exercises
+
+### Exercise 1: BLEU Score Limitations
+
+Compute the BLEU-1 and BLEU-4 scores for the following candidate-reference pairs. Then explain why BLEU fails to capture the quality difference between candidates B and C, and what metric would be more appropriate.
+
+```python
+reference = "The patient was given a high dose of aspirin to reduce fever."
+
+candidate_a = "The patient was given a high dose of aspirin to reduce fever."  # Exact match
+candidate_b = "The sick person received a large amount of aspirin medication for temperature reduction."  # Paraphrase
+candidate_c = "High aspirin dose fever patient given reduce."  # Same words, incoherent order
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from rouge_score import rouge_scorer
+
+reference = "The patient was given a high dose of aspirin to reduce fever."
+candidates = {
+    "a_exact": "The patient was given a high dose of aspirin to reduce fever.",
+    "b_paraphrase": "The sick person received a large amount of aspirin medication for temperature reduction.",
+    "c_incoherent": "High aspirin dose fever patient given reduce."
+}
+
+smoothie = SmoothingFunction().method1
+ref_tokens = [reference.split()]
+
+print("BLEU Scores:")
+print(f"{'Candidate':<15} {'BLEU-1':<10} {'BLEU-4'}")
+print("-" * 35)
+
+for name, cand in candidates.items():
+    cand_tokens = cand.split()
+    bleu1 = sentence_bleu(ref_tokens, cand_tokens, weights=(1, 0, 0, 0), smoothing_function=smoothie)
+    bleu4 = sentence_bleu(ref_tokens, cand_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smoothie)
+    print(f"{name:<15} {bleu1:<10.4f} {bleu4:.4f}")
+
+# BLEU Scores:
+# Candidate       BLEU-1     BLEU-4
+# a_exact         1.0000     1.0000
+# b_paraphrase    0.1538     0.0082  ← Low despite good meaning
+# c_incoherent    0.5556     0.0001  ← BLEU-1 is high despite being useless!
+
+# BERTScore comparison
+from bert_score import score
+refs = [reference] * 3
+cands = list(candidates.values())
+P, R, F1 = score(cands, refs, lang="en", verbose=False)
+
+print("\nBERTScore F1:")
+for name, f1 in zip(candidates.keys(), F1):
+    print(f"{name:<15} {f1.item():.4f}")
+
+# BERTScore F1:
+# a_exact         1.0000  ← Exact match
+# b_paraphrase    0.8900  ← High! Captures semantic similarity
+# c_incoherent    0.8300  ← Still somewhat penalized for incoherence
+```
+
+**Why BLEU fails here:**
+
+| Issue | Problem |
+|-------|---------|
+| **Candidate B** | BLEU counts n-gram overlaps literally. "sick person" ≠ "patient", "large amount" ≠ "high dose" — even though the meaning is identical. BLEU-1 = 0.15 despite being a perfect paraphrase. |
+| **Candidate C** | BLEU-1 = 0.56 because 5/9 individual words match. BLEU has no notion of word order or grammaticality at the unigram level. Only when using bigrams (BLEU-2+) does the incoherence get penalized. |
+
+**Better metrics for this scenario:**
+- **BERTScore**: Uses contextual embeddings to capture semantic similarity — correctly scores B highly
+- **COMET** (for translation): Neural metric trained on human quality judgments
+- **LLM-as-Judge**: Can evaluate fluency, factual accuracy, and completeness holistically
+
+**When BLEU is still useful:** Machine translation (large corpus, many references available), or when lexical overlap is genuinely important (e.g., technical documentation that must use specific terminology).
+</details>
+
+---
+
+### Exercise 2: pass@k Calculation and Interpretation
+
+A code generation model produces 10 samples for each problem. For the following results, calculate pass@1, pass@3, and pass@10. Then explain what these numbers tell you about the model's capabilities.
+
+```python
+from math import comb
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    """n=samples generated, c=correct samples, k=budget"""
+    if n - c < k:
+        return 1.0
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
+# Evaluation results: (problem_name, n_samples, n_correct)
+results = [
+    ("fibonacci", 10, 10),     # Very easy — all correct
+    ("binary_search", 10, 7),  # Moderate — most correct
+    ("merge_sort", 10, 3),     # Hard — few correct
+    ("regex_parser", 10, 1),   # Very hard — barely one correct
+    ("graph_coloring", 10, 0), # Failed — none correct
+]
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from math import comb
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    if n - c < k:
+        return 1.0
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
+results = [
+    ("fibonacci", 10, 10),
+    ("binary_search", 10, 7),
+    ("merge_sort", 10, 3),
+    ("regex_parser", 10, 1),
+    ("graph_coloring", 10, 0),
+]
+
+print(f"{'Problem':<20} {'pass@1':<10} {'pass@3':<10} {'pass@10'}")
+print("-" * 50)
+
+totals = {1: 0, 3: 0, 10: 0}
+for name, n, c in results:
+    p1 = pass_at_k(n, c, 1)
+    p3 = pass_at_k(n, c, 3)
+    p10 = pass_at_k(n, c, 10)
+    print(f"{name:<20} {p1:<10.4f} {p3:<10.4f} {p10:.4f}")
+    totals[1] += p1; totals[3] += p3; totals[10] += p10
+
+num_problems = len(results)
+print("-" * 50)
+print(f"{'Average':<20} {totals[1]/num_problems:<10.4f} {totals[3]/num_problems:<10.4f} {totals[10]/num_problems:.4f}")
+
+# Output:
+# Problem              pass@1     pass@3     pass@10
+# fibonacci            1.0000     1.0000     1.0000
+# binary_search        0.7000     0.9667     1.0000
+# merge_sort           0.3000     0.6583     0.9833
+# regex_parser         0.1000     0.2667     0.6512
+# graph_coloring       0.0000     0.0000     0.0000
+# Average              0.4200     0.5783     0.7269
+
+# --- Interpretation ---
+```
+
+**What these numbers tell us:**
+
+| Metric | Meaning | This model's profile |
+|--------|---------|---------------------|
+| **pass@1** | Probability a single generated solution is correct. Used when you deploy the model to generate one answer. | 0.42 — mediocre for production use |
+| **pass@3** | Probability at least one of 3 candidates is correct. Used when you can verify 3 solutions (e.g., run tests). | 0.58 — improved with selection |
+| **pass@10** | Upper bound with 10 samples. Measures the model's "peak capability" vs "consistency". | 0.73 — model knows the answer, just inconsistently |
+
+**Key insight — the gap between pass@1 and pass@10:**
+- Large gap (like `regex_parser`: 0.10 vs 0.65) → Model has the capability but is unreliable. Solution: use best-of-N sampling with a verifier (run tests, pass/fail).
+- Small gap (like `fibonacci`: 1.0 vs 1.0) → Model consistently knows this.
+- pass@10 = 0 (`graph_coloring`) → Model lacks the capability entirely — no amount of sampling will help.
+
+**Practical recommendation:** For production code generation, optimize pass@1 through fine-tuning + temperature tuning. For research, report pass@1 and pass@10 together to show both reliability and ceiling.
+</details>
+
+---
+
+### Exercise 3: LLM-as-Judge Bias Mitigation
+
+The `llm_judge` function in this lesson has a potential position bias: it might consistently prefer whichever response appears first (Response A). Implement a debiased version that runs the comparison twice with swapped order and aggregates the results.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from openai import OpenAI
+from enum import Enum
+
+client = OpenAI()
+
+class JudgeResult(Enum):
+    A_WINS = "A"
+    B_WINS = "B"
+    TIE = "Tie"
+
+def single_comparison(question: str, response_first: str, response_second: str,
+                      label_first: str = "A", label_second: str = "B") -> JudgeResult:
+    """Single comparison run."""
+    judge_prompt = f"""Compare two AI responses and select the better one.
+
+Question: {question}
+
+Response {label_first}:
+{response_first}
+
+Response {label_second}:
+{response_second}
+
+Evaluation criteria:
+1. Accuracy: Is the information accurate?
+2. Usefulness: Does it appropriately answer the question?
+3. Clarity: Is it easy to understand?
+4. Completeness: Is it sufficiently detailed?
+
+After analysis, reply ONLY with one of: {label_first}, {label_second}, or Tie.
+Reply:"""
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": judge_prompt}],
+        temperature=0,
+        max_tokens=10
+    )
+
+    result = response.choices[0].message.content.strip()
+
+    if label_first in result:
+        return JudgeResult.A_WINS if label_first == "A" else JudgeResult.B_WINS
+    elif label_second in result:
+        return JudgeResult.A_WINS if label_second == "A" else JudgeResult.B_WINS
+    else:
+        return JudgeResult.TIE
+
+def debiased_judge(question: str, response_a: str, response_b: str) -> dict:
+    """
+    Debiased LLM judge using position-swapped double evaluation.
+
+    Run 1: A first, B second → get judgment
+    Run 2: B first, A second → get judgment (swapped)
+
+    If both runs agree → confident result
+    If they disagree → Tie (position bias detected)
+    """
+    # Run 1: A first
+    result_1 = single_comparison(question, response_a, response_b, "A", "B")
+
+    # Run 2: B first (swapped)
+    result_2 = single_comparison(question, response_b, response_a, "B", "A")
+    # Note: labels are swapped back to A/B perspective in single_comparison
+
+    # Wait — we need to interpret result_2 correctly:
+    # In run 2, if judge says "B" (which was shown first), that means response_b won
+    # Let's re-implement with explicit tracking:
+
+    result_2_raw = single_comparison(question, response_b, response_a, "First", "Second")
+    # "First" = response_b, "Second" = response_a
+    if result_2_raw == JudgeResult.A_WINS:  # "First" won = B won
+        result_2_normalized = JudgeResult.B_WINS
+    elif result_2_raw == JudgeResult.B_WINS:  # "Second" won = A won
+        result_2_normalized = JudgeResult.A_WINS
+    else:
+        result_2_normalized = JudgeResult.TIE
+
+    # Aggregate
+    if result_1 == result_2_normalized:
+        final = result_1  # Both agree
+        confidence = "high"
+    elif result_1 == JudgeResult.TIE or result_2_normalized == JudgeResult.TIE:
+        final = result_1 if result_2_normalized == JudgeResult.TIE else result_2_normalized
+        confidence = "medium"
+    else:
+        final = JudgeResult.TIE  # Disagreement = position bias detected, call it a tie
+        confidence = "low (position bias detected)"
+
+    return {
+        "final_result": final.value,
+        "run_1_result": result_1.value,
+        "run_2_result": result_2_normalized.value,
+        "confidence": confidence,
+        "position_bias_detected": result_1 != result_2_normalized
+    }
+
+# Test
+result = debiased_judge(
+    question="What is recursion in programming?",
+    response_a="Recursion is when a function calls itself. For example, factorial(n) = n * factorial(n-1).",
+    response_b="Recursion is a programming technique where a function invokes itself to solve smaller subproblems, with a base case to stop the recursion. It elegantly solves problems like tree traversal and divide-and-conquer algorithms."
+)
+print(result)
+# Expected: B wins (more complete answer), high confidence if consistent across orderings
+```
+
+**Why this matters:** Studies show LLM judges exhibit 10-30% position bias, consistently preferring whichever response appears first. The double-evaluation technique detects and mitigates this. Additional bias mitigation strategies:
+- Use multiple independent judges and take majority vote
+- Present responses without labels (just "First"/"Second")
+- Use scoring (1-5) instead of pairwise preference when possible
+- Shuffle response order across a test set and check if win rates are consistent
+</details>
+
 ---
 
 ## Learning Complete

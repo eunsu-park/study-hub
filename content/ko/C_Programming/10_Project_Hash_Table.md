@@ -1,14 +1,24 @@
 # 프로젝트 8: 해시 테이블
 
-## 학습 목표
-
-이 프로젝트를 통해 배우는 내용:
-- 해시 함수의 원리
-- 해시 테이블 구조
-- 충돌 처리 (체이닝, 오픈 어드레싱)
-- 실전 활용: 간단한 사전 프로그램
+**이전**: [프로젝트 7: 스택과 큐](./09_Project_Stack_Queue.md) | **다음**: [프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 해시 함수(hash function)가 키를 배열 인덱스로 변환하는 방식과 균일 분포(uniform distribution)가 중요한 이유를 설명할 수 있다
+2. 널리 쓰이는 문자열 해시 함수(단순 합산, djb2, sdbm, FNV-1a)를 비교하고 각각의 충돌(collision) 특성을 평가할 수 있다
+3. 버킷별 연결 리스트로 충돌을 처리하는 체이닝(chaining) 해시 테이블을 구현할 수 있다
+4. 선형 탐사(linear probing)와 DELETED 센티널(sentinel)을 사용하는 오픈 어드레싱(open-addressing) 해시 테이블을 구현할 수 있다
+5. 충돌과 툼스톤(tombstone)을 올바르게 처리하는 삽입, 검색, 삭제 연산을 설계할 수 있다
+6. 추가, 검색, 삭제, 목록 명령을 갖춘 완전한 대화형 사전 프로그램을 만들 수 있다
+7. 부하율(load factor)을 기준으로 해시 테이블을 크기 조정해야 할 시점을 파악하고 재해싱(rehashing) 과정을 설명할 수 있다
+
+---
+
+해시 테이블은 Python의 `dict`, JavaScript의 `Object`, 그리고 프로덕션 소프트웨어의 거의 모든 키-값 저장소 이면에 있는 자료구조입니다. 해시 함수를 통해 키를 배열 인덱스로 변환함으로써 평균 O(1) 조회를 달성하는데, 직접 만들어 보고 불가피한 충돌을 맞닥뜨리기 전까지는 거의 마법처럼 느껴지는 트릭입니다. 이 프로젝트는 체이닝과 오픈 어드레싱 전략을 모두 처음부터 구현함으로써 그 마법을 명확히 밝혀냅니다.
 
 ## 해시 테이블이란?
 
@@ -18,12 +28,12 @@
 
 ```
 Key: "apple"
-        ↓
+        |
 Hash Function: hash("apple") = 3
-        ↓
-┌───┬───┬───┬───┬───┬───┬───┐
-│   │   │   │🍎 │   │   │   │  → Index 3에 저장
-└───┴───┴───┴───┴───┴───┴───┘
+        |
++---+---+---+---+---+---+---+
+|   |   |   | X |   |   |   |  -> Index 3에 저장
++---+---+---+---+---+---+---+
   0   1   2   3   4   5   6
 ```
 
@@ -43,8 +53,8 @@ Hash Function: hash("apple") = 3
 
 ### 좋은 해시 함수의 조건
 
-1. **결정적**: 같은 입력 → 항상 같은 출력
-2. **균일 분포**: 출력이 고르게 분포
+1. **결정적(Deterministic)**: 같은 입력 → 항상 같은 출력
+2. **균일 분포(Uniform distribution)**: 출력이 고르게 분포
 3. **빠른 계산**: O(1) 시간
 
 ### 문자열 해시 함수들
@@ -125,17 +135,17 @@ int main(void) {
 ```
 Index 3에 충돌 발생:
 
-┌───┐
-│ 0 │ → NULL
-├───┤
-│ 1 │ → NULL
-├───┤
-│ 2 │ → NULL
-├───┤
-│ 3 │ → [apple] → [apricot] → NULL  (체인)
-├───┤
-│ 4 │ → NULL
-└───┘
++---+
+| 0 | -> NULL
++---+
+| 1 | -> NULL
++---+
+| 2 | -> NULL
++---+
+| 3 | -> [apple] -> [apricot] -> NULL  (체인)
++---+
+| 4 | -> NULL
++---+
 ```
 
 ### 구현
@@ -292,11 +302,11 @@ int main(void) {
     printf("=== 체이닝 해시 테이블 ===\n");
 
     // 삽입
-    ht_set(ht, "apple", "사과");
-    ht_set(ht, "banana", "바나나");
-    ht_set(ht, "cherry", "체리");
-    ht_set(ht, "date", "대추야자");
-    ht_set(ht, "elderberry", "엘더베리");
+    ht_set(ht, "apple", "a fruit");
+    ht_set(ht, "banana", "a tropical fruit");
+    ht_set(ht, "cherry", "a small red fruit");
+    ht_set(ht, "date", "a sweet fruit");
+    ht_set(ht, "elderberry", "a berry");
 
     ht_print(ht);
 
@@ -307,7 +317,7 @@ int main(void) {
 
     // 수정
     printf("\n수정 테스트:\n");
-    ht_set(ht, "apple", "맛있는 사과");
+    ht_set(ht, "apple", "a delicious fruit");
     printf("apple: %s\n", ht_get(ht, "apple"));
 
     // 삭제
@@ -332,15 +342,15 @@ int main(void) {
 hash("apple") = 3, hash("apricot") = 3 (충돌!)
 
 삽입 "apple":
-┌───┬───┬───┬───┬───┬───┬───┐
-│   │   │   │🍎 │   │   │   │
-└───┴───┴───┴───┴───┴───┴───┘
++---+---+---+---+---+---+---+
+|   |   |   | X |   |   |   |
++---+---+---+---+---+---+---+
   0   1   2   3   4   5   6
 
 삽입 "apricot" (충돌 → 다음 슬롯):
-┌───┬───┬───┬───┬───┬───┬───┐
-│   │   │   │🍎 │🍑 │   │   │  ← Index 4에 저장
-└───┴───┴───┴───┴───┴───┴───┘
++---+---+---+---+---+---+---+
+|   |   |   | X | Y |   |   |  <- Index 4에 저장
++---+---+---+---+---+---+---+
   0   1   2   3   4   5   6
 ```
 
@@ -501,9 +511,9 @@ int main(void) {
 
     printf("=== 선형 탐사 해시 테이블 ===\n");
 
-    ht_set(ht, "apple", "사과");
-    ht_set(ht, "banana", "바나나");
-    ht_set(ht, "cherry", "체리");
+    ht_set(ht, "apple", "a fruit");
+    ht_set(ht, "banana", "a tropical fruit");
+    ht_set(ht, "cherry", "a small red fruit");
 
     ht_print(ht);
 
@@ -577,7 +587,7 @@ void dict_add(Dictionary *dict, const char *word, const char *meaning) {
     while (current) {
         if (strcasecmp(current->word, word) == 0) {
             strncpy(current->meaning, meaning, VALUE_SIZE - 1);
-            printf("'%s' 업데이트됨\n", word);
+            printf("'%s' updated\n", word);
             return;
         }
         current = current->next;
@@ -590,7 +600,7 @@ void dict_add(Dictionary *dict, const char *word, const char *meaning) {
     node->next = dict->buckets[index];
     dict->buckets[index] = node;
     dict->count++;
-    printf("'%s' 추가됨\n", word);
+    printf("'%s' added\n", word);
 }
 
 char* dict_search(Dictionary *dict, const char *word) {
@@ -621,17 +631,17 @@ void dict_delete(Dictionary *dict, const char *word) {
             }
             free(current);
             dict->count--;
-            printf("'%s' 삭제됨\n", word);
+            printf("'%s' deleted\n", word);
             return;
         }
         prev = current;
         current = current->next;
     }
-    printf("'%s'을(를) 찾을 수 없습니다\n", word);
+    printf("'%s' not found\n", word);
 }
 
 void dict_list(Dictionary *dict) {
-    printf("\n=== 사전 목록 (총 %d개) ===\n", dict->count);
+    printf("\n=== Dictionary List (Total: %d) ===\n", dict->count);
     for (int i = 0; i < TABLE_SIZE; i++) {
         Node *current = dict->buckets[i];
         while (current) {
@@ -642,15 +652,15 @@ void dict_list(Dictionary *dict) {
 }
 
 void print_menu(void) {
-    printf("\n╔════════════════════════════╗\n");
-    printf("║      📖 간단한 사전        ║\n");
-    printf("╠════════════════════════════╣\n");
-    printf("║  1. 단어 추가              ║\n");
-    printf("║  2. 단어 검색              ║\n");
-    printf("║  3. 단어 삭제              ║\n");
-    printf("║  4. 전체 목록              ║\n");
-    printf("║  0. 종료                   ║\n");
-    printf("╚════════════════════════════╝\n");
+    printf("\n============================\n");
+    printf("|     Simple Dictionary    |\n");
+    printf("|==========================|\n");
+    printf("|  1. Add word             |\n");
+    printf("|  2. Search word          |\n");
+    printf("|  3. Delete word          |\n");
+    printf("|  4. Show all             |\n");
+    printf("|  0. Exit                 |\n");
+    printf("============================\n");
 }
 
 void clear_input(void) {
@@ -665,23 +675,23 @@ int main(void) {
     char meaning[VALUE_SIZE];
 
     // 샘플 데이터
-    dict_add(dict, "apple", "사과; 과일의 일종");
-    dict_add(dict, "book", "책; 인쇄물을 제본한 것");
-    dict_add(dict, "computer", "컴퓨터; 전자 계산기");
+    dict_add(dict, "apple", "a fruit; round and sweet");
+    dict_add(dict, "book", "printed pages bound together");
+    dict_add(dict, "computer", "electronic computing device");
 
     while (1) {
         print_menu();
-        printf("선택: ");
+        printf("Choice: ");
         scanf("%d", &choice);
         clear_input();
 
         switch (choice) {
             case 1:
-                printf("단어: ");
+                printf("Word: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
-                printf("뜻: ");
+                printf("Meaning: ");
                 fgets(meaning, VALUE_SIZE, stdin);
                 meaning[strcspn(meaning, "\n")] = '\0';
 
@@ -689,7 +699,7 @@ int main(void) {
                 break;
 
             case 2:
-                printf("검색할 단어: ");
+                printf("Word to search: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
@@ -697,12 +707,12 @@ int main(void) {
                 if (result) {
                     printf("\n  %s: %s\n", word, result);
                 } else {
-                    printf("\n  '%s'을(를) 찾을 수 없습니다\n", word);
+                    printf("\n  '%s' not found\n", word);
                 }
                 break;
 
             case 3:
-                printf("삭제할 단어: ");
+                printf("Word to delete: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
@@ -714,12 +724,12 @@ int main(void) {
                 break;
 
             case 0:
-                printf("사전을 종료합니다.\n");
+                printf("Exiting dictionary.\n");
                 dict_destroy(dict);
                 return 0;
 
             default:
-                printf("잘못된 선택입니다.\n");
+                printf("Invalid choice.\n");
         }
     }
 
@@ -747,7 +757,7 @@ gcc -Wall -std=c11 dictionary.c -o dictionary
 | 충돌 | 다른 키가 같은 인덱스 |
 | 체이닝 | 연결 리스트로 충돌 처리 |
 | 오픈 어드레싱 | 빈 슬롯 탐사로 충돌 처리 |
-| 로드 팩터 | count / table_size (0.7 이하 권장) |
+| 로드 팩터(load factor) | count / table_size (0.7 이하 권장) |
 
 ### 체이닝 vs 오픈 어드레싱
 
@@ -766,10 +776,14 @@ gcc -Wall -std=c11 dictionary.c -o dictionary
 
 2. **파일 저장**: 사전 데이터를 파일로 저장/불러오기
 
-3. **이중 해싱**: 충돌 시 두 번째 해시 함수로 탐사 간격 결정
+3. **이중 해싱(Double hashing)**: 충돌 시 두 번째 해시 함수로 탐사 간격 결정
 
 ---
 
 ## 다음 단계
 
-[11_Project_Snake_Game.md](./11_Project_Snake_Game.md) → 터미널 게임을 만들어봅시다!
+[프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md) → 터미널 게임을 만들어봅시다!
+
+---
+
+**이전**: [프로젝트 7: 스택과 큐](./09_Project_Stack_Queue.md) | **다음**: [프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md)

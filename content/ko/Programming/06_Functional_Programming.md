@@ -1090,5 +1090,5 @@ class Maybe<T> {
 
 ---
 
-**이전**: [05_OOP_Principles.md](05_OOP_Principles.md)
-**다음**: [07_Design_Patterns.md](07_Design_Patterns.md)
+**이전**: [OOP 원칙](05_OOP_Principles.md)
+**다음**: [디자인 패턴](07_Design_Patterns.md)

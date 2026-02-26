@@ -1,19 +1,26 @@
 # Network Security Basics
 
-## Overview
+**Previous**: [Other Application Protocols](./14_Other_Application_Protocols.md) | **Next**: [Security Threats and Response](./16_Security_Threats_Response.md)
 
-Network security protects computer networks and data from unauthorized access, misuse, and modification. This chapter covers core network security concepts including firewalls, NAT, VPNs, and encryption basics.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define the CIA triad (Confidentiality, Integrity, Availability) and explain the defense-in-depth strategy
+2. Compare packet filtering, stateful inspection, application layer, and next-generation firewalls
+3. Write basic `iptables` rules to allow or deny traffic by port, protocol, and source address
+4. Distinguish between Static NAT, Dynamic NAT, and PAT/NAPT and explain how PAT enables many-to-one address sharing
+5. Compare Site-to-Site and Remote Access VPN architectures and evaluate protocols such as IPsec, OpenVPN, and WireGuard
+6. Differentiate symmetric and asymmetric encryption and explain why TLS uses a hybrid approach
+7. Describe how hash functions and digital signatures provide data integrity and authentication
+
+---
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Understand basic network security principles
-- Learn firewall types and operating principles
-- Understand NAT concepts and security roles
-- Learn VPN types and usage methods
-- Acquire basic encryption concepts
-
----
+Networks are under constant threat -- from eavesdroppers intercepting traffic, to attackers exploiting open ports, to insiders exfiltrating data. Security is not a single product you install; it is a layered discipline woven into every level of the network stack. This lesson introduces the fundamental building blocks -- firewalls, NAT, VPNs, and cryptographic primitives -- that together form a robust defense posture.
 
 ## Table of Contents
 
@@ -23,8 +30,7 @@ Network security protects computer networks and data from unauthorized access, m
 4. [VPN](#4-vpn)
 5. [Encryption Basics](#5-encryption-basics)
 6. [Practice Problems](#6-practice-problems)
-7. [Next Steps](#7-next-steps)
-8. [References](#8-references)
+7. [References](#7-references)
 
 ---
 
@@ -1041,13 +1047,7 @@ VPN (Virtual Private Network) provides secure private network connections throug
 
 ---
 
-## 7. Next Steps
-
-In [16_Security_Threats_Response.md](./16_Security_Threats_Response.md), let's learn about specific security threats like sniffing, spoofing, and DDoS, along with response strategies!
-
----
-
-## 8. References
+## 7. References
 
 ### Standards and RFC
 
@@ -1067,3 +1067,7 @@ In [16_Security_Threats_Response.md](./16_Security_Threats_Response.md), let's l
 - [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
 - [OWASP](https://owasp.org/)
 - [Cloudflare Learning Center](https://www.cloudflare.com/learning/)
+
+---
+
+**Previous**: [Other Application Protocols](./14_Other_Application_Protocols.md) | **Next**: [Security Threats and Response](./16_Security_Threats_Response.md)

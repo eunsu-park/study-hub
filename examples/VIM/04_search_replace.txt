@@ -1,0 +1,212 @@
+================================================================================
+  VIM SEARCH AND REPLACE — Practice File
+================================================================================
+
+  This file contains exercises for search, substitution, and the global command.
+
+================================================================================
+  EXERCISE 1: Basic Search (/, ?, n, N)
+================================================================================
+
+  Search for these patterns using /pattern and navigate with n/N:
+
+  The cat sat on the mat. The cat wore a hat. The cat ate a rat.
+  Another cat appeared. This cat was fat. That cat was flat.
+  No more cats here. Wait, one more cat. Last cat, I promise.
+
+  Tasks:
+    /cat    → find first "cat", then n to cycle through all matches
+    ?cat    → search backward
+    /\<cat\> → whole word match (won't match "cats")
+    *       → with cursor on "cat", searches for whole word forward
+    #       → same but backward
+
+================================================================================
+  EXERCISE 2: Search and Replace (:s and :%s)
+================================================================================
+
+  --- 2a: Single Line ---
+
+  Replace "foo" with "bar" on this line only:
+  foo baz foo qux foo
+
+  Command: :s/foo/bar/       → replaces first "foo" only
+  Command: :s/foo/bar/g      → replaces ALL "foo" on this line
+
+  --- 2b: Entire File ---
+
+  These lines all need "color" changed to "colour":
+  The color of the sky is blue.
+  My favorite color is green.
+  What color are your eyes?
+  The color palette is ready.
+
+  Command: :%s/color/colour/g    → replace all in file
+  Command: :%s/color/colour/gc   → replace with confirmation (y/n/a/q)
+
+  --- 2c: Range ---
+
+  Only fix "teh" on lines 2-4 below (not line 1 or 5):
+  Line 1: teh quick brown fox
+  Line 2: teh lazy dog
+  Line 3: teh jumping cat
+  Line 4: teh flying bird
+  Line 5: teh swimming fish
+
+  Command: Select lines 2-4 visually (V, j, j), then :s/teh/the/g
+  Or: Use line numbers (if line 2 is at line N): :N,N+2s/teh/the/g
+
+================================================================================
+  EXERCISE 3: Special Replacement Patterns
+================================================================================
+
+  --- 3a: Case Conversion ---
+
+  Convert these to uppercase using \U in replacement:
+  hello world
+  foo bar baz
+
+  Command: :%s/\<\w\+\>/\U&/g     → HELLO WORLD (& = entire match)
+  Command: :%s/\<\w/\u&/g          → Hello World (capitalize first letter)
+
+  --- 3b: Capture Groups ---
+
+  Swap first and last names:
+  John Smith
+  Jane Doe
+  Bob Wilson
+  Alice Johnson
+
+  Command: :%s/\(\w\+\) \(\w\+\)/\2 \1/g
+  Result:  Smith John, Doe Jane, Wilson Bob, Johnson Alice
+
+  --- 3c: Very Magic Mode ---
+
+  Using \v for easier regex (no escaping needed):
+
+  These emails need to be anonymized:
+  user1@example.com
+  admin@company.org
+  test.user@domain.co.uk
+
+  Command: :%s/\v(\w+)\@(\w+)/***@\2/g
+  Result:  ***@example.com, ***@company.org, etc.
+
+================================================================================
+  EXERCISE 4: The Global Command (:g)
+================================================================================
+
+  --- 4a: Delete Matching Lines ---
+
+  Delete all lines containing "DELETE":
+  Keep this line
+  DELETE this line
+  Keep this one too
+  DELETE this also
+  And keep this
+  DELETE me
+
+  Command: :g/DELETE/d
+
+  --- 4b: Delete Non-Matching Lines ---
+
+  Keep only lines containing "KEEP":
+  KEEP this important line
+  Remove this
+  KEEP this too
+  Remove this also
+  KEEP me!
+  Remove me
+
+  Command: :v/KEEP/d    (or :g!/KEEP/d)
+
+  --- 4c: Delete Blank Lines ---
+
+  Remove all blank lines from this section:
+  Line one
+
+  Line two
+
+
+  Line three
+
+  Line four
+
+  Command: :g/^$/d
+
+  --- 4d: Move Matching Lines ---
+
+  Move all TODO lines to end of file:
+  Regular code here
+  TODO: implement feature A
+  More regular code
+  TODO: fix bug B
+  Even more code
+  TODO: refactor module C
+
+  Command: :g/TODO/m$
+
+================================================================================
+  EXERCISE 5: Practical Transformations
+================================================================================
+
+  --- 5a: Add Line Numbers ---
+
+  apple
+  banana
+  cherry
+  date
+  elderberry
+
+  Command: :%s/^/\=line('.').' '/
+  Result:  1 apple, 2 banana, etc.
+
+  --- 5b: Convert CSV to SQL ---
+
+  John,30,NYC
+  Jane,25,LA
+  Bob,35,Chicago
+
+  Command: :%s/\(\w\+\),\(\d\+\),\(\w\+\)/INSERT INTO users VALUES ('\1', \2, '\3');/
+
+  --- 5c: Remove Trailing Whitespace ---
+
+  This line has trailing spaces
+  This one too
+  And this one
+
+  Command: :%s/\s\+$//g
+
+  --- 5d: Comment/Uncomment Code ---
+
+  def function_one():
+      return 1
+  def function_two():
+      return 2
+  def function_three():
+      return 3
+
+  Comment all (add # ): :%s/^/# /
+  Uncomment (remove # ): :%s/^# //
+
+================================================================================
+  EXERCISE 6: Regex Challenge
+================================================================================
+
+  Extract and transform this data:
+
+  server01: 192.168.1.10 (active, 4 cores)
+  server02: 192.168.1.11 (standby, 8 cores)
+  server03: 10.0.0.5 (active, 16 cores)
+  server04: 172.16.0.1 (maintenance, 2 cores)
+
+  Task 1: Extract just IP addresses (delete everything else)
+  Command: :%s/.*: \([0-9.]\+\) .*/\1/
+
+  Task 2: Keep only active servers
+  Command: :v/active/d
+
+  Task 3: Swap server name and IP
+  Command: :%s/\v(\w+): (\S+)/\2 → \1/
+
+================================================================================

@@ -1,15 +1,17 @@
 # 로그 관리
 
+**이전**: [SELinux/AppArmor](./17_SELinux_AppArmor.md) | **다음**: [백업과 복구](./19_Backup_Recovery.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- systemd-journald의 설정과 활용
-- rsyslog 설정 및 필터링
-- logrotate를 통한 로그 순환
-- 원격 로그 수집 구성
-
-**난이도**: ⭐⭐⭐ (중급-고급)
+1. systemd-journald를 영구 저장소(persistent storage)로 구성하고 journalctl로 로그를 조회한다
+2. 시간, 우선순위, 서비스, 필드 필터를 사용한 고급 journalctl 쿼리를 작성한다
+3. rsyslog 규칙, 필터, 템플릿을 구성하여 구조화된 로그를 처리한다
+4. logrotate 정책을 설정하여 로그 파일 크기와 보존 기간을 관리한다
+5. TLS를 통한 rsyslog로 중앙 집중식 원격 로깅 인프라를 배포한다
+6. lnav 및 GoAccess 같은 도구를 사용하여 웹 서버 및 시스템 로그를 분석한다
 
 ---
 
@@ -24,6 +26,8 @@
 7. [로그 분석 도구](#7-로그-분석-도구)
 
 ---
+
+로그는 서버의 블랙박스 비행 기록장치입니다. 침입이 발생하거나, 서비스가 충돌하거나, 성능이 저하될 때 가장 먼저 답을 찾는 곳이 바로 로그입니다. 효과적인 로그 관리(Log Management)는 단순히 /var/log에 파일을 쓰는 것 이상을 의미합니다 -- 로그를 구조화하고, 순환(rotate)하고, 중앙화하고, 효율적으로 조회하여 며칠이 아닌 몇 분 안에 문제를 감지할 수 있어야 합니다.
 
 ## 1. Linux 로그 시스템 개요
 
@@ -817,7 +821,7 @@ auth.*  /var/log/auth-all.log
 
 ## 다음 단계
 
-- [19_Backup_Recovery.md](./19_Backup_Recovery.md) - rsync, Borg Backup, 재해복구 전략
+- [백업 및 복구](./19_Backup_Recovery.md) - rsync, Borg Backup, 재해복구 전략
 
 ---
 

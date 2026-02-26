@@ -1,5 +1,23 @@
 # Filesystem Navigation
 
+**Previous**: [Linux Basics](./01_Linux_Basics.md) | **Next**: [File and Directory Management](./03_File_Directory_Management.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the Linux Filesystem Hierarchy Standard (FHS) and the purpose of key directories
+2. Distinguish between absolute and relative paths
+3. Navigate the filesystem using cd, pwd, and special directory symbols (~, .., -, .)
+4. List directory contents with ls and interpret long-format output
+5. Search for files using find, locate, which, and whereis
+6. Inspect file metadata using file and stat commands
+7. Apply wildcard patterns (globbing) to match files efficiently
+
+---
+
+Every file and directory in Linux lives within a single, unified tree rooted at `/`. Unlike Windows, which uses separate drive letters (C:, D:), Linux organizes everything -- devices, configuration, user data -- under one hierarchy. Knowing where things live and how to move around is the first step toward becoming productive on any Linux system.
+
 ## 1. Linux Directory Structure
 
 Linux follows FHS (Filesystem Hierarchy Standard) with a tree structure.
@@ -459,6 +477,4 @@ cat /etc/passwd | head -5
 
 ---
 
-## Next Steps
-
-Learn how to create, copy, move, and delete files and directories in [03_File_Directory_Management.md](./03_File_Directory_Management.md)!
+**Previous**: [Linux Basics](./01_Linux_Basics.md) | **Next**: [File and Directory Management](./03_File_Directory_Management.md)

@@ -443,25 +443,36 @@ class MHDStabilitySolver:
         A = np.zeros((nr, nr))
 
         for i in range(1, nr-1):
-            # Radial derivatives (centered difference)
-            # d²ξ/dr² + (1/r)dξ/dr - (m²/r²)ξ
+            # The Laplacian structure d²ξ/dr² + (1/r)dξ/dr - (m²/r²)ξ
+            # comes from projecting the force operator onto the m-th Fourier
+            # harmonic; the -m²/r² term is the centrifugal cost of bending
+            # the displacement around the cylinder in the azimuthal direction.
 
-            # Magnetic tension term
+            # The magnetic tension coefficient B²/(μ₀ρ) equals v_A² (Alfvén
+            # speed squared): field-line bending creates a restoring force
+            # proportional to v_A², which stabilizes high-m short-wavelength
+            # perturbations — this is the fundamental stabilizing mechanism.
             tension_coef = (Bz[i]**2 + Btheta[i]**2) / (self.mu0 * rho[i])
 
             # Diagonal
             A[i, i] = -2*tension_coef/self.dr**2 - m**2*tension_coef/r[i]**2
 
-            # Off-diagonal
+            # The asymmetric off-diagonal term tension/(2r dr) comes from the
+            # cylindrical (1/r)dξ/dr part of the Laplacian; it is first-order
+            # and vanishes in Cartesian geometry where r → ∞.
             A[i, i+1] = tension_coef/self.dr**2 + tension_coef/(2*r[i]*self.dr)
             A[i, i-1] = tension_coef/self.dr**2 - tension_coef/(2*r[i]*self.dr)
 
-            # Pressure term (simplified)
+            # The pressure gradient term -∇p/ρ acts as a destabilizing drive:
+            # if pressure decreases outward (dp/dr < 0), this term is positive
+            # in A, reducing the restoring force and potentially driving growth.
             if i > 0:
                 dpdx = (p[i+1] - p[i-1]) / (2*self.dr)
                 A[i, i] += -dpdx / rho[i]
 
-        # Boundary conditions: ξ(0) = 0, ξ(r_max) = 0
+        # Dirichlet conditions ξ(0) = ξ(r_max) = 0 enforce regularity at the
+        # axis (no singular displacement) and no perturbation at the boundary
+        # (plasma surface is held fixed in this simplified model).
         A[0, 0] = 1.0
         A[-1, -1] = 1.0
 
@@ -474,13 +485,17 @@ class MHDStabilitySolver:
         """
         A = self.compute_force_operator(m, kz)
 
-        # Solve eigenvalue problem
+        # scipy.linalg.eigh is used instead of eig because the force operator
+        # F is self-adjoint (Hermitian), guaranteeing real eigenvalues ω².
+        # eigh exploits this symmetry for faster, more numerically stable
+        # computation compared to the general complex eigensolver.
         # A ξ = λ ξ, where λ = -ω²
         eigenvalues, eigenvectors = eigh(A)
 
-        # Convert to growth rates
-        # If λ > 0: unstable with γ = sqrt(λ)
-        # If λ < 0: stable (oscillatory)
+        # λ > 0 means ω² < 0, i.e., ω is purely imaginary → exponential growth.
+        # The sign convention (λ = -ω²) comes from the eigenvalue equation
+        # F(ξ) = -ω²ρξ: a positive definite F (restoring force) gives λ < 0
+        # (stable oscillation), while a negative semidefinite F gives λ > 0 (unstable).
         growth_rates_squared = eigenvalues
 
         return growth_rates_squared, eigenvectors
@@ -814,18 +829,30 @@ def compute_delta_W(r, xi_r, xi_theta, Bz, Btheta, p, rho, m, kz, gamma_adiabati
     # B1_r ~ -ikz * xi_r * Bz + (im/r) * xi_theta * Bz
     # This is a simplified model; full calculation is complex
 
-    # Magnetic compression energy
+    # div_xi measures how much the fluid compresses: a non-zero divergence
+    # costs energy through both magnetic compression and acoustic compression,
+    # so the most dangerous (unstable) perturbations tend to be incompressible
+    # (div_xi → 0) since they avoid these stabilizing terms.
     dxi_r_dr = np.gradient(xi_r, r)
     div_xi = dxi_r_dr + xi_r/r + (1j*m/r)*xi_theta
 
+    # The kz*Bz and (m/r)*Bz terms capture field-line bending: displacing the
+    # plasma along kz or around the m-th azimuthal harmonic stretches and
+    # bends field lines, doing positive work (B1_perp_sq > 0), which is
+    # always stabilizing — this is why B_z makes Z-pinches more stable.
     B1_perp_sq = np.abs((kz*Bz)**2 * xi_r**2 + (m*Bz/r)**2 * xi_theta**2)
 
     delta_W_magnetic = 0.5 * simps(B1_perp_sq / mu0 * 2*np.pi*r, r)
 
-    # Pressure compression energy
+    # Adiabatic compression δW_p = (γp/2)|div_ξ|² integrates the acoustic
+    # restoring force: compressing the plasma adiabatically raises its pressure,
+    # opposing further compression.  This term is always positive (stabilizing).
     delta_W_pressure = 0.5 * simps(gamma_adiabatic * p * np.abs(div_xi)**2 * 2*np.pi*r, r)
 
-    # Pressure gradient drive
+    # The pressure gradient drive ξ_r (dp/dr) div_ξ can be negative when
+    # dp/dr < 0 (pressure decreasing outward) and the displacement is outward
+    # (ξ_r > 0 with div_ξ > 0): this is the interchange/ballooning mechanism
+    # where low-pressure plasma flows outward, releasing free energy.
     dp_dr = np.gradient(p, r)
     delta_W_drive = simps(xi_r * dp_dr * div_xi.real * 2*np.pi*r, r)
 

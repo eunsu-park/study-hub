@@ -2,9 +2,23 @@
 
 [Previous: ANOVA](./15_ANOVA.md) | [Next: Generalized Linear Models](./17_Generalized_Linear_Models.md)
 
-## Overview
+---
 
-This chapter covers advanced topics in **Multiple Regression Analysis**. We will learn about checking regression assumptions, diagnostic plots, multicollinearity issues, and variable selection methods.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Fit and interpret multiple regression models using `statsmodels`, including standardized coefficients
+2. Evaluate all four regression assumptions (linearity, independence, homoscedasticity, normality) through diagnostic plots and formal tests
+3. Identify influential observations using leverage, Cook's distance, and DFFITS
+4. Diagnose multicollinearity with VIF and apply remedies (variable removal, PCA, Ridge regression)
+5. Implement forward selection, backward elimination, and stepwise variable selection procedures
+6. Compare candidate models using adjusted R-squared, AIC, BIC, and cross-validation
+7. Apply partial regression and CCPR plots for visual assessment of individual predictor contributions
+
+---
+
+Simple regression tells you whether one variable predicts another; multiple regression reveals how several predictors work together -- and where they can mislead you. Collinear predictors can flip coefficient signs, violated assumptions can invalidate your p-values, and including irrelevant variables inflates variance. This lesson teaches you to diagnose these pitfalls and systematically build reliable regression models.
 
 ---
 

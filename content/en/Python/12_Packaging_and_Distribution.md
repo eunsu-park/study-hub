@@ -1,11 +1,22 @@
 # 12. Packaging & Distribution
 
+**Previous**: [Testing & Quality Assurance](./11_Testing_and_Quality.md) | **Next**: [Dataclasses](./13_Dataclasses.md)
+
 ## Learning Objectives
-- Understand Python package structure and standards
-- Modern package configuration with pyproject.toml
-- Dependency management with Poetry
-- Understand PyPI deployment process
-- Version management and release automation
+
+After completing this lesson, you will be able to:
+
+1. Describe the standard Python package directory layout, including the src layout and its advantages
+2. Write a complete `pyproject.toml` following PEP 621 with build system, metadata, and tool configuration
+3. Distinguish between required, optional, and development dependencies and specify version constraints
+4. Use Poetry to create, manage, build, and publish Python packages
+5. Deploy a package to TestPyPI and PyPI using `twine` or Poetry
+6. Apply semantic versioning (SemVer) and maintain a structured CHANGELOG
+7. Configure automated PyPI publishing through GitHub Actions with Trusted Publisher
+
+---
+
+Knowing how to package and distribute your code is what transforms a collection of scripts into a reusable, installable library that others can depend on. Whether you are sharing an internal tool with your team or publishing an open-source project to PyPI, a well-structured package with proper metadata, pinned dependencies, and automated releases signals professionalism and makes collaboration far smoother.
 
 ## Table of Contents
 1. [Package Structure](#1-package-structure)
@@ -663,13 +674,13 @@ greet World
 
 ---
 
-## Next Steps
-- [13. Dataclasses](./13_Dataclasses.md)
-- [14. Pattern Matching](./14_Pattern_Matching.md)
-
 ## References
 - [Python Packaging User Guide](https://packaging.python.org/)
 - [PEP 621 - Project Metadata](https://peps.python.org/pep-0621/)
 - [Poetry Documentation](https://python-poetry.org/docs/)
 - [Semantic Versioning](https://semver.org/)
 - [Keep a Changelog](https://keepachangelog.com/)
+
+---
+
+**Previous**: [Testing & Quality Assurance](./11_Testing_and_Quality.md) | **Next**: [Dataclasses](./13_Dataclasses.md)

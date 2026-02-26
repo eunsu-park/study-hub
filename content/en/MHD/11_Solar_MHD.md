@@ -766,15 +766,26 @@ def parker_solar_wind():
 
     # Coronal temperature
     T_corona = 1.5e6   # K
+    # c_s = √(kT/m_p): the isothermal sound speed sets the scale of the
+    # problem because the critical radius r_c = GM/(2c_s²) — a hotter
+    # corona moves the sonic point inward, enabling faster acceleration
+    # and higher terminal wind speed.
     c_s = np.sqrt(k_B * T_corona / m_p)  # Sound speed
 
     # Critical radius
+    # r_c is where the flow transitions from subsonic to supersonic;
+    # at this point the Parker equation is degenerate (0/0), so the
+    # solution must pass through it smoothly — the "transonic" condition
+    # that selects the physically correct branch among all possible solutions.
     r_c = G * M_sun / (2 * c_s**2)
 
     print(f"Sound speed: {c_s/1e3:.1f} km/s")
     print(f"Critical radius: {r_c/R_sun:.2f} R_sun")
 
     # Radial grid
+    # Logarithmic spacing captures both the near-Sun acceleration region
+    # (where dv/dr is large) and the distant solar wind (where v is nearly
+    # constant) with equal fractional resolution at each radius.
     r = np.logspace(np.log10(R_sun), np.log10(215*R_sun), 1000)  # 1 R_sun to 1 AU
 
     # Define ODE: dv/dr
@@ -787,6 +798,9 @@ def parker_solar_wind():
 
     # Find critical point solution
     # Start slightly supersonic just past r_c
+    # We start at 1.01 r_c rather than exactly at r_c because the ODE has
+    # a removable singularity at the critical point; a tiny offset lets the
+    # integrator step past it without encountering a zero denominator.
     r_start_idx = np.argmin(np.abs(r - r_c * 1.01))
     r_start = r[r_start_idx]
     v_start = c_s * 1.01
@@ -796,6 +810,10 @@ def parker_solar_wind():
     v_out = odeint(dv_dr, v_start, r_out).flatten()
 
     # Integrate inward from r_c
+    # Integrating both directions from r_c and then joining the pieces
+    # guarantees we follow the unique transonic solution; all other
+    # branches either stall subsonically or diverge supersonically before
+    # reaching the corona, and are therefore unphysical.
     r_in = r[:r_start_idx+1][::-1]
     v_in_rev = odeint(dv_dr, c_s * 0.99, r_in).flatten()
     v_in = v_in_rev[::-1]
@@ -806,6 +824,9 @@ def parker_solar_wind():
 
     # Density from mass conservation
     # ρ v r² = ρ_c c_s r_c²
+    # This is the integrated continuity equation (Ṁ = const); as v increases
+    # and r² grows, ρ must drop steeply — explaining why the solar wind is
+    # a million times less dense at Earth than at the coronal base.
     rho_c = 1e-12  # kg/m^3 (arbitrary normalization)
     rho_sol = rho_c * c_s * r_c**2 / (v_sol * r_sol**2)
 
@@ -889,6 +910,10 @@ def flux_tube_rise():
     r_top = R_sun           # Photosphere
 
     # Stratification (simplified exponential)
+    # An exponential density profile with scale height H_p gives the
+    # correct order-of-magnitude variation across the convection zone;
+    # it also makes the buoyancy force larger near the tachocline (where
+    # ρ_e is high) and smaller near the surface (where ρ_e drops sharply).
     H_p = 5e7  # Pressure scale height ~ 50 Mm
     rho_0 = 1e-1  # kg/m^3 (at r_bottom, approximate)
 
@@ -907,6 +932,10 @@ def flux_tube_rise():
 
     def rho_int(rho_e, B):
         """Internal density from pressure balance."""
+        # The flux tube interior must have lower gas pressure than the
+        # exterior to balance the added magnetic pressure B²/(2μ₀); for
+        # an isothermal gas (p=ρc_s²) this directly means ρ_i < ρ_e,
+        # which is the source of the buoyancy driving the tube upward.
         p_e = rho_e * c_s**2
         p_i = p_e - B**2 / (2*mu_0)
         return p_i / c_s**2
@@ -937,9 +966,17 @@ def flux_tube_rise():
         Delta_rho = rho_e - rho_i
 
         # Buoyancy acceleration
+        # a_buoy = (Δρ/ρ_e) g is Archimedes' law in a compressible fluid:
+        # the fractional density deficit times g gives the net upward
+        # force per unit mass.  A strong field (large B) creates a large
+        # Δρ and therefore vigorous buoyancy.
         a_buoy = (Delta_rho / rho_e) * g
 
         # Drag
+        # The v_z²/(2H_p) form reflects aerodynamic drag normalized by
+        # the pressure scale height: at terminal velocity the drag exactly
+        # balances buoyancy, limiting how fast tubes can rise through
+        # the convection zone and thus constraining the rise time.
         a_drag = -C_D * v_z[n]**2 / (2 * H_p)
 
         # Update velocity

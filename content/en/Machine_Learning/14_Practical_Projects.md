@@ -1,8 +1,24 @@
 # Real-World Projects
 
-## Overview
+**Previous**: [Pipelines and Practice](./13_Pipelines_and_Practice.md) | **Next**: [Feature Engineering](./15_Feature_Engineering.md)
 
-This lesson covers end-to-end solutions for classification and regression problems using real datasets, including Kaggle-style problem-solving processes and practical know-how.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the end-to-end machine learning project workflow from problem definition to deployment
+2. Implement a complete classification project (Titanic survival prediction) including EDA, feature engineering, model comparison, and hyperparameter tuning
+3. Implement a complete regression project (housing price prediction) with residual analysis and feature importance
+4. Apply cross-validation strategies including K-Fold and OOF (out-of-fold) prediction generation
+5. Build ensemble predictions using blending and stacking techniques
+6. Evaluate models with appropriate metrics for classification (F1, AUC) and regression (RMSE, R2, MAE)
+7. Identify and analyze prediction errors to guide iterative model improvement
+
+---
+
+Algorithms and theory only matter if you can apply them to real problems end-to-end. This lesson puts everything together -- EDA, preprocessing, model selection, tuning, evaluation, and ensemble -- through two complete projects that mirror the workflow you would follow in a Kaggle competition or a real business setting. The patterns you practice here form the foundation of every applied ML project.
 
 ---
 

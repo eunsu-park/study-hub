@@ -1087,4 +1087,4 @@ void makeBirdFly(Bird* bird) {
 ---
 
 **이전**: [04_Programming_Paradigms.md](04_Programming_Paradigms.md)
-**다음**: [06_Functional_Programming.md](06_Functional_Programming.md)
+**다음**: [함수형 프로그래밍 개념](06_Functional_Programming.md)

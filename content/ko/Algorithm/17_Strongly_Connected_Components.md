@@ -92,7 +92,11 @@ class KosarajuSCC:
         self.reverse_graph[v].append(u)
 
     def find_sccs(self):
-        # Step 1: 원본 그래프에서 DFS, 종료 순서 기록
+        # Step 1: 원본 그래프에서 DFS, 종료 순서 기록.
+        # 노드는 도달 가능한 모든 노드가 완료된 후에야 종료(추가)되므로,
+        # "싱크" SCC(다른 SCC로의 나가는 간선이 없는)의 노드가 먼저 종료된다.
+        # 이 순서를 역순으로 하면 step 2에서 "소스" SCC부터 시작하게 된다 —
+        # 모든 곳에 도달할 수 있지만 외부에서 도달할 수 없는 노드.
         visited = [False] * self.n
         finish_order = []
 
@@ -101,13 +105,19 @@ class KosarajuSCC:
             for neighbor in self.graph[node]:
                 if not visited[neighbor]:
                     dfs1(neighbor)
-            finish_order.append(node)
+            finish_order.append(node)  # 모든 후손 방문 후에 추가
 
         for i in range(self.n):
             if not visited[i]:
                 dfs1(i)
 
-        # Step 2: 역방향 그래프에서 역순으로 DFS
+        # Step 2: 역방향 그래프에서 종료 순서의 역순으로 DFS.
+        # 모든 간선을 뒤집으면 "역방향 그래프에서 u로부터 도달 가능"은
+        # "원본 그래프에서 u에 도달 가능"과 같다. 가장 높은 종료 시간의
+        # 노드(소스 SCC 루트)에서 역방향 그래프 DFS를 시작하면
+        # 같은 SCC 안에 갇히게 된다 — 간선이 뒤집혔기 때문에
+        # 다른 SCC로 탈출할 수 없다. 따라서 여기서 각 DFS 트리가
+        # 정확히 하나의 SCC가 된다.
         visited = [False] * self.n
         sccs = []
 
@@ -262,18 +272,26 @@ class TarjanSCC:
         self.disc[node] = self.low[node] = self.time
         self.time += 1
         self.stack.append(node)
-        self.on_stack[node] = True
+        self.on_stack[node] = True  # 스택 소속 여부를 "방문 여부"와 별도로 추적
 
         for neighbor in self.graph[node]:
             if self.disc[neighbor] == -1:
-                # 미방문 노드
+                # 트리 간선(Tree edge): 재귀 후 서브트리에서 도달 가능한 가장 작은
+                # disc 값을 역전파 — 깊은 곳의 역방향 간선(back edge)이 경로 상의
+                # 모든 조상 low 값에 영향을 미치는 원리
                 self.dfs(neighbor)
                 self.low[node] = min(self.low[node], self.low[neighbor])
             elif self.on_stack[neighbor]:
-                # 스택에 있는 노드 (back edge)
+                # 현재 DFS 스택에 남아있는 조상으로의 역방향 간선(back edge):
+                # 이 노드가 해당 조상까지 "탈출" 가능하므로 low 갱신.
+                # on_stack 확인 이유: 이미 팝되어 완성된 SCC에 속한 이웃은
+                # 다른 컴포넌트에 있으므로, 교차 간선(cross-edge)을 따라가면
+                # 두 개의 별도 SCC를 잘못 병합하게 됨
                 self.low[node] = min(self.low[node], self.disc[neighbor])
 
-        # SCC의 루트인 경우
+        # disc[node] == low[node]이면 이 노드 아래에서 위로 올라가는 역방향 간선이
+        # 없다는 의미 — 이 노드가 해당 SCC의 최상위(가장 오래된) 노드(루트).
+        # 이 노드까지 포함하여 스택에서 팝하면 하나의 SCC가 완성됨
         if self.disc[node] == self.low[node]:
             component = []
             while True:

@@ -76,7 +76,10 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, dept_salary_rank;
 
--- 부서별 Top 2 급여자
+-- Why: ROW_NUMBER is used instead of RANK here because we want exactly 2 rows
+-- per department even if there are ties. RANK would return more than 2 if
+-- multiple employees share the same salary. The subquery wrapper is needed
+-- because window functions cannot be used directly in WHERE.
 SELECT * FROM (
     SELECT
         e.first_name,
@@ -130,7 +133,11 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, e.salary;
 
--- FIRST_VALUE, LAST_VALUE
+-- Why: LAST_VALUE requires an explicit frame (ROWS BETWEEN UNBOUNDED PRECEDING AND
+-- UNBOUNDED FOLLOWING) because the default frame only extends to CURRENT ROW,
+-- which would make LAST_VALUE return the current row itself — a common gotcha.
+-- FIRST_VALUE works correctly with the default frame since it always starts at
+-- the partition beginning.
 SELECT
     e.first_name,
     d.dept_name,
@@ -171,7 +178,10 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, e.emp_id;
 
--- 이동 평균 (Moving Average)
+-- Why: A moving average smooths out noise by averaging over a sliding window.
+-- ROWS BETWEEN 2 PRECEDING AND CURRENT ROW creates a 3-row window. For the
+-- first two rows the window is smaller (1 or 2 rows), so the average is less
+-- smooth — be aware of this edge effect at partition boundaries.
 SELECT
     first_name,
     salary,
@@ -292,7 +302,9 @@ FROM employees;
 -- 9. 윈도우 함수 별칭 (WINDOW 절)
 -- =============================================================================
 
--- 같은 윈도우 정의 재사용
+-- Why: The WINDOW clause avoids repeating the same window definition multiple
+-- times. Without it, each OVER(...) would duplicate the partition/order spec,
+-- making the query harder to read and error-prone to maintain.
 SELECT
     first_name,
     salary,

@@ -1,14 +1,26 @@
 # Memory Hierarchy
 
-## Overview
-
-In computer systems, the speed gap between the CPU and memory is a major performance bottleneck. The memory hierarchy addresses this problem by optimizing the trade-offs between speed, capacity, and cost. In this lesson, we will learn about the principles of memory hierarchy, the concept of locality, and the characteristics of each memory level.
+**Previous**: [13_Superscalar_Out_of_Order.md](./13_Superscalar_Out_of_Order.md) | **Next**: [15_Cache_Memory.md](./15_Cache_Memory.md)
 
 **Difficulty**: ⭐⭐
 
 **Prerequisites**: Computer System Overview, CPU Architecture Basics
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the memory hierarchy from registers to disk and explain the speed-cost tradeoff at each level
+2. Explain temporal and spatial locality and why programs exhibit them
+3. Calculate effective memory access time given hit rates and access times
+4. Explain why the memory wall problem exists (CPU speed vs memory speed gap)
+5. Describe how the memory hierarchy creates the illusion of large, fast memory
+
+---
+
+CPU speeds have increased exponentially, but memory speeds have not kept pace -- this is the "memory wall." The memory hierarchy is the computer architect's elegant solution: a cascade of increasingly larger but slower memories, designed so that the data the CPU needs most is almost always in the fastest layer. Understanding the hierarchy explains why data structures with good locality (arrays) outperform those with poor locality (linked lists) by orders of magnitude.
 
 ## Table of Contents
 
@@ -192,6 +204,9 @@ Exploiting spatial locality:
 Good code (high locality):
 
 // Row-major traversal - matches memory layout
+// Why row-major is fast: C stores matrix[i][j] so that consecutive j values
+// are contiguous in memory. A 64-byte cache line holds 16 ints, so accessing
+// j, j+1, j+2, ... gets 15 hits per 1 miss (spatial locality).
 for (i = 0; i < N; i++) {
     for (j = 0; j < N; j++) {
         sum += matrix[i][j];
@@ -207,6 +222,10 @@ Sequential access → High cache hit rate
 Bad code (low locality):
 
 // Column-major traversal - mismatches memory layout
+// Why column-major is slow: each increment of i jumps N elements (N×4 bytes) in
+// memory, landing in a completely different cache line every time. For N=1024 with
+// 4-byte ints, successive accesses are 4096 bytes apart — 64× the cache line size.
+// Every single access is a cache miss, destroying spatial locality.
 for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
         sum += matrix[i][j];
@@ -657,6 +676,10 @@ AMAT for Multi-level Cache:
 Structure of Arrays (SoA) vs Array of Structures (AoS):
 
 AoS (Array of Structures):
+// Why AoS hurts when accessing a single field: each Particle is 32 bytes, so
+// consecutive x values are 32 bytes apart. A 64-byte cache line fetches only 2
+// x values but also brings in 56 bytes of unused fields (y, z, vx, ...).
+// Cache utilization is only 4/32 = 12.5%.
 struct Particle {
     float x, y, z;      // 12 bytes
     float vx, vy, vz;   // 12 bytes
@@ -673,6 +696,10 @@ When accessing only x coordinates: Only 4 bytes used per 32 bytes → wasteful
 
 
 SoA (Structure of Arrays):
+// Why SoA is faster for field-wise access: all x values are contiguous in memory.
+// A 64-byte cache line now holds 16 consecutive x values (16 × 4 bytes), giving
+// 100% utilization. SIMD instructions (SSE/AVX) can process 4-8 floats per cycle
+// from this packed layout — impossible with AoS's interleaved fields.
 struct Particles {
     float x[1000];
     float y[1000];
@@ -698,12 +725,19 @@ Performance difference: SoA can be up to 4-8x faster (with SIMD)
 Loop Tiling (Blocking):
 
 // Original code - low cache efficiency
+// Why the original is slow: the inner loop sweeps B[k][j] column-wise (stride = N),
+// repeatedly evicting and reloading entire rows of B. For N=1024 with 8-byte doubles,
+// the B matrix alone is 8 MB — far exceeding L1/L2 cache, causing thrashing.
 for (i = 0; i < N; i++)
     for (j = 0; j < N; j++)
         for (k = 0; k < N; k++)
             C[i][j] += A[i][k] * B[k][j];
 
 // With tiling - high cache efficiency
+// Why tiling works: by processing BLOCK×BLOCK sub-matrices at a time, the working
+// set (3 blocks of BLOCK² elements) fits in L1 cache. For BLOCK=64 with 8-byte
+// doubles: 3 × 64² × 8 = 96 KB — comfortably within a 128 KB L1 data cache.
+// Each element is reused BLOCK times before eviction, maximizing temporal locality.
 #define BLOCK 64
 for (ii = 0; ii < N; ii += BLOCK)
     for (jj = 0; jj < N; jj += BLOCK)
@@ -735,6 +769,10 @@ Hardware Prefetch:
 
 Software Prefetch:
 // Intel intrinsic example
+// Why prefetch 16 elements ahead: if memory latency is ~80 cycles and each loop
+// iteration takes ~5 cycles, we need to issue the prefetch 80/5 = 16 iterations
+// early so the data arrives in L1 cache just in time for the actual load.
+// _MM_HINT_T0 targets L1 (temporal); _MM_HINT_NTA targets non-temporal (streaming).
 for (i = 0; i < N; i++) {
     _mm_prefetch(&array[i + 16], _MM_HINT_T0);  // Prefetch to L1
     sum += array[i];
@@ -777,11 +815,18 @@ Access count: 2
 
 Alignment Directives:
 // C/C++
+// Why align to 64 bytes: this matches the cache line size. If a struct straddles
+// two cache lines (e.g., starts at byte 48 of one line), a single access requires
+// loading TWO cache lines — doubling memory traffic and halving effective bandwidth.
+// Aligning to the cache line boundary guarantees one-line access.
 struct alignas(64) CacheLine {
     int data[16];
 };
 
 // Dynamic allocation
+// Why use aligned_alloc instead of malloc: malloc only guarantees alignment to
+// max_align_t (typically 16 bytes). For cache-line-aligned data (64 bytes) or
+// SIMD-aligned data (32 bytes for AVX), explicit alignment is required.
 void* ptr = aligned_alloc(64, size);
 ```
 

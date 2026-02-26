@@ -5,6 +5,19 @@
 > **Prerequisites**: Basic LaTeX document structure (Lesson 1), packages
 > **Objective**: Master page layout customization, margins, headers/footers, spacing, and advanced typography techniques
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Configure page dimensions, margins, and orientation using the `geometry` package
+2. Design custom headers and footers with the `fancyhdr` package, including chapter and section marks
+3. Adjust line spacing, paragraph spacing, and indentation to meet specific style requirements
+4. Implement multi-column layouts using the `multicol` package
+5. Apply microtypography enhancements with the `microtype` package to improve text justification and spacing
+6. Select and load appropriate fonts using `fontspec` (XeLaTeX/LuaLaTeX) or legacy LaTeX font commands
+
+---
+
 ## Introduction
 
 Professional documents require precise control over page layout and typography. LaTeX provides powerful packages and commands for customizing every aspect of page design, from margins and headers to line spacing and multi-column layouts. This lesson covers the essential tools for creating publication-quality documents with professional typography.
@@ -950,4 +963,4 @@ These tools give you complete control over page layout and typography, enabling 
 ---
 
 **Previous**: [08_Custom_Commands.md](08_Custom_Commands.md)
-**Next**: [10_TikZ_Basics.md](10_TikZ_Basics.md)
+**Next**: [TikZ Graphics Basics](10_TikZ_Basics.md)

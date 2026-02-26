@@ -1,12 +1,25 @@
 # 파이썬 기초 문법
 
+**이전**: [패턴 매칭](./14_Pattern_Matching.md) | **다음**: [OOP 기초](./16_OOP_Basics.md)
+
 > **참고**: 이 레슨은 선수 지식 복습용입니다. 고급 레슨을 시작하기 전에 기초가 부족하다면 이 내용을 먼저 학습하세요.
 
-## 학습 목표
-- 파이썬 기본 자료형과 연산자 이해
-- 제어문 (조건문, 반복문) 활용
-- 함수 정의와 호출 방법 습득
-- 자료구조 (리스트, 딕셔너리, 튜플, 세트) 활용
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 파이썬 기본 자료형(int, float, str, bool, None)을 식별하고 사용하며, 타입 변환(type conversion)을 수행할 수 있습니다
+2. 산술, 비교, 논리, 멤버십 연산자(membership operator)를 표현식에 적용할 수 있습니다
+3. 인덱싱(indexing), 슬라이싱(slicing), 주요 메서드, f-string 포맷팅을 사용해 문자열을 조작할 수 있습니다
+4. 조건문(`if`/`elif`/`else`)과 삼항 표현식(ternary expression)으로 분기 로직을 작성할 수 있습니다
+5. `range`, `enumerate`, `zip`, 컴프리헨션(comprehension)을 활용해 `for`/`while` 루프를 구현할 수 있습니다
+6. 기본값 매개변수, 가변 인자(`*args`, `**kwargs`), 람다(lambda) 표현식을 사용해 함수를 정의할 수 있습니다
+7. 리스트, 튜플, 딕셔너리, 세트를 주요 연산과 함께 사용하고 각 자료구조의 트레이드오프(trade-off)를 이해할 수 있습니다
+8. `try`/`except`/`else`/`finally`로 예외(exception)를 처리하고 사용자 정의 예외 클래스(custom exception class)를 정의할 수 있습니다
+
+---
+
+고급 파이썬 기법은 모두 언어 기초에 대한 탄탄한 이해 위에 세워집니다. 변수, 자료구조, 제어 흐름(control flow), 함수, 예외 처리(exception handling)는 모든 프로그램에서 사용하게 될 구성 요소입니다. 이 기초를 복습함으로써 데코레이터(decorator), 제너레이터(generator), 메타클래스(metaclass) 같은 고급 주제에 도전하기 전에 확실한 기반을 갖출 수 있습니다.
 
 ---
 
@@ -738,8 +751,98 @@ with open("data.json", "r", encoding="utf-8") as f:
 ### 다음 단계
 
 이 기초를 마쳤다면 다음 레슨으로:
-- [16_OOP_Basics.md](./16_OOP_Basics.md): 객체지향 프로그래밍 기초
-- [01_Type_Hints.md](./01_Type_Hints.md): 타입 힌팅 (고급 레슨 시작)
+- [객체지향 프로그래밍 기초](./16_OOP_Basics.md): 객체지향 프로그래밍 기초
+- [타입 힌팅 (Type Hints)](./01_Type_Hints.md): 타입 힌팅 (고급 레슨 시작)
+
+---
+
+## 연습 문제
+
+### 연습 1: 자료형과 형 변환
+
+Python의 핵심 자료형과 변환 함수를 연습하세요.
+
+1. 각 기본 자료형(int, float, str, bool, None)의 변수를 만들고 `type()`으로 타입을 출력하세요.
+2. `value`를 `target_type`으로 변환을 시도하고, 변환 실패 시 예외를 발생시키는 대신 `None`을 반환하는 함수 `safe_convert(value, target_type)`을 작성하세요. 다음으로 테스트하세요:
+   - `safe_convert("42", int)` → 42
+   - `safe_convert("hello", float)` → None
+   - `safe_convert("3.14", float)` → 3.14
+3. `==`과 `is`의 차이를 설명하세요. 리스트로 시연하세요: 동일한 내용의 두 리스트(`a = [1, 2, 3]`과 `b = [1, 2, 3]`)를 만들고 `a == b`는 `True`이지만 `a is b`는 `False`임을 보이세요.
+4. 다음 각각의 진리값(truthiness)은 무엇인가요? 예측한 후 검증하세요: `0`, `0.0`, `""`, `" "`, `[]`, `[0]`, `None`, `False`.
+5. `bool`과 리스트 컴프리헨션(list comprehension)을 사용하여 `[0, 1, "", "hello", None, [], [1]]`에서 참(truthy)인 값의 개수를 세는 한 줄짜리 코드를 작성하세요.
+
+### 연습 2: 문자열 처리
+
+문자열 메서드와 f-string을 사용하여 작은 텍스트 처리 도구 모음을 만드세요.
+
+1. 다음 동작을 수행하는 함수 `normalize(s)`를 작성하세요: 앞뒤 공백 제거, 소문자로 변환, 모든 공백을 밑줄로 교체. 테스트: `normalize("  Hello World  ")` → `"hello_world"`.
+2. 이메일 주소를 부분적으로 숨기는 함수 `mask_email(email)`을 작성하세요. `"alice@example.com"`에 대해 `"a***e@example.com"` 반환 (로컬 파트의 첫 번째와 마지막 문자만 표시하고 중간은 `*`로 마스킹).
+3. 각 고유 단어(대소문자 무시)의 빈도를 매핑하는 딕셔너리를 반환하는 함수 `word_count(text)`를 작성하세요. `"the quick brown fox the fox"`에 대해 `{'the': 2, 'quick': 1, 'brown': 1, 'fox': 2}` 반환.
+4. f-string 형식으로 다음 데이터에 대한 형식화된 표를 출력하세요:
+   ```python
+   data = [("Alice", 92.5), ("Bob", 78.0), ("Charlie", 85.3)]
+   ```
+   각 행은 `| Name       |  Score |` 형식으로, 이름은 10자 필드에 왼쪽 정렬, 점수는 소수점 1자리로 오른쪽 정렬.
+5. `s`가 (대소문자, 공백, 구두점 무시) 회문(palindrome)이면 `True`를 반환하는 함수 `is_palindrome(s)`를 작성하세요. `"A man, a plan, a canal: Panama"`로 테스트하세요.
+
+### 연습 3: 제어 흐름과 컴프리헨션
+
+조건문, 반복문, 컴프리헨션을 연습하여 장황한 명령형 코드를 대체하세요.
+
+1. 1부터 n까지의 문자열 리스트를 반환하는 함수 `fizzbuzz(n)`을 작성하세요: 3과 5의 배수이면 "FizzBuzz", 3의 배수이면 "Fizz", 5의 배수이면 "Buzz", 그 외에는 숫자를 문자열로.
+2. 다음 반복문을 단일 리스트 컴프리헨션으로 다시 작성하세요:
+   ```python
+   result = []
+   for x in range(20):
+       if x % 2 == 0 and x % 3 != 0:
+           result.append(x ** 2)
+   ```
+3. 문장의 각 단어를 길이에 매핑하는 딕셔너리 컴프리헨션을 작성하세요. `"the quick brown fox"`에 대해 `{'the': 3, 'quick': 5, 'brown': 5, 'fox': 3}` 생성.
+4. 리스트의 리스트로 구구단표를 생성하는 중첩 리스트 컴프리헨션을 작성하세요: `[[i*j for j in range(1, 6)] for i in range(1, 6)]`. 형식화된 그리드로 출력하세요.
+5. `zip`과 `enumerate`를 사용하여 점수 내림차순으로 정렬된 `(rank, name, score)` 튜플의 리스트를 반환하는 함수 `merge_ranked(names, scores)`를 작성하세요. `names=["Alice","Bob","Charlie"]`와 `scores=[85, 92, 78]`에 대해 `[(1, "Bob", 92), (2, "Alice", 85), (3, "Charlie", 78)]` 반환.
+
+### 연습 4: 함수와 인수 처리
+
+Python의 유연한 함수 인수 메커니즘을 탐색하세요.
+
+1. 임의 개수의 숫자 인수를 받아 튜플 `(min, max, mean, median)`을 반환하는 함수 `stats(*numbers)`를 작성하세요. 빈 입력의 에지 케이스를 우아하게 처리하세요.
+2. HTML 문자열을 생성하는 함수 `create_html_tag(tag, content, **attributes)`를 작성하세요. 예를 들어:
+   ```python
+   create_html_tag("a", "Click here", href="https://example.com", class_="btn")
+   # → '<a href="https://example.com" class="btn">Click here</a>'
+   ```
+   참고: `class_`는 `class`로 렌더링되어야 합니다 (끝의 밑줄 제거).
+3. 람다(lambda)와 `sorted()`를 사용하여 다음을 다시 작성하세요:
+   ```python
+   students = [{"name": "Alice", "grade": "B", "score": 85},
+               {"name": "Bob",   "grade": "A", "score": 92},
+               {"name": "Charlie", "grade": "C", "score": 78}]
+   # 먼저 등급(알파벳순)으로 정렬한 후, 점수 내림차순으로 정렬
+   ```
+4. (`functools.lru_cache`를 사용하지 않고) 함수의 결과를 캐싱하는 데코레이터 `memoize`를 작성하세요. 재귀 피보나치 함수에 적용하고, 메모이제이션 유무에 따른 `fib(30)`의 호출 횟수를 비교하세요.
+5. 가변(mutable)과 불변(immutable) 기본 인수의 차이를 설명하세요. `def append_to(item, lst=[])`의 고전적인 버그를 시연하고 올바르게 수정하는 방법을 보이세요.
+
+### 연습 5: 자료구조와 예외 처리
+
+자료구조 연산과 견고한 오류 처리를 결합하세요.
+
+1. `key_func`의 반환값에 따라 리스트의 항목을 딕셔너리로 그룹화하는 함수 `group_by(items, key_func)`를 작성하세요. 예를 들어:
+   ```python
+   group_by([1, 2, 3, 4, 5, 6], lambda x: "even" if x % 2 == 0 else "odd")
+   # → {"even": [2, 4, 6], "odd": [1, 3, 5]}
+   ```
+2. 리스트를 사용하여 `push(item)`, `pop()`, `peek()` (제거 없이 최상단 확인), `is_empty()`를 지원하는 간단한 스택(stack) 클래스를 구현하세요. 빈 스택에서 `pop()` 또는 `peek()`이 호출될 때 사용자 정의 `StackUnderflowError`를 발생시키세요.
+3. 두 개의 중첩 딕셔너리를 재귀적으로 병합하는 함수 `deep_merge(base, override)`를 작성하세요. `override`의 키는 `base`를 덮어쓰고, 중첩 딕셔너리는 전체를 교체하는 대신 재귀적으로 병합됩니다.
+4. CSV 파일을 읽어 딕셔너리 리스트를 반환하는 함수 `read_csv_safe(filename)`을 작성하세요. 다음을 수행해야 합니다:
+   - 파일이 없으면 명확한 메시지와 함께 `FileNotFoundError`를 발생시킵니다.
+   - 잘못된 형식의 행(열 수가 맞지 않는 행)을 건너뛰고 경고를 출력합니다.
+   - 파일이 존재하지만 비어 있으면 빈 리스트를 반환합니다.
+   - `finally`를 사용하여 읽기 중 예외가 발생하더라도 항상 파일이 닫히도록 보장합니다.
+5. 집합 연산(set operation)을 사용하여 해결하세요: 두 사용자 ID 리스트 `active_users`와 `premium_users`가 주어졌을 때, 다음을 계산하고 출력하세요:
+   - 활성 상태이면서 프리미엄인 사용자 (교집합, intersection)
+   - 프리미엄이 아닌 활성 사용자 (차집합, difference)
+   - 활성 또는 프리미엄이지만 둘 다는 아닌 사용자 (대칭 차집합, symmetric difference)
+   - 두 리스트 전체의 고유 사용자 수 (합집합 크기, union length)
 
 ---
 

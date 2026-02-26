@@ -1,15 +1,20 @@
 # Sampling and Reconstruction
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the mathematical framework for ideal sampling using the impulse train model and the spectrum of a sampled signal.
+2. State and prove the Nyquist-Shannon sampling theorem and define the Nyquist rate.
+3. Identify aliasing, explain its cause in the frequency domain, and implement anti-aliasing filters to prevent it.
+4. Implement signal reconstruction using sinc interpolation and zero-order/first-order hold methods.
+5. Analyze practical ADC/DAC systems and evaluate the benefits of oversampling and noise shaping.
+
+---
+
 ## Overview
 
 Sampling is the bridge between continuous-time (analog) and discrete-time (digital) signals. Understanding the sampling process, its limitations, and how to faithfully reconstruct the original signal is fundamental to all digital signal processing. This lesson covers the Nyquist-Shannon sampling theorem, aliasing, anti-aliasing strategies, reconstruction techniques, and practical ADC/DAC considerations.
-
-**Learning Objectives:**
-- Understand the mathematical framework for ideal sampling
-- State and prove the Nyquist-Shannon sampling theorem
-- Identify and prevent aliasing
-- Implement reconstruction using sinc interpolation and hold circuits
-- Analyze practical ADC/DAC systems and the benefits of oversampling
 
 **Prerequisites:** [04. Fourier Transform and Frequency Domain](04_Fourier_Transform.md)
 

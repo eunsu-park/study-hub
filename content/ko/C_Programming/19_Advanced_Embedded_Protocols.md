@@ -1,10 +1,24 @@
-# 고급 임베디드 프로토콜
+# 고급 임베디드 프로토콜(Advanced Embedded Protocols)
 
-## 개요
+**이전**: [디버깅과 메모리 분석](./18_Debugging_Memory_Analysis.md) | **다음**: [C 언어 포인터 심화](./20_Advanced_Pointers.md)
 
-이 장에서는 임베디드 시스템에서 자주 사용되는 통신 프로토콜과 하드웨어 제어 기법을 학습합니다. PWM, I2C, SPI, ADC 등 실제 센서와 액추에이터를 제어하는 데 필요한 핵심 기술을 다룹니다.
+## 학습 목표(Learning Objectives)
 
-**난이도**: ⭐⭐⭐⭐
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. PWM 신호를 생성하여 LED 밝기, 서보 각도, DC 모터 속도를 제어한다
+2. 하드웨어 타이머를 설정하고 주기적 작업을 위한 인터럽트 서비스 루틴(ISR, Interrupt Service Routine)을 작성한다
+3. Arduino Wire 라이브러리를 사용하여 I2C 슬레이브 장치(센서, 디스플레이)와 통신한다
+4. SD 카드 등 주변 장치에 SPI로 고속 데이터를 전송한다
+5. ADC를 통해 아날로그 센서 값을 읽고 원시 값을 물리 단위로 변환한다
+6. 이동 평균 및 중앙값 필터 등 노이즈 제거 기법을 적용하여 ADC 정확도를 높인다
+7. 실용적인 데이터 로깅 프로젝트에서 여러 프로토콜(I2C, SPI, ADC)을 결합한다
+
+---
+
+LED를 깜빡이고 버튼을 읽을 수 있게 됐다면, 다음 과제는 임베디드 시스템을 실질적으로 유용하게 만드는 풍부한 센서·디스플레이·액추에이터 생태계와 통신하는 것입니다. PWM은 조명을 조절하고 모터를 돌리게 해주고, I2C와 SPI는 온도 센서와 SD 카드를 연결해주며, ADC는 아날로그 세계를 디지털 프로그램으로 끌어들입니다. 이 레슨은 실제 임베디드 애플리케이션을 구축하는 데 필요한 프로토콜 도구 상자를 제공합니다.
+
+**난이도**: 고급(Advanced)
 
 **선수 지식**: 임베디드 기초, 비트 연산, 포인터
 
@@ -45,9 +59,9 @@ PWM은 디지털 신호의 ON/OFF 비율을 조절하여 아날로그와 유사�
 
 | 용어 | 설명 |
 |------|------|
-| 주기 (Period) | 한 사이클의 전체 시간 |
-| 듀티 사이클 | HIGH 상태의 비율 (%) |
-| 주파수 | 초당 사이클 수 (Hz) |
+| 주기(Period) | 한 사이클의 전체 시간 |
+| 듀티 사이클(Duty Cycle) | HIGH 상태의 비율 (%) |
+| 주파수(Frequency) | 초당 사이클 수 (Hz) |
 
 ### Arduino PWM
 
@@ -440,9 +454,9 @@ Master              Slave
   │                   │
   │◀───── MISO ───────┤  (Master In, Slave Out)
   │                   │
-  ├───── SCK ────────▶│  (클럭)
+  ├───── SCK ────────▶│  (Clock)
   │                   │
-  ├───── SS ─────────▶│  (슬레이브 선택)
+  ├───── SS ─────────▶│  (Slave Select)
   │                   │
 ```
 
@@ -901,3 +915,7 @@ void loop() {
 - [AVR Libc Reference](https://www.nongnu.org/avr-libc/user-manual/)
 - [I2C Protocol](https://i2c.info/)
 - [SPI Protocol](https://en.wikipedia.org/wiki/Serial_Peripheral_Interface)
+
+---
+
+**이전**: [디버깅과 메모리 분석](./18_Debugging_Memory_Analysis.md) | **다음**: [C 언어 포인터 심화](./20_Advanced_Pointers.md)

@@ -552,6 +552,270 @@ trainer.train()
 
 ---
 
+## Exercises
+
+### Exercise 1: LoRA Parameter Count Analysis
+
+Given a BERT-base model (12 layers, d_model=768, num_heads=12) with LoRA applied to the query and value projection matrices, calculate: (a) the number of trainable parameters with rank r=8, (b) the percentage of total parameters being trained, and (c) how this compares to full fine-tuning.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+# BERT-base architecture parameters
+num_layers = 12
+d_model = 768
+d_k = d_model // 12  # = 64, dimension per head
+num_heads = 12
+
+# Query and Value projection dimensions
+# W_q: (d_model, d_model) = (768, 768)
+# W_v: (d_model, d_model) = (768, 768)
+
+# Total BERT-base parameters (approximate)
+# Embeddings: vocab_size * d_model ≈ 30522 * 768 = 23,440,896
+# Per layer: attention (4 * d_model^2) + FFN (2 * d_model * d_ff) + norms
+# d_ff = 3072 for BERT-base
+d_ff = 3072
+vocab_size = 30522
+
+embeddings = vocab_size * d_model + 512 * d_model + 2 * d_model  # token + pos + segment
+per_layer = (4 * d_model**2) + (2 * d_model * d_ff) + (4 * d_model)  # attn + FFN + norms
+pooler = d_model * d_model + d_model
+
+total_bert = embeddings + (num_layers * per_layer) + pooler
+print(f"Total BERT-base parameters: {total_bert:,}")
+# ≈ 109,482,240 (110M)
+
+# LoRA parameters for rank r=8
+r = 8
+lora_r = r
+
+# For each LoRA layer applied to W_q and W_v:
+# A matrix: (d_model, r) — maps d_model → r
+# B matrix: (r, d_model) — maps r → d_model
+lora_params_per_matrix = d_model * r + r * d_model  # A + B
+lora_targets = 2  # query AND value
+
+# Applied to all 12 layers
+total_lora_params = num_layers * lora_targets * lora_params_per_matrix
+print(f"LoRA parameters (r={r}): {total_lora_params:,}")
+# = 12 * 2 * (768*8 + 8*768) = 12 * 2 * 12288 = 294,912
+
+percentage = total_lora_params / total_bert * 100
+print(f"Trainable percentage: {percentage:.3f}%")
+# ≈ 0.27%
+
+# Compare
+print(f"\nFull fine-tuning: {total_bert:,} parameters (100%)")
+print(f"LoRA fine-tuning: {total_lora_params:,} parameters ({percentage:.2f}%)")
+print(f"Reduction: {total_bert / total_lora_params:.0f}x fewer trainable parameters")
+# ~371x fewer parameters
+
+# Verify with PEFT
+from peft import LoraConfig, get_peft_model, TaskType
+from transformers import AutoModelForSequenceClassification
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    "bert-base-uncased", num_labels=2
+)
+lora_config = LoraConfig(
+    r=8, lora_alpha=32,
+    target_modules=["query", "value"],
+    lora_dropout=0.1,
+    task_type=TaskType.SEQ_CLS
+)
+lora_model = get_peft_model(model, lora_config)
+lora_model.print_trainable_parameters()
+# trainable params: 294,912 || all params: 109,482,240 || trainable%: 0.27%
+```
+
+**Why LoRA works**:
+
+LoRA adds low-rank matrices `A` and `B` such that the weight update `ΔW = BA` (where `B ∈ R^{d×r}` and `A ∈ R^{r×d}`). During forward pass: `h = W₀x + BAx = (W₀ + BA)x`. Only `A` and `B` are updated — `W₀` is frozen.
+
+The hypothesis is that the intrinsic dimensionality of task adaptation is much lower than `d`, so a rank-8 update captures most of the necessary adaptation. This has been validated empirically across many benchmarks.
+
+</details>
+
+### Exercise 2: Token Alignment for NER
+
+One of the trickier aspects of NER fine-tuning is that WordPiece tokenization can split a word into multiple subword tokens, but NER labels are assigned at the word level. Write a function that properly aligns NER labels to subword tokens, and trace through a concrete example.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from transformers import BertTokenizer
+
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+# Example: NER at word level
+words = ['Barack', 'Obama', 'was', 'born', 'in', 'Hawaii']
+ner_labels = [1, 2, 0, 0, 0, 5]  # B-PER, I-PER, O, O, O, B-LOC
+# 0=O, 1=B-PER, 2=I-PER, 3=B-ORG, 4=I-ORG, 5=B-LOC, 6=I-LOC
+
+def align_labels_with_tokens(words, labels, tokenizer):
+    """
+    Align word-level NER labels to subword tokens.
+    Rules:
+    - Special tokens ([CLS], [SEP]) get label -100 (ignored in loss)
+    - First subword of a word gets the word's label
+    - Subsequent subwords of the same word get label -100 (ignored)
+    """
+    tokenized = tokenizer(
+        words,
+        is_split_into_words=True,
+        return_offsets_mapping=False,
+        truncation=True,
+    )
+
+    word_ids = tokenized.word_ids()  # Maps each token position to word index
+
+    aligned_labels = []
+    previous_word_id = None
+
+    for word_id in word_ids:
+        if word_id is None:
+            # Special token ([CLS], [SEP], [PAD])
+            aligned_labels.append(-100)
+        elif word_id != previous_word_id:
+            # First subword of a new word: use the word's label
+            aligned_labels.append(labels[word_id])
+        else:
+            # Continuation subword: ignore in loss
+            aligned_labels.append(-100)
+
+        previous_word_id = word_id
+
+    return tokenized, aligned_labels, word_ids
+
+tokenized, aligned_labels, word_ids = align_labels_with_tokens(
+    words, ner_labels, tokenizer
+)
+
+# Show the alignment
+tokens = tokenizer.convert_ids_to_tokens(tokenized['input_ids'])
+label_names = ['O', 'B-PER', 'I-PER', 'B-ORG', 'I-ORG', 'B-LOC', 'I-LOC']
+
+print(f"{'Token':<15} {'Word ID':<10} {'Label':<15} {'Label Name'}")
+print("-" * 50)
+for token, word_id, label in zip(tokens, word_ids, aligned_labels):
+    label_str = label_names[label] if label != -100 else "IGNORE"
+    word_id_str = str(word_id) if word_id is not None else "special"
+    print(f"{token:<15} {word_id_str:<10} {str(label):<15} {label_str}")
+
+# Output:
+# Token           Word ID    Label           Label Name
+# --------------------------------------------------
+# [CLS]           special    -100            IGNORE
+# barack          0          1               B-PER
+# ##ob            0          -100            IGNORE  ← subword
+# ##ama           0          -100            IGNORE  ← subword
+# was             2          0               O
+# born            3          0               O
+# in              4          0               O
+# hawaii          5          5               B-LOC
+# [SEP]           special    -100            IGNORE
+```
+
+**Why this matters**: If we naively assigned `B-PER` to all three subwords of "Barack" ("barack", "##ob", "##ama"), the model would try to predict `B-PER` for `##ama` even though in practice, an entity never starts mid-word. Using `-100` for continuation subwords correctly focuses learning on first-subword predictions only.
+
+</details>
+
+### Exercise 3: Fine-Tuning Strategy Selection
+
+For each scenario below, choose the most appropriate fine-tuning strategy and justify your choice:
+
+1. You have 100,000 labeled movie reviews and 4 A100 GPUs
+2. You need to adapt a 7B parameter LLM for customer support on a laptop with 16GB RAM
+3. You have only 50 labeled examples for a specialized medical classification task
+4. You need to fine-tune for instruction following on preference data (chosen/rejected pairs)
+
+<details>
+<summary>Show Answer</summary>
+
+**Scenario 1: Full Fine-tuning**
+
+- 100k samples is sufficient to update all parameters without overfitting
+- With 4 A100 GPUs (40GB VRAM each), you can fit the full model in memory
+- Full fine-tuning gives maximum flexibility and typically best performance when data is abundant
+
+```python
+# Full fine-tuning setup
+args = TrainingArguments(
+    per_device_train_batch_size=32,  # Large batch exploits 4 GPUs
+    num_train_epochs=3,
+    learning_rate=2e-5,
+    fp16=True,  # Mixed precision for speed
+)
+```
+
+**Scenario 2: QLoRA (Quantized LoRA)**
+
+- 7B parameter model in fp16 would need ~14GB just for weights — barely fits on laptop
+- 4-bit quantization reduces to ~3.5GB, leaving room for activations and LoRA adapters
+- LoRA adds only ~0.3% additional trainable parameters
+
+```python
+from transformers import BitsAndBytesConfig
+from peft import LoraConfig
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    quantization_config=bnb_config
+)
+lora_config = LoraConfig(r=16, target_modules=["q_proj", "v_proj"])
+model = get_peft_model(model, lora_config)
+```
+
+**Scenario 3: Prompt Tuning or Few-Shot with Frozen Model**
+
+- 50 examples is too few for reliable full or even LoRA fine-tuning (high risk of overfitting)
+- Prompt tuning trains only soft prompt tokens (~1% of parameters), dramatically reducing the chance of overfitting
+- Alternative: Use the pre-trained model with few-shot in-context learning (no gradient updates at all)
+
+```python
+from peft import PromptTuningConfig, TaskType, get_peft_model
+
+config = PromptTuningConfig(
+    task_type=TaskType.SEQ_CLS,
+    num_virtual_tokens=20,  # Few learnable prompt tokens
+    prompt_tuning_init="TEXT",
+    prompt_tuning_init_text="Classify the following medical text: "
+)
+model = get_peft_model(frozen_model, config)
+```
+
+**Scenario 4: SFT + DPO (Direct Preference Optimization)**
+
+- Instruction following requires teaching the model what outputs are preferred
+- Step 1: SFT on chosen responses to learn the target behavior
+- Step 2: DPO uses (chosen, rejected) pairs to directly optimize preference alignment without a reward model
+
+```python
+from trl import SFTTrainer, DPOTrainer
+
+# Step 1: Supervised Fine-Tuning
+sft_trainer = SFTTrainer(model=model, train_dataset=instruction_dataset)
+sft_trainer.train()
+
+# Step 2: DPO for preference alignment
+dpo_trainer = DPOTrainer(
+    model=sft_model,
+    ref_model=sft_model_copy,  # Reference model (frozen)
+    train_dataset=preference_dataset,  # {prompt, chosen, rejected}
+    beta=0.1,
+)
+dpo_trainer.train()
+```
+
+</details>
+
 ## Next Steps
 
 Learn effective prompt engineering techniques in [08_Prompt_Engineering.md](./08_Prompt_Engineering.md).

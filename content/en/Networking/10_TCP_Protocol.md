@@ -1,14 +1,28 @@
 # TCP Protocol
 
-## Overview
-
-This document covers the core concepts of TCP (Transmission Control Protocol). You'll learn the operating principles of TCP, which ensures connection-oriented and reliable data transmission, including header structure, flow control, and congestion control mechanisms.
+**Previous**: [Routing Protocols](./09_Routing_Protocols.md) | **Next**: [UDP and Ports](./11_UDP_and_Ports.md)
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 3-4 hours
 **Prerequisites**: [09_Routing_Protocols.md](./09_Routing_Protocols.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain TCP's core characteristics: connection-oriented, reliable, ordered delivery
+2. Identify and describe the fields in a TCP header, including flags, sequence numbers, and window size
+3. Trace the 3-way handshake process for connection establishment
+4. Trace the 4-way handshake process for connection termination
+5. Explain how sequence numbers and acknowledgments provide reliable delivery
+6. Describe TCP flow control using the sliding window mechanism
+7. Compare TCP congestion control algorithms: Slow Start, Congestion Avoidance, Fast Retransmit, and Fast Recovery
+
+---
+
+TCP is the protocol that makes the Internet reliable. Every time you download a file, load a web page, or send an email, TCP quietly ensures that every byte arrives intact, in order, and without duplication -- even across an unreliable network of routers and links. Understanding how TCP establishes connections, tracks data with sequence numbers, and adapts to network congestion is essential for debugging application performance issues and designing networked systems.
 
 ## Table of Contents
 
@@ -20,8 +34,7 @@ This document covers the core concepts of TCP (Transmission Control Protocol). Y
 6. [Flow Control](#6-flow-control)
 7. [Congestion Control](#7-congestion-control)
 8. [Practice Problems](#8-practice-problems)
-9. [Next Steps](#9-next-steps)
-10. [References](#10-references)
+9. [References](#9-references)
 
 ---
 
@@ -175,6 +188,8 @@ TCP Data Encapsulation
 | NOP | 1 | Padding (No Operation) |
 
 ---
+
+> **Analogy -- Registered Mail**: TCP is like sending a registered letter. You get a delivery confirmation (ACK), the postal service tracks every package (sequence numbers), and if something gets lost, it's automatically re-sent (retransmission). This reliability comes at a cost -- it's slower than just dropping a postcard in the mailbox (UDP). But when you need to be certain your message arrived intact and in order, TCP's overhead is worth the guarantee.
 
 ## 3. 3-Way Handshake
 
@@ -905,25 +920,11 @@ c) 3 dup ACKs (Fast Retransmit):
 
 ---
 
-## 9. Next Steps
-
-Once you understand TCP core concepts, learn about UDP and ports.
-
-### Next Lesson
-- [11_UDP_and_Ports.md](./11_UDP_and_Ports.md) - UDP features, port numbers
-
-### Related Lessons
-- [09_Routing_Protocols.md](./09_Routing_Protocols.md) - Network layer
-- [12_DNS.md](./12_DNS.md) - DNS operation principles
-
-### Recommended Practice
-1. Capture TCP 3-way handshake with Wireshark
-2. Check TCP statistics with `ss -i` or `netstat -s`
-3. Analyze TCP flags with `tcpdump`
+**Previous**: [Routing Protocols](./09_Routing_Protocols.md) | **Next**: [UDP and Ports](./11_UDP_and_Ports.md)
 
 ---
 
-## 10. References
+## 9. References
 
 ### RFC Documents
 

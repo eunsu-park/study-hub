@@ -7,11 +7,15 @@
 - Learn SIMPLE algorithm basics
 - Grasp the concept of staggered grid
 
+**Why This Lesson Matters:** Incompressible flow is the most common regime in everyday fluid mechanics -- water in pipes, air in buildings (at low speeds), blood in vessels. The incompressible Navier-Stokes equations present a unique numerical challenge: pressure has no evolution equation of its own. Instead, it acts as a Lagrange multiplier that enforces the divergence-free constraint ($\nabla \cdot \mathbf{u} = 0$). This pressure-velocity coupling is the central difficulty of incompressible CFD and has inspired ingenious algorithms like SIMPLE, fractional-step, and stream function-vorticity methods.
+
 ---
 
 ## 1. Incompressible Navier-Stokes Equations
 
 ### 1.1 Primitive Variable Formulation
+
+The incompressible Navier-Stokes equations in primitive variables (velocity $\mathbf{u}$ and pressure $p$) consist of a divergence-free constraint and momentum equations:
 
 ```
 Incompressible NS equations (primitive variables: u, v, p):
@@ -1118,6 +1122,25 @@ Incompressible flow essentials:
    - Grid convergence check essential
    - Comply with CFL condition
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Stream Function and Velocity Field
+Given the stream function ψ = sin(πx)sin(πy) on the unit square [0,1]×[0,1], derive the velocity components u = ∂ψ/∂y and v = -∂ψ/∂x analytically. Verify that the incompressibility condition ∂u/∂x + ∂v/∂y = 0 is satisfied. Then compute the vorticity ω = ∂v/∂x - ∂u/∂y and show that ∇²ψ = -ω holds.
+
+### Exercise 2: Lid-Driven Cavity Resolution Study
+Run the stream function-vorticity lid-driven cavity simulation at Re = 100 using grid sizes N = 21, 41, and 81. For each grid, record the location and value of the primary vortex center (minimum of ψ). Compare your results to the Ghia et al. (1982) benchmark: vortex center at approximately (0.617, 0.742) with ψ_min ≈ -0.1034. How does the error depend on grid size?
+
+### Exercise 3: Checkerboard Pressure Instability
+On a 5×5 collocated grid, manually construct a checkerboard pressure field p(i,j) = (-1)^(i+j). Compute the central-difference pressure gradient ∂p/∂x at each interior point and show it is identically zero. Explain why this causes problems for the momentum equation and how the staggered grid resolves it.
+
+### Exercise 4: SIMPLE Under-Relaxation Effects
+Implement the SIMPLE algorithm for the lid-driven cavity at Re = 100 and experiment with pressure under-relaxation factors αp ∈ {0.1, 0.3, 0.5, 0.7}. For each value, record: (a) the number of outer iterations to reach convergence (max divergence < 10⁻⁴), and (b) whether the simulation diverges. Plot convergence history and identify the optimal αp for fastest stable convergence.
+
+### Exercise 5: Reynolds Number Transition Study
+Using the stream function-vorticity solver, simulate the lid-driven cavity at Re = 100, 400, and 1000. For each case, identify: (a) the primary vortex center coordinates, (b) whether secondary corner vortices appear, and (c) the maximum vorticity magnitude. Describe qualitatively how increasing Re changes the flow structure and explain the physical mechanism responsible for corner vortex formation.
 
 ---
 

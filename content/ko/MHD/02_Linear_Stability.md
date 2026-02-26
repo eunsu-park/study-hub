@@ -443,25 +443,35 @@ class MHDStabilitySolver:
         A = np.zeros((nr, nr))
 
         for i in range(1, nr-1):
-            # Radial derivatives (centered difference)
-            # d²ξ/dr² + (1/r)dξ/dr - (m²/r²)ξ
+            # 라플라시안 구조 d²ξ/dr² + (1/r)dξ/dr - (m²/r²)ξ는
+            # 힘 연산자를 m번째 푸리에 고조파에 투영하는 데서 나옵니다;
+            # -m²/r² 항은 방위각 방향으로 원통 주위에서 변위를 구부리는
+            # 원심 비용입니다.
 
-            # Magnetic tension term
+            # 자기 장력 계수 B²/(μ₀ρ)는 v_A² (알벤 속도 제곱)과 같습니다:
+            # 자기장선 굽힘은 v_A²에 비례하는 복원력을 생성하여
+            # 높은 m의 짧은 파장 섭동을 안정화합니다 — 이것이 근본적인 안정화 메커니즘입니다.
             tension_coef = (Bz[i]**2 + Btheta[i]**2) / (self.mu0 * rho[i])
 
             # Diagonal
             A[i, i] = -2*tension_coef/self.dr**2 - m**2*tension_coef/r[i]**2
 
-            # Off-diagonal
+            # 비대칭 비대각 항 tension/(2r dr)은 라플라시안의
+            # 원통형 (1/r)dξ/dr 부분에서 나옵니다; 1차이며
+            # r → ∞인 직교 좌표 기하학에서는 사라집니다.
             A[i, i+1] = tension_coef/self.dr**2 + tension_coef/(2*r[i]*self.dr)
             A[i, i-1] = tension_coef/self.dr**2 - tension_coef/(2*r[i]*self.dr)
 
-            # Pressure term (simplified)
+            # 압력 구배 항 -∇p/ρ는 불안정화 구동으로 작용합니다:
+            # 압력이 바깥쪽으로 감소하면 (dp/dr < 0), 이 항은 A에서 양수가 되어
+            # 복원력을 줄이고 잠재적으로 성장을 구동합니다.
             if i > 0:
                 dpdx = (p[i+1] - p[i-1]) / (2*self.dr)
                 A[i, i] += -dpdx / rho[i]
 
-        # Boundary conditions: ξ(0) = 0, ξ(r_max) = 0
+        # Dirichlet 조건 ξ(0) = ξ(r_max) = 0은 축에서의 정칙성 (특이 변위 없음)과
+        # 경계에서 섭동 없음(플라즈마 표면이 이 단순화된 모델에서 고정됨)을
+        # 강제합니다.
         A[0, 0] = 1.0
         A[-1, -1] = 1.0
 
@@ -474,13 +484,16 @@ class MHDStabilitySolver:
         """
         A = self.compute_force_operator(m, kz)
 
-        # Solve eigenvalue problem
+        # 힘 연산자 F가 자기수반(에르미트)이므로 ω²의 실수 고유값이 보장됩니다.
+        # eigh는 일반 복소 고유값 해석기보다 빠르고 수치적으로 안정적인
+        # 이 대칭성을 활용합니다.
         # A ξ = λ ξ, where λ = -ω²
         eigenvalues, eigenvectors = eigh(A)
 
-        # Convert to growth rates
-        # If λ > 0: unstable with γ = sqrt(λ)
-        # If λ < 0: stable (oscillatory)
+        # λ > 0은 ω² < 0을 의미하며, 즉 ω가 순허수 → 지수 성장입니다.
+        # 부호 관례(λ = -ω²)는 고유값 방정식 F(ξ) = -ω²ρξ에서 나옵니다:
+        # 양정치 F (복원력)는 λ < 0 (안정 진동)을 줌으로써 불안정을 나타내고,
+        # 음반정치 F는 λ > 0 (불안정)을 줍니다.
         growth_rates_squared = eigenvalues
 
         return growth_rates_squared, eigenvectors
@@ -814,18 +827,30 @@ def compute_delta_W(r, xi_r, xi_theta, Bz, Btheta, p, rho, m, kz, gamma_adiabati
     # B1_r ~ -ikz * xi_r * Bz + (im/r) * xi_theta * Bz
     # This is a simplified model; full calculation is complex
 
-    # Magnetic compression energy
+    # div_xi는 유체가 얼마나 압축되는지 측정합니다: 0이 아닌 발산은
+    # 자기 압축과 음향 압축 모두를 통해 에너지 비용을 지불하므로,
+    # 가장 위험한(불안정) 섭동은 비압축(div_xi → 0)인 경향이 있습니다 —
+    # 이러한 안정화 항을 피하기 때문입니다.
     dxi_r_dr = np.gradient(xi_r, r)
     div_xi = dxi_r_dr + xi_r/r + (1j*m/r)*xi_theta
 
+    # kz*Bz와 (m/r)*Bz 항은 자기장선 굽힘을 포착합니다: kz 방향 또는
+    # m번째 방위각 고조파 주위로 플라즈마를 변위시키면 자기장선이 늘어나고
+    # 구부러져 양의 일을 합니다(B1_perp_sq > 0), 이는 항상 안정화입니다 —
+    # 이것이 B_z가 Z-pinch를 더 안정하게 만드는 이유입니다.
     B1_perp_sq = np.abs((kz*Bz)**2 * xi_r**2 + (m*Bz/r)**2 * xi_theta**2)
 
     delta_W_magnetic = 0.5 * simps(B1_perp_sq / mu0 * 2*np.pi*r, r)
 
-    # Pressure compression energy
+    # 단열 압축 δW_p = (γp/2)|div_ξ|²은 음향 복원력을 적분합니다:
+    # 플라즈마를 단열적으로 압축하면 압력이 높아져 추가 압축에 저항합니다.
+    # 이 항은 항상 양수(안정화)입니다.
     delta_W_pressure = 0.5 * simps(gamma_adiabatic * p * np.abs(div_xi)**2 * 2*np.pi*r, r)
 
-    # Pressure gradient drive
+    # 압력 구배 구동 ξ_r (dp/dr) div_ξ는 dp/dr < 0 (바깥쪽으로 감소하는 압력)이고
+    # 변위가 바깥쪽이면 (ξ_r > 0이고 div_ξ > 0) 음수일 수 있습니다:
+    # 이것이 낮은 압력의 플라즈마가 바깥쪽으로 흘러 자유 에너지를 방출하는
+    # 교환/ballooning 메커니즘입니다.
     dp_dr = np.gradient(p, r)
     delta_W_drive = simps(xi_r * dp_dr * div_xi.real * 2*np.pi*r, r)
 

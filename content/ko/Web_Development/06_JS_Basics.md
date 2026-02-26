@@ -1,12 +1,25 @@
 # JavaScript 기초
 
-## 개요
+**이전**: [CSS 반응형](./05_CSS_Responsive.md) | **다음**: [JS 이벤트와 DOM](./07_JS_Events_DOM.md)
 
-JavaScript는 웹 페이지에 동적인 기능을 추가하는 프로그래밍 언어입니다. HTML이 구조, CSS가 스타일이라면, JavaScript는 **동작**을 담당합니다.
+## 학습 목표(Learning Objectives)
 
-**선수 지식**: HTML, CSS 기초
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. JavaScript가 HTML/CSS/JS 삼각 구도에서 어떤 역할을 하는지 설명하고, defer와 async 스크립트 로딩의 차이를 설명할 수 있습니다
+2. let과 const를 사용해 변수를 선언하고, var를 지양해야 하는 이유를 설명할 수 있습니다
+3. 원시 타입(primitive types)(string, number, boolean, null, undefined, symbol, bigint)과 참조 타입(reference types)(object, array, function)의 차이를 구별할 수 있습니다
+4. 산술(arithmetic), 비교(comparison), 논리(logical), nullish coalescing 연산자를 적용할 수 있습니다
+5. if/else, switch, 삼항 연산자(ternary operator)를 사용해 조건 로직을 작성할 수 있습니다
+6. for, for...of, for...in, while, do...while로 반복문을 구현할 수 있습니다
+7. 함수 선언식(declaration), 표현식(expression), 화살표 구문(arrow syntax)으로 함수를 정의하고, 기본 매개변수(default parameters), 나머지 매개변수(rest parameters), 구조 분해(destructuring)를 활용할 수 있습니다
+8. map, filter, reduce, spread, optional chaining을 포함한 모던 ES6+ 메서드로 배열과 객체를 다룰 수 있습니다
 
 ---
+
+> **비유:** HTML이 TV라면, CSS는 화질 설정이고, JavaScript는 리모컨입니다. 채널을 바꾸고(콘텐츠 수정), 볼륨을 조절하고(스타일 업데이트), 버튼 누름에 반응하는(이벤트 처리) 모든 것을 TV 내부를 열지 않고도 할 수 있습니다.
+
+JavaScript는 웹 브라우저의 프로그래밍 언어입니다. HTML과 CSS가 선언형(declarative)으로 무언가가 무엇인지, 어떻게 보이는지를 기술하는 반면, JavaScript는 명령형(imperative)으로 무엇을 해야 하는지를 기술합니다. 이것이 바로 JavaScript가 상호작용성의 핵심인 이유입니다. 사용자가 입력하는 동안 폼 필드를 검증하거나, 페이지를 새로 고침하지 않고 서버에서 새 데이터를 가져오는 것까지 가능합니다.
 
 ## 목차
 
@@ -49,7 +62,9 @@ JavaScript는 웹 페이지에 동적인 기능을 추가하는 프로그래밍 
     <!-- head에 넣으면 HTML 파싱 차단 -->
     <script src="blocking.js"></script>
 
-    <!-- defer: HTML 파싱 완료 후 실행 -->
+    <!-- defer: HTML 파싱 중 병렬로 다운로드하고, DOM 준비 후 실행;
+         <script>를 <body> 끝에 두는 것보다 선호되는 이유:
+         선언은 <head>에 두어 초기에 파악 가능하면서도 DOM이 완전히 구성된 후 실행을 보장 -->
     <script src="main.js" defer></script>
 
     <!-- async: 다운로드 완료 즉시 실행 (순서 보장 X) -->
@@ -313,15 +328,15 @@ const value = input || '기본값';  // input이 falsy면 '기본값'
 ### Nullish 연산자
 
 ```javascript
-// ?? (null/undefined일 때만 우측 값)
+// ?? 는 null/undefined일 때만 우측 값을 반환 — 0, "", false가 유효한 값일 때는 || 대신 ?? 사용
 null ?? '기본값'      // '기본값'
 undefined ?? '기본값' // '기본값'
-0 ?? '기본값'         // 0
-'' ?? '기본값'        // ''
+0 ?? '기본값'         // 0  ← 0은 유효한 점수/카운트이므로 누락된 값이 아님
+'' ?? '기본값'        // '' ← 빈 문자열은 유효한 입력값이므로 값 부재가 아님
 
 // || 와 비교
-0 || '기본값'         // '기본값' (0은 falsy)
-'' || '기본값'        // '기본값' (''은 falsy)
+0 || '기본값'         // '기본값' (0이 falsy — 0이 유효한 값이라면 잘못된 동작!)
+'' || '기본값'        // '기본값' (''이 falsy — 빈 문자열이 의도적이라면 잘못된 동작)
 ```
 
 ### 할당 연산자
@@ -510,6 +525,7 @@ greet('홍길동');
 ### 화살표 함수 (Arrow Function)
 
 ```javascript
+// 화살표 함수는 자체적인 'this'를 바인딩하지 않음 — 'this'를 참조하는 객체 메서드에는 일반 함수를 사용
 // 기본 형태
 const greet = (name) => {
     return `안녕, ${name}!`;
@@ -546,7 +562,7 @@ function sum(...numbers) {
 }
 sum(1, 2, 3, 4);  // 10
 
-// 구조 분해
+// 구조 분해(destructuring) — person.name, person.age처럼 반복 접근을 피하고 로컬 const 바인딩을 생성
 function printUser({ name, age }) {
     console.log(`${name}은 ${age}살`);
 }
@@ -668,7 +684,7 @@ const doubled = numbers.map(n => n * 2);
 const evens = numbers.filter(n => n % 2 === 0);
 // [2, 4]
 
-// reduce: 누적 계산
+// reduce: acc = 누적 합계(초기값 0에서 시작), cur = 현재 배열 요소
 const sum = numbers.reduce((acc, cur) => acc + cur, 0);
 // 15
 
@@ -962,12 +978,12 @@ const result = obj.method?.();
 ### Nullish Coalescing (??)
 
 ```javascript
-// || 와 다르게 null/undefined만 체크
+// ?? 는 null/undefined에만 반응 — 0, "", false가 유효한 값일 때 || 대신 사용
 const value1 = null ?? '기본값';     // '기본값'
 const value2 = undefined ?? '기본값'; // '기본값'
-const value3 = 0 ?? '기본값';        // 0
-const value4 = '' ?? '기본값';       // ''
-const value5 = false ?? '기본값';    // false
+const value3 = 0 ?? '기본값';        // 0    ← 유효한 점수/카운트를 보존
+const value4 = '' ?? '기본값';       // ''   ← 유효한 빈 문자열 입력을 보존
+const value5 = false ?? '기본값';    // false ← 유효한 boolean 플래그를 보존
 ```
 
 ---
@@ -1051,7 +1067,7 @@ console.log(result);  // ['Lee', 'Park']
 
 ## 다음 단계
 
-- [07_JS_Events_DOM.md](./07_JS_Events_DOM.md) - DOM 조작과 이벤트 핸들링
+- [JavaScript 이벤트와 DOM](./07_JS_Events_DOM.md) - DOM 조작과 이벤트 핸들링
 
 ---
 

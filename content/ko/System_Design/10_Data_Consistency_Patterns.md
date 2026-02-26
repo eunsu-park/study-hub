@@ -1,12 +1,25 @@
 # 데이터 일관성 패턴 (Data Consistency Patterns)
 
-난이도: ⭐⭐⭐⭐
-
-## 개요
-
-분산 시스템에서 데이터 일관성은 가장 도전적인 문제 중 하나입니다. 이 장에서는 Strong Consistency와 Eventual Consistency의 트레이드오프, 읽기 일관성 패턴, 분산 트랜잭션의 한계, 그리고 Saga 패턴을 학습합니다.
+**이전**: [데이터베이스 복제](./09_Database_Replication.md) | **다음**: [메시지 큐 기초](./11_Message_Queue_Basics.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 강한 일관성(Strong Consistency)부터 최종 일관성(Eventual Consistency)까지 일관성 모델의 스펙트럼을 정의하고 관련 트레이드오프를 설명할 수 있다
+2. 선형화 가능성(Linearizability), 순차 일관성(Sequential Consistency), 인과 일관성(Causal Consistency)을 구체적인 예시와 함께 비교할 수 있다
+3. 읽기 일관성 패턴(자신의 쓰기 읽기(Read-Your-Writes), 단조 읽기(Monotonic Reads), 일관된 프리픽스(Consistent Prefix))을 설명하고 각각이 필요한 상황을 설명할 수 있다
+4. 2단계 커밋(2PC, Two-Phase Commit)을 사용하는 분산 트랜잭션이 대규모에서 왜 문제가 되는지 설명할 수 있다
+5. 안무(Choreography)와 오케스트레이션(Orchestration) 방식 모두에서 보상 트랜잭션(Compensating Transaction)을 포함한 Saga 패턴 구현을 설계할 수 있다
+6. 정확성과 가용성 및 지연 시간 간의 균형을 맞추면서 주어진 비즈니스 요구사항에 적합한 일관성 모델을 선택할 수 있다
+
+**난이도**: ⭐⭐⭐⭐
+
+---
+
+단일 데이터베이스 환경에서는 일관성이 단순합니다. 모든 읽기가 가장 최근의 쓰기를 반영합니다. 하지만 데이터가 여러 노드에 분산되는 순간, 어려운 선택을 해야 합니다. 모든 복제본이 동의할 때까지 쓰기를 차단할 것인지, 아니면 속도와 가용성을 위해 복제본들이 일시적으로 달라지도록 허용할 것인지 — 이 트레이드오프는 엄격한 정확성을 요구하는 뱅킹 플랫폼부터 몇 초의 오래된 데이터가 전혀 문제없는 소셜 미디어 피드까지, 모든 분산 시스템을 형성합니다.
 
 ## 목차
 
@@ -739,12 +752,6 @@ Read-Your-Writes를 보장하는 클라이언트 라이브러리를 설계하세
 
 ---
 
-## 다음 단계
-
-[11_Message_Queue_Basics.md](./11_Message_Queue_Basics.md)에서 비동기 통신의 기반이 되는 메시지 큐에 대해 배워봅시다!
-
----
-
 ## 참고 자료
 
 - "Designing Data-Intensive Applications" - Martin Kleppmann
@@ -752,3 +759,7 @@ Read-Your-Writes를 보장하는 클라이언트 라이브러리를 설계하세
 - Google Cloud Spanner: TrueTime and External Consistency
 - AWS: Building Distributed Locks with DynamoDB
 - "Sagas" - Hector Garcia-Molina, Kenneth Salem (1987)
+
+---
+
+**이전**: [데이터베이스 복제](./09_Database_Replication.md) | **다음**: [메시지 큐 기초](./11_Message_Queue_Basics.md)

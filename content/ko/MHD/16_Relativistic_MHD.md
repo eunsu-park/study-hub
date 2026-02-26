@@ -562,21 +562,35 @@ def prim2cons(prim):
     B2 = Bx**2 + By**2 + Bz**2
     vdotB = vx*Bx + vy*By + vz*Bz
 
-    # Specific enthalpy
+    # 비엔탈피(Specific Enthalpy) h = 1 + (Γ/Γ-1)(p/ρ): 비상대론적 경우와 달리
+    # 정지 질량 에너지 밀도를 포함; 낮은 p/ρ에서 h≈1로 축소되어 뉴턴 역학을 복원 —
+    # 하지만 초상대론적 압력(p ~ ρc²)에서는 엔탈피가 관성을 지배하여
+    # 상대론적 흐름이 근본적으로 달라짐
     h = 1.0 + GAMMA/(GAMMA-1.0) * p/rho
 
-    # Comoving magnetic field
+    # 공동 자기장(Comoving Magnetic Field)
     b0 = W * vdotB / C
     bx = Bx/W + W*vx*vdotB/C**2
     by = By/W + W*vy*vdotB/C**2
     bz = Bz/W + W*vz*vdotB/C**2
+    # b2 = B²/W² + (v·B)²/(W²c²): 공동 장 크기는 실험실 프레임의 B보다
+    # Lorentz 인수만큼 작음 — 고속 부스트된 제트는 자신의 프레임에서
+    # 더 약한 자기장을 경험하며, 이것이 고-σ 자기권이 파동 속도와 압력을
+    # 올바르게 계산하기 위해 완전한 상대론적 처리가 필요한 이유임
     b2 = (B2 + (vdotB)**2/C**2) / W**2
 
-    # Conserved variables
+    # D = ρW: 3+1 보존 밀도는 Lorentz 인수를 포함; 움직이는 유체 요소가
+    # 길이 수축되어 그 정지 질량 밀도가 W만큼 증가 — 이것이 질량 보존의 상대론적 유사체
     D = rho * W
+    # S = (ρh + b²)W²v - (v·B)B: 운동량 밀도는 운동학적 기여와 전자기적 기여를 혼합;
+    # (v·B)B 항은 B가 공동 프레임에서 순수하게 횡방향이 아님을 보정하여
+    # SRMHD를 SRHD와 구별함
     Sx = (rho*h + b2)*W**2*vx - (vdotB)*Bx/(4.0*np.pi)
     Sy = (rho*h + b2)*W**2*vy - (vdotB)*By/(4.0*np.pi)
     Sz = (rho*h + b2)*W**2*vz - (vdotB)*Bz/(4.0*np.pi)
+    # τ = 총 에너지 - 정지 질량 에너지: Dc²를 빼면 동적으로 진화하는
+    # 비정지 질량 에너지(운동 + 열 + 자기)만 남음; D*c²를 포함하면
+    # v≪c에서 수치 소거(Numerical Cancellation)가 발생
     tau = (rho*h + b2)*W**2 - p - b2/2.0 - D*C**2
 
     return np.array([D, Sx, Sy, Sz, tau, Bx, By, Bz])
@@ -589,7 +603,10 @@ def cons2prim(cons, prim_guess):
     # Initial guess
     rho, vx, vy, vz, p = prim_guess[:5]
 
-    # Newton-Raphson iteration (simplified)
+    # 원시 변수 복원(Primitive Variable Recovery)은 SRMHD에서 가장 어려운 단계:
+    # 보존 → 원시가 대수적인 고전 MHD와 달리, 여기서 W, ρ, v, p는 비선형으로 결합됨 —
+    # W는 v에 의존하고, v는 p에 의존하며, p는 다시 W에 의존하므로
+    # 반복이 불가피; Newton-Raphson 루프가 이 결합된 시스템을 동시에 해결함
     max_iter = 50
     tol = 1e-10
 
@@ -600,7 +617,9 @@ def cons2prim(cons, prim_guess):
         vdotB = vx*Bx + vy*By + vz*Bz
         b2 = (Bx**2 + By**2 + Bz**2 + (vdotB)**2/C**2) / W**2
 
-        # Residuals
+        # 잔차(Residuals)는 현재 추정값이 보존 변수 정의를 얼마나 잘 만족하는지 측정;
+        # D, Sx, τ가 모두 W와 p를 통해 결합되어 있으므로
+        # 세 잔차가 함께 소멸해야 함
         f1 = D - rho*W
         f2 = Sx - ((rho*h + b2)*W**2*vx - (vdotB)*Bx/(4.0*np.pi))
         f3 = tau - ((rho*h + b2)*W**2 - p - b2/2.0 - D*C**2)
@@ -608,7 +627,9 @@ def cons2prim(cons, prim_guess):
         if abs(f1) + abs(f2) + abs(f3) < tol:
             break
 
-        # Simple update (damped)
+        # 감쇠 업데이트(Damped Update, 0.5 블렌딩): Newton 스텝이 오버슈트될 수 있음 —
+        # 특히 높은 W이거나 진공 근처에서 — 따라서 새 추정값을 이전 값과 절반씩 가중하면
+        # 느린 수렴을 감수하고 안정성을 얻을 수 있음
         rho = D / W
         p_new = (tau + D*C**2 + p + b2/2.0) / (W**2) - rho*h - b2
         p = 0.5 * p + 0.5 * max(p_new, 1e-10)
@@ -621,7 +642,9 @@ def cons2prim(cons, prim_guess):
             vy = Sy / (rho*h*W**2)
             vz = Sz / (rho*h*W**2)
 
-        # Limit velocity
+        # |v| < c 강제: Newton 스텝이 초광속 속도를 생성하면
+        # (반복이 수렴하기 전 가능) 0.99c로 다시 스케일링 —
+        # W가 복소수가 되지 않도록 막는 물리적 하한
         v = np.sqrt(vx**2 + vy**2 + vz**2)
         if v >= C:
             scale = 0.99 * C / v
@@ -629,7 +652,9 @@ def cons2prim(cons, prim_guess):
             vy *= scale
             vz *= scale
 
-    # Apply floors
+    # 바닥값(Floor) 적용: ρ → 0 또는 p → 0 (진공)을 방지; 바닥값 없이는
+    # Lorentz 인수 W가 발산하여 시뮬레이션이 충돌; 1e-10은 물리 해에
+    # 영향을 주지 않을 만큼 충분히 작지만 W를 유한하게 유지함
     rho = max(rho, 1e-10)
     p = max(p, 1e-10)
 
@@ -692,7 +717,9 @@ def hll_flux(pL, pR):
     lamL = (vxL - cfL) / (1.0 - vxL*cfL/C**2)
     lamR = (vxR + cfR) / (1.0 + vxR*cfR/C**2)
 
-    # HLL flux
+    # HLL 플럭스: 가장 바깥쪽 좌향 및 우향 고속 파동(λL, λR)을 포착하는
+    # 세 파동 근사(Three-Wave Approximation); 중간 상태는 Rankine-Hugoniot 조건으로 결정 —
+    # HLLD보다 단순하지만 접촉 불연속에서 더 확산적; 고속파 정확도만 필요하므로 여기서는 적절함
     consL = prim2cons(pL)
     consR = prim2cons(pR)
     FL = flux(pL)
@@ -703,6 +730,8 @@ def hll_flux(pL, pR):
     elif lamR <= 0:
         return FR
     else:
+        # λL*λR*(consR - consL)는 "상류 보정(Upwinding Correction)"으로
+        # 엔트로피를 강제하고 Riemann 팬에 걸쳐 해가 인과율을 위반하지 않도록 함
         F_hll = (lamR*FL - lamL*FR + lamL*lamR*(consR - consL)) / (lamR - lamL)
         return F_hll
 
@@ -735,11 +764,18 @@ def evolve_srmhd():
                           abs((vx - cf)/(1.0 - vx*cf/C**2)))
             v_max = max(v_max, v_signal)
 
+        # CFL = 0.4은 고전적인 최대값 0.5보다 더 보수적:
+        # 상대론적 파동 속도가 신호 추정에서 c에 근접하고,
+        # 고-σ 플라즈마에서 고속 자기음파가 c에 가까울 수 있음 —
+        # 이 안전 마진이 솔버가 수치적으로 인과율이 위반되는
+        # 광원뿔 바깥으로 스텝하는 것을 방지함
         dt = CFL * dx / v_max
         if t + dt > t_end:
             dt = t_end - t
 
-        # RK2 time integration
+        # RK2 (Heun의 방법(Heun's Method)): 2단계 예측자-수정자가 2차 정확도를 달성 —
+        # 1단계는 1차 예측자(Forward Euler)를 제공하고,
+        # 2단계는 초기 및 예측 플럭스를 평균하여 2차 정확도를 얻음
         # Stage 1
         flux_arr = np.zeros((NX+1, 8))
         for i in range(NX+1):
@@ -754,7 +790,9 @@ def evolve_srmhd():
         for i in range(NX):
             cons_1[i] -= dt/dx * (flux_arr[i+1] - flux_arr[i])
 
-        # Recover primitives
+        # cons를 업데이트한 후 Stage 2 전에 즉시 원시 변수를 복원:
+        # SRMHD에서는 플럭스 함수가 원시 변수를 필요로 하기 때문에
+        # 이 복원을 연기할 수 없음 — 보존 변수에서 플럭스로의 직접 경로가 없음
         prim_1 = np.array([cons2prim(cons_1[i], prim[i]) for i in range(NX)])
 
         # Stage 2
@@ -770,6 +808,8 @@ def evolve_srmhd():
         for i in range(NX):
             cons_2[i] -= dt/dx * (flux_arr[i+1] - flux_arr[i])
 
+        # 최종 RK2 업데이트 = Stage 1과 Stage 2 추정값의 산술 평균;
+        # 이 평균화가 선행 오차항을 소거하여 스킴을 1차에서 2차 시간 정확도로 높임
         cons = 0.5 * (cons + cons_2)
         prim = np.array([cons2prim(cons[i], prim_1[i]) for i in range(NX)])
 

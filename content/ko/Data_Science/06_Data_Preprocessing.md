@@ -2,9 +2,24 @@
 
 [이전: Pandas 고급](./05_Pandas_Advanced.md) | [다음: 기술통계와 EDA](./07_Descriptive_Stats_EDA.md)
 
-## 개요
+---
 
-데이터 전처리는 분석이나 모델링 전에 데이터를 정제하고 변환하는 과정입니다. 결측치 처리, 이상치 탐지, 정규화, 인코딩 등 핵심 기법을 다룹니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `isna`를 사용하여 결측값(Missing Value)을 식별하고 결측 데이터 패턴을 시각화할 수 있습니다
+2. 삭제, 대체(Imputation), 보간(Interpolation)을 포함한 적절한 결측값 처리 전략을 적용할 수 있습니다
+3. IQR, Z-점수(Z-score), 수정된 Z-점수 방법을 사용하여 이상치(Outlier) 탐지를 구현할 수 있습니다
+4. Min-Max, Z-점수, Robust, Quantile 스케일링을 포함한 정규화(Normalization) 기법을 비교할 수 있습니다
+5. 범주형 변수에 레이블 인코딩(Label Encoding), 원-핫 인코딩(One-Hot Encoding), 순서형 인코딩(Ordinal Encoding), 타겟 인코딩(Target Encoding)을 적용할 수 있습니다
+6. 왜도가 큰 데이터에 로그 변환, Box-Cox, Yeo-Johnson을 포함한 수치형 변환을 구현할 수 있습니다
+7. 날짜 특성을 추출하고 시간 변수에 주기적 인코딩(Cyclic Encoding)을 적용할 수 있습니다
+8. scikit-learn의 `Pipeline`과 `ColumnTransformer`를 사용하여 엔드-투-엔드 전처리 파이프라인을 구축할 수 있습니다
+
+---
+
+원시 데이터는 지저분합니다 -- 결측 항목, 이상치, 일관성 없는 형식, 그리고 완전히 다른 스케일의 특성들이 뒤섞여 있습니다. 이러한 데이터를 그대로 분석이나 모델에 투입하면 기껏해야 신뢰할 수 없는 결과가, 최악의 경우에는 완전한 실패가 발생합니다. 데이터 전처리(Data Preprocessing)는 원시 데이터 수집과 신뢰할 수 있는 분석 사이를 잇는 필수적인 가교이며, 실무자들은 프로젝트 시간의 대부분을 이 단계에 할애합니다.
 
 ---
 

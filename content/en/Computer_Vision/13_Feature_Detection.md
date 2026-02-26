@@ -1,5 +1,18 @@
 # Feature Detection
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what feature points are and define the properties that make a good keypoint (repeatability, distinctiveness, locality)
+2. Implement Harris corner detection and interpret the corner response function
+3. Apply FAST, SIFT, and ORB detectors to find keypoints in images using OpenCV
+4. Compare the speed, accuracy, and patent/licensing trade-offs among Harris, FAST, SIFT, and ORB
+5. Extract and visualize keypoint descriptors and understand how they encode local image structure
+6. Evaluate detector performance by analyzing keypoint repeatability across transformed versions of an image
+
+---
+
 ## Overview
 
 Features are unique and repeatable points that can be detected in an image. These include corners, blobs, edge intersections, and more. They are used in image matching, object recognition, 3D reconstruction, and other applications. In this lesson, we will learn about various feature detection algorithms including Harris, FAST, SIFT, and ORB.
@@ -109,6 +122,8 @@ R = lambda1*lambda2 - k(lambda1 + lambda2)^2
 - R < 0: Edge
 ```
 
+**Geometric intuition**: The eigenvalues λ1 and λ2 of M represent the two principal directions of intensity change around a pixel. At a **corner**, the image changes strongly in all directions, so both eigenvalues are large — making det(M) = λ1·λ2 large and R positive. At an **edge**, intensity changes in only one direction, so one eigenvalue is large and the other small — making det(M) small but trace(M) still large, so R goes negative. At a **flat region**, neither eigenvalue is significant, so R is near zero. The parameter k (typically 0.04–0.06) controls sensitivity: smaller k detects more corners but also more false positives.
+
 ### cv2.cornerHarris()
 
 ```python
@@ -124,15 +139,21 @@ def harris_corner_detection(image_path):
     # Harris corner detection
     dst = cv2.cornerHarris(
         gray,
-        blockSize=2,     # Neighborhood size
-        ksize=3,         # Sobel kernel size
-        k=0.04           # Harris parameter
+        blockSize=2,     # Small patch (2px) captures fine structure; larger values
+                         # smooth over detail and miss tight corners
+        ksize=3,         # Sobel kernel size: 3 is the smallest that gives a
+                         # good gradient estimate without excessive blurring
+        k=0.04           # Harris sensitivity: 0.04–0.06 is the empirically safe
+                         # range — smaller k detects more corners but adds false
+                         # positives; larger k misses weak corners
     )
 
-    # Dilate result (emphasize corners)
+    # Dilate result to expand corner peaks so they are visible as distinct
+    # bright regions — without dilation, corners appear as single-pixel dots
     dst = cv2.dilate(dst, None)
 
-    # Mark corners above threshold
+    # Threshold at 1% of peak response: scales automatically to image content
+    # so the same code works on both high-contrast and low-contrast images
     result = img.copy()
     result[dst > 0.01 * dst.max()] = [0, 0, 255]
 
@@ -156,10 +177,11 @@ def harris_subpixel(image_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_float = np.float32(gray)
 
-    # Harris corners
+    # Harris corners — same parameters as above (blockSize=2, ksize=3, k=0.04)
     dst = cv2.cornerHarris(gray_float, 2, 3, 0.04)
 
-    # Extract corner locations
+    # Dilate then threshold: dilation merges nearby high-response pixels into
+    # connected blobs, making connectedComponentsWithStats find cleaner centroids
     dst = cv2.dilate(dst, None)
     ret, dst_thresh = cv2.threshold(dst, 0.01 * dst.max(), 255, 0)
     dst_thresh = np.uint8(dst_thresh)
@@ -218,12 +240,17 @@ def good_features_demo(image_path):
     # Detect good features
     corners = cv2.goodFeaturesToTrack(
         gray,
-        maxCorners=100,     # Maximum number of corners
-        qualityLevel=0.01,  # Quality level (ratio of max response)
-        minDistance=10,     # Minimum distance between corners
-        blockSize=3,        # Neighborhood size
-        useHarrisDetector=False,  # Use Shi-Tomasi
-        k=0.04              # Harris parameter (when using Harris)
+        maxCorners=100,     # Cap output count — unlimited corners overwhelm
+                            # downstream trackers (e.g., Lucas-Kanade)
+        qualityLevel=0.01,  # Accept corners with response >= 1% of the strongest;
+                            # low value keeps weaker but still useful corners
+        minDistance=10,     # Enforce spatial spread: prevents clusters of
+                            # redundant corners from the same region
+        blockSize=3,        # Slightly larger patch than Harris (2) for more
+                            # stable gradient estimates in noisy images
+        useHarrisDetector=False,  # Use Shi-Tomasi (min eigenvalue) — it avoids
+                                  # the k trade-off and is more numerically stable
+        k=0.04              # Harris parameter (only active when useHarrisDetector=True)
     )
 
     result = img.copy()
@@ -435,11 +462,16 @@ def sift_detection(image_path):
 
     # Create SIFT detector
     sift = cv2.SIFT_create(
-        nfeatures=0,          # Max features (0=unlimited)
-        nOctaveLayers=3,      # Layers per octave
-        contrastThreshold=0.04,  # Contrast threshold
-        edgeThreshold=10,     # Edge threshold
-        sigma=1.6             # Initial Gaussian sigma
+        nfeatures=0,          # 0 = unlimited; set a cap (e.g. 500) to bound
+                              # descriptor computation time at inference
+        nOctaveLayers=3,      # Layers between octaves: 3 gives good coverage
+                              # of the scale space without redundant computation
+        contrastThreshold=0.04,  # Reject low-contrast keypoints (texture-less areas)
+                                 # — lower values keep more but noisier keypoints
+        edgeThreshold=10,     # Reject edge responses; higher values are more
+                              # permissive and allow more edge-like keypoints
+        sigma=1.6             # Initial Gaussian blur matches the assumed camera
+                              # smoothing; Lowe's original paper validated 1.6
     )
 
     # Compute keypoints and descriptors
@@ -548,15 +580,23 @@ def orb_detection(image_path):
 
     # Create ORB detector
     orb = cv2.ORB_create(
-        nfeatures=500,        # Maximum features
-        scaleFactor=1.2,      # Pyramid scale factor
-        nlevels=8,            # Number of pyramid levels
-        edgeThreshold=31,     # Edge threshold
-        firstLevel=0,         # First pyramid level
-        WTA_K=2,              # Points to compare in BRIEF (2, 3, 4)
-        scoreType=cv2.ORB_HARRIS_SCORE,  # Score type
-        patchSize=31,         # BRIEF patch size
-        fastThreshold=20      # FAST threshold
+        nfeatures=500,        # Practical limit for real-time use: 500 gives good
+                              # coverage without overwhelming the matcher
+        scaleFactor=1.2,      # Mild downscale per pyramid level; smaller values
+                              # build finer-grained scale space but cost more memory
+        nlevels=8,            # 8 levels gives ~3.6× scale range (1.2^8), enough
+                              # to handle typical viewpoint scale changes
+        edgeThreshold=31,     # Matches patchSize: keeps FAST away from borders
+                              # so BRIEF can sample a full 31×31 patch
+        firstLevel=0,         # Start detection at full resolution for small features
+        WTA_K=2,              # Default binary comparison (pairs); use 3 or 4 for
+                              # more discriminative but larger descriptors
+        scoreType=cv2.ORB_HARRIS_SCORE,  # Harris score is more accurate than FAST
+                                         # score for ranking keypoints by quality
+        patchSize=31,         # BRIEF patch size: larger patches are more
+                              # discriminative but slower to compute
+        fastThreshold=20      # FAST intensity threshold: 20 balances sensitivity
+                              # and false positive rate for typical images
     )
 
     # Compute keypoints and descriptors

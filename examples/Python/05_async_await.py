@@ -66,7 +66,8 @@ async def concurrent_tasks():
     """Run multiple tasks concurrently."""
     start = time.perf_counter()
 
-    # Create tasks
+    # Why: create_task() schedules coroutines to run concurrently on the event loop;
+    # simply awaiting them sequentially would serialize the I/O waits
     task1 = asyncio.create_task(fetch_data(1, 0.2))
     task2 = asyncio.create_task(fetch_data(2, 0.15))
     task3 = asyncio.create_task(fetch_data(3, 0.1))
@@ -150,6 +151,8 @@ async def error_handling_example():
     except ValueError as e:
         print(f"  Caught exception: {e}")
 
+    # Why: return_exceptions=True collects exceptions as values in the results list instead
+    # of cancelling other tasks — essential when you want all tasks to complete regardless
     print("\nWith return_exceptions=True:")
     results = await asyncio.gather(
         risky_operation(1),
@@ -222,7 +225,9 @@ async def producer(queue: asyncio.Queue, producer_id: int, num_items: int):
         await queue.put(item)
         print(f"  Producer-{producer_id}: produced {item}")
 
-    await queue.put(None)  # Sentinel value
+    # Why: A sentinel (None) signals consumers to stop — without it, consumers would block
+    # forever on queue.get() since they can't know when production is finished
+    await queue.put(None)
 
 
 async def consumer(queue: asyncio.Queue, consumer_id: int):
@@ -364,7 +369,8 @@ async def run_blocking_code():
     """Run blocking code in executor."""
     loop = asyncio.get_event_loop()
 
-    # Run blocking calls in thread pool
+    # Why: run_in_executor offloads blocking calls to a thread pool so they don't freeze
+    # the event loop — pure async code and blocking libraries can coexist this way
     results = await asyncio.gather(
         loop.run_in_executor(None, blocking_io_operation, 1),
         loop.run_in_executor(None, blocking_io_operation, 2),

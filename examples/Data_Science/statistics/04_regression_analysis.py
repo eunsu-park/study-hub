@@ -8,6 +8,21 @@ Demonstrates regression analysis techniques:
 - Residual analysis
 - R-squared and adjusted R-squared
 - Confidence and prediction intervals
+
+Theory:
+- OLS minimizes the sum of squared residuals, yielding the Best Linear
+  Unbiased Estimator (BLUE) under the Gauss-Markov conditions: linearity,
+  independence, homoscedasticity, and no perfect multicollinearity.
+- R-squared measures the proportion of variance explained but always increases
+  with more predictors. Adjusted R-squared penalizes for model complexity.
+- Residual analysis checks the four key assumptions: linearity (residuals vs
+  fitted), Normality (Q-Q plot), homoscedasticity (scale-location), and
+  independence (Durbin-Watson).
+- The confidence interval brackets the mean response E[Y|x]; the prediction
+  interval brackets a new individual Y — wider because it includes both
+  estimation uncertainty and irreducible noise.
+
+Adapted from Data_Science Lesson 16.
 """
 
 import numpy as np
@@ -48,7 +63,9 @@ def simple_ols_from_scratch():
     x_mean = np.mean(x)
     y_mean = np.mean(y)
 
-    # Slope: β₁ = Cov(x,y) / Var(x)
+    # Why: The OLS slope is Cov(x,y)/Var(x) — the ratio of how x and y co-vary
+    # to how much x varies on its own. This is the projection of y onto x that
+    # minimizes squared prediction error.
     numerator = np.sum((x - x_mean) * (y - y_mean))
     denominator = np.sum((x - x_mean)**2)
     beta_1 = numerator / denominator
@@ -137,7 +154,9 @@ def multiple_regression():
     # Design matrix
     X = np.column_stack([np.ones(n), x1, x2, x3])
 
-    # OLS solution: β = (X'X)⁻¹X'y
+    # Why: The Normal Equations (X'X)beta = X'y are the matrix form of OLS.
+    # We use np.linalg.solve (not inv) because it is numerically more stable
+    # and faster. Inverting X'X is ill-conditioned when predictors are correlated.
     XtX = X.T @ X
     Xty = X.T @ y
     beta = np.linalg.solve(XtX, Xty)
@@ -157,7 +176,9 @@ def multiple_regression():
     ss_residual = np.sum(residuals**2)
     r_squared = 1 - (ss_residual / ss_total)
 
-    # Adjusted R-squared
+    # Why: Adjusted R-squared penalizes for the number of predictors. Adding a
+    # useless predictor increases R-squared but decreases adj-R-squared because
+    # the penalty (n-1)/(n-k-1) grows. This prevents overfitting in model selection.
     k = X.shape[1] - 1  # number of predictors (excluding intercept)
     adj_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
 
@@ -222,7 +243,10 @@ def polynomial_regression():
         k = degree
         adj_r_squared = 1 - (1 - r_squared) * (n - 1) / (n - k - 1)
 
-        # AIC and BIC
+        # Why: AIC balances goodness-of-fit (log-likelihood) against complexity
+        # (number of parameters). BIC has a stronger penalty (log(n) vs 2) and
+        # tends to select simpler models, especially with large n. Both prevent
+        # overfitting that raw R-squared cannot detect.
         log_likelihood = -n/2 * np.log(2*np.pi) - n/2 * np.log(ss_residual/n) - n/2
         aic = 2 * (degree + 1) - 2 * log_likelihood
         bic = (degree + 1) * np.log(n) - 2 * log_likelihood
@@ -276,7 +300,10 @@ def residual_analysis():
     """Demonstrate residual analysis."""
     print_section("4. Residual Analysis")
 
-    # Generate data with heteroscedasticity
+    # Why: Heteroscedasticity (non-constant variance) violates the OLS assumption
+    # of homoscedasticity. Here noise scales with x (0.5*x), so larger x values
+    # produce more spread. This inflates SE estimates and invalidates standard
+    # t-tests on coefficients. Remedies: WLS, robust SE, or log-transform.
     np.random.seed(789)
     n = 100
     x = np.random.uniform(1, 10, n)
@@ -300,7 +327,9 @@ def residual_analysis():
     print(f"  Min: {np.min(residuals):.4f}")
     print(f"  Max: {np.max(residuals):.4f}")
 
-    # Check normality (Shapiro-Wilk test)
+    # Why: Shapiro-Wilk is the most powerful normality test for small samples
+    # (n < 5000). If residuals are non-Normal, coefficient estimates remain
+    # unbiased but confidence intervals and p-values become unreliable.
     stat, p_value = stats.shapiro(residuals)
     print(f"\nShapiro-Wilk normality test:")
     print(f"  Statistic: {stat:.4f}")
@@ -310,7 +339,10 @@ def residual_analysis():
     else:
         print(f"  Residuals may not be normally distributed")
 
-    # Durbin-Watson statistic (autocorrelation)
+    # Why: Durbin-Watson tests for first-order autocorrelation in residuals.
+    # DW near 2 = no autocorrelation; DW near 0 = positive; DW near 4 = negative.
+    # Autocorrelated residuals indicate omitted temporal structure and invalidate
+    # standard errors (they become too small).
     dw = np.sum(np.diff(residuals)**2) / np.sum(residuals**2)
     print(f"\nDurbin-Watson statistic: {dw:.4f}")
     print(f"  (Values near 2 indicate no autocorrelation)")
@@ -384,7 +416,10 @@ def confidence_prediction_intervals():
     conf_lower = y_new - t_crit * conf_se
     conf_upper = y_new + t_crit * conf_se
 
-    # Prediction interval for new observations
+    # Why: The prediction interval adds the "+1" term for irreducible noise
+    # (sigma^2) on top of the estimation uncertainty. A confidence interval for
+    # E[Y|x] only has the estimation term. This is why prediction intervals are
+    # always wider — they account for individual-level variability.
     pred_se = np.sqrt(mse * (1 + np.sum((X_new @ XtX_inv) * X_new, axis=1)))
     pred_lower = y_new - t_crit * pred_se
     pred_upper = y_new + t_crit * pred_se

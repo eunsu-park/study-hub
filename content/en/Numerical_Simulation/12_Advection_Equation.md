@@ -261,6 +261,15 @@ c < 0 (moving left):
 du/dx ≈ (u_{i+1} - u_i) / dx  (forward difference)
 ```
 
+### Why Upwind? Following the Physics
+
+The advection equation describes quantities carried by a flow at speed c. **Information travels in the direction of the flow** — a wave moving rightward depends only on what lies upstream (to the left). The upwind scheme respects this by using a one-sided difference that looks in the upstream direction:
+
+- If c > 0 (rightward flow): use backward difference (u_i - u_{i-1})/Δx
+- If c < 0 (leftward flow): use forward difference (u_{i+1} - u_i)/Δx
+
+This is why central differences (FTCS) fail for pure advection: they look equally in both directions and don't respect the flow's directionality, leading to unconditional instability. The amplification factor for FTCS on advection is |G|² = 1 + C²·sin²(kΔx) > 1 for all wavenumbers — the scheme *always* amplifies every mode.
+
 ### 3.2 Scheme
 
 ```

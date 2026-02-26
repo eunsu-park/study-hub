@@ -1,5 +1,18 @@
 # Mathematics and Number Theory
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply modular arithmetic properties to compute sums, products, and modular inverses under a given modulus without overflow
+2. Implement the Euclidean algorithm and extended Euclidean algorithm to compute GCD, LCM, and modular inverses
+3. Identify prime numbers using the Sieve of Eratosthenes and implement efficient primality tests
+4. Calculate combinations and permutations using Pascal's triangle or factorials with modular inverses
+5. Use fast matrix exponentiation to evaluate linear recurrences in O(k³ log n) time
+6. Solve competitive programming problems that require number theory techniques such as Euler's totient and the Chinese Remainder Theorem
+
+---
+
 ## Overview
 
 This covers mathematical concepts frequently encountered in algorithm problems. Includes modular arithmetic, GCD, prime numbers, combinatorics, and matrix exponentiation.
@@ -89,15 +102,20 @@ def mod_pow(base, exp, mod):
     """
     Fast exponentiation (divide and conquer)
     Time: O(log exp)
+
+    Why this works: We decompose exp in binary.  For each bit position k,
+    base^(2^k) = (base^(2^(k-1)))^2, so we can build up all needed powers
+    with only log(exp) squarings.  We accumulate the product only when the
+    corresponding bit of exp is set — exactly the standard binary method.
     """
     result = 1
-    base %= mod
+    base %= mod  # Reduce base upfront to keep all intermediate values < mod
 
     while exp > 0:
-        if exp & 1:  # If exp is odd
+        if exp & 1:  # Current bit is set: multiply the running result by base^(2^k)
             result = (result * base) % mod
-        exp >>= 1  # exp //= 2
-        base = (base * base) % mod
+        exp >>= 1        # Move to the next bit
+        base = (base * base) % mod  # Square: base^(2^k) → base^(2^(k+1))
 
     return result
 
@@ -322,6 +340,9 @@ def sieve_of_eratosthenes(n):
 
     for i in range(2, int(n**0.5) + 1):
         if is_prime[i]:
+            # Start marking at i*i, not 2*i: every smaller multiple of i
+            # already has a factor < i and was crossed out in an earlier pass.
+            # This optimization roughly halves the inner-loop iterations.
             for j in range(i * i, n + 1, i):
                 is_prime[j] = False
 
@@ -463,13 +484,18 @@ print(get_divisors(36))  # [1, 2, 3, 4, 6, 9, 12, 18, 36]
 MOD = 10**9 + 7
 MAX_N = 10**6
 
-# Preprocessing
+# Preprocessing: build factorial and inverse-factorial tables once in O(N).
+# This lets every nCr / nPr query run in O(1) — critical when thousands of
+# queries arrive in a single test case.
 factorial = [1] * (MAX_N + 1)
 inv_factorial = [1] * (MAX_N + 1)
 
 for i in range(1, MAX_N + 1):
     factorial[i] = factorial[i - 1] * i % MOD
 
+# Compute inv_factorial[MAX_N] with one modular exponentiation (Fermat's theorem),
+# then fill downward using inv_factorial[i] = inv_factorial[i+1] * (i+1) % MOD.
+# This avoids MAX_N separate modular exponentiations (each O(log MOD)).
 inv_factorial[MAX_N] = mod_pow(factorial[MAX_N], MOD - 2, MOD)
 for i in range(MAX_N - 1, -1, -1):
     inv_factorial[i] = inv_factorial[i + 1] * (i + 1) % MOD
@@ -478,6 +504,8 @@ def nCr(n, r):
     """Binomial coefficient nCr - O(1) (after preprocessing)"""
     if r < 0 or r > n:
         return 0
+    # C(n,r) = n! / (r! * (n-r)!) ; division becomes multiplication by
+    # modular inverse so the result stays in [0, MOD).
     return factorial[n] * inv_factorial[r] % MOD * inv_factorial[n - r] % MOD
 
 def nPr(n, r):
@@ -618,15 +646,22 @@ def matrix_pow(M, n, mod):
     """
     Matrix M to the power n
     Time: O(k³ log n) (k = matrix size)
+
+    Why the identity matrix as the starting value: multiplying any matrix
+    by the identity leaves it unchanged, so `result` starts as M^0 = I.
+    This mirrors scalar fast exponentiation where `result` starts at 1.
+    The same repeated-squaring trick applies: O(log n) matrix multiplications
+    each costing O(k³), giving O(k³ log n) overall.
     """
     size = len(M)
-    # Identity matrix
+    # Identity matrix: I[i][j] = 1 iff i == j
     result = [[1 if i == j else 0 for j in range(size)] for i in range(size)]
 
     while n > 0:
         if n & 1:
+            # Current bit set: accumulate M^(2^k) into the result
             result = matrix_mult(result, M, mod)
-        M = matrix_mult(M, M, mod)
+        M = matrix_mult(M, M, mod)  # Square: M^(2^k) → M^(2^(k+1))
         n >>= 1
 
     return result

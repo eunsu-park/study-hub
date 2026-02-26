@@ -1,5 +1,24 @@
 # Text Processing
 
+**Previous**: [File and Directory Management](./03_File_Directory_Management.md) | **Next**: [Permissions and Ownership](./05_Permissions_Ownership.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Search for patterns in files using grep with regular expressions
+2. Write basic and extended regular expressions for text matching
+3. Extract specific fields from structured data using cut
+4. Sort and deduplicate data with sort and uniq
+5. Count lines, words, and bytes using wc
+6. Perform text substitutions and line operations with sed
+7. Process structured text data and perform calculations with awk
+8. Build multi-stage data processing pipelines using pipes and redirection
+
+---
+
+Text processing is where Linux truly shines. The Unix philosophy of "small tools that do one thing well" means you can chain grep, sed, awk, sort, and other utilities into powerful data pipelines -- all from the command line. System administrators use these tools daily to analyze logs, extract metrics, and transform configuration files. Mastering text processing turns you from a casual Linux user into a power user.
+
 ## 1. grep - Text Search
 
 grep is a powerful tool for searching patterns in files.
@@ -604,6 +623,4 @@ tail -f /var/log/syslog | grep --line-buffered -i error
 
 ---
 
-## Next Steps
-
-Learn about file permissions and ownership management in [05_Permissions_Ownership.md](./05_Permissions_Ownership.md)!
+**Previous**: [File and Directory Management](./03_File_Directory_Management.md) | **Next**: [Permissions and Ownership](./05_Permissions_Ownership.md)

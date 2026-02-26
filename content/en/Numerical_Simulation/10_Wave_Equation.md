@@ -8,6 +8,8 @@
 
 ---
 
+**Why does the wave equation require a different approach than the heat equation?** The heat equation is **dissipative** -- it smooths out disturbances over time, and energy monotonically decreases. The wave equation is **dispersive** -- it propagates disturbances without damping, and energy is conserved. This fundamental difference means numerical schemes that work well for heat (like implicit methods that damp high-frequency modes) are unnecessary for waves, while schemes that preserve wave amplitude and minimize numerical dispersion become essential.
+
 ## 1. Wave Equation Theory
 
 ### 1.1 Physical Background
@@ -55,7 +57,11 @@ for material, c in wave_speeds.items():
 
 ### 1.3 D'Alembert's Solution
 
-Analytical solution in infinite domain:
+D'Alembert showed that the general solution in an infinite domain decomposes into two counter-propagating waves:
+
+$$u(x,t) = f(x - ct) + g(x + ct)$$
+
+where $f$ travels to the right and $g$ travels to the left, both at speed $c$. The wave shapes are preserved exactly -- the wave equation has no dispersion or dissipation. The functions $f$ and $g$ are determined by the initial displacement $u(x,0)$ and initial velocity $u_t(x,0)$.
 
 ```
 u(x,t) = f(x - ct) + g(x + ct)
@@ -116,6 +122,8 @@ def dalembert_demo():
 
 ## 2. CTCS Method (Central Time Central Space)
 
+**Why CTCS for waves?** The wave equation is second-order in both time and space, so central differences (which are second-order accurate) are the natural choice for both. CTCS is explicit (no equation solving needed), time-reversible (matching the physics), and energy-conserving when $C = 1$. It is the gold standard for wave propagation problems.
+
 ### 2.1 Discretization
 
 CTCS uses central differencing for both time and space.
@@ -144,6 +152,12 @@ Time n-1:         [i]
 ```
 
 ### 2.3 Stability Condition
+
+The CFL (Courant-Friedrichs-Lewy) condition is one of the most important results in computational physics:
+
+$$C = \frac{c \cdot \Delta t}{\Delta x} \leq 1$$
+
+The Courant number $C$ compares two speeds: the numerical domain of dependence ($\Delta x / \Delta t$) and the physical propagation speed ($c$). If $C > 1$, physical signals travel faster than numerical information can propagate on the grid, and the scheme becomes unstable. When $C = 1$ exactly, CTCS reproduces the exact solution (no numerical dispersion), because the grid perfectly matches the wave's characteristic lines.
 
 ```
 CFL Condition: C = c·dt/dx <= 1
@@ -185,7 +199,8 @@ class WaveEquation1D:
         self.dx = L / (nx - 1)
         self.x = np.linspace(0, L, nx)
 
-        # Time step based on CFL condition
+        # Time step based on CFL condition: dt = C * dx / c
+        # Choosing courant close to 1 minimizes numerical dispersion
         self.dt = courant * self.dx / c
         self.nt = int(np.ceil(T / self.dt))
         self.dt = T / self.nt
@@ -215,8 +230,10 @@ class WaveEquation1D:
         if v0_func is None:
             v0_func = lambda x: np.zeros_like(x)
 
-        # First time step (using initial velocity)
-        # u^1 ≈ u^0 + dt·v^0 + (dt²/2)·c²·d²u^0/dx²
+        # CTCS is a 3-level scheme (uses u at times n-1, n, n+1).
+        # The first step needs special treatment because u^{-1} doesn't exist.
+        # We use a Taylor expansion: u^1 ≈ u^0 + dt·v^0 + (dt²/2)·c²·u_xx^0
+        # This preserves second-order accuracy at the first step.
         self.u_prev = self.u.copy()
 
         # Spatial second derivative
@@ -375,6 +392,12 @@ Result: Wave reflects at boundary with same phase
 
 ### 3.3 Absorbing Boundary (Absorbing/Sommerfeld)
 
+Absorbing boundaries approximate an infinite domain by letting waves pass through without reflection. The first-order Sommerfeld condition assumes waves hit the boundary at normal incidence:
+
+$$\frac{\partial u}{\partial t} + c\frac{\partial u}{\partial x} = 0 \quad \text{(right boundary, outgoing wave)}$$
+
+This works perfectly for normally-incident plane waves, but reflects waves arriving at oblique angles. Higher-order absorbing conditions (or Perfectly Matched Layers) handle oblique incidence better.
+
 ```
 du/dt + c·du/dx = 0 (right boundary)
 du/dt - c·du/dx = 0 (left boundary)
@@ -430,6 +453,8 @@ def boundary_condition_comparison():
 ---
 
 ## 4. Standing Waves and Normal Modes
+
+Standing waves arise when two counter-propagating waves of equal amplitude interfere. They are the natural vibration patterns (eigenmodes) of bounded systems. Any vibration of a string fixed at both ends can be decomposed into a sum of these modes -- this is the physical basis of Fourier series.
 
 ### 4.1 Analytical Standing Wave Solution
 
@@ -830,7 +855,15 @@ def create_wave_animation_2d():
 
 ## 7. Numerical Dispersion Analysis
 
+Numerical dispersion is a purely artificial effect where different wavelengths travel at different speeds on the discrete grid, even though the continuous wave equation is non-dispersive ($\omega = ck$ for all $k$). Short wavelengths (comparable to the grid spacing) suffer the most distortion. Understanding this effect is critical for choosing grid resolution: you need enough points per wavelength to keep dispersion errors acceptable.
+
 ### 7.1 Dispersion Relation
+
+The CTCS numerical dispersion relation replaces the exact $\omega = ck$ with:
+
+$$\sin\!\left(\frac{\omega \Delta t}{2}\right) = C \cdot \sin\!\left(\frac{k \Delta x}{2}\right)$$
+
+For small $k\Delta x$ (long wavelengths), $\sin \approx$ argument and the exact relation is recovered. For large $k\Delta x$ (short wavelengths), the numerical phase velocity is less than $c$, causing trailing artifacts.
 
 ```python
 def dispersion_analysis():

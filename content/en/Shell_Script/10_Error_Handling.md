@@ -2,9 +2,26 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [09_Process_Management.md](./09_Process_Management.md) | **Next**: [11_Argument_Parsing.md](./11_Argument_Parsing.md)
+**Previous**: [Process Management and Job Control](./09_Process_Management.md) | **Next**: [Argument Parsing and CLI Interfaces](./11_Argument_Parsing.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the behavior and edge cases of `set -e`, `set -u`, and `set -o pipefail`
+2. Configure the recommended strict-mode header (`set -euo pipefail`) for production scripts
+3. Implement `trap ERR` handlers that capture exit codes, line numbers, and stack traces
+4. Build a reusable error handling framework with named exit codes, log levels, and die/assert functions
+5. Apply defensive coding patterns including input validation, safe temporary files, and lock file management
+6. Use ShellCheck to detect and fix common shell scripting bugs before runtime
+7. Write multi-level debug logging with configurable verbosity and structured key-value output
+8. Distinguish between `ERR` and `EXIT` traps and combine them for robust cleanup and error reporting
+
+---
+
+A shell script without error handling will silently continue after failures, corrupt data, and leave behind orphaned resources. In production environments -- where scripts manage backups, deployments, and data pipelines -- a single unhandled error can cascade into hours of downtime. This lesson teaches you how to make scripts fail fast, fail loudly, and clean up after themselves using the defensive patterns that separate throwaway scripts from reliable automation.
 
 ## 1. set Options Deep Dive
 
@@ -1790,6 +1807,66 @@ Implement a comprehensive debug mode framework that:
 - Can be enabled/disabled for specific sections of code
 - Includes performance timing (duration of operations)
 
+## Exercises
+
+### Exercise 1: Understand set -e Gotchas
+
+Run the following script and predict the output before executing it. Then explain why each `echo` does or does not execute given `set -e` is active.
+
+```bash
+#!/bin/bash
+set -e
+
+echo "Start"
+false || echo "A"
+if false; then echo "B"; fi
+echo "C"
+! false
+echo "D"
+false | true
+echo "E"
+```
+
+Write down which letters (A through E) are printed and explain the rule that governs each case.
+
+### Exercise 2: Build a trap ERR Handler
+
+Write a script called `safe_run.sh` that:
+- Enables strict mode (`set -euo pipefail`)
+- Installs a `trap ERR` handler that prints: the exit code, the failing command (`$BASH_COMMAND`), and the line number (`$LINENO`)
+- Also installs a `trap EXIT` handler that always prints "Cleanup done" regardless of success or failure
+- Runs three commands: `echo "step 1"`, `false`, `echo "step 3"`
+
+Verify that step 3 never prints, the ERR trap fires with accurate context, and the EXIT trap always fires.
+
+### Exercise 3: Write a die/assert Library
+
+Create a reusable shell library file `error_lib.sh` that provides:
+- Named exit code constants: `E_SUCCESS=0`, `E_GENERAL=1`, `E_INVALID_ARGS=2`, `E_NOT_FOUND=66`
+- A `die <code> <message>` function that prints the message to stderr and exits with the given code
+- An `assert_file_exists <path>` function that calls `die $E_NOT_FOUND` if the file is missing
+- An `assert_not_empty <value> <name>` function that calls `die $E_INVALID_ARGS` if the value is empty
+
+Write a second script that sources `error_lib.sh` and calls each function with both valid and invalid inputs to demonstrate the behavior.
+
+### Exercise 4: Implement Safe File Operations with Cleanup
+
+Write a script that processes a source file and produces a modified output file using only safe operations:
+- Use `mktemp` to create a temporary file and register it for cleanup with `trap ... EXIT`
+- Write processed content to the temp file first, then atomically move it to the final destination with `mv`
+- If any step fails, the trap must remove the temp file and print "Aborted, temp files cleaned"
+- Test by intentionally failing midway (e.g., by piping through a command that does not exist) to verify cleanup occurs
+
+### Exercise 5: Multi-Level Debug Logging Framework
+
+Build a logging library `log_lib.sh` with these features:
+- A `LOG_LEVEL` environment variable controlling verbosity (0=none, 1=error, 2=warn, 3=info, 4=debug)
+- Functions `log_error`, `log_warn`, `log_info`, `log_debug` that each check `LOG_LEVEL` before printing
+- Each line includes a timestamp (`date '+%Y-%m-%d %H:%M:%S'`), the level name, and the message
+- A `log_structured` function that accepts `key=value` pairs and appends them after the standard prefix
+
+Test by running your script with `LOG_LEVEL=1 ./script.sh` (only errors), `LOG_LEVEL=3` (up to info), and `LOG_LEVEL=4` (all messages). Confirm only the expected lines appear at each level.
+
 ---
 
-**Previous**: [09_Process_Management.md](./09_Process_Management.md) | **Next**: [11_Argument_Parsing.md](./11_Argument_Parsing.md)
+**Previous**: [Process Management and Job Control](./09_Process_Management.md) | **Next**: [Argument Parsing and CLI Interfaces](./11_Argument_Parsing.md)

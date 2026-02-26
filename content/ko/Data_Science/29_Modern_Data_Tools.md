@@ -2,9 +2,21 @@
 
 [이전: 생존 분석](./28_Survival_Analysis.md)
 
-## 개요
+## 학습 목표
 
-Polars와 DuckDB는 중대형 데이터셋에서 Pandas보다 훨씬 빠른 속도를 제공하는 차세대 데이터 처리 도구입니다. 이 레슨에서는 Polars의 지연 평가(lazy evaluation)와 표현식 API(expression API), DuckDB의 인프로세스 SQL 엔진(in-process SQL engine), Apache Arrow 상호 운용성(interoperability), 그리고 Pandas에서의 실전 마이그레이션 패턴을 다룹니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. Pandas의 성능 한계를 파악하고 현대적 대안이 필요한 시점을 설명할 수 있다
+2. Polars의 표현식 API(expression API)를 사용하여 대용량 데이터셋에서 필터링·집계·컬럼 변환을 수행할 수 있다
+3. Polars의 지연 평가(lazy evaluation)와 쿼리 최적화(술어 푸시다운·프로젝션 푸시다운)가 성능을 개선하는 원리를 설명할 수 있다
+4. DuckDB를 사용하여 서버 없이 DataFrame, Parquet 파일, CSV 파일에 SQL 쿼리를 직접 실행할 수 있다
+5. Apache Arrow가 Polars, Pandas, DuckDB 사이의 제로 복사(zero-copy) 교환 포맷으로서 하는 역할을 설명할 수 있다
+6. 일반적인 Pandas 연산을 Polars에 상응하는 방식으로 변환할 수 있다
+7. 데이터셋 크기·워크플로우 요구사항·팀 친숙도에 따라 Pandas, Polars, DuckDB 중 적합한 도구를 선택할 수 있다
+
+---
+
+Pandas는 데이터 과학의 주력 도구이지만, 단일 코어 프로세서와 메모리에 여유롭게 올라가는 데이터셋 시대에 설계되었습니다. 데이터 규모가 커질수록 단일 스레드 즉시 평가(eager-evaluation) 모델이 병목이 됩니다. Polars와 DuckDB는 분산 컴퓨팅 클러스터 없이도 멀티코어 병렬 처리, 지연 평가(lazy evaluation), 컬럼형 저장소를 활용하여 수십 배의 속도 향상을 제공하는 차세대 데이터 도구입니다.
 
 ---
 

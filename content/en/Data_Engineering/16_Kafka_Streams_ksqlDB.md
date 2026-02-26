@@ -1,5 +1,18 @@
 # Kafka Streams and ksqlDB
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the fundamental differences between bounded (batch) and unbounded (stream) data processing, and distinguish event time, processing time, and watermarks.
+2. Describe the Kafka Streams topology model including source processors, stateless transformations (filter, map, flatMap), and stateful operations using state stores.
+3. Implement windowed aggregations (tumbling, hopping, session windows) and stream-table joins using Kafka Streams or Faust in Python.
+4. Write ksqlDB queries to create streams and tables, perform real-time filtering and aggregation, and materialize results for interactive access.
+5. Apply stream processing patterns such as event sourcing, CQRS, and materialized views to solve real-world data engineering problems.
+6. Design a stream processing pipeline with proper error handling, dead letter queues, and exactly-once semantics.
+
+---
+
 ## Overview
 
 Kafka Streams is a client library for building real-time stream processing applications on top of Apache Kafka. ksqlDB extends this with a SQL interface for stream processing. This lesson covers stream processing concepts, Faust (Python Kafka Streams), windowed aggregations, joins, and ksqlDB for interactive queries.
@@ -114,6 +127,10 @@ Faust is a Python stream processing library inspired by Kafka Streams.
 import faust
 
 # Create Faust app (connects to Kafka)
+# RocksDB is chosen for state storage because it provides persistent,
+# crash-recoverable key-value storage with LSM-tree performance —
+# ideal for high-throughput stream aggregations. The alternative
+# (in-memory store) is faster but loses state on restart.
 app = faust.App(
     'my_stream_app',
     broker='kafka://localhost:9092',
@@ -121,7 +138,9 @@ app = faust.App(
     topic_replication_factor=1,
 )
 
-# Define data model
+# Faust Records provide typed deserialization — incoming JSON messages are
+# automatically parsed into Order objects with type validation, catching
+# malformed messages early in the pipeline.
 class Order(faust.Record):
     order_id: str
     user_id: str
@@ -131,7 +150,9 @@ class Order(faust.Record):
 # Define input topic
 orders_topic = app.topic('orders', value_type=Order)
 
-# Simple stream processor: filter high-value orders
+# @app.agent creates a stream processor that runs as an async generator.
+# Each agent instance consumes from one or more Kafka partitions, enabling
+# horizontal scaling by adding more worker processes.
 @app.agent(orders_topic)
 async def process_orders(orders):
     async for order in orders:
@@ -156,7 +177,10 @@ class PageView(faust.Record):
 
 page_views_topic = app.topic('page_views', value_type=PageView)
 
-# Table: persistent key-value store (backed by Kafka changelog topic)
+# Table = a KTable in Kafka Streams terms: persistent key-value store backed
+# by a Kafka changelog topic. If this worker crashes, a new worker rebuilds
+# the table by replaying the changelog — automatic fault recovery.
+# partitions=8 should match the source topic's partition count for co-partitioning.
 page_view_counts = app.Table(
     'page_view_counts',
     default=int,
@@ -169,12 +193,16 @@ async def count_views(views):
     async for view in views:
         page_view_counts[view.page] += 1
 
-# Expose counts via HTTP endpoint
+# Faust exposes tables via HTTP for ad-hoc debugging and lightweight dashboards.
+# For production, prefer pushing aggregates to an external store (Redis, Postgres).
 @app.page('/counts/')
 async def get_counts(self, request):
     return self.json({k: v for k, v in page_view_counts.items()})
 
-# Windowed table: count per page per hour
+# Hopping window: overlapping time windows that provide smoother trend curves
+# than tumbling windows. size=1h, step=10min means each event contributes to
+# 6 overlapping windows, giving a "moving average" effect.
+# expires=24h auto-deletes old windows from RocksDB to prevent unbounded storage growth.
 hourly_counts = app.Table(
     'hourly_page_views',
     default=int,
@@ -206,20 +234,27 @@ class Event(faust.Record):
 events_topic = app.topic('events', value_type=Event)
 filtered_topic = app.topic('high_value_events', value_type=Event)
 
-# Filter
+# Filter — stateless operation: each event is evaluated independently.
+# Filtered events are forwarded to a separate topic so that downstream
+# consumers (e.g., alerting) only receive relevant events, reducing
+# their processing load and consumer lag.
 @app.agent(events_topic)
 async def filter_events(events):
     async for event in events.filter(lambda e: e.value > 100):
         await filtered_topic.send(value=event)
 
-# Group by
+# Group by — repartitions the stream by event_type, sending events with
+# the same type to the same Kafka partition. This is required before
+# any stateful aggregation (count, sum) to ensure all events for a given
+# key are processed by the same worker instance.
 @app.agent(events_topic)
 async def group_by_type(events):
     async for event in events.group_by(Event.event_type):
-        # Events are now partitioned by event_type
         print(f"Type: {event.event_type}, Value: {event.value}")
 
-# Map / Transform
+# Map / Transform — enrichment adds derived fields in-flight.
+# Using message.timestamp (Kafka ingestion time) rather than wall-clock time
+# ensures consistent results during event replay or reprocessing.
 @app.agent(events_topic)
 async def enrich_events(events):
     async for event in events:
@@ -270,7 +305,11 @@ class Transaction(faust.Record):
 
 transactions_topic = app.topic('transactions', value_type=Transaction)
 
-# Tumbling window: total spending per user per 5 minutes
+# Tumbling window: non-overlapping 5-minute buckets.
+# Each transaction falls into exactly one window, making the semantics simple
+# and the output easy to chart (one data point per 5-min interval).
+# expires=1h auto-cleans old windows from RocksDB — without this, state
+# grows indefinitely and eventually exhausts disk space.
 tumbling_spending = app.Table(
     'tumbling_spending',
     default=float,
@@ -283,10 +322,15 @@ tumbling_spending = app.Table(
 async def aggregate_tumbling(transactions):
     async for txn in transactions:
         tumbling_spending[txn.user_id] += txn.amount
+        # .current() returns the value for the currently active window only,
+        # not historical windows — important for real-time alerting
         current = tumbling_spending[txn.user_id].current()
         print(f"User {txn.user_id} 5-min spending: ${current:.2f}")
 
-# Hopping window: total spending per user, 10-min window every 5 min
+# Hopping window: overlapping windows provide smoother aggregation than tumbling.
+# size=10min with step=5min means windows overlap by 50%, so a transaction near
+# a boundary contributes to two windows — useful for fraud detection where you
+# want to catch spending spikes regardless of exact window alignment.
 hopping_spending = app.Table(
     'hopping_spending',
     default=float,
@@ -345,15 +389,23 @@ class UserProfile(faust.Record):
 orders_topic = app.topic('orders', value_type=Order)
 profiles_topic = app.topic('profiles', value_type=UserProfile)
 
-# KTable for user profiles (latest profile per user)
+# KTable for user profiles: stores only the latest profile per user_id.
+# This is the correct abstraction for slowly-changing reference data —
+# using a KStream would accumulate all historical profiles, wasting memory
+# and returning stale data on lookup.
 user_profiles = app.Table('user_profiles', default=None)
 
 @app.agent(profiles_topic)
 async def update_profiles(profiles):
     async for profile in profiles:
+        # Upsert semantics: each new profile message overwrites the previous one.
+        # The changelog topic backing this table provides fault tolerance.
         user_profiles[profile.user_id] = profile
 
-# KStream-KTable join: enrich orders with user profiles
+# KStream-KTable join: the most common stream enrichment pattern.
+# The order stream (unbounded, high-velocity) is enriched with the profile
+# table (latest snapshot). This is much more efficient than a KStream-KStream
+# join, which would require windowing and potentially miss matches.
 @app.agent(orders_topic)
 async def enrich_orders(orders):
     async for order in orders:
@@ -361,6 +413,8 @@ async def enrich_orders(orders):
         if profile:
             print(f"Order {order.order_id}: {profile.name} ({profile.tier}) - ${order.amount}")
         else:
+            # Graceful handling of missing profiles: log rather than crash.
+            # In production, route these to a dead letter topic for investigation.
             print(f"Order {order.order_id}: Unknown user {order.user_id} - ${order.amount}")
 ```
 
@@ -391,7 +445,11 @@ Key Concepts:
 ### 6.2 ksqlDB SQL Examples
 
 ```sql
--- Create a STREAM from a Kafka topic
+-- Create a STREAM from a Kafka topic.
+-- STREAM = unbounded sequence of events (insert semantics, like KStream).
+-- TIMESTAMP = 'order_time' tells ksqlDB to use the event time embedded in the
+-- data for windowing, rather than Kafka's ingestion timestamp — critical for
+-- correct windowed aggregations when events arrive out of order.
 CREATE STREAM orders_stream (
     order_id VARCHAR KEY,
     user_id VARCHAR,
@@ -404,7 +462,9 @@ CREATE STREAM orders_stream (
     TIMESTAMP = 'order_time'
 );
 
--- Create a TABLE (latest state per key)
+-- TABLE = materialized view of the latest value per key (like KTable).
+-- PRIMARY KEY tells ksqlDB which field to use for upsert semantics —
+-- new messages with the same user_id overwrite the previous value.
 CREATE TABLE user_profiles (
     user_id VARCHAR PRIMARY KEY,
     name VARCHAR,
@@ -415,14 +475,18 @@ CREATE TABLE user_profiles (
     VALUE_FORMAT = 'JSON'
 );
 
--- Filter stream: create a new stream of high-value orders
+-- Persistent query: runs continuously and writes results to a new Kafka topic.
+-- This is NOT a one-time query — it processes every new event in real time.
+-- The output topic can be consumed by alerting systems or other applications.
 CREATE STREAM high_value_orders AS
 SELECT *
 FROM orders_stream
 WHERE amount > 1000
 EMIT CHANGES;
 
--- Windowed aggregation: orders per user per hour
+-- Windowed aggregation materialized as a TABLE.
+-- TUMBLING (SIZE 1 HOUR) creates non-overlapping hourly buckets.
+-- The result is queryable via pull queries for real-time dashboards.
 CREATE TABLE hourly_user_orders AS
 SELECT
     user_id,
@@ -435,7 +499,9 @@ WINDOW TUMBLING (SIZE 1 HOUR)
 GROUP BY user_id
 EMIT CHANGES;
 
--- Stream-Table join: enrich orders with user profiles
+-- Stream-Table join: enriches every order event with the user's current profile.
+-- LEFT JOIN ensures orders are emitted even if the user profile is missing
+-- (e.g., new users not yet in the profiles topic), preventing data loss.
 CREATE STREAM enriched_orders AS
 SELECT
     o.order_id,
@@ -448,17 +514,23 @@ FROM orders_stream o
 LEFT JOIN user_profiles u ON o.user_id = u.user_id
 EMIT CHANGES;
 
--- Pull query: point-in-time lookup (REST API)
+-- Pull query: synchronous point-in-time lookup against the materialized table.
+-- Suitable for REST APIs and dashboards that need the current value.
 SELECT * FROM hourly_user_orders WHERE user_id = 'user_123';
 
--- Push query: continuous updates (Server-Sent Events)
+-- Push query: long-running query that streams results as Server-Sent Events.
+-- Unlike pull queries, push queries keep the connection open and emit every
+-- matching event in real time — ideal for live monitoring UIs.
 SELECT * FROM enriched_orders WHERE amount > 500 EMIT CHANGES;
 ```
 
 ### 6.3 ksqlDB Connectors
 
 ```sql
--- Source connector: Import data from PostgreSQL into Kafka
+-- Source connector: streams database changes (CDC) from PostgreSQL into Kafka topics.
+-- Debezium captures row-level changes via PostgreSQL's WAL (Write-Ahead Log),
+-- which is non-invasive to the source database (no polling, no triggers).
+-- Each captured change becomes a Kafka event that ksqlDB can process in real time.
 CREATE SOURCE CONNECTOR pg_source WITH (
     'connector.class' = 'io.debezium.connector.postgresql.PostgresConnector',
     'database.hostname' = 'postgres',
@@ -466,11 +538,17 @@ CREATE SOURCE CONNECTOR pg_source WITH (
     'database.user' = 'replicator',
     'database.password' = 'secret',
     'database.dbname' = 'mydb',
+    -- table.include.list limits capture to specific tables, reducing Kafka
+    -- storage and network overhead vs capturing the entire database
     'table.include.list' = 'public.orders,public.users',
     'topic.prefix' = 'pg'
 );
 
--- Sink connector: Export processed data to Elasticsearch
+-- Sink connector: exports processed stream data to Elasticsearch for full-text
+-- search and visualization. This creates a materialized view in Elasticsearch
+-- that stays synchronized with the Kafka topic in near real-time.
+-- key.ignore=true lets Elasticsearch auto-generate document IDs, which is
+-- appropriate for append-only event data.
 CREATE SINK CONNECTOR es_sink WITH (
     'connector.class' = 'io.confluent.connect.elasticsearch.ElasticsearchSinkConnector',
     'connection.url' = 'http://elasticsearch:9200',
@@ -563,6 +641,76 @@ Given a clickstream topic with: user_id, page_url, timestamp
 4. Build a table of user engagement metrics (avg session duration, bounce rate)
 */
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Real-Time Transaction Aggregator
+
+Build a Faust application that aggregates transaction data in multiple window types simultaneously:
+
+1. Define a `Transaction` record with fields: `user_id`, `merchant`, `amount`, `category`, `timestamp`
+2. Create three separate tables on the same transaction stream:
+   - A **tumbling** 5-minute table that tracks per-user total spending
+   - A **hopping** 10-minute (step=2-minute) table that tracks per-merchant transaction count
+   - A **session** table (30-second gap) that counts transactions per user session
+3. For each tumbling window update, print an alert if a user's 5-minute total exceeds $500
+4. Expose the current tumbling totals via a Faust HTTP endpoint at `/spending/`
+5. Explain in comments why `expires` must be set on each table and what happens to RocksDB state without it
+
+### Exercise 2: KStream-KTable Enrichment Pipeline
+
+Implement a stream enrichment pipeline using Faust where order events are joined against a user-profile table:
+
+1. Define `Order` (order_id, user_id, product_id, amount) and `UserProfile` (user_id, name, tier, credit_limit) records
+2. Maintain a `user_profiles` KTable that stays up-to-date as new profile events arrive
+3. For each incoming order:
+   - Enrich it with the user's name and tier from the KTable
+   - If the user profile is missing, route the order to a `missing_profile_orders` topic (dead letter queue)
+   - If the order amount exceeds the user's `credit_limit`, route to a `credit_alerts` topic
+4. Maintain a tumbling 1-hour table counting credit alerts per user tier
+5. Explain in comments why a KTable (not a KStream) is the correct abstraction for the profile lookup
+
+### Exercise 3: ksqlDB Fraud Detection Pipeline
+
+Write a complete ksqlDB pipeline to detect suspicious transaction patterns:
+
+```sql
+-- Starting from a raw transactions stream: (txn_id, user_id, amount, merchant, country, txn_time)
+-- Build the following pipeline:
+
+-- Step 1: Create the source stream with event-time semantics
+-- Step 2: Create a TABLE of per-user rolling 1-hour spending totals
+-- Step 3: Create a STREAM of transactions where:
+--         (a) single amount > $2000, OR
+--         (b) the user's rolling 1-hour total exceeds $5000
+-- Step 4: Join the alerts stream back to the user's profile table to add their email
+-- Step 5: Write a push query that continuously monitors the alert stream
+-- Step 6: Write a pull query to check the current rolling total for a specific user_id
+```
+
+For each step, add a comment explaining why that specific ksqlDB construct (STREAM vs TABLE, EMIT CHANGES vs point-in-time) was chosen.
+
+### Exercise 4: Dead Letter Queue and Error Handling
+
+Extend the Faust order enrichment pipeline from Exercise 2 to add production-grade error handling:
+
+1. Wrap the enrichment logic in a try/except block; on any exception, serialize the raw event to a `dead_letter_orders` Faust topic with an additional `error_reason` field
+2. Create a second Faust agent that consumes from `dead_letter_orders` and maintains a table counting errors by reason
+3. Add a Faust HTTP endpoint at `/dlq/stats/` that returns the error counts as JSON
+4. Implement exponential backoff retry logic: if the user profile is not yet in the KTable, retry up to 3 times with 100ms, 200ms, 400ms delays before routing to the DLQ
+5. Explain in comments how exactly-once semantics interacts with your retry logic and why idempotent writes to the dead letter topic matter
+
+### Exercise 5: Multi-Source Join and Session Analytics
+
+Design an advanced pipeline that correlates clickstream and purchase events:
+
+1. Create two Faust topics: `page_views` (user_id, page, session_id, timestamp) and `purchases` (user_id, order_id, amount, timestamp)
+2. Implement session-based aggregation: use a 30-minute session window on `page_views` to count pages viewed per session
+3. Join purchase events with session data: for each purchase, look up how many pages the user viewed in the session that ended within 30 minutes before the purchase
+4. Create a ksqlDB equivalent: a STREAM-TABLE join that enriches purchase events with `pages_in_session` count
+5. Produce a `conversion_events` topic containing `{user_id, order_id, amount, pages_in_session}` and use a ksqlDB TABLE to compute the average `pages_in_session` for converting users, grouped by `amount` bucket (0-50, 50-200, 200+)
 
 ---
 

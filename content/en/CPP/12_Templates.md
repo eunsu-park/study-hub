@@ -1,5 +1,28 @@
 # Templates
 
+**Previous**: [STL Algorithms and Iterators](./11_STL_Algorithms_Iterators.md) | **Next**: [Exception Handling and File I/O](./13_Exceptions_and_File_IO.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define function templates and class templates with single and multiple type parameters
+2. Distinguish between implicit type deduction and explicit template argument specification
+3. Use non-type template parameters to embed compile-time constants into templates
+4. Write full and partial specializations to customize behavior for specific types
+5. Implement variadic templates and fold expressions for functions accepting arbitrary argument counts
+6. Apply SFINAE and `if constexpr` to conditionally enable template instantiations
+7. Define and use C++20 concepts to constrain template parameters with clear error messages
+8. Organize template code correctly using the header-only compilation model
+
+---
+
+> **Analogy -- The Compiler's Cookie Cutter**: A C++ template is like a cookie cutter: you define the shape once, and the compiler stamps out a concrete version for every type you use (`int`, `double`, `std::string`). The cutter itself isn't a cookie--it's a blueprint the compiler uses at compile time to generate real, type-safe code with zero runtime overhead.
+
+Templates are the foundation of generic programming in C++. Without them, you would need to duplicate every function and class for each data type you want to support--a maintenance nightmare. With templates, the compiler does the duplication for you, producing specialized, type-safe code while you write the logic only once. They underpin the entire STL and form the basis for modern metaprogramming techniques.
+
 ## 1. What are Templates?
 
 Templates are a powerful feature of C++ that allows writing type-independent, generic code.

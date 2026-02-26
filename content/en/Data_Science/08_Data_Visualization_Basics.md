@@ -2,45 +2,60 @@
 
 [Previous: Descriptive Stats & EDA](./07_Descriptive_Stats_EDA.md) | [Next: Data Visualization Advanced](./09_Data_Visualization_Advanced.md)
 
-## Overview
+---
 
-Matplotlib is Python's representative visualization library. This covers various chart types and customization methods.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Figure/Axes object model and create plots using the object-oriented Matplotlib API
+2. Implement line plots with custom styles, markers, colors, and time series formatting
+3. Create vertical, horizontal, grouped, and stacked bar charts with value labels
+4. Apply histograms with density curves, cumulative mode, and overlapping comparisons
+5. Implement scatter plots, bubble charts, and category-colored scatter plots with trend lines
+6. Describe when to use pie/donut charts, box plots, and heatmaps for different data types
+7. Customize plot elements including titles, labels, annotations, grids, spines, and legends
+8. Apply Matplotlib styles and save publication-quality figures in PNG, PDF, and SVG formats
 
 ---
 
-## 1. Matplotlib 기초
+A well-crafted visualization can communicate in seconds what tables of numbers cannot convey in minutes. Matplotlib is the foundational plotting library in the Python ecosystem -- virtually every other visualization tool builds on top of it. Learning to create and customize Matplotlib charts gives you full control over every visual element, enabling you to tell compelling data stories for any audience.
 
-### 1.1 기본 플롯 생성
+---
+
+## 1. Matplotlib Basics
+
+### 1.1 Creating Basic Plots
 
 ```python
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 데이터 준비
+# Prepare data
 x = np.linspace(0, 10, 100)
 y = np.sin(x)
 
-# Basic 플롯
+# Basic plot
 plt.plot(x, y)
 plt.show()
 
-# 제목과 레이블 추가
+# Add title and labels
 plt.plot(x, y)
 plt.title('Sine Wave')
 plt.xlabel('X axis')
 plt.ylabel('Y axis')
 plt.show()
 
-# 저장
+# Save
 plt.plot(x, y)
 plt.savefig('plot.png', dpi=300, bbox_inches='tight')
 plt.close()
 ```
 
-### 1.2 Figure와 Axes
+### 1.2 Figure and Axes
 
 ```python
-# 객체 지향 방식 (권장)
+# Object-oriented approach (recommended)
 fig, ax = plt.subplots(figsize=(10, 6))
 
 x = np.linspace(0, 10, 100)
@@ -57,10 +72,10 @@ plt.tight_layout()
 plt.show()
 ```
 
-### 1.3 여러 플롯 (Subplots)
+### 1.3 Multiple Plots (Subplots)
 
 ```python
-# 2x2 서브플롯
+# 2x2 subplots
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
 x = np.linspace(0, 10, 100)
@@ -81,12 +96,12 @@ axes[1, 1].set_title('Tangent')
 plt.tight_layout()
 plt.show()
 
-# 다른 크기의 서브플롯
+# Subplots of different sizes
 fig = plt.figure(figsize=(12, 6))
 
-ax1 = fig.add_subplot(1, 2, 1)  # 1행 2열의 1번째
-ax2 = fig.add_subplot(2, 2, 2)  # 2행 2열의 2번째
-ax3 = fig.add_subplot(2, 2, 4)  # 2행 2열의 4번째
+ax1 = fig.add_subplot(1, 2, 1)  # 1st in 1-row 2-col grid
+ax2 = fig.add_subplot(2, 2, 2)  # 2nd in 2-row 2-col grid
+ax3 = fig.add_subplot(2, 2, 4)  # 4th in 2-row 2-col grid
 
 ax1.plot(x, np.sin(x))
 ax2.plot(x, np.cos(x))
@@ -98,9 +113,9 @@ plt.show()
 
 ---
 
-## 2. 선 그래프 (Line Plot)
+## 2. Line Plot
 
-### 2.1 기본 선 그래프
+### 2.1 Basic Line Plot
 
 ```python
 x = np.arange(1, 11)
@@ -121,38 +136,38 @@ ax.grid(True, alpha=0.3)
 plt.show()
 ```
 
-### 2.2 선 스타일 커스터마이징
+### 2.2 Line Style Customization
 
 ```python
 x = np.linspace(0, 10, 50)
 
 fig, ax = plt.subplots(figsize=(12, 6))
 
-# 다양한 스타일
-ax.plot(x, np.sin(x), 'b-', linewidth=2, label='실선')
-ax.plot(x, np.sin(x + 1), 'r--', linewidth=2, label='점선')
-ax.plot(x, np.sin(x + 2), 'g-.', linewidth=2, label='점선+실선')
-ax.plot(x, np.sin(x + 3), 'm:', linewidth=2, label='점')
+# Various styles
+ax.plot(x, np.sin(x), 'b-', linewidth=2, label='solid')
+ax.plot(x, np.sin(x + 1), 'r--', linewidth=2, label='dashed')
+ax.plot(x, np.sin(x + 2), 'g-.', linewidth=2, label='dash-dot')
+ax.plot(x, np.sin(x + 3), 'm:', linewidth=2, label='dotted')
 
-# 마커 추가
-ax.plot(x[::5], np.sin(x[::5] + 4), 'ko-', markersize=8, label='마커')
+# Add markers
+ax.plot(x[::5], np.sin(x[::5] + 4), 'ko-', markersize=8, label='marker')
 
 ax.legend()
 ax.set_title('Line Styles')
 plt.show()
 
-# 선 스타일 옵션
-# '-': 실선, '--': 점선, '-.': 점선+실선, ':': 점
-# 색상: 'b'(blue), 'g'(green), 'r'(red), 'c'(cyan), 'm'(magenta), 'y'(yellow), 'k'(black), 'w'(white)
-# 마커: 'o'(원), 's'(사각), '^'(삼각), 'd'(다이아몬드), 'x', '+', '*'
+# Line style options
+# '-': solid, '--': dashed, '-.': dash-dot, ':': dotted
+# Colors: 'b'(blue), 'g'(green), 'r'(red), 'c'(cyan), 'm'(magenta), 'y'(yellow), 'k'(black), 'w'(white)
+# Markers: 'o'(circle), 's'(square), '^'(triangle), 'd'(diamond), 'x', '+', '*'
 ```
 
-### 2.3 시계열 그래프
+### 2.3 Time Series Plot
 
 ```python
 import pandas as pd
 
-# 시계열 데이터
+# Time series data
 dates = pd.date_range('2023-01-01', periods=365, freq='D')
 values = np.cumsum(np.random.randn(365)) + 100
 
@@ -165,7 +180,7 @@ ax.set_xlabel('Date')
 ax.set_ylabel('Value')
 ax.set_title('Time Series Plot')
 
-# x축 날짜 포맷
+# Format x-axis dates
 import matplotlib.dates as mdates
 ax.xaxis.set_major_locator(mdates.MonthLocator())
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
@@ -177,9 +192,9 @@ plt.show()
 
 ---
 
-## 3. 막대 그래프 (Bar Chart)
+## 3. Bar Chart
 
-### 3.1 수직 막대 그래프
+### 3.1 Vertical Bar Chart
 
 ```python
 categories = ['A', 'B', 'C', 'D', 'E']
@@ -189,7 +204,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 
 bars = ax.bar(categories, values, color='steelblue', edgecolor='black')
 
-# 값 레이블 추가
+# Add value labels
 for bar, val in zip(bars, values):
     ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
             str(val), ha='center', va='bottom', fontsize=12)
@@ -201,7 +216,7 @@ ax.set_title('Vertical Bar Chart')
 plt.show()
 ```
 
-### 3.2 수평 막대 그래프
+### 3.2 Horizontal Bar Chart
 
 ```python
 categories = ['Very Long Category A', 'Category B', 'Category C', 'Category D']
@@ -211,7 +226,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 
 bars = ax.barh(categories, values, color='coral', edgecolor='black')
 
-# 값 레이블
+# Value labels
 for bar, val in zip(bars, values):
     ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
             str(val), ha='left', va='center')
@@ -222,7 +237,7 @@ ax.set_title('Horizontal Bar Chart')
 plt.show()
 ```
 
-### 3.3 그룹 막대 그래프
+### 3.3 Grouped Bar Chart
 
 ```python
 categories = ['Q1', 'Q2', 'Q3', 'Q4']
@@ -250,7 +265,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-### 3.4 스택 막대 그래프
+### 3.4 Stacked Bar Chart
 
 ```python
 categories = ['A', 'B', 'C', 'D']
@@ -275,32 +290,32 @@ plt.show()
 
 ---
 
-## 4. 히스토그램 (Histogram)
+## 4. Histogram
 
 ```python
-# 정규분포 데이터
+# Normally distributed data
 np.random.seed(42)
 data = np.random.randn(1000)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-# Basic 히스토그램
+# Basic histogram
 axes[0, 0].hist(data, bins=30, edgecolor='black', alpha=0.7)
 axes[0, 0].set_title('Basic Histogram')
 
-# 밀도 히스토그램
+# Density histogram
 axes[0, 1].hist(data, bins=30, density=True, edgecolor='black', alpha=0.7)
-# 정규분포 곡선 추가
+# Add normal distribution curve
 x = np.linspace(-4, 4, 100)
 from scipy import stats
 axes[0, 1].plot(x, stats.norm.pdf(x), 'r-', linewidth=2)
 axes[0, 1].set_title('Density Histogram with Normal Curve')
 
-# 누적 히스토그램
+# Cumulative histogram
 axes[1, 0].hist(data, bins=30, cumulative=True, edgecolor='black', alpha=0.7)
 axes[1, 0].set_title('Cumulative Histogram')
 
-# 여러 데이터 비교
+# Comparing multiple datasets
 data1 = np.random.randn(1000)
 data2 = np.random.randn(1000) + 2
 axes[1, 1].hist(data1, bins=30, alpha=0.5, label='Data 1', edgecolor='black')
@@ -314,9 +329,9 @@ plt.show()
 
 ---
 
-## 5. 산점도 (Scatter Plot)
+## 5. Scatter Plot
 
-### 5.1 기본 산점도
+### 5.1 Basic Scatter Plot
 
 ```python
 np.random.seed(42)
@@ -331,7 +346,7 @@ ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_title('Basic Scatter Plot')
 
-# 추세선 추가
+# Add trend line
 z = np.polyfit(x, y, 1)
 p = np.poly1d(z)
 ax.plot(x, p(x), "r--", linewidth=2, label=f'Trend: y={z[0]:.2f}x+{z[1]:.2f}')
@@ -340,7 +355,7 @@ ax.legend()
 plt.show()
 ```
 
-### 5.2 버블 차트
+### 5.2 Bubble Chart
 
 ```python
 np.random.seed(42)
@@ -358,14 +373,14 @@ ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_title('Bubble Chart')
 
-# 컬러바 추가
+# Add colorbar
 cbar = plt.colorbar(scatter)
 cbar.set_label('Color Value')
 
 plt.show()
 ```
 
-### 5.3 카테고리별 산점도
+### 5.3 Scatter Plot by Category
 
 ```python
 np.random.seed(42)
@@ -390,22 +405,22 @@ plt.show()
 
 ---
 
-## 6. 파이 차트 (Pie Chart)
+## 6. Pie Chart
 
 ```python
 labels = ['Product A', 'Product B', 'Product C', 'Product D', 'Others']
 sizes = [30, 25, 20, 15, 10]
 colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99', '#c2c2f0']
-explode = (0.05, 0, 0, 0, 0)  # 첫 번째 조각 분리
+explode = (0.05, 0, 0, 0, 0)  # Separate the first slice
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Basic 파이 차트
+# Basic pie chart
 axes[0].pie(sizes, labels=labels, colors=colors, explode=explode,
             autopct='%1.1f%%', shadow=True, startangle=90)
 axes[0].set_title('Basic Pie Chart')
 
-# 도넛 차트
+# Donut chart
 wedges, texts, autotexts = axes[1].pie(sizes, colors=colors, explode=explode,
                                         autopct='%1.1f%%', startangle=90,
                                         pctdistance=0.85)
@@ -420,7 +435,7 @@ plt.show()
 
 ---
 
-## 7. 박스 플롯 (Box Plot)
+## 7. Box Plot
 
 ```python
 np.random.seed(42)
@@ -428,17 +443,17 @@ data = [np.random.normal(0, std, 100) for std in range(1, 5)]
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Basic 박스플롯
+# Basic box plot
 bp = axes[0].boxplot(data, labels=['A', 'B', 'C', 'D'])
 axes[0].set_title('Basic Box Plot')
 axes[0].set_ylabel('Value')
 
-# 커스터마이징된 박스플롯
+# Customized box plot
 bp = axes[1].boxplot(data, labels=['A', 'B', 'C', 'D'],
-                     patch_artist=True,  # 박스 색상 채우기
-                     notch=True,         # 노치 (신뢰구간)
-                     showmeans=True,     # 평균 표시
-                     meanline=True)      # 평균선
+                     patch_artist=True,  # Fill box with color
+                     notch=True,         # Notch (confidence interval)
+                     showmeans=True,     # Show mean
+                     meanline=True)      # Mean line
 
 colors = ['pink', 'lightblue', 'lightgreen', 'lightyellow']
 for patch, color in zip(bp['boxes'], colors):
@@ -450,7 +465,7 @@ axes[1].set_ylabel('Value')
 plt.tight_layout()
 plt.show()
 
-# 수평 박스플롯
+# Horizontal box plot
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.boxplot(data, labels=['A', 'B', 'C', 'D'], vert=False)
 ax.set_title('Horizontal Box Plot')
@@ -459,10 +474,10 @@ plt.show()
 
 ---
 
-## 8. 히트맵 (Heatmap)
+## 8. Heatmap
 
 ```python
-# 상관행렬 히트맵
+# Correlation matrix heatmap
 np.random.seed(42)
 data = np.random.randn(10, 5)
 df = pd.DataFrame(data, columns=['A', 'B', 'C', 'D', 'E'])
@@ -472,19 +487,19 @@ fig, ax = plt.subplots(figsize=(10, 8))
 
 im = ax.imshow(correlation, cmap='coolwarm', aspect='auto', vmin=-1, vmax=1)
 
-# 축 레이블
+# Axis labels
 ax.set_xticks(range(len(correlation.columns)))
 ax.set_yticks(range(len(correlation.columns)))
 ax.set_xticklabels(correlation.columns)
 ax.set_yticklabels(correlation.columns)
 
-# 값 표시
+# Display values
 for i in range(len(correlation)):
     for j in range(len(correlation)):
         text = ax.text(j, i, f'{correlation.iloc[i, j]:.2f}',
                        ha='center', va='center', color='black')
 
-# 컬러바
+# Colorbar
 cbar = plt.colorbar(im)
 cbar.set_label('Correlation')
 
@@ -495,13 +510,13 @@ plt.show()
 
 ---
 
-## 9. 스타일과 테마
+## 9. Styles and Themes
 
 ```python
-# Usage 가능한 스타일 확인
+# Check available styles
 print(plt.style.available)
 
-# 스타일 적용
+# Apply a style
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 styles = ['default', 'seaborn-v0_8', 'ggplot', 'dark_background']
 
@@ -517,55 +532,55 @@ for ax, style in zip(axes.flat, styles):
 plt.tight_layout()
 plt.show()
 
-# 전역 스타일 설정
+# Set global style
 # plt.style.use('seaborn-v0_8')
 ```
 
 ---
 
-## 10. 그래프 커스터마이징
+## 10. Plot Customization
 
 ```python
-# 폰트 설정
+# Font settings
 plt.rcParams['font.family'] = 'DejaVu Sans'
 plt.rcParams['font.size'] = 12
 plt.rcParams['axes.titlesize'] = 14
 plt.rcParams['axes.labelsize'] = 12
 
-# 그래프 요소 커스터마이징
+# Customize plot elements
 fig, ax = plt.subplots(figsize=(12, 6))
 
 x = np.linspace(0, 10, 100)
 ax.plot(x, np.sin(x), linewidth=2, color='navy', label='sin(x)')
 
-# 축 범위
+# Axis limits
 ax.set_xlim(0, 10)
 ax.set_ylim(-1.5, 1.5)
 
-# 눈금
+# Ticks
 ax.set_xticks(np.arange(0, 11, 2))
 ax.set_yticks(np.arange(-1, 1.5, 0.5))
 
-# 그리드
+# Grid
 ax.grid(True, linestyle='--', alpha=0.5)
 
-# 주석
+# Annotation
 ax.annotate('Peak', xy=(np.pi/2, 1), xytext=(np.pi/2 + 1, 1.3),
             arrowprops=dict(facecolor='black', shrink=0.05),
             fontsize=12)
 
-# 텍스트
+# Text
 ax.text(5, -1.3, 'Note: This is a sine wave', fontsize=10, style='italic')
 
-# 제목과 레이블
+# Title and labels
 ax.set_title('Customized Sine Wave Plot', fontsize=16, fontweight='bold')
 ax.set_xlabel('X axis', fontsize=12)
 ax.set_ylabel('Y axis', fontsize=12)
 
-# 범례
+# Legend
 ax.legend(loc='upper right', frameon=True, shadow=True)
 
-# 스파인 (테두리)
+# Spines (borders)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
@@ -577,21 +592,98 @@ plt.show()
 
 ## Summary
 
-| 차트 유형 | 함수 | 용도 |
+| Chart Type | Function | Use Case |
 |----------|------|------|
-| 선 그래프 | `plot()` | 시계열, 연속 데이터 |
-| 막대 그래프 | `bar()`, `barh()` | 범주형 비교 |
-| 히스토그램 | `hist()` | 분포 확인 |
-| 산점도 | `scatter()` | 두 변수 관계 |
-| 파이 차트 | `pie()` | 비율, 구성 |
-| 박스 플롯 | `boxplot()` | 분포, 이상치 |
-| 히트맵 | `imshow()` | 행렬 데이터 |
+| Line Plot | `plot()` | Time series, continuous data |
+| Bar Chart | `bar()`, `barh()` | Categorical comparison |
+| Histogram | `hist()` | Distribution inspection |
+| Scatter Plot | `scatter()` | Relationship between two variables |
+| Pie Chart | `pie()` | Proportions, composition |
+| Box Plot | `boxplot()` | Distribution, outliers |
+| Heatmap | `imshow()` | Matrix data |
 
-| 커스터마이징 | 메서드 |
+| Customization | Method |
 |-------------|--------|
-| 제목/레이블 | `set_title()`, `set_xlabel()`, `set_ylabel()` |
-| 범위 | `set_xlim()`, `set_ylim()` |
-| 눈금 | `set_xticks()`, `set_yticks()` |
-| 범례 | `legend()` |
-| 그리드 | `grid()` |
-| 저장 | `savefig()` |
+| Title/Labels | `set_title()`, `set_xlabel()`, `set_ylabel()` |
+| Limits | `set_xlim()`, `set_ylim()` |
+| Ticks | `set_xticks()`, `set_yticks()` |
+| Legend | `legend()` |
+| Grid | `grid()` |
+| Save | `savefig()` |
+
+---
+
+## Exercises
+
+### Exercise 1: Object-Oriented API Fundamentals
+
+Practice the Figure/Axes object model to understand the difference between the state-based and object-oriented Matplotlib APIs.
+
+1. Create a figure with `fig, ax = plt.subplots(figsize=(10, 5))`.
+2. Plot `y = x²` and `y = x³` for x ∈ [-3, 3] on the same axes, each with a distinct color and label.
+3. Add a title, axis labels, legend, and a horizontal dashed line at y = 0.
+4. Remove the top and right spines using `ax.spines['top'].set_visible(False)` and the right spine similarly.
+5. Save the figure as a PNG at 300 DPI. Explain the difference between `plt.plot()` (state-based) and `ax.plot()` (object-oriented) — when does the distinction matter?
+
+### Exercise 2: Time Series Visualization
+
+Build a complete time series chart with proper date formatting.
+
+1. Generate 24 months of daily data starting 2022-01-01:
+   ```python
+   import pandas as pd, numpy as np
+   dates = pd.date_range('2022-01-01', periods=730, freq='D')
+   values = 100 + np.cumsum(np.random.randn(730))
+   ```
+2. Create a figure with `fill_between()` shading the area under the line.
+3. Format the x-axis to display monthly ticks (`mdates.MonthLocator()`) and rotate the labels 45 degrees.
+4. Annotate the global maximum with an arrow pointing to the peak value using `ax.annotate()`.
+5. Add a 30-day rolling mean as a second line in a contrasting color. Add a legend distinguishing the raw series from the smoothed series.
+
+### Exercise 3: Multi-Panel Comparison Chart
+
+Use subplots to compare several chart types on the same data.
+
+1. Load the Iris dataset: `from sklearn.datasets import load_iris`.
+2. Create a 2×2 figure:
+   - Top-left: overlapping histograms of sepal length for each species (three colors, alpha=0.5).
+   - Top-right: horizontal bar chart of the mean sepal length per species, with value labels.
+   - Bottom-left: box plot of petal length grouped by species.
+   - Bottom-right: scatter plot of sepal length vs. petal length, color-coded by species with a trend line for each species.
+3. Give each subplot a descriptive title and consistent color coding across all four panels.
+4. Call `plt.tight_layout()` and save the figure as a PDF.
+
+### Exercise 4: Grouped and Stacked Bar Charts
+
+Create side-by-side grouped and stacked bar charts and interpret the trade-offs.
+
+1. Build a DataFrame with quarterly sales for three products over four quarters:
+   ```python
+   data = {
+       'Q1': [120, 95, 80], 'Q2': [140, 110, 70],
+       'Q3': [130, 105, 90], 'Q4': [160, 125, 100]
+   }
+   products = ['Product A', 'Product B', 'Product C']
+   ```
+2. Create a grouped bar chart (three bars per quarter, side by side).
+3. Create a stacked bar chart showing the same data (contribution of each product to total).
+4. Add value labels inside each segment of the stacked chart.
+5. Explain in a comment: which chart is better for (a) comparing individual product trends and (b) comparing total quarterly revenue? Why?
+
+### Exercise 5: Correlation Heatmap with Styling
+
+Build a polished correlation heatmap using the object-oriented API.
+
+1. Generate a 100×6 random dataset with mild correlations:
+   ```python
+   np.random.seed(0)
+   A = np.random.randn(100, 3)
+   B = A + np.random.randn(100, 3) * 0.5  # correlated with A
+   df = pd.DataFrame(np.hstack([A, B]), columns=list('ABCDEF'))
+   ```
+2. Compute the correlation matrix and visualize it with `ax.imshow(corr, cmap='coolwarm', vmin=-1, vmax=1)`.
+3. Annotate each cell with the correlation value rounded to two decimal places.
+4. Add a colorbar labeled "Pearson r".
+5. Apply a Matplotlib style (`plt.style.use('seaborn-v0_8-whitegrid')`) and export the figure in both PNG (300 DPI) and SVG formats. Explain when to prefer SVG over PNG.
+
+[Previous: Descriptive Stats & EDA](./07_Descriptive_Stats_EDA.md) | [Next: Data Visualization Advanced](./09_Data_Visualization_Advanced.md)

@@ -1,5 +1,25 @@
 # Environment Setup and First Program
 
+**Previous**: [C++ Learning Guide](./00_Overview.md) | **Next**: [Variables and Types](./02_Variables_and_Types.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what C++ is and identify its key features and version history
+2. Install a C++ development environment on Windows, macOS, or Linux
+3. Implement and compile a "Hello, World!" program using g++
+4. Apply common compiler options such as `-std=c++17`, `-Wall`, and `-Wextra`
+5. Distinguish between `std::cout` and `std::cin` for basic input/output operations
+6. Compare C and C++ approaches to I/O, memory management, and string handling
+7. Configure VS Code or Visual Studio for C++ development
+
+---
+
+Every programming journey begins with a working toolchain. Before you can explore classes, templates, or the Standard Library, you need a compiler that turns your source code into an executable and an editor where you can write it comfortably. This lesson walks you through that essential first step and rewards you with the most satisfying milestone in any language: seeing your first program run.
+
 ## 1. What is C++?
 
 C++ is a general-purpose programming language developed by Bjarne Stroustrup in 1979, extending the C language.

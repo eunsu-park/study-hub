@@ -108,30 +108,36 @@ def nim_game(piles):
     """
     님 게임의 승자 판별
     Returns: True면 첫 번째 플레이어 승리
+    XOR 정리가 성립하는 이유: XOR = 0은 모든 비트가 더미들 사이에서 "균형"을 이룬다는 뜻 --
+    하나의 더미를 바꾸는 어떤 수도 어떤 비트의 균형을 깨뜨리고, 두 번째 플레이어는
+    항상 균형을 복원할 수 있어서, 결국 첫 번째 플레이어에게 모두-0인 더미를 남김.
     """
     xor_sum = 0
     for pile in piles:
-        xor_sum ^= pile
+        xor_sum ^= pile  # 모든 더미에 걸쳐 비트별 XOR 누적
 
-    return xor_sum != 0
+    return xor_sum != 0  # XOR이 0이 아니면 첫 번째 플레이어가 항상 0으로 만들 수 있음
 
 def nim_winning_move(piles):
     """
     승리를 위한 최적 수 찾기
     Returns: (더미 인덱스, 가져갈 돌 수) 또는 None
+    전략: 어떤 더미를 줄여서 전체 XOR = 0으로 만들어 상대를 패배 상태로 몰아넣기.
     """
     xor_sum = 0
     for pile in piles:
         xor_sum ^= pile
 
     if xor_sum == 0:
-        return None  # 이미 패배 상태
+        return None  # 이미 패배 상태 -- 어떤 수를 두든 상대에게 승리 상태를 만들어 줌
 
-    # XOR sum을 0으로 만드는 수 찾기
+    # xor_sum과 XOR하면 줄어드는 더미를 찾기.
+    # target = pile ^ xor_sum은 새 XOR 합이 0이 되도록 해당 더미가 되어야 할 값;
+    # target < pile이면 돌을 제거하는 것(추가가 아닌)이 보장됨.
     for i, pile in enumerate(piles):
         target = pile ^ xor_sum
         if target < pile:
-            return (i, pile - target)
+            return (i, pile - target)  # 더미 i에서 (pile - target)개 가져가기
 
     return None
 
@@ -202,29 +208,32 @@ Grundy(G1 + G2) = Grundy(G1) XOR Grundy(G2)
 ```python
 def calculate_grundy(state, get_next_states, memo=None):
     """
-    상태의 Grundy number 계산
-    state: 현재 게임 상태
-    get_next_states: 가능한 다음 상태들을 반환하는 함수
+    상태의 Grundy number 계산.
+    Grundy number는 게임 위치의 전체 전략적 가치를 해당 크기의 님 더미와 동등한
+    단일 정수로 인코딩 -- 이것이 독립 게임들을 XOR로 결합할 수 있는 이유.
     """
     if memo is None:
         memo = {}
 
     if state in memo:
-        return memo[state]
+        return memo[state]  # 메모이제이션으로 중복 상태의 지수적 재계산을 방지
 
     next_states = get_next_states(state)
 
     if not next_states:
-        # 이동 불가 = Grundy 0
+        # 종료 상태: 이동 불가는 현재 플레이어의 패배 (정상 플레이 규칙)
+        # 패배 상태는 빈 님 더미와 동등 -- Grundy number 0
         memo[state] = 0
         return 0
 
-    # 다음 상태들의 Grundy number 집합
+    # 도달 가능한 모든 다음 상태의 Grundy number 수집
     grundy_set = set()
     for next_state in next_states:
         grundy_set.add(calculate_grundy(next_state, get_next_states, memo))
 
-    # mex 계산
+    # mex (minimum excludant) = grundy_set에 없는 가장 작은 비음수 정수.
+    # "첫 번째 빈 자리"를 나타냄 -- 현재 상태는 도달 가능한 위치의
+    # Grundy number와 같은 크기로 줄일 수 없는 님 더미처럼 동작.
     mex = 0
     while mex in grundy_set:
         mex += 1
@@ -330,12 +339,15 @@ def minimax(state, depth, is_maximizing, get_moves, evaluate, is_terminal):
 def alphabeta(state, depth, alpha, beta, is_maximizing,
               get_moves, evaluate, is_terminal):
     """
-    알파-베타 가지치기로 최적화된 미니맥스
-    alpha: Max 플레이어의 최선 (하한)
-    beta: Min 플레이어의 최선 (상한)
+    알파-베타 가지치기로 최적화된 미니맥스.
+    alpha = Max가 지금까지 보장할 수 있는 최선의 점수 (Max의 하한)
+    beta  = Min이 지금까지 보장할 수 있는 최선의 점수 (Max의 상한)
+    beta <= alpha일 때 가지치기하는 이유: Max가 이미 다른 곳에서 보장할 수 있는 것보다
+    Min에게 더 나은 값을 주는 분기를 Max는 절대 선택하지 않음.
+    최적의 경우(완벽한 수 순서), O(b^d)를 O(b^(d/2))로 줄임.
     """
     if depth == 0 or is_terminal(state):
-        return evaluate(state)
+        return evaluate(state)  # 리프 노드 -- 정적 평가 반환
 
     moves = get_moves(state)
 
@@ -346,9 +358,9 @@ def alphabeta(state, depth, alpha, beta, is_maximizing,
             eval_score = alphabeta(next_state, depth - 1, alpha, beta, False,
                                    get_moves, evaluate, is_terminal)
             max_eval = max(max_eval, eval_score)
-            alpha = max(alpha, eval_score)
+            alpha = max(alpha, eval_score)  # Max의 하한 업데이트
             if beta <= alpha:
-                break  # 가지치기
+                break  # Min이 다른 곳에서 이미 더 나은 선택지를 가짐 -- 이 하위 트리는 무관
         return max_eval
     else:
         min_eval = float('inf')
@@ -357,9 +369,9 @@ def alphabeta(state, depth, alpha, beta, is_maximizing,
             eval_score = alphabeta(next_state, depth - 1, alpha, beta, True,
                                    get_moves, evaluate, is_terminal)
             min_eval = min(min_eval, eval_score)
-            beta = min(beta, eval_score)
+            beta = min(beta, eval_score)  # Min의 상한 업데이트
             if beta <= alpha:
-                break  # 가지치기
+                break  # Max가 다른 곳에서 이미 더 나은 선택지를 가짐 -- 이 하위 트리는 무관
         return min_eval
 
 # 호출

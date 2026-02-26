@@ -12,15 +12,18 @@ Claude Code는 터미널에만 국한되지 않습니다. 가장 널리 사용�
 - 레슨 02: Claude Code 시작하기 (CLI 기초)
 - VS Code 또는 JetBrains IDE 중 하나에 대한 기본 지식
 
-**학습 목표**:
-- VS Code용 Claude Code 확장 프로그램 설치 및 설정
-- JetBrains IDE용 Claude Code 플러그인 설치 및 설정
-- IDE 내에서 대화형 코딩을 위한 Claude Code 패널 사용
-- 인라인 차이(diff)를 검토하고 제안된 변경 사항 수락/거절
-- @-멘션을 사용하여 파일 컨텍스트를 효율적으로 제공
-- IDE 내에서 플랜 모드(Plan mode) 검토 탐색
-- 일반적인 작업에 대한 키보드 단축키 적용
-- 터미널 전용 워크플로와 IDE 통합 워크플로 비교하여 적합한 방법 선택
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. VS Code용 Claude Code 확장 프로그램 설치 및 설정
+2. JetBrains IDE용 Claude Code 플러그인 설치 및 설정
+3. IDE 내에서 대화형 코딩을 위한 Claude Code 패널 사용
+4. 인라인 차이(diff)를 검토하고 제안된 변경 사항 수락/거절
+5. @-멘션을 사용하여 파일 컨텍스트를 효율적으로 제공
+6. IDE 내에서 플랜 모드(Plan mode) 검토 탐색
+7. 일반적인 작업에 대한 키보드 단축키 적용
+8. 터미널 전용 워크플로와 IDE 통합 워크플로 비교하여 적합한 방법 선택
 
 ---
 

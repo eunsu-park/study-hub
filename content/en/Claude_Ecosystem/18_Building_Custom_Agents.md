@@ -14,14 +14,17 @@ Building a custom agent means going beyond using the SDK out of the box. It mean
 - Python 3.10+ or TypeScript/Node.js 18+
 - Understanding of async programming
 
-**Learning Objectives**:
-- Design agents with clear scope, appropriate tools, and safety constraints
-- Build custom tools with JSON Schema definitions, executors, and error handling
-- Write effective system prompts that guide agent behavior reliably
-- Implement four complete agent examples for real-world use cases
-- Test agents at the unit, integration, and evaluation levels
-- Deploy agents with rate limiting, cost monitoring, logging, and security
-- Design multi-agent systems with orchestration patterns
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Design agents with clear scope, appropriate tools, and safety constraints
+2. Build custom tools with JSON Schema definitions, executors, and error handling
+3. Write effective system prompts that guide agent behavior reliably
+4. Implement four complete agent examples for real-world use cases
+5. Test agents at the unit, integration, and evaluation levels
+6. Deploy agents with rate limiting, cost monitoring, logging, and security
+7. Design multi-agent systems with orchestration patterns
 
 ---
 

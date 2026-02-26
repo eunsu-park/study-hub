@@ -1,5 +1,9 @@
 # 29. Advanced DP Optimization
 
+**Previous**: [Game Theory](./27_Game_Theory.md) | **Next**: [Problem Solving](./29_Problem_Solving.md)
+
+---
+
 ## Learning Objectives
 - Understanding and implementing Convex Hull Trick (CHT)
 - Divide and Conquer Optimization
@@ -68,38 +72,47 @@ CHT = Manage lower (or upper) envelope of lines
 ```python
 class ConvexHullTrickMin:
     """
-    CHT for minimum queries
-    Conditions: slopes monotonically decreasing, query x monotonically increasing
+    CHT for minimum queries.
+    Conditions: slopes monotonically decreasing, query x monotonically increasing.
+    Key idea: for each j, define line y = a[j]*x + c[j]. Then dp[i] = min over all j
+    of evaluating these lines at x = b[i]. CHT maintains only the "lower envelope"
+    of lines — the subset that is minimal somewhere — discarding lines that are
+    always beaten by their neighbors.
     """
     def __init__(self):
-        self.lines = []  # (slope, y-intercept)
-        self.ptr = 0
+        self.lines = []  # (slope, y-intercept) — maintained as lower convex hull
+        self.ptr = 0     # Monotonic pointer: valid because query x is non-decreasing
 
     def bad(self, l1, l2, l3):
-        """Check if l2 is unnecessary"""
-        # If intersection(l1, l2).x >= intersection(l2, l3).x then l2 unnecessary
+        """Check if l2 is dominated (never on the lower envelope between l1 and l3).
+        l2 is unnecessary when the intersection of l1 and l3 is to the left of
+        the intersection of l1 and l2 — meaning l3 beats l2 before l2 would ever beat l1.
+        """
         return (l3[1] - l1[1]) * (l1[0] - l2[0]) <= (l2[1] - l1[1]) * (l1[0] - l3[0])
 
     def add_line(self, m, b):
-        """Add line y = mx + b"""
+        """Add line y = mx + b — discard any now-dominated lines from the back"""
         line = (m, b)
+        # When the new line makes the previous line redundant on the envelope, pop it.
+        # This keeps the deque representing the lower convex hull in sorted order.
         while len(self.lines) >= 2 and self.bad(self.lines[-2], self.lines[-1], line):
             self.lines.pop()
         self.lines.append(line)
 
     def query(self, x):
-        """Minimum value at x"""
+        """Minimum value at x — O(1) amortized when x is non-decreasing"""
         if not self.lines:
             return float('inf')
 
-        # Move pointer (when x increases monotonically)
+        # Since x is non-decreasing, the optimal line pointer can only move forward.
+        # This amortized O(1) query (across all calls) is what makes CHT O(n) total.
         while self.ptr < len(self.lines) - 1:
             m1, b1 = self.lines[self.ptr]
             m2, b2 = self.lines[self.ptr + 1]
             if m1 * x + b1 > m2 * x + b2:
-                self.ptr += 1
+                self.ptr += 1  # Next line is better at this x — advance permanently
             else:
-                break
+                break  # Current line is optimal — stop
 
         m, b = self.lines[self.ptr]
         return m * x + b
@@ -274,6 +287,10 @@ def dnc_optimization(n, k, cost):
     """
     Calculate dp[k][n] (partition n elements into k groups)
     cost(i, j): cost of interval [i, j)
+    Why D&C works here: the optimal split point opt[i] is monotonically non-decreasing
+    as i increases. So when we find opt for the midpoint, we know the left half's
+    opt is <= it and the right half's opt is >= it — halving the search range at each level.
+    This turns O(N²) per row into O(N log N) per row.
     """
     INF = float('inf')
     dp = [[INF] * (n + 1) for _ in range(k + 1)]
@@ -287,15 +304,19 @@ def dnc_optimization(n, k, cost):
         best_cost = INF
         best_opt = opt_lo
 
+        # Search only in [opt_lo, min(opt_hi, dp_mid)] — monotonicity guarantees
+        # the true optimal for dp_mid is within this constrained range
         for opt in range(opt_lo, min(opt_hi, dp_mid) + 1):
             current_cost = dp[row - 1][opt] + cost(opt, dp_mid)
             if current_cost < best_cost:
                 best_cost = current_cost
-                best_opt = opt
+                best_opt = opt  # Record the optimal split point for this midpoint
 
         dp[row][dp_mid] = best_cost
 
-        # Divide and conquer
+        # Left half: optimal split is at most best_opt (monotonicity)
+        # Right half: optimal split is at least best_opt (monotonicity)
+        # This constraint is what makes the recursion O(N log N) rather than O(N²)
         compute(row, dp_lo, dp_mid - 1, opt_lo, best_opt)
         compute(row, dp_mid + 1, dp_hi, best_opt, opt_hi)
 
@@ -413,44 +434,54 @@ for length in range(2, n+1):
 ```python
 def optimal_bst(freq):
     """
-    Optimal binary search tree construction cost
-    freq[i]: search frequency of i-th key
+    Optimal binary search tree construction cost.
+    freq[i]: search frequency of i-th key.
+    Knuth optimization applies because the cost function satisfies the quadrangle
+    inequality, which guarantees that opt[i][j-1] <= opt[i][j] <= opt[i+1][j].
+    This monotonicity reduces the O(N³) DP to O(N²) by shrinking each inner loop.
     """
     n = len(freq)
     INF = float('inf')
 
-    # prefix sum for range cost
+    # Prefix sum for O(1) range cost queries — without this, each cost() call would be O(N)
     prefix = [0] * (n + 1)
     for i in range(n):
         prefix[i + 1] = prefix[i] + freq[i]
 
     def cost(i, j):
+        # Total frequency in [i, j) = the extra depth cost added when this subtree
+        # is attached as a child — every node in [i, j) goes one level deeper
         return prefix[j] - prefix[i]
 
-    # dp[i][j]: minimum cost for interval [i, j)
+    # dp[i][j]: minimum weighted search cost for keys in [i, j)
     dp = [[0] * (n + 1) for _ in range(n + 1)]
+    # opt[i][j]: the root index that achieves dp[i][j] — used to bound the next iteration
     opt = [[0] * (n + 1) for _ in range(n + 1)]
 
-    # Length 1
+    # Base case: single-key intervals
     for i in range(n):
         dp[i][i + 1] = freq[i]
-        opt[i][i + 1] = i
+        opt[i][i + 1] = i  # The only key in [i, i+1) must be the root
 
-    # Length 2 or more
+    # Fill by increasing interval length — Knuth's bound is only valid when
+    # shorter intervals (which define opt) are already computed
     for length in range(2, n + 1):
         for i in range(n - length + 1):
             j = i + length
             dp[i][j] = INF
 
-            # Knuth optimization: opt[i][j-1] ~ opt[i+1][j]
+            # Knuth's constraint: search only between opt[i][j-1] and opt[i+1][j].
+            # Correctness follows from the quadrangle inequality on cost(i, j).
             lo = opt[i][j - 1]
             hi = opt[i + 1][j] if i + 1 <= n and j <= n else j - 1
 
             for k in range(lo, min(hi, j - 1) + 1):
+                # k is the root: dp[i][k] is left subtree, dp[k+1][j] is right subtree.
+                # cost(i, j) accounts for increasing depth of all nodes in [i, j) by 1.
                 val = dp[i][k] + dp[k + 1][j] + cost(i, j)
                 if val < dp[i][j]:
                     dp[i][j] = val
-                    opt[i][j] = k
+                    opt[i][j] = k  # Record optimal root for use in larger intervals
 
     return dp[0][n]
 

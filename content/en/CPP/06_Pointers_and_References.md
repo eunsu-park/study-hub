@@ -1,5 +1,26 @@
 # Pointers and References
 
+**Previous**: [Arrays and Strings](./05_Arrays_and_Strings.md) | **Next**: [Class Basics](./07_Classes_Basics.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a pointer is and use the address-of (`&`) and dereference (`*`) operators
+2. Apply `nullptr` (C++11) for safe null pointer initialization and null checks
+3. Implement pointer arithmetic to traverse arrays and compute element distances
+4. Compare pointers and references, and identify when each is the appropriate choice
+5. Apply `new`/`delete` and `new[]`/`delete[]` for dynamic memory allocation and deallocation
+6. Distinguish between pointer-to-const, const-pointer, and const-pointer-to-const using the right-to-left reading rule
+7. Identify common memory errors including dangling pointers, memory leaks, and double-free
+8. Describe how smart pointers (`unique_ptr`, `shared_ptr`) automate memory management
+
+---
+
+Pointers and references give you direct access to memory -- the defining superpower of C++. They are what make zero-cost abstractions possible: you can pass large objects without copying them, build linked data structures, and interact with hardware or operating-system APIs. At the same time, misuse of pointers is the most common source of crashes and security vulnerabilities, so learning to wield them safely is one of the most valuable skills a C++ programmer can develop.
+
 ## 1. What is a Pointer?
 
 A pointer is a variable that stores a memory address.

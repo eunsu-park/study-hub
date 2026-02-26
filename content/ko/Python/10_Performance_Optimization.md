@@ -1,5 +1,22 @@
 # 성능 최적화 (Performance Optimization)
 
+**이전**: [함수형 프로그래밍](./09_Functional_Programming.md) | **다음**: [테스트와 품질](./11_Testing_and_Quality.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `timeit`, `cProfile`, `line_profiler`를 사용하여 성능 병목(Bottleneck)을 측정하고 식별할 수 있습니다
+2. `memory_profiler`와 `tracemalloc`으로 메모리 소비 문제를 진단할 수 있습니다
+3. 시간 복잡도(Time Complexity) 트레이드오프에 따라 적절한 자료구조(list, set, dict, tuple)를 선택할 수 있습니다
+4. `join` 기반 연결과 f-string을 포함한 문자열 최적화(String Optimization) 기법을 적용할 수 있습니다
+5. 지역 변수 캐싱(Local Variable Caching)과 메모이제이션(Memoization) 등 루프 및 함수 최적화 전략을 적용할 수 있습니다
+6. 전역 인터프리터 잠금(GIL, Global Interpreter Lock)을 설명하고, 작업 유형에 따라 `multiprocessing`, `threading`, `asyncio` 중 적합한 것을 선택할 수 있습니다
+7. 수치 계산 코드에서 느린 파이썬 루프를 대체하기 위해 NumPy 벡터화 연산(Vectorized Operations)을 활용할 수 있습니다
+8. 가독성과 성능을 균형 있게 고려한 체계적인 최적화 체크리스트를 작성할 수 있습니다
+
+---
+
 ## 1. 성능 측정 기초
 
 최적화 전에 반드시 측정하세요. "추측하지 말고 측정하라."

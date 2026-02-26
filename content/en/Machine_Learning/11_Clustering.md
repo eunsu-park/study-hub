@@ -1,8 +1,24 @@
 # Clustering
 
-## Overview
+**Previous**: [kNN and Naive Bayes](./10_kNN_and_Naive_Bayes.md) | **Next**: [Dimensionality Reduction](./12_Dimensionality_Reduction.md)
 
-Clustering is an **unsupervised learning** technique that groups similar data points together without labeled data. It's used for exploratory data analysis, customer segmentation, anomaly detection, and more.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the goal of clustering and distinguish it from supervised classification
+2. Implement K-Means clustering and interpret centroid assignments
+3. Apply the elbow method and silhouette analysis to select the optimal number of clusters
+4. Compare K-Means, DBSCAN, hierarchical clustering, and Gaussian Mixture Models
+5. Identify when density-based methods (DBSCAN) outperform centroid-based methods (K-Means)
+6. Evaluate clustering quality using both internal metrics (silhouette, Davies-Bouldin) and external metrics (ARI, NMI)
+7. Apply clustering to a real-world customer segmentation problem
+
+---
+
+All the supervised algorithms we have studied so far require labeled data -- someone has to tell the model what the "right answer" is. But what if you have no labels at all? Clustering is the gateway to **unsupervised learning**: it discovers hidden groupings in data by measuring similarity, without any labeled examples to guide it. Understanding clustering is essential because real-world data is overwhelmingly unlabeled, and the ability to reveal its latent structure powers applications from customer segmentation to anomaly detection to gene expression analysis.
 
 ---
 
@@ -55,7 +71,8 @@ import numpy as np
 # Generate sample data
 X, y_true = make_blobs(n_samples=300, centers=4, cluster_std=0.60, random_state=0)
 
-# Train K-Means
+# Fixes centroid initialization seed — K-Means is sensitive to initial
+# centroids; different seeds can produce different local optima (clusters)
 kmeans = KMeans(n_clusters=4, random_state=42)
 y_kmeans = kmeans.fit_predict(X)
 
@@ -82,7 +99,7 @@ K_range = range(1, 11)
 for k in K_range:
     kmeans = KMeans(n_clusters=k, random_state=42)
     kmeans.fit(X)
-    inertias.append(kmeans.inertia_)  # Sum of squared distances to nearest centroid
+    inertias.append(kmeans.inertia_)  # Sum of squared distances to nearest centroid; decreases monotonically with K
 
 # Plot elbow curve
 plt.figure(figsize=(10, 6))
@@ -207,7 +224,9 @@ from sklearn.datasets import make_moons
 # Generate non-linearly separable data
 X, y_true = make_moons(n_samples=300, noise=0.05, random_state=0)
 
-# Train DBSCAN
+# eps defines the neighborhood radius — points within eps distance are considered
+# reachable neighbors. Too small → most points become noise; too large → everything
+# merges into one cluster. Use a k-NN distance plot elbow method to tune eps.
 dbscan = DBSCAN(eps=0.3, min_samples=5)
 y_dbscan = dbscan.fit_predict(X)
 
@@ -501,7 +520,9 @@ data = {
 }
 df = pd.DataFrame(data)
 
-# Standardize features
+# Standardize features — K-Means uses Euclidean distance, so features on
+# different scales (e.g., income in $50k vs spending_score in 1-100) would
+# make income dominate the distance calculation and distort clusters
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(df)
 

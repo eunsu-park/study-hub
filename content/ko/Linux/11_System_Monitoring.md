@@ -1,5 +1,24 @@
 # 시스템 모니터링
 
+**이전**: [네트워크 기초](./10_Network_Basics.md) | **다음**: [보안과 방화벽](./12_Security_and_Firewall.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. uname, hostnamectl, lsb_release를 사용하여 시스템 정보 조회
+2. lscpu, top, vmstat으로 CPU 세부 정보 확인 및 CPU 사용량 모니터링
+3. free와 /proc/meminfo를 사용하여 메모리 사용량 모니터링
+4. df, du, lsblk, fdisk로 디스크 사용량과 파티션 정보 확인
+5. 전통적인 로그 파일과 journalctl을 사용하여 시스템 로그 조회 및 분석
+6. cron으로 반복 작업 예약 및 crontab 구문 해석
+7. 부하 평균 해석 및 vmstat, iostat으로 시스템 성능 진단
+8. 시스템 상태를 보고하고 임계값 초과 시 알림을 보내는 모니터링 스크립트 작성
+
+---
+
+모니터링되지 않는 서버는 장애를 기다리는 서버입니다. 시스템 모니터링을 통해 장애가 되기 전에 문제를 발견할 수 있습니다. 디스크가 가득 차거나, 메모리 누수가 발생하거나, CPU 사용량이 급증하거나, 서비스가 실패하는 경우가 그런 예입니다. 이 레슨의 도구들은 리눅스에서 관찰 가능성(Observability)의 기반을 이루며, Raspberry Pi부터 수천 노드 클라우드 클러스터까지 모든 환경에서 동작합니다.
+
 ## 1. 시스템 정보
 
 ### uname - 커널 정보
@@ -569,4 +588,4 @@ ps aux --sort=-%mem | head -6
 
 ## 다음 단계
 
-[12_Security_and_Firewall.md](./12_Security_and_Firewall.md)에서 시스템 보안을 배워봅시다!
+[보안과 방화벽](./12_Security_and_Firewall.md)에서 시스템 보안을 배워봅시다!

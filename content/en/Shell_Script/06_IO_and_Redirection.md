@@ -2,9 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md) | **Next**: [07_String_Processing.md](./07_String_Processing.md)
+**Previous**: [Functions and Libraries](./05_Functions_and_Libraries.md) | **Next**: [String Processing and Text Manipulation](./07_String_Processing.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how file descriptors work and create custom FDs for multi-stream I/O
+2. Apply advanced redirection techniques to separate, merge, swap, and save/restore stdout and stderr
+3. Write here documents and here strings for inline data and template generation
+4. Use process substitution to avoid subshell variable scope issues in pipelines
+5. Implement producer-consumer communication using named pipes (FIFOs)
+6. Identify common pipe pitfalls including subshell scope loss and PIPESTATUS checking
+7. Write atomic file updates, file-locking routines, and multi-destination logging patterns
+
+---
+
+I/O redirection is what makes shell scripting powerful for data pipelines, logging, and process coordination. Beyond simple `>` and `|`, bash provides file descriptors, process substitution, here documents, and named pipes that let you build sophisticated data flows without intermediate files. You need these skills whenever you write log handlers, parse multi-stream command output, or build concurrent producer-consumer workflows.
 
 ## 1. File Descriptors
 
@@ -1181,4 +1197,4 @@ Create a stream processing framework:
 - Uses process substitution for real-time monitoring
 - Handles stream termination gracefully
 
-**Previous**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md) | **Next**: [07_String_Processing.md](./07_String_Processing.md)
+**Previous**: [Functions and Libraries](./05_Functions_and_Libraries.md) | **Next**: [String Processing and Text Manipulation](./07_String_Processing.md)

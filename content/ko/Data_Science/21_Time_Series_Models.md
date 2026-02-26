@@ -2,9 +2,22 @@
 
 [이전: 시계열 분석 기초](./20_Time_Series_Basics.md) | [다음: 다변량 분석](./22_Multivariate_Analysis.md)
 
-## 개요
+## 학습 목표
 
-이 장에서는 AR, MA, ARMA, ARIMA 모형을 학습합니다. 모형의 이론적 배경, ACF/PACF를 통한 모델 식별, 파라미터 추정, 그리고 예측 방법을 다룹니다.
+이 레슨을 완료하면 다음을 수행할 수 있습니다:
+
+1. AR(p) 모형의 구조와 정상성(Stationarity) 조건 설명
+2. MA(q) 모형이 과거 충격(Shock)의 가중 합으로 시계열을 표현하는 방식 서술
+3. ACF/PACF 패턴을 기반으로 AR, MA, ARMA, ARIMA 모형 구별
+4. Box-Jenkins 방법론을 적용하여 시계열 모형 식별, 추정, 진단
+5. AIC와 BIC 정보 기준으로 후보 모형 비교
+6. 롤링(Rolling) 및 고정 호라이즌(Fixed-Horizon) 예측 구현, RMSE와 MAE로 성능 평가
+7. 정상성 검정부터 예측까지 ARIMA 모델링 전체 파이프라인 추적
+8. 벡터 자기회귀(VAR) 모형을 다변량 시계열에 적용하고, 그랜저 인과성(Granger Causality), 충격 반응 분석(IRF), 분산 분해(FEVD) 수행
+
+---
+
+시계열 데이터는 어디에나 있습니다 — 주가, 센서 측정값, 웹 트래픽 — 그러나 단일 스냅샷만으로는 다음에 무엇이 올지 알 수 없습니다. AR, MA, ARMA, ARIMA 모형은 순차적 관측값에 숨겨진 시간적 구조를 포착하는 체계적인 프레임워크를 제공하며, 미래 값을 예측하고 예측의 불확실성을 정량화할 수 있게 합니다. 시계열 데이터를 다루는 데이터 과학자에게 이러한 모형의 식별과 진단을 위한 Box-Jenkins 방법론 습득은 핵심 기초 역량입니다.
 
 ---
 
@@ -909,7 +922,221 @@ result = complete_arima_analysis(y_sample, '샘플 시계열')
 
 ---
 
-## 9. 연습 문제
+## 9. 벡터 자기회귀 모형 (Vector Autoregression, VAR)
+
+위에서 다룬 AR, MA, ARMA, ARIMA 모형은 모두 단일 시계열을 다룹니다. 그러나 실제로 경제 및 과학 변수는 함께 움직입니다: GDP와 실업률, 온도와 기압, 업종별 주가 등. **벡터 자기회귀(VAR)** 모형은 AR 프레임워크를 여러 시계열로 동시에 확장하여, 각 변수가 자기 자신의 과거 *그리고* 시스템 내 다른 모든 변수의 과거에 의존할 수 있게 합니다.
+
+### 9.1 VAR(p) 모형 수식
+
+K차원 시계열 **Y**ₜ = (Y₁ₜ, Y₂ₜ, ..., Yₖₜ)'에 대한 VAR(p) 모형:
+
+$$\mathbf{Y}_t = \mathbf{c} + \mathbf{A}_1 \mathbf{Y}_{t-1} + \mathbf{A}_2 \mathbf{Y}_{t-2} + \cdots + \mathbf{A}_p \mathbf{Y}_{t-p} + \mathbf{u}_t$$
+
+여기서:
+- **c**: K x 1 절편 벡터(Intercept vector)
+- **A**ᵢ: K x K 계수 행렬(Coefficient matrix, 각 시차별 하나)
+- **u**ₜ: K x 1 백색 잡음 벡터, E(**u**ₜ) = **0**, 공분산 행렬 Σ
+
+두 변수 Y, X에 대한 이변량 VAR(1)의 경우:
+
+$$\begin{pmatrix} Y_t \\ X_t \end{pmatrix} = \begin{pmatrix} c_1 \\ c_2 \end{pmatrix} + \begin{pmatrix} a_{11} & a_{12} \\ a_{21} & a_{22} \end{pmatrix} \begin{pmatrix} Y_{t-1} \\ X_{t-1} \end{pmatrix} + \begin{pmatrix} u_{1t} \\ u_{2t} \end{pmatrix}$$
+
+비대각 원소(a₁₂, a₂₁)는 **변수 간 교차 동학(Cross-variable dynamics)**을 포착합니다 — 이것이 각 변수에 별도의 AR 모형을 적합하는 것과 비교했을 때 VAR의 핵심 강점입니다.
+
+### 9.2 Python으로 VAR 모형 적합
+
+```python
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.stattools import adfuller
+
+np.random.seed(42)
+
+# --- 이변량 VAR(2) 과정 시뮬레이션 ---
+# 왜 시뮬레이션하는가? 추정기가 참 모수를 복원하는지 검증할 수 있기 때문이다.
+n = 500
+K = 2
+y = np.zeros((n, K))
+
+# 참 계수 행렬
+A1 = np.array([[0.5, 0.1],
+               [0.2, 0.3]])
+A2 = np.array([[-0.2, 0.0],
+               [0.1, -0.1]])
+
+for t in range(2, n):
+    y[t] = A1 @ y[t-1] + A2 @ y[t-2] + np.random.multivariate_normal(
+        [0, 0], [[1.0, 0.3], [0.3, 0.8]]
+    )
+
+df_var = pd.DataFrame(y, columns=['GDP_growth', 'Inflation'])
+
+# 정상성 확인 — VAR는 모든 시계열이 정상이어야 한다
+for col in df_var.columns:
+    adf_p = adfuller(df_var[col])[1]
+    print(f"{col}: ADF p-value = {adf_p:.4f} ({'정상' if adf_p < 0.05 else '비정상'})")
+
+# 정보 기준으로 자동 시차 선택
+# 왜 정보 기준을 사용하는가? VAR의 모수 수는 K^2 * p로 증가하므로
+# (변수 수의 제곱에 비례) 적합도와 과적합 사이의 균형이 특히 중요하다.
+model = VAR(df_var)
+lag_order = model.select_order(maxlags=8)
+print("\n=== 시차 선택 ===")
+print(lag_order.summary())
+
+# 선택된 모형 적합
+result = model.fit(maxlags=8, ic='aic')
+print(f"\n선택된 시차: {result.k_ar}")
+print(result.summary())
+```
+
+### 9.3 그랜저 인과성 (Granger Causality)
+
+그랜저 인과성(Granger Causality)은 다음을 묻습니다: 변수 X의 과거를 아는 것이 Y 자신의 과거만으로 예측하는 것 이상으로 Y의 예측을 개선하는가? 이것은 *예측적 선행성(Predictive precedence)*에 대한 통계적 검정이며, 진정한 인과관계가 아닙니다.
+
+```python
+from statsmodels.tsa.stattools import grangercausalitytests
+
+# 인플레이션이 GDP 성장을 그랜저 인과하는지 검정
+# 왜 그랜저 인과가 중요한가: X가 Y를 그랜저 인과하면, X의 시차를
+# 모형에 포함할 때 Y의 예측 오차가 유의하게 줄어든다.
+# 이는 VAR 시스템에 어떤 변수를 포함할지 결정하는 데 도움을 준다.
+print("=== 그랜저 인과: 인플레이션 -> GDP 성장 ===")
+gc_result = grangercausalitytests(df_var[['GDP_growth', 'Inflation']], maxlag=4)
+
+print("\n=== 그랜저 인과: GDP 성장 -> 인플레이션 ===")
+gc_result = grangercausalitytests(df_var[['Inflation', 'GDP_growth']], maxlag=4)
+
+# 해석: 어떤 시차에서든 p-value < 0.05이면, 두 번째 변수가 첫 번째 변수를
+# 그랜저 인과하지 않는다는 귀무가설을 기각한다.
+```
+
+### 9.4 충격 반응 함수 (Impulse Response Functions, IRF)
+
+충격 반응 함수(IRF)는 한 변수에 대한 단위 충격이 시간에 따라 시스템을 통해 어떻게 전파되는지 추적합니다. 이는 VAR 결과를 해석하는 데 가장 중요한 도구로, 변수 간 *동적 승수 효과(Dynamic multiplier effects)*를 보여줍니다.
+
+```python
+# 충격 반응 함수 계산
+# 왜 직교화하는가? 원시 충격은 변수 간에 상관되어 있는 것이 일반적이다.
+# 직교화된 IRF는 오차 공분산 행렬의 촐레스키 분해(Cholesky decomposition)를
+# 사용하여 한 변수에 대한 "순수한" 충격의 효과를 분리한다.
+irf = result.irf(periods=20)
+
+# 신뢰대역과 함께 IRF 그리기
+fig = irf.plot(orth=True, impulse='GDP_growth', response='Inflation')
+plt.suptitle('직교화 IRF: GDP 성장 충격 -> 인플레이션')
+plt.tight_layout()
+plt.show()
+
+fig = irf.plot(orth=True, impulse='Inflation', response='GDP_growth')
+plt.suptitle('직교화 IRF: 인플레이션 충격 -> GDP 성장')
+plt.tight_layout()
+plt.show()
+
+# 누적 IRF — 장기적(누적) 효과를 보여줌
+fig = irf.plot_cum_effects(orth=True)
+plt.suptitle('누적 충격 반응 함수')
+plt.tight_layout()
+plt.show()
+```
+
+### 9.5 예측 오차 분산 분해 (Forecast Error Variance Decomposition, FEVD)
+
+FEVD는 다음에 답합니다: 예측 수평선 h에서, 변수 Y의 예측 불확실성 중 변수 X의 충격에 기인하는 비율은 얼마인가? 이는 시간에 따른 각 충격 원천의 상대적 중요성을 정량화합니다.
+
+```python
+# FEVD 계산
+fevd = result.fevd(periods=20)
+print("=== 예측 오차 분산 분해 ===")
+print(fevd.summary())
+
+# FEVD 시각화
+fig = fevd.plot()
+plt.suptitle('예측 오차 분산 분해')
+plt.tight_layout()
+plt.show()
+
+# FEVD가 왜 중요한가: 거시경제학에서 FEVD는 "산출 변동의 몇 퍼센트가
+# 통화정책 충격 vs 공급 충격에 의한 것인가?"와 같은 질문에 답한다.
+# 이는 점추정을 넘어 시스템 내 각 변수의 구조적 중요성을 보여준다.
+```
+
+### 9.6 VAR로 예측
+
+```python
+# 향후 10기간 예측
+forecast_steps = 10
+forecast = result.forecast(df_var.values[-result.k_ar:], steps=forecast_steps)
+
+# 신뢰구간과 함께 예측
+forecast_ci = result.forecast_interval(
+    df_var.values[-result.k_ar:], steps=forecast_steps, alpha=0.05
+)
+point_forecast, lower_ci, upper_ci = forecast_ci
+
+# 시각화
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+for i, col in enumerate(df_var.columns):
+    # 마지막 50개 관측값
+    axes[i].plot(range(n-50, n), df_var[col].values[-50:], 'b-', label='관측값')
+
+    # 예측
+    fcast_idx = range(n, n + forecast_steps)
+    axes[i].plot(fcast_idx, point_forecast[:, i], 'r-', label='예측')
+    axes[i].fill_between(fcast_idx, lower_ci[:, i], upper_ci[:, i],
+                         color='r', alpha=0.2, label='95% CI')
+    axes[i].axvline(n, color='k', linestyle='--', alpha=0.5)
+    axes[i].set_title(f'{col} 예측')
+    axes[i].legend()
+    axes[i].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+```
+
+### 9.7 VAR vs VECM: 공적분 시계열
+
+VAR는 모든 시계열이 정상이라고 가정합니다. 시계열이 비정상이지만 공통 확률적 추세(Stochastic trend)를 공유하는 경우(즉, **공적분(Cointegrated)** 관계), **벡터 오차 수정 모형(VECM, Vector Error Correction Model)**을 사용해야 합니다. VECM은 본질적으로 1차 차분의 VAR에 장기 균형 관계를 포착하는 오차 수정 항(Error correction terms)을 추가한 것입니다.
+
+| 관점 | VAR | VECM |
+|--------|-----|------|
+| 입력 시계열 | 정상 (또는 차분된) | 비정상이지만 공적분 |
+| 장기 관계 | 모델링하지 않음 | 공적분 방정식으로 명시적 모델링 |
+| 사용 시점 | 변수가 독립적으로 움직일 때 | 변수가 공통 장기 추세를 공유할 때 |
+| 차분 | 먼저 차분 후 VAR 적합 | 차분 불필요 — VECM이 처리 |
+| 선행 검정 | 정상성 검정 (ADF/KPSS) | 공적분 순위 검정 (Johansen test) |
+
+```python
+from statsmodels.tsa.vector_ar.vecm import coint_johansen, VECM
+
+# 공적분 시계열 시뮬레이션 (Y와 X가 공통 추세를 공유)
+np.random.seed(42)
+n = 300
+trend = np.cumsum(np.random.normal(0, 1, n))  # 공통 확률적 추세
+x = trend + np.random.normal(0, 0.5, n)
+y_coint = 0.8 * trend + np.random.normal(0, 0.5, n)  # x와 공적분 관계
+
+df_coint = pd.DataFrame({'Y': y_coint, 'X': x})
+
+# 요한센 공적분 검정 (Johansen cointegration test)
+# 왜 요한센인가? 엥글-그래인저(Engle-Granger) 검정은 2개 변수로 제한되지만,
+# 요한센 검정은 임의의 수의 변수를 다루며 공적분 관계의 수(순위)를 검정한다.
+johansen_result = coint_johansen(df_coint, det_order=0, k_ar_diff=2)
+print("=== 요한센 공적분 검정 ===")
+print(f"Trace 통계량: {johansen_result.lr1}")
+print(f"임계값 (90%, 95%, 99%): {johansen_result.cvt}")
+
+# 공적분이 있으면 VECM 적합
+vecm = VECM(df_coint, k_ar_diff=2, coint_rank=1)
+vecm_result = vecm.fit()
+print("\n=== VECM 결과 ===")
+print(vecm_result.summary())
+```
+
+**경험 법칙**: 수준(levels)에서 VAR를 적합하기 전에 항상 공적분을 검정하세요. 공적분이 발견되면 VECM을 사용하세요 — 차분은 귀중한 장기 정보를 파괴하지만 VECM은 이를 보존합니다.
+
+---
+
+## 10. 연습 문제
 
 ### 문제 1: 모델 식별
 다음 ACF/PACF 패턴에 해당하는 모델을 식별하세요:
@@ -931,7 +1158,7 @@ AIC와 BIC가 다른 모델을 선택할 때 어떻게 결정해야 할까요?
 
 ---
 
-## 10. 핵심 요약
+## 11. 핵심 요약
 
 ### ARIMA 모델 체계
 

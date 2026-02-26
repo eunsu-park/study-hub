@@ -1,10 +1,22 @@
 # Deadlock
 
-## Overview
-
-Deadlock is a state where two or more processes wait indefinitely for each other to release resources. In this lesson, we'll learn about the four necessary conditions for deadlock, resource allocation graphs, and methods for prevention, avoidance, detection, and recovery.
+**Previous**: [Synchronization Tools](./08_Synchronization_Tools.md) | **Next**: [Memory Management Basics](./10_Memory_Management_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. List and explain the four Coffman conditions for deadlock
+2. Distinguish deadlock prevention from avoidance and detection
+3. Apply the Banker's algorithm to determine safe and unsafe states
+4. Construct and analyze a resource allocation graph
+5. Evaluate the tradeoffs of different deadlock handling strategies
+
+---
+
+Deadlock is a silent killer -- your system freezes, no error message appears, and no single process is "wrong." It happens when processes hold resources while waiting for others in a circular chain. Understanding deadlock is crucial for designing systems that do not silently hang.
 
 ## Table of Contents
 
@@ -19,6 +31,8 @@ Deadlock is a state where two or more processes wait indefinitely for each other
 ---
 
 ## 1. What is Deadlock?
+
+> Picture a four-way intersection where every car has arrived at the same time, and each car is waiting for the car to its right to go first. Nobody moves -- ever. This is deadlock: each process holds a resource another needs, and all are waiting in a cycle that can never break on its own.
 
 ### Definition
 
@@ -950,6 +964,119 @@ When using the "abort one process at a time" recovery method after deadlock occu
 **Optimal selection:** Define cost function as weighted sum of above criteria, select minimum cost process
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Wait-For Graph Visualizer
+
+Run `examples/OS_Theory/09_deadlock_detection.py` and extend it.
+
+**Tasks:**
+1. Modify the `WaitForGraph` class to return ALL cycles in the graph, not just the first one found
+2. Add an `involved_processes()` method that returns the set of processes participating in any cycle
+3. Test with a graph containing two independent cycles: {P1→P2→P1} and {P3→P4→P5→P3}
+
+### Exercise 2: Banker's Algorithm Extensions
+
+Using the `BankersAlgorithm` class from `examples/OS_Theory/09_deadlock_detection.py`:
+
+**Tasks:**
+1. Add a `release(pid, resources)` method that releases resources when a process finishes
+2. Simulate a full execution sequence: process requests resources, does work, releases resources. Track the system state at each step
+3. Find the maximum number of resources a single process can request from the initial state while keeping the system safe
+
+### Exercise 3: Deadlock-Free Resource Manager
+
+Build a complete resource manager that prevents deadlock using resource ordering:
+
+**Tasks:**
+1. Create a `ResourceManager` class that assigns a global ordering to all resources
+2. Implement `request(process, resource_list)` that verifies resources are requested in ascending order (reject if not)
+3. Test with 5 processes and 5 resources. Run 1000 random allocation/release cycles and verify no deadlock occurs
+4. Compare performance (throughput) against a version using Banker's algorithm for avoidance
+
+---
+
+## Exercises
+
+### Exercise 1: Coffman Conditions Analysis
+
+For each system description, identify which of the four Coffman conditions (mutual exclusion, hold-and-wait, no-preemption, circular wait) are present, and whether deadlock is possible.
+
+**System A**: A database where transactions lock rows exclusively (no shared reads), must hold all locks until commit, cannot have locks forcibly taken away, and two transactions are each waiting for a row locked by the other.
+
+**System B**: A print spooler where any job can be preempted and its print job cancelled, restarted later from scratch.
+
+**System C**: A philosopher problem variant where each philosopher either picks up BOTH forks simultaneously or waits (no holding one fork and waiting for the other).
+
+For each system:
+1. Check each Coffman condition (present / not present / partially)
+2. Conclude whether deadlock is possible and explain why
+
+### Exercise 2: Resource Allocation Graph Analysis
+
+Given the following resource allocation graph, answer the questions. Notation: P→R means process P requests resource R; R→P means resource R is allocated to process P.
+
+```
+Edges:
+P1 → R1      (P1 requests R1)
+R1 → P2      (R1 held by P2)
+P2 → R2      (P2 requests R2)
+R2 → P3      (R2 held by P3)
+P3 → R1      (P3 requests R1)
+R3 → P4      (R3 held by P4)
+P4 → R3      (P4 requests R3)
+```
+
+Each resource has exactly one instance.
+
+1. Draw the resource allocation graph
+2. Identify any cycles in the graph
+3. Is there a deadlock? Which processes are deadlocked?
+4. P5 arrives and requests R3. After granting R3 to P5 (if P4 were to release it), would the deadlock resolve?
+
+### Exercise 3: Banker's Algorithm
+
+A system has 3 resource types: A (10 instances), B (5 instances), C (7 instances).
+
+**Current state:**
+
+| Process | Allocation (A,B,C) | Max Need (A,B,C) |
+|---------|-------------------|------------------|
+| P0 | 0, 1, 0 | 7, 5, 3 |
+| P1 | 2, 0, 0 | 3, 2, 2 |
+| P2 | 3, 0, 2 | 9, 0, 2 |
+| P3 | 2, 1, 1 | 2, 2, 2 |
+| P4 | 0, 0, 2 | 4, 3, 3 |
+
+1. Calculate the Available vector
+2. Calculate the Need matrix for each process
+3. Find a safe sequence using the Banker's algorithm. Show the Available vector at each step
+4. P1 now requests (1, 0, 2). Can the system grant this request? Run the Banker's algorithm and explain your decision
+
+### Exercise 4: Prevention Strategy Trade-offs
+
+For each of the four deadlock prevention strategies, describe one real-world system or situation where that strategy is practical, and one where it is impractical (and why).
+
+| Strategy | Real-world where practical | Real-world where impractical |
+|----------|---------------------------|------------------------------|
+| Deny mutual exclusion | | |
+| Deny hold-and-wait | | |
+| Allow preemption | | |
+| Impose resource ordering | | |
+
+### Exercise 5: Detection and Recovery
+
+A system does not prevent or avoid deadlock; instead it runs a deadlock detector every 5 minutes.
+
+**Detection result at t=60min**: Processes P2, P5, P7, P8 are deadlocked, each holding one of the shared resources R1, R2, R3, R4 (all single-instance).
+
+1. What is the minimum number of processes that must be terminated to break the deadlock? Which ones? (Assume all have equal priority)
+2. If instead of termination the OS preempts resources, in what order should it preempt to minimize wasted work? What criteria would you use?
+3. After recovery, P2 and P5 restart and immediately deadlock again. What does this suggest about the underlying design, and what should be done?
+4. A system runs the detector every T minutes. What are the trade-offs of choosing a small T vs a large T?
 
 ---
 

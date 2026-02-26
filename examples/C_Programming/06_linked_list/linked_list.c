@@ -5,6 +5,8 @@
 #include <stdlib.h>
 
 // 노드 구조체
+// Why: "struct Node" is used inside the definition (not "Node") because the
+// typedef alias isn't available yet while the struct body is being defined
 typedef struct Node {
     int data;
     struct Node* next;
@@ -32,6 +34,8 @@ void list_push_front(LinkedList* list, int data) {
     if (!new_node) return;
 
     new_node->data = data;
+    // Why: point new node to current head BEFORE updating head — reversing this
+    // order would lose the reference to the rest of the list
     new_node->next = list->head;
     list->head = new_node;
     list->size++;
@@ -98,6 +102,8 @@ int list_remove(LinkedList* list, int data) {
     }
 
     // 중간 또는 끝 노드 삭제
+    // Why: checking current->next instead of current lets us relink the previous
+    // node — a singly-linked list has no back-pointer, so we must look one step ahead
     Node* current = list->head;
     while (current->next != NULL) {
         if (current->next->data == data) {
@@ -129,6 +135,8 @@ void list_print(LinkedList* list) {
 }
 
 // 리스트 해제
+// Why: saving current->next BEFORE freeing current is essential — after free(),
+// the memory is invalid and accessing current->next would be undefined behavior
 void list_destroy(LinkedList* list) {
     Node* current = list->head;
 

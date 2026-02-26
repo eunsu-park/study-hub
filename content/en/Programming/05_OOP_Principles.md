@@ -1,13 +1,25 @@
 # OOP Principles
 
-> **Topic**: Programming
-> **Lesson**: 5 of 16
-> **Prerequisites**: Basic understanding of classes and objects, familiarity with at least one object-oriented language
-> **Objective**: Master the four pillars of OOP (encapsulation, abstraction, inheritance, polymorphism) and apply SOLID principles to write maintainable, extensible code
+**Previous**: [Control Flow Patterns](./04_Control_Flow_Patterns.md) | **Next**: [Functional Programming Concepts](./06_Functional_Programming.md)
 
-## Introduction
+## Learning Objectives
 
-Object-Oriented Programming (OOP) is built on fundamental principles that guide how we structure code. Understanding these principles deeply—not just superficially—is crucial for writing maintainable, scalable software. This lesson explores the four pillars of OOP, SOLID principles, and when to apply (or avoid) each concept.
+After completing this lesson, you will be able to:
+
+1. Explain the four pillars of OOP -- encapsulation, abstraction, inheritance, and polymorphism -- with concrete examples
+2. Implement encapsulation using access modifiers and the information hiding principle
+3. Design class hierarchies using inheritance and recognize when composition is a better alternative
+4. Apply compile-time polymorphism (overloading) and runtime polymorphism (overriding/duck typing)
+5. State and apply each of the five SOLID principles (SRP, OCP, LSP, ISP, DIP)
+6. Identify the diamond problem in multiple inheritance and describe solutions (MRO, virtual inheritance)
+7. Apply the Law of Demeter to reduce coupling between objects
+8. Refactor code from inheritance-based to composition-based design when appropriate
+
+---
+
+Object-Oriented Programming (OOP) is built on fundamental principles that guide how we structure code. Understanding these principles deeply -- not just superficially -- is crucial for writing maintainable, scalable software. This lesson explores the four pillars of OOP, SOLID principles, and when to apply (or avoid) each concept.
+
+> **📌 Analogy:** A class is an architect's blueprint that specifies the structure (attributes) and functions (methods) of a building. Every building constructed from the same blueprint shares the design, but each has its own address and occupants -- just as each object has its own state.
 
 ## The Four Pillars of OOP
 
@@ -1086,5 +1098,4 @@ Review a codebase (your own or open-source) and identify:
 
 ---
 
-**Previous**: [04_Programming_Paradigms.md](04_Programming_Paradigms.md)
-**Next**: [06_Functional_Programming.md](06_Functional_Programming.md)
+**Previous**: [Control Flow Patterns](./04_Control_Flow_Patterns.md) | **Next**: [Functional Programming Concepts](./06_Functional_Programming.md)

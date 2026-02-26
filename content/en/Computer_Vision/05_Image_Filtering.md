@@ -6,11 +6,14 @@ Image filtering is the process of transforming pixel values by considering neigh
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
-**Learning Objectives**:
-- Understand kernel and convolution concepts
-- Learn various blur filters (`blur`, `GaussianBlur`, `medianBlur`, `bilateralFilter`)
-- Edge-preserving smoothing
-- Implement custom filters and sharpening
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand kernel and convolution concepts
+2. Learn various blur filters (`blur`, `GaussianBlur`, `medianBlur`, `bilateralFilter`)
+3. Edge-preserving smoothing
+4. Implement custom filters and sharpening
 
 ---
 
@@ -103,15 +106,15 @@ def visualize_convolution(img, kernel):
     """Visualize convolution process (for learning)"""
     h, w = img.shape
     kh, kw = kernel.shape
-    pad = kh // 2
+    pad = kh // 2  # Why pad = kh//2: ensures the output has the same size as the input
 
-    # Add padding
+    # Why zero-padding: border pixels need neighbors; padding with 0 is neutral for average kernels
     padded = np.pad(img, pad, mode='constant', constant_values=0)
 
-    # Result array
+    # Why float64: intermediate sums can exceed uint8 range (0-255); promotes before clipping
     result = np.zeros_like(img, dtype=np.float64)
 
-    # Convolution (slow version - for learning)
+    # Slow explicit loop — used here to make each step visible; use cv2.filter2D in production
     for y in range(h):
         for x in range(w):
             region = padded[y:y+kh, x:x+kw]
@@ -128,12 +131,14 @@ img = np.array([
     [13, 14, 15, 16]
 ], dtype=np.float64)
 
-kernel = np.ones((3, 3)) / 9  # Average filter
+kernel = np.ones((3, 3)) / 9  # Average filter: weights sum to 1 to preserve overall brightness
 
 result = visualize_convolution(img, kernel)
 print("Input:\n", img)
 print("\nResult:\n", result)
 ```
+
+**Why does blurring work?** Noise in an image manifests as rapid, high-frequency pixel variations — adjacent pixels differ sharply without reflecting actual scene content. When a blur kernel averages neighboring pixels, these sharp random fluctuations cancel out, while genuine image features (which vary gradually across many pixels) are preserved. In signal processing terms, a blur kernel is a **low-pass filter** that suppresses high-frequency components. This is also why Gaussian blur is preferred as a preprocessing step before edge detection: it removes noise-induced false edges while preserving true structural boundaries.
 
 ---
 
@@ -262,10 +267,13 @@ img = cv2.imread('image.jpg')
 # sigmaX: Standard deviation in X direction (0 = auto-calculate from kernel size)
 # sigmaY: Standard deviation in Y direction (0 = same as sigmaX)
 
-# Specify kernel size (sigma auto-calculated)
+# Why ksize=(5,5) and sigmaX=0: letting OpenCV derive sigma from kernel size is the
+# recommended default — it ties blur strength to a single intuitive parameter (kernel size)
+# rather than requiring you to keep ksize and sigma in sync manually
 blur1 = cv2.GaussianBlur(img, (5, 5), 0)
 
-# Specify sigma (kernel size auto-adjusted appropriately)
+# Why (0,0) with explicit sigma: when you reason in terms of sigma (e.g., "blur ~3 pixels"),
+# letting OpenCV pick the minimal sufficient kernel size avoids unnecessary computation
 blur2 = cv2.GaussianBlur(img, (0, 0), 3)  # sigma=3
 
 # Specify both kernel size and sigma
@@ -739,7 +747,8 @@ def unsharp_mask(img, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
     amount: Sharpening strength (1.0 = standard)
     threshold: Edge detection threshold (noise prevention)
     """
-    # Blurred image
+    # Why Gaussian blur here: isolates low-frequency content; subtracting it leaves only
+    # high-frequency detail (edges, texture) which we then amplify
     blurred = cv2.GaussianBlur(img, kernel_size, sigma)
 
     # Original - Blur = Edges/Details
@@ -747,7 +756,8 @@ def unsharp_mask(img, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
     sharpened = cv2.addWeighted(img, 1 + amount, blurred, -amount, 0)
 
     if threshold > 0:
-        # Keep original for pixels with change below threshold
+        # Why threshold: prevents amplifying flat-region noise — only sharpen where
+        # there is already a meaningful intensity difference between original and blur
         diff = cv2.absdiff(img, blurred)
         mask = (diff < threshold).astype(np.uint8) * 255
         sharpened = np.where(mask == 255, img, sharpened)
@@ -772,15 +782,18 @@ def adaptive_sharpening(img, amount=1.0):
 
     # Edge detection
     edges = cv2.Canny(gray, 50, 150)
+    # Why dilate edges: the 1-pixel Canny edge is too narrow; dilation creates a soft
+    # transition zone so sharpening doesn't produce hard halos at region boundaries
     edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
 
-    # Blur
+    # Why blur before sharpening: we need the low-frequency baseline to subtract from
     blurred = cv2.GaussianBlur(img, (5, 5), 1)
 
     # Sharpening
     sharpened = cv2.addWeighted(img, 1 + amount, blurred, -amount, 0)
 
-    # Apply sharpening only to edge regions
+    # Why blend instead of hard mask: keeps flat areas completely unchanged while
+    # concentrating sharpening where edges already exist, avoiding noise amplification
     edges_3ch = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR) / 255.0
     result = (sharpened * edges_3ch + img * (1 - edges_3ch)).astype(np.uint8)
 

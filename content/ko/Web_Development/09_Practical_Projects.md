@@ -1,5 +1,24 @@
 # 실전 프로젝트
 
+**이전**: [JS 비동기](./08_JS_Async.md) | **다음**: [TypeScript 기초](./10_TypeScript_Basics.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. CRUD 작업과 로컬 스토리지(local storage) 영속성을 갖춘 완전한 Todo 애플리케이션을 구축한다
+2. 외부 REST API(REST API)를 연동하여 날씨 앱에서 동적 데이터를 가져와 표시한다
+3. Intersection Observer API를 사용하여 무한 스크롤(infinite scroll)을 구현한다
+4. 모바일에서 데스크톱 뷰포트까지 적응하는 반응형(responsive) 레이아웃을 설계한다
+5. 효율적인 DOM 이벤트 처리를 위한 이벤트 위임(event delegation) 패턴을 적용한다
+6. 사용자 인터페이스에서 로딩 상태, 에러 상태, 빈 상태를 처리한다
+7. HTML, CSS, JavaScript가 명확히 분리된 구조로 프런트엔드 프로젝트를 구성한다
+8. 키보드 내비게이션을 지원하는 라이트박스(lightbox) 갤러리를 구현한다
+
+---
+
+실제 프로젝트를 만드는 것은 개별 개념을 배우는 것과 생산적인 웹 개발자가 되는 것 사이의 다리입니다. 튜토리얼이 문법을 가르친다면, 프로젝트는 HTML 구조, CSS 스타일링, JavaScript 로직을 실제 문제를 해결하는 완성된 애플리케이션으로 결합하는 방법을 가르칩니다. 이 레슨의 세 가지 프로젝트는 복잡도가 점진적으로 증가하며, 각 프로젝트는 전문 현장에서 자주 접하는 새로운 패턴을 소개합니다.
+
 ## 개요
 
 이 문서에서는 앞서 배운 HTML, CSS, JavaScript를 종합하여 실제 동작하는 웹 애플리케이션을 만들어봅니다.
@@ -1557,6 +1576,77 @@ document.addEventListener('DOMContentLoaded', () => {
 - 음악 플레이어
 - 마크다운 에디터
 - 지출 관리 앱
+
+---
+
+## 연습 문제
+
+### 연습 1: Todo 앱 확장
+
+프로젝트 1의 Todo 앱에 다음 기능을 추가하세요:
+
+1. **편집 기능**: 사용자가 Todo 항목을 더블클릭하면 텍스트를 인라인으로 편집할 수 있도록 합니다. Enter를 누르거나 다른 곳을 클릭하면 변경 내용이 저장됩니다.
+2. **마감 기한(due date)**: Todo 생성 시 선택적 마감 기한 필드를 추가합니다. 기한이 지난 항목은 빨간색 표시기로 구분합니다.
+3. **우선순위 수준(priority level)**: 우선순위 선택기(낮음/보통/높음)를 추가하고, 높은 우선순위 항목이 먼저 표시되도록 목록을 정렬합니다.
+
+> **팁**: 편집 모드는 `<span>`과 `<input>` 요소를 `display: none`으로 전환하는 방식을 사용하세요. 각 Todo 객체에 `id`, `text`, `completed`와 함께 `dueDate`, `priority` 필드를 저장하세요.
+
+### 연습 2: 날씨 앱 목업(Mock) API
+
+실제 API 키 없이 동작하도록 날씨 앱(프로젝트 2)을 목업 데이터 레이어로 재작성하세요:
+
+1. `mockApi.js` 파일을 만들고 `async function fetchWeather(city)`를 export합니다. `Promise` 내부에서 `setTimeout`을 사용해 800ms 지연 후 하드코딩된 날씨 객체를 반환하게 합니다.
+2. `app.js`에서 실제 `fetch` 호출을 `mockApi.js`에서 가져온 함수로 교체합니다.
+3. 위도가 양수(북반구)인지 음수인지에 따라 다른 목업 데이터를 반환하는 두 번째 함수 `fetchWeatherByCoords(lat, lon)`을 추가합니다.
+
+```javascript
+// mockApi.js 스켈레톤
+export function fetchWeather(city) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            if (city.toLowerCase() === 'unknown') {
+                reject(new Error('City not found.'));
+            } else {
+                resolve({ name: city, main: { temp: 22, feels_like: 20, humidity: 60 }, /* ... */ });
+            }
+        }, 800);
+    });
+}
+```
+
+### 연습 3: 키보드 내비게이션이 지원되는 접근성 갤러리
+
+이미지 갤러리(프로젝트 3)를 키보드 내비게이션을 완전히 지원하도록 개선하세요:
+
+1. 각 갤러리 항목을 포커스 가능하게(`tabindex="0"`) 만들고, 포커스된 항목에서 **Enter** 또는 **Space**를 누르면 라이트박스(lightbox)가 열리도록 합니다.
+2. 라이트박스가 열려 있을 때 포커스를 내부에 가두세요: **Tab**과 **Shift+Tab**이 닫기, 이전, 다음 버튼 사이만 순환해야 합니다.
+3. 라이트박스가 닫힐 때, 라이트박스를 열기 전에 활성화되어 있던 갤러리 항목으로 포커스를 돌려줍니다.
+4. 닫기(`"Close lightbox"`), 이전(`"Previous image"`), 다음(`"Next image"`) 버튼에 `aria-label` 속성을 추가합니다.
+
+### 연습 4: 반응형 칸반(Kanban) 보드 (심화)
+
+네 번째 프로젝트로 간단한 칸반 보드를 만들어 보세요:
+
+- **할 일(To Do)**, **진행 중(In Progress)**, **완료(Done)** 3개의 컬럼
+- HTML 드래그 앤 드롭(Drag and Drop) API(`dragstart`, `dragover`, `drop` 이벤트)를 사용하여 카드를 컬럼 간에 이동
+- 카드 상태(각 카드가 속한 컬럼)를 `localStorage`에 저장
+- 카드를 클릭하면 카드 제목을 편집할 수 있는 인라인 편집 폼이 표시
+
+```javascript
+// 드래그 앤 드롭 스켈레톤
+card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', card.dataset.id);
+});
+
+column.addEventListener('dragover', (e) => e.preventDefault());
+
+column.addEventListener('drop', (e) => {
+    const id = e.dataTransfer.getData('text/plain');
+    const card = document.querySelector(`[data-id="${id}"]`);
+    column.querySelector('.cards').appendChild(card);
+    saveState();
+});
+```
 
 ---
 

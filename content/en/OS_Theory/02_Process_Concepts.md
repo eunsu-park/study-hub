@@ -1,10 +1,24 @@
 # Process Concepts
 
-## Overview
-
-A process is a program in execution. This lesson covers process memory structure, Process Control Block (PCB), process state transitions, and context switching.
+**Previous**: [OS Overview](./01_OS_Overview.md) | **Next**: [Threads and Multithreading](./03_Threads_and_Multithreading.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define a process and distinguish it from a program
+2. Describe the process memory layout, including the text, data, BSS, heap, and stack sections
+3. Explain the contents of a Process Control Block (PCB) and its role in process management
+4. Trace process state transitions through the 5-state and 7-state models
+5. Distinguish between process creation methods using fork() and program replacement using exec()
+6. Analyze the direct and indirect costs of context switching
+7. Explain zombie and orphan processes and how the OS handles them
+
+---
+
+A program sitting on disk is like a recipe in a cookbook -- inert text. A process is that recipe being actively cooked: ingredients allocated, oven preheated, timer running. Understanding processes is understanding how your computer brings programs to life. This lesson covers process memory structure, the Process Control Block (PCB), process state transitions, and context switching -- the core mechanisms that allow an OS to manage running programs.
 
 ## Table of Contents
 
@@ -223,38 +237,57 @@ PCB (Process Control Block) = Data structure containing all info to manage a pro
 // Linux kernel process structure (simplified)
 struct task_struct {
     // Process identification
-    pid_t pid;                    // Process ID
-    pid_t tgid;                   // Thread group ID
+    pid_t pid;                    // Process ID — uniquely identifies this process so the kernel
+                                  // can track, schedule, and signal it among thousands of others
+    pid_t tgid;                   // Thread group ID — groups threads that share an address space
+                                  // so signals/exits affect the whole thread group, not just one thread
 
     // Process state
     volatile long state;          // TASK_RUNNING, TASK_INTERRUPTIBLE...
+                                  // The scheduler checks this field to decide whether the process
+                                  // is eligible for CPU time or must wait for an event
 
     // Scheduling info
-    int prio;                     // Dynamic priority
-    int static_prio;              // Static priority
-    struct sched_entity se;       // Scheduling entity
+    int prio;                     // Dynamic priority — adjusted at runtime so interactive processes
+                                  // get a responsiveness boost while CPU-hogs are deprioritized
+    int static_prio;              // Static priority — set by the user (via nice); provides the
+                                  // baseline from which dynamic priority is calculated
+    struct sched_entity se;       // Scheduling entity — encapsulates CFS accounting (vruntime)
+                                  // so the scheduler can fairly divide CPU time among all processes
 
     // CPU context
-    struct thread_struct thread;  // CPU register state
+    struct thread_struct thread;  // CPU register state — saves where execution stopped (PC, SP,
+                                  // general registers) so the process can resume exactly where
+                                  // it was interrupted after a context switch
 
     // Memory management
-    struct mm_struct *mm;         // Memory descriptor
+    struct mm_struct *mm;         // Memory descriptor — points to the page tables and VMA list;
+                                  // without this, the kernel cannot translate virtual addresses
+                                  // or enforce per-process memory isolation
 
     // File system
-    struct files_struct *files;   // Open file table
-    struct fs_struct *fs;         // File system info
+    struct files_struct *files;   // Open file table — tracks every file descriptor the process
+                                  // owns so the kernel can route read/write calls to the right file
+    struct fs_struct *fs;         // File system info — stores root dir and current working dir
+                                  // so path resolution works correctly for this process
 
     // Process relationships
-    struct task_struct *parent;   // Parent process
-    struct list_head children;    // Children processes list
-    struct list_head sibling;     // Sibling processes list
+    struct task_struct *parent;   // Parent process — needed so wait()/SIGCHLD can propagate
+                                  // the child's exit status to the correct parent
+    struct list_head children;    // Children processes list — lets the parent iterate over all
+                                  // its children (e.g., to reap zombies or forward signals)
+    struct list_head sibling;     // Sibling processes list — links processes that share the same
+                                  // parent, enabling efficient traversal of the process tree
 
     // Signals
-    struct signal_struct *signal;
+    struct signal_struct *signal; // Pending/blocked signal info — the kernel checks this on return
+                                  // from kernel mode to deliver asynchronous notifications (SIGTERM, etc.)
 
     // Timing info
-    u64 utime, stime;            // User/system CPU time
-    u64 start_time;              // Start time
+    u64 utime, stime;            // User/system CPU time — used for accounting and scheduling
+                                  // decisions; also exposed via /proc so admins can find CPU hogs
+    u64 start_time;              // Start time — records when the process was created so the kernel
+                                  // (and tools like ps) can compute elapsed wall-clock time
 };
 ```
 
@@ -833,6 +866,199 @@ Describe two direct costs and two indirect costs of context switching.
 2. TLB flush: New process uses different virtual address space, invalidating TLB entries
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Process Lifecycle Simulation
+
+Run `examples/OS_Theory/02_process_demo.py` and observe the output.
+
+**Tasks:**
+1. Add a new process "P5" with priority 3 and trace its state transitions: NEW → READY → RUNNING → WAITING → READY → RUNNING → TERMINATED
+2. Modify the `ProcessTable` to track the total time each process spends in each state
+3. Add a `kill_process(pid)` method that forcibly transitions any state to TERMINATED
+
+### Exercise 2: Process Tree Exploration
+
+Use system tools to explore the process hierarchy on your machine:
+
+```bash
+# Linux
+pstree -p | head -30
+
+# macOS
+ps -axo pid,ppid,comm | head -30
+```
+
+**Tasks:**
+1. Identify the init/launchd process (PID 1) and trace 3 levels of its child processes
+2. What is the PPID of your current shell? Trace the ancestry back to PID 1
+3. Write a Python script using `os.getpid()` and `os.getppid()` that prints its own ancestry
+
+### Exercise 3: Context Switch Overhead
+
+Measure context switch overhead using pipe-based ping-pong between two processes:
+
+```python
+import os, time
+
+def measure_context_switches(n=10000):
+    r1, w1 = os.pipe()
+    r2, w2 = os.pipe()
+
+    pid = os.fork()
+    if pid == 0:
+        for _ in range(n):
+            os.read(r1, 1)
+            os.write(w2, b'x')
+        os._exit(0)
+    else:
+        start = time.perf_counter()
+        for _ in range(n):
+            os.write(w1, b'x')
+            os.read(r2, 1)
+        elapsed = time.perf_counter() - start
+        os.wait()
+        print(f"{n} round-trips: {elapsed*1000:.1f} ms")
+        print(f"Per switch: {elapsed/n*1e6:.1f} µs")
+
+measure_context_switches()
+```
+
+**Tasks:**
+1. Run the script and interpret the per-switch latency
+2. How does this compare to the theoretical minimum (register save/restore time)?
+3. What additional costs beyond register save/restore contribute to context switch overhead?
+
+---
+
+## Exercises
+
+### Exercise 1: Memory Layout Analysis
+
+For each variable or expression in the program below, state the memory section (Text, Data, BSS, Heap, or Stack) where it resides and briefly explain why.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int server_port = 8080;          // (1)
+char *app_name;                  // (2)
+static int request_count = 0;   // (3)
+
+void handle_request(int id) {
+    char buf[256];               // (4)
+    static int call_num = 0;     // (5)
+    int *data = malloc(1024);    // (6) where is data itself? where does it point?
+    free(data);
+}
+```
+
+### Exercise 2: Process State Transitions
+
+A system has four processes: P1, P2, P3, and P4. Trace the state of each process at each time step based on the events listed below. Use: New, Ready, Running, Waiting, Terminated.
+
+| Time | Event |
+|------|-------|
+| t=0 | P1 created, P2 created |
+| t=1 | P1 dispatched to CPU |
+| t=2 | P3 created |
+| t=3 | P1 requests file read (I/O) |
+| t=4 | P2 dispatched; P4 created |
+| t=5 | P1's I/O completes |
+| t=6 | P2's time slice expires |
+| t=7 | P1 dispatched; P3 dispatched (multicore) |
+| t=8 | P3 calls exit() |
+
+Fill in the table:
+
+| Process | t=0 | t=1 | t=2 | t=3 | t=4 | t=5 | t=6 | t=7 | t=8 |
+|---------|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| P1 | | | | | | | | | |
+| P2 | | | | | | | | | |
+| P3 | | | | | | | | | |
+| P4 | | | | | | | | | |
+
+### Exercise 3: fork() Output Prediction
+
+Predict the exact output of the following program, including the number of times each line is printed. Assume no buffering issues and that PIDs are assigned as 1000, 1001, 1002 in order.
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int x = 0;
+
+int main() {
+    printf("start\n");
+
+    pid_t p1 = fork();
+    if (p1 == 0) {
+        x = 10;
+        printf("child1: x=%d\n", x);
+        return 0;
+    }
+
+    pid_t p2 = fork();
+    if (p2 == 0) {
+        x = 20;
+        printf("child2: x=%d\n", x);
+        return 0;
+    }
+
+    wait(NULL);
+    wait(NULL);
+    printf("parent: x=%d\n", x);
+    return 0;
+}
+```
+
+1. How many processes are created in total (including the original)?
+2. What is the value of `x` in the parent at the end? Why?
+3. Can the two child output lines appear in either order? Why?
+
+### Exercise 4: Zombie and Orphan Processes
+
+Read the following code and answer the questions.
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid > 0) {
+        // Parent
+        printf("Parent sleeping...\n");
+        sleep(60);   // Does NOT call wait()
+        printf("Parent done\n");
+    } else {
+        // Child
+        printf("Child exiting immediately\n");
+        exit(0);
+    }
+    return 0;
+}
+```
+
+1. What state does the child process enter after calling `exit(0)` while the parent sleeps? Why?
+2. How could you observe this state using command-line tools on Linux?
+3. What change to the parent code would prevent this situation?
+4. Suppose the parent itself crashes before `sleep(60)` ends. What happens to the child? What process adopts it?
+
+### Exercise 5: Context Switch Cost Estimation
+
+A system performs 1,000 context switches per second. Each switch costs approximately 5 microseconds for direct overhead (register save/restore) and an additional 15 microseconds for indirect overhead (TLB flush, cache warm-up).
+
+1. Calculate the total CPU time lost to context switching per second
+2. Express this as a percentage of a 1 GHz single-core CPU's total cycles per second
+3. If the system reduces context switches to 500 per second by doubling the time quantum, what is the new overhead percentage?
+4. Name two workload types where reducing context switches would hurt performance even if it reduces overhead
 
 ---
 

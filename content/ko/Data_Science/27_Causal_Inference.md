@@ -2,9 +2,21 @@
 
 [이전: 베이지안 고급 방법론](./26_Bayesian_Advanced.md) | [다음: 생존 분석](./28_Survival_Analysis.md)
 
-## 개요
+## 학습 목표
 
-인과 추론은 "만약 ~라면 어떻게 될까?"라는 질문에 답합니다 — 상관관계를 넘어 원인과 결과 관계를 파악하는 것입니다. 이 레슨에서는 인과 그래프(DAG), 잠재 결과 프레임워크(potential outcomes framework), 성향 점수(propensity score) 방법, 이중 차분법(Difference-in-Differences, DID), 회귀 불연속 설계(Regression Discontinuity Design, RDD), 도구 변수(Instrumental Variables), 그리고 인과적 머신러닝(Causal ML) 입문을 다룹니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 인과 추론(Causal Inference)의 근본적인 문제를 설명하고, 구체적인 예시를 통해 상관관계와 인과관계를 구별할 수 있다
+2. 인과 DAG를 그리고 해석하며, 체인·포크·충돌자를 식별하여 후문 기준(backdoor criterion)으로 유효한 조정 집합을 결정할 수 있다
+3. 성향 점수 매칭(propensity score matching)과 역확률 가중법(IPW, Inverse Probability Weighting)을 구현하여 관찰 데이터에서 평균 처치 효과(ATE)를 추정할 수 있다
+4. 이중 차분법(DID, Difference-in-Differences) 추정을 적용하고 평행 추세 가정을 평가할 수 있다
+5. 회귀 불연속 설계(RDD, Regression Discontinuity Design)를 설명하고 절단값 근방의 국소 처치 효과를 추정할 수 있다
+6. 도구 변수(IV, Instrumental Variables)가 필요한 시점을 설명하고 1단계 F-통계량으로 도구의 유효성을 검증할 수 있다
+7. 평균 처치 효과(ATE)와 조건부 평균 처치 효과(CATE, Conditional Average Treatment Effects)를 구별하고, T-학습기(T-learner)를 적용하여 이질적 효과를 추정할 수 있다
+
+---
+
+데이터 과학의 대부분은 예측에 관한 것입니다 — 관측한 것을 바탕으로 무엇을 기대할 수 있는가? 그러나 실제 의사결정을 이끄는 질문은 인과적입니다: 버튼 색상을 바꾸면 전환율이 높아질까? 이 훈련 프로그램이 임금을 올려줄까? 인과 추론(Causal Inference)은 실험 데이터와 관찰 데이터 모두에서 "만약 ~라면 어떻게 될까?"라는 질문에 답하는 엄밀한 도구를 제공하며, 통계적 연관성과 실행 가능한 지식 사이의 간극을 연결합니다.
 
 ---
 

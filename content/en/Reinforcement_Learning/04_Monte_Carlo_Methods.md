@@ -59,10 +59,11 @@ def calculate_returns(episode, gamma=0.99):
     G = 0  # Initialize return
     returns = {}
 
-    # Calculate in reverse order (efficient)
+    # Why reverse iteration: exploits the recurrence G_t = r_t + gamma * G_{t+1},
+    # computing all returns in a single O(n) pass instead of O(n^2) forward re-summation
     for t in range(len(episode) - 1, -1, -1):
         state, action, reward = episode[t]
-        G = reward + gamma * G  # Discounted return
+        G = reward + gamma * G  # Discounted return — each step reuses the already-computed future return
         returns[t] = (state, G)
 
     return returns
@@ -124,7 +125,8 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
     Returns:
         V: State value function
     """
-    # Return sum and visit count for each state
+    # Why incremental mean: storing sum and count avoids keeping every return in memory,
+    # giving O(1) memory per state while converging to the true expected value
     returns_sum = defaultdict(float)
     returns_count = defaultdict(int)
     V = defaultdict(float)
@@ -142,17 +144,21 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
             state = next_state
             done = terminated or truncated
 
-        # First-visit: Find first visit index for each state
+        # Why first-visit: only counting the first occurrence per state produces an
+        # unbiased estimator of V(s). Every-visit MC is also consistent but has different
+        # bias/variance trade-offs — first-visit is simpler to analyze theoretically.
         visited = set()
         G = 0
 
-        # Calculate returns in reverse order
+        # Why reverse iteration: G_t = r_t + gamma * G_{t+1} — one backward pass
+        # computes all returns in O(n) instead of re-summing from each timestep
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # First-visit check
+            # Why first-visit check: skipping later visits avoids double-counting returns
+            # for the same state within one episode, preserving the unbiased property
             if state_t not in visited:
                 visited.add(state_t)
                 returns_sum[state_t] += G
@@ -203,13 +209,15 @@ def every_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
 
         G = 0
 
-        # Every-visit: Update on all visits
+        # Why every-visit differs: updating on all visits trades unbiasedness for
+        # lower variance — more data points per episode, but the samples from the
+        # same episode are correlated. Converges to the same value asymptotically.
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # Count all visits
+            # No first-visit filter: every occurrence contributes a return sample
             returns_sum[state_t] += G
             returns_count[state_t] += 1
             V[state_t] = returns_sum[state_t] / returns_count[state_t]
@@ -244,7 +252,9 @@ def mc_exploring_starts(env, n_episodes=100000, gamma=0.99):
     policy = defaultdict(lambda: 0)
 
     for episode_num in range(n_episodes):
-        # Exploring Starts: Start with random state and action
+        # Why exploring starts: a greedy policy can only improve if Q values are
+        # accurate for all (s, a) pairs, which requires visiting them all.
+        # Random initialization guarantees every pair has nonzero visit probability.
         start_state = env.observation_space.sample()
         start_action = env.action_space.sample()
 
@@ -284,7 +294,8 @@ def mc_exploring_starts(env, n_episodes=100000, gamma=0.99):
                 Q[state_t][action_t] = (returns_sum[state_t][action_t] /
                                         returns_count[state_t][action_t])
 
-                # Policy improvement (greedy)
+                # Why greedy improvement here: the policy improvement theorem guarantees
+                # that acting greedily w.r.t. Q is at least as good as the old policy
                 policy[state_t] = np.argmax(Q[state_t])
 
     return Q, policy
@@ -313,11 +324,15 @@ def epsilon_greedy_policy(Q, state, n_actions, epsilon=0.1):
     Returns:
         action: Selected action
     """
+    # Why epsilon-greedy: balances exploration vs exploitation — with probability
+    # epsilon we try a random action to discover potentially better strategies,
+    # otherwise we exploit the best known action. Pure greedy (epsilon=0) risks
+    # getting stuck in a suboptimal policy by never discovering better alternatives.
     if np.random.random() < epsilon:
-        # Explore: Random action
+        # Explore: random action to gather information about unvisited (s, a) pairs
         return np.random.randint(n_actions)
     else:
-        # Exploit: Best action
+        # Exploit: choose the action with highest estimated Q value
         return np.argmax(Q[state])
 ```
 
@@ -382,7 +397,10 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
                 Q[state_t][action_t] = (returns_sum[state_t][action_t] /
                                         returns_count[state_t][action_t])
 
-        # Decay epsilon
+        # Why decay epsilon: early training needs heavy exploration (high epsilon) to
+        # build accurate Q estimates; later we shift toward exploitation. The floor of
+        # 0.01 prevents complete lock-in to a potentially suboptimal policy — without
+        # this minimum, the agent could never escape a local optimum.
         epsilon = max(0.01, epsilon * epsilon_decay)
 
         if (episode_num + 1) % 10000 == 0:
@@ -390,7 +408,8 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
             print(f"Episode {episode_num + 1}: avg_reward = {avg_reward:.3f}, "
                   f"epsilon = {epsilon:.4f}")
 
-    # Final greedy policy
+    # Why greedy at inference: during deployment there is no need to explore —
+    # we simply pick the best learned action to maximize expected return
     policy = {}
     for state in Q:
         policy[state] = np.argmax(Q[state])
@@ -426,6 +445,9 @@ def importance_sampling_ratio(episode, target_policy, behavior_policy, t):
 
     ρ = π(a₀|s₀)/b(a₀|s₀) × π(a₁|s₁)/b(a₁|s₁) × ...
     """
+    # Why importance sampling ratio: data was collected under behavior policy b,
+    # but we want to evaluate target policy pi. The ratio pi/b re-weights each
+    # transition to correct for the distribution mismatch between the two policies.
     rho = 1.0
 
     for k in range(t, len(episode)):
@@ -434,9 +456,9 @@ def importance_sampling_ratio(episode, target_policy, behavior_policy, t):
         b_prob = behavior_policy(state, action)  # b(a|s)
 
         if b_prob == 0:
-            return 0  # Action impossible under behavior policy
+            return 0  # Safety check: avoid division by zero when b never takes this action
 
-        rho *= pi_prob / b_prob
+        rho *= pi_prob / b_prob  # Product of ratios across all remaining steps
 
     return rho
 ```
@@ -472,19 +494,25 @@ def mc_off_policy_prediction(env, target_policy, behavior_policy,
         G = 0
         W = 1.0  # Importance sampling weight
 
-        # Process in reverse
+        # Why reverse processing: same O(n) recurrence trick as on-policy MC, plus
+        # we can early-terminate when the behavior and target policies diverge
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
             G = gamma * G + reward_t
 
-            # Weighted importance sampling update
+            # Why weighted importance sampling: ordinary IS has high variance because
+            # the ratio product can explode. Weighted IS (self-normalizing) divides by
+            # the cumulative weight C, which dramatically reduces variance at the cost
+            # of a small bias that vanishes asymptotically.
             C[state_t][action_t] += W
             Q[state_t][action_t] += W / C[state_t][action_t] * (G - Q[state_t][action_t])
 
             # Action from target policy
             target_action = target_policy(state_t)
 
-            # Break if action differs from target policy (for deterministic policies)
+            # Why early break: for a deterministic target policy, if the behavior
+            # policy took a different action, pi(a|s) = 0 so the IS ratio becomes 0
+            # and all earlier timesteps contribute nothing — no need to continue
             if action_t != target_action:
                 break
 
@@ -530,6 +558,8 @@ def learn_blackjack(n_episodes=500000, gamma=1.0, epsilon=0.1):
     returns_count = defaultdict(lambda: np.zeros(2))
 
     def get_action(state, Q, epsilon):
+        # Why epsilon-greedy here: Blackjack has a small discrete state space, but
+        # we still need exploration to discover the correct hit/stick boundary
         if np.random.random() < epsilon:
             return env.action_space.sample()
         return np.argmax(Q[state])

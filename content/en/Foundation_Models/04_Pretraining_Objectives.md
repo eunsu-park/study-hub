@@ -1,5 +1,18 @@
 # 04. Pre-training Objectives
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare the three main pre-training paradigms (Causal LM, Masked LM, Prefix LM) and explain how each shapes a model's context access, training signal density, and suitability for generation vs. understanding tasks.
+2. Derive the mathematical objective functions for Causal Language Modeling (CLM) and Masked Language Modeling (MLM), and explain the role of the causal mask and masking rate.
+3. Explain Span Corruption (T5-style) and other advanced objectives such as CLM with prefix, and identify the representative models that use each objective.
+4. Analyze how pre-training objective choice affects emergent capabilities such as few-shot prompting, instruction following, and zero-shot generalization.
+5. Evaluate the trade-offs between training efficiency and representational quality when choosing between CLM, MLM, and encoder-decoder objectives.
+6. Identify how continued pre-training, domain-adaptive pre-training, and multi-task objectives extend standard pre-training to specialized domains.
+
+---
+
 ## Overview
 
 Pre-training objectives determine **what patterns** a Foundation Model learns from large-scale data. The choice of objective directly impacts the model's capabilities and downstream task performance.
@@ -715,3 +728,136 @@ if __name__ == "__main__":
 ### Related Lessons
 - [../LLM_and_NLP/03_BERT_GPT_Architecture.md](../LLM_and_NLP/03_BERT_GPT_Architecture.md)
 - [../Deep_Learning/12_Transformer_Architecture.md](../Deep_Learning/12_Transformer_Architecture.md)
+
+---
+
+## Exercises
+
+### Exercise 1: Objective Function Comparison
+
+For each scenario below, identify the most appropriate pre-training objective (CLM, MLM, or Span Corruption) and justify your choice.
+
+1. You are building a chatbot that needs to generate fluent multi-turn conversations.
+2. You want to fine-tune a model for sentiment classification on movie reviews.
+3. You are building a question-answering system that takes a document and a question and produces a short answer.
+4. You want a single model that performs well at both classification and generation with no task-specific fine-tuning.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Chatbot (Causal LM / CLM)** — Generation requires predicting the next token autoregressively. CLM is the natural objective for this since the model learns to generate fluent continuations given prior context. GPT-style models excel here.
+
+2. **Sentiment Classification (MLM)** — For understanding-focused tasks with fine-tuning, bidirectional context (MLM) produces richer token representations than CLM. BERT-style models typically outperform GPT models on classification with the same parameter count.
+
+3. **Question Answering (Span Corruption / Encoder-Decoder)** — T5-style span corruption teaches the model to reconstruct missing spans from context, which directly mimics the QA task structure (given a document with a masked span, recover the answer). The encoder-decoder architecture also allows flexible length output.
+
+4. **Single model for both (UL2 / Mixture of Denoisers)** — UL2 trains with multiple denoising objectives (R, S, X denoisers) covering both short-span MLM-like tasks and long-span generation tasks. The mode prefix ([R], [S], [X]) allows task-type specification at inference time without fine-tuning.
+
+</details>
+
+---
+
+### Exercise 2: BERT Masking Strategy
+
+In BERT's MLM, 15% of tokens are selected for masking. Of those, 80% are replaced with `[MASK]`, 10% with a random token, and 10% kept unchanged.
+
+1. Why are only 10% of selected tokens kept unchanged (rather than 0%)?
+2. Why are 10% of selected tokens replaced with random tokens (rather than always using `[MASK]`)?
+3. What problem would arise if you masked 50% of tokens instead of 15%?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Why keep 10% unchanged:**
+Without keeping some tokens unchanged, the model never learns to produce good representations for tokens that appear exactly as written. During fine-tuning, `[MASK]` tokens don't appear — the model must rely on representations of actual tokens. The 10% unchanged forces the model to maintain a useful representation for every token, not just `[MASK]` positions.
+
+**2. Why use 10% random tokens:**
+Without random token substitution, the model could "cheat" by learning to recognize that `[MASK]` tokens always need to be predicted and treating other tokens as passthrough. Random substitution forces the model to consider every token as potentially "wrong" and produce contextually grounded predictions for each position — improving the quality of all token representations, not just masked ones.
+
+**3. Problem with 50% masking:**
+- Too much context is destroyed: the model no longer has enough surrounding tokens to correctly infer the masked positions, making the task too hard or even unsolvable.
+- The training signal becomes noisy because many predictions are guesses rather than context-informed.
+- The resulting representations may be degraded because the model sees sequences that bear little resemblance to natural text.
+- The 15% rate was empirically found to balance learning signal quality and context availability.
+
+</details>
+
+---
+
+### Exercise 3: Causal Mask Implementation
+
+The `create_causal_mask` function in the lesson creates a boolean upper-triangular matrix. Trace through what happens when this mask is applied in scaled dot-product attention.
+
+Given the query-key dot product matrix for a 4-token sequence:
+```
+scores = [[0.9, 0.3, 0.7, 0.5],
+          [0.2, 0.8, 0.1, 0.4],
+          [0.6, 0.5, 0.9, 0.3],
+          [0.4, 0.7, 0.8, 0.6]]
+```
+
+Show the masked scores matrix and the final attention weights after softmax (conceptually, not numerically).
+
+<details>
+<summary>Show Answer</summary>
+
+**Step 1: The causal mask (True = block)**
+
+```python
+mask = torch.triu(torch.ones(4, 4), diagonal=1).bool()
+# [[False, True,  True,  True ],
+#  [False, False, True,  True ],
+#  [False, False, False, True ],
+#  [False, False, False, False]]
+```
+
+**Step 2: Apply mask (set masked positions to -infinity)**
+
+```
+masked_scores = [[ 0.9, -inf, -inf, -inf],
+                 [ 0.2,  0.8, -inf, -inf],
+                 [ 0.6,  0.5,  0.9, -inf],
+                 [ 0.4,  0.7,  0.8,  0.6]]
+```
+
+**Step 3: Softmax row-wise**
+
+After softmax, `-inf` positions become 0 (they receive zero attention weight):
+- Token 1 (row 0): attends only to itself (position 0)
+- Token 2 (row 1): distributes attention between positions 0 and 1
+- Token 3 (row 2): distributes attention between positions 0, 1, 2
+- Token 4 (row 3): distributes attention across all four positions
+
+This ensures position t can only attend to positions ≤ t, preventing information "leakage" from future tokens during training. The model learns to predict the next token using only past context.
+
+</details>
+
+---
+
+### Exercise 4: Span Corruption vs MLM Signal Density
+
+T5's span corruption masks ~15% of tokens but replaces each span (average 3 tokens) with a single sentinel token, whereas BERT masks individual 15% tokens.
+
+Calculate the **training signal density** (fraction of output tokens that are predicted) for each objective, given a sequence of 512 tokens. Which provides denser supervision signal?
+
+<details>
+<summary>Show Answer</summary>
+
+**BERT MLM:**
+- Input tokens: 512
+- Masked tokens: 512 × 0.15 = 76.8 ≈ 77 tokens predicted
+- Fraction of output predicted: 77 / 512 = **15%**
+
+**T5 Span Corruption:**
+- Input tokens: 512
+- Noise tokens: 512 × 0.15 = 76.8 ≈ 77 tokens corrupted
+- Number of spans (avg 3 tokens): 77 / 3 ≈ 26 spans
+- Output sequence: 26 sentinels + 77 original tokens = 103 tokens
+- The decoder must predict all 103 output tokens
+- Fraction of output predicted: 103 / 512 = **~20%**
+
+However, the more important difference is the **decoder's role**: in T5, the decoder predicts the entire target sequence autoregressively, which means it also learns to generate the sentinel structure. In BERT, the encoder predicts all masked positions in parallel (non-autoregressive).
+
+**Key insight:** Span corruption requires the model to predict longer contiguous sequences (full spans) rather than isolated tokens, which better prepares it for generative tasks where coherent multi-token outputs are needed.
+
+</details>

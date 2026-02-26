@@ -119,6 +119,16 @@ u_i^{n+1} = u_i^n + r·(u_{i+1}^n - 2u_i^n + u_{i-1}^n)
 Where r = α·Δt/Δx² (stability condition: r ≤ 0.5)
 ```
 
+### Why r ≤ 0.5? Von Neumann Stability Analysis
+
+The FTCS scheme for the heat equation has the stability parameter r = α·Δt/Δx². To determine the stability bound, we substitute a Fourier mode u_j^n = G^n · e^{ikjΔx} into the discrete equation and solve for the amplification factor:
+
+```
+G = 1 - 4r·sin²(kΔx/2)
+```
+
+For stability we need |G| ≤ 1, which requires 0 ≤ 4r·sin²(kΔx/2) ≤ 2. The worst case is sin² = 1 (the highest frequency mode), giving **r ≤ 0.5**. Physically, this means the time step must be small enough that heat doesn't "skip over" grid cells — the numerical diffusion rate must match or exceed the physical diffusion rate.
+
 ### 2.2 FTCS Stencil Visualization
 
 ```

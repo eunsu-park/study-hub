@@ -1,8 +1,23 @@
 # Monte Carlo Simulation
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the principles of the Monte Carlo method and identify problem classes where it is advantageous over deterministic methods.
+2. Implement Monte Carlo integration and analyze how the law of large numbers governs convergence and error scaling.
+3. Apply Monte Carlo simulation to estimate probabilities and expectations in physical and financial models.
+4. Implement Markov Chain Monte Carlo (MCMC) sampling and explain the Metropolis-Hastings algorithm.
+5. Compare variance reduction techniques (importance sampling, control variates) and evaluate their effectiveness.
+6. Design and run a complete Monte Carlo simulation for a real-world problem and interpret the statistical results.
+
+---
+
 ## Overview
 
 The Monte Carlo method is a stochastic algorithm that uses random numbers to obtain numerical results. It is applied in various fields including complex integration, optimization, and physical system simulation.
+
+**Why This Lesson Matters:** All the methods covered so far are deterministic -- given the same inputs, they produce the same output. Monte Carlo methods embrace randomness instead, using random sampling to estimate quantities that would be prohibitively expensive to compute deterministically. Their superpower: the convergence rate $O(1/\sqrt{N})$ is independent of dimension, making Monte Carlo the method of choice for high-dimensional integrals (10+ dimensions) where grid-based methods are hopeless due to the curse of dimensionality.
 
 ---
 

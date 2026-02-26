@@ -1,5 +1,24 @@
 # GitHub Collaboration
 
+**Previous**: [GitHub Getting Started](./04_GitHub_Getting_Started.md) | **Next**: [Advanced Git Commands](./06_Git_Advanced.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between the Collaborator model and the Fork & Pull Request model
+2. Fork a repository, make changes, and submit a Pull Request
+3. Conduct a code review by commenting on and approving Pull Requests
+4. Use GitHub Issues to track bugs, feature requests, and tasks
+5. Configure branch protection rules to enforce review and CI requirements
+6. Apply the fork-based open-source contribution workflow end to end
+
+---
+
+Writing code is only half the job; the other half is coordinating with others. GitHub's collaboration features -- Pull Requests, code reviews, Issues, and branch protection -- provide a structured process that catches bugs early, shares knowledge across the team, and keeps the main branch stable. Whether you are contributing to open source or working on a private team project, these skills are essential.
+
 ## 1. Collaboration Workflow Overview
 
 Two main ways to collaborate on GitHub:
@@ -363,3 +382,37 @@ You've completed Git/GitHub basics! Practice with real projects before moving on
 1. Find an interesting open source project on GitHub
 2. Try first contribution by fixing documentation typos
 3. Upload and manage your personal project on GitHub
+
+---
+
+## Exercises
+
+### Exercise 1: Fork and Submit a Pull Request
+1. Fork the repository `https://github.com/octocat/Spoon-Knife`.
+2. Clone your fork, add `upstream` pointing to the original, and verify both remotes with `git remote -v`.
+3. Create a branch called `add-my-name`, append your GitHub username to a file, commit, and push to your fork.
+4. Open a Pull Request against the original repository. Fill in a proper title and description that follows the PR template format shown in this lesson.
+
+### Exercise 2: Code Review Practice
+With a partner (or by using two GitHub accounts):
+1. One person opens a PR with a small code change.
+2. The reviewer leaves at least two inline comments on specific lines in the "Files changed" tab.
+3. The author addresses the feedback with a new commit and pushes — confirm the new commit appears in the open PR automatically.
+4. The reviewer approves and the author (or reviewer, if they have write access) merges the PR.
+
+### Exercise 3: Issues Workflow
+1. In your own repository, create a bug report issue using the template format from this lesson. Include reproduction steps, expected behavior, and environment details.
+2. Create a feature request issue for a hypothetical enhancement.
+3. Open a PR that uses `Closes #<issue-number>` in the description. Merge the PR and verify the issue closes automatically.
+
+### Exercise 4: Syncing a Fork
+1. Using the fork you created in Exercise 1, simulate upstream changes by asking the repository owner (or making a commit on the original via the GitHub web editor if you own a test repo).
+2. Run `git fetch upstream`, inspect the new commits with `git log upstream/main`, and merge them into your local `main`.
+3. Push the updated `main` to your fork with `git push origin main`.
+
+### Exercise 5: Branch Protection Rules
+In a repository where you have admin access:
+1. Go to **Settings → Branches** and add a branch protection rule for `main`.
+2. Enable "Require a pull request before merging" and "Require status checks to pass before merging".
+3. Attempt to push directly to `main` and observe the rejection.
+4. Describe in writing why branch protection rules improve code quality in team environments.

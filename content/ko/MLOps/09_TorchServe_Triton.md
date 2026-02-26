@@ -1,5 +1,17 @@
 # TorchServe & Triton Inference Server
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. TorchServe 아키텍처의 프론트엔드(frontend), 백엔드(backend), 모델 스토어(model store), 워커(worker) 컴포넌트를 설명하고 요청이 어떻게 처리되는지 서술할 수 있다
+2. PyTorch 모델을 `.mar` 아카이브 파일로 패키징하고 커스텀 요청 핸들러(request handler)를 사용하여 TorchServe로 배포할 수 있다
+3. Triton Inference Server 아키텍처와 여러 백엔드(PyTorch, TensorFlow, ONNX, TensorRT) 지원을 설명할 수 있다
+4. 앙상블 파이프라인(ensemble pipeline)과 동적 배칭(dynamic batching)으로 Triton 모델 리포지토리를 구성하여 GPU 처리량을 최대화할 수 있다
+5. TorchServe와 Triton Inference Server를 성능, 유연성, 운영 복잡성 측면에서 비교하여 배포 시나리오에 적합한 도구를 선택할 수 있다
+
+---
+
 ## 1. TorchServe 개요
 
 TorchServe는 PyTorch 모델을 프로덕션 환경에서 서빙하기 위한 공식 도구입니다.
@@ -80,11 +92,13 @@ class CustomHandler(BaseHandler):
 
     def initialize(self, context):
         """모델 초기화"""
+        # 시작 시 한 번만 호출됨(요청마다가 아님) — 여기서 모델 로드와 GPU 메모리 할당을 수행하여
+        # 매 추론 호출마다 100-500ms 오버헤드를 방지
         self.manifest = context.manifest
         properties = context.system_properties
         model_dir = properties.get("model_dir")
 
-        # 디바이스 설정
+        # GPU 자동 감지 — CPU로 폴백하여 동일한 핸들러가 양쪽 환경에서 동작
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
@@ -93,6 +107,8 @@ class CustomHandler(BaseHandler):
         serialized_file = self.manifest["model"]["serializedFile"]
         model_pt_path = f"{model_dir}/{serialized_file}"
 
+        # TorchScript 모델 — 직렬화된 연산 그래프로 런타임에 Python이 불필요하여
+        # 더 빠른 추론과 C++ 배포가 가능
         self.model = torch.jit.load(model_pt_path, map_location=self.device)
         self.model.eval()
 
@@ -132,6 +148,8 @@ class CustomHandler(BaseHandler):
 
     def inference(self, data):
         """추론 수행"""
+        # torch.no_grad()로 그래디언트 추적 비활성화 — 메모리 사용량을 ~50% 줄이고
+        # 서빙 시에는 역전파가 불필요하므로 추론 속도도 향상
         with torch.no_grad():
             outputs = self.model(data)
             probabilities = F.softmax(outputs, dim=1)
@@ -430,6 +448,8 @@ output [
   }
 ]
 
+# 동일 GPU에 다중 인스턴스 — 컴퓨팅과 데이터 전송을 겹쳐서(overlap)
+# 한 인스턴스가 I/O를 대기하는 동안 GPU를 계속 활용
 instance_group [
   {
     count: 2
@@ -438,8 +458,11 @@ instance_group [
   }
 ]
 
+# 동적 배칭(dynamic batching)으로 수신 요청을 배치로 묶음 — GPU 커널 실행 오버헤드를
+# 여러 입력에 분산하여 최소한의 지연 비용으로 처리량을 3-5배 향상
 dynamic_batching {
   preferred_batch_size: [8, 16, 32]
+  # 100us 최대 대기 — 배치 크기와 지연 시간 사이의 균형; 처리량 우선 워크로드에서는 증가
   max_queue_delay_microseconds: 100
 }
 

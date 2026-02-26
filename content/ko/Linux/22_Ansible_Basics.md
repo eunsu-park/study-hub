@@ -1,13 +1,18 @@
 # Ansible 기초
 
+**이전**: [가상화(KVM)](./21_Virtualization_KVM.md) | **다음**: [고급 네트워킹](./23_Advanced_Networking.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- Ansible의 개념과 아키텍처
-- 인벤토리와 Ad-hoc 명령어
-- Playbook 작성 및 실행
-- Roles와 변수 관리
+1. Ansible의 에이전트리스(Agentless) 푸시(Push) 기반 아키텍처를 설명하고 Puppet, Chef와의 차이점을 비교한다
+2. 그룹, 변수, 동적 소스를 포함하여 INI 및 YAML 형식으로 인벤토리(Inventory)를 정의한다
+3. 공통 Ansible 모듈을 사용하여 여러 호스트에 Ad-hoc 명령을 실행한다
+4. 태스크(Task), 조건문, 반복문, 핸들러(Handler), 블록(Block)을 포함한 플레이북(Playbook)을 작성한다
+5. 올바른 디렉토리 구조를 갖춘 재사용 가능한 롤(Role)로 자동화 코드를 구성한다
+6. 여러 스코프에 걸쳐 변수를 관리하고, 설정 파일에 Jinja2 템플릿을 활용한다
+7. Ansible Vault로 민감한 데이터를 암호화하여 안전한 자격증명(Credential) 관리를 구현한다
 
 **난이도**: ⭐⭐⭐ (중급-고급)
 
@@ -25,6 +30,8 @@
 8. [Ansible Vault](#8-ansible-vault)
 
 ---
+
+서버 한 대를 수동으로 관리하는 것은 가능하지만, 열 대는 번거롭고, 수백 대는 자동화 없이는 불가능합니다. Ansible은 원하는 인프라 상태를 간단한 YAML 파일로 기술하고 SSH를 통해 여러 서버에 적용하여 이 문제를 해결합니다. 에이전트를 설치하거나 복잡한 설정을 할 필요가 없습니다. Ansible은 업계에서 가장 널리 사용되는 구성 관리(Configuration Management) 도구이며, 이를 익히면 시스템 관리자로서의 생산성이 크게 향상됩니다.
 
 ## 1. Ansible 개요
 
@@ -1029,7 +1036,7 @@ all:
 
 ## 다음 단계
 
-- [23_Advanced_Networking.md](./23_Advanced_Networking.md) - VLAN, bonding, iptables/nftables
+- [고급 네트워킹](./23_Advanced_Networking.md) - VLAN, bonding, iptables/nftables
 
 ---
 

@@ -28,26 +28,26 @@
 |----------|------------|------------|-------|
 | [05_Functional_Dependencies.md](./05_Functional_Dependencies.md) | ⭐⭐⭐ | FDs, Armstrong's Axioms, Closure, Canonical Cover, Attribute Closure | 형식 종속성 이론 |
 | [06_Normalization.md](./06_Normalization.md) | ⭐⭐⭐ | 1NF-5NF, BCNF, Decomposition, Lossless Join, Dependency Preservation | 스키마 정제 |
-| [07_SQL_Theory.md](./07_SQL_Theory.md) | ⭐⭐ | DDL, DML, Subqueries, Aggregation, Views, NULL Handling, Relational Completeness | 형식 언어로서의 SQL |
-| [08_Constraints_and_Triggers.md](./08_Constraints_and_Triggers.md) | ⭐⭐⭐ | CHECK, UNIQUE, FK Actions, Assertions, Triggers, Active Databases | 선언적 무결성 |
+| [07_Advanced_Normalization.md](./07_Advanced_Normalization.md) | ⭐⭐⭐ | 4NF, 5NF, DKNF, MVDs, Join Dependencies | 고급 정규화 |
+| [08_Query_Processing.md](./08_Query_Processing.md) | ⭐⭐⭐⭐ | Parsing, Optimization, Cost Estimation, Join Algorithms | 쿼리 엔진 내부 |
 
 ### Phase 3: 내부 구조(Internals) (L09-L12)
 
 | 파일명 | 난이도 | 핵심 주제 | 비고 |
 |----------|------------|------------|-------|
-| [09_Storage_and_Indexing.md](./09_Storage_and_Indexing.md) | ⭐⭐⭐ | Disk I/O, B+ Trees, Hash Indexes, Clustered vs Non-Clustered, Buffer Management | 물리적 저장 계층 |
-| [10_Query_Processing.md](./10_Query_Processing.md) | ⭐⭐⭐⭐ | Parsing, Optimization, Cost Estimation, Join Algorithms, Execution Plans | 쿼리 엔진 내부 |
-| [11_Transaction_Theory.md](./11_Transaction_Theory.md) | ⭐⭐⭐⭐ | ACID, Serializability, Conflict/View Equivalence, Schedules, Recoverability | 동시성 이론 |
-| [12_Concurrency_Control.md](./12_Concurrency_Control.md) | ⭐⭐⭐⭐ | 2PL, Deadlock, Timestamp Ordering, MVCC, Isolation Levels, Snapshot Isolation | 잠금 및 버전 프로토콜 |
+| [09_Indexing.md](./09_Indexing.md) | ⭐⭐⭐ | B+ Trees, Hash Indexes, Bitmap, Multi-level Indexing | 인덱스 구조 |
+| [10_Transaction_Theory.md](./10_Transaction_Theory.md) | ⭐⭐⭐⭐ | ACID, Serializability, Conflict/View Equivalence, Schedules, Recoverability | 트랜잭션 이론 |
+| [11_Concurrency_Control.md](./11_Concurrency_Control.md) | ⭐⭐⭐⭐ | 2PL, Deadlock, Timestamp Ordering, MVCC, Isolation Levels, Snapshot Isolation | 동시성 제어 프로토콜 |
+| [12_Recovery_Systems.md](./12_Recovery_Systems.md) | ⭐⭐⭐⭐ | WAL, ARIES, Checkpointing, Undo/Redo, Shadow Paging, Media Recovery | 장애 복구 |
 
 ### Phase 4: 고급 주제(Advanced Topics) (L13-L16)
 
 | 파일명 | 난이도 | 핵심 주제 | 비고 |
 |----------|------------|------------|-------|
-| [13_Recovery_Systems.md](./13_Recovery_Systems.md) | ⭐⭐⭐⭐ | WAL, ARIES, Checkpointing, Undo/Redo, Shadow Paging, Media Recovery | 장애 복구 |
-| [14_NoSQL_and_NewSQL.md](./14_NoSQL_and_NewSQL.md) | ⭐⭐⭐ | Key-Value, Document, Column-Family, Graph, CAP, BASE, NewSQL | 관계형을 넘어서 |
-| [15_Distributed_Databases.md](./15_Distributed_Databases.md) | ⭐⭐⭐⭐ | Fragmentation, Replication, 2PC, Paxos/Raft, Distributed Joins, CAP Theorem | 분산 시스템 |
-| [16_Database_Design_Project.md](./16_Database_Design_Project.md) | ⭐⭐⭐⭐ | Full Design Lifecycle: Requirements → ER → Relational → Normalization → SQL | 종합 프로젝트 |
+| [13_NoSQL_Data_Models.md](./13_NoSQL_Data_Models.md) | ⭐⭐⭐ | Key-Value, Document, Column-Family, Graph, CAP Theorem | NoSQL 패러다임 |
+| [14_Distributed_Databases.md](./14_Distributed_Databases.md) | ⭐⭐⭐⭐ | Fragmentation, Replication, 2PC, Paxos/Raft, Distributed Joins | 분산 시스템 |
+| [15_NewSQL_and_Modern_Trends.md](./15_NewSQL_and_Modern_Trends.md) | ⭐⭐⭐ | Spanner, CockroachDB, HTAP, NewSQL Architecture | 현대 트렌드 |
+| [16_Database_Design_Case_Study.md](./16_Database_Design_Case_Study.md) | ⭐⭐⭐⭐ | Full Design Lifecycle: Requirements → ER → Relational → Normalization → SQL | 종합 프로젝트 |
 
 ## 추천 학습 경로(Recommended Learning Path)
 
@@ -57,25 +57,25 @@ Phase 1: 기초 (L01-L04)         Phase 2: 설계 이론 (L05-L08)
        ▼                                       ▼
   DBMS 개념                           함수 종속성
   관계형 모델                         정규화 (1NF-5NF)
-  관계 대수                           형식 언어로서의 SQL
-  ER 모델링                           제약조건 및 트리거
+  관계 대수                           고급 정규화 (4NF-DKNF)
+  ER 모델링                           쿼리 처리 및 최적화
        │                                       │
        └───────────────┬───────────────────────┘
                        │
                        ▼
          Phase 3: 내부 구조 (L09-L12)
-         저장장치, 인덱싱, B+ 트리
-         쿼리 처리 및 최적화
-         트랜잭션 및 동시성
+         인덱싱 (B+ 트리, 해시)
+         트랜잭션 및 직렬화가능성
+         동시성 제어 및 복구
                        │
                        ▼
          Phase 4: 고급 (L13-L16)
-         복구 (WAL, ARIES)
-         NoSQL 및 NewSQL 패러다임
+         NoSQL 데이터 모델
          분산 데이터베이스
+         NewSQL 및 현대 트렌드
                        │
                        ▼
-         종합 설계 프로젝트 (L16)
+         설계 사례 연구 (L16)
 ```
 
 ## 관련 주제(Related Topics)

@@ -1,14 +1,34 @@
 # ODE Advanced
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define stiffness in ODE systems and explain why explicit methods fail for stiff problems.
+2. Implement implicit methods (backward Euler, trapezoidal rule) and explain how they achieve A-stability.
+3. Apply `scipy.integrate.solve_ivp` with stiff solvers (Radau, BDF) and configure appropriate tolerances.
+4. Analyze the eigenvalue structure of a system to diagnose stiffness and select an appropriate solver.
+5. Solve practical stiff ODE problems from chemical kinetics and electrical circuits.
+
+---
+
 ## Overview
 
 Learn about stiff problems, implicit methods, and advanced usage of scipy.integrate. We'll tackle difficult ODE problems that frequently appear in real-world applications.
+
+**Why This Lesson Matters:** Many real-world systems -- chemical reactions, electrical circuits, biological networks -- contain processes that evolve on vastly different time scales. A chemical reaction may have a fast transient that settles in microseconds alongside a slow equilibrium that takes hours. Naive explicit solvers would need microsecond-sized steps for the entire simulation, making them impractical. Implicit methods and stiff solvers are the essential tools that make such problems tractable.
 
 ---
 
 ## 1. Stiff Problems
 
 ### 1.1 Definition of Stiffness
+
+A system is **stiff** when it contains widely separated time scales. Formally, stiffness is characterized by the ratio of the largest to smallest eigenvalue magnitudes of the Jacobian matrix:
+
+$$\text{Stiffness ratio} = \frac{|\lambda_{\max}|}{|\lambda_{\min}|}$$
+
+When this ratio is large (e.g., 500 or more), explicit methods must use a time step dictated by the fastest mode ($\Delta t \lesssim 2/|\lambda_{\max}|$ for stability), even though the solution of interest evolves on the slow time scale ($1/|\lambda_{\min}|$). This wastes enormous computational effort on a component that has already decayed.
 
 ```python
 import numpy as np
@@ -30,17 +50,21 @@ def stiff_example():
     # Eigenvalues: λ₁ ≈ -500.002, λ₂ ≈ -0.998
     # Ratio: |λ₁/λ₂| ≈ 500 (stiffness ratio)
 
+    # The fast mode (λ₁ ≈ -500) decays in ~0.002 time units, but the slow mode
+    # (λ₂ ≈ -1) needs ~5 time units to evolve. RK45 must track the fast mode's
+    # stability limit the entire time, while Radau's implicit formulation is
+    # unconditionally stable and can take large steps once the transient decays.
     def stiff_system(t, y):
         return [-500*y[0] + 500*y[1], y[0] - y[1]]
 
     y0 = [1.0, 0.0]
     t_span = (0, 5)
 
-    # Explicit RK45 (requires many steps)
+    # Explicit RK45: stability region limits dt to ~2/500 = 0.004, forcing many steps
     sol_rk45 = solve_ivp(stiff_system, t_span, y0, method='RK45',
                          rtol=1e-6, atol=1e-9)
 
-    # Implicit Radau (fewer steps)
+    # Implicit Radau: A-stable, so dt is limited only by accuracy, not stability
     sol_radau = solve_ivp(stiff_system, t_span, y0, method='Radau',
                           rtol=1e-6, atol=1e-9)
 
@@ -73,6 +97,8 @@ stiff_example()
 
 ### 1.2 Chemical Reaction Kinetics
 
+The Robertson problem is a classic benchmark for stiff solvers. The three reaction rate constants span 9 orders of magnitude ($k_1 = 0.04$, $k_2 = 3 \times 10^7$, $k_3 = 10^4$), creating extreme stiffness. Species B reaches a quasi-steady-state almost instantly, while A and C evolve over millions of time units.
+
 ```python
 def chemical_kinetics():
     """Stiff chemical reaction system (Robertson problem)"""
@@ -93,7 +119,9 @@ def chemical_kinetics():
     t_span = (0, 1e7)
     t_eval = np.logspace(-5, 7, 200)
 
-    # BDF method (suitable for stiff problems)
+    # BDF is chosen because it damps high-frequency transients efficiently.
+    # Logarithmic time spacing matches the solution's multi-scale behavior:
+    # rapid early transient (t < 1) followed by slow equilibration (t ~ 10^7).
     sol = solve_ivp(robertson, t_span, y0, method='BDF',
                     t_eval=t_eval, rtol=1e-8, atol=1e-10)
 
@@ -126,7 +154,15 @@ chemical_kinetics()
 
 ## 2. Implicit Methods
 
+**Why Implicit Methods?** Explicit methods evaluate $f$ at the current time to predict the future. Implicit methods evaluate $f$ at the future time, requiring the solution of a (generally nonlinear) equation at each step. This extra cost buys unconditional stability: the method remains stable regardless of step size, so $\Delta t$ can be chosen based on accuracy rather than stability constraints.
+
 ### 2.1 Backward Euler (Revisited)
+
+The Backward Euler method is the simplest implicit scheme. At each step we must solve:
+
+$$y_{n+1} = y_n + h \cdot f(t_{n+1}, y_{n+1})$$
+
+Since $y_{n+1}$ appears on both sides, we use Newton-Raphson iteration. Define the residual $F(y_{n+1}) = y_{n+1} - y_n - h \cdot f(t_{n+1}, y_{n+1})$ and its Jacobian $J_F = I - h \cdot J_f$, where $J_f = \partial f / \partial y$. Newton's update is $\delta = -J_F^{-1} F$, converging quadratically when the initial guess is close.
 
 ```python
 def backward_euler_system(f, jacobian, y0, t_span, n_steps, tol=1e-10):
@@ -143,15 +179,19 @@ def backward_euler_system(f, jacobian, y0, t_span, n_steps, tol=1e-10):
     y[0] = y0
 
     for i in range(n_steps):
+        # Use current solution as initial guess for Newton iteration
         y_guess = y[i].copy()
 
         for _ in range(100):
+            # Residual: should be zero when y_guess satisfies the implicit equation
             F = y_guess - y[i] - h * np.array(f(t[i+1], y_guess))
+            # Newton Jacobian: I - h*J_f; solving J*delta = -F is the key cost
             J = np.eye(n) - h * np.array(jacobian(t[i+1], y_guess))
 
             delta = np.linalg.solve(J, -F)
             y_guess = y_guess + delta
 
+            # Quadratic convergence: once close, each iteration squares the error
             if np.linalg.norm(delta) < tol:
                 break
 
@@ -180,6 +220,12 @@ plt.show()
 ```
 
 ### 2.2 Crank-Nicolson Method
+
+The Crank-Nicolson method averages the explicit and implicit Euler methods, yielding second-order accuracy while remaining A-stable:
+
+$$y_{n+1} = y_n + \frac{h}{2}\bigl[f(t_n, y_n) + f(t_{n+1}, y_{n+1})\bigr]$$
+
+This is equivalent to applying the trapezoidal quadrature rule to the integral form of the ODE. The trade-off: it is A-stable but not L-stable, meaning it does not damp high-frequency oscillations as aggressively as Backward Euler. For stiff problems with oscillatory transients, this can produce small spurious oscillations.
 
 ```python
 def crank_nicolson(f, jacobian, y0, t_span, n_steps, tol=1e-10):
@@ -238,6 +284,12 @@ plt.show()
 
 ### 2.3 BDF Methods
 
+BDF methods approximate the derivative using backward differences of the solution history, then set it equal to $f$ at the new time. Higher-order BDF uses more past points for a better derivative approximation:
+
+$$\text{BDF}k: \quad \sum_{j=0}^{k} \alpha_j \, y_{n+1-j} = h \cdot f(t_{n+1}, y_{n+1})$$
+
+The key property is **L-stability** (for BDF1-2): stiff components are damped to zero in one step, unlike Crank-Nicolson which merely keeps them bounded. BDF3-6 lose A-stability but remain useful with adaptive order selection (as in scipy's `BDF` solver).
+
 ```python
 """
 BDF (Backward Differentiation Formula) Methods
@@ -266,7 +318,8 @@ def bdf2_solver(f, jacobian, y0, t_span, n_steps, tol=1e-10):
     y = np.zeros((n_steps + 1, n))
     y[0] = y0
 
-    # First step using backward Euler
+    # BDF2 is a 2-step method, so the first step must use a 1-step method (BDF1).
+    # This "bootstrap" is unavoidable for any multistep method.
     y_guess = y[0].copy()
     for _ in range(100):
         F = y_guess - y[0] - h * np.array(f(t[1], y_guess))
@@ -316,6 +369,8 @@ plt.show()
 
 ### 3.1 Providing Jacobian
 
+Implicit solvers must solve a nonlinear system at each step, which requires the Jacobian $J = \partial f / \partial y$. If not provided, the solver estimates it by finite differences (requiring $n$ extra function evaluations per Jacobian update). Providing an analytical Jacobian can significantly reduce computation time, especially for large systems.
+
 ```python
 def with_jacobian():
     """Performance improvement when providing Jacobian"""
@@ -357,6 +412,8 @@ with_jacobian()
 
 ### 3.2 Dense Output
 
+Adaptive solvers take variable-sized steps, so the solution is naturally available only at solver-chosen time points. Dense output provides a continuous polynomial interpolant between steps, allowing evaluation at arbitrary times without re-running the solver. This is essential for event detection (e.g., finding zero-crossings) and smooth visualization.
+
 ```python
 def dense_output_example():
     """Obtaining continuous solution with dense output"""
@@ -385,6 +442,8 @@ dense_output_example()
 ```
 
 ### 3.3 Mass Matrix (DAE)
+
+A Differential-Algebraic Equation (DAE) has the form $M \cdot y' = f(t, y)$ where $M$ may be singular. Rows of $M$ that are zero correspond to algebraic constraints (equations with no derivatives), which couple the differential equations. DAEs arise naturally in constrained mechanical systems (pendulums, robots) and electrical circuits (Kirchhoff's laws impose algebraic constraints on voltages and currents).
 
 ```python
 def dae_example():
@@ -431,7 +490,11 @@ dae_example()
 
 ## 4. Boundary Value Problems (BVP)
 
+**Why BVPs are different from IVPs:** Initial value problems specify all conditions at one point and march forward in time. Boundary value problems specify conditions at two (or more) separate points, so we cannot simply march forward -- the solution at the left boundary depends on what happens at the right boundary. This requires either iterative "shooting" or solving the entire domain simultaneously.
+
 ### 4.1 Shooting Method
+
+The shooting method converts a BVP into a sequence of IVPs. We guess the unknown initial conditions, integrate forward, check whether the boundary condition at the far end is satisfied, and adjust the guess. It is analogous to aiming a cannon: adjust the launch angle (initial slope) until the projectile hits the target (far boundary).
 
 ```python
 from scipy.optimize import brentq
@@ -561,6 +624,8 @@ nonlinear_bvp()
 ## 5. Special Problems
 
 ### 5.1 Finding Periodic Orbits
+
+The Van der Pol oscillator $x'' - \mu(1 - x^2)x' + x = 0$ models self-sustaining oscillations: the nonlinear damping term pumps energy in when the amplitude is small and dissipates energy when it is large, driving all trajectories toward a unique **limit cycle**. Poincare sections (sampling the trajectory once per period) reveal whether the system has settled onto this periodic orbit.
 
 ```python
 def find_periodic_orbit():

@@ -1497,5 +1497,5 @@ class Order {
 
 ---
 
-**이전**: [06_Functional_Programming.md](06_Functional_Programming.md)
-**다음**: [08_Clean_Code.md](08_Clean_Code.md)
+**이전**: [함수형 프로그래밍 개념](06_Functional_Programming.md)
+**다음**: [클린 코드와 코드 스멜](08_Clean_Code.md)

@@ -1,5 +1,17 @@
 # 실전 프로젝트 (Practical Projects)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 엣지 검출, 원근 변환(Perspective Transformation), 정렬된 스캔 이미지 생성을 결합한 문서 스캐너(Document Scanner)를 설계하고 구현할 수 있습니다.
+2. 캐니 엣지 검출(Canny Edge Detection), 허프 변환(Hough Transform), 관심 영역(ROI) 마스킹을 활용한 차선 검출(Lane Detection) 시스템을 구현할 수 있습니다.
+3. ArUco 마커를 이용한 자세 추정(Pose Estimation)과 오버레이 렌더링을 포함하는 AR 마커 검출 파이프라인을 구축할 수 있습니다.
+4. 얼굴 랜드마크(Facial Landmark) 검출과 이미지 오버레이 기법을 결합한 실시간 얼굴 필터 애플리케이션을 구현할 수 있습니다.
+5. 여러 컴퓨터 비전 기술을 통합하여 완성된 end-to-end 응용 프로젝트를 구현할 수 있습니다.
+
+---
+
 ## 개요
 
 지금까지 학습한 OpenCV 기술들을 종합하여 실제 응용 프로젝트를 구현합니다. 각 프로젝트는 여러 기술을 조합하여 완성된 애플리케이션을 만드는 과정을 단계별로 안내합니다.
@@ -23,28 +35,30 @@
 
 ## 프로젝트 1: 문서 스캐너
 
+스마트폰으로 찍은 문서 사진은 거의 항상 기울어지거나 원근 왜곡이 발생합니다. 문서 스캐너 프로젝트는 문서 경계를 자동으로 감지하고 원근 보정을 적용하여 OCR이나 보관에 적합한 깔끔하고 축 정렬된 이미지를 생성함으로써 이 문제를 해결합니다. 즉, 스마트폰 카메라로 평판 스캐너를 대체하는 것입니다.
+
 ### 프로젝트 개요
 
 ```
-문서 스캐너 (Document Scanner):
-사진으로 찍은 문서를 정렬된 스캔 이미지로 변환
+Document Scanner:
+Transform photographed documents into aligned scan images
 
 ┌──────────────────┐        ┌──────────────────┐
-│   촬영된 문서     │        │   스캔된 결과    │
+│   Captured Doc   │        │  Scanned Result  │
 │  /‾‾‾‾‾‾‾‾‾‾‾\   │        │ ┌──────────────┐ │
 │ /             \  │  ──▶   │ │              │ │
-│ \             /  │        │ │   문서 내용   │ │
-│  \___________/   │        │ │              │ │
+│ \             /  │        │ │   Document   │ │
+│  \___________/   │        │ │   Content    │ │
 │                  │        │ └──────────────┘ │
 └──────────────────┘        └──────────────────┘
-     기울어진 원본                정렬된 결과
+    Tilted Original              Aligned Result
 
-사용 기술:
-- 엣지 검출 (Canny)
-- 윤곽선 검출 (findContours)
-- 다각형 근사 (approxPolyDP)
-- 원근 변환 (warpPerspective)
-- 이진화 (adaptiveThreshold)
+Technologies used:
+- Edge detection (Canny)
+- Contour detection (findContours)
+- Polygon approximation (approxPolyDP)
+- Perspective transform (warpPerspective)
+- Binarization (adaptiveThreshold)
 ```
 
 ### 단계별 구현
@@ -54,23 +68,23 @@ import cv2
 import numpy as np
 
 class DocumentScanner:
-    """문서 스캐너"""
+    """Document Scanner"""
 
     def __init__(self):
         pass
 
     def order_points(self, pts):
-        """4개의 점을 순서대로 정렬 (좌상, 우상, 우하, 좌하)"""
+        """Order 4 points in order (top-left, top-right, bottom-right, bottom-left)"""
         rect = np.zeros((4, 2), dtype=np.float32)
 
-        # 좌상: x+y 합이 가장 작음
-        # 우하: x+y 합이 가장 큼
+        # Top-left: smallest x+y sum
+        # Bottom-right: largest x+y sum
         s = pts.sum(axis=1)
         rect[0] = pts[np.argmin(s)]
         rect[2] = pts[np.argmax(s)]
 
-        # 우상: y-x 차이가 가장 작음
-        # 좌하: y-x 차이가 가장 큼
+        # Top-right: smallest y-x difference
+        # Bottom-left: largest y-x difference
         diff = np.diff(pts, axis=1)
         rect[1] = pts[np.argmin(diff)]
         rect[3] = pts[np.argmax(diff)]
@@ -78,11 +92,11 @@ class DocumentScanner:
         return rect
 
     def four_point_transform(self, image, pts):
-        """원근 변환으로 문서 정렬"""
+        """Align document using perspective transform"""
         rect = self.order_points(pts)
         (tl, tr, br, bl) = rect
 
-        # 새 이미지 크기 계산
+        # Calculate new image size
         width_a = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
         width_b = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
         max_width = max(int(width_a), int(width_b))
@@ -91,7 +105,7 @@ class DocumentScanner:
         height_b = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
         max_height = max(int(height_a), int(height_b))
 
-        # 목표 좌표
+        # Target coordinates
         dst = np.array([
             [0, 0],
             [max_width - 1, 0],
@@ -99,36 +113,41 @@ class DocumentScanner:
             [0, max_height - 1]
         ], dtype=np.float32)
 
-        # 원근 변환 행렬
+        # Perspective transform matrix
         M = cv2.getPerspectiveTransform(rect, dst)
         warped = cv2.warpPerspective(image, M, (max_width, max_height))
 
         return warped
 
     def find_document_contour(self, image):
-        """문서 윤곽선 찾기"""
-        # 전처리
+        """Find document contour"""
+        # Preprocessing
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)  # Blur first to suppress texture noise inside the document
 
-        # 엣지 검출
+        # Edge detection — thresholds 75/200 chosen for documents: high lower bound avoids texture,
+        # high upper bound ensures only strong edges (document border) are marked as definite
         edged = cv2.Canny(blur, 75, 200)
 
-        # 모폴로지 연산으로 엣지 연결
+        # Morphological operations to connect edges — dilate then erode closes small gaps in the border line
+        # caused by shadows or worn edges, making the contour a closed loop
         kernel = np.ones((5, 5), np.uint8)
         edged = cv2.dilate(edged, kernel, iterations=1)
         edged = cv2.erode(edged, kernel, iterations=1)
 
-        # 윤곽선 검출
+        # Contour detection
         contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
-        # 가장 큰 4각형 윤곽선 찾기
+        # Sort by area descending — the document is almost always the largest object in the frame,
+        # so inspecting only the top 5 avoids processing hundreds of small contours
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
         document_contour = None
-        for contour in contours[:5]:  # 상위 5개만 확인
+        for contour in contours[:5]:  # Check top 5 only
             peri = cv2.arcLength(contour, True)
+            # 2% of perimeter as epsilon — tight enough to reject rounded shapes,
+            # loose enough to handle slightly curved document edges
             approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
 
             if len(approx) == 4:
@@ -138,82 +157,84 @@ class DocumentScanner:
         return document_contour, edged
 
     def enhance_document(self, image):
-        """문서 이미지 향상"""
-        # 그레이스케일 변환
+        """Enhance document image"""
+        # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # 적응형 이진화
+        # Adaptive thresholding — chosen over global Otsu because documents often have uneven lighting
+        # (e.g. a shadow across one corner); adaptive threshold computes a local threshold per 11×11 region,
+        # making text readable even where the background is darker
         binary = cv2.adaptiveThreshold(
             gray, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
-            11, 2
+            11, 2   # blockSize=11 (local window), C=2 (subtract 2 from weighted mean to fine-tune threshold)
         )
 
-        # 또는 OTSU 이진화
+        # Or OTSU thresholding
         # _, binary = cv2.threshold(gray, 0, 255,
         #                           cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         return binary
 
     def scan(self, image, enhance=True):
-        """문서 스캔 전체 과정"""
+        """Complete document scanning process"""
         original = image.copy()
         height, width = image.shape[:2]
 
-        # 처리를 위해 리사이즈 (비율 유지)
+        # Resize for processing (maintain ratio)
         ratio = 500.0 / height
         resized = cv2.resize(image, None, fx=ratio, fy=ratio)
 
-        # 문서 윤곽선 찾기
+        # Find document contour
         contour, edged = self.find_document_contour(resized)
 
         if contour is None:
-            print("문서 윤곽선을 찾을 수 없습니다")
+            print("Document contour not found")
             return None, None
 
-        # 원본 크기로 좌표 변환
+        # Convert coordinates to original size
         contour = contour.reshape(4, 2) / ratio
 
-        # 원근 변환
+        # Perspective transform
         scanned = self.four_point_transform(original, contour)
 
-        # 문서 향상 (선택사항)
+        # Document enhancement (optional)
         if enhance:
             scanned = self.enhance_document(scanned)
 
         return scanned, contour
 
     def visualize(self, image, contour):
-        """결과 시각화"""
+        """Visualize results"""
         vis = image.copy()
         if contour is not None:
             cv2.drawContours(vis, [contour.astype(int)], -1, (0, 255, 0), 3)
 
-            # 코너 점 표시
+            # Mark corner points
             for point in contour:
                 cv2.circle(vis, tuple(point.astype(int)), 10, (0, 0, 255), -1)
 
         return vis
 
-# 사용 예
+# Usage example
 scanner = DocumentScanner()
 
-# 이미지 로드
+# Load image
 img = cv2.imread('document_photo.jpg')
 
-# 스캔
+# Scan
 scanned, contour = scanner.scan(img, enhance=True)
 
 if scanned is not None:
-    # 결과 시각화
+    # Visualize results
     vis = scanner.visualize(img, contour)
 
     cv2.imshow('Original with Contour', vis)
     cv2.imshow('Scanned', scanned)
     cv2.waitKey(0)
 
-    # 저장
+    # Save
     cv2.imwrite('scanned_document.jpg', scanned)
 ```
 
@@ -224,7 +245,7 @@ import cv2
 import numpy as np
 
 def realtime_document_scanner():
-    """실시간 문서 스캐너"""
+    """Real-time document scanner"""
 
     scanner = DocumentScanner()
     cap = cv2.VideoCapture(0)
@@ -234,7 +255,7 @@ def realtime_document_scanner():
         if not ret:
             break
 
-        # 문서 윤곽선 검출
+        # Document contour detection
         height = frame.shape[0]
         ratio = 500.0 / height
         resized = cv2.resize(frame, None, fx=ratio, fy=ratio)
@@ -244,13 +265,13 @@ def realtime_document_scanner():
         display = frame.copy()
 
         if contour is not None:
-            # 원본 크기로 변환
+            # Convert to original size
             contour = (contour.reshape(4, 2) / ratio).astype(int)
 
-            # 윤곽선 그리기
+            # Draw contour
             cv2.drawContours(display, [contour], -1, (0, 255, 0), 3)
 
-            # 안내 텍스트
+            # Guide text
             cv2.putText(display, "Press 's' to scan", (10, 30),
                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         else:
@@ -263,7 +284,7 @@ def realtime_document_scanner():
         if key == ord('q'):
             break
         elif key == ord('s') and contour is not None:
-            # 스캔 수행
+            # Perform scan
             scanned, _ = scanner.scan(frame)
             if scanned is not None:
                 cv2.imshow('Scanned', scanned)
@@ -272,7 +293,7 @@ def realtime_document_scanner():
     cap.release()
     cv2.destroyAllWindows()
 
-# 실행
+# Run
 # realtime_document_scanner()
 ```
 
@@ -280,32 +301,34 @@ def realtime_document_scanner():
 
 ## 프로젝트 2: 차선 검출
 
+차선 검출은 ADAS(첨단 운전자 보조 시스템, Advanced Driver Assistance Systems)와 자율주행의 핵심 구성 요소 중 하나입니다. 차선은 얇고, 종종 지워지거나 부분적으로 가려져 있으며, 실시간으로 감지해야 한다는 어려움이 있습니다. 이 프로젝트는 색상 필터링, 엣지 검출, 허프 변환(Hough Transform)과 같은 고전적인 컴퓨터 비전 기법을 사용합니다. 이 기법들은 빠르고 해석 가능하며, 레이블된 학습 데이터셋이 필요하지 않기 때문입니다.
+
 ### 프로젝트 개요
 
 ```
-차선 검출 (Lane Detection):
-도로 영상에서 차선을 검출하고 시각화
+Lane Detection:
+Detect and visualize lanes in road images
 
 ┌────────────────────────────────────┐
-│            도로 영상               │
+│            Road Image              │
 │                                    │
 │     ╲                    ╱         │
-│      ╲      차선       ╱          │
+│      ╲      Lane       ╱          │
 │       ╲              ╱            │
-│        ╲    검출   ╱              │
+│        ╲  Detection ╱              │
 │         ╲        ╱                │
 │          ╲      ╱                 │
 │           ╲    ╱                  │
 │            ╲  ╱                   │
 └────────────────────────────────────┘
 
-처리 파이프라인:
-1. 관심 영역 (ROI) 설정
-2. 색상 공간 변환 (HSV)
-3. 흰색/노란색 마스크 생성
-4. 캐니 엣지 검출
-5. 허프 변환으로 직선 검출
-6. 차선 합성
+Processing Pipeline:
+1. Region of Interest (ROI) setup
+2. Color space conversion (HSV)
+3. White/yellow mask generation
+4. Canny edge detection
+5. Hough transform for line detection
+6. Lane synthesis
 ```
 
 ### 단계별 구현
@@ -315,21 +338,21 @@ import cv2
 import numpy as np
 
 class LaneDetector:
-    """차선 검출기"""
+    """Lane Detector"""
 
     def __init__(self):
         pass
 
     def region_of_interest(self, img):
-        """관심 영역 마스킹 (도로 부분만)"""
+        """Region of interest masking (road area only)"""
         height, width = img.shape[:2]
 
-        # 사다리꼴 ROI
+        # Trapezoidal ROI
         vertices = np.array([[
-            (int(width * 0.1), height),           # 좌하
-            (int(width * 0.4), int(height * 0.6)), # 좌상
-            (int(width * 0.6), int(height * 0.6)), # 우상
-            (int(width * 0.9), height)            # 우하
+            (int(width * 0.1), height),           # Bottom-left
+            (int(width * 0.4), int(height * 0.6)), # Top-left
+            (int(width * 0.6), int(height * 0.6)), # Top-right
+            (int(width * 0.9), height)            # Bottom-right
         ]], dtype=np.int32)
 
         mask = np.zeros_like(img)
@@ -343,49 +366,51 @@ class LaneDetector:
         return masked
 
     def color_filter(self, img):
-        """색상 필터 (흰색/노란색 차선)"""
-        # HSV 변환
+        """Color filter (white/yellow lanes)"""
+        # HSV is used instead of BGR/RGB because hue is separable from brightness;
+        # a white lane in shadow has the same hue/saturation but lower value — RGB thresholds fail here
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-        # 흰색 마스크
+        # White mask: any hue (0-255), very low saturation (near-gray), high brightness
         lower_white = np.array([0, 0, 200])
         upper_white = np.array([255, 30, 255])
         white_mask = cv2.inRange(hsv, lower_white, upper_white)
 
-        # 노란색 마스크
+        # Yellow mask: hue 15-35° covers yellow, saturation >80 excludes washed-out colors,
+        # value >100 excludes shadows
         lower_yellow = np.array([15, 80, 100])
         upper_yellow = np.array([35, 255, 255])
         yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
 
-        # 마스크 결합
+        # Combine masks
         combined_mask = cv2.bitwise_or(white_mask, yellow_mask)
 
-        # 마스크 적용
+        # Apply mask
         filtered = cv2.bitwise_and(img, img, mask=combined_mask)
 
         return filtered, combined_mask
 
     def detect_edges(self, img):
-        """엣지 검출"""
+        """Edge detection"""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         edges = cv2.Canny(blur, 50, 150)
         return edges
 
     def detect_lines(self, edges):
-        """허프 변환으로 직선 검출"""
+        """Line detection using Hough transform"""
         lines = cv2.HoughLinesP(
             edges,
-            rho=1,              # 거리 해상도 (픽셀)
-            theta=np.pi/180,    # 각도 해상도 (라디안)
-            threshold=50,       # 최소 투표 수
-            minLineLength=50,   # 최소 선 길이
-            maxLineGap=150      # 최대 간격
+            rho=1,              # 1-pixel distance resolution — finer is more accurate but slower
+            theta=np.pi/180,    # 1-degree angular resolution — sufficient for lane angles
+            threshold=50,       # Minimum votes: requires 50 edge pixels to agree on a line; filters noise
+            minLineLength=50,   # Reject short segments that are likely noise or road debris
+            maxLineGap=150      # Allow gaps up to 150px — handles dashed lane markings as one line
         )
         return lines
 
     def separate_lines(self, lines, img_width):
-        """좌/우 차선 분리"""
+        """Separate left/right lanes"""
         left_lines = []
         right_lines = []
 
@@ -397,17 +422,19 @@ class LaneDetector:
         for line in lines:
             x1, y1, x2, y2 = line[0]
 
-            # 기울기 계산
+            # Calculate slope
             if x2 - x1 == 0:
                 continue
 
             slope = (y2 - y1) / (x2 - x1)
 
-            # 기울기가 너무 작으면 무시 (수평선)
+            # Reject near-horizontal lines (|slope| < 0.3): lane lines are always angled;
+            # horizontal segments are typically road cracks, shadows, or distant markings
             if abs(slope) < 0.3:
                 continue
 
-            # 좌/우 분류
+            # Left lane: negative slope (goes up-left in image coords) AND both endpoints left of center;
+            # the position check prevents misclassifying a right-side diagonal that crosses center
             if slope < 0 and x1 < center and x2 < center:
                 left_lines.append(line[0])
             elif slope > 0 and x1 > center and x2 > center:
@@ -416,7 +443,7 @@ class LaneDetector:
         return left_lines, right_lines
 
     def average_line(self, lines, img_height):
-        """여러 선분을 평균내어 하나의 선으로"""
+        """Average multiple line segments into one line"""
         if len(lines) == 0:
             return None
 
@@ -428,24 +455,25 @@ class LaneDetector:
             x_coords.extend([x1, x2])
             y_coords.extend([y1, y2])
 
-        # 선형 회귀 (1차 다항식 피팅)
+        # Fit x as a function of y (not the usual y=f(x)) because lane lines are nearly vertical
+        # and would cause numerical instability (infinite slope) in standard linear regression
         poly = np.polyfit(y_coords, x_coords, deg=1)
 
-        # y 범위 설정
+        # Set y range
         y1 = img_height
         y2 = int(img_height * 0.6)
 
-        # x 좌표 계산
+        # Calculate x coordinates
         x1 = int(np.polyval(poly, y1))
         x2 = int(np.polyval(poly, y2))
 
         return [x1, y1, x2, y2]
 
     def draw_lanes(self, img, left_line, right_line):
-        """차선 그리기"""
+        """Draw lanes"""
         overlay = np.zeros_like(img)
 
-        # 차선 그리기
+        # Draw lanes
         if left_line is not None:
             cv2.line(overlay, (left_line[0], left_line[1]),
                     (left_line[2], left_line[3]), (0, 0, 255), 10)
@@ -454,7 +482,7 @@ class LaneDetector:
             cv2.line(overlay, (right_line[0], right_line[1]),
                     (right_line[2], right_line[3]), (0, 0, 255), 10)
 
-        # 차선 영역 채우기
+        # Fill lane area
         if left_line is not None and right_line is not None:
             pts = np.array([
                 [left_line[0], left_line[1]],
@@ -465,35 +493,35 @@ class LaneDetector:
 
             cv2.fillPoly(overlay, [pts], (0, 255, 0))
 
-        # 원본과 합성
+        # Blend with original
         result = cv2.addWeighted(img, 1, overlay, 0.3, 0)
 
         return result
 
     def detect(self, img):
-        """전체 차선 검출 파이프라인"""
+        """Complete lane detection pipeline"""
         height, width = img.shape[:2]
 
-        # 1. 색상 필터링
+        # 1. Color filtering
         filtered, color_mask = self.color_filter(img)
 
-        # 2. 엣지 검출
+        # 2. Edge detection
         edges = self.detect_edges(filtered)
 
-        # 3. ROI 적용
+        # 3. Apply ROI
         roi_edges = self.region_of_interest(edges)
 
-        # 4. 직선 검출
+        # 4. Line detection
         lines = self.detect_lines(roi_edges)
 
-        # 5. 좌/우 차선 분리
+        # 5. Separate left/right lanes
         left_lines, right_lines = self.separate_lines(lines, width)
 
-        # 6. 평균 차선 계산
+        # 6. Calculate average lanes
         left_lane = self.average_line(left_lines, height)
         right_lane = self.average_line(right_lines, height)
 
-        # 7. 결과 시각화
+        # 7. Visualize results
         result = self.draw_lanes(img, left_lane, right_lane)
 
         return result, {
@@ -503,10 +531,10 @@ class LaneDetector:
             'right_lane': right_lane
         }
 
-# 사용 예
+# Usage example
 detector = LaneDetector()
 
-# 이미지에서 차선 검출
+# Lane detection from image
 img = cv2.imread('road.jpg')
 result, debug = detector.detect(img)
 
@@ -522,12 +550,12 @@ import cv2
 import numpy as np
 
 def video_lane_detection(video_path):
-    """비디오에서 차선 검출"""
+    """Lane detection from video"""
 
     detector = LaneDetector()
     cap = cv2.VideoCapture(video_path)
 
-    # 출력 비디오 설정
+    # Output video setup
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -535,10 +563,13 @@ def video_lane_detection(video_path):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter('lane_output.mp4', fourcc, fps, (width, height))
 
-    # 이전 프레임의 차선 (스무딩용)
+    # Previous frame lanes (for smoothing)
     prev_left = None
     prev_right = None
-    alpha = 0.7  # 스무딩 계수
+    # Exponential moving average: alpha=0.7 weights the previous frame heavily, so lane lines
+    # move smoothly even when Hough detects a slightly different position each frame
+    # (lower alpha = more smoothing, higher lag; higher alpha = more jitter, faster response)
+    alpha = 0.7
 
     while True:
         ret, frame = cap.read()
@@ -547,7 +578,7 @@ def video_lane_detection(video_path):
 
         result, debug = detector.detect(frame)
 
-        # 차선 스무딩 (급격한 변화 방지)
+        # Lane smoothing (prevent abrupt changes)
         left = debug['left_lane']
         right = debug['right_lane']
 
@@ -561,7 +592,7 @@ def video_lane_detection(video_path):
         prev_left = left
         prev_right = right
 
-        # 스무딩된 차선으로 다시 그리기
+        # Redraw with smoothed lanes
         result = detector.draw_lanes(frame, left, right)
 
         out.write(result)
@@ -574,7 +605,7 @@ def video_lane_detection(video_path):
     out.release()
     cv2.destroyAllWindows()
 
-# 실행
+# Run
 # video_lane_detection('driving.mp4')
 ```
 
@@ -582,13 +613,15 @@ def video_lane_detection(video_path):
 
 ## 프로젝트 3: AR 마커 검출
 
+증강 현실(Augmented Reality)은 하나의 2D 이미지에서 알려진 기준점이 3D 공간의 정확히 어디에 있는지를 파악해야 합니다. AR 마커는 고대비 정사각형 패턴에 고유한 ID를 인코딩하여 이 문제를 해결합니다. 이 패턴은 다양한 조명 조건에서도 쉽게 감지할 수 있습니다. 실제 크기를 알고 있는 마커의 네 모서리를 알면 카메라 자세(Pose)를 계산하고 3D 콘텐츠를 정밀하게 고정할 수 있습니다.
+
 ### 프로젝트 개요
 
 ```
-AR 마커 검출 (AR Marker Detection):
-이미지에서 정사각형 마커를 검출하고 3D 객체를 합성
+AR Marker Detection:
+Detect square markers in images and composite 3D objects
 
-마커 구조:
+Marker structure:
 ┌────────────────────┐
 │ ██████████████████ │
 │ █                █ │
@@ -601,11 +634,11 @@ AR 마커 검출 (AR Marker Detection):
 │ ██████████████████ │
 └────────────────────┘
 
-처리 과정:
-1. 사각형 윤곽선 검출
-2. 원근 변환으로 마커 정규화
-3. 마커 ID 인식
-4. 호모그래피로 3D 객체 투영
+Processing steps:
+1. Square contour detection
+2. Normalize marker with perspective transform
+3. Marker ID recognition
+4. Project 3D object using homography
 ```
 
 ### 단계별 구현
@@ -615,64 +648,68 @@ import cv2
 import numpy as np
 
 class ARMarkerDetector:
-    """AR 마커 검출기"""
+    """AR Marker Detector"""
 
     def __init__(self, marker_size=100):
         self.marker_size = marker_size
 
     def order_points(self, pts):
-        """4개 점을 순서대로 정렬"""
+        """Order 4 points in sequence"""
         rect = np.zeros((4, 2), dtype=np.float32)
 
         s = pts.sum(axis=1)
-        rect[0] = pts[np.argmin(s)]  # 좌상
-        rect[2] = pts[np.argmax(s)]  # 우하
+        rect[0] = pts[np.argmin(s)]  # Top-left
+        rect[2] = pts[np.argmax(s)]  # Bottom-right
 
         diff = np.diff(pts, axis=1)
-        rect[1] = pts[np.argmin(diff)]  # 우상
-        rect[3] = pts[np.argmax(diff)]  # 좌하
+        rect[1] = pts[np.argmin(diff)]  # Top-right
+        rect[3] = pts[np.argmax(diff)]  # Bottom-left
 
         return rect
 
     def find_markers(self, img):
-        """마커 후보 찾기"""
+        """Find marker candidates"""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        # 적응형 이진화
+        # Adaptive thresholding — markers are black-on-white and must be detectable under varying
+        # lighting; local thresholding handles shadows that would make global Otsu miss part of the border
         binary = cv2.adaptiveThreshold(
             blur, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV,
+            cv2.THRESH_BINARY_INV,  # Invert so marker interior (black) becomes white foreground
             11, 2
         )
 
-        # 윤곽선 검출
+        # RETR_LIST retrieves all contours without hierarchy — faster than RETR_TREE when we
+        # don't need parent/child relationships (markers can be nested but we check them individually)
         contours, _ = cv2.findContours(binary, cv2.RETR_LIST,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
         markers = []
 
         for contour in contours:
-            # 면적 필터
+            # Area filter: too small (<1000px²) = noise; too large (>50% of image) = frame border
             area = cv2.contourArea(contour)
             if area < 1000 or area > img.shape[0] * img.shape[1] * 0.5:
                 continue
 
-            # 다각형 근사
+            # 4% epsilon — more lenient than the document scanner (2%) because marker edges may
+            # be blurry or perspective-distorted, making the polygon less regular
             peri = cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
 
-            # 4각형인 경우만
+            # Only quadrilaterals
             if len(approx) == 4:
-                # 볼록 다각형 확인
+                # Convexity check rejects non-square quads (e.g. an L-shape that approximates to 4 points)
+                # Real markers are always convex squares/rectangles
                 if cv2.isContourConvex(approx):
                     markers.append(approx.reshape(4, 2))
 
         return markers, binary
 
     def get_marker_transform(self, corners):
-        """마커 정규화를 위한 변환 행렬"""
+        """Transform matrix for marker normalization"""
         ordered = self.order_points(corners.astype(np.float32))
 
         dst = np.array([
@@ -686,15 +723,15 @@ class ARMarkerDetector:
         return M, ordered
 
     def decode_marker(self, warped):
-        """마커 ID 디코딩 (간단한 예)"""
-        # 그레이스케일 변환
+        """Decode marker ID (simple example)"""
+        # Convert to grayscale
         if len(warped.shape) == 3:
             warped = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
 
-        # 이진화
+        # Binarization
         _, binary = cv2.threshold(warped, 127, 255, cv2.THRESH_BINARY)
 
-        # 5x5 그리드로 분할 (가장자리는 검은 테두리)
+        # Divide into 5x5 grid (edges are black border)
         grid_size = self.marker_size // 5
         grid = np.zeros((5, 5), dtype=np.uint8)
 
@@ -702,10 +739,10 @@ class ARMarkerDetector:
             for j in range(5):
                 cell = binary[i*grid_size:(i+1)*grid_size,
                              j*grid_size:(j+1)*grid_size]
-                # 셀의 평균 밝기로 0/1 결정
+                # Determine 0/1 based on cell average brightness
                 grid[i, j] = 1 if np.mean(cell) > 127 else 0
 
-        # 간단한 ID 계산 (내부 3x3 영역)
+        # Simple ID calculation (inner 3x3 region)
         inner = grid[1:4, 1:4]
         marker_id = 0
         for i in range(3):
@@ -715,19 +752,19 @@ class ARMarkerDetector:
         return marker_id, grid
 
     def draw_cube(self, img, corners, size=50):
-        """마커 위에 3D 큐브 그리기"""
-        # 마커 평면의 4개 점
+        """Draw 3D cube on marker"""
+        # 4 points of marker plane
         corners = self.order_points(corners.astype(np.float32))
 
-        # 바닥면 좌표
+        # Bottom face coordinates
         bottom = corners.astype(int)
 
-        # 윗면 좌표 계산 (호모그래피 이용한 간단한 근사)
+        # Calculate top face coordinates (simple approximation using homography)
         center = np.mean(corners, axis=0)
 
-        # 윗면은 마커 중심 방향으로 축소 + 위로 이동
+        # Top face shrinks toward marker center + moves up
         scale = 0.7
-        offset = np.array([0, -size])  # 위로 이동
+        offset = np.array([0, -size])  # Move up
 
         top = []
         for pt in corners:
@@ -736,22 +773,22 @@ class ARMarkerDetector:
             top.append(new_pt.astype(int))
         top = np.array(top)
 
-        # 면 그리기 (반투명)
+        # Draw faces (semi-transparent)
         overlay = img.copy()
 
-        # 윗면 (빨간색)
+        # Top face (red)
         cv2.fillPoly(overlay, [top], (0, 0, 200))
 
-        # 옆면 (녹색)
+        # Side faces (green)
         for i in range(4):
             pts = np.array([bottom[i], bottom[(i+1)%4],
                            top[(i+1)%4], top[i]])
             cv2.fillPoly(overlay, [pts], (0, 200, 0))
 
-        # 합성
+        # Blend
         result = cv2.addWeighted(img, 0.6, overlay, 0.4, 0)
 
-        # 엣지 그리기
+        # Draw edges
         for i in range(4):
             cv2.line(result, tuple(bottom[i]), tuple(bottom[(i+1)%4]),
                     (255, 255, 255), 2)
@@ -763,7 +800,7 @@ class ARMarkerDetector:
         return result
 
     def detect(self, img):
-        """마커 검출 및 AR 렌더링"""
+        """Marker detection and AR rendering"""
         result = img.copy()
 
         markers, binary = self.find_markers(img)
@@ -771,42 +808,42 @@ class ARMarkerDetector:
         detected_markers = []
 
         for corners in markers:
-            # 마커 정규화
+            # Normalize marker
             M, ordered = self.get_marker_transform(corners)
             warped = cv2.warpPerspective(img, M,
                                          (self.marker_size, self.marker_size))
 
-            # 마커 ID 디코딩
+            # Decode marker ID
             marker_id, grid = self.decode_marker(warped)
 
-            # 테두리 확인 (가장자리가 검은색이어야 함)
+            # Border check (edges should be black)
             border_check = (grid[0, :].sum() + grid[4, :].sum() +
                            grid[:, 0].sum() + grid[:, 4].sum())
 
-            if border_check < 5:  # 대부분 검은색
+            if border_check < 5:  # Mostly black
                 detected_markers.append({
                     'id': marker_id,
                     'corners': ordered
                 })
 
-                # 3D 큐브 그리기
+                # Draw 3D cube
                 result = self.draw_cube(result, ordered)
 
-                # ID 표시
+                # Display ID
                 center = np.mean(ordered, axis=0).astype(int)
                 cv2.putText(result, f"ID: {marker_id}", tuple(center),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
         return result, detected_markers, binary
 
-# 사용 예
+# Usage example
 detector = ARMarkerDetector()
 
-# 이미지에서 마커 검출
+# Detect markers from image
 img = cv2.imread('ar_marker.jpg')
 result, markers, binary = detector.detect(img)
 
-print(f"검출된 마커: {len(markers)}")
+print(f"Detected markers: {len(markers)}")
 for m in markers:
     print(f"  ID: {m['id']}")
 
@@ -822,9 +859,9 @@ import cv2
 import numpy as np
 
 def aruco_marker_detection():
-    """OpenCV ArUco 마커 검출"""
+    """OpenCV ArUco marker detection"""
 
-    # ArUco 딕셔너리 선택
+    # Select ArUco dictionary
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     parameters = cv2.aruco.DetectorParameters()
 
@@ -837,16 +874,16 @@ def aruco_marker_detection():
         if not ret:
             break
 
-        # 마커 검출
+        # Detect markers
         corners, ids, rejected = detector.detectMarkers(frame)
 
-        # 결과 시각화
+        # Visualize results
         if ids is not None:
             cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
             for i, corner in enumerate(corners):
-                # 각 마커에 큐브 또는 축 그리기
-                # (카메라 캘리브레이션이 있는 경우)
+                # Draw cube or axis on each marker
+                # (if camera calibration is available)
                 pass
 
         cv2.imshow('ArUco Detection', frame)
@@ -858,14 +895,14 @@ def aruco_marker_detection():
     cv2.destroyAllWindows()
 
 def generate_aruco_marker(marker_id=0, size=200):
-    """ArUco 마커 생성"""
+    """Generate ArUco marker"""
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
     marker_img = cv2.aruco.generateImageMarker(aruco_dict, marker_id, size)
 
     cv2.imwrite(f'aruco_marker_{marker_id}.png', marker_img)
     return marker_img
 
-# 마커 생성
+# Generate marker
 # marker = generate_aruco_marker(0)
 # cv2.imshow('Marker', marker)
 ```
@@ -874,15 +911,17 @@ def generate_aruco_marker(marker_id=0, size=200):
 
 ## 프로젝트 4: 실시간 얼굴 필터
 
+Snapchat이나 Instagram이 대중화한 얼굴 필터는 특정 얼굴 특징점(Facial Landmark)에 가상 객체를 고정하는 방식으로 작동합니다. 핵심 과제는 머리가 움직여도 오버레이가 안정적으로 유지되도록 프레임 간 랜드마크 위치를 견고하게 추적하는 것입니다. 이 프로젝트는 68개 포인트 얼굴 랜드마크 모델을 사용합니다. 이 모델은 선글라스나 모자 같은 액세서리를 올바른 해부학적 위치에 고정하기에 충분한 정밀도를 제공하기 때문입니다.
+
 ### 프로젝트 개요
 
 ```
-실시간 얼굴 필터 (Face Filter):
-얼굴 랜드마크를 기반으로 필터 효과 적용
+Real-time Face Filter:
+Apply filter effects based on facial landmarks
 
 ┌────────────────────────────────────┐
 │                                    │
-│        😎 선글라스 필터            │
+│        Sunglasses Filter           │
 │       /‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾\           │
 │      │  ●────────●   │           │
 │      │   \      /    │           │
@@ -891,11 +930,11 @@ def generate_aruco_marker(marker_id=0, size=200):
 │                                    │
 └────────────────────────────────────┘
 
-사용 기술:
-- dlib 얼굴 랜드마크 (68점)
-- 투명 이미지 합성
-- 어파인/원근 변환
-- 실시간 처리 최적화
+Technologies used:
+- dlib facial landmarks (68 points)
+- Transparent image compositing
+- Affine/perspective transform
+- Real-time processing optimization
 ```
 
 ### 단계별 구현
@@ -906,24 +945,28 @@ import numpy as np
 import dlib
 
 class FaceFilter:
-    """실시간 얼굴 필터"""
+    """Real-time Face Filter"""
 
     def __init__(self, predictor_path):
+        # dlib's HOG-based detector is chosen over Haar cascades because it handles
+        # slightly tilted faces better without the high false-positive rate of Haar
         self.detector = dlib.get_frontal_face_detector()
+        # 68-point predictor gives anatomically precise landmarks (eye corners, lip edges, etc.)
+        # needed to position accessories correctly; a 5-point model is faster but lacks the detail
         self.predictor = dlib.shape_predictor(predictor_path)
 
-        # 필터 이미지 로드
+        # Filter images
         self.filters = {}
 
     def load_filter(self, name, image_path, alpha_path=None):
-        """필터 이미지 로드 (PNG with alpha 권장)"""
+        """Load filter image (PNG with alpha recommended)"""
         img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
 
         if img.shape[2] == 4:
-            # 이미 알파 채널 있음
+            # Already has alpha channel
             self.filters[name] = img
         else:
-            # 알파 채널 추가 (흰색 배경을 투명으로)
+            # Add alpha channel (make white background transparent)
             if alpha_path:
                 alpha = cv2.imread(alpha_path, cv2.IMREAD_GRAYSCALE)
             else:
@@ -935,17 +978,17 @@ class FaceFilter:
             self.filters[name] = cv2.merge([b, g, r, alpha])
 
     def get_landmarks(self, img, face):
-        """얼굴 랜드마크 추출"""
+        """Extract facial landmarks"""
         shape = self.predictor(img, face)
         landmarks = np.array([[shape.part(i).x, shape.part(i).y]
                               for i in range(68)])
         return landmarks
 
     def overlay_image(self, background, overlay, x, y):
-        """투명 이미지 합성"""
+        """Composite transparent image"""
         h, w = overlay.shape[:2]
 
-        # 경계 체크
+        # Boundary check
         if x < 0:
             overlay = overlay[:, -x:]
             w = overlay.shape[1]
@@ -966,9 +1009,11 @@ class FaceFilter:
         if w <= 0 or h <= 0:
             return background
 
-        # 알파 블렌딩
+        # Alpha blending: composite = alpha * foreground + (1 - alpha) * background
+        # Using the PNG's alpha channel means partially transparent pixels blend smoothly
+        # rather than showing a harsh edge around the filter image
         overlay_rgb = overlay[:, :, :3]
-        alpha = overlay[:, :, 3] / 255.0
+        alpha = overlay[:, :, 3] / 255.0  # Normalize alpha to [0,1] for the blend formula
 
         roi = background[y:y+h, x:x+w]
 
@@ -981,25 +1026,26 @@ class FaceFilter:
         return background
 
     def apply_sunglasses(self, img, landmarks, filter_img):
-        """선글라스 필터 적용"""
-        # 눈 좌표
+        """Apply sunglasses filter"""
+        # Eye coordinates
         left_eye = landmarks[36:42].mean(axis=0).astype(int)
         right_eye = landmarks[42:48].mean(axis=0).astype(int)
 
-        # 눈 사이 거리와 각도
+        # Eye distance and angle
         eye_width = np.linalg.norm(right_eye - left_eye)
         eye_center = ((left_eye + right_eye) / 2).astype(int)
         angle = np.degrees(np.arctan2(right_eye[1] - left_eye[1],
                                       right_eye[0] - left_eye[0]))
 
-        # 선글라스 크기 조정
+        # 2.5× eye width gives sunglasses that extend slightly past the face edges — matching
+        # how real sunglasses are proportioned relative to inter-pupillary distance
         filter_width = int(eye_width * 2.5)
         filter_height = int(filter_width * filter_img.shape[0] /
-                           filter_img.shape[1])
+                           filter_img.shape[1])  # Preserve filter's original aspect ratio
 
         resized_filter = cv2.resize(filter_img, (filter_width, filter_height))
 
-        # 회전
+        # Rotate
         M = cv2.getRotationMatrix2D((filter_width // 2, filter_height // 2),
                                     -angle, 1)
         rotated_filter = cv2.warpAffine(resized_filter, M,
@@ -1008,49 +1054,49 @@ class FaceFilter:
                                         borderMode=cv2.BORDER_CONSTANT,
                                         borderValue=(0, 0, 0, 0))
 
-        # 위치 계산
+        # Calculate position
         x = eye_center[0] - filter_width // 2
         y = eye_center[1] - filter_height // 2
 
-        # 합성
+        # Composite
         result = self.overlay_image(img, rotated_filter, x, y)
 
         return result
 
     def apply_hat(self, img, landmarks, filter_img):
-        """모자 필터 적용"""
-        # 이마 위치 (눈썹 위)
+        """Apply hat filter"""
+        # Forehead position (above eyebrows)
         left_brow = landmarks[17:22].mean(axis=0)
         right_brow = landmarks[22:27].mean(axis=0)
 
         brow_center = ((left_brow + right_brow) / 2).astype(int)
         brow_width = np.linalg.norm(right_brow - left_brow)
 
-        # 모자 크기
+        # Hat size
         hat_width = int(brow_width * 3)
         hat_height = int(hat_width * filter_img.shape[0] /
                         filter_img.shape[1])
 
         resized_hat = cv2.resize(filter_img, (hat_width, hat_height))
 
-        # 위치 (눈썹 위에 배치)
+        # Position (place above eyebrows)
         x = brow_center[0] - hat_width // 2
         y = brow_center[1] - hat_height
 
-        # 합성
+        # Composite
         result = self.overlay_image(img, resized_hat, x, y)
 
         return result
 
     def apply_mustache(self, img, landmarks, filter_img):
-        """콧수염 필터 적용"""
-        # 코 아래, 입 위
+        """Apply mustache filter"""
+        # Below nose, above mouth
         nose_tip = landmarks[33]
         upper_lip = landmarks[51]
 
         center = ((nose_tip + upper_lip) / 2).astype(int)
 
-        # 콧수염 크기 (입 너비 기준)
+        # Mustache size (based on mouth width)
         mouth_width = np.linalg.norm(landmarks[48] - landmarks[54])
         mustache_width = int(mouth_width * 1.5)
         mustache_height = int(mustache_width * filter_img.shape[0] /
@@ -1066,7 +1112,7 @@ class FaceFilter:
         return result
 
     def process(self, img, filter_name='sunglasses'):
-        """필터 적용"""
+        """Apply filter"""
         if filter_name not in self.filters:
             return img
 
@@ -1090,13 +1136,13 @@ class FaceFilter:
 
         return result
 
-# 사용 예
+# Usage example
 def realtime_face_filter():
-    """실시간 얼굴 필터"""
+    """Real-time face filter"""
 
     filter_app = FaceFilter('shape_predictor_68_face_landmarks.dat')
 
-    # 필터 로드 (투명 PNG 권장)
+    # Load filters (transparent PNG recommended)
     filter_app.load_filter('sunglasses', 'sunglasses.png')
     # filter_app.load_filter('hat', 'hat.png')
     # filter_app.load_filter('mustache', 'mustache.png')
@@ -1116,10 +1162,10 @@ def realtime_face_filter():
 
         frame = cv2.flip(frame, 1)
 
-        # 필터 적용
+        # Apply filter
         result = filter_app.process(frame, current_filter)
 
-        # 현재 필터 표시
+        # Display current filter
         cv2.putText(result, f"Filter: {current_filter}", (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
@@ -1135,7 +1181,7 @@ def realtime_face_filter():
     cap.release()
     cv2.destroyAllWindows()
 
-# 실행
+# Run
 # realtime_face_filter()
 ```
 
@@ -1143,22 +1189,24 @@ def realtime_face_filter():
 
 ## 프로젝트 5: 객체 추적 시스템
 
+모든 프레임에 완전한 객체 검출기를 실행하는 것은 계산 비용이 높고, 동일한 물리적 객체가 연속 프레임에서 다른 바운딩 박스를 얻는 불안정한 ID를 생성합니다. 이 프로젝트는 배경 차분(Background Subtraction, 저렴한 프레임별 움직임 감지), 칼만 필터(Kalman Filter, 각 객체의 다음 위치 예측), 헝가리안 알고리즘(Hungarian Algorithm, 탐지와 트랙의 전역 최적 할당)을 결합합니다. 이는 고전적인 SORT(Simple Online and Realtime Tracking) 아키텍처입니다.
+
 ### 프로젝트 개요
 
 ```
-객체 추적 시스템 (Object Tracking System):
-배경 차분과 칼만 필터를 조합한 다중 객체 추적
+Object Tracking System:
+Multi-object tracking combining background subtraction and Kalman filter
 
-처리 흐름:
+Processing flow:
 ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│ 프레임  │ → │ 배경    │ → │ 윤곽선  │ → │ 칼만    │
-│ 입력    │    │ 차분    │    │ 검출    │    │ 필터    │
+│ Frame   │ → │ Background│ → │ Contour │ → │ Kalman  │
+│ Input   │    │ Subtract │    │ Detect  │    │ Filter  │
 └─────────┘    └─────────┘    └─────────┘    └─────────┘
                                                   │
                                                   ▼
 ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│ 결과    │ ← │ ID      │ ← │ 헝가리안│ ← │ 예측    │
-│ 출력    │    │ 할당    │    │ 매칭    │    │ 위치    │
+│ Result  │ ← │ ID      │ ← │Hungarian│ ← │ Predict │
+│ Output  │    │ Assign  │    │ Match   │    │ Position│
 └─────────┘    └─────────┘    └─────────┘    └─────────┘
 ```
 
@@ -1170,14 +1218,15 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 class KalmanTracker:
-    """칼만 필터 기반 단일 객체 추적기"""
+    """Kalman filter-based single object tracker"""
 
     def __init__(self, initial_pos):
-        # 칼만 필터 초기화
-        # 상태 벡터: [x, y, vx, vy]
+        # Initialize Kalman filter
+        # State vector: [x, y, vx, vy]
         self.kalman = cv2.KalmanFilter(4, 2)
 
-        # 전이 행렬 (등속 운동 모델)
+        # Constant velocity model: next_pos = current_pos + velocity
+        # Simple but effective for short prediction horizons (a few frames)
         self.kalman.transitionMatrix = np.array([
             [1, 0, 1, 0],
             [0, 1, 0, 1],
@@ -1185,19 +1234,21 @@ class KalmanTracker:
             [0, 0, 0, 1]
         ], dtype=np.float32)
 
-        # 측정 행렬
+        # We only observe (x, y) position, not velocity directly;
+        # the filter infers velocity from successive position measurements
         self.kalman.measurementMatrix = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0]
         ], dtype=np.float32)
 
-        # 프로세스 노이즈
+        # Low process noise (0.03): we trust the motion model — use higher values for erratic objects
         self.kalman.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03
 
-        # 측정 노이즈
+        # Measurement noise (1.0): background-subtracted centroids have ~1px localization error;
+        # higher trust in measurements than in prediction when detections are available
         self.kalman.measurementNoiseCov = np.eye(2, dtype=np.float32) * 1
 
-        # 초기 상태
+        # Initial state
         self.kalman.statePre = np.array([
             [initial_pos[0]],
             [initial_pos[1]],
@@ -1207,30 +1258,30 @@ class KalmanTracker:
 
         self.kalman.statePost = self.kalman.statePre.copy()
 
-        self.age = 0  # 추적 프레임 수
-        self.hits = 1  # 성공적인 매칭 수
-        self.time_since_update = 0  # 업데이트 이후 프레임 수
+        self.age = 0  # Number of tracked frames
+        self.hits = 1  # Successful matches
+        self.time_since_update = 0  # Frames since last update
 
     def predict(self):
-        """다음 위치 예측"""
+        """Predict next position"""
         prediction = self.kalman.predict()
         self.age += 1
         self.time_since_update += 1
         return prediction[:2].flatten()
 
     def update(self, measurement):
-        """측정값으로 상태 업데이트"""
+        """Update state with measurement"""
         self.kalman.correct(np.array(measurement, dtype=np.float32))
         self.hits += 1
         self.time_since_update = 0
 
     def get_state(self):
-        """현재 상태 반환"""
+        """Return current state"""
         return self.kalman.statePost[:2].flatten()
 
 
 class MultiObjectTracker:
-    """다중 객체 추적 시스템"""
+    """Multi-object tracking system"""
 
     def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3):
         self.trackers = []
@@ -1239,32 +1290,36 @@ class MultiObjectTracker:
         self.min_hits = min_hits
         self.iou_threshold = iou_threshold
 
-        # 배경 차분기
+        # MOG2 is used instead of simple frame differencing because it models each pixel
+        # as a mixture of Gaussians, adapting to gradual lighting changes (clouds, day/night)
+        # history=500: uses ~500 frames to learn the background model
+        # varThreshold=16: pixels deviating more than √16 std-devs are foreground
+        # detectShadows=True: marks shadow pixels separately (gray) rather than treating them as objects
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=500, varThreshold=16, detectShadows=True
         )
 
     def detect_objects(self, frame):
-        """배경 차분으로 객체 검출"""
-        # 배경 차분
+        """Object detection using background subtraction"""
+        # Background subtraction
         fg_mask = self.bg_subtractor.apply(frame)
 
-        # 그림자 제거
+        # Shadow removal
         fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)[1]
 
-        # 노이즈 제거
+        # Noise removal
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
 
-        # 윤곽선 검출
+        # Contour detection
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
         detections = []
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area > 500:  # 최소 면적
+            if area > 500:  # Minimum area
                 x, y, w, h = cv2.boundingRect(contour)
                 center = (x + w // 2, y + h // 2)
                 detections.append({
@@ -1275,7 +1330,7 @@ class MultiObjectTracker:
         return detections, fg_mask
 
     def iou(self, bbox1, bbox2):
-        """IoU (Intersection over Union) 계산"""
+        """Calculate IoU (Intersection over Union)"""
         x1, y1, w1, h1 = bbox1
         x2, y2, w2, h2 = bbox2
 
@@ -1294,14 +1349,14 @@ class MultiObjectTracker:
         return inter_area / union_area if union_area > 0 else 0
 
     def associate_detections(self, detections):
-        """검출과 트래커 매칭 (헝가리안 알고리즘)"""
+        """Match detections with trackers (Hungarian algorithm)"""
         if len(self.trackers) == 0:
             return [], list(range(len(detections))), []
 
         if len(detections) == 0:
             return [], [], list(range(len(self.trackers)))
 
-        # 비용 행렬 계산 (거리 기반)
+        # Calculate cost matrix (distance-based)
         cost_matrix = np.zeros((len(detections), len(self.trackers)))
 
         for d, det in enumerate(detections):
@@ -1310,7 +1365,8 @@ class MultiObjectTracker:
                 dist = np.linalg.norm(np.array(det['center']) - pred)
                 cost_matrix[d, t] = dist
 
-        # 헝가리안 알고리즘으로 최적 매칭
+        # Hungarian algorithm finds the globally optimal assignment in O(n³) — greedy nearest-neighbor
+        # assignment can give wrong IDs when two objects cross paths; Hungarian prevents that
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
         matched = []
@@ -1318,7 +1374,9 @@ class MultiObjectTracker:
         unmatched_trackers = list(range(len(self.trackers)))
 
         for row, col in zip(row_indices, col_indices):
-            if cost_matrix[row, col] < 100:  # 거리 임계값
+            # Reject matches where distance > 100px — even the "best" assignment may be wrong
+            # if an object disappeared and a new one appeared far away
+            if cost_matrix[row, col] < 100:  # Distance threshold
                 matched.append((row, col))
                 unmatched_detections.remove(row)
                 unmatched_trackers.remove(col)
@@ -1326,26 +1384,26 @@ class MultiObjectTracker:
         return matched, unmatched_detections, unmatched_trackers
 
     def update(self, frame):
-        """추적 업데이트"""
-        # 객체 검출
+        """Update tracking"""
+        # Object detection
         detections, fg_mask = self.detect_objects(frame)
 
-        # 예측
+        # Prediction
         for tracker in self.trackers:
             tracker['kalman'].predict()
 
-        # 매칭
+        # Matching
         matched, unmatched_dets, unmatched_trks = \
             self.associate_detections(detections)
 
-        # 매칭된 트래커 업데이트
+        # Update matched trackers
         for det_idx, trk_idx in matched:
             self.trackers[trk_idx]['kalman'].update(
                 np.array(detections[det_idx]['center'])
             )
             self.trackers[trk_idx]['bbox'] = detections[det_idx]['bbox']
 
-        # 새 트래커 생성
+        # Create new trackers
         for det_idx in unmatched_dets:
             tracker = {
                 'id': self.next_id,
@@ -1360,13 +1418,15 @@ class MultiObjectTracker:
             self.trackers.append(tracker)
             self.next_id += 1
 
-        # 오래된 트래커 제거
+        # Remove old trackers
         self.trackers = [t for t in self.trackers
                         if t['kalman'].time_since_update < self.max_age]
 
-        # 결과 반환
+        # Return results
         results = []
         for tracker in self.trackers:
+            # min_hits guard: only report tracks that have been confirmed by at least min_hits detections;
+            # prevents single-frame false positives from polluting the output with spurious IDs
             if tracker['kalman'].hits >= self.min_hits:
                 results.append({
                     'id': tracker['id'],
@@ -1378,7 +1438,7 @@ class MultiObjectTracker:
         return results, fg_mask
 
     def draw(self, frame, results):
-        """결과 시각화"""
+        """Visualize results"""
         for obj in results:
             x, y, w, h = obj['bbox']
             color = obj['color']
@@ -1387,15 +1447,15 @@ class MultiObjectTracker:
             cv2.putText(frame, f"ID: {obj['id']}", (x, y-10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-            # 궤적 표시 (중심점)
+            # Display trajectory (center point)
             center = tuple(obj['center'].astype(int))
             cv2.circle(frame, center, 4, color, -1)
 
         return frame
 
-# 사용 예
+# Usage example
 def multi_object_tracking(video_path):
-    """다중 객체 추적 실행"""
+    """Run multi-object tracking"""
 
     tracker = MultiObjectTracker()
     cap = cv2.VideoCapture(video_path)
@@ -1405,13 +1465,13 @@ def multi_object_tracking(video_path):
         if not ret:
             break
 
-        # 추적 업데이트
+        # Update tracking
         results, fg_mask = tracker.update(frame)
 
-        # 시각화
+        # Visualization
         output = tracker.draw(frame, results)
 
-        # 정보 표시
+        # Display info
         cv2.putText(output, f"Objects: {len(results)}", (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
@@ -1424,7 +1484,7 @@ def multi_object_tracking(video_path):
     cap.release()
     cv2.destroyAllWindows()
 
-# 실행
+# Run
 # multi_object_tracking('traffic.mp4')
 ```
 

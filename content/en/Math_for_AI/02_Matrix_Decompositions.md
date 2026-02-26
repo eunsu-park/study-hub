@@ -27,7 +27,7 @@ where $\lambda$ is the eigenvalue.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 2x2 행렬의 고유값과 고유벡터
+# Eigenvalues and eigenvectors of a 2x2 matrix
 A = np.array([[3, 1],
               [0, 2]])
 
@@ -35,7 +35,7 @@ eigenvalues, eigenvectors = np.linalg.eig(A)
 print(f"Eigenvalues: {eigenvalues}")
 print(f"Eigenvectors:\n{eigenvectors}")
 
-# 검증: Av = λv
+# Verification: Av = λv
 for i in range(len(eigenvalues)):
     v = eigenvectors[:, i]
     lam = eigenvalues[i]
@@ -56,7 +56,7 @@ $$\det(A - \lambda I) = 0$$
 This is an $n$-th degree polynomial with $n$ eigenvalues (including multiplicities).
 
 ```python
-# 특성방정식 수동 계산 (2x2 예제)
+# Manual computation of characteristic equation (2x2 example)
 A = np.array([[4, 2],
               [1, 3]])
 
@@ -68,7 +68,7 @@ A = np.array([[4, 2],
 eigenvalues = np.linalg.eigvals(A)
 print(f"Eigenvalues: {eigenvalues}")  # [5, 2]
 
-# 검증: 특성방정식
+# Verification: characteristic equation
 for lam in eigenvalues:
     det = np.linalg.det(A - lam * np.eye(2))
     print(f"det(A - {lam}I) = {det:.10f}")  # ~0
@@ -85,7 +85,7 @@ where:
 - $\Lambda$: Diagonal matrix with eigenvalues on diagonal
 
 ```python
-# 고유값 분해
+# Eigendecomposition
 A = np.array([[3, 1],
               [0, 2]])
 
@@ -95,7 +95,7 @@ Lambda = np.diag(eigenvalues)
 print(f"V (eigenvectors):\n{V}")
 print(f"Λ (eigenvalues):\n{Lambda}")
 
-# 재구성: A = VΛV^(-1)
+# Reconstruction: A = VΛV^(-1)
 A_reconstructed = V @ Lambda @ np.linalg.inv(V)
 print(f"A reconstructed:\n{A_reconstructed}")
 print(f"Original A:\n{A}")
@@ -113,18 +113,18 @@ Matrix functions can also be defined:
 $$f(A) = Vf(\Lambda)V^{-1}$$
 
 ```python
-# 행렬 거듭제곱
+# Matrix powers
 A = np.array([[2, 1],
               [1, 2]])
 
 eigenvalues, V = np.linalg.eig(A)
 Lambda = np.diag(eigenvalues)
 
-# A^10 계산 (두 가지 방법)
-# 방법 1: 직접 곱셈
+# Compute A^10 (two methods)
+# Method 1: direct multiplication
 A_10_direct = np.linalg.matrix_power(A, 10)
 
-# 방법 2: 고유값 분해 이용
+# Method 2: using eigendecomposition
 Lambda_10 = np.diag(eigenvalues**10)
 A_10_eigen = V @ Lambda_10 @ np.linalg.inv(V)
 
@@ -132,7 +132,7 @@ print(f"A^10 (direct):\n{A_10_direct}")
 print(f"A^10 (eigendecomposition):\n{A_10_eigen.real}")
 print(f"Equal? {np.allclose(A_10_direct, A_10_eigen.real)}")
 
-# 행렬 지수 함수
+# Matrix exponential function
 from scipy.linalg import expm
 exp_A_scipy = expm(A)
 exp_Lambda = np.diag(np.exp(eigenvalues))
@@ -150,25 +150,25 @@ For a real symmetric matrix $A = A^T$:
 3. **Orthogonally diagonalizable**: $A = Q\Lambda Q^T$ (where $Q$ is orthogonal)
 
 ```python
-# 대칭 행렬의 고유값 분해
+# Eigendecomposition of a symmetric matrix
 A_sym = np.array([[4, 2, 0],
                   [2, 3, 1],
                   [0, 1, 2]])
 
-# 대칭 행렬인지 확인
+# Check if symmetric
 print(f"Is symmetric? {np.allclose(A_sym, A_sym.T)}")
 
-eigenvalues, Q = np.linalg.eigh(A_sym)  # 대칭 행렬 전용 함수
+eigenvalues, Q = np.linalg.eigh(A_sym)  # function dedicated to symmetric matrices
 Lambda = np.diag(eigenvalues)
 
 print(f"Eigenvalues: {eigenvalues}")
 print(f"Q (orthogonal matrix):\n{Q}")
 
-# 직교성 확인
+# Check orthogonality
 print(f"Q^T Q = I?\n{Q.T @ Q}")
 print(f"Is orthogonal? {np.allclose(Q.T @ Q, np.eye(3))}")
 
-# 재구성: A = QΛQ^T
+# Reconstruction: A = QΛQ^T
 A_reconstructed = Q @ Lambda @ Q.T
 print(f"Reconstruction error: {np.linalg.norm(A_sym - A_reconstructed)}")
 ```
@@ -187,7 +187,7 @@ $$\mathbf{x}^T A \mathbf{x} > 0 \quad \forall \mathbf{x} \neq \mathbf{0}$$
 Positive definite matrices are very important in machine learning (covariance matrices, Hessians, etc.).
 
 ```python
-# 양정치 행렬 예제
+# Positive definite matrix example
 A_pd = np.array([[2, -1, 0],
                  [-1, 2, -1],
                  [0, -1, 2]])
@@ -196,13 +196,13 @@ eigenvalues = np.linalg.eigvalsh(A_pd)
 print(f"Eigenvalues: {eigenvalues}")
 print(f"All positive? {np.all(eigenvalues > 0)}")
 
-# x^T A x > 0 확인
+# Verify x^T A x > 0
 x = np.random.randn(3)
 quadratic_form = x.T @ A_pd @ x
 print(f"x^T A x = {quadratic_form}")
 print(f"Positive? {quadratic_form > 0}")
 
-# 반양정치(positive semidefinite) 예제
+# Positive semidefinite (PSD) example
 A_psd = np.array([[1, 1],
                   [1, 1]])
 eigenvalues_psd = np.linalg.eigvalsh(A_psd)
@@ -215,30 +215,30 @@ print(f"All non-negative? {np.all(eigenvalues_psd >= 0)}")
 Symmetric matrices define ellipsoids. Eigenvectors are the directions of the principal axes, and eigenvalues correspond to the length of each axis.
 
 ```python
-# 2D 타원 시각화
+# 2D ellipse visualization
 A = np.array([[3, 1],
               [1, 2]])
 
 eigenvalues, eigenvectors = np.linalg.eigh(A)
 
-# 단위원을 A로 변환
+# Transform the unit circle by A
 theta = np.linspace(0, 2*np.pi, 100)
 unit_circle = np.array([np.cos(theta), np.sin(theta)])
 ellipse = A @ unit_circle
 
-# 시각화
+# Visualization
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
-# 단위원
+# Unit circle
 ax1.plot(unit_circle[0], unit_circle[1], 'b-', label='Unit circle')
 ax1.set_aspect('equal')
 ax1.grid(True)
 ax1.legend()
 ax1.set_title('Before transformation')
 
-# 타원
+# Ellipse
 ax2.plot(ellipse[0], ellipse[1], 'r-', label='Ellipse')
-# 고유벡터 그리기
+# Draw eigenvectors
 for i in range(2):
     scale = np.sqrt(eigenvalues[i])
     v = eigenvectors[:, i] * scale
@@ -267,7 +267,7 @@ where:
 - $V$: $n \times n$ orthogonal matrix (right singular vectors)
 
 ```python
-# SVD 계산
+# SVD computation
 A = np.array([[3, 1, 1],
               [-1, 3, 1]])
 
@@ -275,17 +275,17 @@ U, sigma, VT = np.linalg.svd(A, full_matrices=True)
 
 print(f"A shape: {A.shape}")
 print(f"U shape: {U.shape}")
-print(f"sigma: {sigma}")  # 1D 배열
+print(f"sigma: {sigma}")  # 1D array
 print(f"V^T shape: {VT.shape}")
 
-# Σ 행렬 재구성 (m x n)
+# Reconstruct Σ matrix (m x n)
 Sigma = np.zeros_like(A, dtype=float)
 Sigma[:min(A.shape), :min(A.shape)] = np.diag(sigma)
 
 print(f"Sigma shape: {Sigma.shape}")
 print(f"Sigma:\n{Sigma}")
 
-# 재구성 확인
+# Verify reconstruction
 A_reconstructed = U @ Sigma @ VT
 print(f"Reconstruction error: {np.linalg.norm(A - A_reconstructed)}")
 ```
@@ -304,26 +304,26 @@ SVD breaks down any linear transformation into three steps:
 ```
 
 ```python
-# SVD의 기하학적 해석
+# Geometric interpretation of SVD
 A = np.array([[3, 1],
               [1, 2]])
 
 U, sigma, VT = np.linalg.svd(A)
 
-# 단위원
+# Unit circle
 theta = np.linspace(0, 2*np.pi, 100)
 circle = np.array([np.cos(theta), np.sin(theta)])
 
-# 각 단계 적용
-step1 = VT @ circle  # 첫 번째 회전
+# Apply each step
+step1 = VT @ circle  # first rotation
 Sigma_2d = np.diag(sigma)
-step2 = Sigma_2d @ step1  # 스케일링
-step3 = U @ step2  # 두 번째 회전
+step2 = Sigma_2d @ step1  # scaling
+step3 = U @ step2  # second rotation
 
-# 최종 결과 (한번에)
+# Final result (all at once)
 final = A @ circle
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 axes[0, 0].plot(circle[0], circle[1], 'b-')
@@ -351,7 +351,7 @@ axes[1, 1].set_title('5. Final: A @ circle')
 axes[1, 1].set_aspect('equal')
 axes[1, 1].grid(True)
 
-# 검증
+# Verification
 axes[1, 2].plot(step3[0], step3[1], 'r-', alpha=0.5, label='SVD steps')
 axes[1, 2].plot(final[0], final[1], 'k--', label='Direct')
 axes[1, 2].set_title('Verification')
@@ -376,17 +376,17 @@ That is:
 - $\sigma_i^2$ are the eigenvalues of $A^TA$ (or $AA^T$)
 
 ```python
-# SVD와 고유값 분해의 관계
+# Relationship between SVD and eigendecomposition
 A = np.array([[3, 1, 1],
               [-1, 3, 1]])
 
-# 방법 1: 직접 SVD
+# Method 1: direct SVD
 U_svd, sigma_svd, VT_svd = np.linalg.svd(A)
 
-# 방법 2: A^T A의 고유값 분해
+# Method 2: eigendecomposition of A^T A
 ATA = A.T @ A
 eigenvalues_ATA, V_eigen = np.linalg.eigh(ATA)
-# 고유값을 내림차순으로 정렬
+# Sort eigenvalues in descending order
 idx = eigenvalues_ATA.argsort()[::-1]
 eigenvalues_ATA = eigenvalues_ATA[idx]
 V_eigen = V_eigen[:, idx]
@@ -406,19 +406,19 @@ print(f"V from eigendecomposition:\n{V_eigen}")
 $$A_k = \sum_{i=1}^k \sigma_i \mathbf{u}_i \mathbf{v}_i^T = U_k \Sigma_k V_k^T$$
 
 ```python
-# 저랭크 근사 예제: 이미지 압축
+# Low-rank approximation example: image compression
 from sklearn.datasets import load_sample_image
 import matplotlib.pyplot as plt
 
-# 샘플 이미지 로드
+# Load sample image
 china = load_sample_image("china.jpg")
-# 그레이스케일로 변환
+# Convert to grayscale
 china_gray = china.mean(axis=2)
 
 # SVD
 U, sigma, VT = np.linalg.svd(china_gray, full_matrices=False)
 
-# 다양한 랭크로 근사
+# Approximate with various ranks
 ranks = [5, 20, 50, 100]
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 axes = axes.ravel()
@@ -428,12 +428,12 @@ axes[0].set_title(f'Original (rank={np.linalg.matrix_rank(china_gray)})')
 axes[0].axis('off')
 
 for i, k in enumerate(ranks, 1):
-    # 랭크 k 근사
+    # Rank k approximation
     A_k = U[:, :k] @ np.diag(sigma[:k]) @ VT[:k, :]
 
     axes[i].imshow(A_k, cmap='gray')
 
-    # 압축률 계산
+    # Compute compression ratio
     original_size = china_gray.size
     compressed_size = k * (U.shape[0] + VT.shape[1] + 1)
     compression_ratio = original_size / compressed_size
@@ -441,7 +441,7 @@ for i, k in enumerate(ranks, 1):
     axes[i].set_title(f'Rank {k} (compression: {compression_ratio:.1f}x)')
     axes[i].axis('off')
 
-# 특이값 분포
+# Singular value distribution
 axes[-1].plot(sigma, 'b-')
 axes[-1].set_xlabel('Index')
 axes[-1].set_ylabel('Singular value')
@@ -464,14 +464,14 @@ $$C = \frac{1}{n-1}X^TX \quad \text{(assuming data is centered)}$$
 The covariance matrix is symmetric and positive semidefinite.
 
 ```python
-# 공분산 행렬
+# Covariance matrix
 np.random.seed(42)
 X = np.random.randn(100, 3)
 
-# 데이터 중심화
+# Center the data
 X_centered = X - X.mean(axis=0)
 
-# 공분산 행렬 (두 가지 방법)
+# Covariance matrix (two methods)
 cov_manual = (X_centered.T @ X_centered) / (len(X) - 1)
 cov_numpy = np.cov(X.T)
 
@@ -479,7 +479,7 @@ print(f"Manual covariance:\n{cov_manual}")
 print(f"NumPy covariance:\n{cov_numpy}")
 print(f"Equal? {np.allclose(cov_manual, cov_numpy)}")
 
-# 대칭성 확인
+# Check symmetry
 print(f"Is symmetric? {np.allclose(cov_manual, cov_manual.T)}")
 ```
 
@@ -496,22 +496,22 @@ $$\max_{\mathbf{w}} \mathbf{w}^T C \mathbf{w} \quad \text{subject to } \|\mathbf
 The $k$-th principal component is the direction orthogonal to the previous $k-1$ components that maximizes variance.
 
 ```python
-# PCA 수동 구현
+# Manual PCA implementation
 from sklearn.datasets import load_iris
 
 iris = load_iris()
 X = iris.data
 
-# 1. 데이터 중심화
+# 1. Center the data
 X_centered = X - X.mean(axis=0)
 
-# 2. 공분산 행렬
+# 2. Covariance matrix
 cov = np.cov(X_centered.T)
 
-# 3. 고유값 분해
+# 3. Eigendecomposition
 eigenvalues, eigenvectors = np.linalg.eigh(cov)
 
-# 4. 내림차순 정렬
+# 4. Sort in descending order
 idx = eigenvalues.argsort()[::-1]
 eigenvalues = eigenvalues[idx]
 eigenvectors = eigenvectors[:, idx]
@@ -519,7 +519,7 @@ eigenvectors = eigenvectors[:, idx]
 print(f"Eigenvalues (variances): {eigenvalues}")
 print(f"Principal components (eigenvectors):\n{eigenvectors}")
 
-# 5. 변환 (처음 2개 주성분으로 투영)
+# 5. Transform (project onto first 2 principal components)
 k = 2
 X_pca = X_centered @ eigenvectors[:, :k]
 
@@ -535,25 +535,25 @@ $$X = U\Sigma V^T \quad \Rightarrow \quad X^TX = V\Sigma^2 V^T$$
 Therefore, the columns of $V$ are the principal components, and $\sigma_i^2/(n-1)$ is the variance.
 
 ```python
-# SVD를 이용한 PCA
+# PCA using SVD
 X_centered = X - X.mean(axis=0)
 
 # SVD
 U, sigma, VT = np.linalg.svd(X_centered, full_matrices=False)
 
-# 주성분 = V의 열벡터
+# Principal components = column vectors of V
 principal_components = VT.T
 print(f"Principal components (from SVD):\n{principal_components}")
 
-# 설명된 분산
+# Explained variance
 explained_variance = (sigma**2) / (len(X) - 1)
 print(f"Explained variance: {explained_variance}")
 
-# 분산 비율
+# Variance ratio
 explained_variance_ratio = explained_variance / explained_variance.sum()
 print(f"Explained variance ratio: {explained_variance_ratio}")
 
-# 변환
+# Transform
 X_pca_svd = X_centered @ principal_components[:, :2]
 print(f"Same as eigendecomposition? {np.allclose(np.abs(X_pca), np.abs(X_pca_svd))}")
 ```
@@ -567,10 +567,10 @@ from sklearn.decomposition import PCA as SklearnPCA
 pca = SklearnPCA(n_components=2)
 X_sklearn = pca.fit_transform(X)
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 변환된 데이터
+# Transformed data
 for i, target_name in enumerate(iris.target_names):
     mask = iris.target == i
     axes[0].scatter(X_sklearn[mask, 0], X_sklearn[mask, 1],
@@ -581,7 +581,7 @@ axes[0].set_title('PCA of Iris Dataset')
 axes[0].legend()
 axes[0].grid(True)
 
-# 설명된 분산
+# Explained variance
 axes[1].bar(range(1, len(pca.explained_variance_ratio_)+1),
            pca.explained_variance_ratio_)
 axes[1].set_xlabel('Principal Component')
@@ -592,7 +592,7 @@ axes[1].grid(True)
 plt.tight_layout()
 plt.show()
 
-# 주성분 로딩 (원래 피처와의 상관관계)
+# Principal component loadings (correlation with original features)
 loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
 print("\nFeature loadings:")
 for i, feature in enumerate(iris.feature_names):
@@ -604,29 +604,29 @@ for i, feature in enumerate(iris.feature_names):
 PCA can compress data to lower dimensions and reconstruct it.
 
 ```python
-# 차원 축소와 재구성
+# Dimensionality reduction and reconstruction
 pca_full = SklearnPCA(n_components=4)
 X_transformed = pca_full.fit_transform(X)
 
-# 다양한 성분 개수로 재구성
+# Reconstruct with various numbers of components
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 axes = axes.ravel()
 
 for idx, n_components in enumerate([1, 2, 3, 4]):
-    # 처음 n개 성분만 사용
+    # Use only the first n components
     X_reduced = X_transformed[:, :n_components]
 
-    # 재구성
+    # Reconstruction
     X_reconstructed = pca_full.inverse_transform(
         np.column_stack([X_reduced,
                         np.zeros((len(X), 4-n_components))])
     )
 
-    # 재구성 오차
+    # Reconstruction error
     reconstruction_error = np.mean((X - X_reconstructed)**2)
     explained_var = pca_full.explained_variance_ratio_[:n_components].sum()
 
-    # 첫 두 피처만 시각화
+    # Visualize first two features only
     axes[idx].scatter(X[:, 0], X[:, 1], alpha=0.3, label='Original')
     axes[idx].scatter(X_reconstructed[:, 0], X_reconstructed[:, 1],
                      alpha=0.3, label='Reconstructed')
@@ -653,7 +653,7 @@ $$A = LU$$
 ```python
 from scipy.linalg import lu
 
-# LU 분해
+# LU decomposition
 A = np.array([[2, 1, 1],
               [4, -6, 0],
               [-2, 7, 2]])
@@ -664,16 +664,16 @@ print(f"P (permutation matrix):\n{P}")
 print(f"L (lower triangular):\n{L}")
 print(f"U (upper triangular):\n{U}")
 
-# 재구성
+# Reconstruction
 A_reconstructed = P @ L @ U
 print(f"Reconstruction error: {np.linalg.norm(A - A_reconstructed)}")
 
-# LU 분해를 이용한 방정식 풀이
+# Solving equations using LU decomposition
 b = np.array([4, 2, 6])
 
-# Ax = b를 LUx = b로 변환
-# 1. Ly = Pb 풀기 (전방 대입)
-# 2. Ux = y 풀기 (후방 대입)
+# Convert Ax = b to LUx = b
+# 1. Solve Ly = Pb (forward substitution)
+# 2. Solve Ux = y (back substitution)
 
 from scipy.linalg import solve_triangular
 
@@ -693,7 +693,7 @@ $$A = QR$$
 **Uses**: Least squares problems, Gram-Schmidt orthogonalization
 
 ```python
-# QR 분해
+# QR decomposition
 A = np.array([[1, 1, 0],
               [1, 0, 1],
               [0, 1, 1]])
@@ -703,14 +703,14 @@ Q, R = np.linalg.qr(A)
 print(f"Q (orthogonal):\n{Q}")
 print(f"R (upper triangular):\n{R}")
 
-# 직교성 확인
+# Check orthogonality
 print(f"Q^T Q:\n{Q.T @ Q}")
 
-# 재구성
+# Reconstruction
 A_reconstructed = Q @ R
 print(f"Reconstruction error: {np.linalg.norm(A - A_reconstructed)}")
 
-# 최소자승 문제 풀기: Ax = b (overdetermined)
+# Solve least squares problem: Ax = b (overdetermined)
 A_over = np.array([[1, 1],
                    [1, 2],
                    [1, 3],
@@ -718,7 +718,7 @@ A_over = np.array([[1, 1],
 b = np.array([2, 3, 5, 6])
 
 Q, R = np.linalg.qr(A_over)
-# R은 처음 2행만 상삼각
+# R is upper triangular for only the first 2 rows
 R_square = R[:2, :]
 Q_reduced = Q[:, :2]
 
@@ -736,38 +736,38 @@ $$A = LL^T$$
 **Uses**: Gaussian sampling, numerically stable computations
 
 ```python
-# Cholesky 분해
+# Cholesky decomposition
 A_pd = np.array([[4, 2, 2],
                  [2, 5, 1],
                  [2, 1, 6]])
 
-# 양정치 확인
+# Check positive definiteness
 eigenvalues = np.linalg.eigvalsh(A_pd)
 print(f"Eigenvalues: {eigenvalues}")
 print(f"Is positive definite? {np.all(eigenvalues > 0)}")
 
-# Cholesky 분해
+# Cholesky decomposition
 L = np.linalg.cholesky(A_pd)
 print(f"L:\n{L}")
 
-# 재구성
+# Reconstruction
 A_reconstructed = L @ L.T
 print(f"Reconstruction error: {np.linalg.norm(A_pd - A_reconstructed)}")
 
-# 응용: 다변량 가우시안 샘플링
-# N(μ, Σ)에서 샘플링하려면: μ + L @ z (z ~ N(0, I))
+# Application: multivariate Gaussian sampling
+# To sample from N(μ, Σ): μ + L @ z (z ~ N(0, I))
 mu = np.array([1, 2, 3])
 Sigma = A_pd
 L = np.linalg.cholesky(Sigma)
 
-# 표준 정규분포에서 샘플링
+# Sample from standard normal distribution
 n_samples = 1000
 Z = np.random.randn(n_samples, 3)
 
-# 변환
+# Transform
 samples = mu + (L @ Z.T).T
 
-# 검증
+# Verification
 print(f"Sample mean: {samples.mean(axis=0)}")
 print(f"True mean: {mu}")
 print(f"Sample covariance:\n{np.cov(samples.T)}")
@@ -793,10 +793,10 @@ Approximate user-item rating matrix $R$ with low rank:
 $$R \approx UV^T$$
 
 ```python
-# 간단한 추천 시스템
+# Simple recommender system
 from sklearn.decomposition import TruncatedSVD
 
-# 사용자-영화 평점 행렬 (5 users × 6 movies)
+# User-movie rating matrix (5 users × 6 movies)
 R = np.array([
     [5, 3, 0, 1, 0, 0],
     [4, 0, 0, 1, 0, 0],
@@ -805,15 +805,15 @@ R = np.array([
     [0, 0, 5, 0, 4, 4]
 ])
 
-# 0은 결측값
+# 0 represents missing values
 mask = R > 0
 
-# SVD (랭크 2 근사)
+# SVD (rank 2 approximation)
 svd = TruncatedSVD(n_components=2)
 U = svd.fit_transform(R)
 VT = svd.components_
 
-# 재구성
+# Reconstruction
 R_approx = U @ VT
 
 print("Original ratings:")
@@ -821,7 +821,7 @@ print(R)
 print("\nApproximated ratings:")
 print(R_approx)
 
-# 결측값 예측
+# Predict missing values
 print("\nPredicted ratings for missing values:")
 for i in range(R.shape[0]):
     for j in range(R.shape[1]):
@@ -841,15 +841,15 @@ Clustering using eigenvectors of graph Laplacian matrix:
 from sklearn.cluster import SpectralClustering
 from sklearn.datasets import make_moons
 
-# 비선형 분리 가능한 데이터
+# Nonlinearly separable data
 X, y = make_moons(n_samples=200, noise=0.05, random_state=42)
 
-# 스펙트럼 군집화
+# Spectral clustering
 spectral = SpectralClustering(n_clusters=2, affinity='nearest_neighbors',
                                random_state=42)
 labels = spectral.fit_predict(X)
 
-# 시각화
+# Visualization
 plt.figure(figsize=(10, 5))
 
 plt.subplot(1, 2, 1)
@@ -871,20 +871,20 @@ Combining kernel trick with PCA for nonlinear dimensionality reduction:
 ```python
 from sklearn.decomposition import KernelPCA
 
-# 원형 데이터
+# Circular data
 theta = np.linspace(0, 2*np.pi, 100)
 r = 1 + 0.3 * np.random.randn(100)
 X_circle = np.column_stack([r * np.cos(theta), r * np.sin(theta)])
 
-# 선형 PCA
+# Linear PCA
 pca_linear = SklearnPCA(n_components=1)
 X_pca_linear = pca_linear.fit_transform(X_circle)
 
-# Kernel PCA (RBF 커널)
+# Kernel PCA (RBF kernel)
 kpca = KernelPCA(n_components=1, kernel='rbf', gamma=10)
 X_kpca = kpca.fit_transform(X_circle)
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
 axes[0].scatter(X_circle[:, 0], X_circle[:, 1], c=theta, cmap='viridis')

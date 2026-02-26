@@ -31,7 +31,7 @@ Foundation Models refer to models that are pre-trained on large-scale data and c
 | [04_Pretraining_Objectives.md](04_Pretraining_Objectives.md) | Objectives | Causal LM, Masked LM, Prefix LM, UL2 | ⭐⭐⭐ |
 | [05_Data_Curation.md](05_Data_Curation.md) | Data Curation | The Pile, RedPajama, Deduplication, Quality Filtering | ⭐⭐⭐ |
 | [06_Pretraining_Infrastructure.md](06_Pretraining_Infrastructure.md) | Training Infrastructure | FSDP, DeepSpeed ZeRO, Distributed Training | ⭐⭐⭐⭐ |
-| [07_Tokenization_Advanced.md](07_Tokenization_Advanced.md) | Tokenization | BPE, Unigram, Multilingual, Tokenizer-free | ⭐⭐⭐ |
+| [07_Tokenization_Deep_Dive.md](07_Tokenization_Deep_Dive.md) | Tokenization | BPE, Unigram, Multilingual, Tokenizer-free | ⭐⭐⭐ |
 
 ### Section 3: State-of-the-art LLM Architectures (08-11)
 | File | Topic | Key Content | Difficulty |
@@ -52,7 +52,7 @@ Foundation Models refer to models that are pre-trained on large-scale data and c
 ### Section 5: Multimodal Foundation Models (16-18)
 | File | Topic | Key Content | Difficulty |
 |------|------|----------|--------|
-| [16_Vision_Language_Deep.md](16_Vision_Language_Deep.md) | Vision-Language | LLaVA, Qwen-VL, Visual Instruction Tuning | ⭐⭐⭐⭐ |
+| [16_Vision_Language_Advanced.md](16_Vision_Language_Advanced.md) | Vision-Language | LLaVA, Qwen-VL, Visual Instruction Tuning | ⭐⭐⭐⭐ |
 | [17_GPT4V_Gemini.md](17_GPT4V_Gemini.md) | GPT-4V & Gemini | Multimodal Input, Interleaved, API Usage | ⭐⭐⭐ |
 | [18_Audio_Video_Foundation.md](18_Audio_Video_Foundation.md) | Audio/Video | Whisper, AudioLM, MusicGen, VideoLLaMA | ⭐⭐⭐⭐ |
 
@@ -134,7 +134,7 @@ Foundation Models refer to models that are pre-trained on large-scale data and c
 | Deep_Learning Lesson | Foundation_Models Extension |
 |-------------------|----------------------|
 | 19_ViT | 10_Long_Context (ViT-based extensions) |
-| 20_CLIP | 16_Vision_Language_Deep (LLaVA, etc.) |
+| 20_CLIP | 16_Vision_Language_Advanced (LLaVA, etc.) |
 | 21_Self_Supervised | 12_DINOv2 (Latest SSL) |
 | 17_Diffusion | 15_Image_Generation_Advanced (SDXL, ControlNet) |
 

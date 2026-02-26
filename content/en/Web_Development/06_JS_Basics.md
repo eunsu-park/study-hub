@@ -1,12 +1,25 @@
 # JavaScript Basics
 
-## Overview
+**Previous**: [CSS Responsive Design](./05_CSS_Responsive.md) | **Next**: [JavaScript Events and DOM](./07_JS_Events_DOM.md)
 
-JavaScript is a programming language that adds dynamic functionality to web pages. If HTML is structure and CSS is style, JavaScript handles **behavior**.
+## Learning Objectives
 
-**Prerequisites**: HTML, CSS basics
+After completing this lesson, you will be able to:
+
+1. Explain how JavaScript fits into the HTML/CSS/JS triad and describe the difference between defer and async script loading
+2. Declare variables using let and const, and explain why var is discouraged
+3. Distinguish between primitive types (string, number, boolean, null, undefined, symbol, bigint) and reference types (object, array, function)
+4. Apply arithmetic, comparison, logical, and nullish coalescing operators
+5. Write conditional logic using if/else, switch, and the ternary operator
+6. Implement loops with for, for...of, for...in, while, and do...while
+7. Define functions using declarations, expressions, and arrow syntax, and use default parameters, rest parameters, and destructuring
+8. Manipulate arrays and objects using modern ES6+ methods including map, filter, reduce, spread, and optional chaining
 
 ---
+
+> **Analogy:** If HTML is the TV and CSS is the picture settings, JavaScript is the remote control. It lets you change channels (modify content), adjust volume (update styles), and respond to button presses (handle events) -- all without opening up the TV itself.
+
+JavaScript is the programming language of the web browser. While HTML and CSS are declarative -- they describe what something is and how it looks -- JavaScript is imperative: it describes what to do. This makes it the key to interactivity, from validating a form field as the user types to fetching fresh data from a server without reloading the page.
 
 ## Table of Contents
 
@@ -49,7 +62,9 @@ JavaScript is a programming language that adds dynamic functionality to web page
     <!-- In head blocks HTML parsing -->
     <script src="blocking.js"></script>
 
-    <!-- defer: Executes after HTML parsing -->
+    <!-- defer: Downloads in parallel while HTML parses, then executes after DOM is ready;
+         preferred over placing script at end of <body> because it keeps <script> declarations
+         in <head> where they are visible early, while still guaranteeing DOM is fully built -->
     <script src="main.js" defer></script>
 
     <!-- async: Executes immediately after download (order not guaranteed) -->
@@ -313,15 +328,15 @@ const value = input || 'default';  // 'default' if input is falsy
 ### Nullish Coalescing
 
 ```javascript
-// ?? (right value only if null/undefined)
+// ?? returns right side ONLY for null/undefined; use instead of || when 0, "", or false are valid values
 null ?? 'default'      // 'default'
 undefined ?? 'default' // 'default'
-0 ?? 'default'         // 0
-'' ?? 'default'        // ''
+0 ?? 'default'         // 0  ← 0 is a valid score/count, not a missing value
+'' ?? 'default'        // '' ← empty string is valid input, not absence of value
 
 // Compare with ||
-0 || 'default'         // 'default' (0 is falsy)
-'' || 'default'        // 'default' ('' is falsy)
+0 || 'default'         // 'default' (0 is falsy — wrong if 0 is a valid value!)
+'' || 'default'        // 'default' ('' is falsy — wrong if empty string is intentional)
 ```
 
 ### Assignment Operators
@@ -510,6 +525,7 @@ greet('John');
 ### Arrow Function
 
 ```javascript
+// Arrow functions don't bind their own 'this' — use regular functions for object methods that reference 'this'
 // Basic form
 const greet = (name) => {
     return `Hello, ${name}!`;
@@ -546,7 +562,7 @@ function sum(...numbers) {
 }
 sum(1, 2, 3, 4);  // 10
 
-// Destructuring
+// Destructuring — avoids repeated person.name, person.age access; creates local const bindings
 function printUser({ name, age }) {
     console.log(`${name} is ${age} years old`);
 }
@@ -668,7 +684,7 @@ const doubled = numbers.map(n => n * 2);
 const evens = numbers.filter(n => n % 2 === 0);
 // [2, 4]
 
-// reduce: Accumulate calculation
+// reduce: acc = running total (starts at initial value 0), curr = current array element
 const sum = numbers.reduce((acc, cur) => acc + cur, 0);
 // 15
 
@@ -962,12 +978,12 @@ const result = obj.method?.();
 ### Nullish Coalescing (??)
 
 ```javascript
-// Unlike ||, only checks for null/undefined
+// ?? returns right side ONLY for null/undefined — use instead of || when 0, "", or false are valid values
 const value1 = null ?? 'default';     // 'default'
 const value2 = undefined ?? 'default'; // 'default'
-const value3 = 0 ?? 'default';        // 0
-const value4 = '' ?? 'default';       // ''
-const value5 = false ?? 'default';    // false
+const value3 = 0 ?? 'default';        // 0    ← preserves 0 (valid score/count)
+const value4 = '' ?? 'default';       // ''   ← preserves empty string (valid input)
+const value5 = false ?? 'default';    // false ← preserves false (valid boolean flag)
 ```
 
 ---
@@ -1049,10 +1065,6 @@ console.log(result);  // ['Lee', 'Park']
 
 ---
 
-## Next Steps
-
-- [07_JS_Events_DOM.md](./07_JS_Events_DOM.md) - DOM manipulation and event handling
-
 ---
 
 ## References
@@ -1060,3 +1072,7 @@ console.log(result);  // ['Lee', 'Park']
 - [MDN JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 - [JavaScript.info](https://javascript.info/)
 - [ECMAScript Specification](https://tc39.es/ecma262/)
+
+---
+
+**Previous**: [CSS Responsive Design](./05_CSS_Responsive.md) | **Next**: [JavaScript Events and DOM](./07_JS_Events_DOM.md)

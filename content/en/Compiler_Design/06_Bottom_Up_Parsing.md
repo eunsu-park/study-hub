@@ -1542,4 +1542,4 @@ Test with inputs: `+ id * id`, `id + * id`, `( + ) * id`.
 
 ---
 
-[Previous: 05_Top_Down_Parsing.md](./05_Top_Down_Parsing.md) | [Next: 07_Abstract_Syntax_Trees.md](./07_Abstract_Syntax_Trees.md) | [Overview](./00_Overview.md)
+[Previous: Top-Down Parsing](./05_Top_Down_Parsing.md) | [Next: Abstract Syntax Trees](./07_Abstract_Syntax_Trees.md) | [Overview](./00_Overview.md)

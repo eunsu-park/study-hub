@@ -10,14 +10,17 @@ Adaptive filters are filters whose coefficients are adjusted automatically accor
 
 **Prerequisites**: FIR/IIR filter design, linear algebra, basic optimization concepts
 
-**Learning Objectives**:
-- Derive the Wiener filter as the optimal MMSE linear filter
-- Understand the method of steepest descent and its convergence properties
-- Derive and implement the LMS algorithm and analyze its convergence behavior
-- Implement the Normalized LMS (NLMS) algorithm for improved convergence
-- Derive and implement the RLS algorithm using the matrix inversion lemma
-- Compare LMS and RLS in terms of complexity, convergence, and tracking
-- Apply adaptive filters to system identification, noise cancellation, echo cancellation, and equalization
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Derive the Wiener filter as the optimal MMSE linear filter
+2. Understand the method of steepest descent and its convergence properties
+3. Derive and implement the LMS algorithm and analyze its convergence behavior
+4. Implement the Normalized LMS (NLMS) algorithm for improved convergence
+5. Derive and implement the RLS algorithm using the matrix inversion lemma
+6. Compare LMS and RLS in terms of complexity, convergence, and tracking
+7. Apply adaptive filters to system identification, noise cancellation, echo cancellation, and equalization
 
 ---
 

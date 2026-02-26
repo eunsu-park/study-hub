@@ -2199,4 +2199,4 @@ result = (3 + 4) * (10 - 2) / (1 + 1)
 
 ---
 
-[Previous: 10_Runtime_Environments.md](./10_Runtime_Environments.md) | [Next: 12_Optimization_Local_and_Global.md](./12_Optimization_Local_and_Global.md) | [Overview](./00_Overview.md)
+[이전: 런타임 환경](./10_Runtime_Environments.md) | [다음: 최적화 — 지역 최적화와 전역 최적화](./12_Optimization_Local_and_Global.md) | [개요](./00_Overview.md)

@@ -1,8 +1,24 @@
 # AutoML과 하이퍼파라미터 최적화(AutoML and Hyperparameter Optimization)
 
-## 개요
+**이전**: [시계열 머신러닝](./18_Time_Series_ML.md) | **다음**: [이상 탐지](./20_Anomaly_Detection.md)
 
-AutoML은 알고리즘 선택, 피처 엔지니어링(Feature Engineering), 하이퍼파라미터(Hyperparameter) 튜닝 과정을 자동화합니다. 이 레슨에서는 하이퍼파라미터 최적화를 위한 Optuna, Auto-sklearn, FLAML, H2O AutoML을 다룹니다. 이 도구들은 데이터에서 배포 가능한 모델까지 걸리는 시간을 크게 줄여줍니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 그리드 탐색(grid search), 랜덤 탐색(random search), 베이지안 최적화(Bayesian optimization, TPE), 하이퍼밴드(Hyperband) HPO 방법을 구별할 수 있습니다
+2. 목적 함수(objective function), 가지치기(pruning), 다중 목적 최적화(multi-objective optimization)를 갖춘 Optuna 스터디를 구현할 수 있습니다
+3. Optuna 시각화(최적화 이력, 파라미터 중요도, 등고선 플롯)를 해석하여 탐색을 안내할 수 있습니다
+4. AutoML 프레임워크(Auto-sklearn, FLAML, H2O AutoML)를 비교하고 사용 사례에 맞는 것을 선택할 수 있습니다
+5. 테스트 데이터를 보류하고 CV-테스트 차이를 모니터링하여 HPO 과적합(overfitting)을 식별하고 완화할 수 있습니다
+6. 로그 스케일(log scale), 조건부 파라미터(conditional parameter), 스텝 크기를 사용하여 효율적인 탐색 공간을 설계할 수 있습니다
+7. 다중 목적 최적화(multi-objective optimization)를 적용하여 정확도, 추론 속도, 모델 복잡도 간의 균형을 맞출 수 있습니다
+
+---
+
+하이퍼파라미터를 수동으로 튜닝하는 작업은 번거롭고 인간의 직관에 의한 편향이 개입됩니다. AutoML과 베이지안 최적화(Bayesian optimization)는 이를 체계적인 탐색으로 전환합니다. Optuna는 유망하지 않은 시도를 조기에 가지치기(pruning)하며 파라미터 공간을 지능적으로 탐색하고, FLAML과 H2O 같은 완전 AutoML 프레임워크는 여러 알고리즘을 테스트하고 앙상블(ensemble)을 구성합니다. 이를 통해 전문가 수준의 성능을 훨씬 짧은 시간 안에 달성하는 경우가 많습니다. 이 레슨에서는 기계가 기계를 최적화하도록 만드는 방법을 배웁니다.
 
 ---
 

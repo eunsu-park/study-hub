@@ -28,12 +28,13 @@ extract_urls() {
     # URL pattern: http(s)://...
     local url_pattern='https?://[a-zA-Z0-9./?=_%:-]*'
 
+    # Why: bash =~ only finds the first match, so we iteratively strip the
+    # matched text to find subsequent matches — emulating a global regex search.
     local count=0
     while [[ "$text" =~ $url_pattern ]]; do
         local url="${BASH_REMATCH[0]}"
         echo -e "  ${GREEN}→${NC} $url"
 
-        # Remove matched URL from text to find next one
         text="${text#*"$url"}"
         ((count++))
     done
@@ -156,6 +157,8 @@ extract_key_values() {
     local kv_pattern='([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*([^[:space:]].*)'
 
     local count=0
+    # Why: reading line-by-line via here-string (<<<) and matching each line
+    # avoids multi-line regex issues — bash =~ only matches within a single string.
     while IFS= read -r line; do
         if [[ "$line" =~ $kv_pattern ]]; then
             local key="${BASH_REMATCH[1]}"

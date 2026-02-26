@@ -2,9 +2,21 @@
 
 [이전: 회귀분석 심화](./16_Regression_Analysis_Advanced.md) | [다음: 베이지안 통계 기초](./18_Bayesian_Statistics_Basics.md)
 
-## 개요
+## 학습 목표
 
-**일반화 선형모형(GLM)**은 종속변수가 정규분포를 따르지 않는 경우에도 적용할 수 있는 회귀분석의 확장입니다. 이진 데이터(로지스틱 회귀), 카운트 데이터(포아송 회귀) 등 다양한 유형의 종속변수를 다룰 수 있습니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. GLM의 세 가지 구성요소(확률적 성분(random component), 체계적 성분(systematic component), 링크 함수(link function))를 설명하고, 주어진 데이터 유형에 적합한 GLM을 선택할 수 있다
+2. 이진 로지스틱 회귀(binary logistic regression) 모형을 적합하고, 오즈비(odds ratio)와 신뢰구간(confidence interval)을 포함하여 결과를 해석할 수 있다
+3. 혼동 행렬(confusion matrix), ROC 곡선(ROC curve), AUC를 사용하여 분류 모형을 평가할 수 있다
+4. 카운트 데이터에 포아송 회귀(Poisson regression)를 적용하고, 오프셋(offset)을 활용하여 비율(rate)을 모형화할 수 있다
+5. 과대산포(overdispersion)를 탐지하고, 음이항 회귀(negative binomial regression)를 해결책으로 적용할 수 있다
+6. Pearson 잔차(Pearson residuals), 이탈도 잔차(deviance residuals), 영향력 측도(influence measures)를 사용하여 GLM 진단을 수행할 수 있다
+7. 이탈도 검정(deviance test), AIC, BIC를 이용하여 중첩(nested) 및 비중첩(non-nested) GLM을 비교할 수 있다
+
+---
+
+표준 선형 회귀는 정규분포 반응변수를 가정하지만, 실제 결과는 이진형(구매 여부), 카운트형(사건 발생 횟수), 또는 양수 연속형(보험 청구액)인 경우가 많습니다. GLM은 각 반응 유형에 적합한 분포와 링크 함수를 연결하여 이러한 사례들을 단일 프레임워크 아래 통합합니다. 이 레슨은 가우시안(Gaussian) 세계를 넘어 다양한 데이터 유형을 모형화하는 실용적인 도구를 제공합니다.
 
 ---
 

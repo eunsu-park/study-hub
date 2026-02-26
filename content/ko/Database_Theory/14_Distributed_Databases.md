@@ -8,16 +8,19 @@
 
 **난이도**: ⭐⭐⭐⭐
 
-**학습 목표**:
-- Shared-nothing, shared-disk, shared-memory 아키텍처 비교
-- 수평, 수직, 하이브리드 단편화 전략 설계
-- 동기 vs 비동기 복제 및 쿼럼 기반 프로토콜 분석
-- 분산 쿼리 처리 및 최적화 설명
-- Two-Phase Commit (2PC) 및 Three-Phase Commit (3PC) 프로토콜 추적
-- Paxos 및 Raft 합의 알고리즘을 개념적 수준에서 설명
-- 분산 동시성 제어 기술 적용
-- 적절한 파티셔닝 전략 선택 (범위, 해시, 일관된 해싱)
-- 분산 시스템 설계에서 CAP 정리의 함의에 대해 추론
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Shared-nothing, shared-disk, shared-memory 아키텍처 비교
+2. 수평, 수직, 하이브리드 단편화 전략 설계
+3. 동기 vs 비동기 복제 및 쿼럼 기반 프로토콜 분석
+4. 분산 쿼리 처리 및 최적화 설명
+5. Two-Phase Commit (2PC) 및 Three-Phase Commit (3PC) 프로토콜 추적
+6. Paxos 및 Raft 합의 알고리즘을 개념적 수준에서 설명
+7. 분산 동시성 제어 기술 적용
+8. 적절한 파티셔닝 전략 선택 (범위, 해시, 일관된 해싱)
+9. 분산 시스템 설계에서 CAP 정리의 함의에 대해 추론
 
 ---
 

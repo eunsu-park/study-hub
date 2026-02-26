@@ -51,7 +51,7 @@ def text_pipeline(text):
 
 def collate_fn(batch):
     texts, labels = zip(*batch)
-    # 토큰화 및 패딩
+    # Tokenize and pad
     encoded = [torch.tensor(text_pipeline(t)) for t in texts]
     padded = nn.utils.rnn.pad_sequence(encoded, batch_first=True)
     labels = torch.tensor(labels)
@@ -74,7 +74,7 @@ class TextClassifier(nn.Module):
     def forward(self, x):
         # x: (batch, seq_len)
         embedded = self.embedding(x)  # (batch, seq, embed)
-        # 평균 풀링
+        # Average pooling
         pooled = embedded.mean(dim=1)
         return self.fc(pooled)
 ```
@@ -86,15 +86,15 @@ from torchtext.vocab import GloVe
 
 glove = GloVe(name='6B', dim=100)
 
-# 임베딩 행렬 생성
+# Build embedding matrix
 embedding_matrix = torch.zeros(len(vocab), 100)
 for i, word in enumerate(vocab.get_itos()):
     if word in glove.stoi:
         embedding_matrix[i] = glove[word]
 
-# 모델에 적용
+# Apply to model
 model.embedding.weight = nn.Parameter(embedding_matrix)
-model.embedding.weight.requires_grad = False  # 고정 또는 미세조정
+model.embedding.weight.requires_grad = False  # Freeze or fine-tune
 ```
 
 ---
@@ -130,7 +130,7 @@ class LSTMClassifier(nn.Module):
         embedded = self.embedding(x)
         output, (hidden, _) = self.lstm(embedded)
 
-        # 양방향: 마지막 정방향 + 마지막 역방향
+        # Bidirectional: last forward + last backward
         if self.lstm.bidirectional:
             hidden = torch.cat([hidden[-2], hidden[-1]], dim=1)
         else:
@@ -166,7 +166,7 @@ class TransformerClassifier(nn.Module):
         )
 
     def forward(self, x, mask=None):
-        # 패딩 마스크
+        # Padding mask
         padding_mask = (x == 0)
 
         embedded = self.embedding(x) * math.sqrt(self.embedding.embedding_dim)
@@ -174,7 +174,7 @@ class TransformerClassifier(nn.Module):
 
         output = self.transformer(embedded, src_key_padding_mask=padding_mask)
 
-        # [CLS] 토큰 또는 평균 풀링
+        # [CLS] token or average pooling
         pooled = output.mean(dim=1)
         return self.fc(pooled)
 ```
@@ -190,7 +190,7 @@ from torchtext.datasets import IMDB
 
 train_data, test_data = IMDB(split=('train', 'test'))
 
-# 라벨: 'pos' → 1, 'neg' → 0
+# Labels: 'pos' → 1, 'neg' → 0
 def label_pipeline(label):
     return 1 if label == 'pos' else 0
 ```
@@ -208,7 +208,7 @@ def collate_batch(batch):
     labels = torch.tensor(labels)
     texts = nn.utils.rnn.pad_sequence(texts, batch_first=True, padding_value=0)
 
-    # 최대 길이 제한
+    # Limit maximum length
     if texts.size(1) > 256:
         texts = texts[:, :256]
 
@@ -224,7 +224,7 @@ train_loader = DataLoader(train_data, batch_size=32, shuffle=True,
 
 ```python
 def train_text_classifier():
-    # 모델
+    # Model
     model = LSTMClassifier(
         vocab_size=len(vocab),
         embed_dim=128,
@@ -235,7 +235,7 @@ def train_text_classifier():
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    # 학습
+    # Training
     for epoch in range(epochs):
         model.train()
         total_loss = 0
@@ -250,7 +250,7 @@ def train_text_classifier():
             loss = criterion(output, labels)
             loss.backward()
 
-            # 기울기 클리핑 (RNN에 중요)
+            # Gradient clipping (important for RNNs)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             optimizer.step()
@@ -285,7 +285,7 @@ def predict_sentiment(model, text, vocab, tokenizer):
 
     return sentiment, confidence
 
-# 사용
+# Usage
 text = "This movie was absolutely amazing! I loved every minute of it."
 sentiment, conf = predict_sentiment(model, text, vocab, tokenizer)
 print(f"{sentiment} ({conf*100:.1f}%)")
@@ -301,18 +301,18 @@ print(f"{sentiment} ({conf*100:.1f}%)")
 from transformers import BertTokenizer, BertForSequenceClassification
 from transformers import Trainer, TrainingArguments
 
-# 토크나이저와 모델
+# Tokenizer and model
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertForSequenceClassification.from_pretrained(
     'bert-base-uncased', num_labels=2
 )
 
-# 데이터 전처리
+# Data preprocessing
 def tokenize_function(examples):
     return tokenizer(examples['text'], padding='max_length',
                      truncation=True, max_length=256)
 
-# 학습
+# Training
 training_args = TrainingArguments(
     output_dir='./results',
     num_train_epochs=3,
@@ -359,6 +359,39 @@ trainer.train()
 | LSTM | 85-88% |
 | Transformer | 87-90% |
 | BERT (fine-tuned) | 93-95% |
+
+---
+
+## Exercises
+
+### Exercise 1: Preprocess and Explore the IMDb Dataset
+
+1. Load the IMDb dataset using `torchtext.datasets.IMDB` and build a vocabulary with `min_freq=5`.
+2. Report: vocabulary size, average review length (in tokens), and the 20 most frequent words.
+3. Visualize the distribution of review lengths as a histogram. At what length would you set the maximum sequence length to cover 90% of reviews?
+4. Identify and display 2 examples of correctly labeled but short reviews (< 20 tokens) and 2 examples of long reviews (> 500 tokens). Does review length seem correlated with sentiment?
+
+### Exercise 2: Train an LSTM Classifier and Analyze Predictions
+
+1. Train `LSTMClassifier` on IMDb for 5 epochs with `embed_dim=128, hidden_dim=256, num_layers=2, bidirectional=True`.
+2. Evaluate on the test set and report accuracy.
+3. Use `predict_sentiment` to classify 5 movie reviews you write yourself (aim for nuanced cases, e.g., a review that praises the acting but criticizes the plot).
+4. Find 3 misclassified examples from the test set. Inspect the reviews: are they genuinely ambiguous, or is the model clearly making an error?
+
+### Exercise 3: Compare LSTM vs Transformer Classifier
+
+1. Implement `PositionalEncoding` using sinusoidal embeddings (refer to Lesson 09 if needed) and train `TransformerClassifier` with `embed_dim=128, num_heads=4, num_layers=2`.
+2. Compare test accuracy, training time per epoch, and model parameter count for LSTM vs Transformer.
+3. Experiment with sequence length: truncate reviews to 64, 128, and 256 tokens. How does truncation affect each model differently?
+4. For the Transformer, explain the purpose of the `padding_mask`. What would happen if you omitted it?
+
+### Exercise 4: Fine-tune BERT with the Hugging Face Trainer
+
+Using `BertForSequenceClassification`:
+1. Fine-tune `bert-base-uncased` on IMDb for 3 epochs with `batch_size=16, lr=2e-5`.
+2. Report test accuracy and compare to LSTM and Transformer baselines.
+3. Inspect the attention weights of the first BERT layer for a sample review: which tokens receive the most attention in the `[CLS]` token's representation?
+4. Analyze the impact of the number of fine-tuning epochs: evaluate after epoch 1, 2, and 3. Is there overfitting? What does the validation loss curve show?
 
 ---
 

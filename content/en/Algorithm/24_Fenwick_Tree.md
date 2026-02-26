@@ -1,5 +1,18 @@
 # Fenwick Tree (Binary Indexed Tree)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the lowbit trick (`i & -i`) and describe how it determines the range each Fenwick tree node is responsible for
+2. Implement prefix sum queries and point updates on a Fenwick tree in O(log n) time
+3. Extend the Fenwick tree to support range update and range query operations using a difference array technique
+4. Apply the Fenwick tree to solve inversion count and order-statistics problems efficiently
+5. Implement a 2D Fenwick tree to handle 2D range sum queries with point updates
+6. Compare Fenwick trees and segment trees by implementation complexity, memory usage, and capability
+
+---
+
 ## Overview
 
 Fenwick Tree (BIT: Binary Indexed Tree) is a data structure that processes range sum queries and point updates in O(log n) time. It is simpler to implement and more memory efficient than a segment tree.
@@ -89,24 +102,31 @@ class FenwickTree:
     def __init__(self, n):
         """Fenwick tree of size n (1-indexed)"""
         self.n = n
-        self.tree = [0] * (n + 1)
+        self.tree = [0] * (n + 1)  # Index 0 is unused; tree is 1-indexed
 
     def update(self, i, delta):
-        """arr[i] += delta"""
+        """arr[i] += delta — propagate the change to all ancestor nodes"""
         while i <= self.n:
             self.tree[i] += delta
-            i += i & (-i)  # Move to next node
+            # i & (-i) strips all bits except the lowest set bit (the "lowbit").
+            # Adding lowbit(i) jumps to the next node that is responsible for a
+            # range that includes i — visiting exactly O(log n) ancestors.
+            i += i & (-i)
 
     def prefix_sum(self, i):
-        """arr[1] + arr[2] + ... + arr[i]"""
+        """arr[1] + arr[2] + ... + arr[i] — decompose prefix into O(log n) disjoint ranges"""
         total = 0
         while i > 0:
             total += self.tree[i]
-            i -= i & (-i)  # Move to previous node
+            # Subtracting lowbit(i) moves to the previous node whose range is disjoint
+            # from and to the left of tree[i]'s range — together they tile [1, i] exactly.
+            i -= i & (-i)
         return total
 
     def range_sum(self, l, r):
-        """arr[l] + arr[l+1] + ... + arr[r]"""
+        """arr[l] + arr[l+1] + ... + arr[r]
+        Works by inclusion-exclusion: prefix[r] - prefix[l-1] cancels out [1, l-1]
+        """
         return self.prefix_sum(r) - self.prefix_sum(l - 1)
 
 
@@ -130,16 +150,21 @@ print(bit.range_sum(2, 5)) # 19 (2+8+4+5)
 ```python
 class FenwickTreeFromArray:
     def __init__(self, arr):
-        """Build Fenwick tree from array - O(n)"""
+        """Build Fenwick tree from array - O(n)
+        This is faster than calling update() n times (which would be O(n log n)).
+        Each node accumulates contributions from its children in a single forward pass.
+        """
         self.n = len(arr)
         self.tree = [0] * (self.n + 1)
 
-        # O(n) initialization
+        # O(n) initialization: propagate each node's value to its immediate parent.
+        # This bottom-up construction ensures every ancestor node receives the correct
+        # partial sum without redundant computation.
         for i in range(1, self.n + 1):
             self.tree[i] += arr[i - 1]  # arr is 0-indexed
-            j = i + (i & (-i))
+            j = i + (i & (-i))          # j is the direct parent of i in the BIT structure
             if j <= self.n:
-                self.tree[j] += self.tree[i]
+                self.tree[j] += self.tree[i]  # Pass current node's total to its parent
 
     def update(self, i, delta):
         while i <= self.n:
@@ -290,21 +315,25 @@ def find_kth(bit, k):
     """
     Find minimum index where prefix sum >= k
     (bit[i] = 1 if element exists)
-    Time: O(log n)
+    Time: O(log n) — binary lifting on the BIT structure
+    This is faster than binary searching over prefix_sum() calls (which would be O(log²n))
+    because we descend the BIT directly, one bit at a time.
     """
     n = bit.n
     pos = 0
     total = 0
 
-    # Search from highest bit
+    # Try to extend pos by adding each power of 2 from high to low.
+    # If adding 2^i doesn't overshoot the k-th element, we commit to that step.
+    # This greedy bit-by-bit descent reconstructs the answer in O(log n) steps.
     log_n = n.bit_length()
     for i in range(log_n - 1, -1, -1):
         next_pos = pos + (1 << i)
         if next_pos <= n and total + bit.tree[next_pos] < k:
             total += bit.tree[next_pos]
-            pos = next_pos
+            pos = next_pos  # Safe to extend — the k-th element is further right
 
-    return pos + 1  # Index of k-th element
+    return pos + 1  # pos is the last "safe" position; pos+1 is the k-th element
 
 
 # Example: dynamic k-th element
@@ -379,8 +408,10 @@ print(count_inversions(arr))  # 5: (7,5), (7,6), (7,4), (5,4), (6,4)
 ```python
 class FenwickTreeRURQ:
     """
-    Range Update, Range Query
-    Uses two BITs
+    Range Update, Range Query using two BITs.
+    The key insight: prefix_sum(i) = bit1[i] * i - bit2[i].
+    This algebraic identity lets us encode a range [l, r] addition of delta as
+    point updates to two BITs, enabling O(log n) for both update and query.
     """
     def __init__(self, n):
         self.n = n
@@ -400,14 +431,18 @@ class FenwickTreeRURQ:
         return total
 
     def range_update(self, l, r, delta):
-        """arr[l..r] += delta"""
+        """arr[l..r] += delta — encoded as two difference-array tricks simultaneously"""
+        # bit1 is a standard difference array BIT: adding delta at l and -delta at r+1
+        # means query(bit1, i) = delta for i in [l, r] and 0 otherwise
         self._update(self.bit1, l, delta)
         self._update(self.bit1, r + 1, -delta)
+        # bit2 adjustment ensures the prefix_sum formula prefix_sum(i) = bit1*i - bit2
+        # holds correctly — the l-1 and r terms cancel out contributions outside [l, r]
         self._update(self.bit2, l, delta * (l - 1))
         self._update(self.bit2, r + 1, -delta * r)
 
     def prefix_sum(self, i):
-        """arr[1] + ... + arr[i]"""
+        """arr[1] + ... + arr[i] using the two-BIT identity"""
         return self._query(self.bit1, i) * i - self._query(self.bit2, i)
 
     def range_sum(self, l, r):

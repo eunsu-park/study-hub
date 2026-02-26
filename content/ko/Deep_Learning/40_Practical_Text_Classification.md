@@ -362,6 +362,39 @@ trainer.train()
 
 ---
 
+## 연습 문제
+
+### 연습 1: IMDb 데이터셋 전처리 및 탐색
+
+1. `torchtext.datasets.IMDB`를 사용하여 IMDb 데이터셋을 불러오고 `min_freq=5`로 어휘(vocabulary)를 구축하세요.
+2. 보고하세요: 어휘 크기, 평균 리뷰 길이(토큰 기준), 가장 빈번한 상위 20개 단어.
+3. 리뷰 길이 분포를 히스토그램으로 시각화하세요. 리뷰의 90%를 커버하기 위해 최대 시퀀스 길이를 얼마로 설정할까요?
+4. 올바르게 레이블링되었지만 짧은 리뷰(< 20 토큰) 2개와 긴 리뷰(> 500 토큰) 2개를 식별하고 표시하세요. 리뷰 길이가 감성(sentiment)과 상관관계가 있는 것처럼 보이나요?
+
+### 연습 2: LSTM 분류기 학습 및 예측 분석
+
+1. `embed_dim=128, hidden_dim=256, num_layers=2, bidirectional=True`로 IMDb에서 `LSTMClassifier`를 5 에폭 학습하세요.
+2. 테스트 세트에서 평가하고 정확도를 보고하세요.
+3. `predict_sentiment`를 사용하여 직접 작성한 5개의 영화 리뷰를 분류하세요 (연기는 칭찬하지만 줄거리를 비판하는 리뷰처럼 미묘한 경우를 목표로 하세요).
+4. 테스트 세트에서 잘못 분류된 예시 3개를 찾으세요. 리뷰를 검사하세요: 진짜로 모호한가요, 아니면 모델이 명확한 오류를 범하고 있나요?
+
+### 연습 3: LSTM vs Transformer 분류기 비교
+
+1. 사인파(sinusoidal) 임베딩을 사용하는 `PositionalEncoding`을 구현하고 `embed_dim=128, num_heads=4, num_layers=2`로 `TransformerClassifier`를 학습하세요.
+2. LSTM과 Transformer의 테스트 정확도, 에폭당 학습 시간, 모델 파라미터 수를 비교하세요.
+3. 시퀀스 길이를 실험하세요: 리뷰를 64, 128, 256 토큰으로 잘라내세요. 잘라내기가 각 모델에 어떻게 다르게 영향을 미치나요?
+4. Transformer에서 `padding_mask`의 목적을 설명하세요. 이것을 생략하면 어떻게 되나요?
+
+### 연습 4: Hugging Face Trainer로 BERT 미세조정
+
+`BertForSequenceClassification`을 사용하여:
+1. IMDb에서 `bert-base-uncased`를 `batch_size=16, lr=2e-5`로 3 에폭 미세조정하세요.
+2. 테스트 정확도를 보고하고 LSTM과 Transformer 기준선과 비교하세요.
+3. 샘플 리뷰에 대한 BERT 첫 번째 레이어의 어텐션 가중치를 검사하세요: `[CLS]` 토큰 표현에서 어떤 토큰이 가장 많은 어텐션을 받나요?
+4. 미세조정 에폭 수의 영향을 분석하세요: 에폭 1, 2, 3 후 평가하세요. 과적합이 있나요? 검증 손실 곡선이 무엇을 보여주나요?
+
+---
+
 ## 마무리
 
 이것으로 DeepLearning 학습 과정을 완료했습니다!

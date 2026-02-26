@@ -5,6 +5,19 @@
 > **선수지식**: 기본 LaTeX 문서 구조(레슨 1), 패키지
 > **목표**: 고품질 벡터 그래픽, 다이어그램 및 기술 일러스트레이션 생성을 위한 TikZ 기초 숙달
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. TikZ 그림 환경(picture environment)을 설정하고 좌표 시스템(coordinate system)과 단위(unit) 규칙을 설명할 수 있다
+2. TikZ 경로 명령(path command)을 사용하여 직선, 직사각형, 원, 타원, 호 등 기본 도형(basic shape)을 그릴 수 있다
+3. 채우기 색상(fill color), 선 굵기(line width), 점선 패턴(dashed pattern), 불투명도(opacity)로 그래픽 요소에 스타일을 적용할 수 있다
+4. TikZ 다이어그램 안에 텍스트 레이블(label), 노드(node), 주석(annotation)을 배치하고 서식을 지정할 수 있다
+5. 명명된 노드(named node)를 화살표로 연결하여 간단한 순서도(flowchart)와 블록 다이어그램(block diagram)을 만들 수 있다
+6. 명명된 스타일(named style)을 정의하고 일관되게 적용하여 재사용 가능한 다이어그램 템플릿(template)을 구축할 수 있다
+
+---
+
 ## 소개
 
 TikZ(TikZ ist kein Zeichenprogramm - "TikZ는 그리기 프로그램이 아닙니다")는 벡터 그래픽을 프로그래밍 방식으로 생성하기 위한 강력한 LaTeX 패키지입니다. 외부 이미지를 가져오는 것과 달리 TikZ 그래픽은 코드를 사용하여 생성되므로 확장 가능하고 문서 타이포그래피와 일관성이 있으며 버전 제어가 쉽습니다. TikZ는 다이어그램, 차트, 플로차트, 기술 일러스트레이션 및 수학적 시각화에 널리 사용됩니다.
@@ -837,5 +850,5 @@ TikZ는 LaTeX에서 직접 전문적인 벡터 그래픽을 만들기 위한 강
 
 ---
 
-**이전**: [09_Page_Layout.md](09_Page_Layout.md)
-**다음**: [11_TikZ_Advanced.md](11_TikZ_Advanced.md)
+**이전**: [페이지 레이아웃 및 타이포그래피(Page Layout & Typography)](09_Page_Layout.md)
+**다음**: [고급 TikZ 및 PGFPlots(Advanced TikZ & PGFPlots)](11_TikZ_Advanced.md)

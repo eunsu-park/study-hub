@@ -21,6 +21,7 @@ on:
   # Allow manual trigger
   workflow_dispatch:
 
+# Why: Cancelling in-progress runs for the same branch avoids wasting CI minutes when multiple pushes happen in quick succession — only the latest commit matters
 # Cancel in-progress runs for the same branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -99,6 +100,7 @@ jobs:
       # ----------------------------------------------------------------------
       # Log in to container registry
       # ----------------------------------------------------------------------
+      # Why: Skipping registry login on PRs prevents exposing credentials to fork PRs and avoids pushing untested images from feature branches
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -121,6 +123,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+          # Why: GitHub Actions cache (type=gha) stores Docker layers across CI runs — mode=max caches all layers (not just the final image), cutting rebuild times from minutes to seconds for dependency-only changes
           # Cache configuration for faster builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -176,6 +179,7 @@ jobs:
       # ----------------------------------------------------------------------
       # Security scan with Trivy
       # ----------------------------------------------------------------------
+      # Why: Scanning BEFORE push ensures vulnerable images never reach the registry — exit-code 1 fails the pipeline on CRITICAL/HIGH CVEs, while ignore-unfixed avoids blocking on vulnerabilities with no available patch
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
@@ -198,6 +202,7 @@ jobs:
       # ----------------------------------------------------------------------
       # Generate SBOM (Software Bill of Materials)
       # ----------------------------------------------------------------------
+      # Why: SBOM (Software Bill of Materials) is increasingly required by compliance frameworks (e.g., US Executive Order 14028) — CycloneDX format is machine-readable and supported by most vulnerability management tools
       - name: Generate SBOM
         uses: aquasecurity/trivy-action@master
         with:

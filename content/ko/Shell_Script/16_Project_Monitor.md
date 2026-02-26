@@ -2,9 +2,25 @@
 
 **난이도**: ⭐⭐⭐⭐
 
-**이전**: [15_Project_Deployment.md](./15_Project_Deployment.md)
+**이전**: [배포 자동화](./15_Project_Deployment.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `tput`을 사용하여 커서 제어(cursor control), 컬러 포맷팅, 반응형 레이아웃을 갖춘 실시간 터미널 대시보드(terminal dashboard)를 구축할 수 있습니다.
+2. `/proc`과 표준 Unix 유틸리티에서 CPU, 메모리, 디스크, 네트워크 데이터를 파싱하는 시스템 메트릭 수집기(metric collector)를 구현할 수 있습니다.
+3. 알림 스팸을 방지하는 쿨다운 기간(cooldown period)이 포함된 임계값 기반 경고(threshold-based alerting) 시스템을 설정할 수 있습니다.
+4. 셸 스크립트에서 Slack 또는 Discord 웹훅(webhook)과 이메일로 경고 알림을 전송할 수 있습니다.
+5. 시스템 로그를 파싱하고 오류 패턴을 감지하며 결과를 요약하는 로그 집계(log aggregation) 모듈을 작성할 수 있습니다.
+6. 주기적인 헬스 체크(health check)와 자동화된 HTML 보고서 생성을 위해 모니터링 스크립트를 cron과 연동할 수 있습니다.
+7. 터미널 크기 변경 이벤트(`SIGWINCH`)를 처리하여 대시보드 레이아웃을 동적으로 조정할 수 있습니다.
+
+---
+
+프로덕션 서버가 새벽 3시에 디스크 공간이 부족해지거나 트래픽 급증으로 CPU 사용률이 폭등할 때, 문제가 발생하기 전에 모니터링이 갖춰져 있어야 합니다. Datadog이나 Prometheus 같은 상용 도구는 강력하지만 자체 인프라가 필요합니다. bash 기반 모니터링 도구는 의존성 없이 어떤 서버에서도 실행되고, 수집할 메트릭과 경고 방식을 완전히 제어할 수 있으며, 이전 모든 레슨의 터미널 UI, 시그널 처리(signal handling), 프로세스 관리(process management), 시스템 내부 구조를 통합하는 마무리 프로젝트로 작동합니다.
 
 ## 1. 개요
 
@@ -1215,6 +1231,68 @@ EOF
     done
 }
 ```
+
+## 연습 문제
+
+### 연습 1: 크로스 플랫폼(Cross-Platform) 메트릭 수집기 구현하기
+
+모니터링 도구는 Linux 전용인 `/proc` 파일을 사용합니다. OS를 감지하고 적절한 명령어를 사용하여 macOS 지원을 추가하세요:
+- Linux에서는 `/proc/stat`을, macOS에서는 `top -l 1`(awk로 파싱)을 사용하는 `get_cpu_usage()` 작성
+- Linux에서는 `/proc/meminfo`를, macOS에서는 `vm_stat`을 읽는 `get_memory_info()` 작성
+- 두 OS에서 `df -h`를 사용하되 다른 열 레이아웃을 처리하는 `get_disk_info()` 작성
+- 각 함수를 시스템에서 테스트하고 숫자 백분율을 반환하는지 확인
+
+`uname -s`를 사용하여 각 함수에 OS 확인을 추가하세요:
+```bash
+OS=$(uname -s)
+case "$OS" in
+    Linux)  ... ;;
+    Darwin) ... ;;
+    *) echo "Unsupported OS: $OS" >&2; return 1 ;;
+esac
+```
+
+### 연습 2: 쿨다운(Cooldown)이 있는 임계값 알림 시스템 구축하기
+
+다음을 수행하는 독립 실행형 `alerter.sh`를 구현하세요:
+- `CPU_THRESHOLD`, `MEM_THRESHOLD`, `DISK_THRESHOLD` 환경 변수 허용 (기본값: 80, 85, 90)
+- 연습 1의 메트릭 함수를 호출하여 현재 CPU, 메모리, 디스크 백분율 확인
+- 임계값이 초과된 각 항목에 대해 `ALERT: CPU at 92% (threshold: 80%)` 같은 알림 메시지 출력
+- 쿨다운(cooldown) 구현: 알림이 발동되면 타임스탬프를 `/tmp/alert_cooldown_<metric>`에 저장하고 5분이 경과할 때까지 다시 발동하지 않음
+- 모든 알림(쿨다운으로 건너뛴 알림 포함)을 타임스탬프와 함께 `/var/log/monitor_alerts.log`에 기록
+
+임계값을 현재 사용률보다 낮게 일시적으로 낮춰 알림을 트리거하여 테스트하고, 5분 이내에 다시 실행하여 쿨다운이 두 번째 알림을 억제하는지 확인하세요.
+
+### 연습 3: 터미널 크기 조정 처리 추가하기
+
+터미널 크기 조정 이벤트에 응답하도록 대시보드를 확장하세요:
+- `trap 'redraw_dashboard' SIGWINCH` 핸들러 설치
+- `redraw_dashboard` 함수가 `tput lines`와 `tput cols`로 새 터미널 크기를 읽어야 함
+- 새 크기를 사용하여 전체 대시보드를 지우고 다시 그리기
+- 터미널이 너무 작으면(24줄 또는 80열 미만), 단일 메시지 표시: `"Terminal too small. Resize to at least 80x24."`
+- 화면 깜박임을 피하기 위해 `clear` 대신 `tput cup 0 0`(커서를 좌상단으로 이동) 사용
+
+대시보드를 실행하고 터미널 창 크기를 조정하여 테스트 — 히스토리 손실이나 깜박임 없이 레이아웃이 적응되어야 합니다.
+
+### 연습 4: 자동화된 HTML 보고서 생성하기
+
+시스템 상태의 자가 포함(self-contained) HTML 보고서를 생성하는 `generate_report.sh`를 작성하세요:
+- CPU, 메모리, 디스크, 로드 평균(load average)의 스냅샷 수집 한 번
+- CPU 사용량 기준 상위 5개 프로세스 나열 (`ps aux --sort=-%cpu`에서)
+- `ERROR|WARN|CRIT`와 일치하는 줄에 대해 `/var/log/syslog`(macOS는 `/var/log/system.log`)의 마지막 50줄 확인
+- 메트릭용 테이블, 상위 프로세스용 테이블, 로그 발췌용 `<pre>` 블록이 있는 스타일이 적용된 HTML 파일에 모든 결과 작성
+- 보고서 헤더에 생성 타임스탬프와 호스트명 포함
+
+이 스크립트를 매일 오전 7시에 실행하고 출력을 `/var/reports/$(date +%Y%m%d)_report.html`에 저장하는 크론(cron) 작업을 설정하세요.
+
+### 연습 5: 모니터를 위한 통합 테스트 작성하기
+
+상승된 권한이나 특정 하드웨어를 실제로 요구하지 않고 모니터링 도구의 핵심 동작을 테스트하는 Bats 테스트 스위트(test suite) `test_monitor.bats`를 작성하세요:
+- `get_cpu_usage`가 0~100 사이의 값을 반환하는지 테스트
+- `get_memory_info`가 공백으로 구분된 세 개의 값(사용량, 총량, 백분율)을 반환하는지 테스트
+- `get_disk_info`가 최소 한 줄의 출력을 반환하는지 테스트
+- 임계값이 0으로 설정될 때(반드시 트리거됨) 알림 시스템이 발동하는지 테스트
+- 메트릭 함수를 고정 값(예: CPU=95)을 반환하도록 모킹(mocking)하고 알림 메시지 내용이 예상 형식과 일치하는지 확인
 
 ---
 

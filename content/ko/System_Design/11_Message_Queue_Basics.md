@@ -1,12 +1,23 @@
 # 메시지 큐 기초 (Message Queue Fundamentals)
 
+**이전**: [데이터 일관성 패턴](./10_Data_Consistency_Patterns.md) | **다음**: [메시지 시스템 비교](./12_Message_System_Comparison.md)
+
 난이도: ⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-메시지 큐는 분산 시스템에서 서비스 간 비동기 통신을 가능하게 하는 핵심 인프라입니다. 이 장에서는 동기와 비동기 통신의 차이, 큐와 토픽의 개념, 메시지 전달 보장 수준, 그리고 멱등성에 대해 학습합니다.
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 동기 통신(synchronous)과 비동기 통신(asynchronous)의 차이를 구분하고, 각각이 적합한 상황을 식별한다
+2. 분산 아키텍처(distributed architecture)에서 메시지 큐의 핵심 이점(디커플링, 버퍼링, 복원력)을 설명한다
+3. 큐 기반(Point-to-Point) 모델과 토픽 기반(Publish-Subscribe) 메시징 모델을 비교한다
+4. 세 가지 메시지 전달 보장(at-most-once, at-least-once, exactly-once)과 각각의 트레이드오프를 설명한다
+5. 중복 제거 키(deduplication key)와 멱등성 토큰(idempotency token)을 사용하여 멱등 메시지 컨슈머(idempotent consumer)를 구현한다
+6. 일반적인 메시지 큐 패턴(작업 큐, 팬아웃, 요청-응답, 데드 레터 큐)을 실제 시나리오에 적용한다
 
 ---
+
+여러분이 매일 사용하는 현대 웹 애플리케이션 — 차량 공유 서비스부터 이커머스 결제까지 — 은 즉각적인 응답이 필요하지 않은 작업을 처리하기 위해 내부적으로 메시지 큐에 의존합니다. 온라인으로 주문을 완료하면 확인 페이지가 즉시 표시되고, 결제 처리·재고 업데이트·이메일 알림은 메시지 큐를 통해 비동기적으로 수행됩니다. 메시지 큐를 이해하는 것은 높은 부하에서도 응답성을 유지하고 부분 장애를 우아하게 극복하는 시스템을 구축하기 위한 첫걸음입니다.
 
 ## 목차
 
@@ -777,11 +788,7 @@ class IdempotentConsumer:
 
 ---
 
-## 다음 단계
-
-[12_Message_System_Comparison.md](./12_Message_System_Comparison.md)에서 Kafka, RabbitMQ, AWS SQS/SNS 등 주요 메시지 시스템을 비교해봅시다!
-
----
+**이전**: [데이터 일관성 패턴](./10_Data_Consistency_Patterns.md) | **다음**: [메시지 시스템 비교](./12_Message_System_Comparison.md)
 
 ## 참고 자료
 

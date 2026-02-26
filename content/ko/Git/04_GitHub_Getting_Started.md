@@ -1,5 +1,24 @@
 # GitHub 시작하기
 
+**이전**: [Git 브랜치](./03_Branches.md) | **다음**: [GitHub 협업](./05_GitHub_Collaboration.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. GitHub이 무엇인지, 그리고 Git에 어떤 협업 기능을 추가하는지 설명할 수 있습니다
+2. GitHub 계정을 만들고 SSH 키 인증을 설정할 수 있습니다
+3. GitHub에 원격 저장소를 만들고 로컬 저장소와 연결할 수 있습니다
+4. `git push`로 로컬 커밋을 원격 저장소에 업로드할 수 있습니다
+5. `git clone`으로 기존 저장소를 복제할 수 있습니다
+6. `git pull`과 `git fetch`를 사용해 로컬과 원격 간의 변경 사항을 동기화할 수 있습니다
+
+---
+
+Git 자체만으로도 강력한 로컬 도구이지만, 소프트웨어 개발은 팀 스포츠입니다. GitHub은 로컬 저장소를 공유된 클라우드 허브로 변환하여, 팀원들이 코드를 리뷰하고, 이슈를 추적하고, 워크플로우를 자동화할 수 있게 합니다. SSH 키와 원격 연결을 올바르게 설정하면 팀 코드베이스와의 모든 상호작용에서 불필요한 마찰을 없앨 수 있습니다.
+
 ## 1. GitHub이란?
 
 GitHub은 Git 저장소를 호스팅하는 웹 서비스입니다.
@@ -294,6 +313,36 @@ git push
 
 ---
 
+## 연습 문제
+
+### 연습 1: SSH 키 설정
+SSH 키 쌍을 생성하고 공개 키를 GitHub 계정에 등록하세요. `ssh -T git@github.com`으로 연결을 확인합니다. 플래그를 포함한 `ssh-keygen` 명령어 등 사용한 전체 명령어 순서를 기록하세요.
+
+### 연습 2: 저장소 생성 및 푸시(Push)
+1. `my-first-remote`라는 새 로컬 Git 저장소를 초기화합니다.
+2. 간단한 프로젝트 설명이 담긴 `README.md`를 생성하고, 스테이지에 올린 후 적절한 메시지로 커밋합니다.
+3. GitHub에 빈 저장소(README 없이)를 만들고, 이를 `origin` 원격으로 연결한 뒤 `-u` 플래그를 사용하여 로컬 `main` 브랜치를 푸시합니다.
+4. GitHub에서 저장소를 확인하여 푸시가 성공했는지 검증합니다.
+
+### 연습 3: Fetch vs Pull 탐구
+1. 팀원과 공유한 저장소(또는 GitHub 웹 에디터로 직접 커밋을 만들어 시뮬레이션)에서 `git fetch origin`을 실행한 뒤, `git log origin/main`으로 병합 전 원격 변경 사항을 확인합니다.
+2. 단순히 `git pull`을 사용하는 것보다 `git fetch` + 확인 + `git merge` 순서를 선호할 수 있는 이유를 자신의 말로 설명합니다.
+
+### 연습 4: 원격 브랜치 워크플로우
+1. GitHub 웹 UI에서 `feature/experiment`라는 새 브랜치를 생성합니다.
+2. 로컬 머신에서 `git fetch origin`을 실행하고, `git switch -c feature/experiment origin/feature/experiment`로 새 원격 브랜치를 체크아웃합니다.
+3. 작은 변경 사항을 만들어 커밋하고 푸시합니다.
+4. `git push origin --delete feature/experiment`로 원격 브랜치를 삭제하고, `git branch -r`에서 사라졌는지 확인합니다.
+
+### 연습 5: 푸시 거부(Push Rejection) 해결
+다음 단계를 따라 푸시 거부를 시뮬레이션합니다:
+1. 같은 저장소를 두 개의 별도 디렉토리(`clone-a`와 `clone-b`)로 클론합니다.
+2. `clone-a`에서 커밋을 만들고 푸시합니다.
+3. `clone-b`에서 같은 브랜치에 다른 커밋을 만들고 푸시를 시도합니다 — 거부 메시지를 확인합니다.
+4. 풀(Pull)로 거부를 해결하고, 필요하다면 충돌을 처리한 뒤 푸시를 완료합니다.
+
+---
+
 ## 다음 단계
 
-[05_GitHub_Collaboration.md](./05_GitHub_Collaboration.md)에서 Fork, Pull Request, Issues를 활용한 협업 방법을 배워봅시다!
+[GitHub 협업](./05_GitHub_Collaboration.md)에서 Fork, Pull Request, Issues를 활용한 협업 방법을 배워봅시다!

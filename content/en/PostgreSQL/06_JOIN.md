@@ -1,5 +1,25 @@
 # JOIN
 
+**Previous**: [Conditions and Sorting](./05_Conditions_and_Sorting.md) | **Next**: [Aggregation and Grouping](./07_Aggregation_and_Grouping.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of JOIN and how it connects rows from two or more tables
+2. Distinguish among INNER JOIN, LEFT JOIN, RIGHT JOIN, FULL JOIN, and CROSS JOIN
+3. Write multi-table JOIN queries using table aliases and explicit ON conditions
+4. Apply SELF JOIN to model hierarchical relationships (e.g., employee-manager)
+5. Identify the difference between filtering in the ON clause versus the WHERE clause for outer joins
+6. Use the USING clause and understand when NATURAL JOIN is appropriate (and when it is not)
+7. Create indexes on foreign key columns to optimize JOIN performance
+
+---
+
+Real-world data is rarely stored in a single table. Customers, orders, and products each live in their own table, and the power of a relational database comes from connecting them on the fly. JOIN is the SQL mechanism that reassembles related data from multiple tables into a single, meaningful result set -- making it one of the most important operations you will use every day.
+
 ## 1. JOIN Concept
 
 JOIN is a method to connect two or more tables to query data.
@@ -55,6 +75,8 @@ INSERT INTO orders (user_id, product_name, amount) VALUES
 ```
 
 ---
+
+> **Analogy -- Venn Diagrams for JOINs**: Think of each table as a circle in a Venn diagram. An INNER JOIN returns the overlapping region -- rows that match in both tables. A LEFT JOIN returns the entire left circle plus the overlap, filling in NULL where the right circle has no match. Understanding JOINs as set operations makes it easy to predict which rows appear in your result.
 
 ## 3. INNER JOIN
 
@@ -506,6 +528,4 @@ JOIN orders o ON u.id = o.user_id;
 
 ---
 
-## Next Steps
-
-Learn about aggregate functions and GROUP BY in [07_Aggregation_and_Grouping.md](./07_Aggregation_and_Grouping.md)!
+**Previous**: [Conditions and Sorting](./05_Conditions_and_Sorting.md) | **Next**: [Aggregation and Grouping](./07_Aggregation_and_Grouping.md)

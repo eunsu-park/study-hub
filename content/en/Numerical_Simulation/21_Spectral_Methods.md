@@ -24,6 +24,8 @@
 
 ### 1.1 What are Spectral Methods?
 
+**Why Spectral Methods?** Finite difference methods converge as $O(h^p)$ -- doubling the resolution only reduces the error by a fixed factor. Spectral methods converge as $O(e^{-cN})$ for smooth problems -- doubling the resolution can reduce the error by orders of magnitude. This makes spectral methods vastly more efficient when the solution is smooth, which is why they are the method of choice for turbulence simulation (DNS), weather prediction, and quantum mechanics.
+
 Spectral methods approximate solutions to differential equations using global basis functions (e.g., Fourier series, Chebyshev polynomials). Unlike finite difference or finite element methods that use local approximations, spectral methods achieve **exponential convergence** for smooth problems.
 
 ```
@@ -793,15 +795,13 @@ print("KdV equation solved successfully.")
 
 ---
 
-## 9. Practice Problems
+## Exercises
 
-### Problem 1: Exponential Convergence
-Write a function to demonstrate exponential convergence of spectral methods:
-- Approximate u(x) = e^(sin(x)) on [0, 2π] using N Fourier modes
-- Compute L∞ error for N = 4, 8, 16, 32, 64
-- Plot error vs N on a log scale and verify exponential decay
+### Exercise 1: Exponential Convergence
+Demonstrate that spectral methods achieve exponential convergence for smooth periodic functions. Approximate u(x) = e^(sin(x)) on [0, 2π] using N Fourier modes. Compute the L∞ error for N = 4, 8, 16, 32, 64 and verify exponential decay on a log-scale plot.
 
-**Solution:**
+<details><summary>Show Answer</summary>
+
 ```python
 def test_exponential_convergence():
     def u_exact(x):
@@ -830,7 +830,6 @@ def test_exponential_convergence():
         errors.append(error)
         print(f"N={N:3d}: Error = {error:.2e}")
 
-    # Plot
     plt.figure(figsize=(8, 5))
     plt.semilogy(N_values, errors, 'o-', linewidth=2, markersize=8)
     plt.xlabel('N (number of modes)')
@@ -844,22 +843,170 @@ def test_exponential_convergence():
 test_exponential_convergence()
 ```
 
-### Problem 2: Chebyshev Interpolation
-Interpolate the Runge function f(x) = 1/(1 + 25x²) on [-1, 1] using:
-- Uniform grid points (show Runge phenomenon)
-- Chebyshev-Gauss-Lobatto points
+The error drops dramatically (from ~1e-1 at N=4 to ~1e-14 at N=64), confirming exponential (spectral) convergence. A polynomial method would show algebraic decay O(N^{-p}) instead.
+</details>
 
-Compare interpolation errors.
+### Exercise 2: Chebyshev Interpolation vs Runge Phenomenon
+Interpolate the Runge function f(x) = 1/(1 + 25x²) on [-1, 1] using (a) N+1 uniformly spaced points and (b) Chebyshev-Gauss-Lobatto points for N = 10, 20. Compute the L∞ error on a fine grid and explain why Chebyshev nodes avoid the Runge phenomenon.
 
-### Problem 3: Heat Equation
-Solve the 1D heat equation ∂u/∂t = ∂²u/∂x² using Fourier spectral method with initial condition u(x,0) = sin(x). Compare with exact solution u(x,t) = e^(-t) sin(x).
+<details><summary>Show Answer</summary>
 
-### Problem 4: 2-Soliton Collision
-Modify the KdV solver to simulate collision of two solitons with different speeds. Initial condition:
+```python
+def runge_vs_chebyshev(N=16):
+    f = lambda x: 1.0 / (1 + 25 * x**2)
+    x_fine = np.linspace(-1, 1, 500)
+    f_fine = f(x_fine)
+
+    # Uniform nodes
+    x_uni = np.linspace(-1, 1, N+1)
+    p_uni = np.polyfit(x_uni, f(x_uni), N)
+    err_uni = np.max(np.abs(np.polyval(p_uni, x_fine) - f_fine))
+
+    # Chebyshev-Gauss-Lobatto nodes
+    j = np.arange(N+1)
+    x_cheb = np.cos(np.pi * j / N)
+    # Barycentric interpolation at fine points
+    # (simple approach: use numpy polynomial fit on Chebyshev nodes)
+    p_cheb = np.polyfit(x_cheb, f(x_cheb), N)
+    err_cheb = np.max(np.abs(np.polyval(p_cheb, x_fine) - f_fine))
+
+    print(f"N={N}: Uniform L∞ error = {err_uni:.4e}, Chebyshev L∞ error = {err_cheb:.4e}")
+
+runge_vs_chebyshev(N=10)
+runge_vs_chebyshev(N=20)
 ```
-u(x,0) = -6κ₁² sech²(κ₁(x+5)) - 6κ₂² sech²(κ₂(x-5))
+
+Uniform nodes produce large oscillations near the endpoints (Runge phenomenon), yielding errors that grow with N. Chebyshev nodes cluster near ±1, minimizing the Lebesgue constant and suppressing oscillations. The Chebyshev interpolant converges rapidly to the true function.
+</details>
+
+### Exercise 3: Spectral Heat Equation
+Solve the 1D heat equation ∂u/∂t = ∂²u/∂x² on [0, 2π] with periodic boundary conditions and initial condition u(x,0) = sin(x). Use the Fourier spectral method with exact time integration (integrating factor). Compare the numerical solution at t = 1 with the exact solution u(x,t) = e^(-t) sin(x).
+
+<details><summary>Show Answer</summary>
+
+```python
+def spectral_heat_equation(T=1.0, N=64, dt=0.01):
+    x = np.linspace(0, 2*np.pi, N, endpoint=False)
+    k = fftfreq(N, 1.0/N)  # integer wavenumbers
+
+    # Initial condition
+    u = np.sin(x)
+    u_hat = fft(u)
+
+    # Exact time integration: u_hat(k, t) = u_hat(k, 0) * exp(-k^2 * t)
+    t_final = T
+    u_hat_final = u_hat * np.exp(-k**2 * t_final)
+    u_spectral = np.real(ifft(u_hat_final))
+
+    u_exact = np.exp(-T) * np.sin(x)
+    error = np.linalg.norm(u_spectral - u_exact, np.inf)
+    print(f"Spectral heat equation error at t={T}: {error:.2e}")
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, u_exact, 'b-', label='Exact', linewidth=2)
+    plt.plot(x, u_spectral, 'r--', label='Spectral', linewidth=2)
+    plt.xlabel('x'); plt.ylabel('u(x,t)')
+    plt.title(f'Heat Equation at t={T}')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('spectral_heat.png', dpi=150)
+    plt.close()
+
+spectral_heat_equation(T=1.0)
 ```
-with κ₁ = 0.5, κ₂ = 0.3.
+
+The integrating factor method solves the linear part exactly in spectral space. The error is at machine precision level (~1e-15), demonstrating the power of spectral methods for smooth problems with periodic boundaries.
+</details>
+
+### Exercise 4: Two-Soliton Collision in KdV
+Modify the KdV spectral solver to initialize two solitons with different speeds. Use the initial condition:
+```
+u(x,0) = -6κ₁² sech²(κ₁(x+10)) - 6κ₂² sech²(κ₂(x-10))
+```
+with κ₁ = 0.5, κ₂ = 0.8. Simulate until T = 20 and verify that after the collision, both solitons emerge with their original shape and speed (an elastic collision).
+
+<details><summary>Show Answer</summary>
+
+```python
+def kdv_two_soliton(T=20.0, N=512, dt=0.005):
+    L = 60 * np.pi
+    x = np.linspace(-L/2, L/2, N, endpoint=False)
+    k = fftfreq(N, L/N) * 2 * np.pi
+
+    kappa1, kappa2 = 0.5, 0.8
+    # Two-soliton initial condition (solitons at x=-10 and x=+10)
+    u = (-6 * kappa1**2 / np.cosh(kappa1 * (x + 10))**2
+         - 6 * kappa2**2 / np.cosh(kappa2 * (x - 10))**2)
+
+    def rhs(u):
+        u_hat = fft(u)
+        dispersion = -(1j * k)**3 * u_hat
+        ux = np.real(ifft(1j * k * u_hat))
+        nonlinear = fft(-u * ux)
+        return np.real(ifft(dispersion + nonlinear))
+
+    u_initial = u.copy()
+    nt = int(T / dt)
+    for n in range(nt):
+        k1 = rhs(u); k2 = rhs(u + 0.5*dt*k1)
+        k3 = rhs(u + 0.5*dt*k2); k4 = rhs(u + dt*k3)
+        u = u + (dt/6) * (k1 + 2*k2 + 2*k3 + k4)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, u_initial, 'b-', label='t=0', linewidth=2)
+    plt.plot(x, u, 'r-', label=f't={T}', linewidth=2)
+    plt.xlabel('x'); plt.ylabel('u')
+    plt.title('KdV Two-Soliton Collision')
+    plt.legend(); plt.grid(True); plt.xlim(-L/4, L/4)
+    plt.tight_layout()
+    plt.savefig('kdv_two_soliton.png', dpi=150)
+    plt.close()
+    print(f"Mass conservation: initial={np.sum(u_initial):.6f}, final={np.sum(u):.6f}")
+
+kdv_two_soliton()
+```
+
+After the collision, both solitons re-emerge with their original amplitudes and speeds, only shifted in position. This elastic collision (no energy loss) is a hallmark of the KdV soliton, arising from the integrable structure of the equation. Mass (and other conserved quantities) should be preserved to high accuracy.
+</details>
+
+### Exercise 5: Aliasing Error Demonstration
+Show the effect of aliasing in a concrete example. For N = 32, compute u(x) = sin(Nx/2 · x) (a high-frequency mode) and then compute sin(3x) · u(x) without dealiasing. Compare the result in spectral space to the correctly dealiased version using the 3/2 rule.
+
+<details><summary>Show Answer</summary>
+
+```python
+def aliasing_demonstration(N=32):
+    x = np.linspace(0, 2*np.pi, N, endpoint=False)
+    k = fftfreq(N, 1.0/N)
+
+    # Two modes that when multiplied produce frequencies beyond N/2
+    u = np.sin(int(N/4) * x)   # mode N/4
+    v = np.sin(int(N/4) * x)   # same mode
+
+    # Naive (aliased) product
+    w_naive = u * v
+    w_naive_hat = np.abs(fft(w_naive))
+
+    # Dealiased product using 3/2 rule
+    w_dealiased = dealias_product_3_2_rule(u, v)
+    w_dealiased_hat = np.abs(fft(w_dealiased))
+
+    # Exact: sin(k0*x)*sin(k0*x) = 0.5*(1 - cos(2*k0*x))
+    # Mode 0 and mode 2*k0 should appear
+    k0 = int(N/4)
+    w_exact_hat = np.zeros(N)
+    w_exact_hat[0] = N/2           # DC component
+    w_exact_hat[min(2*k0, N-1)] = N/4  # frequency 2*k0
+
+    print(f"Mode 0:    naive={w_naive_hat[0]:.2f}, dealiased={w_dealiased_hat[0]:.2f}, exact={N/2:.2f}")
+    print(f"Mode {2*k0}: naive={w_naive_hat[2*k0 % N]:.2f}, dealiased={w_dealiased_hat[2*k0 % N]:.2f}, exact={N/4:.2f}")
+    print("Aliasing causes spurious energy at wrong wavenumbers in the naive case.")
+
+aliasing_demonstration(N=32)
+```
+
+When mode N/4 is squared, the product contains mode N/2 (the Nyquist frequency). Without dealiasing, this aliases back to mode 0, contaminating low-frequency content. The 3/2 rule zero-pads the spectrum before multiplication, correctly capturing the N/2 mode and returning the right answer.
+</details>
 
 ---
 

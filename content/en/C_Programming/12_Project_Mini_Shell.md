@@ -1,12 +1,24 @@
 # Project 11: Mini Shell
 
-Implement a simple command shell from scratch.
+**Previous**: [Project 10: Terminal Snake Game](./11_Project_Snake_Game.md) | **Next**: [Project 12: Multithreaded Programming](./13_Project_Multithreading.md)
+
+---
 
 ## Learning Objectives
-- Process creation (fork)
-- Program execution (exec family)
-- Pipes and redirection
-- Signal handling basics
+
+After completing this lesson, you will be able to:
+
+1. Implement the Read-Parse-Execute loop that forms the core of any command-line shell
+2. Apply `fork` to create child processes and `execvp` to replace them with external programs
+3. Implement built-in commands (`cd`, `pwd`, `echo`, `export`) that must execute in the shell's own process
+4. Design a redirection parser that detects `<`, `>`, and `>>` tokens and applies `dup2` to reroute file descriptors
+5. Build a pipe executor that chains multiple commands with `pipe`, `dup2`, and coordinated `fork`/`wait` calls
+6. Configure a `SIGINT` handler so that Ctrl+C interrupts the foreground command without killing the shell
+7. Implement environment-variable expansion (`$VAR`) and wildcard globbing (`*`, `?`) in command arguments
+
+---
+
+A shell is the program you use every day to launch other programs, yet most developers never look inside one. Building a mini shell from scratch is one of the most rewarding systems-programming exercises because it ties together processes, file descriptors, pipes, signals, and environment variables -- the fundamental building blocks of Unix. By the end of this project you will understand what happens between the moment you press Enter and the moment your command's output appears on screen.
 
 ## Prerequisites
 - String processing

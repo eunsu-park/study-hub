@@ -1,5 +1,26 @@
 # Aggregation and Grouping
 
+**Previous**: [JOIN](./06_JOIN.md) | **Next**: [Subqueries and CTE](./08_Subqueries_and_CTE.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply the five core aggregate functions: COUNT, SUM, AVG, MIN, and MAX
+2. Use GROUP BY to partition rows into groups and compute per-group statistics
+3. Filter grouped results with HAVING and explain how it differs from WHERE
+4. Combine GROUP BY with JOIN to aggregate data across related tables
+5. Perform date-based aggregation using DATE_TRUNC and EXTRACT
+6. Write conditional aggregations with CASE expressions and the FILTER clause
+7. Generate subtotals and grand totals using ROLLUP and CUBE
+8. Describe the SQL query execution order (FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT)
+
+---
+
+Databases excel at summarizing large volumes of data into concise, actionable numbers. Questions like "What are our total sales by region?" or "Which product category generates the highest average revenue?" require aggregate functions and grouping. Mastering these operations turns a flat table of transactions into the dashboards, reports, and KPIs that drive business decisions.
+
 ## 1. Aggregate Functions
 
 Aggregate functions calculate multiple rows into a single result.
@@ -73,6 +94,8 @@ SELECT COUNT(DISTINCT region) FROM sales;
 ## 4. SUM - Summation
 
 ```sql
+-- Aggregates collapse millions of rows into a single answer — the database performs
+-- the computation server-side, avoiding the cost of transferring all rows to the app
 -- Total sales amount
 SELECT SUM(amount) FROM sales;
 -- 4653000
@@ -147,7 +170,8 @@ Groups data by specific columns for aggregation.
 ### Basic GROUP BY
 
 ```sql
--- Sales by category
+-- GROUP BY partitions rows into buckets so each aggregate (COUNT, SUM) runs
+-- independently per group — this is how you answer "totals per category" in one query
 SELECT
     category,
     COUNT(*) AS count,
@@ -221,7 +245,9 @@ Result:
 
 ## 10. HAVING - Group Filtering
 
-WHERE filters before grouping, HAVING filters after grouping.
+WHERE filters individual rows before grouping; HAVING filters entire groups after aggregation.
+Use HAVING when the condition involves an aggregate (SUM, COUNT, etc.) that does not exist
+until groups are formed -- WHERE cannot reference aggregates because it runs first.
 
 ```sql
 -- Only categories with total sales >= 500,000
@@ -236,14 +262,15 @@ HAVING SUM(amount) >= 500000;
 ### WHERE + HAVING
 
 ```sql
--- Products with sales >= 1,000,000 in Seoul and Busan regions
+-- WHERE + HAVING cooperate: WHERE shrinks the dataset first (cheaper), then HAVING
+-- filters the aggregated groups — always push filters to WHERE when possible for performance
 SELECT
     product,
     SUM(amount) AS total_amount
 FROM sales
-WHERE region IN ('Seoul', 'Busan')  -- Filter before grouping
+WHERE region IN ('Seoul', 'Busan')  -- Filter before grouping (row-level)
 GROUP BY product
-HAVING SUM(amount) >= 1000000       -- Filter after grouping
+HAVING SUM(amount) >= 1000000       -- Filter after grouping (group-level)
 ORDER BY total_amount DESC;
 ```
 
@@ -343,6 +370,8 @@ FROM sales;
 ### FILTER (PostgreSQL 9.4+)
 
 ```sql
+-- FILTER is cleaner than CASE+SUM — it reads as "count only where ..." and the planner
+-- can sometimes optimize it better than the equivalent CASE expression
 SELECT
     COUNT(*) FILTER (WHERE category = 'Electronics') AS electronics_count,
     COUNT(*) FILTER (WHERE category = 'Furniture') AS furniture_count,
@@ -523,6 +552,4 @@ LIMIT/OFFSET   ← Limit results
 
 ---
 
-## Next Steps
-
-Learn about subqueries and WITH clauses in [08_Subqueries_and_CTE.md](./08_Subqueries_and_CTE.md)!
+**Previous**: [JOIN](./06_JOIN.md) | **Next**: [Subqueries and CTE](./08_Subqueries_and_CTE.md)

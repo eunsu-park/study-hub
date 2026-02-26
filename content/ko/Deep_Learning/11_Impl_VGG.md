@@ -1,5 +1,18 @@
 # 04. VGG
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 균일한 3×3 합성곱 필터를 사용하여 매우 깊은 네트워크를 구성하는 VGGNet의 아키텍처 철학을 설명합니다.
+2. 중첩된 3×3 합성곱과 단일 대형 합성곱 간의 수용 영역(Receptive Field) 동치성을 분석하고 파라미터 수를 비교합니다.
+3. VGG-16과 VGG-19의 구성(블록 구조, 채널 진행, 분류기 헤드 설계)을 설명합니다.
+4. 모듈식 블록 구성을 사용하여 PyTorch에서 VGGNet 계열(예: VGG-16)을 처음부터 구현합니다.
+5. 파인튜닝(Fine-tuning) 기법을 사용하여 사전 훈련된 VGGNet으로 커스텀 분류 작업에 전이 학습(Transfer Learning)을 적용합니다.
+6. VGGNet의 한계(파라미터 수, 메모리 사용량)를 식별하고 이후 아키텍처들이 이를 어떻게 해결했는지 설명합니다.
+
+---
+
 ## 개요
 
 VGGNet은 2014년 ILSVRC에서 2위를 차지한 모델로, Karen Simonyan과 Andrew Zisserman이 제안했습니다. "Very Deep Convolutional Networks for Large-Scale Image Recognition" 논문에서 **3x3 작은 필터를 깊게 쌓는 것**이 효과적임을 보여주었습니다.

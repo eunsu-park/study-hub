@@ -12,15 +12,18 @@ This lesson covers the full spectrum of loop optimizations: from detecting loops
 
 **Prerequisites**: [09. Intermediate Representations](./09_Intermediate_Representations.md), [12. Optimization -- Local and Global](./12_Optimization_Local_and_Global.md)
 
-**Learning Objectives**:
-- Identify natural loops using dominance analysis and back edges
-- Construct dominator trees and compute dominance frontiers
-- Apply loop-invariant code motion (LICM) to hoist computations out of loops
-- Recognize and optimize induction variables through strength reduction
-- Understand loop unrolling and its trade-offs
-- Apply loop transformations: fusion, fission, interchange, tiling
-- Explain the basics of vectorization and the polyhedral model
-- Reason about loop parallelization opportunities
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify natural loops using dominance analysis and back edges
+2. Construct dominator trees and compute dominance frontiers
+3. Apply loop-invariant code motion (LICM) to hoist computations out of loops
+4. Recognize and optimize induction variables through strength reduction
+5. Understand loop unrolling and its trade-offs
+6. Apply loop transformations: fusion, fission, interchange, tiling
+7. Explain the basics of vectorization and the polyhedral model
+8. Reason about loop parallelization opportunities
 
 ---
 

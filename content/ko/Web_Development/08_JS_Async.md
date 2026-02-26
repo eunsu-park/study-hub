@@ -1,12 +1,22 @@
 # JavaScript 비동기 프로그래밍
 
-## 개요
+**이전**: [JS 이벤트와 DOM](./07_JS_Events_DOM.md)
 
-JavaScript는 단일 스레드로 동작하지만, 비동기 프로그래밍을 통해 네트워크 요청, 파일 읽기 등의 작업을 효율적으로 처리합니다. 이 문서에서는 콜백, Promise, async/await, 그리고 fetch API를 다룹니다.
+## 학습 목표(Learning Objectives)
 
-**선수 지식**: [07_JS_Events_DOM.md](./07_JS_Events_DOM.md)
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 동기(synchronous)와 비동기(asynchronous) 실행의 차이를 설명하고, JavaScript 이벤트 루프(event loop)를 묘사할 수 있다
+2. 콜백 지옥(callback hell)을 식별하고, 깊이 중첩된 콜백이 왜 문제인지 설명할 수 있다
+3. resolve/reject 생성자, then/catch/finally 체인, 정적 메서드(Promise.all, Promise.race, Promise.allSettled, Promise.any)를 사용하여 Promise를 생성하고 소비할 수 있다
+4. 적절한 try/catch 에러 처리와 함께 async/await 구문을 사용하여 비동기 함수를 작성할 수 있다
+5. 순차(sequential)와 병렬(parallel) 비동기 실행을 비교하고 적절한 패턴을 선택할 수 있다
+6. 다양한 메서드(GET, POST, PUT, DELETE), 헤더, 요청 본문을 포함하여 Fetch API를 사용한 HTTP 요청을 구현할 수 있다
+7. 재시도 로직, AbortController를 사용한 요청 취소, 디바운스(debounce), 쓰로틀(throttle) 등 실전 비동기 패턴을 적용할 수 있다
 
 ---
+
+웹 애플리케이션에서 흥미로운 동작의 대부분은 기다리는 과정을 포함합니다. 서버 응답을 기다리고, 파일 업로드를 기다리고, 데이터베이스 쿼리를 기다립니다. JavaScript가 매번 기다리는 동안 실행을 차단한다면, 브라우저는 멈추고 사용자 인터페이스는 응답 불가 상태가 될 것입니다. 비동기 프로그래밍은 JavaScript가 오래 걸리는 작업을 시작하고, 다른 작업을 계속 수행하다가, 결과가 준비되면 돌아올 수 있게 해주는 기법입니다. 이를 통해 애플리케이션은 빠릿하게 동작하고 사용자는 쾌적한 경험을 누릴 수 있습니다.
 
 ## 목차
 
@@ -213,16 +223,16 @@ Promise.resolve('값');
 // 즉시 거부된 Promise
 Promise.reject('에러');
 
-// 모두 성공해야 성공 (하나라도 실패하면 실패)
+// Promise.all — 모든 요청이 반드시 성공해야 할 때 사용; 하나라도 실패하면 즉시 실패 (예: 대시보드 필수 데이터 전부 로딩)
 Promise.all([promise1, promise2, promise3])
     .then(results => {
         // results = [result1, result2, result3]
     })
     .catch(error => {
-        // 첫 번째 실패
+        // 첫 번째 실패 — 전체 작업 실패; 부분 결과가 의미 없을 때 적합
     });
 
-// 모든 결과 반환 (성공/실패 구분)
+// Promise.allSettled — 성공/실패 여부와 무관하게 모든 결과가 필요할 때 사용 (예: 일부 성공도 허용하는 배치 작업)
 Promise.allSettled([promise1, promise2, promise3])
     .then(results => {
         results.forEach(result => {
@@ -234,19 +244,19 @@ Promise.allSettled([promise1, promise2, promise3])
         });
     });
 
-// 가장 먼저 완료되는 것 (성공이든 실패든)
+// Promise.race — 타임아웃 패턴에 사용: 가장 먼저 완료되는 것이 이김 (reject여도 포함)
 Promise.race([promise1, promise2, promise3])
     .then(result => {
-        // 가장 빠른 결과
+        // 가장 빠른 결과 — "가장 가까운 서버에서 가져오기" 또는 커스텀 타임아웃 구현에 유용
     });
 
-// 가장 먼저 성공하는 것
+// Promise.any — 첫 번째 성공만 필요하고 실패는 신경 쓰지 않을 때 사용 (예: 여러 CDN 미러 시도)
 Promise.any([promise1, promise2, promise3])
     .then(result => {
-        // 가장 먼저 성공한 결과
+        // 가장 먼저 성공한 결과 — race와 달리, 모두 실패할 때까지 reject를 무시
     })
     .catch(error => {
-        // 모두 실패한 경우
+        // AggregateError: 모든 Promise가 실패한 경우
     });
 ```
 
@@ -284,6 +294,8 @@ loadImage('image.jpg')
 async 함수는 항상 Promise를 반환합니다. await는 Promise가 처리될 때까지 기다립니다.
 
 ```javascript
+// async 함수는 항상 Promise를 반환; await는 Promise를 unwrap — .then() 체인의 문법적 설탕(syntactic sugar)
+// 장점: 중첩된 .catch() 대신 try/catch로 에러 처리, 코드가 위에서 아래로 읽힘
 async function fetchData() {
     const response = await fetch('/api/data');
     const data = await response.json();
@@ -374,7 +386,7 @@ export const config = await response.json();
 ```javascript
 // GET 요청
 fetch('https://api.example.com/data')
-    .then(response => response.json())
+    .then(res => res.json())  // res.json()은 또 다른 Promise를 반환 — 파싱 전에 응답 바디 스트림 전체를 읽어야 함; 이 단계는 헤더 도착 시점이고, 다음 .then이 파싱된 데이터를 받음
     .then(data => console.log(data))
     .catch(error => console.error(error));
 
@@ -565,7 +577,7 @@ try {
     }
 }
 
-// 수동 취소
+// fetch Promise를 AbortError로 reject — 사용자가 페이지를 이탈하거나 타임아웃이 만료될 때 요청을 취소하는 데 유용
 controller.abort();
 ```
 
@@ -1045,7 +1057,7 @@ form.addEventListener('submit', async (e) => {
 
 ## 다음 단계
 
-- [09_Practical_Projects.md](./09_Practical_Projects.md) - 배운 내용을 종합한 프로젝트
+- [실전 프로젝트](./09_Practical_Projects.md) - 배운 내용을 종합한 프로젝트
 
 ---
 

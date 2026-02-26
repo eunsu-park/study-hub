@@ -1,8 +1,24 @@
 # Logistic Regression
 
-## Overview
+**Previous**: [Linear Regression](./02_Linear_Regression.md) | **Next**: [Model Evaluation](./04_Model_Evaluation.md)
 
-Despite its name, logistic regression is a classification algorithm. It predicts probabilities for binary and multi-class classification problems.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why logistic regression is a classification algorithm despite its name
+2. Describe the sigmoid function and how it maps linear outputs to probabilities
+3. Implement binary logistic regression using scikit-learn and from scratch with gradient descent
+4. Compare L1, L2, and Elastic Net regularization in the context of logistic regression
+5. Distinguish between One-vs-Rest and Softmax approaches for multi-class classification
+6. Apply threshold adjustment to balance precision and recall for a given problem
+7. Demonstrate how class weighting addresses imbalanced datasets
+
+---
+
+Despite its name, logistic regression is a classification algorithm -- and one of the most important ones to understand. It predicts class probabilities by passing a linear combination of features through the sigmoid function, giving you an interpretable model that serves as the foundation for understanding neural networks and more advanced classifiers.
 
 ---
 

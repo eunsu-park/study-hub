@@ -441,8 +441,15 @@ def coulomb_logarithm(n_e, T_e, Z=1):
     ln_Lambda : float
         Coulomb logarithm
     """
+    # NRL Plasma Formulary는 ln_Lambda를 CGS(cm^-3) 단위로 정의하므로 변환이 필요하다;
+    # SI 공식을 그대로 사용하면 상수가 달라져 잘못된 결과가 나온다.
     n_e_cgs = n_e * 1e-6  # Convert to cm^-3
 
+    # 두 영역을 구분하는 이유는 최소 충격 매개변수(b_min)가 달라지기 때문이다:
+    # 낮은 T_e(< 10 Z^2 eV)에서는 b_min이 고전적 90° 산란 길이 b_90이고,
+    # 높은 T_e에서는 b_min이 de Broglie 파장(양자 한계)으로 전환된다.
+    # 잘못된 분기를 사용하면 ln_Lambda가 ~1-2 과대평가되고,
+    # 이 오차는 충돌 주파수와 저항률에 직접 전파된다.
     if T_e < 10 * Z**2:
         ln_Lambda = 23 - np.log(np.sqrt(n_e_cgs) * Z * T_e**(-1.5))
     else:
@@ -459,6 +466,10 @@ def nu_ei(n_e, T_e, Z=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e, Z)
 
+    # T_e^(-3/2) 스케일링이 핵심 물리다: 더 빠른 전자는 이온 근처에서
+    # 머무는 시간이 짧아 유효 단면적이 ∝ v^(-4) ∝ T^(-2)가 되고,
+    # 열속도의 T^(1/2) 증가분이 상쇄되어 결과적으로 T^(-3/2)가 된다.
+    # 이것이 바로 토카막 Ohmic 가열이 ~1 keV 이상에서 비효율적이 되는 이유다.
     return 2.91e-6 * n_e * Z * ln_Lambda / T_e**1.5
 
 def nu_ee(n_e, T_e, ln_Lambda=None):
@@ -470,6 +481,9 @@ def nu_ee(n_e, T_e, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e)
 
+    # nu_ee ~ nu_ei / 2 수치적으로; 동종 입자(like-particle) 충돌은 질량 중심(center-of-mass)
+    # 계에서 운동량을 덜 효율적으로 전달하므로 전치인수가 더 작지만(1.45 vs 2.91),
+    # T^(-3/2) 물리는 동일하게 적용된다.
     return 1.45e-6 * n_e * ln_Lambda / T_e**1.5
 
 def nu_ii(n_i, T_i, Z=1, A=1, ln_Lambda=None):
@@ -481,7 +495,9 @@ def nu_ii(n_i, T_i, Z=1, A=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_i, T_i, Z)
 
-    # Conversion factor
+    # sqrt(m_e / m_i) 인수는 이온이 sqrt(m_i/m_e)만큼 느리다는 사실을 반영한다:
+    # nu_ii / nu_ei ~ sqrt(m_e/m_i) ~ 1/43 (수소 기준) — 이온은 훨씬 드물게 충돌하므로
+    # 이온 수송(transport)은 더 느린 시간 스케일에 지배된다.
     factor = 1.45e-6 * np.sqrt(m_e / (A * m_p))
     return factor * n_i * Z**4 * ln_Lambda / T_i**1.5
 
@@ -503,9 +519,16 @@ def spitzer_resistivity(T_e, Z=1, ln_Lambda=None):
     eta : float
         Resistivity [Ohm*m]
     """
+    # ln_Lambda가 주어지지 않으면 n_e 없이도 사용할 수 있도록 표준 추정값 15를 사용한다;
+    # 저항률은 ln_Lambda에 로그적으로만 의존하므로 고정값 사용 시
+    # 대부분의 실험실 및 핵융합 플라즈마에서 오차는 30% 미만이다.
     if ln_Lambda is None:
         ln_Lambda = 15  # Typical value
 
+    # eta ∝ T_e^(-3/2)는 nu_ei ∝ T_e^(-3/2)의 직접적인 결과다:
+    # 더 뜨거운 플라즈마에서 전자가 덜 자주 산란되므로 전도도가 더 좋다.
+    # T_e ~ 10 keV(핵융합 관련)에서 eta는 실온 구리 수준에 근접하여
+    # Ohmic 전류 구동은 가능하나 Ohmic 가열은 무시할 만해진다.
     return 5.2e-5 * Z * ln_Lambda / T_e**1.5
 
 def mean_free_path(n_e, T_e, Z=1, ln_Lambda=None):
@@ -517,6 +540,9 @@ def mean_free_path(n_e, T_e, Z=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e, Z)
 
+    # lambda_mfp = v_te / nu_ei ∝ T_e^2 / n: T^2 스케일링 덕분에 온도가 조금만
+    # 올라가도 평균 자유 경로(mean free path)가 급격히 늘어난다. 이 때문에
+    # 핵융합급 플라즈마(T ~ 10 keV)는 장치 크기 대비 사실상 무충돌(collisionless)이다.
     return 3.44e11 * T_e**2 / (n_e * Z * ln_Lambda)
 
 # Demonstration
@@ -571,6 +597,10 @@ if __name__ == "__main__":
     print("-"*70)
 
     # Energy equipartition time
+    # tau_eq의 m_i / (2 m_e) 인수는 가벼운 전자와 무거운 이온 사이의
+    # 에너지 전달 비효율성을 반영한다: 충돌 후 전자 운동 에너지의 대부분이
+    # 돌아오므로 온도 평형에는 많은 충돌이 필요하다 — 이 때문에 보조 가열
+    # 토카막에서 상대적으로 높은 밀도에서도 T_e ≠ T_i인 경우가 흔하다.
     tau_eq = (A * m_p) / (2 * m_e * nu_ei_val)
     print(f"\nEnergy Equipartition:")
     print(f"  τ_eq = {tau_eq:.3e} s = {tau_eq*1000:.1f} ms")

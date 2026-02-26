@@ -1,5 +1,24 @@
 # File and Directory Management
 
+**Previous**: [Filesystem Navigation](./02_Filesystem_Navigation.md) | **Next**: [Text Processing](./04_Text_Processing.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create files and directory structures using touch and mkdir
+2. Copy files and directories with cp, choosing appropriate options for backups
+3. Move and rename files and directories using mv
+4. Safely delete files and directories with rm and rmdir, avoiding destructive mistakes
+5. View file contents using cat, less, head, and tail (including real-time log monitoring)
+6. Create and manage hard links and symbolic links with ln
+7. Compress and extract archives using tar, gzip, and zip
+8. Check disk usage with du and df
+
+---
+
+File and directory management is the daily bread of Linux administration. Whether you are deploying code, organizing backups, or cleaning up temporary files, you will use these commands hundreds of times a day. Mastering them -- along with their safety flags -- prevents costly mistakes like accidentally deleting an entire project directory.
+
 ## 1. Creating Files/Directories
 
 ### touch - Create Empty File
@@ -583,6 +602,4 @@ ls ~/logs/
 
 ---
 
-## Next Steps
-
-Learn about text processing using grep, sed, and awk in [04_Text_Processing.md](./04_Text_Processing.md)!
+**Previous**: [Filesystem Navigation](./02_Filesystem_Navigation.md) | **Next**: [Text Processing](./04_Text_Processing.md)

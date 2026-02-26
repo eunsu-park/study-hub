@@ -375,21 +375,32 @@ class NBodyPlasma1D:
 
     def compute_field(self, Ng=128):
         """Compute electric field using Poisson solver on grid."""
-        # Deposit charge to grid
+        # 히스토그램(nearest-grid-point 기법)으로 격자에 전하를 할당한다;
+        # 이 방법은 가장 단순한 전하 할당으로, 정확도를 희생하고 속도를 얻는다.
+        # CIC, TSC 같은 더 정확한 기법은 수치 잡음을 줄이지만 구현이 복잡해진다.
         rho_grid, edges = np.histogram(self.x, bins=Ng, range=(0, self.L))
         dx = self.L / Ng
         rho_grid = self.q * rho_grid / dx  # Charge density
 
-        # Background neutralizing charge
+        # 균일한 중화 이온 배경을 빼서 준중성(quasi-neutrality) 편차만 전하 밀도에 남긴다.
+        # 이 처리 없이는 DC 모드가 섭동이 아닌 총 전하에서 비물리적으로 큰 전기장을 유발한다.
         rho_grid -= self.q * self.N / self.L
 
-        # Solve Poisson equation: d^2 phi / dx^2 = -rho / epsilon_0
-        # Using FFT
+        # Poisson 방정식 풀기: d^2 phi / dx^2 = -rho / epsilon_0
+        # FFT는 주기 영역에서 O(N log N) 비용으로 정확한 스펙트럼 해를 주므로,
+        # 직접 행렬 역산(O(N^3))보다 훨씬 저렴하다.
         rho_k = np.fft.rfft(rho_grid)
         k_modes = 2 * np.pi * np.fft.rfftfreq(Ng, d=dx)
+        # k[0] = 1로 설정해 Poisson 풀이에서 0으로 나누기를 막는다.
+        # DC(k=0) 성분은 공간적으로 균일한 전하를 나타내며 전기장을 생성하지 않는다
+        # (상수의 E = -dφ/dx = 0). 이를 아래에서 phi_k[0]=0으로 직접 강제하므로
+        # k[0]=1로 설정하는 것은 안전하다.
         k_modes[0] = 1  # Avoid division by zero (set DC to zero)
 
         phi_k = -rho_k / (epsilon_0 * k_modes**2)
+        # DC 퍼텐셜을 명시적으로 0으로 만든다: 주기 상자에서 균일한 퍼텐셜 이동은
+        # 물리적으로 의미가 없으며(게이지 자유도, gauge freedom), 남겨두면
+        # 전기장에 잉여 상수 오프셋이 도입된다.
         phi_k[0] = 0  # No DC potential
 
         # Electric field: E = -d phi / dx
@@ -409,11 +420,15 @@ class NBodyPlasma1D:
         indices = np.floor(self.x / dx).astype(int) % Ng
         E_particles = E_grid[indices]
 
-        # Push velocities (half step)
+        # 위치 이동 전후로 속도를 반 스텝씩 나눠 미는 리프로그(leapfrog / Verlet) 기법은
+        # 적분기를 시간 가역적이고 2차 정확도로 만들며,
+        # PIC의 장기 에너지 보존에 필수적이다.
         self.v += (self.q / self.m) * E_particles * (dt / 2)
 
         # Push positions
         self.x += self.v * dt
+        # 위치를 [0, L]로 되감아 주기 경계 조건(periodic boundary condition)을 적용한다;
+        # 모듈로(modulo) 연산은 모든 입자에 대해 분기 없이 주기 재진입을 처리하는 가장 저렴한 방법이다.
         self.x = self.x % L  # Periodic BC
 
         # Push velocities (half step)
@@ -448,13 +463,19 @@ class VlasovPlasma1D:
 
     def compute_field(self):
         """Compute electric field from Poisson equation."""
-        # Density
+        # 속도에 대해 f를 적분해 밀도를 구한다; trapz를 사용하는 이유는
+        # 속도 격자 경계 근처가 불균일할 수 있고, 이 방법이 0차 모멘트(전체 입자 수)를
+        # 기계 정밀도까지 정확히 보존하기 때문이다.
         n = np.trapz(self.f, self.v, axis=1)
 
-        # Charge density (with neutralizing background)
+        # 중화 배경을 포함한 전하 밀도
+        # (n - n0)만이 전기장을 생성한다 — N-body 풀이와 동일한 물리:
+        # 준중성에서 배경 이온이 전자의 평균 전하를 상쇄한다.
         rho = -e * (n - n0)
 
-        # Solve Poisson via FFT
+        # N-body와 동일한 FFT Poisson 풀이를 반복한다;
+        # DC를 다시 0으로 만드는 이유는 Vlasov 격자가 분리 스텝의
+        # 수치 확산으로 인해 미세한 DC 불균형을 축적할 수 있기 때문이다.
         rho_k = np.fft.rfft(rho)
         k_modes = 2 * np.pi * np.fft.rfftfreq(self.Nx, d=self.dx)
         k_modes[0] = 1
@@ -471,13 +492,24 @@ class VlasovPlasma1D:
         """Advance Vlasov equation using splitting."""
         E = self.compute_field()
 
-        # Step 1: Advection in x (v * df/dx)
+        # Strang(연산자) 분리법(operator splitting)은 6D Vlasov 방정식을
+        # 두 독립적인 1D 이류(advection)로 분해한다(x 방향과 v 방향).
+        # 각각은 주기 격자에서 배열 롤(roll)로 정확히 풀 수 있으며,
+        # 분리 오차는 스텝당 O(dt^2)으로 전체 기법과 일치한다.
+
+        # Step 1: x 방향 이류 (v * df/dx)
+        # 각 속도 클래스가 dt 동안 이동하는 거리만큼 f를 x 방향으로 롤한다;
+        # 정수 반올림은 O(dt^2) 분리 오차의 원인이지만,
+        # 분포 함수를 비음수로 유지하고 정확히 보존하는 이점이 있다.
         for j in range(self.Nv):
             v_val = self.v[j]
             shift = int(np.round(v_val * dt / self.dx))
             self.f[:, j] = np.roll(self.f[:, j], -shift)
 
-        # Step 2: Acceleration in v ((qE/m) * df/dv)
+        # Step 2: v 방향 가속 ((qE/m) * df/dv)
+        # E는 스텝 시작 시 고정값으로 사용한다(명시적 처리, explicit treatment);
+        # 이는 분리 근사와 일관되며 x와 v 서브스텝 사이에
+        # Poisson 방정식을 다시 풀 필요를 없앤다.
         for i in range(self.Nx):
             accel = -e * E[i] / m_e
             shift = int(np.round(accel * dt / self.dv))
@@ -518,7 +550,9 @@ class FluidPlasma1D:
         """Advance using simple Euler (for demonstration)."""
         E = self.compute_field()
 
-        # Continuity: dn/dt = -d(nu)/dx
+        # 연속 방정식: dn/dt = -d(nu)/dx
+        # 유한 차분 대신 스펙트럼 미분(Fourier 공간에서 ik 곱)을 사용한다.
+        # 주기 데이터에 대해 정확하며, 밀도파를 번지게 하는 수치 확산이 없다.
         nu = self.n * self.u
         nu_k = np.fft.rfft(nu)
         k_modes = 2 * np.pi * np.fft.rfftfreq(self.Nx, d=self.dx)
@@ -526,7 +560,11 @@ class FluidPlasma1D:
 
         self.n -= d_nu_dx * dt
 
-        # Momentum (cold, neglecting pressure): du/dt = qE/m - u * du/dx
+        # 운동량 방정식 (냉유체, 압력 무시): du/dt = qE/m - u * du/dx
+        # 냉유체 가정(zero pressure)은 의도적이다: 가능한 가장 단순한 유체 모델로서
+        # 열보정 없이 플라즈마 진동 물리를 분리한다. 누락된 압력 항은
+        # Vlasov 모델이 포착하지만 유체 모델이 빠뜨리는 부분이다
+        # (cf. 유체에서는 Landau damping이 없지만 kinetic 결과에는 있음).
         u_k = np.fft.rfft(self.u)
         du_dx = np.fft.irfft(1j * k_modes * u_k, n=self.Nx)
 

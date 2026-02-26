@@ -46,6 +46,9 @@ $$\text{subject to} \quad \mathbb{E}[D_{KL}(\pi_{\theta_{old}} || \pi_\theta)] \
 ### 2.3 Problems with TRPO
 
 - Requires second-order derivatives (Hessian)
+
+  The Hessian is the matrix of second-order partial derivatives. Computing it requires O(n²) space for n parameters — prohibitive for neural networks with millions of parameters. PPO avoids this by using first-order gradient descent with a simple clipping constraint.
+
 - Needs conjugate gradient algorithm
 - Complex implementation and high computational cost
 
@@ -66,10 +69,13 @@ $$L^{CLIP}(\theta) = \mathbb{E}\left[\min(r_t(\theta) A_t, \text{clip}(r_t(\thet
 ```python
 def compute_ppo_loss(ratio, advantage, clip_epsilon=0.2):
     """PPO Clipped Loss"""
-    # Clipped ratio
+    # Clip the probability ratio to [1-ε, 1+ε] — prevents catastrophically large
+    # policy updates that could destabilize training; ε=0.2 means at most a 20% change
     clipped_ratio = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon)
 
-    # Take minimum of two terms
+    # Take the minimum of clipped and unclipped objectives: this is a pessimistic bound —
+    # when advantage > 0, min prevents the ratio from growing beyond 1+ε (caps benefit);
+    # when advantage < 0, min prevents the ratio from falling below 1-ε (caps punishment)
     loss1 = ratio * advantage
     loss2 = clipped_ratio * advantage
 
@@ -214,16 +220,23 @@ class PPOAgent:
         advantages = np.zeros_like(rewards)
         last_gae = 0
 
+        # Traverse backwards to accumulate the GAE sum in one pass without storing
+        # all future deltas; last_value provides the bootstrap for the final step
         for t in reversed(range(len(rewards))):
             if t == len(rewards) - 1:
                 next_value = last_value
             else:
                 next_value = values[t + 1]
 
+            # Mask out the next state's contribution when the episode ended —
+            # multiplying by (1 - done) cleanly zeros out future bootstrap value
+            # at terminal transitions without needing an if-branch inside the loop
             next_non_terminal = 1.0 - dones[t]
             delta = rewards[t] + self.gamma * next_value * next_non_terminal - values[t]
             advantages[t] = last_gae = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae
 
+        # Returns = advantages + values: the critic learns to predict these returns,
+        # while advantages (centered around zero by subtraction) drive the actor update
         returns = advantages + values
         return advantages, returns
 
@@ -231,7 +244,8 @@ class PPOAgent:
         """PPO Update"""
         advantages, returns = self.compute_gae(rollout)
 
-        # Normalize
+        # Normalize advantages to zero mean and unit variance — reduces sensitivity
+        # to reward scale differences across environments and stabilizes gradient magnitude
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Convert to tensors
@@ -241,9 +255,12 @@ class PPOAgent:
         returns = torch.FloatTensor(returns)
         advantages = torch.FloatTensor(advantages)
 
-        # Multiple epoch updates
+        # Multiple epoch updates: reusing the same rollout data multiple times
+        # improves sample efficiency — this is PPO's key advantage over on-policy methods
+        # like A2C that discard data after a single update
         for _ in range(self.update_epochs):
-            # Generate minibatches
+            # Random permutation for minibatching breaks temporal correlations in the
+            # rollout and reduces gradient variance across the update epochs
             indices = np.random.permutation(len(states))
 
             for start in range(0, len(states), self.batch_size):
@@ -261,10 +278,12 @@ class PPOAgent:
                     batch_states, batch_actions
                 )
 
-                # Compute ratio
+                # Ratio in log space for numerical stability: exp(log π_new - log π_old)
+                # is equivalent to π_new / π_old but avoids overflow with small probabilities
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)
 
-                # Clipped loss
+                # Clipped surrogate objective: surr1 is the unclipped update, surr2 limits
+                # the policy change; taking the min makes this a pessimistic (conservative) bound
                 surr1 = ratio * batch_advantages
                 surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * batch_advantages
                 actor_loss = -torch.min(surr1, surr2).mean()
@@ -272,7 +291,8 @@ class PPOAgent:
                 # Value loss
                 critic_loss = F.mse_loss(values.squeeze(), batch_returns)
 
-                # Entropy bonus
+                # Entropy bonus: negative because we minimize total_loss but want to
+                # maximize entropy — encourages exploration throughout training
                 entropy_loss = -entropy.mean()
 
                 # Total loss
@@ -281,6 +301,8 @@ class PPOAgent:
                 # Update
                 self.optimizer.zero_grad()
                 loss.backward()
+                # Clip gradients before stepping to prevent a single bad minibatch
+                # from causing a runaway update that collapses the policy
                 nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
@@ -374,7 +396,9 @@ class ContinuousPPONetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=64):
         super().__init__()
 
-        # Actor
+        # Actor: Tanh activations are preferred over ReLU in PPO for continuous actions
+        # because they bound outputs to (-1, 1), preventing extreme pre-activations
+        # that can cause the Normal distribution's mean to drift to unreachable values
         self.actor_mean = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.Tanh(),
@@ -382,6 +406,8 @@ class ContinuousPPONetwork(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, action_dim)
         )
+        # State-independent log_std initialized to zeros (std=1): starts with maximum
+        # exploration and lets the network learn to reduce uncertainty as training progresses
         self.actor_log_std = nn.Parameter(torch.zeros(action_dim))
 
         # Critic
@@ -406,6 +432,8 @@ class ContinuousPPONetwork(nn.Module):
         if action is None:
             action = dist.sample()
 
+        # Sum log_probs across action dimensions: assumes independent Gaussians per
+        # dimension, so joint log-prob = sum of marginals (factored distribution)
         log_prob = dist.log_prob(action).sum(-1)
         entropy = dist.entropy().sum(-1)
 
@@ -484,6 +512,82 @@ r(θ) = π_θ(a|s) / π_θ_old(a|s)  # Policy ratio
 - Constrains policy changes to [1-ε, 1+ε] range
 - Prevents drastic updates
 - Ensures learning stability
+
+---
+
+## Exercises
+
+### Exercise 1: TRPO vs PPO Trade-off Analysis
+
+Analyze the theoretical and practical differences between TRPO and PPO.
+
+1. Explain why TRPO requires the Hessian of the KL divergence. What is the computational complexity of computing and inverting an n×n Hessian for a network with n parameters?
+2. Describe how PPO's clipped objective approximates the TRPO constraint without second-order information.
+3. Fill in the following comparison table based on the lesson content:
+
+| Property | TRPO | PPO-Clip |
+|----------|------|----------|
+| Constraint type | | |
+| Gradient order | | |
+| Implementation complexity | | |
+| Memory cost | | |
+| Typical wall-clock speed | | |
+
+4. In what scenario might TRPO's hard constraint be strictly necessary over PPO's soft clipping?
+
+### Exercise 2: Clipping Behavior Visualization
+
+Visualize how the PPO clipped objective responds to different ratio values.
+
+1. For advantage values A ∈ {-2.0, -1.0, -0.5, 0.5, 1.0, 2.0} and ε = 0.2, compute L^CLIP(r) for r ∈ [0.5, 1.5] using:
+   ```python
+   import numpy as np
+   import matplotlib.pyplot as plt
+
+   def l_clip(r, A, eps=0.2):
+       clipped = np.clip(r, 1 - eps, 1 + eps)
+       return np.minimum(r * A, clipped * A)
+   ```
+2. Plot L^CLIP as a function of r for each advantage value on the same axes.
+3. Mark the clipping boundaries (r = 0.8 and r = 1.2) with vertical dashed lines.
+4. Explain why the function is flat (zero gradient) outside the clipping region when A > 0 but not when A < 0 (and vice versa for A < 0).
+
+### Exercise 3: GAE Lambda Sensitivity
+
+Investigate how the GAE lambda parameter affects the bias-variance trade-off.
+
+1. Train five PPO agents on LunarLander-v2 for 200,000 timesteps, varying only `gae_lambda` ∈ {0.0, 0.5, 0.9, 0.95, 1.0}.
+2. For each run, record:
+   - Mean episode reward (last 20 episodes)
+   - Standard deviation of episode rewards
+3. Plot learning curves for all five settings.
+4. Explain the results in terms of the bias-variance trade-off:
+   - λ = 0: 1-step TD advantage (low variance, high bias)
+   - λ = 1: Monte Carlo advantage (high variance, no bias)
+5. Which value of λ works best? Does this match the default λ = 0.95 used in the lesson?
+
+### Exercise 4: Implement PPO-Penalty
+
+Implement the KL-penalty variant of PPO from Section 5.2 and compare it with PPO-Clip.
+
+1. Implement `ppo_penalty_loss(ratio, advantage, old_probs, new_probs, beta)` from Section 5.2.
+2. Add adaptive beta adjustment: after each update epoch, measure the mean KL divergence:
+   - If KL > 1.5 × target_kl: multiply beta by 2
+   - If KL < target_kl / 1.5: divide beta by 2
+   - Use target_kl = 0.01
+3. Train PPO-Penalty and PPO-Clip on CartPole-v1 for 100,000 timesteps each.
+4. Plot training curves and record final performance.
+5. Does adaptive beta effectively control the KL divergence to stay near target_kl?
+
+### Exercise 5: Vectorized Environment PPO
+
+Extend PPO to use multiple parallel environments for faster data collection.
+
+1. Create 4 parallel CartPole-v1 environments using `gymnasium.vector.SyncVectorEnv`.
+2. Modify `collect_rollouts()` to collect n_steps transitions from all 4 environments simultaneously, producing a buffer of shape `(n_steps × 4,)`.
+3. Verify that the total rollout size is 4× larger for the same n_steps.
+4. Train for 100,000 total timesteps and compare wall-clock time against the single-environment version from Section 4.2.
+5. Analyze: does using 4 environments change the quality of learning, or only the speed? Explain why in terms of sample diversity.
 
 ---
 

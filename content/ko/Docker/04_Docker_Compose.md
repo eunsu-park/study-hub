@@ -1,5 +1,22 @@
 # Docker Compose
 
+**이전**: [Dockerfile](./03_Dockerfile.md) | **다음**: [실전 예제](./05_Practical_Examples.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Docker Compose가 무엇인지, 그리고 왜 멀티 컨테이너 애플리케이션 관리를 단순화하는지 설명할 수 있다
+2. 서비스(services), 포트(ports), 환경 변수(environment variables), 볼륨(volumes), 네트워크(networks)를 포함한 docker-compose.yml 파일을 작성할 수 있다
+3. `depends_on`, `healthcheck`, 재시작 정책(restart policies)을 사용하여 서비스 의존성과 안정성을 관리할 수 있다
+4. Docker Compose CLI 명령어를 활용하여 서비스를 시작, 중지, 스케일링, 모니터링할 수 있다
+5. 여러 Compose 파일을 이용한 환경별 설정 오버라이드(override)를 구성할 수 있다
+6. 헬스체크(health check)와 조건부 시작을 통한 서비스 준비 패턴을 구현할 수 있다
+
+---
+
+대부분의 실제 애플리케이션은 웹 서버, 데이터베이스, 캐시, 메시지 큐 등 여러 서비스로 구성됩니다. 이 각각을 별도의 `docker run` 명령으로 관리하면 금세 다루기 어렵고 오류가 발생하기 쉬워집니다. Docker Compose는 전체 애플리케이션 스택을 하나의 YAML 파일에 정의하고 단 하나의 명령으로 제어할 수 있게 해줍니다. 로컬 개발 환경과 간단한 프로덕션 배포를 위한 표준 도구입니다.
+
 ## 1. Docker Compose란?
 
 Docker Compose는 **여러 컨테이너를 정의하고 실행**하는 도구입니다. YAML 파일 하나로 전체 애플리케이션 스택을 관리합니다.
@@ -8,10 +25,10 @@ Docker Compose는 **여러 컨테이너를 정의하고 실행**하는 도구입
 
 **일반 Docker 명령어:**
 ```bash
-# 네트워크 생성
+# Create network — needed so containers can reach each other by name
 docker network create myapp-network
 
-# 데이터베이스 실행
+# Run database
 docker run -d \
   --name db \
   --network myapp-network \
@@ -19,7 +36,7 @@ docker run -d \
   -v pgdata:/var/lib/postgresql/data \
   postgres:15
 
-# 백엔드 실행
+# Run backend — must remember the exact network, env vars, volume for every service
 docker run -d \
   --name backend \
   --network myapp-network \
@@ -27,7 +44,7 @@ docker run -d \
   -p 3000:3000 \
   my-backend
 
-# 프론트엔드 실행
+# Run frontend — three separate commands to manage; error-prone and hard to reproduce
 docker run -d \
   --name frontend \
   --network myapp-network \
@@ -54,11 +71,11 @@ docker compose up -d
 Docker Desktop에는 Docker Compose가 포함되어 있습니다.
 
 ```bash
-# 버전 확인
+# Check version
 docker compose version
 # Docker Compose version v2.23.0
 
-# 또는 (구버전)
+# Or (old version)
 docker-compose --version
 ```
 
@@ -72,26 +89,26 @@ docker-compose --version
 # docker-compose.yml
 
 services:
-  서비스명1:
-    image: 이미지명
+  service-name1:
+    image: image-name
     ports:
-      - "호스트:컨테이너"
+      - "host:container"
     environment:
-      - 변수=값
+      - variable=value
     volumes:
-      - 볼륨:경로
+      - volume:path
     depends_on:
-      - 다른서비스
+      - other-service
 
-  서비스명2:
-    build: ./경로
+  service-name2:
+    build: ./path
     ...
 
 volumes:
-  볼륨명:
+  volume-name:
 
 networks:
-  네트워크명:
+  network-name:
 ```
 
 ---
@@ -122,13 +139,13 @@ services:
 ```yaml
 services:
   app:
-    build: .                    # 현재 디렉토리의 Dockerfile
+    build: .                    # Dockerfile in current directory
 
   api:
     build:
-      context: ./backend        # 빌드 컨텍스트
-      dockerfile: Dockerfile    # Dockerfile 경로
-      args:                     # 빌드 인자
+      context: ./backend        # Build context
+      dockerfile: Dockerfile    # Dockerfile path
+      args:                     # Build arguments
         - NODE_ENV=production
 ```
 
@@ -138,7 +155,7 @@ services:
 services:
   web:
     ports:
-      - "8080:80"              # 호스트:컨테이너
+      - "8080:80"              # host:container
       - "443:443"
 
   api:
@@ -156,7 +173,7 @@ services:
       - POSTGRES_PASSWORD=secret
       - POSTGRES_DB=myapp
 
-  # 또는 key: value 형식
+  # Or key: value format
   api:
     environment:
       NODE_ENV: production
@@ -186,16 +203,16 @@ API_KEY=abc123
 services:
   db:
     volumes:
-      - pgdata:/var/lib/postgresql/data    # Named volume
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # 바인드 마운트
+      - pgdata:/var/lib/postgresql/data    # Named volume — data survives container removal
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Bind mount — auto-runs SQL on first start
 
   app:
     volumes:
-      - ./src:/app/src                      # 소스 코드 마운트 (개발용)
-      - /app/node_modules                   # 익명 볼륨 (덮어쓰기 방지)
+      - ./src:/app/src                      # Source code mount — enables live-reload during dev
+      - /app/node_modules                   # Anonymous volume — prevents host's node_modules from overwriting container's
 
 volumes:
-  pgdata:                                   # Named volume 선언
+  pgdata:                                   # Declare here so Compose manages the volume lifecycle
 ```
 
 ### depends_on - 의존성
@@ -222,19 +239,19 @@ services:
 services:
   frontend:
     networks:
-      - frontend-net
+      - frontend-net      # frontend can only talk to backend, not directly to db
 
   backend:
     networks:
-      - frontend-net
-      - backend-net
+      - frontend-net      # reachable by frontend
+      - backend-net       # can reach db — acts as a gateway between the two networks
 
   db:
     networks:
-      - backend-net
+      - backend-net       # isolated from frontend — reduces attack surface
 
 networks:
-  frontend-net:
+  frontend-net:           # Separate networks enforce least-privilege network access
   backend-net:
 ```
 
@@ -243,13 +260,13 @@ networks:
 ```yaml
 services:
   web:
-    restart: always              # 항상 재시작
+    restart: always              # Always restart — even after daemon reboot (production use)
 
   api:
-    restart: unless-stopped      # 수동 중지 전까지 재시작
+    restart: unless-stopped      # Auto-restart on crash, but respect manual docker stop
 
   worker:
-    restart: on-failure          # 실패 시 재시작
+    restart: on-failure          # Restart only on non-zero exit — avoids infinite loops from intentional shutdowns
 ```
 
 ### healthcheck - 헬스체크
@@ -258,11 +275,12 @@ services:
 services:
   api:
     healthcheck:
+      # Orchestrators use health checks to restart unhealthy containers automatically
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 30s            # How often to probe
+      timeout: 10s             # Max wait per probe before marking as failure
+      retries: 3               # Consecutive failures before marking "unhealthy"
+      start_period: 40s        # Grace period for slow-starting apps (failures don't count here)
 ```
 
 ---
@@ -272,64 +290,64 @@ services:
 ### 실행
 
 ```bash
-# 실행 (포그라운드)
+# Run (foreground)
 docker compose up
 
-# 백그라운드 실행
+# Run in background
 docker compose up -d
 
-# 이미지 재빌드 후 실행
+# Rebuild images then run
 docker compose up --build
 
-# 특정 서비스만 실행
+# Run specific services only
 docker compose up -d web api
 ```
 
 ### 중지/삭제
 
 ```bash
-# 중지
+# Stop
 docker compose stop
 
-# 중지 및 컨테이너 삭제
+# Stop and remove containers
 docker compose down
 
-# 볼륨도 함께 삭제
+# Also remove volumes — destroys persistent data; use only when you want a clean slate
 docker compose down -v
 
-# 이미지도 함께 삭제
+# Also remove images — forces a fresh pull/build on next 'up'; useful after major changes
 docker compose down --rmi all
 ```
 
 ### 상태 확인
 
 ```bash
-# 서비스 목록
+# List services
 docker compose ps
 
-# 로그 확인
+# View logs
 docker compose logs
 
-# 특정 서비스 로그
+# View specific service logs
 docker compose logs api
 
-# 실시간 로그
+# Real-time logs
 docker compose logs -f
 ```
 
 ### 서비스 관리
 
 ```bash
-# 재시작
+# Restart
 docker compose restart
 
-# 특정 서비스 재시작
+# Restart specific service
 docker compose restart api
 
-# 서비스 스케일링
+# Scale services
 docker compose up -d --scale api=3
 
-# 서비스 내 명령 실행
+# Execute command in service
 docker compose exec api bash
 docker compose exec db psql -U postgres
 ```
@@ -358,20 +376,21 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # 'db' hostname works because Compose creates a shared network with DNS for each service
       - DATABASE_URL=postgres://user:pass@db:5432/mydb
     depends_on:
-      - db
+      - db                       # Ensures db container starts first (but not necessarily "ready")
 
   db:
-    image: postgres:15-alpine
+    image: postgres:15-alpine    # Alpine variant: smaller image, faster pulls
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=pass
       - POSTGRES_DB=mydb
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data   # Named volume — data persists across restarts
     ports:
-      - "5432:5432"
+      - "5432:5432"              # Expose to host for local DB tools (pgAdmin, DBeaver, etc.)
 
 volumes:
   pgdata:
@@ -381,10 +400,12 @@ volumes:
 ```dockerfile
 FROM node:18-alpine
 WORKDIR /app
+# Copy dependency manifest first — changes less often, so Docker caches the install layer
 COPY package*.json ./
 RUN npm install
 COPY . .
 EXPOSE 3000
+# Exec form: process runs as PID 1, receives SIGTERM for graceful shutdown
 CMD ["node", "index.js"]
 ```
 
@@ -418,53 +439,53 @@ docker compose down
 # docker-compose.yml
 
 services:
-  # 프론트엔드 (React)
+  # Frontend (React)
   frontend:
     build: ./frontend
     ports:
-      - "80:80"
+      - "80:80"              # Standard HTTP port — no port prefix needed in browser URL
     depends_on:
       - backend
 
-  # 백엔드 (Node.js)
+  # Backend (Node.js)
   backend:
     build: ./backend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DB_HOST=db
+      - DB_HOST=db           # Compose DNS resolves 'db' to the database container's IP
       - DB_NAME=myapp
-      - REDIS_HOST=redis
+      - REDIS_HOST=redis     # Same DNS-based discovery for the cache service
     depends_on:
       - db
       - redis
 
-  # 데이터베이스 (PostgreSQL)
+  # Database (PostgreSQL)
   db:
     image: postgres:15-alpine
     environment:
       - POSTGRES_DB=myapp
       - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}   # Read from .env file — keeps secrets out of YAML
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Auto-runs on first container start only
 
-  # 캐시 (Redis)
+  # Cache (Redis)
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine                  # Alpine: ~30 MB vs ~130 MB full Redis image
     volumes:
-      - redisdata:/data
+      - redisdata:/data                    # Persist cache across restarts (useful for sessions)
 
-  # 관리 도구 (pgAdmin)
+  # Admin tool (pgAdmin)
   pgadmin:
     image: dpage/pgadmin4
     environment:
       - PGADMIN_DEFAULT_EMAIL=admin@example.com
       - PGADMIN_DEFAULT_PASSWORD=admin
     ports:
-      - "5050:80"
+      - "5050:80"            # Non-standard host port to avoid conflicts with other services on :80
     depends_on:
       - db
 
@@ -487,30 +508,30 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.dev     # Separate Dockerfile — may include dev tools (nodemon, debugger)
     ports:
       - "3000:3000"
     volumes:
-      - .:/app                    # 소스 코드 마운트
-      - /app/node_modules         # node_modules 보호
+      - .:/app                    # Bind mount — edit on host, changes appear instantly in container
+      - /app/node_modules         # Anonymous volume: prevents host bind mount from hiding container's installed modules
     environment:
       - NODE_ENV=development
-    command: npm run dev          # 개발 서버 실행
+    command: npm run dev          # Override CMD — use a file-watching dev server instead of production start
 
   db:
     image: postgres:15-alpine
     environment:
       - POSTGRES_PASSWORD=devpass
     ports:
-      - "5432:5432"              # 로컬 접속 허용
+      - "5432:5432"              # Expose to host so local DB tools (pgAdmin, psql) can connect directly
 ```
 
 **실행:**
 ```bash
-# 개발 환경
+# Development environment
 docker compose -f docker-compose.dev.yml up
 
-# 프로덕션 환경
+# Production environment
 docker compose -f docker-compose.yml up -d
 ```
 
@@ -521,29 +542,29 @@ docker compose -f docker-compose.yml up -d
 ### 환경별 설정 분리
 
 ```yaml
-# docker-compose.yml (기본)
+# docker-compose.yml (base)
 services:
   app:
     image: myapp
 
-# docker-compose.override.yml (개발용, 자동 병합)
+# docker-compose.override.yml (dev, auto-merged)
 services:
   app:
     build: .
     volumes:
       - .:/app
 
-# docker-compose.prod.yml (프로덕션용)
+# docker-compose.prod.yml (production)
 services:
   app:
     restart: always
 ```
 
 ```bash
-# 개발: docker-compose.yml + docker-compose.override.yml 자동 병합
+# Development: auto-merges docker-compose.yml + docker-compose.override.yml
 docker compose up
 
-# 프로덕션
+# Production
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -554,11 +575,12 @@ services:
   app:
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy   # Wait until db is actually ready, not just started
 
   db:
     image: postgres:15
     healthcheck:
+      # pg_isready checks if Postgres is accepting connections — better than just checking if the process is alive
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
@@ -584,6 +606,73 @@ services:
 
 ---
 
-## 다음 단계
+## 연습 문제
 
-[05_Practical_Examples.md](./05_Practical_Examples.md)에서 실제 프로젝트에 Docker를 적용해봅시다!
+### 연습 1: 두 서비스 스택(Two-Service Stack)
+
+간단한 웹 앱과 Redis 카운터로 Docker Compose 스택(stack)을 만듭니다.
+
+1. 두 개의 서비스(service)를 포함하는 `docker-compose.yml`을 작성합니다:
+   - `redis`: `redis:7-alpine` 이미지 사용
+   - `web`: `python:3.11-slim` 사용, 포트(port) 5000 게시, `DATABASE_URL=redis://redis:6379`를 환경 변수(environment variable)로 설정
+2. `web`이 `redis` 이후에 시작되도록 `depends_on` 규칙을 추가합니다
+3. `docker compose up -d`를 실행하고 `docker compose ps`로 두 서비스가 실행 중인지 확인합니다
+4. `redis` 서비스의 로그를 확인합니다: `docker compose logs redis`
+5. `redis` 컨테이너 내부에서 Redis CLI 명령을 실행합니다: `docker compose exec redis redis-cli ping`
+6. `docker compose down`으로 종료하고 모든 컨테이너가 삭제되었는지 확인합니다
+
+### 연습 2: 헬스 체크(Health Check)가 있는 영속적 데이터베이스
+
+헬스 체크(health check)와 의존성 기반 앱 시작을 포함하여 PostgreSQL 서비스를 구성합니다.
+
+1. 다음을 포함하는 `docker-compose.yml`을 작성합니다:
+   - `db`: `postgres:15-alpine`, 네임드 볼륨(named volume) `pgdata:/var/lib/postgresql/data`, `pg_isready`를 사용하는 `healthcheck`
+   - `app`: 임의의 이미지, `depends_on.db.condition: service_healthy`
+2. 스택을 시작하고 `docker compose ps`를 실행합니다 — `db`가 건강한 상태(healthy)가 된 후에만 `app`이 시작되는 것을 관찰합니다
+3. 스택을 중지하고 재시작하여 네임드 볼륨 덕분에 `db`의 데이터가 유지되는지 확인합니다
+4. `docker compose down -v`를 실행하여 네임드 볼륨도 삭제되는지 확인합니다
+
+### 연습 3: 개발과 프로덕션(Production) 환경
+
+여러 Compose 파일을 사용하여 환경별 설정을 관리합니다.
+
+1. 빌드된 이미지(`build: .`)를 사용하는 `web` 서비스를 포함하는 기본 `docker-compose.yml`을 작성합니다
+2. 개발 환경을 위한 `docker-compose.override.yml`을 작성합니다:
+   - 소스 코드를 볼륨으로 마운트: `.:/app`
+   - `NODE_ENV=development` 설정
+   - 포트 `3001:3000` 매핑
+3. 프로덕션을 위한 `docker-compose.prod.yml`을 작성합니다:
+   - `restart: always` 추가
+   - `NODE_ENV=production` 설정
+   - 포트 `80:3000` 매핑
+4. 개발 모드로 시작: `docker compose up` (override 자동 병합)
+5. 프로덕션 모드로 시작: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+6. 두 모드 간의 구성 차이를 확인합니다
+
+### 연습 4: 서비스 스케일링(Service Scaling)
+
+서비스를 스케일(scale)하고 부하 분산을 관찰합니다.
+
+1. 호스트명(hostname)으로 응답하는 `api` 서비스가 포함된 `docker-compose.yml`을 작성합니다 (`hashicorp/http-echo -text="$(hostname)"` 또는 유사한 이미지 사용)
+2. `docker compose up -d`로 시작합니다
+3. `api` 서비스를 3개의 레플리카(replica)로 스케일합니다: `docker compose up -d --scale api=3`
+4. `docker compose ps`로 세 개의 컨테이너가 실행 중인지 확인합니다
+5. `docker compose logs api`로 모든 레플리카의 로그를 확인합니다
+6. 1개의 레플리카로 다시 스케일 다운(scale down)하고 확인합니다
+
+### 연습 5: 풀스택(Full-Stack) 애플리케이션 Compose
+
+프론트엔드(frontend), 백엔드(backend), 데이터베이스 3개 서비스로 compose 파일을 만듭니다.
+
+1. `docker-compose.yml`에 세 개의 서비스를 정의합니다:
+   - `db`: `postgres:15-alpine`, 환경 변수와 네임드 볼륨
+   - `backend`: 로컬 Dockerfile로 빌드, `db`에 의존, 데이터베이스 연결 환경 변수 포함
+   - `frontend`: 다른 Dockerfile로 빌드, `backend`에 의존, 포트 80 게시
+2. 두 개의 네트워크(network)를 정의합니다: `frontend-net` (frontend + backend)과 `backend-net` (backend + db)
+3. `frontend`가 `db`에 직접 접근할 수 없도록 각 서비스를 적절한 네트워크에 할당합니다
+4. 스택을 시작하고 `docker compose exec db psql`을 사용하여 `backend`에서는 데이터베이스에 접근 가능하지만 `frontend`에서는 불가능한지 확인합니다
+5. `docker inspect`를 사용하여 네트워크 할당을 확인합니다
+
+---
+
+**이전**: [Dockerfile](./03_Dockerfile.md) | **다음**: [실전 예제](./05_Practical_Examples.md)

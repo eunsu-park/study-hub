@@ -1,5 +1,27 @@
 # 머신러닝 개요
 
+**다음**: [선형회귀](./02_Linear_Regression.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 머신러닝이 무엇이며 전통적인 프로그래밍과 어떻게 다른지 설명할 수 있습니다
+2. 지도학습(supervised learning), 비지도학습(unsupervised learning), 강화학습(reinforcement learning)을 구분할 수 있습니다
+3. 문제 정의부터 배포까지 머신러닝의 엔드투엔드(end-to-end) 워크플로우를 설명할 수 있습니다
+4. 과적합(overfitting)과 과소적합(underfitting)을 식별하고 편향-분산 트레이드오프(bias-variance tradeoff)를 설명할 수 있습니다
+5. 훈련/검증/테스트 분할(train/validation/test splitting) 전략을 올바르게 적용할 수 있습니다
+6. scikit-learn의 추정기(estimator)와 변환기(transformer) 인터페이스 사용을 시연할 수 있습니다
+7. StandardScaler와 MinMaxScaler를 사용하여 특성 스케일링(feature scaling)을 구현할 수 있습니다
+
+---
+
+매일 우리는 머신러닝 시스템과 상호작용합니다 — 이메일 스팸 필터부터 상품 추천, 음성 어시스턴트까지. 이러한 시스템이 강력한 이유는 직접 규칙을 코딩하는 대신 데이터에서 패턴을 학습하는 능력에 있습니다. 특정 알고리즘을 깊이 파고들기 전에, ML의 핵심 개념, 워크플로우, 그리고 함정을 이해하는 것이 필수적인 첫 번째 단계입니다.
+
+---
+
 ## 1. 머신러닝이란?
 
 머신러닝(Machine Learning)은 명시적으로 프로그래밍하지 않아도 데이터로부터 학습하여 예측이나 결정을 수행하는 알고리즘입니다.
@@ -103,15 +125,19 @@ from sklearn.datasets import load_iris
 iris = load_iris()
 X, y = iris.data, iris.target
 
-# 2. 데이터 분할
+# 2. 데이터 분할 — 스케일링보다 먼저 수행해야 데이터 누수(data leakage)를 막을 수 있음.
+# 전체 데이터로 스케일링하면 테스트셋의 통계값(평균, 표준편차)이 훈련에 유출되어
+# 성능이 과도하게 낙관적으로 측정됨
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.2, random_state=42  # 랜덤 시드 고정으로 매 실행마다 동일한 분할 보장
 )
 
 # 3. 데이터 전처리 (스케일링)
+# 표준화(Standardization, 평균=0, 분산=1)는 경사 기반 최적화(gradient-based optimizer)의
+# 수렴 속도를 높임; 스케일이 큰 특성이 손실(loss)을 지배하면 훈련이 느려지거나 편향됨
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+X_test_scaled = scaler.transform(X_test)  # 테스트 데이터는 transform만 — 재학습(refit) 금지
 
 # 4. 모델 학습
 model = LogisticRegression(max_iter=200)
@@ -121,6 +147,9 @@ model.fit(X_train_scaled, y_train)
 y_pred = model.predict(X_test_scaled)
 
 # 6. 평가
+# 정확도(accuracy)만으로는 클래스 불균형 시 오해를 부를 수 있음 —
+# classification_report의 클래스별 정밀도(precision)/재현율(recall)로
+# 소수 클래스를 모델이 무시하는지 확인 가능
 print(f"정확도: {accuracy_score(y_test, y_pred):.4f}")
 print("\n분류 리포트:")
 print(classification_report(y_test, y_pred, target_names=iris.target_names))
@@ -200,8 +229,8 @@ plt.show()
 편향 (Bias): 모델의 단순함으로 인한 오차
 분산 (Variance): 데이터 변화에 대한 모델의 민감도
 
-높은 편향 → 과소적합
-높은 분산 → 과적합
+높은 편향 → 과소적합   (모델이 너무 단순하여 실제 신호(signal)를 포착하지 못함)
+높은 분산 → 과적합    (모델이 훈련 데이터의 노이즈까지 암기함)
 ```
 
 ### 4.4 특성 스케일링

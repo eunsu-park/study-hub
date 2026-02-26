@@ -45,8 +45,10 @@
 | [17_Spark_Structured_Streaming.md](./17_Spark_Structured_Streaming.md) | Spark Structured Streaming | ⭐⭐⭐⭐ | 무한 테이블, 워터마킹, 상태 기반 처리, Kafka 통합 |
 | [18_CDC_Debezium.md](./18_CDC_Debezium.md) | CDC와 Debezium | ⭐⭐⭐ | 로그 기반 CDC, Debezium+Kafka Connect, 이벤트 형식, 아웃박스 패턴 |
 | [19_Lakehouse_Practical_Patterns.md](./19_Lakehouse_Practical_Patterns.md) | Lakehouse 실전 패턴 | ⭐⭐⭐⭐ | 메달리온 아키텍처, MERGE/SCD2, 컴팩션, 타임 트래블, Iceberg |
+| [20_Dagster_Asset_Orchestration.md](./20_Dagster_Asset_Orchestration.md) | Dagster 자산 기반 오케스트레이션 | ⭐⭐⭐ | 소프트웨어 정의 자산, Dagster vs Airflow, 파티션 자산, 센서, dbt 통합 |
+| [21_Data_Versioning_and_Contracts.md](./21_Data_Versioning_and_Contracts.md) | 데이터 버전 관리와 데이터 계약 | ⭐⭐⭐⭐ | lakeFS, DVC 비교, 스키마 계약, 계약 테스트, 데이터 메시 |
 
-**총 레슨**: 19개
+**총 레슨**: 21개
 
 ---
 

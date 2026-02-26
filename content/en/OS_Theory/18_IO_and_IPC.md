@@ -1,10 +1,24 @@
 # I/O and IPC ⭐⭐⭐
 
-## Overview
-
-This chapter covers operating system I/O systems and Inter-Process Communication (IPC) mechanisms. Topics range from hardware control to high-level communication methods.
+**Previous**: [File System Implementation](./17_File_System_Implementation.md) | **Next**: None (final lesson)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain I/O hardware organization including ports, buses, and device controllers
+2. Compare programmed I/O (polling), interrupt-driven I/O, and DMA transfer methods
+3. Describe the role of device drivers and the layered I/O subsystem architecture
+4. Compare IPC mechanisms including pipes, message queues, shared memory, and sockets
+5. Explain when to use shared memory versus message passing based on performance and complexity trade-offs
+6. Implement basic IPC using anonymous pipes, named pipes (FIFOs), and POSIX shared memory
+7. Design a simple client-server communication using TCP sockets
+
+---
+
+A computer is useless without I/O -- keyboards, displays, disks, and networks are how it interacts with the world. Inter-process communication extends this idea to processes talking to each other. Together, I/O and IPC are the nervous system of the operating system, connecting isolated processes to hardware and to each other. This lesson ties together everything you have learned about processes, memory, and file systems into the complete picture of how an OS manages a running system.
 
 ## Table of Contents
 
@@ -523,6 +537,10 @@ int main() {
 
     if (pid == 0) {
         // Child process: read from pipe
+        // Why: Close the unused write end in the reader process. A pipe stays open
+        // as long as ANY write end exists. If the child keeps fd[1] open, read()
+        // will block forever waiting for EOF even after the parent closes its write
+        // end -- because the pipe still has an open writer (the child itself).
         close(pipefd[1]);  // Close write end
 
         ssize_t n = read(pipefd[0], buffer, sizeof(buffer));
@@ -532,6 +550,11 @@ int main() {
         exit(0);
     } else {
         // Parent process: write to pipe
+        // Why: Close the unused read end in the writer process. If the parent keeps
+        // fd[0] open and the child exits, writing to a pipe with no readers would
+        // normally generate SIGPIPE. But if the parent still holds the read end,
+        // the kernel thinks there is still a reader, so write() blocks instead of
+        // signaling an error. Always close the end you don't use.
         close(pipefd[0]);  // Close read end
 
         const char* message = "Hello from parent!";
@@ -545,6 +568,8 @@ int main() {
     return 0;
 }
 ```
+
+> **Why fork+exec with pipes?** `fork()` creates a child process that inherits all open file descriptors from the parent -- including both ends of the pipe. `exec()` then replaces the child's program image but preserves open file descriptors. This two-step pattern is exactly how shell piping (`cmd1 | cmd2`) works: the shell creates a pipe, forks twice, redirects stdout/stdin to the pipe ends, then execs each command. The new programs never know they are connected by a pipe -- they just read from stdin and write to stdout as usual.
 
 ### 6.2 Named Pipe (FIFO)
 
@@ -705,6 +730,8 @@ int main() {
 ```
 
 ### 7.2 Synchronization Need
+
+> **Why synchronization is essential**: Shared memory is the fastest IPC mechanism because data is never copied -- both processes read and write the same physical memory region with no kernel involvement per access. However, this speed comes at a cost: since two processes can write to the same memory location simultaneously, you get data races without explicit synchronization. Unlike pipes or message queues where the kernel serializes access, shared memory puts the responsibility entirely on the programmer to use mutexes, semaphores, or other synchronization primitives.
 
 ```c
 // Shared memory with semaphore synchronization

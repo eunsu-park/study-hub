@@ -1,10 +1,22 @@
 # Synchronization Tools
 
-## Overview
-
-Operating systems and programming languages provide various tools for synchronization. In this lesson, we'll learn about mutexes, semaphores, monitors, condition variables, and solve classic synchronization problems.
+**Previous**: [Synchronization Basics](./07_Synchronization_Basics.md) | **Next**: [Deadlock](./09_Deadlock.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish a mutex from a binary semaphore and explain the ownership difference
+2. Implement counting semaphores for resource pooling
+3. Solve the Producer-Consumer problem using semaphores
+4. Solve the Readers-Writers and Dining Philosophers problems
+5. Explain how monitors simplify synchronization by encapsulating shared state
+
+---
+
+Raw locks and test-and-set are too low-level for most programmers. Higher-level tools -- semaphores, monitors, condition variables -- provide structured ways to coordinate concurrent access. These are the building blocks used inside every database, web server, and operating system kernel.
 
 ## Table of Contents
 
@@ -982,6 +994,138 @@ pthread_mutex_unlock(&mutex);
 ```
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Producer-Consumer Variants
+
+Run `examples/OS_Theory/08_producer_consumer.py` and experiment with the bounded buffer.
+
+**Tasks:**
+1. Change the buffer capacity to 1 (single-element buffer). How does this affect throughput compared to capacity=5?
+2. Create an unbalanced scenario: 5 fast producers (0.01s delay) and 1 slow consumer (0.1s delay). Observe the buffer utilization pattern
+3. Implement a priority producer-consumer where high-priority items are consumed first (hint: use a heap instead of a deque)
+
+### Exercise 2: Dining Philosophers Solutions
+
+Explore different solutions to the dining philosophers problem using `examples/OS_Theory/08_producer_consumer.py`.
+
+**Tasks:**
+1. Implement the "waiter" solution: add a semaphore initialized to N-1 that limits how many philosophers can attempt to eat simultaneously
+2. Implement the "chandy-misra" solution: forks start dirty, after use forks are marked dirty, dirty forks must be given to requesting neighbors
+3. Compare all three solutions (resource hierarchy, waiter, chandy-misra) by running 1000 meals and measuring average wait time per philosopher
+
+### Exercise 3: Read-Write Lock
+
+Implement a readers-writers lock that allows concurrent reads but exclusive writes:
+
+**Tasks:**
+1. Create a `ReadWriteLock` class with `acquire_read()`, `release_read()`, `acquire_write()`, `release_write()` methods
+2. Implement the "readers-preference" policy (readers never wait if no writer is active)
+3. Test with 5 reader threads (100 reads each) and 2 writer threads (20 writes each). Verify no read occurs during a write
+
+---
+
+## Exercises
+
+### Exercise 1: Mutex vs Semaphore Semantics
+
+For each synchronization scenario, choose **mutex** or **semaphore** and justify your choice. If semaphore, specify whether it is binary or counting and its initial value.
+
+| Scenario | Tool (mutex/semaphore) | Initial Value | Justification |
+|----------|----------------------|---------------|---------------|
+| Protecting a shared `int counter` updated by 4 threads | | | |
+| Limiting simultaneous database connections to 10 | | | |
+| Signaling a worker thread that a new task has been added to a queue | | | |
+| Ensuring a config file is read by exactly one thread at a time | | | |
+| Coordinating a producer that runs ahead of a consumer (bounded buffer, size=5) | | | |
+
+### Exercise 2: Semaphore Trace
+
+A system uses two semaphores to coordinate a producer and consumer with a buffer of size 3:
+- `empty` (initialized to 3): counts empty slots
+- `full` (initialized to 0): counts full slots
+- `mutex` (initialized to 1): protects buffer access
+
+Trace the following sequence of operations and record the semaphore values after each call. Write "BLOCK" if a process would block.
+
+| Step | Operation | empty | full | mutex | Notes |
+|------|-----------|-------|------|-------|-------|
+| Initial | — | 3 | 0 | 1 | |
+| 1 | Producer: P(empty) | | | | |
+| 2 | Producer: P(mutex) | | | | |
+| 3 | Producer: add item | | | | |
+| 4 | Producer: V(mutex) | | | | |
+| 5 | Producer: V(full) | | | | |
+| 6 | Producer: P(empty) | | | | |
+| 7 | Producer: P(mutex) | | | | |
+| 8 | Producer: add item | | | | |
+| 9 | Producer: V(mutex) | | | | |
+| 10 | Producer: V(full) | | | | |
+| 11 | Producer: P(empty) | | | | |
+| 12 | Producer: P(mutex) | | | | |
+| 13 | Producer: add item | | | | |
+| 14 | Producer: V(mutex) | | | | |
+| 15 | Producer: V(full) | | | | |
+| 16 | Producer: P(empty) | | | | |
+
+### Exercise 3: Monitor and Condition Variable Design
+
+Design a `BoundedQueue` monitor in pseudocode that supports `enqueue(item)` and `dequeue()` with a maximum capacity of N. The monitor must:
+- Block `enqueue()` when the queue is full
+- Block `dequeue()` when the queue is empty
+- Use two condition variables: `not_full` and `not_empty`
+
+```pseudocode
+monitor BoundedQueue:
+    queue = []
+    capacity = N
+    condition not_full
+    condition not_empty
+
+    procedure enqueue(item):
+        // TODO: fill in
+
+    procedure dequeue():
+        // TODO: fill in
+        return item
+```
+
+1. Fill in the `enqueue` and `dequeue` procedures using `wait()` and `signal()`
+2. Why must the condition check be in a `while` loop rather than an `if` statement? (Hint: spurious wakeup)
+3. If `signal()` uses **signal-and-wait** semantics, what changes in the implementation?
+
+### Exercise 4: Dining Philosophers Deadlock Analysis
+
+Five philosophers sit at a round table. Each picks up the left fork then the right fork. Consider this flawed implementation:
+
+```c
+void philosopher(int i) {
+    while (true) {
+        think();
+        lock(fork[i]);           // pick up left fork
+        lock(fork[(i+1) % 5]);  // pick up right fork
+        eat();
+        unlock(fork[i]);
+        unlock(fork[(i+1) % 5]);
+    }
+}
+```
+
+1. Demonstrate a deadlock scenario: show the specific state where all 5 philosophers hold exactly one fork and none can proceed
+2. Apply the **resource hierarchy** solution: philosophers must always acquire the lower-numbered fork first. Rewrite `philosopher()` to use this fix and explain why it breaks the circular wait condition.
+3. With the resource hierarchy fix, can starvation still occur? Give a specific scenario or prove it cannot.
+
+### Exercise 5: Readers-Writers Problem Fairness
+
+The classic readers-writers solution with readers' preference can starve writers. Consider a system where readers arrive at rate λ_r = 10/second and writers at λ_w = 1/second, and reads take 50ms while writes take 20ms.
+
+1. Under readers' preference, a writer arrives and finds 5 active readers. New readers keep arriving. Does the writer ever get access? Explain the starvation mechanism.
+2. Implement writers' preference (a reader waits if any writer is waiting or writing) using pseudocode with semaphores. What variables do you need?
+3. Under writers' preference, a writer holds the lock. 20 readers are waiting. The writer finishes. How many readers can proceed? All at once or one at a time?
+4. Describe a fair solution that prevents both reader and writer starvation. What is the key mechanism?
 
 ---
 

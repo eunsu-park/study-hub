@@ -983,6 +983,265 @@ app = graph.compile()
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: LCEL 체인(Chain) 구성
+
+코드 스니펫(snippet)에서 프로그래밍 언어를 먼저 식별하고, 감지된 언어를 두 번째 프롬프트(prompt)에 활용하여 코드가 무엇을 하는지 설명하는 2단계 LCEL 체인을 만드세요. 두 번째 단계에 원본 코드를 전달하기 위해 `RunnablePassthrough`를 사용해야 합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+
+# 1단계: 프로그래밍 언어 감지
+detect_language_prompt = ChatPromptTemplate.from_template(
+    "이 코드가 어떤 프로그래밍 언어로 작성되었나요? "
+    "언어 이름만 대답하세요.\n\n코드:\n{code}"
+)
+
+# 2단계: 감지된 언어를 활용하여 코드 설명
+explain_prompt = ChatPromptTemplate.from_template(
+    "당신은 {language} 전문가입니다. "
+    "다음 코드가 무엇을 하는지 2-3문장으로 설명하세요:\n\n{code}"
+)
+
+# 개별 단계 구성
+detect_chain = detect_language_prompt | llm | StrOutputParser()
+
+# 2단계 체인: 언어 감지 후, 언어+원본 코드를 explain에 전달
+chain = (
+    RunnableParallel(
+        language=detect_chain,
+        code=RunnablePassthrough()  # 원본 입력 딕셔너리 그대로 전달
+    )
+    | explain_prompt
+    | llm
+    | StrOutputParser()
+)
+
+# 테스트
+code_snippet = {"code": """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""}
+
+result = chain.invoke(code_snippet)
+print(result)
+# 기대 출력: "이 Python 함수는 재귀를 사용하여 n번째 피보나치 수를 계산합니다.
+#            기저 사례(n=0은 0, n=1은 1)를 처리하고 앞선 두 피보나치 수를 재귀적으로 합산합니다."
+```
+
+**핵심 개념:**
+- `RunnableParallel`이 두 서브 체인(sub-chain)을 동시에 실행: 언어 감지와 코드 패스스루(passthrough)
+- `RunnablePassthrough()`는 입력 딕셔너리를 변경 없이 전달하여 2단계에서도 `code`를 사용 가능하게 함
+- `RunnableParallel`의 출력은 `{"language": "Python", "code": "..."}` 딕셔너리로, `explain_prompt` 변수와 일치함
+</details>
+
+---
+
+### 연습 문제 2: Pydantic 출력 파서(Output Parser)
+
+비정형 텍스트에서 구조화된 제품 정보를 추출하는 LangChain 체인을 만드세요. 출력은 `name`(str), `price`(float), `in_stock`(bool), `features`(str 목록) 필드를 가진 Pydantic 모델이어야 합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List
+
+class Product(BaseModel):
+    name: str = Field(description="제품명")
+    price: float = Field(description="가격(숫자로)")
+    in_stock: bool = Field(description="재고 여부")
+    features: List[str] = Field(description="주요 제품 특징 목록")
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+parser = JsonOutputParser(pydantic_object=Product)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     "텍스트에서 제품 정보를 추출하여 JSON으로 반환하세요. "
+     "{format_instructions}"),
+    ("human", "{text}")
+]).partial(format_instructions=parser.get_format_instructions())
+
+chain = prompt | llm | parser
+
+# 비정형 제품 설명으로 테스트
+text = """
+울트라북 프로 15가 1,399,000원에 출시되었습니다. 현재 재고가 있으며
+바로 배송 가능합니다. 주요 특징으로는 15인치 4K 디스플레이, 16GB RAM,
+512GB NVMe SSD, 18시간 배터리 수명이 있습니다.
+"""
+
+result = chain.invoke({"text": text})
+print(result)
+# 기대 출력:
+# {
+#   'name': '울트라북 프로 15',
+#   'price': 1399000.0,
+#   'in_stock': True,
+#   'features': ['15인치 4K 디스플레이', '16GB RAM', '512GB NVMe SSD', '18시간 배터리 수명']
+# }
+
+# Pydantic 유효성 검사 포함
+product = Product(**result)
+print(f"제품: {product.name}, 가격: {product.price:,.0f}원")
+print(f"재고: {product.in_stock}")
+print(f"특징: {', '.join(product.features)}")
+```
+
+**왜 중요한가:** Pydantic 모델이 있는 `JsonOutputParser`는 스키마(schema) 검증을 제공합니다 — LLM이 `price`를 float 대신 문자열로 반환하면 Pydantic이 유효성 검사 오류를 발생시킵니다. 이를 통해 다운스트림(downstream) 처리에서 출력의 신뢰성이 보장됩니다.
+</details>
+
+---
+
+### 연습 문제 3: 다중 턴(Multi-turn) 챗봇을 위한 RunnableWithMessageHistory
+
+`RunnableWithMessageHistory`를 사용하여 다중 턴 고객 지원 챗봇을 구현하세요. 봇은 대화 컨텍스트를 기억하고 제품 지원 담당자 역할을 설정하는 시스템 프롬프트를 가져야 합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+
+# 대화 이력 플레이스홀더(placeholder)가 있는 프롬프트
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     "당신은 TechCorp의 친절한 고객 지원 담당자입니다. "
+     "간결하고 친근하게 답변하세요. 관련 있을 때 이전 메시지를 참조하세요."),
+    MessagesPlaceholder(variable_name="history"),  # 대화 이력 삽입 위치
+    ("human", "{input}"),
+])
+
+chain = prompt | llm | StrOutputParser()
+
+# 세션 저장소 (인메모리(in-memory); 운영 환경에서는 Redis/DB 사용)
+store = {}
+
+def get_session_history(session_id: str) -> ChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
+chatbot = RunnableWithMessageHistory(
+    chain,
+    get_session_history,
+    input_messages_key="input",
+    history_messages_key="history",
+)
+
+# 다중 턴 대화 시뮬레이션
+session = {"configurable": {"session_id": "user_42"}}
+
+# 턴 1
+r1 = chatbot.invoke({"input": "주문 #12345가 아직 도착하지 않았어요."}, config=session)
+print(f"봇: {r1}")
+
+# 턴 2 — 봇이 주문 번호를 기억해야 함
+r2 = chatbot.invoke({"input": "추적이 가능한가요?"}, config=session)
+print(f"봇: {r2}")
+
+# 턴 3 — 봇이 여전히 컨텍스트를 알아야 함
+r3 = chatbot.invoke({"input": "분실된 경우 어떻게 하나요?"}, config=session)
+print(f"봇: {r3}")
+
+# 저장된 이력 확인
+history = get_session_history("user_42")
+print(f"\n저장된 총 메시지 수: {len(history.messages)}")
+# 6개여야 함 (3개 human + 3개 AI 메시지)
+```
+
+**핵심 포인트:**
+- `MessagesPlaceholder`가 프롬프트의 해당 위치에 모든 이전 메시지를 삽입함
+- `session_id`로 여러 독립적인 대화 관리 가능; 각 사용자는 별도의 이력을 가짐
+- 운영 환경에서는 서버 재시작 시에도 이력이 유지되도록 `ChatMessageHistory`를 영구 저장소(Redis, PostgreSQL)로 교체
+- 이력은 매 턴마다 증가 — 매우 긴 대화에는 `ConversationSummaryMemory` 패턴 사용
+</details>
+
+---
+
+### 연습 문제 4: LangChain vs LangGraph 선택
+
+아래 각 애플리케이션 시나리오에 대해 LCEL 체인과 LangGraph 중 무엇을 사용할지 결정하고, 선택 이유와 고수준 아키텍처(architecture)를 스케치하세요.
+
+| 시나리오 | LCEL 또는 LangGraph? | 이유? |
+|---------|-------------------|------|
+| A. PDF 문서 요약 | ? | ? |
+| B. 답을 찾을 때까지 웹을 탐색하는 에이전트 | ? | ? |
+| C. 텍스트를 5개 언어로 병렬 번역 | ? | ? |
+| D. 모든 테스트가 통과할 때까지 반복하는 코드 리뷰 파이프라인 | ? | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 시나리오 | 선택 | 이유 |
+|---------|------|------|
+| A. PDF 요약 | **LCEL** | 선형 워크플로우: 로드 → 분할 → 요약. 사이클이나 복잡한 상태 불필요. `chain = loader | splitter | summarize_prompt | llm | parser` |
+| B. 웹 탐색 에이전트 | **LangGraph** | 사이클 필요 (검색 → 평가 → 필요시 재검색). 반복 전반에 걸쳐 상태 유지 필수. 조건부 엣지로 종료 시점 결정. |
+| C. 병렬 번역 | **LCEL** | `RunnableParallel`로 완벽히 처리: `{"fr": fr_chain, "de": de_chain, "ja": ja_chain, "ko": ko_chain, "es": es_chain}` — 모두 한 번에. |
+| D. 코드 리뷰 루프 | **LangGraph** | 사이클 필요: 리뷰 → 테스트 실행 → 실패 시 리뷰로 복귀. 상태 있는(stateful) 그래프가 반복 횟수와 테스트 결과를 추적. |
+
+**시나리오 B (웹 탐색 에이전트) LangGraph 아키텍처:**
+
+```python
+from langgraph.graph import StateGraph, END
+from typing import TypedDict, List
+
+class SearchState(TypedDict):
+    question: str
+    search_results: List[str]
+    answer: str
+    iterations: int
+
+def search_node(state: SearchState) -> SearchState:
+    """웹 검색 수행."""
+    results = web_search(state["question"])
+    return {**state, "search_results": results, "iterations": state["iterations"] + 1}
+
+def evaluate_node(state: SearchState) -> SearchState:
+    """답을 찾았는지 평가."""
+    answer = llm.invoke(f"{state['search_results']} 기반으로 답변: {state['question']}")
+    return {**state, "answer": answer.content}
+
+def should_continue(state: SearchState) -> str:
+    """재검색 여부 결정."""
+    if "모르겠습니다" in state["answer"] and state["iterations"] < 3:
+        return "search"  # 루프 복귀
+    return END          # 완료
+
+graph = StateGraph(SearchState)
+graph.add_node("search", search_node)
+graph.add_node("evaluate", evaluate_node)
+graph.add_edge("search", "evaluate")
+graph.add_conditional_edges("evaluate", should_continue, {"search": "search", END: END})
+graph.set_entry_point("search")
+app = graph.compile()
+```
+</details>
+
+---
+
 ## 다음 단계
 
-[11_Vector_Databases.md](./11_Vector_Databases.md)에서 벡터 데이터베이스를 학습합니다.
+[벡터 데이터베이스](./11_Vector_Databases.md)에서 벡터 데이터베이스를 학습합니다.

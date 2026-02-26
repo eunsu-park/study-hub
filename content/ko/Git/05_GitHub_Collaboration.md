@@ -1,5 +1,24 @@
 # GitHub 협업
 
+**이전**: [GitHub 시작하기](./04_GitHub_Getting_Started.md) | **다음**: [Git 고급 명령어](./06_Git_Advanced.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Collaborator 모델과 Fork & Pull Request 모델의 차이를 구분할 수 있다
+2. 저장소를 Fork하고, 변경 사항을 만들고, Pull Request를 제출할 수 있다
+3. Pull Request에 코멘트를 달고 승인하는 방식으로 코드 리뷰(Code Review)를 수행할 수 있다
+4. GitHub Issues를 사용하여 버그, 기능 요청, 작업을 추적할 수 있다
+5. 리뷰 및 CI 요구사항을 강제하기 위한 브랜치 보호 규칙(Branch Protection Rule)을 설정할 수 있다
+6. Fork 기반 오픈소스 기여 워크플로우를 처음부터 끝까지 적용할 수 있다
+
+---
+
+코드를 작성하는 것은 일의 절반에 불과하며, 나머지 절반은 다른 사람들과 협력하는 것입니다. GitHub의 협업 기능인 Pull Request, 코드 리뷰(Code Review), Issues, 브랜치 보호는 버그를 조기에 발견하고, 팀 전체에 지식을 공유하며, main 브랜치를 안정적으로 유지하는 구조화된 프로세스를 제공합니다. 오픈소스에 기여하든 팀 프로젝트에서 작업하든, 이러한 기술은 필수적입니다.
+
 ## 1. 협업 워크플로우 개요
 
 GitHub에서 협업하는 두 가지 주요 방식:
@@ -363,3 +382,37 @@ Git/GitHub 기초 학습을 완료했습니다. 다음 주제로 넘어가기 �
 1. GitHub에서 관심 있는 오픈소스 프로젝트 찾기
 2. 문서 오타 수정으로 첫 기여 시도
 3. 개인 프로젝트를 GitHub에 올리고 관리
+
+---
+
+## 연습 문제
+
+### 연습 1: Fork 후 Pull Request 제출
+1. `https://github.com/octocat/Spoon-Knife` 저장소를 Fork합니다.
+2. Fork한 저장소를 클론하고, 원본을 가리키는 `upstream`을 추가한 뒤 `git remote -v`로 두 원격을 확인합니다.
+3. `add-my-name` 브랜치를 만들고, 파일에 GitHub 사용자명을 추가한 뒤 커밋하고 Fork에 푸시합니다.
+4. 원본 저장소를 대상으로 Pull Request(PR)를 엽니다. 이 레슨에서 다룬 PR 템플릿 형식에 맞게 제목과 설명을 작성합니다.
+
+### 연습 2: 코드 리뷰(Code Review) 연습
+파트너와 함께(또는 두 개의 GitHub 계정을 사용하여):
+1. 한 사람이 작은 코드 변경이 담긴 PR을 엽니다.
+2. 리뷰어가 "Files changed" 탭에서 특정 라인에 최소 두 개의 인라인 코멘트를 남깁니다.
+3. 작성자가 피드백을 반영하여 새 커밋을 푸시합니다 — 새 커밋이 열린 PR에 자동으로 추가되는지 확인합니다.
+4. 리뷰어가 승인(Approve)하고, 작성자(또는 쓰기 권한이 있는 리뷰어)가 PR을 머지합니다.
+
+### 연습 3: Issues 워크플로우
+1. 자신의 저장소에서 이 레슨의 템플릿 형식을 사용하여 버그 리포트 이슈를 작성합니다. 재현 단계, 예상 동작, 환경 정보를 포함합니다.
+2. 가상의 개선 사항에 대한 기능 요청 이슈를 작성합니다.
+3. 설명에 `Closes #<이슈번호>`를 포함한 PR을 엽니다. PR을 머지하고 이슈가 자동으로 닫히는지 확인합니다.
+
+### 연습 4: Fork 동기화
+1. 연습 1에서 만든 Fork를 사용하여 업스트림(upstream) 변경 사항을 시뮬레이션합니다(저장소 소유자에게 요청하거나, 테스트용 저장소라면 GitHub 웹 에디터로 직접 커밋 생성).
+2. `git fetch upstream`을 실행하고 `git log upstream/main`으로 새 커밋을 확인한 뒤 로컬 `main`에 병합합니다.
+3. `git push origin main`으로 업데이트된 `main`을 Fork에 푸시합니다.
+
+### 연습 5: 브랜치 보호 규칙(Branch Protection Rules)
+관리자 권한이 있는 저장소에서:
+1. **Settings → Branches**로 이동하여 `main`에 대한 브랜치 보호 규칙을 추가합니다.
+2. "Require a pull request before merging"과 "Require status checks to pass before merging"을 활성화합니다.
+3. `main`으로 직접 푸시를 시도하고 거부되는지 확인합니다.
+4. 브랜치 보호 규칙이 팀 환경에서 코드 품질을 어떻게 향상시키는지 간략히 서술합니다.

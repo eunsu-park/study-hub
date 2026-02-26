@@ -1,44 +1,55 @@
 # Python Basics
 
+**Previous**: [Pattern Matching](./14_Pattern_Matching.md) | **Next**: [OOP Basics](./16_OOP_Basics.md)
+
 > **Note**: This lesson is for reviewing prerequisite knowledge. If you lack foundational knowledge before starting advanced lessons, study this content first.
 
 ## Learning Objectives
-- Understand Python basic data types and operators
-- Utilize control flow statements (conditionals, loops)
-- Master function definition and calling
-- Utilize data structures (lists, dictionaries, tuples, sets)
+
+After completing this lesson, you will be able to:
+
+1. Identify and use Python's basic data types (int, float, str, bool, None) and perform type conversions
+2. Apply arithmetic, comparison, logical, and membership operators in expressions
+3. Manipulate strings using indexing, slicing, common methods, and f-string formatting
+4. Write conditional statements (`if`/`elif`/`else`) and ternary expressions for branching logic
+5. Implement `for` and `while` loops with `range`, `enumerate`, `zip`, and comprehensions
+6. Define functions with default parameters, variable arguments (`*args`, `**kwargs`), and lambda expressions
+7. Use lists, tuples, dictionaries, and sets with their key operations and understand their trade-offs
+8. Handle exceptions with `try`/`except`/`else`/`finally` and define custom exception classes
 
 ---
+
+Every advanced Python technique rests on a solid understanding of the language fundamentals. Variables, data structures, control flow, functions, and exception handling are the building blocks you will use in every program you write. Reviewing these basics ensures you have a firm foundation before tackling topics like decorators, generators, and metaclasses.
 
 ## 1. Variables and Data Types
 
 ### 1.1 Basic Data Types
 
 ```python
-# 정수 (int)
+# integer (int)
 age = 25
 count = -10
-big_number = 1_000_000  # 가독성을 위한 언더스코어
+big_number = 1_000_000  # underscore for readability
 
-# 실수 (float)
+# float (float)
 pi = 3.14159
 temperature = -40.5
 scientific = 2.5e-3  # 0.0025
 
-# 문자열 (str)
+# string (str)
 name = "Alice"
 message = '안녕하세요'
 multiline = """여러 줄
 문자열입니다"""
 
-# 불리언 (bool)
+# boolean (bool)
 is_active = True
 is_empty = False
 
-# None (값 없음)
+# None (no value)
 result = None
 
-# 타입 확인
+# type check
 print(type(age))        # <class 'int'>
 print(type(pi))         # <class 'float'>
 print(type(name))       # <class 'str'>
@@ -48,44 +59,44 @@ print(type(is_active))  # <class 'bool'>
 ### 1.2 Type Conversion
 
 ```python
-# 문자열 → 정수/실수
+# string → int/float
 num_str = "123"
 num_int = int(num_str)      # 123
 num_float = float(num_str)  # 123.0
 
-# 숫자 → 문자열
+# number → string
 age = 25
 age_str = str(age)  # "25"
 
-# 불리언 변환
+# boolean conversion
 bool(0)       # False
 bool(1)       # True
-bool("")      # False (빈 문자열)
+bool("")      # False (empty string)
 bool("hello") # True
-bool([])      # False (빈 리스트)
+bool([])      # False (empty list)
 bool([1, 2])  # True
 
-# 형변환 오류 처리
+# type conversion error handling
 try:
     invalid = int("hello")
 except ValueError as e:
-    print(f"변환 오류: {e}")
+    print(f"Conversion error: {e}")
 ```
 
 ### 1.3 Operators
 
 ```python
-# 산술 연산자
+# arithmetic operators
 a, b = 10, 3
-print(a + b)   # 13 (덧셈)
-print(a - b)   # 7 (뺄셈)
-print(a * b)   # 30 (곱셈)
-print(a / b)   # 3.333... (나눗셈, 항상 float)
-print(a // b)  # 3 (정수 나눗셈)
-print(a % b)   # 1 (나머지)
-print(a ** b)  # 1000 (거듭제곱)
+print(a + b)   # 13 (addition)
+print(a - b)   # 7 (subtraction)
+print(a * b)   # 30 (multiplication)
+print(a / b)   # 3.333... (division, always float)
+print(a // b)  # 3 (integer division)
+print(a % b)   # 1 (remainder)
+print(a ** b)  # 1000 (exponentiation)
 
-# 비교 연산자
+# comparison operators
 print(5 == 5)   # True
 print(5 != 3)   # True
 print(5 > 3)    # True
@@ -93,23 +104,23 @@ print(5 >= 5)   # True
 print(3 < 5)    # True
 print(3 <= 3)   # True
 
-# 논리 연산자
+# logical operators
 print(True and False)  # False
 print(True or False)   # True
 print(not True)        # False
 
-# 멤버십 연산자
+# membership operators
 fruits = ["apple", "banana"]
 print("apple" in fruits)      # True
 print("orange" not in fruits) # True
 
-# 동일성 연산자 (객체 비교)
+# identity operators (object comparison)
 a = [1, 2, 3]
 b = [1, 2, 3]
 c = a
-print(a == b)  # True (값 비교)
-print(a is b)  # False (객체 비교)
-print(a is c)  # True (같은 객체)
+print(a == b)  # True (value comparison)
+print(a is b)  # False (object comparison)
+print(a is c)  # True (same object)
 ```
 
 ---
@@ -119,29 +130,29 @@ print(a is c)  # True (같은 객체)
 ### 2.1 String Basics
 
 ```python
-# 문자열 생성
+# string creation
 s1 = "Hello"
 s2 = 'World'
 s3 = """Multi
 line"""
 
-# 문자열 연결
+# string concatenation
 greeting = s1 + " " + s2  # "Hello World"
 
-# 문자열 반복
+# string repetition
 dashes = "-" * 10  # "----------"
 
-# 인덱싱 (0부터 시작)
+# indexing (starts from 0)
 text = "Python"
 print(text[0])   # 'P'
-print(text[-1])  # 'n' (마지막)
+print(text[-1])  # 'n' (last)
 
-# 슬라이싱
+# slicing
 print(text[0:3])   # 'Pyt' (0~2)
-print(text[2:])    # 'thon' (2부터 끝)
-print(text[:3])    # 'Pyt' (처음~2)
-print(text[::2])   # 'Pto' (2칸씩)
-print(text[::-1])  # 'nohtyP' (역순)
+print(text[2:])    # 'thon' (from 2 to end)
+print(text[:3])    # 'Pyt' (start~2)
+print(text[::2])   # 'Pto' (every 2 steps)
+print(text[::-1])  # 'nohtyP' (reversed)
 ```
 
 ### 2.2 String Methods
@@ -149,31 +160,31 @@ print(text[::-1])  # 'nohtyP' (역순)
 ```python
 text = "  Hello, World!  "
 
-# 공백 제거
+# remove whitespace
 print(text.strip())   # "Hello, World!"
 print(text.lstrip())  # "Hello, World!  "
 print(text.rstrip())  # "  Hello, World!"
 
-# 대소문자 변환
+# case conversion
 s = "Hello World"
 print(s.upper())       # "HELLO WORLD"
 print(s.lower())       # "hello world"
 print(s.capitalize())  # "Hello world"
 print(s.title())       # "Hello World"
 
-# 검색
-print(s.find("World"))     # 6 (인덱스)
-print(s.find("Python"))    # -1 (없음)
+# search
+print(s.find("World"))     # 6 (index)
+print(s.find("Python"))    # -1 (not found)
 print(s.count("o"))        # 2
 print(s.startswith("He"))  # True
 print(s.endswith("!"))     # False
 
-# 분리와 결합
+# split and join
 csv = "a,b,c,d"
 parts = csv.split(",")     # ['a', 'b', 'c', 'd']
 joined = "-".join(parts)   # 'a-b-c-d'
 
-# 치환
+# replace
 text = "I like Python"
 new_text = text.replace("Python", "Java")  # "I like Java"
 ```
@@ -185,24 +196,24 @@ name = "Alice"
 age = 25
 score = 95.5
 
-# f-string (권장, Python 3.6+)
+# f-string (recommended, Python 3.6+)
 print(f"Name: {name}, Age: {age}")
-print(f"Score: {score:.2f}")  # 소수점 2자리
-print(f"Binary: {age:08b}")   # 8자리 이진수, 0패딩
+print(f"Score: {score:.2f}")  # 2 decimal places
+print(f"Binary: {age:08b}")   # 8-digit binary, zero-padded
 
-# format() 메서드
+# format() method
 print("Name: {}, Age: {}".format(name, age))
 print("Name: {n}, Age: {a}".format(n=name, a=age))
 
-# % 연산자 (구 방식)
+# % operator (old style)
 print("Name: %s, Age: %d" % (name, age))
 
-# 정렬
+# alignment
 text = "Python"
-print(f"{text:>10}")   # "    Python" (오른쪽 정렬)
-print(f"{text:<10}")   # "Python    " (왼쪽 정렬)
-print(f"{text:^10}")   # "  Python  " (가운데 정렬)
-print(f"{text:*^10}")  # "**Python**" (패딩 문자)
+print(f"{text:>10}")   # "    Python" (right-align)
+print(f"{text:<10}")   # "Python    " (left-align)
+print(f"{text:^10}")   # "  Python  " (center-align)
+print(f"{text:*^10}")  # "**Python**" (padding character)
 ```
 
 ---
@@ -212,7 +223,7 @@ print(f"{text:*^10}")  # "**Python**" (패딩 문자)
 ### 3.1 Conditionals (if)
 
 ```python
-# 기본 if-elif-else
+# basic if-elif-else
 score = 85
 
 if score >= 90:
@@ -226,20 +237,20 @@ else:
 
 print(f"Grade: {grade}")  # Grade: B
 
-# 삼항 연산자
+# ternary operator
 status = "Pass" if score >= 60 else "Fail"
 
-# 조건식 체이닝
+# condition chaining
 age = 25
 if 18 <= age < 65:
     print("Working age")
 
-# 진리값 판단
+# truthiness evaluation
 items = [1, 2, 3]
-if items:  # 비어있지 않으면 True
+if items:  # True if not empty
     print("List has items")
 
-# 논리 연산 조합
+# combining logical operators
 x, y = 5, 10
 if x > 0 and y > 0:
     print("Both positive")
@@ -251,12 +262,12 @@ if x < 0 or y < 0:
 ### 3.2 Loops (for)
 
 ```python
-# 리스트 반복
+# iterate over a list
 fruits = ["apple", "banana", "cherry"]
 for fruit in fruits:
     print(fruit)
 
-# range 사용
+# using range
 for i in range(5):        # 0, 1, 2, 3, 4
     print(i)
 
@@ -266,17 +277,17 @@ for i in range(2, 8):     # 2, 3, 4, 5, 6, 7
 for i in range(0, 10, 2): # 0, 2, 4, 6, 8
     print(i)
 
-# enumerate (인덱스와 값)
+# enumerate (index and value)
 for idx, fruit in enumerate(fruits):
     print(f"{idx}: {fruit}")
 
-# zip (여러 시퀀스 병렬 순회)
+# zip (parallel iteration over multiple sequences)
 names = ["Alice", "Bob", "Charlie"]
 ages = [25, 30, 35]
 for name, age in zip(names, ages):
     print(f"{name} is {age}")
 
-# 딕셔너리 반복
+# dictionary iteration
 person = {"name": "Alice", "age": 25}
 for key in person:
     print(f"{key}: {person[key]}")
@@ -284,7 +295,7 @@ for key in person:
 for key, value in person.items():
     print(f"{key}: {value}")
 
-# 리스트 컴프리헨션
+# list comprehension
 squares = [x**2 for x in range(10)]
 evens = [x for x in range(20) if x % 2 == 0]
 ```
@@ -292,21 +303,21 @@ evens = [x for x in range(20) if x % 2 == 0]
 ### 3.3 Loops (while)
 
 ```python
-# 기본 while
+# basic while
 count = 0
 while count < 5:
     print(count)
     count += 1
 
-# break와 continue
+# break and continue
 for i in range(10):
     if i == 3:
-        continue  # 3 건너뛰기
+        continue  # skip 3
     if i == 7:
-        break     # 7에서 종료
+        break     # stop at 7
     print(i)  # 0, 1, 2, 4, 5, 6
 
-# while-else (break 없이 끝났을 때)
+# while-else (runs when loop ends without break)
 n = 7
 i = 2
 while i < n:
@@ -317,7 +328,7 @@ while i < n:
 else:
     print(f"{n} is prime")
 
-# 무한 루프
+# infinite loop
 while True:
     user_input = input("Enter 'quit' to exit: ")
     if user_input == "quit":
@@ -331,31 +342,31 @@ while True:
 ### 4.1 Function Definition
 
 ```python
-# 기본 함수
+# basic function
 def greet(name):
-    """인사말을 반환합니다."""
+    """Returns a greeting message."""
     return f"Hello, {name}!"
 
 message = greet("Alice")
 print(message)  # Hello, Alice!
 
-# 여러 값 반환
+# returning multiple values
 def divide(a, b):
     quotient = a // b
     remainder = a % b
     return quotient, remainder
 
 q, r = divide(10, 3)
-print(f"몫: {q}, 나머지: {r}")  # 몫: 3, 나머지: 1
+print(f"Quotient: {q}, Remainder: {r}")  # Quotient: 3, Remainder: 1
 
-# 기본값 매개변수
+# default parameter values
 def power(base, exp=2):
     return base ** exp
 
 print(power(3))     # 9
 print(power(3, 3))  # 27
 
-# 키워드 인자
+# keyword arguments
 def create_user(name, age, city="Seoul"):
     return {"name": name, "age": age, "city": city}
 
@@ -365,27 +376,27 @@ user = create_user(name="Bob", age=30, city="Busan")
 ### 4.2 Variable Arguments
 
 ```python
-# *args (위치 인자)
+# *args (positional arguments)
 def sum_all(*args):
-    """임의 개수의 숫자 합계"""
+    """Sum an arbitrary number of numbers."""
     return sum(args)
 
 print(sum_all(1, 2, 3))       # 6
 print(sum_all(1, 2, 3, 4, 5)) # 15
 
-# **kwargs (키워드 인자)
+# **kwargs (keyword arguments)
 def print_info(**kwargs):
-    """임의 개수의 키-값 출력"""
+    """Print an arbitrary number of key-value pairs."""
     for key, value in kwargs.items():
         print(f"{key}: {value}")
 
 print_info(name="Alice", age=25, city="Seoul")
 
-# 혼합 사용
+# mixed usage
 def mixed_func(required, *args, **kwargs):
-    print(f"필수: {required}")
-    print(f"추가 위치: {args}")
-    print(f"추가 키워드: {kwargs}")
+    print(f"Required: {required}")
+    print(f"Extra positional: {args}")
+    print(f"Extra keyword: {kwargs}")
 
 mixed_func("hello", 1, 2, 3, x=10, y=20)
 ```
@@ -393,27 +404,27 @@ mixed_func("hello", 1, 2, 3, x=10, y=20)
 ### 4.3 Lambda Functions
 
 ```python
-# 기본 람다
+# basic lambda
 square = lambda x: x ** 2
 print(square(5))  # 25
 
-# 여러 매개변수
+# multiple parameters
 add = lambda a, b: a + b
 print(add(3, 4))  # 7
 
-# 정렬에서 활용
+# sorting with lambda
 students = [
     {"name": "Alice", "score": 85},
     {"name": "Bob", "score": 92},
     {"name": "Charlie", "score": 78}
 ]
 
-# 점수 기준 정렬
+# sort by score
 sorted_students = sorted(students, key=lambda x: x["score"], reverse=True)
 for s in sorted_students:
     print(f"{s['name']}: {s['score']}")
 
-# map, filter와 함께
+# with map and filter
 numbers = [1, 2, 3, 4, 5]
 squared = list(map(lambda x: x**2, numbers))
 evens = list(filter(lambda x: x % 2 == 0, numbers))
@@ -426,75 +437,75 @@ evens = list(filter(lambda x: x % 2 == 0, numbers))
 ### 5.1 Lists
 
 ```python
-# 리스트 생성
+# create a list
 fruits = ["apple", "banana", "cherry"]
 numbers = [1, 2, 3, 4, 5]
 mixed = [1, "hello", 3.14, True]
 empty = []
 
-# 요소 접근
+# element access
 print(fruits[0])   # "apple"
 print(fruits[-1])  # "cherry"
 
-# 슬라이싱
+# slicing
 print(numbers[1:4])  # [2, 3, 4]
 print(numbers[::2])  # [1, 3, 5]
 
-# 요소 수정
+# modify element
 fruits[0] = "apricot"
 
-# 요소 추가
-fruits.append("date")           # 끝에 추가
-fruits.insert(1, "blueberry")   # 위치 지정 추가
-fruits.extend(["elderberry"])   # 여러 개 추가
+# add elements
+fruits.append("date")           # append to end
+fruits.insert(1, "blueberry")   # insert at position
+fruits.extend(["elderberry"])   # extend with multiple items
 
-# 요소 제거
-fruits.remove("banana")  # 값으로 제거
-del fruits[0]            # 인덱스로 제거
-popped = fruits.pop()    # 마지막 제거 및 반환
-fruits.clear()           # 전체 제거
+# remove elements
+fruits.remove("banana")  # remove by value
+del fruits[0]            # remove by index
+popped = fruits.pop()    # remove and return last element
+fruits.clear()           # remove all elements
 
-# 리스트 연산
+# list operations
 a = [1, 2, 3]
 b = [4, 5, 6]
 c = a + b      # [1, 2, 3, 4, 5, 6]
 d = a * 2      # [1, 2, 3, 1, 2, 3]
 
-# 유용한 메서드
+# useful methods
 nums = [3, 1, 4, 1, 5, 9, 2]
 print(len(nums))        # 7
 print(nums.count(1))    # 2
 print(nums.index(4))    # 2
-nums.sort()             # 정렬 (제자리)
-nums.reverse()          # 역순 (제자리)
+nums.sort()             # sort in-place
+nums.reverse()          # reverse in-place
 ```
 
 ### 5.2 Tuples
 
 ```python
-# 튜플 생성 (불변)
+# create a tuple (immutable)
 point = (3, 4)
 rgb = (255, 128, 0)
-single = (42,)  # 요소 1개 (쉼표 필수)
+single = (42,)  # single element (trailing comma required)
 
-# 언패킹
+# unpacking
 x, y = point
 print(f"x={x}, y={y}")
 
-# 함수에서 여러 값 반환
+# returning multiple values from a function
 def get_stats(numbers):
     return min(numbers), max(numbers), sum(numbers)
 
 minimum, maximum, total = get_stats([1, 2, 3, 4, 5])
 
-# 튜플은 수정 불가
+# tuples are immutable
 # point[0] = 5  # TypeError!
 
-# 하지만 가변 객체 포함 시 내부는 변경 가능
+# but mutable objects inside can be modified
 data = ([1, 2], [3, 4])
-data[0].append(3)  # 가능! ([1, 2, 3], [3, 4])
+data[0].append(3)  # allowed! ([1, 2, 3], [3, 4])
 
-# 튜플 ↔ 리스트 변환
+# tuple ↔ list conversion
 t = tuple([1, 2, 3])
 l = list((1, 2, 3))
 ```
@@ -502,43 +513,43 @@ l = list((1, 2, 3))
 ### 5.3 Dictionaries
 
 ```python
-# 딕셔너리 생성
+# create a dictionary
 person = {
     "name": "Alice",
     "age": 25,
     "city": "Seoul"
 }
 
-# 요소 접근
+# element access
 print(person["name"])          # "Alice"
-print(person.get("job"))       # None (없을 때)
-print(person.get("job", "N/A")) # "N/A" (기본값)
+print(person.get("job"))       # None (key not found)
+print(person.get("job", "N/A")) # "N/A" (default value)
 
-# 요소 추가/수정
-person["job"] = "Engineer"  # 추가
-person["age"] = 26          # 수정
+# add/update elements
+person["job"] = "Engineer"  # add
+person["age"] = 26          # update
 
-# 요소 삭제
+# delete elements
 del person["city"]
 job = person.pop("job")
 person.clear()
 
-# 메서드
+# methods
 person = {"name": "Alice", "age": 25}
 print(person.keys())    # dict_keys(['name', 'age'])
 print(person.values())  # dict_values(['Alice', 25])
 print(person.items())   # dict_items([('name', 'Alice'), ('age', 25)])
 
-# 딕셔너리 컴프리헨션
+# dictionary comprehension
 squares = {x: x**2 for x in range(5)}
 # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}
 
-# 병합 (Python 3.9+)
+# merge (Python 3.9+)
 a = {"x": 1, "y": 2}
 b = {"y": 3, "z": 4}
 c = a | b  # {"x": 1, "y": 3, "z": 4}
 
-# 중첩 딕셔너리
+# nested dictionary
 users = {
     "user1": {"name": "Alice", "age": 25},
     "user2": {"name": "Bob", "age": 30}
@@ -549,31 +560,31 @@ print(users["user1"]["name"])  # "Alice"
 ### 5.4 Sets
 
 ```python
-# 세트 생성 (중복 없음, 순서 없음)
+# create a set (no duplicates, unordered)
 fruits = {"apple", "banana", "cherry"}
 numbers = {1, 2, 3, 3, 2, 1}  # {1, 2, 3}
-empty = set()  # 빈 세트 ({}는 딕셔너리!)
+empty = set()  # empty set ({} creates a dict!)
 
-# 요소 추가/제거
+# add/remove elements
 fruits.add("date")
-fruits.remove("apple")    # 없으면 KeyError
-fruits.discard("grape")   # 없어도 에러 없음
+fruits.remove("apple")    # KeyError if not found
+fruits.discard("grape")   # no error if not found
 
-# 집합 연산
+# set operations
 a = {1, 2, 3, 4}
 b = {3, 4, 5, 6}
 
-print(a | b)  # 합집합: {1, 2, 3, 4, 5, 6}
-print(a & b)  # 교집합: {3, 4}
-print(a - b)  # 차집합: {1, 2}
-print(a ^ b)  # 대칭 차집합: {1, 2, 5, 6}
+print(a | b)  # union: {1, 2, 3, 4, 5, 6}
+print(a & b)  # intersection: {3, 4}
+print(a - b)  # difference: {1, 2}
+print(a ^ b)  # symmetric difference: {1, 2, 5, 6}
 
-# 부분집합 확인
+# subset check
 c = {1, 2}
 print(c.issubset(a))    # True
 print(a.issuperset(c))  # True
 
-# 리스트 중복 제거
+# remove duplicates from a list
 numbers = [1, 2, 2, 3, 3, 3]
 unique = list(set(numbers))  # [1, 2, 3]
 ```
@@ -589,60 +600,60 @@ unique = list(set(numbers))  # [1, 2, 3]
 try:
     result = 10 / 0
 except ZeroDivisionError:
-    print("0으로 나눌 수 없습니다")
+    print("Cannot divide by zero")
 
-# 여러 예외 처리
+# handling multiple exceptions
 try:
-    value = int(input("숫자 입력: "))
+    value = int(input("Enter a number: "))
     result = 10 / value
 except ValueError:
-    print("숫자가 아닙니다")
+    print("Not a number")
 except ZeroDivisionError:
-    print("0으로 나눌 수 없습니다")
+    print("Cannot divide by zero")
 
-# 예외 정보 접근
+# accessing exception info
 try:
     x = int("hello")
 except ValueError as e:
-    print(f"에러 발생: {e}")
+    print(f"Error occurred: {e}")
 
-# else와 finally
+# else and finally
 try:
     file = open("data.txt", "r")
 except FileNotFoundError:
-    print("파일 없음")
+    print("File not found")
 else:
-    # 예외 없을 때 실행
+    # runs when no exception occurs
     content = file.read()
     file.close()
 finally:
-    # 항상 실행
-    print("작업 완료")
+    # always runs
+    print("Operation complete")
 ```
 
 ### 6.2 Raising Exceptions
 
 ```python
-# 예외 발생시키기
+# raising exceptions
 def validate_age(age):
     if age < 0:
-        raise ValueError("나이는 음수일 수 없습니다")
+        raise ValueError("Age cannot be negative")
     if age > 150:
-        raise ValueError("나이가 너무 큽니다")
+        raise ValueError("Age is too large")
     return age
 
 try:
     validate_age(-5)
 except ValueError as e:
-    print(f"검증 실패: {e}")
+    print(f"Validation failed: {e}")
 
-# 커스텀 예외
+# custom exception
 class InsufficientFundsError(Exception):
-    """잔액 부족 예외"""
+    """Exception for insufficient balance."""
     def __init__(self, balance, amount):
         self.balance = balance
         self.amount = amount
-        super().__init__(f"잔액 {balance}원, 출금 요청 {amount}원")
+        super().__init__(f"Balance {balance}, withdrawal requested {amount}")
 
 def withdraw(balance, amount):
     if amount > balance:
@@ -652,7 +663,7 @@ def withdraw(balance, amount):
 try:
     withdraw(1000, 2000)
 except InsufficientFundsError as e:
-    print(f"출금 실패: {e}")
+    print(f"Withdrawal failed: {e}")
 ```
 
 ---
@@ -662,31 +673,31 @@ except InsufficientFundsError as e:
 ### 7.1 File Reading/Writing
 
 ```python
-# 파일 쓰기
+# write to file
 with open("output.txt", "w", encoding="utf-8") as f:
     f.write("Hello, World!\n")
-    f.write("안녕하세요\n")
+    f.write("Hello there\n")
 
-# 파일 읽기
+# read from file
 with open("output.txt", "r", encoding="utf-8") as f:
-    content = f.read()  # 전체 읽기
+    content = f.read()  # read entire file
     print(content)
 
-# 줄 단위 읽기
+# read line by line
 with open("output.txt", "r", encoding="utf-8") as f:
     for line in f:
         print(line.strip())
 
-# 파일 추가
+# append to file
 with open("output.txt", "a", encoding="utf-8") as f:
-    f.write("추가된 내용\n")
+    f.write("Additional content\n")
 
-# 파일 모드
-# "r"  읽기 (기본)
-# "w"  쓰기 (덮어쓰기)
-# "a"  추가
-# "x"  생성 (이미 있으면 에러)
-# "b"  바이너리 모드 (예: "rb", "wb")
+# file modes
+# "r"  read (default)
+# "w"  write (overwrite)
+# "a"  append
+# "x"  create (error if already exists)
+# "b"  binary mode (e.g., "rb", "wb")
 ```
 
 ### 7.2 JSON Processing
@@ -694,22 +705,22 @@ with open("output.txt", "a", encoding="utf-8") as f:
 ```python
 import json
 
-# Python 객체 → JSON
+# Python object → JSON
 data = {
     "name": "Alice",
     "age": 25,
     "hobbies": ["reading", "coding"]
 }
 
-# JSON 문자열로 변환
+# convert to JSON string
 json_str = json.dumps(data, ensure_ascii=False, indent=2)
 print(json_str)
 
-# JSON 파일로 저장
+# save to JSON file
 with open("data.json", "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
-# JSON 파일 읽기
+# read from JSON file
 with open("data.json", "r", encoding="utf-8") as f:
     loaded = json.load(f)
     print(loaded["name"])
@@ -735,11 +746,95 @@ with open("data.json", "r", encoding="utf-8") as f:
 | Functions | Reusable code block | `def func():` |
 | Exception Handling | Error handling | `try/except` |
 
-### Next Steps
+---
 
-After completing these basics, proceed to the next lessons:
-- [16_OOP_Basics.md](./16_OOP_Basics.md): Object-Oriented Programming Basics
-- [01_Type_Hints.md](./01_Type_Hints.md): Type Hinting (start of advanced lessons)
+## Exercises
+
+### Exercise 1: Data Types and Type Conversion
+
+Practice working with Python's core data types and conversion functions.
+
+1. Create variables of each basic type (int, float, str, bool, None) and print their types using `type()`.
+2. Write a function `safe_convert(value, target_type)` that attempts to convert `value` to `target_type` and returns `None` (instead of raising an exception) if the conversion fails. Test it with:
+   - `safe_convert("42", int)` → 42
+   - `safe_convert("hello", float)` → None
+   - `safe_convert("3.14", float)` → 3.14
+3. Explain the difference between `==` and `is`. Demonstrate with a list: create two lists with identical content (`a = [1, 2, 3]` and `b = [1, 2, 3]`) and show that `a == b` is `True` but `a is b` is `False`.
+4. What is the truthiness of each of the following? Predict, then verify: `0`, `0.0`, `""`, `" "`, `[]`, `[0]`, `None`, `False`.
+5. Write a one-liner using `bool` and a list comprehension that counts how many values in `[0, 1, "", "hello", None, [], [1]]` are truthy.
+
+### Exercise 2: String Manipulation
+
+Build a small text-processing toolkit using string methods and f-strings.
+
+1. Write a function `normalize(s)` that: strips leading/trailing whitespace, converts to lowercase, and replaces all spaces with underscores. Test: `normalize("  Hello World  ")` → `"hello_world"`.
+2. Write a function `mask_email(email)` that partially hides an email address. For `"alice@example.com"` return `"a***e@example.com"` (show first and last character of the local part, mask the middle with `*`).
+3. Write a function `word_count(text)` that returns a dictionary mapping each unique word (case-insensitive) to its frequency. For `"the quick brown fox the fox"` return `{'the': 2, 'quick': 1, 'brown': 1, 'fox': 2}`.
+4. Using f-string formatting, print a formatted table for the following data:
+   ```python
+   data = [("Alice", 92.5), ("Bob", 78.0), ("Charlie", 85.3)]
+   ```
+   Each row should be formatted as: `| Name       |  Score |` with the name left-aligned in a 10-character field and the score right-aligned with one decimal place.
+5. Write a function `is_palindrome(s)` that returns `True` if `s` (ignoring case, spaces, and punctuation) is a palindrome. Test with `"A man, a plan, a canal: Panama"`.
+
+### Exercise 3: Control Flow and Comprehensions
+
+Practice conditionals, loops, and comprehensions to replace verbose imperative code.
+
+1. Write a function `fizzbuzz(n)` that returns a list of strings from 1 to n: "FizzBuzz" for multiples of both 3 and 5, "Fizz" for multiples of 3, "Buzz" for multiples of 5, and the number as a string otherwise.
+2. Rewrite the following loop as a single list comprehension:
+   ```python
+   result = []
+   for x in range(20):
+       if x % 2 == 0 and x % 3 != 0:
+           result.append(x ** 2)
+   ```
+3. Write a dictionary comprehension that maps each word in a sentence to its length. For `"the quick brown fox"` produce `{'the': 3, 'quick': 5, 'brown': 5, 'fox': 3}`.
+4. Write a nested list comprehension that produces a multiplication table as a list of lists: `[[i*j for j in range(1, 6)] for i in range(1, 6)]`. Print it in a formatted grid.
+5. Use `zip` and `enumerate` to write a function `merge_ranked(names, scores)` that returns a list of tuples `(rank, name, score)` sorted by score descending. For `names=["Alice","Bob","Charlie"]` and `scores=[85, 92, 78]` return `[(1, "Bob", 92), (2, "Alice", 85), (3, "Charlie", 78)]`.
+
+### Exercise 4: Functions and Argument Handling
+
+Explore Python's flexible function argument mechanisms.
+
+1. Write a function `stats(*numbers)` that accepts any number of numeric arguments and returns a tuple `(min, max, mean, median)`. Handle the edge case of an empty input gracefully.
+2. Write a function `create_html_tag(tag, content, **attributes)` that generates an HTML string. For example:
+   ```python
+   create_html_tag("a", "Click here", href="https://example.com", class_="btn")
+   # → '<a href="https://example.com" class="btn">Click here</a>'
+   ```
+   Note: `class_` should be rendered as `class` (strip the trailing underscore).
+3. Rewrite the following using a lambda and `sorted()`:
+   ```python
+   students = [{"name": "Alice", "grade": "B", "score": 85},
+               {"name": "Bob",   "grade": "A", "score": 92},
+               {"name": "Charlie", "grade": "C", "score": 78}]
+   # Sort by grade first (alphabetically), then by score descending
+   ```
+4. Write a decorator `memoize` (without using `functools.lru_cache`) that caches the results of a function. Apply it to a recursive Fibonacci function and compare the call count with and without memoization for `fib(30)`.
+5. Explain the difference between mutable and immutable default arguments. Demonstrate the classic bug with `def append_to(item, lst=[])` and show how to fix it correctly.
+
+### Exercise 5: Data Structures and Exception Handling
+
+Combine data structure operations with robust error handling.
+
+1. Write a function `group_by(items, key_func)` that groups items from a list into a dictionary by the return value of `key_func`. For example:
+   ```python
+   group_by([1, 2, 3, 4, 5, 6], lambda x: "even" if x % 2 == 0 else "odd")
+   # → {"even": [2, 4, 6], "odd": [1, 3, 5]}
+   ```
+2. Implement a simple stack class using a list that supports `push(item)`, `pop()`, `peek()` (view top without removing), and `is_empty()`. Raise a custom `StackUnderflowError` when `pop()` or `peek()` is called on an empty stack.
+3. Write a function `deep_merge(base, override)` that recursively merges two nested dictionaries. Keys in `override` overwrite `base`; nested dicts are merged recursively rather than replaced wholesale.
+4. Write a function `read_csv_safe(filename)` that reads a CSV file and returns a list of dictionaries. It should:
+   - Raise `FileNotFoundError` with a clear message if the file does not exist.
+   - Skip malformed rows (rows with wrong number of columns) and print a warning.
+   - Return an empty list if the file exists but is empty.
+   - Use `finally` to ensure the file is always closed even if an exception occurs mid-read.
+5. Use set operations to solve: given two lists of user IDs, `active_users` and `premium_users`, compute and print:
+   - Users who are both active and premium (intersection)
+   - Active users who are NOT premium (difference)
+   - Users who are either active or premium but not both (symmetric difference)
+   - The total number of distinct users across both lists (union length)
 
 ---
 
@@ -748,3 +843,7 @@ After completing these basics, proceed to the next lessons:
 - [Python Official Tutorial](https://docs.python.org/3/tutorial/)
 - [Real Python](https://realpython.com/)
 - [Python Cheat Sheet](https://www.pythoncheatsheet.org/)
+
+---
+
+**Previous**: [Pattern Matching](./14_Pattern_Matching.md) | **Next**: [OOP Basics](./16_OOP_Basics.md)

@@ -1,8 +1,40 @@
 # PostgreSQL Examples
 
-This directory contains practical PostgreSQL examples demonstrating replication, high availability, and production configurations.
+This directory contains PostgreSQL examples covering SQL fundamentals, advanced features, and production configurations.
 
 ## Files
+
+| File | Topic | Description |
+|------|-------|-------------|
+| `01_basic_crud.sql` | CRUD | CREATE, INSERT, SELECT, UPDATE, DELETE |
+| `02_joins.sql` | Joins | INNER, LEFT, RIGHT, FULL, CROSS, self joins |
+| `03_aggregation.sql` | Aggregation | GROUP BY, HAVING, aggregate functions |
+| `04_subqueries.sql` | Subqueries | Scalar, correlated, EXISTS, CTE |
+| `05_window_functions.sql` | Window Functions | ROW_NUMBER, RANK, LAG, LEAD, aggregates |
+| `06_full_text_search.sql` | Full-Text Search | tsvector, tsquery, ranking, fuzzy match |
+| `07_security_rls.sql` | Security & RLS | Row-Level Security, roles, policies |
+| `08_primary_standby_compose.yml` | Replication | Docker Compose for streaming replication |
+| `09_primary_standby_setup.sh` | Replication | Automated Primary-Standby setup script |
+| `10_functions.sql` | Functions | SQL/PL/pgSQL functions, procedures, overloading |
+| `11_transactions.sql` | Transactions | Isolation levels, savepoints, advisory locks |
+| `12_triggers.sql` | Triggers | BEFORE/AFTER, row/statement, audit logging |
+| `13_monitoring.sql` | Monitoring | pg_stat_*, cache hit ratio, lock analysis |
+| `14_json.sql` | JSON/JSONB | Operators, indexing, path queries, aggregation |
+| `15_optimization.sql` | Query Optimization | EXPLAIN, scan types, join strategies, indexes |
+| `17_window_functions.sql` | Advanced Windows | Moving averages, frames, cumulative distribution |
+| `18_partitioning.sql` | Partitioning | Range, list, hash, sub-partitioning, maintenance |
+
+## Running Examples
+
+```bash
+# Connect to PostgreSQL
+psql -U postgres -d your_database
+
+# Run a specific example
+psql -U postgres -d your_database -f 10_functions.sql
+```
+
+---
 
 ### 08_primary_standby_compose.yml
 

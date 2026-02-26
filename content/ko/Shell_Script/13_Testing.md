@@ -2,9 +2,25 @@
 
 **난이도**: ⭐⭐⭐⭐
 
-**이전**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md) | **다음**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md)
+**이전**: [이식성과 모범 사례](./12_Portability_and_Best_Practices.md) | **다음**: [작업 실행기](./14_Project_Task_Runner.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 셸 스크립트에서 자동화 테스팅이 유용한 이유를 설명하고 단위(unit), 통합(integration), 종단간(end-to-end), 스모크(smoke) 테스트를 구분할 수 있습니다
+2. `@test` 블록, `setup`/`teardown` 훅(hook), 내장 어설션(assertion) 헬퍼를 사용해 Bats 테스트 파일을 작성할 수 있습니다
+3. 외부 명령과 부수 효과(side effect)로부터 테스트를 격리하기 위한 목(mock)과 스텁(stub) 기법을 적용할 수 있습니다
+4. 먼저 실패하는 테스트를 작성한 후 통과하는 코드를 구현하는 테스트 주도 개발(TDD, Test-Driven Development) 방식을 실습할 수 있습니다
+5. 임시 파일 픽스처(fixture), 환경 변수 격리, 출력 캡처를 포함한 일반적인 테스팅 패턴을 구현할 수 있습니다
+6. 모든 커밋에서 Bats 테스트를 자동으로 실행하도록 CI 파이프라인(GitHub Actions, GitLab CI)을 구성할 수 있습니다
+7. CI 대시보드와 통합하기 위해 TAP 및 JUnit XML 형식으로 테스트 보고서를 생성할 수 있습니다
+
+---
+
+배포, 백업, 인프라를 관리하는 셸 스크립트는 종종 압박 속에서 수정되고 프로덕션에서만 테스트됩니다. 배포 스크립트의 회귀(regression) 하나가 서비스를 중단시킬 수 있습니다. 자동화 테스팅은 이러한 회귀를 프로덕션 도달 전에 포착하고, 오래된 스크립트를 리팩토링할 자신감을 주며, 스크립트가 어떻게 동작해야 하는지를 실행 가능한 문서로 제공합니다. Bats 프레임워크(Bash Automated Testing System)는 셸 스크립트 테스팅을 다른 언어의 테스팅만큼 간단하게 만들어 줍니다.
 
 ## 1. 왜 셸 스크립트를 테스트해야 하는가?
 
@@ -1126,6 +1142,60 @@ process_data() {
 - 파이프라인이 모든 행을 처리하는지 테스트
 - 어떤 단계가 실패할 때 오류 처리 테스트
 - 최종 출력 형식 검증
+
+## 연습 문제
+
+### 연습 1: 첫 번째 Bats 테스트 스위트 작성하기
+
+Bats를 설치하고 `greet.sh`에 저장된 다음 함수에 대한 테스트 파일 `test_greet.bats`를 작성하세요:
+
+```bash
+greet() {
+    local name="${1:-World}"
+    echo "Hello, ${name}!"
+}
+```
+
+테스트 스위트(test suite)는 다음을 포함해야 합니다:
+- 인수가 전달되지 않을 때 기본 인사말(`Hello, World!`)을 검증하는 테스트
+- 이름이 제공될 때 개인화된 인사말을 검증하는 테스트
+- 각 테스트 전에 `greet.sh`를 소스(source)하는 `setup` 함수
+- `bats test_greet.bats`로 실행하고 모든 테스트가 통과하는지 확인
+
+### 연습 2: 외부 명령어 모킹(Mocking)하기
+
+`curl`을 호출하여 JSON 페이로드(payload)를 URL에 POST하는 함수 `send_report.sh`를 작성하세요. 그런 다음 다음을 수행하는 Bats 테스트를 작성하세요:
+- 테스트 시작 시 임시 디렉토리에 가짜 `curl` 스텁(stub)을 생성
+- 실제 `curl` 대신 스텁이 찾아지도록 해당 디렉토리를 `PATH` 앞에 추가
+- `curl`이 올바른 URL과 `-X POST` 플래그로 호출되었는지 검증 (스텁이 인수를 파일에 로그하도록 하여)
+- teardown에서 `PATH` 복원
+
+### 연습 3: 테스트 주도 개발(TDD) 실습하기
+
+TDD를 사용하여 `validate_config.sh` 스크립트를 구현하세요. 레드-그린-리팩터(red-green-refactor) 사이클을 따르세요:
+1. `validate_port <number>`에 대한 실패하는 테스트 작성 (1-65535를 허용하고 그 외는 거부해야 함)
+2. 테스트를 통과시키기 위한 최소 코드 작성
+3. `validate_hostname <host>`에 대한 실패하는 테스트 작성 (유효한 호스트명을 허용하고, IP와 빈 문자열은 거부해야 함)
+4. 테스트를 통과시키기 위한 최소 코드 작성
+5. 모든 테스트를 통과 상태로 유지하면서 두 함수가 공통 `_validate` 헬퍼를 공유하도록 리팩터링
+
+### 연습 4: JUnit 보고서 생성하기
+
+연습 1의 Bats 테스트 스위트(또는 새 스위트)를 JUnit XML 보고서를 출력하도록 설정하세요. 단계:
+- `bats-support` 및 `bats-assert` 헬퍼 라이브러리 설치
+- `--formatter junit` 플래그로 Bats를 실행하고 출력을 `test-results.xml`로 리디렉션
+- XML 파일을 열고 `<testsuite>`, `<testcase>`, (실패가 있는 경우) `<failure>` 요소 식별
+- 의도적으로 테스트 하나를 망가뜨리고 재실행하여 XML에 기록된 실패 확인
+
+### 연습 5: 셸 테스트를 위한 GitHub Actions CI 설정하기
+
+다음을 수행하는 `.github/workflows/test.yml` 파일을 생성하세요:
+- `main`에 대한 모든 `push`와 모든 풀 리퀘스트(pull request)에 트리거
+- `ubuntu-latest`에서 실행
+- `apt-get` 또는 공식 Bats 액션을 사용하여 Bats 설치
+- `tests/` 디렉토리 아래에서 찾은 모든 `*.bats` 파일 실행
+- 테스트가 실패하면 워크플로우 실패
+- `actions/upload-artifact`를 사용하여 JUnit XML 보고서를 워크플로우 아티팩트(artifact)로 업로드
 
 ---
 

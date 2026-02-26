@@ -1,5 +1,18 @@
 # 특징점 검출 (Feature Detection)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 특징점(feature point)이 무엇이며 좋은 키포인트(keypoint)를 구성하는 속성(반복성, 변별력, 지역성)을 정의할 수 있다
+2. 해리스 코너 검출(Harris corner detection)을 구현하고 코너 응답 함수(corner response function)를 해석할 수 있다
+3. OpenCV를 사용하여 이미지에서 키포인트를 찾기 위해 FAST, SIFT, ORB 검출기를 적용할 수 있다
+4. 속도, 정확도, 특허/라이선스 측면에서 Harris, FAST, SIFT, ORB의 장단점을 비교할 수 있다
+5. 키포인트 디스크립터(keypoint descriptor)를 추출하고 시각화하며, 지역 이미지 구조를 어떻게 인코딩하는지 이해할 수 있다
+6. 변환된 이미지 버전에 걸쳐 키포인트 반복성(keypoint repeatability)을 분석하여 검출기 성능을 평가할 수 있다
+
+---
+
 ## 개요
 
 특징점(Feature)은 이미지에서 고유하고 반복적으로 검출 가능한 지점입니다. 코너, 블롭, 엣지 교차점 등이 있으며, 이미지 매칭, 객체 인식, 3D 재구성 등에 활용됩니다. 이 레슨에서는 Harris, FAST, SIFT, ORB 등 다양한 특징점 검출 알고리즘을 학습합니다.
@@ -24,59 +37,60 @@
 ### 특징점이란?
 
 ```
-특징점 (Feature Point / Keypoint):
-이미지에서 고유하게 식별 가능한 지점
+Feature Point / Keypoint:
+A uniquely identifiable point in an image
 
-좋은 특징점의 조건:
-1. 반복성 (Repeatability): 같은 물체는 항상 같은 특징점
-2. 구별성 (Distinctiveness): 서로 다른 특징점은 구별 가능
-3. 불변성 (Invariance): 회전, 크기, 조명 변화에 강건
-4. 정확성 (Accuracy): 정확한 위치 검출
+Requirements for Good Features:
+1. Repeatability: Same object should produce same features
+2. Distinctiveness: Different features should be distinguishable
+3. Invariance: Robust to rotation, scale, and lighting changes
+4. Accuracy: Precise location detection
 
-특징점의 종류:
-┌─────────────────────────────────────────────────────────────┐
-│  코너 (Corner)              블롭 (Blob)                      │
-│                                                             │
-│       ┌──────              ●●●●●                            │
-│       │                    ●●●●●●●                          │
-│    ───┘                    ●●●●●●●●                         │
-│                            ●●●●●●●                          │
-│   두 방향으로 변화           ●●●●●                            │
-│                          특정 크기의 영역                     │
-└─────────────────────────────────────────────────────────────┘
+Types of Features:
++-------------------------------------------------------------+
+|  Corner                    Blob                              |
+|                                                              |
+|       +------              *****                             |
+|       |                    *******                           |
+|    ---+                    ********                          |
+|                            *******                           |
+|   Change in two            *****                             |
+|   directions               Specific region size              |
++-------------------------------------------------------------+
 ```
 
 ### 특징점 검출 파이프라인
 
 ```
-1. 특징점 검출 (Detection)
-   - 이미지에서 키포인트 위치 찾기
-   - Harris, FAST, SIFT, ORB 등
-         │
-         ▼
-2. 특징점 기술 (Description)
-   - 각 키포인트 주변의 특징 벡터 생성
-   - SIFT descriptor, ORB descriptor, BRIEF 등
-         │
-         ▼
-3. 특징점 매칭 (Matching)
-   - 다른 이미지의 디스크립터와 비교
-   - BFMatcher, FLANN 등
+1. Feature Detection
+   - Find keypoint locations in image
+   - Harris, FAST, SIFT, ORB, etc.
+         |
+         v
+2. Feature Description
+   - Generate feature vector around each keypoint
+   - SIFT descriptor, ORB descriptor, BRIEF, etc.
+         |
+         v
+3. Feature Matching
+   - Compare descriptors with other images
+   - BFMatcher, FLANN, etc.
 ```
 
 ### 검출기 비교
 
 ```
-┌────────────────┬───────────┬───────────┬───────────┬──────────┐
-│ 알고리즘       │ 속도      │ 회전 불변 │ 크기 불변 │ 특허     │
-├────────────────┼───────────┼───────────┼───────────┼──────────┤
-│ Harris         │ 빠름      │ ○         │ ✗         │ 없음     │
-│ FAST           │ 매우 빠름 │ ✗         │ ✗         │ 없음     │
-│ SIFT           │ 느림      │ ○         │ ○         │ 만료     │
-│ SURF           │ 보통      │ ○         │ ○         │ 있음     │
-│ ORB            │ 빠름      │ ○         │ ○         │ 없음     │
-│ AKAZE          │ 보통      │ ○         │ ○         │ 없음     │
-└────────────────┴───────────┴───────────┴───────────┴──────────┘
++----------------+-----------+-----------+-----------+----------+
+| Algorithm      | Speed     | Rotation  | Scale     | Patent   |
+|                |           | Invariant | Invariant |          |
++----------------+-----------+-----------+-----------+----------+
+| Harris         | Fast      | O         | X         | None     |
+| FAST           | Very Fast | X         | X         | None     |
+| SIFT           | Slow      | O         | O         | Expired  |
+| SURF           | Medium    | O         | O         | Yes      |
+| ORB            | Fast      | O         | O         | None     |
+| AKAZE          | Medium    | O         | O         | None     |
++----------------+-----------+-----------+-----------+----------+
 ```
 
 ---
@@ -86,27 +100,29 @@
 ### 개념
 
 ```
-Harris 코너 검출:
-이미지 패치를 이동시켰을 때 밝기 변화 분석
+Harris Corner Detection:
+Analyzes intensity changes when shifting an image patch
 
-- 평탄 영역: 모든 방향으로 변화 없음
-- 엣지: 엣지 방향은 변화 없음, 수직 방향은 변화 큼
-- 코너: 모든 방향으로 변화 큼
+- Flat region: No change in any direction
+- Edge: No change along edge direction, large change perpendicular
+- Corner: Large change in all directions
 
-자기상관 행렬 M:
-M = Σ [Ix²    IxIy]
-    [IxIy   Iy² ]
+Auto-correlation Matrix M:
+M = sum [Ix^2    IxIy]
+        [IxIy   Iy^2 ]
 
-Ix, Iy: x, y 방향 미분
+Ix, Iy: Derivatives in x, y directions
 
-코너 응답 함수:
-R = det(M) - k × (trace(M))²
-R = λ1×λ2 - k(λ1 + λ2)²
+Corner Response Function:
+R = det(M) - k * (trace(M))^2
+R = lambda1*lambda2 - k(lambda1 + lambda2)^2
 
-- R > threshold: 코너
-- R ≈ 0: 평탄
-- R < 0: 엣지
+- R > threshold: Corner
+- R ~ 0: Flat
+- R < 0: Edge
 ```
+
+**기하학적 직관**: M의 고유값(eigenvalue) λ1과 λ2는 픽셀 주변의 두 가지 주요 밝기 변화 방향을 나타냅니다. **코너(corner)**에서는 모든 방향으로 이미지가 강하게 변하므로 두 고유값이 모두 커서 det(M) = λ1·λ2가 크고 R이 양수가 됩니다. **엣지(edge)**에서는 한 방향으로만 밝기가 강하게 변하므로 하나의 고유값은 크고 다른 하나는 작아 det(M)는 작지만 trace(M)는 여전히 커서 R이 음수가 됩니다. **평탄 영역(flat)**에서는 두 고유값 모두 미미하여 R이 0에 가깝습니다. 파라미터 k(일반적으로 0.04–0.06)는 민감도를 제어합니다: 작은 k는 더 많은 코너를 검출하지만 거짓 양성도 증가합니다.
 
 ### cv2.cornerHarris()
 
@@ -115,23 +131,29 @@ import cv2
 import numpy as np
 
 def harris_corner_detection(image_path):
-    """Harris 코너 검출"""
+    """Harris corner detection"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = np.float32(gray)
 
-    # Harris 코너 검출
+    # Harris corner detection
     dst = cv2.cornerHarris(
         gray,
-        blockSize=2,     # 이웃 크기
-        ksize=3,         # Sobel 커널 크기
-        k=0.04           # Harris 파라미터
+        blockSize=2,     # Small patch (2px) captures fine structure; larger values
+                         # smooth over detail and miss tight corners
+        ksize=3,         # Sobel kernel size: 3 is the smallest that gives a
+                         # good gradient estimate without excessive blurring
+        k=0.04           # Harris sensitivity: 0.04–0.06 is the empirically safe
+                         # range — smaller k detects more corners but adds false
+                         # positives; larger k misses weak corners
     )
 
-    # 결과 팽창 (코너 강조)
+    # Dilate result to expand corner peaks so they are visible as distinct
+    # bright regions — without dilation, corners appear as single-pixel dots
     dst = cv2.dilate(dst, None)
 
-    # 임계값 이상의 점을 코너로 표시
+    # Threshold at 1% of peak response: scales automatically to image content
+    # so the same code works on both high-contrast and low-contrast images
     result = img.copy()
     result[dst > 0.01 * dst.max()] = [0, 0, 255]
 
@@ -150,36 +172,37 @@ import cv2
 import numpy as np
 
 def harris_subpixel(image_path):
-    """서브픽셀 정확도의 Harris 코너"""
+    """Harris corners with sub-pixel accuracy"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_float = np.float32(gray)
 
-    # Harris 코너
+    # Harris corners — same parameters as above (blockSize=2, ksize=3, k=0.04)
     dst = cv2.cornerHarris(gray_float, 2, 3, 0.04)
 
-    # 코너 위치 추출
+    # Dilate then threshold: dilation merges nearby high-response pixels into
+    # connected blobs, making connectedComponentsWithStats find cleaner centroids
     dst = cv2.dilate(dst, None)
     ret, dst_thresh = cv2.threshold(dst, 0.01 * dst.max(), 255, 0)
     dst_thresh = np.uint8(dst_thresh)
 
-    # 연결 요소로 코너 중심 찾기
+    # Find corner centroids using connected components
     ret, labels, stats, centroids = cv2.connectedComponentsWithStats(dst_thresh)
 
-    # 서브픽셀 정밀도로 개선
+    # Refine to sub-pixel precision
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
     corners = cv2.cornerSubPix(
         gray,
         np.float32(centroids),
-        (5, 5),      # 윈도우 크기
-        (-1, -1),    # 제로 존
+        (5, 5),      # Window size
+        (-1, -1),    # Zero zone
         criteria
     )
 
     result = img.copy()
     for i, corner in enumerate(corners):
         x, y = corner.ravel()
-        if i == 0:  # 첫 번째는 배경
+        if i == 0:  # First one is background
             continue
         cv2.circle(result, (int(x), int(y)), 5, (0, 255, 0), -1)
 
@@ -198,11 +221,11 @@ harris_subpixel('chessboard.jpg')
 ### cv2.goodFeaturesToTrack()
 
 ```
-Shi-Tomasi 코너 검출 (Harris 개선):
-R = min(λ1, λ2)
+Shi-Tomasi Corner Detection (Harris improvement):
+R = min(lambda1, lambda2)
 
-Harris보다 더 안정적인 코너 검출
-→ 광학 흐름(Optical Flow) 추적에 적합
+More stable corner detection than Harris
+-> Suitable for optical flow tracking
 ```
 
 ```python
@@ -210,19 +233,24 @@ import cv2
 import numpy as np
 
 def good_features_demo(image_path):
-    """좋은 특징점 검출"""
+    """Good features detection"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 좋은 특징점 검출
+    # Detect good features
     corners = cv2.goodFeaturesToTrack(
         gray,
-        maxCorners=100,     # 최대 코너 수
-        qualityLevel=0.01,  # 품질 수준 (최대 응답의 비율)
-        minDistance=10,     # 코너 간 최소 거리
-        blockSize=3,        # 이웃 크기
-        useHarrisDetector=False,  # Shi-Tomasi 사용
-        k=0.04              # Harris 파라미터 (Harris 사용시)
+        maxCorners=100,     # Cap output count — unlimited corners overwhelm
+                            # downstream trackers (e.g., Lucas-Kanade)
+        qualityLevel=0.01,  # Accept corners with response >= 1% of the strongest;
+                            # low value keeps weaker but still useful corners
+        minDistance=10,     # Enforce spatial spread: prevents clusters of
+                            # redundant corners from the same region
+        blockSize=3,        # Slightly larger patch than Harris (2) for more
+                            # stable gradient estimates in noisy images
+        useHarrisDetector=False,  # Use Shi-Tomasi (min eigenvalue) — it avoids
+                                  # the k trade-off and is more numerically stable
+        k=0.04              # Harris parameter (only active when useHarrisDetector=True)
     )
 
     result = img.copy()
@@ -233,7 +261,7 @@ def good_features_demo(image_path):
             x, y = corner.ravel()
             cv2.circle(result, (x, y), 5, (0, 255, 0), -1)
 
-        print(f"검출된 코너 수: {len(corners)}")
+        print(f"Detected corners: {len(corners)}")
 
     cv2.imshow('Good Features', result)
     cv2.waitKey(0)
@@ -250,16 +278,16 @@ import cv2
 import numpy as np
 
 def features_with_mask(image_path):
-    """특정 영역에서만 특징점 검출"""
+    """Detect features only in specific region"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
 
-    # ROI 마스크 생성 (중앙 영역만)
+    # Create ROI mask (center region only)
     mask = np.zeros((h, w), dtype=np.uint8)
     cv2.rectangle(mask, (w//4, h//4), (3*w//4, 3*h//4), 255, -1)
 
-    # 마스크 영역에서만 특징점 검출
+    # Detect features only in masked region
     corners = cv2.goodFeaturesToTrack(
         gray,
         maxCorners=50,
@@ -270,7 +298,7 @@ def features_with_mask(image_path):
 
     result = img.copy()
 
-    # 마스크 영역 표시
+    # Show mask region
     cv2.rectangle(result, (w//4, h//4), (3*w//4, 3*h//4), (128, 128, 128), 2)
 
     if corners is not None:
@@ -292,10 +320,10 @@ features_with_mask('scene.jpg')
 
 ```
 FAST (Features from Accelerated Segment Test):
-매우 빠른 코너 검출 알고리즘
+Very fast corner detection algorithm
 
-원리:
-중심 픽셀 P 주변의 원형 패턴(16픽셀) 검사
+Principle:
+Examine circular pattern (16 pixels) around center pixel P
 
         1  2  3
      16           4
@@ -305,15 +333,15 @@ FAST (Features from Accelerated Segment Test):
      12          8
         11 10 9
 
-판단 기준 (N=12):
-- 연속된 N개 픽셀이 P보다 밝으면: 코너
-- 연속된 N개 픽셀이 P보다 어두우면: 코너
+Decision criterion (N=12):
+- If N consecutive pixels are brighter than P: Corner
+- If N consecutive pixels are darker than P: Corner
 
-특징:
-- 매우 빠름 (실시간 처리)
-- 회전 불변성 없음
-- 크기 불변성 없음
-- 비최대 억제(NMS)로 다중 검출 방지
+Characteristics:
+- Very fast (real-time processing)
+- No rotation invariance
+- No scale invariance
+- Non-maximum suppression (NMS) prevents multiple detections
 ```
 
 ### cv2.FastFeatureDetector
@@ -323,27 +351,27 @@ import cv2
 import numpy as np
 
 def fast_detection(image_path):
-    """FAST 특징점 검출"""
+    """FAST feature detection"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # FAST 검출기 생성
+    # Create FAST detector
     fast = cv2.FastFeatureDetector_create(
-        threshold=20,           # 밝기 임계값
-        nonmaxSuppression=True  # 비최대 억제
+        threshold=20,           # Intensity threshold
+        nonmaxSuppression=True  # Non-maximum suppression
     )
 
-    # 특징점 검출
+    # Detect features
     keypoints = fast.detect(gray, None)
 
-    # 결과 그리기
+    # Draw results
     result = cv2.drawKeypoints(
         img, keypoints, None,
         color=(0, 255, 0),
         flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
     )
 
-    print(f"검출된 특징점 수: {len(keypoints)}")
+    print(f"Detected features: {len(keypoints)}")
 
     cv2.imshow('FAST', result)
     cv2.waitKey(0)
@@ -361,7 +389,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def compare_fast_thresholds(image_path):
-    """FAST 임계값 비교"""
+    """Compare FAST thresholds"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -396,29 +424,29 @@ compare_fast_thresholds('building.jpg')
 
 ```
 SIFT (Scale-Invariant Feature Transform):
-크기와 회전에 불변한 특징점 검출 및 기술
+Feature detection and description invariant to scale and rotation
 
-단계:
-1. 스케일 공간 극값 검출 (DoG: Difference of Gaussians)
-2. 키포인트 정밀화 (서브픽셀 정확도, 엣지 제거)
-3. 방향 할당 (그래디언트 히스토그램)
-4. 디스크립터 계산 (4x4 그리드 x 8방향 = 128차원)
+Steps:
+1. Scale-space extrema detection (DoG: Difference of Gaussians)
+2. Keypoint localization (sub-pixel accuracy, edge removal)
+3. Orientation assignment (gradient histogram)
+4. Descriptor computation (4x4 grid x 8 directions = 128 dimensions)
 
-스케일 공간:
-┌─────────────────────────────────────────────────┐
-│  Octave 0    Octave 1    Octave 2              │
-│  ┌───────┐   ┌─────┐    ┌───┐                  │
-│  │ σ=1.6│   │ σ=1.6│   │σ=1.6│  → 스케일별     │
-│  │ σ=2.0│   │ σ=2.0│   │σ=2.0│     가우시안    │
-│  │ σ=2.5│   │ σ=2.5│   │σ=2.5│     블러        │
-│  │ σ=3.2│   │ σ=3.2│   │σ=3.2│                 │
-│  └───────┘   └─────┘    └───┘                  │
-│  원본 크기    1/2 축소   1/4 축소              │
-└─────────────────────────────────────────────────┘
+Scale Space:
++-------------------------------------------------+
+|  Octave 0    Octave 1    Octave 2               |
+|  +-------+   +-----+    +---+                   |
+|  | s=1.6|   | s=1.6|   |s=1.6|  -> Scale-wise   |
+|  | s=2.0|   | s=2.0|   |s=2.0|     Gaussian     |
+|  | s=2.5|   | s=2.5|   |s=2.5|     blur         |
+|  | s=3.2|   | s=3.2|   |s=3.2|                  |
+|  +-------+   +-----+    +---+                   |
+|  Original    1/2 size   1/4 size                |
++-------------------------------------------------+
 
 DoG (Difference of Gaussians):
-D(x, y, σ) = L(x, y, kσ) - L(x, y, σ)
-→ 인접한 스케일 간의 차이로 블롭 검출
+D(x, y, sigma) = L(x, y, k*sigma) - L(x, y, sigma)
+-> Blob detection via difference between adjacent scales
 ```
 
 ### cv2.SIFT_create()
@@ -428,31 +456,36 @@ import cv2
 import numpy as np
 
 def sift_detection(image_path):
-    """SIFT 특징점 검출"""
+    """SIFT feature detection"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # SIFT 검출기 생성
+    # Create SIFT detector
     sift = cv2.SIFT_create(
-        nfeatures=0,          # 최대 특징점 수 (0=무제한)
-        nOctaveLayers=3,      # 옥타브당 레이어 수
-        contrastThreshold=0.04,  # 대비 임계값
-        edgeThreshold=10,     # 엣지 임계값
-        sigma=1.6             # 초기 가우시안 시그마
+        nfeatures=0,          # 0 = unlimited; set a cap (e.g. 500) to bound
+                              # descriptor computation time at inference
+        nOctaveLayers=3,      # Layers between octaves: 3 gives good coverage
+                              # of the scale space without redundant computation
+        contrastThreshold=0.04,  # Reject low-contrast keypoints (texture-less areas)
+                                 # — lower values keep more but noisier keypoints
+        edgeThreshold=10,     # Reject edge responses; higher values are more
+                              # permissive and allow more edge-like keypoints
+        sigma=1.6             # Initial Gaussian blur matches the assumed camera
+                              # smoothing; Lowe's original paper validated 1.6
     )
 
-    # 특징점과 디스크립터 계산
+    # Compute keypoints and descriptors
     keypoints, descriptors = sift.detectAndCompute(gray, None)
 
-    # 결과 그리기
+    # Draw results
     result = cv2.drawKeypoints(
         img, keypoints, None,
         flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
     )
 
-    print(f"검출된 특징점 수: {len(keypoints)}")
+    print(f"Detected features: {len(keypoints)}")
     if descriptors is not None:
-        print(f"디스크립터 크기: {descriptors.shape}")
+        print(f"Descriptor size: {descriptors.shape}")
 
     cv2.imshow('SIFT', result)
     cv2.waitKey(0)
@@ -469,34 +502,34 @@ import cv2
 import numpy as np
 
 def analyze_sift_keypoints(image_path):
-    """SIFT 키포인트 상세 분석"""
+    """Detailed analysis of SIFT keypoints"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     sift = cv2.SIFT_create()
     keypoints, descriptors = sift.detectAndCompute(gray, None)
 
-    print("SIFT 키포인트 분석:")
+    print("SIFT Keypoint Analysis:")
     print("-" * 50)
 
-    # 키포인트 속성
+    # Keypoint attributes
     for i, kp in enumerate(keypoints[:5]):
-        print(f"키포인트 {i}:")
-        print(f"  위치 (x, y): ({kp.pt[0]:.1f}, {kp.pt[1]:.1f})")
-        print(f"  크기 (scale): {kp.size:.1f}")
-        print(f"  방향 (angle): {kp.angle:.1f}도")
-        print(f"  응답 (response): {kp.response:.4f}")
-        print(f"  옥타브: {kp.octave}")
+        print(f"Keypoint {i}:")
+        print(f"  Location (x, y): ({kp.pt[0]:.1f}, {kp.pt[1]:.1f})")
+        print(f"  Size (scale): {kp.size:.1f}")
+        print(f"  Angle: {kp.angle:.1f} degrees")
+        print(f"  Response: {kp.response:.4f}")
+        print(f"  Octave: {kp.octave}")
 
-    # 스케일 분포
+    # Scale distribution
     scales = [kp.size for kp in keypoints]
-    print(f"\n스케일 범위: {min(scales):.1f} ~ {max(scales):.1f}")
+    print(f"\nScale range: {min(scales):.1f} ~ {max(scales):.1f}")
 
-    # 디스크립터 분석
+    # Descriptor analysis
     if descriptors is not None:
-        print(f"\n디스크립터:")
-        print(f"  차원: {descriptors.shape[1]}")
-        print(f"  값 범위: {descriptors.min():.1f} ~ {descriptors.max():.1f}")
+        print(f"\nDescriptors:")
+        print(f"  Dimensions: {descriptors.shape[1]}")
+        print(f"  Value range: {descriptors.min():.1f} ~ {descriptors.max():.1f}")
 
 analyze_sift_keypoints('object.jpg')
 ```
@@ -509,29 +542,29 @@ analyze_sift_keypoints('object.jpg')
 
 ```
 ORB (Oriented FAST and Rotated BRIEF):
-FAST + BRIEF의 개선 버전, 특허 무료
+Improved version of FAST + BRIEF, patent-free
 
-구성:
-1. oFAST: 방향 정보가 추가된 FAST
-   - 회전 불변성을 위해 방향(orientation) 계산
-   - 이미지 피라미드로 스케일 불변성
+Components:
+1. oFAST: FAST with orientation information
+   - Computes orientation for rotation invariance
+   - Image pyramid for scale invariance
 
-2. rBRIEF: 회전된 BRIEF
-   - BRIEF: 바이너리 디스크립터 (256비트)
-   - 학습된 비교 패턴으로 구별력 향상
-   - Hamming 거리로 빠른 매칭
+2. rBRIEF: Rotated BRIEF
+   - BRIEF: Binary descriptor (256 bits)
+   - Learned comparison patterns for better discrimination
+   - Fast matching with Hamming distance
 
-특징:
-- SIFT/SURF보다 훨씬 빠름
-- 특허 무료
-- 실시간 처리에 적합
-- 바이너리 디스크립터 → 빠른 매칭
+Characteristics:
+- Much faster than SIFT/SURF
+- Patent-free
+- Suitable for real-time processing
+- Binary descriptor -> Fast matching
 
-BRIEF 디스크립터:
-패치 내 두 점의 밝기 비교
-τ(P; x, y) = { 1 if P(x) < P(y)
-             { 0 otherwise
-→ n개 비교로 n비트 바이너리 문자열
+BRIEF Descriptor:
+Compare intensities of two points in a patch
+tau(P; x, y) = { 1 if P(x) < P(y)
+               { 0 otherwise
+-> n comparisons yield n-bit binary string
 ```
 
 ### cv2.ORB_create()
@@ -541,37 +574,45 @@ import cv2
 import numpy as np
 
 def orb_detection(image_path):
-    """ORB 특징점 검출"""
+    """ORB feature detection"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # ORB 검출기 생성
+    # Create ORB detector
     orb = cv2.ORB_create(
-        nfeatures=500,        # 최대 특징점 수
-        scaleFactor=1.2,      # 피라미드 스케일 팩터
-        nlevels=8,            # 피라미드 레벨 수
-        edgeThreshold=31,     # 엣지 임계값
-        firstLevel=0,         # 첫 피라미드 레벨
-        WTA_K=2,              # BRIEF에서 비교할 점 수 (2, 3, 4)
-        scoreType=cv2.ORB_HARRIS_SCORE,  # 점수 유형
-        patchSize=31,         # BRIEF 패치 크기
-        fastThreshold=20      # FAST 임계값
+        nfeatures=500,        # Practical limit for real-time use: 500 gives good
+                              # coverage without overwhelming the matcher
+        scaleFactor=1.2,      # Mild downscale per pyramid level; smaller values
+                              # build finer-grained scale space but cost more memory
+        nlevels=8,            # 8 levels gives ~3.6× scale range (1.2^8), enough
+                              # to handle typical viewpoint scale changes
+        edgeThreshold=31,     # Matches patchSize: keeps FAST away from borders
+                              # so BRIEF can sample a full 31×31 patch
+        firstLevel=0,         # Start detection at full resolution for small features
+        WTA_K=2,              # Default binary comparison (pairs); use 3 or 4 for
+                              # more discriminative but larger descriptors
+        scoreType=cv2.ORB_HARRIS_SCORE,  # Harris score is more accurate than FAST
+                                         # score for ranking keypoints by quality
+        patchSize=31,         # BRIEF patch size: larger patches are more
+                              # discriminative but slower to compute
+        fastThreshold=20      # FAST intensity threshold: 20 balances sensitivity
+                              # and false positive rate for typical images
     )
 
-    # 특징점과 디스크립터 계산
+    # Compute keypoints and descriptors
     keypoints, descriptors = orb.detectAndCompute(gray, None)
 
-    # 결과 그리기
+    # Draw results
     result = cv2.drawKeypoints(
         img, keypoints, None,
         color=(0, 255, 0),
         flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
     )
 
-    print(f"검출된 특징점 수: {len(keypoints)}")
+    print(f"Detected features: {len(keypoints)}")
     if descriptors is not None:
-        print(f"디스크립터 크기: {descriptors.shape}")
-        print(f"디스크립터 타입: {descriptors.dtype}")  # uint8 (바이너리)
+        print(f"Descriptor size: {descriptors.shape}")
+        print(f"Descriptor type: {descriptors.dtype}")  # uint8 (binary)
 
     cv2.imshow('ORB', result)
     cv2.waitKey(0)
@@ -590,7 +631,7 @@ import time
 import matplotlib.pyplot as plt
 
 def compare_sift_orb(image_path):
-    """SIFT와 ORB 성능 비교"""
+    """Compare SIFT and ORB performance"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -606,17 +647,17 @@ def compare_sift_orb(image_path):
     kps_orb, descs_orb = orb.detectAndCompute(gray, None)
     orb_time = time.time() - start
 
-    print("성능 비교:")
+    print("Performance Comparison:")
     print("-" * 50)
     print(f"SIFT: {len(kps_sift)} points, {sift_time*1000:.1f}ms")
     print(f"ORB:  {len(kps_orb)} points, {orb_time*1000:.1f}ms")
-    print(f"속도 비율: ORB가 {sift_time/orb_time:.1f}배 빠름")
+    print(f"Speed ratio: ORB is {sift_time/orb_time:.1f}x faster")
 
     if descs_sift is not None and descs_orb is not None:
-        print(f"\nSIFT 디스크립터: {descs_sift.shape}, {descs_sift.dtype}")
-        print(f"ORB 디스크립터: {descs_orb.shape}, {descs_orb.dtype}")
+        print(f"\nSIFT descriptor: {descs_sift.shape}, {descs_sift.dtype}")
+        print(f"ORB descriptor: {descs_orb.shape}, {descs_orb.dtype}")
 
-    # 시각화
+    # Visualization
     result_sift = cv2.drawKeypoints(img, kps_sift, None, color=(0, 255, 0))
     result_orb = cv2.drawKeypoints(img, kps_orb, None, color=(0, 0, 255))
 
@@ -647,25 +688,25 @@ import cv2
 import numpy as np
 
 def keypoint_structure():
-    """키포인트 구조 이해"""
-    # 키포인트 수동 생성
+    """Understanding keypoint structure"""
+    # Manually create keypoint
     kp = cv2.KeyPoint(
-        x=100.5,        # x 좌표
-        y=200.5,        # y 좌표
-        size=20,        # 특징점 크기 (직경)
-        angle=45,       # 방향 (도)
-        response=0.8,   # 응답 강도
-        octave=0,       # 옥타브 (스케일)
-        class_id=-1     # 분류 ID
+        x=100.5,        # x coordinate
+        y=200.5,        # y coordinate
+        size=20,        # Feature size (diameter)
+        angle=45,       # Orientation (degrees)
+        response=0.8,   # Response strength
+        octave=0,       # Octave (scale)
+        class_id=-1     # Class ID
     )
 
-    print("KeyPoint 속성:")
-    print(f"  위치: ({kp.pt[0]}, {kp.pt[1]})")
-    print(f"  크기: {kp.size}")
-    print(f"  방향: {kp.angle}")
-    print(f"  응답: {kp.response}")
-    print(f"  옥타브: {kp.octave}")
-    print(f"  클래스 ID: {kp.class_id}")
+    print("KeyPoint Attributes:")
+    print(f"  Location: ({kp.pt[0]}, {kp.pt[1]})")
+    print(f"  Size: {kp.size}")
+    print(f"  Angle: {kp.angle}")
+    print(f"  Response: {kp.response}")
+    print(f"  Octave: {kp.octave}")
+    print(f"  Class ID: {kp.class_id}")
 
 keypoint_structure()
 ```
@@ -678,20 +719,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def visualize_descriptors(image_path):
-    """디스크립터 시각화"""
+    """Visualize descriptors"""
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
-    # SIFT 디스크립터 (128차원 float)
+    # SIFT descriptor (128-dimensional float)
     sift = cv2.SIFT_create()
     kps_sift, descs_sift = sift.detectAndCompute(img, None)
 
-    # ORB 디스크립터 (32바이트 = 256비트)
+    # ORB descriptor (32 bytes = 256 bits)
     orb = cv2.ORB_create()
     kps_orb, descs_orb = orb.detectAndCompute(img, None)
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-    # SIFT 디스크립터 히스토그램
+    # SIFT descriptor histogram
     if descs_sift is not None and len(descs_sift) > 0:
         axes[0, 0].bar(range(128), descs_sift[0])
         axes[0, 0].set_title('SIFT Descriptor (128D)')
@@ -702,15 +743,15 @@ def visualize_descriptors(image_path):
         axes[0, 1].set_xlabel('Dimension')
         axes[0, 1].set_ylabel('Keypoint')
 
-    # ORB 디스크립터 (바이너리)
+    # ORB descriptor (binary)
     if descs_orb is not None and len(descs_orb) > 0:
-        # 바이너리를 비트로 변환
+        # Convert binary to bits
         bits = np.unpackbits(descs_orb[0])
         axes[1, 0].bar(range(256), bits)
         axes[1, 0].set_title('ORB Descriptor (256 bits)')
         axes[1, 0].set_xlabel('Bit')
 
-        # 여러 디스크립터
+        # Multiple descriptors
         bits_all = np.unpackbits(descs_orb[:50], axis=1)
         axes[1, 1].imshow(bits_all, aspect='auto', cmap='binary')
         axes[1, 1].set_title('ORB Descriptors (first 50)')
@@ -730,7 +771,7 @@ import cv2
 import numpy as np
 
 def use_various_detectors(image_path):
-    """다양한 특징점 검출기 사용"""
+    """Use various feature detectors"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -739,7 +780,7 @@ def use_various_detectors(image_path):
         'ORB': cv2.ORB_create(),
         'BRISK': cv2.BRISK_create(),
         'AKAZE': cv2.AKAZE_create(),
-        # 'KAZE': cv2.KAZE_create(),  # 느림
+        # 'KAZE': cv2.KAZE_create(),  # Slow
     }
 
     results = {}
@@ -754,9 +795,9 @@ def use_various_detectors(image_path):
         }
 
         print(f"{name}:")
-        print(f"  특징점 수: {len(kps)}")
+        print(f"  Feature count: {len(kps)}")
         if descs is not None:
-            print(f"  디스크립터: {descs.shape}, {descs.dtype}")
+            print(f"  Descriptor: {descs.shape}, {descs.dtype}")
         print()
 
     return results
@@ -780,21 +821,21 @@ import cv2
 import numpy as np
 
 def select_best_keypoints(image_path, n=50):
-    """가장 강한 N개의 특징점 선택"""
+    """Select N strongest keypoints"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # ORB로 특징점 검출 (많이 검출)
+    # Detect many keypoints with ORB
     orb = cv2.ORB_create(nfeatures=500)
     keypoints, descriptors = orb.detectAndCompute(gray, None)
 
-    # 응답 강도로 정렬
+    # Sort by response strength
     keypoints_sorted = sorted(keypoints, key=lambda x: x.response, reverse=True)
 
-    # 상위 N개 선택
+    # Select top N
     best_keypoints = keypoints_sorted[:n]
 
-    # 해당 디스크립터도 선택
+    # Select corresponding descriptors
     indices = [keypoints.index(kp) for kp in best_keypoints]
     best_descriptors = descriptors[indices] if descriptors is not None else None
 
@@ -826,7 +867,7 @@ import cv2
 import numpy as np
 
 def uniform_keypoints(image_path, grid_size=(8, 8)):
-    """그리드별로 균일하게 특징점 선택"""
+    """Select keypoints uniformly per grid cell"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
@@ -834,35 +875,35 @@ def uniform_keypoints(image_path, grid_size=(8, 8)):
     orb = cv2.ORB_create(nfeatures=1000)
     keypoints, descriptors = orb.detectAndCompute(gray, None)
 
-    # 그리드 크기 계산
+    # Calculate grid size
     cell_h = h // grid_size[0]
     cell_w = w // grid_size[1]
 
-    # 각 셀별로 가장 강한 특징점 선택
+    # Select strongest keypoint per cell
     selected_kps = []
     selected_indices = []
 
     for row in range(grid_size[0]):
         for col in range(grid_size[1]):
-            # 셀 영역
+            # Cell region
             x_min = col * cell_w
             x_max = (col + 1) * cell_w
             y_min = row * cell_h
             y_max = (row + 1) * cell_h
 
-            # 셀 내의 특징점 필터링
+            # Filter keypoints in cell
             cell_kps = []
             for i, kp in enumerate(keypoints):
                 if x_min <= kp.pt[0] < x_max and y_min <= kp.pt[1] < y_max:
                     cell_kps.append((i, kp))
 
             if cell_kps:
-                # 가장 강한 특징점 선택
+                # Select strongest keypoint
                 best_idx, best_kp = max(cell_kps, key=lambda x: x[1].response)
                 selected_kps.append(best_kp)
                 selected_indices.append(best_idx)
 
-    # 디스크립터
+    # Descriptors
     selected_descs = descriptors[selected_indices] if descriptors is not None else None
 
     result = cv2.drawKeypoints(
@@ -871,7 +912,7 @@ def uniform_keypoints(image_path, grid_size=(8, 8)):
         flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
     )
 
-    # 그리드 표시
+    # Draw grid
     for row in range(1, grid_size[0]):
         cv2.line(result, (0, row * cell_h), (w, row * cell_h), (128, 128, 128), 1)
     for col in range(1, grid_size[1]):
@@ -899,38 +940,38 @@ import cv2
 import numpy as np
 
 def test_rotation_invariance(image_path, angle=45):
-    """회전 불변성 테스트"""
+    """Test rotation invariance"""
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
 
-    # 이미지 회전
+    # Rotate image
     center = (w // 2, h // 2)
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     rotated = cv2.warpAffine(gray, M, (w, h))
 
-    # SIFT (회전 불변)
+    # SIFT (rotation invariant)
     sift = cv2.SIFT_create(nfeatures=100)
 
     kps1, descs1 = sift.detectAndCompute(gray, None)
     kps2, descs2 = sift.detectAndCompute(rotated, None)
 
-    # 특징점 매칭
+    # Feature matching
     bf = cv2.BFMatcher()
     matches = bf.knnMatch(descs1, descs2, k=2)
 
-    # 좋은 매칭 필터링 (Lowe's ratio test)
+    # Filter good matches (Lowe's ratio test)
     good_matches = []
     for m, n in matches:
         if m.distance < 0.75 * n.distance:
             good_matches.append(m)
 
-    print(f"원본 특징점: {len(kps1)}")
-    print(f"회전 이미지 특징점: {len(kps2)}")
-    print(f"매칭된 특징점: {len(good_matches)}")
-    print(f"매칭률: {len(good_matches) / len(kps1) * 100:.1f}%")
+    print(f"Original features: {len(kps1)}")
+    print(f"Rotated image features: {len(kps2)}")
+    print(f"Matched features: {len(good_matches)}")
+    print(f"Match rate: {len(good_matches) / len(kps1) * 100:.1f}%")
 
-    # 시각화
+    # Visualization
     result = cv2.drawMatches(
         gray, kps1, rotated, kps2,
         good_matches, None,
@@ -959,7 +1000,7 @@ test_rotation_invariance('object.jpg', angle=30)
 
 ## 다음 단계
 
-- [14_Feature_Matching.md](./14_Feature_Matching.md) - BFMatcher, FLANN, Homography
+- [특징점 매칭 (Feature Matching)](./14_Feature_Matching.md) - BFMatcher, FLANN, Homography
 
 ---
 

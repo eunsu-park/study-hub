@@ -1,5 +1,18 @@
 # 허프 변환 (Hough Transform)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 허프 변환(Hough Transform) 원리와 이미지 공간의 점이 파라미터 공간(parameter space)의 곡선으로 어떻게 매핑되는지 설명할 수 있다
+2. OpenCV의 HoughLines()와 HoughLinesP()를 사용하여 표준 및 확률적(probabilistic) 허프 직선 검출을 구현할 수 있다
+3. HoughCircles()로 허프 원 검출을 적용하고 어큐뮬레이터(accumulator) 및 임계값(threshold) 파라미터를 조정할 수 있다
+4. 속도와 정확도 측면에서 표준 허프 변환과 확률적 허프 변환의 장단점을 분석할 수 있다
+5. 엣지 검출과 허프 직선 필터링을 결합한 차선 검출(lane detection) 파이프라인을 설계할 수 있다
+6. 파라미터 민감도를 평가하고 특정 이미지 도메인에 맞게 허프 변환 설정을 최적화할 수 있다
+
+---
+
 ## 개요
 
 허프 변환은 이미지에서 직선, 원 등의 기하학적 형태를 검출하는 알고리즘입니다. 엣지 검출 결과에서 특정 모양을 찾는 데 사용되며, 차선 검출, 동전 검출 등 다양한 응용 분야가 있습니다.
@@ -45,6 +58,8 @@ y = mx + b  (기울기, y절편) → 수직선 표현 불가
 ρ: 원점에서 직선까지의 수직 거리
 θ: 수직선과 x축이 이루는 각도
 ```
+
+기하학적으로, 엣지 위의 각 점 (x, y)는 어떤 (ρ, θ) 쌍에 대해 이 방정식을 만족합니다. 핵심 통찰은, 이미지 공간의 한 점이 가능한 (ρ, θ) 값들의 사인파형 *곡선(curve)*으로 매핑되며, 동일 직선 위의 점들은 모두 같은 (ρ, θ)에서 교차하는 곡선을 생성한다는 것입니다 — 그 교차점이 바로 검출된 직선입니다. 기울기-절편 표현(y = mx + b)이 수직선(무한대 기울기)을 특수 처리 없이는 다룰 수 없는 반면, 극좌표 표현은 이러한 예외 없이 모든 직선을 처리할 수 있어 선호됩니다.
 
 ### 허프 변환 과정
 
@@ -117,6 +132,8 @@ visualize_hough_space('lines.jpg')
 
 ## 2. 허프 직선 변환
 
+단순한 직선 피팅(최소제곱 회귀)은 엣지에 끊김, 가려짐(occlusion), 또는 노이즈 아웃라이어 픽셀이 존재하는 순간 무너집니다 — 총 오차를 최소화하는 방식이기 때문에, 몇 개의 잘못된 점만으로도 추정 직선이 크게 틀어질 수 있습니다. 허프 변환은 *투표(voting)* 메커니즘으로 이 문제를 우회합니다: 각 엣지 픽셀이 속할 수 있는 모든 직선에 독립적으로 투표하고, 많은 독립 투표를 받은 직선만 살아남습니다. 덕분에 연결된 윤곽선이 없어도 끊김과 노이즈에 본질적으로 강인합니다.
+
 ### cv2.HoughLines() 함수
 
 ```python
@@ -150,7 +167,10 @@ def hough_lines_example(image_path):
         edges,
         rho=1,              # ρ 해상도: 1 픽셀
         theta=np.pi/180,    # θ 해상도: 1도
-        threshold=100       # 최소 투표 수
+        threshold=100       # minimum number of votes — this is the key quality gate:
+                            #   too low → many spurious lines from noise; too high → real lines missed.
+                            #   Each edge pixel that lies on a candidate line casts one vote, so threshold
+                            #   approximates the minimum pixel length of a line you want to detect.
     )
 
     result = img.copy()
@@ -286,8 +306,11 @@ def hough_lines_p_example(image_path):
         rho=1,
         theta=np.pi/180,
         threshold=50,
-        minLineLength=50,    # 최소 50픽셀 이상
-        maxLineGap=10        # 10픽셀 이내 간격은 연결
+        minLineLength=50,    # minimum line length — rejects short noise fragments; increase
+                             #   for road lanes (want long continuous marks), decrease for short dashes.
+        maxLineGap=10        # maximum pixel gap allowed inside a single segment — setting this
+                             #   higher "bridges" dashed lines into one segment, which is useful for lane
+                             #   detection where paint markings have regular gaps.
     )
 
     result = img.copy()
@@ -469,10 +492,15 @@ def hough_circles_example(image_path):
     circles = cv2.HoughCircles(
         blurred,
         cv2.HOUGH_GRADIENT,
-        dp=1,              # 원본 해상도
-        minDist=50,        # 원 중심 간 최소 거리
-        param1=100,        # Canny 상위 임계값
-        param2=30,         # 원 검출 임계값
+        dp=1,              # inverse ratio of accumulator resolution — dp=1 means full resolution
+                           #   (more memory, more precise); dp=2 halves the accumulator size (faster).
+        minDist=50,        # minimum distance between circle centers — prevents the algorithm
+                           #   from returning many overlapping circles for the same coin/object.
+        param1=100,        # upper Canny threshold; the lower is automatically set to half.
+        param2=30,         # accumulator threshold for circle centers — the most sensitive tuning
+                           #   knob. Lower values detect more circles (including false positives from noise);
+                           #   higher values require a stronger consensus of edge points around the center,
+                           #   yielding fewer but more confident detections.
         minRadius=10,      # 최소 반지름
         maxRadius=100      # 최대 반지름
     )
@@ -1201,7 +1229,7 @@ detect_red_signs('traffic_sign.jpg')
 
 ## 다음 단계
 
-- [12_Histogram_Analysis.md](./12_Histogram_Analysis.md) - calcHist, equalizeHist, CLAHE
+- [히스토그램 분석 (Histogram Analysis)](./12_Histogram_Analysis.md) - calcHist, equalizeHist, CLAHE
 
 ---
 

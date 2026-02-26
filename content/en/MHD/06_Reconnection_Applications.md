@@ -47,7 +47,7 @@ For a flaring active region with $B \sim 0.01$ T, volume $V \sim (10^8 \text{ m}
 
 $$E_{mag} \sim \frac{(0.01)^2}{2 \times 4\pi \times 10^{-7}} \times 10^{24} \sim 10^{26} \text{ J}$$
 
-A significant fraction (10–50%) of this magnetic energy is released during the flare.
+A significant fraction (10–50%) of this magnetic energy is released during the flare. Only the **free energy** (the excess above the potential-field minimum) is available for release; the energy stored in the potential part cannot be tapped by reconnection alone since doing so would require changing the normal-field boundary condition at the photosphere on dynamical (not evolutionary) timescales.
 
 ### 1.2 The CSHKP Standard Model
 
@@ -621,11 +621,18 @@ import matplotlib.pyplot as plt
 # (Not a real reconnection simulation, just illustrative)
 
 r = np.linspace(0, 1, 100)  # Normalized radius
+# t_rise >> t_crash: the sawtooth is asymmetric because the rise (ohmic/RF
+# heating) is a slow diffusive process, while the crash is driven by the
+# fast internal kink on the Alfvén timescale (~μs vs ~ms for the rise).
 t_rise = 100  # Number of time steps in rise phase
 t_crash = 5   # Number of time steps in crash
 n_cycles = 3
 
-# Inversion radius
+# The inversion radius r_inv ~ 0.3 marks the boundary where the temperature
+# response to the crash reverses sign: inside r_inv the hot core plasma
+# spreads outward, cooling the core; outside r_inv the arriving hot plasma
+# raises the temperature — this is the observational signature of sawtooth
+# redistribution, measured by soft X-ray tomography.
 r_inv = 0.3
 
 # Initial profile
@@ -641,9 +648,14 @@ time = 0
 for cycle in range(n_cycles):
     # Rise phase: gradual central heating
     for i in range(t_rise):
-        # Heat deposition in core
+        # Gaussian heat deposition in the core mimics on-axis heating by
+        # neutral beams or ECRH; the narrow width 0.2 represents the
+        # deposited power profile peaked well inside r_inv.
         heat_source = 0.01 * np.exp(-(r / 0.2)**2)
-        # Diffusive cooling
+        # Diffusive cooling models heat transport along flux surfaces:
+        # the second derivative ∂²T/∂r² drives heat from hot to cold
+        # regions with a diffusivity coefficient set by χ_e (not modeled
+        # self-consistently here, but the qualitative rise is reproduced).
         dTdr = np.gradient(T, r)
         d2Tdr2 = np.gradient(dTdr, r)
         cooling = 0.001 * d2Tdr2
@@ -656,12 +668,17 @@ for cycle in range(n_cycles):
     # Crash phase: rapid flattening inside inversion radius
     T_before_crash = T.copy()
     for i in range(t_crash):
-        # Average inside inversion radius
+        # Replacing T by its mean inside r_inv models the Kadomtsev full
+        # reconnection scenario: the m=1 kink mixes the hot core completely
+        # with cooler plasma out to the q=1 surface, destroying the peaked
+        # temperature structure in just a few Alfvén times.
         inside = r < r_inv
         T_avg_inside = np.mean(T[inside])
         T[inside] = T_avg_inside
 
-        # Slight increase outside (conservation)
+        # Energy conservation: the heat removed from the core is deposited
+        # just outside r_inv, producing the small temperature bump observed
+        # in soft X-ray diagnostics during the sawtooth crash.
         outside = r >= r_inv
         T[outside] += 0.05 * (T_before_crash[inside].mean() - T_avg_inside)
 
@@ -796,7 +813,11 @@ x = np.linspace(-4, 4, 100)
 y = np.linspace(-2, 2, 80)
 X, Y = np.meshgrid(x, y)
 
-# Function to create an O-point (island) flux function
+# A Gaussian flux function -exp(-r²/size²) models an O-point (island):
+# the negative sign places the maximum of ψ at the island center, while
+# the Gaussian envelope gives a smooth, isolated flux structure.  This is
+# a simplified analytic stand-in for the more complex current-sheet-derived
+# islands seen in MHD simulations, but it captures the topology correctly.
 def island_flux(X, Y, x0, y0, size):
     return -np.exp(-((X - x0)**2 + (Y - y0)**2) / size**2)
 
@@ -804,6 +825,10 @@ def island_flux(X, Y, x0, y0, size):
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 times = [0, 1, 2, 3]
+# Decreasing separation illustrates the attraction: two same-helicity islands
+# are pulled together by the magnetic tension of the field lines threading the
+# X-point between them — analogous to two parallel current-carrying wires
+# attracting each other.
 separations = [2.5, 1.5, 0.8, 0]  # Island separation decreases
 
 for ax, t, sep in zip(axes.flat, times, separations):
@@ -814,14 +839,22 @@ for ax, t, sep in zip(axes.flat, times, separations):
     if sep > 0:
         # Before full merger
         psi = psi1 + psi2
-        # Add a current sheet between them (X-point)
+        # The narrow Gaussian current sheet at X=0 represents the X-point
+        # current layer that intensifies as the islands approach: it is in
+        # this layer that reconnection occurs, allowing the islands to merge.
         sheet_contrib = 0.2 * np.exp(-X**2 / 0.1**2) * np.exp(-(Y)**2 / 2)
         psi += sheet_contrib
     else:
         # After merger: single large island
+        # The merged island has larger size (1.0 vs 0.6) because the
+        # reconnected flux from both islands is now enclosed in a single
+        # O-point; the total magnetic energy is lower than the sum of the
+        # two separate islands, with the difference released as heat and flows.
         psi = island_flux(X, Y, 0, 0, 1.0)
 
-    # Add background field (hyperbolic)
+    # The 0.05·X·Y background hyperbolic field creates an X-point geometry
+    # between the two islands: without it the superposition of two Gaussian
+    # islands would not show a proper saddle-point topology.
     psi += 0.05 * X * Y
 
     # Compute magnetic field

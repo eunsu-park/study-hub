@@ -39,19 +39,3 @@ class Bookmark(db.Model):
 
     def __repr__(self):
         return f"<Bookmark {self.language}/{self.topic}/{self.filename}>"
-
-
-class SearchIndex(db.Model):
-    """Full-text search index using SQLite FTS5."""
-    __tablename__ = "search_index"
-
-    id = db.Column(db.Integer, primary_key=True)
-    language = db.Column(db.String(10), nullable=False, default="ko")
-    topic = db.Column(db.String(100), nullable=False)
-    filename = db.Column(db.String(200), nullable=False)
-    title = db.Column(db.String(500))
-    content = db.Column(db.Text)
-
-    __table_args__ = (
-        db.UniqueConstraint("language", "topic", "filename", name="unique_search_entry"),
-    )

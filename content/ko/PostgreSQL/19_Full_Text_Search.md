@@ -1,12 +1,24 @@
 # 19. 전문 검색(Full-Text Search)
 
+**이전**: [테이블 파티셔닝](./18_Table_Partitioning.md) | **다음**: [보안과 접근 제어](./20_Security_Access_Control.md)
+
+---
+
 ## 학습 목표
-- PostgreSQL 전문 검색(Full-Text Search) 아키텍처 이해하기
-- tsvector와 tsquery 데이터 타입 효과적으로 사용하기
-- 빠른 텍스트 검색을 위한 GIN 인덱스 생성하기
-- 가중치를 활용한 랭킹 검색 구현하기
-- 다국어 검색 지원 설정하기
-- 퍼지 매칭(Fuzzy Matching)을 위한 pg_trgm 활용하기
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 인덱싱, 형태소 분석(stemming), 랭킹 측면에서 전문 검색(Full-Text Search)이 LIKE/ILIKE보다 우수한 이유를 설명할 수 있다
+2. tsvector(문서 표현) 및 tsquery(쿼리 표현) 데이터 타입을 생성하고 조작할 수 있다
+3. 텍스트 검색 사전(dictionary), 불용어(stop word), 형태소 분석을 다양한 언어에 맞게 구성할 수 있다
+4. tsvector 컬럼에 GIN 및 GiST 인덱스를 구축하고 두 방식의 트레이드오프를 비교할 수 있다
+5. ts_rank, ts_rank_cd, 그리고 setweight를 활용한 가중치 검색으로 검색 결과를 랭킹할 수 있다
+6. 구문 검색(phrase search), 접두어 매칭(prefix matching), 하이라이트 스니펫(highlighted snippet) 등 고급 검색 기능을 구현할 수 있다
+7. pg_trgm 확장을 사용하여 퍼지 매칭(fuzzy matching), 오타 허용, LIKE 쿼리 가속화를 구현할 수 있다
+
+---
+
+사용자 생성 콘텐츠가 있는 애플리케이션은 결국 검색 기능이 필요합니다. LIKE 쿼리는 소규모 데이터셋에서는 작동하지만, 대용량 테이블에서는 매우 느려지고 언어를 이해하지 못합니다 — "running"은 "run"과 매칭되지 않으며, 결과를 관련성으로 랭킹할 방법도 없습니다. PostgreSQL의 내장 전문 검색(Full-Text Search)은 형태소 분석, 불용어 제거, 불리언 연산자, 관련성 랭킹을 갖춘 언어 인식 인덱싱을 제공합니다 — Elasticsearch와 같은 외부 검색 엔진 없이도 말이죠. 많은 애플리케이션에서 이 내장 기능으로 충분하며, 아키텍처를 단순하게 유지할 수 있습니다.
 
 ## 목차
 1. [전문 검색 개요](#1-전문-검색-개요)
@@ -95,7 +107,8 @@
 ### 2.1 tsvector — 문서 표현
 
 ```sql
--- 기본 변환
+-- tsvector는 텍스트를 언어학적으로 정규화: "foxes" → "fox", "jumped" → "jump"
+-- LIKE '%fox%'가 놓치는 단어 변형을 FTS가 매칭할 수 있는 이유
 SELECT to_tsvector('english', 'The quick brown foxes jumped over the lazy dogs');
 -- 결과: 'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2
 
@@ -138,7 +151,8 @@ SELECT websearch_to_tsquery('english', 'cats or dogs');
 ### 2.3 매치 연산자(@@)
 
 ```sql
--- tsvector @@ tsquery
+-- @@는 FTS 핵심 연산자: 문서(tsvector)가 쿼리(tsquery)를 만족하는지 검사
+-- LIKE와 달리 @@ 는 GIN 인덱스를 사용하고 언어적 동등성(어간 매칭)을 이해함
 SELECT to_tsvector('english', 'The fat cats sat on the mat')
        @@ to_tsquery('english', 'cat & mat');
 -- 결과: true
@@ -171,7 +185,8 @@ ORDER BY rank DESC;
 ### 2.4 저장된 tsvector 컬럼
 
 ```sql
--- 성능 향상을 위한 생성된 tsvector 컬럼 추가
+-- STORED 컬럼에 tsvector 사전 계산 — 매 쿼리마다 텍스트를 재파싱하는 비용 제거.
+-- setweight로 제목 매치에 'A'(최고), 본문에 'B' 할당하여 제목 히트가 더 높은 랭크
 ALTER TABLE articles ADD COLUMN search_vector tsvector
     GENERATED ALWAYS AS (
         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -256,10 +271,12 @@ ALTER TEXT SEARCH CONFIGURATION my_english
 ### 4.1 전문 검색을 위한 GIN 인덱스
 
 ```sql
--- tsvector 컬럼에 GIN 인덱스 생성
+-- GIN 인덱스는 각 렉심을 포함하는 행에 매핑 — @@를 순차 스캔에서
+-- 비트맵 인덱스 스캔으로 변환, 수백만 행 테이블에서 FTS 실용화
 CREATE INDEX idx_articles_search ON articles USING GIN (search_vector);
 
--- 또는 표현식에 (빌드는 느리지만, 저장된 컬럼 불필요)
+-- 표현식 인덱스: 저장된 컬럼 불필요하나 인덱스 생성 시 tsvector 재구축
+-- 사전 계산된 가중치(A/B/C/D) 활용 불가
 CREATE INDEX idx_articles_body_gin ON articles
     USING GIN (to_tsvector('english', body));
 
@@ -496,7 +513,8 @@ ORDER BY ndoc DESC;
 ### 7.1 트라이그램 기초
 
 ```sql
--- 확장 활성화
+-- pg_trgm은 FTS를 보완: FTS는 정확한 렉심 매치(어간 분석 후) 필요하지만,
+-- pg_trgm은 3글자 부분 문자열을 사용하여 오타와 부분 문자열을 처리
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- 트라이그램 표시
@@ -666,9 +684,7 @@ WHERE search_en @@ websearch_to_tsquery('english', 'search term')
 
 ---
 
-## 다음 단계
-- [20. 보안과 접근 제어](./20_Security_Access_Control.md)
-- [15. 쿼리 최적화](./15_Query_Optimization.md)
+**이전**: [테이블 파티셔닝](./18_Table_Partitioning.md) | **다음**: [보안과 접근 제어](./20_Security_Access_Control.md)
 
 ## 참고 자료
 - [PostgreSQL Full-Text Search](https://www.postgresql.org/docs/current/textsearch.html)

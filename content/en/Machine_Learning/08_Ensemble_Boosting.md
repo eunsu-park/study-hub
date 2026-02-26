@@ -1,10 +1,28 @@
 # Ensemble Learning - Boosting
 
-## Overview
-
-Boosting is an ensemble technique that sequentially trains weak learners, with each model focusing on the errors made by previous models to improve overall performance.
+**Previous**: [Ensemble Learning - Bagging](./07_Ensemble_Bagging.md) | **Next**: [SVM](./09_SVM.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how boosting differs from bagging in terms of training strategy and error reduction
+2. Describe the AdaBoost algorithm including sample weight updates and model weighting
+3. Implement Gradient Boosting and explain how it performs gradient descent in function space
+4. Compare XGBoost, LightGBM, and CatBoost in terms of tree growth strategy, speed, and categorical handling
+5. Apply early stopping and regularization techniques to prevent overfitting in boosting models
+6. Demonstrate a systematic hyperparameter tuning order for boosting algorithms
+7. Identify which boosting algorithm to choose based on dataset size, feature types, and speed requirements
+
+---
+
+Where bagging reduces variance by averaging independent models, boosting takes a fundamentally different approach: it reduces bias by building models sequentially, with each new model specifically targeting the mistakes of its predecessors. This strategy has produced some of the most accurate off-the-shelf algorithms in machine learning, including XGBoost and LightGBM, which dominate tabular data competitions.
+
+---
+
+> **Serial correction, not parallel voting.** If bagging is a committee where everyone votes independently, boosting is more like a relay team where each runner compensates for the previous one's weakness. The first model makes predictions; the second model focuses specifically on the cases the first model got wrong; the third focuses on what's still wrong after two attempts. Each new model is a "specialist" in the predecessor's failures, and the final prediction combines all specialists' input with appropriate weights.
 
 ## 1. Boosting Concepts
 

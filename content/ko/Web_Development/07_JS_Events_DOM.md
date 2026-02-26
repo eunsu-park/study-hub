@@ -1,12 +1,23 @@
 # JavaScript 이벤트와 DOM
 
-## 개요
+**이전**: [JS 기초](./06_JS_Basics.md) | **다음**: [JS 비동기](./08_JS_Async.md)
 
-DOM(Document Object Model)은 HTML 문서를 JavaScript로 조작할 수 있게 해주는 인터페이스입니다. 이벤트는 사용자 상호작용(클릭, 입력 등)을 처리하는 메커니즘입니다.
+## 학습 목표(Learning Objectives)
 
-**선수 지식**: [06_JS_Basics.md](./06_JS_Basics.md)
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. DOM 트리 구조를 설명하고 요소 노드(element node), 텍스트 노드(text node), 문서 노드(document node)를 구분할 수 있다
+2. querySelector, querySelectorAll, getElementById를 사용하여 단일 및 다중 요소를 선택할 수 있다
+3. textContent, innerHTML, outerHTML을 사용하여 요소 내용을 조작하고, XSS 위험성을 이해할 수 있다
+4. HTML 속성(attribute), 데이터 속성(data attribute), CSS 클래스, 인라인 스타일을 프로그래밍으로 읽고 수정할 수 있다
+5. DOM 요소를 동적으로 생성, 추가, 삭제, 복제, 교체할 수 있다
+6. addEventListener를 사용하여 이벤트 리스너를 등록·제거하고, 이벤트 흐름(캡처(capture), 타겟(target), 버블링(bubble))을 설명할 수 있다
+7. 이벤트 위임(event delegation)을 적용하여 동적 자식 요소의 이벤트를 효율적으로 처리할 수 있다
+8. 값 추출, FormData, 제약 유효성 검사 API(Constraint Validation API)를 포함한 폼(form) 처리를 구현할 수 있다
 
 ---
+
+DOM은 HTML 문서와 JavaScript를 연결하는 다리입니다. HTML이 정적인 텍스트 파일이라면, DOM은 브라우저가 그 파일을 파싱하여 메모리에 구성한 살아있는 트리입니다. JavaScript는 이 트리에 접근하여 언제든지 어떤 요소든 읽고, 수정하고, 추가하거나 제거할 수 있습니다. 이벤트 시스템과 결합하면, DOM은 문서를 클릭, 키 입력, 스크롤 등 모든 사용자 상호작용에 반응하는 인터랙티브 애플리케이션으로 변환합니다.
 
 ## 목차
 
@@ -1182,7 +1193,7 @@ textarea.addEventListener('input', (e) => {
 
 ## 다음 단계
 
-- [08_JS_Async.md](./08_JS_Async.md) - Promise, async/await, fetch
+- [JS 비동기](./08_JS_Async.md) - Promise, async/await, fetch
 
 ---
 

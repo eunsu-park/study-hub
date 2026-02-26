@@ -1,10 +1,22 @@
 # 동기화 기초
 
-## 개요
-
-동시에 실행되는 프로세스나 스레드가 공유 자원에 접근할 때 문제가 발생할 수 있습니다. 이 레슨에서는 경쟁 상태(Race Condition), 임계 구역(Critical Section), 그리고 Peterson's Solution과 하드웨어 지원 동기화 방법을 학습합니다.
+**이전**: [고급 스케줄링](./06_Advanced_Scheduling.md) | **다음**: [동기화 도구](./08_Synchronization_Tools.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 경쟁 상태(Race Condition)를 정의하고 동시 프로그램에서 발생하는 이유를 설명할 수 있습니다
+2. 임계 구역(Critical Section) 해결 조건 세 가지(상호 배제, 진행, 한정 대기)를 식별할 수 있습니다
+3. Peterson's 알고리즘을 단계별로 추적하고 `flag[]`와 `turn` 두 변수가 모두 필요한 이유를 설명할 수 있습니다
+4. Test-and-Set과 Compare-and-Swap 하드웨어 명령어를 설명할 수 있습니다
+5. 바쁜 대기(Busy Waiting)와 블로킹 동기화(Blocking Synchronization)를 구별할 수 있습니다
+
+---
+
+동시성 버그는 타이밍에 의존하기 때문에 찾고 재현하기가 가장 어렵습니다. 경쟁 상태(Race Condition)는 백만 번 실행 중 한 번 프로그램을 충돌시킬 수 있지만, 그 한 번이 데이터베이스를 손상시키거나 보안 침해를 일으킬 수 있습니다. 동기화를 마스터하는 것이 "대부분의 경우에" 작동하는 프로그램과 증명 가능하게 올바른 프로그램을 구분합니다.
 
 ## 목차
 
@@ -18,6 +30,8 @@
 ---
 
 ## 1. 경쟁 상태 (Race Condition)
+
+> 두 사람이 반대편에서 동시에 회전문을 통과하려 한다고 상상해보세요. 조율 없이는 문이 막혀 누구도 통과하지 못합니다. 이것이 경쟁 상태(Race Condition)의 본질입니다 -- 여러 주체가 적절한 동기화 없이 공유 자원에 접근하여 예측할 수 없는 결과를 초래합니다.
 
 ### 정의
 
@@ -891,9 +905,166 @@ unlock(&my_lock);
 
 ---
 
+## 실습 과제
+
+### 실습 1: 피터슨 알고리즘 검증
+
+`examples/OS_Theory/07_sync_primitives.py`를 실행하고 피터슨 알고리즘(Peterson's Algorithm) 데모를 분석하세요.
+
+**과제:**
+1. `PetersonLock`에서 `turn` 변수를 제거하세요. `demo_peterson()`을 실행하고 상호 배제(Mutual Exclusion)가 실패하는 이유를 설명하세요
+2. 반복 횟수를 500,000으로 늘리고 5번 실행하세요. 실제 카운트 vs 기대값을 기록하세요. 관찰된 최대 오차는 얼마인가요?
+3. 피터슨 알고리즘을 N개 스레드로 일반화하는 `FilterLock`을 구현하세요 (N-1 레벨의 flag 배열 사용)
+
+### 실습 2: 원자적 연산 비교
+
+다양한 동기화 프리미티브의 성능을 비교하세요:
+
+```python
+import threading, time
+
+def benchmark_lock(lock_type, label, n=1_000_000):
+    counter = [0]
+    lock = lock_type()
+
+    def worker():
+        for _ in range(n // 2):
+            lock.acquire()
+            counter[0] += 1
+            lock.release()
+
+    t0 = threading.Thread(target=worker)
+    t1 = threading.Thread(target=worker)
+    start = time.perf_counter()
+    t0.start(); t1.start()
+    t0.join(); t1.join()
+    elapsed = time.perf_counter() - start
+    print(f"{label}: {elapsed:.3f}s, count={counter[0]}")
+```
+
+**과제:**
+1. `threading.Lock`, `threading.RLock`, `threading.Semaphore(1)`을 벤치마크하세요. 성능별로 순위를 매기세요
+2. `Lock`이 일반적으로 `RLock`과 `Semaphore`보다 빠른 이유를 설명하세요
+3. 락 없이 테스트하고 오류율을 보고하세요 — Python의 GIL이 결과에 어떤 영향을 미치나요?
+
+### 실습 3: 배리어 구현
+
+`examples/OS_Theory/07_sync_primitives.py`의 `SimpleBarrier`를 연구하세요.
+
+**과제:**
+1. 현재 배리어는 세대별로 `Event`를 사용합니다. 대신 `Condition` 변수를 사용하는 대안을 구현하세요
+2. 정확히 하나의 스레드를 "리더"로 식별하는 `barrier.wait()` 반환 값을 추가하세요 (배리어 단계당 하나의 스레드에만 True 반환)
+3. 8개 스레드와 5개 단계로 배리어를 테스트하고, 모든 Phase N이 Phase N+1 전에 완료되는지 검증하세요
+
+---
+
+## 연습 문제
+
+### 연습 1: 경쟁 조건(Race Condition) 식별
+
+간단한 은행 계좌를 구현하는 다음 코드를 살펴보세요. 두 스레드가 `transfer()`를 동시에 실행합니다.
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+
+int account_A = 1000;
+int account_B = 500;
+
+void transfer(int *from, int *to, int amount) {
+    if (*from >= amount) {       // 단계 1: 잔액 확인
+        *from -= amount;         // 단계 2: 차감
+        *to   += amount;         // 단계 3: 입금
+    }
+}
+
+void *thread1(void *arg) { transfer(&account_A, &account_B, 200); return NULL; }
+void *thread2(void *arg) { transfer(&account_A, &account_B, 900); return NULL; }
+```
+
+1. 이 코드에서 임계 구역(critical section)을 식별하세요
+2. 두 이체(transfer) 모두 처음 확인을 통과한다는 전제 하에, thread1과 thread2의 특정 인터리빙(interleaving)으로 account_A가 음수 잔액이 되는 상황을 설명하세요
+3. 시스템 내 총 금액은 처음에 얼마인가요? 경쟁 조건이 이 합계를 변경할 수 있나요? 설명하세요
+4. 올바른 동작을 보장하기 위해 전역 `pthread_mutex_t`를 사용하여 코드를 수정하세요
+
+### 연습 2: 임계 구역 요구사항 분석
+
+두 프로세스 임계 구역 문제에 대한 각 "해결책"이 세 가지 요구사항(상호 배제(mutual exclusion), 진행(progress), 유한 대기(bounded waiting)) 중 어느 것을 위반하는지 식별하세요. 두 프로세스 P0와 P1을 가정합니다.
+
+**제안된 해결책 A** — 단순 turn 변수:
+```c
+int turn = 0;
+// 프로세스 Pi:
+while (turn != i);  // 대기
+// 임계 구역
+turn = 1 - i;       // 다른 프로세스에 turn 양보
+```
+
+**제안된 해결책 B** — 플래그만, turn 없음:
+```c
+bool flag[2] = {false, false};
+// 프로세스 Pi:
+flag[i] = true;
+while (flag[1-i]);  // 대기
+// 임계 구역
+flag[i] = false;
+```
+
+각 해결책에 대해:
+1. 상호 배제를 만족하나요? 증명하거나 반례를 제시하세요
+2. 진행을 만족하나요? 증명하거나 반례를 제시하세요
+3. 유한 대기를 만족하나요? 설명하세요
+
+### 연습 3: 피터슨 알고리즘(Peterson's Algorithm) 단계별 추적
+
+프로세스 P0와 P1을 위한 피터슨 알고리즘(Peterson's Algorithm):
+```c
+bool flag[2] = {false, false};
+int turn;
+
+// 프로세스 Pi (i=0 또는 1):
+flag[i] = true;
+turn = 1 - i;
+while (flag[1-i] && turn == 1-i);  // 바쁜 대기
+// --- 임계 구역 ---
+flag[i] = false;
+```
+
+P0와 P1이 동시에 진입을 시도하는 다음 인터리빙을 추적하세요. 각 단계 후 `flag[0]`, `flag[1]`, `turn`의 값을 기록하세요. 어떤 프로세스가 먼저 임계 구역에 진입하나요?
+
+| 단계 | 동작 | flag[0] | flag[1] | turn | 결과 |
+|------|------|---------|---------|------|------|
+| 1 | P0: flag[0]=true | | | | |
+| 2 | P1: flag[1]=true | | | | |
+| 3 | P0: turn=1 | | | | |
+| 4 | P1: turn=0 | | | | |
+| 5 | P0: while 확인 | | | | |
+| 6 | P1: while 확인 | | | | |
+
+설명: `turn`을 마지막에 설정하는 것이 정확히 하나의 프로세스만 진행됨을 보장하는 이유는 무엇인가요?
+
+### 연습 4: TAS와 CAS 의미론
+
+**파트 A**: 테스트-앤-셋(Test-and-Set, TAS)을 사용하여 스핀락(spinlock)을 구현하세요. `TestAndSet(bool *target)`을 사용하는 `lock()`과 `unlock()`의 의사 코드(pseudocode)를 작성하세요.
+
+**파트 B**: 비교-앤-교환(Compare-and-Swap, CAS)을 사용하여 락 없는(lock-free) 카운터 증가를 구현하세요. `CompareAndSwap(int *value, int expected, int new_val)`을 사용하는 `atomic_increment(int *counter)`의 의사 코드를 작성하세요.
+
+**파트 C**: TAS를 사용한 스핀락은 상호 배제를 만족하지만 유한 대기를 위반할 수 있습니다. 3개 프로세스 중 하나가 절대 락을 획득하지 못하는 시나리오를 설명하세요. 그런 다음 유한 대기를 보장하기 위해 필요한 수정(티켓 락(ticket lock))을 설명하세요.
+
+### 연습 5: 바쁜 대기(Busy Waiting)와 블로킹(Blocking)
+
+시스템에 100개의 스레드가 평균 2ms가 걸리는 임계 구역을 두고 경쟁합니다. 시스템에는 CPU 코어 4개가 있습니다.
+
+1. 스레드가 **스핀락(spinlock)**(바쁜 대기)을 사용한다면, 99개의 스레드가 1개 스레드가 완료되기를 기다리는 동안 낭비되는 CPU 시간은 얼마인가요? 4코어 용량의 비율로 나타내세요.
+2. 스레드가 **뮤텍스(mutex)**(블로킹)를 사용한다면 대기 스레드에게 어떤 일이 발생하며 왜 CPU가 낭비되지 않나요?
+3. 블로킹 뮤텍스보다 스핀락이 **선호되는** 시나리오를 하나 제시하고 이유를 설명하세요.
+4. 리눅스(Linux)의 `mutex_spin_on_owner()`가 사용하는 "이중 모드(dual-mode)" 전략은 무엇인가요? 두 접근 방식을 결합하는 이유는 무엇인가요?
+
+---
+
 ## 다음 단계
 
-- [08_Synchronization_Tools.md](./08_Synchronization_Tools.md) - 뮤텍스, 세마포어, 모니터
+- [동기화 도구](./08_Synchronization_Tools.md) - 뮤텍스, 세마포어, 모니터
 
 ---
 

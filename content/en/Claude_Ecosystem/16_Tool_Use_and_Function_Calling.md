@@ -13,14 +13,17 @@ Tool use (also called function calling) is the mechanism that lets Claude call f
 - Understanding of JSON Schema basics
 - Python 3.9+ or Node.js 18+
 
-**Learning Objectives**:
-- Define tools with name, description, and JSON Schema input specifications
-- Implement the full tool use conversation flow (request, tool_use, tool_result, response)
-- Handle parallel tool execution when Claude requests multiple tools simultaneously
-- Use the `tool_choice` parameter to control when and how Claude uses tools
-- Return errors from tools and handle edge cases
-- Apply advanced patterns: chaining, structured output, image returns
-- Design effective tools following best practices
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define tools with name, description, and JSON Schema input specifications
+2. Implement the full tool use conversation flow (request, tool_use, tool_result, response)
+3. Handle parallel tool execution when Claude requests multiple tools simultaneously
+4. Use the `tool_choice` parameter to control when and how Claude uses tools
+5. Return errors from tools and handle edge cases
+6. Apply advanced patterns: chaining, structured output, image returns
+7. Design effective tools following best practices
 
 ---
 

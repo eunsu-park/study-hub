@@ -1,5 +1,18 @@
 # Edge Detection
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the concept of image gradients and how they represent intensity changes in an image
+2. Implement edge detection using Sobel, Scharr, and Laplacian operators with OpenCV
+3. Apply the Canny edge detection algorithm and tune its hysteresis thresholds
+4. Compare the strengths and limitations of first-order versus second-order derivative operators
+5. Analyze gradient magnitude and direction to characterize edge properties
+6. Design a preprocessing pipeline that selects appropriate edge detection methods for different image types
+
+---
+
 ## Overview
 
 An edge is a region in an image where brightness changes rapidly, representing object boundaries or structures. This lesson covers the concept of image gradients and various edge detection techniques including Sobel, Scharr, Laplacian, and Canny.
@@ -37,6 +50,8 @@ Gradient Magnitude:
 Gradient Direction:
 θ = arctan(∂f/∂y / ∂f/∂x)
 ```
+
+The gradient vector (∂f/∂x, ∂f/∂y) always points in the direction of steepest brightness increase, like water flowing uphill. Its magnitude |∇f| tells you how sharp the edge is; its direction θ tells you which way the brightness rises — perpendicular to the edge boundary itself. For example, a vertical edge (left side dark, right side bright) produces a large ∂f/∂x and near-zero ∂f/∂y, so θ ≈ 0° and the gradient points horizontally.
 
 ### Types of Edges
 
@@ -127,15 +142,20 @@ import numpy as np
 img = cv2.imread('image.jpg', cv2.IMREAD_GRAYSCALE)
 
 # Sobel operation
-# Set ddepth to CV_64F to handle negative values
+# CV_64F (float64) is required because gradients can be negative —
+# a dark-to-bright transition gives a positive value, bright-to-dark gives negative.
+# Using uint8 would silently clip all negative values to 0, missing half the edges.
 sobel_x = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)  # x direction
 sobel_y = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)  # y direction
 
 # Convert to absolute value and then to 8-bit
+# We take the absolute value so that both directions of contrast
+# (bright→dark and dark→bright) map to the same edge strength.
 sobel_x = cv2.convertScaleAbs(sobel_x)
 sobel_y = cv2.convertScaleAbs(sobel_y)
 
 # Combine x, y gradients
+# Equal weighting (0.5 each) avoids overflow while preserving both edge orientations.
 sobel_combined = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
 
 # Display results
@@ -160,7 +180,9 @@ def sobel_magnitude(image):
     else:
         gray = image
 
-    # Remove noise
+    # Gaussian blur before Sobel: the derivative operator amplifies noise
+    # (differentiation is a high-pass filter), so smoothing first is essential
+    # to distinguish real edges from noise spikes.
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
     # Sobel operation (calculate in float64)
@@ -168,6 +190,8 @@ def sobel_magnitude(image):
     sobel_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
 
     # Gradient magnitude: sqrt(Gx² + Gy²)
+    # This is the Euclidean length of the gradient vector (Gx, Gy), representing
+    # the steepness of the brightness ramp at each pixel — large at sharp edges.
     magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
 
     # Normalize to 0-255 range
@@ -540,10 +564,15 @@ def canny_edge(image, low=50, high=150):
     else:
         gray = image
 
-    # Remove noise (optional - also performed inside Canny)
+    # Pre-blurring before Canny is optional but recommended:
+    # Canny's internal Gaussian (apertureSize-derived) is fixed, while this
+    # external blur lets you control smoothing scale independently of edge precision.
     blurred = cv2.GaussianBlur(gray, (5, 5), 1.4)
 
-    # Canny edge detection
+    # Hysteresis thresholding uses two thresholds rather than one to solve the
+    # "weak edge" problem: a single threshold either breaks continuous edges
+    # (too high) or includes noise (too low). High marks definite edges;
+    # low admits uncertain pixels only when they connect to a definite edge.
     edges = cv2.Canny(blurred, low, high)
 
     return edges
@@ -690,7 +719,9 @@ def gradient_magnitude_direction(image):
     # Magnitude
     magnitude = np.sqrt(gx**2 + gy**2)
 
-    # Direction - radians
+    # arctan2(gy, gx) gives the full 360° direction of the gradient vector;
+    # we reduce to 0-180° because edge orientation is undirected — an edge
+    # running NE-SW is the same as SW-NE (opposite gradient directions).
     direction = np.arctan2(gy, gx)
 
     # Convert direction to degrees (0-180)

@@ -1,5 +1,24 @@
 # GitHub Actions
 
+**Previous**: [Advanced Git Commands](./06_Git_Advanced.md) | **Next**: [Git Workflow Strategies](./08_Git_Workflow_Strategies.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what GitHub Actions is and how it fits into a CI/CD pipeline
+2. Identify the core concepts: workflows, jobs, steps, runners, and events
+3. Write a basic workflow YAML file that triggers on push or pull request events
+4. Configure a multi-job pipeline with dependencies between jobs
+5. Use environment variables, secrets, and matrix builds in workflows
+6. Select and integrate third-party actions from the GitHub Marketplace
+
+---
+
+Manual testing and deployment are tedious, error-prone, and slow. GitHub Actions lets you automate these tasks so that every push triggers tests, every merged PR deploys to staging, and every release builds artifacts -- all without leaving the GitHub ecosystem. Understanding CI/CD automation is a cornerstone skill for modern software development and DevOps.
+
 ## 1. What is GitHub Actions?
 
 GitHub Actions is a **CI/CD automation platform**. It automatically runs workflows based on events like code pushes and PR creation.
@@ -1021,6 +1040,40 @@ act -j build
 | `if` | Conditional execution |
 | `needs` | Job dependencies |
 | `strategy.matrix` | Matrix builds |
+
+---
+
+## Exercises
+
+### Exercise 1: First CI Workflow
+1. In a repository of your choice, create the file `.github/workflows/ci.yml`.
+2. Write a workflow that triggers on `push` and `pull_request` events targeting `main`.
+3. Add a single job that runs on `ubuntu-latest`, checks out the code, and runs `echo "All checks passed"`.
+4. Push the file and verify the workflow runs successfully in the **Actions** tab.
+
+### Exercise 2: Multi-job Pipeline with Dependencies
+Extend the workflow from Exercise 1 to have three jobs: `lint`, `test`, and `deploy`.
+- `test` must wait for `lint` to succeed (use `needs`).
+- `deploy` must wait for both `lint` and `test` (use `needs: [lint, test]`).
+- Add `if: github.ref == 'refs/heads/main'` to `deploy` so it only runs on the main branch.
+- Verify the job dependency graph is correct by inspecting the Actions run UI.
+
+### Exercise 3: Matrix Build
+Create a workflow that tests a Python project (or uses `echo` as a stand-in) across Python versions `3.10`, `3.11`, and `3.12` using a matrix strategy.
+- Use `actions/setup-python@v5` with `python-version: ${{ matrix.python-version }}`.
+- Add `fail-fast: false` so all matrix jobs run even if one fails.
+- Confirm that 3 separate jobs appear in the Actions run.
+
+### Exercise 4: Secrets and Environment Variables
+1. In your repository settings, add a secret named `MY_SECRET` with any value.
+2. Write a workflow step that prints `"Secret length: X"` (where X is the length of the secret value) without printing the secret itself — use a shell expression like `${#MY_SECRET}`.
+3. Observe that the secret value itself is masked in the logs even if you accidentally try to echo it directly.
+
+### Exercise 5: Dependency Caching
+Add dependency caching to an existing CI workflow:
+1. Use `actions/setup-node@v4` with `cache: 'npm'` (or `actions/setup-python@v5` with `cache: 'pip'`).
+2. Run the workflow twice — on the second run, confirm the cache is restored by checking for a "Cache restored" message in the step logs.
+3. Measure and compare the approximate time saved between the first (cold cache) and second (warm cache) run.
 
 ---
 

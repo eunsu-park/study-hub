@@ -52,10 +52,10 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 
-# SymPy를 이용한 라플라스 변환 계산
+# Computing Laplace transforms using SymPy
 t, s = sp.symbols('t s', positive=True)
 
-# 기본 함수들의 라플라스 변환
+# Laplace transforms of basic functions
 funcs = {
     '1': 1,
     't': t,
@@ -66,7 +66,7 @@ funcs = {
 }
 
 print("=" * 50)
-print("기본 함수의 라플라스 변환")
+print("Laplace transforms of basic functions")
 print("=" * 50)
 for name, f in funcs.items():
     F = sp.laplace_transform(f, t, s, noconds=True)
@@ -131,34 +131,34 @@ import sympy as sp
 
 t, s, a = sp.symbols('t s a', positive=True)
 
-# 단위 계단 함수의 라플라스 변환
+# Laplace transform of the unit step function
 heaviside_transform = sp.laplace_transform(sp.Heaviside(t - a), t, s, noconds=True)
 print(f"L{{u(t-a)}} = {heaviside_transform}")
 
-# 디랙 델타 함수의 라플라스 변환
+# Laplace transform of the Dirac delta function
 delta_transform = sp.laplace_transform(sp.DiracDelta(t - a), t, s, noconds=True)
 print(f"L{{delta(t-a)}} = {delta_transform}")
 
-# 기본 변환 쌍 수치 검증: L{sin(3t)} = 3/(s^2+9)
+# Numerical verification of basic transform pair: L{sin(3t)} = 3/(s^2+9)
 import numpy as np
 from scipy import integrate
 
 def numerical_laplace(f, s_val, upper=50):
-    """라플라스 변환의 수치 계산"""
+    """Numerical computation of the Laplace transform"""
     integrand = lambda tau: f(tau) * np.exp(-s_val * tau)
     result, _ = integrate.quad(integrand, 0, upper)
     return result
 
 s_test = 2.0
-# 수치 결과
+# Numerical result
 numerical = numerical_laplace(lambda tau: np.sin(3*tau), s_test)
-# 해석적 결과: 3/(s^2+9)
+# Analytical result: 3/(s^2+9)
 analytical = 3 / (s_test**2 + 9)
 
-print(f"\nL{{sin(3t)}} 검증 (s={s_test}):")
-print(f"  수치 적분: {numerical:.6f}")
-print(f"  해석적:    {analytical:.6f}")
-print(f"  오차:      {abs(numerical - analytical):.2e}")
+print(f"\nL{{sin(3t)}} verification (s={s_test}):")
+print(f"  Numerical integration: {numerical:.6f}")
+print(f"  Analytical:            {analytical:.6f}")
+print(f"  Error:                 {abs(numerical - analytical):.2e}")
 ```
 
 ---
@@ -257,16 +257,16 @@ import sympy as sp
 t, s = sp.symbols('t s')
 a_sym = sp.Symbol('a', positive=True)
 
-# 제1이동 정리 검증: L{e^(-2t)*cos(3t)}
+# First shifting theorem verification: L{e^(-2t)*cos(3t)}
 f1 = sp.exp(-2*t) * sp.cos(3*t)
 F1_direct = sp.laplace_transform(f1, t, s, noconds=True)
-F1_shift = (s + 2) / ((s + 2)**2 + 9)  # s-이동 적용
-print("=== 제1이동 정리 검증 ===")
-print(f"직접 변환:  {F1_direct}")
-print(f"이동 정리:  {F1_shift}")
-print(f"동일 여부:  {sp.simplify(F1_direct - F1_shift) == 0}")
+F1_shift = (s + 2) / ((s + 2)**2 + 9)  # applying s-shift
+print("=== First shifting theorem verification ===")
+print(f"Direct transform: {F1_direct}")
+print(f"Shifting theorem: {F1_shift}")
+print(f"Identical:        {sp.simplify(F1_direct - F1_shift) == 0}")
 
-# 미분 성질 검증: L{f'(t)} = sF(s) - f(0)
+# Differentiation property verification: L{f'(t)} = sF(s) - f(0)
 # f(t) = t*exp(-t), f(0) = 0
 f2 = t * sp.exp(-t)
 f2_prime = sp.diff(f2, t)  # (1-t)*exp(-t)
@@ -275,17 +275,17 @@ F2 = sp.laplace_transform(f2, t, s, noconds=True)  # 1/(s+1)^2
 F2_prime_direct = sp.laplace_transform(f2_prime, t, s, noconds=True)
 F2_prime_property = s * F2 - 0  # f(0) = 0
 
-print("\n=== 미분 성질 검증 ===")
-print(f"L{{f'(t)}} 직접:  {F2_prime_direct}")
-print(f"sF(s) - f(0):    {sp.simplify(F2_prime_property)}")
+print("\n=== Differentiation property verification ===")
+print(f"L{{f'(t)}} direct:  {F2_prime_direct}")
+print(f"sF(s) - f(0):      {sp.simplify(F2_prime_property)}")
 
-# 합성곱 정리 검증: L{sin(t) * sin(t)} = [1/(s^2+1)]^2
+# Convolution theorem verification: L{sin(t) * sin(t)} = [1/(s^2+1)]^2
 conv_result = sp.laplace_transform(
     sp.integrate(sp.sin(t - sp.Symbol('tau')) * sp.sin(sp.Symbol('tau')),
                  (sp.Symbol('tau'), 0, t)), t, s, noconds=True
 )
 product_result = 1 / (s**2 + 1)**2
-print("\n=== 합성곱 정리 ===")
+print("\n=== Convolution theorem ===")
 print(f"F(s)*G(s) = 1/(s^2+1)^2 = {product_result}")
 ```
 
@@ -338,36 +338,36 @@ import sympy as sp
 
 s, t = sp.symbols('s t')
 
-print("=== 부분분수 분해와 역 라플라스 변환 ===\n")
+print("=== Partial fraction decomposition and inverse Laplace transform ===\n")
 
-# 예제 1: 서로 다른 실수 근
+# Example 1: distinct real roots
 F1 = (3*s + 2) / ((s + 1) * (s - 2))
 print(f"F(s) = {F1}")
 pf1 = sp.apart(F1, s)
-print(f"부분분수: {pf1}")
+print(f"Partial fractions: {pf1}")
 f1 = sp.inverse_laplace_transform(F1, s, t)
 print(f"f(t) = {f1}\n")
 
-# 예제 2: 중근
+# Example 2: repeated root
 F2 = (2*s + 3) / (s + 1)**2
 print(f"F(s) = {F2}")
 pf2 = sp.apart(F2, s)
-print(f"부분분수: {pf2}")
+print(f"Partial fractions: {pf2}")
 f2 = sp.inverse_laplace_transform(F2, s, t)
 print(f"f(t) = {f2}\n")
 
-# 예제 3: 복소 켤레근
+# Example 3: complex conjugate roots
 F3 = (s + 3) / (s**2 + 2*s + 5)
 print(f"F(s) = {F3}")
-# 완전제곱식: (s+1)^2 + 4 -> e^(-t)cos(2t) + e^(-t)sin(2t)
+# Complete the square: (s+1)^2 + 4 -> e^(-t)cos(2t) + e^(-t)sin(2t)
 f3 = sp.inverse_laplace_transform(F3, s, t)
 print(f"f(t) = {f3}\n")
 
-# 예제 4: 고차 분모
+# Example 4: higher-order denominator
 F4 = 1 / (s * (s**2 + 4))
 print(f"F(s) = {F4}")
 pf4 = sp.apart(F4, s)
-print(f"부분분수: {pf4}")
+print(f"Partial fractions: {pf4}")
 f4 = sp.inverse_laplace_transform(F4, s, t)
 print(f"f(t) = {f4}")
 ```
@@ -459,40 +459,40 @@ import sympy as sp
 t, s = sp.symbols('t s')
 Y = sp.Function('Y')
 
-print("=== ODE 풀이: y'' + 3y' + 2y = 0, y(0)=1, y'(0)=0 ===\n")
+print("=== ODE solution: y'' + 3y' + 2y = 0, y(0)=1, y'(0)=0 ===\n")
 
-# 방법 1: SymPy의 dsolve로 직접 풀기
+# Method 1: Solve directly with SymPy's dsolve
 y = sp.Function('y')
 ode = sp.Eq(y(t).diff(t, 2) + 3*y(t).diff(t) + 2*y(t), 0)
 sol = sp.dsolve(ode, y(t), ics={y(0): 1, y(t).diff(t).subs(t, 0): 0})
-print(f"dsolve 결과: {sol}\n")
+print(f"dsolve result: {sol}\n")
 
-# 방법 2: 라플라스 변환을 단계별로 수행
-print("--- 단계별 라플라스 변환 풀이 ---")
+# Method 2: Step-by-step Laplace transform
+print("--- Step-by-step Laplace transform solution ---")
 
-# Y(s) 구하기
+# Find Y(s)
 Ys = (s + 3) / (s**2 + 3*s + 2)
 print(f"Y(s) = {Ys}")
 
-# 부분분수 분해
+# Partial fraction decomposition
 pf = sp.apart(Ys, s)
-print(f"부분분수: {pf}")
+print(f"Partial fractions: {pf}")
 
-# 역 라플라스 변환
+# Inverse Laplace transform
 yt = sp.inverse_laplace_transform(Ys, s, t)
 print(f"y(t) = {yt}\n")
 
-# 검증: 초기 조건과 ODE 만족 여부
-print("--- 검증 ---")
+# Verification: check initial conditions and ODE satisfaction
+print("--- Verification ---")
 print(f"y(0) = {yt.subs(t, 0)}")
 print(f"y'(0) = {sp.diff(yt, t).subs(t, 0)}")
 residual = sp.simplify(sp.diff(yt, t, 2) + 3*sp.diff(yt, t) + 2*yt)
 print(f"y'' + 3y' + 2y = {residual}")
 
-print("\n=== 비제차 ODE: y'' + y = sin(2t) ===\n")
+print("\n=== Nonhomogeneous ODE: y'' + y = sin(2t) ===\n")
 Ys2 = 2 / ((s**2 + 1) * (s**2 + 4))
 pf2 = sp.apart(Ys2, s)
-print(f"부분분수: {pf2}")
+print(f"Partial fractions: {pf2}")
 yt2 = sp.inverse_laplace_transform(Ys2, s, t)
 print(f"y(t) = {yt2}")
 ```
@@ -537,30 +537,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 
-# 2차 시스템: H(s) = omega_n^2 / (s^2 + 2*zeta*omega_n*s + omega_n^2)
-omega_n = 2.0  # 고유 진동수
-zeta_values = [0.1, 0.3, 0.7, 1.0, 2.0]  # 감쇠비
+# Second-order system: H(s) = omega_n^2 / (s^2 + 2*zeta*omega_n*s + omega_n^2)
+omega_n = 2.0  # natural frequency
+zeta_values = [0.1, 0.3, 0.7, 1.0, 2.0]  # damping ratios
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 for zeta in zeta_values:
-    # 전달함수 정의
+    # Define transfer function
     num = [omega_n**2]
     den = [1, 2*zeta*omega_n, omega_n**2]
     sys = signal.TransferFunction(num, den)
 
-    # 계단 응답
+    # Step response
     t_step, y_step = signal.step(sys)
     axes[0].plot(t_step, y_step, label=f'zeta={zeta}')
 
-    # 극점 표시
+    # Plot poles
     poles = np.roots(den)
     axes[1].plot(poles.real, poles.imag, 'x', markersize=10,
                  label=f'zeta={zeta}: {poles[0]:.2f}')
 
-axes[0].set_xlabel('시간 t')
+axes[0].set_xlabel('Time t')
 axes[0].set_ylabel('y(t)')
-axes[0].set_title('계단 응답 (감쇠비에 따른 변화)')
+axes[0].set_title('Step response (variation with damping ratio)')
 axes[0].legend()
 axes[0].grid(True)
 axes[0].axhline(y=1, color='k', linestyle='--', alpha=0.3)
@@ -569,7 +569,7 @@ axes[1].axvline(x=0, color='k', linestyle='-', alpha=0.3)
 axes[1].axhline(y=0, color='k', linestyle='-', alpha=0.3)
 axes[1].set_xlabel('Re(s)')
 axes[1].set_ylabel('Im(s)')
-axes[1].set_title('극점 위치 (s-평면)')
+axes[1].set_title('Pole locations (s-plane)')
 axes[1].legend()
 axes[1].grid(True)
 axes[1].set_aspect('equal')
@@ -577,7 +577,7 @@ axes[1].set_aspect('equal')
 plt.tight_layout()
 plt.savefig('transfer_function_analysis.png', dpi=150)
 plt.show()
-print("감쇠비가 클수록 극점이 실수축에 가까워지고, 응답이 빠르게 안정화됨")
+print("As damping ratio increases, poles approach the real axis and response stabilizes faster")
 ```
 
 ---
@@ -609,42 +609,42 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 
-# RLC 회로 파라미터
-R = 10       # Ohm (저항)
-L = 0.1      # H (인덕턴스)
-C = 1e-3     # F (커패시턴스)
+# RLC circuit parameters
+R = 10       # Ohm (resistance)
+L = 0.1      # H (inductance)
+C = 1e-3     # F (capacitance)
 
-omega_0 = 1 / np.sqrt(L * C)  # 고유 진동수
-zeta = R / (2 * np.sqrt(L / C))  # 감쇠비
-print(f"RLC 회로 파라미터:")
-print(f"  고유 진동수 omega_0 = {omega_0:.2f} rad/s")
-print(f"  감쇠비 zeta = {zeta:.4f}")
-print(f"  상태: {'과감쇠' if zeta > 1 else '임계감쇠' if zeta == 1 else '부족감쇠'}")
+omega_0 = 1 / np.sqrt(L * C)  # natural frequency
+zeta = R / (2 * np.sqrt(L / C))  # damping ratio
+print(f"RLC circuit parameters:")
+print(f"  Natural frequency omega_0 = {omega_0:.2f} rad/s")
+print(f"  Damping ratio zeta = {zeta:.4f}")
+print(f"  State: {'overdamped' if zeta > 1 else 'critically damped' if zeta == 1 else 'underdamped'}")
 
-# 전달함수: H(s) = (1/L) / (s^2 + (R/L)s + 1/(LC))
+# Transfer function: H(s) = (1/L) / (s^2 + (R/L)s + 1/(LC))
 num = [1/L]
 den = [1, R/L, 1/(L*C)]
 sys_rlc = signal.TransferFunction(num, den)
 
-# 단위 계단 전압 입력에 대한 응답 (스위치 ON)
+# Response to unit step voltage input (switch ON)
 t_sim = np.linspace(0, 0.1, 1000)
 t_out, q_out = signal.step(sys_rlc, T=t_sim)
 
-# 전류 i(t) = dq/dt
+# Current i(t) = dq/dt
 i_out = np.gradient(q_out, t_out)
 
 fig, axes = plt.subplots(2, 1, figsize=(10, 8))
 
 axes[0].plot(t_out * 1000, q_out * 1e6, 'b-', linewidth=2)
-axes[0].set_xlabel('시간 (ms)')
-axes[0].set_ylabel('전하 q (uC)')
-axes[0].set_title('RLC 직렬 회로 - 계단 응답')
+axes[0].set_xlabel('Time (ms)')
+axes[0].set_ylabel('Charge q (uC)')
+axes[0].set_title('RLC series circuit - step response')
 axes[0].grid(True)
 
 axes[1].plot(t_out * 1000, i_out * 1000, 'r-', linewidth=2)
-axes[1].set_xlabel('시간 (ms)')
-axes[1].set_ylabel('전류 i (mA)')
-axes[1].set_title('전류 응답')
+axes[1].set_xlabel('Time (ms)')
+axes[1].set_ylabel('Current i (mA)')
+axes[1].set_title('Current response')
 axes[1].grid(True)
 
 plt.tight_layout()
@@ -672,12 +672,12 @@ $$x(t) = x_0 e^{-\zeta\omega_n t}\left(\cos\omega_d t + \frac{\zeta}{\sqrt{1-\ze
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 질량-스프링-댐퍼 파라미터
+# Mass-spring-damper parameters
 m = 1.0   # kg
 k = 100.0  # N/m
-x0 = 0.05  # m (초기 변위 5cm)
+x0 = 0.05  # m (initial displacement 5cm)
 
-# 다양한 감쇠 조건
+# Various damping conditions
 c_values = [0.5, 5.0, 20.0, 25.0]  # N*s/m
 
 t = np.linspace(0, 3, 1000)
@@ -687,29 +687,29 @@ for c in c_values:
     omega_n = np.sqrt(k / m)
     zeta = c / (2 * np.sqrt(m * k))
 
-    if zeta < 1:  # 부족감쇠
+    if zeta < 1:  # underdamped
         omega_d = omega_n * np.sqrt(1 - zeta**2)
         x = x0 * np.exp(-zeta * omega_n * t) * (
             np.cos(omega_d * t) +
             (zeta / np.sqrt(1 - zeta**2)) * np.sin(omega_d * t)
         )
-        label = f'c={c} (zeta={zeta:.2f}, 부족감쇠)'
-    elif zeta == 1:  # 임계감쇠
+        label = f'c={c} (zeta={zeta:.2f}, underdamped)'
+    elif zeta == 1:  # critically damped
         x = x0 * (1 + omega_n * t) * np.exp(-omega_n * t)
-        label = f'c={c} (zeta={zeta:.2f}, 임계감쇠)'
-    else:  # 과감쇠
+        label = f'c={c} (zeta={zeta:.2f}, critically damped)'
+    else:  # overdamped
         r1 = -zeta * omega_n + omega_n * np.sqrt(zeta**2 - 1)
         r2 = -zeta * omega_n - omega_n * np.sqrt(zeta**2 - 1)
         A = x0 * r2 / (r2 - r1)
         B = -x0 * r1 / (r2 - r1)
         x = A * np.exp(r1 * t) + B * np.exp(r2 * t)
-        label = f'c={c} (zeta={zeta:.2f}, 과감쇠)'
+        label = f'c={c} (zeta={zeta:.2f}, overdamped)'
 
     plt.plot(t, x * 100, linewidth=2, label=label)
 
-plt.xlabel('시간 (s)')
-plt.ylabel('변위 (cm)')
-plt.title('질량-스프링-댐퍼 시스템의 자유 진동')
+plt.xlabel('Time (s)')
+plt.ylabel('Displacement (cm)')
+plt.title('Free vibration of mass-spring-damper system')
 plt.legend()
 plt.grid(True)
 plt.axhline(y=0, color='k', linestyle='-', alpha=0.3)
@@ -746,22 +746,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import erfc
 
-# 열전도 파라미터
-T0 = 100.0        # 경계 온도 (deg C)
-alpha = 1.14e-4   # 열확산계수 (m^2/s, 철)
+# Heat conduction parameters
+T0 = 100.0        # boundary temperature (deg C)
+alpha = 1.14e-4   # thermal diffusivity (m^2/s, iron)
 
-# 시간별 온도 분포
-x = np.linspace(0, 0.1, 200)  # 위치 (m)
-times = [1, 10, 60, 300, 1800]  # 시간 (s)
+# Temperature distribution at different times
+x = np.linspace(0, 0.1, 200)  # position (m)
+times = [1, 10, 60, 300, 1800]  # time (s)
 
 plt.figure(figsize=(10, 6))
 for t_val in times:
     u = T0 * erfc(x / (2 * np.sqrt(alpha * t_val)))
     plt.plot(x * 100, u, linewidth=2, label=f't = {t_val}s')
 
-plt.xlabel('위치 x (cm)')
-plt.ylabel('온도 u (deg C)')
-plt.title('반무한 봉의 열전도 (라플라스 변환 풀이)')
+plt.xlabel('Position x (cm)')
+plt.ylabel('Temperature u (deg C)')
+plt.title('Heat conduction in a semi-infinite rod (Laplace transform solution)')
 plt.legend()
 plt.grid(True)
 plt.savefig('heat_conduction_laplace.png', dpi=150)
@@ -794,7 +794,7 @@ import matplotlib.pyplot as plt
 from math import factorial
 
 def stehfest_weights(N):
-    """스테페스트 알고리즘의 가중치 계산"""
+    """Compute weights for the Stehfest algorithm"""
     V = np.zeros(N)
     for k in range(1, N + 1):
         s = 0
@@ -810,12 +810,12 @@ def stehfest_weights(N):
     return V
 
 def numerical_inverse_laplace(F_func, t_values, N=12):
-    """스테페스트 알고리즘을 이용한 수치적 역 라플라스 변환
+    """Numerical inverse Laplace transform using the Stehfest algorithm
 
     Parameters:
-        F_func: F(s)를 계산하는 함수
-        t_values: 역변환을 구할 시간값 배열
-        N: 스테페스트 차수 (짝수, 기본값 12)
+        F_func: function that computes F(s)
+        t_values: array of time values at which to compute the inverse transform
+        N: Stehfest order (even, default 12)
     """
     V = stehfest_weights(N)
     ln2 = np.log(2)
@@ -831,33 +831,33 @@ def numerical_inverse_laplace(F_func, t_values, N=12):
 
     return result
 
-# 검증: F(s) = 1/(s+1) -> f(t) = e^(-t)
+# Verification: F(s) = 1/(s+1) -> f(t) = e^(-t)
 F_exp = lambda sv: 1.0 / (sv + 1.0)
 t_test = np.linspace(0.01, 5, 200)
 f_numerical = numerical_inverse_laplace(F_exp, t_test)
 f_exact = np.exp(-t_test)
 
 plt.figure(figsize=(10, 6))
-plt.plot(t_test, f_exact, 'b-', linewidth=2, label='해석적: exp(-t)')
-plt.plot(t_test, f_numerical, 'r--', linewidth=2, label='스테페스트 (N=12)')
-plt.xlabel('시간 t')
+plt.plot(t_test, f_exact, 'b-', linewidth=2, label='Analytical: exp(-t)')
+plt.plot(t_test, f_numerical, 'r--', linewidth=2, label='Stehfest (N=12)')
+plt.xlabel('Time t')
 plt.ylabel('f(t)')
-plt.title('수치적 역 라플라스 변환 검증')
+plt.title('Numerical inverse Laplace transform verification')
 plt.legend()
 plt.grid(True)
 plt.savefig('numerical_inverse_laplace.png', dpi=150)
 plt.show()
 
-# 오차 분석
+# Error analysis
 max_error = np.max(np.abs(f_numerical - f_exact))
-print(f"최대 오차: {max_error:.2e}")
+print(f"Maximum error: {max_error:.2e}")
 
-# 더 복잡한 예: F(s) = 1/(s^2+1) -> f(t) = sin(t)
+# More complex example: F(s) = 1/(s^2+1) -> f(t) = sin(t)
 F_sin = lambda sv: 1.0 / (sv**2 + 1.0)
 f_sin_numerical = numerical_inverse_laplace(F_sin, t_test)
 f_sin_exact = np.sin(t_test)
 
-print(f"\nsin(t) 역변환 최대 오차: {np.max(np.abs(f_sin_numerical - f_sin_exact)):.2e}")
+print(f"\nMaximum error for sin(t) inverse transform: {np.max(np.abs(f_sin_numerical - f_sin_exact)):.2e}")
 ```
 
 ---

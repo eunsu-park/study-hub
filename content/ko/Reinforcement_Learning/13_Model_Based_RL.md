@@ -140,18 +140,24 @@ class DynaQ:
         return np.argmax(self.Q[state])
 
     def update(self, s, a, r, s_next, done):
-        # Step 1: Direct RL update
+        # 1단계: 직접 강화학습 업데이트 — 항상 하나의 실제 TD 업데이트를 먼저 적용하여
+        # 모델을 사용하기 전에 Q-테이블이 실제 전이(transition)를 반영하도록 한다
         target = r if done else r + self.gamma * np.max(self.Q[s_next])
         self.Q[s, a] += self.alpha * (target - self.Q[s, a])
 
-        # Step 2: Model learning
+        # 2단계: 모델 학습 — 관찰된 결정론적 전이를 저장한다;
+        # 이 단순한 테이블형 모델은 방문한 (s,a) 쌍에 대해서는 정확하지만
+        # 방문하지 않은 상태로는 일반화할 수 없다 (신경망 모델과 달리)
         self.model[(s, a)] = (r, s_next, done)
         if (s, a) not in self.visited:
             self.visited.append((s, a))
 
-        # Step 3: Planning (n simulated updates)
+        # 3단계: 계획(n 시뮬레이션 업데이트) — 저장된 모델로 n번의 Q-업데이트를 수행하는 것은
+        # n번의 실제 환경 스텝보다 훨씬 비용이 적게 든다;
+        # n_planning이 클수록 실제 스텝당 더 많은 계산 비용으로 더 높은 샘플 효율성을 얻는다
         for _ in range(self.n_planning):
-            # Sample random previously visited (s, a)
+            # 방문한 쌍에서 균일하게 샘플링하는 이유: 최근 상태만이 아니라 알려진 상태 공간의
+            # 모든 부분이 동등하게 업데이트되도록 보장한다
             idx = np.random.randint(len(self.visited))
             sim_s, sim_a = self.visited[idx]
             sim_r, sim_s_next, sim_done = self.model[(sim_s, sim_a)]
@@ -239,6 +245,9 @@ class EnsembleDynamicsModel(nn.Module):
 
     def __init__(self, state_dim, action_dim, n_models=5, hidden_dim=256):
         super().__init__()
+        # 5개 모델로 앙상블을 구성하는 이유: 단일 모델은 "이 영역을 봤고 예측 가능하다"와
+        # "이 영역을 전혀 보지 못했다"를 구분할 수 없다 — 모델 간 불일치(disagreement)는
+        # 베이지안 추론 없이 인식론적 불확실성(epistemic uncertainty)에 대한 저렴한 대리 지표가 된다
         self.models = nn.ModuleList([
             DynamicsModel(state_dim, action_dim, hidden_dim)
             for _ in range(n_models)
@@ -249,11 +258,13 @@ class EnsembleDynamicsModel(nn.Module):
         next_states = torch.stack([p[0] for p in predictions])
         rewards = torch.stack([p[1] for p in predictions])
 
-        # Mean prediction
+        # 평균 예측 — 평균화는 단일 모델에 비해 분산을 줄인다
         mean_next_state = next_states.mean(dim=0)
         mean_reward = rewards.mean(dim=0)
 
-        # Uncertainty (disagreement between models)
+        # 표준편차(std)를 불확실성으로 사용하는 이유: 모델 간 높은 불일치는 우리가
+        # 학습 데이터가 거의 없는 상태 공간 영역에 있음을 나타낸다;
+        # MBPO는 이를 활용하여 오류가 누적되기 전에 롤아웃을 종료한다
         uncertainty = next_states.std(dim=0).mean(dim=-1)
 
         return mean_next_state, mean_reward, uncertainty
@@ -275,12 +286,17 @@ class ModelTrainer:
             for i, (model, optimizer) in enumerate(
                 zip(self.ensemble.models, self.optimizers)
             ):
-                # Each model trained on different bootstrap sample
+                # 각 모델이 다른 부트스트랩 샘플(bootstrap sample)로 학습되는 이유:
+                # 모든 모델이 동일한 데이터를 보면 유사한 예측으로 수렴하여
+                # 앙상블의 목적을 상실한다; 랜덤 샘플링이 모델 가중치의 다양성을 도입한다
                 states, actions, rewards, next_states = \
                     replay_buffer.sample(batch_size)
 
                 pred_next_states, pred_rewards = model(states, actions)
 
+                # 상태 손실과 보상 손실을 분리하는 이유: 서로 다른 스케일과 의미를 가진다;
+                # 동등한 가중치로 함께 학습하는 것은 단순화로, 실제로 보상 예측이 더 쉬운 경우
+                # (스칼라 vs 고차원 상태), 그 그래디언트가 지배적이 되어서는 안 된다
                 state_loss = nn.MSELoss()(pred_next_states, next_states)
                 reward_loss = nn.MSELoss()(pred_rewards, rewards)
                 loss = state_loss + reward_loss
@@ -390,6 +406,9 @@ class MBPO:
 
     def _generate_model_rollouts(self):
         """Branch short rollouts from real states."""
+        # 실제 상태에서 분기하는 이유: 실제로 관찰된 상태에서 시작하면 롤아웃이
+        # 실제 분포에 고정된다; 오류는 순수 상상(imagination)에서 빠르게 누적되므로
+        # 실제 상태 분기는 모델이 진짜 역학(dynamics)에서 벗어나는 "거리"를 제한한다
         states = self.env_buffer.sample_states(self.rollouts_per_step)
 
         for state in states:
@@ -400,10 +419,16 @@ class MBPO:
                     s.unsqueeze(0), a.unsqueeze(0)
                 )
 
-                # Stop rollout if model is uncertain
+                # 높은 불확실성에서 롤아웃을 중단하는 이유: 앙상블 불일치는 모델이
+                # 학습 데이터 너머로 외삽(extrapolation)하고 있음을 나타낸다;
+                # 롤아웃을 계속하면 정책의 가치 추정을 오염시키는 신뢰할 수 없는
+                # 전이(transition)가 추가된다
                 if uncertainty.item() > 0.5:
                     break
 
+                # 모델 전이에 done=False로 표시하는 이유: 모델은 종료 조건을
+                # 신뢰할 수 있게 시뮬레이션하지 않는다; 모든 시뮬레이션 전이를
+                # 비종료로 처리하면 인위적인 에피소드 끝에서 잘못된 가치 절단을 방지한다
                 self.model_buffer.add(
                     s.numpy(), a.numpy(), r.item(),
                     s_next.squeeze(0).detach().numpy(), False

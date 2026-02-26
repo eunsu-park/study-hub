@@ -1,12 +1,22 @@
-# CSS 애니메이션
+# 14. CSS 애니메이션 (CSS Animations)
 
-## 학습 목표
-- CSS transition으로 부드러운 상태 변화 구현
-- CSS transform으로 요소 변형 적용
-- @keyframes를 사용한 복잡한 애니메이션 생성
-- 성능 최적화와 접근성 고려 사항 이해
+**이전**: [빌드 도구와 환경](./13_Build_Tools_Environment.md) | **다음**: [JavaScript 모듈 시스템](./15_JS_Modules.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 트랜지션(transitions)을 사용하여 CSS 속성 값 사이의 부드러운 상태 변화를 구현할 수 있습니다
+2. 이동(translate), 크기(scale), 회전(rotate), 기울이기(skew)를 포함한 2D 및 3D 변환(transformations)을 적용할 수 있습니다
+3. `@keyframes`로 다단계 애니메이션을 만들고 애니메이션 속성으로 재생을 제어할 수 있습니다
+4. Intersection Observer와 최신 CSS 스크롤 타임라인(scroll timelines)을 사용하여 스크롤 기반 애니메이션을 구현할 수 있습니다
+5. GPU 가속 속성(`transform`, `opacity`)을 대상으로 하여 애니메이션 성능을 최적화할 수 있습니다
+6. `prefers-reduced-motion` 미디어 쿼리를 구현하여 사용자 기본 설정을 존중할 수 있습니다
+7. 실용적인 UI 패턴에서 트랜지션, 변환, 키프레임 애니메이션을 조합할 수 있습니다
 
 ---
+
+정적인 페이지는 생명이 없어 보입니다. 잘 구성된 애니메이션은 사용자의 주의를 안내하고, 상태 변화를 전달하며, 인터페이스를 반응성 있고 세련되게 만들어 줍니다. 그러나 잘못 구현된 애니메이션은 성능을 저하시키고 모션에 민감한 사용자들을 소외시킬 수 있습니다. 이 레슨에서는 JavaScript 라이브러리 없이 순수 CSS만으로 성능 좋고 접근성 있는 애니메이션을 만드는 방법을 배웁니다.
 
 ## 1. CSS Transition
 
@@ -774,7 +784,61 @@ if (prefersReducedMotion) {
 3. `left`, `width` 등 레이아웃 속성 피하기
 
 ### 다음 단계
-- [15_JS_Modules.md](./15_JS_Modules.md): JavaScript 모듈 시스템
+- [15. JS 모듈](./15_JS_Modules.md): JavaScript 모듈 시스템
+
+---
+
+## 연습 문제
+
+### 연습 1: 애니메이션 내비게이션 메뉴
+
+CSS 트랜지션(transition)만 사용하여(JavaScript 없이) 다음과 같은 애니메이션 동작을 가진 가로 내비게이션 바를 구축하세요:
+
+1. 각 내비게이션 링크에는 호버(hover) 시 `width: 0`에서 `width: 100%`로 양쪽에서 중앙을 기준으로 펼쳐지는 색상 밑줄이 있습니다.
+2. 호버 시 링크 텍스트 색상이 0.25초에 걸쳐 부드럽게 변합니다.
+3. 부모 `<li>`에 호버 시 드롭다운 서브메뉴가 `max-height` 트랜지션으로 아래로 슬라이드됩니다.
+
+> **성능 참고**: 가능한 경우 `transform`과 `opacity`를 사용하세요. `max-height` 애니메이션이 GPU 가속을 사용하지 않음에도 여기서 허용 가능한 이유를 주석으로 설명하세요.
+
+### 연습 2: 로딩 스켈레톤 스크린(Loading Skeleton Screen)
+
+CSS 애니메이션을 사용하여 스켈레톤(skeleton) 로딩 화면을 구현하세요:
+
+1. 이미지, 제목 줄, 본문 두 줄의 플레이스홀더 블록이 있는 카드 형태의 스켈레톤을 만드세요.
+2. 반투명 그라디언트(gradient)가 각 블록을 왼쪽에서 오른쪽으로 무한 반복하며 이동하는 시머(shimmer) 효과를 `@keyframes` 애니메이션으로 적용하세요.
+3. `setTimeout`을 사용해 데이터 로딩을 시뮬레이션하고, `.loaded` 클래스 토글로 스켈레톤을 `opacity`와 `transition`을 사용해 페이드 아웃(fade out)하고 실제 콘텐츠를 페이드 인(fade in)하세요.
+
+```css
+/* 시머(Shimmer) 키프레임 스켈레톤 */
+@keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+}
+
+.skeleton-block {
+    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite;
+}
+```
+
+### 연습 3: 스크롤 트리거 섹션 등장 효과
+
+다섯 개의 콘텐츠 섹션이 수직으로 쌓인 단일 페이지 레이아웃을 만드세요. 각 섹션은 뷰포트에 스크롤될 때 애니메이션으로 등장해야 합니다:
+
+1. `IntersectionObserver`를 `threshold` 0.15로 사용하여 가시성을 감지합니다.
+2. 등장 방향을 번갈아가며 적용합니다: 홀수 섹션은 왼쪽에서, 짝수 섹션은 오른쪽에서 슬라이드 인(slide in)됩니다.
+3. 섹션이 한 번 애니메이션되면 `unobserve`를 호출하여 애니메이션이 한 번만 재생되도록 합니다.
+4. 모든 애니메이션 CSS를 `@media (prefers-reduced-motion: no-preference)` 블록으로 감싸서, 모션 감소를 선호하는 사용자는 애니메이션 없이 즉시 콘텐츠를 볼 수 있도록 합니다.
+
+### 연습 4: 부드러운 높이 트랜지션이 있는 CSS 전용 아코디언(Accordion) (심화)
+
+JavaScript 없이 `:checked` 가상 클래스(pseudo-class)만으로 FAQ 아코디언을 구현하세요:
+
+1. 각 FAQ 항목은 `<details>` 요소 또는 숨겨진 체크박스(checkbox) + 레이블(label) 트릭을 사용합니다.
+2. 패널이 열릴 때 `max-height: 0`에서 `max-height: 500px`로(`overflow: hidden` 적용) 0.4초에 걸쳐 트랜지션됩니다.
+3. 오른쪽의 `+` 아이콘이 패널이 열리면 45도 회전하여 `×`가 되도록 `transform: rotate` 트랜지션을 사용합니다.
+4. 한 번에 하나의 패널만 열려야 합니다 — 순수 CSS로 "한 번에 하나만 열림"을 구현하기 어려운 CSS의 한계와 우회 방법을 주석으로 설명하세요.
 
 ---
 

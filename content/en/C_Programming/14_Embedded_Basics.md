@@ -1,12 +1,24 @@
 # Embedded Programming Basics
 
+**Previous**: [Project 12: Multithreaded Programming](./13_Project_Multithreading.md) | **Next**: [Advanced Bit Operations](./15_Bit_Operations.md)
+
 Understand the concepts of embedded systems and set up the Arduino development environment.
 
 ## Learning Objectives
-- Understand embedded system concepts
-- Understand microcontrollers (MCU)
-- Set up Arduino development environment
-- Write and run first program
+
+After completing this lesson, you will be able to:
+
+1. Explain what an embedded system is and how it differs from a general-purpose computer
+2. Describe the internal architecture of a microcontroller (CPU, Flash, SRAM, peripherals)
+3. Compare common Arduino boards and select an appropriate one for a project
+4. Set up an Arduino development environment (IDE, Wokwi simulator, or PlatformIO)
+5. Write, compile, and upload an Arduino program using `setup()` and `loop()`
+6. Control digital output pins to drive LEDs with various blink patterns
+7. Use the Serial Monitor for debugging and variable inspection
+
+---
+
+Every appliance you interact with daily -- from your microwave to your car's braking system -- runs on an embedded processor. Learning embedded programming connects the abstract world of C code to physical hardware, giving you the ability to make things blink, move, and communicate. In this lesson you will set up your first embedded environment and see your code control real (or simulated) hardware.
 
 ## Prerequisites
 - C language basic syntax

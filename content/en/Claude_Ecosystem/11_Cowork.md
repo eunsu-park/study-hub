@@ -13,14 +13,17 @@ Cowork is Anthropic's product for deploying Claude as an autonomous **digital co
 - Lesson 10: Claude Desktop (understanding the Desktop environment)
 - Basic understanding of workflow automation concepts
 
-**Learning Objectives**:
-- Understand what Cowork is and how it differs from Claude Code
-- Set up and configure Cowork for your workflow
-- Use Cowork for multi-step task execution across different domains
-- Navigate the plugin ecosystem and enable relevant plugins
-- Connect external services through MCP connectors
-- Apply Cowork to practical use cases (documentation, research, project management)
-- Understand privacy, data handling, and limitations
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand what Cowork is and how it differs from Claude Code
+2. Set up and configure Cowork for your workflow
+3. Use Cowork for multi-step task execution across different domains
+4. Navigate the plugin ecosystem and enable relevant plugins
+5. Connect external services through MCP connectors
+6. Apply Cowork to practical use cases (documentation, research, project management)
+7. Understand privacy, data handling, and limitations
 
 ---
 

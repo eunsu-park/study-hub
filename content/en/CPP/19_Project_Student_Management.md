@@ -1,13 +1,24 @@
 # 19. Project: Student Management System
 
+**Previous**: [C++ Design Patterns](./18_Design_Patterns.md) | **Next**: [CMake and Build Systems](./20_CMake_and_Build_Systems.md)
+
+---
+
 ## Learning Objectives
-- Apply STL containers (vector, map, set) in a real-world application
-- Design classes with encapsulation and data validation
-- Implement file I/O with serialization and deserialization
-- Use exception handling for robust error management
-- Leverage smart pointers for automatic memory management
-- Build a menu-driven CLI interface
-- Practice modern C++ best practices
+
+After completing this lesson, you will be able to:
+
+1. Design a multi-class C++ application with clear separation of concerns (data, storage, UI)
+2. Apply STL containers (`map`, `vector`, `set`) for efficient lookup, sorting, and uniqueness guarantees
+3. Implement CRUD operations with input validation and meaningful error messages
+4. Serialize and deserialize structured data to and from CSV files using `stringstream`
+5. Build a menu-driven CLI that handles invalid input gracefully with exception handling
+6. Use operator overloading (`<<`, `<`, `==`) to integrate custom types with STL algorithms and I/O
+7. Practice const correctness, RAII, and modern C++ best practices in a complete project
+
+---
+
+Up to this point, each lesson has taught individual C++ features in isolation. This project ties them all together into a cohesive, working application. Building a student management system from scratch forces you to make design decisions--how to structure classes, which containers to choose, how to handle errors--that mirror the challenges of real software development. It is in projects like this that isolated knowledge becomes genuine skill.
 
 ## Table of Contents
 1. [Project Overview](#1-project-overview)
@@ -843,7 +854,65 @@ Data saved to students.csv
 
 ---
 
+## Exercises
+
+### Exercise 1: Add a Course Enrollment Feature
+
+Extend the `Student` class to support a list of enrolled courses. Add:
+- A `std::vector<std::string> courses` member.
+- `enrollCourse(const std::string& course)` — adds the course only if not already enrolled (use `std::find`).
+- `dropCourse(const std::string& course)` — removes the course; throws `std::runtime_error` if not enrolled.
+- `getCourses() const` — returns the vector.
+- Update `serialize()` / `deserialize()` to persist courses (courses can be joined with `|` as a separator in the CSV field).
+
+Test by enrolling two courses, dropping one, and verifying serialization round-trips correctly.
+
+### Exercise 2: Extend StudentDatabase with Statistics
+
+Add the following methods to `StudentDatabase`:
+
+1. `std::map<std::string, double> gpaDistribution() const` — returns a map from letter grade (`"A"`, `"B"`, `"C"`, `"D"`, `"F"`) to the percentage of students in that range.
+2. `double medianGpa() const` — returns the median GPA across all students (sort a copy of the GPAs and pick the middle value; handle even-sized collections).
+3. `std::vector<Student> belowAverage() const` — returns all students whose GPA is strictly below the class average.
+
+Add menu options 11, 12, and 13 to `main.cpp` to invoke these methods and display the results.
+
+### Exercise 3: Custom Exception Hierarchy
+
+Replace the use of `std::runtime_error` and `std::invalid_argument` in the project with a custom exception hierarchy:
+
+```cpp
+class StudentException : public std::exception { ... };
+class StudentNotFoundException : public StudentException { ... };
+class DuplicateStudentException : public StudentException { ... };
+class InvalidStudentDataException : public StudentException { ... };
+```
+
+Each exception should carry a descriptive message and the relevant student ID where applicable. Update all throw sites and catch blocks in both `Student.cpp` and `StudentDatabase.cpp`. Verify that catching `StudentException` handles all three derived types.
+
+### Exercise 4: Sorting and Filtering Enhancements
+
+Add three new query methods to `StudentDatabase`:
+
+1. `std::vector<Student> sortedByName() const` — returns all students sorted alphabetically by name (case-insensitive).
+2. `std::vector<Student> sortedByAge() const` — returns all students sorted by age ascending.
+3. `std::vector<Student> filterByAgeRange(int minAge, int maxAge) const` — returns students whose age is within the range (inclusive).
+
+Implement each method using `std::sort` or `std::copy_if` with a lambda comparator/predicate. Add corresponding menu entries.
+
+### Exercise 5: Batch Import from CSV
+
+Add a method `int importFromCsv(const std::string& filename)` to `StudentDatabase` that:
+1. Opens the specified file and reads every line.
+2. Attempts to deserialize each line into a `Student`.
+3. Skips lines that fail validation (catching exceptions and logging a warning).
+4. Skips students whose ID already exists in the database (no overwrite).
+5. Returns the count of successfully imported students.
+
+Write a test CSV file with five valid records and two invalid ones (e.g., a negative GPA and an empty name), run the import, and confirm the correct count and the existing records are untouched.
+
+---
+
 ## Navigation
-- Previous: [18. Design Patterns](18_Design_Patterns.md)
-- Next: [Overview](00_Overview.md)
-- [Back to Overview](00_Overview.md)
+
+**Previous**: [C++ Design Patterns](./18_Design_Patterns.md) | **Next**: [CMake and Build Systems](./20_CMake_and_Build_Systems.md)

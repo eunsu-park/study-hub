@@ -1,12 +1,21 @@
 # Distributed Systems Concepts
 
+**Previous**: [Microservices Patterns](./14_Microservices_Patterns.md) | **Next**: [Consensus Algorithms](./16_Consensus_Algorithms.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-A distributed system is multiple computers connected via a network that cooperate to function as a single system. In this chapter, we'll learn about the fundamental challenges of distributed systems, the concept of time, and leader election algorithms.
+1. Identify and explain each of the 8 Fallacies of Distributed Computing and their practical consequences
+2. Describe why physical clock synchronization is unreliable in distributed systems and the problems this creates for event ordering
+3. Implement Lamport clocks and vector clocks to establish causal ordering of events without synchronized physical time
+4. Compare leader election algorithms (Bully, Ring) and explain how they handle network partitions and split-brain scenarios
+5. Analyze fundamental distributed systems challenges including partial failure, network partitions, and Byzantine faults
+6. Reason about the implications of the CAP theorem when designing distributed architectures
 
 ---
+
+Every distributed system you interact with -- from Google Search to your bank's transaction processing -- must solve problems that simply do not exist on a single machine: messages arrive out of order, clocks disagree, and any network link can fail at any moment. Leslie Lamport's famous observation that "a distributed system is one in which the failure of a computer you didn't even know existed can render your own computer unusable" captures the core challenge. Mastering these foundational concepts is essential before tackling consensus algorithms and real-world system design.
 
 ## Table of Contents
 
@@ -718,9 +727,7 @@ Design a leader election mechanism for a distributed database with 5 nodes:
 
 ---
 
-## Next Steps
-
-In [16_Consensus_Algorithms.md](./16_Consensus_Algorithms.md), let's learn about distributed consensus algorithms like Paxos and Raft!
+**Previous**: [Microservices Patterns](./14_Microservices_Patterns.md) | **Next**: [Consensus Algorithms](./16_Consensus_Algorithms.md)
 
 ---
 

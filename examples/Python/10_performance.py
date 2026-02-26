@@ -105,6 +105,8 @@ def concat_with_plus(n):
     return result
 
 
+# Why: str.join() allocates the result string once after knowing the total length,
+# while += creates a new string object on every iteration (quadratic time complexity)
 def concat_with_join(n):
     """Fast - builds list then joins once."""
     parts = []
@@ -143,6 +145,8 @@ class PointWithDict:
         self.y = y
 
 
+# Why: __slots__ replaces the per-instance __dict__ with a fixed-size array, saving ~40-50%
+# memory per instance — critical when creating millions of small objects (e.g., data points)
 class PointWithSlots:
     """Class with __slots__ - no __dict__."""
     __slots__ = ['x', 'y']
@@ -252,6 +256,8 @@ def append_left_list(n):
     return lst
 
 
+# Why: deque is implemented as a doubly-linked list of fixed-size blocks, giving O(1)
+# append/pop at both ends, while list.insert(0, x) shifts all elements — O(n) per call
 def append_left_deque(n):
     """Fast - O(1) for each appendleft."""
     dq = deque()
@@ -317,6 +323,8 @@ def with_global_lookup():
     return result
 
 
+# Why: CPython uses LOAD_FAST for locals (array index) vs LOAD_GLOBAL for globals (dict
+# lookup) — binding builtins to locals in tight loops avoids repeated hash table lookups
 def with_local_lookup():
     """Faster - local variable."""
     _len = len
@@ -421,6 +429,8 @@ def search_in_list(items, targets):
     return [item in items for item in targets]
 
 
+# Why: Set uses a hash table internally, making 'in' checks O(1) average vs O(n) for list
+# — the one-time O(n) cost of building the set pays off when checking many items
 def search_in_set(items, targets):
     """O(1) lookup."""
     item_set = set(items)

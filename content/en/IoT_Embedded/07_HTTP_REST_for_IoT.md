@@ -1,11 +1,21 @@
 # 07. HTTP/REST for IoT
 
+**Previous**: [MQTT Protocol](./06_MQTT_Protocol.md) | **Next**: [Edge AI - TensorFlow Lite](./08_Edge_AI_TFLite.md)
+
 ## Learning Objectives
 
-- Build IoT server with Flask
-- Design sensor data collection API
-- Understand RESTful API design principles
-- Process and validate JSON data
+After completing this lesson, you will be able to:
+
+1. Build an IoT data collection server using Flask
+2. Design RESTful sensor data APIs with proper CRUD operations
+3. Apply RESTful design principles including resource naming and HTTP methods
+4. Validate incoming JSON data using decorators and Pydantic models
+5. Implement pagination and filtering for sensor data queries
+6. Integrate HTTP and MQTT in a gateway server
+
+---
+
+While MQTT excels at real-time device-to-device messaging, HTTP/REST remains essential for IoT systems that need web dashboards, mobile app integration, or interoperability with existing enterprise systems. A REST API on your gateway lets any client -- a browser, a phone, a cloud service -- query sensor data or send commands using the same standard web protocols that power the entire internet.
 
 ---
 
@@ -808,11 +818,4 @@ if __name__ == "__main__":
 
 ---
 
-## Next Steps
-
-- [08_Edge_AI_TFLite.md](08_Edge_AI_TFLite.md): AI analysis of sensor data
-- [10_Home_Automation_Project.md](10_Home_Automation_Project.md): REST API-based smart home
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [MQTT Protocol](./06_MQTT_Protocol.md) | **Next**: [Edge AI - TensorFlow Lite](./08_Edge_AI_TFLite.md)

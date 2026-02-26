@@ -2,9 +2,25 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [07_String_Processing.md](./07_String_Processing.md) | **다음**: [09_Process_Management.md](./09_Process_Management.md)
+**이전**: [문자열 처리와 텍스트 조작](./07_String_Processing.md) | **다음**: [프로세스 관리 및 작업 제어](./09_Process_Management.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 문법, 의미, 사용 맥락 측면에서 글로브(glob) 패턴과 정규 표현식(regular expression)의 차이를 구별한다
+2. `[[ =~ ]]` 연산자를 사용하여 Bash 조건문에서 문자열을 정규 표현식 패턴과 대조한다
+3. `BASH_REMATCH` 배열을 사용하여 정규 표현식 매칭에서 캡처 그룹을 추출한다
+4. 교대(alternation), 수량자(quantifier), 문자 클래스(character class)를 사용하여 확장 정규 표현식(extended regular expression)을 작성한다
+5. 이메일, IP 주소, 날짜, URL, 시맨틱 버전에 대한 재사용 가능한 검증 함수를 구축한다
+6. 검색, 추출, 치환 작업에 `grep`과 `sed`를 정규 표현식과 함께 효과적으로 활용한다
+7. 정규 표현식의 성능 함정을 파악하고 효율적인 패턴 매칭을 위한 모범 사례를 적용한다
+
+---
+
+정규 표현식은 입력값 검증, 구조화된 데이터 추출, 복잡한 검색-치환 작업을 위한 표준 도구입니다. Bash는 `=~` 연산자를 통해 정규 표현식을 기본 지원하지만, 많은 개발자들이 Bash가 직접 처리할 수 있는 작업에도 `grep`이나 `sed` 프로세스를 실행하는 방식을 선택합니다. 이 레슨에서는 두 가지 접근 방식을 모두 다루어, 올바른 도구를 선택하고 정확하고 가독성 있으며 효율적인 패턴을 작성할 수 있도록 합니다.
 
 ## 1. Glob vs Regex
 

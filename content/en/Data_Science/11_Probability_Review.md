@@ -2,9 +2,23 @@
 
 [Previous: From EDA to Inference](./10_From_EDA_to_Inference.md) | [Next: Sampling and Estimation](./12_Sampling_and_Estimation.md)
 
-## Overview
+---
 
-Probability theory is the mathematical foundation of statistics. This chapter reviews the core concepts of probability that must be understood before learning advanced statistics.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the three Kolmogorov axioms and verify them programmatically
+2. Distinguish between discrete and continuous random variables and their distribution functions (PMF, PDF, CDF)
+3. Describe the major probability distributions (binomial, Poisson, normal, exponential, gamma, beta) and their parameters
+4. Calculate joint, marginal, and conditional probabilities and apply Bayes' theorem
+5. Compute expected value, variance, covariance, and correlation for random variables
+6. Apply the Law of Large Numbers and Central Limit Theorem through simulation
+7. Implement distribution fitting and use `scipy.stats` distribution objects effectively
+
+---
+
+Probability theory underpins every statistical method you will encounter in the remaining lessons. Without a firm grasp of distributions, expectations, and limit theorems, techniques like hypothesis testing, regression, and Bayesian inference remain opaque recipes rather than reasoned tools. This review ensures that your probabilistic foundations are solid before we build on them.
 
 ---
 

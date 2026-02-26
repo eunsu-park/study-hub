@@ -146,6 +146,8 @@ class IQLAgent:
         self.action_dim = action_dim
 
     def choose_action(self, obs):
+        # Epsilon-greedy: with probability epsilon, explore randomly to discover
+        # actions that haven't been tried; otherwise exploit current Q estimates
         if np.random.random() < self.epsilon:
             return np.random.randint(self.action_dim)
         with torch.no_grad():
@@ -160,10 +162,16 @@ class IQLAgent:
 
         with torch.no_grad():
             if done:
+                # No future rewards after termination — target is just the immediate reward;
+                # bootstrapping beyond a terminal state would corrupt the value estimate
                 target_q = reward
             else:
+                # Bellman optimality: Q(s,a) = r + γ max_a' Q(s',a') — the target uses
+                # the greedy next action, making this Q-learning (off-policy by design)
                 target_q = reward + self.gamma * self.q_network(next_obs_tensor).max()
 
+        # Squared TD error as loss: minimizing this drives current_q toward the
+        # Bellman target, which is treated as a fixed label (no-grad above)
         loss = (current_q - target_q) ** 2
 
         self.optimizer.zero_grad()
@@ -252,7 +260,9 @@ class QMIXMixer(nn.Module):
         super().__init__()
         self.n_agents = n_agents
 
-        # Hypernetworks (generate weights)
+        # Hypernetworks generate the mixing weights conditioned on global state —
+        # this allows the mixing function to adapt to the current situation while
+        # keeping the overall architecture differentiable end-to-end
         self.hyper_w1 = nn.Linear(state_dim, n_agents * embed_dim)
         self.hyper_w2 = nn.Linear(state_dim, embed_dim)
         self.hyper_b1 = nn.Linear(state_dim, embed_dim)
@@ -272,17 +282,21 @@ class QMIXMixer(nn.Module):
         batch_size = agent_qs.size(0)
         agent_qs = agent_qs.view(batch_size, 1, self.n_agents)
 
-        # First layer weights (constrain to positive)
+        # abs() enforces non-negative weights, which is the key monotonicity constraint:
+        # ∂Q_tot/∂Q_i ≥ 0 for all i — this guarantees that greedy action selection
+        # in Q_tot is consistent with each agent's local greedy choice (IGM property)
         w1 = torch.abs(self.hyper_w1(state))
         w1 = w1.view(batch_size, self.n_agents, self.embed_dim)
         b1 = self.hyper_b1(state).view(batch_size, 1, self.embed_dim)
 
-        # Second layer weights
+        # Biases are unconstrained because they don't affect the monotonicity condition —
+        # only the weights that multiply individual Q-values need to be non-negative
         w2 = torch.abs(self.hyper_w2(state))
         w2 = w2.view(batch_size, self.embed_dim, 1)
         b2 = self.hyper_b2(state).view(batch_size, 1, 1)
 
-        # Mixing
+        # Mixing: bmm performs batch matrix multiplication to combine individual Q-values
+        # into Q_tot through a state-conditioned monotonic function
         hidden = F.elu(torch.bmm(agent_qs, w1) + b1)
         q_tot = torch.bmm(hidden, w2) + b2
 
@@ -306,17 +320,22 @@ class MADDPGAgent:
         self.agent_id = agent_id
         self.n_agents = n_agents
 
-        # Actor (local)
+        # Actor uses only local observation — this matches the decentralized execution
+        # requirement where agents can't observe other agents' states at deployment time
         self.actor = nn.Sequential(
             nn.Linear(obs_dims[agent_id], 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
             nn.Linear(64, action_dims[agent_id]),
+            # Tanh bounds the continuous action to [-1, 1], a common convention
+            # for environments that scale actions to their actual physical ranges
             nn.Tanh()
         )
 
-        # Critic (centralized)
+        # Centralized critic concatenates ALL agents' observations and actions —
+        # this solves the non-stationarity problem because the joint state-action space
+        # is stationary even as individual agents' policies change during training
         total_obs_dim = sum(obs_dims)
         total_action_dim = sum(action_dims)
         self.critic = nn.Sequential(
@@ -330,11 +349,15 @@ class MADDPGAgent:
     def act(self, obs, noise_scale=0.1):
         """Decide action with local observation"""
         action = self.actor(torch.FloatTensor(obs))
+        # Gaussian exploration noise added during training; clamping keeps actions
+        # within the valid range [-1, 1] even after noise perturbation
         noise = torch.randn_like(action) * noise_scale
         return (action + noise).clamp(-1, 1)
 
     def get_q_value(self, all_obs, all_actions):
         """Compute Q-value with global information"""
+        # Concatenate all observations and actions into a single vector — this is
+        # only possible during centralized training, not at execution time
         x = torch.cat([*all_obs, *all_actions], dim=-1)
         return self.critic(x)
 ```
@@ -438,7 +461,9 @@ class SelfPlayTrainer:
         self.env = env
 
     def train_episode(self):
-        # Choose opponent (random from past versions)
+        # 80% chance to face a past version rather than the current self — this prevents
+        # the agent from overfitting to its own current strategy and maintains robustness
+        # against a diverse range of opponent styles seen throughout training
         if len(self.opponent_pool) > 0 and np.random.random() < 0.8:
             opponent = np.random.choice(self.opponent_pool)
         else:
@@ -456,7 +481,8 @@ class SelfPlayTrainer:
 
             next_state, rewards, done, _ = self.env.step([action1, action2])
 
-            # Learn (current agent only)
+            # Only update the current agent — the opponent is a frozen snapshot;
+            # training both simultaneously would destabilize the learning signal
             self.current_agent.update(
                 state[0], action1, rewards[0], next_state[0], done
             )
@@ -465,10 +491,13 @@ class SelfPlayTrainer:
 
     def save_snapshot(self):
         """Add current agent to opponent pool"""
+        # deepcopy freezes the current parameters — future training won't affect
+        # past snapshots, preserving the historical diversity of the opponent pool
         snapshot = copy.deepcopy(self.current_agent)
         self.opponent_pool.append(snapshot)
 
-        # Limit pool size
+        # Limit pool size to bound memory and keep opponents reasonably competitive
+        # (very old agents may be too weak to provide useful training signal)
         if len(self.opponent_pool) > 10:
             self.opponent_pool.pop(0)
 ```
@@ -507,6 +536,85 @@ def run_pettingzoo():
 | QMIX | CTDE | Cooperative | Monotonic decomposition |
 | MADDPG | CTDE | Both | Continuous actions |
 | MAPPO | CTDE | Both | PPO extension |
+
+---
+
+## Exercises
+
+### Exercise 1: Non-Stationarity Analysis
+
+Analyze why single-agent RL techniques fail in multi-agent settings.
+
+1. Explain the non-stationarity problem in MARL in your own words: why does the Markov property break when other agents are learning?
+2. Suppose agent i uses Q-learning with the Bellman update:
+   `Q(s, a_i) ← r + γ max Q(s', a_i)`
+   Describe what happens to this update when another agent j simultaneously changes its policy.
+3. Give one concrete example (e.g., a 2-player coordination game) where IQL completely fails to converge.
+4. Explain how the CTDE paradigm addresses non-stationarity during training. Why can execution still be decentralized?
+5. Does CTDE fully solve non-stationarity, or does some residual non-stationarity remain? Justify your answer.
+
+### Exercise 2: VDN vs QMIX Expressiveness
+
+Compare the representational power of VDN and QMIX.
+
+1. VDN assumes Q_tot = Σ Q_i. Construct a simple 2-agent, 2-action cooperative game (write out the payoff matrix) where this additivity assumption is violated — that is, where the optimal joint action cannot be recovered from individual greedy selections under VDN.
+2. Explain the QMIX monotonicity condition: ∂Q_tot/∂Q_i ≥ 0. Why does this guarantee that argmax over Q_tot is consistent with individual argmax operations (the IGM property)?
+3. Demonstrate that VDN satisfies the monotonicity condition — show algebraically that ∂(ΣQ_i)/∂Q_j = 1 ≥ 0.
+4. Construct a cooperative game that QMIX can represent but VDN cannot. What structural property of the game makes it representable by QMIX?
+5. What class of cooperative games cannot be represented by QMIX either? What algorithm would be needed?
+
+### Exercise 3: Implement a Simple CTDE System
+
+Build a two-agent cooperative system using the CTDE pattern from Section 3.1.
+
+1. Create a simple 2D grid environment where two agents must reach opposite corners simultaneously to receive a reward of +1 (reward 0 otherwise). Each agent observes only its own position.
+2. Implement two actors (one per agent) that take local observations as input.
+3. Implement a centralized critic that takes the concatenated observations of both agents as input.
+4. Train using a simplified MADDPG-style update: the actor gradient is computed using the centralized critic's Q-value.
+5. Compare against two independent Q-learning agents on the same environment. Which converges faster? Which achieves higher reward?
+
+```python
+# Environment skeleton
+class CoopGridEnv:
+    def __init__(self, size=5):
+        self.size = size
+        self.n_agents = 2
+        # Agent 0 goal: top-right corner, Agent 1 goal: bottom-left corner
+        self.goals = [(size-1, size-1), (0, 0)]
+
+    def reset(self):
+        # Random starting positions for both agents
+        ...
+
+    def step(self, actions):
+        # actions: list of (dx, dy) for each agent
+        ...
+```
+
+### Exercise 4: Self-Play Curriculum Design
+
+Design a self-play training curriculum for a competitive game.
+
+1. Using the `SelfPlayTrainer` skeleton from Section 8.1, set up a simple 1v1 game (e.g., Tic-Tac-Toe or a simplified Pong).
+2. Implement the `save_snapshot()` method to periodically freeze the current policy and add it to the opponent pool.
+3. Experiment with two opponent sampling strategies:
+   - **Uniform**: sample any past snapshot with equal probability
+   - **Prioritized**: sample recent snapshots more often (e.g., weight by recency)
+4. Train for 10,000 episodes with each strategy. Track win rate against a fixed random opponent every 500 episodes.
+5. Analyze: which sampling strategy leads to faster improvement? Does the opponent pool size affect the result?
+
+### Exercise 5: PettingZoo Cooperative Task
+
+Apply MAPPO to a cooperative task using PettingZoo.
+
+1. Install PettingZoo: `pip install pettingzoo[mpe]`
+2. Set up the `simple_spread_v2` environment (3 agents must cover 3 landmarks cooperatively).
+3. Implement the MAPPO architecture from Section 7.1: each agent has a local actor; each agent's critic receives the global state (concatenated positions of all agents and landmarks).
+4. Train for 50,000 timesteps and record the team reward per episode.
+5. Compare against three independent PPO agents (each with its own actor and critic, using only local observation). Measure:
+   - Final mean team reward
+   - Number of timesteps to reach 50% of maximum possible reward
+   - Qualitative behavior: do agents learn to spread out?
 
 ---
 

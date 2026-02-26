@@ -94,7 +94,8 @@ def power(base: float, exponent: float) -> float:
     return base ** exponent
 
 
-# Create specialized functions
+# Why: partial() "freezes" some arguments, creating specialized functions from general ones
+# without lambda boilerplate — the resulting function also preserves introspection metadata
 square = functools.partial(power, exponent=2)
 cube = functools.partial(power, exponent=3)
 
@@ -244,6 +245,8 @@ print(f"times_ten(5) = {times_ten(5)}")
 section("Function Composition")
 
 
+# Why: Right-to-left composition matches mathematical notation f(g(x)), making it natural
+# for readers familiar with math — pipe() below offers the left-to-right alternative
 def compose(*functions):
     """Compose functions right to left."""
     def inner(arg):
@@ -296,7 +299,8 @@ section("List Comprehensions vs Functional Style")
 
 numbers = range(1, 11)
 
-# Comprehension style
+# Why: Python's list comprehensions are generally preferred over map/filter because they
+# are more readable and ~10-30% faster (no function call overhead per element)
 result_comp = [x**2 for x in numbers if x % 2 == 0]
 print(f"Comprehension: {result_comp}")
 
@@ -338,7 +342,8 @@ Point = namedtuple('Point', ['x', 'y'])
 p1 = Point(10, 20)
 print(f"NamedTuple: {p1}")
 
-# "Update" by creating new instance
+# Why: _replace() creates a new namedtuple instead of mutating, preserving immutability
+# — this functional "update" pattern avoids shared-state bugs in concurrent code
 p2 = p1._replace(x=15)
 print(f"Updated: {p2} (original: {p1})")
 
@@ -350,6 +355,8 @@ print(f"Updated: {p2} (original: {p1})")
 section("Currying Pattern")
 
 
+# Why: Currying enables point-free style and partial application chains; checking
+# co_argcount determines when enough arguments are collected to invoke the original function
 def curry(func: Callable) -> Callable:
     """Convert function to curried form."""
     @functools.wraps(func)

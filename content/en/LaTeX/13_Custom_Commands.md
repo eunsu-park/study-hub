@@ -5,6 +5,19 @@
 > **Prerequisites**: Lessons 01-08 (especially mathematical typesetting)
 > **Objective**: Learn to create custom commands, environments, and personal packages to improve efficiency and maintain consistency
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define new commands with `\newcommand` and `\renewcommand`, including commands that accept optional and mandatory arguments
+2. Create custom environments with `\newenvironment` to encapsulate recurring document structures
+3. Use `\newcommand` to build a personal mathematical notation library that ensures consistent typesetting
+4. Package custom commands into a personal `.sty` file for reuse across multiple documents
+5. Apply `xparse` for defining robust commands with complex argument syntax
+6. Audit a document's custom command definitions to detect conflicts and maintain maintainability
+
+---
+
 ## Introduction
 
 Custom commands and environments are powerful features that let you:
@@ -864,4 +877,4 @@ Mastering custom commands transforms LaTeX from a typesetting system into a pers
 **Navigation**
 
 - Previous: [12_Graphics_with_TikZ.md](12_Graphics_with_TikZ.md)
-- Next: [14_Document_Classes.md](14_Document_Classes.md)
+- Next: [Document Classes & Templates](14_Document_Classes.md)

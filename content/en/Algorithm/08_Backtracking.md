@@ -1,5 +1,18 @@
 # Backtracking
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the backtracking paradigm as a depth-first search enhanced with pruning, and describe how it reduces the search space compared to brute force
+2. Implement the general backtracking template (choose, explore, unchoose) and apply it to generate permutations and combinations
+3. Solve the N-Queens problem using backtracking with constraint-based pruning, tracing through the state space tree
+4. Generate all subsets (power set) of a given set using a recursive backtracking approach
+5. Apply backtracking to constraint satisfaction problems such as Sudoku, using forward checking to prune invalid branches early
+6. Analyze the time complexity of a backtracking solution in terms of its branching factor and maximum depth
+
+---
+
 ## Overview
 
 Backtracking is a technique for finding solutions by exploring possibilities and returning when hitting a dead end. It reduces unnecessary exploration through pruning.
@@ -79,13 +92,18 @@ All permutations of [1, 2, 3]:
 // C++
 void permute(vector<int>& nums, int start, vector<vector<int>>& result) {
     if (start == nums.size()) {
+        // Base case: every position is fixed — record this permutation
         result.push_back(nums);
         return;
     }
 
     for (int i = start; i < nums.size(); i++) {
+        // Place nums[i] at position 'start' by swapping; this avoids
+        // allocating a separate "used" array — the in-place swap is O(1)
         swap(nums[start], nums[i]);
         permute(nums, start + 1, result);
+        // Undo the swap so the array is restored for the next iteration;
+        // without this, the loop would see a corrupted array state
         swap(nums[start], nums[i]);  // Undo
     }
 }
@@ -103,12 +121,18 @@ def permutations(nums):
 
     def backtrack(start):
         if start == len(nums):
+            # nums[:] creates a snapshot — appending nums directly would give
+            # a reference that changes as we backtrack
             result.append(nums[:])
             return
 
         for i in range(start, len(nums)):
+            # Swap to "choose" nums[i] for position start; the in-place swap
+            # keeps space O(1) compared to building a new list each call
             nums[start], nums[i] = nums[i], nums[start]
             backtrack(start + 1)
+            # Swap back to "unchoose" — restoring the original order so the
+            # next iteration of the loop sees an unmodified tail
             nums[start], nums[i] = nums[i], nums[start]
 
     backtrack(0)
@@ -302,25 +326,30 @@ public:
 def solve_n_queens(n):
     results = []
     cols = set()
-    diag1 = set()  # row - col
-    diag2 = set()  # row + col
+    diag1 = set()  # row - col: same value along the top-left→bottom-right diagonal
+    diag2 = set()  # row + col: same value along the top-right→bottom-left diagonal
 
     def backtrack(row, queens):
         if row == n:
+            # All n queens placed without conflict — build and record the board
             board = ['.' * q + 'Q' + '.' * (n - q - 1) for q in queens]
             results.append(board)
             return
 
         for col in range(n):
+            # Pruning: skip this column if any of the three attack constraints fire;
+            # using sets gives O(1) lookup instead of scanning previous rows
             if col in cols or (row - col) in diag1 or (row + col) in diag2:
                 continue
 
+            # Mark the column and both diagonals as occupied before going deeper
             cols.add(col)
             diag1.add(row - col)
             diag2.add(row + col)
 
             backtrack(row + 1, queens + [col])
 
+            # Undo the marks so the next col choice starts from a clean state
             cols.remove(col)
             diag1.remove(row - col)
             diag2.remove(row + col)
@@ -488,16 +517,16 @@ def subset_sum(nums, target):
 ```python
 def solve_sudoku(board):
     def is_valid(board, row, col, num):
-        # Check row
+        # Check row — O(9) scan; early return avoids redundant checks
         if num in board[row]:
             return False
 
-        # Check column
+        # Check column — must verify the same digit doesn't appear above/below
         for r in range(9):
             if board[r][col] == num:
                 return False
 
-        # Check 3×3 box
+        # Check 3×3 box — integer division maps any (row,col) to its box origin
         box_row, box_col = 3 * (row // 3), 3 * (col // 3)
         for r in range(box_row, box_row + 3):
             for c in range(box_col, box_col + 3):
@@ -510,15 +539,19 @@ def solve_sudoku(board):
         for row in range(9):
             for col in range(9):
                 if board[row][col] == '.':
+                    # Try each digit; is_valid prunes invalid placements early
+                    # rather than waiting for a contradiction further down the tree
                     for num in '123456789':
                         if is_valid(board, row, col, num):
                             board[row][col] = num
 
+                            # Recurse; if the subtree yields a solution, propagate True up
                             if solve():
                                 return True
 
-                            board[row][col] = '.'  # Backtrack
+                            board[row][col] = '.'  # Backtrack: undo placement and try next digit
 
+                    # Exhausted all digits without a valid placement — signal failure
                     return False  # All numbers failed
 
         return True  # No empty cell = completed

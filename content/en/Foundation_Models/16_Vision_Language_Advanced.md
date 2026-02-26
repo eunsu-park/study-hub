@@ -1,5 +1,17 @@
 # 16. Advanced Vision-Language
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Trace the evolution of Vision-Language Models from CLIP to LLaVA and Qwen-VL, explaining the key architectural innovations at each stage
+2. Describe how visual tokens are projected and integrated into large language model (LLM) attention layers using linear projection and cross-attention methods
+3. Implement Visual Instruction Tuning to fine-tune a VLM for specific multimodal tasks such as image captioning and visual question answering
+4. Compare the connection methods (linear projection, cross-attention, MLP) used by different VLMs and analyze their impact on performance
+5. Evaluate VLM capabilities on multi-image and high-resolution scenarios, identifying current limitations and emerging solutions
+
+---
+
 ## Overview
 
 Vision-Language Models (VLMs) are models that understand both images and text together. This lesson covers state-of-the-art VLM architectures like LLaVA and Qwen-VL, as well as Visual Instruction Tuning techniques.
@@ -657,3 +669,160 @@ def chart_understanding():
 ### Related Lessons
 - [../Deep_Learning/20_CLIP_Multimodal.md](../Deep_Learning/20_CLIP_Multimodal.md)
 - [12_DINOv2_Self_Supervised.md](12_DINOv2_Self_Supervised.md)
+
+---
+
+## Exercises
+
+### Exercise 1: VLM Connection Methods Comparison
+The table in the lesson shows three different methods for connecting a vision encoder to an LLM: Linear Projection (LLaVA), Cross-Attention (Qwen-VL), and MLP. Analyze the trade-offs of each method and explain when each is most appropriate.
+
+| Connection Method | Trainable Params | Latency Impact | Best For |
+|------------------|-----------------|----------------|----------|
+| Linear Projection | ??? | ??? | ??? |
+| MLP (2-3 layers) | ??? | ??? | ??? |
+| Cross-Attention | ??? | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Connection Method | Trainable Params | Latency Impact | Best For |
+|------------------|-----------------|----------------|----------|
+| Linear Projection | Minimal (vision_dim × llm_dim) | Minimal — single matrix multiply | Fast training/inference; resource-constrained settings; when visual features are already high quality (CLIP-L) |
+| MLP (2-3 layers) | Moderate | Low — sequential small layers | Better modality alignment than linear; most common balanced choice (LLaVA-1.5 uses 2-layer MLP) |
+| Cross-Attention | Large (full cross-attention blocks) | Higher — attention over all visual tokens at each LLM layer | When visual-language interaction needs to be deep and contextual; high-resolution images where spatial detail matters |
+
+**Detailed analysis**:
+
+**Linear Projection** (LLaVA original): Maps visual features directly to LLM embedding space with a single weight matrix. Pros: extremely fast to train (only the projection layer is trained in stage 1), near-zero inference overhead. Cons: limited capacity for modality alignment — it cannot learn complex non-linear mappings between vision and language spaces.
+
+**MLP** (LLaVA-1.5): Adds 1-2 hidden layers with activation functions. The extra capacity significantly improves visual understanding benchmarks (e.g., LLaVA-1.5 with 2-layer MLP greatly outperforms LLaVA-1.0 with linear projection). Good balance of capacity and efficiency.
+
+**Cross-Attention** (Flamingo, Qwen-VL): Dedicated cross-attention layers in the LLM let every text token attend to visual tokens at each layer. Enables richer visual-language grounding. Best for tasks requiring detailed visual reading (OCR, grounding, counting) or when processing high-resolution image tiles. Significant computational cost increase.
+
+</details>
+
+### Exercise 2: Visual Instruction Tuning Data Quality
+LLaVA generates training data using GPT-4V as a "teacher" model. Analyze the quality and coverage of this approach by identifying: (A) what types of visual understanding it likely captures well, (B) what it likely misses or distorts, and (C) one concrete improvement to the data generation pipeline.
+
+<details>
+<summary>Show Answer</summary>
+
+**A) What GPT-4V-generated data captures well**:
+- **Descriptive and narrative capabilities**: Image captioning, detailed scene descriptions — GPT-4V excels at these.
+- **Common visual reasoning**: "The person on the left appears to be laughing because..." — general commonsense reasoning about images.
+- **Multi-turn conversation format**: GPT-4V can generate realistic back-and-forth dialogues about images.
+- **High-resource domains**: Everyday objects, indoor/outdoor scenes, common activities — well-represented in GPT-4V's training data.
+
+**B) What it misses or distorts**:
+- **Domain-specific accuracy**: Medical imaging, specialized technical diagrams, scientific data visualization — GPT-4V may generate plausible-sounding but inaccurate descriptions.
+- **Precise spatial reasoning**: Exact object counts, precise measurements, fine-grained spatial relationships ("the second object from the left on the third shelf") — GPT-4V makes errors the student model will learn to replicate.
+- **Calibrated uncertainty**: GPT-4V tends to be confident even when uncertain, training the student to hallucinate rather than express uncertainty.
+- **Dataset biases**: Generates descriptions reflecting GPT-4V's biases (cultural, demographic, linguistic) which get amplified in the student.
+
+**C) Concrete improvement**:
+Use **verified ground-truth data sources** for factual tasks rather than GPT-4V generation. Example: for object counting, use COCO annotations (verified by multiple human annotators) to generate QA pairs like "How many cats are in this image? 3." This ensures the student learns accurate counting rather than GPT-4V's approximate answers. A hybrid pipeline: GPT-4V for descriptive/conversational data, ground-truth annotations for quantitative/factual tasks.
+
+</details>
+
+### Exercise 3: AnyRes High-Resolution Processing
+LLaVA-NeXT uses "AnyRes" to handle high-resolution images. Given an input image of 1680×672 pixels and a base resolution of 336×336, trace through the AnyRes processing pipeline:
+
+```python
+def anyres_processing(image, base_resolution=336):
+    """
+    AnyRes processing:
+    1. Resize full image to 336×336 (global context)
+    2. Split into 336×336 tiles (local details)
+    3. Return: [global_image] + [tile1, tile2, ..., tileN]
+    """
+    W, H = image.size  # (1680, 672)
+    # How many tiles? What is the total token count?
+    pass
+
+# Given:
+# - Each 336×336 image produces 576 visual tokens (24×24 patches with 14px patches)
+# - The full image is resized to 336×336 → 576 tokens
+# - Each tile is 336×336 → 576 tokens
+# Calculate: total visual tokens for a 1680×672 image
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+# Step 1: Calculate number of tiles
+W, H = 1680, 672
+base_resolution = 336
+
+num_tiles_w = (W + base_resolution - 1) // base_resolution
+            = (1680 + 336 - 1) // 336
+            = 2015 // 336 = 5 tiles horizontally
+
+num_tiles_h = (H + base_resolution - 1) // base_resolution
+            = (672 + 336 - 1) // 336
+            = 1007 // 336 = 2 tiles vertically (ceiling division)
+
+# Actually: 672 / 336 = 2.0 exactly → 2 tiles vertically
+# 1680 / 336 = 5.0 exactly → 5 tiles horizontally
+total_tiles = 5 × 2 = 10 tiles
+
+# Step 2: Calculate total visual tokens
+tokens_per_image = 576  # 24×24 patches per 336×336 image
+
+global_tokens = 576          # 1 resized full image
+tile_tokens = 10 × 576       # 10 local detail tiles
+              = 5760
+
+total_visual_tokens = 576 + 5760 = 6336 tokens
+
+# For comparison:
+# - LLaVA 1.0 (single 224×224): 256 tokens
+# - LLaVA-NeXT for this image: 6336 tokens (24.75x more)
+
+# Memory implications:
+# With a 4096-dim LLM, attention over 6336 visual + ~100 text tokens
+# Attention matrix: (6436)^2 = ~41M entries per layer
+# vs. LLaVA 1.0: (356)^2 = ~127K entries per layer
+# → ~330x more attention computation per layer
+```
+
+This explains why high-resolution VLM inference is expensive and why techniques like token compression (e.g., visual token merging) are an active research area.
+
+</details>
+
+### Exercise 4: POPE Hallucination Evaluation
+The POPE benchmark evaluates VLM hallucination by asking binary yes/no questions about objects ("Is there a dog in this image?"). Design a scenario where a VLM with high POPE accuracy could still exhibit harmful hallucination in practice, and propose a more comprehensive evaluation.
+
+<details>
+<summary>Show Answer</summary>
+
+**Scenario where high POPE accuracy fails to detect harmful hallucination**:
+
+POPE only tests object presence/absence for common COCO objects using simple binary questions. Consider:
+
+**Scenario: Medical document analysis**
+- Image: A radiology report showing a chest X-ray with a small nodule in the upper-right lung.
+- POPE-style question: "Is there a nodule in this image?" — Model correctly answers "Yes." (POPE says: no hallucination)
+- Harmful hallucination not caught by POPE: The model describes "The nodule is located in the lower-left lung, measures approximately 2cm, and shows irregular edges consistent with malignancy." — location is wrong, size is fabricated, and the malignancy assessment is hallucinated.
+- POPE would score this model as excellent; in practice, it could lead to misdiagnosis.
+
+**Other failure modes POPE misses**:
+- Attribute hallucination: "A red fire truck" when the truck is blue.
+- Relational hallucination: "The cat is on the table" when the cat is under the table.
+- Counting hallucination: Saying there are 3 people when there are 5.
+- Fabricated text: Making up text on signs/labels not present or misreading it.
+
+**More comprehensive evaluation**:
+
+1. **Attribute hallucination benchmark**: Questions like "What color is the car?" — test whether described attributes match ground truth.
+
+2. **Spatial relation benchmark**: "Is the cup to the left or right of the plate?" — test spatial understanding accuracy.
+
+3. **Counting benchmark**: "How many people are in this image?" — evaluate count accuracy, not just presence.
+
+4. **Fine-grained OCR verification**: For images with text, compare model's transcription to verified ground truth.
+
+5. **Confidence calibration test**: Measure whether the model's expressed uncertainty (e.g., "I think there might be...") correlates with its actual accuracy — a well-calibrated model should be uncertain when it's wrong.
+
+</details>

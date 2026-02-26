@@ -74,6 +74,8 @@ print_stack_trace() {
     echo -e "${MAGENTA}Stack trace:${NC}" >&2
 
     # Skip the first frame (this function itself)
+    # Why: FUNCNAME[], BASH_SOURCE[], and BASH_LINENO[] are parallel arrays
+    # that form bash's call stack — enabling Java-style stack traces in shell.
     for ((frame=1; frame < ${#FUNCNAME[@]}; frame++)); do
         func_name="${FUNCNAME[$frame]}"
         source_file="${BASH_SOURCE[$frame]}"
@@ -109,9 +111,12 @@ error_handler() {
 
 # Setup ERR trap for automatic error context
 setup_error_trap() {
-    set -eE  # Inherit ERR trap in functions
+    # Why: -E makes the ERR trap propagate into functions and subshells.
+    # Without it, errors inside functions would silently bypass the trap.
+    set -eE
 
-    # Note: BASH_COMMAND contains the command that triggered the error
+    # Why: BASH_COMMAND captures the exact failing command, giving the error
+    # handler enough context to produce meaningful diagnostics.
     trap 'error_handler ${LINENO} ${BASH_LINENO[0]} "${FUNCNAME[1]}" "$BASH_COMMAND" $?' ERR
 }
 
@@ -124,7 +129,8 @@ setup_error_trap() {
 try() {
     local error_code=0
 
-    # Execute in subshell to isolate errors
+    # Why: the subshell isolates the error so set -e doesn't terminate the
+    # parent script — simulating try/catch where the caller decides the response.
     (
         set -e
         "$@"

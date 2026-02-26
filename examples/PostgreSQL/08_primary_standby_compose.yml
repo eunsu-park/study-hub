@@ -36,9 +36,14 @@ services:
     networks:
       - postgres-cluster
 
+    # Why: wal_level=replica (not minimal) is required for streaming replication
+    # because it includes enough information for standby replay. max_wal_senders=10
+    # allows up to 10 concurrent replication connections (standbys + pg_basebackup).
+    # archive_command copies WAL segments to a shared volume as a fallback in case
+    # streaming falls behind and the primary recycles a WAL segment before the
+    # standby has received it.
     command:
       - postgres
-      # Enable WAL archiving for PITR (Point-In-Time Recovery)
       - -c
       - wal_level=replica
       - -c
@@ -79,7 +84,9 @@ services:
       # Separate data volume for standby
       - standby-data:/var/lib/postgresql/data
 
-      # Shared WAL archive (read-only access)
+      # Why: The standby mounts the WAL archive as read-only (:ro) because it
+      # only needs to read archived segments that streaming missed — the primary
+      # is the sole writer. This prevents accidental corruption of the archive.
       - wal-archive:/var/lib/postgresql/wal_archive:ro
 
       # Initialization script for standby setup
@@ -91,10 +98,18 @@ services:
     networks:
       - postgres-cluster
 
+    # Why: The standby must wait for the primary to be fully healthy before starting,
+    # because pg_basebackup (run during initialization) needs an active primary
+    # to connect to. Without this, the standby would fail on first boot.
     depends_on:
       postgres-primary:
         condition: service_healthy
 
+    # Why: max_standby_streaming_delay=30s allows read queries on the standby to
+    # delay WAL replay by up to 30 seconds before being cancelled. This balances
+    # read query availability against replication lag. wal_receiver_status_interval
+    # controls how often the standby reports its position to the primary for
+    # lag monitoring.
     command:
       - postgres
       - -c

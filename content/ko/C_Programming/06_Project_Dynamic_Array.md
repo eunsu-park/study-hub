@@ -1,34 +1,44 @@
 # 프로젝트 4: 동적 배열 (Dynamic Array)
 
-## 학습 목표
-
-이 프로젝트를 통해 배우는 내용:
-- 동적 메모리 할당 (`malloc`, `calloc`, `realloc`, `free`)
-- 메모리 누수 방지
-- 크기가 자동으로 늘어나는 배열 구현
-- Python의 리스트, JavaScript의 배열과 유사한 자료구조
+**이전**: [프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md) | **다음**: [프로젝트 5: 연결 리스트](./07_Project_Linked_List.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 컴파일 시점에 요소 개수를 알 수 없을 때 정적 배열이 왜 부족한지 설명할 수 있습니다
+2. `malloc`, `calloc`, `realloc`, `free`를 사용하여 NULL 검사를 포함한 동적 메모리 할당을 구현할 수 있습니다
+3. `data`, `size`, `capacity`를 별도로 추적하는 확장 가능한 배열 구조체를 설계할 수 있습니다
+4. 분할 상환 O(1) push 성능을 달성하기 위한 두 배 증가(doubling) 전략을 적용할 수 있습니다
+5. 요소를 이동시켜 연속 저장을 유지하는 삽입 및 삭제 연산을 구축할 수 있습니다
+6. `void*` 포인터와 `memcpy`를 사용하여 타입에 독립적인 범용(generic) 동적 배열을 구현할 수 있습니다
+7. 메모리 누수(memory leak), 댕글링 포인터(dangling pointer), 이중 해제(double free), 해제 후 사용(use-after-free)과 같은 일반적인 메모리 버그를 식별하고 예방할 수 있습니다
+
+---
+
+Python의 `list`, JavaScript의 `Array`, Java의 `ArrayList`처럼 고급 언어는 크기 조정 가능한 배열을 기본으로 제공합니다. C에서는 그 메커니즘을 직접 구축해야 합니다. 이 프로젝트를 통해 그 방법을 배우고, 그 과정에서 고급 추상화 내부에서 일어나는 일을 정확히 이해하게 됩니다. 힙 메모리 블록을 할당하고, 블록이 너무 작아지면 데이터를 복사하고, 운영체제가 재사용할 수 있도록 이전 블록을 해제하는 것이 바로 그 내부 동작입니다.
 
 ## 동적 메모리가 필요한 이유
 
 ### 정적 배열의 한계
 
 ```c
-// 정적 배열: 크기가 고정됨
-int arr[100];  // 컴파일 시 크기 결정
+// Static array: fixed size
+int arr[100];  // Size determined at compile time
 
-// 문제 1: 크기를 미리 알아야 함
-// 문제 2: 크기 변경 불가
-// 문제 3: 사용하지 않는 공간 낭비
+// Problem 1: Must know size in advance
+// Problem 2: Cannot change size
+// Problem 3: Wastes unused space
 ```
 
 ### 동적 배열의 장점
 
 ```c
-// 동적 배열: 실행 중 크기 결정 및 변경 가능
-int *arr = malloc(n * sizeof(int));  // 실행 시 크기 결정
-arr = realloc(arr, m * sizeof(int)); // 크기 변경 가능!
+// Dynamic array: size can be determined and changed at runtime
+int *arr = malloc(n * sizeof(int));  // Size determined at runtime
+arr = realloc(arr, m * sizeof(int)); // Size can be changed!
 ```
 
 ---
@@ -37,21 +47,23 @@ arr = realloc(arr, m * sizeof(int)); // 크기 변경 가능!
 
 ### malloc - Memory Allocation
 
+> **비유 — 주소가 적힌 포스트잇**: C 포인터는 집 주소가 적힌 포스트잇 메모와 같습니다. 메모 자체는 작지만(64비트 시스템에서 8바이트), 그 주소를 따라가면 어떤 크기도 될 수 있는 건물에 도달합니다. `malloc`은 새 건물을 짓고 포스트잇을 건네줍니다. `free`는 그 건물을 철거합니다. 메모를 잃어버리면(`free` 없이 `p = NULL` 로 덮어쓰면), 건물은 여전히 땅을 차지하고 있습니다 — 이것이 메모리 누수(memory leak)입니다.
+
 ```c
 #include <stdio.h>
 #include <stdlib.h>  // malloc, free
 
 int main(void) {
-    // int 5개 크기의 메모리 할당
+    // Allocate memory for 5 ints
     int *arr = (int *)malloc(5 * sizeof(int));
 
-    // 할당 실패 체크 (필수!)
+    // Check for allocation failure (required!)
     if (arr == NULL) {
-        printf("메모리 할당 실패\n");
+        printf("Memory allocation failed\n");
         return 1;
     }
 
-    // 사용
+    // Use
     for (int i = 0; i < 5; i++) {
         arr[i] = i * 10;
     }
@@ -61,9 +73,9 @@ int main(void) {
     }
     printf("\n");
 
-    // 해제 (필수!)
+    // Free (required!)
     free(arr);
-    arr = NULL;  // dangling pointer 방지
+    arr = NULL;  // Prevent dangling pointer
 
     return 0;
 }
@@ -72,13 +84,13 @@ int main(void) {
 ### calloc - Clear Allocation
 
 ```c
-// calloc: 할당 + 0으로 초기화
+// calloc: allocate + initialize to 0
 int *arr = (int *)calloc(5, sizeof(int));
-// arr[0] ~ arr[4] 모두 0으로 초기화됨
+// arr[0] ~ arr[4] all initialized to 0
 
 // malloc vs calloc
-int *m = malloc(5 * sizeof(int));  // 초기화 안 됨 (쓰레기 값)
-int *c = calloc(5, sizeof(int));   // 0으로 초기화
+int *m = malloc(5 * sizeof(int));  // Not initialized (garbage values)
+int *c = calloc(5, sizeof(int));   // Initialized to 0
 ```
 
 ### realloc - Re-allocation
@@ -86,16 +98,16 @@ int *c = calloc(5, sizeof(int));   // 0으로 초기화
 ```c
 int *arr = malloc(5 * sizeof(int));
 
-// 크기 확장 (5 → 10)
+// Expand size (5 -> 10)
 int *new_arr = realloc(arr, 10 * sizeof(int));
 if (new_arr == NULL) {
-    // 실패 시 원본 arr은 그대로 유지됨
+    // On failure, original arr remains valid
     free(arr);
     return 1;
 }
 arr = new_arr;
 
-// 크기 축소 (10 → 3)
+// Shrink size (10 -> 3)
 arr = realloc(arr, 3 * sizeof(int));
 
 free(arr);
@@ -104,18 +116,18 @@ free(arr);
 ### realloc 동작 방식
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  realloc(ptr, new_size)                             │
-│                                                     │
-│  1. 현재 위치에서 확장 가능하면 → 확장              │
-│     [기존 데이터][새 공간      ]                    │
-│                                                     │
-│  2. 확장 불가능하면 → 새 위치로 복사                │
-│     [기존 위치: 해제됨]                             │
-│     [새 위치: 기존 데이터 복사][새 공간]            │
-│                                                     │
-│  3. 실패하면 → NULL 반환 (원본 유지)               │
-└─────────────────────────────────────────────────────┘
++-----------------------------------------------------+
+|  realloc(ptr, new_size)                             |
+|                                                     |
+|  1. If expansion possible at current location:      |
+|     [existing data][new space      ]                |
+|                                                     |
+|  2. If expansion not possible -> copy to new loc    |
+|     [original location: freed]                      |
+|     [new location: existing data copied][new space] |
+|                                                     |
+|  3. On failure -> returns NULL (original preserved) |
++-----------------------------------------------------+
 ```
 
 ---
@@ -126,29 +138,29 @@ free(arr);
 
 ```c
 typedef struct {
-    int *data;      // 실제 데이터 저장
-    int size;       // 현재 요소 개수
-    int capacity;   // 할당된 공간 크기
+    int *data;      // Actual data storage
+    int size;       // Current element count
+    int capacity;   // Allocated space size
 } DynamicArray;
 ```
 
 ### 동작 원리
 
 ```
-초기 상태 (capacity=4, size=0):
-┌───┬───┬───┬───┐
-│   │   │   │   │  data
-└───┴───┴───┴───┘
+Initial state (capacity=4, size=0):
++---+---+---+---+
+|   |   |   |   |  data
++---+---+---+---+
 
-3개 추가 후 (capacity=4, size=3):
-┌───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │   │  data
-└───┴───┴───┴───┘
+After adding 3 items (capacity=4, size=3):
++---+---+---+---+
+| 1 | 2 | 3 |   |  data
++---+---+---+---+
 
-5번째 추가 시 → 자동 확장! (capacity=8, size=5):
-┌───┬───┬───┬───┬───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │ 4 │ 5 │   │   │   │  data
-└───┴───┴───┴───┴───┴───┴───┴───┘
+Adding 5th item -> auto expand! (capacity=8, size=5):
++---+---+---+---+---+---+---+---+
+| 1 | 2 | 3 | 4 | 5 |   |   |   |  data
++---+---+---+---+---+---+---+---+
 ```
 
 ---
@@ -164,14 +176,14 @@ typedef struct {
 #define INITIAL_CAPACITY 4
 #define GROWTH_FACTOR 2
 
-// 동적 배열 구조체
+// Dynamic array struct
 typedef struct {
     int *data;
     int size;
     int capacity;
 } DynamicArray;
 
-// 함수 선언
+// Function declarations
 DynamicArray* da_create(void);
 void da_destroy(DynamicArray *arr);
 int da_push(DynamicArray *arr, int value);
@@ -183,7 +195,7 @@ int da_remove(DynamicArray *arr, int index);
 void da_print(DynamicArray *arr);
 static int da_resize(DynamicArray *arr, int new_capacity);
 
-// 생성
+// Create
 DynamicArray* da_create(void) {
     DynamicArray *arr = (DynamicArray *)malloc(sizeof(DynamicArray));
     if (arr == NULL) {
@@ -201,7 +213,7 @@ DynamicArray* da_create(void) {
     return arr;
 }
 
-// 해제
+// Destroy
 void da_destroy(DynamicArray *arr) {
     if (arr != NULL) {
         free(arr->data);
@@ -209,21 +221,21 @@ void da_destroy(DynamicArray *arr) {
     }
 }
 
-// 크기 조정 (내부 함수)
+// Resize (internal function)
 static int da_resize(DynamicArray *arr, int new_capacity) {
     int *new_data = (int *)realloc(arr->data, new_capacity * sizeof(int));
     if (new_data == NULL) {
-        return -1;  // 실패
+        return -1;  // Failure
     }
 
     arr->data = new_data;
     arr->capacity = new_capacity;
-    return 0;  // 성공
+    return 0;  // Success
 }
 
-// 끝에 추가
+// Push to end
 int da_push(DynamicArray *arr, int value) {
-    // 공간이 부족하면 확장
+    // Expand if not enough space
     if (arr->size >= arr->capacity) {
         if (da_resize(arr, arr->capacity * GROWTH_FACTOR) != 0) {
             return -1;
@@ -235,10 +247,10 @@ int da_push(DynamicArray *arr, int value) {
     return 0;
 }
 
-// 끝에서 제거
+// Pop from end
 int da_pop(DynamicArray *arr, int *value) {
     if (arr->size == 0) {
-        return -1;  // 빈 배열
+        return -1;  // Empty array
     }
 
     arr->size--;
@@ -246,7 +258,7 @@ int da_pop(DynamicArray *arr, int *value) {
         *value = arr->data[arr->size];
     }
 
-    // 공간이 너무 크면 축소 (선택적)
+    // Shrink if too large (optional)
     if (arr->size > 0 && arr->size <= arr->capacity / 4) {
         da_resize(arr, arr->capacity / 2);
     }
@@ -254,17 +266,17 @@ int da_pop(DynamicArray *arr, int *value) {
     return 0;
 }
 
-// 인덱스로 값 가져오기
+// Get value by index
 int da_get(DynamicArray *arr, int index, int *value) {
     if (index < 0 || index >= arr->size) {
-        return -1;  // 범위 초과
+        return -1;  // Out of range
     }
 
     *value = arr->data[index];
     return 0;
 }
 
-// 인덱스에 값 설정
+// Set value at index
 int da_set(DynamicArray *arr, int index, int value) {
     if (index < 0 || index >= arr->size) {
         return -1;
@@ -274,20 +286,20 @@ int da_set(DynamicArray *arr, int index, int value) {
     return 0;
 }
 
-// 특정 위치에 삽입
+// Insert at specific position
 int da_insert(DynamicArray *arr, int index, int value) {
     if (index < 0 || index > arr->size) {
         return -1;
     }
 
-    // 공간 확보
+    // Ensure space
     if (arr->size >= arr->capacity) {
         if (da_resize(arr, arr->capacity * GROWTH_FACTOR) != 0) {
             return -1;
         }
     }
 
-    // 뒤의 요소들을 한 칸씩 이동
+    // Shift elements right
     for (int i = arr->size; i > index; i--) {
         arr->data[i] = arr->data[i - 1];
     }
@@ -297,13 +309,13 @@ int da_insert(DynamicArray *arr, int index, int value) {
     return 0;
 }
 
-// 특정 위치 제거
+// Remove at specific position
 int da_remove(DynamicArray *arr, int index) {
     if (index < 0 || index >= arr->size) {
         return -1;
     }
 
-    // 뒤의 요소들을 한 칸씩 앞으로
+    // Shift elements left
     for (int i = index; i < arr->size - 1; i++) {
         arr->data[i] = arr->data[i + 1];
     }
@@ -312,7 +324,7 @@ int da_remove(DynamicArray *arr, int index) {
     return 0;
 }
 
-// 배열 출력
+// Print array
 void da_print(DynamicArray *arr) {
     printf("DynamicArray(size=%d, capacity=%d): [", arr->size, arr->capacity);
     for (int i = 0; i < arr->size; i++) {
@@ -324,28 +336,28 @@ void da_print(DynamicArray *arr) {
     printf("]\n");
 }
 
-// 테스트
+// Test
 int main(void) {
-    printf("=== 동적 배열 테스트 ===\n\n");
+    printf("=== Dynamic Array Test ===\n\n");
 
-    // 생성
+    // Create
     DynamicArray *arr = da_create();
     if (arr == NULL) {
-        printf("배열 생성 실패\n");
+        printf("Array creation failed\n");
         return 1;
     }
 
     da_print(arr);
 
-    // push 테스트
-    printf("\n[Push 테스트]\n");
+    // Push test
+    printf("\n[Push Test]\n");
     for (int i = 1; i <= 10; i++) {
         da_push(arr, i * 10);
         da_print(arr);
     }
 
-    // get/set 테스트
-    printf("\n[Get/Set 테스트]\n");
+    // Get/set test
+    printf("\n[Get/Set Test]\n");
     int value;
     da_get(arr, 3, &value);
     printf("arr[3] = %d\n", value);
@@ -353,30 +365,30 @@ int main(void) {
     da_set(arr, 3, 999);
     da_print(arr);
 
-    // insert 테스트
-    printf("\n[Insert 테스트]\n");
-    da_insert(arr, 0, -100);  // 맨 앞에 삽입
+    // Insert test
+    printf("\n[Insert Test]\n");
+    da_insert(arr, 0, -100);  // Insert at front
     da_print(arr);
 
-    da_insert(arr, 5, -500);  // 중간에 삽입
+    da_insert(arr, 5, -500);  // Insert in middle
     da_print(arr);
 
-    // remove 테스트
-    printf("\n[Remove 테스트]\n");
-    da_remove(arr, 0);  // 맨 앞 제거
+    // Remove test
+    printf("\n[Remove Test]\n");
+    da_remove(arr, 0);  // Remove from front
     da_print(arr);
 
-    // pop 테스트
-    printf("\n[Pop 테스트]\n");
+    // Pop test
+    printf("\n[Pop Test]\n");
     while (arr->size > 0) {
         da_pop(arr, &value);
         printf("Popped: %d, ", value);
         da_print(arr);
     }
 
-    // 해제
+    // Destroy
     da_destroy(arr);
-    printf("\n배열 해제 완료\n");
+    printf("\nArray destroyed\n");
 
     return 0;
 }
@@ -384,7 +396,7 @@ int main(void) {
 
 ---
 
-## 4단계: 제네릭 동적 배열 (void 포인터)
+## 4단계: 범용 동적 배열 (void 포인터)
 
 어떤 타입이든 저장할 수 있는 버전:
 
@@ -398,7 +410,7 @@ typedef struct {
     void *data;
     int size;
     int capacity;
-    size_t element_size;  // 요소 하나의 크기
+    size_t element_size;  // Size of one element
 } GenericArray;
 
 GenericArray* ga_create(size_t element_size) {
@@ -434,7 +446,7 @@ int ga_push(GenericArray *arr, const void *element) {
         arr->capacity = new_cap;
     }
 
-    // 요소 복사
+    // Copy element
     void *dest = (char *)arr->data + (arr->size * arr->element_size);
     memcpy(dest, element, arr->element_size);
     arr->size++;
@@ -446,10 +458,10 @@ void* ga_get(GenericArray *arr, int index) {
     return (char *)arr->data + (index * arr->element_size);
 }
 
-// 테스트
+// Test
 int main(void) {
-    // int 배열
-    printf("=== int 배열 ===\n");
+    // int array
+    printf("=== int array ===\n");
     GenericArray *int_arr = ga_create(sizeof(int));
 
     for (int i = 0; i < 5; i++) {
@@ -464,8 +476,8 @@ int main(void) {
     printf("\n");
     ga_destroy(int_arr);
 
-    // double 배열
-    printf("\n=== double 배열 ===\n");
+    // double array
+    printf("\n=== double array ===\n");
     GenericArray *double_arr = ga_create(sizeof(double));
 
     for (int i = 0; i < 5; i++) {
@@ -480,8 +492,8 @@ int main(void) {
     printf("\n");
     ga_destroy(double_arr);
 
-    // 구조체 배열
-    printf("\n=== 구조체 배열 ===\n");
+    // struct array
+    printf("\n=== struct array ===\n");
     typedef struct { int x, y; } Point;
     GenericArray *point_arr = ga_create(sizeof(Point));
 
@@ -515,16 +527,16 @@ gcc -Wall -Wextra -std=c11 dynamic_array.c -o dynamic_array
 ## 실행 결과
 
 ```
-=== 동적 배열 테스트 ===
+=== Dynamic Array Test ===
 
 DynamicArray(size=0, capacity=4): []
 
-[Push 테스트]
+[Push Test]
 DynamicArray(size=1, capacity=4): [10]
 DynamicArray(size=2, capacity=4): [10, 20]
 DynamicArray(size=3, capacity=4): [10, 20, 30]
 DynamicArray(size=4, capacity=4): [10, 20, 30, 40]
-DynamicArray(size=5, capacity=8): [10, 20, 30, 40, 50]  ← 자동 확장!
+DynamicArray(size=5, capacity=8): [10, 20, 30, 40, 50]  <- Auto expand!
 DynamicArray(size=6, capacity=8): [10, 20, 30, 40, 50, 60]
 ...
 ```
@@ -545,8 +557,8 @@ DynamicArray(size=6, capacity=8): [10, 20, 30, 40, 50, 60]
 
 1. **할당 후 NULL 체크** 필수
 2. **사용 후 free()** 필수
-3. **free 후 NULL 할당** 권장 (dangling pointer 방지)
-4. **이중 free 금지**
+3. **free 후 NULL 할당** 권장 (댕글링 포인터(dangling pointer) 방지)
+4. **이중 해제(double free) 금지**
 
 ---
 
@@ -564,4 +576,8 @@ DynamicArray(size=6, capacity=8): [10, 20, 30, 40, 50, 60]
 
 ## 다음 단계
 
-[07_Project_Linked_List.md](./07_Project_Linked_List.md) → 포인터의 꽃, 연결 리스트를 배워봅시다!
+[프로젝트 5: 연결 리스트 (Linked List)](./07_Project_Linked_List.md) → 포인터의 꽃, 연결 리스트를 배워봅시다!
+
+---
+
+**이전**: [프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md) | **다음**: [프로젝트 5: 연결 리스트](./07_Project_Linked_List.md)

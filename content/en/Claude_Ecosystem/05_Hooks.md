@@ -14,13 +14,16 @@ Hooks are shell commands that Claude Code executes automatically in response to 
 - Shell scripting basics (see **Shell_Script** topic)
 - Familiarity with JSON configuration files
 
-**Learning Objectives**:
-- Understand the four hook types and when each fires
-- Write hook configurations in JSON with matchers and commands
-- Use environment variables to access hook context data
-- Build practical hooks for formatting, linting, testing, and notifications
-- Debug hooks when they fail or produce unexpected results
-- Distinguish between hooks (deterministic) and CLAUDE.md instructions (suggestive)
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the four hook types and when each fires
+2. Write hook configurations in JSON with matchers and commands
+3. Use environment variables to access hook context data
+4. Build practical hooks for formatting, linting, testing, and notifications
+5. Debug hooks when they fail or produce unexpected results
+6. Distinguish between hooks (deterministic) and CLAUDE.md instructions (suggestive)
 
 ---
 

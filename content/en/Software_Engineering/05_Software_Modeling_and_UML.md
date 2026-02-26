@@ -13,16 +13,19 @@ Before a single line of code is written, engineers think in terms of models. A m
 - Lesson 04 — Requirements Engineering (use cases will be revisited here)
 - Basic object-oriented programming concepts (class, object, inheritance)
 
-**Learning Objectives**:
-- Explain why software models are valuable and at what level of detail to draw them
-- Distinguish structural diagrams from behavioral diagrams in UML 2.x
-- Draw and interpret use case diagrams with actors, use cases, and relationships
-- Draw class diagrams showing classes, attributes, operations, and all five relationship types
-- Draw sequence diagrams with lifelines, messages, activation boxes, and combined fragments
-- Draw activity diagrams with decision nodes, forks/joins, and swimlanes
-- Draw state machine diagrams with states, transitions, guards, and entry/exit actions
-- Describe the purpose of component and deployment diagrams
-- Apply modeling best practices and avoid common mistakes
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why software models are valuable and at what level of detail to draw them
+2. Distinguish structural diagrams from behavioral diagrams in UML 2.x
+3. Draw and interpret use case diagrams with actors, use cases, and relationships
+4. Draw class diagrams showing classes, attributes, operations, and all five relationship types
+5. Draw sequence diagrams with lifelines, messages, activation boxes, and combined fragments
+6. Draw activity diagrams with decision nodes, forks/joins, and swimlanes
+7. Draw state machine diagrams with states, transitions, guards, and entry/exit actions
+8. Describe the purpose of component and deployment diagrams
+9. Apply modeling best practices and avoid common mistakes
 
 ---
 
@@ -699,6 +702,64 @@ b. A **deployment diagram** showing these services deployed on Kubernetes pods, 
 - Mermaid documentation — https://mermaid.js.org/ — browser-native diagramming for GitHub/GitLab
 - Scott, K. — *Fast Track UML 2.0* (Apress, 2004) — concise reference with worked examples
 - Evans, E. — *Domain-Driven Design* (Addison-Wesley, 2003) — how class models reflect domain concepts
+
+---
+
+## Exercises
+
+### Exercise 1: Read and Critique a Use Case Diagram
+
+Examine the following partial use case diagram description for an ATM system:
+
+- Actors: Customer, Bank Network
+- Use cases: Insert Card, Enter PIN, Withdraw Cash, Check Balance, Deposit Cash, Change PIN
+- Relationships: Customer is associated with all use cases; Enter PIN `<<include>>`s from Withdraw Cash, Check Balance, Deposit Cash, and Change PIN
+
+(a) Draw this diagram using ASCII art or describe it precisely.
+(b) Identify at least three mistakes or improvements in the design (refer to Section 3.5 common mistakes).
+(c) Write a prose use case description for "Withdraw Cash" covering preconditions, main success scenario, and two alternative flows.
+
+### Exercise 2: Design a Class Diagram
+
+Model a **hospital patient management system** with at least the following concepts: Patient, Doctor, Nurse, Appointment, MedicalRecord, Department, Prescription. Include:
+
+- All five relationship types from Section 4.2 (use at least three of them)
+- Correct multiplicity on every association
+- At least one abstract class or interface
+- Five attributes and two operations per class minimum
+
+Justify your composition vs. aggregation choices with a one-sentence explanation for each.
+
+### Exercise 3: Draw a Sequence Diagram
+
+Using the hospital system from Exercise 2, draw a sequence diagram for the scenario "Patient books an appointment with a doctor." Include:
+
+- At least five lifelines (e.g., Patient, Website, AppointmentService, DoctorSchedule, NotificationService)
+- One `alt` fragment (doctor is available vs. fully booked)
+- One `opt` fragment (send confirmation email if patient has email on file)
+- Return messages for every synchronous call
+
+### Exercise 4: Model Concurrent Workflow with Activity Diagram
+
+A hospital discharges a patient through the following process: the doctor approves discharge, the nurse prepares discharge summary and collects final vitals (these two can happen in parallel), the pharmacy prepares take-home medication, billing generates the invoice (in parallel with pharmacy), and finally the patient signs the discharge form and leaves.
+
+Draw an activity diagram with:
+- Swimlanes for Doctor, Nurse, Pharmacy, and Billing
+- A fork/join pair for the parallel activities
+- A decision node (patient may need follow-up appointment or not)
+
+### Exercise 5: State Machine for a Real Object
+
+Choose one of: (a) a traffic light controller, (b) a document workflow (Draft → Review → Approved → Published), or (c) a TCP connection lifecycle.
+
+Draw a complete state machine diagram including:
+- All states with meaningful names
+- Entry/exit actions where appropriate
+- Guards on transitions where needed
+- Initial and final pseudostates
+- At least one composite state (hierarchical state) if applicable
+
+Explain one transition that could cause non-deterministic behavior if guards were omitted.
 
 ---
 

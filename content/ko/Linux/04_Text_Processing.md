@@ -1,5 +1,24 @@
 # 텍스트 처리
 
+**이전**: [파일/디렉토리 관리](./03_File_Directory_Management.md) | **다음**: [권한과 소유권](./05_Permissions_Ownership.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 정규 표현식(regular expression)을 사용해 grep으로 파일에서 패턴을 검색한다
+2. 텍스트 매칭을 위한 기본 및 확장 정규 표현식(extended regular expression)을 작성한다
+3. cut으로 구조화된 데이터에서 특정 필드를 추출한다
+4. sort와 uniq로 데이터를 정렬하고 중복을 제거한다
+5. wc로 줄 수, 단어 수, 바이트 수를 센다
+6. sed로 텍스트 치환과 행 조작을 수행한다
+7. awk로 구조화된 텍스트 데이터를 처리하고 계산을 수행한다
+8. 파이프(pipe)와 리다이렉션(redirection)을 사용해 다단계 데이터 처리 파이프라인을 구성한다
+
+---
+
+텍스트 처리는 리눅스가 진정으로 빛을 발하는 영역입니다. "한 가지 일을 잘하는 작은 도구들"이라는 유닉스 철학 덕분에 grep, sed, awk, sort 등의 유틸리티를 강력한 데이터 파이프라인으로 연결할 수 있습니다. 시스템 관리자들은 로그 분석, 지표 추출, 설정 파일 변환을 위해 이 도구들을 매일 사용합니다. 텍스트 처리를 마스터하면 리눅스 초보 사용자에서 고급 사용자로 도약할 수 있습니다.
+
 ## 1. grep - 텍스트 검색
 
 grep은 파일에서 패턴을 검색하는 강력한 도구입니다.
@@ -606,4 +625,4 @@ tail -f /var/log/syslog | grep --line-buffered -i error
 
 ## 다음 단계
 
-[05_Permissions_Ownership.md](./05_Permissions_Ownership.md)에서 파일 권한과 소유권 관리를 배워봅시다!
+[권한과 소유권](./05_Permissions_Ownership.md)에서 파일 권한과 소유권 관리를 배워봅시다!

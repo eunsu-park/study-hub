@@ -2,9 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Previous**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md) | **Next**: [16_Project_Monitor.md](./16_Project_Monitor.md)
+**Previous**: [Project: Task Runner](./14_Project_Task_Runner.md) | **Next**: [Project: System Monitoring Tool](./16_Project_Monitor.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Build an SSH-based deployment script that uses rsync for file synchronization and remote command execution
+2. Implement a symlink-based release directory structure that enables instant rollback to previous versions
+3. Write a rolling deployment strategy that deploys to servers one at a time with health checks between each host
+4. Configure health check probes that verify application responsiveness after each deployment step
+5. Implement automatic rollback logic that reverts to the previous release when a health check fails
+6. Write Docker entrypoint scripts with proper signal forwarding, configuration templating, and graceful shutdown
+7. Manage environment-specific configuration using `.env` files, host inventories, and deployment strategies
+
+---
+
+Deploying code to production is where shell scripting skills have the highest leverage and the highest risk. A well-written deployment script can push changes to a fleet of servers in minutes with automatic rollback on failure; a poorly written one can take down your entire service. This project brings together SSH, rsync, signal handling, and error management to build deployment automation that you can adapt to real infrastructure -- from a single VPS to a multi-server production environment.
 
 ## 1. Overview
 
@@ -1230,6 +1246,70 @@ acquire_lock || exit 1
 rolling_deploy
 ```
 
+## Exercises
+
+### Exercise 1: Implement a Health Check Function
+
+Write a `health_check.sh` script that implements a robust health check function:
+
+```bash
+health_check() {
+    local url="$1"
+    local max_attempts="${2:-5}"
+    local interval="${3:-3}"
+    # Your implementation here
+}
+```
+
+The function must:
+- Use `curl -sf` to check the URL (silent mode, fail on HTTP errors)
+- Retry up to `max_attempts` times with `interval` seconds between retries
+- Print progress: `"Attempt 1/5: checking http://..."` on each retry
+- Return 0 on success, 1 if all attempts fail
+- Include a timeout of 5 seconds per attempt using `curl --max-time 5`
+
+Test by pointing it at `http://httpbin.org/status/200` (should pass) and `http://httpbin.org/status/503` (should fail after retries).
+
+### Exercise 2: Build a Symlink-Based Release Manager
+
+Implement a local release management system that mimics the Capistrano-style directory structure:
+
+```
+releases/
+    20240115_143022/   ← old release
+    20240116_091500/   ← current release (symlinked)
+current -> releases/20240116_091500
+```
+
+Write a `release.sh` script with three subcommands:
+- `release.sh deploy <source_dir>` — copies `source_dir` to `releases/$(date +%Y%m%d_%H%M%S)/`, then updates the `current` symlink atomically using `ln -sfn`
+- `release.sh rollback` — reads the two most recent releases, updates `current` to point to the second-newest, and prints which version was restored
+- `release.sh list` — lists all releases with their timestamps and marks the current one with `*`
+
+### Exercise 3: Add Environment-Specific Configuration
+
+Extend the deployment script concept to support multiple environments. Create:
+- A `configs/` directory with `staging.env` and `production.env` files, each setting `APP_PORT`, `DB_HOST`, `LOG_LEVEL`, and `HEALTH_URL`
+- A `load_config <environment>` function that sources the appropriate `.env` file and validates that all required variables are set
+- A deploy command that accepts `-e staging` or `-e production` and calls `load_config` before proceeding
+- Prevent production deploys unless a `DEPLOY_CONFIRMED=yes` environment variable is set or the user types `yes` at an interactive confirmation prompt
+
+### Exercise 4: Simulate a Rolling Deployment
+
+Implement a rolling deployment simulation without real SSH by using local directories as "hosts":
+- Create three directories `/tmp/server_{1,2,3}/app/` to simulate three servers
+- Write a `rolling_deploy <version>` function that iterates over the three "servers" and for each one: creates a file `version.txt` with the version string, sleeps 1 second, then runs a fake health check
+- If the fake health check returns failure (simulate by having server_2 fail), stop the deployment and roll back already-deployed servers by removing `version.txt`
+- Print a summary at the end: which servers succeeded, which failed, and whether rollback occurred
+
+### Exercise 5: Write a Docker Entrypoint Script
+
+Create a production-quality `entrypoint.sh` for a web application container:
+- Forward signals properly: trap `SIGTERM` and `SIGINT` to gracefully shut down the application process
+- Template an `nginx.conf` from environment variables `SERVER_NAME`, `APP_PORT`, and `WORKER_PROCESSES` using `sed` or `envsubst`
+- Validate required environment variables (`DATABASE_URL`, `SECRET_KEY`) at startup and exit with code 78 (configuration error) if any are missing
+- After configuration validation, `exec` the main process (passed as `CMD` arguments via `"$@"`) so it becomes PID 1 and receives signals directly
+
 ---
 
-**Previous**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md) | **Next**: [16_Project_Monitor.md](./16_Project_Monitor.md)
+**Previous**: [Project: Task Runner](./14_Project_Task_Runner.md) | **Next**: [Project: System Monitoring Tool](./16_Project_Monitor.md)

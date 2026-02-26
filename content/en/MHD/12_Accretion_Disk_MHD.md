@@ -732,20 +732,34 @@ def mri_dispersion():
     # Dispersion relation: γ⁴ + γ² [Ω² + (k v_A)²] - 3 Ω² (k v_A)² = 0
     # Let X = γ² / Ω², Y = (k v_A / Ω)²
     # X² + X [1 + Y] - 3 Y = 0
+    # This normalisation reveals that the instability is controlled entirely
+    # by the ratio k v_A / Ω — the ratio of the "spring constant" (Alfvén
+    # restoring force) to the "centrifugal restoring force" (orbital shear).
+    # When this ratio is small (weak field), the spring is too compliant and
+    # allows runaway angular-momentum transfer; that is the spring analogy.
 
     Y = k_vA_over_Omega**2
 
     # Solve quadratic for X = γ² / Ω²
     # X = -(1+Y)/2 ± √[(1+Y)²/4 + 3Y]
-
+    # The +√ root can be positive (X > 0 → γ² > 0 → exponential growth);
+    # the -√ root is always negative, representing a damped oscillation
+    # (restoring torque wins) — these are the two physically distinct branches.
     discriminant = (1 + Y)**2 / 4 + 3 * Y
     X_plus = -(1 + Y)/2 + np.sqrt(discriminant)
     X_minus = -(1 + Y)/2 - np.sqrt(discriminant)
 
     # Growth rate γ / Ω (take positive root)
+    # We mask X_plus < 0 with zeros because negative X_plus means γ² < 0,
+    # i.e. the mode is oscillatory (not growing) — there is an upper cutoff
+    # wavelength above which the magnetic spring is too stiff to be stretched
+    # by the orbital shear and MRI is stabilised.
     gamma_over_Omega = np.where(X_plus > 0, np.sqrt(X_plus), 0)
 
     # Maximum growth rate (at k v_A → 0)
+    # As k v_A → 0 the field becomes infinitely flexible (zero tension) and
+    # the growth rate approaches its maximum ~0.75 Ω; this is why even an
+    # infinitesimally weak field is sufficient to trigger MRI in a Keplerian disk.
     gamma_max = np.sqrt(X_plus[0]) * Omega
     print(f"Maximum growth rate: γ_max / Ω = {gamma_max:.4f}")
     print(f"                     γ_max = {gamma_max:.4f} Ω")
@@ -801,8 +815,15 @@ def mri_growth_vs_field():
 
     # Choose a fixed wavelength: k = Ω / (H) where H ~ c_s / Ω
     # Then k v_A / Ω = v_A / c_s
+    # This choice is physically motivated: the disk scale height H is the
+    # largest coherent length scale in the disk, so k ~ 1/H is the smallest
+    # wavenumber (longest wave) that fits inside the disk.  At this k the
+    # MRI wavelength λ_MRI ~ 2π v_A / Ω must resolve within H.
     c_s = 1.0  # Sound speed (normalized)
 
+    # k_vA / Ω = v_A / c_s: when v_A ≪ c_s (weak field, sub-Alfvénic disk)
+    # we are in the long-wavelength MRI regime where growth is near-maximum;
+    # when v_A ≳ c_s the field becomes too stiff and MRI is suppressed.
     k_vA_over_Omega = v_A / c_s
 
     # Compute growth rate from dispersion relation
@@ -824,6 +845,10 @@ def mri_growth_vs_field():
     ax1.grid(True, alpha=0.3)
 
     # Wavelength of fastest growing mode
+    # λ_MRI = 2π v_A / (Ω γ/Ω) = 2π v_A / γ; this scales linearly with B
+    # because stronger field → faster Alfvén speed → longer optimal wavelength.
+    # The NaN masking removes the stabilised (γ = 0) field-strength regime so
+    # that the log-log plot shows only the window where MRI actually operates.
     lambda_MRI = 2 * np.pi * v_A / (Omega * gamma_over_Omega)
     lambda_MRI = np.where(gamma_over_Omega > 0, lambda_MRI, np.nan)
 
@@ -853,6 +878,10 @@ def shearing_box_trajectories():
     Shear flow: v_y = -q Ω x  (Keplerian: q = 3/2)
     """
     Omega = 1.0
+    # q = 3/2 for Keplerian: this is the local shear rate dΩ/d ln r = -3/2.
+    # It is exactly 3/2 in a Keplerian potential (Ω ∝ r^{-3/2}) and is the
+    # single parameter that controls MRI in the shearing-box frame — a
+    # sub-Keplerian disk (q < 3/2) grows MRI more slowly.
     q = 1.5  # Keplerian
 
     # Initial positions
@@ -876,7 +905,12 @@ def shearing_box_trajectories():
         y[0] = y0[i]
 
         for n in range(Nt - 1):
-            # Shear flow
+            # Shear flow: pure azimuthal drift proportional to radial offset.
+            # In the co-rotating frame the background velocity is v_y = -q Ω x
+            # (inner annuli move forward, outer annuli lag behind).  There is
+            # NO radial velocity in pure shear, so x stays constant — this is
+            # why all trajectories are vertical lines: each fluid element simply
+            # drifts in y at a rate set by its fixed x position.
             v_y = -q * Omega * x[n]
 
             # Update (Euler)
@@ -917,6 +951,9 @@ def blandford_payne_wind():
     # Parameters
     GM = 1.0       # Gravitational parameter (normalized)
     r_0 = 1.0      # Launch radius
+    # Keplerian Ω₀ is fixed at r_0 so that the centrifugal potential L²/(2R²)
+    # at the launch point exactly balances gravity — any gas anchored to the
+    # disk surface is in circular equilibrium before the wind is launched.
     Omega_0 = np.sqrt(GM / r_0**3)  # Keplerian angular velocity at r_0
 
     # Field line inclination
@@ -929,16 +966,26 @@ def blandford_payne_wind():
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
     for th, th_d in zip(theta, theta_deg):
-        # Height z = (R - r_0) tan(θ)
+        # Height z = (R - r_0) tan(θ): a straight field line inclined at θ
+        # from the disk normal.  A shallower θ (field nearly vertical) means
+        # the gas must climb steeply before R increases significantly, so the
+        # centrifugal "slingshot" is weak; a steeper θ (field nearly horizontal)
+        # gives a larger lever arm but requires the field to be strongly bent.
         z = (R - r_0) * np.tan(th)
 
         # Spherical radius
         r_sph = np.sqrt(R**2 + z**2)
 
-        # Angular momentum (conserved)
+        # Angular momentum: L = r₀² Ω₀ is conserved once gas leaves the disk
+        # surface and slides along the frozen-in field line.  This constraint
+        # is the core of the Blandford-Payne mechanism — the disk rotation is
+        # communicated outward along the field line, making the wind carry away
+        # angular momentum and allowing the underlying disk to accrete inward.
         L = r_0**2 * Omega_0
 
-        # Azimuthal velocity
+        # Azimuthal velocity: v_φ = L/R decreases as R grows, so the centrifugal
+        # force (L²/R³) drops faster than gravity (GM/r_sph²), eventually turning
+        # the effective potential into a barrier for steep (θ < 30°) field lines.
         v_phi = L / R
 
         # Centrifugal force (per unit mass)
@@ -947,7 +994,12 @@ def blandford_payne_wind():
         # Gravitational force (radial component)
         F_grav = GM / r_sph**2
 
-        # Effective potential
+        # Effective potential Φ_eff = -GM/r_sph + L²/(2R²): its slope along the
+        # field line tells whether gas accelerates (dΦ_eff/dl < 0) or decelerates.
+        # For θ > 30° the potential is monotonically decreasing along the field
+        # line → gas is always accelerated and escapes to infinity (centrifugal wind).
+        # For θ < 30° a local maximum appears → gas is trapped unless thermally
+        # driven; this is the Blandford-Payne critical-angle theorem.
         Phi_eff = -GM / r_sph + L**2 / (2 * R**2)
 
         # Plot field lines
@@ -1003,6 +1055,10 @@ def mri_turbulence_energy():
     """
     # Parameters
     Omega = 1.0
+    # gamma_MRI = 0.75 Ω is the maximum MRI growth rate for a Keplerian disk
+    # in the limit k v_A → 0 (from the dispersion relation solved earlier).
+    # The magnetic energy E_M grows exponentially at this rate in the linear
+    # phase until Lorentz-force back-reaction (the β and ε_M terms) saturates it.
     gamma_MRI = 0.75 * Omega  # MRI growth rate
     alpha_visc = 0.01         # Effective viscosity parameter
     beta_exchange = 0.1       # Energy exchange rate
@@ -1012,12 +1068,26 @@ def mri_turbulence_energy():
     def dE_dt(E, t):
         E_K, E_M = E
 
+        # E_K equation: kinetic energy is sourced by Lorentz work (β E_M)
+        # and drained by viscous dissipation (-α Ω E_K) and ohmic-like losses
+        # (-ε_K E_K).  In MRI turbulence simulations the Maxwell stress
+        # ⟨-B_r B_φ⟩/μ₀ is the dominant angular-momentum flux, so the β E_M
+        # coupling encapsulates how the growing magnetic field stirs the fluid.
         dE_K_dt = -alpha_visc * Omega * E_K + beta_exchange * E_M - epsilon_K * E_K
+
+        # E_M equation: net growth rate is (γ_MRI - β - ε_M).  The β term
+        # represents energy leaving the magnetic reservoir to the kinetic
+        # reservoir via Lorentz-force work (J × B · v); the ε_M term is Ohmic
+        # dissipation.  When γ_MRI > β + ε_M the field grows; saturation
+        # occurs when the back-reaction on the flow reduces the effective γ_MRI.
         dE_M_dt = gamma_MRI * E_M - beta_exchange * E_M - epsilon_M * E_M
 
         return [dE_K_dt, dE_M_dt]
 
-    # Initial conditions
+    # Initial conditions: E_M ≪ E_K mimics a disk that already has turbulent
+    # kinetic energy (from, e.g., convection or accretion shocks) but only a
+    # tiny seed magnetic field — the MRI then amplifies that seed exponentially
+    # until the field reaches equipartition with the turbulent pressure.
     E0 = [1.0, 0.01]  # Initial kinetic energy, small magnetic seed
 
     # Time
@@ -1042,7 +1112,11 @@ def mri_turbulence_energy():
     ax1.legend(fontsize=12)
     ax1.grid(True, alpha=0.3)
 
-    # Semi-log
+    # Semi-log: the exponential (linear MRI) phase appears as a straight line
+    # on this scale, making it easy to read off the growth rate directly.
+    # The break from linear to nonlinear behaviour is visible as the curve
+    # bends over — this is when magnetic energy approaches equipartition and
+    # the Lorentz back-reaction term becomes comparable to the MRI drive.
     ax2.semilogy(t, E_K, 'b-', linewidth=2, label='Kinetic $E_K$')
     ax2.semilogy(t, E_M, 'r-', linewidth=2, label='Magnetic $E_M$')
     ax2.set_xlabel('Time (in $\\Omega^{-1}$)', fontsize=14)

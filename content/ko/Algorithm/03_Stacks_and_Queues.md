@@ -1,5 +1,18 @@
 # 스택과 큐 활용 (Stack and Queue Applications)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 스택(Stack)과 큐(Queue)의 LIFO 및 FIFO 원칙을 설명하고 O(1) 핵심 연산을 식별할 수 있다
+2. 스택을 사용하여 괄호 유효성 검사(parenthesis validation)를 구현하고 짝이 맞지 않거나 닫히지 않은 괄호를 탐지할 수 있다
+3. 스택 기반 평가 알고리즘을 적용하여 후위 표기법(Reverse Polish Notation) 수식을 계산할 수 있다
+4. 모노토닉 스택(monotonic stack) 패턴을 적용하여 다음 더 큰 원소(next-greater-element) 및 가장 큰 직사각형 문제를 효율적으로 해결할 수 있다
+5. 큐(Queue)를 사용하여 너비 우선 탐색(BFS, Breadth-First Search)을 구현하고 레벨 순서 순회 및 최단 경로 문제에 활용할 수 있다
+6. 덱(deque)을 활용하여 슬라이딩 윈도우 최댓값(sliding-window maximum) 문제를 O(n) 시간에 해결할 수 있다
+
+---
+
 ## 개요
 
 스택(Stack)과 큐(Queue)는 기본적인 자료구조이지만, 다양한 알고리즘 문제에서 핵심적인 역할을 합니다. 이 레슨에서는 괄호 검사, 후위 표기법, 모노토닉 스택 등 실전에서 자주 사용되는 패턴을 학습합니다.
@@ -191,8 +204,12 @@ bool isValid(const char* s) {
         char c = s[i];
 
         if (c == '(' || c == '[' || c == '{') {
+            // 여는 괄호를 push; 가장 최근에 열린 괄호가 먼저 닫혀야 하므로
+            // 스택이 완벽히 적합 (LIFO가 중첩(nesting) 구조와 일치)
             stack[++top] = c;
         } else {
+            // 스택이 비어있는데 닫는 괄호가 나오면 — 괄호 유형을 확인하기도 전에
+            // 이미 짝이 맞지 않는(unmatched) 상태
             if (top == -1) return false;
 
             char topChar = stack[top--];
@@ -203,6 +220,7 @@ bool isValid(const char* s) {
         }
     }
 
+    // 스택이 비어있지 않다면 닫히지 않은 여는 괄호가 남아있는 것 — 역시 무효
     return top == -1;
 }
 ```
@@ -568,16 +586,23 @@ def next_greater_element(arr):
 // C++
 int largestRectangleArea(const vector<int>& heights) {
     int n = heights.size();
-    stack<int> st;
+    stack<int> st;  // 높이 오름차순으로 막대 인덱스를 저장
     int maxArea = 0;
 
+    // i == n에서 센티넬(sentinel) 높이 0을 추가하면 스택에 남은 모든 막대가
+    // 강제로 pop되어 처리됨 — 루프 후 별도의 플러시(flush) 작업이 불필요
     for (int i = 0; i <= n; i++) {
         int h = (i == n) ? 0 : heights[i];
 
+        // h보다 높은 모든 막대를 pop: h가 해당 막대들의 오른쪽 경계이므로
+        // 최대 직사각형을 계산할 마지막 기회
         while (!st.empty() && heights[st.top()] > h) {
             int height = heights[st.top()];
             st.pop();
 
+            // 너비는 양쪽에서 가장 가까운 더 낮은 막대까지 확장 —
+            // 새로운 스택 top이 왼쪽의 가장 가까운 더 낮은 막대이고,
+            // i가 오른쪽의 가장 가까운 더 낮은 막대
             int width = st.empty() ? i : i - st.top() - 1;
             maxArea = max(maxArea, height * width);
         }
@@ -686,11 +711,14 @@ void bfs(vector<vector<int>>& graph, int start) {
     queue<int> q;
 
     q.push(start);
+    // 큐에 넣기 *전*에 방문 표시 — 큐에서 꺼낸 후가 아님. 이렇게 해야 같은 노드가
+    // 여러 이웃을 통해 중복으로 큐에 삽입되는 것을 방지하며,
+    // 레벨 순서 보장이 깨지고 O(n) 작업이 낭비되는 것을 막음
     visited[start] = true;
 
     while (!q.empty()) {
         int node = q.front();
-        q.pop();
+        q.pop();  // FIFO 순서로 처리 — 최단 경로 거리를 보장
 
         cout << node << " ";
 
@@ -894,23 +922,27 @@ dq.pop()            # 뒤에서 제거
 ```cpp
 // C++
 vector<int> maxSlidingWindow(const vector<int>& nums, int k) {
-    deque<int> dq;  // 인덱스 저장, 단조 감소
+    deque<int> dq;  // 인덱스 저장; dq 내의 값은 단조 감소
     vector<int> result;
 
     for (int i = 0; i < nums.size(); i++) {
-        // 윈도우 범위 벗어난 원소 제거
+        // 현재 윈도우 밖으로 벗어난 front를 제거 — 인덱스로 확인하므로
+        // 별도의 "윈도우 시작" 변수가 필요 없음
         while (!dq.empty() && dq.front() < i - k + 1) {
             dq.pop_front();
         }
 
-        // 현재 원소보다 작은 원소들 제거 (최댓값 후보 유지)
+        // nums[i]보다 작은 값의 인덱스를 뒤에서부터 모두 제거:
+        // 이 원소들은 nums[i]가 더 크고 윈도우에서 더 오래 남으므로
+        // 미래의 윈도우 최댓값이 될 수 없음
         while (!dq.empty() && nums[dq.back()] < nums[i]) {
             dq.pop_back();
         }
 
         dq.push_back(i);
 
-        // 윈도우가 완성되면 결과 저장
+        // dq의 front는 항상 윈도우 최댓값의 인덱스 —
+        // 첫 번째 완전한 윈도우가 형성될 때까지 출력을 지연
         if (i >= k - 1) {
             result.push_back(nums[dq.front()]);
         }

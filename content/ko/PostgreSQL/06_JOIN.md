@@ -1,5 +1,25 @@
 # JOIN
 
+**이전**: [조건과 정렬](./05_Conditions_and_Sorting.md) | **다음**: [집계와 그룹화](./07_Aggregation_and_Grouping.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. JOIN의 목적과 두 개 이상의 테이블에서 행을 연결하는 방법을 설명할 수 있습니다
+2. INNER JOIN, LEFT JOIN, RIGHT JOIN, FULL JOIN, CROSS JOIN을 구별할 수 있습니다
+3. 테이블 별칭(alias)과 명시적 ON 조건을 사용하여 다중 테이블 JOIN 쿼리를 작성할 수 있습니다
+4. SELF JOIN을 적용하여 계층적 관계(예: 직원-관리자)를 모델링할 수 있습니다
+5. 외부 조인(outer join)에서 ON 절의 필터링과 WHERE 절의 필터링 차이를 구별할 수 있습니다
+6. USING 절을 사용하고 NATURAL JOIN이 적절한 경우(및 적절하지 않은 경우)를 이해할 수 있습니다
+7. JOIN 성능을 최적화하기 위해 외래 키(foreign key) 컬럼에 인덱스(index)를 생성할 수 있습니다
+
+---
+
+현실 세계의 데이터는 하나의 테이블에 저장되는 경우가 거의 없습니다. 고객, 주문, 상품은 각각 자신의 테이블에 존재하며, 관계형 데이터베이스(relational database)의 진정한 힘은 이들을 즉석에서 연결하는 데서 나옵니다. JOIN은 여러 테이블의 관련 데이터를 하나의 의미 있는 결과 집합으로 재조합하는 SQL 메커니즘으로, 매일 사용하게 될 가장 중요한 연산 중 하나입니다.
+
 ## 1. JOIN 개념
 
 JOIN은 두 개 이상의 테이블을 연결하여 데이터를 조회하는 방법입니다.
@@ -55,6 +75,8 @@ INSERT INTO orders (user_id, product_name, amount) VALUES
 ```
 
 ---
+
+> **비유 -- JOIN을 위한 벤 다이어그램(Venn Diagrams for JOINs)**: 각 테이블을 벤 다이어그램의 원이라고 생각해 보세요. INNER JOIN은 겹치는 영역, 즉 양쪽 테이블 모두에 일치하는 행을 반환합니다. LEFT JOIN은 왼쪽 원 전체와 겹치는 영역을 반환하며, 오른쪽 원에 일치하는 값이 없는 곳은 NULL로 채웁니다. JOIN을 집합 연산(set operations)으로 이해하면 결과에 어떤 행이 나타날지 쉽게 예측할 수 있습니다.
 
 ## 3. INNER JOIN
 
@@ -506,6 +528,4 @@ JOIN orders o ON u.id = o.user_id;
 
 ---
 
-## 다음 단계
-
-[07_Aggregation_and_Grouping.md](./07_Aggregation_and_Grouping.md)에서 집계 함수와 GROUP BY를 배워봅시다!
+**이전**: [조건과 정렬](./05_Conditions_and_Sorting.md) | **다음**: [집계와 그룹화](./07_Aggregation_and_Grouping.md)

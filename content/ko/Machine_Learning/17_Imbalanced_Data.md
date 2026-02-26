@@ -1,8 +1,24 @@
 # 불균형 데이터 처리(Handling Imbalanced Data)
 
-## 개요
+**이전**: [모델 설명 가능성](./16_Model_Explainability.md) | **다음**: [시계열 머신러닝](./18_Time_Series_ML.md)
 
-불균형 데이터셋(Imbalanced Dataset)은 한 클래스(Class)가 다른 클래스보다 현저히 많을 때 발생합니다. 일반적인 분류기(Classifier)는 다수 클래스를 예측하는 경향이 있어 정확도(Accuracy)가 오해를 일으킬 만큼 높게 나타납니다. 이 레슨에서는 불균형 분류 문제를 위한 평가 지표(Evaluation Metrics), 샘플링 기법(Sampling Techniques), 비용 민감 학습(Cost-Sensitive Learning), 임계값 최적화(Threshold Optimization)를 다룹니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 불균형 데이터셋에서 정확도(Accuracy)가 오해를 유발하는 이유를 설명하고 적절한 지표(F1, PR-AUC, MCC)를 선택할 수 있습니다
+2. 정밀도-재현율 곡선(Precision-Recall Curve)과 ROC 곡선을 비교하고 PR-AUC가 더 유익한 정보를 제공하는 경우를 파악할 수 있습니다
+3. SMOTE(Synthetic Minority Over-sampling Technique)와 그 변형(Borderline-SMOTE, SMOTE-ENN)을 구현하여 합성 과샘플링을 수행할 수 있습니다
+4. 트리 기반 모델에서 클래스 가중치(Class Weights)와 샘플 가중치(Sample Weights)를 사용한 비용 민감 학습(Cost-Sensitive Learning)을 적용할 수 있습니다
+5. 비용 기반 분석을 이용한 분류 임계값(Classification Threshold) 최적화를 수행할 수 있습니다
+6. 데이터 누수(Data Leakage)를 방지하는 imblearn 파이프라인으로 완전한 불균형 분류 파이프라인을 구축할 수 있습니다
+7. 극단적인 불균형 문제를 이상 탐지(Anomaly Detection)로 재구성해야 하는 시점을 결정할 수 있습니다
+
+---
+
+99.9% 정확도를 달성하는 사기 탐지 모델은 인상적으로 들립니다 -- 모든 거래를 합법적인 것으로 분류하고 사기를 단 하나도 잡아내지 못한다는 사실을 깨닫기 전까지는 말이죠. 불균형 데이터는 실제 머신러닝에서 일반적인 현상입니다: 사기, 희귀 질환, 제조 결함, 침입 탐지는 모두 소수 클래스가 가장 중요한 '건초 더미 속 바늘 찾기' 문제입니다. 이 레슨에서는 실제로 중요한 희귀 사건을 포착하는 모델을 만들기 위해 평가, 샘플링, 재가중치 부여, 임계값 튜닝을 다루는 방법을 가르칩니다.
 
 ---
 

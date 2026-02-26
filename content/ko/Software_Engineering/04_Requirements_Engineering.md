@@ -13,15 +13,18 @@
 - 레슨 02 — 소프트웨어 개발 생명주기
 - 레슨 03 — 애자일과 반복 개발
 
-**학습 목표**:
-- 기능 요구사항(Functional Requirements)과 비기능 요구사항(Non-Functional Requirements) 및 제약(Constraints)을 구별한다
-- 주어진 이해관계자 상황에 적합한 도출(Elicitation) 기법을 적용한다
-- SMART 기준과 IEEE 830 / ISO 29148 품질 기준을 충족하는 요구사항을 작성한다
-- 잘 구조화된 소프트웨어 요구사항 명세서(Software Requirements Specification, SRS)를 작성한다
-- Given/When/Then 형식의 인수 기준(Acceptance Criteria)과 함께 사용자 스토리를 작성한다
-- 요구사항 추적성 매트릭스(Requirements Traceability Matrix, RTM)를 구축하고 활용한다
-- MoSCoW와 카노 모델(Kano model)을 사용하여 요구사항 우선순위를 정한다
-- 프로젝트 전반에 걸쳐 요구사항 변경을 관리하는 전략을 설명한다
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 기능 요구사항(Functional Requirements)과 비기능 요구사항(Non-Functional Requirements) 및 제약(Constraints)을 구별한다
+2. 주어진 이해관계자 상황에 적합한 도출(Elicitation) 기법을 적용한다
+3. SMART 기준과 IEEE 830 / ISO 29148 품질 기준을 충족하는 요구사항을 작성한다
+4. 잘 구조화된 소프트웨어 요구사항 명세서(Software Requirements Specification, SRS)를 작성한다
+5. Given/When/Then 형식의 인수 기준(Acceptance Criteria)과 함께 사용자 스토리를 작성한다
+6. 요구사항 추적성 매트릭스(Requirements Traceability Matrix, RTM)를 구축하고 활용한다
+7. MoSCoW와 카노 모델(Kano model)을 사용하여 요구사항 우선순위를 정한다
+8. 프로젝트 전반에 걸쳐 요구사항 변경을 관리하는 전략을 설명한다
 
 ---
 
@@ -664,6 +667,58 @@ d. "오류는 정상적으로 처리되어야 한다."
 - Pohl, K. — *Requirements Engineering: Fundamentals, Principles, and Techniques* (Springer, 2010) — 엄밀한 학문적 처리
 - IREB — *Certified Professional for Requirements Engineering (CPRE) Handbook* — 자격증 단체 및 참조 용어집
 - OWASP ASVS — *Application Security Verification Standard* — 보안 NFR의 출처
+
+---
+
+## 연습 문제
+
+### 연습 1: 요구사항 분류 및 수정
+
+아래 각 항목에 대해 (a) 기능 요구사항(FR), 비기능 요구사항(NFR), 제약(Constraint) 중 하나로 분류하고, (b) 4.2절의 결함 유형(Defect Type)을 식별하고, (c) SMART하고 검증 가능하도록 다시 작성하세요.
+
+1. "시스템은 사용하기 쉬워야 한다."
+2. "모든 비밀번호는 안전해야 한다."
+3. "리포트 모듈은 데이터를 표시하고 내보내고 보관해야 한다."
+4. "애플리케이션은 클라우드에서 실행되어야 한다."
+5. "사용자는 빠르게 로그인할 수 있어야 한다."
+
+### 연습 2: Gherkin 형식의 인수 기준(Acceptance Criteria) 작성
+
+승차 공유 앱에 다음 사용자 스토리가 있습니다:
+
+> 승객으로서, 운전자의 실시간 위치를 지도에서 확인하고 싶습니다. 그래야 운전자가 얼마나 가까이 있는지 알 수 있기 때문입니다.
+
+다음 세 가지 시나리오를 포함하는 Gherkin 시나리오를 최소 세 개 작성하세요: (a) 운전자가 이동 중인 정상 경로, (b) 운전자가 취소하는 경우, (c) GPS 데이터를 사용할 수 없는 경우.
+
+### 연습 3: 요구사항 추적성 매트릭스(RTM) 구축
+
+다음 요구사항으로 간단한 태스크 관리 API를 구축한다고 가정합니다:
+
+- FR-001: 사용자는 제목, 설명, 마감일이 있는 태스크를 생성할 수 있다.
+- FR-002: 사용자는 태스크를 완료로 표시할 수 있다.
+- NFR-001: API는 정상 부하에서 95번째 백분위수 기준으로 300ms 이내에 응답해야 한다.
+- C-001: 시스템은 Python 3.11 이상으로 구현되어야 한다.
+
+Req ID, 설명, 출처(Source), 설계 참조(Design Ref), 코드 모듈(Code Module), 테스트 케이스 ID(Test Case ID) 열이 포함된 RTM을 작성하세요. 각 행에 적절한 테스트 케이스 ID를 고안하여 채우세요.
+
+### 연습 4: MoSCoW와 카노 모델(Kano Model)로 백로그 우선순위 정하기
+
+한 팀이 개인 금융 앱의 범위를 결정하고 있습니다. 각 기능을 MVP 기준 MoSCoW와 카노 모델(Kano model) 두 가지로 분류한 다음, 두 프레임워크 간의 충돌이 있다면 설명하세요:
+
+1. 은행 계좌 연결
+2. 계좌 잔액 보기
+3. 거래 자동 분류
+4. 월별 예산 설정 및 알림
+5. CSV로 거래 내보내기
+6. 저축 목표 소셜 공유
+7. AI 기반 지출 인사이트
+8. 다크 모드
+
+### 연습 5: 변경 통제 프로세스(Change Control Process) 설계
+
+운영 중인 전자상거래 시스템에 법무팀으로부터 새로운 요구사항이 접수되었습니다: 30일 이내에 모든 구매 영수증에 고객의 등록 국가를 표시하고 현지 부가가치세(VAT) 표시 규칙을 준수해야 합니다. 이 요구사항은 결제(checkout), 영수증(receipt), 청구서(invoice) 모듈에 영향을 미칩니다.
+
+다음 내용을 포함하는 한 페이지 분량의 변경 통제 계획을 작성하세요: (a) 변경 요청(Change Request) 문서 항목, (b) 변경 통제 위원회(CCB) 구성원과 필수 검토 질문, (c) 영향 분석(Impact Analysis) 차원, (d) 베이스라인(Baseline) 및 출시 전략.
 
 ---
 

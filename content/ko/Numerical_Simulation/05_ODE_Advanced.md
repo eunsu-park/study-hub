@@ -1,14 +1,34 @@
 # ODE 고급
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ODE 시스템에서 강성(Stiffness)을 정의하고 강성 문제에서 명시적 방법이 실패하는 이유를 설명할 수 있습니다.
+2. 암시적 방법(Implicit Method)(후진 오일러(Backward Euler), 사다리꼴 공식)을 구현하고 A-안정성(A-stability)을 달성하는 방법을 설명할 수 있습니다.
+3. 강성 솔버(Radau, BDF)와 적절한 허용 오차 설정으로 `scipy.integrate.solve_ivp`를 적용할 수 있습니다.
+4. 시스템의 고유값 구조를 분석하여 강성을 진단하고 적절한 솔버를 선택할 수 있습니다.
+5. 화학 반응 동역학(Chemical Kinetics)과 전기 회로에서 발생하는 실용적인 강성 ODE 문제를 풀 수 있습니다.
+
+---
+
 ## 개요
 
 강성(stiff) 문제, 암시적 방법, scipy.integrate의 고급 사용법을 학습합니다. 실제 응용에서 자주 등장하는 어려운 ODE 문제들을 다룹니다.
+
+**이 레슨이 중요한 이유:** 화학 반응, 전기 회로, 생물학적 네트워크 등 많은 실제 시스템은 매우 다른 시간 스케일에서 진행되는 과정을 포함합니다. 화학 반응에서 마이크로초 단위의 빠른 과도 현상과 수 시간에 걸친 느린 평형이 공존합니다. 단순한 명시적 솔버는 전체 시뮬레이션에 마이크로초 크기의 스텝을 사용해야 하므로 비실용적입니다. 암시적 방법(Implicit Method)과 강성 솔버(Stiff Solver)는 이러한 문제를 다루기 위한 필수 도구입니다.
 
 ---
 
 ## 1. 강성 문제 (Stiff Problems)
 
 ### 1.1 강성의 정의
+
+시스템에 매우 다른 시간 스케일이 포함되어 있으면 **강성(Stiff)**이라고 합니다. 수학적으로, 강성은 야코비 행렬의 고유값 크기 비율로 특성화됩니다:
+
+$$\text{강성비(Stiffness ratio)} = \frac{|\lambda_{\max}|}{|\lambda_{\min}|}$$
+
+이 비율이 크면(예: 500 이상) 명시적 방법은 안정성을 위해 가장 빠른 모드가 결정하는 시간 스텝을 사용해야 합니다($\Delta t \lesssim 2/|\lambda_{\max}|$). 하지만 관심 있는 해는 느린 시간 스케일($1/|\lambda_{\min}|$)에서 진화하므로, 이미 감쇠한 성분에 대해 막대한 계산 낭비가 발생합니다.
 
 ```python
 import numpy as np
@@ -30,17 +50,21 @@ def stiff_example():
     # 고유값: λ₁ ≈ -500.002, λ₂ ≈ -0.998
     # 비율: |λ₁/λ₂| ≈ 500 (강성비)
 
+    # 빠른 모드(λ₁ ≈ -500)는 ~0.002 시간 단위 내에 감쇠하지만, 느린 모드
+    # (λ₂ ≈ -1)는 ~5 시간 단위가 필요합니다. RK45는 전체 시간 동안 빠른 모드의
+    # 안정성 한계를 추적해야 하지만, Radau의 암시적 공식은 무조건 안정하므로
+    # 과도 현상이 감쇠한 후에는 큰 스텝을 사용할 수 있습니다.
     def stiff_system(t, y):
         return [-500*y[0] + 500*y[1], y[0] - y[1]]
 
     y0 = [1.0, 0.0]
     t_span = (0, 5)
 
-    # 명시적 RK45 (많은 스텝 필요)
+    # 명시적 RK45: 안정 영역이 dt를 ~2/500 = 0.004로 제한하여 많은 스텝 필요
     sol_rk45 = solve_ivp(stiff_system, t_span, y0, method='RK45',
                          rtol=1e-6, atol=1e-9)
 
-    # 암시적 Radau (적은 스텝)
+    # 암시적 Radau: A-안정이므로 dt는 안정성이 아닌 정확도에 의해서만 제한됨
     sol_radau = solve_ivp(stiff_system, t_span, y0, method='Radau',
                           rtol=1e-6, atol=1e-9)
 
@@ -73,6 +97,8 @@ stiff_example()
 
 ### 1.2 화학 반응 동역학
 
+Robertson 문제는 강성 솔버의 대표적 벤치마크입니다. 세 반응 속도 상수가 9차수에 걸쳐 분포하여($k_1 = 0.04$, $k_2 = 3 \times 10^7$, $k_3 = 10^4$) 극심한 강성을 만듭니다. 종 B는 거의 즉각적으로 준정상 상태(Quasi-Steady State)에 도달하는 반면, A와 C는 수백만 시간 단위에 걸쳐 진화합니다.
+
 ```python
 def chemical_kinetics():
     """강성 화학 반응 시스템 (Robertson 문제)"""
@@ -93,7 +119,9 @@ def chemical_kinetics():
     t_span = (0, 1e7)
     t_eval = np.logspace(-5, 7, 200)
 
-    # BDF 방법 (강성 문제에 적합)
+    # BDF는 고주파 과도 현상을 효율적으로 감쇠시키므로 선택됨.
+    # 로그 간격 시간 샘플링은 해의 다중 스케일 거동과 일치:
+    # 빠른 초기 과도 현상(t < 1) 이후 느린 평형화(t ~ 10^7).
     sol = solve_ivp(robertson, t_span, y0, method='BDF',
                     t_eval=t_eval, rtol=1e-8, atol=1e-10)
 
@@ -126,7 +154,15 @@ chemical_kinetics()
 
 ## 2. 암시적 방법
 
+**왜 암시적 방법인가?** 명시적 방법은 현재 시각의 $f$를 평가하여 미래를 예측합니다. 암시적 방법은 미래 시각의 $f$를 평가하므로 각 스텝에서 (일반적으로 비선형인) 방정식을 풀어야 합니다. 이 추가 비용으로 무조건적 안정성(Unconditional Stability)을 얻습니다: 스텝 크기에 관계없이 방법이 안정하므로, $\Delta t$를 안정성이 아닌 정확도 기준으로 선택할 수 있습니다.
+
 ### 2.1 후진 오일러 (다시 보기)
+
+후진 오일러(Backward Euler)법은 가장 간단한 암시적 기법입니다. 각 스텝에서 다음을 풀어야 합니다:
+
+$$y_{n+1} = y_n + h \cdot f(t_{n+1}, y_{n+1})$$
+
+$y_{n+1}$이 양변에 나타나므로 뉴턴-랩슨(Newton-Raphson) 반복을 사용합니다. 잔차 $F(y_{n+1}) = y_{n+1} - y_n - h \cdot f(t_{n+1}, y_{n+1})$와 야코비안 $J_F = I - h \cdot J_f$를 정의하면, 뉴턴 업데이트 $\delta = -J_F^{-1} F$는 초기 추정이 가까울 때 이차적으로 수렴합니다.
 
 ```python
 def backward_euler_system(f, jacobian, y0, t_span, n_steps, tol=1e-10):
@@ -143,15 +179,19 @@ def backward_euler_system(f, jacobian, y0, t_span, n_steps, tol=1e-10):
     y[0] = y0
 
     for i in range(n_steps):
+        # 현재 해를 뉴턴 반복의 초기 추정값으로 사용
         y_guess = y[i].copy()
 
         for _ in range(100):
+            # 잔차: y_guess가 암시적 방정식을 만족하면 0이 되어야 함
             F = y_guess - y[i] - h * np.array(f(t[i+1], y_guess))
+            # 뉴턴 야코비안: I - h*J_f; J*delta = -F를 푸는 것이 핵심 비용
             J = np.eye(n) - h * np.array(jacobian(t[i+1], y_guess))
 
             delta = np.linalg.solve(J, -F)
             y_guess = y_guess + delta
 
+            # 이차 수렴: 가까워지면 각 반복이 오차를 제곱함
             if np.linalg.norm(delta) < tol:
                 break
 

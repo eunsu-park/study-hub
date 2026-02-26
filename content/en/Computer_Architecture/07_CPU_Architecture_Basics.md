@@ -1,14 +1,28 @@
 # CPU Architecture Basics
 
-## Overview
-
-The CPU (Central Processing Unit) is the brain of the computer, serving as the core component that interprets and executes program instructions. In this lesson, we'll learn in detail about the internal components of the CPU, types of registers, datapath structure, and the instruction execution cycle.
+**Previous**: [06_Sequential_Logic.md](./06_Sequential_Logic.md) | **Next**: [08_Control_Unit.md](./08_Control_Unit.md)
 
 **Difficulty**: ⭐⭐
 
 **Prerequisites**: Logic Gates, Sequential Logic Circuits, Combinational Logic Circuits
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the major components of a CPU (ALU, registers, control unit, buses)
+2. Trace the fetch-decode-execute cycle step by step
+3. Explain the role of the program counter (PC), instruction register (IR), and MAR/MBR
+4. Describe how the datapath connects CPU components
+5. Distinguish between register-register and register-memory architectures
+6. Compare single-cycle and multi-cycle CPU implementations
+7. Calculate execution time and CPI for different CPU designs
+
+---
+
+The CPU is the brain of every computer -- but unlike a human brain, its operation can be understood completely by tracing signals through a handful of components. Understanding CPU architecture explains why some programs run faster than others, why instruction sets matter, and how hardware and software co-evolve. In this lesson, we examine the internal components of the CPU, types of registers, the datapath structure, and the instruction execution cycle in detail.
 
 ## Table of Contents
 

@@ -6,6 +6,8 @@
 /**
  * @brief Construct a new Student object
  */
+// Why: member initializer list initializes fields directly, avoiding default-construct-then-assign;
+// for non-trivial types like std::string this prevents an unnecessary default construction
 Student::Student(int id, const std::string& name, const std::string& major, double gpa)
     : id(id), name(name), major(major), gpa(gpa) {
     if (gpa < 0.0 || gpa > 4.0) {
@@ -28,6 +30,8 @@ std::string Student::toCSV() const {
  * @param csvLine CSV formatted string (id,name,major,gpa)
  * @return Student object
  */
+// Why: static factory method creates a Student from external data, separating parsing logic
+// from the constructor and allowing validation before object creation
 Student Student::fromCSV(const std::string& csvLine) {
     std::istringstream iss(csvLine);
     std::string token;

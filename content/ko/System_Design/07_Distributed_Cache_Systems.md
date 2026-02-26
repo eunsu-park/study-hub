@@ -1,14 +1,27 @@
 # 분산 캐시 시스템
 
-## 개요
+**이전**: [캐싱 전략](./06_Caching_Strategies.md) | **다음**: [데이터베이스 확장](./08_Database_Scaling.md)
 
-이 문서에서는 분산 캐시 시스템의 핵심 개념을 다룹니다. Redis의 데이터 구조와 클러스터 구성, Memcached와의 비교, 그리고 일관성 해싱(Consistent Hashing)을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 단일 노드 캐시가 대규모 시스템에 불충분한 이유와 분산 캐시(Distributed Cache)가 이 문제를 해결하는 방식을 설명할 수 있습니다
+2. Redis의 핵심 데이터 구조(문자열, 해시, 리스트, 집합, 정렬된 집합)를 설명하고 각각에 적합한 사용 사례를 식별할 수 있습니다
+3. 고가용성(High Availability)과 수평 확장(Horizontal Scaling)을 위한 Redis 클러스터(Redis Cluster)와 Redis 센티넬(Redis Sentinel) 아키텍처를 비교할 수 있습니다
+4. Redis와 Memcached의 트레이드오프(Trade-off)를 평가하고 주어진 워크로드에 적합한 도구를 선택할 수 있습니다
+5. 가상 노드(Virtual Nodes)를 활용한 일관성 해싱(Consistent Hashing)을 구현하여 캐시 노드 간에 키를 균등하게 분산할 수 있습니다
+6. 최소한의 중단으로 노드 장애와 리밸런싱(Rebalancing)을 처리하는 분산 캐싱 계층(Distributed Caching Tier)을 설계할 수 있습니다
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [06_Caching_Strategies.md](./06_Caching_Strategies.md)
 
 ---
+
+이전 레슨에서 캐싱 패턴을 학습했습니다. 이제 시스템이 수십 또는 수백 대의 서버에 걸쳐 있을 때 캐시가 실제로 어디에 위치하는지가 문제가 됩니다. 단일 Redis 인스턴스는 인상적인 처리량을 처리할 수 있지만, 여전히 제한된 메모리를 가진 단일 장애점(Single Point of Failure)입니다. Redis 클러스터(Redis Cluster)와 Memcached 풀(Pool) 같은 분산 캐시 시스템은 여러 노드에 데이터를 분산시켜, 프로덕션 시스템에서 필요로 하는 용량과 복원력을 모두 제공합니다.
 
 ## 목차
 
@@ -18,8 +31,7 @@
 4. [Memcached 비교](#4-memcached-비교)
 5. [일관성 해싱](#5-일관성-해싱)
 6. [연습 문제](#6-연습-문제)
-7. [다음 단계](#7-다음-단계)
-8. [참고 자료](#8-참고-자료)
+7. [참고 자료](#7-참고-자료)
 
 ---
 
@@ -804,27 +816,44 @@ SREM user:A:following "B"
 SREM user:B:followers "A"
 ```
 
+## 실습 과제
+
+### 실습 1: 일관성 해싱(Consistent Hashing) 심화
+
+`examples/System_Design/07_consistent_hashing.py`를 사용하여 일관성 해싱을 탐구하세요.
+
+**과제:**
+1. 모든 데모를 실행하고 가상 노드(virtual node)가 분배 균형에 미치는 영향을 관찰하세요
+2. 실험: 10,000개의 키에 대해 모든 서버가 이상적인 분배의 ±5% 이내를 유지하려면 최소 몇 개의 가상 노드가 필요한가요?
+3. **가중치 일관성 해싱(weighted consistent hashing)** 을 구현하세요: "대형" 서버에 "소형" 서버의 2배에 해당하는 가상 노드를 부여하세요. 해당 서버가 약 2배의 키를 할당받는지 확인하세요
+4. 롤링 배포(rolling deployment)를 시뮬레이션하세요: 노드 1개 추가 후 재배치를 확인하고, 다시 1개를 추가하세요. 누적 키 이동량을 추적하세요
+
+### 실습 2: 캐시 클러스터 복제(Cache Cluster Replication)
+
+복제 기능을 갖춘 다중 노드 캐시 클러스터를 구축하세요.
+
+**과제:**
+1. 일관성 해싱으로 기본(primary) 할당을 수행하는 캐시 노드 3개를 생성하세요
+2. 각 키에 대해 링 상에서 시계 방향으로 N-1개의 인접 노드에 복제하세요(복제 인수(replication factor) = 2)
+3. 읽기를 구현하세요: 기본 노드를 시도하고, 실패 시 복제본(replica)으로 폴백(fallback)하세요
+4. 노드 장애를 시뮬레이션하세요: 노드 하나를 종료하고, 모든 키가 복제본에서 여전히 읽힐 수 있는지 확인하세요
+5. 읽기 지연 시간(1홉 vs. 2홉)과 쓰기 증폭(write amplification)(쓰기 횟수 × 복제 인수)을 측정하세요
+
+### 실습 3: 캐시 제거 정책(Cache Eviction Policy) 비교
+
+분산 캐시 워크로드에 대한 제거 정책을 비교하세요.
+
+**과제:**
+1. 용량 100인 캐시에서 LRU, LFU, 랜덤(Random) 제거를 구현하세요
+2. Zipf 분포(80/20 법칙) 접근 패턴을 생성하세요: 키의 20%가 접근의 80%를 차지합니다
+3. 10,000회의 요청을 실행하고 각 정책의 히트율(hit rate)을 비교하세요
+4. 균등(uniform) 접근 패턴으로 반복하세요. 어떤 정책이 편향된 접근 패턴에서 가장 큰 이점을 얻나요?
+
 ---
 
-## 7. 다음 단계
-
-분산 캐시를 이해했다면, 데이터베이스 확장을 학습하세요.
-
-### 다음 레슨
-- [08_Database_Scaling.md](./08_Database_Scaling.md)
-
-### 관련 레슨
-- [06_Caching_Strategies.md](./06_Caching_Strategies.md) - 캐싱 패턴
-- [09_Database_Replication.md](./09_Database_Replication.md) - 복제 전략
-
-### 추천 실습
-1. Redis 설치 및 데이터 구조 실습
-2. Redis Sentinel 구성해보기
-3. 일관성 해싱 직접 구현해보기
-
 ---
 
-## 8. 참고 자료
+## 7. 참고 자료
 
 ### 공식 문서
 - [Redis Documentation](https://redis.io/documentation)
@@ -839,7 +868,4 @@ SREM user:B:followers "A"
 
 ---
 
-**문서 정보**
-- 최종 수정: 2024년
-- 난이도: ⭐⭐⭐
-- 예상 학습 시간: 2-3시간
+**이전**: [캐싱 전략](./06_Caching_Strategies.md) | **다음**: [데이터베이스 확장](./08_Database_Scaling.md)

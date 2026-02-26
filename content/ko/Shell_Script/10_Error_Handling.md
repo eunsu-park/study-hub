@@ -2,9 +2,26 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [09_Process_Management.md](./09_Process_Management.md) | **다음**: [11_Argument_Parsing.md](./11_Argument_Parsing.md)
+**이전**: [프로세스 관리 및 작업 제어](./09_Process_Management.md) | **다음**: [인수 파싱 및 CLI 인터페이스](./11_Argument_Parsing.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `set -e`, `set -u`, `set -o pipefail`의 동작 방식과 예외 케이스를 설명할 수 있습니다
+2. 프로덕션 스크립트에 권장되는 엄격 모드 헤더(`set -euo pipefail`)를 구성할 수 있습니다
+3. 종료 코드(exit code), 줄 번호, 스택 추적(stack trace)을 캡처하는 `trap ERR` 핸들러를 구현할 수 있습니다
+4. 명명된 종료 코드(named exit code), 로그 레벨(log level), `die`/`assert` 함수를 갖춘 재사용 가능한 에러 처리 프레임워크를 구축할 수 있습니다
+5. 입력 유효성 검사, 안전한 임시 파일, 잠금 파일(lock file) 관리 등 방어적 코딩 패턴을 적용할 수 있습니다
+6. ShellCheck를 사용하여 런타임 이전에 일반적인 셸 스크립팅 버그를 탐지하고 수정할 수 있습니다
+7. 설정 가능한 상세도(verbosity)와 구조화된 키-값(key-value) 출력을 갖춘 다단계 디버그 로깅을 작성할 수 있습니다
+8. `ERR` 트랩과 `EXIT` 트랩의 차이를 구별하고, 이를 결합하여 견고한 정리(cleanup) 및 에러 보고를 구현할 수 있습니다
+
+---
+
+에러 처리가 없는 셸 스크립트는 실패 후에도 조용히 계속 실행되어 데이터를 손상시키고 고아 리소스(orphaned resource)를 남깁니다. 백업, 배포(deployment), 데이터 파이프라인을 관리하는 스크립트가 운영되는 프로덕션 환경에서는 처리되지 않은 단 하나의 에러가 몇 시간의 다운타임으로 이어질 수 있습니다. 이 레슨에서는 스크립트가 빠르게 실패하고(fail fast), 큰 소리로 실패하고(fail loudly), 스스로 정리(clean up)하도록 만드는 방법을 가르쳐 줍니다. 이는 일회성 스크립트와 신뢰할 수 있는 자동화를 구분하는 방어적 패턴입니다.
 
 ## 1. set 옵션 심화
 
@@ -1789,6 +1806,66 @@ structured_log ERROR "event=error" "error=connection_failed" "host=db.example.co
 - key=value 쌍으로 구조화된 로깅 지원
 - 코드의 특정 섹션에 대해 활성화/비활성화 가능
 - 성능 타이밍(작업 지속 시간) 포함
+
+## 연습 문제
+
+### 연습 1: set -e의 예외 케이스 이해하기
+
+다음 스크립트를 실행하기 전에 출력을 예측해 보세요. `set -e`가 활성화된 상태에서 각 `echo`가 실행되는지 아닌지를 설명하세요.
+
+```bash
+#!/bin/bash
+set -e
+
+echo "Start"
+false || echo "A"
+if false; then echo "B"; fi
+echo "C"
+! false
+echo "D"
+false | true
+echo "E"
+```
+
+출력되는 문자(A~E)를 적고, 각 케이스를 지배하는 규칙을 설명하세요.
+
+### 연습 2: trap ERR 핸들러 구축하기
+
+`safe_run.sh`라는 스크립트를 작성하세요:
+- 엄격 모드(strict mode) 활성화 (`set -euo pipefail`)
+- 종료 코드(exit code), 실패한 명령어(`$BASH_COMMAND`), 줄 번호(`$LINENO`)를 출력하는 `trap ERR` 핸들러 설치
+- 성공·실패 여부에 관계없이 항상 "Cleanup done"을 출력하는 `trap EXIT` 핸들러 설치
+- `echo "step 1"`, `false`, `echo "step 3"` 세 명령어 실행
+
+step 3이 절대 출력되지 않고, ERR 트랩이 정확한 컨텍스트와 함께 실행되며, EXIT 트랩은 항상 실행됨을 확인하세요.
+
+### 연습 3: die/assert 라이브러리 작성하기
+
+다음을 제공하는 재사용 가능한 셸 라이브러리 파일 `error_lib.sh`를 생성하세요:
+- 명명된 종료 코드(named exit code) 상수: `E_SUCCESS=0`, `E_GENERAL=1`, `E_INVALID_ARGS=2`, `E_NOT_FOUND=66`
+- 메시지를 stderr에 출력하고 지정된 코드로 종료하는 `die <code> <message>` 함수
+- 파일이 없으면 `die $E_NOT_FOUND`를 호출하는 `assert_file_exists <path>` 함수
+- 값이 비어 있으면 `die $E_INVALID_ARGS`를 호출하는 `assert_not_empty <value> <name>` 함수
+
+`error_lib.sh`를 소스(source)하고 각 함수를 유효한 입력과 잘못된 입력 양쪽으로 호출하여 동작을 시연하는 두 번째 스크립트를 작성하세요.
+
+### 연습 4: 정리(cleanup)를 포함한 안전한 파일 작업 구현하기
+
+안전한 작업만 사용하여 소스 파일을 처리하고 수정된 출력 파일을 생성하는 스크립트를 작성하세요:
+- `mktemp`로 임시 파일을 생성하고 `trap ... EXIT`으로 정리 등록
+- 처리된 내용을 임시 파일에 먼저 기록한 다음 `mv`로 최종 목적지에 원자적(atomic)으로 이동
+- 어느 단계에서든 실패하면 트랩이 임시 파일을 제거하고 "Aborted, temp files cleaned"를 출력
+- 존재하지 않는 명령어를 통해 파이프하는 등 의도적으로 중간에 실패시켜 정리가 발생하는지 확인
+
+### 연습 5: 다단계 디버그 로깅 프레임워크
+
+다음 기능을 가진 로깅 라이브러리 `log_lib.sh`를 구축하세요:
+- 상세도(verbosity)를 제어하는 `LOG_LEVEL` 환경 변수 (0=없음, 1=에러, 2=경고, 3=정보, 4=디버그)
+- 출력 전에 `LOG_LEVEL`을 확인하는 `log_error`, `log_warn`, `log_info`, `log_debug` 함수
+- 각 줄에 타임스탬프(`date '+%Y-%m-%d %H:%M:%S'`), 레벨 이름, 메시지 포함
+- 표준 접두사 뒤에 `key=value` 쌍을 추가하는 `log_structured` 함수
+
+`LOG_LEVEL=1 ./script.sh`(에러만), `LOG_LEVEL=3`(정보까지), `LOG_LEVEL=4`(전체 메시지)로 실행하여 테스트하세요. 각 레벨에서 예상되는 줄만 출력되는지 확인하세요.
 
 ---
 

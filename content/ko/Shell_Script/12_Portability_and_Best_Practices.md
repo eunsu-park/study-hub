@@ -2,9 +2,26 @@
 
 **난이도**: ⭐⭐⭐⭐
 
-**이전**: [11_Argument_Parsing.md](./11_Argument_Parsing.md) | **다음**: [13_Testing.md](./13_Testing.md)
+**이전**: [인수 파싱 및 CLI 인터페이스](./11_Argument_Parsing.md) | **다음**: [셸 스크립트 테스팅](./13_Testing.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. POSIX sh, Bash, Zsh의 기능 집합을 구분하고 주어진 작업에 적합한 셸을 선택할 수 있습니다
+2. 일반적인 Bash 전용 문법(Bashisms)(배열, `[[ ]]`, 프로세스 치환(process substitution), here strings)을 식별하고 POSIX 호환 방식으로 재작성할 수 있습니다
+3. 명명 규칙, 따옴표 처리, 들여쓰기, 함수 문서화에 관한 Google Shell Style Guide 관례를 적용할 수 있습니다
+4. 입력 sanitization, `eval` 회피, 안전한 임시 파일 처리, PATH 강화(hardening)를 포함한 보안 모범 사례를 구현할 수 있습니다
+5. 외부 명령 최소화, 불필요한 서브셸 회피, 내장 매개변수 확장(parameter expansion) 활용을 통해 스크립트 성능을 최적화할 수 있습니다
+6. 상수, 헬퍼 함수, 핵심 로직, 메인 진입점으로 구성된 모듈화되고 유지보수 가능한 구조로 스크립트를 정리할 수 있습니다
+7. 버전 비교 기능을 갖춘 의존성 검사와 선택적 도구가 없을 때의 우아한 성능 저하(graceful degradation)를 작성할 수 있습니다
+8. 자기 압축 해제 아카이브(self-extracting archives), man 페이지, bash-completion 지원으로 배포용 스크립트를 준비할 수 있습니다
+
+---
+
+개발 환경에서 완벽하게 동작하는 스크립트가 동료의 노트북, CI 러너, 혹은 최소화된 Docker 컨테이너에서는 실패할 수 있습니다. 셸 이식성(portability), 코딩 표준, 보안 관행은 개인 유틸리티를 신뢰할 수 있는 공유 인프라로 탈바꿈시키는 요소입니다. 이 레슨은 전문 셸 개발자들이 다양한 환경에서 이식 가능하고, 안전하며, 성능이 뛰어나고, 유지보수 가능한 스크립트를 작성하기 위해 사용하는 관례와 기법을 다룹니다.
 
 ## 1. POSIX sh vs Bash vs Zsh
 
@@ -1667,6 +1684,83 @@ complete -F _mytool_completion mytool
 - 커버리지 보고서 생성
 - CI/CD 시스템과 통합
 - JUnit 스타일 XML 보고서 생성
+
+## 연습 문제
+
+### 연습 1: 스크립트의 이식성 문제 감사하기
+
+다음 스크립트 단편의 모든 이식성 문제를 식별하세요. 각 문제에 대해 문제를 설명하고 이식 가능한(portable) 수정을 제공하세요.
+
+```bash
+#!/bin/bash
+which python3 > /dev/null
+result=`python3 -c "print(2**10)"`
+echo "Result: $result"
+ls *.log | while read file; do
+    wc -l $file
+done
+stat -c%s report.txt
+function cleanup { rm -f /tmp/myapp.$$; }
+```
+
+찾아야 할 문제: 배시즘(bashism), 안전하지 않은 인용(quoting), 이식 불가능한 플래그, 더 이상 사용되지 않는 문법, 특수 파일명에서 안전하지 않은 패턴.
+
+### 연습 2: POSIX 호환 스크립트 작성하기
+
+다음 bash 전용 스크립트를 POSIX 호환(`#!/bin/sh`)으로 다시 작성하세요. 모든 bash 전용 기능을 POSIX 동등물로 교체하세요.
+
+```bash
+#!/bin/bash
+declare -a files=()
+for f in *.conf; do
+    [[ -f "$f" ]] && files+=("$f")
+done
+
+process() {
+    local name="$1"
+    echo "Processing: $name"
+    [[ "$name" =~ ^[0-9]+_ ]] && echo "  (numbered file)"
+}
+
+for f in "${files[@]}"; do
+    process "$f"
+done
+```
+
+다시 작성한 후, `bash`와 `sh` 모두로 실행되는지 테스트하세요.
+
+### 연습 3: ShellCheck를 워크플로우에 통합하기
+
+작은 프로젝트에 ShellCheck를 설정하세요:
+1. ShellCheck 설치 (아직 사용 가능하지 않은 경우)
+2. `shell=bash`를 설정하고 `SC2034`(미사용 변수 — 소스된 라이브러리에서 흔함)를 비활성화하는 `.shellcheckrc` 파일 생성
+3. 현재 디렉토리 아래의 모든 `*.sh` 파일을 찾아 각각에 `shellcheck`를 실행하고, 에러(심각도(severity) `error`) 발견 시 코드 1로 종료하는 `lint.sh` 스크립트 작성
+4. 테스트 스크립트에 의도적으로 두 개의 ShellCheck 경고를 도입하고 `lint.sh`가 이를 잡아내는지 확인
+
+### 연습 4: 성능 모범 사례 적용하기
+
+다음 느린 스크립트를 프로파일링하고 최적화하세요. `time`을 사용하여 각 변경 전후의 실행 시간을 측정하세요.
+
+```bash
+#!/bin/bash
+count=0
+while read line; do
+    if echo "$line" | grep -q "ERROR"; then
+        count=$((count + 1))
+    fi
+done < application.log
+echo "Error count: $count"
+```
+
+최소 세 가지 최적화를 적용하세요 (힌트: 루프에서 서브쉘(subshell) 피하기, 내장 문자열 연산 사용, 카운팅에는 `grep -c` 선호). 최종 `time` 출력을 원본과 비교하세요.
+
+### 연습 5: 배포 가능한 스크립트 패키지 만들기
+
+모범 사례를 따라 배포용 스크립트를 패키지화하세요:
+- `myscript.sh`를 `/usr/local/bin`에 복사하고, 권한을 `755`로 설정하고, `/usr/local/share/man/man1/myscript.1`에 맨 페이지(man page) 항목을 생성하는 `install.sh` 작성
+- 루트가 아닌 설치를 지원하는 `--prefix` 옵션 추가 (예: `~/.local`)
+- 설치를 완전히 되돌리는 `uninstall.sh` 작성
+- 버전 확인 추가: 시스템의 bash가 4.0보다 오래된 경우, 경고를 출력하고 종료
 
 ---
 

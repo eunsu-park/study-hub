@@ -5,6 +5,19 @@
 > **사전 요구 사항**: 레슨 3 (텍스트 서식)
 > **목표**: 인라인 및 디스플레이 수식 모드, 그리스 문자, 아래 첨자/위 첨자, 분수, 근, 연산자, 구분 기호 및 수학 기호 마스터하기
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 인라인 수식 모드(inline math mode)와 디스플레이 수식 모드(display math mode)를 구분하고 각 문맥에 적합한 것을 선택할 수 있다
+2. 표준 LaTeX 명령을 사용하여 그리스 문자(Greek letter), 아래 첨자(subscript), 위 첨자(superscript), 분수(fraction), 제곱근(square root)을 작성할 수 있다
+3. 구분 기호 명령(`\left`, `\right`)을 사용하여 자동으로 크기가 조정되는 괄호(bracket)와 소괄호(parenthesis)를 만들 수 있다
+4. LaTeX 기호 라이브러리에서 일반적인 수학 연산자(operator), 관계 기호(relation), 수학 기호(symbol)를 생성할 수 있다
+5. 디스플레이 모드에서 합(sum), 곱(product), 적분(integral), 극한(limit)의 범위(bound)를 올바르게 배치하여 표현할 수 있다
+6. `equation`, `align` 및 관련 환경을 적용하여 수식에 번호를 매기고 참조(reference)할 수 있다
+
+---
+
 ## 수식 모드 소개
 
 LaTeX의 수학 조판은 가장 강력한 기능 중 하나입니다. 일반 텍스트와 달리 수학 표기법은 특별한 서식 규칙, 간격 및 기호가 필요합니다.
@@ -849,5 +862,5 @@ Cauchy-Schwarz 부등식 조판:
 ---
 
 **탐색**
-- 이전: [03_Text_Formatting.md](03_Text_Formatting.md)
+- 이전: [텍스트 서식](03_Text_Formatting.md)
 - 다음: [05_Advanced_Math.md](05_Advanced_Math.md)

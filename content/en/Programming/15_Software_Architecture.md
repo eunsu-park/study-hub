@@ -1,9 +1,25 @@
 # Software Architecture Basics
 
+**Previous**: [Version Control and Collaboration](./14_Version_Control_Workflows.md) | **Next**: [Developer Practices and Ethics](./16_Developer_Practices.md)
+
 > **Topic**: Programming
 > **Lesson**: 15 of 16
 > **Prerequisites**: Object-oriented programming, design patterns, system design fundamentals
-> **Objective**: Understand high-level architectural patterns, trade-offs between monoliths and microservices, and principles for designing maintainable systems
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between architecture (system-level, strategic) and design (component-level, tactical) decisions
+2. Evaluate when to use monolithic architecture versus microservices based on team size, complexity, and scaling needs
+3. Organize code using layered (N-tier) architecture with clear separation between presentation, business logic, and data access
+4. Apply hexagonal architecture (ports and adapters) to decouple domain logic from infrastructure concerns
+5. Implement event-driven communication patterns including event sourcing and CQRS
+6. Compare MVC, MVP, and MVVM patterns for UI organization and select the appropriate one for a given framework
+7. Write Architectural Decision Records (ADRs) to document and communicate design rationale
+8. Analyze trade-offs using the CAP theorem and quality attributes (performance, scalability, availability, maintainability)
+
+---
 
 ## Introduction
 
@@ -943,6 +959,6 @@ Software architecture is about making **intentional trade-offs** to meet busines
 
 **Golden rule**: Choose the simplest architecture that meets your needs. You can always evolve later.
 
-## Navigation
+---
 
-[← Previous: Version Control Workflows](14_Version_Control_Workflows.md) | [Next: Developer Practices →](16_Developer_Practices.md)
+**Previous**: [Version Control and Collaboration](./14_Version_Control_Workflows.md) | **Next**: [Developer Practices and Ethics](./16_Developer_Practices.md)

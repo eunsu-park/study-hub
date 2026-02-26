@@ -33,6 +33,9 @@ int account_deposit(Account* acc, int amount) {
     return new_balance;
 }
 
+// Why: the balance check and deduction must be atomic (under the same lock) —
+// without the lock, two threads could both see balance=100, both pass the check,
+// and overdraw the account
 int account_withdraw(Account* acc, int amount) {
     pthread_mutex_lock(&acc->lock);
 
@@ -47,6 +50,8 @@ int account_withdraw(Account* acc, int amount) {
     return -1;  // 잔액 부족
 }
 
+// Why: even a simple read needs the lock — on some architectures, reading an int
+// while another thread writes it can produce a torn (partially updated) value
 int account_get_balance(Account* acc) {
     pthread_mutex_lock(&acc->lock);
     int balance = acc->balance;
@@ -55,6 +60,9 @@ int account_get_balance(Account* acc) {
 }
 
 // 이체 (두 계좌 간)
+// Why: acquiring two locks in arbitrary order causes deadlock — thread A locks
+// account 1 then waits for 2, while thread B locks 2 then waits for 1.
+// Ordering by address guarantees a global lock acquisition order
 int account_transfer(Account* from, Account* to, int amount) {
     // 데드락 방지: 항상 같은 순서로 잠금
     // 주소값이 작은 계좌 먼저 잠금

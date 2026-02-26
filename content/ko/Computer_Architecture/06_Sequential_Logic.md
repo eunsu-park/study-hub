@@ -1,12 +1,26 @@
 # 순차 논리 회로
 
-## 개요
-
-순차 논리 회로는 현재 입력뿐만 아니라 이전 상태(메모리)에 따라 출력이 결정되는 디지털 회로입니다. 이 레슨에서는 기본 기억 소자인 래치와 플립플롭, 그리고 이를 활용한 레지스터와 카운터를 학습합니다. 이들은 CPU 레지스터, 메모리, 상태 기계 등 컴퓨터 핵심 구성 요소의 기반입니다.
+**이전**: [조합 논리 회로](./05_Combinational_Logic.md) | **다음**: [CPU 구조 기초](./07_CPU_Architecture_Basics.md)
 
 **난이도**: ⭐⭐ (중급)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 조합 논리(Combinational Logic)와 순차 논리(Sequential Logic) 구분
+2. SR, D, JK, T 플립플롭(Flip-Flop)과 각각의 특성표 설명
+3. 플립플롭 그룹을 사용하여 레지스터(Register)가 데이터를 저장하는 방식 설명
+4. 플립플롭을 사용하여 동기 카운터(Synchronous Counter) 설계
+5. 상태 다이어그램(State Diagram)과 상태표(State Table)로 유한 상태 기계(Finite State Machine) 모델링
+6. 순차 회로 동기화에서 클럭 신호(Clock Signal)의 역할 설명
+7. 셋업 타임(Setup Time), 홀드 타임(Hold Time), 전파 지연(Propagation Delay)으로 최대 클럭 주파수 계산
+
+---
+
+조합 회로에는 메모리가 없습니다 -- 출력은 오직 현재 입력에만 의존합니다. 순차 회로(Sequential Circuit)는 과거 입력을 기억하는 핵심 기능을 추가하여 데이터 저장과 명령어의 단계적 실행을 가능하게 합니다. 레지스터(Register), 카운터(Counter), 상태 기계(State Machine)는 수동 회로를 능동적이고 프로그래밍 가능한 컴퓨터로 변환하는 핵심 구성 요소입니다.
 
 ## 목차
 

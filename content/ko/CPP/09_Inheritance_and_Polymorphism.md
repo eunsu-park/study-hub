@@ -1,5 +1,26 @@
 # 상속과 다형성
 
+**이전**: [클래스 심화](./08_Classes_Advanced.md) | **다음**: [STL 컨테이너](./10_STL_Containers.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 상속의 개념을 설명하고 `public`, `protected`, `private` 상속을 사용하여 파생 클래스를 구현할 수 있습니다
+2. 상속 계층 구조에서 생성자와 소멸자의 호출 순서를 파악할 수 있습니다
+3. 함수 오버라이딩(`virtual` 없이)과 다형적 디스패치(`virtual` 사용)를 구별할 수 있습니다
+4. `override`와 `final` 키워드(C++11)를 적용하여 의도를 명확히 하고 컴파일 타임 오류를 잡을 수 있습니다
+5. 순수 가상 함수를 사용하여 추상 클래스를 설계하고 인터페이스 패턴을 구현할 수 있습니다
+6. 기반 클래스 소멸자가 `virtual`이어야 하는 이유를 설명하고, 그렇지 않을 때 발생하는 메모리 누수 시나리오를 식별할 수 있습니다
+7. 다중 상속에서 발생하는 다이아몬드 문제를 파악하고 가상 상속으로 해결할 수 있습니다
+8. `dynamic_cast`와 `typeid`를 적용하여 안전한 런타임 타입 식별(RTTI)을 수행할 수 있습니다
+
+---
+
+상속과 다형성은 일반적인 인터페이스에 맞게 코드를 작성하고, 어떤 구체적인 구현과도 원활하게 동작하도록 만드는 메커니즘입니다. 이는 플러그인 아키텍처, GUI 프레임워크, 게임 엔진 등 기존 코드를 재작성하지 않고 새로운 동작을 추가해야 하는 모든 곳의 기반이 됩니다. 내부적으로 가상 디스패치 테이블이 어떻게 동작하는지 이해하면 다형성이 적절한 도구인지, 아니면 더 단순한 대안으로 충분한지에 대해 정보에 입각한 결정을 내리는 데 도움이 됩니다.
+
 ## 1. 상속이란?
 
 상속은 기존 클래스(부모)의 속성과 메서드를 새 클래스(자식)가 물려받는 것입니다.
@@ -724,6 +745,63 @@ int main() {
 
 ---
 
+## 연습 문제
+
+### 연습 1: 생성자/소멸자(Constructor/Destructor) 호출 순서
+
+세 단계의 상속 계층을 만드세요: `Vehicle` → `Car` → `ElectricCar`. 각 클래스는 생성자와 소멸자에서 메시지를 출력해야 합니다. `main`에서 `ElectricCar` 객체를 스택에 생성하고 출력 순서가 예상과 일치하는지 확인하세요 (생성 시 기반 클래스 먼저, 소멸 시 파생 클래스 먼저). 그 다음 변수를 힙에 할당된 `ElectricCar`를 가리키는 `Vehicle*`로 변경하고, 삭제한 후 `Vehicle`의 소멸자가 `virtual`이 아닐 때 어떻게 변하는지 관찰하세요. 이유를 설명하세요.
+
+### 연습 2: 다형성(Polymorphism)을 활용한 도형 면적 계산기
+
+순수 가상 메서드(pure virtual method) `double area() const`를 가진 추상 기반 클래스(abstract base class) `Shape`를 설계하세요. 최소 세 가지 구체 클래스를 파생하세요: `Circle`, `Rectangle`, `Triangle`. 세 개 모두 `std::vector<Shape*>`에 저장하고 반복하면서 기반 클래스 포인터를 사용하여 각 도형의 면적을 출력하세요. 각 객체에 대해 올바른 `area()` 구현이 호출되는지 확인하세요 (다형적 디스패치(polymorphic dispatch)).
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+class Shape {
+public:
+    virtual double area() const = 0;
+    virtual std::string name() const = 0;
+    virtual ~Shape() = default;
+};
+
+// Circle, Rectangle, Triangle 여기에 구현하세요 ...
+
+int main() {
+    std::vector<Shape*> shapes;
+    // 객체를 추가하고 반복하세요 ...
+    return 0;
+}
+```
+
+### 연습 3: override와 final 안전성
+
+다음 기반 클래스가 주어졌을 때, `override` 키워드를 사용하여 `log()`를 오버라이드하는 파생 클래스 `FastLogger`를 추가하세요. 그 다음 의도적으로 시그니처 불일치를 도입하고(예: 매개변수 타입 변경) 컴파일 오류를 관찰하세요. 마지막으로 `FastLogger::log()`를 `final`로 표시하고 세 번째 클래스에서 오버라이드를 시도하여 컴파일 타임 오류를 확인하세요.
+
+```cpp
+class Logger {
+public:
+    virtual void log(const std::string& message) {
+        std::cout << "[LOG] " << message << std::endl;
+    }
+    virtual ~Logger() = default;
+};
+```
+
+런타임이 아닌 컴파일 타임에 이러한 오류를 잡는 것이 왜 더 바람직한지 주석으로 설명하세요.
+
+### 연습 4: 인터페이스(Interface) 조합
+
+두 개의 순수 가상 인터페이스를 정의하세요: `Drawable` (`void draw() const` 포함)와 `Resizable` (`void resize(double factor)` 포함). `std::vector<Drawable*>`를 저장하고 각 요소에 `draw()`를 호출하는 `Canvas` 클래스를 구현하세요. 그런 다음 두 인터페이스를 모두 구현하는 `Square` 클래스를 만드세요. 여러 `Square` 객체를 `Canvas`에 추가하고, 일부는 크기를 조정하고, 모두 그려보세요.
+
+### 연습 5: 다이아몬드 문제(Diamond Problem) 해결
+
+클래식 다이아몬드 계층을 만드세요: `Person` → `Employee`, `Person` → `Student`, `Employee` + `Student` → `WorkingStudent`. `Person` 클래스는 `std::string name` 멤버와 `greet()` 메서드를 가져야 합니다. 가상 상속(virtual inheritance) 없이 모호성 오류를 확인하세요. 그런 다음 `virtual public` 상속으로 수정하고 `WorkingStudent`가 모호함 없이 `greet()`를 호출할 수 있는지 확인하세요.
+
+---
+
 ## 다음 단계
 
-[10_STL_컨테이너.md](./10_STL_컨테이너.md)에서 STL 컨테이너를 배워봅시다!
+[STL 컨테이너](./10_STL_Containers.md)에서 STL 컨테이너를 배워봅시다!

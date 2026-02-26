@@ -2,9 +2,23 @@
 
 [Previous: Probability Review](./11_Probability_Review.md) | [Next: Confidence Intervals](./13_Confidence_Intervals.md)
 
-## Overview
+---
 
-The core goal of statistics is to infer characteristics of a **population** through a **sample**. This chapter covers the concept of sampling distributions and point estimation methods, particularly Maximum Likelihood Estimation (MLE) and the Method of Moments (MoM).
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between population parameters and sample statistics, and explain why sampling is necessary
+2. Describe simple random, stratified, and systematic sampling methods
+3. Derive the sampling distribution of the sample mean and calculate standard errors
+4. Evaluate estimator quality using the properties of unbiasedness, consistency, and efficiency
+5. Implement Maximum Likelihood Estimation (MLE) for common distributions (Bernoulli, normal, Poisson, exponential)
+6. Apply the Method of Moments (MoM) to estimate parameters of gamma and beta distributions
+7. Compare MLE and MoM in terms of bias, variance, and MSE through simulation
+
+---
+
+In practice, you almost never have access to an entire population -- you work with samples. The central challenge of statistics is bridging the gap between what a finite sample tells you and what is true about the whole population. This lesson develops the theoretical machinery for that bridge: sampling distributions that quantify how sample statistics behave, and estimation methods that extract the best possible parameter guesses from limited data.
 
 ---
 

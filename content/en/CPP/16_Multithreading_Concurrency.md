@@ -1,8 +1,24 @@
 # Multithreading and Concurrency
 
-## Overview
+**Previous**: [Modern C++ (C++11/14/17/20)](./15_Modern_CPP.md) | **Next**: [Advanced C++20](./17_CPP20_Advanced.md)
 
-To utilize the multicore performance of modern processors, multithreading programming is essential. Threading support was added to the standard library starting from C++11. In this chapter, we will learn about std::thread, synchronization techniques, and asynchronous programming.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create and manage threads using `std::thread`, `join()`, and `detach()`
+2. Identify data races and protect shared state with `std::mutex` and lock guards
+3. Coordinate thread execution using `std::condition_variable` for producer-consumer patterns
+4. Use `std::atomic` operations to perform lock-free updates on shared variables
+5. Write asynchronous code with `std::async`, `std::future`, and `std::promise`
+6. Implement a basic thread pool that distributes tasks across worker threads
+7. Diagnose and prevent common concurrency bugs: deadlocks, livelocks, and starvation
+
+---
+
+Modern processors deliver performance through parallelism, not faster clock speeds. A single-threaded program leaves most of that hardware idle. Multithreading lets you exploit every core, but it introduces an entirely new class of bugs--data races, deadlocks, and ordering issues--that cannot be found by reading code sequentially. Learning the C++ threading primitives and their correct usage patterns is essential for writing software that is both fast and correct on today's multicore machines.
 
 **Difficulty**: ****
 

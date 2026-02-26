@@ -52,7 +52,8 @@ void parse_redirect(char** args, Redirect* redir) {
             }
         }
 
-        // 리다이렉션이 아닌 인자
+        // Why: non-redirect args are compacted in-place (with separate i/j indices) so
+        // the command array is clean for execvp — it must not see "<", ">", or filenames
         args[j++] = args[i++];
     }
     args[j] = NULL;
@@ -72,6 +73,8 @@ int apply_redirect(Redirect* redir) {
     }
 
     // 출력 리다이렉션
+    // Why: O_TRUNC vs O_APPEND implements > vs >> — truncate discards existing
+    // content, append preserves it; O_CREAT ensures the file is created if missing
     if (redir->output_file) {
         int flags = O_WRONLY | O_CREAT;
         flags |= redir->append ? O_APPEND : O_TRUNC;
@@ -89,6 +92,8 @@ int apply_redirect(Redirect* redir) {
 }
 
 // 리다이렉션을 포함한 명령어 실행
+// Why: redirections are applied in the child AFTER fork — this preserves the
+// parent's original stdin/stdout so the shell can keep reading user input
 void execute_with_redirect(char** args) {
     Redirect redir;
     parse_redirect(args, &redir);

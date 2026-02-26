@@ -1,8 +1,24 @@
 # Pipelines and Practice
 
-## Overview
+**Previous**: [Dimensionality Reduction](./12_Dimensionality_Reduction.md) | **Next**: [Practical Projects](./14_Practical_Projects.md)
 
-Using sklearn's Pipeline and ColumnTransformer allows you to integrate preprocessing and modeling into a single workflow. This lesson covers practical know-how from model saving to deployment.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why sklearn Pipelines prevent data leakage and simplify ML workflows
+2. Build pipelines that chain preprocessing, feature extraction, and model training into a single object
+3. Apply ColumnTransformer to handle numeric and categorical features with different preprocessing steps
+4. Integrate Pipelines with cross-validation and GridSearchCV for correct hyperparameter tuning
+5. Implement custom transformers using BaseEstimator and TransformerMixin
+6. Save and load trained pipelines using joblib, including version metadata
+7. Design reusable pipeline templates for classification and regression problems
+
+---
+
+Knowing how to train a model is only half the story -- in production, the entire preprocessing-to-prediction chain must be reproducible, leak-free, and portable. Sklearn's Pipeline and ColumnTransformer solve this by encapsulating every transformation step into a single object that can be cross-validated, serialized, and deployed as a unit. This lesson bridges the gap between notebook experiments and production-grade ML code.
 
 ---
 

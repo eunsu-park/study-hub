@@ -1,13 +1,24 @@
 # Project 15: GPIO Control
 
+**Previous**: [Advanced Bit Operations](./15_Bit_Operations.md) | **Next**: [Project 16: Serial Communication](./17_Project_Serial_Communication.md)
+
 Control LEDs and buttons using GPIO (General Purpose Input/Output).
 
 ## Learning Objectives
-- Understand GPIO input/output concepts
-- LED control (digital output)
-- Button reading (digital input)
-- Understand pull-up/pull-down resistors
-- Learn debouncing techniques
+
+After completing this lesson, you will be able to:
+
+1. Configure GPIO pins as digital inputs or outputs using `pinMode()`
+2. Drive LEDs with `digitalWrite()` and create multi-LED lighting patterns
+3. Read button states with `digitalRead()` using internal pull-up resistors
+4. Explain the difference between pull-up and pull-down resistor configurations
+5. Implement software debouncing to eliminate false triggers from mechanical switch bounce
+6. Control GPIO pins through direct register manipulation (DDRx, PORTx, PINx) for higher performance
+7. Build an interactive project that combines button input with LED pattern output
+
+---
+
+GPIO pins are your program's physical hands -- they let software reach into the real world to turn things on, sense button presses, and respond to the environment. This project moves beyond blinking a single LED and challenges you to build an interactive controller where buttons select patterns and speeds, combining everything you have learned about digital I/O and bit operations.
 
 ## Prerequisites
 - Arduino basic structure (setup, loop)

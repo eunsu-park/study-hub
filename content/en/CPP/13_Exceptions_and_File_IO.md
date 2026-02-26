@@ -1,5 +1,25 @@
 # Exception Handling and File I/O
 
+**Previous**: [Templates](./12_Templates.md) | **Next**: [Smart Pointers and Memory Management](./14_Smart_Pointers_Memory.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use `try`, `throw`, and `catch` to handle exceptional conditions without crashing the program
+2. Design custom exception classes by inheriting from `std::exception`
+3. Apply `noexcept` to declare functions that guarantee not to throw
+4. Explain the four levels of exception safety and implement RAII to achieve the strong guarantee
+5. Read and write text files using `ifstream`, `ofstream`, and `fstream` with various open modes
+6. Perform binary file I/O with `read()`/`write()` and control file position using `seekg`/`seekp`
+7. Parse structured data (CSV, config files) using `stringstream` and `getline`
+
+---
+
+Every real-world program must deal with the unexpected--files that do not exist, networks that drop, and users who enter invalid data. Exception handling gives you a structured way to separate error-detection code from error-recovery code, keeping your main logic clean. Paired with file I/O, these skills let your programs persist data, communicate with other systems, and recover gracefully from failure instead of silently corrupting state.
+
 ## 1. What is Exception Handling?
 
 Exceptions are abnormal situations that occur during program execution. C++ handles exceptions using try-catch syntax.

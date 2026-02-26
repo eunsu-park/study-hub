@@ -1,10 +1,17 @@
 # 15. 컨테이너 내부 구조
 
+**이전**: [성능 튜닝](./14_Performance_Tuning.md) | **다음**: [스토리지 관리](./16_Storage_Management.md)
+
 ## 학습 목표
-- Linux 컨테이너 격리 기술 이해
-- namespaces로 리소스 격리
-- cgroups로 리소스 제한
-- 컨테이너 런타임 동작 원리
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 컨테이너와 가상머신(Virtual Machine)의 근본적인 차이를 설명한다
+2. Linux 네임스페이스(namespace)를 생성하고 관리하여 프로세스, 네트워크, 파일시스템을 격리한다
+3. cgroups v2를 구성하여 프로세스 그룹의 CPU, 메모리, I/O 자원을 제한한다
+4. OverlayFS가 컨테이너 이미지에 계층적 쓰기 시 복사(copy-on-write) 스토리지를 제공하는 방식을 설명한다
+5. 네임스페이스, cgroups, chroot를 사용하여 최소 컨테이너를 수동으로 구축한다
+6. 캐퍼빌리티(capabilities), seccomp, AppArmor 등 보안 메커니즘을 적용하여 컨테이너를 강화한다
 
 ## 목차
 1. [컨테이너 기초](#1-컨테이너-기초)
@@ -13,9 +20,13 @@
 4. [Union Filesystem](#4-union-filesystem)
 5. [컨테이너 런타임](#5-컨테이너-런타임)
 6. [보안](#6-보안)
-7. [연습 문제](#7-연습-문제)
+7. [eBPF 기초](#7-ebpf-기초)
+8. [컨테이너 네트워킹 심화](#8-컨테이너-네트워킹-심화)
+9. [연습 문제](#9-연습-문제)
 
 ---
+
+컨테이너는 소프트웨어를 빌드하고, 배포하고, 실행하는 방식을 혁신했습니다. 그러나 Docker와 Podman 같은 도구 뒤에는 수년간 존재해온 Linux 커널 기능들 -- 네임스페이스(namespaces), cgroups, 유니온 파일시스템(union filesystems) -- 이 자리 잡고 있습니다. 이 내부 구조를 이해하는 것은 컨테이너 문제를 디버깅하고, 안전한 컨테이너 설정을 작성하고, 컨테이너가 실제로 무엇을 보장하는지(그리고 보장하지 않는지)를 파악하는 데 필수적입니다. 이 레슨은 추상화 계층을 걷어내어 커널 수준에서 컨테이너를 다룰 수 있도록 합니다.
 
 ## 1. 컨테이너 기초
 
@@ -90,6 +101,8 @@
 ```
 
 ---
+
+> **비유: 아파트 건물.** Linux 컨테이너는 건물 속 아파트와 같습니다. 네임스페이스(namespace)는 각 입주자에게 고유한 시야를 제공합니다 -- 자신만의 우편함(PID 네임스페이스), 자신만의 호수(네트워크 네임스페이스), 자신만의 계량기(마운트 네임스페이스) -- 동일한 건물 구조(커널)를 공유하면서도 말입니다. Cgroups는 단 한 명의 입주자도 물과 전기를 과도하게 사용하지 못하도록 관리하는 건물 관리인입니다.
 
 ## 2. Linux Namespaces
 
@@ -662,9 +675,340 @@ docker run --read-only --tmpfs /tmp alpine sh
 docker run --read-only -v /data alpine sh
 ```
 
+## 7. eBPF 기초
+
+eBPF(extended Berkeley Packet Filter)는 커널 소스 코드를 변경하거나 커널 모듈을 로드하지 않고도 Linux 커널 내부에서 샌드박스 프로그램을 실행할 수 있는 혁신적인 기술입니다. 원래 패킷 필터링용으로 설계되었지만, eBPF는 현대적인 관측성(observability), 네트워킹, 보안 도구를 구동하는 범용 커널 내 가상 머신으로 발전했습니다.
+
+### 7.1 eBPF란?
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       eBPF 아키텍처                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  사용자 공간 (User Space)                                   │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │  bcc / bpftrace / libbpf                          │     │
+│  │  (eBPF 프로그램 로더 & 프론트엔드)                │     │
+│  └───────────────────┬───────────────────────────────┘     │
+│                      │ 프로그램 로드                         │
+│                      ▼                                      │
+│  ─────────────────────────────────────────────────────      │
+│  커널 공간 (Kernel Space)                                   │
+│  ┌───────────────┐   ┌───────────────┐                     │
+│  │   Verifier    │──>│  JIT Compiler │                     │
+│  │ (안전성 검사) │   │ (네이티브 코드)│                     │
+│  └───────────────┘   └───────┬───────┘                     │
+│                              │ 부착(attach)                 │
+│                              ▼                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ kprobes  │ │tracepoint│ │   XDP    │ │  cgroup  │      │
+│  │          │ │          │ │(네트워크)│ │(리소스) │      │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+│                                                             │
+│  eBPF Maps (커널-사용자 공간 공유 데이터)                   │
+│  ┌─────────────────────────────────────────────────┐       │
+│  │  Hash maps, Arrays, Ring buffers, Per-CPU maps  │       │
+│  └─────────────────────────────────────────────────┘       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> **클래식 BPF vs eBPF.** 클래식 BPF(cBPF)는 단순한 32비트 명령어 집합과 2개의 레지스터로 패킷 필터링에 한정되었습니다. eBPF는 이를 64비트 명령어 집합, 11개 레지스터로 확장하고, 상태 저장을 위한 맵(map)을 지원하며, 함수 호출이 가능하고, 네트워크 패킷뿐 아니라 거의 모든 커널 이벤트에 부착할 수 있습니다. cBPF가 공학용 계산기라면 eBPF는 완전한 프로그래밍 환경입니다.
+
+### 7.2 eBPF 프로그램 타입
+
+| 프로그램 타입 | 부착 지점(Attach Point) | 용도 |
+|-------------|-------------|----------|
+| `kprobe` / `kretprobe` | 커널 함수 진입/반환 | 커널 내부 추적 |
+| `tracepoint` | 정적 커널 트레이스포인트(tracepoint) | 안정적 성능 모니터링 |
+| `XDP` (eXpress Data Path) | 네트워크 드라이버 (sk_buff 이전) | 초고속 패킷 처리 |
+| `tc` (traffic control) | 네트워크 트래픽 제어 계층 | 패킷 변조, 폴리싱 |
+| `cgroup` | cgroup 이벤트 | 컨테이너별 리소스 제어 |
+| `socket_filter` | 소켓 계층 | 소켓별 패킷 필터링 |
+| `perf_event` | CPU 성능 카운터 | 하드웨어 수준 프로파일링 |
+| `LSM` (Linux Security Module) | 보안 훅(hook) | 세분화된 보안 정책 |
+
+### 7.3 eBPF 검증기(Verifier)와 JIT 컴파일
+
+eBPF 검증기(verifier)는 eBPF 프로그램이 커널을 크래시시키거나 비인가 메모리에 접근하지 못하도록 보장하는 안전 메커니즘입니다:
+
+```bash
+# 검증기가 확인하는 항목:
+# 1. 무한 루프 없음 (프로그램이 반드시 종료해야 함)
+# 2. 모든 메모리 접근에 경계 검사
+# 3. 널 포인터 역참조 없음
+# 4. 스택 크기 512바이트 제한
+# 5. 프로그램 크기 제한 (커널 5.2+ 기준 100만 명령어)
+
+# JIT 컴파일은 검증된 eBPF 바이트코드를 네이티브 머신 코드로 변환
+# JIT 상태 확인
+cat /proc/sys/net/core/bpf_jit_enable
+# 0 = 비활성, 1 = 활성, 2 = 디버그 활성
+
+# JIT 컴파일 활성화
+echo 1 | sudo tee /proc/sys/net/core/bpf_jit_enable
+```
+
+### 7.4 bpftool과 BCC 도구
+
+```bash
+# bpftool: eBPF 프로그램/맵 검사 및 관리
+# 로드된 eBPF 프로그램 목록
+bpftool prog list
+
+# 특정 프로그램 상세 정보
+bpftool prog show id 42
+
+# eBPF 맵 목록
+bpftool map list
+
+# 맵 내용 덤프
+bpftool map dump id 10
+
+# --- BCC (BPF Compiler Collection) 도구 ---
+# BCC 도구 설치
+apt install bpfcc-tools  # Debian/Ubuntu
+# 또는
+yum install bcc-tools    # RHEL/CentOS
+
+# tcptop: 프로세스별 TCP 트래픽 모니터링 (TCP용 top)
+tcptop
+
+# execsnoop: 새 프로세스 실행 추적
+execsnoop
+# 출력: PCOMM PID PPID RET ARGS
+# bash   1234 1000 0   /usr/bin/ls -la
+
+# biolatency: 블록 I/O 지연 히스토그램
+biolatency
+
+# opensnoop: 시스템 전체 파일 열기 추적
+opensnoop
+
+# tcpconnect: 능동적 TCP 연결 추적
+tcpconnect
+
+# funccount: 커널 함수 호출 횟수 카운트
+funccount 'tcp_send*'
+```
+
+### 7.5 eBPF 활용 사례
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    eBPF 활용 사례                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. 관측성 (Observability)                                  │
+│     • 시스템 콜 추적 (strace 대체)                          │
+│     • 애플리케이션 지연 프로파일링                           │
+│     • 지속적 프로덕션 프로파일링 (Parca, Pyroscope)         │
+│     • 코드 변경 없이 커스텀 메트릭 수집                     │
+│                                                             │
+│  2. 네트워킹 (Networking)                                   │
+│     • XDP 기반 DDoS 완화 (Cloudflare, Facebook)            │
+│     • 로드 밸런싱 (Cilium, Katran)                          │
+│     • K8s 네트워크 정책 적용                                │
+│     • DNS 요청 모니터링                                     │
+│                                                             │
+│  3. 보안 (Security)                                         │
+│     • 런타임 위협 탐지 (Falco, Tetragon)                   │
+│     • 파일 무결성 모니터링                                   │
+│     • 네트워크 정책 적용                                    │
+│     • syscall 감사 (auditd 대체)                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ---
 
-## 7. 연습 문제
+## 8. 컨테이너 네트워킹 심화
+
+컨테이너의 통신 원리를 이해하려면 Linux 네트워킹 기본 요소에 대한 지식이 필요합니다. Docker 브릿지, Kubernetes 파드 네트워킹, 서비스 메시 등 모든 컨테이너 네트워크는 이러한 커널 수준의 빌딩 블록 위에 구축됩니다.
+
+### 8.1 네트워크 네임스페이스(Network Namespace)
+
+```bash
+# 두 개의 네트워크 네임스페이스 생성 (컨테이너 2개 시뮬레이션)
+ip netns add container1
+ip netns add container2
+
+# 확인
+ip netns list
+# container1
+# container2
+
+# 각 네임스페이스는 자체 격리된 네트워크 스택을 가짐
+ip netns exec container1 ip a
+# lo (루프백) 인터페이스만 존재하며 DOWN 상태
+
+# 각 네임스페이스에서 루프백 활성화
+ip netns exec container1 ip link set lo up
+ip netns exec container2 ip link set lo up
+```
+
+### 8.2 Veth 페어와 브릿지 네트워킹
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              컨테이너 브릿지 네트워킹                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Container 1                Container 2                     │
+│  (netns: container1)        (netns: container2)             │
+│  ┌───────────────┐          ┌───────────────┐              │
+│  │ eth0          │          │ eth0          │              │
+│  │ 172.17.0.2/24 │          │ 172.17.0.3/24 │              │
+│  └───────┬───────┘          └───────┬───────┘              │
+│          │ veth pair                │ veth pair              │
+│          │                          │                        │
+│  ┌───────┴──────────────────────────┴───────┐              │
+│  │              docker0 bridge               │              │
+│  │              172.17.0.1/24                │              │
+│  └──────────────────┬───────────────────────┘              │
+│                     │                                       │
+│                     │ NAT (iptables MASQUERADE)             │
+│                     ▼                                       │
+│  ┌─────────────────────────────────────────┐               │
+│  │          Host eth0 / ens33              │               │
+│  │          192.168.1.100                  │               │
+│  └─────────────────────────────────────────┘               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+```bash
+# 단계별: 컨테이너 네트워킹 수동 구축
+
+# 1. 브릿지 생성 (docker0에 해당)
+ip link add br0 type bridge
+ip addr add 172.18.0.1/24 dev br0
+ip link set br0 up
+
+# 2. container1용 veth 페어 생성
+ip link add veth1 type veth peer name veth1-br
+
+# 3. 한쪽 끝을 컨테이너 네임스페이스로 이동
+ip link set veth1 netns container1
+
+# 4. 다른 끝을 브릿지에 연결
+ip link set veth1-br master br0
+ip link set veth1-br up
+
+# 5. 컨테이너 내부에서 IP 설정
+ip netns exec container1 ip addr add 172.18.0.2/24 dev veth1
+ip netns exec container1 ip link set veth1 up
+ip netns exec container1 ip route add default via 172.18.0.1
+
+# 6. container2도 동일하게 반복
+ip link add veth2 type veth peer name veth2-br
+ip link set veth2 netns container2
+ip link set veth2-br master br0
+ip link set veth2-br up
+ip netns exec container2 ip addr add 172.18.0.3/24 dev veth2
+ip netns exec container2 ip link set veth2 up
+ip netns exec container2 ip route add default via 172.18.0.1
+
+# 7. 컨테이너 간 통신 테스트
+ip netns exec container1 ping -c 3 172.18.0.3
+# PING 172.18.0.3: 3 packets transmitted, 3 received, 0% packet loss
+
+# 8. 외부 접속을 위한 NAT 활성화
+sysctl -w net.ipv4.ip_forward=1
+iptables -t nat -A POSTROUTING -s 172.18.0.0/24 -j MASQUERADE
+```
+
+### 8.3 Docker 네트워크 모드
+
+| 모드 | 명령어 | 격리 수준 | 성능 | 용도 |
+|------|---------|-----------|------|------|
+| **bridge** (기본) | `--network bridge` | 컨테이너 수준 | 중간 (NAT 오버헤드) | 범용 |
+| **host** | `--network host` | 없음 (호스트 스택 공유) | 네이티브 | 성능 중시 앱 |
+| **none** | `--network none` | 완전 격리 | 해당 없음 | 보안 민감 워크로드 |
+| **overlay** | `--network my-overlay` | 크로스 호스트 | 낮음 (VXLAN 캡슐화) | Swarm / 다중 호스트 |
+| **macvlan** | `--network my-macvlan` | VLAN 수준 | 네이티브에 가까움 | 직접 LAN 통합 |
+
+```bash
+# Docker 브릿지 네트워크 검사
+docker network inspect bridge
+# 출력: subnet, gateway, 연결된 컨테이너, IPAM 설정
+
+# 특정 서브넷으로 커스텀 브릿지 생성
+docker network create --driver bridge --subnet 10.10.0.0/16 mynet
+
+# 커스텀 네트워크에서 컨테이너 실행 (컨테이너 이름으로 자동 DNS)
+docker run -d --name web --network mynet nginx
+docker run -it --network mynet alpine ping web
+# 컨테이너 이름 "web"이 자동으로 DNS 해석됨
+```
+
+### 8.4 Kubernetes CNI (Container Network Interface)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                Kubernetes CNI 아키텍처                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  kubelet                                                    │
+│    │                                                        │
+│    │ "파드 네트워크 생성"                                    │
+│    ▼                                                        │
+│  CRI (containerd/CRI-O)                                    │
+│    │                                                        │
+│    │ CNI ADD / DEL                                          │
+│    ▼                                                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                    CNI 플러그인                        │  │
+│  │                                                      │  │
+│  │  Calico     │  Cilium      │  Flannel               │  │
+│  │  • BGP      │  • eBPF      │  • VXLAN overlay       │  │
+│  │  • IP-in-IP │  • kube-     │  • 간단한 설정         │  │
+│  │  • 정책     │    proxy     │  • 제한적 정책         │  │
+│  │    엔진     │    불필요    │                         │  │
+│  │  • IPAM     │  • L7 정책   │                         │  │
+│  │             │  • Hubble    │                         │  │
+│  │             │   (관측성)   │                         │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  파드 간 통신: 모든 파드가 라우팅 가능한 IP 주소를 부여받음 │
+│  파드 간 NAT 없음 (플랫 네트워크 모델)                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.5 CNI 플러그인 비교: Calico vs Cilium vs Flannel
+
+| 특징 | Calico | Cilium | Flannel |
+|------|--------|--------|---------|
+| **데이터 플레인** | iptables 또는 eBPF | eBPF | VXLAN / host-gw |
+| **네트워크 정책** | 완전 (L3/L4) | 완전 (L3/L4/L7) | 없음 (애드온 필요) |
+| **암호화** | WireGuard | WireGuard / IPsec | 없음 |
+| **관측성** | 제한적 | Hubble (심층 가시성) | 없음 |
+| **성능** | 높음 (BGP 모드) | 최고 (eBPF 바이패스) | 중간 |
+| **복잡도** | 중간 | 중상 | 낮음 |
+| **적합 환경** | 대규모 클러스터, BGP | 보안 + 관측성 | 간단한/소규모 클러스터 |
+
+```bash
+# Calico: 매니페스트로 설치
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+# Cilium: Helm으로 설치
+helm repo add cilium https://helm.cilium.io/
+helm install cilium cilium/cilium --namespace kube-system
+
+# Flannel: 매니페스트로 설치
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+
+# CNI 동작 확인
+kubectl get pods -n kube-system | grep -E 'calico|cilium|flannel'
+```
+
+> **Cilium이 주목받는 이유.** Cilium은 kube-proxy를 eBPF 프로그램으로 완전히 대체하여, 수천 개의 서비스에서 확장이 어려운 iptables 규칙을 제거합니다. L7(HTTP, gRPC, Kafka) 네트워크 정책, Hubble을 통한 내장 관측성, 투명한 암호화를 제공하며 -- 이 모든 것을 사이드카 프록시 없이 달성합니다. 성능과 보안 가시성이 모두 필요한 클러스터에서 Cilium은 선도적인 선택지가 되었습니다.
+
+---
+
+## 9. 연습 문제
 
 ### 연습 1: namespace 실습
 ```bash
@@ -725,6 +1069,10 @@ docker run --read-only -v /data alpine sh
 - [OverlayFS](https://docs.kernel.org/filesystems/overlayfs.html)
 - [runc](https://github.com/opencontainers/runc)
 - [Container Security](https://docs.docker.com/engine/security/)
+- [eBPF Documentation](https://ebpf.io/what-is-ebpf/)
+- [BCC Tools](https://github.com/iovisor/bcc)
+- [Cilium Documentation](https://docs.cilium.io/)
+- [Kubernetes CNI Specification](https://github.com/containernetworking/cni)
 
 ---
 

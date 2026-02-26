@@ -41,10 +41,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import eigh
 
-# 간단한 그래프 생성
+# Create a simple graph
 def create_sample_graph():
     """
-    5개 정점으로 구성된 무방향 그래프
+    Undirected graph with 5 vertices
     """
     n = 5
     A = np.array([
@@ -57,13 +57,13 @@ def create_sample_graph():
     return A
 
 A = create_sample_graph()
-print("인접 행렬 A:")
+print("Adjacency matrix A:")
 print(A)
-print(f"\n대칭성 확인: {np.allclose(A, A.T)}")
+print(f"\nSymmetry check: {np.allclose(A, A.T)}")
 
-# 경로 수 계산
+# Count number of paths
 A2 = np.linalg.matrix_power(A, 2)
-print(f"\n정점 0에서 정점 4로 가는 길이 2인 경로의 수: {A2[0, 4]}")
+print(f"\nNumber of paths of length 2 from vertex 0 to vertex 4: {A2[0, 4]}")
 ```
 
 ### 1.3 Degree Matrix
@@ -76,14 +76,14 @@ $$D = \text{diag}(d_1, d_2, \ldots, d_n)$$
 
 ```python
 def compute_degree_matrix(A):
-    """차수 행렬 계산"""
+    """Compute degree matrix"""
     degrees = np.sum(A, axis=1)
     D = np.diag(degrees)
     return D, degrees
 
 D, degrees = compute_degree_matrix(A)
-print("차수 벡터:", degrees)
-print("\n차수 행렬 D:")
+print("Degree vector:", degrees)
+print("\nDegree matrix D:")
 print(D)
 ```
 
@@ -112,19 +112,19 @@ This is a smoothness measure that **quantifies differences between adjacent vert
 
 ```python
 def compute_laplacian(A):
-    """그래프 라플라시안 계산"""
+    """Compute graph Laplacian"""
     D, _ = compute_degree_matrix(A)
     L = D - A
     return L
 
 L = compute_laplacian(A)
-print("라플라시안 행렬 L:")
+print("Laplacian matrix L:")
 print(L)
 
-# 양반정치 확인 (모든 고유값 >= 0)
+# Verify positive semidefiniteness (all eigenvalues >= 0)
 eigenvalues = np.linalg.eigvalsh(L)
-print(f"\n라플라시안 고유값: {eigenvalues}")
-print(f"최소 고유값: {eigenvalues[0]:.10f}")
+print(f"\nLaplacian eigenvalues: {eigenvalues}")
+print(f"Minimum eigenvalue: {eigenvalues[0]:.10f}")
 ```
 
 ### 2.3 Normalized Laplacian
@@ -141,10 +141,10 @@ Eigenvalues of the normalized Laplacian lie in the range $[0, 2]$.
 
 ```python
 def compute_normalized_laplacian(A):
-    """정규화 라플라시안 계산"""
+    """Compute normalized Laplacian"""
     D, degrees = compute_degree_matrix(A)
 
-    # D^{-1/2} 계산
+    # Compute D^{-1/2}
     D_inv_sqrt = np.diag(1.0 / np.sqrt(degrees))
 
     # L_sym = D^{-1/2} L D^{-1/2}
@@ -158,11 +158,11 @@ def compute_normalized_laplacian(A):
     return L_sym, L_rw
 
 L_sym, L_rw = compute_normalized_laplacian(A)
-print("정규화 라플라시안 L_sym:")
+print("Normalized Laplacian L_sym:")
 print(L_sym)
 
 eig_sym = np.linalg.eigvalsh(L_sym)
-print(f"\nL_sym 고유값: {eig_sym}")
+print(f"\nL_sym eigenvalues: {eig_sym}")
 ```
 
 ### 2.4 Connected Components and Eigenvalues
@@ -171,9 +171,9 @@ print(f"\nL_sym 고유값: {eig_sym}")
 
 ```python
 def create_disconnected_graph():
-    """두 개의 연결 성분을 가진 그래프"""
-    # 성분 1: 정점 0, 1, 2
-    # 성분 2: 정점 3, 4
+    """Graph with two connected components"""
+    # Component 1: vertices 0, 1, 2
+    # Component 2: vertices 3, 4
     A = np.array([
         [0, 1, 1, 0, 0],
         [1, 0, 1, 0, 0],
@@ -187,9 +187,9 @@ A_disconnected = create_disconnected_graph()
 L_disconnected = compute_laplacian(A_disconnected)
 eigenvalues_disc = np.linalg.eigvalsh(L_disconnected)
 
-print("비연결 그래프의 라플라시안 고유값:")
+print("Laplacian eigenvalues of disconnected graph:")
 print(eigenvalues_disc)
-print(f"고유값 0의 개수 (연결 성분 수): {np.sum(np.abs(eigenvalues_disc) < 1e-10)}")
+print(f"Number of zero eigenvalues (number of connected components): {np.sum(np.abs(eigenvalues_disc) < 1e-10)}")
 ```
 
 ## 3. Spectral Clustering
@@ -219,43 +219,43 @@ The solution is the second smallest eigenvector of the generalized eigenvalue pr
 ```python
 def spectral_clustering(A, n_clusters=2):
     """
-    스펙트럼 군집화 알고리즘
+    Spectral clustering algorithm
 
     Parameters:
     -----------
     A : ndarray
-        인접 행렬
+        Adjacency matrix
     n_clusters : int
-        군집 수
+        Number of clusters
 
     Returns:
     --------
     labels : ndarray
-        각 정점의 군집 레이블
+        Cluster label for each vertex
     """
-    # 정규화 라플라시안 계산
+    # Compute normalized Laplacian
     L_sym, _ = compute_normalized_laplacian(A)
 
-    # 고유값 분해 (최소 n_clusters개의 고유벡터)
+    # Eigenvalue decomposition (at least n_clusters eigenvectors)
     eigenvalues, eigenvectors = eigh(L_sym)
 
-    # 최소 n_clusters개의 고유벡터 선택
+    # Select the smallest n_clusters eigenvectors
     U = eigenvectors[:, :n_clusters]
 
-    # 행 정규화
+    # Row normalization
     U_normalized = U / np.linalg.norm(U, axis=1, keepdims=True)
 
-    # k-means 군집화
+    # k-means clustering
     from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     labels = kmeans.fit_predict(U_normalized)
 
     return labels, U
 
-# 스펙트럼 군집화 적용
+# Apply spectral clustering
 labels, U = spectral_clustering(A, n_clusters=2)
-print("군집 레이블:", labels)
-print("\n첫 2개 고유벡터:")
+print("Cluster labels:", labels)
+print("\nFirst 2 eigenvectors:")
 print(U)
 ```
 
@@ -267,50 +267,50 @@ print(U)
 
 ```python
 def visualize_spectral_clustering():
-    """스펙트럼 군집화 시각화"""
-    # 더 큰 그래프 생성 (두 개의 밀집된 커뮤니티)
+    """Visualize spectral clustering"""
+    # Create a larger graph (two dense communities)
     np.random.seed(42)
     n1, n2 = 15, 15
     n = n1 + n2
 
-    # 블록 행렬 구조
+    # Block matrix structure
     A_block = np.zeros((n, n))
 
-    # 커뮤니티 1 내부 연결 (밀집)
+    # Intra-community connections for community 1 (dense)
     for i in range(n1):
         for j in range(i+1, n1):
             if np.random.rand() < 0.6:
                 A_block[i, j] = A_block[j, i] = 1
 
-    # 커뮤니티 2 내부 연결 (밀집)
+    # Intra-community connections for community 2 (dense)
     for i in range(n1, n):
         for j in range(i+1, n):
             if np.random.rand() < 0.6:
                 A_block[i, j] = A_block[j, i] = 1
 
-    # 커뮤니티 간 연결 (희소)
+    # Inter-community connections (sparse)
     for i in range(n1):
         for j in range(n1, n):
             if np.random.rand() < 0.05:
                 A_block[i, j] = A_block[j, i] = 1
 
-    # 스펙트럼 군집화
+    # Spectral clustering
     labels, U = spectral_clustering(A_block, n_clusters=2)
 
-    # 라플라시안 고유값
+    # Laplacian eigenvalues
     L_sym, _ = compute_normalized_laplacian(A_block)
     eigenvalues = np.linalg.eigvalsh(L_sym)
 
-    # 시각화
+    # Visualization
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
-    # 인접 행렬
+    # Adjacency matrix
     axes[0].imshow(A_block, cmap='binary')
     axes[0].set_title('Adjacency Matrix')
     axes[0].set_xlabel('Node')
     axes[0].set_ylabel('Node')
 
-    # 고유값 스펙트럼
+    # Eigenvalue spectrum
     axes[1].plot(eigenvalues, 'o-')
     axes[1].axvline(x=2, color='r', linestyle='--', label='Eigengap')
     axes[1].set_xlabel('Index')
@@ -319,7 +319,7 @@ def visualize_spectral_clustering():
     axes[1].legend()
     axes[1].grid(True)
 
-    # Fiedler 벡터
+    # Fiedler vector
     axes[2].scatter(range(n), U[:, 1], c=labels, cmap='viridis', s=50)
     axes[2].axhline(y=0, color='r', linestyle='--')
     axes[2].set_xlabel('Node')
@@ -329,7 +329,7 @@ def visualize_spectral_clustering():
 
     plt.tight_layout()
     plt.savefig('spectral_clustering.png', dpi=150, bbox_inches='tight')
-    print("스펙트럼 군집화 시각화 저장 완료")
+    print("Spectral clustering visualization saved")
 
 visualize_spectral_clustering()
 ```
@@ -348,16 +348,16 @@ $P_{ij}$ is the probability of moving from vertex $i$ to vertex $j$.
 
 ```python
 def compute_transition_matrix(A):
-    """전이 확률 행렬 계산"""
+    """Compute transition probability matrix"""
     D, degrees = compute_degree_matrix(A)
     D_inv = np.diag(1.0 / degrees)
     P = D_inv @ A
     return P
 
 P = compute_transition_matrix(A)
-print("전이 확률 행렬 P:")
+print("Transition probability matrix P:")
 print(P)
-print(f"\n각 행의 합 (확률의 합): {np.sum(P, axis=1)}")
+print(f"\nRow sums (sum of probabilities): {np.sum(P, axis=1)}")
 ```
 
 ### 4.2 Stationary Distribution
@@ -372,19 +372,19 @@ $$\pi_i = \frac{d_i}{\sum_j d_j}$$
 
 ```python
 def compute_stationary_distribution(A):
-    """정상 분포 계산"""
+    """Compute stationary distribution"""
     _, degrees = compute_degree_matrix(A)
     pi = degrees / np.sum(degrees)
     return pi
 
 pi = compute_stationary_distribution(A)
-print("정상 분포 π:")
+print("Stationary distribution π:")
 print(pi)
 
-# 검증: π^T P = π^T
+# Verify: π^T P = π^T
 P = compute_transition_matrix(A)
 pi_next = pi @ P
-print(f"\n정상성 확인: {np.allclose(pi, pi_next)}")
+print(f"\nStationarity check: {np.allclose(pi, pi_next)}")
 ```
 
 ### 4.3 PageRank Algorithm
@@ -398,43 +398,43 @@ where $d \in [0, 1]$ is the damping factor (typically 0.85), and $\mathbf{e}$ is
 ```python
 def pagerank(A, d=0.85, max_iter=100, tol=1e-6):
     """
-    PageRank 알고리즘
+    PageRank algorithm
 
     Parameters:
     -----------
     A : ndarray
-        인접 행렬
+        Adjacency matrix
     d : float
         Damping factor
     max_iter : int
-        최대 반복 횟수
+        Maximum number of iterations
     tol : float
-        수렴 임계값
+        Convergence threshold
 
     Returns:
     --------
     r : ndarray
-        PageRank 점수
+        PageRank scores
     """
     n = A.shape[0]
     P = compute_transition_matrix(A)
 
-    # 초기화: 균등 분포
+    # Initialize: uniform distribution
     r = np.ones(n) / n
 
     for iteration in range(max_iter):
         r_new = (1 - d) / n + d * (P.T @ r)
 
-        # 수렴 확인
+        # Check convergence
         if np.linalg.norm(r_new - r, 1) < tol:
-            print(f"수렴 완료: {iteration + 1}번 반복")
+            print(f"Converged: {iteration + 1} iterations")
             break
 
         r = r_new
 
     return r
 
-# 방향 그래프 생성 (웹페이지 링크 구조)
+# Create directed graph (web page link structure)
 A_directed = np.array([
     [0, 1, 1, 0, 0],
     [0, 0, 1, 1, 0],
@@ -444,9 +444,9 @@ A_directed = np.array([
 ])
 
 pagerank_scores = pagerank(A_directed)
-print("\nPageRank 점수:")
+print("\nPageRank scores:")
 for i, score in enumerate(pagerank_scores):
-    print(f"페이지 {i}: {score:.4f}")
+    print(f"Page {i}: {score:.4f}")
 ```
 
 ## 5. Graph Signal Processing
@@ -474,41 +474,41 @@ $$\mathbf{f} = \sum_{\ell=0}^{n-1} \hat{f}(\ell) \mathbf{u}_\ell$$
 ```python
 def graph_fourier_transform(A, signal):
     """
-    그래프 푸리에 변환
+    Graph Fourier Transform
 
     Parameters:
     -----------
     A : ndarray
-        인접 행렬
+        Adjacency matrix
     signal : ndarray
-        그래프 신호
+        Graph signal
 
     Returns:
     --------
     f_hat : ndarray
-        주파수 영역 신호
+        Frequency domain signal
     eigenvalues : ndarray
-        라플라시안 고유값
+        Laplacian eigenvalues
     eigenvectors : ndarray
-        라플라시안 고유벡터
+        Laplacian eigenvectors
     """
     L_sym, _ = compute_normalized_laplacian(A)
     eigenvalues, eigenvectors = eigh(L_sym)
 
-    # 그래프 푸리에 변환
+    # Graph Fourier Transform
     f_hat = eigenvectors.T @ signal
 
     return f_hat, eigenvalues, eigenvectors
 
-# 예제: 저주파 신호 생성
+# Example: generate a low-frequency signal
 n = A.shape[0]
 signal_smooth = np.array([1.0, 1.1, 0.9, 0.8, 1.0])
 
 f_hat, eigenvalues, eigenvectors = graph_fourier_transform(A, signal_smooth)
 
-print("원 신호:", signal_smooth)
-print("주파수 영역 신호:", f_hat)
-print("\n라플라시안 고유값 (주파수):", eigenvalues)
+print("Original signal:", signal_smooth)
+print("Frequency domain signal:", f_hat)
+print("\nLaplacian eigenvalues (frequencies):", eigenvalues)
 ```
 
 ### 5.3 Graph Filtering
@@ -524,36 +524,36 @@ where $h(\lambda)$ is the filter function.
 
 ```python
 def graph_filter(A, signal, filter_func):
-    """그래프 필터링"""
+    """Graph filtering"""
     f_hat, eigenvalues, eigenvectors = graph_fourier_transform(A, signal)
 
-    # 주파수 영역에서 필터 적용
+    # Apply filter in the frequency domain
     f_hat_filtered = f_hat * filter_func(eigenvalues)
 
-    # 역변환
+    # Inverse transform
     signal_filtered = eigenvectors @ f_hat_filtered
 
     return signal_filtered
 
-# 저역 통과 필터
+# Low-pass filter
 def lowpass_filter(eigenvalues, cutoff=0.5):
     return (eigenvalues < cutoff).astype(float)
 
-# 고역 통과 필터
+# High-pass filter
 def highpass_filter(eigenvalues, cutoff=0.5):
     return (eigenvalues >= cutoff).astype(float)
 
-# 노이즈가 있는 신호 생성
+# Generate a noisy signal
 np.random.seed(42)
 signal_noisy = signal_smooth + 0.3 * np.random.randn(n)
 
 signal_lowpass = graph_filter(A, signal_noisy, lambda eig: lowpass_filter(eig, cutoff=1.0))
 signal_highpass = graph_filter(A, signal_noisy, lambda eig: highpass_filter(eig, cutoff=1.0))
 
-print("원 신호:", signal_smooth)
-print("노이즈 신호:", signal_noisy)
-print("저역 통과 필터 결과:", signal_lowpass)
-print("고역 통과 필터 결과:", signal_highpass)
+print("Original signal:", signal_smooth)
+print("Noisy signal:", signal_noisy)
+print("Low-pass filter result:", signal_lowpass)
+print("High-pass filter result:", signal_highpass)
 ```
 
 ## 6. Mathematical Foundations of GNNs
@@ -601,62 +601,62 @@ where $\tilde{A} = A + I$ (adding self-loops), and $\tilde{D}$ is the degree mat
 ```python
 def gcn_layer(A, H, W, activation=lambda x: np.maximum(0, x)):
     """
-    GCN 레이어 구현
+    GCN layer implementation
 
     Parameters:
     -----------
     A : ndarray, shape (n, n)
-        인접 행렬
+        Adjacency matrix
     H : ndarray, shape (n, d_in)
-        입력 특징 행렬
+        Input feature matrix
     W : ndarray, shape (d_in, d_out)
-        가중치 행렬
+        Weight matrix
     activation : function
-        활성화 함수 (기본: ReLU)
+        Activation function (default: ReLU)
 
     Returns:
     --------
     H_out : ndarray, shape (n, d_out)
-        출력 특징 행렬
+        Output feature matrix
     """
     n = A.shape[0]
 
-    # 자기 루프 추가
+    # Add self-loops
     A_tilde = A + np.eye(n)
 
-    # 차수 행렬
+    # Degree matrix
     D_tilde = np.diag(np.sum(A_tilde, axis=1))
 
-    # 정규화: D^{-1/2} A D^{-1/2}
+    # Normalization: D^{-1/2} A D^{-1/2}
     D_inv_sqrt = np.diag(1.0 / np.sqrt(np.diag(D_tilde)))
     A_hat = D_inv_sqrt @ A_tilde @ D_inv_sqrt
 
-    # 메시지 패싱 + 선형 변환 + 활성화
+    # Message passing + linear transform + activation
     H_out = activation(A_hat @ H @ W)
 
     return H_out
 
-# 예제: 간단한 2층 GCN
+# Example: simple 2-layer GCN
 np.random.seed(42)
 n = 5
 d_in = 3
 d_hidden = 4
 d_out = 2
 
-# 초기 특징 행렬
+# Initial feature matrix
 X = np.random.randn(n, d_in)
 
-# 가중치 행렬
+# Weight matrices
 W1 = np.random.randn(d_in, d_hidden) * 0.1
 W2 = np.random.randn(d_hidden, d_out) * 0.1
 
-# 순전파
+# Forward pass
 H1 = gcn_layer(A, X, W1)
-print("레이어 1 출력 shape:", H1.shape)
+print("Layer 1 output shape:", H1.shape)
 
 H2 = gcn_layer(A, H1, W2)
-print("레이어 2 출력 shape:", H2.shape)
-print("\n최종 임베딩:")
+print("Layer 2 output shape:", H2.shape)
+print("\nFinal embeddings:")
 print(H2)
 ```
 
@@ -671,63 +671,63 @@ $$\mathbf{h}_v^{(\ell+1)} = \sigma\left( \sum_{u \in \mathcal{N}(v)} \alpha_{vu}
 ```python
 def graph_attention_layer(A, H, W, a, alpha=0.2):
     """
-    간단한 그래프 어텐션 레이어
+    Simple graph attention layer
 
     Parameters:
     -----------
     A : ndarray, shape (n, n)
-        인접 행렬
+        Adjacency matrix
     H : ndarray, shape (n, d_in)
-        입력 특징
+        Input features
     W : ndarray, shape (d_in, d_out)
-        특징 변환 가중치
+        Feature transformation weights
     a : ndarray, shape (2 * d_out,)
-        어텐션 파라미터
+        Attention parameters
     alpha : float
-        LeakyReLU 기울기
+        LeakyReLU slope
 
     Returns:
     --------
     H_out : ndarray, shape (n, d_out)
-        출력 특징
+        Output features
     """
     n = A.shape[0]
 
-    # 특징 변환
+    # Feature transformation
     H_transformed = H @ W
     d_out = H_transformed.shape[1]
 
-    # 어텐션 계산
+    # Compute attention scores
     attention_scores = np.zeros((n, n))
 
     for i in range(n):
         for j in range(n):
-            if A[i, j] > 0 or i == j:  # 연결되어 있거나 자기 자신
-                # 연결된 특징 [h_i || h_j]
+            if A[i, j] > 0 or i == j:  # Connected or self-loop
+                # Concatenated features [h_i || h_j]
                 concat = np.concatenate([H_transformed[i], H_transformed[j]])
 
-                # 어텐션 점수
+                # Attention score
                 score = a @ concat
                 attention_scores[i, j] = np.maximum(alpha * score, score)  # LeakyReLU
             else:
                 attention_scores[i, j] = -np.inf
 
-    # 소프트맥스
+    # Softmax
     attention_weights = np.exp(attention_scores - np.max(attention_scores, axis=1, keepdims=True))
     attention_weights = attention_weights / np.sum(attention_weights, axis=1, keepdims=True)
 
-    # 어텐션 집계
+    # Attention aggregation
     H_out = attention_weights @ H_transformed
 
     return H_out, attention_weights
 
-# 예제
+# Example
 W_att = np.random.randn(d_in, d_hidden) * 0.1
 a_att = np.random.randn(2 * d_hidden) * 0.1
 
 H_gat, att_weights = graph_attention_layer(A, X, W_att, a_att)
-print("GAT 출력 shape:", H_gat.shape)
-print("\n어텐션 가중치:")
+print("GAT output shape:", H_gat.shape)
+print("\nAttention weights:")
 print(att_weights)
 ```
 

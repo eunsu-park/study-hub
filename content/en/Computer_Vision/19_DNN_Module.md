@@ -1,5 +1,17 @@
 # Deep Neural Network Module (DNN Module)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how OpenCV's DNN module loads and runs inference with pre-trained models from multiple frameworks.
+2. Implement model loading with `readNet()` and input preprocessing with `blobFromImage()`.
+3. Apply the DNN module to perform YOLO-based object detection on images and video streams.
+4. Compare SSD and YOLO architectures for real-time object detection tasks.
+5. Implement DNN-based face detection and modern ONNX model inference in a complete pipeline.
+
+---
+
 ## Overview
 
 OpenCV's DNN module provides functionality to load and run inference with pre-trained deep learning models. It supports models from various frameworks including TensorFlow, Caffe, Darknet, and ONNX, and can run efficiently on both CPU and GPU.
@@ -24,6 +36,8 @@ OpenCV's DNN module provides functionality to load and run inference with pre-tr
 ---
 
 ## 1. cv2.dnn Module Overview
+
+The OpenCV DNN module solves a real deployment problem: you trained a model in PyTorch or TensorFlow, but shipping those heavy frameworks to an edge device or embedding them into a C++ application is impractical. The DNN module lets you run inference on models from any major framework using only OpenCV, with no additional runtime dependency. This matters especially for embedded systems, mobile apps, and production pipelines where minimizing dependencies is critical.
 
 ### DNN Module Features
 
@@ -227,11 +241,12 @@ img = cv2.imread('image.jpg')
 # Basic Blob creation
 blob = cv2.dnn.blobFromImage(
     img,                    # Input image
-    scalefactor=1/255.0,    # Scale factor (normalization)
+    scalefactor=1/255.0,    # Divide by 255 to map [0,255]→[0,1]; the model was trained on this range
     size=(416, 416),        # Target size
-    mean=(0, 0, 0),         # Mean subtraction
-    swapRB=True,            # BGR → RGB
-    crop=False              # Crop flag
+    mean=(0, 0, 0),         # Mean subtraction — set to (0,0,0) for YOLO since it uses pure [0,1] normalization;
+                            #   ImageNet-trained models use per-channel means instead (e.g. 104,117,123)
+    swapRB=True,            # OpenCV loads images as BGR; most DNN models expect RGB — this fixes the mismatch
+    crop=False              # False = stretch to fit; True = center-crop (changes aspect ratio, hurts accuracy)
 )
 
 print(f"Blob shape: {blob.shape}")  # (1, 3, 416, 416)
@@ -241,9 +256,9 @@ print(f"Blob shape: {blob.shape}")  # (1, 3, 416, 416)
 # 1. ImageNet style (mean subtraction)
 blob_imagenet = cv2.dnn.blobFromImage(
     img,
-    scalefactor=1.0,
+    scalefactor=1.0,         # No rescaling — the model was trained on raw [0,255] with only mean subtracted
     size=(224, 224),
-    mean=(104.0, 117.0, 123.0),  # ImageNet mean
+    mean=(104.0, 117.0, 123.0),  # Per-channel ImageNet mean (BGR order); subtracting removes dataset-wide color bias
     swapRB=True
 )
 
@@ -400,16 +415,20 @@ class YOLODetector:
         with open(names_path, 'r') as f:
             self.classes = [line.strip() for line in f.readlines()]
 
-        # Output layer names
+        # Output layer names — YOLO has 3 detection heads (at different scales);
+        # getUnconnectedOutLayers() finds them automatically regardless of model variant
         layer_names = self.net.getLayerNames()
         self.output_layers = [layer_names[i - 1]
                               for i in self.net.getUnconnectedOutLayers()]
 
-        # Thresholds
+        # conf_threshold=0.5: only keep detections with >50% class confidence;
+        #   lower values increase recall but add false positives
+        # nms_threshold=0.4: during NMS, boxes with IoU > 0.4 are suppressed;
+        #   lower = more aggressive suppression (fewer duplicate boxes)
         self.conf_threshold = conf_threshold
         self.nms_threshold = nms_threshold
 
-        # Colors (per class)
+        # Seed ensures consistent per-class colors across runs for easy visual tracking
         np.random.seed(42)
         self.colors = np.random.randint(0, 255, size=(len(self.classes), 3),
                                         dtype=np.uint8)
@@ -433,18 +452,19 @@ class YOLODetector:
 
         for output in outputs:
             for detection in output:
+                # detection[0:4] = bbox, detection[4] = objectness (YOLOv3), detection[5:] = class probs
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
 
                 if confidence > self.conf_threshold:
-                    # Bounding box coordinates (normalized)
+                    # YOLO outputs coordinates normalized to [0,1]; multiply by image dims to get pixels
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
                     w = int(detection[2] * width)
                     h = int(detection[3] * height)
 
-                    # Top-left coordinates
+                    # Convert from center format (cx,cy,w,h) to top-left format (x,y,w,h) for NMSBoxes
                     x = int(center_x - w / 2)
                     y = int(center_y - h / 2)
 
@@ -452,7 +472,8 @@ class YOLODetector:
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
 
-        # Non-Maximum Suppression
+        # NMS removes redundant overlapping boxes — YOLO generates many candidates per object,
+        # NMS keeps only the highest-confidence box when boxes overlap by more than nms_threshold IoU
         indices = cv2.dnn.NMSBoxes(boxes, confidences,
                                     self.conf_threshold, self.nms_threshold)
 
@@ -794,8 +815,9 @@ class DNNFaceDetector:
         # Create blob
         blob = cv2.dnn.blobFromImage(
             img, 1.0, (300, 300),
-            (104.0, 177.0, 123.0),  # Mean values
-            swapRB=False,
+            (104.0, 177.0, 123.0),  # Per-channel means the res10 model was trained with (BGR order);
+                                    # using the training-time means keeps pixel distributions matched
+            swapRB=False,           # The Caffe res10 model was trained on BGR, matching OpenCV's native order
             crop=False
         )
 
@@ -895,6 +917,8 @@ def realtime_dnn_face_detection():
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
 
+            # 0.5 threshold balances precision and recall for real-time use;
+            # lower values catch more faces but add false positives that hurt UX
             if confidence > 0.5:
                 box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                 x1, y1, x2, y2 = box.astype(int)
@@ -1061,14 +1085,14 @@ class YOLOv8Detector:
         height, width = img.shape[:2]
 
         # Preprocessing: letterbox resize
-        input_size = 640
+        input_size = 640  # YOLOv8 was trained at 640×640; using a different size degrades accuracy
         blob = cv2.dnn.blobFromImage(
             img,
-            scalefactor=1/255.0,
+            scalefactor=1/255.0,  # Normalize to [0,1] — YOLOv8 training uses this range (no per-channel mean)
             size=(input_size, input_size),
-            mean=(0, 0, 0),
-            swapRB=True,
-            crop=False
+            mean=(0, 0, 0),       # No mean subtraction for YOLO-family models; they rely on [0,1] scaling alone
+            swapRB=True,          # Convert BGR→RGB to match YOLOv8's training data format
+            crop=False            # Preserve aspect ratio via padding rather than cropping to avoid distortion
         )
 
         # Inference

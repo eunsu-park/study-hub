@@ -4,6 +4,19 @@
 
 # 35. CLIP (Contrastive Language-Image Pre-training)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the CLIP training objective — contrastive learning over image-text pairs — and describe how the InfoNCE loss aligns vision and language representations.
+2. Describe the dual-encoder architecture of CLIP (vision encoder + text encoder) and explain how the shared embedding space enables cross-modal similarity computation.
+3. Implement the CLIP contrastive training loop from scratch in PyTorch, including the symmetric cross-entropy loss over the similarity matrix.
+4. Perform zero-shot image classification using a pretrained CLIP model by constructing text prompts and computing image-text similarities.
+5. Apply CLIP embeddings for downstream tasks such as image retrieval, semantic image search, and as frozen features for few-shot classification.
+6. Analyze the role of temperature scaling in the InfoNCE loss and explain how data scale and prompt engineering affect CLIP's zero-shot performance.
+
+---
+
 ## Overview
 
 CLIP maps images and text to the same embedding space, enabling zero-shot image classification. "Learning Transferable Visual Models From Natural Language Supervision" (Radford et al., 2021)

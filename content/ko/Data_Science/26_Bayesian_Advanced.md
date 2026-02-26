@@ -2,9 +2,20 @@
 
 [이전: 실전 프로젝트](./25_Practical_Projects.md) | [다음: 인과 추론](./27_Causal_Inference.md)
 
-## 개요
+## 학습 목표
 
-이 레슨은 L15-L16의 베이지안 기초를 고급 계산 방법론으로 확장합니다. 해밀턴 몬테카를로(Hamiltonian Monte Carlo, HMC)와 NUTS 변형, 변분 추론(Variational Inference, VI)을 MCMC의 확장 가능한 대안으로, 그룹화된 데이터를 위한 계층 모델(hierarchical models), 그리고 WAIC와 LOO-CV를 이용한 모델 비교를 다룹니다. 모든 예제는 PyMC를 사용합니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. HMC(Hamiltonian Monte Carlo)가 기울기(gradient) 정보를 활용해 메트로폴리스-헤이스팅스(Metropolis-Hastings)보다 효율적으로 샘플링하는 원리를 설명할 수 있다
+2. NUTS(No-U-Turn Sampler)가 궤적 길이를 자동으로 조정하는 방식과 현대 확률적 프로그래밍 프레임워크에서 기본 샘플러로 채택된 이유를 설명할 수 있다
+3. MCMC와 변분 추론(Variational Inference, ADVI)을 정확도, 속도, 적합한 사용 사례 측면에서 비교할 수 있다
+4. PyMC에서 계층 모델(hierarchical model)을 구현하고, 부분 풀링(partial pooling)과 수축(shrinkage) 개념을 설명할 수 있다
+5. LOO-CV와 WAIC를 이용한 베이지안 모델 비교를 적용하고, 파레토 k(Pareto k) 진단 결과를 해석할 수 있다
+6. R-hat, 유효 표본 크기(ESS, Effective Sample Size), 발산(divergence) 검사, 사후 예측 검사(posterior predictive check)를 활용하여 MCMC 수렴을 평가할 수 있다
+
+---
+
+메트로폴리스-헤이스팅스 같은 기본적인 MCMC 방법은 단순한 모델에서는 충분하지만, 고차원 매개변수 공간에서는 어려움을 겪고 대규모 데이터셋에 잘 확장되지 않습니다. HMC/NUTS(효율적인 샘플링), 변분 추론(Variational Inference)(속도), 계층 모델(hierarchical models)(그룹화된 데이터) 등의 고급 계산 베이지안 방법론은 베이지안 프레임워크의 진정한 잠재력을 열어줍니다. 문제가 복잡한 경우에도 더 풍부한 모델을 구축하고 신뢰할 수 있는 결론을 도출할 수 있게 해줍니다.
 
 ---
 

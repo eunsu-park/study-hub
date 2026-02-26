@@ -11,6 +11,8 @@
 
 ### 정의
 
+네트워크 플로우를 파이프 시스템을 통해 흐르는 물이라고 생각해 보세요. 각 파이프에는 최대 용량이 있고, 합류점에서 물은 보존되어야 하며(들어오는 양 = 나가는 양), 목표는 소스(source)에서 싱크(sink)로의 처리량을 최대화하는 것입니다.
+
 **유량 네트워크**는 다음으로 구성됩니다:
 - **방향 그래프** G = (V, E)
 - **용량 함수** c(u, v): 간선이 수용할 수 있는 최대 유량
@@ -31,9 +33,9 @@ S: 소스, T: 싱크
 
 ### 유량의 조건
 
-1. **용량 제한**: 0 ≤ f(u,v) ≤ c(u,v)
-2. **유량 보존**: 소스/싱크 제외, 들어오는 유량 = 나가는 유량
-3. **반대칭성**: f(u,v) = -f(v,u)
+1. **용량 제한**: 0 ≤ f(u,v) ≤ c(u,v) *(파이프 지름이 허용하는 것 이상의 물을 흘릴 수 없음)*
+2. **유량 보존**: 소스/싱크 제외, 들어오는 유량 = 나가는 유량 *(합류점에서 물이 축적되지 않음 -- 들어온 모든 물방울은 반드시 나가야 함)*
+3. **반대칭성**: f(u,v) = -f(v,u) *(u에서 v로 3단위가 흐르면, v에서 u로는 -3으로 표현되어 잔여 그래프 연산을 가능하게 함)*
 
 ### 최대 유량 문제
 
@@ -100,22 +102,30 @@ class MaxFlow:
 
     def add_edge(self, u, v, cap):
         self.capacity[u][v] += cap
+        # 명시적 역방향 간선 불필요: self.flow[v][u]는 0에서 시작하므로
+        # 잔여 용량(cap - flow) = 정방향에서 cap이 되고,
+        # 아래 flow[neighbor][source] -= result가 역방향 부기를 처리함
 
     def dfs(self, source, sink, visited, min_cap):
         if source == sink:
-            return min_cap
+            return min_cap  # 싱크 도달 -- 이 경로의 병목 용량을 반환
 
         visited.add(source)
 
         for neighbor in self.capacity[source]:
+            # 잔여 용량 = 원래 용량 - 이미 흐르고 있는 유량
             residual = self.capacity[source][neighbor] - self.flow[source][neighbor]
 
             if neighbor not in visited and residual > 0:
+                # 이 DFS 경로를 따라 지금까지 본 가장 좁은 병목을 추적
                 new_cap = min(min_cap, residual)
                 result = self.dfs(neighbor, sink, visited, new_cap)
 
                 if result > 0:
                     self.flow[source][neighbor] += result
+                    # 역방향 간선: flow[neighbor][source]를 감소시키는 것은
+                    # 용량을 "크레딧"으로 돌려주는 것으로, 미래의 경로가
+                    # 차선의 경로로 보내진 유량을 재라우팅할 수 있게 해줌
                     self.flow[neighbor][source] -= result
                     return result
 
@@ -124,12 +134,14 @@ class MaxFlow:
     def max_flow(self, source, sink):
         total_flow = 0
 
+        # 증가 경로가 없을 때까지 계속 찾기 --
+        # 각 반복은 최소 1단위의 유량을 보내므로 루프가 종료됨
         while True:
             visited = set()
             path_flow = self.dfs(source, sink, visited, float('inf'))
 
             if path_flow == 0:
-                break
+                break  # 증가 경로 없음 -- 잔여 그래프가 소진됨
 
             total_flow += path_flow
 
@@ -176,9 +188,12 @@ class EdmondsKarp:
     def add_edge(self, u, v, cap):
         self.capacity[u][v] += cap
         self.graph[u].append(v)
-        self.graph[v].append(u)  # 역방향도 추가
+        self.graph[v].append(u)  # 역방향도 추가 -- 잔여 그래프 탐색에 필요
 
     def bfs(self, source, sink, parent):
+        # BFS는 최단 증가 경로를 찾음 -- Edmonds-Karp는 항상 간선 수가 가장 적은
+        # 경로를 선택하여 O(VE²)를 보장하며, DFS 기반 Ford-Fulkerson의
+        # 병리적인 O(E × max_flow) 동작을 방지함
         visited = [False] * self.n
         visited[source] = True
         queue = deque([source])
@@ -187,21 +202,24 @@ class EdmondsKarp:
             node = queue.popleft()
 
             for neighbor in self.graph[node]:
+                # 잔여 용량이 남아 있는 간선만 탐색
                 if not visited[neighbor] and self.capacity[node][neighbor] > 0:
                     visited[neighbor] = True
                     parent[neighbor] = node
                     if neighbor == sink:
-                        return True
+                        return True  # 경로 발견 -- BFS 조기 종료
                     queue.append(neighbor)
 
-        return False
+        return False  # 싱크까지의 경로 없음 -- 최대 유량 도달
 
     def max_flow(self, source, sink):
         parent = [-1] * self.n
         total_flow = 0
 
+        # 각 BFS 호출은 하나의 증가 경로를 찾고 최소 하나의 간선을 포화시키므로,
+        # 종료까지 최대 O(VE)번의 증가 경로 반복이 있음
         while self.bfs(source, sink, parent):
-            # 경로의 최소 잔여 용량 찾기
+            # 경로를 따라 최소 잔여 용량 찾기 (병목 간선)
             path_flow = float('inf')
             node = sink
             while node != source:
@@ -209,7 +227,10 @@ class EdmondsKarp:
                 path_flow = min(path_flow, self.capacity[prev][node])
                 node = prev
 
-            # 유량 업데이트
+            # 용량 업데이트: 정방향 간선은 감소, 역방향 간선은 증가.
+            # capacity[node][prev]를 증가시키면 미래 경로를 위한 "취소" 옵션을
+            # 만들게 됨 -- 이것이 알고리즘이 이전의 차선 라우팅 결정을
+            # 되돌릴 수 있게 하는 핵심 메커니즘
             node = sink
             while node != source:
                 prev = parent[node]
@@ -218,7 +239,7 @@ class EdmondsKarp:
                 node = prev
 
             total_flow += path_flow
-            parent = [-1] * self.n
+            parent = [-1] * self.n  # 다음 BFS를 위해 부모 배열 초기화
 
         return total_flow
 
@@ -305,6 +326,8 @@ public:
 
 **최대 유량 = 최소 컷의 용량**
 
+직관적으로, 컷(cut)은 병목(bottleneck)이라고 생각할 수 있습니다 -- 제거하면 소스에서 싱크로의 모든 경로가 끊어지는 간선 집합입니다. 최소 컷은 가장 좁은 병목이며, 모든 유량은 반드시 이 컷을 통과해야 하므로 그 총 용량을 초과할 수 없습니다. 반대로, 최대 유량 알고리즘은 이 병목을 정확히 포화시킵니다 -- 알고리즘이 종료될 때 잔여 그래프 경계를 가로지르는 포화된 간선들이 최소 컷을 형성합니다. 잔여 그래프의 역방향 간선은 이 과정에서 필수적입니다: 차선의 경로로 보내진 유량을 재라우팅할 수 있게 해서, 이전 결정을 효과적으로 "되돌려" 최종 유량 구성이 최소 컷을 최대 용량으로 통과하도록 합니다.
+
 ### 컷이란?
 
 그래프를 소스 측(S)과 싱크 측(T)으로 나누는 간선 집합
@@ -326,10 +349,12 @@ def find_min_cut(self, source, sink):
     """
     최대 유량 계산 후 최소 컷을 구성하는 간선들 반환
     """
-    # 먼저 최대 유량 계산
+    # 먼저 최대 유량 계산 -- 최소 컷을 가로지르는 모든 병목 간선을 포화시킴
     max_flow_value = self.max_flow(source, sink)
 
-    # 잔여 그래프에서 소스로부터 도달 가능한 노드 찾기
+    # 최대 유량 후, 잔여 그래프에서 소스로부터 BFS 수행.
+    # 소스에서 도달 가능한 노드들이 최소 컷의 "S측"을 형성.
+    # 모든 증가 경로가 소진되었으므로 싱크는 도달 불가능.
     visited = [False] * self.n
     queue = deque([source])
     visited[source] = True
@@ -337,11 +362,16 @@ def find_min_cut(self, source, sink):
     while queue:
         node = queue.popleft()
         for neighbor in range(self.n):
+            # 잔여 용량이 남아 있는 간선만 탐색
             if not visited[neighbor] and self.capacity[node][neighbor] > 0:
                 visited[neighbor] = True
                 queue.append(neighbor)
 
-    # 최소 컷 = 방문 노드 → 미방문 노드 간선 (원본 용량 > 0)
+    # 최소 컷 간선은 도달 가능(S)측에서 도달 불가능(T)측으로 교차하는 간선.
+    # 원본 그래프에 존재했던 간선을 식별하기 위해 원본 용량(현재 잔여 용량이 아닌)을 확인 --
+    # 일부는 완전히 포화되어 잔여가 0이 되었으며 최소 컷 경계를 형성함.
+    # original_capacity 추적 없이는 원래 그래프에 없던 간선(용량 0)과
+    # 유량에 의해 포화된 간선을 구별할 수 없음.
     min_cut_edges = []
     for u in range(self.n):
         if visited[u]:
@@ -402,20 +432,26 @@ class BipartiteMatching:
         for right in self.adj[node]:
             if visited[right]:
                 continue
+            # 이 DFS가 같은 오른쪽 노드를 재방문하는 것을 방지하기 위해 방문 표시 --
+            # 그렇지 않으면 증가 경로 탐색에서 무한 재귀가 발생함
             visited[right] = True
 
-            # 오른쪽 노드가 매칭 안됨 or 기존 매칭을 다른 곳으로 보낼 수 있음
+            # 오른쪽 노드가 미매칭이거나, 현재 매칭 파트너가 다른 매칭을 찾을 수 있음.
+            # 이 재귀 호출은 증가 경로 단계: 기존 매칭 파트너를 다른 오른쪽 노드로
+            # "밀어내어" 이 자리를 비우려고 시도함.
             if match_right[right] == -1 or self.dfs(match_right[right], visited, match_right):
-                match_right[right] = node
+                match_right[right] = node  # 이 오른쪽 노드를 현재 왼쪽 노드에 (재)배정
                 return True
 
-        return False
+        return False  # 이 왼쪽 노드에서 증가 경로를 찾지 못함
 
     def max_matching(self):
-        match_right = [-1] * self.right  # 오른쪽 노드의 매칭 상대
+        match_right = [-1] * self.right  # match_right[r] = 오른쪽 노드 r에 매칭된 왼쪽 노드
         result = 0
 
         for left_node in range(self.left):
+            # 왼쪽 노드마다 새 visited 배열 -- 이전 반복에 차단되지 않고
+            # 모든 대안 증가 경로를 탐색할 수 있도록 보장
             visited = [False] * self.right
             if self.dfs(left_node, visited, match_right):
                 result += 1
@@ -636,10 +672,16 @@ class Dinic:
         self.graph = [[] for _ in range(n)]
 
     def add_edge(self, u, v, cap):
+        # 각 정방향 간선은 역방향 간선의 참조 인덱스를 저장하고 그 반대도 마찬가지.
+        # 이 쌍 인덱스 트릭은 유량 업데이트 시 역방향 간선을 O(1)로 찾을 수 있게 하여,
+        # 인접 리스트에서 해당 역방향 간선을 검색할 필요를 없앰.
         self.graph[u].append([v, cap, len(self.graph[v])])
-        self.graph[v].append([u, 0, len(self.graph[u]) - 1])
+        self.graph[v].append([u, 0, len(self.graph[u]) - 1])  # 용량 0인 역방향 간선
 
     def bfs(self, source, sink):
+        # BFS는 각 노드에 "레벨"(잔여 그래프에서 소스까지의 거리)을 할당.
+        # 이 레벨 그래프는 DFS가 싱크 방향으로만 진행하도록 제한하여
+        # 사이클을 방지하고 각 차단 유량(blocking flow) 단계가 진전되도록 보장.
         self.level = [-1] * self.n
         self.level[source] = 0
         queue = deque([source])
@@ -651,36 +693,40 @@ class Dinic:
                     self.level[next_node] = self.level[node] + 1
                     queue.append(next_node)
 
-        return self.level[sink] != -1
+        return self.level[sink] != -1  # False이면 경로 없음 -- 최대 유량 도달
 
     def dfs(self, node, sink, flow):
         if node == sink:
-            return flow
+            return flow  # 싱크 도달 -- 이 경로의 병목 용량을 반환
 
         while self.iter[node] < len(self.graph[node]):
             edge = self.graph[node][self.iter[node]]
             next_node, cap, rev = edge
 
+            # 정확히 한 레벨 더 깊은 간선만 따라감 (레벨 그래프 제약)
             if cap > 0 and self.level[next_node] == self.level[node] + 1:
                 d = self.dfs(next_node, sink, min(flow, cap))
                 if d > 0:
-                    edge[1] -= d
-                    self.graph[next_node][rev][1] += d
+                    edge[1] -= d                        # 정방향 간선 용량 감소
+                    self.graph[next_node][rev][1] += d  # 역방향 간선 용량 증가 (잔여)
                     return d
 
-            self.iter[node] += 1
+            self.iter[node] += 1  # 이 간선 소진 -- 다음 이웃으로 이동
 
-        return 0
+        return 0  # 레벨 그래프에서 막다른 길; 백트랙
 
     def max_flow(self, source, sink):
         flow = 0
 
+        # 외부 루프: 각 차단 유량(blocking flow) 단계 후 BFS로 레벨 그래프를 재구성.
+        # 각 BFS 단계는 최단 증가 경로 길이를 최소 1 증가시키므로,
+        # 최대 O(V)번의 BFS 단계가 있어 총 O(V²E) 복잡도가 됨.
         while self.bfs(source, sink):
-            self.iter = [0] * self.n
+            self.iter = [0] * self.n  # iter[node]는 다음 시도할 간선을 추적 -- 재방문 방지
             while True:
                 f = self.dfs(source, sink, float('inf'))
                 if f == 0:
-                    break
+                    break  # 차단 유량 완료 -- 레벨 그래프 재구성
                 flow += f
 
         return flow

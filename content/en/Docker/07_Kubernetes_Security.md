@@ -1,11 +1,21 @@
 # 07. Kubernetes Security
 
+**Previous**: [Kubernetes Introduction](./06_Kubernetes_Intro.md) | **Next**: [Kubernetes Advanced](./08_Kubernetes_Advanced.md)
+
 ## Learning Objectives
-- Understand Kubernetes security architecture
-- Implement access control with RBAC
-- Network isolation with NetworkPolicy
-- Manage Secrets and sensitive information
-- Apply Pod security policies
+
+After completing this lesson, you will be able to:
+
+1. Describe the Kubernetes 4C security model and its layered defense approach
+2. Implement Role-Based Access Control (RBAC) with Roles, ClusterRoles, and Bindings
+3. Configure ServiceAccounts to control Pod-level API access
+4. Write NetworkPolicy manifests to enforce network isolation between Pods
+5. Manage Secrets securely and distinguish them from ConfigMaps
+6. Apply Pod security policies including SecurityContext and Pod Security Standards
+
+---
+
+As Kubernetes clusters grow to host production workloads, security becomes a critical concern. A misconfigured RBAC policy can grant unintended access, an open network can allow lateral movement between services, and exposed secrets can compromise entire systems. This lesson covers the essential security primitives built into Kubernetes -- from access control and network isolation to secret management and Pod hardening -- giving you the tools to defend your cluster at every layer.
 
 ## Table of Contents
 1. [Kubernetes Security Overview](#1-kubernetes-security-overview)
@@ -128,9 +138,10 @@ metadata:
   namespace: development
   name: pod-reader
 rules:
+  # Principle of least privilege — grant only the permissions this service actually needs
 - apiGroups: [""]          # "" = core API group
   resources: ["pods"]
-  verbs: ["get", "watch", "list"]
+  verbs: ["get", "watch", "list"]  # Read-only: no create/delete prevents accidental or malicious changes
 
 ---
 # role-deployment-manager.yaml
@@ -163,7 +174,7 @@ rules:
 - apiGroups: [""]
   resources: ["secrets"]
   resourceNames: ["app-config", "db-credentials"]  # Specific resources only
-  verbs: ["get"]
+  verbs: ["get"]  # resourceNames narrows scope — even if the Role is compromised, only these two Secrets are exposed
 ```
 
 ### 2.3 ClusterRole Definition
@@ -207,7 +218,7 @@ rules:
   resources: ["namespaces"]
   verbs: ["get", "list", "watch", "create", "delete"]
 - apiGroups: [""]
-  resources: ["*"]
+  resources: ["*"]  # Wildcard grants access to ALL resources — use sparingly and audit regularly
   verbs: ["*"]
 
 ---
@@ -223,7 +234,7 @@ aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
       rbac.example.com/aggregate-to-monitoring: "true"
-rules: []  # Rules are automatically aggregated
+rules: []  # Rules are automatically aggregated — keeps individual roles small and composable
 ```
 
 ### 2.4 RoleBinding & ClusterRoleBinding
@@ -293,7 +304,7 @@ subjects:
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole      # ClusterRole but
-  name: admin            # Scope limited by RoleBinding
+  name: admin            # Scope limited by RoleBinding — reuse one ClusterRole across namespaces without granting cluster-wide access
   apiGroup: rbac.authorization.k8s.io
 ```
 
@@ -364,7 +375,7 @@ metadata:
   namespace: production
 spec:
   serviceAccountName: app-service-account
-  automountServiceAccountToken: true  # Auto-mount token
+  automountServiceAccountToken: true  # Auto-mount token — only enable when the app calls the K8s API
   containers:
   - name: app
     image: myapp:latest
@@ -378,7 +389,7 @@ metadata:
   name: secure-pod
 spec:
   serviceAccountName: restricted-sa
-  automountServiceAccountToken: false  # Do not mount token
+  automountServiceAccountToken: false  # Do not mount token — reduces attack surface if the container is compromised
   containers:
   - name: app
     image: myapp:latest
@@ -401,19 +412,19 @@ kind: ClusterRole
 metadata:
   name: cicd-deployer-role
 rules:
-# Deployment management
+# Deployment management — CI/CD needs full lifecycle control to roll out new versions
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# Service management
+# Service management — deployer may need to create/update Services for new endpoints
 - apiGroups: [""]
   resources: ["services"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# ConfigMap, Secret read
+# ConfigMap, Secret read — read-only prevents CI/CD from overwriting production secrets
 - apiGroups: [""]
   resources: ["configmaps", "secrets"]
   verbs: ["get", "list", "watch"]
-# Pod status check
+# Pod status check — needed for deployment verification, not modification
 - apiGroups: [""]
   resources: ["pods", "pods/log"]
   verbs: ["get", "list", "watch"]
@@ -481,17 +492,17 @@ kubectl config set-context sa-context --cluster=my-cluster --user=sa-user
 
 ```yaml
 # deny-all-ingress.yaml
-# Deny all inbound traffic by default
+# Default-deny + explicit allow — limits blast radius of a compromised pod
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: deny-all-ingress
   namespace: production
 spec:
-  podSelector: {}  # Apply to all Pods
+  podSelector: {}  # Apply to all Pods — empty selector means "every pod in this namespace"
   policyTypes:
   - Ingress
-  # No ingress rules = deny all inbound
+  # No ingress rules = deny all inbound — forces every service to declare its allowed sources
 
 ---
 # deny-all-egress.yaml
@@ -541,7 +552,7 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          app: frontend
+          app: frontend  # Only frontend pods can reach the backend — blocks lateral movement from other services
     ports:
     - protocol: TCP
       port: 8080
@@ -563,10 +574,10 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          app: backend
+          app: backend  # Only backend can talk to the DB — even if frontend is compromised, the DB is unreachable
     ports:
     - protocol: TCP
-      port: 5432
+      port: 5432  # Restrict to the exact port — an attacker cannot probe other services on the DB pod
 
 ---
 # Allow access from another namespace
@@ -633,7 +644,7 @@ spec:
     - ipBlock:
         cidr: 10.0.0.0/8
         except:
-        - 10.0.1.0/24  # Exclude this range
+        - 10.0.1.0/24  # Exclude this range — carve out untrusted subnets within the broader CIDR
     ports:
     - protocol: TCP
       port: 443
@@ -654,7 +665,7 @@ spec:
     ports:
     - protocol: TCP
       port: 6379
-  # 3. Allow DNS (required!)
+  # 3. Allow DNS (required!) — without this, pods cannot resolve service names and all network calls fail
   - to:
     - namespaceSelector: {}
       podSelector:
@@ -664,7 +675,7 @@ spec:
     - protocol: UDP
       port: 53
     - protocol: TCP
-      port: 53
+      port: 53  # TCP fallback for large DNS responses (>512 bytes) or zone transfers
 ```
 
 ### 4.5 NetworkPolicy Debugging
@@ -706,7 +717,7 @@ data:
   username: YWRtaW4=         # admin
   password: cGFzc3dvcmQxMjM=  # password123
 stringData:
-  # stringData doesn't need encoding
+  # stringData doesn't need encoding — K8s base64-encodes it automatically, reducing human error
   api-key: my-secret-api-key
 
 ---
@@ -811,7 +822,7 @@ spec:
     volumeMounts:
     - name: secret-volume
       mountPath: /etc/secrets
-      readOnly: true
+      readOnly: true  # Prevent the app from accidentally overwriting secret files
     - name: tls-volume
       mountPath: /etc/tls
       readOnly: true
@@ -819,11 +830,11 @@ spec:
   - name: secret-volume
     secret:
       secretName: app-secrets
-      # Mount specific keys only
+      # Mount specific keys only — avoids exposing unrelated secrets in the same Secret object
       items:
       - key: api-key
         path: api-key.txt
-        mode: 0400  # File permissions
+        mode: 0400  # File permissions — owner-read-only prevents other processes from reading the secret
   - name: tls-volume
     secret:
       secretName: tls-secret
@@ -853,11 +864,11 @@ resources:
   - resources:
       - secrets
     providers:
-      - aescbc:
+      - aescbc:  # Encrypt Secrets at rest in etcd — without this, anyone with etcd access reads plaintext
           keys:
             - name: key1
               secret: <base64-encoded-32-byte-key>
-      - identity: {}  # Fallback (unencrypted)
+      - identity: {}  # Fallback (unencrypted) — listed last so new writes use aescbc, but old unencrypted data is still readable
 
 ---
 # Restrict Secret access with RBAC
@@ -884,7 +895,7 @@ metadata:
   name: aws-secret
   namespace: production
 spec:
-  refreshInterval: 1h
+  refreshInterval: 1h  # Periodic sync ensures rotated secrets propagate without redeployment
   secretStoreRef:
     name: aws-secretsmanager
     kind: SecretStore
@@ -983,23 +994,23 @@ metadata:
 spec:
   # Pod-level security context
   securityContext:
-    runAsNonRoot: true
+    runAsNonRoot: true  # Prevents container from running as UID 0 even if the image defaults to root
     runAsUser: 1000
     runAsGroup: 3000
-    fsGroup: 2000
+    fsGroup: 2000  # Volumes are owned by this GID — ensures the non-root user can read/write mounted data
     seccompProfile:
-      type: RuntimeDefault
+      type: RuntimeDefault  # Drop dangerous syscalls — defense-in-depth even if container runtime has a bug
 
   containers:
   - name: app
     image: myapp:latest
     # Container-level security context
     securityContext:
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false  # Blocks setuid/setgid binaries from gaining elevated privileges
+      readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
       capabilities:
         drop:
-          - ALL
+          - ALL  # Drop all Linux capabilities — add back only what the app truly needs
         # Add only necessary capabilities
         # add:
         #   - NET_BIND_SERVICE
@@ -1008,10 +1019,10 @@ spec:
     resources:
       limits:
         cpu: "500m"
-        memory: "128Mi"
+        memory: "128Mi"  # limits prevent one pod from starving others on the node
       requests:
         cpu: "250m"
-        memory: "64Mi"
+        memory: "64Mi"  # requests guarantee scheduling — the scheduler reserves this much capacity
 
     # Temporary volumes (for read-only root when writes needed)
     volumeMounts:
@@ -1038,7 +1049,7 @@ metadata:
   name: secure-app
   namespace: production
 spec:
-  replicas: 3
+  replicas: 3  # Multiple replicas for high availability — if one pod crashes, others continue serving
   selector:
     matchLabels:
       app: secure-app
@@ -1047,13 +1058,13 @@ spec:
       labels:
         app: secure-app
     spec:
-      # Don't mount ServiceAccount token
+      # Don't mount ServiceAccount token — most apps don't call the K8s API, so the token is pure attack surface
       automountServiceAccountToken: false
 
       # Pod security context
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65534  # nobody
+        runAsUser: 65534  # nobody — a well-known non-root UID with no login shell or home directory
         runAsGroup: 65534
         fsGroup: 65534
         seccompProfile:
@@ -1062,14 +1073,14 @@ spec:
       containers:
       - name: app
         image: myapp:latest
-        imagePullPolicy: Always
+        imagePullPolicy: Always  # Ensures the latest digest is pulled — prevents stale cached images in production
 
         securityContext:
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
+          readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
           capabilities:
             drop:
-              - ALL
+              - ALL  # Drop dangerous syscalls — defense-in-depth even if container runtime has a bug
 
         # Ports
         ports:
@@ -1080,20 +1091,20 @@ spec:
         resources:
           limits:
             cpu: "1"
-            memory: "512Mi"
+            memory: "512Mi"  # limits prevent one pod from starving others
           requests:
             cpu: "100m"
-            memory: "128Mi"
+            memory: "128Mi"  # requests guarantee scheduling; the scheduler reserves this much
 
         # Health checks
-        livenessProbe:
+        livenessProbe:  # liveness restarts the pod; separate from readiness to avoid cascading restarts
           httpGet:
             path: /health
             port: 8080
           initialDelaySeconds: 10
           periodSeconds: 10
 
-        readinessProbe:
+        readinessProbe:  # readiness gates traffic; a failing probe removes the pod from the Service
           httpGet:
             path: /ready
             port: 8080
@@ -1110,13 +1121,13 @@ spec:
       volumes:
       - name: tmp
         emptyDir:
-          medium: Memory
+          medium: Memory  # tmpfs in RAM — faster I/O and data is automatically wiped when the pod terminates
           sizeLimit: 64Mi
       - name: config
         configMap:
           name: app-config
 
-      # Forbid host network/PID
+      # Forbid host network/PID — prevents container from seeing host processes or sniffing host traffic
       hostNetwork: false
       hostPID: false
       hostIPC: false
@@ -1192,12 +1203,6 @@ kubectl get constraints
 
 ---
 
-## Next Steps
-
-- [08_Kubernetes_Advanced](08_Kubernetes_Advanced.md) - Ingress, StatefulSet, PV/PVC
-- [09_Helm_Package_Management](09_Helm_Package_Management.md) - Helm chart management
-- [10_CI_CD_Pipelines](10_CI_CD_Pipelines.md) - Automated deployment
-
 ## References
 
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
@@ -1207,4 +1212,96 @@ kubectl get constraints
 
 ---
 
-[← Previous: Docker Compose](06_Docker_Compose.md) | [Next: Kubernetes Advanced →](08_Kubernetes_Advanced.md) | [Table of Contents](00_Overview.md)
+## Exercises
+
+### Exercise 1: Create RBAC for a Development Team
+
+Apply the principle of least privilege using Roles and RoleBindings.
+
+1. Create a `dev` namespace: `kubectl create namespace dev`
+2. Create a ServiceAccount for a developer: `kubectl create serviceaccount developer -n dev`
+3. Write a Role manifest that grants the `developer` SA permission to `get`, `list`, `watch`, `create`, and `delete` Pods and Deployments in the `dev` namespace
+4. Write a RoleBinding that binds the Role to the `developer` ServiceAccount
+5. Apply both manifests: `kubectl apply -f role.yaml -f rolebinding.yaml`
+6. Test that the SA can list Pods: `kubectl auth can-i list pods --as=system:serviceaccount:dev:developer -n dev`
+7. Test that it cannot access Secrets: `kubectl auth can-i get secrets --as=system:serviceaccount:dev:developer -n dev`
+
+### Exercise 2: Enforce Network Isolation with NetworkPolicy
+
+Use NetworkPolicy to allow only intended traffic flows.
+
+1. Create a namespace with three deployments: `frontend`, `backend`, and `database`
+2. Apply a default-deny NetworkPolicy that blocks all ingress traffic in the namespace:
+   ```yaml
+   apiVersion: networking.k8s.io/v1
+   kind: NetworkPolicy
+   metadata:
+     name: default-deny
+   spec:
+     podSelector: {}
+     policyTypes:
+       - Ingress
+   ```
+3. Verify that `frontend` can no longer reach `backend` (`kubectl exec` into frontend pod and try `curl backend`)
+4. Write and apply a NetworkPolicy that allows `frontend` to reach `backend` on port 8080
+5. Write and apply a NetworkPolicy that allows `backend` to reach `database` on port 5432, but blocks `frontend` → `database` directly
+6. Confirm the allowed paths work and the denied path is blocked
+
+### Exercise 3: Harden a Pod with SecurityContext
+
+Apply Pod-level hardening following the principle of least privilege.
+
+1. Create a Pod manifest with the following security constraints:
+   ```yaml
+   securityContext:
+     runAsNonRoot: true
+     runAsUser: 1000
+     fsGroup: 2000
+   containers:
+   - name: app
+     image: nginx:alpine
+     securityContext:
+       allowPrivilegeEscalation: false
+       readOnlyRootFilesystem: true
+       capabilities:
+         drop: ["ALL"]
+   ```
+2. Apply the manifest and check if the Pod starts (`nginx` requires write access to some directories — it will fail)
+3. Fix the issue by adding an `emptyDir` volume mounted at `/tmp` and `/var/cache/nginx`
+4. Verify the Pod is running and exec into it: confirm `whoami` returns a non-root user
+5. Attempt to write to `/` inside the container and observe the permission denial
+
+### Exercise 4: Manage Secrets Securely
+
+Practice secure Secret creation and consumption patterns.
+
+1. Create a Secret from literal values:
+   ```bash
+   kubectl create secret generic app-credentials \
+     --from-literal=DB_USER=admin \
+     --from-literal=DB_PASS=s3cr3t
+   ```
+2. Inspect the Secret: `kubectl get secret app-credentials -o yaml`
+3. Decode a value: `kubectl get secret app-credentials -o jsonpath='{.data.DB_PASS}' | base64 -d`
+4. Create a Pod that mounts the Secret as a **volume** at `/run/secrets/app` instead of environment variables
+5. Exec into the Pod and read the mounted files: `cat /run/secrets/app/DB_PASS`
+6. Explain the security benefit of volume mounts over environment variables for secrets
+
+### Exercise 5: Apply Pod Security Standards
+
+Enforce workload security policies at the namespace level using Pod Security Standards.
+
+1. Label a namespace to enforce the `restricted` Pod Security Standard:
+   ```bash
+   kubectl label namespace dev \
+     pod-security.kubernetes.io/enforce=restricted \
+     pod-security.kubernetes.io/enforce-version=latest
+   ```
+2. Attempt to create a Pod that runs as root in the `dev` namespace — observe the rejection
+3. Fix the Pod manifest to comply with the `restricted` standard (non-root user, no privilege escalation, drop all capabilities, read-only root filesystem)
+4. Successfully apply the compliant Pod
+5. Change the label to `baseline` and repeat step 2 — observe which Pods are now allowed
+
+---
+
+**Previous**: [Kubernetes Introduction](./06_Kubernetes_Intro.md) | **Next**: [Kubernetes Advanced](./08_Kubernetes_Advanced.md)

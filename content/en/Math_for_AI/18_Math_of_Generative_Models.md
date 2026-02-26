@@ -48,9 +48,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-# 간단한 1D 데이터 분포 (혼합 가우시안)
+# Simple 1D data distribution (mixture of Gaussians)
 def generate_data(n_samples=1000):
-    """진짜 데이터 분포: 두 개의 가우시안 혼합"""
+    """True data distribution: mixture of two Gaussians"""
     modes = np.random.choice([0, 1], size=n_samples, p=[0.3, 0.7])
     data = np.where(modes == 0,
                     np.random.randn(n_samples) * 0.5 - 2,
@@ -68,7 +68,7 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('data_distribution.png', dpi=150, bbox_inches='tight')
-print("데이터 분포 시각화 저장 완료")
+print("Data distribution visualization saved")
 ```
 
 ## 2. Mathematics of VAE: Complete ELBO Derivation
@@ -151,31 +151,31 @@ class VAE(nn.Module):
     def __init__(self, input_dim=784, latent_dim=20):
         super().__init__()
 
-        # 인코더
+        # Encoder
         self.fc1 = nn.Linear(input_dim, 400)
         self.fc_mu = nn.Linear(400, latent_dim)
         self.fc_logvar = nn.Linear(400, latent_dim)
 
-        # 디코더
+        # Decoder
         self.fc3 = nn.Linear(latent_dim, 400)
         self.fc4 = nn.Linear(400, input_dim)
 
     def encode(self, x):
-        """인코더: x -> (mu, logvar)"""
+        """Encoder: x -> (mu, logvar)"""
         h = F.relu(self.fc1(x))
         mu = self.fc_mu(h)
         logvar = self.fc_logvar(h)
         return mu, logvar
 
     def reparameterize(self, mu, logvar):
-        """재매개변수화: z = mu + sigma * epsilon"""
+        """Reparameterization: z = mu + sigma * epsilon"""
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         z = mu + std * eps
         return z
 
     def decode(self, z):
-        """디코더: z -> x_recon"""
+        """Decoder: z -> x_recon"""
         h = F.relu(self.fc3(z))
         x_recon = torch.sigmoid(self.fc4(h))
         return x_recon
@@ -188,41 +188,41 @@ class VAE(nn.Module):
 
 def vae_loss(x, x_recon, mu, logvar):
     """
-    VAE 손실 함수
+    VAE loss function
 
     Parameters:
     -----------
     x : Tensor
-        원본 입력
+        Original input
     x_recon : Tensor
-        재구성된 출력
+        Reconstructed output
     mu, logvar : Tensor
-        잠재 분포의 평균과 로그 분산
+        Mean and log variance of the latent distribution
 
     Returns:
     --------
     loss : Tensor
-        총 손실 (재구성 + KL)
+        Total loss (reconstruction + KL)
     """
-    # 재구성 손실 (Bernoulli 분포 가정)
+    # Reconstruction loss (assuming Bernoulli distribution)
     recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum')
 
-    # KL 발산 (가우시안 간의 닫힌 형태)
+    # KL divergence (closed form between Gaussians)
     # KL(N(mu, sigma^2) || N(0, 1)) = 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     return recon_loss + kl_loss, recon_loss, kl_loss
 
-# 예제: 간단한 2D 잠재 공간
+# Example: simple 2D latent space
 vae_model = VAE(input_dim=2, latent_dim=2)
 x_sample = torch.randn(10, 2)
 
 x_recon, mu, logvar = vae_model(x_sample)
 total_loss, recon, kl = vae_loss(x_sample, x_recon, mu, logvar)
 
-print(f"총 손실: {total_loss.item():.4f}")
-print(f"재구성 손실: {recon.item():.4f}")
-print(f"KL 손실: {kl.item():.4f}")
+print(f"Total loss: {total_loss.item():.4f}")
+print(f"Reconstruction loss: {recon.item():.4f}")
+print(f"KL loss: {kl.item():.4f}")
 ```
 
 ### 2.6 Closed-Form KL Divergence for Gaussians
@@ -286,7 +286,7 @@ $$\text{JS}(p \| q) = \frac{1}{2} D_{\text{KL}}\left(p \middle\| \frac{p+q}{2}\r
 - JS divergence can still be small
 
 ```python
-# 간단한 GAN 예제 (1D)
+# Simple GAN example (1D)
 class Generator(nn.Module):
     def __init__(self, latent_dim=10, output_dim=1):
         super().__init__()
@@ -312,35 +312,35 @@ class Discriminator(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# 모델 초기화
+# Initialize models
 latent_dim = 10
 G = Generator(latent_dim=latent_dim, output_dim=1)
 D = Discriminator(input_dim=1)
 
-# 손실 함수
+# Loss function
 criterion = nn.BCELoss()
 
-# 옵티마이저
+# Optimizers
 optimizer_G = torch.optim.Adam(G.parameters(), lr=2e-4)
 optimizer_D = torch.optim.Adam(D.parameters(), lr=2e-4)
 
-# 간단한 학습 루프
+# Simple training loop
 def train_gan_step(real_data, G, D, optimizer_G, optimizer_D, latent_dim):
-    """GAN 1 스텝 학습"""
+    """GAN training step"""
     batch_size = real_data.size(0)
 
-    # 레이블
+    # Labels
     real_labels = torch.ones(batch_size, 1)
     fake_labels = torch.zeros(batch_size, 1)
 
-    # 판별자 학습
+    # Train discriminator
     optimizer_D.zero_grad()
 
-    # 진짜 데이터
+    # Real data
     D_real = D(real_data)
     loss_D_real = criterion(D_real, real_labels)
 
-    # 가짜 데이터
+    # Fake data
     z = torch.randn(batch_size, latent_dim)
     fake_data = G(z)
     D_fake = D(fake_data.detach())
@@ -350,25 +350,25 @@ def train_gan_step(real_data, G, D, optimizer_G, optimizer_D, latent_dim):
     loss_D.backward()
     optimizer_D.step()
 
-    # 생성자 학습
+    # Train generator
     optimizer_G.zero_grad()
 
     z = torch.randn(batch_size, latent_dim)
     fake_data = G(z)
     D_fake = D(fake_data)
-    loss_G = criterion(D_fake, real_labels)  # 진짜로 분류되길 원함
+    loss_G = criterion(D_fake, real_labels)  # Want to be classified as real
 
     loss_G.backward()
     optimizer_G.step()
 
     return loss_D.item(), loss_G.item()
 
-# 예제 데이터
+# Example data
 real_samples = torch.FloatTensor(generate_data(100)).unsqueeze(1)
 loss_d, loss_g = train_gan_step(real_samples, G, D, optimizer_G, optimizer_D, latent_dim)
 
-print(f"판별자 손실: {loss_d:.4f}")
-print(f"생성자 손실: {loss_g:.4f}")
+print(f"Discriminator loss: {loss_d:.4f}")
+print(f"Generator loss: {loss_g:.4f}")
 ```
 
 ## 4. Wasserstein Distance and WGAN
@@ -417,35 +417,35 @@ where $\hat{\mathbf{x}} = \epsilon \mathbf{x} + (1 - \epsilon) \tilde{\mathbf{x}
 ```python
 def gradient_penalty(D, real_data, fake_data, device='cpu'):
     """
-    그래디언트 패널티 계산 (WGAN-GP)
+    Gradient penalty computation (WGAN-GP)
 
     Parameters:
     -----------
     D : nn.Module
-        판별자 (critic)
+        Discriminator (critic)
     real_data : Tensor
-        진짜 데이터
+        Real data
     fake_data : Tensor
-        가짜 데이터
+        Fake data
     device : str
-        디바이스
+        Device
 
     Returns:
     --------
     gp : Tensor
-        그래디언트 패널티
+        Gradient penalty
     """
     batch_size = real_data.size(0)
 
-    # 랜덤 보간
+    # Random interpolation
     epsilon = torch.rand(batch_size, 1).to(device)
     interpolates = epsilon * real_data + (1 - epsilon) * fake_data
     interpolates.requires_grad_(True)
 
-    # 판별자 출력
+    # Discriminator output
     D_interpolates = D(interpolates)
 
-    # 그래디언트 계산
+    # Compute gradients
     gradients = torch.autograd.grad(
         outputs=D_interpolates,
         inputs=interpolates,
@@ -454,23 +454,23 @@ def gradient_penalty(D, real_data, fake_data, device='cpu'):
         retain_graph=True
     )[0]
 
-    # 그래디언트 norm
+    # Gradient norm
     gradients = gradients.view(batch_size, -1)
     gradient_norm = gradients.norm(2, dim=1)
 
-    # 패널티
+    # Penalty
     gp = ((gradient_norm - 1) ** 2).mean()
 
     return gp
 
-# 예제
+# Example
 real = torch.randn(32, 1, requires_grad=False)
 fake = torch.randn(32, 1, requires_grad=False)
 
 D_critic = Discriminator(input_dim=1)
 gp = gradient_penalty(D_critic, real, fake)
 
-print(f"그래디언트 패널티: {gp.item():.4f}")
+print(f"Gradient penalty: {gp.item():.4f}")
 ```
 
 ## 5. Mathematics of Diffusion Models
@@ -523,11 +523,11 @@ That is, it reduces to a **noise prediction** problem!
 
 ```python
 def linear_beta_schedule(timesteps, beta_start=1e-4, beta_end=0.02):
-    """선형 노이즈 스케줄"""
+    """Linear noise schedule"""
     return np.linspace(beta_start, beta_end, timesteps)
 
 def get_diffusion_parameters(timesteps=1000):
-    """확산 모델 파라미터 계산"""
+    """Compute diffusion model parameters"""
     betas = linear_beta_schedule(timesteps)
     alphas = 1.0 - betas
     alphas_cumprod = np.cumprod(alphas)
@@ -544,26 +544,26 @@ def get_diffusion_parameters(timesteps=1000):
 
 params = get_diffusion_parameters(timesteps=1000)
 
-# 노이즈 추가 예제
+# Example of adding noise
 def q_sample(x_0, t, params, noise=None):
     """
-    정방향 과정: x_0에서 x_t 샘플링
+    Forward process: sample x_t from x_0
 
     Parameters:
     -----------
     x_0 : Tensor
-        원본 데이터
+        Original data
     t : int
-        타임스텝
+        Timestep
     params : dict
-        확산 파라미터
+        Diffusion parameters
     noise : Tensor, optional
-        노이즈 (None이면 샘플링)
+        Noise (sampled if None)
 
     Returns:
     --------
     x_t : Tensor
-        노이즈가 추가된 데이터
+        Data with added noise
     """
     if noise is None:
         noise = torch.randn_like(x_0)
@@ -575,7 +575,7 @@ def q_sample(x_0, t, params, noise=None):
 
     return x_t
 
-# 예제: 1D 데이터에 노이즈 추가
+# Example: add noise to 1D data
 x_0 = torch.FloatTensor([[1.0], [2.0], [3.0]])
 timesteps_to_visualize = [0, 250, 500, 750, 999]
 
@@ -590,7 +590,7 @@ for idx, t in enumerate(timesteps_to_visualize):
 
 plt.tight_layout()
 plt.savefig('diffusion_forward_process.png', dpi=150, bbox_inches='tight')
-print("확산 정방향 과정 시각화 저장 완료")
+print("Diffusion forward process visualization saved")
 ```
 
 ### 5.4 Relationship to Score Matching
@@ -660,7 +660,7 @@ where $\theta^-$ is EMA (exponential moving average) parameter.
 **Advantage**: 1-step generation possible (diffusion models need hundreds of steps)
 
 ```python
-# 간단한 Flow Matching 예제
+# Simple Flow Matching example
 class FlowMatchingModel(nn.Module):
     def __init__(self, dim=2):
         super().__init__()
@@ -673,55 +673,55 @@ class FlowMatchingModel(nn.Module):
         )
 
     def forward(self, x, t):
-        """벡터 필드 예측"""
+        """Predict vector field"""
         t_expanded = t.view(-1, 1).expand(-1, x.size(1))
         xt = torch.cat([x, t_expanded[:, :1]], dim=1)
         return self.net(xt)
 
 def flow_matching_loss(model, x0, x1):
     """
-    Flow Matching 손실
+    Flow Matching loss
 
     Parameters:
     -----------
     model : nn.Module
-        벡터 필드 모델
+        Vector field model
     x0 : Tensor
-        시작 분포 샘플 (노이즈)
+        Source distribution samples (noise)
     x1 : Tensor
-        목표 분포 샘플 (데이터)
+        Target distribution samples (data)
 
     Returns:
     --------
     loss : Tensor
-        Flow Matching 손실
+        Flow Matching loss
     """
     batch_size = x0.size(0)
 
-    # 랜덤 시간
+    # Random time
     t = torch.rand(batch_size, 1)
 
-    # 선형 보간
+    # Linear interpolation
     x_t = (1 - t) * x0 + t * x1
 
-    # 진짜 벡터 필드 (선형 보간의 도함수)
+    # True vector field (derivative of linear interpolation)
     true_velocity = x1 - x0
 
-    # 예측 벡터 필드
+    # Predicted vector field
     pred_velocity = model(x_t, t.squeeze())
 
-    # 손실
+    # Loss
     loss = F.mse_loss(pred_velocity, true_velocity)
 
     return loss
 
-# 예제
+# Example
 fm_model = FlowMatchingModel(dim=2)
 x0_samples = torch.randn(32, 2)
 x1_samples = torch.randn(32, 2) + torch.tensor([2.0, 0.0])
 
 loss = flow_matching_loss(fm_model, x0_samples, x1_samples)
-print(f"Flow Matching 손실: {loss.item():.4f}")
+print(f"Flow Matching loss: {loss.item():.4f}")
 ```
 
 ## Practice Problems

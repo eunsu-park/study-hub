@@ -43,28 +43,29 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Environment_Setup.md](./01_Environment_Setup.md) | ⭐ | 개발 환경 구축, 컴파일러 설치 |
-| [02_C_Basics_Review.md](./02_C_Basics_Review.md) | ⭐ | 변수, 자료형, 연산자, 제어문, 함수 |
-| [03_Project_Calculator.md](./03_Project_Calculator.md) | ⭐ | 함수, switch-case, scanf |
-| [04_Project_Number_Guessing.md](./04_Project_Number_Guessing.md) | ⭐ | 반복문, 랜덤, 조건문 |
-| [05_Project_Address_Book.md](./05_Project_Address_Book.md) | ⭐⭐ | 구조체, 배열, 파일 I/O |
-| [06_Project_Dynamic_Array.md](./06_Project_Dynamic_Array.md) | ⭐⭐ | malloc, realloc, free |
-| [07_Project_Linked_List.md](./07_Project_Linked_List.md) | ⭐⭐⭐ | 포인터, 동적 자료구조 |
-| [08_Project_File_Encryption.md](./08_Project_File_Encryption.md) | ⭐⭐ | 파일 처리, 비트 연산 |
-| [09_Project_Stack_Queue.md](./09_Project_Stack_Queue.md) | ⭐⭐ | 자료구조, LIFO/FIFO |
-| [10_Project_Hash_Table.md](./10_Project_Hash_Table.md) | ⭐⭐⭐ | 해싱, 충돌 처리 |
-| [11_Project_Snake_Game.md](./11_Project_Snake_Game.md) | ⭐⭐⭐ | 터미널 제어, 게임 루프 |
-| [12_Project_Mini_Shell.md](./12_Project_Mini_Shell.md) | ⭐⭐⭐⭐ | fork, exec, 파이프 |
-| [13_Project_Multithreading.md](./13_Project_Multithreading.md) | ⭐⭐⭐⭐ | pthread, 동기화 |
-| [14_Embedded_Basics.md](./14_Embedded_Basics.md) | ⭐ | Arduino, GPIO 기초 |
-| [15_Bit_Operations.md](./15_Bit_Operations.md) | ⭐⭐ | 비트 마스킹, 레지스터 |
-| [16_Project_GPIO_Control.md](./16_Project_GPIO_Control.md) | ⭐⭐ | LED, 버튼, 디바운싱 |
-| [17_Project_Serial_Communication.md](./17_Project_Serial_Communication.md) | ⭐⭐ | UART, 명령어 파싱 |
-| [18_Debugging_Memory_Analysis.md](./18_Debugging_Memory_Analysis.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
-| [19_Advanced_Embedded_Protocols.md](./19_Advanced_Embedded_Protocols.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
-| [20_Advanced_Pointers.md](./20_Advanced_Pointers.md) | ⭐⭐⭐ | 포인터 산술, 다중 포인터, 함수 포인터, 동적 메모리 |
-| [21_Network_Programming.md](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP 소켓, 클라이언트-서버, select/poll 다중화 |
-| [22_IPC_and_Signals.md](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | 파이프, 공유 메모리, 메시지 큐, 시그널 |
+| [C 언어 환경 설정](./01_Environment_Setup.md) | ⭐ | 개발 환경 구축, 컴파일러 설치 |
+| [C 언어 기초 빠른 복습](./02_C_Basics_Review.md) | ⭐ | 변수, 자료형, 연산자, 제어문, 함수 |
+| [프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md) | ⭐ | 함수, switch-case, scanf |
+| [프로젝트 2: 숫자 맞추기 게임](./04_Project_Number_Guessing.md) | ⭐ | 반복문, 랜덤, 조건문 |
+| [프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md) | ⭐⭐ | 구조체, 배열, 파일 I/O |
+| [프로젝트 4: 동적 배열 (Dynamic Array)](./06_Project_Dynamic_Array.md) | ⭐⭐ | malloc, realloc, free |
+| [프로젝트 5: 연결 리스트 (Linked List)](./07_Project_Linked_List.md) | ⭐⭐⭐ | 포인터, 동적 자료구조 |
+| [프로젝트 6: 파일 암호화 도구](./08_Project_File_Encryption.md) | ⭐⭐ | 파일 처리, 비트 연산 |
+| [프로젝트 7: 스택과 큐](./09_Project_Stack_Queue.md) | ⭐⭐ | 자료구조, LIFO/FIFO |
+| [프로젝트 8: 해시 테이블](./10_Project_Hash_Table.md) | ⭐⭐⭐ | 해싱, 충돌 처리 |
+| [프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md) | ⭐⭐⭐ | 터미널 제어, 게임 루프 |
+| [프로젝트 11: 미니 쉘](./12_Project_Mini_Shell.md) | ⭐⭐⭐⭐ | fork, exec, 파이프 |
+| [프로젝트 12: 멀티스레드 프로그래밍](./13_Project_Multithreading.md) | ⭐⭐⭐⭐ | pthread, 동기화 |
+| [임베디드 프로그래밍 기초](./14_Embedded_Basics.md) | ⭐ | Arduino, GPIO 기초 |
+| [비트 연산 심화](./15_Bit_Operations.md) | ⭐⭐ | 비트 마스킹, 레지스터 |
+| [프로젝트 15: GPIO 제어](./16_Project_GPIO_Control.md) | ⭐⭐ | LED, 버튼, 디바운싱 |
+| [프로젝트 16: 시리얼 통신](./17_Project_Serial_Communication.md) | ⭐⭐ | UART, 명령어 파싱 |
+| [디버깅과 메모리 분석](./18_Debugging_Memory_Analysis.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
+| [고급 임베디드 프로토콜(Advanced Embedded Protocols)](./19_Advanced_Embedded_Protocols.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
+| [C 언어 포인터 심화](./20_Advanced_Pointers.md) | ⭐⭐⭐ | 포인터 산술, 다중 포인터, 함수 포인터, 동적 메모리 |
+| [C 네트워크 프로그래밍](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP 소켓, 클라이언트-서버, select/poll 다중화 |
+| [프로세스 간 통신(Inter-Process Communication)과 시그널(Signals)](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | 파이프, 공유 메모리, 메시지 큐, 시그널 |
+| [레슨 23: C 테스팅과 프로파일링(Testing and Profiling)](./23_Testing_and_Profiling.md) | ⭐⭐⭐ | 단위 테스트(Unity, assert.h), gprof, Valgrind, 최적화 |
 
 ---
 

@@ -51,8 +51,8 @@ my_package/
     └── example.py
 
 Why src/ layout?
-- Prevents accidental imports from source
-- Ensures package is installed before testing
+- Prevents accidental imports from the working directory (Python adds cwd to sys.path)
+- Ensures package is installed before testing (catches missing files in setup)
 - Better isolation during development
 """)
 
@@ -63,6 +63,8 @@ Why src/ layout?
 
 section("pyproject.toml Example")
 
+# Why: pyproject.toml (PEP 621) replaces setup.py as the single source of truth for
+# project metadata — it is declarative, tool-agnostic, and understood by all modern build backends
 pyproject_toml = '''
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -236,7 +238,8 @@ Modern alternatives:
   $ pipenv install requests
   $ pipenv shell
 
-  # uv - faster pip/venv (Rust-based)
+  # Why: uv is 10-100x faster than pip for dependency resolution and installation
+  # because it's written in Rust with parallel downloads and a global cache
   $ pip install uv
   $ uv venv
   $ uv pip install requests
@@ -251,7 +254,8 @@ section("Installing Package")
 
 print("""
 Development installation (editable mode):
-  # Changes to source code immediately available
+  # Why: Editable mode (-e) creates a link to your source rather than copying files,
+  # so code changes take effect immediately without reinstalling the package
   $ pip install -e .
   $ pip install -e ".[dev]"      # With dev dependencies
   $ pip install -e ".[dev,docs]" # Multiple extras

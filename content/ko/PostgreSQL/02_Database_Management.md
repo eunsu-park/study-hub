@@ -1,5 +1,25 @@
 # 데이터베이스 관리
 
+**이전**: [PostgreSQL 기초](./01_PostgreSQL_Basics.md) | **다음**: [테이블과 데이터 타입](./03_Tables_and_Data_Types.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. PostgreSQL 서버의 계층 구조(서버, 데이터베이스, 스키마, 테이블)를 설명할 수 있다
+2. 적절한 옵션을 사용하여 데이터베이스를 생성, 조회, 이름 변경, 삭제할 수 있다
+3. 템플릿 데이터베이스(`template0`, `template1`)의 역할을 설명할 수 있다
+4. 특정 권한을 가진 롤(Role)(사용자 및 그룹)을 생성하고 관리할 수 있다
+5. GRANT/REVOKE 시스템을 적용하여 데이터베이스, 스키마, 테이블 수준에서 접근을 제어할 수 있다
+6. 스키마(Schema)를 구성하여 데이터베이스 내 객체를 논리적으로 정리할 수 있다
+7. 권한 모델을 설계할 때 최소 권한 원칙(Principle of Least Privilege)을 적용할 수 있다
+
+---
+
+운영 환경에서는 올바른 SQL을 작성하는 것만큼이나 데이터베이스, 사용자, 권한을 적절히 관리하는 것이 중요합니다. 잘못 구성된 롤(Role)이나 과도하게 허용된 권한은 민감한 데이터를 노출시키거나 우발적인 삭제를 허용할 수 있습니다. 이 레슨에서는 처음부터 안전하고 체계적인 PostgreSQL 환경을 구축하는 데 필요한 관리 명령어들을 다룹니다.
+
 ## 1. 데이터베이스 기본 개념
 
 PostgreSQL에서 데이터베이스는 테이블, 뷰, 함수 등을 담는 최상위 컨테이너입니다.
@@ -57,10 +77,12 @@ CREATE DATABASE mydb
 ### 템플릿 데이터베이스
 
 ```sql
--- template1: 기본 템플릿 (커스텀 설정 가능)
+-- template1은 기본 템플릿 — template1에 추가한 확장이나 객체가
+-- 모든 새 데이터베이스에 자동 포함됨. 조직 전체 기본값 설정에 활용
 CREATE DATABASE mydb TEMPLATE template1;
 
--- template0: 깨끗한 템플릿 (인코딩 변경 시 사용)
+-- template0은 수정되지 않은 원본 템플릿 — template1이 클러스터의
+-- 원래 설정을 상속하므로, 다른 인코딩/로케일이 필요할 때 사용
 CREATE DATABASE mydb TEMPLATE template0 ENCODING 'UTF8';
 ```
 
@@ -280,7 +302,8 @@ GRANT ALL PRIVILEGES ON TABLE users TO myuser;
 -- 스키마 내 모든 테이블 권한
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO myuser;
 
--- 향후 생성될 테이블에도 자동 권한 부여
+-- DEFAULT PRIVILEGES 없이는 새 테이블마다 수동 GRANT 필요.
+-- 자동으로 새 테이블에 권한이 상속되도록 설정
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT SELECT ON TABLES TO myuser;
 ```
@@ -469,10 +492,12 @@ ORDER BY r.rolname;
 ### 최소 권한 원칙
 
 ```sql
--- 필요한 권한만 부여
+-- 최소 권한: 앱이 실제로 수행하는 작업만 부여.
+-- app_user가 DELETE/DROP 권한을 가지면 공격자도 그 권한을 상속
 GRANT SELECT, INSERT, UPDATE ON users TO app_user;
 
--- ALL PRIVILEGES는 가급적 피함
+-- ALL PRIVILEGES는 TRUNCATE, REFERENCES, TRIGGER까지 포함 —
+-- 대부분의 애플리케이션 사용자에게 불필요한 권한
 -- GRANT ALL PRIVILEGES ON ... -- 비권장
 ```
 
@@ -495,6 +520,4 @@ ALTER ROLE myuser VALID UNTIL '2025-12-31';
 
 ---
 
-## 다음 단계
-
-[03_Tables_and_Data_Types.md](./03_Tables_and_Data_Types.md)에서 테이블 생성과 데이터 타입을 자세히 다뤄봅시다!
+**이전**: [PostgreSQL 기초](./01_PostgreSQL_Basics.md) | **다음**: [테이블과 데이터 타입](./03_Tables_and_Data_Types.md)

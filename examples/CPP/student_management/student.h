@@ -21,6 +21,8 @@ private:
 
 public:
     // Constructor
+    // Why: passing strings by const reference avoids copying potentially large strings
+    // while preventing accidental modification of the caller's data
     Student(int id, const std::string& name, const std::string& major, double gpa);
 
     // Default constructor
@@ -37,7 +39,8 @@ public:
     void setMajor(const std::string& newMajor) { major = newMajor; }
     void setGpa(double newGpa) { gpa = newGpa; }
 
-    // Comparison operators (for sorting)
+    // Why: operator< enables this type to work with std::sort, std::set, and std::map
+    // without requiring a custom comparator — STL algorithms rely on this by default
     bool operator<(const Student& other) const { return id < other.id; }
     bool operator==(const Student& other) const { return id == other.id; }
 
@@ -45,7 +48,8 @@ public:
     std::string toCSV() const;
     static Student fromCSV(const std::string& csvLine);
 
-    // Stream insertion operator
+    // Why: friend grants operator<< access to private members while keeping it a free
+    // function — this preserves the natural stream syntax (cout << student) rather than member syntax
     friend std::ostream& operator<<(std::ostream& os, const Student& student);
 };
 

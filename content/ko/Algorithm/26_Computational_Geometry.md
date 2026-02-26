@@ -239,10 +239,13 @@ def convex_hull_graham(points):
     if n < 3:
         return points[:]
 
-    # 가장 아래 왼쪽 점 찾기
+    # 기준점: 가장 아래(그 다음 가장 왼쪽) 점은 껍질 위에 있음이 보장됨
+    # 왼쪽과 아래에 동시에 놓인 점이 없기 때문
     start = min(range(n), key=lambda i: (points[i].y, points[i].x))
 
-    # 각도 기준 정렬
+    # 기준점으로부터의 극각(polar angle) 기준으로 나머지 점 정렬.
+    # 이 순서가 반시계 방향 스위프로 점들을 방문하게 하여,
+    # 스택 기반 제거가 올바르게 동작하게 하는 핵심 불변식(invariant)임.
     def polar_angle(p):
         return math.atan2(p.y - points[start].y, p.x - points[start].x)
 
@@ -251,11 +254,14 @@ def convex_hull_graham(points):
 
     sorted_points = sorted(range(n), key=lambda i: (polar_angle(points[i]), dist_sq(points[i])))
 
-    # 스택으로 볼록 껍질 구성
+    # 스택 기반 껍질 구성: 스택이 항상 좌회전(CCW)을 만드는 불변식을 유지.
+    # 새 점을 추가할 때 우회전이나 직진이 되면, 이전 점은 볼록 껍질 위에 있을 수 없는
+    # 오목한 꼭짓점이므로 제거함. 각 점은 최대 한 번 push/pop되므로
+    # 이 단계는 O(n).
     hull = []
     for i in sorted_points:
         while len(hull) >= 2 and ccw(points[hull[-2]], points[hull[-1]], points[i]) <= 0:
-            hull.pop()
+            hull.pop()  # 오목한 꼭짓점 제거 -- 껍질 내부에 있음
         hull.append(i)
 
     return [points[i] for i in hull]
@@ -267,29 +273,34 @@ def convex_hull_graham(points):
 def convex_hull_andrew(points):
     """
     Andrew's Monotone Chain: O(n log n)
-    더 간단하고 안정적
+    Graham Scan보다 더 간단하고 안정적 -- 극각(polar angle) 대신 좌표 정렬을 사용하여
+    부동소수점 atan2 정밀도 문제를 회피함.
     """
+    # 사전순(lexicographic) 정렬: 가장 왼쪽 점 먼저, 동률 시 가장 아래 점.
+    # 아래 껍질은 왼쪽→오른쪽, 위 껍질은 오른쪽→왼쪽 스위프를 보장.
     points = sorted(points, key=lambda p: (p.x, p.y))
     n = len(points)
 
     if n < 3:
         return points[:]
 
-    # 아래 껍질 (Lower Hull)
+    # 아래 껍질 (Lower Hull): 왼쪽에서 오른쪽으로 스캔, 좌회전만 유지.
+    # 결과는 볼록 껍질의 아래 경계.
     lower = []
     for p in points:
         while len(lower) >= 2 and ccw(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
+            lower.pop()  # 우회전 또는 일직선 -- 아래 껍질에 해당하지 않음
         lower.append(p)
 
-    # 위 껍질 (Upper Hull)
+    # 위 껍질 (Upper Hull): 오른쪽에서 왼쪽으로 스캔, 같은 논리.
+    # 아래 + 위를 합치면 닫힌 볼록 다각형이 됨.
     upper = []
     for p in reversed(points):
         while len(upper) >= 2 and ccw(upper[-2], upper[-1], p) <= 0:
             upper.pop()
         upper.append(p)
 
-    # 합치기 (시작점과 끝점은 중복)
+    # 중복 끝점 제거 (가장 왼쪽과 가장 오른쪽 점이 양쪽에 모두 나타남)
     return lower[:-1] + upper[:-1]
 ```
 
@@ -448,8 +459,12 @@ def point_in_convex_polygon(point, polygon):
 def closest_pair(points):
     """
     가장 가까운 두 점 찾기: O(n log n)
+    분할 정복은 기하학적 성질을 활용하여 O(n²) 브루트포스를 회피:
+    각 반쪽에서 최소 거리 d를 알면, 분할선 주위 2d 너비의 띠에 있는
+    점들만이 d를 개선할 가능성이 있음.
     """
     points_sorted_x = sorted(points, key=lambda p: (p.x, p.y))
+    # y로 미리 정렬하여 각 레벨에서 재정렬 없이 y 순서로 띠를 처리할 수 있게 함
     points_sorted_y = sorted(points, key=lambda p: (p.y, p.x))
 
     def distance(p1, p2):
@@ -458,7 +473,7 @@ def closest_pair(points):
     def closest_util(pts_x, pts_y):
         n = len(pts_x)
 
-        # 기저 사례
+        # 기저 사례: 작은 부분 문제에는 브루트포스로 충분
         if n <= 3:
             min_dist = float('inf')
             pair = None
@@ -470,15 +485,15 @@ def closest_pair(points):
                         pair = (pts_x[i], pts_x[j])
             return min_dist, pair
 
-        # 분할
+        # 중앙 x 좌표에서 분할
         mid = n // 2
         mid_point = pts_x[mid]
 
-        # y 기준 정렬된 점들도 분할
+        # y로 정렬된 리스트를 왼쪽/오른쪽 반으로 분할하며 y 순서 유지 --
+        # 각 재귀 레벨에서 재정렬을 피하여 총 작업량을 O(n log n)으로 유지
         left_y = [p for p in pts_y if p.x < mid_point.x or (p.x == mid_point.x and p.y <= mid_point.y)]
         right_y = [p for p in pts_y if p.x > mid_point.x or (p.x == mid_point.x and p.y > mid_point.y)]
 
-        # 재귀
         dl, pair_l = closest_util(pts_x[:mid], left_y)
         dr, pair_r = closest_util(pts_x[mid:], right_y)
 
@@ -489,11 +504,13 @@ def closest_pair(points):
             d = dr
             pair = pair_r
 
-        # 중앙 띠에서 확인
+        # 분할선 주위 너비 2d인 띠를 확인.
+        # 기하학적으로, 띠 내의 각 점은 거리 d 이내에 최대 7개의 다른 점만
+        # 존재할 수 있으므로 -- 내부 루프는 점당 O(1).
         strip = [p for p in pts_y if abs(p.x - mid_point.x) < d]
 
         for i in range(len(strip)):
-            for j in range(i + 1, min(i + 7, len(strip))):  # 최대 6개만 확인
+            for j in range(i + 1, min(i + 7, len(strip))):  # 점당 최대 7개 후보
                 dist = distance(strip[i], strip[j])
                 if dist < d:
                     d = dist

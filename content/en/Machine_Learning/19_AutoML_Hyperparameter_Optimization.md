@@ -1,8 +1,24 @@
 # AutoML and Hyperparameter Optimization
 
-## Overview
+**Previous**: [Time Series ML](./18_Time_Series_ML.md) | **Next**: [Anomaly Detection](./20_Anomaly_Detection.md)
 
-AutoML automates the process of selecting algorithms, engineering features, and tuning hyperparameters. This lesson covers Optuna for hyperparameter optimization, Auto-sklearn, FLAML, and H2O AutoML — tools that can significantly reduce the time from data to deployed model.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between grid search, random search, Bayesian optimization (TPE), and Hyperband HPO methods
+2. Implement Optuna studies with objective functions, pruning, and multi-objective optimization
+3. Interpret Optuna visualizations (optimization history, parameter importance, contour plots) to guide search
+4. Compare AutoML frameworks (Auto-sklearn, FLAML, H2O AutoML) and select the right one for your use case
+5. Identify and mitigate HPO overfitting by holding out test data and monitoring the CV-test gap
+6. Design efficient search spaces using log scales, conditional parameters, and step sizes
+7. Apply multi-objective optimization to balance accuracy, inference speed, and model complexity
+
+---
+
+Tuning hyperparameters manually is tedious and biased by human intuition. AutoML and Bayesian optimization turn this into a principled search: Optuna explores the parameter space intelligently, pruning unpromising trials early, while full AutoML frameworks like FLAML and H2O test multiple algorithms and assemble ensembles -- often matching expert-level performance in a fraction of the time. This lesson shows you how to let the machine optimize the machine.
 
 ---
 

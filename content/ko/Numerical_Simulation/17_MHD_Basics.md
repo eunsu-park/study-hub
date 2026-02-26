@@ -7,6 +7,8 @@
 - Alfven 속도와 MHD 파동 이해
 - 자기압과 자기장력 개념 학습
 
+**이 레슨이 중요한 이유:** 자기유체역학(Magnetohydrodynamics, MHD)은 우주에서 가장 에너지가 큰 현상들을 지배합니다: 태양 플레어(solar flare), 천체물리적 제트(astrophysical jet), 항성 다이나모(stellar dynamo), 그리고 핵융합 플라즈마가 그 예입니다. 유체역학과 Maxwell 방정식을 결합함으로써, MHD는 전도성 유체와 자기장이 어떻게 상호작용하는지를 포착합니다 -- 자기장은 유체에 힘을 가하고, 유체의 운동은 자기장을 늘이고 증폭시킵니다. MHD의 이해는 우주 날씨 예측, 제어 핵융합, 천체물리 모델링에 필수적입니다.
+
 ---
 
 ## 1. MHD 소개
@@ -403,6 +405,12 @@ def ideal_mhd_equations():
 ## 4. Alfven 속도
 
 ### 4.1 정의와 물리적 의미
+
+Alfven 속도는 MHD의 기본 속도 스케일로, 유체역학에서의 음속에 해당합니다. 자기력선을 따라 횡방향 섭동이 전파되는 속도를 나타냅니다:
+
+$$v_A = \frac{B}{\sqrt{\mu_0 \rho}}$$
+
+여기서 $B$는 자기장 세기, $\mu_0$는 진공 투자율(vacuum permeability), $\rho$는 질량 밀도입니다. 핵심 통찰: 이 속도는 자기 장력(magnetic tension, 복원력, $\sim B^2/\mu_0$)과 관성($\sim \rho v^2$) 사이의 균형에서 나옵니다. 플라즈마 베타(plasma beta) $\beta = 2\mu_0 p / B^2$는 열압력 대 자기 압력의 비율로, 어느 힘이 역학을 지배하는지를 결정합니다.
 
 ```
 Alfven 속도 (Alfvén velocity):
@@ -1110,17 +1118,195 @@ Frozen-in 정리 요약:
 
 ## 8. 연습 문제
 
-### 연습 1: Alfven 속도
-태양 코로나에서 B = 10 G, n = 10^8 cm^-3 일 때 Alfven 속도를 계산하시오. 이것을 음속(T = 10^6 K)과 비교하고 플라즈마 베타를 구하시오.
+### 연습 1: 알벤 속도(Alfvén Velocity)
+태양 코로나에서 B = 10 G, n = 10⁸ cm⁻³일 때 알벤 속도를 계산하시오. 이것을 음속(T = 10⁶ K)과 비교하고 플라즈마 베타(plasma beta)를 구하시오.
 
-### 연습 2: MHD 파동 속도
-vA = 2cs 인 경우, 자기장에 수직한 방향(θ = 90°)으로 전파하는 빠른 자기음파의 위상 속도를 구하시오.
+<details><summary>정답 보기</summary>
 
-### 연습 3: 자기압 평형
+```python
+import numpy as np
+
+# 물리 상수
+mu_0 = 4 * np.pi * 1e-7   # 진공 투자율 [H/m]
+k_B  = 1.38e-23            # 볼츠만 상수 [J/K]
+m_p  = 1.67e-27            # 양성자 질량 [kg]
+
+# 태양 코로나 파라미터
+B = 10e-4        # 10 G → Tesla (1 G = 10^-4 T)
+n = 1e14         # 10^8 cm^-3 → m^-3 (1 cm^-3 = 10^6 m^-3)
+T = 1e6          # 온도 [K]
+gamma = 5/3      # 단열 지수
+
+# 밀도
+rho = n * m_p
+print(f"밀도 ρ = {rho:.3e} kg/m³")
+
+# 알벤 속도: v_A = B / sqrt(μ₀ρ)
+v_A = B / np.sqrt(mu_0 * rho)
+print(f"알벤 속도 v_A = {v_A/1e3:.1f} km/s")
+
+# 음속: c_s = sqrt(γ k_B T / m_p)
+c_s = np.sqrt(gamma * k_B * T / m_p)
+print(f"음속 c_s = {c_s/1e3:.1f} km/s")
+
+# 플라즈마 베타: β = 열압력 / 자기압력
+p_thermal = n * k_B * T        # 열압력
+p_magnetic = B**2 / (2 * mu_0) # 자기압력
+beta = p_thermal / p_magnetic
+print(f"\n열압력 = {p_thermal:.3e} Pa")
+print(f"자기압력 = {p_magnetic:.3e} Pa")
+print(f"플라즈마 베타 β = {beta:.4f}")
+if beta < 1:
+    print("β < 1: 자기장 지배 플라즈마 (태양 코로나 전형적)")
+```
+
+v_A ≈ 2187 km/s, c_s ≈ 151 km/s → v_A ≫ c_s (자기장 지배 플라즈마)
+
+β ≈ 0.048 ≪ 1: 태양 코로나는 자기압력이 열압력보다 훨씬 크며, 이것이 코로나 구조가 자기장에 의해 지배되는 이유입니다.
+</details>
+
+### 연습 2: MHD 파동 속도(MHD Wave Speed)
+v_A = 2c_s인 경우, 자기장에 수직한 방향(θ = 90°)으로 전파하는 빠른 자기음파(fast magnetosonic wave)의 위상 속도를 구하시오.
+
+<details><summary>정답 보기</summary>
+
+MHD 파동의 위상 속도 공식:
+
+빠른/느린 자기음파의 위상 속도:
+```
+v²_{fast,slow} = (1/2){(c_s² + v_A²) ± √[(c_s² + v_A²)² - 4c_s²v_A²cos²θ]}
+```
+
+θ = 90°에서 cos θ = 0이므로:
+```
+v²_{fast} = c_s² + v_A²
+v²_{slow} = 0
+```
+
+```python
+import numpy as np
+
+# v_A = 2c_s 설정
+c_s = 1.0       # 정규화
+v_A = 2.0 * c_s
+theta = np.pi / 2  # 90도
+
+# 빠른/느린 자기음파 위상 속도
+def mhd_wave_speeds(c_s, v_A, theta):
+    sum_sq  = c_s**2 + v_A**2
+    disc    = np.sqrt(sum_sq**2 - 4*c_s**2 * v_A**2 * np.cos(theta)**2)
+    v_fast  = np.sqrt((sum_sq + disc) / 2)
+    v_slow  = np.sqrt((sum_sq - disc) / 2)
+    v_alfven = v_A * abs(np.cos(theta))  # 알벤파
+    return v_fast, v_slow, v_alfven
+
+v_f, v_s, v_alf = mhd_wave_speeds(c_s, v_A, theta)
+print(f"θ = 90°, v_A = 2c_s:")
+print(f"  빠른 자기음파: v_fast = {v_f:.4f} c_s = √(c_s² + v_A²) = √5 c_s")
+print(f"  느린 자기음파: v_slow = {v_s:.6f} c_s (≈ 0)")
+print(f"  알벤파:        v_A = {v_alf:.4f} c_s (cos90°=0 → 0)")
+print(f"\n검증: √(1² + 2²) = √5 = {np.sqrt(5):.4f}")
+```
+
+θ = 90°에서 빠른 자기음파의 위상 속도 v_fast = √(c_s² + v_A²) = √(1 + 4)c_s = **√5 c_s ≈ 2.236c_s**
+
+느린 자기음파와 알벤파는 수직 방향으로 전파하지 않습니다(v = 0). 이것은 알벤파와 느린 자기음파가 자기장을 따라 전파하는 특성을 반영합니다.
+</details>
+
+### 연습 3: 자기압 평형(Magnetic Pressure Equilibrium)
 균일한 자기장 Bz 영역과 무자기장 영역 사이의 경계에서 압력 평형 조건을 구하시오.
 
-### 연습 4: Frozen-in
-길이 L = 1 Mm, 전도도 σ = 10^6 S/m인 플라즈마에서 자기 확산 시간을 계산하시오. 속도 v = 100 km/s일 때 자기 Reynolds 수는?
+<details><summary>정답 보기</summary>
+
+MHD 압력 평형 조건: 총 압력(열압력 + 자기압력)이 경계에서 연속:
+
+```
+p₁ + B₁²/(2μ₀) = p₂ + B₂²/(2μ₀)
+```
+
+영역 1(자기장 있음): B₁ = Bz, 압력 p₁
+영역 2(무자기장): B₂ = 0, 압력 p₂
+
+```python
+import numpy as np
+mu_0 = 4 * np.pi * 1e-7  # [H/m]
+
+def magnetic_pressure_equilibrium(Bz, T1=1e6, n1=1e18):
+    """자기장 영역 vs 무자기장 영역 압력 평형"""
+    k_B = 1.38e-23; m_p = 1.67e-27
+
+    # 자기장 영역 (영역 1)
+    p_magnetic = Bz**2 / (2 * mu_0)
+    p_thermal1 = n1 * k_B * T1
+    p_total1 = p_thermal1 + p_magnetic
+    beta1 = p_thermal1 / p_magnetic
+
+    print(f"자기장 Bz = {Bz*1e4:.1f} G")
+    print(f"  자기압력 = {p_magnetic:.3e} Pa")
+    print(f"  열압력₁  = {p_thermal1:.3e} Pa")
+    print(f"  플라즈마 β₁ = {beta1:.3f}")
+
+    # 평형 조건: p₂ = p_total1 (B₂=0)
+    p_thermal2 = p_total1
+    n2 = p_thermal2 / (k_B * T1)  # 같은 온도 가정
+    print(f"\n무자기장 영역 (평형 조건):")
+    print(f"  필요한 열압력₂ = {p_thermal2:.3e} Pa")
+    print(f"  필요한 밀도   n₂ = {n2:.3e} m^-3")
+    print(f"  밀도 비 n₂/n₁ = {n2/n1:.3f}")
+    print(f"  → 자기장 없는 영역이 더 높은 밀도 필요")
+
+# 태양 흑점 예시: B ≈ 3000 G
+magnetic_pressure_equilibrium(Bz=3000e-4, T1=6000, n1=1e23)
+```
+
+평형 조건: **p₂ = p₁ + B₁²/(2μ₀)**
+
+자기장이 없는 외부 영역은 자기압력만큼 더 높은 열압력이 필요합니다. 태양 흑점은 강한 자기장(~3000 G)으로 인해 내부 압력이 낮아 주변보다 온도가 낮고(~4500 K vs 5800 K) 어둡게 보입니다.
+</details>
+
+### 연습 4: 자기 동결(Frozen-in) 조건
+길이 L = 1 Mm, 전도도 σ = 10⁶ S/m인 플라즈마에서 자기 확산 시간(magnetic diffusion time)을 계산하시오. 속도 v = 100 km/s일 때 자기 레이놀즈 수(magnetic Reynolds number)는 얼마인가?
+
+<details><summary>정답 보기</summary>
+
+```python
+import numpy as np
+
+# 파라미터
+mu_0  = 4 * np.pi * 1e-7  # [H/m]
+sigma = 1e6                 # 전도도 [S/m]
+L     = 1e6                 # 1 Mm = 10^6 m
+v     = 100e3               # 100 km/s [m/s]
+
+# 자기 확산 시간: τ_d = μ₀ σ L²
+# (자기장이 저항에 의해 확산되는 시간 척도)
+tau_d = mu_0 * sigma * L**2
+print(f"자기 확산 시간 τ_d = μ₀σL² = {tau_d:.3e} s")
+print(f"                       = {tau_d/(3600*24*365):.1f} 년")
+
+# 알벤 시간 (대류 시간): τ_A = L / v
+tau_A = L / v
+print(f"\n대류 시간 τ_A = L/v = {tau_A:.1f} s")
+
+# 자기 레이놀즈 수: Rm = μ₀ σ v L = τ_d / τ_A
+Rm = mu_0 * sigma * v * L
+print(f"\n자기 레이놀즈 수 Rm = μ₀σvL = {Rm:.3e}")
+print(f"                      Rm = τ_d/τ_A = {tau_d/tau_A:.3e}")
+
+if Rm > 1:
+    print(f"\nRm ≫ 1: 자기장이 플라즈마에 동결(frozen-in)")
+    print("→ 자기 확산이 무시될 만큼 느림")
+    print("→ 자기 플럭스가 유체 소체와 함께 이동")
+else:
+    print(f"\nRm < 1: 자기장 확산이 지배적")
+```
+
+τ_d ≈ 1.26×10⁶ s ≈ 14.6일, τ_A = 10 s
+
+Rm = μ₀σvL ≈ **1.26×10⁵ ≫ 1**
+
+Rm이 매우 크므로 자기장은 플라즈마에 **동결(frozen-in)**됩니다. 태양 플라즈마에서 Rm ~ 10⁸~10¹², 지구 외핵에서 Rm ~ 10³ 정도로 모두 1보다 훨씬 큽니다. 이 조건에서 자기 플럭스는 보존되고 자기장선은 유체 소체와 함께 이동합니다.
+</details>
 
 ---
 
@@ -1177,6 +1363,25 @@ MHD 기초 핵심:
    - 자기력선이 유체와 동결
    - Rm >> 1 일 때 유효
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: 알벤 속도(Alfven Velocity)와 플라즈마 베타(Plasma Beta)
+자기장 B = 10 G = 10⁻³ T, 수밀도 n = 10⁸ cm⁻³ = 10¹⁴ m⁻³인 태양 코로나(solar corona)에서 다음을 계산하세요 (양성자 플라즈마 가정): (a) ρ = n·mp를 사용한 알벤 속도(Alfven velocity) vA = B/√(μ₀ρ), (b) T = 10⁶ K에서의 음속(sound speed) cs = √(γp/ρ), (c) 플라즈마 베타(plasma beta) β = 2μ₀p/B². 이 환경이 자기 지배(magnetically dominated, β < 1)인지 열 지배(thermally dominated, β > 1)인지 분류하고 파동 전파에 대한 물리적 의미를 설명하세요.
+
+### 연습 2: MHD 파동(Wave) 위상 속도
+vA = 2cs인 플라즈마에서 배경 자기장 B₀에 대해 전파 각도 θ = 0°, 30°, 60°, 90°에서 세 가지 MHD 파동 모드 (빠른 자기음파(fast magnetosonic), 알벤파(Alfven wave), 느린 자기음파(slow magnetosonic)) 의 위상 속도를 모두 계산하세요. 5.1절에 제시된 분산 관계(dispersion relation)를 사용하세요. 직교 좌표계에서 v⊥ 대 v‖로 세 파동 모드의 Friedrichs 다이어그램을 그리세요. 빠른 파동이 최대 속도에 도달하는 각도는 어디인가요?
+
+### 연습 3: 자기 압력(Magnetic Pressure) 평형
+전류 시트(current sheet)가 자기장 B₁ = 10 G, 열압력 p₁ = 0.5 × 10⁻³ Pa인 영역과 자기장이 없는(B₂ = 0) 열압력 p₂인 영역을 분리합니다. 전류 시트를 가로지르는 전체 압력 균형(total pressure balance) p + B²/(2μ₀) = 상수를 사용하여 p₂를 계산하세요. 그런 다음 전체 압력의 점프가 0임을 검증하세요. 이것이 평형 조건(equilibrium condition)임을 확인하세요.
+
+### 연습 4: 동결-인(Frozen-in) 정리와 자기 확산(Magnetic Diffusion)
+전기 전도도(electrical conductivity) σ = 10⁶ S/m, 특성 길이 L = 1 Mm = 10⁶ m인 저항성 플라즈마(resistive plasma)에 대해 다음을 계산하세요: (a) 자기 확산율(magnetic diffusivity) η = 1/(μ₀σ), (b) 자기 확산 타임스케일(magnetic diffusion timescale) τdiff = μ₀σL², (c) 유속 v = 100 km/s에서의 자기 레이놀즈 수(magnetic Reynolds number) Rm = μ₀σvL. 동결-인(frozen-in) 조건이 유효한가요? τdiff를 B = 10 G, n = 10¹⁴ m⁻³를 사용한 알벤 도달 시간(Alfven crossing time) τA = L/vA와 비교하세요.
+
+### 연습 5: 이상 MHD(Ideal MHD) 보존 형식(Conservative Form)
+1차원 이상 MHD에서 보존 변수 벡터 U와 플럭스 벡터 F(U)의 모든 7개 성분을 명시적으로 작성하세요. 각 성분의 단위를 확인하여 표현식이 차원적으로 일관성이 있는지 검증하세요. 유도 방정식(induction equation) dB/dt = ∇×(v×B)에서 출발하여, 이것이 보존 형 MHD 시스템에서 사용되는 플럭스 형식과 대수적으로 동치임을 보이세요.
 
 ---
 

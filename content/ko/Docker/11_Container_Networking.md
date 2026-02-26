@@ -1,12 +1,18 @@
 # 컨테이너 네트워킹(Container Networking)
 
+**이전**: [CI/CD 파이프라인](./10_CI_CD_Pipelines.md) | **다음**: [보안 베스트 프랙티스](./12_Security_Best_Practices.md)
+
 ## 학습 목표
-- Docker 네트워크 드라이버(Network Drivers)와 사용 사례 이해
-- 브리지(Bridge), 호스트(Host), 오버레이(Overlay), 맥브이랜(Macvlan) 네트워크 마스터하기
-- 서브넷(Subnet), 게이트웨이(Gateway), DNS를 사용한 커스텀 네트워크 구성
-- 서비스 디스커버리(Service Discovery)와 컨테이너 간 통신 구현
-- 네트워크 연결성 문제 해결
-- 네트워크 보안 모범 사례 적용
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Docker 네트워크 드라이버(bridge, host, overlay, macvlan)와 각각의 적합한 사용 사례를 설명한다
+2. 서브넷(Subnet), 게이트웨이(Gateway), IP 할당을 포함한 커스텀 브리지 네트워크를 구성한다
+3. Swarm 클러스터에서 멀티 호스트 컨테이너 통신을 위한 오버레이 네트워크(Overlay Network)를 구현한다
+4. 컨테이너 간 통신을 위한 DNS 기반 서비스 디스커버리(Service Discovery)를 적용한다
+5. 호스트 바인딩과 프로토콜 선택을 포함한 고급 포트 매핑 전략을 구성한다
+6. 격리, 암호화, 접근 제어를 통한 네트워크 보안을 구현한다
+7. 진단 도구를 활용해 컨테이너 네트워크 연결 문제를 해결한다
 
 ## 목차
 1. [Docker 네트워크 드라이버](#1-docker-네트워크-드라이버)
@@ -21,6 +27,10 @@
 10. [연습 문제](#10-연습-문제)
 
 **난이도**: ⭐⭐⭐
+
+---
+
+컨테이너 네트워킹은 Docker를 프로덕션에서 운용할 때 가장 복잡하면서도 핵심적인 영역 중 하나입니다. 모든 컨테이너는 다른 컨테이너, 호스트, 그리고 외부 세계와 통신해야 하며, 선택하는 네트워킹 모델은 성능, 보안, 안정성에 직접적인 영향을 미칩니다. 이 레슨에서는 Docker의 네트워크 드라이버, DNS 기반 서비스 디스커버리(Service Discovery), 보안 구성을 심층적으로 다루어, 자신감을 갖고 컨테이너 네트워크를 설계하고 문제를 해결할 수 있도록 합니다.
 
 ---
 
@@ -142,7 +152,7 @@ docker network create \
   --gateway 172.25.0.1 \
   my-custom-network
 
-# Create with IP range reservation
+# Create with IP range reservation — carves out a smaller pool for dynamic allocation, leaving room for static IPs outside the range
 docker network create \
   --subnet 172.26.0.0/16 \
   --ip-range 172.26.5.0/24 \
@@ -194,24 +204,24 @@ services:
     image: nginx
     networks:
       - frontend
-      - backend
+      - backend  # web bridges both networks — it reverse-proxies public traffic to the backend tier
 
   app:
     image: myapp:latest
     networks:
       backend:
-        ipv4_address: 172.28.0.100
+        ipv4_address: 172.28.0.100  # Static IP — useful when external config or firewalls reference a fixed address
 
   db:
     image: postgres
     networks:
-      - backend
+      - backend  # db is only on backend — unreachable from the frontend network, reducing attack surface
 
 networks:
   frontend:
     driver: bridge
   backend:
-    driver: bridge
+    driver: bridge  # Separate bridge isolates backend traffic — containers on frontend cannot sniff DB queries
     ipam:
       config:
         - subnet: 172.28.0.0/16
@@ -358,14 +368,14 @@ docker network create \
   --subnet 10.0.9.0/24 \
   my-overlay
 
-# Create with encryption
+# Create with encryption — IPsec encrypts VXLAN traffic so inter-node communication is confidential even on untrusted networks
 docker network create \
   --driver overlay \
   --opt encrypted \
   --subnet 10.0.10.0/24 \
   secure-overlay
 
-# Create attachable overlay (for standalone containers)
+# Create attachable overlay (for standalone containers) — without --attachable, only Swarm services can join
 docker network create \
   --driver overlay \
   --attachable \
@@ -434,7 +444,7 @@ networks:
   backend:
     driver: overlay
     driver_opts:
-      encrypted: "true"
+      encrypted: "true"  # Encrypt DB traffic between nodes — prevents eavesdropping on the physical network
 
 volumes:
   db-data:
@@ -485,7 +495,7 @@ docker network create \
 ### MTU 구성
 
 ```bash
-# Set MTU (Maximum Transmission Unit)
+# Set MTU (Maximum Transmission Unit) — match the underlying network's MTU to avoid packet fragmentation and throughput loss
 docker network create \
   --driver bridge \
   --opt com.docker.network.driver.mtu=1450 \
@@ -641,6 +651,7 @@ networks:
 
 ```bash
 # Create multiple containers with same name (using --network-alias)
+# DNS round-robin provides basic load balancing without an external LB — good enough for internal service-to-service calls
 docker run -d --name api1 --network my-net --network-alias api myapi:latest
 docker run -d --name api2 --network my-net --network-alias api myapi:latest
 docker run -d --name api3 --network my-net --network-alias api myapi:latest
@@ -667,7 +678,7 @@ docker run -d -P nginx
 # Publish to specific host port
 docker run -d -p 8080:80 nginx
 
-# Publish to specific interface
+# Publish to specific interface — binds only to loopback, preventing external network access to this port
 docker run -d -p 127.0.0.1:8080:80 nginx
 # Only accessible from localhost
 
@@ -800,12 +811,12 @@ services:
     image: postgres
     networks:
       - backend
-    # db is NOT exposed to frontend network
+    # db is NOT exposed to frontend network — even if the web tier is compromised, the DB is unreachable
 
 networks:
   frontend:
   backend:
-    internal: true  # No external access
+    internal: true  # No external access — containers on this network cannot reach the internet, reducing data exfiltration risk
 ```
 
 ### 내부 네트워크(Internal Networks)
@@ -824,7 +835,7 @@ docker run -d --name isolated-db --network internal-net postgres
 ### 컨테이너 간 통신(ICC)
 
 ```bash
-# Disable ICC (containers can't talk to each other by default)
+# Disable ICC (containers can't talk to each other by default) — forces explicit port publishing for communication, tightening isolation
 docker network create \
   --driver bridge \
   --opt com.docker.network.bridge.enable_icc=false \
@@ -1249,6 +1260,74 @@ docker run --rm \
 - 고급 네트워킹을 위한 서비스 메시 솔루션 (Istio, Linkerd) 탐색
 - Kubernetes용 CNI 플러그인 학습
 - 네트워크 성능 최적화 기법 연구
+
+---
+
+## 연습 문제
+
+### 연습 1: Docker 네트워크 드라이버(Network Driver) 탐색
+
+bridge, host, none 네트워크 드라이버의 동작 방식 차이를 관찰합니다.
+
+1. 기본 브리지(bridge) 네트워크에서 컨테이너를 실행하고 IP를 확인합니다: `docker run --rm alpine ip addr`
+2. 호스트(host) 네트워킹으로 컨테이너를 실행하고 인터페이스를 비교합니다: `docker run --rm --network host alpine ip addr`
+3. 네트워킹 없이 컨테이너를 실행하고 외부 연결이 없음을 확인합니다: `docker run --rm --network none alpine ping -c 1 8.8.8.8`
+4. 모든 네트워크를 나열합니다: `docker network ls`
+5. 기본 브리지 네트워크를 조사하여 연결된 컨테이너와 서브넷(subnet)을 확인합니다: `docker network inspect bridge`
+6. `bridge`, `host`, `none` 드라이버 간의 격리 차이를 설명합니다
+
+### 연습 2: DNS(도메인 네임 시스템) 해석이 가능한 사용자 정의 브리지 네트워크 생성
+
+사용자 정의 네트워크를 사용하여 컨테이너 간 자동 서비스 디스커버리(service discovery)를 활성화합니다.
+
+1. 사용자 정의 브리지 네트워크를 생성합니다: `docker network create --subnet 192.168.100.0/24 mynet`
+2. 네트워크에 `server`라는 이름의 컨테이너를 시작합니다: `docker run -d --name server --network mynet nginx:alpine`
+3. 동일한 네트워크에서 두 번째 컨테이너를 시작하고 DNS 해석을 테스트합니다: `docker run --rm --network mynet alpine ping -c 3 server`
+4. 기본 브리지 네트워크에서 동일한 ping을 시도합니다 — 이름으로 실패해야 합니다: `docker run --rm alpine ping -c 3 server`
+5. `server` 컨테이너를 두 번째 네트워크에 연결합니다: `docker network create mynet2 && docker network connect mynet2 server`
+6. 컨테이너가 이제 두 네트워크에 인터페이스를 가지는지 확인합니다: `docker inspect server | grep -A 20 Networks`
+
+### 연습 3: Docker Compose 네트워크로 멀티 컨테이너 통신 구현
+
+Compose의 내장 네트워킹을 사용하여 격리된 프론트엔드/백엔드/데이터베이스 계층을 구현합니다.
+
+1. `frontend` (nginx), `backend` (HTTP 서버), `db` (postgres) 세 개의 서비스를 가진 `docker-compose.yml`을 작성합니다
+2. `web-tier` (frontend + backend)와 `data-tier` (backend + db) 두 개의 네트워크를 정의합니다
+3. 각 서비스를 적절한 네트워크에 할당합니다
+4. 스택을 시작합니다: `docker compose up -d`
+5. `frontend`에 exec로 접속하여 `backend`에 접근할 수 있는지 확인합니다: `docker compose exec frontend wget -qO- http://backend`
+6. `frontend`에서 `db`에 호스트명으로 접근할 수 없는지 확인합니다: `docker compose exec frontend ping db`
+7. `backend`에서 `frontend`와 `db` 모두에 접근할 수 있는지 확인합니다
+
+### 연습 4: 네트워크 연결 검사 및 디버깅
+
+진단 도구를 사용하여 끊어진 컨테이너 네트워크를 문제 해결합니다.
+
+1. 별도의 사용자 정의 네트워크에서 두 개의 컨테이너를 시작합니다 (공유 네트워크 없음):
+   ```bash
+   docker network create net-a
+   docker network create net-b
+   docker run -d --name container-a --network net-a nginx:alpine
+   docker run -d --name container-b --network net-b nginx:alpine
+   ```
+2. `container-b`에서 `container-a`로 ping을 시도합니다 — 실패하는지 확인합니다
+3. `docker inspect`를 사용하여 두 컨테이너의 IP 주소를 찾습니다
+4. `docker exec container-b ping <container-a의 IP>`를 시도합니다 — 다른 서브넷이므로 역시 실패하는지 확인합니다
+5. `container-b`를 `net-a`에 연결합니다: `docker network connect net-a container-b`
+6. 이름과 IP로 ping을 재시도합니다 — 이제 두 방법 모두 성공하는지 확인합니다
+7. `docker network inspect net-a`로 두 컨테이너가 네트워크에 나타나는지 확인합니다
+
+### 연습 5: 포트 매핑(Port Mapping)과 호스트 바인딩(Host Binding)
+
+프로토콜 선택과 인터페이스 바인딩을 포함한 세부적인 포트 매핑을 실습합니다.
+
+1. 컨테이너를 실행하고 포트 80을 호스트 포트 8080에 매핑합니다: `docker run -d -p 8080:80 nginx:alpine`
+2. 접근 가능한지 확인합니다: `curl http://localhost:8080`
+3. 루프백(loopback)에만 바인딩하는 컨테이너를 실행합니다: `docker run -d -p 127.0.0.1:8081:80 nginx:alpine`
+4. `127.0.0.1:8081`에서는 접근 가능하지만 `0.0.0.0:8081`에서는 접근 불가한지 확인합니다
+5. UDP 서비스를 실행하고 명시적 프로토콜로 포트를 매핑합니다: `docker run -d -p 5353:53/udp some-dns-image` (또는 UDP를 리슨하는 컨테이너 사용)
+6. 모든 포트 매핑을 나열합니다: `docker ps --format "table {{.Names}}\t{{.Ports}}"`
+7. 모든 테스트 컨테이너를 정리합니다: `docker rm -f $(docker ps -aq)`
 
 ---
 

@@ -54,13 +54,18 @@ SELECT to_tsvector('english', 'PostgreSQL is a powerful database system')
 -- 2. Creating a GIN Index for Fast Search
 -- ============================================================================
 
--- Update search_vector column with combined title and body
+-- Why: Weighting title as 'A' and body as 'B' means title matches rank higher
+-- than body matches in relevance scoring. This mirrors how search engines
+-- prioritize headings over body text. Pre-computing the vector avoids
+-- the cost of tokenizing at query time.
 UPDATE documents
 SET search_vector =
     setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(body, '')), 'B');
 
--- Create GIN (Generalized Inverted Index) for fast full-text search
+-- Why: GIN (Generalized Inverted Index) maps each lexeme to the set of rows
+-- containing it, enabling O(1) lookup per term. Without this index, every
+-- query would re-tokenize and scan all documents sequentially.
 CREATE INDEX idx_documents_search ON documents USING GIN(search_vector);
 
 -- Basic search query
@@ -118,7 +123,9 @@ FROM documents, to_tsquery('english', 'database') query
 WHERE search_vector @@ query
 ORDER BY rank DESC;
 
--- ts_rank_cd (cover density ranking) - considers proximity of terms
+-- Why: ts_rank_cd uses "cover density" — it rewards documents where search terms
+-- appear close together, not just frequently. This produces better results for
+-- multi-word queries where proximity indicates stronger relevance than mere occurrence.
 SELECT
     id,
     title,
@@ -213,7 +220,9 @@ INSERT INTO articles (title, content) VALUES
     ('PostgreSQL Administration', 'Essential PostgreSQL administration tasks and tools.'),
     ('Data Warehousing Basics', 'Introduction to data warehousing concepts and star schemas.');
 
--- Create GIN index for trigram matching
+-- Why: pg_trgm breaks strings into 3-character substrings ("trigrams") and indexes
+-- them with GIN. This enables fuzzy matching (typo tolerance) and LIKE '%substring%'
+-- queries that B-tree indexes cannot accelerate.
 CREATE INDEX idx_articles_title_trgm ON articles USING GIN(title gin_trgm_ops);
 
 -- Similarity search (0.0 = no match, 1.0 = perfect match)
@@ -257,7 +266,9 @@ ORDER BY fts_rank DESC, fuzzy_sim DESC;
 -- 8. Automatic Search Vector Update with Trigger
 -- ============================================================================
 
--- Create trigger function to auto-update search_vector
+-- Why: A trigger keeps the search_vector column in sync with title/body automatically.
+-- Without this, application code would need to remember to recompute the vector
+-- on every INSERT/UPDATE — a fragile pattern that leads to stale search results.
 CREATE OR REPLACE FUNCTION documents_search_vector_update() RETURNS trigger AS $$
 BEGIN
     NEW.search_vector :=

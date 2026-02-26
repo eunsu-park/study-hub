@@ -72,12 +72,15 @@ def policy_evaluation(mdp, policy: Dict, gamma: float = 0.9,
     Returns:
         V: 상태 가치 함수 {state: value}
     """
-    # 가치 함수 초기화
+    # 0으로 초기화 — 벨만 연산자(Bellman operator)는 수축 사상(contraction mapping)이므로
+    # 초기값과 관계없이 수렴이 보장됨
     V = {s: 0.0 for s in mdp.get_states()}
 
     iteration = 0
     while True:
-        delta = 0  # 최대 변화량 추적
+        # delta는 이번 스윕에서 가장 큰 단일 상태 변화를 추적 — 합이 아닌 max를 사용하면
+        # 최악의 경우 경계를 제공하므로, 수렴 시 모든 상태가 안정됨을 보장
+        delta = 0
         iteration += 1
 
         # 모든 상태에 대해 업데이트
@@ -96,12 +99,15 @@ def policy_evaluation(mdp, policy: Dict, gamma: float = 0.9,
                     if done:
                         new_v += action_prob * prob * reward
                     else:
+                        # 현재 스윕의 V[next_s]를 사용하는 것이 "인플레이스(in-place)" 방식 —
+                        # 루프 앞쪽 상태의 업데이트가 뒤쪽 상태에 바로 반영되어 더 빠르게 수렴
                         new_v += action_prob * prob * (reward + gamma * V[next_s])
 
             V[s] = new_v
             delta = max(delta, abs(v - new_v))
 
-        # 수렴 체크
+        # theta는 수렴 임계값: delta < theta이면 가치 함수가 진짜 V^π의
+        # theta/(1-gamma) 이내에 있음을 보장
         if delta < theta:
             print(f"정책 평가 수렴: {iteration} iterations")
             break
@@ -200,7 +206,8 @@ def policy_improvement(mdp, V: Dict, gamma: float = 0.9) -> Tuple[Dict, bool]:
             new_policy[s] = {a: 1/len(mdp.actions) for a in mdp.actions}
             continue
 
-        # 각 행동의 Q 값 계산
+        # 별도의 Q 테이블 저장 없이 V에서 Q 값을 재계산 —
+        # 메모리를 절약하고 Q가 항상 현재 V와 일관되게 유지됨
         q_values = {}
         for a in mdp.actions:
             q = 0
@@ -215,11 +222,13 @@ def policy_improvement(mdp, V: Dict, gamma: float = 0.9) -> Tuple[Dict, bool]:
         best_action = max(q_values, key=q_values.get)
         best_q = q_values[best_action]
 
-        # 동률인 행동들 찾기 (수치 오차 고려)
+        # 1e-8 허용 오차로 동률 처리: 부동소수점 노이즈 처리 — 없으면 수학적으로 동일한
+        # 두 행동이 다르게 취급되어 반복 간 불필요한 정책 진동이 발생할 수 있음
         best_actions = [a for a, q in q_values.items()
                         if abs(q - best_q) < 1e-8]
 
-        # 결정적 정책 생성 (또는 동률 시 균등 분배)
+        # 동률인 최선 행동들에 균등 확률 분배 — 일반적으로 단일 승자인 결정적 정책을 만들되
+        # 여러 행동이 진정으로 동등할 때는 균등 분배로 자연스럽게 처리
         new_policy[s] = {a: 0.0 for a in mdp.actions}
         for a in best_actions:
             new_policy[s][a] = 1.0 / len(best_actions)
@@ -271,7 +280,8 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
         V: 최적 가치 함수
         policy: 최적 정책
     """
-    # 균등 랜덤 정책으로 초기화
+    # 균등 랜덤 정책으로 초기화 — 최적이 아닐 수 있지만, 첫 번째 평가 과정에서
+    # 모든 상태가 탐색되도록 보장하는 안전한 출발점
     policy = create_uniform_policy(mdp)
 
     iteration = 0
@@ -279,7 +289,8 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
         iteration += 1
         print(f"\n=== 정책 반복 {iteration} ===")
 
-        # 1. 정책 평가
+        # 1. 정책 평가 — 개선 전에 완전히 수렴할 때까지 실행;
+        # 이것이 가치 반복(1회만 평가)과의 핵심 차이점
         V = policy_evaluation(mdp, policy, gamma, theta)
 
         # 2. 정책 개선
@@ -303,12 +314,15 @@ def policy_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
                         q += prob * (reward + gamma * V[next_s])
                 q_values[a] = q
 
-            # 탐욕적 정책
+            # 탐욕적 정책: 최선의 행동에 확률 1.0을 완전히 부여 —
+            # 결정적 탐욕 정책은 항상 혼합 정책 이상으로 좋음
             best_action = max(q_values, key=q_values.get)
             new_policy[s] = {a: 0.0 for a in mdp.actions}
             new_policy[s][best_action] = 1.0
 
-            # 정책 변화 체크
+            # policy_stable은 어느 상태든 최선 행동이 바뀌었는지 추적 —
+            # 아무 상태도 변하지 않았다면 정책은 이미 자신의 V에 대해 탐욕적,
+            # 즉 최적임을 의미 (정책 개선 정리, Policy Improvement Theorem)
             old_best = max(old_policy[s], key=old_policy[s].get)
             if old_best != best_action:
                 policy_stable = False
@@ -399,7 +413,9 @@ def value_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
 
             v = V[s]
 
-            # 벨만 최적성 방정식: max over actions
+            # 벨만 최적성 방정식: 정책 가중 평균 대신 max를 취하면
+            # 매 스윕마다 암묵적으로 정책 개선이 수행됨 — 상태별 평가+개선 루프가
+            # 단일 업데이트로 압축되는 것
             q_values = []
             for a in mdp.actions:
                 q = 0
@@ -420,7 +436,8 @@ def value_iteration(mdp, gamma: float = 0.9, theta: float = 1e-6):
             print(f"\n가치 반복 수렴: {iteration} iterations")
             break
 
-    # 최적 정책 추출
+    # V가 수렴한 후 최적 정책 추출 — 반복 중 π를 저장하지 않고 별도 패스로 추출하는 이유는
+    # 중간의 암묵적 정책이 아닌 최종 탐욕 정책만 필요하기 때문
     policy = {}
     for s in mdp.get_states():
         if mdp.is_terminal(s):
@@ -559,15 +576,20 @@ import numpy as np
 def dp_frozen_lake():
     """Frozen Lake 환경에서 DP 적용"""
 
-    # 환경 생성 (미끄러지지 않는 버전)
+    # is_slippery=False는 확률적 전이를 제거하여 DP가 매우 적은 반복으로 수렴 —
+    # is_slippery=True를 사용하면 바람/미끄러짐에 대한 강건성을 테스트할 수 있음
     env = gym.make('FrozenLake-v1', is_slippery=False)
 
     n_states = env.observation_space.n
     n_actions = env.action_space.n
+    # gamma=0.99: 4x4 그리드에서 목표까지 최대 6단계이므로 보상 신호를
+    # 시작 상태까지 전파하려면 높은 gamma가 필요 (0.9이면 너무 많이 할인됨)
     gamma = 0.99
     theta = 1e-8
 
     # P[s][a] = [(prob, next_state, reward, done), ...]
+    # env.unwrapped.P는 Gymnasium에서 모델을 읽는 표준 방법 —
+    # .unwrapped 없이는 래퍼(wrapper)가 속성 접근을 가로챌 수 있음
     P = env.unwrapped.P
 
     # 가치 반복
@@ -582,6 +604,8 @@ def dp_frozen_lake():
             # 각 행동의 가치 계산
             q_values = []
             for a in range(n_actions):
+                # (not done)은 비종료 상태에서 1, 종료 상태에서 0이므로
+                # 별도의 if 분기 없이 종료 상태의 V[next_s]를 자동으로 0으로 만듦
                 q = sum(prob * (reward + gamma * V[next_s] * (not done))
                         for prob, next_s, reward, done in P[s][a])
                 q_values.append(q)
@@ -621,7 +645,8 @@ def dp_frozen_lake():
     print("\n가치 함수:")
     print(V.reshape(4, 4).round(3))
 
-    # 정책 테스트
+    # 새로운 환경에서 정책 테스트: 실제 성능 측정 —
+    # env를 재생성하여 학습 단계의 상태 누수를 방지
     env = gym.make('FrozenLake-v1', is_slippery=False)
     success = 0
     n_tests = 100

@@ -10,6 +10,8 @@
  */
 void StudentDatabase::addStudent(std::shared_ptr<Student> student) {
     // Check for duplicate ID
+    // Why: find_if with a lambda provides a flexible predicate-based search without
+    // needing to define a separate functor class — cleaner than manual loop iteration
     auto it = std::find_if(students.begin(), students.end(),
         [&student](const std::shared_ptr<Student>& s) {
             return s->getId() == student->getId();
@@ -128,6 +130,8 @@ double StudentDatabase::calculateAverageGpa() const {
         return 0.0;
     }
 
+    // Why: accumulate with a custom binary op reduces the collection in one pass —
+    // the 0.0 initial value forces double arithmetic, avoiding integer truncation
     double sum = std::accumulate(students.begin(), students.end(), 0.0,
         [](double total, const std::shared_ptr<Student>& s) {
             return total + s->getGpa();
@@ -141,6 +145,8 @@ double StudentDatabase::calculateAverageGpa() const {
  * @return Map of major -> student count
  */
 std::map<std::string, int> StudentDatabase::countByMajor() const {
+    // Why: map's operator[] default-constructs missing keys (int → 0), making it perfect
+    // for counting patterns — no need to check if the key exists before incrementing
     std::map<std::string, int> majorCount;
 
     for (const auto& student : students) {

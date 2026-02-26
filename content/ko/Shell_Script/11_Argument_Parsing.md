@@ -2,9 +2,26 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [10_Error_Handling.md](./10_Error_Handling.md) | **다음**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md)
+**이전**: [에러 처리 및 디버깅](./10_Error_Handling.md) | **다음**: [이식성과 모범 사례](./12_Portability_and_Best_Practices.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `while`/`case` 루프를 사용해 짧은 옵션, 긴 옵션, 결합 옵션을 지원하는 수동 인수 파싱(manual argument parsing)을 구현할 수 있다
+2. POSIX `getopts`를 적용해 조용한 모드(silent mode)에서 적절한 에러 처리와 함께 짧은 옵션을 파싱할 수 있다
+3. `getopts`(POSIX)와 GNU `getopt`를 비교하고, 주어진 이식성 요건에 맞는 도구를 선택할 수 있다
+4. NAME/SYNOPSIS/DESCRIPTION/OPTIONS 관례를 따르는 자기 문서화(self-documenting) 도움말 메시지를 작성할 수 있다
+5. 터미널 기능 자동 감지 및 `NO_COLOR` 지원과 함께 색상 출력(color output)을 구현할 수 있다
+6. 스피너(spinner), 진행 막대(progress bar), 다중 작업 대시보드를 포함한 진행 표시기(progress indicator)를 제작할 수 있다
+7. 유효성 검사, 메뉴, 비밀번호 마스킹이 포함된 대화형 입력 프롬프트(interactive input prompt)를 설계할 수 있다
+8. 인수 파싱, 색상 출력, 진행 표시를 결합해 전문적인 CLI 도구를 만들 수 있다
+
+---
+
+사용자 입력을 받는 모든 스크립트에는 커맨드라인 인수(command-line argument)를 파싱하는 방법이 필요합니다. 명확한 도움말 텍스트, 직관적인 플래그, 유익한 진행 피드백을 갖춘 잘 설계된 CLI 인터페이스는 스크립트가 세련된 도구처럼 느껴지는지 아니면 불안정한 즉흥 작업처럼 느껴지는지를 결정합니다. 팀원과 스크립트를 공유하거나 CI/CD 파이프라인에서 실행할 때, 적절한 인수 처리는 "내 컴퓨터에서는 작동했는데"와 신뢰할 수 있는 자기 문서화 자동화 사이의 차이를 만들어 냅니다.
 
 ## 1. 수동 인수 파싱
 
@@ -1799,6 +1816,75 @@ git 스타일 하위 명령을 가진 CLI 도구를 구현하세요:
 - 실행 중인 작업의 진행 막대 표시
 - 모든 이벤트를 파일에 로그
 - 스크립트용 비대화형 모드에서 실행 가능
+
+## 연습 문제
+
+### 연습 1: 수동 파싱 vs getopts 비교
+
+동일한 CLI 도구를 두 번 작성하세요 — 한 번은 수동 `while/case` 루프를 사용하고, 한 번은 `getopts`를 사용합니다. 도구는 다음을 받아야 합니다:
+- `-v` / `--verbose` (플래그)
+- `-o FILE` / `--output FILE` (인수를 갖는 옵션)
+- `-n NUM` / `--count NUM` (기본값 1인 숫자 인수 옵션)
+- 나머지 위치 인수(positional arguments)를 배열에 수집
+
+두 버전을 구현한 후, 각 방식의 장점 하나와 한계 하나를 나열하세요.
+
+### 연습 2: 자기 문서화(Self-Documenting) 도움말 함수 작성하기
+
+`--help`, `--source DIR`, `--dest DIR`, `--compress`, `--dry-run` 플래그를 받는 스크립트 `backup.sh`를 만드세요. NAME / SYNOPSIS / DESCRIPTION / OPTIONS 규약을 따르는 `usage()` 함수를 구현하세요:
+
+```
+NAME
+    backup.sh - archive files from source to destination
+
+SYNOPSIS
+    backup.sh [OPTIONS]
+
+OPTIONS
+    -s, --source DIR    Source directory to backup
+    -d, --dest DIR      Destination directory
+    -c, --compress      Compress the archive with gzip
+    -n, --dry-run       Show what would be done without doing it
+    -h, --help          Show this help and exit
+```
+
+`--help`가 전달되거나 필수 인수가 누락될 때 `usage()`를 호출하세요.
+
+### 연습 3: NO_COLOR 지원을 포함한 컬러 출력 추가하기
+
+기존 스크립트에 컬러 출력 라이브러리를 추가하세요. 요구사항:
+- ANSI 이스케이프 코드(ANSI escape code)를 사용하여 `RED`, `GREEN`, `YELLOW`, `CYAN`, `RESET` 상수 정의
+- `[ -t 1 ]`(stdout이 터미널인지)과 `${NO_COLOR:-}`(NO_COLOR 규약) 모두 확인하여 컬러 출력 여부 결정
+- 적절한 컬러를 사용하는 `print_success`, `print_warn`, `print_error` 헬퍼 함수 제공
+- 다음으로 테스트: `./script.sh`(컬러), `NO_COLOR=1 ./script.sh`(컬러 없음), `./script.sh | cat`(파이프, 컬러 없음)
+
+### 연습 4: 진행 막대(Progress Bar) 구축하기
+
+다음을 수행하는 `progress_bar <current> <total> <label>` 함수를 구현하세요:
+- 완료 백분율 계산
+- 40열로 스케일된 `#` 문자를 사용하여 막대 그리기
+- `\r`(캐리지 리턴)을 사용하여 이전 줄을 덮어쓰면서 막대가 제자리에서 업데이트되도록
+- 막대 뒤에 표시되는 선택적 레이블 문자열 받기
+
+파일 처리를 시뮬레이션하는 루프로 테스트:
+
+```bash
+total=20
+for i in $(seq 1 $total); do
+    sleep 0.1
+    progress_bar "$i" "$total" "Processing files"
+done
+echo ""  # newline after bar completes
+```
+
+### 연습 5: 다단계 대화형(Interactive) 위저드 구축하기
+
+대화형 프롬프트를 통해 설정을 수집하는 `wizard.sh`를 구현하세요:
+- 프로젝트 이름 요청(검증: 비어 있지 않아야 하고, 영숫자 + 밑줄만 허용)
+- 포트 번호 요청(검증: 1024~65535 사이의 정수)
+- 번호 메뉴에서 환경(environment) 선택: `1) development  2) staging  3) production`
+- 기본값을 "n"으로 설정하여 계속 진행 전 확인 요청
+- 비대화형 모드(stdin이 터미널이 아닌 경우), 프롬프트 대신 환경 변수 `PROJ_NAME`, `PROJ_PORT`, `PROJ_ENV`에서 값 읽기
 
 ---
 

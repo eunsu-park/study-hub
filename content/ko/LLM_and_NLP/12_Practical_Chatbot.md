@@ -649,6 +649,344 @@ for chunk in llm.stream(messages):
 - 사용자 피드백 수집
 - 지속적인 모델 개선
 
+## 연습 문제
+
+### 연습 문제 1: 토큰 제한이 있는 히스토리 잘라내기
+
+`TokenManager.truncate_history` 메서드는 히스토리가 `max_history_tokens`를 초과하면 오래된 메시지를 제거합니다. 그런데 미묘한 버그가 있습니다: 대화 쌍을 깨뜨릴 수 있습니다(예: 어시스턴트 메시지는 유지하면서 해당 사용자 메시지를 삭제). 이 문제를 수정하고 단위 테스트를 추가하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import tiktoken
+
+class TokenManager:
+    def __init__(self, model="gpt-3.5-turbo", max_tokens=4000):
+        self.encoding = tiktoken.encoding_for_model(model)
+        self.max_tokens = max_tokens
+
+    def count_tokens(self, text: str) -> int:
+        return len(self.encoding.encode(text))
+
+    def truncate_history(self, history: list[dict], max_history_tokens: int = 2000) -> list[dict]:
+        """
+        대화 일관성 유지를 위해 가장 오래된 메시지 쌍(pair)부터 제거합니다.
+        고아(orphan) 메시지 방지를 위해 항상 user+assistant 쌍을 함께 제거합니다.
+        """
+        if not history:
+            return history
+
+        # 총 토큰 수 계산
+        total_tokens = sum(self.count_tokens(msg['content']) for msg in history)
+
+        if total_tokens <= max_history_tokens:
+            return history  # 잘라내기 불필요
+
+        # 가장 오래된 쌍부터 제거 (한 번에 2개 메시지)
+        truncated = list(history)
+        while truncated and total_tokens > max_history_tokens:
+            # 가장 오래된 쌍 제거 (user + assistant)
+            if len(truncated) >= 2:
+                removed_user = truncated.pop(0)
+                removed_assistant = truncated.pop(0)
+                total_tokens -= (
+                    self.count_tokens(removed_user['content']) +
+                    self.count_tokens(removed_assistant['content'])
+                )
+            else:
+                # 메시지 하나만 남으면 제거
+                removed = truncated.pop(0)
+                total_tokens -= self.count_tokens(removed['content'])
+
+        return truncated
+
+
+# 단위 테스트
+def test_truncate_history():
+    tm = TokenManager()
+
+    # 알려진 토큰 수로 대화 구성
+    history = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"},
+        {"role": "user", "content": "How are you?"},
+        {"role": "assistant", "content": "I'm great!"},
+        {"role": "user", "content": "Tell me about Python"},
+        {"role": "assistant", "content": "Python is a high-level programming language"},
+    ]
+
+    # 테스트 1: 잘라내기 불필요
+    result = tm.truncate_history(history, max_history_tokens=1000)
+    assert len(result) == 6, "제한 내에서는 모든 메시지 유지"
+
+    # 테스트 2: 가장 오래된 쌍 제거
+    result = tm.truncate_history(history, max_history_tokens=25)
+    assert len(result) % 2 == 0, "결과는 짝수 개의 메시지(완전한 쌍)여야 함"
+    assert result[0]["role"] == "user", "첫 메시지는 user여야 함"
+
+    # 테스트 3: 쌍(pair) 무결성 검증 (고아 어시스턴트 메시지 없음)
+    for i in range(0, len(result), 2):
+        assert result[i]["role"] == "user", f"메시지 {i}는 user여야 함"
+        assert result[i+1]["role"] == "assistant", f"메시지 {i+1}는 assistant여야 함"
+
+    print("모든 테스트 통과!")
+
+test_truncate_history()
+```
+
+**원본의 버그:** 원본 구현은 `reversed(history)`로 최신부터 토큰을 세지만, 제한에 도달해도 메시지 쌍 무결성을 보장하지 않습니다. 대응하는 사용자 메시지가 없는 어시스턴트 메시지는 LLM을 혼란스럽게 만듭니다.
+</details>
+
+---
+
+### 연습 문제 2: 의도(Intent) 기반 챗봇 라우터
+
+사용자 의도를 `rag_query`(문서로 답변 가능한 질문), `chitchat`(일반 대화), `action_request`(주문과 같은 실제 행동 필요)의 세 가지로 분류하는 챗봇 라우터(router)를 구축하세요. 각 의도를 다른 핸들러(handler)로 라우팅하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+
+class Intent(Enum):
+    RAG_QUERY = "rag_query"
+    CHITCHAT = "chitchat"
+    ACTION_REQUEST = "action_request"
+
+@dataclass
+class ChatbotResponse:
+    intent: Intent
+    response: str
+    sources: list = None
+
+class RouterChatbot:
+    def __init__(self, rag_chatbot=None):
+        from openai import OpenAI
+        self.client = OpenAI()
+        self.rag_chatbot = rag_chatbot  # 선택적 RAG 컴포넌트
+        self.history = []
+
+    def classify_intent(self, message: str) -> Intent:
+        """Zero-shot LLM 분류로 사용자 의도 파악."""
+        prompt = f"""다음 메시지를 정확히 하나의 카테고리로 분류하세요:
+- rag_query: 문서/지식 베이스에서 답변이 필요한 질문
+- chitchat: 일상 대화, 인사, 일반적인 질문
+- action_request: 무언가를 해달라는 요청 (주문, 예약, 취소 등)
+
+메시지: "{message}"
+
+카테고리 (카테고리 이름만 답하세요):"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=20
+        )
+        result = response.choices[0].message.content.strip().lower()
+
+        mapping = {
+            "rag_query": Intent.RAG_QUERY,
+            "chitchat": Intent.CHITCHAT,
+            "action_request": Intent.ACTION_REQUEST,
+        }
+        return mapping.get(result, Intent.CHITCHAT)
+
+    def handle_rag(self, message: str) -> ChatbotResponse:
+        """문서 기반 질문 처리."""
+        if self.rag_chatbot:
+            response = self.rag_chatbot.chat(message)
+            sources = self.rag_chatbot.get_sources(message)
+        else:
+            response = "해당 질문에 답변하기 위한 문서에 접근할 수 없습니다."
+            sources = []
+        return ChatbotResponse(Intent.RAG_QUERY, response, sources)
+
+    def handle_chitchat(self, message: str) -> ChatbotResponse:
+        """일상 대화 처리."""
+        messages = [
+            {"role": "system", "content": "당신은 친근한 대화 어시스턴트입니다."},
+            {"role": "user", "content": message}
+        ]
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.8
+        )
+        return ChatbotResponse(Intent.CHITCHAT, response.choices[0].message.content)
+
+    def handle_action(self, message: str) -> ChatbotResponse:
+        """행동 요청 처리 (실제 행동 로직의 플레이스홀더)."""
+        response = (
+            f"'{message}'를 처리하고 싶으신 거군요. "
+            "요청을 처리하기 위해 더 자세한 정보가 필요합니다. "
+            "추가 정보를 제공해 주시겠어요?"
+        )
+        return ChatbotResponse(Intent.ACTION_REQUEST, response)
+
+    def chat(self, message: str) -> ChatbotResponse:
+        """메인 진입점: 의도 분류 후 라우팅."""
+        intent = self.classify_intent(message)
+
+        if intent == Intent.RAG_QUERY:
+            result = self.handle_rag(message)
+        elif intent == Intent.CHITCHAT:
+            result = self.handle_chitchat(message)
+        else:
+            result = self.handle_action(message)
+
+        # 공유 히스토리 업데이트
+        self.history.append({"role": "user", "content": message})
+        self.history.append({"role": "assistant", "content": result.response, "intent": intent.value})
+
+        return result
+
+# 라우팅 테스트
+bot = RouterChatbot()
+
+test_messages = [
+    "반품 정책이 어떻게 되나요?",   # → rag_query
+    "안녕하세요! 잘 지내시나요?",    # → chitchat
+    "주문을 취소하고 싶어요",        # → action_request
+]
+
+for msg in test_messages:
+    result = bot.chat(msg)
+    print(f"[{result.intent.value}] {msg}")
+    print(f"  → {result.response[:80]}...\n")
+```
+</details>
+
+---
+
+### 연습 문제 3: 슬롯 정정(Slot Correction) 처리
+
+`StatefulChatbot`을 확장하여 대화 중간에 사용자가 모순된 정보를 제공하는 경우(예: 처음에 주문 #12345를 말했다가 "아, #67890이었어요"라고 수정)를 처리하세요. 봇이 슬롯을 업데이트하고 수정을 확인해야 합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional
+from openai import OpenAI
+
+class ConversationState(Enum):
+    GREETING = "greeting"
+    COLLECTING_INFO = "collecting_info"
+    CONFIRMING = "confirming"
+    COMPLETED = "completed"
+
+@dataclass
+class ConversationContext:
+    state: ConversationState = ConversationState.GREETING
+    slots: Dict[str, Any] = field(default_factory=dict)
+    history: List[Dict] = field(default_factory=list)
+    corrections: List[Dict] = field(default_factory=list)  # 정정 이력 추적
+
+class SmartStatefulChatbot:
+    """대화 중 슬롯 정정을 감지하는 챗봇."""
+
+    REQUIRED_SLOTS = ["order_id", "issue"]
+    SLOT_QUESTIONS = {
+        "order_id": "주문 번호를 알려주시겠어요?",
+        "issue": "주문에 어떤 문제가 있으신가요?"
+    }
+
+    def __init__(self):
+        self.client = OpenAI()
+        self.context = ConversationContext()
+
+    def extract_slots(self, message: str) -> dict:
+        """메시지에서 슬롯 값을 추출합니다."""
+        import json
+        prompt = f"""메시지에서 주문 정보를 추출하세요. JSON만 반환하세요.
+필드: order_id (문자열, 예: "12345"), issue (문자열 설명)
+누락된 필드는 null 사용.
+
+메시지: "{message}"
+JSON:"""
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        try:
+            return json.loads(response.choices[0].message.content)
+        except:
+            return {"order_id": None, "issue": None}
+
+    def detect_correction(self, new_slots: dict) -> Optional[str]:
+        """사용자가 이전에 제공한 슬롯을 정정하는지 확인합니다."""
+        for slot, new_value in new_slots.items():
+            if new_value and slot in self.context.slots:
+                old_value = self.context.slots[slot]
+                if old_value and old_value != new_value:
+                    return slot  # 이 슬롯이 정정됨
+        return None
+
+    def process(self, message: str) -> str:
+        self.context.history.append({"role": "user", "content": message})
+        new_slots = self.extract_slots(message)
+
+        # 정정 확인
+        corrected_slot = self.detect_correction(new_slots)
+        if corrected_slot:
+            old_value = self.context.slots[corrected_slot]
+            new_value = new_slots[corrected_slot]
+            self.context.corrections.append({
+                "slot": corrected_slot,
+                "old": old_value,
+                "new": new_value
+            })
+            self.context.slots[corrected_slot] = new_value
+            response = (
+                f"알겠습니다! {corrected_slot}을 "
+                f"'{old_value}'에서 '{new_value}'로 수정했습니다. "
+            )
+        else:
+            # 일반 슬롯 업데이트
+            for slot, value in new_slots.items():
+                if value:
+                    self.context.slots[slot] = value
+            response = ""
+
+        # 아직 누락된 슬롯 확인
+        missing = [s for s in self.REQUIRED_SLOTS
+                  if not self.context.slots.get(s)]
+
+        if missing:
+            self.context.state = ConversationState.COLLECTING_INFO
+            response += self.SLOT_QUESTIONS[missing[0]]
+        else:
+            self.context.state = ConversationState.CONFIRMING
+            response += self.confirm_action()
+
+        self.context.history.append({"role": "assistant", "content": response})
+        return response
+
+    def confirm_action(self) -> str:
+        return (
+            f"확인해 드리겠습니다: 주문 #{self.context.slots['order_id']}, "
+            f"문제: {self.context.slots['issue']}. 맞으신가요? (네/아니요)"
+        )
+
+# 정정 처리 테스트
+bot = SmartStatefulChatbot()
+
+print(bot.process("주문 12345 반품하고 싶어요"))   # order_id 설정, issue 질문
+print(bot.process("상품이 파손됐어요"))            # issue 설정, 확인 요청
+print(bot.process("아, 주문은 67890이었어요"))     # order_id 정정
+
+print(f"\n정정 이력: {bot.context.corrections}")
+# [{'slot': 'order_id', 'old': '12345', 'new': '67890'}]
+```
+</details>
+
 ---
 
 ## 학습 완료

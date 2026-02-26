@@ -1,5 +1,17 @@
 # Kubeflow Pipelines
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Kubeflow 생태계 컴포넌트인 Pipelines, Katib, Training Operators, KServe, Notebooks를 설명하고 각각이 ML 플랫폼에서 수행하는 역할을 서술할 수 있다
+2. `@component` 데코레이터를 사용하여 Python 함수를 컨테이너화된 스텝으로 정의하고 KFP SDK로 Kubeflow Pipeline 컴포넌트와 파이프라인을 구축할 수 있다
+3. 제어 흐름(control flow) 구조를 사용하여 Kubeflow Pipelines에서 조건부 분기(conditional branching)와 병렬 실행(parallel execution)을 구현할 수 있다
+4. Kubernetes 클러스터에서 베이지안 최적화(Bayesian optimization)를 사용한 자동 하이퍼파라미터 튜닝을 위해 Katib를 구성할 수 있다
+5. Kubernetes에서 A/B 테스트(A/B testing)와 카나리 롤아웃(canary rollout)을 위해 KServe를 사용하여 학습된 모델을 배포하고 관리할 수 있다
+
+---
+
 ## 1. Kubeflow 개요
 
 Kubeflow는 Kubernetes 위에서 ML 워크플로우를 구축, 배포, 관리하기 위한 오픈소스 플랫폼입니다.
@@ -75,7 +87,8 @@ KFP v2 기본 파이프라인
 from kfp import dsl
 from kfp import compiler
 
-# 컴포넌트 정의
+# 각 @dsl.component는 자체 컨테이너에서 실행 — 스텝 간 의존성 충돌
+# (예: 다른 sklearn 버전)이 절대 발생하지 않도록 격리
 @dsl.component
 def preprocess_data(input_path: str, output_path: dsl.OutputPath(str)):
     """데이터 전처리 컴포넌트"""
@@ -135,10 +148,12 @@ def ml_pipeline(
     input_data_path: str = "gs://bucket/data.csv",
     n_estimators: int = 100
 ):
-    # 단계 1: 데이터 전처리
+    # 출력으로 스텝이 연결됨 — KFP가 자동으로 DAG 의존성을 생성하므로
+    # 명시적 순서 지정 없이 2단계가 1단계 완료를 대기
     preprocess_task = preprocess_data(input_path=input_data_path)
 
-    # 단계 2: 모델 학습
+    # 학습이 전처리 출력을 소비 — 아티팩트가 클라우드 스토리지를 통해 전달되므로
+    # 스텝이 다른 머신에서 실행 가능
     train_task = train_model(
         data_path=preprocess_task.outputs["output_path"],
         n_estimators=n_estimators
@@ -150,7 +165,8 @@ def ml_pipeline(
         test_data_path=preprocess_task.outputs["output_path"]
     )
 
-# 파이프라인 컴파일
+# YAML로 컴파일 — 컴파일된 스펙은 이식 가능하고 git에 버전 관리되어
+# 파이프라인 변경이 코드와 동일한 리뷰 프로세스를 거칠 수 있음
 compiler.Compiler().compile(
     pipeline_func=ml_pipeline,
     package_path="ml_pipeline.yaml"
@@ -171,7 +187,8 @@ Python 함수 기반 컴포넌트
 from kfp import dsl
 from kfp.dsl import Input, Output, Dataset, Model, Metrics
 
-# 기본 컴포넌트
+# base_image와 packages를 명시적으로 지정 — 재현성 보장;
+# 이것 없이는 기본 이미지를 상속하여 시간이 지나면서 드리프트 발생 가능
 @dsl.component(
     base_image="python:3.9-slim",
     packages_to_install=["pandas", "scikit-learn"]
@@ -463,7 +480,8 @@ def resource_pipeline(data_path: str):
     # GPU 학습 태스크
     train_task = gpu_training(data_path=data_path)
 
-    # 리소스 설정
+    # request vs limit: request는 스케줄링을 위한 최소 리소스 예약,
+    # limit는 최대치를 제한하여 한 학습 작업이 다른 pod의 리소스를 빼앗지 못하도록 방지
     train_task.set_cpu_limit("4")
     train_task.set_memory_limit("16Gi")
     train_task.set_cpu_request("2")
@@ -785,6 +803,8 @@ def e2e_ml_pipeline(
     )
 
     # 3. 검증 통과 시 학습
+    # 조건부 게이트 — 데이터 품질이 낮으면 비용이 큰 학습을 건너뛰어
+    # 손상된 데이터에 GPU 시간을 낭비하는 것을 방지
     with dsl.Condition(validate_task.output == True, name="data-valid"):
         train_task = train_and_evaluate(
             train_data=ingest_task.outputs["output_data"],

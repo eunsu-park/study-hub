@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the historical context of Codd's relational model and describe the problems it solved over earlier data models.
+2. Define the formal components of a relation — domain, tuple, attribute, and schema — using mathematical notation.
+3. Identify and distinguish among superkeys, candidate keys, primary keys, and foreign keys, and explain how each enforces integrity.
+4. Apply entity integrity and referential integrity constraints to validate relational schemas.
+5. Describe the semantics of NULL values and evaluate expressions using three-valued logic (TRUE, FALSE, UNKNOWN).
+6. Translate an informal data requirement into a formal relational schema with appropriate constraints and notation.
+
+---
+
 The relational model, introduced by Edgar F. Codd in 1970, is the most widely used data model and the theoretical foundation of SQL databases. It represents data as mathematical relations (tables) and provides a rigorous framework for defining structure, enforcing integrity, and manipulating data. This lesson covers the formal definitions, key concepts, integrity constraints, and the subtle semantics of NULLs that every database practitioner must understand.
 
 ## Table of Contents

@@ -1,12 +1,24 @@
 # 비트 연산 심화
 
+**이전**: [임베디드 프로그래밍 기초](./14_Embedded_Basics.md) | **다음**: [프로젝트 15: GPIO 제어](./16_Project_GPIO_Control.md)
+
 임베디드 프로그래밍의 핵심인 비트 단위 조작을 완벽하게 익힙니다.
 
-## 학습 목표
-- 비트 연산자 완벽 이해
-- 비트 마스킹 기법 습득
-- 레지스터 제어 개념 이해
-- volatile 키워드 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 6가지 비트 연산자(`&`, `|`, `^`, `~`, `<<`, `>>`) 모두를 실용적인 문제에 적용할 수 있다
+2. 마스킹 매크로(masking macro)를 사용하여 개별 비트를 읽고, 설정하고, 해제하고, 토글할 수 있다
+3. 여러 개의 불리언 플래그(Boolean flag)를 단일 바이트에 압축하여 메모리를 절약할 수 있다
+4. MCU 하드웨어 레지스터(hardware register)가 메모리 주소에 어떻게 매핑되어 주변장치를 제어하는지 설명할 수 있다
+5. 라이브러리 호출보다 훨씬 빠른 직접 레지스터 조작(direct register manipulation)을 사용하여 GPIO를 제어할 수 있다
+6. 하드웨어 레지스터와 인터럽트 공유 변수에 `volatile` 키워드가 필요한 이유를 설명할 수 있다
+7. 팝카운트(population count), 비트 반전(bit reversal), 니블 스왑(nibble swap) 등의 유틸리티 함수를 구현할 수 있다
+
+---
+
+하드웨어 수준에서는 모든 것이 비트입니다. 레지스터의 단 하나의 비트가 LED를 켜고, 통신 채널을 활성화하고, 인터럽트를 발생시킬 수 있습니다. 비트 연산을 마스터하는 것은 고수준 C 코드 작성과 진정한 하드웨어 제어 사이의 다리 역할을 합니다 -- 이것이 바로 마이크로컨트롤러가 실제로 말하는 언어입니다.
 
 ## 사전 지식
 - C 언어 기본 문법
@@ -65,7 +77,7 @@ Arduino Uno의 포트 B 레지스터 (핀 8~13)
 void print_binary(unsigned char n) {
     for (int i = 7; i >= 0; i--) {
         printf("%d", (n >> i) & 1);
-        if (i == 4) printf(" ");  // 가독성을 위한 공백
+        if (i == 4) printf(" ");  // Space for readability
     }
     printf("\n");
 }
@@ -394,7 +406,7 @@ void loop() {
 
 ### MCU 레지스터란?
 
-레지스터는 MCU 내부의 특수한 메모리 위치로, 하드웨어를 제어합니다.
+레지스터(Register)는 MCU 내부의 특수한 메모리 위치로, 하드웨어를 제어합니다.
 
 ```
 Arduino Uno (ATmega328P) GPIO 관련 레지스터:
@@ -559,7 +571,7 @@ int main() {
 ### volatile의 의미
 
 ```
-volatile = "변덕스러운"
+volatile = "변덕스러운(unpredictable)"
 
 컴파일러에게 알려주는 것:
 1. 이 변수는 언제든 외부에서 변경될 수 있음
@@ -846,4 +858,8 @@ int parity(unsigned char n);
 ## 다음 단계
 
 비트 연산을 익혔다면 다음 문서로 넘어가세요:
-- [15. GPIO 제어](15_프로젝트_GPIO제어.md) - LED와 버튼으로 실습
+- [16. GPIO 제어](16_Project_GPIO_Control.md) - LED와 버튼으로 실습
+
+---
+
+**이전**: [임베디드 프로그래밍 기초](./14_Embedded_Basics.md) | **다음**: [프로젝트 15: GPIO 제어](./16_Project_GPIO_Control.md)

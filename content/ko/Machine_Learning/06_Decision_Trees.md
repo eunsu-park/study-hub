@@ -1,8 +1,24 @@
 # 결정 트리 (Decision Tree)
 
-## 개요
+**이전**: [교차검증과 하이퍼파라미터 튜닝](./05_Cross_Validation_Hyperparameters.md) | **다음**: [앙상블 학습 - 배깅](./07_Ensemble_Bagging.md)
 
-결정 트리는 데이터를 특성(feature)에 따라 분할하여 트리 구조로 의사결정을 수행하는 알고리즘입니다. 직관적이고 해석이 쉬워 실무에서 많이 사용됩니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 결정 트리의 구조(루트, 내부 노드, 리프)와 예측이 이루어지는 방식을 설명한다
+2. 후보 분할에 대한 엔트로피(entropy), 지니 불순도(Gini impurity), 정보 이득(information gain)을 계산한다
+3. CART 알고리즘과 탐욕적 분할 탐색(greedy split-search) 과정을 설명한다
+4. 과적합(overfitting)을 제어하기 위해 사전 가지치기(pre-pruning) 하이퍼파라미터(max_depth, min_samples_split, min_samples_leaf)를 적용한다
+5. 비용-복잡도 가지치기(cost-complexity pruning, CCP)를 구현하고 교차검증으로 최적 알파(alpha)를 선택한다
+6. 학습된 결정 트리에서 특성 중요도(feature importance) 점수를 해석한다
+7. 분류 트리(classification tree)와 회귀 트리(regression tree)를 비교하고 각각의 적절한 사용 사례를 식별한다
+
+---
+
+결정 트리는 가장 직관적인 머신러닝 알고리즘 중 하나입니다 — 일련의 예/아니오 질문을 던짐으로써 인간이 의사결정을 하는 방식을 그대로 반영합니다. 이러한 투명성은 이해관계자에게 예측을 설명해야 할 때 매우 유용하며, 랜덤 포레스트(Random Forest)와 그래디언트 부스팅(Gradient Boosting) 같은 강력한 앙상블(ensemble) 방법의 구성 요소로도 활용됩니다.
 
 ---
 
@@ -95,9 +111,20 @@ for name, importance in zip(iris.feature_names, clf.feature_importances_):
 import numpy as np
 
 def entropy(y):
-    """정보 엔트로피 계산"""
+    """정보 엔트로피(information entropy) 계산.
+
+    엔트로피는 클래스 분포의 무질서/불확실성을 측정함.
+    한 클래스만 있는 순수 노드(pure node)는 엔트로피=0.
+    클래스가 골고루 섞인 노드는 엔트로피 최대 — 어떤 클래스인지
+    전혀 알 수 없으므로 최악의 분할 상태.
+    결정 트리는 엔트로피를 가장 많이 감소시키는 분할(정보 이득 최대화)을 선택함.
+    """
     _, counts = np.unique(y, return_counts=True)
-    probabilities = counts / len(y)
+    probabilities = counts / len(y)  # 각 클래스에 속하는 샘플 비율
+    # log2(p) ≤ 0 이므로 (p ∈ (0,1]) 음수 부호를 붙여 H(y) ≥ 0 으로 만듦 —
+    # 엔트로피는 관례상 음수가 아닌 값
+    # + 1e-10 은 log(0)을 방지 — 이 노드에 샘플이 없는 클래스(확률=0)가 있으면
+    # log(0)=-inf가 되어 계산이 중단됨
     return -np.sum(probabilities * np.log2(probabilities + 1e-10))
 
 # 예시
@@ -115,9 +142,11 @@ print(f"  균형 노드 [2:2]: {entropy(y_balanced):.4f}")  # 1 (최대)
 
 ```python
 def gini_impurity(y):
-    """지니 불순도 계산"""
+    """지니 불순도(Gini impurity) 계산"""
     _, counts = np.unique(y, return_counts=True)
-    probabilities = counts / len(y)
+    probabilities = counts / len(y)  # 각 원소 = 해당 클래스 샘플 비율 (클래스 비율 벡터)
+    # 1 - Σp² 는 무작위로 뽑은 두 샘플이 서로 다른 클래스에 속할 확률과 같음 —
+    # 순수 노드는 0, 완전히 섞인 노드는 최대 ~0.5
     return 1 - np.sum(probabilities ** 2)
 
 print("\n지니 불순도 예시:")
@@ -143,7 +172,9 @@ def information_gain(parent, left_child, right_child, criterion='gini'):
     else:
         impurity_func = entropy
 
-    # 가중 평균 불순도
+    # 가중 평균 불순도(weighted impurity): 자식 노드의 불순도를 샘플 수로 가중 평균.
+    # 분할이 불균등할 때도 규모를 고려해 분할 품질을 공정하게 측정하기 위함 —
+    # 큰 순수 자식 노드는 작은 순수 자식 노드보다 더 가치 있음
     n = len(left_child) + len(right_child)
     n_left, n_right = len(left_child), len(right_child)
 

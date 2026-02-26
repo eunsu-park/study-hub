@@ -1,5 +1,24 @@
 # AWS & GCP Account Setup
 
+**Previous**: [Cloud Computing Overview](./01_Cloud_Computing_Overview.md) | **Next**: [Regions and Availability Zones](./03_Regions_Availability_Zones.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create and configure an AWS account with proper security settings
+2. Create and configure a GCP project with billing enabled
+3. Enable multi-factor authentication (MFA) on root and admin accounts
+4. Set up billing alerts and budget thresholds on both platforms
+5. Configure IAM admin users to avoid day-to-day root account usage
+6. Navigate the AWS Management Console and GCP Cloud Console
+
+---
+
+Before you can deploy any cloud resource, you need a properly secured account. Poor account setup is one of the most common sources of security breaches and unexpected bills. This lesson walks through the exact steps to create, secure, and configure both AWS and GCP accounts so you start with a solid foundation from day one.
+
 ## 1. AWS Account Creation
 
 ### 1.1 Account Creation Steps
@@ -372,6 +391,133 @@ gcloud billing budgets create \
 
 - [03_Regions_Availability_Zones.md](./03_Regions_Availability_Zones.md) - Understanding regions and availability zones
 - [13_Identity_Access_Management.md](./13_Identity_Access_Management.md) - Detailed IAM setup
+
+---
+
+## Exercises
+
+### Exercise 1: Root Account Security Audit
+
+You have just created a new AWS account and want to lock it down before using it. List all the steps you should take immediately, in the correct priority order, and explain why each step is important.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Enable MFA on the Root account** — The root user has unrestricted access to everything. If compromised without MFA, an attacker can delete all resources, transfer data, and rack up charges with no recourse.
+2. **Delete or do not create Root access keys** — Access keys allow programmatic access. Root access keys are especially dangerous because they bypass permission policies.
+3. **Create an IAM admin user** — Never use the root account for day-to-day tasks. Create an IAM user with `AdministratorAccess` policy and use that instead.
+4. **Enable MFA on the IAM admin user** — Admin IAM users are also high-value targets; MFA adds a critical second factor.
+5. **Set up billing alerts** — Prevents surprise charges from accidental resource creation or account compromise.
+6. **Enable CloudTrail** — Creates an audit log of all API activity, which is essential for detecting unauthorized access.
+
+</details>
+
+### Exercise 2: GCP vs AWS Account Structure
+
+A team is setting up cloud infrastructure for three separate environments: development, staging, and production.
+
+1. How would you organize these environments in GCP? Describe the recommended project structure.
+2. How would you handle the same separation in AWS? What mechanism replaces GCP projects?
+
+<details>
+<summary>Show Answer</summary>
+
+1. **GCP structure** — Use a folder-and-project hierarchy:
+   ```
+   Organization
+   ├── Folder: Development
+   │   └── Project: myapp-dev
+   ├── Folder: Staging
+   │   └── Project: myapp-staging
+   └── Folder: Production
+       └── Project: myapp-prod
+   ```
+   Each project has its own billing, IAM policies, and resource quotas, providing strong isolation.
+
+2. **AWS structure** — AWS uses **tags** and optionally **AWS Organizations** (separate accounts) for isolation:
+   - For lightweight separation within a single account: apply consistent tags (`Environment=dev/staging/prod`) to all resources. Use IAM policies and resource groups to enforce boundaries.
+   - For strong isolation: use **AWS Organizations** with separate AWS accounts per environment (recommended for production). Each account has its own IAM, billing, and resource limits.
+   - Key difference: GCP's project is a built-in first-class concept; AWS requires deliberate tagging discipline or separate accounts to achieve equivalent isolation.
+
+</details>
+
+### Exercise 3: Budget Alert Configuration
+
+A developer is learning cloud on AWS and wants to ensure they never accidentally spend more than $20 in a month. Write the AWS CLI command to create a budget that sends an email alert at 80% of the budget limit. Use `your@email.com` as the recipient.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+aws budgets create-budget \
+    --account-id YOUR_ACCOUNT_ID \
+    --budget '{
+        "BudgetName": "Monthly-20USD",
+        "BudgetLimit": {"Amount": "20", "Unit": "USD"},
+        "TimeUnit": "MONTHLY",
+        "BudgetType": "COST"
+    }' \
+    --notifications-with-subscribers '[{
+        "Notification": {
+            "NotificationType": "ACTUAL",
+            "ComparisonOperator": "GREATER_THAN",
+            "Threshold": 80
+        },
+        "Subscribers": [{
+            "SubscriptionType": "EMAIL",
+            "Address": "your@email.com"
+        }]
+    }]'
+```
+
+**Key parameters explained**:
+- `"Amount": "20"` — sets the $20 limit
+- `"TimeUnit": "MONTHLY"` — resets each calendar month
+- `"NotificationType": "ACTUAL"` — alerts on actual (not forecasted) spend
+- `"Threshold": 80` — fires at 80% ($16)
+
+To also add a 100% (forecasted) alert, add a second object in the `notifications-with-subscribers` array with `"NotificationType": "FORECASTED"` and `"Threshold": 100`.
+
+</details>
+
+### Exercise 4: Free Tier Planning
+
+You are building a personal project and want to stay entirely within the free tier for the first year. Your application needs: a web server, a relational database, and file storage for user uploads.
+
+For AWS, which specific services and instance types/configurations would you choose to stay within the free tier? List any limitations you need to be aware of.
+
+<details>
+<summary>Show Answer</summary>
+
+| Need | AWS Service | Free Tier Limit | Key Limitations |
+|------|-------------|-----------------|-----------------|
+| Web server | EC2 **t2.micro** | 750 hours/month (12 months) | Only 1 GB RAM; must stop the instance if running multiple to stay within 750 hours |
+| Relational database | RDS **db.t2.micro** | 750 hours/month (12 months) | 20 GB storage; Single-AZ only; MySQL, PostgreSQL, MariaDB, or SQL Server Express supported |
+| File storage | S3 | 5 GB standard storage, 20,000 GET requests, 2,000 PUT requests/month (12 months) | Watch request counts for high-traffic apps; egress (outbound) data transfer is NOT free beyond 100 GB/month |
+
+**Important caveats**:
+- Free tier limits are per account, not per service instance. If you run two t2.micro instances, you consume 1,500 hours — exceeding the 750-hour limit.
+- The 12-month free tier begins at account creation, not when you first use the service.
+- Always enable a Free Tier Usage Alert in AWS Billing to get notified before charges occur.
+
+</details>
+
+### Exercise 5: MFA Method Comparison
+
+Compare the three MFA device types available in AWS (Virtual MFA, Hardware TOTP token, Security Key). For each, describe a use case where it would be the most appropriate choice.
+
+<details>
+<summary>Show Answer</summary>
+
+| MFA Type | How It Works | Best Use Case |
+|----------|-------------|---------------|
+| **Virtual MFA device** (e.g., Google Authenticator, Authy) | Time-based one-time password (TOTP) generated in a smartphone app | Individual developers and personal accounts. Free, convenient, and requires no additional hardware. Best for learning and development environments. |
+| **Hardware TOTP token** (e.g., Gemalto token) | Dedicated physical device generating TOTP codes | Corporate environments where employees should not use personal phones for work MFA, or situations requiring a dedicated non-networked device for security reasons. |
+| **Security key** (FIDO2/WebAuthn, e.g., YubiKey) | Physical USB/NFC key that performs cryptographic authentication | High-security accounts (root account, break-glass admin accounts) where phishing resistance is critical. Security keys are immune to phishing because they validate the domain. Best for production root accounts. |
+
+**Recommendation for most teams**: Use a virtual MFA device for IAM users during development, and a hardware security key (YubiKey) for the root account and any privileged admin accounts.
+
+</details>
 
 ---
 

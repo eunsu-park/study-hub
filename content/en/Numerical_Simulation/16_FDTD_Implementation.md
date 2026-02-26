@@ -7,6 +7,8 @@
 - 2D FDTD (TM, TE modes)
 - PML (Perfectly Matched Layer) concept
 
+**Why This Lesson Matters:** FDTD (Finite-Difference Time-Domain) is the workhorse method for computational electromagnetics. Its appeal lies in simplicity: leapfrog time-stepping on a staggered Yee grid naturally satisfies Gauss's laws and produces second-order accuracy in both time and space. Because it operates directly in the time domain, FDTD can handle broadband sources, nonlinear materials, and complex geometries with a single simulation run.
+
 ---
 
 ## 1. Complete 1D FDTD Implementation
@@ -54,6 +56,9 @@ class FDTD_1D:
         """
         self.Nx = Nx
         self.dx = dx
+        # CFL condition for EM waves: dt <= dx/c0. The Courant number sets how
+        # close to this limit we operate. Values near 1 minimize dispersion error
+        # but leave less margin for material interfaces.
         self.dt = courant * dx / c0
 
         # Field arrays
@@ -1229,6 +1234,25 @@ FDTD Implementation Key Points:
    - 10-20 cells per wavelength
    - Minimize numerical dispersion
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Hard Source vs Soft Source Reflected Field
+Using the FDTD_1D class, set up a 1D domain with a PEC reflector at x = 150 mm. Launch a Gaussian pulse from x = 50 mm using both a hard source and a soft source. After the pulse has reflected and returned to the source region, compare the field at the source position for both cases. Explain why the hard source produces an artifact at late times that the soft source does not.
+
+### Exercise 2: Mur ABC Angle Dependence
+Implement a 2D FDTD TM simulation with a point source at the center. Replace the PEC boundary on three sides with Mur first-order ABC, and keep PEC on the fourth side. Visually compare how well the ABC absorbs waves arriving at normal incidence versus those arriving at 45°. Estimate the reflection coefficient for each angle by recording the maximum field amplitude at probe points 5 cells from each boundary before and after the pulse arrives.
+
+### Exercise 3: PML Thickness Optimization
+Using the FDTD_2D_TM_PML class, run simulations with PML layer counts of 4, 8, 12, and 16 cells. For each, place a probe at the center and measure the maximum spurious reflected field amplitude after the main pulse has left the domain. Plot the reflection level (in dB) versus PML thickness and determine the minimum thickness needed to achieve -40 dB reflection. How does PML order (2, 3, 4) affect this result?
+
+### Exercise 4: Waveguide Mode Cutoff
+Using the rectangular waveguide simulation code, set the operating frequency to (a) 0.8×fc, (b) fc, and (c) 1.2×fc where fc is the TE10 cutoff frequency. For each case, plot the Ez field snapshot at n = 300 steps. In cases (a) and (b), observe exponential decay or no propagation; in case (c), observe guided wave propagation. Measure the guide wavelength λg from the standing wave pattern and compare to the theoretical value λg = λ/√(1-(fc/f)²).
+
+### Exercise 5: Gaussian Pulse Spectral Analysis
+Run the 1D FDTD with a Gaussian pulse (t0 = 1×10⁻¹⁰ s, tau = 3×10⁻¹¹ s). Record the time series at two probe points: one near the source and one at the far end of the domain (before and after a dielectric slab). Compute the FFT of each recorded time series and plot the magnitude spectrum. Identify: (a) the -3 dB bandwidth of the source spectrum, (b) frequency-dependent attenuation caused by the dielectric slab, and (c) the phase shift introduced by propagation through the slab.
 
 ---
 

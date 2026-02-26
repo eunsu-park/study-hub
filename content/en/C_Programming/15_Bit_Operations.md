@@ -1,12 +1,24 @@
 # Advanced Bit Operations
 
+**Previous**: [Embedded Programming Basics](./14_Embedded_Basics.md) | **Next**: [Project 15: GPIO Control](./16_Project_GPIO_Control.md)
+
 Master bit-level manipulation, which is essential for embedded programming.
 
 ## Learning Objectives
-- Perfect understanding of bit operators
-- Master bit masking techniques
-- Understand register control concepts
-- Understand volatile keyword
+
+After completing this lesson, you will be able to:
+
+1. Apply all six bitwise operators (`&`, `|`, `^`, `~`, `<<`, `>>`) to solve practical problems
+2. Read, set, clear, and toggle individual bits using masking macros
+3. Pack multiple Boolean flags into a single byte to conserve memory
+4. Explain how MCU hardware registers map to memory addresses and control peripherals
+5. Use direct register manipulation for GPIO control that is significantly faster than library calls
+6. Describe why the `volatile` keyword is required for hardware registers and interrupt-shared variables
+7. Implement utility functions such as population count, bit reversal, and nibble swap
+
+---
+
+At the hardware level, everything is a bit. A single bit in a register can turn on an LED, enable a communication channel, or trigger an interrupt. Mastering bit operations is the bridge between writing high-level C and truly controlling hardware -- it is the language that microcontrollers actually speak.
 
 ## Prerequisites
 - C language basic syntax

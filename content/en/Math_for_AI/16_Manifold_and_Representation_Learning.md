@@ -31,24 +31,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# 스위스 롤 (Swiss Roll) 생성
+# Generate Swiss Roll
 def generate_swiss_roll(n_samples=1000, noise=0.0):
     """
-    3D 공간에 임베딩된 2D 다양체
+    2D manifold embedded in 3D space
 
     Parameters:
     -----------
     n_samples : int
-        샘플 수
+        Number of samples
     noise : float
-        노이즈 수준
+        Noise level
 
     Returns:
     --------
     X : ndarray, shape (n_samples, 3)
-        3D 공간의 점
+        Points in 3D space
     t : ndarray, shape (n_samples,)
-        내재 좌표 (회전 각도)
+        Intrinsic coordinate (rotation angle)
     """
     t = 1.5 * np.pi * (1 + 2 * np.random.rand(n_samples))
     x = t * np.cos(t)
@@ -60,10 +60,10 @@ def generate_swiss_roll(n_samples=1000, noise=0.0):
 
     return X, t
 
-# 스위스 롤 생성
+# Generate Swiss Roll
 X_swiss, t_swiss = generate_swiss_roll(n_samples=1000, noise=0.5)
 
-# 시각화
+# Visualization
 fig = plt.figure(figsize=(12, 5))
 
 ax1 = fig.add_subplot(121, projection='3d')
@@ -82,7 +82,7 @@ ax2.set_ylabel('y')
 
 plt.tight_layout()
 plt.savefig('swiss_roll.png', dpi=150, bbox_inches='tight')
-print("스위스 롤 시각화 저장 완료")
+print("Swiss Roll visualization saved")
 ```
 
 ## 2. Mathematical Foundations of Manifolds
@@ -112,48 +112,48 @@ On a Swiss roll: even if Euclidean distance is small, geodesic distance can be l
 ```python
 def compute_geodesic_distance_approximation(X, k=10):
     """
-    k-최근접 이웃 그래프를 이용한 측지 거리 근사
+    Geodesic distance approximation using k-nearest neighbor graph
 
     Parameters:
     -----------
     X : ndarray, shape (n, d)
-        데이터 포인트
+        Data points
     k : int
-        최근접 이웃 수
+        Number of nearest neighbors
 
     Returns:
     --------
     D_geodesic : ndarray, shape (n, n)
-        측지 거리 행렬 (근사)
+        Geodesic distance matrix (approximation)
     """
     from sklearn.neighbors import kneighbors_graph
     from scipy.sparse.csgraph import shortest_path
 
     n = X.shape[0]
 
-    # k-최근접 이웃 그래프 생성
+    # Build k-nearest neighbor graph
     knn_graph = kneighbors_graph(X, n_neighbors=k, mode='distance')
 
-    # 다익스트라 알고리즘으로 최단 경로 계산 (측지 거리 근사)
+    # Compute shortest paths using Dijkstra's algorithm (geodesic distance approximation)
     D_geodesic = shortest_path(knn_graph, directed=False)
 
     return D_geodesic
 
-# 측지 거리 계산
+# Compute geodesic distances
 D_geodesic = compute_geodesic_distance_approximation(X_swiss, k=10)
 
-# 유클리드 거리
+# Euclidean distances
 from scipy.spatial.distance import cdist
 D_euclidean = cdist(X_swiss, X_swiss)
 
-# 비교
+# Comparison
 sample_idx = 0
-print(f"샘플 {sample_idx}와의 거리 (상위 5개):")
-print("\n유클리드 거리:")
+print(f"Distances from sample {sample_idx} (top 5):")
+print("\nEuclidean distances:")
 euclidean_sorted = np.argsort(D_euclidean[sample_idx])[:6]
 print(euclidean_sorted, D_euclidean[sample_idx, euclidean_sorted])
 
-print("\n측지 거리 (근사):")
+print("\nGeodesic distances (approximation):")
 geodesic_sorted = np.argsort(D_geodesic[sample_idx])[:6]
 print(geodesic_sorted, D_geodesic[sample_idx, geodesic_sorted])
 ```
@@ -201,21 +201,21 @@ from sklearn.manifold import Isomap
 
 def apply_isomap(X, n_components=2, n_neighbors=10):
     """
-    Isomap 차원 축소
+    Isomap dimensionality reduction
 
     Parameters:
     -----------
     X : ndarray, shape (n, d)
-        고차원 데이터
+        High-dimensional data
     n_components : int
-        목표 차원
+        Target dimension
     n_neighbors : int
-        최근접 이웃 수
+        Number of nearest neighbors
 
     Returns:
     --------
     Y : ndarray, shape (n, n_components)
-        저차원 임베딩
+        Low-dimensional embedding
     """
     isomap = Isomap(n_components=n_components, n_neighbors=n_neighbors)
     Y = isomap.fit_transform(X)
@@ -231,7 +231,7 @@ plt.ylabel('Component 2')
 plt.colorbar(label='Original angle t')
 plt.tight_layout()
 plt.savefig('isomap_result.png', dpi=150, bbox_inches='tight')
-print("Isomap 결과 저장 완료")
+print("Isomap result saved")
 ```
 
 ### 3.4 Locally Linear Embedding (LLE)
@@ -254,7 +254,7 @@ This reduces to a sparse eigenvalue problem: $(I - W)^T(I - W) \mathbf{y} = \lam
 from sklearn.manifold import LocallyLinearEmbedding
 
 def apply_lle(X, n_components=2, n_neighbors=10):
-    """LLE 차원 축소"""
+    """LLE dimensionality reduction"""
     lle = LocallyLinearEmbedding(n_components=n_components,
                                   n_neighbors=n_neighbors)
     Y = lle.fit_transform(X)
@@ -270,7 +270,7 @@ plt.ylabel('Component 2')
 plt.colorbar(label='Original angle t')
 plt.tight_layout()
 plt.savefig('lle_result.png', dpi=150, bbox_inches='tight')
-print("LLE 결과 저장 완료")
+print("LLE result saved")
 ```
 
 ## 4. Mathematics of t-SNE
@@ -323,25 +323,25 @@ from sklearn.manifold import TSNE
 def apply_tsne(X, n_components=2, perplexity=30, learning_rate=200,
                n_iter=1000, random_state=42):
     """
-    t-SNE 차원 축소
+    t-SNE dimensionality reduction
 
     Parameters:
     -----------
     X : ndarray
-        고차원 데이터
+        High-dimensional data
     n_components : int
-        목표 차원
+        Target dimension
     perplexity : float
-        Perplexity 값 (유효 이웃 수)
+        Perplexity value (effective number of neighbors)
     learning_rate : float
-        학습률
+        Learning rate
     n_iter : int
-        최적화 반복 횟수
+        Number of optimization iterations
 
     Returns:
     --------
     Y : ndarray
-        저차원 임베딩
+        Low-dimensional embedding
     """
     tsne = TSNE(n_components=n_components,
                 perplexity=perplexity,
@@ -361,7 +361,7 @@ plt.ylabel('Component 2')
 plt.colorbar(label='Original angle t')
 plt.tight_layout()
 plt.savefig('tsne_result.png', dpi=150, bbox_inches='tight')
-print("t-SNE 결과 저장 완료")
+print("t-SNE result saved")
 ```
 
 ### 4.5 Limitations of t-SNE
@@ -410,23 +410,23 @@ import umap
 def apply_umap(X, n_components=2, n_neighbors=15, min_dist=0.1,
                random_state=42):
     """
-    UMAP 차원 축소
+    UMAP dimensionality reduction
 
     Parameters:
     -----------
     X : ndarray
-        고차원 데이터
+        High-dimensional data
     n_components : int
-        목표 차원
+        Target dimension
     n_neighbors : int
-        최근접 이웃 수 (perplexity와 유사)
+        Number of nearest neighbors (similar to perplexity)
     min_dist : float
-        저차원 공간에서 최소 거리
+        Minimum distance in low-dimensional space
 
     Returns:
     --------
     Y : ndarray
-        저차원 임베딩
+        Low-dimensional embedding
     """
     reducer = umap.UMAP(n_components=n_components,
                         n_neighbors=n_neighbors,
@@ -445,7 +445,7 @@ plt.ylabel('Component 2')
 plt.colorbar(label='Original angle t')
 plt.tight_layout()
 plt.savefig('umap_result.png', dpi=150, bbox_inches='tight')
-print("UMAP 결과 저장 완료")
+print("UMAP result saved")
 ```
 
 ### 5.4 UMAP vs t-SNE
@@ -479,7 +479,7 @@ class Autoencoder(nn.Module):
     def __init__(self, input_dim, latent_dim):
         super().__init__()
 
-        # 인코더
+        # Encoder
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
@@ -488,7 +488,7 @@ class Autoencoder(nn.Module):
             nn.Linear(64, latent_dim)
         )
 
-        # 디코더
+        # Decoder
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, 64),
             nn.ReLU(),
@@ -502,7 +502,7 @@ class Autoencoder(nn.Module):
         x_recon = self.decoder(z)
         return x_recon, z
 
-# 예제: 스위스 롤에 적용
+# Example: apply to Swiss Roll
 input_dim = 3
 latent_dim = 2
 
@@ -510,10 +510,10 @@ model = Autoencoder(input_dim, latent_dim)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 criterion = nn.MSELoss()
 
-# 데이터 준비
+# Prepare data
 X_torch = torch.FloatTensor(X_swiss)
 
-# 학습
+# Training
 n_epochs = 500
 for epoch in range(n_epochs):
     model.train()
@@ -528,7 +528,7 @@ for epoch in range(n_epochs):
     if (epoch + 1) % 100 == 0:
         print(f"Epoch {epoch+1}/{n_epochs}, Loss: {loss.item():.4f}")
 
-# 잠재 표현 추출
+# Extract latent representation
 model.eval()
 with torch.no_grad():
     _, Z_ae = model(X_torch)
@@ -542,7 +542,7 @@ plt.ylabel('Latent dim 2')
 plt.colorbar(label='Original angle t')
 plt.tight_layout()
 plt.savefig('autoencoder_latent.png', dpi=150, bbox_inches='tight')
-print("오토인코더 잠재 공간 시각화 저장 완료")
+print("Autoencoder latent space visualization saved")
 ```
 
 ### 6.2 Geometric Properties of Latent Space
@@ -551,15 +551,15 @@ print("오토인코더 잠재 공간 시각화 저장 완료")
 **Interpolability**: linear interpolation in latent space → meaningful outputs
 
 ```python
-# 잠재 공간에서 보간
+# Interpolation in latent space
 def interpolate_in_latent_space(model, x1, x2, n_steps=10):
-    """잠재 공간에서 두 점 사이 보간"""
+    """Interpolate between two points in latent space"""
     model.eval()
     with torch.no_grad():
         z1 = model.encoder(torch.FloatTensor(x1).unsqueeze(0))
         z2 = model.encoder(torch.FloatTensor(x2).unsqueeze(0))
 
-        # 선형 보간
+        # Linear interpolation
         alphas = np.linspace(0, 1, n_steps)
         interpolations = []
 
@@ -570,7 +570,7 @@ def interpolate_in_latent_space(model, x1, x2, n_steps=10):
 
     return np.array(interpolations)
 
-# 두 샘플 선택
+# Select two samples
 idx1, idx2 = 0, 500
 x1, x2 = X_swiss[idx1], X_swiss[idx2]
 
@@ -579,11 +579,11 @@ interpolated = interpolate_in_latent_space(model, x1, x2, n_steps=10)
 fig = plt.figure(figsize=(10, 4))
 ax = fig.add_subplot(111, projection='3d')
 
-# 원본 데이터
+# Original data
 ax.scatter(X_swiss[:, 0], X_swiss[:, 1], X_swiss[:, 2],
            c='lightgray', s=5, alpha=0.3)
 
-# 보간 경로
+# Interpolation path
 ax.plot(interpolated[:, 0], interpolated[:, 1], interpolated[:, 2],
         'r-o', linewidth=2, markersize=6)
 ax.scatter([x1[0], x2[0]], [x1[1], x2[1]], [x1[2], x2[2]],
@@ -592,7 +592,7 @@ ax.scatter([x1[0], x2[0]], [x1[1], x2[1]], [x1[2], x2[2]],
 ax.set_title('Latent space interpolation')
 plt.tight_layout()
 plt.savefig('latent_interpolation.png', dpi=150, bbox_inches='tight')
-print("잠재 공간 보간 시각화 저장 완료")
+print("Latent space interpolation visualization saved")
 ```
 
 ### 6.3 Hyperbolic Embeddings

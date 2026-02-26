@@ -1,5 +1,24 @@
 # Async Programming
 
+**Previous**: [Descriptors](./07_Descriptors.md) | **Next**: [Functional Programming](./09_Functional_Programming.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the difference between synchronous and asynchronous execution and identify I/O-bound scenarios that benefit from async
+2. Define coroutines with `async def` and use `await` to suspend execution at I/O boundaries
+3. Describe the role of the asyncio event loop and run coroutines with `asyncio.run()`
+4. Create and schedule concurrent tasks using `asyncio.create_task()`
+5. Apply `asyncio.gather()`, `asyncio.wait()`, and `asyncio.as_completed()` for concurrent execution patterns
+6. Implement timeouts using `asyncio.wait_for()` and `asyncio.timeout()`
+7. Write async context managers (`async with`) and async iterators/generators (`async for`)
+8. Integrate synchronous blocking code with async code using `run_in_executor()` and `asyncio.to_thread()`
+
+---
+
+Modern applications spend most of their time waiting -- for network responses, database queries, file reads, and API calls. Asynchronous programming lets a single thread handle thousands of concurrent I/O operations by switching between tasks during these wait periods instead of blocking. Python's `asyncio` library, combined with `async`/`await` syntax, makes it possible to write highly concurrent web servers, scrapers, and microservices without the complexity of threads or multiprocessing.
+
 ## 1. Synchronous vs Asynchronous
 
 ### Synchronous
@@ -85,7 +104,8 @@ print(result)  # Hello, Async!
 ```python
 async def fetch_data():
     print("Fetching data...")
-    await asyncio.sleep(1)  # I/O simulation
+    await asyncio.sleep(1)  # This is the I/O boundary — execution yields here so the event loop
+                            # can service other coroutines while waiting for the network/disk response
     return {"data": "value"}
 
 async def main():
@@ -109,6 +129,8 @@ async def main():
 ---
 
 ## 3. asyncio Event Loop
+
+> **Analogy:** the event loop is the head chef who juggles multiple dishes. When one dish is in the oven (I/O wait), the chef starts prepping the next order instead of standing idle. `await` is the moment the chef slides a dish into the oven and turns to the next task.
 
 ### Basic Execution
 
@@ -218,7 +240,10 @@ async def main():
         might_fail(1),
         might_fail(2),
         might_fail(3),
-        return_exceptions=True
+        return_exceptions=True  # Without this, the first exception cancels all remaining tasks;
+                                # with it, exceptions are returned as values so you can handle
+                                # partial failures — essential for fan-out patterns where you
+                                # want all results, successful or not
     )
     print(results)  # [1, ValueError('Error!'), 3]
 
@@ -501,7 +526,9 @@ async def limited_task(sem, n):
         print(f"Task {n} done")
 
 async def main():
-    sem = asyncio.Semaphore(3)  # Max 3 concurrent
+    sem = asyncio.Semaphore(3)  # Tune based on downstream rate limits or connection pool size;
+                                # 3 is illustrative — production APIs often allow 10-100
+                                # concurrent requests before throttling or dropping connections
 
     tasks = [limited_task(sem, i) for i in range(10)]
     await asyncio.gather(*tasks)
@@ -604,6 +631,4 @@ Write an async function that limits requests per second.
 
 ---
 
-## Next Steps
-
-Check out [09_Functional_Programming.md](./09_Functional_Programming.md) to learn about functional programming!
+**Previous**: [Descriptors](./07_Descriptors.md) | **Next**: [Functional Programming](./09_Functional_Programming.md)

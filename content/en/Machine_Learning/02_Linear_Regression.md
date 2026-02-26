@@ -1,8 +1,24 @@
 # Linear Regression
 
-## Overview
+**Previous**: [ML Overview](./01_ML_Overview.md) | **Next**: [Logistic Regression](./03_Logistic_Regression.md)
 
-Linear regression is the most basic regression algorithm that predicts continuous values. It models the linear relationship between input and output variables.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the mathematical formulation of simple and multiple linear regression
+2. Implement linear regression using both the analytical (OLS) solution and gradient descent
+3. Compare batch, stochastic, and mini-batch gradient descent approaches
+4. Describe how Ridge (L2), Lasso (L1), and Elastic Net regularization prevent overfitting
+5. Apply polynomial regression to model nonlinear relationships
+6. Calculate and interpret regression evaluation metrics (MSE, RMSE, MAE, R-squared, MAPE)
+7. Distinguish when to use Ridge versus Lasso based on feature characteristics
+
+---
+
+Linear regression is the most basic regression algorithm that predicts continuous values, and it remains one of the most widely used models in practice. By modeling the linear relationship between input and output variables, it provides an interpretable baseline that every practitioner should master before tackling more complex algorithms.
 
 ---
 

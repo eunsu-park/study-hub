@@ -983,6 +983,266 @@ app = graph.compile()
 
 ---
 
+## Exercises
+
+### Exercise 1: LCEL Chain Composition
+
+Build a two-step LCEL chain that first identifies the programming language in a code snippet, then explains what the code does — using the detected language in the second prompt. The chain should use `RunnablePassthrough` to thread the original code into the second step.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+
+# Step 1: Detect the programming language
+detect_language_prompt = ChatPromptTemplate.from_template(
+    "What programming language is this code written in? "
+    "Reply with just the language name, nothing else.\n\nCode:\n{code}"
+)
+
+# Step 2: Explain the code using the detected language
+explain_prompt = ChatPromptTemplate.from_template(
+    "You are an expert {language} developer. "
+    "Explain what the following code does in 2-3 sentences:\n\n{code}"
+)
+
+# Build individual steps
+detect_chain = detect_language_prompt | llm | StrOutputParser()
+
+# Two-step chain: detect language, then pass both language + original code to explain
+chain = (
+    RunnableParallel(
+        language=detect_chain,
+        code=RunnablePassthrough()  # Pass original input dict unchanged
+    )
+    | explain_prompt
+    | llm
+    | StrOutputParser()
+)
+
+# Test
+code_snippet = {"code": """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""}
+
+result = chain.invoke(code_snippet)
+print(result)
+# Expected: "This Python function computes the nth Fibonacci number using recursion.
+#            It handles the base cases (n=0 returns 0, n=1 returns 1) and recursively
+#            sums the two preceding Fibonacci numbers."
+```
+
+**Key concepts demonstrated:**
+- `RunnableParallel` runs two sub-chains simultaneously: language detection and code passthrough
+- `RunnablePassthrough()` passes the input dict unchanged so `code` is still available in step 2
+- The output of `RunnableParallel` is a dict `{"language": "Python", "code": "..."}` which matches the `explain_prompt` variables
+</details>
+
+---
+
+### Exercise 2: Pydantic Output Parser
+
+Create a LangChain chain that extracts structured product information from unstructured text. The output should be a Pydantic model with fields: `name` (str), `price` (float), `in_stock` (bool), and `features` (list of str).
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List
+
+class Product(BaseModel):
+    name: str = Field(description="Product name")
+    price: float = Field(description="Price in USD as a number")
+    in_stock: bool = Field(description="Whether the product is in stock")
+    features: List[str] = Field(description="List of key product features")
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+parser = JsonOutputParser(pydantic_object=Product)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     "Extract product information from the text and return it as JSON. "
+     "{format_instructions}"),
+    ("human", "{text}")
+]).partial(format_instructions=parser.get_format_instructions())
+
+chain = prompt | llm | parser
+
+# Test with unstructured product description
+text = """
+The UltraBook Pro 15 is now available for $1,299.99. This laptop is in stock
+and ready to ship. Key highlights include a 15-inch 4K display, 16GB RAM,
+512GB NVMe SSD, and 18-hour battery life.
+"""
+
+result = chain.invoke({"text": text})
+print(result)
+# Expected:
+# {
+#   'name': 'UltraBook Pro 15',
+#   'price': 1299.99,
+#   'in_stock': True,
+#   'features': ['15-inch 4K display', '16GB RAM', '512GB NVMe SSD', '18-hour battery life']
+# }
+
+# With Pydantic validation
+product = Product(**result)
+print(f"Product: {product.name}, Price: ${product.price:.2f}")
+print(f"In stock: {product.in_stock}")
+print(f"Features: {', '.join(product.features)}")
+```
+
+**Why this matters:** `JsonOutputParser` with a Pydantic model provides schema validation — if the LLM returns a string for `price` instead of a float, Pydantic raises a validation error. This makes the output reliable for downstream processing.
+</details>
+
+---
+
+### Exercise 3: RunnableWithMessageHistory for Multi-turn Chat
+
+Implement a multi-turn customer support chatbot using `RunnableWithMessageHistory`. The bot should remember the conversation context and have a system prompt that sets its role as a product support agent.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+
+# Prompt with conversation history placeholder
+prompt = ChatPromptTemplate.from_messages([
+    ("system",
+     "You are a helpful customer support agent for TechCorp. "
+     "Be concise and friendly. Reference previous messages when relevant."),
+    MessagesPlaceholder(variable_name="history"),  # Insert conversation history here
+    ("human", "{input}"),
+])
+
+chain = prompt | llm | StrOutputParser()
+
+# Session storage (in-memory; use Redis/DB in production)
+store = {}
+
+def get_session_history(session_id: str) -> ChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
+
+chatbot = RunnableWithMessageHistory(
+    chain,
+    get_session_history,
+    input_messages_key="input",
+    history_messages_key="history",
+)
+
+# Simulate a multi-turn conversation
+session = {"configurable": {"session_id": "user_42"}}
+
+# Turn 1
+r1 = chatbot.invoke({"input": "My order #12345 hasn't arrived yet."}, config=session)
+print(f"Bot: {r1}")
+
+# Turn 2 — bot should remember the order number
+r2 = chatbot.invoke({"input": "Can you track it?"}, config=session)
+print(f"Bot: {r2}")
+
+# Turn 3 — bot should still know the context
+r3 = chatbot.invoke({"input": "What if it's lost?"}, config=session)
+print(f"Bot: {r3}")
+
+# Inspect stored history
+history = get_session_history("user_42")
+print(f"\nTotal messages stored: {len(history.messages)}")
+# Should be 6 (3 human + 3 AI messages)
+```
+
+**Key points:**
+- `MessagesPlaceholder` injects all previous messages at that position in the prompt
+- `session_id` allows multiple isolated conversations; each user gets their own history
+- In production, replace `ChatMessageHistory` with a persistent store (Redis, PostgreSQL) so history survives server restarts
+- The history grows with every turn — use `ConversationSummaryMemory` pattern for very long conversations
+</details>
+
+---
+
+### Exercise 4: LangChain vs LangGraph Selection
+
+For each application scenario below, decide whether to use LCEL chains or LangGraph. Justify your choice and sketch the high-level architecture.
+
+| Scenario | LCEL or LangGraph? | Why? |
+|----------|-------------------|------|
+| A. Summarize a PDF document | ? | ? |
+| B. An agent that browses the web until it finds an answer | ? | ? |
+| C. Translate text to 5 languages in parallel | ? | ? |
+| D. A code review pipeline that loops until all tests pass | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Scenario | Choice | Justification |
+|----------|--------|---------------|
+| A. Summarize a PDF | **LCEL** | Linear workflow: load → split → summarize. No cycles or complex state needed. `chain = loader | splitter | summarize_prompt | llm | parser` |
+| B. Web browsing agent | **LangGraph** | Requires cycles (search → evaluate → search again if needed). State must persist across iterations. Conditional edges decide when to stop. |
+| C. Parallel translation | **LCEL** | `RunnableParallel` handles this perfectly: `{"fr": fr_chain, "de": de_chain, "ja": ja_chain, "ko": ko_chain, "es": es_chain}` — all in one call. |
+| D. Code review loop | **LangGraph** | Requires a cycle: review → run tests → if tests fail, route back to review. Stateful graph tracks iteration count and test results. |
+
+**LangGraph architecture for scenario B (Web Browsing Agent):**
+
+```python
+from langgraph.graph import StateGraph, END
+from typing import TypedDict, List
+
+class SearchState(TypedDict):
+    question: str
+    search_results: List[str]
+    answer: str
+    iterations: int
+
+def search_node(state: SearchState) -> SearchState:
+    """Perform web search."""
+    results = web_search(state["question"])
+    return {**state, "search_results": results, "iterations": state["iterations"] + 1}
+
+def evaluate_node(state: SearchState) -> SearchState:
+    """Evaluate if answer is found."""
+    answer = llm.invoke(f"Based on {state['search_results']}, answer: {state['question']}")
+    return {**state, "answer": answer.content}
+
+def should_continue(state: SearchState) -> str:
+    """Decide whether to search again or finish."""
+    if "I don't know" in state["answer"] and state["iterations"] < 3:
+        return "search"  # Loop back
+    return END          # Done
+
+graph = StateGraph(SearchState)
+graph.add_node("search", search_node)
+graph.add_node("evaluate", evaluate_node)
+graph.add_edge("search", "evaluate")
+graph.add_conditional_edges("evaluate", should_continue, {"search": "search", END: END})
+graph.set_entry_point("search")
+app = graph.compile()
+```
+</details>
+
+---
+
 ## Next Steps
 
 Learn about vector databases in [11_Vector_Databases.md](./11_Vector_Databases.md).

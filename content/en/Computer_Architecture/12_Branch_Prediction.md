@@ -1,10 +1,23 @@
 # Branch Prediction
 
-## Overview
-
-Branch prediction is a technique that improves pipeline performance by predicting the outcome of conditional branch instructions in advance. Modern processors achieve prediction accuracy of over 90%.
+**Previous**: [11_Pipelining.md](./11_Pipelining.md) | **Next**: [13_Superscalar_Out_of_Order.md](./13_Superscalar_Out_of_Order.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why branches disrupt pipelining
+2. Distinguish static from dynamic branch prediction
+3. Implement a 1-bit and 2-bit branch predictor
+4. Describe the Branch Target Buffer (BTB) and its role
+5. Calculate the performance impact of branch misprediction
+6. Explain speculative execution and its relationship to prediction
+
+---
+
+Modern CPUs can execute billions of instructions per second, but a single mispredicted branch can waste dozens of cycles of work. Branch prediction -- the CPU's attempt to guess the outcome of a branch before it is resolved -- is critical to keeping the pipeline full. Understanding prediction explains why loop performance differs from branchy code, and why Spectre-class vulnerabilities exist.
 
 ## Table of Contents
 

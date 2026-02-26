@@ -1,8 +1,24 @@
 # C++20 심화
 
-## 개요
+**이전**: [멀티스레딩과 동시성](./16_Multithreading_Concurrency.md) | **다음**: [C++ 디자인 패턴](./18_Design_Patterns.md)
 
-C++20은 C++11 이후 가장 큰 변화를 가져온 표준입니다. Concepts, Ranges, Coroutines, Modules 등 혁신적인 기능들이 추가되었습니다. 이 장에서는 C++20의 핵심 기능들을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 커스텀 컨셉(Concept)을 정의하고 표준 라이브러리 컨셉을 적용하여 템플릿 매개변수를 제약할 수 있습니다
+2. 뷰(Views)(filter, transform, take, drop)를 사용하여 지연 데이터 처리를 위한 레인지(Range) 파이프라인을 구성할 수 있습니다
+3. `co_yield`와 `co_return`으로 코루틴(Coroutine)을 구현하여 제너레이터(Generator)와 비동기 태스크를 빌드할 수 있습니다
+4. 전통적인 헤더/소스 모델의 대안으로 모듈(Module)을 사용하여 코드를 구성할 수 있습니다
+5. 삼방향 비교(Three-way Comparison) 연산자(스페이스십 연산자)를 사용하여 모든 관계 연산자를 자동 생성할 수 있습니다
+6. `std::span`, `std::format`, 지정 초기화자(Designated Initializer), `consteval` 등 C++20 유틸리티를 적용할 수 있습니다
+7. C++23 기능(`std::expected`, `std::print`, `std::generator`)과 그 용도를 파악할 수 있습니다
+
+---
+
+C++20은 C++11 이후 가장 혁신적인 표준으로, 템플릿, 이터레이션, 코드 구성 방식을 근본적으로 바꿉니다. 컨셉(Concepts)은 난해한 SFINAE 오류를 읽기 쉬운 제약 조건으로 대체합니다. 레인지(Ranges)는 이터레이터 쌍 보일러플레이트를 제거하고 조합 가능한 파이프라인으로 대체합니다. 코루틴(Coroutines)은 스레드 오버헤드 없이 협력적 멀티태스킹을 가능하게 합니다. 이 기능들을 이해하는 것은 단순히 최신 문법을 사용하는 것이 아니라 더 명확하고 안전하며 유지보수하기 쉬운 코드를 작성하는 것입니다.
 
 **난이도**: ⭐⭐⭐⭐⭐
 
@@ -25,7 +41,7 @@ C++20은 C++11 이후 가장 큰 변화를 가져온 표준입니다. Concepts, 
 
 ### Concepts란?
 
-템플릿 매개변수에 대한 **제약 조건**을 정의하는 기능입니다. 이전의 SFINAE보다 훨씬 가독성이 좋습니다.
+템플릿 매개변수에 대한 **제약 조건(Constraint)**을 정의하는 기능입니다. 이전의 SFINAE(Substitution Failure Is Not An Error)보다 훨씬 가독성이 좋습니다.
 
 ### 기본 사용법
 
@@ -187,7 +203,7 @@ int main() {
 
 ### Ranges란?
 
-컨테이너와 알고리즘을 더 우아하게 다루는 라이브러리입니다. 파이프라인 스타일의 연산을 지원합니다.
+컨테이너와 알고리즘을 더 우아하게 다루는 라이브러리입니다. 파이프라인(Pipeline) 스타일의 연산을 지원합니다.
 
 ### 기본 사용법
 
@@ -214,7 +230,7 @@ int main() {
 
 ### Views (뷰)
 
-뷰는 지연 평가되며, 원본 데이터를 복사하지 않습니다.
+뷰는 지연 평가(Lazy Evaluation)되며, 원본 데이터를 복사하지 않습니다.
 
 ```cpp
 #include <ranges>
@@ -304,7 +320,7 @@ int main() {
 
     auto [min, max] = std::ranges::minmax(v);
 
-    // 프로젝션
+    // 프로젝션(Projection)
     struct Person {
         std::string name;
         int age;
@@ -323,7 +339,7 @@ int main() {
 
 ### Coroutines란?
 
-실행을 **일시 중단**하고 나중에 **재개**할 수 있는 함수입니다.
+실행을 **일시 중단(Suspend)**하고 나중에 **재개(Resume)**할 수 있는 함수입니다.
 
 ### 기본 구조
 
@@ -526,7 +542,7 @@ g++ -std=c++20 -fmodules-ts main.cpp math.o -o main
 
 ## 기타 C++20 기능
 
-### 삼항 비교 연산자 (Spaceship Operator)
+### 삼방향 비교 연산자(Spaceship Operator)
 
 ```cpp
 #include <compare>
@@ -551,7 +567,7 @@ int main() {
 }
 ```
 
-### 지정 초기화자
+### 지정 초기화자(Designated Initializers)
 
 ```cpp
 struct Config {
@@ -768,7 +784,7 @@ int main() {
 
 ## 다음 단계
 
-- [18_Design_Patterns.md](./18_Design_Patterns.md) - C++ 디자인 패턴
+- [C++ 디자인 패턴](./18_Design_Patterns.md) - C++ 디자인 패턴
 
 ---
 
@@ -777,3 +793,7 @@ int main() {
 - [cppreference C++20](https://en.cppreference.com/w/cpp/20)
 - [C++20 완벽 가이드](https://leanpub.com/cpp20)
 - [Ranges 라이브러리](https://en.cppreference.com/w/cpp/ranges)
+
+---
+
+**이전**: [멀티스레딩과 동시성](./16_Multithreading_Concurrency.md) | **다음**: [C++ 디자인 패턴](./18_Design_Patterns.md)

@@ -1,12 +1,21 @@
 # 02. 라즈베리파이 설정
 
+**이전**: [IoT 개요](./01_IoT_Overview.md) | **다음**: [Python GPIO 제어](./03_Python_GPIO_Control.md)
+
 ## 학습 목표
 
-- Raspberry Pi 모델별 특징과 선택 기준 이해
-- Raspberry Pi OS 설치 및 초기 설정
-- SSH 원격 접속 설정
-- raspi-config를 통한 시스템 설정
-- GPIO 핀아웃 이해
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 주어진 IoT 프로젝트에 적합한 Raspberry Pi 모델을 선택할 수 있다
+2. Raspberry Pi Imager를 사용하여 Raspberry Pi OS를 설치할 수 있다
+3. SSH 접속을 설정하고 초기 시스템 구성을 수행할 수 있다
+4. GPIO 핀 배치를 파악하고 BCM과 BOARD 번호 체계를 구분할 수 있다
+5. 공통 IoT 라이브러리로 Python 가상 환경을 구성할 수 있다
+6. 애플리케이션 자동 시작을 위한 systemd 서비스를 생성할 수 있다
+
+---
+
+모든 IoT 프로젝트는 실행할 물리적 플랫폼이 필요하며, Raspberry Pi는 임베디드 개발에 입문하는 가장 접근하기 쉬운 관문입니다. 올바른 모델 선택, OS 설정, GPIO 핀 배치 이해를 통해 안정적인 기반을 마련하면, 이후 이 과정에서 다루는 센서, 네트워킹, AI 프로젝트를 모두 원활하게 진행할 수 있습니다.
 
 ---
 
@@ -523,27 +532,61 @@ sudo systemctl status my-iot-app
 
 ## 연습 문제
 
-### 문제 1: 초기 설정
-1. Raspberry Pi OS Lite를 SD 카드에 설치하세요.
-2. 헤드리스 모드로 SSH와 WiFi를 설정하세요.
-3. SSH로 접속하여 시스템 업데이트를 수행하세요.
+### 연습 1: 모델 선택 근거 설명
 
-### 문제 2: SSH 보안
-1. SSH 키 인증을 설정하세요.
-2. 비밀번호 인증을 비활성화하세요.
-3. 연결을 테스트하세요.
+세 가지 IoT 배포 시나리오에 대해 가장 적합한 Raspberry Pi 모델을 선택하고 이유를 설명하세요:
 
-### 문제 3: GPIO 확인
-1. I2C와 SPI 인터페이스를 활성화하세요.
-2. pinout 명령어로 핀아웃을 확인하세요.
-3. i2cdetect로 연결된 I2C 장치를 스캔하세요.
+1. 체온을 모니터링하여 스마트폰으로 전송하는 휴대용 웨어러블(Wearable). 크기와 전력 소비가 중요합니다.
+2. 20개의 센서에서 데이터를 수집하고, 로컬 MQTT 브로커(broker)를 실행하며, 클라우드(cloud) 서버로 영상을 스트리밍(streaming)하는 게이트웨이(gateway) 장치.
+3. GPIO, Python, 데스크탑 GUI를 실험하고 싶지만 예산이 제한적인 학습 프로젝트.
+
+각 시나리오에 대해 짧은 단락으로 작성하고, 섹션 1의 모델 비교 표를 참조하세요.
+
+### 연습 2: 헤드리스(Headless) 설정 및 SSH 보안 강화
+
+모니터나 키보드 없이 헤드리스 모드로 Raspberry Pi를 설정하고 SSH 접근을 강화하세요:
+
+1. Raspberry Pi Imager를 사용하여 SSH 활성화 및 WiFi 사전 설정과 함께 Raspberry Pi OS Lite를 SD 카드에 씁니다.
+2. Pi를 부팅하고 `nmap` 또는 `arp`로 IP 주소를 찾아 SSH로 접속합니다.
+3. 호스트 머신에서 Ed25519 키 쌍을 생성하고 `ssh-copy-id`를 사용하여 공개 키를 Pi에 복사합니다.
+4. `/etc/ssh/sshd_config`를 편집하여 비밀번호 인증(Password Authentication)을 비활성화(`PasswordAuthentication no`)하고 SSH 서비스를 재시작합니다.
+5. 키로 로그인이 가능하고 비밀번호 로그인이 거부되는지 확인합니다.
+
+### 연습 3: GPIO 핀 매핑(Pin Mapping)
+
+섹션 4.1의 40핀 GPIO 헤더 배치를 학습하고 어떤 참고 자료도 보지 않고 다음에 답하세요:
+
+1. 어느 물리적 핀 번호가 5V 전원을 공급하나요? 3.3V는?
+2. BCM 번호 체계에서 GPIO17의 물리적(BOARD) 핀 번호는 무엇인가요?
+3. 하드웨어 PWM을 지원하는 GPIO 핀은 어느 것인가요?
+4. I2C 통신에 사용되는 핀은 어느 것이며, BCM 번호는 무엇인가요?
+
+그런 다음 물리적 핀 11에 연결된 LED를 BOARD 모드에서 `RPi.GPIO`를 사용하여 깜빡이는 짧은 Python 코드를 작성하세요.
+
+### 연습 4: 자동 시작을 위한 systemd 서비스
+
+부팅 시 Python 센서 스크립트를 자동으로 실행하는 systemd 서비스를 만드세요:
+
+1. `vcgencmd measure_temp`로 CPU 온도를 읽고, 타임스탬프(timestamp)와 함께 `/home/pi/iot_project/temp_log.csv`에 기록하며, 루프에서 30초간 슬립(sleep)하는 Python 스크립트(`/home/pi/iot_project/temperature_logger.py`)를 작성합니다.
+2. 해당 스크립트를 참조하는 systemd 서비스 파일을 `/etc/systemd/system/temp_logger.service`에 만듭니다.
+3. 서비스를 활성화하고 시작한 후, `systemctl status`로 실행 중임을 확인합니다.
+4. Pi를 재부팅하고 부팅 후 로그 파일을 확인하여 서비스가 자동으로 시작되는지 검증합니다.
+
+### 연습 5: 네트워크 모니터링 및 자동 재연결
+
+인터넷 연결을 모니터링하고 연결이 끊기면 자동으로 네트워크를 재시작하는 Python 스크립트를 작성하세요:
+
+1. `subprocess`를 사용하여 60초마다 `8.8.8.8`에 ping을 보냅니다.
+2. ping이 실패하면 연결 끊김 시각을 파일에 기록하고 `sudo systemctl restart networking`으로 네트워킹 서비스를 재시작합니다.
+3. 재연결 후 재연결 시각을 기록하고 중단 지속 시간을 계산합니다.
+4. 스크립트를 systemd 서비스로 감싸 백그라운드에서 지속적으로 실행되도록 합니다. `sudo ip link set wlan0 down`으로 WiFi 인터페이스를 임시로 비활성화하여 테스트하세요.
 
 ---
 
 ## 다음 단계
 
-- [03_Python_GPIO_Control.md](03_Python_GPIO_Control.md): Python으로 GPIO 제어 시작
-- [04_WiFi_Networking.md](04_WiFi_Networking.md): 네트워크 프로그래밍
+- [Python GPIO 제어](03_Python_GPIO_Control.md): Python으로 GPIO 제어 시작
+- [WiFi 네트워킹](04_WiFi_Networking.md): 네트워크 프로그래밍
 
 ---
 

@@ -1,14 +1,25 @@
 # 08. Edge AI - TensorFlow Lite
 
+**Previous**: [HTTP/REST for IoT](./07_HTTP_REST_for_IoT.md) | **Next**: [Edge AI - ONNX Runtime](./09_Edge_AI_ONNX.md)
+
 ## Learning Objectives
 
-- Understand Edge AI concepts and advantages
-- Learn TensorFlow Lite overview
-- Master model conversion (.tflite) methods
-- Perform inference on Raspberry Pi
-- Implement image classification examples
+After completing this lesson, you will be able to:
+
+1. Explain Edge AI concepts and compare them with cloud-based AI inference
+2. Describe the TensorFlow Lite workflow from model training to edge deployment
+3. Convert Keras models to TFLite format with various quantization options
+4. Run inference on Raspberry Pi using the TFLite interpreter
+5. Build an image classifier that runs locally on edge hardware
+6. Integrate Edge AI results with MQTT for IoT data pipelines
 
 ---
+
+Processing AI models on edge devices rather than in the cloud eliminates network latency, preserves privacy, and keeps your system working even when the internet goes down. For IoT applications like real-time defect detection on a factory floor or person detection on a security camera, waiting hundreds of milliseconds for a cloud round-trip is simply not an option. TensorFlow Lite makes it possible to run neural networks on devices as small as a Raspberry Pi.
+
+---
+
+> **Analogy: Branch Office** -- Cloud AI is like sending every decision to corporate headquarters -- accurate but slow and expensive. Edge AI is the local branch office that handles routine decisions (is this a person? is this temperature abnormal?) on-site in milliseconds, only escalating unusual cases to headquarters. TensorFlow Lite is the compact toolkit that fits in the branch office.
 
 ## 1. Edge AI Concepts
 
@@ -291,6 +302,12 @@ class TFLiteModel:
     def predict(self, input_data: np.ndarray) -> np.ndarray:
         """Perform inference"""
         # Set input
+        # Why astype(self.input_dtype) matters: INT8-quantized models expect int8
+        # input. If you pass float32 data to an INT8 model, TFLite does NOT raise
+        # an error -- it silently reinterprets the bytes, producing garbage output
+        # that looks like valid (but wrong) predictions. Always cast to the model's
+        # expected dtype. Check input_details[0]['dtype'] when debugging unexpected
+        # classification results.
         self.interpreter.set_tensor(
             self.input_details[0]['index'],
             input_data.astype(self.input_dtype)
@@ -434,7 +451,12 @@ class ImageClassifier:
         # Convert to NumPy array
         input_data = np.array(image, dtype=np.float32)
 
-        # Normalize (-1 ~ 1)
+        # Why [-1, 1] normalization: MobileNet was trained with pixel values scaled
+        # to [-1, 1] using exactly this formula. Using a different normalization
+        # (e.g., /255.0 which gives [0, 1]) produces WRONG results silently --
+        # the model still outputs class probabilities, but they are meaningless
+        # because the input distribution doesn't match what the model learned.
+        # Always match the preprocessing to the model's training pipeline.
         input_data = (input_data - 127.5) / 127.5
 
         # Add batch dimension
@@ -551,6 +573,7 @@ class RealtimeClassifier:
         image = image.resize((self.input_width, self.input_height))
 
         input_data = np.array(image, dtype=np.float32)
+        # Why [-1, 1]: must match MobileNet's training normalization (see 5.1)
         input_data = (input_data - 127.5) / 127.5
         input_data = np.expand_dims(input_data, axis=0)
 
@@ -660,6 +683,7 @@ class AIEdgeNode:
         image = image.resize((self.input_shape[2], self.input_shape[1]))
 
         input_data = np.array(image, dtype=np.float32)
+        # Why [-1, 1]: must match MobileNet's training normalization (see 5.1)
         input_data = (input_data - 127.5) / 127.5
         input_data = np.expand_dims(input_data, axis=0)
 
@@ -735,11 +759,4 @@ if __name__ == "__main__":
 
 ---
 
-## Next Steps
-
-- [09_Edge_AI_ONNX.md](09_Edge_AI_ONNX.md): Edge AI with ONNX Runtime
-- [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md): Image analysis project
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [HTTP/REST for IoT](./07_HTTP_REST_for_IoT.md) | **Next**: [Edge AI - ONNX Runtime](./09_Edge_AI_ONNX.md)

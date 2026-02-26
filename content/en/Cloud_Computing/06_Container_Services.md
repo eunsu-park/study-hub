@@ -1,5 +1,24 @@
 # Container Services (ECS/EKS/Fargate vs GKE/Cloud Run)
 
+**Previous**: [Serverless Functions](./05_Serverless_Functions.md) | **Next**: [Object Storage](./07_Object_Storage.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how containers differ from virtual machines in resource isolation and efficiency
+2. Compare AWS container services (ECS, EKS, Fargate) with GCP equivalents (GKE, Cloud Run)
+3. Deploy a containerized application using a managed orchestration service
+4. Distinguish between serverless containers (Fargate, Cloud Run) and self-managed clusters
+5. Configure container registries (ECR, Artifact Registry) for image storage
+6. Design a container deployment strategy considering scaling, networking, and service discovery
+
+---
+
+Containers have become the standard unit of deployment for modern applications. They package code and dependencies into a portable image that runs identically across development, staging, and production. Cloud providers offer managed container services that abstract away cluster management, letting teams focus on building and shipping software rather than operating infrastructure.
+
 ## 1. Container Overview
 
 ### 1.1 Container vs VM
@@ -53,52 +72,52 @@
 ### 2.1 AWS ECR (Elastic Container Registry)
 
 ```bash
-# 1. ECR 레포지토리 생성
+# 1. Create ECR repository
 aws ecr create-repository \
     --repository-name my-app \
     --region ap-northeast-2
 
-# 2. Docker 로그인
+# 2. Docker login
 aws ecr get-login-password --region ap-northeast-2 | \
     docker login --username AWS --password-stdin \
     123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
 
-# 3. 이미지 빌드 및 태그
+# 3. Build and tag image
 docker build -t my-app .
 docker tag my-app:latest \
     123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
 
-# 4. 이미지 푸시
+# 4. Push image
 docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
 
-# 5. 이미지 목록 확인
+# 5. List images
 aws ecr list-images --repository-name my-app
 ```
 
 ### 2.2 GCP Artifact Registry
 
 ```bash
-# 1. Artifact Registry API 활성화
+# 1. Enable Artifact Registry API
 gcloud services enable artifactregistry.googleapis.com
 
-# 2. 레포지토리 생성
+# 2. Create repository
 gcloud artifacts repositories create my-repo \
     --repository-format=docker \
     --location=asia-northeast3 \
     --description="My Docker repository"
 
-# 3. Docker 인증 설정
+# 3. Configure Docker authentication
 gcloud auth configure-docker asia-northeast3-docker.pkg.dev
 
-# 4. 이미지 빌드 및 태그
+# 4. Build and tag image
 docker build -t my-app .
 docker tag my-app:latest \
     asia-northeast3-docker.pkg.dev/PROJECT_ID/my-repo/my-app:latest
 
-# 5. 이미지 푸시
+# 5. Push image
 docker push asia-northeast3-docker.pkg.dev/PROJECT_ID/my-repo/my-app:latest
 
-# 6. 이미지 목록 확인
+# 6. List images
 gcloud artifacts docker images list \
     asia-northeast3-docker.pkg.dev/PROJECT_ID/my-repo
 ```
@@ -262,7 +281,7 @@ aws ecs execute-command \
 # 1. Install eksctl (macOS)
 brew install eksctl
 
-# 2. 클러스터 생성
+# 2. Create cluster
 eksctl create cluster \
     --name my-cluster \
     --region ap-northeast-2 \
@@ -272,10 +291,10 @@ eksctl create cluster \
     --nodes-min 1 \
     --nodes-max 4
 
-# 3. kubeconfig 업데이트
+# 3. Update kubeconfig
 aws eks update-kubeconfig --name my-cluster --region ap-northeast-2
 
-# 4. 클러스터 확인
+# 4. Verify cluster
 kubectl get nodes
 ```
 
@@ -352,10 +371,10 @@ spec:
 ```
 
 ```bash
-# 배포
+# Deploy
 kubectl apply -f deployment.yaml
 
-# 상태 확인
+# Check status
 kubectl get pods
 kubectl get services
 ```
@@ -367,24 +386,24 @@ kubectl get services
 ### 5.1 Creating a GKE Cluster
 
 ```bash
-# 1. GKE API 활성화
+# 1. Enable GKE API
 gcloud services enable container.googleapis.com
 
-# 2. 클러스터 생성 (Autopilot - 권장)
+# 2. Create cluster (Autopilot - recommended)
 gcloud container clusters create-auto my-cluster \
     --region=asia-northeast3
 
-# 또는 Standard 클러스터
+# Or Standard cluster
 gcloud container clusters create my-cluster \
     --region=asia-northeast3 \
     --num-nodes=2 \
     --machine-type=e2-medium
 
-# 3. 클러스터 인증 정보 가져오기
+# 3. Get cluster credentials
 gcloud container clusters get-credentials my-cluster \
     --region=asia-northeast3
 
-# 4. 클러스터 확인
+# 4. Verify cluster
 kubectl get nodes
 ```
 
@@ -517,7 +536,7 @@ Fargate runs containers without server provisioning.
 - Use with ECS or EKS
 
 ```bash
-# ECS + Fargate로 서비스 생성
+# Create service with ECS + Fargate
 aws ecs create-service \
     --cluster my-cluster \
     --service-name my-fargate-service \
@@ -539,19 +558,19 @@ Cloud Run runs containers in a serverless manner.
 - HTTP traffic or event-driven
 
 ```bash
-# 1. 이미지 배포
+# 1. Deploy image
 gcloud run deploy my-service \
     --image=asia-northeast3-docker.pkg.dev/PROJECT_ID/my-repo/my-app:latest \
     --region=asia-northeast3 \
     --platform=managed \
     --allow-unauthenticated
 
-# 2. 서비스 URL 확인
+# 2. Get service URL
 gcloud run services describe my-service \
     --region=asia-northeast3 \
     --format='value(status.url)'
 
-# 3. 트래픽 분할 (Blue/Green)
+# 3. Traffic splitting (Blue/Green)
 gcloud run services update-traffic my-service \
     --region=asia-northeast3 \
     --to-revisions=my-service-00002-abc=50,my-service-00001-xyz=50
@@ -687,7 +706,7 @@ gunicorn==21.2.0
 ### 9.2 Deploy to GCP Cloud Run
 
 ```bash
-# 빌드 및 배포 (소스에서 직접)
+# Build and deploy (directly from source)
 gcloud run deploy my-app \
     --source=. \
     --region=asia-northeast3 \
@@ -698,9 +717,9 @@ gcloud run deploy my-app \
 ### 9.3 Deploy to AWS App Runner
 
 ```bash
-# 1. ECR에 이미지 푸시 (앞서 설명한 방법)
+# 1. Push image to ECR (as described above)
 
-# 2. App Runner 서비스 생성
+# 2. Create App Runner service
 aws apprunner create-service \
     --service-name my-app \
     --source-configuration '{
@@ -726,6 +745,143 @@ aws apprunner create-service \
 
 - [07_Object_Storage.md](./07_Object_Storage.md) - Object Storage
 - [09_Virtual_Private_Cloud.md](./09_Virtual_Private_Cloud.md) - VPC Networking
+
+---
+
+## Exercises
+
+### Exercise 1: Container vs VM Trade-off
+
+A team is migrating a monolithic web application to the cloud. They are debating between running it on an EC2 VM versus containerizing it with Docker and deploying to ECS Fargate.
+
+Identify two advantages of the container approach and two scenarios where staying with a VM would be the better choice.
+
+<details>
+<summary>Show Answer</summary>
+
+**Advantages of containers (Fargate)**:
+1. **Portability and consistency** — A Docker image encapsulates the application and all its dependencies. The same image runs identically in development, CI/CD, and production, eliminating "it works on my machine" problems.
+2. **Density and cost efficiency** — Multiple containers share the host OS kernel, using far less memory than VMs where each has its own OS. Fargate charges only for the CPU/memory reserved by your task, with no idle EC2 overhead.
+
+**Scenarios where VM (EC2) is better**:
+1. **Applications requiring full OS access or kernel-level customization** — Some workloads (e.g., custom kernel modules, specialized hardware drivers, or applications that modify `/proc` and `/sys`) require root-level OS access that containers cannot provide.
+2. **Legacy applications that cannot be containerized** — If the application has hard dependencies on specific OS versions, registry entries (Windows), or com objects, containerizing may require significant refactoring. Running directly on an EC2 VM may be the pragmatic migration path.
+
+</details>
+
+### Exercise 2: Service Selection
+
+For each scenario, choose the most appropriate AWS container service (ECS on EC2, ECS Fargate, EKS, App Runner) and explain why:
+
+1. A small startup wants to deploy a simple containerized REST API with zero infrastructure management and automatic HTTPS.
+2. A platform team manages 50+ microservices and needs advanced networking, custom admission controllers, and multi-cloud portability.
+3. A machine learning team runs GPU-accelerated training jobs as containers that process datasets and exit.
+4. A company wants to run containers but requires custom EC2 instance types (e.g., storage-optimized i3 instances) for their workload.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **AWS App Runner** — Zero infrastructure management: no clusters, no task definitions, no load balancer configuration. App Runner handles HTTPS, scaling, load balancing, and deployments automatically. Ideal for simple stateless services.
+
+2. **Amazon EKS** — Kubernetes is the industry standard for complex microservice platforms. Advanced features like custom resource definitions (CRDs), admission webhooks, pod security policies, and service mesh integration (Istio) are Kubernetes-native. Multi-cloud portability is a Kubernetes strength (same manifests can run on GKE, AKS).
+
+3. **ECS Fargate with GPU** or **EKS with GPU node groups** — Batch-style jobs that start, process, and exit are well-suited for ECS tasks or Kubernetes Jobs. For GPU workloads, both platforms support GPU-enabled instances. ECS Tasks are simpler for batch; EKS Jobs offer more scheduling control.
+
+4. **ECS on EC2** — When you need specific EC2 instance types (i3, c5n, etc.) that Fargate doesn't support, or when you need to attach physical hardware (GPUs with specific drivers), you must manage the underlying EC2 nodes. ECS on EC2 gives you full control over the instance type while still providing container orchestration.
+
+</details>
+
+### Exercise 3: Container Registry Workflow
+
+Describe the complete sequence of CLI commands to:
+1. Authenticate Docker to AWS ECR in the `ap-northeast-2` region for account `123456789012`.
+2. Build a Docker image from a local `Dockerfile` and tag it for ECR with the repository name `my-app` and tag `v1.0`.
+3. Push the image to ECR.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Step 1: Authenticate Docker to ECR
+aws ecr get-login-password --region ap-northeast-2 | \
+    docker login --username AWS --password-stdin \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
+
+# Step 2: Build and tag the image
+docker build -t my-app .
+docker tag my-app:latest \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:v1.0
+
+# (Optional) Also tag as latest
+docker tag my-app:latest \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
+
+# Step 3: Push to ECR
+docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:v1.0
+docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
+```
+
+**Note**: You must create the ECR repository before pushing. If it doesn't exist yet:
+```bash
+aws ecr create-repository --repository-name my-app --region ap-northeast-2
+```
+
+</details>
+
+### Exercise 4: Cloud Run Traffic Splitting
+
+You have deployed a new version of a Cloud Run service named `payment-service` in region `asia-northeast3`. The new revision is `payment-service-00003-xyz` and the previous stable version is `payment-service-00002-abc`.
+
+Write the `gcloud` command to route 10% of traffic to the new version and 90% to the old version (canary deployment), and explain why this pattern is useful.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+gcloud run services update-traffic payment-service \
+    --region=asia-northeast3 \
+    --to-revisions=payment-service-00003-xyz=10,payment-service-00002-abc=90
+```
+
+**Why this pattern (canary deployment) is useful**:
+- **Risk reduction**: Only 10% of real users hit the new version. If it has a critical bug (crashes, data corruption), only 10% of users are affected instead of 100%.
+- **Real traffic testing**: Synthetic tests and staging environments may not reproduce all production conditions. Canary deployments expose the new version to actual production load patterns.
+- **Gradual rollout**: If the 10% canary shows good metrics (error rate, latency), you can increase it to 50%, then 100%. If problems arise, you roll back instantly by routing 100% back to the stable version.
+
+To promote the new version to 100%:
+```bash
+gcloud run services update-traffic payment-service \
+    --region=asia-northeast3 \
+    --to-latest
+```
+
+</details>
+
+### Exercise 5: Fargate vs Cloud Run Comparison
+
+Analyze the architectural differences between AWS Fargate and GCP Cloud Run. For a stateless HTTP microservice that handles ~100 requests/second with occasional 10x spikes, which would you choose, and what are the key operational differences?
+
+<details>
+<summary>Show Answer</summary>
+
+**Key architectural differences**:
+
+| Aspect | AWS Fargate | GCP Cloud Run |
+|--------|-------------|---------------|
+| **Scaling model** | Pre-configured min/max task count; scales to minimum (not zero by default) | Scales to zero; request-based autoscaling |
+| **Startup time** | Container cold start on new task; typically 30–60 seconds | Fast cold starts; typically a few seconds |
+| **Pricing basis** | Per vCPU-hour and GB-hour while task is running (even idle) | Per vCPU-second and GB-second only during active request handling |
+| **Cluster requirement** | Requires ECS cluster (though serverless, still needs cluster config) | Fully managed, no cluster concept |
+| **Traffic splitting** | Requires ALB weighted target groups | Built-in revision-based traffic splitting |
+
+**Recommendation for this scenario**: **GCP Cloud Run** is a better fit for this workload because:
+1. **Cost**: 100 requests/second means the service has some baseline load, but Cloud Run's per-request billing is cheaper for bursty workloads. Fargate charges for idle time between spikes.
+2. **Scaling**: Cloud Run's fast scale-out handles 10x spikes well. Built-in traffic splitting enables safe deployments.
+3. **Simplicity**: No cluster management, no task definition versioning, no ALB configuration needed.
+
+For AWS, **App Runner** would be the closer equivalent to Cloud Run for simplicity. Fargate is better when you need fine-grained networking (VPC, security groups, private subnets), persistent connections, or integration with other ECS-based services.
+
+</details>
 
 ---
 

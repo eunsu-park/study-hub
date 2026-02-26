@@ -1760,4 +1760,4 @@ B3: print z
 
 ---
 
-[Previous: 11_Code_Generation.md](./11_Code_Generation.md) | [Next: 13_Loop_Optimization.md](./13_Loop_Optimization.md) | [Overview](./00_Overview.md)
+[이전: 코드 생성](./11_Code_Generation.md) | [다음: 루프 최적화](./13_Loop_Optimization.md) | [개요](./00_Overview.md)

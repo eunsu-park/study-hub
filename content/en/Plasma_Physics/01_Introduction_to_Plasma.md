@@ -463,27 +463,40 @@ class PlasmaParameters:
         """Compute all plasma parameters."""
 
         # Debye length [m]
+        # T_e is given in eV; multiply by eV_to_K to get Kelvin, then by k_B to
+        # get Joules. This avoids propagating a separate unit throughout the class.
         self.lambda_D = np.sqrt(epsilon_0 * k_B * self.T_e * eV_to_K /
                                 (self.n_e * e**2))
 
         # Plasma parameter (number of particles in Debye sphere)
+        # N_D >> 1 is the fundamental criterion for collective plasma behavior;
+        # grouping it here alongside lambda_D makes it trivial to check the
+        # plasma criterion immediately after calculating the shielding scale.
         self.N_D = self.n_e * (4*np.pi/3) * self.lambda_D**3
 
         # Electron plasma frequency [rad/s]
+        # omega_pe depends only on density (not temperature), because it arises
+        # from the restoring force of the ion background, not thermal pressure.
         self.omega_pe = np.sqrt(self.n_e * e**2 / (epsilon_0 * m_e))
         self.f_pe = self.omega_pe / (2*np.pi)  # [Hz]
 
         # Ion plasma frequency [rad/s]
+        # omega_pi << omega_pe (by sqrt(m_e/m_i)); keeping both lets users
+        # verify the frequency ordering that underpins many fluid approximations.
         self.omega_pi = np.sqrt(self.n_e * self.Z**2 * e**2 /
                                 (epsilon_0 * self.m_i))
         self.f_pi = self.omega_pi / (2*np.pi)  # [Hz]
 
         # Thermal velocities [m/s]
+        # Using the same eV_to_K * k_B pattern as lambda_D keeps unit conversion
+        # centralized; v_te and v_ti set the speed scales for all subsequent drifts.
         self.v_te = np.sqrt(k_B * self.T_e * eV_to_K / m_e)
         self.v_ti = np.sqrt(k_B * self.T_i * eV_to_K / self.m_i)
 
         if self.B > 0:
-            # Electron gyrofrequency [rad/s]
+            # Gyrofrequency and Larmor radius are only meaningful when B > 0;
+            # guarding with this condition prevents division-by-zero and signals
+            # to the caller that magnetization effects do not apply for B = 0.
             self.omega_ce = e * self.B / m_e
             self.f_ce = self.omega_ce / (2*np.pi)  # [Hz]
 
@@ -492,10 +505,14 @@ class PlasmaParameters:
             self.f_ci = self.omega_ci / (2*np.pi)  # [Hz]
 
             # Larmor radii [m]
+            # r_Le = v_te / omega_ce rather than the exact formula mv/qB because
+            # the thermal speed already encodes the temperature dependence cleanly.
             self.r_Le = self.v_te / self.omega_ce
             self.r_Li = self.v_ti / self.omega_ci
 
             # Plasma beta
+            # Sum T_e + T_i in the thermal pressure so beta reflects both species;
+            # beta < 1 means magnetic pressure dominates and confines the plasma.
             p_thermal = self.n_e * k_B * (self.T_e + self.T_i) * eV_to_K
             p_magnetic = self.B**2 / (2 * mu_0)
             self.beta = p_thermal / p_magnetic
@@ -513,6 +530,9 @@ class PlasmaParameters:
         print("="*60)
         print(f"Input Parameters:")
         print(f"  Electron density:     n_e = {self.n_e:.3e} m^-3")
+        # Show temperature in both eV and K so the reader can compare directly
+        # with tables that use either convention (plasma literature uses eV,
+        # thermodynamics literature uses K).
         print(f"  Electron temperature: T_e = {self.T_e:.3f} eV ({self.T_e*eV_to_K:.3e} K)")
         print(f"  Ion temperature:      T_i = {self.T_i:.3f} eV ({self.T_i*eV_to_K:.3e} K)")
         print(f"  Magnetic field:       B   = {self.B:.3f} T")
@@ -522,12 +542,17 @@ class PlasmaParameters:
         print(f"Debye Shielding:")
         print(f"  Debye length:         λ_D = {self.lambda_D:.3e} m")
         print(f"  Plasma parameter:     N_D = {self.N_D:.3e}")
+        # Threshold of 100 (not 1) is conservative: N_D >> 1 is the theoretical
+        # requirement, but N_D ~ 100 ensures the statistical average is reliable.
         print(f"  Plasma criterion:     N_D >> 1? {self.N_D > 100}")
         print("-"*60)
 
         print(f"Plasma Frequencies:")
         print(f"  Electron plasma freq: ω_pe = {self.omega_pe:.3e} rad/s ({self.f_pe:.3e} Hz)")
         print(f"  Ion plasma freq:      ω_pi = {self.omega_pi:.3e} rad/s ({self.f_pi:.3e} Hz)")
+        # Printing the ratio makes it immediately clear how much faster electrons
+        # oscillate than ions, motivating the separation of electron/ion timescales
+        # used throughout plasma theory.
         print(f"  Ratio:                ω_pe/ω_pi = {self.omega_pe/self.omega_pi:.2f}")
         print("-"*60)
 
@@ -545,6 +570,10 @@ class PlasmaParameters:
             print(f"  Ion Larmor:           r_Li = {self.r_Li:.3e} m")
             print(f"  Plasma beta:          β    = {self.beta:.3e}")
             print(f"  Regime:               ", end="")
+            # Beta thresholds (0.01, 0.1, 10) correspond to practically meaningful
+            # boundaries: β < 0.01 is typical of deep magnetosphere and tokamak
+            # cores where field-line bending is negligible; β > 10 means the
+            # magnetic field is dynamically irrelevant.
             if self.beta < 0.01:
                 print("Strongly magnetized (β << 1)")
             elif self.beta < 0.1:
@@ -570,6 +599,10 @@ class PlasmaParameters:
 
 # Example usage
 if __name__ == "__main__":
+    # Three examples span ~13 orders of magnitude in density and 4 in temperature,
+    # chosen to cover qualitatively distinct regimes: fusion (strongly magnetized,
+    # collisionless), space (weakly magnetized, collisionless), and industrial
+    # plasma (unmagnetized, partially collisional).
     print("\n### Example 1: Tokamak Core ###\n")
     tokamak = PlasmaParameters(n_e=1e20, T_e=10000, B=5, T_i=10000, Z=1, A=2)
     tokamak.print_summary()

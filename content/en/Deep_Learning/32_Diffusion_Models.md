@@ -63,11 +63,11 @@ Reverse (removing noise):
 import torch
 
 def linear_beta_schedule(timesteps, beta_start=1e-4, beta_end=0.02):
-    """선형 노이즈 스케줄 (⭐⭐)"""
+    """Linear noise schedule (⭐⭐)"""
     return torch.linspace(beta_start, beta_end, timesteps)
 
 def cosine_beta_schedule(timesteps, s=0.008):
-    """코사인 노이즈 스케줄 (더 좋은 성능) (⭐⭐⭐)"""
+    """Cosine noise schedule (better performance) (⭐⭐⭐)"""
     steps = timesteps + 1
     x = torch.linspace(0, timesteps, steps)
     alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * torch.pi * 0.5) ** 2
@@ -76,7 +76,7 @@ def cosine_beta_schedule(timesteps, s=0.008):
     return torch.clip(betas, 0.0001, 0.9999)
 
 def get_index_from_list(vals, t, x_shape):
-    """배치의 각 샘플에 맞는 t 시점의 값 추출"""
+    """Extract t-timestep values for each sample in the batch"""
     batch_size = t.shape[0]
     out = vals.gather(-1, t.cpu())
     return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)
@@ -86,7 +86,7 @@ def get_index_from_list(vals, t, x_shape):
 
 ```python
 class DiffusionSchedule:
-    """Diffusion 스케줄 관리 (⭐⭐⭐)"""
+    """Diffusion schedule manager (⭐⭐⭐)"""
     def __init__(self, timesteps=1000, beta_schedule='linear'):
         self.timesteps = timesteps
 
@@ -100,16 +100,16 @@ class DiffusionSchedule:
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1, 0), value=1.0)
 
-        # 계산에 필요한 값들
+        # Values needed for computation
         self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
         self.sqrt_recip_alphas = torch.sqrt(1.0 / self.alphas)
 
-        # Posterior 계산용
+        # For posterior computation
         self.posterior_variance = betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
 
     def q_sample(self, x_0, t, noise=None):
-        """Forward process: x_0에서 x_t 샘플링 (⭐⭐⭐)
+        """Forward process: sample x_t from x_0 (⭐⭐⭐)
 
         x_t = sqrt(alpha_bar_t) * x_0 + sqrt(1 - alpha_bar_t) * noise
         """
@@ -147,7 +147,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SinusoidalPositionEmbeddings(nn.Module):
-    """시간 임베딩 (⭐⭐⭐)"""
+    """Time embedding (⭐⭐⭐)"""
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
@@ -163,7 +163,7 @@ class SinusoidalPositionEmbeddings(nn.Module):
 
 
 class Block(nn.Module):
-    """기본 Conv Block"""
+    """Basic Conv Block"""
     def __init__(self, in_ch, out_ch, time_emb_dim, up=False):
         super().__init__()
         self.time_mlp = nn.Linear(time_emb_dim, out_ch)
@@ -194,7 +194,7 @@ class Block(nn.Module):
 
 
 class SimpleUNet(nn.Module):
-    """간단한 U-Net for Diffusion (⭐⭐⭐)"""
+    """Simple U-Net for Diffusion (⭐⭐⭐)"""
     def __init__(self, in_channels=3, out_channels=3, time_dim=256):
         super().__init__()
 
@@ -266,7 +266,7 @@ class SimpleUNet(nn.Module):
 
 ```python
 def train_diffusion(model, schedule, dataloader, epochs=100, lr=1e-4):
-    """Diffusion 모델 학습 (⭐⭐⭐)"""
+    """Train Diffusion model (⭐⭐⭐)"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
@@ -280,17 +280,17 @@ def train_diffusion(model, schedule, dataloader, epochs=100, lr=1e-4):
             images = images.to(device)
             batch_size = images.size(0)
 
-            # 랜덤 타임스텝
+            # Random timestep
             t = torch.randint(0, schedule.timesteps, (batch_size,), device=device).long()
 
-            # 노이즈 추가
+            # Add noise
             noise = torch.randn_like(images)
             x_t = schedule.q_sample(images, t, noise)
 
-            # 노이즈 예측
+            # Predict noise
             noise_pred = model(x_t, t)
 
-            # 손실 계산
+            # Compute loss
             loss = criterion(noise_pred, noise)
 
             optimizer.zero_grad()
@@ -312,13 +312,13 @@ def train_diffusion(model, schedule, dataloader, epochs=100, lr=1e-4):
 ```python
 @torch.no_grad()
 def sample_ddpm(model, schedule, shape, device):
-    """DDPM 샘플링 (⭐⭐⭐)
+    """DDPM sampling (⭐⭐⭐)
 
-    x_T ~ N(0, I)에서 시작하여 x_0 생성
+    Start from x_T ~ N(0, I) and generate x_0
     """
     model.eval()
 
-    # 순수 노이즈에서 시작
+    # Start from pure noise
     x = torch.randn(shape, device=device)
 
     for i in reversed(range(schedule.timesteps)):
@@ -332,10 +332,10 @@ def sample_ddpm(model, schedule, shape, device):
             schedule.sqrt_recip_alphas, t, x.shape
         )
 
-        # 노이즈 예측
+        # Predict noise
         noise_pred = model(x, t)
 
-        # Mean 계산
+        # Compute mean
         model_mean = sqrt_recip_alphas_t * (
             x - betas_t * noise_pred / sqrt_one_minus_alphas_cumprod_t
         )
@@ -357,14 +357,14 @@ def sample_ddpm(model, schedule, shape, device):
 ```python
 @torch.no_grad()
 def sample_ddim(model, schedule, shape, device, num_inference_steps=50, eta=0.0):
-    """DDIM 샘플링 (⭐⭐⭐⭐)
+    """DDIM sampling (⭐⭐⭐⭐)
 
-    더 적은 스텝으로 빠른 샘플링
-    eta=0: 결정론적, eta=1: DDPM과 동일
+    Fast sampling with fewer steps
+    eta=0: deterministic, eta=1: same as DDPM
     """
     model.eval()
 
-    # 스텝 간격
+    # Step interval
     step_size = schedule.timesteps // num_inference_steps
     timesteps = list(range(0, schedule.timesteps, step_size))
     timesteps = list(reversed(timesteps))
@@ -377,19 +377,19 @@ def sample_ddim(model, schedule, shape, device, num_inference_steps=50, eta=0.0)
         alpha_cumprod_t = schedule.alphas_cumprod[t]
         alpha_cumprod_prev = schedule.alphas_cumprod[timesteps[i+1]] if i < len(timesteps)-1 else 1.0
 
-        # 노이즈 예측
+        # Predict noise
         noise_pred = model(x, t_tensor)
 
-        # x_0 예측
+        # Predict x_0
         pred_x0 = (x - torch.sqrt(1 - alpha_cumprod_t) * noise_pred) / torch.sqrt(alpha_cumprod_t)
 
-        # 방향 계산
+        # Compute direction
         sigma = eta * torch.sqrt((1 - alpha_cumprod_prev) / (1 - alpha_cumprod_t)) * \
                      torch.sqrt(1 - alpha_cumprod_t / alpha_cumprod_prev)
 
         pred_dir = torch.sqrt(1 - alpha_cumprod_prev - sigma**2) * noise_pred
 
-        # 노이즈 추가 (eta > 0인 경우)
+        # Add noise (when eta > 0)
         noise = torch.randn_like(x) if eta > 0 else 0
 
         x = torch.sqrt(alpha_cumprod_prev) * pred_x0 + pred_dir + sigma * noise
@@ -414,10 +414,10 @@ s_theta(x_t, t) ≈ ∇_{x_t} log p(x_t)
 ### Relationship with DDPM
 
 ```python
-# DDPM에서 노이즈 예측과 score의 관계:
+# Relationship between noise prediction and score in DDPM:
 # epsilon_theta(x_t, t) = -sqrt(1 - alpha_bar_t) * s_theta(x_t, t)
 
-# Score 예측 → 노이즈 예측으로 변환 가능
+# Score prediction → can be converted to noise prediction
 ```
 
 ---
@@ -478,8 +478,8 @@ class CrossAttention(nn.Module):
         self.to_out = nn.Linear(inner_dim, query_dim)
 
     def forward(self, x, context):
-        # x: 이미지 특징 (batch, hw, dim)
-        # context: 텍스트 임베딩 (batch, seq_len, context_dim)
+        # x: image features (batch, hw, dim)
+        # context: text embeddings (batch, seq_len, context_dim)
 
         q = self.to_q(x)
         k = self.to_k(context)
@@ -519,7 +519,7 @@ w < 1: Weaker condition
 
 ```python
 def classifier_free_guidance_sample(model, schedule, shape, condition, w=7.5, device='cuda'):
-    """Classifier-free Guidance 샘플링 (⭐⭐⭐⭐)"""
+    """Classifier-free Guidance sampling (⭐⭐⭐⭐)"""
     model.eval()
 
     x = torch.randn(shape, device=device)
@@ -527,16 +527,16 @@ def classifier_free_guidance_sample(model, schedule, shape, condition, w=7.5, de
     for i in reversed(range(schedule.timesteps)):
         t = torch.full((shape[0],), i, device=device, dtype=torch.long)
 
-        # 조건부 예측
+        # Conditional prediction
         noise_cond = model(x, t, condition)
 
-        # 비조건부 예측 (조건 = None 또는 빈 임베딩)
+        # Unconditional prediction (condition = None or empty embedding)
         noise_uncond = model(x, t, None)
 
         # Guidance
         noise_pred = noise_uncond + w * (noise_cond - noise_uncond)
 
-        # 샘플링 스텝 (DDPM 또는 DDIM)
+        # Sampling step (DDPM or DDIM)
         x = sampling_step(x, noise_pred, t, schedule)
 
     return x
@@ -546,13 +546,13 @@ def classifier_free_guidance_sample(model, schedule, shape, condition, w=7.5, de
 
 ```python
 def train_with_cfg(model, dataloader, drop_prob=0.1):
-    """CFG를 위한 학습 (조건 드롭아웃) (⭐⭐⭐)"""
+    """Training for CFG (condition dropout) (⭐⭐⭐)"""
     for images, conditions in dataloader:
-        # 일정 확률로 조건을 None으로
+        # With some probability, set condition to None
         mask = torch.rand(images.size(0)) < drop_prob
-        conditions[mask] = None  # 또는 빈 임베딩
+        conditions[mask] = None  # or empty embedding
 
-        # 일반 학습...
+        # Normal training...
 ```
 
 ---
@@ -567,7 +567,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 
-# 설정
+# Configuration
 image_size = 28
 channels = 1
 timesteps = 1000
@@ -577,7 +577,7 @@ lr = 1e-3
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# 데이터
+# Data
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Lambda(lambda t: (t * 2) - 1)  # [0, 1] → [-1, 1]
@@ -586,14 +586,14 @@ transform = transforms.Compose([
 train_data = datasets.MNIST('data', train=True, download=True, transform=transform)
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
-# 스케줄
+# Schedule
 schedule = DiffusionSchedule(timesteps=timesteps, beta_schedule='linear')
 
-# 모델 (간단한 버전)
+# Model (simple version)
 model = SimpleUNet(in_channels=channels, out_channels=channels).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-# 학습
+# Training
 for epoch in range(epochs):
     total_loss = 0
 
@@ -601,17 +601,17 @@ for epoch in range(epochs):
         images = images.to(device)
         batch_size = images.size(0)
 
-        # 랜덤 타임스텝
+        # Random timestep
         t = torch.randint(0, timesteps, (batch_size,), device=device).long()
 
-        # 노이즈 추가 (forward process)
+        # Add noise (forward process)
         noise = torch.randn_like(images)
         x_t = schedule.q_sample(images, t, noise)
 
-        # 노이즈 예측
+        # Predict noise
         noise_pred = model(x_t, t)
 
-        # 손실
+        # Loss
         loss = F.mse_loss(noise_pred, noise)
 
         optimizer.zero_grad()
@@ -622,19 +622,19 @@ for epoch in range(epochs):
 
     print(f"Epoch {epoch+1}: Loss = {total_loss / len(train_loader):.4f}")
 
-# 샘플링
+# Sampling
 model.eval()
 with torch.no_grad():
     samples = sample_ddpm(model, schedule, (16, channels, image_size, image_size), device)
     samples = (samples + 1) / 2  # [-1, 1] → [0, 1]
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(4, 4, figsize=(8, 8))
 for i, ax in enumerate(axes.flat):
     ax.imshow(samples[i, 0].cpu(), cmap='gray')
     ax.axis('off')
 plt.savefig('diffusion_samples.png')
-print("샘플 저장: diffusion_samples.png")
+print("Saved samples: diffusion_samples.png")
 ```
 
 ---
@@ -669,6 +669,50 @@ Reverse: x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t/sqrt(1-alpha_bar_t)) * eps
 | Sampling speed | Slow | Fast | Fast |
 | Mode Coverage | Good | Mode Collapse | Good |
 | Density estimation | Possible | Not possible | Possible |
+
+---
+
+## Exercises
+
+### Exercise 1: Visualize the Forward Diffusion Process
+
+Using the `DiffusionSchedule` and `q_sample` method:
+1. Load a single MNIST image and apply forward diffusion at timesteps `t = 0, 100, 250, 500, 750, 999`.
+2. Plot the six noisy images side by side in a row.
+3. For each timestep, compute and print the signal-to-noise ratio: `SNR(t) = alpha_bar_t / (1 - alpha_bar_t)`.
+4. Describe the relationship between SNR and image perceptibility. At what timestep does the original image become unrecognizable?
+
+### Exercise 2: Compare Linear vs Cosine Noise Schedules
+
+Using `linear_beta_schedule` and `cosine_beta_schedule`:
+1. Plot `beta_t` vs. `t` for both schedules on the same graph.
+2. Plot `alpha_bar_t` (cumulative product) vs. `t` for both schedules.
+3. Apply both schedules to the same image and compare the progression of noise at `t = 200, 500, 800`.
+4. Explain why the cosine schedule is generally preferred: where does the linear schedule "use up" its noise budget too quickly?
+
+### Exercise 3: Train a Simple DDPM on MNIST
+
+Using the provided `SimpleUNet`, `DiffusionSchedule`, and training code:
+1. Train for 50 epochs with `timesteps=1000`, `batch_size=64`, `lr=1e-3`.
+2. After training, generate 16 samples using `sample_ddpm` and save them as a grid.
+3. Monitor and plot the training loss curve.
+4. Experiment: what happens if you use only `timesteps=200` during training? Does the model still generate reasonable samples?
+
+### Exercise 4: Implement DDIM Sampling and Compare Speed
+
+After training a DDPM model:
+1. Generate 16 samples using `sample_ddpm` (1000 steps) and measure wall-clock time.
+2. Generate 16 samples using `sample_ddim` with `num_inference_steps=50` and `eta=0.0`, and measure time.
+3. Visually compare the quality of samples from both methods.
+4. Experiment with `eta=0.5` and `eta=1.0` in DDIM. Describe how eta controls the trade-off between determinism and sample diversity.
+
+### Exercise 5: Implement Classifier-Free Guidance for a Conditional Model
+
+Extend the DDPM to support class-conditional generation on MNIST:
+1. Modify `SimpleUNet` to accept an optional class label `c` (embed it with `nn.Embedding(10, time_dim)` and add it to the time embedding).
+2. During training, randomly drop the condition with probability `p=0.1` (replace label with a null embedding index, e.g., index 10).
+3. Implement `classifier_free_guidance_sample` that combines conditional and unconditional noise predictions: `noise_guided = noise_uncond + w * (noise_cond - noise_uncond)`.
+4. Generate samples for each digit class `0-9` with guidance scales `w=1.0, 3.0, 7.5`. Observe how higher guidance strength affects sample sharpness and class fidelity.
 
 ---
 

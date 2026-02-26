@@ -51,6 +51,8 @@ int shared_counter = 0;
 void increment_counter(int id, int iterations) {
     for (int i = 0; i < iterations; i++) {
         {
+            // Why: lock_guard follows RAII — the mutex is released automatically when the
+            // scope exits, even if an exception is thrown, preventing deadlocks
             std::lock_guard<std::mutex> lock(cout_mutex);
             shared_counter++;
             std::cout << "Thread " << id << " incremented counter to "
@@ -125,7 +127,8 @@ void consumer(int id) {
     while (true) {
         std::unique_lock<std::mutex> lock(queue_mutex);
 
-        // Wait for data or finish signal
+        // Why: the predicate lambda guards against spurious wakeups — the thread re-checks
+        // the condition after every wakeup and only proceeds when it's actually true
         data_cond.wait(lock, [] { return !data_queue.empty() || finished; });
 
         if (!data_queue.empty()) {
@@ -164,6 +167,8 @@ template<typename T>
 class ThreadSafeQueue {
 private:
     std::queue<T> queue_;
+    // Why: mutable allows locking the mutex in const methods like empty() and size() —
+    // the mutex protects internal state but isn't part of the logical constness
     mutable std::mutex mutex_;
     std::condition_variable cond_;
 
@@ -239,6 +244,8 @@ void demo_jthread() {
     std::cout << "\n=== std::jthread (C++20 - Auto-joining) ===\n";
 
     {
+        // Why: jthread auto-joins on destruction and supports cooperative cancellation via
+        // stop_token — this eliminates the common bug of forgetting to join/detach a thread
         std::jthread t([](std::stop_token stoken) {
             int count = 0;
             while (!stoken.stop_requested() && count < 5) {

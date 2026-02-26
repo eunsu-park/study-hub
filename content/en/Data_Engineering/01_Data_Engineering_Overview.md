@@ -1,6 +1,19 @@
 # Data Engineering Overview
 
-## Introduction
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define data engineering and explain the core responsibilities of a data engineer compared to data scientists and analysts
+2. Describe the components of a data pipeline and implement a basic ETL pipeline in Python
+3. Compare batch processing and stream processing, and select the appropriate approach for a given use case
+4. Explain major data architecture patterns including Data Warehouse, Data Lake, Lambda, and Kappa architectures
+5. Identify the key tools in the data engineering ecosystem and map them to their cloud service equivalents
+6. Apply pipeline design best practices such as idempotency, atomicity, and error handling with retry logic
+
+---
+
+## Overview
 
 Data Engineering is the field of designing and building systems that collect, store, process, and deliver organizational data. Data engineers build data pipelines that transform raw data into analyzable formats.
 
@@ -44,6 +57,10 @@ Data Engineering is the field of designing and building systems that collect, st
 
 ```python
 # Example data engineer tech stack
+# Grouped by function rather than vendor — this mirrors how teams typically
+# divide ownership (e.g., a "platform" team owns infra, a "data" team owns
+# orchestration + processing).  Knowing the *category* helps you identify
+# transferable skills when switching between cloud providers.
 tech_stack = {
     "programming": ["Python", "SQL", "Scala", "Java"],
     "databases": ["PostgreSQL", "MySQL", "MongoDB", "Redis"],
@@ -99,15 +116,20 @@ class DataPipeline:
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Data transformation step"""
         print(f"[{datetime.now()}] Transforming data")
-        # Data cleaning, transformation, aggregation, etc.
-        df = df.dropna()  # Remove missing values
+        # Drop rather than impute: this simple pipeline assumes upstream
+        # systems handle partial data; dropping keeps the logic idempotent
+        # since we don't need to guess fill values.
+        df = df.dropna()
+        # Stamp processing time so downstream consumers can detect stale data
+        # and distinguish between two runs on the same source file.
         df['processed_at'] = datetime.now()
         return df
 
     def load(self, df: pd.DataFrame, destination: str):
         """Data loading step"""
         print(f"[{datetime.now()}] Loading to {destination}")
-        # In practice, save to DB, files, cloud storage, etc.
+        # Parquet chosen over CSV: columnar format compresses better and
+        # preserves dtypes, avoiding type-inference issues on reload.
         df.to_parquet(destination, index=False)
 
     def run(self, source: str, destination: str):
@@ -115,7 +137,8 @@ class DataPipeline:
         self.start_time = datetime.now()
         print(f"Pipeline '{self.name}' started")
 
-        # ETL process
+        # Sequential E→T→L: each step receives the previous step's output,
+        # making it easy to add validation or checkpoints between stages.
         raw_data = self.extract(source)
         transformed_data = self.transform(raw_data)
         self.load(transformed_data, destination)
@@ -154,11 +177,13 @@ import pandas as pd
 def daily_sales_batch():
     """Daily sales batch processing"""
 
-    # 1. Extract yesterday's data
+    # Process *yesterday's* data: the full day must be complete before
+    # aggregation, otherwise totals would be partial and misleading.
     yesterday = datetime.now() - timedelta(days=1)
     date_str = yesterday.strftime('%Y-%m-%d')
 
-    # 2. Extract data (simulation)
+    # Pre-aggregate at the source DB level to minimize data transfer —
+    # only aggregated rows cross the network rather than raw transactions.
     query = f"""
     SELECT
         product_id,
@@ -169,7 +194,8 @@ def daily_sales_batch():
     GROUP BY product_id
     """
 
-    # 3. Save aggregation results
+    # Date-partitioned output file enables idempotent re-runs:
+    # re-running the same date simply overwrites the same file.
     print(f"Processing batch for {date_str}")
     # df = execute_query(query)
     # df.to_parquet(f"sales_summary_{date_str}.parquet")
@@ -205,6 +231,9 @@ class StreamProcessor:
     """Simple stream processor"""
 
     def __init__(self):
+        # Multiple handlers per event type: the observer pattern lets us
+        # add new reactions (alerting, logging, metrics) without modifying
+        # existing handler code — critical in streaming where downtime is costly.
         self.handlers: dict[str, list[Callable]] = {}
 
     def register_handler(self, event_type: str, handler: Callable):
@@ -215,6 +244,8 @@ class StreamProcessor:
 
     def process(self, event: Event):
         """Process event"""
+        # Fan-out: every registered handler runs on the same event, enabling
+        # independent processing paths (e.g., log AND alert simultaneously).
         handlers = self.handlers.get(event.event_type, [])
         for handler in handlers:
             handler(event)
@@ -222,6 +253,8 @@ class StreamProcessor:
     def consume(self, stream):
         """Consume events from stream (simulation)"""
         for message in stream:
+            # Timestamp assigned at consume-time, not source-time — in production
+            # you'd use the source event timestamp to avoid clock-skew issues.
             event = Event(
                 event_type=message['type'],
                 data=message['data'],
@@ -326,22 +359,30 @@ streaming_characteristics = {
 
 A hybrid architecture combining batch and streaming.
 
+> **When to choose Lambda vs Kappa?**
+> - **Lambda**: Use when you need historical reprocessing (e.g., correcting past aggregations after a schema change) and real-time results simultaneously. The batch layer acts as the "source of truth" that the speed layer's approximate results converge toward.
+> - **Kappa**: Use when a streaming-first approach suffices and the event log is replayable (e.g., Kafka with long retention). Kappa avoids the operational burden of maintaining two separate codebases for the same logic.
+
 ```python
 # Lambda architecture concept implementation
 class LambdaArchitecture:
     """Lambda architecture: Batch + Streaming layers"""
 
     def __init__(self):
+        # Two parallel layers solve a fundamental tension: batch gives
+        # *accurate* results (full dataset recomputation) while speed gives
+        # *timely* results (sub-second latency). Neither alone satisfies
+        # use cases like fraud detection dashboards that need both properties.
         self.batch_layer = BatchLayer()
         self.speed_layer = SpeedLayer()
         self.serving_layer = ServingLayer()
 
     def ingest(self, data):
         """Data ingestion: Send to both layers simultaneously"""
-        # Batch layer (master dataset)
+        # Dual-write: the same event feeds both layers so they stay in sync.
+        # The batch layer stores the immutable master copy for reprocessing;
+        # the speed layer processes it immediately for low-latency queries.
         self.batch_layer.append(data)
-
-        # Speed layer (real-time processing)
         self.speed_layer.process(data)
 
     def query(self, params):
@@ -349,6 +390,9 @@ class LambdaArchitecture:
         batch_result = self.serving_layer.get_batch_view(params)
         realtime_result = self.speed_layer.get_realtime_view(params)
 
+        # Merge logic: the batch view covers all data up to the last batch run;
+        # the real-time view covers only the gap since then. Merging ensures
+        # the query result is both complete *and* up-to-date.
         return self.merge_views(batch_result, realtime_result)
 
 
@@ -357,12 +401,15 @@ class BatchLayer:
 
     def append(self, data):
         """Append to master dataset"""
-        # Store immutable data (append-only)
+        # Append-only (immutable) storage preserves the raw event history,
+        # enabling full recomputation if business logic changes later.
         pass
 
     def compute_batch_views(self):
         """Compute batch views (periodic execution)"""
-        # Process entire data with MapReduce, Spark, etc.
+        # Recomputes over the *entire* dataset — expensive but guarantees
+        # correctness. Typically runs on a schedule (e.g., hourly/daily)
+        # using Spark or MapReduce on the master dataset.
         pass
 
 
@@ -371,7 +418,9 @@ class SpeedLayer:
 
     def process(self, data):
         """Real-time processing"""
-        # Stream processing (Kafka, Flink, etc.)
+        # Incremental updates only — fast but potentially approximate.
+        # Once the batch layer catches up, its results supersede the
+        # speed layer's, so any approximation errors are self-correcting.
         pass
 
     def get_realtime_view(self, params):
@@ -384,6 +433,9 @@ class ServingLayer:
 
     def get_batch_view(self, params):
         """Return batch view"""
+        # Serves pre-computed batch results from a low-latency store
+        # (e.g., Cassandra, HBase) — the heavy computation happened
+        # during the batch run, so reads are fast.
         pass
 ```
 
@@ -427,8 +479,13 @@ A simplified architecture using only streaming.
 ### 5.1 Major Tool Categories
 
 ```python
+# Organized into functional layers rather than vendor buckets:
+# this reflects how a real data platform is assembled — you pick one
+# tool per layer and swap vendors without changing the overall design.
 data_engineering_tools = {
     "orchestration": {
+        # Batch orchestrators schedule DAGs; streaming ones manage
+        # long-running topologies — different failure/retry models.
         "batch": ["Apache Airflow", "Prefect", "Dagster", "Luigi"],
         "streaming": ["Apache Kafka", "Apache Flink", "Spark Streaming"]
     },
@@ -437,11 +494,17 @@ data_engineering_tools = {
         "streaming": ["Apache Kafka Streams", "Apache Flink", "Apache Storm"]
     },
     "storage": {
+        # Lake vs warehouse vs DB is a latency/cost/flexibility trade-off:
+        # lakes are cheapest for raw data, warehouses optimise for analytics,
+        # OLTP databases serve low-latency application reads.
         "data_lake": ["S3", "GCS", "HDFS", "Azure Blob"],
         "data_warehouse": ["Snowflake", "BigQuery", "Redshift", "Databricks"],
         "databases": ["PostgreSQL", "MySQL", "MongoDB", "Cassandra"]
     },
     "transformation": {
+        # SQL-based tools (dbt) let analysts own transforms without Python;
+        # code-based tools (PySpark) handle ML feature engineering or complex
+        # business logic that is awkward in pure SQL.
         "sql_based": ["dbt", "SQLMesh"],
         "code_based": ["PySpark", "Pandas", "Polars"]
     },
@@ -471,6 +534,9 @@ data_engineering_tools = {
 
 ```python
 # Good pipeline design principles
+# These are ordered roughly by how often violations cause production incidents:
+# idempotency failures cause duplicate data, atomicity failures cause partial
+# loads, and missing monitoring causes silent failures that go unnoticed for days.
 pipeline_best_practices = {
     "idempotency": "Same input produces same result",
     "atomicity": "All succeed or all fail",
@@ -483,7 +549,10 @@ pipeline_best_practices = {
 # Idempotency example
 def idempotent_upsert(df, table_name, key_columns):
     """Upsert function ensuring idempotency"""
-    # Delete existing data then insert (MERGE or DELETE + INSERT)
+    # DELETE-then-INSERT rather than INSERT alone: if the pipeline is re-run
+    # (e.g., after a partial failure), this approach prevents duplicate rows.
+    # An alternative is MERGE/UPSERT, but DELETE+INSERT is simpler to reason
+    # about and works identically across most SQL dialects.
     delete_query = f"""
     DELETE FROM {table_name}
     WHERE (key1, key2) IN (
@@ -505,6 +574,8 @@ from typing import Callable, Type
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
+    # Catch only specific exceptions in production (e.g., ConnectionError)
+    # to avoid retrying on programming bugs like TypeError.
     exceptions: tuple[Type[Exception], ...] = (Exception,)
 ):
     """Retry decorator"""
@@ -519,16 +590,25 @@ def retry(
                     last_exception = e
                     if attempt < max_attempts:
                         print(f"Attempt {attempt} failed: {e}")
-                        time.sleep(delay * attempt)  # Exponential backoff
+                        # Linear backoff (delay * attempt): gives transient
+                        # failures time to resolve without hammering the
+                        # upstream service. For true exponential, use
+                        # delay * (2 ** attempt) + random jitter.
+                        time.sleep(delay * attempt)
             raise last_exception
         return wrapper
     return decorator
 
 
+# max_attempts=3, delay=2.0 → waits 2s, then 4s before giving up.
+# Total worst-case wait: 6s, which balances fast recovery against
+# overwhelming an already-struggling API.
 @retry(max_attempts=3, delay=2.0)
 def fetch_data_from_api(url: str):
     """Fetch data from API (with retry)"""
     import requests
+    # timeout=30: prevents the pipeline from hanging indefinitely if
+    # the API is alive but slow; 30s is generous enough for most REST APIs.
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     return response.json()

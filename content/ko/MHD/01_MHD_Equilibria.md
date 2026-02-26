@@ -589,39 +589,53 @@ class SolovevEquilibrium:
 
     def compute_psi(self, R, Z):
         """Compute poloidal flux function (Solovev solution)"""
-        # Simplified Solovev: circular, low beta
+        # Solovev 해(Solovev solution)는 p(ψ)=0, F²(ψ) = F₀² + cψ (ψ에 선형)를
+        # 선택함으로써 GS 방정식을 선형화하고, (R,Z)의 다항식 정확해를 허용합니다.
+        # 이것은 가장 단순한 비자명 해석 평형: β≪1이고 단면이 원형에 가깝습니다 ("저베타").
         c = -2 * self.mu0 * self.Ip / (np.pi * self.a**2)
 
-        # Normalized coordinates
+        # Z를 κ로 나누면 타원형 단면을 원형으로 되돌려서,
+        # 단일 반경 좌표 r_norm이 Solovev 가정 하에서
+        # 신장된 플라즈마의 플럭스 표면을 올바르게 표시합니다.
         r_norm = np.sqrt((R - self.R0)**2 + (Z/self.kappa)**2) / self.a
 
-        # Flux function (normalized)
+        # r_norm의 2차 의존성은 Solovev ψ가 2차 다항식임을 반영합니다;
+        # 고차항은 더 일반적인 (비선형) 자유함수 처방이 필요합니다.
         psi = -c * self.R0**2 * self.a**2 * r_norm**2 / 8
 
         return psi
 
     def compute_B(self, R, Z):
         """Compute magnetic field components"""
-        # Numerical derivatives
+        # 중심 유한 차분을 ∂ψ/∂R과 ∂ψ/∂Z에 사용합니다. 단 두 번의 함수 평가로
+        # 2차 정확도를 달성하며, 매끄러운 Solovev 플럭스 함수에 충분합니다.
         dR = 0.001
         dZ = 0.001
 
         dpsi_dR = (self.compute_psi(R+dR, Z) - self.compute_psi(R-dR, Z)) / (2*dR)
         dpsi_dZ = (self.compute_psi(R, Z+dZ) - self.compute_psi(R, Z-dZ)) / (2*dZ)
 
+        # 1/R 인수는 원통형 정의 B_R = -(1/R)∂ψ/∂Z와 B_Z = (1/R)∂ψ/∂R에서
+        # 비롯됩니다 — 이는 토로이달 기하학에서 ∇·B = 0을 보장합니다.
         BR = -1/R * dpsi_dZ
         BZ = 1/R * dpsi_dR
+        # B_φ ∝ 1/R은 토로이달 전류 없는 진공 영역에 앙페르 법칙을 적용한 것;
+        # Bt0*R0은 축 위에서 F = R*B_φ의 상수입니다.
         Bphi = self.Bt0 * self.R0 / R
 
         return BR, BZ, Bphi
 
     def compute_q(self, psi_vals):
         """Compute safety factor profile"""
-        # Simplified q-profile for circular equilibrium
+        # ψ_edge는 마지막 닫힌 플럭스 표면(LCFS)의 플럭스 레이블을 줍니다;
+        # 이것으로 정규화하면 ψ를 [0,1]로 매핑하여 ψ_norm = 0이 축,
+        # ψ_norm = 1이 플라즈마 경계가 되어 전류 레벨과 무관합니다.
         psi_edge = self.compute_psi(self.R0 + self.a, 0)
         psi_norm = psi_vals / psi_edge
 
-        # Parabolic q-profile
+        # 포물형 q(ψ)는 축 위에서 피크 전류 밀도와 일치하는 가장 단순한 프로파일입니다;
+        # 더 정확한 평형에서 q(ψ)는 전류 프로파일로부터 자기 일관적으로 구해지지만,
+        # 이것은 완전한 GS 풀이 없이 안전 인자 구조를 설명하는 데 충분합니다.
         q0 = 1.0  # On-axis q
         qa = 3.0  # Edge q
 
@@ -909,10 +923,16 @@ class GradShafranovSolver:
         nZ = self.nZ
         N = nR * nZ
 
-        # Build operator matrix (constant for linear problem)
+        # 연산자 행렬 A는 Δ* (Grad-Shafranov 연산자)를 인코딩하고
+        # ψ에 의존하지 않으므로, 한 번만 구성하고 매 반복마다 재사용합니다
+        # — 각 Picard 단계에서 비싼 재구성을 피합니다.
         A = self.build_operator_matrix()
 
-        # Picard iteration
+        # Picard (고정점) 반복: GS 방정식은 p(ψ)와 F(ψ)가 해 자체에
+        # 의존하기 때문에 비선형입니다. 각 단계는 현재 ψ^(n)에서 자유함수를
+        # 동결시키고, 결과 선형 시스템을 ψ^(n+1)에 대해 풀고, 반복합니다.
+        # 수렴은 잘 정의된 압력/전류 프로파일에 대해 보장되지만
+        # 강한 비선형 경우에는 느릴 수 있습니다.
         for iteration in range(max_iter):
             psi_old = self.psi.copy()
 
@@ -924,16 +944,24 @@ class GradShafranovSolver:
                     R = self.R[j]
                     psi_val = self.psi[i, j]
 
-                    # Numerical derivatives of p and F
+                    # ψ 공간에서의 중심 유한 차분은 현재 반복 플럭스 값에서
+                    # dp/dψ와 dF/dψ 소스항을 제공합니다;
+                    # dpsi=1e-6의 작은 단계는 자유함수의 매끄러운 부분 내에서
+                    # 소거 오류를 피합니다.
                     dpsi = 1e-6
                     dpdpsi = (self.p_func(psi_val + dpsi) - self.p_func(psi_val - dpsi)) / (2*dpsi)
 
                     F_val = self.F_func(psi_val)
                     dFdpsi = (self.F_func(psi_val + dpsi) - self.F_func(psi_val - dpsi)) / (2*dpsi)
 
+                    # 압력항의 R² 가중치는 GS 방정식에서 직접 나옵니다:
+                    # -μ₀R²(dp/dψ)가 토러스에서 플라즈마 압력을 균형잡는
+                    # 폴로이달 장 곡률을 구동합니다.
                     rhs[i, j] = -self.mu0 * R**2 * dpdpsi - F_val * dFdpsi
 
-            # Apply boundary conditions
+            # Dirichlet 경계 조건 ψ=0은 플럭스가 통과하지 않는 "진공" 경계를 나타냅니다;
+            # 이것은 코일 전류가 반복되기 전 자유 경계 GS 코드에서 사용되는
+            # 가장 단순한 고정 경계 가정입니다.
             rhs[0, :] = psi_boundary
             rhs[-1, :] = psi_boundary
             rhs[:, 0] = psi_boundary
@@ -944,7 +972,9 @@ class GradShafranovSolver:
             psi_flat = spsolve(A, rhs_flat)
             self.psi = psi_flat.reshape((nZ, nR))
 
-            # Check convergence
+            # 업데이트의 L∞ 노름을 사용합니다. 단일 큰 편차(예: 축 근처)는
+            # 평균 노름으로는 놓칠 수 있기 때문입니다 — 최대 노름은
+            # 최악의 경우 잔차를 잡아냅니다.
             error = np.max(np.abs(self.psi - psi_old))
 
             if iteration % 10 == 0:
@@ -1071,7 +1101,9 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
     r = np.linspace(0, a, nr)
     dr = r[1] - r[0]
 
-    # Volume element in torus: dV = 2π R₀ · 2πr dr
+    # dV = 2πR₀ · 2πr dr는 대종횡비 극한에서의 토로이달 체적 요소입니다:
+    # 2πR₀ 인수는 전체 토로이달 회로를 고려하고,
+    # 2πr dr은 폴로이달 단면에서 얇은 환형 링을 쓸어냅니다.
     def volume_element(r_val):
         return 4 * np.pi**2 * R0 * r_val * dr
 
@@ -1080,7 +1112,9 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
     Bt_vals = np.array([B_profiles['Bt'](r_val) for r_val in r])
     Bp_vals = np.array([B_profiles['Bp'](r_val) for r_val in r])
 
-    # Volume integrals
+    # 가중 합은 체적 적분 ∫ f dV / ∫ dV를 근사합니다;
+    # 명시적인 dV 가중치를 사용하면 코드의 이산화가 투명해지고
+    # 그리드가 균일하지 않을 때 숨겨진 정규화 오류를 피합니다.
     V_total = np.sum([volume_element(r[i]) for i in range(nr)])
 
     p_avg = np.sum([p_vals[i] * volume_element(r[i]) for i in range(nr)]) / V_total
@@ -1090,18 +1124,27 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
 
     mu0 = 4*np.pi*1e-7
 
-    # Poloidal beta
+    # β_p는 <B_p²>을 사용합니다. 폴로이달 베타는 플라즈마 압력이
+    # 자체 폴로이달 장에 의해 얼마나 균형잡히는지를 포착합니다 —
+    # 전류 구동 안정성 한계의 성능 지표입니다.
     beta_p = 2 * mu0 * p_avg / Bp2_avg
 
-    # Toroidal beta
+    # β_t는 <B_t²> ≈ B_t0²를 사용합니다. 토로이달 베타는 코일이 생성해야 하는
+    # 외부 진공 장에 대한 공학적 한계이며,
+    # Troyon 경험적 베타 한계에 직접 들어갑니다.
     beta_t = 2 * mu0 * p_avg / Bt2_avg
 
     # For beta_N, need plasma current
     # I_p = ∮ J·dl ~ B_p * circumference / μ₀
     Bp_edge = Bp_vals[-1]
+    # 반지름 a의 원에서 앙페르 법칙: I_p = (2πa B_p(a)) / μ₀
+    # 전류 밀도 프로파일을 직접 적분하는 것을 피하고,
+    # 대신 폴로이달 장의 경계값에 의존합니다.
     Ip = 2 * np.pi * a * Bp_edge / mu0
 
-    # Troyon normalized beta
+    # β_N은 β_t를 I_p/(aB_t)로 정규화하여 Troyon 한계 β_N < 2.8–3.5가
+    # 장치 독립적이 되도록 합니다: I_p/(aB_t) 인수는 인가 장에 대해
+    # kink 안정화 전류를 구동하는 플라즈마의 능력과 함께 스케일됩니다.
     Bt_axis = Bt_vals[0]
     beta_N = beta_t * 100 / (Ip / (a * Bt_axis))  # percentage
 

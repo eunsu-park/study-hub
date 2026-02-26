@@ -1,11 +1,23 @@
 # Data Types & Abstraction
 
-> **Topic**: Programming
-> **Lesson**: 3 of 16
-> **Prerequisites**: What Is Programming, Programming Paradigms
-> **Objective**: Understand data types, type systems, abstract data types, and how abstraction manages complexity.
+**Previous**: [Programming Paradigms](./02_Programming_Paradigms.md) | **Next**: [Control Flow Patterns](./04_Control_Flow_Patterns.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a type is and why types are essential for preventing errors
+2. Identify and use primitive types (integers, floats, booleans, characters, strings) across multiple languages
+3. Construct composite types (arrays, structs/records, tuples) from primitive building blocks
+4. Compare static vs. dynamic typing and strong vs. weak typing with concrete examples
+5. Define Abstract Data Types (ADTs) and explain the distinction between interface and implementation
+6. Implement classic ADTs (Stack, Queue, Map) using different underlying data structures
+7. Apply generics and templates to write type-safe, reusable code
+8. Describe algebraic data types (sum types, product types) and explain how Option/Maybe types address the null problem
 
 ---
+
+Every value in a program has a type, and the way a language handles types profoundly affects how you write, debug, and reason about code. From the hardware-level distinction between an integer and a floating-point number to the design-level concept of an Abstract Data Type, types are the primary mechanism for preventing errors and managing complexity. This lesson builds your fluency with type systems and shows how abstraction lets you think at higher levels without losing rigor.
 
 ## What Are Types?
 
@@ -15,7 +27,7 @@ A **type** is a classification of data that determines:
 - How much memory it occupies
 - How it's interpreted by the computer
 
-**Analogy**: Types are like containers — a glass bottle holds liquids, a cardboard box holds solid items. You can't pour water into a cardboard box (or rather, you shouldn't). Types enforce similar constraints in code.
+> **📌 Analogy:** Types are like containers -- a glass bottle holds liquids, a cardboard box holds solid items. You cannot pour water into a cardboard box (or rather, you should not). Types enforce similar constraints in code.
 
 ### Why Types Matter
 
@@ -917,6 +929,4 @@ Make it safe using `Optional<String>`.
 
 ---
 
-## Navigation
-
-[← Previous: Programming Paradigms](02_Programming_Paradigms.md) | [Next: Control Flow Patterns →](04_Control_Flow_Patterns.md)
+**Previous**: [Programming Paradigms](./02_Programming_Paradigms.md) | **Next**: [Control Flow Patterns](./04_Control_Flow_Patterns.md)

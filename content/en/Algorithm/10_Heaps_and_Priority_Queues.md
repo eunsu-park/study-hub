@@ -1,5 +1,18 @@
 # Heaps and Priority Queues
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the heap property for both max-heaps and min-heaps, and represent a complete binary tree efficiently as an array using index arithmetic
+2. Implement heap insert (sift-up) and extract-max/min (sift-down) operations, tracing each step to confirm the heap property is restored
+3. Build a heap from an arbitrary array in O(n) time using the heapify algorithm and explain why it is more efficient than n individual insertions
+4. Implement Heap Sort and analyze its O(n log n) time and O(1) space complexity
+5. Use a priority queue (Python heapq or C++ priority_queue) to solve problems such as k-th largest element, merging k sorted lists, and task scheduling
+6. Design a solution using two heaps (max-heap + min-heap) to maintain a running median efficiently
+
+---
+
 ## Overview
 
 A heap is a complete binary tree-based data structure that allows O(1) access to the maximum/minimum value and O(log n) insertion/deletion.
@@ -100,13 +113,17 @@ int heap[MAX_SIZE];
 int heapSize = 0;
 
 void insert(int value) {
+    // Place the new element at the end to maintain the complete binary tree shape;
+    // a complete tree maps perfectly to an array without wasted indices
     heap[heapSize] = value;
     int i = heapSize;
     heapSize++;
 
-    // Bubble up
+    // Bubble up: repeatedly compare with parent until the max-heap property holds;
+    // each swap moves the new value one level closer to its correct position —
+    // at most O(log n) swaps because the tree height is log n
     while (i > 0 && heap[(i - 1) / 2] < heap[i]) {
-        int parent = (i - 1) / 2;
+        int parent = (i - 1) / 2;  // Parent index derived from array formula
         int temp = heap[i];
         heap[i] = heap[parent];
         heap[parent] = temp;
@@ -195,6 +212,9 @@ class MaxHeap:
             return None
 
         max_val = self.heap[0]
+        # Move the last element to the root to maintain the complete tree shape;
+        # removing from the end is O(1) whereas removing from the middle would
+        # require shifting all elements
         self.heap[0] = self.heap[-1]
         self.heap.pop()
 
@@ -209,13 +229,17 @@ class MaxHeap:
         while True:
             left = 2 * i + 1
             right = 2 * i + 2
-            largest = i
+            largest = i  # Assume current node is the largest
 
+            # Find the largest among node and its two children;
+            # swapping with the largest child preserves the heap property locally
             if left < n and self.heap[left] > self.heap[largest]:
                 largest = left
             if right < n and self.heap[right] > self.heap[largest]:
                 largest = right
 
+            # If the current node is already the largest, the heap property is
+            # restored — stop early rather than iterating to a leaf every time
             if largest == i:
                 break
 
@@ -251,6 +275,8 @@ void heapify(vector<int>& arr, int n, int i) {
 
     if (largest != i) {
         swap(arr[i], arr[largest]);
+        // Recursively fix the subtree rooted at the swapped child —
+        // a single swap may have violated the heap property one level down
         heapify(arr, n, largest);
     }
 }
@@ -258,7 +284,10 @@ void heapify(vector<int>& arr, int n, int i) {
 void buildHeap(vector<int>& arr) {
     int n = arr.size();
 
-    // Start from last non-leaf node
+    // Start from last non-leaf node (n/2 - 1) and work upward;
+    // leaf nodes are trivially valid heaps so we skip them.
+    // This bottom-up approach is O(n), unlike n individual insertions which is O(n log n),
+    // because most heapify calls operate near the leaves where depth is small
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
@@ -337,14 +366,18 @@ void heapSort(vector<int>& arr) {
 def heap_sort(arr):
     n = len(arr)
 
-    # Build max heap
+    # Phase 1: build a max-heap in-place in O(n);
+    # after this the largest element is guaranteed to be at arr[0]
     for i in range(n // 2 - 1, -1, -1):
         heapify(arr, n, i)
 
-    # Extract one by one
+    # Phase 2: repeatedly place the current maximum at the sorted tail.
+    # Swapping root with arr[i] puts the max in its final position,
+    # then heapify on the reduced heap restores the property for the
+    # next iteration — achieves O(n log n) with O(1) extra space
     for i in range(n - 1, 0, -1):
-        arr[0], arr[i] = arr[i], arr[0]
-        heapify(arr, i, 0)
+        arr[0], arr[i] = arr[i], arr[0]  # Move current max to sorted region
+        heapify(arr, i, 0)               # Re-heapify the unsorted prefix of length i
 
     return arr
 ```
@@ -472,19 +505,27 @@ import heapq
 
 class MedianFinder:
     def __init__(self):
-        self.small = []  # Max heap (smaller half)
+        self.small = []  # Max heap (smaller half) — negated because heapq is min-heap only
         self.large = []  # Min heap (larger half)
 
     def add_num(self, num):
+        # Always push to small first so the new element is evaluated against the
+        # current median boundary before deciding which half it belongs to
         heapq.heappush(self.small, -num)
+        # Move small's maximum to large — this balances the partition and ensures
+        # every element in small is ≤ every element in large
         heapq.heappush(self.large, -heapq.heappop(self.small))
 
+        # Rebalance sizes: small is allowed to hold one extra element (for odd counts),
+        # but large must never be larger; the median is always at small's top
         if len(self.large) > len(self.small):
             heapq.heappush(self.small, -heapq.heappop(self.large))
 
     def find_median(self):
+        # Odd total: small holds one more element — its top is the exact median
         if len(self.small) > len(self.large):
             return -self.small[0]
+        # Even total: median is the average of the two middle elements
         return (-self.small[0] + self.large[0]) / 2
 ```
 

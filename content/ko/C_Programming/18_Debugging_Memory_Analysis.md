@@ -1,10 +1,24 @@
 # 디버깅과 메모리 분석
 
-## 개요
+**이전**: [프로젝트 16: 시리얼 통신](./17_Project_Serial_Communication.md) | **다음**: [고급 임베디드 프로토콜](./19_Advanced_Embedded_Protocols.md)
 
-효과적인 디버깅은 프로그래머의 핵심 역량입니다. 이 장에서는 GDB 디버거, Valgrind 메모리 분석 도구, 그리고 AddressSanitizer를 사용하여 버그를 찾고 메모리 문제를 해결하는 방법을 학습합니다.
+## 학습 목표(Learning Objectives)
 
-**난이도**: ⭐⭐⭐⭐
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. GDB로 브레이크포인트(breakpoint)를 설정하고, 변수를 검사하며, 코드를 단계별로 실행할 수 있다
+2. Valgrind의 Memcheck 도구를 사용하여 메모리 누수(memory leak)와 잘못된 접근(invalid access)을 탐지할 수 있다
+3. Valgrind 출력을 해석하여 definitely-lost, indirectly-lost, still-reachable 블록을 구분할 수 있다
+4. AddressSanitizer로 컴파일하여 런타임에 버퍼 오버플로우(buffer overflow), use-after-free, double-free를 잡아낼 수 있다
+5. `assert`, 로깅 레벨, NULL-after-free 등 방어적 프로그래밍(defensive programming) 기법을 적용할 수 있다
+6. 초기화되지 않은 읽기(uninitialized read), 스택 오버플로우(stack overflow), 댕글링 포인터(dangling pointer) 등 일반적인 메모리 버그를 진단할 수 있다
+7. 상황에 맞는 디버깅 도구(GDB vs. Valgrind vs. ASan)를 선택할 수 있다
+
+---
+
+버그는 피할 수 없지만, 얼마나 빠르게 찾아서 고치느냐가 생산적인 프로그래머와 좌절하는 프로그래머를 가릅니다. 새벽 2시에 발생한 세그멘테이션 폴트(segmentation fault)도 GDB를 실행하고, 브레이크포인트를 설정하고, 콜 스택을 검사하는 방법을 알면 훨씬 덜 무섭습니다. 이 레슨은 인터랙티브 단계 실행부터 자동 메모리 분석까지, 전문 디버깅 툴킷을 갖춰 추측에 소비하는 시간을 줄이고 올바른 코드를 더 빠르게 완성할 수 있도록 합니다.
+
+**난이도**: 고급
 
 **선수 지식**: 포인터, 동적 메모리 할당
 
@@ -71,7 +85,7 @@ int main(void) {
 
 ### assert 매크로
 
-전제 조건 검증에 사용합니다.
+전제 조건(precondition) 검증에 사용합니다.
 
 ```c
 #include <assert.h>
@@ -285,7 +299,7 @@ $3 = 0
 
 ### GDB TUI 모드
 
-텍스트 사용자 인터페이스로 소스 코드를 보면서 디버깅합니다.
+텍스트 사용자 인터페이스(TUI, Text User Interface)로 소스 코드를 보면서 디버깅합니다.
 
 ```bash
 # TUI 모드 시작
@@ -598,7 +612,7 @@ free(ptr);
 ptr = NULL;  // 해제 후 NULL 설정
 ```
 
-### 3. 이중 해제
+### 3. 이중 해제(Double Free)
 
 ```c
 // 문제
@@ -717,7 +731,7 @@ void log_input(const char *input) {
 // $ git bisect good v1.0
 ```
 
-### 3. 방어적 프로그래밍
+### 3. 방어적 프로그래밍(Defensive Programming)
 
 ```c
 // 함수 시작 시 검증
@@ -880,7 +894,7 @@ $ gdb ./program
 
 ## 다음 단계
 
-- [19_Advanced_Embedded_Protocols.md](./19_Advanced_Embedded_Protocols.md) - PWM, I2C, SPI
+- [고급 임베디드 프로토콜(Advanced Embedded Protocols)](./19_Advanced_Embedded_Protocols.md) - PWM, I2C, SPI
 
 ---
 
@@ -890,3 +904,7 @@ $ gdb ./program
 - [Valgrind 공식 문서](https://valgrind.org/docs/manual/)
 - [AddressSanitizer Wiki](https://github.com/google/sanitizers/wiki/AddressSanitizer)
 - [Debugging with GDB (책)](https://sourceware.org/gdb/current/onlinedocs/gdb/)
+
+---
+
+**이전**: [프로젝트 16: 시리얼 통신](./17_Project_Serial_Communication.md) | **다음**: [고급 임베디드 프로토콜](./19_Advanced_Embedded_Protocols.md)

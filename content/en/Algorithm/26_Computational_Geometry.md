@@ -239,10 +239,13 @@ def convex_hull_graham(points):
     if n < 3:
         return points[:]
 
-    # Find bottommost leftmost point
+    # Anchor point: bottommost (then leftmost) point is guaranteed on the hull
+    # because no point lies to its left and below simultaneously
     start = min(range(n), key=lambda i: (points[i].y, points[i].x))
 
-    # Sort by polar angle
+    # Sort remaining points by polar angle from anchor.
+    # This ordering ensures we visit points in CCW sweep order,
+    # which is the key invariant that makes the stack-based elimination correct.
     def polar_angle(p):
         return math.atan2(p.y - points[start].y, p.x - points[start].x)
 
@@ -251,11 +254,15 @@ def convex_hull_graham(points):
 
     sorted_points = sorted(range(n), key=lambda i: (polar_angle(points[i]), dist_sq(points[i])))
 
-    # Build convex hull with stack
+    # Stack-based hull construction: maintain the invariant that the stack
+    # always makes left turns (CCW). If adding a new point would create a right
+    # turn or go straight, the previous point cannot be on the convex hull
+    # (a concave vertex), so we pop it. Each point is pushed and popped at most
+    # once, giving O(n) for this phase.
     hull = []
     for i in sorted_points:
         while len(hull) >= 2 and ccw(points[hull[-2]], points[hull[-1]], points[i]) <= 0:
-            hull.pop()
+            hull.pop()  # Remove concave vertex — it is inside the hull
         hull.append(i)
 
     return [points[i] for i in hull]
@@ -267,29 +274,34 @@ def convex_hull_graham(points):
 def convex_hull_andrew(points):
     """
     Andrew's Monotone Chain: O(n log n)
-    Simpler and more stable
+    Simpler and more stable than Graham Scan because it uses coordinate sorting
+    instead of polar angles, avoiding floating-point atan2 precision issues.
     """
+    # Lexicographic sort: leftmost points first, then bottommost on ties.
+    # This guarantees we sweep left-to-right for the lower hull and right-to-left for upper.
     points = sorted(points, key=lambda p: (p.x, p.y))
     n = len(points)
 
     if n < 3:
         return points[:]
 
-    # Lower hull
+    # Lower hull: scan left to right, keeping only left turns.
+    # Result is the bottom boundary of the convex hull.
     lower = []
     for p in points:
         while len(lower) >= 2 and ccw(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
+            lower.pop()  # Right turn or collinear — not on the lower hull
         lower.append(p)
 
-    # Upper hull
+    # Upper hull: scan right to left, same logic.
+    # Together, lower + upper form a closed convex polygon.
     upper = []
     for p in reversed(points):
         while len(upper) >= 2 and ccw(upper[-2], upper[-1], p) <= 0:
             upper.pop()
         upper.append(p)
 
-    # Combine (start and end points are duplicated)
+    # Remove duplicate endpoints (the leftmost and rightmost points appear in both)
     return lower[:-1] + upper[:-1]
 ```
 
@@ -448,8 +460,12 @@ def point_in_convex_polygon(point, polygon):
 def closest_pair(points):
     """
     Find closest pair of points: O(n log n)
+    Divide and conquer avoids the O(n²) brute-force by exploiting geometry:
+    once we know the best distance d in each half, only points within a 2d-wide
+    strip around the dividing line can possibly improve d.
     """
     points_sorted_x = sorted(points, key=lambda p: (p.x, p.y))
+    # Pre-sort by y so the strip can be processed in y-order without re-sorting at each level
     points_sorted_y = sorted(points, key=lambda p: (p.y, p.x))
 
     def distance(p1, p2):
@@ -458,7 +474,7 @@ def closest_pair(points):
     def closest_util(pts_x, pts_y):
         n = len(pts_x)
 
-        # Base case
+        # Base case: brute force is fine for tiny subproblems
         if n <= 3:
             min_dist = float('inf')
             pair = None
@@ -470,15 +486,15 @@ def closest_pair(points):
                         pair = (pts_x[i], pts_x[j])
             return min_dist, pair
 
-        # Divide
+        # Divide at the median x-coordinate
         mid = n // 2
         mid_point = pts_x[mid]
 
-        # Split y-sorted points too
+        # Split y-sorted list into left/right halves maintaining y-order —
+        # this avoids re-sorting at each recursion level, keeping total work O(n log n)
         left_y = [p for p in pts_y if p.x < mid_point.x or (p.x == mid_point.x and p.y <= mid_point.y)]
         right_y = [p for p in pts_y if p.x > mid_point.x or (p.x == mid_point.x and p.y > mid_point.y)]
 
-        # Recurse
         dl, pair_l = closest_util(pts_x[:mid], left_y)
         dr, pair_r = closest_util(pts_x[mid:], right_y)
 
@@ -489,11 +505,13 @@ def closest_pair(points):
             d = dr
             pair = pair_r
 
-        # Check middle strip
+        # Check the strip of width 2d around the dividing line.
+        # By geometry, each point in the strip has at most 7 other points within
+        # distance d that could be closer — so the inner loop is O(1) per point.
         strip = [p for p in pts_y if abs(p.x - mid_point.x) < d]
 
         for i in range(len(strip)):
-            for j in range(i + 1, min(i + 7, len(strip))):  # Check at most 6
+            for j in range(i + 1, min(i + 7, len(strip))):  # At most 7 candidates per point
                 dist = distance(strip[i], strip[j])
                 if dist < d:
                     d = dist

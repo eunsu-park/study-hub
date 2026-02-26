@@ -1,4 +1,4 @@
-# 11. Series Solutions and Special Functions (급수해와 특수함수)
+# 11. Series Solutions and Special Functions
 
 ## Learning Objectives
 
@@ -32,32 +32,32 @@ At ordinary points, we use the **power series method**; at regular singular poin
 ```python
 import sympy as sp
 
-# --- 특이점 분류 ---
+# --- Singular point classification ---
 x = sp.Symbol('x')
 
-# 예제: 베셀 방정식 x^2 y'' + x y' + (x^2 - n^2) y = 0
-# 표준형으로 변환: y'' + (1/x) y' + (1 - n^2/x^2) y = 0
+# Example: Bessel's equation x^2 y'' + x y' + (x^2 - n^2) y = 0
+# Standard form: y'' + (1/x) y' + (1 - n^2/x^2) y = 0
 n = sp.Symbol('n', positive=True)
 P_bessel = 1 / x
 Q_bessel = 1 - n**2 / x**2
 
-# x = 0에서의 분류
-xP = sp.simplify(x * P_bessel)   # x * (1/x) = 1 (해석적)
-x2Q = sp.simplify(x**2 * Q_bessel)  # x^2 * (1 - n^2/x^2) = x^2 - n^2 (해석적)
+# Classification at x = 0
+xP = sp.simplify(x * P_bessel)   # x * (1/x) = 1 (analytic)
+x2Q = sp.simplify(x**2 * Q_bessel)  # x^2 * (1 - n^2/x^2) = x^2 - n^2 (analytic)
 
-print(f"베셀 방정식 (x=0):")
-print(f"  P(x) = {P_bessel}  →  x=0에서 특이")
-print(f"  x·P(x) = {xP}  →  해석적")
-print(f"  x²·Q(x) = {x2Q}  →  해석적")
-print(f"  결론: x=0은 정칙 특이점")
+print(f"Bessel's equation (x=0):")
+print(f"  P(x) = {P_bessel}  →  singular at x=0")
+print(f"  x·P(x) = {xP}  →  analytic")
+print(f"  x²·Q(x) = {x2Q}  →  analytic")
+print(f"  Conclusion: x=0 is a regular singular point")
 
-# 예제: 에어리 방정식 y'' - x y = 0
+# Example: Airy equation y'' - x y = 0
 P_airy = 0
 Q_airy = -x
 
-print(f"\n에어리 방정식 (x=0):")
+print(f"\nAiry equation (x=0):")
 print(f"  P(x) = {P_airy}, Q(x) = {Q_airy}")
-print(f"  둘 다 x=0에서 해석적 → x=0은 정상점")
+print(f"  Both analytic at x=0 → x=0 is an ordinary point")
 ```
 
 ### 1.2 Series Solutions Around Ordinary Points
@@ -89,31 +89,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import airy
 
-# --- 에어리 방정식의 급수해 ---
+# --- Power series solution of the Airy equation ---
 def airy_series(x_val, a0, a1, N_terms=30):
-    """에어리 방정식 y'' - xy = 0의 멱급수 해"""
+    """Power series solution of the Airy equation y'' - xy = 0"""
     a = np.zeros(N_terms)
     a[0] = a0
     a[1] = a1
-    a[2] = 0  # a_2 = 0 항상
+    a[2] = 0  # a_2 = 0 always
 
-    # 점화 관계: a[m+2] = a[m-1] / ((m+2)*(m+1)), m >= 1
+    # Recurrence relation: a[m+2] = a[m-1] / ((m+2)*(m+1)), m >= 1
     for m in range(1, N_terms - 2):
         a[m + 2] = a[m - 1] / ((m + 2) * (m + 1))
 
     result = sum(a[k] * x_val**k for k in range(N_terms))
     return result
 
-# SciPy의 에어리 함수와 비교
+# Compare with SciPy Airy functions
 x = np.linspace(-15, 5, 500)
 Ai, Aip, Bi, Bip = airy(x)
 
-# 급수해 (수렴 범위 내에서)
+# Series solution (within convergence range)
 x_series = np.linspace(-8, 5, 300)
 y_series_Ai = np.array([airy_series(xi, 1, 0, N_terms=60) for xi in x_series])
 y_series_Bi = np.array([airy_series(xi, 0, 1, N_terms=60) for xi in x_series])
 
-# 정규화 상수 (SciPy 에어리 함수와 맞추기)
+# Normalization constants (to match SciPy Airy functions)
 c_Ai = airy(0)[0]  # Ai(0)
 c_Bi = airy(0)[2]  # Bi(0)
 c_Ai_prime = airy(0)[1]  # Ai'(0)
@@ -121,30 +121,30 @@ c_Bi_prime = airy(0)[3]  # Bi'(0)
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# Ai(x): 제1종 에어리 함수
+# Ai(x): Airy function of the first kind
 axes[0].plot(x, Ai, 'b-', linewidth=2, label='Ai(x) (SciPy)')
 y_approx = c_Ai * np.array([airy_series(xi, 1, 0, 60) for xi in x_series]) \
          + c_Ai_prime * np.array([airy_series(xi, 0, 1, 60) for xi in x_series])
-axes[0].plot(x_series, y_approx, 'r--', linewidth=1.5, label='급수해 (60항)')
+axes[0].plot(x_series, y_approx, 'r--', linewidth=1.5, label='Series solution (60 terms)')
 axes[0].set_xlim(-15, 5)
 axes[0].set_ylim(-0.6, 0.8)
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('Ai(x)')
-axes[0].set_title('에어리 함수 Ai(x)')
+axes[0].set_title('Airy Function Ai(x)')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# Bi(x): 제2종 에어리 함수
+# Bi(x): Airy function of the second kind
 axes[1].plot(x, Bi, 'b-', linewidth=2, label='Bi(x) (SciPy)')
 axes[1].set_xlim(-15, 5)
 axes[1].set_ylim(-0.6, 1.5)
 axes[1].set_xlabel('x')
 axes[1].set_ylabel('Bi(x)')
-axes[1].set_title('에어리 함수 Bi(x)')
+axes[1].set_title('Airy Function Bi(x)')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
-plt.suptitle('에어리 방정식 $y\'\' - xy = 0$의 해', fontsize=14)
+plt.suptitle('Solutions of the Airy Equation $y\'\' - xy = 0$', fontsize=14)
 plt.tight_layout()
 plt.savefig('airy_functions.png', dpi=150, bbox_inches='tight')
 plt.show()
@@ -191,25 +191,25 @@ $$s_1 = \nu, \quad s_2 = -\nu$$
 ```python
 import sympy as sp
 
-# --- 프로베니우스 방법: 베셀 방정식의 지표 방정식 ---
+# --- Frobenius method: indicial equation of Bessel's equation ---
 s, nu = sp.symbols('s nu', real=True)
 
-# 지표 방정식: s(s-1) + b0*s + c0 = 0
+# Indicial equation: s(s-1) + b0*s + c0 = 0
 b0 = 1        # b(0) = 1
 c0 = -nu**2   # c(0) = -nu^2
 
 indicial_eq = s*(s - 1) + b0*s + c0
-print(f"지표 방정식: {sp.expand(indicial_eq)} = 0")
+print(f"Indicial equation: {sp.expand(indicial_eq)} = 0")
 roots = sp.solve(indicial_eq, s)
-print(f"지표근: s1 = {roots[1]}, s2 = {roots[0]}")
+print(f"Indicial roots: s1 = {roots[1]}, s2 = {roots[0]}")
 
-# nu = 0: 중근 (경우 2) → 제2종 베셀 함수에 ln 항 포함
-# nu = 1/2: 비정수 차이 (경우 1) → 두 독립 급수해
-# nu = 1: 정수 차이 (경우 3) → 주의 필요
+# nu = 0: repeated root (Case 2) → second kind Bessel has ln term
+# nu = 1/2: non-integer difference (Case 1) → two independent series solutions
+# nu = 1: integer difference (Case 3) → requires care
 for nu_val in [0, sp.Rational(1, 2), 1, 2]:
     diff = 2 * nu_val  # s1 - s2 = 2*nu
-    case = "경우 2 (중근)" if diff == 0 else \
-           ("경우 1 (비정수)" if not diff.is_integer else "경우 3 (정수 차이)")
+    case = "Case 2 (repeated root)" if diff == 0 else \
+           ("Case 1 (non-integer)" if not diff.is_integer else "Case 3 (integer difference)")
     print(f"  nu = {nu_val}: s1-s2 = {diff} → {case}")
 ```
 
@@ -253,12 +253,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import jv, yv, jn_zeros
 
-# --- 베셀 함수 시각화 ---
+# --- Bessel function visualization ---
 x = np.linspace(0.01, 20, 500)
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 제1종 베셀 함수
+# Bessel functions of the first kind
 for nu in [0, 1, 2, 3]:
     axes[0].plot(x, jv(nu, x), linewidth=1.5, label=f'$J_{{{nu}}}(x)$')
 axes[0].axhline(y=0, color='k', linewidth=0.5)
@@ -266,11 +266,11 @@ axes[0].set_xlim(0, 20)
 axes[0].set_ylim(-0.5, 1.1)
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('$J_\\nu(x)$')
-axes[0].set_title('제1종 베셀 함수 $J_\\nu(x)$')
+axes[0].set_title('Bessel Functions of the First Kind $J_\\nu(x)$')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 제2종 베셀 함수
+# Bessel functions of the second kind
 for nu in [0, 1, 2]:
     axes[1].plot(x, yv(nu, x), linewidth=1.5, label=f'$Y_{{{nu}}}(x)$')
 axes[1].axhline(y=0, color='k', linewidth=0.5)
@@ -278,7 +278,7 @@ axes[1].set_xlim(0, 20)
 axes[1].set_ylim(-1.5, 0.8)
 axes[1].set_xlabel('x')
 axes[1].set_ylabel('$Y_\\nu(x)$')
-axes[1].set_title('제2종 베셀 함수 $Y_\\nu(x)$')
+axes[1].set_title('Bessel Functions of the Second Kind $Y_\\nu(x)$')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -286,14 +286,14 @@ plt.tight_layout()
 plt.savefig('bessel_functions.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# --- 점화식 검증 ---
+# --- Recurrence relation verification ---
 nu_test = 2
 x_test = np.linspace(1, 10, 100)
 
 # J_{nu-1} + J_{nu+1} = (2*nu/x) * J_nu
 lhs = jv(nu_test - 1, x_test) + jv(nu_test + 1, x_test)
 rhs = (2 * nu_test / x_test) * jv(nu_test, x_test)
-print(f"점화식 검증 (nu={nu_test}):")
+print(f"Recurrence relation verification (nu={nu_test}):")
 print(f"  max|LHS - RHS| = {np.max(np.abs(lhs - rhs)):.2e}")
 ```
 
@@ -315,16 +315,16 @@ from scipy.special import jv, jn_zeros
 from scipy.integrate import quad
 import matplotlib.pyplot as plt
 
-# --- 푸리에-베셀 급수 예제: f(r) = 1을 J_0 급수로 전개 ---
-a = 1.0  # 구간 [0, a]
+# --- Fourier-Bessel series example: expand f(r) = 1 in J_0 series ---
+a = 1.0  # interval [0, a]
 nu = 0
 N_terms = 20
 
-# J_0의 영점
+# Zeros of J_0
 zeros = jn_zeros(nu, N_terms)
 
 def compute_bessel_coeff(n_idx, func, a, nu):
-    """푸리에-베셀 계수 c_n 계산"""
+    """Compute Fourier-Bessel coefficient c_n"""
     alpha_n = zeros[n_idx]
     norm = (a**2 / 2) * jv(nu + 1, alpha_n)**2
 
@@ -337,7 +337,7 @@ def compute_bessel_coeff(n_idx, func, a, nu):
 f = lambda r: 1.0
 coeffs = [compute_bessel_coeff(n, f, a, nu) for n in range(N_terms)]
 
-# 급수 재구성
+# Reconstruct series
 r = np.linspace(0, a, 200)
 f_approx = {5: None, 10: None, 20: None}
 
@@ -348,10 +348,10 @@ plt.figure(figsize=(10, 5))
 plt.axhline(y=1.0, color='k', linewidth=2, label='$f(r) = 1$')
 for N, color in zip([5, 10, 20], ['red', 'blue', 'green']):
     plt.plot(r, f_approx[N], color=color, linewidth=1.5,
-             label=f'베셀 급수 ({N}항)')
+             label=f'Bessel series ({N} terms)')
 plt.xlabel('r')
 plt.ylabel('f(r)')
-plt.title('푸리에-베셀 급수 전개: $f(r) = 1$ on $[0, 1]$')
+plt.title('Fourier-Bessel Series Expansion: $f(r) = 1$ on $[0, 1]$')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -372,7 +372,7 @@ import numpy as np
 from scipy.special import jv, jn_zeros
 import matplotlib.pyplot as plt
 
-# --- 원형 막의 정상 진동 모드 시각화 ---
+# --- Visualization of standing vibration modes of a circular membrane ---
 fig, axes = plt.subplots(2, 3, figsize=(15, 10),
                          subplot_kw={'projection': 'polar'})
 
@@ -383,7 +383,7 @@ for idx, (m, n) in enumerate(modes):
     row, col = idx // 3, idx % 3
     ax = axes[row, col]
 
-    alpha_mn = jn_zeros(m, n)[-1]  # n번째 영점
+    alpha_mn = jn_zeros(m, n)[-1]  # n-th zero
 
     r = np.linspace(0, 1, 100)
     theta = np.linspace(0, 2 * np.pi, 200)
@@ -392,19 +392,19 @@ for idx, (m, n) in enumerate(modes):
     Z = jv(m, alpha_mn * R) * np.cos(m * Theta)
 
     c = ax.pcolormesh(Theta, R, Z, cmap='RdBu_r', shading='auto')
-    ax.set_title(f'모드 ($m$={m}, $n$={n})\n'
+    ax.set_title(f'Mode ($m$={m}, $n$={n})\n'
                  f'$\\alpha_{{{m},{n}}}$ = {alpha_mn:.3f}',
                  fontsize=11, pad=12)
     ax.set_rticks([])
 
-plt.suptitle('원형 막 진동 모드 — $J_m(\\alpha_{m,n} r/a) \\cos(m\\theta)$',
+plt.suptitle('Circular Membrane Vibration Modes — $J_m(\\alpha_{m,n} r/a) \\cos(m\\theta)$',
              fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig('circular_membrane_modes.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# --- 정상 모드의 진동수 비율 ---
-print("원형 막 정상 모드 진동수 비율 (f_mn / f_01):")
+# --- Frequency ratios of normal modes ---
+print("Circular membrane normal mode frequency ratios (f_mn / f_01):")
 alpha_01 = jn_zeros(0, 1)[0]
 for m in range(3):
     for n in range(1, 4):
@@ -448,34 +448,34 @@ x = np.linspace(0.01, 5, 300)
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# I_nu(x): 제1종 변형 베셀
+# I_nu(x): modified Bessel of the first kind
 for nu in [0, 1, 2]:
     axes[0].plot(x, iv(nu, x), linewidth=2, label=f'$I_{{{nu}}}(x)$')
 axes[0].set_ylim(0, 10)
 axes[0].set_xlabel('x'); axes[0].set_ylabel('$I_\\nu(x)$')
-axes[0].set_title('제1종 변형 베셀 함수 $I_\\nu(x)$')
+axes[0].set_title('Modified Bessel Functions of the First Kind $I_\\nu(x)$')
 axes[0].legend(); axes[0].grid(True, alpha=0.3)
 
-# K_nu(x): 제2종 변형 베셀
+# K_nu(x): modified Bessel of the second kind
 for nu in [0, 1, 2]:
     axes[1].plot(x, kv(nu, x), linewidth=2, label=f'$K_{{{nu}}}(x)$')
 axes[1].set_ylim(0, 5)
 axes[1].set_xlabel('x'); axes[1].set_ylabel('$K_\\nu(x)$')
-axes[1].set_title('제2종 변형 베셀 함수 $K_\\nu(x)$')
+axes[1].set_title('Modified Bessel Functions of the Second Kind $K_\\nu(x)$')
 axes[1].legend(); axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.savefig('modified_bessel.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# J_nu vs I_nu 비교: 진동 vs 단조증가
+# J_nu vs I_nu comparison: oscillating vs monotonically increasing
 fig2, ax = plt.subplots(figsize=(10, 5))
-ax.plot(x, jv(0, x), 'b-', linewidth=2, label='$J_0(x)$ (진동)')
-ax.plot(x, iv(0, x), 'r-', linewidth=2, label='$I_0(x)$ (단조증가)')
-ax.plot(x, kv(0, x), 'g-', linewidth=2, label='$K_0(x)$ (단조감소)')
+ax.plot(x, jv(0, x), 'b-', linewidth=2, label='$J_0(x)$ (oscillating)')
+ax.plot(x, iv(0, x), 'r-', linewidth=2, label='$I_0(x)$ (monotonically increasing)')
+ax.plot(x, kv(0, x), 'g-', linewidth=2, label='$K_0(x)$ (monotonically decreasing)')
 ax.set_xlabel('x'); ax.set_ylabel('y')
 ax.set_ylim(-0.5, 5)
-ax.set_title('베셀 $J_0$ vs 변형 베셀 $I_0$, $K_0$')
+ax.set_title('Bessel $J_0$ vs Modified Bessel $I_0$, $K_0$')
 ax.legend(); ax.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
 ```
@@ -522,21 +522,21 @@ import sympy as sp
 import matplotlib.pyplot as plt
 from scipy.special import legendre
 
-# --- 르장드르 다항식: SymPy 로드리게스 공식 ---
+# --- Legendre polynomials: Rodrigues' formula with SymPy ---
 x = sp.Symbol('x')
 
 def rodrigues(l):
-    """로드리게스 공식으로 P_l(x) 계산"""
+    """Compute P_l(x) using Rodrigues' formula"""
     return sp.simplify(
         sp.diff((x**2 - 1)**l, x, l) / (2**l * sp.factorial(l))
     )
 
-print("로드리게스 공식으로 구한 르장드르 다항식:")
+print("Legendre polynomials via Rodrigues' formula:")
 for l in range(6):
     Pl = rodrigues(l)
     print(f"  P_{l}(x) = {Pl}")
 
-# --- 시각화 ---
+# --- Visualization ---
 x_vals = np.linspace(-1, 1, 500)
 
 plt.figure(figsize=(10, 6))
@@ -546,7 +546,7 @@ for l in range(6):
 
 plt.xlabel('$x$')
 plt.ylabel('$P_l(x)$')
-plt.title('르장드르 다항식 $P_l(x)$, $l = 0, 1, \\ldots, 5$')
+plt.title('Legendre Polynomials $P_l(x)$, $l = 0, 1, \\ldots, 5$')
 plt.legend(loc='lower right')
 plt.grid(True, alpha=0.3)
 plt.axhline(y=0, color='k', linewidth=0.5)
@@ -571,9 +571,9 @@ from scipy.special import legendre
 from scipy.integrate import quad
 import matplotlib.pyplot as plt
 
-# --- 르장드르 급수 전개: f(x) = |x| ---
+# --- Legendre series expansion: f(x) = |x| ---
 def legendre_coeff(l, func):
-    """르장드르 급수 계수 c_l 계산"""
+    """Compute Legendre series coefficient c_l"""
     Pl = legendre(l)
     integrand = lambda x: func(x) * Pl(x)
     integral, _ = quad(integrand, -1, 1)
@@ -583,12 +583,12 @@ f = lambda x: np.abs(x)
 N_max = 20
 coeffs = [legendre_coeff(l, f) for l in range(N_max)]
 
-# |x|는 우함수이므로 홀수 l 계수는 0
-print("르장드르 급수 계수 (f(x) = |x|):")
+# |x| is even, so odd l coefficients are 0
+print("Legendre series coefficients (f(x) = |x|):")
 for l in range(8):
-    print(f"  c_{l} = {coeffs[l]:.6f}", "(= 0 이론적)" if l % 2 == 1 else "")
+    print(f"  c_{l} = {coeffs[l]:.6f}", "(= 0 theoretically)" if l % 2 == 1 else "")
 
-# 급수 재구성
+# Reconstruct series
 x = np.linspace(-1, 1, 500)
 
 plt.figure(figsize=(10, 6))
@@ -597,11 +597,11 @@ plt.plot(x, np.abs(x), 'k-', linewidth=2.5, label='$f(x) = |x|$')
 for N, color in [(3, 'red'), (7, 'blue'), (15, 'green')]:
     f_approx = sum(coeffs[l] * legendre(l)(x) for l in range(N))
     plt.plot(x, f_approx, color=color, linewidth=1.5,
-             label=f'르장드르 급수 ({N}항)')
+             label=f'Legendre series ({N} terms)')
 
 plt.xlabel('$x$')
 plt.ylabel('$f(x)$')
-plt.title('르장드르 급수 전개: $f(x) = |x|$')
+plt.title('Legendre Series Expansion: $f(x) = |x|$')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -626,25 +626,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import legendre
 
-# --- 다중극 전개 시각화 ---
-# 점전하 q가 z축 위 d에 위치
+# --- Multipole expansion visualization ---
+# Point charge q located at distance d on the z-axis
 q = 1.0
-d = 0.5  # 전하 위치 (원점에서 z방향)
+d = 0.5  # charge position (along z from origin)
 
-# 극좌표 그리드 (r > d 영역)
+# Polar coordinate grid (region r > d)
 r = np.linspace(0.8, 3.0, 100)
 theta = np.linspace(0, np.pi, 100)
 R, Theta = np.meshgrid(r, theta)
 
-# 정확한 전위
+# Exact potential
 X = R * np.sin(Theta)
 Z = R * np.cos(Theta)
 dist = np.sqrt(X**2 + (Z - d)**2)
 Phi_exact = q / dist
 
-# 다중극 근사
+# Multipole approximations
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-titles = ['단극자 (l=0)', '단극자+쌍극자 (l=0,1)', '다중극 (l=0,...,4)']
+titles = ['Monopole (l=0)', 'Monopole+Dipole (l=0,1)', 'Multipole (l=0,...,4)']
 L_max_list = [0, 1, 4]
 
 for idx, L_max in enumerate(L_max_list):
@@ -653,14 +653,14 @@ for idx, L_max in enumerate(L_max_list):
         Pl = legendre(l)
         Phi_approx += q * (d**l / R**(l + 1)) * Pl(np.cos(Theta))
 
-    # r-theta 평면에서 등고선 (x-z 단면)
+    # Contour plot in r-theta plane (x-z cross section)
     ax = axes[idx]
     levels = np.linspace(0.2, 2.0, 15)
     c1 = ax.contour(X, Z, Phi_exact, levels=levels,
                     colors='gray', linewidths=0.5, linestyles='--')
     c2 = ax.contour(X, Z, Phi_approx, levels=levels,
                     colors='blue', linewidths=1.0)
-    ax.plot(0, d, 'ro', markersize=8, label='점전하')
+    ax.plot(0, d, 'ro', markersize=8, label='Point charge')
     ax.set_xlabel('x')
     ax.set_ylabel('z')
     ax.set_title(titles[idx])
@@ -668,7 +668,7 @@ for idx, L_max in enumerate(L_max_list):
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.2)
 
-plt.suptitle('다중극 전개: 정확해(회색 점선) vs 근사(파란색 실선)', fontsize=13)
+plt.suptitle('Multipole Expansion: Exact (gray dashed) vs Approximation (blue solid)', fontsize=13)
 plt.tight_layout()
 plt.savefig('multipole_expansion.png', dpi=150, bbox_inches='tight')
 plt.show()
@@ -712,7 +712,7 @@ import numpy as np
 from scipy.special import lpmv
 import matplotlib.pyplot as plt
 
-# 결합 르장드르 함수 시각화
+# Associated Legendre function visualization
 theta = np.linspace(0, np.pi, 200)
 x = np.cos(theta)
 
@@ -724,14 +724,14 @@ for idx, (l, m) in enumerate(funcs):
     Plm = lpmv(m, l, x)
     ax.plot(theta * 180 / np.pi, Plm, 'b-', linewidth=2)
     ax.set_title(f'$P_{{{l}}}^{{{m}}}(\\cos\\theta)$')
-    ax.set_xlabel('$\\theta$ (도)')
+    ax.set_xlabel('$\\theta$ (degrees)')
     ax.grid(True, alpha=0.3)
 
-plt.suptitle('결합 르장드르 함수', fontsize=14, fontweight='bold')
+plt.suptitle('Associated Legendre Functions', fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 
-# 직교성 검증 (같은 m, 다른 l)
-print("=== 직교성: ∫P_l^m P_l'^m dx (m=1) ===")
+# Orthogonality verification (same m, different l)
+print("=== Orthogonality: ∫P_l^m P_l'^m dx (m=1) ===")
 x_fine = np.linspace(-1, 1, 5000)
 for l1 in range(1, 5):
     for l2 in range(l1, 5):
@@ -765,7 +765,7 @@ import numpy as np
 from scipy.special import sph_harm
 import matplotlib.pyplot as plt
 
-# 구면조화함수 |Y_l^m|² 시각화
+# Spherical harmonics |Y_l^m|² visualization
 theta = np.linspace(0, np.pi, 100)
 phi = np.linspace(0, 2*np.pi, 100)
 Theta, Phi = np.meshgrid(theta, phi)
@@ -786,7 +786,7 @@ for idx, (l, m) in enumerate(harmonics):
     Y_coord = r * np.sin(Theta) * np.sin(Phi)
     Z = r * np.cos(Theta)
 
-    # 위상에 따른 색상
+    # Color by phase
     fcolors = Y.real
     fmax = np.max(np.abs(fcolors))
     if fmax > 0:
@@ -797,11 +797,11 @@ for idx, (l, m) in enumerate(harmonics):
     ax.set_title(f'$Y_{{{l}}}^{{{m}}}(\\theta, \\phi)$')
     ax.set_xlim(-0.5, 0.5); ax.set_ylim(-0.5, 0.5); ax.set_zlim(-0.5, 0.5)
 
-plt.suptitle('구면조화함수 (실수 부분에 따른 색상)', fontsize=14, y=1.02)
+plt.suptitle('Spherical Harmonics (colored by real part)', fontsize=14, y=1.02)
 plt.tight_layout(); plt.show()
 
-# 직교정규성 검증
-print("=== 구면조화함수 직교정규성 ===")
+# Orthonormality verification
+print("=== Spherical Harmonics Orthonormality ===")
 dtheta = theta[1] - theta[0]
 dphi = phi[1] - phi[0]
 for l1, m1 in [(0,0), (1,0), (1,1), (2,0)]:
@@ -844,9 +844,9 @@ import matplotlib.pyplot as plt
 from scipy.special import hermite
 from math import factorial, sqrt, pi
 
-# --- 양자 조화 진동자 파동함수 ---
+# --- Quantum harmonic oscillator wavefunctions ---
 def psi_n(xi, n):
-    """n번째 조화 진동자 파동함수"""
+    """n-th harmonic oscillator wavefunction"""
     Hn = hermite(n)
     norm = 1.0 / sqrt(2**n * factorial(n) * sqrt(pi))
     return norm * Hn(xi) * np.exp(-xi**2 / 2)
@@ -855,7 +855,7 @@ xi = np.linspace(-6, 6, 500)
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 파동함수
+# Wavefunctions
 for n in range(5):
     axes[0].plot(xi, psi_n(xi, n) + n, linewidth=1.5,
                  label=f'$\\psi_{{{n}}}$ ($E_{n} = {n+0.5}\\hbar\\omega$)')
@@ -863,28 +863,28 @@ for n in range(5):
 
 axes[0].set_xlabel('$\\xi = \\sqrt{m\\omega/\\hbar} \\, x$')
 axes[0].set_ylabel('$\\psi_n(\\xi)$ + offset')
-axes[0].set_title('양자 조화 진동자 파동함수')
+axes[0].set_title('Quantum Harmonic Oscillator Wavefunctions')
 axes[0].legend(loc='upper right', fontsize=9)
 axes[0].grid(True, alpha=0.2)
 
-# 확률밀도
+# Probability densities
 for n in range(5):
     prob = psi_n(xi, n)**2
     axes[1].fill_between(xi, n, prob + n, alpha=0.3)
     axes[1].plot(xi, prob + n, linewidth=1.5, label=f'$|\\psi_{{{n}}}|^2$')
     axes[1].axhline(y=n, color='gray', linewidth=0.3, linestyle='--')
 
-# 고전적 확률밀도 (n=4, 비교용)
+# Classical probability density (n=4, for comparison)
 n_class = 4
 A = np.sqrt(2 * n_class + 1)
 xi_class = np.linspace(-A + 0.01, A - 0.01, 300)
 prob_class = 1.0 / (np.pi * np.sqrt(A**2 - xi_class**2))
 axes[1].plot(xi_class, prob_class + n_class, 'k--', linewidth=1.5,
-             label='고전적 ($n=4$)')
+             label='Classical ($n=4$)')
 
 axes[1].set_xlabel('$\\xi$')
 axes[1].set_ylabel('$|\\psi_n|^2$ + offset')
-axes[1].set_title('확률밀도 (양자 vs 고전 대응)')
+axes[1].set_title('Probability Density (Quantum vs Classical Correspondence)')
 axes[1].legend(loc='upper right', fontsize=9)
 axes[1].grid(True, alpha=0.2)
 
@@ -915,11 +915,11 @@ import matplotlib.pyplot as plt
 from scipy.special import assoc_laguerre, factorial
 from math import sqrt
 
-# --- 수소 원자 방사 파동함수 ---
-a0 = 1.0  # 보어 반지름 단위
+# --- Hydrogen atom radial wavefunctions ---
+a0 = 1.0  # in units of Bohr radius
 
 def R_nl(r, n, l):
-    """수소 원자 방사 파동함수 R_nl(r)"""
+    """Hydrogen atom radial wavefunction R_nl(r)"""
     rho = 2 * r / (n * a0)
     norm = sqrt((2 / (n * a0))**3 * factorial(n - l - 1)
                 / (2 * n * factorial(n + l)))
@@ -929,7 +929,7 @@ r = np.linspace(0, 25, 500)
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 방사 파동함수 R_nl(r)
+# Radial wavefunction R_nl(r)
 states = [(1, 0), (2, 0), (2, 1), (3, 0), (3, 1), (3, 2)]
 for n, l in states:
     axes[0].plot(r, R_nl(r, n, l), linewidth=1.5,
@@ -937,12 +937,12 @@ for n, l in states:
 
 axes[0].set_xlabel('$r / a_0$')
 axes[0].set_ylabel('$R_{nl}(r)$')
-axes[0].set_title('수소 원자 방사 파동함수')
+axes[0].set_title('Hydrogen Atom Radial Wavefunctions')
 axes[0].legend(fontsize=9)
 axes[0].grid(True, alpha=0.3)
 axes[0].axhline(y=0, color='k', linewidth=0.5)
 
-# 방사 확률밀도 r^2 |R_nl|^2
+# Radial probability density r^2 |R_nl|^2
 for n, l in states:
     prob = r**2 * R_nl(r, n, l)**2
     axes[1].plot(r, prob, linewidth=1.5,
@@ -950,7 +950,7 @@ for n, l in states:
 
 axes[1].set_xlabel('$r / a_0$')
 axes[1].set_ylabel('$r^2 |R_{nl}|^2$')
-axes[1].set_title('방사 확률밀도')
+axes[1].set_title('Radial Probability Density')
 axes[1].legend(fontsize=9)
 axes[1].grid(True, alpha=0.3)
 
@@ -985,16 +985,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import gamma
 
-# --- 감마 함수 시각화 ---
+# --- Gamma function visualization ---
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 실수축에서의 감마 함수
+# Gamma function on the real axis
 x = np.linspace(-4.5, 5, 1000)
 y = np.array([gamma(xi) if abs(xi - round(xi)) > 0.01 or xi > 0
               else np.nan for xi in x])
 
 axes[0].plot(x, y, 'b-', linewidth=1.5)
-# 양의 정수에서의 값 (계승)
+# Values at positive integers (factorials)
 for n in range(1, 6):
     axes[0].plot(n, gamma(n), 'ro', markersize=6)
     axes[0].annotate(f'{n-1}! = {int(gamma(n))}',
@@ -1007,10 +1007,10 @@ axes[0].axhline(y=0, color='k', linewidth=0.5)
 axes[0].axvline(x=0, color='k', linewidth=0.5)
 axes[0].set_xlabel('$x$')
 axes[0].set_ylabel('$\\Gamma(x)$')
-axes[0].set_title('감마 함수 $\\Gamma(x)$')
+axes[0].set_title('Gamma Function $\\Gamma(x)$')
 axes[0].grid(True, alpha=0.3)
 
-# 스털링 근사 비교
+# Stirling approximation comparison
 n_vals = np.arange(1, 15)
 exact = np.array([gamma(n + 1) for n in n_vals])
 stirling = np.sqrt(2 * np.pi * n_vals) * (n_vals / np.e)**n_vals
@@ -1018,21 +1018,21 @@ rel_error = np.abs(stirling - exact) / exact
 
 axes[1].semilogy(n_vals, rel_error, 'bo-', linewidth=1.5, markersize=6)
 axes[1].set_xlabel('$n$')
-axes[1].set_ylabel('상대 오차')
-axes[1].set_title('스털링 근사 $n! \\approx \\sqrt{2\\pi n}(n/e)^n$의 정확도')
+axes[1].set_ylabel('Relative error')
+axes[1].set_title('Accuracy of Stirling Approximation $n! \\approx \\sqrt{2\\pi n}(n/e)^n$')
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.savefig('gamma_function.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 반사 공식 검증
-print("감마 함수 반사 공식 검증: Gamma(z) * Gamma(1-z) = pi/sin(pi*z)")
+# Reflection formula verification
+print("Gamma function reflection formula verification: Gamma(z) * Gamma(1-z) = pi/sin(pi*z)")
 for z in [0.25, 0.5, 0.75, 1.3]:
     lhs = gamma(z) * gamma(1 - z)
     rhs = np.pi / np.sin(np.pi * z)
     print(f"  z = {z}: LHS = {lhs:.8f}, RHS = {rhs:.8f}, "
-          f"차이 = {abs(lhs-rhs):.2e}")
+          f"diff = {abs(lhs-rhs):.2e}")
 ```
 
 ### 6.2 Beta Function
@@ -1053,31 +1053,31 @@ This formula is very useful, allowing complex integrals to be computed directly 
 import numpy as np
 from scipy.special import gamma, beta
 
-# --- 베타 함수를 이용한 적분 계산 ---
-print("베타 함수를 이용한 적분 계산:")
+# --- Integral computation using the beta function ---
+print("Integral computation using the beta function:")
 print("=" * 55)
 
-# 예제 1: int_0^1 x^3 (1-x)^4 dx = B(4, 5) = 3!*4!/8!
+# Example 1: int_0^1 x^3 (1-x)^4 dx = B(4, 5) = 3!*4!/8!
 result = beta(4, 5)
 exact = 6 * 24 / 40320
 print(f"\n∫₀¹ x³(1-x)⁴ dx = B(4,5) = {result:.8f}")
 print(f"  = 3!·4!/8! = {exact:.8f}")
 
-# 예제 2: int_0^{pi/2} sin^5(theta) d(theta)
+# Example 2: int_0^{pi/2} sin^5(theta) d(theta)
 # = (1/2) B(3, 1/2) = (1/2) * Gamma(3)*Gamma(1/2) / Gamma(7/2)
 m = 5
 integral = 0.5 * beta((m + 1)/2, 0.5)
 print(f"\n∫₀^(π/2) sin⁵θ dθ = (1/2)B(3, 1/2) = {integral:.8f}")
-print(f"  이론값 = 8/15 = {8/15:.8f}")
+print(f"  theoretical value = 8/15 = {8/15:.8f}")
 
-# 예제 3: 가우시안 적분의 일반화
+# Example 3: Generalized Gaussian integral
 # int_0^inf x^(2n) e^(-x^2) dx = Gamma(n + 1/2) / 2
-print(f"\n가우시안 적분의 일반화:")
+print(f"\nGeneralized Gaussian integral:")
 for n in range(5):
     val = gamma(n + 0.5) / 2
     print(f"  ∫₀^∞ x^{2*n} e^(-x²) dx = Γ({n}+1/2)/2 = {val:.6f}")
 
-# 스털링 공식: Gamma(1/2) = sqrt(pi) 확인
+# Stirling formula: verify Gamma(1/2) = sqrt(pi)
 print(f"\nΓ(1/2) = {gamma(0.5):.10f}")
 print(f"√π     = {np.sqrt(np.pi):.10f}")
 ```
@@ -1150,8 +1150,8 @@ where $\alpha_{0,n}$ is the $n$-th positive root of $J_0(x) = 0$.
 from scipy.special import jn_zeros
 
 zeros_J0 = jn_zeros(0, 5)
-print("J_0(x)의 영점:", zeros_J0)
-print("진동수 비율:")
+print("Zeros of J_0(x):", zeros_J0)
+print("Frequency ratios:")
 for n in range(5):
     print(f"  omega_{n+1}/omega_1 = {zeros_J0[n]/zeros_J0[0]:.4f}")
 ```
@@ -1198,7 +1198,7 @@ import numpy as np
 for n in range(1, 5):
     V = np.pi**(n/2) / gamma(n/2 + 1)
     print(f"V_{n}(R=1) = pi^({n}/2) / Gamma({n}/2 + 1) = {V:.6f}")
-# V_1 = 2 (선분 길이), V_2 = pi (원), V_3 = 4pi/3 (구), V_4 = pi^2/2
+# V_1 = 2 (line segment), V_2 = pi (circle), V_3 = 4pi/3 (sphere), V_4 = pi^2/2
 ```
 
 </details>

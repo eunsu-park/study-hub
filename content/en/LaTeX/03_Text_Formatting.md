@@ -5,6 +5,19 @@
 > **Prerequisites**: Lesson 2 (Document Structure)
 > **Objective**: Master text styling, fonts, colors, lists, quotations, verbatim text, special characters, spacing, alignment, and footnotes
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply font style commands (bold, italic, underline, emphasis) and combine multiple styles correctly
+2. Change font families, sizes, and colors using standard LaTeX commands and the `xcolor` package
+3. Create ordered, unordered, and description lists, including nested and customized variants
+4. Display verbatim text and source code using `verbatim` and `listings` environments
+5. Escape special characters and produce typographically correct quotation marks, dashes, and symbols
+6. Control text alignment, line spacing, and paragraph indentation to meet specific formatting requirements
+
+---
+
 ## Font Styles
 
 LaTeX provides several commands for changing text appearance.
@@ -962,5 +975,5 @@ You now have complete control over text appearance in LaTeX. Next, we'll explore
 ---
 
 **Navigation**
-- Previous: [02_Document_Structure.md](02_Document_Structure.md)
-- Next: [04_Math_Basics.md](04_Math_Basics.md)
+- Previous: [Document Structure](02_Document_Structure.md)
+- Next: [Mathematical Typesetting Basics](04_Math_Basics.md)

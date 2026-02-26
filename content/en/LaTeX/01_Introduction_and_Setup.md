@@ -5,6 +5,19 @@
 > **Prerequisites**: Basic computer literacy, text editor familiarity
 > **Objective**: Understand what LaTeX is, install a TeX distribution or access Overleaf, and compile your first document
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the history and purpose of TeX and LaTeX, and distinguish between them
+2. Compare LaTeX with word processors and Markdown to select the right tool for a given task
+3. Install a TeX distribution (TeX Live, MiKTeX, or MacTeX) or configure Overleaf for cloud-based editing
+4. Identify the essential components of a minimal LaTeX document and describe the role of each
+5. Compile a LaTeX source file to produce a PDF output using a command-line tool or online editor
+6. Recognize common LaTeX compilation errors and apply basic troubleshooting strategies
+
+---
+
 ## What is TeX and LaTeX?
 
 ### The History of TeX
@@ -456,4 +469,4 @@ In the next lesson, we'll dive deeper into document structure, exploring documen
 ---
 
 **Navigation**
-- Next: [02_Document_Structure.md](02_Document_Structure.md)
+- Next: [Document Structure](02_Document_Structure.md)

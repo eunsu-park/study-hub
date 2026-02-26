@@ -1,5 +1,26 @@
 # 서브쿼리와 CTE
 
+**이전**: [집계와 그룹](./07_Aggregation_and_Grouping.md) | **다음**: [뷰와 인덱스](./09_Views_and_Indexes.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 서브쿼리(subquery)가 무엇인지 설명하고 어디에 사용될 수 있는지(WHERE, FROM, SELECT) 파악할 수 있습니다
+2. 스칼라(scalar), 다중 행(multi-row), 상관(correlated) 서브쿼리를 작성할 수 있습니다
+3. EXISTS / NOT EXISTS를 사용하고 IN / NOT IN과의 동작 차이를 비교할 수 있습니다
+4. FROM 절 서브쿼리(인라인 뷰)를 적용하여 중간 결과 집합을 구성할 수 있습니다
+5. 복잡한 서브쿼리를 WITH 절을 사용한 공통 테이블 표현식(Common Table Expression, CTE)으로 재작성하여 가독성을 높일 수 있습니다
+6. 단일 쿼리에서 여러 CTE를 연결(chain)하여 사용할 수 있습니다
+7. 재귀 CTE(WITH RECURSIVE)를 구현하여 계층적 데이터를 순회(traversal)할 수 있습니다
+8. 가독성과 성능 필요에 따라 서브쿼리, CTE, JOIN 중 적절한 방법을 선택할 수 있습니다
+
+---
+
+SQL 질문이 복잡해질수록, 다음 질문을 하기 전에 먼저 하나의 질문에 대한 답을 구해야 하는 경우가 자주 생깁니다. 서브쿼리는 한 쿼리 안에 다른 쿼리를 내장할 수 있게 해주고, 공통 테이블 표현식(CTE)은 중간 결과에 이름을 붙여 재사용할 수 있게 해줍니다. 이 두 가지를 함께 사용하면 단일 SQL 구문을 구조화된 다단계 추론 과정으로 변환할 수 있습니다.
+
 ## 1. 서브쿼리란?
 
 서브쿼리(Subquery)는 쿼리 안에 포함된 또 다른 쿼리입니다.
@@ -188,6 +209,8 @@ WHERE price = (
 ```
 
 ---
+
+> **비유 -- SQL은 집합으로 사고한다(SQL Thinks in Sets)**: 서브쿼리는 질문 안의 질문과 같습니다: "직원이 10명 이상인 부서에 속한 직원들의 평균 급여는 얼마인가?" 먼저 내부 질문(어떤 부서인가?)에 답한 뒤, 그 답을 외부 질문에 활용합니다. 공통 테이블 표현식(CTE)은 그 내부 답에 이름을 붙여 여러 번 참조할 수 있게 해줍니다 -- 마치 최종 계산에 사용하기 전에 중간 결과를 화이트보드에 적어두는 것과 같습니다.
 
 ## 7. CTE (Common Table Expression)
 
@@ -513,6 +536,4 @@ ORDER BY aa.diff DESC;
 
 ---
 
-## 다음 단계
-
-[09_Views_and_Indexes.md](./09_Views_and_Indexes.md)에서 VIEW와 INDEX를 배워봅시다!
+**이전**: [집계와 그룹](./07_Aggregation_and_Grouping.md) | **다음**: [뷰와 인덱스](./09_Views_and_Indexes.md)

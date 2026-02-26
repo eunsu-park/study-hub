@@ -2,9 +2,24 @@
 
 [Previous: NumPy Advanced](./02_NumPy_Advanced.md) | [Next: Pandas Data Manipulation](./04_Pandas_Data_Manipulation.md)
 
-## Overview
+---
 
-Pandas is the core library for data analysis in Python. It provides DataFrame and Series data structures for efficiently handling tabular data.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between Series and DataFrame data structures and create each from various sources
+2. Describe key DataFrame attributes including shape, columns, dtypes, and memory usage
+3. Apply `read_csv`, `read_excel`, `read_json`, and `read_sql` to load data from multiple formats
+4. Implement label-based (`loc`), integer-based (`iloc`), and single-value (`at`/`iat`) selection
+5. Apply conditional filtering, unique value counting, and missing value detection for data exploration
+6. Demonstrate arithmetic operations, aggregation functions, and sorting on DataFrames
+7. Implement column and row additions, modifications, and deletions
+8. Apply string accessor methods (`.str`) for text cleaning and extraction
+
+---
+
+Real-world data almost always arrives in tabular form -- spreadsheets, database exports, CSV logs. Pandas gives you a powerful, expressive interface for loading, exploring, and transforming this kind of data. Learning Pandas is arguably the single most impactful skill for any aspiring data scientist, because every analysis pipeline begins with data wrangling.
 
 ---
 

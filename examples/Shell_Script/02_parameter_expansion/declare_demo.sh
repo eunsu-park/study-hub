@@ -10,6 +10,8 @@ echo
 # 1. Integer arithmetic with declare -i
 echo "1. Integer Arithmetic (declare -i)"
 echo "-----------------------------------"
+# Why: declare -i makes the variable an integer, so assignments like
+# "num1=num1+5" are evaluated as arithmetic without needing $(( )).
 declare -i num1=10
 declare -i num2=20
 
@@ -73,7 +75,8 @@ echo "-------------------------------"
 original_var="Original Value"
 echo "original_var=$original_var"
 
-# Create a nameref (pointer to another variable)
+# Why: nameref (-n) lets the function modify the caller's variable by name,
+# avoiding the subshell overhead of echo-capture and the fragility of eval.
 declare -n ref=original_var
 echo "Created nameref 'ref' pointing to 'original_var'"
 echo "ref=$ref"
@@ -99,7 +102,8 @@ echo "Element 1: ${indexed_array[1]}"
 
 echo
 
-# Associative array
+# Why: declare -A creates a hash map (associative array), which requires
+# explicit declaration — unlike indexed arrays, bash can't infer it from syntax.
 declare -A assoc_array=(
     [name]="John Doe"
     [age]="30"
@@ -149,6 +153,8 @@ echo
 # 8. Combining attributes
 echo "8. Combining Attributes"
 echo "-----------------------"
+# Why: combining -i and -r makes an integer constant — the shell equivalent of
+# "const int" — preventing accidental reassignment and enforcing type safety.
 declare -ir READONLY_INT=42
 echo "Readonly integer: READONLY_INT=$READONLY_INT"
 

@@ -1,5 +1,18 @@
 # 수학과 정수론 (Mathematics and Number Theory)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 모듈러 연산(modular arithmetic)의 성질을 활용하여 오버플로우 없이 주어진 모듈러 하에서 합, 곱, 모듈러 역원(modular inverse)을 계산할 수 있다
+2. 유클리드 호제법(Euclidean algorithm)과 확장 유클리드 호제법(extended Euclidean algorithm)을 구현하여 최대공약수(GCD), 최소공배수(LCM), 모듈러 역원을 구할 수 있다
+3. 에라토스테네스의 체(Sieve of Eratosthenes)를 이용하여 소수를 판별하고 효율적인 소수 판정 알고리즘을 구현할 수 있다
+4. 파스칼의 삼각형(Pascal's triangle)이나 모듈러 역원을 이용한 팩토리얼로 조합(combination)과 순열(permutation)을 계산할 수 있다
+5. 행렬 빠른 거듭제곱(matrix exponentiation)을 이용하여 O(k³ log n) 시간에 선형 점화식(linear recurrence)을 계산할 수 있다
+6. 오일러 파이 함수(Euler's totient)와 중국인의 나머지 정리(Chinese Remainder Theorem) 등 정수론 기법이 필요한 알고리즘 문제를 풀 수 있다
+
+---
+
 ## 개요
 
 알고리즘 문제에서 자주 등장하는 수학적 개념들을 다룹니다. 모듈러 연산, 최대공약수, 소수, 조합론, 행렬 거듭제곱 등이 포함됩니다.
@@ -89,15 +102,20 @@ def mod_pow(base, exp, mod):
     """
     빠른 거듭제곱 (분할정복)
     시간: O(log exp)
+
+    작동 원리: exp를 이진수로 분해한다. 각 비트 위치 k에 대해
+    base^(2^k) = (base^(2^(k-1)))^2이므로, log(exp)번의 제곱만으로
+    필요한 모든 거듭제곱을 구성할 수 있다. exp의 해당 비트가 설정된 경우에만
+    결과에 곱해준다 — 이것이 표준 이진법(binary method)이다.
     """
     result = 1
-    base %= mod
+    base %= mod  # 모든 중간값이 mod 미만이 되도록 base를 먼저 축소
 
     while exp > 0:
-        if exp & 1:  # exp가 홀수면
+        if exp & 1:  # 현재 비트가 설정됨: 누적 결과에 base^(2^k)를 곱함
             result = (result * base) % mod
-        exp >>= 1  # exp //= 2
-        base = (base * base) % mod
+        exp >>= 1        # 다음 비트로 이동
+        base = (base * base) % mod  # 제곱: base^(2^k) → base^(2^(k+1))
 
     return result
 
@@ -322,6 +340,9 @@ def sieve_of_eratosthenes(n):
 
     for i in range(2, int(n**0.5) + 1):
         if is_prime[i]:
+            # 2*i가 아닌 i*i부터 표시를 시작한다: i보다 작은 인수를 가진
+            # 더 작은 배수들은 이전 반복에서 이미 지워졌다.
+            # 이 최적화로 내부 루프 반복 횟수가 대략 절반으로 줄어든다.
             for j in range(i * i, n + 1, i):
                 is_prime[j] = False
 
@@ -463,13 +484,18 @@ print(get_divisors(36))  # [1, 2, 3, 4, 6, 9, 12, 18, 36]
 MOD = 10**9 + 7
 MAX_N = 10**6
 
-# 전처리
+# 전처리: O(N)에 팩토리얼과 역팩토리얼 테이블을 한 번 구성한다.
+# 이렇게 하면 모든 nCr / nPr 쿼리를 O(1)에 처리할 수 있다 —
+# 하나의 테스트 케이스에서 수천 개의 쿼리가 들어올 때 필수적이다.
 factorial = [1] * (MAX_N + 1)
 inv_factorial = [1] * (MAX_N + 1)
 
 for i in range(1, MAX_N + 1):
     factorial[i] = factorial[i - 1] * i % MOD
 
+# inv_factorial[MAX_N]을 모듈러 거듭제곱(페르마 정리) 한 번으로 계산한 뒤,
+# inv_factorial[i] = inv_factorial[i+1] * (i+1) % MOD로 아래로 채운다.
+# 이렇게 하면 MAX_N번의 개별 모듈러 거듭제곱(각각 O(log MOD))을 피할 수 있다.
 inv_factorial[MAX_N] = mod_pow(factorial[MAX_N], MOD - 2, MOD)
 for i in range(MAX_N - 1, -1, -1):
     inv_factorial[i] = inv_factorial[i + 1] * (i + 1) % MOD
@@ -478,6 +504,8 @@ def nCr(n, r):
     """이항계수 nCr - O(1) (전처리 후)"""
     if r < 0 or r > n:
         return 0
+    # C(n,r) = n! / (r! * (n-r)!) ; 나눗셈은 모듈러 역원을 곱하는 것으로 대체하여
+    # 결과가 [0, MOD) 범위에 머물게 한다.
     return factorial[n] * inv_factorial[r] % MOD * inv_factorial[n - r] % MOD
 
 def nPr(n, r):
@@ -618,15 +646,22 @@ def matrix_pow(M, n, mod):
     """
     행렬 M의 n제곱
     시간: O(k³ log n) (k = 행렬 크기)
+
+    단위 행렬(identity matrix)을 초기값으로 사용하는 이유: 어떤 행렬이든
+    단위 행렬을 곱하면 그대로 유지되므로, `result`는 M^0 = I에서 시작한다.
+    이는 스칼라 빠른 거듭제곱에서 `result`가 1에서 시작하는 것과 같은 원리이다.
+    동일한 반복 제곱 기법이 적용된다: O(log n)번의 행렬 곱셈에
+    각각 O(k³)이 소요되어, 전체 O(k³ log n)이 된다.
     """
     size = len(M)
-    # 단위 행렬
+    # 단위 행렬: I[i][j] = 1 iff i == j
     result = [[1 if i == j else 0 for j in range(size)] for i in range(size)]
 
     while n > 0:
         if n & 1:
+            # 현재 비트가 설정됨: M^(2^k)를 결과에 누적
             result = matrix_mult(result, M, mod)
-        M = matrix_mult(M, M, mod)
+        M = matrix_mult(M, M, mod)  # 제곱: M^(2^k) → M^(2^(k+1))
         n >>= 1
 
     return result

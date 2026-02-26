@@ -11,6 +11,8 @@
 #define QUEUE_SIZE 100
 
 // 작업 정의
+// Why: function pointer + void* arg is the standard C callback pattern — void*
+// erases the type so any data can be passed, making the pool generic
 typedef struct Task {
     void (*function)(void* arg);
     void* arg;
@@ -139,6 +141,8 @@ bool pool_submit(ThreadPool* pool, void (*function)(void*), void* arg) {
 }
 
 // 스레드 풀 종료
+// Why: broadcast wakes ALL workers blocked in queue_pop — setting shutdown=true
+// under the lock ensures workers see the flag consistently and exit their loops
 void pool_shutdown(ThreadPool* pool) {
     pthread_mutex_lock(&pool->queue.mutex);
     pool->queue.shutdown = true;
@@ -167,6 +171,8 @@ void process_work(void* arg) {
     usleep((rand() % 500 + 100) * 1000);  // 100~600ms 처리
     printf("작업 %d 완료!\n", item->id);
 
+    // Why: the worker (not the submitter) frees the work item — ownership
+    // transfers through the queue, so freeing before processing would be UAF
     free(item);
 }
 

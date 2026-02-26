@@ -532,10 +532,15 @@ def two_stream_dispersion(k, omega_p0, omega_pb, v0):
     """
     def dispersion_eq(omega_complex):
         omega = omega_complex[0] + 1j * omega_complex[1]
+        # 분산 관계는 ε = 0으로 표현되며, 두 개의 독립적인 Langmuir 항으로 구성됩니다:
+        # 배경 플라즈마는 ω_p0²/ω² (정지 상태)를 기여하고, 빔은
+        # 빔 정지계에서 Doppler 이동된 ω_pb²/(ω - kv0)²를 기여합니다.
         eps = 1 - omega_p0**2/omega**2 - omega_pb**2/(omega - k*v0)**2
         return [np.real(eps), np.imag(eps)]
 
-    # Initial guess
+    # (ω_p0, 0) 근처에서 시작하는 이유는 이 불안정성이 배경 Langmuir 파동의
+    # 섭동이기 때문입니다; 작은 허수 부분은 근 탐색기를 성장하는 해(Im ω > 0)가
+    # 존재하는 상반 평면(upper half-plane)으로 안내합니다.
     omega_guess = [omega_p0, 0.1 * omega_p0]
 
     sol = fsolve(dispersion_eq, omega_guess)
@@ -549,16 +554,20 @@ e = 1.602e-19  # C
 epsilon_0 = 8.854e-12  # F/m
 
 omega_p0 = np.sqrt(n0 * e**2 / (epsilon_0 * m_e))
+# ω_pb << ω_p0인 이유는 n_b << n_0이기 때문입니다; 이것이 약한 빔 한계(weak-beam limit)로,
+# 섭동론적 성장률 γ ~ ω_p0 (n_b/n_0)^(1/3)이 유효한 영역입니다.
 omega_pb = np.sqrt(nb_frac * n0 * e**2 / (epsilon_0 * m_e))
 
-# Beam velocity
+# v0는 공명 조건 k v0 ~ ω_p0가 스캔 범위 중간에 오도록 선택합니다;
+# 이렇게 하면 최대 성장 영역이 완전히 해상됩니다.
 v0 = 2 * omega_p0 * (1e8 / omega_p0)  # Choose v0 ~ ω_p0/k_typical
 
 print(f"Background plasma frequency: ω_p0 = {omega_p0:.2e} rad/s")
 print(f"Beam plasma frequency: ω_pb = {omega_pb:.2e} rad/s")
 print(f"Beam velocity: v0 = {v0:.2e} m/s")
 
-# Wavenumber scan
+# k를 ω_p0/v0 근방으로 스캔하면 공명 파수 kv0 = ω_p0 주변에 스캔이 집중됩니다;
+# Langmuir 파동의 위상 속도가 빔과 일치하는 이 지점에서 최대 성장이 일어납니다.
 k_array = np.linspace(0.5, 3, 100) * omega_p0 / v0
 
 omega_real = []
@@ -616,11 +625,19 @@ def weibel_growth_rate(T_perp, T_parallel, n, B0=0):
     γ_max ≈ ω_pe √[(T_⊥ - T_∥)/T_∥]
     """
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
+    # 비등방성(anisotropy) A = (T_⊥ - T_∥)/T_∥는 Weibel 문제에서 유일한 무차원
+    # 자유 에너지 파라미터입니다; 분포가 등방성에서 얼마나 벗어났는지, 즉
+    # 불안정성을 구동하는 데 사용 가능한 에너지가 얼마인지를 나타냅니다.
     anisotropy = (T_perp - T_parallel) / T_parallel
 
+    # γ_max ~ ω_pe √A는 Vlasov-Maxwell 분석에서 나옵니다: 자기 섭동이
+    # 비등방성 전류와 결합하고, ω_pe가 생성된 전류 필라멘트에 대한
+    # 전자기 응답의 시간 스케일을 설정합니다.
     if anisotropy > 0:
         gamma_max = omega_pe * np.sqrt(anisotropy)
     else:
+        # 음의 비등방성(T_∥ > T_⊥)은 Weibel이 아닌 firehose 불안정성을
+        # 구동합니다; 해당 영역에서 Weibel 성장이 없음을 나타내기 위해 0을 반환합니다.
         gamma_max = 0
 
     return gamma_max, omega_pe
@@ -765,17 +782,25 @@ def srs_growth_rate(I_laser, n, T_e, lambda_laser=1.053e-6):
     omega_0 = 2 * np.pi * c / lambda_laser
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
 
-    # Quiver velocity
+    # E_0는 시간 평균 Poynting 선속 I = ε_0 c E_0²/2에서 유도됩니다;
+    # 진동 속도(quiver velocity) v_osc = eE_0/(m_e ω_0)는 레이저 장의 진동이
+    # 이온에 대해 전자를 얼마나 강하게 변위시키는지를 나타내며,
+    # 모든 파라메트릭 불안정성 공식에서 펌프 진폭의 자연스러운 척도입니다.
     E_0 = np.sqrt(2 * I_laser / (c * epsilon_0))
     v_osc = e * E_0 / (m_e * omega_0)
 
-    # Scattered wave frequency (backward scattering)
+    # 후방산란 기하학(backscatter geometry)에서 ω_s = ω_0 - ω_pe입니다.
+    # Langmuir 파동(ω_pe)이 주파수 불일치를 담당하며,
+    # 이 근사는 ω_pe << ω_0일 때 유효합니다.
     omega_s = omega_0 - omega_pe  # Approximate
 
-    # Langmuir wavenumber
+    # k_L = 2ω_0/c는 후방산란 파수입니다: 산란된 EM파가 방향을 역전하므로
+    # (k_s ≈ -k_0), Langmuir 파동은 k_L = k_0 + |k_s| ≈ 2k_0을 만족해야 합니다.
     k_L = 2 * omega_0 / c  # Backscatter
 
-    # Growth rate
+    # √(ω_0/ω_s) 인자가 성장을 강화하는 이유는 산란파가 차단 주파수 근처에 있기
+    # (ω_s가 ω_pe에 가까움) 때문입니다 — 군속도(group velocity)가 작아져 펌프에서
+    # 딸 파동으로의 결맞음 에너지 전달이 더 오래 지속될 수 있습니다.
     gamma_SRS = (k_L * v_osc / 4) * np.sqrt(omega_0 / omega_s)
 
     return gamma_SRS

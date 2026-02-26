@@ -1,5 +1,17 @@
 # 비트마스크 DP (Bitmask Dynamic Programming)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. AND, OR, XOR, 시프트(shift), 비트 설정/해제/토글 등 기본 비트 연산을 수행하고 자주 쓰이는 비트 조작 기법을 적용할 수 있다
+2. 작은 집합의 부분집합을 정수 비트마스크(bitmask)로 표현하고 모든 부분집합 또는 부분마스크(submask)를 효율적으로 열거할 수 있다
+3. 어떤 원소가 사용되었는지를 인코딩하는 상태를 정의하여 비트마스크 DP(Bitmask DP) 풀이를 설계할 수 있다
+4. O(2^n × n) 시간 복잡도로 비트마스크 DP를 이용하여 외판원 문제(TSP, Traveling Salesman Problem)를 구현할 수 있다
+5. 상태 전환 시 아이템 부분집합을 추적해야 하는 배정(assignment) 및 매칭(matching) 문제에 비트마스크 DP를 적용할 수 있다
+
+---
+
 ## 개요
 
 비트마스크 DP는 집합의 상태를 비트로 표현하여 DP를 수행하는 기법입니다. n이 작을 때(n ≤ 20) 부분집합 문제를 효율적으로 해결할 수 있습니다.
@@ -169,6 +181,13 @@ def iterate_submasks(mask):
     """
     mask의 모든 부분집합(공집합 제외) 순회
     예: mask = 5 (101) → 5, 4, 1
+
+    (submask - 1) & mask가 작동하는 이유:
+    1을 빼면 submask의 최하위 설정 비트가 0이 되고 그보다 낮은 모든 비트가 1이 된다.
+    mask와 AND 연산을 하면 원래 mask에 설정되지 않았던 비트가 제거되어,
+    부분집합 범위 안에 머물게 된다.
+    이 방법은 O(2^popcount(mask)) 단계로 모든 부분마스크를 방문하며 —
+    모든 2^n 마스크를 순회하고 필터링하는 것보다 훨씬 효율적이다.
     """
     submask = mask
     while submask > 0:
@@ -307,24 +326,31 @@ def tsp(dist):
     dist[i][j] = 도시 i에서 j로 가는 비용
     시간: O(n² × 2^n)
     공간: O(n × 2^n)
+
+    비트마스크를 사용하는 이유: 정확히 어떤 도시들을 방문했는지 추적해야 한다.
+    비트마스크는 이를 하나의 정수로 인코딩한다(비트 i = 도시 i 방문),
+    O(1) 멤버십 테스트와 집합 연산이 가능하다. 전체 상태 공간은 2^n × n으로
+    지수적이지만 n <= 20에서는 다룰 수 있으며, 모든 n! 순열에 대한
+    브루트포스보다 훨씬 낫다.
     """
     n = len(dist)
     INF = float('inf')
 
-    # dp[mask][i] = mask 상태에서 i에 있을 때 최소 비용
+    # dp[mask][i] = mask에 포함된 도시만 정확히 방문하고 도시 i에서 끝날 때의 최소 비용
     dp = [[INF] * n for _ in range(1 << n)]
-    dp[1][0] = 0  # 시작점 0에서 출발
+    dp[1][0] = 0  # 도시 0만 방문(mask=0b1), 비용 0
 
     for mask in range(1 << n):
         for last in range(n):
             if dp[mask][last] == INF:
                 continue
             if not (mask & (1 << last)):
+                # last가 방문 집합에 있어야 함 — 비일관적 상태는 건너뜀
                 continue
 
             for next_city in range(n):
                 if mask & (1 << next_city):
-                    continue
+                    continue  # 이미 방문함 — 재방문 불가
                 if dist[last][next_city] == INF:
                     continue
 
@@ -334,7 +360,8 @@ def tsp(dist):
                     dp[mask][last] + dist[last][next_city]
                 )
 
-    # 모든 도시 방문 후 출발점(0)으로 돌아가기
+    # 모든 도시 방문 후 출발점(0)으로 돌아가기.
+    # 왕복 비용은 도시 0으로 돌아가는 마지막 구간을 더한다.
     full_mask = (1 << n) - 1
     result = INF
     for last in range(n):

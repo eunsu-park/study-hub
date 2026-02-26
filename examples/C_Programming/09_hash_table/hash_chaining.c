@@ -40,6 +40,8 @@ typedef struct {
 } Statistics;
 
 // djb2 해시 함수
+// Why: unsigned int prevents undefined behavior from signed overflow during
+// repeated multiply-and-add — signed overflow is UB in C, unsigned wraps safely
 unsigned int hash(const char *key) {
     unsigned int hash = 5381;
     int c;
@@ -108,12 +110,16 @@ bool ht_set(HashTable *ht, const char *key, const char *value) {
         return false;
     }
 
+    // Why: strncpy + manual null-termination prevents buffer overflow — strncpy
+    // alone does NOT guarantee null-termination if the source exceeds the limit
     strncpy(node->key, key, KEY_SIZE - 1);
     node->key[KEY_SIZE - 1] = '\0';
     strncpy(node->value, value, VALUE_SIZE - 1);
     node->value[VALUE_SIZE - 1] = '\0';
 
     // 버킷 맨 앞에 삽입 (O(1))
+    // Why: inserting at the head of the chain is O(1) — appending at the tail
+    // would require traversing the entire chain, making insertion O(n)
     node->next = ht->buckets[index];
 
     // 충돌 확인 (버킷에 이미 노드가 있으면 충돌)
@@ -152,6 +158,8 @@ bool ht_delete(HashTable *ht, const char *key) {
     unsigned int index = hash(key);
 
     Node *current = ht->buckets[index];
+    // Why: tracking prev pointer is necessary because singly-linked lists cannot
+    // look backward — without prev, we cannot relink after removing a node
     Node *prev = NULL;
 
     // 체인에서 노드 찾기

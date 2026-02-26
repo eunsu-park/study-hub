@@ -1,5 +1,18 @@
 # 09. GPT
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 자기회귀(Autoregressive) 인과적 언어 모델링 목적함수를 설명하고, 아키텍처, 사전 훈련, 활용 사례 측면에서 GPT가 BERT와 어떻게 다른지 서술합니다.
+2. 인과적 자기 어텐션(Causal Self-Attention) 메커니즘을 설명하고, 인과적 마스크(Causal Mask)가 학습 중 자기회귀 특성을 어떻게 강제하는지 설명합니다.
+3. 인과적 마스크 다중 헤드 어텐션(Causal Masked Multi-Head Attention), 층 정규화(Layer Normalization), 위치 임베딩(Positional Embedding)을 포함하여 PyTorch에서 GPT 디코더 아키텍처를 처음부터 구현합니다.
+4. 자기회귀 샘플링 전략(그리디(Greedy), Top-k, 뉴클리어스 샘플링(Nucleus Sampling))을 사용하여 텍스트를 생성하고, 생성 품질과 다양성 간의 트레이드오프를 설명합니다.
+5. GPT 모델을 다운스트림 생성 작업(예: 텍스트 요약, 대화)에 파인튜닝하고 출력 품질을 평가합니다.
+6. GPT-1에서 GPT-2, GPT-3으로의 진화를 추적하고, 성능 향상을 이끈 스케일링 결정(모델 크기, 데이터, 연산)을 식별합니다.
+
+---
+
 ## 개요
 
 GPT (Generative Pre-trained Transformer)는 OpenAI가 개발한 자기회귀(autoregressive) 언어 모델입니다. **왼쪽에서 오른쪽으로** 텍스트를 생성하며, 현대 LLM의 기반이 되었습니다.

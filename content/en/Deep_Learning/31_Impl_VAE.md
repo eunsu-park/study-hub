@@ -4,6 +4,19 @@
 
 # 31. Variational Autoencoder (VAE)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the generative model goal of VAE and describe why direct maximization of the marginal likelihood p(x) is intractable.
+2. Derive the Evidence Lower BOund (ELBO) from the variational inference framework and interpret its two components: reconstruction loss and KL divergence regularization.
+3. Describe the reparameterization trick and explain why it is necessary for backpropagating gradients through the stochastic sampling step.
+4. Implement a VAE from scratch in PyTorch, including the encoder (posterior network), decoder (likelihood network), and ELBO loss computation.
+5. Perform latent space interpolation and arithmetic to demonstrate that the VAE learns a smooth, structured latent manifold.
+6. Compare VAE with GAN in terms of training stability, output sharpness, and latent space interpretability, and identify scenarios where each excels.
+
+---
+
 ## Overview
 
 Variational Autoencoder (VAE) is a foundational generative model architecture that learns latent representations of data and can generate new samples. "Auto-Encoding Variational Bayes" (Kingma & Welling, 2013)

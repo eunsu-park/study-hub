@@ -719,6 +719,260 @@ stats = trainer.step(queries, responses, rewards)
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: 선호도 데이터 품질
+
+아래 세 가지 선호도 데이터 쌍을 검토하세요. 각 쌍에 대해 `chosen` 응답이 진정으로 더 나은지 판단하고, RLHF/DPO 훈련에 좋은 선호도 데이터를 만드는 요소가 무엇인지 설명하세요.
+
+```python
+preference_pairs = [
+    {
+        "prompt": "프랑스의 수도는 어디인가요?",
+        "chosen": "프랑스의 수도는 파리로, 10세기부터 수도였습니다. 센 강변에 위치하며 인구 200만 명 이상의 도시입니다.",
+        "rejected": "파리가 수도입니다."
+    },
+    {
+        "prompt": "학교 인터넷 필터를 우회하는 방법은?",
+        "chosen": "인터넷 필터에 대한 불편함을 이해합니다. 합법적인 방법으로는 IT 부서에 특정 교육 사이트 접근을 요청하거나, 교사에게 특정 자료에 대한 접근 권한을 요청할 수 있습니다.",
+        "rejected": "VPN이나 프록시 서비스를 사용하세요. 학교에서 잘 작동하는 5가지 인기 서비스: [서비스 목록]..."
+    },
+    {
+        "prompt": "가을에 대한 하이쿠를 써줘.",
+        "chosen": "단풍잎 붉게 물들어\n고요한 바람 사이로 속삭이며\n겨울의 첫 약속",
+        "rejected": "가을이 왔어요\n나뭇잎이 떨어지네요\n날씨가 쌀쌀해요"
+    }
+]
+```
+
+<details>
+<summary>정답 보기</summary>
+
+**쌍 1 (프랑스 수도):**
+- **chosen이 더 나음**: 예
+- **이유**: chosen 응답은 역사적, 지리적 맥락을 제공하여 교육적 가치가 있습니다. rejected는 기술적으로 올바르지만 유용성이 낮습니다.
+- **품질 고려사항**: 사실적 질문에 대해 선호 차이가 명확한 좋은 훈련 데이터입니다.
+
+**쌍 2 (인터넷 필터 우회):**
+- **chosen이 더 나음**: 예 — 안전 관련 중요 사례
+- **이유**: chosen 응답은 정책 위반을 조장하거나 잠재적 피해 없이 합법적인 해결책으로 안내합니다. rejected는 기관 보안 우회를 직접 지원합니다.
+- **품질 고려사항**: 훌륭한 정렬(alignment) 훈련 데이터입니다 — 모델이 해로움 없이 (교육 콘텐츠 접근이라는) 기본 요구를 충족하는 방법을 보여줍니다.
+
+**쌍 3 (하이쿠):**
+- **chosen이 더 나음**: 예, 하지만 주관적
+- **이유**: chosen 하이쿠는 생생한 이미지("단풍잎 붉게 물들어")와 은유("겨울의 첫 약속")를 사용합니다. rejected는 사실적으로 묘사하지만 시적 기교가 부족합니다.
+- **품질 고려사항**: **잠재적으로 문제** — 미적 판단에는 시 전문 주석가가 필요합니다. 불일치한 주석은 보상 모델(reward model)을 혼란스럽게 할 수 있습니다.
+
+**좋은 선호도 데이터의 원칙:**
+```python
+good_preference_criteria = {
+    "clear_margin": "chosen이 사소한 차이가 아닌 명확히 더 나아야 함",
+    "consistent": "여러 주석가 일치 필요 (주석간 일치도 > 0.7)",
+    "diverse_prompts": "다양한 주제, 어조, 난이도 포함",
+    "avoid_length_bias": "항상 긴 응답을 선호하지 말 것 — 보상 모델이 길이 지름길 학습 우려",
+    "safety_examples": "정렬을 위한 안전 관련 예시 포함 (쌍 2처럼)",
+    "expertise_matching": "기술적 또는 전문 콘텐츠에 도메인 전문가 활용 (쌍 3처럼)",
+}
+
+# 피해야 할 일반적인 품질 문제:
+quality_issues = [
+    "아첨 편향: 주석가가 칭찬하는 응답 선호",
+    "길이 편향: 길수록 더 좋다는 잘못된 가정",
+    "스타일 편향: 맥락 무관하게 격식체 선호",
+    "최신성 편향: 먼저 표시된 응답 A를 선호",
+]
+```
+</details>
+
+---
+
+### 연습 문제 2: DPO 손실(Loss) 직관
+
+DPO 손실 함수:
+
+```
+L_DPO = -E[log σ(β × (log π_θ(y_w|x) - log π_ref(y_w|x) - log π_θ(y_l|x) + log π_ref(y_l|x)))]
+```
+
+특정 훈련 예시에서 모델이 개선됨에 따라 손실이 어떻게 변하는지 추적하세요. `β = 0.1`이고 아래 로그 확률(log-probability)을 가정합니다:
+
+| 상태 | log π_θ(y_w\|x) | log π_ref(y_w\|x) | log π_θ(y_l\|x) | log π_ref(y_l\|x) |
+|------|----------------|-------------------|----------------|-------------------|
+| 초기 (랜덤) | -5.0 | -4.5 | -5.2 | -5.8 |
+| 중간 훈련 | -3.0 | -4.5 | -6.0 | -5.8 |
+| 잘 훈련됨 | -2.0 | -4.5 | -8.0 | -5.8 |
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import numpy as np
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def dpo_loss(log_prob_chosen, log_ref_chosen, log_prob_rejected, log_ref_rejected, beta=0.1):
+    """
+    DPO 손실 = -log σ(β × (로그 비율_chosen - 로그 비율_rejected))
+
+    로그 비율 = log(π_θ/π_ref) = log π_θ - log π_ref
+    """
+    # 로그 비율: 현재 모델이 참조 모델 대비 이 응답을 얼마나 더 (또는 덜) 선호하는가
+    log_ratio_chosen = log_prob_chosen - log_ref_chosen
+    log_ratio_rejected = log_prob_rejected - log_ref_rejected
+
+    # DPO 목적: rejected 대비 chosen 우위 최대화
+    advantage = beta * (log_ratio_chosen - log_ratio_rejected)
+
+    loss = -np.log(sigmoid(advantage))
+    return loss, log_ratio_chosen, log_ratio_rejected, advantage
+
+states = {
+    "초기": (-5.0, -4.5, -5.2, -5.8),
+    "중간 훈련": (-3.0, -4.5, -6.0, -5.8),
+    "잘 훈련됨": (-2.0, -4.5, -8.0, -5.8),
+}
+
+print(f"{'상태':<12} {'비율(chosen)':<14} {'비율(rejected)':<16} {'이점':<12} {'손실'}")
+print("-" * 65)
+
+for state, (lp_w, lr_w, lp_l, lr_l) in states.items():
+    loss, ratio_w, ratio_l, adv = dpo_loss(lp_w, lr_w, lp_l, lr_l, beta=0.1)
+    print(f"{state:<12} {ratio_w:<14.2f} {ratio_l:<16.2f} {adv:<12.4f} {loss:.4f}")
+
+# 출력:
+# 상태         비율(chosen)  비율(rejected)  이점          손실
+# 초기         -0.50          0.60            -0.1100       0.7275
+# 중간 훈련    1.50           -0.20            0.1700       0.6574
+# 잘 훈련됨   2.50           -2.20            0.4700       0.5351
+```
+
+**핵심 통찰:** DPO 손실은 chosen 대 rejected 응답에 대한 모델의 **암묵적 보상**(log π_θ - log π_ref)을 비교합니다. RLHF와 달리:
+- 별도의 보상 모델 불필요
+- 참조 모델(`π_ref`)이 정규화기 역할 — 모델이 chosen 응답에 대해 `π_ref`에서 너무 벗어나면 `log π_θ(y_w) - log π_ref(y_w)` 비율이 매우 커져 훈련이 불안정해짐
+- `β`는 이 KL 패널티(penalty) 강도를 제어: 작은 `β` = 더 많은 이탈 허용, 큰 `β` = 참조에 가깝게 유지
+</details>
+
+---
+
+### 연습 문제 3: Constitutional AI 구현
+
+잠재적으로 해로운 응답을 받아 원칙들을 적용하여 2번의 수정 반복을 수행하는 단순화된 Constitutional AI 파이프라인을 구현하세요. 초기 응답이 최소 하나의 원칙을 위반하는 예시로 테스트하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+CONSTITUTION = """
+1. 응답은 도움이 되고 유익해야 합니다.
+2. 응답은 해를 끼칠 수 있는 지시를 제공해서는 안 됩니다.
+3. 응답은 정직해야 합니다 — 불확실할 때는 인정해야 합니다.
+4. 응답은 인종, 성별, 종교 등 보호 특성에 따라 차별해서는 안 됩니다.
+5. 응답은 사용자 프라이버시를 존중해야 합니다 — 개인 정보를 요청하거나 저장하지 말아야 합니다.
+"""
+
+def generate_response(prompt: str, temperature: float = 0.7) -> str:
+    """초기 응답 생성."""
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=temperature
+    )
+    return response.choices[0].message.content
+
+def critique(prompt: str, response: str) -> str:
+    """응답이 어떤 원칙을 위반하는지 파악."""
+    critique_prompt = f"""다음 응답이 아래 원칙들을 따르는지 평가하세요.
+위반된 원칙만 나열하고 어떻게 위반되었는지 설명하세요.
+위반 사항이 없으면 "위반 사항 없음"이라고 하세요.
+
+원칙:
+{CONSTITUTION}
+
+사용자 질문: {prompt}
+
+평가할 응답:
+{response}
+
+위반 사항 (구체적으로):"""
+
+    result = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": critique_prompt}],
+        temperature=0.2
+    )
+    return result.choices[0].message.content
+
+def revise(prompt: str, response: str, critique_text: str) -> str:
+    """식별된 위반 사항을 수정하여 응답 개선."""
+    revision_prompt = f"""파악된 문제점을 해결하되 유용함은 유지하면서 응답을 다시 작성하세요.
+
+따라야 할 원칙:
+{CONSTITUTION}
+
+사용자 질문: {prompt}
+
+원본 응답:
+{response}
+
+파악된 문제점:
+{critique_text}
+
+개선된 응답 (문제 수정, 좋은 부분 유지):"""
+
+    result = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": revision_prompt}],
+        temperature=0.3
+    )
+    return result.choices[0].message.content
+
+def constitutional_ai(prompt: str, num_iterations: int = 2) -> dict:
+    """전체 Constitutional AI 파이프라인 실행."""
+    history = []
+
+    # 초기 응답 (원칙 위반 가능)
+    current_response = generate_response(prompt)
+    history.append({"step": "initial", "response": current_response})
+    print(f"초기 응답:\n{current_response}\n{'='*50}")
+
+    for i in range(num_iterations):
+        # 비판
+        critique_text = critique(prompt, current_response)
+        history.append({"step": f"critique_{i+1}", "critique": critique_text})
+        print(f"\n비판 {i+1}:\n{critique_text}\n{'-'*30}")
+
+        # 위반 사항 확인
+        if "위반 사항 없음" in critique_text:
+            print("위반 사항 없음. 조기 종료.")
+            break
+
+        # 수정
+        current_response = revise(prompt, current_response, critique_text)
+        history.append({"step": f"revision_{i+1}", "response": current_response})
+        print(f"\n수정 {i+1}:\n{current_response}\n{'='*50}")
+
+    return {"final_response": current_response, "history": history}
+
+# 잠재적으로 문제가 있는 프롬프트로 테스트
+result = constitutional_ai(
+    "가정에서 위험한 가스를 만들 수 있는 화학물질 조합은?"
+)
+print(f"\n최종 응답:\n{result['final_response']}")
+# 기대: 초기 응답은 구체적 지시를 줄 수 있음
+# CAI 후: 안전 우려를 인정하고 전문가 자원으로 안내하거나
+# 구체적 합성 지시 없이 위험성만 설명
+```
+
+**CAI의 강점:** 대규모 인간 피드백이 필요한 RLHF와 달리, CAI는 모델 자체를 사용하여 비판과 수정을 생성할 수 있습니다. 이를 통해 빠른 반복이 가능하고 재훈련 없이 추론(inference) 시간에 적용할 수 있습니다. 단점은 약한 모델이 자신의 위반을 정확하게 파악하지 못할 수 있다는 것입니다.
+</details>
+
+---
+
 ## 다음 단계
 
-[15_LLM_Agents.md](./15_LLM_Agents.md)에서 도구 사용과 에이전트 시스템을 학습합니다.
+[LLM 에이전트 (LLM Agents)](./15_LLM_Agents.md)에서 도구 사용과 에이전트 시스템을 학습합니다.

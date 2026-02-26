@@ -767,15 +767,26 @@ def small_scale_dynamo_growth():
 
     for eta in eta_vals:
         Rm = u_rms * ell / eta
+        # Rm_c ~ 60 is the threshold below which resistive diffusion wins
+        # over turbulent stretching; its value sets the minimum magnetic
+        # Reynolds number for small-scale dynamo action, consistent with
+        # the Kazantsev theory and confirmed by direct numerical simulations.
         Rm_c = 60  # Critical magnetic Reynolds number
 
         if Rm > Rm_c:
             # Growth rate (simplified Kazantsev)
+            # γ ∝ √(Rm/Rm_c - 1) — the square-root dependence on (Rm - Rm_c)
+            # reflects a supercritical bifurcation: just above threshold the
+            # dynamo is weakly unstable (small γ), and it only becomes vigorous
+            # once Rm substantially exceeds Rm_c.
             gamma = (u_rms / ell) * np.sqrt((Rm - Rm_c) / Rm_c) * 0.1
         else:
             gamma = 0  # No dynamo
 
         # Resistive timescale
+        # τ_η = ℓ²/η is the time for resistivity to diffuse the field across
+        # a correlation length; including this loss term ensures the model
+        # captures the competition between amplification and Ohmic decay.
         tau_eta = ell**2 / eta
 
         # Differential equation: dE_B/dt = 2*gamma*E_B - E_B/tau_eta
@@ -826,6 +837,10 @@ def magnetic_helicity_evolution():
     dt = t[1] - t[0]
 
     # Two scenarios: closed vs open boundaries
+    # The closed/open comparison is the key diagnostic: in a closed box total
+    # helicity is conserved (up to resistive decay), so the large-scale field
+    # saturates catastrophically; open boundaries allow small-scale helicity
+    # to escape, relieving the quenching and letting the field grow further.
     scenarios = {
         'Closed (no flux)': 0.0,
         'Open (with flux)': flux_rate
@@ -844,9 +859,15 @@ def magnetic_helicity_evolution():
         # Time evolution
         for n in range(len(t) - 1):
             # Helicity production (from alpha effect and field growth)
+            # α₀ B² is the mean-field approximation to ⟨u × b⟩ · B̄,
+            # the rate at which helical turbulence injects helicity into
+            # the large-scale field as part of the α-effect cycle.
             production = alpha0 * B_rms[n]**2
 
             # Resistive dissipation
+            # 2η/L² × H_B is the Ohmic helicity decay rate; the factor
+            # 2 comes from the relation dH_B/dt = -2η ∫ J·B dV ≈ -2η k² H_B
+            # where k ~ 1/L is the dominant wavenumber of the large-scale field.
             dissipation = (2 * eta / L**2) * H_B[n]
 
             # Helicity flux (for open boundaries)
@@ -858,6 +879,10 @@ def magnetic_helicity_evolution():
 
             # Simple model for field growth with helicity constraint
             # α-quenching: α_eff = α0 / (1 + |H_B| / H_sat)
+            # This quenching formula captures the back-reaction: growing
+            # large-scale helicity builds up small-scale helicity of the
+            # opposite sign (to conserve total), which in turn suppresses
+            # the α-effect — the mechanism behind catastrophic quenching.
             H_sat = 0.1
             alpha_eff = alpha0 / (1 + np.abs(H_B[n]) / H_sat)
 
@@ -915,6 +940,9 @@ def turbulent_cascade_with_dynamo():
       Dynamo: energy input from stretching
     """
     # Wavenumber bins (logarithmic)
+    # Logarithmic binning is used because the cascade spans orders of
+    # magnitude in k; equal spacing in log(k) ensures each decade of
+    # the inertial range is represented by the same number of shells.
     N_bins = 20
     k = np.logspace(0, 2, N_bins)
     dk = np.diff(np.log(k))
@@ -934,6 +962,9 @@ def turbulent_cascade_with_dynamo():
     E_B = np.zeros(N_bins)
 
     # Initial kinetic energy (inject at large scales)
+    # Starting with energy only at the forcing shell (large scale) lets
+    # us watch the forward cascade develop naturally rather than
+    # prescribing an initial spectrum that would bias the result.
     E_K[forcing_k] = 1.0
 
     # Storage
@@ -952,19 +983,32 @@ def turbulent_cascade_with_dynamo():
 
         for i in range(1, N_bins - 1):
             # Forward cascade for kinetic
+            # The upwind finite difference approximates the energy flux
+            # flowing toward higher k (smaller scales); the minus sign
+            # converts a flux divergence into a loss at each shell.
             T_K[i] = -0.5 * (E_K[i] - E_K[i-1]) / dk[i]
 
             # Forward cascade for magnetic (Iroshnikov-Kraichnan)
+            # The smaller prefactor (0.3 vs 0.5) for magnetic energy reflects
+            # the reduced cascade rate in MHD compared to hydrodynamics:
+            # Alfvén wave propagation weakens eddy-eddy interactions,
+            # consistent with IK theory and the shallower -3/2 spectrum.
             T_B[i] = -0.3 * (E_B[i] - E_B[i-1]) / dk[i]
 
         # Dynamo effect: kinetic energy → magnetic energy at small scales
         Dynamo = np.zeros(N_bins)
         for i in range(N_bins):
             if k[i] > k[forcing_k]:
-                # Stretching proportional to strain rate ~ k E_K^{1/2}
+                # Stretching rate ~ k × E_K^{1/2} (strain rate at scale 1/k)
+                # The saturation factor (1 - E_B/E_K) cuts off amplification
+                # once the magnetic energy approaches equipartition, capturing
+                # the Lorentz-force back-reaction that halts kinematic growth.
                 Dynamo[i] = 0.1 * k[i] * np.sqrt(E_K[i]) * (1 - E_B[i] / (E_K[i] + 1e-10))
 
         # Magnetic-kinetic coupling (Lorentz force back-reaction)
+        # This M term transfers energy from the magnetic field back to the
+        # kinetic field via the J×B force; it is essential for capturing the
+        # dynamical saturation where Lorentz work modifies the turbulence.
         M = 0.05 * E_B * np.sqrt(E_K + 1e-10)
 
         # Dissipation

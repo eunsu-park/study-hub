@@ -60,6 +60,8 @@ void execute_pipe(char** args) {
         return;
     }
 
+    // Why: N commands need N-1 pipes — each pipe connects one command's stdout
+    // to the next command's stdin, forming a data pipeline
     int pipes[MAX_PIPES][2];  // 파이프 파일 디스크립터
 
     // 파이프 생성
@@ -77,17 +79,20 @@ void execute_pipe(char** args) {
         if (pid == 0) {
             // 자식 프로세스
 
-            // 이전 파이프의 읽기 끝을 stdin으로
+            // Why: the first command reads from real stdin (no redirection needed),
+            // and the last command writes to real stdout — only middle commands
+            // need both ends redirected
             if (i > 0) {
                 dup2(pipes[i - 1][0], STDIN_FILENO);
             }
 
-            // 다음 파이프의 쓰기 끝을 stdout으로
             if (i < cmd_count - 1) {
                 dup2(pipes[i][1], STDOUT_FILENO);
             }
 
-            // 모든 파이프 닫기
+            // Why: child must close ALL pipe fds after dup2 — the duplicated fds
+            // already point to the right pipe ends, and keeping originals open
+            // prevents EOF detection (readers block forever waiting for writers)
             for (int j = 0; j < cmd_count - 1; j++) {
                 close(pipes[j][0]);
                 close(pipes[j][1]);

@@ -1,5 +1,18 @@
 # Minimum Spanning Tree
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define a Minimum Spanning Tree (MST) and explain the properties that distinguish it from a general spanning tree
+2. Implement the Union-Find data structure with path compression and union by rank for efficient disjoint set operations
+3. Implement Kruskal's algorithm using greedy edge selection and Union-Find to build an MST
+4. Implement Prim's algorithm using a priority queue to grow an MST from a starting vertex
+5. Compare Kruskal and Prim algorithms by time complexity and suitability for sparse vs. dense graphs
+6. Apply MST algorithms to practical problems such as network design and clustering
+
+---
+
 ## Overview
 
 A Minimum Spanning Tree (MST) is a tree that connects all vertices of a graph while minimizing the sum of edge weights. We'll learn about Kruskal and Prim algorithms, as well as the Union-Find data structure.
@@ -176,6 +189,9 @@ void init(int n) {
 
 int find(int x) {
     if (parent[x] != x) {
+        // Path compression: rewire x directly to the root so that
+        // every future find() on x (or its former chain) takes O(1).
+        // Without this, a degenerate chain of n nodes costs O(n) per query.
         parent[x] = find(parent[x]);
     }
     return parent[x];
@@ -187,14 +203,18 @@ void unite(int x, int y) {
 
     if (px == py) return;
 
-    // Attach smaller rank tree to larger rank tree
+    // Union by rank: always attach the shorter tree under the taller one.
+    // This keeps tree height at most O(log n), so find() without path
+    // compression would still be O(log n) rather than O(n).
+    // Combined with path compression the amortized cost becomes
+    // near-O(1) — formally O(α(n)) where α is the inverse Ackermann function.
     if (rank_arr[px] < rank_arr[py]) {
         parent[px] = py;
     } else if (rank_arr[px] > rank_arr[py]) {
         parent[py] = px;
     } else {
         parent[py] = px;
-        rank_arr[px]++;
+        rank_arr[px]++;  // Only increment rank when both trees have equal height
     }
 }
 ```
@@ -209,11 +229,13 @@ private:
 
 public:
     UnionFind(int n) : parent(n), rank_(n, 0) {
-        iota(parent.begin(), parent.end(), 0);
+        iota(parent.begin(), parent.end(), 0);  // Each node starts as its own root
     }
 
     int find(int x) {
         if (parent[x] != x) {
+            // Path compression: collapse the path to root on every find,
+            // so repeated queries on the same element cost O(1) amortized.
             parent[x] = find(parent[x]);
         }
         return parent[x];
@@ -221,13 +243,15 @@ public:
 
     bool unite(int x, int y) {
         int px = find(x), py = find(y);
-        if (px == py) return false;
+        if (px == py) return false;  // Already in the same component — adding this edge would form a cycle
 
+        // Swap so px is always the higher-rank root;
+        // attaching the smaller tree under the larger one bounds tree height at O(log n).
         if (rank_[px] < rank_[py]) swap(px, py);
         parent[py] = px;
-        if (rank_[px] == rank_[py]) rank_[px]++;
+        if (rank_[px] == rank_[py]) rank_[px]++;  // Heights were equal: merged tree is one taller
 
-        return true;
+        return true;  // Returns true to signal a new MST edge was accepted
     }
 
     bool connected(int x, int y) {
@@ -333,7 +357,8 @@ int kruskal(int V, int E) {
     for (int i = 0; i < V; i++)
         parent[i] = i;
 
-    // Sort
+    // Sort edges by weight — greedy correctness relies on always picking
+    // the globally cheapest edge that doesn't create a cycle (cut property).
     qsort(edges, E, sizeof(Edge), cmp);
 
     int mstWeight = 0;
@@ -344,6 +369,9 @@ int kruskal(int V, int E) {
         int pv = find(edges[i].v);
 
         if (pu != pv) {
+            // Different components: this edge safely connects them without a cycle.
+            // A spanning tree on V vertices always has exactly V-1 edges,
+            // so we stop as soon as edgeCount reaches V-1.
             parent[pu] = pv;
             mstWeight += edges[i].weight;
             edgeCount++;

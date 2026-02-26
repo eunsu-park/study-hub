@@ -1,5 +1,24 @@
 # 컨텍스트 매니저 (Context Managers)
 
+**이전**: [데코레이터](./02_Decorators.md) | **다음**: [이터레이터와 제너레이터](./04_Iterators_and_Generators.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `with`문의 목적과 리소스 정리를 보장하는 방식을 설명한다
+2. `__enter__`와 `__exit__` 메서드로 컨텍스트 매니저 클래스를 구현한다
+3. `__exit__`의 각 매개변수(`exc_type`, `exc_val`, `exc_tb`)의 역할을 설명하고 예외 전파를 제어한다
+4. `contextlib`의 `@contextmanager`를 사용하여 제너레이터 기반 컨텍스트 매니저를 작성한다
+5. `contextlib` 유틸리티인 `suppress`, `redirect_stdout`, `closing`, `ExitStack`을 활용한다
+6. 단일 `with`문 안에서 여러 컨텍스트 매니저를 조합한다
+7. 타이머, 임시 디렉토리 변경, 트랜잭션과 같은 실용적인 패턴을 구현한다
+8. `__aenter__` / `__aexit__`와 `@asynccontextmanager`를 사용하여 비동기 컨텍스트 매니저를 작성한다
+
+---
+
+장기 실행 애플리케이션에서 가장 잡기 어려운 버그 중 하나는 닫히지 않은 파일, 해제되지 않은 락, 끊기지 않은 데이터베이스 연결과 같은 리소스 누수(resource leak)입니다. Python의 `with`문과 컨텍스트 매니저(context manager) 프로토콜은 리소스를 획득하고 해제하는 결정론적이고 예외 안전(exception-safe)한 방법을 제공합니다. 파일 열기, 데이터베이스 트랜잭션 관리, 전역 상태 임시 변경 등 어떤 경우에도 컨텍스트 매니저는 예외가 발생하더라도 정리 코드가 반드시 실행되도록 보장합니다.
+
 ## 1. 컨텍스트 매니저란?
 
 컨텍스트 매니저는 `with`문과 함께 사용되어 리소스의 설정(setup)과 정리(cleanup)를 자동으로 처리합니다.
@@ -541,4 +560,4 @@ async def main():
 
 ## 다음 단계
 
-[04_Iterators_and_Generators.md](./04_Iterators_and_Generators.md)에서 이터레이터와 yield를 배워봅시다!
+[이터레이터와 제너레이터 (Iterators & Generators)](./04_Iterators_and_Generators.md)에서 이터레이터와 yield를 배워봅시다!

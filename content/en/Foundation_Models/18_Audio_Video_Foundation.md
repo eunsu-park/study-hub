@@ -1,5 +1,17 @@
 # 18. Audio/Video Foundation Models
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Whisper architecture and describe how log-Mel spectrograms are processed by encoder-decoder Transformers for speech recognition and translation
+2. Implement speech transcription and speaker diarization pipelines using Whisper and related audio foundation models
+3. Describe the architecture of music generation models such as MusicGen and AudioCraft, including how they handle multi-stream audio tokens
+4. Compare video understanding approaches (VideoMAE, Video-LLaMA) and explain how temporal information is encoded across frames
+5. Design multimodal pipelines that integrate audio, video, and text foundation models for tasks such as automatic video captioning
+
+---
+
 ## Overview
 
 Foundation Models for the Audio and Video domains comprehensively handle various multimedia tasks including speech recognition, music generation, and video understanding.
@@ -1075,3 +1087,198 @@ Video Generation (Sora concept):
 3. Borsos et al. (2023). "AudioLM: a Language Modeling Approach to Audio Generation"
 4. Zhang et al. (2023). "Video-LLaMA: An Instruction-tuned Audio-Visual Language Model"
 5. OpenAI Sora Technical Report (2024)
+
+---
+
+## Exercises
+
+### Exercise 1: Whisper Architecture and 30-Second Segments
+Whisper processes audio in fixed 30-second chunks. Explain the architectural reason for this constraint and describe how the pipeline handles audio files that are much shorter (e.g., 5 seconds) or much longer (e.g., 3 minutes). What problem arises when a word or sentence is split across a 30-second boundary?
+
+<details>
+<summary>Show Answer</summary>
+
+**Why 30-second chunks**: Whisper's audio encoder uses a fixed-size log-Mel spectrogram input of 80 frequency bins × 3000 time frames, where each time frame represents 10ms. This gives exactly 30 seconds (3000 × 10ms). The encoder uses absolute sinusoidal positional embeddings — it cannot generalize to variable-length inputs without architectural modifications.
+
+**Handling shorter audio (5 seconds)**:
+- The 5-second audio is zero-padded to fill the 30-second buffer.
+- The encoder processes the padded spectrogram normally.
+- The decoder generates tokens until it produces an `<|endoftext|>` token, naturally stopping at the end of actual speech without generating content for the silent padding.
+
+**Handling longer audio (3 minutes)**:
+- The audio is split into overlapping 30-second chunks.
+- Each chunk is transcribed independently.
+- Transcriptions are stitched together, usually by finding the overlap region using timestamp alignment.
+- Whisper's `word_timestamps=True` mode provides timing information to locate exact stitch points.
+
+**Boundary splitting problem (word cut mid-segment)**:
+- A word like "extraordinary" might be split: "extraord-" ends chunk 1, "-inary" starts chunk 2.
+- The first chunk encoder sees "extraord" as the last word — it may transcribe it as "extraord" (incomplete), be cut off, or hallucinate a different ending.
+- Chunk 2 starts with "-inary" in the middle — the decoder lacks the beginning context.
+- Result: words near segment boundaries are the most common transcription error sources.
+- **Mitigation**: Use overlapping windows (e.g., 25-second chunks with 5-second overlap) and take the higher-confidence transcription for overlapping regions, or use a VAD (Voice Activity Detector) to split only at silences.
+
+</details>
+
+### Exercise 2: AudioLM Hierarchical Tokenization
+AudioLM uses a three-level hierarchy: Semantic tokens (w2v-BERT, ~25/sec), Coarse Acoustic tokens (SoundStream, ~50/sec), and Fine Acoustic tokens (SoundStream, ~100/sec). Explain why this hierarchy is necessary — why can't AudioLM just use a single token representation at one resolution?
+
+<details>
+<summary>Show Answer</summary>
+
+**Why a single resolution fails**:
+
+**Single high-resolution tokens (fine acoustic only, ~100/sec)**:
+- For 10 seconds of audio: 1000 tokens
+- A language model must learn to generate coherent speech over 1000 tokens while maintaining semantic consistency (same word, correct grammar, continuous meaning).
+- Long-range dependencies are very hard to model at this scale — transformers struggle with O(n²) attention over 1000 tokens to maintain semantic coherence.
+- The model would waste capacity learning to copy acoustic details rather than planning semantic content.
+
+**Single low-resolution tokens (semantic only, ~25/sec)**:
+- Semantic tokens capture content (what is said) but discard speaker identity, prosody (how it sounds), and fine acoustic details.
+- You can't reconstruct high-quality audio from semantic tokens alone — the result sounds robotic or like a vocoder.
+
+**Why the hierarchy solves this**:
+
+1. **Semantic layer** (~25 tokens/sec): Captures "what is said" — word identities, language content. Models here can use long context windows affordably. This is where grammatical coherence and content planning happen.
+
+2. **Coarse Acoustic layer** (~50 tokens/sec): Conditioned on semantic tokens, captures "how it sounds" at a coarse level — speaker identity, general prosody, speaking rate.
+
+3. **Fine Acoustic layer** (~100 tokens/sec): Conditioned on coarse acoustic, adds fine-grained perceptual details — microphone characteristics, fine timing, subtle acoustic textures.
+
+The hierarchy allows each level to focus on its own problem complexity: semantic planning over long context, then progressive acoustic refinement. This divide-and-conquer approach makes each sub-problem tractable.
+
+</details>
+
+### Exercise 3: Video Frame Sampling Strategy
+The `VideoUnderstanding` class uses uniform frame sampling (`np.linspace(0, total_frames-1, num_frames)`). Analyze the limitations of this approach and propose two alternative sampling strategies for different video types.
+
+```python
+def extract_frames(self, video_path: str, num_frames: int = 8, uniform: bool = True):
+    """Extract frames from video"""
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if uniform:
+        indices = np.linspace(0, total_frames - 1, num_frames, dtype=int)
+    # What other sampling strategies should exist?
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Limitations of uniform sampling**:
+1. **Redundancy for static videos**: A talking-head interview has 99% identical frames — uniform sampling wastes capacity on near-duplicate frames.
+2. **Missing key events**: A sports highlight video may have 3 seconds of action and 27 seconds of replay/commentary — uniform sampling undersamples the action.
+3. **Ignores motion**: All frames are treated equally regardless of how much changes between them.
+4. **Resolution-length mismatch**: A 2-minute video and a 10-minute video both get 8 frames with uniform sampling, but the 10-minute video has 5x less temporal resolution per second.
+
+**Alternative Strategy 1: Scene-change / keyframe-based sampling**
+```python
+def sample_keyframes(self, video_path, num_frames=8):
+    """Sample frames at scene boundaries"""
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    prev_frame = None
+    scene_scores = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if prev_frame is not None:
+            # Compute inter-frame difference
+            diff = cv2.absdiff(gray, prev_frame).mean()
+            scene_scores.append((cap.get(cv2.CAP_PROP_POS_FRAMES), diff))
+
+        prev_frame = gray
+
+    # Select frames at highest scene-change scores
+    scene_scores.sort(key=lambda x: -x[1])
+    top_indices = sorted([int(s[0]) for s in scene_scores[:num_frames]])
+    return top_indices
+```
+Best for: Action videos, movies, tutorials with distinct steps.
+
+**Alternative Strategy 2: Activity-density-proportional sampling**
+```python
+def sample_activity_proportional(self, video_path, num_frames=8):
+    """Sample more frames from high-motion segments"""
+    # 1. Compute optical flow or frame difference for all frames
+    # 2. Compute "activity score" per second
+    # 3. Allocate frames proportionally to activity score
+    # High-activity segment: 3 seconds → 4 frames
+    # Low-activity segment: 7 seconds → 4 frames
+    # (rather than fixed 1 frame per 1.25 seconds)
+    pass
+```
+Best for: Sports, instructional videos, surveillance footage where key events occur in bursts.
+
+</details>
+
+### Exercise 4: MusicGen Token Budget Calculation
+MusicGen generates audio at 32kHz using EnCodec compression that produces 50 tokens/second. You want to generate a 60-second music clip.
+
+A) Calculate the total tokens needed.
+B) If the transformer has a max context length of 4096 tokens, can you generate the full 60 seconds in one pass? What is the maximum duration in one pass?
+C) Propose a strategy to generate longer music (5 minutes) while maintaining musical coherence.
+
+<details>
+<summary>Show Answer</summary>
+
+**A) Total tokens for 60 seconds**:
+```python
+duration_seconds = 60
+tokens_per_second = 50  # EnCodec compression rate
+total_tokens = 60 * 50 = 3000 tokens
+```
+
+**B) Can 60 seconds fit in 4096 context?**:
+```python
+max_context = 4096
+max_duration = 4096 / 50 = 81.92 seconds
+# YES: 3000 < 4096, so 60 seconds fits in a single pass.
+# Maximum duration in one pass: ~81 seconds
+```
+
+**C) Strategy for 5-minute (300 seconds) generation**:
+5 minutes × 50 tokens/sec = 15,000 tokens >> 4096 context limit.
+
+**Approach: Continuation with overlap (similar to Whisper chunking)**:
+```python
+def generate_long_music(prompt: str, target_duration: float = 300.0):
+    """Generate long music with continuation"""
+    chunk_duration = 75.0    # ~3750 tokens, leaving room for context
+    overlap_duration = 6.0   # 6-second overlap for coherence
+
+    chunks = []
+    generated_so_far = 0.0
+
+    while generated_so_far < target_duration:
+        if generated_so_far == 0:
+            # First chunk: generate from text prompt
+            chunk = model.generate(
+                text_prompt=prompt,
+                duration=chunk_duration
+            )
+        else:
+            # Subsequent chunks: condition on last N seconds of previous chunk
+            # The last overlap_duration of audio serves as musical context
+            continuation_audio = chunks[-1][-overlap_duration:]
+            chunk = model.generate_continuation(
+                prompt_audio=continuation_audio,
+                text_prompt=prompt,  # Maintain style consistency
+                duration=chunk_duration - overlap_duration
+            )
+
+        chunks.append(chunk)
+        generated_so_far += (chunk_duration - overlap_duration)
+
+    # Crossfade between chunks at overlap regions to avoid hard cuts
+    return crossfade_concatenate(chunks, overlap_duration)
+```
+
+Key insight: The text prompt stays constant across all chunks to maintain style consistency. The audio overlap provides musical continuity (key, tempo, instrument continuation). Crossfading at boundaries prevents audible clicks from discontinuities.
+
+</details>

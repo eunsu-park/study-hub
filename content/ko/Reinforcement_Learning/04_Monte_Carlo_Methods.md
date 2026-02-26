@@ -59,10 +59,11 @@ def calculate_returns(episode, gamma=0.99):
     G = 0  # 리턴 초기화
     returns = {}
 
-    # 역순으로 계산 (효율적인 계산)
+    # 왜 역순 반복인가: G_t = r_t + gamma * G_{t+1} 점화식(recurrence)을 활용하여
+    # 한 번의 O(n) 패스로 모든 리턴 계산 — 정방향이면 각 t마다 재합산하여 O(n^2)
     for t in range(len(episode) - 1, -1, -1):
         state, action, reward = episode[t]
-        G = reward + gamma * G  # 할인된 리턴
+        G = reward + gamma * G  # 할인된 리턴 — 이미 계산된 미래 리턴을 재활용
         returns[t] = (state, G)
 
     return returns
@@ -124,7 +125,8 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
     Returns:
         V: 상태 가치 함수
     """
-    # 각 상태의 리턴 합과 방문 횟수
+    # 왜 점진적 평균(incremental mean)인가: 합계와 횟수만 저장하면 상태당 O(1) 메모리로
+    # 모든 리턴을 보관하지 않아도 참 기대값으로 수렴
     returns_sum = defaultdict(float)
     returns_count = defaultdict(int)
     V = defaultdict(float)
@@ -142,17 +144,21 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
             state = next_state
             done = terminated or truncated
 
-        # First-visit: 각 상태의 첫 방문 인덱스 찾기
+        # 왜 First-visit인가: 상태의 첫 방문만 카운트하면 V(s)의 비편향(unbiased) 추정량을
+        # 얻음. Every-visit MC도 일치(consistent)하지만 편향/분산 트레이드오프가 다름
+        # — First-visit이 이론적 분석이 더 간단.
         visited = set()
         G = 0
 
-        # 역순으로 리턴 계산
+        # 왜 역순 반복인가: G_t = r_t + gamma * G_{t+1} — 한 번의 역방향 패스로
+        # O(n)에 모든 리턴 계산 (각 시점에서 재합산하면 O(n^2))
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # First-visit 체크
+            # 왜 First-visit 체크인가: 같은 에피소드 내 중복 방문을 제외하여
+            # 비편향(unbiased) 성질을 유지
             if state_t not in visited:
                 visited.add(state_t)
                 returns_sum[state_t] += G
@@ -203,13 +209,15 @@ def every_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
 
         G = 0
 
-        # Every-visit: 모든 방문에서 업데이트
+        # 왜 Every-visit가 다른가: 모든 방문에서 업데이트하면 비편향성(unbiasedness)을 포기하는
+        # 대신 분산(variance)이 낮아짐 — 에피소드당 더 많은 데이터 포인트를 얻지만 같은
+        # 에피소드의 샘플은 상관(correlated)됨. 점근적으로는 동일 값에 수렴.
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # 모든 방문 카운트
+            # First-visit 필터 없음: 모든 발생이 리턴 샘플에 기여
             returns_sum[state_t] += G
             returns_count[state_t] += 1
             V[state_t] = returns_sum[state_t] / returns_count[state_t]
@@ -244,7 +252,9 @@ def mc_exploring_starts(env, n_episodes=100000, gamma=0.99):
     policy = defaultdict(lambda: 0)
 
     for episode_num in range(n_episodes):
-        # Exploring Starts: 랜덤한 상태와 행동으로 시작
+        # 왜 Exploring Starts인가: 탐욕적(greedy) 정책은 모든 (s, a) 쌍의 Q값이
+        # 정확해야만 개선 가능 → 모든 쌍을 방문해야 함. 랜덤 초기화로
+        # 모든 쌍의 방문 확률이 0이 아님을 보장.
         start_state = env.observation_space.sample()
         start_action = env.action_space.sample()
 
@@ -284,7 +294,8 @@ def mc_exploring_starts(env, n_episodes=100000, gamma=0.99):
                 Q[state_t][action_t] = (returns_sum[state_t][action_t] /
                                         returns_count[state_t][action_t])
 
-                # 정책 개선 (탐욕적)
+                # 왜 탐욕적(greedy) 개선인가: 정책 개선 정리(policy improvement theorem)에 의해
+                # Q에 대해 탐욕적으로 행동하면 기존 정책 이상의 성능이 보장됨
                 policy[state_t] = np.argmax(Q[state_t])
 
     return Q, policy
@@ -313,11 +324,15 @@ def epsilon_greedy_policy(Q, state, n_actions, epsilon=0.1):
     Returns:
         action: 선택된 행동
     """
+    # 왜 epsilon-greedy인가: 탐험(exploration)과 활용(exploitation)의 균형 —
+    # epsilon 확률로 랜덤 행동을 시도하여 더 나은 전략을 발견하고,
+    # 나머지 시간에는 최선의 알려진 행동을 활용. 순수 탐욕(epsilon=0)은
+    # 더 나은 대안을 발견하지 못해 차선 정책에 갇힐 위험.
     if np.random.random() < epsilon:
-        # 탐험: 랜덤 행동
+        # 탐험: 미방문 (s, a) 쌍에 대한 정보를 수집하기 위한 랜덤 행동
         return np.random.randint(n_actions)
     else:
-        # 활용: 최선의 행동
+        # 활용: 추정된 Q값이 가장 높은 행동 선택
         return np.argmax(Q[state])
 ```
 
@@ -382,7 +397,9 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
                 Q[state_t][action_t] = (returns_sum[state_t][action_t] /
                                         returns_count[state_t][action_t])
 
-        # epsilon 감소
+        # 왜 epsilon 감소인가: 초기 학습에는 높은 탐험(high epsilon)으로 정확한 Q 추정을
+        # 구축하고, 이후 점차 활용(exploitation)으로 전환. 최솟값 0.01은 차선 정책에
+        # 완전히 갇히는 것을 방지 — 이 최솟값 없이는 지역 최적에서 벗어날 수 없음.
         epsilon = max(0.01, epsilon * epsilon_decay)
 
         if (episode_num + 1) % 10000 == 0:
@@ -390,7 +407,8 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
             print(f"Episode {episode_num + 1}: avg_reward = {avg_reward:.3f}, "
                   f"epsilon = {epsilon:.4f}")
 
-    # 최종 탐욕적 정책
+    # 왜 추론 시 탐욕적(greedy)인가: 배포(deployment) 시에는 탐험이 필요 없음 —
+    # 기대 보상(expected return)을 최대화하기 위해 최선의 학습된 행동만 선택
     policy = {}
     for state in Q:
         policy[state] = np.argmax(Q[state])
@@ -426,6 +444,9 @@ def importance_sampling_ratio(episode, target_policy, behavior_policy, t):
 
     ρ = π(a₀|s₀)/b(a₀|s₀) × π(a₁|s₁)/b(a₁|s₁) × ...
     """
+    # 왜 중요도 샘플링 비율(importance sampling ratio)인가: 데이터는 행동 정책(behavior policy) b
+    # 하에서 수집되었지만 목표 정책(target policy) pi를 평가하고자 함. pi/b 비율이 각 전이를
+    # 재가중하여 두 정책 간 분포 불일치(distribution mismatch)를 보정.
     rho = 1.0
 
     for k in range(t, len(episode)):
@@ -434,9 +455,9 @@ def importance_sampling_ratio(episode, target_policy, behavior_policy, t):
         b_prob = behavior_policy(state, action)  # b(a|s)
 
         if b_prob == 0:
-            return 0  # 행동 정책에서 불가능한 행동
+            return 0  # 안전 검사: b가 이 행동을 취하지 않을 때 0으로 나누기 방지
 
-        rho *= pi_prob / b_prob
+        rho *= pi_prob / b_prob  # 나머지 모든 스텝에 대한 비율의 곱
 
     return rho
 ```
@@ -472,19 +493,24 @@ def mc_off_policy_prediction(env, target_policy, behavior_policy,
         G = 0
         W = 1.0  # 중요도 샘플링 가중치
 
-        # 역순 처리
+        # 왜 역순 처리인가: on-policy MC와 동일한 O(n) 점화식 활용 + 행동 정책과
+        # 목표 정책이 분기할 때 조기 종료(early-terminate) 가능
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
             G = gamma * G + reward_t
 
-            # 가중 중요도 샘플링 업데이트
+            # 왜 가중 중요도 샘플링(weighted IS)인가: 일반 IS는 비율 곱이 폭발하여
+            # 분산이 매우 높음. 가중 IS(자기 정규화)는 누적 가중치 C로 나누어 분산을
+            # 크게 줄임 — 약간의 편향이 생기지만 점근적으로 소멸.
             C[state_t][action_t] += W
             Q[state_t][action_t] += W / C[state_t][action_t] * (G - Q[state_t][action_t])
 
             # 목표 정책에서의 행동
             target_action = target_policy(state_t)
 
-            # 행동이 목표 정책과 다르면 중단 (결정적 정책의 경우)
+            # 왜 조기 종료인가: 결정적(deterministic) 목표 정책에서 행동 정책이 다른 행동을
+            # 취했으면 pi(a|s) = 0이므로 IS 비율이 0이 됨 — 이전 시점들은 기여 없으므로
+            # 계속 진행할 필요 없음
             if action_t != target_action:
                 break
 
@@ -530,6 +556,8 @@ def learn_blackjack(n_episodes=500000, gamma=1.0, epsilon=0.1):
     returns_count = defaultdict(lambda: np.zeros(2))
 
     def get_action(state, Q, epsilon):
+        # 왜 여기서 epsilon-greedy인가: 블랙잭은 이산 상태 공간이 작지만
+        # 올바른 hit/stick 경계를 발견하기 위해 여전히 탐험이 필요
         if np.random.random() < epsilon:
             return env.action_space.sample()
         return np.argmax(Q[state])

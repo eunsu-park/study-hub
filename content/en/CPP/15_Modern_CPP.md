@@ -1,5 +1,25 @@
 # Modern C++ (C++11/14/17/20)
 
+**Previous**: [Smart Pointers and Memory Management](./14_Smart_Pointers_Memory.md) | **Next**: [Multithreading and Concurrency](./16_Multithreading_Concurrency.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use C++11 core features: `auto`, range-based for loops, `nullptr`, initializer lists, and lambdas
+2. Implement move semantics with move constructors and move assignment operators
+3. Apply `constexpr` to evaluate expressions at compile time
+4. Write generic lambdas and use return-type deduction introduced in C++14
+5. Decompose return values with C++17 structured bindings and use `if constexpr` for compile-time branching
+6. Leverage C++17 vocabulary types (`std::optional`, `std::variant`, `std::string_view`)
+7. Use C++20 features including concepts, ranges pipelines, the spaceship operator, and `std::format`
+
+---
+
+C++ has evolved more in the last decade than in the preceding twenty years combined. Each standard--C++11, 14, 17, and 20--has introduced features that make the language safer, more expressive, and often faster without changing a line of runtime code. Understanding these features is not optional: modern libraries and codebases expect them, and ignoring them means writing more code that is harder to read and more prone to bugs.
+
 ## 1. C++ Version Evolution
 
 ```

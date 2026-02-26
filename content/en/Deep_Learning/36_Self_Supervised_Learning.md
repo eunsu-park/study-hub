@@ -866,6 +866,49 @@ ViT-based: MAE (reconstruction-based)
 
 ---
 
+## Exercises
+
+### Exercise 1: Understand Contrastive Learning Augmentations
+
+Strong data augmentation is the most critical factor in contrastive learning quality.
+1. Using `SimCLRAugmentation`, generate 8 augmented views of the same CIFAR-10 image and visualize them.
+2. Identify which augmentations (crop, flip, color jitter, grayscale, blur) are most visually drastic.
+3. Explain why color jitter is particularly important for contrastive learning: what visual shortcut would the model exploit if color jitter were removed?
+4. What is the purpose of using `GaussianBlur` as an augmentation? What invariance does it encourage the encoder to learn?
+
+### Exercise 2: Implement and Run SimCLR Training
+
+Using the provided `SimCLR` and `SimCLRAugmentation` code:
+1. Wrap a CIFAR-10 dataset so that `__getitem__` returns `(augmented_view_1, augmented_view_2)` using `SimCLRAugmentation`.
+2. Train a `SimCLR` model with a `ResNet-18` backbone for 20 epochs with `batch_size=256` and `temperature=0.5`.
+3. After training, freeze the encoder and train a linear classifier on top (linear evaluation) for 30 epochs.
+4. Report the linear probe accuracy on the CIFAR-10 test set. How does it compare to fully supervised training with the same architecture?
+
+### Exercise 3: Analyze MoCo's Momentum Encoder
+
+The momentum encoder is the key innovation in MoCo that allows using a smaller batch size than SimCLR.
+1. In `MoCo._momentum_update_key_encoder`, the update rule is: `param_k = m * param_k + (1-m) * param_q`. Explain in your own words why the key encoder parameters are NOT updated through backpropagation.
+2. Experiment: initialize two copies of a small network. Update one with SGD and the other with momentum update (m=0.999) for 100 steps. Plot the norm of parameter differences over time.
+3. What would happen if `m=0.0` (no momentum)? What if `m=1.0`? Why is a value close to 1 (e.g., 0.999) used in practice?
+
+### Exercise 4: Implement MAE Masking Visualization
+
+Using the `MAE.random_masking` function:
+1. Take a 224×224 image and divide it into 14×14 = 196 patches of size 16×16.
+2. Apply random masking with ratios `mask_ratio=0.25, 0.50, 0.75, 0.90` and visualize the resulting visible patches (gray out masked patches).
+3. The original MAE paper uses 75% masking. Explain why such a high masking ratio is beneficial: how does it prevent the model from using simple local texture patterns to reconstruct patches?
+4. Compare MAE's reconstruction-based approach to SimCLR's contrastive approach. In what scenarios would MAE-style pre-training be preferred? When would contrastive learning be preferred?
+
+### Exercise 5: Evaluate and Compare SSL Methods
+
+Using pre-trained model weights (e.g., from torchvision or timm):
+1. Load a SimCLR-pre-trained ResNet-50 and a supervised ResNet-50, both frozen.
+2. Train a linear classifier on top of each for 100 epochs using the STL-10 dataset (which has few labeled samples).
+3. Compare the linear probe accuracy of both approaches.
+4. Now fine-tune both models end-to-end with 10% labeled data. Which approach benefits more from fine-tuning? Why does self-supervised pre-training shine particularly in low-label regimes?
+
+---
+
 ## References
 
 - SimCLR: https://arxiv.org/abs/2002.05709

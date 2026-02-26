@@ -8,11 +8,15 @@
 - Learn the boundary layer concept
 - Implement simple channel flow CFD
 
+**Why This Lesson Matters:** Fluid mechanics governs an enormous range of phenomena -- from blood flow in arteries to weather prediction to aircraft design. The Navier-Stokes equations that describe fluid motion are nonlinear PDEs that rarely admit analytical solutions. CFD (Computational Fluid Dynamics) bridges this gap by solving these equations numerically, making it one of the most impactful applications of numerical simulation.
+
 ---
 
 ## 1. Fluid Mechanics Fundamentals
 
 ### 1.1 Continuum Hypothesis
+
+The continuum hypothesis is the foundational assumption that enables us to use PDEs for fluid modeling. It states that we can treat the fluid as a continuous medium rather than tracking individual molecules, provided the flow length scales are much larger than the molecular mean free path.
 
 ```
 Continuum Hypothesis:
@@ -82,6 +86,12 @@ print(f"  Prandtl number: {air.Pr:.2f}")
 ```
 
 ### 1.3 Reynolds Number
+
+The Reynolds number is perhaps the most important dimensionless parameter in fluid mechanics. It measures the ratio of inertial forces (which cause turbulent mixing) to viscous forces (which damp out disturbances):
+
+$$Re = \frac{\rho U L}{\mu} = \frac{U L}{\nu}$$
+
+At low $Re$, viscosity dominates and flow is smooth (laminar). At high $Re$, inertia dominates and flow becomes chaotic (turbulent). This single number determines the qualitative character of the flow and dictates the numerical resolution required.
 
 ```
 Reynolds Number Definition:
@@ -1039,6 +1049,25 @@ CFD Fundamentals Summary:
    - Turbulence model selection
    - Numerical stability (CFL condition)
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Reynolds Number and Flow Regime
+Water at 20°C (density 998 kg/m³, dynamic viscosity 1.002×10⁻³ Pa·s) flows through a 5 cm diameter pipe at an average velocity of 2 m/s. Calculate the Reynolds number and determine the flow regime. Then find the minimum velocity needed to achieve turbulent flow in the same pipe.
+
+### Exercise 2: Navier-Stokes Term Analysis
+For a 2D incompressible flow with velocity field u = sin(x)cos(y) and v = -cos(x)sin(y), verify that the continuity equation is satisfied. Then compute the vorticity ω = ∂v/∂x - ∂u/∂y and describe what it represents physically.
+
+### Exercise 3: Poiseuille Flow Comparison
+Implement the analytical Poiseuille flow solution and the finite difference CFD solution for a channel with height H = 1 m, dynamic viscosity μ = 0.01 Pa·s, and pressure gradient dp/dx = -1 Pa/m. Use grid sizes Ny = 10, 20, and 40, and plot the L2 error between the numerical and analytical solutions as a function of grid spacing. What convergence order do you observe?
+
+### Exercise 4: Boundary Layer Scaling
+For air at 20°C (kinematic viscosity ν = 1.5×10⁻⁵ m²/s) flowing at U∞ = 10 m/s over a flat plate, compute and plot: (a) the laminar boundary layer thickness δ(x) for 0 < x < 0.5 m using the Blasius formula δ = 5x/√(Re_x), (b) the local friction coefficient Cf(x) = 0.664/√(Re_x), and (c) the transition location where Re_x = 5×10⁵. At what flow speed does the transition point move to x = 0.1 m?
+
+### Exercise 5: CFD Mesh Sensitivity
+Modify the channel flow CFD code to perform a systematic grid convergence study. Run simulations with Nx×Ny = 25×15, 50×30, and 100×60 grids. For each grid, compare the centerline velocity profile against the analytical Poiseuille solution and compute the maximum absolute error. Does the error halve when the grid spacing is halved (first-order convergence) or reduce by a factor of four (second-order)?
 
 ---
 

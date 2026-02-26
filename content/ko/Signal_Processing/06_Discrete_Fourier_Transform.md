@@ -1,15 +1,20 @@
 # 이산 푸리에 변환(Discrete Fourier Transform)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. DTFT, DFT, FFT 간의 관계를 설명하고 DFT가 DTFT를 샘플링함으로써 어떻게 도출되는지 기술할 수 있습니다.
+2. 선형성, 원형 시프트(Circular Shift), 원형 합성곱(Circular Convolution), 파르스발 정리(Parseval's Theorem)를 포함한 DFT 성질을 적용할 수 있습니다.
+3. 스펙트럼 누설(Spectral Leakage)을 설명하고 이를 줄이기 위한 윈도잉(Windowing) 전략(Hann, Hamming, Blackman)을 구현할 수 있습니다.
+4. NumPy를 사용하여 FFT 알고리즘을 구현하고 실제 신호의 스펙트럼 분석에 활용할 수 있습니다.
+5. 쿨리-튜키(Cooley-Tukey) 알고리즘의 분할 정복(Divide-and-Conquer) 구조를 분석하고 O(N log N) 계산 이점을 설명할 수 있습니다.
+
+---
+
 ## 개요
 
 이산 푸리에 변환(Discrete Fourier Transform, DFT)은 디지털 신호 처리의 계산적 핵심 도구입니다. DFT는 유한 길이의 표본 시퀀스를 유한 길이의 주파수 성분 시퀀스로 변환합니다. 고속 푸리에 변환(Fast Fourier Transform, FFT) 알고리즘과 결합하여, DFT는 효율적인 스펙트럼 분석, 필터링, 상관관계 계산 등 수많은 응용을 가능하게 합니다. 이 레슨은 DFT 이론, 성질, FFT 알고리즘, 그리고 실용적 사용법을 다룹니다.
-
-**학습 목표:**
-- DTFT, DFT, FFT 간의 관계 이해
-- 원형 합성곱과 파르스발 정리를 포함한 DFT 성질 적용
-- 스펙트럼 누설과 윈도잉 전략 설명
-- 실제 신호의 스펙트럼 분석을 위한 FFT 구현 및 활용
-- 쿨리-튜키(Cooley-Tukey) 알고리즘과 그 계산적 이점 이해
 
 **선수 과목:** [05. 표본화와 복원](05_Sampling_and_Reconstruction.md)
 

@@ -2,9 +2,26 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [10_Error_Handling.md](./10_Error_Handling.md) | **Next**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md)
+**Previous**: [Error Handling and Debugging](./10_Error_Handling.md) | **Next**: [Portability and Best Practices](./12_Portability_and_Best_Practices.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement manual argument parsing using `while`/`case` loops with support for short, long, and combined options
+2. Apply POSIX `getopts` to parse short options with proper error handling in silent mode
+3. Compare `getopts` (POSIX) and GNU `getopt` and choose the appropriate tool for a given portability requirement
+4. Write self-documenting help messages following the NAME/SYNOPSIS/DESCRIPTION/OPTIONS convention
+5. Implement color output with automatic detection of terminal capabilities and `NO_COLOR` support
+6. Build progress indicators including spinners, progress bars, and multi-task dashboards
+7. Design interactive input prompts with validation, menus, and password masking
+8. Combine argument parsing, colored output, and progress display into a professional CLI tool
+
+---
+
+Every script that accepts user input needs a way to parse command-line arguments. A well-designed CLI interface -- with clear help text, intuitive flags, and informative progress feedback -- determines whether your script feels like a polished tool or a fragile hack. When you share scripts with teammates or run them in CI/CD pipelines, proper argument handling becomes the difference between "it works on my machine" and reliable, self-documenting automation.
 
 ## 1. Manual Argument Parsing
 
@@ -1800,6 +1817,75 @@ Build an interactive CLI dashboard that:
 - Logs all events to a file
 - Can run in non-interactive mode for scripts
 
+## Exercises
+
+### Exercise 1: Compare Manual Parsing vs getopts
+
+Write the same CLI tool twice — once using a manual `while/case` loop and once using `getopts`. The tool should accept:
+- `-v` / `--verbose` (flag)
+- `-o FILE` / `--output FILE` (option with argument)
+- `-n NUM` / `--count NUM` (option with numeric argument, default 1)
+- Remaining positional arguments collected into an array
+
+After implementing both versions, list one advantage and one limitation of each approach.
+
+### Exercise 2: Write a Self-Documenting Help Function
+
+Create a script `backup.sh` that accepts `--help`, `--source DIR`, `--dest DIR`, `--compress`, and `--dry-run` flags. Implement a `usage()` function that follows the NAME / SYNOPSIS / DESCRIPTION / OPTIONS convention:
+
+```
+NAME
+    backup.sh - archive files from source to destination
+
+SYNOPSIS
+    backup.sh [OPTIONS]
+
+OPTIONS
+    -s, --source DIR    Source directory to backup
+    -d, --dest DIR      Destination directory
+    -c, --compress      Compress the archive with gzip
+    -n, --dry-run       Show what would be done without doing it
+    -h, --help          Show this help and exit
+```
+
+Trigger `usage()` when `--help` is passed or when required arguments are missing.
+
+### Exercise 3: Add Color Output with NO_COLOR Support
+
+Add a color output library to an existing script. Requirements:
+- Define constants `RED`, `GREEN`, `YELLOW`, `CYAN`, `RESET` using ANSI escape codes
+- Check both `[ -t 1 ]` (stdout is a terminal) and `${NO_COLOR:-}` (the NO_COLOR convention) to decide whether to emit color
+- Provide `print_success`, `print_warn`, `print_error` helper functions that use the appropriate color
+- Test by running: `./script.sh` (color), `NO_COLOR=1 ./script.sh` (no color), and `./script.sh | cat` (piped, no color)
+
+### Exercise 4: Build a Progress Bar
+
+Implement a `progress_bar <current> <total> <label>` function that:
+- Calculates the percentage complete
+- Draws a bar using `#` characters scaled to 40 columns
+- Overwrites the previous line using `\r` (carriage return) so the bar updates in place
+- Accepts an optional label string displayed after the bar
+
+Test it with a loop simulating file processing:
+
+```bash
+total=20
+for i in $(seq 1 $total); do
+    sleep 0.1
+    progress_bar "$i" "$total" "Processing files"
+done
+echo ""  # newline after bar completes
+```
+
+### Exercise 5: Build a Multi-Step Interactive Wizard
+
+Implement a `wizard.sh` that collects configuration through interactive prompts:
+- Ask for a project name (validate: non-empty, alphanumeric + underscores only)
+- Ask for a port number (validate: integer between 1024 and 65535)
+- Ask to choose an environment from a numbered menu: `1) development  2) staging  3) production`
+- Ask for confirmation before proceeding, defaulting to "n"
+- In non-interactive mode (when stdin is not a terminal), read values from environment variables `PROJ_NAME`, `PROJ_PORT`, `PROJ_ENV` instead of prompting
+
 ---
 
-**Previous**: [10_Error_Handling.md](./10_Error_Handling.md) | **Next**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md)
+**Previous**: [Error Handling and Debugging](./10_Error_Handling.md) | **Next**: [Portability and Best Practices](./12_Portability_and_Best_Practices.md)

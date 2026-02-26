@@ -70,7 +70,8 @@ section("Generator Expressions")
 squares_list = [x**2 for x in range(10)]
 print(f"List comprehension: {squares_list}")
 
-# Generator expression - lazy evaluation
+# Why: Generator expressions produce values lazily (one at a time), using O(1) memory
+# regardless of input size, unlike list comprehensions which materialize the entire result
 squares_gen = (x**2 for x in range(10))
 print(f"Generator expression: {squares_gen}")
 print(f"First 5 squares: {list(itertools.islice(squares_gen, 5))}")
@@ -136,7 +137,9 @@ def accumulator() -> Iterator[int]:
 
 
 acc = accumulator()
-next(acc)  # Prime the generator
+# Why: The first next() advances the generator to the first yield, which is required
+# before send() can inject a value — the generator must be "primed" to reach a yield point
+next(acc)
 print(f"  send(10) -> {acc.send(10)}")
 print(f"  send(20) -> {acc.send(20)}")
 print(f"  send(5) -> {acc.send(5)}")
@@ -188,6 +191,8 @@ def combined_manual():
         yield value
 
 
+# Why: 'yield from' transparently delegates to a sub-generator, correctly forwarding
+# send(), throw(), and close() — manual for-loop delegation cannot do this
 def combined_yield_from():
     """Delegation with yield from."""
     yield from generator_a()
@@ -301,7 +306,8 @@ def take(n: int, iterable: Iterator[Any]) -> Iterator[Any]:
         yield item
 
 
-# Build pipeline
+# Why: Generator pipelines compose lazily — no intermediate lists are created, so even
+# with huge data sources, memory usage stays constant (each stage processes one item at a time)
 pipeline = take(5, square(filter_even(read_numbers())))
 result = list(pipeline)
 print(f"Pipeline: read -> filter_even -> square -> take(5)")

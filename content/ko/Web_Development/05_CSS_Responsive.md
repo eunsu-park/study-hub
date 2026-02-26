@@ -1,12 +1,22 @@
 # CSS 반응형 디자인
 
-## 개요
+**이전**: [CSS 레이아웃](./04_CSS_Layout.md) | **다음**: [JS 기초](./06_JS_Basics.md)
 
-반응형 웹 디자인은 다양한 화면 크기(데스크톱, 태블릿, 모바일)에서 최적의 사용자 경험을 제공하는 설계 방식입니다.
+## 학습 목표(Learning Objectives)
 
-**선수 지식**: [04_CSS_Layout.md](./04_CSS_Layout.md)
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 반응형 웹 디자인의 세 가지 핵심 원칙인 유동적 그리드(fluid grids), 유연한 이미지(flexible images), 미디어 쿼리(media queries)를 설명할 수 있습니다
+2. 뷰포트 메타 태그(viewport meta tag)의 목적을 설명하고 올바르게 설정할 수 있습니다
+3. min-width, max-width, orientation, hover 및 prefers-color-scheme 같은 기능 쿼리(feature queries)를 사용하는 미디어 쿼리를 작성할 수 있습니다
+4. rem, em, vw, vh 및 clamp() 함수를 포함한 반응형 CSS 단위를 적용할 수 있습니다
+5. srcset, sizes, picture 요소, object-fit을 사용하여 반응형 이미지를 구현할 수 있습니다
+6. 모바일 퍼스트(mobile-first)와 데스크톱 퍼스트(desktop-first) 개발 전략을 비교하고 모바일 퍼스트가 선호되는 이유를 설명할 수 있습니다
+7. Mostly Fluid, Column Drop, Off Canvas 같은 일반적인 반응형 레이아웃 패턴을 구현할 수 있습니다
 
 ---
+
+현재 전체 웹 트래픽의 절반 이상이 모바일 기기에서 발생하며, 그 비중은 계속 증가하고 있습니다. 데스크톱 모니터에서는 완벽하게 보이지만 스마트폰에서는 사용하기 어려운 사이트는 잠재적 방문자 대다수를 놓치게 됩니다. 반응형 디자인은 4인치 스마트폰부터 32인치 모니터까지 어떤 화면 크기에서도 콘텐츠가 가독성 있게, 내비게이션이 사용 가능하게, 성능이 유지되도록 레이아웃을 자연스럽게 적응시키는 방법입니다.
 
 ## 목차
 
@@ -1059,7 +1069,7 @@ body {
 
 ## 다음 단계
 
-- [06_JS_Basics.md](./06_JS_Basics.md) - JavaScript 시작하기
+- [JavaScript 기초](./06_JS_Basics.md) - JavaScript 시작하기
 
 ---
 

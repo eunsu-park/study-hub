@@ -1,5 +1,26 @@
 # Views and Indexes
 
+**Previous**: [Subqueries and CTE](./08_Subqueries_and_CTE.md) | **Next**: [Functions and Procedures](./10_Functions_and_Procedures.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a view is and describe its advantages (query simplification, security, logical independence)
+2. Create, replace, rename, and drop views using DDL statements
+3. Distinguish between regular views and materialized views and explain when to use each
+4. Identify whether a view is updatable and apply WITH CHECK OPTION for data integrity
+5. Explain how B-tree indexes accelerate lookups and describe the trade-off with write performance
+6. Create single-column, composite, partial, expression, and unique indexes
+7. Compare index types (B-tree, Hash, GIN, GiST) and choose the appropriate one for a given use case
+8. Read EXPLAIN / EXPLAIN ANALYZE output to verify that indexes are being used
+
+---
+
+As your database grows, two challenges emerge: complex queries become tedious to repeat, and full-table scans become unacceptably slow. Views solve the first problem by encapsulating a query behind a simple name, while indexes solve the second by giving PostgreSQL a fast lookup path to the rows you need. Together, they are essential tools for building maintainable and performant database applications.
+
 ## 1. VIEW Concept
 
 A view is a stored query that can be used like a virtual table.
@@ -521,6 +542,4 @@ EXPLAIN ANALYZE SELECT * FROM test_orders WHERE user_id = 500;
 
 ---
 
-## Next Steps
-
-Learn about user-defined functions in [10_Functions_and_Procedures.md](./10_Functions_and_Procedures.md)!
+**Previous**: [Subqueries and CTE](./08_Subqueries_and_CTE.md) | **Next**: [Functions and Procedures](./10_Functions_and_Procedures.md)

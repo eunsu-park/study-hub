@@ -1,5 +1,24 @@
 # 블록 및 파일 스토리지 (EBS/EFS vs Persistent Disk/Filestore)
 
+**이전**: [객체 스토리지](./07_Object_Storage.md) | **다음**: [VPC](./09_Virtual_Private_Cloud.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 블록, 파일, 객체 스토리지를 구분하고 각각의 적절한 사용 사례를 설명할 수 있습니다
+2. AWS EBS와 GCP Persistent Disk의 볼륨 유형 및 성능 특성을 비교할 수 있습니다
+3. IOPS, 처리량, 비용 요구 사항에 따라 적절한 볼륨 유형을 선택할 수 있습니다
+4. AWS EFS와 GCP Filestore를 사용하여 공유 파일 스토리지를 구성할 수 있습니다
+5. 블록 스토리지 볼륨에 대한 스냅샷 및 백업 전략을 구현할 수 있습니다
+6. 인스턴스 연결 스토리지(Instance-attached Storage)와 네트워크 연결 스토리지(Network-attached Storage)의 차이를 설명할 수 있습니다
+
+---
+
+객체 스토리지가 대규모 비정형 데이터를 처리하는 반면, 많은 워크로드는 블록 및 파일 스토리지만이 제공할 수 있는 낮은 지연 시간과 높은 처리량을 필요로 합니다. 데이터베이스는 랜덤 I/O를 위해 블록 볼륨이 필요하고, 공유 애플리케이션 데이터는 종종 POSIX 호환 파일 시스템을 요구합니다. 각 워크로드에 적합한 스토리지 유형을 선택하는 것은 성능과 비용 최적화 모두에 있어 매우 중요합니다.
+
 ## 1. 스토리지 유형 비교
 
 ### 1.1 블록 vs 파일 vs 객체 스토리지
@@ -475,6 +494,164 @@ cat /shared/test.txt  # "Hello from Instance 1" 출력
 
 - [09_Virtual_Private_Cloud.md](./09_Virtual_Private_Cloud.md) - VPC 네트워킹
 - [11_Managed_Relational_DB.md](./11_Managed_Relational_DB.md) - 데이터베이스 스토리지
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 스토리지 유형 선택
+
+각 워크로드에 가장 적합한 스토리지 유형(블록/EBS, 파일/EFS, 객체/S3)을 선택하고 이유를 설명하세요:
+
+1. EC2에서 실행되는 PostgreSQL 데이터베이스는 낮은 지연 시간의 무작위 읽기/쓰기 접근이 필요합니다.
+2. 콘텐츠 관리 시스템(CMS)이 10개의 EC2 웹 서버에 걸쳐 실행되며, 모든 서버가 동일한 업로드된 미디어 파일을 동시에 읽고 써야 합니다.
+3. 로그 집계 시스템이 하루에 500 GB의 압축 로그 파일을 아카이브하며, 거의 읽히지 않습니다.
+4. 애플리케이션이 EC2 인스턴스가 실행되는 동안에만 필요한 중간 연산 파일을 저장하기 위한 임시 스크래치(scratch) 공간이 필요합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+1. **블록 스토리지(EBS)** — 데이터베이스는 무작위 I/O 작업(개별 행 읽기/쓰기)을 위해 블록 수준 접근이 필요합니다. EBS `gp3` 또는 `io2`가 PostgreSQL에 필요한 낮은 지연 시간과 높은 IOPS를 제공합니다. 객체 스토리지는 작업당 높은 지연 시간이, 파일 스토리지는 NFS 오버헤드가 있습니다.
+
+2. **파일 스토리지(EFS)** — 여러 EC2 인스턴스가 동일한 파일 시스템을 동시에 마운트하는 것이 NFS 기반 파일 스토리지의 정의적 사용 사례입니다. EFS는 10개의 웹 서버 모두가 동일한 파일 시스템을 마운트하고 동일한 미디어 파일을 읽고 쓸 수 있게 합니다. 블록 스토리지(EBS)는 읽기-쓰기 모드에서 한 번에 하나의 인스턴스에만 연결할 수 있습니다.
+
+3. **객체 스토리지(S3)** — 로그 아카이브는 한 번 쓰고 거의 읽지 않으며 전체 볼륨이 방대할 수 있습니다. S3의 GB당 과금, 무제한 용량, 라이프사이클 규칙(Glacier로 자동 전환)이 가장 비용 효율적인 선택입니다. 블록 및 파일 스토리지는 콜드 데이터에 대해 GB당 훨씬 더 비쌉니다.
+
+4. **인스턴스 스토어(Instance Store, 로컬 SSD)** — 인스턴스 수명 동안만 필요한 임시 스크래치 공간에는, 호스트에 물리적으로 연결된 인스턴스 스토어(NVMe SSD)가 추가 비용 없이 최고의 IOPS와 처리량을 제공합니다. 인스턴스 중지 시 데이터가 손실되지만, 임시 스크래치 데이터에는 허용됩니다. 임시 데이터를 보관할 EBS 볼륨 비용을 절약할 수 있습니다.
+
+</details>
+
+### 연습 문제 2: EBS 볼륨 유형 선택
+
+고빈도 트레이딩(HFT, High-Frequency Trading) 애플리케이션이 다음 I/O 특성을 가진 데이터베이스를 필요로 합니다:
+- 지속적으로 50,000 IOPS 필요
+- 500 MB/s 처리량
+- 2 TB 용량
+- 서브 밀리초(sub-millisecond) 지연 시간이 중요
+
+어떤 EBS 볼륨 유형을 사용해야 합니까? 생성 AWS CLI 명령어를 작성하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**볼륨 유형: `io2`** (프로비저닝된 IOPS SSD)
+
+이유:
+- `gp3`는 최대 16,000 IOPS를 지원 — 50,000 IOPS에 불충분합니다.
+- `io2`는 볼륨당 최대 64,000 IOPS를 지원합니다(지원 인스턴스에서 io2 Block Express로 최대 256,000).
+- `io2`는 HFT 워크로드에 필요한 일관되고 서브 밀리초 지연 시간을 제공합니다.
+- `st1`/`sc1`은 HDD 기반으로 지연 시간 요건이 있는 무작위 I/O에 부적합합니다.
+
+```bash
+aws ec2 create-volume \
+    --availability-zone ap-northeast-2a \
+    --size 2000 \
+    --volume-type io2 \
+    --iops 50000 \
+    --tag-specifications 'ResourceType=volume,Tags=[{Key=Name,Value=HFT-DB-Volume}]'
+```
+
+**참고**: 50,000 IOPS를 달성하려면 EC2 인스턴스도 이를 지원해야 합니다. 스토리지 최적화 인스턴스(i3/i4i) 또는 높은 EBS 대역폭을 지원하는 대형 컴퓨팅 인스턴스(예: `m5.8xlarge`)를 사용하세요.
+
+</details>
+
+### 연습 문제 3: EBS 스냅샷(Snapshot)과 복원
+
+운영(production) EC2 인스턴스에 주요 OS 업데이트 전에 백업이 필요한 EBS 볼륨(`vol-0abc123`)이 있습니다. 다음을 위한 AWS CLI 명령어를 작성하세요:
+1. 설명적인 이름으로 볼륨의 스냅샷을 생성합니다.
+2. 해당 볼륨의 모든 스냅샷을 나열합니다.
+3. 스냅샷에서 AZ `ap-northeast-2b`에 새 EBS 볼륨을 생성합니다(다른 AZ로 복원이 필요한 경우를 위해).
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+# 1단계: 설명이 있는 스냅샷 생성
+aws ec2 create-snapshot \
+    --volume-id vol-0abc123 \
+    --description "Pre-OS-update backup - $(date +%Y-%m-%d)" \
+    --tag-specifications 'ResourceType=snapshot,Tags=[{Key=Name,Value=pre-os-update-backup},{Key=Purpose,Value=manual-backup}]'
+
+# 2단계: 이 볼륨의 스냅샷 나열 (본인 소유)
+aws ec2 describe-snapshots \
+    --owner-ids self \
+    --filters "Name=volume-id,Values=vol-0abc123" \
+    --query 'Snapshots[*].[SnapshotId,StartTime,State,Description]' \
+    --output table
+
+# 3단계: ap-northeast-2b에 스냅샷에서 새 볼륨 생성
+# (snap-0xyz456을 2단계의 실제 스냅샷 ID로 교체)
+aws ec2 create-volume \
+    --snapshot-id snap-0xyz456 \
+    --availability-zone ap-northeast-2b \
+    --volume-type gp3 \
+    --tag-specifications 'ResourceType=volume,Tags=[{Key=Name,Value=restored-from-pre-os-update}]'
+```
+
+**핵심 인사이트**: 스냅샷은 리전 리소스입니다(AZ 특정이 아님). 동일 리전 내 어느 AZ에도 스냅샷을 복원할 수 있으며, 이를 통해 교차 AZ 재해 복구와 볼륨 마이그레이션이 가능합니다.
+
+</details>
+
+### 연습 문제 4: EFS vs EBS 아키텍처 결정
+
+웹 애플리케이션 팀이 두 가지 스토리지 아키텍처를 논의 중입니다:
+
+**옵션 A**: 각 EC2 웹 서버가 사용자 업로드 파일에 대한 자체 EBS 볼륨을 가집니다.
+**옵션 B**: 모든 EC2 웹 서버가 사용자 업로드 파일에 대한 공유 EFS 파일 시스템을 마운트합니다.
+
+다음 측면에서 각 옵션의 의미를 분석하세요: (1) 데이터 일관성(consistency), (2) 스케일링, (3) 비용
+
+<details>
+<summary>정답 보기</summary>
+
+| 측면 | 옵션 A: 인스턴스별 EBS | 옵션 B: 공유 EFS |
+|------|------------------------|-----------------|
+| **데이터 일관성** | 한 서버에 업로드된 파일이 다른 서버에는 보이지 않습니다. 사용자는 어떤 서버가 요청을 처리하느냐에 따라 다른 응답을 받게 됩니다 — 파일 스토리지에서 치명적인 버그입니다. | 모든 서버가 동일한 파일 시스템을 봅니다. 서버 1을 통해 업로드된 파일이 서버 2에서 즉시 읽을 수 있습니다. |
+| **스케일링** | 새 EC2 인스턴스 추가 시 빈 볼륨으로 시작됩니다. 인스턴스 간 파일을 수동으로 동기화하거나 CDN/S3 레이어를 추가해야 합니다. | 새 인스턴스가 EFS를 마운트하면 기존 모든 파일에 자동으로 접근 가능합니다. 수평적 스케일링이 원활합니다. |
+| **비용** | EBS: ~$0.10/GB/월(gp3). 100 GB × 10대 서버 = 1 TB EBS = **월 $100** | EFS Standard: ~$0.30/GB/월이지만 실제 데이터 100 GB(공유)에 대해서만 = **월 $30**. EFS는 GB당 더 비싸지만 하나의 사본에만 비용이 발생합니다. |
+
+**결론**: 옵션 B(EFS)가 공유 웹 서버 파일 스토리지의 올바른 아키텍처입니다. 옵션 A는 올바르게 작동하기 위해 동기화 메커니즘(예: S3 + 동기화 스크립트)을 구축해야 하므로 비용 이점이 사라집니다.
+
+**모범 사례**: 진정한 대규모 웹 애플리케이션의 경우, 사전 서명된 POST(pre-signed POST)를 사용하여 사용자 업로드를 S3에 직접 저장하고 CloudFront를 통해 제공하세요. 이렇게 하면 EFS가 완전히 필요 없어지고 글로벌 CDN 전달이 가능합니다.
+
+</details>
+
+### 연습 문제 5: 스토리지 비용 비교
+
+다음 스토리지 요건에 대한 월별 비용을 계산하고 요건을 충족하는 가장 저렴한 옵션을 결정하세요:
+
+요건: 월 2회 접근하는 10 TB 데이터(매번 약 100 GB 순차 읽기), 15분 이내 접근 가능해야 함
+
+선택지:
+- EBS `st1` (처리량 최적화 HDD): $0.045/GB/월
+- S3 Standard-IA: $0.0138/GB/월 + GB당 $0.01 검색 비용
+- S3 Glacier Flexible Retrieval: $0.005/GB/월 + GB당 $0.01 검색 비용(긴급(expedited) 티어: ~15분)
+
+<details>
+<summary>정답 보기</summary>
+
+**옵션 1: EBS st1**
+- 스토리지: 10,000 GB × $0.045 = **월 $450**
+- 검색: $0 (연결된 스토리지, 접근당 수수료 없음)
+- 합계: **월 $450**
+
+**옵션 2: S3 Standard-IA**
+- 스토리지: 10,000 GB × $0.0138 = **월 $138**
+- 검색: 2회 × 100 GB × $0.01/GB = **월 $2**
+- 합계: **월 $140**
+
+**옵션 3: S3 Glacier Flexible Retrieval (긴급 검색)**
+- 스토리지: 10,000 GB × $0.005 = **월 $50**
+- 검색: 긴급 검색(1~5분, 15분 SLA 충족)은 ~$0.03/GB
+  - 2회 × 100 GB × $0.03 = **월 $6**
+- 긴급 요청: 요청당 $0.01 (무시할 만한 수준)
+- 합계: **~월 $56**
+
+**최우선 선택: S3 Glacier Flexible Retrieval** ~월 $56 — EBS보다 87% 저렴하고 긴급 검색 티어를 사용하면 15분 가용성 요건을 충족합니다.
+
+**중요 주의사항**: Glacier 긴급 검색은 최선 노력(best-effort) 방식으로 피크 수요 중에는 사용 불가할 수 있습니다. 보장된 15분 가용성이 필요하다면 밀리초 접근을 제공하는 S3 Glacier Instant Retrieval($0.004/GB/월 + $0.03/GB 검색)을 고려하세요.
+
+</details>
 
 ---
 

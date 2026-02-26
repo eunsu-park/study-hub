@@ -1,5 +1,25 @@
 # Operators and Control Flow
 
+**Previous**: [Variables and Types](./02_Variables_and_Types.md) | **Next**: [Functions](./04_Functions.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply arithmetic, assignment, comparison, logical, and bitwise operators in C++ expressions
+2. Distinguish between prefix and postfix increment/decrement behavior
+3. Explain short-circuit evaluation in logical expressions and identify its side-effect implications
+4. Implement branching logic using `if`, `else if`, `else`, and `switch` statements
+5. Design loops using `for`, `while`, and `do-while`, including range-based `for` (C++11)
+6. Apply `break` and `continue` to control loop execution flow
+7. Identify operator precedence rules and use parentheses to clarify intent
+
+---
+
+Operators and control flow are the steering wheel and accelerator of every program. Without operators you cannot compute, compare, or combine values; without control flow you cannot make decisions or repeat work. Together they transform a static list of declarations into dynamic, responsive logic -- and every advanced C++ feature you will encounter later is ultimately built on these primitives.
+
 ## 1. Arithmetic Operators
 
 ### Basic Arithmetic Operators
@@ -692,6 +712,92 @@ int main() {
 | `for` | Count-based iteration |
 | `while` | Condition-based iteration |
 | `do-while` | Executes at least once |
+
+---
+
+## Exercises
+
+### Exercise 1: Operator Evaluation Prediction
+
+Without running the code, predict the output of each statement. Then compile and verify your answers.
+
+```cpp
+#include <iostream>
+
+int main() {
+    int a = 10, b = 3;
+
+    // Predict each output before running
+    std::cout << a / b << std::endl;          // ?
+    std::cout << a % b << std::endl;          // ?
+    std::cout << (double)a / b << std::endl;  // ?
+
+    int x = 5;
+    std::cout << x++ << std::endl;  // ?
+    std::cout << x   << std::endl;  // ?
+    std::cout << ++x << std::endl;  // ?
+
+    // Predict: does the following print 0 or 1?
+    int counter = 0;
+    if (false && (++counter > 0)) {}
+    if (true  || (++counter > 0)) {}
+    std::cout << counter << std::endl;  // ?
+
+    return 0;
+}
+```
+
+After predicting, explain in your own words why `counter` has that value (short-circuit evaluation).
+
+### Exercise 2: Bitwise Flag Operations
+
+Implement a simple permission system using bitwise operators. Define three flags (`READ = 1`, `WRITE = 2`, `EXECUTE = 4`) and write a program that:
+
+1. Creates a permission variable with READ and WRITE set.
+2. Checks whether EXECUTE is set (it should not be).
+3. Grants EXECUTE permission using bitwise OR.
+4. Revokes WRITE permission using bitwise AND with NOT (`&= ~WRITE`).
+5. Prints the final permissions in a human-readable format.
+
+```cpp
+#include <iostream>
+
+int main() {
+    const int READ    = 1;  // 001
+    const int WRITE   = 2;  // 010
+    const int EXECUTE = 4;  // 100
+
+    int perms = READ | WRITE;  // Start: READ + WRITE
+
+    // Add your steps here ...
+
+    return 0;
+}
+```
+
+### Exercise 3: Grade Calculator with switch
+
+Write a function `char letterGrade(int score)` that converts a numeric score (0–100) to a letter grade using a `switch` statement on `score / 10`. Map 10 and 9 to `'A'`, 8 to `'B'`, 7 to `'C'`, 6 to `'D'`, and anything else to `'F'`. Test it with at least five different scores including boundary values (59, 60, 89, 90, 100).
+
+### Exercise 4: Loop Pattern Challenge
+
+Using nested `for` loops, print the following diamond pattern for a given `size` (shown here for `size = 4`):
+
+```
+   *
+  ***
+ *****
+*******
+ *****
+  ***
+   *
+```
+
+The top half (including the middle row) should have rows of `2*i - 1` stars (`i` from 1 to `size`), and the bottom half mirrors it. Use only `std::cout`, loops, and `continue` or `break` if needed — do not use any string manipulation functions.
+
+### Exercise 5: Input Validation Loop
+
+Write a complete program that repeatedly prompts the user to enter an integer in the range [1, 100] using a `do-while` loop. The loop must continue until a valid value is entered. Once a valid number is received, use the ternary operator to classify it as `"low"` (1–33), `"medium"` (34–66), or `"high"` (67–100), then print the classification.
 
 ---
 

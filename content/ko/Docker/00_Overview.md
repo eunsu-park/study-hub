@@ -37,18 +37,18 @@ Docker 기초 ──────▶ Dockerfile ──────▶ Kubernetes 
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Docker_Basics.md](./01_Docker_Basics.md) | ⭐ | Docker 개념, 설치, 기본 명령어 |
-| [02_Images_and_Containers.md](./02_Images_and_Containers.md) | ⭐ | 이미지 관리, 컨테이너 실행/관리 |
-| [03_Dockerfile.md](./03_Dockerfile.md) | ⭐⭐ | Dockerfile 작성, 이미지 빌드 |
-| [04_Docker_Compose.md](./04_Docker_Compose.md) | ⭐⭐ | 다중 컨테이너, docker-compose.yml |
-| [05_Practical_Examples.md](./05_Practical_Examples.md) | ⭐⭐⭐ | 웹앱 컨테이너화, DB 연동 |
-| [06_Kubernetes_Intro.md](./06_Kubernetes_Intro.md) | ⭐⭐⭐ | K8s 개념, Pod, Deployment, Service |
-| [07_Kubernetes_Security.md](./07_Kubernetes_Security.md) | ⭐⭐⭐⭐ | RBAC, NetworkPolicy, Secrets, PodSecurity |
-| [08_Kubernetes_Advanced.md](./08_Kubernetes_Advanced.md) | ⭐⭐⭐⭐ | Ingress, StatefulSet, DaemonSet, PV/PVC |
-| [09_Helm_Package_Management.md](./09_Helm_Package_Management.md) | ⭐⭐⭐ | Helm 차트, values.yaml, 릴리스 관리 |
-| [10_CI_CD_Pipelines.md](./10_CI_CD_Pipelines.md) | ⭐⭐⭐⭐ | GitHub Actions, 이미지 빌드, K8s 배포 |
-| [11_Container_Networking.md](./11_Container_Networking.md) | ⭐⭐⭐ | Bridge, host, overlay, macvlan, DNS, 포트 매핑 |
-| [12_Security_Best_Practices.md](./12_Security_Best_Practices.md) | ⭐⭐⭐⭐ | 이미지 스캐닝, rootless, seccomp, 시크릿 관리, Falco |
+| [Docker 기초](./01_Docker_Basics.md) | ⭐ | Docker 개념, 설치, 기본 명령어 |
+| [Docker 이미지와 컨테이너](./02_Images_and_Containers.md) | ⭐ | 이미지 관리, 컨테이너 실행/관리 |
+| [Dockerfile](./03_Dockerfile.md) | ⭐⭐ | Dockerfile 작성, 이미지 빌드 |
+| [Docker Compose](./04_Docker_Compose.md) | ⭐⭐ | 다중 컨테이너, docker-compose.yml |
+| [Docker 실전 예제](./05_Practical_Examples.md) | ⭐⭐⭐ | 웹앱 컨테이너화, DB 연동 |
+| [Kubernetes 입문](./06_Kubernetes_Intro.md) | ⭐⭐⭐ | K8s 개념, Pod, Deployment, Service |
+| [Kubernetes 보안](./07_Kubernetes_Security.md) | ⭐⭐⭐⭐ | RBAC, NetworkPolicy, Secrets, PodSecurity |
+| [Kubernetes 고급](./08_Kubernetes_Advanced.md) | ⭐⭐⭐⭐ | Ingress, StatefulSet, DaemonSet, PV/PVC |
+| [Helm 패키지 관리](./09_Helm_Package_Management.md) | ⭐⭐⭐ | Helm 차트, values.yaml, 릴리스 관리 |
+| [CI/CD 파이프라인](./10_CI_CD_Pipelines.md) | ⭐⭐⭐⭐ | GitHub Actions, 이미지 빌드, K8s 배포 |
+| [컨테이너 네트워킹(Container Networking)](./11_Container_Networking.md) | ⭐⭐⭐ | Bridge, host, overlay, macvlan, DNS, 포트 매핑 |
+| [보안 모범 사례(Security Best Practices)](./12_Security_Best_Practices.md) | ⭐⭐⭐⭐ | 이미지 스캐닝, rootless, seccomp, 시크릿 관리, Falco |
 
 ---
 

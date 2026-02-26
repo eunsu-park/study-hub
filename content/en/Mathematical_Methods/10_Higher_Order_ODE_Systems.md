@@ -52,20 +52,20 @@ The general solution is determined by the types of characteristic roots:
 import numpy as np
 import sympy as sp
 
-# --- SymPy로 특성방정식 풀기 ---
+# --- Solve characteristic equation with SymPy ---
 r = sp.Symbol('r')
-char_eq = r**4 - 5*r**2 + 4  # 특성방정식
+char_eq = r**4 - 5*r**2 + 4  # characteristic equation
 roots = sp.solve(char_eq, r)
-print(f"특성근: {roots}")
-# 출력: 특성근: [-2, -1, 1, 2]
+print(f"Characteristic roots: {roots}")
+# Output: Characteristic roots: [-2, -1, 1, 2]
 
-# --- 일반해 구하기 ---
+# --- Find general solution ---
 x = sp.Symbol('x')
 y = sp.Function('y')
 ode = sp.Eq(y(x).diff(x, 4) - 5*y(x).diff(x, 2) + 4*y(x), 0)
 general_sol = sp.dsolve(ode, y(x))
-print(f"일반해: {general_sol}")
-# 출력: y(x) = C1*exp(-2*x) + C2*exp(-x) + C3*exp(x) + C4*exp(2*x)
+print(f"General solution: {general_sol}")
+# Output: y(x) = C1*exp(-2*x) + C2*exp(-x) + C3*exp(x) + C4*exp(2*x)
 ```
 
 **Example with repeated roots**: $y''' - 3y'' + 3y' - y = 0$
@@ -75,11 +75,11 @@ Characteristic equation $r^3 - 3r^2 + 3r - 1 = (r-1)^3 = 0$, so $r = 1$ (multipl
 $$y = (c_1 + c_2 x + c_3 x^2) e^x$$
 
 ```python
-# 중복근이 있는 3차 ODE
+# 3rd-order ODE with repeated roots
 ode2 = sp.Eq(y(x).diff(x, 3) - 3*y(x).diff(x, 2) + 3*y(x).diff(x) - y(x), 0)
 sol2 = sp.dsolve(ode2, y(x))
-print(f"중복근 일반해: {sol2}")
-# 출력: y(x) = (C1 + C2*x + C3*x**2)*exp(x)
+print(f"Repeated-root general solution: {sol2}")
+# Output: y(x) = (C1 + C2*x + C3*x**2)*exp(x)
 ```
 
 ### 1.3 Particular Solutions for Non-Homogeneous Problems
@@ -106,27 +106,27 @@ $$y_p = -y_1 \int \frac{y_2 f}{W} dx + y_2 \int \frac{y_1 f}{W} dx$$
 where $W = y_1 y_2' - y_2 y_1'$ is the **Wronskian**.
 
 ```python
-# --- 비제차 ODE: y'' + y = sec(x) ---
-# 미정계수법으로는 풀 수 없음 → 매개변수 변환법 사용
+# --- Non-homogeneous ODE: y'' + y = sec(x) ---
+# Cannot be solved by undetermined coefficients → use variation of parameters
 x = sp.Symbol('x')
 y = sp.Function('y')
 
 ode_nh = sp.Eq(y(x).diff(x, 2) + y(x), sp.sec(x))
 sol_nh = sp.dsolve(ode_nh, y(x))
-print(f"매개변수 변환법 결과: {sol_nh}")
+print(f"Variation of parameters result: {sol_nh}")
 
-# 론스키안 직접 계산
+# Direct Wronskian calculation
 y1 = sp.cos(x)
 y2 = sp.sin(x)
 W = y1 * sp.diff(y2, x) - y2 * sp.diff(y1, x)
-print(f"론스키안: W = {sp.simplify(W)}")
-# 출력: W = 1
+print(f"Wronskian: W = {sp.simplify(W)}")
+# Output: W = 1
 
-# 특수해 계산
+# Particular solution calculation
 f_x = sp.sec(x)
 yp = -y1 * sp.integrate(y2 * f_x / W, x) + y2 * sp.integrate(y1 * f_x / W, x)
 yp_simplified = sp.simplify(yp)
-print(f"특수해: y_p = {yp_simplified}")
+print(f"Particular solution: y_p = {yp_simplified}")
 ```
 
 ---
@@ -152,7 +152,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# --- 2차 ODE → 연립 1차 ODE 변환 및 수치 풀이 ---
+# --- Convert 2nd-order ODE to system of 1st-order ODEs and solve numerically ---
 # y'' + 3y' + 2y = 0, y(0) = 1, y'(0) = 0
 def system(t, x):
     """x[0] = y, x[1] = y'"""
@@ -162,24 +162,24 @@ t_span = (0, 5)
 x0 = [1.0, 0.0]
 sol = solve_ivp(system, t_span, x0, t_eval=np.linspace(0, 5, 200), method='RK45')
 
-# 해석해와 비교
+# Compare with analytical solution
 t_exact = np.linspace(0, 5, 200)
-# 특성근: r = -1, -2 → y = 2e^{-t} - e^{-2t}
+# Characteristic roots: r = -1, -2 → y = 2e^{-t} - e^{-2t}
 y_exact = 2*np.exp(-t_exact) - np.exp(-2*t_exact)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-axes[0].plot(sol.t, sol.y[0], 'b-', label='수치해 (RK45)')
-axes[0].plot(t_exact, y_exact, 'r--', label='해석해')
+axes[0].plot(sol.t, sol.y[0], 'b-', label='Numerical solution (RK45)')
+axes[0].plot(t_exact, y_exact, 'r--', label='Analytical solution')
 axes[0].set_xlabel('t')
 axes[0].set_ylabel('y(t)')
-axes[0].set_title('해 비교')
+axes[0].set_title('Solution Comparison')
 axes[0].legend()
 
 axes[1].plot(sol.y[0], sol.y[1], 'b-')
 axes[1].set_xlabel('y')
 axes[1].set_ylabel("y'")
-axes[1].set_title('위상 평면 궤적')
-axes[1].plot(x0[0], x0[1], 'ro', markersize=8, label='초기값')
+axes[1].set_title('Phase Plane Trajectory')
+axes[1].plot(x0[0], x0[1], 'ro', markersize=8, label='Initial value')
 axes[1].legend()
 
 plt.tight_layout()
@@ -215,27 +215,27 @@ $$\mathbf{x}(t) = c_1 \mathbf{v} e^{\lambda t} + c_2 (\mathbf{v} t + \mathbf{w})
 import numpy as np
 from scipy.linalg import eig
 
-# --- 연립 ODE의 고유값/고유벡터 풀이 ---
+# --- Eigenvalue/eigenvector solution for system of ODEs ---
 # x' = Ax, A = [[1, 1], [4, -2]]
 A = np.array([[1, 1], [4, -2]])
 eigenvalues, eigenvectors = eig(A)
 
-print("고유값:", eigenvalues)
-print("고유벡터 (열벡터):")
+print("Eigenvalues:", eigenvalues)
+print("Eigenvectors (column vectors):")
 print(eigenvectors)
-# 고유값: [2, -3]
-# 고유벡터: v1 = [1, 1], v2 = [1, -4] (정규화됨)
+# Eigenvalues: [2, -3]
+# Eigenvectors: v1 = [1, 1], v2 = [1, -4] (normalized)
 
-# 일반해 구성
+# Construct general solution
 t = np.linspace(0, 3, 200)
-# 초기조건 x(0) = [3, 2]에서 c1, c2 결정
+# Determine c1, c2 from initial condition x(0) = [3, 2]
 x0 = np.array([3, 2])
 # c1*v1 + c2*v2 = x0 → [c1, c2] = V^{-1} x0
 V = eigenvectors
 c = np.linalg.solve(V, x0)
-print(f"계수: c1 = {c[0]:.4f}, c2 = {c[1]:.4f}")
+print(f"Coefficients: c1 = {c[0]:.4f}, c2 = {c[1]:.4f}")
 
-# 해석해 계산
+# Compute analytical solution
 x1_sol = c[0] * V[0, 0] * np.exp(eigenvalues[0].real * t) + \
          c[1] * V[0, 1] * np.exp(eigenvalues[1].real * t)
 x2_sol = c[0] * V[1, 0] * np.exp(eigenvalues[0].real * t) + \
@@ -243,20 +243,20 @@ x2_sol = c[0] * V[1, 0] * np.exp(eigenvalues[0].real * t) + \
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 시간에 따른 해
+# Solution over time
 axes[0].plot(t, x1_sol.real, 'b-', label='$x_1(t)$')
 axes[0].plot(t, x2_sol.real, 'r-', label='$x_2(t)$')
 axes[0].set_xlabel('t')
-axes[0].set_title('연립 ODE의 해')
+axes[0].set_title('Solution of System of ODEs')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 위상 평면
+# Phase plane
 axes[1].plot(x1_sol.real, x2_sol.real, 'b-', linewidth=2)
-axes[1].plot(x0[0], x0[1], 'ro', markersize=8, label='초기값')
+axes[1].plot(x0[0], x0[1], 'ro', markersize=8, label='Initial value')
 axes[1].set_xlabel('$x_1$')
 axes[1].set_ylabel('$x_2$')
-axes[1].set_title('위상 평면 궤적')
+axes[1].set_title('Phase Plane Trajectory')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -283,7 +283,7 @@ $$e^{At} = I + At + \frac{(At)^2}{2!} + \frac{(At)^3}{3!} + \cdots = \sum_{k=0}^
 ```python
 from scipy.linalg import expm
 
-# --- 행렬 지수를 이용한 연립 ODE 풀이 ---
+# --- Solve system of ODEs using matrix exponential ---
 A = np.array([[1, 1], [4, -2]])
 x0 = np.array([3, 2])
 
@@ -295,17 +295,17 @@ ax.plot(t_vals, solutions[:, 0], 'b-', linewidth=2, label='$x_1(t)$')
 ax.plot(t_vals, solutions[:, 1], 'r-', linewidth=2, label='$x_2(t)$')
 ax.set_xlabel('t', fontsize=12)
 ax.set_ylabel('x(t)', fontsize=12)
-ax.set_title('행렬 지수를 이용한 해', fontsize=14)
+ax.set_title('Solution Using Matrix Exponential', fontsize=14)
 ax.legend(fontsize=12)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('matrix_exponential.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# --- SymPy로 심볼릭 행렬 지수 계산 ---
+# --- Compute symbolic matrix exponential with SymPy ---
 t_sym = sp.Symbol('t')
 A_sym = sp.Matrix([[1, 1], [4, -2]])
-exp_At = sp.exp(A_sym * t_sym)  # 심볼릭 행렬 지수
+exp_At = sp.exp(A_sym * t_sym)  # symbolic matrix exponential
 print("e^{At} =")
 sp.pprint(exp_At)
 ```
@@ -364,8 +364,8 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 def plot_phase_portrait(A, title, ax, xlim=(-3, 3), ylim=(-3, 3)):
-    """2D 선형 시스템의 위상 초상화를 그린다."""
-    # 벡터장 (streamplot)
+    """Draw phase portrait for a 2D linear system."""
+    # Vector field (streamplot)
     x1 = np.linspace(xlim[0], xlim[1], 20)
     x2 = np.linspace(ylim[0], ylim[1], 20)
     X1, X2 = np.meshgrid(x1, x2)
@@ -375,7 +375,7 @@ def plot_phase_portrait(A, title, ax, xlim=(-3, 3), ylim=(-3, 3)):
     ax.streamplot(X1, X2, U, V, color='steelblue', density=1.5, linewidth=0.8,
                   arrowsize=1.2)
 
-    # 여러 초기조건에서 궤적 추가
+    # Add trajectories from multiple initial conditions
     for angle in np.linspace(0, 2*np.pi, 12, endpoint=False):
         r0 = 2.5
         ic = [r0 * np.cos(angle), r0 * np.sin(angle)]
@@ -387,12 +387,12 @@ def plot_phase_portrait(A, title, ax, xlim=(-3, 3), ylim=(-3, 3)):
                         method='RK45')
         ax.plot(sol.y[0], sol.y[1], 'b-', alpha=0.4, linewidth=0.8)
 
-    # 고유값/고유벡터
+    # Eigenvalues/eigenvectors
     eigenvalues, eigenvectors = np.linalg.eig(A)
     eigval_str = ", ".join([f"{ev:.2f}" for ev in eigenvalues])
     ax.set_title(f"{title}\n$\\lambda = {eigval_str}$", fontsize=11)
 
-    # 고유벡터 방향 표시 (실수인 경우)
+    # Show eigenvector directions (for real eigenvalues)
     for i in range(2):
         if np.isreal(eigenvalues[i]):
             v = eigenvectors[:, i].real
@@ -410,24 +410,24 @@ def plot_phase_portrait(A, title, ax, xlim=(-3, 3), ylim=(-3, 3)):
     ax.grid(True, alpha=0.3)
 
 
-# --- 4가지 평형점 유형의 위상 초상화 ---
+# --- Phase portraits for 4 equilibrium point types ---
 fig, axes = plt.subplots(2, 2, figsize=(12, 12))
 
-# (a) 안정 노드: 고유값 모두 음수
+# (a) Stable node: all eigenvalues negative
 A_stable_node = np.array([[-2, 0], [0, -1]])
-plot_phase_portrait(A_stable_node, '안정 노드 (Stable Node)', axes[0, 0])
+plot_phase_portrait(A_stable_node, 'Stable Node', axes[0, 0])
 
-# (b) 안장점: 고유값이 이부호
+# (b) Saddle point: eigenvalues of opposite signs
 A_saddle = np.array([[1, 0], [0, -2]])
-plot_phase_portrait(A_saddle, '안장점 (Saddle Point)', axes[0, 1])
+plot_phase_portrait(A_saddle, 'Saddle Point', axes[0, 1])
 
-# (c) 안정 소용돌이: 복소 고유값, 실수부 음수
+# (c) Stable spiral: complex eigenvalues, negative real part
 A_spiral = np.array([[-0.5, 2], [-2, -0.5]])
-plot_phase_portrait(A_spiral, '안정 소용돌이 (Stable Spiral)', axes[1, 0])
+plot_phase_portrait(A_spiral, 'Stable Spiral', axes[1, 0])
 
-# (d) 중심: 순허수 고유값
+# (d) Center: purely imaginary eigenvalues
 A_center = np.array([[0, 1], [-4, 0]])
-plot_phase_portrait(A_center, '중심 (Center)', axes[1, 1])
+plot_phase_portrait(A_center, 'Center', axes[1, 1])
 
 plt.tight_layout()
 plt.savefig('phase_portraits.png', dpi=150, bbox_inches='tight')
@@ -475,7 +475,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# --- 로트카-볼테라 시뮬레이션 ---
+# --- Lotka-Volterra simulation ---
 alpha, beta, gamma, delta = 1.0, 0.5, 0.75, 0.25
 
 def lotka_volterra(t, z):
@@ -484,7 +484,7 @@ def lotka_volterra(t, z):
     dydt = -gamma * y + delta * x * y
     return [dxdt, dydt]
 
-# 여러 초기조건
+# Multiple initial conditions
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
 initial_conditions = [[2, 1], [4, 2], [1, 3], [6, 1]]
@@ -495,34 +495,34 @@ for ic, color in zip(initial_conditions, colors):
                     t_eval=np.linspace(0, 30, 1000), method='RK45',
                     rtol=1e-10, atol=1e-12)
 
-    # 시간 영역
+    # Time domain
     axes[0].plot(sol.t, sol.y[0], '-', color=color, alpha=0.8,
-                 label=f'피식자 ({ic[0]},{ic[1]})')
+                 label=f'Prey ({ic[0]},{ic[1]})')
     axes[0].plot(sol.t, sol.y[1], '--', color=color, alpha=0.8,
-                 label=f'포식자 ({ic[0]},{ic[1]})')
+                 label=f'Predator ({ic[0]},{ic[1]})')
 
-    # 위상 평면
+    # Phase plane
     axes[1].plot(sol.y[0], sol.y[1], '-', color=color, linewidth=1.5,
                  label=f'IC=({ic[0]},{ic[1]})')
     axes[1].plot(ic[0], ic[1], 'o', color=color, markersize=6)
 
-# 평형점 표시
+# Mark equilibrium point
 x_eq, y_eq = gamma / delta, alpha / beta
-axes[1].plot(x_eq, y_eq, 'k*', markersize=15, zorder=5, label='평형점')
+axes[1].plot(x_eq, y_eq, 'k*', markersize=15, zorder=5, label='Equilibrium')
 
-axes[0].set_xlabel('시간 t')
-axes[0].set_ylabel('개체수')
-axes[0].set_title('로트카-볼테라: 시간 영역')
+axes[0].set_xlabel('Time t')
+axes[0].set_ylabel('Population')
+axes[0].set_title('Lotka-Volterra: Time Domain')
 axes[0].legend(fontsize=7, ncol=2)
 axes[0].grid(True, alpha=0.3)
 
-axes[1].set_xlabel('피식자 x')
-axes[1].set_ylabel('포식자 y')
-axes[1].set_title('로트카-볼테라: 위상 평면')
+axes[1].set_xlabel('Prey x')
+axes[1].set_ylabel('Predator y')
+axes[1].set_title('Lotka-Volterra: Phase Plane')
 axes[1].legend(fontsize=8)
 axes[1].grid(True, alpha=0.3)
 
-# 벡터장 (streamplot)
+# Vector field (streamplot)
 x_range = np.linspace(0.2, 8, 20)
 y_range = np.linspace(0.2, 5, 20)
 X, Y = np.meshgrid(x_range, y_range)
@@ -532,10 +532,10 @@ speed = np.sqrt(U**2 + V**2)
 
 axes[2].streamplot(X, Y, U, V, color=speed, cmap='coolwarm', density=1.5,
                    linewidth=0.8)
-axes[2].plot(x_eq, y_eq, 'k*', markersize=15, label='평형점')
-axes[2].set_xlabel('피식자 x')
-axes[2].set_ylabel('포식자 y')
-axes[2].set_title('로트카-볼테라: 벡터장')
+axes[2].plot(x_eq, y_eq, 'k*', markersize=15, label='Equilibrium')
+axes[2].set_xlabel('Prey x')
+axes[2].set_ylabel('Predator y')
+axes[2].set_title('Lotka-Volterra: Vector Field')
 axes[2].legend()
 axes[2].grid(True, alpha=0.3)
 
@@ -566,7 +566,7 @@ $$J = \begin{pmatrix} 0 & 1 \\ -1 & \mu \end{pmatrix}$$
 If $\mu > 0$, then $\text{tr}(J) = \mu > 0$, so the origin is **unstable**.
 
 ```python
-# --- 반데르폴 진동자 시뮬레이션 ---
+# --- Van der Pol oscillator simulation ---
 def van_der_pol(t, z, mu):
     x, xdot = z
     return [xdot, mu * (1 - x**2) * xdot - x]
@@ -575,7 +575,7 @@ fig, axes = plt.subplots(2, 3, figsize=(16, 10))
 mu_values = [0.1, 1.0, 5.0]
 
 for idx, mu in enumerate(mu_values):
-    # 여러 초기조건
+    # Multiple initial conditions
     ics = [[0.1, 0], [4, 0], [0, 5], [2, -3]]
 
     for ic in ics:
@@ -583,19 +583,19 @@ for idx, mu in enumerate(mu_values):
                         args=(mu,), t_eval=np.linspace(0, 50, 2000),
                         method='RK45', rtol=1e-10, atol=1e-12)
 
-        # 시간 영역
+        # Time domain
         axes[0, idx].plot(sol.t, sol.y[0], linewidth=0.8, alpha=0.8)
-        # 위상 평면
+        # Phase plane
         axes[1, idx].plot(sol.y[0], sol.y[1], linewidth=0.8, alpha=0.8)
 
     axes[0, idx].set_xlabel('t')
     axes[0, idx].set_ylabel('x(t)')
-    axes[0, idx].set_title(f'Van der Pol ($\\mu$ = {mu}): 시간 영역')
+    axes[0, idx].set_title(f'Van der Pol ($\\mu$ = {mu}): Time Domain')
     axes[0, idx].grid(True, alpha=0.3)
 
     axes[1, idx].set_xlabel('x')
     axes[1, idx].set_ylabel('$\\dot{x}$')
-    axes[1, idx].set_title(f'Van der Pol ($\\mu$ = {mu}): 위상 평면')
+    axes[1, idx].set_title(f'Van der Pol ($\\mu$ = {mu}): Phase Plane')
     axes[1, idx].plot(0, 0, 'ro', markersize=5)
     axes[1, idx].grid(True, alpha=0.3)
     axes[1, idx].set_aspect('equal')
@@ -619,7 +619,7 @@ plt.show()
 Consider the motion of two masses connected by springs:
 
 ```
-벽 ─── k ─── [m₁] ─── k_c ─── [m₂] ─── k ─── 벽
+Wall ─── k ─── [m₁] ─── k_c ─── [m₂] ─── k ─── Wall
 ```
 
 Newton's equations of motion:
@@ -654,76 +654,76 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# --- 결합 진동자와 정규 모드 ---
-m = 1.0     # 질량
-k = 1.0     # 벽 스프링 상수
-kc = 0.5    # 결합 스프링 상수
+# --- Coupled oscillators and normal modes ---
+m = 1.0     # mass
+k = 1.0     # wall spring constant
+kc = 0.5    # coupling spring constant
 
-# 강성 행렬과 질량 행렬
+# Stiffness matrix and mass matrix
 K = np.array([[k + kc, -kc],
               [-kc, k + kc]])
 M = np.array([[m, 0],
               [0, m]])
 
-# 정규 모드 (일반화된 고유값 문제)
+# Normal modes (generalized eigenvalue problem)
 from scipy.linalg import eigh
 omega_sq, modes = eigh(K, M)
 omega = np.sqrt(omega_sq)
 
-print("정규 주파수:")
+print("Normal frequencies:")
 for i, w in enumerate(omega):
     print(f"  omega_{i+1} = {w:.4f} rad/s (f = {w/(2*np.pi):.4f} Hz)")
-print(f"\n정규 모드 벡터:")
-print(f"  모드 1 (동위상): {modes[:, 0]}")
-print(f"  모드 2 (역위상): {modes[:, 1]}")
+print(f"\nNormal mode vectors:")
+print(f"  Mode 1 (in-phase): {modes[:, 0]}")
+print(f"  Mode 2 (out-of-phase): {modes[:, 1]}")
 
-# 시뮬레이션: 초기에 질량 1만 변위
+# Simulation: only mass 1 displaced initially
 def coupled_oscillator(t, z):
     x1, x2, v1, v2 = z
     a1 = (-k * x1 - kc * (x1 - x2)) / m
     a2 = (-k * x2 - kc * (x2 - x1)) / m
     return [v1, v2, a1, a2]
 
-# 초기조건: x1(0) = 1, x2(0) = 0 (비트 현상 관찰)
+# Initial condition: x1(0) = 1, x2(0) = 0 (to observe beating)
 sol = solve_ivp(coupled_oscillator, [0, 60], [1, 0, 0, 0],
                 t_eval=np.linspace(0, 60, 2000), method='RK45',
                 rtol=1e-12, atol=1e-14)
 
 fig, axes = plt.subplots(3, 1, figsize=(14, 10))
 
-# 각 질량의 변위
-axes[0].plot(sol.t, sol.y[0], 'b-', linewidth=1, label='$x_1(t)$ (질량 1)')
-axes[0].plot(sol.t, sol.y[1], 'r-', linewidth=1, label='$x_2(t)$ (질량 2)')
-axes[0].set_xlabel('시간 t')
-axes[0].set_ylabel('변위')
-axes[0].set_title('결합 진동자: 에너지 전달 (비트 현상)')
+# Displacement of each mass
+axes[0].plot(sol.t, sol.y[0], 'b-', linewidth=1, label='$x_1(t)$ (mass 1)')
+axes[0].plot(sol.t, sol.y[1], 'r-', linewidth=1, label='$x_2(t)$ (mass 2)')
+axes[0].set_xlabel('Time t')
+axes[0].set_ylabel('Displacement')
+axes[0].set_title('Coupled Oscillators: Energy Transfer (Beating)')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 정규 좌표
-q1 = (sol.y[0] + sol.y[1]) / np.sqrt(2)  # 동위상 모드
-q2 = (sol.y[0] - sol.y[1]) / np.sqrt(2)  # 역위상 모드
+# Normal coordinates
+q1 = (sol.y[0] + sol.y[1]) / np.sqrt(2)  # in-phase mode
+q2 = (sol.y[0] - sol.y[1]) / np.sqrt(2)  # out-of-phase mode
 
-axes[1].plot(sol.t, q1, 'g-', linewidth=1, label='$q_1(t)$ (동위상 모드)')
-axes[1].plot(sol.t, q2, 'm-', linewidth=1, label='$q_2(t)$ (역위상 모드)')
-axes[1].set_xlabel('시간 t')
-axes[1].set_ylabel('정규 좌표')
-axes[1].set_title('정규 좌표: 각 모드의 독립적 진동')
+axes[1].plot(sol.t, q1, 'g-', linewidth=1, label='$q_1(t)$ (in-phase mode)')
+axes[1].plot(sol.t, q2, 'm-', linewidth=1, label='$q_2(t)$ (out-of-phase mode)')
+axes[1].set_xlabel('Time t')
+axes[1].set_ylabel('Normal coordinates')
+axes[1].set_title('Normal Coordinates: Independent Oscillation of Each Mode')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
-# 에너지 교환
+# Energy exchange
 E1 = 0.5 * m * sol.y[2]**2 + 0.5 * k * sol.y[0]**2
 E2 = 0.5 * m * sol.y[3]**2 + 0.5 * k * sol.y[1]**2
 E_coupling = 0.5 * kc * (sol.y[0] - sol.y[1])**2
 
-axes[2].plot(sol.t, E1, 'b-', linewidth=1, label='질량 1 에너지')
-axes[2].plot(sol.t, E2, 'r-', linewidth=1, label='질량 2 에너지')
+axes[2].plot(sol.t, E1, 'b-', linewidth=1, label='Mass 1 energy')
+axes[2].plot(sol.t, E2, 'r-', linewidth=1, label='Mass 2 energy')
 axes[2].plot(sol.t, E1 + E2 + E_coupling, 'k--', linewidth=0.8,
-             label='총 에너지', alpha=0.5)
-axes[2].set_xlabel('시간 t')
-axes[2].set_ylabel('에너지')
-axes[2].set_title('에너지 교환: 비트 진동수 = $|\\omega_2 - \\omega_1|/2$')
+             label='Total energy', alpha=0.5)
+axes[2].set_xlabel('Time t')
+axes[2].set_ylabel('Energy')
+axes[2].set_title('Energy Exchange: Beat frequency = $|\\omega_2 - \\omega_1|/2$')
 axes[2].legend()
 axes[2].grid(True, alpha=0.3)
 
@@ -731,11 +731,11 @@ plt.tight_layout()
 plt.savefig('coupled_oscillators.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 비트 진동수 계산
+# Beat frequency calculation
 omega_beat = abs(omega[1] - omega[0]) / 2
 T_beat = 2 * np.pi / omega_beat if omega_beat > 0 else float('inf')
-print(f"\n비트 진동수: {omega_beat:.4f} rad/s")
-print(f"비트 주기: {T_beat:.2f} s")
+print(f"\nBeat frequency: {omega_beat:.4f} rad/s")
+print(f"Beat period: {T_beat:.2f} s")
 ```
 
 ### 5.3 Systems of ODEs from Lagrangian Mechanics
@@ -757,7 +757,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# --- 이중 진자 (비선형 전체 방정식) ---
+# --- Double pendulum (full nonlinear equations) ---
 g = 9.81
 m1, m2 = 1.0, 1.0
 l1, l2 = 1.0, 1.0
@@ -781,12 +781,12 @@ def double_pendulum(t, z):
 
     return [w1, w2, dw1, dw2]
 
-# 두 가지 약간 다른 초기조건 → 카오스 민감성
+# Two slightly different initial conditions → sensitivity to chaos
 t_span = (0, 20)
 t_eval = np.linspace(0, 20, 5000)
 
 ic1 = [np.pi/2, np.pi/2, 0, 0]
-ic2 = [np.pi/2 + 0.001, np.pi/2, 0, 0]  # theta1을 0.001 rad 차이
+ic2 = [np.pi/2 + 0.001, np.pi/2, 0, 0]  # theta1 differs by 0.001 rad
 
 sol1 = solve_ivp(double_pendulum, t_span, ic1, t_eval=t_eval,
                  method='RK45', rtol=1e-12, atol=1e-14)
@@ -795,32 +795,32 @@ sol2 = solve_ivp(double_pendulum, t_span, ic2, t_eval=t_eval,
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# theta1 비교
+# theta1 comparison
 axes[0, 0].plot(sol1.t, sol1.y[0], 'b-', linewidth=0.8, label='IC 1')
 axes[0, 0].plot(sol2.t, sol2.y[0], 'r--', linewidth=0.8, label='IC 2')
 axes[0, 0].set_xlabel('t')
 axes[0, 0].set_ylabel('$\\theta_1$')
-axes[0, 0].set_title('$\\theta_1(t)$: 초기조건 민감성 (카오스)')
+axes[0, 0].set_title('$\\theta_1(t)$: Sensitivity to initial conditions (chaos)')
 axes[0, 0].legend()
 axes[0, 0].grid(True, alpha=0.3)
 
-# theta2 비교
+# theta2 comparison
 axes[0, 1].plot(sol1.t, sol1.y[1], 'b-', linewidth=0.8, label='IC 1')
 axes[0, 1].plot(sol2.t, sol2.y[1], 'r--', linewidth=0.8, label='IC 2')
 axes[0, 1].set_xlabel('t')
 axes[0, 1].set_ylabel('$\\theta_2$')
-axes[0, 1].set_title('$\\theta_2(t)$: 초기조건 민감성 (카오스)')
+axes[0, 1].set_title('$\\theta_2(t)$: Sensitivity to initial conditions (chaos)')
 axes[0, 1].legend()
 axes[0, 1].grid(True, alpha=0.3)
 
-# 위상 공간 (theta1 vs omega1)
+# Phase space (theta1 vs omega1)
 axes[1, 0].plot(sol1.y[0], sol1.y[2], 'b-', linewidth=0.3, alpha=0.7)
 axes[1, 0].set_xlabel('$\\theta_1$')
 axes[1, 0].set_ylabel('$\\dot{\\theta}_1$')
-axes[1, 0].set_title('위상 공간: $(\\theta_1, \\dot{\\theta}_1)$')
+axes[1, 0].set_title('Phase space: $(\\theta_1, \\dot{\\theta}_1)$')
 axes[1, 0].grid(True, alpha=0.3)
 
-# 진자 끝 궤적
+# Pendulum tip trajectory
 x1 = l1 * np.sin(sol1.y[0])
 y1 = -l1 * np.cos(sol1.y[0])
 x2 = x1 + l2 * np.sin(sol1.y[1])
@@ -829,31 +829,31 @@ y2 = y1 - l2 * np.cos(sol1.y[1])
 axes[1, 1].plot(x2, y2, 'b-', linewidth=0.2, alpha=0.5)
 axes[1, 1].set_xlabel('x')
 axes[1, 1].set_ylabel('y')
-axes[1, 1].set_title('이중 진자 끝점 궤적')
+axes[1, 1].set_title('Double Pendulum Tip Trajectory')
 axes[1, 1].set_aspect('equal')
 axes[1, 1].grid(True, alpha=0.3)
 
-plt.suptitle('이중 진자 (Double Pendulum) - 카오스적 역학', fontsize=14, y=1.02)
+plt.suptitle('Double Pendulum - Chaotic Dynamics', fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig('double_pendulum.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# --- 소진폭 정규 모드 분석 ---
+# --- Small-amplitude normal mode analysis ---
 M_mat = np.array([[(m1 + m2) * l1, m2 * l2],
                   [l1, l2]])
 K_mat = np.array([[(m1 + m2) * g, 0],
                   [0, g]])
 
-# 일반화된 고유값 문제: K u = omega^2 M u
+# Generalized eigenvalue problem: K u = omega^2 M u
 from scipy.linalg import eig
 eigenvalues, eigenvectors = eig(K_mat, M_mat)
 omega_normal = np.sqrt(eigenvalues.real)
 omega_normal = np.sort(omega_normal)
 
-print("\n이중 진자 (소진폭) 정규 주파수:")
-print(f"  omega_1 = {omega_normal[0]:.4f} rad/s (동위상 모드)")
-print(f"  omega_2 = {omega_normal[1]:.4f} rad/s (역위상 모드)")
-print(f"  비율 omega_2/omega_1 = {omega_normal[1]/omega_normal[0]:.4f}")
+print("\nDouble pendulum (small amplitude) normal frequencies:")
+print(f"  omega_1 = {omega_normal[0]:.4f} rad/s (in-phase mode)")
+print(f"  omega_2 = {omega_normal[1]:.4f} rad/s (out-of-phase mode)")
+print(f"  Ratio omega_2/omega_1 = {omega_normal[1]/omega_normal[0]:.4f}")
 ```
 
 ---
@@ -879,7 +879,7 @@ General solution: $y = c_1 + c_2 x + c_3 \cos 2x + c_4 \sin 2x$
 (c) $r^2 + 4r + 13 = 0$ → $r = -2 \pm 3i$
 
 ```python
-# 검증
+# Verification
 import sympy as sp
 x = sp.Symbol('x')
 y = sp.Function('y')
@@ -936,8 +936,8 @@ K = k * np.array([[2, -1, 0], [-1, 2, -1], [0, -1, 2]])
 M = m_val * np.eye(3)
 
 omega_sq, modes = eigh(K, M)
-print("정규 주파수:", np.sqrt(omega_sq))
-print("정규 모드:\n", modes)
+print("Normal frequencies:", np.sqrt(omega_sq))
+print("Normal modes:\n", modes)
 ```
 
 </details>
@@ -962,18 +962,18 @@ x, y = sp.symbols('x y')
 F1 = x * (3 - x - 2*y)
 F2 = y * (2 - x - y)
 
-# 평형점
+# Equilibrium points
 eq_pts = sp.solve([F1, F2], [x, y])
-print("평형점:", eq_pts)
+print("Equilibrium points:", eq_pts)
 
-# 야코비 행렬
+# Jacobian matrix
 J = sp.Matrix([[sp.diff(F1, x), sp.diff(F1, y)],
                [sp.diff(F2, x), sp.diff(F2, y)]])
 
 for pt in eq_pts:
     J_at = J.subs([(x, pt[0]), (y, pt[1])])
     eigenvals = J_at.eigenvals()
-    print(f"\n평형점 {pt}: 고유값 = {eigenvals}")
+    print(f"\nEquilibrium {pt}: eigenvalues = {eigenvals}")
 ```
 
 </details>
@@ -1023,10 +1023,10 @@ for idx, mu in enumerate(mu_vals):
     if mu > 0:
         theta = np.linspace(0, 2*np.pi, 100)
         axes[idx].plot(np.sqrt(mu)*np.cos(theta), np.sqrt(mu)*np.sin(theta),
-                       'r-', linewidth=2, label=f'한계 주기 $r=\\sqrt{{{mu}}}$')
+                       'r-', linewidth=2, label=f'Limit cycle $r=\\sqrt{{{mu}}}$')
         axes[idx].legend()
 
-plt.suptitle('호프 분기 (Hopf Bifurcation)', fontsize=14)
+plt.suptitle('Hopf Bifurcation', fontsize=14)
 plt.tight_layout()
 plt.savefig('hopf_bifurcation.png', dpi=150, bbox_inches='tight')
 plt.show()

@@ -1,5 +1,17 @@
 # 위상 정렬 (Topological Sort)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 위상 정렬(topological sort)의 개념을 설명하고 적용 가능한 조건(DAG 요건)을 서술할 수 있다
+2. 진입 차수(in-degree) 추적과 BFS를 이용한 칸(Kahn) 알고리즘을 구현하여 위상 순서를 생성할 수 있다
+3. 후위 순서(post-order) 스택을 사용한 DFS 기반 위상 정렬을 구현할 수 있다
+4. 칸 알고리즘과 DFS 색칠(coloring) 방법을 이용하여 방향 그래프에서 사이클(cycle)을 감지할 수 있다
+5. 수강 신청 일정 및 빌드 시스템과 같은 의존성 순서 정렬 문제에 위상 정렬을 적용할 수 있다
+
+---
+
 ## 개요
 
 위상 정렬은 방향 비순환 그래프(DAG)의 정점들을 선형으로 정렬하는 알고리즘입니다. 모든 간선 (u, v)에 대해 u가 v보다 먼저 나타나도록 정렬합니다.
@@ -129,9 +141,10 @@ def topological_sort_kahn(n, edges):
 
     for u, v in edges:
         graph[u].append(v)
-        in_degree[v] += 1
+        in_degree[v] += 1  # 각 노드의 선행 조건 수를 카운트
 
-    # 진입 차수가 0인 정점들로 시작
+    # 진입 차수가 0인 노드는 미해결 의존성이 없으므로
+    # 즉시 스케줄링해도 안전하다
     queue = deque()
     for i in range(n):
         if in_degree[i] == 0:
@@ -141,14 +154,17 @@ def topological_sort_kahn(n, edges):
 
     while queue:
         node = queue.popleft()
-        result.append(node)
+        result.append(node)  # 이 노드는 이제 "완료"됨
 
         for neighbor in graph[node]:
+            # 'node' 완료는 각 이웃의 선행 조건 하나를 충족시킨다;
+            # 카운트가 0이 되면 스케줄링 가능 상태가 된다
             in_degree[neighbor] -= 1
             if in_degree[neighbor] == 0:
                 queue.append(neighbor)
 
-    # 사이클 확인
+    # 사이클이 존재하면 일부 노드는 진입 차수가 0에 도달하지 못해
+    # result에 포함되지 않는다 — 길이 확인으로 추가 기록 없이 이를 감지한다
     if len(result) != n:
         return []  # 사이클 존재
 
@@ -243,26 +259,31 @@ def topological_sort_dfs(n, edges):
     for u, v in edges:
         graph[u].append(v)
 
-    visited = [0] * n  # 0: 미방문, 1: 방문 중, 2: 완료
+    # 3색 표시: 미방문(0) → 방문 중(1) → 완료(2)
+    # 2개가 아닌 3개 상태를 사용하면 사이클 감지가 가능하다 —
+    # '방문 중' 노드를 다시 만나면 아직 DFS 경로 위에 있다는 뜻(사이클)
+    visited = [0] * n
     result = []
     has_cycle = False
 
     def dfs(node):
         nonlocal has_cycle
         if has_cycle:
-            return
+            return  # 사이클이 발견되면 즉시 중단
 
-        visited[node] = 1  # 방문 중
+        visited[node] = 1  # 방문 중: 이 노드는 현재 DFS 경로 위에 있음
 
         for neighbor in graph[node]:
             if visited[neighbor] == 1:
-                # 방문 중인 노드를 다시 만남 → 사이클
+                # 재귀 스택에 있는 노드에 도달 — 역방향 간선(back-edge) = 사이클
                 has_cycle = True
                 return
             if visited[neighbor] == 0:
                 dfs(neighbor)
 
-        visited[node] = 2  # 완료
+        visited[node] = 2  # 완료: 모든 후손이 끝남 — 추가해도 안전
+        # 모든 후손 이후에 추가하면 u→v일 때 v가 u보다 먼저 추가된다;
+        # 마지막에 역순으로 뒤집으면 올바른 위상 순서가 된다
         result.append(node)
 
     for i in range(n):
@@ -272,7 +293,7 @@ def topological_sort_dfs(n, edges):
     if has_cycle:
         return []
 
-    return result[::-1]  # 역순
+    return result[::-1]  # 역순: 마지막에 끝난 노드가 위상 순서에서 먼저 온다
 
 
 # 예시
@@ -297,26 +318,33 @@ def topological_sort_iterative(n, edges):
         if visited[start]:
             continue
 
+        # 각 스택 항목은 'processed' 플래그를 가지며 재귀 DFS의 두 단계를 시뮬레이션한다:
+        # 첫 번째 pop은 자식 탐색을 시작하고,
+        # 두 번째 pop(자식 반환 후)은 후위 순서 추가를 수행한다
         stack = [(start, False)]  # (노드, 처리 완료 여부)
 
         while stack:
             node, processed = stack.pop()
 
             if processed:
+                # 후위 순서: 모든 후손이 방문됨 — 노드 추가
                 result.append(node)
                 continue
 
             if visited[node]:
-                continue
+                continue  # 다른 경로를 통해 이미 처리됨
 
             visited[node] = True
-            stack.append((node, True))  # 완료 처리를 위해 다시 삽입
+            # processed=True로 다시 push하여 서브트리 이후에 이 노드를 기록
+            stack.append((node, True))
 
+            # 자식을 processed=False로 push; node의 후위 순서 마커보다
+            # 먼저 탐색됨 (LIFO 순서가 DFS 깊이 우선 동작을 구현)
             for neighbor in graph[node]:
                 if not visited[neighbor]:
                     stack.append((neighbor, False))
 
-    return result[::-1]
+    return result[::-1]  # 후위 순서는 역위상 순서
 ```
 
 ---
@@ -506,7 +534,7 @@ def earliest_completion(n, edges, times):
         graph[u].append(v)
         in_degree[v] += 1
 
-    # earliest[i] = 작업 i의 가장 빠른 시작 시간
+    # earliest[i] = 작업 i의 가장 빠른 시작 시간 (선행 조건이 없는 작업은 0)
     earliest = [0] * n
 
     queue = deque()
@@ -518,14 +546,16 @@ def earliest_completion(n, edges, times):
         node = queue.popleft()
 
         for neighbor in graph[node]:
-            # neighbor의 시작 시간 갱신
+            # 이웃은 모든 선행 조건이 완료된 후에만 시작할 수 있다;
+            # 모든 들어오는 경로에서 max를 취해 진정한 가장 빠른 시작 시간을 찾는다
             earliest[neighbor] = max(earliest[neighbor],
                                       earliest[node] + times[node])
             in_degree[neighbor] -= 1
             if in_degree[neighbor] == 0:
+                # 모든 선행자가 처리됨 — 가장 빠른 시작 시간이 확정됨
                 queue.append(neighbor)
 
-    # 완료 시간 계산
+    # 완료 = 시작 + 소요시간; 전체 최대값이 임계 경로(critical path) 길이
     completion = [earliest[i] + times[i] for i in range(n)]
     return completion, max(completion)
 

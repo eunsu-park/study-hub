@@ -27,6 +27,8 @@ from datetime import datetime
 # WiFi 네트워크 스캔
 # ============================================================================
 
+# Why: Detecting the platform early lets the script auto-switch to simulation
+# mode on laptops/CI, so developers never see confusing GPIO errors.
 def is_raspberry_pi() -> bool:
     """라즈베리파이 환경인지 확인"""
     try:
@@ -209,7 +211,8 @@ def tcp_server(host: str = '0.0.0.0', port: int = 9999):
         port: 포트 번호
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        # 주소 재사용 허용
+        # Why: SO_REUSEADDR lets you restart the server immediately after a crash.
+        # Without it, the OS holds the port in TIME_WAIT for ~60 s, blocking rebind.
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         server.bind((host, port))
@@ -377,6 +380,8 @@ def http_client_with_retry(api_base: str, sensor_id: str, retries: int = 3):
                 break
             else:
                 if attempt < retries - 1:
+                    # Why: Exponential backoff (1 s, 2 s, 4 s...) avoids overwhelming
+                    # a struggling server with rapid retries, giving it time to recover.
                     wait_time = 2 ** attempt  # Exponential backoff
                     print(f"  재시도 대기: {wait_time}초...")
                     time.sleep(wait_time)
@@ -391,6 +396,9 @@ def http_client_with_retry(api_base: str, sensor_id: str, retries: int = 3):
 # 네트워크 연결 상태 확인
 # ============================================================================
 
+# Why: Connecting to Google's DNS (8.8.8.8) on port 53 is the fastest portable
+# internet check — it avoids DNS resolution itself, so a DNS outage won't
+# produce a false negative for raw IP connectivity.
 def check_internet_connection(host: str = "8.8.8.8", port: int = 53, timeout: int = 3) -> bool:
     """
     인터넷 연결 확인
@@ -411,6 +419,9 @@ def check_internet_connection(host: str = "8.8.8.8", port: int = 53, timeout: in
         return False
 
 
+# Why: Opening a UDP socket to an external address (without sending data)
+# makes the OS pick the correct outbound interface. This is more reliable
+# than parsing ifconfig output, which varies across OSes and locales.
 def get_local_ip() -> str:
     """
     로컬 IP 주소 조회

@@ -24,6 +24,9 @@ static void to_upper(char *str) {
 }
 
 int main(void) {
+    // Why: bidirectional communication requires TWO pipes — a single pipe is
+    // unidirectional (one write end, one read end), so reading and writing on
+    // the same pipe would cause a process to read back its own data
     int parent_to_child[2];  /* Parent writes, child reads */
     int child_to_parent[2];  /* Child writes, parent reads */
 
@@ -32,6 +35,8 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
+    // Why: pipes must be created BEFORE fork — after fork, parent and child each
+    // get copies of the pipe file descriptors, enabling cross-process communication
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -40,6 +45,9 @@ int main(void) {
 
     if (pid == 0) {
         /* === Child process === */
+        // Why: each side must close the pipe ends it doesn't use — if the child
+        // keeps parent_to_child[1] open, the read() below will never see EOF
+        // because the OS thinks someone might still write to the pipe
         close(parent_to_child[1]);  /* Close write end */
         close(child_to_parent[0]);  /* Close read end */
 

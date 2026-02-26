@@ -1,10 +1,24 @@
 # 15. Advanced PostgreSQL Query Optimization
 
+**Previous**: [JSON/JSONB Features](./14_JSON_JSONB.md) | **Next**: [Replication and High Availability](./16_Replication_HA.md)
+
+---
+
 ## Learning Objectives
-- Complete understanding of EXPLAIN ANALYZE output
-- Understanding query planner behavior
-- Establishing index selection strategies
-- Advanced query optimization techniques
+
+After completing this lesson, you will be able to:
+
+1. Read and interpret EXPLAIN ANALYZE output including cost estimates, actual times, buffer statistics, and loop counts
+2. Describe how the PostgreSQL query planner transforms SQL into an execution plan
+3. Select the appropriate index type (B-tree, Hash, GIN, GiST, BRIN) for different query patterns
+4. Design effective composite, partial, and covering indexes
+5. Compare Nested Loop, Hash Join, and Merge Join algorithms and predict when each is chosen
+6. Use table statistics and cost parameters to understand and influence planner decisions
+7. Apply advanced optimization techniques including query refactoring, materialized views, and partitioning
+
+---
+
+A query that runs in 5 milliseconds versus 5 seconds can be the difference between a responsive application and a frustrated user. PostgreSQL's query optimizer is remarkably sophisticated, but it relies on accurate statistics, well-chosen indexes, and properly structured queries to do its best work. Understanding how the planner thinks -- and how to read the execution plans it produces -- gives you the power to diagnose and fix performance bottlenecks systematically rather than guessing.
 
 ## Table of Contents
 1. [EXPLAIN ANALYZE Deep Dive](#1-explain-analyze-deep-dive)
@@ -18,6 +32,8 @@
 ---
 
 ## 1. EXPLAIN ANALYZE Deep Dive
+
+> **Analogy -- The Query Optimizer as GPS**: Just as a GPS evaluates multiple routes (highway vs. side streets vs. toll road) and picks the fastest based on current conditions, PostgreSQL's query planner evaluates multiple execution strategies (sequential scan, index scan, hash join, merge join) and chooses the one with the lowest estimated cost. Understanding EXPLAIN output is like reading the GPS's chosen route -- it tells you exactly which "roads" the database will take to reach your data.
 
 ### 1.1 EXPLAIN Options
 
@@ -719,12 +735,6 @@ AND o.created_at > '2024-01-01';
 
 ---
 
-## Next Steps
-
-- [16_Replication_HA](16_Replication_HA.md) - Read distribution
-- [17_Window_Functions](17_Window_Functions.md) - Advanced analytics
-- [PostgreSQL Performance](https://wiki.postgresql.org/wiki/Performance_Optimization)
-
 ## References
 
 - [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html)
@@ -734,4 +744,4 @@ AND o.created_at > '2024-01-01';
 
 ---
 
-[← Previous: JSON/JSONB Features](14_JSON_JSONB.md) | [Next: Replication and High Availability →](16_Replication_HA.md) | [Table of Contents](00_Overview.md)
+**Previous**: [JSON/JSONB Features](./14_JSON_JSONB.md) | **Next**: [Replication and High Availability](./16_Replication_HA.md)

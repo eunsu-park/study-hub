@@ -19,6 +19,9 @@ import sys
 # GPIO pin configuration
 LED_PIN = 17
 
+# Why: Registering SIGINT separately from the try/except gives us two layers
+# of cleanup — the signal handler for abrupt termination, and the finally
+# block for normal loop exit. Belt-and-suspenders for hardware safety.
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully"""
     print("\nExiting...")
@@ -52,6 +55,8 @@ def main():
     except KeyboardInterrupt:
         print("\nStopped by user")
     finally:
+        # Why: Always turn off the LED on exit. Leaving GPIO pins active after
+        # the script ends can damage components or drain power on battery setups.
         led.off()
         print("LED turned off, cleanup complete")
 

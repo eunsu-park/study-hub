@@ -1793,4 +1793,4 @@ Design an LL(1) grammar for the following language features:
 
 ---
 
-[Previous: 04_Context_Free_Grammars.md](./04_Context_Free_Grammars.md) | [Next: 06_Bottom_Up_Parsing.md](./06_Bottom_Up_Parsing.md) | [Overview](./00_Overview.md)
+[Previous: Context-Free Grammars](./04_Context_Free_Grammars.md) | [Next: Bottom-Up Parsing](./06_Bottom_Up_Parsing.md) | [Overview](./00_Overview.md)

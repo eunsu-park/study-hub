@@ -1,10 +1,23 @@
 # 스레드와 멀티스레딩
 
-## 개요
-
-스레드(Thread)는 프로세스 내에서 실행되는 경량 실행 단위입니다. 이 레슨에서는 스레드와 프로세스의 차이, 사용자/커널 스레드, 멀티스레딩 모델, 그리고 pthread API를 학습합니다.
+**이전**: [프로세스 개념](./02_Process_Concepts.md) | **다음**: [CPU 스케줄링 기초](./04_CPU_Scheduling_Basics.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 스레드와 프로세스를 구별하고, 스레드가 공유하는 자원과 독립적으로 유지하는 자원을 설명할 수 있습니다
+2. 생성 비용, 전환 비용, 메모리 오버헤드 측면에서 스레드가 프로세스보다 경량인 이유를 설명할 수 있습니다
+3. 사용자 수준 스레드(User-Level Thread)와 커널 수준 스레드(Kernel-Level Thread)를 비교하고 각 방식의 트레이드오프를 식별할 수 있습니다
+4. 세 가지 멀티스레딩 모델(다대일, 일대일, 다대다)을 설명하고 현대 운영체제가 사용하는 모델을 파악할 수 있습니다
+5. POSIX pthread API를 사용하여 기본적인 멀티스레드 프로그램을 구현할 수 있습니다
+6. 공유 메모리 동시성에서 경쟁 상태(Race Condition)와 같은 스레드 안전(Thread Safety) 문제를 분석할 수 있습니다
+
+---
+
+현대 CPU는 여러 코어를 갖추고 있지만, 단일 코어조차 수많은 스레드를 실행할 수 있습니다. 스레드를 사용하면 하나의 프로세스가 여러 작업을 동시에 처리할 수 있습니다 — 파일을 내려받으면서 UI를 렌더링하고 사용자 입력을 처리하는 것이 그 예입니다. 스레드를 이해하는 것은 응답성 있고 효율적인 소프트웨어를 작성하는 데 필수적입니다. 이 레슨에서는 스레드와 프로세스의 차이, 사용자 수준 스레드와 커널 수준 스레드, 멀티스레딩 모델, 그리고 이러한 개념을 C 언어로 실현하는 pthread API를 다룹니다.
 
 ## 목차
 
@@ -796,6 +809,132 @@ TCB가 PCB보다 작은 이유:
 결과적으로 스레드 컨텍스트 스위치가 프로세스 컨텍스트 스위치보다 빠름.
 
 </details>
+
+---
+
+## 실습 과제
+
+### 실습 1: 경쟁 조건과 GIL
+
+`examples/OS_Theory/03_threading_demo.py`를 실행하고 경쟁 조건(Race Condition)과 GIL 데모를 관찰하세요.
+
+**과제:**
+1. `demo_race_condition()`에서 반복 횟수를 1,000,000으로 변경하세요. 안전하지 않은 카운터가 정확한 결과를 생성하는 경우가 있나요? 10번 실행하고 오류율을 기록하세요
+2. Python의 GIL이 단순 정수 증가에서는 경쟁 조건을 방지하지만 검사-후-행동 패턴(예: `if balance > 0: balance -= 1`)에서는 방지하지 못하는 이유를 설명하세요
+3. `threading.RLock`(재진입 락)을 사용하도록 스레딩 데모를 수정하고, 일반 `Lock`은 교착 상태에 빠지지만 `RLock`은 성공하는 시나리오를 시연하세요
+
+### 실습 2: 스레드 vs 프로세스 성능
+
+스레드 생성 vs 프로세스 생성 오버헤드를 비교하는 벤치마크를 작성하세요:
+
+```python
+import threading, multiprocessing, time
+
+def worker():
+    pass  # 최소한의 작업
+
+def benchmark(label, create_func, n=1000):
+    start = time.perf_counter()
+    items = [create_func(target=worker) for _ in range(n)]
+    for item in items:
+        item.start()
+    for item in items:
+        item.join()
+    elapsed = time.perf_counter() - start
+    print(f"{label}: {elapsed*1000:.1f} ms for {n} workers")
+
+benchmark("Threads", threading.Thread)
+benchmark("Processes", multiprocessing.Process, n=100)
+```
+
+**과제:**
+1. 벤치마크를 실행하고 스레드 vs 프로세스 생성 시간을 비교하세요
+2. 프로세스 생성이 더 느린 이유는? fork()에 어떤 추가 설정이 필요한가요?
+3. CPU 바운드 작업(1부터 1M까지 합산)을 추가하고 총 실행 시간을 비교하세요 — 언제 프로세스가 이기나요?
+
+### 실습 3: 스레드 풀 패턴
+
+새 스레드를 생성하는 대신 스레드를 재사용하는 간단한 스레드 풀(Thread Pool)을 구현하세요:
+
+**과제:**
+1. `submit(func, *args)` 메서드가 있는 `ThreadPool(n_workers)` 클래스를 생성하세요
+2. 작업 분배에 `queue.Queue`를 사용하세요
+3. 4개 워커 풀에서 100개 작업으로 테스트하고 모든 작업이 완료되는지 확인하세요
+4. 100개 개별 스레드를 생성하는 것과 총 시간을 비교하세요
+
+---
+
+## 연습 문제
+
+### 연습 1: 스레드(Thread)와 프로세스(Process)의 자원 공유
+
+웹 서버가 들어오는 각 요청마다 새 **스레드(thread)**를 생성합니다. 아래 나열된 각 자원이 모든 스레드 간에 **공유(shared)**되는지, 각 스레드에 **독립적(private)**인지 명시하고 이유를 설명하세요.
+
+| 자원 | 공유 또는 독립? | 이유? |
+|------|----------------|-------|
+| 전역 변수 `int total_requests` | | |
+| 핸들러 내부의 지역 변수 `char buf[4096]` | | |
+| 접근 로그용으로 열린 파일 디스크립터(file descriptor) | | |
+| errno 값 | | |
+| 힙(Heap)에 `malloc()`으로 할당된 요청 객체 | | |
+| 시그널 처리 방식(SIGTERM → 정상 종료) | | |
+
+### 연습 2: 멀티스레딩 모델(Multithreading Model) 비교
+
+학생이 새 애플리케이션을 위한 스레딩 모델을 선택하려 합니다. 각 시나리오를 평가하고 가장 적합한 모델(N:1, 1:1, M:N)을 추천하되 이유를 설명하세요.
+
+1. 12코어 머신의 8개 CPU 코어에 걸쳐 행렬 곱셈을 병렬화하는 과학 시뮬레이션
+2. 커널 스레드(kernel thread)를 지원하지 않는 레거시 임베디드 시스템에서 협력적(cooperative) 멀티태스킹이 필요한 경우
+3. 4코어 시스템에서 10,000개의 동시 연결을 처리하는 고동시성(high-concurrency) 서버
+4. UI 응답성을 유지하기 위해 하나의 백그라운드 작업을 오프로드(offload)하는 간단한 데스크톱 GUI 앱
+
+### 연습 3: 경쟁 조건(Race Condition) 분석
+
+두 스레드가 동시에 실행하는 다음 코드를 살펴보세요. 모든 경쟁 조건(race condition)을 식별하고, 각각에 대해 (a) 관련된 공유 자원, (b) 잘못된 동작을 유발하는 구체적인 인터리빙(interleaving), (c) 수정 방법을 설명하세요.
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+
+int counter = 0;
+int log_count = 0;
+FILE *log_file;
+
+void *worker(void *arg) {
+    int id = *(int *)arg;
+    for (int i = 0; i < 1000; i++) {
+        counter++;                            // (A)
+        fprintf(log_file, "thread %d: %d\n", id, counter);  // (B)
+        log_count++;                          // (C)
+    }
+    return NULL;
+}
+```
+
+1. 경쟁 조건이 몇 개 존재하나요? 각각 나열하세요.
+2. 동기화(synchronization)가 없을 때 두 스레드가 종료된 후 `counter`의 기댓값은 얼마인가요? 실제로 가능한 값의 범위는?
+3. `pthread_mutex_t`를 사용하여 경쟁 조건을 수정하세요.
+
+### 연습 4: 컨텍스트 스위치(Context Switch) 시 TCB 필드
+
+스레드가 실행 중 선점(preemption)됩니다. 선점 순간에 스레드 제어 블록(Thread Control Block, TCB)에 저장해야 하는 필드를 나열하고, 각 필드가 저장되지 않을 경우 어떤 문제가 발생하는지 설명하세요.
+
+| TCB 필드 | 저장하지 않을 경우 결과 |
+|----------|------------------------|
+| 프로그램 카운터(Program Counter) | |
+| 스택 포인터(Stack Pointer) | |
+| 범용 레지스터(General-purpose registers) | |
+| 부동소수점 레지스터(Floating-point registers) | |
+| 스레드 상태(Thread state) | |
+
+### 연습 5: 동시성(Concurrency)을 위한 설계
+
+단일 스레드 이미지 처리 서버가 순차적으로 작업을 처리합니다: (1) 네트워크로 이미지 수신, (2) 크기 조정, (3) 필터 적용, (4) 디스크에 저장. 측정된 시간은 네트워크 I/O 200ms, 크기 조정 50ms, 필터 150ms, 디스크 I/O 100ms입니다. 서버는 한 번에 하나의 요청을 처리합니다.
+
+1. 요청 하나의 총 지연 시간(latency)과 최대 처리량(throughput, 초당 요청 수)은 얼마인가요?
+2. 처리량을 최대화하기 위해 멀티스레딩(multithreading)을 사용하여 서버를 재설계하세요. 설계 내용(스레드 수, 각 스레드의 역할, 통신 방식)을 설명하세요.
+3. 어떤 단계가 멀티코어 CPU에서 진정한 병렬 처리의 이점을 얻을 수 있나요? 스레드를 사용해도 I/O에 의해 제한되는 단계는 어느 것인가요?
+4. CPU 단계가 I/O 단계와 겹칠 수 있다면, 멀티스레드 설계의 이론적 최대 처리량은 얼마인가요?
 
 ---
 

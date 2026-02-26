@@ -1,10 +1,24 @@
 # File System Basics ⭐⭐⭐
 
-## Overview
-
-File systems define how operating systems store and manage data on disks. Learn core concepts including file concepts, attributes, operations, directory structures, and access methods.
+**Previous**: [Page Replacement](./15_Page_Replacement.md) | **Next**: [File System Implementation](./17_File_System_Implementation.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define what a file is from the OS perspective and explain how it abstracts raw disk storage
+2. Describe common file attributes and operations including open, read, write, seek, and close
+3. Distinguish sequential from direct and indexed access methods
+4. Compare flat, hierarchical, and acyclic-graph directory structures
+5. Explain file protection mechanisms using access control lists and capability lists
+6. Analyze the open file table structure and how file descriptors work across fork()
+7. Distinguish hard links from symbolic links and explain their trade-offs
+
+---
+
+Files are the primary abstraction for persistent data. Every document, photo, configuration, and database on your computer is a file. The file system is how the OS organizes, names, and protects these files -- turning a raw disk of magnetic sectors or flash cells into the familiar folder hierarchy you navigate every day. Understanding file system basics is the foundation for everything from system administration to database design.
 
 ## Table of Contents
 

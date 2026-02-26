@@ -2,7 +2,26 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [08_Regex_in_Bash.md](./08_Regex_in_Bash.md) | **Next**: [10_Error_Handling.md](./10_Error_Handling.md)
+**Previous**: [Regular Expressions in Bash](./08_Regex_in_Bash.md) | **Next**: [Error Handling and Debugging](./10_Error_Handling.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how background processes work and retrieve their PIDs using `$!`
+2. Apply the `wait` command to synchronize background jobs by PID or job number
+3. Implement parallel execution patterns with configurable concurrency limits
+4. Distinguish between subshells and command grouping and their variable scope implications
+5. Identify common Unix signals and describe their default behavior
+6. Write `trap` handlers to catch signals and perform cleanup on script exit
+7. Build idempotent cleanup functions that safely remove temporary files, release locks, and terminate child processes
+8. Use coprocesses (`coproc`) for bidirectional inter-process communication in Bash
+
+---
+
+Production scripts frequently need to run tasks concurrently, coordinate multiple background jobs, and shut down gracefully when interrupted. Whether you are processing files in parallel to cut a 10-minute job to 2 minutes, or ensuring a cron job cleans up its temp files even after a crash, mastering process management and signal handling is essential for writing scripts that behave reliably under real-world conditions.
 
 ## 1. Background Processes
 
@@ -1069,4 +1088,4 @@ Create a task scheduler that:
 
 ---
 
-**Previous**: [08_Regex_in_Bash.md](./08_Regex_in_Bash.md) | **Next**: [10_Error_Handling.md](./10_Error_Handling.md)
+**Previous**: [Regular Expressions in Bash](./08_Regex_in_Bash.md) | **Next**: [Error Handling and Debugging](./10_Error_Handling.md)

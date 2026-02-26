@@ -649,6 +649,9 @@ def mirror_field(z, B0=1e-3, L=10.0, R=5.0):
     L: mirror length scale (m)
     R: mirror ratio B_max/B_min
     """
+    # Parabolic profile is chosen because it is analytically simple AND gives a
+    # smooth, monotonic increase from B_min at z=0 to B_max at |z|=L, closely
+    # approximating the on-axis field of real Helmholtz-coil mirror devices.
     return B0 * (1 + (z / L)**2 * (R - 1))
 
 def mirror_grad(z, B0=1e-3, L=10.0, R=5.0):
@@ -672,9 +675,15 @@ def equations_of_motion_mirror(t, state, q, m, B0, L, R):
     F_lorentz = q * np.cross(v, B_vec)
 
     # Mirror force (adiabatic approximation)
+    # Recompute μ at every step from current vx,vy rather than using a stored
+    # constant: this lets us monitor how well μ is actually conserved numerically,
+    # while still using the guiding-center approximation for the parallel force.
     # mu = m * (vx^2 + vy^2) / (2 * B)
     v_perp_sq = vx**2 + vy**2
     mu = m * v_perp_sq / (2 * B)
+    # F_mirror = -μ ∂B/∂z: this is the gradient force derived from the adiabatic
+    # invariant. It is negative (opposing increasing B) because a trapped particle
+    # is reflected before all its parallel kinetic energy converts to perpendicular.
     F_mirror = -mu * mirror_grad(z, B0, L, R)
 
     # Total force (Lorentz + mirror force in z-direction)
@@ -725,6 +734,10 @@ B0 = 1e-3  # Tesla
 L = 10.0   # meters
 R = 5.0    # mirror ratio
 
+# Loss cone formula: sin^2(alpha_c) = B_min/B_max = 1/R.
+# This comes from μ conservation: at the mirror point v_perp = v_total, so
+# (v_perp,0)^2 / v^2 = B_min/B_max. Particles with smaller pitch angle have
+# insufficient v_perp to be reflected and escape — they are "in the loss cone".
 alpha_c = np.arcsin(1/np.sqrt(R)) * 180/np.pi  # degrees
 
 print(f"Mirror ratio R = {R}")
@@ -816,7 +829,10 @@ ax5.set_title('Velocity Components (Trapped)')
 ax5.legend()
 ax5.grid(True)
 
-# Adiabatic invariant μ
+# Adiabatic invariant μ — plot normalised to μ(0) so deviations from 1 directly
+# show the fractional numerical error. A well-resolved simulation keeps μ/μ(0)
+# within ~1% throughout the bounce; larger drift reveals dt is too large or that
+# the field gradient is too steep for the adiabatic approximation to hold.
 B_traj_trap = mirror_field(traj_trap[:, 2], B0, L, R)
 mu_trap = m_p * v_perp_trap**2 / (2 * B_traj_trap)
 
@@ -833,7 +849,9 @@ plt.tight_layout()
 plt.savefig('magnetic_mirror.png', dpi=150)
 print("\nSaved: magnetic_mirror.png")
 
-# Calculate bounce period
+# Calculate bounce period by detecting sign changes in v_z (the parallel velocity).
+# A sign change means v_z passed through zero — the particle reversed direction at a
+# mirror point. The time between consecutive reversals is half a bounce period.
 z_positions = traj_trap[:, 2]
 # Find turning points (where v_z changes sign)
 v_z = traj_trap[:, 5]
@@ -952,17 +970,23 @@ def tokamak_field(R, Z, R0=2.0, a=0.5, B0=3.0, q=2.0):
     B0: field at magnetic axis (T)
     q: safety factor
     """
-    # Toroidal field (1/R dependence)
+    # Toroidal field decreases as 1/R because the field is produced by straight
+    # central solenoid coils; by Ampere's law B_phi * 2πR = const → B_phi ∝ 1/R.
+    # This 1/R variation creates both the field gradient and curvature that cause
+    # the banana orbit drift.
     B_phi = B0 * R0 / R
 
-    # Poloidal field (simplified, from plasma current)
+    # Poloidal field model: linear inside the plasma (uniform current density),
+    # dipole-like outside. This gives a safety factor q = rB_phi/(R0 B_theta)
+    # that is constant inside — a simplification avoiding the full Grad-Shafranov.
     r = np.sqrt((R - R0)**2 + Z**2)
     if r < a:
         B_theta = B0 * r / (q * R0)
     else:
         B_theta = B0 * a**2 / (q * R0 * r)
 
-    # Components in cylindrical coordinates
+    # Convert poloidal field to cylindrical (R,Z) components using the local
+    # poloidal angle; the sign convention ensures B_theta circles the magnetic axis.
     B_R = -B_theta * Z / r if r > 1e-6 else 0
     B_Z = B_theta * (R - R0) / r if r > 1e-6 else 0
 
@@ -1024,7 +1048,11 @@ plt.tight_layout()
 plt.savefig('tokamak_field.png', dpi=150)
 print("Saved: tokamak_field.png")
 
-# Calculate trapping fraction
+# Calculate trapping fraction using the small-ε approximation f_trap ≈ sqrt(2ε).
+# This estimate comes from the loss-cone condition for the tokamak mirror: particles
+# with sin^2(alpha) < 1 - B_out/B_in ≈ 2ε are trapped. For ε ~ 0.3 (typical
+# aspect ratio), about 77% of particles are on banana orbits — a dominant effect
+# in neoclassical transport.
 epsilon = a / R0
 f_trapped = np.sqrt(2 * epsilon)
 print(f"\nTokamak parameters:")

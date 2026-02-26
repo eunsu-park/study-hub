@@ -1,8 +1,24 @@
 # Support Vector Machine (SVM)
 
-## Overview
+**Previous**: [Ensemble Learning - Boosting](./08_Ensemble_Boosting.md) | **Next**: [kNN and Naive Bayes](./10_kNN_and_Naive_Bayes.md)
 
-Support Vector Machine (SVM) is a powerful supervised learning algorithm for classification and regression. It finds the optimal decision boundary (hyperplane) that maximally separates classes.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the maximum margin principle and the role of support vectors in defining the decision boundary
+2. Distinguish between hard margin and soft margin SVM and describe the effect of the C parameter
+3. Describe the kernel trick and explain how it enables nonlinear classification without explicit feature transformation
+4. Compare linear, polynomial, RBF, and sigmoid kernels and identify when each is appropriate
+5. Apply feature scaling as a preprocessing step and explain why it is critical for SVM
+6. Implement SVM for multiclass classification using One-vs-One and One-vs-Rest strategies
+7. Demonstrate Support Vector Regression (SVR) and explain the epsilon-insensitive tube concept
+
+---
+
+Support Vector Machines find the decision boundary that maximally separates classes -- not just any boundary that works, but the one with the widest safety margin. This elegant geometric idea, combined with the kernel trick that handles nonlinear data, makes SVM one of the most theoretically grounded and practically effective algorithms for small to medium-sized datasets.
 
 ---
 
@@ -142,6 +158,8 @@ plt.show()
 ---
 
 ## 3. Kernel Trick
+
+> **Lifting to a higher dimension.** Imagine data points on a flat table -- red and blue dots hopelessly intermingled with no straight line that separates them. Now imagine lifting some dots upward (based on their distance from the center, for example). In this 3D space, a flat plane can cleanly separate the colors. The kernel trick does exactly this -- it implicitly maps data to a higher-dimensional space where a linear separator exists, without ever computing the coordinates in that space. This is why SVMs can find non-linear decision boundaries while still solving a linear optimization problem.
 
 ### 3.1 Why Kernels?
 

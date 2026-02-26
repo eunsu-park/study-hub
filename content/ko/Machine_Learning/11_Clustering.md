@@ -1,8 +1,24 @@
 # 클러스터링 (Clustering)
 
-## 개요
+**이전**: [k-최근접 이웃과 나이브 베이즈](./10_kNN_and_Naive_Bayes.md) | **다음**: [차원 축소](./12_Dimensionality_Reduction.md)
 
-클러스터링은 비지도 학습의 대표적인 방법으로, 레이블 없는 데이터를 유사한 그룹으로 분류합니다. 데이터 탐색, 고객 세분화, 이상 탐지 등에 활용됩니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 클러스터링의 목표를 설명하고 지도 분류(supervised classification)와 구별하기
+2. K-평균(K-Means) 클러스터링을 구현하고 중심점(centroid) 할당 결과 해석하기
+3. 엘보 방법(elbow method)과 실루엣 분석(silhouette analysis)을 적용해 최적 클러스터 수 선택하기
+4. K-평균, DBSCAN, 계층적 클러스터링(hierarchical clustering), 가우시안 혼합 모델(Gaussian Mixture Models) 비교하기
+5. 밀도 기반 방법(DBSCAN)이 중심점 기반 방법(K-Means)보다 우수한 상황 파악하기
+6. 내부 지표(실루엣 점수(silhouette), 데이비스-볼딘 지수(Davies-Bouldin))와 외부 지표(ARI, NMI)를 사용해 클러스터링 품질 평가하기
+7. 실제 고객 세분화(customer segmentation) 문제에 클러스터링 적용하기
+
+---
+
+지금까지 살펴본 지도 학습 알고리즘은 모두 레이블된 데이터를 필요로 합니다 -- 모델에 "정답"을 알려주는 사람이 필요했습니다. 그런데 레이블이 전혀 없다면 어떻게 할까요? 클러스터링은 **비지도 학습(unsupervised learning)**의 출발점입니다. 레이블된 예시 없이 유사도를 측정해 데이터 속에 숨겨진 그룹을 발견합니다. 실제 데이터는 대부분 레이블이 없기 때문에 클러스터링을 이해하는 것은 필수적이며, 데이터의 잠재 구조를 밝히는 능력은 고객 세분화부터 이상 탐지, 유전자 발현 분석까지 다양한 응용 분야를 뒷받침합니다.
 
 ---
 
@@ -65,7 +81,8 @@ J = Σ Σ ||x - μ_k||²
 # 데이터 생성
 X, y_true = make_blobs(n_samples=300, centers=4, cluster_std=0.60, random_state=42)
 
-# K-Means 적용
+# random_state=42 로 초기 중심점(centroid) 선택 고정 — K-Means는 초기 중심점에
+# 민감하여 시드에 따라 다른 지역 최적해(local optima)에 수렴할 수 있음
 kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
 y_pred = kmeans.fit_predict(X)
 
@@ -129,7 +146,7 @@ K_range = range(1, 11)
 for k in K_range:
     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
     kmeans.fit(X)
-    inertias.append(kmeans.inertia_)
+    inertias.append(kmeans.inertia_)  # 각 포인트~중심점 거리²의 합; k가 늘수록 단조 감소
 
 # 시각화
 plt.figure(figsize=(10, 6))
@@ -353,7 +370,10 @@ X_moons, _ = make_moons(n_samples=300, noise=0.05, random_state=42)
 
 # DBSCAN
 dbscan = DBSCAN(
-    eps=0.2,             # 이웃 반경
+    # eps: 이웃 반경(neighborhood radius) — eps 이내의 포인트를 "도달 가능한" 이웃으로 간주.
+    # 너무 작으면 대부분의 포인트가 노이즈가 되고, 너무 크면 모두 하나의 클러스터로 병합됨.
+    # k-NN 거리 플롯의 엘보우(elbow) 지점 값을 eps로 사용하는 것이 표준 방법.
+    eps=0.2,
     min_samples=5,       # 핵심점 최소 이웃 수
     metric='euclidean'   # 거리 메트릭
 )
@@ -766,7 +786,9 @@ data = {
 import pandas as pd
 df = pd.DataFrame(data)
 
-# 스케일링
+# 스케일링(Standardization) — K-Means는 유클리드 거리(Euclidean distance)를 사용하므로
+# 스케일이 다른 특성(예: 소득 ~5만 vs 지출 점수 1-100)을 그대로 쓰면 스케일이 큰
+# 특성이 거리 계산을 지배하여 클러스터가 왜곡됨
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(df)
 

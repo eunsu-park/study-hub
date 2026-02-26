@@ -1,12 +1,23 @@
 # 분산 시스템 개념 (Distributed Systems Concepts)
 
-난이도: ⭐⭐⭐⭐
+**이전**: [마이크로서비스 패턴](./14_Microservices_Patterns.md) | **다음**: [합의 알고리즘](./16_Consensus_Algorithms.md)
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-분산 시스템은 네트워크로 연결된 여러 컴퓨터가 협력하여 하나의 시스템처럼 동작하는 것입니다. 이 장에서는 분산 시스템의 근본적인 도전과제, 시간 개념, 그리고 리더 선출 알고리즘에 대해 학습합니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 분산 컴퓨팅의 8가지 오류(8 Fallacies of Distributed Computing)를 각각 식별하고, 그 실제적인 결과를 설명할 수 있습니다
+2. 분산 시스템에서 물리적 시계 동기화(physical clock synchronization)가 왜 불안정한지, 그리고 이것이 이벤트 순서 결정에 어떤 문제를 일으키는지 설명할 수 있습니다
+3. 물리적 시간 동기화 없이 인과 순서(causal ordering)를 확립하기 위해 Lamport 시계와 벡터 시계(vector clock)를 구현할 수 있습니다
+4. 리더 선출 알고리즘(Bully, Ring)을 비교하고, 이들이 네트워크 파티션과 스플릿 브레인(split-brain) 시나리오를 어떻게 처리하는지 설명할 수 있습니다
+5. 부분 장애(partial failure), 네트워크 파티션(network partition), 비잔틴 결함(Byzantine fault)을 포함한 분산 시스템의 근본적인 도전 과제를 분석할 수 있습니다
+6. CAP 정리(CAP theorem)의 의미를 바탕으로 분산 아키텍처 설계에 대해 논리적으로 추론할 수 있습니다
 
 ---
+
+여러분이 상호작용하는 모든 분산 시스템 — Google 검색부터 은행 거래 처리까지 — 은 단일 머신에서는 존재하지 않는 문제들을 반드시 해결해야 합니다: 메시지가 순서 없이 도착하고, 시계가 서로 어긋나며, 어떤 네트워크 링크도 언제든 실패할 수 있습니다. Leslie Lamport의 유명한 말처럼 "분산 시스템이란 존재도 몰랐던 컴퓨터의 장애가 자신의 컴퓨터를 사용 불가능하게 만들 수 있는 시스템"이라는 말이 핵심 도전을 잘 포착합니다. 합의 알고리즘(consensus algorithms)과 실제 시스템 설계를 다루기 전에 이 기초 개념들을 마스터하는 것이 필수적입니다.
 
 ## 목차
 
@@ -715,9 +726,7 @@ P2: ─────d ─────────► e ────────�
 
 ---
 
-## 다음 단계
-
-[16_Consensus_Algorithms.md](./16_Consensus_Algorithms.md)에서 Paxos, Raft 등 분산 합의 알고리즘을 배워봅시다!
+**이전**: [마이크로서비스 패턴](./14_Microservices_Patterns.md) | **다음**: [합의 알고리즘](./16_Consensus_Algorithms.md)
 
 ---
 

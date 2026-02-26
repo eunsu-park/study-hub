@@ -672,6 +672,50 @@ Reverse: x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (beta_t/sqrt(1-alpha_bar_t)) * eps
 
 ---
 
+## 연습 문제
+
+### 연습 1: 순방향 확산 과정(Forward Diffusion Process) 시각화
+
+`DiffusionSchedule`과 `q_sample` 메서드를 사용하여:
+1. MNIST 이미지 하나를 불러와 타임스텝 `t = 0, 100, 250, 500, 750, 999`에서 순방향 확산을 적용하세요.
+2. 6개의 노이즈 이미지를 한 행에 나란히 플롯하세요.
+3. 각 타임스텝에서 신호 대 잡음비(SNR, Signal-to-Noise Ratio)를 계산하고 출력하세요: `SNR(t) = alpha_bar_t / (1 - alpha_bar_t)`.
+4. SNR과 이미지 인식 가능성의 관계를 설명하세요. 어느 타임스텝에서 원본 이미지가 인식 불가능해지나요?
+
+### 연습 2: 선형 vs 코사인 노이즈 스케줄 비교
+
+`linear_beta_schedule`과 `cosine_beta_schedule`을 사용하여:
+1. 두 스케줄의 `beta_t` 대 `t`를 같은 그래프에 플롯하세요.
+2. 두 스케줄의 `alpha_bar_t` (누적 곱) 대 `t`를 플롯하세요.
+3. 같은 이미지에 두 스케줄을 모두 적용하고 `t = 200, 500, 800`에서 노이즈 진행을 비교하세요.
+4. 코사인 스케줄이 일반적으로 선호되는 이유를 설명하세요: 선형 스케줄은 어디서 노이즈 "예산"을 너무 빨리 소모하나요?
+
+### 연습 3: MNIST에서 간단한 DDPM 학습
+
+제공된 `SimpleUNet`, `DiffusionSchedule`, 학습 코드를 사용하여:
+1. `timesteps=1000`, `batch_size=64`, `lr=1e-3`으로 50 에폭 학습하세요.
+2. 학습 후 `sample_ddpm`을 사용해 16개의 샘플을 생성하고 그리드로 저장하세요.
+3. 학습 손실 곡선을 모니터링하고 플롯하세요.
+4. 실험: 학습 시 `timesteps=200`만 사용하면 어떻게 되나요? 모델이 여전히 합리적인 샘플을 생성하나요?
+
+### 연습 4: DDIM 샘플링 구현 및 속도 비교
+
+DDPM 모델을 학습한 후:
+1. `sample_ddpm` (1000 스텝)으로 16개의 샘플을 생성하고 실제 경과 시간을 측정하세요.
+2. `num_inference_steps=50`, `eta=0.0`으로 `sample_ddim`을 사용해 16개의 샘플을 생성하고 시간을 측정하세요.
+3. 두 방법의 샘플 품질을 시각적으로 비교하세요.
+4. DDIM에서 `eta=0.5`와 `eta=1.0`으로 실험해보세요. eta가 결정론성(determinism)과 샘플 다양성 사이의 균형을 어떻게 제어하는지 설명하세요.
+
+### 연습 5: 조건부 모델을 위한 분류기 없는 안내(Classifier-Free Guidance) 구현
+
+MNIST에서 클래스 조건부 생성을 지원하도록 DDPM을 확장하세요:
+1. 선택적 클래스 레이블 `c`를 받도록 `SimpleUNet`을 수정하세요 (`nn.Embedding(10, time_dim)`으로 임베딩하여 시간 임베딩에 더하세요).
+2. 학습 중 확률 `p=0.1`로 조건을 무작위로 드롭하세요 (레이블을 null 임베딩 인덱스 예: 인덱스 10으로 교체).
+3. 조건부와 비조건부 노이즈 예측을 결합하는 `classifier_free_guidance_sample`을 구현하세요: `noise_guided = noise_uncond + w * (noise_cond - noise_uncond)`.
+4. 안내 강도 `w=1.0, 3.0, 7.5`로 각 숫자 클래스 0-9에 대한 샘플을 생성하세요. 안내 강도가 높을수록 샘플 선명도와 클래스 충실도에 어떤 영향을 미치는지 관찰하세요.
+
+---
+
 ## 다음 단계
 
-[17_Attention_Deep_Dive.md](./17_Attention_Deep_Dive.md)에서 Attention 메커니즘을 심층적으로 학습합니다.
+[Attention 메커니즘 심화](./17_Attention_Deep_Dive.md)에서 Attention 메커니즘을 심층적으로 학습합니다.

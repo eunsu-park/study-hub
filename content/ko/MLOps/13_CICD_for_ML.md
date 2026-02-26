@@ -1,5 +1,17 @@
 # 머신러닝을 위한 CI/CD
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 머신러닝 시스템에 특화된 추가 트리거(trigger), 아티팩트(artifact), 품질 게이트(quality gate)를 파악하여 ML CI/CD가 전통적인 소프트웨어 CI/CD와 어떻게 다른지 설명할 수 있다
+2. ML 프로젝트에 대한 데이터 검증, 모델 학습, 평가 게이팅(evaluation gating), 조건부 배포를 자동화하는 GitHub Actions 워크플로우를 구현할 수 있다
+3. 모델이 스테이징(staging)에서 프로덕션으로 승격되기 전 최소 성능 임계값을 강제하는 평가 게이트를 설계할 수 있다
+4. 프로덕션에서 새 모델 버전을 안전하게 출시하기 위한 섀도우 배포(shadow deployment), 카나리 롤아웃(canary rollout), 블루-그린 배포(blue-green deployment) 전략을 적용할 수 있다
+5. 프로덕션 성능 저하를 감지하고 이전 모델 버전으로 되돌리는 자동화된 롤백(rollback) 절차를 구현할 수 있다
+
+---
+
 ## 개요
 
 ML CI/CD(지속적 통합/지속적 배포)는 전통적인 소프트웨어 CI/CD에 데이터 검증, 모델 학습, 평가 게이트(Evaluation Gate), 그리고 ML 시스템에 특화된 배포 전략을 더한 것입니다. 이 레슨에서는 GitHub Actions를 활용한 ML 파이프라인 자동화, 데이터·모델 검증 게이트, 배포 전략(섀도우, 카나리, 블루-그린), 롤백 패턴, 그리고 ML 시스템에 고유한 테스트 전략을 다룹니다.
@@ -116,6 +128,7 @@ jobs:
         run: pytest tests/unit/ -v --cov=src --cov-report=xml
 
   # ── Stage 2: Data Validation ──
+  # 코드 품질과 분리: 데이터 문제는 코드 정확성과 독립적
   data-validation:
     runs-on: ubuntu-latest
     needs: code-quality
@@ -206,6 +219,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+      # 10%로 시작하여 폭발 반경(blast radius) 제한 — 10%에서 저하 감지 시 90% 사용자는 영향 없음
       - name: Canary deploy (10%)
         run: |
           python scripts/deploy.py \
@@ -282,7 +296,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
         "detail": f"Missing columns: {missing}" if missing else "OK",
     })
 
-    # 4. Target distribution check (detect label shift)
+    # 레이블 시프트(label shift) 감지: 극단적 클래스 불균형은 업스트림 데이터 파이프라인 문제 신호
     target_col = config.get("target_column", "target")
     if target_col in df.columns:
         value_counts = df[target_col].value_counts(normalize=True)
@@ -307,7 +321,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
                 "detail": f"{out_of_range} values out of [{bounds['min']}, {bounds['max']}]",
             })
 
-    # 6. Duplicate check
+    # 중복은 학습 메트릭을 부풀리고 교차 검증(cross-validation)에서 데이터 누수(leakage) 유발
     dup_count = df.duplicated().sum()
     max_dup_pct = config.get("max_duplicate_percent", 1.0)
     dup_pct = dup_count / len(df) * 100
@@ -326,6 +340,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
         status = "PASS" if r["passed"] else "FAIL"
         print(f"  [{status}] {r['check']}: {r['detail']}")
 
+    # 종료 코드 1은 CI 파이프라인 실패 유발 — 잘못된 데이터로 학습 차단
     return 0 if all_passed else 1
 
 
@@ -399,7 +414,7 @@ def evaluate_model(model_version, config_path="configs/eval_gate.json"):
         "passed": p99_latency <= max_latency,
     })
 
-    # 3. Improvement over production
+    # 프로덕션 대비 향상 필수 — 동등한 정확도지만 더 위험한 모델 배포 방지
     # prod_accuracy = get_production_model_accuracy()
     prod_accuracy = 0.928  # placeholder
     min_improvement = config.get("min_improvement", 0.005)
@@ -411,7 +426,7 @@ def evaluate_model(model_version, config_path="configs/eval_gate.json"):
         "passed": improvement >= min_improvement,
     })
 
-    # 4. Model size check
+    # 대형 모델은 서버리스/컨테이너 배포에서 콜드 스타트(cold start) 시간과 메모리 비용 증가
     # model_size_mb = get_model_size(model_version)
     model_size_mb = 245.0  # placeholder
     max_size_mb = config.get("max_model_size_mb", 500)
@@ -495,6 +510,7 @@ class CanaryDeployer:
 
     def __init__(self, model_version, steps=None):
         self.model_version = model_version
+        # 지수적 트래픽 증가: 최소한의 사용자 영향으로 문제 조기 포착
         self.steps = steps or [5, 10, 25, 50, 100]  # Traffic percentages
         self.current_step = 0
 
@@ -519,6 +535,7 @@ class CanaryDeployer:
 
     def rollback(self):
         """Rollback: route all traffic to previous version."""
+        # 0%로 설정하면 이전 버전이 활성 유지 — 별도 배포 불필요
         print(f"ROLLBACK: Removing v{self.model_version} from traffic")
         self.deploy_canary(0)
 
@@ -629,6 +646,7 @@ class TestModel:
 
     def test_beats_baseline(self, trained_model, sample_data):
         """Model accuracy exceeds random baseline."""
+        # 다수 클래스 투표보다 나쁜 모델은 해로움 — 학습 버그 포착
         from sklearn.metrics import accuracy_score
         preds = trained_model.predict(sample_data["X_test"])
         accuracy = accuracy_score(sample_data["y_test"], preds)
@@ -645,7 +663,7 @@ class TestModel:
 
     def test_directionality(self, trained_model):
         """Known feature changes produce expected prediction changes."""
-        # Higher income should increase credit approval probability
+        # 방향성 테스트로 모델이 단순 상관관계가 아닌 인과 관계를 학습했는지 검증
         x_low = np.array([[30, 30000, 1]])
         x_high = np.array([[30, 100000, 1]])
         pred_low = trained_model.predict_proba(x_low)[0][1]
@@ -654,6 +672,7 @@ class TestModel:
 
     def test_serialization_roundtrip(self, trained_model, tmp_path):
         """Model survives save/load cycle."""
+        # 커스텀 레이어/변환에서 pickle/unpickle 시 깨지는 문제 포착
         model_path = tmp_path / "model.pkl"
         with open(model_path, "wb") as f:
             pickle.dump(trained_model, f)
@@ -794,3 +813,67 @@ Write a comprehensive test suite for an ML pipeline:
 
 - **L14**: DVC — 데이터와 ML 실험을 위한 버전 관리
 - **L15**: LLMOps — LLM 애플리케이션에 특화된 CI/CD 패턴
+
+---
+
+## 연습 문제
+
+### 연습 1: ML CI/CD 차이점 파악
+
+2.1절의 GitHub Actions 워크플로우를 검토하고 다음 질문에 답하세요:
+
+1. 워크플로우에는 몇 개의 잡(job) 단계가 있나요? 각 단계가 무엇을 하는지 한 문장으로 설명하세요.
+2. `train` 잡에 `if: ${{ !inputs.skip_training }}`이 있는 이유는 무엇인가요? `skip_training` 입력을 사용하는 시나리오는 언제인가요?
+3. 각 잡의 `needs:` 키워드는 어떤 역할을 하며, 의존 잡이 실패하면 어떻게 되나요?
+4. 파이프라인은 `staging`과 `production` 두 개의 배포 환경(deployment environment)을 사용합니다. 이 분리가 일반 소프트웨어가 아닌 ML 시스템에서 특히 중요한 이유를 설명하세요.
+
+### 연습 2: 데이터 검증 스크립트 작성
+
+고객 이탈(churn) 데이터셋에 대한 독립형 데이터 검증 함수를 구현하세요. 데이터셋에는 `customer_id`(문자열), `age`(정수, 범위 18–100), `monthly_spend`(실수, 범위 0–10000), `churn`(이진값 0/1) 컬럼이 있습니다.
+
+함수는 다음을 수행해야 합니다:
+
+1. 데이터셋에 최소 500개의 행이 있는지 확인
+2. 네 개의 필수 컬럼이 모두 존재하는지 검증
+3. 컬럼당 결측값(null)이 3%를 초과하는지 감지
+4. `age` 값이 [18, 100] 범위 내에, `monthly_spend`가 [0, 10000] 범위 내에 있는지 검증
+5. `churn`의 소수 클래스(minority class)가 전체 행의 5% 이상인지 확인
+6. 검증 보고서를 출력하고, 모든 검사를 통과하면 `True`, 실패하면 `False`를 반환
+
+`age=150`인 행을 추가하는 등 의도적으로 오류를 발생시켜 보고서가 이를 잡아내는지 확인하세요.
+
+### 연습 3: 평가 게이트(Evaluation Gate) 구현
+
+4.1절의 `evaluate_model` 패턴을 참고하여 집값 예측 회귀(regression) 모델의 평가 게이트를 작성하세요. 게이트는 다음을 강제해야 합니다:
+
+1. MAE(평균 절대 오차, Mean Absolute Error) <= $15,000
+2. R² 점수 >= 0.85
+3. p99 추론 지연 시간(inference latency) <= 80ms
+4. 모델 파일 크기 <= 200MB
+5. 현재 프로덕션 모델 대비 MAE에서 최소 2% 향상 (프로덕션 MAE = $17,500)
+
+계산할 수 없는 메트릭에는 플레이스홀더 값(예: `mae = 13200.0`)을 사용하고, 각 검사 결과를 보여주는 형식화된 보고서를 출력하며, 검사 실패 시 종료 코드 1로 종료하는 함수를 작성하세요.
+
+### 연습 4: 배포 전략 비교
+
+다음 각 시나리오에 가장 적합한 배포 전략(섀도우(shadow), 카나리(canary), 블루-그린(blue-green), A/B 테스트)을 선택하고 근거를 제시하세요:
+
+1. 잠깐의 위양성(false negative) 증가도 수백만 달러의 손실로 이어질 수 있는 사기 감지(fraud detection) 모델 업데이트
+2. 2주에 걸쳐 장기적인 클릭률(click-through rate) 향상을 측정하고자 하는 추천 엔진 업데이트
+3. 문제가 발생하면 1초 이내에 롤백해야 하는 안전-필수(safety-critical) 자율주행 인식 모델
+4. 단순성이 우선인 저위험 출력(내부 문서 태깅) 텍스트 분류 모델
+
+각 시나리오에 대해 모니터링할 구체적인 메트릭 하나와 롤백을 트리거할 임계값도 설명하세요.
+
+### 연습 5: 완전한 ML CI/CD 파이프라인 설계
+
+은행의 신용 점수(credit scoring) 모델에 대한 완전한 ML CI/CD 파이프라인을 설계하세요. `dvc.yaml` 형식이나 GitHub Actions YAML로 다음을 포함하는 명세를 작성하세요:
+
+1. **트리거(Triggers)**: `src/` 코드 변경, 주간 스케줄, `force_retrain` 옵션이 있는 수동 디스패치(manual dispatch)
+2. **데이터 검증 게이트**: 최소 10,000개 행, 스키마(schema) 검사, 결측값 5% 초과 피처 없음, 레이블 분포 검사
+3. **학습(Training) 단계**: `configs/model.yaml`로 파라미터화, 출력 모델은 MLflow에 등록
+4. **평가 게이트**: 정확도 >= 0.88, AUC >= 0.92, p99 지연 시간 <= 100ms, 공정성 검사(연령 그룹 간 인구 통계 동등성(demographic parity) >= 0.80), 프로덕션 대비 AUC 최소 1% 향상
+5. **배포**: 5% 카나리 → 30분 모니터링 → 25% → 30분 모니터링 → 100%, 오류율이 1%를 초과하면 자동 롤백
+6. **롤백 메커니즘**: 재배포 없이 동작하는 피처 플래그(feature flag) 기반 롤백
+
+인프라에 대한 가정이 있다면 문서화하세요(예: "트래픽 분할을 위해 Istio가 있는 Kubernetes 가정").

@@ -1,14 +1,19 @@
 # 보안 모범 사례(Security Best Practices)
 
+**이전**: [컨테이너 네트워킹](./11_Container_Networking.md)
+
 ## 학습 목표
-- 컨테이너 보안 위협 모델 이해
-- 이미지 보안 모범 사례 및 취약점 스캐닝 적용
-- 런타임 보안 제어 및 최소 권한 구현
-- 컨테이너화된 애플리케이션에서 시크릿을 안전하게 관리
-- 네트워크 보안 및 격리 구성
-- 서명 및 콘텐츠 신뢰로 컨테이너 레지스트리 보안
-- Kubernetes 보안 컨텍스트(Security Context) 및 Pod 보안 표준 적용
-- 컨테이너 런타임 동작 모니터링 및 감사
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 컨테이너 보안 위협 모델을 설명하고 일반적인 공격 벡터(Attack Vector)를 파악한다
+2. 최소 베이스 이미지와 취약점 스캐닝을 포함한 이미지 보안 모범 사례를 적용한다
+3. 최소 권한 원칙(Principle of Least Privilege)에 따른 보안 Dockerfile을 작성한다
+4. 읽기 전용 파일시스템(Read-only Filesystem)과 권한 제한(Capability Restriction)으로 런타임 보안 제어를 구현한다
+5. Docker Secrets, Kubernetes Secrets, 외부 볼트(Vault)를 사용해 시크릿을 안전하게 관리한다
+6. 격리, 암호화, 인그레스/이그레스(Ingress/Egress) 제어로 네트워크 보안을 구성한다
+7. 이미지 서명과 Docker Content Trust로 컨테이너 레지스트리를 보호한다
+8. Kubernetes SecurityContext와 Pod Security Standards를 적용해 워크로드를 강화한다
 
 ## 목차
 1. [컨테이너 보안 개요](#1-컨테이너-보안-개요)
@@ -23,6 +28,10 @@
 10. [연습 문제](#10-연습-문제)
 
 **난이도**: ⭐⭐⭐⭐
+
+---
+
+컨테이너는 호스트 커널을 공유하기 때문에, 한 컨테이너의 취약점이 시스템 전체를 위협할 수 있습니다. 보안은 컨테이너 라이프사이클의 모든 계층에 내재되어야 합니다. 최소화되고 스캔된 이미지 빌드부터 최소 권한으로 실행, 네트워크 트래픽 암호화, 런타임 동작의 지속적인 모니터링까지 모두 포함됩니다. 이 레슨은 Docker와 Kubernetes를 아우르는 포괄적인 보안 프레임워크를 제공하여, "동작하는 것"에서 "프로덕션에서 안전하게 동작하는 것"으로 나아갈 수 있도록 합니다.
 
 ---
 
@@ -137,13 +146,13 @@ FROM node:latest
 # ✅ GOOD: Minimal base image
 FROM alpine:3.19
 
-# ✅ GOOD: Distroless (no shell, package manager)
+# ✅ GOOD: Distroless (no shell, package manager) — eliminates an entire class of attacks since there are no tools to exploit
 FROM gcr.io/distroless/base-debian12
 
-# ✅ GOOD: Specific version tag for reproducibility
+# ✅ GOOD: Specific version tag for reproducibility — ensures every build uses the exact same base
 FROM node:18.19-alpine3.19
 
-# ✅ BEST: Digest pinning for immutability
+# ✅ BEST: Digest pinning for immutability — even if a tag is re-pushed with different content, you get the exact image you audited
 FROM node:18.19-alpine3.19@sha256:abc123...
 ```
 
@@ -164,20 +173,20 @@ COPY . .
 RUN go build -o myapp
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates  # Only install what the binary needs — fewer packages means fewer CVEs
 COPY --from=builder /app/myapp /myapp
-USER 1000
+USER 1000  # Non-root user — limits damage if the container is compromised
 CMD ["/myapp"]
 
 # ✅ BEST: Distroless final image
 FROM golang:1.21 AS builder
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 go build -o myapp
+RUN CGO_ENABLED=0 go build -o myapp  # Static binary — no libc dependency, so it runs on scratch/distroless without shared libraries
 
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian12  # No shell, no package manager — an attacker has no tools to work with
 COPY --from=builder /app/myapp /myapp
-USER nonroot:nonroot
+USER nonroot:nonroot  # Distroless ships with a built-in nonroot user for this purpose
 CMD ["/myapp"]
 ```
 
@@ -209,10 +218,10 @@ trivy image nginx:latest
 # Scan with severity filter
 trivy image --severity CRITICAL,HIGH nginx:latest
 
-# Scan and exit with error if vulnerabilities found
+# Scan and exit with error if vulnerabilities found — use this in CI to block deployment of vulnerable images
 trivy image --exit-code 1 --severity CRITICAL myapp:latest
 
-# Scan for secrets in image
+# Scan for secrets in image — catches accidentally baked-in API keys, passwords, and private keys in any layer
 trivy image --scanners secret nginx:latest
 
 # Generate JSON report
@@ -289,11 +298,11 @@ RUN addgroup -g 1000 appgroup && \
 USER appuser
 COPY app /usr/share/nginx/html
 
-# ✅ GOOD: Use numeric UID (works better in Kubernetes)
+# ✅ GOOD: Use numeric UID (works better in Kubernetes) — K8s runAsUser validates UIDs, not usernames
 FROM node:18-alpine
 RUN addgroup -g 1001 nodegroup && \
     adduser -D -u 1001 -G nodegroup nodeuser
-USER 1001
+USER 1001  # Numeric UID avoids issues if /etc/passwd is missing or different in the runtime image
 COPY --chown=1001:1001 . /app
 WORKDIR /app
 CMD ["node", "server.js"]
@@ -343,7 +352,7 @@ ARG API_KEY
 RUN curl -H "Authorization: Bearer $API_KEY" https://api.example.com
 CMD ["./app"]
 
-# ✅ GOOD: Use Docker BuildKit secrets
+# ✅ GOOD: Use Docker BuildKit secrets — the secret is mounted only during this RUN step and never persisted in any layer
 # syntax=docker/dockerfile:1.4
 FROM alpine
 RUN --mount=type=secret,id=api_key \
@@ -414,7 +423,7 @@ RUN npm prune --production
 # ✅ GOOD: Optimized layer caching
 FROM node:18-alpine AS builder
 WORKDIR /app
-# Cache dependencies separately
+# Cache dependencies separately — this layer is only rebuilt when package.json changes, saving minutes on every build
 COPY package*.json ./
 RUN npm ci
 # Copy source and build
@@ -452,8 +461,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     -a \
     -o app \
     ./cmd/server
+# -w -s strips debug info and symbol tables — smaller binary with less information for reverse engineering
 
-# Production image
+# Production image — scratch has zero OS packages, zero CVEs, and the smallest possible attack surface
 FROM scratch
 
 # Copy necessary files from builder
@@ -462,10 +472,10 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /build/app /app
 
-# Use non-root user (UID 65534 = nobody)
+# Use non-root user (UID 65534 = nobody) — minimal identity with no login shell, home directory, or extra privileges
 USER 65534:65534
 
-# Health check
+# Health check — Docker restarts the container automatically if the app becomes unresponsive
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/app", "healthcheck"]
 
@@ -485,7 +495,7 @@ Linux capabilities는 세분화된 권한 제어를 제공합니다.
 # ❌ BAD: Running with all capabilities
 docker run --privileged myapp
 
-# ✅ GOOD: Drop all capabilities, add only needed ones
+# ✅ GOOD: Drop all capabilities, add only needed ones — even if the container is exploited, the attacker has no kernel-level powers
 docker run \
   --cap-drop=ALL \
   --cap-add=NET_BIND_SERVICE \
@@ -517,10 +527,10 @@ services:
       - SETUID
       - SETGID
     security_opt:
-      - no-new-privileges:true
-    read_only: true
+      - no-new-privileges:true  # Prevents setuid/setgid binaries from escalating — blocks common privilege-escalation exploits
+    read_only: true  # Immutable filesystem: an attacker cannot install tools or drop malware
     tmpfs:
-      - /var/run
+      - /var/run  # Writable tmpfs for PID files — nginx needs this but the rest of the filesystem stays immutable
       - /var/cache/nginx
       - /tmp
 ```
@@ -547,9 +557,9 @@ docker run \
 services:
   app:
     image: myapp:latest
-    read_only: true
+    read_only: true  # Immutable filesystem: prevents persistent malware even if the container is compromised
     tmpfs:
-      - /tmp:noexec,nosuid,size=64m
+      - /tmp:noexec,nosuid,size=64m  # noexec prevents executing binaries from /tmp — blocks a common attack vector
       - /var/run:noexec,nosuid,size=64m
 ```
 
@@ -560,7 +570,7 @@ Seccomp(Secure Computing Mode)은 시스템 호출을 제한합니다.
 ```json
 // seccomp-profile.json
 {
-  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultAction": "SCMP_ACT_ERRNO",  // Default-deny: any syscall not explicitly allowed returns an error
   "architectures": [
     "SCMP_ARCH_X86_64",
     "SCMP_ARCH_X86",
@@ -644,14 +654,14 @@ services:
 
     # Security options
     security_opt:
-      - no-new-privileges:true
-      - apparmor:docker-default
-      - seccomp:seccomp-profile.json
+      - no-new-privileges:true  # Blocks setuid/setgid escalation — defense-in-depth alongside capability drops
+      - apparmor:docker-default  # Mandatory access control — restricts file/network access even for root
+      - seccomp:seccomp-profile.json  # Drop dangerous syscalls — limits kernel attack surface
 
     # User
-    user: "1000:1000"
+    user: "1000:1000"  # Non-root — even if code has a vulnerability, the attacker cannot modify system files
 
-    # Resource limits
+    # Resource limits — prevent a runaway container from consuming all host resources (CPU/memory bomb)
     deploy:
       resources:
         limits:
@@ -659,10 +669,10 @@ services:
           memory: 512M
         reservations:
           cpus: '0.25'
-          memory: 256M
+          memory: 256M  # Reservations guarantee scheduling — the container always gets at least this much
 
     # Prevent privilege escalation
-    privileged: false
+    privileged: false  # Never use privileged mode — it gives the container full host kernel access
 ```
 
 ---
@@ -747,7 +757,7 @@ ENV API_KEY=sk-1234567890
 # ❌ BAD: Secrets visible in process list
 docker run myapp --api-key=sk-1234567890
 
-# ✅ GOOD: Secrets in files
+# ✅ GOOD: Secrets in files — file-based secrets don't appear in `docker inspect` or process environment
 docker run -v /path/to/secrets:/secrets:ro myapp
 
 # ✅ GOOD: Docker secrets (Swarm)
@@ -888,14 +898,14 @@ services:
     image: postgres
     networks:
       - private
-    # Database not exposed to public network
+    # Database not exposed to public network — even if the frontend is compromised, the DB is unreachable
 
 networks:
   public:
     driver: bridge
   private:
     driver: bridge
-    internal: true  # No external access
+    internal: true  # No external access — containers on this network cannot reach the internet, blocking data exfiltration
 ```
 
 ### TLS 암호화
@@ -935,14 +945,14 @@ server {
     # TLS configuration
     ssl_certificate /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_protocols TLSv1.2 TLSv1.3;  # Disable older TLS versions — TLS 1.0/1.1 have known vulnerabilities
+    ssl_ciphers HIGH:!aNULL:!MD5;  # Exclude weak ciphers — prevents downgrade attacks
     ssl_prefer_server_ciphers on;
 
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
+    # Security headers — each header defends against a specific class of web attacks
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;  # HSTS: forces browsers to use HTTPS for a year
+    add_header X-Frame-Options "SAMEORIGIN" always;  # Prevents clickjacking by disallowing framing from other origins
+    add_header X-Content-Type-Options "nosniff" always;  # Prevents MIME-type sniffing — browser trusts declared Content-Type
     add_header X-XSS-Protection "1; mode=block" always;
 
     location / {
@@ -985,10 +995,10 @@ metadata:
   name: deny-all-ingress
   namespace: production
 spec:
-  podSelector: {}
+  podSelector: {}  # Default-deny + explicit allow — limits blast radius of a compromised pod
   policyTypes:
   - Ingress
-  - Egress
+  - Egress  # Denying both directions forces every service to declare exactly who it talks to
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -1048,7 +1058,7 @@ spec:
 ### Docker Content Trust를 사용한 이미지 서명
 
 ```bash
-# Enable Docker Content Trust
+# Enable Docker Content Trust — ensures only cryptographically signed images can be pulled and run
 export DOCKER_CONTENT_TRUST=1
 
 # Generate root and repository keys
@@ -1182,27 +1192,27 @@ metadata:
 spec:
   securityContext:
     # Pod-level security context
-    runAsNonRoot: true
+    runAsNonRoot: true  # Prevents container from running as UID 0 even if the image defaults to root
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
+    fsGroup: 1000  # Volumes are owned by this GID — ensures the non-root user can read/write mounted data
     seccompProfile:
-      type: RuntimeDefault
+      type: RuntimeDefault  # Drop dangerous syscalls — defense-in-depth even if container runtime has a bug
 
   containers:
   - name: app
     image: myapp:latest
     securityContext:
       # Container-level security context (overrides pod-level)
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false  # Blocks setuid/setgid binaries from gaining elevated privileges
+      readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
       runAsNonRoot: true
       runAsUser: 1000
       capabilities:
         drop:
-        - ALL
+        - ALL  # Drop all Linux capabilities first — start from zero privilege
         add:
-        - NET_BIND_SERVICE
+        - NET_BIND_SERVICE  # Add back only what the app truly needs (binding to ports < 1024)
 
     volumeMounts:
     - name: tmp
@@ -1247,7 +1257,7 @@ metadata:
   name: secure-app
   namespace: production
 spec:
-  replicas: 3
+  replicas: 3  # Multiple replicas for high availability — if one pod crashes, others continue serving
   selector:
     matchLabels:
       app: secure-app
@@ -1278,23 +1288,23 @@ spec:
         resources:
           limits:
             cpu: "1"
-            memory: "512Mi"
+            memory: "512Mi"  # limits prevent one pod from starving others
           requests:
             cpu: "100m"
-            memory: "128Mi"
+            memory: "128Mi"  # requests guarantee scheduling; the scheduler reserves this much
 
         volumeMounts:
         - name: tmp
           mountPath: /tmp
 
-        livenessProbe:
+        livenessProbe:  # liveness restarts the pod; separate from readiness to avoid cascading restarts
           httpGet:
             path: /health
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
 
-        readinessProbe:
+        readinessProbe:  # readiness gates traffic; a failing probe removes the pod from the Service
           httpGet:
             path: /ready
             port: 8080
@@ -1304,7 +1314,7 @@ spec:
       volumes:
       - name: tmp
         emptyDir:
-          sizeLimit: 100Mi
+          sizeLimit: 100Mi  # Prevents a misbehaving process from filling node disk — enforces a hard cap on tmp usage
 ```
 
 ### Pod를 위한 RBAC
@@ -1355,8 +1365,8 @@ metadata:
 spec:
   template:
     spec:
-      serviceAccountName: myapp-sa
-      automountServiceAccountToken: false  # Disable if not needed
+      serviceAccountName: myapp-sa  # Dedicated SA per app — avoids sharing the default SA's broad permissions
+      automountServiceAccountToken: false  # Disable if not needed — reduces attack surface if the container is compromised
       containers:
       - name: app
         image: myapp:latest
@@ -1385,13 +1395,13 @@ spec:
         app: falco
     spec:
       serviceAccountName: falco
-      hostNetwork: true
-      hostPID: true
+      hostNetwork: true  # Falco needs host-level visibility to detect anomalous network syscalls
+      hostPID: true  # Required to see all host processes and correlate events to containers
       containers:
       - name: falco
         image: falcosecurity/falco:0.36.0
         securityContext:
-          privileged: true
+          privileged: true  # Falco needs kernel-level access to intercept syscalls — this is the exception that proves the least-privilege rule
         volumeMounts:
         - name: docker-socket
           mountPath: /var/run/docker.sock
@@ -1809,6 +1819,84 @@ services:
 - [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)
 - [NIST Application Container Security Guide](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-190.pdf)
 - [OWASP Docker Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html)
+
+---
+
+## 연습 문제
+
+### 연습 1: 이미지 취약점(Vulnerability) 스캔
+
+Trivy를 사용하여 컨테이너 이미지의 알려진 CVE(공통 취약점 및 노출)를 식별하고 수정합니다.
+
+1. Trivy를 설치합니다: `brew install trivy` (macOS) 또는 [공식 문서](https://aquasecurity.github.io/trivy/) 참조
+2. 알려진 취약점이 있는 구버전 이미지를 스캔합니다: `trivy image python:3.8`
+3. CRITICAL 및 HIGH 심각도 CVE의 수를 기록합니다
+4. 동일 이미지의 최신 버전을 스캔합니다: `trivy image python:3.12-alpine`
+5. 결과를 비교합니다 — 더 최신의 alpine 변형이 훨씬 적은 취약점을 가져야 합니다
+6. `python:3.12-alpine`을 기본 이미지로 사용하고, 비루트(non-root) 사용자로 실행하며, 간단한 `app.py`를 복사하는 `Dockerfile`을 작성합니다
+7. 커스텀 이미지를 빌드하고 스캔합니다: `trivy image myapp:latest`
+
+### 연습 2: 보안을 강화한 Dockerfile 작성
+
+Dockerfile 보안 모범 사례를 적용하여 애플리케이션 이미지를 강화합니다.
+
+1. 다음 안전하지 않은 `Dockerfile`로 시작합니다:
+   ```dockerfile
+   FROM ubuntu:latest
+   RUN apt-get update && apt-get install -y curl wget vim python3
+   COPY . /app
+   RUN chmod 777 /app
+   CMD ["python3", "/app/main.py"]
+   ```
+2. 위 Dockerfile에서 최소 5가지 보안 문제를 식별합니다
+3. 최소한의 기본 이미지, 고정된 버전, 비루트 사용자, 최소 권한 파일 권한, 해당하는 경우 멀티 스테이지 빌드(multi-stage build), 불필요한 도구 제거를 적용하여 재작성합니다
+4. 두 버전을 모두 빌드하고 이미지 크기를 비교합니다: `docker images`
+5. 두 이미지를 Trivy로 스캔하고 취약점 수를 비교합니다
+
+### 연습 3: 최소 권한(Least Privilege)으로 컨테이너 실행
+
+컨테이너 시작 시 런타임(runtime) 보안 제어를 적용합니다.
+
+1. 비루트 사용자로 컨테이너를 실행합니다: `docker run --rm --user 1000:1000 alpine whoami`
+2. 읽기 전용 루트 파일시스템으로 컨테이너를 실행합니다: `docker run --rm --read-only alpine sh -c "echo test > /test.txt"` — 실패를 확인합니다
+3. 쓰기 가능한 `/tmp` tmpfs를 추가하여 동일한 컨테이너를 실행합니다: `docker run --rm --read-only --tmpfs /tmp alpine sh -c "echo test > /tmp/test.txt && cat /tmp/test.txt"`
+4. 모든 Linux capabilities를 삭제합니다: `docker run --rm --cap-drop ALL alpine ping -c 1 8.8.8.8` — 실패를 확인합니다 (ping은 `CAP_NET_RAW`가 필요)
+5. 필요한 capability만 다시 추가합니다: `docker run --rm --cap-drop ALL --cap-add NET_RAW alpine ping -c 1 8.8.8.8`
+6. 세 가지 제약을 모두 결합하여 컨테이너를 실행합니다: 비루트 사용자, 읽기 전용 파일시스템, 모든 capabilities 삭제
+
+### 연습 4: 시크릿(Secret)을 이미지에 포함하지 않고 관리하기
+
+이미지나 환경 변수에 시크릿을 저장하지 않는 시크릿 주입(secret injection) 패턴을 실습합니다.
+
+1. 시크릿 파일을 생성합니다: `echo "supersecret_db_password" > /tmp/db_password.txt`
+2. 런타임에 바인드 마운트(bind mount)로 시크릿 파일을 마운트합니다: `docker run --rm -v /tmp/db_password.txt:/run/secrets/db_password:ro alpine cat /run/secrets/db_password`
+3. 빌드한 이미지에서 `docker history`를 실행하여 시크릿이 이미지에 포함되지 않았음을 확인합니다
+4. Docker Compose에서 최상위 `secrets` 블록을 정의하고 서비스에서 참조합니다:
+   ```yaml
+   secrets:
+     db_password:
+       file: ./db_password.txt
+   services:
+     app:
+       image: alpine
+       secrets:
+         - db_password
+       command: cat /run/secrets/db_password
+   ```
+5. `docker compose up`을 실행하고 컨테이너 내부에서 시크릿에 접근할 수 있는지 확인합니다
+6. `docker inspect` 환경 변수에 시크릿이 나타나지 않는지 확인합니다
+
+### 연습 5: Docker Content Trust(콘텐츠 신뢰)로 이미지 서명
+
+Docker Content Trust를 사용하여 컨테이너 이미지를 서명하고 검증합니다.
+
+1. Content Trust를 활성화합니다: `export DOCKER_CONTENT_TRUST=1`
+2. 신뢰할 수 있는 이미지를 풀(pull)하고 서명 검증을 확인합니다: `docker pull nginx:alpine`
+3. 로컬 이미지에 태그를 지정합니다: `docker tag nginx:alpine yourusername/signed-nginx:latest`
+4. 서명된 이미지를 Docker Hub에 푸시합니다: `docker push yourusername/signed-nginx:latest` (Docker가 서명 키 생성을 요청함)
+5. Content Trust가 활성화된 상태에서 서명된 이미지를 풀합니다: `docker pull yourusername/signed-nginx:latest`
+6. Content Trust를 비활성화하고 서명되지 않은 이미지를 풀합니다: `DOCKER_CONTENT_TRUST=0 docker pull <서명되지-않은-이미지>`
+7. Content Trust가 보호하는 것과 그 한계에 대해 설명합니다
 
 ---
 

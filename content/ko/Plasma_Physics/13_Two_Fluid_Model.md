@@ -672,25 +672,35 @@ def ohm_law_terms(n, T_e, B, L, V, eta=None):
     k_B = 1.38e-23
     c = 3e8
 
-    # Spitzer resistivity (if not provided)
+    # Spitzer 저항률(Spitzer resistivity)은 고전적(충돌) 기준선이며, 난류에 의한
+    # 이상 저항률(anomalous resistivity)은 난류 모델이 필요하므로 여기서는 제외합니다.
+    # T_e^{-3/2} 스케일링은 고온 플라즈마가 거의 이상적(저저항)임을 의미합니다.
     if eta is None:
         T_e_eV = T_e
         ln_Lambda = 15  # Coulomb logarithm (typical)
         eta = 5.2e-5 * ln_Lambda * T_e_eV**(-3/2)  # Ω·m
 
-    # Current density (from Ampere's law estimate)
+    # Ampere의 법칙(∇×B = μ₀J)은 J ~ B/(μ₀L)로 추정합니다: 특성 스케일 L에서
+    # B의 회전이 전류 밀도의 차수를 결정합니다.
+    # 이것이 스케일 분석에서 사용되는 표준 무차원 순서입니다.
     J = B / (mu_0 * L)
 
-    # Characteristic electric field (ideal MHD)
+    # 이상적 MHD 항 v×B가 기준 스케일을 설정합니다: 다른 모든 항은
+    # 이 값으로 정규화되어 이상적 MHD에서 얼마나 벗어났는지를 정량화합니다.
     E_ideal = V * B
 
     # Generalized Ohm's law terms
     E_resistive = eta * J
     E_Hall = J * B / (e * n)
+    # 압력 경사 ∇p_e ~ nkT/L을 ne로 나누면 kT/(eL)이 되어 n에 독립적입니다.
+    # 이것이 압력 항이 n에 무관하게 급격한 경사 영역에서 중요해지는 이유이며,
+    # B/(μ₀nen L)로 스케일되는 Hall 항과 달리 밀도에 의존하지 않습니다.
     E_pressure = k_B * T_e * e / (e * L)  # ∇p_e ~ nkT/L
 
     omega_pe = np.sqrt(n * e**2 / (m_e * 8.85e-12))
     d_e = c / omega_pe
+    # 전자 관성(electron inertia) 항은 (d_e/L)^2로 스케일됩니다: 길이 스케일 L이
+    # d_i보다 훨씬 작은 전자 skin depth에 접근할 때만 나타납니다.
     E_inertia = (m_e / (e**2 * n**2)) * J * (V / L)
 
     # Normalize to ideal MHD term
@@ -702,6 +712,8 @@ def ohm_law_terms(n, T_e, B, L, V, eta=None):
         'Inertia (m_e dJ/dt)': E_inertia
     }
 
+    # 모든 항을 E_ideal로 정규화하여 각 스케일에서 O(1)(중요)인지
+    # 1보다 훨씬 작은지(무시 가능)를 출력에서 직접 확인할 수 있게 합니다.
     return {k: v/E_ideal for k, v in terms.items()}, eta
 
 # Parameter scan: vary length scale

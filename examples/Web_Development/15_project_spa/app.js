@@ -6,6 +6,8 @@
 
 import router from './router.js';
 
+// Why: A centralized state object (even a simple one) keeps shared data in one place,
+// making data flow predictable and avoiding scattered global variables
 // Simple State Management
 const state = {
     user: null,
@@ -113,6 +115,8 @@ function AboutPage() {
  * Contact Page Component
  */
 function ContactPage() {
+    // Why: setTimeout(fn, 0) defers listener attachment to the next microtask, ensuring the
+    // DOM created by innerHTML assignment is fully parsed before we query for the form element
     // Add form submission handler after render
     setTimeout(() => {
         const form = document.getElementById('contact-form');
@@ -232,6 +236,8 @@ function handleContactSubmit(e) {
 
 // Router Configuration
 
+// Why: Declarative route registration maps URL patterns to component functions, keeping
+// the routing table readable and separating navigation logic from page rendering
 // Register routes
 router.addRoute('/', HomePage);
 router.addRoute('/about', AboutPage);
@@ -248,6 +254,8 @@ router.beforeEach((path) => {
     return true; // Continue navigation
 });
 
+// Why: Updating document.title on each route change is critical for SPAs because the browser
+// does not do it automatically - without this, bookmarks and history entries all show the same name
 router.afterEach((path, params) => {
     console.log('Navigation complete:', path, params);
     // Update page title

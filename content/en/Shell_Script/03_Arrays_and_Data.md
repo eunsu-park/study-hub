@@ -1,10 +1,24 @@
 # Arrays and Data Structures ⭐⭐
 
-**Previous**: [02_Parameter_Expansion.md](./02_Parameter_Expansion.md) | **Next**: [04_Advanced_Control_Flow.md](./04_Advanced_Control_Flow.md)
+**Previous**: [Parameter Expansion and Variable Attributes](./02_Parameter_Expansion.md) | **Next**: [Advanced Control Flow](./04_Advanced_Control_Flow.md)
 
 ---
 
-This lesson covers bash arrays and how to work with structured data. We'll explore indexed and associative arrays, common data structure patterns, parsing CSV and config files, and practical techniques for managing complex data in shell scripts.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Declare, populate, and iterate over indexed arrays using proper quoting to handle whitespace safely
+2. Create and manipulate associative arrays for key-value data storage
+3. Implement stack, queue, and set patterns using bash arrays
+4. Parse CSV data line-by-line with correct field splitting and quoting
+5. Write config file loaders that populate associative arrays from key=value files
+6. Simulate multi-dimensional data structures using compound keys or parallel arrays
+7. Apply array-based patterns for batch file renaming, option parsing, and data aggregation
+
+---
+
+Real-world scripts rarely work with single scalar values. You need to process lists of servers, parse configuration files, collect command output, and manage structured records. Bash arrays let you do this without writing temporary files or calling external tools. Mastering arrays is the difference between fragile one-off scripts and maintainable automation.
 
 ## 1. Indexed Array Operations
 
@@ -1410,4 +1424,4 @@ log_agg --input "*.log" \
 
 ---
 
-**Previous**: [02_Parameter_Expansion.md](./02_Parameter_Expansion.md) | **Next**: [04_Advanced_Control_Flow.md](./04_Advanced_Control_Flow.md)
+**Previous**: [Parameter Expansion and Variable Attributes](./02_Parameter_Expansion.md) | **Next**: [Advanced Control Flow](./04_Advanced_Control_Flow.md)

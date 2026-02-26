@@ -1,12 +1,26 @@
 # IP Addressing and Subnetting
 
-## Overview
-
-An IP (Internet Protocol) address is a logical address that uniquely identifies each device on a network. In this lesson, we will learn about the structure of IPv4 addresses, class-based addressing, subnet masks, CIDR notation, public/private IPs, and IPv6 basics. Subnetting is one of the most important skills in network design and management.
+**Previous**: [Data Link Layer](./05_Data_Link_Layer.md) | **Next**: [Subnetting Practice](./07_Subnetting_Practice.md)
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of IP addresses and how they differ from MAC addresses
+2. Describe the structure of an IPv4 address and convert between decimal and binary representations
+3. Identify IP address classes (A through E) and their default subnet masks
+4. Apply a subnet mask to determine the network and host portions of an address
+5. Write addresses in CIDR notation and calculate the number of available hosts
+6. Distinguish between public and private IP addresses and explain NAT
+7. Describe the basics of IPv6 addressing and why the transition from IPv4 is necessary
+
+---
+
+IP addressing is the numbering system of the Internet. Just as every house needs a unique street address for mail delivery, every device on a network needs an IP address so that routers can forward packets to the correct destination. Mastering subnetting -- the art of dividing networks into smaller, manageable pieces -- is one of the most practical and frequently tested skills in networking.
 
 ## Table of Contents
 
@@ -1076,9 +1090,7 @@ An IP (Internet Protocol) address is a logical address that uniquely identifies 
 
 ---
 
-## Next Steps
-
-- [07_Subnetting_Practice.md](./07_Subnetting_Practice.md) - Subnetting Calculation Practice
+**Previous**: [Data Link Layer](./05_Data_Link_Layer.md) | **Next**: [Subnetting Practice](./07_Subnetting_Practice.md)
 
 ---
 

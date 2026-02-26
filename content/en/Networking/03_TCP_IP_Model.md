@@ -1,12 +1,25 @@
 # TCP/IP Model
 
-## Overview
-
-The TCP/IP (Transmission Control Protocol/Internet Protocol) model is the foundational protocol stack of the Internet. Developed in the 1970s as part of the U.S. Department of Defense's ARPANET project, it is now used as the standard for global Internet communication. In this lesson, we'll explore the TCP/IP model's 4-layer architecture, comparisons with the OSI model, the history of the Internet, and actual communication flows.
+**Previous**: [OSI 7-Layer Model](./02_OSI_7_Layer_Model.md) | **Next**: [Physical Layer](./04_Physical_Layer.md)
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the four layers of the TCP/IP model and the role of each layer
+2. Compare the TCP/IP model with the OSI 7-layer model and explain why TCP/IP became the Internet standard
+3. Trace the complete communication flow when a web page is loaded (DNS, TCP handshake, HTTP, encapsulation)
+4. Distinguish between TCP and UDP and identify appropriate use cases for each
+5. Explain the function of key supporting protocols (ICMP, ARP, DHCP)
+6. Identify major application-layer protocols and their port numbers
+
+---
+
+While the OSI model provides the theoretical vocabulary, the TCP/IP model is the protocol stack that actually powers the Internet. Every packet you send -- whether a web request, a video stream, or a DNS lookup -- is processed by this four-layer architecture. Understanding TCP/IP is not just academic; it is the practical foundation for configuring networks, debugging connectivity issues, and building networked applications.
 
 ## Table of Contents
 
@@ -682,6 +695,8 @@ The TCP/IP (Transmission Control Protocol/Internet Protocol) model is the founda
 
 ### ICMP (Internet Control Message Protocol)
 
+> **Why does ICMP exist as a separate protocol?** IP itself has no error reporting — when a packet is dropped (TTL expired, destination unreachable), the sender would never know without ICMP. ICMP rides inside IP packets but serves as the network's *feedback channel*: `ping` uses Echo Request/Reply to test reachability, while `traceroute` deliberately triggers TTL expiry at each hop to map the path. Without ICMP, network troubleshooting would be blind guesswork.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                          ICMP                                    │
@@ -1225,9 +1240,7 @@ What are possible causes?
 
 ---
 
-## Next Steps
-
-- [04_Physical_Layer.md](./04_Physical_Layer.md) - Physical Layer and Transmission Media
+**Previous**: [OSI 7-Layer Model](./02_OSI_7_Layer_Model.md) | **Next**: [Physical Layer](./04_Physical_Layer.md)
 
 ---
 

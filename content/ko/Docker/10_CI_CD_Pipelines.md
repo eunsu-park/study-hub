@@ -1,11 +1,21 @@
 # 10. CI/CD 파이프라인
 
+**이전**: [Helm 패키지 관리](./09_Helm_Package_Management.md) | **다음**: [컨테이너 네트워킹](./11_Container_Networking.md)
+
 ## 학습 목표
-- CI/CD 개념과 워크플로우 이해
-- GitHub Actions를 활용한 자동화 구축
-- Docker 이미지 빌드 및 레지스트리 푸시
-- Kubernetes 자동 배포 구현
-- GitOps 패턴 이해
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. CI/CD 개념을 설명하고 전형적인 배포 파이프라인의 단계를 기술한다
+2. 테스트, 빌드, 배포를 자동화하는 GitHub Actions 워크플로우를 작성한다
+3. 멀티 플랫폼 지원 및 레지스트리 푸시를 포함한 Docker 이미지 빌드 자동화를 구현한다
+4. 롤링 업데이트(Rolling Update)와 헬스 체크(Health Check)를 포함한 Kubernetes 배포 자동화를 구성한다
+5. 매트릭스 빌드(Matrix Build), 캐싱, 환경 프로모션을 활용한 고급 파이프라인을 설계한다
+6. ArgoCD를 이용한 GitOps 패턴으로 선언적(Declarative)이고 Git 기반의 배포를 적용한다
+
+---
+
+컨테이너를 수동으로 빌드하고 배포하는 방식은 학습 목적으로는 충분하지만, 프로덕션 팀은 코드 변경마다 테스트, 빌드, 배포를 자동으로 처리하는 파이프라인이 필요합니다. CI/CD(Continuous Integration / Continuous Deployment) 파이프라인은 사람의 실수를 없애고, 품질 게이트(Quality Gate)를 강제하며, 빠르고 안정적인 릴리즈를 가능하게 합니다. 이 레슨에서는 코드 푸시부터 프로덕션 배포까지 전체 파이프라인을 다루며, 자동화를 위한 GitHub Actions와 선언적 인프라 관리를 위한 GitOps를 활용합니다.
 
 ## 목차
 1. [CI/CD 개요](#1-cicd-개요)
@@ -14,7 +24,8 @@
 4. [Kubernetes 배포 자동화](#4-kubernetes-배포-자동화)
 5. [고급 파이프라인](#5-고급-파이프라인)
 6. [GitOps](#6-gitops)
-7. [연습 문제](#7-연습-문제)
+7. [Docker CI/CD 모범 사례](#7-docker-cicd-모범-사례)
+8. [연습 문제](#8-연습-문제)
 
 ---
 
@@ -24,22 +35,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    CI/CD 파이프라인                          │
+│                    CI/CD Pipeline                            │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │               Continuous Integration (CI)            │   │
 │  ├─────────┬─────────┬─────────┬─────────┬─────────┐   │   │
-│  │  코드   │  빌드   │  테스트  │  분석   │ 아티팩트│   │   │
-│  │  푸시   │         │         │         │  저장   │   │   │
+│  │  Code   │  Build  │  Test   │ Analyze │ Artifact│   │   │
+│  │  Push   │         │         │         │  Save   │   │   │
 │  └────┬────┴────┬────┴────┬────┴────┬────┴────┬────┘   │   │
 │       │         │         │         │         │         │   │
 │       ▼         ▼         ▼         ▼         ▼         │   │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │               Continuous Delivery (CD)               │   │
 │  ├─────────┬─────────┬─────────┬─────────┐             │   │
-│  │ 스테이징│  E2E    │  승인   │ 프로덕션│             │   │
-│  │  배포   │ 테스트  │         │  배포   │             │   │
+│  │ Staging │  E2E    │ Approval│Production              │   │
+│  │ Deploy  │  Test   │         │ Deploy  │             │   │
 │  └─────────┴─────────┴─────────┴─────────┘             │   │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -49,40 +60,40 @@
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                        CI 단계                              │
+│                        CI Stage                             │
 ├────────────────────────────────────────────────────────────┤
-│  1. 소스 체크아웃                                          │
-│     └─ 코드 가져오기, 의존성 캐싱                          │
+│  1. Source Checkout                                        │
+│     └─ Fetch code, cache dependencies                     │
 │                                                            │
-│  2. 빌드                                                   │
-│     └─ 컴파일, 번들링, Docker 이미지 빌드                  │
+│  2. Build                                                  │
+│     └─ Compile, bundle, Docker image build                │
 │                                                            │
-│  3. 테스트                                                 │
-│     ├─ 단위 테스트 (Unit Test)                            │
-│     ├─ 통합 테스트 (Integration Test)                     │
-│     └─ 코드 커버리지                                       │
+│  3. Test                                                   │
+│     ├─ Unit Test                                          │
+│     ├─ Integration Test                                   │
+│     └─ Code Coverage                                       │
 │                                                            │
-│  4. 코드 분석                                              │
-│     ├─ 린트 (ESLint, pylint 등)                          │
-│     ├─ 정적 분석 (SonarQube)                              │
-│     └─ 보안 스캔 (Snyk, Trivy)                            │
+│  4. Code Analysis                                          │
+│     ├─ Lint (ESLint, pylint, etc.)                       │
+│     ├─ Static Analysis (SonarQube)                        │
+│     └─ Security Scan (Snyk, Trivy)                        │
 │                                                            │
-│  5. 아티팩트 저장                                          │
-│     └─ Docker 이미지, 바이너리, 패키지                     │
+│  5. Artifact Storage                                       │
+│     └─ Docker images, binaries, packages                  │
 ├────────────────────────────────────────────────────────────┤
-│                        CD 단계                              │
+│                        CD Stage                             │
 ├────────────────────────────────────────────────────────────┤
-│  6. 스테이징 배포                                          │
-│     └─ 테스트 환경에 자동 배포                             │
+│  6. Staging Deployment                                     │
+│     └─ Auto deploy to test environment                    │
 │                                                            │
-│  7. E2E 테스트                                             │
-│     └─ 전체 시스템 통합 테스트                             │
+│  7. E2E Test                                               │
+│     └─ Full system integration test                       │
 │                                                            │
-│  8. 승인 (선택)                                            │
-│     └─ 수동 승인 또는 자동 승인                            │
+│  8. Approval (Optional)                                    │
+│     └─ Manual or automatic approval                       │
 │                                                            │
-│  9. 프로덕션 배포                                          │
-│     └─ 롤링 업데이트, Blue-Green, Canary                  │
+│  9. Production Deployment                                  │
+│     └─ Rolling update, Blue-Green, Canary                 │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,24 +105,24 @@
 
 ```yaml
 # .github/workflows/ci.yaml
-name: CI Pipeline                    # 워크플로우 이름
+name: CI Pipeline                    # Workflow name
 
-on:                                  # 트리거
+on:                                  # Triggers
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:                 # 수동 실행
+  workflow_dispatch:                 # Manual execution
 
-env:                                 # 전역 환경 변수
+env:                                 # Global environment variables
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-jobs:                                # 작업 정의
+jobs:                                # Job definitions
   build:
-    runs-on: ubuntu-latest           # 러너
+    runs-on: ubuntu-latest           # Runner
 
-    steps:                           # 단계
+    steps:                           # Steps
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -141,12 +152,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 코드 체크아웃
+    # 1. Code checkout
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 전체 히스토리 (태그 등 필요 시)
+        fetch-depth: 0  # Full history (for tags, etc.) — needed for changelog generation and semver tag detection
 
-    # 2. 언어별 설정
+    # 2. Language setup
     - uses: actions/setup-node@v4
       with:
         node-version: '20'
@@ -161,28 +172,28 @@ jobs:
       with:
         go-version: '1.21'
 
-    # 3. 캐싱
+    # 3. Caching — reuses downloaded dependencies across runs, cutting minutes off CI builds
     - uses: actions/cache@v4
       with:
         path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}  # Cache key tied to lockfile — busts cache only when deps change
         restore-keys: |
           ${{ runner.os }}-node-
 
-    # 4. 아티팩트 업로드
+    # 4. Upload artifact
     - uses: actions/upload-artifact@v4
       with:
         name: build-output
         path: dist/
         retention-days: 7
 
-    # 5. 아티팩트 다운로드
+    # 5. Download artifact
     - uses: actions/download-artifact@v4
       with:
         name: build-output
         path: ./dist
 
-    # 6. Docker 설정
+    # 6. Docker setup
     - uses: docker/setup-buildx-action@v3
 
     - uses: docker/login-action@v3
@@ -191,7 +202,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    # 7. Kubernetes 설정
+    # 7. Kubernetes setup
     - uses: azure/setup-kubectl@v4
       with:
         version: 'v1.28.0'
@@ -210,11 +221,11 @@ name: Matrix Build
 on: push
 
 jobs:
-  # 빌드 매트릭스
+  # Build matrix
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: false  # Continue other matrix jobs even if one fails — gives a complete picture of compatibility
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [18, 20, 22]
@@ -241,7 +252,7 @@ jobs:
       if: matrix.coverage
       uses: codecov/codecov-action@v4
 
-  # Job 의존성
+  # Job dependencies
   build:
     needs: test
     runs-on: ubuntu-latest
@@ -255,7 +266,7 @@ jobs:
         name: dist
         path: dist/
 
-  # 조건부 실행
+  # Conditional execution
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main'
@@ -277,15 +288,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # 환경 선택 (GitHub 환경 보호 규칙 적용)
+    # Environment selection (applies GitHub environment protection rules)
     environment:
       name: production
       url: https://myapp.example.com
 
     env:
-      # 일반 환경 변수
+      # Normal environment variables
       NODE_ENV: production
-      # Secret 참조
+      # Secret reference
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
@@ -293,16 +304,16 @@ jobs:
 
     - name: Deploy
       env:
-        # Step 레벨 환경 변수
+        # Step-level environment variables
         API_KEY: ${{ secrets.API_KEY }}
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         echo "Deploying with secret..."
-        # secrets는 로그에 마스킹됨
+        # Secrets are masked in logs
 
     - name: Use GITHUB_TOKEN
-      # GITHUB_TOKEN은 자동 제공
+      # GITHUB_TOKEN is automatically provided
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -342,10 +353,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set up QEMU
+    - name: Set up QEMU  # Required for cross-platform builds (e.g., building ARM64 images on AMD64 runners)
       uses: docker/setup-qemu-action@v3
 
-    - name: Set up Docker Buildx
+    - name: Set up Docker Buildx  # Buildx enables BuildKit features: layer caching, multi-platform, and secret mounts
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Container Registry
@@ -372,41 +383,41 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }}
+        platforms: linux/amd64,linux/arm64  # Build for both architectures — supports servers and Apple Silicon/ARM-based cloud instances
+        push: ${{ github.event_name != 'pull_request' }}  # Don't push on PRs — avoids polluting the registry with unmerged code
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha  # Pull previous build layers from GitHub Actions cache — speeds up CI builds
+        cache-to: type=gha,mode=max  # mode=max caches ALL layers (not just final) for maximum reuse
 ```
 
 ### 3.2 멀티스테이지 Dockerfile
 
 ```dockerfile
 # Dockerfile
-# 빌드 스테이지
+# Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 의존성 먼저 복사 (캐싱 최적화)
+# Copy dependencies first (caching optimization) — this layer is cached until package.json changes, saving rebuild time
 COPY package*.json ./
 RUN npm ci --only=production
 
-# 소스 복사 및 빌드
+# Copy source and build
 COPY . .
 RUN npm run build
 
-# 프로덕션 스테이지
+# Production stage
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# 비root 사용자
+# Non-root user — limits damage if the container is compromised; attacker cannot modify system files
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# 빌드 결과만 복사
+# Copy build results only — excludes source code, devDependencies, and build tools from the production image
 COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
@@ -432,10 +443,10 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '0 0 * * *'  # 매일 자정
+    - cron: '0 0 * * *'  # Daily at midnight — catches newly disclosed CVEs in images that haven't been rebuilt
 
 jobs:
-  # 이미지 취약점 스캔
+  # Image vulnerability scan
   trivy-scan:
     runs-on: ubuntu-latest
     steps:
@@ -457,7 +468,7 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
-  # 코드 취약점 스캔
+  # Code vulnerability scan
   codeql:
     runs-on: ubuntu-latest
     permissions:
@@ -473,7 +484,7 @@ jobs:
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
 
-  # 의존성 스캔
+  # Dependency scan
   dependency-scan:
     runs-on: ubuntu-latest
     steps:
@@ -549,10 +560,10 @@ jobs:
     - name: Deploy to staging
       run: |
         kubectl apply -f k8s/ -n staging
-        kubectl rollout status deployment/myapp -n staging --timeout=300s
+        kubectl rollout status deployment/myapp -n staging --timeout=300s  # Blocks until all pods are healthy — fails the workflow if deployment is broken
 
   deploy-production:
-    needs: [build, deploy-staging]
+    needs: [build, deploy-staging]  # Production deploys only after staging succeeds — prevents shipping untested code
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -637,7 +648,7 @@ jobs:
           --set image.repository=ghcr.io/${{ github.repository }} \
           -f ./charts/myapp/values-prod.yaml \
           --wait \
-          --timeout 5m
+          --timeout 5m  # --wait blocks until all resources are ready — ensures the deploy step fails if pods never become healthy
 
     - name: Verify deployment
       run: |
@@ -763,7 +774,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # 1. 린트 및 정적 분석
+  # 1. Lint and static analysis
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -779,7 +790,7 @@ jobs:
     - run: npm run lint
     - run: npm run type-check
 
-  # 2. 단위 테스트
+  # 2. Unit tests
   test:
     runs-on: ubuntu-latest
     steps:
@@ -799,7 +810,7 @@ jobs:
       with:
         files: ./coverage/lcov.info
 
-  # 3. 통합 테스트
+  # 3. Integration tests
   integration-test:
     runs-on: ubuntu-latest
     services:
@@ -834,7 +845,7 @@ jobs:
         REDIS_URL: redis://localhost:6379
       run: npm run test:integration
 
-  # 4. 빌드
+  # 4. Build
   build:
     needs: [lint, test, integration-test]
     runs-on: ubuntu-latest
@@ -882,7 +893,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  # 5. 보안 스캔
+  # 5. Security scan
   security-scan:
     needs: build
     runs-on: ubuntu-latest
@@ -902,7 +913,7 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
-  # 6. 스테이징 배포
+  # 6. Staging deployment
   deploy-staging:
     needs: [build, security-scan]
     runs-on: ubuntu-latest
@@ -931,7 +942,7 @@ jobs:
           -f ./charts/myapp/values-staging.yaml \
           --wait
 
-  # 7. E2E 테스트
+  # 7. E2E tests
   e2e-test:
     needs: deploy-staging
     runs-on: ubuntu-latest
@@ -961,7 +972,7 @@ jobs:
         name: playwright-report
         path: playwright-report/
 
-  # 8. 프로덕션 배포
+  # 8. Production deployment
   deploy-production:
     needs: [build, e2e-test]
     runs-on: ubuntu-latest
@@ -991,7 +1002,7 @@ jobs:
           --wait \
           --timeout 10m
 
-  # 9. 릴리스 노트
+  # 9. Release notes
   release:
     needs: deploy-production
     runs-on: ubuntu-latest
@@ -1058,7 +1069,7 @@ jobs:
     - name: Deploy Canary
       if: ${{ !inputs.promote }}
       run: |
-        # Canary Deployment 생성
+        # Create Canary Deployment
         helm upgrade --install myapp-canary ./charts/myapp \
           --namespace production \
           --set image.tag=${{ github.sha }} \
@@ -1070,7 +1081,7 @@ jobs:
     - name: Monitor Canary
       if: ${{ !inputs.promote }}
       run: |
-        # 5분간 에러율 모니터링
+        # Monitor error rate for 5 minutes
         for i in {1..30}; do
           error_rate=$(kubectl exec -n production deploy/prometheus -- \
             promtool query instant 'sum(rate(http_requests_total{status=~"5.."}[1m])) / sum(rate(http_requests_total[1m])) * 100' | jq -r '.data.result[0].value[1]')
@@ -1087,14 +1098,14 @@ jobs:
     - name: Promote Canary
       if: ${{ inputs.promote }}
       run: |
-        # Canary를 Stable로 승격
+        # Promote Canary to Stable
         helm upgrade --install myapp ./charts/myapp \
           --namespace production \
           --set image.tag=${{ github.sha }} \
           -f ./charts/myapp/values-prod.yaml \
           --wait
 
-        # Canary 삭제
+        # Delete Canary
         helm uninstall myapp-canary -n production || true
 ```
 
@@ -1106,22 +1117,22 @@ jobs:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     GitOps 아키텍처                          │
+│                     GitOps Architecture                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────┐                  ┌──────────────┐        │
 │  │  App Repo    │                  │ Config Repo  │        │
-│  │  (소스 코드)  │                  │ (K8s 매니페스트)│       │
+│  │ (Source Code)│                  │(K8s Manifests)│       │
 │  └──────┬───────┘                  └──────┬───────┘        │
 │         │                                  │                │
 │         │ 1. Push                          │ 3. Push        │
 │         ▼                                  ▼                │
 │  ┌──────────────┐                  ┌──────────────┐        │
-│  │    CI        │  2. 이미지 태그   │   GitOps     │        │
-│  │  Pipeline    │────업데이트──────▶│  Controller  │        │
+│  │    CI        │  2. Update image │   GitOps     │        │
+│  │  Pipeline    │──────tag────────▶│  Controller  │        │
 │  └──────────────┘                  │  (ArgoCD)    │        │
 │         │                          └──────┬───────┘        │
-│         │ 빌드                            │ 4. Sync        │
+│         │ Build                           │ 4. Sync        │
 │         ▼                                  ▼                │
 │  ┌──────────────┐                  ┌──────────────┐        │
 │  │  Container   │                  │  Kubernetes  │        │
@@ -1156,9 +1167,9 @@ spec:
 
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
-      allowEmpty: false
+      prune: true  # Remove resources deleted from Git — prevents orphaned objects from accumulating in the cluster
+      selfHeal: true  # Revert manual kubectl changes — ensures Git remains the single source of truth
+      allowEmpty: false  # Safety net: refuse to sync if Git repo returns zero resources (likely a misconfiguration)
     syncOptions:
       - Validate=true
       - CreateNamespace=true
@@ -1172,7 +1183,7 @@ spec:
         maxDuration: 3m
 
 ---
-# Helm 차트 사용
+# Using Helm chart
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -1230,11 +1241,11 @@ jobs:
     - name: Update image tag
       working-directory: config
       run: |
-        # Kustomize 사용
+        # Using Kustomize
         cd overlays/production
         kustomize edit set image myapp=ghcr.io/myorg/myapp:${{ steps.tag.outputs.tag }}
 
-        # 또는 yq 사용
+        # Or using yq
         # yq e '.spec.template.spec.containers[0].image = "ghcr.io/myorg/myapp:${{ steps.tag.outputs.tag }}"' -i deployment.yaml
 
     - name: Commit and push
@@ -1249,50 +1260,376 @@ jobs:
 
 ---
 
-## 7. 연습 문제
+## 7. Docker CI/CD 모범 사례
+
+이 섹션은 CI/CD 파이프라인에서 Docker 이미지를 빌드, 테스트, 배포하기 위한 실무 패턴을 정리합니다 -- 섹션 3-6을 연결하는 "접착제" 역할입니다.
+
+### 7.1 CI/CD를 위한 멀티스테이지(Multi-Stage) Dockerfile
+
+잘 구조화된 멀티스테이지 Dockerfile은 관심사를 분리하고 효율적인 CI 파이프라인을 가능하게 합니다:
+
+```dockerfile
+# Dockerfile.ci
+# ── Stage 1: Dependencies ──────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./  # Copy lockfile first — this layer is cached until dependencies change, saving minutes on rebuilds
+RUN npm ci
+
+# ── Stage 2: Test ──────────────────────────────────────────
+FROM deps AS test
+COPY . .
+RUN npm run lint
+RUN npm run test -- --coverage
+# Test stage produces coverage artifacts but is NOT shipped
+
+# ── Stage 3: Build ─────────────────────────────────────────
+FROM deps AS build
+COPY . .
+RUN npm run build
+# Only production build artifacts survive this stage
+
+# ── Stage 4: Production ───────────────────────────────────
+FROM node:20-alpine AS production
+WORKDIR /app
+
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001
+
+COPY --from=build --chown=appuser:appgroup /app/dist ./dist
+COPY --from=build --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=build --chown=appuser:appgroup /app/package.json ./
+
+USER appuser  # Non-root user — limits damage if the container is compromised
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1  # Built-in health check — Docker restarts the container if it becomes unresponsive
+
+CMD ["node", "dist/main.js"]
+```
+
+CI에서 스테이지 분리가 중요한 이유:
+- **deps**: 독립적으로 캐시됨 -- `package*.json`이 변경될 때만 재빌드
+- **test**: CI에서 실행되지만 프로덕션으로 배포되지 않음 (공격 표면 축소)
+- **build**: 최적화된 아티팩트 생성
+- **production**: 런타임 의존성만 포함한 최소 이미지
+
+### 7.2 CI에서 Docker Compose를 활용한 통합 테스트
+
+CI에서 실제 의존성(데이터베이스, 캐시, 큐)을 사용한 통합 테스트 실행:
+
+```yaml
+# docker-compose.ci.yaml
+services:
+  app:
+    build:
+      context: .
+      target: test        # Build only up to the test stage — never ship test dependencies to production
+    depends_on:
+      postgres:
+        condition: service_healthy  # Wait for DB to accept connections before running tests — prevents flaky failures
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://test:test@postgres:5432/testdb
+      REDIS_URL: redis://redis:6379
+    command: npm run test:integration
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: testdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+```
+
+```yaml
+# In your GitHub Actions workflow:
+- name: Run integration tests with Docker Compose
+  run: |
+    docker compose -f docker-compose.ci.yaml up \
+      --build --abort-on-container-exit --exit-code-from app
+
+    # --abort-on-container-exit: Stop all when any container exits
+    # --exit-code-from app: Use app container's exit code as workflow result
+
+- name: Cleanup
+  if: always()
+  run: docker compose -f docker-compose.ci.yaml down -v
+```
+
+### 7.3 이미지 태깅 전략(Image Tagging Strategy)
+
+일관된 태깅 전략은 배포 혼란을 방지하고 안정적인 롤백을 가능하게 합니다:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Image Tagging Strategy                        │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Tag Type        Example             When to Use         │
+│  ──────────────  ──────────────────  ──────────────────  │
+│  Git SHA         myapp:a1b2c3d       Every build (unique │
+│                                      and traceable)      │
+│                                                          │
+│  Semver          myapp:1.2.3         Release tags only   │
+│                  myapp:1.2           (major.minor alias) │
+│                                                          │
+│  Branch          myapp:main          Latest on branch    │
+│                  myapp:develop       (mutable -- careful)│
+│                                                          │
+│  latest          myapp:latest        Convenience only    │
+│                                      (never in prod!)    │
+│                                                          │
+│  Recommended production practice:                        │
+│  Always deploy by Git SHA or Semver tag, NEVER by        │
+│  :latest or branch name.                                 │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+`docker/metadata-action`은 이러한 태그를 자동으로 생성합니다:
+
+```yaml
+- uses: docker/metadata-action@v5
+  with:
+    images: ghcr.io/${{ github.repository }}
+    tags: |
+      type=sha,prefix=                    # a1b2c3d
+      type=semver,pattern={{version}}      # 1.2.3
+      type=semver,pattern={{major}}.{{minor}}  # 1.2
+      type=ref,event=branch               # main, develop
+      type=raw,value=latest,enable={{is_default_branch}}
+```
+
+### 7.4 취약점 스캔 파이프라인(Vulnerability Scanning Pipeline)
+
+여러 단계에서 보안 스캔을 통합하면 문제를 조기에 발견할 수 있습니다:
+
+```yaml
+# .github/workflows/docker-security.yaml
+name: Docker Security Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6 AM
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build image
+      run: docker build -t myapp:scan .
+
+    # Trivy: fast, comprehensive, widely adopted
+    - name: Trivy vulnerability scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: myapp:scan
+        format: table
+        exit-code: 1               # Fail the build on findings — blocks deployment of vulnerable images
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true       # Skip vulns with no fix available — avoids blocking on issues you cannot resolve yet
+
+    # Hadolint: Dockerfile best-practice linter
+    - name: Lint Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        failure-threshold: warning
+
+    # Dockle: container image security checker
+    - name: Dockle image audit
+      run: |
+        VERSION=$(curl -s https://api.github.com/repos/goodwithtech/dockle/releases/latest | jq -r .tag_name)
+        curl -sSL "https://github.com/goodwithtech/dockle/releases/download/${VERSION}/dockle_${VERSION#v}_Linux-64bit.tar.gz" | tar xz
+        ./dockle --exit-code 1 --exit-level warn myapp:scan
+```
+
+### 7.5 완전한 Docker CI/CD 워크플로우
+
+모든 요소를 결합한 프로덕션 준비 워크플로우:
+
+```yaml
+# .github/workflows/docker-complete.yaml
+name: Docker CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── Lint & Test ──────────────────────────────────────────
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Lint Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+
+    - name: Integration tests via Compose
+      run: |
+        docker compose -f docker-compose.ci.yaml up \
+          --build --abort-on-container-exit --exit-code-from app
+      # Real DB + Redis integration tests
+
+    - name: Cleanup
+      if: always()
+      run: docker compose -f docker-compose.ci.yaml down -v
+
+  # ── Build & Push ─────────────────────────────────────────
+  build:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: docker/setup-qemu-action@v3       # ARM64 support — enables cross-platform builds on x86 runners
+    - uses: docker/setup-buildx-action@v3
+
+    - name: Login to GHCR
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=sha,prefix=
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=ref,event=branch
+
+    - name: Build and push
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # ── Security Scan ────────────────────────────────────────
+  security:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build.outputs.image-digest }}
+        format: sarif
+        output: trivy.sarif
+        severity: CRITICAL,HIGH
+
+    - name: Upload SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: trivy.sarif
+
+  # ── Deploy ───────────────────────────────────────────────
+  deploy:
+    needs: [build, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - uses: actions/checkout@v4
+    - name: Deploy to production
+      run: |
+        echo "Deploy ${{ needs.build.outputs.image-tags }}"
+        # Replace with your actual deployment command
+```
+
+---
+
+## 8. 연습 문제
 
 ### 연습 1: 기본 CI 파이프라인
 ```yaml
-# 요구사항:
-# 1. Node.js 프로젝트용 CI 파이프라인
-# 2. 린트, 테스트, 빌드 단계
-# 3. PR과 main 브랜치에서 실행
-# 4. 테스트 커버리지 리포트 업로드
+# Requirements:
+# 1. CI pipeline for Node.js project
+# 2. Lint, test, build stages
+# 3. Run on PR and main branch
+# 4. Upload test coverage report
 
-# 워크플로우 작성
+# Write workflow
 ```
 
 ### 연습 2: Docker 멀티 아키텍처 빌드
 ```yaml
-# 요구사항:
-# 1. AMD64, ARM64 이미지 빌드
-# 2. 태그: latest, git sha, semver
-# 3. 캐싱 설정
-# 4. 보안 스캔
+# Requirements:
+# 1. Build AMD64, ARM64 images
+# 2. Tags: latest, git sha, semver
+# 3. Caching configuration
+# 4. Security scan
 
-# 워크플로우 작성
+# Write workflow
 ```
 
 ### 연습 3: Blue-Green 배포
 ```yaml
-# 요구사항:
-# 1. Blue/Green 환경 전환
-# 2. 헬스체크 후 트래픽 전환
-# 3. 롤백 기능
-# 4. 수동 승인 단계
+# Requirements:
+# 1. Blue/Green environment switching
+# 2. Health check before traffic switch
+# 3. Rollback capability
+# 4. Manual approval stage
 
-# 워크플로우 작성
+# Write workflow
 ```
 
 ### 연습 4: GitOps 설정
 ```yaml
-# 요구사항:
-# 1. ArgoCD Application 설정
-# 2. CI에서 Config Repo 자동 업데이트
-# 3. 자동 동기화 및 자가 치유
-# 4. Slack 알림
+# Requirements:
+# 1. ArgoCD Application setup
+# 2. Auto-update Config Repo from CI
+# 3. Automatic sync and self-healing
+# 4. Slack notifications
 
-# ArgoCD Application 및 CI 워크플로우 작성
+# Write ArgoCD Application and CI workflow
 ```
 
 ---
@@ -1309,6 +1646,83 @@ jobs:
 - [Docker Build Push Action](https://github.com/docker/build-push-action)
 - [ArgoCD 문서](https://argo-cd.readthedocs.io/)
 - [GitOps 원칙](https://opengitops.dev/)
+
+---
+
+## 연습 문제
+
+### 연습 1: 기본 GitHub Actions CI 워크플로우 구축
+
+모든 푸시(push)에서 테스트를 실행하고 Docker 이미지를 빌드하는 워크플로우를 생성합니다.
+
+1. GitHub 저장소에 `.github/workflows/ci.yml`을 생성합니다
+2. `main` 브랜치로의 `push`와 `pull_request`에서 트리거되도록 워크플로우를 구성합니다
+3. 다음 단계를 가진 job을 추가합니다:
+   - `actions/checkout@v4`로 코드를 체크아웃(checkout)합니다
+   - `docker/setup-buildx-action@v3`으로 Docker Buildx를 설정합니다
+   - Docker 이미지를 빌드합니다 (푸시 없이): `docker build -t myapp:test .`
+   - 스모크 테스트(smoke test)를 실행합니다: `docker run --rm myapp:test echo "Image works"`
+4. 커밋을 푸시하고 GitHub Actions 탭에서 워크플로우 실행을 확인합니다
+5. Dockerfile에 의도적인 오류를 추가하고 다시 푸시합니다 — 워크플로우가 실패하는지 확인합니다
+
+### 연습 2: 레지스트리(Registry)에 이미지 푸시
+
+CI 워크플로우를 확장하여 버전이 지정된 이미지를 Docker Hub(또는 GitHub Container Registry)에 빌드 및 푸시합니다.
+
+1. 저장소 시크릿을 추가합니다: `DOCKERHUB_USERNAME`과 `DOCKERHUB_TOKEN` (또는 GHCR의 경우 `GITHUB_TOKEN` 사용)
+2. `docker/login-action@v3`을 사용하여 Docker 로그인 단계를 추가합니다
+3. 브랜치 이름과 Git SHA로 태그를 생성하기 위해 `docker/metadata-action@v4`을 사용합니다:
+   ```yaml
+   - uses: docker/metadata-action@v4
+     id: meta
+     with:
+       images: yourusername/myapp
+       tags: |
+         type=ref,event=branch
+         type=sha,prefix=sha-
+   ```
+4. 생성된 태그를 사용하여 이미지를 푸시하도록 빌드 단계를 업데이트합니다: `push: true` 및 `tags: ${{ steps.meta.outputs.tags }}`
+5. 커밋을 푸시하고 이미지가 올바른 태그와 함께 레지스트리에 나타나는지 확인합니다
+
+### 연습 3: 환경 프로모션(Environment Promotion)을 가진 멀티 스테이지 파이프라인 추가
+
+순차적으로 실행되는 별도의 테스트(test)와 배포(deploy) job을 생성합니다.
+
+1. 워크플로우를 `test`와 `deploy` 두 개의 job으로 분리합니다
+2. `needs: test`로 `deploy`가 `test`에 의존하도록 합니다
+3. `test` job에서: 코드를 체크아웃하고, 이미지를 빌드하고, 컨테이너 내부에서 단위 테스트를 실행합니다
+4. `deploy` job에서: 레지스트리에 로그인하여 이미지를 푸시하되, `main`으로의 푸시일 때만 실행합니다 (`if: github.ref == 'refs/heads/main'` 추가)
+5. `test` job에 여러 Node.js 버전에서 테스트를 실행하는 매트릭스(matrix) 전략을 추가합니다: `matrix: node: [18, 20]`
+6. 기능 브랜치에 푸시하여 `test`만 실행되는지 확인합니다; `main`에 머지하여 `deploy`도 실행되는지 확인합니다
+
+### 연습 4: Docker 빌드 레이어 캐시 적용
+
+GitHub Actions 캐시를 사용하여 Docker 빌드 속도를 높입니다.
+
+1. `docker/build-push-action`에 GitHub Actions 캐시 백엔드를 추가합니다:
+   ```yaml
+   cache-from: type=gha
+   cache-to: type=gha,mode=max
+   ```
+2. 커밋을 푸시하고 워크플로우 실행 시간을 기록합니다
+3. 코드를 소폭 변경(의존성 변경 아님)하여 두 번째 커밋을 푸시합니다
+4. 두 실행 시간을 비교합니다 — 두 번째 실행이 캐시 히트(cache hit)로 인해 훨씬 빠릅니다
+5. 세 번째 푸시에서 빌드 단계에 `--no-cache` 플래그를 추가하여 원래 시간으로 돌아가는지 확인합니다 (캐시 무시됨)
+
+### 연습 5: ArgoCD(아르고CD)로 GitOps 배포 구현
+
+Git 저장소를 ArgoCD에 연결하여 선언적(declarative) 지속적 배포(Continuous Deployment)를 구현합니다.
+
+1. minikube 클러스터에 ArgoCD를 설치합니다:
+   ```bash
+   kubectl create namespace argocd
+   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+   ```
+2. ArgoCD UI에 접근합니다: `kubectl port-forward svc/argocd-server -n argocd 8080:443`
+3. Kubernetes 매니페스트가 포함된 Git 저장소를 가리키는 ArgoCD `Application` 매니페스트를 생성합니다
+4. 매니페스트를 적용합니다: `kubectl apply -f argocd-app.yaml`
+5. ArgoCD UI에서 애플리케이션이 동기화되는 것을 확인합니다 — 클러스터 상태가 Git 저장소 상태와 일치합니다
+6. Git 저장소에서 매니페스트를 수정하고 (예: `replicas`를 1에서 2로 변경) 변경 사항을 푸시한 후 ArgoCD가 자동으로 클러스터를 동기화하는 것을 확인합니다
 
 ---
 

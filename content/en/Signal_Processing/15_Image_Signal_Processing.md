@@ -10,15 +10,18 @@ An image is a two-dimensional signal: a function of spatial coordinates rather t
 
 **Prerequisites**: 1D DFT, convolution, FIR filter design, sampling theorem
 
-**Learning Objectives**:
-- Represent images as 2D discrete signals and understand their sampling structure
-- Compute and interpret the 2D Discrete Fourier Transform
-- Apply 2D convolution for spatial domain filtering (smoothing, sharpening, median)
-- Design and apply frequency domain filters (lowpass, highpass, bandpass)
-- Implement gradient-based and Laplacian edge detectors, including the Canny algorithm
-- Apply histogram equalization and contrast stretching for image enhancement
-- Understand the DCT-based JPEG compression pipeline
-- Explain 2D sampling, resolution, and the Nyquist criterion in two dimensions
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Represent images as 2D discrete signals and understand their sampling structure
+2. Compute and interpret the 2D Discrete Fourier Transform
+3. Apply 2D convolution for spatial domain filtering (smoothing, sharpening, median)
+4. Design and apply frequency domain filters (lowpass, highpass, bandpass)
+5. Implement gradient-based and Laplacian edge detectors, including the Canny algorithm
+6. Apply histogram equalization and contrast stretching for image enhancement
+7. Understand the DCT-based JPEG compression pipeline
+8. Explain 2D sampling, resolution, and the Nyquist criterion in two dimensions
 
 ---
 

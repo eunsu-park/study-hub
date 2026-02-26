@@ -1,5 +1,17 @@
 # 11. Feature Stores
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of a Feature Store and describe how its offline store and online store components solve the training-serving skew problem
+2. Define and register features using Feast or a similar feature store, implementing feature views, entities, and data sources
+3. Retrieve consistent features for model training (offline) and real-time inference (online) from the same feature store
+4. Compare managed feature stores (AWS SageMaker Feature Store, Google Vertex AI Feature Store, Databricks Feature Store) against open-source alternatives
+5. Design a feature engineering pipeline that writes computed features to the store and maintains feature freshness for production inference
+
+---
+
 ## 1. Feature Store Concept
 
 A Feature Store is a platform that centrally manages, stores, and serves ML features.
@@ -146,7 +158,7 @@ from datetime import timedelta
 from feast import Entity, Feature, FeatureView, Field, FileSource, ValueType
 from feast.types import Float32, Int64, String
 
-# Define Entity (feature key)
+# Entity is the join key — all feature lookups resolve through this, like a primary key
 user = Entity(
     name="user_id",
     description="Customer ID",
@@ -164,6 +176,7 @@ user_source = FileSource(
 user_features = FeatureView(
     name="user_features",
     entities=[user],
+    # TTL prevents serving stale features — forces re-materialization if data is too old
     ttl=timedelta(days=1),  # Time to Live
     schema=[
         Field(name="total_purchases", dtype=Int64),
@@ -174,6 +187,7 @@ user_features = FeatureView(
     ],
     online=True,   # Enable online store
     source=user_source,
+    # Tags enable cross-team feature discovery — searchable in the registry
     tags={
         "team": "ml-platform",
         "owner": "data-science"
@@ -193,6 +207,7 @@ import pandas as pd
 )
 def user_derived_features(inputs: pd.DataFrame) -> pd.DataFrame:
     """Real-time computed features"""
+    # On-demand features compute at request time — no materialization needed for derived values
     df = pd.DataFrame()
     df["purchase_frequency"] = inputs["total_purchases"] / inputs["tenure_months"]
     df["is_high_value"] = (inputs["avg_purchase_amount"] > 100).astype(int)
@@ -234,6 +249,7 @@ transaction_features = FeatureView(
 # Time window aggregation (StreamFeatureView - Feast 0.26+)
 from feast import StreamFeatureView, PushSource
 
+# PushSource bridges batch and streaming — same features, different ingestion paths
 push_source = PushSource(
     name="transaction_push_source",
     batch_source=transaction_source
@@ -242,6 +258,7 @@ push_source = PushSource(
 streaming_features = StreamFeatureView(
     name="transaction_streaming_features",
     entities=[user],
+    # Short TTL for streaming — stale real-time features are worse than missing ones
     ttl=timedelta(hours=1),
     schema=[
         Field(name="transaction_count_1h", dtype=Int64),
@@ -303,7 +320,7 @@ entity_df = pd.DataFrame({
     ])
 })
 
-# Retrieve historical features (Point-in-time accurate)
+# Point-in-time join prevents data leakage — only uses features available at each event_timestamp
 training_df = store.get_historical_features(
     entity_df=entity_df,
     features=[
@@ -335,8 +352,8 @@ from feast import FeatureStore
 
 store = FeatureStore(repo_path="./feature_repo")
 
-# Load features to online store (materialization)
-# Sync offline → online
+# Materialization copies latest values to online store (Redis/DynamoDB) for low-latency serving
+# Incremental only syncs new data — full materialize would reprocess entire history
 store.materialize_incremental(end_date=datetime.now())
 
 # Or full re-sync for entire period
@@ -407,6 +424,7 @@ class ModelWithFeatureStore:
     """Model server with Feature Store integration"""
 
     def __init__(self, model_path: str, feature_repo_path: str):
+        # Model and store loaded once at startup — feature retrieval adds ~1-5ms per request
         self.model = joblib.load(model_path)
         self.store = FeatureStore(repo_path=feature_repo_path)
         self.feature_list = [
@@ -425,7 +443,7 @@ class ModelWithFeatureStore:
             entity_rows=[{"user_id": user_id}]
         ).to_dict()
 
-        # 2. Create feature vector
+        # Same feature definitions used in training — eliminates training/serving skew
         feature_names = [f.split(":")[1] for f in self.feature_list]
         feature_vector = np.array([
             [features[name][0] for name in feature_names]
@@ -466,6 +484,7 @@ import joblib
 import numpy as np
 
 app = FastAPI()
+# Module-level initialization: model and store loaded once at process start, not per request
 store = FeatureStore(repo_path="./feature_repo")
 model = joblib.load("models/churn_model.pkl")
 
@@ -546,6 +565,7 @@ class FeatureEngineeringPipeline:
 
     def compute_user_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Compute user features"""
+        # Aggregations at user level — same logic used by both batch pipeline and online serving
         user_features = df.groupby("user_id").agg({
             "transaction_amount": ["count", "sum", "mean"],
             "transaction_date": ["min", "max"]
@@ -567,7 +587,7 @@ class FeatureEngineeringPipeline:
             pd.to_datetime(user_features["first_purchase_date"])
         ).dt.days // 30
 
-        # Add timestamps
+        # Feast requires timestamps for point-in-time joins and TTL expiration
         user_features["event_timestamp"] = today
         user_features["created_timestamp"] = today
 
@@ -575,7 +595,7 @@ class FeatureEngineeringPipeline:
 
     def validate_features(self, df: pd.DataFrame) -> bool:
         """Validate features"""
-        # Null check
+        # Validate before write — bad features corrupt online store and affect all downstream models
         if df.isnull().sum().sum() > 0:
             print("Warning: Null values detected")
             return False
@@ -620,7 +640,7 @@ pipeline = FeatureEngineeringPipeline(
 )
 features = pipeline.run()
 
-# Sync Feast features
+# Materialize after batch write — online store must reflect latest computed features
 store = FeatureStore(repo_path="./feature_repo")
 store.materialize_incremental(end_date=datetime.now())
 ```
@@ -647,7 +667,7 @@ def process_streaming_event(event: dict):
         "transaction_timestamp": datetime.now()
     }])
 
-    # Push to Feature Store
+    # Push bypasses batch pipeline — updates online store in near-real-time for fresh features
     store.push(
         push_source_name="transaction_push_source",
         df=feature_df

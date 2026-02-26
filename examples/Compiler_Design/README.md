@@ -1,6 +1,6 @@
 # Compiler Design Examples
 
-This directory contains 10 Python examples demonstrating key compiler design concepts, from lexical analysis through bytecode generation and execution. All examples use only Python's standard library (no external dependencies).
+This directory contains 12 Python examples demonstrating key compiler design concepts, from lexical analysis through bytecode generation, register allocation, and a complete end-to-end mini compiler. All examples use only Python's standard library (no external dependencies).
 
 ## Files Overview
 
@@ -140,6 +140,32 @@ This directory contains 10 Python examples demonstrating key compiler design con
 
 ---
 
+### 11. `11_register_allocator.py` - Register Allocation via Graph Coloring
+**Concepts:**
+- Liveness analysis (backward dataflow, fixed-point iteration)
+- Interference graph construction (live-range conflicts)
+- Graph coloring register allocation (Chaitin's algorithm)
+- Simplification and select phases
+- Register pressure detection and spilling
+- Comparison of allocation strategies
+
+**Run:** `python 11_register_allocator.py`
+
+---
+
+### 12. `12_mini_compiler.py` - Complete Mini Compiler Pipeline
+**Concepts:**
+- End-to-end compilation pipeline in a single file
+- Lexer, recursive-descent parser, type checker, code generator, VM
+- Small imperative language with integers, booleans, variables, if/else, while, functions
+- Recursive function support (factorial, fibonacci)
+- Bytecode inspection and disassembly
+- Integration of phases 1 (lexer), 4/5 (parser), 7 (types), 10 (codegen + VM)
+
+**Run:** `python 12_mini_compiler.py`
+
+---
+
 ## Requirements
 
 - Python 3.8 or higher
@@ -174,6 +200,10 @@ Recommended order for learning the compilation process:
 
 3. **Backend (Code Generation):**
    - 10_bytecode_vm.py (bytecode and execution)
+   - 11_register_allocator.py (register allocation)
+
+4. **Integration:**
+   - 12_mini_compiler.py (complete pipeline)
 
 ## Key Takeaways
 

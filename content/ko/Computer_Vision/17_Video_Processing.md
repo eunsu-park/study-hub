@@ -1,8 +1,22 @@
 # 비디오 처리 (Video Processing)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. OpenCV에서 VideoCapture와 VideoWriter가 비디오 파일 및 카메라 스트림을 읽고 쓰는 방법을 설명할 수 있습니다.
+2. 정확한 FPS 측정과 함께 프레임별(frame-by-frame) 비디오 처리 파이프라인을 구현할 수 있습니다.
+3. 배경 차분(Background Subtraction) 알고리즘(MOG2, KNN)을 적용하여 비디오에서 움직이는 물체를 검출할 수 있습니다.
+4. 옵티컬 플로우(Optical Flow) 기법(Lucas-Kanade, Farneback)을 구현하여 프레임 간 움직임을 분석할 수 있습니다.
+5. 다양한 비디오 분석 과제에 적합한 객체 추적(Object Tracking) 알고리즘을 비교하고 선택할 수 있습니다.
+
+---
+
 ## 개요
 
 비디오는 연속된 이미지 프레임의 시퀀스입니다. OpenCV를 사용하여 비디오 파일과 카메라 스트림을 처리하고, 배경 차분과 옵티컬 플로우를 이용한 동작 분석 방법을 학습합니다.
+
+단일 이미지 처리와 달리, 비디오는 시간적 차원(temporal dimension)을 도입합니다. 각 프레임에는 이전 프레임과 다음 프레임이 있으므로, 알고리즘은 정지 이미지에서는 얻을 수 없는 동작 단서를 활용할 수 있습니다. 또한 실시간 제약이 추가됩니다 — 프레임당 50ms가 걸리는 처리 파이프라인은 처리량을 20 FPS로 제한하므로, 비디오 작업에서는 성능 인식(performance awareness)이 필수적입니다.
 
 **난이도**: ⭐⭐⭐
 
@@ -28,21 +42,21 @@
 ### 비디오 구조 이해
 
 ```
-비디오 = 연속된 이미지 프레임
+Video = Sequence of continuous image frames
 
-시간 ──────────────────────────────────────────▶
-    ┌─────┐┌─────┐┌─────┐┌─────┐┌─────┐
-    │Frame││Frame││Frame││Frame││Frame│ ...
-    │  1  ││  2  ││  3  ││  4  ││  5  │
-    └─────┘└─────┘└─────┘└─────┘└─────┘
+Time ------------------------------------------>
+    +-----++-----++-----++-----++-----+
+    |Frame||Frame||Frame||Frame||Frame| ...
+    |  1  ||  2  ||  3  ||  4  ||  5  |
+    +-----++-----++-----++-----++-----+
 
-FPS (Frames Per Second): 초당 프레임 수
-- 24 FPS: 영화 표준
-- 30 FPS: 일반 비디오
-- 60 FPS: 게임, 스포츠
-- 120+ FPS: 슬로모션
+FPS (Frames Per Second): Number of frames per second
+- 24 FPS: Movie standard
+- 30 FPS: General video
+- 60 FPS: Gaming, sports
+- 120+ FPS: Slow motion
 
-해상도: 각 프레임의 크기
+Resolution: Size of each frame
 - 640x480: VGA
 - 1280x720: HD (720p)
 - 1920x1080: Full HD (1080p)
@@ -54,42 +68,42 @@ FPS (Frames Per Second): 초당 프레임 수
 ```python
 import cv2
 
-# 비디오 파일 열기
+# Open video file
 cap = cv2.VideoCapture('video.mp4')
 
-# 열기 성공 확인
+# Check if opened successfully
 if not cap.isOpened():
-    print("비디오를 열 수 없습니다")
+    print("Cannot open video")
     exit()
 
-# 비디오 속성 가져오기
+# Get video properties
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = cap.get(cv2.CAP_PROP_FPS)
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 duration = frame_count / fps
 
-print(f"해상도: {width}x{height}")
+print(f"Resolution: {width}x{height}")
 print(f"FPS: {fps}")
-print(f"총 프레임: {frame_count}")
-print(f"재생 시간: {duration:.2f}초")
+print(f"Total frames: {frame_count}")
+print(f"Duration: {duration:.2f} seconds")
 
-# 프레임 읽기 루프
+# Frame reading loop
 while True:
     ret, frame = cap.read()
 
     if not ret:
-        print("비디오 끝 또는 에러")
+        print("End of video or error")
         break
 
-    # 프레임 처리
+    # Frame processing
     cv2.imshow('Video', frame)
 
-    # 'q' 키로 종료, 1ms 대기
+    # Exit with 'q' key, wait 1ms
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# 자원 해제
+# Release resources
 cap.release()
 cv2.destroyAllWindows()
 ```
@@ -99,23 +113,27 @@ cv2.destroyAllWindows()
 ```python
 import cv2
 
-# 카메라 열기 (장치 ID: 0=기본 카메라)
+# Open camera (device ID: 0=default camera)
 cap = cv2.VideoCapture(0)
 
-# 카메라 열기 실패 시
+# If camera fails to open
 if not cap.isOpened():
-    print("카메라를 열 수 없습니다")
+    print("Cannot open camera")
     exit()
 
-# 카메라 속성 설정
+# Set camera properties — explicitly request resolution and FPS because
+# cameras often default to a lower mode; requesting forces negotiation
+# with the driver (actual values may still differ, always verify after setting)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 cap.set(cv2.CAP_PROP_FPS, 30)
 
-# 버퍼 크기 설정 (지연 감소)
+# BUFFERSIZE=1 keeps only the most recent frame in the driver buffer,
+# trading throughput for latency — critical for real-time applications
+# where a stale frame is worse than a dropped one
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-print(f"카메라 해상도: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
+print(f"Camera resolution: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
       f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
 
 while True:
@@ -124,7 +142,7 @@ while True:
     if not ret:
         continue
 
-    # 좌우 반전 (거울 효과)
+    # Horizontal flip (mirror effect)
     frame = cv2.flip(frame, 1)
 
     cv2.imshow('Camera', frame)
@@ -143,28 +161,28 @@ import cv2
 
 cap = cv2.VideoCapture('video.mp4')
 
-# 읽기 속성
+# Read properties
 properties = {
-    'CAP_PROP_FRAME_WIDTH': cv2.CAP_PROP_FRAME_WIDTH,    # 프레임 너비
-    'CAP_PROP_FRAME_HEIGHT': cv2.CAP_PROP_FRAME_HEIGHT,  # 프레임 높이
+    'CAP_PROP_FRAME_WIDTH': cv2.CAP_PROP_FRAME_WIDTH,    # Frame width
+    'CAP_PROP_FRAME_HEIGHT': cv2.CAP_PROP_FRAME_HEIGHT,  # Frame height
     'CAP_PROP_FPS': cv2.CAP_PROP_FPS,                    # FPS
-    'CAP_PROP_FRAME_COUNT': cv2.CAP_PROP_FRAME_COUNT,    # 총 프레임 수
-    'CAP_PROP_POS_FRAMES': cv2.CAP_PROP_POS_FRAMES,      # 현재 프레임 위치
-    'CAP_PROP_POS_MSEC': cv2.CAP_PROP_POS_MSEC,          # 현재 위치 (밀리초)
-    'CAP_PROP_FOURCC': cv2.CAP_PROP_FOURCC,              # 코덱 4문자 코드
-    'CAP_PROP_BRIGHTNESS': cv2.CAP_PROP_BRIGHTNESS,      # 밝기 (카메라)
-    'CAP_PROP_CONTRAST': cv2.CAP_PROP_CONTRAST,          # 대비 (카메라)
+    'CAP_PROP_FRAME_COUNT': cv2.CAP_PROP_FRAME_COUNT,    # Total frame count
+    'CAP_PROP_POS_FRAMES': cv2.CAP_PROP_POS_FRAMES,      # Current frame position
+    'CAP_PROP_POS_MSEC': cv2.CAP_PROP_POS_MSEC,          # Current position (ms)
+    'CAP_PROP_FOURCC': cv2.CAP_PROP_FOURCC,              # Codec 4-char code
+    'CAP_PROP_BRIGHTNESS': cv2.CAP_PROP_BRIGHTNESS,      # Brightness (camera)
+    'CAP_PROP_CONTRAST': cv2.CAP_PROP_CONTRAST,          # Contrast (camera)
 }
 
 for name, prop in properties.items():
     value = cap.get(prop)
     print(f"{name}: {value}")
 
-# 특정 프레임으로 이동
-cap.set(cv2.CAP_PROP_POS_FRAMES, 100)  # 100번째 프레임으로
+# Seek to specific frame
+cap.set(cv2.CAP_PROP_POS_FRAMES, 100)  # Go to frame 100
 
-# 특정 시간으로 이동 (밀리초)
-cap.set(cv2.CAP_PROP_POS_MSEC, 5000)  # 5초 위치로
+# Seek to specific time (milliseconds)
+cap.set(cv2.CAP_PROP_POS_MSEC, 5000)  # Go to 5 seconds
 
 cap.release()
 ```
@@ -178,35 +196,37 @@ cap.release()
 ```python
 import cv2
 
-# 비디오 캡처 설정
+# Video capture setup
 cap = cv2.VideoCapture(0)
 
-# 비디오 속성
+# Video properties
 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = 30.0
 
-# 코덱 설정 (4문자 코드)
-# 'XVID': AVI 컨테이너용
-# 'mp4v': MP4 컨테이너용
-# 'MJPG': Motion JPEG
+# Codec setup (4-character code)
+# 'XVID': for AVI container — widely compatible, moderate compression
+# 'mp4v': for MP4 container — good balance of compatibility and file size
+# 'MJPG': Motion JPEG — fast but large files (each frame independently compressed)
+# 'avc1'/'X264': H.264 — highest compression ratio but requires codec install
+# Choose mp4v when portability matters; use XVID when H.264 is unavailable
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-# VideoWriter 생성
+# Create VideoWriter
 out = cv2.VideoWriter('output.mp4', fourcc, fps, (width, height))
 
-print("녹화 시작... 'q'를 눌러 종료")
+print("Recording started... Press 'q' to stop")
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    # 프레임 저장
+    # Save frame
     out.write(frame)
 
-    # 녹화 표시
-    cv2.circle(frame, (30, 30), 10, (0, 0, 255), -1)  # 빨간 원
+    # Recording indicator
+    cv2.circle(frame, (30, 30), 10, (0, 0, 255), -1)  # Red circle
     cv2.putText(frame, 'REC', (50, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
@@ -215,38 +235,39 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# 자원 해제
+# Release resources
 cap.release()
 out.release()
 cv2.destroyAllWindows()
-print("녹화 완료: output.mp4")
+print("Recording complete: output.mp4")
 ```
 
 ### 주요 코덱
 
 ```
-┌─────────────┬─────────────┬────────────────────────┐
-│   코덱      │  컨테이너   │         특징           │
-├─────────────┼─────────────┼────────────────────────┤
-│ 'XVID'      │ .avi        │ 널리 지원, 적당한 압축 │
-│ 'MJPG'      │ .avi        │ Motion JPEG, 빠름      │
-│ 'mp4v'      │ .mp4        │ MPEG-4, 호환성 좋음    │
-│ 'avc1'      │ .mp4        │ H.264, 고압축률        │
-│ 'X264'      │ .mp4        │ H.264 (요구사항 있음)  │
-│ 'VP80'      │ .webm       │ VP8, 웹용              │
-│ 'VP90'      │ .webm       │ VP9, 고효율            │
-└─────────────┴─────────────┴────────────────────────┘
++-----------+-------------+------------------------+
+|   Codec   |  Container  |      Characteristics   |
++-----------+-------------+------------------------+
+| 'XVID'    | .avi        | Widely supported,      |
+|           |             | decent compression     |
+| 'MJPG'    | .avi        | Motion JPEG, fast      |
+| 'mp4v'    | .mp4        | MPEG-4, good compat    |
+| 'avc1'    | .mp4        | H.264, high compression|
+| 'X264'    | .mp4        | H.264 (requirements)   |
+| 'VP80'    | .webm       | VP8, for web           |
+| 'VP90'    | .webm       | VP9, high efficiency   |
++-----------+-------------+------------------------+
 
-# 코덱 테스트
+# Codec test
 def test_codec(codec_str, extension):
     fourcc = cv2.VideoWriter_fourcc(*codec_str)
     out = cv2.VideoWriter(f'test.{extension}', fourcc, 30, (640, 480))
     if out.isOpened():
-        print(f"{codec_str}: 지원됨")
+        print(f"{codec_str}: Supported")
         out.release()
         return True
     else:
-        print(f"{codec_str}: 지원 안 됨")
+        print(f"{codec_str}: Not supported")
         return False
 ```
 
@@ -256,7 +277,7 @@ def test_codec(codec_str, extension):
 import cv2
 
 def process_and_save_video(input_path, output_path, process_func):
-    """비디오 처리 후 저장"""
+    """Process video and save"""
 
     cap = cv2.VideoCapture(input_path)
 
@@ -274,27 +295,27 @@ def process_and_save_video(input_path, output_path, process_func):
         if not ret:
             break
 
-        # 프레임 처리
+        # Process frame
         processed = process_func(frame)
 
-        # 저장
+        # Save
         out.write(processed)
 
-        # 진행률 표시
+        # Progress display
         frame_num += 1
         progress = (frame_num / total_frames) * 100
-        print(f"\r처리 중: {progress:.1f}%", end='')
+        print(f"\rProcessing: {progress:.1f}%", end='')
 
-    print("\n완료!")
+    print("\nComplete!")
 
     cap.release()
     out.release()
 
-# 사용 예: 그레이스케일 변환 및 엣지 검출
+# Usage example: Grayscale conversion and edge detection
 def edge_detection(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 50, 150)
-    # 3채널로 변환 (VideoWriter는 컬러 비디오로 설정됨)
+    # Convert to 3 channels (VideoWriter is set for color video)
     return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
 process_and_save_video('input.mp4', 'edges.mp4', edge_detection)
@@ -307,15 +328,15 @@ process_and_save_video('input.mp4', 'edges.mp4', edge_detection)
 ### 프레임 처리 파이프라인
 
 ```
-프레임 처리 파이프라인:
+Frame Processing Pipeline:
 
-입력 ──▶ 전처리 ──▶ 분석 ──▶ 후처리 ──▶ 출력
-         │          │         │
-         ▼          ▼         ▼
-      - 리사이즈  - 검출    - 시각화
-      - 색 변환  - 추적    - 필터링
-      - 노이즈   - 인식    - 합성
-        제거
+Input --> Preprocessing --> Analysis --> Postprocessing --> Output
+              |              |              |
+              v              v              v
+          - Resize       - Detection    - Visualization
+          - Color conv   - Tracking     - Filtering
+          - Noise        - Recognition  - Compositing
+            removal
 ```
 
 ### 다중 처리 예제
@@ -325,24 +346,24 @@ import cv2
 import numpy as np
 
 class VideoProcessor:
-    """비디오 프레임 처리기"""
+    """Video frame processor"""
 
     def __init__(self):
         self.processors = []
 
     def add_processor(self, name, func):
-        """처리 함수 추가"""
+        """Add processing function"""
         self.processors.append((name, func))
 
     def process_frame(self, frame):
-        """모든 처리 함수 적용"""
+        """Apply all processing functions"""
         result = frame.copy()
         for name, func in self.processors:
             result = func(result)
         return result
 
     def process_video(self, input_source, output_path=None, display=True):
-        """비디오 처리"""
+        """Process video"""
         cap = cv2.VideoCapture(input_source)
 
         out = None
@@ -358,14 +379,14 @@ class VideoProcessor:
             if not ret:
                 break
 
-            # 처리
+            # Process
             processed = self.process_frame(frame)
 
-            # 저장
+            # Save
             if out:
                 out.write(processed)
 
-            # 표시
+            # Display
             if display:
                 cv2.imshow('Processed', processed)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -376,10 +397,10 @@ class VideoProcessor:
             out.release()
         cv2.destroyAllWindows()
 
-# 사용 예
+# Usage example
 processor = VideoProcessor()
 
-# 처리 함수들 추가
+# Add processing functions
 processor.add_processor('blur', lambda f: cv2.GaussianBlur(f, (5, 5), 0))
 processor.add_processor('edge', lambda f: cv2.Canny(f, 50, 150))
 
@@ -392,7 +413,7 @@ def add_timestamp(frame):
 
 processor.add_processor('timestamp', add_timestamp)
 
-# 웹캠 처리
+# Process webcam
 processor.process_video(0, output_path='recorded.mp4')
 ```
 
@@ -403,7 +424,7 @@ import cv2
 import time
 
 def skip_frames_processing(video_path, skip=5):
-    """프레임 건너뛰기 (속도 향상)"""
+    """Frame skipping (speed improvement)"""
 
     cap = cv2.VideoCapture(video_path)
 
@@ -415,11 +436,11 @@ def skip_frames_processing(video_path, skip=5):
 
         frame_count += 1
 
-        # skip 프레임마다 처리
+        # Process every skip frames
         if frame_count % skip != 0:
             continue
 
-        # 무거운 처리 수행
+        # Perform heavy processing
         processed = heavy_processing(frame)
 
         cv2.imshow('Skipped Processing', processed)
@@ -429,7 +450,7 @@ def skip_frames_processing(video_path, skip=5):
     cap.release()
 
 def buffered_reading(video_path, buffer_size=10):
-    """프레임 버퍼링 (스무스한 재생)"""
+    """Frame buffering (smooth playback)"""
     from collections import deque
     from threading import Thread
 
@@ -445,11 +466,11 @@ def buffered_reading(video_path, buffer_size=10):
             if len(buffer) < buffer_size:
                 buffer.append(frame)
 
-    # 읽기 스레드 시작
+    # Start reading thread
     thread = Thread(target=read_frames)
     thread.start()
 
-    # 초기 버퍼 채우기 대기
+    # Wait for initial buffer fill
     time.sleep(0.5)
 
     while True:
@@ -476,31 +497,38 @@ import cv2
 import time
 
 class FPSCounter:
-    """FPS 측정 클래스"""
+    """FPS measurement class"""
 
     def __init__(self, avg_frames=30):
         self.frame_times = []
+        # avg_frames=30 gives a ~1-second rolling window at 30 FPS —
+        # large enough to smooth out single-frame spikes, small enough
+        # to respond to genuine performance changes within seconds
         self.avg_frames = avg_frames
         self.last_time = time.time()
 
     def update(self):
-        """프레임 처리 후 호출"""
+        """Call after processing each frame"""
         current_time = time.time()
         self.frame_times.append(current_time - self.last_time)
         self.last_time = current_time
 
-        # 최근 N개 프레임만 유지
+        # Sliding window: discard the oldest sample so the average
+        # reflects recent performance rather than startup conditions
         if len(self.frame_times) > self.avg_frames:
             self.frame_times.pop(0)
 
     def get_fps(self):
-        """현재 FPS 반환"""
+        """Return current FPS"""
         if len(self.frame_times) == 0:
             return 0
+        # Averaging inter-frame intervals then inverting is more stable
+        # than counting frames in a fixed time window, because it handles
+        # irregular processing times without a separate timer thread
         avg_time = sum(self.frame_times) / len(self.frame_times)
         return 1.0 / avg_time if avg_time > 0 else 0
 
-# 사용 예
+# Usage example
 cap = cv2.VideoCapture(0)
 fps_counter = FPSCounter()
 
@@ -509,13 +537,13 @@ while True:
     if not ret:
         break
 
-    # 프레임 처리
+    # Frame processing
     # ...
 
     fps_counter.update()
     fps = fps_counter.get_fps()
 
-    # FPS 표시
+    # Display FPS
     cv2.putText(frame, f'FPS: {fps:.1f}', (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
@@ -533,17 +561,17 @@ import cv2
 import time
 
 class PerformanceMonitor:
-    """성능 모니터링"""
+    """Performance monitoring"""
 
     def __init__(self):
         self.timings = {}
 
     def start(self, name):
-        """타이밍 시작"""
+        """Start timing"""
         self.timings[name] = {'start': time.time()}
 
     def stop(self, name):
-        """타이밍 종료"""
+        """Stop timing"""
         if name in self.timings:
             elapsed = time.time() - self.timings[name]['start']
             self.timings[name]['elapsed'] = elapsed
@@ -551,40 +579,40 @@ class PerformanceMonitor:
         return 0
 
     def get_report(self):
-        """성능 리포트"""
+        """Performance report"""
         report = []
         for name, data in self.timings.items():
             if 'elapsed' in data:
                 report.append(f"{name}: {data['elapsed']*1000:.2f}ms")
         return '\n'.join(report)
 
-# 사용 예
+# Usage example
 monitor = PerformanceMonitor()
 
 cap = cv2.VideoCapture(0)
 
 while True:
-    # 전체 프레임 시간 측정
+    # Measure total frame time
     monitor.start('total')
 
     ret, frame = cap.read()
     if not ret:
         break
 
-    # 전처리 시간 측정
+    # Measure preprocessing time
     monitor.start('preprocess')
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     monitor.stop('preprocess')
 
-    # 검출 시간 측정
+    # Measure detection time
     monitor.start('detection')
     edges = cv2.Canny(blur, 50, 150)
     monitor.stop('detection')
 
     monitor.stop('total')
 
-    # 성능 표시
+    # Display performance
     y = 30
     for line in monitor.get_report().split('\n'):
         cv2.putText(frame, line, (10, y),
@@ -605,22 +633,22 @@ cap.release()
 ### 배경 차분 원리
 
 ```
-배경 차분 (Background Subtraction):
-움직이는 전경 객체를 정지된 배경으로부터 분리
+Background Subtraction:
+Separate moving foreground objects from stationary background
 
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ 현재 프레임     │  -  │   배경 모델     │  =  │   전경 마스크   │
-│                 │     │                 │     │                 │
-│    ┌───┐        │     │                 │     │    ┌───┐        │
-│    │ ● │ (사람) │     │   (빈 방)       │     │    │███│        │
-│    └───┘        │     │                 │     │    └───┘        │
-│                 │     │                 │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
++-----------------+     +-----------------+     +-----------------+
+| Current frame   |  -  | Background model|  =  | Foreground mask |
+|                 |     |                 |     |                 |
+|    +---+        |     |                 |     |    +---+        |
+|    | * | (person)|    |   (empty room)  |     |    |###|        |
+|    +---+        |     |                 |     |    +---+        |
+|                 |     |                 |     |                 |
++-----------------+     +-----------------+     +-----------------+
 
-배경 모델 학습:
-- 여러 프레임을 분석하여 배경 통계 학습
-- 조명 변화, 그림자 등 처리
-- 동적 배경 (나뭇잎 흔들림 등) 대응
+Background model learning:
+- Analyze multiple frames to learn background statistics
+- Handle lighting changes, shadows, etc.
+- Adapt to dynamic backgrounds (tree leaves, etc.)
 ```
 
 ### MOG2 (Mixture of Gaussians)
@@ -629,11 +657,15 @@ cap.release()
 import cv2
 import numpy as np
 
-# MOG2 배경 차분기 생성
+# Create MOG2 background subtractor
 backSub = cv2.createBackgroundSubtractorMOG2(
-    history=500,          # 배경 학습에 사용할 프레임 수
-    varThreshold=16,      # 픽셀이 배경으로 판단되는 분산 임계값
-    detectShadows=True    # 그림자 검출 여부
+    history=500,          # Frames used to build background model —
+                          # larger = slower adaptation to scene changes
+                          # (e.g., 500 frames at 30 FPS ≈ 16 seconds of memory)
+    varThreshold=16,      # Mahalanobis distance threshold for classifying a pixel
+                          # as foreground; lower = more sensitive but more noise
+    detectShadows=True    # Marks shadows as 127 (gray) instead of 255 (white),
+                          # letting you remove them separately to avoid false positives
 )
 
 cap = cv2.VideoCapture(0)
@@ -643,22 +675,26 @@ while True:
     if not ret:
         break
 
-    # 배경 차분 적용
-    # fgMask: 전경=255, 배경=0, 그림자=127
+    # Apply background subtraction
+    # fgMask: foreground=255, background=0, shadow=127
     fgMask = backSub.apply(frame)
 
-    # 그림자 제거 (127 -> 0)
+    # Remove shadows (127 -> 0)
     fgMask_no_shadow = cv2.threshold(fgMask, 200, 255, cv2.THRESH_BINARY)[1]
 
-    # 노이즈 제거
+    # Remove noise with morphological operations:
+    # OPEN (erode then dilate) removes small speckles/salt noise
+    # CLOSE (dilate then erode) fills holes inside detected objects
+    # ELLIPSE kernel is rotationally symmetric — better for blob-shaped objects
+    # than RECT, which leaves corner artifacts
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     fgMask_clean = cv2.morphologyEx(fgMask_no_shadow, cv2.MORPH_OPEN, kernel)
     fgMask_clean = cv2.morphologyEx(fgMask_clean, cv2.MORPH_CLOSE, kernel)
 
-    # 전경 추출
+    # Extract foreground
     foreground = cv2.bitwise_and(frame, frame, mask=fgMask_clean)
 
-    # 결과 표시
+    # Display results
     cv2.imshow('Original', frame)
     cv2.imshow('FG Mask', fgMask)
     cv2.imshow('Cleaned Mask', fgMask_clean)
@@ -676,11 +712,11 @@ cv2.destroyAllWindows()
 ```python
 import cv2
 
-# KNN 배경 차분기 생성
+# Create KNN background subtractor
 backSub = cv2.createBackgroundSubtractorKNN(
-    history=500,          # 배경 학습 프레임 수
-    dist2Threshold=400.0, # 거리 임계값
-    detectShadows=True    # 그림자 검출
+    history=500,          # Background learning frame count
+    dist2Threshold=400.0, # Distance threshold
+    detectShadows=True    # Shadow detection
 )
 
 cap = cv2.VideoCapture('traffic.mp4')
@@ -690,20 +726,20 @@ while True:
     if not ret:
         break
 
-    # 배경 차분
+    # Background subtraction
     fgMask = backSub.apply(frame)
 
-    # 노이즈 제거
+    # Remove noise
     fgMask = cv2.medianBlur(fgMask, 5)
 
-    # 윤곽선 검출
+    # Contour detection
     contours, _ = cv2.findContours(fgMask, cv2.RETR_EXTERNAL,
                                     cv2.CHAIN_APPROX_SIMPLE)
 
-    # 움직이는 객체 표시
+    # Mark moving objects
     for contour in contours:
         area = cv2.contourArea(contour)
-        if area > 500:  # 최소 면적 필터
+        if area > 500:  # Minimum area filter
             x, y, w, h = cv2.boundingRect(contour)
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
@@ -719,17 +755,18 @@ cap.release()
 ### MOG2 vs KNN 비교
 
 ```
-┌────────────────┬──────────────────────┬──────────────────────┐
-│     항목       │        MOG2          │        KNN           │
-├────────────────┼──────────────────────┼──────────────────────┤
-│ 알고리즘       │ 가우시안 혼합 모델   │ K-최근접 이웃        │
-│ 속도           │ 빠름                 │ 중간                 │
-│ 메모리         │ 적음                 │ 많음                 │
-│ 동적 배경      │ 보통                 │ 좋음                 │
-│ 조명 변화      │ 보통                 │ 좋음                 │
-│ 노이즈         │ 민감                 │ 강건                 │
-│ 추천 상황      │ 정적 장면, 실시간    │ 복잡한 장면          │
-└────────────────┴──────────────────────┴──────────────────────┘
++----------------+----------------------+----------------------+
+|     Item       |        MOG2          |        KNN           |
++----------------+----------------------+----------------------+
+| Algorithm      | Gaussian Mixture Model| K-Nearest Neighbors |
+| Speed          | Fast                 | Medium               |
+| Memory         | Low                  | High                 |
+| Dynamic BG     | Medium               | Good                 |
+| Lighting Change| Medium               | Good                 |
+| Noise          | Sensitive            | Robust               |
+| Recommended    | Static scenes,       | Complex scenes       |
+|                | real-time            |                      |
++----------------+----------------------+----------------------+
 ```
 
 ---
@@ -739,23 +776,23 @@ cap.release()
 ### 옵티컬 플로우 개념
 
 ```
-옵티컬 플로우 (Optical Flow):
-연속된 프레임 사이의 픽셀 움직임을 추정
+Optical Flow:
+Estimate pixel movement between consecutive frames
 
-프레임 t                    프레임 t+1
-┌─────────────────┐        ┌─────────────────┐
-│                 │        │                 │
-│    ●            │   →    │        ●        │
-│                 │        │                 │
-└─────────────────┘        └─────────────────┘
+Frame t                    Frame t+1
++-----------------+        +-----------------+
+|                 |        |                 |
+|    *            |   ->   |        *        |
+|                 |        |                 |
++-----------------+        +-----------------+
 
-속도 벡터 (u, v):
-- 픽셀 (x, y)가 다음 프레임에서 (x+u, y+v)로 이동
-- I(x, y, t) = I(x+u, y+v, t+1) (밝기 항상성 가정)
+Velocity vector (u, v):
+- Pixel (x, y) moves to (x+u, y+v) in next frame
+- I(x, y, t) = I(x+u, y+v, t+1) (brightness constancy assumption)
 
-종류:
-1. Sparse (희소): 특정 점들의 움직임만 계산 (Lucas-Kanade)
-2. Dense (밀집): 모든 픽셀의 움직임 계산 (Farneback)
+Types:
+1. Sparse: Only compute movement for specific points (Lucas-Kanade)
+2. Dense: Compute movement for all pixels (Farneback)
 ```
 
 ### Lucas-Kanade 옵티컬 플로우
@@ -764,34 +801,41 @@ cap.release()
 import cv2
 import numpy as np
 
-# Lucas-Kanade 파라미터
+# Lucas-Kanade parameters
 lk_params = dict(
-    winSize=(15, 15),      # 검색 윈도우 크기
-    maxLevel=2,            # 피라미드 레벨
+    winSize=(15, 15),      # Search window: larger = handles bigger motion but slower
+                           # and prone to aperture problem on textureless regions
+    maxLevel=2,            # Image pyramid levels: pyramid lets LK handle fast motion
+                           # by first estimating flow on a downsampled image, then
+                           # refining on higher resolution (maxLevel=2 → 3 scales)
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+    # Stop iterating when error < 0.03 OR after 10 iterations — combining both
+    # prevents wasting time on converged estimates and limits worst-case cost
 )
 
-# 특징점 검출 파라미터
+# Feature detection parameters
 feature_params = dict(
-    maxCorners=100,        # 최대 특징점 수
-    qualityLevel=0.3,      # 품질 수준
-    minDistance=7,         # 최소 거리
+    maxCorners=100,        # Cap at 100 to keep tracking computationally feasible
+    qualityLevel=0.3,      # Keep only corners scoring ≥ 30% of the strongest one,
+                           # filtering weak features that would drift under noise
+    minDistance=7,         # Enforce spatial spread so features cover the whole frame,
+                           # not just one high-contrast region
     blockSize=7
 )
 
 cap = cv2.VideoCapture(0)
 
-# 첫 프레임 읽기
+# Read first frame
 ret, old_frame = cap.read()
 old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
 
-# 특징점 검출
+# Detect features
 p0 = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
 
-# 추적 궤적 시각화용
+# For trajectory visualization
 mask = np.zeros_like(old_frame)
 
-# 색상
+# Colors
 colors = np.random.randint(0, 255, (100, 3))
 
 while True:
@@ -802,32 +846,32 @@ while True:
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     if p0 is not None and len(p0) > 0:
-        # 옵티컬 플로우 계산
+        # Compute optical flow
         p1, st, err = cv2.calcOpticalFlowPyrLK(
             old_gray, frame_gray, p0, None, **lk_params
         )
 
         if p1 is not None:
-            # 좋은 점만 선택
+            # Select good points only
             good_new = p1[st == 1]
             good_old = p0[st == 1]
 
-            # 움직임 시각화
+            # Visualize movement
             for i, (new, old) in enumerate(zip(good_new, good_old)):
                 a, b = new.ravel().astype(int)
                 c, d = old.ravel().astype(int)
 
-                # 궤적 선
+                # Trajectory line
                 mask = cv2.line(mask, (a, b), (c, d),
                                colors[i % 100].tolist(), 2)
-                # 현재 위치 점
+                # Current position point
                 frame = cv2.circle(frame, (a, b), 5,
                                    colors[i % 100].tolist(), -1)
 
-            # 다음 프레임을 위한 업데이트
+            # Update for next frame
             p0 = good_new.reshape(-1, 1, 2)
 
-    # 궤적 합성
+    # Combine trajectory
     img = cv2.add(frame, mask)
 
     cv2.imshow('Lucas-Kanade', img)
@@ -836,7 +880,7 @@ while True:
     if key == ord('q'):
         break
     elif key == ord('r'):
-        # 'r' 키로 특징점 재검출
+        # Re-detect features with 'r' key
         p0 = cv2.goodFeaturesToTrack(frame_gray, mask=None, **feature_params)
         mask = np.zeros_like(frame)
 
@@ -853,12 +897,12 @@ import cv2
 import numpy as np
 
 def draw_flow(img, flow, step=16):
-    """플로우 벡터 시각화"""
+    """Visualize flow vectors"""
     h, w = img.shape[:2]
     y, x = np.mgrid[step/2:h:step, step/2:w:step].astype(int)
     fx, fy = flow[y, x].T
 
-    # 선 그리기
+    # Draw lines
     lines = np.vstack([x, y, x+fx, y+fy]).T.reshape(-1, 2, 2)
     lines = np.int32(lines + 0.5)
 
@@ -871,13 +915,13 @@ def draw_flow(img, flow, step=16):
     return vis
 
 def flow_to_hsv(flow):
-    """플로우를 HSV 색상으로 변환"""
+    """Convert flow to HSV color"""
     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
 
     hsv = np.zeros((*flow.shape[:2], 3), dtype=np.uint8)
-    hsv[..., 0] = ang * 180 / np.pi / 2  # 방향 -> Hue
+    hsv[..., 0] = ang * 180 / np.pi / 2  # Direction -> Hue
     hsv[..., 1] = 255  # Saturation
-    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)  # 크기 -> Value
+    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)  # Magnitude -> Value
 
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
@@ -893,20 +937,25 @@ while True:
 
     next_gray = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
-    # Farneback 옵티컬 플로우
+    # Farneback optical flow
     flow = cv2.calcOpticalFlowFarneback(
         prvs, next_gray,
-        None,           # 초기 플로우
-        pyr_scale=0.5,  # 피라미드 스케일
-        levels=3,       # 피라미드 레벨
-        winsize=15,     # 윈도우 크기
-        iterations=3,   # 반복 횟수
-        poly_n=5,       # 다항식 크기
-        poly_sigma=1.2, # 가우시안 시그마
+        None,           # Initial flow (None = start from zero displacement)
+        pyr_scale=0.5,  # Each pyramid level is half the previous resolution —
+                        # 0.5 is the standard choice; lower values handle larger
+                        # motions but increase computation
+        levels=3,       # 3 pyramid levels cover displacements up to ~8× winsize
+        winsize=15,     # Neighborhood for polynomial expansion; larger = smoother
+                        # flow but blurs motion boundaries
+        iterations=3,   # Refinement passes per pyramid level; 3 is enough for
+                        # typical video, more iterations rarely improve quality
+        poly_n=5,       # Pixel neighborhood size for polynomial fit (5 or 7)
+        poly_sigma=1.2, # Gaussian weighting of the neighborhood; must match poly_n
+                        # (use 1.1 for poly_n=5, 1.5 for poly_n=7)
         flags=0
     )
 
-    # 시각화
+    # Visualization
     flow_vis = draw_flow(frame2, flow)
     hsv_vis = flow_to_hsv(flow)
 
@@ -931,7 +980,7 @@ cv2.destroyAllWindows()
 ```python
 import cv2
 
-# 트래커 종류
+# Tracker types
 TRACKERS = {
     'BOOSTING': cv2.legacy.TrackerBoosting_create,
     'MIL': cv2.TrackerMIL_create,
@@ -941,19 +990,19 @@ TRACKERS = {
 }
 
 def track_object(video_path, tracker_type='CSRT'):
-    """단일 객체 추적"""
+    """Single object tracking"""
 
-    # 트래커 생성
+    # Create tracker
     tracker = TRACKERS[tracker_type]()
 
     cap = cv2.VideoCapture(video_path)
     ret, frame = cap.read()
 
-    # 추적할 객체 선택 (마우스 드래그)
+    # Select object to track (mouse drag)
     bbox = cv2.selectROI('Select Object', frame, False)
     cv2.destroyWindow('Select Object')
 
-    # 트래커 초기화
+    # Initialize tracker
     tracker.init(frame, bbox)
 
     while True:
@@ -961,7 +1010,7 @@ def track_object(video_path, tracker_type='CSRT'):
         if not ret:
             break
 
-        # 추적 업데이트
+        # Update tracking
         success, bbox = tracker.update(frame)
 
         if success:
@@ -981,7 +1030,7 @@ def track_object(video_path, tracker_type='CSRT'):
     cap.release()
     cv2.destroyAllWindows()
 
-# 사용 예
+# Usage example
 track_object('video.mp4', 'CSRT')
 ```
 
@@ -991,7 +1040,7 @@ track_object('video.mp4', 'CSRT')
 import cv2
 
 class MultiObjectTracker:
-    """다중 객체 추적기"""
+    """Multi-object tracker"""
 
     def __init__(self, tracker_type='CSRT'):
         self.tracker_type = tracker_type
@@ -999,7 +1048,7 @@ class MultiObjectTracker:
         self.colors = []
 
     def add_tracker(self, frame, bbox):
-        """새 트래커 추가"""
+        """Add new tracker"""
         tracker = cv2.TrackerCSRT_create()
         tracker.init(frame, bbox)
         self.trackers.append(tracker)
@@ -1010,7 +1059,7 @@ class MultiObjectTracker:
         ))
 
     def update(self, frame):
-        """모든 트래커 업데이트"""
+        """Update all trackers"""
         results = []
 
         for i, tracker in enumerate(self.trackers):
@@ -1025,7 +1074,7 @@ class MultiObjectTracker:
         return results
 
     def draw(self, frame, results):
-        """결과 시각화"""
+        """Visualize results"""
         for r in results:
             x, y, w, h = [int(v) for v in r['bbox']]
             cv2.rectangle(frame, (x, y), (x+w, y+h), r['color'], 2)
@@ -1033,7 +1082,7 @@ class MultiObjectTracker:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, r['color'], 2)
         return frame
 
-# 사용 예
+# Usage example
 import numpy as np
 
 cap = cv2.VideoCapture(0)
@@ -1041,10 +1090,10 @@ multi_tracker = MultiObjectTracker()
 
 ret, frame = cap.read()
 
-# 여러 객체 선택 (ESC로 종료)
+# Select multiple objects (ESC to finish)
 while True:
     bbox = cv2.selectROI('Select Objects (Press ESC when done)', frame, False)
-    if bbox == (0, 0, 0, 0):  # ESC 누름
+    if bbox == (0, 0, 0, 0):  # ESC pressed
         break
     multi_tracker.add_tracker(frame, bbox)
 
@@ -1072,7 +1121,7 @@ import cv2
 import numpy as np
 
 class MotionTracker:
-    """배경 차분 기반 움직임 추적"""
+    """Background subtraction-based motion tracking"""
 
     def __init__(self):
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
@@ -1081,23 +1130,23 @@ class MotionTracker:
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         self.tracks = {}  # {id: {'centroid': (x,y), 'frames': count}}
         self.next_id = 0
-        self.max_distance = 50  # 동일 객체 판단 거리
+        self.max_distance = 50  # Distance for same object judgment
 
     def process(self, frame):
-        """프레임 처리"""
-        # 배경 차분
+        """Process frame"""
+        # Background subtraction
         fg_mask = self.bg_subtractor.apply(frame)
         fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)[1]
 
-        # 노이즈 제거
+        # Remove noise
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, self.kernel)
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, self.kernel)
 
-        # 윤곽선 검출
+        # Contour detection
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
-        # 현재 프레임의 객체들
+        # Current frame's objects
         current_objects = []
         for contour in contours:
             area = cv2.contourArea(contour)
@@ -1109,13 +1158,13 @@ class MotionTracker:
                     'bbox': (x, y, w, h)
                 })
 
-        # 기존 트랙과 매칭
+        # Match with existing tracks
         self._match_tracks(current_objects)
 
         return fg_mask, current_objects
 
     def _match_tracks(self, current_objects):
-        """현재 객체와 기존 트랙 매칭"""
+        """Match current objects with existing tracks"""
         matched = set()
 
         for obj in current_objects:
@@ -1123,7 +1172,7 @@ class MotionTracker:
             best_match = None
             best_dist = float('inf')
 
-            # 가장 가까운 기존 트랙 찾기
+            # Find closest existing track
             for track_id, track in self.tracks.items():
                 tx, ty = track['centroid']
                 dist = np.sqrt((cx-tx)**2 + (cy-ty)**2)
@@ -1133,14 +1182,14 @@ class MotionTracker:
                     best_match = track_id
 
             if best_match is not None:
-                # 기존 트랙 업데이트
+                # Update existing track
                 self.tracks[best_match]['centroid'] = obj['centroid']
                 self.tracks[best_match]['bbox'] = obj['bbox']
                 self.tracks[best_match]['frames'] += 1
                 obj['id'] = best_match
                 matched.add(best_match)
             else:
-                # 새 트랙 생성
+                # Create new track
                 obj['id'] = self.next_id
                 self.tracks[self.next_id] = {
                     'centroid': obj['centroid'],
@@ -1149,14 +1198,14 @@ class MotionTracker:
                 }
                 self.next_id += 1
 
-        # 오래된 트랙 제거
+        # Remove old tracks
         to_remove = [tid for tid in self.tracks if tid not in matched]
         for tid in to_remove:
-            if self.tracks[tid]['frames'] < 10:  # 짧은 트랙은 바로 제거
+            if self.tracks[tid]['frames'] < 10:  # Remove short tracks immediately
                 del self.tracks[tid]
 
     def draw(self, frame, objects):
-        """시각화"""
+        """Visualize"""
         for obj in objects:
             x, y, w, h = obj['bbox']
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
@@ -1167,7 +1216,7 @@ class MotionTracker:
 
         return frame
 
-# 사용 예
+# Usage example
 cap = cv2.VideoCapture(0)
 tracker = MotionTracker()
 
@@ -1207,14 +1256,14 @@ cap.release()
 <summary>힌트</summary>
 
 ```python
-# 프레임 이동
+# Frame navigation
 cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
 
-# 키 처리
+# Key handling
 key = cv2.waitKey(delay) & 0xFF
-if key == ord(' '):  # 스페이스바
+if key == ord(' '):  # Spacebar
     paused = not paused
-elif key == 83:  # 오른쪽 화살표
+elif key == 83:  # Right arrow
     skip_forward()
 ```
 
@@ -1234,13 +1283,13 @@ elif key == 83:  # 오른쪽 화살표
 <summary>힌트</summary>
 
 ```python
-# 누적 맵 초기화
+# Initialize accumulation map
 accumulator = np.zeros((height, width), dtype=np.float32)
 
-# 프레임마다 누적
+# Accumulate per frame
 accumulator += fg_mask.astype(np.float32) / 255.0
 
-# 정규화 및 컬러맵 적용
+# Normalize and apply colormap
 normalized = cv2.normalize(accumulator, None, 0, 255, cv2.NORM_MINMAX)
 heatmap = cv2.applyColorMap(normalized.astype(np.uint8), cv2.COLORMAP_JET)
 ```
@@ -1260,14 +1309,14 @@ heatmap = cv2.applyColorMap(normalized.astype(np.uint8), cv2.COLORMAP_JET)
 <summary>힌트</summary>
 
 ```python
-# ROI 내 평균 플로우
+# Average flow in ROI
 roi_flow = flow[y:y+h, x:x+w]
 avg_flow = np.mean(roi_flow, axis=(0, 1))
 
-# 속도 계산 (픽셀/프레임)
+# Speed calculation (pixels/frame)
 speed = np.sqrt(avg_flow[0]**2 + avg_flow[1]**2)
 
-# 실제 속도 변환 (예: 1픽셀 = 1cm, 30fps)
+# Convert to actual speed (e.g., 1 pixel = 1cm, 30fps)
 real_speed = speed * pixels_to_cm * fps  # cm/s
 ```
 
@@ -1287,15 +1336,15 @@ real_speed = speed * pixels_to_cm * fps  # cm/s
 <summary>힌트</summary>
 
 ```python
-# 가상 선 정의
+# Define virtual line
 line_y = height // 2
 
-# 객체가 선을 통과했는지 확인
+# Check if object crossed line
 def crossed_line(prev_y, curr_y, line_y):
-    # 위에서 아래로
+    # Top to bottom
     if prev_y < line_y and curr_y >= line_y:
         return 'down'
-    # 아래에서 위로
+    # Bottom to top
     if prev_y > line_y and curr_y <= line_y:
         return 'up'
     return None
@@ -1317,19 +1366,19 @@ def crossed_line(prev_y, curr_y, line_y):
 <summary>힌트</summary>
 
 ```python
-# 피부색 검출 (HSV)
+# Skin color detection (HSV)
 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 lower_skin = np.array([0, 20, 70])
 upper_skin = np.array([20, 255, 255])
 mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-# 움직임 궤적 저장
+# Store movement trajectory
 trajectory = []
 trajectory.append(centroid)
 
-# 궤적 분석
-# 손 흔들기: x 방향 진동
-# 원 그리기: 시작점과 끝점이 가까움 + 일정 면적
+# Trajectory analysis
+# Hand waving: oscillation in x direction
+# Circle drawing: start and end points close + certain area
 ```
 
 </details>
@@ -1338,7 +1387,7 @@ trajectory.append(centroid)
 
 ## 다음 단계
 
-- [18_Camera_Calibration.md](./18_Camera_Calibration.md) - 카메라 행렬, 왜곡 보정
+- [카메라 캘리브레이션 (Camera Calibration)](./18_Camera_Calibration.md) - 카메라 행렬, 왜곡 보정
 
 ---
 

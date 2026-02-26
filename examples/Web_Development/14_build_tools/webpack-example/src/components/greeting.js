@@ -2,6 +2,8 @@
  * 인사 컴포넌트
  */
 
+// Why: Returning an HTML string from a function keeps the component self-contained and
+// testable; in production, a template literal approach works well for small components
 export function greeting(name) {
     return `
         <div class="greeting">

@@ -1,5 +1,18 @@
 # Spark Structured Streaming
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the unbounded table model in Spark Structured Streaming and how the engine performs incremental computation over continuously arriving data.
+2. Implement streaming queries using PySpark's DataFrame API, selecting appropriate output modes (append, complete, update) for different aggregation patterns.
+3. Apply event-time windowing and watermarking to handle late-arriving data and compute accurate windowed aggregations.
+4. Integrate Spark Structured Streaming with Apache Kafka as both a source and a sink, using appropriate serialization formats.
+5. Design stateful stream processing using mapGroupsWithState or flatMapGroupsWithState for custom session and user-defined aggregation logic.
+6. Configure checkpointing and fault-tolerance mechanisms to achieve end-to-end exactly-once processing guarantees.
+
+---
+
 ## Overview
 
 Spark Structured Streaming extends the DataFrame API to handle unbounded data streams. It treats a stream as a continuously growing table, enabling batch-like queries on streaming data. This lesson covers the programming model, sources/sinks, windowed aggregations, stateful processing, and Kafka integration.
@@ -41,23 +54,30 @@ spark = SparkSession.builder \
     .appName("StructuredStreaming") \
     .getOrCreate()
 
-# Read from a socket (for demo; use Kafka in production)
+# Socket source is unbuffered and offers no replay — suitable only for demos.
+# In production, use Kafka or file sources which support offset tracking for
+# exactly-once semantics and fault-tolerant recovery.
 lines = spark.readStream \
     .format("socket") \
     .option("host", "localhost") \
     .option("port", 9999) \
     .load()
 
-# Split lines into words and count
+# explode() turns each word into its own row — this is necessary because
+# groupBy operates on rows, not on elements within a single column value.
 words = lines.select(explode(split(lines.value, " ")).alias("word"))
 word_counts = words.groupBy("word").count()
 
-# Write results to console
+# "complete" mode re-emits the ENTIRE aggregation result on every trigger.
+# This works here because the word count table is small enough to fit in memory.
+# For high-cardinality aggregations, prefer "update" mode to emit only changed rows.
 query = word_counts.writeStream \
     .outputMode("complete") \
     .format("console") \
     .start()
 
+# awaitTermination() blocks the main thread — without it the driver exits
+# immediately and the streaming query is killed before processing any data.
 query.awaitTermination()
 ```
 
@@ -148,7 +168,10 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType, T
 
 spark = SparkSession.builder.appName("StreamOps").getOrCreate()
 
-# Define schema for incoming JSON
+# Schema must be declared upfront for Kafka sources because Kafka values
+# are opaque byte arrays — Spark cannot infer the schema by sampling.
+# Getting the schema wrong here silently produces null columns, so keep
+# this definition in sync with the producer's serialization format.
 schema = StructType([
     StructField("user_id", StringType()),
     StructField("action", StringType()),
@@ -163,12 +186,16 @@ raw = spark.readStream \
     .option("subscribe", "events") \
     .load()
 
-# Parse JSON value
+# Kafka delivers key/value as binary — cast to string first, then parse
+# the JSON envelope. The two-step select ("data" alias then "data.*")
+# flattens nested struct columns into top-level columns for easier downstream use.
 events = raw.select(
     from_json(col("value").cast("string"), schema).alias("data")
 ).select("data.*")
 
-# Stateless operations (same as batch DataFrame)
+# Stateless transformations (filter, map, withColumn) run identically to
+# batch DataFrames. They require no state tracking and support append mode,
+# which is the most memory-efficient output mode.
 filtered = events.filter(col("amount") > 0)
 transformed = filtered.withColumn(
     "event_time", to_timestamp(col("timestamp"))
@@ -176,7 +203,9 @@ transformed = filtered.withColumn(
     "action_upper", upper(col("action"))
 )
 
-# Write to console
+# processingTime="5 seconds" sets the micro-batch interval. Shorter intervals
+# reduce latency but increase scheduling overhead. For most use cases,
+# 1-30 seconds balances freshness against throughput.
 query = transformed.writeStream \
     .outputMode("append") \
     .format("console") \
@@ -225,7 +254,10 @@ from pyspark.sql.functions import window, col, count, sum as spark_sum, avg
 tumbling = events \
     .withWatermark("event_time", "5 minutes") \
     .groupBy(
-        window(col("event_time"), "10 minutes"),  # Tumbling: windowDuration only
+        # Tumbling windows partition time into fixed, non-overlapping buckets.
+        # Each event belongs to exactly one window — simpler and cheaper than
+        # sliding windows, which duplicate events across overlapping windows.
+        window(col("event_time"), "10 minutes"),
         col("action")
     ) \
     .agg(
@@ -234,11 +266,14 @@ tumbling = events \
         avg("amount").alias("avg_amount"),
     )
 
-# Sliding window: 10-minute window, sliding every 5 minutes
+# Sliding window: 10-minute window, sliding every 5 minutes.
+# The slide interval (5 min) < window duration (10 min) creates overlap,
+# so each event appears in 2 windows. This doubles state size and processing
+# cost compared to tumbling, but provides smoother trend detection.
 sliding = events \
     .withWatermark("event_time", "5 minutes") \
     .groupBy(
-        window(col("event_time"), "10 minutes", "5 minutes"),  # slideDuration added
+        window(col("event_time"), "10 minutes", "5 minutes"),
         col("user_id")
     ) \
     .agg(
@@ -246,7 +281,9 @@ sliding = events \
         spark_sum("amount").alias("total_amount"),
     )
 
-# Write windowed aggregation
+# "update" mode emits only windows that changed in this micro-batch.
+# This is far more efficient than "complete" for windowed aggregations
+# because old, finalized windows are not re-emitted every trigger.
 query = tumbling.writeStream \
     .outputMode("update") \
     .format("console") \
@@ -324,11 +361,17 @@ shipments = spark.readStream.format("kafka") \
     .select("s.*") \
     .withColumn("ship_time", to_timestamp(col("timestamp")))
 
-# Join: match orders with shipments within 24 hours
-# Both streams need watermarks for the join to work
+# Both streams MUST have watermarks for stream-stream joins; without them
+# the engine would buffer ALL events forever waiting for a potential match.
+# The watermark values can differ per stream — set each based on how late
+# that particular source's events typically arrive.
 orders_wm = orders.withWatermark("order_time", "2 hours")
 shipments_wm = shipments.withWatermark("ship_time", "3 hours")
 
+# The time-range condition (ship_time within 24h of order_time) is critical:
+# it bounds how long state is kept per order. Without it, every unmatched
+# order would remain in state indefinitely. Tightening this window reduces
+# memory usage but risks missing late-arriving shipment events.
 joined = orders_wm.join(
     shipments_wm,
     expr("""
@@ -364,13 +407,19 @@ enriched = events.join(
 ```python
 def process_batch(batch_df, batch_id):
     """Process each micro-batch with custom logic."""
+    # Early return on empty batches avoids JDBC connection overhead and
+    # prevents creating empty Parquet files that slow down later reads.
     if batch_df.isEmpty():
         return
 
-    # Write to multiple sinks
+    # foreachBatch is the only way to write to multiple sinks atomically
+    # from a single streaming query. Without it, you'd need two separate
+    # queries consuming the same source (doubling Kafka read traffic).
     batch_df.write.mode("append").parquet(f"/data/output/batch_{batch_id}/")
 
-    # Write to a database
+    # JDBC sink is not natively supported in Structured Streaming —
+    # foreachBatch bridges this gap by giving you a standard DataFrame
+    # that supports all batch write formats including JDBC.
     batch_df.write \
         .format("jdbc") \
         .option("url", "jdbc:postgresql://localhost:5432/warehouse") \
@@ -382,7 +431,10 @@ def process_batch(batch_df, batch_id):
 
     print(f"Batch {batch_id}: {batch_df.count()} rows processed")
 
-# Use foreachBatch
+# foreachBatch inherits exactly-once guarantees from checkpointing: if the
+# batch fails mid-write, it will be replayed from the checkpoint on restart.
+# Your batch function must be idempotent (e.g., use MERGE or dedup by batch_id)
+# to avoid duplicate writes during replay.
 query = events.writeStream \
     .foreachBatch(process_batch) \
     .option("checkpointLocation", "/checkpoints/foreach/") \
@@ -393,13 +445,16 @@ query = events.writeStream \
 ### 6.2 Deduplication
 
 ```python
-# Deduplicate events by event_id within a watermark window
+# Including event_time in dropDuplicates is required so the watermark
+# can expire old entries from state. Using event_id alone would force
+# the engine to retain every seen ID indefinitely (unbounded memory).
 deduplicated = events \
     .withWatermark("event_time", "10 minutes") \
     .dropDuplicates(["event_id", "event_time"])
 
-# Without watermark: keeps ALL event_ids in state (memory grows unbounded)
-# With watermark: only keeps event_ids within the watermark window
+# The 10-minute watermark means duplicates arriving >10 minutes late will
+# NOT be caught. Choose this threshold based on your producer's retry window —
+# if retries happen within 5 minutes, a 10-minute watermark provides safe margin.
 ```
 
 ---
@@ -462,14 +517,23 @@ Rules:
 ### 8.1 Reading from Kafka
 
 ```python
-# Read from Kafka with full configuration
+# Multiple brokers provide failover — if broker1 is down, Spark
+# connects via broker2 without query interruption.
 kafka_stream = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "broker1:9092,broker2:9092") \
     .option("subscribe", "orders,shipments") \
+    # "latest" skips historical data on first start — use "earliest" if you
+    # need to backfill. After first run, offsets resume from checkpoint regardless.
     .option("startingOffsets", "latest") \
+    # Caps how many records are read per micro-batch. Without this limit,
+    # a large backlog (e.g., after downtime) can cause OOM by pulling
+    # millions of records into a single batch.
     .option("maxOffsetsPerTrigger", 10000) \
     .option("kafka.group.id", "spark-streaming-group") \
+    # failOnDataLoss=false prevents the query from crashing when Kafka
+    # retention deletes offsets the checkpoint references. Set to true in
+    # pipelines where data loss must halt processing for investigation.
     .option("failOnDataLoss", "false") \
     .load()
 
@@ -485,6 +549,9 @@ schema = StructType([
     StructField("amount", DoubleType()),
 ])
 
+# Preserving kafka_key and kafka_timestamp alongside parsed fields enables
+# downstream debugging (trace a bad record back to its Kafka partition/offset)
+# and event-time processing (kafka_timestamp reflects when Kafka received the message).
 parsed = kafka_stream.select(
     col("key").cast("string").alias("kafka_key"),
     from_json(col("value").cast("string"), schema).alias("data"),
@@ -496,12 +563,16 @@ parsed = kafka_stream.select(
 ### 8.2 Writing to Kafka
 
 ```python
-# Write processed data back to Kafka
+# Kafka sink requires exactly two columns: "key" and "value" (both strings
+# or bytes). Using order_id as the key ensures all events for the same order
+# land on the same Kafka partition, preserving per-order event ordering.
 output = parsed.select(
     col("order_id").alias("key"),
     col("amount").cast("string").alias("value"),
 )
 
+# Each streaming query must have its OWN checkpoint directory — sharing
+# checkpoints between queries causes offset corruption and data loss.
 query = output.writeStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "broker:9092") \
@@ -543,6 +614,76 @@ Match ad impressions with ad clicks:
 5. Write high-CTR ads (>5%) to an alert topic
 """
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Kafka-to-Parquet Streaming Pipeline
+
+Build a complete Structured Streaming pipeline that reads from Kafka and writes results to Parquet:
+
+1. Read from a Kafka topic `user_events` with schema `(event_id STRING, user_id STRING, action STRING, amount DOUBLE, event_time TIMESTAMP)`
+2. Apply a 3-minute watermark on `event_time` to handle late arrivals
+3. Compute tumbling 10-minute window aggregations grouped by `(action, window)`:
+   - Event count
+   - Sum of amount
+   - Count of distinct users (hint: use `approx_count_distinct`)
+4. Write results to Parquet at `/data/output/event_summary/` using Update output mode
+5. Configure a checkpoint location and set `maxOffsetsPerTrigger=5000`
+6. Monitor the query with `query.lastProgress` and print the `inputRowsPerSecond` after each micro-batch
+
+### Exercise 2: Stateful Deduplication with Watermark
+
+Implement an exactly-once deduplication pipeline for a high-volume event stream:
+
+1. Read from Kafka topic `raw_events` where the same `event_id` may appear multiple times due to producer retries
+2. Parse the JSON payload with schema `(event_id STRING, user_id STRING, amount DOUBLE, event_ts TIMESTAMP)`
+3. Apply a 15-minute watermark on `event_ts` and use `dropDuplicates(["event_id", "event_ts"])` to remove duplicates
+4. Write deduplicated events to a second Kafka topic `clean_events` using Append mode
+5. Use `foreachBatch` to simultaneously write to both Kafka and a PostgreSQL table `clean_events_log`
+6. Explain in comments: why must `event_ts` be included in `dropDuplicates` alongside `event_id`? What happens to state size without the watermark?
+
+### Exercise 3: Stream-Stream Join for Order Matching
+
+Build a pipeline that matches two event streams within a time window:
+
+1. Stream 1: `orders` topic with schema `(order_id STRING, user_id STRING, amount DOUBLE, order_ts TIMESTAMP)`
+2. Stream 2: `payments` topic with schema `(payment_id STRING, order_id STRING, payment_method STRING, pay_ts TIMESTAMP)`
+3. Apply watermarks: 1 hour on `order_ts`, 2 hours on `pay_ts`
+4. Inner join the streams: match orders with payments where `pay_ts` is between `order_ts` and `order_ts + 4 hours`
+5. Write matched pairs to a `matched_orders` Kafka topic as JSON
+6. For orders that have not been matched after 4 hours, use a separate `foreachBatch` query on the orders stream to write them to an `unmatched_orders` table in PostgreSQL
+7. Explain in comments: why do both streams need watermarks for a stream-stream join? What determines the state retention period?
+
+### Exercise 4: foreachBatch Multi-Sink Writer
+
+Implement a `foreachBatch` function that writes each micro-batch to three destinations atomically:
+
+1. Read streaming events from Kafka (same schema as Exercise 1)
+2. Implement `process_batch(batch_df, batch_id)` that:
+   - Skips empty batches (early return)
+   - Writes raw events to Parquet partitioned by date
+   - Aggregates per-user totals and upserts to a Delta Lake table using `DeltaTable.merge()` with `batch_id` in the condition to ensure idempotency
+   - Writes a JSON summary `{batch_id, row_count, total_amount, timestamp}` to a `batch_log` PostgreSQL table
+3. Configure `foreachBatch` with a 30-second trigger and a checkpoint location
+4. Add error handling so that if the PostgreSQL write fails, the batch is logged to a local error file and the stream continues
+5. Explain in comments why the `batch_id` parameter is critical for idempotent `foreachBatch` implementations
+
+### Exercise 5: End-to-End Streaming Analytics System
+
+Design and implement a complete streaming analytics system for an e-commerce platform:
+
+1. **Ingestion**: Read from three Kafka topics: `clicks`, `cart_events`, and `purchases` — each with appropriate schemas and timestamps
+2. **Watermarking**: Apply 5-minute watermarks to all three streams
+3. **Funnel computation**: Using tumbling 15-minute windows, compute for each window:
+   - `click_count`: total clicks
+   - `cart_count`: total cart additions
+   - `purchase_count`: total purchases
+   - `conversion_rate`: `purchase_count / click_count` (handle division by zero)
+4. **Static enrichment**: Join the purchases stream with a static `product_catalog` DataFrame (loaded from Parquet) to add `category` and `price` columns
+5. **Output**: Write the funnel metrics to a Delta Lake table using Update mode; write enriched purchases to a separate Parquet sink
+6. **Fault tolerance**: Use separate checkpoint locations for each query; explain in comments why checkpoint directories must never be shared between queries
 
 ---
 

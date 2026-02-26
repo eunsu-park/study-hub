@@ -1,5 +1,17 @@
 # Monocular Depth Estimation
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the problem of monocular depth estimation and compare it with stereo-based depth methods.
+2. Implement depth inference using the MiDaS model via OpenCV's DNN module.
+3. Apply the Dense Prediction Transformer (DPT) for high-resolution depth map generation.
+4. Describe the Structure from Motion (SfM) pipeline and implement a basic multi-view depth estimation workflow.
+5. Analyze depth map outputs and apply them to downstream tasks such as scene understanding and 3D effects.
+
+---
+
 ## Overview
 
 Monocular depth estimation is the technology for estimating per-pixel depth information from a single 2D image. This covers deep learning models like MiDaS and DPT, as well as geometric approaches through Structure from Motion (SfM).
@@ -22,6 +34,8 @@ Monocular depth estimation is the technology for estimating per-pixel depth info
 ---
 
 ## 1. Monocular Depth Estimation Overview
+
+Depth is the missing dimension in 2D images — every pixel carries color and intensity, but not how far it is from the camera. Recovering per-pixel depth turns a flat image into a metric understanding of the scene, enabling downstream tasks like 3D reconstruction, object avoidance, and augmented reality without the hardware overhead of stereo rigs or LiDAR.
 
 ### Why Monocular Depth Estimation?
 
@@ -214,6 +228,10 @@ def normalize_depth(depth_map):
     depth_min = depth_map.min()
     depth_max = depth_map.max()
 
+    # MiDaS outputs *relative* inverse depth (larger value = closer object),
+    # not metric meters. Min-max normalization maps the scene-specific range
+    # to [0, 255] so the colormap spans the full visible range regardless of
+    # the actual depth scale — suitable for visualization but not metric use.
     depth_normalized = (depth_map - depth_min) / (depth_max - depth_min)
     depth_normalized = (depth_normalized * 255).astype(np.uint8)
 
@@ -306,7 +324,9 @@ class MiDaSDepthEstimator:
     def visualize(self, depth, colormap=cv2.COLORMAP_MAGMA):
         """Visualize depth map"""
 
-        # Normalization
+        # cv2.NORM_MINMAX stretches the full depth range to [0, 255];
+        # this is purely for display — the original float depth values
+        # are what you pass to any downstream 3D computation
         depth_norm = cv2.normalize(depth, None, 0, 255, cv2.NORM_MINMAX)
         depth_norm = depth_norm.astype(np.uint8)
 
@@ -435,9 +455,13 @@ class DPTDepthEstimator:
     def get_metric_depth(self, depth, scale=10.0):
         """Relative depth → Metric depth conversion (approximation)"""
 
-        # MiDaS/DPT outputs relative depth
-        # Scale estimation needed for absolute depth conversion
-
+        # MiDaS/DPT outputs *inverse* relative depth: high values = close objects.
+        # The stereo formula Z = f*b/d shows depth is inversely proportional to
+        # disparity, so dividing a constant by the predicted value converts the
+        # network's output back to a metric-like scale. The +1e-6 prevents
+        # division by zero in far-background regions where predicted depth ≈ 0.
+        # 'scale' is scene-dependent and must be calibrated against known distances
+        # for truly metric output — this is an approximation for relative use.
         depth_metric = scale / (depth + 1e-6)
 
         return depth_metric
@@ -451,7 +475,9 @@ def estimate_depth_with_confidence(estimator, img, num_samples=5):
     depths = []
 
     for _ in range(num_samples):
-        # Slight image variation
+        # Slight image variation: perturbing brightness simulates real-world
+        # exposure changes and gives a rough uncertainty estimate across plausible
+        # inputs — a pragmatic substitute when the model lacks explicit dropout layers
         augmented = img.copy()
 
         # Brightness change
@@ -860,13 +886,15 @@ import numpy as np
 def apply_bokeh_effect(img, depth, focus_depth=0.5, aperture=0.1):
     """Depth-based bokeh effect (depth of field simulation)"""
 
-    # Normalize depth (0-1)
+    # Normalize depth to [0, 1] so focus_depth and aperture are scene-independent
+    # parameters — 0.5 always means "mid-range" regardless of actual distance units
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
     # Calculate deviation from focus distance
     depth_diff = np.abs(depth_norm - focus_depth)
 
-    # Blur strength (stronger farther from focus)
+    # Blur strength proportional to distance from focus plane, capped at 31
+    # so kernel sizes stay odd (2*level+1) and within OpenCV's supported range
     blur_strength = (depth_diff / aperture * 30).astype(int)
     blur_strength = np.clip(blur_strength, 0, 31)
 

@@ -29,6 +29,10 @@ class CloudProvider(Enum):
     SIMULATION = "simulation"
 
 
+# Why: MQTT defines three QoS levels with very different trade-offs.
+# QoS 0 (fire-and-forget) saves bandwidth; QoS 1 (ACK) guarantees delivery
+# at the cost of possible duplicates; QoS 2 (4-step handshake) ensures
+# exactly-once but doubles round trips. IoT sensors typically use QoS 1.
 class MessageQoS(Enum):
     """MQTT QoS 레벨"""
     AT_MOST_ONCE = 0
@@ -210,6 +214,9 @@ class AWSIoTDeviceManager:
 
         self.client.publish(topic, payload)
 
+    # Why: Device Shadow is AWS IoT's "digital twin" — a JSON document that
+    # stores the last-known device state in the cloud. This lets mobile apps
+    # read the device's state even when the device is offline or asleep.
     def update_device_shadow(self, state: Dict):
         """Device Shadow 업데이트"""
         if not self.device_info:
@@ -348,6 +355,9 @@ class SimulatedGCPPubSubSubscriber:
 # MQTT 메시지 포맷
 # ==============================================================================
 
+# Why: Standardizing message formats (telemetry, event, command, response)
+# across all devices ensures that cloud-side rules, analytics, and dashboards
+# can parse any device's messages without per-device customization.
 class MQTTMessageFormat:
     """MQTT 메시지 포맷 표준"""
 
@@ -405,6 +415,10 @@ class MQTTMessageFormat:
 # 디바이스 프로비저닝
 # ==============================================================================
 
+# Why: Provisioning bundles identity creation (Thing), credential issuance
+# (X.509 certificate), and policy attachment into one atomic workflow.
+# Automating this avoids the manual, error-prone process of copying certs
+# onto each device, which doesn't scale beyond a handful of units.
 class DeviceProvisioning:
     """디바이스 프로비저닝 (시뮬레이션)"""
 

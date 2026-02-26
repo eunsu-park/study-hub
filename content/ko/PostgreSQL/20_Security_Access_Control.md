@@ -1,12 +1,24 @@
 # 20. 보안과 접근 제어
 
+**이전**: [전문 검색](./19_Full_Text_Search.md)
+
+---
+
 ## 학습 목표
-- 역할(Role)과 권한(Privilege)을 효과적으로 관리하기
-- 행 수준 보안(Row-Level Security, RLS) 구현하기
-- 인증을 위한 pg_hba.conf 구성하기
-- SSL/TLS 암호화 연결 설정하기
-- 규정 준수를 위한 감사 로깅 활성화하기
-- 보안 모범 사례 적용하기
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 그룹 역할(group role), 로그인 역할(login role), 최소 권한 원칙(principle of least privilege)을 활용한 역할 계층 구조를 설계할 수 있다
+2. 스키마, 테이블, 시퀀스, 함수에 대한 객체 수준 및 컬럼 수준 권한을 부여하고 취소할 수 있다
+3. 멀티 테넌트 격리 및 부서 기반 접근 제어를 위한 행 수준 보안(Row-Level Security, RLS) 정책을 구현할 수 있다
+4. 적절한 인증 방법(scram-sha-256, peer, cert)으로 pg_hba.conf 인증 규칙을 구성할 수 있다
+5. 클라이언트 인증서 인증을 포함한 SSL/TLS 암호화 연결을 설정할 수 있다
+6. PostgreSQL 내장 로깅과 pgAudit 확장을 활용하여 감사 로깅(audit logging)을 활성화할 수 있다
+7. SQL 인젝션 방지, pgcrypto를 활용한 데이터 암호화, 연결 보안 강화 등 보안 모범 사례를 적용할 수 있다
+
+---
+
+보안은 나중에 덧붙이는 기능이 아닙니다 — 처음부터 데이터베이스 설계에 포함되어야 합니다. 잘못 구성된 PostgreSQL 인스턴스는 민감한 데이터를 노출시키거나, 권한 상승을 허용하거나, 공격자의 진입점이 될 수 있습니다. 이 레슨은 PostgreSQL의 심층 방어(defense-in-depth) 보안 모델을 다룹니다: 네트워크 수준 제어와 인증(authentication)부터 세밀한 인가(authorization)와 행 수준 보안, 암호화와 감사 로깅까지. 멀티 테넌트 SaaS 애플리케이션을 구축하든, 기존 배포를 강화하든, 이 기법들은 안전한 PostgreSQL 환경의 기반이 됩니다.
 
 ## 목차
 1. [보안 개요](#1-보안-개요)
@@ -722,9 +734,7 @@ CREATE ROLE api_admin LOGIN PASSWORD '...' IN ROLE web_admin;
 
 ---
 
-## 다음 단계
-- [19. 전문 검색](./19_Full_Text_Search.md)
-- [15. 쿼리 최적화](./15_Query_Optimization.md)
+**이전**: [전문 검색](./19_Full_Text_Search.md)
 
 ## 참고 자료
 - [PostgreSQL Roles](https://www.postgresql.org/docs/current/user-manag.html)

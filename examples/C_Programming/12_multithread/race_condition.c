@@ -7,12 +7,17 @@
 #define ITERATIONS 100000
 
 // 공유 변수
+// Why: global (shared) mutable state without synchronization is the root cause
+// of race conditions — each thread sees and modifies the same memory location
 int counter = 0;
 
 void* increment(void* arg) {
     (void)arg;
 
     for (int i = 0; i < ITERATIONS; i++) {
+        // Why: counter++ compiles to load-increment-store (3 CPU instructions) —
+        // two threads can load the same value, both increment to N+1, and store
+        // N+1 twice, losing one increment entirely
         counter++;  // 원자적이지 않음!
         // 실제로는: temp = counter; temp = temp + 1; counter = temp;
     }
@@ -28,7 +33,8 @@ int main(void) {
         pthread_create(&threads[i], NULL, increment, NULL);
     }
 
-    // 대기
+    // Why: pthread_join blocks until the thread finishes — without it, main could
+    // exit and print counter before all threads have completed their increments
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(threads[i], NULL);
     }

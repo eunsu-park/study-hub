@@ -1,10 +1,24 @@
 # Computer System Overview
 
-## Overview
-
-A computer is an electronic device that receives input data, processes it, and outputs results. In this lesson, we'll learn about the history of computers, their basic structure, and the relationship between hardware and software.
+**Previous**: [Overview](./00_Overview.md) | **Next**: [Data Representation Basics](./02_Data_Representation_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the generational evolution of computers from vacuum tubes to modern VLSI
+2. Explain von Neumann architecture and its core principles (stored program, sequential execution, binary representation)
+3. Identify the von Neumann bottleneck and describe methods to mitigate it
+4. Identify the major hardware components (CPU, memory, I/O) and their roles
+5. Distinguish between system software and application software
+6. Calculate basic performance metrics (CPI, MIPS, execution time) using standard formulas
+7. Apply Amdahl's Law to evaluate the impact of partial system improvements
+
+---
+
+Every device you use -- from your phone to cloud servers -- is built on the same fundamental architecture that John von Neumann described in 1945. Understanding how a computer's hardware components work together is the foundation for writing efficient software, diagnosing performance problems, and appreciating why certain design decisions were made.
 
 ## Table of Contents
 

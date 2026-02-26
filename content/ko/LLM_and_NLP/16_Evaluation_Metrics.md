@@ -833,6 +833,271 @@ judgment = llm_judge(question, response_a, response_b)
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: BLEU 점수 한계
+
+아래 참조 번역과 세 후보 문장에 대해 BLEU-1 및 BLEU-4 점수를 직접 계산하고, 각 결과가 번역 품질을 제대로 반영하는지 분석하세요.
+
+```python
+reference = "The cat sat on the mat"
+
+candidates = {
+    "exact":       "The cat sat on the mat",         # 완전 일치
+    "paraphrase":  "A feline rested upon the rug",   # 의미는 같지만 단어가 다름
+    "incoherent":  "The the the the the the the",    # 문법적으로 틀린 반복
+}
+```
+
+각 후보에 대해 다음을 수행하세요:
+1. `nltk.translate.bleu_score`로 BLEU-1 및 BLEU-4 점수 계산
+2. 결과를 표로 정리 (후보 | BLEU-1 | BLEU-4 | 품질)
+3. BLEU가 왜 의미론적 동의어(paraphrase)와 무의미 반복(incoherent)을 올바르게 구분하지 못하는지 설명
+4. BERTScore가 이 두 경우를 더 잘 처리하는 이유를 2-3 문장으로 설명
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+import nltk
+
+reference = "The cat sat on the mat".split()
+candidates = {
+    "exact":       "The cat sat on the mat".split(),
+    "paraphrase":  "A feline rested upon the rug".split(),
+    "incoherent":  "The the the the the the the".split(),
+}
+
+smoothie = SmoothingFunction().method1
+print(f"{'후보':<12} {'BLEU-1':>8} {'BLEU-4':>8}")
+print("-" * 30)
+for name, cand in candidates.items():
+    b1 = sentence_bleu([reference], cand, weights=(1,0,0,0), smoothing_function=smoothie)
+    b4 = sentence_bleu([reference], cand, weights=(.25,.25,.25,.25), smoothing_function=smoothie)
+    print(f"{name:<12} {b1:>8.3f} {b4:>8.3f}")
+
+# 예상 결과:
+# 후보         BLEU-1   BLEU-4
+# ------------------------------
+# exact         1.000    1.000
+# paraphrase    0.000    0.000   ← 의미가 같아도 0
+# incoherent    0.857    0.001   ← 높은 BLEU-1, 낮은 BLEU-4
+```
+
+**핵심 인사이트:**
+- **paraphrase**: 모든 단어가 참조와 다르므로 BLEU-1=0. 그러나 실제로는 의미 있는 번역임
+- **incoherent**: "the"가 참조에 존재하므로 BLEU-1이 높게 나옴 (브리바이어티 패널티로 낮아지지만)
+- **BERTScore 우위**: BERT 임베딩은 "feline"과 "cat"의 코사인 유사도를 계산하므로 의미적 유사성을 포착함. "the the the"는 문맥 임베딩이 분산되어 낮은 점수를 받음
+
+</details>
+
+---
+
+### 연습 문제 2: pass@k 계산 및 해석
+
+5개의 코딩 문제에 대해 각각 n=10번씩 LLM 응답을 생성하고 테스트를 통과한 횟수를 기록했습니다. 아래 데이터로 pass@1, pass@3, pass@10을 계산하세요.
+
+```python
+results = {
+    "problem_1": {"n": 10, "c": 10},  # 10번 중 10번 통과
+    "problem_2": {"n": 10, "c": 7},   # 10번 중 7번 통과
+    "problem_3": {"n": 10, "c": 3},   # 10번 중 3번 통과
+    "problem_4": {"n": 10, "c": 1},   # 10번 중 1번 통과
+    "problem_5": {"n": 10, "c": 0},   # 10번 중 0번 통과
+}
+```
+
+1. pass@k 공식 구현: `pass_at_k(n, c, k) = 1 - C(n-c, k) / C(n, k)`
+2. 각 문제에 대해 k=1, 3, 10 값을 계산하여 표로 정리
+3. 전체 평균 pass@1 및 pass@10 계산
+4. 다음 해석 질문에 답하세요:
+   - pass@1과 pass@10의 차이가 실제 배포 시 무엇을 의미하는가?
+   - problem_4 (c=1)에서 pass@10 = 1.0인 이유는?
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from math import comb
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    """
+    n: 총 샘플 수
+    c: 정답 샘플 수
+    k: 허용 시도 횟수
+    """
+    if n - c < k:
+        return 1.0
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
+results = {
+    "problem_1": (10, 10),
+    "problem_2": (10, 7),
+    "problem_3": (10, 3),
+    "problem_4": (10, 1),
+    "problem_5": (10, 0),
+}
+
+print(f"{'문제':<12} {'pass@1':>8} {'pass@3':>8} {'pass@10':>9}")
+print("-" * 40)
+for name, (n, c) in results.items():
+    p1  = pass_at_k(n, c, 1)
+    p3  = pass_at_k(n, c, 3)
+    p10 = pass_at_k(n, c, 10)
+    print(f"{name:<12} {p1:>8.3f} {p3:>8.3f} {p10:>9.3f}")
+
+# 문제         pass@1   pass@3   pass@10
+# ----------------------------------------
+# problem_1     1.000    1.000     1.000
+# problem_2     0.700    0.933     1.000
+# problem_3     0.300    0.633     1.000
+# problem_4     0.100    0.267     1.000
+# problem_5     0.000    0.000     0.000
+```
+
+**해석:**
+
+| 지표 | 의미 | 활용 |
+|------|------|------|
+| pass@1 | 한 번 생성했을 때 정답일 확률 | 배포 신뢰도 (실제 사용자 경험) |
+| pass@10 | 10번 시도 중 한 번이라도 정답일 확률 | 모델 능력 상한선 |
+
+- **pass@10 = 1.0 for problem_4**: c=1이므로, 10번 모두 시도하면 그 정답이 반드시 포함됨 (k=n이면 c≥1일 때 항상 1.0)
+- **배포 의미**: pass@1이 낮고 pass@10이 높은 문제는 모델이 "풀 수 있지만 자주 실패"하는 케이스 → 재시도(retry) 전략이 효과적
+
+</details>
+
+---
+
+### 연습 문제 3: LLM-as-Judge 편향 완화
+
+LLM 심판(judge)은 응답 순서에 따라 편향된 판단을 내리는 경향이 있습니다(위치 편향, Position Bias). 두 번의 평가(순서 바꾸기)를 통해 편향을 감지하는 공정한 심판 함수를 구현하세요.
+
+```python
+from enum import Enum
+
+class JudgeResult(Enum):
+    A_WINS = "A"
+    B_WINS = "B"
+    TIE    = "Tie"
+
+def debiased_judge(question: str, response_a: str, response_b: str) -> dict:
+    """
+    두 번 평가하여 위치 편향을 감지합니다.
+    - 1차: A를 'First', B를 'Second'로 제시
+    - 2차: B를 'First', A를 'Second'로 제시
+    - 두 결과가 일치하면 high confidence
+    - 불일치하면 Tie (위치 편향 감지)
+
+    반환: {
+        "winner": JudgeResult,
+        "confidence": str,
+        "eval_1": str,
+        "eval_2_normalized": str,
+    }
+    """
+    # TODO: 구현하세요
+    pass
+```
+
+요구사항:
+1. `single_comparison(question, first, second, label_first, label_second) -> JudgeResult` 헬퍼 함수 구현 (LLM 호출 모의)
+2. `debiased_judge` 완성: 두 번 평가 후 결과 정규화 및 비교
+3. 세 가지 시나리오 테스트: 일관된 A 승리, 일관된 B 승리, 편향 감지(불일치)
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+from enum import Enum
+import anthropic
+
+class JudgeResult(Enum):
+    A_WINS = "A"
+    B_WINS = "B"
+    TIE    = "Tie"
+
+client = anthropic.Anthropic()
+
+def single_comparison(
+    question: str,
+    first: str, second: str,
+    label_first: str, label_second: str
+) -> JudgeResult:
+    prompt = f"""질문: {question}
+
+응답 {label_first}: {first}
+
+응답 {label_second}: {second}
+
+어느 응답이 더 도움이 됩니까? "{label_first}", "{label_second}", 또는 "동점" 중 하나만 답하세요."""
+
+    result = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=10,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    verdict = result.content[0].text.strip()
+
+    if label_first in verdict:
+        return JudgeResult.A_WINS   # first = A
+    elif label_second in verdict:
+        return JudgeResult.B_WINS   # second = B
+    else:
+        return JudgeResult.TIE
+
+def debiased_judge(question: str, response_a: str, response_b: str) -> dict:
+    # 1차 평가: A=First, B=Second
+    eval_1 = single_comparison(question, response_a, response_b, "First", "Second")
+    # A가 이기면 A_WINS, B가 이기면 B_WINS
+
+    # 2차 평가: B=First, A=Second (순서 반전)
+    eval_2_raw = single_comparison(question, response_b, response_a, "First", "Second")
+    # eval_2_raw에서 "First 승" = B가 더 나음 = B_WINS
+    # eval_2_raw에서 "Second 승" = A가 더 나음 = A_WINS
+    if eval_2_raw == JudgeResult.A_WINS:   # "First"(=B) 승
+        eval_2_normalized = JudgeResult.B_WINS
+    elif eval_2_raw == JudgeResult.B_WINS: # "Second"(=A) 승
+        eval_2_normalized = JudgeResult.A_WINS
+    else:
+        eval_2_normalized = JudgeResult.TIE
+
+    # 결과 비교
+    if eval_1 == eval_2_normalized:
+        final = eval_1
+        confidence = "high"
+    else:
+        final = JudgeResult.TIE
+        confidence = "low (위치 편향 감지됨)"
+
+    return {
+        "winner": final,
+        "confidence": confidence,
+        "eval_1": eval_1.value,
+        "eval_2_normalized": eval_2_normalized.value,
+    }
+
+# 테스트
+q = "Python에서 리스트를 역순으로 만드는 방법은?"
+good = "list.reverse()를 사용하거나 슬라이싱 lst[::-1]을 사용합니다."
+poor = "반복문으로 새 리스트를 만드세요."
+
+result = debiased_judge(q, good, poor)
+print(f"승자: {result['winner'].value}")
+print(f"신뢰도: {result['confidence']}")
+print(f"1차 평가: {result['eval_1']}, 2차 평가(정규화): {result['eval_2_normalized']}")
+```
+
+**핵심 개념:**
+- **위치 편향(Position Bias)**: LLM은 첫 번째로 제시된 응답을 선호하는 경향이 있음
+- **이중 평가**: 순서를 바꿔 두 번 평가하면 편향 여부를 감지할 수 있음
+- **신뢰도**: 두 평가가 일치하면 high, 불일치하면 위치 편향으로 간주하고 Tie 처리
+
+</details>
+
+---
+
 ## 학습 완료
 
 이것으로 LLM & NLP 심화 학습을 완료했습니다!

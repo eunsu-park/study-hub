@@ -1,5 +1,18 @@
 # Divide and Conquer
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the three steps of divide and conquer (divide, conquer, combine) and identify when a problem is suited for this paradigm
+2. Distinguish divide and conquer from dynamic programming by explaining the role of overlapping subproblems and memoization
+3. Implement Merge Sort using the divide and conquer pattern and trace through its recursion tree to derive the O(n log n) complexity
+4. Implement Quick Sort with partition-based divide and conquer, and analyze its best, average, and worst-case behavior
+5. Apply fast exponentiation (exponentiation by squaring) to compute large powers in O(log n) time
+6. Analyze the recurrence relations of divide and conquer algorithms using the Master Theorem
+
+---
+
 ## Overview
 
 Divide and conquer is an algorithm design technique that divides a large problem into smaller subproblems, solves each one, and then combines the solutions.
@@ -95,24 +108,33 @@ void merge(int arr[], int left, int mid, int right) {
     int n1 = mid - left + 1;
     int n2 = right - mid;
 
+    // VLAs (variable-length arrays) used here for simplicity; in production C
+    // prefer malloc to avoid stack overflow on large n
     int L[n1], R[n2];
 
+    // Copy both halves before merging — once we start writing back into arr,
+    // the original values would be lost if we read from arr directly
     for (int i = 0; i < n1; i++) L[i] = arr[left + i];
     for (int i = 0; i < n2; i++) R[i] = arr[mid + 1 + i];
 
     int i = 0, j = 0, k = left;
 
     while (i < n1 && j < n2) {
+        // <= ensures stability: equal left elements are placed before right elements
         if (L[i] <= R[j]) arr[k++] = L[i++];
         else arr[k++] = R[j++];
     }
 
+    // Exactly one of these drains any remaining elements from the unfinished half
     while (i < n1) arr[k++] = L[i++];
     while (j < n2) arr[k++] = R[j++];
 }
 
 void mergeSort(int arr[], int left, int right) {
     if (left < right) {
+        // Overflow-safe midpoint — also avoids the off-by-one that (left+right)/2
+        // would cause when left = 0, right = 1 (mid would still be 0, which is correct,
+        // but the safe form is a good habit whenever indices can be large)
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);
@@ -124,10 +146,15 @@ void mergeSort(int arr[], int left, int right) {
 
 ```python
 def merge_sort(arr):
+    # Base case: zero or one element is trivially sorted — also the recursion
+    # termination condition that prevents infinite splitting
     if len(arr) <= 1:
         return arr
 
     mid = len(arr) // 2
+    # arr[:mid] and arr[mid:] create new list objects (O(n) space each level),
+    # which is why Python merge sort uses O(n log n) space in naive form;
+    # an in-place variant avoids this but is significantly more complex
     left = merge_sort(arr[:mid])
     right = merge_sort(arr[mid:])
 
@@ -138,6 +165,8 @@ def merge(left, right):
     i = j = 0
 
     while i < len(left) and j < len(right):
+        # <= preserves stability: among equal elements, the left subarray's
+        # element is always preferred, maintaining the original input ordering
         if left[i] <= right[j]:
             result.append(left[i])
             i += 1
@@ -145,6 +174,8 @@ def merge(left, right):
             result.append(right[j])
             j += 1
 
+    # extend is O(k) where k is the remaining elements — much cheaper than
+    # looping with append because it avoids per-element Python overhead
     result.extend(left[i:])
     result.extend(right[j:])
     return result
@@ -195,14 +226,19 @@ Space: O(n) - temporary array
 // C++
 int partition(vector<int>& arr, int low, int high) {
     int pivot = arr[high];
+    // i starts at low - 1: it's the index of the last element confirmed smaller
+    // than pivot; the region [low..i] grows as we find more such elements
     int i = low - 1;
 
     for (int j = low; j < high; j++) {
         if (arr[j] < pivot) {
+            // Extend the smaller-than-pivot region and swap new element into it
             swap(arr[++i], arr[j]);
         }
     }
 
+    // Place pivot at its correct sorted position — all elements to its left are
+    // smaller, all to the right are larger (in-place, no extra memory needed)
     swap(arr[i + 1], arr[high]);
     return i + 1;
 }
@@ -211,6 +247,7 @@ void quickSort(vector<int>& arr, int low, int high) {
     if (low < high) {
         int pi = partition(arr, low, high);
 
+        // Pivot is now in final position; recurse only on the unsorted partitions
         quickSort(arr, low, pi - 1);
         quickSort(arr, pi + 1, high);
     }
@@ -332,14 +369,21 @@ Example: 2^10
 ```c
 // C - Recursive
 long long power(long long a, int n) {
+    // n == 0: any number to the power 0 is 1 (empty product)
     if (n == 0) return 1;
+    // n == 1 is an explicit short-circuit, not strictly necessary but avoids
+    // one unnecessary squaring step for the common single-step case
     if (n == 1) return a;
 
+    // Compute a^(n/2) once and reuse — this is the divide step that reduces
+    // O(n) multiplications to O(log n) by squaring instead of multiplying linearly
     long long half = power(a, n / 2);
 
     if (n % 2 == 0) {
         return half * half;
     } else {
+        // Odd exponent: a^n = a^(n/2) * a^(n/2) * a — the extra 'a' handles
+        // the remainder when integer division floors n/2
         return half * half * a;
     }
 }
@@ -349,10 +393,14 @@ long long powerIterative(long long a, int n) {
     long long result = 1;
 
     while (n > 0) {
+        // Process one bit of n at a time: if the current bit is set, multiply
+        // the current power of a into the result (bit = 1 means this term contributes)
         if (n & 1) {  // n is odd
             result *= a;
         }
+        // Square a at each step: after k iterations, a = original_a^(2^k)
         a *= a;
+        // Right-shift to examine the next bit of the exponent
         n >>= 1;
     }
 
@@ -401,6 +449,8 @@ Use divide and conquer for matrix exponentiation!
 
 ```python
 def matrix_mult(A, B, mod=10**9+7):
+    # Standard 2×2 matrix multiplication; keeping mod applied at every step
+    # prevents Python integers from growing to millions of digits (performance)
     return [
         [(A[0][0]*B[0][0] + A[0][1]*B[1][0]) % mod,
          (A[0][0]*B[0][1] + A[0][1]*B[1][1]) % mod],
@@ -409,22 +459,28 @@ def matrix_mult(A, B, mod=10**9+7):
     ]
 
 def matrix_power(M, n, mod=10**9+7):
+    # Base case: M^1 = M (identity matrix would be M^0, but we start from n=1)
     if n == 1:
         return M
 
     if n % 2 == 0:
+        # Square the result of the half-power — same divide-and-conquer idea as
+        # scalar exponentiation; reduces recursive calls from O(n) to O(log n)
         half = matrix_power(M, n // 2, mod)
         return matrix_mult(half, half, mod)
     else:
+        # Odd exponent: peel off one factor of M and handle the even part recursively
         return matrix_mult(M, matrix_power(M, n - 1, mod), mod)
 
 def fibonacci(n):
     if n <= 1:
         return n
 
+    # The recurrence [[F(n+1)], [F(n)]] = [[1,1],[1,0]]^n × [[F(1)],[F(0)]]
+    # lets us compute Fibonacci in O(log n) multiplications instead of O(n)
     M = [[1, 1], [1, 0]]
     result = matrix_power(M, n)
-    return result[1][0]
+    return result[1][0]  # result[1][0] = F(n) after n matrix multiplications
 ```
 
 ---

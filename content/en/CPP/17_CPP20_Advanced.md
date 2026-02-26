@@ -1,10 +1,26 @@
 # Advanced C++20
 
-## Overview
+**Previous**: [Multithreading and Concurrency](./16_Multithreading_Concurrency.md) | **Next**: [C++ Design Patterns](./18_Design_Patterns.md)
 
-C++20 brought the biggest changes since C++11. Revolutionary features such as Concepts, Ranges, Coroutines, and Modules were added. This chapter covers the core features of C++20.
+---
 
-**Difficulty**: ⭐⭐⭐⭐⭐
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define custom concepts and apply standard library concepts to constrain template parameters
+2. Compose range pipelines using views (`filter`, `transform`, `take`, `drop`) for lazy data processing
+3. Implement coroutines with `co_yield` and `co_return` to build generators and async tasks
+4. Organize code into modules as an alternative to the traditional header/source model
+5. Use the three-way comparison (spaceship) operator to auto-generate all relational operators
+6. Apply C++20 utilities including `std::span`, `std::format`, designated initializers, and `consteval`
+7. Identify C++23 features (`std::expected`, `std::print`, `std::generator`) and their intended use cases
+
+---
+
+C++20 is the most transformative standard since C++11, fundamentally changing how templates, iteration, and code organization work. Concepts replace cryptic SFINAE errors with readable constraints. Ranges eliminate iterator-pair boilerplate in favor of composable pipelines. Coroutines unlock cooperative multitasking without thread overhead. Understanding these features is not just about using the latest syntax--it is about writing code that is clearer, safer, and easier to maintain.
+
+**Difficulty**: *****
 
 **Prerequisites**: Templates, Lambdas, Smart Pointers
 

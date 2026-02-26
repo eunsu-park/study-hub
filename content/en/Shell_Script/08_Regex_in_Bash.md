@@ -2,9 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [07_String_Processing.md](./07_String_Processing.md) | **Next**: [09_Process_Management.md](./09_Process_Management.md)
+**Previous**: [String Processing and Text Manipulation](./07_String_Processing.md) | **Next**: [Process Management and Job Control](./09_Process_Management.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between glob patterns and regular expressions in terms of syntax, semantics, and usage context
+2. Use the `[[ =~ ]]` operator to match strings against regex patterns in bash conditionals
+3. Extract captured groups from regex matches using the `BASH_REMATCH` array
+4. Write extended regular expressions with alternation, quantifiers, and character classes
+5. Build reusable validation functions for emails, IPs, dates, URLs, and semantic versions
+6. Apply regex effectively with `grep` and `sed` for search, extraction, and substitution tasks
+7. Identify regex performance pitfalls and apply best practices for efficient pattern matching
+
+---
+
+Regular expressions are the standard tool for validating input, extracting structured data, and performing complex search-and-replace operations. Bash has native regex support through the `=~` operator, but many developers default to spawning `grep` or `sed` for tasks that bash can handle directly. This lesson covers both approaches so you can choose the right tool -- and write patterns that are correct, readable, and efficient.
 
 ## 1. Glob vs Regex
 
@@ -1020,4 +1036,4 @@ Build a URL/path router:
 - Generate URLs from patterns and parameters
 - Support query string parsing
 
-**Previous**: [07_String_Processing.md](./07_String_Processing.md) | **Next**: [09_Process_Management.md](./09_Process_Management.md)
+**Previous**: [String Processing and Text Manipulation](./07_String_Processing.md) | **Next**: [Process Management and Job Control](./09_Process_Management.md)

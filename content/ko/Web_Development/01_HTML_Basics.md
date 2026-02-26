@@ -1,5 +1,24 @@
 # HTML 기초
 
+**다음**: [HTML 폼과 테이블](./02_HTML_Forms_Tables.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. HTML이 무엇인지 설명하고 웹 개발에서의 역할을 기술할 수 있다
+2. DOCTYPE, head, body를 포함한 HTML5 문서 구조를 설명할 수 있다
+3. 제목, 문단, 텍스트 서식 태그를 적용하여 콘텐츠를 구조화할 수 있다
+4. 블록 레벨 요소(block-level element)와 인라인 요소(inline element)를 구분할 수 있다
+5. 순서 있는 목록, 순서 없는 목록, 정의 목록을 구현할 수 있다
+6. 적절한 속성을 사용하여 하이퍼링크를 작성하고, alt 텍스트를 포함하여 이미지를 삽입할 수 있다
+7. header, nav, main, article, footer 등의 시맨틱 HTML5(Semantic HTML5) 요소의 목적을 파악할 수 있다
+8. 시맨틱 마크업(Semantic Markup)을 적용하여 접근성(Accessibility)과 SEO를 개선할 수 있다
+
+---
+
+여러분이 방문하는 모든 웹 페이지는 — 간단한 블로그부터 복잡한 웹 애플리케이션까지 — HTML에서 시작됩니다. HTML은 브라우저가 이해하는 범용 언어이며, 웹에서 무언가를 만들기 위한 필수적인 첫 번째 단계입니다. 탄탄한 HTML 기초 없이는 CSS 스타일링과 JavaScript 상호작용이 의미 있게 붙을 곳이 없습니다.
+
 ## 1. HTML이란?
 
 HTML(HyperText Markup Language)은 웹 페이지의 구조를 정의하는 마크업 언어입니다.
@@ -647,4 +666,4 @@ https://validator.w3.org/ 에서 HTML 문법 검사 가능
 
 ## 다음 단계
 
-[02_HTML_Forms_Tables.md](./02_HTML_Forms_Tables.md)에서 폼과 테이블을 배워봅시다!
+[HTML 폼과 테이블](./02_HTML_Forms_Tables.md)에서 폼과 테이블을 배워봅시다!

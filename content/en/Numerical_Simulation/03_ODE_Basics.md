@@ -1,8 +1,22 @@
 # ODE Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define ordinary differential equations (ODE) and classify them by order, linearity, and homogeneity.
+2. Solve first-order ODEs analytically (separation of variables, integrating factor) for simple physical models.
+3. Formulate initial value problems (IVP) and boundary value problems (BVP) from physical system descriptions.
+4. Explain the concept of solution existence and uniqueness and identify conditions under which they hold.
+5. Model and analyze physical phenomena (e.g., exponential growth, harmonic oscillator) using ODEs.
+
+---
+
 ## Overview
 
 Ordinary Differential Equations (ODE) are equations that contain derivatives with respect to a single independent variable. They are widely used to describe temporal changes in physical systems.
+
+**Why This Lesson Matters:** ODEs are the simplest differential equations, yet they describe an astonishing range of phenomena: radioactive decay, population dynamics, electrical circuits, mechanical oscillators, chemical reactions, and orbital mechanics. Mastering ODEs -- both their analytical structure and numerical solution -- is the essential first step before tackling the partial differential equations that dominate the rest of this course.
 
 ---
 
@@ -216,6 +230,8 @@ second_order_examples()
 
 ### 3.1 Existence and Uniqueness
 
+Before solving an IVP numerically, we should ask: does a solution even exist, and is it unique? The Picard-Lindelof theorem provides the answer through the Lipschitz condition. If $f$ is Lipschitz continuous in $y$ near the initial point, the solution exists and is unique. This matters practically because if uniqueness fails, a numerical solver may converge to any of the multiple solutions depending on implementation details.
+
 ```python
 """
 Lipschitz Condition:
@@ -309,6 +325,8 @@ convert_to_system()
 ---
 
 ## 4. Phase Plane Analysis
+
+Phase plane analysis provides a geometric view of the solution without actually solving the ODE. By plotting the vector field $(\dot{y}_1, \dot{y}_2)$ at every point, we can visualize all possible trajectories at once, identify equilibrium points, and determine their stability. This qualitative understanding is often more valuable than a single numerical solution.
 
 ### 4.1 Equilibrium Points and Stability
 
@@ -588,3 +606,264 @@ exercise_2()
 | Higher→First conversion | nth-order ODE → n first-order systems |
 | Phase plane | Equilibrium points, stability, trajectory analysis |
 | Existence/Uniqueness | Lipschitz condition |
+
+## Exercises
+
+### Exercise 1: Classify and Solve a First-Order Separable ODE
+
+Classify the ODE `dy/dt = -2ty²` (order, linearity, autonomy) and find the general solution by separation of variables. Then apply the initial condition `y(0) = 1/3` to obtain the particular solution and verify it satisfies the ODE.
+
+<details>
+<summary>Show Answer</summary>
+
+**Classification:**
+- Order: 1st (highest derivative is dy/dt)
+- Linearity: Nonlinear (contains y²)
+- Autonomy: Non-autonomous (t appears explicitly)
+
+**Separation of variables:**
+
+```
+dy/dt = -2ty²
+dy/y² = -2t dt
+∫ y⁻² dy = ∫ -2t dt
+-1/y = -t² + C
+y = 1/(t² - C) = 1/(t² + K)  where K = -C
+```
+
+Applying `y(0) = 1/3`: `1/3 = 1/K` → `K = 3`
+
+Particular solution: `y(t) = 1/(t² + 3)`
+
+```python
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+
+# Analytical solution
+t_vals = np.linspace(0, 3, 200)
+y_exact = 1 / (t_vals**2 + 3)
+
+# Numerical verification
+def ode(t, y):
+    return [-2 * t * y[0]**2]
+
+sol = solve_ivp(ode, (0, 3), [1/3], t_eval=t_vals, rtol=1e-10)
+
+plt.figure(figsize=(8, 4))
+plt.plot(t_vals, y_exact, 'b-', linewidth=2, label='Analytical: 1/(t²+3)')
+plt.plot(sol.t, sol.y[0], 'r--', linewidth=1.5, label='Numerical (RK45)')
+plt.xlabel('t')
+plt.ylabel('y')
+plt.title('dy/dt = -2ty², y(0) = 1/3')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Verify: dy/dt = -2t * y² should equal -2ty²
+dy_dt = np.gradient(y_exact, t_vals)
+rhs   = -2 * t_vals * y_exact**2
+print(f"Max residual |dy/dt - f(t,y)|: {np.max(np.abs(dy_dt - rhs)):.2e}")
+```
+
+</details>
+
+### Exercise 2: Characteristic Equation and Damped Oscillation
+
+Solve the 2nd-order ODE `y'' + 4y' + 5y = 0` with initial conditions `y(0) = 2, y'(0) = 0` by:
+1. Finding the characteristic equation and its roots.
+2. Writing the general solution using the complex root formula.
+3. Applying initial conditions to find constants C₁ and C₂.
+4. Plotting the solution and identifying the damped frequency and decay rate.
+
+<details>
+<summary>Show Answer</summary>
+
+**Step 1:** Characteristic equation: `r² + 4r + 5 = 0`
+
+Roots: `r = (-4 ± √(16 - 20))/2 = -2 ± i`
+
+**Step 2:** General solution (complex roots `α ± βi` → `α = -2, β = 1`):
+```
+y(t) = e^(-2t)(C₁ cos(t) + C₂ sin(t))
+```
+
+**Step 3:** Apply initial conditions:
+- `y(0) = C₁ = 2` → `C₁ = 2`
+- `y'(t) = e^(-2t)[(-2C₁ + C₂)cos(t) + (-2C₂ - C₁)sin(t)]`
+- `y'(0) = -2C₁ + C₂ = 0` → `C₂ = 2·2 = 4`
+
+Particular solution: `y(t) = e^(-2t)(2cos(t) + 4sin(t))`
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+
+t = np.linspace(0, 5, 300)
+
+# Analytical solution
+C1, C2 = 2, 4
+y_exact = np.exp(-2 * t) * (C1 * np.cos(t) + C2 * np.sin(t))
+envelope = np.sqrt(C1**2 + C2**2) * np.exp(-2 * t)  # amplitude envelope
+
+# Numerical check
+def ode(t, y):
+    return [y[1], -4*y[1] - 5*y[0]]
+
+sol = solve_ivp(ode, (0, 5), [2, 0], t_eval=t, rtol=1e-10)
+
+plt.figure(figsize=(9, 4))
+plt.plot(t, y_exact, 'b-', label='Analytical')
+plt.plot(sol.t, sol.y[0], 'r--', alpha=0.7, label='Numerical')
+plt.plot(t,  envelope, 'g:', label='Envelope ±√(C₁²+C₂²)·e^(-2t)')
+plt.plot(t, -envelope, 'g:')
+plt.xlabel('t')
+plt.ylabel('y')
+plt.title("y'' + 4y' + 5y = 0,  α = -2, ω_d = 1 rad/s")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+print(f"Decay rate α = 2,  Damped frequency ω_d = 1 rad/s")
+print(f"Max error vs numerical: {np.max(np.abs(y_exact - sol.y[0])):.2e}")
+```
+
+</details>
+
+### Exercise 3: Stability of Equilibrium Points in a Nonlinear ODE
+
+For the autonomous ODE `dy/dt = y³ - y` (a.k.a. `dy/dt = y(y-1)(y+1)`):
+1. Find all equilibrium points analytically.
+2. Determine the stability of each equilibrium using linear stability analysis (`f'(y*)`).
+3. Simulate trajectories from initial conditions `y₀ = -1.5, -0.5, 0.5, 1.5` and confirm each converges or diverges as predicted.
+
+<details>
+<summary>Show Answer</summary>
+
+**Step 1:** Equilibrium points where `f(y*) = 0`:
+```
+y³ - y = y(y² - 1) = y(y-1)(y+1) = 0
+y* = -1, 0, +1
+```
+
+**Step 2:** Linear stability: `f'(y) = 3y² - 1`
+- `y* = -1`: `f'(-1) = 3 - 1 = 2 > 0` → **Unstable**
+- `y* = 0`:  `f'(0)  = 0 - 1 = -1 < 0` → **Stable**
+- `y* = +1`: `f'(+1) = 3 - 1 = 2 > 0` → **Unstable**
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+
+def f(y):
+    return y**3 - y
+
+t_span = (0, 8)
+t_eval = np.linspace(0, 8, 300)
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Phase portrait
+y_phase = np.linspace(-1.8, 1.8, 300)
+axes[0].plot(y_phase, f(y_phase), 'b-', linewidth=2)
+axes[0].axhline(0, color='k', linewidth=0.8)
+for y_eq, stable in [(-1, False), (0, True), (1, False)]:
+    color = 'green' if stable else 'red'
+    label = 'Stable' if stable else 'Unstable'
+    axes[0].scatter([y_eq], [0], s=100, color=color, zorder=5, label=f'y*={y_eq} ({label})')
+axes[0].set_xlabel('y')
+axes[0].set_ylabel("dy/dt = y³ - y")
+axes[0].set_title("Phase Portrait")
+axes[0].legend()
+axes[0].grid(True)
+
+# Trajectories
+for y0 in [-1.5, -0.5, 0.5, 1.5]:
+    sol = solve_ivp(lambda t, y: [f(y[0])], t_span, [y0], t_eval=t_eval)
+    axes[1].plot(sol.t, sol.y[0], label=f'y₀={y0}')
+
+for y_eq, stable in [(-1, False), (0, True), (1, False)]:
+    ls = '--' if stable else ':'
+    axes[1].axhline(y_eq, color='gray', linestyle=ls, alpha=0.6)
+axes[1].set_xlabel('t')
+axes[1].set_ylabel('y(t)')
+axes[1].set_title('Solution Trajectories')
+axes[1].legend()
+axes[1].grid(True)
+
+plt.tight_layout()
+plt.show()
+```
+
+Trajectories starting between ±1 converge to y* = 0 (stable), while those outside diverge (unstable equilibria repel). This matches the linear stability analysis.
+
+</details>
+
+### Exercise 4: Converting a 3rd-Order ODE to a First-Order System
+
+Convert the 3rd-order ODE `y''' - y'' + 4y' - 4y = 0` to a system of three first-order ODEs. Write the system in matrix form, find the characteristic equation of the coefficient matrix, and use `scipy.integrate.solve_ivp` to numerically solve with initial conditions `y(0) = 1, y'(0) = 0, y''(0) = -1`.
+
+<details>
+<summary>Show Answer</summary>
+
+**State vector:** Let `u₁ = y, u₂ = y', u₃ = y''`
+
+**System:**
+```
+u₁' = u₂
+u₂' = u₃
+u₃' = 4u₁ - 4u₂ + u₃
+```
+
+**Matrix form:**
+```
+d/dt [u₁]   [ 0  1  0] [u₁]
+     [u₂] = [ 0  0  1] [u₂]
+     [u₃]   [ 4 -4  1] [u₃]
+```
+
+**Characteristic equation:** `r³ - r² + 4r - 4 = 0` → `r²(r-1) + 4(r-1) = 0` → `(r-1)(r²+4) = 0`
+
+Roots: `r = 1, ±2i` → general solution: `y = C₁eᵗ + C₂cos(2t) + C₃sin(2t)`
+
+```python
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+
+def system(t, u):
+    u1, u2, u3 = u
+    return [u2, u3, 4*u1 - 4*u2 + u3]
+
+# Initial conditions: y(0)=1, y'(0)=0, y''(0)=-1
+u0 = [1.0, 0.0, -1.0]
+t_span = (0, 4)
+t_eval = np.linspace(0, 4, 400)
+
+sol = solve_ivp(system, t_span, u0, t_eval=t_eval, method='RK45', rtol=1e-10)
+
+# Find constants from initial conditions
+# y(0) = C1 + C2 = 1
+# y'(0) = C1 + 2*C3 = 0  (derivative of C2*cos + C3*sin is -2C2*sin + 2C3*cos)
+# y''(0) = C1 - 4*C2 = -1
+# Solve: C1+C2=1, C1+2C3=0, C1-4C2=-1
+# From eq1-eq3: 5C2=2 -> C2=0.4, C1=0.6; C3=-C1/2=-0.3
+C1, C2, C3 = 0.6, 0.4, -0.3
+y_analytic = C1*np.exp(t_eval) + C2*np.cos(2*t_eval) + C3*np.sin(2*t_eval)
+
+plt.figure(figsize=(9, 4))
+plt.plot(t_eval, sol.y[0], 'b-', linewidth=2, label='Numerical y(t)')
+plt.plot(t_eval, y_analytic, 'r--', linewidth=1.5, label='Analytical y(t)')
+plt.xlabel('t')
+plt.ylabel('y')
+plt.title("y''' - y'' + 4y' - 4y = 0")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+print(f"Max error: {np.max(np.abs(sol.y[0] - y_analytic)):.2e}")
+```
+
+</details>

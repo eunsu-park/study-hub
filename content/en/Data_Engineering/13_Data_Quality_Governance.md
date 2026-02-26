@@ -1,5 +1,18 @@
 # Data Quality and Governance
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define the six core dimensions of data quality (accuracy, completeness, consistency, timeliness, uniqueness, validity) and explain how each impacts downstream analytics.
+2. Implement automated data quality checks using tools such as Great Expectations or dbt tests to detect anomalies in production pipelines.
+3. Design a data governance framework that includes data cataloging, lineage tracking, and ownership policies.
+4. Apply data quality metrics collection and alerting patterns to monitor pipeline health in real time.
+5. Evaluate data observability platforms and compare their capabilities for detecting schema changes, null rate spikes, and distribution shifts.
+6. Analyze the relationship between data governance policies and regulatory compliance requirements such as GDPR or CCPA.
+
+---
+
 ## Overview
 
 Data quality ensures the accuracy, completeness, and consistency of data, while data governance is a framework for systematically managing data assets. Both are essential for building trustworthy data pipelines.
@@ -64,10 +77,13 @@ class DataQualityMetrics:
 def calculate_quality_metrics(df: pd.DataFrame, table_name: str) -> DataQualityMetrics:
     """Calculate quality metrics"""
 
-    # Completeness: NULL count
+    # Completeness: count NULLs per column rather than just overall,
+    # because a single critical column (e.g., primary key) being 50% null
+    # is far worse than many optional columns having a few nulls each
     null_count = {col: df[col].isna().sum() for col in df.columns}
 
-    # Uniqueness: Duplicate count
+    # Uniqueness: whole-row deduplication catches exact duplicate ingestion,
+    # which commonly occurs in at-least-once delivery systems (Kafka, S3 events)
     duplicate_count = df.duplicated().sum()
 
     return DataQualityMetrics(
@@ -85,12 +101,16 @@ def quality_score(metrics: DataQualityMetrics) -> float:
     scores = []
 
     # Completeness score (NULL ratio)
+    # Guard against division-by-zero when the table is empty or has no columns
     total_cells = metrics.row_count * len(metrics.null_count)
     total_nulls = sum(metrics.null_count.values())
     completeness = (1 - total_nulls / total_cells) * 100 if total_cells > 0 else 100
     scores.append(completeness)
 
     # Uniqueness score (duplicate ratio)
+    # Simple average of two dimensions here; in production, weight these
+    # based on business impact (e.g., uniqueness failures in financial data
+    # may be catastrophic, while completeness gaps in logs are tolerable)
     uniqueness = (1 - metrics.duplicate_count / metrics.row_count) * 100 if metrics.row_count > 0 else 100
     scores.append(uniqueness)
 
@@ -117,10 +137,14 @@ great_expectations init
 import great_expectations as gx
 import pandas as pd
 
-# Create Context
+# GX uses a "Context" as the central entry point that manages all
+# configuration, data sources, and expectation suites — similar to
+# how dbt uses profiles.yml as a single configuration hub.
 context = gx.get_context()
 
-# Add data source
+# Add data source — Pandas datasource for local/development validation.
+# In production, swap for a SQLAlchemy or Spark datasource to validate
+# data in-place without loading it into memory.
 datasource = context.sources.add_pandas("my_datasource")
 
 # Define data asset
@@ -129,13 +153,16 @@ data_asset = datasource.add_dataframe_asset(name="orders")
 # Load DataFrame
 df = pd.read_csv("orders.csv")
 
-# Batch Request
+# Batch Request — decouples "which data" from "which expectations",
+# enabling the same expectation suite to validate different batches
+# (e.g., yesterday's data, today's data, a backfill batch)
 batch_request = data_asset.build_batch_request(dataframe=df)
 
 # Create Expectation Suite
 suite = context.add_expectation_suite("orders_suite")
 
-# Create Validator
+# Create Validator — the bridge between data (batch) and rules (suite).
+# The validator materializes expectations into concrete SQL/Pandas checks.
 validator = context.get_validator(
     batch_request=batch_request,
     expectation_suite_name="orders_suite"
@@ -145,57 +172,70 @@ validator = context.get_validator(
 ### 2.3 Define Expectations
 
 ```python
-# Basic Expectations
+# Each expectation maps to one of the six quality dimensions.
+# Structuring expectations by dimension makes it clear which
+# aspect of quality fails, enabling targeted remediation.
 
-# No NULLs
+# Completeness: primary key must never be null — a null order_id
+# would make downstream joins and aggregations unreliable
 validator.expect_column_values_to_not_be_null("order_id")
 
-# Unique
+# Uniqueness: duplicate order_ids inflate revenue/count metrics.
+# If this fails, investigate at-least-once delivery from the source.
 validator.expect_column_values_to_be_unique("order_id")
 
-# Value range
+# Validity: bounds check catches data corruption (negative amounts)
+# and outliers (>1M) that may indicate unit-of-measure errors (cents vs dollars)
 validator.expect_column_values_to_be_between(
     "amount",
     min_value=0,
     max_value=1000000
 )
 
-# Allowed value list
+# Validity: enum check detects unexpected status values that may indicate
+# schema drift in the source system or unhandled business state transitions
 validator.expect_column_values_to_be_in_set(
     "status",
     ["pending", "completed", "cancelled", "refunded"]
 )
 
-# Regex matching
+# Accuracy: regex validates email format — catches data entry errors
+# and garbage values that would break email-based customer matching
 validator.expect_column_values_to_match_regex(
     "email",
     r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 )
 
-# Table row count
+# Completeness: volume check detects upstream extraction failures.
+# A row count drop below 1000 likely means the source query failed
+# or returned partial results.
 validator.expect_table_row_count_to_be_between(
     min_value=1000,
     max_value=1000000
 )
 
-# Column existence
+# Consistency: schema drift detection — catches when upstream systems
+# add, remove, or rename columns without coordinating with the data team
 validator.expect_table_columns_to_match_set(
     ["order_id", "customer_id", "amount", "status", "order_date"]
 )
 
-# Date format
+# Validity: date format check prevents parsing failures downstream.
+# Mixed formats (MM/DD vs YYYY-MM-DD) are a common silent data corruption.
 validator.expect_column_values_to_match_strftime_format(
     "order_date",
     "%Y-%m-%d"
 )
 
-# Referential integrity (other table)
+# Consistency: referential integrity between tables — orphaned customer_ids
+# indicate sync lag between the orders and customers extraction jobs
 validator.expect_column_values_to_be_in_set(
     "customer_id",
     customer_ids_list  # List of IDs from customer table
 )
 
-# Save Suite
+# discard_failed_expectations=False preserves all expectations including
+# failed ones, which is important for iterative suite development
 validator.save_expectation_suite(discard_failed_expectations=False)
 ```
 
@@ -253,11 +293,16 @@ def validate_data(**kwargs):
     """Great Expectations validation Task"""
     context = gx.get_context()
 
-    # Run Checkpoint
+    # Checkpoints bundle a batch request + expectation suite + actions (e.g., store
+    # results, send Slack alerts). Running via checkpoint ensures consistent
+    # validation behavior across manual runs and scheduled executions.
     result = context.run_checkpoint(
         checkpoint_name="orders_checkpoint"
     )
 
+    # Raising an exception on failure causes Airflow to mark this task as FAILED,
+    # which blocks downstream tasks and triggers email/Slack alerts configured
+    # in default_args — acting as a quality gate in the pipeline.
     if not result.success:
         raise ValueError("Data quality check failed!")
 
@@ -288,9 +333,13 @@ def check_row_count(**kwargs):
     df = pd.read_parquet(f"/data/{kwargs['ds']}/orders.parquet")
     row_count = len(df)
 
-    # Store metric in XCom
+    # Push to XCom so downstream tasks (like the branching decision) can
+    # access the count without re-reading the file — avoids duplicate I/O
     kwargs['ti'].xcom_push(key='row_count', value=row_count)
 
+    # Threshold of 1000 is a sanity floor: real daily order volume is ~10K+.
+    # A count below 1000 usually indicates a partial extraction failure
+    # rather than genuinely low business activity.
     if row_count < 1000:
         raise ValueError(f"Row count too low: {row_count}")
 
@@ -301,13 +350,18 @@ def check_freshness(**kwargs):
     """Data freshness validation"""
     from datetime import datetime, timedelta
 
-    # Check file modification time
+    # Using file mtime as a proxy for data freshness — simple but effective.
+    # In production, prefer checking MAX(event_timestamp) inside the data
+    # for more accurate freshness measurement.
     import os
     file_path = f"/data/{kwargs['ds']}/orders.parquet"
     mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
 
     age_hours = (datetime.now() - mtime).total_seconds() / 3600
 
+    # 24-hour threshold aligns with the daily pipeline SLA.
+    # If data is older than 24h, the pipeline likely didn't run or
+    # the upstream source is stale.
     if age_hours > 24:
         raise ValueError(f"Data too old: {age_hours:.1f} hours")
 
@@ -319,6 +373,9 @@ def decide_next_step(**kwargs):
     ti = kwargs['ti']
     row_count = ti.xcom_pull(task_ids='check_row_count', key='row_count')
 
+    # Adaptive processing: large batches use Spark for distributed compute,
+    # while small batches use Pandas for lower overhead — optimizes cost
+    # and avoids Spark startup latency on small datasets
     if row_count > 10000:
         return 'process_large_batch'
     else:
@@ -342,6 +399,9 @@ with DAG('quality_checks_dag', ...) as dag:
         python_callable=decide_next_step,
     )
 
+    # Both checks run in parallel (fan-in) before branching — if either
+    # fails, the branch task never executes, preventing bad data from
+    # flowing downstream
     [check_rows, check_fresh] >> branch
 ```
 
@@ -397,6 +457,8 @@ with DAG('quality_checks_dag', ...) as dag:
 
 ```python
 # DataHub metadata collection example
+# Programmatic metadata emission enables automated catalog updates as part of
+# CI/CD pipelines — no manual data entry needed when schemas or ownership change.
 from datahub.emitter.mce_builder import make_dataset_urn
 from datahub.emitter.rest_emitter import DatahubRestEmitter
 from datahub.metadata.schema_classes import (
@@ -407,17 +469,21 @@ from datahub.metadata.schema_classes import (
     NumberTypeClass,
 )
 
-# Create Emitter
+# REST emitter sends metadata to the DataHub GMS (Generalized Metadata Service).
+# Alternatively, use KafkaEmitter for async, higher-throughput emission.
 emitter = DatahubRestEmitter(gms_server="http://localhost:8080")
 
-# Dataset URN
+# URN (Uniform Resource Name) uniquely identifies each dataset across all platforms.
+# The three-part structure (platform.name.env) prevents naming collisions when
+# the same table name exists in dev and prod environments.
 dataset_urn = make_dataset_urn(
     platform="postgres",
     name="analytics.public.fact_orders",
     env="PROD"
 )
 
-# Dataset properties
+# Custom properties store governance metadata that DataHub's UI can filter/search on.
+# Tagging PII status here enables automatic access control enforcement downstream.
 properties = DatasetPropertiesClass(
     description="Orders fact table",
     customProperties={
@@ -427,7 +493,9 @@ properties = DatasetPropertiesClass(
     }
 )
 
-# Schema definition
+# Schema definition — registering field-level metadata enables impact analysis:
+# when you rename "amount" to "order_amount", DataHub can identify all dashboards
+# and downstream models that reference this field.
 schema = SchemaMetadataClass(
     schemaName="fact_orders",
     platform=f"urn:li:dataPlatform:postgres",
@@ -519,6 +587,9 @@ models:
 
 ```python
 # Lineage tracking using OpenLineage
+# OpenLineage is an open standard (not tied to any single vendor) for lineage events.
+# This enables heterogeneous pipelines (Spark + Airflow + dbt) to emit lineage to
+# a single backend (e.g., Marquez, DataHub) without vendor lock-in.
 from openlineage.client import OpenLineageClient
 from openlineage.client.run import Run, Job, RunEvent, RunState
 from openlineage.client.facet import (
@@ -531,17 +602,22 @@ import uuid
 
 client = OpenLineageClient(url="http://localhost:5000")
 
-# Job definition
+# Namespace + name uniquely identifies a job across the organization.
+# Use a consistent naming convention (e.g., team.pipeline_name) to enable
+# cross-team lineage discovery.
 job = Job(
     namespace="my_pipeline",
     name="transform_orders"
 )
 
-# Start Run
+# UUID per run ensures each execution is independently trackable,
+# enabling debugging of specific pipeline failures via their run_id.
 run_id = str(uuid.uuid4())
 run = Run(runId=run_id)
 
-# Input datasets
+# Input datasets — declaring inputs with schema facets enables automatic
+# impact analysis: when raw.orders changes, the lineage graph shows which
+# downstream jobs and datasets are affected.
 input_datasets = [
     {
         "namespace": "postgres",
@@ -565,7 +641,8 @@ output_datasets = [
     }
 ]
 
-# Start event
+# START event marks the beginning of a run — lineage consumers can track
+# in-progress jobs and detect stuck/hanging pipelines
 client.emit(
     RunEvent(
         eventType=RunState.START,
@@ -579,7 +656,9 @@ client.emit(
 
 # ... actual transformation work ...
 
-# Complete event
+# COMPLETE event closes the run. Emitting both START and COMPLETE enables
+# duration tracking. If a COMPLETE is never received, monitoring can flag
+# the run as potentially failed.
 client.emit(
     RunEvent(
         eventType=RunState.COMPLETE,
@@ -632,7 +711,11 @@ client.emit(
 from enum import Enum
 
 class DataClassification(Enum):
-    """Data sensitivity classification"""
+    """Data sensitivity classification
+    Four levels from least to most sensitive. This hierarchy directly maps
+    to access control policies: e.g., RESTRICTED requires encryption at rest
+    and column-level masking for non-privileged users.
+    """
     PUBLIC = "public"           # Publicly available
     INTERNAL = "internal"       # Internal use
     CONFIDENTIAL = "confidential"  # Confidential
@@ -641,6 +724,10 @@ class DataClassification(Enum):
 class DataClassifier:
     """Automatic data classification"""
 
+    # Regex patterns for common PII types. These are intentionally broad
+    # to minimize false negatives — it's better to over-classify (restrict
+    # non-PII) than to under-classify (expose actual PII). False positives
+    # can be whitelisted during manual review.
     PII_PATTERNS = {
         'email': r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+',
         'phone': r'\d{3}-\d{3,4}-\d{4}',
@@ -658,19 +745,25 @@ class DataClassifier:
         """Classify column"""
         column_lower = column_name.lower()
 
-        # Column name-based classification
+        # Name-based check runs first because it's O(1) and catches the
+        # most common cases without reading any data
         if any(pii in column_lower for pii in cls.PII_COLUMN_NAMES):
             return DataClassification.RESTRICTED
 
-        # Value pattern-based classification
+        # Value-based check as fallback: catches PII in generically-named columns
+        # (e.g., 'field_1' that actually contains SSNs).
+        # Sampling 100 values balances accuracy with performance — scanning
+        # every row would be prohibitively slow on large tables.
         import re
-        for value in sample_values[:100]:  # Sampling
+        for value in sample_values[:100]:
             if value is None:
                 continue
             for pii_type, pattern in cls.PII_PATTERNS.items():
                 if re.match(pattern, str(value)):
                     return DataClassification.RESTRICTED
 
+        # Default to INTERNAL (not PUBLIC) as a safe default: data should be
+        # explicitly promoted to PUBLIC after human review
         return DataClassification.INTERNAL
 ```
 

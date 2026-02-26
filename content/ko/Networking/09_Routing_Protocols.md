@@ -1,14 +1,27 @@
 # 라우팅 프로토콜
 
-## 개요
-
-이 문서에서는 동적 라우팅 프로토콜의 종류와 특징을 다룹니다. RIP, OSPF, BGP 등 주요 라우팅 프로토콜의 동작 원리를 이해하고, 각 프로토콜이 적합한 환경을 학습합니다.
+**이전**: [라우팅 기초](./08_Routing_Basics.md) | **다음**: [TCP 프로토콜](./10_TCP_Protocol.md)
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 3-4시간
 **선수 지식**: [08_Routing_Basics.md](./08_Routing_Basics.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 라우팅 프로토콜을 IGP와 EGP, 거리 벡터(Distance Vector)와 링크 상태(Link State)로 분류할 수 있다
+2. RIP의 동작 원리(홉 카운트 메트릭 및 한계)를 설명할 수 있다
+3. OSPF의 동작 원리(영역, LSA, SPF 계산, DR/BDR 선출 포함)를 설명할 수 있다
+4. 인터넷의 도메인 간 라우팅 프로토콜로서 BGP의 역할과 경로 속성(Path Attributes) 활용 방식을 설명할 수 있다
+5. 자율 시스템(AS, Autonomous System)의 정의와 인터넷 라우팅에서의 의미를 설명할 수 있다
+6. RIP, OSPF, BGP를 비교하고 주어진 네트워크 시나리오에 적합한 프로토콜을 추천할 수 있다
+
+---
+
+동적 라우팅 프로토콜은 인터넷을 자가 복구(self-healing)하고 확장 가능하게 만드는 핵심 요소입니다. 링크가 다운되거나 새로운 네트워크가 온라인 상태가 되면, 라우팅 프로토콜이 자동으로 변화를 감지하고 최적 경로를 재계산합니다 -- 수동 개입이 전혀 필요 없습니다. 소규모 랩 환경의 RIP부터 900,000개 이상의 프리픽스로 구성된 글로벌 인터넷 라우팅 테이블을 관리하는 BGP까지, 이 프로토콜들은 모든 패킷의 여정을 뒤에서 조용히 이끄는 보이지 않는 지능입니다.
 
 ## 목차
 
@@ -19,8 +32,7 @@
 5. [BGP (Border Gateway Protocol)](#5-bgp-border-gateway-protocol)
 6. [AS (Autonomous System)](#6-as-autonomous-system)
 7. [연습 문제](#7-연습-문제)
-8. [다음 단계](#8-다음-단계)
-9. [참고 자료](#9-참고-자료)
+8. [참고 자료](#8-참고-자료)
 
 ---
 
@@ -486,15 +498,21 @@ Down → Init → 2-Way → ExStart → Exchange → Loading → Full
 
 **Cisco Router**:
 ```
+! 프로세스 ID 1은 로컬에서만 유효 — 다른 라우터와 ID가 달라도 인접 관계(adjacency) 형성 가능
 Router(config)# router ospf 1
+! area 0 = 백본(backbone); 모든 영역 간 트래픽은 반드시 area 0을 경유 (계층적 설계로 LSDB 플러딩 축소)
+! 와일드카드 마스크(wildcard mask) 0.255.255.255 = 서브넷 마스크의 역수; 0비트는 일치 필수, 255비트는 무관
 Router(config-router)# network 10.0.0.0 0.255.255.255 area 0
+! 별도의 area 1은 SPF 재계산 범위를 제한 — area 1의 토폴로지 변경이 area 0의 재계산을 유발하지 않음
 Router(config-router)# network 192.168.1.0 0.0.0.255 area 1
 ```
 
 **Linux (FRR)**:
 ```
 router ospf
+ # FRR은 와일드카드 마스크 대신 CIDR 표기법 사용 — 동일한 의미, 더 직관적인 문법
  network 10.0.0.0/8 area 0.0.0.0
+ # 점 구분 영역 ID(0.0.0.1 = area 1) — FRR/Quagga에서 필수 형식
  network 192.168.1.0/24 area 0.0.0.1
 ```
 
@@ -613,8 +631,11 @@ Idle → Connect → OpenSent → OpenConfirm → Established
 
 **Cisco Router (eBGP)**:
 ```
+! BGP는 TCP 포트 179 사용 — 신뢰성 있는 전송으로 패킷 손실에 의한 경로 플래핑(route flapping) 방지
 Router(config)# router bgp 100
+! remote-as 200 ≠ 로컬 AS 100이므로 eBGP 세션 (신뢰 수준 차이: AD=20 vs iBGP의 AD=200)
 Router(config-router)# neighbor 203.0.113.1 remote-as 200
+! 명시적 마스크 필수 — BGP는 자동 요약(auto-summarize)하지 않음; 지정한 프리픽스만 정확히 광고
 Router(config-router)# network 10.0.0.0 mask 255.0.0.0
 ```
 
@@ -622,6 +643,7 @@ Router(config-router)# network 10.0.0.0 mask 255.0.0.0
 ```
 router bgp 100
  neighbor 203.0.113.1 remote-as 200
+ # address-family로 IPv4/IPv6/VPN 라우팅 테이블 분리 — 하나의 BGP 프로세스로 다중 프로토콜 처리
  address-family ipv4 unicast
   network 10.0.0.0/8
  exit-address-family
@@ -844,25 +866,7 @@ d) 단일 경로 지사: **정적 라우팅** (+ 기본 경로)
 
 ---
 
-## 8. 다음 단계
-
-라우팅 프로토콜을 이해했다면, 전송 계층으로 넘어가세요.
-
-### 다음 레슨
-- [10_TCP_Protocol.md](./10_TCP_Protocol.md) - TCP 3-way handshake, 흐름 제어
-
-### 관련 레슨
-- [08_Routing_Basics.md](./08_Routing_Basics.md) - 라우팅 기본 개념
-- [15_Network_Security_Basics.md](./15_Network_Security_Basics.md) - 방화벽, VPN
-
-### 추천 실습
-1. GNS3/Packet Tracer에서 OSPF 구성
-2. `show ip route` 명령으로 라우팅 테이블 분석
-3. BGP Looking Glass로 인터넷 경로 확인
-
----
-
-## 9. 참고 자료
+## 8. 참고 자료
 
 ### RFC 문서
 
@@ -874,15 +878,16 @@ d) 단일 경로 지사: **정적 라우팅** (+ 기본 경로)
 ### 유용한 도구
 
 ```bash
-# BGP 경로 조회
+# BGP 경로 조회 — Looking Glass 서버로 다른 AS 관점에서 인터넷을 볼 수 있음
 # BGP Looking Glass: https://lg.he.net/
 
-# AS 정보 조회
+# AS 정보 조회 — RADB(Routing Assets Database)는 경로 객체(route object)와 정책이 담긴 IRR 레코드 보유
 whois -h whois.radb.net AS15169
 
-# 경로 추적
-traceroute -A google.com    # AS 번호 표시 (Linux)
-mtr google.com              # 실시간 추적
+# 경로 추적 — -A 옵션은 각 홉의 AS 번호를 표시하여 트래픽을 전달하는 조직을 파악
+traceroute -A google.com
+# mtr은 traceroute + ping을 결합하여 홉별 실시간 지연 시간 모니터링
+mtr google.com
 ```
 
 ### 학습 자료
@@ -904,3 +909,7 @@ mtr google.com              # 실시간 추적
 - 최종 수정: 2024년
 - 난이도: ⭐⭐⭐
 - 예상 학습 시간: 3-4시간
+
+---
+
+**이전**: [라우팅 기초](./08_Routing_Basics.md) | **다음**: [TCP 프로토콜](./10_TCP_Protocol.md)

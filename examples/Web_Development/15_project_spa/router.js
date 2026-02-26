@@ -18,6 +18,8 @@ class Router {
         this.beforeHooks = [];
         this.afterHooks = [];
 
+        // Why: Hash-based routing avoids server configuration for SPA fallback - the server never
+        // sees the hash fragment, so any static file server works without rewrite rules
         // Listen for hash changes
         window.addEventListener('hashchange', () => this.handleRoute());
         window.addEventListener('load', () => this.handleRoute());
@@ -36,6 +38,8 @@ class Router {
         };
     }
 
+    // Why: Converting route patterns to regex at registration time (not every navigation)
+    // amortizes the parsing cost and simplifies the matching loop in handleRoute
     /**
      * Convert path pattern to regex for matching
      * Supports dynamic parameters like :id, :name
@@ -113,6 +117,8 @@ class Router {
             appElement.innerHTML = '<h1>404 - Page Not Found</h1>';
         }
 
+        // Why: Removing then re-adding the class with a forced reflow (void offsetWidth) in between
+        // restarts the CSS animation, which otherwise would not replay on same-class re-addition
         // Add page transition animation
         appElement.classList.remove('page-enter');
         void appElement.offsetWidth; // Trigger reflow
@@ -141,6 +147,8 @@ class Router {
         this.notFoundHandler = handler;
     }
 
+    // Why: Navigation guards enable auth checks, unsaved-form warnings, and analytics tracking
+    // before a route transition completes - inspired by Vue Router's beforeEach pattern
     /**
      * Add navigation guard (before route change)
      */

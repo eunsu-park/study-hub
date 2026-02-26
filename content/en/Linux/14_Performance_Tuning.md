@@ -1,10 +1,18 @@
 # 14. Linux Performance Tuning
 
+**Previous**: [Advanced systemd](./13_Systemd_Advanced.md) | **Next**: [Container Internals](./15_Container_Internals.md)
+
 ## Learning Objectives
-- System performance monitoring and analysis
-- Kernel parameter optimization via sysctl
-- CPU, memory, and I/O performance tuning
-- Profiling with perf and flamegraphs
+
+After completing this lesson, you will be able to:
+
+1. Apply the USE methodology to systematically identify performance bottlenecks
+2. Monitor system performance using tools like top, vmstat, mpstat, and iostat
+3. Tune CPU scheduling, governor settings, and process affinity
+4. Optimize memory behavior through sysctl parameters including swappiness and dirty page ratios
+5. Select and configure appropriate I/O schedulers for different workloads
+6. Tune TCP/IP stack parameters for high-performance networking
+7. Profile applications with perf and generate flamegraphs for bottleneck analysis
 
 ## Table of Contents
 1. [Performance Analysis Fundamentals](#1-performance-analysis-fundamentals)
@@ -16,6 +24,8 @@
 7. [Practice Exercises](#7-practice-exercises)
 
 ---
+
+A slow server does not just frustrate users -- it costs revenue, violates SLAs, and can cascade into outages. Performance tuning is the discipline of measuring first, then making targeted adjustments to CPU scheduling, memory management, I/O paths, and network stacks. Mastering these techniques transforms you from someone who reboots and hopes, into an engineer who pinpoints the exact bottleneck and resolves it with confidence.
 
 ## 1. Performance Analysis Fundamentals
 
@@ -608,6 +618,230 @@ ss -s
 
 ---
 
+## 6.6 Deep Dive: perf and Flamegraph Profiling
+
+The `perf` tool and flamegraphs form the gold standard for CPU profiling on Linux. While the earlier sections introduced the basic commands, this section dives into the methodology, event types, and interpretation skills needed to turn raw profiling data into actionable performance insights.
+
+### Understanding perf Events
+
+`perf` works by sampling or counting hardware and software events. Knowing which events to use is half the battle.
+
+```bash
+# List all available events on the current system
+# Why: different kernels/CPUs expose different counters
+perf list
+
+# Hardware counters (PMU-based, very low overhead)
+# - cycles             : CPU clock cycles consumed
+# - instructions       : instructions retired (completed)
+# - cache-references   : L3 cache lookups
+# - cache-misses       : L3 cache misses (data not in cache → RAM fetch)
+# - branch-misses      : branch prediction failures (pipeline stalls)
+
+# Software events (kernel-level)
+# - page-faults        : memory pages brought in from disk/swap
+# - context-switches   : process/thread context switches
+# - cpu-migrations     : process moved between CPUs
+
+# Tracepoints (detailed kernel function tracing)
+# - sched:sched_switch : scheduler context switch details
+# - block:block_rq_issue : block device I/O request
+```
+
+### perf stat: Quick Performance Summary
+
+```bash
+# Get a high-level performance profile of a command
+# Why: perf stat gives you the "executive summary" -- is the workload
+# CPU-bound, memory-bound, or suffering from branch mispredictions?
+perf stat ./my-program
+
+# Example output and how to read it:
+#  1,234,567,890  cycles              # Total CPU cycles
+#  2,345,678,901  instructions        # 1.90 IPC (instructions per cycle)
+#     12,345,678  cache-misses        # 5.2% of cache-references
+#      1,234,567  branch-misses       # 0.8% of branches
+
+# Key metrics to watch:
+# - IPC < 1.0 → likely memory-bound (CPU waiting for data)
+# - IPC > 2.0 → CPU-efficient, look elsewhere for bottlenecks
+# - cache-miss ratio > 10% → poor data locality, consider restructuring
+# - branch-miss ratio > 5% → consider branchless algorithms
+
+# Detailed mode: adds L1/L2 cache, TLB stats
+# Why: -d gives more granular insight into cache hierarchy
+perf stat -d ./my-program
+
+# Repeat measurement for statistical confidence
+# Why: a single run may be noisy; 5 runs gives mean + stddev
+perf stat -r 5 ./my-program
+```
+
+### perf record + perf report: Sampling Workflow
+
+```bash
+# Record CPU call stacks at 99 Hz for 30 seconds
+# Why -F 99: avoids aliasing with 100Hz timer; common best practice
+# Why -g: captures call graph (stack traces) for meaningful analysis
+# Why -a: system-wide (all CPUs, all processes)
+perf record -F 99 -a -g -- sleep 30
+
+# For a specific process
+# Why --: separates perf args from the command/PID
+perf record -F 99 -g -p $(pgrep my-program) -- sleep 30
+
+# Analyze the recording interactively
+# Why: perf report opens a TUI where you can drill into hot functions
+perf report
+
+# Text-based output (useful for scripting or remote sessions)
+# Why --stdio: no TUI, prints directly to stdout
+perf report --stdio --sort=dso,symbol
+
+# Show callers of a specific function
+# Why: helps trace who is calling the expensive function
+perf report --call-graph=callee --symbol-filter=malloc
+```
+
+### perf top: Live Monitoring
+
+```bash
+# Real-time view of hottest functions (system-wide)
+# Why: perf top is like "top" but for functions -- shows where
+# CPU cycles are being spent right now
+perf top
+
+# Monitor a specific process
+perf top -p $(pgrep nginx)
+
+# Show call graphs in live view
+# Why -g: see not just which function is hot, but who called it
+perf top -g
+
+# Filter by specific event (e.g., cache misses)
+# Why: helps find functions with poor cache behavior
+perf top -e cache-misses
+```
+
+### Flamegraph Generation: Full Pipeline
+
+Brendan Gregg's flamegraphs transform stack traces into an interactive SVG visualization. The workflow is a three-stage pipeline:
+
+```
+perf record → perf script → stackcollapse-perf.pl → flamegraph.pl → SVG
+```
+
+```bash
+# Step 1: Clone the FlameGraph toolkit (one-time setup)
+git clone https://github.com/brendangregg/FlameGraph /opt/FlameGraph
+
+# Step 2: Record profiling data
+# Why -F 99: sample at 99 Hz (not 100, to avoid lockstep with timers)
+# Why -a: all CPUs for a complete system picture
+# Why -g: call graph is essential -- without it, flamegraph has no stacks
+perf record -F 99 -a -g -- sleep 60
+
+# Step 3: Convert binary perf data to readable stack traces
+# Why: perf script outputs human-readable text that the collapse tool parses
+perf script > /tmp/perf.out
+
+# Step 4: Collapse stacks into a single-line-per-stack format
+# Why: stackcollapse counts identical stacks, producing "stack;stack;func count"
+/opt/FlameGraph/stackcollapse-perf.pl /tmp/perf.out > /tmp/perf.folded
+
+# Step 5: Generate the SVG flamegraph
+# Why: flamegraph.pl creates an interactive SVG you can open in a browser
+/opt/FlameGraph/flamegraph.pl /tmp/perf.folded > /tmp/flamegraph.svg
+
+# Or combine steps 3-5 in one pipeline
+perf script | /opt/FlameGraph/stackcollapse-perf.pl | \
+  /opt/FlameGraph/flamegraph.pl > /tmp/flamegraph.svg
+
+# Open in browser
+xdg-open /tmp/flamegraph.svg  # or: open /tmp/flamegraph.svg (macOS)
+```
+
+### Reading Flamegraphs
+
+A flamegraph encodes a wealth of information in a compact visual form:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                     How to Read a Flamegraph                          │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Y-axis (vertical): Call stack depth                                 │
+│    - Bottom: entry point (e.g., main, _start)                        │
+│    - Top: leaf function where CPU time is actually spent             │
+│                                                                      │
+│  X-axis (horizontal): NOT time! It is sorted alphabetically          │
+│    - Width of a box = proportion of CPU time in that function        │
+│      (including all its children)                                    │
+│    - Wide box at the top = CPU hotspot (most actionable)             │
+│                                                                      │
+│  Colors: random warm palette (no meaning by default)                 │
+│    - Some tools use color to distinguish: user vs kernel,            │
+│      language runtime vs application code                            │
+│                                                                      │
+│  Interactivity (SVG in browser):                                     │
+│    - Click a box to zoom into that subtree                           │
+│    - Ctrl+F to search for a function name (matches highlight)        │
+│    - Reset zoom by clicking "Reset Zoom" at the bottom               │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Common Performance Patterns to Look For
+
+| Pattern | What You See | Likely Cause | Action |
+|---------|-------------|--------------|--------|
+| **Tall narrow tower** | Deep call stack, thin width | Recursive algorithm | Consider iterative approach |
+| **Wide plateau at top** | Single function consuming most CPU | Hot loop or expensive computation | Optimize the algorithm or data structure |
+| **Wide `malloc`/`free`** | Memory allocation dominates | Excessive heap allocation | Use object pools or arena allocators |
+| **Wide `__GI___libc_read`** | I/O system calls consuming CPU | I/O-bound workload | Add buffering, use async I/O |
+| **Wide `spin_lock`** | Kernel lock contention | Lock contention in multi-threaded code | Reduce critical section size, use lock-free structures |
+| **Sawtooth pattern** | Periodic spikes in GC/runtime functions | Garbage collection pauses | Tune GC parameters, reduce allocation rate |
+
+### Off-CPU Flamegraphs
+
+Standard flamegraphs show on-CPU time. Off-CPU flamegraphs show where threads are **waiting** (blocked on I/O, locks, sleep). Together they provide the complete picture.
+
+```bash
+# Record scheduler events to capture off-CPU time
+# Why -e sched:sched_switch: captures every context switch
+# This reveals what threads are blocked on
+perf record -e sched:sched_switch -a -g -- sleep 30
+
+# Generate off-CPU flamegraph (requires different collapse script)
+perf script | /opt/FlameGraph/stackcollapse-perf.pl | \
+  /opt/FlameGraph/flamegraph.pl --color=io --title="Off-CPU Flamegraph" \
+  > /tmp/offcpu-flamegraph.svg
+```
+
+### Brendan Gregg's Performance Analysis Methodology
+
+Gregg recommends a systematic approach rather than random tool usage:
+
+```
+1. USE Method (per resource: CPU, memory, disk, network)
+   - Utilization → saturation → errors
+
+2. Workload Characterization
+   - Who is causing the load? (perf top, pidstat)
+   - What type of work? (CPU, I/O, network)
+
+3. Drill-Down Analysis
+   - Start broad (perf stat), narrow down (perf record → flamegraph)
+   - On-CPU flamegraph → find hot code paths
+   - Off-CPU flamegraph → find blocking/waiting
+
+4. Latency Analysis
+   - perf trace (like strace but lower overhead)
+   - bpftrace for custom latency histograms
+```
+
+---
+
 ## 7. Practice Exercises
 
 ### Exercise 1: Web Server Tuning
@@ -653,11 +887,7 @@ ss -s
 
 ---
 
-## Next Steps
-
-- [15_Container_Internals](15_Container_Internals.md) - cgroups, namespaces
-- [16_Storage_Management](16_Storage_Management.md) - LVM, RAID
-- [Brendan Gregg's Blog](https://www.brendangregg.com/)
+---
 
 ## References
 
@@ -668,4 +898,4 @@ ss -s
 
 ---
 
-[← Previous: Advanced systemd](13_Systemd_Advanced.md) | [Next: Container Internals →](15_Container_Internals.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Advanced systemd](./13_Systemd_Advanced.md) | **Next**: [Container Internals](./15_Container_Internals.md)

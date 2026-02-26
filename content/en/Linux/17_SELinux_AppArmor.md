@@ -1,15 +1,17 @@
 # SELinux and AppArmor
 
+**Previous**: [Storage Management](./16_Storage_Management.md) | **Next**: [Log Management](./18_Log_Management.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Concepts and necessity of Mandatory Access Control (MAC)
-- SELinux modes and policy management
-- AppArmor profile creation and management
-- Security module troubleshooting
-
-**Difficulty**: Advanced
+1. Explain the difference between Discretionary Access Control (DAC) and Mandatory Access Control (MAC)
+2. Configure SELinux modes and manage security contexts for files, processes, and ports
+3. Use SELinux booleans to toggle policy features without writing custom modules
+4. Diagnose SELinux denials using audit2why and resolve them with restorecon or custom policies
+5. Write and manage AppArmor profiles to confine application access
+6. Generate AppArmor profiles automatically using aa-genprof and aa-logprof
 
 ---
 
@@ -24,6 +26,8 @@ Through this document, you will learn:
 7. [Practical Scenarios](#7-practical-scenarios)
 
 ---
+
+Traditional Unix permissions (DAC) have a critical weakness: if an attacker compromises a process running as root, they own the entire system. Mandatory Access Control closes this gap by enforcing policies that even root cannot override. SELinux and AppArmor are the two dominant MAC implementations in Linux, and they are enabled by default on most enterprise distributions. Knowing how to configure and troubleshoot them is the difference between a secure production server and one that gets disabled to "make things work."
 
 ## 1. Mandatory Access Control Overview
 
@@ -656,12 +660,6 @@ sudo sealert -a /var/log/audit/audit.log
 
 ---
 
-## Next Steps
-
-- [18_Log_Management.md](./18_Log_Management.md) - Learn journald, rsyslog, logrotate
-
----
-
 ## References
 
 - [SELinux User Guide (Red Hat)](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/using_selinux/index)
@@ -669,3 +667,7 @@ sudo sealert -a /var/log/audit/audit.log
 - [SELinux Project Wiki](https://selinuxproject.org/page/Main_Page)
 - `man semanage`, `man restorecon`, `man audit2why`
 - `man apparmor`, `man aa-status`, `man apparmor.d`
+
+---
+
+**Previous**: [Storage Management](./16_Storage_Management.md) | **Next**: [Log Management](./18_Log_Management.md)

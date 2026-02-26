@@ -1,5 +1,17 @@
 # 23. Advanced RAG
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the limitations of basic RAG (single retrieval, retrieval-question mismatch, context length constraints) and explain how advanced techniques address them
+2. Implement query transformation techniques such as HyDE (Hypothetical Document Embeddings) and query expansion to improve retrieval relevance
+3. Build multi-step and hierarchical retrieval pipelines using RAPTOR and multi-hop reasoning for complex questions
+4. Apply post-retrieval techniques including reranking, context compression, and self-reflection to improve final answer quality
+5. Design an Agentic RAG system that uses an LLM to dynamically decide when and what to retrieve during generation
+
+---
+
 ## Overview
 
 This lesson covers more sophisticated retrieval and generation strategies beyond basic RAG. We explore Agentic RAG, Multi-hop Reasoning, HyDE, RAPTOR, and other cutting-edge techniques.
@@ -810,4 +822,202 @@ Quality critical → Self-RAG
 1. Gao et al. (2022). "Precise Zero-Shot Dense Retrieval without Relevance Labels" (HyDE)
 2. Sarthi et al. (2024). "RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval"
 3. Khattab et al. (2020). "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction"
+
+---
+
+## Exercises
+
+### Exercise 1: HyDE vs. Direct Query — When Does It Help?
+HyDE generates a hypothetical document before searching, rather than searching directly with the query. Analyze when HyDE helps and when it does not, using two concrete examples.
+
+Given these retrieval tasks:
+- **Task A**: "What are the side effects of aspirin?" (factual, well-documented)
+- **Task B**: "Find a document written in a formal legal tone about contract termination rights"
+
+<details>
+<summary>Show Answer</summary>
+
+**Why HyDE helps**:
+
+The key insight is that **question embeddings and document embeddings occupy different regions of the embedding space**. Questions are short, interrogative, and sparse ("What are side effects of aspirin?"). Documents are long, declarative, and dense ("Aspirin may cause gastrointestinal bleeding, tinnitus..."). Direct query-to-document similarity often misses relevant documents because the embedding model sees them as different linguistic styles.
+
+HyDE bridges this gap by generating a hypothetical answer document first, then embedding *that* as the search query. Now you're doing document-to-document similarity, which embedding models handle better.
+
+**Task A: "What are the side effects of aspirin?"**
+```
+Direct query embedding:
+"What are the side effects of aspirin?" → [0.12, -0.34, ...]
+Target document:
+"Aspirin (acetylsalicylic acid) can cause..." → [0.09, -0.31, ...]
+Similarity: moderate (different style)
+
+HyDE hypothetical document:
+"The common side effects of aspirin include gastrointestinal
+irritation, bleeding, tinnitus at high doses..." → [0.08, -0.32, ...]
+Target document:
+"Aspirin (acetylsalicylic acid) can cause..." → [0.09, -0.31, ...]
+Similarity: high (same declarative style)
+```
+**HyDE helps here** — factual questions benefit because the hypothetical answer closely mirrors the style and content of target documents.
+
+**Task B: "Find a document written in a formal legal tone about contract termination"**
+- The query is already describing a *document style*, not a factual question.
+- HyDE generates a *hypothetical legal document* — but this introduces risk: the LLM may hallucinate specific legal clauses that don't appear in the actual corpus.
+- For style-matching retrieval, hybrid search (dense + BM25) may work better without the hallucination risk.
+
+**When HyDE does NOT help (or hurts)**:
+1. **Highly specific factual lookups** where the LLM may confidently hallucinate wrong details (e.g., "Find the Q4 2023 revenue of Company X" — hypothetical document might generate plausible but wrong numbers).
+2. **Very short factual queries** in well-matched corpora where direct embedding similarity already works well.
+3. **Time-sensitive queries** where the hypothetical document may reflect outdated training knowledge.
+
+</details>
+
+### Exercise 2: Multi-hop Retrieval Design
+A legal research assistant needs to answer: "Was the judge in the Smith v. Johnson 2019 case also involved in cases related to intellectual property disputes in 2020?"
+
+This question requires at least 2 retrieval steps. Design the multi-hop retrieval pipeline, specifying what is retrieved at each step and what information is passed forward.
+
+<details>
+<summary>Show Answer</summary>
+
+**Why single retrieval fails**:
+A single query "judge from Smith v. Johnson 2019 involved in IP cases 2020" will likely fail because no document contains all this information. The judge's name isn't known upfront, so the query can't be specific enough.
+
+**Multi-hop pipeline**:
+
+```
+Step 1: Retrieve case details
+  Query: "Smith v. Johnson 2019 case"
+  Retrieved: Case record with judge name = "Judge Robert Thompson"
+  Extracted information: judge_name = "Robert Thompson"
+
+Step 2: Use extracted info for second retrieval
+  Query: "Judge Robert Thompson intellectual property 2020"
+  Retrieved: IP cases from 2020 listing Judge Thompson
+  Answer: "Yes, Judge Thompson presided over DataTech v. InnoSoft (2020)
+           and two other IP disputes in 2020."
+```
+
+**Implementation pattern**:
+```python
+class MultiHopRetriever:
+    def retrieve(self, question, retriever, llm):
+        # Step 1: Initial retrieval
+        docs_1 = retriever.get_relevant_documents(question)
+
+        # Extract key entities from step 1 results
+        extract_prompt = f"""
+        From these documents: {docs_1}
+        Extract the specific entity needed for: {question}
+        (e.g., person name, case number, date)
+        """
+        entity = llm.invoke(extract_prompt)
+
+        # Step 2: Targeted retrieval using extracted entity
+        follow_up_query = f"{entity} intellectual property disputes 2020"
+        docs_2 = retriever.get_relevant_documents(follow_up_query)
+
+        # Combine and generate answer from all retrieved docs
+        return docs_1 + docs_2
+```
+
+**Key design principle**: Each hop should extract a *specific, grounded entity* (name, ID, date) rather than a vague summary — grounded entities make step 2 queries precise and reduce hallucination risk.
+
+</details>
+
+### Exercise 3: Reranking vs. Retrieval Quality
+A RAG system retrieves the top-10 documents by vector similarity and then uses a cross-encoder reranker to select the final top-3 for context. Explain why this two-stage approach outperforms either stage alone (retrieve top-3 directly, or no reranking).
+
+<details>
+<summary>Show Answer</summary>
+
+**Why retrieval alone (top-3 directly) can fail**:
+
+Vector embedding models (bi-encoders) encode query and document **independently** and compare their embeddings. This is efficient but coarse:
+- Bi-encoders compress entire documents into fixed-size vectors, losing fine-grained token interactions.
+- They are optimized for recall (finding semantically related documents) not precision (finding the *most relevant* document).
+- A query about "Python performance optimization" may retrieve documents about "Python" and "optimization" separately — both get high similarity scores but neither answers the specific question.
+
+If you only retrieve top-3 with bi-encoder, you risk missing the best answer that scored 4th or 5th due to embedding compression artifacts.
+
+**Why reranking alone (no initial retrieval, rerank everything) is impossible**:
+
+Cross-encoders jointly process query + document together, enabling token-level attention across both. This is highly accurate but extremely slow (O(n) forward passes over entire corpus).
+
+Running a cross-encoder on a 1M-document corpus per query would take hours. It's computationally infeasible for real-time retrieval.
+
+**Why two-stage works best**:
+
+```
+Stage 1: Bi-encoder (fast recall)
+  - Retrieve top-100 from 1M documents in ~20ms
+  - High recall: correct answer is almost certainly in top-100
+  - Lower precision: some irrelevant documents included
+
+Stage 2: Cross-encoder (accurate reranking)
+  - Rerank top-100 → select top-3 in ~200ms
+  - High precision: token-level attention identifies true relevance
+  - Feasible: only 100 documents to score (not 1M)
+
+Result: Fast (bi-encoder speed) + Accurate (cross-encoder quality)
+Total latency: ~220ms vs hours for cross-encoder alone
+```
+
+**Practical numbers**: Studies show two-stage retrieval improves MRR@3 (Mean Reciprocal Rank) by 10-20% over bi-encoder alone, at the cost of ~10x more compute for the reranking stage — a worthwhile trade-off for quality-critical applications.
+
+</details>
+
+### Exercise 4: Self-RAG Reflection Token Design
+Self-RAG uses special reflection tokens to guide generation. Design the reflection token logic for a medical information chatbot that must decide whether to retrieve and whether to cite retrieved information.
+
+Specify what each token should evaluate and give an example of a query where each reflection decision differs.
+
+<details>
+<summary>Show Answer</summary>
+
+**Reflection token design for medical chatbot**:
+
+**Token 1: [Retrieve] — Should the system retrieve external information?**
+
+| Decision | When | Example |
+|----------|------|---------|
+| YES | Medical facts, drug info, diagnostic criteria | "What is the maximum safe dose of acetaminophen?" |
+| NO | General health advice, empathy, procedural info | "How should I tell my family about my diagnosis?" |
+| NO | Already answered from context | Follow-up on something just discussed |
+
+**Token 2: [IsREL] — Is the retrieved document relevant to the query?**
+
+```python
+# After retrieval, evaluate before including in context
+if retrieved_doc about "aspirin side effects" for query "acetaminophen dosage":
+    [IsREL] = NOT_RELEVANT  # Different drug, skip this document
+    → Trigger new retrieval with refined query
+```
+
+**Token 3: [IsSUP] — Does the generated response faithfully reflect the retrieved documents?**
+
+```python
+# After generating response, verify against sources
+retrieved: "The maximum recommended dose is 4g/day for healthy adults"
+generated: "The safe limit is 3g per day"
+
+[IsSUP] = PARTIALLY_SUPPORTED
+→ Flag for revision or add caveat: "Sources indicate 4g/day for healthy adults;
+  individual variation may apply"
+```
+
+**Token 4: [IsUSE] — Is the overall response useful to the user?**
+
+Evaluates holistically: relevant + supported + addresses the actual question + not harmful.
+
+**Example where each decision differs**:
+- Query: "Can I take ibuprofen with my blood pressure medication?"
+  - [Retrieve] = YES (drug interaction facts needed)
+  - [IsREL] = YES (retrieved drug interaction database entry for NSAIDs + antihypertensives)
+  - [IsSUP] = YES (response accurately reflects "NSAIDs can reduce antihypertensive effectiveness")
+  - [IsUSE] = PARTIALLY (useful but should add "consult your pharmacist" caveat for safety)
+
+This four-token chain ensures the medical chatbot doesn't hallucinate drug facts, doesn't include irrelevant pharmaceutical documents, and remains conservatively safe.
+
+</details>
 4. Asai et al. (2023). "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection"

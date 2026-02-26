@@ -396,6 +396,51 @@ model = model.to(device)
 
 ---
 
+## 연습 문제
+
+### 연습 1: 기준선 CNN 학습 및 오류 분석
+
+1. 데이터 증강이 포함된 표준 파이프라인을 사용하여 `CIFAR10CNN`을 50 에폭 학습하세요.
+2. 학습 후 `plot_confusion_matrix`를 사용하여 혼동 행렬(confusion matrix)을 생성하세요. 어떤 클래스 쌍이 가장 자주 혼동되나요?
+3. `per_class_accuracy`를 사용하여 분류하기 가장 어려운 두 클래스를 파악하세요. 각 어려운 클래스에서 잘못 분류된 5개의 예시를 표시하세요.
+4. 왜 그 클래스가 어려운지 가설을 세우세요: 시각적 유사성, 클래스 내 변동(intra-class variation), 또는 다른 이유 때문인가요?
+
+### 연습 2: 데이터 증강 전략 비교
+
+CIFAR-10에서 30 에폭씩 세 가지 학습 실험을 실행하세요:
+1. **증강 없음**: `transforms.ToTensor()`와 정규화만 사용.
+2. **기본 증강**: 랜덤 크롭과 수평 뒤집기만 사용.
+3. **전체 증강**: `ColorJitter`가 포함된 완전한 `train_transform` 사용.
+4. 세 가지 실험의 테스트 정확도 곡선을 같은 그래프에 플롯하세요. 각 증강 단계의 개선을 수치화하세요. 어떤 증강이 가장 큰 영향을 미치고 그 이유는?
+
+### 연습 3: Mixup 학습 구현 및 테스트
+
+1. `mixup_data`와 `mixup_criterion`을 사용하여 전체 Mixup 학습 루프를 구현하세요.
+2. `alpha=0.2`, `alpha=0.5`, `alpha=1.0`으로 `CIFAR10CNN`을 50 에폭 학습하세요.
+3. 각 알파 값의 최종 테스트 정확도를 비교하세요.
+4. `alpha=0.2`에 대한 4개의 혼합 학습 예시를 시각화하세요. Mixup이 왜 정규화기(regularizer)로 작동하는지 개념적으로 설명하세요: 학습 예시 근처에서 모델이 무엇을 하는 것을 방지하나요?
+
+### 연습 4: 전이학습(Transfer Learning) vs 처음부터 학습
+
+ResNet-18 전이학습 설정을 사용하여:
+1. ImageNet 사전학습 가중치로 ResNet-18을 30 에폭 학습하세요.
+2. 동일한 30 에폭 동안 무작위 초기화로 ResNet-18을 처음부터 학습하세요.
+3. 테스트 정확도와 학습 손실 곡선을 비교하세요. 어느 것이 더 빨리 수렴하나요?
+4. 실험: 마지막 `fc` 레이어를 제외한 모든 ResNet 레이어를 10 에폭 동안 고정(특성 추출)한 후, 20 에폭 더 미세조정하세요. 이 단계적 접근법이 처음부터 모든 레이어를 미세조정하는 것과 어떻게 비교되나요?
+
+### 연습 5: 최대 정확도를 위해 모든 기법 결합
+
+다음을 결합하여 최선의 CIFAR-10 분류기를 구축하세요:
+1. 잔차 블록(`ResBlock`)을 갖는 ResNet 유사 아키텍처.
+2. 전체 데이터 증강 (`RandomCrop`, `RandomHorizontalFlip`, `ColorJitter`).
+3. 학습 중 CutMix 또는 Mixup 증강.
+4. 레이블 스무딩(label smoothing) (`CrossEntropyLoss(label_smoothing=0.1)`).
+5. 코사인 어닐링(cosine annealing) 학습률 스케줄러.
+
+100 에폭 학습하고 최종 테스트 정확도를 보고하세요. 이 레슨에서 시도한 모든 기법과 최종 결과에 대한 기여도를 비교하는 표를 만드세요.
+
+---
+
 ## 다음 단계
 
-[40_Practical_Text_Classification.md](./40_Practical_Text_Classification.md)에서 텍스트 분류 프로젝트를 진행합니다.
+[실전 텍스트 분류 프로젝트](./40_Practical_Text_Classification.md)에서 텍스트 분류 프로젝트를 진행합니다.

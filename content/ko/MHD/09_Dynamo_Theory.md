@@ -667,11 +667,17 @@ def alpha_omega_dynamo_1d():
     dr = r[1] - r[0]
 
     # Differential rotation profile: Ω(r) = Ω0(1 - r²)
+    # r² 형태는 태양과 유사한 차등 자전을 모방한다: 중심에서 가장 빠르고
+    # (적도에 해당), 가장자리에서 느리다(극에 해당). 전단 dΩ/dr = -2Ω0 r이
+    # Ω-효과의 구동원이다.
     Omega0 = 1.0
     Omega = Omega0 * (1 - r**2)
     dOmega_dr = -2 * Omega0 * r
 
     # Alpha profile: α(r) = α0 sin(πr)
+    # sin(πr) 프로파일은 양쪽 경계에서 0이 되어 α-효과가 내부에 국한된다
+    # — 물리적으로 나선성(helicity)은 경계가 아닌 본체의 회전 대류에서
+    # 생성되며, 경계에서는 경계 조건이 물리를 오염시킬 수 있다.
     alpha0 = 0.1
     alpha = alpha0 * np.sin(np.pi * r)
 
@@ -687,6 +693,9 @@ def alpha_omega_dynamo_1d():
     B_r = np.zeros(Nr)
 
     # Initial perturbation
+    # 중점에 단일 점 씨앗을 두는 이유: 대규모 모드를 인위적으로 도입하지
+    # 않기 위해서다; 다이나모는 이 국소 초기 조건에서 가장 높은 성장률을
+    # 가진 정규 모드(normal mode)를 스스로 증폭해야 한다.
     B_r[Nr//2] = 0.01
 
     # Storage for plotting
@@ -704,15 +713,25 @@ def alpha_omega_dynamo_1d():
         d2B_r[1:-1] = (B_r[2:] - 2*B_r[1:-1] + B_r[:-2]) / dr**2
 
         # Boundary conditions: no-flux (∂B/∂r = 0)
+        # Neumann 조건은 경계를 가로지르는 전류가 없다는 물리적 제약을
+        # 모방한다; Dirichlet 조건(B=0)보다 약하며, 자기장 프로파일이
+        # 벽 근처에서 자연스럽게 형성되도록 허용한다.
         d2B_phi[0] = d2B_phi[1]
         d2B_phi[-1] = d2B_phi[-2]
         d2B_r[0] = d2B_r[1]
         d2B_r[-1] = d2B_r[-2]
 
         # Ω-effect: generates B_φ from B_r
+        # 이것이 핵심 소스 항이다: 차등 자전(dΩ/dr)이 반경 방향 자기장 선을
+        # 방위각 방향으로 늘려 폴로이달 자속(B_r)을 환상 자속(B_φ)으로
+        # 변환한다 — α-Ω 사이클의 첫 번째 절반이다.
         omega_term = r * dOmega_dr * B_r
 
         # α-effect: generates B_r from B_φ
+        # α-효과를 공간 기울기 ∂(αB_φ)/∂r로 계산하는 이유: 평균 EMF
+        # (ε = αB̄)의 회전을 올바르게 구동하기 위해서다 — 평균장 유도
+        # 방정식이 환상 장으로부터 폴로이달 장을 재생성하여 다이나모 루프를
+        # 닫으려면 이 형태가 필요하다.
         alpha_term = np.zeros(Nr)
         alpha_term[1:-1] = (alpha[2:] * B_phi[2:] - alpha[:-2] * B_phi[:-2]) / (2*dr)
 
@@ -869,12 +888,18 @@ def solar_butterfly_diagram():
     dtheta = theta[1] - theta[0]
 
     # Differential rotation: Ω(θ) = Ω0(1 + δΩ cos²θ)
+    # cos²θ 프로파일은 태양물리학적 관측(helioseismology)과 일치한다: 적도가
+    # 극보다 ~20% 빠르게 회전한다. 2차 미분 d²Ω/dθ²이 Ω-효과를 구동하며
+    # (위도 전단(latitudinal shear) ≡ 태양에서 지배적인 환상 자기장 소스).
     Omega0 = 1.0
     delta_Omega = 0.2
     Omega = Omega0 * (1 + delta_Omega * np.cos(theta)**2)
     d2Omega_dtheta2 = -2 * delta_Omega * Omega0 * (np.cos(theta)**2 - np.sin(theta)**2)
 
     # Alpha effect: α(θ) = α0 cos(θ)
+    # cos(θ) 의존성은 회전 대류의 물리를 담는다: Coriolis 유도 나선성은
+    # 적도에서 최대이고 극에서 사라지며, 적도면을 가로질러 부호가 바뀐다
+    # — 나비 다이어그램이 적도면에 대해 반대칭인 이유다.
     alpha0 = 0.5
     alpha = alpha0 * np.cos(theta)
 
@@ -892,6 +917,9 @@ def solar_butterfly_diagram():
     B_theta = np.zeros(Ntheta)
 
     # Initial perturbation at mid-latitudes
+    # 중위도(θ ~ π/4)에서 Gaussian 씨앗을 두는 이유: 관측된 각 새 태양
+    # 주기의 시작(~30° 위도)을 모방하기 위해서다; 적도에서 시작하면
+    # α(0) ≠ 0이지만 d²Ω/dθ²|₀ ≈ 0이어서 시뮬레이션을 억제하게 된다.
     B_theta += 0.01 * np.exp(-((theta - np.pi/4)**2) / 0.1)
 
     # Storage
@@ -908,6 +936,9 @@ def solar_butterfly_diagram():
         d2B_theta[1:-1] = (B_theta[2:] - 2*B_theta[1:-1] + B_theta[:-2]) / dtheta**2
 
         # Boundary: zero at poles
+        # 극에서 B = 0인 물리적 조건: 환상 자속이 자전축을 통과하지 않는다는
+        # 것을 반영한다; 이 조건으로 나비 날개가 고위도에서 무한히 쌓이지
+        # 않고 끝나게 된다.
         d2B_phi[0] = 0
         d2B_phi[-1] = 0
         d2B_theta[0] = 0

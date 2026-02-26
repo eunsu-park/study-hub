@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of relational algebra as the formal foundation of SQL and describe how query optimizers use algebraic expressions.
+2. Apply unary operations — selection (σ) and projection (π) — to filter and reshape relations.
+3. Use binary operations — union, intersection, difference, Cartesian product, and join variants — to combine relations and retrieve related data.
+4. Construct relational algebra expressions for multi-table queries and translate between SQL and their algebraic equivalents.
+5. Build and simplify query trees, applying algebraic equivalence rules to optimize query plans.
+6. Distinguish between relational algebra (procedural) and relational calculus (declarative) and explain their expressive equivalence.
+
+---
+
 Relational algebra is the formal query language of the relational model. It provides a collection of operators that take one or two relations as input and produce a new relation as output. Understanding relational algebra is essential because it underlies SQL query processing: every SQL query is internally translated into a relational algebra expression that the query optimizer can then transform and improve.
 
 ## Table of Contents

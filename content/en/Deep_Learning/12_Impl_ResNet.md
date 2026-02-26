@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the degradation problem in deep networks and describe why it cannot be attributed solely to overfitting or vanishing gradients.
+2. Formulate the residual learning framework — F(x) + x — and explain why learning residual mappings is easier than learning unreferenced mappings.
+3. Distinguish between the basic residual block and the bottleneck residual block, and explain when each is used.
+4. Implement a ResNet variant (e.g., ResNet-50) from scratch in PyTorch, correctly constructing residual blocks with shortcut connections.
+5. Handle dimension-matching shortcuts (projection shortcuts) when the input and output dimensions differ across blocks.
+6. Evaluate the trade-offs between ResNet depth variants (ResNet-18, 34, 50, 101, 152) in terms of accuracy, parameter count, and computational cost.
+
+---
+
 ## Overview
 
 ResNet (Residual Network) won 1st place in ILSVRC 2015 and is a revolutionary model. Kaiming He et al. proposed **Skip Connections (Residual Connections)** that enable training networks with hundreds of layers.

@@ -32,8 +32,16 @@ import torch
 import torch.nn as nn
 
 class QNetwork(nn.Module):
+    """Why a neural network for Q: tabular Q-learning requires storing a value for every
+    (state, action) pair — impossible when the state space is large or continuous.
+    A neural network generalizes across similar states, enabling learning in high-
+    dimensional environments like Atari (84x84x4 pixel inputs)."""
+
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
+        # Why output all action values at once: a single forward pass gives Q(s,a)
+        # for every action, making argmax selection O(1) instead of requiring
+        # one forward pass per action
         self.network = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU(),
@@ -43,7 +51,7 @@ class QNetwork(nn.Module):
         )
 
     def forward(self, state):
-        return self.network(state)  # Output Q values for all actions
+        return self.network(state)  # Output Q values for all actions simultaneously
 ```
 
 ---
@@ -64,7 +72,13 @@ from collections import deque
 import random
 
 class ReplayBuffer:
+    # Why experience replay: consecutive transitions are highly correlated (s_t and s_{t+1}
+    # are nearly identical). Training on correlated batches causes the network to overfit
+    # to recent experience and forget older knowledge. Random sampling from a large buffer
+    # breaks this correlation and provides a more i.i.d.-like training distribution.
     def __init__(self, capacity=100000):
+        # Why deque with maxlen: automatically discards oldest experiences when full,
+        # ensuring the buffer stays within memory limits while keeping recent data
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done):
@@ -93,24 +107,40 @@ Use a separate target network to stabilize learning.
 **Problem:** When updating Q(s,a;θ), target y = r + γ max Q(s',a';θ) also changes
 **Solution:** Fix target network θ⁻ and update periodically
 
+**DQN Loss Function:**
+
+$$L(\theta) = \mathbb{E}\left[(r + \gamma \max_{a'} Q(s', a'; \theta^-) - Q(s, a; \theta))^2\right]$$
+
+where:
+- $\theta$ = online network parameters (updated every step)
+- $\theta^-$ = target network parameters (frozen copy of $\theta$, updated every N steps)
+- $r + \gamma \max_{a'} Q(s', a'; \theta^-)$ = TD target (computed with frozen $\theta^-$ for stability)
+
+**Why a target network?** Without it, both the prediction $Q(s,a;\theta)$ and the target $r + \gamma \max_{a'} Q(s',a';\theta)$ shift simultaneously on each gradient step. This creates a "moving target" problem — the network chases a target that keeps changing, causing oscillation or divergence. Freezing $\theta^-$ decouples the target from the current parameters, turning the problem into a supervised regression task for N steps at a time.
+
 ```python
 class DQNAgent:
     def __init__(self, state_dim, action_dim, lr=1e-4):
         self.q_network = QNetwork(state_dim, action_dim)
         self.target_network = QNetwork(state_dim, action_dim)
 
-        # Initialize target network (same weights)
+        # Why identical initialization: ensures the target network starts at the same
+        # point, so initial TD targets are consistent with the online network
         self.target_network.load_state_dict(self.q_network.state_dict())
 
         self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=lr)
         self.gamma = 0.99
 
     def update_target_network(self):
-        """Hard update target network"""
+        """Hard update: copy all weights at once every N steps.
+        Why hard update: simple and ensures the target is stable for exactly N steps,
+        giving the online network a fixed regression target to converge toward."""
         self.target_network.load_state_dict(self.q_network.state_dict())
 
     def soft_update_target(self, tau=0.005):
-        """Soft update target network"""
+        """Soft update: blend weights incrementally every step.
+        Why soft update (Polyak averaging): avoids the sudden shift of hard updates,
+        providing a smoother target that can improve stability in some environments."""
         for target_param, param in zip(
             self.target_network.parameters(),
             self.q_network.parameters()
@@ -162,6 +192,9 @@ class DQNAgent:
         self.buffer = ReplayBuffer(buffer_size)
 
     def choose_action(self, state, training=True):
+        # Why epsilon-greedy with decay: early on, Q estimates are random, so heavy
+        # exploration discovers diverse transitions. As Q improves, we shift toward
+        # exploitation. At test time (training=False), we use pure greedy.
         if training and np.random.random() < self.epsilon:
             return np.random.randint(self.action_dim)
 
@@ -174,35 +207,49 @@ class DQNAgent:
         self.buffer.push(state, action, reward, next_state, done)
 
     def learn(self):
+        # Why minimum buffer check: training on very small batches before the buffer
+        # fills produces high-variance gradients from correlated recent transitions
         if len(self.buffer) < self.batch_size:
             return None
 
-        # Sample batch
+        # Why random batch sampling: breaks temporal correlation between consecutive
+        # transitions, approximating an i.i.d. training set
         states, actions, rewards, next_states, dones = self.buffer.sample(self.batch_size)
 
-        # Current Q values
+        # Why gather: the network outputs Q for all actions; gather extracts only
+        # the Q values for the actions that were actually taken
         current_q = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze()
 
-        # Target Q values (using target network)
+        # Why target network here: using frozen theta^- for the TD target prevents
+        # the "moving target" problem — the target stays fixed for target_update_freq
+        # steps, turning this into a standard supervised regression problem
         with torch.no_grad():
             next_q = self.target_network(next_states).max(1)[0]
+            # Why (1 - dones): terminal states have no future reward, so we zero out
+            # the bootstrapped value to prevent the network from hallucinating future returns
             target_q = rewards + self.gamma * next_q * (1 - dones)
 
-        # Calculate loss and update
+        # MSE loss: L(theta) = E[(target_q - current_q)^2]
         loss = nn.MSELoss()(current_q, target_q)
 
         self.optimizer.zero_grad()
         loss.backward()
-        # Gradient clipping (stability)
+        # Why gradient clipping: deep networks can produce exploding gradients,
+        # especially early in training when Q estimates are poor. Clipping keeps
+        # updates bounded, preventing catastrophic parameter jumps.
         torch.nn.utils.clip_grad_norm_(self.q_network.parameters(), 10)
         self.optimizer.step()
 
-        # Update target network
+        # Why periodic hard update: copies online weights to target network every N
+        # steps. More frequent updates track the online network faster but reduce
+        # stability; less frequent updates are more stable but slower to incorporate
+        # new knowledge.
         self.learn_step += 1
         if self.learn_step % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
 
-        # Decay epsilon
+        # Why epsilon floor at epsilon_min: ensures the agent always retains some
+        # exploration, preventing permanent lock-in to a suboptimal policy
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         return loss.item()
@@ -261,11 +308,18 @@ Solves Q-value overestimation problem in vanilla DQN.
 # Double DQN: y = r + γ Q(s', argmax_a' Q(s', a'; θ); θ⁻)
 
 def compute_double_dqn_target(self, rewards, next_states, dones):
+    # Why Double DQN: vanilla DQN uses max_a' Q(s', a'; theta^-) for both action
+    # selection and evaluation. The max operator is positively biased — when Q
+    # estimates have noise, max picks the noisiest overestimate. By decoupling
+    # selection (online network) from evaluation (target network), the bias is
+    # greatly reduced, leading to more accurate Q values and better policies.
     with torch.no_grad():
-        # Select action with Q network
+        # Why online network for selection: the online network has the freshest
+        # estimates, making it better at identifying the best action
         next_actions = self.q_network(next_states).argmax(1, keepdim=True)
 
-        # Evaluate Q value with target network
+        # Why target network for evaluation: even if the selected action is slightly
+        # wrong, the target network provides a less biased Q estimate for it
         next_q = self.target_network(next_states).gather(1, next_actions).squeeze()
 
         target_q = rewards + self.gamma * next_q * (1 - dones)
@@ -283,10 +337,17 @@ Q(s, a) = V(s) + A(s, a) - mean(A(s, ·))
 
 ```python
 class DuelingQNetwork(nn.Module):
+    """Why Dueling architecture: many states have similar values regardless of
+    which action is taken (e.g., when no obstacle is near, all actions are
+    roughly equal). Separating V(s) from A(s,a) lets the network learn the
+    state value independently, improving sample efficiency in states where
+    action choice matters little."""
+
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
 
-        # Shared feature extraction
+        # Why shared features: both V and A need to understand the state, so sharing
+        # early layers avoids redundant computation and improves feature reuse
         self.feature = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU()
@@ -311,7 +372,10 @@ class DuelingQNetwork(nn.Module):
         value = self.value_stream(features)
         advantage = self.advantage_stream(features)
 
-        # Q = V + A - mean(A)
+        # Why subtract mean(A): makes the decomposition identifiable — without
+        # centering, V and A are not uniquely determined (any constant could shift
+        # between them). Subtracting the mean forces A to have zero mean, so V
+        # truly represents the state value.
         q_values = value + advantage - advantage.mean(dim=1, keepdim=True)
         return q_values
 ```
@@ -322,10 +386,19 @@ Sample experiences with higher TD error more frequently.
 
 ```python
 class PrioritizedReplayBuffer:
+    """Why prioritized replay: uniform sampling wastes time replaying transitions
+    the network already predicts well. Sampling proportional to TD error focuses
+    learning on surprising or poorly-predicted transitions, accelerating convergence."""
+
     def __init__(self, capacity, alpha=0.6, beta=0.4):
         self.capacity = capacity
-        self.alpha = alpha  # Priority exponent
-        self.beta = beta    # Importance sampling exponent
+        # Why alpha: controls how much prioritization is used (alpha=0 → uniform,
+        # alpha=1 → fully proportional to TD error). 0.6 is a common balance.
+        self.alpha = alpha
+        # Why beta: importance sampling correction — prioritized sampling introduces
+        # bias by oversampling high-error transitions. Beta anneals from 0.4 to 1.0
+        # during training to fully correct this bias by end of training.
+        self.beta = beta
         self.buffer = []
         self.priorities = np.zeros(capacity)
         self.position = 0
@@ -368,7 +441,9 @@ class AtariDQN(nn.Module):
     def __init__(self, n_actions):
         super().__init__()
 
-        # Input: 84x84x4 (4 frame stack)
+        # Why 4-frame stack: a single frame gives no velocity information —
+        # stacking 4 consecutive frames lets the network infer motion (direction
+        # and speed of objects), which is critical for games like Pong and Breakout
         self.conv = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=8, stride=4),
             nn.ReLU(),
@@ -386,7 +461,9 @@ class AtariDQN(nn.Module):
 
     def forward(self, x):
         # x shape: (batch, 4, 84, 84)
-        x = x / 255.0  # Normalize
+        # Why normalize to [0,1]: pixel values in [0, 255] would produce very large
+        # activations; dividing by 255 keeps inputs in a stable range for gradient descent
+        x = x / 255.0
         x = self.conv(x)
         x = x.view(x.size(0), -1)
         return self.fc(x)

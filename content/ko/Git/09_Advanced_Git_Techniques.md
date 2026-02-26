@@ -1,10 +1,24 @@
 # 09. 고급 Git 기법
 
-## 학습 목표
-- Git Hooks를 활용한 자동화
-- Submodules로 외부 의존성 관리
-- Worktrees로 여러 브랜치 동시 작업
-- Git 내부 구조와 저수준 명령어 이해
+**이전**: [Git 워크플로우 전략](./08_Git_Workflow_Strategies.md) | **다음**: [모노레포 관리](./10_Monorepo_Management.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Git 훅(Hook)(pre-commit, commit-msg, pre-push)을 작성하고 설치하여 품질 검사를 자동화할 수 있습니다
+2. Git 서브모듈(Submodule)을 설정하여 저장소 내 외부 의존성을 관리할 수 있습니다
+3. Git 워크트리(Worktree)를 사용하여 스태시(stash) 없이 여러 브랜치에서 동시에 작업할 수 있습니다
+4. `rev-parse`, `cat-file`, `ls-tree` 등의 저수준 명령어(plumbing command)로 Git 내부를 검사할 수 있습니다
+5. Git의 객체 모델(블롭(blob), 트리(tree), 커밋(commit), 태그(tag))과 DAG 구조를 설명할 수 있습니다
+6. `reflog`, `fsck`, `filter-branch`를 사용하여 일반적인 Git 문제를 진단하고 복구할 수 있습니다
+7. `--onto`, `--autosquash`, `--rebase-merges`를 포함한 고급 리베이스(rebase) 작업을 수행할 수 있습니다
+
+---
+
+이전 레슨에서 다룬 명령어들은 일상적인 Git 사용의 90%를 커버합니다. 이 레슨은 나머지 10%, 즉 문제가 발생했을 때 수 시간을 절약해 주고, 팀 표준을 자동으로 적용하며, 복잡한 다중 저장소 아키텍처를 관리할 수 있는 파워유저(power-user) 기법을 다룹니다. 이 도구들을 마스터하면 단순한 Git 사용자를 넘어, 버전 관리 워크플로우를 진단하고 자동화하며 설계할 수 있는 Git 전문가로 거듭날 수 있습니다.
 
 ## 목차
 1. [Git Hooks](#1-git-hooks)
@@ -622,6 +636,8 @@ git cherry-pick -m 1 abc1234
 # -m 2: 두 번째 부모 기준 (병합된 브랜치)
 ```
 
+> **비유 -- 리베이스(Rebase): 외과적 도구**: `merge`가 청테이프라면 — 빠르고, 눈에 보이며, 두 조각을 모두 보존한다 — `rebase`는 미세수술(microsurgery)입니다. 커밋을 하나씩 새로운 베이스 위에 재적용하여, 브랜치가 애초에 갈라지지 않은 것처럼 깔끔한 선형 히스토리를 만들어냅니다. 결과물은 우아하지만, 이 작업은 커밋 해시를 재작성합니다. 따라서 **다른 사람이 이미 가져간 커밋은 절대 리베이스하지 마세요** — 그것은 마치 다른 사람의 의료 기록을 사후에 수정하는 것과 같습니다.
+
 ### 4.5 Git Rebase 고급
 
 ```bash
@@ -859,6 +875,288 @@ git sparse-checkout init
 git sparse-checkout set src/ tests/
 ```
 
+### 6.4 Git LFS (Large File Storage)
+
+섹션 6.3에서 기본적인 `git lfs track` 명령어를 소개했습니다. 이 섹션에서는 전체 LFS 워크플로우와 마이그레이션 전략을 다룹니다.
+
+#### LFS가 필요한 이유
+
+Git은 저장소 히스토리에 모든 파일의 모든 버전을 저장합니다. 바이너리 파일(이미지, 모델, 데이터셋, 비디오)은 효율적으로 diff할 수 없어 각 버전이 전체 복사본으로 저장됩니다. 대용량 바이너리가 있는 저장소는 금방 다음과 같은 상태가 됩니다:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              문제: Git에서의 대용량 바이너리                  │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  LFS 없이:                                               │
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                       │
+│  │v1   │ │v2   │ │v3   │ │v4   │  ← 매번 전체 복사     │
+│  │50MB │ │50MB │ │50MB │ │50MB │     = 200MB            │
+│  └─────┘ └─────┘ └─────┘ └─────┘                       │
+│                                                          │
+│  LFS 사용 시:                                            │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                   │
+│  │ptr   │ │ptr   │ │ptr   │ │ptr   │  ← 작은 포인터    │
+│  │128B  │ │128B  │ │128B  │ │128B  │     Git 저장소에   │
+│  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘                   │
+│     │        │        │        │                         │
+│     ▼        ▼        ▼        ▼                         │
+│  ┌──────────────────────────────────┐                    │
+│  │     LFS 스토리지 서버             │  ← 실제 파일은   │
+│  │  (GitHub LFS, GitLab, 커스텀)    │     여기에 저장    │
+│  └──────────────────────────────────┘                    │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### 전체 LFS 워크플로우
+
+```bash
+# 1. Git LFS 설치 (머신당 1회)
+git lfs install
+# Updated git hooks: post-checkout, post-commit, post-merge, pre-push
+
+# 2. 파일 패턴 추적
+git lfs track "*.psd"
+git lfs track "*.zip"
+git lfs track "*.bin"
+git lfs track "models/**"       # Entire directory
+git lfs track "*.pt"            # PyTorch model files
+# This writes rules to .gitattributes
+
+# 3. .gitattributes 확인
+cat .gitattributes
+# *.psd filter=lfs diff=lfs merge=lfs -text
+# *.zip filter=lfs diff=lfs merge=lfs -text
+
+# 4. .gitattributes를 먼저 커밋
+git add .gitattributes
+git commit -m "Configure Git LFS tracking"
+
+# 5. 대용량 파일을 평소처럼 추가 및 커밋
+git add model.pt dataset.zip
+git commit -m "Add ML model and dataset"
+
+# 6. Push (LFS 파일은 자동으로 LFS 서버에 업로드됨)
+git push origin main
+
+# 7. LFS 상태 확인
+git lfs ls-files          # List LFS-tracked files
+git lfs status            # Show pending transfers
+git lfs env               # Show LFS configuration
+```
+
+#### .gitattributes 설정
+
+```gitattributes
+# .gitattributes
+
+# Images
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+
+# Archives
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+
+# ML/Data
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.parquet filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+
+# Media
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+
+# Binaries
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.so filter=lfs diff=lfs merge=lfs -text
+```
+
+#### LFS 스토리지 제공업체
+
+| 제공업체 | 무료 할당량 | 유료 플랜 | 참고 |
+|----------|-----------|------------|-------|
+| **GitHub** | 1 GB 스토리지, 1 GB/월 대역폭 | $5/월 (50 GB 데이터 팩당) | 오픈 소스에서 가장 일반적 |
+| **GitLab** | 프로젝트당 5 GB (SaaS) | Premium/Ultimate에 포함 | 셀프 호스팅: 무제한 |
+| **Bitbucket** | 저장소당 1 GB | $10/월 (100 GB당) | LFS 애드온 필요 |
+| **커스텀** | 설정에 따라 다름 | 자체 관리 | `lfs.url` 설정으로 커스텀 서버 지정 |
+
+#### 기존 저장소를 LFS로 마이그레이션
+
+대용량 파일이 이미 Git 히스토리에 있는 경우 히스토리 재작성이 필요합니다:
+
+```bash
+# 옵션 1: BFG Repo-Cleaner (권장 -- 빠르고 안전)
+# BFG가 히스토리에서 대용량 파일을 제거한 후 LFS가 새 파일을 추적
+java -jar bfg.jar --convert-to-git-lfs "*.psd" --no-blob-protection
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+
+# 옵션 2: git lfs migrate (내장)
+# 기존 파일을 LFS로 마이그레이션 (히스토리 재작성)
+git lfs migrate import --include="*.psd,*.zip" --everything
+
+# 마이그레이션 확인
+git lfs ls-files
+
+# Force push (주의: 모든 협업자의 히스토리가 재작성됨)
+git push --force-with-lease
+```
+
+> **경고**: 두 방법 모두 Git 히스토리를 재작성합니다. 공유 저장소에서 이 명령을 실행하기 전에 반드시 팀과 협의하세요. 마이그레이션 후 모든 협업자가 다시 클론해야 합니다.
+
+### 6.5 GPG 서명으로 커밋과 태그 서명하기
+
+GPG(GNU Privacy Guard) 서명은 커밋과 태그가 특정 사람에 의해 생성되었음을 암호학적으로 증명합니다. 이는 공급망 보안(Supply Chain Security)과 컴플라이언스(Compliance)에 필수적입니다.
+
+#### 커밋에 서명해야 하는 이유
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              왜 커밋에 서명해야 하는가?                      │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  서명 없이:                                              │
+│  • 누구나 git config user.email을 당신의 이메일로 설정 가능│
+│  • git log에 이름이 표시되지만 증명은 없음               │
+│  • 히스토리에서 커밋이 위조될 수 있음                     │
+│                                                          │
+│  GPG 서명 사용 시:                                       │
+│  • 저작권의 암호학적 증명                                 │
+│  • GitHub/GitLab에 "Verified" 배지 표시 ✓                │
+│  • 컴플라이언스 요구 (SOC2, HIPAA, FedRAMP)              │
+│  • 공급망 공격(Supply-Chain Attack)으로부터 보호          │
+│  • 일부 조직은 브랜치 규칙으로 서명된 커밋을 강제         │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### GPG 키 설정
+
+```bash
+# 1. GPG 키 생성
+gpg --full-generate-key
+# Choose: RSA and RSA, 4096 bits, no expiration (or 1-2 years)
+# Enter your name and the email associated with your Git account
+
+# 2. GPG 키 목록 확인
+gpg --list-secret-keys --keyid-format=long
+# sec   rsa4096/3AA5C34371567BD2 2024-01-01 [SC]
+#       ABC123DEF456GHI789JKL012MNO345PQR678STU9
+# uid           [ultimate] Your Name <your@email.com>
+# ssb   rsa4096/42B317FD4BA89E7A 2024-01-01 [E]
+
+# 3. 공개 키 내보내기 (GitHub/GitLab에 등록용)
+gpg --armor --export 3AA5C34371567BD2
+# Copy the entire output (including BEGIN/END lines)
+
+# 4. Git에서 GPG 키 사용하도록 설정
+git config --global user.signingkey 3AA5C34371567BD2
+git config --global commit.gpgsign true    # Sign all commits by default
+git config --global tag.gpgSign true       # Sign all tags by default
+
+# 5. (macOS) 패스프레이즈 프롬프트를 위한 GPG TTY 설정
+echo 'export GPG_TTY=$(tty)' >> ~/.zshrc
+# If using pinentry-mac:
+# echo "pinentry-program /opt/homebrew/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
+# gpgconf --kill gpg-agent
+```
+
+#### 커밋과 태그 서명하기
+
+```bash
+# 단일 커밋 서명 (전역 gpgsign 미설정 시)
+git commit -S -m "feat: add authentication module"
+
+# 모든 커밋 자동 서명 (권장)
+git config --global commit.gpgsign true
+git commit -m "feat: add authentication module"  # Automatically signed
+
+# 서명된 태그 생성
+git tag -s v1.0.0 -m "Release version 1.0.0"
+
+# 서명된 커밋 검증
+git log --show-signature -1
+# gpg: Signature made Thu Jan  1 12:00:00 2024
+# gpg: Good signature from "Your Name <your@email.com>"
+
+# 서명된 태그 검증
+git tag -v v1.0.0
+
+# 로그에서 서명 정보 보기
+git log --format='%H %G? %GK %aN %s' -5
+# %G? shows: G=good, B=bad, U=untrusted, N=no signature, E=expired
+```
+
+#### GitHub Verified 배지 설정
+
+```
+┌──────────────────────────────────────────────────────────┐
+│           GitHub Verified 배지 설정                         │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  1. GitHub → Settings → SSH and GPG keys 이동            │
+│  2. "New GPG key" 클릭                                   │
+│  3. 다음 명령의 출력을 붙여넣기:                          │
+│     gpg --armor --export YOUR_KEY_ID                     │
+│  4. 저장                                                 │
+│                                                          │
+│  이제 서명된 커밋이 다음과 같이 표시됩니다:               │
+│  ┌──────────────────────────────────────────┐            │
+│  │  ✓ Verified   abc1234                    │            │
+│  │  feat: add authentication module         │            │
+│  │  Your Name committed 2 hours ago         │            │
+│  └──────────────────────────────────────────┘            │
+│                                                          │
+│  서명되지 않은 커밋은 다음과 같이 표시됩니다:             │
+│  ┌──────────────────────────────────────────┐            │
+│  │  ○ Unverified  def5678                   │            │
+│  │  fix: typo in readme                     │            │
+│  └──────────────────────────────────────────┘            │
+│                                                          │
+│  브랜치 보호 규칙으로 서명 강제:                          │
+│  Settings → Branches → Branch protection →               │
+│  ☑ Require signed commits                                │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### SSH 서명 (Git 2.34+ 대안)
+
+Git 2.34에서 GPG보다 간단한 대안으로 SSH 키 서명이 도입되었습니다:
+
+```bash
+# 기존 SSH 키를 서명에 사용 (GPG 설정 불필요!)
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+
+# 검증을 위한 allowed_signers 파일 생성
+echo "your@email.com $(cat ~/.ssh/id_ed25519.pub)" > ~/.config/git/allowed_signers
+git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+
+# 서명과 검증은 동일한 방식으로 작동
+git commit -m "feat: signed with SSH key"
+git log --show-signature -1
+
+# GitHub도 SSH 서명을 지원합니다:
+# Settings → SSH and GPG keys → New SSH key → Key type: Signing Key
+```
+
+| 기능 | GPG 서명 | SSH 서명 |
+|---------|------------|-------------|
+| **설정 복잡도** | 높음 (GPG 키 관리 필요) | 낮음 (기존 SSH 키 재사용) |
+| **키 관리** | 별도의 GPG 키링 | 기존 SSH 키 |
+| **신뢰 체인(Web of Trust)** | 전체 PKI 지원 | 신뢰 체인 없음 |
+| **GitHub 지원** | 완전 지원 (Verified 배지) | 완전 지원 (Git 2.34+) |
+| **만료/폐기** | 내장 키 만료 기능 | 내장 만료 기능 없음 |
+| **적합한 대상** | 엔터프라이즈/컴플라이언스 | 개인 개발자 |
+
 ---
 
 ## 7. 연습 문제
@@ -919,6 +1217,41 @@ git sparse-checkout set src/ tests/
 - [Git Submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules)
 - [Git Worktree](https://git-scm.com/docs/git-worktree)
 - [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)
+
+---
+
+## 연습 문제
+
+### 연습 1: commit-msg 훅(Hook) 작성 및 테스트
+1. 로컬 저장소에 `.git/hooks/commit-msg`를 생성합니다(실행 권한 부여).
+2. `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore` 중 하나로 시작하지 않는 커밋 메시지를 거부하는 Bash 스크립트를 작성합니다.
+3. 잘못된 메시지(예: `"updated stuff"`)로 커밋을 시도하여 거부되는지, 올바른 메시지(예: `"feat: add login endpoint"`)로는 성공하는지 테스트합니다.
+4. `.gitconfig`에서 `core.hooksPath`를 추적되는 `.githooks/` 디렉토리로 설정하여 팀과 훅을 공유합니다.
+
+### 연습 2: 서브모듈(Submodule) 생명주기
+1. `hello()` 함수를 내보내는 Python 파일 하나가 있는 "라이브러리" 저장소를 만듭니다.
+2. "메인 프로젝트" 저장소에서 `git submodule add`로 라이브러리를 서브모듈로 추가합니다.
+3. 새 디렉토리에 `--recursive`를 사용하여 메인 프로젝트를 클론하고 서브모듈이 채워졌는지 확인합니다.
+4. 라이브러리 저장소에 두 번째 함수를 추가하고 푸시합니다. 메인 프로젝트에서 `git submodule update --remote`로 서브모듈 포인터를 업데이트하고, 스테이지에 올린 뒤 새 포인터를 커밋합니다.
+
+### 연습 3: Worktree로 병렬 작업
+1. 메인 워크트리에서 기능 브랜치 작업 중에 `git worktree add`를 사용하여 `../hotfix-wt`에 `main`용 두 번째 워크트리를 만듭니다.
+2. 새 워크트리에서 `hotfix/urgent-fix` 브랜치를 만들고, 수정 커밋을 추가한 뒤 푸시합니다.
+3. stash 없이 메인 워크트리로 돌아가서 기능 작업을 계속합니다.
+4. `git worktree remove ../hotfix-wt`로 핫픽스 워크트리를 제거합니다.
+
+### 연습 4: git bisect로 버그 찾기 자동화
+1. 10개의 커밋이 있는 저장소를 만듭니다. 커밋 #6에서 버그를 도입합니다(예: 함수가 항상 `False`를 반환하도록 변경).
+2. 버그가 없으면 0, 있으면 1을 반환하는 셸 테스트 스크립트 `test.sh`를 작성합니다.
+3. `git bisect start`를 실행하고, 최신 커밋을 `bad`, 커밋 #1을 `good`으로 표시한 뒤 `git bisect run ./test.sh`로 첫 번째 불량 커밋을 자동으로 찾습니다.
+4. 결과가 커밋 #6과 일치하는지 확인하고 `git bisect reset`으로 종료합니다.
+
+### 연습 5: Git 내부(Git Internals) 탐구
+임의의 저장소에서 다음 plumbing 명령어를 실행하고 각 출력의 의미를 설명합니다:
+1. `git cat-file -t HEAD` — `HEAD`는 어떤 타입의 객체인가?
+2. `git cat-file -p HEAD` — 커밋 객체에는 어떤 필드들이 있는가?
+3. `git cat-file -p HEAD^{tree}` — 루트 트리 객체에는 무엇이 담겨 있는가?
+4. `git rev-parse HEAD` — 이 명령어는 무엇을 반환하며, 스크립트에서 언제 사용하는가?
 
 ---
 

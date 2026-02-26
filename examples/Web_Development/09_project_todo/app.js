@@ -72,6 +72,8 @@ function addEventListeners() {
         });
     });
 
+    // Why: Event delegation on the list container avoids re-attaching listeners after every
+    // re-render and handles clicks on dynamically created todo items automatically
     // Todo 리스트 이벤트 위임
     todoList.addEventListener('click', handleTodoClick);
     todoList.addEventListener('change', handleTodoChange);
@@ -88,6 +90,8 @@ function addTodo() {
         return;
     }
 
+    // Why: Date.now() provides a simple unique ID without external libraries; sufficient
+    // for client-side-only apps since collisions are practically impossible at human input speeds
     const newTodo = {
         id: Date.now(),
         text: text,
@@ -109,6 +113,8 @@ function deleteTodo(id) {
     render();
 }
 
+// Why: Spreading into a new object ({ ...todo }) produces an immutable update,
+// making state changes predictable and easy to debug (no mutation side effects)
 function toggleTodo(id) {
     todos = todos.map(todo =>
         todo.id === id ? { ...todo, completed: !todo.completed } : todo
@@ -289,6 +295,8 @@ function saveTodos() {
     localStorage.setItem('todos', JSON.stringify(todos));
 }
 
+// Why: Wrapping JSON.parse in try-catch guards against corrupted localStorage data
+// (e.g., manual edits, quota errors) that would crash the entire app on load
 function loadTodos() {
     const stored = localStorage.getItem('todos');
     if (stored) {
@@ -304,6 +312,8 @@ function loadTodos() {
 // ============================================
 // Utility
 // ============================================
+// Why: Using textContent+innerHTML leverages the browser's own encoding to escape HTML entities,
+// preventing XSS attacks when rendering user-supplied text into innerHTML templates
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;

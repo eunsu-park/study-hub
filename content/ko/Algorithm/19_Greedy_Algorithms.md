@@ -1,5 +1,17 @@
 # 탐욕 알고리즘 (Greedy Algorithm)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 탐욕 알고리즘(greedy algorithm)이 전역 최적해를 보장하기 위한 조건인 탐욕 선택 속성(greedy choice property)과 최적 부분 구조(optimal substructure)를 설명할 수 있다
+2. 반례(counterexample)를 이용하여 탐욕적 접근이 성공하는 문제 유형과 실패하는 문제 유형을 구분할 수 있다
+3. 활동 선택(activity selection), 구간 스케줄링(interval scheduling), 허프만 코딩(Huffman coding) 등 고전 문제에 탐욕적 해법을 구현할 수 있다
+4. 작업 스케줄링(task scheduling) 및 자원 배분(resource allocation) 문제에 탐욕 기법을 적용할 수 있다
+5. 탐욕 알고리즘과 동적 프로그래밍(DP)을 비교하고 주어진 문제에 더 적합한 패러다임을 결정할 수 있다
+
+---
+
 ## 개요
 
 탐욕 알고리즘은 매 단계에서 현재 상황에서 가장 좋은 선택을 하는 방법입니다. 항상 최적해를 보장하지는 않지만, 특정 문제에서는 효율적으로 최적해를 찾을 수 있습니다.
@@ -122,7 +134,11 @@ struct Activity {
 };
 
 int maxActivities(vector<Activity>& activities) {
-    // 종료 시간 기준 정렬
+    // 시작 시간이 아닌 종료 시간(END time) 기준으로 정렬한다.
+    // 가장 빨리 끝나는 활동을 선택하면 이후 활동을 위한 여유 시간이 최대화된다 —
+    // 이것이 "교환 논증(exchange argument)"으로 최적성이 증명되는 탐욕 선택이다:
+    // 더 늦게 끝나는 활동을 먼저 선택한 해가 있다면, 가장 빨리 끝나는 활동으로
+    // 교환해도 실행 가능성을 잃지 않는다.
     sort(activities.begin(), activities.end(),
          [](const Activity& a, const Activity& b) {
              return a.end < b.end;
@@ -133,6 +149,7 @@ int maxActivities(vector<Activity>& activities) {
 
     for (int i = 1; i < activities.size(); i++) {
         if (activities[i].start >= lastEnd) {
+            // 마지막으로 선택한 활동과 겹치지 않음: 탐욕적으로 선택
             count++;
             lastEnd = activities[i].end;
         }
@@ -311,6 +328,10 @@ int minMeetingRooms(vector<pair<int,int>>& meetings) {
 
 ```python
 def min_meeting_rooms(meetings):
+    # 시작 시간과 종료 시간을 독립적으로 분리하여 정렬한다.
+    # 이렇게 하면 명시적인 이벤트 목록을 만들지 않고도 타임라인 스위프를 시뮬레이션할 수 있다 —
+    # 다음 시작이 다음 종료보다 먼저이면 새 방이 필요하고,
+    # 그렇지 않으면 기존 방이 비게 된다.
     starts = sorted([m[0] for m in meetings])
     ends = sorted([m[1] for m in meetings])
 
@@ -320,12 +341,12 @@ def min_meeting_rooms(meetings):
 
     while i < len(starts):
         if starts[i] < ends[j]:
-            rooms += 1
+            rooms += 1   # 가장 빨리 끝나는 회의가 끝나기 전에 새 회의가 시작됨
             i += 1
         else:
-            rooms -= 1
+            rooms -= 1   # 가장 빨리 끝나는 회의가 종료됨; 해당 방을 재사용
             j += 1
-        max_rooms = max(max_rooms, rooms)
+        max_rooms = max(max_rooms, rooms)  # 동시 사용 최대치를 추적
 
     return max_rooms
 ```
@@ -396,13 +417,20 @@ def min_jumps(nums):
         return 0
 
     jumps = 0
-    current_end = 0
-    farthest = 0
+    current_end = 0   # 현재 점프로 도달 가능한 범위의 오른쪽 경계
+    farthest = 0      # 현재 범위 내 어디서든 도달 가능한 가장 먼 위치
 
+    # len-2까지만 순회한다: 마지막 인덱스에 도달하는 것이 목표이므로
+    # 마지막 위치에서의 점프는 셀 필요가 없다.
     for i in range(len(nums) - 1):
         farthest = max(farthest, i + nums[i])
 
         if i == current_end:
+            # `jumps`번의 점프로 도달 가능한 모든 위치를 소진했다.
+            # [current_end+1, farthest] 범위로 진입하려면 한 번 더 점프해야 한다.
+            # `farthest`를 새 경계로 설정하는 것이 탐욕적 핵심이다:
+            # 특정 착지 지점을 정하지 않고, 다음 점프가 `farthest`까지
+            # 도달할 수 있다는 사실만 기록한다.
             jumps += 1
             current_end = farthest
 

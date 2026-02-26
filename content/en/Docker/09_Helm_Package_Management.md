@@ -1,11 +1,21 @@
 # 09. Helm Package Management
 
+**Previous**: [Kubernetes Advanced](./08_Kubernetes_Advanced.md) | **Next**: [CI/CD Pipelines](./10_CI_CD_Pipelines.md)
+
 ## Learning Objectives
-- Understanding Helm concepts and architecture
-- Creating and managing Helm charts
-- Customizing configuration with values.yaml
-- Using template functions and conditionals
-- Managing chart repositories and deployments
+
+After completing this lesson, you will be able to:
+
+1. Explain what Helm is and how it simplifies Kubernetes application packaging and deployment
+2. Create Helm charts with proper directory structure and metadata
+3. Write Helm templates using Go template syntax, built-in functions, and conditionals
+4. Customize deployments through values.yaml and command-line overrides
+5. Manage chart releases with install, upgrade, rollback, and uninstall operations
+6. Use chart repositories and dependency management for reusable components
+
+---
+
+Deploying a Kubernetes application typically involves multiple YAML manifests -- Deployments, Services, ConfigMaps, Secrets, and more. As applications grow, managing these manifests becomes complex and error-prone. Helm is the de facto package manager for Kubernetes, packaging related manifests into reusable, versioned charts with configurable templates. Learning Helm dramatically reduces deployment complexity and enables consistent, repeatable deployments across environments.
 
 ## Table of Contents
 1. [Helm Overview](#1-helm-overview)
@@ -239,14 +249,14 @@ dependencies:
   - name: postgresql
     version: "12.x.x"
     repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
+    condition: postgresql.enabled  # Conditionally include — skip the DB in dev if an external service is used
     tags:
       - database
   - name: redis
     version: "17.x.x"
     repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
-    alias: cache  # Alias
+    alias: cache  # Alias — lets you reference redis values under `.Values.cache` for clarity
 
 # Annotations
 annotations:
@@ -305,7 +315,7 @@ spec:
       labels:
         {{- include "myapp.selectorLabels" . | nindent 8 }}
       annotations:
-        # Trigger Pod restart on config change
+        # Trigger Pod restart on config change — without this, ConfigMap updates won't reach running pods
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
@@ -601,6 +611,7 @@ spec:
 
 ```yaml
 # values.yaml
+# Externalize config so the same chart works across dev/staging/prod
 # Default configuration
 
 # Replica count
@@ -609,8 +620,8 @@ replicaCount: 1
 # Image configuration
 image:
   repository: myapp/myapp
-  pullPolicy: IfNotPresent
-  tag: ""  # Uses Chart.AppVersion if empty
+  pullPolicy: IfNotPresent  # Avoids unnecessary pulls in dev; override to Always in production for security
+  tag: ""  # Uses Chart.AppVersion if empty — keeps image version in sync with chart version by default
 
 imagePullSecrets: []
 nameOverride: ""
@@ -628,12 +639,12 @@ podSecurityContext:
   fsGroup: 1000
 
 securityContext:
-  runAsNonRoot: true
+  runAsNonRoot: true  # Prevents container from running as UID 0 even if the image defaults to root
   runAsUser: 1000
   capabilities:
     drop:
-    - ALL
-  readOnlyRootFilesystem: true
+    - ALL  # Drop all Linux capabilities — add back only what the app truly needs
+  readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
 
 # Service configuration
 service:
@@ -662,10 +673,10 @@ ingress:
 resources:
   limits:
     cpu: 500m
-    memory: 512Mi
+    memory: 512Mi  # limits prevent one pod from starving others on the node
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 128Mi  # requests guarantee scheduling — the scheduler reserves this much capacity
 
 # Autoscaling
 autoscaling:
@@ -785,10 +796,10 @@ ingress:
 
 ---
 # values-prod.yaml
-replicaCount: 3
+replicaCount: 3  # Multiple replicas for high availability — if one pod crashes, others continue serving
 
 image:
-  tag: "1.0.0"  # Fixed version
+  tag: "1.0.0"  # Fixed version — never use "latest" in production; pinned tags enable deterministic rollbacks
 
 env:
   LOG_LEVEL: warn
@@ -898,11 +909,11 @@ metadata:
   labels:
     {{- include "myapp.labels" . | nindent 4 }}
   annotations:
-    # Hook type
+    # Hook type — run DB migration before app starts so the schema is ready when pods boot
     "helm.sh/hook": pre-install,pre-upgrade
-    # Hook priority (lower number first)
+    # Hook priority (lower number first) — ensures this runs before other hooks like config seeding
     "helm.sh/hook-weight": "-5"
-    # Delete policy
+    # Delete policy — clean up the Job to avoid accumulating completed pods in the namespace
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   template:
@@ -955,7 +966,7 @@ curl --data-binary "@myapp-1.0.0.tgz" http://localhost:8080/api/charts
 helm plugin install https://github.com/chartmuseum/helm-push
 helm cm-push myapp-1.0.0.tgz myrepo
 
-# Use OCI registry (Helm 3.8+)
+# Use OCI registry (Helm 3.8+) — OCI avoids running a separate chart server; reuses your existing container registry
 helm push myapp-1.0.0.tgz oci://ghcr.io/myorg/charts
 
 # Install from OCI
@@ -1071,12 +1082,6 @@ helm create webapp
 
 ---
 
-## Next Steps
-
-- [10_CI_CD_Pipelines](10_CI_CD_Pipelines.md) - GitHub Actions and deployment automation
-- [07_Kubernetes_Security](07_Kubernetes_Security.md) - Review security
-- [08_Kubernetes_Advanced](08_Kubernetes_Advanced.md) - Advanced K8s features
-
 ## References
 
 - [Helm Official Documentation](https://helm.sh/docs/)
@@ -1086,4 +1091,89 @@ helm create webapp
 
 ---
 
-[← Previous: Kubernetes Advanced](08_Kubernetes_Advanced.md) | [Next: CI/CD Pipelines →](10_CI_CD_Pipelines.md) | [Table of Contents](00_Overview.md)
+## Exercises
+
+### Exercise 1: Create and Install Your First Helm Chart
+
+Scaffold a chart, customize it, and install it to your cluster.
+
+1. Create a new chart: `helm create myapp`
+2. Explore the generated structure (`Chart.yaml`, `values.yaml`, `templates/`)
+3. Open `values.yaml` and change `replicaCount` to 2 and `image.tag` to `alpine`
+4. Lint the chart for errors: `helm lint myapp`
+5. Render the templates without installing: `helm template myapp ./myapp`
+6. Install the chart: `helm install myapp-release ./myapp`
+7. Verify: `helm list` and `kubectl get pods`
+8. Uninstall: `helm uninstall myapp-release`
+
+### Exercise 2: Customize Deployments with Values
+
+Use values overrides to deploy the same chart to different environments.
+
+1. Use the `myapp` chart from Exercise 1
+2. Create a `values-dev.yaml` file:
+   ```yaml
+   replicaCount: 1
+   service:
+     type: NodePort
+   ```
+3. Create a `values-prod.yaml` file:
+   ```yaml
+   replicaCount: 3
+   service:
+     type: LoadBalancer
+   ```
+4. Install to a `dev` namespace: `helm install myapp-dev ./myapp -f values-dev.yaml -n dev --create-namespace`
+5. Install to a `prod` namespace: `helm install myapp-prod ./myapp -f values-prod.yaml -n prod --create-namespace`
+6. Compare the two releases: `helm list -A` and `kubectl get svc -A`
+
+### Exercise 3: Upgrade and Rollback a Release
+
+Practice the Helm release lifecycle with upgrades and rollbacks.
+
+1. Install the chart with 1 replica: `helm install myapp ./myapp --set replicaCount=1`
+2. Check the release status: `helm status myapp`
+3. Upgrade to 3 replicas: `helm upgrade myapp ./myapp --set replicaCount=3`
+4. Confirm the change: `kubectl get pods`
+5. View the release history: `helm history myapp`
+6. Roll back to revision 1: `helm rollback myapp 1`
+7. Confirm the replica count returned to 1: `kubectl get pods`
+
+### Exercise 4: Use a Helm Repository
+
+Install a chart from a public repository and customize its values.
+
+1. Add the Bitnami repository: `helm repo add bitnami https://charts.bitnami.com/bitnami`
+2. Update repositories: `helm repo update`
+3. Search for the nginx chart: `helm search repo bitnami/nginx`
+4. Inspect the default values: `helm show values bitnami/nginx`
+5. Install nginx with a custom replica count:
+   ```bash
+   helm install my-nginx bitnami/nginx \
+     --set replicaCount=2 \
+     --set service.type=NodePort
+   ```
+6. Access the service via minikube: `minikube service my-nginx --url`
+7. Uninstall when done: `helm uninstall my-nginx`
+
+### Exercise 5: Add a Chart Dependency
+
+Use chart dependencies to compose a multi-component application.
+
+1. Create a new chart: `helm create webapp`
+2. Add a Redis dependency to `Chart.yaml`:
+   ```yaml
+   dependencies:
+     - name: redis
+       version: "19.x.x"
+       repository: "https://charts.bitnami.com/bitnami"
+   ```
+3. Download the dependency: `helm dependency update webapp`
+4. Confirm `charts/redis-*.tgz` was created inside the `webapp` chart directory
+5. In `values.yaml`, configure the app to connect to Redis using `redis-master` as the host
+6. Install the combined chart: `helm install webapp-release ./webapp`
+7. Verify both the webapp and Redis pods are running: `kubectl get pods`
+
+---
+
+**Previous**: [Kubernetes Advanced](./08_Kubernetes_Advanced.md) | **Next**: [CI/CD Pipelines](./10_CI_CD_Pipelines.md)

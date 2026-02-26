@@ -1,12 +1,23 @@
 # CSS 레이아웃
 
-## 개요
+**이전**: [CSS 기초](./03_CSS_Basics.md) | **다음**: [CSS 반응형](./05_CSS_Responsive.md)
 
-CSS 레이아웃은 웹 페이지의 요소들을 원하는 위치에 배치하는 기술입니다. 현대 웹 개발에서는 주로 **Flexbox**와 **CSS Grid**를 사용합니다.
+## 학습 목표(Learning Objectives)
 
-**선수 지식**: [03_CSS_Basics.md](./03_CSS_Basics.md)
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. float 기반 레이아웃이 레거시(legacy)로 여겨지는 이유와, 여전히 적합한 상황을 설명할 수 있다
+2. Flexbox를 적용하여 네비게이션 바, 카드 행, 중앙 정렬 패턴 등 1차원 레이아웃을 구성할 수 있다
+3. Flexbox의 축 모델(주 축(main axis) vs. 교차 축(cross axis))을 설명하고, 방향·줄바꿈·정렬을 설정할 수 있다
+4. CSS Grid를 적용하여 명시적 행과 열로 2차원 레이아웃을 구성할 수 있다
+5. `grid-template-areas`로 명명된 그리드 영역을 구현하여 가독성 높은 페이지 레이아웃을 만들 수 있다
+6. Flexbox와 Grid를 비교하고, 주어진 레이아웃 요구사항에 적합한 시스템을 선택할 수 있다
+7. static, relative, absolute, fixed, sticky 위치 지정 방식을 구별할 수 있다
+8. 고정 푸터(sticky footer), 모달(modal), 사이드바+콘텐츠 레이아웃 등 실전 패턴을 구현할 수 있다
 
 ---
+
+CSS 속성을 아는 것은 절반에 불과합니다. 나머지 절반은 요소를 페이지의 원하는 위치에 배치하는 것입니다. 레이아웃은 세로로 쌓인 콘텐츠 블록들을 헤더, 사이드바, 푸터가 갖춰진 전문적인 다단 디자인으로 변환하는 기술입니다. 현대 CSS는 두 가지 강력하고 상호 보완적인 시스템을 제공합니다—1차원 흐름을 위한 Flexbox와 2차원 격자를 위한 Grid—이 두 가지를 함께 사용하면 사실상 모든 레이아웃 요구사항을 처리할 수 있습니다.
 
 ## 목차
 
@@ -33,9 +44,9 @@ CSS 레이아웃은 웹 페이지의 요소들을 원하는 위치에 배치하�
 
 /* float 해제 */
 .clearfix::after {
-    content: "";
-    display: table;
-    clear: both;
+    content: "";    /* 가상 요소(pseudo-element)를 생성 — content가 없으면 크기가 없어 렌더링되지 않음 */
+    display: table; /* 블록 서식 컨텍스트(block formatting context)를 생성하여 float 요소를 포함하게 함 */
+    clear: both;    /* 앞선 모든 float 아래로 밀어내어, 부모 요소가 높이를 되찾도록 함 */
 }
 ```
 
@@ -195,7 +206,7 @@ stretch:     flex-start:   flex-end:    center:      baseline:
 ```css
 .item {
     flex-grow: 0;  /* 기본값: 늘어나지 않음 */
-    flex-grow: 1;  /* 남은 공간 1만큼 차지 */
+    flex-grow: 1;  /* 1 = 남은 공간을 균등하게 나눔; 2를 사용하면 다른 아이템의 두 배 공간을 차지 */
     flex-grow: 2;  /* 남은 공간 2만큼 차지 */
 }
 ```
@@ -381,7 +392,7 @@ row │    4    │    5    │    6    │  │ row 2
     grid-template-columns: 200px 1fr 1fr;
 
     /* repeat 함수 */
-    grid-template-columns: repeat(3, 1fr);      /* 1fr 1fr 1fr */
+    grid-template-columns: repeat(3, 1fr);      /* 1fr = 사용 가능한 공간의 1 분율(fraction); 비율에 따라 크기가 조정되는 세 개의 동일한 열 */
     grid-template-columns: repeat(4, 100px);    /* 100px 100px 100px 100px */
 
     /* auto-fill / auto-fit */
@@ -1114,7 +1125,7 @@ div를 화면 정중앙에 배치하세요 (3가지 방법).
 
 ## 다음 단계
 
-- [05_CSS_Responsive.md](./05_CSS_Responsive.md) - 미디어 쿼리와 반응형 디자인
+- [CSS 반응형 디자인](./05_CSS_Responsive.md) - 미디어 쿼리와 반응형 디자인
 
 ---
 

@@ -1,5 +1,17 @@
 # MLOps 개요
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. MLOps를 정의하고 머신러닝 모델 개발과 신뢰할 수 있는 프로덕션 배포 사이의 간극을 어떻게 해소하는지 설명할 수 있다
+2. MLOps의 네 가지 핵심 원칙인 재현성(reproducibility), 자동화(automation), 모니터링(monitoring), 버전 관리(versioning)를 설명하고 각각이 왜 필요한지 서술할 수 있다
+3. MLOps의 세 가지 성숙도 수준(maturity level)을 파악하고 특정 조직이나 프로젝트에 적합한 수준을 결정할 수 있다
+4. 데이터 검증, 피처 엔지니어링(feature engineering), 학습, 평가, 배포를 포함하는 엔드투엔드(end-to-end) ML 파이프라인을 설계할 수 있다
+5. DevOps와 MLOps의 핵심 차이를 설명하고 데이터 및 모델 관리가 도입하는 고유한 과제를 서술할 수 있다
+
+---
+
 ## 1. MLOps란?
 
 MLOps(Machine Learning Operations)는 머신러닝 모델의 개발, 배포, 운영을 자동화하고 효율적으로 관리하기 위한 실무 방법론입니다.

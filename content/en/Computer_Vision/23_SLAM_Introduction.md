@@ -1,5 +1,18 @@
 # SLAM Introduction (Visual SLAM Introduction)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define SLAM and explain how simultaneous localization and map building are achieved in unknown environments.
+2. Implement visual odometry using feature matching to estimate camera pose between consecutive frames.
+3. Describe the ORB-SLAM pipeline including feature extraction, tracking, local mapping, and loop closure.
+4. Compare Visual SLAM and LiDAR SLAM in terms of sensor characteristics, accuracy, and computational cost.
+5. Explain loop closure detection and its role in correcting accumulated drift in SLAM systems.
+6. Implement a basic SLAM simulation and evaluate trajectory accuracy against ground truth.
+
+---
+
 ## Overview
 
 SLAM (Simultaneous Localization and Mapping) is a technology that enables robots and autonomous systems to build maps while simultaneously estimating their own position in unknown environments. This lesson covers the fundamentals of Visual SLAM, LiDAR SLAM, and Loop Closure.
@@ -25,6 +38,19 @@ SLAM (Simultaneous Localization and Mapping) is a technology that enables robots
 ## 1. SLAM Overview
 
 ### What is SLAM?
+
+SLAM solves a fundamental bootstrap problem in autonomous navigation: you need a map to localize, but you need your location to build a map. Rather than solving these sequentially, SLAM maintains a joint probability distribution over both the robot's trajectory and the map, updating both as new sensor data arrives.
+
+The SLAM posterior captures this joint uncertainty:
+
+**p(x_{1:t}, m | z_{1:t}, u_{1:t})**
+
+- **x_{1:t}**: the full robot trajectory (poses at every time step)
+- **m**: the map (landmark positions or occupancy grid cells)
+- **z_{1:t}**: all sensor observations so far (pixel features, laser returns)
+- **u_{1:t}**: all control inputs (wheel odometry, IMU)
+
+The key insight is that observations z constrain *both* pose and map simultaneously. When the robot revisits a known landmark, its uncertainty about both quantities shrinks — this is why loop closure produces such dramatic corrections.
 
 ```
 SLAM (Simultaneous Localization and Mapping):
@@ -201,6 +227,9 @@ class MonocularVO:
 
         # Feature detector
         if detector == 'ORB':
+            # ORB is preferred over SIFT for real-time VO: binary descriptors
+            # enable Hamming-distance matching (~10x faster than SIFT's L2),
+            # and ORB is patent-free with comparable repeatability outdoors.
             self.detector = cv2.ORB_create(3000)
         elif detector == 'SIFT':
             self.detector = cv2.SIFT_create(3000)
@@ -209,9 +238,12 @@ class MonocularVO:
 
         # Optical flow parameters
         self.lk_params = dict(
-            winSize=(21, 21),
-            maxLevel=3,
+            winSize=(21, 21),   # 21×21 search window: large enough to handle ~10px/frame motion
+                                # without losing the feature, but small enough to stay on one surface
+            maxLevel=3,         # 3-level pyramid lets us track features displaced up to ~80px
+                                # (21 * 2^3) — covers typical camera motion between frames
             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01)
+            # Stop when displacement < 0.01px OR after 30 iterations — trades accuracy vs speed
         )
 
         # State
@@ -249,11 +281,17 @@ class MonocularVO:
 
         E, mask = cv2.findEssentialMat(
             pts1, pts2, self.K,
-            method=cv2.RANSAC,
-            prob=0.999,
-            threshold=1.0
+            method=cv2.RANSAC,  # RANSAC discards outlier matches from incorrect tracking
+                                # or moving objects; without it, even a few bad matches
+                                # corrupt the entire Essential Matrix estimate
+            prob=0.999,         # 99.9% confidence that at least one sample is outlier-free;
+                                # higher than typical (0.99) because VO errors compound over time
+            threshold=1.0       # 1.0px Sampson distance tolerance — tight enough to reject
+                                # mismatches yet forgiving of sub-pixel calibration residuals
         )
 
+        # recoverPose selects the unique R,t from the 4 possible decompositions
+        # by checking which solution has the most points in front of both cameras
         _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K)
 
         return R, t
@@ -280,18 +318,25 @@ class MonocularVO:
             )
 
             if len(prev_pts) >= 8:
-                # Estimate pose
+                # 8 is the theoretical minimum for the 8-point algorithm that
+                # underlies findEssentialMat; in practice more is better, but
+                # we need at least this many to have a determined linear system
                 R, t = self.estimate_pose(
                     prev_pts.reshape(-1, 2),
                     cur_pts.reshape(-1, 2)
                 )
 
-                # Accumulate pose
+                # Accumulate pose in world frame: translation must be rotated
+                # by the *current* world-to-camera rotation before adding,
+                # so that all increments are expressed in the same reference frame
                 self.cur_t = self.cur_t + self.cur_R @ t
                 self.cur_R = R @ self.cur_R
 
                 # Detect new features if needed
                 if len(cur_pts) < 1000:
+                    # Replenish when tracked count falls below threshold —
+                    # too few features degrades pose estimation accuracy and
+                    # increases drift; 1000 is a practical balance for HD video
                     new_pts = self.detect_features(gray)
                     if len(cur_pts) > 0:
                         self.prev_pts = np.vstack([
@@ -358,15 +403,20 @@ class StereoVO:
         self.focal = K[0, 0]
 
         self.detector = cv2.ORB_create(3000)
+        # NORM_HAMMING matches binary ORB descriptors by XOR bit-count,
+        # which is much faster than L2 for floating-point descriptors like SIFT
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-        # Stereo matcher
+        # Stereo matcher — SGBM (Semi-Global Block Matching) enforces
+        # disparity smoothness along multiple scan-line directions,
+        # giving more complete depth maps than local block matching alone
         self.stereo = cv2.StereoSGBM_create(
             minDisparity=0,
-            numDisparities=128,
-            blockSize=5,
-            P1=8 * 3 * 5 ** 2,
-            P2=32 * 3 * 5 ** 2
+            numDisparities=128,  # Search range 0–128px; covers ~2–50m depth at typical baselines
+            blockSize=5,         # 5×5 matching window: small enough to preserve edges,
+                                 # large enough for reliable texture matching
+            P1=8 * 3 * 5 ** 2,  # Penalty for disparity change of 1 — standard heuristic
+            P2=32 * 3 * 5 ** 2  # Penalty for larger jumps; P2 > P1 discourages discontinuities
         )
 
         self.prev_pts_3d = None
@@ -404,7 +454,8 @@ class StereoVO:
             if 0 <= x < depth.shape[1] and 0 <= y < depth.shape[0]:
                 z = depth[y, x]
 
-                if z > 0 and z < 100:  # Valid depth
+                if z > 0 and z < 100:  # 0–100m: reject invalid (0) and implausibly far points;
+                                       # stereo becomes unreliable beyond ~baseline×50 range
                     X = (pt.pt[0] - cx) * z / fx
                     Y = (pt.pt[1] - cy) * z / fy
                     pts_3d.append([X, Y, z])
@@ -439,6 +490,9 @@ class StereoVO:
 
         good_matches = []
         for m, n in matches:
+            # Lowe's ratio test: accept only matches where the best is
+            # significantly better than the second-best (0.7 threshold).
+            # This rejects ambiguous matches in repetitive textures.
             if m.distance < 0.7 * n.distance:
                 good_matches.append(m)
 
@@ -451,7 +505,10 @@ class StereoVO:
                 kp[valid_idx[m.trainIdx]].pt for m in good_matches
             ])
 
-            # Estimate pose using PnP
+            # PnP (Perspective-n-Point): given 3D map points and their 2D
+            # projections, recover camera pose directly — more stable than
+            # Essential Matrix decomposition because depth is already known.
+            # RANSAC variant handles moving objects and descriptor mismatches.
             success, rvec, tvec, inliers = cv2.solvePnPRansac(
                 obj_points, img_points, self.K, None
             )
@@ -560,15 +617,19 @@ class ORBVocabulary:
 
         all_desc = np.vstack(all_descriptors)
 
-        # K-means clustering
+        # K-means clusters descriptors into "visual words" — each cluster
+        # center becomes a prototype that any descriptor can be quantized to.
+        # This lets us compare images by word-frequency histogram rather than
+        # exhaustive descriptor matching, reducing query cost from O(N·M) to O(N).
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
                    100, 0.2)
         _, labels, centers = cv2.kmeans(
             all_desc.astype(np.float32),
-            self.num_words,
+            self.num_words,  # Vocabulary size: more words → finer discrimination,
+                             # but slower lookup and larger database memory footprint
             None,
             criteria,
-            10,
+            10,              # 10 random restarts pick the best clustering (lowest inertia)
             cv2.KMEANS_RANDOM_CENTERS
         )
 
@@ -589,10 +650,11 @@ class ORBVocabulary:
 
         bow = np.zeros(self.num_words)
         for m in matches:
-            bow[m.trainIdx] += 1
+            bow[m.trainIdx] += 1  # Accumulate word frequencies (term frequency)
 
-        # Normalize
-        bow = bow / (np.linalg.norm(bow) + 1e-6)
+        # L2-normalize so cosine similarity (dot product) is scale-invariant —
+        # images with more features shouldn't score higher just because of feature count
+        bow = bow / (np.linalg.norm(bow) + 1e-6)  # 1e-6 avoids division by zero on blank frames
 
         return bow
 
@@ -607,6 +669,10 @@ class SimpleSLAM:
     def __init__(self, K):
         self.K = K
         self.orb = cv2.ORB_create(2000)
+        # crossCheck=True enforces mutual consistency: match A→B is kept only if
+        # B also maps back to A as its nearest neighbor, eliminating one-sided matches.
+        # This is simpler than Lowe's ratio test and works well for keyframe matching
+        # where both descriptor sets are from the same detector.
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
         # Map
@@ -621,7 +687,9 @@ class SimpleSLAM:
         self.prev_kp = None
         self.prev_desc = None
 
-        # Keyframe criteria
+        # Keyframe criteria: 30 matches is the practical lower bound before
+        # Essential Matrix estimation becomes unreliable. Below this, RANSAC
+        # may converge to a degenerate solution (e.g., pure rotation).
         self.kf_threshold = 30   # Minimum matches
 
     def is_keyframe(self, num_matches, motion):
@@ -699,7 +767,9 @@ class SimpleSLAM:
         for pose in self.poses:
             R = pose['R']
             t = pose['t']
-            # Camera position = -R^T * t
+            # Camera position in world frame = -R^T * t
+            # Because t is the world origin expressed in camera coordinates,
+            # we invert the transform: world position = R^T * (-t)
             pos = -R.T @ t
             trajectory.append(pos.ravel())
         return np.array(trajectory)
@@ -746,6 +816,8 @@ LiDAR SLAM:
 
 ### ICP (Iterative Closest Point)
 
+ICP solves the core LiDAR SLAM subproblem: given two overlapping point clouds captured at different times, find the rigid-body transform (rotation + translation) that best aligns them. This alignment reveals how much the robot moved between scans, without needing any artificial landmarks or GPS.
+
 ```python
 import numpy as np
 from scipy.spatial import KDTree
@@ -770,26 +842,33 @@ def icp(source, target, max_iterations=50, tolerance=1e-6):
     R_total = np.eye(3)
     t_total = np.zeros(3)
 
-    # KD-Tree for efficient nearest neighbor search
+    # KD-Tree indexes the *target* cloud for O(log M) nearest-neighbor queries
+    # instead of O(N·M) brute force — critical when clouds have 10k+ points
     tree = KDTree(target)
 
     for i in range(max_iterations):
-        # 1. Find nearest correspondences
+        # 1. Find nearest correspondences (the "Closest Point" in ICP's name)
+        #    Assumes the current alignment is good enough that the nearest
+        #    target point is the correct correspondent — improves each iteration
         distances, indices = tree.query(src)
         correspondences = target[indices]
 
         # 2. Estimate transformation (SVD)
+        #    The Orthogonal Procrustes Problem: given matched point pairs,
+        #    find the rotation R that minimizes sum of squared distances.
+        #    SVD of the cross-covariance matrix H gives the optimal solution.
         src_centroid = np.mean(src, axis=0)
         tgt_centroid = np.mean(correspondences, axis=0)
 
         src_centered = src - src_centroid
         tgt_centered = correspondences - tgt_centroid
 
-        H = src_centered.T @ tgt_centered
+        H = src_centered.T @ tgt_centered  # 3×3 cross-covariance matrix
         U, _, Vt = np.linalg.svd(H)
         R = Vt.T @ U.T
 
-        # Correct reflection
+        # Correct reflection: det(R) = -1 means SVD returned an improper rotation
+        # (reflection). Flipping the last row of Vt forces a proper rotation (det=+1).
         if np.linalg.det(R) < 0:
             Vt[-1, :] *= -1
             R = Vt.T @ U.T
@@ -820,15 +899,20 @@ class LiDARSLAM:
         self.pose = np.array([0.0, 0.0, 0.0])  # x, y, theta
         self.trajectory = [self.pose.copy()]
 
-        # Occupancy grid map
+        # Occupancy grid map — initialize all cells to 0.5 (maximum uncertainty)
+        # so that unvisited areas are neither claimed free nor occupied.
+        # 0.5 is the prior probability; updates push cells toward 0 (free) or 1 (occupied).
         self.map_size = 1000
         self.occupancy_map = np.ones((self.map_size, self.map_size)) * 0.5
         self.map_origin = np.array([self.map_size // 2, self.map_size // 2])
+        # Center origin so the robot can map equally in all directions
 
     def scan_to_points(self, scan_ranges, scan_angles):
         """Convert scan data to 2D points"""
 
         valid = (scan_ranges > 0.1) & (scan_ranges < 30.0)
+        # 0.1m minimum: filters out the robot's own body returns
+        # 30.0m maximum: beyond this, 2D LiDAR returns become unreliable
         ranges = scan_ranges[valid]
         angles = scan_angles[valid]
 
@@ -868,6 +952,9 @@ class LiDARSLAM:
         gx, gy, valid = self.point_to_grid(world_points)
 
         # Update occupancy probability (log odds)
+        # +0.1 per hit: laser endpoint = occupied. Log-odds representation
+        # would be more principled, but this additive approximation is fast
+        # and sufficient for simple mapping (see Problem 4 for full log-odds).
         self.occupancy_map[gy, gx] = np.clip(
             self.occupancy_map[gy, gx] + 0.1, 0, 1
         )
@@ -976,14 +1063,17 @@ class LoopClosureDetector:
 
         self.vocabulary = None
         self.vocabulary_size = vocabulary_size
-        self.min_score = min_score
+        self.min_score = min_score  # 0.3: empirically chosen floor — below this,
+                                    # BoW similarity is likely coincidental overlap
 
         # Keyframe database
         self.keyframe_bows = []
         self.keyframe_descs = []
         self.keyframe_kps = []
 
-        # Exclude recent N keyframes from loop candidates
+        # Exclude recent N keyframes from loop candidates — nearby frames are
+        # always visually similar (temporal correlation), so excluding them
+        # prevents false positives from consecutive keyframes being flagged as loops
         self.temporal_window = 30
 
     def build_vocabulary(self, training_images):
@@ -1082,6 +1172,9 @@ class LoopClosureDetector:
 
         good_matches = []
         for m, n in matches:
+            # 0.75 ratio test (slightly looser than typical 0.7 used in VO)
+            # because loop frames can be viewed from significantly different
+            # angles, making descriptors somewhat less similar even for true matches
             if m.distance < 0.75 * n.distance:
                 good_matches.append(m)
 
@@ -1092,6 +1185,11 @@ class LoopClosureDetector:
         pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
         pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
 
+        # We use the Fundamental Matrix (not Essential) here because we don't
+        # need calibrated coordinates — just a geometric consistency check.
+        # Inlier count under RANSAC is our confidence signal: many random
+        # descriptor matches will fail the epipolar constraint, so a high
+        # inlier count strongly suggests these two frames share real 3D structure.
         F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC)
 
         if mask is None:
@@ -1141,7 +1239,10 @@ class PoseGraphOptimizer:
         """Add loop constraint"""
 
         if info_matrix is None:
-            # Loop constraints have high weight
+            # Loop constraints get 100× higher weight than odometry edges because
+            # they are geometrically verified (RANSAC inliers confirm real overlap),
+            # while odometry accumulates noise continuously. The optimizer should
+            # strongly prefer satisfying a verified loop over individual odometry steps.
             info_matrix = np.eye(3) * 100
 
         self.loop_constraints.append({
@@ -1197,6 +1298,9 @@ class SimpleVSLAM:
 
         # State
         self.frame_count = 0
+        # Sample one keyframe every 10 frames: frequent enough to capture
+        # scene change, sparse enough that consecutive keyframes have meaningful
+        # baseline for loop detection (adjacent frames are too similar to be useful)
         self.keyframe_interval = 10
 
     def process_frame(self, frame):
@@ -1224,7 +1328,9 @@ class SimpleVSLAM:
                 )
 
             # Loop detection
-            if kf_idx > 30:  # After sufficient keyframes
+            if kf_idx > 30:  # Need at least 30 keyframes before loop search:
+                             # fewer than this and the BoW vocabulary hasn't seen
+                             # enough variety to distinguish places reliably
                 candidate, score = self.loop_detector.detect_loop(kf_idx)
 
                 if candidate is not None:

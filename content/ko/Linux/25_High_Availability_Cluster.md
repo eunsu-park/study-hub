@@ -1,13 +1,18 @@
 # 고가용성 클러스터
 
+**이전**: [클라우드 통합](./24_Cloud_Integration.md) | **다음**: [트러블슈팅 가이드](./26_Troubleshooting_Guide.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- 고가용성(HA) 클러스터의 개념
-- Pacemaker와 Corosync 설정
-- DRBD를 이용한 스토리지 복제
-- 페일오버와 Fencing
+1. Corosync, Pacemaker, DRBD를 포함한 HA 클러스터 아키텍처의 구성 요소를 설명한다
+2. 적절한 쿼럼(Quorum) 및 속성 설정을 통해 pcs로 2노드 클러스터를 구성한다
+3. 가상 IP(Virtual IP), 파일시스템, 서비스를 포함한 Pacemaker 리소스를 생성하고 관리한다
+4. 올바른 페일오버(Failover)를 위한 리소스 그룹, 순서(Ordering) 제약, 배치(Colocation) 제약을 정의한다
+5. 클러스터 노드 간 실시간 블록 수준 복제를 위해 DRBD를 설정한다
+6. 프로덕션 환경에서 스플릿 브레인(Split-Brain) 시나리오를 방지하기 위해 STONITH 펜싱(Fencing)을 구현한다
+7. 페일오버 절차를 테스트하고 crm_mon, pcs로 클러스터 상태를 모니터링한다
 
 **난이도**: ⭐⭐⭐⭐⭐ (최고급)
 
@@ -24,6 +29,8 @@
 7. [실전 클러스터 구성](#7-실전-클러스터-구성)
 
 ---
+
+데이터베이스, 웹 애플리케이션, 파일 서버와 같은 핵심 서비스에서는 단 몇 분의 다운타임도 매출 손실과 SLA 위반으로 이어질 수 있습니다. 고가용성(High Availability) 클러스터링은 하나의 노드가 장애를 겪을 때 자동으로 인계받는 여러 노드에서 서비스를 실행함으로써 단일 장애점(Single Point of Failure)을 제거합니다. 이 레슨은 클러스터 통신을 담당하는 Corosync, 리소스 관리를 담당하는 Pacemaker, 데이터 복제를 담당하는 DRBD, 스플릿 브레인(Split-Brain) 방지를 위한 펜싱(Fencing)으로 구성된 완전한 HA 스택을 다루며, 수동 개입 없이 하드웨어 장애를 견딜 수 있는 시스템을 구축하는 역량을 제공합니다.
 
 ## 1. 고가용성 개요
 
@@ -703,7 +710,7 @@ sudo drbdadm status all
 
 ## 다음 단계
 
-- [26_Troubleshooting_Guide.md](./26_Troubleshooting_Guide.md) - 시스템 문제 진단 및 해결
+- [트러블슈팅 가이드](./26_Troubleshooting_Guide.md) - 시스템 문제 진단 및 해결
 
 ---
 

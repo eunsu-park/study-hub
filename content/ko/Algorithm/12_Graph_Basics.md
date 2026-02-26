@@ -1,5 +1,18 @@
 # 그래프 기초 (Graph Basics)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 그래프의 핵심 용어(정점(vertex), 간선(edge), 방향/무방향, 가중치, 연결)를 정의하고 속성에 따라 그래프를 분류할 수 있다
+2. 인접 리스트(adjacency list)와 인접 행렬(adjacency matrix)을 사용해 그래프를 표현하고 두 방식의 장단점을 비교할 수 있다
+3. 깊이 우선 탐색(DFS, Depth First Search)을 재귀 및 반복(iterative) 방식으로 구현하여 그래프를 탐색할 수 있다
+4. 너비 우선 탐색(BFS, Breadth First Search)을 큐(queue)를 사용해 구현하고 비가중 그래프에서 최단 경로를 찾는 데 활용할 수 있다
+5. DFS와 BFS를 비교하여 주어진 문제에 적합한 탐색 전략을 선택할 수 있다
+6. 사이클 감지(cycle detection) 및 연결 요소(connected components) 탐색 등 실용적인 문제에 그래프 탐색 알고리즘을 적용할 수 있다
+
+---
+
 ## 개요
 
 그래프는 정점(vertex)과 간선(edge)으로 이루어진 자료구조로, 네트워크, 관계, 경로 등을 표현하는 데 사용됩니다. 이 레슨에서는 그래프의 기본 개념과 DFS, BFS 탐색을 학습합니다.
@@ -370,12 +383,17 @@ void dfsIterative(int start) {
         int v = st.top();
         st.pop();
 
+        // pop 시점에 방문 여부를 검사(push 시점이 아님): 한 노드가
+        // 처리되기 전에 여러 번 push될 수 있기 때문 — 미방문 이웃이
+        // 즉시 push하므로 여기서 재처리를 방지
         if (visited[v]) continue;
 
         visited[v] = true;
         cout << v << " ";
 
-        // 역순으로 push하면 순서 유지
+        // 역순으로 push하여 스택에서 pop될 때 인접 리스트의 첫 번째
+        // 이웃이 먼저 처리됨 — 이렇게 하면 재귀 DFS 방문 순서
+        // (왼쪽→오른쪽)와 동일한 순회 결과를 생성
         for (auto it = adj[v].rbegin(); it != adj[v].rend(); it++) {
             if (!visited[*it]) {
                 st.push(*it);
@@ -394,13 +412,17 @@ def dfs_iterative(graph, start):
     while stack:
         v = stack.pop()
 
+        # 여러 번 push된 노드의 재처리를 방지;
+        # BFS와 달리 push 시점에 표시할 수 없는데, 서로 다른
+        # 스택 경로가 해당 노드가 pop되기 전에 도달할 수 있기 때문
         if v in visited:
             continue
 
         visited.add(v)
         print(v, end=' ')
 
-        # 역순으로 추가하면 순서 유지
+        # 역순으로 추가하여 pop(LIFO) 시 첫 번째 이웃이 먼저 방문됨
+        # — 재귀 호출 순서와 일치하여 동일한 순회 결과를 생성
         for neighbor in reversed(graph[v]):
             if neighbor not in visited:
                 stack.append(neighbor)
@@ -469,6 +491,9 @@ void bfs(int start) {
     vector<bool> visited(V, false);
     queue<int> q;
 
+    // dequeue 시점이 아닌 enqueue 시점에 방문 표시 — dequeue까지 기다리면
+    // 같은 이웃이 처음 처리되기 전에 여러 번 enqueue될 수 있어
+    // O(E) 중복 항목이 생기고 O(V+E) 복잡도가 깨짐
     visited[start] = true;
     q.push(start);
 
@@ -480,6 +505,8 @@ void bfs(int start) {
 
         for (int neighbor : adj[v]) {
             if (!visited[neighbor]) {
+                // 여기(enqueue 시점)에서 표시하여 다른 경로가 이 이웃을
+                // 다시 enqueue하지 못하게 함 — 각 정점이 큐에 정확히 한 번만 들어감을 보장
                 visited[neighbor] = true;
                 q.push(neighbor);
             }
@@ -495,6 +522,10 @@ from collections import deque
 def bfs(graph, start):
     visited = set()
     queue = deque([start])
+    # enqueue 시점에 방문 표시 — BFS는 비가중 그래프에서 소스로부터의
+    # 거리 순서대로 노드를 처리하므로 최단 경로를 보장;
+    # 여기서 표시(dequeue 시점이 아닌)하면 노드가 여러 이웃에 의해
+    # 중복 enqueue되는 것을 방지하고 O(V+E) 시간 한계를 유지
     visited.add(start)
 
     while queue:
@@ -503,6 +534,8 @@ def bfs(graph, start):
 
         for neighbor in graph[v]:
             if neighbor not in visited:
+                # 즉시 visited에 추가하여 같은 이웃에 대한 동시 경로가
+                # 모두 enqueue하지 못하게 함 — 첫 번째 경로가 이김 (최단)
                 visited.add(neighbor)
                 queue.append(neighbor)
 
@@ -540,12 +573,17 @@ vector<int> shortestPath(int start) {
 # Python
 def shortest_path(graph, start):
     dist = {start: 0}
+    # BFS는 소스로부터 거리의 비감소 순서로 노드를 처리;
+    # 노드에 처음 도달할 때의 거리가 최소 — 이 속성은
+    # 비가중 그래프(모든 간선 비용 1)에서만 성립
     queue = deque([start])
 
     while queue:
         v = queue.popleft()
 
         for neighbor in graph[v]:
+            # "not in dist"가 방문 검사 역할도 함 — 이웃을 처음
+            # 볼 때만 거리를 기록 (이것이 최단 거리)
             if neighbor not in dist:
                 dist[neighbor] = dist[v] + 1
                 queue.append(neighbor)
@@ -753,7 +791,7 @@ bool isBipartite() {
 from collections import deque
 
 def is_bipartite(graph, n):
-    color = [-1] * n
+    color = [-1] * n  # -1은 미방문; 0과 1이 두 그룹을 나타냄
 
     for start in range(n):
         if color[start] == -1:
@@ -765,9 +803,13 @@ def is_bipartite(graph, n):
 
                 for neighbor in graph[v]:
                     if color[neighbor] == -1:
+                        # 반대 색상을 할당 — v가 그룹 0이면
+                        # 이웃은 반드시 그룹 1이어야 하고, 그 반대도 마찬가지
                         color[neighbor] = 1 - color[v]
                         queue.append(neighbor)
                     elif color[neighbor] == color[v]:
+                        # 인접한 두 노드가 같은 색상을 공유 — 홀수 길이
+                        # 사이클이 존재하며, 이분 그래프 색칠이 불가능
                         return False
 
     return True

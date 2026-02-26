@@ -2,9 +2,24 @@
 
 [이전: 기술통계와 EDA](./07_Descriptive_Stats_EDA.md) | [다음: 데이터 시각화 고급](./09_Data_Visualization_Advanced.md)
 
-## 개요
+---
 
-Matplotlib은 Python의 대표적인 시각화 라이브러리입니다. 다양한 차트 유형과 커스터마이징 방법을 다룹니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Figure/Axes 객체 모델(object model)을 설명하고 객체 지향(object-oriented) Matplotlib API를 사용해 플롯을 생성할 수 있습니다
+2. 사용자 정의 스타일, 마커(marker), 색상, 시계열(time series) 서식을 적용한 선 그래프(line plot)를 구현할 수 있습니다
+3. 값 레이블이 포함된 수직, 수평, 그룹형(grouped), 누적형(stacked) 막대 차트(bar chart)를 생성할 수 있습니다
+4. 밀도 곡선(density curve), 누적 모드(cumulative mode), 겹침 비교(overlapping comparisons)가 포함된 히스토그램(histogram)을 적용할 수 있습니다
+5. 산점도(scatter plot), 버블 차트(bubble chart), 추세선(trend line)이 있는 범주별 색상 산점도를 구현할 수 있습니다
+6. 다양한 데이터 유형에 파이/도넛 차트(pie/donut chart), 상자 그림(box plot), 히트맵(heatmap)을 언제 사용해야 하는지 설명할 수 있습니다
+7. 제목, 레이블, 주석(annotation), 격자(grid), 척추선(spine), 범례(legend) 등 플롯 요소를 커스터마이징할 수 있습니다
+8. Matplotlib 스타일을 적용하고 PNG, PDF, SVG 형식으로 출판 품질(publication-quality) 그림을 저장할 수 있습니다
+
+---
+
+잘 만들어진 시각화 하나는 숫자 표로는 몇 분이 걸려도 전달하기 어려운 내용을 단 몇 초 만에 전달할 수 있습니다. Matplotlib은 Python 생태계(ecosystem)의 기반이 되는 시각화 라이브러리로, 사실상 모든 시각화 도구가 그 위에 구축되어 있습니다. Matplotlib 차트를 생성하고 커스터마이징하는 방법을 익히면 모든 시각적 요소를 완전히 제어할 수 있게 되어, 어떤 청중에게도 설득력 있는 데이터 스토리를 전달할 수 있습니다.
 
 ---
 
@@ -595,3 +610,80 @@ plt.show()
 | 범례 | `legend()` |
 | 그리드 | `grid()` |
 | 저장 | `savefig()` |
+
+---
+
+## 연습 문제
+
+### 연습 1: 객체지향(Object-Oriented) API 기초
+
+Figure/Axes 객체 모델을 활용하여 상태 기반 API와 객체지향 API의 차이를 이해하세요.
+
+1. `fig, ax = plt.subplots(figsize=(10, 5))`로 그림을 생성하세요.
+2. x ∈ [-3, 3] 범위에서 `y = x²`와 `y = x³`를 같은 축에 각각 다른 색상과 레이블로 그리세요.
+3. 제목, 축 레이블, 범례, y=0에 수평 점선을 추가하세요.
+4. `ax.spines['top'].set_visible(False)`와 마찬가지로 오른쪽 스파인(spine)도 제거하세요.
+5. 300 DPI로 PNG 파일로 저장하세요. `plt.plot()` (상태 기반)과 `ax.plot()` (객체지향)의 차이를 설명하고, 어떤 상황에서 이 구분이 중요한지 설명하세요.
+
+### 연습 2: 시계열(Time Series) 시각화
+
+날짜 형식이 올바르게 적용된 완전한 시계열 차트를 만드세요.
+
+1. 2022-01-01부터 시작하는 24개월의 일별 데이터를 생성하세요:
+   ```python
+   import pandas as pd, numpy as np
+   dates = pd.date_range('2022-01-01', periods=730, freq='D')
+   values = 100 + np.cumsum(np.random.randn(730))
+   ```
+2. `fill_between()`으로 선 아래 영역을 채운 그림을 생성하세요.
+3. x축에 월별 눈금(`mdates.MonthLocator()`)을 표시하고 레이블을 45도 회전하세요.
+4. `ax.annotate()`를 사용하여 전체 최댓값을 화살표로 주석 처리하세요.
+5. 30일 이동 평균(rolling mean)을 대비되는 색상의 두 번째 선으로 추가하고, 원시 데이터와 평활 데이터를 구분하는 범례를 추가하세요.
+
+### 연습 3: 다중 패널 비교 차트
+
+서브플롯(subplot)을 사용하여 같은 데이터를 여러 차트 유형으로 비교하세요.
+
+1. Iris 데이터셋을 로드하세요: `from sklearn.datasets import load_iris`.
+2. 2×2 그림을 생성하세요:
+   - 좌상단: 각 품종별 꽃받침 길이(sepal length)의 겹치는 히스토그램 (3가지 색상, alpha=0.5).
+   - 우상단: 품종별 꽃받침 길이 평균의 수평 막대 차트 (값 레이블 포함).
+   - 좌하단: 품종별로 그룹화된 꽃잎 길이(petal length)의 박스 플롯.
+   - 우하단: 꽃받침 길이 vs. 꽃잎 길이 산점도 (품종별 색상 구분, 각 품종의 추세선 포함).
+3. 각 서브플롯에 설명적인 제목을 붙이고, 네 패널 전체에 일관된 색상 코딩을 사용하세요.
+4. `plt.tight_layout()`을 호출하고 PDF로 저장하세요.
+
+### 연습 4: 그룹형 및 누적 막대 차트
+
+나란히 배치된 그룹형 차트와 누적 차트를 만들고 트레이드오프를 해석하세요.
+
+1. 세 제품의 분기별 매출 데이터프레임을 만드세요:
+   ```python
+   data = {
+       'Q1': [120, 95, 80], 'Q2': [140, 110, 70],
+       'Q3': [130, 105, 90], 'Q4': [160, 125, 100]
+   }
+   products = ['Product A', 'Product B', 'Product C']
+   ```
+2. 그룹형 막대 차트(분기당 3개 막대, 나란히 배치)를 생성하세요.
+3. 같은 데이터를 보여주는 누적 막대 차트(각 제품의 총합 기여도)를 생성하세요.
+4. 누적 차트의 각 세그먼트 안에 값 레이블을 추가하세요.
+5. 코멘트로 설명하세요: (a) 개별 제품 추세 비교와 (b) 분기별 총 매출 비교에는 어느 차트가 더 적합한가요? 이유는 무엇인가요?
+
+### 연습 5: 스타일이 적용된 상관관계 히트맵
+
+객체지향 API를 사용하여 세련된 상관관계 히트맵을 만드세요.
+
+1. 약한 상관관계를 가진 100×6 랜덤 데이터셋을 생성하세요:
+   ```python
+   np.random.seed(0)
+   A = np.random.randn(100, 3)
+   B = A + np.random.randn(100, 3) * 0.5  # A와 상관됨
+   df = pd.DataFrame(np.hstack([A, B]), columns=list('ABCDEF'))
+   ```
+2. 상관 행렬을 계산하고 `ax.imshow(corr, cmap='coolwarm', vmin=-1, vmax=1)`으로 시각화하세요.
+3. 각 셀에 소수점 둘째 자리로 반올림한 상관 계수를 주석으로 추가하세요.
+4. "Pearson r"로 레이블된 컬러바를 추가하세요.
+5. Matplotlib 스타일을 적용하고(`plt.style.use('seaborn-v0_8-whitegrid')`), PNG(300 DPI)와 SVG 형식 모두로 그림을 내보내세요. SVG를 PNG보다 선호해야 하는 경우를 설명하세요.
+
+[이전: 기술 통계 & EDA](./07_Descriptive_Stats_EDA.md) | [다음: 데이터 시각화 고급](./09_Data_Visualization_Advanced.md)

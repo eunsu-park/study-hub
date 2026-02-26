@@ -561,6 +561,344 @@ for chunk in llm.stream(messages):
 - Collect user feedback
 - Continuous model improvement
 
+## Exercises
+
+### Exercise 1: History Truncation with Token Limits
+
+The `TokenManager.truncate_history` method removes older messages when the history exceeds `max_history_tokens`. However, it has a subtle issue: it may break a conversation pair (e.g., keep an assistant message but drop its corresponding user message). Fix this issue and add a unit test.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import tiktoken
+
+class TokenManager:
+    def __init__(self, model="gpt-3.5-turbo", max_tokens=4000):
+        self.encoding = tiktoken.encoding_for_model(model)
+        self.max_tokens = max_tokens
+
+    def count_tokens(self, text: str) -> int:
+        return len(self.encoding.encode(text))
+
+    def truncate_history(self, history: list[dict], max_history_tokens: int = 2000) -> list[dict]:
+        """
+        Remove oldest message PAIRS first to maintain conversational coherence.
+        Always removes user+assistant pairs together to avoid orphaned messages.
+        """
+        if not history:
+            return history
+
+        # Calculate total tokens
+        total_tokens = sum(self.count_tokens(msg['content']) for msg in history)
+
+        if total_tokens <= max_history_tokens:
+            return history  # No truncation needed
+
+        # Remove oldest pairs (2 messages at a time)
+        truncated = list(history)
+        while truncated and total_tokens > max_history_tokens:
+            # Remove oldest pair (user + assistant)
+            if len(truncated) >= 2:
+                removed_user = truncated.pop(0)
+                removed_assistant = truncated.pop(0)
+                total_tokens -= (
+                    self.count_tokens(removed_user['content']) +
+                    self.count_tokens(removed_assistant['content'])
+                )
+            else:
+                # Only one message left, remove it
+                removed = truncated.pop(0)
+                total_tokens -= self.count_tokens(removed['content'])
+
+        return truncated
+
+
+# Unit test
+def test_truncate_history():
+    tm = TokenManager()
+
+    # Build a conversation with known token counts
+    history = [
+        {"role": "user", "content": "Hello"},           # ~1 token
+        {"role": "assistant", "content": "Hi there!"},  # ~3 tokens
+        {"role": "user", "content": "How are you?"},    # ~4 tokens
+        {"role": "assistant", "content": "I'm great!"},  # ~3 tokens
+        {"role": "user", "content": "Tell me about Python"},  # ~5 tokens
+        {"role": "assistant", "content": "Python is a high-level programming language"},  # ~9 tokens
+    ]
+
+    # Test 1: No truncation needed
+    result = tm.truncate_history(history, max_history_tokens=1000)
+    assert len(result) == 6, "Should keep all messages when under limit"
+
+    # Test 2: Truncation removes oldest pair
+    result = tm.truncate_history(history, max_history_tokens=25)
+    assert len(result) % 2 == 0, "Result should have even number of messages (complete pairs)"
+    assert result[0]["role"] == "user", "First message should be user"
+
+    # Test 3: Messages remain as pairs (no orphaned assistant messages)
+    for i in range(0, len(result), 2):
+        assert result[i]["role"] == "user", f"Message {i} should be user"
+        assert result[i+1]["role"] == "assistant", f"Message {i+1} should be assistant"
+
+    print("All tests passed!")
+
+test_truncate_history()
+```
+
+**The bug in the original:** The original implementation iterates `reversed(history)` to count tokens from newest to oldest, but when it hits the token limit it stops without ensuring message-pair integrity. An assistant message with no corresponding user message confuses the LLM.
+</details>
+
+---
+
+### Exercise 2: Intent-Driven Chatbot Router
+
+Build a simple chatbot router that classifies user intent into one of three categories: `rag_query` (question answerable from documents), `chitchat` (general conversation), or `action_request` (needs to take an action like placing an order). Route each intent to a different handler.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+
+class Intent(Enum):
+    RAG_QUERY = "rag_query"
+    CHITCHAT = "chitchat"
+    ACTION_REQUEST = "action_request"
+
+@dataclass
+class ChatbotResponse:
+    intent: Intent
+    response: str
+    sources: list = None
+
+class RouterChatbot:
+    def __init__(self, rag_chatbot=None):
+        from openai import OpenAI
+        self.client = OpenAI()
+        self.rag_chatbot = rag_chatbot  # Optional RAG component
+        self.history = []
+
+    def classify_intent(self, message: str) -> Intent:
+        """Classify user intent using zero-shot LLM classification."""
+        prompt = f"""Classify this message into exactly one category:
+- rag_query: Question that needs to be answered from documents/knowledge base
+- chitchat: Casual conversation, greetings, general questions
+- action_request: Request to DO something (order, book, cancel, etc.)
+
+Message: "{message}"
+
+Category (reply with just the category name):"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=20
+        )
+        result = response.choices[0].message.content.strip().lower()
+
+        # Map to enum, default to chitchat if unrecognized
+        mapping = {
+            "rag_query": Intent.RAG_QUERY,
+            "chitchat": Intent.CHITCHAT,
+            "action_request": Intent.ACTION_REQUEST,
+        }
+        return mapping.get(result, Intent.CHITCHAT)
+
+    def handle_rag(self, message: str) -> ChatbotResponse:
+        """Handle document-based questions."""
+        if self.rag_chatbot:
+            response = self.rag_chatbot.chat(message)
+            sources = self.rag_chatbot.get_sources(message)
+        else:
+            response = "I don't have access to documents to answer that question."
+            sources = []
+        return ChatbotResponse(Intent.RAG_QUERY, response, sources)
+
+    def handle_chitchat(self, message: str) -> ChatbotResponse:
+        """Handle casual conversation."""
+        messages = [
+            {"role": "system", "content": "You are a friendly conversational assistant."},
+            {"role": "user", "content": message}
+        ]
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.8
+        )
+        return ChatbotResponse(Intent.CHITCHAT, response.choices[0].message.content)
+
+    def handle_action(self, message: str) -> ChatbotResponse:
+        """Handle action requests (placeholder for actual action logic)."""
+        response = (
+            f"I understand you want to: '{message}'. "
+            "Let me collect some information to process this request. "
+            "Could you provide more details?"
+        )
+        return ChatbotResponse(Intent.ACTION_REQUEST, response)
+
+    def chat(self, message: str) -> ChatbotResponse:
+        """Main entry point: classify and route."""
+        intent = self.classify_intent(message)
+
+        if intent == Intent.RAG_QUERY:
+            result = self.handle_rag(message)
+        elif intent == Intent.CHITCHAT:
+            result = self.handle_chitchat(message)
+        else:
+            result = self.handle_action(message)
+
+        # Update shared history
+        self.history.append({"role": "user", "content": message})
+        self.history.append({"role": "assistant", "content": result.response, "intent": intent.value})
+
+        return result
+
+# Test routing
+bot = RouterChatbot()
+
+test_messages = [
+    "What are the return policies?",  # → rag_query
+    "Hello! How's your day?",         # → chitchat
+    "I want to cancel my order",      # → action_request
+]
+
+for msg in test_messages:
+    result = bot.chat(msg)
+    print(f"[{result.intent.value}] {msg[:40]}")
+    print(f"  → {result.response[:80]}...\n")
+```
+</details>
+
+---
+
+### Exercise 3: Stateful Conversation with Missing Slot Recovery
+
+Extend the `StatefulChatbot` to handle the case where a user provides conflicting information mid-conversation (e.g., first says order #12345, then says "actually it's #67890"). The bot should update the slot and confirm the correction.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import Dict, List, Any, Optional
+from openai import OpenAI
+
+class ConversationState(Enum):
+    GREETING = "greeting"
+    COLLECTING_INFO = "collecting_info"
+    CONFIRMING = "confirming"
+    COMPLETED = "completed"
+
+@dataclass
+class ConversationContext:
+    state: ConversationState = ConversationState.GREETING
+    slots: Dict[str, Any] = field(default_factory=dict)
+    history: List[Dict] = field(default_factory=list)
+    corrections: List[Dict] = field(default_factory=list)  # Track corrections
+
+class SmartStatefulChatbot:
+    """Chatbot that detects slot corrections during conversation."""
+
+    REQUIRED_SLOTS = ["order_id", "issue"]
+    SLOT_QUESTIONS = {
+        "order_id": "Could you please provide your order number?",
+        "issue": "What issue are you experiencing with your order?"
+    }
+
+    def __init__(self):
+        self.client = OpenAI()
+        self.context = ConversationContext()
+
+    def extract_slots(self, message: str) -> dict:
+        """Extract slot values from message."""
+        import json
+        prompt = f"""Extract order information from the message. Return JSON only.
+Fields: order_id (string, e.g. "12345"), issue (string description)
+Use null for missing fields.
+
+Message: "{message}"
+JSON:"""
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        try:
+            return json.loads(response.choices[0].message.content)
+        except:
+            return {"order_id": None, "issue": None}
+
+    def detect_correction(self, new_slots: dict) -> Optional[str]:
+        """Check if user is correcting a previously provided slot."""
+        for slot, new_value in new_slots.items():
+            if new_value and slot in self.context.slots:
+                old_value = self.context.slots[slot]
+                if old_value and old_value != new_value:
+                    return slot  # This slot was corrected
+        return None
+
+    def process(self, message: str) -> str:
+        self.context.history.append({"role": "user", "content": message})
+        new_slots = self.extract_slots(message)
+
+        # Check for corrections
+        corrected_slot = self.detect_correction(new_slots)
+        if corrected_slot:
+            old_value = self.context.slots[corrected_slot]
+            new_value = new_slots[corrected_slot]
+            self.context.corrections.append({
+                "slot": corrected_slot,
+                "old": old_value,
+                "new": new_value
+            })
+            self.context.slots[corrected_slot] = new_value
+            response = (
+                f"Got it! I've updated your {corrected_slot} from "
+                f"'{old_value}' to '{new_value}'. "
+            )
+        else:
+            # Normal slot update
+            for slot, value in new_slots.items():
+                if value:
+                    self.context.slots[slot] = value
+            response = ""
+
+        # Check what's still missing
+        missing = [s for s in self.REQUIRED_SLOTS
+                  if not self.context.slots.get(s)]
+
+        if missing:
+            self.context.state = ConversationState.COLLECTING_INFO
+            response += self.SLOT_QUESTIONS[missing[0]]
+        else:
+            self.context.state = ConversationState.CONFIRMING
+            response += self.confirm_action()
+
+        self.context.history.append({"role": "assistant", "content": response})
+        return response
+
+    def confirm_action(self) -> str:
+        return (
+            f"To confirm: Order #{self.context.slots['order_id']}, "
+            f"Issue: {self.context.slots['issue']}. Is this correct? (yes/no)"
+        )
+
+# Test correction handling
+bot = SmartStatefulChatbot()
+
+print(bot.process("I want to return order 12345"))  # Sets order_id, asks for issue
+print(bot.process("The item is damaged"))           # Sets issue, asks to confirm
+print(bot.process("Actually my order is 67890"))    # Corrects order_id
+print(f"\nCorrections made: {bot.context.corrections}")
+# [{'slot': 'order_id', 'old': '12345', 'new': '67890'}]
+```
+</details>
+
 ---
 
 ## Course Complete

@@ -1,5 +1,18 @@
 # 실전 문제 풀이 (Problem Solving in Practice)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 처음 보는 알고리즘 문제에 대해 이해 → 예제 분석 → 알고리즘 선택 → 구현 → 검증의 5단계 구조적 문제 풀이 프로세스를 적용할 수 있다
+2. 입력 크기 제약 조건으로부터 필요한 시간 복잡도를 추정하고 코딩 전에 부적합한 알고리즘을 제거할 수 있다
+3. 키워드와 구조적 패턴(예: 최단 경로, 부분집합 열거, 구간 쿼리)으로 문제 유형을 인식하고 적합한 알고리즘에 매핑할 수 있다
+4. 제한된 시간 내에서 난이도에 따른 유형별 전략을 선택하여 실행할 수 있다
+5. 코딩 테스트나 대회에서 문제 우선순위를 정하고 시간을 효율적으로 배분하여 관리할 수 있다
+6. 코딩 인터뷰(coding interview)에서 명확한 사고를 보여주고 올바른 해법을 도출하기 위한 구조적 의사소통 및 코딩 기법을 적용할 수 있다
+
+---
+
 ## 개요
 
 코딩 테스트와 알고리즘 대회를 위한 실전 문제 풀이 전략과 유형별 접근법을 다룹니다.
@@ -297,6 +310,8 @@ def bfs_shortest(graph, start, end):
     """
     가중치 없는 그래프의 최단 거리
     시간: O(V + E)
+    BFS가 가중치 없는 최단 경로에 올바른 이유: 홉 수 순서로 노드를 확장하므로 --
+    노드에 처음 도달했을 때가 최단 경로를 통한 것임.
     """
     n = len(graph)
     dist = [-1] * n
@@ -311,11 +326,11 @@ def bfs_shortest(graph, start, end):
             return dist[end]
 
         for next_node in graph[curr]:
-            if dist[next_node] == -1:
+            if dist[next_node] == -1:  # 아직 미방문 -- 첫 도달 = 최단 경로
                 dist[next_node] = dist[curr] + 1
                 queue.append(next_node)
 
-    return -1
+    return -1  # start에서 end에 도달 불가
 
 # 유형 2: 다익스트라 - 최단 거리 (가중치 있음)
 def dijkstra(graph, start):
@@ -323,16 +338,20 @@ def dijkstra(graph, start):
     가중치 있는 그래프의 최단 거리
     graph: 인접 리스트 [(next, weight), ...]
     시간: O((V + E) log V)
+    다익스트라가 동작하는 원리: 현재 가장 가까운 미확정 노드를 항상 확장 --
+    모든 간선 가중치가 비음수이므로 탐욕적 선택이 안전함.
     """
     n = len(graph)
     dist = [float('inf')] * n
     dist[start] = 0
 
-    pq = [(0, start)]  # (거리, 노드)
+    pq = [(0, start)]  # (거리, 노드) 최소 힙 -- 가장 가까운 노드를 먼저 처리
 
     while pq:
         d, curr = heapq.heappop(pq)
 
+        # 오래된 힙 항목 건너뛰기 -- 노드가 다른 거리로 여러 번 삽입될 수 있으며;
+        # 가장 작은 거리(첫 번째 pop)만이 최종
         if d > dist[curr]:
             continue
 
@@ -347,23 +366,26 @@ def dijkstra(graph, start):
 # 유형 3: Union-Find - 연결 요소
 class UnionFind:
     def __init__(self, n):
-        self.parent = list(range(n))
-        self.rank = [0] * n
+        self.parent = list(range(n))  # 각 노드가 자기 자신을 루트로 시작
+        self.rank = [0] * n           # 랭크(rank)가 합치는 방향을 안내하여 트리를 평평하게 유지
 
     def find(self, x):
         if self.parent[x] != x:
+            # 경로 압축: 경로의 모든 노드가 루트를 직접 가리키게 만들어
+            # 이후 find가 거의 O(1)이 됨 -- 이것이 상각 효율성의 핵심
             self.parent[x] = self.find(self.parent[x])
         return self.parent[x]
 
     def union(self, x, y):
         px, py = self.find(x), self.find(y)
         if px == py:
-            return False
+            return False  # 이미 같은 컴포넌트 -- 병합 불필요
+        # 랭크 기반 합치기: 짧은 트리를 긴 트리 아래에 붙여 높이를 O(log n)으로 유지
         if self.rank[px] < self.rank[py]:
             px, py = py, px
         self.parent[py] = px
         if self.rank[px] == self.rank[py]:
-            self.rank[px] += 1
+            self.rank[px] += 1  # 같은 랭크의 트리를 합칠 때만 높이가 증가
         return True
 ```
 
@@ -375,6 +397,8 @@ def climb_stairs(n):
     """
     n개의 계단을 1칸 또는 2칸씩 오르는 방법의 수
     시간: O(N), 공간: O(1)
+    피보나치와 동일한 점화식: ways(n) = ways(n-1) + ways(n-2)
+    마지막 단계가 1칸 또는 2칸이기 때문.
     """
     if n <= 2:
         return n
@@ -382,7 +406,7 @@ def climb_stairs(n):
     prev2, prev1 = 1, 2
     for _ in range(3, n + 1):
         curr = prev1 + prev2
-        prev2, prev1 = prev1, curr
+        prev2, prev1 = prev1, curr  # 윈도우 슬라이드 -- O(N) 배열 대신 O(1) 공간
 
     return prev1
 
@@ -396,6 +420,9 @@ def knapsack_01(weights, values, capacity):
     dp = [0] * (capacity + 1)
 
     for i in range(n):
+        # 역순으로 용량을 순회하여 각 아이템이 최대 한 번만 고려되도록 함.
+        # 정방향이면 dp[w - weights[i]]에 이미 아이템 i가 포함되어
+        # 같은 아이템을 여러 번 선택하는 것을 잘못 허용함 (무한 배낭 문제가 됨).
         for w in range(capacity, weights[i] - 1, -1):
             dp[w] = max(dp[w], dp[w - weights[i]] + values[i])
 
@@ -406,6 +433,9 @@ def lcs_length(s1, s2):
     """
     최장 공통 부분 수열의 길이
     시간: O(N * M)
+    dp[i][j] = s1[0:i]와 s2[0:j]의 LCS 길이.
+    문자가 일치하면 이전 쌍에서 LCS를 확장;
+    일치하지 않으면 어느 한 문자열에서 한 문자를 빼는 것 중 최선을 취함.
     """
     n, m = len(s1), len(s2)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
@@ -413,9 +443,9 @@ def lcs_length(s1, s2):
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             if s1[i - 1] == s2[j - 1]:
-                dp[i][j] = dp[i - 1][j - 1] + 1
+                dp[i][j] = dp[i - 1][j - 1] + 1  # 문자 일치 -- LCS를 1 확장
             else:
-                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])  # 한 문자 없이 최선을 취함
 
     return dp[n][m]
 
@@ -425,6 +455,8 @@ def matrix_chain(dims):
     행렬 곱셈의 최소 연산 횟수
     dims: 행렬 차원 [d0, d1, d2, ...] → (d0×d1) × (d1×d2) × ...
     시간: O(N³)
+    증가하는 구간 길이로 채워서 더 작은 부분 문제가 그것에 의존하는
+    더 큰 문제보다 먼저 준비되도록 함.
     """
     n = len(dims) - 1
     dp = [[0] * n for _ in range(n)]
@@ -433,6 +465,8 @@ def matrix_chain(dims):
         for i in range(n - length + 1):
             j = i + length - 1
             dp[i][j] = float('inf')
+            # 모든 가능한 분할점 k를 시도; [i..k] × [k+1..j]를 곱하는 비용은
+            # 각 서브 체인의 비용 + 최종 곱셈 dims[i]*dims[k+1]*dims[j+1]
             for k in range(i, j):
                 cost = dp[i][k] + dp[k + 1][j] + dims[i] * dims[k + 1] * dims[j + 1]
                 dp[i][j] = min(dp[i][j], cost)
@@ -527,20 +561,20 @@ def install_routers(houses, n):
 def permutations(nums):
     """모든 순열 생성 - O(N! * N)"""
     result = []
-    used = [False] * len(nums)
+    used = [False] * len(nums)  # 현재 경로에 이미 있는 원소 추적
 
     def backtrack(path):
         if len(path) == len(nums):
-            result.append(path[:])
+            result.append(path[:])  # 복사 -- path는 그 자리에서 변경되므로 스냅샷이 필요
             return
 
         for i, num in enumerate(nums):
             if used[i]:
                 continue
-            used[i] = True
+            used[i] = True   # 선택: 내려가기 전에 사용 표시
             path.append(num)
             backtrack(path)
-            path.pop()
+            path.pop()       # 선택 취소: 다음 반복이 다른 원소를 시도할 수 있도록 되돌림
             used[i] = False
 
     backtrack([])
@@ -558,7 +592,7 @@ def combinations(nums, k):
 
         for i in range(start, len(nums)):
             path.append(nums[i])
-            backtrack(i + 1, path)
+            backtrack(i + 1, path)  # i+1부터 시작하여 같은 원소 재사용 방지
             path.pop()
 
     backtrack(0, [])
@@ -569,25 +603,27 @@ def solve_n_queens(n):
     """N-Queens 해의 개수"""
     count = 0
     cols = [False] * n
-    diag1 = [False] * (2 * n - 1)  # row - col + n - 1
-    diag2 = [False] * (2 * n - 1)  # row + col
+    diag1 = [False] * (2 * n - 1)  # row - col + n - 1 (각 \ 대각선마다 고유)
+    diag2 = [False] * (2 * n - 1)  # row + col          (각 / 대각선마다 고유)
 
     def backtrack(row):
         nonlocal count
         if row == n:
-            count += 1
+            count += 1  # n개의 퀸이 충돌 없이 모두 배치됨
             return
 
         for col in range(n):
             d1 = row - col + n - 1
             d2 = row + col
 
+            # 가지치기: 어떤 제약이든 위반되면 이 열 건너뛰기 -- 이것이
+            # 전체 하위 트리를 제거하여 백트래킹이 브루트포스보다 훨씬 빠른 이유
             if cols[col] or diag1[d1] or diag2[d2]:
                 continue
 
             cols[col] = diag1[d1] = diag2[d2] = True
             backtrack(row + 1)
-            cols[col] = diag1[d1] = diag2[d2] = False
+            cols[col] = diag1[d1] = diag2[d2] = False  # 다음 열 시도 전에 되돌리기
 
     backtrack(0)
     return count

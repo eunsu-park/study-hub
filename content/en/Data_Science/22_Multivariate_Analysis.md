@@ -2,11 +2,27 @@
 
 [Previous: Time Series Models](./21_Time_Series_Models.md) | [Next: Nonparametric Statistics](./23_Nonparametric_Statistics.md)
 
-## Overview
+---
 
-Multivariate analysis involves statistical techniques for analyzing multiple variables simultaneously. In this chapter, we will learn about dimensionality reduction (PCA, Factor Analysis), classification (LDA, QDA), and cluster validation.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the mathematical foundations of PCA, including eigenvalue decomposition and variance maximization
+2. Implement PCA from scratch and verify results against scikit-learn
+3. Determine the appropriate number of principal components using the Kaiser rule, variance criteria, and scree plots
+4. Distinguish between PCA (variance-based) and Factor Analysis (latent-variable-based) and identify when each is appropriate
+5. Apply Varimax rotation to improve factor interpretability
+6. Compare LDA and QDA for supervised classification, including their assumptions about class covariance
+7. Evaluate clustering quality using internal metrics (Silhouette, Calinski-Harabasz, Davies-Bouldin) and external metrics (ARI, NMI)
 
 ---
+
+Real-world datasets rarely have just one or two variables. When dozens of features compete for your attention, it becomes impossible to visualize patterns or build stable models without first understanding how those variables relate to each other. Multivariate analysis provides the tools to reduce complexity, uncover latent structure, classify observations, and validate groupings -- turning high-dimensional noise into actionable insight.
+
+---
+
+> **Shadow projection.** Imagine holding a 3D wireframe object in front of a lamp. The shadow on the wall is a 2D projection that captures the object's shape -- but some angles cast more informative shadows than others. Dimensionality reduction (PCA, Factor Analysis) works the same way: it finds the "viewing angle" that preserves the most structure when projecting high-dimensional data onto fewer dimensions. The principal components are the directions that cast the most informative shadow.
 
 ## 1. Principal Component Analysis (PCA)
 

@@ -7,6 +7,20 @@ Demonstrates Generalized Linear Models (GLM):
 - Link functions
 - Deviance
 - AIC/BIC model comparison
+
+Theory:
+- GLMs extend linear regression to non-Normal response variables by using
+  a link function g() that relates E[Y] to a linear predictor: g(mu) = X*beta.
+- Logistic regression (logit link) models binary outcomes as P(Y=1) via the
+  sigmoid function. It estimates log-odds ratios, not probabilities directly.
+- Poisson regression (log link) models count data, ensuring the predicted
+  mean is always positive via exp(). Overdispersion (variance > mean) signals
+  the need for Negative Binomial or quasi-Poisson models.
+- Deviance plays the role of RSS in GLMs. It measures how far the fitted
+  model is from the saturated (perfect-fit) model.
+- AIC/BIC trade off fit vs complexity: AIC = 2k - 2*logL, BIC = k*ln(n) - 2*logL.
+
+Adapted from Data_Science Lesson 19.
 """
 
 import numpy as np
@@ -51,11 +65,16 @@ def logistic_regression_scratch():
     # Design matrix
     X = np.column_stack([np.ones(n), x1, x2])
 
-    # Logistic function
+    # Why: The sigmoid (logistic) function maps any real number to (0,1), making
+    # it the canonical inverse link for binary outcomes. Clipping at +-500
+    # prevents numerical overflow in exp().
     def sigmoid(z):
         return 1 / (1 + np.exp(-np.clip(z, -500, 500)))
 
-    # Negative log-likelihood
+    # Why: The cross-entropy loss is the negative log-likelihood of the
+    # Bernoulli distribution. Minimizing it is equivalent to maximizing the
+    # probability of the observed labels. No closed-form solution exists
+    # (unlike OLS), so we use iterative optimization (BFGS).
     def neg_log_likelihood(beta):
         z = X @ beta
         p = sigmoid(z)
@@ -100,11 +119,12 @@ def logistic_regression_scratch():
     log_lik = -neg_log_likelihood(beta_hat)
     print(f"\nLog-likelihood: {log_lik:.2f}")
 
-    # Null model (intercept only)
+    # Why: McFadden's pseudo-R-squared compares the fitted model's log-likelihood
+    # to the null model's (intercept only). Unlike linear R-squared, it rarely
+    # exceeds 0.4 even for excellent models. Values of 0.2-0.4 are considered
+    # "good fit" in practice.
     p_null = np.mean(y)
     log_lik_null = np.sum(y * np.log(p_null + 1e-15) + (1 - y) * np.log(1 - p_null + 1e-15))
-
-    # McFadden's R²
     r2_mcfadden = 1 - log_lik / log_lik_null
     print(f"McFadden's R²: {r2_mcfadden:.4f}")
 
@@ -142,7 +162,10 @@ def poisson_regression():
     n = 150
     x = np.random.uniform(0, 5, n)
 
-    # True model: log(λ) = β₀ + β₁*x
+    # Why: The log link ensures lambda (the Poisson rate) is always positive:
+    # log(lambda) = X*beta, so lambda = exp(X*beta). Coefficients are
+    # interpreted multiplicatively: a unit increase in x multiplies the
+    # expected count by exp(beta_1).
     true_beta = np.array([0.5, 0.4])
     log_lambda = true_beta[0] + true_beta[1] * x
     lambda_true = np.exp(log_lambda)
@@ -178,9 +201,10 @@ def poisson_regression():
 
     print(f"\nPredicted λ range: [{lambda_hat.min():.2f}, {lambda_hat.max():.2f}]")
 
-    # Deviance
-    # Saturated model: λ_i = y_i
-    # Null model: λ_i = mean(y)
+    # Why: Deviance is 2*(logL_saturated - logL_fitted). It generalizes the
+    # residual sum of squares to GLMs. The saturated model has one parameter per
+    # observation (perfect fit); deviance measures how far our model is from it.
+    # For Poisson, deviance follows chi-squared under the null asymptotically.
     y_safe = np.where(y == 0, 1, y)  # Avoid log(0)
 
     deviance_residuals = 2 * (y * np.log(y_safe / lambda_hat) - (y - lambda_hat))
@@ -357,7 +381,10 @@ def deviance_analysis():
     for r in results:
         print(f"{r['name']:<20} {r['k']:>3} {r['deviance']:>12.2f} {r['aic']:>12.2f} {r['bic']:>12.2f}")
 
-    # Likelihood ratio test (Model 1 vs Model 3)
+    # Why: The likelihood ratio test compares nested models via the difference
+    # in deviance, which follows chi-squared with df = difference in parameters.
+    # It is the gold standard for testing whether additional predictors
+    # significantly improve model fit.
     lr_statistic = -2 * (results[0]['log_lik'] - results[2]['log_lik'])
     df = results[2]['k'] - results[0]['k']
     p_value = 1 - stats.chi2.cdf(lr_statistic, df)

@@ -1,11 +1,24 @@
 # 18. 테이블 파티셔닝 (Table Partitioning)
 
+**이전**: [윈도우 함수](./17_Window_Functions.md) | **다음**: [전문 검색](./19_Full_Text_Search.md)
+
+---
+
 ## 학습 목표
-- 파티셔닝의 개념과 필요성 이해
-- PostgreSQL의 선언적 파티셔닝 활용
-- Range, List, Hash 파티셔닝 구현
-- 파티션 프루닝과 성능 최적화
-- 파티션 유지보수 자동화
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 테이블 파티셔닝(Table Partitioning)의 개념을 설명하고, 의미 있는 성능 이점을 제공하는 시나리오를 식별한다
+2. 적절한 기본 키와 인덱스 설계를 갖춘 시계열 데이터용 범위 파티션(Range Partition) 테이블을 생성한다
+3. 지역이나 상태 등 범주형 데이터에 리스트 파티셔닝(List Partitioning)을 구현한다
+4. 자연적인 범위나 범주가 없을 때 균등한 데이터 분산을 위한 해시 파티셔닝(Hash Partitioning)을 설정한다
+5. EXPLAIN ANALYZE를 사용하여 파티션 프루닝(Partition Pruning) 동작을 검증하고, 프루닝을 무력화하는 일반적인 함정을 피한다
+6. 파티션 추가, 분리, 삭제, pg_cron을 이용한 자동화 생성 등 동적으로 파티션을 관리한다
+7. 기존의 비파티션 테이블을 최소 다운타임으로 파티션 테이블로 전환한다
+
+---
+
+테이블이 수백만 행에서 수십억 행으로 증가하면, 인덱스 자체가 방대해지고 VACUUM 및 백업 같은 유지보수 작업이 길어지면서 잘 인덱싱된 쿼리조차 느려질 수 있습니다. 파티셔닝(Partitioning)은 하나의 논리적 테이블을 데이터의 일부를 담는 더 작은 물리적 조각으로 분할합니다. 이를 통해 PostgreSQL은 관련 파티션만 스캔하고, 더 작은 인덱스를 유지하며, 값비싼 DELETE 문 대신 파티션 전체를 즉시 삭제할 수 있습니다. 시계열 데이터, 이벤트 로그, 대용량 트랜잭션 데이터를 다루는 시스템이라면 파티셔닝은 필수적인 확장 전략입니다.
 
 ## 목차
 1. [파티셔닝 개요](#1-파티셔닝-개요)
@@ -83,7 +96,9 @@
 ### 2.1 기본 구조
 
 ```sql
--- 부모 테이블 생성 (파티션 키 지정)
+-- 파티션 키 선택이 핵심: WHERE 절에서 가장 자주 사용되는 컬럼을 선택.
+-- order_date가 이상적 — 쿼리가 거의 항상 시간 범위로 필터링하여
+-- 파티션 프루닝으로 관련 없는 월을 완전히 건너뛸 수 있음
 CREATE TABLE orders (
     id BIGSERIAL,
     customer_id INT NOT NULL,
@@ -321,7 +336,9 @@ SELECT create_hash_partitions('logs', 8);
 ### 5.1 프루닝 동작 확인
 
 ```sql
--- 실행 계획으로 프루닝 확인
+-- 파티션 프루닝이 핵심 성능 이점: 플래너가 매칭 행을 포함할 수 없는 파티션을
+-- 실행 전에 제거하여, 12개 파티션 테이블을 WHERE 절이 한 달과 일치할 때
+-- 단일 파티션 스캔으로 변환
 EXPLAIN (ANALYZE, COSTS OFF)
 SELECT * FROM orders
 WHERE order_date = '2024-02-15';
@@ -345,12 +362,12 @@ SET enable_partition_pruning = on;
 ### 5.3 프루닝이 작동하지 않는 경우
 
 ```sql
--- 1. 함수 적용 시 프루닝 실패
--- 나쁜 예
+-- 1. 파티션 키에 함수 적용 시 프루닝 실패 — 키가 EXTRACT() 등으로 감싸지면
+-- 플래너가 어떤 파티션을 건너뛸지 추론 불가
 SELECT * FROM orders
 WHERE EXTRACT(YEAR FROM order_date) = 2024;
 
--- 좋은 예
+-- 범위 조건으로 재작성하면 플래너가 파티션 경계를 직접 매칭 가능
 SELECT * FROM orders
 WHERE order_date >= '2024-01-01' AND order_date < '2025-01-01';
 
@@ -616,9 +633,7 @@ WHERE start_date < CURRENT_DATE - INTERVAL '90 days';
 
 ---
 
-## 다음 단계
-- [15. 쿼리 최적화 심화](./15_Query_Optimization.md)
-- [16. 복제와 고가용성](./16_Replication_HA.md)
+**이전**: [윈도우 함수](./17_Window_Functions.md) | **다음**: [전문 검색](./19_Full_Text_Search.md)
 
 ## 참고 자료
 - [PostgreSQL Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)

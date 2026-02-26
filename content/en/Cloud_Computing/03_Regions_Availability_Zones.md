@@ -1,5 +1,24 @@
 # Regions and Availability Zones
 
+**Previous**: [AWS/GCP Account Setup](./02_AWS_GCP_Account_Setup.md) | **Next**: [Virtual Machines](./04_Virtual_Machines.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the hierarchy of regions, availability zones, and data centers
+2. Compare the global infrastructure models of AWS and GCP
+3. Identify factors that influence region selection (latency, compliance, cost, services)
+4. Design a multi-AZ deployment for high availability
+5. Distinguish between regional, zonal, and global cloud services
+6. Describe the role of edge locations in content delivery
+
+---
+
+Every cloud resource runs in a physical data center somewhere on Earth. Choosing the right region affects latency for your users, compliance with data residency laws, service availability, and even cost. Understanding how cloud providers organize their global infrastructure is a prerequisite for designing reliable, performant architectures.
+
 ## 1. Global Infrastructure Overview
 
 Cloud providers deliver services through data centers distributed worldwide.
@@ -414,6 +433,142 @@ gcloud compute machine-types list \
 
 - [04_Virtual_Machines.md](./04_Virtual_Machines.md) - Virtual machine creation and management
 - [09_Virtual_Private_Cloud.md](./09_Virtual_Private_Cloud.md) - VPC networking
+
+---
+
+## Exercises
+
+### Exercise 1: Infrastructure Hierarchy Identification
+
+For each AWS resource, identify its scope (Global, Regional, or Availability Zone):
+
+1. An EC2 instance running in `ap-northeast-2a`
+2. An S3 bucket named `my-data-bucket`
+3. An IAM role named `EC2ReadOnlyRole`
+4. An RDS Multi-AZ instance
+5. An EBS volume in `us-east-1b`
+6. A Route 53 hosted zone
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Availability Zone (AZ)** — EC2 instances are tied to a specific AZ. The instance only runs in `ap-northeast-2a`.
+2. **Regional** — S3 buckets are regional; however, AWS replicates data across AZs within the region automatically. The bucket's data resides in a specific region.
+3. **Global** — IAM is a global service. IAM roles, users, and policies apply across all regions in an account.
+4. **Regional** — An RDS Multi-AZ instance is a regional resource; it automatically manages a standby replica in a different AZ within the same region.
+5. **Availability Zone** — EBS volumes are tied to the specific AZ where they are created. They cannot be directly attached to an instance in another AZ.
+6. **Global** — Route 53 is a global service. Hosted zones and DNS records are accessible globally.
+
+</details>
+
+### Exercise 2: Region Selection Decision
+
+A South Korean healthcare startup is building a patient records management system. They must comply with South Korea's Personal Information Protection Act (PIPA) requiring patient data to remain within South Korea. They also have a small number of EU customers.
+
+1. Which AWS region should be the primary region for the main application and database?
+2. Can they use `us-east-1` for any part of the system? If so, which parts?
+3. What region consideration applies for the EU customers?
+
+<details>
+<summary>Show Answer</summary>
+
+1. **`ap-northeast-2` (Seoul)** — Patient data must remain within South Korea per PIPA. Seoul is the only AWS region on South Korean soil, so it is mandatory for the primary application and all regulated patient data storage (RDS, S3 containing PHI, etc.).
+
+2. **Yes, for global/non-regulated services** — `us-east-1` hosts several global services (e.g., IAM, some global service endpoints, CloudFront distributions). It is also acceptable for non-patient data such as anonymized analytics, internal tooling, and static marketing assets — as long as no regulated personal health information (PHI) is stored or processed there.
+
+3. **EU data residency** — EU customers' data may be subject to GDPR, which may require their data to stay within the EU. An `eu-west-1` (Ireland) or `eu-central-1` (Frankfurt) region deployment would be needed if EU patient data must not leave the EU. The team would then have a multi-region architecture: `ap-northeast-2` for Korean patients, EU region for EU patients.
+
+</details>
+
+### Exercise 3: Multi-AZ Architecture Design
+
+You are designing a highly available web application on AWS in the Seoul region (`ap-northeast-2`). The application requires: a load balancer, application servers, and a relational database with automatic failover.
+
+Draw or describe the architecture, specifying which components go in which AZs and why.
+
+<details>
+<summary>Show Answer</summary>
+
+```
+Seoul Region (ap-northeast-2)
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  [Application Load Balancer]  ← Regional scope, spans AZs │
+│             │                                              │
+│    ┌────────┴────────┐                                     │
+│    ▼                 ▼                                     │
+│  AZ-a               AZ-b                                   │
+│  ┌──────────────┐   ┌──────────────┐                       │
+│  │ EC2 App-1    │   │ EC2 App-2    │  ← Auto Scaling Group  │
+│  └──────────────┘   └──────────────┘                       │
+│  ┌──────────────┐   ┌──────────────┐                       │
+│  │ RDS Primary  │──▶│ RDS Standby  │  ← Multi-AZ RDS       │
+│  │ (active)     │   │ (passive)    │                       │
+│  └──────────────┘   └──────────────┘                       │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Component explanations**:
+- **ALB** — Automatically routes traffic to healthy instances across both AZs. If AZ-a fails, it only routes to AZ-b instances.
+- **EC2 in Auto Scaling Group** — Spread across `ap-northeast-2a` and `ap-northeast-2b`. Each AZ has at least one instance. If one AZ fails, the ASG launches replacement instances in the surviving AZ.
+- **RDS Multi-AZ** — Primary in AZ-a, synchronous standby replica in AZ-b. If AZ-a fails, AWS automatically promotes the standby (typically < 2 minutes), and the DNS CNAME is updated. No manual intervention required.
+
+**Why two AZs?** Independent power, cooling, and networking means an outage in one AZ (hardware failure, power cut, maintenance) does not affect the other.
+
+</details>
+
+### Exercise 4: AWS vs GCP VPC Scope Difference
+
+Explain the fundamental difference between how AWS and GCP define VPC scope, and describe a scenario where the GCP approach is operationally simpler.
+
+<details>
+<summary>Show Answer</summary>
+
+**AWS VPC**: Regional scope. A VPC is confined to a single region. If you need resources in `us-east-1` and `ap-northeast-2` to communicate privately, you must create separate VPCs in each region and connect them with VPC Peering or Transit Gateway.
+
+**GCP VPC**: Global scope. A single VPC spans all regions. Subnets within that VPC are regional, but they all share the same routing table and private IP space. A VM in `us-central1` and a VM in `asia-northeast3` can communicate using private IP addresses within the same VPC without any additional configuration.
+
+**Scenario where GCP is simpler**: A global microservices application with services deployed in multiple regions for latency optimization. In GCP, all services share one VPC — a database in `asia-northeast3` can be reached via private IP from an API server in `us-central1` without peering setup. In AWS, you would need to configure VPC Peering (or Transit Gateway) between the regional VPCs and manage CIDR ranges carefully to avoid overlap. GCP's single global VPC significantly reduces networking configuration complexity for multi-region architectures.
+
+</details>
+
+### Exercise 5: CLI Commands for Infrastructure Discovery
+
+Write the CLI commands to perform the following tasks:
+
+1. (AWS) List all availability zones in the Tokyo region (`ap-northeast-1`) and show their current state.
+2. (GCP) List all zones available in the Seoul region (`asia-northeast3`).
+3. (AWS) Set your CLI default region to Seoul.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **AWS — List AZs in Tokyo**:
+```bash
+aws ec2 describe-availability-zones \
+    --region ap-northeast-1 \
+    --query 'AvailabilityZones[*].[ZoneName,State]' \
+    --output table
+```
+
+2. **GCP — List zones in Seoul**:
+```bash
+gcloud compute zones list \
+    --filter="region:asia-northeast3" \
+    --format="table(name,status)"
+```
+
+3. **AWS — Set default region to Seoul**:
+```bash
+aws configure set region ap-northeast-2
+```
+Or, to set it only for the current shell session:
+```bash
+export AWS_DEFAULT_REGION=ap-northeast-2
+```
+
+</details>
 
 ---
 

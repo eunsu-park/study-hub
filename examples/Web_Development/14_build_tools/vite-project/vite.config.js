@@ -23,6 +23,8 @@ export default defineConfig({
         // }
     },
 
+    // Why: Separating build options from dev server config keeps concerns isolated and
+    // lets CI pipelines override build settings without touching dev defaults
     // 빌드 설정
     build: {
         outDir: 'dist',       // 출력 디렉토리
@@ -54,6 +56,8 @@ export default defineConfig({
         chunkSizeWarningLimit: 500,
     },
 
+    // Why: Path aliases eliminate fragile relative imports (../../components/foo) and let you
+    // reorganize directory structure without updating import paths across the entire codebase
     // 경로 별칭 설정
     resolve: {
         alias: {
@@ -85,6 +89,8 @@ export default defineConfig({
         }
     },
 
+    // Why: The VITE_ prefix acts as a safeguard - only prefixed env vars are exposed to client
+    // code, preventing accidental leakage of server-side secrets (DB passwords, API keys) into bundles
     // 환경 변수 접두사
     envPrefix: 'VITE_',
 

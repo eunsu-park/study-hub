@@ -5,6 +5,17 @@
 > **선수지식**: 문서 구조, 패키지
 > **목표**: 캡션, 레이블, 상호 참조, 고급 배치 기법을 포함한 LaTeX의 부동체 시스템을 사용한 그림, 이미지, 표의 배치 및 관리 마스터하기.
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. LaTeX의 부동체 시스템(float system)이 작동하는 방식과 그림·표가 일반 텍스트와 다르게 배치되는 이유를 설명할 수 있다
+2. `graphicx` 패키지를 사용하여 이미지를 삽입하고 크기, 회전, 정렬을 제어할 수 있다
+3. 부동체에 캡션(caption)과 레이블(label)을 추가하고 `\ref`, `\autoref`로 참조할 수 있다
+4. 부동체 배치 지정자(placement specifier: `h`, `t`, `b`, `p`, `H`)를 사용하여 페이지에서의 위치를 제어할 수 있다
+5. `subfigure` 또는 `minipage` 환경을 사용하여 나란히 배치된 그림(side-by-side figure)을 만들 수 있다
+6. `\FloatBarrier` 및 관련 기법을 사용하여 긴 문서에서의 부동체 누적(float accumulation)을 관리할 수 있다
+
 ---
 
 ## 소개
@@ -838,6 +849,6 @@ LaTeX가 어디에 배치하는지 관찰하세요.
 ---
 
 **내비게이션**:
-- [이전: 05_Math_Advanced.md](05_Math_Advanced.md)
-- [다음: 07_Tables_Advanced.md](07_Tables_Advanced.md)
+- [이전: 고급 수학](05_Math_Advanced.md)
+- [다음: 고급 표](07_Tables_Advanced.md)
 - [개요로 돌아가기](00_Overview.md)

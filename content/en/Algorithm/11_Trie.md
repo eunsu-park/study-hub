@@ -1,5 +1,17 @@
 # Trie
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Trie data structure and describe how it stores strings using shared prefixes
+2. Implement a Trie with insert, search, and prefix-check operations in Python
+3. Analyze the time and space complexity of Trie operations compared to hash maps and sorted arrays
+4. Apply Trie structures to solve autocomplete and dictionary search problems
+5. Implement an XOR Trie to solve maximum XOR problems on integer arrays
+
+---
+
 ## Overview
 
 A Trie is a tree data structure for efficiently storing and searching strings. Also called a Prefix Tree, it is used for autocomplete, dictionary search, and more.
@@ -100,6 +112,8 @@ p = prefix length, n = number of words
 ```python
 class TrieNode:
     def __init__(self):
+        # Fixed-size array of 26 slots gives O(1) child access by index
+        # (trade-off: wastes memory when alphabet usage is sparse)
         self.children = [None] * 26  # a-z
         self.is_end = False
 
@@ -108,6 +122,7 @@ class Trie:
         self.root = TrieNode()
 
     def _char_to_index(self, c):
+        # Map 'a'→0 … 'z'→25 so each character becomes a direct array index
         return ord(c) - ord('a')
 
     def insert(self, word):
@@ -115,9 +130,12 @@ class Trie:
         node = self.root
         for c in word:
             idx = self._char_to_index(c)
+            # Lazily create nodes — only allocate memory for characters that appear
             if node.children[idx] is None:
                 node.children[idx] = TrieNode()
             node = node.children[idx]
+        # Mark end here, not during traversal, so prefixes ('app') and full words
+        # ('apple') share the same path but are distinguished by this flag
         node.is_end = True
 
     def search(self, word):
@@ -128,6 +146,7 @@ class Trie:
             if node.children[idx] is None:
                 return False
             node = node.children[idx]
+        # Checking is_end distinguishes "app" (a word) from "appl" (just a prefix)
         return node.is_end
 
     def starts_with(self, prefix):
@@ -194,7 +213,11 @@ class TrieDict:
             if depth == len(word):
                 if not node.is_end:
                     return False  # Word not found
+                # Clear the end-of-word marker; the node itself may still be needed
+                # as a prefix node for other words, so we don't delete it yet
                 node.is_end = False
+                # Signal to the parent that this node can be removed only if it
+                # has no children (i.e., it's not shared with any other word)
                 return len(node.children) == 0
 
             c = word[depth]
@@ -204,7 +227,10 @@ class TrieDict:
             should_delete = _delete(node.children[c], word, depth + 1)
 
             if should_delete:
+                # Safe to prune this child only because it has no further dependents
                 del node.children[c]
+                # Propagate the pruning signal upward if this node is also no longer
+                # needed — neither an end marker nor a branching point for other words
                 return len(node.children) == 0 and not node.is_end
 
             return False
@@ -472,15 +498,21 @@ class XORTrie:
         node = self.root
         result = 0
 
+        # Process from most significant bit to least significant bit;
+        # greedy bit-by-bit maximization works because each bit position
+        # is more significant than all lower bits combined
         for i in range(self.max_bits - 1, -1, -1):
             bit = (num >> i) & 1
-            # Choosing opposite bit maximizes XOR
+            # XOR is 1 when bits differ, so the opposite bit always maximizes
+            # the contribution at this position
             opposite = 1 - bit
 
             if opposite in node:
+                # Take the path that sets this XOR bit to 1
                 result |= (1 << i)
                 node = node[opposite]
             elif bit in node:
+                # Opposite bit not available — this XOR bit will be 0
                 node = node[bit]
             else:
                 break

@@ -1,5 +1,18 @@
 # Graph Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define core graph terminology (vertex, edge, directed/undirected, weighted, connected) and classify graphs by their properties
+2. Implement graph representations using adjacency lists and adjacency matrices, and compare their trade-offs
+3. Implement Depth First Search (DFS) both recursively and iteratively to traverse or explore a graph
+4. Implement Breadth First Search (BFS) using a queue and use it to find shortest paths in unweighted graphs
+5. Compare DFS and BFS and select the appropriate traversal strategy for a given problem
+6. Apply graph traversal algorithms to solve practical problems such as cycle detection and connected components
+
+---
+
 ## Overview
 
 A graph is a data structure consisting of vertices and edges, used to represent networks, relationships, and paths. This lesson covers basic graph concepts and DFS, BFS traversal.
@@ -370,12 +383,18 @@ void dfsIterative(int start) {
         int v = st.top();
         st.pop();
 
+        // Check visited at dequeue time (not enqueue) because a node may be
+        // pushed multiple times before it is processed — each unvisited neighbor
+        // eagerly pushes it, so we guard against re-processing here
         if (visited[v]) continue;
 
         visited[v] = true;
         cout << v << " ";
 
-        // Push in reverse to maintain order
+        // Push neighbors in reverse order so that when they are popped from the
+        // stack the first neighbor in the adjacency list is processed first —
+        // this matches the recursive DFS visit order (left-to-right), making
+        // the two implementations produce identical traversal sequences
         for (auto it = adj[v].rbegin(); it != adj[v].rend(); it++) {
             if (!visited[*it]) {
                 st.push(*it);
@@ -394,13 +413,18 @@ def dfs_iterative(graph, start):
     while stack:
         v = stack.pop()
 
+        # Guard against processing a node that was pushed multiple times;
+        # unlike BFS we cannot cheaply mark at push time because different
+        # stack paths can reach the same node before it is ever popped
         if v in visited:
             continue
 
         visited.add(v)
         print(v, end=' ')
 
-        # Add in reverse to maintain order
+        # Append neighbors in reverse so that when popped (LIFO) the first
+        # neighbor is visited first — this matches the recursive call order
+        # and makes the iterative version produce the same traversal sequence
         for neighbor in reversed(graph[v]):
             if neighbor not in visited:
                 stack.append(neighbor)
@@ -469,6 +493,9 @@ void bfs(int start) {
     vector<bool> visited(V, false);
     queue<int> q;
 
+    // Mark visited at enqueue time, not at dequeue time — if we waited until
+    // dequeue, the same neighbor could be enqueued multiple times before it is
+    // first processed, causing O(E) redundant entries and breaking O(V+E) complexity
     visited[start] = true;
     q.push(start);
 
@@ -480,6 +507,8 @@ void bfs(int start) {
 
         for (int neighbor : adj[v]) {
             if (!visited[neighbor]) {
+                // Mark here (enqueue time) so no other path can enqueue this
+                // neighbor again — guarantees each vertex enters the queue exactly once
                 visited[neighbor] = true;
                 q.push(neighbor);
             }
@@ -495,6 +524,10 @@ from collections import deque
 def bfs(graph, start):
     visited = set()
     queue = deque([start])
+    # Mark visited at enqueue time — BFS guarantees shortest path in unweighted
+    # graphs because it processes nodes in strict order of distance from the source;
+    # marking here (rather than at dequeue) prevents a node being enqueued multiple
+    # times by different neighbors and preserves the O(V+E) time bound
     visited.add(start)
 
     while queue:
@@ -503,6 +536,8 @@ def bfs(graph, start):
 
         for neighbor in graph[v]:
             if neighbor not in visited:
+                # Add to visited immediately so concurrent paths to the same
+                # neighbor don't both enqueue it — the first path wins (shortest)
                 visited.add(neighbor)
                 queue.append(neighbor)
 
@@ -540,12 +575,17 @@ vector<int> shortestPath(int start) {
 # Python
 def shortest_path(graph, start):
     dist = {start: 0}
+    # BFS processes nodes in non-decreasing distance order from the source;
+    # the first time a node is reached its distance is therefore minimal —
+    # this property holds only in unweighted graphs (all edges cost 1)
     queue = deque([start])
 
     while queue:
         v = queue.popleft()
 
         for neighbor in graph[v]:
+            # "not in dist" doubles as the visited check — we only record a
+            # distance the first time we see the neighbor (which is the shortest)
             if neighbor not in dist:
                 dist[neighbor] = dist[v] + 1
                 queue.append(neighbor)
@@ -753,7 +793,7 @@ bool isBipartite() {
 from collections import deque
 
 def is_bipartite(graph, n):
-    color = [-1] * n
+    color = [-1] * n  # -1 means unvisited; 0 and 1 represent the two groups
 
     for start in range(n):
         if color[start] == -1:
@@ -765,9 +805,13 @@ def is_bipartite(graph, n):
 
                 for neighbor in graph[v]:
                     if color[neighbor] == -1:
+                        # Assign the opposite color — if v is group 0,
+                        # neighbor must be group 1, and vice versa
                         color[neighbor] = 1 - color[v]
                         queue.append(neighbor)
                     elif color[neighbor] == color[v]:
+                        # Two adjacent nodes share the same color — an odd-length
+                        # cycle exists, which makes bipartite coloring impossible
                         return False
 
     return True

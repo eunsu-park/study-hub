@@ -10,16 +10,19 @@
 
 **선수 학습**: DFT/FFT, 윈도잉(windowing), 컨볼루션(convolution), 기초 선형 대수
 
-**학습 목표**:
-- 비정상 신호에 푸리에 변환이 부적합한 이유 설명하기
-- STFT를 유도하고 계산하며 시간-주파수 해상도 트레이드오프 이해하기
-- 신호에 대한 하이젠베르크 불확정성 원리 기술 및 해석하기
-- 스펙트로그램(spectrogram) 계산 및 해석하기
-- 위그너-빌 분포(Wigner-Ville Distribution)와 그 성질 이해하기
-- 표준 모 웨이블릿(mother wavelet)을 사용하여 연속 웨이블릿 변환(CWT) 정의 및 계산하기
-- 다해상도 분석(MRA, Multiresolution Analysis)을 설명하고 이산 웨이블릿 변환(DWT) 구현하기
-- 웨이블릿 분해 및 재구성을 위한 말라 알고리즘(Mallat's Algorithm) 적용하기
-- 실제 신호 분석에서 STFT와 웨이블릿 접근법 비교하기
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 비정상 신호에 푸리에 변환이 부적합한 이유 설명하기
+2. STFT를 유도하고 계산하며 시간-주파수 해상도 트레이드오프 이해하기
+3. 신호에 대한 하이젠베르크 불확정성 원리 기술 및 해석하기
+4. 스펙트로그램(spectrogram) 계산 및 해석하기
+5. 위그너-빌 분포(Wigner-Ville Distribution)와 그 성질 이해하기
+6. 표준 모 웨이블릿(mother wavelet)을 사용하여 연속 웨이블릿 변환(CWT) 정의 및 계산하기
+7. 다해상도 분석(MRA, Multiresolution Analysis)을 설명하고 이산 웨이블릿 변환(DWT) 구현하기
+8. 웨이블릿 분해 및 재구성을 위한 말라 알고리즘(Mallat's Algorithm) 적용하기
+9. 실제 신호 분석에서 STFT와 웨이블릿 접근법 비교하기
 
 ---
 

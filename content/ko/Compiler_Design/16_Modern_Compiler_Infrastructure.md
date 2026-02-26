@@ -12,18 +12,21 @@
 
 **선수 지식**: [09. 중간 표현](./09_Intermediate_Representations.md), [11. 코드 생성](./11_Code_Generation.md), [12. 최적화 -- 지역 및 전역](./12_Optimization_Local_and_Global.md)
 
-**학습 목표**:
-- LLVM의 모듈식 아키텍처와 패스 파이프라인 설명
-- 타입, 명령어, SSA 형식을 포함한 LLVM IR 읽기 및 쓰기
-- LLVM 최적화 패스 작성 방법 이해
-- MLIR의 다중 레벨 IR 철학과 다이얼렉트(Dialect) 설명
-- LLVM과 GCC 내부 표현(GIMPLE, RTL) 비교
-- 도메인 특화 언어(DSL) 설계 및 구현
-- 컴파일러 구성 도구(ANTLR, Tree-sitter) 활용
-- 언어 서버 프로토콜(Language Server Protocol, LSP) 이해
-- 증분 컴파일(Incremental Compilation) 전략 설명
-- 프로파일 기반 최적화(Profile-Guided Optimization, PGO)와 링크 타임 최적화(Link-Time Optimization, LTO) 적용
-- 컴파일러 검증 접근 방식 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. LLVM의 모듈식 아키텍처와 패스 파이프라인 설명
+2. 타입, 명령어, SSA 형식을 포함한 LLVM IR 읽기 및 쓰기
+3. LLVM 최적화 패스 작성 방법 이해
+4. MLIR의 다중 레벨 IR 철학과 다이얼렉트(Dialect) 설명
+5. LLVM과 GCC 내부 표현(GIMPLE, RTL) 비교
+6. 도메인 특화 언어(DSL) 설계 및 구현
+7. 컴파일러 구성 도구(ANTLR, Tree-sitter) 활용
+8. 언어 서버 프로토콜(Language Server Protocol, LSP) 이해
+9. 증분 컴파일(Incremental Compilation) 전략 설명
+10. 프로파일 기반 최적화(Profile-Guided Optimization, PGO)와 링크 타임 최적화(Link-Time Optimization, LTO) 적용
+11. 컴파일러 검증 접근 방식 이해
 
 ---
 

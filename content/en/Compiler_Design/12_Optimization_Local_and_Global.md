@@ -1760,4 +1760,4 @@ Test both analyses on the CFG from Exercise 2 and show how they enable further o
 
 ---
 
-[Previous: 11_Code_Generation.md](./11_Code_Generation.md) | [Next: 13_Loop_Optimization.md](./13_Loop_Optimization.md) | [Overview](./00_Overview.md)
+[Previous: Code Generation](./11_Code_Generation.md) | [Next: Loop Optimization](./13_Loop_Optimization.md) | [Overview](./00_Overview.md)

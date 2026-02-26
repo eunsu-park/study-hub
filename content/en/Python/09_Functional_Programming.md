@@ -1,5 +1,24 @@
 # Functional Programming
 
+**Previous**: [Async Programming](./08_Async_Programming.md) | **Next**: [Performance Optimization](./10_Performance_Optimization.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the core principles of functional programming and how they differ from imperative programming
+2. Write and use first-class functions, including passing and returning functions as values
+3. Apply higher-order functions (`map`, `filter`, `reduce`) to transform collections
+4. Use lambda expressions appropriately and identify when regular functions are preferred
+5. Implement partial application, memoization, and function overloading with the `functools` module
+6. Distinguish between pure and impure functions and apply immutability patterns in Python
+7. Build data processing pipelines using function composition and chaining
+8. Apply `itertools` combinatoric, grouping, and infinite iterator utilities effectively
+
+---
+
+Functional programming is one of the most influential paradigms in modern software development. Whether you are writing data pipelines, building concurrent systems, or simply trying to produce cleaner and more testable code, understanding how to think in terms of pure functions and immutable data will sharpen every part of your Python practice.
+
 ## 1. What is Functional Programming?
 
 Functional programming is a paradigm that structures programs around pure functions and immutable data.
@@ -863,6 +882,4 @@ Implement your own memoization decorator.
 
 ---
 
-## Next Steps
-
-Check out [10_Performance_Optimization.md](./10_Performance_Optimization.md) to learn about Python performance optimization techniques!
+**Previous**: [Async Programming](./08_Async_Programming.md) | **Next**: [Performance Optimization](./10_Performance_Optimization.md)

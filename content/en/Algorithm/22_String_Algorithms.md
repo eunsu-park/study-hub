@@ -1,5 +1,18 @@
 # String Algorithms
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement brute-force string pattern matching and analyze its O(n × m) time complexity
+2. Build the KMP failure function and use it to perform O(n + m) pattern matching without redundant comparisons
+3. Implement the Rabin-Karp rolling hash algorithm and explain how it achieves average-case O(n + m) matching
+4. Construct the Z-array and use the Z-algorithm to find all pattern occurrences in linear time
+5. Design polynomial string hashing to compare substrings in O(1) after O(n) preprocessing
+6. Apply string algorithms to solve problems such as period detection, anagram search, and multiple pattern matching
+
+---
+
 ## Overview
 
 String pattern matching algorithms efficiently find specific patterns in text. Covers various techniques from brute force O(nm) to KMP/Z-algorithm O(n+m).
@@ -124,18 +137,21 @@ i=4: "ABAAB"  → "AB" matches → π[4] = 2
 def compute_failure(pattern):
     """Compute failure function - O(m)"""
     m = len(pattern)
-    pi = [0] * m  # π[0] = 0
-    j = 0  # Current matched length
+    pi = [0] * m  # π[0] = 0 by definition — no proper prefix can equal the whole string
+    j = 0  # j tracks the length of the longest matching prefix-suffix seen so far
 
     for i in range(1, m):
-        # On mismatch, move j to pi[j-1]
+        # On mismatch, fall back to the next candidate prefix length.
+        # π[j-1] tells us: "if pattern[0..j-1] matched but pattern[j] didn't,
+        # the longest still-valid prefix is π[j-1] characters."
+        # This reuse of already-computed values keeps the total work O(m).
         while j > 0 and pattern[i] != pattern[j]:
             j = pi[j - 1]
 
-        # If match, increment j
+        # If match, extend the current prefix-suffix by one character
         if pattern[i] == pattern[j]:
             j += 1
-            pi[i] = j
+            pi[i] = j  # Record that pattern[0..i] has a prefix-suffix of length j
 
     return pi
 
@@ -151,6 +167,8 @@ def kmp_search(text, pattern):
     """
     KMP pattern matching
     Time: O(n + m), Space: O(m)
+    KMP never re-examines a text character — once text[i] is processed, i only moves forward.
+    The failure function handles backward movement in the pattern, not the text.
     """
     if not pattern:
         return []
@@ -158,19 +176,23 @@ def kmp_search(text, pattern):
     n, m = len(text), len(pattern)
     pi = compute_failure(pattern)
     result = []
-    j = 0  # Current position in pattern
+    j = 0  # j = number of pattern characters matched so far
 
     for i in range(n):
-        # On mismatch, move j using failure function
+        # On mismatch, fall back in the pattern using failure function.
+        # This is O(n) amortized: j can only increase n times across the whole loop,
+        # so the total number of fallback steps cannot exceed n either.
         while j > 0 and text[i] != pattern[j]:
             j = pi[j - 1]
 
-        # If match, increment j
         if text[i] == pattern[j]:
             if j == m - 1:
-                # Complete match!
+                # Complete match — record start position
                 result.append(i - m + 1)
-                j = pi[j]  # Move for next match
+                # Use failure function to set up for overlapping matches:
+                # pi[j] tells us the longest prefix of pattern that is also a suffix
+                # of the match just found, so we don't restart from scratch
+                j = pi[j]
             else:
                 j += 1
 
@@ -284,15 +306,19 @@ def rabin_karp(text, pattern, d=256, q=101):
     d: base (number of characters)
     q: modulus (large prime)
     Time: Average O(n + m), Worst O(nm)
+    The rolling hash makes each window shift O(1) instead of O(m):
+    we subtract the outgoing character's contribution and add the incoming one.
     """
     n, m = len(text), len(pattern)
     if m > n:
         return []
 
     result = []
-    h = pow(d, m - 1, q)  # d^(m-1) mod q
+    # h = d^(m-1) mod q — the positional weight of the leftmost character in the window.
+    # We need this to subtract the outgoing character's contribution during rolling.
+    h = pow(d, m - 1, q)
 
-    # Compute initial hash values
+    # Compute initial hash values using polynomial rolling hash
     p_hash = 0  # Pattern hash
     t_hash = 0  # Text window hash
 
@@ -300,18 +326,20 @@ def rabin_karp(text, pattern, d=256, q=101):
         p_hash = (d * p_hash + ord(pattern[i])) % q
         t_hash = (d * t_hash + ord(text[i])) % q
 
-    # Sliding window
+    # Sliding window — O(n) total across all iterations due to O(1) rolling hash
     for i in range(n - m + 1):
-        # If hashes match, compare actual strings
+        # Hash comparison is O(1); character comparison is O(m) but only done on
+        # hash matches, which are rare on random input — giving O(n+m) average case
         if p_hash == t_hash:
-            if text[i:i + m] == pattern:
+            if text[i:i + m] == pattern:  # Verify to guard against hash collisions
                 result.append(i)
 
-        # Compute next window hash (rolling)
+        # Rolling hash: remove leftmost character, add rightmost new character.
+        # Subtracting ord(text[i]) * h removes the d^(m-1) contribution of the old leading char.
         if i < n - m:
             t_hash = (d * (t_hash - ord(text[i]) * h) + ord(text[i + m])) % q
             if t_hash < 0:
-                t_hash += q
+                t_hash += q  # Python % can return negative for negative inputs — normalize
 
     return result
 
@@ -398,24 +426,26 @@ Pattern matching:
 def z_function(s):
     """
     Compute Z array
-    Time: O(n)
+    Time: O(n) — the Z-box avoids re-examining characters inside already-matched regions
     """
     n = len(s)
     z = [0] * n
-    z[0] = n  # By definition, full string
+    z[0] = n  # By convention, the full string is the common prefix with itself
 
-    l, r = 0, 0  # Z-box left and right boundaries
+    l, r = 0, 0  # Z-box: the rightmost matching window found so far, [l, r)
 
     for i in range(1, n):
         if i < r:
-            # Inside Z-box: use previous information
+            # i is inside a known Z-box. We already know s[i..r-1] matches s[i-l..r-l-1].
+            # So z[i] is at least min(r - i, z[i - l]), saving us from re-examining
+            # those characters — this is what achieves O(n) overall.
             z[i] = min(r - i, z[i - l])
 
-        # Try to extend
+        # Attempt to extend the match beyond what we already know
         while i + z[i] < n and s[z[i]] == s[i + z[i]]:
             z[i] += 1
 
-        # Update Z-box
+        # Extend the Z-box to the rightmost position seen so far
         if i + z[i] > r:
             l, r = i, i + z[i]
 
@@ -522,25 +552,32 @@ def polynomial_hash(s, base=31, mod=10**9 + 9):
 class StringHash:
     """
     String hash (O(1) range hash queries)
+    Uses the same prefix-sum idea as prefix sums for integers, but for polynomial hashes.
+    After O(n) preprocessing, any substring hash is computable in O(1).
     """
     def __init__(self, s, base=31, mod=10**9 + 9):
         self.base = base
         self.mod = mod
         self.n = len(s)
 
-        # Prefix hash
+        # prefix[i] = hash of s[0:i] — analogous to a prefix sum array
         self.prefix = [0] * (self.n + 1)
-        # Powers of base
+        # power[i] = base^i mod mod — precomputed to avoid repeated exponentiation
         self.power = [1] * (self.n + 1)
 
         for i in range(self.n):
+            # Treat each character as a digit in base-31: s[0]*31^(n-1) + s[1]*31^(n-2) + ...
+            # Mapping to 1..26 instead of 0..25 avoids the ambiguity where leading 'a's are invisible
             self.prefix[i + 1] = (self.prefix[i] * base + ord(s[i]) - ord('a') + 1) % mod
             self.power[i + 1] = (self.power[i] * base) % mod
 
     def get_hash(self, l, r):
-        """Hash of s[l:r+1] (0-indexed)"""
+        """Hash of s[l:r+1] (0-indexed)
+        Subtracting prefix[l] scaled by power[r-l+1] removes the contribution of
+        characters before position l — same logic as range_sum = prefix[r+1] - prefix[l].
+        """
         h = (self.prefix[r + 1] - self.prefix[l] * self.power[r - l + 1]) % self.mod
-        return (h + self.mod) % self.mod
+        return (h + self.mod) % self.mod  # Add mod to handle Python's negative modulo
 
 
 # Usage example

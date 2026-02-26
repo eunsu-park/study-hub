@@ -6,11 +6,14 @@ OpenCV(Open Source Computer Vision Library)는 실시간 컴퓨터 비전을 위
 
 **난이도**: ⭐ (입문)
 
-**학습 목표**:
-- OpenCV 설치 및 개발 환경 구성
-- 버전 확인 및 첫 번째 프로그램 작성
-- OpenCV와 NumPy의 관계 이해
-- 이미지가 ndarray로 표현되는 개념 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. OpenCV 설치 및 개발 환경 구성
+2. 버전 확인 및 첫 번째 프로그램 작성
+3. OpenCV와 NumPy의 관계 이해
+4. 이미지가 ndarray로 표현되는 개념 이해
 
 ---
 
@@ -36,19 +39,21 @@ OpenCV는 Intel에서 시작하여 현재는 오픈소스로 관리되는 컴퓨
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        OpenCV 활용 분야                          │
+│                    OpenCV Application Areas                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
-│   │  영상 처리   │   │  객체 검출   │   │  얼굴 인식   │          │
-│   │  필터링     │   │  YOLO/SSD   │   │  인증 시스템  │          │
-│   │  변환       │   │  추적       │   │  감정 분석   │          │
+│   │  Image      │   │  Object     │   │  Face       │          │
+│   │  Processing │   │  Detection  │   │  Recognition│          │
+│   │  Filtering  │   │  YOLO/SSD   │   │  Auth Systems│         │
+│   │  Transform  │   │  Tracking   │   │  Emotion    │          │
 │   └─────────────┘   └─────────────┘   └─────────────┘          │
 │                                                                 │
 │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
-│   │  의료 영상   │   │  자율 주행   │   │  AR/VR      │          │
-│   │  CT/MRI     │   │  차선 검출   │   │  마커 인식   │          │
-│   │  진단 보조   │   │  장애물 인식  │   │  3D 재구성   │          │
+│   │  Medical    │   │  Autonomous │   │  AR/VR      │          │
+│   │  Imaging    │   │  Driving    │   │  Marker     │          │
+│   │  CT/MRI     │   │  Lane Detect│   │  Recognition│          │
+│   │  Diagnosis  │   │  Obstacles  │   │  3D Recon   │          │
 │   └─────────────┘   └─────────────┘   └─────────────┘          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -72,7 +77,7 @@ OpenCV는 Intel에서 시작하여 현재는 오픈소스로 관리되는 컴퓨
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                      OpenCV Python 패키지                       │
+│                     OpenCV Python Packages                     │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
 │   opencv-python                opencv-contrib-python           │
@@ -89,8 +94,8 @@ OpenCV는 Intel에서 시작하여 현재는 오픈소스로 관리되는 컴퓨
 │   │  - ml            │        │    - face                │    │
 │   └──────────────────┘        └──────────────────────────┘    │
 │                                                                │
-│   → 대부분의 기능 사용 가능     → SIFT 등 추가 알고리즘 필요시    │
-│   → 빠른 설치                 → 특허/연구 알고리즘 포함         │
+│   → Covers most features        → For additional algorithms   │
+│   → Quick installation           → Includes patented/research │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -98,48 +103,51 @@ OpenCV는 Intel에서 시작하여 현재는 오픈소스로 관리되는 컴퓨
 ### pip를 이용한 설치
 
 ```bash
-# 기본 설치 (대부분의 경우 충분)
+# Basic installation: covers ~95% of use cases (filtering, detection, video I/O)
+# Choose this when you don't need patented algorithms like SIFT/SURF
 pip install opencv-python
 
-# 추가 기능 포함 설치 (SIFT, SURF 등)
+# contrib adds extra modules including SIFT, SURF, ArUco, and face recognition
+# Use this when you need research-grade features not yet in the main module
 pip install opencv-contrib-python
 
-# NumPy와 matplotlib도 함께 설치 (권장)
+# Install with NumPy and matplotlib (recommended for development)
+# NumPy is required at runtime; matplotlib makes Jupyter-based visualization easy
 pip install opencv-python numpy matplotlib
 
-# 버전 지정 설치
+# Install specific version (useful when pinning for reproducible environments)
 pip install opencv-python==4.8.0.76
 
-# 업그레이드
+# Upgrade
 pip install --upgrade opencv-python
 ```
 
 **주의사항**: `opencv-python`과 `opencv-contrib-python`을 동시에 설치하지 마세요. 충돌이 발생할 수 있습니다.
 
 ```bash
-# 잘못된 예 (충돌 발생)
+# Wrong (causes conflicts)
 pip install opencv-python opencv-contrib-python  # ✗
 
-# 올바른 예 (둘 중 하나만)
-pip install opencv-contrib-python  # ✓ (contrib에 기본 기능 포함)
+# Correct (choose one)
+pip install opencv-contrib-python  # ✓ (contrib includes basic features)
 ```
 
 ### 가상환경 사용 (권장)
 
 ```bash
-# 가상환경 생성
+# Create virtual environment
 python -m venv opencv_env
 
-# 활성화 (Windows)
+# Activate (Windows)
 opencv_env\Scripts\activate
 
-# 활성화 (macOS/Linux)
+# Activate (macOS/Linux)
 source opencv_env/bin/activate
 
-# 패키지 설치
+# Install packages
 pip install opencv-contrib-python numpy matplotlib
 
-# 비활성화
+# Deactivate
 deactivate
 ```
 
@@ -151,22 +159,22 @@ deactivate
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     VSCode 권장 설정                         │
+│                   VSCode Recommended Settings                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│   필수 확장 프로그램:                                        │
+│   Essential Extensions:                                     │
 │   ┌─────────────────────────────────────────────────────┐   │
-│   │  1. Python (Microsoft)        - Python 지원         │   │
-│   │  2. Pylance                   - 코드 분석, 자동완성  │   │
-│   │  3. Jupyter                   - 노트북 지원         │   │
-│   │  4. Python Image Preview      - 이미지 미리보기     │   │
+│   │  1. Python (Microsoft)        - Python support      │   │
+│   │  2. Pylance                   - Code analysis       │   │
+│   │  3. Jupyter                   - Notebook support    │   │
+│   │  4. Python Image Preview      - Image preview       │   │
 │   └─────────────────────────────────────────────────────┘   │
 │                                                             │
-│   권장 확장 프로그램:                                        │
+│   Recommended Extensions:                                   │
 │   ┌─────────────────────────────────────────────────────┐   │
-│   │  5. Image Preview             - 이미지 파일 미리보기 │   │
-│   │  6. Rainbow CSV               - CSV 파일 가독성     │   │
-│   │  7. GitLens                   - Git 히스토리 확인   │   │
+│   │  5. Image Preview             - Image file preview  │   │
+│   │  6. Rainbow CSV               - CSV readability     │   │
+│   │  7. GitLens                   - Git history         │   │
 │   └─────────────────────────────────────────────────────┘   │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -193,13 +201,13 @@ deactivate
 ### Jupyter Notebook
 
 ```bash
-# Jupyter 설치
+# Install Jupyter
 pip install jupyter
 
-# 실행
+# Run
 jupyter notebook
 
-# 또는 JupyterLab
+# Or JupyterLab
 pip install jupyterlab
 jupyter lab
 ```
@@ -211,7 +219,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 img = cv2.imread('image.jpg')
-# BGR → RGB 변환 (matplotlib은 RGB 사용)
+# BGR → RGB conversion (matplotlib uses RGB)
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 plt.imshow(img_rgb)
@@ -229,15 +237,16 @@ plt.show()
 import cv2
 import numpy as np
 
-# OpenCV 버전 확인
-print(f"OpenCV 버전: {cv2.__version__}")
-# 출력 예: OpenCV 버전: 4.8.0
+# Check OpenCV version — important because APIs change between major versions
+print(f"OpenCV version: {cv2.__version__}")
+# Output example: OpenCV version: 4.8.0
 
-# NumPy 버전 확인
-print(f"NumPy 버전: {np.__version__}")
-# 출력 예: NumPy 버전: 1.24.3
+# NumPy version matters: OpenCV relies on NumPy's array layout (C-contiguous)
+print(f"NumPy version: {np.__version__}")
+# Output example: NumPy version: 1.24.3
 
-# 빌드 정보 확인 (상세)
+# getBuildInformation() reveals whether GPU (CUDA/OpenCL) and optimized BLAS
+# libraries are available — useful for diagnosing performance bottlenecks
 print(cv2.getBuildInformation())
 ```
 
@@ -246,22 +255,22 @@ print(cv2.getBuildInformation())
 ```python
 import cv2
 
-# 이미지 읽기
+# Read image
 img = cv2.imread('sample.jpg')
 
-# 이미지가 제대로 읽혔는지 확인
+# Check if image was read successfully
 if img is None:
-    print("이미지를 읽을 수 없습니다!")
+    print("Cannot read image!")
 else:
-    print(f"이미지 크기: {img.shape}")
+    print(f"Image size: {img.shape}")
 
-    # 창에 이미지 표시
+    # Display image in window
     cv2.imshow('My First OpenCV', img)
 
-    # 키 입력 대기 (0 = 무한 대기)
+    # Wait for key press (0 = wait indefinitely)
     cv2.waitKey(0)
 
-    # 모든 창 닫기
+    # Close all windows
     cv2.destroyAllWindows()
 ```
 
@@ -271,17 +280,18 @@ else:
 import cv2
 import numpy as np
 
-# 검은색 이미지 생성 (300x400, 3채널)
+# np.zeros creates a black canvas: dtype=uint8 gives the [0, 255] range
+# that OpenCV functions expect — using float here would cause display issues
 img = np.zeros((300, 400, 3), dtype=np.uint8)
 
-# 텍스트 추가
+# Add text — useful as a quick smoke test without needing an image file on disk
 cv2.putText(img, 'Hello OpenCV!', (50, 150),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
-# 원 그리기 (중심, 반지름, 색상, 두께)
+# Draw circle: thickness=2 (outline); use -1 for a filled circle
 cv2.circle(img, (200, 200), 50, (0, 255, 0), 2)
 
-# 표시
+# Display
 cv2.imshow('Test Image', img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
@@ -297,7 +307,7 @@ OpenCV-Python에서 이미지는 NumPy 배열(ndarray)로 표현됩니다.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                  OpenCV와 NumPy의 관계                          │
+│               Relationship between OpenCV and NumPy             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   cv2.imread()                                                  │
@@ -308,15 +318,15 @@ OpenCV-Python에서 이미지는 NumPy 배열(ndarray)로 표현됩니다.
 │   │  ┌─────────────────────────────────────────┐    │          │
 │   │  │  shape: (height, width, channels)       │    │          │
 │   │  │  dtype: uint8 (0-255)                   │    │          │
-│   │  │  data: 실제 픽셀 값                      │    │          │
+│   │  │  data: actual pixel values              │    │          │
 │   │  └─────────────────────────────────────────┘    │          │
 │   └─────────────────────────────────────────────────┘          │
 │        │                                                        │
 │        ▼                                                        │
-│   NumPy 연산 사용 가능:                                          │
-│   - 슬라이싱: img[100:200, 50:150]                              │
-│   - 연산: img + 50, img * 1.5                                   │
-│   - 함수: np.mean(img), np.max(img)                             │
+│   NumPy operations available:                                  │
+│   - Slicing: img[100:200, 50:150]                              │
+│   - Operations: img + 50, img * 1.5                            │
+│   - Functions: np.mean(img), np.max(img)                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -329,20 +339,21 @@ import numpy as np
 
 img = cv2.imread('sample.jpg')
 
-# NumPy 함수 사용
-print(f"평균 밝기: {np.mean(img):.2f}")
-print(f"최대값: {np.max(img)}")
-print(f"최소값: {np.min(img)}")
+# Use NumPy functions
+print(f"Average brightness: {np.mean(img):.2f}")
+print(f"Maximum: {np.max(img)}")
+print(f"Minimum: {np.min(img)}")
 
-# 배열 연산으로 밝기 조절
+# np.clip prevents uint8 overflow: without it, 255 + 1 wraps around to 0
+# (silent integer overflow), which creates dark spots instead of bright ones
 brighter = np.clip(img + 50, 0, 255).astype(np.uint8)
 darker = np.clip(img - 50, 0, 255).astype(np.uint8)
 
-# 비교 연산
-bright_pixels = img > 200  # Boolean 배열
+# Boolean array: True/False mask for downstream masking or counting pixels
+bright_pixels = img > 200
 
-# 통계
-print(f"표준편차: {np.std(img):.2f}")
+# Statistics
+print(f"Standard deviation: {np.std(img):.2f}")
 ```
 
 ### OpenCV 함수 vs NumPy 연산
@@ -353,23 +364,23 @@ import numpy as np
 
 img = cv2.imread('sample.jpg')
 
-# 방법 1: OpenCV 함수 사용
+# Method 1: Using OpenCV functions
 mean_cv = cv2.mean(img)
-print(f"OpenCV mean: {mean_cv}")  # (B평균, G평균, R평균, 0)
+print(f"OpenCV mean: {mean_cv}")  # (B_avg, G_avg, R_avg, 0)
 
-# 방법 2: NumPy 사용
+# Method 2: Using NumPy
 mean_np = np.mean(img, axis=(0, 1))
-print(f"NumPy mean: {mean_np}")  # [B평균, G평균, R평균]
+print(f"NumPy mean: {mean_np}")  # [B_avg, G_avg, R_avg]
 
-# 성능 비교 (대부분의 경우 OpenCV가 빠름)
+# Performance comparison (OpenCV is usually faster)
 import time
 
-# 가우시안 블러 비교
+# Gaussian blur comparison
 img_large = np.random.randint(0, 256, (1000, 1000, 3), dtype=np.uint8)
 
 start = time.time()
 blur_cv = cv2.GaussianBlur(img_large, (5, 5), 0)
-print(f"OpenCV: {time.time() - start:.4f}초")
+print(f"OpenCV: {time.time() - start:.4f}s")
 ```
 
 ---
@@ -380,24 +391,24 @@ print(f"OpenCV: {time.time() - start:.4f}초")
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    이미지 = 3차원 배열                          │
+│                    Image = 3D Array                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   img.shape = (height, width, channels)                         │
 │                                                                 │
-│   예: (480, 640, 3) → 480행 × 640열 × 3채널(BGR)                │
+│   e.g., (480, 640, 3) → 480 rows × 640 cols × 3 channels (BGR)  │
 │                                                                 │
-│         width (열, x축)                                         │
+│         width (columns, x-axis)                                 │
 │       ←───────────────→                                         │
 │      ┌─────────────────┐  ↑                                     │
 │      │ B G R │ B G R │ │  │                                     │
-│      │ 픽셀  │ 픽셀  │ │  │ height                              │
-│      ├───────┼───────┤ │  │ (행, y축)                           │
+│      │ pixel │ pixel │ │  │ height                              │
+│      ├───────┼───────┤ │  │ (rows, y-axis)                      │
 │      │ B G R │ B G R │ │  │                                     │
-│      │ 픽셀  │ 픽셀  │ │  │                                     │
+│      │ pixel │ pixel │ │  │                                     │
 │      └─────────────────┘  ↓                                     │
 │                                                                 │
-│   접근: img[y, x] 또는 img[y, x, channel]                       │
+│   Access: img[y, x] or img[y, x, channel]                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -410,19 +421,19 @@ import numpy as np
 
 img = cv2.imread('sample.jpg')
 
-# 기본 데이터 타입
-print(f"데이터 타입: {img.dtype}")  # uint8
+# Basic data type
+print(f"Data type: {img.dtype}")  # uint8
 
-# 주요 데이터 타입
-# uint8:  0 ~ 255 (가장 일반적)
-# float32: 0.0 ~ 1.0 (딥러닝, 정밀 계산)
-# float64: 0.0 ~ 1.0 (과학적 계산)
+# Common data types
+# uint8:  0 ~ 255 (most common)
+# float32: 0.0 ~ 1.0 (deep learning, precision calculations)
+# float64: 0.0 ~ 1.0 (scientific computing)
 
-# 타입 변환
+# Type conversion
 img_float = img.astype(np.float32) / 255.0
-print(f"변환 후: {img_float.dtype}, 범위: {img_float.min():.2f} ~ {img_float.max():.2f}")
+print(f"After conversion: {img_float.dtype}, range: {img_float.min():.2f} ~ {img_float.max():.2f}")
 
-# 다시 uint8로 (저장/표시용)
+# Back to uint8 (for saving/display)
 img_back = (img_float * 255).astype(np.uint8)
 ```
 
@@ -432,23 +443,23 @@ img_back = (img_float * 255).astype(np.uint8)
 import cv2
 import numpy as np
 
-# 컬러 이미지 (3채널)
+# Color image (3 channels)
 color_img = cv2.imread('sample.jpg', cv2.IMREAD_COLOR)
-print(f"컬러: {color_img.shape}")  # (H, W, 3)
+print(f"Color: {color_img.shape}")  # (H, W, 3)
 
-# 그레이스케일 (1채널, 2차원)
+# Grayscale (1 channel, 2D)
 gray_img = cv2.imread('sample.jpg', cv2.IMREAD_GRAYSCALE)
-print(f"그레이: {gray_img.shape}")  # (H, W)
+print(f"Gray: {gray_img.shape}")  # (H, W)
 
-# 알파 채널 포함 (4채널)
+# With alpha channel (4 channels)
 alpha_img = cv2.imread('sample.png', cv2.IMREAD_UNCHANGED)
 if alpha_img is not None and alpha_img.shape[2] == 4:
-    print(f"알파 포함: {alpha_img.shape}")  # (H, W, 4)
+    print(f"With alpha: {alpha_img.shape}")  # (H, W, 4)
 
-# 새 이미지 생성
-blank_color = np.zeros((300, 400, 3), dtype=np.uint8)  # 검은 컬러
-blank_gray = np.zeros((300, 400), dtype=np.uint8)       # 검은 그레이
-white_img = np.ones((300, 400, 3), dtype=np.uint8) * 255  # 흰색
+# Create new images
+blank_color = np.zeros((300, 400, 3), dtype=np.uint8)  # Black color
+blank_gray = np.zeros((300, 400), dtype=np.uint8)       # Black gray
+white_img = np.ones((300, 400, 3), dtype=np.uint8) * 255  # White
 ```
 
 ### 이미지 속성 확인
@@ -459,19 +470,19 @@ import cv2
 img = cv2.imread('sample.jpg')
 
 if img is not None:
-    # 기본 속성
-    print(f"형태 (H, W, C): {img.shape}")
-    print(f"높이: {img.shape[0]}px")
-    print(f"너비: {img.shape[1]}px")
-    print(f"채널 수: {img.shape[2]}")
+    # Basic properties
+    print(f"Shape (H, W, C): {img.shape}")
+    print(f"Height: {img.shape[0]}px")
+    print(f"Width: {img.shape[1]}px")
+    print(f"Channels: {img.shape[2]}")
 
-    # 데이터 속성
-    print(f"데이터 타입: {img.dtype}")
-    print(f"총 픽셀 수: {img.size}")  # H * W * C
-    print(f"메모리 크기: {img.nbytes} bytes")
+    # Data properties
+    print(f"Data type: {img.dtype}")
+    print(f"Total pixels: {img.size}")  # H * W * C
+    print(f"Memory size: {img.nbytes} bytes")
 
-    # 차원
-    print(f"차원: {img.ndim}")  # 컬러=3, 그레이=2
+    # Dimensions
+    print(f"Dimensions: {img.ndim}")  # Color=3, Gray=2
 ```
 
 ---
@@ -487,12 +498,12 @@ if img is not None:
 - 사용 가능한 GPU 가속 여부 (`cv2.cuda.getCudaEnabledDeviceCount()`)
 
 ```python
-# 힌트
+# Hint
 import cv2
 import numpy as np
 import sys
 
-# 여기에 코드 작성
+# Write your code here
 ```
 
 ### 연습 2: 이미지 정보 출력기
@@ -502,19 +513,19 @@ import sys
 ```python
 def print_image_info(filepath):
     """
-    이미지 파일의 상세 정보를 출력합니다.
+    Prints detailed information about an image file.
 
-    출력 항목:
-    - 파일 경로
-    - 로드 성공 여부
-    - 이미지 크기 (너비 x 높이)
-    - 채널 수
-    - 데이터 타입
-    - 메모리 사용량
-    - 픽셀 값 범위 (최소, 최대)
-    - 평균 밝기
+    Output items:
+    - File path
+    - Load success status
+    - Image size (width x height)
+    - Number of channels
+    - Data type
+    - Memory usage
+    - Pixel value range (min, max)
+    - Average brightness
     """
-    # 여기에 코드 작성
+    # Write your code here
     pass
 ```
 
@@ -532,10 +543,10 @@ def print_image_info(filepath):
 이미지를 로드한 후 다음 작업을 수행하세요:
 
 ```python
-# 1. 밝기 50 증가 (클리핑 적용)
-# 2. 밝기 50 감소 (클리핑 적용)
-# 3. 대비 1.5배 증가
-# 4. 이미지 반전 (255 - img)
+# 1. Increase brightness by 50 (apply clipping)
+# 2. Decrease brightness by 50 (apply clipping)
+# 3. Increase contrast by 1.5x
+# 4. Invert image (255 - img)
 ```
 
 ### 연습 5: 채널 분리 미리보기
@@ -546,7 +557,7 @@ def print_image_info(filepath):
 
 ## 8. 다음 단계
 
-[02_Image_Basics.md](./02_Image_Basics.md)에서 이미지 읽기/쓰기, 픽셀 접근, ROI 설정 등 기본적인 이미지 연산을 학습합니다!
+[이미지 기초 연산](./02_Image_Basics.md)에서 이미지 읽기/쓰기, 픽셀 접근, ROI 설정 등 기본적인 이미지 연산을 학습합니다!
 
 **다음에 배울 내용**:
 - `cv2.imread()`, `cv2.imshow()`, `cv2.imwrite()` 상세

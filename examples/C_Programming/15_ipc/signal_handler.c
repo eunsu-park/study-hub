@@ -18,7 +18,9 @@
 #include <sys/wait.h>
 #include <string.h>
 
-/* Use volatile sig_atomic_t for signal-safe flags */
+// Why: volatile prevents the compiler from caching "running" in a register —
+// sig_atomic_t guarantees atomic reads/writes, so the signal handler and main
+// loop see changes without locks or memory barriers
 static volatile sig_atomic_t running = 1;
 static volatile sig_atomic_t usr1_count = 0;
 static volatile sig_atomic_t usr2_count = 0;
@@ -26,7 +28,9 @@ static volatile sig_atomic_t usr2_count = 0;
 /* SIGINT / SIGTERM handler: graceful shutdown */
 static void handle_shutdown(int sig) {
     const char *name = (sig == SIGINT) ? "SIGINT" : "SIGTERM";
-    /* write() is async-signal-safe; printf is NOT */
+    // Why: write() is async-signal-safe but printf() is NOT — printf uses internal
+    // locks/buffers that may be in an inconsistent state when the signal fires,
+    // causing deadlocks or corruption
     write(STDOUT_FILENO, "\nReceived ", 10);
     write(STDOUT_FILENO, name, strlen(name));
     write(STDOUT_FILENO, ", shutting down...\n", 18);
@@ -91,6 +95,9 @@ int main(void) {
     /* Install handlers */
     install_handler(SIGINT,  handle_shutdown, 0);
     install_handler(SIGTERM, handle_shutdown, 0);
+    // Why: SA_RESTART makes interrupted system calls (read, write, sleep) resume
+    // automatically after the signal — without it, they would return -1 with
+    // errno=EINTR, requiring manual retry logic throughout the code
     install_handler(SIGUSR1, handle_usr1, SA_RESTART);
     install_handler(SIGCHLD, handle_sigchld, SA_RESTART | SA_NOCLDSTOP);
 
@@ -102,7 +109,8 @@ int main(void) {
     sa_usr2.sa_flags = SA_SIGINFO | SA_RESTART;
     sigaction(SIGUSR2, &sa_usr2, NULL);
 
-    /* Ignore SIGPIPE */
+    // Why: SIGPIPE's default action kills the process — ignoring it lets us handle
+    // broken-pipe errors via write()'s return value instead of crashing
     signal(SIGPIPE, SIG_IGN);
 
     /* Fork a child to demonstrate SIGCHLD */

@@ -36,16 +36,16 @@ Git 기초 ────────▶ GitHub 시작 ────▶ Git 고급
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Git_Basics.md](./01_Git_Basics.md) | ⭐ | Git 개념, 설치, 초기 설정 |
-| [02_Basic_Commands.md](./02_Basic_Commands.md) | ⭐ | status, add, commit, log |
-| [03_Branches.md](./03_Branches.md) | ⭐⭐ | 브랜치 생성, 병합, 충돌 해결 |
-| [04_GitHub_Getting_Started.md](./04_GitHub_Getting_Started.md) | ⭐ | 원격 저장소, push, pull, clone |
-| [05_GitHub_Collaboration.md](./05_GitHub_Collaboration.md) | ⭐⭐ | Pull Request, 코드 리뷰, Fork |
-| [06_Git_Advanced.md](./06_Git_Advanced.md) | ⭐⭐⭐ | rebase, cherry-pick, stash, reset |
-| [07_GitHub_Actions.md](./07_GitHub_Actions.md) | ⭐⭐⭐ | CI/CD, 워크플로우 자동화 |
-| [08_Git_Workflow_Strategies.md](./08_Git_Workflow_Strategies.md) | ⭐⭐⭐ | Git Flow, GitHub Flow, trunk-based |
-| [09_Advanced_Git_Techniques.md](./09_Advanced_Git_Techniques.md) | ⭐⭐⭐⭐ | hooks, submodules, worktrees |
-| [10_Monorepo_Management.md](./10_Monorepo_Management.md) | ⭐⭐⭐⭐ | Nx, Turborepo, 의존성 관리 |
+| [Git 기초](./01_Git_Basics.md) | ⭐ | Git 개념, 설치, 초기 설정 |
+| [Git 기본 명령어](./02_Basic_Commands.md) | ⭐ | status, add, commit, log |
+| [Git 브랜치](./03_Branches.md) | ⭐⭐ | 브랜치 생성, 병합, 충돌 해결 |
+| [GitHub 시작하기](./04_GitHub_Getting_Started.md) | ⭐ | 원격 저장소, push, pull, clone |
+| [GitHub 협업](./05_GitHub_Collaboration.md) | ⭐⭐ | Pull Request, 코드 리뷰, Fork |
+| [Git 고급 명령어](./06_Git_Advanced.md) | ⭐⭐⭐ | rebase, cherry-pick, stash, reset |
+| [GitHub Actions](./07_GitHub_Actions.md) | ⭐⭐⭐ | CI/CD, 워크플로우 자동화 |
+| [Git 워크플로우 전략](./08_Git_Workflow_Strategies.md) | ⭐⭐⭐ | Git Flow, GitHub Flow, trunk-based |
+| [고급 Git 기법](./09_Advanced_Git_Techniques.md) | ⭐⭐⭐⭐ | hooks, submodules, worktrees |
+| [모노레포 관리](./10_Monorepo_Management.md) | ⭐⭐⭐⭐ | Nx, Turborepo, 의존성 관리 |
 
 ---
 

@@ -1,10 +1,24 @@
 # k-Nearest Neighbors (k-NN) and Naive Bayes
 
-## Overview
+**Previous**: [SVM](./09_SVM.md) | **Next**: [Clustering](./11_Clustering.md)
 
-This lesson covers two simple yet powerful algorithms:
-- **k-NN**: Distance-based classification and regression
-- **Naive Bayes**: Probabilistic classification based on Bayes' theorem
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the k-NN algorithm and how it performs lazy (instance-based) learning
+2. Compare distance metrics (Euclidean, Manhattan, Cosine) and identify when each is appropriate
+3. Apply cross-validation to select the optimal k value and evaluate uniform vs. distance-weighted voting
+4. Describe Bayes' theorem and the "naive" conditional independence assumption
+5. Distinguish between Gaussian, Multinomial, and Bernoulli Naive Bayes and match each to its data type
+6. Implement a text classification pipeline using TF-IDF and Multinomial Naive Bayes
+7. Evaluate the trade-offs between k-NN and Naive Bayes in terms of speed, memory, and dimensionality
+
+---
+
+This lesson covers two algorithms that sit at opposite ends of the machine learning spectrum. k-NN makes predictions by finding similar examples in the training data -- simple and assumption-free, but slow at prediction time. Naive Bayes takes a probabilistic approach using Bayes' theorem with a bold independence assumption that rarely holds in practice yet yields surprisingly competitive results, especially for text classification.
 
 ---
 

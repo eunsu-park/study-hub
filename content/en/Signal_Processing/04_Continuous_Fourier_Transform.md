@@ -10,15 +10,18 @@ The Fourier transform is one of the most powerful and ubiquitous tools in all of
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Derive the Fourier transform as the limit of the Fourier series for aperiodic signals
-- State and prove key CTFT properties (linearity, shifting, scaling, duality, convolution)
-- Compute forward and inverse Fourier transforms of standard signals
-- Apply the convolution theorem to simplify LTI system analysis
-- Interpret frequency-domain representations physically
-- Describe ideal frequency-selective filters (lowpass, highpass, bandpass)
-- Understand bandwidth and the time-bandwidth product (uncertainty principle)
-- Use Python (FFT) for continuous-signal Fourier analysis
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Derive the Fourier transform as the limit of the Fourier series for aperiodic signals
+2. State and prove key CTFT properties (linearity, shifting, scaling, duality, convolution)
+3. Compute forward and inverse Fourier transforms of standard signals
+4. Apply the convolution theorem to simplify LTI system analysis
+5. Interpret frequency-domain representations physically
+6. Describe ideal frequency-selective filters (lowpass, highpass, bandpass)
+7. Understand bandwidth and the time-bandwidth product (uncertainty principle)
+8. Use Python (FFT) for continuous-signal Fourier analysis
 
 ---
 

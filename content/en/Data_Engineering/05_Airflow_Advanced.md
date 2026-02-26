@@ -1,5 +1,18 @@
 # Airflow Advanced
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use XCom to share data between Airflow tasks and understand its limitations compared to external storage
+2. Generate dynamic DAGs programmatically using Python to handle variable numbers of tasks or data sources
+3. Implement Sensors to create event-driven workflows that wait for external conditions
+4. Build custom Hooks and Operators to extend Airflow's integration capabilities
+5. Organize complex DAGs using TaskGroups and apply branching with BranchPythonOperator
+6. Design and implement production-grade pipelines applying Airflow best practices for error handling, retries, and alerting
+
+---
+
 ## Overview
 
 This document covers advanced Airflow features including XCom for data sharing between tasks, dynamic DAG generation, Sensors, Hooks, TaskGroups, and more. Leveraging these features allows you to build more flexible and powerful pipelines.
@@ -21,10 +34,12 @@ def push_data(**kwargs):
     """Push data to XCom"""
     ti = kwargs['ti']
 
-    # Method 1: Using xcom_push
+    # Method 1: xcom_push with explicit key — use when a task needs to
+    # publish multiple distinct values (e.g., status + metrics).
     ti.xcom_push(key='my_key', value={'status': 'success', 'count': 100})
 
-    # Method 2: Return value (automatically saved with key='return_value')
+    # Method 2: return value — simpler for the common case of one output.
+    # Stored with key='return_value' automatically.
     return {'result': 'completed', 'rows': 500}
 
 
@@ -32,15 +47,18 @@ def pull_data(**kwargs):
     """Pull data from XCom"""
     ti = kwargs['ti']
 
-    # Method 1: Pull by specific key
+    # Pull by explicit key — necessary when the upstream task pushed
+    # multiple values and you need a specific one.
     custom_data = ti.xcom_pull(key='my_key', task_ids='push_task')
     print(f"Custom data: {custom_data}")
 
-    # Method 2: Pull return value
-    return_value = ti.xcom_pull(task_ids='push_task')  # key='return_value' by default
+    # Pull return value (omitting key defaults to 'return_value') —
+    # the most common pattern for simple task-to-task communication.
+    return_value = ti.xcom_pull(task_ids='push_task')
     print(f"Return value: {return_value}")
 
-    # Method 3: Pull from multiple tasks
+    # Pull from multiple tasks at once — useful for fan-in patterns
+    # where a downstream task aggregates results from parallel upstreams.
     multiple_results = ti.xcom_pull(task_ids=['task1', 'task2'])
 
 
@@ -89,9 +107,12 @@ sql_task = PostgresOperator(
 ### 1.3 XCom Limitations and Alternatives
 
 ```python
-# XCom limitation: default 1GB (stored in DB, recommended for small data only)
+# XCom limitation: values are serialized into the metadata DB (default 1GB).
+# Large XCom values bloat the DB, slow down the UI, and can cause OOM errors
+# during serialization.  Rule of thumb: keep XCom values under ~50 KB.
 
-# Handling large data
+# Recommended pattern: pass a *path* (pointer) via XCom, store actual data
+# in external storage (S3, GCS).  This decouples data size from XCom limits.
 class LargeDataHandler:
     """Pattern for handling large data"""
 
@@ -100,9 +121,10 @@ class LargeDataHandler:
         """Save data to external storage and pass only the path via XCom"""
         import pandas as pd
 
-        # Save to S3, GCS, etc.
+        # External storage (S3/GCS) handles arbitrarily large files;
+        # XCom stores only the ~50-byte path string.
         data.to_parquet(path)
-        return path  # Return only the path
+        return path
 
     @staticmethod
     def load_from_storage(path: str):
@@ -115,23 +137,25 @@ class LargeDataHandler:
 def produce_large_data(**kwargs):
     import pandas as pd
 
-    # Generate large dataset
     df = pd.DataFrame({'col': range(1000000)})
 
-    # Save to S3 and return only the path
+    # Date-partitioned path ensures idempotent re-runs overwrite the same
+    # file rather than creating duplicates.
     path = f"s3://bucket/data/{kwargs['ds']}/output.parquet"
     df.to_parquet(path)
 
-    return path  # Store only path in XCom
+    # Only the path string (~50 bytes) goes into XCom, not the DataFrame.
+    return path
 
 
 def consume_large_data(**kwargs):
     import pandas as pd
 
     ti = kwargs['ti']
+    # Pull the path, then read the actual data from storage —
+    # this keeps the metadata DB lightweight and the pipeline scalable.
     path = ti.xcom_pull(task_ids='produce_task')
 
-    # Load data from path
     df = pd.read_parquet(path)
     print(f"Loaded {len(df)} rows from {path}")
 ```
@@ -203,7 +227,9 @@ def create_dag(config: dict) -> DAG:
     return dag
 
 
-# Register DAGs in globals() (so Airflow can discover them)
+# Register DAGs in globals(): Airflow's DagBag parser inspects the module's
+# global namespace for DAG objects — if the DAG isn't in globals(), the
+# scheduler never sees it.  This loop creates one DAG per config entry.
 for config in DAG_CONFIGS:
     dag_id = config['dag_id']
     globals()[dag_id] = create_dag(config)
@@ -309,8 +335,12 @@ with DAG(
     start = EmptyOperator(task_id='start')
     end = EmptyOperator(task_id='end')
 
-    # Dynamically create tasks
+    # Dynamically create one task per table: adding a new table to the TABLES
+    # list auto-generates its ETL task — no copy-paste of operator boilerplate.
     for table in TABLES:
+        # Default argument `table_name=table` captures the loop variable
+        # by value; without it, all tasks would reference the last table
+        # due to Python's late-binding closures.
         def process_table(table_name=table, **kwargs):
             print(f"Processing table: {table_name}")
 
@@ -320,6 +350,7 @@ with DAG(
             op_kwargs={'table_name': table},
         )
 
+        # Fan-out / fan-in: all table tasks run in parallel between start/end.
         start >> task >> end
 ```
 
@@ -340,26 +371,33 @@ from datetime import datetime, timedelta
 
 with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='@daily') as dag:
 
-    # 1. FileSensor - wait for file existence
+    # 1. FileSensor — use when an external system drops files on a schedule
+    # you don't control (e.g., vendor SFTP uploads).  The sensor blocks the
+    # DAG until the file appears, avoiding "file not found" failures.
     wait_for_file = FileSensor(
         task_id='wait_for_file',
         filepath='/data/input/{{ ds }}/data.csv',
-        poke_interval=60,           # Check interval (seconds)
-        timeout=3600,               # Timeout (seconds)
-        mode='poke',                # poke or reschedule
+        poke_interval=60,           # Check every 60s — balance responsiveness vs I/O
+        timeout=3600,               # Give up after 1 hour
+        mode='poke',                # Holds the worker slot; use for short expected waits
     )
 
-    # 2. ExternalTaskSensor - wait for another DAG's task completion
+    # 2. ExternalTaskSensor — creates a cross-DAG dependency without merging
+    # the DAGs.  execution_delta=0 means "wait for the same logical date",
+    # which is the most common pattern for chained daily pipelines.
     wait_for_upstream = ExternalTaskSensor(
         task_id='wait_for_upstream',
         external_dag_id='upstream_dag',
         external_task_id='final_task',
-        execution_delta=timedelta(hours=0),  # Same execution_date
+        execution_delta=timedelta(hours=0),
         timeout=7200,
-        mode='reschedule',          # Return worker and reschedule
+        # reschedule mode: frees the worker slot between checks, critical
+        # when the upstream DAG may take hours to complete.
+        mode='reschedule',
     )
 
-    # 3. HttpSensor - check HTTP endpoint
+    # 3. HttpSensor — useful for waiting on an API to become available
+    # (e.g., after a deployment) before sending requests.
     wait_for_api = HttpSensor(
         task_id='wait_for_api',
         http_conn_id='my_api',
@@ -370,7 +408,9 @@ with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='
         timeout=600,
     )
 
-    # 4. SqlSensor - check SQL condition
+    # 4. SqlSensor — polls a database condition.  Ideal for waiting on an
+    # upstream batch job that doesn't use Airflow (e.g., a Spark job that
+    # writes a "done" row to a control table).
     wait_for_data = SqlSensor(
         task_id='wait_for_data',
         conn_id='my_postgres',
@@ -379,7 +419,7 @@ with DAG('sensor_examples', start_date=datetime(2024, 1, 1), schedule_interval='
             FROM staging_table
             WHERE date = '{{ ds }}'
         """,
-        poke_interval=300,
+        poke_interval=300,          # 5-min interval: DB-friendly polling rate
         timeout=3600,
     )
 
@@ -400,6 +440,8 @@ import boto3
 class S3KeySensorCustom(BaseSensorOperator):
     """Custom Sensor to check S3 key existence"""
 
+    # bucket_key is templated so you can use {{ ds }} to wait for
+    # date-partitioned files without hardcoding dates.
     template_fields = ['bucket_key']
 
     @apply_defaults
@@ -420,14 +462,19 @@ class S3KeySensorCustom(BaseSensorOperator):
         """Check condition (returns True on success)"""
         self.log.info(f"Checking for s3://{self.bucket_name}/{self.bucket_key}")
 
-        # Create S3 client
         s3 = boto3.client('s3')
 
         try:
+            # head_object is cheaper than list_objects: it checks a single key
+            # without scanning the prefix, and returns metadata without
+            # downloading the file contents.
             s3.head_object(Bucket=self.bucket_name, Key=self.bucket_key)
             self.log.info("File found!")
             return True
         except s3.exceptions.ClientError as e:
+            # 404 = file doesn't exist yet → return False to keep waiting.
+            # Any other error (403 permission, 500 server) is unexpected
+            # and should propagate to fail the task immediately.
             if e.response['Error']['Code'] == '404':
                 self.log.info("File not found, waiting...")
                 return False
@@ -464,14 +511,18 @@ sensor_modes = {
     }
 }
 
-# Recommended configuration
+# Recommended production configuration for long-wait sensors:
 wait_for_file = FileSensor(
     task_id='wait_for_file',
     filepath='/data/input.csv',
-    poke_interval=300,      # Check every 5 minutes
-    timeout=86400,          # 24 hour timeout
-    mode='reschedule',      # Use reschedule for long waits
-    soft_fail=True,         # Skip on timeout (instead of failing)
+    poke_interval=300,      # 5 min: low enough for reasonable latency, high
+                            # enough to avoid taxing the scheduler with retries
+    timeout=86400,          # 24 hours: generous timeout for daily files
+    mode='reschedule',      # Frees the worker slot between pokes — essential
+                            # when you have limited worker capacity
+    soft_fail=True,         # On timeout, mark as "skipped" instead of "failed"
+                            # so downstream tasks can use trigger_rule to decide
+                            # whether to proceed or skip gracefully
 )
 ```
 
@@ -585,6 +636,9 @@ import requests
 class MyCustomHook(BaseHook):
     """Custom API Hook"""
 
+    # These class attributes let Airflow's connection UI auto-populate fields
+    # and validate connection types — without them, users would need to
+    # remember the exact conn_id format.
     conn_name_attr = 'my_custom_conn_id'
     default_conn_name = 'my_custom_default'
     conn_type = 'http'
@@ -598,6 +652,8 @@ class MyCustomHook(BaseHook):
 
     def get_conn(self):
         """Load connection configuration"""
+        # Credentials are stored in Airflow's encrypted connection store,
+        # not in DAG code — keeps secrets out of version control.
         conn = self.get_connection(self.my_custom_conn_id)
         self.base_url = f"https://{conn.host}"
         self.api_key = conn.password
@@ -605,6 +661,9 @@ class MyCustomHook(BaseHook):
 
     def make_request(self, endpoint: str, method: str = 'GET', data: dict = None) -> Any:
         """Make API request"""
+        # Lazy connection: credentials are loaded only when a request is
+        # made, not at hook instantiation — avoids unnecessary DB lookups
+        # if the hook is created but never used (e.g., in a skipped branch).
         self.get_conn()
 
         headers = {
@@ -621,6 +680,8 @@ class MyCustomHook(BaseHook):
             json=data
         )
 
+        # raise_for_status() converts HTTP 4xx/5xx into Python exceptions,
+        # which Airflow catches and retries according to the task's retry policy.
         response.raise_for_status()
         return response.json()
 
@@ -649,7 +710,9 @@ with DAG('taskgroup_example', start_date=datetime(2024, 1, 1), schedule_interval
 
     start = EmptyOperator(task_id='start')
 
-    # Group related tasks with TaskGroup
+    # TaskGroup visually collapses related tasks in the UI, making complex
+    # DAGs navigable.  It also enables setting dependencies on the *group*
+    # rather than on individual tasks (extract_group >> transform_group).
     with TaskGroup(group_id='extract_group') as extract_group:
         extract_users = PythonOperator(
             task_id='extract_users',
@@ -715,6 +778,8 @@ with DAG('nested_taskgroup', ...) as dag:
 ```python
 from airflow.utils.task_group import TaskGroup
 
+# Adding a new source requires only appending to this list — the loop below
+# generates the full extract→load pipeline automatically.
 SOURCES = ['mysql', 'postgres', 'mongodb']
 
 with DAG('dynamic_taskgroup', ...) as dag:
@@ -723,9 +788,13 @@ with DAG('dynamic_taskgroup', ...) as dag:
 
     task_groups = []
     for source in SOURCES:
+        # Each source gets its own TaskGroup: isolates failures (a MongoDB
+        # error doesn't block the MySQL pipeline) and the UI shows per-source
+        # progress at a glance.
         with TaskGroup(group_id=f'process_{source}') as tg:
             extract = PythonOperator(
                 task_id='extract',
+                # Default arg `s=source` captures the loop var by value
                 python_callable=lambda s=source: print(f"Extract from {s}")
             )
             load = PythonOperator(
@@ -738,6 +807,7 @@ with DAG('dynamic_taskgroup', ...) as dag:
 
     end = EmptyOperator(task_id='end')
 
+    # All source groups run in parallel between start and end
     start >> task_groups >> end
 ```
 
@@ -780,10 +850,13 @@ with DAG('branch_example', ...) as dag:
     process_small = EmptyOperator(task_id='process_small')
     skip_processing = EmptyOperator(task_id='skip_processing')
 
-    # Join after branching
+    # Join after branching: trigger_rule is essential here because the
+    # un-chosen branches are marked "skipped", which the default
+    # 'all_success' rule treats as not-success.  'none_failed_min_one_success'
+    # allows the join to proceed as long as the chosen branch succeeded.
     join = EmptyOperator(
         task_id='join',
-        trigger_rule='none_failed_min_one_success'  # Execute if at least one succeeds
+        trigger_rule='none_failed_min_one_success'
     )
 
     count_data >> branch >> [process_large, process_small, skip_processing] >> join
@@ -797,9 +870,11 @@ from airflow.operators.python import ShortCircuitOperator
 def check_condition(**kwargs):
     """Check condition - skip downstream tasks if returns False"""
     ds = kwargs['ds']
-    # Skip on weekends
+    # ShortCircuit vs Branch: use ShortCircuit when there is only one
+    # "should I run?" gate (yes/no), and Branch when you need to choose
+    # between multiple alternative paths.
     day_of_week = datetime.strptime(ds, '%Y-%m-%d').weekday()
-    return day_of_week < 5  # True only on weekdays
+    return day_of_week < 5  # True → continue; False → skip all downstream
 
 
 with DAG('shortcircuit_example', ...) as dag:

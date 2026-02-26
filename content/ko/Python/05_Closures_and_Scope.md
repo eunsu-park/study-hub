@@ -1,5 +1,24 @@
 # 클로저와 스코프 (Closures & Scope)
 
+**이전**: [이터레이터와 제너레이터](./04_Iterators_and_Generators.md) | **다음**: [메타클래스](./06_Metaclasses.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 변수 이름 탐색을 위한 LEGB 규칙(Local, Enclosing, Global, Built-in)을 설명할 수 있습니다
+2. `global` 키워드를 사용해 함수 내부에서 모듈 수준 변수를 수정할 수 있습니다
+3. `nonlocal` 키워드를 사용해 중첩 함수에서 감싸는 함수의 변수를 수정할 수 있습니다
+4. 클로저(Closure)를 생성하는 데 필요한 세 가지 조건을 설명할 수 있습니다
+5. 팩토리 함수(factory function), 누산기(accumulator), 설정 클로저(configuration closure)를 구현할 수 있습니다
+6. 클로저와 호출 가능 클래스(callable class)를 비교하고 각 방식이 적합한 상황을 파악할 수 있습니다
+7. 클로저의 고전적인 "루프 변수 캡처(loop variable capture)" 함정을 식별하고 수정할 수 있습니다
+8. 메모이제이션(memoization), 디바운스(debounce), 재시도 로직(retry logic) 등 실용적인 클로저 기반 패턴을 작성할 수 있습니다
+
+---
+
+파이썬이 변수 이름을 탐색하는 방식과 내부 함수가 감싸는 스코프(enclosing scope)의 상태를 캡처하여 유지하는 방법을 이해하는 것은 데코레이터(decorator), 콜백(callback), 팩토리 함수(factory function)를 작성하는 데 필수적입니다. 클로저(Closure)는 함수를 전체 클래스를 정의하는 번거로움 없이 가벼운 상태 저장 객체로 만들어 주며, 파이썬의 함수형 패턴(functional pattern)의 근간을 이루고 여러분이 작성하는 모든 데코레이터를 작동시키는 메커니즘입니다.
+
 ## 1. 변수 스코프
 
 파이썬에서 변수는 정의된 위치에 따라 접근 범위가 결정됩니다.
@@ -541,4 +560,4 @@ print(vars(obj))  # {'a': 1, 'b': 2}
 
 ## 다음 단계
 
-[06_Metaclasses.md](./06_Metaclasses.md)에서 클래스의 클래스, 메타클래스를 배워봅시다!
+[메타클래스 (Metaclasses)](./06_Metaclasses.md)에서 클래스의 클래스, 메타클래스를 배워봅시다!

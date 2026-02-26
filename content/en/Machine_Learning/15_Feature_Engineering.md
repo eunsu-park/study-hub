@@ -1,8 +1,26 @@
 # Feature Engineering
 
-## Overview
+**Previous**: [Practical Projects](./14_Practical_Projects.md) | **Next**: [Model Explainability](./16_Model_Explainability.md)
 
-Feature engineering is the process of using domain knowledge to create, transform, and select features that make machine learning models work better. It is often the most impactful step in the ML pipeline — good features can make simple models outperform complex ones trained on raw data.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why feature engineering is often more impactful than model selection
+2. Apply numerical transformations (log, power, binning, polynomial) to match model assumptions
+3. Implement categorical encoding strategies (one-hot, target, frequency, hash) and choose the right one based on cardinality
+4. Engineer temporal features using cyclical encoding, lag values, and rolling statistics
+5. Extract text features using TF-IDF, n-grams, and basic text statistics
+6. Identify and prevent data leakage during feature engineering using sklearn Pipeline
+7. Build a complete feature engineering pipeline that improves model performance over a raw-feature baseline
+
+---
+
+The difference between a mediocre model and a competition-winning one is rarely the algorithm -- it is the features. Feature engineering is the art and science of transforming raw data into representations that expose the underlying patterns a model needs to learn. A date becomes "day of week" and "is_holiday"; an address becomes distance-to-downtown; raw text becomes TF-IDF vectors. This lesson equips you with a comprehensive toolkit of transformations so you can make any model work harder for you.
+
+> **Cooking preparation before the recipe.** A chef doesn't just throw raw ingredients into a pot -- they wash, peel, chop, marinate, and measure first. Feature engineering is the "mise en place" of machine learning: transforming raw data into ingredients the model can actually use. A date becomes "day of week" and "is_holiday"; an address becomes distance-to-downtown; raw text becomes TF-IDF vectors. Often, clever feature engineering matters more than choosing a fancier algorithm -- the best model can't learn patterns that aren't represented in the features.
 
 ---
 

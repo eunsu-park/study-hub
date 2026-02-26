@@ -1,12 +1,25 @@
 # Integer and Floating-Point Representation
 
-## Overview
-
-Computer representation of numbers is divided into integers and real numbers. In this lesson, we'll learn about various representations of signed integers (sign-magnitude, one's complement, two's complement) and the IEEE 754 floating-point standard. We'll also cover integer overflow and floating-point precision issues.
+**Previous**: [Data Representation Basics](./02_Data_Representation_Basics.md) | **Next**: [Logic Gates](./04_Logic_Gates.md)
 
 **Difficulty**: ⭐⭐ (Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why two's complement is preferred over other negative number representations
+2. Perform two's complement arithmetic (addition, subtraction, negation)
+3. Describe the IEEE 754 floating-point format (sign, exponent, mantissa) for single and double precision
+4. Identify special IEEE 754 values (infinity, NaN, denormalized numbers)
+5. Explain why 0.1 + 0.2 does not equal 0.3 in floating-point arithmetic
+6. Compare fixed-point and floating-point representations and their trade-offs
+
+---
+
+The infamous question "why does 0.1 + 0.2 not equal 0.3 in most programming languages?" has its answer in IEEE 754 floating-point representation. Understanding how computers represent integers and real numbers explains a whole class of bugs that have caused real-world disasters -- from the Ariane 5 rocket explosion (integer overflow) to the Patriot missile failure (floating-point drift).
 
 ## Table of Contents
 

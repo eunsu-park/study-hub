@@ -1,8 +1,22 @@
 # Debugging and Memory Analysis
 
-## Overview
+**Previous**: [Project 16: Serial Communication](./17_Project_Serial_Communication.md) | **Next**: [Advanced Embedded Protocols](./19_Advanced_Embedded_Protocols.md)
 
-Effective debugging is a core competency for programmers. In this chapter, we learn how to find bugs and solve memory issues using the GDB debugger, Valgrind memory analysis tool, and AddressSanitizer.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Navigate GDB to set breakpoints, inspect variables, and step through code
+2. Detect memory leaks and invalid accesses using Valgrind's Memcheck tool
+3. Interpret Valgrind output to distinguish definitely-lost, indirectly-lost, and still-reachable blocks
+4. Compile with AddressSanitizer to catch buffer overflows, use-after-free, and double-free at runtime
+5. Apply defensive programming techniques such as `assert`, logging levels, and NULL-after-free
+6. Diagnose common memory bugs including uninitialized reads, stack overflow, and dangling pointers
+7. Choose the right debugging tool for a given situation (GDB vs. Valgrind vs. ASan)
+
+---
+
+Bugs are inevitable, but the speed at which you find and fix them separates productive programmers from frustrated ones. A segmentation fault at 2 AM is far less terrifying when you know how to fire up GDB, set a breakpoint, and inspect the call stack. This lesson equips you with a professional debugging toolkit -- from interactive stepping to automated memory analysis -- so that you spend less time guessing and more time shipping correct code.
 
 **Difficulty**: Advanced
 
@@ -880,7 +894,7 @@ $ gdb ./program
 
 ## Next Step
 
-- [19_Advanced_Embedded_Protocols.md](./19_Advanced_Embedded_Protocols.md) - PWM, I2C, SPI
+- [Advanced Embedded Protocols](./19_Advanced_Embedded_Protocols.md) - PWM, I2C, SPI
 
 ---
 

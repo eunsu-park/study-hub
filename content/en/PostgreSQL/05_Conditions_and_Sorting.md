@@ -1,5 +1,25 @@
 # Conditions and Sorting
 
+**Previous**: [CRUD Basics](./04_CRUD_Basics.md) | **Next**: [JOIN](./06_JOIN.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Write WHERE clauses using comparison operators (`=`, `<>`, `<`, `>`, `<=`, `>=`)
+2. Combine conditions with logical operators (AND, OR, NOT) and apply correct precedence
+3. Use BETWEEN, IN, and LIKE/ILIKE for range checks, set membership, and pattern matching
+4. Handle NULL values correctly with IS NULL, IS NOT NULL, COALESCE, and NULLIF
+5. Sort query results with ORDER BY including multi-column and expression-based ordering
+6. Implement pagination using LIMIT, OFFSET, and the SQL-standard FETCH syntax
+7. Apply DISTINCT and DISTINCT ON to eliminate duplicate rows from result sets
+
+---
+
+Raw data in a table is only useful when you can filter, sort, and page through it efficiently. In practice, almost every query you write will include a WHERE clause to narrow down results and an ORDER BY to present them in a meaningful sequence. These filtering and sorting skills are the bridge between storing data and extracting actionable information from it.
+
 ## 1. WHERE Clause Basics
 
 The WHERE clause selects only rows that match a condition.
@@ -197,10 +217,11 @@ SELECT * FROM users WHERE city = NULL;  -- Doesn't work!
 ### COALESCE - NULL Replacement
 
 ```sql
--- Display 'Unspecified' if NULL
+-- COALESCE returns the first non-NULL argument — essential for user-facing output
+-- where NULL would display as blank or cause downstream errors in application code
 SELECT name, COALESCE(city, 'Unspecified') AS city FROM users;
 
--- First non-NULL value from multiple values
+-- Chain multiple fallbacks: try phone first, then email, then a literal default
 SELECT COALESCE(phone, email, 'No contact') AS contact FROM users;
 ```
 
@@ -454,7 +475,9 @@ SELECT * FROM products ORDER BY stock NULLS LAST;
 ### Use Indexes
 
 ```sql
--- Create indexes on frequently searched columns
+-- Indexes turn O(n) sequential scans into O(log n) B-tree lookups.
+-- Only create indexes on columns that appear in WHERE, JOIN, or ORDER BY clauses;
+-- each index adds write overhead (INSERT/UPDATE must maintain the index).
 CREATE INDEX idx_products_category ON products(category);
 CREATE INDEX idx_products_price ON products(price);
 
@@ -465,10 +488,11 @@ CREATE INDEX idx_products_cat_price ON products(category, price);
 ### LIKE Pattern Optimization
 
 ```sql
--- Can use index (prefix search)
+-- Prefix patterns anchor to the start — B-tree can binary-search the sorted values
 WHERE name LIKE 'MacBook%'
 
--- Cannot use index (full scan)
+-- Leading wildcard requires scanning every row — consider pg_trgm GIN index
+-- or full-text search if this pattern is common in your workload
 WHERE name LIKE '%MacBook%'
 ```
 
@@ -484,6 +508,4 @@ CREATE INDEX idx_products_price_desc ON products(price DESC);
 
 ---
 
-## Next Steps
-
-Learn about joining multiple tables with JOIN in [06_JOIN.md](./06_JOIN.md)!
+**Previous**: [CRUD Basics](./04_CRUD_Basics.md) | **Next**: [JOIN](./06_JOIN.md)

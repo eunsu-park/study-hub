@@ -1,5 +1,25 @@
 # 객체 스토리지 (S3 / Cloud Storage)
 
+**이전**: [컨테이너 서비스](./06_Container_Services.md) | **다음**: [블록 및 파일 스토리지](./08_Block_and_File_Storage.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 객체 스토리지 모델과 블록 및 파일 스토리지와의 차이점을 설명할 수 있습니다
+2. AWS S3와 GCP Cloud Storage의 기능, 스토리지 클래스, 가격을 비교할 수 있습니다
+3. 버킷을 생성하고, 객체를 업로드하며, 접근 정책을 구성할 수 있습니다
+4. 수명 주기 규칙(Lifecycle Rules)을 구현하여 스토리지 클래스 간 객체를 자동으로 전환할 수 있습니다
+5. 데이터 내구성을 위한 버전 관리(Versioning)와 크로스 리전 복제(Cross-Region Replication)를 구성할 수 있습니다
+6. 저장된 객체에 암호화(서버 측 및 클라이언트 측)와 접근 제어를 적용할 수 있습니다
+7. 적절한 스토리지 티어를 선택하여 비용 효율적인 스토리지 전략을 설계할 수 있습니다
+
+---
+
+객체 스토리지는 클라우드 데이터 관리의 근간입니다. 애플리케이션 에셋과 로그 아카이브부터 데이터 레이크 파일과 백업 스냅샷까지, 사실상 모든 클라우드 워크로드는 어느 시점에 객체 스토리지에 데이터를 저장합니다. 사실상 무제한에 가까운 용량, 높은 내구성, 사용한 만큼 지불하는 가격 정책 덕분에 객체 스토리지는 전 산업에 걸쳐 가장 널리 사용되는 클라우드 서비스 중 하나입니다.
+
 ## 1. 객체 스토리지 개요
 
 ### 1.1 객체 스토리지란?
@@ -586,6 +606,209 @@ url = blob.generate_signed_url(expiration=timedelta(hours=1))
 
 - [08_Block_and_File_Storage.md](./08_Block_and_File_Storage.md) - 블록 스토리지
 - [10_Load_Balancing_CDN.md](./10_Load_Balancing_CDN.md) - CDN과 함께 사용
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 스토리지 클래스(Storage Class) 선택
+
+미디어 회사가 다음 카테고리의 파일을 S3에 저장합니다. 각각에 가장 비용 효율적인 스토리지 클래스를 선택하고 이유를 설명하세요:
+
+1. 활성 소셜 미디어 피드의 썸네일 이미지 — 하루에 수천 번 접근
+2. 크리에이터가 업로드한 원본 동영상 — 처음 48시간은 자주 접근, 이후 거의 접근 안 함
+3. 규정 준수를 위해 7년간 보관해야 하지만 거의 읽히지 않는 분기별 재무 보고서
+4. 시스템 로그 파일 — 첫 30일 내에 디버깅 시 가끔 접근, 이후 절대 접근 안 함
+
+<details>
+<summary>정답 보기</summary>
+
+1. **S3 Standard** — 고빈도 접근(하루 수천 회)은 Standard의 핵심 사용 사례입니다. 높은 스토리지 비용은 검색 수수료 없음으로 정당화됩니다. Intelligent-Tiering이나 IA를 사용하면 스토리지 절감분을 훨씬 초과하는 검색 수수료가 발생합니다.
+
+2. **S3 Intelligent-Tiering** — 접근 패턴이 48시간 후 극적으로 변화하지만(빈번 → 드문), 각 파일의 정확한 패턴은 다를 수 있습니다. Intelligent-Tiering은 검색 수수료나 최소 보관 기간 페널티 없이 자동으로 객체를 빈번/드문 티어(tier) 간에 이동시켜 패턴이 변하는 경우에 이상적입니다.
+
+3. **S3 Glacier Deep Archive** — 연간 1회 미만으로 접근하고 7년간 보관하는 객체는 Deep Archive의 전형적인 사용 사례입니다. GB당 월 $0.00099로, Standard보다 25배 저렴합니다. 180일 최소 보관 기간은 7년 보관 정책으로 쉽게 충족됩니다. 12시간의 검색 시간은 드물게 접근하는 규정 준수 문서에 허용됩니다.
+
+4. **S3 Standard-IA** — 처음 30일 내 가끔 접근하는 로그는 Standard 대비 낮은 스토리지 비용의 Standard-IA가 유리합니다. 30일 후에는 라이프사이클 규칙으로 Glacier Flexible Retrieval이나 Deep Archive로 전환합니다. 30일 최소 보관 기간이 활성 기간과 일치합니다.
+
+</details>
+
+### 연습 문제 2: 라이프사이클 정책(Lifecycle Policy) 설계
+
+다음 요건에 따라 애플리케이션 로그 파일에 대한 S3 라이프사이클 정책을 설계하세요:
+- 처음 7일: 활발한 분석
+- 7일~30일: 가끔 디버깅용으로 접근 가능
+- 30일~365일: 규정 준수용 보관, 거의 접근 안 함
+- 1년 후: 삭제 가능
+
+라이프사이클 규칙 설정을 JSON 또는 일반 텍스트로 작성하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "log-lifecycle",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "logs/"},
+      "Transitions": [
+        {
+          "Days": 7,
+          "StorageClass": "STANDARD_IA"
+        },
+        {
+          "Days": 30,
+          "StorageClass": "GLACIER_FLEXIBLE_RETRIEVAL"
+        }
+      ],
+      "Expiration": {
+        "Days": 365
+      }
+    }
+  ]
+}
+```
+
+**전환 설명**:
+- **0~7일**: S3 Standard — 활발한 분석에는 빠르고 무료의 검색이 필요
+- **7~30일**: S3 Standard-IA — 가끔 디버깅 접근; 낮은 스토리지 비용, 요청별 검색 수수료는 허용 가능
+- **30~365일**: S3 Glacier Flexible Retrieval — 매우 낮은 비용으로 규정 준수 보관; 드문 접근에 1~12시간 검색 시간 괜찮음
+- **365일+**: 객체가 만료되어 자동 삭제, 스토리지 비용 제거
+
+**AWS CLI 적용**:
+```bash
+aws s3api put-bucket-lifecycle-configuration \
+    --bucket my-log-bucket \
+    --lifecycle-configuration file://lifecycle.json
+```
+
+</details>
+
+### 연습 문제 3: 버킷 버전 관리(Versioning)와 퍼블릭 접근 차단
+
+개발팀이 프로덕션 설정 파일을 S3 버킷에 저장합니다. 다음을 원합니다:
+1. 설정 파일의 실수로 인한 삭제 방지
+2. 버킷이 절대 공개적으로 접근 가능하지 않도록 보장
+
+두 요건을 구현하는 AWS CLI 명령어를 제공하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+# 1. 버킷에 버전 관리 활성화
+# 버전 관리 활성화 시, 삭제된 객체는 삭제 마커(delete marker)가 생성되고
+# (실제로 제거되지 않음), 덮어쓴 파일은 이전 버전을 유지합니다.
+aws s3api put-bucket-versioning \
+    --bucket my-config-bucket \
+    --versioning-configuration Status=Enabled
+
+# 2. 버킷 수준에서 모든 퍼블릭 접근 차단
+aws s3api put-public-access-block \
+    --bucket my-config-bucket \
+    --public-access-block-configuration \
+        BlockPublicAcls=true,\
+        IgnorePublicAcls=true,\
+        BlockPublicPolicy=true,\
+        RestrictPublicBuckets=true
+```
+
+**추가 보호** — 승인된 사용자도 영구 삭제를 할 수 없도록 MFA Delete 요건 추가:
+```bash
+aws s3api put-bucket-versioning \
+    --bucket my-config-bucket \
+    --versioning-configuration Status=Enabled,MFADelete=Enabled \
+    --mfa "arn:aws:iam::ACCOUNT_ID:mfa/USER_DEVICE CURRENT_CODE"
+```
+
+**버전 관리의 삭제 효과**:
+- `aws s3 rm s3://my-config-bucket/prod.yaml` — 삭제 마커 생성; 객체는 숨겨지지만 복구 가능
+- 영구 삭제하려면 특정 버전 ID를 명시적으로 삭제해야 합니다
+
+</details>
+
+### 연습 문제 4: 사전 서명된 URL(Pre-Signed URL) 사용 사례
+
+애플리케이션이 버킷을 공개하지 않고 사용자가 프라이빗 S3 객체(`reports/q3-summary.pdf`)를 정확히 1시간 동안 다운로드할 수 있도록 해야 합니다. 사전 서명된 URL을 생성하는 AWS CLI 명령어를 작성하고 작동 원리를 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+aws s3 presign s3://my-reports-bucket/reports/q3-summary.pdf \
+    --expires-in 3600
+```
+
+이 명령어는 다음과 같은 URL을 생성합니다:
+```
+https://my-reports-bucket.s3.amazonaws.com/reports/q3-summary.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Expires=3600&X-Amz-Signature=...
+```
+
+**작동 원리**:
+1. AWS는 생성한 IAM 엔터티(사용자)의 자격 증명을 사용하여 URL에 서명합니다.
+2. 서명은 버킷, 객체 키, 만료 시간, 자격 증명을 인코딩합니다.
+3. URL을 가진 누구든지 HTTP GET 요청으로 객체에 접근할 수 있습니다 — AWS 자격 증명 불필요
+4. 3,600초(1시간) 후 서명이 무효화되어 URL이 403 Forbidden 오류를 반환합니다.
+
+**보안 고려 사항**: 사전 서명된 URL은 생성한 IAM 엔터티의 권한을 상속합니다. URL이 만료되기 전에 생성 역할이 삭제되거나 S3 읽기 권한을 잃으면 URL도 작동을 멈춥니다.
+
+</details>
+
+### 연습 문제 5: 교차 리전 복제(Cross-Region Replication) 설정
+
+회사가 `ap-northeast-2`(서울)에 기본 S3 버킷을 가지고 있으며 재해 복구를 위해 모든 새 객체를 `us-east-1`(버지니아)에 복제해야 합니다. S3 교차 리전 복제(CRR, Cross-Region Replication)를 설정하는 데 필요한 전제 조건과 주요 단계를 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**전제 조건**:
+1. **소스 버킷과 대상 버킷 모두에 버전 관리가 활성화되어야 합니다** — CRR은 양쪽 모두 버전 관리가 필요합니다.
+2. **IAM 역할(role)** — 소스 버킷에서 읽고 대상 버킷에 쓸 수 있는 S3 권한을 부여하는 IAM 역할이 필요합니다.
+
+**단계**:
+
+```bash
+# 1단계: 소스 버킷(서울)에 버전 관리 활성화
+aws s3api put-bucket-versioning \
+    --bucket source-bucket-seoul \
+    --region ap-northeast-2 \
+    --versioning-configuration Status=Enabled
+
+# 2단계: us-east-1에 대상 버킷 생성 및 버전 관리 활성화
+aws s3api create-bucket \
+    --bucket destination-bucket-virginia \
+    --region us-east-1 \
+    --create-bucket-configuration LocationConstraint=us-east-1
+
+aws s3api put-bucket-versioning \
+    --bucket destination-bucket-virginia \
+    --region us-east-1 \
+    --versioning-configuration Status=Enabled
+
+# 3단계: 복제 규칙 설정
+aws s3api put-bucket-replication \
+    --bucket source-bucket-seoul \
+    --region ap-northeast-2 \
+    --replication-configuration '{
+        "Role": "arn:aws:iam::ACCOUNT_ID:role/s3-replication-role",
+        "Rules": [{
+            "Status": "Enabled",
+            "Filter": {"Prefix": ""},
+            "Destination": {
+                "Bucket": "arn:aws:s3:::destination-bucket-virginia"
+            }
+        }]
+    }'
+```
+
+**중요 사항**:
+- CRR은 규칙 설정 이후에 작성된 새 객체만 복제합니다. 기존 객체는 자동으로 복제되지 않으며, **S3 Batch Operations**를 사용해야 합니다.
+- 삭제 마커(delete marker)는 기본적으로 복제되지 않습니다(설정 가능).
+- 서울에서 버지니아로의 데이터 전송은 이그레스(egress) 요금이 발생합니다.
+
+</details>
 
 ---
 

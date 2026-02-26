@@ -1,5 +1,17 @@
 # MLflow 고급
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 엔트리 포인트(entry point), 파라미터, 재현 가능한 환경을 정의하는 MLproject 파일로 MLflow Projects를 생성할 수 있다
+2. `mlflow.pyfunc.PythonModel`을 상속하여 비표준 추론 로직을 패키징하는 커스텀 MLflow 모델을 구현할 수 있다
+3. 데이터 전처리, 학습, 평가를 부모-자식 실행(parent-child run)으로 연결하는 다단계 MLflow 파이프라인을 구축할 수 있다
+4. 프로덕션 배포를 위해 원격 아티팩트 저장소(S3, GCS)와 데이터베이스 기반 트래킹 서버로 MLflow를 구성할 수 있다
+5. Optuna 또는 Ray Tune을 사용하여 하이퍼파라미터 튜닝(hyperparameter tuning) 워크플로우에 MLflow 트래킹을 통합할 수 있다
+
+---
+
 ## 1. MLflow Projects
 
 MLflow Projects는 재현 가능한 ML 코드 패키징 형식입니다.
@@ -34,7 +46,8 @@ conda_env: conda.yaml
 # 옵션 3: System (현재 환경 사용)
 # python_env: python_env.yaml
 
-# 엔트리 포인트
+# 엔트리 포인트 분리 — CI/CD에서 전체 파이프라인 실행 없이
+# 학습/평가/탐색을 독립적으로 트리거 가능
 entry_points:
   main:
     parameters:
@@ -113,9 +126,11 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def main(args):
-    # MLflow 자동 로깅
+    # autolog이 모델 파라미터, 메트릭, 아티팩트를 자동으로 캡처 —
+    # 보일러플레이트를 줄이고 중요한 정보의 로깅 누락을 방지
     mlflow.sklearn.autolog()
 
+    # 컨텍스트 매니저(context manager)로 학습 중 크래시 시에도 실행 종료를 보장
     with mlflow.start_run():
         # 데이터 로드
         df = pd.read_csv(args.data_path)
@@ -126,7 +141,8 @@ def main(args):
             X, y, test_size=0.2, random_state=42
         )
 
-        # 추가 파라미터 로깅
+        # 데이터 출처 로깅 — 모델 품질 저하 시 디버깅에 필수;
+        # autolog은 데이터 경로 같은 커스텀 메타데이터를 캡처하지 않음
         mlflow.log_param("data_path", args.data_path)
         mlflow.log_param("train_size", len(X_train))
 
@@ -237,6 +253,8 @@ import pandas as pd
 class CustomModel(mlflow.pyfunc.PythonModel):
     """커스텀 MLflow 모델"""
 
+    # pyfunc이 전처리 + 모델 + 후처리를 하나의 아티팩트로 래핑 —
+    # 서빙 환경에서 학습과 정확히 동일한 파이프라인 사용을 보장
     def __init__(self, preprocessor, model, threshold=0.5):
         self.preprocessor = preprocessor
         self.model = model
@@ -244,6 +262,8 @@ class CustomModel(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
         """아티팩트 로드"""
+        # 모델 로드 시 한 번만 호출(요청마다가 아님) — 여기서 무거운 초기화를 수행하여
+        # 추론 중 반복적인 I/O 오버헤드를 방지
         import joblib
         # context.artifacts에서 추가 파일 로드 가능
         pass
@@ -256,7 +276,8 @@ class CustomModel(mlflow.pyfunc.PythonModel):
         # 예측
         probabilities = self.model.predict_proba(processed)[:, 1]
 
-        # 후처리 (임계값 적용)
+        # 레이블과 확률 모두 반환 — 호출자가 추론을 다시 실행하지 않고도
+        # 비즈니스별 임계값을 적용할 수 있음
         predictions = (probabilities >= self.threshold).astype(int)
 
         return pd.DataFrame({
@@ -279,6 +300,8 @@ conda_env = {
     "name": "custom_model_env"
 }
 
+# 외부 아티팩트를 모델과 번들링 — 전처리기와 설정이 모델과 함께 이동하므로
+# 서빙 시 "아티팩트 누락" 오류를 제거
 with mlflow.start_run():
     mlflow.pyfunc.log_model(
         artifact_path="model",
@@ -403,7 +426,9 @@ client.transition_model_version_stage(
     name="ChurnPredictionModel",
     version=1,
     stage="Production",
-    archive_existing_versions=True  # 기존 Production 버전 자동 아카이브
+    # 자동 아카이브로 다중 Production 버전을 방지 — load_model("Production")이
+    # 항상 정확히 하나의 모델을 반환하도록 보장
+    archive_existing_versions=True
 )
 
 # 모델 로드 (스테이지별)
@@ -609,7 +634,8 @@ results.to_parquet("s3://bucket/predictions.parquet")
 ### 5.1 원격 Tracking Server
 
 ```bash
-# PostgreSQL 백엔드 + S3 아티팩트 저장소
+# 메타데이터(실행, 파라미터, 메트릭)는 PostgreSQL, 대형 아티팩트(모델, 데이터)는 S3에 저장
+# — 관심사 분리: 메타데이터는 관계형 쿼리, 바이너리는 저렴한 대량 스토리지 활용
 mlflow server \
     --backend-store-uri postgresql://user:password@host:5432/mlflow \
     --default-artifact-root s3://mlflow-artifacts/ \
@@ -700,11 +726,12 @@ client.transition_model_version_stage(
     stage="Staging"
 )
 
-# 5. 테스트 (Staging에서)
+# 5. Staging에서 먼저 테스트 — 실제 트래픽에 영향을 주기 전에
+# 프로덕션과 유사한 환경에서 모델 로드와 임계값 검증을 확인
 staging_model = mlflow.pyfunc.load_model("models:/ChurnPredictionModel/Staging")
 test_results = evaluate_model(staging_model, test_data)
 
-# 6. Production 승격
+# 6. 메트릭 기반 승격 게이트 — 회귀(regression)가 프로덕션에 도달하는 것을 방지
 if test_results["accuracy"] > 0.9:
     client.transition_model_version_stage(
         name="ChurnPredictionModel",

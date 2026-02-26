@@ -1,9 +1,23 @@
 # Concurrency & Parallelism
 
+**Previous**: [Debugging & Profiling](./11_Debugging_and_Profiling.md) | **Next**: [API Design Principles](./13_API_Design.md)
+
 > **Topic**: Programming
 > **Lesson**: 12 of 16
 > **Prerequisites**: Functions and Methods, Error Handling, Debugging and Profiling
-> **Objective**: Understand the difference between concurrency and parallelism, master threads, async/await, message passing, learn parallel patterns, and avoid common pitfalls like race conditions and deadlocks.
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between concurrency (structuring programs to handle multiple tasks) and parallelism (executing multiple tasks simultaneously on multiple cores)
+2. Compare processes, threads, and green threads/goroutines in terms of memory, overhead, and communication
+3. Identify and fix race conditions using mutexes, locks, and semaphores across Python, Java, and C++
+4. Diagnose deadlock scenarios using the four necessary conditions and apply prevention strategies such as lock ordering
+5. Implement asynchronous I/O using async/await in Python, JavaScript, Rust, and C#
+6. Apply message-passing concurrency patterns including channels (Go, Rust) and the actor model (Erlang)
+7. Implement parallel computation patterns: map-reduce, fork-join, pipeline, and thread pool
+8. Use immutability and lock-free data structures as strategies for safe concurrent programming
 
 ---
 
@@ -16,6 +30,8 @@ However, concurrent programming is notoriously difficult. Race conditions, deadl
 ---
 
 ## Concurrency vs Parallelism
+
+> **Analogy: Highway Lanes** -- Think of concurrency as a single-lane road where cars (tasks) take turns at intersections; one car moves while another waits at a red light. Parallelism is a multi-lane highway where cars travel simultaneously in separate lanes. Adding lanes (CPU cores) helps parallel workloads move faster, but a traffic cop (scheduler) is still needed to prevent collisions at merge points.
 
 These terms are often confused, but they represent different concepts:
 
@@ -1227,7 +1243,6 @@ def transfer_b_to_a(amount):
 
 ---
 
-## Navigation
+---
 
-**Previous Lesson**: [11_Debugging_and_Profiling.md](11_Debugging_and_Profiling.md)
-**Next Lesson**: [13_Performance_Optimization.md](13_Performance_Optimization.md)
+**Previous**: [Debugging & Profiling](./11_Debugging_and_Profiling.md) | **Next**: [API Design Principles](./13_API_Design.md)

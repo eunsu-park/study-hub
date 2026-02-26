@@ -2,11 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐
 
-**Previous**: [13_Testing.md](./13_Testing.md) | **Next**: [15_Project_Deployment.md](./15_Project_Deployment.md)
-
-In this lesson, we'll build a complete task runner in pure bash — a Makefile-like tool that executes tasks with dependency resolution, parallel execution, and automatic help generation.
+**Previous**: [Shell Script Testing](./13_Testing.md) | **Next**: [Project: Deployment Automation](./15_Project_Deployment.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Build a task runner that discovers and executes tasks defined as `task::name` bash functions
+2. Implement dependency resolution so that tasks automatically run their prerequisites before executing
+3. Write a topological sort to detect circular dependencies and determine correct execution order
+4. Add parallel execution of independent tasks using background jobs and `wait`
+5. Generate help text automatically by extracting `##` comments above task function definitions
+6. Apply colored, timestamped output formatting to provide clear feedback during task execution
+7. Implement error handling that stops execution and reports which task failed and why
+
+---
+
+Every software project accumulates repetitive commands: build, test, lint, deploy, clean. Developers typically reach for Make, npm scripts, or language-specific tools, but these add dependencies and complexity. A bash-based task runner lives in your repository as a single file, works anywhere bash is installed, and lets you define tasks as plain shell functions -- making it an ideal capstone project that combines dependency resolution, parallel execution, and CLI design from the previous lessons.
 
 ## 1. Overview
 
@@ -700,6 +714,67 @@ task::build() {
 }
 ```
 
+## Exercises
+
+### Exercise 1: Add a New Task to the Runner
+
+Using the provided `task.sh` implementation as a starting point, add the following two tasks:
+
+```bash
+## Generate API documentation
+task::docs() {
+    depends_on "build"
+    # Your implementation here
+}
+
+## Run the application locally
+task::run() {
+    depends_on "build"
+    # Your implementation here
+}
+```
+
+- `task::docs` should depend on `build` and print "Generating docs..." then create a `docs/` directory
+- `task::run` should depend on `build` and simulate starting the app with a 2-second sleep
+
+Run `./task.sh docs` and `./task.sh run` to verify dependency resolution works correctly for both new tasks.
+
+### Exercise 2: Detect Circular Dependencies
+
+The current implementation does not detect circular dependencies — it will loop forever. Add circular dependency detection:
+- Before executing a task, maintain a `TASK_VISITING` array of tasks currently in the call stack
+- If `execute_task` is called for a task that is already in `TASK_VISITING`, print an error like `"Circular dependency detected: build → test → build"` and exit with code 1
+- Test by adding a circular dependency: make `task::build` depend on `task::test` and `task::test` depend on `task::build`, then run `./task.sh build`
+
+### Exercise 3: Implement the --dry-run Flag
+
+Add a `--dry-run` (`-n`) flag to the task runner:
+- When dry-run is active, `execute_task` should print `[DRY RUN] Would execute: <task>` instead of actually running the task function
+- Dependencies should still be resolved and displayed in the correct order
+- The `TASK_EXECUTED` deduplication should still work in dry-run mode
+
+Verify by running `./task.sh --dry-run deploy` and checking that the full dependency chain (clean → deps → build → test → package → deploy) is printed without any commands actually executing.
+
+### Exercise 4: Implement Task Timing
+
+Add per-task execution timing:
+- Record the start time before calling each task function using `date +%s%N` (nanoseconds)
+- Record the end time after the task completes
+- Calculate the duration in milliseconds
+- Display it in the completion log line: `✓ Task 'build' completed in 1234ms`
+
+After implementing, run `./task.sh all` and verify that each task shows a non-zero duration.
+
+### Exercise 5: Write Bats Tests for the Task Runner
+
+Write a Bats test suite `test_task_runner.bats` that tests the core behaviors of `task.sh`:
+- Test that running `./task.sh --list` outputs at least `clean`, `build`, and `test`
+- Test that running `./task.sh unknown_task` exits with a non-zero code and prints an error
+- Test that running `./task.sh build` also runs `clean` and `deps` (i.e., dependencies execute)
+- Test that running `./task.sh build build` (same task twice) only executes `build` once (deduplication)
+
+Use mocking or temporary script files as needed to isolate tests from side effects.
+
 ---
 
-**Previous**: [13_Testing.md](./13_Testing.md) | **Next**: [15_Project_Deployment.md](./15_Project_Deployment.md)
+**Previous**: [Shell Script Testing](./13_Testing.md) | **Next**: [Project: Deployment Automation](./15_Project_Deployment.md)

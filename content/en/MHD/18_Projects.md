@@ -80,6 +80,10 @@ import matplotlib.pyplot as plt
 
 # Parameters
 Lx, Ly = 25.6, 12.8
+# Nx=512, Ny=256: the 2:1 aspect ratio matches the domain aspect Lx:Ly = 2:1,
+# so dx ≈ dy ≈ 0.05 — a uniform cell size that avoids anisotropic numerical diffusion;
+# Nx=512 is chosen so the resistive layer δ ~ a/√S ≈ 0.5/√500 ≈ 0.022 spans ~5 cells,
+# which is the minimum needed to resolve the current sheet without artificial broadening
 Nx, Ny = 512, 256
 dx = Lx / Nx
 dy = Ly / Ny
@@ -89,22 +93,51 @@ X, Y = np.meshgrid(x, y, indexing='ij')
 
 # Physical parameters
 B0 = 1.0
+# a = 0.5 sets the Harris sheet half-width; it must be large enough to resolve
+# the resistive layer δ ~ a/√S where S = Lundquist number = τ_R/τ_A = a²/(η*τ_A);
+# with η = 0.001 and a = 0.5 the Alfvén time τ_A ~ a/v_A ~ 0.5 and S ≈ 500,
+# giving δ ≈ 0.022 — just above the grid scale dx ≈ 0.05 (marginally resolved)
 a = 0.5
 rho0 = 1.0
+# β = 1.0 ensures total pressure balance: the current sheet has lower magnetic
+# pressure (sech² profile) which must be compensated by higher plasma pressure,
+# and β = 1 sets these in balance so the sheet does not immediately expand or collapse
+# before reconnection begins; β < 1 would over-confine the sheet, β > 1 would expand it
 beta_param = 1.0
 p0 = B0**2 * beta_param / 2.0
 gamma = 5.0 / 3.0
+# η = 0.001 gives Lundquist number S = a*v_A/η ≈ 500 for this configuration:
+# S ≈ 500 is in the plasmoid-unstable regime (Sweet-Parker is S^{1/2} times slower
+# than fast reconnection), so secondary islands should form during the simulation,
+# yielding reconnection rates closer to the Petschek/plasmoid fast rate ~0.01-0.1 v_A
 eta = 0.001
 nu = 0.001  # Viscosity (for numerical stability)
+# CFL = 0.4: the Alfvén speed v_A = B0/√(μ₀ρ0) = 1 sets the fastest signal;
+# CFL < 0.5 ensures information travels less than one cell per step, preventing
+# the instability that arises when the numerical domain of dependence is too small
 CFL = 0.4
 
 # Initial conditions
 def initial_harris_sheet():
+    # tanh(Y/a) is the exact Harris equilibrium solution for Bx: it satisfies
+    # force balance d/dy(p + B²/2μ₀) = 0 when combined with the sech² density
+    # and pressure profiles below — perturbing away from this exact equilibrium
+    # seeds the tearing instability without introducing spurious initial transients
     Bx = B0 * np.tanh(Y / a)
+    # By perturbation amplitude ε = 0.1: large enough to trigger reconnection
+    # on a reasonable simulation time but small enough (ε < 1) that the tearing
+    # mode starts in the linear regime and grows exponentially before nonlinear saturation;
+    # cos(kx)*sin(πy/Ly) satisfies By=0 at the conducting walls in y
     By = 0.1 * B0 * np.cos(2*np.pi*X/Lx) * np.sin(np.pi*Y/Ly)  # Perturbation
     Bz = np.zeros_like(Bx)
 
+    # ρ ∝ (1 + β*sech²(y/a)): density is enhanced inside the current sheet to
+    # maintain force balance — the magnetic pressure B²/2μ₀ drops to zero at y=0
+    # (where tanh=0), so the plasma pressure p must be maximum there, and with the
+    # ideal gas law, higher p at fixed T means higher ρ
     rho = rho0 * (1.0 + beta_param * (1.0/np.cosh(Y/a))**2)
+    # p = p0 + B0²/2*(1 - tanh²): total pressure (p + B²/2) = const = p0 + B0²/2,
+    # confirming exact Harris force balance at every y-location
     p = p0 + B0**2/2.0 * (1.0 - np.tanh(Y/a)**2)
 
     vx = np.zeros_like(Bx)
@@ -275,8 +308,15 @@ def solve_reconnection():
         # Recover primitives
         rho, vx, vy, vz, p, Bx, By, Bz = cons2prim(*U)
 
-        # Add resistivity (explicit diffusion)
+        # Resistive diffusion term η∇²B = η(∇×J): applied as an operator-split
+        # step after the ideal MHD update — this splitting avoids the stiffness of
+        # an implicit treatment while keeping the resistive layer physically correct;
+        # without this step the simulation would be purely ideal and reconnection
+        # could not occur regardless of the perturbation amplitude
         Jz = (np.gradient(By, dx, axis=0) - np.gradient(Bx, dy, axis=1))
+        # dBx/dt = -η * ∂Jz/∂y: the minus sign is from Faraday's law ∂B/∂t = -∇×E
+        # with E = ηJ (Ohm's law); the curl of the resistive electric field drives
+        # flux diffusion across the current sheet at rate proportional to η
         dBx_dt = -eta * np.gradient(Jz, dy, axis=1)
         dBy_dt = eta * np.gradient(Jz, dx, axis=0)
 
@@ -288,6 +328,10 @@ def solve_reconnection():
 
         # Diagnostics
         if step % 50 == 0:
+            # Tracking all three energy reservoirs confirms that ΔE_mag = ΔE_kin + ΔE_th:
+            # magnetic energy released during reconnection should be split between bulk
+            # kinetic energy of the outflow jets and thermal energy of the heated plasma —
+            # if total energy is not conserved, the numerics have a bug
             E_mag = 0.5 * np.sum((Bx**2 + By**2 + Bz**2) * dx * dy)
             E_kin = 0.5 * np.sum(rho * (vx**2 + vy**2 + vz**2) * dx * dy)
             E_th = np.sum(p / (gamma - 1.0) * dx * dy)
@@ -453,8 +497,15 @@ def current_profile(r, profile_type='peaked'):
 def compute_Btheta(r, J):
     """B_theta(r) = (mu_0 / r) * integral_0^r J(r') r' dr'"""
     mu0 = 4e-7 * np.pi
+    # integrand = J*r: the Ampere's law integral ∫J·dA in cylindrical geometry
+    # requires the area element r*dr*dφ; integrating over azimuth gives 2π,
+    # and dividing by 2π*r at the end recovers Bθ — the weighting by r accounts
+    # for the increasing circumference of shells at larger minor radius
     integrand = J * r
     I_enc = cumulative_trapezoid(integrand, r, initial=0)
+    # Division by r gives Bθ = μ₀*I(r)/(2π*r): the safety factor q = r*Bφ/(R*Bθ)
+    # diverges at r=0 for any finite Bφ, so the small offset avoids a singularity
+    # there while leaving all physically meaningful radii (r > 0.01 m) unaffected
     Btheta = mu0 * I_enc / (r + 1e-10)  # Avoid r=0
     return Btheta
 
@@ -502,16 +553,25 @@ def analyze_stability(profile_type):
     # Simple pressure profile (proportional to current)
     p = 1e5 * (1.0 - (r/a)**2)**2
 
-    # Kruskal-Shafranov: q > 1 everywhere?
+    # Kruskal-Shafranov q > 1: if q drops below 1 on-axis, the m=1, n=1 internal
+    # kink mode becomes ideally unstable — field lines complete one full poloidal
+    # turn in less than one toroidal turn, allowing the kink to close on itself
+    # and grow without the field-line-bending stabilization that normally resists it
     q_min = np.min(q[1:])  # Skip r=0
     ks_stable = q_min > 1.0
 
-    # Suydam
+    # Suydam criterion: local shear s = (r/q)*dq/dr measures how quickly field-line
+    # pitch changes with radius; higher shear stabilizes interchange modes by requiring
+    # perturbations to bend field lines over a shorter connection length — a threshold
+    # of s > 0.5 is a simplified proxy for the full Suydam discriminant
     shear = np.zeros_like(r)
     shear[1:] = r[1:] / q[1:] * np.gradient(q, r)[1:]
     suydam_stable = np.all(shear[1:] > 0.5)
 
-    # Tearing mode (m=2, n=1)
+    # m=2, n=1 tearing mode at the q=2 rational surface: this is the most dangerous
+    # tearing mode in tokamaks because q=2 occurs well inside the plasma where
+    # drive is strong; Δ' > 0 means flux is released when the island opens, making
+    # the surface unstable — this is the mode that locks and precedes disruptions
     rs_21, delta_prime_21 = estimate_delta_prime(r, q, m=2, n=1)
     tearing_stable = delta_prime_21 < 0
 
@@ -690,13 +750,22 @@ Omega0 = 10.0
 dt = 1e-4
 t_end = 2.0
 
-# Differential rotation
+# Ω ∝ cos²θ*(1-r²): faster rotation at equator and core — this latitude and
+# radial differential rotation is what drives the Ω-effect: stretching poloidal
+# field lines toroidally at different rates creates the strong toroidal field
+# (solar sunspot belts) that characterizes the solar dynamo cycle
 Omega = Omega0 * np.cos(Theta)**2 * (1.0 - (R/ro)**2)
 
-# Alpha effect
+# α ∝ sinθ*cosθ: anti-symmetric about the equator — positive in the northern
+# hemisphere, negative in the southern; this antisymmetry is required to generate
+# a dipole-like poloidal field from the toroidal field via the α-effect, because
+# a symmetric α would create a quadrupole instead
 alpha = alpha0 * np.sin(Theta) * np.cos(Theta)
 
-# Omega-effect coefficient
+# C_Ω = r*sinθ * ∂Ω/∂r measures the local shear in Ω: it is the coefficient that
+# converts the gradient of the poloidal flux A into the source term for toroidal
+# field Bφ — where differential rotation is strong (large |C_Ω|), the Ω-effect
+# is most efficient at winding up poloidal field into toroidal field
 C_Omega = R * np.sin(Theta) * np.gradient(Omega, dr, axis=0)
 
 # Initialize fields
@@ -894,6 +963,95 @@ By completing these, you have mastered **graduate-level magnetohydrodynamics**!
 ### Numerical MHD
 - Tóth et al. (2012), *Adaptive numerical algorithms in space weather modeling*, JCP
 - Stone et al. (2020), *Athena++: A Fast, Portable, and Multi-Physics PDE Solver*, ApJS
+
+---
+
+## Exercises
+
+### Exercise 1: Harris Sheet Equilibrium Verification
+
+Before running a full reconnection simulation, verify that the initial Harris current sheet is in force balance.
+
+1. Using the Harris sheet initial conditions from Project 1, write a Python script that computes the total pressure $p_{\text{tot}}(y) = p(y) + B^2(y)/2$ at each grid point along $y$.
+2. Plot $p_{\text{tot}}(y)$, $p(y)$, and $B^2(y)/2$ on the same axes.
+3. Confirm that $p_{\text{tot}}$ is constant across the sheet (within numerical precision).
+4. Compute the maximum relative deviation from the mean: $\max |p_{\text{tot}} - \langle p_{\text{tot}} \rangle| / \langle p_{\text{tot}} \rangle$. What value do you expect for an ideal equilibrium?
+5. Explain physically why the plasma pressure must be enhanced inside the current sheet ($y \approx 0$) to maintain force balance.
+
+### Exercise 2: Safety Factor and Lundquist Number Scaling
+
+Explore how key dimensionless parameters control MHD behavior.
+
+1. For the tokamak model in Project 2, compute the safety factor $q(r)$ for a **uniform current profile** $J_\phi = J_0 = \text{const}$.
+   - Derive analytically: $q(r) = 2 B_\phi r / (\mu_0 J_0 R_0)$.
+   - Compare your numerical result from `compute_q` to this formula.
+2. For the reconnection simulation in Project 1, the Lundquist number is $S = a v_A / \eta$. With $v_A = B_0 / \sqrt{\rho_0} = 1$, $a = 0.5$:
+   - Calculate $S$ for $\eta \in \{0.01, 0.001, 0.0001\}$.
+   - For each $S$, estimate the Sweet-Parker reconnection rate $M_A^{\text{SP}} = S^{-1/2}$ and the Sweet-Parker current sheet thickness $\delta^{\text{SP}} = a S^{-1/2}$.
+   - Fill in the table:
+
+     | $\eta$ | $S$ | $M_A^{\text{SP}}$ | $\delta^{\text{SP}}$ |
+     |--------|-----|-------------------|----------------------|
+     | 0.01   |     |                   |                      |
+     | 0.001  |     |                   |                      |
+     | 0.0001 |     |                   |                      |
+
+3. At what Lundquist number does the plasmoid instability become important (hint: $S \gtrsim 10^4$)? What changes in the reconnection dynamics?
+
+### Exercise 3: Tearing Mode Stability Map
+
+Extend the tokamak stability analysis to build a 2D stability map.
+
+1. Using the stability analysis code from Project 2, scan over two parameters:
+   - Current peaking index $\nu$: generalize the peaked profile to $J_\phi(r) = J_0 (1 - (r/a)^2)^\nu$ for $\nu \in \{0.5, 1.0, 1.5, 2.0, 3.0\}$.
+   - Total plasma current: scale $J_0$ so that $q_0 = q(r \to 0) \in \{1.2, 1.5, 2.0, 3.0\}$.
+2. For each combination, record:
+   - $q_{\text{min}}$ (Kruskal-Shafranov stability: $q_{\text{min}} > 1$?)
+   - Location of the $q = 2$ rational surface $r_s$
+   - Tearing mode $\Delta'$ sign
+3. Create a 2D color map (heatmap) with $\nu$ on one axis and $q_0$ on the other, color-coded by stability (green = stable, red = unstable, yellow = marginal).
+4. Identify the stability boundary: which combinations of $(\nu, q_0)$ are most disruption-prone?
+
+### Exercise 4: Dynamo Dynamo Number and Cycle Period
+
+Investigate how the dynamo number controls the oscillation frequency of the mean-field dynamo.
+
+1. The dynamo number is defined as $D = C_\alpha C_\Omega$ where $C_\alpha = \alpha_0 L / \eta$ and $C_\Omega = \Omega_0 L^2 / \eta$ (with $L = r_o - r_i$). For the Project 3 parameters:
+   - Compute $D$ using $\alpha_0 = 1.0$, $\Omega_0 = 10.0$, $\eta = 10^{-3}$, $L = 0.5$.
+2. Modify the dynamo code to scan $\alpha_0 \in \{0.5, 1.0, 2.0, 4.0\}$ while keeping $\Omega_0 = 10.0$ fixed. For each run:
+   - Record the total magnetic energy $E(t) = \sum (A^2 + B_\phi^2)$ as a function of time.
+   - Determine whether the dynamo grows, decays, or oscillates by fitting an exponential to $E(t)$.
+   - If oscillating, estimate the cycle period $T$ from the time between energy maxima.
+3. Plot growth rate $\gamma$ (or cycle period $T$) versus $D$. What is the critical dynamo number $D_c$ below which the field decays?
+4. Explain physically: why does increasing $\alpha_0$ both increase the growth rate and shorten the cycle period?
+
+### Exercise 5: Integrated MHD Project — CME Initiation Model
+
+Design and implement a simplified coronal mass ejection (CME) initiation model that combines elements from all three projects.
+
+**Background:** CMEs are initiated when a flux rope above a solar active region loses equilibrium and erupts. This involves a force-free magnetic field configuration becoming unstable (kink or torus instability) and undergoing reconnection with the overlying field.
+
+**Tasks:**
+
+1. **Equilibrium setup:** Create a 2D flux rope equilibrium in Cartesian geometry:
+   - Background field: $B_y(x) = B_{\text{ext}} \tanh(x / L)$ (arcade field)
+   - Embedded flux rope: add a localized current loop centered at $(x_0, y_0) = (0, 1)$ with radius $R_{\text{rope}} = 0.5$, current $I_{\text{rope}}$
+   - Compute the total magnetic field $\mathbf{B} = \mathbf{B}_{\text{arcade}} + \mathbf{B}_{\text{rope}}$ using the Biot-Savart law for the rope contribution.
+
+2. **Stability analysis:** Apply the torus instability criterion: the flux rope erupts when
+   $$n = -\frac{\partial \ln B_{\text{ext}}}{\partial \ln h} > n_{\text{crit}} \approx 1.5$$
+   where $h$ is the height of the flux rope center. Compute the decay index $n(h)$ of the background field as a function of height and determine the critical height $h_c$.
+
+3. **Dynamic evolution:** Initialize the resistive MHD solver from Project 1 with the flux rope equilibrium. Perturb the rope upward by $\delta h = 0.1$ and evolve. Track:
+   - Rope center height $h(t)$ (find centroid of $|J_z|$ maximum)
+   - Reconnection rate at the current sheet below the rope
+   - Energy partition: $\Delta E_{\text{mag}}$ vs $\Delta E_{\text{kin}}$
+
+4. **Physical interpretation:**
+   - Does the rope erupt (exponential rise) or return to equilibrium (oscillates)?
+   - Where does reconnection occur — above or below the rope?
+   - Compare the simulated dynamics to the standard CSHKP flare model (Carmichael-Sturrock-Hirayama-Kopp-Pneuman).
+   - Estimate the energy available for a solar flare given the rope parameters.
 
 ---
 

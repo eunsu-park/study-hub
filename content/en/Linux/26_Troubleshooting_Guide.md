@@ -1,15 +1,18 @@
 # Troubleshooting Guide
 
+**Previous**: [High Availability Cluster](./25_High_Availability_Cluster.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Systematic problem diagnosis methodology
-- Resolving boot issues
-- Diagnosing network, disk, and memory problems
-- Performance bottleneck analysis
-
-**Difficulty**: ⭐⭐⭐ (Intermediate-Advanced)
+1. Apply a systematic five-step methodology for diagnosing Linux system problems
+2. Recover from GRUB, filesystem, and systemd boot failures using recovery mode
+3. Diagnose network connectivity issues step-by-step from interface to DNS to firewall
+4. Identify and resolve disk space exhaustion, filesystem corruption, and I/O bottlenecks
+5. Detect OOM killer events and diagnose memory leaks in running processes
+6. Debug process issues including zombies, high CPU usage, and file descriptor exhaustion
+7. Build performance baselines and use bottleneck analysis checklists for production systems
 
 ---
 
@@ -24,6 +27,8 @@ Through this document, you will learn:
 7. [Performance Analysis](#7-performance-analysis)
 
 ---
+
+When a production server goes down at 3 AM, there is no time for trial and error. Effective troubleshooting requires a structured methodology: gather evidence, form hypotheses, test them, and document the resolution. This lesson compiles the diagnostic techniques from the entire Linux series into a practical reference that you can use under pressure to resolve boot failures, network outages, disk problems, memory exhaustion, and performance degradation.
 
 ## 1. Problem Solving Methodology
 
@@ -814,3 +819,7 @@ Complete Learning Content:
 - 17-26: Expert Level (Security, Virtualization, Automation, HA, Troubleshooting)
 
 Return to [00_Overview.md](./00_Overview.md) to review the complete learning roadmap.
+
+---
+
+**Previous**: [High Availability Cluster](./25_High_Availability_Cluster.md)

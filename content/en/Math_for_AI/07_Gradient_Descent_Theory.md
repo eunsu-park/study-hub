@@ -56,7 +56,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from IPython.display import HTML
 
-# 목적 함수: f(x,y) = (x-1)^2 + 2(y-2)^2
+# Objective function: f(x,y) = (x-1)^2 + 2(y-2)^2
 def objective(x, y):
     return (x - 1)**2 + 2*(y - 2)**2
 
@@ -65,9 +65,9 @@ def gradient(x, y):
     df_dy = 4*(y - 2)
     return np.array([df_dx, df_dy])
 
-# 경사 하강법
+# Gradient descent
 def gradient_descent(x0, learning_rate, n_iterations):
-    """기본 경사 하강법"""
+    """Basic gradient descent"""
     trajectory = [x0]
     x = x0.copy()
 
@@ -78,17 +78,17 @@ def gradient_descent(x0, learning_rate, n_iterations):
 
     return np.array(trajectory)
 
-# 초기점
+# Initial point
 x0 = np.array([-2.0, -1.0])
 
-# 여러 학습률로 실험
+# Experiment with multiple learning rates
 learning_rates = [0.1, 0.3, 0.5, 0.9]
 n_iterations = 50
 
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 axes = axes.flatten()
 
-# 등고선 그리드
+# Contour grid
 x_vals = np.linspace(-3, 3, 300)
 y_vals = np.linspace(-2, 4, 300)
 X, Y = np.meshgrid(x_vals, y_vals)
@@ -97,18 +97,18 @@ Z = objective(X, Y)
 for idx, lr in enumerate(learning_rates):
     ax = axes[idx]
 
-    # 등고선
+    # Contour
     contour = ax.contour(X, Y, Z, levels=20, alpha=0.6, cmap='viridis')
     ax.clabel(contour, inline=True, fontsize=8)
 
-    # 경사 하강법 궤적
+    # Gradient descent trajectory
     trajectory = gradient_descent(x0, lr, n_iterations)
     ax.plot(trajectory[:, 0], trajectory[:, 1], 'ro-', linewidth=2,
-            markersize=6, label='GD 궤적')
-    ax.plot(x0[0], x0[1], 'g*', markersize=20, label='시작점')
-    ax.plot(1, 2, 'r*', markersize=20, label='최솟값')
+            markersize=6, label='GD trajectory')
+    ax.plot(x0[0], x0[1], 'g*', markersize=20, label='Start point')
+    ax.plot(1, 2, 'r*', markersize=20, label='Minimum')
 
-    # 그래디언트 벡터 표시 (처음 몇 개)
+    # Show gradient vectors (first few)
     for i in range(0, min(5, len(trajectory)-1), 1):
         x_curr = trajectory[i]
         grad = gradient(x_curr[0], x_curr[1])
@@ -118,17 +118,17 @@ for idx, lr in enumerate(learning_rates):
 
     ax.set_xlabel('x', fontsize=12)
     ax.set_ylabel('y', fontsize=12)
-    ax.set_title(f'학습률 η = {lr} ({len(trajectory)-1} iterations)', fontsize=13)
+    ax.set_title(f'Learning rate η = {lr} ({len(trajectory)-1} iterations)', fontsize=13)
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(-3, 3)
     ax.set_ylim(-2, 4)
 
-    # 수렴 정보
+    # Convergence info
     final_x = trajectory[-1]
     final_loss = objective(final_x[0], final_x[1])
     distance_to_optimum = np.linalg.norm(final_x - np.array([1, 2]))
-    ax.text(0.05, 0.95, f'최종 손실: {final_loss:.4f}\n최솟값까지 거리: {distance_to_optimum:.4f}',
+    ax.text(0.05, 0.95, f'Final loss: {final_loss:.4f}\nDistance to minimum: {distance_to_optimum:.4f}',
             transform=ax.transAxes, fontsize=10, verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
@@ -136,10 +136,10 @@ plt.tight_layout()
 plt.savefig('gradient_descent_learning_rates.png', dpi=150)
 plt.show()
 
-print("학습률의 영향:")
-print("  - η 너무 작음: 수렴 느림")
-print("  - η 적절함: 빠른 수렴")
-print("  - η 너무 큼: 발산 또는 진동")
+print("Effect of learning rate:")
+print("  - η too small: slow convergence")
+print("  - η appropriate: fast convergence")
+print("  - η too large: divergence or oscillation")
 ```
 
 ### 1.4 Choosing the Learning Rate
@@ -157,7 +157,7 @@ print("  - η 너무 큼: 발산 또는 진동")
 - Practice: grid search or learning rate schedule
 
 ```python
-# 학습률에 따른 수렴 곡선
+# Convergence curves for different learning rates
 fig, ax = plt.subplots(figsize=(12, 6))
 
 for lr in learning_rates:
@@ -167,7 +167,7 @@ for lr in learning_rates:
 
 ax.set_xlabel('Iteration', fontsize=12)
 ax.set_ylabel('Loss', fontsize=12)
-ax.set_title('학습률에 따른 손실 감소', fontsize=14)
+ax.set_title('Loss Reduction by Learning Rate', fontsize=14)
 ax.set_yscale('log')
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
@@ -229,14 +229,14 @@ The larger the condition number (ill-conditioned), the slower the convergence.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 이차 형식: f(x) = 0.5 * x^T A x
-# 강볼록: eigenvalues(A) > 0
+# Quadratic form: f(x) = 0.5 * x^T A x
+# Strongly convex: eigenvalues(A) > 0
 
 def create_quadratic(m, L, dim=10):
-    """강볼록 이차 함수 생성 (조건수 κ = L/m)"""
-    # 고유값을 m과 L 사이에 균등 분포
+    """Create strongly convex quadratic function (condition number κ = L/m)"""
+    # Uniformly distributed eigenvalues between m and L
     eigenvalues = np.linspace(m, L, dim)
-    # 랜덤 직교 행렬
+    # Random orthogonal matrix
     Q, _ = np.linalg.qr(np.random.randn(dim, dim))
     # A = Q Λ Q^T
     A = Q @ np.diag(eigenvalues) @ Q.T
@@ -249,7 +249,7 @@ def quadratic_gradient(x, A):
     return A @ x
 
 def gd_quadratic(A, x0, learning_rate, n_iterations):
-    """이차 함수에 대한 경사 하강법"""
+    """Gradient descent on quadratic function"""
     x = x0.copy()
     trajectory = [np.linalg.norm(x)**2]  # ||x - x*||^2, x* = 0
 
@@ -260,11 +260,11 @@ def gd_quadratic(A, x0, learning_rate, n_iterations):
 
     return trajectory
 
-# 실험 설정
+# Experiment setup
 dim = 10
 n_iterations = 100
 
-# 여러 조건수로 실험
+# Experiment with multiple condition numbers
 condition_numbers = [1, 10, 100, 1000]
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -273,34 +273,34 @@ for kappa in condition_numbers:
     L = kappa * m
     A = create_quadratic(m, L, dim)
 
-    # 초기점
+    # Initial point
     x0 = np.random.randn(dim)
 
-    # 경사 하강법
+    # Gradient descent
     learning_rate = 1 / L
     trajectory = gd_quadratic(A, x0, learning_rate, n_iterations)
 
-    # 선형 스케일
+    # Linear scale
     axes[0].plot(trajectory, linewidth=2, label=f'κ = {kappa}')
 
-    # 로그 스케일
+    # Log scale
     axes[1].semilogy(trajectory, linewidth=2, label=f'κ = {kappa}')
 
-    # 이론적 수렴 속도
+    # Theoretical convergence rate
     rho = 1 - m/L
     theoretical = [trajectory[0] * (rho ** t) for t in range(n_iterations + 1)]
     axes[1].semilogy(theoretical, '--', linewidth=1, alpha=0.6,
-                     label=f'이론 (κ={kappa})')
+                     label=f'Theory (κ={kappa})')
 
 axes[0].set_xlabel('Iteration', fontsize=12)
 axes[0].set_ylabel('$\|x_t - x^*\|^2$', fontsize=12)
-axes[0].set_title('수렴 곡선 (선형 스케일)', fontsize=14)
+axes[0].set_title('Convergence Curve (Linear Scale)', fontsize=14)
 axes[0].legend(fontsize=10)
 axes[0].grid(True, alpha=0.3)
 
 axes[1].set_xlabel('Iteration', fontsize=12)
 axes[1].set_ylabel('$\|x_t - x^*\|^2$ (log scale)', fontsize=12)
-axes[1].set_title('수렴 곡선 (로그 스케일): 선형 수렴', fontsize=14)
+axes[1].set_title('Convergence Curve (Log Scale): Linear Convergence', fontsize=14)
 axes[1].legend(fontsize=9)
 axes[1].grid(True, alpha=0.3)
 
@@ -308,10 +308,10 @@ plt.tight_layout()
 plt.savefig('convergence_analysis_condition_number.png', dpi=150)
 plt.show()
 
-print("조건수의 영향:")
-print("  κ = 1: 완벽한 조건 (모든 방향 동일한 곡률)")
-print("  κ >> 1: ill-conditioned (일부 방향 매우 평탄)")
-print("  수렴 속도: O((1 - 1/κ)^t)")
+print("Effect of condition number:")
+print("  κ = 1: perfectly conditioned (equal curvature in all directions)")
+print("  κ >> 1: ill-conditioned (some directions very flat)")
+print("  Convergence rate: O((1 - 1/κ)^t)")
 ```
 
 ## 3. Stochastic Gradient Descent (SGD)
@@ -349,7 +349,7 @@ $$x_{t+1} = x_t - \eta \frac{1}{|B|}\sum_{i \in B} \nabla f_i(x_t)$$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 합성 데이터: 선형 회귀
+# Synthetic data: linear regression
 np.random.seed(42)
 n_samples = 1000
 n_features = 20
@@ -359,41 +359,41 @@ true_w = np.random.randn(n_features)
 y = X @ true_w + 0.1 * np.random.randn(n_samples)
 
 def mse_loss(w, X, y):
-    """MSE 손실"""
+    """MSE loss"""
     return 0.5 * np.mean((X @ w - y) ** 2)
 
 def mse_gradient(w, X, y):
-    """MSE 그래디언트"""
+    """MSE gradient"""
     return X.T @ (X @ w - y) / len(y)
 
 def sgd_minibatch(X, y, batch_size, learning_rate, n_epochs):
-    """미니배치 SGD"""
+    """Mini-batch SGD"""
     n_samples = len(X)
     w = np.zeros(X.shape[1])
     losses = []
 
     for epoch in range(n_epochs):
-        # 데이터 셔플
+        # Shuffle data
         indices = np.random.permutation(n_samples)
         X_shuffled = X[indices]
         y_shuffled = y[indices]
 
-        # 미니배치로 나누기
+        # Split into mini-batches
         for i in range(0, n_samples, batch_size):
             X_batch = X_shuffled[i:i+batch_size]
             y_batch = y_shuffled[i:i+batch_size]
 
-            # 그래디언트 계산 및 업데이트
+            # Compute gradient and update
             grad = mse_gradient(w, X_batch, y_batch)
             w = w - learning_rate * grad
 
-        # 에포크마다 전체 손실 기록
+        # Record full loss per epoch
         loss = mse_loss(w, X, y)
         losses.append(loss)
 
     return w, losses
 
-# 여러 배치 크기로 실험
+# Experiment with multiple batch sizes
 batch_sizes = [1, 10, 50, 200, 1000]
 n_epochs = 50
 learning_rate = 0.01
@@ -403,19 +403,19 @@ fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 for batch_size in batch_sizes:
     w_final, losses = sgd_minibatch(X, y, batch_size, learning_rate, n_epochs)
 
-    # 손실 곡선
+    # Loss curves
     axes[0].plot(losses, linewidth=2, label=f'Batch size = {batch_size}')
     axes[1].semilogy(losses, linewidth=2, label=f'Batch size = {batch_size}')
 
 axes[0].set_xlabel('Epoch', fontsize=12)
 axes[0].set_ylabel('MSE Loss', fontsize=12)
-axes[0].set_title('배치 크기에 따른 수렴', fontsize=14)
+axes[0].set_title('Convergence by Batch Size', fontsize=14)
 axes[0].legend(fontsize=10)
 axes[0].grid(True, alpha=0.3)
 
 axes[1].set_xlabel('Epoch', fontsize=12)
 axes[1].set_ylabel('MSE Loss (log scale)', fontsize=12)
-axes[1].set_title('배치 크기에 따른 수렴 (로그 스케일)', fontsize=14)
+axes[1].set_title('Convergence by Batch Size (Log Scale)', fontsize=14)
 axes[1].legend(fontsize=10)
 axes[1].grid(True, alpha=0.3)
 
@@ -423,10 +423,10 @@ plt.tight_layout()
 plt.savefig('sgd_batch_size_effect.png', dpi=150)
 plt.show()
 
-print("배치 크기의 영향:")
-print("  작은 배치: 노이즈 크고 불안정, 정규화 효과, 메모리 효율")
-print("  큰 배치: 안정적 그래디언트, 빠른 수렴, 계산 병렬화")
-print("  실전: 32, 64, 128, 256 등 2의 거듭제곱 (GPU 최적화)")
+print("Effect of batch size:")
+print("  Small batch: noisy and unstable, regularization effect, memory efficient")
+print("  Large batch: stable gradient, faster convergence, parallelizable computation")
+print("  In practice: powers of 2 like 32, 64, 128, 256 (GPU optimized)")
 ```
 
 ### 3.4 SGD Variance and Learning Rate
@@ -482,7 +482,7 @@ $$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Rosenbrock 함수
+# Rosenbrock function
 def rosenbrock(x, y):
     return (1 - x)**2 + 100*(y - x**2)**2
 
@@ -491,7 +491,7 @@ def rosenbrock_gradient(x, y):
     df_dy = 200*(y - x**2)
     return np.array([df_dx, df_dy])
 
-# 기본 GD
+# Basic GD
 def gd(x0, learning_rate, n_iterations):
     trajectory = [x0]
     x = x0.copy()
@@ -503,7 +503,7 @@ def gd(x0, learning_rate, n_iterations):
 
     return np.array(trajectory)
 
-# 모멘텀 GD
+# Momentum GD
 def momentum_gd(x0, learning_rate, beta, n_iterations):
     trajectory = [x0]
     x = x0.copy()
@@ -533,7 +533,7 @@ def nesterov_gd(x0, learning_rate, beta, n_iterations):
 
     return np.array(trajectory)
 
-# 시각화
+# Visualization
 x0 = np.array([-1.0, 0.5])
 learning_rate = 0.001
 beta = 0.9
@@ -547,13 +547,13 @@ trajectories = {
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 등고선
+# Contour
 x_vals = np.linspace(-1.5, 1.5, 300)
 y_vals = np.linspace(-0.5, 1.5, 300)
 X, Y = np.meshgrid(x_vals, y_vals)
 Z = rosenbrock(X, Y)
 
-# 왼쪽: 궤적 비교
+# Left: trajectory comparison
 ax = axes[0]
 levels = np.logspace(-1, 3, 20)
 contour = ax.contour(X, Y, Z, levels=levels, alpha=0.4, cmap='gray')
@@ -564,14 +564,14 @@ for name, traj in trajectories.items():
             label=name, alpha=0.7)
     ax.plot(traj[0, 0], traj[0, 1], 'o', markersize=10, color=colors[name])
 
-ax.plot(1, 1, 'k*', markersize=20, label='최솟값 (1, 1)')
+ax.plot(1, 1, 'k*', markersize=20, label='Minimum (1, 1)')
 ax.set_xlabel('x', fontsize=12)
 ax.set_ylabel('y', fontsize=12)
-ax.set_title('Rosenbrock 함수: 모멘텀 vs Nesterov', fontsize=14)
+ax.set_title('Rosenbrock Function: Momentum vs Nesterov', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 
-# 오른쪽: 손실 곡선
+# Right: loss curves
 ax = axes[1]
 for name, traj in trajectories.items():
     losses = [rosenbrock(x[0], x[1]) for x in traj]
@@ -579,7 +579,7 @@ for name, traj in trajectories.items():
 
 ax.set_xlabel('Iteration', fontsize=12)
 ax.set_ylabel('Loss (log scale)', fontsize=12)
-ax.set_title('손실 감소 비교', fontsize=14)
+ax.set_title('Loss Reduction Comparison', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 
@@ -587,13 +587,13 @@ plt.tight_layout()
 plt.savefig('momentum_vs_nesterov.png', dpi=150)
 plt.show()
 
-print("모멘텀의 효과:")
-print("  - 일관된 방향으로 가속")
-print("  - 진동 감쇠 (특히 ill-conditioned 문제)")
-print("  - 안장점 더 빠르게 통과")
-print("\nNesterov의 장점:")
-print("  - Look-ahead로 더 현명한 업데이트")
-print("  - 이론적으로 더 나은 수렴 속도")
+print("Effect of momentum:")
+print("  - Accelerates in consistent direction")
+print("  - Dampens oscillations (especially for ill-conditioned problems)")
+print("  - Passes through saddle points faster")
+print("\nAdvantages of Nesterov:")
+print("  - Smarter updates via look-ahead")
+print("  - Theoretically better convergence rate")
 ```
 
 ## 5. Adaptive Learning Rate Methods
@@ -604,7 +604,7 @@ print("  - 이론적으로 더 나은 수렴 속도")
 
 $$
 \begin{align}
-G_t &= G_{t-1} + \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(누적 제곱)} \\
+G_t &= G_{t-1} + \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(cumulative square)} \\
 x_{t+1} &= x_t - \frac{\eta}{\sqrt{G_t + \epsilon}} \odot \nabla f(x_t)
 \end{align}
 $$
@@ -623,7 +623,7 @@ $$
 
 $$
 \begin{align}
-G_t &= \beta G_{t-1} + (1-\beta) \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(지수 이동 평균)} \\
+G_t &= \beta G_{t-1} + (1-\beta) \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(exponential moving average)} \\
 x_{t+1} &= x_t - \frac{\eta}{\sqrt{G_t + \epsilon}} \odot \nabla f(x_t)
 \end{align}
 $$
@@ -639,9 +639,9 @@ $$
 
 $$
 \begin{align}
-m_t &= \beta_1 m_{t-1} + (1-\beta_1) \nabla f(x_t) \quad \text{(1차 모멘트, 평균)} \\
-v_t &= \beta_2 v_{t-1} + (1-\beta_2) \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(2차 모멘트, 분산)} \\
-\hat{m}_t &= \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t} \quad \text{(편향 보정)} \\
+m_t &= \beta_1 m_{t-1} + (1-\beta_1) \nabla f(x_t) \quad \text{(1st moment, mean)} \\
+v_t &= \beta_2 v_{t-1} + (1-\beta_2) \nabla f(x_t) \odot \nabla f(x_t) \quad \text{(2nd moment, variance)} \\
+\hat{m}_t &= \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t} \quad \text{(bias correction)} \\
 x_{t+1} &= x_t - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \odot \hat{m}_t
 \end{align}
 $$
@@ -663,7 +663,7 @@ $$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 최적화 알고리즘 구현
+# Optimization algorithm implementations
 class Optimizer:
     def __init__(self, learning_rate):
         self.lr = learning_rate
@@ -728,13 +728,13 @@ class Adam(Optimizer):
         self.m = self.beta1 * self.m + (1 - self.beta1) * grad
         self.v = self.beta2 * self.v + (1 - self.beta2) * grad ** 2
 
-        # 편향 보정
+        # Bias correction
         m_hat = self.m / (1 - self.beta1 ** self.t)
         v_hat = self.v / (1 - self.beta2 ** self.t)
 
         return x - self.lr * m_hat / (np.sqrt(v_hat) + self.epsilon)
 
-# 테스트 함수: Beale 함수
+# Test function: Beale function
 def beale(x, y):
     return (1.5 - x + x*y)**2 + (2.25 - x + x*y**2)**2 + (2.625 - x + x*y**3)**2
 
@@ -745,7 +745,7 @@ def beale_gradient(x, y):
             2*(2.625 - x + x*y**3)*(3*x*y**2)
     return np.array([df_dx, df_dy])
 
-# 최적화 실행
+# Run optimization
 x0 = np.array([3.0, 3.0])
 n_iterations = 500
 
@@ -769,16 +769,16 @@ for name, opt in optimizers.items():
 
     trajectories[name] = np.array(traj)
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 등고선
+# Contour
 x_vals = np.linspace(-1, 4, 300)
 y_vals = np.linspace(-1, 4, 300)
 X, Y = np.meshgrid(x_vals, y_vals)
 Z = beale(X, Y)
 
-# 왼쪽: 궤적
+# Left: trajectories
 ax = axes[0]
 levels = np.logspace(0, 4, 20)
 contour = ax.contour(X, Y, Z, levels=levels, alpha=0.3, cmap='gray')
@@ -790,16 +790,16 @@ for name, traj in trajectories.items():
     ax.plot(traj[:, 0], traj[:, 1], '-', linewidth=2, color=colors[name],
             label=name, alpha=0.7)
 
-ax.plot(3, 0.5, 'k*', markersize=20, label='최솟값')
+ax.plot(3, 0.5, 'k*', markersize=20, label='Minimum')
 ax.set_xlabel('x', fontsize=12)
 ax.set_ylabel('y', fontsize=12)
-ax.set_title('Beale 함수: 옵티마이저 비교', fontsize=14)
+ax.set_title('Beale Function: Optimizer Comparison', fontsize=14)
 ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3)
 ax.set_xlim(-1, 4)
 ax.set_ylim(-1, 4)
 
-# 오른쪽: 손실 곡선
+# Right: loss curves
 ax = axes[1]
 for name, traj in trajectories.items():
     losses = [beale(x[0], x[1]) for x in traj]
@@ -807,7 +807,7 @@ for name, traj in trajectories.items():
 
 ax.set_xlabel('Iteration', fontsize=12)
 ax.set_ylabel('Loss (log scale)', fontsize=12)
-ax.set_title('손실 감소 비교', fontsize=14)
+ax.set_title('Loss Reduction Comparison', fontsize=14)
 ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3)
 
@@ -815,12 +815,12 @@ plt.tight_layout()
 plt.savefig('optimizer_comparison.png', dpi=150)
 plt.show()
 
-print("옵티마이저 특징:")
-print("  SGD: 단순, 느림")
-print("  Momentum: 가속, 진동 감쇠")
-print("  AdaGrad: 희소 데이터 적합, 학습률 감소 문제")
-print("  RMSProp: AdaGrad 개선, 안정적")
-print("  Adam: 대부분 상황에서 우수, 사실상 표준")
+print("Optimizer characteristics:")
+print("  SGD: simple, slow")
+print("  Momentum: acceleration, oscillation damping")
+print("  AdaGrad: good for sparse data, learning rate decay problem")
+print("  RMSProp: improved AdaGrad, stable")
+print("  Adam: best in most situations, de facto standard")
 ```
 
 ### 5.5 Adam Bias Correction
@@ -834,7 +834,7 @@ $$
 Therefore, $\hat{m}_t = \frac{m_t}{1 - \beta_1^t}$ is an unbiased estimator.
 
 ```python
-# 편향 보정 효과 시각화
+# Visualize bias correction effect
 fig, ax = plt.subplots(figsize=(12, 6))
 
 beta1, beta2 = 0.9, 0.999
@@ -843,23 +843,23 @@ t_vals = np.arange(1, 101)
 correction1 = 1 / (1 - beta1 ** t_vals)
 correction2 = 1 / (1 - beta2 ** t_vals)
 
-ax.plot(t_vals, correction1, linewidth=2, label=f'1차 모멘트 보정 (β₁={beta1})')
-ax.plot(t_vals, correction2, linewidth=2, label=f'2차 모멘트 보정 (β₂={beta2})')
-ax.axhline(y=1, color='black', linestyle='--', linewidth=1, label='보정 없음')
+ax.plot(t_vals, correction1, linewidth=2, label=f'1st moment correction (β₁={beta1})')
+ax.plot(t_vals, correction2, linewidth=2, label=f'2nd moment correction (β₂={beta2})')
+ax.axhline(y=1, color='black', linestyle='--', linewidth=1, label='No correction')
 
 ax.set_xlabel('Iteration t', fontsize=12)
-ax.set_ylabel('보정 계수', fontsize=12)
-ax.set_title('Adam 편향 보정 계수', fontsize=14)
+ax.set_ylabel('Correction factor', fontsize=12)
+ax.set_title('Adam Bias Correction Factors', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('adam_bias_correction.png', dpi=150)
 plt.show()
 
-print("편향 보정의 중요성:")
-print("  - 초기 스텝에서 모멘트가 0으로 편향")
-print("  - 보정 없으면 초기 학습률이 과도하게 작음")
-print("  - 수십 iteration 후 보정 효과 사라짐")
+print("Importance of bias correction:")
+print("  - Moments are biased toward 0 in early steps")
+print("  - Without correction, initial learning rate is excessively small")
+print("  - Correction effect disappears after tens of iterations")
 ```
 
 ## 6. Learning Rate Schedules
@@ -902,7 +902,7 @@ def one_cycle(t, eta_min=0.001, eta_max=0.1, T=100, warmup_frac=0.3):
         progress = (t - warmup_frac * T) / ((1 - warmup_frac) * T)
         return eta_min + 0.5 * (eta_max - eta_min) * (1 + np.cos(np.pi * progress))
 
-# 시각화
+# Visualization
 t_vals = np.arange(0, 200)
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
@@ -931,11 +931,11 @@ plt.tight_layout()
 plt.savefig('learning_rate_schedules.png', dpi=150)
 plt.show()
 
-print("학습률 스케줄의 역할:")
-print("  - 초기: 큰 학습률로 빠르게 좋은 영역 탐색")
-print("  - 후반: 작은 학습률로 미세 조정")
-print("  - Warm-up: 초기 불안정성 방지")
-print("  - Cosine/1-Cycle: 부드러운 감소, Transformer 등에서 인기")
+print("Role of learning rate schedules:")
+print("  - Early: explore good regions quickly with large learning rate")
+print("  - Late: fine-tune with small learning rate")
+print("  - Warm-up: prevent early instability")
+print("  - Cosine/1-Cycle: smooth decay, popular for Transformers etc.")
 ```
 
 ## 7. Practical Considerations in Neural Network Optimization
@@ -965,13 +965,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# 손실 지형 시뮬레이션
+# Loss landscape simulation
 def sharp_minimum(x, y):
-    """날카로운 최솟값"""
+    """Sharp minimum"""
     return x**2 + y**2 + 0.01 * np.random.randn()
 
 def flat_minimum(x, y):
-    """평탄한 최솟값"""
+    """Flat minimum"""
     return 0.1 * x**2 + 0.1 * y**2 + 0.01 * np.random.randn()
 
 fig = plt.figure(figsize=(16, 6))
@@ -984,7 +984,7 @@ X, Y = np.meshgrid(x, y)
 ax1 = fig.add_subplot(121, projection='3d')
 Z_sharp = X**2 + Y**2
 ax1.plot_surface(X, Y, Z_sharp, cmap='Reds', alpha=0.8, edgecolor='none')
-ax1.set_title('Sharp Minimum (일반화 낮음)', fontsize=14)
+ax1.set_title('Sharp Minimum (Poor generalization)', fontsize=14)
 ax1.set_xlabel('w₁')
 ax1.set_ylabel('w₂')
 ax1.set_zlabel('Loss')
@@ -993,7 +993,7 @@ ax1.set_zlabel('Loss')
 ax2 = fig.add_subplot(122, projection='3d')
 Z_flat = 0.1 * X**2 + 0.1 * Y**2
 ax2.plot_surface(X, Y, Z_flat, cmap='Blues', alpha=0.8, edgecolor='none')
-ax2.set_title('Flat Minimum (일반화 높음)', fontsize=14)
+ax2.set_title('Flat Minimum (Good generalization)', fontsize=14)
 ax2.set_xlabel('w₁')
 ax2.set_ylabel('w₂')
 ax2.set_zlabel('Loss')
@@ -1003,9 +1003,9 @@ plt.savefig('sharp_vs_flat_minima.png', dpi=150)
 plt.show()
 
 print("Sharp vs Flat Minima:")
-print("  Sharp: 파라미터 작은 변화에 손실 크게 변함 → 과적합")
-print("  Flat: 파라미터 변화에 손실 둔감 → 일반화")
-print("  SGD의 노이즈가 Flat Minima 선호하도록 암묵적 정규화")
+print("  Sharp: loss changes greatly with small parameter changes → overfitting")
+print("  Flat: loss insensitive to parameter changes → generalization")
+print("  SGD noise acts as implicit regularization favoring flat minima")
 ```
 
 ### 7.3 Gradient Clipping
@@ -1029,12 +1029,12 @@ $$
 import torch
 
 def gradient_clipping_demo():
-    # 간단한 RNN 시뮬레이션
+    # Simple RNN simulation
     torch.manual_seed(42)
     hidden_size = 10
-    W = torch.randn(hidden_size, hidden_size, requires_grad=True) * 2  # 큰 가중치
+    W = torch.randn(hidden_size, hidden_size, requires_grad=True) * 2  # large weights
 
-    # 순방향 (여러 시간 스텝)
+    # Forward pass (multiple time steps)
     h = torch.randn(hidden_size)
     for _ in range(20):
         h = torch.tanh(W @ h)
@@ -1043,27 +1043,27 @@ def gradient_clipping_demo():
     loss.backward()
 
     grad_norm = W.grad.norm().item()
-    print(f"클리핑 전 그래디언트 노름: {grad_norm:.4f}")
+    print(f"Gradient norm before clipping: {grad_norm:.4f}")
 
-    # 그래디언트 클리핑
+    # Gradient clipping
     max_norm = 1.0
     torch.nn.utils.clip_grad_norm_([W], max_norm)
 
     clipped_grad_norm = W.grad.norm().item()
-    print(f"클리핑 후 그래디언트 노름: {clipped_grad_norm:.4f}")
+    print(f"Gradient norm after clipping: {clipped_grad_norm:.4f}")
 
 gradient_clipping_demo()
 
-print("\n그래디언트 클리핑:")
-print("  - RNN/Transformer에서 필수")
-print("  - 일반적으로 max_norm = 1.0 또는 5.0")
-print("  - 학습 안정성 크게 향상")
+print("\nGradient clipping:")
+print("  - Essential for RNN/Transformer")
+print("  - Typically max_norm = 1.0 or 5.0")
+print("  - Greatly improves training stability")
 ```
 
 ### 7.4 Practical Optimization Recipe
 
 ```python
-# PyTorch 스타일 최적화 설정 예제
+# PyTorch-style optimization configuration example
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -1082,36 +1082,36 @@ class SimpleNN(nn.Module):
 
 model = SimpleNN()
 
-# 1. 옵티마이저 선택: Adam (대부분의 경우)
+# 1. Optimizer choice: Adam (in most cases)
 optimizer = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999))
 
-# 2. 학습률 스케줄러: Cosine Annealing
+# 2. Learning rate scheduler: Cosine Annealing
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
 
-# 3. 학습 루프 (가상)
+# 3. Training loop (mock)
 for epoch in range(10):
     # Forward & Backward
     # loss.backward()
 
-    # 그래디언트 클리핑 (RNN/Transformer)
+    # Gradient clipping (RNN/Transformer)
     # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-    # 옵티마이저 스텝
+    # Optimizer step
     optimizer.step()
     optimizer.zero_grad()
 
-    # 학습률 업데이트
+    # Update learning rate
     scheduler.step()
 
     print(f"Epoch {epoch+1}, LR: {scheduler.get_last_lr()[0]:.6f}")
 
-print("\n실전 최적화 팁:")
-print("  1. Adam을 기본으로 시작 (lr=1e-3)")
-print("  2. Cosine Annealing 또는 Step Decay 적용")
-print("  3. Warm-up 사용 (Transformer 등)")
-print("  4. 그래디언트 클리핑 (RNN/Transformer)")
-print("  5. 배치 크기: 32-256 (GPU 메모리에 따라)")
-print("  6. Weight Decay (L2 정규화): 1e-4 ~ 1e-5")
+print("\nPractical optimization tips:")
+print("  1. Start with Adam as default (lr=1e-3)")
+print("  2. Apply Cosine Annealing or Step Decay")
+print("  3. Use Warm-up (Transformer etc.)")
+print("  4. Gradient clipping (RNN/Transformer)")
+print("  5. Batch size: 32-256 (depending on GPU memory)")
+print("  6. Weight Decay (L2 regularization): 1e-4 ~ 1e-5")
 ```
 
 ## Practice Problems

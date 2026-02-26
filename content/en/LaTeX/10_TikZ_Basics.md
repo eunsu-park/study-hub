@@ -5,6 +5,19 @@
 > **Prerequisites**: Basic LaTeX document structure (Lesson 1), packages
 > **Objective**: Master TikZ fundamentals for creating high-quality vector graphics, diagrams, and technical illustrations
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Set up a TikZ picture environment and explain the coordinate system and unit conventions
+2. Draw basic shapes (lines, rectangles, circles, ellipses, arcs) using TikZ path commands
+3. Style graphical elements with fill colors, line widths, dashed patterns, and opacity
+4. Place and format text labels, nodes, and annotations within TikZ diagrams
+5. Create simple flowcharts and block diagrams by connecting named nodes with arrows
+6. Build reusable diagram templates by defining named styles and applying them consistently
+
+---
+
 ## Introduction
 
 TikZ (TikZ ist kein Zeichenprogramm - "TikZ is not a drawing program") is a powerful LaTeX package for creating vector graphics programmatically. Unlike importing external images, TikZ graphics are created using code, making them scalable, consistent with document typography, and easy to version control. TikZ is built on top of PGF (Portable Graphics Format) and is widely used for diagrams, charts, flowcharts, technical illustrations, and mathematical visualizations.
@@ -837,5 +850,5 @@ TikZ provides a powerful foundation for creating professional vector graphics di
 
 ---
 
-**Previous**: [09_Page_Layout.md](09_Page_Layout.md)
-**Next**: [11_TikZ_Advanced.md](11_TikZ_Advanced.md)
+**Previous**: [Page Layout & Typography](09_Page_Layout.md)
+**Next**: [Advanced TikZ & PGFPlots](11_TikZ_Advanced.md)

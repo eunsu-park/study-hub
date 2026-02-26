@@ -440,6 +440,192 @@ attn = softmax(scores) @ V
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: 인과 마스크(Causal Mask) 동작
+
+길이 5인 시퀀스에 대한 전체 인과 마스크 행렬을 손으로 쓰거나 코드로 작성하세요. 그런 다음 시퀀스의 3번째 토큰(인덱스 2)이 어떤 토큰에 어텐션할 수 있는지, 그리고 그 이유를 설명하세요. 자기회귀(autoregressive) 생성 중에 이 마스크가 없다면 어떤 일이 발생할까요?
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import torch
+
+def create_causal_mask(seq_len):
+    """하삼각 행렬: 1 = 어텐션 가능, 0 = 차단"""
+    return torch.tril(torch.ones(seq_len, seq_len))
+
+mask = create_causal_mask(5)
+print(mask)
+# tensor([[1., 0., 0., 0., 0.],
+#         [1., 1., 0., 0., 0.],
+#         [1., 1., 1., 0., 0.],
+#         [1., 1., 1., 1., 0.],
+#         [1., 1., 1., 1., 1.]])
+```
+
+**인덱스 2(3번째 토큰)에 대한 마스크 해석**:
+- 2행은 `[1, 1, 1, 0, 0]`입니다.
+- 위치 0, 1, 2의 토큰(자기 자신과 모든 이전 토큰)에 어텐션할 수 있습니다.
+- 위치 3, 4의 토큰(미래 토큰)에는 어텐션할 수 **없습니다**.
+
+**어텐션 계산에서의 효과**:
+```python
+# mask=0인 위치는 softmax 전에 -1e9 점수를 받음
+scores[mask == 0] = -1e9
+# softmax 이후 이 위치들의 어텐션 가중치 ≈ 0
+# 따라서 출력 벡터는 과거+현재 토큰의 가중합만으로 이루어짐
+```
+
+**인과 마스크가 없다면**:
+- 학습 중: 모델이 다음 단어를 예측하기 위해 미래 토큰을 "커닝"할 수 있어 태스크가 지나치게 쉬워지고 실제 생성에는 쓸모없는 모델이 됩니다.
+- 추론 중: 미래 토큰은 아직 존재하지 않으므로 (하나씩 생성 중) 모델이 일관성 없는 출력을 생성하거나 모든 토큰을 미리 알아야 합니다.
+
+인과 마스크는 **자기회귀 특성**을 강제합니다: 위치 `t`의 예측은 위치 `0`부터 `t-1`까지만 의존합니다.
+
+</details>
+
+### 연습 문제 2: 인코더 vs 디코더 아키텍처 차이점
+
+다음 비교 표를 채우고, BERT를 개방형 텍스트 생성에 직접 사용할 수 없는 이유와 GPT를 완전한 양방향 이해가 필요한 태스크에 직접 사용할 수 없는 이유를 각각 한 문장으로 설명하세요.
+
+| 특징 | BERT (인코더) | GPT (디코더) |
+|------|--------------|-------------|
+| 어텐션 유형 | ? | ? |
+| 학습 목표 | ? | ? |
+| 일반적인 용도 | ? | ? |
+| 미래 토큰 참조 가능? | ? | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 특징 | BERT (인코더) | GPT (디코더) |
+|------|--------------|-------------|
+| 어텐션 유형 | 양방향 셀프 어텐션(self-attention) | 인과적(causal) 단방향 셀프 어텐션 |
+| 학습 목표 | MLM(Masked Language Model) + NSP(Next Sentence Prediction) | 다음 토큰 예측 (CLM) |
+| 일반적인 용도 | 분류, NER, QA, 유사도 | 텍스트 생성, 대화, 자동 완성 |
+| 미래 토큰 참조 가능? | 예 (전체 시퀀스 가시) | 아니오 (과거 토큰만 가시) |
+
+**BERT가 텍스트를 생성할 수 없는 이유**:
+BERT는 양쪽 문맥이 주어진 상황에서 마스킹된 토큰을 채우도록 학습되었습니다. 추론 시 생성은 토큰 `t+1`이 존재하기 전에 토큰 `t`를 예측해야 하지만, BERT는 자기회귀 생성 메커니즘이 없어 완전한(마스킹된) 입력을 기대하지 확장할 부분 입력을 기대하지 않습니다.
+
+**GPT가 양방향 태스크를 잘 수행하지 못하는 이유**:
+GPT의 인과 마스킹은 각 토큰의 표현이 과거 토큰으로만 계산됨을 의미합니다. NER이나 QA처럼 토큰의 레이블이 미래 문맥에 의존할 수 있는 태스크(예: "Washington"이 사람인지 장소인지 판단하려면 이후 단어를 확인해야 함)에서 GPT의 단방향 어텐션은 근본적인 한계를 가집니다.
+
+</details>
+
+### 연습 문제 3: 위치 인코딩(Positional Encoding) 특성
+
+사인파 위치 인코딩은 공식 `PE(pos, 2i) = sin(pos / 10000^(2i/d_model))`에 기반한 주파수를 사용합니다. 이 인코딩을 계산하는 함수를 구현하고 두 가지 핵심 특성을 확인하세요: (1) 서로 다른 위치는 서로 다른 인코딩을 생성한다, (2) 위치 간의 상대적 오프셋은 절대적 위치에 관계없이 일정하다.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import torch
+import torch.nn.functional as F
+import math
+
+def sinusoidal_encoding(max_len, d_model):
+    """사인파 위치 인코딩 계산"""
+    pe = torch.zeros(max_len, d_model)
+    position = torch.arange(0, max_len).unsqueeze(1).float()
+    div_term = torch.exp(torch.arange(0, d_model, 2).float() *
+                         (-math.log(10000.0) / d_model))
+
+    pe[:, 0::2] = torch.sin(position * div_term)  # 짝수 차원
+    pe[:, 1::2] = torch.cos(position * div_term)  # 홀수 차원
+    return pe
+
+pe = sinusoidal_encoding(max_len=100, d_model=64)
+
+# 특성 1: 서로 다른 위치는 서로 다른 인코딩을 생성
+pos_5 = pe[5]
+pos_10 = pe[10]
+pos_50 = pe[50]
+
+sim_5_10 = F.cosine_similarity(pos_5.unsqueeze(0), pos_10.unsqueeze(0)).item()
+sim_5_50 = F.cosine_similarity(pos_5.unsqueeze(0), pos_50.unsqueeze(0)).item()
+print(f"위치 5 vs 10 유사도: {sim_5_10:.4f}")   # < 1.0 (구별됨)
+print(f"위치 5 vs 50 유사도: {sim_5_50:.4f}")   # 더 덜 유사 (더 멀리 떨어짐)
+
+# 특성 2: 일정한 상대적 오프셋
+# pe[pos] · pe[pos+k]의 내적은 같은 k에 대해 어떤 pos에서도 유사해야 함
+offset = 5
+dots = []
+for pos in [0, 10, 20, 50]:
+    dot = (pe[pos] * pe[pos + offset]).sum().item()
+    dots.append(dot)
+    print(f"내적 pe[{pos}] · pe[{pos+offset}] = {dot:.4f}")
+
+# 모든 값이 대략 동일해야 함
+print(f"내적의 표준편차: {torch.tensor(dots).std():.4f}")  # 작아야 함
+```
+
+**핵심 특성**:
+1. 각 위치는 고유한 인코딩 벡터를 가집니다 (코사인 유사도 < 1.0으로 확인).
+2. 고정된 오프셋 `k`에 대해 내적 `pe[pos] · pe[pos+k]`는 절대적 `pos`에 관계없이 대략 일정합니다. 이를 통해 모델은 위치에 걸쳐 일반화되는 상대적 위치 패턴을 학습할 수 있습니다.
+
+이러한 특성 덕분에 사인파 인코딩은 학습 중에 보지 못한 길이의 시퀀스에도 적용 가능합니다 — 학습된 위치 임베딩에 비해 핵심적인 장점입니다.
+
+</details>
+
+### 연습 문제 4: 언어 모델의 가중치 공유(Weight Tying)
+
+`GPTModel` 구현에서 `self.head.weight = self.token_embedding.weight`라는 줄이 있습니다. 이 문맥에서 "가중치 공유(weight tying)"가 무엇을 의미하는지, 왜 이 방법을 사용하는지, 그리고 실질적인 이점은 무엇인지 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**가중치 공유의 의미**:
+
+출력 프로젝션 레이어(`self.head`)는 은닉 차원에서 어휘 크기로 매핑하여 다음 토큰 예측을 위한 로짓(logit)을 생성합니다. 토큰 임베딩 행렬은 어휘 인덱스에서 은닉 차원으로 매핑합니다. 가중치 공유는 이 두 행렬을 메모리에서 동일한 객체로 설정합니다:
+
+```python
+# 가중치 공유 없이: 두 개의 별도 행렬
+# embedding: (vocab_size, d_model)  →  token_id를 벡터로 매핑
+# head:      (d_model, vocab_size)  →  벡터를 토큰당 로짓으로 매핑
+
+# 가중치 공유: 동일한 데이터를 공유
+self.head.weight = self.token_embedding.weight
+# head.weight는 사실상 embedding.weight.T
+# (PyTorch 선형 레이어는 W @ x를 사용하므로 가중치 형태는 (out, in) = (vocab, d_model))
+# 즉: 입력 임베딩과 출력 임베딩이 동일한 행렬
+```
+
+**사용 이유**:
+
+단어의 임베딩 벡터가 은닉 상태 `h`에 가깝다면, 모델은 그 단어를 다음 토큰으로 높은 확률을 할당해야 한다는 우아한 대칭성이 있습니다. 입력 임베딩과 출력 프로젝션 행렬은 동일한 의미 공간에서 역방향 연산을 수행합니다.
+
+**실질적인 이점**:
+
+1. **파라미터 감소**: `vocab_size × d_model` 행렬 하나를 제거합니다. GPT-2의 경우 vocab_size=50,257, d_model=768이면 약 3,860만 개의 파라미터를 절약합니다.
+
+2. **정규화**: 입력 및 출력 임베딩을 동일하게 강제하면 언어 모델링 목표에서 과적합을 방지하는 암묵적 제약이 추가됩니다.
+
+3. **더 좋은 임베딩 품질**: 공유 행렬은 임베딩(입력) 방향과 예측(출력) 방향 모두에서 그레이디언트 업데이트를 받아 일반적으로 더 높은 품질의 단어 표현을 만들어냅니다.
+
+```python
+# 실제로 가중치 공유 검증
+import torch.nn as nn
+
+class TiedModel(nn.Module):
+    def __init__(self, vocab_size=1000, d_model=64):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head.weight = self.embedding.weight  # 가중치 공유
+
+# 파라미터 수 계산
+model = TiedModel()
+total_params = sum(p.numel() for p in model.parameters())
+print(f"총 파라미터: {total_params}")  # 64,000 (행렬의 단일 복사본만)
+# 공유 없이: 128,000 파라미터 (두 개의 별도 행렬)
+```
+
+</details>
+
 ## 다음 단계
 
-[04_BERT_Understanding.md](./04_BERT_Understanding.md)에서 BERT의 구조와 학습 방법을 상세히 학습합니다.
+[BERT 이해](./04_BERT_Understanding.md)에서 BERT의 구조와 학습 방법을 상세히 학습합니다.

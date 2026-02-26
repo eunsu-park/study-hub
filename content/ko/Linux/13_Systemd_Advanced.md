@@ -1,10 +1,23 @@
 # 13. systemd 심화
 
-## 학습 목표
-- systemd 아키텍처와 동작 원리 이해
-- 커스텀 서비스 유닛 작성
-- 타이머 유닛으로 스케줄링
-- 소켓 활성화와 의존성 관리
+**이전**: [보안과 방화벽](./12_Security_and_Firewall.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. systemd 아키텍처, 유닛 타입, 유닛 파일 위치 설명
+2. 적절한 Type, Exec, Restart 지시자를 사용하여 커스텀 서비스 유닛 파일 작성
+3. 서비스 유닛에 보안 강화 옵션(ProtectSystem, PrivateTmp, NoNewPrivileges) 적용
+4. cron 작업의 현대적 대안으로 타이머 유닛 생성
+5. 소켓 활성화를 구현하여 필요 시 서비스를 시작하고 부팅 성능 향상
+6. Requires, Wants, After, Before를 사용하여 유닛 의존성 및 순서 설정
+7. journalctl과 journald 설정을 사용하여 시스템 로그 조회, 필터링, 관리
+8. systemd-analyze로 부팅 성능 및 의존성 체인 분석
+
+---
+
+systemd는 사실상 모든 현대 리눅스 배포판에서 PID 1로 실행되는 init 시스템이자 서비스 관리자입니다. 기존의 SysVinit과 Upstart를 대체하면서 병렬 서비스 시작, 온디맨드 활성화, 통합 로깅을 제공합니다. 웹 애플리케이션 배포, 백업 예약, 서비스 시작 실패 디버깅 등 어떤 작업이든 systemd와 함께하게 됩니다. 이 레슨은 기본적인 `systemctl start/stop` 명령을 넘어 직접 유닛 파일을 작성하고 systemd의 모든 기능을 활용하는 방법을 보여줍니다.
 
 ## 목차
 1. [systemd 아키텍처](#1-systemd-아키텍처)

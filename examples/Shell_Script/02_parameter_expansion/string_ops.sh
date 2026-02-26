@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Why: set -e exits on error, -u treats unset variables as errors, -o pipefail
+# catches failures in piped commands — the defensive trifecta for safe scripts.
 set -euo pipefail
 
 # String Operations with Parameter Expansion
@@ -14,7 +16,8 @@ filepath="/home/user/documents/report.tar.gz"
 echo "Full path: $filepath"
 echo
 
-# Remove directory path (shortest match from left)
+# Why: ## (greedy) strips the longest prefix matching */, leaving only the
+# filename — a pure-bash alternative to $(basename ...) with no subprocess.
 filename="${filepath##*/}"
 echo "Filename: $filename"
 
@@ -22,7 +25,8 @@ echo "Filename: $filename"
 directory="${filepath%/*}"
 echo "Directory: $directory"
 
-# Extract basename (remove extension)
+# Why: %% (greedy) removes the longest suffix matching .*, stripping all
+# extensions (e.g., .tar.gz) — contrast with % which only strips the last one.
 basename="${filename%%.*}"
 echo "Basename: $basename"
 
@@ -144,6 +148,8 @@ echo "-----------------------------------"
 unset optional_var
 required_var="I exist"
 
+# Why: :- provides a default without modifying the variable, making it ideal
+# for config values where you want a fallback but shouldn't persist it.
 echo "Use default if unset: ${optional_var:-default_value}"
 echo "Use default if unset or empty: ${optional_var-default_value}"
 echo "Variable doesn't change: optional_var=${optional_var:-}"

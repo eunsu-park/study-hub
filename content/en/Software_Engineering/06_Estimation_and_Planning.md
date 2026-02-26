@@ -13,18 +13,21 @@ Ask any software team how long the next project will take, and you will likely r
 - Lesson 03 — Agile and Iterative Development
 - Lesson 04 — Requirements Engineering
 
-**Learning Objectives**:
-- Explain why software estimation is inherently uncertain and describe the Cone of Uncertainty
-- Apply Lines of Code (LOC) estimation and articulate its limitations
-- Describe Function Point Analysis (FPA) and compute a basic unadjusted function point count
-- Explain COCOMO and COCOMO II, and calculate a basic effort estimate using the COCOMO model
-- Use story points and relative estimation for agile sprint planning
-- Facilitate a Planning Poker session
-- Apply three-point estimation with the PERT formula
-- Construct a Work Breakdown Structure (WBS)
-- Build a Gantt chart and identify the critical path using the Critical Path Method (CPM)
-- Distinguish release planning from sprint planning
-- Recognize common estimation biases and apply techniques to counteract them
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why software estimation is inherently uncertain and describe the Cone of Uncertainty
+2. Apply Lines of Code (LOC) estimation and articulate its limitations
+3. Describe Function Point Analysis (FPA) and compute a basic unadjusted function point count
+4. Explain COCOMO and COCOMO II, and calculate a basic effort estimate using the COCOMO model
+5. Use story points and relative estimation for agile sprint planning
+6. Facilitate a Planning Poker session
+7. Apply three-point estimation with the PERT formula
+8. Construct a Work Breakdown Structure (WBS)
+9. Build a Gantt chart and identify the critical path using the Critical Path Method (CPM)
+10. Distinguish release planning from sprint planning
+11. Recognize common estimation biases and apply techniques to counteract them
 
 ---
 
@@ -254,6 +257,10 @@ Average team size = E / D = 87.6 / 14.0 ≈ 6.3 people
 Intermediate COCOMO multiplies the basic effort estimate by **Cost Drivers** — 15 factors (grouped into product, computer, personnel, and project attributes), each rated Very Low to Extra High with a multiplier (Effort Multiplier, EM):
 
 ```
+# Why multiply by the product of all EMs (Π)?
+# Each cost driver independently scales effort. Multiplying captures their
+# compounding effect — e.g., high reliability AND low analyst capability
+# together amplify risk far more than either factor alone.
 E = a × (KLOC)^b × Π(EM_i)
 ```
 
@@ -422,6 +429,12 @@ The **Program Evaluation and Review Technique (PERT)** uses a weighted average, 
 Expected duration  E = (O + 4M + P) / 6
 Standard deviation σ = (P - O) / 6
 Variance         Var = σ²
+
+# Why is M weighted 4×?
+# PERT assumes a beta distribution for task duration. The most likely value (M)
+# sits at the peak of the bell curve — it is the mode. Weighting it 4× reflects
+# that outcomes cluster around M far more than at the tails (O or P).
+# The divisor 6 normalizes across the full O + 4M + P = 6 "shares" of weight.
 ```
 
 **Example**:
@@ -537,18 +550,25 @@ The **Critical Path** is the longest sequence of dependent tasks from project st
 
 **Forward pass** — compute Earliest Start (ES) and Earliest Finish (EF):
 ```
+# Why max? A task cannot start until ALL predecessors finish.
+# The bottleneck predecessor (the one finishing last) dictates the earliest start.
 ES(task) = max(EF of all predecessors)
 EF(task) = ES(task) + duration
 ```
 
 **Backward pass** — compute Latest Start (LS) and Latest Finish (LF):
 ```
+# Why min? A task must finish before ALL successors need to start.
+# The most demanding successor (earliest LS) dictates the latest allowable finish.
 LF(task) = min(LS of all successors)
 LS(task) = LF(task) - duration
 ```
 
 **Float** (slack):
 ```
+# Why does Float = 0 identify the critical path?
+# Zero float means there is no scheduling flexibility — any delay propagates directly
+# to the project end date. These tasks form the critical path.
 Float = LS - ES = LF - EF
 ```
 
@@ -632,11 +652,18 @@ For every sprint:
 
 ```python
 # Pseudo-code for tracking estimation accuracy
+# Why track accuracy per story? Because aggregate averages hide systematic
+# mis-estimation of specific story sizes (e.g., 8-point stories consistently underestimated).
 def sprint_report(sprint):
     accuracy_per_story = []
     for story in sprint.completed_stories:
         # For hour-based tasks
         accuracy = story.actual_hours / story.estimated_hours
+        # Why this ratio direction (actual/estimated)?
+        #   > 1.0 means over budget (underestimated the work)
+        #   < 1.0 means under budget (overestimated the work)
+        #   = 1.0 means perfect estimation
+        # This convention makes it intuitive: values above 1 signal danger.
         accuracy_per_story.append(accuracy)
 
     avg_accuracy = mean(accuracy_per_story)
@@ -828,6 +855,75 @@ e. The team estimates features based on the best-case scenario ("if everything g
 - Cohn, M. — *Agile Estimating and Planning* (Prentice-Hall, 2005) — story points, Planning Poker, velocity-driven release planning
 - IFPUG — *IFPUG Function Point Counting Practices Manual* (Release 4.3.1) — authoritative FPA reference
 - PMI — *A Guide to the Project Management Body of Knowledge (PMBOK Guide)* — WBS, CPM, and earned value management
+
+---
+
+## Exercises
+
+### Exercise 1: Apply the Cone of Uncertainty
+
+A project manager is asked to commit to a launch date at the very beginning of a new project. Requirements have been captured in rough user stories but no architecture work has been done.
+
+(a) According to the Cone of Uncertainty, what is the accuracy range of any estimate made at this point?
+(b) What artifacts or milestones must be completed before the estimate narrows to ±2×?
+(c) A stakeholder insists on a firm date. Write a one-paragraph response explaining why committing at this stage is risky and what you can offer instead.
+
+### Exercise 2: Compute COCOMO Estimates
+
+A new payroll system is classified as an Organic project with an estimated size of 24 KLOC. Use the COCOMO basic model formulas from Section 4.
+
+(a) Calculate the expected effort in person-months.
+(b) Calculate the expected schedule duration in months.
+(c) Estimate the average team size.
+(d) The requirements change mid-project and scope grows to 40 KLOC. Recalculate all three values. By what percentage did effort increase relative to the size increase?
+
+### Exercise 3: Plan a Sprint Using Story Points
+
+A team has a measured velocity of 34 points per two-week sprint. Their backlog for the next release contains the following stories (already estimated):
+
+| Story | Points |
+|-------|--------|
+| User registration | 5 |
+| Email verification | 3 |
+| Profile editing | 8 |
+| Password reset | 5 |
+| Two-factor authentication | 13 |
+| OAuth login (Google) | 8 |
+| Account deletion | 3 |
+| Admin user management | 13 |
+
+(a) Which stories fit in Sprint 1 if the team selects in priority order from top to bottom?
+(b) How many sprints are needed to complete all stories?
+(c) If a senior engineer leaves mid-project, reducing velocity to 22 points/sprint, how does the release timeline change?
+
+### Exercise 4: Identify Estimation Pitfalls
+
+For each scenario, name the estimation bias or pitfall from Section 13, and propose a concrete mitigation technique.
+
+(a) A developer estimates a new module will take "about a week" and their manager immediately says "Great, so we can ship it in five days."
+(b) The team spends the first eight days of a ten-day sprint on design discussions, then rushes implementation in the last two days.
+(c) A feature that was estimated at 5 story points consistently takes 3× longer than comparable 5-point features from other teams.
+(d) A project is reported as "almost done" for six consecutive weeks while the same 20% of work remains.
+
+### Exercise 5: Build a WBS and Find the Critical Path
+
+You are managing a two-month data migration project. Decompose the work into a WBS with at least three levels and then list the key tasks with dependencies:
+
+| Task | Duration | Predecessors |
+|------|----------|--------------|
+| Requirements analysis | 3 days | — |
+| Source schema mapping | 4 days | Requirements analysis |
+| Target schema design | 5 days | Requirements analysis |
+| ETL script development | 8 days | Source schema mapping, Target schema design |
+| Data validation rules | 3 days | Target schema design |
+| Testing environment setup | 2 days | — |
+| Migration dry run | 4 days | ETL script development, Testing environment setup |
+| Validation testing | 3 days | Migration dry run, Data validation rules |
+| Production migration | 1 day | Validation testing |
+
+(a) Perform a forward and backward pass to compute ES, EF, LS, LF, and Float for each task.
+(b) Identify the critical path and the project duration.
+(c) If "ETL script development" is delayed by 3 days, what happens to the project end date?
 
 ---
 

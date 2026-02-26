@@ -1,9 +1,23 @@
 # Debugging & Profiling
 
+**Previous**: [Testing Fundamentals](./10_Testing_Fundamentals.md) | **Next**: [Concurrency & Parallelism](./12_Concurrency_and_Parallelism.md)
+
 > **Topic**: Programming
 > **Lesson**: 11 of 16
 > **Prerequisites**: Error Handling, Testing Fundamentals, Program Flow Control
-> **Objective**: Develop systematic debugging skills, master debugging tools across languages, understand profiling techniques, and learn to identify and fix performance bottlenecks.
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply the scientific method to debugging: reproduce, hypothesize, test, fix, and verify
+2. Construct minimal reproducible examples to isolate bugs efficiently
+3. Use interactive debuggers (pdb, GDB, Chrome DevTools, IDE debuggers) to set breakpoints, inspect variables, and step through code
+4. Recognize common bug patterns including off-by-one errors, null references, race conditions, integer overflow, and scope issues
+5. Apply advanced debugging techniques such as rubber duck debugging, binary search debugging, and git bisect
+6. Detect and fix memory leaks using Valgrind (C/C++), memory_profiler (Python), and Chrome DevTools
+7. Profile CPU performance with cProfile (Python), Chrome DevTools Performance tab, and perf (Linux) to identify hotspots
+8. Write meaningful benchmarks that distinguish micro-benchmarks from realistic workload measurements
 
 ---
 
@@ -1193,7 +1207,6 @@ Promise.all([
 
 ---
 
-## Navigation
+---
 
-**Previous Lesson**: [10_Testing_Fundamentals.md](10_Testing_Fundamentals.md)
-**Next Lesson**: [12_Concurrency_and_Parallelism.md](12_Concurrency_and_Parallelism.md)
+**Previous**: [Testing Fundamentals](./10_Testing_Fundamentals.md) | **Next**: [Concurrency & Parallelism](./12_Concurrency_and_Parallelism.md)

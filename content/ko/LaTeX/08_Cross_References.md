@@ -5,6 +5,17 @@
 > **선수지식**: 부동체와 그림, 표, 수학 조판
 > **목표**: 섹션, 수식, 그림, 표 상호 참조 마스터하기; BibTeX와 BibLaTeX를 사용한 참고문헌 관리 학습; 전문 학술 문서를 위한 하이퍼링크, 색인, 용어집 생성하기.
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `\label`/`\ref`/`\eqref` 시스템을 적용하여 섹션, 수식, 그림, 표를 일관되게 상호 참조(cross-reference)할 수 있다
+2. BibTeX `.bib` 파일로 참고문헌 항목(bibliography entry)을 관리하고 `\cite` 명령으로 통합할 수 있다
+3. BibTeX와 BibLaTeX 워크플로우(workflow)를 구분하고 프로젝트에 적합한 것을 선택할 수 있다
+4. `hyperref` 패키지를 사용하여 클릭 가능한 하이퍼링크(hyperlink)와 PDF 메타데이터(metadata)를 추가할 수 있다
+5. `makeidx` 패키지와 `\index` 명령을 사용하여 긴 문서의 색인(index)을 구축할 수 있다
+6. `glossaries` 패키지를 사용하여 용어집(glossary) 또는 약어 목록(list of acronyms)을 만들 수 있다
+
 ---
 
 ## 소개
@@ -950,6 +961,6 @@ Future work will explore transformers \parencite{vaswani2017}.
 ---
 
 **내비게이션**:
-- [이전: 07_Tables_Advanced.md](07_Tables_Advanced.md)
-- [다음: 09_TikZ_Graphics.md](09_TikZ_Graphics.md)
+- [이전: 고급 표](07_Tables_Advanced.md)
+- [다음: 페이지 레이아웃 및 타이포그래피](09_Page_Layout.md)
 - [개요로 돌아가기](00_Overview.md)

@@ -12,18 +12,21 @@ This lesson explores the infrastructure that powers modern compilers: LLVM's arc
 
 **Prerequisites**: [09. Intermediate Representations](./09_Intermediate_Representations.md), [11. Code Generation](./11_Code_Generation.md), [12. Optimization -- Local and Global](./12_Optimization_Local_and_Global.md)
 
-**Learning Objectives**:
-- Describe LLVM's modular architecture and pass pipeline
-- Read and write LLVM IR, including types, instructions, and SSA form
-- Understand how to write an LLVM optimization pass
-- Explain MLIR's multi-level IR philosophy and dialects
-- Compare LLVM and GCC internal representations (GIMPLE, RTL)
-- Design and implement domain-specific languages (DSLs)
-- Use compiler construction tools (ANTLR, Tree-sitter)
-- Understand the Language Server Protocol (LSP)
-- Explain incremental compilation strategies
-- Apply profile-guided optimization (PGO) and link-time optimization (LTO)
-- Reason about compiler verification approaches
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe LLVM's modular architecture and pass pipeline
+2. Read and write LLVM IR, including types, instructions, and SSA form
+3. Understand how to write an LLVM optimization pass
+4. Explain MLIR's multi-level IR philosophy and dialects
+5. Compare LLVM and GCC internal representations (GIMPLE, RTL)
+6. Design and implement domain-specific languages (DSLs)
+7. Use compiler construction tools (ANTLR, Tree-sitter)
+8. Understand the Language Server Protocol (LSP)
+9. Explain incremental compilation strategies
+10. Apply profile-guided optimization (PGO) and link-time optimization (LTO)
+11. Reason about compiler verification approaches
 
 ---
 

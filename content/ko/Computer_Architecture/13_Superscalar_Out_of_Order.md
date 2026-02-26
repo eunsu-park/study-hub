@@ -1,14 +1,27 @@
 # 슈퍼스칼라와 비순차 실행
 
-## 개요
-
-현대 고성능 프로세서는 단순히 클럭 속도를 높이는 것만으로는 성능 향상에 한계가 있습니다. 슈퍼스칼라(Superscalar)와 비순차 실행(Out-of-Order Execution)은 명령어 수준 병렬성(ILP)을 활용하여 한 사이클에 여러 명령어를 동시에 실행하는 기술입니다. 이 레슨에서는 ILP의 개념, 슈퍼스칼라 아키텍처, 비순차 실행의 원리와 구현 방법을 학습합니다.
+**이전**: [분기 예측](./12_Branch_Prediction.md) | **다음**: [메모리 계층 구조](./14_Memory_Hierarchy.md)
 
 **난이도**: ⭐⭐⭐⭐
 
 **선수 지식**: 파이프라이닝, 분기 예측, CPU 구조 기초
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 슈퍼스칼라 실행(superscalar execution)의 개념과 사이클당 여러 명령어를 발행하는 방식을 설명할 수 있다
+2. 비순차 실행(out-of-order execution)의 개념과 성능 향상 이유를 설명할 수 있다
+3. 레지스터 리네이밍(register renaming)이 거짓 의존성(WAR, WAW)을 제거하는 방법을 설명할 수 있다
+4. 진정한 데이터 의존성(RAW)과 거짓 의존성을 구별할 수 있다
+5. Tomasulo 알고리즘을 개념적 수준에서 설명할 수 있다
+6. 리오더 버퍼(reorder buffer)가 프로그램 순서를 유지하는 역할을 설명할 수 있다
+
+---
+
+현대 CPU는 여러분이 작성한 순서대로 명령어를 실행하지 않습니다. 비순차·슈퍼스칼라 실행 덕분에 프로세서는 코드에서 순차적으로 보이는 명령어들 중 독립적인 것을 자동으로 찾아 동시에 실행할 수 있습니다. 이것이 단일 CPU 코어가 명시적 병렬화 없이도 높은 성능을 달성하는 방법입니다.
 
 ## 목차
 
@@ -19,7 +32,8 @@
 5. [Tomasulo 알고리즘](#5-tomasulo-알고리즘)
 6. [Reorder Buffer (ROB)](#6-reorder-buffer-rob)
 7. [현대 프로세서의 실제 구현](#7-현대-프로세서의-실제-구현)
-8. [연습 문제](#8-연습-문제)
+8. [레지스터 리네이밍 심화](#8-레지스터-리네이밍-심화)
+9. [연습 문제](#9-연습-문제)
 
 ---
 
@@ -73,6 +87,10 @@ I2는 I1이 R1에 쓴 후에만 실행 가능
 ```assembly
 I1: ADD R1, R2, R3    ; R2 읽기
 I2: SUB R2, R4, R5    ; R2 쓰기 (I1이 R2를 읽은 후에 써야 함)
+# 이것이 "거짓(false)" 의존성인 이유: I2의 계산은 I1의 R2 값과 아무 관련이 없음.
+# 충돌은 ISA의 레지스터 이름이 제한적이라서 — 컴파일러가 "R2"를 재사용한 것뿐.
+# 레지스터 리네이밍(Register Renaming)이 I2에 새 물리 레지스터를 부여하면
+# I1과 병렬 실행이 가능해짐.
 ```
 
 ```
@@ -85,6 +103,10 @@ I1이 R2를 읽기 전에 I2가 R2를 덮어쓰면 안 됨
 ```assembly
 I1: ADD R1, R2, R3    ; R1 쓰기
 I2: SUB R1, R4, R5    ; R1 쓰기 (같은 레지스터에 쓰기)
+# 이것이 "거짓(false)" 의존성인 이유: I1과 I2는 완전히 독립적인 결과를 계산함.
+# 유일한 제약은 R1의 최종 값이 I2의 결과여야 한다는 것(프로그램 순서상 I2가
+# 나중이므로). 리네이밍(Renaming)으로 각각 자신의 물리 레지스터를 받으면 —
+# I1은 P10에, I2는 P11에 쓰기 — 동시 실행이 가능해짐.
 ```
 
 ```
@@ -941,7 +963,320 @@ ILP 활용의 제한 요소:
 
 ---
 
-## 8. 연습 문제
+## 8. 레지스터 리네이밍 심화(Register Renaming: Deep Dive)
+
+4장에서 레지스터 리네이밍의 개념을 소개했지만, 이 섹션에서는 구체적인 시뮬레이션을 통한 상세 워크스루와 하드웨어 메커니즘을 깊이 있게 살펴봅니다.
+
+### 8.1 WAR과 WAW: 거짓 의존성(False Dependency) 문제
+
+거짓 의존성은 ISA가 제한된 수의 아키텍처 레지스터(예: x86-64의 16개, ARM/RISC-V의 32개)를 가지기 때문에 발생합니다. 프로그래머와 컴파일러가 같은 레지스터 이름을 재사용하면서 인위적인 순서 제약이 생깁니다:
+
+```
+레지스터 부족이 거짓 의존성을 만드는 예시:
+
+I1: MUL R1, R2, R3      ; R1 = R2 * R3          (R1 생산)
+I2: ADD R4, R1, R5      ; R4 = R1 + R5          (RAW: I1의 R1 읽기 ← 진짜 의존성)
+I3: SUB R1, R6, R7      ; R1 = R6 - R7          (WAW: I1처럼 R1 쓰기)
+                                                  (WAR: I2가 읽는 R1 쓰기)
+I4: ADD R8, R1, R9      ; R8 = R1 + R9          (RAW: I3의 R1 읽기 ← 진짜 의존성)
+I5: MUL R4, R10, R11    ; R4 = R10 * R11        (WAW: I2처럼 R4 쓰기)
+
+리네이밍 없이:
+- I3는 I2가 R1을 읽을 때까지 대기해야 함 (WAR) — 하지만 I3의 계산은 독립적!
+- I5는 I2가 완료될 때까지 대기해야 함 (R4에 대한 WAW) — 하지만 I5는 독립적!
+- I2→I1과 I4→I3만이 진정한 데이터 의존성
+
+리네이밍 후 I3와 I5가 I1, I2와 병렬 실행 가능.
+```
+
+### 8.2 Register Alias Table (RAT) 상세
+
+RAT는 레지스터 리네이밍의 핵심 부기(bookkeeping) 구조체입니다. 각 아키텍처 레지스터를 현재의 물리 레지스터에 매핑합니다:
+
+```
+레지스터 리네이밍 하드웨어 구조:
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   Register Renaming Hardware                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │   RAT (매핑)      │  Arch Reg → Physical Reg                  │
+│  │   R0 → P0         │  모든 WRITE(목적지)에서 갱신              │
+│  │   R1 → P7         │                                           │
+│  │   R2 → P2         │  모든 READ(소스)에서 조회                 │
+│  │   ...             │                                           │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │  Free List (FIFO) │  할당되지 않은 물리 레지스터 풀            │
+│  │  [P14, P15, P16,  │  결과를 쓰는 각 명령어마다 새              │
+│  │   P17, P18, ...]  │  물리 레지스터 할당                       │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │  Physical Reg File │  실제 저장 공간 (현대 x86 프로세서에서    │
+│  │  P0: 42            │  정수 레지스터 180개 이상)                │
+│  │  P1: 17            │                                           │
+│  │  P2: 99            │  아키텍처 집합보다 훨씬 큼                │
+│  │  ...               │  (x86-64는 아키텍처 레지스터 16개뿐)     │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  물리 레지스터는 이전 매핑이 더 이상 필요 없을 때 해제됨          │
+│  (매핑을 덮어쓴 명령어가 커밋된 후)                              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 상세 리네이밍 추적 (5개 명령어)
+
+5개 명령어의 리네이밍을 단계별로 추적하며, 각 명령어 후의 RAT 상태를 보여줍니다:
+
+```
+초기 상태:
+  RAT: R1→P1(val=10), R2→P2(val=20), R3→P3(val=30),
+       R4→P4(val=40), R5→P5(val=50), R6→P6(val=60)
+  Free List: [P20, P21, P22, P23, P24, ...]
+
+─── 명령어 1: ADD R1, R2, R3  (R1 = R2 + R3) ───
+
+  소스 리네이밍:
+    R2 → RAT 조회 → P2 (값 20, 준비됨)
+    R3 → RAT 조회 → P3 (값 30, 준비됨)
+  목적지 리네이밍:
+    R1 → Free List에서 P20 할당
+    이전 매핑: R1→P1 (나중에 해제를 위해 P1 기록)
+    RAT 갱신: R1→P20
+
+  리네이밍 결과: ADD P20, P2, P3
+  RAT: R1→P20, R2→P2, R3→P3, R4→P4, R5→P5, R6→P6
+  Free List: [P21, P22, P23, P24, ...]
+
+─── 명령어 2: MUL R4, R1, R5  (R4 = R1 * R5) ───
+
+  소스 리네이밍:
+    R1 → RAT 조회 → P20 (아직 준비 안 됨 — I1이 끝나지 않음)
+    R5 → RAT 조회 → P5 (값 50, 준비됨)
+  목적지 리네이밍:
+    R4 → P21 할당
+    이전 매핑: R4→P4
+    RAT 갱신: R4→P21
+
+  리네이밍 결과: MUL P21, P20, P5     ← P20을 기다림
+  RAT: R1→P20, R2→P2, R3→P3, R4→P21, R5→P5, R6→P6
+  Free List: [P22, P23, P24, ...]
+
+─── 명령어 3: SUB R1, R6, R2  (R1 = R6 - R2) ───
+
+  소스 리네이밍:
+    R6 → RAT 조회 → P6 (값 60, 준비됨)
+    R2 → RAT 조회 → P2 (값 20, 준비됨)
+  목적지 리네이밍:
+    R1 → P22 할당 (새로운 물리 레지스터!)
+    이전 매핑: R1→P20
+    RAT 갱신: R1→P22
+
+  리네이밍 결과: SUB P22, P6, P2
+  RAT: R1→P22, R2→P2, R3→P3, R4→P21, R5→P5, R6→P6
+
+  핵심 통찰: I3는 P22에 쓰지, P20에 쓰지 않습니다.
+  → I2는 여전히 P20(I1의 결과)을 읽음 — WAR 제거!
+  → I1은 P20에, I3는 P22에 쓰기 — WAW 제거!
+  → I3는 I1과 병렬 실행 가능!
+
+─── 명령어 4: ADD R5, R1, R4  (R5 = R1 + R4) ───
+
+  소스 리네이밍:
+    R1 → RAT 조회 → P22 (I3의 결과, 아직 준비 안 됨)
+    R4 → RAT 조회 → P21 (I2의 결과, 아직 준비 안 됨)
+  목적지 리네이밍:
+    R5 → P23 할당
+    RAT 갱신: R5→P23
+
+  리네이밍 결과: ADD P23, P22, P21    ← P22와 P21 둘 다 대기
+  RAT: R1→P22, R2→P2, R3→P3, R4→P21, R5→P23, R6→P6
+
+─── 명령어 5: MUL R2, R1, R3  (R2 = R1 * R3) ───
+
+  소스 리네이밍:
+    R1 → P22, R3 → P3
+  목적지 리네이밍:
+    R2 → P24 할당
+    RAT 갱신: R2→P24
+
+  리네이밍 결과: MUL P24, P22, P3
+
+최종 RAT: R1→P22, R2→P24, R3→P3, R4→P21, R5→P23, R6→P6
+Free List: [P25, P26, ...]
+
+리네이밍된 프로그램 요약:
+  I1: ADD P20, P2, P3
+  I2: MUL P21, P20, P5     (I1에 대한 진짜 의존성, P20 경유)
+  I3: SUB P22, P6, P2      (I1, I2와 독립적!)
+  I4: ADD P23, P22, P21    (I2, I3에 대한 진짜 의존성)
+  I5: MUL P24, P22, P3     (I3에만 의존)
+
+노출된 병렬성:
+  사이클 1: I1, I3 병렬 실행 (의존성 없음)
+  사이클 2: I5 시작 가능 (I3에만 의존)
+  사이클 2+: I1 완료 후 I2 시작
+  이후:     I2와 I3 모두 완료 후 I4 시작
+```
+
+### 8.4 Tomasulo 알고리즘과의 연결
+
+레지스터 리네이밍과 Tomasulo 알고리즘은 같은 문제(거짓 의존성 제거)를 다른 방식으로 해결합니다:
+
+```
+Tomasulo (1967):                    현대 리네이밍 (1990년 이후):
+  - RS 태그로 리네이밍                - 명시적 RAT + 물리 레지스터
+  - 태그 = Reservation Station ID     - 태그 = 물리 레지스터 번호
+  - 암시적 리네이밍                   - 파이프라인에 명시적 리네이밍 단계
+  - CDB를 통해 결과 브로드캐스트       - 물리 레지스터 파일에 결과 기록
+
+현대 프로세서는 두 가지를 모두 결합:
+  1. RAT가 명시적 리네이밍 수행 (프론트엔드)
+  2. Issue Queue (RS에서 발전)가 의존성 추적
+  3. Physical Register File이 값 저장
+  4. 바이패스 네트워크(CDB에서 발전)로 결과 전달
+```
+
+### 8.5 물리 레지스터 해제(Physical Register Freeing)
+
+핵심 질문: 물리 레지스터는 언제 Free List로 반환될 수 있을까요?
+
+```
+규칙: 물리 레지스터 Pold는 다음 조건에서 해제 가능:
+  1. 매핑을 덮어쓴 명령어 (Pold → Pnew)가 커밋(COMMIT)됨
+  2. AND 더 오래된 인플라이트(in-flight) 명령어 중 Pold를 필요로 하는 것이 없음
+
+실제:
+  I1: ADD R1, R2, R3  → R1이 P20에 매핑됨 (이전 매핑 P1)
+      I1이 커밋될 때 P1 해제 가능
+      (I1 이전에 P1을 사용한 모든 명령어도 이미 커밋되었으므로)
+
+이것이 ROB + 리네이밍이 함께 작동하는 이유:
+  - ROB가 프로그램 순서와 커밋 지점 추적
+  - 커밋 시: 덮어쓴 매핑의 이전 물리 레지스터 해제
+  - 플러시 시 (예측 실패): 이전 매핑 복원, 새 레지스터 해제
+```
+
+### 8.6 Python 시뮬레이션: 레지스터 리네이밍
+
+```python
+"""
+Register Renaming Simulator
+RAT가 거짓 의존성을 제거하는 과정을 보여줍니다.
+"""
+from collections import deque
+
+class RegisterRenamer:
+    def __init__(self, num_arch_regs=8, num_phys_regs=32):
+        self.num_arch = num_arch_regs
+        self.num_phys = num_phys_regs
+
+        # RAT: 아키텍처 레지스터 이름 -> 물리 레지스터 번호
+        # 초기에 Ri -> Pi (항등 매핑)
+        self.rat = {f"R{i}": f"P{i}" for i in range(num_arch_regs)}
+
+        # Free list: 할당 가능한 물리 레지스터
+        self.free_list = deque(f"P{i}" for i in range(num_arch_regs, num_phys_regs))
+
+        # 커밋 시 해제를 위한 이전 매핑 추적
+        self.old_mappings = []  # (instruction_id, old_phys_reg)
+
+    def rename_instruction(self, inst_id, op, rd, rs1, rs2=None):
+        """명령어 하나를 리네이밍합니다. 리네이밍된 명령어를 반환합니다."""
+        # 1단계: 소스 레지스터 리네이밍 (현재 매핑 조회)
+        phys_rs1 = self.rat[rs1]
+        phys_rs2 = self.rat[rs2] if rs2 else None
+
+        # 2단계: 목적지를 위한 새 물리 레지스터 할당
+        if not self.free_list:
+            raise RuntimeError("Out of physical registers! Pipeline stall.")
+        old_phys = self.rat[rd]
+        new_phys = self.free_list.popleft()
+
+        # 3단계: RAT 갱신
+        self.rat[rd] = new_phys
+        self.old_mappings.append((inst_id, old_phys))
+
+        # 리네이밍된 명령어 문자열 생성
+        if phys_rs2:
+            renamed = f"{op} {new_phys}, {phys_rs1}, {phys_rs2}"
+        else:
+            renamed = f"{op} {new_phys}, {phys_rs1}"
+
+        return {
+            "id": inst_id,
+            "original": f"{op} {rd}, {rs1}" + (f", {rs2}" if rs2 else ""),
+            "renamed": renamed,
+            "dest_old": old_phys,
+            "dest_new": new_phys,
+        }
+
+    def print_rat(self):
+        """현재 RAT 상태를 출력합니다."""
+        entries = [f"{arch}->{phys}" for arch, phys in sorted(self.rat.items())]
+        print(f"  RAT: {', '.join(entries)}")
+        print(f"  Free: [{', '.join(list(self.free_list)[:6])}{'...' if len(self.free_list) > 6 else ''}]")
+
+
+def main():
+    renamer = RegisterRenamer(num_arch_regs=8, num_phys_regs=20)
+
+    # WAR과 WAW 해저드가 있는 프로그램
+    instructions = [
+        # (op, dest, src1, src2)
+        ("ADD", "R1", "R2", "R3"),   # I1: R1 = R2 + R3
+        ("MUL", "R4", "R1", "R5"),   # I2: R4 = R1 * R5  (R1에 대한 RAW)
+        ("SUB", "R1", "R6", "R7"),   # I3: R1 = R6 - R7  (WAW I1, WAR I2)
+        ("ADD", "R5", "R1", "R4"),   # I4: R5 = R1 + R4  (R1, R4에 대한 RAW)
+        ("MUL", "R2", "R1", "R3"),   # I5: R2 = R1 * R3
+    ]
+
+    print("=" * 60)
+    print("Register Renaming Simulation")
+    print("=" * 60)
+    print("\nInitial state:")
+    renamer.print_rat()
+
+    results = []
+    for i, (op, rd, rs1, rs2) in enumerate(instructions):
+        inst_id = f"I{i+1}"
+        print(f"\n--- {inst_id}: {op} {rd}, {rs1}, {rs2} ---")
+        result = renamer.rename_instruction(inst_id, op, rd, rs1, rs2)
+        results.append(result)
+        print(f"  Renamed: {result['renamed']}")
+        print(f"  ({rd}: {result['dest_old']} -> {result['dest_new']})")
+        renamer.print_rat()
+
+    # 리네이밍 후 의존성 분석
+    print("\n" + "=" * 60)
+    print("Dependency Analysis After Renaming")
+    print("=" * 60)
+
+    print("\nRenamed program:")
+    for r in results:
+        print(f"  {r['id']}: {r['renamed']}")
+
+    print("\nTrue dependencies only (RAW):")
+    print("  I2 depends on I1 (reads P8, produced by I1)")
+    print("  I4 depends on I3 (reads P10) and I2 (reads P9)")
+    print("  I5 depends on I3 (reads P10)")
+    print("\nFalse dependencies eliminated:")
+    print("  I1 vs I3: WAW on R1 -> now P8 vs P10 (independent!)")
+    print("  I2 vs I3: WAR on R1 -> I2 reads P8, I3 writes P10 (independent!)")
+    print("\nParallel execution possible: I1 || I3, then I2 || I5")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## 9. 연습 문제
 
 ### 기초 문제
 

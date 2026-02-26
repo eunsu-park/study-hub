@@ -1,5 +1,26 @@
 # Kubernetes 입문
 
+**이전**: [실전 예제](./05_Practical_Examples.md) | **다음**: [Kubernetes 보안](./07_Kubernetes_Security.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Kubernetes가 무엇인지, 그리고 대규모 환경에서 컨테이너 오케스트레이션(container orchestration)이 왜 필요한지 설명할 수 있다
+2. 컨트롤 플레인(Control Plane)과 노드(Node) 구성 요소를 포함한 Kubernetes 클러스터 아키텍처를 설명할 수 있다
+3. YAML 매니페스트(manifest)를 사용하여 Pod, Deployment, Service를 정의하고 생성할 수 있다
+4. minikube와 kubectl을 사용해 로컬 Kubernetes 환경을 구성할 수 있다
+5. 기본 kubectl 명령어를 활용하여 리소스를 생성, 조회, 스케일링, 삭제할 수 있다
+6. 무중단 배포를 위한 롤링 업데이트(rolling update)와 롤백(rollback)을 구현할 수 있다
+7. ConfigMap과 Secret을 사용하여 애플리케이션 설정과 민감한 데이터를 관리할 수 있다
+8. 논리적 격리를 위해 네임스페이스(Namespace)로 리소스를 구성할 수 있다
+
+---
+
+Docker는 단일 머신에서 컨테이너를 실행하는 데 탁월하지만, 프로덕션 시스템은 일반적으로 여러 서버에 걸쳐 있으며 자동 스케줄링, 자가 치유(self-healing), 로드 밸런싱, 롤링 업데이트가 필요합니다. Kubernetes는 이 모든 과제를 해결하는 업계 표준 플랫폼입니다. Docker를 마스터한 다음 단계로 Kubernetes 기초를 배우는 것은 자연스러운 흐름이며, 현대 클라우드 네이티브 애플리케이션의 대부분을 구동하는 확장 가능하고 안정적인 인프라로의 문을 열어줍니다.
+
+> **비유 — 공항 관제탑:** Kubernetes를 공항 관제탑으로 생각해보세요. 개별 Docker 컨테이너는 항공기와 같습니다 — 각각은 자체 화물을 싣고 독립적으로 운항할 수 있습니다. 하지만 수백 편의 항공편이 있다면, 각 비행기가 어느 활주로(노드)에 착륙할지 결정하고, 활주로가 폐쇄되었을 때 트래픽을 우회시키며(자가 치유), 피크 시간대에 더 많은 게이트를 추가하고(자동 스케일링), 교대 근무 간의 원활한 전환(롤링 업데이트)을 보장하는 관제탑(Kubernetes)이 필요합니다.
+
 ## 1. Kubernetes란?
 
 Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**입니다. 여러 컨테이너의 배포, 확장, 관리를 자동화합니다.
@@ -17,19 +38,19 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**입니다. �
 
 **문제 상황:**
 ```
-컨테이너가 100개일 때...
-- 어떤 서버에 배포해야 하나?
-- 컨테이너가 죽으면 누가 다시 시작하나?
-- 트래픽이 늘면 어떻게 확장하나?
-- 새 버전 배포 중 다운타임은?
+When you have 100 containers...
+- Which server should they be deployed to?
+- Who restarts containers when they die?
+- How to scale when traffic increases?
+- Downtime during new version deployment?
 ```
 
 **Kubernetes 해결책:**
 ```
-- 자동 스케줄링: 최적의 노드에 배치
-- 자가 치유: 장애 시 자동 복구
-- 자동 스케일링: 부하에 따라 확장/축소
-- 롤링 업데이트: 무중단 배포
+- Auto-scheduling: Deploy to optimal nodes
+- Self-healing: Automatic recovery on failure
+- Auto-scaling: Scale up/down based on load
+- Rolling updates: Zero-downtime deployment
 ```
 
 ---
@@ -85,7 +106,7 @@ Kubernetes(K8s)는 **컨테이너 오케스트레이션 플랫폼**입니다. �
 - 같은 Pod의 컨테이너는 네트워크/스토리지 공유
 
 ```yaml
-# pod.yaml
+# pod.yaml — rarely created directly; use Deployments instead for self-healing and scaling
 apiVersion: v1
 kind: Pod
 metadata:
@@ -93,9 +114,9 @@ metadata:
 spec:
   containers:
     - name: nginx
-      image: nginx:alpine
+      image: nginx:alpine       # Alpine: ~5 MB base — smaller attack surface
       ports:
-        - containerPort: 80
+        - containerPort: 80     # Informational; actual exposure requires a Service
 ```
 
 ### Deployment
@@ -111,14 +132,14 @@ kind: Deployment
 metadata:
   name: my-deployment
 spec:
-  replicas: 3                    # Pod 3개 유지
+  replicas: 3                    # Maintain 3 Pods — K8s auto-replaces any that crash or get evicted
   selector:
     matchLabels:
-      app: my-app
-  template:                      # Pod 템플릿
+      app: my-app               # Must match template labels — this is how the Deployment finds its Pods
+  template:                      # Pod template
     metadata:
       labels:
-        app: my-app
+        app: my-app             # Labels connect Deployments → Pods → Services (the glue of K8s)
     spec:
       containers:
         - name: nginx
@@ -141,11 +162,11 @@ metadata:
   name: my-service
 spec:
   selector:
-    app: my-app                  # 이 라벨의 Pod로 트래픽 전달
+    app: my-app                  # Route traffic to Pods with this label — decouples routing from Pod IPs
   ports:
-    - port: 80                   # Service 포트
-      targetPort: 80             # Pod 포트
-  type: ClusterIP                # 서비스 타입
+    - port: 80                   # Port other services use to reach this Service
+      targetPort: 80             # Port the container actually listens on
+  type: ClusterIP                # Internal only (default) — use NodePort or LoadBalancer for external access
 ```
 
 ### Service 타입
@@ -183,19 +204,19 @@ sudo install minikube-linux-amd64 /usr/local/bin/minikube
 ### minikube 시작
 
 ```bash
-# 클러스터 시작
+# Start cluster
 minikube start
 
-# 상태 확인
+# Check status
 minikube status
 
-# 대시보드 열기
+# Open dashboard
 minikube dashboard
 
-# 클러스터 중지
+# Stop cluster
 minikube stop
 
-# 클러스터 삭제
+# Delete cluster
 minikube delete
 ```
 
@@ -225,32 +246,32 @@ kubectl version --client
 ### 리소스 조회
 
 ```bash
-# 모든 Pod 조회
+# View all Pods
 kubectl get pods
 
-# 모든 리소스 조회
+# View all resources
 kubectl get all
 
-# 상세 정보
+# Detailed information
 kubectl get pods -o wide
 
-# YAML 형식으로 출력
+# Output in YAML format
 kubectl get pod my-pod -o yaml
 
-# 네임스페이스 지정
+# Specify namespace
 kubectl get pods -n kube-system
 ```
 
 ### 리소스 생성/삭제
 
 ```bash
-# YAML 파일로 생성
+# Create from YAML file
 kubectl apply -f deployment.yaml
 
-# 삭제
+# Delete
 kubectl delete -f deployment.yaml
 
-# 이름으로 삭제
+# Delete by name
 kubectl delete pod my-pod
 kubectl delete deployment my-deployment
 ```
@@ -258,22 +279,22 @@ kubectl delete deployment my-deployment
 ### 상세 정보
 
 ```bash
-# 리소스 상세 정보
+# Resource details
 kubectl describe pod my-pod
 kubectl describe deployment my-deployment
 
-# 로그 확인
+# View logs
 kubectl logs my-pod
-kubectl logs -f my-pod              # 실시간
+kubectl logs -f my-pod              # Real-time
 
-# 컨테이너 접속
+# Access container
 kubectl exec -it my-pod -- /bin/sh
 ```
 
 ### 스케일링
 
 ```bash
-# 복제본 수 변경
+# Change replica count
 kubectl scale deployment my-deployment --replicas=5
 ```
 
@@ -284,19 +305,19 @@ kubectl scale deployment my-deployment --replicas=5
 ### 예제 1: 첫 번째 Pod 실행
 
 ```bash
-# 1. Pod 직접 실행
+# 1. Run Pod directly
 kubectl run nginx-pod --image=nginx:alpine
 
-# 2. 확인
+# 2. Verify
 kubectl get pods
 
-# 3. 상세 정보
+# 3. Detailed information
 kubectl describe pod nginx-pod
 
-# 4. 로그 확인
+# 4. Check logs
 kubectl logs nginx-pod
 
-# 5. 삭제
+# 5. Delete
 kubectl delete pod nginx-pod
 ```
 
@@ -309,14 +330,14 @@ kind: Deployment
 metadata:
   name: hello-app
 spec:
-  replicas: 3
+  replicas: 3                    # 3 replicas — K8s distributes them across nodes for high availability
   selector:
     matchLabels:
       app: hello
   template:
     metadata:
       labels:
-        app: hello
+        app: hello               # Labels tie Deployment → ReplicaSet → Pods → Service together
     spec:
       containers:
         - name: hello
@@ -326,18 +347,18 @@ spec:
 ```
 
 ```bash
-# 1. Deployment 생성
+# 1. Create Deployment
 kubectl apply -f deployment.yaml
 
-# 2. 확인
+# 2. Verify
 kubectl get deployments
 kubectl get pods
 
-# 3. Pod 하나 삭제해보기 (자동 복구 확인)
+# 3. Delete one Pod (verify auto-recovery)
 kubectl delete pod <pod-name>
-kubectl get pods  # 새 Pod가 생성됨
+kubectl get pods  # New Pod created
 
-# 4. 스케일 업
+# 4. Scale up
 kubectl scale deployment hello-app --replicas=5
 kubectl get pods
 ```
@@ -352,26 +373,26 @@ metadata:
   name: hello-service
 spec:
   selector:
-    app: hello
+    app: hello                   # Matches Deployment's Pod labels — Service auto-discovers matching Pods
   ports:
     - port: 80
       targetPort: 80
-  type: NodePort
+  type: NodePort                 # Allocates a high port (30000-32767) on every node for external access
 ```
 
 ```bash
-# 1. Service 생성
+# 1. Create Service
 kubectl apply -f service.yaml
 
-# 2. 확인
+# 2. Verify
 kubectl get services
 
-# 3. minikube에서 접근
+# 3. Access on minikube
 minikube service hello-service
 
-# 또는 포트 포워딩
+# Or port forwarding
 kubectl port-forward service/hello-service 8080:80
-# http://localhost:8080 에서 확인
+# Access at http://localhost:8080
 ```
 
 ### 예제 4: 전체 애플리케이션 (Node.js + MongoDB)
@@ -383,7 +404,7 @@ kind: Deployment
 metadata:
   name: node-app
 spec:
-  replicas: 2
+  replicas: 2                     # 2 replicas for basic high availability
   selector:
     matchLabels:
       app: node-app
@@ -400,6 +421,7 @@ spec:
             - containerPort: 3000
           env:
             - name: MONGO_URL
+              # K8s DNS resolves 'mongo-service' to the MongoDB Service's ClusterIP
               value: "mongodb://mongo-service:27017/mydb"
 ---
 apiVersion: v1
@@ -410,8 +432,8 @@ spec:
   selector:
     app: node-app
   ports:
-    - port: 80
-      targetPort: 3000
+    - port: 80                    # External-facing port
+      targetPort: 3000            # Container's actual listening port — Service bridges the difference
   type: NodePort
 ```
 
@@ -422,7 +444,7 @@ kind: Deployment
 metadata:
   name: mongo
 spec:
-  replicas: 1
+  replicas: 1                     # Single replica — databases typically use StatefulSets for production
   selector:
     matchLabels:
       app: mongo
@@ -438,34 +460,35 @@ spec:
             - containerPort: 27017
           volumeMounts:
             - name: mongo-storage
-              mountPath: /data/db
+              mountPath: /data/db        # MongoDB's default data directory
       volumes:
         - name: mongo-storage
-          emptyDir: {}
+          emptyDir: {}                   # emptyDir: data lost when Pod is deleted — use PersistentVolume for production
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongo-service
+  name: mongo-service              # Other Pods reach MongoDB via this DNS name
 spec:
   selector:
     app: mongo
   ports:
     - port: 27017
       targetPort: 27017
+  # type defaults to ClusterIP — MongoDB should not be exposed outside the cluster
 ```
 
 ```bash
-# 1. MongoDB 배포
+# 1. Deploy MongoDB
 kubectl apply -f mongo-deployment.yaml
 
-# 2. Node.js 앱 배포
+# 2. Deploy Node.js app
 kubectl apply -f app-deployment.yaml
 
-# 3. 확인
+# 3. Verify
 kubectl get all
 
-# 4. 접속
+# 4. Access
 minikube service node-service
 ```
 
@@ -476,30 +499,30 @@ minikube service node-service
 ### 업데이트 적용
 
 ```bash
-# 이미지 업데이트
+# Update image
 kubectl set image deployment/hello-app hello=nginxdemos/hello:latest
 
-# 또는 YAML 수정 후
+# Or modify YAML then apply
 kubectl apply -f deployment.yaml
 ```
 
 ### 업데이트 상태 확인
 
 ```bash
-# 롤아웃 상태
+# Rollout status
 kubectl rollout status deployment/hello-app
 
-# 히스토리
+# History
 kubectl rollout history deployment/hello-app
 ```
 
 ### 롤백
 
 ```bash
-# 이전 버전으로 롤백
+# Rollback to previous version
 kubectl rollout undo deployment/hello-app
 
-# 특정 버전으로 롤백
+# Rollback to specific version
 kubectl rollout undo deployment/hello-app --to-revision=2
 ```
 
@@ -510,7 +533,7 @@ kubectl rollout undo deployment/hello-app --to-revision=2
 ### ConfigMap - 설정 데이터
 
 ```yaml
-# configmap.yaml
+# configmap.yaml — externalizes config from the image so the same image works in dev/staging/prod
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -527,25 +550,25 @@ spec:
     - name: app
       envFrom:
         - configMapRef:
-            name: app-config
+            name: app-config   # Injects all keys as env vars — avoids listing each one individually
 ```
 
 ### Secret - 민감한 데이터
 
 ```bash
-# Secret 생성
+# Create Secret
 kubectl create secret generic db-secret \
   --from-literal=username=admin \
   --from-literal=password=secret123
 ```
 
 ```yaml
-# YAML로 생성 (base64 인코딩 필요)
+# Create with YAML (requires base64 encoding — not encryption; use RBAC to restrict access)
 apiVersion: v1
 kind: Secret
 metadata:
   name: db-secret
-type: Opaque
+type: Opaque                # Opaque = generic key-value; K8s also supports TLS and docker-registry types
 data:
   username: YWRtaW4=      # echo -n 'admin' | base64
   password: c2VjcmV0MTIz  # echo -n 'secret123' | base64
@@ -561,7 +584,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: db-secret
-              key: password
+              key: password    # Inject a single key — safer than envFrom which exposes all keys
 ```
 
 ---
@@ -571,14 +594,14 @@ spec:
 리소스를 논리적으로 분리합니다.
 
 ```bash
-# 네임스페이스 생성
+# Namespaces provide logical isolation — same resource names can exist in different namespaces
 kubectl create namespace dev
 kubectl create namespace prod
 
-# 특정 네임스페이스에 배포
+# Deploy to specific namespace — keeps dev and prod resources separate in one cluster
 kubectl apply -f deployment.yaml -n dev
 
-# 기본 네임스페이스 변경
+# Change default namespace — avoids typing -n dev on every subsequent command
 kubectl config set-context --current --namespace=dev
 ```
 
@@ -614,3 +637,86 @@ kubectl config set-context --current --namespace=dev
 - [Kubernetes 공식 문서](https://kubernetes.io/docs/)
 - [Kubernetes Tutorial](https://kubernetes.io/docs/tutorials/)
 - [Play with Kubernetes](https://labs.play-with-k8s.com/)
+
+---
+
+## 연습 문제
+
+### 연습 1: 첫 번째 Pod와 Deployment(배포) 생성
+
+Kubernetes의 가장 기본적인 리소스를 직접 다뤄봅니다.
+
+1. 로컬 클러스터를 시작합니다: `minikube start`
+2. Pod를 명령형으로 실행합니다: `kubectl run nginx-test --image=nginx:alpine`
+3. 실행 중인지 확인합니다: `kubectl get pods -w` (Ctrl+C로 감시 중지)
+4. Pod를 describe하여 스케줄된 노드(Node)를 확인합니다: `kubectl describe pod nginx-test`
+5. 로그를 확인합니다: `kubectl logs nginx-test`
+6. Pod를 삭제하고, 재생성되지 않음을 확인합니다 (Deployment와 비교)
+7. 복제본 2개를 가진 Deployment를 생성합니다: `kubectl create deployment web --image=nginx:alpine --replicas=2`
+8. Pod 중 하나를 삭제하고, Kubernetes가 자동으로 대체 Pod를 생성하는지 확인합니다
+
+### 연습 2: Service(서비스)로 Deployment 노출
+
+워크로드(workload)를 외부에 노출하는 주요 Service 유형을 실습합니다.
+
+1. Deployment를 생성합니다: `kubectl create deployment hello --image=nginxdemos/hello --replicas=3`
+2. ClusterIP Service로 노출합니다: `kubectl expose deployment hello --port=80 --type=ClusterIP`
+3. Service가 생성되었는지 확인합니다: `kubectl get svc hello`
+4. 포트 포워딩(port-forwarding)으로 로컬에서 접근합니다: `kubectl port-forward svc/hello 8080:80`
+5. 브라우저에서 `http://localhost:8080`을 열고, 표시되는 호스트명이 Pod마다 달라지는 것을 확인합니다
+6. Service 유형을 NodePort로 변경합니다: `kubectl patch svc hello -p '{"spec":{"type":"NodePort"}}'`
+7. minikube를 통해 접근합니다: `minikube service hello --url`로 URL을 확인하고 테스트합니다
+
+### 연습 3: 롤링 업데이트(Rolling Update)와 롤백(Rollback)
+
+무중단 배포와 롤백을 실습합니다.
+
+1. 구버전 이미지로 Deployment를 생성합니다: `kubectl create deployment app --image=nginxdemos/hello:plain-text`
+2. 롤아웃(rollout) 상태를 확인합니다: `kubectl rollout status deployment/app`
+3. 새 이미지로 업데이트합니다: `kubectl set image deployment/app hello=nginx:1.25`
+4. 롤링 업데이트 과정을 실시간으로 관찰합니다: `kubectl get pods -w`
+5. 롤아웃 기록을 확인합니다: `kubectl rollout history deployment/app`
+6. 이전 버전으로 롤백합니다: `kubectl rollout undo deployment/app`
+7. `kubectl rollout status deployment/app`으로 롤백 성공 여부를 확인합니다
+
+### 연습 4: ConfigMap과 Secret(시크릿)
+
+Kubernetes 기본 메커니즘을 사용하여 설정과 민감한 데이터를 저장합니다.
+
+1. 두 개의 키를 가진 ConfigMap을 생성합니다:
+   ```bash
+   kubectl create configmap app-config \
+     --from-literal=LOG_LEVEL=info \
+     --from-literal=APP_PORT=8080
+   ```
+2. 생성 여부를 확인합니다: `kubectl get configmap app-config -o yaml`
+3. Secret을 생성합니다:
+   ```bash
+   kubectl create secret generic db-secret \
+     --from-literal=username=admin \
+     --from-literal=password=supersecret
+   ```
+4. ConfigMap을 환경 변수로, Secret을 `/secrets` 경로의 볼륨 마운트로 사용하는 Pod 매니페스트(manifest)를 작성합니다
+5. 매니페스트를 적용하고, Pod에 exec로 접속하여 값을 확인합니다: `env | grep -E "LOG_LEVEL|APP_PORT"` 및 `cat /secrets/password`
+6. ConfigMap을 수정합니다: `kubectl edit configmap app-config` (`LOG_LEVEL`을 `debug`로 변경)
+7. 볼륨 마운트된 ConfigMap이 자동으로 업데이트되는 것을 관찰합니다 (약 1분 소요될 수 있음)
+
+### 연습 5: 네임스페이스(Namespace)와 멀티 환경 구성
+
+단일 클러스터에서 격리된 환경을 시뮬레이션합니다.
+
+1. 두 개의 네임스페이스를 생성합니다: `kubectl create namespace dev` 및 `kubectl create namespace prod`
+2. 동일한 애플리케이션을 두 네임스페이스에 배포합니다:
+   ```bash
+   kubectl create deployment web --image=nginx:alpine -n dev
+   kubectl create deployment web --image=nginx:alpine -n prod
+   ```
+3. 각각 다른 복제본 수로 스케일링합니다: `dev`는 1개, `prod`는 3개
+4. 모든 네임스페이스의 Pod를 조회합니다: `kubectl get pods --all-namespaces`
+5. 기본 컨텍스트(context)를 `dev`로 전환합니다: `kubectl config set-context --current --namespace=dev`
+6. `kubectl get pods`를 실행하여 `dev` 네임스페이스의 Pod만 표시되는지 확인합니다
+7. 두 네임스페이스를 정리합니다: `kubectl delete namespace dev prod`
+
+---
+
+**이전**: [실전 예제](./05_Practical_Examples.md) | **다음**: [Kubernetes 보안](./07_Kubernetes_Security.md)

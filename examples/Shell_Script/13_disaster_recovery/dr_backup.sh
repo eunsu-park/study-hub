@@ -94,6 +94,8 @@ log() {
     local timestamp
     timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
+    # Why: tee writes to both stdout and the log file in one step, ensuring
+    # the operator sees live progress while preserving a persistent audit trail.
     echo "[${timestamp}] [${level}] ${message}" | tee -a "$LOG_FILE"
 }
 
@@ -125,7 +127,8 @@ setup_directories() {
     mkdir -p "$BACKUP_ROOT"/{full,incremental,database,config,logs}
     mkdir -p "$LOG_DIR"
 
-    # Set secure permissions
+    # Why: 700/600 restricts access to owner-only, protecting backup data and
+    # logs from other users — critical when backups contain sensitive data.
     chmod 700 "$BACKUP_ROOT"
     chmod 600 "$LOG_FILE"
 }
@@ -180,7 +183,8 @@ backup_filesystem() {
             || log "WARN" "Encryption failed"
     fi
 
-    # Create/update latest symlink
+    # Why: a "latest" symlink provides a stable path for incremental backups
+    # and monitoring tools — no need to compute the most recent timestamp.
     ln -sfn "$backup_dir" "${BACKUP_ROOT}/full/latest"
 
     log "INFO" "Filesystem backup completed: $backup_dir"
@@ -294,7 +298,8 @@ verify_backup() {
         return 0
     fi
 
-    # Create checksums
+    # Why: SHA-256 checksums let the restore script detect bit-rot or tampering
+    # before restoring — catching corruption early prevents spreading bad data.
     find "$latest_backup" -type f -exec sha256sum {} \; \
         > "${latest_backup}/checksums.txt" 2>/dev/null
 

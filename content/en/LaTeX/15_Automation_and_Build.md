@@ -5,6 +5,19 @@
 > **Prerequisites**: Lessons 01-10 (document creation, bibliography)
 > **Objective**: Master automated compilation workflows, build systems, version control, CI/CD, and modern LaTeX development environments
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Set up `latexmk` to automate multi-pass compilation, including BibTeX and index generation, with a single command
+2. Configure a Makefile or build script for a LaTeX project to handle dependencies and clean-up targets
+3. Integrate LaTeX compilation into a Git workflow, including `.gitignore` rules for generated files
+4. Set up a CI/CD pipeline (e.g., GitHub Actions) to automatically compile and publish PDF documents on push
+5. Configure a LaTeX-aware editor (VS Code with LaTeX Workshop, or Neovim) with forward/inverse search and live preview
+6. Apply spell-checking and linting tools (`chktex`, `lacheck`) to improve document quality automatically
+
+---
+
 ## Introduction
 
 Professional LaTeX workflows require more than manual compilation. You need:
@@ -1167,5 +1180,5 @@ Mastering these tools transforms LaTeX from a typesetting system into a complete
 
 **Navigation**
 
-- Previous: [14_Document_Classes.md](14_Document_Classes.md)
-- Next: [16_Practical_Projects.md](16_Practical_Projects.md)
+- Previous: [Document Classes & Templates](14_Document_Classes.md)
+- Next: [Practical Projects](16_Practical_Projects.md)

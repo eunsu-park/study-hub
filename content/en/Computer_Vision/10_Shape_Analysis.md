@@ -1,8 +1,23 @@
 # Shape Analysis
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define image moments and explain how they encode shape information such as area, centroid, and orientation
+2. Implement centroid and orientation calculation from contour moments using OpenCV
+3. Apply bounding shapes (rectangles, circles, ellipses) to enclose detected contours
+4. Compute convex hulls and identify convexity defects for shape characterization
+5. Compare shapes using Hu moments and shape matching techniques
+6. Design a shape classification system that combines multiple geometric descriptors
+
+---
+
 ## Overview
 
 Learn methods for analyzing and classifying characteristics of shapes extracted from contours. This lesson covers various shape analysis techniques including moments, centroids, bounding shapes, convex hulls, and shape matching.
+
+Shape analysis solves a fundamental recognition problem: the same physical object looks different in every image because its position, size, and rotation change. A coin photographed from the left looks different from the same coin photographed from the right. By computing descriptors that are invariant to translation, scale, and rotation, shape analysis lets you recognize and compare objects regardless of how they appear in the scene.
 
 ---
 
@@ -118,6 +133,8 @@ nu20, nu11, nu02, nu30, nu21, nu12, nu03
 
 ### Hu Moments
 
+**Why are moments useful for shape recognition?** Think of the centroid (M10/M00, M01/M00) as the point where the shape would balance on a pin — a direct analogy to center of mass in physics. Central moments (measured relative to the centroid) are translation-invariant because they describe the shape's distribution around its own center, regardless of position. Normalized central moments (divided by M00^((i+j)/2+1)) are additionally scale-invariant because the normalization factor scales with the shape's area. Hu combined these into 7 specific algebraic expressions that are also rotation-invariant. The log transform `−sign(h)·log10(|h|)` is used because the 7 values span many orders of magnitude; log scale makes them comparable in Euclidean distance.
+
 ```python
 import cv2
 import numpy as np
@@ -127,10 +144,14 @@ def hu_moments_analysis(contour):
     # Regular moments
     M = cv2.moments(contour)
 
-    # Hu moments (7 invariant features)
+    # Hu's 7 moments are specific algebraic combinations of normalized central
+    # moments that cancel out any rotation effect. They are invariant to
+    # translation (central moments), scale (normalized), and rotation (Hu's algebra).
     huMoments = cv2.HuMoments(M)
 
-    # Log scale transformation (easier to compare)
+    # The 7 Hu values span ~15 orders of magnitude (e.g., h1≈1e-1, h7≈1e-15).
+    # Log scale makes them comparable for Euclidean distance matching;
+    # the sign is preserved so the direction of asymmetry is not lost.
     huMoments_log = -np.sign(huMoments) * np.log10(np.abs(huMoments) + 1e-10)
 
     print("Hu Moments:")
@@ -170,6 +191,8 @@ if len(contours) >= 2:
 ## 2. Centroid Calculation
 
 ### Centroid Formula
+
+The centroid formula is a direct application of the weighted-average principle: M10 = Σ x·I(x,y) accumulates x-coordinates weighted by pixel intensity (like summing "how far right" each pixel pulls), and M00 = Σ I(x,y) is the total weight (area). Dividing M10 / M00 gives the average x-position weighted by pixel mass — exactly the center of mass of a flat plate with density I(x,y). The same logic applies to cy = M01 / M00.
 
 ```
 Centroid:
@@ -215,7 +238,9 @@ def find_centroids(image_path):
         # Calculate moments
         M = cv2.moments(contour)
 
-        # Only if area is non-zero
+        # Guard against zero area (degenerate contour with no enclosed pixels).
+        # m10/m00 is the x-weighted average (center of mass in x);
+        # m01/m00 is the y-weighted average. Together they give the centroid.
         if M['m00'] != 0:
             cx = int(M['m10'] / M['m00'])
             cy = int(M['m01'] / M['m00'])
@@ -810,7 +835,11 @@ def find_similar_shapes(image_path, template_path, threshold=0.1):
         if cv2.contourArea(contour) < 100:
             continue
 
-        # Shape matching
+        # matchShapes compares Hu moments of both contours using method I1,
+        # which normalizes each moment before differencing (Σ|1/mA - 1/mB|),
+        # making it robust to scale differences between template and candidate.
+        # A score of 0 means identical shape; scores below ~0.1 are usually
+        # visually very similar.
         match = cv2.matchShapes(
             template_contour, contour, cv2.CONTOURS_MATCH_I1, 0
         )
@@ -894,6 +923,9 @@ class ShapeClassifier:
         }
 
         # Shape identification
+        # Polygon vertex count comes first because polygons can have circularity
+        # close to 1 (a regular hexagon has ~0.91), so checking circularity first
+        # would misclassify them as circles.
         if vertices == 3:
             shape = 'Triangle'
         elif vertices == 4:
@@ -906,10 +938,15 @@ class ShapeClassifier:
         elif vertices == 6:
             shape = 'Hexagon'
         elif circularity > 0.85:
+            # 0.85 is empirical: a perfect circle scores 1.0; digitization and
+            # contour approximation degrade it slightly, so 0.85 is a practical
+            # threshold that excludes ellipses and rounded rectangles.
             shape = 'Circle'
         elif 0.6 < circularity < 0.85 and solidity > 0.9:
             shape = 'Ellipse'
         elif solidity < 0.7:
+            # Low solidity means the convex hull is much larger than the contour,
+            # indicating significant concavities — the hallmark of a star shape.
             shape = 'Star' if vertices > 6 else 'Irregular'
         else:
             shape = f'Polygon-{vertices}'
@@ -936,7 +973,9 @@ class ShapeClassifier:
 
             classifications.append((shape, props))
 
-            # Centroid
+            # Centroid via moments: placing the label at the center of mass
+            # ensures it stays inside the shape regardless of the shape's position
+            # or size — more reliable than using the bounding rect center.
             M = cv2.moments(contour)
             if M['m00'] != 0:
                 cx = int(M['m10'] / M['m00'])

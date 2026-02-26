@@ -1,5 +1,24 @@
 # Security and Firewall
 
+**Previous**: [System Monitoring](./11_System_Monitoring.md) | **Next**: [Advanced systemd](./13_Systemd_Advanced.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply the principle of least privilege and describe Linux security layers
+2. Harden SSH configuration by disabling root login, using key authentication, and limiting access
+3. Configure UFW (Ubuntu) to allow, deny, and rate-limit network traffic
+4. Configure firewalld (CentOS/RHEL) using zones, services, and rich rules
+5. Understand the basics of SELinux (CentOS) and AppArmor (Ubuntu) mandatory access controls
+6. Install and configure fail2ban to block brute-force attacks automatically
+7. Set up unattended security updates for both Ubuntu and CentOS
+8. Perform a security audit checking users, services, open ports, and file permissions
+
+---
+
+Security is not a feature you add at the end -- it is a mindset you apply from the start. A Linux server exposed to the internet will be probed by automated scanners within minutes of going online. This lesson covers the essential hardening steps that every server should have in place: locking down SSH, configuring firewalls, enabling intrusion prevention, and performing regular security audits.
+
 ## 1. Security Basic Principles
 
 ### Principle of Least Privilege
@@ -597,11 +616,4 @@ find /usr/bin -perm -4000 2>/dev/null
 
 ---
 
-## Congratulations!
-
-You've completed all Linux learning materials. Next steps:
-
-- Practice on real servers
-- Use Docker containers: [Docker/](../Docker/00_Overview.md)
-- Database operations: [PostgreSQL/](../PostgreSQL/00_Overview.md)
-- Practice writing automation scripts
+**Previous**: [System Monitoring](./11_System_Monitoring.md) | **Next**: [Advanced systemd](./13_Systemd_Advanced.md)

@@ -1,5 +1,26 @@
 # Advanced Classes
 
+**Previous**: [Class Basics](./07_Classes_Basics.md) | **Next**: [Inheritance and Polymorphism](./09_Inheritance_and_Polymorphism.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement operator overloading for arithmetic, comparison, compound assignment, and stream operators
+2. Distinguish between member-function and friend-function operator overloads
+3. Explain the difference between shallow copy and deep copy and implement a deep-copy constructor
+4. Design a correct copy assignment operator with self-assignment protection
+5. Apply move semantics (move constructor and move assignment operator) to eliminate unnecessary copies
+6. Identify the Rule of Five and explain when a class must define all five special member functions
+7. Implement `static` member variables and functions for class-wide shared state
+8. Apply `explicit` to prevent unintended implicit conversions
+
+---
+
+Once you can create classes, the next question is how they should *behave* when copied, moved, compared, or printed. Advanced class mechanics -- operator overloading, copy/move semantics, and the Rule of Five -- are what make user-defined types feel as natural as built-in types. These techniques are not academic curiosities; they underpin the entire Standard Library, from `std::string` to `std::vector`, and mastering them is essential for writing professional-quality C++.
+
 ## 1. Operator Overloading
 
 You can define how operators work with your classes.

@@ -12,7 +12,8 @@ cleanup() {
     jobs -p | xargs -r kill 2>/dev/null || true
 }
 
-# Set trap for cleanup
+# Why: trapping EXIT plus INT/TERM ensures FIFOs are cleaned up whether
+# the script ends normally, is Ctrl-C'd, or killed — avoiding stale pipes.
 trap cleanup EXIT INT TERM
 
 echo "=== Named Pipe (FIFO) Demonstrations ==="
@@ -25,7 +26,8 @@ demo_basic_fifo() {
 
     local fifo="/tmp/demo_fifo_basic"
 
-    # Create named pipe
+    # Why: FIFOs (named pipes) persist on the filesystem, enabling IPC between
+    # unrelated processes — unlike anonymous pipes which only connect parent-child.
     mkfifo "$fifo"
     echo "Created FIFO: $fifo"
 
@@ -107,6 +109,8 @@ demo_bidirectional() {
     echo "3. Bidirectional Communication (Two FIFOs)"
     echo "------------------------------------------"
 
+    # Why: bidirectional IPC requires two FIFOs because a single FIFO is
+    # unidirectional — one for requests, one for responses, like a socket pair.
     local request_fifo="/tmp/demo_fifo_request"
     local response_fifo="/tmp/demo_fifo_response"
 
@@ -195,6 +199,8 @@ demo_load_balancing() {
     local num_workers=3
     echo "Starting $num_workers workers..."
 
+    # Why: all workers read from the same FIFO, and the kernel delivers each
+    # message to exactly one reader — providing built-in load balancing for free.
     for i in $(seq 1 $num_workers); do
         worker "$i" < "$job_fifo" &
     done

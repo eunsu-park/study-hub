@@ -1,3 +1,4 @@
+# Why: Excluding these from the build context prevents Docker from sending gigabytes of irrelevant files to the daemon, speeding up builds dramatically
 # Python
 __pycache__/
 *.py[cod]
@@ -40,10 +41,12 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Why: .git/ alone can be hundreds of MB; excluding it also prevents commit history from leaking into the image layer
 # Git
 .git/
 .gitignore
 
+# Why: Docs add nothing to a runtime image — keeping them out shrinks the build context and avoids accidental cache invalidation when only READMEs change
 # Documentation
 *.md
 docs/
@@ -54,6 +57,7 @@ docs/
 htmlcov/
 .tox/
 
+# Why: Including Dockerfile in the image is a security risk — it may reveal build secrets, base image choices, and internal architecture
 # Docker
 Dockerfile*
 docker-compose*.yml

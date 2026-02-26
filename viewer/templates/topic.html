@@ -10,8 +10,14 @@
 </nav>
 <h1>{{ display_name }}</h1>
 <div class="header-meta">
-    <span class="lesson-count">{{ lessons|length }} lessons</span>
-    <span class="progress-badge">{{ progress.percentage }}% complete</span>
+    {% if tier %}
+    <span class="tier-badge tier-{{ tier.id }}" style="--tier-color: {{ tier.color }}">{{ tier.label[lang] }}</span>
+    {% endif %}
+    <span class="lesson-count">{{ lessons|length }} {% if lang == 'ko' %}레슨{% else %}lessons{% endif %}</span>
+    <span class="progress-badge">{{ progress.percentage }}% {% if lang == 'ko' %}완료{% else %}complete{% endif %}</span>
+    {% if has_examples %}
+    <a href="{{ url_for('examples_topic', lang=lang, topic_name=topic) }}" class="examples-link">{% if lang == 'ko' %}예제 코드 &rarr;{% else %}Examples &rarr;{% endif %}</a>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -20,26 +26,39 @@
     <div class="progress-bar large">
         <div class="progress-fill" style="width: {{ progress.percentage }}%"></div>
     </div>
-    <span class="progress-text">{{ progress.read }} of {{ progress.total }} lessons completed</span>
+    <span class="progress-text">{{ progress.read }} / {{ progress.total }} {% if lang == 'ko' %}레슨 완료{% else %}lessons completed{% endif %}</span>
+</div>
+
+<div class="lesson-filters">
+    <button class="lesson-filter-btn active" data-filter="all">{% if lang == 'ko' %}전체{% else %}All{% endif %}</button>
+    <button class="lesson-filter-btn" data-filter="unread">{% if lang == 'ko' %}미읽음{% else %}Unread{% endif %}</button>
+    <button class="lesson-filter-btn" data-filter="read">{% if lang == 'ko' %}읽음{% else %}Read{% endif %}</button>
+    <button class="lesson-filter-btn" data-filter="bookmarked">{% if lang == 'ko' %}북마크{% else %}Bookmarked{% endif %}</button>
 </div>
 
 <div class="lessons-list">
     {% for lesson in lessons %}
-    <a href="{{ url_for('lesson', lang=lang, name=topic, filename=lesson.filename) }}" class="lesson-item {% if lesson.is_read %}read{% endif %}">
+    <a href="{{ url_for('lesson', lang=lang, name=topic, filename=lesson.filename) }}"
+       class="lesson-item {% if lesson.is_read %}read{% endif %}"
+       data-read="{{ 'true' if lesson.is_read else 'false' }}"
+       data-bookmarked="{{ 'true' if lesson.is_bookmarked else 'false' }}">
         <div class="lesson-status">
             {% if lesson.is_read %}
-            <span class="status-icon read" title="Read">✓</span>
+            <span class="status-icon read" title="Read">&#10003;</span>
             {% else %}
-            <span class="status-icon unread" title="Unread">○</span>
+            <span class="status-icon unread" title="Unread">&#9675;</span>
             {% endif %}
         </div>
         <div class="lesson-info">
             <h3 class="lesson-title">{{ lesson.title or lesson.display_name }}</h3>
-            <span class="lesson-filename">{{ lesson.filename }}</span>
+            <div class="lesson-meta">
+                <span class="lesson-filename">{{ lesson.filename }}</span>
+                <span class="lesson-duration">~{{ lesson.reading_time }} {% if lang == 'ko' %}분{% else %}min{% endif %}</span>
+            </div>
         </div>
         <div class="lesson-actions">
             {% if lesson.is_bookmarked %}
-            <span class="bookmark-icon active" title="Bookmarked">🔖</span>
+            <span class="bookmark-icon active" title="Bookmarked">&#128278;</span>
             {% endif %}
         </div>
     </a>

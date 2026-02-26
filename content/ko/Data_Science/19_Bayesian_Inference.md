@@ -2,9 +2,21 @@
 
 [이전: 베이지안 통계 기초](./18_Bayesian_Statistics_Basics.md) | [다음: 시계열 분석 기초](./20_Time_Series_Basics.md)
 
-## 개요
+## 학습 목표
 
-켤레 사전분포가 적용되지 않는 복잡한 모델에서는 사후분포를 해석적으로 구할 수 없습니다. 이 장에서는 MCMC(Markov Chain Monte Carlo) 방법과 PyMC 라이브러리를 사용한 베이지안 추론을 학습합니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 켤레 사전분포(conjugate prior)를 사용할 수 없고 사후분포의 닫힌 형식(closed form)이 존재하지 않을 때 MCMC가 필요한 이유를 설명할 수 있습니다
+2. Metropolis-Hastings 알고리즘을 처음부터 구현하고, 적절한 수락률(acceptance rate)을 위해 제안 분포(proposal distribution)를 조정할 수 있습니다
+3. PyMC를 사용하여 사전분포(prior), 가능도(likelihood), 샘플링 매개변수를 지정하는 베이지안 모델을 구축하고 샘플링할 수 있습니다
+4. 베이지안 선형 회귀를 구현하고 사후 추정치를 빈도주의 OLS 결과와 비교할 수 있습니다
+5. WAIC, LOO-CV를 사용하여 경쟁 모델을 비교하고 베이즈 팩터(Bayes factor)를 해석할 수 있습니다
+6. 사후 예측 검사(posterior predictive checks)를 수행하여 모델 적합도를 평가하고 모델 오특정(misspecification)을 탐지할 수 있습니다
+7. R-hat, 유효 표본 크기(effective sample size), 트레이스 플롯(trace plot), 자기상관(autocorrelation) 진단을 사용하여 MCMC 수렴을 평가할 수 있습니다
+
+---
+
+이전 레슨에서는 켤레 사전분포가 우아한 닫힌 형식의 사후분포를 산출하는 방법을 보여주었지만, 대부분의 실제 모델은 그런 편리함을 누리기에는 너무 복잡합니다. 사후분포를 해석적으로 계산할 수 없을 때, MCMC 알고리즘은 대신 샘플을 추출할 수 있게 해줍니다 — 다루기 어려운 적분 문제를 시뮬레이션 문제로 변환하는 것입니다. 이 레슨에서는 MCMC의 이론적 배경과 PyMC를 활용한 현대적 베이지안 모델링의 실제 워크플로우를 모두 배웁니다.
 
 ---
 

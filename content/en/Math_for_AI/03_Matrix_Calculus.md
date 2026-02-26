@@ -44,8 +44,8 @@ import numpy as np
 import torch
 from sympy import symbols, Matrix, diff, simplify
 
-# SymPy로 심볼릭 계산
-print("=== SymPy 심볼릭 미분 ===")
+# Symbolic computation with SymPy
+print("=== SymPy Symbolic Differentiation ===")
 x1, x2 = symbols('x1 x2')
 x = Matrix([x1, x2])
 A = Matrix([[2, 1], [1, 3]])
@@ -54,28 +54,28 @@ A = Matrix([[2, 1], [1, 3]])
 f = (x.T * A * x)[0]
 print(f"f(x) = {f}")
 
-# 그래디언트 계산
+# Compute gradient
 grad_f = Matrix([diff(f, x1), diff(f, x2)])
 print(f"∇f = {simplify(grad_f)}")
 print(f"(A + A^T)x = {simplify((A + A.T) * x)}")
 
-# PyTorch로 수치 계산 및 검증
-print("\n=== PyTorch 자동 미분 ===")
+# Numerical computation and verification with PyTorch
+print("\n=== PyTorch Automatic Differentiation ===")
 x_val = torch.tensor([1.0, 2.0], requires_grad=True)
 A_torch = torch.tensor([[2.0, 1.0], [1.0, 3.0]])
 
-# 순전파
+# Forward pass
 f_val = x_val @ A_torch @ x_val
 print(f"f(x) = {f_val.item():.4f}")
 
-# 역전파
+# Backward pass
 f_val.backward()
 print(f"∇f (autograd) = {x_val.grad}")
 
-# 공식으로 계산
+# Compute using formula
 grad_formula = (A_torch + A_torch.T) @ x_val.detach()
-print(f"∇f (공식)      = {grad_formula}")
-print(f"차이: {torch.norm(x_val.grad - grad_formula).item():.2e}")
+print(f"∇f (formula)   = {grad_formula}")
+print(f"Difference: {torch.norm(x_val.grad - grad_formula).item():.2e}")
 ```
 
 ### 1.4 Numerator Layout vs Denominator Layout
@@ -110,7 +110,7 @@ where $\mathbf{y} = \mathbf{f}(\mathbf{x})$, and the right-hand side is the prod
 ```python
 import torch
 
-# 함수 정의: f: R^2 -> R^3
+# Function definition: f: R^2 -> R^3
 def vector_function(x):
     """
     f([x1, x2]) = [x1^2 + x2,
@@ -125,29 +125,29 @@ def vector_function(x):
 
 x = torch.tensor([1.0, 2.0], requires_grad=True)
 
-# PyTorch의 야코비안 계산
+# Compute Jacobian with PyTorch
 from torch.autograd.functional import jacobian
 
 J = jacobian(vector_function, x)
-print("야코비안 행렬 (3x2):")
+print("Jacobian matrix (3x2):")
 print(J)
 
-# 수동 계산으로 검증
+# Verify by manual computation
 x1, x2 = x[0].item(), x[1].item()
 J_manual = torch.tensor([
     [2*x1, 1],
     [x2, x1],
     [np.cos(x1), -np.sin(x2)]
 ])
-print("\n수동 계산:")
+print("\nManual computation:")
 print(J_manual)
-print(f"\n차이: {torch.norm(J - J_manual).item():.2e}")
+print(f"\nDifference: {torch.norm(J - J_manual).item():.2e}")
 ```
 
 ### 2.4 Chain Rule Practice
 
 ```python
-# 합성 함수의 야코비안: h(x) = g(f(x))
+# Jacobian of composed function: h(x) = g(f(x))
 def f(x):
     """f: R^2 -> R^2"""
     return torch.stack([x[0]**2, x[0] + x[1]])
@@ -162,20 +162,20 @@ def h(x):
 
 x = torch.tensor([1.0, 2.0])
 
-# 방법 1: 직접 계산
+# Method 1: direct computation
 J_h = jacobian(h, x)
-print("J_h (직접):")
+print("J_h (direct):")
 print(J_h)
 
-# 방법 2: 체인 룰
+# Method 2: chain rule
 J_f = jacobian(f, x)
 y = f(x)
 J_g = jacobian(g, y)
 J_chain = J_g @ J_f
-print("\nJ_g @ J_f (체인 룰):")
+print("\nJ_g @ J_f (chain rule):")
 print(J_chain)
 
-print(f"\n차이: {torch.norm(J_h - J_chain).item():.2e}")
+print(f"\nDifference: {torch.norm(J_h - J_chain).item():.2e}")
 ```
 
 ## 3. Hessian Matrix
@@ -208,34 +208,34 @@ It uses the inverse of the Hessian to leverage second-order information.
 import torch
 import numpy as np
 
-# 함수 정의: f(x, y) = x^2 + xy + 2y^2
+# Function definition: f(x, y) = x^2 + xy + 2y^2
 def f(x):
     return x[0]**2 + x[0]*x[1] + 2*x[1]**2
 
 x = torch.tensor([1.0, 2.0], requires_grad=True)
 
-# 그래디언트 계산
+# Compute gradient
 y = f(x)
 grad = torch.autograd.grad(y, x, create_graph=True)[0]
 print("∇f =", grad)
 
-# 헤시안 계산 (각 그래디언트 성분을 다시 미분)
+# Compute Hessian (differentiate each gradient component again)
 hessian = torch.zeros(2, 2)
 for i in range(2):
     hessian[i] = torch.autograd.grad(grad[i], x, retain_graph=True)[0]
 
-print("\n헤시안 행렬:")
+print("\nHessian matrix:")
 print(hessian)
 
-# 수동 계산: H = [[2, 1], [1, 4]]
+# Manual computation: H = [[2, 1], [1, 4]]
 H_manual = torch.tensor([[2.0, 1.0], [1.0, 4.0]])
-print("\n수동 계산:")
+print("\nManual computation:")
 print(H_manual)
 
-# 고유값으로 정부호 판정
+# Determine definiteness from eigenvalues
 eigenvalues = torch.linalg.eigvalsh(hessian)
-print(f"\n고유값: {eigenvalues}")
-print("양정치 (극솟값):", torch.all(eigenvalues > 0).item())
+print(f"\nEigenvalues: {eigenvalues}")
+print("Positive definite (local minimum):", torch.all(eigenvalues > 0).item())
 ```
 
 ### 3.5 Hessian and Convexity
@@ -244,29 +244,29 @@ print("양정치 (극솟값):", torch.all(eigenvalues > 0).item())
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# 볼록 함수: f(x, y) = x^2 + 2y^2
+# Convex function: f(x, y) = x^2 + 2y^2
 x = np.linspace(-3, 3, 50)
 y = np.linspace(-3, 3, 50)
 X, Y = np.meshgrid(x, y)
 Z_convex = X**2 + 2*Y**2
 
-# 안장점 함수: f(x, y) = x^2 - y^2
+# Saddle point function: f(x, y) = x^2 - y^2
 Z_saddle = X**2 - Y**2
 
 fig = plt.figure(figsize=(14, 6))
 
-# 볼록 함수
+# Convex function
 ax1 = fig.add_subplot(121, projection='3d')
 ax1.plot_surface(X, Y, Z_convex, cmap='viridis', alpha=0.8)
-ax1.set_title('볼록 함수: $f(x,y) = x^2 + 2y^2$\n헤시안 양정치', fontsize=12)
+ax1.set_title('Convex function: $f(x,y) = x^2 + 2y^2$\nHessian positive definite', fontsize=12)
 ax1.set_xlabel('x')
 ax1.set_ylabel('y')
 ax1.set_zlabel('f(x,y)')
 
-# 안장점 함수
+# Saddle point function
 ax2 = fig.add_subplot(122, projection='3d')
 ax2.plot_surface(X, Y, Z_saddle, cmap='plasma', alpha=0.8)
-ax2.set_title('안장점: $f(x,y) = x^2 - y^2$\n헤시안 부정부호', fontsize=12)
+ax2.set_title('Saddle point: $f(x,y) = x^2 - y^2$\nHessian indefinite', fontsize=12)
 ax2.set_xlabel('x')
 ax2.set_ylabel('y')
 ax2.set_zlabel('f(x,y)')
@@ -275,7 +275,7 @@ plt.tight_layout()
 plt.savefig('hessian_surfaces.png', dpi=150)
 plt.close()
 
-print("헤시안과 함수 형태 시각화 저장: hessian_surfaces.png")
+print("Hessian and function shape visualization saved: hessian_surfaces.png")
 ```
 
 ## 4. Matrix Derivative Identities
@@ -321,36 +321,36 @@ $$\frac{\partial \text{tr}(AB)}{\partial A} = B^T$$
 ```python
 import torch
 
-# 항등식 1: ∂(x^T a)/∂x = a
+# Identity 1: ∂(x^T a)/∂x = a
 x = torch.randn(5, requires_grad=True)
 a = torch.randn(5)
 f = x @ a
 f.backward()
-print("항등식 1: ∂(x^T a)/∂x = a")
+print("Identity 1: ∂(x^T a)/∂x = a")
 print(f"autograd: {x.grad}")
-print(f"공식:     {a}")
-print(f"차이: {torch.norm(x.grad - a).item():.2e}\n")
+print(f"formula:  {a}")
+print(f"Difference: {torch.norm(x.grad - a).item():.2e}\n")
 
-# 항등식 2: ∂(x^T A x)/∂x = (A + A^T)x
+# Identity 2: ∂(x^T A x)/∂x = (A + A^T)x
 x = torch.randn(5, requires_grad=True)
 A = torch.randn(5, 5)
 f = x @ A @ x
 f.backward()
-print("항등식 2: ∂(x^T A x)/∂x = (A + A^T)x")
+print("Identity 2: ∂(x^T A x)/∂x = (A + A^T)x")
 print(f"autograd: {x.grad}")
 expected = (A + A.T) @ x.detach()
-print(f"공식:     {expected}")
-print(f"차이: {torch.norm(x.grad - expected).item():.2e}\n")
+print(f"formula:  {expected}")
+print(f"Difference: {torch.norm(x.grad - expected).item():.2e}\n")
 
-# 항등식 3: ∂tr(AB)/∂A = B^T
+# Identity 3: ∂tr(AB)/∂A = B^T
 A = torch.randn(4, 4, requires_grad=True)
 B = torch.randn(4, 4)
 f = torch.trace(A @ B)
 f.backward()
-print("항등식 3: ∂tr(AB)/∂A = B^T")
+print("Identity 3: ∂tr(AB)/∂A = B^T")
 print(f"autograd:\n{A.grad}")
-print(f"공식:\n{B.T}")
-print(f"차이: {torch.norm(A.grad - B.T).item():.2e}")
+print(f"formula:\n{B.T}")
+print(f"Difference: {torch.norm(A.grad - B.T).item():.2e}")
 ```
 
 ## 5. Applications of Matrix Calculus in ML
@@ -379,26 +379,26 @@ $$\nabla_\mathbf{w} L = \frac{1}{n} \nabla_\mathbf{w} \mathbf{r}^T \mathbf{r} = 
 import torch
 import torch.nn as nn
 
-# 데이터 생성
+# Generate data
 n, d = 100, 10
 X = torch.randn(n, d)
 y = torch.randn(n)
 w = torch.randn(d, requires_grad=True)
 
-# 방법 1: PyTorch autograd
+# Method 1: PyTorch autograd
 pred = X @ w
 loss = 0.5 * torch.mean((y - pred)**2)
 loss.backward()
 grad_autograd = w.grad.clone()
 
-# 방법 2: 수동 유도 공식
+# Method 2: manually derived formula
 residual = y - X @ w.detach()
 grad_formula = -X.T @ residual / n
 
-print("MSE 그래디언트 비교:")
+print("MSE gradient comparison:")
 print(f"autograd: {grad_autograd[:5]}")
-print(f"공식:     {grad_formula[:5]}")
-print(f"차이: {torch.norm(grad_autograd - grad_formula).item():.2e}")
+print(f"formula:  {grad_formula[:5]}")
+print(f"Difference: {torch.norm(grad_autograd - grad_formula).item():.2e}")
 ```
 
 ### 5.3 Softmax Cross-Entropy Gradient
@@ -423,25 +423,25 @@ This concise form is derived from computing the Jacobian of the softmax.
 import torch
 import torch.nn.functional as F
 
-# 로짓과 타겟
+# Logits and target
 logits = torch.randn(5, requires_grad=True)
-target_class = 2  # 클래스 2가 정답
+target_class = 2  # class 2 is the correct answer
 
-# 방법 1: PyTorch autograd
+# Method 1: PyTorch autograd
 loss = F.cross_entropy(logits.unsqueeze(0), torch.tensor([target_class]))
 loss.backward()
 grad_autograd = logits.grad.clone()
 
-# 방법 2: 수동 계산
+# Method 2: manual computation
 probs = F.softmax(logits.detach(), dim=0)
 y_onehot = torch.zeros(5)
 y_onehot[target_class] = 1.0
 grad_formula = probs - y_onehot
 
-print("소프트맥스 교차 엔트로피 그래디언트:")
+print("Softmax cross-entropy gradient:")
 print(f"autograd: {grad_autograd}")
-print(f"공식:     {grad_formula}")
-print(f"차이: {torch.norm(grad_autograd - grad_formula).item():.2e}")
+print(f"formula:  {grad_formula}")
+print(f"Difference: {torch.norm(grad_autograd - grad_formula).item():.2e}")
 ```
 
 ### 5.5 Backpropagation: Chain of Jacobians
@@ -465,7 +465,7 @@ $$\frac{\partial L}{\partial \mathbf{b}} = \frac{\partial L}{\partial \mathbf{z}
 $$\frac{\partial L}{\partial \mathbf{x}} = W^T \frac{\partial L}{\partial \mathbf{z}}$$
 
 ```python
-# 선형 레이어 그래디언트 수동 구현
+# Manual implementation of linear layer gradients
 class LinearLayer:
     def __init__(self, in_dim, out_dim):
         self.W = torch.randn(out_dim, in_dim, requires_grad=False)
@@ -479,25 +479,25 @@ class LinearLayer:
         return self.W @ x + self.b
 
     def backward(self, dL_dz):
-        """dL_dz: 손실에 대한 출력의 그래디언트"""
+        """dL_dz: gradient of loss with respect to output"""
         self.dW = torch.outer(dL_dz, self.x)  # (out_dim, in_dim)
         self.db = dL_dz  # (out_dim,)
         dL_dx = self.W.T @ dL_dz  # (in_dim,)
         return dL_dx
 
-# 테스트
+# Test
 layer = LinearLayer(5, 3)
 x = torch.randn(5)
 z = layer.forward(x)
-dL_dz = torch.randn(3)  # 가짜 그래디언트
+dL_dz = torch.randn(3)  # fake gradient
 dL_dx = layer.backward(dL_dz)
 
-print("선형 레이어 역전파:")
-print(f"dW 형태: {layer.dW.shape}")
-print(f"db 형태: {layer.db.shape}")
-print(f"dx 형태: {dL_dx.shape}")
+print("Linear layer backpropagation:")
+print(f"dW shape: {layer.dW.shape}")
+print(f"db shape: {layer.db.shape}")
+print(f"dx shape: {dL_dx.shape}")
 
-# PyTorch로 검증
+# Verify with PyTorch
 W_torch = layer.W.clone().requires_grad_(True)
 b_torch = layer.b.clone().requires_grad_(True)
 x_torch = x.clone().requires_grad_(True)
@@ -505,9 +505,9 @@ x_torch = x.clone().requires_grad_(True)
 z_torch = W_torch @ x_torch + b_torch
 z_torch.backward(dL_dz)
 
-print(f"\ndW 차이: {torch.norm(layer.dW - W_torch.grad).item():.2e}")
-print(f"db 차이: {torch.norm(layer.db - b_torch.grad).item():.2e}")
-print(f"dx 차이: {torch.norm(dL_dx - x_torch.grad).item():.2e}")
+print(f"\ndW difference: {torch.norm(layer.dW - W_torch.grad).item():.2e}")
+print(f"db difference: {torch.norm(layer.db - b_torch.grad).item():.2e}")
+print(f"dx difference: {torch.norm(dL_dx - x_torch.grad).item():.2e}")
 ```
 
 ## 6. Automatic Differentiation
@@ -529,60 +529,60 @@ print(f"dx 차이: {torch.norm(dL_dx - x_torch.grad).item():.2e}")
 A computational graph represents operations as nodes and data flow as edges.
 
 ```python
-# 계산 그래프 예시: f(x, y) = (x + y) * (x - y)
+# Computational graph example: f(x, y) = (x + y) * (x - y)
 import torch
 
 x = torch.tensor(3.0, requires_grad=True)
 y = torch.tensor(2.0, requires_grad=True)
 
-# 중간 변수 저장
+# Store intermediate variables
 a = x + y  # a = 5
 b = x - y  # b = 1
 f = a * b  # f = 5
 
-print("계산 그래프:")
+print("Computational graph:")
 print(f"x={x.item()}, y={y.item()}")
 print(f"a = x + y = {a.item()}")
 print(f"b = x - y = {b.item()}")
 print(f"f = a * b = {f.item()}")
 
-# 역전파
+# Backpropagation
 f.backward()
 print(f"\n∂f/∂x = {x.grad.item()}")
 print(f"∂f/∂y = {y.grad.item()}")
 
-# 수동 계산 검증
+# Verify by manual computation
 # f = (x+y)(x-y) = x^2 - y^2
 # ∂f/∂x = 2x = 6
 # ∂f/∂y = -2y = -4
-print(f"\n수동 계산: ∂f/∂x = 2x = {2*x.item()}")
-print(f"수동 계산: ∂f/∂y = -2y = {-2*y.item()}")
+print(f"\nManual: ∂f/∂x = 2x = {2*x.item()}")
+print(f"Manual: ∂f/∂y = -2y = {-2*y.item()}")
 ```
 
 ### 6.3 PyTorch Autograd Internals
 
 ```python
-# 계산 그래프 시각화 (간단한 예)
+# Visualize computational graph (simple example)
 import torch
 
 x = torch.tensor([1.0, 2.0], requires_grad=True)
 w = torch.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
 b = torch.tensor([0.5, 1.0], requires_grad=True)
 
-# 순전파
-z = w @ x + b  # 선형 변환
-a = torch.relu(z)  # 활성화
-loss = a.sum()  # 손실
+# Forward pass
+z = w @ x + b  # linear transformation
+a = torch.relu(z)  # activation
+loss = a.sum()  # loss
 
-print("계산 그래프 추적:")
+print("Computational graph trace:")
 print(f"grad_fn of z: {z.grad_fn}")
 print(f"grad_fn of a: {a.grad_fn}")
 print(f"grad_fn of loss: {loss.grad_fn}")
 
-# 역전파
+# Backpropagation
 loss.backward()
 
-print("\n그래디언트:")
+print("\nGradients:")
 print(f"∂L/∂x: {x.grad}")
 print(f"∂L/∂w:\n{w.grad}")
 print(f"∂L/∂b: {b.grad}")
@@ -591,19 +591,19 @@ print(f"∂L/∂b: {b.grad}")
 ### 6.4 Higher-Order Derivatives
 
 ```python
-# 2차 미분 (헤시안 대각선)
+# Second-order derivatives (Hessian diagonal)
 x = torch.tensor(2.0, requires_grad=True)
 y = x**4
 
-# 1차 미분
+# First derivative
 dy_dx = torch.autograd.grad(y, x, create_graph=True)[0]
 print(f"f(x) = x^4, f'(x) = 4x^3")
-print(f"f'(2) = {dy_dx.item()} (예상: {4*2**3})")
+print(f"f'(2) = {dy_dx.item()} (expected: {4*2**3})")
 
-# 2차 미분
+# Second derivative
 d2y_dx2 = torch.autograd.grad(dy_dx, x)[0]
 print(f"f''(x) = 12x^2")
-print(f"f''(2) = {d2y_dx2.item()} (예상: {12*2**2})")
+print(f"f''(2) = {d2y_dx2.item()} (expected: {12*2**2})")
 ```
 
 ### 6.5 Limitations of Automatic Differentiation and Manual Implementation
@@ -615,7 +615,7 @@ While automatic differentiation is convenient, manual implementation is sometime
 - Improved numerical stability
 
 ```python
-# 커스텀 autograd 함수
+# Custom autograd function
 class MyReLU(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x):
@@ -629,13 +629,13 @@ class MyReLU(torch.autograd.Function):
         grad_input[x < 0] = 0
         return grad_input
 
-# 사용
+# Usage
 x = torch.randn(5, requires_grad=True)
 y = MyReLU.apply(x)
 loss = y.sum()
 loss.backward()
 
-print("커스텀 ReLU 그래디언트:")
+print("Custom ReLU gradient:")
 print(f"x: {x.detach()}")
 print(f"y: {y.detach()}")
 print(f"∂L/∂x: {x.grad}")

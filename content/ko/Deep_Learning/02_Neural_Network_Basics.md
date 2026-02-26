@@ -14,14 +14,14 @@
 
 ## 1. 퍼셉트론 (Perceptron)
 
-가장 기본적인 신경망 단위입니다.
+가장 기본적인 신경망 단위입니다. 퍼셉트론은 생물학적 뉴런에서 느슨하게 영감을 받았습니다: 수상돌기(dendrite)가 신호(입력)를 받고, 세포체(soma)가 가중합을 계산하고, 축삭 소구(axon hillock)가 임계값(활성화 함수)을 적용하고, 축삭(axon)이 출력을 전달합니다. 실제 뉴런은 훨씬 복잡하지만, 이 비유는 핵심 아이디어를 잘 포착합니다 — 정보를 모으고, 집계하고, 결과에 따라 발화(fire)하거나 하지 않는 것입니다.
 
 ```
-입력(x₁) ──w₁──┐
-               │
-입력(x₂) ──w₂──┼──▶ Σ(wᵢxᵢ + b) ──▶ 활성화 ──▶ 출력(y)
-               │
-입력(x₃) ──w₃──┘
+Input(x₁) ──w₁──┐
+                │
+Input(x₂) ──w₂──┼──▶ Σ(wᵢxᵢ + b) ──▶ Activation ──▶ Output(y)
+                │
+Input(x₃) ──w₃──┘
 ```
 
 ### 수식
@@ -40,7 +40,7 @@ def perceptron(x, w, b, activation):
     z = np.dot(x, w) + b
     return activation(z)
 
-# 예시: 단순 선형 출력
+# Example: Simple linear output
 x = np.array([1.0, 2.0, 3.0])
 w = np.array([0.5, -0.3, 0.8])
 b = 0.1
@@ -51,6 +51,8 @@ z = np.dot(x, w) + b  # 1*0.5 + 2*(-0.3) + 3*0.8 + 0.1 = 2.4
 ---
 
 ## 2. 활성화 함수 (Activation Functions)
+
+비선형 활성화 함수가 없다면, N개의 선형 층을 쌓아도 결국 단일 행렬 곱셈 `W_N ... W_2 W_1 x = W x`로 축약됩니다. 네트워크가 아무리 깊어도 선형 매핑만 학습할 수 있습니다. 비선형 활성화 함수가 이 축약을 막아, 네트워크가 *임의의* 연속 함수를 근사할 수 있게 합니다 — 이를 **보편 근사 정리(Universal Approximation Theorem)**라고 합니다.
 
 비선형성을 추가하여 복잡한 패턴을 학습합니다.
 
@@ -63,6 +65,10 @@ z = np.dot(x, w) + b  # 1*0.5 + 2*(-0.3) + 3*0.8 + 0.1 = 2.4
 | ReLU | max(0, x) | 가장 많이 사용, 간단하고 효과적 |
 | Leaky ReLU | max(αx, x) | 음수 영역에서 작은 기울기 |
 | GELU | x·Φ(x) | Transformer에서 사용 |
+
+**왜 시그모이드는 기울기 소실을 유발할까요?** 시그모이드의 미분은 `σ'(x) = σ(x)(1 - σ(x))`이며, `x = 0`에서 최댓값 `σ'(0) = 0.25`에 도달합니다. 깊은 네트워크에서는 기울기가 층마다 곱해집니다. 10개 층만 지나도 기울기는 최대 `0.25^10 ≈ 0.0000009`으로 줄어들어 사실상 0이 됩니다. 초기 층은 거의 학습 신호를 받지 못해 학습이 정체됩니다.
+
+**ReLU가 이를 해결하는 이유:** 양수 입력에 대해 ReLU의 미분은 정확히 1이므로, 깊이에 관계없이 기울기가 그대로 통과합니다. 이것이 ReLU(와 그 변형들)가 훨씬 더 깊은 네트워크의 학습을 가능하게 한 이유입니다.
 
 ### NumPy 구현
 
@@ -94,18 +100,18 @@ y = F.tanh(x)
 여러 층을 쌓아 복잡한 함수를 근사합니다.
 
 ```
-입력층 ──▶ 은닉층1 ──▶ 은닉층2 ──▶ 출력층
-(n개)     (h1개)      (h2개)      (m개)
+Input Layer ──▶ Hidden Layer 1 ──▶ Hidden Layer 2 ──▶ Output Layer
+(n units)        (h1 units)          (h2 units)          (m units)
 ```
 
 ### 순전파 (Forward Pass)
 
 ```python
-# 2층 MLP 순전파
-z1 = x @ W1 + b1       # 첫 번째 선형 변환
-a1 = relu(z1)          # 활성화
-z2 = a1 @ W2 + b2      # 두 번째 선형 변환
-y = softmax(z2)        # 출력 (분류의 경우)
+# 2-layer MLP forward pass
+z1 = x @ W1 + b1       # First linear transformation
+a1 = relu(z1)          # Activation
+z2 = a1 @ W2 + b2      # Second linear transformation
+y = softmax(z2)        # Output (for classification)
 ```
 
 ---
@@ -120,6 +126,9 @@ PyTorch에서 신경망을 정의하는 표준 방법입니다.
 import torch
 import torch.nn as nn
 
+# Why inherit nn.Module?  It automatically tracks all parameters (for optimizer),
+# handles device transfer (model.to('cuda')), enables save/load (state_dict),
+# and provides training/eval mode switching.
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
@@ -127,6 +136,9 @@ class MLP(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.relu = nn.ReLU()
 
+    # Why define forward()?  This method is called automatically when you do
+    # model(x).  It defines the computation graph — the path data takes through
+    # layers.  PyTorch records each operation here for autograd.
     def forward(self, x):
         x = self.fc1(x)
         x = self.relu(x)
@@ -176,7 +188,7 @@ model.apply(init_weights)
 ### 데이터
 
 ```
-입력      출력
+Input      Output
 (0, 0) → 0
 (0, 1) → 1
 (1, 0) → 1
@@ -186,7 +198,7 @@ model.apply(init_weights)
 ### MLP 구조
 
 ```
-입력(2) ──▶ 은닉(4) ──▶ 출력(1)
+Input(2) ──▶ Hidden(4) ──▶ Output(1)
 ```
 
 ### PyTorch 구현
@@ -221,14 +233,14 @@ for epoch in range(1000):
 ### MLP 순전파
 
 ```python
-# NumPy (수동)
+# NumPy (manual)
 def forward_numpy(x, W1, b1, W2, b2):
     z1 = x @ W1 + b1
     a1 = np.maximum(0, z1)  # ReLU
     z2 = a1 @ W2 + b2
     return z2
 
-# PyTorch (자동)
+# PyTorch (automatic)
 class MLP(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -265,4 +277,4 @@ class MLP(nn.Module):
 
 ## 다음 단계
 
-[03_Backpropagation.md](./03_Backpropagation.md)에서 역전파 알고리즘을 NumPy로 직접 구현합니다.
+[역전파 이해](./03_Backpropagation.md)에서 역전파 알고리즘을 NumPy로 직접 구현합니다.

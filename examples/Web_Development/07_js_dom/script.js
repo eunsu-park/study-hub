@@ -17,6 +17,8 @@ function demoSelection() {
     const byClass = document.getElementsByClassName('myClass');
     result += `getElementsByClassName: ${byClass.length}개 요소\n`;
 
+    // Why: querySelector/All accept any CSS selector, making them far more flexible than
+    // getElementById/ClassName; they're the modern go-to for DOM queries
     // querySelector (첫 번째 일치)
     const byQuery = document.querySelector('.myClass');
     result += `querySelector('.myClass'): "${byQuery.textContent}"\n`;
@@ -109,6 +111,8 @@ function changeColor() {
     box.style.color = 'white';
 }
 
+// Why: classList.toggle is safer than manually checking/adding/removing classes,
+// avoiding duplicate class entries and reducing code from 4 lines to 1
 function toggleHighlight() {
     const box = document.getElementById('styleBox');
     box.classList.toggle('highlight');
@@ -188,6 +192,8 @@ eventBox.addEventListener('mouseleave', () => {
     eventBox.style.backgroundColor = '';
 });
 
+// Why: Manual throttle prevents mousemove from flooding the log (fires 60+ times/sec),
+// keeping the demo readable while still demonstrating the event
 // 마우스 이동 (throttle 적용)
 let lastMoveLog = 0;
 eventBox.addEventListener('mousemove', (e) => {
@@ -204,6 +210,8 @@ eventBox.addEventListener('contextmenu', (e) => {
     logEvent('우클릭 (기본 동작 방지됨)');
 });
 
+// Why: Event delegation attaches a single listener to the parent instead of one per card,
+// reducing memory usage and automatically handling dynamically added cards
 // ============================================
 // 6. 이벤트 위임
 // ============================================
@@ -257,6 +265,8 @@ document.getElementById('emailInput').addEventListener('blur', (e) => {
     e.target.style.borderColor = '';
 });
 
+// Why: preventDefault on submit stops the browser from reloading the page, letting JS
+// handle validation and async submission for a smoother user experience
 // submit 이벤트
 demoForm.addEventListener('submit', (e) => {
     e.preventDefault();  // 기본 동작 방지
@@ -318,6 +328,8 @@ document.querySelectorAll('.draggable').forEach(elem => {
     });
 });
 
+// Why: The browser's default behavior for dragover is to reject drops, so
+// preventDefault() is required to make an element a valid drop target
 // 드롭 존
 document.querySelectorAll('.drop-zone').forEach(zone => {
     zone.addEventListener('dragover', (e) => {

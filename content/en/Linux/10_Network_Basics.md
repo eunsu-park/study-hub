@@ -1,5 +1,24 @@
 # Network Basics
 
+**Previous**: [Shell Scripting](./09_Shell_Scripting.md) | **Next**: [System Monitoring](./11_System_Monitoring.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain IP addressing, subnetting, and common port assignments
+2. Check and configure network interfaces using ip addr, ip link, and ip route
+3. Test network connectivity with ping, traceroute, and mtr
+4. Perform DNS lookups using dig, nslookup, and host
+5. Inspect open ports and socket connections with ss, netstat, and lsof
+6. Connect to remote systems securely using SSH with key-based authentication
+7. Transfer files between systems using scp, rsync, and sftp
+8. Configure persistent network settings with Netplan (Ubuntu) and NetworkManager (CentOS)
+
+---
+
+Networking is what makes Linux servers useful -- without it, they are just expensive space heaters. Whether you are diagnosing why a web application is unreachable, setting up SSH access for remote administration, or configuring a static IP for a production server, networking commands are among the most frequently used tools in a system administrator's toolkit.
+
 ## 1. Basic Network Concepts
 
 ### IP Address
@@ -572,6 +591,4 @@ ls -la ~/test_sync/dest/
 
 ---
 
-## Next Steps
-
-Let's learn about system monitoring in [11_System_Monitoring.md](./11_System_Monitoring.md)!
+**Previous**: [Shell Scripting](./09_Shell_Scripting.md) | **Next**: [System Monitoring](./11_System_Monitoring.md)

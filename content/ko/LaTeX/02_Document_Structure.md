@@ -5,6 +5,19 @@
 > **사전 요구 사항**: 레슨 1 (소개 및 설치)
 > **목표**: 문서 클래스(Document Class), 전문부(preamble) 구성, 섹션 명령 및 복잡한 문서를 구성하는 기술 마스터하기
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 주어진 문서 유형에 적합한 문서 클래스(document class)를 선택하고 옵션을 구성할 수 있다
+2. 패키지 임포트(package import)와 전역 설정(global settings)을 포함한 체계적인 전문부(preamble)를 구성할 수 있다
+3. 섹션 명령(sectioning command)을 적용하여 자동 번호가 붙는 논리적 문서 계층 구조(hierarchy)를 만들 수 있다
+4. `\tableofcontents`, `\listoffigures`, `\listoftables` 명령으로 자동 목차(navigation aids)를 생성할 수 있다
+5. `\input`과 `\include`를 사용하여 대용량 문서를 여러 파일로 분리하고 마스터 문서(master document)로 관리할 수 있다
+6. 페이지 번호(page numbering), 표지(title page), 초록(abstract) 환경을 제어하여 학술 서식 기준을 충족할 수 있다
+
+---
+
 ## 문서 클래스
 
 모든 LaTeX 문서는 `\documentclass{...}`로 시작합니다. 문서 클래스는 문서의 전체 구조 및 서식 규칙을 정의합니다.
@@ -875,5 +888,5 @@ thesis/
 ---
 
 **탐색**
-- 이전: [01_Introduction_and_Setup.md](01_Introduction_and_Setup.md)
-- 다음: [03_Text_Formatting.md](03_Text_Formatting.md)
+- 이전: [LaTeX 소개](01_Introduction_and_Setup.md)
+- 다음: [텍스트 서식](03_Text_Formatting.md)

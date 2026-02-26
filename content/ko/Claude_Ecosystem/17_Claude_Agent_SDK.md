@@ -14,14 +14,17 @@ Claude Agent SDK(`claude-code-sdk`)는 Claude Code CLI를 구동하는 것과 �
 - Claude Code CLI 설치 (SDK가 이에 의존함)
 - 비동기 프로그래밍에 대한 친숙함 (Python asyncio 또는 TypeScript async/await)
 
-**학습 목표**:
-- Agent SDK의 아키텍처와 Claude Code와의 관계 이해하기
-- Python과 TypeScript에서 SDK 설치 및 구성하기
-- 커스텀 시스템 프롬프트와 도구 구성으로 에이전트 만들기
-- 에이전트 실행에서 스트리밍 이벤트 처리하기
-- 모델 선택, 턴 제한, 권한 설정 구성하기
-- SDK 기반 에이전트와 MCP 서버 통합하기
-- 에이전트 워크플로우에서 오류, 재시도, 엣지 케이스 처리하기
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Agent SDK의 아키텍처와 Claude Code와의 관계 이해하기
+2. Python과 TypeScript에서 SDK 설치 및 구성하기
+3. 커스텀 시스템 프롬프트와 도구 구성으로 에이전트 만들기
+4. 에이전트 실행에서 스트리밍 이벤트 처리하기
+5. 모델 선택, 턴 제한, 권한 설정 구성하기
+6. SDK 기반 에이전트와 MCP 서버 통합하기
+7. 에이전트 워크플로우에서 오류, 재시도, 엣지 케이스 처리하기
 
 ---
 

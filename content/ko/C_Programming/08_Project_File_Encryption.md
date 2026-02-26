@@ -1,14 +1,24 @@
 # 프로젝트 6: 파일 암호화 도구
 
-## 학습 목표
-
-이 프로젝트를 통해 배우는 내용:
-- 비트 연산 (AND, OR, XOR, NOT, shift)
-- 파일 바이트 단위 처리
-- 명령줄 인자 처리 (argc, argv)
-- 간단한 암호화 원리
+**이전**: [프로젝트 5: 연결 리스트](./07_Project_Linked_List.md) | **다음**: [프로젝트 7: 스택과 큐](./09_Project_Stack_Queue.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 비트 연산자(AND, OR, XOR, NOT, 시프트)를 적용하고 진리표(truth table)를 설명할 수 있습니다
+2. XOR의 자기 역원 속성(`A ^ B ^ B == A`)과 그것이 대칭 암호화(symmetric encryption)를 가능하게 하는 이유를 설명할 수 있습니다
+3. 바이너리 모드에서 `fread`, `fwrite`, `fgetc`, `fputc`를 사용하여 바이트 단위 파일 처리(byte-level file processing)를 구현할 수 있습니다
+4. 모드, 파일명, 키를 받기 위해 `argc`와 `argv`를 파싱하는 명령줄 도구(command-line tool)를 설계할 수 있습니다
+5. 매직 넘버(magic number), 버전, 키 해시, 원본 크기 헤더를 포함한 암호화 파일 형식을 구현할 수 있습니다
+6. 복호화 시 키 검증을 위한 간단한 해시 함수(djb2)를 구현할 수 있습니다
+7. XOR 암호화의 보안 한계를 파악하고 실제 운영 환경에 적합하지 않은 이유를 설명할 수 있습니다
+
+---
+
+비트 연산(bit operations)은 C에서 수행할 수 있는 가장 낮은 수준의 연산으로, 바이트 안의 개별 0과 1을 뒤집습니다. 암호화, 압축, 네트워크 프로토콜, 하드웨어 드라이버가 모두 비트 연산에 의존하고 있다는 것을 알기 전까지는 추상적으로 느껴질 수 있습니다. 이 프로젝트는 비트 연산자를 실용적으로 활용하여, 비밀번호로 모든 파일을 암호화하고 복원할 수 있는 파일 암호화 도구를 구현합니다.
 
 ## XOR 암호화 원리
 
@@ -16,18 +26,18 @@
 
 ```
 A XOR B = C
-C XOR B = A  ← 같은 키로 다시 XOR하면 원본 복원!
+C XOR B = A  <- XOR again with same key restores original!
 
-예:
+Example:
   01100001 (a = 97)
 ^ 00110000 (key = 48)
 -----------
-  01010001 (Q = 81)  암호화
+  01010001 (Q = 81)  Encrypted
 
   01010001 (Q = 81)
 ^ 00110000 (key = 48)
 -----------
-  01100001 (a = 97)  복호화!
+  01100001 (a = 97)  Decrypted!
 ```
 
 ### 특성
@@ -57,29 +67,29 @@ int main(void) {
     for (int i = 7; i >= 0; i--) printf("%d", (b >> i) & 1);
     printf(")\n\n");
 
-    // AND: 둘 다 1이면 1
+    // AND: 1 if both are 1
     printf("a & b = %d\n", a & b);   // 128
 
-    // OR: 하나라도 1이면 1
+    // OR: 1 if either is 1
     printf("a | b = %d\n", a | b);   // 254
 
-    // XOR: 다르면 1
+    // XOR: 1 if different
     printf("a ^ b = %d\n", a ^ b);   // 126
 
-    // NOT: 비트 반전
+    // NOT: bit inversion
     printf("~a    = %d\n", (unsigned char)~a);  // 53
 
-    // 왼쪽 시프트: 2배
-    printf("a << 1 = %d\n", a << 1);  // 148 (오버플로)
+    // Left shift: multiply by 2
+    printf("a << 1 = %d\n", a << 1);  // 148 (overflow)
 
-    // 오른쪽 시프트: 2로 나누기
+    // Right shift: divide by 2
     printf("a >> 1 = %d\n", a >> 1);  // 101
 
     return 0;
 }
 ```
 
-### 비트 연산 진리표
+### 비트 연산 진리표(Truth Table)
 
 | A | B | AND | OR | XOR |
 |---|---|-----|----|----|
@@ -105,21 +115,21 @@ void xor_encrypt(char *data, int len, char key) {
 
 int main(void) {
     char message[] = "Hello, World!";
-    char key = 'K';  // 간단한 단일 문자 키
+    char key = 'K';  // Simple single character key
 
-    printf("원본: %s\n", message);
+    printf("Original: %s\n", message);
 
-    // 암호화
+    // Encrypt
     xor_encrypt(message, strlen(message), key);
-    printf("암호화: ");
+    printf("Encrypted: ");
     for (int i = 0; message[i]; i++) {
         printf("%02X ", (unsigned char)message[i]);
     }
     printf("\n");
 
-    // 복호화 (같은 키로 다시 XOR)
+    // Decrypt (XOR again with same key)
     xor_encrypt(message, strlen(message), key);
-    printf("복호화: %s\n", message);
+    printf("Decrypted: %s\n", message);
 
     return 0;
 }
@@ -128,9 +138,9 @@ int main(void) {
 ### 실행 결과
 
 ```
-원본: Hello, World!
-암호화: 03 2E 27 27 24 67 52 18 24 31 27 2F 48
-복호화: Hello, World!
+Original: Hello, World!
+Encrypted: 03 2E 27 27 24 67 52 18 24 31 27 2F 48
+Decrypted: Hello, World!
 ```
 
 ---
@@ -140,23 +150,23 @@ int main(void) {
 ### 핵심 문법: 바이트 단위 파일 처리
 
 ```c
-// 바이트 단위 읽기/쓰기
+// Byte-level read/write
 FILE *fp = fopen("file.bin", "rb");
 
 int byte;
 while ((byte = fgetc(fp)) != EOF) {
-    // byte 처리
+    // process byte
 }
 
 fclose(fp);
 
-// 바이트 쓰기
+// Byte write
 FILE *fp = fopen("file.bin", "wb");
 fputc(encrypted_byte, fp);
 fclose(fp);
 ```
 
-### 핵심 문법: 명령줄 인자
+### 핵심 문법: 명령줄 인자(Command-Line Arguments)
 
 ```c
 // ./program arg1 arg2
@@ -186,7 +196,7 @@ int main(int argc, char *argv[]) {
 
 #define BUFFER_SIZE 4096
 
-// 함수 선언
+// Function declarations
 void print_usage(const char *program_name);
 int encrypt_file(const char *input_file, const char *output_file, const char *key);
 int decrypt_file(const char *input_file, const char *output_file, const char *key);
@@ -276,7 +286,7 @@ int encrypt_file(const char *input_file, const char *output_file, const char *ke
 }
 
 int decrypt_file(const char *input_file, const char *output_file, const char *key) {
-    // XOR 암호화는 암호화와 복호화가 동일
+    // XOR encryption and decryption are identical
     return encrypt_file(input_file, output_file, key);
 }
 ```
@@ -288,16 +298,16 @@ int decrypt_file(const char *input_file, const char *output_file, const char *ke
 ### 암호화 파일 형식
 
 ```
-┌─────────────────────────────────────────┐
-│              파일 헤더                  │
-├─────────────────────────────────────────┤
-│  Magic Number (4 bytes): "XENC"         │
-│  Version (1 byte): 1                    │
-│  Key Hash (4 bytes): 검증용             │
-│  Original Size (8 bytes): 원본 크기     │
-├─────────────────────────────────────────┤
-│              암호화된 데이터            │
-└─────────────────────────────────────────┘
++-----------------------------------------+
+|              File Header                |
++-----------------------------------------+
+|  Magic Number (4 bytes): "XENC"         |
+|  Version (1 byte): 1                    |
+|  Key Hash (4 bytes): for verification   |
+|  Original Size (8 bytes): original size |
++-----------------------------------------+
+|              Encrypted Data             |
++-----------------------------------------+
 ```
 
 ### 개선된 코드
@@ -314,7 +324,7 @@ int decrypt_file(const char *input_file, const char *output_file, const char *ke
 #define BUFFER_SIZE 4096
 #define HEADER_SIZE 17
 
-// 파일 헤더 구조체
+// File header struct
 typedef struct {
     char magic[4];
     uint8_t version;
@@ -322,7 +332,7 @@ typedef struct {
     uint64_t original_size;
 } FileHeader;
 
-// 간단한 해시 함수 (djb2)
+// Simple hash function (djb2)
 uint32_t hash_key(const char *key) {
     uint32_t hash = 5381;
     int c;
@@ -354,7 +364,7 @@ int encrypt_file(const char *input, const char *output, const char *key) {
         return 1;
     }
 
-    // 원본 파일 크기 확인
+    // Get original file size
     fseek(fin, 0, SEEK_END);
     uint64_t file_size = ftell(fin);
     fseek(fin, 0, SEEK_SET);
@@ -366,7 +376,7 @@ int encrypt_file(const char *input, const char *output, const char *key) {
         return 1;
     }
 
-    // 헤더 작성
+    // Write header
     FileHeader header;
     memcpy(header.magic, MAGIC, 4);
     header.version = VERSION;
@@ -374,7 +384,7 @@ int encrypt_file(const char *input, const char *output, const char *key) {
     header.original_size = file_size;
     fwrite(&header, sizeof(FileHeader), 1, fout);
 
-    // 데이터 암호화
+    // Encrypt data
     unsigned char buffer[BUFFER_SIZE];
     size_t bytes_read;
     size_t key_len = strlen(key);
@@ -400,7 +410,7 @@ int decrypt_file(const char *input, const char *output, const char *key) {
         return 1;
     }
 
-    // 헤더 읽기
+    // Read header
     FileHeader header;
     if (fread(&header, sizeof(FileHeader), 1, fin) != 1) {
         fprintf(stderr, "Error: Invalid encrypted file\n");
@@ -408,14 +418,14 @@ int decrypt_file(const char *input, const char *output, const char *key) {
         return 1;
     }
 
-    // 매직 넘버 확인
+    // Verify magic number
     if (memcmp(header.magic, MAGIC, 4) != 0) {
         fprintf(stderr, "Error: Not a valid encrypted file\n");
         fclose(fin);
         return 1;
     }
 
-    // 키 확인
+    // Verify key
     if (header.key_hash != hash_key(key)) {
         fprintf(stderr, "Error: Wrong password\n");
         fclose(fin);
@@ -429,7 +439,7 @@ int decrypt_file(const char *input, const char *output, const char *key) {
         return 1;
     }
 
-    // 데이터 복호화
+    // Decrypt data
     unsigned char buffer[BUFFER_SIZE];
     size_t bytes_read;
     size_t key_len = strlen(key);
@@ -519,25 +529,25 @@ int main(int argc, char *argv[]) {
 ## 컴파일 및 실행
 
 ```bash
-# 컴파일
+# Compile
 gcc -Wall -Wextra -std=c11 file_encrypt_v2.c -o encrypt
 
-# 테스트 파일 생성
+# Create test file
 echo "This is a secret message!" > secret.txt
 
-# 암호화
+# Encrypt
 ./encrypt encrypt secret.txt secret.enc mypassword
 
-# 파일 정보 확인
+# View file info
 ./encrypt info secret.enc
 
-# 복호화
+# Decrypt
 ./encrypt decrypt secret.enc decrypted.txt mypassword
 
-# 확인
+# Verify
 cat decrypted.txt
 
-# 잘못된 비밀번호로 시도
+# Try with wrong password
 ./encrypt decrypt secret.enc fail.txt wrongpassword
 # Error: Wrong password
 ```
@@ -586,7 +596,7 @@ This is a secret message!
 
 > **보안 경고**: XOR 암호화는 학습 목적으로만 사용하세요!
 > - 같은 키 반복 사용 시 패턴 노출
-> - 알려진 평문 공격에 취약
+> - 알려진 평문 공격(known plaintext attack)에 취약
 > - 실제 보안에는 AES, RSA 등 사용
 
 ---
@@ -624,3 +634,7 @@ C 언어 프로젝트 기반 학습을 완료했습니다.
 2. **알고리즘**: 정렬, 탐색, 재귀
 3. **시스템 프로그래밍**: 프로세스, 스레드, 소켓
 4. **임베디드 C**: 마이크로컨트롤러 프로그래밍
+
+---
+
+**이전**: [프로젝트 5: 연결 리스트](./07_Project_Linked_List.md) | **다음**: [프로젝트 7: 스택과 큐](./09_Project_Stack_Queue.md)

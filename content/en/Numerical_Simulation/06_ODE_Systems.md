@@ -1,14 +1,37 @@
 # ODE Systems
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Formulate coupled ODE systems and convert higher-order ODEs to first-order systems for numerical integration.
+2. Implement and analyze the Lotka-Volterra predator-prey model, interpreting the ecological dynamics from the solution.
+3. Simulate nonlinear pendulum motion and compare it to the linearized small-angle approximation.
+4. Implement the Lorenz system and explain how sensitive dependence on initial conditions leads to chaotic behavior.
+5. Apply phase plane analysis and trajectory visualization to interpret the qualitative behavior of ODE systems.
+
+---
+
 ## Overview
 
 Real physical systems are described by coupled ODE systems where multiple variables interact. We learn numerical solutions for coupled ODEs through various examples including ecosystem models, pendulum motion, and chaotic systems.
+
+**Why This Lesson Matters:** Single-variable ODEs can model isolated processes, but the natural world is full of interacting quantities: predator and prey populations, position and velocity of a pendulum, temperature and concentration in a reactor. Coupled ODE systems capture these interactions, and their solutions reveal emergent phenomena -- oscillations, chaos, pattern formation -- that no single equation can produce.
 
 ---
 
 ## 1. Lotka-Volterra (Predator-Prey)
 
+The Lotka-Volterra model is one of the simplest systems that produces sustained oscillations from pure interaction dynamics. Two species with no intrinsic oscillation create periodic boom-bust cycles purely through their coupling. This makes it a cornerstone example for understanding how nonlinear feedback generates complex dynamics.
+
 ### 1.1 Model Description
+
+The Lotka-Volterra equations model predator-prey interaction through two coupled ODEs:
+
+$$\frac{dx}{dt} = \alpha x - \beta x y \qquad \text{(prey growth minus predation)}$$
+$$\frac{dy}{dt} = \delta x y - \gamma y \qquad \text{(predator growth minus natural death)}$$
+
+where $x$ is prey population, $y$ is predator population, $\alpha$ is prey birth rate, $\beta$ is predation rate, $\gamma$ is predator death rate, and $\delta$ is predator conversion efficiency. The equilibrium point $(\gamma/\delta, \alpha/\beta)$ is a center, meaning nearby orbits are closed curves -- the system oscillates perpetually without damping or amplification.
 
 ```python
 import numpy as np
@@ -131,7 +154,15 @@ lv_phase_portrait()
 
 ## 2. Pendulum Motion
 
+**Why the pendulum?** The simple pendulum bridges linear and nonlinear dynamics. At small angles, $\sin\theta \approx \theta$ and the motion is perfectly harmonic. As the amplitude grows, the nonlinearity $\sin\theta$ causes the period to depend on amplitude -- a phenomenon impossible in linear systems. At angles near $\pi$, the pendulum approaches its separatrix and the dynamics become qualitatively different (rotation vs. oscillation).
+
 ### 2.1 Simple Pendulum
+
+The equation of motion for a simple pendulum of length $L$ in gravitational field $g$ is:
+
+$$\ddot{\theta} + \frac{g}{L}\sin\theta = 0$$
+
+Converting to a first-order system with $\omega = \dot{\theta}$: the state $(\theta, \omega)$ traces closed orbits in phase space for oscillatory motion, but open curves for rotational motion (when the pendulum swings over the top).
 
 ```python
 def simple_pendulum():
@@ -170,6 +201,8 @@ simple_pendulum()
 ```
 
 ### 2.2 Damped Driven Pendulum
+
+Adding damping ($\gamma\dot{\theta}$) and periodic driving ($A\cos\omega_d t$) transforms the pendulum into one of the simplest systems that exhibits chaos. The competition between energy injection (driving), energy dissipation (damping), and nonlinear restoring force ($\sin\theta$) creates a rich parameter space where periodic, quasiperiodic, and chaotic motions coexist.
 
 ```python
 def driven_pendulum():
@@ -240,6 +273,8 @@ driven_pendulum()
 ```
 
 ### 2.3 Double Pendulum
+
+The double pendulum is a 4-dimensional system ($\theta_1, \theta_2, \omega_1, \omega_2$) that exhibits chaos even without external driving. The Lagrangian mechanics yields coupled, highly nonlinear equations of motion. Tiny differences in initial conditions lead to exponentially diverging trajectories -- the hallmark of deterministic chaos.
 
 ```python
 def double_pendulum():
@@ -334,7 +369,15 @@ double_pendulum()
 
 ## 3. Lorenz System (Chaos)
 
+Edward Lorenz discovered this system in 1963 while studying a simplified model of atmospheric convection. It demonstrated that deterministic systems can produce apparently random behavior, launching the field of chaos theory. The Lorenz attractor became the iconic image of "the butterfly effect."
+
 ### 3.1 Basic Simulation
+
+The Lorenz system consists of three coupled ODEs derived from a truncated Fourier expansion of the Rayleigh-Benard convection equations:
+
+$$\dot{x} = \sigma(y - x), \quad \dot{y} = x(\rho - z) - y, \quad \dot{z} = xy - \beta z$$
+
+Here $\sigma$ (Prandtl number) controls the ratio of viscous to thermal diffusion, $\rho$ (Rayleigh number) measures the strength of convective driving, and $\beta$ relates to the aspect ratio of convection cells. At the standard parameters $\sigma=10, \rho=28, \beta=8/3$, the system has a strange attractor with fractal dimension $\approx 2.06$.
 
 ```python
 def lorenz_system():
@@ -512,6 +555,12 @@ print("Bifurcation diagram computation takes a long time.")
 ## 4. Other Systems
 
 ### 4.1 SIR Epidemic Model
+
+The SIR model partitions a population into three compartments and describes epidemic dynamics with two parameters:
+
+$$\frac{dS}{dt} = -\beta SI, \quad \frac{dI}{dt} = \beta SI - \gamma I, \quad \frac{dR}{dt} = \gamma I$$
+
+The basic reproduction number $R_0 = \beta/\gamma$ determines whether an epidemic occurs: if $R_0 > 1$, each infected individual infects more than one susceptible, and the epidemic grows. The herd immunity threshold $1 - 1/R_0$ gives the fraction that must be immune to prevent outbreaks.
 
 ```python
 def sir_model():

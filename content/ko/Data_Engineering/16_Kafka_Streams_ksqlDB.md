@@ -1,5 +1,18 @@
 # Kafka Streams와 ksqlDB
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 유한(배치) 데이터와 무한(스트림) 데이터 처리의 근본적인 차이를 설명하고, 이벤트 시간(Event Time), 처리 시간(Processing Time), 워터마크(Watermark)를 구분할 수 있습니다.
+2. Kafka Streams 토폴로지(Topology) 모델에서 소스 프로세서, 상태 비저장 변환(filter, map, flatMap), 상태 저장소(State Store)를 활용한 상태 저장 연산을 설명할 수 있습니다.
+3. Kafka Streams 또는 파이썬 Faust를 사용하여 텀블링(Tumbling), 호핑(Hopping), 세션(Session) 윈도우 집계와 스트림-테이블 조인을 구현할 수 있습니다.
+4. ksqlDB 쿼리를 작성하여 스트림과 테이블을 생성하고, 실시간 필터링 및 집계를 수행하며, 대화형 접근을 위한 결과를 구체화할 수 있습니다.
+5. 이벤트 소싱(Event Sourcing), CQRS, 구체화 뷰(Materialized Views) 등의 스트림 처리 패턴을 실제 데이터 엔지니어링 문제에 적용할 수 있습니다.
+6. 적절한 오류 처리, 데드 레터 큐(Dead Letter Queue), 정확히 한 번(Exactly-Once) 시맨틱을 갖춘 스트림 처리 파이프라인을 설계할 수 있습니다.
+
+---
+
 ## 개요
 
 Kafka Streams는 Apache Kafka 위에서 실시간 스트림 처리(stream processing) 애플리케이션을 구축하기 위한 클라이언트 라이브러리입니다. ksqlDB는 SQL 인터페이스를 통해 스트림 처리를 확장합니다. 이 레슨에서는 스트림 처리 개념, Faust(파이썬 Kafka Streams), 윈도우 집계(windowed aggregation), 조인(join), 그리고 대화형 쿼리를 위한 ksqlDB를 다룹니다.
@@ -113,15 +126,20 @@ Faust is a Python stream processing library inspired by Kafka Streams.
 
 import faust
 
-# Create Faust app (connects to Kafka)
+# Faust 앱 생성 (Kafka에 연결)
+# RocksDB는 LSM-트리 성능으로 지속적이고 충돌 복구 가능한 키-값 스토리지를 제공하기 때문에
+# 상태 저장소로 선택됩니다 — 고처리량 스트림 집계에 이상적입니다.
+# 대안(인메모리 스토어)은 빠르지만 재시작 시 상태를 잃습니다
 app = faust.App(
     'my_stream_app',
     broker='kafka://localhost:9092',
-    store='rocksdb://',  # State store backend
+    store='rocksdb://',  # 상태 저장소 백엔드
     topic_replication_factor=1,
 )
 
-# Define data model
+# Faust Records는 타입화된 역직렬화를 제공합니다 — 들어오는 JSON 메시지가
+# 타입 검증과 함께 Order 객체로 자동 파싱되어
+# 파이프라인 초기에 잘못된 메시지를 포착합니다
 class Order(faust.Record):
     order_id: str
     user_id: str
@@ -131,7 +149,9 @@ class Order(faust.Record):
 # Define input topic
 orders_topic = app.topic('orders', value_type=Order)
 
-# Simple stream processor: filter high-value orders
+# @app.agent은 비동기 제너레이터로 실행되는 스트림 프로세서를 생성합니다.
+# 각 에이전트 인스턴스는 하나 이상의 Kafka 파티션에서 소비하여
+# 더 많은 워커 프로세스를 추가함으로써 수평 확장이 가능합니다
 @app.agent(orders_topic)
 async def process_orders(orders):
     async for order in orders:
@@ -156,7 +176,9 @@ class PageView(faust.Record):
 
 page_views_topic = app.topic('page_views', value_type=PageView)
 
-# Table: persistent key-value store (backed by Kafka changelog topic)
+# Table = Kafka Streams 용어의 KTable: Kafka 변경 로그 토픽으로 백업된 지속적 키-값 스토어.
+# 이 워커가 충돌하면 새 워커가 변경 로그를 재생하여 테이블을 재빌드합니다 — 자동 장애 복구.
+# partitions=8은 코-파티셔닝을 위해 소스 토픽의 파티션 수와 일치해야 합니다
 page_view_counts = app.Table(
     'page_view_counts',
     default=int,
@@ -169,12 +191,15 @@ async def count_views(views):
     async for view in views:
         page_view_counts[view.page] += 1
 
-# Expose counts via HTTP endpoint
+# Faust는 임시 디버깅과 경량 대시보드를 위해 HTTP를 통해 테이블을 노출합니다.
+# 프로덕션에서는 집계를 외부 스토어(Redis, Postgres)로 밀어내는 것을 선호하세요
 @app.page('/counts/')
 async def get_counts(self, request):
     return self.json({k: v for k, v in page_view_counts.items()})
 
-# Windowed table: count per page per hour
+# 호핑 윈도우: 텀블링 윈도우보다 부드러운 트렌드 곡선을 제공하는 겹치는 시간 윈도우.
+# size=1h, step=10min은 각 이벤트가 6개의 겹치는 윈도우에 기여하여 "이동 평균" 효과를 줍니다.
+# expires=24h는 무제한 스토리지 성장을 방지하기 위해 RocksDB에서 오래된 윈도우를 자동 삭제합니다
 hourly_counts = app.Table(
     'hourly_page_views',
     default=int,
@@ -206,20 +231,25 @@ class Event(faust.Record):
 events_topic = app.topic('events', value_type=Event)
 filtered_topic = app.topic('high_value_events', value_type=Event)
 
-# Filter
+# Filter — 상태 비저장 연산: 각 이벤트는 독립적으로 평가됩니다.
+# 필터링된 이벤트는 별도 토픽으로 전달되어 다운스트림 소비자(예: 알림)가
+# 관련 이벤트만 받아 처리 부하와 컨슈머 랙을 줄입니다
 @app.agent(events_topic)
 async def filter_events(events):
     async for event in events.filter(lambda e: e.value > 100):
         await filtered_topic.send(value=event)
 
-# Group by
+# Group by — event_type으로 스트림을 재파티셔닝하여 같은 타입의 이벤트를
+# 같은 Kafka 파티션으로 보냅니다. 이는 상태 저장 집계(count, sum) 전에 필수로,
+# 주어진 키의 모든 이벤트가 동일한 워커 인스턴스에서 처리되도록 보장합니다
 @app.agent(events_topic)
 async def group_by_type(events):
     async for event in events.group_by(Event.event_type):
-        # Events are now partitioned by event_type
         print(f"Type: {event.event_type}, Value: {event.value}")
 
-# Map / Transform
+# Map / Transform — 강화는 인플라이트(in-flight)에서 파생 필드를 추가합니다.
+# 벽시계 시간 대신 message.timestamp(Kafka 수신 시간)를 사용하면
+# 이벤트 재생 또는 재처리 중에도 일관된 결과를 보장합니다
 @app.agent(events_topic)
 async def enrich_events(events):
     async for event in events:
@@ -270,7 +300,11 @@ class Transaction(faust.Record):
 
 transactions_topic = app.topic('transactions', value_type=Transaction)
 
-# Tumbling window: total spending per user per 5 minutes
+# 텀블링 윈도우: 비겹치는 5분 버킷.
+# 각 거래는 정확히 하나의 윈도우에 속하여 의미론이 단순하고
+# 출력을 차트로 그리기 쉽습니다 (5분 간격마다 한 데이터 포인트).
+# expires=1h는 RocksDB에서 오래된 윈도우를 자동 정리합니다 — 없으면 상태가
+# 무한히 증가하여 결국 디스크 공간이 소진됩니다
 tumbling_spending = app.Table(
     'tumbling_spending',
     default=float,
@@ -283,10 +317,15 @@ tumbling_spending = app.Table(
 async def aggregate_tumbling(transactions):
     async for txn in transactions:
         tumbling_spending[txn.user_id] += txn.amount
+        # .current()는 과거 윈도우가 아닌 현재 활성 윈도우의 값만 반환합니다
+        # — 실시간 알림에 중요합니다
         current = tumbling_spending[txn.user_id].current()
         print(f"User {txn.user_id} 5-min spending: ${current:.2f}")
 
-# Hopping window: total spending per user, 10-min window every 5 min
+# 호핑 윈도우: 텀블링보다 부드러운 집계를 제공하는 겹치는 윈도우.
+# size=10min, step=5min은 윈도우가 50% 겹쳐 경계 근처의 거래가
+# 두 윈도우에 기여합니다 — 정확한 윈도우 정렬과 관계없이 지출 급증을
+# 포착하고 싶은 사기 탐지에 유용합니다
 hopping_spending = app.Table(
     'hopping_spending',
     default=float,
@@ -345,15 +384,23 @@ class UserProfile(faust.Record):
 orders_topic = app.topic('orders', value_type=Order)
 profiles_topic = app.topic('profiles', value_type=UserProfile)
 
-# KTable for user profiles (latest profile per user)
+# 사용자 프로필을 위한 KTable: user_id별 최신 프로필만 저장합니다.
+# 이는 천천히 변하는 참조 데이터에 올바른 추상화입니다 —
+# KStream을 사용하면 모든 과거 프로필을 누적하여 메모리를 낭비하고
+# 조회 시 오래된 데이터를 반환합니다
 user_profiles = app.Table('user_profiles', default=None)
 
 @app.agent(profiles_topic)
 async def update_profiles(profiles):
     async for profile in profiles:
+        # 업서트 의미론: 각 새 프로필 메시지가 이전 것을 덮어씁니다.
+        # 이 테이블을 백업하는 변경 로그 토픽이 장애 허용을 제공합니다
         user_profiles[profile.user_id] = profile
 
-# KStream-KTable join: enrich orders with user profiles
+# KStream-KTable 조인: 가장 일반적인 스트림 강화 패턴.
+# 주문 스트림(무한, 고속도)이 프로필 테이블(최신 스냅샷)로 강화됩니다.
+# 이는 윈도우가 필요하고 잠재적으로 매칭을 놓칠 수 있는
+# KStream-KStream 조인보다 훨씬 더 효율적입니다
 @app.agent(orders_topic)
 async def enrich_orders(orders):
     async for order in orders:
@@ -361,6 +408,8 @@ async def enrich_orders(orders):
         if profile:
             print(f"Order {order.order_id}: {profile.name} ({profile.tier}) - ${order.amount}")
         else:
+            # 누락된 프로필의 우아한 처리: 충돌 대신 로그합니다.
+            # 프로덕션에서는 이것들을 조사를 위해 데드 레터 토픽으로 라우팅하세요
             print(f"Order {order.order_id}: Unknown user {order.user_id} - ${order.amount}")
 ```
 
@@ -391,7 +440,11 @@ Key Concepts:
 ### 6.2 ksqlDB SQL 예제
 
 ```sql
--- Create a STREAM from a Kafka topic
+-- Kafka 토픽에서 STREAM을 생성합니다.
+-- STREAM = 이벤트의 무한 시퀀스 (삽입 의미론, KStream과 유사).
+-- TIMESTAMP = 'order_time'은 윈도우가 Kafka의 수신 타임스탬프가 아닌
+-- 데이터에 내장된 이벤트 시간을 사용하도록 ksqlDB에 지시합니다 —
+-- 이벤트가 순서 없이 도착할 때 올바른 윈도우 집계에 중요합니다
 CREATE STREAM orders_stream (
     order_id VARCHAR KEY,
     user_id VARCHAR,
@@ -404,7 +457,9 @@ CREATE STREAM orders_stream (
     TIMESTAMP = 'order_time'
 );
 
--- Create a TABLE (latest state per key)
+-- TABLE = 키별 최신값의 구체화된 뷰 (KTable과 유사).
+-- PRIMARY KEY는 업서트 의미론을 위해 어떤 필드를 사용할지 ksqlDB에 알립니다 —
+-- 동일한 user_id를 가진 새 메시지가 이전 값을 덮어씁니다
 CREATE TABLE user_profiles (
     user_id VARCHAR PRIMARY KEY,
     name VARCHAR,
@@ -415,14 +470,18 @@ CREATE TABLE user_profiles (
     VALUE_FORMAT = 'JSON'
 );
 
--- Filter stream: create a new stream of high-value orders
+-- 지속 쿼리: 연속 실행하며 결과를 새 Kafka 토픽에 씁니다.
+-- 이것은 일회성 쿼리가 아닙니다 — 실시간으로 모든 새 이벤트를 처리합니다.
+-- 출력 토픽은 알림 시스템이나 다른 애플리케이션에서 소비할 수 있습니다
 CREATE STREAM high_value_orders AS
 SELECT *
 FROM orders_stream
 WHERE amount > 1000
 EMIT CHANGES;
 
--- Windowed aggregation: orders per user per hour
+-- TABLE로 구체화된 윈도우 집계.
+-- TUMBLING (SIZE 1 HOUR)은 비겹치는 시간별 버킷을 생성합니다.
+-- 결과는 실시간 대시보드를 위해 풀 쿼리로 조회 가능합니다
 CREATE TABLE hourly_user_orders AS
 SELECT
     user_id,
@@ -435,7 +494,9 @@ WINDOW TUMBLING (SIZE 1 HOUR)
 GROUP BY user_id
 EMIT CHANGES;
 
--- Stream-Table join: enrich orders with user profiles
+-- 스트림-테이블 조인: 모든 주문 이벤트를 사용자의 현재 프로필로 강화합니다.
+-- LEFT JOIN은 사용자 프로필이 없을 때도 주문이 출력되도록 보장합니다
+-- (예: 프로필 토픽에 아직 없는 신규 사용자), 데이터 손실을 방지합니다
 CREATE STREAM enriched_orders AS
 SELECT
     o.order_id,
@@ -448,17 +509,23 @@ FROM orders_stream o
 LEFT JOIN user_profiles u ON o.user_id = u.user_id
 EMIT CHANGES;
 
--- Pull query: point-in-time lookup (REST API)
+-- 풀 쿼리: 구체화된 테이블에 대한 동기적 시점 조회.
+-- 현재 값이 필요한 REST API와 대시보드에 적합합니다
 SELECT * FROM hourly_user_orders WHERE user_id = 'user_123';
 
--- Push query: continuous updates (Server-Sent Events)
+-- 푸시 쿼리: 결과를 Server-Sent Events로 스트리밍하는 장기 실행 쿼리.
+-- 풀 쿼리와 달리 푸시 쿼리는 연결을 열어두고 실시간으로 모든
+-- 매칭 이벤트를 출력합니다 — 라이브 모니터링 UI에 이상적입니다
 SELECT * FROM enriched_orders WHERE amount > 500 EMIT CHANGES;
 ```
 
 ### 6.3 ksqlDB 커넥터(Connectors)
 
 ```sql
--- Source connector: Import data from PostgreSQL into Kafka
+-- 소스 커넥터: PostgreSQL에서 Kafka 토픽으로 데이터베이스 변경(CDC)을 스트리밍합니다.
+-- Debezium은 PostgreSQL의 WAL(Write-Ahead Log)을 통해 행 수준 변경을 캡처합니다.
+-- 소스 데이터베이스에 비침습적입니다 (폴링 없음, 트리거 없음).
+-- 각 캡처된 변경은 ksqlDB가 실시간으로 처리할 수 있는 Kafka 이벤트가 됩니다
 CREATE SOURCE CONNECTOR pg_source WITH (
     'connector.class' = 'io.debezium.connector.postgresql.PostgresConnector',
     'database.hostname' = 'postgres',
@@ -466,11 +533,17 @@ CREATE SOURCE CONNECTOR pg_source WITH (
     'database.user' = 'replicator',
     'database.password' = 'secret',
     'database.dbname' = 'mydb',
+    -- table.include.list는 특정 테이블로 캡처를 제한하여
+    -- 전체 데이터베이스 캡처 대비 Kafka 스토리지와 네트워크 오버헤드를 줄입니다
     'table.include.list' = 'public.orders,public.users',
     'topic.prefix' = 'pg'
 );
 
--- Sink connector: Export processed data to Elasticsearch
+-- 싱크 커넥터: 처리된 스트림 데이터를 전체 텍스트 검색과 시각화를 위해
+-- Elasticsearch로 내보냅니다. 이는 Kafka 토픽과 거의 실시간으로 동기화된
+-- 구체화된 뷰를 Elasticsearch에 생성합니다.
+-- key.ignore=true는 Elasticsearch가 문서 ID를 자동 생성하게 하며
+-- 추가 전용 이벤트 데이터에 적합합니다
 CREATE SINK CONNECTOR es_sink WITH (
     'connector.class' = 'io.confluent.connect.elasticsearch.ElasticsearchSinkConnector',
     'connection.url' = 'http://elasticsearch:9200',
@@ -563,6 +636,76 @@ Given a clickstream topic with: user_id, page_url, timestamp
 4. Build a table of user engagement metrics (avg session duration, bounce rate)
 */
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: 실시간 거래 집계기
+
+여러 윈도우 유형으로 거래 데이터를 동시에 집계하는 Faust 애플리케이션을 구축하세요:
+
+1. `user_id`, `merchant`, `amount`, `category`, `timestamp` 필드를 가진 `Transaction` 레코드를 정의하세요
+2. 동일한 거래 스트림에 세 개의 별도 테이블을 생성하세요:
+   - 사용자별 총 지출을 추적하는 **텀블링(tumbling)** 5분 테이블
+   - 가맹점별 거래 건수를 추적하는 **호핑(hopping)** 10분(step=2분) 테이블
+   - 사용자 세션당 거래 건수를 계산하는 **세션(session)** 테이블(30초 갭)
+3. 텀블링 윈도우가 업데이트될 때마다, 사용자의 5분 누적 금액이 $500을 초과하면 알림을 출력하세요
+4. 현재 텀블링 집계 합계를 JSON으로 반환하는 Faust HTTP 엔드포인트를 `/spending/`에 노출하세요
+5. 각 테이블에 `expires`가 설정되어야 하는 이유와, 없을 경우 RocksDB 상태(state)에 어떤 일이 발생하는지 주석으로 설명하세요
+
+### 연습 2: KStream-KTable 데이터 강화 파이프라인
+
+Faust를 사용하여 주문 이벤트를 사용자 프로필 테이블과 조인하는 스트림 강화(enrichment) 파이프라인을 구현하세요:
+
+1. `Order`(order_id, user_id, product_id, amount)와 `UserProfile`(user_id, name, tier, credit_limit) 레코드를 정의하세요
+2. 새 프로필 이벤트가 도착할 때마다 최신 상태를 유지하는 `user_profiles` KTable을 관리하세요
+3. 각 수신 주문에 대해:
+   - KTable에서 사용자의 이름과 등급(tier)으로 주문을 강화(enrich)하세요
+   - 사용자 프로필이 없으면 `missing_profile_orders` 토픽(데드 레터 큐)으로 라우팅하세요
+   - 주문 금액이 사용자의 `credit_limit`을 초과하면 `credit_alerts` 토픽으로 라우팅하세요
+4. 사용자 등급별 신용 한도 초과 알림 수를 집계하는 텀블링 1시간 테이블을 유지하세요
+5. 프로필 조회에 KTable이 KStream보다 올바른 추상화인 이유를 주석으로 설명하세요
+
+### 연습 3: ksqlDB 사기 탐지 파이프라인
+
+의심스러운 거래 패턴을 감지하는 완전한 ksqlDB 파이프라인을 작성하세요:
+
+```sql
+-- 원시 거래 스트림 시작점: (txn_id, user_id, amount, merchant, country, txn_time)
+-- 다음 파이프라인을 구축하세요:
+
+-- 1단계: 이벤트 시간(Event Time) 의미론을 사용하는 소스 스트림 생성
+-- 2단계: 사용자별 롤링(rolling) 1시간 지출 합계의 TABLE 생성
+-- 3단계: 다음 조건의 거래 STREAM 생성:
+--         (a) 단일 금액 > $2000, 또는
+--         (b) 사용자의 롤링 1시간 합계가 $5000 초과
+-- 4단계: 경보 스트림을 사용자 프로필 테이블과 조인하여 이메일 추가
+-- 5단계: 경보 스트림을 지속적으로 모니터링하는 푸시 쿼리(push query) 작성
+-- 6단계: 특정 user_id의 현재 롤링 합계를 확인하는 풀 쿼리(pull query) 작성
+```
+
+각 단계에서 해당 ksqlDB 구조체(STREAM vs TABLE, EMIT CHANGES vs 시점 조회)를 선택한 이유를 주석으로 설명하세요.
+
+### 연습 4: 데드 레터 큐(Dead Letter Queue)와 오류 처리
+
+연습 2의 Faust 주문 강화 파이프라인을 확장하여 프로덕션 수준의 오류 처리를 추가하세요:
+
+1. 강화 로직을 try/except 블록으로 감싸고, 예외 발생 시 원시 이벤트를 `dead_letter_orders` Faust 토픽에 `error_reason` 필드와 함께 직렬화하세요
+2. `dead_letter_orders`를 소비하여 오류 유형별 건수를 테이블로 유지하는 두 번째 Faust 에이전트를 생성하세요
+3. 오류 건수를 JSON으로 반환하는 Faust HTTP 엔드포인트를 `/dlq/stats/`에 추가하세요
+4. 지수 백오프(exponential backoff) 재시도 로직을 구현하세요: KTable에 사용자 프로필이 없으면 100ms, 200ms, 400ms 간격으로 최대 3번 재시도 후 데드 레터 큐(DLQ)로 라우팅하세요
+5. 정확히 한 번(exactly-once) 시맨틱이 재시도 로직과 어떻게 상호작용하는지, 데드 레터 토픽에 멱등적(idempotent) 쓰기가 중요한 이유를 주석으로 설명하세요
+
+### 연습 5: 다중 소스 조인과 세션 분석
+
+클릭스트림(clickstream)과 구매 이벤트를 연관 짓는 고급 파이프라인을 설계하세요:
+
+1. 두 개의 Faust 토픽을 생성하세요: `page_views`(user_id, page, session_id, timestamp)와 `purchases`(user_id, order_id, amount, timestamp)
+2. 세션 기반 집계 구현: `page_views`에 30분 세션 윈도우를 적용하여 세션당 페이지 조회 수를 계산하세요
+3. 구매 이벤트와 세션 데이터를 조인: 각 구매에 대해 구매 30분 이전에 종료된 세션에서 사용자가 몇 페이지를 조회했는지 조회하세요
+4. ksqlDB 동등 구현: 구매 이벤트를 `pages_in_session` 수로 강화하는 STREAM-TABLE 조인을 작성하세요
+5. `conversion_events` 토픽(`{user_id, order_id, amount, pages_in_session}`)을 생성하고, ksqlDB TABLE을 사용하여 금액 구간(0-50, 50-200, 200+)별로 전환 사용자의 평균 `pages_in_session`을 계산하세요
 
 ---
 

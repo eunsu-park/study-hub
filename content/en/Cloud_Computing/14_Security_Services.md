@@ -1,5 +1,24 @@
 # Security Services
 
+**Previous**: [Identity and Access Management](./13_Identity_Access_Management.md) | **Next**: [CLI and SDK](./15_CLI_and_SDK.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the layered security model from infrastructure to application level
+2. Compare AWS and GCP security services across network, data, and application layers
+3. Configure encryption at rest and in transit using managed key services (KMS)
+4. Implement web application firewalls (WAF) and DDoS protection (Shield/Cloud Armor)
+5. Use vulnerability scanning and compliance auditing tools (Inspector, Security Command Center)
+6. Design a defense-in-depth security architecture using multiple cloud security services
+
+---
+
+Cloud providers offer a rich set of security services that go far beyond basic firewalls. From encryption key management and DDoS protection to automated vulnerability scanning and compliance monitoring, these tools form the layers of a defense-in-depth strategy. Understanding which services exist and how they fit together is essential for protecting cloud workloads against evolving threats.
+
 ## 1. Security Overview
 
 ### 1.1 Cloud Security Layers
@@ -560,6 +579,243 @@ gcloud projects set-iam-policy PROJECT_ID policy.json
 
 - [15_CLI_and_SDK.md](./15_CLI_and_SDK.md) - CLI/SDK Automation
 - [13_Identity_Access_Management.md](./13_Identity_Access_Management.md) - IAM Details
+
+---
+
+## Exercises
+
+### Exercise 1: Defense-in-Depth Layer Mapping
+
+A company runs a web application on EC2 behind an ALB. Match each security concern to the appropriate AWS service or feature that addresses it.
+
+| Security Concern | AWS Service / Feature |
+|---|---|
+| Block SQL injection attacks from the internet | ? |
+| Detect suspicious API calls (e.g., unusual IAM activity) | ? |
+| Encrypt the RDS database at rest with a customer-managed key | ? |
+| Prevent direct internet access to the EC2 instances | ? |
+| Rotate the database password automatically every 30 days | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Security Concern | AWS Service / Feature |
+|---|---|
+| Block SQL injection attacks from the internet | AWS WAF with AWSManagedRulesSQLiRuleSet |
+| Detect suspicious API calls (e.g., unusual IAM activity) | Amazon GuardDuty |
+| Encrypt the RDS database at rest with a customer-managed key | AWS KMS (customer managed key) + RDS encryption |
+| Prevent direct internet access to the EC2 instances | Private subnet (no public IP) + Security Group (no inbound from 0.0.0.0/0) |
+| Rotate the database password automatically every 30 days | AWS Secrets Manager with automatic rotation |
+
+Defense-in-depth means each layer handles a different threat vector: WAF at the application edge, GuardDuty at the account level, KMS for data at rest, VPC/SGs for network access, and Secrets Manager for credential hygiene.
+
+</details>
+
+---
+
+### Exercise 2: KMS Encryption Workflow
+
+You need to encrypt a sensitive configuration file before storing it in S3. Write the AWS CLI commands to:
+1. Create a customer managed KMS key with alias `alias/config-key`
+2. Encrypt `config.json` using that key
+3. Configure the S3 bucket `my-config-bucket` to use SSE-KMS with `alias/config-key` by default
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Step 1: Create customer managed key
+aws kms create-key \
+    --description "Config file encryption key" \
+    --key-usage ENCRYPT_DECRYPT \
+    --origin AWS_KMS
+
+# Note the KeyId from the output, then create alias
+aws kms create-alias \
+    --alias-name alias/config-key \
+    --target-key-id <KeyId-from-above>
+
+# Step 2: Encrypt the file
+aws kms encrypt \
+    --key-id alias/config-key \
+    --plaintext fileb://config.json \
+    --output text \
+    --query CiphertextBlob | base64 --decode > config.json.enc
+
+# Step 3: Set bucket default encryption
+aws s3api put-bucket-encryption \
+    --bucket my-config-bucket \
+    --server-side-encryption-configuration '{
+        "Rules": [{
+            "ApplyServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": "alias/config-key"
+            }
+        }]
+    }'
+```
+
+Key points:
+- Customer managed keys (CMK) give you control over key policy, rotation, and deletion
+- SSE-KMS encrypts objects automatically on upload; no need to manually encrypt each file
+- For manual `kms encrypt`, the output is base64-encoded and must be decoded before storage
+
+</details>
+
+---
+
+### Exercise 3: WAF Rule Design
+
+Your e-commerce API endpoint `POST /api/checkout` is receiving automated abuse — bots are submitting thousands of fake orders per minute from various IPs. Design a GCP Cloud Armor policy to mitigate this. Write the relevant `gcloud` commands.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Create the security policy
+gcloud compute security-policies create checkout-protection \
+    --description="Protect checkout endpoint from abuse"
+
+# Rule 1: Block known bad actors (SQL injection)
+gcloud compute security-policies rules create 1000 \
+    --security-policy=checkout-protection \
+    --expression="evaluatePreconfiguredWaf('sqli-v33-stable')" \
+    --action=deny-403
+
+# Rule 2: Rate limit — allow max 10 requests/min per IP
+gcloud compute security-policies rules create 2000 \
+    --security-policy=checkout-protection \
+    --expression="request.path.matches('/api/checkout')" \
+    --action=rate-based-ban \
+    --rate-limit-threshold-count=10 \
+    --rate-limit-threshold-interval-sec=60 \
+    --ban-duration-sec=300
+
+# Attach to the backend service
+gcloud compute backend-services update checkout-backend \
+    --security-policy=checkout-protection \
+    --global
+```
+
+Design rationale:
+- Lower priority number = higher priority in Cloud Armor (rule 1000 evaluated before 2000)
+- Rate-based banning temporarily blocks IPs that exceed the threshold, reducing bot traffic without blocking all users
+- For more sophisticated bot mitigation, consider reCAPTCHA integration with Cloud Armor's bot management features
+
+</details>
+
+---
+
+### Exercise 4: Secrets Manager vs KMS — When to Use Which
+
+A developer asks: "We need to store a third-party API key that our Lambda function uses. Should we use AWS Secrets Manager or AWS KMS directly?"
+
+Explain the difference and recommend the right approach.
+
+<details>
+<summary>Show Answer</summary>
+
+**Use AWS Secrets Manager** for storing the API key. Here is why:
+
+| Feature | AWS Secrets Manager | AWS KMS (direct) |
+|---|---|---|
+| Purpose | Store and retrieve secret values (passwords, API keys, tokens) | Encrypt/decrypt arbitrary data; manage encryption keys |
+| Secret storage | Yes — stores the secret value securely | No — only manages keys; you store the ciphertext yourself |
+| Automatic rotation | Yes — native rotation with Lambda | No — you must build rotation logic yourself |
+| Access control | IAM policy on the secret | Key policy + IAM policy |
+| Cost | $0.40/secret/month + API calls | $1/key/month + API calls |
+
+**Recommended approach:**
+```bash
+# Store the API key
+aws secretsmanager create-secret \
+    --name /lambda/third-party-api-key \
+    --secret-string '{"api_key": "sk-abc123..."}'
+
+# Lambda function retrieves it at runtime
+```
+
+```python
+import boto3, json
+
+def get_api_key():
+    client = boto3.client('secretsmanager')
+    response = client.get_secret_value(SecretId='/lambda/third-party-api-key')
+    return json.loads(response['SecretString'])['api_key']
+```
+
+Note: Secrets Manager uses KMS internally to encrypt the stored secret. You are not choosing between them — Secrets Manager wraps KMS to provide a higher-level secret storage service. Use KMS directly only when you need to encrypt your own data blobs (e.g., application-level encryption of database fields).
+
+</details>
+
+---
+
+### Exercise 5: Security Audit Trail
+
+Your security team requires that all AWS API calls in the account be logged, retained for 1 year, and protected from deletion. You also want an alert when anyone logs into the AWS Console. Write the steps and commands.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Step 1: Create an S3 bucket for log storage with versioning
+aws s3api create-bucket \
+    --bucket my-cloudtrail-logs-$(date +%s) \
+    --region us-east-1
+
+# Enable versioning (protects against accidental deletion of log objects)
+aws s3api put-bucket-versioning \
+    --bucket my-cloudtrail-logs \
+    --versioning-configuration Status=Enabled
+
+# Apply lifecycle policy: transition to Glacier after 90 days, expire after 1 year
+aws s3api put-bucket-lifecycle-configuration \
+    --bucket my-cloudtrail-logs \
+    --lifecycle-configuration '{
+        "Rules": [{
+            "Status": "Enabled",
+            "Transitions": [{"Days": 90, "StorageClass": "GLACIER"}],
+            "Expiration": {"Days": 365},
+            "Filter": {"Prefix": ""}
+        }]
+    }'
+
+# Step 2: Create multi-region CloudTrail with log file validation
+aws cloudtrail create-trail \
+    --name org-audit-trail \
+    --s3-bucket-name my-cloudtrail-logs \
+    --is-multi-region-trail \
+    --enable-log-file-validation
+
+aws cloudtrail start-logging --name org-audit-trail
+
+# Step 3: Create CloudWatch metric filter for Console logins
+aws logs put-metric-filter \
+    --log-group-name CloudTrail/logs \
+    --filter-name ConsoleLoginFilter \
+    --filter-pattern '{ $.eventName = "ConsoleLogin" }' \
+    --metric-transformations metricName=ConsoleLoginCount,metricNamespace=Security,metricValue=1
+
+# Create alarm
+aws cloudwatch put-metric-alarm \
+    --alarm-name ConsoleLoginAlert \
+    --metric-name ConsoleLoginCount \
+    --namespace Security \
+    --statistic Sum \
+    --period 300 \
+    --threshold 1 \
+    --comparison-operator GreaterThanOrEqualToThreshold \
+    --evaluation-periods 1 \
+    --alarm-actions arn:aws:sns:...:security-alerts
+```
+
+Key points:
+- `--is-multi-region-trail` captures API activity from all regions in a single trail
+- `--enable-log-file-validation` creates a digest file to detect tampering
+- Use S3 Object Lock (WORM mode) for stricter immutability requirements (compliance use cases)
+- CloudTrail logs + CloudWatch metric filters = near-real-time security alerting
+
+</details>
 
 ---
 

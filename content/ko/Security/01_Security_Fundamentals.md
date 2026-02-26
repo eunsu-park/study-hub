@@ -8,15 +8,18 @@
 
 **난이도**: ⭐⭐
 
-**학습 목표**:
-- CIA Triad와 확장된 보안 속성 이해하기
-- 실제 시스템에 Threat Modeling 방법론(STRIDE, DREAD) 적용하기
-- 소프트웨어 아키텍처에서 공격 표면과 위협 벡터 식별하기
-- Defense-in-depth 원칙을 사용하여 계층적 방어 설계하기
-- 시스템 설계에서 최소 권한 원칙 적용하기
-- Security by design과 security by obscurity 구별하기
-- 표준 프레임워크를 사용하여 기본 위험 평가 수행하기
-- Common Vulnerability Scoring System(CVSS) 점수 해석하기
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. CIA Triad와 확장된 보안 속성 이해하기
+2. 실제 시스템에 Threat Modeling 방법론(STRIDE, DREAD) 적용하기
+3. 소프트웨어 아키텍처에서 공격 표면과 위협 벡터 식별하기
+4. Defense-in-depth 원칙을 사용하여 계층적 방어 설계하기
+5. 시스템 설계에서 최소 권한 원칙 적용하기
+6. Security by design과 security by obscurity 구별하기
+7. 표준 프레임워크를 사용하여 기본 위험 평가 수행하기
+8. Common Vulnerability Scoring System(CVSS) 점수 해석하기
 
 ---
 

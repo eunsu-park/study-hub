@@ -2,7 +2,26 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [08_Regex_in_Bash.md](./08_Regex_in_Bash.md) | **다음**: [10_Error_Handling.md](./10_Error_Handling.md)
+**이전**: [Bash에서의 정규 표현식](./08_Regex_in_Bash.md) | **다음**: [에러 처리 및 디버깅](./10_Error_Handling.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 백그라운드 프로세스의 동작 방식을 설명하고 `$!`를 사용해 PID를 가져올 수 있습니다
+2. `wait` 명령을 적용해 PID 또는 작업 번호로 백그라운드 작업을 동기화할 수 있습니다
+3. 설정 가능한 동시 실행 제한(concurrency limit)을 가진 병렬 실행(parallel execution) 패턴을 구현할 수 있습니다
+4. 서브셸(subshell)과 명령 그룹화(command grouping)의 차이, 그리고 변수 스코프(scope) 영향을 구분할 수 있습니다
+5. 일반적인 Unix 시그널(signal)을 식별하고 기본 동작을 설명할 수 있습니다
+6. `trap` 핸들러를 작성해 시그널을 포착하고 스크립트 종료 시 정리(cleanup) 작업을 수행할 수 있습니다
+7. 임시 파일 제거, 락(lock) 해제, 자식 프로세스 종료를 안전하게 수행하는 멱등(idempotent) 정리 함수를 구축할 수 있습니다
+8. 코프로세스(`coproc`)를 사용해 Bash에서 양방향 프로세스 간 통신(inter-process communication)을 구현할 수 있습니다
+
+---
+
+프로덕션 스크립트는 작업을 동시에 실행하고, 여러 백그라운드 작업을 조율하며, 중단 시 정상적으로 종료(graceful shutdown)해야 하는 경우가 많습니다. 파일을 병렬로 처리해 10분짜리 작업을 2분으로 단축하거나, cron 작업이 크래시 후에도 임시 파일을 정리하도록 보장하는 것이든, 프로세스 관리와 시그널 처리(signal handling)를 마스터하는 것은 실제 환경에서 안정적으로 동작하는 스크립트를 작성하는 데 필수적입니다.
 
 ## 1. 백그라운드 프로세스(Background Processes)
 

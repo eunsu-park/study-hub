@@ -1,12 +1,25 @@
 # Database Replication
 
-## Difficulty: ⭐⭐⭐ (Intermediate)
-
-## Overview
-
-Database replication is a technique that copies identical data to multiple nodes to improve availability, fault tolerance, and read performance. In this document, you will learn about various replication strategies, consistency guarantee mechanisms, and failure recovery methods.
+**Previous**: [Database Scaling](./08_Database_Scaling.md) | **Next**: [Data Consistency Patterns](./10_Data_Consistency_Patterns.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of database replication and the benefits it provides (availability, fault tolerance, read scaling)
+2. Compare single-leader, multi-leader, and leaderless replication topologies and their respective trade-offs
+3. Distinguish between synchronous and asynchronous replication and explain semi-synchronous as a practical compromise
+4. Identify replication lag issues and describe consistency guarantees such as read-your-writes and monotonic reads
+5. Describe the failover process for leader election and explain how split-brain scenarios are prevented
+6. Apply quorum formulas (R + W > N) to configure consistency levels for a distributed database
+
+**Difficulty**: ⭐⭐⭐ (Intermediate)
+
+---
+
+Every production database needs copies of its data on multiple machines -- if your only database server crashes, you lose everything. Replication is the mechanism that keeps these copies in sync, but the devil is in the details: how quickly do replicas converge, what happens during a network partition, and who resolves conflicting writes? These questions sit at the heart of distributed systems design and come up in virtually every system design interview.
 
 ## Table of Contents
 
@@ -19,8 +32,7 @@ Database replication is a technique that copies identical data to multiple nodes
 7. [Failure Recovery and Leader Election](#7-failure-recovery-and-leader-election)
 8. [Quorum and Consistency Levels](#8-quorum-and-consistency-levels)
 9. [Practice Problems](#9-practice-problems)
-10. [Next Steps](#10-next-steps)
-11. [References](#11-references)
+10. [References](#10-references)
 
 ---
 
@@ -1281,29 +1293,7 @@ class Client:
 
 ---
 
-## 10. Next Steps
-
-Based on what you learned in this document, study the following topics:
-
-1. **Distributed Transactions** - 2PC, Saga Pattern
-2. **Consensus Algorithms** - Paxos, Raft, ZAB
-3. **CDC (Change Data Capture)** - Debezium
-4. **Event Sourcing and CQRS** - Alternative approaches to replication
-
-```
-Learning Path:
-[Current] Database Replication
-    │
-    ├──> Distributed Transactions (2PC, Saga)
-    │
-    ├──> Consensus Algorithms (Raft, Paxos)
-    │
-    └──> CDC & Event Sourcing
-```
-
----
-
-## 11. References
+## 10. References
 
 ### Essential Books
 
@@ -1374,3 +1364,7 @@ Learning Path:
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+**Previous**: [Database Scaling](./08_Database_Scaling.md) | **Next**: [Data Consistency Patterns](./10_Data_Consistency_Patterns.md)

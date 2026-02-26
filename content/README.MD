@@ -10,13 +10,13 @@ A collection of study material Markdown files. Maintained in both Korean (ko) an
 content/
 ├── ko/                    # 한국어 자료 (번역본) / Korean (translated)
 │   ├── Algorithm/         # 29개 레슨 / 29 lessons
-│   ├── C_Programming/     # 22개 레슨 / 22 lessons
-│   └── ...                # 총 39개 토픽 / 39 topics total
+│   ├── C_Programming/     # 23개 레슨 / 23 lessons
+│   └── ...                # 총 50개 토픽 / 50 topics total
 │
 └── en/                    # 영어 자료 (원본) / English (original)
     ├── Algorithm/
     ├── C_Programming/
-    └── ...                # 총 39개 토픽 / 39 topics total
+    └── ...                # 총 50개 토픽 / 50 topics total
 ```
 
 ## 토픽 목록 / Topic List

@@ -10,6 +10,9 @@
 #define NUM_WRITERS 2
 
 // 공유 데이터
+// Why: rwlock is ideal when reads vastly outnumber writes (5 readers vs 2 writers
+// here) — a plain mutex would serialize all 7 threads, but rwlock lets 5 readers
+// proceed in parallel
 typedef struct {
     int data;
     pthread_rwlock_t lock;
@@ -21,6 +24,8 @@ void* reader(void* arg) {
     int id = *(int*)arg;
 
     for (int i = 0; i < 5; i++) {
+        // Why: rdlock allows multiple readers simultaneously — unlike mutex, readers
+        // don't block each other, giving much better throughput for read-heavy workloads
         pthread_rwlock_rdlock(&shared.lock);  // 읽기 잠금
 
         printf("[독자 %d] 데이터 읽음: %d\n", id, shared.data);
@@ -38,6 +43,8 @@ void* writer(void* arg) {
     int id = *(int*)arg;
 
     for (int i = 0; i < 3; i++) {
+        // Why: wrlock is exclusive — it blocks ALL readers and other writers,
+        // ensuring the write is seen atomically (no partial updates observed)
         pthread_rwlock_wrlock(&shared.lock);  // 쓰기 잠금 (배타적)
 
         shared.data = rand() % 1000;

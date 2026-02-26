@@ -1,10 +1,17 @@
 # 15. Container Internals
 
+**Previous**: [Performance Tuning](./14_Performance_Tuning.md) | **Next**: [Storage Management](./16_Storage_Management.md)
+
 ## Learning Objectives
-- Understand Linux container isolation technologies
-- Resource isolation with namespaces
-- Resource limiting with cgroups
-- Container runtime operation principles
+
+After completing this lesson, you will be able to:
+
+1. Explain the fundamental differences between containers and virtual machines
+2. Create and manage Linux namespaces to isolate processes, networks, and filesystems
+3. Configure cgroups v2 to limit CPU, memory, and I/O resources for process groups
+4. Describe how OverlayFS provides layered, copy-on-write storage for container images
+5. Build a minimal container manually using namespaces, cgroups, and chroot
+6. Apply security mechanisms including capabilities, seccomp, and AppArmor to harden containers
 
 ## Table of Contents
 1. [Container Fundamentals](#1-container-fundamentals)
@@ -13,9 +20,13 @@
 4. [Union Filesystem](#4-union-filesystem)
 5. [Container Runtime](#5-container-runtime)
 6. [Security](#6-security)
-7. [Practice Exercises](#7-practice-exercises)
+7. [eBPF Basics](#7-ebpf-basics)
+8. [Container Networking Deep Dive](#8-container-networking-deep-dive)
+9. [Practice Exercises](#9-practice-exercises)
 
 ---
+
+Containers have revolutionized how software is built, shipped, and run. But behind tools like Docker and Podman lies a set of Linux kernel features -- namespaces, cgroups, and union filesystems -- that have existed for years. Understanding these internals is essential for debugging container issues, writing secure container configurations, and knowing what containers actually guarantee (and what they do not). This lesson peels back the abstraction layer so you can work with containers at the kernel level.
 
 ## 1. Container Fundamentals
 
@@ -90,6 +101,8 @@
 ```
 
 ---
+
+> **Analogy: The Apartment Building.** Linux containers are like apartments in a building. Namespaces give each tenant their own view -- their own mailbox (PID namespace), their own door number (network namespace), and their own utility meter (mount namespace) -- even though they share the same building structure (kernel). Cgroups are the building manager who ensures no single tenant uses more than their fair share of water and electricity.
 
 ## 2. Linux Namespaces
 
@@ -662,9 +675,339 @@ docker run --read-only --tmpfs /tmp alpine sh
 docker run --read-only -v /data alpine sh
 ```
 
+## 7. eBPF Basics
+
+eBPF (extended Berkeley Packet Filter) is a revolutionary technology that allows sandboxed programs to run inside the Linux kernel without changing kernel source code or loading kernel modules. Originally designed for packet filtering, eBPF has evolved into a general-purpose in-kernel virtual machine that powers modern observability, networking, and security tools.
+
+### 7.1 What is eBPF?
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       eBPF Architecture                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User Space                                                 │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │  bcc / bpftrace / libbpf                          │     │
+│  │  (eBPF program loader & frontend)                 │     │
+│  └───────────────────┬───────────────────────────────┘     │
+│                      │ load program                         │
+│                      ▼                                      │
+│  ─────────────────────────────────────────────────────      │
+│  Kernel Space                                               │
+│  ┌───────────────┐   ┌───────────────┐                     │
+│  │   Verifier    │──>│  JIT Compiler │                     │
+│  │ (safety check)│   │ (native code) │                     │
+│  └───────────────┘   └───────┬───────┘                     │
+│                              │ attach                       │
+│                              ▼                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ kprobes  │ │tracepoint│ │   XDP    │ │  cgroup  │      │
+│  │          │ │          │ │(network) │ │(resource)│      │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+│                                                             │
+│  eBPF Maps (shared data between kernel & user space)       │
+│  ┌─────────────────────────────────────────────────┐       │
+│  │  Hash maps, Arrays, Ring buffers, Per-CPU maps  │       │
+│  └─────────────────────────────────────────────────┘       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> **Classic BPF vs eBPF.** Classic BPF (cBPF) was limited to packet filtering with a simple 32-bit instruction set and two registers. eBPF extends this to a 64-bit instruction set with 11 registers, supports maps for state storage, allows function calls, and can attach to nearly any kernel event -- not just network packets. Think of cBPF as a pocket calculator and eBPF as a full programming environment.
+
+### 7.2 eBPF Program Types
+
+| Program Type | Attach Point | Use Case |
+|-------------|-------------|----------|
+| `kprobe` / `kretprobe` | Any kernel function entry/return | Tracing kernel internals |
+| `tracepoint` | Static kernel tracepoints | Stable performance monitoring |
+| `XDP` (eXpress Data Path) | Network driver (before sk_buff) | Ultra-fast packet processing |
+| `tc` (traffic control) | Network traffic control layer | Packet mangling, policing |
+| `cgroup` | cgroup events | Per-container resource control |
+| `socket_filter` | Socket layer | Per-socket packet filtering |
+| `perf_event` | CPU performance counters | Hardware-level profiling |
+| `LSM` (Linux Security Module) | Security hooks | Fine-grained security policy |
+
+### 7.3 eBPF Verifier and JIT Compilation
+
+The eBPF verifier is the safety mechanism that ensures no eBPF program can crash the kernel or access unauthorized memory:
+
+```bash
+# The verifier checks:
+# 1. No unbounded loops (programs must terminate)
+# 2. All memory accesses are bounds-checked
+# 3. No null pointer dereferences
+# 4. Stack size limited to 512 bytes
+# 5. Program size limited (1M instructions as of kernel 5.2+)
+
+# JIT compilation converts verified eBPF bytecode to native machine code
+# Check JIT status
+cat /proc/sys/net/core/bpf_jit_enable
+# 0 = disabled, 1 = enabled, 2 = enabled with debug
+
+# Enable JIT compilation
+echo 1 | sudo tee /proc/sys/net/core/bpf_jit_enable
+```
+
+### 7.4 bpftool and BCC Tools
+
+```bash
+# bpftool: inspect and manage eBPF programs/maps
+# List loaded eBPF programs
+bpftool prog list
+
+# Show details of a specific program
+bpftool prog show id 42
+
+# List eBPF maps
+bpftool map list
+
+# Dump map contents
+bpftool map dump id 10
+
+# --- BCC (BPF Compiler Collection) Tools ---
+# Install BCC tools
+apt install bpfcc-tools  # Debian/Ubuntu
+# or
+yum install bcc-tools    # RHEL/CentOS
+
+# tcptop: monitor TCP traffic by process (like top for TCP)
+tcptop
+
+# execsnoop: trace new process execution
+execsnoop
+# Shows: PCOMM PID PPID RET ARGS
+# bash   1234 1000 0   /usr/bin/ls -la
+
+# biolatency: block I/O latency histogram
+biolatency
+
+# opensnoop: trace file opens system-wide
+opensnoop
+
+# tcpconnect: trace active TCP connections
+tcpconnect
+
+# funccount: count kernel function calls
+funccount 'tcp_send*'
+```
+
+### 7.5 eBPF Use Cases
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    eBPF Use Cases                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Observability                                           │
+│     • System call tracing (strace replacement)              │
+│     • Application latency profiling                         │
+│     • Continuous production profiling (Parca, Pyroscope)    │
+│     • Custom metrics without code changes                   │
+│                                                             │
+│  2. Networking                                              │
+│     • XDP-based DDoS mitigation (Cloudflare, Facebook)     │
+│     • Load balancing (Cilium, Katran)                       │
+│     • Network policy enforcement in K8s                     │
+│     • DNS request monitoring                                │
+│                                                             │
+│  3. Security                                                │
+│     • Runtime threat detection (Falco, Tetragon)            │
+│     • File integrity monitoring                             │
+│     • Network policy enforcement                            │
+│     • Syscall auditing (replacing auditd)                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ---
 
-## 7. Practice Exercises
+## 8. Container Networking Deep Dive
+
+Understanding how containers communicate requires knowledge of Linux networking primitives. Every container network -- whether Docker bridge, Kubernetes pod networking, or service mesh -- builds on these kernel-level building blocks.
+
+### 8.1 Network Namespaces
+
+```bash
+# Create two network namespaces (simulating two containers)
+ip netns add container1
+ip netns add container2
+
+# Verify
+ip netns list
+# container1
+# container2
+
+# Each namespace has its own isolated network stack
+ip netns exec container1 ip a
+# Only lo (loopback) interface exists, and it's DOWN
+
+# Bring up loopback in each namespace
+ip netns exec container1 ip link set lo up
+ip netns exec container2 ip link set lo up
+```
+
+### 8.2 Veth Pairs and Bridge Networking
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Container Bridge Networking                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Container 1                Container 2                     │
+│  (netns: container1)        (netns: container2)             │
+│  ┌───────────────┐          ┌───────────────┐              │
+│  │ eth0          │          │ eth0          │              │
+│  │ 172.17.0.2/24 │          │ 172.17.0.3/24 │              │
+│  └───────┬───────┘          └───────┬───────┘              │
+│          │ veth pair                │ veth pair              │
+│          │                          │                        │
+│  ┌───────┴──────────────────────────┴───────┐              │
+│  │              docker0 bridge               │              │
+│  │              172.17.0.1/24                │              │
+│  └──────────────────┬───────────────────────┘              │
+│                     │                                       │
+│                     │ NAT (iptables MASQUERADE)             │
+│                     ▼                                       │
+│  ┌─────────────────────────────────────────┐               │
+│  │          Host eth0 / ens33              │               │
+│  │          192.168.1.100                  │               │
+│  └─────────────────────────────────────────┘               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+```bash
+# Step-by-step: build container networking manually
+
+# 1. Create a bridge (equivalent to docker0)
+ip link add br0 type bridge
+ip addr add 172.18.0.1/24 dev br0
+ip link set br0 up
+
+# 2. Create veth pairs for container1
+ip link add veth1 type veth peer name veth1-br
+
+# 3. Move one end into the container namespace
+ip link set veth1 netns container1
+
+# 4. Attach the other end to the bridge
+ip link set veth1-br master br0
+ip link set veth1-br up
+
+# 5. Configure IP inside the container
+ip netns exec container1 ip addr add 172.18.0.2/24 dev veth1
+ip netns exec container1 ip link set veth1 up
+ip netns exec container1 ip route add default via 172.18.0.1
+
+# 6. Repeat for container2
+ip link add veth2 type veth peer name veth2-br
+ip link set veth2 netns container2
+ip link set veth2-br master br0
+ip link set veth2-br up
+ip netns exec container2 ip addr add 172.18.0.3/24 dev veth2
+ip netns exec container2 ip link set veth2 up
+ip netns exec container2 ip route add default via 172.18.0.1
+
+# 7. Test container-to-container communication
+ip netns exec container1 ping -c 3 172.18.0.3
+# PING 172.18.0.3: 3 packets transmitted, 3 received, 0% packet loss
+
+# 8. Enable NAT for external access
+sysctl -w net.ipv4.ip_forward=1
+iptables -t nat -A POSTROUTING -s 172.18.0.0/24 -j MASQUERADE
+```
+
+### 8.3 Docker Network Modes
+
+| Mode | Command | Isolation | Performance | Use Case |
+|------|---------|-----------|-------------|----------|
+| **bridge** (default) | `--network bridge` | Container-level | Moderate (NAT overhead) | General purpose |
+| **host** | `--network host` | None (shares host stack) | Native | Performance-critical apps |
+| **none** | `--network none` | Complete | N/A | Security-sensitive workloads |
+| **overlay** | `--network my-overlay` | Cross-host | Lower (VXLAN encap) | Swarm / multi-host |
+| **macvlan** | `--network my-macvlan` | VLAN-level | Near-native | Direct LAN integration |
+
+```bash
+# Inspect Docker bridge network
+docker network inspect bridge
+# Shows: subnet, gateway, connected containers, IPAM config
+
+# Create custom bridge with specific subnet
+docker network create --driver bridge --subnet 10.10.0.0/16 mynet
+
+# Run containers on custom network (automatic DNS by container name)
+docker run -d --name web --network mynet nginx
+docker run -it --network mynet alpine ping web
+# Container name "web" resolves automatically
+```
+
+### 8.4 Kubernetes CNI (Container Network Interface)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                Kubernetes CNI Architecture                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  kubelet                                                    │
+│    │                                                        │
+│    │ "Create pod network"                                   │
+│    ▼                                                        │
+│  CRI (containerd/CRI-O)                                    │
+│    │                                                        │
+│    │ CNI ADD / DEL                                          │
+│    ▼                                                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                    CNI Plugin                         │  │
+│  │                                                      │  │
+│  │  Calico     │  Cilium      │  Flannel               │  │
+│  │  • BGP      │  • eBPF      │  • VXLAN overlay       │  │
+│  │  • IP-in-IP │  • No kube-  │  • Simple setup        │  │
+│  │  • Policy   │    proxy     │  • Limited policy      │  │
+│  │    engine   │  • L7 policy │                         │  │
+│  │  • IPAM     │  • Hubble    │                         │  │
+│  │             │    (observ.) │                         │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  Pod-to-Pod: Every pod gets a routable IP address          │
+│  No NAT between pods (flat network model)                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.5 CNI Plugin Comparison: Calico vs Cilium vs Flannel
+
+| Feature | Calico | Cilium | Flannel |
+|---------|--------|--------|---------|
+| **Data plane** | iptables or eBPF | eBPF | VXLAN / host-gw |
+| **Network policy** | Full (L3/L4) | Full (L3/L4/L7) | None (requires add-on) |
+| **Encryption** | WireGuard | WireGuard / IPsec | None |
+| **Observability** | Limited | Hubble (deep visibility) | None |
+| **Performance** | High (BGP mode) | Highest (eBPF bypass) | Moderate |
+| **Complexity** | Medium | Medium-High | Low |
+| **Best for** | Large clusters, BGP | Security + observability | Simple/small clusters |
+
+```bash
+# Calico: Install via manifest
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+# Cilium: Install via Helm
+helm repo add cilium https://helm.cilium.io/
+helm install cilium cilium/cilium --namespace kube-system
+
+# Flannel: Install via manifest
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+
+# Verify CNI is working
+kubectl get pods -n kube-system | grep -E 'calico|cilium|flannel'
+```
+
+> **Why Cilium is gaining adoption.** Cilium replaces kube-proxy entirely with eBPF programs, eliminating iptables rules that scale poorly with thousands of services. It provides L7 (HTTP, gRPC, Kafka) network policies, built-in observability via Hubble, and transparent encryption -- all without sidecar proxies. For clusters that need both performance and security visibility, Cilium has become the leading choice.
+
+---
+
+## 9. Practice Exercises
 
 ### Exercise 1: Namespace Practice
 ```bash
@@ -712,11 +1055,7 @@ docker run --read-only -v /data alpine sh
 
 ---
 
-## Next Steps
-
-- [16_Storage_Management](16_Storage_Management.md) - LVM, RAID
-- [Docker Documentation](https://docs.docker.com/)
-- [OCI Runtime Spec](https://github.com/opencontainers/runtime-spec)
+---
 
 ## References
 
@@ -725,7 +1064,11 @@ docker run --read-only -v /data alpine sh
 - [OverlayFS](https://docs.kernel.org/filesystems/overlayfs.html)
 - [runc](https://github.com/opencontainers/runc)
 - [Container Security](https://docs.docker.com/engine/security/)
+- [eBPF Documentation](https://ebpf.io/what-is-ebpf/)
+- [BCC Tools](https://github.com/iovisor/bcc)
+- [Cilium Documentation](https://docs.cilium.io/)
+- [Kubernetes CNI Specification](https://github.com/containernetworking/cni)
 
 ---
 
-[← Previous: Performance Tuning](14_Performance_Tuning.md) | [Next: Storage Management →](16_Storage_Management.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Performance Tuning](./14_Performance_Tuning.md) | **Next**: [Storage Management](./16_Storage_Management.md)

@@ -1,10 +1,23 @@
 # 14. PostgreSQL JSON/JSONB 기능
 
-## 학습 목표
-- JSON과 JSONB 타입의 차이점 이해
-- JSON 데이터 저장 및 조회
-- JSON 연산자와 함수 활용
-- GIN 인덱스를 통한 JSON 검색 최적화
+**이전**: [백업과 운영](./13_Backup_and_Operations.md) | **다음**: [쿼리 최적화](./15_Query_Optimization.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 수행할 수 있습니다:
+
+1. JSON과 JSONB 데이터 타입을 구별하고, 주어진 사용 사례에 적합한 타입을 선택한다
+2. PostgreSQL 내장 함수와 연산자를 사용하여 JSON 데이터를 저장, 수정, 삭제한다
+3. 화살표 연산자(`->`, `->>`, `#>`, `#>>`)를 사용하여 중첩 JSON 구조를 조회한다
+4. JSONB 데이터에 포함 연산자(`@>`), 존재 연산자(`?`), 병합 연산자(`||`)를 적용한다
+5. JSONB 컬럼에 GIN 인덱스(GIN index)를 생성하고 EXPLAIN ANALYZE로 사용 여부를 검증한다
+6. 스키마리스(schema-less) 이벤트 로깅, EAV(Entity-Attribute-Value) 대체, 문서 버전 관리 등 실전 패턴을 구현한다
+
+---
+
+현대 애플리케이션은 사용자 설정, API 응답, 이벤트 페이로드, 설정 데이터 등 엄격한 관계형 컬럼에 맞지 않는 반구조화 데이터(semi-structured data)를 자주 다룹니다. PostgreSQL의 네이티브 JSON/JSONB 지원을 사용하면 이러한 유연한 데이터를 관계형 테이블과 함께 저장하고 조회할 수 있으며, 완전한 인덱싱과 트랜잭션 보장이 제공됩니다. 이를 통해 많은 아키텍처에서 별도의 문서 데이터베이스가 불필요해지고, SQL의 강력함을 유지하면서 스택을 단순화할 수 있습니다.
 
 ## 목차
 1. [JSON vs JSONB](#1-json-vs-jsonb)
@@ -45,7 +58,8 @@
 ### 1.2 기본 사용
 
 ```sql
--- 테이블 생성
+-- JSONB는 사전 파싱된 바이너리 저장 — GIN 인덱싱 및 포함 연산자(@>, ?) 지원
+-- JSON은 원시 텍스트 저장 — 매 접근마다 재파싱, 인덱스 미지원; 쓰기 전용/원시 읽기에만 사용
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -185,6 +199,8 @@ SELECT * FROM products
 WHERE attributes->'brand' = '"Dell"'::jsonb;
 
 -- @> : 포함 (왼쪽이 오른쪽 포함)
+-- 필터링 시 ->> = 대신 @> 선호 — @>는 GIN 인덱스를 활용하여 O(1) 검색 가능
+-- 반면 ->>는 모든 행의 텍스트 값을 추출하며 스캔해야 함
 SELECT * FROM products
 WHERE attributes @> '{"brand": "Dell"}'::jsonb;
 
@@ -352,11 +368,11 @@ FROM products, jsonb_array_elements(attributes->'tags') AS elem;
 ### 5.1 GIN 인덱스
 
 ```sql
--- 기본 GIN 인덱스 (모든 연산자 지원)
+-- 기본 GIN: @>, ?, ?|, ?& 지원 — 다양한 연산자 타입이 필요한 쿼리에 사용
 CREATE INDEX idx_products_attrs
 ON products USING GIN (attributes);
 
--- jsonb_path_ops (더 작고 빠름, @> 연산만 지원)
+-- jsonb_path_ops: 인덱스 크기 2~3배 작고 @> 검색 빠름 — 포함 쿼리만 필요할 때 선택
 CREATE INDEX idx_products_attrs_path
 ON products USING GIN (attributes jsonb_path_ops);
 
@@ -391,7 +407,8 @@ SELECT pg_size_pretty(pg_indexes_size('products'));
 ### 5.3 성능 최적화
 
 ```sql
--- 자주 사용하는 키는 별도 컬럼으로
+-- 자주 조회하는 키는 별도 컬럼으로 추출 — 스칼라 컬럼의 B-tree 인덱스가
+-- 전체 JSONB 문서의 GIN 인덱스보다 빠르고 메모리 효율적
 ALTER TABLE products ADD COLUMN brand VARCHAR(100);
 UPDATE products SET brand = attributes->>'brand';
 CREATE INDEX idx_products_brand_col ON products(brand);
@@ -416,7 +433,8 @@ ANALYZE products;
 ### 6.1 스키마리스 테이블
 
 ```sql
--- 이벤트 로그 테이블
+-- JSONB는 이벤트 로그에 최적: 이벤트 타입마다 필드가 다르므로 고정 스키마는
+-- 빈번한 ALTER TABLE이나 넓은 NULL 허용 컬럼이 필요. JSONB는 어떤 형태든 수용 가능
 CREATE TABLE events (
     id BIGSERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL,
@@ -444,14 +462,16 @@ AND occurred_at > NOW() - INTERVAL '7 days';
 ### 6.2 EAV (Entity-Attribute-Value) 대체
 
 ```sql
--- 전통적 EAV (느림, 복잡)
+-- EAV는 속성당 한 행 필요 — "제품 X의 모든 속성" 조회 시 다수의 행을 조인/피벗해야 하며,
+-- 타입 안전성 상실 (모든 값이 VARCHAR)
 CREATE TABLE product_attributes_eav (
     product_id INT,
     attribute_name VARCHAR(100),
     attribute_value VARCHAR(255)
 );
 
--- JSONB로 대체 (빠름, 간단)
+-- JSONB는 모든 속성을 하나의 인덱싱된 컬럼에 통합 — 단일 행 읽기,
+-- 네이티브 타입(number, boolean, array), GIN 가속 포함 쿼리 지원
 CREATE TABLE products_jsonb (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -596,12 +616,6 @@ CHECK (validate_product_attributes(attributes));
 
 ---
 
-## 다음 단계
-
-- [15_쿼리_최적화_심화](15_Query_Optimization.md) - JSON 쿼리 최적화
-- [17_윈도우_함수_분석](17_Window_Functions.md) - JSON과 윈도우 함수
-- [PostgreSQL JSON Documentation](https://www.postgresql.org/docs/current/functions-json.html)
-
 ## 참고 자료
 
 - [PostgreSQL JSON Functions](https://www.postgresql.org/docs/current/functions-json.html)
@@ -610,4 +624,4 @@ CHECK (validate_product_attributes(attributes));
 
 ---
 
-[← 이전: 백업과 복구](13_Backup_and_Operations.md) | [다음: 쿼리 최적화 심화 →](15_Query_Optimization.md) | [목차](00_Overview.md)
+**이전**: [백업과 운영](./13_Backup_and_Operations.md) | **다음**: [쿼리 최적화](./15_Query_Optimization.md)

@@ -1,14 +1,28 @@
 # Cache Memory
 
-## Overview
-
-Cache memory is a high-speed buffer memory located between the CPU and main memory to bridge the speed gap between them. Cache design directly affects computer performance and requires various design decisions including mapping schemes, replacement policies, and write policies. In this lesson, we will learn about cache operation principles and various design techniques.
+**Previous**: [14_Memory_Hierarchy.md](./14_Memory_Hierarchy.md) | **Next**: [16_Virtual_Memory.md](./16_Virtual_Memory.md)
 
 **Difficulty**: ⭐⭐⭐
 
 **Prerequisites**: Memory Hierarchy, Principle of Locality
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how cache exploits the principle of locality
+2. Compare direct-mapped, set-associative, and fully-associative cache mapping
+3. Implement LRU and FIFO cache replacement policies
+4. Distinguish write-through from write-back policies
+5. Classify cache misses as compulsory, capacity, or conflict (the 3 Cs)
+6. Explain multi-level cache organization (L1/L2/L3) and inclusion policies
+7. Calculate cache performance metrics (hit rate, AMAT)
+
+---
+
+Cache memory is the single most important hardware optimization for software performance. A cache hit takes ~1 nanosecond; a cache miss that goes to main memory takes ~100 nanoseconds -- a 100x penalty. Understanding how caches work explains why matrix traversal order matters, why struct-of-arrays beats array-of-structs, and why your carefully optimized algorithm might still be slow if it has poor cache behavior.
 
 ## Table of Contents
 
@@ -22,6 +36,8 @@ Cache memory is a high-speed buffer memory located between the CPU and main memo
 8. [Practice Problems](#8-practice-problems)
 
 ---
+
+> Think of cache as your desk, main memory as a filing cabinet across the room, and disk as a warehouse across town. When you are working on a report, you keep the documents you need right on your desk (L1 cache) for instant access. Less frequently needed files go in the filing cabinet (main memory) — a short walk away. Rarely needed archives stay in the warehouse (disk) — retrieving them takes much longer. Cache design is the art of predicting which files you will need next and keeping them on your desk before you ask for them.
 
 ## 1. Cache Concept and Operation
 
@@ -972,8 +988,17 @@ Software Prefetch:
 ┌─────────────────────────────────────────────────────────────┐
 │  // Software prefetch example                               │
 │  for (int i = 0; i < N; i++) {                              │
-│      __builtin_prefetch(&a[i + 16], 0, 3);  // Prefetch 16  │
-│      sum += a[i];                           // ahead        │
+│      // __builtin_prefetch(addr, rw, locality):             │
+│      //   addr = address to prefetch                        │
+│      //   rw: 0 = prefetch for read, 1 = prefetch for write │
+│      //   locality: 0-3 temporal locality hint               │
+│      //     3 = keep in all cache levels (high reuse)       │
+│      //     0 = can evict immediately after use (streaming)  │
+│      // 16 elements ahead ≈ 1 cache line of lead time:      │
+│      //   64B line / 4B int = 16 ints per line, so prefetch │
+│      //   starts loading the NEXT cache line just in time.   │
+│      __builtin_prefetch(&a[i + 16], 0, 3);                  │
+│      sum += a[i];                                           │
 │  }                                                          │
 └─────────────────────────────────────────────────────────────┘
 
@@ -995,23 +1020,33 @@ Prefetch effect:
 
 ```
 Loop Interchange:
+// C stores 2D arrays in row-major order: a[i][0], a[i][1], ... a[i][N-1] are
+// contiguous in memory. A 64-byte cache line holds 16 ints, so sequential access
+// along a row gets 15 hits for every 1 miss (spatial locality).
+
 // Before: Column-major (poor locality)
+// Iterating i in the inner loop jumps N*4 bytes between accesses (stride-N).
+// If N > 16 (cache line / element size), every access misses — no spatial locality.
 for (j = 0; j < N; j++)
     for (i = 0; i < N; i++)
         a[i][j] = b[i][j] + c[i][j];
 
 // After: Row-major (good locality)
+// Iterating j in the inner loop accesses consecutive memory addresses.
+// Only 1 miss per 16 elements — 93.75% hit rate from spatial locality alone.
 for (i = 0; i < N; i++)
     for (j = 0; j < N; j++)
         a[i][j] = b[i][j] + c[i][j];
 
 
 Loop Fusion:
-// Before: Two loops
+// Before: Two loops — a[i] is written in loop 1 and read in loop 2.
+// If the array is larger than the cache, a[i] is evicted before loop 2 reads it.
 for (i = 0; i < N; i++) a[i] = b[i] + 1;
 for (i = 0; i < N; i++) c[i] = a[i] * 2;
 
-// After: One loop (use a[i] while in cache)
+// After: One loop — a[i] is written and immediately read while still in L1 cache.
+// This eliminates capacity misses for a[] and cuts total memory traffic roughly in half.
 for (i = 0; i < N; i++) {
     a[i] = b[i] + 1;
     c[i] = a[i] * 2;
@@ -1019,13 +1054,18 @@ for (i = 0; i < N; i++) {
 
 
 Loop Tiling:
-// Before
+// Before — naive matrix multiply.
+// B[k][j] is accessed column-wise (stride-N): terrible cache behavior for large N.
+// Working set = entire B matrix, which overflows cache when N is large.
 for (i = 0; i < N; i++)
     for (j = 0; j < N; j++)
         for (k = 0; k < N; k++)
             C[i][j] += A[i][k] * B[k][j];
 
 // After (block-wise processing for cache reuse)
+// BLOCK is chosen so that a BLOCK×BLOCK sub-matrix of A, B, and C all fit in cache
+// simultaneously (3 × BLOCK² × sizeof(double) ≤ L1 cache size).
+// Within each tile, B is accessed with good locality because the working set is small.
 for (ii = 0; ii < N; ii += BLOCK)
     for (jj = 0; jj < N; jj += BLOCK)
         for (kk = 0; kk < N; kk += BLOCK)
@@ -1069,6 +1109,9 @@ for (ii = 0; ii < N; ii += BLOCK)
 7. Analyze the cache performance of the following code (64-byte cache line, 4-byte int):
    ```c
    int a[1024], b[1024], c[1024];
+   // Sequential access pattern: each array is traversed linearly.
+   // 64B line / 4B int = 16 ints per line → 1 cold miss per 16 accesses.
+   // Hint: count total accesses, cold misses, and derive the hit rate.
    for (int i = 0; i < 1024; i++)
        c[i] = a[i] + b[i];
    ```

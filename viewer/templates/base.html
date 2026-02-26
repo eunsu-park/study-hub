@@ -1,8 +1,16 @@
+{% from "macros/icons.html" import icon %}
 <!DOCTYPE html>
-<html lang="{{ lang }}" data-theme="light">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        (function(){
+            var t = localStorage.getItem('theme');
+            if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
     <title>{% block title %}Study Viewer{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <!-- Pygments syntax highlighting -->
@@ -26,6 +34,9 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <a href="{{ url_for('index', lang=lang) }}" class="logo">Study Viewer</a>
+                <button class="sidebar-collapse-btn" id="sidebar-collapse" aria-label="Collapse sidebar" title="Collapse sidebar">
+                    &laquo;
+                </button>
                 <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
                     <span></span>
                 </button>
@@ -33,22 +44,27 @@
 
             <nav class="sidebar-nav">
                 <a href="{{ url_for('index', lang=lang) }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
-                    <span class="nav-icon">🏠</span>
+                    <span class="nav-icon">{{ icon('home', 18) }}</span>
                     <span class="nav-text">Home</span>
                 </a>
                 <a href="{{ url_for('dashboard', lang=lang) }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon">{{ icon('dashboard', 18) }}</span>
                     <span class="nav-text">Dashboard</span>
                 </a>
                 <a href="{{ url_for('bookmarks', lang=lang) }}" class="nav-item {% if request.endpoint == 'bookmarks' %}active{% endif %}">
-                    <span class="nav-icon">🔖</span>
+                    <span class="nav-icon">{{ icon('bookmark', 18) }}</span>
                     <span class="nav-text">Bookmarks</span>
+                </a>
+                <a href="{{ url_for('examples_index', lang=lang) }}" class="nav-item {% if request.endpoint in ('examples_index', 'examples_topic', 'example_view') %}active{% endif %}">
+                    <span class="nav-icon">{{ icon('code', 18) }}</span>
+                    <span class="nav-text">Examples</span>
                 </a>
             </nav>
 
             <div class="sidebar-search">
                 <form action="{{ url_for('search_page', lang=lang) }}" method="get">
-                    <input type="search" name="q" placeholder="Search..." value="{{ request.args.get('q', '') }}">
+                    <label for="sidebar-search-input" class="sr-only">Search</label>
+                    <input type="search" id="sidebar-search-input" name="q" placeholder="{% if lang == 'ko' %}검색 (2글자 이상){% else %}Search (min 2 chars){% endif %}" value="{{ request.args.get('q', '') }}" aria-label="{% if lang == 'ko' %}레슨 및 예제 검색{% else %}Search lessons and examples{% endif %}">
                 </form>
             </div>
 
@@ -65,8 +81,8 @@
 
             <div class="sidebar-footer">
                 <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-                    <span class="theme-icon light">☀️</span>
-                    <span class="theme-icon dark">🌙</span>
+                    <span class="theme-icon light">{{ icon('sun', 18) }}</span>
+                    <span class="theme-icon dark">{{ icon('moon', 18) }}</span>
                 </button>
             </div>
         </aside>

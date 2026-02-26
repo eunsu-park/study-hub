@@ -8,6 +8,20 @@ Demonstrates sampling methods and estimation techniques:
 - Confidence intervals
 - Bias and variance of estimators
 - Maximum Likelihood Estimation (MLE)
+
+Theory:
+- Sampling design determines how representative our data is. Simple random
+  sampling gives every unit equal probability, but stratified sampling
+  reduces variance by ensuring each subgroup is proportionally represented.
+- The bootstrap resamples from the observed data to approximate the sampling
+  distribution of any statistic — no distributional assumptions needed.
+- A 95% confidence interval means: if we repeated the experiment many times,
+  95% of such intervals would contain the true parameter.
+- MLE finds parameter values that maximize the probability of the observed
+  data. It is asymptotically efficient (lowest variance among consistent
+  estimators) but can be biased in small samples.
+
+Adapted from Data_Science Lessons 12-13.
 """
 
 import numpy as np
@@ -49,7 +63,7 @@ def simple_random_sampling():
     for n in sample_sizes:
         sample_means = []
         for _ in range(n_replications):
-            sample = np.random.choice(population, n, replace=False)
+                sample = np.random.choice(population, n, replace=False)
             sample_means.append(np.mean(sample))
 
         sample_means = np.array(sample_means)
@@ -57,6 +71,8 @@ def simple_random_sampling():
         print(f"\n  Sample size n={n}:")
         print(f"    Mean of estimates: {np.mean(sample_means):.2f}")
         print(f"    Std of estimates: {np.std(sample_means, ddof=1):.2f}")
+        # Why: The standard error of the mean is sigma/sqrt(n). As n grows,
+        # SE shrinks at rate 1/sqrt(n) — quadrupling n halves the SE.
         print(f"    Theoretical SE: {np.std(population)/np.sqrt(n):.2f}")
         print(f"    Min estimate: {np.min(sample_means):.2f}")
         print(f"    Max estimate: {np.max(sample_means):.2f}")
@@ -96,7 +112,10 @@ def stratified_sampling():
         simple_sample = np.random.choice(population, total_sample_size, replace=False)
         simple_means.append(np.mean(simple_sample))
 
-        # Stratified sampling (proportional allocation)
+        # Why: Proportional allocation ensures each stratum is represented in
+        # proportion to its population size. This eliminates between-stratum
+        # variance from the estimate, always yielding lower SE than SRS when
+        # strata have different means.
         s1_sample = np.random.choice(stratum1, 180, replace=False)  # 60%
         s2_sample = np.random.choice(stratum2, 90, replace=False)   # 30%
         s3_sample = np.random.choice(stratum3, 30, replace=False)   # 10%
@@ -124,7 +143,9 @@ def bootstrap_estimation():
     """Demonstrate bootstrap estimation."""
     print_section("3. Bootstrap Estimation")
 
-    # Original sample
+    # Why: We use a lognormal distribution because it's right-skewed — exactly
+    # the scenario where bootstrap shines. Parametric CIs for the mean assume
+    # Normality and can be poor for skewed data; bootstrap makes no such assumption.
     np.random.seed(42)
     sample = np.random.lognormal(3, 0.5, 100)
 
@@ -140,6 +161,9 @@ def bootstrap_estimation():
     bootstrap_stds = []
 
     for _ in range(n_bootstrap):
+        # Why: Sampling WITH replacement is essential — it creates variability
+        # that mimics drawing new samples from the population. Each bootstrap
+        # sample has ~63.2% unique observations (due to the birthday problem).
         bootstrap_sample = np.random.choice(sample, len(sample), replace=True)
         bootstrap_means.append(np.mean(bootstrap_sample))
         bootstrap_medians.append(np.median(bootstrap_sample))
@@ -218,7 +242,10 @@ def confidence_intervals():
         sample_mean = np.mean(sample)
         sample_se = stats.sem(sample)
 
-        # t-based CI
+        # Why: We use the t-distribution (not Normal) because we estimate sigma
+        # from the sample. The t accounts for the extra uncertainty in small
+        # samples; as n grows, t converges to z. For n=50, the difference is small
+        # but using t is always correct.
         ci = stats.t.interval(confidence_level, sample_size - 1,
                              loc=sample_mean, scale=sample_se)
         ci_widths.append(ci[1] - ci[0])
@@ -268,11 +295,14 @@ def bias_variance_estimators():
     for _ in range(n_samples):
         sample = np.random.normal(100, np.sqrt(true_var), sample_size)
 
-        # Biased estimator (divide by n)
+        # Why: Dividing by n underestimates the true variance on average because
+        # deviations are measured from the sample mean (which is closer to the data
+        # than the true mean). This is the MLE estimate — consistent but biased.
         biased_var = np.var(sample, ddof=0)
         biased_vars.append(biased_var)
 
-        # Unbiased estimator (divide by n-1)
+        # Why: Bessel's correction (dividing by n-1) produces an unbiased estimator.
+        # The "lost" degree of freedom accounts for estimating the mean from the data.
         unbiased_var = np.var(sample, ddof=1)
         unbiased_vars.append(unbiased_var)
 
@@ -308,7 +338,9 @@ def mle_normal():
     print(f"True parameters: μ={true_mu}, σ={true_sigma}")
     print(f"Sample size: {sample_size}")
 
-    # MLE estimates
+    # Why: MLE for the Normal finds the parameters that maximize the likelihood
+    # L(mu,sigma|data). The MLE for mu is the sample mean (unbiased), but the
+    # MLE for sigma uses n (not n-1), making it slightly biased downward.
     mle_mu = np.mean(sample)
     mle_sigma = np.std(sample, ddof=0)  # MLE uses n, not n-1
 

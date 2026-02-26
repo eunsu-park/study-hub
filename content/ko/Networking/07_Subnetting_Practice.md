@@ -1,14 +1,27 @@
 # 서브네팅 실습
 
-## 개요
-
-이 문서에서는 서브네팅(Subnetting)의 실제 계산 방법과 다양한 실습 문제를 다룹니다. 서브네팅은 네트워크 설계와 관리의 핵심 기술로, 효율적인 IP 주소 할당과 네트워크 분할을 가능하게 합니다.
+**이전**: [IP 주소와 서브넷팅](./06_IP_Address_Subnetting.md) | **다음**: [라우팅 기초](./08_Routing_Basics.md)
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 3-4시간
 **선수 지식**: [06_IP_Address_Subnetting.md](./06_IP_Address_Subnetting.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 주어진 CIDR 블록(CIDR block)에서 네트워크 주소(network address), 브로드캐스트 주소(broadcast address), 사용 가능한 호스트 범위(usable host range)를 계산할 수 있습니다
+2. 필요한 호스트 수 또는 서브넷 수를 기반으로 적절한 서브넷 마스크(subnet mask)를 결정할 수 있습니다
+3. 네트워크를 동일한 크기의 서브넷(subnet)으로 분할하는 서브넷 분할을 수행할 수 있습니다
+4. VLSM(Variable Length Subnet Masking, 가변 길이 서브넷 마스킹)을 적용하여 서로 다른 크기의 서브넷을 효율적으로 할당할 수 있습니다
+5. 다중 사이트(multi-site) 네트워크 시나리오에 맞는 서브네팅 계획을 설계할 수 있습니다
+6. 이진 산술(binary arithmetic)과 2의 거듭제곱을 사용하여 서브네팅 계산을 검증할 수 있습니다
+
+---
+
+서브네팅(Subnetting)은 IP 주소 이론이 실제 실습으로 이어지는 지점입니다. 네트워크 엔지니어들은 새 사무실 개설, 데이터센터 VLAN 크기 산정, WAN 링크 전반의 주소 할당 최적화 등 매일 이 계산을 수행합니다. 빠르고 정확하게 서브넷을 계산하는 능력은 모든 네트워킹 자격증 시험과 취업 면접에서 검증되는 핵심 역량입니다.
 
 ## 목차
 
@@ -18,8 +31,7 @@
 4. [VLSM (Variable Length Subnet Mask)](#4-vlsm-variable-length-subnet-mask)
 5. [서브넷 설계 문제](#5-서브넷-설계-문제)
 6. [연습 문제](#6-연습-문제)
-7. [다음 단계](#7-다음-단계)
-8. [참고 자료](#8-참고-자료)
+7. [참고 자료](#7-참고-자료)
 
 ---
 
@@ -585,25 +597,7 @@ CIDR: 32 - 14 = /18
 
 ---
 
-## 7. 다음 단계
-
-서브네팅을 충분히 연습했다면, 다음 주제로 넘어가세요.
-
-### 다음 레슨
-- [08_Routing_Basics.md](./08_Routing_Basics.md) - 라우팅 테이블, 정적/동적 라우팅
-
-### 관련 레슨
-- [06_IP_Address_Subnetting.md](./06_IP_Address_Subnetting.md) - IP 주소 기초
-- [09_Routing_Protocols.md](./09_Routing_Protocols.md) - RIP, OSPF, BGP
-
-### 추천 실습
-1. 다양한 CIDR 조합으로 서브넷 계산 연습
-2. 실제 네트워크 환경에서 `ip addr`로 확인
-3. Packet Tracer에서 서브넷 구성 실습
-
----
-
-## 8. 참고 자료
+## 7. 참고 자료
 
 ### 온라인 도구
 
@@ -621,14 +615,16 @@ CIDR: 32 - 14 = /18
 
 ```bash
 # Linux/macOS - 네트워크 설정 확인
+# ip addr: ifconfig보다 권장 — CIDR 표기법을 직접 표시하고 최신 기능(VLAN, 네임스페이스) 지원
 ip addr show
+# ifconfig: 레거시 도구 — macOS에서는 'ip'가 기본 설치되지 않으므로 여전히 유용
 ifconfig
 
-# 서브넷 계산 도구
-ipcalc 192.168.1.0/24      # Linux
-sipcalc 192.168.1.0/24     # Linux
+# 서브넷 계산 도구 — 배포 전 수동 계산을 검증
+ipcalc 192.168.1.0/24      # 네트워크/브로드캐스트/호스트 범위 출력 — off-by-one 오류 방지
+sipcalc 192.168.1.0/24     # 더 상세함: 이진 표현과 와일드카드 마스크(wildcard mask) 표시
 
-# Windows
+# Windows — /all 플래그로 서브넷 마스크, 게이트웨이, DNS, DHCP 임대 정보까지 표시 (IP만이 아님)
 ipconfig /all
 ```
 
@@ -638,3 +634,7 @@ ipconfig /all
 - 최종 수정: 2024년
 - 난이도: ⭐⭐⭐
 - 예상 학습 시간: 3-4시간
+
+---
+
+**이전**: [IP 주소와 서브넷팅](./06_IP_Address_Subnetting.md) | **다음**: [라우팅 기초](./08_Routing_Basics.md)

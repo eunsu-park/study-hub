@@ -1,5 +1,25 @@
 # 예외 처리와 파일 입출력
 
+**이전**: [템플릿](./12_Templates.md) | **다음**: [스마트 포인터와 메모리 관리](./14_Smart_Pointers_Memory.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `try`, `throw`, `catch`를 사용하여 프로그램이 충돌하지 않도록 예외 상황을 처리한다
+2. `std::exception`을 상속받아 커스텀 예외 클래스(Custom Exception Class)를 설계한다
+3. `noexcept`를 적용하여 예외를 던지지 않음을 보장하는 함수를 선언한다
+4. 예외 안전성(Exception Safety)의 네 가지 수준을 설명하고, RAII를 구현하여 강력 보장(Strong Guarantee)을 달성한다
+5. 다양한 열기 모드와 함께 `ifstream`, `ofstream`, `fstream`을 사용하여 텍스트 파일을 읽고 쓴다
+6. `read()`/`write()`로 바이너리(Binary) 파일 입출력을 수행하고 `seekg`/`seekp`로 파일 위치를 제어한다
+7. `stringstream`과 `getline`을 사용하여 구조화된 데이터(CSV, 설정 파일 등)를 파싱(Parsing)한다
+
+---
+
+모든 실제 프로그램은 예상치 못한 상황을 처리해야 합니다 — 존재하지 않는 파일, 끊어지는 네트워크, 잘못된 입력을 하는 사용자. 예외 처리(Exception Handling)는 오류 탐지 코드와 오류 복구 코드를 분리하는 구조적인 방법을 제공하여 메인 로직을 깔끔하게 유지시켜 줍니다. 파일 입출력과 결합하면, 이러한 기술들은 프로그램이 데이터를 영속적으로 저장하고, 다른 시스템과 통신하며, 상태를 조용히 손상시키는 대신 장애로부터 우아하게 복구할 수 있도록 합니다.
+
 ## 1. 예외 처리란?
 
 예외(Exception)는 프로그램 실행 중 발생하는 비정상적인 상황입니다. C++은 try-catch 구문으로 예외를 처리합니다.
@@ -1159,4 +1179,8 @@ int main() {
 
 ## 다음 단계
 
-[14_Smart_Pointers_Memory.md](./14_Smart_Pointers_Memory.md)에서 스마트 포인터를 배워봅시다!
+[스마트 포인터와 메모리 관리](./14_Smart_Pointers_Memory.md)에서 스마트 포인터를 배워봅시다!
+
+---
+
+**이전**: [템플릿](./12_Templates.md) | **다음**: [스마트 포인터와 메모리 관리](./14_Smart_Pointers_Memory.md)

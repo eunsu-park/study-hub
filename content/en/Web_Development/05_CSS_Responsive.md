@@ -1,12 +1,22 @@
 # CSS Responsive Design
 
-## Overview
+**Previous**: [CSS Layout](./04_CSS_Layout.md) | **Next**: [JavaScript Basics](./06_JS_Basics.md)
 
-Responsive web design is a design approach that provides optimal user experience across various screen sizes (desktop, tablet, mobile).
+## Learning Objectives
 
-**Prerequisites**: [04_CSS_Layout.md](./04_CSS_Layout.md)
+After completing this lesson, you will be able to:
+
+1. Explain the three core principles of responsive web design: fluid grids, flexible images, and media queries
+2. Describe the purpose of the viewport meta tag and configure it correctly
+3. Write media queries using min-width, max-width, orientation, and feature queries such as hover and prefers-color-scheme
+4. Apply responsive CSS units including rem, em, vw, vh, and the clamp() function
+5. Implement responsive images using srcset, sizes, the picture element, and object-fit
+6. Compare mobile-first and desktop-first development strategies and explain why mobile-first is preferred
+7. Implement common responsive layout patterns such as Mostly Fluid, Column Drop, and Off Canvas
 
 ---
+
+More than half of all web traffic now comes from mobile devices, and that share continues to grow. A site that looks perfect on a desktop monitor but is unusable on a phone effectively locks out the majority of its potential audience. Responsive design is the practice of building layouts that adapt gracefully to any screen size, ensuring that content remains readable, navigation remains usable, and performance remains acceptable from a 4-inch phone to a 32-inch monitor.
 
 ## Table of Contents
 
@@ -1057,10 +1067,6 @@ body {
 
 ---
 
-## Next Steps
-
-- [06_JS_Basics.md](./06_JS_Basics.md) - Getting Started with JavaScript
-
 ---
 
 ## References
@@ -1068,3 +1074,7 @@ body {
 - [MDN: Responsive Design](https://developer.mozilla.org/en-US/docs/Learn/CSS/CSS_layout/Responsive_Design)
 - [Google: Responsive Web Design Basics](https://web.dev/responsive-web-design-basics/)
 - [Can I Use](https://caniuse.com/) - Check browser support
+
+---
+
+**Previous**: [CSS Layout](./04_CSS_Layout.md) | **Next**: [JavaScript Basics](./06_JS_Basics.md)

@@ -375,21 +375,35 @@ class NBodyPlasma1D:
 
     def compute_field(self, Ng=128):
         """Compute electric field using Poisson solver on grid."""
-        # Deposit charge to grid
+        # Deposit charge to grid using a histogram (nearest-grid-point scheme);
+        # the histogram approach is the simplest charge assignment, trading
+        # accuracy for speed. More accurate schemes (CIC, TSC) would reduce
+        # numerical noise but complicate the implementation.
         rho_grid, edges = np.histogram(self.x, bins=Ng, range=(0, self.L))
         dx = self.L / Ng
         rho_grid = self.q * rho_grid / dx  # Charge density
 
-        # Background neutralizing charge
+        # Subtract the uniform neutralizing ion background so the net charge
+        # density represents only the deviation from quasi-neutrality. Without
+        # this, the DC mode would drive a huge, unphysical electric field from
+        # the total charge rather than the perturbation.
         rho_grid -= self.q * self.N / self.L
 
         # Solve Poisson equation: d^2 phi / dx^2 = -rho / epsilon_0
-        # Using FFT
+        # FFT gives the exact spectral solution on periodic domains with O(N log N)
+        # cost, far cheaper than direct matrix inversion (O(N^3)).
         rho_k = np.fft.rfft(rho_grid)
         k_modes = 2 * np.pi * np.fft.rfftfreq(Ng, d=dx)
+        # Set k[0] = 1 (not 0) to prevent division by zero in the Poisson solve.
+        # The DC (k=0) component represents a spatially uniform charge, which
+        # produces zero electric field (E = -dφ/dx of a constant is zero); we
+        # enforce this directly by zeroing phi_k[0] below, so k[0] = 1 is safe.
         k_modes[0] = 1  # Avoid division by zero (set DC to zero)
 
         phi_k = -rho_k / (epsilon_0 * k_modes**2)
+        # Zero the DC potential explicitly: a uniform potential shift has no
+        # physical consequence in a periodic box (gauge freedom), and leaving it
+        # non-zero would introduce a spurious constant offset into the field.
         phi_k[0] = 0  # No DC potential
 
         # Electric field: E = -d phi / dx
@@ -409,11 +423,16 @@ class NBodyPlasma1D:
         indices = np.floor(self.x / dx).astype(int) % Ng
         E_particles = E_grid[indices]
 
-        # Push velocities (half step)
+        # Half-step velocity push before and after the position push (leapfrog /
+        # Verlet scheme) makes the integrator time-reversible and second-order
+        # accurate, which is essential for long-run energy conservation in PIC.
         self.v += (self.q / self.m) * E_particles * (dt / 2)
 
         # Push positions
         self.x += self.v * dt
+        # Wrap positions into [0, L] to enforce periodic boundary conditions;
+        # modulo is the cheapest way to handle periodic reentrance without
+        # branching on every particle.
         self.x = self.x % self.L  # Periodic BC
 
         # Push velocities (half step)
@@ -448,13 +467,20 @@ class VlasovPlasma1D:
 
     def compute_field(self):
         """Compute electric field from Poisson equation."""
-        # Density
+        # Integrate f over velocity to get the density; trapz is used because the
+        # velocity grid may not be uniform near the boundaries, and it exactly
+        # preserves the zeroth moment (total particle number) to machine precision.
         n = np.trapz(self.f, self.v, axis=1)
 
         # Charge density (with neutralizing background)
+        # Only the deviation (n - n0) sources the electric field; this is the
+        # same physics as in the N-body solver — quasi-neutrality means the
+        # background ions cancel the mean electron charge.
         rho = -e * (n - n0)
 
-        # Solve Poisson via FFT
+        # Same FFT Poisson solve as N-body; the DC zero-out is repeated here
+        # because the Vlasov grid may accumulate a tiny DC imbalance from
+        # numerical diffusion in the splitting step.
         rho_k = np.fft.rfft(rho)
         k_modes = 2 * np.pi * np.fft.rfftfreq(self.Nx, d=self.dx)
         k_modes[0] = 1
@@ -471,13 +497,24 @@ class VlasovPlasma1D:
         """Advance Vlasov equation using splitting."""
         E = self.compute_field()
 
+        # Strang (operator) splitting separates the 6D Vlasov equation into
+        # two independent 1D advections (in x and v), each of which can be
+        # solved exactly on a periodic grid by a simple array roll.
+        # The splitting error is O(dt^2) per step, matching the overall scheme.
+
         # Step 1: Advection in x (v * df/dx)
+        # Roll f along x by the distance each velocity class travels in dt;
+        # integer rounding is the source of the O(dt^2) splitting error, but
+        # it keeps the distribution non-negative and exactly conservative.
         for j in range(self.Nv):
             v_val = self.v[j]
             shift = int(np.round(v_val * dt / self.dx))
             self.f[:, j] = np.roll(self.f[:, j], -shift)
 
         # Step 2: Acceleration in v ((qE/m) * df/dv)
+        # E is held fixed from the start of the step (explicit treatment);
+        # this is consistent with the splitting approximation and avoids the
+        # need to re-solve Poisson between the x and v sub-steps.
         for i in range(self.Nx):
             accel = -e * E[i] / m_e
             shift = int(np.round(accel * dt / self.dv))
@@ -519,6 +556,9 @@ class FluidPlasma1D:
         E = self.compute_field()
 
         # Continuity: dn/dt = -d(nu)/dx
+        # Spectral differentiation (multiply by ik in Fourier space) is used
+        # instead of finite differences because it is exact for periodic data
+        # and avoids the numerical diffusion that would smear the density wave.
         nu = self.n * self.u
         nu_k = np.fft.rfft(nu)
         k_modes = 2 * np.pi * np.fft.rfftfreq(self.Nx, d=self.dx)
@@ -527,6 +567,11 @@ class FluidPlasma1D:
         self.n -= d_nu_dx * dt
 
         # Momentum (cold, neglecting pressure): du/dt = qE/m - u * du/dx
+        # The cold-fluid assumption (zero pressure) is intentional: it makes
+        # this model the simplest possible fluid, isolating the plasma oscillation
+        # physics without thermal corrections. The missing pressure term is exactly
+        # what the Vlasov model captures and that the fluid model omits (cf. Landau
+        # damping absent in fluid but present in kinetic results).
         u_k = np.fft.rfft(self.u)
         du_dx = np.fft.irfft(1j * k_modes * u_k, n=self.Nx)
 

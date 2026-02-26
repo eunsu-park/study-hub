@@ -2,9 +2,26 @@
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Previous**: [11_Argument_Parsing.md](./11_Argument_Parsing.md) | **Next**: [13_Testing.md](./13_Testing.md)
+**Previous**: [Argument Parsing and CLI Interfaces](./11_Argument_Parsing.md) | **Next**: [Shell Script Testing](./13_Testing.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between POSIX sh, Bash, and Zsh feature sets and select the appropriate shell for a given task
+2. Identify common Bashisms (arrays, `[[ ]]`, process substitution, here strings) and rewrite them as POSIX-compatible equivalents
+3. Apply the Google Shell Style Guide conventions for naming, quoting, indentation, and function documentation
+4. Implement security best practices including input sanitization, eval avoidance, secure temporary files, and PATH hardening
+5. Optimize script performance by minimizing external commands, avoiding unnecessary subshells, and using built-in parameter expansion
+6. Organize scripts into modular, maintainable structures with constants, helpers, core logic, and main entry points
+7. Write dependency checks with version comparison and graceful degradation when optional tools are missing
+8. Prepare scripts for distribution with self-extracting archives, man pages, and bash-completion support
+
+---
+
+Scripts that work perfectly on your development machine can break on a colleague's laptop, a CI runner, or a minimal Docker container. Shell portability, coding standards, and security practices are what turn a personal utility into a reliable piece of shared infrastructure. This lesson covers the conventions and techniques that professional shell developers use to write scripts that are portable, secure, performant, and maintainable across diverse environments.
 
 ## 1. POSIX sh vs Bash vs Zsh
 
@@ -1668,6 +1685,83 @@ Implement a testing framework for shell scripts that:
 - Integrates with CI/CD systems
 - Produces JUnit-style XML reports
 
+## Exercises
+
+### Exercise 1: Audit a Script for Portability Issues
+
+Take the following script fragment and identify every portability issue. For each issue, state the problem and provide the portable fix.
+
+```bash
+#!/bin/bash
+which python3 > /dev/null
+result=`python3 -c "print(2**10)"`
+echo "Result: $result"
+ls *.log | while read file; do
+    wc -l $file
+done
+stat -c%s report.txt
+function cleanup { rm -f /tmp/myapp.$$; }
+```
+
+Issues to look for: bashisms, unsafe quoting, unportable flags, deprecated syntax, unsafe patterns with special filenames.
+
+### Exercise 2: Write a POSIX-Compatible Script
+
+Rewrite the following bash-specific script to be POSIX-compatible (`#!/bin/sh`). Replace every bash-only feature with a POSIX equivalent.
+
+```bash
+#!/bin/bash
+declare -a files=()
+for f in *.conf; do
+    [[ -f "$f" ]] && files+=("$f")
+done
+
+process() {
+    local name="$1"
+    echo "Processing: $name"
+    [[ "$name" =~ ^[0-9]+_ ]] && echo "  (numbered file)"
+}
+
+for f in "${files[@]}"; do
+    process "$f"
+done
+```
+
+After rewriting, test that it runs with both `bash` and `sh`.
+
+### Exercise 3: Integrate ShellCheck into a Workflow
+
+Set up ShellCheck for a small project:
+1. Install ShellCheck (if not already available)
+2. Create a `.shellcheckrc` file that sets `shell=bash` and disables `SC2034` (unused variables — common in sourced libraries)
+3. Write a `lint.sh` script that finds all `*.sh` files under the current directory, runs `shellcheck` on each, and exits with code 1 if any errors (severity `error`) are found
+4. Intentionally introduce two ShellCheck warnings into a test script and verify that `lint.sh` catches them
+
+### Exercise 4: Apply Performance Best Practices
+
+Profile and optimize the following slow script. Measure execution time before and after each change using `time`.
+
+```bash
+#!/bin/bash
+count=0
+while read line; do
+    if echo "$line" | grep -q "ERROR"; then
+        count=$((count + 1))
+    fi
+done < application.log
+echo "Error count: $count"
+```
+
+Apply at least three optimizations (hint: avoid subshells in loops, use built-in string operations, prefer `grep -c` for counting). Compare the final `time` output with the original.
+
+### Exercise 5: Create a Distributable Script Package
+
+Package a script for distribution following best practices:
+- Write a `install.sh` that copies `myscript.sh` to `/usr/local/bin`, sets permissions to `755`, and generates a man page entry at `/usr/local/share/man/man1/myscript.1`
+- Add a `--prefix` option to `install.sh` to support non-root installation (e.g., `~/.local`)
+- Write an `uninstall.sh` that reverses the installation cleanly
+- Add a version check: if the system's bash is older than 4.0, print a warning and exit
+
 ---
 
-**Previous**: [11_Argument_Parsing.md](./11_Argument_Parsing.md) | **Next**: [13_Testing.md](./13_Testing.md)
+**Previous**: [Argument Parsing and CLI Interfaces](./11_Argument_Parsing.md) | **Next**: [Shell Script Testing](./13_Testing.md)

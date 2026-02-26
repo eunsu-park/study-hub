@@ -13,14 +13,17 @@
 - 소프트웨어 테스팅 개념 친숙도
 - 기본 프로그래밍 지식
 
-**학습 목표**:
-- IEEE 및 ISO 25010 프레임워크를 사용하여 소프트웨어 품질 정의하기
-- 품질 보증(Quality Assurance), 품질 관리(Quality Control), 테스팅의 차이 구별하기
-- 소프트웨어 프로젝트에 품질 비용(Cost of Quality) 모델 적용하기
-- 일반적인 소프트웨어 메트릭(순환 복잡도(Cyclomatic Complexity), 응집도(Cohesion), 결합도(Coupling)) 계산 및 해석하기
-- 정적 분석(Static Analysis) 도구를 사용하여 코드 품질 측정 및 개선하기
-- 기술 부채(Technical Debt) 식별 및 관리하기
-- 효과적인 코드 리뷰(Code Review) 진행 및 참여하기
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. IEEE 및 ISO 25010 프레임워크를 사용하여 소프트웨어 품질 정의하기
+2. 품질 보증(Quality Assurance), 품질 관리(Quality Control), 테스팅의 차이 구별하기
+3. 소프트웨어 프로젝트에 품질 비용(Cost of Quality) 모델 적용하기
+4. 일반적인 소프트웨어 메트릭(순환 복잡도(Cyclomatic Complexity), 응집도(Cohesion), 결합도(Coupling)) 계산 및 해석하기
+5. 정적 분석(Static Analysis) 도구를 사용하여 코드 품질 측정 및 개선하기
+6. 기술 부채(Technical Debt) 식별 및 관리하기
+7. 효과적인 코드 리뷰(Code Review) 진행 및 참여하기
 
 ---
 
@@ -797,6 +800,108 @@ def get_user_data(user_id):
   - McCabe, T. J. (1976). "A Complexity Measure." *IEEE Transactions on Software Engineering*.
   - Fagan, M. E. (1976). "Design and Code Inspections to Reduce Errors in Program Development." *IBM Systems Journal*.
   - Cunningham, W. (1992). "The WyCash Portfolio Management System." *OOPSLA*.
+
+---
+
+## 연습 문제
+
+### 연습 1: QA, QC, 테스팅 구별
+
+아래 각 활동을 품질 보증(Quality Assurance, QA), 품질 통제(Quality Control, QC), 또는 테스팅(Testing)으로 분류하세요. 한 활동이 두 가지 이상의 범주에 걸쳐 있을 경우, 그 이유를 설명하세요.
+
+1. 모든 함수에 독스트링(docstring)이 필요하다는 코딩 표준 작성
+2. 풀 리퀘스트(Pull Request) 병합 전에 자동화된 테스트 스위트 실행
+3. 완전성과 일관성을 위해 요구사항 문서 검토
+4. 최근 다섯 번의 릴리스에서 KLOC당 결함 밀도(Defect Density) 측정
+5. 실행 전에 Python 소스 코드에서 보안 문제를 찾기 위해 Bandit 실행
+6. 모든 커밋에서 보안 스캔이 실행되고 있는지 확인하기 위해 CI/CD 파이프라인 감사
+
+### 연습 2: 소프트웨어 메트릭 계산 및 해석
+
+주어진 Python 함수의 순환 복잡도(Cyclomatic Complexity, CC)를 수동으로 계산하세요. 그런 다음 아래 질문에 답하세요.
+
+```python
+def process_refund(order, reason):
+    if order is None or reason is None:
+        return {"error": "Missing input"}
+    if order.status not in ("delivered", "shipped"):
+        return {"error": "Order not eligible for refund"}
+    if reason == "damaged":
+        refund_pct = 100
+    elif reason == "partial":
+        if order.days_since_delivery <= 7:
+            refund_pct = 50
+        else:
+            refund_pct = 25
+    elif reason == "wrong_item":
+        refund_pct = 100
+    else:
+        return {"error": "Invalid reason"}
+    amount = order.total * (refund_pct / 100)
+    return {"refund": amount, "pct": refund_pct}
+```
+
+(a) CC는 얼마입니까? 계산에 포함된 각 결정 지점(Decision Point)을 나열하세요.
+(b) 이 CC는 허용 가능합니까? CC 위험 표에서 권장 조치는 무엇입니까?
+(c) 동작을 변경하지 않고 CC를 줄이는 리팩토링 전략을 하나 제안하세요.
+
+### 연습 3: 품질 비용(Cost of Quality) 모델 적용
+
+소규모 SaaS 팀의 월별 지출은 다음과 같습니다:
+
+| 활동 | 월별 비용 |
+|------|-----------|
+| 자동화 테스트 인프라 (CI 러너) | $1,200 |
+| 주간 코드 리뷰 세션 (엔지니어 2명 × 3시간 × $80/시간) | $1,920 |
+| 보안 코딩 개발자 교육 | $800 |
+| 릴리스 전 버그 수정 | $9,000 |
+| 프로덕션 인시던트 고객 지원 | $14,000 |
+| 긴급 핫픽스 및 롤백 | $6,500 |
+
+(a) 네 가지 CoQ 범주(예방, 평가, 내부 실패, 외부 실패)를 사용하여 각 비용을 분류하세요.
+(b) 총 품질 비용(Total Cost of Quality)은 얼마입니까? 예방 + 평가 대 실패의 비율은 얼마입니까?
+(c) 팀이 예방(더 나은 테스트 도구 및 CI 린팅)에 월 $3,000을 추가로 투자할 것을 고려하고 있습니다. 1-10-100 규칙에 근거하여 이 투자의 손익분기점을 달성하기 위해 필요한 최소 실패 비용 절감액을 추정하세요.
+
+### 연습 4: 기술 부채(Technical Debt) 감소 계획 설계
+
+레거시 결제 모듈의 정적 분석 스캔 결과:
+
+- CC > 15인 함수 23개
+- 테스트 커버리지 58% (목표: 85%)
+- 확인된 SQL 인젝션 취약점 3개 (SAST 발견)
+- 중복 코드 블록 140개
+- 더 이상 사용되지 않는 API 호출 8개
+
+(a) Fowler의 기술 부채 사분면(Technical Debt Quadrant)을 사용하여 각 범주를 분류하세요.
+(b) 스프린트 용량의 20%를 부채 감소에 할당할 수 있는 팀을 위해 다섯 가지 범주의 우선순위를 정하세요. 순위 결정 근거를 제시하세요.
+(c) 프로덕션 위험을 고려하여 각 스프린트에 작업 패키지를 할당하는 4스프린트 부채 감소 계획을 작성하세요.
+
+### 연습 5: 풀 리퀘스트 코드 리뷰 작성
+
+아래는 단순화된 Python 라우트 핸들러입니다. 시니어 엔지니어가 PR 리뷰를 진행하는 것처럼 검토하세요. 정확성, 보안, 성능, 유지보수성 차원에서 최소 여섯 가지 문제를 식별하세요. 각 문제에 대해 발생 가능한 문제점을 설명하고 수정된 코드 스니펫을 제공하세요.
+
+```python
+@app.route("/transfer", methods=["POST"])
+def transfer():
+    data = request.json
+    from_id = data["from_account"]
+    to_id = data["to_account"]
+    amount = data["amount"]
+    conn = db.connect()
+    from_bal = conn.execute(
+        "SELECT balance FROM accounts WHERE id = " + str(from_id)
+    ).fetchone()[0]
+    if from_bal >= amount:
+        conn.execute(
+            "UPDATE accounts SET balance = balance - " + str(amount) +
+            " WHERE id = " + str(from_id)
+        )
+        conn.execute(
+            "UPDATE accounts SET balance = balance + " + str(amount) +
+            " WHERE id = " + str(to_id)
+        )
+    return jsonify({"status": "ok"})
+```
 
 ---
 

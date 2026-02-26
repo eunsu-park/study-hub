@@ -111,6 +111,8 @@ class Circle:
         """Instance method - uses instance data."""
         return self.pi * self.radius ** 2
 
+    # Why: @classmethod receives the class (cls) instead of an instance, enabling alternative
+    # constructors that work correctly with subclasses (cls ensures the right type is created)
     @classmethod
     def from_diameter(cls, diameter: float):
         """Class method - alternative constructor."""
@@ -166,7 +168,9 @@ class Dog(Animal):
 
     def __init__(self, name: str, breed: str):
         """Initialize with additional attribute."""
-        super().__init__(name)  # Call parent constructor
+        # Why: super().__init__() delegates to the parent's constructor, ensuring the MRO
+        # chain is followed correctly — hard-coding Animal.__init__() breaks with MI
+        super().__init__(name)
         self.breed = breed
 
     def speak(self) -> str:
@@ -271,6 +275,8 @@ class Vector:
         self.x = x
         self.y = y
 
+    # Why: __repr__ is for developers (unambiguous, ideally eval()-able), while __str__ is
+    # for end users (readable) — print() uses __str__, while the REPL and debuggers use __repr__
     def __repr__(self) -> str:
         """String representation."""
         return f"Vector({self.x}, {self.y})"
@@ -396,7 +402,9 @@ class CarComposition:
 
     def __init__(self, brand: str, horsepower: int):
         self.brand = brand
-        self.engine = Engine(horsepower)  # Composition
+        # Why: Composition ("has-a") is favored over inheritance ("is-a") because it allows
+        # swapping the Engine implementation at runtime without changing CarComposition's hierarchy
+        self.engine = Engine(horsepower)
 
     def start(self):
         return self.engine.start()
@@ -525,6 +533,8 @@ class BankAccount:
 
     def get_transaction_history(self) -> List[str]:
         """Get transaction history."""
+        # Why: Returning a copy prevents callers from mutating the internal list directly,
+        # preserving encapsulation — modifying the returned list won't affect account state
         return self._transactions.copy()
 
     def __str__(self) -> str:

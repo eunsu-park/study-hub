@@ -1,11 +1,22 @@
 # 13. 빌드 도구와 개발 환경 (Build Tools & Development Environment)
 
-## 학습 목표
-- 패키지 관리자(npm, yarn, pnpm) 이해와 활용
-- 모던 빌드 도구(Vite, webpack) 설정
-- 개발 환경 구성 및 최적화
-- 환경 변수 관리
-- 프로덕션 빌드 최적화
+**이전**: [SEO 기초](./12_SEO_Basics.md) | **다음**: [CSS 애니메이션](./14_CSS_Animations.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. npm, yarn, pnpm 패키지 관리자(package manager)를 사용하여 프로젝트 의존성을 관리할 수 있습니다
+2. `package.json`과 락 파일(lock file)에서 시맨틱 버저닝(semantic versioning) 범위를 해석할 수 있습니다
+3. TypeScript, 경로 별칭(path aliases), 프록시(proxy) 설정을 포함한 Vite 프로젝트를 스캐폴딩하고 구성할 수 있습니다
+4. 엔트리(entry), 아웃풋(output), 로더(loaders), 플러그인(plugins)이라는 webpack의 핵심 개념을 설명할 수 있습니다
+5. 개발 및 프로덕션 빌드를 위한 환경 변수(environment variables)를 설정할 수 있습니다
+6. ESLint, Prettier, Husky를 설정하여 팀 워크플로우에서 코드 품질을 강제할 수 있습니다
+7. 코드 스플리팅(code splitting), 트리 쉐이킹(tree shaking), 압축(minification)으로 프로덕션 빌드를 최적화할 수 있습니다
+
+---
+
+모던 웹 개발은 HTML, CSS, JavaScript 파일을 작성하는 것 이상을 요구합니다. 패키지 관리자는 의존성 트리를 해결하고, 빌드 도구는 코드를 번들링하고 최적화하며, 린터는 오류가 프로덕션에 도달하기 전에 잡아냅니다. 이러한 도구들을 마스터하면 느슨한 파일 모음이 1인 프로젝트부터 대규모 팀까지 확장 가능한 전문적이고 재현 가능한 개발 워크플로우로 변환됩니다.
 
 ## 목차
 1. [패키지 관리자](#1-패키지-관리자)
@@ -814,8 +825,8 @@ npx husky add .husky/pre-commit "npx lint-staged"
 ---
 
 ## 다음 단계
-- [10. TypeScript 기초](./10_TypeScript_Basics.md)
-- [11. 웹 접근성](./11_Web_Accessibility.md)
+- [14. CSS 애니메이션](./14_CSS_Animations.md)
+- [15. JS 모듈](./15_JS_Modules.md)
 
 ## 참고 자료
 - [Vite Documentation](https://vitejs.dev/)

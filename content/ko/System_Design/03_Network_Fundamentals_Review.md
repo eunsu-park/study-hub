@@ -1,14 +1,27 @@
 # 네트워크 기초 복습
 
-## 개요
+**이전**: [확장성 기초](./02_Scalability_Basics.md) | **다음**: [로드 밸런싱](./04_Load_Balancing.md)
 
-이 문서에서는 시스템 설계에 필수적인 네트워크 개념을 복습합니다. DNS 동작 원리와 DNS 기반 로드밸런싱, CDN의 Push/Pull 모델, HTTP/2와 HTTP/3의 특징, 그리고 REST와 gRPC의 선택 기준을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. DNS 해석(DNS resolution)이 어떻게 동작하는지, 그리고 DNS 기반 로드 밸런싱이 서버 간 트래픽을 어떻게 분산하는지 설명할 수 있다
+2. CDN의 Push 모델과 Pull 모델을 비교하고, 주어진 콘텐츠 전달 시나리오에 어느 것이 적합한지 판단할 수 있다
+3. HTTP/1.1 대비 HTTP/2의 주요 개선 사항(멀티플렉싱(multiplexing), 서버 푸시(server push), 헤더 압축(header compression))을 설명할 수 있다
+4. HTTP/3와 QUIC이 전송 계층(transport layer)의 HOL 블로킹(head-of-line blocking) 문제를 어떻게 해결하는지 설명할 수 있다
+5. REST와 gRPC를 비교하고, 서비스 간 통신에서 각 프로토콜이 더 적합한 상황을 파악할 수 있다
+6. 전 세계에 분산된 시스템 설계에서 발생하는 네트워크 트레이드오프(trade-off)를 평가할 수 있다
 
 **난이도**: ⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [Networking 폴더](../Networking/00_Overview.md) 기초
 
 ---
+
+네트워킹은 모든 분산 시스템의 보이지 않는 배관(plumbing)이다. 웹 페이지 하나를 로드하는 데도 수십 번의 DNS 조회, CDN 엣지 서버 접근, HTTP 왕복이 발생할 수 있으며, 각 단계마다 지연(latency), 장애 모드, 설계 선택지가 따라온다. 로드 밸런서, 캐시, 데이터베이스의 대규모 동작을 이해하려면, 이 모든 것을 연결하는 네트워크 계층을 먼저 탄탄하게 파악해야 한다.
 
 ## 목차
 
@@ -17,8 +30,7 @@
 3. [HTTP/2와 HTTP/3](#3-http2와-http3)
 4. [REST vs gRPC](#4-rest-vs-grpc)
 5. [연습 문제](#5-연습-문제)
-6. [다음 단계](#6-다음-단계)
-7. [참고 자료](#7-참고-자료)
+6. [참고 자료](#6-참고-자료)
 
 ---
 
@@ -797,23 +809,44 @@ gRPC 선택
 
 ---
 
-## 6. 다음 단계
+## 실습 과제
 
-네트워크 기초를 복습했다면, 로드밸런싱에 대해 더 깊이 학습하세요.
+### 실습 1: DNS 조회 추적기
 
-### 다음 레슨
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - L4/L7 로드밸런서, 분배 알고리즘
+재귀 쿼리(recursive query)와 반복 쿼리(iterative query)의 차이를 보여주는 간단한 DNS 조회 시뮬레이터를 만드세요.
 
-### 관련 레슨
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md) - 프록시 패턴
+**과제:**
+1. Root → TLD(.com) → Authoritative(example.com)로 이어지는 DNS 서버 계층 구조를 만드세요.
+2. 각 서버가 다음 계층에 쿼리하고 최종 응답을 반환하는 `recursive_resolve(domain)` 함수를 구현하세요.
+3. 리졸버(resolver)가 직접 참조(referral)를 따라가는 `iterative_resolve(domain)` 함수를 구현하세요.
+4. 각 방식에서 교환되는 메시지 수를 추적하고 비교하세요.
+5. 캐싱 계층을 추가하고, 이후 조회가 얼마나 빨라지는지 보여주세요.
 
-### 추천 학습
-- [Networking/12_DNS.md](../Networking/12_DNS.md) - DNS 상세
-- [Networking/13_HTTP_and_HTTPS.md](../Networking/13_HTTP_and_HTTPS.md) - HTTP 상세
+### 실습 2: HTTP/1.1 vs HTTP/2 비교
+
+HTTP/1.1의 순차적 요청과 HTTP/2 멀티플렉싱(multiplexing)의 성능 차이를 시뮬레이션하세요.
+
+**과제:**
+1. 크기가 다양한 10개의 리소스(CSS, JS, 이미지)가 필요한 페이지를 모델링하세요.
+2. HTTP/1.1 시뮬레이션: 최대 6개의 병렬 연결, 각 리소스는 자신의 연결을 점유합니다.
+3. HTTP/2 시뮬레이션: 10개의 요청 모두를 1개의 연결에서 멀티플렉싱하여 프레임을 인터리빙합니다.
+4. 각 프로토콜의 총 페이지 로드 시간을 계산하세요.
+5. 하나의 리소스가 느릴 때 HOL 블로킹(Head-of-Line Blocking)이 HTTP/1.1에 미치는 영향을 보여주세요.
+
+### 실습 3: REST vs gRPC 페이로드 비교
+
+JSON(REST)과 프로토콜 버퍼(Protocol Buffers, gRPC) 간의 메시지 크기와 직렬화 오버헤드를 비교하세요.
+
+**과제:**
+1. 샘플 데이터 구조를 정의하세요 (예: 이름, 나이, 이메일, 주소 목록을 포함한 사용자 프로필).
+2. JSON(`json.dumps`)으로 직렬화하고 바이트 크기를 측정하세요.
+3. Protobuf 인코딩을 시뮬레이션하세요 (간단한 이진 인코딩 또는 실제 `struct.pack` 사용).
+4. 1건, 10건, 100건의 레코드에 대한 페이로드 크기를 비교하세요.
+5. 크기 차이가 언제 중요한지 논의하세요 (고처리량 마이크로서비스 vs 단순 API).
 
 ---
 
-## 7. 참고 자료
+## 6. 참고 자료
 
 ### RFC 문서
 - RFC 7540 - HTTP/2
@@ -833,7 +866,4 @@ gRPC 선택
 
 ---
 
-**문서 정보**
-- 최종 수정: 2024년
-- 난이도: ⭐⭐
-- 예상 학습 시간: 2-3시간
+**이전**: [확장성 기초](./02_Scalability_Basics.md) | **다음**: [로드 밸런싱](./04_Load_Balancing.md)

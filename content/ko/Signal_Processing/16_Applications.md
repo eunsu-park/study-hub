@@ -10,15 +10,18 @@
 
 **선수 지식**: DFT/FFT, 필터링(FIR/IIR), 변조 기초, 상관관계, 스펙트럼 분석
 
-**학습 목표**:
-- 오디오 신호 표현을 이해하고 디지털 오디오 이펙트를 구현한다
-- 자기상관(autocorrelation)과 켑스트럼(cepstrum) 방법을 사용한 피치(pitch) 검출을 구현한다
-- 아날로그 및 디지털 변조 방식(AM, FM, ASK, FSK, PSK, QAM)을 설명한다
-- 펄스 성형(pulse shaping), 정합 필터링(matched filtering), OFDM 기초를 설명한다
-- 레이더 신호 처리에 정합 필터링과 처프(chirp) 압축을 적용한다
-- 레이더 파형 설계를 위한 모호 함수(ambiguity function)를 계산하고 해석한다
-- 본 과정의 기법을 사용하여 생체의학 신호(ECG, EEG)를 처리한다
-- 각 응용의 동작하는 Python 시연을 구현한다
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 오디오 신호 표현을 이해하고 디지털 오디오 이펙트를 구현한다
+2. 자기상관(autocorrelation)과 켑스트럼(cepstrum) 방법을 사용한 피치(pitch) 검출을 구현한다
+3. 아날로그 및 디지털 변조 방식(AM, FM, ASK, FSK, PSK, QAM)을 설명한다
+4. 펄스 성형(pulse shaping), 정합 필터링(matched filtering), OFDM 기초를 설명한다
+5. 레이더 신호 처리에 정합 필터링과 처프(chirp) 압축을 적용한다
+6. 레이더 파형 설계를 위한 모호 함수(ambiguity function)를 계산하고 해석한다
+7. 본 과정의 기법을 사용하여 생체의학 신호(ECG, EEG)를 처리한다
+8. 각 응용의 동작하는 Python 시연을 구현한다
 
 ---
 

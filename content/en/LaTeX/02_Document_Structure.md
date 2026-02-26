@@ -5,6 +5,19 @@
 > **Prerequisites**: Lesson 1 (Introduction and Setup)
 > **Objective**: Master document classes, preamble configuration, sectioning commands, and techniques for organizing complex documents
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Select an appropriate document class for a given document type and configure its options
+2. Construct a well-organized preamble with package imports and global settings
+3. Apply sectioning commands to create a logical document hierarchy with automatic numbering
+4. Use the `\tableofcontents`, `\listoffigures`, and `\listoftables` commands to generate automatic navigation aids
+5. Split large documents into multiple files using `\input` and `\include`, and manage them with a master document
+6. Control page numbering, title pages, and abstract environments to meet academic formatting standards
+
+---
+
 ## Document Classes
 
 Every LaTeX document begins with `\documentclass{...}`. The document class defines the overall structure and formatting rules for your document.
@@ -875,5 +888,5 @@ These foundational concepts will be used in every LaTeX document you create. Nex
 ---
 
 **Navigation**
-- Previous: [01_Introduction_and_Setup.md](01_Introduction_and_Setup.md)
-- Next: [03_Text_Formatting.md](03_Text_Formatting.md)
+- Previous: [Introduction to LaTeX](01_Introduction_and_Setup.md)
+- Next: [Text Formatting](03_Text_Formatting.md)

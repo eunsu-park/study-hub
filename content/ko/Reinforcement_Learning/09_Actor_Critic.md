@@ -77,7 +77,9 @@ class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
 
-        # 공유 특징 추출
+        # 공유 특징 추출(shared feature extraction): Actor와 Critic이 초기 레이어를 공유하는 이유는
+        # 위치·속도 같은 저수준 상태 표현이 정책 결정과 가치 추정 모두에 유용하기 때문이다 —
+        # 공유를 통해 연산량을 줄이고, 두 헤드 모두에 유익한 표현을 학습하도록 강제한다
         self.shared = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU()
@@ -88,9 +90,12 @@ class ActorCritic(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim)
+            # 여기서는 활성화 없음 — softmax는 forward()에서 적용하여
+            # 수치적으로 더 안정적인 raw logits 상태로 작업할 수 있다
         )
 
-        # Critic (가치)
+        # Critic은 스칼라 가치 V(s)를 출력하며, 특정 행동과 무관하게
+        # *현재 상태*가 평균적으로 얼마나 좋은지를 추정한다
         self.critic = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -105,6 +110,8 @@ class ActorCritic(nn.Module):
 
     def get_action(self, state):
         policy, value = self.forward(state)
+        # Categorical 분포(Categorical distribution)는 확률적 행동 선택을 가능하게 해 탐험에 필수적이다;
+        # log_prob는 정책 경사(policy gradient) 업데이트에 사용하기 위해 저장된다
         dist = torch.distributions.Categorical(policy)
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -162,7 +169,9 @@ class A2CAgent:
         return torch.tensor(returns)
 
     def update(self, next_state):
-        # 다음 상태의 가치 (부트스트래핑)
+        # 부트스트래핑(bootstrapping): 에피소드 종료를 기다리는 대신 Critic을 사용해
+        # 남은 리턴을 추정한다 — 이것이 Actor-Critic을 에피소드 중간에도 업데이트할 수 있는
+        # 온라인 알고리즘으로 만드는 핵심이다
         with torch.no_grad():
             _, next_value = self.network(
                 torch.FloatTensor(next_state).unsqueeze(0)
@@ -174,12 +183,19 @@ class A2CAgent:
         log_probs = torch.stack(self.log_probs)
         entropies = torch.stack(self.entropies)
 
-        # Advantage
+        # Advantage 계산 시 values를 계산 그래프에서 분리(detach)한다 —
+        # Critic 추정값을 고정 기준선(baseline)으로 취급하여 log_probs를 통해서만
+        # Actor 손실이 역전파되도록 한다
         advantages = returns - values.detach()
 
-        # 손실 계산
+        # 정책 경사(policy gradient) 손실: 기준선이 있는 REINFORCE —
+        # 평균보다 좋은 행동의 확률은 높이고, 나쁜 행동의 확률은 낮춘다
         actor_loss = -(log_probs * advantages).mean()
+        # MSE 손실로 Critic이 할인된 리턴을 정확히 예측하도록 훈련한다 —
+        # 더 정확한 기준선은 시간이 지날수록 Actor 경사의 분산을 줄인다
         critic_loss = F.mse_loss(values, returns)
+        # 엔트로피 보너스(entropy bonus)는 지나치게 확신에 찬 정책에 패널티를 주어 탐험을 장려한다;
+        # 음수 부호는 엔트로피를 최대화하면서 전체 손실을 최소화하기 때문이다
         entropy_loss = -entropies.mean()
 
         total_loss = (actor_loss +
@@ -189,6 +205,8 @@ class A2CAgent:
         # 업데이트
         self.optimizer.zero_grad()
         total_loss.backward()
+        # 그래디언트 클리핑(gradient clipping)은 폭발적 그래디언트를 방지한다 —
+        # 희소 보상이나 분산이 높은 환경에서 자주 발생하며, 0.5는 보수적인 상한값이다
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
         self.optimizer.step()
 
@@ -267,14 +285,21 @@ $$A^{GAE}\_t = \sum\_{l=0}^{\infty} (\gamma \lambda)^l \delta\_{t+l}$$
 def compute_gae(rewards, values, next_values, dones, gamma=0.99, lam=0.95):
     """Generalized Advantage Estimation"""
     advantages = []
+    # 역방향 순회(backward traversal): GAE는 재귀적 합이라 A_t가 A_{t+1}에 의존한다.
+    # 앞에서부터 계산하면 미래 델타를 모두 저장해야 하지만, 역방향으로 순회하면
+    # gae 누적합을 단일 패스로 계산할 수 있다
     gae = 0
 
     for t in reversed(range(len(rewards))):
         if dones[t]:
+            # 에피소드 경계: 이 시점 이후의 미래 리턴은 현재 궤적에 속하지 않으므로
+            # 누적기를 초기화하여 가치 누출(value leakage)을 방지한다
             delta = rewards[t] - values[t]
             gae = delta
         else:
             delta = rewards[t] + gamma * next_values[t] - values[t]
+            # GAE는 TD-1(낮은 분산, 높은 편향)과 몬테카를로(높은 분산, 낮은 편향)를
+            # lambda로 결합한다: lam=0이면 순수 TD, lam=1이면 몬테카를로 리턴
             gae = delta + gamma * lam * gae
 
         advantages.insert(0, gae)
@@ -387,6 +412,8 @@ class ContinuousActorCritic(nn.Module):
 
         # Actor: 평균과 표준편차
         self.actor_mean = nn.Linear(hidden_dim, action_dim)
+        # log_std를 상태 독립적인 학습 파라미터로 두면 훈련 초기에 정책을 더 단순하고
+        # 안정적으로 유지할 수 있다; exp()를 통해 항상 std > 0을 보장한다
         self.actor_log_std = nn.Parameter(torch.zeros(action_dim))
 
         # Critic
@@ -403,8 +430,12 @@ class ContinuousActorCritic(nn.Module):
         mean, std, value = self.forward(state)
 
         if deterministic:
+            # 테스트 시에는 평균값을 직접 사용한다 — 탐험 노이즈 없이
+            # 알려진 최선의 행동을 원하기 때문에 무작위 샘플링이 필요 없다
             action = mean
         else:
+            # Normal 분포(Normal distribution)는 연속 행동 공간을 모델링한다;
+            # 샘플링은 학습된 std에 비례하는 확률적 탐험을 추가한다
             dist = torch.distributions.Normal(mean, std)
             action = dist.sample()
 
@@ -414,6 +445,8 @@ class ContinuousActorCritic(nn.Module):
         mean, std, value = self.forward(state)
         dist = torch.distributions.Normal(mean, std)
 
+        # 행동 차원에 걸쳐 log_prob를 합산: 독립적인 차원을 가진 다변량 Normal의 경우
+        # 결합 로그 확률(joint log-probability)은 주변 확률의 합이다
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         entropy = dist.entropy().sum(-1, keepdim=True)
 
@@ -454,6 +487,8 @@ class RunningMeanStd:
     def __init__(self):
         self.mean = 0
         self.var = 1
+        # 작은 초기 count는 데이터가 들어오기 전 0으로 나누는 것을 방지하면서도
+        # 실제 샘플이 충분히 쌓이면 영향이 무시할 수준이 된다
         self.count = 1e-4
 
     def update(self, x):
@@ -464,12 +499,16 @@ class RunningMeanStd:
         delta = batch_mean - self.mean
         total_count = self.count + batch_count
 
+        # Welford의 온라인 알고리즘(Welford's online algorithm): 과거 데이터를 저장하지 않고
+        # 평균과 분산을 증분적으로 업데이트한다 — 에피소드 수와 무관하게 O(1) 메모리 사용
         self.mean += delta * batch_count / total_count
         self.var = (self.var * self.count + batch_var * batch_count +
                    delta**2 * self.count * batch_count / total_count) / total_count
         self.count = total_count
 
     def normalize(self, x):
+        # 1e-8 엡실론(epsilon)은 분산이 0에 가까울 때(예: 배치 내 모든 보상이 동일할 때)
+        # 0으로 나누는 것을 방지한다
         return (x - self.mean) / (np.sqrt(self.var) + 1e-8)
 ```
 

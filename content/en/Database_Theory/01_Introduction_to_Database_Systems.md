@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define a database system and explain the limitations of file-based data management that motivated its development.
+2. Describe the roles and responsibilities of a Database Management System (DBMS) and identify its key components.
+3. Explain the Three-Schema (ANSI/SPARC) Architecture and distinguish between physical, conceptual, and external schemas.
+4. Differentiate between physical and logical data independence and justify their importance in database design.
+5. Identify the major data models (relational, hierarchical, network, object-oriented) and compare their characteristics.
+6. Recognize the different types of database users and describe their distinct roles and interaction patterns with a DBMS.
+
+---
+
 A database system is one of the most important pieces of software infrastructure in modern computing. From banking transactions and airline reservations to social media feeds and scientific research, databases underpin virtually every application that manages persistent, shared data. This lesson introduces the fundamental concepts, architecture, and terminology that form the foundation of database theory.
 
 ## Table of Contents
@@ -361,6 +374,13 @@ Combining the scalability of NoSQL with the guarantees of relational systems:
 
 The **three-schema architecture** (also called the three-level architecture) separates a database system into three abstraction levels. This separation is the foundation of data independence.
 
+> **Analogy -- Think of a Building**:
+> - **External schema** = the floor plan given to tenants. Each tenant sees only the rooms relevant to them (a restaurant sees the kitchen layout; an office sees meeting rooms). Different tenants get different views of the same building.
+> - **Conceptual schema** = the architect's blueprint. It describes every room, wall, door, and hallway in a single, unified design -- the complete logical structure of the building.
+> - **Internal schema** = the electrical wiring, plumbing, and structural steel hidden inside the walls. Tenants never see these details, and the architect's blueprint does not change when an electrician reroutes a cable.
+>
+> Just as rewiring does not force the architect to redraw the blueprint (physical independence), and adding a new room for a tenant does not change the wiring diagram (logical independence), the three-schema architecture insulates each level from changes in the others.
+
 ### The Three Levels
 
 ```
@@ -410,7 +430,9 @@ The **three-schema architecture** (also called the three-level architecture) sep
 The **external level** describes the part of the database that is relevant to a particular user or application. Different users see different views of the same underlying data.
 
 ```sql
--- View for the Registrar (sees academic info)
+-- View for the Registrar: exposes only academic columns (name, major, gpa, grades).
+-- Financial columns (scholarship, loan) are intentionally excluded —
+-- this enforces column-level access control without modifying the base table.
 CREATE VIEW registrar_view AS
 SELECT s.student_id, s.name, s.major, s.gpa,
        c.course_id, c.title, e.grade
@@ -418,13 +440,17 @@ FROM students s
 JOIN enrollments e ON s.student_id = e.student_id
 JOIN courses c ON e.course_id = c.course_id;
 
--- View for Financial Aid (sees financial info)
+-- View for Financial Aid: exposes only financial columns.
+-- Academic details (GPA, grades) are hidden — the Financial Aid office
+-- has no business reason to see them, following the principle of least privilege.
 CREATE VIEW financial_aid_view AS
 SELECT s.student_id, s.name, s.financial_status,
        s.scholarship_amount, s.loan_balance
 FROM students s;
 
--- View for the Student Portal (limited self-view)
+-- View for the Student Portal: row-level + column-level restriction.
+-- The WHERE clause limits each student to their own rows (row-level security),
+-- while the SELECT list omits sensitive fields like student_id and financial data.
 CREATE VIEW student_portal_view AS
 SELECT s.name, s.gpa, c.title, e.grade
 FROM students s
@@ -815,36 +841,63 @@ class DBA:
     """Database Administrator responsibilities"""
 
     def schema_management(self):
-        """Define and modify database schema"""
+        """Define and modify database schema.
+
+        Why: The DBA owns the conceptual schema — the single source of truth
+        for what data exists. Without centralized schema control, teams would
+        create conflicting table definitions (the same redundancy problem that
+        motivated moving from files to a DBMS in the first place).
+        """
         # CREATE TABLE, ALTER TABLE, CREATE INDEX
-        # Define views for different user groups
-        # Manage schema migrations
+        # Define views for different user groups — enforces least-privilege access
+        # Manage schema migrations — coordinate schema changes with app releases
 
     def security_management(self):
-        """Control access to the database"""
-        # GRANT/REVOKE privileges
-        # Create roles and assign users
-        # Audit access logs
+        """Control access to the database.
+
+        Why: A DBMS stores data for many users with different trust levels.
+        The DBA translates organizational access policies into GRANT/REVOKE
+        statements, ensuring that each role sees only what it needs (principle
+        of least privilege) and that every access is auditable.
+        """
+        # GRANT/REVOKE privileges — map business roles to DB permissions
+        # Create roles and assign users — group-based access is easier to audit
+        # Audit access logs — detect unauthorized or anomalous queries
 
     def performance_tuning(self):
-        """Optimize database performance"""
-        # Analyze query execution plans
-        # Create/drop indexes based on workload
-        # Configure buffer pool, cache sizes
-        # Partition large tables
+        """Optimize database performance.
+
+        Why: A query that ran fine with 1,000 rows may become unacceptably slow
+        at 10 million rows. The DBA bridges the gap between the logical schema
+        (what the data looks like) and the physical schema (how the data is
+        stored), adding indexes and adjusting storage to match real workloads.
+        """
+        # Analyze query execution plans — find bottlenecks before users notice
+        # Create/drop indexes based on workload — balance read speed vs write cost
+        # Configure buffer pool, cache sizes — keep hot data in memory
+        # Partition large tables — distribute I/O and enable faster scans
 
     def backup_and_recovery(self):
-        """Ensure data durability"""
-        # Schedule regular backups (full, incremental)
-        # Test recovery procedures
-        # Manage transaction logs
-        # Handle disaster recovery
+        """Ensure data durability.
+
+        Why: Hardware fails, humans make mistakes, and disasters happen.
+        Without tested backup/recovery procedures, a single disk failure or
+        accidental DELETE can cause permanent data loss.
+        """
+        # Schedule regular backups (full, incremental) — minimize data loss window
+        # Test recovery procedures — an untested backup is not a backup
+        # Manage transaction logs — enable point-in-time recovery
+        # Handle disaster recovery — restore service after catastrophic failure
 
     def capacity_planning(self):
-        """Plan for growth"""
-        # Monitor disk usage trends
-        # Estimate future storage needs
-        # Plan hardware upgrades
+        """Plan for growth.
+
+        Why: Databases grow over time. Proactive planning avoids emergency
+        migrations under pressure (e.g., running out of disk space at 3 AM).
+        """
+        # Monitor disk usage trends — forecast when current storage will run out
+        # Estimate future storage needs — align with business growth projections
+        # Plan hardware upgrades — budget and schedule before hitting limits
 ```
 
 ---

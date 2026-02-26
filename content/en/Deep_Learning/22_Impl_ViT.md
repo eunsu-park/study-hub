@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the core idea of ViT — treating an image as a sequence of flattened patches — and describe how this reformulates image classification as a sequence modeling problem.
+2. Calculate the number of patches produced from an input image given the patch size, and determine the embedding dimension for each patch token.
+3. Describe the role of the [CLS] token and 1D learnable positional embeddings in the ViT architecture.
+4. Implement the full ViT pipeline from scratch in PyTorch: patch embedding, Transformer encoder blocks, and classification head.
+5. Fine-tune a pretrained ViT model on a downstream image classification dataset and compare its performance against CNN baselines.
+6. Identify the data requirements and computational trade-offs of ViT compared to CNNs, and explain why ViT benefits significantly from large-scale pretraining.
+
+---
+
 ## Overview
 
 Vision Transformer (ViT) applies the Transformer architecture to image classification. It divides images into patches and treats each patch like a token. "An Image is Worth 16x16 Words" (Dosovitskiy et al., 2020)

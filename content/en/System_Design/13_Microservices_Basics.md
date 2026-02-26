@@ -1,12 +1,21 @@
 # Microservices Fundamentals
 
+**Previous**: [Message Systems Comparison](./12_Message_System_Comparison.md) | **Next**: [Microservices Patterns](./14_Microservices_Patterns.md)
+
 Difficulty: ⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Microservices architecture is a design approach that structures an application as a collection of small, independent services. In this chapter, you will learn the difference between monolith and microservices, service boundary definition, data management principles, and inter-service communication methods.
+1. Compare monolithic and microservices architectures, identifying the trade-offs of each approach
+2. Enumerate the key characteristics of well-designed microservices (single responsibility, autonomous deployment, decentralized data)
+3. Apply Domain-Driven Design concepts (bounded contexts, aggregates) to define service boundaries
+4. Explain the database-per-service pattern and strategies for managing cross-service data consistency
+5. Distinguish between synchronous (REST, gRPC) and asynchronous (event-driven) inter-service communication styles
+6. Outline a practical migration strategy from a monolith to microservices using the Strangler Fig pattern
 
 ---
+
+Netflix famously migrated from a monolithic Java application to over 700 microservices, enabling them to deploy thousands of times per day and scale individual components independently. Yet many teams that rush into microservices without understanding the fundamentals end up with a "distributed monolith" that is harder to operate than what they started with. This lesson builds the conceptual foundation you need to decompose systems wisely and avoid the most common pitfalls.
 
 ## Table of Contents
 
@@ -791,9 +800,7 @@ Create a plan to transition an existing monolith e-commerce system to microservi
 
 ---
 
-## Next Steps
-
-Learn about Service Discovery, Circuit Breaker, Service Mesh, and other microservices operational patterns in [14_Microservices_Patterns.md](./14_Microservices_Patterns.md)!
+**Previous**: [Message Systems Comparison](./12_Message_System_Comparison.md) | **Next**: [Microservices Patterns](./14_Microservices_Patterns.md)
 
 ---
 

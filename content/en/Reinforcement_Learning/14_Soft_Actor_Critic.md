@@ -184,13 +184,22 @@ class GaussianActor(nn.Module):
         std = log_std.exp()
         normal = Normal(mean, std)
 
-        # Reparameterization trick: z = μ + σ·ε
+        # Why reparameterization trick (rsample instead of sample): allows
+        # gradients to flow through the stochastic sampling step — z = μ + σ·ε
+        # moves randomness to a fixed ε ~ N(0,I) so the actor loss can be
+        # differentiated with respect to μ and σ
         z = normal.rsample()
 
-        # Squash through tanh
+        # Why tanh squashing: maps unbounded Gaussian samples to (-1, 1),
+        # matching the bounded action spaces common in continuous control
+        # (e.g., joint torques); without squashing the policy could produce
+        # arbitrarily large actions that saturate actuators
         action = torch.tanh(z)
 
-        # Log probability with correction for tanh squashing
+        # Why the correction term -log(1 - action^2 + 1e-6): the change-of-
+        # variables formula for log-probabilities requires subtracting the
+        # log absolute Jacobian of tanh; omitting this makes log_prob incorrect,
+        # causing the entropy estimate and actor gradient to be wrong
         log_prob = normal.log_prob(z) - torch.log(1 - action.pow(2) + 1e-6)
         log_prob = log_prob.sum(dim=-1, keepdim=True)
 
@@ -251,10 +260,16 @@ class SACAgent:
 
         # Networks
         self.actor = GaussianActor(state_dim, action_dim, hidden_dim)
+        # Why twin critics: using min(Q1, Q2) as the target prevents the
+        # overestimation bias that occurs when a single Q-network is used —
+        # overestimation causes the actor to exploit incorrect high Q-values,
+        # leading to policy collapse; twin critics were first shown effective in TD3
         self.critic = TwinQCritic(state_dim, action_dim, hidden_dim)
         self.critic_target = copy.deepcopy(self.critic)
 
-        # Freeze target parameters
+        # Why freeze target parameters: target networks provide stable regression
+        # targets during critic updates; allowing gradients to flow into the target
+        # would create a moving-target problem that destabilizes training
         for param in self.critic_target.parameters():
             param.requires_grad = False
 
@@ -264,7 +279,13 @@ class SACAgent:
 
         # Temperature (alpha)
         if auto_alpha:
+            # Why default target entropy = -action_dim: a heuristic that sets
+            # the entropy target to "one bit per action dimension", giving the
+            # policy enough freedom to explore without becoming nearly uniform
             self.target_entropy = target_entropy or -action_dim
+            # Why optimize log_alpha (not alpha directly): log_alpha is
+            # unconstrained and its gradient is well-behaved; exponentiating
+            # guarantees alpha > 0 without any clipping or projection
             self.log_alpha = torch.zeros(1, requires_grad=True)
             self.alpha = self.log_alpha.exp().item()
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=lr)
@@ -287,7 +308,15 @@ class SACAgent:
         with torch.no_grad():
             next_actions, next_log_probs = self.actor.sample(next_states)
             q1_target, q2_target = self.critic_target(next_states, next_actions)
+            # Why min of twin targets: taking the minimum of Q1 and Q2 in the
+            # Bellman target propagates pessimistic Q-estimates, counteracting
+            # the upward bias that accumulates when a critic is bootstrapped
+            # from its own (often optimistic) predictions
             q_target = torch.min(q1_target, q2_target)
+            # Why subtract alpha * log_prob in the target: this is the soft
+            # Bellman backup — the entropy bonus augments every reward with
+            # the policy's log-probability, encouraging the policy to remain
+            # stochastic and explore all high-value actions
             target = rewards + self.gamma * (1 - dones) * \
                      (q_target - self.alpha * next_log_probs)
 
@@ -322,6 +351,13 @@ class SACAgent:
         for param, target_param in zip(
             self.critic.parameters(), self.critic_target.parameters()
         ):
+            # Why soft update with small τ (0.005): slowly blending the online
+            # weights into the target (θ' ← τθ + (1-τ)θ') keeps targets stable
+            # across consecutive gradient steps — this is critical for continuous-
+            # action algorithms like SAC and TD3 where the actor is updated every
+            # step; DQN typically uses hard updates (τ=1) every N steps instead
+            # because its discrete action space makes the policy less sensitive
+            # to small target fluctuations
             target_param.data.copy_(
                 self.tau * param.data + (1 - self.tau) * target_param.data
             )

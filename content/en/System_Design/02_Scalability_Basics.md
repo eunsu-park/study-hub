@@ -1,14 +1,28 @@
 # Scalability Basics
 
-## Overview
+**Previous**: [System Design Overview](./01_System_Design_Overview.md) | **Next**: [Network Fundamentals Review](./03_Network_Fundamentals_Review.md)
 
-This document covers the core concepts of system Scalability. You'll learn the differences between vertical and horizontal scaling, Stateless vs Stateful architectures, and important theories for distributed systems like CAP theorem and PACELC.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define scalability and explain why it is a critical concern for modern systems
+2. Compare vertical scaling and horizontal scaling, identifying the trade-offs of each approach
+3. Distinguish between stateless and stateful architectures and explain their impact on scaling
+4. Describe common session management strategies (sticky sessions, centralized store, JWT)
+5. Explain the CAP theorem and classify real-world systems as CP or AP
+6. Describe the PACELC extension and how it captures latency-consistency trade-offs under normal operation
+7. Estimate whether a given workload is better served by scaling up or scaling out
 
 **Difficulty**: ⭐⭐
 **Estimated Study Time**: 2-3 hours
 **Prerequisites**: [01_System_Design_Overview.md](./01_System_Design_Overview.md)
 
 ---
+
+A single server can only grow so large before hitting physical limits -- there is no CPU with infinite cores or a hard drive with infinite capacity. Scalability is the art of designing systems that grow gracefully as demand increases, whether that means serving ten users or ten million. Understanding the fundamental trade-offs between scaling strategies and distributed-system guarantees will shape every architecture decision you make from this point forward.
 
 ## Table of Contents
 
@@ -19,8 +33,7 @@ This document covers the core concepts of system Scalability. You'll learn the d
 5. [CAP Theorem](#5-cap-theorem)
 6. [PACELC Theory](#6-pacelc-theory)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -714,25 +727,42 @@ Practical implementation:
 
 ---
 
-## 8. Next Steps
+## Hands-On Exercises
 
-Now that you understand scalability basics, learn about network-related system design elements.
+### Exercise 1: Stateless Service Simulation
 
-### Next Lesson
-- [03_Network_Fundamentals_Review.md](./03_Network_Fundamentals_Review.md) - DNS, CDN, HTTP/2/3
+Design a simulation that demonstrates the difference between stateful and stateless architectures.
 
-### Related Lessons
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - Core of horizontal scaling
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - Session storage
+**Tasks:**
+1. Implement a `StatefulServer` class that stores session data in local memory, and a `StatelessServer` class that reads from an external store (simulated dict)
+2. Create a load balancer that routes requests randomly across 3 server instances
+3. Demonstrate that stateful servers break when requests hit different instances, while stateless servers work correctly regardless of routing
+4. Measure the "session loss rate" for stateful architecture under random routing
 
-### Recommended Practice
-1. Run multiple server instances locally
-2. Set up Redis as session store
-3. Analyze whether services you use are CP or AP
+### Exercise 2: CAP Theorem Demonstration
+
+Build a simple 3-node key-value store that lets you toggle between CP and AP behavior.
+
+**Tasks:**
+1. Create a `DistributedKV` class with 3 replica nodes
+2. Implement a `partition(node)` method that isolates a node (simulates network partition)
+3. In CP mode: writes/reads fail if a partition prevents quorum (2/3 nodes)
+4. In AP mode: writes/reads succeed on available nodes, but reads may return stale data
+5. Show a scenario where CP rejects a write and AP allows it but creates inconsistency
+
+### Exercise 3: Scaling Cost Calculator
+
+Build a tool that compares vertical vs. horizontal scaling costs for growing traffic.
+
+**Tasks:**
+1. Model vertical scaling: single server with cost doubling per capacity tier (e.g., 1x→2x→4x→8x CPU, costs $100→$250→$600→$1400)
+2. Model horizontal scaling: N identical servers at $100 each + $50 load balancer overhead
+3. Plot or print cost vs. capacity for both strategies from 1x to 16x traffic
+4. Find the crossover point where horizontal becomes cheaper than vertical
 
 ---
 
-## 9. References
+## 8. References
 
 ### Books
 - Designing Data-Intensive Applications - Martin Kleppmann (Chapter 5, 9)
@@ -744,6 +774,10 @@ Now that you understand scalability basics, learn about network-related system d
 ### Online Resources
 - [CAP Theorem Revisited](https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/)
 - [PACELC Wikipedia](https://en.wikipedia.org/wiki/PACELC_theorem)
+
+---
+
+**Previous**: [System Design Overview](./01_System_Design_Overview.md) | **Next**: [Network Fundamentals Review](./03_Network_Fundamentals_Review.md)
 
 ---
 

@@ -1,5 +1,26 @@
 # Kubernetes Introduction
 
+**Previous**: [Docker Practical Examples](./05_Practical_Examples.md) | **Next**: [Kubernetes Security](./07_Kubernetes_Security.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what Kubernetes is and why container orchestration is needed at scale
+2. Describe the Kubernetes cluster architecture including Control Plane and Node components
+3. Define and create Pods, Deployments, and Services using YAML manifests
+4. Set up a local Kubernetes environment with minikube and kubectl
+5. Apply basic kubectl commands to create, inspect, scale, and delete resources
+6. Implement rolling updates and rollbacks for zero-downtime deployments
+7. Use ConfigMaps and Secrets to manage application configuration and sensitive data
+8. Organize resources with Namespaces for logical isolation
+
+---
+
+Docker excels at running containers on a single machine, but production systems typically span many servers and require automated scheduling, self-healing, load balancing, and rolling updates. Kubernetes is the industry-standard platform that solves all of these challenges. Learning Kubernetes fundamentals is the natural next step after mastering Docker, opening the door to scalable, resilient infrastructure that powers the majority of modern cloud-native applications.
+
+> **Analogy -- Airport Control Tower:** Think of Kubernetes as an airport control tower. Individual Docker containers are like aircraft -- each one carries its own payload and can operate independently. But when you have hundreds of flights, you need a control tower (Kubernetes) to decide which runway (node) each plane lands on, reroute traffic when a runway is closed (self-healing), add more gates during peak hours (auto-scaling), and ensure smooth transitions between shifts (rolling updates).
+
 ## 1. What is Kubernetes?
 
 Kubernetes (K8s) is a **container orchestration platform**. It automates deployment, scaling, and management of containerized applications.
@@ -85,7 +106,7 @@ When you have 100 containers...
 - Containers in same Pod share network/storage
 
 ```yaml
-# pod.yaml
+# pod.yaml — rarely created directly; use Deployments instead for self-healing and scaling
 apiVersion: v1
 kind: Pod
 metadata:
@@ -93,9 +114,9 @@ metadata:
 spec:
   containers:
     - name: nginx
-      image: nginx:alpine
+      image: nginx:alpine       # Alpine: ~5 MB base — smaller attack surface
       ports:
-        - containerPort: 80
+        - containerPort: 80     # Informational; actual exposure requires a Service
 ```
 
 ### Deployment
@@ -111,14 +132,14 @@ kind: Deployment
 metadata:
   name: my-deployment
 spec:
-  replicas: 3                    # Maintain 3 Pods
+  replicas: 3                    # Maintain 3 Pods — K8s auto-replaces any that crash or get evicted
   selector:
     matchLabels:
-      app: my-app
+      app: my-app               # Must match template labels — this is how the Deployment finds its Pods
   template:                      # Pod template
     metadata:
       labels:
-        app: my-app
+        app: my-app             # Labels connect Deployments → Pods → Services (the glue of K8s)
     spec:
       containers:
         - name: nginx
@@ -141,11 +162,11 @@ metadata:
   name: my-service
 spec:
   selector:
-    app: my-app                  # Route traffic to Pods with this label
+    app: my-app                  # Route traffic to Pods with this label — decouples routing from Pod IPs
   ports:
-    - port: 80                   # Service port
-      targetPort: 80             # Pod port
-  type: ClusterIP                # Service type
+    - port: 80                   # Port other services use to reach this Service
+      targetPort: 80             # Port the container actually listens on
+  type: ClusterIP                # Internal only (default) — use NodePort or LoadBalancer for external access
 ```
 
 ### Service Types
@@ -309,14 +330,14 @@ kind: Deployment
 metadata:
   name: hello-app
 spec:
-  replicas: 3
+  replicas: 3                    # 3 replicas — K8s distributes them across nodes for high availability
   selector:
     matchLabels:
       app: hello
   template:
     metadata:
       labels:
-        app: hello
+        app: hello               # Labels tie Deployment → ReplicaSet → Pods → Service together
     spec:
       containers:
         - name: hello
@@ -352,11 +373,11 @@ metadata:
   name: hello-service
 spec:
   selector:
-    app: hello
+    app: hello                   # Matches Deployment's Pod labels — Service auto-discovers matching Pods
   ports:
     - port: 80
       targetPort: 80
-  type: NodePort
+  type: NodePort                 # Allocates a high port (30000-32767) on every node for external access
 ```
 
 ```bash
@@ -383,7 +404,7 @@ kind: Deployment
 metadata:
   name: node-app
 spec:
-  replicas: 2
+  replicas: 2                     # 2 replicas for basic high availability
   selector:
     matchLabels:
       app: node-app
@@ -400,6 +421,7 @@ spec:
             - containerPort: 3000
           env:
             - name: MONGO_URL
+              # K8s DNS resolves 'mongo-service' to the MongoDB Service's ClusterIP
               value: "mongodb://mongo-service:27017/mydb"
 ---
 apiVersion: v1
@@ -410,8 +432,8 @@ spec:
   selector:
     app: node-app
   ports:
-    - port: 80
-      targetPort: 3000
+    - port: 80                    # External-facing port
+      targetPort: 3000            # Container's actual listening port — Service bridges the difference
   type: NodePort
 ```
 
@@ -422,7 +444,7 @@ kind: Deployment
 metadata:
   name: mongo
 spec:
-  replicas: 1
+  replicas: 1                     # Single replica — databases typically use StatefulSets for production
   selector:
     matchLabels:
       app: mongo
@@ -438,21 +460,22 @@ spec:
             - containerPort: 27017
           volumeMounts:
             - name: mongo-storage
-              mountPath: /data/db
+              mountPath: /data/db        # MongoDB's default data directory
       volumes:
         - name: mongo-storage
-          emptyDir: {}
+          emptyDir: {}                   # emptyDir: data lost when Pod is deleted — use PersistentVolume for production
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongo-service
+  name: mongo-service              # Other Pods reach MongoDB via this DNS name
 spec:
   selector:
     app: mongo
   ports:
     - port: 27017
       targetPort: 27017
+  # type defaults to ClusterIP — MongoDB should not be exposed outside the cluster
 ```
 
 ```bash
@@ -510,7 +533,7 @@ kubectl rollout undo deployment/hello-app --to-revision=2
 ### ConfigMap - Configuration Data
 
 ```yaml
-# configmap.yaml
+# configmap.yaml — externalizes config from the image so the same image works in dev/staging/prod
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -527,7 +550,7 @@ spec:
     - name: app
       envFrom:
         - configMapRef:
-            name: app-config
+            name: app-config   # Injects all keys as env vars — avoids listing each one individually
 ```
 
 ### Secret - Sensitive Data
@@ -540,12 +563,12 @@ kubectl create secret generic db-secret \
 ```
 
 ```yaml
-# Create with YAML (requires base64 encoding)
+# Create with YAML (requires base64 encoding — not encryption; use RBAC to restrict access)
 apiVersion: v1
 kind: Secret
 metadata:
   name: db-secret
-type: Opaque
+type: Opaque                # Opaque = generic key-value; K8s also supports TLS and docker-registry types
 data:
   username: YWRtaW4=      # echo -n 'admin' | base64
   password: c2VjcmV0MTIz  # echo -n 'secret123' | base64
@@ -561,7 +584,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: db-secret
-              key: password
+              key: password    # Inject a single key — safer than envFrom which exposes all keys
 ```
 
 ---
@@ -571,14 +594,14 @@ spec:
 Logically separate resources.
 
 ```bash
-# Create namespaces
+# Namespaces provide logical isolation — same resource names can exist in different namespaces
 kubectl create namespace dev
 kubectl create namespace prod
 
-# Deploy to specific namespace
+# Deploy to specific namespace — keeps dev and prod resources separate in one cluster
 kubectl apply -f deployment.yaml -n dev
 
-# Change default namespace
+# Change default namespace — avoids typing -n dev on every subsequent command
 kubectl config set-context --current --namespace=dev
 ```
 
@@ -601,16 +624,83 @@ kubectl config set-context --current --namespace=dev
 
 ---
 
-## Recommended Next Learning
+## Exercises
 
-1. **Ingress**: HTTP routing, SSL handling
-2. **Persistent Volume**: Permanent storage
-3. **Helm**: Package manager
-4. **Monitoring**: Prometheus, Grafana
-5. **Service Mesh**: Istio, Linkerd
+### Exercise 1: Deploy Your First Pod and Deployment
 
-### Additional Learning Resources
+Get hands-on experience with the most fundamental Kubernetes resources.
 
-- [Kubernetes Official Documentation](https://kubernetes.io/docs/)
-- [Kubernetes Tutorial](https://kubernetes.io/docs/tutorials/)
-- [Play with Kubernetes](https://labs.play-with-k8s.com/)
+1. Start a local cluster: `minikube start`
+2. Run a Pod imperatively: `kubectl run nginx-test --image=nginx:alpine`
+3. Wait for it to be running: `kubectl get pods -w` (Ctrl+C to stop watching)
+4. Describe the Pod and find the Node it was scheduled on: `kubectl describe pod nginx-test`
+5. View logs: `kubectl logs nginx-test`
+6. Delete the Pod and observe it is not recreated (compare with a Deployment)
+7. Create a Deployment with 2 replicas using `kubectl create deployment web --image=nginx:alpine --replicas=2`
+8. Delete one of its Pods and confirm Kubernetes creates a replacement automatically
+
+### Exercise 2: Expose a Deployment with a Service
+
+Practice the most common Service types to expose workloads.
+
+1. Create a Deployment: `kubectl create deployment hello --image=nginxdemos/hello --replicas=3`
+2. Expose it as a ClusterIP Service: `kubectl expose deployment hello --port=80 --type=ClusterIP`
+3. Verify the Service was created: `kubectl get svc hello`
+4. Use port-forwarding to access it locally: `kubectl port-forward svc/hello 8080:80`
+5. Open `http://localhost:8080` in your browser and note the hostname shown (it rotates between Pods)
+6. Change the Service type to NodePort: `kubectl patch svc hello -p '{"spec":{"type":"NodePort"}}'`
+7. Access it via minikube: `minikube service hello --url` and test the URL
+
+### Exercise 3: Rolling Update and Rollback
+
+Practice zero-downtime deployments and rollbacks.
+
+1. Create a Deployment with the older image: `kubectl create deployment app --image=nginxdemos/hello:plain-text`
+2. Watch the rollout: `kubectl rollout status deployment/app`
+3. Update to a new image: `kubectl set image deployment/app hello=nginx:1.25`
+4. Watch the rolling update in real time: `kubectl get pods -w`
+5. Check rollout history: `kubectl rollout history deployment/app`
+6. Roll back to the previous version: `kubectl rollout undo deployment/app`
+7. Verify the rollback was successful with `kubectl rollout status deployment/app`
+
+### Exercise 4: ConfigMap and Secret
+
+Store configuration and sensitive data using Kubernetes-native mechanisms.
+
+1. Create a ConfigMap with two keys:
+   ```bash
+   kubectl create configmap app-config \
+     --from-literal=LOG_LEVEL=info \
+     --from-literal=APP_PORT=8080
+   ```
+2. Verify it was created: `kubectl get configmap app-config -o yaml`
+3. Create a Secret:
+   ```bash
+   kubectl create secret generic db-secret \
+     --from-literal=username=admin \
+     --from-literal=password=supersecret
+   ```
+4. Write a Pod manifest that consumes the ConfigMap as environment variables and the Secret as a volume mount at `/secrets`
+5. Apply the manifest, exec into the Pod, and verify the values: `env | grep -E "LOG_LEVEL|APP_PORT"` and `cat /secrets/password`
+6. Update the ConfigMap: `kubectl edit configmap app-config` (change `LOG_LEVEL` to `debug`)
+7. Observe how a volume-mounted ConfigMap updates automatically (may take ~1 minute)
+
+### Exercise 5: Namespaces and Multi-Environment Setup
+
+Use Namespaces to simulate isolated environments in a single cluster.
+
+1. Create two namespaces: `kubectl create namespace dev` and `kubectl create namespace prod`
+2. Deploy the same application to both namespaces:
+   ```bash
+   kubectl create deployment web --image=nginx:alpine -n dev
+   kubectl create deployment web --image=nginx:alpine -n prod
+   ```
+3. Scale them differently: 1 replica in `dev`, 3 replicas in `prod`
+4. List all Pods across all namespaces: `kubectl get pods --all-namespaces`
+5. Switch the default context to `dev`: `kubectl config set-context --current --namespace=dev`
+6. Run `kubectl get pods` and confirm it only shows the `dev` namespace Pods
+7. Clean up both namespaces: `kubectl delete namespace dev prod`
+
+---
+
+**Previous**: [Docker Practical Examples](./05_Practical_Examples.md) | **Next**: [Kubernetes Security](./07_Kubernetes_Security.md)

@@ -1,12 +1,21 @@
 # 10. Home Automation Project
 
+**Previous**: [Edge AI - ONNX Runtime](./09_Edge_AI_ONNX.md) | **Next**: [Image Analysis Project](./11_Image_Analysis_Project.md)
+
 ## Learning Objectives
 
-- Design smart home system architecture
-- Implement lighting control using relays
-- Monitor environment with temperature/humidity sensors
-- Build MQTT-based device control system
-- Develop web dashboard
+After completing this lesson, you will be able to:
+
+1. Design a smart home system architecture with gateway, sensors, and actuators
+2. Implement lighting control through relay modules and GPIO
+3. Monitor environmental conditions with a threaded sensor monitoring class
+4. Build an MQTT-based device command and status system
+5. Develop a web dashboard for real-time device control and sensor display
+6. Integrate all components into a working smart home gateway
+
+---
+
+This project lesson pulls together everything you have learned so far -- GPIO control, sensor reading, MQTT messaging, and Flask web serving -- into a single cohesive system. Home automation is one of the most tangible and rewarding IoT applications, and building it end-to-end demonstrates how individual skills combine to create a real, interactive product.
 
 ---
 
@@ -958,11 +967,4 @@ if __name__ == "__main__":
 
 ---
 
-## Next Steps
-
-- [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md): AI camera integration
-- [12_Cloud_IoT_Integration.md](12_Cloud_IoT_Integration.md): Cloud integration
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [Edge AI - ONNX Runtime](./09_Edge_AI_ONNX.md) | **Next**: [Image Analysis Project](./11_Image_Analysis_Project.md)

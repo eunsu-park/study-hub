@@ -8,11 +8,15 @@
 - 경계층 개념 학습
 - 간단한 채널 유동 CFD 구현
 
+**이 레슨이 중요한 이유:** 유체역학은 혈관 내 혈류부터 기상 예측, 항공기 설계에 이르기까지 엄청나게 다양한 현상을 지배합니다. 유체 운동을 기술하는 나비에-스토크스(Navier-Stokes) 방정식은 해석해가 거의 존재하지 않는 비선형 PDE입니다. 전산유체역학(CFD, Computational Fluid Dynamics)은 이러한 방정식을 수치적으로 풀어 이 간극을 메우며, 수치 시뮬레이션의 가장 영향력 있는 응용 분야 중 하나입니다.
+
 ---
 
 ## 1. 유체역학 기초
 
 ### 1.1 연속체 가정
+
+연속체 가정(Continuum Hypothesis)은 유체 모델링에 PDE를 사용할 수 있게 하는 기본 가정입니다. 유동의 길이 스케일이 분자 평균 자유 경로(Mean Free Path)보다 훨씬 큰 경우, 개별 분자를 추적하는 대신 유체를 연속 매질로 취급할 수 있다고 말합니다.
 
 ```
 연속체 가정 (Continuum Hypothesis):
@@ -977,17 +981,145 @@ def mesh_types_visualization():
 
 ## 7. 연습 문제
 
-### 연습 1: 레이놀즈 수 계산
+### 연습 1: 레이놀즈 수(Reynolds Number) 계산
 직경 5cm 관에서 물(20°C)이 평균 속도 2m/s로 흐를 때 레이놀즈 수를 계산하고 유동 상태를 판별하시오.
 
-### 연습 2: Poiseuille 유동
+<details><summary>정답 보기</summary>
+
+물(20°C)의 물성치: ρ = 998 kg/m³, μ = 1.002×10⁻³ Pa·s
+
+```python
+rho = 998      # kg/m^3
+mu  = 1.002e-3 # Pa·s
+U   = 2.0      # m/s
+D   = 0.05     # m (5 cm)
+
+Re = rho * U * D / mu
+print(f"Reynolds number Re = {Re:.0f}")
+
+if Re < 2300:
+    regime = "층류(Laminar)"
+elif Re < 4000:
+    regime = "천이(Transition)"
+else:
+    regime = "난류(Turbulent)"
+print(f"유동 상태: {regime}")
+```
+
+Re = 998 × 2.0 × 0.05 / (1.002×10⁻³) ≈ **99,601**
+
+Re ≫ 4000이므로 **난류(Turbulent)** 유동입니다. 실제 파이프 엔지니어링에서는 이 레이놀즈 수 범위에서 Moody 선도를 이용하여 마찰 계수를 구하고 압력 손실을 계산합니다.
+</details>
+
+### 연습 2: Poiseuille 유동(Poiseuille Flow)
 Poiseuille 유동에서 평균 속도와 최대 속도의 관계를 유도하시오.
 
-### 연습 3: 경계층 두께
+<details><summary>정답 보기</summary>
+
+Poiseuille 유동의 속도 프로파일: u(y) = -(1/2μ)(dp/dx) y(H-y)
+
+최대 속도(중심선, y = H/2):
+```
+u_max = -(1/2μ)(dp/dx)(H/2)(H - H/2) = -(1/8μ)(dp/dx) H²
+```
+
+평균 속도(단면 적분):
+```
+u_avg = (1/H) ∫₀ᴴ u(y) dy
+      = (1/H) · -(1/2μ)(dp/dx) · [Hy²/2 - y³/3]₀ᴴ
+      = (1/H) · -(1/2μ)(dp/dx) · (H³/2 - H³/3)
+      = -(1/2μ)(dp/dx) · H²/6
+      = (2/3) u_max
+```
+
+따라서: **u_avg = (2/3) u_max**
+
+```python
+H = 1.0; mu = 0.01; dpdx = -1.0
+y = np.linspace(0, H, 100)
+u = -(1/(2*mu)) * dpdx * y * (H - y)
+u_max = np.max(u)
+u_avg = np.mean(u)
+print(f"u_max = {u_max:.4f}, u_avg = {u_avg:.4f}")
+print(f"u_avg / u_max = {u_avg/u_max:.4f} (expected 2/3 = {2/3:.4f})")
+```
+
+이 관계는 층류 채널 유동의 핵심 결과로, 유량 측정에 활용됩니다.
+</details>
+
+### 연습 3: 경계층 두께(Boundary Layer Thickness)
 공기(20°C)가 5m/s로 평판 위를 흐를 때, 선단에서 10cm 떨어진 위치의 층류 경계층 두께를 계산하시오.
 
-### 연습 4: CFD 격자 의존성
-채널 유동 CFD 코드를 수정하여 격자 수를 변화시키면서 격자 수렴 테스트를 수행하시오.
+<details><summary>정답 보기</summary>
+
+공기(20°C) 물성치: ν = μ/ρ = 1.825×10⁻⁵/1.204 ≈ 1.516×10⁻⁵ m²/s
+
+블라지우스(Blasius) 층류 경계층 공식: δ = 5.0 x / √(Re_x)
+
+```python
+nu    = 1.516e-5  # m^2/s (공기 동점성계수)
+U_inf = 5.0       # m/s
+x     = 0.10      # m (10 cm)
+
+Re_x  = U_inf * x / nu
+delta = 5.0 * x / np.sqrt(Re_x)
+
+print(f"Re_x = {Re_x:.0f}")
+print(f"경계층 두께 δ = {delta*1000:.2f} mm")
+
+# 유동 상태 확인 (층류 기준: Re_x < 5×10^5)
+if Re_x < 5e5:
+    print("층류(Laminar) 경계층 확인")
+```
+
+Re_x = 5.0 × 0.10 / (1.516×10⁻⁵) ≈ 33,003 (층류)
+
+δ = 5.0 × 0.10 / √33003 ≈ **2.75 mm**
+
+경계층 두께는 x에 비례하고 Re의 제곱근에 반비례합니다. 속도나 거리가 증가할수록 경계층은 상대적으로 얇아집니다.
+</details>
+
+### 연습 4: CFD 격자 의존성(Grid Dependence) 검사
+채널 유동 CFD 코드를 수정하여 격자 수(Ny = 10, 20, 30)를 변화시키면서 격자 수렴 테스트를 수행하시오. 각 격자에서 계산된 최대 속도를 Poiseuille 해석해와 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def grid_convergence_test():
+    """격자 수렴 테스트: Poiseuille 유동"""
+    H = 1.0; mu = 0.01; dpdx = -1.0
+    u_max_exact = H**2 / (8*mu) * abs(dpdx)
+    print(f"해석해 u_max = {u_max_exact:.4f} m/s\n")
+
+    for Ny in [10, 20, 30, 50]:
+        dy = H / (Ny - 1)
+        y = np.linspace(0, H, Ny)
+
+        # 1D 확산 방정식: d²u/dy² = (1/mu)(dp/dx)
+        # 유한 차분: (u[i+1] - 2u[i] + u[i-1])/dy² = (1/mu)(dp/dx)
+        # 내부 절점만 (0과 H에서 경계 조건 u=0)
+        n_int = Ny - 2
+        A_fd = np.zeros((n_int, n_int))
+        b_fd = np.ones(n_int) * (dpdx / mu)
+
+        for i in range(n_int):
+            A_fd[i, i] = -2 / dy**2
+            if i > 0:       A_fd[i, i-1] = 1 / dy**2
+            if i < n_int-1: A_fd[i, i+1] = 1 / dy**2
+
+        u_int = np.linalg.solve(A_fd, b_fd)
+        u_full = np.zeros(Ny)
+        u_full[1:-1] = u_int
+        u_max_num = np.max(u_full)
+        error = abs(u_max_num - u_max_exact) / u_max_exact * 100
+
+        print(f"Ny={Ny:3d}: u_max = {u_max_num:.4f}, 오차 = {error:.2f}%")
+
+grid_convergence_test()
+```
+
+격자를 세밀하게 할수록 수치해가 해석해에 수렴합니다. 유한 차분법(Finite Difference Method)은 격자 간격 dy에 비례하는 O(dy²) 정확도를 가지므로 격자 수를 2배 늘리면 오차가 약 4배 줄어듭니다.
+</details>
 
 ---
 
@@ -1037,6 +1169,25 @@ CFD 기초 핵심:
    - 난류 모델 선택
    - 수치 안정성 (CFL 조건)
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: 레이놀즈 수(Reynolds Number)와 유동 형태
+20°C의 물(밀도 998 kg/m³, 동점성계수 1.002×10⁻³ Pa·s)이 지름 5 cm 파이프를 통해 평균 속도 2 m/s로 흐릅니다. 레이놀즈 수(Reynolds number)를 계산하고 유동 형태(층류 또는 난류)를 판별하세요. 그런 다음 동일한 파이프에서 난류(turbulent flow)를 달성하는 데 필요한 최소 속도를 구하세요.
+
+### 연습 2: 나비에-스토크스(Navier-Stokes) 항 분석
+2차원 비압축성 유동(incompressible flow)에서 속도 벡터장이 u = sin(x)cos(y), v = -cos(x)sin(y)로 주어질 때, 연속 방정식(continuity equation)이 만족됨을 검증하세요. 그런 다음 와도(vorticity) ω = ∂v/∂x - ∂u/∂y를 계산하고, 이것이 물리적으로 무엇을 의미하는지 설명하세요.
+
+### 연습 3: Poiseuille 유동 비교
+채널 높이 H = 1 m, 동점성계수 μ = 0.01 Pa·s, 압력 구배(pressure gradient) dp/dx = -1 Pa/m 조건에서 Poiseuille 유동(Poiseuille flow)의 해석해와 유한 차분(finite difference) CFD 수치해를 모두 구현하세요. 격자 크기 Ny = 10, 20, 40을 사용하여 수치해와 해석해 사이의 L2 오차를 격자 간격의 함수로 그래프로 나타내세요. 관찰되는 수렴 차수는 얼마인가요?
+
+### 연습 4: 경계층(Boundary Layer) 스케일링
+공기(20°C, 동점성계수 ν = 1.5×10⁻⁵ m²/s)가 평판 위를 U∞ = 10 m/s로 흐를 때, 0 < x < 0.5 m 범위에서 다음을 계산하고 그래프로 나타내세요: (a) Blasius 공식 δ = 5x/√(Re_x)를 사용한 층류 경계층 두께(laminar boundary layer thickness) δ(x), (b) 국소 마찰 계수(local friction coefficient) Cf(x) = 0.664/√(Re_x), (c) Re_x = 5×10⁵인 천이 위치(transition location). 천이점이 x = 0.1 m로 이동하려면 유속이 얼마여야 하나요?
+
+### 연습 5: CFD 격자 민감도(Mesh Sensitivity) 분석
+채널 유동 CFD 코드를 수정하여 체계적인 격자 수렴성(grid convergence) 검토를 수행하세요. Nx×Ny = 25×15, 50×30, 100×60 격자로 시뮬레이션을 실행하세요. 각 격자에 대해 중심선 속도 프로파일을 해석적 Poiseuille 해와 비교하고 최대 절대 오차를 계산하세요. 격자 간격이 절반으로 줄 때 오차가 절반이 되나요(1차 수렴), 아니면 4분의 1로 줄어드나요(2차 수렴)?
 
 ---
 

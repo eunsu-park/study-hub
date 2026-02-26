@@ -1,5 +1,26 @@
 # Variables and Types
 
+**Previous**: [Environment Setup and First Program](./01_Environment_Setup.md) | **Next**: [Operators and Control Flow](./03_Operators_and_Control_Flow.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a variable is and how it maps to memory
+2. Distinguish between integer, floating-point, character, and boolean data types
+3. Compare copy initialization, direct initialization, and brace initialization (C++11)
+4. Apply `const` and `constexpr` to declare compile-time and runtime constants
+5. Implement automatic type deduction using the `auto` keyword
+6. Identify narrowing conversions and use `static_cast` for safe explicit casting
+7. Apply `sizeof` to inspect the memory footprint of types
+8. Design type aliases with `using` and choose appropriate fixed-width integer types
+
+---
+
+Variables are the building blocks of every program -- they give names to the data your code manipulates. Understanding how C++ represents integers, floating-point numbers, characters, and booleans at the hardware level is what separates someone who merely writes code from someone who writes *efficient* code. Mastering types early also prevents an entire category of subtle bugs caused by overflow, precision loss, and unintended conversions.
+
 ## 1. What are Variables?
 
 Variables are named memory locations that store data.

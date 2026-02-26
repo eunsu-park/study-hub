@@ -1,5 +1,17 @@
 # 드리프트 감지 & 모니터링
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 데이터 드리프트(data drift), 개념 드리프트(concept drift), 레이블 드리프트(label drift)를 구별하고 각 유형이 프로덕션 모델 성능을 어떻게 저하시키는지 설명할 수 있다
+2. KS 검정(KS test), PSI(Population Stability Index), 카이제곱 검정(chi-squared test) 등 통계적 드리프트 감지 검정을 구현하여 입력 피처의 분포 변화를 감지할 수 있다
+3. 예측 로그를 수집하고 드리프트 메트릭을 계산하며 임계값 초과 시 알림을 트리거하는 모델 모니터링 파이프라인을 구축할 수 있다
+4. Evidently AI 또는 유사 도구를 사용하여 자동화된 데이터 품질 및 드리프트 모니터링 리포트를 생성할 수 있다
+5. 불필요한 재학습 오버헤드를 최소화하면서 감지된 드리프트에 대응하는 재학습 트리거(retraining trigger) 전략을 설계할 수 있다
+
+---
+
 ## 1. 드리프트 개념
 
 드리프트(Drift)는 시간이 지남에 따라 데이터나 모델 성능이 변화하는 현상입니다.
@@ -89,6 +101,7 @@ def kolmogorov_smirnov_test(
     threshold: float = 0.05
 ) -> Tuple[float, bool]:
     """KS 검정 - 두 분포의 차이 검정"""
+    # 비모수(non-parametric) 검정: t-test나 카이제곱과 달리 분포 가정 불필요
     statistic, p_value = stats.ks_2samp(reference, current)
     is_drift = p_value < threshold
     return statistic, is_drift
@@ -99,12 +112,12 @@ def population_stability_index(
     n_bins: int = 10
 ) -> float:
     """PSI - 분포 안정성 지수"""
-    # 히스토그램 생성
+    # 비닝(binning)으로 요약 통계량(평균/표준편차)이 놓치는 분포 형태 변화를 포착
     bins = np.histogram_bin_edges(reference, bins=n_bins)
     ref_hist, _ = np.histogram(reference, bins=bins, density=True)
     cur_hist, _ = np.histogram(current, bins=bins, density=True)
 
-    # 0 방지
+    # log(0)은 -inf를 생성하여 PSI 값을 오염시키므로 소량값으로 대체
     ref_hist = np.where(ref_hist == 0, 0.0001, ref_hist)
     cur_hist = np.where(cur_hist == 0, 0.0001, cur_hist)
 
@@ -126,6 +139,7 @@ def jensen_shannon_divergence(
     n_bins: int = 10
 ) -> float:
     """Jensen-Shannon Divergence"""
+    # 대칭적이고 [0,1] 범위 — KL 발산(divergence)보다 임계값 설정이 용이
     from scipy.spatial.distance import jensenshannon
 
     bins = np.histogram_bin_edges(reference, bins=n_bins)
@@ -163,14 +177,14 @@ def domain_classifier_drift(
     - 참조 데이터와 현재 데이터를 구분하는 분류기 학습
     - AUC가 0.5에 가까우면 드리프트 없음
     """
-    # 레이블 생성
+    # 개별 피처 검정이 놓치는 다변량 드리프트(예: 상관관계 변화)를 포착
     X = np.vstack([reference, current])
     y = np.hstack([
         np.zeros(len(reference)),
         np.ones(len(current))
     ])
 
-    # 분류기 학습 및 평가
+    # 교차 검증(cross-validation)으로 과적합 방지 — AUC=0.5면 학습 가능한 드리프트 없음
     clf = RandomForestClassifier(n_estimators=100, random_state=42)
     scores = cross_val_score(clf, X, y, cv=5, scoring="roc_auc")
     mean_auc = scores.mean()
@@ -192,7 +206,7 @@ def multivariate_drift_pca(
     from sklearn.decomposition import PCA
     from scipy.spatial.distance import mahalanobis
 
-    # PCA로 차원 축소
+    # PCA로 차원의 저주(curse of dimensionality) 완화 — 피처 수 > 샘플 수일 때 Mahalanobis 실패
     pca = PCA(n_components=n_components)
     ref_pca = pca.fit_transform(reference)
     cur_pca = pca.transform(current)
@@ -206,6 +220,7 @@ def multivariate_drift_pca(
     try:
         distance = mahalanobis(ref_mean, cur_mean, np.linalg.inv(ref_cov))
     except np.linalg.LinAlgError:
+        # 공분산 행렬이 특이(singular)하면(공선성 피처) 유클리드 거리로 폴백
         distance = np.linalg.norm(ref_mean - cur_mean)
 
     return distance
@@ -236,7 +251,7 @@ from evidently.metrics import (
 reference_data = pd.read_csv("reference_data.csv")
 current_data = pd.read_csv("current_data.csv")
 
-# 컬럼 매핑
+# 명시적 매핑으로 Evidently가 컬럼 타입별로 적절한 통계 검정을 선택하도록 보장
 column_mapping = ColumnMapping(
     target="target",
     prediction="prediction",
@@ -354,14 +369,15 @@ from evidently.tests import (
     TestNumberOfRows
 )
 
-# 테스트 스위트 정의
+# 테스트 스위트는 pass/fail 반환 — CI/CD에 통합하여 데이터 품질로 배포를 게이트
 test_suite = TestSuite(tests=[
-    # 프리셋
+    # 프리셋은 전체 컬럼 커버; 개별 테스트는 핵심 피처에 더 엄격한 임계값 적용
     DataDriftTestPreset(),
 
     # 개별 테스트
     TestColumnDrift(column_name="monthly_charges", stattest_threshold=0.1),
     TestShareOfMissingValues(column_name="age", lt=0.05),
+    # 도메인 제약 조건으로 데이터 파이프라인 버그 포착 (예: 인코딩 오류로 음수 나이)
     TestColumnValueRange(column_name="age", left=18, right=100),
     TestNumberOfRows(gte=1000),
 ])
@@ -411,9 +427,11 @@ class ModelMonitor:
         column_mapping,
         alert_thresholds: Dict[str, float]
     ):
+        # 참조 데이터를 초기화 시 한 번 로드 — 매 모니터링 주기마다 스토리지 재읽기 방지
         self.reference_data = reference_data
         self.column_mapping = column_mapping
         self.thresholds = alert_thresholds
+        # 이력으로 추세 분석 가능 — 단일 시점 드리프트는 노이즈, 지속적 드리프트가 진짜 신호
         self.monitoring_history = []
 
     def check_data_drift(self, current_data: pd.DataFrame) -> Dict[str, Any]:
@@ -484,6 +502,7 @@ class ModelMonitor:
             "alerts": []
         }
 
+        # 실제 레이블(actuals)은 지연 도착(수시간/수일)하는 경우가 많음 — 드리프트 감지는 레이블 없이도 동작
         if predictions is not None and actuals is not None:
             result["performance"] = self.check_model_performance(predictions, actuals)
             result["alerts"] = self.generate_alerts(
@@ -531,7 +550,7 @@ Prometheus 메트릭 노출
 from prometheus_client import Gauge, Counter, Histogram, start_http_server
 import time
 
-# 메트릭 정의
+# Gauge(Counter 아님): 드리프트 점수는 시간에 따라 증가/감소할 수 있으므로
 DRIFT_SCORE = Gauge(
     "model_drift_score",
     "Current drift score",
@@ -549,6 +568,7 @@ PREDICTIONS_TOTAL = Counter(
     ["model_version"]
 )
 
+# Histogram 버킷을 SLA 티어에 맞춤 — 백분위수 알림(p50, p95, p99) 활성화
 PREDICTION_LATENCY = Histogram(
     "prediction_latency_seconds",
     "Prediction latency in seconds",
@@ -651,6 +671,7 @@ class SlackAlerter:
             drifted_cols = drift_result.get("number_of_drifted_columns", 0)
             drift_share = drift_result.get("drift_share", 0)
 
+            # 심각도 에스컬레이션: 50% 이상 피처 드리프트는 업스트림 데이터 파이프라인 장애 가능성
             self.send_alert(
                 title="Data Drift Detected",
                 message=f"{drifted_cols} features drifted ({drift_share:.1%})",
@@ -680,6 +701,7 @@ class RetrainingTrigger:
     ):
         self.drift_threshold = drift_threshold
         self.performance_threshold = performance_threshold
+        # 쿨다운(cooldown)으로 드리프트가 지속적이지만 데이터가 안정화되지 않았을 때 재학습 루프 방지
         self.cooldown_hours = cooldown_hours
         self.last_retrain = None
 
@@ -695,11 +717,11 @@ class RetrainingTrigger:
             if hours_since < self.cooldown_hours:
                 return False, f"In cooldown period ({hours_since:.1f}h)"
 
-        # 드리프트 기반
+        # 드리프트 먼저 확인: 성능 저하 전에 감지하는 선제적 신호
         if drift_score > self.drift_threshold:
             return True, f"High drift score: {drift_score:.2f}"
 
-        # 성능 기반
+        # 성능 확인은 두 번째: 레이블이 있을 때 사용하는 반응적 신호
         if performance < self.performance_threshold:
             return True, f"Low performance: {performance:.4f}"
 

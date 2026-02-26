@@ -44,11 +44,11 @@ $$S_N = \sum_{n=1}^{N} a_n = a_1 + a_2 + \cdots + a_N$$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 예제: 기하급수 (geometric series)의 부분합
+# Example: Partial sums of a geometric series
 # sum_{n=0}^{inf} r^n = 1/(1-r)  (|r| < 1)
 
 def geometric_partial_sums(r, N_max):
-    """기하급수의 부분합을 계산합니다."""
+    """Compute partial sums of the geometric series."""
     n_values = np.arange(N_max + 1)
     terms = r ** n_values
     partial_sums = np.cumsum(terms)
@@ -56,7 +56,7 @@ def geometric_partial_sums(r, N_max):
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 수렴하는 경우: |r| < 1
+# Convergent case: |r| < 1
 r_conv = 0.5
 n_vals, S_n = geometric_partial_sums(r_conv, 20)
 exact = 1 / (1 - r_conv)
@@ -64,24 +64,24 @@ axes[0].plot(n_vals, S_n, 'bo-', markersize=4, label=f'S_N (r={r_conv})')
 axes[0].axhline(y=exact, color='r', linestyle='--', label=f'S = {exact:.4f}')
 axes[0].set_xlabel('N')
 axes[0].set_ylabel('S_N')
-axes[0].set_title(f'수렴하는 기하급수 (r = {r_conv})')
+axes[0].set_title(f'Convergent geometric series (r = {r_conv})')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 조화급수 vs p-급수 비교
+# Harmonic series vs p-series comparison
 N_max = 100
 n = np.arange(1, N_max + 1)
-harmonic = np.cumsum(1.0 / n)           # p = 1 (발산)
-p2_series = np.cumsum(1.0 / n**2)       # p = 2 (수렴)
-p3_series = np.cumsum(1.0 / n**3)       # p = 3 (수렴)
+harmonic = np.cumsum(1.0 / n)           # p = 1 (diverges)
+p2_series = np.cumsum(1.0 / n**2)       # p = 2 (converges)
+p3_series = np.cumsum(1.0 / n**3)       # p = 3 (converges)
 
-axes[1].plot(n, harmonic, 'r-', label='p=1 (조화급수, 발산)')
-axes[1].plot(n, p2_series, 'b-', label=f'p=2 (수렴, pi^2/6 = {np.pi**2/6:.4f})')
-axes[1].plot(n, p3_series, 'g-', label='p=3 (수렴)')
+axes[1].plot(n, harmonic, 'r-', label='p=1 (harmonic series, diverges)')
+axes[1].plot(n, p2_series, 'b-', label=f'p=2 (converges, pi^2/6 = {np.pi**2/6:.4f})')
+axes[1].plot(n, p3_series, 'g-', label='p=3 (converges)')
 axes[1].axhline(y=np.pi**2/6, color='b', linestyle='--', alpha=0.5)
 axes[1].set_xlabel('N')
 axes[1].set_ylabel('S_N')
-axes[1].set_title('p-급수 비교: sum(1/n^p)')
+axes[1].set_title('p-series comparison: sum(1/n^p)')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -158,46 +158,46 @@ Error bound for alternating series: $|S - S_N| \leq b_{N+1}$ (less than or equal
 import numpy as np
 import sympy as sp
 
-# 수렴 판정법 자동 적용 도구
-def test_convergence(a_n_func, name="급수"):
-    """주어진 급수에 대해 비율 판정법과 근 판정법을 적용합니다."""
+# Automated convergence test tool
+def test_convergence(a_n_func, name="series"):
+    """Apply the ratio test and root test to the given series."""
     n = sp.Symbol('n', positive=True, integer=True)
     a_n = a_n_func(n)
 
     print(f"=== {name}: sum a_n, a_n = {a_n} ===\n")
 
-    # 비율 판정법
+    # Ratio test
     ratio = sp.simplify(a_n_func(n + 1) / a_n)
     rho_ratio = sp.limit(sp.Abs(ratio), n, sp.oo)
-    print(f"비율 판정법: |a_(n+1)/a_n| -> {rho_ratio}")
+    print(f"Ratio test: |a_(n+1)/a_n| -> {rho_ratio}")
     if rho_ratio < 1:
-        print("  => 절대 수렴\n")
+        print("  => Absolutely convergent\n")
     elif rho_ratio > 1:
-        print("  => 발산\n")
+        print("  => Divergent\n")
     else:
-        print("  => 판정 불능\n")
+        print("  => Inconclusive\n")
 
-    # 근 판정법
+    # Root test
     root = sp.Abs(a_n) ** (sp.Rational(1, n))
     rho_root = sp.limit(root, n, sp.oo)
-    print(f"근 판정법: |a_n|^(1/n) -> {rho_root}")
+    print(f"Root test: |a_n|^(1/n) -> {rho_root}")
     if rho_root < 1:
-        print("  => 절대 수렴\n")
+        print("  => Absolutely convergent\n")
     elif rho_root > 1:
-        print("  => 발산\n")
+        print("  => Divergent\n")
     else:
-        print("  => 판정 불능\n")
+        print("  => Inconclusive\n")
 
-# 테스트 예제들
+# Test examples
 n = sp.Symbol('n', positive=True, integer=True)
 
-# 1) sum n! / n^n  (수렴)
+# 1) sum n! / n^n  (converges)
 test_convergence(lambda n: sp.factorial(n) / n**n, "n!/n^n")
 
-# 2) sum 1/n^2  (수렴)
+# 2) sum 1/n^2  (converges)
 test_convergence(lambda n: 1 / n**2, "1/n^2")
 
-# 3) sum n^2 / 2^n  (수렴)
+# 3) sum n^2 / 2^n  (converges)
 test_convergence(lambda n: n**2 / 2**n, "n^2/2^n")
 ```
 
@@ -205,18 +205,18 @@ test_convergence(lambda n: n**2 / 2**n, "n^2/2^n")
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 교대급수 시각화: ln(2) = sum_{n=1}^{inf} (-1)^{n+1} / n
+# Alternating series visualization: ln(2) = sum_{n=1}^{inf} (-1)^{n+1} / n
 N = 30
 n = np.arange(1, N + 1)
 terms = (-1.0) ** (n + 1) / n
 partial_sums = np.cumsum(terms)
 
 plt.figure(figsize=(10, 5))
-plt.plot(n, partial_sums, 'bo-', markersize=5, label='부분합 S_N')
+plt.plot(n, partial_sums, 'bo-', markersize=5, label='Partial sum S_N')
 plt.axhline(y=np.log(2), color='r', linestyle='--',
             label=f'ln(2) = {np.log(2):.6f}')
 
-# 오차 범위 표시
+# Show error bounds
 for i in range(len(n)):
     error_bound = 1.0 / (n[i] + 1)
     plt.plot([n[i], n[i]],
@@ -225,7 +225,7 @@ for i in range(len(n)):
 
 plt.xlabel('N')
 plt.ylabel('S_N')
-plt.title('교대급수: ln(2) = 1 - 1/2 + 1/3 - 1/4 + ...')
+plt.title('Alternating series: ln(2) = 1 - 1/2 + 1/3 - 1/4 + ...')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -277,15 +277,15 @@ import sympy as sp
 
 x = sp.Symbol('x')
 
-# 멱급수의 수렴 반경 계산 예제
-print("=== 멱급수의 수렴 반경 ===\n")
+# Example: Computing the radius of convergence for power series
+print("=== Radius of convergence for power series ===\n")
 
-# 1) sum x^n / n!  (지수함수)
+# 1) sum x^n / n!  (exponential function)
 n = sp.Symbol('n', positive=True, integer=True)
 c_n = 1 / sp.factorial(n)
 c_n1 = 1 / sp.factorial(n + 1)
 R1 = sp.limit(sp.Abs(c_n / c_n1), n, sp.oo)
-print(f"sum x^n/n!: R = {R1}  (모든 x에서 수렴)")
+print(f"sum x^n/n!: R = {R1}  (converges for all x)")
 
 # 2) sum n * x^n  (R = 1)
 c_n = n
@@ -293,15 +293,15 @@ c_n1 = n + 1
 R2 = sp.limit(sp.Abs(c_n / c_n1), n, sp.oo)
 print(f"sum n*x^n: R = {R2}")
 
-# 3) sum n! * x^n  (R = 0, x=0에서만 수렴)
+# 3) sum n! * x^n  (R = 0, converges only at x=0)
 c_n = sp.factorial(n)
 c_n1 = sp.factorial(n + 1)
 R3 = sp.limit(sp.Abs(c_n / c_n1), n, sp.oo)
-print(f"sum n!*x^n: R = {R3}  (x=0에서만 수렴)")
+print(f"sum n!*x^n: R = {R3}  (converges only at x=0)")
 
-# 항별 미분 시각화
-print("\n=== 항별 미분: d/dx [1/(1-x)] = 1/(1-x)^2 ===")
-# 1/(1-x) = sum x^n  =>  미분하면  1/(1-x)^2 = sum n*x^{n-1}
+# Term-by-term differentiation visualization
+print("\n=== Term-by-term differentiation: d/dx [1/(1-x)] = 1/(1-x)^2 ===")
+# 1/(1-x) = sum x^n  =>  differentiating gives  1/(1-x)^2 = sum n*x^{n-1}
 x_vals = np.linspace(-0.9, 0.9, 200)
 
 import numpy as np
@@ -309,7 +309,7 @@ import matplotlib.pyplot as plt
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 원래 함수와 급수
+# Original function and series
 for N in [3, 5, 10, 20]:
     series_sum = sum(x_vals**k for k in range(N))
     axes[0].plot(x_vals, series_sum, alpha=0.7, label=f'N={N}')
@@ -320,7 +320,7 @@ axes[0].set_title('1/(1-x) = sum x^n')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 미분한 함수와 급수
+# Differentiated function and series
 for N in [3, 5, 10, 20]:
     deriv_sum = sum(k * x_vals**(k-1) for k in range(1, N))
     axes[1].plot(x_vals, deriv_sum, alpha=0.7, label=f'N={N}')
@@ -377,7 +377,7 @@ import numpy as np
 import sympy as sp
 import matplotlib.pyplot as plt
 
-# SymPy를 이용한 테일러 전개
+# Taylor expansion using SymPy
 x = sp.Symbol('x')
 
 functions = {
@@ -387,64 +387,64 @@ functions = {
     'ln(1+x)': sp.ln(1 + x),
 }
 
-print("=== 주요 함수의 테일러 급수 (a=0, 6차까지) ===\n")
+print("=== Taylor series of common functions (a=0, up to 6th order) ===\n")
 for name, func in functions.items():
     taylor = sp.series(func, x, 0, n=7)
     print(f"{name} = {taylor}\n")
 
-# 테일러 급수의 수렴 시각화
+# Taylor series convergence visualization
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
 x_vals = np.linspace(-2 * np.pi, 2 * np.pi, 500)
 
-# sin(x)의 테일러 근사
+# Taylor approximation of sin(x)
 ax = axes[0, 0]
 ax.plot(x_vals, np.sin(x_vals), 'k-', linewidth=2, label='sin(x)')
 for N in [1, 3, 5, 7, 9]:
     approx = sum((-1)**k * x_vals**(2*k+1) / np.math.factorial(2*k+1)
                  for k in range(N))
-    ax.plot(x_vals, approx, alpha=0.7, label=f'{2*N-1}차')
+    ax.plot(x_vals, approx, alpha=0.7, label=f'order {2*N-1}')
 ax.set_ylim(-2, 2)
-ax.set_title('sin(x)의 테일러 근사')
+ax.set_title('Taylor approximation of sin(x)')
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
-# cos(x)의 테일러 근사
+# Taylor approximation of cos(x)
 ax = axes[0, 1]
 ax.plot(x_vals, np.cos(x_vals), 'k-', linewidth=2, label='cos(x)')
 for N in [1, 2, 4, 6, 8]:
     approx = sum((-1)**k * x_vals**(2*k) / np.math.factorial(2*k)
                  for k in range(N))
-    ax.plot(x_vals, approx, alpha=0.7, label=f'{2*N-2}차')
+    ax.plot(x_vals, approx, alpha=0.7, label=f'order {2*N-2}')
 ax.set_ylim(-2, 2)
-ax.set_title('cos(x)의 테일러 근사')
+ax.set_title('Taylor approximation of cos(x)')
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
-# e^x의 테일러 근사
+# Taylor approximation of e^x
 x_exp = np.linspace(-3, 3, 300)
 ax = axes[1, 0]
 ax.plot(x_exp, np.exp(x_exp), 'k-', linewidth=2, label='e^x')
 for N in [1, 2, 4, 6, 10]:
     approx = sum(x_exp**k / np.math.factorial(k) for k in range(N + 1))
-    ax.plot(x_exp, approx, alpha=0.7, label=f'{N}차')
+    ax.plot(x_exp, approx, alpha=0.7, label=f'order {N}')
 ax.set_ylim(-5, 20)
-ax.set_title('e^x의 테일러 근사')
+ax.set_title('Taylor approximation of e^x')
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
-# ln(1+x)의 테일러 근사
+# Taylor approximation of ln(1+x)
 x_ln = np.linspace(-0.95, 2, 300)
 ax = axes[1, 1]
 ax.plot(x_ln, np.log(1 + x_ln), 'k-', linewidth=2, label='ln(1+x)')
 for N in [1, 3, 5, 10, 20]:
-    x_series = np.linspace(-0.95, 0.95, 300)  # 수렴 구간 내
+    x_series = np.linspace(-0.95, 0.95, 300)  # within convergence interval
     approx = sum((-1)**(k+1) * x_series**k / k for k in range(1, N + 1))
-    ax.plot(x_series, approx, alpha=0.7, label=f'{N}차')
-ax.axvline(x=1, color='gray', linestyle=':', alpha=0.5, label='x=1 (경계)')
-ax.axvline(x=-1, color='gray', linestyle=':', alpha=0.5, label='x=-1 (경계)')
+    ax.plot(x_series, approx, alpha=0.7, label=f'order {N}')
+ax.axvline(x=1, color='gray', linestyle=':', alpha=0.5, label='x=1 (boundary)')
+ax.axvline(x=-1, color='gray', linestyle=':', alpha=0.5, label='x=-1 (boundary)')
 ax.set_ylim(-4, 2)
-ax.set_title('ln(1+x)의 테일러 근사')
+ax.set_title('Taylor approximation of ln(1+x)')
 ax.legend(fontsize=8)
 ax.grid(True, alpha=0.3)
 
@@ -475,38 +475,38 @@ $$\frac{1}{1+\varepsilon} \approx 1 - \varepsilon + \varepsilon^2 - \cdots$$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 소량 근사의 정확도 비교
+# Accuracy comparison of small-quantity approximations
 epsilon = np.linspace(0, 1, 100)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# sqrt(1 + epsilon) = (1+epsilon)^{1/2} 의 근사
+# Approximation of sqrt(1 + epsilon) = (1+epsilon)^{1/2}
 exact = np.sqrt(1 + epsilon)
-order1 = 1 + epsilon / 2                       # 1차 근사
-order2 = 1 + epsilon / 2 - epsilon**2 / 8      # 2차 근사
-order3 = 1 + epsilon/2 - epsilon**2/8 + epsilon**3/16  # 3차
+order1 = 1 + epsilon / 2                       # 1st-order approximation
+order2 = 1 + epsilon / 2 - epsilon**2 / 8      # 2nd-order approximation
+order3 = 1 + epsilon/2 - epsilon**2/8 + epsilon**3/16  # 3rd-order
 
-axes[0].plot(epsilon, exact, 'k-', linewidth=2, label='정확값')
-axes[0].plot(epsilon, order1, 'b--', label='1차: 1 + e/2')
-axes[0].plot(epsilon, order2, 'r--', label='2차: 1 + e/2 - e^2/8')
-axes[0].plot(epsilon, order3, 'g--', label='3차')
+axes[0].plot(epsilon, exact, 'k-', linewidth=2, label='Exact')
+axes[0].plot(epsilon, order1, 'b--', label='1st order: 1 + e/2')
+axes[0].plot(epsilon, order2, 'r--', label='2nd order: 1 + e/2 - e^2/8')
+axes[0].plot(epsilon, order3, 'g--', label='3rd order')
 axes[0].set_xlabel('epsilon')
 axes[0].set_ylabel('sqrt(1 + epsilon)')
-axes[0].set_title('이항급수 근사: (1+e)^{1/2}')
+axes[0].set_title('Binomial series approximation: (1+e)^{1/2}')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 상대 오차
+# Relative error
 rel_err1 = np.abs(order1 - exact) / exact * 100
 rel_err2 = np.abs(order2 - exact) / exact * 100
 rel_err3 = np.abs(order3 - exact) / exact * 100
 
-axes[1].semilogy(epsilon, rel_err1, 'b-', label='1차 근사')
-axes[1].semilogy(epsilon, rel_err2, 'r-', label='2차 근사')
-axes[1].semilogy(epsilon, rel_err3, 'g-', label='3차 근사')
+axes[1].semilogy(epsilon, rel_err1, 'b-', label='1st-order approx')
+axes[1].semilogy(epsilon, rel_err2, 'r-', label='2nd-order approx')
+axes[1].semilogy(epsilon, rel_err3, 'g-', label='3rd-order approx')
 axes[1].set_xlabel('epsilon')
-axes[1].set_ylabel('상대 오차 (%)')
-axes[1].set_title('근사 차수에 따른 상대 오차')
+axes[1].set_ylabel('Relative error (%)')
+axes[1].set_title('Relative error by approximation order')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -553,40 +553,40 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import gamma, factorial
 
-# 스털링 근사의 정확도
+# Accuracy of Stirling's approximation
 n_vals = np.arange(1, 51)
 
-# 정확한 ln(n!)
+# Exact ln(n!)
 exact_lnfact = np.array([np.sum(np.log(np.arange(1, n+1))) for n in n_vals])
 
-# 스털링 근사 (여러 차수)
-stirling_0 = n_vals * np.log(n_vals) - n_vals  # 가장 간단한 형태
-stirling_1 = stirling_0 + 0.5 * np.log(2 * np.pi * n_vals)  # 1차 보정
-stirling_2 = stirling_1 + 1 / (12 * n_vals)  # 2차 보정
+# Stirling's approximation (multiple orders)
+stirling_0 = n_vals * np.log(n_vals) - n_vals  # simplest form
+stirling_1 = stirling_0 + 0.5 * np.log(2 * np.pi * n_vals)  # 1st-order correction
+stirling_2 = stirling_1 + 1 / (12 * n_vals)  # 2nd-order correction
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 절대값 비교
-axes[0].plot(n_vals, exact_lnfact, 'k-', linewidth=2, label='ln(n!) 정확값')
+# Absolute value comparison
+axes[0].plot(n_vals, exact_lnfact, 'k-', linewidth=2, label='ln(n!) exact')
 axes[0].plot(n_vals, stirling_0, 'b--', label='n*ln(n) - n')
 axes[0].plot(n_vals, stirling_1, 'r--', label='+ (1/2)ln(2*pi*n)')
 axes[0].set_xlabel('n')
 axes[0].set_ylabel('ln(n!)')
-axes[0].set_title('스털링 근사')
+axes[0].set_title("Stirling's approximation")
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 상대 오차
+# Relative error
 rel_err0 = np.abs(stirling_0 - exact_lnfact) / exact_lnfact * 100
 rel_err1 = np.abs(stirling_1 - exact_lnfact) / exact_lnfact * 100
 rel_err2 = np.abs(stirling_2 - exact_lnfact) / exact_lnfact * 100
 
-axes[1].semilogy(n_vals, rel_err0, 'b-', label='0차: n*ln(n)-n')
-axes[1].semilogy(n_vals, rel_err1, 'r-', label='1차: + ln(sqrt(2*pi*n))')
-axes[1].semilogy(n_vals, rel_err2, 'g-', label='2차: + 1/(12n)')
+axes[1].semilogy(n_vals, rel_err0, 'b-', label='0th order: n*ln(n)-n')
+axes[1].semilogy(n_vals, rel_err1, 'r-', label='1st order: + ln(sqrt(2*pi*n))')
+axes[1].semilogy(n_vals, rel_err2, 'g-', label='2nd order: + 1/(12n)')
 axes[1].set_xlabel('n')
-axes[1].set_ylabel('상대 오차 (%)')
-axes[1].set_title('스털링 근사의 상대 오차')
+axes[1].set_ylabel('Relative error (%)')
+axes[1].set_title("Relative error of Stirling's approximation")
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -594,17 +594,17 @@ plt.tight_layout()
 plt.savefig('stirling_approximation.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 통계역학 응용: 볼츠만 엔트로피
-print("=== 통계역학 응용: 이상기체 엔트로피 ===\n")
-print("N개 입자가 W개 미시상태를 가질 때:")
+# Statistical mechanics application: Boltzmann entropy
+print("=== Statistical mechanics application: Ideal gas entropy ===\n")
+print("When N particles have W microstates:")
 print("S = k_B * ln(W)")
-print("스털링 근사를 사용하면:")
+print("Using Stirling's approximation:")
 print("ln(N!) ~ N*ln(N) - N")
 print()
-print("예: N = 10^23 (아보가드로 수 규모)")
+print("Example: N = 10^23 (Avogadro's number scale)")
 N = 1e23
 print(f"ln(N!) ~ N*ln(N) - N = {N * np.log(N) - N:.4e}")
-print("직접 계산은 불가능하지만, 스털링 근사로 쉽게 계산 가능!")
+print("Direct computation is impossible, but easy with Stirling's approximation!")
 ```
 
 ---
@@ -630,50 +630,50 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import ellipk
 
-# 단진자의 주기: 정확값 vs 급수 근사
+# Pendulum period: exact vs series approximation
 g = 9.81  # m/s^2
 L = 1.0   # m
-T0 = 2 * np.pi * np.sqrt(L / g)  # 소각 근사 주기
+T0 = 2 * np.pi * np.sqrt(L / g)  # small-angle approximation period
 
-theta0 = np.linspace(0.01, np.pi * 0.95, 200)  # 초기 각도 (rad)
+theta0 = np.linspace(0.01, np.pi * 0.95, 200)  # initial angle (rad)
 k = np.sin(theta0 / 2)
 
-# 정확한 주기 (완전 타원 적분)
+# Exact period (complete elliptic integral)
 T_exact = 4 * np.sqrt(L / g) * ellipk(k**2)
 
-# 급수 근사 (소각 근사부터 고차항까지)
-T_approx0 = T0 * np.ones_like(theta0)                          # 0차 (소각)
-T_approx2 = T0 * (1 + (1/4) * k**2)                           # 2차
-T_approx4 = T0 * (1 + (1/4)*k**2 + (9/64)*k**4)               # 4차
+# Series approximations (from small-angle to higher-order)
+T_approx0 = T0 * np.ones_like(theta0)                          # 0th order (small-angle)
+T_approx2 = T0 * (1 + (1/4) * k**2)                           # 2nd order
+T_approx4 = T0 * (1 + (1/4)*k**2 + (9/64)*k**4)               # 4th order
 T_approx6 = T0 * (1 + (1/4)*k**2 + (9/64)*k**4 + (25/256)*k**6)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 주기 비교
+# Period comparison
 theta_deg = np.degrees(theta0)
-axes[0].plot(theta_deg, T_exact / T0, 'k-', linewidth=2, label='정확값')
-axes[0].plot(theta_deg, T_approx0 / T0, 'b--', label='0차 (소각근사)')
-axes[0].plot(theta_deg, T_approx2 / T0, 'r--', label='2차 보정')
-axes[0].plot(theta_deg, T_approx4 / T0, 'g--', label='4차 보정')
-axes[0].plot(theta_deg, T_approx6 / T0, 'm--', label='6차 보정')
-axes[0].set_xlabel('초기 각도 (도)')
+axes[0].plot(theta_deg, T_exact / T0, 'k-', linewidth=2, label='Exact')
+axes[0].plot(theta_deg, T_approx0 / T0, 'b--', label='0th order (small-angle)')
+axes[0].plot(theta_deg, T_approx2 / T0, 'r--', label='2nd-order correction')
+axes[0].plot(theta_deg, T_approx4 / T0, 'g--', label='4th-order correction')
+axes[0].plot(theta_deg, T_approx6 / T0, 'm--', label='6th-order correction')
+axes[0].set_xlabel('Initial angle (degrees)')
 axes[0].set_ylabel('T / T_0')
-axes[0].set_title('단진자 주기: 급수 전개 근사')
+axes[0].set_title('Pendulum period: series expansion approximation')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 상대 오차
+# Relative error
 axes[1].semilogy(theta_deg, np.abs(T_approx0 - T_exact)/T_exact * 100,
-                 'b-', label='0차 (소각)')
+                 'b-', label='0th order (small-angle)')
 axes[1].semilogy(theta_deg, np.abs(T_approx2 - T_exact)/T_exact * 100,
-                 'r-', label='2차')
+                 'r-', label='2nd order')
 axes[1].semilogy(theta_deg, np.abs(T_approx4 - T_exact)/T_exact * 100,
-                 'g-', label='4차')
+                 'g-', label='4th order')
 axes[1].semilogy(theta_deg, np.abs(T_approx6 - T_exact)/T_exact * 100,
-                 'm-', label='6차')
-axes[1].set_xlabel('초기 각도 (도)')
-axes[1].set_ylabel('상대 오차 (%)')
-axes[1].set_title('급수 근사의 상대 오차')
+                 'm-', label='6th order')
+axes[1].set_xlabel('Initial angle (degrees)')
+axes[1].set_ylabel('Relative error (%)')
+axes[1].set_title('Relative error of series approximation')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -681,9 +681,9 @@ plt.tight_layout()
 plt.savefig('pendulum_period.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 수치 결과
-print("=== 단진자 주기 비교 (L=1m) ===\n")
-print(f"{'각도':>6s}  {'정확값(s)':>10s}  {'소각근사(s)':>12s}  {'오차(%)':>8s}")
+# Numerical results
+print("=== Pendulum period comparison (L=1m) ===\n")
+print(f"{'Angle':>6s}  {'Exact (s)':>10s}  {'Small-angle (s)':>15s}  {'Error (%)':>9s}")
 print("-" * 45)
 for angle_deg in [5, 10, 30, 45, 60, 90, 120, 150]:
     angle_rad = np.radians(angle_deg)
@@ -711,33 +711,33 @@ $$= \underbrace{\frac{1}{2}mv^2}_{\text{Newtonian}} + \underbrace{\frac{3}{8}m\f
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 상대론적 운동 에너지의 급수 근사
+# Series approximation of relativistic kinetic energy
 beta = np.linspace(0.001, 0.99, 500)  # v/c
 
-# 정확한 상대론적 운동 에너지: K/(mc^2) = gamma - 1
+# Exact relativistic kinetic energy: K/(mc^2) = gamma - 1
 gamma = 1 / np.sqrt(1 - beta**2)
-K_exact = gamma - 1  # mc^2 단위
+K_exact = gamma - 1  # in units of mc^2
 
-# 급수 근사 (이항급수 전개)
-K_order2 = 0.5 * beta**2                                         # 뉴턴 역학
-K_order4 = 0.5 * beta**2 + (3/8) * beta**4                      # 1차 보정
-K_order6 = 0.5 * beta**2 + (3/8) * beta**4 + (5/16) * beta**6  # 2차 보정
+# Series approximation (binomial expansion)
+K_order2 = 0.5 * beta**2                                         # Newtonian
+K_order4 = 0.5 * beta**2 + (3/8) * beta**4                      # 1st-order correction
+K_order6 = 0.5 * beta**2 + (3/8) * beta**4 + (5/16) * beta**6  # 2nd-order correction
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 운동 에너지 비교
-axes[0].plot(beta, K_exact, 'k-', linewidth=2, label='상대론적 (정확)')
-axes[0].plot(beta, K_order2, 'b--', label='뉴턴: (1/2)mv^2')
-axes[0].plot(beta, K_order4, 'r--', label='1차 보정')
-axes[0].plot(beta, K_order6, 'g--', label='2차 보정')
+# Kinetic energy comparison
+axes[0].plot(beta, K_exact, 'k-', linewidth=2, label='Relativistic (exact)')
+axes[0].plot(beta, K_order2, 'b--', label='Newtonian: (1/2)mv^2')
+axes[0].plot(beta, K_order4, 'r--', label='1st-order correction')
+axes[0].plot(beta, K_order6, 'g--', label='2nd-order correction')
 axes[0].set_xlabel('beta = v/c')
 axes[0].set_ylabel('K / (mc^2)')
-axes[0].set_title('운동 에너지: 상대론 vs 뉴턴')
+axes[0].set_title('Kinetic energy: Relativistic vs Newtonian')
 axes[0].set_ylim(0, 5)
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 뉴턴 역학의 상대 오차
+# Relative error of Newtonian mechanics
 beta_low = np.linspace(0.001, 0.5, 300)
 gamma_low = 1 / np.sqrt(1 - beta_low**2)
 K_exact_low = gamma_low - 1
@@ -747,12 +747,12 @@ K_corr1 = 0.5 * beta_low**2 + (3/8) * beta_low**4
 rel_err_newton = np.abs(K_newton - K_exact_low) / K_exact_low * 100
 rel_err_corr1 = np.abs(K_corr1 - K_exact_low) / K_exact_low * 100
 
-axes[1].semilogy(beta_low, rel_err_newton, 'b-', label='뉴턴 역학 오차')
-axes[1].semilogy(beta_low, rel_err_corr1, 'r-', label='1차 보정 후 오차')
-axes[1].axhline(y=1, color='gray', linestyle=':', alpha=0.5, label='1% 오차선')
+axes[1].semilogy(beta_low, rel_err_newton, 'b-', label='Newtonian error')
+axes[1].semilogy(beta_low, rel_err_corr1, 'r-', label='Error after 1st-order correction')
+axes[1].axhline(y=1, color='gray', linestyle=':', alpha=0.5, label='1% error line')
 axes[1].set_xlabel('beta = v/c')
-axes[1].set_ylabel('상대 오차 (%)')
-axes[1].set_title('뉴턴 역학의 유효 범위')
+axes[1].set_ylabel('Relative error (%)')
+axes[1].set_title('Valid range of Newtonian mechanics')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -760,9 +760,9 @@ plt.tight_layout()
 plt.savefig('relativistic_energy.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 결과 출력
-print("=== 뉴턴 역학이 유효한 속도 범위 ===\n")
-print(f"{'v/c':>6s}  {'상대론적 K':>12s}  {'뉴턴 K':>10s}  {'오차(%)':>8s}")
+# Print results
+print("=== Valid velocity range for Newtonian mechanics ===\n")
+print(f"{'v/c':>6s}  {'Relativistic K':>14s}  {'Newtonian K':>11s}  {'Error (%)':>9s}")
 print("-" * 42)
 for b in [0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9]:
     g = 1 / np.sqrt(1 - b**2)
@@ -806,17 +806,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import legendre
 
-# 다중극 전개 (Multipole Expansion) 시각화
-# 전하 q가 z축 위 d = 1에 있을 때, 1/|r - d*z_hat|의 급수 전개
+# Multipole Expansion visualization
+# Series expansion of 1/|r - d*z_hat| when charge q is at z-axis position d = 1
 
 def exact_potential_ratio(r, theta, d=1.0):
-    """정확한 전위 비율: r / |r - d*z_hat| (1/r 제외한 부분)"""
+    """Exact potential ratio: r / |r - d*z_hat| (excluding the 1/r factor)"""
     # |r - d*z_hat|^2 = r^2 - 2*r*d*cos(theta) + d^2
     dist = np.sqrt(r**2 - 2*r*d*np.cos(theta) + d**2)
     return r / dist
 
 def multipole_approx(r, theta, d=1.0, L_max=5):
-    """다중극 전개: sum_{l=0}^{L_max} (d/r)^l * P_l(cos(theta))"""
+    """Multipole expansion: sum_{l=0}^{L_max} (d/r)^l * P_l(cos(theta))"""
     result = np.zeros_like(r)
     cos_theta = np.cos(theta)
     for l in range(L_max + 1):
@@ -824,9 +824,9 @@ def multipole_approx(r, theta, d=1.0, L_max=5):
         result += (d / r)**l * Pl(cos_theta)
     return result
 
-# r/d 비율에 따른 다중극 전개의 정확도
+# Accuracy of multipole expansion as a function of r/d ratio
 r_values = np.linspace(1.5, 10, 200)
-theta = np.pi / 4  # 45도
+theta = np.pi / 4  # 45 degrees
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -836,32 +836,32 @@ for L_max in [0, 1, 2, 5, 10]:
     approx = multipole_approx(r_values, theta, L_max=L_max)
     axes[0].plot(r_values, approx, label=f'L_max = {L_max}')
 
-axes[0].plot(r_values, exact, 'k--', linewidth=2, label='정확값')
+axes[0].plot(r_values, exact, 'k--', linewidth=2, label='Exact')
 axes[0].set_xlabel('r/d')
 axes[0].set_ylabel('r * V(r) / (kq)')
-axes[0].set_title(f'다중극 전개 (theta = 45도)')
+axes[0].set_title(f'Multipole expansion (theta = 45 degrees)')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 쌍극자 전위 패턴 (2D)
+# Electric dipole potential pattern (2D)
 r_grid = np.linspace(0.5, 5, 200)
 theta_grid = np.linspace(0, 2*np.pi, 200)
 R, Theta = np.meshgrid(r_grid, theta_grid)
 X = R * np.sin(Theta)
 Z = R * np.cos(Theta)
 
-# 쌍극자 전위: V ~ cos(theta)/r^2 (단위 생략)
+# Dipole potential: V ~ cos(theta)/r^2 (units omitted)
 V_dipole = np.cos(Theta) / R**2
 
 axes[1].contourf(X, Z, V_dipole, levels=np.linspace(-2, 2, 41),
                  cmap='RdBu_r', extend='both')
 axes[1].set_xlabel('x')
 axes[1].set_ylabel('z')
-axes[1].set_title('전기 쌍극자 전위 패턴')
+axes[1].set_title('Electric dipole potential pattern')
 axes[1].set_aspect('equal')
 axes[1].set_xlim(-3, 3)
 axes[1].set_ylim(-3, 3)
-# 전하 위치 표시
+# Mark charge positions
 axes[1].plot(0, 0.1, 'r+', markersize=15, markeredgewidth=2)
 axes[1].plot(0, -0.1, 'b_', markersize=15, markeredgewidth=2)
 
@@ -869,8 +869,8 @@ plt.tight_layout()
 plt.savefig('multipole_expansion.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 르장드르 다항식의 처음 몇 개
-print("=== 르장드르 다항식 P_l(x) ===\n")
+# First few Legendre polynomials
+print("=== Legendre polynomials P_l(x) ===\n")
 import sympy as sp
 x_sym = sp.Symbol('x')
 for l in range(6):
@@ -943,37 +943,37 @@ When an electron has velocity $v = 0.1c$:
 (d) Find the maximum $v/c$ for which Newtonian mechanics has an error less than 1%
 
 ```python
-# 연습 문제 풀이 도우미
+# Practice problem solution helper
 import numpy as np
 import sympy as sp
 
-# 문제 1(a) 검증
+# Problem 1(a) verification
 n = sp.Symbol('n', positive=True, integer=True)
 a_n = n**2 / 3**n
 ratio = sp.simplify(sp.Abs((n+1)**2 / 3**(n+1)) / (n**2 / 3**n))
 rho = sp.limit(ratio, n, sp.oo)
-print(f"문제 1(a): 비율 = {rho} < 1 => 수렴")
+print(f"Problem 1(a): ratio = {rho} < 1 => converges")
 
-# 문제 4 검증
+# Problem 4 verification
 from scipy.special import ellipk
 L, g = 1.0, 9.81
 theta0 = np.radians(30)
 T0 = 2 * np.pi * np.sqrt(L / g)
 k = np.sin(theta0 / 2)
 T_exact = 4 * np.sqrt(L / g) * ellipk(k**2)
-print(f"\n문제 4: T_exact = {T_exact:.6f}s, T_0 = {T0:.6f}s")
-print(f"소각 근사 오차 = {abs(T0 - T_exact)/T_exact * 100:.4f}%")
+print(f"\nProblem 4: T_exact = {T_exact:.6f}s, T_0 = {T0:.6f}s")
+print(f"Small-angle approx error = {abs(T0 - T_exact)/T_exact * 100:.4f}%")
 
 T_corrected = T0 * (1 + (1/4) * k**2)
-print(f"2차 보정 후 오차 = {abs(T_corrected - T_exact)/T_exact * 100:.6f}%")
+print(f"Error after 2nd-order correction = {abs(T_corrected - T_exact)/T_exact * 100:.6f}%")
 
-# 문제 5 검증
+# Problem 5 verification
 import math
 stirling_log10_100 = (100 * np.log(100) - 100 + 0.5 * np.log(200 * np.pi)) / np.log(10)
 exact_log10_100 = np.log10(float(math.factorial(100)))
-print(f"\n문제 5: log10(100!) 스털링 = {stirling_log10_100:.4f}")
-print(f"         log10(100!) 정확값 = {exact_log10_100:.4f}")
-print(f"         오차 = {abs(stirling_log10_100 - exact_log10_100):.6f}")
+print(f"\nProblem 5: log10(100!) Stirling = {stirling_log10_100:.4f}")
+print(f"           log10(100!) exact    = {exact_log10_100:.4f}")
+print(f"           error = {abs(stirling_log10_100 - exact_log10_100):.6f}")
 ```
 
 ---

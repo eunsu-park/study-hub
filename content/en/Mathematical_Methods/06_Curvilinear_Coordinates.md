@@ -34,14 +34,14 @@ from scipy import integrate
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
-# --- 이중적분 수치 계산 ---
-# f(x, y) = x + y, 영역: 0 <= x <= 1, 0 <= y <= x
+# --- Numerical double integral computation ---
+# f(x, y) = x + y, region: 0 <= x <= 1, 0 <= y <= x
 f = lambda y, x: x + y
 result, error = integrate.dblquad(f, 0, 1, lambda x: 0, lambda x: x)
-print(f"이중적분 결과: {result:.6f} (오차: {error:.2e})")
-# 출력: 이중적분 결과: 0.500000 (오차: 5.55e-15)
+print(f"Double integral result: {result:.6f} (error: {error:.2e})")
+# Output: Double integral result: 0.500000 (error: 5.55e-15)
 
-# --- 적분 영역 시각화 ---
+# --- Visualize integration region ---
 fig, ax = plt.subplots(1, 1, figsize=(5, 4))
 triangle = Polygon([[0, 0], [1, 0], [1, 1]], alpha=0.3, color='steelblue')
 ax.add_patch(triangle)
@@ -49,7 +49,7 @@ ax.set_xlim(-0.1, 1.3)
 ax.set_ylim(-0.1, 1.3)
 ax.set_xlabel('x')
 ax.set_ylabel('y')
-ax.set_title('적분 영역: 0 ≤ y ≤ x, 0 ≤ x ≤ 1')
+ax.set_title('Integration region: 0 ≤ y ≤ x, 0 ≤ x ≤ 1')
 ax.set_aspect('equal')
 ax.plot([0, 1], [0, 1], 'r-', linewidth=2, label='y = x')
 ax.legend()
@@ -69,7 +69,7 @@ In rectangular coordinates, the volume element is $dV = dx \, dy \, dz$.
 **Example**: Triple integral of $f = 1$ inside the unit sphere $x^2 + y^2 + z^2 \le 1$ (volume of a sphere)
 
 ```python
-# 단위 구의 부피: 삼중적분 (직교 좌표)
+# Volume of unit sphere: triple integral (Cartesian coordinates)
 def sphere_volume_cartesian():
     f = lambda z, y, x: 1.0
     x_lo, x_hi = -1, 1
@@ -82,8 +82,8 @@ def sphere_volume_cartesian():
     return result
 
 V = sphere_volume_cartesian()
-print(f"단위 구의 부피 (수치적분): {V:.6f}")
-print(f"해석적 결과 (4π/3):       {4*np.pi/3:.6f}")
+print(f"Volume of unit sphere (numerical): {V:.6f}")
+print(f"Analytical result (4π/3):          {4*np.pi/3:.6f}")
 ```
 
 ### 1.3 Changing the Order of Integration
@@ -104,12 +104,12 @@ import sympy as sp
 
 x, y = sp.symbols('x y', positive=True)
 
-# 순서 변경 후 적분
+# Integrate after changing order
 inner = sp.integrate(sp.exp(x**2), (y, 0, x))   # ∫₀ˣ e^{x²} dy = x·e^{x²}
 result = sp.integrate(inner, (x, 0, 1))           # ∫₀¹ x·e^{x²} dx
-print(f"적분 순서 변경 후 결과: {result}")
-# 출력: -1/2 + E/2  즉, (e-1)/2
-print(f"수치값: {float(result):.6f}")
+print(f"Result after changing order: {result}")
+# Output: -1/2 + E/2  i.e., (e-1)/2
+print(f"Numerical value: {float(result):.6f}")
 ```
 
 ---
@@ -143,25 +143,25 @@ import sympy as sp
 
 u, v = sp.symbols('u v', positive=True)
 
-# 예: 극좌표 변환 x = r cos(θ), y = r sin(θ)
+# Example: polar coordinate transformation x = r cos(θ), y = r sin(θ)
 r, theta = sp.symbols('r theta', positive=True)
 x_expr = r * sp.cos(theta)
 y_expr = r * sp.sin(theta)
 
-# 야코비안 계산
+# Compute Jacobian
 J = sp.Matrix([
     [sp.diff(x_expr, r), sp.diff(x_expr, theta)],
     [sp.diff(y_expr, r), sp.diff(y_expr, theta)]
 ])
 jacobian_det = J.det().simplify()
-print(f"극좌표 야코비안: J = {jacobian_det}")
-# 출력: 극좌표 야코비안: J = r
+print(f"Polar coordinate Jacobian: J = {jacobian_det}")
+# Output: Polar coordinate Jacobian: J = r
 
-# 야코비안 행렬 출력
-print(f"\n야코비안 행렬:")
+# Print Jacobian matrix
+print(f"\nJacobian matrix:")
 sp.pprint(J)
 
-# --- 타원 좌표 변환 예제 ---
+# --- Elliptic coordinate transformation example ---
 # x = a·u·cos(v), y = b·u·sin(v)
 a, b = sp.symbols('a b', positive=True)
 x_ellip = a * u * sp.cos(v)
@@ -172,8 +172,8 @@ J_ellip = sp.Matrix([
     [sp.diff(y_ellip, u), sp.diff(y_ellip, v)]
 ])
 det_ellip = J_ellip.det().simplify()
-print(f"\n타원 좌표 야코비안: J = {det_ellip}")
-# 출력: 타원 좌표 야코비안: J = a*b*u
+print(f"\nElliptic coordinate Jacobian: J = {det_ellip}")
+# Output: Elliptic coordinate Jacobian: J = a*b*u
 ```
 
 ---
@@ -198,22 +198,22 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 def cylindrical_to_cartesian(rho, phi, z):
-    """원통 좌표 → 직교 좌표 변환"""
+    """Cylindrical coordinates → Cartesian coordinates"""
     x = rho * np.cos(phi)
     y = rho * np.sin(phi)
     return x, y, z
 
 def cartesian_to_cylindrical(x, y, z):
-    """직교 좌표 → 원통 좌표 변환"""
+    """Cartesian coordinates → Cylindrical coordinates"""
     rho = np.sqrt(x**2 + y**2)
     phi = np.arctan2(y, x)
     return rho, phi, z
 
-# --- 원통 좌표계 시각화 ---
+# --- Visualize cylindrical coordinate system ---
 fig = plt.figure(figsize=(10, 8))
 ax = fig.add_subplot(111, projection='3d')
 
-# ρ = const 곡면 (원통)
+# ρ = const surface (cylinder)
 phi_grid = np.linspace(0, 2*np.pi, 50)
 z_grid = np.linspace(-2, 2, 20)
 PHI, Z = np.meshgrid(phi_grid, z_grid)
@@ -222,7 +222,7 @@ for rho_val in [0.5, 1.0, 1.5]:
     Y = rho_val * np.sin(PHI)
     ax.plot_surface(X, Y, Z, alpha=0.15, color='blue')
 
-# φ = const 곡면 (반평면)
+# φ = const surface (half-plane)
 rho_grid = np.linspace(0, 2, 20)
 RHO, Z2 = np.meshgrid(rho_grid, z_grid)
 for phi_val in [0, np.pi/3, 2*np.pi/3, np.pi]:
@@ -230,7 +230,7 @@ for phi_val in [0, np.pi/3, 2*np.pi/3, np.pi]:
     Y2 = RHO * np.sin(phi_val)
     ax.plot_surface(X2, Y2, Z2, alpha=0.1, color='red')
 
-# z = const 곡면 (수평면)
+# z = const surface (horizontal plane)
 RHO3, PHI3 = np.meshgrid(rho_grid, phi_grid)
 X3 = RHO3 * np.cos(PHI3)
 Y3 = RHO3 * np.sin(PHI3)
@@ -241,7 +241,7 @@ for z_val in [-1, 0, 1]:
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
-ax.set_title('원통 좌표계 등위면: ρ=const(파랑), φ=const(빨강), z=const(초록)')
+ax.set_title('Cylindrical coordinate surfaces: ρ=const(blue), φ=const(red), z=const(green)')
 plt.tight_layout()
 plt.savefig('cylindrical_coords.png', dpi=150)
 plt.show()
@@ -272,12 +272,12 @@ import sympy as sp
 rho, phi, z = sp.symbols('rho phi z', positive=True)
 R, H = sp.symbols('R H', positive=True)
 
-# 원통의 부피
+# Volume of cylinder
 V = sp.integrate(rho, (rho, 0, R), (phi, 0, 2*sp.pi), (z, 0, H))
-print(f"원통의 부피: V = {V}")
-# 출력: V = π·R²·H
+print(f"Volume of cylinder: V = {V}")
+# Output: V = π·R²·H
 
-# 야코비안 검증
+# Verify Jacobian
 x_cyl = rho * sp.cos(phi)
 y_cyl = rho * sp.sin(phi)
 z_cyl = z
@@ -287,8 +287,8 @@ J_cyl = sp.Matrix([
     [sp.diff(y_cyl, rho), sp.diff(y_cyl, phi), sp.diff(y_cyl, z)],
     [sp.diff(z_cyl, rho), sp.diff(z_cyl, phi), sp.diff(z_cyl, z)]
 ])
-print(f"야코비안 det = {J_cyl.det().simplify()}")
-# 출력: 야코비안 det = rho
+print(f"Jacobian det = {J_cyl.det().simplify()}")
+# Output: Jacobian det = rho
 ```
 
 ### 3.3 Gradient, Divergence, and Curl in Cylindrical Coordinates
@@ -321,7 +321,7 @@ By Ampère's law, $\mathbf{B} = \frac{\mu_0 I}{2\pi \rho}\hat{\boldsymbol{\phi}}
 import sympy as sp
 from sympy.vector import CoordSys3D
 
-# SymPy 벡터 시스템은 직교 좌표 기반이므로, 직접 원통 좌표 미분 연산 구현
+# SymPy vector system is Cartesian-based; implement cylindrical differential operators directly
 rho, phi, z = sp.symbols('rho phi z', positive=True)
 mu_0, I = sp.symbols('mu_0 I', positive=True)
 
@@ -330,17 +330,17 @@ B_rho = 0
 B_phi = mu_0 * I / (2 * sp.pi * rho)
 B_z = 0
 
-# 발산 (원통 좌표)
+# Divergence (cylindrical coordinates)
 div_B = (1/rho) * sp.diff(rho * B_rho, rho) + \
         (1/rho) * sp.diff(B_phi, phi) + \
         sp.diff(B_z, z)
 print(f"∇·B = {sp.simplify(div_B)}")
-# 출력: ∇·B = 0  (맥스웰 방정식 ∇·B = 0 성립)
+# Output: ∇·B = 0  (Maxwell's equation ∇·B = 0 satisfied)
 
-# 회전 (원통 좌표) - z 성분만 계산 (나머지는 0)
+# Curl (cylindrical coordinates) - only z component (others are 0)
 curl_B_z = (1/rho) * (sp.diff(rho * B_phi, rho) - sp.diff(B_rho, phi))
 print(f"(∇×B)_z = {sp.simplify(curl_B_z)}")
-# ρ ≠ 0에서 0 (도선 외부에서 전류 없음)
+# 0 for ρ ≠ 0 (no current outside the wire)
 ```
 
 ---
@@ -367,23 +367,23 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 def spherical_to_cartesian(r, theta, phi):
-    """구면 좌표 → 직교 좌표 변환"""
+    """Spherical coordinates → Cartesian coordinates"""
     x = r * np.sin(theta) * np.cos(phi)
     y = r * np.sin(theta) * np.sin(phi)
     z = r * np.cos(theta)
     return x, y, z
 
 def cartesian_to_spherical(x, y, z):
-    """직교 좌표 → 구면 좌표 변환"""
+    """Cartesian coordinates → Spherical coordinates"""
     r = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(z / np.where(r > 0, r, 1))
     phi = np.arctan2(y, x)
     return r, theta, phi
 
-# --- 구면 좌표계 등위면 시각화 ---
+# --- Visualize spherical coordinate surfaces ---
 fig = plt.figure(figsize=(12, 5))
 
-# (a) r = const (구면)
+# (a) r = const (sphere)
 ax1 = fig.add_subplot(131, projection='3d')
 theta_g = np.linspace(0, np.pi, 30)
 phi_g = np.linspace(0, 2*np.pi, 30)
@@ -393,9 +393,9 @@ for r_val in [0.5, 1.0, 1.5]:
     Y = r_val * np.sin(THETA) * np.sin(PHI)
     Z = r_val * np.cos(THETA)
     ax1.plot_surface(X, Y, Z, alpha=0.2, color='blue')
-ax1.set_title('r = const (구면)')
+ax1.set_title('r = const (sphere)')
 
-# (b) θ = const (원뿔)
+# (b) θ = const (cone)
 ax2 = fig.add_subplot(132, projection='3d')
 r_g = np.linspace(0, 2, 20)
 R_grid, PHI2 = np.meshgrid(r_g, phi_g)
@@ -404,9 +404,9 @@ for theta_val in [np.pi/6, np.pi/3, np.pi/2]:
     Y2 = R_grid * np.sin(theta_val) * np.sin(PHI2)
     Z2 = R_grid * np.cos(theta_val)
     ax2.plot_surface(X2, Y2, Z2, alpha=0.2, color='red')
-ax2.set_title('θ = const (원뿔)')
+ax2.set_title('θ = const (cone)')
 
-# (c) φ = const (반평면)
+# (c) φ = const (half-plane)
 ax3 = fig.add_subplot(133, projection='3d')
 R3, THETA3 = np.meshgrid(r_g, theta_g)
 for phi_val in [0, np.pi/3, 2*np.pi/3, np.pi]:
@@ -414,14 +414,14 @@ for phi_val in [0, np.pi/3, 2*np.pi/3, np.pi]:
     Y3 = R3 * np.sin(THETA3) * np.sin(phi_val)
     Z3 = R3 * np.cos(THETA3)
     ax3.plot_surface(X3, Y3, Z3, alpha=0.2, color='green')
-ax3.set_title('φ = const (반평면)')
+ax3.set_title('φ = const (half-plane)')
 
 for ax in [ax1, ax2, ax3]:
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
 
-plt.suptitle('구면 좌표계 등위면', fontsize=14)
+plt.suptitle('Spherical coordinate surfaces', fontsize=14)
 plt.tight_layout()
 plt.savefig('spherical_coords.png', dpi=150)
 plt.show()
@@ -452,7 +452,7 @@ import sympy as sp
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 R = sp.Symbol('R', positive=True)
 
-# 야코비안 검증
+# Verify Jacobian
 x_sph = r * sp.sin(theta) * sp.cos(phi)
 y_sph = r * sp.sin(theta) * sp.sin(phi)
 z_sph = r * sp.cos(theta)
@@ -463,18 +463,18 @@ J_sph = sp.Matrix([
     [sp.diff(z_sph, r), sp.diff(z_sph, theta), sp.diff(z_sph, phi)]
 ])
 det_J = sp.trigsimp(J_sph.det())
-print(f"구면 좌표 야코비안: {det_J}")
-# 출력: r**2*sin(theta)
+print(f"Spherical coordinate Jacobian: {det_J}")
+# Output: r**2*sin(theta)
 
-# 구의 부피
+# Volume of sphere
 V = sp.integrate(r**2 * sp.sin(theta), (r, 0, R), (theta, 0, sp.pi), (phi, 0, 2*sp.pi))
-print(f"구의 부피: V = {V}")
-# 출력: 4*pi*R**3/3
+print(f"Volume of sphere: V = {V}")
+# Output: 4*pi*R**3/3
 
-# 구의 표면적 (r = R 고정)
+# Surface area of sphere (r = R fixed)
 S = sp.integrate(R**2 * sp.sin(theta), (theta, 0, sp.pi), (phi, 0, 2*sp.pi))
-print(f"구의 표면적: S = {S}")
-# 출력: 4*pi*R**2
+print(f"Surface area of sphere: S = {S}")
+# Output: 4*pi*R**2
 ```
 
 ### 4.3 Gradient, Divergence, and Curl in Spherical Coordinates
@@ -505,27 +505,27 @@ import sympy as sp
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 q, eps0 = sp.symbols('q epsilon_0', positive=True)
 
-# 쿨롱 포텐셜
+# Coulomb potential
 Phi = q / (4 * sp.pi * eps0 * r)
 
-# 구면 좌표 라플라시안 계산 (r > 0 영역)
+# Laplacian in spherical coordinates (r > 0 region)
 laplacian_Phi = (1/r**2) * sp.diff(r**2 * sp.diff(Phi, r), r) + \
                 (1/(r**2 * sp.sin(theta))) * sp.diff(sp.sin(theta) * sp.diff(Phi, theta), theta) + \
                 (1/(r**2 * sp.sin(theta)**2)) * sp.diff(Phi, phi, 2)
 
 result = sp.simplify(laplacian_Phi)
-print(f"∇²Φ = {result}  (r > 0에서)")
-# 출력: 0  (원점 제외 영역에서 라플라스 방정식 만족)
-# 원점에서는 ∇²(1/r) = -4πδ(r) (디랙 델타 함수)
+print(f"∇²Φ = {result}  (r > 0)")
+# Output: 0  (satisfies Laplace's equation outside the origin)
+# At the origin: ∇²(1/r) = -4πδ(r) (Dirac delta function)
 
-# --- 구면 좌표에서 발산 정리 검증 ---
+# --- Verify divergence theorem in spherical coordinates ---
 # E = -∇Φ = (q/4πε₀r²) r̂
 E_r = q / (4 * sp.pi * eps0 * r**2)
 
-# 발산 (구 대칭이므로 r 성분만)
+# Divergence (only r component due to spherical symmetry)
 div_E = (1/r**2) * sp.diff(r**2 * E_r, r)
 print(f"∇·E = {sp.simplify(div_E)}  (r > 0)")
-# 출력: 0 (전하가 없는 영역)
+# Output: 0 (no charge in this region)
 ```
 
 **Example**: Solid angle integration in spherical coordinates
@@ -535,26 +535,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# 입체각 요소 dΩ = sin(θ) dθ dφ
-# 전체 구의 입체각: ∫∫ sin(θ) dθ dφ = 4π 스테라디안
+# Solid angle element dΩ = sin(θ) dθ dφ
+# Total solid angle of sphere: ∫∫ sin(θ) dθ dφ = 4π steradians
 
-# 원뿔(θ ≤ α)이 차지하는 입체각
+# Solid angle subtended by cone (θ ≤ α)
 alpha_values = np.linspace(0, np.pi, 100)
 solid_angles = 2 * np.pi * (1 - np.cos(alpha_values))
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# (a) 입체각 vs 반꼭지각
+# (a) Solid angle vs half-apex angle
 axes[0].plot(np.degrees(alpha_values), solid_angles, 'b-', linewidth=2)
-axes[0].axhline(y=4*np.pi, color='r', linestyle='--', label='전체 구 = 4π sr')
-axes[0].axhline(y=2*np.pi, color='g', linestyle='--', label='반구 = 2π sr')
-axes[0].set_xlabel('반꼭지각 α (도)')
-axes[0].set_ylabel('입체각 Ω (sr)')
-axes[0].set_title('원뿔의 입체각')
+axes[0].axhline(y=4*np.pi, color='r', linestyle='--', label='Full sphere = 4π sr')
+axes[0].axhline(y=2*np.pi, color='g', linestyle='--', label='Hemisphere = 2π sr')
+axes[0].set_xlabel('Half-apex angle α (degrees)')
+axes[0].set_ylabel('Solid angle Ω (sr)')
+axes[0].set_title('Solid angle of cone')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# (b) 구면 위 면적 요소 시각화
+# (b) Visualize area element on sphere
 ax2 = fig.add_subplot(122, projection='3d')
 theta_g = np.linspace(0, np.pi, 40)
 phi_g = np.linspace(0, 2*np.pi, 40)
@@ -563,10 +563,10 @@ X = np.sin(THETA) * np.cos(PHI)
 Y = np.sin(THETA) * np.sin(PHI)
 Z = np.cos(THETA)
 
-# sin(θ)에 비례하는 색으로 면적 요소 밀도 표현
+# Color proportional to sin(θ) to represent area element density
 colors = plt.cm.viridis(np.sin(THETA) / np.sin(THETA).max())
 ax2.plot_surface(X, Y, Z, facecolors=colors, alpha=0.7)
-ax2.set_title('면적 요소 밀도 ∝ sinθ\n(적도 부근이 밝음)')
+ax2.set_title('Area element density ∝ sinθ\n(brighter near equator)')
 ax2.set_xlabel('x')
 ax2.set_ylabel('y')
 ax2.set_zlabel('z')
@@ -605,38 +605,38 @@ $$dV = h_1 h_2 h_3 \, dq_1 \, dq_2 \, dq_3$$
 ```python
 import sympy as sp
 
-# --- 스케일 인자 계산 함수 ---
+# --- Scale factor computation function ---
 def compute_scale_factors(coords, transform):
     """
-    곡선좌표계의 스케일 인자를 계산한다.
+    Compute scale factors for a curvilinear coordinate system.
 
     Parameters:
-        coords: 곡선좌표 변수 리스트 [q1, q2, q3]
-        transform: 직교좌표 [x(q), y(q), z(q)]
+        coords: list of curvilinear coordinate variables [q1, q2, q3]
+        transform: Cartesian coordinates [x(q), y(q), z(q)]
 
     Returns:
-        스케일 인자 [h1, h2, h3]
+        scale factors [h1, h2, h3]
     """
     r = sp.Matrix(transform)
     scale_factors = []
     for q in coords:
         dr_dq = r.diff(q)
         h = sp.sqrt(dr_dq.dot(dr_dq)).simplify()
-        # trigsimp로 삼각함수 정리
+        # Simplify trigonometric expressions
         h = sp.trigsimp(h)
         scale_factors.append(h)
     return scale_factors
 
-# 원통 좌표
+# Cylindrical coordinates
 rho, phi, z = sp.symbols('rho phi z', positive=True)
 h_cyl = compute_scale_factors(
     [rho, phi, z],
     [rho * sp.cos(phi), rho * sp.sin(phi), z]
 )
-print(f"원통 좌표 스케일 인자: h_ρ={h_cyl[0]}, h_φ={h_cyl[1]}, h_z={h_cyl[2]}")
-# 출력: h_ρ=1, h_φ=rho, h_z=1
+print(f"Cylindrical coordinate scale factors: h_ρ={h_cyl[0]}, h_φ={h_cyl[1]}, h_z={h_cyl[2]}")
+# Output: h_ρ=1, h_φ=rho, h_z=1
 
-# 구면 좌표
+# Spherical coordinates
 r, theta = sp.symbols('r theta', positive=True)
 h_sph = compute_scale_factors(
     [r, theta, phi],
@@ -644,17 +644,17 @@ h_sph = compute_scale_factors(
      r * sp.sin(theta) * sp.sin(phi),
      r * sp.cos(theta)]
 )
-print(f"구면 좌표 스케일 인자: h_r={h_sph[0]}, h_θ={h_sph[1]}, h_φ={h_sph[2]}")
-# 출력: h_r=1, h_θ=r, h_φ=r*sin(theta)
+print(f"Spherical coordinate scale factors: h_r={h_sph[0]}, h_θ={h_sph[1]}, h_φ={h_sph[2]}")
+# Output: h_r=1, h_θ=r, h_φ=r*sin(theta)
 
-# 포물선 좌표 (parabolic cylindrical): x = (u²-v²)/2, y = uv, z = z
+# Parabolic cylindrical coordinates: x = (u²-v²)/2, y = uv, z = z
 u, v = sp.symbols('u v', positive=True)
 h_parab = compute_scale_factors(
     [u, v, z],
     [(u**2 - v**2)/2, u*v, z]
 )
-print(f"포물선 원통 좌표 스케일 인자: h_u={h_parab[0]}, h_v={h_parab[1]}, h_z={h_parab[2]}")
-# 출력: h_u=sqrt(u²+v²), h_v=sqrt(u²+v²), h_z=1
+print(f"Parabolic cylindrical coordinate scale factors: h_u={h_parab[0]}, h_v={h_parab[1]}, h_z={h_parab[2]}")
+# Output: h_u=sqrt(u²+v²), h_v=sqrt(u²+v²), h_z=1
 ```
 
 ### 5.2 General Differential Operators
@@ -682,10 +682,10 @@ import sympy as sp
 
 def laplacian_curvilinear(f, coords, scale_factors):
     """
-    일반 직교 곡선좌표계에서 라플라시안을 계산한다.
+    Compute Laplacian in a general orthogonal curvilinear coordinate system.
 
     Parameters:
-        f: 스칼라 함수
+        f: scalar function
         coords: [q1, q2, q3]
         scale_factors: [h1, h2, h3]
     """
@@ -698,7 +698,7 @@ def laplacian_curvilinear(f, coords, scale_factors):
 
     return sp.simplify((term1 + term2 + term3) / (h1 * h2 * h3))
 
-# 구면 좌표에서 라플라시안 검증: f = 1/r
+# Verify Laplacian in spherical coordinates: f = 1/r
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 f = 1 / r
 
@@ -707,10 +707,10 @@ lap_f = laplacian_curvilinear(
     [r, theta, phi],
     [1, r, r * sp.sin(theta)]
 )
-print(f"∇²(1/r) = {lap_f}  (r > 0에서)")
-# 출력: 0 (원점 제외)
+print(f"∇²(1/r) = {lap_f}  (r > 0)")
+# Output: 0 (excluding origin)
 
-# 구면 좌표에서 라플라시안 검증: f = r² cos(θ) = rz → ∇²f = 0 (조화함수)
+# Verify Laplacian: f = r² cos(θ) = rz → ∇²f = 0 (harmonic function)
 f2 = r**2 * sp.cos(theta)
 lap_f2 = laplacian_curvilinear(
     f2,
@@ -718,8 +718,8 @@ lap_f2 = laplacian_curvilinear(
     [1, r, r * sp.sin(theta)]
 )
 print(f"∇²(r²cosθ) = {lap_f2}")
-# ∇²(r²cosθ) = 0 이어야 한다 (단, 사실 이것은 조화함수가 아님)
-# 올바른 조화함수: r cos(θ) = z
+# ∇²(r²cosθ) should be 0 (but actually this is not harmonic)
+# Correct harmonic function: r cos(θ) = z
 f3 = r * sp.cos(theta)
 lap_f3 = laplacian_curvilinear(
     f3,
@@ -727,7 +727,7 @@ lap_f3 = laplacian_curvilinear(
     [1, r, r * sp.sin(theta)]
 )
 print(f"∇²(r·cosθ) = {lap_f3}")
-# 출력: 0 (z = r·cosθ 는 조화함수)
+# Output: 0 (z = r·cosθ is a harmonic function)
 ```
 
 ### 5.3 Orthogonal Curvilinear Coordinates
@@ -773,35 +773,35 @@ import sympy as sp
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 R, rho0, M = sp.symbols('R rho_0 M', positive=True)
 
-# z축 기준 관성 모멘트
+# Moment of inertia about z-axis
 integrand = rho0 * (r * sp.sin(theta))**2 * r**2 * sp.sin(theta)
 I_z = sp.integrate(integrand, (r, 0, R), (theta, 0, sp.pi), (phi, 0, 2*sp.pi))
 I_z_simplified = sp.simplify(I_z)
 print(f"I_z = {I_z_simplified}")
 
-# 총 질량 M = (4/3)πR³ρ₀ 로 치환
+# Substitute total mass M = (4/3)πR³ρ₀
 M_expr = sp.Rational(4, 3) * sp.pi * R**3 * rho0
 I_z_M = I_z_simplified.subs(rho0, M / (sp.Rational(4, 3) * sp.pi * R**3))
 I_z_final = sp.simplify(I_z_M)
 print(f"I_z = {I_z_final}")
-# 출력: 2*M*R²/5
+# Output: 2*M*R²/5
 
-print(f"\n--- 다양한 도형의 관성 모멘트 ---")
+print(f"\n--- Moments of inertia for various shapes ---")
 
-# 원통 (반지름 R, 높이 H, z축 기준)
+# Cylinder (radius R, height H, about z-axis)
 rho_cyl, z_cyl = sp.symbols('rho z', positive=True)
 H = sp.Symbol('H', positive=True)
 I_cylinder = sp.integrate(
-    rho0 * rho_cyl**2 * rho_cyl,  # d² * dV/dρdφdz 에서 d=ρ
+    rho0 * rho_cyl**2 * rho_cyl,  # d² * dV/dρdφdz where d=ρ
     (rho_cyl, 0, R), (phi, 0, 2*sp.pi), (z_cyl, 0, H)
 )
 M_cyl = sp.pi * R**2 * H * rho0
 I_cyl_M = sp.simplify(I_cylinder.subs(rho0, M / (sp.pi * R**2 * H)))
-print(f"원통 (z축): I = {I_cyl_M}")
-# 출력: M*R²/2
+print(f"Cylinder (z-axis): I = {I_cyl_M}")
+# Output: M*R²/2
 
-# 속이 빈 구껍질 (반지름 R, z축 기준)
-# 면적분: I = ∫ (R sinθ)² σ R² sinθ dθ dφ
+# Hollow spherical shell (radius R, about z-axis)
+# Surface integral: I = ∫ (R sinθ)² σ R² sinθ dθ dφ
 sigma = sp.Symbol('sigma', positive=True)
 I_shell = sp.integrate(
     sigma * (R * sp.sin(theta))**2 * R**2 * sp.sin(theta),
@@ -809,8 +809,8 @@ I_shell = sp.integrate(
 )
 M_shell = 4 * sp.pi * R**2 * sigma
 I_shell_M = sp.simplify(I_shell.subs(sigma, M / (4 * sp.pi * R**2)))
-print(f"구껍질 (z축): I = {I_shell_M}")
-# 출력: 2*M*R²/3
+print(f"Spherical shell (z-axis): I = {I_shell_M}")
+# Output: 2*M*R²/3
 ```
 
 ### 6.2 Electric Field of Spherically Symmetric Charge Distribution
@@ -828,44 +828,44 @@ For spherically symmetric charge distributions, spherical coordinates are a natu
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 균일 전하 구의 전기장
-Q = 1.0        # 총 전하 (임의 단위)
-R = 1.0        # 구의 반지름
-eps0 = 1.0     # 진공 유전율 (단위계 단순화)
+# Electric field of a uniformly charged sphere
+Q = 1.0        # Total charge (arbitrary units)
+R = 1.0        # Sphere radius
+eps0 = 1.0     # Permittivity (simplified units)
 
 r = np.linspace(0.01, 3.0, 500)
 
-# 전기장 크기
+# Electric field magnitude
 E = np.where(
     r < R,
-    Q * r / (4 * np.pi * eps0 * R**3),      # 내부: E ∝ r
-    Q / (4 * np.pi * eps0 * r**2)            # 외부: E ∝ 1/r²
+    Q * r / (4 * np.pi * eps0 * R**3),      # Interior: E ∝ r
+    Q / (4 * np.pi * eps0 * r**2)            # Exterior: E ∝ 1/r²
 )
 
-# 전위
+# Electric potential
 V_inside = Q / (8 * np.pi * eps0 * R) * (3 - r**2 / R**2)
 V_outside = Q / (4 * np.pi * eps0 * r)
 V = np.where(r < R, V_inside, V_outside)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# (a) 전기장
+# (a) Electric field
 axes[0].plot(r/R, E * (4*np.pi*eps0*R**2/Q), 'b-', linewidth=2)
 axes[0].axvline(x=1, color='gray', linestyle='--', alpha=0.5, label='r = R')
 axes[0].set_xlabel('r / R')
 axes[0].set_ylabel('E × (4πε₀R²/Q)')
-axes[0].set_title('균일 전하 구의 전기장')
+axes[0].set_title('Electric field of uniformly charged sphere')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 axes[0].annotate('E ∝ r', xy=(0.5, 0.3), fontsize=12, color='blue')
 axes[0].annotate('E ∝ 1/r²', xy=(1.8, 0.25), fontsize=12, color='blue')
 
-# (b) 전위
+# (b) Electric potential
 axes[1].plot(r/R, V * (4*np.pi*eps0*R/Q), 'r-', linewidth=2)
 axes[1].axvline(x=1, color='gray', linestyle='--', alpha=0.5, label='r = R')
 axes[1].set_xlabel('r / R')
 axes[1].set_ylabel('V × (4πε₀R/Q)')
-axes[1].set_title('균일 전하 구의 전위')
+axes[1].set_title('Electric potential of uniformly charged sphere')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -873,15 +873,15 @@ plt.tight_layout()
 plt.savefig('uniform_sphere_field.png', dpi=150)
 plt.show()
 
-# --- 가우스 법칙 수치 검증 ---
+# --- Numerical verification of Gauss's law ---
 from scipy import integrate
 
-rho_e = 3 * Q / (4 * np.pi * R**3)  # 균일 전하 밀도
+rho_e = 3 * Q / (4 * np.pi * R**3)  # Uniform charge density
 
-# 반지름 r_test인 구면을 통한 전기 선속
+# Electric flux through sphere of radius r_test
 r_test_values = [0.3, 0.7, 1.0, 1.5, 2.0]
 
-print("가우스 법칙 검증:")
+print("Gauss's law verification:")
 print(f"{'r/R':>6s}  {'Q_enc':>10s}  {'Φ = Q_enc/ε₀':>14s}  {'E·4πr²':>10s}")
 print("-" * 48)
 
@@ -912,7 +912,7 @@ import matplotlib.pyplot as plt
 from scipy.special import sph_harm
 from mpl_toolkits.mplot3d import Axes3D
 
-# --- 구면 조화 함수 시각화 ---
+# --- Visualize spherical harmonics ---
 theta = np.linspace(0, np.pi, 100)
 phi = np.linspace(0, 2*np.pi, 100)
 THETA, PHI = np.meshgrid(theta, phi)
@@ -932,10 +932,10 @@ harmonics = [
 for idx, (l, m, title) in enumerate(harmonics):
     ax = axes[idx // 3][idx % 3]
 
-    # scipy의 sph_harm은 (m, l, φ, θ) 순서에 주의
+    # Note: scipy sph_harm takes (m, l, φ, θ) order
     Y = sph_harm(m, l, PHI, THETA)
 
-    # 실수 구면 조화 함수
+    # Real spherical harmonics
     if m > 0:
         Y_real = np.real(Y) * np.sqrt(2) * (-1)**m
     elif m < 0:
@@ -943,26 +943,26 @@ for idx, (l, m, title) in enumerate(harmonics):
     else:
         Y_real = np.real(Y)
 
-    # |Y|를 반지름으로, 부호를 색으로 표현
+    # Use |Y| as radius, sign encoded as color
     R = np.abs(Y_real)
     X = R * np.sin(THETA) * np.cos(PHI)
     Y_coord = R * np.sin(THETA) * np.sin(PHI)
     Z = R * np.cos(THETA)
 
     colors = np.where(Y_real >= 0, 'steelblue', 'coral')
-    # 양수/음수 영역을 다른 색으로 표시
+    # Show positive/negative regions in different colors
     norm = plt.Normalize(vmin=-np.max(np.abs(Y_real)), vmax=np.max(np.abs(Y_real)))
     facecolors = plt.cm.RdBu(norm(Y_real))
 
     ax.plot_surface(X, Y_coord, Z, facecolors=facecolors, alpha=0.8)
     ax.set_title(title, fontsize=14)
     ax.set_box_aspect([1, 1, 1])
-    # 축 레이블 숨기기
+    # Hide axis tick labels
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
 
-plt.suptitle('구면 조화 함수 $Y_l^m(\\theta, \\phi)$\n(파랑: 양, 빨강: 음)', fontsize=16)
+plt.suptitle('Spherical harmonics $Y_l^m(\\theta, \\phi)$\n(blue: positive, red: negative)', fontsize=16)
 plt.tight_layout()
 plt.savefig('spherical_harmonics.png', dpi=150)
 plt.show()

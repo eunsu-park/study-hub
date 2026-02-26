@@ -1,10 +1,24 @@
 # 09. Advanced Git Techniques
 
+**Previous**: [Git Workflow Strategies](./08_Git_Workflow_Strategies.md) | **Next**: [Monorepo Management](./10_Monorepo_Management.md)
+
+---
+
 ## Learning Objectives
-- Automate with Git Hooks
-- Manage external dependencies with Submodules
-- Work on multiple branches simultaneously with Worktrees
-- Understand Git internals and low-level commands
+
+After completing this lesson, you will be able to:
+
+1. Write and install Git hooks (pre-commit, commit-msg, pre-push) to automate quality checks
+2. Configure Git submodules to manage external dependencies within a repository
+3. Use Git worktrees to work on multiple branches simultaneously without stashing
+4. Apply advanced plumbing commands (`rev-parse`, `cat-file`, `ls-tree`) to inspect Git internals
+5. Explain Git's object model (blobs, trees, commits, tags) and how they form a DAG
+6. Diagnose and recover from common Git problems using `reflog`, `fsck`, and `filter-branch`
+7. Perform advanced rebase operations including `--onto`, `--autosquash`, and `--rebase-merges`
+
+---
+
+The commands from earlier lessons cover 90% of daily Git usage. This lesson addresses the remaining 10% -- the power-user techniques that save hours when things go wrong, enforce team standards automatically, and let you manage complex multi-repository architectures. Mastering these tools transforms you from a Git user into a Git expert who can diagnose, automate, and architect version-control workflows.
 
 ## Table of Contents
 1. [Git Hooks](#1-git-hooks)
@@ -622,6 +636,8 @@ git cherry-pick -m 1 abc1234
 # -m 2: Based on second parent (merged branch)
 ```
 
+> **Analogy -- Rebase: The Surgical Instrument**: If `merge` is duct tape -- quick, visible, and preserves both pieces -- then `rebase` is microsurgery. It replays your commits one by one onto a new base, creating a clean, linear history as if your branch never diverged. The result is elegant, but the operation rewrites commit hashes, so **never rebase commits that others have already pulled** -- that would be like editing someone else's medical records after the fact.
+
 ### 4.5 Advanced Git Rebase
 
 ```bash
@@ -859,6 +875,288 @@ git sparse-checkout init
 git sparse-checkout set src/ tests/
 ```
 
+### 6.4 Git LFS (Large File Storage)
+
+Section 6.3 showed the basic `git lfs track` command. This section covers the full LFS workflow and migration strategies.
+
+#### Why LFS?
+
+Git stores every version of every file in the repository history. Binary files (images, models, datasets, videos) cannot be diffed efficiently, so each version is stored in full. A repository with large binaries quickly becomes:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Problem: Large Binaries in Git                │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Without LFS:                                            │
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                       │
+│  │v1   │ │v2   │ │v3   │ │v4   │  ← Full copy each     │
+│  │50MB │ │50MB │ │50MB │ │50MB │     time = 200MB       │
+│  └─────┘ └─────┘ └─────┘ └─────┘                       │
+│                                                          │
+│  With LFS:                                               │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐                   │
+│  │ptr   │ │ptr   │ │ptr   │ │ptr   │  ← Tiny pointers  │
+│  │128B  │ │128B  │ │128B  │ │128B  │     in Git repo    │
+│  └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘                   │
+│     │        │        │        │                         │
+│     ▼        ▼        ▼        ▼                         │
+│  ┌──────────────────────────────────┐                    │
+│  │     LFS Storage Server           │  ← Actual files   │
+│  │  (GitHub LFS, GitLab, custom)    │     stored here    │
+│  └──────────────────────────────────┘                    │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### Complete LFS Workflow
+
+```bash
+# 1. Install Git LFS (one-time per machine)
+git lfs install
+# Updated git hooks: post-checkout, post-commit, post-merge, pre-push
+
+# 2. Track file patterns
+git lfs track "*.psd"
+git lfs track "*.zip"
+git lfs track "*.bin"
+git lfs track "models/**"       # Entire directory
+git lfs track "*.pt"            # PyTorch model files
+# This writes rules to .gitattributes
+
+# 3. Verify .gitattributes
+cat .gitattributes
+# *.psd filter=lfs diff=lfs merge=lfs -text
+# *.zip filter=lfs diff=lfs merge=lfs -text
+
+# 4. Commit .gitattributes FIRST
+git add .gitattributes
+git commit -m "Configure Git LFS tracking"
+
+# 5. Add and commit large files normally
+git add model.pt dataset.zip
+git commit -m "Add ML model and dataset"
+
+# 6. Push (LFS files uploaded to LFS server automatically)
+git push origin main
+
+# 7. Verify LFS status
+git lfs ls-files          # List LFS-tracked files
+git lfs status            # Show pending transfers
+git lfs env               # Show LFS configuration
+```
+
+#### .gitattributes Configuration
+
+```gitattributes
+# .gitattributes
+
+# Images
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+
+# Archives
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+
+# ML/Data
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.parquet filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+
+# Media
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+
+# Binaries
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.so filter=lfs diff=lfs merge=lfs -text
+```
+
+#### LFS Storage Providers
+
+| Provider | Free Quota | Paid Plans | Notes |
+|----------|-----------|------------|-------|
+| **GitHub** | 1 GB storage, 1 GB/month bandwidth | $5/month per 50 GB data pack | Most common for open source |
+| **GitLab** | 5 GB per project (SaaS) | Included in Premium/Ultimate | Self-hosted: unlimited |
+| **Bitbucket** | 1 GB per repo | $10/month per 100 GB | Requires LFS add-on |
+| **Custom** | Depends on setup | Self-managed | Use `lfs.url` config for custom server |
+
+#### Migrating Existing Repos to LFS
+
+When large files are already in Git history, you need to rewrite history:
+
+```bash
+# Option 1: BFG Repo-Cleaner (recommended -- fast and safe)
+# BFG removes large files from history, then LFS tracks new ones
+java -jar bfg.jar --convert-to-git-lfs "*.psd" --no-blob-protection
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+
+# Option 2: git lfs migrate (built-in)
+# Migrate existing files to LFS (rewrites history)
+git lfs migrate import --include="*.psd,*.zip" --everything
+
+# Verify migration
+git lfs ls-files
+
+# Force push (CAUTION: rewrites history for all collaborators)
+git push --force-with-lease
+```
+
+> **Warning**: Both methods rewrite Git history. Coordinate with your team before running these commands on shared repositories. All collaborators must re-clone after migration.
+
+### 6.5 GPG Signing Commits and Tags
+
+GPG (GNU Privacy Guard) signing cryptographically proves that commits and tags were created by a specific person. This is essential for supply chain security and compliance.
+
+#### Why Sign Commits?
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              Why Sign Your Commits?                        │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Without signing:                                        │
+│  • Anyone can set git config user.email to YOUR email    │
+│  • git log shows your name, but there's no proof         │
+│  • Commits could be forged in the history                │
+│                                                          │
+│  With GPG signing:                                       │
+│  • Cryptographic proof of authorship                     │
+│  • GitHub/GitLab shows "Verified" badge ✓                │
+│  • Required for compliance (SOC2, HIPAA, FedRAMP)        │
+│  • Protects against supply-chain attacks                 │
+│  • Some orgs enforce signed commits via branch rules     │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### GPG Key Setup
+
+```bash
+# 1. Generate a GPG key
+gpg --full-generate-key
+# Choose: RSA and RSA, 4096 bits, no expiration (or 1-2 years)
+# Enter your name and the email associated with your Git account
+
+# 2. List your GPG keys
+gpg --list-secret-keys --keyid-format=long
+# sec   rsa4096/3AA5C34371567BD2 2024-01-01 [SC]
+#       ABC123DEF456GHI789JKL012MNO345PQR678STU9
+# uid           [ultimate] Your Name <your@email.com>
+# ssb   rsa4096/42B317FD4BA89E7A 2024-01-01 [E]
+
+# 3. Export your public key (for GitHub/GitLab)
+gpg --armor --export 3AA5C34371567BD2
+# Copy the entire output (including BEGIN/END lines)
+
+# 4. Configure Git to use your GPG key
+git config --global user.signingkey 3AA5C34371567BD2
+git config --global commit.gpgsign true    # Sign all commits by default
+git config --global tag.gpgSign true       # Sign all tags by default
+
+# 5. (macOS) Fix GPG TTY for passphrase prompt
+echo 'export GPG_TTY=$(tty)' >> ~/.zshrc
+# If using pinentry-mac:
+# echo "pinentry-program /opt/homebrew/bin/pinentry-mac" >> ~/.gnupg/gpg-agent.conf
+# gpgconf --kill gpg-agent
+```
+
+#### Signing Commits and Tags
+
+```bash
+# Sign a single commit (if not using global gpgsign)
+git commit -S -m "feat: add authentication module"
+
+# Sign all commits automatically (recommended)
+git config --global commit.gpgsign true
+git commit -m "feat: add authentication module"  # Automatically signed
+
+# Create a signed tag
+git tag -s v1.0.0 -m "Release version 1.0.0"
+
+# Verify a signed commit
+git log --show-signature -1
+# gpg: Signature made Thu Jan  1 12:00:00 2024
+# gpg: Good signature from "Your Name <your@email.com>"
+
+# Verify a signed tag
+git tag -v v1.0.0
+
+# View signature in log format
+git log --format='%H %G? %GK %aN %s' -5
+# %G? shows: G=good, B=bad, U=untrusted, N=no signature, E=expired
+```
+
+#### GitHub Verified Badge Setup
+
+```
+┌──────────────────────────────────────────────────────────┐
+│           GitHub Verified Badge Setup                      │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  1. Go to GitHub → Settings → SSH and GPG keys           │
+│  2. Click "New GPG key"                                  │
+│  3. Paste the output of:                                 │
+│     gpg --armor --export YOUR_KEY_ID                     │
+│  4. Save                                                 │
+│                                                          │
+│  Now your signed commits show:                           │
+│  ┌──────────────────────────────────────────┐            │
+│  │  ✓ Verified   abc1234                    │            │
+│  │  feat: add authentication module         │            │
+│  │  Your Name committed 2 hours ago         │            │
+│  └──────────────────────────────────────────┘            │
+│                                                          │
+│  Unsigned commits show:                                  │
+│  ┌──────────────────────────────────────────┐            │
+│  │  ○ Unverified  def5678                   │            │
+│  │  fix: typo in readme                     │            │
+│  └──────────────────────────────────────────┘            │
+│                                                          │
+│  Enforce signing via branch protection rules:            │
+│  Settings → Branches → Branch protection →               │
+│  ☑ Require signed commits                                │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### SSH Signing (Git 2.34+ Alternative)
+
+Git 2.34 introduced SSH key signing as a simpler alternative to GPG:
+
+```bash
+# Use your existing SSH key for signing (no GPG setup needed!)
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+
+# Create an allowed_signers file for verification
+echo "your@email.com $(cat ~/.ssh/id_ed25519.pub)" > ~/.config/git/allowed_signers
+git config --global gpg.ssh.allowedSignersFile ~/.config/git/allowed_signers
+
+# Sign and verify works the same way
+git commit -m "feat: signed with SSH key"
+git log --show-signature -1
+
+# GitHub supports SSH signing too:
+# Settings → SSH and GPG keys → New SSH key → Key type: Signing Key
+```
+
+| Feature | GPG Signing | SSH Signing |
+|---------|------------|-------------|
+| **Setup complexity** | Higher (GPG key management) | Lower (reuse SSH key) |
+| **Key management** | Separate GPG keyring | Existing SSH keys |
+| **Web of Trust** | Full PKI support | No web of trust |
+| **GitHub support** | Full (Verified badge) | Full (Git 2.34+) |
+| **Expiration/Revocation** | Built-in key expiry | No built-in expiry |
+| **Best for** | Enterprise/compliance | Individual developers |
+
 ---
 
 ## 7. Practice Exercises
@@ -919,6 +1217,41 @@ git sparse-checkout set src/ tests/
 - [Git Submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules)
 - [Git Worktree](https://git-scm.com/docs/git-worktree)
 - [Git Internals](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)
+
+---
+
+## Exercises
+
+### Exercise 1: Write and Test a commit-msg Hook
+1. In a local repository, create `.git/hooks/commit-msg` (make it executable).
+2. Write a Bash script that rejects any commit message that does not start with one of the Conventional Commits types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, or `chore`.
+3. Test it by attempting a commit with an invalid message (e.g., `"updated stuff"`) and confirming rejection, then with a valid message (e.g., `"feat: add login endpoint"`) and confirming success.
+4. Share the hook with the team by setting `core.hooksPath` in `.gitconfig` to a tracked `.githooks/` directory.
+
+### Exercise 2: Submodule Lifecycle
+1. Create a "library" repository with a single Python file exporting a `hello()` function.
+2. In a "main project" repository, add the library as a submodule with `git submodule add`.
+3. Clone the main project into a fresh directory using `--recursive` and verify the submodule is populated.
+4. In the library repository, add a second function and push the change. In the main project, update the submodule pointer with `git submodule update --remote`, stage, and commit the new pointer.
+
+### Exercise 3: Worktree for Parallel Work
+1. While working on a feature branch in your main worktree, create a second worktree for `main` at `../hotfix-wt` using `git worktree add`.
+2. In the new worktree, create a `hotfix/urgent-fix` branch, make a fix commit, and push it.
+3. Return to the main worktree and continue feature work without any stashing.
+4. Remove the hotfix worktree with `git worktree remove ../hotfix-wt`.
+
+### Exercise 4: Automate Bug Finding with git bisect
+1. Create a repository with 10 commits. In commit #6, introduce a bug (e.g., change a function to always return `False`).
+2. Write a shell test script `test.sh` that exits 0 if the bug is absent and 1 if it is present.
+3. Run `git bisect start`, mark the latest commit as `bad` and commit #1 as `good`, then use `git bisect run ./test.sh` to find the first bad commit automatically.
+4. Confirm the result matches commit #6 and exit bisect with `git bisect reset`.
+
+### Exercise 5: Inspect Git Internals
+Run the following plumbing commands in any repository and describe what each output means:
+1. `git cat-file -t HEAD` — what type of object is `HEAD`?
+2. `git cat-file -p HEAD` — what fields does a commit object contain?
+3. `git cat-file -p HEAD^{tree}` — what does the root tree object contain?
+4. `git rev-parse HEAD` — what does this return, and when would you use it in a script?
 
 ---
 

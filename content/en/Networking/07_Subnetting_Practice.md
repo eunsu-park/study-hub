@@ -1,14 +1,27 @@
 # Subnetting Practice
 
-## Overview
-
-This document covers practical calculation methods and various practice problems for subnetting. Subnetting is a core skill in network design and management, enabling efficient IP address allocation and network segmentation.
+**Previous**: [IP Addressing and Subnetting](./06_IP_Address_Subnetting.md) | **Next**: [Routing Basics](./08_Routing_Basics.md)
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 3-4 hours
 **Prerequisites**: [06_IP_Address_Subnetting.md](./06_IP_Address_Subnetting.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Calculate network address, broadcast address, and usable host range for any given CIDR block
+2. Determine the required subnet mask given a number of hosts or subnets
+3. Perform subnet division to split a network into equal-sized subnets
+4. Apply VLSM (Variable Length Subnet Masking) to allocate subnets of different sizes efficiently
+5. Design a subnetting plan for a multi-site network scenario
+6. Verify subnetting calculations using binary arithmetic and powers of two
+
+---
+
+Subnetting is where IP addressing theory meets hands-on practice. Network engineers perform these calculations daily -- whether provisioning a new office, sizing a data center VLAN, or optimizing address allocation across WAN links. The ability to quickly and accurately subnet is a core competency tested in every networking certification and job interview.
 
 ## Table of Contents
 
@@ -585,25 +598,11 @@ CIDR: 32 - 14 = /18
 
 ---
 
-## 7. Next Steps
-
-If you've practiced subnetting sufficiently, proceed to the next topics.
-
-### Next Lessons
-- [08_Routing_Basics.md](./08_Routing_Basics.md) - Routing tables, static/dynamic routing
-
-### Related Lessons
-- [06_IP_Address_Subnetting.md](./06_IP_Address_Subnetting.md) - IP addressing basics
-- [09_Routing_Protocols.md](./09_Routing_Protocols.md) - RIP, OSPF, BGP
-
-### Recommended Practice
-1. Practice subnet calculation with various CIDR combinations
-2. Verify with `ip addr` in real network environments
-3. Practice subnet configuration in Packet Tracer
+**Previous**: [IP Addressing and Subnetting](./06_IP_Address_Subnetting.md) | **Next**: [Routing Basics](./08_Routing_Basics.md)
 
 ---
 
-## 8. References
+## 7. References
 
 ### Online Tools
 
@@ -621,14 +620,16 @@ If you've practiced subnetting sufficiently, proceed to the next topics.
 
 ```bash
 # Linux/macOS - Check network configuration
+# ip addr: preferred over ifconfig — shows CIDR notation directly and supports newer features (VLANs, namespaces)
 ip addr show
+# ifconfig: legacy tool — still useful on macOS where 'ip' is not installed by default
 ifconfig
 
-# Subnet calculation tools
-ipcalc 192.168.1.0/24      # Linux
-sipcalc 192.168.1.0/24     # Linux
+# Subnet calculation tools — verify your manual calculations before deploying
+ipcalc 192.168.1.0/24      # Outputs network/broadcast/host range — catches off-by-one errors
+sipcalc 192.168.1.0/24     # More detailed: shows binary representation and wildcard mask
 
-# Windows
+# Windows — /all flag shows subnet mask, gateway, DNS, and DHCP lease info (not just IP)
 ipconfig /all
 ```
 

@@ -209,8 +209,14 @@ def boris_step(r, v, E, B, q, m, dt):
     v_minus = v + (q * dt / (2 * m)) * E
 
     # Magnetic rotation
+    # t_vec = (q dt/2m) B는 반 회전각 벡터입니다; Boris 트릭(Boris trick)은
+    # 완전한 회전을 두 번의 외적으로 분해하여 완전한 회전 행렬 계산을 피하면서
+    # 동시에 정확한 시간 가역성(time-reversibility)을 유지합니다.
     t_vec = (q * dt / (2 * m)) * B
     t_mag_sq = np.dot(t_vec, t_vec)
+    # s_vec = 2t/(1+|t|²)는 회전에 대한 배각 공식(double-angle formula)입니다:
+    # 이 정확한 형태가 정적 B 필드에서 운동 에너지를 기계 정밀도 수준까지 보존하며,
+    # 이것이 단순 오일러 적분(Euler integration) 대신 Boris 알고리즘을 선호하는 이유입니다.
     s_vec = 2 * t_vec / (1 + t_mag_sq)
 
     v_prime = v_minus + np.cross(v_minus, t_vec)
@@ -219,7 +225,8 @@ def boris_step(r, v, E, B, q, m, dt):
     # Half electric push
     v_new = v_plus + (q * dt / (2 * m)) * E
 
-    # Position update
+    # 이미 갱신된 속도를 사용한 위치 업데이트(도약 개구리 순서, leap-frog ordering)는
+    # 위치와 속도 모두에서 2차 정확도(second-order accuracy)를 보장합니다.
     r_new = r + v_new * dt
 
     return r_new, v_new
@@ -825,12 +832,20 @@ def solve_poisson_fft(rho, dx, L):
 
     # Wavenumbers
     k = 2 * np.pi * np.fft.fftfreq(Nx, d=dx)
+    # k[0] = 0 (DC 모드)는 φ_k = -ρ_k/(ε₀k²)에서 0으로 나누기를 발생시킵니다.
+    # k[0] = 1로 임시 설정하면 분모가 유한해지며; 아래에서 phi_k[0]이
+    # 즉시 덮어써지므로 물리적 영향은 전혀 없습니다.
     k[0] = 1  # avoid division by zero (DC component is arbitrary for periodic)
 
     # Fourier transform of potential: φ_k = -ρ_k / (ε₀ k²)
     phi_k = -rho_k / (epsilon_0 * k**2)
+    # DC 퍼텐셜을 0으로 설정하면 가산적 게이지 자유도(additive gauge freedom)가
+    # 고정됩니다: 주기적 영역에서는 퍼텐셜의 차이만이 물리적이며, 비-zero 평균값은
+    # 동역학에 영향을 주지 않으면서 모든 입자 에너지를 이동시킬 뿐입니다.
     phi_k[0] = 0  # set DC component to zero
 
+    # 푸리에 공간에서의 미분(스펙트럴 미분, spectral differentiation)은 dφ/dx에 대한
+    # 유한 차분 격자법(finite-difference stencil)의 절단 오차를 완전히 제거합니다.
     # Electric field: E = -dφ/dx → E_k = i k φ_k
     E_k = 1j * k * phi_k
 
@@ -1003,20 +1018,27 @@ energy_history = []
 
 # Time-stepping loop
 for n in range(Nt):
-    # Compute density
+    # 속도 공간에서 f를 적분하여 밀도를 계산합니다: n_e = ∫f dv.
+    # 이 모멘트 축소(moment reduction)는 정확하며, 운동론적 Vlasov 시뮬레이션이
+    # 어떠한 닫힘 가정(closure assumption) 없이도 유체 모멘트를 복원할 수 있는 이유입니다.
     n_e = np.trapz(f, v_grid, axis=1)
 
     # Solve Poisson
+    # rho = e(n_i - n_e): 이온은 고정 배경(n_i = n_0)이므로, 전자 밀도 요동만이
+    # 자기 일관적(self-consistent) 전기장을 구동합니다.
     rho = e * (n_0 - n_e)
     E = solve_poisson_fft(rho, dx)
 
-    # Store diagnostics
+    # f를 진행시키기 전에 진단량(diagnostics)을 저장하면, 방금 계산된 전기장에
+    # 대응하는 상태를 기록하게 됩니다(일관된 스냅샷, consistent snapshot).
     E_history.append(np.max(np.abs(E)))
     field_energy = 0.5 * epsilon_0 * np.sum(E**2) * dx
     kinetic_energy = 0.5 * m_e * np.sum(f * (v_grid[np.newaxis, :]**2) * dx * dv)
     energy_history.append(field_energy + kinetic_energy)
 
-    # Split-step advection
+    # Strang 분할(Strang splitting, 반-x, 전체-v, 반-x)은 시간에서 2차 정확도를
+    # 달성합니다: 1차 분할은 O(dt) 정확도만 제공하지만, 이 대칭적 배열은 선두
+    # 오차 항을 상쇄하여 동일한 비용으로 룽게-쿠타 2(Runge-Kutta 2)의 정확도를 맞춥니다.
     f = advect_x(f, v_grid, dt / 2)
     f = advect_v(f, E, dt)
     f = advect_x(f, v_grid, dt / 2)
@@ -1117,6 +1139,105 @@ print("\nProject 3: Vlasov-Poisson simulation complete!")
 - **MHD** 코드: 핵융합 평형 및 안정성(예: NIMROD, M3D-C1)
 
 플라즈마 물리 과정을 완료하신 것을 축하합니다! 이제 플라즈마 물리의 이론과 계산 모두에 대한 견고한 기초를 갖추셨습니다.
+
+---
+
+## 연습 문제
+
+### 연습 1: 보리스 알고리즘(Boris Algorithm) 수렴 연구
+
+보리스 알고리즘은 시간에 대해 2차 정확도를 가집니다. 시간 단계 크기에 따라 선회 반지름 오차가 어떻게 변하는지 측정하여 이를 실험적으로 검증하세요.
+
+**단계**:
+1. $\mathbf{B} = 0.1\,\text{T}\,\hat{\mathbf{z}}$의 균일한 자기장에서 $v_\perp = 10^6\,\text{m/s}$, 초기 평행 속도 없이 선회하는 전자를 설정합니다.
+2. 해석적 선회 반지름 $\rho_c = m_e v_\perp / (eB)$와 사이클로트론 주기 $T_c = 2\pi m_e / (eB)$를 계산합니다.
+3. $N \in \{10, 20, 50, 100, 200, 500\}$에 대해 $\Delta t = T_c / N$의 시간 단계를 사용하여 정확히 10 사이클로트론 주기 동안 시뮬레이션을 실행합니다.
+4. 10주기 후, 위치 오차를 측정합니다: 입자의 위치가 출발점에서 벗어난 편차(궤도는 정확히 닫혀야 함).
+5. 위치 오차 대 $\Delta t$를 로그-로그 눈금에 플롯하고 기울기를 맞춥니다. 기울기가 2차 수렴(second-order convergence)에 일치하는 2에 가까운지 확인합니다.
+6. 각 시간 단계 크기에서 에너지 변동 $\Delta E_{kin} / E_{kin,0}$을 측정하고 모든 $N$에 대해 유계 상태(증가하지 않음)임을 검증합니다.
+
+**기대 결과**: 위치 오차 $\propto (\Delta t)^2$; 에너지는 $\Delta t$ 크기에 무관하게 기계 정밀도 수준에서 보존됩니다.
+
+---
+
+### 연습 2: 자기 거울(Magnetic Mirror)에서의 손실 원뿔(Loss Cone)
+
+자기 거울은 피치각(pitch angle)이 손실 원뿔 각도를 초과하는 입자만 가둡니다. 손실 원뿔 각도를 해석적으로 유도하고 입자 궤도 시뮬레이터를 사용하여 수치적으로 검증하세요.
+
+**단계**:
+1. 거울비(mirror ratio) $R_m = B_{max}/B_{min}$ ($z=0$에서 $B_{min} = 0.1\,\text{T}$, 거울점에서 $B_{max} = 0.5\,\text{T}$ 사용)의 자기 거울에 대해 손실 원뿔 반각(half-angle)을 유도합니다:
+   $$\sin^2\alpha_{lc} = \frac{B_{min}}{B_{max}} = \frac{1}{R_m}$$
+2. 중간면($z=0$)에서 같은 속력 $v = 5 \times 10^6\,\text{m/s}$이지만 피치각 $\alpha$가 $0°$에서 $90°$ 사이에서 균일하게 샘플링된 50개의 전자를 발사합니다($\alpha$는 $\mathbf{v}$와 $\mathbf{B}$ 사이의 각도).
+3. 1.3절의 자기 거울 장을 사용하여 각 궤도를 $t_{final} = 50\,\mu\text{s}$ 동안 적분합니다.
+4. 각 입자를 구속됨(바운싱) 또는 손실됨($|z| > z_{mirror}$ 도달)으로 분류하고 초기 피치각을 기록합니다.
+5. 피치각에 대한 구속 결과를 플롯합니다. 이론적 손실 원뿔 경계를 표시하고 수치 결과와 비교합니다.
+6. 등방성 분포(isotropic distribution)에서 구속될 입자의 비율을 추정합니다.
+
+**힌트**: 단열 불변량(adiabatic invariant) $\mu = m v_\perp^2 / (2B)$는 보존됩니다. 이를 사용하여 거울점에서의 피치각을 유도하고 반사 조건을 결정하세요.
+
+---
+
+### 연습 3: CMA 다이어그램에서 차단과 공명 식별
+
+클레모-멀렐리-앨리스(Clemmow-Mullaly-Allis, CMA) 다이어그램은 차단(cutoff)과 공명(resonance)에 따라 모든 냉각 플라즈마 파동 모드를 정리합니다. 이 다이어그램을 수치적으로 구성하고 명명된 파동 모드를 식별하세요.
+
+**단계**:
+1. 고정 자기장 $B_0 = 0.05\,\text{T}$를 선택합니다. 무차원 축을 정의합니다:
+   - $X = \omega_{pe}^2 / \omega^2$ (밀도 매개변수, $n$ 또는 $\omega$ 변경으로 조정)
+   - $Y = \omega_{ce} / \omega$ (자화 매개변수)
+2. $X \in [0, 4]$, $Y \in [0, 3]$의 $(X, Y)$ 값 그리드에서 각 점에 대해 스틱스 매개변수(Stix parameters) $S$, $D$, $P$를 계산합니다($\omega$는 고정하고 $n$을 변경하여 $X$를 조정).
+3. 차단선을 그립니다:
+   - $P = 0$ (O모드 차단: $\omega = \omega_{pe}$, 즉 $X = 1$)
+   - $R = S + D = 0$ (R 차단)
+   - $L = S - D = 0$ (L 차단)
+4. 공명선을 그립니다:
+   - $S = 0$ (상부 및 하부 하이브리드 공명)
+   - $\tan^2\theta = -P/S$ ($\theta = 0$ 및 $\theta = \pi/2$에 대해, 평행 및 수직 공명)
+5. 파동 모드가 전파하는 영역(두 $n_\pm^2 > 0$, 하나만 양수, 또는 둘 다 음수/감쇠)에 따라 색을 칠합니다.
+6. 영역에 표준 이름으로 레이블을 붙입니다: O모드, X모드, R파, L파, 휘슬러 모드(whistler mode), 하부 하이브리드파.
+
+**참고**: 다이어그램은 T. H. Stix, *Waves in Plasmas* (AIP, 1992)의 그림 1-8을 재현해야 합니다.
+
+---
+
+### 연습 4: 쌍류 불안정성(Two-Stream Instability) 성장률 측정
+
+쌍류 불안정성은 가장 중요한 운동 플라즈마 불안정성 중 하나입니다. 성장률을 수치적으로 측정하고 해석적 예측과 비교하세요.
+
+**단계**:
+1. 프로젝트 3의 블라소프-푸아송(Vlasov-Poisson) 해결기를 수정하여 쌍빔(two-beam) 초기 조건을 수용하도록 합니다:
+   $$f_0(x, v) = \frac{n_0}{2}\left[\mathcal{M}(v - v_0) + \mathcal{M}(v + v_0)\right](1 + \alpha\cos(k_0 x))$$
+   여기서 $\mathcal{M}(v) = (2\pi v_{th}^2)^{-1/2}\exp(-v^2/2v_{th}^2)$, 빔 속력 $v_0 = 3v_{th}$, $v_{th} = 10^6\,\text{m/s}$, $\alpha = 0.01$.
+2. 교란 파수(perturbation wavenumber) $k_0$를 불안정 대역에 선택합니다: 대칭 빔의 경우 불안정성은 $k_0 \approx \omega_{pe} / v_0$ 근방에서 가장 강합니다. 냉각 빔 분산 관계(cold-beam dispersion relation)를 사용하여 이것이 불안정 영역에 있음을 검증합니다:
+   $$1 = \frac{\omega_{pe}^2/2}{(\omega - kv_0)^2} + \frac{\omega_{pe}^2/2}{(\omega + kv_0)^2}$$
+3. 시뮬레이션을 실행하고 각 시간 단계에서 $\max_x |E(x, t)|$를 기록합니다.
+4. 선형 성장 구간($\ln|E|$가 시간에 선형으로 증가하는 구간)을 식별하고, 직선 적합(linear fit)으로 수치 성장률 $\gamma_{num}$을 측정합니다.
+5. $\gamma_{num}$을 냉각 빔 분산 관계를 수치적으로 풀어(`numpy.roots`를 다항식 형태에 사용) 얻은 $\omega$의 허수부(imaginary part)와 비교합니다.
+6. 위상 공간 $f(x, v)$를 세 시점에서 플롯합니다: 초기, 포화 중간, 포화 후. 포화 시 나타나는 소용돌이 구조(위상 공간 홀, phase space holes)를 설명합니다.
+
+**기대 결과**: 선형 구간에서 $|E| \propto e^{\gamma t}$이며, $v_0 \gg v_{th}$이고 $k = \omega_{pe}/v_0$일 때 $\gamma \approx \omega_{pe}/2\sqrt{2}$.
+
+---
+
+### 연습 5: 통합 소프로젝트 — 휘슬러파(Whistler Wave) 전파와 분산
+
+휘슬러파는 전자 사이클로트론 주파수 아래에서 전파하는 우원 편파(right-hand circularly polarized) 전자기파입니다. 이 파는 복사대(radiation belt) 역학과 전리층(ionospheric) 통신에서 중요한 역할을 합니다. 세 가지 주요 프로젝트를 모두 연결하는 통합 소프로젝트를 설계하고 수행하세요.
+
+**A부 — 분산 다이어그램** (프로젝트 2 코드 사용):
+1. 휘슬러파 분기($\omega < \omega_{ce}$, 평행 전파, R모드)를 계산하고 $\omega$-$k$ 다이어그램에 플롯합니다.
+2. 군속도(group velocity) $v_g = d\omega/dk$를 주파수의 함수로 겹쳐 플롯하고 최대 군속도의 주파수를 식별합니다.
+3. $\omega_{ce} \ll \omega_{pe}$ 한계에서 군속도가 $v_g \approx 2c\sqrt{\omega/\omega_{pe}^2 \cdot \omega_{ce}}$임을 보이고 수치적으로 검증합니다.
+
+**B부 — 시간 분산** (해석적 계산):
+1. 번개 방전이 광대역 충격을 생성합니다. 두 주파수 $f_1 = 5\,\text{kHz}$와 $f_2 = 10\,\text{kHz}$가 전리층을 통해 전파하는 것을 고려합니다($n_e = 10^{10}\,\text{m}^{-3}$, $B_0 = 5 \times 10^{-5}\,\text{T}$, $L = 1000\,\text{km}$ 사용).
+2. 각 주파수의 이동 시간 $t = L/v_g(\omega)$를 계산합니다.
+3. 도착 시간 차이가 "휘슬러 분산(whistler dispersion)"입니다. 시간 분리 $\Delta t = t_1 - t_2$를 추정하고 관측된 휘슬러 분산(일반적으로 1~10초)과 비교합니다.
+
+**C부 — 입자 공명** (해석적):
+1. 전자는 사이클로트론 공명 조건 $\omega - k v_\parallel = \omega_{ce}$를 통해 휘슬러파와 공명할 수 있습니다. 이 전리층 플라즈마에서 $f = 5\,\text{kHz}$의 휘슬러파에 대해 공명 전자 에너지(keV 단위)를 구합니다.
+2. 이 공명이 어떻게 피치각 산란(pitch angle scattering)과 복사대 전자의 대기권 손실로 이어지는지 논의합니다(파동-입자 상호작용(wave-particle interaction)의 실제 적용).
+
+**제출물**: 세 개의 그림(분산 다이어그램, 군속도 곡선, 주파수 대 이동 시간)을 적절한 주석과 함께 생성하는 단일 Python 스크립트, 그리고 파동-입자 공명에 대한 짧은 서면 논의.
 
 ---
 

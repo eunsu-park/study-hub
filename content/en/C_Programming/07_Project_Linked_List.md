@@ -1,14 +1,24 @@
 # Project 5: Linked List
 
-## Learning Objectives
-
-What you will learn through this project:
-- Practical application of pointers
-- Self-referential structs
-- Node-based data structures
-- Understanding insert/delete operations
+**Previous**: [Project 4: Dynamic Array](./06_Project_Dynamic_Array.md) | **Next**: [Project 6: File Encryption Tool](./08_Project_File_Encryption.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement a self-referential struct where each node contains data and a pointer to the next node
+2. Build a singly linked list with push-front, push-back, insert-at-index, and remove-at-index operations
+3. Compare the time-complexity trade-offs between arrays (O(1) access, O(n) insert) and linked lists (O(n) access, O(1) insert)
+4. Apply pointer manipulation to re-link nodes during insertion, deletion, and in-place reversal
+5. Implement a doubly linked list with both `prev` and `next` pointers for O(1) pop-back
+6. Debug common linked-list errors: NULL-pointer dereference, lost nodes, and forgotten `free` calls
+7. Distinguish singly, doubly, and circular linked lists and identify appropriate use cases for each
+
+---
+
+If a dynamic array is a row of numbered mailboxes, a linked list is a treasure hunt: each clue leads to the next. You trade instant random access for the ability to insert or remove elements anywhere in constant time -- no shifting required. This project takes you deep into pointer manipulation, the skill that separates someone who uses C from someone who truly understands it.
 
 ## What Is a Linked List?
 
@@ -29,6 +39,8 @@ Linked List:
 - O(n) sequential access
 - O(1) insert/delete (only change pointers)
 ```
+
+> **Analogy -- The Treasure Hunt**: A linked list is like a treasure hunt where each clue (node) contains a prize (data) and directions to the next clue (pointer). To find the 5th prize, you must follow every clue from the start -- you can't skip ahead. But inserting a new clue in the middle is trivial: just rewrite one set of directions. Compare this to an array, which is like prizes lined up on a shelf -- fast to find #5 (just count) but expensive to insert in the middle (shift everything over).
 
 ### When to Use?
 
@@ -618,4 +630,4 @@ list[3] = 999
 
 ## Next Step
 
-[08_Project_File_Encryption.md](./08_Project_File_Encryption.md) -> Let's learn about bit operations and file processing!
+[Project 6: File Encryption Tool](./08_Project_File_Encryption.md) -> Let's learn about bit operations and file processing!

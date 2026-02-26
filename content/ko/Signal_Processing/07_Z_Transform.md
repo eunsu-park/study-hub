@@ -1,16 +1,21 @@
 # Z 변환(Z-Transform)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 양방향(Bilateral) 및 단방향(Unilateral) Z 변환을 정의하고 일반적인 이산 시간 신호에 대해 계산할 수 있습니다.
+2. Z 변환의 수렴 영역(ROC, Region of Convergence)을 결정하고 신호 인과성(Causality)과 시스템 안정성과의 관계를 설명할 수 있습니다.
+3. Z 변환의 성질(선형성, 시간 이동, 합성곱)을 적용하여 이산 시간 시스템을 분석할 수 있습니다.
+4. 부분 분수 전개(Partial Fraction Expansion), 멱급수 전개(Power Series Expansion), 유수 방법(Residue Method)을 사용하여 역 Z 변환을 계산할 수 있습니다.
+5. 전달 함수, 극-영점 선도(Pole-Zero Plot)를 사용하여 LTI 시스템을 분석하고 극점 위치로부터 안정성을 판정할 수 있습니다.
+6. Z 변환과 DTFT 및 라플라스 변환의 관계를 이해하고 각 표현이 적용되는 상황을 파악할 수 있습니다.
+
+---
+
 ## 개요
 
 Z 변환은 라플라스 변환(Laplace Transform)의 이산 시간(discrete-time) 대응 개념입니다. 차분 방정식(difference equation)을 대수 방정식으로 변환하여, 복소 $z$ 평면에서 이산 시간 LTI 시스템을 분석할 수 있게 해줍니다. Z 변환은 시스템 안정성, 주파수 응답, 전달 함수 결정에 강력한 도구를 제공합니다. 이 레슨에서는 Z 변환 이론, 성질, 역변환 방법, 그리고 디지털 시스템 분석 응용을 다룹니다.
-
-**학습 목표:**
-- 양방향(bilateral) 및 단방향(unilateral) Z 변환을 정의하고 계산하기
-- 수렴 영역(ROC, Region of Convergence)과 그 의미 이해하기
-- 시스템 분석을 위한 Z 변환 성질 적용하기
-- 다양한 방법으로 역 Z 변환 계산하기
-- 전달 함수, 극점(poles), 영점(zeros)을 이용하여 LTI 시스템 분석하기
-- Z 변환과 DTFT 및 라플라스 변환의 관계 이해하기
 
 **선수 학습:** [06. 이산 푸리에 변환](06_Discrete_Fourier_Transform.md)
 

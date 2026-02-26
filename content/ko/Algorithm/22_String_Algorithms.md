@@ -1,5 +1,18 @@
 # 문자열 알고리즘 (String Algorithms)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 브루트포스(brute-force) 문자열 패턴 매칭을 구현하고 O(n × m) 시간 복잡도를 분석할 수 있다
+2. KMP 실패 함수(failure function)를 구성하고 이를 이용해 중복 비교 없이 O(n + m) 패턴 매칭을 수행할 수 있다
+3. 라빈-카프(Rabin-Karp) 롤링 해시(rolling hash) 알고리즘을 구현하고 평균 O(n + m) 매칭을 달성하는 원리를 설명할 수 있다
+4. Z-배열(Z-array)을 구성하고 Z-알고리즘을 이용하여 선형 시간에 모든 패턴 출현 위치를 찾을 수 있다
+5. 다항식 문자열 해시(polynomial string hashing)를 설계하여 O(n) 전처리 후 O(1)에 부분 문자열을 비교할 수 있다
+6. 주기 감지(period detection), 애너그램 검색(anagram search), 다중 패턴 매칭(multiple pattern matching) 문제에 문자열 알고리즘을 적용할 수 있다
+
+---
+
 ## 개요
 
 문자열 패턴 매칭 알고리즘은 텍스트에서 특정 패턴을 효율적으로 찾는 방법입니다. 브루트포스 O(nm)에서 KMP/Z-알고리즘 O(n+m)까지 다양한 기법을 다룹니다.
@@ -124,18 +137,21 @@ i=4: "ABAAB"  → "AB" 매칭 → π[4] = 2
 def compute_failure(pattern):
     """실패 함수 계산 - O(m)"""
     m = len(pattern)
-    pi = [0] * m  # π[0] = 0
-    j = 0  # 현재 매칭된 길이
+    pi = [0] * m  # π[0] = 0 (정의상 — 진접두사(proper prefix)는 전체 문자열과 같을 수 없음)
+    j = 0  # j는 지금까지 관찰된 가장 긴 매칭 접두사-접미사(prefix-suffix)의 길이를 추적
 
     for i in range(1, m):
-        # 불일치 시 j를 pi[j-1]로 이동
+        # 불일치 시 다음 후보 접두사 길이로 폴백한다.
+        # π[j-1]의 의미: "pattern[0..j-1]이 매칭되었으나 pattern[j]가 불일치하면,
+        # 여전히 유효한 가장 긴 접두사는 π[j-1] 문자이다."
+        # 이미 계산된 값을 재활용하므로 총 작업량이 O(m)으로 유지된다.
         while j > 0 and pattern[i] != pattern[j]:
             j = pi[j - 1]
 
-        # 일치하면 j 증가
+        # 일치하면 현재 접두사-접미사를 한 문자 확장
         if pattern[i] == pattern[j]:
             j += 1
-            pi[i] = j
+            pi[i] = j  # pattern[0..i]에 길이 j인 접두사-접미사가 있음을 기록
 
     return pi
 
@@ -151,6 +167,8 @@ def kmp_search(text, pattern):
     """
     KMP 패턴 매칭
     시간: O(n + m), 공간: O(m)
+    KMP는 텍스트 문자를 절대 다시 검사하지 않는다 — text[i]가 처리되면 i는 앞으로만 이동한다.
+    실패 함수가 패턴 내에서의 후퇴를 처리하지, 텍스트에서의 후퇴는 없다.
     """
     if not pattern:
         return []
@@ -158,19 +176,23 @@ def kmp_search(text, pattern):
     n, m = len(text), len(pattern)
     pi = compute_failure(pattern)
     result = []
-    j = 0  # pattern에서의 현재 위치
+    j = 0  # j = 지금까지 매칭된 패턴 문자 수
 
     for i in range(n):
-        # 불일치 시 j를 실패 함수로 이동
+        # 불일치 시 실패 함수를 사용해 패턴 내에서 폴백한다.
+        # 이것이 O(n) 분할 상환인 이유: j는 전체 루프에서 최대 n번만 증가할 수 있으므로,
+        # 폴백 횟수의 총합도 n을 초과할 수 없다.
         while j > 0 and text[i] != pattern[j]:
             j = pi[j - 1]
 
-        # 일치하면 j 증가
         if text[i] == pattern[j]:
             if j == m - 1:
-                # 완전 매칭!
+                # 완전 매칭 — 시작 위치를 기록
                 result.append(i - m + 1)
-                j = pi[j]  # 다음 매칭을 위해 이동
+                # 실패 함수를 사용하여 겹치는 매칭(overlapping matches)을 설정:
+                # pi[j]는 방금 찾은 매칭의 접미사이면서 패턴의 접두사인
+                # 가장 긴 부분의 길이를 알려주므로, 처음부터 다시 시작하지 않아도 된다
+                j = pi[j]
             else:
                 j += 1
 
@@ -284,15 +306,19 @@ def rabin_karp(text, pattern, d=256, q=101):
     d: 기수 (문자 종류 수)
     q: 모듈러 (큰 소수)
     시간: 평균 O(n + m), 최악 O(nm)
+    롤링 해시(rolling hash)는 각 윈도우 이동을 O(m) 대신 O(1)로 만든다:
+    나가는 문자의 기여를 빼고 들어오는 문자를 더한다.
     """
     n, m = len(text), len(pattern)
     if m > n:
         return []
 
     result = []
-    h = pow(d, m - 1, q)  # d^(m-1) mod q
+    # h = d^(m-1) mod q — 윈도우에서 가장 왼쪽 문자의 위치 가중치.
+    # 롤링 시 나가는 문자의 기여를 빼기 위해 이 값이 필요하다.
+    h = pow(d, m - 1, q)
 
-    # 초기 해시값 계산
+    # 다항식 롤링 해시를 사용하여 초기 해시값 계산
     p_hash = 0  # 패턴 해시
     t_hash = 0  # 텍스트 윈도우 해시
 
@@ -300,18 +326,20 @@ def rabin_karp(text, pattern, d=256, q=101):
         p_hash = (d * p_hash + ord(pattern[i])) % q
         t_hash = (d * t_hash + ord(text[i])) % q
 
-    # 슬라이딩 윈도우
+    # 슬라이딩 윈도우 — O(1) 롤링 해시로 인해 전체 반복에서 O(n)
     for i in range(n - m + 1):
-        # 해시가 같으면 실제 비교
+        # 해시 비교는 O(1); 문자 비교는 O(m)이지만 해시가 일치할 때만 수행되며,
+        # 무작위 입력에서 해시 일치는 드물어 평균 O(n+m)을 달성
         if p_hash == t_hash:
-            if text[i:i + m] == pattern:
+            if text[i:i + m] == pattern:  # 해시 충돌을 방지하기 위해 실제 비교로 검증
                 result.append(i)
 
-        # 다음 윈도우 해시 계산 (롤링)
+        # 롤링 해시: 가장 왼쪽 문자를 제거하고 가장 오른쪽 새 문자를 추가.
+        # ord(text[i]) * h를 빼면 이전 선두 문자의 d^(m-1) 기여가 제거된다.
         if i < n - m:
             t_hash = (d * (t_hash - ord(text[i]) * h) + ord(text[i + m])) % q
             if t_hash < 0:
-                t_hash += q
+                t_hash += q  # Python의 %는 음수 입력에서 음수를 반환할 수 있으므로 정규화
 
     return result
 
@@ -398,24 +426,26 @@ Z[4] = 3: "aab"와 "aabxaab"의 공통 접두사 = "aab" (길이 3)
 def z_function(s):
     """
     Z 배열 계산
-    시간: O(n)
+    시간: O(n) — Z-box가 이미 매칭된 영역 내의 문자를 재검사하지 않도록 한다
     """
     n = len(s)
     z = [0] * n
-    z[0] = n  # 정의상 전체 문자열
+    z[0] = n  # 관례상 전체 문자열이 자기 자신과의 공통 접두사이다
 
-    l, r = 0, 0  # Z-box의 왼쪽, 오른쪽 경계
+    l, r = 0, 0  # Z-box: 지금까지 발견된 가장 오른쪽 매칭 윈도우 [l, r)
 
     for i in range(1, n):
         if i < r:
-            # Z-box 내부: 이전 정보 활용
+            # i가 이미 알려진 Z-box 내부에 있다. s[i..r-1]이 s[i-l..r-l-1]과
+            # 매칭됨을 이미 알고 있다. 따라서 z[i]는 최소 min(r - i, z[i - l])이며,
+            # 그 문자들을 재검사하지 않아도 된다 — 이것이 O(n)을 달성하는 핵심이다.
             z[i] = min(r - i, z[i - l])
 
-        # 확장 시도
+        # 이미 알고 있는 범위를 넘어서 매칭 확장 시도
         while i + z[i] < n and s[z[i]] == s[i + z[i]]:
             z[i] += 1
 
-        # Z-box 업데이트
+        # Z-box를 지금까지 관찰된 가장 오른쪽 위치로 확장
         if i + z[i] > r:
             l, r = i, i + z[i]
 
@@ -521,26 +551,33 @@ def polynomial_hash(s, base=31, mod=10**9 + 9):
 ```python
 class StringHash:
     """
-    문자열 해시 (구간 해시 쿼리 O(1))
+    문자열 해시 (O(1) 구간 해시 쿼리)
+    정수 배열의 누적 합(prefix sum)과 동일한 아이디어를 다항식 해시에 적용한 것이다.
+    O(n) 전처리 후 임의의 부분 문자열 해시를 O(1)에 계산할 수 있다.
     """
     def __init__(self, s, base=31, mod=10**9 + 9):
         self.base = base
         self.mod = mod
         self.n = len(s)
 
-        # 프리픽스 해시
+        # prefix[i] = s[0:i]의 해시 — 누적 합 배열과 유사
         self.prefix = [0] * (self.n + 1)
-        # base의 거듭제곱
+        # power[i] = base^i mod mod — 반복 거듭제곱을 피하기 위해 미리 계산
         self.power = [1] * (self.n + 1)
 
         for i in range(self.n):
+            # 각 문자를 31진법의 자릿수로 취급: s[0]*31^(n-1) + s[1]*31^(n-2) + ...
+            # 0..25 대신 1..26으로 매핑하여 선두 'a'가 보이지 않는 모호성을 방지
             self.prefix[i + 1] = (self.prefix[i] * base + ord(s[i]) - ord('a') + 1) % mod
             self.power[i + 1] = (self.power[i] * base) % mod
 
     def get_hash(self, l, r):
-        """s[l:r+1]의 해시값 (0-indexed)"""
+        """s[l:r+1]의 해시값 (0-indexed)
+        prefix[l]에 power[r-l+1]을 곱하여 빼면 위치 l 이전 문자들의 기여가 제거된다 —
+        range_sum = prefix[r+1] - prefix[l]과 동일한 논리이다.
+        """
         h = (self.prefix[r + 1] - self.prefix[l] * self.power[r - l + 1]) % self.mod
-        return (h + self.mod) % self.mod
+        return (h + self.mod) % self.mod  # Python의 음수 모듈러를 처리하기 위해 mod를 더함
 
 
 # 사용 예시

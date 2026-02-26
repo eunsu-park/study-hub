@@ -1,5 +1,26 @@
 # 클래스 심화
 
+**이전**: [클래스 기초](./07_Classes_Basics.md) | **다음**: [상속과 다형성](./09_Inheritance_and_Polymorphism.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 산술, 비교, 복합 대입, 스트림 연산자에 대한 연산자 오버로딩(operator overloading)을 구현할 수 있습니다
+2. 멤버 함수 방식과 friend 함수 방식의 연산자 오버로딩을 구별할 수 있습니다
+3. 얕은 복사(shallow copy)와 깊은 복사(deep copy)의 차이를 설명하고 깊은 복사 생성자를 구현할 수 있습니다
+4. 자기 대입(self-assignment) 보호를 포함한 올바른 복사 대입 연산자(copy assignment operator)를 설계할 수 있습니다
+5. 이동 시맨틱(move semantics)(이동 생성자와 이동 대입 연산자)을 적용하여 불필요한 복사를 제거할 수 있습니다
+6. 5의 규칙(Rule of Five)을 파악하고 클래스가 다섯 가지 특수 멤버 함수를 모두 정의해야 하는 시점을 설명할 수 있습니다
+7. 클래스 전체가 공유하는 상태를 위해 `static` 멤버 변수와 함수를 구현할 수 있습니다
+8. 의도치 않은 암시적 변환을 방지하기 위해 `explicit`을 적용할 수 있습니다
+
+---
+
+클래스를 만들 수 있게 되면, 다음 질문은 복사, 이동, 비교, 출력 시 클래스가 어떻게 *동작*해야 하는가입니다. 연산자 오버로딩, 복사/이동 시맨틱(copy/move semantics), 5의 규칙(Rule of Five)과 같은 고급 클래스 메커니즘은 사용자 정의 타입(user-defined type)을 내장 타입처럼 자연스럽게 느껴지게 만드는 요소입니다. 이 기법들은 학문적인 호기심의 대상이 아닙니다. `std::string`부터 `std::vector`까지 표준 라이브러리(Standard Library) 전체의 근간을 이루며, 이를 마스터하는 것은 전문적인 수준의 C++ 코드를 작성하는 데 필수적입니다.
+
 ## 1. 연산자 오버로딩
 
 클래스에 대해 연산자의 동작을 정의할 수 있습니다.
@@ -870,6 +891,4 @@ int main() {
 
 ---
 
-## 다음 단계
-
-[09_Inheritance_and_Polymorphism.md](./09_Inheritance_and_Polymorphism.md)에서 상속과 다형성을 배워봅시다!
+**이전**: [클래스 기초](./07_Classes_Basics.md) | **다음**: [상속과 다형성](./09_Inheritance_and_Polymorphism.md)

@@ -544,6 +544,256 @@ docs = vectorstore.similarity_search("query", k=3)
 
 ---
 
+## Exercises
+
+### Exercise 1: FAISS Index Type Selection
+
+You are building a vector search system and have the following constraints. For each scenario, choose the appropriate FAISS index type and explain why.
+
+| Scenario | Dataset Size | Constraints | Best Index Type? |
+|----------|-------------|-------------|-----------------|
+| A. Medical record search | 50,000 vectors | 100% accuracy required | ? |
+| B. Real-time product search | 10 million vectors | <50ms latency required | ? |
+| C. Mobile app embedding search | 500,000 vectors | 500MB memory limit | ? |
+| D. Nightly batch recommendation | 2 million vectors | Accuracy >95%, training time OK | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Scenario | Best Index | Reasoning |
+|----------|-----------|-----------|
+| A. Medical records (50K, 100% accuracy) | **IndexFlatL2** | Exact search, no approximation. 50K vectors × 384 dims × 4 bytes ≈ 73MB — perfectly manageable. Medical decisions require precision. |
+| B. Real-time product search (10M, <50ms) | **IndexHNSWFlat** | 98%+ accuracy at millisecond latency. No training required. Best recall/latency trade-off for real-time serving. |
+| C. Mobile app (500K, 500MB limit) | **IndexIVFPQ** | PQ compresses vectors from 1536 bytes to ~64 bytes (24x compression). 500K × 64 bytes ≈ 32MB, well within budget. |
+| D. Batch recommendation (2M, >95%) | **IndexIVFFlat** | Good accuracy with fast approximate search. Training is a one-time cost. `nprobe` tunable for accuracy/speed trade-off. |
+
+```python
+import faiss
+import numpy as np
+
+dimension = 384
+vectors = np.random.random((50000, dimension)).astype('float32')
+
+# Scenario A: Exact flat index
+index_a = faiss.IndexFlatL2(dimension)
+index_a.add(vectors)
+
+# Scenario B: HNSW (high connectivity for fast graph traversal)
+index_b = faiss.IndexHNSWFlat(dimension, 32)  # M=32: higher = better recall, more memory
+index_b.add(vectors[:50000])  # No training needed
+
+# Scenario C: IVF + PQ for memory efficiency
+quantizer = faiss.IndexFlatL2(dimension)
+index_c = faiss.IndexIVFPQ(quantizer, dimension, nlist=1000, m=8, nbits=8)
+# m=8: 8 sub-quantizers, nbits=8: 256 centroids each → 8 bytes/vector
+index_c.train(vectors)
+index_c.add(vectors)
+print(f"Scenario C memory: ~{50000 * 8 / 1e6:.1f}MB (vs {50000 * dimension * 4 / 1e6:.0f}MB flat)")
+
+# Scenario D: IVF for tunable accuracy
+quantizer_d = faiss.IndexFlatL2(dimension)
+index_d = faiss.IndexIVFFlat(quantizer_d, dimension, nlist=2000)
+index_d.train(vectors)
+index_d.add(vectors)
+index_d.nprobe = 50  # Search 50 of 2000 clusters (~2.5%); increase for higher recall
+```
+</details>
+
+---
+
+### Exercise 2: Chroma Metadata Filtering
+
+A document collection stores research papers with metadata: `year` (int), `category` (str: "ml", "nlp", "cv"), and `citations` (int). Write Chroma queries for the following requirements:
+
+1. Find papers from 2022 or later in the "nlp" category
+2. Find papers from "ml" or "cv" categories with more than 100 citations
+3. Find papers from the last 3 years (2023-2025) that are NOT in the "cv" category
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+client = chromadb.Client()
+embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="all-MiniLM-L6-v2"
+)
+collection = client.create_collection("papers", embedding_function=embedding_fn)
+
+# Sample data
+collection.add(
+    documents=["Attention is all you need", "BERT pre-training", "ResNet deep residual"],
+    metadatas=[
+        {"year": 2017, "category": "nlp", "citations": 50000},
+        {"year": 2018, "category": "nlp", "citations": 30000},
+        {"year": 2016, "category": "cv", "citations": 80000},
+    ],
+    ids=["p1", "p2", "p3"]
+)
+
+# Query 1: NLP papers from 2022+
+results_1 = collection.query(
+    query_texts=["transformer architecture"],
+    n_results=5,
+    where={
+        "$and": [
+            {"year": {"$gte": 2022}},
+            {"category": {"$eq": "nlp"}}
+        ]
+    }
+)
+
+# Query 2: ML or CV with >100 citations
+results_2 = collection.query(
+    query_texts=["neural network"],
+    n_results=5,
+    where={
+        "$and": [
+            {"category": {"$in": ["ml", "cv"]}},
+            {"citations": {"$gt": 100}}
+        ]
+    }
+)
+
+# Query 3: 2023-2025, not CV
+results_3 = collection.query(
+    query_texts=["deep learning"],
+    n_results=10,
+    where={
+        "$and": [
+            {"year": {"$gte": 2023}},
+            {"year": {"$lte": 2025}},
+            {"category": {"$ne": "cv"}}
+        ]
+    }
+)
+
+# Chroma filter operators reference:
+# $eq, $ne: equal, not equal
+# $gt, $gte, $lt, $lte: numeric comparisons
+# $in, $nin: membership in list
+# $and, $or: logical combinations
+```
+
+**Common pitfall:** Chroma's `$and`/`$or` take a list, and ALL conditions must be at the same nesting level. You cannot mix list-level and dict-level operators in the same `where` clause.
+</details>
+
+---
+
+### Exercise 3: Deduplication with Content Hashing
+
+Extend the `upsert_documents` function to also handle document updates: if a document with the same ID already exists but has different content, it should be updated; if it's identical, skip it.
+
+```python
+import hashlib
+
+def get_doc_id(text: str) -> str:
+    return hashlib.md5(text.encode()).hexdigest()
+
+# Current implementation (add-only deduplication)
+def upsert_documents(texts, collection):
+    ids = [get_doc_id(t) for t in texts]
+    existing = collection.get(ids=ids)
+    existing_ids = set(existing['ids'])
+
+    new_texts = [t for t, id_ in zip(texts, ids) if id_ not in existing_ids]
+    new_ids = [id_ for id_, t in zip(ids, texts) if id_ not in existing_ids]
+
+    if new_texts:
+        collection.add(documents=new_texts, ids=new_ids)
+    return len(new_texts)
+```
+
+<details>
+<summary>Show Answer</summary>
+
+The key insight is that content-based IDs (MD5 hashes) make identical documents always have the same ID. So "updating" a changed document means: the old content has ID `old_hash`, the new content has ID `new_hash` — they are different entries.
+
+```python
+import hashlib
+from typing import Optional
+
+def get_content_hash(text: str) -> str:
+    """Generate a stable ID from content."""
+    return hashlib.md5(text.encode()).hexdigest()
+
+def smart_upsert(
+    texts: list[str],
+    doc_keys: list[str],  # Logical IDs (e.g. "doc_001", "doc_002")
+    collection,
+    metadatas: Optional[list[dict]] = None
+) -> dict:
+    """
+    Upsert documents with change detection.
+
+    Strategy: store both the logical key AND content hash in metadata.
+    When re-indexing, check if the content hash changed.
+
+    Returns: {"added": N, "updated": N, "skipped": N}
+    """
+    stats = {"added": 0, "updated": 0, "skipped": 0}
+
+    for i, (text, key) in enumerate(zip(texts, doc_keys)):
+        new_hash = get_content_hash(text)
+        meta = metadatas[i] if metadatas else {}
+        meta["doc_key"] = key
+        meta["content_hash"] = new_hash
+
+        # Check if this logical key already exists (query by metadata)
+        existing = collection.get(where={"doc_key": {"$eq": key}})
+
+        if not existing["ids"]:
+            # New document
+            collection.add(
+                documents=[text],
+                ids=[new_hash],
+                metadatas=[meta]
+            )
+            stats["added"] += 1
+
+        elif existing["metadatas"][0]["content_hash"] == new_hash:
+            # Identical content — skip
+            stats["skipped"] += 1
+
+        else:
+            # Content changed — delete old, add new
+            collection.delete(ids=existing["ids"])
+            collection.add(
+                documents=[text],
+                ids=[new_hash],
+                metadatas=[meta]
+            )
+            stats["updated"] += 1
+
+    return stats
+
+# Test
+import chromadb
+client = chromadb.Client()
+coll = client.create_collection("docs")
+
+result = smart_upsert(
+    texts=["Version 1 of doc A", "Version 1 of doc B"],
+    doc_keys=["doc_A", "doc_B"],
+    collection=coll
+)
+print(result)  # {"added": 2, "updated": 0, "skipped": 0}
+
+result = smart_upsert(
+    texts=["Version 2 of doc A", "Version 1 of doc B"],  # A changed, B same
+    doc_keys=["doc_A", "doc_B"],
+    collection=coll
+)
+print(result)  # {"added": 0, "updated": 1, "skipped": 1}
+```
+
+**Why content-hash IDs matter:** If you used sequential IDs, you'd have to compare document text on every upsert. With content hashes, unchanged documents always generate the same ID — no text comparison needed.
+</details>
+
+---
+
 ## Next Steps
 
 Build a conversational AI system in [12_Practical_Chatbot.md](./12_Practical_Chatbot.md).

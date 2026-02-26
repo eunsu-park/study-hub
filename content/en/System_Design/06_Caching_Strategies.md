@@ -1,14 +1,27 @@
 # Caching Strategies
 
-## Overview
+**Previous**: [Reverse Proxy & API Gateway](./05_Reverse_Proxy_API_Gateway.md) | **Next**: [Distributed Cache Systems](./07_Distributed_Cache_Systems.md)
 
-This document covers core caching strategies and patterns. Understand the differences between Cache-Aside, Read-Through, Write-Through, and Write-Behind patterns, along with cache invalidation, TTL configuration, and solutions to cache penetration/avalanche/hotkey problems.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why caching is one of the most effective techniques for improving system performance and reducing load
+2. Compare Cache-Aside, Read-Through, Write-Through, and Write-Behind patterns, identifying the consistency and performance trade-offs of each
+3. Describe cache invalidation strategies (TTL-based, event-driven, version-based) and explain why invalidation is considered the hardest problem in caching
+4. Diagnose and solve common cache failure modes: cache penetration, cache avalanche, and hot key problems
+5. Design a multi-layer caching architecture that includes browser, CDN, application, and database caches
+6. Select the appropriate caching pattern for a given read/write workload
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 2-3 hours
 **Prerequisites**: [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md)
 
 ---
+
+The fastest database query is the one you never have to make. Caching stores frequently accessed data closer to where it is needed, turning expensive millisecond-level database lookups into microsecond in-memory reads. Done well, caching can reduce backend load by orders of magnitude; done poorly, it introduces stale data, thundering herds, and mysterious inconsistencies. This lesson equips you with the patterns and pitfalls you need to cache effectively.
 
 ## Table of Contents
 
@@ -18,8 +31,7 @@ This document covers core caching strategies and patterns. Understand the differ
 4. [Cache Problems and Solutions](#4-cache-problems-and-solutions)
 5. [CDN Caching](#5-cdn-caching)
 6. [Practice Problems](#6-practice-problems)
-7. [Next Steps](#7-next-steps)
-8. [References](#8-references)
+7. [References](#7-references)
 
 ---
 
@@ -139,6 +151,14 @@ This document covers core caching strategies and patterns. Understand the differ
 
 ## 2. Caching Strategy Patterns
 
+> **Analogy -- The Convenience Store**
+>
+> Think of caching like the difference between a convenience store and a warehouse. The **warehouse** (database) has everything, but it is far away and takes time to retrieve items. The **convenience store** (cache) is right around the corner with a small selection of the most popular items -- you get what you need in seconds.
+>
+> **Cache-Aside** is like you checking the convenience store first; if they do not have it, you drive to the warehouse and bring a copy back to the store for next time. **Write-Through** is like the store automatically restocking from the warehouse every time a new shipment arrives. **Write-Behind** is like the store accepting new products immediately and sending the paperwork to the warehouse later in batch.
+>
+> The tricky part? Knowing when the convenience store's stock is outdated -- that is the cache invalidation problem, and it is why Phil Karlton famously said there are only two hard things in computer science: cache invalidation and naming things.
+
 ### 2.1 Cache-Aside (Lazy Loading)
 
 ```
@@ -210,6 +230,45 @@ This document covers core caching strategies and patterns. Understand the differ
 │  • Possible cache-DB inconsistency                              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+**Annotated implementation:**
+
+```python
+def get_user(user_id):
+    cache_key = f"user:{user_id}"
+
+    # Step 1: Check cache first — avoids a DB round-trip on the
+    # majority of reads (assuming a warm cache with reasonable hit rate)
+    user = cache.get(cache_key)
+    if user is not None:           # Explicit None check: cached empty results are valid
+        return user
+
+    # Step 2: Cache miss — query DB *before* writing to cache,
+    # so we cache the actual current value, not a stale or speculative one
+    user = db.query("SELECT * FROM users WHERE id = %s", (user_id,))
+
+    # Step 3: Populate cache with TTL.
+    # TTL = 3600s (1 hour): balances freshness vs DB load.
+    # Without TTL, stale data could persist indefinitely after a write
+    # that bypasses cache invalidation (e.g., direct DB migration).
+    if user is not None:
+        cache.set(cache_key, user, ttl=3600)
+
+    return user
+
+
+def update_user(user_id, data):
+    # Write to DB first — DB is the source of truth.
+    # If we invalidated cache first and the DB write failed,
+    # the next read would re-cache the old value (acceptable),
+    # but if we updated cache first and DB failed, we'd serve wrong data.
+    db.execute("UPDATE users SET ... WHERE id = %s", (user_id,))
+
+    # Invalidate (delete) rather than update the cache entry.
+    # Delete is safer: avoids race conditions where a concurrent read
+    # re-caches stale data between our DB write and cache update.
+    cache.delete(f"user:{user_id}")
 ```
 
 ### 2.2 Read-Through
@@ -924,24 +983,41 @@ c) Login status API
 
 ---
 
-## 7. Next Steps
+## Hands-On Exercises
 
-If you've understood caching strategies, learn about distributed cache systems next.
+### Exercise 1: Cache Strategy Comparison
 
-### Next Lesson
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md)
+Use `examples/System_Design/06_cache_strategies.py` to explore cache behavior.
 
-### Related Lessons
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md) - Proxy caching
+**Tasks:**
+1. Run all demos and observe the difference between cache-aside, write-through, and write-back
+2. Add a **write-around** strategy: writes go directly to DB, cache is only populated on read miss
+3. Compare all four strategies (cache-aside, write-through, write-back, write-around) for a mixed workload: 70% reads, 30% writes on 1000 operations
+4. Track metrics: DB reads, DB writes, cache hits, and total "simulated latency" for each strategy
 
-### Recommended Practice
-1. Implement cache patterns in Redis
-2. Practice Nginx caching configuration
-3. Test Cache-Control headers
+### Exercise 2: Cache Warming
+
+Implement a cache warming strategy for cold-start scenarios.
+
+**Tasks:**
+1. Extend the `CacheAside` class with a `warm(keys)` method that pre-loads frequently accessed keys
+2. Simulate a cold start: compare performance (hit rate over first 100 requests) with and without warming
+3. Implement a "top-K" warming strategy: analyze access logs to find the K most frequently accessed keys, then warm only those
+4. What's the optimal K for a cache of size 100 with Zipf-distributed access patterns?
+
+### Exercise 3: Cache Stampede Prevention
+
+Implement techniques to prevent cache stampede (thundering herd).
+
+**Tasks:**
+1. Simulate a stampede: 100 concurrent readers all miss the same key simultaneously, causing 100 DB reads
+2. Implement **lock-based prevention**: only one reader fetches from DB while others wait
+3. Implement **probabilistic early expiration**: refresh cache entries before they actually expire (add jitter to TTL)
+4. Compare the three approaches (no protection, locking, early expiration) for DB load and average latency
 
 ---
 
-## 8. References
+## 7. References
 
 ### Documentation
 - [Redis Caching](https://redis.io/docs/manual/client-side-caching/)
@@ -955,6 +1031,10 @@ If you've understood caching strategies, learn about distributed cache systems n
 
 ### References
 - [Caching Strategies](https://aws.amazon.com/caching/best-practices/)
+
+---
+
+**Previous**: [Reverse Proxy & API Gateway](./05_Reverse_Proxy_API_Gateway.md) | **Next**: [Distributed Cache Systems](./07_Distributed_Cache_Systems.md)
 
 ---
 

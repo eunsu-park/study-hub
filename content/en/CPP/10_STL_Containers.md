@@ -1,5 +1,25 @@
 # STL Containers
 
+**Previous**: [Inheritance and Polymorphism](./09_Inheritance_and_Polymorphism.md) | **Next**: [STL Algorithms and Iterators](./11_STL_Algorithms_Iterators.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what the STL is and identify its four main components: containers, iterators, algorithms, and function objects
+2. Implement dynamic arrays with `std::vector` and apply element access, insertion, deletion, and iterator traversal
+3. Compare sequence containers (`vector`, `array`, `deque`, `list`) and select the appropriate one for a given use case
+4. Apply associative containers (`set`, `map`) and their unordered counterparts for sorted and hash-based storage
+5. Implement LIFO, FIFO, and priority-based logic using `stack`, `queue`, and `priority_queue` adapters
+6. Distinguish between ordered and unordered containers in terms of internal structure, time complexity, and iteration order
+7. Design composite data with `std::pair` and `std::tuple`, and destructure them with C++17 structured bindings
+
+---
+
+The Standard Template Library is where C++ truly shines. Instead of reinventing linked lists, hash maps, or sorting algorithms for every project, you can rely on battle-tested, highly optimized containers and algorithms that have been refined over decades. Learning which container to reach for -- and understanding the Big-O trade-offs behind each choice -- is one of the most impactful skills for writing performant, idiomatic C++ code.
+
 ## 1. What is STL?
 
 STL (Standard Template Library) is the core of the C++ standard library, providing data structures and algorithms.
@@ -18,6 +38,8 @@ STL (Standard Template Library) is the core of the C++ standard library, providi
 ## 2. vector
 
 A dynamic-sized array. Most commonly used.
+
+> **Analogy -- The Expanding Row of Seats**: Think of `std::vector` as a row of seats in a theater. When the row is full and a new guest arrives, the theater doesn't add one chair -- it moves everyone to a bigger row (typically double the size). This is why `push_back` is amortized O(1): most additions are instant, but occasionally the entire audience must relocate.
 
 ### Basic Usage
 
@@ -211,6 +233,8 @@ int main() {
 ## 5. list
 
 A doubly-linked list.
+
+> **Analogy -- The Sticky-Note Chain**: A `std::list` is like a chain of sticky notes, each one saying "the next note is on page X." You can insert or remove a note anywhere instantly (just rewrite one pointer), but finding the 50th note means following the chain from the beginning -- there's no shortcut.
 
 ```cpp
 #include <iostream>
@@ -616,7 +640,271 @@ int main() {
 
 ---
 
-## 12. Summary
+## 12. Custom Allocators and Hash Customization
+
+### Why Custom Allocators?
+
+Every STL container accepts an optional allocator template parameter. By default, `std::allocator<T>` uses `new`/`delete`, but custom allocators let you:
+
+- **Memory pools**: Pre-allocate a large block and hand out fixed-size chunks (eliminates per-allocation system call overhead)
+- **Arena allocation**: Allocate many objects in a contiguous region, then free them all at once (useful in game engines, compilers, request-scoped servers)
+- **Tracking**: Count allocations, detect leaks, log memory usage
+- **Alignment**: Guarantee specific alignment for SIMD or hardware requirements
+
+### Minimal Custom Allocator (C++17)
+
+C++17 drastically simplified the allocator requirements. You only need `allocate`, `deallocate`, and a few type aliases:
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <cstdlib>
+#include <memory>
+
+/* A tracking allocator that counts how many bytes have been allocated.
+ * Why: Useful for debugging, profiling, or enforcing memory budgets. */
+template <typename T>
+struct TrackingAllocator {
+    using value_type = T;
+
+    /* Shared counter across all rebound copies of this allocator.
+     * Why shared_ptr: When a container rebound allocator (e.g., for internal nodes),
+     * we still want to track total memory through one counter. */
+    std::shared_ptr<std::size_t> total_allocated;
+
+    TrackingAllocator()
+        : total_allocated(std::make_shared<std::size_t>(0)) {}
+
+    /* Rebinding constructor: allows the allocator to be used for a different type.
+     * Why needed: std::vector<T, Alloc> internally needs Alloc<SomeInternalType>,
+     * so the container converts your allocator via this constructor. */
+    template <typename U>
+    TrackingAllocator(const TrackingAllocator<U>& other)
+        : total_allocated(other.total_allocated) {}
+
+    T* allocate(std::size_t n) {
+        std::size_t bytes = n * sizeof(T);
+        *total_allocated += bytes;
+        std::cout << "[alloc] " << bytes << " bytes (total: "
+                  << *total_allocated << ")\n";
+        return static_cast<T*>(std::malloc(bytes));
+    }
+
+    void deallocate(T* ptr, std::size_t n) {
+        std::size_t bytes = n * sizeof(T);
+        *total_allocated -= bytes;
+        std::cout << "[dealloc] " << bytes << " bytes (total: "
+                  << *total_allocated << ")\n";
+        std::free(ptr);
+    }
+
+    /* Required for container equality checks. Two allocators are "equal"
+     * if memory from one can be freed by the other. */
+    template <typename U>
+    bool operator==(const TrackingAllocator<U>&) const { return true; }
+    template <typename U>
+    bool operator!=(const TrackingAllocator<U>&) const { return false; }
+};
+
+int main() {
+    /* Use the tracking allocator with std::vector */
+    std::vector<int, TrackingAllocator<int>> v;
+
+    v.push_back(1);   // allocates initial buffer
+    v.push_back(2);
+    v.push_back(3);
+    v.push_back(4);
+    v.push_back(5);   // may trigger reallocation (capacity doubling)
+
+    std::cout << "Vector contents: ";
+    for (int x : v) std::cout << x << " ";
+    std::cout << std::endl;
+
+    return 0;
+}
+```
+
+### Arena Allocator Concept
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <cstdint>
+
+/* A simple arena (bump) allocator: allocates from a fixed-size buffer.
+ * Why: Extremely fast allocation (just increment a pointer), and all memory
+ * is freed at once when the arena is destroyed. No per-object deallocation. */
+template <typename T>
+struct ArenaAllocator {
+    using value_type = T;
+
+    /* Shared arena state */
+    struct Arena {
+        std::uint8_t* buffer;
+        std::size_t   capacity;
+        std::size_t   offset;
+
+        Arena(std::size_t cap)
+            : buffer(new std::uint8_t[cap]), capacity(cap), offset(0) {}
+        ~Arena() { delete[] buffer; }
+    };
+
+    std::shared_ptr<Arena> arena;
+
+    explicit ArenaAllocator(std::size_t capacity)
+        : arena(std::make_shared<Arena>(capacity)) {}
+
+    template <typename U>
+    ArenaAllocator(const ArenaAllocator<U>& other)
+        : arena(other.arena) {}
+
+    T* allocate(std::size_t n) {
+        std::size_t bytes = n * sizeof(T);
+        /* Align to alignof(T) */
+        std::size_t aligned = (arena->offset + alignof(T) - 1) & ~(alignof(T) - 1);
+        if (aligned + bytes > arena->capacity) {
+            throw std::bad_alloc();
+        }
+        T* result = reinterpret_cast<T*>(arena->buffer + aligned);
+        arena->offset = aligned + bytes;
+        return result;
+    }
+
+    /* Arena allocator: deallocation is a no-op. Memory is freed all at once. */
+    void deallocate(T*, std::size_t) { /* intentionally empty */ }
+
+    template <typename U> bool operator==(const ArenaAllocator<U>&) const { return true; }
+    template <typename U> bool operator!=(const ArenaAllocator<U>&) const { return false; }
+};
+
+int main() {
+    ArenaAllocator<int> alloc(4096);  // 4KB arena
+    std::vector<int, ArenaAllocator<int>> v(alloc);
+
+    for (int i = 0; i < 100; i++) {
+        v.push_back(i);
+    }
+    std::cout << "Arena used: " << alloc.arena->offset << " bytes\n";
+
+    return 0;  // All arena memory freed at once in Arena destructor
+}
+```
+
+### Custom Hash for `unordered_map`
+
+By default, `std::unordered_map` and `std::unordered_set` use `std::hash<Key>`, which only works for built-in types and `std::string`. For custom types, you must provide a hash function.
+
+```cpp
+#include <iostream>
+#include <unordered_map>
+#include <string>
+#include <functional>
+
+struct Point {
+    int x, y;
+
+    /* operator== is REQUIRED for unordered containers.
+     * Why: After hashing, the container needs equality to handle collisions. */
+    bool operator==(const Point& other) const {
+        return x == other.x && y == other.y;
+    }
+};
+
+/* Method 1: Specialize std::hash (preferred for widely-used types) */
+template <>
+struct std::hash<Point> {
+    std::size_t operator()(const Point& p) const {
+        /* Hash combine pattern: mix the hashes of individual fields.
+         * Why this formula? Multiplying by a prime and XORing prevents
+         * (1,2) and (2,1) from producing the same hash. The shift and
+         * golden ratio constant (0x9e3779b9) spread bits evenly. */
+        std::size_t h1 = std::hash<int>{}(p.x);
+        std::size_t h2 = std::hash<int>{}(p.y);
+        return h1 ^ (h2 * 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
+};
+
+int main() {
+    /* After specializing std::hash, Point works directly as a key */
+    std::unordered_map<Point, std::string> labels;
+    labels[{0, 0}] = "origin";
+    labels[{1, 2}] = "point A";
+    labels[{3, 4}] = "point B";
+
+    for (const auto& [pt, label] : labels) {
+        std::cout << "(" << pt.x << ", " << pt.y << "): "
+                  << label << "\n";
+    }
+
+    return 0;
+}
+```
+
+### Hash Combine for Composite Keys
+
+```cpp
+#include <iostream>
+#include <unordered_map>
+#include <string>
+#include <functional>
+
+/* A reusable hash_combine utility.
+ * Why: Combining multiple field hashes into one is a recurring need.
+ * This is modeled after boost::hash_combine. */
+inline void hash_combine(std::size_t& seed, std::size_t value) {
+    seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+struct Employee {
+    std::string department;
+    std::string name;
+    int id;
+
+    bool operator==(const Employee& o) const {
+        return department == o.department && name == o.name && id == o.id;
+    }
+};
+
+/* Method 2: Functor passed as template argument (for local/specific use) */
+struct EmployeeHash {
+    std::size_t operator()(const Employee& e) const {
+        std::size_t seed = 0;
+        hash_combine(seed, std::hash<std::string>{}(e.department));
+        hash_combine(seed, std::hash<std::string>{}(e.name));
+        hash_combine(seed, std::hash<int>{}(e.id));
+        return seed;
+    }
+};
+
+int main() {
+    /* Pass the hash functor as the third template argument */
+    std::unordered_map<Employee, double, EmployeeHash> salaries;
+
+    salaries[{"Engineering", "Alice", 1001}] = 95000.0;
+    salaries[{"Marketing",   "Bob",   2001}] = 85000.0;
+
+    for (const auto& [emp, salary] : salaries) {
+        std::cout << emp.name << " (" << emp.department << "): $"
+                  << salary << "\n";
+    }
+
+    return 0;
+}
+```
+
+### When to Customize
+
+| Scenario | Solution |
+|----------|----------|
+| Custom type as `unordered_map` key | Specialize `std::hash` or pass hash functor |
+| Composite key (multiple fields) | Use `hash_combine` pattern |
+| Need deterministic memory allocation | Custom allocator with arena/pool |
+| Memory usage tracking or budgets | Tracking allocator |
+| High-frequency, same-size allocations | Pool allocator |
+
+---
+
+## 13. Summary
 
 | Container | Characteristics |
 |-----------|----------------|
@@ -631,6 +919,54 @@ int main() {
 | `stack` | LIFO |
 | `queue` | FIFO |
 | `priority_queue` | Heap |
+
+---
+
+## Exercises
+
+### Exercise 1: Container Selection Justification
+
+For each of the following scenarios, choose the most appropriate STL container and justify your choice in terms of time complexity and use-case fit:
+
+1. A browser history where the most recently visited page is always retrieved first (LIFO).
+2. A dictionary that maps English words to Korean translations, looked up by the English word frequently but iteration order doesn't matter.
+3. A ranked leaderboard where you always need the player with the highest score instantly.
+4. A to-do list where items are processed in the order they were added (FIFO) and new tasks are frequently added at both ends.
+5. A set of unique IP addresses that need to be checked for membership millions of times per second.
+
+Write one or two sentences per scenario explaining the reasoning, including the Big-O complexity of the key operation.
+
+### Exercise 2: Vector Growth Observation
+
+Write a program that pushes 20 integers into an empty `std::vector<int>` one by one and prints the `size()` and `capacity()` after each `push_back`. Observe where `capacity()` jumps and confirm it doubles. Then use `reserve(20)` before the loop and repeat — note how the number of reallocations changes.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v;
+    // Optional: v.reserve(20);
+    for (int i = 1; i <= 20; i++) {
+        v.push_back(i);
+        std::cout << "size=" << v.size()
+                  << " capacity=" << v.capacity() << "\n";
+    }
+    return 0;
+}
+```
+
+### Exercise 3: Word Frequency Counter
+
+Write a program that reads words from a `std::vector<std::string>` (hardcoded or from `std::cin`) and uses a `std::map<std::string, int>` to count how many times each word appears. After counting, iterate the map to print each word and its count in alphabetical order. Then repeat using `std::unordered_map` and compare the output ordering.
+
+### Exercise 4: Bracket Matching with stack
+
+Use `std::stack<char>` to verify whether a string of brackets is balanced. The function `bool isBalanced(const std::string& s)` should return `true` if every opening bracket (`(`, `[`, `{`) has a matching closing bracket in the correct order, and `false` otherwise. Test with at least five inputs: `"([]{})"`, `"([)]"`, `""`, `"((("`, and `"{[()]}"`.
+
+### Exercise 5: Custom Hash for Composite Key
+
+Extend the hash customization example from the lesson. Define a struct `Point3D { int x, y, z; }` and specialize `std::hash<Point3D>` using the `hash_combine` technique. Store several `Point3D → std::string` mappings in an `std::unordered_map<Point3D, std::string>` and verify that lookup works correctly. Add `operator==` to `Point3D` and explain in a comment why it is required alongside the hash specialization.
 
 ---
 

@@ -1,11 +1,22 @@
 # 12. SEO 기초 (Search Engine Optimization)
 
-## 학습 목표
-- SEO의 기본 원리와 중요성 이해
-- 기술적 SEO 요소 구현
-- 메타 태그와 구조화 데이터 활용
-- 콘텐츠 최적화 전략 학습
-- SEO 도구 활용법 습득
+**이전**: [웹 접근성](./11_Web_Accessibility.md) | **다음**: [빌드 도구와 환경](./13_Build_Tools_Environment.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 검색 엔진이 웹 페이지를 크롤링(crawling)·인덱싱(indexing)·랭킹(ranking)하는 방식을 설명할 수 있다
+2. 온페이지 SEO(on-page SEO)를 위한 효과적인 타이틀 태그(title tag)·메타 디스크립션(meta description)·정식 URL(canonical URL)을 작성할 수 있다
+3. 소셜 미디어 공유를 위한 Open Graph와 Twitter Card 메타 태그를 구현할 수 있다
+4. 아티클·제품·FAQ·브레드크럼(breadcrumb)에 JSON-LD 구조화 데이터(structured data)를 추가할 수 있다
+5. 크롤러 동작을 제어하기 위해 `robots.txt`와 `sitemap.xml`을 설정할 수 있다
+6. Core Web Vitals 모범 사례를 적용하여 페이지 속도를 최적화할 수 있다
+7. Google Search Console과 Lighthouse를 사용해 사이트의 SEO 상태를 평가할 수 있다
+
+---
+
+훌륭한 웹사이트를 만들더라도 아무도 찾지 못한다면 의미가 없습니다. 검색 엔진은 사용자가 새로운 콘텐츠를 발견하는 주된 경로이며, SEO는 페이지를 검색 엔진에 노출시키는 실천입니다. SEO를 이해하는 것은 단순히 마케팅 역량이 아닙니다 — HTML 구조 설계, 콘텐츠 작성, 사이트의 기술적 기반 설계 방식에 직접적인 영향을 미칩니다.
 
 ## 목차
 1. [SEO 개요](#1-seo-개요)
@@ -766,7 +777,7 @@ Sitemap: https://example.com/sitemap.xml
 
 ## 다음 단계
 - [11. 웹 접근성](./11_Web_Accessibility.md)
-- [13. 빌드 도구 환경](./13_Build_Tools_Environment.md)
+- [13. 빌드 도구와 환경](./13_Build_Tools_Environment.md)
 
 ## 참고 자료
 - [Google Search Central](https://developers.google.com/search)

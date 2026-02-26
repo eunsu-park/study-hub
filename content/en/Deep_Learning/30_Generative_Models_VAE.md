@@ -97,20 +97,20 @@ log p(x) = log ∫ p(x, z) dz
 
 ```python
 def vae_loss(x, x_recon, mu, log_var):
-    """VAE 손실 함수 (⭐⭐⭐)
+    """VAE loss function (⭐⭐⭐)
 
     Args:
-        x: 원본 이미지 (batch, ...)
-        x_recon: 재구성 이미지 (batch, ...)
-        mu: 평균 (batch, latent_dim)
-        log_var: 로그 분산 (batch, latent_dim)
+        x: original image (batch, ...)
+        x_recon: reconstructed image (batch, ...)
+        mu: mean (batch, latent_dim)
+        log_var: log variance (batch, latent_dim)
 
     Returns:
         total_loss, recon_loss, kl_loss
     """
-    # 재구성 손실 (이진 이미지: BCE, 연속 이미지: MSE)
+    # Reconstruction loss (binary image: BCE, continuous image: MSE)
     recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum')
-    # 또는 MSE
+    # Or MSE
     # recon_loss = F.mse_loss(x_recon, x, reduction='sum')
 
     # KL Divergence: -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
@@ -180,7 +180,7 @@ import torch.nn.functional as F
 class VAEEncoder(nn.Module):
     """VAE Encoder (⭐⭐⭐)
 
-    이미지 → mu, log_var
+    image → mu, log_var
     """
     def __init__(self, in_channels=1, latent_dim=20):
         super().__init__()
@@ -209,7 +209,7 @@ class VAEEncoder(nn.Module):
 class VAEDecoder(nn.Module):
     """VAE Decoder (⭐⭐⭐)
 
-    z → 이미지
+    z → image
     """
     def __init__(self, latent_dim=20, out_channels=1):
         super().__init__()
@@ -253,13 +253,13 @@ class VAE(nn.Module):
         return x_recon, mu, log_var
 
     def generate(self, num_samples, device):
-        """새로운 샘플 생성"""
+        """Generate new samples"""
         z = torch.randn(num_samples, self.latent_dim, device=device)
         samples = self.decoder(z)
         return samples
 
     def reconstruct(self, x):
-        """이미지 재구성"""
+        """Reconstruct images"""
         with torch.no_grad():
             x_recon, _, _ = self.forward(x)
         return x_recon
@@ -271,7 +271,7 @@ class VAE(nn.Module):
 
 ```python
 def train_vae(model, dataloader, epochs=50, lr=1e-3):
-    """VAE 학습 (⭐⭐⭐)"""
+    """VAE training (⭐⭐⭐)"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
@@ -336,11 +336,11 @@ beta < 1: Focus on reconstruction
 
 ```python
 def beta_vae_loss(x, x_recon, mu, log_var, beta=4.0):
-    """Beta-VAE 손실 함수 (⭐⭐⭐)"""
+    """Beta-VAE loss function (⭐⭐⭐)"""
     recon_loss = F.binary_cross_entropy(x_recon, x, reduction='sum')
     kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
 
-    # Beta 가중치
+    # Beta weighting
     total_loss = recon_loss + beta * kl_loss
 
     return total_loss, recon_loss, kl_loss
@@ -366,7 +366,7 @@ Independently controlling each dimension changes only that feature
 
 ```python
 def visualize_latent_space(model, dataloader, device):
-    """잠재 공간 시각화 (⭐⭐)"""
+    """Latent space visualization (⭐⭐)"""
     model.eval()
 
     latents = []
@@ -396,7 +396,7 @@ def visualize_latent_space(model, dataloader, device):
 
 ```python
 def explore_latent_dimension(model, dim_idx, range_vals, fixed_z, device):
-    """특정 잠재 차원 탐색 (⭐⭐)"""
+    """Explore a specific latent dimension (⭐⭐)"""
     model.eval()
     images = []
 
@@ -414,10 +414,10 @@ def explore_latent_dimension(model, dim_idx, range_vals, fixed_z, device):
 
 ```python
 def generate_manifold(model, n=20, latent_dim=2, device='cpu'):
-    """2D 잠재 공간의 manifold 생성 (⭐⭐⭐)"""
+    """Generate manifold over 2D latent space (⭐⭐⭐)"""
     model.eval()
 
-    # 그리드 생성 (-3, 3) 범위
+    # Generate grid in range (-3, 3)
     grid_x = torch.linspace(-3, 3, n)
     grid_y = torch.linspace(-3, 3, n)
 
@@ -490,13 +490,13 @@ GAN Disadvantages:
 class CVAE(nn.Module):
     """Conditional VAE (⭐⭐⭐)
 
-    조건(예: 클래스 레이블)을 주어 특정 타입 생성
+    Given a condition (e.g. class label), generate a specific type
     """
     def __init__(self, in_channels=1, latent_dim=20, num_classes=10):
         super().__init__()
         self.num_classes = num_classes
 
-        # 조건을 one-hot으로 concat
+        # Concatenate condition as one-hot
         self.encoder = CVAEEncoder(in_channels, latent_dim, num_classes)
         self.decoder = CVAEDecoder(latent_dim, in_channels, num_classes)
         self.latent_dim = latent_dim
@@ -512,7 +512,7 @@ class CVAE(nn.Module):
         return x_recon, mu, log_var
 
     def generate(self, label, num_samples, device):
-        """특정 클래스 생성"""
+        """Generate samples for a specific class"""
         z = torch.randn(num_samples, self.latent_dim, device=device)
         y = F.one_hot(label, self.num_classes).float().to(device)
         y = y.expand(num_samples, -1)
@@ -522,18 +522,18 @@ class CVAE(nn.Module):
 ### VQ-VAE (Vector Quantized VAE)
 
 ```python
-# VQ-VAE는 연속 잠재 공간 대신 이산 코드북 사용
-# 고품질 이미지/오디오 생성에 효과적
+# VQ-VAE uses a discrete codebook instead of continuous latent space
+# Effective for high-quality image/audio generation
 
 class VectorQuantizer(nn.Module):
-    """VQ-VAE의 벡터 양자화 (⭐⭐⭐⭐)"""
+    """Vector quantization for VQ-VAE (⭐⭐⭐⭐)"""
     def __init__(self, num_embeddings, embedding_dim, commitment_cost=0.25):
         super().__init__()
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
         self.commitment_cost = commitment_cost
 
-        # 코드북
+        # Codebook
         self.embeddings = nn.Embedding(num_embeddings, embedding_dim)
         self.embeddings.weight.data.uniform_(-1/num_embeddings, 1/num_embeddings)
 
@@ -541,13 +541,13 @@ class VectorQuantizer(nn.Module):
         # z: (batch, channels, H, W)
         z_flat = z.permute(0, 2, 3, 1).contiguous().view(-1, self.embedding_dim)
 
-        # 가장 가까운 코드북 벡터 찾기
+        # Find nearest codebook vector
         distances = torch.cdist(z_flat, self.embeddings.weight)
         indices = torch.argmin(distances, dim=1)
         z_q = self.embeddings(indices).view(z.shape[0], z.shape[2], z.shape[3], -1)
         z_q = z_q.permute(0, 3, 1, 2)
 
-        # 손실: 코드북 학습 + commitment loss
+        # Loss: codebook learning + commitment loss
         loss = F.mse_loss(z_q.detach(), z) + self.commitment_cost * F.mse_loss(z_q, z.detach())
 
         # Straight-through estimator
@@ -567,7 +567,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-# 설정
+# Configuration
 latent_dim = 20
 batch_size = 128
 epochs = 30
@@ -575,16 +575,16 @@ lr = 1e-3
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# 데이터
+# Data
 transform = transforms.ToTensor()
 train_data = datasets.MNIST('data', train=True, download=True, transform=transform)
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
-# 모델
+# Model
 model = VAE(in_channels=1, latent_dim=latent_dim).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-# 학습
+# Training
 for epoch in range(epochs):
     model.train()
     train_loss = 0
@@ -606,13 +606,13 @@ for epoch in range(epochs):
 
     print(f"Epoch {epoch+1}: Loss = {train_loss / len(train_loader):.4f}")
 
-# 생성
+# Generation
 model.eval()
 with torch.no_grad():
     samples = model.generate(16, device)
-    # 저장 또는 시각화...
+    # save or visualize...
 
-print("VAE 학습 완료!")
+print("VAE training complete!")
 ```
 
 ---
@@ -630,7 +630,7 @@ print("VAE 학습 완료!")
 ### Core Code
 
 ```python
-# Encoder 출력
+# Encoder output
 mu, log_var = encoder(x)
 
 # Reparameterization
@@ -655,6 +655,56 @@ loss = recon + kl
 | High-quality images | GAN or VQ-VAE |
 | Conditional generation | CVAE |
 | Compression/reconstruction | VAE |
+
+---
+
+## Exercises
+
+### Exercise 1: Derive the KL Divergence Term
+
+For a Gaussian encoder `q(z|x) = N(mu, sigma^2 I)` and a standard normal prior `p(z) = N(0, I)`, derive the closed-form KL divergence:
+
+```
+KL(q(z|x) || p(z)) = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+```
+
+1. Start from the definition: `KL(q || p) = E_q[log q(z|x) - log p(z)]`.
+2. Substitute the Gaussian probability density functions.
+3. Simplify term by term to arrive at the formula used in `vae_loss`.
+4. Why does this closed-form expression eliminate the need to estimate the KL term via sampling?
+
+### Exercise 2: Visualize the Reparameterization Trick
+
+Implement a small experiment to demonstrate that the reparameterization trick enables gradient flow:
+1. Create a simple 2D Gaussian encoder: `mu, log_var = some_network(x)`.
+2. Sample `z` using `z = mu + std * eps` (reparameterized).
+3. Compute a simple loss `loss = z.sum()` and call `loss.backward()`.
+4. Verify that `mu.grad` and `log_var.grad` are non-None after backpropagation.
+5. Explain in your own words why direct sampling `z ~ N(mu, sigma)` would fail this test.
+
+### Exercise 3: Train a VAE on MNIST and Visualize the Latent Space
+
+Using the provided `VAE` implementation:
+1. Train for 30 epochs with `latent_dim=2` on MNIST.
+2. After training, use `visualize_latent_space` to plot the 2D latent space colored by digit class.
+3. Use `generate_manifold` to generate a 20×20 grid of images spanning `(-3, 3)` in both latent dimensions.
+4. Describe what you observe: are the digit classes well-separated? Is the latent space smooth and continuous?
+
+### Exercise 4: Experiment with Beta-VAE
+
+Modify the training loop to use `beta_vae_loss` with different beta values:
+1. Train three models with `beta=0.5`, `beta=1.0` (standard VAE), and `beta=4.0`.
+2. For each model, visualize the 2D latent space.
+3. Compare reconstruction quality vs. latent space structure: how does increasing beta affect the trade-off?
+4. Qualitatively assess disentanglement: does `beta=4.0` produce latent dimensions that correspond more clearly to independent visual features (e.g., rotation, thickness)?
+
+### Exercise 5: Implement a Conditional VAE (CVAE)
+
+Extend the VAE to generate specific digit classes:
+1. Modify the encoder to accept a one-hot class label concatenated to the flattened image features.
+2. Modify the decoder to accept a one-hot label concatenated to the latent vector `z`.
+3. Train the CVAE on MNIST and implement the `generate` method to produce `num_samples` images of a specified digit.
+4. Generate 10 samples of each digit class (0-9) and display them in a 10×10 grid. Verify that the conditional generation produces the correct digit class.
 
 ---
 

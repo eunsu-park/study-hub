@@ -1,12 +1,22 @@
 # JavaScript 모듈 시스템
 
-## 학습 목표
-- ES Modules (ESM)의 import/export 문법 이해
-- CommonJS와 ESM의 차이점 파악
-- 동적 import와 코드 스플리팅 활용
-- 모듈 번들러의 역할 이해
+**이전**: [CSS 애니메이션](./14_CSS_Animations.md) | **다음**: [Flask 기초](./16_Flask_Basics.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ES 모듈(ES Module)의 named export, default export, re-export를 사용하여 값을 내보내고 가져오기
+2. CommonJS(`require`/`module.exports`)와 ES 모듈(`import`/`export`)의 차이 구별
+3. 동적 `import()` 표현식을 사용하여 런타임에 조건부로 모듈 로드
+4. 코드 스플리팅(code splitting) 전략을 적용하여 프로덕션에서 초기 번들 크기 줄이기
+5. 배럴 파일(barrel file)과 표준 디렉토리 관례를 사용하여 프로젝트 파일 구성
+6. 번들러가 수행하는 의존성 해결, 트리 셰이킹(tree shaking), 최소화(minification) 설명
+7. 팩토리(factory), 싱글톤(singleton), 플러그인(plugin) 패턴을 포함한 일반적인 모듈 패턴 구현
 
 ---
+
+웹 애플리케이션이 수백 줄을 넘어 성장함에 따라 단일 파일로 코드를 관리하는 것은 감당하기 어려워집니다. 모듈은 코드를 명시적인 의존성을 가진 집중적이고 재사용 가능한 단위로 분리하게 해줍니다 -- 전역 스코프 오염을 제거하고 대규모 코드베이스를 탐색 가능하게 만듭니다. ES 모듈은 이제 브라우저와 Node.js 모두에서 표준이며, 이를 이해하는 것은 모든 현대적인 프레임워크나 빌드 도구를 다루는 데 필수적입니다.
 
 ## 1. 모듈의 필요성
 
@@ -705,7 +715,120 @@ import { formatDate } from '@utils';
 4. **동적 import 활용**: 큰 모듈 지연 로딩
 
 ### 다음 단계
-- [13_Build_Tools_Environment.md](./13_Build_Tools_Environment.md): 빌드 도구 (Vite, webpack)
+- [빌드 도구와 개발 환경 (Build Tools & Development Environment)](./13_Build_Tools_Environment.md): 빌드 도구 (Vite, webpack)
+
+---
+
+## 연습 문제
+
+### 연습 1: 전역 스코프 스크립트를 ES 모듈로 리팩토링
+
+전역 스코프를 오염시키는 다음 단일 파일 스크립트를 적절히 구조화된 ES 모듈로 분리하세요:
+
+```javascript
+// Before: 전역 변수를 포함한 단일 파일
+var TAX_RATE = 0.1;
+
+function calculateTax(price) {
+    return price * TAX_RATE;
+}
+
+function formatCurrency(amount) {
+    return '$' + amount.toFixed(2);
+}
+
+function createCartItem(name, price) {
+    return { name, price, tax: calculateTax(price) };
+}
+
+function printCart(items) {
+    items.forEach(item => {
+        console.log(item.name + ': ' + formatCurrency(item.price + item.tax));
+    });
+}
+```
+
+**과제**:
+1. `TAX_RATE`를 export하는 `constants.js`를 만드세요.
+2. `constants.js`에서 `TAX_RATE`를 import하고 `calculateTax`를 export하는 `tax.js`를 만드세요.
+3. `formatCurrency`를 export하는 `format.js`를 만드세요.
+4. 다른 모듈에서 import하고 `createCartItem`과 `printCart`를 export하는 `cart.js`를 만드세요.
+5. `cart.js`에서 import하고 데모를 실행하는 `index.js` 엔트리 포인트를 만드세요.
+
+### 연습 2: 라우트 기반 코드 스플리팅을 위한 동적 import 구현
+
+요청에 따라 페이지 모듈을 지연 로딩(lazy load)하는 간단한 클라이언트 사이드 라우터를 구축하세요:
+
+```javascript
+// pages/home.js
+export default function render() {
+    return '<h1>Welcome Home</h1>';
+}
+
+// pages/about.js
+export default function render() {
+    return '<h1>About Us</h1>';
+}
+
+// router.js (아래를 완성하세요)
+const routes = {
+    '/': () => import('./pages/home.js'),
+    '/about': () => import('./pages/about.js'),
+};
+
+async function navigate(path) {
+    // TODO: 올바른 모듈을 로드하고, default export인 render()를 호출하여
+    // 결과를 document.getElementById('app')에 표시하세요
+}
+```
+
+**과제**:
+1. `navigate` 함수를 완성하세요. 알 수 없는 라우트에는 404 메시지를 표시하세요.
+2. `import()` 호출 중에 나타났다가 모듈 로드가 완료되면 사라지는 로딩 표시기를 추가하세요.
+3. `popstate` 이벤트와 `hashchange` 이벤트를 감지하여 브라우저의 뒤로/앞으로 버튼이 내비게이션을 트리거하도록 하세요.
+
+### 연습 3: 모듈 패턴으로 플러그인 시스템 만들기
+
+섹션 5.4의 패턴을 따라 플러그인 시스템을 설계하고 구현하세요:
+
+```javascript
+// app.js
+class EventEmitter {
+    constructor() { this.listeners = {}; }
+    on(event, fn) { /* ... */ }
+    emit(event, data) { /* ... */ }
+}
+
+class App extends EventEmitter {
+    constructor() {
+        super();
+        this.plugins = [];
+    }
+    use(plugin) { /* 플러그인 설치, 참조 저장, this 반환 */ }
+}
+
+export default new App();
+```
+
+**과제**:
+1. `EventEmitter.on`과 `EventEmitter.emit`을 구현하세요.
+2. `app.emit`에 훅(hook)을 걸어 모든 이벤트를 콘솔에 기록하는 `loggerPlugin`을 만드세요.
+3. 이벤트를 카운트하고 `app.getAnalytics()` 메서드를 노출하는 `analyticsPlugin`을 만드세요.
+4. 두 플러그인을 모두 등록하고 여러 이벤트를 emit하여 시스템을 시연하는 `main.js` 엔트리 포인트를 작성하세요.
+
+### 연습 4: 배럴 파일(Barrel File)과 트리 셰이킹(Tree Shaking) 분석 (심화)
+
+다음 모듈들과 배럴 파일을 포함하는 `utils/` 디렉토리를 만들고 트리 셰이킹 동작을 분석하세요:
+
+1. `utils/string.js` — `capitalize`, `truncate`, `slugify`를 export
+2. `utils/number.js` — `clamp`, `randomInt`, `formatPercent`를 export
+3. `utils/date.js` — `formatDate`, `daysBetween`, `isWeekend`를 export
+4. `utils/index.js` — 세 파일의 모든 것을 re-export
+
+**분석 과제**:
+- `app.js`에서 `'./utils/index.js'`로부터 `{ capitalize, clamp }`만 import하세요. 트리 셰이킹(tree shaking)을 지원하는 번들러(bundler)가 최종 번들에 포함할 함수와 제거할 함수를 나열하세요.
+- 배럴 파일 대신 특정 서브모듈 파일에서 직접 import하도록 재작성하세요. 이 대안 방식이 언제 더 선호되는지 설명하세요.
+- 가상의 `package.json`에 `sideEffects: false` 항목을 추가하고, 이것이 번들러에게 무엇을 알려주는지 설명하세요.
 
 ---
 

@@ -1,5 +1,18 @@
 # 분할 정복 (Divide and Conquer)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 분할 정복(divide and conquer)의 세 단계(분할, 정복, 결합)를 설명하고, 어떤 문제가 이 패러다임에 적합한지 식별할 수 있다
+2. 중복 부분 문제(overlapping subproblems)와 메모이제이션(memoization)의 역할을 통해 분할 정복(divide and conquer)과 동적 프로그래밍(dynamic programming, DP)을 구분할 수 있다
+3. 분할 정복 패턴을 사용하여 병합 정렬(Merge Sort)을 구현하고, 재귀 트리를 추적하여 O(n log n) 복잡도를 도출할 수 있다
+4. 파티션 기반 분할 정복으로 퀵 정렬(Quick Sort)을 구현하고, 최선·평균·최악 케이스 동작을 분석할 수 있다
+5. 빠른 거듭제곱(fast exponentiation, 거듭제곱 분할)을 적용하여 큰 거듭제곱을 O(log n) 시간에 계산할 수 있다
+6. 마스터 정리(Master Theorem)를 사용하여 분할 정복 알고리즘의 점화식(recurrence relation)을 분석할 수 있다
+
+---
+
 ## 개요
 
 분할 정복은 큰 문제를 작은 부분 문제로 나누고, 각각을 해결한 후 결합하는 알고리즘 설계 기법입니다.
@@ -95,24 +108,32 @@ void merge(int arr[], int left, int mid, int right) {
     int n1 = mid - left + 1;
     int n2 = right - mid;
 
+    // VLA(가변 길이 배열)는 간결함을 위해 사용; 프로덕션 C에서는
+    // 큰 n에서 스택 오버플로를 방지하기 위해 malloc 사용 권장
     int L[n1], R[n2];
 
+    // 병합 전에 양쪽 절반을 복사 — arr에 쓰기 시작하면
+    // arr에서 직접 읽을 경우 원본 값이 손실되기 때문
     for (int i = 0; i < n1; i++) L[i] = arr[left + i];
     for (int i = 0; i < n2; i++) R[i] = arr[mid + 1 + i];
 
     int i = 0, j = 0, k = left;
 
     while (i < n1 && j < n2) {
+        // <=로 안정 정렬(stability) 보장: 같은 값의 왼쪽 원소가 오른쪽보다 먼저 배치됨
         if (L[i] <= R[j]) arr[k++] = L[i++];
         else arr[k++] = R[j++];
     }
 
+    // 정확히 하나의 루프만 실행되어 아직 처리되지 않은 절반의 나머지 원소를 비움
     while (i < n1) arr[k++] = L[i++];
     while (j < n2) arr[k++] = R[j++];
 }
 
 void mergeSort(int arr[], int left, int right) {
     if (left < right) {
+        // 오버플로 안전한 중간점 계산 — 인덱스가 클 때를 대비한
+        // 좋은 습관 ((left+right)/2도 left=0, right=1일 때 정상 동작하지만)
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);
@@ -124,10 +145,15 @@ void mergeSort(int arr[], int left, int right) {
 
 ```python
 def merge_sort(arr):
+    # 기저 조건: 원소가 0개 또는 1개이면 이미 정렬됨 — 무한 분할을 방지하는
+    # 재귀 종료 조건이기도 함
     if len(arr) <= 1:
         return arr
 
     mid = len(arr) // 2
+    # arr[:mid]와 arr[mid:]는 새 리스트 객체를 생성(레벨당 O(n) 공간),
+    # 이것이 Python 병합 정렬이 순진한 형태에서 O(n log n) 공간을 쓰는 이유;
+    # 제자리(in-place) 변형은 이를 피하지만 상당히 복잡해짐
     left = merge_sort(arr[:mid])
     right = merge_sort(arr[mid:])
 
@@ -138,6 +164,8 @@ def merge(left, right):
     i = j = 0
 
     while i < len(left) and j < len(right):
+        # <=로 안정 정렬(stability) 보장: 같은 값의 원소 중 왼쪽 부분 배열의
+        # 원소가 항상 우선하여 원래 입력 순서를 유지함
         if left[i] <= right[j]:
             result.append(left[i])
             i += 1
@@ -145,6 +173,8 @@ def merge(left, right):
             result.append(right[j])
             j += 1
 
+    # extend는 나머지 원소에 대해 O(k) — 원소별 Python 오버헤드를 피하므로
+    # append 루프보다 훨씬 효율적
     result.extend(left[i:])
     result.extend(right[j:])
     return result
@@ -195,14 +225,19 @@ f(n) = Θ(n)
 // C++
 int partition(vector<int>& arr, int low, int high) {
     int pivot = arr[high];
+    // i는 low - 1에서 시작: 피벗보다 작다고 확인된 마지막 원소의 인덱스;
+    // 작은 원소를 찾을 때마다 [low..i] 영역이 확장됨
     int i = low - 1;
 
     for (int j = low; j < high; j++) {
         if (arr[j] < pivot) {
+            // 피벗보다 작은 영역을 확장하고 새 원소를 해당 영역으로 교환
             swap(arr[++i], arr[j]);
         }
     }
 
+    // 피벗을 올바른 정렬 위치에 배치 — 왼쪽은 모두 작고,
+    // 오른쪽은 모두 큰 값 (제자리, 추가 메모리 불필요)
     swap(arr[i + 1], arr[high]);
     return i + 1;
 }
@@ -211,6 +246,7 @@ void quickSort(vector<int>& arr, int low, int high) {
     if (low < high) {
         int pi = partition(arr, low, high);
 
+        // 피벗은 이제 최종 위치에 있으므로 정렬되지 않은 파티션만 재귀
         quickSort(arr, low, pi - 1);
         quickSort(arr, pi + 1, high);
     }
@@ -332,14 +368,21 @@ a^n = a^(n/2) × a^(n/2) × a    (n이 홀수)
 ```c
 // C - 재귀
 long long power(long long a, int n) {
+    // n == 0: 어떤 수의 0승이든 1 (빈 곱, empty product)
     if (n == 0) return 1;
+    // n == 1은 명시적 단축 경로로, 꼭 필요하지는 않지만
+    // 일반적인 단일 단계 케이스에서 불필요한 제곱 단계를 방지
     if (n == 1) return a;
 
+    // a^(n/2)를 한 번 계산하고 재사용 — O(n) 곱셈을
+    // O(log n)으로 줄이는 분할 단계 (선형 곱셈 대신 제곱 활용)
     long long half = power(a, n / 2);
 
     if (n % 2 == 0) {
         return half * half;
     } else {
+        // 홀수 지수: a^n = a^(n/2) * a^(n/2) * a — 정수 나눗셈에서
+        // n/2가 내림될 때 나머지를 추가 'a'로 처리
         return half * half * a;
     }
 }
@@ -349,10 +392,14 @@ long long powerIterative(long long a, int n) {
     long long result = 1;
 
     while (n > 0) {
+        // n의 비트를 하나씩 처리: 현재 비트가 1이면 현재 거듭제곱 값을
+        // 결과에 곱함 (비트 = 1은 이 항이 기여함을 의미)
         if (n & 1) {  // n이 홀수
             result *= a;
         }
+        // 매 단계마다 a를 제곱: k번 반복 후 a = original_a^(2^k)
         a *= a;
+        // 오른쪽 시프트하여 지수의 다음 비트를 검사
         n >>= 1;
     }
 
@@ -401,6 +448,8 @@ def power_mod(a, n, mod):
 
 ```python
 def matrix_mult(A, B, mod=10**9+7):
+    # 표준 2x2 행렬 곱셈; 매 단계마다 mod를 적용하여
+    # Python 정수가 수백만 자릿수로 커지는 것을 방지 (성능)
     return [
         [(A[0][0]*B[0][0] + A[0][1]*B[1][0]) % mod,
          (A[0][0]*B[0][1] + A[0][1]*B[1][1]) % mod],
@@ -409,22 +458,28 @@ def matrix_mult(A, B, mod=10**9+7):
     ]
 
 def matrix_power(M, n, mod=10**9+7):
+    # 기저 조건: M^1 = M (항등 행렬은 M^0이지만 n=1부터 시작)
     if n == 1:
         return M
 
     if n % 2 == 0:
+        # 절반 거듭제곱의 결과를 제곱 — 스칼라 거듭제곱과 동일한
+        # 분할 정복 아이디어; 재귀 호출을 O(n)에서 O(log n)으로 축소
         half = matrix_power(M, n // 2, mod)
         return matrix_mult(half, half, mod)
     else:
+        # 홀수 지수: M 하나를 분리하고 짝수 부분을 재귀적으로 처리
         return matrix_mult(M, matrix_power(M, n - 1, mod), mod)
 
 def fibonacci(n):
     if n <= 1:
         return n
 
+    # 점화식 [[F(n+1)], [F(n)]] = [[1,1],[1,0]]^n × [[F(1)],[F(0)]]을 통해
+    # O(n) 대신 O(log n) 곱셈으로 피보나치를 계산할 수 있음
     M = [[1, 1], [1, 0]]
     result = matrix_power(M, n)
-    return result[1][0]
+    return result[1][0]  # n번의 행렬 곱셈 후 result[1][0] = F(n)
 ```
 
 ---

@@ -1,5 +1,23 @@
 # HTML Forms and Tables
 
+**Previous**: [HTML Basics](./01_HTML_Basics.md) | **Next**: [CSS Basics](./03_CSS_Basics.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the purpose of HTML forms and explain the difference between GET and POST methods
+2. Implement text, date, selection, file upload, and button input elements in a form
+3. Apply HTML5 built-in validation attributes such as required, pattern, minlength, and type-based checks
+4. Write custom form validation logic using JavaScript
+5. Construct tables with proper semantic structure using thead, tbody, tfoot, and caption
+6. Apply colspan and rowspan to merge table cells
+7. Implement accessible forms using labels, fieldset, legend, and ARIA attributes
+
+---
+
+Forms and tables are two of the most interaction-heavy HTML structures. Forms turn a static page into a two-way conversation -- they let users send data back to the server, whether it is a login credential, a search query, or a multi-step registration. Tables, meanwhile, remain the correct tool for displaying genuinely tabular data such as schedules, financial reports, and comparison matrices.
+
 ## Table of Contents
 1. [Forms](#forms)
 2. [Input Elements](#input-elements)
@@ -704,13 +722,12 @@ Create a product table with:
 ## Summary
 
 This lesson covered:
-1. ✅ Form structure and attributes
-2. ✅ Various input types and usage
-3. ✅ Form validation (HTML5, JavaScript)
-4. ✅ Table creation and cell merging
-5. ✅ Accessible forms (labels, fieldset, ARIA)
+1. Form structure and attributes
+2. Various input types and usage
+3. Form validation (HTML5, JavaScript)
+4. Table creation and cell merging
+5. Accessible forms (labels, fieldset, ARIA)
 
-**Next Steps:**
-- Learn CSS styling techniques
-- Practice form validation in various scenarios
-- Create responsive forms and tables
+---
+
+**Previous**: [HTML Basics](./01_HTML_Basics.md) | **Next**: [CSS Basics](./03_CSS_Basics.md)

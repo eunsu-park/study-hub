@@ -1,6 +1,26 @@
-# STL 알고리즘과 반복자
+# STL 알고리즘과 반복자(Iterators)
 
-## 1. 반복자 (Iterator)
+**이전**: [STL 컨테이너](./10_STL_Containers.md) | **다음**: [템플릿](./12_Templates.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 다섯 가지 반복자(Iterator) 카테고리를 분류하고, 각 종류를 제공하는 컨테이너를 식별한다
+2. 다양한 캡처 방식(값, 참조, 혼합)으로 람다(lambda) 표현식을 작성한다
+3. STL 검색 알고리즘(`find`, `find_if`, `binary_search`)을 사용해 컨테이너에서 요소를 찾는다
+4. 사용자 정의 비교자(comparator)를 활용한 정렬 알고리즘(`sort`, `partial_sort`, `nth_element`)을 사용한다
+5. 수정 알고리즘(`copy`, `transform`, `remove`/`erase`)을 결합하여 컨테이너 데이터를 재구성한다
+6. `accumulate`로 수치 축소(numeric reduction)를 수행하고, `iota`로 연속 수열을 생성한다
+7. 정렬된 범위(sorted range)에 집합 연산(`set_union`, `set_intersection`, `set_difference`)을 수행한다
+
+---
+
+STL 알고리즘 라이브러리는 C++를 루프를 일일이 손으로 작성하는 언어에서, 일반적인 데이터 연산을 함수 한 번 호출로 끝낼 수 있는 언어로 탈바꿈시킵니다. 프로젝트마다 검색, 정렬, 변환 로직을 다시 발명하는 대신, 표준 라이브러리가 이미 제공하는 검증되고 최적화된 빌딩 블록을 조합할 수 있습니다. 반복자와 알고리즘을 마스터하는 것은 단순히 컴파일되는 코드와 간결하고 정확하며 성능 좋은 코드를 구분하는 핵심입니다.
+
+## 1. 반복자(Iterator)
 
 반복자는 컨테이너의 요소를 가리키는 포인터 같은 객체입니다.
 
@@ -8,11 +28,11 @@
 
 | 종류 | 설명 | 예시 컨테이너 |
 |------|------|--------------|
-| 입력 반복자 | 읽기만 가능, 한 방향 | istream_iterator |
-| 출력 반복자 | 쓰기만 가능, 한 방향 | ostream_iterator |
-| 순방향 반복자 | 읽기/쓰기, 한 방향 | forward_list |
-| 양방향 반복자 | 읽기/쓰기, 양방향 | list, set, map |
-| 임의 접근 반복자 | 모든 연산, 임의 접근 | vector, deque, array |
+| 입력 반복자(Input Iterator) | 읽기만 가능, 한 방향 | istream_iterator |
+| 출력 반복자(Output Iterator) | 쓰기만 가능, 한 방향 | ostream_iterator |
+| 순방향 반복자(Forward Iterator) | 읽기/쓰기, 한 방향 | forward_list |
+| 양방향 반복자(Bidirectional Iterator) | 읽기/쓰기, 양방향 | list, set, map |
+| 임의 접근 반복자(Random Access Iterator) | 모든 연산, 임의 접근 | vector, deque, array |
 
 ### 반복자 기본 사용
 
@@ -81,7 +101,7 @@ int main() {
 
 ---
 
-## 2. 람다 표현식
+## 2. 람다 표현식(Lambda Expressions)
 
 익명 함수를 간결하게 정의합니다.
 
@@ -120,7 +140,7 @@ int main() {
 }
 ```
 
-### 캡처
+### 캡처(Capture)
 
 ```cpp
 #include <iostream>
@@ -692,6 +712,66 @@ int main() {
 
 ---
 
+## 연습 문제
+
+### 연습 1: 람다(Lambda) 캡처 방식
+
+모든 네 가지 람다 캡처 방식을 보여주는 프로그램을 작성하세요. 두 개의 지역 변수 `int base = 10`과 `int multiplier = 3`을 생성하세요. 다음 네 가지 람다를 작성하세요:
+- `base`를 값으로 캡처하여 주어진 `n`에 대해 `base + n`을 반환하는 람다.
+- `multiplier`를 참조로 캡처하고 람다 내부에서 두 배로 만드는 람다 (원본이 변경됨을 확인하세요).
+- 모든 것을 값으로 캡처(`[=]`)하여 `base * multiplier + n`을 계산하는 람다.
+- 모든 것을 참조로 캡처(`[&]`)하여 두 변수를 모두 증가시키는 람다.
+
+각 람다 호출 후 변수를 출력하고 어떤 캡처가 변경을 관찰할 수 있는지 설명하세요.
+
+### 연습 2: transform과 accumulate를 이용한 파이프라인
+
+`std::vector<std::string> words = {"hello", "world", "cpp", "algorithms"}`가 주어졌을 때:
+
+1. `std::transform`을 사용하여 각 문자열을 그 길이(`words.size()`)로 대체한 새 벡터를 만드세요.
+2. 람다와 함께 `std::accumulate`를 사용하여 모든 단어의 총 문자 수를 계산하세요.
+3. `std::find_if`를 사용하여 5자보다 긴 첫 번째 단어를 찾으세요.
+4. `std::count_if`를 사용하여 짝수 개의 문자를 가진 단어의 수를 세세요.
+
+원시 반복문(raw loop) 없이 STL 알고리즘과 람다만으로 모든 단계를 작성하세요.
+
+### 연습 3: 사용자 정의 비교자(Comparator)로 정렬
+
+`struct Person { std::string name; int age; };`와 `std::vector<Person>`을 만드세요. 최소 다섯 명의 사람으로 채우세요. 그런 다음:
+1. 나이 오름차순으로 정렬.
+2. 이름 알파벳순으로 정렬 (가능하면 대소문자 무시).
+3. 이름 길이로 정렬하고, 같은 경우 이름 알파벳순으로 정렬.
+
+각 단계에서 `std::sort`의 비교자로 람다를 사용하고 각 정렬 후 벡터를 출력하세요.
+
+### 연습 4: Erase-Remove 관용구(Idiom)
+
+`std::vector<int> v = {1, 5, 2, 8, 3, 7, 4, 6, 9, 10}`으로 시작하세요.
+
+1. erase-remove 관용구(`std::remove_if` + `v.erase`)를 사용하여 모든 짝수를 제거하세요.
+2. 남은 홀수에서 3보다 큰 것만 남기세요 (관용구를 다시 적용하세요).
+3. 최종 벡터에 정확히 `{5, 7, 9}`가 포함되어 있는지 확인하세요.
+
+`std::remove_if` 단독으로는 벡터를 축소하기에 충분하지 않은 이유를 주석으로 설명하세요.
+
+### 연습 5: 정렬된 범위에 대한 집합 연산(Set Operations)
+
+두 클럽의 회원을 나타내는 정렬된 `std::vector<int>` 두 개를 만드세요:
+- 클럽 A: `{1, 3, 5, 7, 9, 11}`
+- 클럽 B: `{3, 6, 9, 12, 15}`
+
+STL 집합 알고리즘을 사용하여 다음을 계산하고 출력하세요:
+1. 두 클럽 중 하나에라도 속한 모든 회원 (합집합, union).
+2. 두 클럽 모두에 속한 회원 (교집합, intersection).
+3. 클럽 A에는 있지만 클럽 B에는 없는 회원 (차집합, difference).
+4. 두 클럽 중 정확히 하나에만 속한 회원 (대칭 차집합(symmetric difference) — `std::set_symmetric_difference` 사용).
+
+---
+
 ## 다음 단계
 
-[12_Templates.md](./12_Templates.md)에서 템플릿을 배워봅시다!
+[템플릿](./12_Templates.md)에서 템플릿을 배워봅시다!
+
+---
+
+**이전**: [STL 컨테이너](./10_STL_Containers.md) | **다음**: [템플릿](./12_Templates.md)

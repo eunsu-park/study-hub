@@ -1,5 +1,24 @@
 # Closures & Scope
 
+**Previous**: [Iterators & Generators](./04_Iterators_and_Generators.md) | **Next**: [Metaclasses](./06_Metaclasses.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the LEGB rule (Local, Enclosing, Global, Built-in) for variable name resolution
+2. Apply the `global` keyword to modify module-level variables from within a function
+3. Apply the `nonlocal` keyword to modify enclosing function variables from a nested function
+4. Describe the three conditions required to create a closure
+5. Implement factory functions, accumulators, and configuration closures
+6. Compare closures with callable classes and identify when each approach is preferable
+7. Identify and fix the classic "loop variable capture" pitfall with closures
+8. Write practical closure-based patterns: memoization, debounce, and retry logic
+
+---
+
+Understanding how Python resolves variable names -- and how inner functions can capture and carry state from their enclosing scope -- is essential for writing decorators, callbacks, and factory functions. Closures turn functions into lightweight, stateful objects without the ceremony of defining a full class, making them the backbone of functional patterns in Python and the mechanism that powers every decorator you write.
+
 ## 1. Variable Scope
 
 In Python, variable access scope is determined by where it's defined.
@@ -136,6 +155,8 @@ print(f"In global: {x}")    # global (unchanged)
 ---
 
 ## 4. Closures
+
+> **Analogy:** when a nested function leaves its enclosing scope, it carries captured variables in a backpack (the closure). The backpack travels with the function wherever it goes, so the variables remain accessible even after the outer function has returned.
 
 A closure is a function that remembers the environment (scope) where it was defined.
 
@@ -507,6 +528,4 @@ Create a closure that limits calls per second.
 
 ---
 
-## Next Steps
-
-Check out [06_Metaclasses.md](./06_Metaclasses.md) to learn about metaclasses, the class of classes!
+**Previous**: [Iterators & Generators](./04_Iterators_and_Generators.md) | **Next**: [Metaclasses](./06_Metaclasses.md)

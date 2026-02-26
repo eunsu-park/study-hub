@@ -1,12 +1,25 @@
 # Advanced C Pointers
 
-## Objectives
+**Previous**: [Advanced Embedded Protocols](./19_Advanced_Embedded_Protocols.md) | **Next**: [Network Programming in C](./21_Network_Programming.md)
 
-- Deeply understand how pointers work
-- Master various pointer usage patterns
-- Learn how to avoid common pointer-related mistakes
+## Learning Objectives
 
-**Difficulty**: ⭐⭐⭐ (Intermediate)
+After completing this lesson, you will be able to:
+
+1. Perform pointer arithmetic to traverse arrays and compute element distances
+2. Distinguish between pointer arrays (`int *arr[]`) and array pointers (`int (*p)[N]`)
+3. Use double pointers to modify a caller's pointer from within a function
+4. Declare, assign, and invoke function pointers, including with `typedef` and `qsort`
+5. Manage dynamic memory safely with `malloc`, `calloc`, `realloc`, and `free`, avoiding leaks and dangling references
+6. Apply `const` correctly with pointers to express read-only intent in function interfaces
+7. Implement common data structures (linked list, dynamic 2D array) using pointer-based allocation
+8. Detect and fix pointer bugs (dangling pointer, double free, buffer overflow) with Valgrind and AddressSanitizer
+
+---
+
+Pointers are simultaneously the most powerful and the most dangerous feature of C. They give you direct access to memory, enabling efficient data structures, zero-copy interfaces, and hardware control -- but a single misplaced dereference can crash your program or silently corrupt data. This lesson moves beyond the basics to build the deep, practical understanding of pointers that separates confident C programmers from cautious ones.
+
+**Difficulty**: Intermediate
 
 ---
 
@@ -1009,6 +1022,244 @@ void process(int *arr, int size) {
 gcc -fsanitize=address -g myprogram.c -o myprogram
 ./myprogram
 ```
+
+---
+
+## 11. Variadic Functions and the `restrict` Qualifier
+
+### Variadic Functions with `<stdarg.h>`
+
+C supports functions that accept a variable number of arguments through the `<stdarg.h>` header. This is how `printf`, `scanf`, and similar functions work internally.
+
+```c
+#include <stdio.h>
+#include <stdarg.h>
+
+/*
+ * va_list  - Type that holds the state needed to traverse the argument list
+ * va_start - Initialize va_list to point to the first variadic argument
+ * va_arg   - Retrieve the next argument, advancing the internal pointer
+ * va_end   - Clean up (required for portability; some ABIs allocate memory)
+ */
+
+/* Sum a variable number of integers.
+ * The caller must pass the count as the first argument -- there is no way
+ * for the function to discover how many arguments were supplied. */
+int sum(int count, ...) {
+    va_list args;
+    va_start(args, count);  /* Initialize: 'count' is the last named parameter */
+
+    int total = 0;
+    for (int i = 0; i < count; i++) {
+        total += va_arg(args, int);  /* Retrieve next int */
+    }
+
+    va_end(args);  /* Always call va_end to avoid undefined behavior */
+    return total;
+}
+
+int main(void) {
+    printf("Sum: %d\n", sum(3, 10, 20, 30));   /* 60 */
+    printf("Sum: %d\n", sum(5, 1, 2, 3, 4, 5)); /* 15 */
+    return 0;
+}
+```
+
+### Implementing a printf-like Function
+
+A common real-world pattern is wrapping `printf` for logging:
+
+```c
+#include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
+
+/* A logging function that prepends a timestamp.
+ * The format string + variadic args are forwarded to vfprintf,
+ * which is the va_list version of fprintf. */
+void log_message(const char *level, const char *fmt, ...) {
+    /* Print timestamp */
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    fprintf(stderr, "[%02d:%02d:%02d] [%s] ",
+            t->tm_hour, t->tm_min, t->tm_sec, level);
+
+    /* Forward variadic arguments to vfprintf.
+     * Why vfprintf instead of fprintf?  Because we already consumed
+     * the variadic args into a va_list -- fprintf cannot accept va_list. */
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    fputc('\n', stderr);
+}
+
+int main(void) {
+    log_message("INFO",  "Server started on port %d", 8080);
+    log_message("ERROR", "Failed to open file: %s", "config.yaml");
+    return 0;
+}
+```
+
+### Type Safety Issues with Variadic Functions
+
+Variadic functions are inherently **type-unsafe**: the compiler cannot verify that the arguments match the expected types.
+
+```c
+#include <stdio.h>
+#include <stdarg.h>
+
+double average(int count, ...) {
+    va_list args;
+    va_start(args, count);
+
+    double total = 0.0;
+    for (int i = 0; i < count; i++) {
+        /* DANGER: if the caller passes an int where we expect double,
+         * va_arg reads the wrong number of bytes → garbage value.
+         * The compiler will NOT warn about this mismatch! */
+        total += va_arg(args, double);
+    }
+
+    va_end(args);
+    return total / count;
+}
+
+int main(void) {
+    /* Correct: passing doubles */
+    printf("%.2f\n", average(3, 1.0, 2.0, 3.0));  /* 2.00 */
+
+    /* BUG: passing ints instead of doubles -- undefined behavior!
+     * average(3, 1, 2, 3);  ← int is 4 bytes, double is 8 bytes */
+
+    return 0;
+}
+```
+
+**Key dangers**:
+- No compiler type-checking on variadic arguments
+- `va_arg` with the wrong type reads incorrect bytes (UB)
+- Passing fewer arguments than expected reads stack garbage
+- Default argument promotions apply: `float` → `double`, `char`/`short` → `int`
+
+### The `restrict` Qualifier
+
+The `restrict` qualifier (C99) is a promise from the programmer to the compiler: **the pointer is the only way to access the memory it points to** during its lifetime. This enables the compiler to perform optimizations that would otherwise be impossible due to aliasing concerns.
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+/* Without restrict: the compiler must assume a and b might overlap.
+ * Every write to *a could change *b, forcing re-reads. */
+void add_arrays_slow(int *a, const int *b, int n) {
+    for (int i = 0; i < n; i++) {
+        a[i] += b[i];  /* Must re-read b[i] every iteration if a==b possible */
+    }
+}
+
+/* With restrict: we promise a and b do NOT overlap.
+ * The compiler can vectorize aggressively (SIMD), reorder loads/stores,
+ * and keep values in registers without re-reading from memory. */
+void add_arrays_fast(int *restrict a, const int *restrict b, int n) {
+    for (int i = 0; i < n; i++) {
+        a[i] += b[i];  /* Safe to cache b[i] and vectorize */
+    }
+}
+
+int main(void) {
+    int x[] = {1, 2, 3, 4};
+    int y[] = {10, 20, 30, 40};
+
+    /* Correct: x and y are separate arrays */
+    add_arrays_fast(x, y, 4);
+
+    /* WRONG: passing overlapping memory with restrict -- UB!
+     * add_arrays_fast(x, x+1, 3);  ← violates restrict contract */
+
+    for (int i = 0; i < 4; i++) {
+        printf("%d ", x[i]);
+    }
+    printf("\n");  /* 11 22 33 44 */
+
+    return 0;
+}
+```
+
+### restrict and Aliasing: Why It Matters
+
+```c
+#include <stdio.h>
+
+/* Classic example: without restrict, this function is pessimized.
+ * Consider what happens if a == b: writing *a changes *b! */
+void multiply(int *a, int *b, int *result) {
+    *result = *a * *b;
+    /* If the compiler needs *a again later, it must re-read from memory
+     * because writing *result might have changed *a (if result == a). */
+}
+
+/* With restrict: the compiler knows a, b, result are all distinct.
+ * It can keep *a and *b in registers and skip re-reads. */
+void multiply_fast(int *restrict a, int *restrict b, int *restrict result) {
+    *result = *a * *b;
+    /* Compiler can trust that *a and *b haven't changed. */
+}
+```
+
+### restrict in Standard Library Functions
+
+The C standard library uses `restrict` extensively. Compare the signatures of `memcpy` and `memmove`:
+
+```c
+/* memcpy: source and destination must NOT overlap.
+ * restrict tells the compiler this, enabling optimized block copy. */
+void *memcpy(void *restrict dest, const void *restrict src, size_t n);
+
+/* memmove: source and destination MAY overlap.
+ * No restrict → compiler must handle overlap (copy through temp buffer). */
+void *memmove(void *dest, const void *src, size_t n);
+
+/* This is why memcpy is faster than memmove:
+ * restrict allows the compiler to use wider loads/stores without
+ * worrying about overwriting source data before it is read. */
+```
+
+### Practical restrict Usage Patterns
+
+```c
+#include <stddef.h>
+
+/* Pattern 1: Function parameters -- most common use */
+void process(float *restrict output,
+             const float *restrict input,
+             size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        output[i] = input[i] * 2.0f;
+    }
+}
+
+/* Pattern 2: Structure members (rare but valid in C99) */
+struct Buffer {
+    float *restrict data;  /* Only this pointer accesses the buffer */
+    size_t size;
+};
+
+/* Pattern 3: Local variables */
+void compute(float *base, size_t n) {
+    /* Tell the compiler these local views don't alias each other */
+    float *restrict first_half  = base;
+    float *restrict second_half = base + n / 2;
+    /* Only valid if we don't access the same elements through both */
+}
+```
+
+**Guidelines for using `restrict`**:
+1. Use it on function parameters when you can guarantee no aliasing
+2. Violating the `restrict` contract is undefined behavior -- the compiler trusts you
+3. `restrict` only exists in C (C99+), not in standard C++ (though compilers offer `__restrict`)
+4. Profile before and after: the optimization benefit depends on the loop and target architecture
 
 ---
 

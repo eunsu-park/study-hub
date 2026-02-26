@@ -10,14 +10,17 @@ For **periodic signals**, this decomposition is the **Fourier series**. This les
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Derive the trigonometric and complex exponential forms of the Fourier series
-- Compute Fourier coefficients for standard waveforms
-- State and apply the Dirichlet conditions for convergence
-- Explain the Gibbs phenomenon and its practical implications
-- Apply Parseval's theorem to compute signal power from spectral coefficients
-- Interpret line spectra (amplitude and phase spectra)
-- Use Python to compute Fourier series approximations and visualize convergence
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Derive the trigonometric and complex exponential forms of the Fourier series
+2. Compute Fourier coefficients for standard waveforms
+3. State and apply the Dirichlet conditions for convergence
+4. Explain the Gibbs phenomenon and its practical implications
+5. Apply Parseval's theorem to compute signal power from spectral coefficients
+6. Interpret line spectra (amplitude and phase spectra)
+7. Use Python to compute Fourier series approximations and visualize convergence
 
 ---
 

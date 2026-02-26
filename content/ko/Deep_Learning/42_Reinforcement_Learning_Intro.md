@@ -299,7 +299,11 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        """랜덤 샘플링"""
+        """랜덤 샘플링 — 왜 랜덤인가?
+        연속적인 경험은 높은 상관관계를 가집니다(유사한 상태, 유사한 행동).
+        상관된 배치로 학습하면 네트워크가 최근 경험에 과적합(Overfitting)되고
+        이전 교훈을 잊게 됩니다. 랜덤 샘플링은 이러한 시간적 상관관계를 깨뜨려
+        i.i.d.에 가까운 미니배치를 생성하여 SGD를 안정화합니다."""
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         return (np.array(states), np.array(actions), np.array(rewards),
@@ -885,6 +889,51 @@ class DuelingNetwork(nn.Module):
 # - Q 값 분포 모니터링
 # - 학습된 정책 시각화
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: FrozenLake에서 Q-Learning 구현
+
+`QLearningAgent`와 Gymnasium의 `FrozenLake-v1` 환경을 사용하여:
+1. FrozenLake 그리드는 16개의 상태와 4개의 행동을 가집니다. Q-테이블을 모두 0으로 초기화하세요.
+2. `lr=0.1, gamma=0.99, epsilon=1.0, epsilon_decay=0.995`로 10,000 에피소드 학습하세요.
+3. 학습 후 학습된 Q-테이블 (4×16 행렬)을 출력하고 4×4 그리드에 화살표로 탐욕(greedy) 정책을 시각화하세요.
+4. 마지막 1,000 에피소드에서 성공률 (목표에 도달하는 에피소드 비율)을 계산하세요. 성공률이 0.7 근처라면 무엇을 의미하나요? Q-Learning이 이 환경에서 최적 정책을 찾는 것을 보장하나요?
+
+### 연습 2: CartPole-v1에서 DQN 학습 및 수렴 측정
+
+제공된 `DQNAgent`와 `train_dqn`을 사용하여:
+1. 기본 하이퍼파라미터로 `CartPole-v1`에서 500 에피소드 학습하세요.
+2. 50 에피소드 이동 평균 오버레이를 포함하여 에피소드 보상 곡선을 플롯하세요.
+3. CartPole은 이동 평균이 475에 도달하면 "해결"됩니다. DQN이 몇 에피소드가 필요한가요?
+4. 실험: 타겟 네트워크를 제거하세요 (`target_update=1`로 설정하면 매 스텝마다 가중치를 복사합니다). 학습 안정성이 어떻게 변하나요? 지도학습의 "움직이는 타겟" 개념을 사용하여 타겟 네트워크가 왜 필요한지 설명하세요.
+
+### 연습 3: 경험 재현(Experience Replay)에 대한 절제 연구
+
+리플레이 버퍼의 중요성을 조사하세요:
+1. 전체 리플레이 버퍼(capacity=10,000, 랜덤 샘플링)로 CartPole에서 DQN을 학습하세요.
+2. 경험 재현 없이 DQN을 학습하세요: 각 전환을 즉시 처리하고 버립니다 (batch_size=1, 크기 1의 deque).
+3. 두 보상 곡선을 플롯하고 최종 성능과 수렴 속도를 비교하세요.
+4. 상관된 샘플의 개념을 사용하여 경우 (2)의 불안정성을 설명하세요: 연속적인 전환으로 학습하는 것이 왜 SGD에서 요구하는 i.i.d. 가정을 위반하나요?
+
+### 연습 4: Double DQN 구현
+
+표준 DQN은 동일한 네트워크가 최적의 다음 행동을 선택하고 평가하기 때문에 Q-값을 과대추정합니다. Double DQN은 이 두 단계를 분리합니다:
+1. `DQNAgent.learn` 메서드에서 타겟 계산을 수정하세요:
+   - `q_network`를 사용하여 최적 다음 행동을 선택하세요: `best_action = q_network(next_states).argmax(dim=1)`.
+   - `target_network`를 사용하여 평가하세요: `next_q = target_network(next_states).gather(1, best_action.unsqueeze(1)).squeeze(1)`.
+2. 표준 DQN과 Double DQN을 CartPole에서 500 에피소드 학습하세요.
+3. 학습 중 평균 Q-값 추정치를 비교하세요 (에피소드당 `current_q.mean().item()`을 로깅). Double DQN이 더 낮고 정확한 Q 추정치를 생성하나요?
+
+### 연습 5: CartPole에서 REINFORCE 학습 및 DQN과 비교
+
+제공된 `REINFORCEAgent`를 사용하여:
+1. `CartPole-v1`에서 1,000 에피소드 학습하세요.
+2. 연습 2의 DQN 곡선과 함께 에피소드 보상 곡선을 플롯하세요.
+3. REINFORCE는 일반적으로 DQN보다 더 불안정합니다. 관찰하고 설명하세요: REINFORCE의 보상 곡선에서 높은 분산(variance)을 유발하는 것은 무엇인가요? 리턴 정규화 단계 (`(returns - returns.mean()) / returns.std()`)가 분산을 줄이는 기준선(baseline) 역할을 어떻게 하나요?
+4. 간단한 Actor-Critic을 구현하여 기준선을 추가하세요: 전체 리턴 `G_t`를 사용하는 대신, 작은 가치 네트워크로 예측된 가치 추정치 `V(s_t)`를 빼세요. 이것이 기울기 추정치의 분산을 줄이는지 확인하세요.
 
 ---
 

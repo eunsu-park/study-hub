@@ -1,12 +1,26 @@
 # Data Link Layer
 
-## Overview
-
-The Data Link Layer is Layer 2 of the OSI model, responsible for reliable data transmission between adjacent nodes. It organizes the bit stream from the physical layer into frame units and performs functions such as physical addressing using MAC addresses, error detection, and media access control. In this lesson, we will learn about MAC addresses, frame structure, Ethernet, switch operation principles, and the ARP protocol.
+**Previous**: [Physical Layer](./04_Physical_Layer.md) | **Next**: [IP Addressing and Subnetting](./06_IP_Address_Subnetting.md)
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of the Data Link Layer and distinguish between its LLC and MAC sublayers
+2. Describe the structure of a MAC address and interpret OUI and special addresses (broadcast, multicast)
+3. Analyze the Ethernet II frame structure and identify each field's purpose
+4. Explain how CSMA/CD works and why modern full-duplex Ethernet does not require it
+5. Trace the switch learning, forwarding, flooding, and filtering process
+6. Describe how ARP resolves IP addresses to MAC addresses
+7. Distinguish between collision domains and broadcast domains and explain how hubs, switches, and routers affect each
+
+---
+
+The Data Link Layer bridges the gap between raw physical signals and meaningful network communication. It is the layer that gives your computer a hardware identity (MAC address), packages bits into frames, detects transmission errors, and ensures that data reaches the correct neighbor on a shared medium. Understanding this layer is essential for troubleshooting LAN issues, configuring switches, and grasping how Ethernet -- the dominant LAN technology -- actually works.
 
 ## Table of Contents
 
@@ -1335,9 +1349,7 @@ The Data Link Layer is Layer 2 of the OSI model, responsible for reliable data t
 
 ---
 
-## Next Steps
-
-- [06_IP_Address_Subnetting.md](./06_IP_Address_Subnetting.md) - IP Addressing and Subnetting
+**Previous**: [Physical Layer](./04_Physical_Layer.md) | **Next**: [IP Addressing and Subnetting](./06_IP_Address_Subnetting.md)
 
 ---
 

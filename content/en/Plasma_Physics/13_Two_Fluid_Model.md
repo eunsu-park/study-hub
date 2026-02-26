@@ -672,25 +672,35 @@ def ohm_law_terms(n, T_e, B, L, V, eta=None):
     k_B = 1.38e-23
     c = 3e8
 
-    # Spitzer resistivity (if not provided)
+    # Spitzer resistivity is the classical (collisional) baseline; anomalous resistivity
+    # from turbulence is not included here because it requires a turbulence model.
+    # The T_e^{-3/2} scaling means hot plasmas are nearly ideal (low resistivity).
     if eta is None:
         T_e_eV = T_e
         ln_Lambda = 15  # Coulomb logarithm (typical)
         eta = 5.2e-5 * ln_Lambda * T_e_eV**(-3/2)  # Ω·m
 
-    # Current density (from Ampere's law estimate)
+    # Ampere's law (∇×B = μ₀J) estimates J ~ B/(μ₀L): the curl of B over a
+    # characteristic scale L sets the order-of-magnitude for the current density.
+    # This is the standard dimensionless ordering used in scale analysis.
     J = B / (mu_0 * L)
 
-    # Characteristic electric field (ideal MHD)
+    # The ideal MHD term v×B sets the reference scale: all other terms are
+    # normalized to this to quantify how far from ideal MHD we are.
     E_ideal = V * B
 
     # Generalized Ohm's law terms
     E_resistive = eta * J
     E_Hall = J * B / (e * n)
+    # Pressure gradient ∇p_e ~ nkT/L divided by ne gives kT/(eL), independent of n.
+    # This is why the pressure term becomes important in steep gradient regions
+    # regardless of density, unlike the Hall term which scales as B/(μ₀nen L).
     E_pressure = k_B * T_e * e / (e * L)  # ∇p_e ~ nkT/L
 
     omega_pe = np.sqrt(n * e**2 / (m_e * 8.85e-12))
     d_e = c / omega_pe
+    # Electron inertia term scales as (d_e/L)^2: it enters only when the length
+    # scale L approaches the electron skin depth, far smaller than d_i.
     E_inertia = (m_e / (e**2 * n**2)) * J * (V / L)
 
     # Normalize to ideal MHD term
@@ -702,6 +712,8 @@ def ohm_law_terms(n, T_e, B, L, V, eta=None):
         'Inertia (m_e dJ/dt)': E_inertia
     }
 
+    # Normalize every term to E_ideal so the output directly shows which terms
+    # are O(1) (important) vs. much smaller than 1 (negligible) at each scale.
     return {k: v/E_ideal for k, v in terms.items()}, eta
 
 # Parameter scan: vary length scale

@@ -42,11 +42,11 @@
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
-# 정규화 값 (CIFAR-10)
+# Normalization values (CIFAR-10)
 mean = (0.4914, 0.4822, 0.4465)
 std = (0.2470, 0.2435, 0.2616)
 
-# 훈련 변환 (증강 포함)
+# Training transforms (with augmentation)
 train_transform = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
@@ -55,19 +55,19 @@ train_transform = transforms.Compose([
     transforms.Normalize(mean, std)
 ])
 
-# 테스트 변환 (증강 없음)
+# Test transforms (no augmentation)
 test_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean, std)
 ])
 
-# 데이터셋
+# Datasets
 train_data = datasets.CIFAR10('data', train=True, download=True,
                                transform=train_transform)
 test_data = datasets.CIFAR10('data', train=False,
                               transform=test_transform)
 
-# 로더
+# Loaders
 train_loader = DataLoader(train_data, batch_size=128, shuffle=True,
                           num_workers=4, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=256)
@@ -162,18 +162,18 @@ class ResBlock(nn.Module):
 
 ```python
 def train_cifar10():
-    # 설정
+    # Configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     epochs = 100
     lr = 0.1
 
-    # 모델
+    # Model
     model = CIFAR10CNN().to(device)
 
-    # 손실 함수
+    # Loss function
     criterion = nn.CrossEntropyLoss()
 
-    # 옵티마이저
+    # Optimizer
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=lr,
@@ -181,15 +181,15 @@ def train_cifar10():
         weight_decay=5e-4
     )
 
-    # 스케줄러
+    # Scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=epochs
     )
 
-    # 학습
+    # Training
     best_acc = 0
     for epoch in range(epochs):
-        # 훈련
+        # Train
         model.train()
         train_loss = 0
         correct = 0
@@ -211,7 +211,7 @@ def train_cifar10():
 
         train_acc = 100. * correct / total
 
-        # 테스트
+        # Test
         model.eval()
         test_loss = 0
         correct = 0
@@ -232,12 +232,12 @@ def train_cifar10():
 
         print(f"Epoch {epoch+1}: Train Acc={train_acc:.2f}%, Test Acc={test_acc:.2f}%")
 
-        # 최고 모델 저장
+        # Save best model
         if test_acc > best_acc:
             best_acc = test_acc
             torch.save(model.state_dict(), 'best_model.pth')
 
-    print(f"\n최고 테스트 정확도: {best_acc:.2f}%")
+    print(f"\nBest test accuracy: {best_acc:.2f}%")
 ```
 
 ---
@@ -259,7 +259,7 @@ def mixup_data(x, y, alpha=0.2):
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-# 학습 루프에서
+# In the training loop
 mixed_x, y_a, y_b, lam = mixup_data(data, target)
 output = model(mixed_x)
 loss = mixup_criterion(criterion, output, y_a, y_b, lam)
@@ -273,7 +273,7 @@ def cutmix_data(x, y, alpha=1.0):
     batch_size = x.size(0)
     index = torch.randperm(batch_size).to(x.device)
 
-    # 랜덤 박스
+    # Random box
     W, H = x.size(3), x.size(2)
     cut_w = int(W * np.sqrt(1 - lam))
     cut_h = int(H * np.sqrt(1 - lam))
@@ -359,15 +359,15 @@ def per_class_accuracy(model, test_loader, classes):
 ```python
 import torchvision.models as models
 
-# 사전 학습 모델
+# Pre-trained model
 model = models.resnet18(weights='IMAGENET1K_V1')
 
-# 마지막 층 수정
+# Modify last layer
 model.fc = nn.Linear(model.fc.in_features, 10)
 
-# 첫 번째 Conv 수정 (CIFAR: 32×32)
+# Modify first Conv (CIFAR: 32×32)
 model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-model.maxpool = nn.Identity()  # 풀링 제거
+model.maxpool = nn.Identity()  # Remove pooling
 
 model = model.to(device)
 ```
@@ -393,6 +393,51 @@ model = model.to(device)
 | + Data augmentation | 80-85% |
 | + Mixup | 85-88% |
 | ResNet + Transfer learning | 90%+ |
+
+---
+
+## Exercises
+
+### Exercise 1: Train a Baseline CNN and Analyze Errors
+
+1. Train `CIFAR10CNN` for 50 epochs using the standard pipeline with data augmentation.
+2. After training, generate a confusion matrix using `plot_confusion_matrix`. Which class pairs are most frequently confused?
+3. Use `per_class_accuracy` to identify the two hardest classes to classify. Display 5 misclassified examples from each hard class.
+4. Hypothesize why those classes are difficult: is it due to visual similarity, intra-class variation, or another reason?
+
+### Exercise 2: Compare Data Augmentation Strategies
+
+Run three training experiments on CIFAR-10 for 30 epochs each:
+1. **No augmentation**: `transforms.ToTensor()` and normalize only.
+2. **Basic augmentation**: random crop and horizontal flip only.
+3. **Full augmentation**: the complete `train_transform` with `ColorJitter` included.
+4. Plot the test accuracy curves for all three experiments on the same graph. Quantify the improvement from each augmentation step. Which augmentation has the biggest impact and why?
+
+### Exercise 3: Implement and Test Mixup Training
+
+1. Implement the full Mixup training loop using `mixup_data` and `mixup_criterion`.
+2. Train `CIFAR10CNN` for 50 epochs with `alpha=0.2`, `alpha=0.5`, and `alpha=1.0`.
+3. Compare final test accuracy for each alpha value.
+4. Visualize 4 mixed training examples for `alpha=0.2`. Explain conceptually why Mixup acts as a regularizer: what does it prevent the model from doing near training examples?
+
+### Exercise 4: Transfer Learning vs Training from Scratch
+
+Using the ResNet-18 transfer learning setup:
+1. Train ResNet-18 with ImageNet pre-trained weights for 30 epochs.
+2. Train ResNet-18 from scratch (random initialization) for the same 30 epochs.
+3. Compare test accuracy and training loss curves. Which converges faster?
+4. Experiment: freeze all ResNet layers except the final `fc` layer for 10 epochs (feature extraction), then unfreeze and fine-tune for 20 more epochs. How does this staged approach compare to fine-tuning all layers from the start?
+
+### Exercise 5: Combine All Techniques for Maximum Accuracy
+
+Build the best CIFAR-10 classifier you can by combining:
+1. A ResNet-like architecture with residual blocks (`ResBlock`).
+2. Full data augmentation (`RandomCrop`, `RandomHorizontalFlip`, `ColorJitter`).
+3. CutMix or Mixup augmentation during training.
+4. Label smoothing (`CrossEntropyLoss(label_smoothing=0.1)`).
+5. Cosine annealing learning rate scheduler.
+
+Train for 100 epochs and report your final test accuracy. Create a table comparing all techniques you tried in this lesson and their contribution to the final result.
 
 ---
 

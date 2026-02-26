@@ -1,5 +1,17 @@
 # 카메라 캘리브레이션 (Camera Calibration)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 핀홀 카메라 모델(Pinhole Camera Model)과 내부 파라미터(Intrinsic Parameters)(초점 거리, 주점, 비틀림)를 설명할 수 있습니다.
+2. 렌즈 왜곡(Lens Distortion)의 종류(방사형, 접선형)와 수학적 모델을 기술할 수 있습니다.
+3. `findChessboardCorners()`와 `calibrateCamera()`를 사용하여 체스보드 패턴으로 카메라 캘리브레이션을 구현할 수 있습니다.
+4. 캘리브레이션 결과를 활용해 `undistort()`로 이미지의 렌즈 왜곡을 보정할 수 있습니다.
+5. 재투영 오차(Reprojection Error)를 계산하고 해석하여 캘리브레이션 품질을 평가할 수 있습니다.
+
+---
+
 ## 개요
 
 카메라 캘리브레이션은 카메라의 내부 파라미터와 렌즈 왜곡을 측정하는 과정입니다. 정확한 3D 복원, 증강현실, 로봇 비전 등에서 필수적인 단계입니다.
@@ -27,39 +39,47 @@
 ### 핀홀 카메라 모델
 
 ```
-핀홀 카메라 모델:
-3D 세계 좌표를 2D 이미지 좌표로 투영
+Pinhole Camera Model:
+Projects 3D world coordinates to 2D image coordinates
 
-        3D 세계
+        3D World
            P(X, Y, Z)
               │
               │
               ▼
        ┌──────────────┐
-       │    렌즈      │  ← 카메라
+       │    Lens      │  ← Camera
        └──────────────┘
               │
-              │  초점 거리 f
+              │  Focal length f
               ▼
        ┌──────────────┐
-       │ 이미지 평면  │  → p(u, v)
+       │ Image Plane  │  → p(u, v)
        │      ●       │
        └──────────────┘
 
-투영 공식:
+Projection formula:
 u = fx * (X/Z) + cx
 v = fy * (Y/Z) + cy
 
-- (X, Y, Z): 3D 점의 카메라 좌표
-- (u, v): 2D 이미지 좌표 (픽셀)
-- fx, fy: 초점 거리 (픽셀 단위)
-- (cx, cy): 주점 (principal point)
+- (X, Y, Z): 3D point in camera coordinates
+- (u, v): 2D image coordinates (pixels)
+- fx, fy: Focal length (in pixels)
+- (cx, cy): Principal point
+
+Derivation via similar triangles: Consider a side view where
+a 3D point at position (X, Z) projects through the pinhole
+onto the image plane at distance f. The similar triangles
+formed by (0,0)-(0,f)-(x_img,f) and (0,0)-(0,Z)-(X,Z) give
+x_img/f = X/Z, so x_img = f·X/Z. Converting to pixel
+coordinates with focal length in pixels (fx) and adding the
+principal point offset (cx) yields u = fx·(X/Z) + cx.
 ```
 
 ### 카메라 행렬 (Intrinsic Matrix)
 
 ```
-카메라 내부 파라미터 행렬 K:
+Camera Intrinsic Parameter Matrix K:
 
      ┌             ┐
      │ fx   0   cx │
@@ -67,28 +87,28 @@ K =  │  0  fy   cy │
      │  0   0    1 │
      └             ┘
 
-파라미터 설명:
+Parameter Description:
 ┌────────────────────────────────────────────────────────────┐
-│ fx, fy: 초점 거리 (focal length)                           │
-│         - 픽셀 단위                                        │
+│ fx, fy: Focal length                                       │
+│         - In pixel units                                   │
 │         - fx = f / pixel_width                             │
 │         - fy = f / pixel_height                            │
-│         - 일반적으로 fx ≈ fy (정사각 픽셀)                 │
+│         - Generally fx ≈ fy (square pixels)                │
 │                                                            │
-│ cx, cy: 주점 (principal point)                             │
-│         - 광축이 이미지 평면과 만나는 점                   │
-│         - 이상적으로는 이미지 중심 (width/2, height/2)     │
-│         - 실제로는 약간의 오프셋 존재                      │
+│ cx, cy: Principal point                                    │
+│         - Point where optical axis meets image plane       │
+│         - Ideally at image center (width/2, height/2)      │
+│         - In practice, slight offset exists                │
 │                                                            │
-│ skew: 비대칭 계수 (보통 0)                                 │
-│         - 행렬의 (0,1) 위치                                │
-│         - 픽셀의 비직각성                                  │
+│ skew: Skew coefficient (usually 0)                         │
+│         - At position (0,1) in matrix                      │
+│         - Non-orthogonality of pixels                      │
 └────────────────────────────────────────────────────────────┘
 
-예시 (일반적인 웹캠):
+Example (typical webcam):
      ┌                    ┐
      │ 800    0    320    │
-K =  │   0  800    240    │   (640x480 해상도)
+K =  │   0  800    240    │   (640x480 resolution)
      │   0    0      1    │
      └                    ┘
 ```
@@ -96,19 +116,19 @@ K =  │   0  800    240    │   (640x480 해상도)
 ### 외부 파라미터
 
 ```
-카메라 외부 파라미터 (Extrinsic Parameters):
-카메라 좌표계와 세계 좌표계 사이의 변환
+Camera Extrinsic Parameters:
+Transformation between camera coordinate system and world coordinate system
 
-세계 좌표 → 카메라 좌표:
+World coordinates → Camera coordinates:
 
 [X_cam]       [X_world]
 [Y_cam] = R * [Y_world] + t
 [Z_cam]       [Z_world]
 
-R: 3x3 회전 행렬 (rotation)
-t: 3x1 이동 벡터 (translation)
+R: 3x3 rotation matrix
+t: 3x1 translation vector
 
-전체 투영:
+Complete projection:
 
      ┌   ┐       ┌             ┐   ┌       ┐   ┌   ┐
 s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
@@ -116,7 +136,8 @@ s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
      │ 1 │       │  0   0    1 │   │   |   │   │ Z │
      └   ┘       └             ┘   └       ┘   │ 1 │
                                                └   ┘
-    이미지         카메라 행렬      외부 행렬    세계 좌표
+    Image         Camera Matrix    Extrinsic    World
+                                   Matrix       Coordinates
 ```
 
 ---
@@ -126,23 +147,23 @@ s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
 ### 왜곡 종류
 
 ```
-렌즈 왜곡 (Lens Distortion):
+Lens Distortion:
 
-1. 방사 왜곡 (Radial Distortion)
-   - 렌즈의 곡면으로 인해 발생
-   - 배럴 (Barrel): 볼록하게 왜곡 (광각 렌즈)
-   - 핀쿠션 (Pincushion): 오목하게 왜곡 (망원 렌즈)
+1. Radial Distortion
+   - Caused by lens curvature
+   - Barrel: Convex distortion (wide-angle lens)
+   - Pincushion: Concave distortion (telephoto lens)
 
-   원본          배럴 왜곡       핀쿠션 왜곡
+   Original       Barrel          Pincushion
    ┌───────┐    ╭───────╮      ┌───────┐
    │       │    │       │      ╰       ╯
    │       │    │       │      │       │
    │       │    │       │      ╭       ╮
    └───────┘    ╰───────╯      └───────┘
 
-2. 접선 왜곡 (Tangential Distortion)
-   - 렌즈와 이미지 센서의 정렬 오차로 인해 발생
-   - 이미지가 기울어지거나 비틀어짐
+2. Tangential Distortion
+   - Caused by lens and image sensor misalignment
+   - Image appears tilted or twisted
 
    ┌───────┐      ┌───────┐
    │       │      │╲      │
@@ -154,49 +175,60 @@ s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
 ### 왜곡 모델 수식
 
 ```
-방사 왜곡 (Radial Distortion):
+Radial Distortion:
 
 x_distorted = x * (1 + k1*r² + k2*r⁴ + k3*r⁶)
 y_distorted = y * (1 + k1*r² + k2*r⁴ + k3*r⁶)
 
-여기서:
-- r² = x² + y² (정규화된 이미지 좌표에서의 거리)
-- k1, k2, k3: 방사 왜곡 계수
+Where:
+- r² = x² + y² (distance in normalized image coordinates)
+- k1, k2, k3: Radial distortion coefficients
 
-접선 왜곡 (Tangential Distortion):
+Intuition: The polynomial in r acts as a radial scaling factor.
+k1 dominates near the image center; k2 and k3 only matter at the edges
+where r is large. A negative k1 produces barrel distortion (center
+expands outward), positive k1 produces pincushion (edges pulled in).
+In practice, k1 alone often captures 95% of radial distortion.
+
+Tangential Distortion:
 
 x_distorted = x + [2*p1*x*y + p2*(r² + 2*x²)]
 y_distorted = y + [p1*(r² + 2*y²) + 2*p2*x*y]
 
-여기서:
-- p1, p2: 접선 왜곡 계수
+Where:
+- p1, p2: Tangential distortion coefficients
 
-왜곡 계수 벡터:
+Intuition: Tangential terms are cross-products of x and y, so they
+shift pixels in a direction perpendicular to the radial direction —
+geometrically equivalent to slightly tilting the sensor relative to
+the lens. For most modern cameras p1, p2 are very small (<0.01).
+
+Distortion coefficient vector:
 distCoeffs = [k1, k2, p1, p2, k3]
 
-(일부 모델에서는 k4, k5, k6 추가)
+(Some models add k4, k5, k6)
 ```
 
 ### 왜곡의 영향
 
 ```
-왜곡이 심한 경우의 영향:
+Impact of severe distortion:
 
-1. 직선이 곡선으로 보임
-   실제: ───────────
-   왜곡: ╭─────────╮
+1. Straight lines appear curved
+   Actual: ───────────
+   Distorted: ╭─────────╮
 
-2. 거리 측정 오류
-   - 이미지 가장자리로 갈수록 오류 증가
-   - 정밀 측정 불가능
+2. Distance measurement errors
+   - Errors increase toward image edges
+   - Precise measurement impossible
 
-3. 3D 복원 오류
-   - 스테레오 비전에서 깊이 오류
-   - AR 마커 위치 오류
+3. 3D reconstruction errors
+   - Depth errors in stereo vision
+   - AR marker position errors
 
-4. 객체 인식 성능 저하
-   - 템플릿 매칭 실패
-   - 특징점 매칭 정확도 저하
+4. Object recognition degradation
+   - Template matching failures
+   - Feature matching accuracy decline
 ```
 
 ---
@@ -206,13 +238,17 @@ distCoeffs = [k1, k2, p1, p2, k3]
 ### 체스보드 패턴
 
 ```
-체스보드 패턴을 사용하는 이유:
+Why use a chessboard pattern:
 
-1. 코너 검출이 정확함
-2. 제작이 쉬움 (프린트 가능)
-3. 평면 패턴으로 캘리브레이션 용이
+1. Accurate corner detection — black/white corners are saddle points in
+   intensity, giving a unique sub-pixel localizable feature regardless of
+   viewing angle or distance (unlike circle centers, which shift under perspective)
+2. Easy to create (printable)
+3. Planar pattern facilitates calibration — knowing all corners lie on a
+   single flat plane (Z=0) provides strong geometric constraints that allow
+   computing both intrinsic and extrinsic parameters from a single view
 
-체스보드 크기 정의:
+Chessboard size definition:
 ┌───┬───┬───┬───┬───┬───┬───┬───┐
 │   │███│   │███│   │███│   │███│
 ├───┼───┼───┼───┼───┼───┼───┼───┤
@@ -227,12 +263,12 @@ distCoeffs = [k1, k2, p1, p2, k3]
 │███│   │███│   │███│   │███│   │
 └───┴───┴───┴───┴───┴───┴───┴───┘
 
-내부 코너 수: (7, 5)
-- 가로 7개, 세로 5개의 내부 코너
-- 총 35개 코너점
+Internal corner count: (7, 5)
+- 7 horizontal, 5 vertical internal corners
+- Total 35 corner points
 
-주의: 체스보드 크기는 "내부 코너 수"
-      칸 수가 아님!
+Note: Chessboard size is "internal corner count"
+      Not the number of squares!
 ```
 
 ### 코너 검출
@@ -241,59 +277,66 @@ distCoeffs = [k1, k2, p1, p2, k3]
 import cv2
 import numpy as np
 
-# 체스보드 내부 코너 수
+# Chessboard internal corner count
 CHECKERBOARD = (7, 5)
 
-# 이미지 로드
+# Load image
 img = cv2.imread('chessboard.jpg')
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-# 체스보드 코너 검출
+# Detect chessboard corners
+# ADAPTIVE_THRESH + NORMALIZE_IMAGE improve robustness to uneven lighting —
+# the board is often lit differently across its surface
 ret, corners = cv2.findChessboardCorners(
     gray,
     CHECKERBOARD,
     flags=cv2.CALIB_CB_ADAPTIVE_THRESH +
-          cv2.CALIB_CB_FAST_CHECK +
+          cv2.CALIB_CB_FAST_CHECK +    # Reject images quickly if no checkerboard
+                                        # pattern is even plausible — saves ~80% time
+                                        # on frames without the target
           cv2.CALIB_CB_NORMALIZE_IMAGE
 )
 
 if ret:
-    print(f"코너 검출 성공: {corners.shape[0]}개")
+    print(f"Corner detection successful: {corners.shape[0]} corners")
 
-    # 서브픽셀 정밀도로 코너 위치 개선
+    # Refine corner positions to subpixel accuracy —
+    # findChessboardCorners returns integer-pixel corners; cornerSubPix
+    # iteratively minimizes gradient direction in a (11,11) window to
+    # achieve ~0.1-pixel precision, which is essential for low reprojection error
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
-    # 코너 시각화
+    # Visualize corners
     img_corners = cv2.drawChessboardCorners(img, CHECKERBOARD, corners, ret)
     cv2.imshow('Corners', img_corners)
     cv2.waitKey(0)
 else:
-    print("코너 검출 실패")
+    print("Corner detection failed")
 ```
 
 ### 검출 플래그 옵션
 
 ```
-findChessboardCorners 플래그:
+findChessboardCorners flags:
 
 ┌────────────────────────────────┬─────────────────────────────────┐
-│ 플래그                         │ 설명                            │
+│ Flag                           │ Description                     │
 ├────────────────────────────────┼─────────────────────────────────┤
-│ CALIB_CB_ADAPTIVE_THRESH       │ 적응형 이진화 사용              │
-│                                │ (조명 변화에 강건)              │
+│ CALIB_CB_ADAPTIVE_THRESH       │ Use adaptive binarization       │
+│                                │ (robust to illumination changes)│
 ├────────────────────────────────┼─────────────────────────────────┤
-│ CALIB_CB_NORMALIZE_IMAGE       │ 이미지 정규화                   │
-│                                │ (대비 개선)                     │
+│ CALIB_CB_NORMALIZE_IMAGE       │ Normalize image                 │
+│                                │ (improve contrast)              │
 ├────────────────────────────────┼─────────────────────────────────┤
-│ CALIB_CB_FILTER_QUADS          │ 잘못된 사각형 필터링            │
-│                                │ (오검출 감소)                   │
+│ CALIB_CB_FILTER_QUADS          │ Filter incorrect quadrilaterals │
+│                                │ (reduce false detections)       │
 ├────────────────────────────────┼─────────────────────────────────┤
-│ CALIB_CB_FAST_CHECK            │ 빠른 검사로 실패 조기 판단      │
-│                                │ (속도 향상)                     │
+│ CALIB_CB_FAST_CHECK            │ Fast check for early failure    │
+│                                │ (speed improvement)             │
 └────────────────────────────────┴─────────────────────────────────┘
 
-권장 조합:
+Recommended combination:
 flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
 ```
 
@@ -305,20 +348,26 @@ import numpy as np
 import glob
 
 def collect_calibration_points(image_paths, checkerboard_size):
-    """여러 이미지에서 캘리브레이션 포인트 수집"""
+    """Collect calibration points from multiple images.
+    Multiple views are required because a single view only determines
+    the homography — you need diverse angles/distances so that different
+    distortion amounts are observed, making k1..k3 well-constrained.
+    """
 
-    # 3D 점 (세계 좌표): z=0인 평면
+    # 3D points (world coordinates): z=0 plane
     objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3),
                     np.float32)
     objp[:, :2] = np.mgrid[0:checkerboard_size[0],
                            0:checkerboard_size[1]].T.reshape(-1, 2)
 
-    # 실제 크기 적용 (예: 각 칸이 25mm)
+    # Apply actual size (e.g., each square is 25mm)
+    # Scaling objp by the physical square size makes tvecs (translation vectors)
+    # come out in mm, enabling real-world distance measurement later
     square_size = 25.0  # mm
     objp *= square_size
 
-    obj_points = []  # 3D 점들
-    img_points = []  # 2D 점들
+    obj_points = []  # 3D points (same for every image — pattern doesn't change)
+    img_points = []  # 2D points (different per image — perspective changes)
     img_size = None
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
@@ -332,7 +381,7 @@ def collect_calibration_points(image_paths, checkerboard_size):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_size = gray.shape[::-1]
 
-        # 체스보드 코너 검출
+        # Detect chessboard corners
         ret, corners = cv2.findChessboardCorners(
             gray, checkerboard_size,
             cv2.CALIB_CB_ADAPTIVE_THRESH +
@@ -341,21 +390,21 @@ def collect_calibration_points(image_paths, checkerboard_size):
         )
 
         if ret:
-            # 서브픽셀 정밀도 개선
+            # Refine to subpixel accuracy
             corners = cv2.cornerSubPix(gray, corners, (11, 11),
                                        (-1, -1), criteria)
 
             obj_points.append(objp)
             img_points.append(corners)
 
-            print(f"성공: {img_path}")
+            print(f"Success: {img_path}")
         else:
-            print(f"실패: {img_path}")
+            print(f"Failed: {img_path}")
 
-    print(f"\n총 {len(obj_points)}/{len(image_paths)} 이미지 사용")
+    print(f"\nUsing {len(obj_points)}/{len(image_paths)} images total")
     return obj_points, img_points, img_size
 
-# 사용 예
+# Usage example
 images = glob.glob('calibration_images/*.jpg')
 obj_points, img_points, img_size = collect_calibration_points(
     images, (7, 5)
@@ -375,9 +424,9 @@ import glob
 
 def calibrate_camera(image_folder, checkerboard_size=(7, 5),
                      square_size=25.0):
-    """카메라 캘리브레이션 수행"""
+    """Perform camera calibration"""
 
-    # 3D 객체 점
+    # 3D object points
     objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3),
                     np.float32)
     objp[:, :2] = np.mgrid[0:checkerboard_size[0],
@@ -413,23 +462,28 @@ def calibrate_camera(image_folder, checkerboard_size=(7, 5),
             img_points.append(corners)
             valid_images.append(img_path)
 
+    # Calibration needs enough views to constrain all unknowns:
+    # 5 intrinsic + 5 distortion params = 10 unknowns, so ≥10 images
+    # from diverse angles is the practical minimum for stable results
     if len(obj_points) < 10:
-        print(f"경고: 이미지 수가 적습니다 ({len(obj_points)}개)")
+        print(f"Warning: Low number of images ({len(obj_points)})")
 
-    # 캘리브레이션 수행
+    # Perform calibration
     ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
-        obj_points,     # 3D 점들
-        img_points,     # 2D 점들
-        img_size,       # 이미지 크기
-        None,           # 초기 카메라 행렬 (None이면 자동 계산)
-        None,           # 초기 왜곡 계수
-        flags=cv2.CALIB_FIX_K3  # k3 고정 (선택사항)
+        obj_points,     # 3D points
+        img_points,     # 2D points
+        img_size,       # Image size
+        None,           # Initial camera matrix (None for automatic calculation)
+        None,           # Initial distortion coefficients
+        flags=cv2.CALIB_FIX_K3  # k3 models extreme distortion at image corners;
+                                 # fixing it at 0 prevents overfitting when the
+                                 # calibration board doesn't reach the frame edges
     )
 
-    print(f"\n캘리브레이션 완료")
-    print(f"재투영 오차: {ret:.4f} 픽셀")
-    print(f"\n카메라 행렬:\n{camera_matrix}")
-    print(f"\n왜곡 계수:\n{dist_coeffs.ravel()}")
+    print(f"\nCalibration complete")
+    print(f"Reprojection error: {ret:.4f} pixels")
+    print(f"\nCamera matrix:\n{camera_matrix}")
+    print(f"\nDistortion coefficients:\n{dist_coeffs.ravel()}")
 
     return {
         'camera_matrix': camera_matrix,
@@ -440,7 +494,7 @@ def calibrate_camera(image_folder, checkerboard_size=(7, 5),
         'valid_images': valid_images
     }
 
-# 사용 예
+# Usage example
 result = calibrate_camera('calibration_images', (7, 5), 25.0)
 ```
 
@@ -452,9 +506,9 @@ import numpy as np
 import json
 
 def save_calibration(filepath, camera_matrix, dist_coeffs):
-    """캘리브레이션 결과 저장"""
+    """Save calibration results"""
 
-    # NumPy 배열을 리스트로 변환 (JSON 호환)
+    # Convert NumPy arrays to lists (JSON compatible)
     data = {
         'camera_matrix': camera_matrix.tolist(),
         'dist_coeffs': dist_coeffs.tolist()
@@ -463,10 +517,10 @@ def save_calibration(filepath, camera_matrix, dist_coeffs):
     with open(filepath, 'w') as f:
         json.dump(data, f, indent=2)
 
-    print(f"저장됨: {filepath}")
+    print(f"Saved: {filepath}")
 
 def load_calibration(filepath):
-    """캘리브레이션 결과 로드"""
+    """Load calibration results"""
 
     with open(filepath, 'r') as f:
         data = json.load(f)
@@ -476,23 +530,23 @@ def load_calibration(filepath):
 
     return camera_matrix, dist_coeffs
 
-# 또는 OpenCV FileStorage 사용
+# Or use OpenCV FileStorage
 def save_calibration_yaml(filepath, camera_matrix, dist_coeffs):
-    """YAML 형식으로 저장"""
+    """Save in YAML format"""
     fs = cv2.FileStorage(filepath, cv2.FILE_STORAGE_WRITE)
     fs.write('camera_matrix', camera_matrix)
     fs.write('dist_coeffs', dist_coeffs)
     fs.release()
 
 def load_calibration_yaml(filepath):
-    """YAML 형식에서 로드"""
+    """Load from YAML format"""
     fs = cv2.FileStorage(filepath, cv2.FILE_STORAGE_READ)
     camera_matrix = fs.getNode('camera_matrix').mat()
     dist_coeffs = fs.getNode('dist_coeffs').mat()
     fs.release()
     return camera_matrix, dist_coeffs
 
-# 사용 예
+# Usage example
 save_calibration('camera_calib.json', result['camera_matrix'],
                  result['dist_coeffs'])
 camera_matrix, dist_coeffs = load_calibration('camera_calib.json')
@@ -501,34 +555,34 @@ camera_matrix, dist_coeffs = load_calibration('camera_calib.json')
 ### 캘리브레이션 플래그
 
 ```
-calibrateCamera 플래그 옵션:
+calibrateCamera flag options:
 
 ┌──────────────────────────────┬──────────────────────────────────┐
-│ 플래그                       │ 설명                             │
+│ Flag                         │ Description                      │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_USE_INTRINSIC_GUESS    │ 초기 카메라 행렬 사용            │
+│ CALIB_USE_INTRINSIC_GUESS    │ Use initial camera matrix        │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_FIX_PRINCIPAL_POINT    │ 주점 고정                        │
+│ CALIB_FIX_PRINCIPAL_POINT    │ Fix principal point              │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_FIX_ASPECT_RATIO       │ fx/fy 비율 고정                  │
+│ CALIB_FIX_ASPECT_RATIO       │ Fix fx/fy aspect ratio           │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_ZERO_TANGENT_DIST      │ 접선 왜곡 = 0으로 고정           │
+│ CALIB_ZERO_TANGENT_DIST      │ Fix tangential distortion = 0    │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_FIX_K1, K2, K3, ...    │ 특정 왜곡 계수 고정              │
+│ CALIB_FIX_K1, K2, K3, ...    │ Fix specific distortion coeffs   │
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_RATIONAL_MODEL         │ 고차 왜곡 모델 사용 (k4,k5,k6)   │
+│ CALIB_RATIONAL_MODEL         │ Use higher-order model (k4,k5,k6)│
 ├──────────────────────────────┼──────────────────────────────────┤
-│ CALIB_FIX_S1_S2_S3_S4        │ 얇은 렌즈 왜곡 계수 고정         │
+│ CALIB_FIX_S1_S2_S3_S4        │ Fix thin prism distortion coeffs │
 └──────────────────────────────┴──────────────────────────────────┘
 
-일반적인 조합:
-# 기본 캘리브레이션
+Common combinations:
+# Basic calibration
 flags = 0
 
-# 간단한 왜곡 모델 (k1, k2만)
+# Simple distortion model (k1, k2 only)
 flags = cv2.CALIB_FIX_K3 | cv2.CALIB_ZERO_TANGENT_DIST
 
-# 고정밀 캘리브레이션
+# High precision calibration
 flags = cv2.CALIB_RATIONAL_MODEL
 ```
 
@@ -543,29 +597,32 @@ import cv2
 import numpy as np
 
 def undistort_image(img, camera_matrix, dist_coeffs):
-    """이미지 왜곡 보정"""
+    """Image distortion correction"""
 
     h, w = img.shape[:2]
 
-    # 새 카메라 행렬 계산 (최적화된 영역)
-    # alpha: 0=모든 왜곡 픽셀 제거, 1=모든 원본 픽셀 유지
+    # Compute new camera matrix (optimized region)
+    # alpha controls the trade-off between field-of-view and black border removal:
+    # alpha=0 crops away all black border pixels (smaller FoV, no wasted pixels)
+    # alpha=1 preserves all original pixels (full FoV but black borders remain)
+    # For measurement tasks use alpha=1; for display use alpha=0
     new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(
         camera_matrix, dist_coeffs, (w, h), alpha=1, newImgSize=(w, h)
     )
 
-    # 왜곡 보정
+    # Undistort
     undistorted = cv2.undistort(img, camera_matrix, dist_coeffs,
                                  None, new_camera_matrix)
 
-    # ROI로 크롭 (선택사항)
+    # Crop to ROI (optional)
     x, y, w, h = roi
-    if all([x, y, w, h]):  # ROI가 유효한 경우
+    if all([x, y, w, h]):  # If ROI is valid
         undistorted_cropped = undistorted[y:y+h, x:x+w]
         return undistorted, undistorted_cropped
 
     return undistorted, undistorted
 
-# 사용 예
+# Usage example
 img = cv2.imread('distorted.jpg')
 camera_matrix, dist_coeffs = load_calibration('camera_calib.json')
 undistorted, cropped = undistort_image(img, camera_matrix, dist_coeffs)
@@ -583,7 +640,7 @@ import cv2
 import numpy as np
 
 class UndistortMapper:
-    """리맵핑 기반 왜곡 보정기 (비디오용)"""
+    """Remapping-based undistortion (for video)"""
 
     def __init__(self, camera_matrix, dist_coeffs, img_size, alpha=1):
         self.camera_matrix = camera_matrix
@@ -591,19 +648,24 @@ class UndistortMapper:
 
         w, h = img_size
 
-        # 새 카메라 행렬
+        # New camera matrix
         self.new_camera_matrix, self.roi = cv2.getOptimalNewCameraMatrix(
             camera_matrix, dist_coeffs, (w, h), alpha, (w, h)
         )
 
-        # 리맵핑 맵 계산 (한 번만)
+        # Compute remapping maps once and reuse every frame —
+        # cv2.undistort() recomputes the map internally each call (O(W×H) work),
+        # so pre-computing with initUndistortRectifyMap saves ~30-40% CPU for
+        # video streams where the camera parameters don't change between frames
         self.mapx, self.mapy = cv2.initUndistortRectifyMap(
             camera_matrix, dist_coeffs, None,
             self.new_camera_matrix, (w, h), cv2.CV_32FC1
         )
 
     def undistort(self, img, crop=True):
-        """빠른 왜곡 보정 (리맵핑 사용)"""
+        """Fast undistortion (using remapping)"""
+        # cv2.remap applies precomputed pixel mappings with bilinear interpolation —
+        # INTER_LINEAR gives smooth results for non-integer remapped coordinates
         undistorted = cv2.remap(img, self.mapx, self.mapy,
                                 cv2.INTER_LINEAR)
 
@@ -613,14 +675,14 @@ class UndistortMapper:
 
         return undistorted
 
-# 비디오 처리 예
+# Video processing example
 cap = cv2.VideoCapture(0)
 
-# 첫 프레임으로 크기 확인
+# Check size with first frame
 ret, frame = cap.read()
 h, w = frame.shape[:2]
 
-# 리맵퍼 초기화 (한 번만)
+# Initialize remapper (only once)
 camera_matrix, dist_coeffs = load_calibration('camera_calib.json')
 mapper = UndistortMapper(camera_matrix, dist_coeffs, (w, h))
 
@@ -629,7 +691,7 @@ while True:
     if not ret:
         break
 
-    # 빠른 왜곡 보정
+    # Fast undistortion
     undistorted = mapper.undistort(frame)
 
     cv2.imshow('Original', frame)
@@ -649,14 +711,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def visualize_undistortion(img, camera_matrix, dist_coeffs):
-    """왜곡 보정 전후 비교 시각화"""
+    """Visualize before/after undistortion comparison"""
 
     h, w = img.shape[:2]
 
-    # 왜곡 보정
+    # Undistort
     undistorted = cv2.undistort(img, camera_matrix, dist_coeffs)
 
-    # 격자 오버레이 생성
+    # Create grid overlay
     def add_grid(image, step=50):
         result = image.copy()
         for i in range(0, image.shape[1], step):
@@ -668,7 +730,7 @@ def visualize_undistortion(img, camera_matrix, dist_coeffs):
     img_grid = add_grid(img)
     undistorted_grid = add_grid(undistorted)
 
-    # 나란히 표시
+    # Display side by side
     fig, axes = plt.subplots(1, 2, figsize=(14, 7))
 
     axes[0].imshow(cv2.cvtColor(img_grid, cv2.COLOR_BGR2RGB))
@@ -684,7 +746,7 @@ def visualize_undistortion(img, camera_matrix, dist_coeffs):
 
     return undistorted
 
-# 사용 예
+# Usage example
 img = cv2.imread('distorted.jpg')
 undistorted = visualize_undistortion(img, camera_matrix, dist_coeffs)
 ```
@@ -696,21 +758,32 @@ undistorted = visualize_undistortion(img, camera_matrix, dist_coeffs)
 ### 재투영 오차 계산
 
 ```
-재투영 오차 (Reprojection Error):
-캘리브레이션 품질을 나타내는 지표
+Reprojection Error:
+Metric indicating calibration quality
 
-과정:
-1. 알려진 3D 점을 캘리브레이션 결과로 2D로 투영
-2. 검출된 2D 코너와의 거리 계산
-3. 모든 점에 대한 평균 거리
+Process:
+1. Project known 3D points to 2D using calibration results
+2. Calculate distance to detected 2D corners
+3. Average distance over all points
 
-    실제 검출 위치 ●────────● 재투영 위치
-                   │ 오차   │
-                   └────────┘
+    Actual detected position ●────────● Reprojected position
+                             │ Error  │
+                             └────────┘
 
-좋은 캘리브레이션: 재투영 오차 < 0.5 픽셀
-보통: 0.5 ~ 1.0 픽셀
-나쁨: > 1.0 픽셀
+Good calibration: Reprojection error < 0.5 pixels
+Acceptable: 0.5 ~ 1.0 pixels
+Poor: > 1.0 pixels
+
+Why 0.5 pixels is the threshold: a well-focused camera with sub-pixel
+corner refinement has detection noise of ~0.1–0.2 pixels, so any
+additional reprojection error above 0.5 pixels indicates the calibration
+model itself is introducing errors (too few views, poor coverage, or
+a board that wasn't held flat during capture).
+
+Why analyze per-image errors: a single high-error image (blurred, board
+not fully visible, or wrong pose) can inflate the overall mean. Identifying
+and removing that image often reduces total error significantly without
+recapturing new data.
 ```
 
 ### 재투영 오차 상세 분석
@@ -723,25 +796,25 @@ import matplotlib.pyplot as plt
 def calculate_reprojection_error(obj_points, img_points,
                                   rvecs, tvecs,
                                   camera_matrix, dist_coeffs):
-    """상세 재투영 오차 계산"""
+    """Detailed reprojection error calculation"""
 
     errors = []
     per_image_errors = []
 
     for i in range(len(obj_points)):
-        # 3D 점을 2D로 재투영
+        # Reproject 3D points to 2D
         projected_points, _ = cv2.projectPoints(
             obj_points[i], rvecs[i], tvecs[i],
             camera_matrix, dist_coeffs
         )
 
-        # 오차 계산
+        # Calculate error
         error = cv2.norm(img_points[i], projected_points, cv2.NORM_L2)
         error /= len(projected_points)
 
         per_image_errors.append(error)
 
-        # 각 점별 오차
+        # Per-point error
         for j in range(len(projected_points)):
             pt_error = np.linalg.norm(
                 img_points[i][j] - projected_points[j]
@@ -752,10 +825,10 @@ def calculate_reprojection_error(obj_points, img_points,
     std_error = np.std(errors)
     max_error = np.max(errors)
 
-    print(f"재투영 오차 통계:")
-    print(f"  평균: {mean_error:.4f} 픽셀")
-    print(f"  표준편차: {std_error:.4f}")
-    print(f"  최대: {max_error:.4f}")
+    print(f"Reprojection error statistics:")
+    print(f"  Mean: {mean_error:.4f} pixels")
+    print(f"  Std Dev: {std_error:.4f}")
+    print(f"  Max: {max_error:.4f}")
 
     return {
         'mean': mean_error,
@@ -766,11 +839,11 @@ def calculate_reprojection_error(obj_points, img_points,
     }
 
 def visualize_reprojection_error(error_data):
-    """재투영 오차 시각화"""
+    """Visualize reprojection error"""
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    # 포인트별 오차 히스토그램
+    # Per-point error histogram
     axes[0].hist(error_data['per_point'], bins=50, edgecolor='black')
     axes[0].axvline(error_data['mean'], color='r', linestyle='--',
                     label=f"Mean: {error_data['mean']:.3f}")
@@ -779,7 +852,7 @@ def visualize_reprojection_error(error_data):
     axes[0].set_title('Error Distribution')
     axes[0].legend()
 
-    # 이미지별 오차
+    # Per-image error
     axes[1].bar(range(len(error_data['per_image'])),
                 error_data['per_image'])
     axes[1].axhline(error_data['mean'], color='r', linestyle='--')
@@ -790,8 +863,8 @@ def visualize_reprojection_error(error_data):
     plt.tight_layout()
     plt.show()
 
-# 사용 예
-# calibration 결과에서
+# Usage example
+# From calibration results
 error_data = calculate_reprojection_error(
     obj_points, img_points,
     result['rvecs'], result['tvecs'],
@@ -806,9 +879,9 @@ visualize_reprojection_error(error_data)
 def improve_calibration(obj_points, img_points, img_size,
                         camera_matrix, dist_coeffs,
                         rvecs, tvecs, threshold=1.0):
-    """높은 오차의 이미지를 제거하여 캘리브레이션 개선"""
+    """Improve calibration by removing high-error images"""
 
-    # 각 이미지의 재투영 오차 계산
+    # Calculate reprojection error for each image
     per_image_errors = []
 
     for i in range(len(obj_points)):
@@ -820,23 +893,23 @@ def improve_calibration(obj_points, img_points, img_size,
         error /= len(projected)
         per_image_errors.append(error)
 
-    # 임계값 이하의 이미지만 선택
+    # Select only images below threshold
     good_indices = [i for i, e in enumerate(per_image_errors)
                     if e < threshold]
 
     if len(good_indices) < 5:
-        print("경고: 좋은 이미지가 너무 적습니다")
+        print("Warning: Too few good images")
         return None
 
-    # 선택된 이미지로 재캘리브레이션
+    # Re-calibrate with selected images
     good_obj = [obj_points[i] for i in good_indices]
     good_img = [img_points[i] for i in good_indices]
 
     ret, new_camera_matrix, new_dist_coeffs, new_rvecs, new_tvecs = \
         cv2.calibrateCamera(good_obj, good_img, img_size, None, None)
 
-    print(f"제거된 이미지: {len(obj_points) - len(good_indices)}")
-    print(f"새 재투영 오차: {ret:.4f}")
+    print(f"Removed images: {len(obj_points) - len(good_indices)}")
+    print(f"New reprojection error: {ret:.4f}")
 
     return {
         'camera_matrix': new_camera_matrix,
@@ -853,7 +926,7 @@ import cv2
 import numpy as np
 
 class RealtimeCalibrator:
-    """실시간 카메라 캘리브레이션"""
+    """Real-time camera calibration"""
 
     def __init__(self, checkerboard_size=(7, 5), square_size=25.0,
                  min_images=15):
@@ -861,7 +934,7 @@ class RealtimeCalibrator:
         self.square_size = square_size
         self.min_images = min_images
 
-        # 3D 객체 점
+        # 3D object points
         self.objp = np.zeros(
             (checkerboard_size[0] * checkerboard_size[1], 3),
             np.float32
@@ -884,7 +957,7 @@ class RealtimeCalibrator:
                         cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
     def process_frame(self, frame):
-        """프레임 처리 및 코너 검출"""
+        """Process frame and detect corners"""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         self.img_size = gray.shape[::-1]
 
@@ -903,7 +976,7 @@ class RealtimeCalibrator:
             cv2.drawChessboardCorners(display, self.checkerboard_size,
                                        corners, ret)
 
-        # 상태 표시
+        # Display status
         status = f"Images: {len(self.obj_points)}/{self.min_images}"
         cv2.putText(display, status, (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -915,20 +988,20 @@ class RealtimeCalibrator:
         return display, ret, corners
 
     def capture(self, corners):
-        """캘리브레이션용 프레임 캡처"""
+        """Capture frame for calibration"""
         if corners is not None:
             self.obj_points.append(self.objp)
             self.img_points.append(corners)
-            print(f"캡처: {len(self.obj_points)}번째")
+            print(f"Captured: #{len(self.obj_points)}")
 
-            # 충분한 이미지가 모이면 자동 캘리브레이션
+            # Auto-calibrate when enough images collected
             if len(self.obj_points) >= self.min_images and not self.calibrated:
                 self.calibrate()
 
     def calibrate(self):
-        """캘리브레이션 수행"""
+        """Perform calibration"""
         if len(self.obj_points) < self.min_images:
-            print(f"이미지가 부족합니다: {len(self.obj_points)}/{self.min_images}")
+            print(f"Insufficient images: {len(self.obj_points)}/{self.min_images}")
             return False
 
         ret, self.camera_matrix, self.dist_coeffs, rvecs, tvecs = \
@@ -938,24 +1011,24 @@ class RealtimeCalibrator:
             )
 
         self.calibrated = True
-        print(f"\n캘리브레이션 완료!")
-        print(f"재투영 오차: {ret:.4f}")
-        print(f"카메라 행렬:\n{self.camera_matrix}")
+        print(f"\nCalibration complete!")
+        print(f"Reprojection error: {ret:.4f}")
+        print(f"Camera matrix:\n{self.camera_matrix}")
 
         return True
 
     def undistort(self, frame):
-        """왜곡 보정"""
+        """Undistort frame"""
         if not self.calibrated:
             return frame
 
         return cv2.undistort(frame, self.camera_matrix, self.dist_coeffs)
 
-# 사용 예
+# Usage example
 cap = cv2.VideoCapture(0)
 calibrator = RealtimeCalibrator(min_images=15)
 
-print("스페이스바: 캡처, c: 캘리브레이션, u: 왜곡 보정 토글, q: 종료")
+print("Space: Capture, c: Calibrate, u: Toggle undistortion, q: Quit")
 
 show_undistorted = False
 
@@ -986,7 +1059,7 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 
-# 결과 저장
+# Save results
 if calibrator.calibrated:
     save_calibration('camera_calib.json',
                     calibrator.camera_matrix,
@@ -1014,19 +1087,19 @@ if calibrator.calibrated:
 import time
 
 last_capture_time = 0
-min_interval = 2.0  # 최소 캡처 간격 (초)
+min_interval = 2.0  # Minimum capture interval (seconds)
 
-# 블러 검출
+# Blur detection
 def is_blurry(img, threshold=100):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
     return laplacian_var < threshold
 
-# 자동 캡처 조건
+# Auto-capture conditions
 if (found and
     time.time() - last_capture_time > min_interval and
     not is_blurry(frame)):
-    # 캡처
+    # Capture
 ```
 
 </details>
@@ -1044,7 +1117,7 @@ if (found and
 <summary>힌트</summary>
 
 ```python
-# 어안 캘리브레이션
+# Fisheye calibration
 K = np.zeros((3, 3))
 D = np.zeros((4, 1))
 rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for _ in obj_points]
@@ -1058,7 +1131,7 @@ ret, K, D, rvecs, tvecs = cv2.fisheye.calibrate(
     rvecs, tvecs, flags
 )
 
-# 어안 왜곡 보정
+# Fisheye undistortion
 map1, map2 = cv2.fisheye.initUndistortRectifyMap(
     K, D, np.eye(3), K, img_size, cv2.CV_16SC2
 )
@@ -1079,7 +1152,7 @@ map1, map2 = cv2.fisheye.initUndistortRectifyMap(
 <summary>힌트</summary>
 
 ```python
-# 스테레오 캘리브레이션
+# Stereo calibration
 ret, M1, d1, M2, d2, R, T, E, F = cv2.stereoCalibrate(
     obj_points,
     img_points_left, img_points_right,
@@ -1089,7 +1162,7 @@ ret, M1, d1, M2, d2, R, T, E, F = cv2.stereoCalibrate(
     flags=cv2.CALIB_FIX_INTRINSIC
 )
 
-# 스테레오 정류
+# Stereo rectification
 R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
     M1, d1, M2, d2, img_size, R, T
 )
@@ -1110,20 +1183,20 @@ R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
 <summary>힌트</summary>
 
 ```python
-# 원형 그리드 검출
-# 대칭 그리드
+# Circular grid detection
+# Symmetric grid
 ret, centers = cv2.findCirclesGrid(
     gray, (4, 11),
     flags=cv2.CALIB_CB_SYMMETRIC_GRID
 )
 
-# 비대칭 그리드 (더 정확)
+# Asymmetric grid (more accurate)
 ret, centers = cv2.findCirclesGrid(
     gray, (4, 11),
     flags=cv2.CALIB_CB_ASYMMETRIC_GRID
 )
 
-# 비대칭 그리드의 3D 점
+# 3D points for asymmetric grid
 objp = np.zeros((4*11, 3), np.float32)
 for i in range(11):
     for j in range(4):
@@ -1148,19 +1221,19 @@ for i in range(11):
 ```python
 class CalibrationEvaluator:
     def evaluate(self, result, obj_points, img_points):
-        # 재투영 오차 분포
+        # Reprojection error distribution
         errors = self.compute_per_point_errors(...)
 
-        # 이상치 검출 (2 표준편차 이상)
+        # Outlier detection (beyond 2 standard deviations)
         outliers = errors > np.mean(errors) + 2*np.std(errors)
 
-        # 왜곡 계수 분석
+        # Distortion coefficient analysis
         k1, k2, p1, p2, k3 = result['dist_coeffs'].ravel()
 
-        # 신뢰도 점수
+        # Confidence score
         score = 100
-        score -= min(50, result['reprojection_error'] * 50)  # 오차 페널티
-        score -= min(30, outlier_ratio * 100)  # 이상치 페널티
+        score -= min(50, result['reprojection_error'] * 50)  # Error penalty
+        score -= min(30, outlier_ratio * 100)  # Outlier penalty
 
         return {'score': score, ...}
 ```
@@ -1171,7 +1244,7 @@ class CalibrationEvaluator:
 
 ## 다음 단계
 
-- [19_DNN_Module.md](./19_DNN_Module.md) - cv2.dnn, YOLO, SSD
+- [딥러닝 DNN 모듈 (Deep Neural Network Module)](./19_DNN_Module.md) - cv2.dnn, YOLO, SSD
 
 ---
 

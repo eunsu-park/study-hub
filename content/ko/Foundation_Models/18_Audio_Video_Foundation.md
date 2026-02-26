@@ -1,5 +1,17 @@
 # 18. Audio/Video Foundation Models
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Whisper 아키텍처를 설명하고 로그-멜 스펙트로그램(log-Mel spectrogram)이 인코더-디코더 트랜스포머(encoder-decoder Transformer)에 의해 어떻게 음성 인식 및 번역에 활용되는지 서술할 수 있다
+2. Whisper와 관련 오디오 파운데이션 모델을 사용하여 음성 전사(speech transcription) 및 화자 분리(speaker diarization) 파이프라인을 구현할 수 있다
+3. MusicGen과 AudioCraft 같은 음악 생성 모델의 아키텍처를 설명하고 다중 스트림 오디오 토큰(multi-stream audio token)을 어떻게 처리하는지 서술할 수 있다
+4. 비디오 이해 접근법(VideoMAE, Video-LLaMA)을 비교하고 프레임 간 시간 정보(temporal information)가 어떻게 인코딩되는지 설명할 수 있다
+5. 오디오, 비디오, 텍스트 파운데이션 모델을 통합하여 자동 비디오 캡셔닝(video captioning) 등 태스크를 위한 멀티모달 파이프라인을 설계할 수 있다
+
+---
+
 ## 개요
 
 Audio와 Video 도메인의 Foundation Model들은 음성 인식, 음악 생성, 비디오 이해 등 다양한 멀티미디어 태스크를 통합적으로 처리합니다.
@@ -1074,4 +1086,199 @@ Video Generation (Sora concept):
 2. Copet et al. (2023). "Simple and Controllable Music Generation" (MusicGen)
 3. Borsos et al. (2023). "AudioLM: a Language Modeling Approach to Audio Generation"
 4. Zhang et al. (2023). "Video-LLaMA: An Instruction-tuned Audio-Visual Language Model"
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: Whisper 아키텍처와 30초 세그먼트
+Whisper는 고정된 30초 단위로 오디오를 처리합니다. 이 제약의 아키텍처적 이유를 설명하고, 오디오 파일이 훨씬 짧은 경우(예: 5초)나 훨씬 긴 경우(예: 3분)에 파이프라인이 어떻게 처리하는지 서술하세요. 단어나 문장이 30초 경계에서 분리될 때 어떤 문제가 발생하나요?
+
+<details>
+<summary>정답 보기</summary>
+
+**30초 청크를 사용하는 이유**: Whisper의 오디오 인코더(audio encoder)는 80개 주파수 빈(frequency bin) × 3000개 시간 프레임(time frame)의 고정 크기 로그-멜 스펙트로그램(log-Mel spectrogram) 입력을 사용하며, 각 시간 프레임은 10ms를 나타냅니다. 이는 정확히 30초(3000 × 10ms)에 해당합니다. 인코더는 절대 사인파 위치 임베딩(sinusoidal positional embedding)을 사용하므로, 아키텍처 수정 없이는 가변 길이 입력으로 일반화할 수 없습니다.
+
+**짧은 오디오 처리 (5초)**:
+- 5초 오디오는 30초 버퍼를 채우기 위해 제로 패딩(zero padding) 됩니다.
+- 인코더는 패딩된 스펙트로그램을 정상적으로 처리합니다.
+- 디코더는 `<|endoftext|>` 토큰을 생성할 때까지 토큰을 생성하며, 실제 음성이 끝난 후 무음 패딩 영역에 대한 내용을 생성하지 않고 자연스럽게 멈춥니다.
+
+**긴 오디오 처리 (3분)**:
+- 오디오는 겹치는 30초 청크(chunk)로 분할됩니다.
+- 각 청크는 독립적으로 전사(transcription)됩니다.
+- 타임스탬프 정렬(timestamp alignment)을 사용해 겹치는 영역을 찾아 전사 결과를 이어 붙입니다.
+- Whisper의 `word_timestamps=True` 모드는 정확한 이어붙이기 지점을 찾기 위한 타이밍 정보를 제공합니다.
+
+**경계 분리 문제 (단어가 세그먼트 중간에 잘리는 경우)**:
+- "extraordinary"와 같은 단어가 분리될 수 있습니다: "extraord-"가 1번 청크로, "-inary"가 2번 청크로 시작됩니다.
+- 1번 청크 인코더는 "extraord"를 마지막 단어로 보며 불완전하게 전사하거나 다른 단어로 잘못 인식할 수 있습니다.
+- 2번 청크는 "-inary"로 시작하므로 디코더가 앞부분 맥락을 갖지 못합니다.
+- 결과: 세그먼트 경계 근처의 단어가 가장 빈번한 전사 오류 원인이 됩니다.
+- **완화 방법**: 겹치는 윈도우(예: 25초 청크, 5초 겹침)를 사용하고 겹치는 영역에서 신뢰도가 높은 전사 결과를 채택하거나, VAD(Voice Activity Detector)를 사용해 무음 구간에서만 분리합니다.
+
+</details>
+
+### 연습 문제 2: AudioLM 계층적 토크나이제이션
+AudioLM은 세 가지 계층 구조를 사용합니다: 의미론적 토큰(semantic token, w2v-BERT, ~25개/초), 거친 음향 토큰(coarse acoustic token, SoundStream, ~50개/초), 세밀한 음향 토큰(fine acoustic token, SoundStream, ~100개/초). 이 계층 구조가 왜 필요한지 설명하세요 — AudioLM이 단일 해상도의 토큰 표현 하나만 사용할 수 없는 이유는 무엇인가요?
+
+<details>
+<summary>정답 보기</summary>
+
+**단일 해상도가 실패하는 이유**:
+
+**고해상도 단일 토큰만 사용 시 (세밀한 음향만, ~100개/초)**:
+- 10초 오디오: 1000개의 토큰
+- 언어 모델은 1000개의 토큰에 걸쳐 의미적 일관성을 유지하면서 일관된 음성을 생성하는 법을 학습해야 합니다.
+- 1000개의 토큰에 대한 O(n²) 어텐션(attention)으로 의미 일관성을 유지하는 것은 트랜스포머(Transformer)에게 매우 어렵습니다.
+- 모델은 의미론적 내용을 계획하기보다 음향적 세부 사항을 복사하는 데 용량을 낭비합니다.
+
+**저해상도 단일 토큰만 사용 시 (의미론적만, ~25개/초)**:
+- 의미론적 토큰은 내용(무엇이 말해지는지)을 포착하지만 화자 정체성, 운율(prosody), 세밀한 음향 세부 사항은 버립니다.
+- 의미론적 토큰만으로는 고품질 오디오를 재구성할 수 없으며, 결과는 로봇처럼 들리거나 보코더(vocoder) 같은 소리가 납니다.
+
+**계층 구조가 이 문제를 해결하는 방법**:
+
+1. **의미론적 레이어** (~25 토큰/초): "무엇이 말해지는지"를 포착 — 단어 정체성, 언어 내용. 저렴한 비용으로 긴 컨텍스트 윈도우를 활용할 수 있습니다. 문법적 일관성과 내용 계획이 이루어지는 단계입니다.
+
+2. **거친 음향 레이어** (~50 토큰/초): 의미론적 토큰을 조건으로, "어떻게 들리는지"를 거친 수준에서 포착 — 화자 정체성, 일반적인 운율, 말하는 속도.
+
+3. **세밀한 음향 레이어** (~100 토큰/초): 거친 음향을 조건으로, 세밀한 지각적 세부 사항 추가 — 마이크 특성, 세밀한 타이밍, 미묘한 음향 텍스처.
+
+이 계층 구조는 각 레벨이 자체 문제 복잡성에 집중할 수 있게 합니다: 긴 컨텍스트에서의 의미론적 계획, 이후 점진적인 음향 세분화. 이 분할 정복(divide-and-conquer) 방식이 각 하위 문제를 다루기 쉽게 만들어 줍니다.
+
+</details>
+
+### 연습 문제 3: 비디오 프레임 샘플링 전략
+`VideoUnderstanding` 클래스는 균일 프레임 샘플링(`np.linspace(0, total_frames-1, num_frames)`)을 사용합니다. 이 접근법의 한계를 분석하고 서로 다른 비디오 유형에 대한 두 가지 대안적 샘플링 전략을 제안하세요.
+
+```python
+def extract_frames(self, video_path: str, num_frames: int = 8, uniform: bool = True):
+    """Extract frames from video"""
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    if uniform:
+        indices = np.linspace(0, total_frames - 1, num_frames, dtype=int)
+    # What other sampling strategies should exist?
+```
+
+<details>
+<summary>정답 보기</summary>
+
+**균일 샘플링의 한계**:
+1. **정적 비디오에서의 중복**: 대화 인터뷰 영상은 99%가 동일한 프레임으로 구성되어 있어 균일 샘플링이 거의 동일한 프레임에 용량을 낭비합니다.
+2. **핵심 이벤트 누락**: 스포츠 하이라이트 비디오는 3초의 액션과 27초의 리플레이/해설로 구성될 수 있어 균일 샘플링은 액션 장면을 과소샘플링합니다.
+3. **모션 무시**: 프레임 간 변화량에 관계없이 모든 프레임이 동등하게 처리됩니다.
+4. **해상도-길이 불일치**: 2분짜리 비디오와 10분짜리 비디오 모두 균일 샘플링으로 8개 프레임을 얻지만, 10분짜리 비디오는 초당 시간 해상도(temporal resolution)가 5배 낮습니다.
+
+**대안 전략 1: 씬 변화(scene-change) / 키프레임(keyframe) 기반 샘플링**
+```python
+def sample_keyframes(self, video_path, num_frames=8):
+    """씬 경계에서 프레임 샘플링"""
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    prev_frame = None
+    scene_scores = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if prev_frame is not None:
+            # 프레임 간 차이 계산
+            diff = cv2.absdiff(gray, prev_frame).mean()
+            scene_scores.append((cap.get(cv2.CAP_PROP_POS_FRAMES), diff))
+
+        prev_frame = gray
+
+    # 씬 변화 점수가 가장 높은 프레임 선택
+    scene_scores.sort(key=lambda x: -x[1])
+    top_indices = sorted([int(s[0]) for s in scene_scores[:num_frames]])
+    return top_indices
+```
+적합한 경우: 액션 비디오, 영화, 단계가 뚜렷한 튜토리얼.
+
+**대안 전략 2: 활동 밀도 비례 샘플링**
+```python
+def sample_activity_proportional(self, video_path, num_frames=8):
+    """움직임이 많은 구간에서 더 많은 프레임 샘플링"""
+    # 1. 모든 프레임에 대해 광학 흐름(optical flow) 또는 프레임 차이 계산
+    # 2. 초당 "활동 점수" 계산
+    # 3. 활동 점수에 비례하여 프레임 배정
+    # 고활동 구간: 3초 → 4프레임
+    # 저활동 구간: 7초 → 4프레임
+    # (고정적인 1.25초당 1프레임 대신)
+    pass
+```
+적합한 경우: 스포츠, 교육용 비디오, 핵심 이벤트가 집중적으로 발생하는 감시 영상.
+
+</details>
+
+### 연습 문제 4: MusicGen 토큰 예산 계산
+MusicGen은 초당 50개의 토큰을 생성하는 EnCodec 압축을 사용하여 32kHz로 오디오를 생성합니다. 60초 음악 클립을 생성하려고 합니다.
+
+A) 필요한 총 토큰 수를 계산하세요.
+B) 트랜스포머의 최대 컨텍스트 길이가 4096 토큰이라면, 60초 전체를 한 번에 생성할 수 있나요? 한 번에 생성 가능한 최대 길이는 얼마인가요?
+C) 음악적 일관성을 유지하면서 더 긴 음악(5분)을 생성하는 전략을 제안하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**A) 60초에 필요한 총 토큰 수**:
+```python
+duration_seconds = 60
+tokens_per_second = 50  # EnCodec compression rate
+total_tokens = 60 * 50 = 3000 tokens
+```
+
+**B) 60초가 4096 컨텍스트에 들어가는가?**:
+```python
+max_context = 4096
+max_duration = 4096 / 50 = 81.92 seconds
+# 예: 3000 < 4096이므로 60초는 한 번의 패스(pass)로 생성 가능합니다.
+# 한 번의 패스에서 최대 지속 시간: ~81초
+```
+
+**C) 5분(300초) 생성 전략**:
+5분 × 50 토큰/초 = 15,000 토큰 >> 4096 컨텍스트 한계.
+
+**접근법: 겹침이 있는 연속 생성(Whisper 청킹과 유사한 방식)**:
+```python
+def generate_long_music(prompt: str, target_duration: float = 300.0):
+    """Generate long music with continuation"""
+    chunk_duration = 75.0    # ~3750 tokens, leaving room for context
+    overlap_duration = 6.0   # 6-second overlap for coherence
+
+    chunks = []
+    generated_so_far = 0.0
+
+    while generated_so_far < target_duration:
+        if generated_so_far == 0:
+            # First chunk: generate from text prompt
+            chunk = model.generate(
+                text_prompt=prompt,
+                duration=chunk_duration
+            )
+        else:
+            # Subsequent chunks: condition on last N seconds of previous chunk
+            # The last overlap_duration of audio serves as musical context
+            continuation_audio = chunks[-1][-overlap_duration:]
+            chunk = model.generate_continuation(
+                prompt_audio=continuation_audio,
+                text_prompt=prompt,  # Maintain style consistency
+                duration=chunk_duration - overlap_duration
+            )
+
+        chunks.append(chunk)
+        generated_so_far += (chunk_duration - overlap_duration)
+
+    # Crossfade between chunks at overlap regions to avoid hard cuts
+    return crossfade_concatenate(chunks, overlap_duration)
+```
+
+핵심 통찰: 텍스트 프롬프트는 모든 청크에 걸쳐 일정하게 유지되어 스타일 일관성을 보장합니다. 오디오 겹침은 음악적 연속성(조성, 템포, 악기 연속)을 제공합니다. 경계에서 크로스페이딩(crossfading)은 불연속성으로 인한 청각적 끊김을 방지합니다.
+
+</details>
 5. OpenAI Sora Technical Report (2024)

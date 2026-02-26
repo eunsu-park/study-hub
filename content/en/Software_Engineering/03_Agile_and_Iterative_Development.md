@@ -12,16 +12,19 @@ Agile is not a methodology — it is a philosophy. The term describes a family o
 - [Lesson 1: What Is Software Engineering](./01_What_Is_Software_Engineering.md)
 - [Lesson 2: Software Development Life Cycle](./02_Software_Development_Life_Cycle.md)
 
-**Learning Objectives**:
-- Explain the four values and twelve principles of the Agile Manifesto
-- Describe the Scrum framework: roles, events, and artifacts
-- Apply Kanban principles and visualize work with a Kanban board
-- Identify the core practices of Extreme Programming (XP)
-- Explain Lean Software Development's seven principles
-- Describe approaches to scaling agile (SAFe, LeSS, Spotify model)
-- Calculate and interpret agile metrics: velocity, burndown, cycle time, lead time
-- Choose between agile and plan-driven approaches based on project context
-- Recognize common agile anti-patterns
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the four values and twelve principles of the Agile Manifesto
+2. Describe the Scrum framework: roles, events, and artifacts
+3. Apply Kanban principles and visualize work with a Kanban board
+4. Identify the core practices of Extreme Programming (XP)
+5. Explain Lean Software Development's seven principles
+6. Describe approaches to scaling agile (SAFe, LeSS, Spotify model)
+7. Calculate and interpret agile metrics: velocity, burndown, cycle time, lead time
+8. Choose between agile and plan-driven approaches based on project context
+9. Recognize common agile anti-patterns
 
 ---
 

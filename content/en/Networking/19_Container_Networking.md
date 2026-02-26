@@ -1,5 +1,7 @@
 # Container Networking
 
+**Previous**: [IPv6](./18_IPv6.md)
+
 ## Learning Objectives
 - Understand Linux network namespaces and virtual networking
 - Master Docker networking architecture and network drivers
@@ -9,6 +11,10 @@
 - Learn service mesh concepts and implementations
 - Configure ingress and external load balancing
 - Troubleshoot container networking issues
+
+---
+
+Containers have fundamentally changed how we deploy software, but they have also introduced an entirely new layer of networking complexity. Each container gets its own network namespace, its own virtual interfaces, and its own view of the routing table -- yet all must communicate seamlessly with each other and the outside world. This lesson bridges traditional networking knowledge with the container-native world, covering everything from Docker bridge networks to Kubernetes service meshes.
 
 ## Table of Contents
 1. [Container Networking Fundamentals](#1-container-networking-fundamentals)
@@ -1692,4 +1698,4 @@ Container networking continues to evolve with technologies like eBPF (Cilium) an
 
 ---
 
-[Previous: 18_IPv6](./18_IPv6.md) | [Next: 00_Overview](./00_Overview.md)
+**Previous**: [IPv6](./18_IPv6.md)

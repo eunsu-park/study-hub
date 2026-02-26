@@ -1,9 +1,25 @@
 # Version Control and Collaboration
 
+**Previous**: [API Design Principles](./13_API_Design.md) | **Next**: [Software Architecture Basics](./15_Software_Architecture.md)
+
 > **Topic**: Programming
 > **Lesson**: 14 of 16
 > **Prerequisites**: Basic Git knowledge (clone, commit, push, pull), command line familiarity
-> **Objective**: Master branching strategies, code review practices, CI/CD fundamentals, and collaborative workflows for professional software development
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the evolution from centralized (SVN) to distributed (Git) version control and the benefits of the distributed model
+2. Compare branching strategies (Git Flow, GitHub Flow, Trunk-Based Development) and select the right one for a given team size and release cadence
+3. Write effective pull requests with clear titles, descriptions, and appropriately scoped changes
+4. Conduct constructive code reviews that focus on correctness, design, security, and performance
+5. Choose between merge commit, squash, and rebase merge strategies based on project needs
+6. Design CI/CD pipelines with appropriate stages (lint, test, security scan, build, deploy) using GitHub Actions or similar tools
+7. Apply Semantic Versioning (MAJOR.MINOR.PATCH) and Conventional Commits for automated changelog generation
+8. Evaluate monorepo vs polyrepo trade-offs for multi-project codebases
+
+---
 
 ## Introduction
 
@@ -819,6 +835,6 @@ Effective version control workflows enable teams to move fast without breaking t
 
 Great workflows balance **speed** (ship features quickly) and **quality** (avoid bugs, maintain codebase).
 
-## Navigation
+---
 
-[← Previous: API Design](13_API_Design.md) | [Next: Software Architecture →](15_Software_Architecture.md)
+**Previous**: [API Design Principles](./13_API_Design.md) | **Next**: [Software Architecture Basics](./15_Software_Architecture.md)

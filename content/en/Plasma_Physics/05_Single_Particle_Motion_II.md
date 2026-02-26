@@ -409,6 +409,8 @@ def magnetic_field_gradient(x, y, z):
     Creates a gradient in x-direction
     """
     B0 = 1e-3  # Tesla
+    # alpha = 0.1 means B doubles over ~10 m — small enough that the guiding-center
+    # approximation holds (r_L << gradient scale L = B/|∇B| = 1/alpha = 10 m)
     alpha = 0.1  # gradient parameter (1/m)
 
     Bx = 0
@@ -437,6 +439,9 @@ def equations_of_motion_gradb(t, state, q, m):
     return np.array([vx, vy, vz, ax, ay, az])
 
 def rk4_step(f, t, y, dt, q, m):
+    # RK4 is chosen over simpler schemes (Euler, RK2) because the Lorentz force is
+    # stiff on the gyration timescale; RK4's O(dt^5) local error keeps the gyro-orbit
+    # from artificially gaining or losing energy over the many cycles we simulate.
     """4th-order Runge-Kutta step"""
     k1 = f(t, y, q, m)
     k2 = f(t + dt/2, y + dt*k1/2, q, m)
@@ -457,10 +462,15 @@ def simulate_gradb_drift(particle_type='proton', v_perp=1e5, v_para=1e4,
 
     # Initial conditions
     x0, y0, z0 = 0.0, 0.0, 0.0
+    # Start velocity in the x-z plane: v_perp drives gyration, v_para gives a helical
+    # orbit. Starting vx = v_perp (not vz) so the initial gyration plane is x-y,
+    # making the grad-B drift clearly visible in the y-direction.
     vx0, vy0, vz0 = v_perp, 0.0, v_para
     state = np.array([x0, y0, z0, vx0, vy0, vz0])
 
     # Time array
+    # dt = 1e-8 s is chosen to be ~1/10 of the proton gyroperiod at B0 = 1e-3 T
+    # (T_gyro = 2π m/qB ~ 6.5e-8 s), ensuring accurate resolution of gyration.
     num_steps = int(duration / dt)
     times = np.linspace(0, duration, num_steps)
 
@@ -528,7 +538,9 @@ plt.tight_layout()
 plt.savefig('gradb_drift_simulation.png', dpi=150)
 print("Saved: gradb_drift_simulation.png")
 
-# Calculate drift velocity
+# Calculate drift velocity by measuring net y-displacement over the full simulation.
+# Dividing total displacement by total time gives the average drift speed, filtering
+# out the oscillatory gyration which sums to zero over complete cycles.
 y_drift_p = traj_p[-1, 1] - traj_p[0, 1]
 y_drift_e = traj_e[-1, 1] - traj_e[0, 1]
 v_drift_p = y_drift_p / t_p[-1]
@@ -550,6 +562,9 @@ def magnetic_field_dipole(r, theta, phi, M=1e15):
     B_phi = 0
     M: magnetic moment (A·m^2)
     """
+    # Clamp r to avoid 1/r^3 singularity at the origin; physically, the dipole
+    # formula is only valid outside the source (r >> source radius), so r_safe
+    # just prevents a numerical crash if the integrator steps inside r = 0.
     r_safe = max(r, 0.1)  # avoid singularity
 
     B_r = (2 * M / r_safe**3) * np.cos(theta)
@@ -627,10 +642,14 @@ def simulate_dipole_drift(particle_type='proton', r0=1e6, theta0=np.pi/4,
     B_mag = np.linalg.norm(B_cart)
     b_hat = B_cart / B_mag
 
-    # Perpendicular direction
+    # Perpendicular direction: project x-hat onto the plane perpendicular to B,
+    # then normalise. This gives a well-defined perpendicular basis vector without
+    # requiring the full cross-product formalism, as long as B is not exactly along x.
     perp1 = np.array([1, 0, 0]) - np.dot([1, 0, 0], b_hat) * b_hat
     perp1 /= np.linalg.norm(perp1)
 
+    # Decompose initial velocity into guiding-center components so the pitch angle
+    # at t=0 is physically meaningful: v_para along B, v_perp initiates gyration.
     v0 = v_para * b_hat + v_perp * perp1
     vx0, vy0, vz0 = v0
 
@@ -723,16 +742,22 @@ def compute_drift_velocities(B=1e-3, E=1e-2, grad_B=1e-5, R_c=1.0,
     else:
         q, m = q_e, m_e
 
-    # E×B drift
+    # E×B drift — independent of charge and mass, so both species drift identically
+    # and no current is generated; E and B must be perpendicular for this formula.
     v_ExB = E / B
 
-    # Grad-B drift
+    # Grad-B drift: m*v_perp^2 / (2|q|B^2) * (|∇B|/B).
+    # The ratio ∇B/B = 1/L is the inverse gradient scale length; small L (strong
+    # gradient) gives larger drift — consistent with the guiding-center expansion.
     v_gradB = (m * v_perp**2) / (2 * abs(q) * B**2) * (grad_B / B)
 
-    # Curvature drift
+    # Curvature drift: uses v_para^2 (not v_perp^2) because centrifugal force depends
+    # on parallel motion along the curved field line, not perpendicular gyration.
     v_curv = (m * v_para**2) / (abs(q) * B**2 * R_c)
 
-    # Combined grad-B + curvature
+    # Combined grad-B + curvature: in realistic geometries the two drifts always
+    # co-exist (toroidal 1/R field has both curvature and ∇B), so summing them gives
+    # the physically correct guiding-center drift used in tokamak transport analysis.
     v_gc = (m / (abs(q) * B**2)) * (v_perp**2/2 + v_para**2) * (grad_B / B)
 
     # Polarization drift
@@ -847,20 +872,27 @@ def calculate_drift_currents(n=1e19, B=2.0, T=1e3, grad_B=0.2,
     # Convert temperature to SI
     T_J = T * q_p  # Joules
 
-    # Thermal velocity
+    # Thermal velocity — computed here for completeness but not used in current
+    # formulas because the drift current expressions are already averaged over the
+    # Maxwellian (v_perp^2 → k_B T / m), making explicit v_th unnecessary.
     v_th_p = np.sqrt(2 * T_J / m_p)
     v_th_e = np.sqrt(2 * T_J / m_e)
 
-    # E×B drift (no current)
+    # E×B drift produces no current because both species drift in the same direction
+    # and at the same speed (charge/mass cancel), so opposite charges cancel out.
     J_ExB = 0.0
 
-    # Grad-B current (diamagnetic)
+    # Grad-B current: J = n * (q_i v_gradB,i + q_e v_gradB,e).
+    # Each species contributes nkT/B^2 * ∇B (same magnitude, opposite sign of charge,
+    # but opposite drift direction), so they ADD rather than cancel — diamagnetic current.
     J_gradB = n * 2 * T_J / B**2 * grad_B
 
-    # Polarization current (ions only)
+    # Polarization current comes almost entirely from ions: m_i/m_e ~ 1836, so the
+    # electron contribution is negligible. Only ion mass enters the formula.
     J_pol = n * m_p / B**2 * dE_dt
 
-    # Gravitational current
+    # Gravitational current: ions dominate (m_i >> m_e); the formula uses m_p
+    # because even for heavier ions the proton approximation is illustrative here.
     J_grav = n * m_p * g / B
 
     return {

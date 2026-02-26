@@ -5,6 +5,17 @@
 > **Prerequisites**: Floats and Figures, Document Structure
 > **Objective**: Master advanced table creation techniques including professional formatting with booktabs, multi-row and multi-column cells, colored tables, long tables spanning multiple pages, and sophisticated table layouts for research papers and technical documents.
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply the `booktabs` package to produce publication-quality tables with professional horizontal rules
+2. Merge cells horizontally and vertically using `\multicolumn` and `\multirow`
+3. Add background colors to rows, columns, and individual cells using the `colortbl` package
+4. Create long tables that break across multiple pages with consistent headers and footers using `longtable`
+5. Automatically generate tables from data using loops and the `pgfplotstable` package
+6. Evaluate table design choices to improve readability and meet journal or conference formatting guidelines
+
 ---
 
 ## Introduction
@@ -790,6 +801,6 @@ Professional table formatting significantly improves document quality and is ess
 ---
 
 **Navigation**:
-- [Previous: 06_Floats_and_Figures.md](06_Floats_and_Figures.md)
-- [Next: 08_Cross_References.md](08_Cross_References.md)
+- [Previous: Floats, Figures & Tables](06_Floats_and_Figures.md)
+- [Next: Cross-References & Citations](08_Cross_References.md)
 - [Back to Overview](00_Overview.md)

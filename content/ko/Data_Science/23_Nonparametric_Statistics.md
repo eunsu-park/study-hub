@@ -2,9 +2,21 @@
 
 [이전: 다변량 분석](./22_Multivariate_Analysis.md) | [다음: 실험 설계](./24_Experimental_Design.md)
 
-## 개요
+## 학습 목표 (Learning Objectives)
 
-비모수 통계는 모집단의 분포에 대한 가정 없이 데이터를 분석하는 방법입니다. 정규성을 만족하지 않거나 표본 크기가 작을 때 유용합니다.
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 비모수 검정(nonparametric test)이 모수 검정(parametric test)보다 적합한 상황을 파악한다
+2. Mann-Whitney U 검정을 두 독립 그룹 비교에 적용하고, 순위 이연 상관(rank-biserial) 효과 크기를 해석한다
+3. Wilcoxon 부호순위(signed-rank) 검정을 대응 표본 및 단일 표본 중위수 검정에 적용한다
+4. Kruskal-Wallis H 검정으로 세 그룹 이상을 비교하고, Bonferroni 보정된 사후 비교(post-hoc comparison)를 수행한다
+5. Spearman과 Kendall 순위 상관(rank correlation)의 차이를 구분하고, 데이터 유형에 맞는 방법을 선택한다
+6. 비모수 검정의 효과 크기(rank-biserial r, eta-squared, Kendall's W)를 계산하고 해석한다
+7. 정규성 검정, 검정 선택, 시각화를 포함한 종합 비모수 분석 워크플로우를 구현한다
+
+---
+
+모든 데이터가 정규분포의 규칙을 따르지는 않습니다. 편포(skewed distribution), 작은 표본, 순서형 척도(ordinal scale), 그리고 제거하기 어려운 이상치(outlier)는 모두 모수 검정이 의존하는 가정을 위반할 수 있습니다. 비모수 방법은 원시 값 대신 순위(rank)를 사용함으로써 이러한 분포 제약에서 자유로워지며, 교과서적인 가정이 성립하지 않는 상황에서도 강건하고 타당한 추론을 가능하게 합니다.
 
 ---
 

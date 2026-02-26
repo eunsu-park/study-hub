@@ -1,12 +1,21 @@
 # Message Queue Fundamentals
 
+**Previous**: [Data Consistency Patterns](./10_Data_Consistency_Patterns.md) | **Next**: [Message System Comparison](./12_Message_System_Comparison.md)
+
 Difficulty: ⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Message queues are essential infrastructure enabling asynchronous communication between services in distributed systems. This chapter covers the differences between synchronous and asynchronous communication, queue vs topic concepts, message delivery guarantees, and idempotency.
+1. Distinguish between synchronous and asynchronous communication and identify when each is appropriate
+2. Explain the core benefits of message queues in distributed architectures (decoupling, buffering, resilience)
+3. Compare queue-based (point-to-point) and topic-based (publish-subscribe) messaging models
+4. Describe the three message delivery guarantees (at-most-once, at-least-once, exactly-once) and their trade-offs
+5. Implement idempotent message consumers using deduplication keys and idempotency tokens
+6. Apply common message queue patterns (work queue, fan-out, request-reply, dead letter queue) to real-world scenarios
 
 ---
+
+Every modern web application you use -- from ride-sharing to e-commerce checkout -- relies on message queues behind the scenes to handle work that does not need an immediate response. When you place an order online, the confirmation page appears instantly while payment processing, inventory updates, and email notifications happen asynchronously through message queues. Understanding message queues is the first step toward building systems that remain responsive under heavy load and gracefully survive partial failures.
 
 ## Table of Contents
 
@@ -777,9 +786,7 @@ Design how to make the following operations idempotent:
 
 ---
 
-## Next Steps
-
-In [12_Message_System_Comparison.md](./12_Message_System_Comparison.md), let's compare major message systems like Kafka, RabbitMQ, AWS SQS/SNS!
+**Previous**: [Data Consistency Patterns](./10_Data_Consistency_Patterns.md) | **Next**: [Message System Comparison](./12_Message_System_Comparison.md)
 
 ---
 

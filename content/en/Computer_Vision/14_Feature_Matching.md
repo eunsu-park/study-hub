@@ -1,8 +1,21 @@
 # Feature Matching
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the feature matching pipeline from descriptor extraction to correspondence establishment between images
+2. Implement brute-force matching with BFMatcher and approximate matching with FLANN using OpenCV
+3. Apply appropriate distance metrics (L2 norm vs. Hamming distance) based on descriptor type
+4. Filter matches using Lowe's ratio test and cross-check validation to reduce false correspondences
+5. Compute a homography matrix using RANSAC to robustly estimate geometric transformations between matched images
+6. Design an image stitching workflow that combines feature detection, matching, and homography estimation
+
+---
+
 ## Overview
 
-Feature matching is the process of finding and connecting identical feature points across two images. It is used in object recognition, image stitching, 3D reconstruction, object tracking, and more. In this lesson, we will learn about BFMatcher, FLANN, distance metrics, Lowe's ratio test, Homography, and RANSAC.
+Feature matching is the process of finding and connecting identical feature points across two images. Detection alone cannot answer "is this the same object?" or "how do these two views relate geometrically?" — matching is the step that establishes point correspondences between images, making it the bridge from individual keypoints to higher-level tasks like image stitching, 3D reconstruction, and object tracking. In this lesson, we will learn about BFMatcher, FLANN, distance metrics, Lowe's ratio test, Homography, and RANSAC.
 
 ---
 
@@ -121,13 +134,16 @@ def bf_matching_demo(img1_path, img2_path):
     kp1, des1 = orb.detectAndCompute(img1, None)
     kp2, des2 = orb.detectAndCompute(img2, None)
 
-    # Create BFMatcher (Hamming distance for binary)
+    # NORM_HAMMING: counts differing bits between binary ORB descriptors;
+    # much faster than L2 for binary vectors (single XOR + popcount instruction)
+    # crossCheck=True: a match is only kept if A→B and B→A agree — this
+    # eliminates one-to-many false matches with no extra computation
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
-    # Match
+    # Match (returns one best match per query descriptor)
     matches = bf.match(des1, des2)
 
-    # Sort by distance
+    # Sort by distance so the first N drawn are the most confident matches
     matches = sorted(matches, key=lambda x: x.distance)
 
     # Draw top 30 matches
@@ -163,19 +179,21 @@ def bf_crosscheck_comparison(img1_path, img2_path):
     kp1, des1 = orb.detectAndCompute(img1, None)
     kp2, des2 = orb.detectAndCompute(img2, None)
 
-    # crossCheck=False
+    # crossCheck=False: every query descriptor gets a match regardless of quality;
+    # produces more matches but includes many spurious one-to-many assignments
     bf_no_cross = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
     matches_no_cross = bf_no_cross.match(des1, des2)
 
-    # crossCheck=True
-    # Both A->B and B->A must match
+    # crossCheck=True: symmetric consistency filter — descriptor A must be B's
+    # nearest neighbour AND B must be A's nearest neighbour; effectively a free
+    # version of the ratio test that works well when feature counts are similar
     bf_cross = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches_cross = bf_cross.match(des1, des2)
 
     print(f"crossCheck=False: {len(matches_no_cross)} matches")
     print(f"crossCheck=True:  {len(matches_cross)} matches")
-
-    # crossCheck=True provides more reliable matches
+    # crossCheck=True is always the safer default for bf.match(); use False
+    # only when you plan to apply a separate ratio test via knnMatch
 
 bf_crosscheck_comparison('query.jpg', 'train.jpg')
 ```
@@ -196,10 +214,12 @@ def bf_knn_matching(img1_path, img2_path, k=2):
     kp1, des1 = sift.detectAndCompute(img1, None)
     kp2, des2 = sift.detectAndCompute(img2, None)
 
-    # BFMatcher (L2 distance for float)
+    # L2 (Euclidean) distance for float descriptors like SIFT — these represent
+    # gradient histograms where Euclidean distance is geometrically meaningful
     bf = cv2.BFMatcher(cv2.NORM_L2)
 
-    # Return k nearest neighbors
+    # k=2: retrieve the 2 nearest neighbours so that the ratio test (Lowe's)
+    # can compare the best match against the second-best; k=1 cannot do this
     matches = bf.knnMatch(des1, des2, k=k)
 
     # k matches per query descriptor
@@ -252,23 +272,30 @@ def flann_matching_sift(img1_path, img2_path):
     kp1, des1 = sift.detectAndCompute(img1, None)
     kp2, des2 = sift.detectAndCompute(img2, None)
 
-    # FLANN parameters (KD-Tree)
+    # FLANN (Fast Library for Approximate Nearest Neighbours) is preferred over
+    # BFMatcher when descriptor counts are large (thousands): it uses tree-based
+    # approximate search instead of exhaustive O(N*M) comparison
     FLANN_INDEX_KDTREE = 1
     index_params = dict(
-        algorithm=FLANN_INDEX_KDTREE,
-        trees=5
+        algorithm=FLANN_INDEX_KDTREE,  # KD-Tree partitions the 128-D SIFT space;
+                                       # efficient for float descriptors up to ~128 dims
+        trees=5   # Multiple randomised trees improve accuracy at little memory cost;
+                  # 5 is the standard trade-off between build time and query speed
     )
     search_params = dict(
-        checks=50  # Search iterations (higher = more accurate, slower)
+        checks=50  # How many tree nodes to visit per query; 50 gives ~95% recall
+                   # vs brute-force — increase to 100+ for higher precision applications
     )
 
     # Create FLANN matcher
     flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-    # k-nearest neighbors matching
+    # k=2 to enable Lowe's ratio test — we need the second-best match to judge
+    # whether the best match stands out clearly enough
     matches = flann.knnMatch(des1, des2, k=2)
 
-    # Lowe's ratio test
+    # Lowe's ratio test: reject matches where best and second-best distances are
+    # similar (ambiguous); 0.7 is Lowe's recommended threshold from the 2004 paper
     good_matches = []
     for m, n in matches:
         if m.distance < 0.7 * n.distance:
@@ -307,19 +334,25 @@ def flann_matching_orb(img1_path, img2_path):
     kp1, des1 = orb.detectAndCompute(img1, None)
     kp2, des2 = orb.detectAndCompute(img2, None)
 
-    # FLANN parameters (LSH for binary)
+    # LSH (Locality-Sensitive Hashing) for binary descriptors: KD-Trees are
+    # inefficient for bit vectors because Euclidean distance is meaningless there;
+    # LSH hashes similar binary strings to the same bucket using Hamming distance
     FLANN_INDEX_LSH = 6
     index_params = dict(
         algorithm=FLANN_INDEX_LSH,
-        table_number=6,        # Number of hash tables
-        key_size=12,           # Key size
-        multi_probe_level=1    # Multi-probe level
+        table_number=6,        # More tables = higher recall but more memory;
+                               # 6–12 is typical for 256-bit ORB descriptors
+        key_size=12,           # Bits per hash key: smaller keys are less selective
+                               # but handle descriptor noise better
+        multi_probe_level=1    # Probe neighbouring buckets to boost recall;
+                               # 1–2 is the standard setting
     )
     search_params = dict(checks=50)
 
     flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-    # Convert descriptors to float32 (FLANN requirement)
+    # FLANN's internal math expects float32; the cast does not change the binary
+    # content but satisfies the type check before passing to FLANN's C++ backend
     des1 = des1.astype(np.float32)
     des2 = des2.astype(np.float32)
 
@@ -352,6 +385,8 @@ flann_matching_orb('query.jpg', 'train.jpg')
 ## 4. Distance Metrics
 
 ### Distance Types
+
+The choice of distance metric must match the descriptor's mathematical structure. SIFT encodes gradient histograms as float vectors — two similar patches produce nearby vectors in Euclidean space, so L2 is geometrically meaningful. ORB encodes patch comparisons as individual bits — two similar patches differ in few bits, so XOR + popcount (Hamming distance) is the natural measure and runs in a single CPU instruction on modern hardware.
 
 ```
 +--------------------------------------------------------------------+
@@ -431,10 +466,16 @@ def lowe_ratio_test(img1_path, img2_path, ratio_thresh=0.75):
     kp1, des1 = sift.detectAndCompute(img1, None)
     kp2, des2 = sift.detectAndCompute(img2, None)
 
+    # No crossCheck here: knnMatch requires crossCheck=False to return k>1 results
     bf = cv2.BFMatcher()
+    # k=2: we need the runner-up to compute the ratio; k=1 would not allow filtering
     matches = bf.knnMatch(des1, des2, k=2)
 
-    # Ratio test
+    # Lowe's ratio test: reject matches where the best and second-best are
+    # too similar — Lowe (2004) found 0.7–0.8 eliminates ~90% of false
+    # matches while retaining ~95% of correct ones.
+    # Intuition: a correct match has one clearly better candidate (low ratio);
+    # a false match has many similar candidates (ratio close to 1.0)
     good_matches = []
     for m, n in matches:
         ratio = m.distance / n.distance
@@ -576,12 +617,20 @@ def find_object_homography(img1_path, img2_path, min_matches=10):
 
     print(f"Good matches: {len(good_matches)}")
 
+    # Homography needs at least 4 point correspondences (DLT algorithm);
+    # requiring 10+ gives RANSAC enough candidates to find a consensus set
+    # even if half are outliers
     if len(good_matches) >= min_matches:
-        # Extract matched point coordinates
+        # reshape(-1, 1, 2): cv2.findHomography requires this specific shape
+        # (Nx1x2) — it signals that each row is one 2D point, not a flat array
         src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
         dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
 
-        # Compute homography (RANSAC)
+        # RANSAC robustly estimates H even when 30–50% of matches are wrong
+        # (outliers from background clutter or repetitive texture);
+        # threshold=5.0 px: a reprojection error under 5 pixels is considered
+        # an inlier — tight enough to reject bad matches, loose enough for
+        # sub-pixel descriptor imprecision
         H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
 
         if H is not None:
@@ -749,7 +798,8 @@ def simple_panorama(img1_path, img2_path):
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
 
-    # Compute result image size
+    # Project the four corners of img1 through H to find where they land in
+    # img2's coordinate system — this tells us the bounding box of the panorama
     corners1 = np.float32([[0, 0], [w1, 0], [w1, h1], [0, h1]]).reshape(-1, 1, 2)
     corners1_transformed = cv2.perspectiveTransform(corners1, H)
 
@@ -757,20 +807,23 @@ def simple_panorama(img1_path, img2_path):
 
     all_corners = np.concatenate([corners1_transformed, corners2], axis=0)
 
+    # Bounding box of the union of both images in the target coordinate system
     x_min, y_min = np.int32(all_corners.min(axis=0).ravel())
     x_max, y_max = np.int32(all_corners.max(axis=0).ravel())
 
-    # Translation transform
+    # Shift the entire result so the top-left is at (0,0) — negative x_min/y_min
+    # mean part of img1 maps to negative coordinates which warpPerspective would clip
     translation = np.array([
         [1, 0, -x_min],
         [0, 1, -y_min],
         [0, 0, 1]
     ], dtype=np.float32)
 
-    # Warp image 1
     result_width = x_max - x_min
     result_height = y_max - y_min
 
+    # translation @ H: apply H first (warp img1 to img2 coords) then translate
+    # so the result sits inside the positive canvas — order matters in homogeneous coords
     warped1 = cv2.warpPerspective(
         img1,
         translation @ H,

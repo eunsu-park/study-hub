@@ -1,15 +1,23 @@
 # Clean Code & Code Smells
 
-> **Topic**: Programming
-> **Lesson**: 8 of 16
-> **Prerequisites**: Programming experience in at least one language, familiarity with functions and classes
-> **Objective**: Learn to write clean, maintainable code by following best practices, recognizing code smells, and applying effective refactoring techniques
+**Previous**: [Design Patterns](./07_Design_Patterns.md) | **Next**: [Error Handling](./09_Error_Handling.md)
 
-## Introduction
+## Learning Objectives
 
-"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler
+After completing this lesson, you will be able to:
 
-Clean code is code that is easy to read, understand, and modify. It minimizes cognitive load, reduces bugs, and makes collaboration easier. This lesson covers principles from Robert C. Martin's *Clean Code*, Martin Fowler's *Refactoring*, and other industry best practices.
+1. Explain the concept of technical debt and describe its impact on long-term software maintenance
+2. Apply intention-revealing naming conventions for variables, functions, and classes
+3. Write small, focused functions that follow the single-responsibility principle and have minimal arguments
+4. Identify at least eight common code smells (Long Method, God Class, Feature Envy, Data Clumps, Shotgun Surgery, Primitive Obsession, Switch Statements, Dead Code)
+5. Apply standard refactoring techniques (Extract Method, Rename, Introduce Explaining Variable, Move Method, Replace Magic Number)
+6. Distinguish between good and bad comments and prefer self-documenting code
+7. Apply the DRY, KISS, YAGNI, and Boy Scout Rule principles to everyday coding decisions
+8. Evaluate code formatting practices (vertical/horizontal) and explain the value of team conventions and automated formatters
+
+---
+
+"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." -- Martin Fowler. Clean code is code that is easy to read, understand, and modify. It minimizes cognitive load, reduces bugs, and makes collaboration easier. This lesson covers principles from Robert C. Martin's *Clean Code*, Martin Fowler's *Refactoring*, and other industry best practices.
 
 ## The Cost of Bad Code
 
@@ -1323,5 +1331,4 @@ Create a code review checklist based on this lesson. Include at least:
 
 ---
 
-**Previous**: [07_Design_Patterns.md](07_Design_Patterns.md)
-**Next**: [09_Error_Handling.md](09_Error_Handling.md)
+**Previous**: [Design Patterns](./07_Design_Patterns.md) | **Next**: [Error Handling](./09_Error_Handling.md)

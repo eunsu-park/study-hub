@@ -1,5 +1,17 @@
 # 25. Research Frontiers
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain test-time compute scaling and describe how o1-style reasoning improves performance on complex problems by generating extended chain-of-thought reasoning
+2. Describe the World Models paradigm and explain how models like Sora learn latent physical simulations from video data
+3. Analyze the role of synthetic data generation in scaling foundation model training beyond internet-scale corpora
+4. Compare multi-agent system architectures and describe how specialized agents can collaborate to solve tasks beyond single-model capabilities
+5. Evaluate emerging research directions in foundation models and assess their potential impact on AI capabilities over the next few years
+
+---
+
 ## Overview
 
 This lesson explores the cutting edge of Foundation Model research. We investigate future directions including World Models, o1-style Reasoning, Synthetic Data, and Multi-Agent systems.
@@ -745,4 +757,169 @@ Prediction:"""
 2. Yao et al. (2023). "Tree of Thoughts: Deliberate Problem Solving with Large Language Models"
 3. Park et al. (2023). "Generative Agents: Interactive Simulacra of Human Behavior"
 4. Ha & Schmidhuber (2018). "World Models"
+
+---
+
+## Exercises
+
+### Exercise 1: Test-Time Compute Scaling Trade-offs
+o1-style models spend more compute during inference rather than relying solely on training-time scaling. Compare the two paradigms for the following scenarios and explain which is more appropriate in each case.
+
+| Scenario | Training-time scaling | Test-time compute scaling | Better choice | Reason |
+|----------|----------------------|--------------------------|---------------|--------|
+| A) Answering 1M customer support queries per day | ??? | ??? | ??? | ??? |
+| B) Solving a novel mathematics competition problem | ??? | ??? | ??? | ??? |
+| C) Real-time coding autocomplete (< 50ms latency) | ??? | ??? | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Scenario | Training-time scaling | Test-time compute | Better choice | Reason |
+|----------|----------------------|-------------------|---------------|--------|
+| A) 1M customer support queries/day | Larger model handles more query types; fixed latency | Higher quality on difficult queries, but adds latency and cost per query | **Training-time scaling** | Customer support has high volume and predictable query types. Each query should be handled quickly. Training-time scaling (larger or better-trained model) gives consistent quality per query at fixed marginal cost. Test-time compute would multiply cost by 10-50x per query — prohibitive at 1M/day. |
+| B) Novel math competition problem | Better general mathematical knowledge | Generate multiple solution paths, verify each, backtrack on errors | **Test-time compute scaling** | Novel competition problems often require exploring multiple approaches before finding the right one. A human mathematician doesn't solve IMO problems in 2 seconds — they think for hours. Test-time compute mimics this: spend 10-100x more tokens on hard problems. Volume is low (1 problem), so high per-problem cost is acceptable. |
+| C) Real-time code autocomplete (<50ms) | Model must know common code patterns at inference time | More thinking → more latency → violates 50ms requirement | **Training-time scaling** | Hard latency constraint of 50ms makes test-time compute scaling infeasible (it requires many additional forward passes). Instead: use a well-trained small model (< 1B params) with high accuracy on common code patterns from training. Techniques like speculative decoding can improve speed, but the thinking budget must be near-zero. |
+
+**Key insight**: Test-time compute is most valuable for problems that are **rare, difficult, and allow spending more time** on individual instances. Training-time scaling is better for **high-volume, latency-sensitive, or cost-constrained** applications.
+
+</details>
+
+### Exercise 2: Synthetic Data Model Collapse Risk
+The `SyntheticDataGenerator` trains on teacher-generated data. Explain the "model collapse" phenomenon and describe two concrete strategies to detect and prevent it.
+
+```python
+# Potential collapse scenario:
+# Round 1: Train on human data → Model v1
+# Round 2: Generate synthetic data with v1 → Train → Model v2
+# Round 3: Generate synthetic data with v2 → Train → Model v3
+# ...
+# Round N: What happens to the distribution?
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Model collapse mechanism**:
+
+At each round, the model generates synthetic training data from its own distribution. Each generation step introduces subtle biases and loses tail-distribution examples (rare but important patterns). When the next model trains on this narrowed distribution, it amplifies the bias further.
+
+```
+Round 1 (human data): Distribution covers {common, uncommon, rare} content
+Round 2 (v1 synthetic): Drops some "rare" patterns (low probability → rarely sampled)
+Round 3 (v2 synthetic): Further shrinks distribution, amplifies v1's biases
+Round N: Distribution collapses to high-probability, repetitive outputs
+         - Reduced vocabulary diversity
+         - Repetitive stylistic patterns
+         - Loss of factual edge cases
+         - Overconfident on uncertain questions (model v1's confident wrong answers propagate)
+```
+
+**Prevention Strategy 1: Human data replay**
+
+```python
+def train_with_replay(synthetic_data, human_data, replay_ratio=0.1):
+    """Always include a fraction of original human data"""
+    # In every training batch: 10% human data + 90% synthetic
+    # Human data anchors the distribution to the real world
+    # Prevents drift toward narrow synthetic distribution
+    human_sample = random.sample(human_data, int(len(synthetic_data) * replay_ratio))
+    combined = synthetic_data + human_sample
+    return combined
+```
+This ensures the model always sees "ground truth" human data and cannot fully collapse.
+
+**Prevention Strategy 2: Distribution divergence monitoring**
+
+```python
+def check_distribution_health(model_v_current, model_v_previous, test_prompts):
+    """Detect collapse by comparing output distributions"""
+    # Generate outputs from both model versions
+    outputs_current = [model_v_current.generate(p) for p in test_prompts]
+    outputs_previous = [model_v_previous.generate(p) for p in test_prompts]
+
+    # Measure: vocabulary diversity (unique tokens / total tokens)
+    diversity_current = len(set(tokenize(outputs_current))) / len(tokenize(outputs_current))
+    diversity_previous = len(set(tokenize(outputs_previous))) / len(tokenize(outputs_previous))
+
+    # Alert if diversity drops > 10% between generations
+    if diversity_current < diversity_previous * 0.9:
+        raise CollapseWarning(f"Distribution shrinking: {diversity_previous:.3f} → {diversity_current:.3f}")
+
+    # Also monitor: perplexity on human-written held-out text
+    # Increasing perplexity = model drifting from human distribution
+```
+
+</details>
+
+### Exercise 3: Multi-Agent Debate vs. Single Model
+In a multi-agent debate system, multiple LLMs argue for different positions and then reach consensus. For which types of problems does debate improve answer quality vs. potentially degrading it?
+
+Evaluate these tasks:
+- Task A: "Is the following Python code correct? [function with subtle off-by-one error]"
+- Task B: "What is the capital of France?"
+- Task C: "Should a company prioritize profit or employee well-being?"
+
+<details>
+<summary>Show Answer</summary>
+
+**Task A: Code correctness with subtle bug — Debate HELPS**
+
+Different agents independently review the code and may notice the off-by-one error from different angles:
+- Agent 1: "The loop condition uses `<` but should use `<=` because..."
+- Agent 2: "The initialization at `i=1` misses the first element..."
+- Agent 3: "When array length is 0, this crashes because..."
+
+The adversarial structure forces each agent to look for flaws. A single model may confidently say "looks correct" (sycophancy toward the prompt's implicit assumption that it is correct). Multiple agents with independent review are more likely to surface the bug.
+
+**Task B: Capital of France — Debate HURTS (or wastes resources)**
+
+"Paris" is a factual answer with no ambiguity. If agents debate it:
+- Agent 1: "Paris"
+- Agent 2: "Paris"
+- Agent 3: "Paris, but historically Versailles served as capital under Louis XIV..."
+
+The debate adds latency, cost, and potential for agents to introduce spurious "interesting" qualifications that confuse the final answer. For factual, closed-domain questions with deterministic answers, single model with high confidence is better.
+
+**Task C: Profit vs. employee well-being — Debate HELPS (but risks polarization)**
+
+This is a genuinely contested question with multiple valid perspectives. Debate structure can surface:
+- Economic efficiency arguments (profit enables reinvestment → long-term employee benefit)
+- Social contract arguments (employees are stakeholders, not just resources)
+- Empirical evidence (companies with high employee satisfaction outperform long-term)
+
+**Risk**: If agents are assigned fixed "sides" (Agent A = pro-profit, Agent B = pro-employee), they may generate persuasive but one-sided arguments that amplify polarization rather than reaching a nuanced synthesis. Better to have agents generate multiple independent perspectives without fixed assignments.
+
+**General rule**: Debate improves quality for **reasoning problems** (where multiple paths can be cross-checked), **adversarial tasks** (bug finding, security review), and **value-laden questions** (where multiple perspectives add nuance). It adds cost without benefit for **factual lookups**, **simple computations**, and **consensus tasks** where all models agree anyway.
+
+</details>
+
+### Exercise 4: World Models for Physical Reasoning
+Sora-style world models learn to simulate physical environments from video data. Explain one fundamental limitation that prevents current world models from being used as reliable physics simulators, and describe what kind of training data would be needed to address it.
+
+<details>
+<summary>Show Answer</summary>
+
+**Fundamental limitation: Lack of causal grounding (correlation vs. causation)**
+
+Current video-based world models learn **statistical correlations** in pixel space: "when I see this frame configuration, the next frame typically looks like this." They do not learn the **causal physical laws** (Newton's laws, conservation of energy, fluid dynamics equations) that generate those correlations.
+
+**Concrete example**:
+A world model trained on videos of balls rolling down ramps learns to predict: "ball at top of ramp → ball rolling → ball at bottom." But it does this by memorizing the visual trajectory pattern, not by modeling force = mass × acceleration.
+
+**Failure modes**:
+- **Counterfactual reasoning**: "If the ball was twice as heavy, how would it roll?" — the model can't answer because it never learned mass-acceleration relationships, only visual patterns.
+- **Novel physics configurations**: A ramp with a shape never seen in training videos may generate physically impossible trajectories (ball passing through the ramp surface).
+- **Long-horizon extrapolation**: Even if short-term prediction is accurate (learned from videos), extrapolating 10 seconds ahead accumulates errors because small deviations from the learned distribution compound.
+
+**What training data would address this**:
+
+1. **Labeled physics simulations** (e.g., from game engines): Videos paired with ground-truth physical quantities (velocity, force, energy at each frame). The model can learn to predict these quantities, not just pixel values.
+
+2. **Interventional data** (counterfactual pairs): The same physical setup with different object masses, friction coefficients, etc. "Ball A (1kg) rolls to position X in 2s; Ball B (2kg) rolls to position X in 2s" — teaches mass-independence of ramp trajectories (only relevant when air resistance is present), grounding the model in actual causal structure.
+
+3. **Long-horizon physics benchmarks**: Evaluation datasets that test 30+ second extrapolations, forcing models to learn stable physical representations rather than short-term pattern matching.
+
+The key insight: visual world models are excellent for **predictive** tasks (what will happen next?) but insufficient for **causal** tasks (why did it happen, and what if it were different?).
+
+</details>
 5. Sora Technical Report (2024)

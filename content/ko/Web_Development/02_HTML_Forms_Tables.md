@@ -1,5 +1,23 @@
 # HTML 폼과 테이블
 
+**이전**: [HTML 기초](./01_HTML_Basics.md) | **다음**: [CSS 기초](./03_CSS_Basics.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. HTML 폼의 목적을 설명하고 GET 방식과 POST 방식의 차이를 설명할 수 있다
+2. 텍스트, 날짜, 선택, 파일 업로드, 버튼 입력 요소를 폼에 구현할 수 있다
+3. required, pattern, minlength 및 type 기반 검사와 같은 HTML5 기본 검증(built-in validation) 속성을 적용할 수 있다
+4. JavaScript를 사용하여 커스텀 폼 유효성 검사 로직을 작성할 수 있다
+5. thead, tbody, tfoot, caption을 사용하여 올바른 시맨틱 구조의 테이블을 구성할 수 있다
+6. colspan과 rowspan을 적용하여 테이블 셀을 병합할 수 있다
+7. label, fieldset, legend, ARIA 속성을 사용하여 접근성 있는 폼(accessible form)을 구현할 수 있다
+
+---
+
+폼과 테이블은 HTML에서 가장 상호작용이 많은 두 가지 구조입니다. 폼은 정적인 페이지를 양방향 대화로 바꿔줍니다 — 로그인 자격 증명, 검색어, 다단계 회원가입 등 사용자가 서버로 데이터를 보낼 수 있게 합니다. 테이블은 시간표, 재무 보고서, 비교 표와 같이 진정으로 표 형태인 데이터를 표시하는 올바른 도구입니다.
+
 ## 1. 폼(Form) 기초
 
 폼은 사용자로부터 데이터를 입력받아 서버로 전송하는 요소입니다.
@@ -858,4 +876,4 @@
 
 ## 다음 단계
 
-[03_CSS_Basics.md](./03_CSS_Basics.md)에서 CSS 스타일링을 배워봅시다!
+[CSS 기초](./03_CSS_Basics.md)에서 CSS 스타일링을 배워봅시다!

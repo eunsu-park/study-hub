@@ -1,5 +1,18 @@
 # Arrays and Strings
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Recall the time complexity of core array operations (access, insertion, deletion, search) and explain when each applies
+2. Implement the two pointers technique to solve problems such as pair sums and palindrome checking in O(n) time
+3. Apply the sliding window pattern to efficiently compute subarray or substring statistics without redundant computation
+4. Use prefix sums to answer range-sum queries in O(1) after O(n) preprocessing
+5. Process strings by recognizing character frequency counting as a hash-map pattern and apply it to anagram and duplicate detection problems
+6. Select the appropriate array/string technique (two pointers, sliding window, or prefix sum) given a problem's constraints and goals
+
+---
+
 ## Overview
 
 Arrays and strings are the most fundamental data structures. This lesson covers key techniques frequently used in array/string problems: two pointers, sliding window, and prefix sum.
@@ -113,6 +126,10 @@ left → [1]  [2]  [4]  [6]  [8]  [10]
 ```c
 // C
 void twoSum(int arr[], int n, int target) {
+    // Start from both ends — works because the array is sorted:
+    // if the sum is too small, moving left pointer right increases it;
+    // if too large, moving right pointer left decreases it. An unsorted
+    // array would require O(n²) nested scan instead.
     int left = 0;
     int right = n - 1;
 
@@ -124,9 +141,9 @@ void twoSum(int arr[], int n, int target) {
                    arr[left], arr[right], target);
             return;
         } else if (sum < target) {
-            left++;
+            left++;   // Need a larger value — move toward bigger elements
         } else {
-            right--;
+            right--;  // Need a smaller value — move toward smaller elements
         }
     }
     printf("Not found\n");
@@ -281,9 +298,14 @@ Result: [1, 2, 3, _, _, _], 3 unique elements
 int removeDuplicates(int arr[], int n) {
     if (n == 0) return 0;
 
+    // slow marks the write position — everything at [0..slow] is the
+    // deduplicated prefix. Separating read (fast) from write (slow) lets
+    // us modify the array in-place without needing extra memory.
     int slow = 0;
 
     for (int fast = 1; fast < n; fast++) {
+        // Only write when we find a new unique value; duplicate runs
+        // in a sorted array are contiguous, so a simple != check suffices
         if (arr[fast] != arr[slow]) {
             slow++;
             arr[slow] = arr[fast];
@@ -385,7 +407,8 @@ int maxSumNaive(int arr[], int n, int k) {
 
 // C - Sliding Window: O(n)
 int maxSumSliding(int arr[], int n, int k) {
-    // Calculate first window sum
+    // Seed the window with the first k elements; we need a valid baseline
+    // before we can start sliding — computing it separately avoids an off-by-one
     int windowSum = 0;
     for (int i = 0; i < k; i++) {
         windowSum += arr[i];
@@ -393,7 +416,9 @@ int maxSumSliding(int arr[], int n, int k) {
 
     int maxSum = windowSum;
 
-    // Slide window
+    // Slide window by subtracting the element that falls off the left edge
+    // and adding the new element on the right — O(1) update instead of O(k)
+    // recomputation, which is the entire point of the sliding window technique
     for (int i = k; i < n; i++) {
         windowSum += arr[i] - arr[i - k];  // Add new, remove old
         if (windowSum > maxSum) {
@@ -472,13 +497,17 @@ Answer: 2
 ```c
 // C
 int minSubArrayLen(int arr[], int n, int target) {
-    int minLen = n + 1;  // Initialize to impossible value
+    // Initialize to n + 1 (one beyond the maximum possible length) so any
+    // valid window will be smaller — avoids a special "not found" flag
+    int minLen = n + 1;
     int left = 0;
     int sum = 0;
 
     for (int right = 0; right < n; right++) {
         sum += arr[right];
 
+        // Shrink from the left as long as the window still meets the condition —
+        // we want the *shortest* valid window, so we squeeze greedily
         while (sum >= target) {
             int len = right - left + 1;
             if (len < minLen) {
@@ -555,12 +584,16 @@ Answer: 3 ("abc" or "bca" or "cab")
 ```cpp
 // C++
 int lengthOfLongestSubstring(const string& s) {
+    // A set tracks which characters are currently in the window — O(1)
+    // membership test lets us detect duplicates without rescanning the window
     unordered_set<char> seen;
     int maxLen = 0;
     int left = 0;
 
     for (int right = 0; right < s.length(); right++) {
-        // Move left if duplicate
+        // Remove from the left until the new character s[right] is no longer a
+        // duplicate — we can't simply jump left to the duplicate's position
+        // because the set would go out of sync with the actual window contents
         while (seen.count(s[right])) {
             seen.erase(s[left]);
             left++;
@@ -723,10 +756,14 @@ public:
     PrefixSum2D(const vector<vector<int>>& matrix) {
         int m = matrix.size();
         int n = matrix[0].size();
+        // Allocate (m+1) × (n+1) with an extra row and column of zeros —
+        // the sentinel border avoids special-casing i==0 or j==0 in the formula
         prefix.resize(m + 1, vector<int>(n + 1, 0));
 
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
+                // Inclusion-exclusion: add top and left prefixes, subtract
+                // the top-left region counted twice, then add current cell
                 prefix[i + 1][j + 1] = matrix[i][j]
                                      + prefix[i][j + 1]
                                      + prefix[i + 1][j]
@@ -735,8 +772,10 @@ public:
         }
     }
 
-    // Sum of submatrix (r1,c1)~(r2,c2)
+    // Sum of submatrix (r1,c1)~(r2,c2) — O(1) query regardless of submatrix size
     int query(int r1, int c1, int r2, int c2) {
+        // Reverse inclusion-exclusion: subtract two non-overlapping outer strips,
+        // add back the corner region that was subtracted twice
         return prefix[r2 + 1][c2 + 1]
              - prefix[r1][c2 + 1]
              - prefix[r2 + 1][c1]

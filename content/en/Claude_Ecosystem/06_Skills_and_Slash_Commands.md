@@ -13,13 +13,16 @@ Skills are reusable instruction sets that extend Claude Code's capabilities for 
 - [05. Hooks and Event-Driven Automation](./05_Hooks.md)
 - Familiarity with Markdown and YAML frontmatter
 
-**Learning Objectives**:
-- Understand the difference between skills, hooks, and CLAUDE.md instructions
-- Create custom skills using the SKILL.md format
-- Configure skill storage locations (global and project-level)
-- Use built-in slash commands for session management
-- Design skills for common development workflows
-- Make informed decisions about when to use skills vs hooks vs CLAUDE.md
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the difference between skills, hooks, and CLAUDE.md instructions
+2. Create custom skills using the SKILL.md format
+3. Configure skill storage locations (global and project-level)
+4. Use built-in slash commands for session management
+5. Design skills for common development workflows
+6. Make informed decisions about when to use skills vs hooks vs CLAUDE.md
 
 ---
 

@@ -819,6 +819,61 @@ optimizer = torch.optim.AdamW([
 
 ---
 
+## Exercises
+
+### Exercise 1: Patch Embedding Shape Verification
+
+Verify the patch embedding produces the expected tensor shapes.
+
+1. Instantiate `PatchEmbedding(img_size=224, patch_size=16, in_channels=3, embed_dim=768)`.
+2. Pass a random input `torch.randn(2, 3, 224, 224)` and print the output shape.
+3. Confirm the output is `(2, 196, 768)`. Calculate 196 manually: `(224 // 16) ** 2`.
+4. Repeat with `patch_size=32` and `patch_size=8`. What is `num_patches` in each case?
+5. Explain the trade-off: smaller patches give more tokens (better resolution) but increase the O(n²) attention cost.
+
+### Exercise 2: CLS Token Role Verification
+
+Verify that the CLS token aggregates global information from all patches.
+
+1. Build a small ViT (depth=2, `d_model=64`, `nhead=4`) and pass a random image batch.
+2. Extract the CLS token output `x[:, 0]` and each patch token output `x[:, 1:]` after the encoder.
+3. Compute the cosine similarity between the CLS token and each patch token.
+4. Visualize the similarity map by reshaping patch similarities into a `(H/P, W/P)` grid.
+5. Explain why the CLS token serves as the classification representation rather than mean-pooling all patch tokens.
+
+### Exercise 3: ViT Fine-tuning on CIFAR-10
+
+Fine-tune a pretrained ViT on CIFAR-10 using differential learning rates.
+
+1. Load `timm.create_model('vit_small_patch16_224', pretrained=True, num_classes=10)`.
+2. Set backbone learning rate to `1e-5` and head learning rate to `1e-3`.
+3. Apply the correct ImageNet normalization and resize CIFAR-10 images to 224×224.
+4. Train for 10 epochs with `CosineAnnealingLR` and report test accuracy.
+5. Compare with training from scratch (same architecture, random initialization) for 10 epochs.
+
+### Exercise 4: Window Attention Complexity Analysis
+
+Quantify the computational advantage of Swin's window attention over full attention.
+
+1. For an input feature map of size H=56, W=56 with `d_model=96`:
+   - Compute the number of attention operations for full self-attention: O(N²) where N = H × W.
+   - Compute the number for window attention with `window_size=7`: each window has 49 tokens; there are `(56/7)² = 64` windows.
+2. Express the ratio as `full_ops / window_ops`.
+3. Generalize the formula: for image size H×W and window size W_s, derive the complexity ratio.
+4. At what image size does window attention become more than 100× cheaper than full attention?
+
+### Exercise 5: DeiT Knowledge Distillation
+
+Train a DeiT model with knowledge distillation from a CNN teacher.
+
+1. Load a pretrained ResNet-18 as the teacher model.
+2. Build a small DeiT-style model (depth=4, `d_model=192`) as the student.
+3. Implement the combined loss: `0.5 * CrossEntropy(cls_output, labels) + 0.5 * CrossEntropy(dist_output, teacher_argmax)`.
+4. Train on CIFAR-10 for 20 epochs and record validation accuracy.
+5. Compare against the same student model trained without the distillation token and hard labels only. Explain the observed accuracy difference.
+
+---
+
 ## References
 
 - ViT Original: https://arxiv.org/abs/2010.11929

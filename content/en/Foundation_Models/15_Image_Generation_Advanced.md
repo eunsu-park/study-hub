@@ -1,5 +1,17 @@
 # 15. Advanced Image Generation
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the architectural improvements in SDXL over Stable Diffusion 1.5 and describe how dual text encoders enhance image generation quality
+2. Implement ControlNet to achieve spatial control over image generation using depth maps, edge maps, and pose skeletons
+3. Apply IP-Adapter to transfer image style and identity while maintaining prompt-guided content generation
+4. Compare Latent Consistency Models (LCM) with standard diffusion sampling and explain the speed-quality trade-offs
+5. Design end-to-end image generation pipelines that combine multiple conditioning techniques for fine-grained control
+
+---
+
 ## Overview
 
 This lesson covers the latest image generation techniques after Stable Diffusion. We explore practical techniques including SDXL, ControlNet, IP-Adapter, and Latent Consistency Models.
@@ -799,3 +811,182 @@ def batch_generation():
 
 ### Related Lessons
 - [../Deep_Learning/17_Diffusion_Models.md](../Deep_Learning/17_Diffusion_Models.md)
+
+---
+
+## Exercises
+
+### Exercise 1: SDXL Dual Encoder Analysis
+SDXL uses two text encoders: CLIP ViT-L/14 and OpenCLIP ViT-bigG. Their embeddings are concatenated before being passed to the UNet. Explain the purpose of this dual-encoder design and describe what each encoder likely contributes. Also explain why SDXL's micro-conditioning (passing `original_size` and `target_size` parameters) improves generation quality.
+
+<details>
+<summary>Show Answer</summary>
+
+**Dual encoder purpose**: The two encoders have different architectures and training data, leading to complementary strengths. Concatenating their embeddings provides a richer, more detailed text representation than either encoder alone, which allows the UNet to better follow complex, nuanced prompts.
+
+**Individual contributions**:
+- **CLIP ViT-L/14**: Trained on 400M image-text pairs (OpenAI WIT dataset). Good at visual-semantic alignment and associating text concepts with visual features. Strong at general semantic understanding ("a cat," "sunset," "impressionist style").
+- **OpenCLIP ViT-bigG**: Larger model (1.8B params vs 307M) trained on LAION-5B (5B pairs). Better at fine-grained detail, complex compositional descriptions, and rare concepts. Provides more capacity for detailed instructions.
+
+Together, they provide both general semantic alignment (CLIP) and fine-grained detail capture (OpenCLIP bigG).
+
+**Micro-conditioning rationale**: During SD 1.5 training, images were resized and center-cropped to 512×512. This caused the model to learn artifacts: objects getting cropped, unusual compositions. The model "learned" these distortions as part of natural image distributions.
+
+SDXL's micro-conditioning passes the original image size and crop coordinates as additional conditioning signals. This allows the model to:
+1. Distinguish high-quality original (full image, no crop) from training-time distortions.
+2. At inference, setting `original_size=target_size` signals "generate as if this is a high-quality, uncropped image," consistently yielding better compositions and fewer artifacts.
+
+</details>
+
+### Exercise 2: ControlNet Zero Convolution
+ControlNet injects control signals into the frozen UNet using "zero convolution" layers — convolutions initialized with zero weights. Explain why zero initialization is critical for ControlNet's training stability, and describe what would happen if the control encoder's weights were initialized randomly instead.
+
+```python
+# ControlNet injection mechanism (simplified)
+class ZeroConv2d(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, 1)
+        # CRITICAL: Initialize weights and bias to zero
+        nn.init.zeros_(self.conv.weight)
+        nn.init.zeros_(self.conv.bias)
+
+    def forward(self, x):
+        return self.conv(x)
+
+# At the start of training:
+# zero_conv(any_input) = 0
+# UNet output = original_output + 0 = original_output
+
+# Why is this important?
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Why zero initialization is critical**:
+
+At the start of ControlNet training, the zero convolutions ensure the control signal is exactly zero: `zero_conv(condition_features) = 0`. This means:
+- **UNet output = original frozen UNet output + 0 = original output**
+- The pre-trained UNet behaves identically to before ControlNet was added.
+- The model starts from a perfect baseline (the pre-trained diffusion model), not a randomly corrupted one.
+
+As training proceeds, the zero convolution weights gradually learn to inject the appropriate control signal, growing from zero toward meaningful values.
+
+**If initialized randomly instead**:
+- The control encoder would inject random noise into every layer of the UNet.
+- The UNet would receive corrupted intermediate activations at every attention layer.
+- The pre-trained weights (which produce good images) would be overwhelmed by this random injection, causing severe initial instability.
+- The optimization landscape would be highly chaotic — gradients from the corrupted UNet output would be meaningless for learning the correct control behavior.
+- Training would likely diverge or require an extremely slow warm-up schedule to overcome the initial corruption.
+
+Zero initialization is an elegant solution that makes fine-tuning modular: the original model is preserved as a perfect starting point, and the new control pathway is added incrementally.
+
+</details>
+
+### Exercise 3: LCM vs. Standard Diffusion Speed/Quality Trade-off
+LCM generates high-quality images in 2-4 steps vs. 20-50 steps for standard diffusion models. Analyze the following comparison:
+
+```python
+# Standard DDIM sampling (50 steps)
+standard_image = pipe(
+    prompt="A photorealistic portrait",
+    num_inference_steps=50,
+    guidance_scale=7.5
+).images[0]
+
+# LCM sampling (4 steps)
+lcm_image = pipe(
+    prompt="A photorealistic portrait",
+    num_inference_steps=4,
+    guidance_scale=1.5  # Note: MUCH lower guidance scale
+).images[0]
+```
+
+Answer the following:
+- A) Why does LCM use a much lower guidance_scale than standard diffusion?
+- B) What quality differences would you typically observe between the outputs?
+- C) When should you use LCM vs. standard diffusion in a production system?
+
+<details>
+<summary>Show Answer</summary>
+
+**A) Why lower guidance_scale for LCM**:
+Classifier-Free Guidance (CFG) amplifies the text-conditioned signal relative to unconditional noise. At high guidance scales (7.5), the model strongly follows the prompt but also amplifies artifacts and unrealistic details. With standard diffusion at 50 steps, these artifacts are smoothed out over many denoising steps.
+
+LCM uses a consistency objective that maps any noise level directly to the clean image in very few steps. This means each step makes much larger "jumps" in latent space. At high guidance_scale, these large jumps become overcorrections — the model overshoots toward saturated, artifact-heavy outputs. Lower guidance_scale (1.0-2.0) keeps the jumps controlled and produces more natural results in 4 steps.
+
+**B) Typical quality differences**:
+- **Standard diffusion (50 steps)**: More detail in textures (hair, fabric, fine patterns), better color gradients, more photorealistic skin tones, less over-saturation.
+- **LCM (4 steps)**: Slightly softer details, occasional slight over-saturation in highlights, sometimes less fine texture detail. However, for many subjects the difference is surprisingly small — LCM is remarkably good.
+- For abstract/artistic prompts, LCM quality is nearly identical to standard diffusion. For highly photorealistic portraits with fine detail, standard diffusion is noticeably better.
+
+**C) Production use case selection**:
+- **Use LCM when**: Real-time interactivity is required (< 1 second generation for user-facing applications), mobile/edge deployment with limited compute, A/B testing many prompts quickly, generating thumbnails or previews.
+- **Use standard diffusion when**: Maximum quality is the priority (product photography, professional artistic output), fine textural details are important, the output will be displayed at large size or printed, the generation is offline batch processing where latency doesn't matter.
+
+A practical strategy: use LCM for iteration and preview, switch to standard diffusion for final high-quality renders.
+
+</details>
+
+### Exercise 4: Multi-technique Pipeline Design
+Design a complete image generation pipeline using ControlNet + IP-Adapter + LCM-LoRA together to solve the following task:
+
+**Task**: Given a reference photo of a person and a rough pencil sketch of a scene, generate an image of that person placed in the scene depicted by the sketch, in a consistent artistic style.
+
+Describe the role of each component and sketch the pipeline with pseudo-code.
+
+<details>
+<summary>Show Answer</summary>
+
+**Role of each component**:
+- **ControlNet (Scribble/Canny)**: Uses the pencil sketch as a spatial control signal to preserve the scene composition (object placements, general layout) from the sketch.
+- **IP-Adapter (Face variant)**: Uses the reference photo to preserve the person's identity (face features, general appearance) in the generated image.
+- **LCM-LoRA**: Reduces generation steps from 30 to 4, enabling real-time iteration when refining prompt or sketch.
+
+**Pipeline pseudo-code**:
+
+```python
+from diffusers import StableDiffusionControlNetPipeline, ControlNetModel, LCMScheduler
+import torch
+
+# 1. Load components
+controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-scribble")
+pipe = StableDiffusionControlNetPipeline.from_pretrained(
+    "runwayml/stable-diffusion-v1-5",
+    controlnet=controlnet,
+    torch_dtype=torch.float16
+).to("cuda")
+
+# Load IP-Adapter for face identity preservation
+pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models",
+                     weight_name="ip-adapter-full-face_sd15.bin")
+pipe.set_ip_adapter_scale(0.7)  # Strong identity preservation
+
+# Load LCM-LoRA for fast generation
+pipe.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
+pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
+
+# 2. Prepare inputs
+reference_photo = Image.open("person_reference.jpg")     # Identity source
+pencil_sketch = Image.open("scene_sketch.jpg")           # Spatial layout source
+
+# 3. Generate
+result = pipe(
+    prompt="A professional portrait of a person in [scene description], artistic style",
+    negative_prompt="blurry, distorted face, multiple people",
+    image=pencil_sketch,               # ControlNet: scene layout
+    ip_adapter_image=reference_photo,  # IP-Adapter: person identity
+    num_inference_steps=4,             # LCM: fast generation
+    guidance_scale=1.5,               # LCM-appropriate scale
+    controlnet_conditioning_scale=0.8  # Balance scene vs. identity
+).images[0]
+```
+
+**Key design decisions**:
+- `ip_adapter_scale=0.7`: Strong identity (face) preservation — high enough to keep the person's face, low enough to allow style variation.
+- `controlnet_conditioning_scale=0.8`: Strong scene structure control, slightly below 1.0 to allow natural adaptation of the sketch layout.
+- `guidance_scale=1.5`: LCM-compatible low guidance.
+- The text prompt still guides overall style and fills details not constrained by sketch or identity.
+
+</details>

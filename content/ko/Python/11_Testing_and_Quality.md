@@ -1,11 +1,22 @@
 # 11. 테스트 및 품질 관리 (Testing & Quality Assurance)
 
-## 학습 목표
-- pytest 프레임워크의 기본과 고급 기능 마스터
-- 효과적인 테스트 작성 패턴 이해
-- 모킹(Mocking)을 활용한 격리 테스트
-- 코드 커버리지 측정 및 개선
-- 테스트 자동화와 CI/CD 통합
+**이전**: [성능 최적화](./10_Performance_Optimization.md) | **다음**: [패키징과 배포](./12_Packaging_and_Distribution.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. pytest 프레임워크를 사용하여 테스트(test)를 작성하고 구성하며, 테스트 탐색(test discovery) 규칙과 실행 옵션을 이해합니다
+2. 적절한 스코프(scope) 관리와 함께 테스트 설정 및 정리(teardown)를 위한 픽스처(fixture)를 구현합니다
+3. 코드 중복을 최소화하면서 여러 입력 시나리오를 검증하는 파라미터화 테스트(parametrized testing)를 적용합니다
+4. `unittest.mock`과 `pytest-mock`을 활용하여 테스트 대상 단위를 외부 의존성으로부터 격리합니다
+5. `pytest-cov`로 코드 커버리지(code coverage)를 측정하고, 임계값(threshold)과 제외 항목을 설정합니다
+6. Arrange-Act-Assert(준비-실행-검증) 패턴과 Given-When-Then 테스트 패턴을 구별합니다
+7. 테스트 마커(test marker)를 적용하여 테스트를 분류하고, 건너뛰거나, 선택적으로 실행합니다
+
+---
+
+자동화 테스트(automated testing)는 시간이 지나도 소프트웨어 품질을 유지하는 가장 효과적인 단일 실천법입니다. 테스트 없이는 모든 리팩터링(refactoring)이 도박이고, 모든 배포(deployment)가 불안의 원천이 됩니다. 잘 구조화된 테스트 스위트(test suite)는 회귀 버그(regression)를 조기에 발견할 뿐만 아니라, 코드가 어떻게 동작해야 하는지를 보여주는 살아있는 문서(living documentation) 역할도 합니다.
 
 ## 목차
 1. [pytest 기초](#1-pytest-기초)

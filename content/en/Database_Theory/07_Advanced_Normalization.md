@@ -9,6 +9,19 @@
 > **Prerequisites**: Functional dependencies (Lesson 05), normalization through BCNF (Lesson 06)
 > **Objective**: Understand multivalued dependencies and 4NF, join dependencies and 5NF, the theoretical ideal of DKNF, and practical denormalization strategies for real-world systems
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define multivalued dependencies (MVDs) and explain why a BCNF relation can still contain redundancy due to MVDs.
+2. Determine whether a relation satisfies Fourth Normal Form (4NF) by detecting non-trivial multivalued dependencies.
+3. Define join dependencies and explain the conditions under which a relation must be decomposed to achieve Fifth Normal Form (5NF).
+4. Describe the theoretical ideal of Domain-Key Normal Form (DKNF) and explain its practical limitations.
+5. Identify scenarios where controlled denormalization improves performance, and apply common denormalization patterns (derived columns, summary tables, pre-joined tables).
+6. Evaluate the trade-offs between higher normal forms and real-world performance requirements when designing database schemas.
+
+---
+
 ## 1. Introduction
 
 In Lesson 06, we saw how functional dependencies drive normalization through BCNF. However, BCNF does not eliminate **all** forms of redundancy. There are situations where a relation in BCNF still contains redundant data caused by different kinds of constraints: **multivalued dependencies** and **join dependencies**.

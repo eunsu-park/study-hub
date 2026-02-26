@@ -13,14 +13,17 @@
 - Basic programming and unit testing experience
 - Familiarity with software development lifecycle (Lesson 02)
 
-**Learning Objectives**:
-- Distinguish verification from validation and articulate why both are necessary
-- Design test cases using black-box techniques (equivalence partitioning, boundary value analysis, decision tables, state transition)
-- Select appropriate coverage criteria for white-box testing
-- Plan a test strategy that spans unit, integration, system, and acceptance testing
-- Understand the bug lifecycle and write effective defect reports
-- Evaluate the role of formal methods in high-assurance software
-- Build a regression test suite and integrate it into automated pipelines
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish verification from validation and articulate why both are necessary
+2. Design test cases using black-box techniques (equivalence partitioning, boundary value analysis, decision tables, state transition)
+3. Select appropriate coverage criteria for white-box testing
+4. Plan a test strategy that spans unit, integration, system, and acceptance testing
+5. Understand the bug lifecycle and write effective defect reports
+6. Evaluate the role of formal methods in high-assurance software
+7. Build a regression test suite and integrate it into automated pipelines
 
 ---
 
@@ -966,6 +969,72 @@ Write a complete, professional bug report following the template from Section 11
   - Fagan, M. E. (1976). "Design and Code Inspections to Reduce Errors in Program Development." *IBM Systems Journal*.
   - Myers, G. J. (1978). "A Controlled Experiment in Program Testing and Code Walkthroughs/Inspections." *Communications of the ACM*.
   - Boehm, B. (1979). "Guidelines for Verifying and Validating Software Requirements and Design Specifications." *EURO IFIP*.
+
+---
+
+## Exercises
+
+### Exercise 1: Design Black-Box Test Cases
+
+A discount calculation function has the following specification:
+
+- Input: `cart_total` (float, must be > 0) and `coupon_code` (string, optional)
+- Valid coupon codes: `"SAVE10"` (10% off), `"SAVE20"` (20% off), `"FREESHIP"` (no price change, free shipping flag set)
+- If `cart_total` < 10.00, no discount is applied even with a valid coupon
+- If `coupon_code` is None or empty, no discount is applied
+- Invalid coupon codes return an error
+
+Using equivalence partitioning and boundary value analysis, derive a minimal test set. For each test case, specify inputs, the equivalence partition it represents, and the expected output.
+
+### Exercise 2: Achieve Branch Coverage
+
+For the function below, draw the control flow graph and identify a minimal set of test cases that achieves 100% branch coverage. State each branch you must exercise.
+
+```python
+def classify_bmi(weight_kg, height_m):
+    if height_m <= 0 or weight_kg <= 0:
+        raise ValueError("Weight and height must be positive")
+    bmi = weight_kg / (height_m ** 2)
+    if bmi < 18.5:
+        return "underweight"
+    elif bmi < 25.0:
+        return "normal"
+    elif bmi < 30.0:
+        return "overweight"
+    else:
+        return "obese"
+```
+
+(a) How many branches exist? List them.
+(b) What is the minimum number of test cases needed for 100% branch coverage?
+(c) Would this test set also achieve 100% path coverage? Why or why not?
+
+### Exercise 3: Plan Integration Testing
+
+A microservices order system has these services: `OrderService`, `InventoryService`, `PaymentService`, `NotificationService`. `OrderService` calls `InventoryService` and `PaymentService`; `NotificationService` is called by `OrderService` after a successful payment.
+
+(a) Sketch the integration dependency graph.
+(b) Design an incremental bottom-up integration test plan: specify which services are integrated in each phase, what stubs/drivers are needed, and what interface contracts each phase verifies.
+(c) Identify three integration-specific failure modes (not unit-level bugs) that could only be caught at integration level.
+
+### Exercise 4: Write a Test Plan for a New Feature
+
+A mobile banking app is adding biometric login (fingerprint and Face ID) as an alternative to PIN entry. Write a one-page test plan outline covering:
+
+- Scope: what is in and out of scope for this feature's test cycle
+- Test levels: which levels (unit, integration, system, acceptance) apply and what each tests
+- Testing types: at least four non-functional types to consider and why each matters here
+- Entry and exit criteria: specific, measurable conditions
+- Top three risks to the test effort and a mitigation strategy for each
+
+### Exercise 5: Analyze the Bug Lifecycle
+
+A tester discovers that when a user attempts to export a 10,000-row report to PDF, the application returns a 504 Gateway Timeout after 32 seconds instead of generating the file.
+
+(a) Write a complete bug report following the template from Section 11.3.
+(b) Assign a severity and priority rating. Justify both independently.
+(c) Propose two hypotheses about the root cause (one at the application layer, one at the infrastructure layer).
+(d) Describe the verification steps the tester must perform after a developer marks the bug as Fixed.
 
 ---
 

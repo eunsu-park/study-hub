@@ -95,6 +95,8 @@ int setup_redirect(Redirect* r) {
     if (r->infile) {
         int fd = open(r->infile, O_RDONLY);
         if (fd < 0) { perror(r->infile); return -1; }
+        // Why: dup2 copies fd onto STDIN so all reads go to the file, then we
+        // close the original fd to avoid leaking file descriptors
         dup2(fd, STDIN_FILENO);
         close(fd);
     }
@@ -279,11 +281,15 @@ void run_pipeline(char** args) {
         }
 
         // 외부 명령어
+        // Why: fork+exec is the Unix process creation model — fork duplicates the
+        // process, exec replaces it with a new program, so the shell itself survives
         pid_t pid = fork();
         if (pid == 0) {
             setup_redirect(&r);
             execvp(cmds[0][0], cmds[0]);
             fprintf(stderr, "%s: command not found\n", cmds[0][0]);
+            // Why: exit(127) after failed exec prevents the child from continuing
+            // as a second shell — 127 is the standard "command not found" exit code
             exit(127);
         } else if (pid > 0) {
             int status;
@@ -312,7 +318,8 @@ void run_pipeline(char** args) {
                 dup2(pipes[i][1], STDOUT_FILENO);
             }
 
-            // 모든 파이프 닫기
+            // Why: each child must close ALL pipe fds it doesn't use — unclosed write
+            // ends prevent readers from seeing EOF, causing the pipeline to hang forever
             for (int j = 0; j < n - 1; j++) {
                 close(pipes[j][0]);
                 close(pipes[j][1]);
@@ -380,7 +387,8 @@ int main(void) {
     char input[MAX_INPUT];
     char* args[MAX_ARGS];
 
-    // 시그널 핸들러 설정
+    // Why: overriding SIGINT prevents Ctrl+C from killing the shell itself —
+    // the signal should only affect the running foreground child process
     signal(SIGINT, sigint_handler);
 
     printf("\n\033[1;36m=== Mini Shell ===\033[0m\n");

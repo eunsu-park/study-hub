@@ -621,11 +621,17 @@ import matplotlib.pyplot as plt
 # (Not a real reconnection simulation, just illustrative)
 
 r = np.linspace(0, 1, 100)  # Normalized radius
+# t_rise >> t_crash: 톱니파는 비대칭입니다. 상승(ohmic/RF 가열)은 느린
+# 확산 과정인 반면, 충돌은 Alfvén 시간 척도(~μs 대 상승의 ~ms)에서
+# 빠른 내부 kink에 의해 구동되기 때문입니다.
 t_rise = 100  # Number of time steps in rise phase
 t_crash = 5   # Number of time steps in crash
 n_cycles = 3
 
-# Inversion radius
+# 반전 반경 r_inv ~ 0.3은 충돌에 대한 온도 응답이 부호가 바뀌는 경계를
+# 표시합니다: r_inv 내부에서는 고온 코어 플라즈마가 바깥으로 퍼져 코어를
+# 냉각하고, r_inv 외부에서는 도착한 고온 플라즈마가 온도를 높입니다 —
+# 이것이 연X선 단층촬영으로 측정되는 톱니파 재분배의 관측 신호입니다.
 r_inv = 0.3
 
 # Initial profile
@@ -641,9 +647,12 @@ time = 0
 for cycle in range(n_cycles):
     # Rise phase: gradual central heating
     for i in range(t_rise):
-        # Heat deposition in core
+        # 가우시안 열 증착은 중성 빔 또는 ECRH에 의한 축상 가열을 모사합니다;
+        # 좁은 폭 0.2는 r_inv 훨씬 안쪽에 집중된 입사 전력 프로파일을 나타냅니다.
         heat_source = 0.01 * np.exp(-(r / 0.2)**2)
-        # Diffusive cooling
+        # 확산 냉각은 자속 표면을 따른 열 수송을 모델링합니다:
+        # 2차 도함수 ∂²T/∂r²가 열을 고온에서 저온 영역으로 구동하며,
+        # 여기서는 자체 일관적으로 모델링되지 않지만 정성적인 상승을 재현합니다.
         dTdr = np.gradient(T, r)
         d2Tdr2 = np.gradient(dTdr, r)
         cooling = 0.001 * d2Tdr2
@@ -656,12 +665,16 @@ for cycle in range(n_cycles):
     # Crash phase: rapid flattening inside inversion radius
     T_before_crash = T.copy()
     for i in range(t_crash):
-        # Average inside inversion radius
+        # r_inv 내부에서 T를 평균으로 교체하는 것은 Kadomtsev 완전 재결합
+        # 시나리오를 모델링합니다: m=1 kink가 고온 코어를 q=1 표면까지
+        # 더 차가운 플라즈마와 완전히 혼합하여, 단 몇 Alfvén 시간 만에
+        # 첨두 온도 구조를 파괴합니다.
         inside = r < r_inv
         T_avg_inside = np.mean(T[inside])
         T[inside] = T_avg_inside
 
-        # Slight increase outside (conservation)
+        # 에너지 보존: 코어에서 제거된 열은 r_inv 바로 외부에 증착되어,
+        # 톱니파 충돌 중 연X선 진단으로 관측되는 작은 온도 범프를 생성합니다.
         outside = r >= r_inv
         T[outside] += 0.05 * (T_before_crash[inside].mean() - T_avg_inside)
 
@@ -796,7 +809,11 @@ x = np.linspace(-4, 4, 100)
 y = np.linspace(-2, 2, 80)
 X, Y = np.meshgrid(x, y)
 
-# Function to create an O-point (island) flux function
+# 가우시안 자속 함수 -exp(-r²/size²)는 O-점(섬)을 모델링합니다:
+# 음의 부호는 ψ의 최대값을 섬 중심에 놓고, 가우시안 포락선은
+# 부드럽고 고립된 자속 구조를 만듭니다. 이것은 MHD 시뮬레이션에서
+# 보이는 더 복잡한 전류 시트 유래 섬을 단순화한 해석적 대체물이지만,
+# 위상적으로는 올바른 구조를 포착합니다.
 def island_flux(X, Y, x0, y0, size):
     return -np.exp(-((X - x0)**2 + (Y - y0)**2) / size**2)
 
@@ -804,6 +821,9 @@ def island_flux(X, Y, x0, y0, size):
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 times = [0, 1, 2, 3]
+# 감소하는 간격은 인력을 나타냅니다: 같은 나선성을 가진 두 섬은
+# 두 섬 사이 X-점의 자기장 선을 통과하는 자기 장력에 의해 끌어당겨집니다 —
+# 서로 끌어당기는 두 평행한 전류 도선과 유사합니다.
 separations = [2.5, 1.5, 0.8, 0]  # Island separation decreases
 
 for ax, t, sep in zip(axes.flat, times, separations):
@@ -814,14 +834,20 @@ for ax, t, sep in zip(axes.flat, times, separations):
     if sep > 0:
         # Before full merger
         psi = psi1 + psi2
-        # Add a current sheet between them (X-point)
+        # X=0의 좁은 가우시안 전류 시트는 섬이 접근할수록 강해지는
+        # X-점 전류 층을 나타냅니다: 재결합이 발생하여 섬이 병합할 수
+        # 있게 하는 것이 바로 이 층입니다.
         sheet_contrib = 0.2 * np.exp(-X**2 / 0.1**2) * np.exp(-(Y)**2 / 2)
         psi += sheet_contrib
     else:
-        # After merger: single large island
+        # 병합된 섬은 더 큰 크기(0.6 대신 1.0)를 가집니다. 두 섬에서
+        # 재결합된 자속이 이제 단일 O-점에 포함되어 있기 때문입니다;
+        # 총 자기 에너지는 두 개의 분리된 섬의 합보다 낮으며, 그 차이가
+        # 열과 흐름으로 방출됩니다.
         psi = island_flux(X, Y, 0, 0, 1.0)
 
-    # Add background field (hyperbolic)
+    # 0.05·X·Y 배경 쌍곡선 자기장은 두 섬 사이에 X-점 기하학을 생성합니다:
+    # 이것이 없으면 두 가우시안 섬의 중첩은 올바른 안장점 위상을 보이지 않습니다.
     psi += 0.05 * X * Y
 
     # Compute magnetic field

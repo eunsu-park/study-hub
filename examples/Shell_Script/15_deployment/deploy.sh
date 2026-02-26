@@ -182,6 +182,8 @@ switch_current_release() {
 
     log_info "Switching current release on $server"
 
+    # Why: symlink swap (ln -sfn) makes the release switch atomic — the app
+    # instantly points to the new version with zero downtime.
     remote_exec "$server" "
         ln -sfn ${DEPLOY_PATH}/${APP_NAME}/releases/${release} \
                 ${DEPLOY_PATH}/${APP_NAME}/current
@@ -231,6 +233,8 @@ deploy() {
     log_section "Starting deployment to $env environment"
     log_info "Servers: ${servers[*]}"
 
+    # Why: timestamp-based release names create unique, sortable directories
+    # enabling easy rollback to any previous point-in-time deployment.
     local release
     release=$(prepare_release)
     log_info "Release: $release"
@@ -263,7 +267,8 @@ deploy() {
 
         log_success "Deployment successful on $server"
 
-        # Wait between servers in production for rolling deployment
+        # Why: staggering production deploys gives time to detect failures on
+        # early servers before rolling out to the full fleet — canary style.
         if [[ "$env" == "production" ]] && [[ "$server" != "${servers[-1]}" ]]; then
             log_info "Waiting 10 seconds before next server..."
             sleep 10

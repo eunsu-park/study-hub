@@ -1,5 +1,17 @@
 # Kubeflow Pipelines
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the Kubeflow ecosystem components — Pipelines, Katib, Training Operators, KServe, and Notebooks — and explain the role each plays in the ML platform
+2. Build Kubeflow Pipeline components and pipelines using the KFP SDK, defining containerized steps as Python functions with the `@component` decorator
+3. Implement conditional branching and parallel execution in Kubeflow Pipelines using control flow constructs
+4. Configure Katib for automated hyperparameter tuning using Bayesian optimization on a Kubernetes cluster
+5. Deploy and manage trained models using KServe for A/B testing and canary rollouts on Kubernetes
+
+---
+
 ## 1. Kubeflow Overview
 
 Kubeflow is an open-source platform for building, deploying, and managing ML workflows on Kubernetes.
@@ -76,7 +88,8 @@ KFP v2 Basic Pipeline
 from kfp import dsl
 from kfp import compiler
 
-# Define components
+# Each @dsl.component runs in its own container — provides isolation so
+# dependency conflicts between steps (e.g., different sklearn versions) never occur
 @dsl.component
 def preprocess_data(input_path: str, output_path: dsl.OutputPath(str)):
     """Data preprocessing component"""
@@ -136,10 +149,12 @@ def ml_pipeline(
     input_data_path: str = "gs://bucket/data.csv",
     n_estimators: int = 100
 ):
-    # Step 1: Data preprocessing
+    # Steps are connected through outputs — KFP automatically creates the DAG dependency,
+    # so step 2 waits for step 1 to finish without explicit ordering
     preprocess_task = preprocess_data(input_path=input_data_path)
 
-    # Step 2: Model training
+    # Training consumes preprocessing output — artifacts are passed via cloud storage,
+    # not in-memory, enabling steps to run on different machines
     train_task = train_model(
         data_path=preprocess_task.outputs["output_path"],
         n_estimators=n_estimators
@@ -151,7 +166,8 @@ def ml_pipeline(
         test_data_path=preprocess_task.outputs["output_path"]
     )
 
-# Compile pipeline
+# Compile to YAML — the compiled spec is portable and can be versioned in git,
+# allowing pipeline changes to go through the same review process as code
 compiler.Compiler().compile(
     pipeline_func=ml_pipeline,
     package_path="ml_pipeline.yaml"
@@ -172,7 +188,8 @@ Python Function-Based Components
 from kfp import dsl
 from kfp.dsl import Input, Output, Dataset, Model, Metrics
 
-# Basic component
+# Specify base_image and packages explicitly — ensures reproducibility;
+# without this, the component inherits the default image which may drift over time
 @dsl.component(
     base_image="python:3.9-slim",
     packages_to_install=["pandas", "scikit-learn"]
@@ -464,7 +481,8 @@ def resource_pipeline(data_path: str):
     # GPU training task
     train_task = gpu_training(data_path=data_path)
 
-    # Resource configuration
+    # request vs limit: request reserves minimum resources for scheduling,
+    # limit caps maximum to prevent one training job from starving other pods
     train_task.set_cpu_limit("4")
     train_task.set_memory_limit("16Gi")
     train_task.set_cpu_request("2")
@@ -785,7 +803,8 @@ def e2e_ml_pipeline(
         input_data=ingest_task.outputs["output_data"]
     )
 
-    # 3. Train if validation passes
+    # 3. Conditional gate — skips expensive training if data quality is poor,
+    # preventing wasted GPU hours on corrupted data
     with dsl.Condition(validate_task.output == True, name="data-valid"):
         train_task = train_and_evaluate(
             train_data=ingest_task.outputs["output_data"],

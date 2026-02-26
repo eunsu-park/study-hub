@@ -452,7 +452,13 @@ def kink_growth_rate(q_edge, Btheta, rho):
     mu0 = 4*np.pi*1e-7
 
     if q_edge < 1:
-        # Unstable
+        # The Alfvénic prefactor Bθ/√(μ₀ρ) = v_A (poloidal Alfvén speed) sets
+        # the growth rate scale: the kink instability is an ideal MHD mode
+        # driven and stabilized by the magnetic field itself, so its timescale
+        # is naturally the poloidal Alfvén transit time τ_A = a/v_A.
+        # √(1 - q²) measures how far q is below the stability threshold q=1;
+        # at q→0 the full poloidal Alfvén drive is realized, while at q→1
+        # the mode is marginally stable and γ→0.
         gamma = (Btheta / np.sqrt(mu0 * rho)) * np.sqrt(1 - q_edge**2)
         stable = False
     else:
@@ -633,12 +639,18 @@ def tearing_growth_rate(Delta_prime, eta, rs, Btheta):
     if Delta_prime <= 0:
         return 0.0  # Stable
 
-    # Resistive diffusion time
+    # τ_R = μ₀rs²/η is the resistive diffusion time at the resonant surface:
+    # it sets the "clock" for how quickly resistivity can diffuse through the
+    # layer of thickness rs.  All tearing growth rates scale with 1/τ_R
+    # because reconnection requires resistive diffusion to break field lines.
     tau_R = mu0 * rs**2 / eta
 
-    # Scaling (constant-psi)
-    # γ ~ (η/τA)^(3/5) Δ'^(4/5) / rs
-    # Simplified estimate
+    # The constant-ψ (Furth-Killeen-Rosenbluth) scaling γ ∝ η^(3/5)Δ'^(4/5)
+    # arises from matching the outer ideal-MHD solution (characterized by Δ')
+    # to the inner resistive layer: the fractional powers reflect the fact that
+    # both inertia and resistivity compete inside the thin tearing layer, and
+    # neither is negligible.  η^(3/5) means growth slows as resistivity drops,
+    # but not as fast as simple diffusion (which would give η^1).
     gamma = (eta / (mu0 * rs**2))**(3/5) * (Delta_prime * rs)**(4/5)
 
     return gamma
@@ -847,13 +859,25 @@ def rutherford_equation(t, w, Delta_prime_func, eta, Js, rs):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Resistive time
+    # τ_R = μ₀rs²/η is the resistive diffusion time: it appears in the
+    # denominator because resistivity is required to change the magnetic
+    # topology — faster resistive diffusion (larger η, smaller τ_R) means
+    # islands grow more quickly by allowing field lines to slip.
     tau_R = mu0 * rs**2 / eta
 
-    # Δ'(w)
+    # Δ'(w) now depends on island width because large islands flatten the
+    # current density profile inside them, reducing the driving term;
+    # this is the nonlinear feedback mechanism that leads to saturation.
     Delta_p = Delta_prime_func(w)
 
-    # Rutherford equation
+    # The Rutherford equation dw/dt ∝ Δ'(w)·w/τ_R has two key features:
+    # 1. Linear dependence on w: unlike the linear phase (exponential growth),
+    #    the nonlinear island grows only algebraically (w ∝ t), because the
+    #    outer ideal region fully accommodates the island without additional
+    #    free energy release as w increases.
+    # 2. Saturation: when Δ'(w) → 0 at w = w_sat, dw/dt → 0 — the island
+    #    reaches a self-consistent width at which no further reconnection is
+    #    driven by the current gradient.
     dwdt = (rs * Delta_p * w) / tau_R
 
     return dwdt
@@ -869,6 +893,12 @@ def Delta_prime_saturating(w, Delta0, w_sat):
     if w >= w_sat:
         return 0.0
     else:
+        # The (1 - w²/w_sat²) factor is a simple model for how the island
+        # flattens the current density profile: a wider island removes more
+        # of the current gradient that drives the tearing mode, progressively
+        # reducing Δ' until growth ceases at w = w_sat.  More sophisticated
+        # models (e.g., polynomial in w) yield slightly different saturation
+        # levels but the same qualitative nonlinear behaviour.
         return Delta0 * (1 - (w/w_sat)**2)
 
 def plot_island_evolution():

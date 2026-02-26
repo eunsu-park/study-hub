@@ -1,5 +1,25 @@
 # Permissions and Ownership
 
+**Previous**: [Text Processing](./04_Text_Processing.md) | **Next**: [User and Group Management](./06_User_Group_Management.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Read and interpret Linux file permissions in both symbolic and numeric notation
+2. Modify file permissions using chmod in both numeric and symbolic modes
+3. Change file ownership and group with chown and chgrp
+4. Explain the purpose and behavior of SUID, SGID, and the Sticky Bit
+5. Configure default permissions using umask
+6. Apply correct permissions for real-world scenarios (web servers, SSH keys, shared directories)
+7. Diagnose and resolve common "Permission denied" errors
+
+---
+
+Security in Linux starts with permissions. Every file and directory has an owner, a group, and a set of access rules that determine who can read, write, or execute it. A misconfigured permission can either lock legitimate users out of their own files or, worse, expose sensitive data to the entire system. Understanding permissions is essential for both daily work and system hardening.
+
+> **Analogy: Hotel Key Card** -- Linux permissions work like hotel key cards. The owner is the guest who booked the room (full access), the group is the cleaning staff (limited access to common areas), and others are strangers (no access unless explicitly allowed). The `chmod` command is the front desk reprinting key cards with different access levels.
+
 ## 1. Understanding File Permissions
 
 Every file in Linux has permissions.
@@ -481,6 +501,4 @@ touch /tmp/shared_test/my_file.txt
 
 ---
 
-## Next Steps
-
-Learn about user and group management in [06_User_Group_Management.md](./06_User_Group_Management.md)!
+**Previous**: [Text Processing](./04_Text_Processing.md) | **Next**: [User and Group Management](./06_User_Group_Management.md)

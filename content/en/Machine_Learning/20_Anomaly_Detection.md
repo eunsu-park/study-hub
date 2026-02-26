@@ -1,8 +1,24 @@
 # Anomaly Detection
 
-## Overview
+**Previous**: [AutoML and Hyperparameter Optimization](./19_AutoML_Hyperparameter_Optimization.md)
 
-Anomaly detection identifies data points, events, or patterns that deviate significantly from expected behavior. Unlike classification, anomaly detection often works with little or no labeled data for the anomalous class — making it essential for fraud detection, system monitoring, manufacturing quality control, and cybersecurity.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between point, contextual, and collective anomalies and identify real-world examples of each
+2. Apply statistical methods (Z-score, IQR, Mahalanobis distance) for univariate and multivariate outlier detection
+3. Implement Isolation Forest and explain why anomalies have shorter average path lengths
+4. Compare Local Outlier Factor (LOF), One-Class SVM, and Isolation Forest for different data characteristics
+5. Build ensemble anomaly detectors by combining normalized scores from multiple methods
+6. Detect anomalies in time series data using rolling Z-scores and EWMA control charts
+7. Evaluate anomaly detection models using stability analysis when ground-truth labels are unavailable
+
+---
+
+Most machine learning assumes you know what you are looking for -- you have labeled examples of every class. Anomaly detection flips this assumption: you must find the unexpected, the rare, the never-before-seen, often with little or no labeled data for the anomalous class. From catching fraudulent transactions and detecting manufacturing defects to monitoring server health, anomaly detection is one of the most practically important yet methodologically distinct areas of ML. This lesson gives you a complete toolkit, from simple statistical tests to ensemble methods, for finding the needles in your data's haystack.
 
 ---
 
@@ -678,6 +694,7 @@ print(f"Low-confidence (flagged in 1/5): {((stability_score > 0) & (stability_sc
 
 ### Next Steps
 
+- **Next**: [L21 — Advanced Ensemble](21_Advanced_Ensemble.md)
 - **L17**: Imbalanced Data — when you have some labeled anomalies, treat as classification
 - **Deep_Learning**: Autoencoders for high-dimensional anomaly detection
 - **Data_Science L23**: Nonparametric Statistics — bootstrap and permutation tests for anomalies

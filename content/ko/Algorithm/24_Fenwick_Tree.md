@@ -1,5 +1,18 @@
 # 펜윅 트리 (Fenwick Tree / Binary Indexed Tree)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 최하위 비트(lowbit, `i & -i`) 트릭을 설명하고 각 펜윅 트리(Fenwick tree) 노드가 담당하는 구간이 결정되는 원리를 서술할 수 있다
+2. 펜윅 트리에서 O(log n)에 접두사 합(prefix sum) 쿼리와 점 업데이트(point update)를 구현할 수 있다
+3. 차분 배열(difference array) 기법을 이용하여 구간 업데이트(range update)와 구간 쿼리(range query)를 지원하도록 펜윅 트리를 확장할 수 있다
+4. 펜윅 트리를 적용하여 역전 수(inversion count) 및 순서 통계(order-statistics) 문제를 효율적으로 풀 수 있다
+5. 점 업데이트가 있는 2D 구간 합 쿼리를 처리하기 위한 2D 펜윅 트리를 구현할 수 있다
+6. 펜윅 트리와 세그먼트 트리를 구현 복잡도, 메모리 사용량, 기능 지원 범위 기준으로 비교할 수 있다
+
+---
+
 ## 개요
 
 펜윅 트리(BIT: Binary Indexed Tree)는 구간 합 쿼리와 점 업데이트를 O(log n)에 처리하는 자료구조입니다. 세그먼트 트리보다 구현이 간단하고 메모리 효율적입니다.
@@ -89,24 +102,31 @@ class FenwickTree:
     def __init__(self, n):
         """크기 n의 펜윅 트리 (1-indexed)"""
         self.n = n
-        self.tree = [0] * (n + 1)
+        self.tree = [0] * (n + 1)  # 인덱스 0은 사용하지 않음; 트리는 1-indexed
 
     def update(self, i, delta):
-        """arr[i] += delta"""
+        """arr[i] += delta — 변경을 모든 조상 노드에 전파"""
         while i <= self.n:
             self.tree[i] += delta
-            i += i & (-i)  # 다음 노드로 이동
+            # i & (-i)는 최하위 설정 비트("lowbit")만 남긴다.
+            # lowbit(i)를 더하면 i를 포함하는 구간을 담당하는 다음 노드로
+            # 점프한다 — 정확히 O(log n)개의 조상을 방문한다.
+            i += i & (-i)
 
     def prefix_sum(self, i):
-        """arr[1] + arr[2] + ... + arr[i]"""
+        """arr[1] + arr[2] + ... + arr[i] — 접두사를 O(log n)개의 서로소 구간으로 분해"""
         total = 0
         while i > 0:
             total += self.tree[i]
-            i -= i & (-i)  # 이전 노드로 이동
+            # lowbit(i)를 빼면 tree[i]의 구간과 서로소이며
+            # 왼쪽에 있는 이전 노드로 이동한다 — 이들이 합쳐져 [1, i]를 정확히 타일링한다.
+            i -= i & (-i)
         return total
 
     def range_sum(self, l, r):
-        """arr[l] + arr[l+1] + ... + arr[r]"""
+        """arr[l] + arr[l+1] + ... + arr[r]
+        포함-배제 원리: prefix[r] - prefix[l-1]이 [1, l-1]을 상쇄한다
+        """
         return self.prefix_sum(r) - self.prefix_sum(l - 1)
 
 
@@ -130,16 +150,21 @@ print(bit.range_sum(2, 5)) # 19 (2+8+4+5)
 ```python
 class FenwickTreeFromArray:
     def __init__(self, arr):
-        """배열로 펜윅 트리 구성 - O(n)"""
+        """배열로 펜윅 트리 구성 - O(n)
+        update()를 n번 호출하는 것(O(n log n))보다 빠르다.
+        각 노드가 단일 전진 패스에서 자식의 기여를 축적한다.
+        """
         self.n = len(arr)
         self.tree = [0] * (self.n + 1)
 
-        # O(n) 초기화
+        # O(n) 초기화: 각 노드의 값을 직계 부모에게 전파한다.
+        # 이 상향식 구성으로 모든 조상 노드가 중복 계산 없이
+        # 올바른 부분합을 받게 된다.
         for i in range(1, self.n + 1):
             self.tree[i] += arr[i - 1]  # arr은 0-indexed
-            j = i + (i & (-i))
+            j = i + (i & (-i))          # j는 BIT 구조에서 i의 직계 부모
             if j <= self.n:
-                self.tree[j] += self.tree[i]
+                self.tree[j] += self.tree[i]  # 현재 노드의 총합을 부모에게 전달
 
     def update(self, i, delta):
         while i <= self.n:
@@ -290,21 +315,25 @@ def find_kth(bit, k):
     """
     프리픽스 합이 k 이상인 최소 인덱스 찾기
     (bit[i] = 1 if 원소 존재)
-    시간: O(log n)
+    시간: O(log n) — BIT 구조에서의 이진 리프팅(binary lifting)
+    prefix_sum() 호출에 이분 탐색을 하는 것(O(log²n))보다 빠르다.
+    BIT를 직접 내려가며 한 비트씩 처리하기 때문이다.
     """
     n = bit.n
     pos = 0
     total = 0
 
-    # 최상위 비트부터 탐색
+    # 높은 비트부터 낮은 비트까지 각 2의 거듭제곱을 더해 pos를 확장 시도한다.
+    # 2^i를 더해도 k번째 원소를 넘지 않으면 그 단계를 확정한다.
+    # 이 탐욕적 비트별 하강이 O(log n) 단계로 답을 복원한다.
     log_n = n.bit_length()
     for i in range(log_n - 1, -1, -1):
         next_pos = pos + (1 << i)
         if next_pos <= n and total + bit.tree[next_pos] < k:
             total += bit.tree[next_pos]
-            pos = next_pos
+            pos = next_pos  # 안전하게 확장 — k번째 원소는 더 오른쪽에 있음
 
-    return pos + 1  # k번째 원소의 인덱스
+    return pos + 1  # pos는 마지막 "안전한" 위치; pos+1이 k번째 원소
 
 
 # 예시: 동적 k번째 원소
@@ -379,8 +408,10 @@ print(count_inversions(arr))  # 5: (7,5), (7,6), (7,4), (5,4), (6,4)
 ```python
 class FenwickTreeRURQ:
     """
-    Range Update, Range Query
-    두 개의 BIT 사용
+    Range Update, Range Query — 두 개의 BIT 사용.
+    핵심 통찰: prefix_sum(i) = bit1[i] * i - bit2[i].
+    이 대수적 항등식을 통해 구간 [l, r]에 delta를 더하는 연산을
+    두 BIT에 대한 점 업데이트로 인코딩하여, 업데이트와 쿼리 모두 O(log n)을 달성한다.
     """
     def __init__(self, n):
         self.n = n
@@ -400,14 +431,18 @@ class FenwickTreeRURQ:
         return total
 
     def range_update(self, l, r, delta):
-        """arr[l..r] += delta"""
+        """arr[l..r] += delta — 두 개의 차분 배열 기법으로 동시에 인코딩"""
+        # bit1은 표준 차분 배열 BIT: l에 delta, r+1에 -delta를 더하면
+        # query(bit1, i) = i가 [l, r]에 있을 때 delta, 아닐 때 0
         self._update(self.bit1, l, delta)
         self._update(self.bit1, r + 1, -delta)
+        # bit2 보정으로 prefix_sum 공식 prefix_sum(i) = bit1*i - bit2가
+        # 올바르게 성립하도록 한다 — l-1과 r 항이 [l, r] 외부의 기여를 상쇄
         self._update(self.bit2, l, delta * (l - 1))
         self._update(self.bit2, r + 1, -delta * r)
 
     def prefix_sum(self, i):
-        """arr[1] + ... + arr[i]"""
+        """arr[1] + ... + arr[i] — 두 BIT 항등식을 사용"""
         return self._query(self.bit1, i) * i - self._query(self.bit2, i)
 
     def range_sum(self, l, r):

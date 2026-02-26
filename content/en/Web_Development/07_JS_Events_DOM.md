@@ -1,12 +1,23 @@
 # JavaScript Events and DOM
 
-## Overview
+**Previous**: [JavaScript Basics](./06_JS_Basics.md) | **Next**: [JavaScript Asynchronous Programming](./08_JS_Async.md)
 
-The DOM (Document Object Model) is an interface that allows JavaScript to manipulate HTML documents. Events are mechanisms for handling user interactions (clicks, input, etc.).
+## Learning Objectives
 
-**Prerequisites**: [06_JS_Basics.md](./06_JS_Basics.md)
+After completing this lesson, you will be able to:
+
+1. Describe the DOM tree structure and distinguish between element nodes, text nodes, and document nodes
+2. Select single and multiple elements using querySelector, querySelectorAll, and getElementById
+3. Manipulate element content using textContent, innerHTML, and outerHTML while understanding XSS risks
+4. Read and modify HTML attributes, data attributes, CSS classes, and inline styles programmatically
+5. Create, append, remove, clone, and replace DOM elements dynamically
+6. Register and remove event listeners using addEventListener, and explain the event flow (capture, target, bubble)
+7. Apply event delegation to efficiently handle events on dynamic child elements
+8. Implement form handling including value extraction, FormData, and validation using the Constraint Validation API
 
 ---
+
+The DOM is the bridge between your HTML document and JavaScript. While HTML is a static text file, the DOM is a live, in-memory tree that the browser builds from that file -- and JavaScript can reach into this tree to read, modify, add, or remove any element at any time. Combined with the event system, the DOM turns a document into an interactive application that responds to every click, keystroke, and scroll.
 
 ## Table of Contents
 
@@ -1180,10 +1191,6 @@ textarea.addEventListener('input', (e) => {
 
 ---
 
-## Next Steps
-
-- [08_JS_Async.md](./08_JS_Async.md) - Promise, async/await, fetch
-
 ---
 
 ## References
@@ -1191,3 +1198,7 @@ textarea.addEventListener('input', (e) => {
 - [MDN DOM](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model)
 - [MDN Events](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events)
 - [JavaScript.info DOM](https://javascript.info/document)
+
+---
+
+**Previous**: [JavaScript Basics](./06_JS_Basics.md) | **Next**: [JavaScript Asynchronous Programming](./08_JS_Async.md)

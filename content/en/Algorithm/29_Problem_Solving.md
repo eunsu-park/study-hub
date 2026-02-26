@@ -1,5 +1,18 @@
 # Problem Solving in Practice
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply a structured 5-step problem solving process — understand, analyze examples, choose algorithm, implement, verify — to unfamiliar algorithmic problems
+2. Estimate the required time complexity from the input size constraints and use this to eliminate unsuitable algorithms before coding
+3. Recognize problem types from keywords and structural patterns (e.g., shortest path, subset enumeration, interval queries) and map them to appropriate algorithms
+4. Select and execute problem-type-specific strategies for varying difficulty levels under timed conditions
+5. Manage time effectively during a coding test or competition by prioritizing problems and allocating effort appropriately
+6. Apply structured communication and coding techniques during coding interviews to demonstrate clear thinking and produce correct solutions
+
+---
+
 ## Overview
 
 Covers practical problem solving strategies and type-specific approaches for coding tests and algorithm competitions.
@@ -297,6 +310,8 @@ def bfs_shortest(graph, start, end):
     """
     Shortest distance in unweighted graph
     Time: O(V + E)
+    BFS is correct for unweighted shortest paths because it expands nodes
+    in order of hop count — the first time a node is reached, it is via the shortest path.
     """
     n = len(graph)
     dist = [-1] * n
@@ -311,11 +326,11 @@ def bfs_shortest(graph, start, end):
             return dist[end]
 
         for next_node in graph[curr]:
-            if dist[next_node] == -1:
+            if dist[next_node] == -1:  # Not yet visited — first reach = shortest path
                 dist[next_node] = dist[curr] + 1
                 queue.append(next_node)
 
-    return -1
+    return -1  # end is unreachable from start
 
 # Type 2: Dijkstra - Shortest distance (weighted)
 def dijkstra(graph, start):
@@ -323,16 +338,20 @@ def dijkstra(graph, start):
     Shortest distance in weighted graph
     graph: adjacency list [(next, weight), ...]
     Time: O((V + E) log V)
+    Dijkstra works by always extending the currently nearest unfinalized node —
+    the greedy choice is safe because all edge weights are non-negative.
     """
     n = len(graph)
     dist = [float('inf')] * n
     dist[start] = 0
 
-    pq = [(0, start)]  # (distance, node)
+    pq = [(0, start)]  # Min-heap on (distance, node) — processes nearest node first
 
     while pq:
         d, curr = heapq.heappop(pq)
 
+        # Skip stale heap entries — a node may be inserted multiple times with
+        # different distances; only the smallest distance (first pop) is final
         if d > dist[curr]:
             continue
 
@@ -347,23 +366,26 @@ def dijkstra(graph, start):
 # Type 3: Union-Find - Connected components
 class UnionFind:
     def __init__(self, n):
-        self.parent = list(range(n))
-        self.rank = [0] * n
+        self.parent = list(range(n))  # Each node starts as its own root
+        self.rank = [0] * n           # Rank guides union direction to keep trees flat
 
     def find(self, x):
         if self.parent[x] != x:
+            # Path compression: make every node on the path point directly to the root,
+            # so subsequent finds are nearly O(1) — this is the key to amortized efficiency
             self.parent[x] = self.find(self.parent[x])
         return self.parent[x]
 
     def union(self, x, y):
         px, py = self.find(x), self.find(y)
         if px == py:
-            return False
+            return False  # Already in the same component — no merge needed
+        # Union by rank: attach shorter tree under taller to keep height O(log n)
         if self.rank[px] < self.rank[py]:
             px, py = py, px
         self.parent[py] = px
         if self.rank[px] == self.rank[py]:
-            self.rank[px] += 1
+            self.rank[px] += 1  # Height increases only when merging equal-rank trees
         return True
 ```
 
@@ -375,6 +397,8 @@ def climb_stairs(n):
     """
     Number of ways to climb n stairs (1 or 2 steps at a time)
     Time: O(N), Space: O(1)
+    Same recurrence as Fibonacci: ways(n) = ways(n-1) + ways(n-2)
+    because the last step is either 1 or 2 stairs.
     """
     if n <= 2:
         return n
@@ -382,7 +406,7 @@ def climb_stairs(n):
     prev2, prev1 = 1, 2
     for _ in range(3, n + 1):
         curr = prev1 + prev2
-        prev2, prev1 = prev1, curr
+        prev2, prev1 = prev1, curr  # Slide the window — O(1) space instead of O(N) array
 
     return prev1
 
@@ -396,6 +420,9 @@ def knapsack_01(weights, values, capacity):
     dp = [0] * (capacity + 1)
 
     for i in range(n):
+        # Iterate capacity in reverse so each item is considered at most once.
+        # If we went forward, dp[w - weights[i]] might already include item i,
+        # incorrectly allowing it to be picked multiple times (unbounded knapsack).
         for w in range(capacity, weights[i] - 1, -1):
             dp[w] = max(dp[w], dp[w - weights[i]] + values[i])
 
@@ -406,6 +433,9 @@ def lcs_length(s1, s2):
     """
     Longest common subsequence length
     Time: O(N * M)
+    dp[i][j] = LCS length for s1[0:i] and s2[0:j].
+    When characters match, we extend the LCS from the previous pair;
+    when they don't, we take the best of dropping one character from either string.
     """
     n, m = len(s1), len(s2)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
@@ -413,9 +443,9 @@ def lcs_length(s1, s2):
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             if s1[i - 1] == s2[j - 1]:
-                dp[i][j] = dp[i - 1][j - 1] + 1
+                dp[i][j] = dp[i - 1][j - 1] + 1  # Characters match — extend LCS by 1
             else:
-                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])  # Take the best without one character
 
     return dp[n][m]
 
@@ -425,6 +455,8 @@ def matrix_chain(dims):
     Minimum operations for matrix multiplication
     dims: matrix dimensions [d0, d1, d2, ...] → (d0×d1) × (d1×d2) × ...
     Time: O(N³)
+    Fill by increasing interval length so smaller subproblems are ready
+    before the larger ones that depend on them.
     """
     n = len(dims) - 1
     dp = [[0] * n for _ in range(n)]
@@ -433,6 +465,8 @@ def matrix_chain(dims):
         for i in range(n - length + 1):
             j = i + length - 1
             dp[i][j] = float('inf')
+            # Try every possible split point k; the cost of multiplying [i..k] × [k+1..j]
+            # is the cost of each sub-chain plus dims[i]*dims[k+1]*dims[j+1] for the final multiply
             for k in range(i, j):
                 cost = dp[i][k] + dp[k + 1][j] + dims[i] * dims[k + 1] * dims[j + 1]
                 dp[i][j] = min(dp[i][j], cost)
@@ -527,20 +561,20 @@ def install_routers(houses, n):
 def permutations(nums):
     """Generate all permutations - O(N! * N)"""
     result = []
-    used = [False] * len(nums)
+    used = [False] * len(nums)  # Track which elements are already in the current path
 
     def backtrack(path):
         if len(path) == len(nums):
-            result.append(path[:])
+            result.append(path[:])  # Copy — path is mutated in-place, so we need a snapshot
             return
 
         for i, num in enumerate(nums):
             if used[i]:
                 continue
-            used[i] = True
+            used[i] = True   # Choose: mark as used before descending
             path.append(num)
             backtrack(path)
-            path.pop()
+            path.pop()       # Unchoose: undo the choice so the next iteration can try a different element
             used[i] = False
 
     backtrack([])
@@ -558,7 +592,7 @@ def combinations(nums, k):
 
         for i in range(start, len(nums)):
             path.append(nums[i])
-            backtrack(i + 1, path)
+            backtrack(i + 1, path)  # start from i+1 to avoid reusing the same element
             path.pop()
 
     backtrack(0, [])
@@ -569,25 +603,27 @@ def solve_n_queens(n):
     """Number of solutions to N-Queens"""
     count = 0
     cols = [False] * n
-    diag1 = [False] * (2 * n - 1)  # row - col + n - 1
-    diag2 = [False] * (2 * n - 1)  # row + col
+    diag1 = [False] * (2 * n - 1)  # row - col + n - 1 (unique for each \ diagonal)
+    diag2 = [False] * (2 * n - 1)  # row + col          (unique for each / diagonal)
 
     def backtrack(row):
         nonlocal count
         if row == n:
-            count += 1
+            count += 1  # All n queens placed without conflict
             return
 
         for col in range(n):
             d1 = row - col + n - 1
             d2 = row + col
 
+            # Pruning: skip this column if any constraint is violated — this eliminates
+            # entire subtrees and is why backtracking is far faster than brute force
             if cols[col] or diag1[d1] or diag2[d2]:
                 continue
 
             cols[col] = diag1[d1] = diag2[d2] = True
             backtrack(row + 1)
-            cols[col] = diag1[d1] = diag2[d2] = False
+            cols[col] = diag1[d1] = diag2[d2] = False  # Undo before trying next column
 
     backtrack(0)
     return count

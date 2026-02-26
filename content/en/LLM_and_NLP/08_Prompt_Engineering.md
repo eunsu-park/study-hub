@@ -513,6 +513,272 @@ few_shot_prompt = FewShotPromptTemplate(
 
 ---
 
+## Exercises
+
+### Exercise 1: Zero-shot vs Few-shot Comparison
+
+You need to classify product reviews into three categories: Positive, Negative, or Neutral. Write both a zero-shot and a few-shot prompt for this task, then explain when you would prefer each approach.
+
+<details>
+<summary>Show Answer</summary>
+
+**Zero-shot prompt:**
+```
+Classify the sentiment of the following product review as Positive, Negative, or Neutral.
+
+Review: "{review}"
+
+Sentiment:
+```
+
+**Few-shot prompt:**
+```
+Classify the sentiment of the following product reviews.
+
+Review: "Absolutely love this! Best purchase I've made all year."
+Sentiment: Positive
+
+Review: "Terrible quality. Broke after two days of use."
+Sentiment: Negative
+
+Review: "It does what it says. Nothing special."
+Sentiment: Neutral
+
+Review: "{review}"
+Sentiment:
+```
+
+**When to prefer each:**
+- **Zero-shot**: Use when the task is straightforward and the model's training already covers it well. Faster to write and uses fewer tokens.
+- **Few-shot**: Use when you need a specific output format, the task is ambiguous, or you want consistent style. Especially valuable for rare label sets or domain-specific tasks where the model may not have strong priors.
+
+A good rule of thumb: start with zero-shot, switch to few-shot if results are inconsistent.
+</details>
+
+---
+
+### Exercise 2: Chain-of-Thought Prompt Design
+
+A user wants to calculate whether they can afford a vacation. They earn $4,200/month after taxes, their fixed monthly expenses are $2,800, and the vacation costs $1,500. The trip is 3 months away. Write a zero-shot CoT prompt that guides the model to reason through this correctly.
+
+<details>
+<summary>Show Answer</summary>
+
+```
+A user wants to know if they can save enough for a vacation.
+- Monthly income (after tax): $4,200
+- Fixed monthly expenses: $2,800
+- Vacation cost: $1,500
+- Months until vacation: 3
+
+Can they afford it? Let's think step by step.
+```
+
+**Expected model reasoning:**
+```
+1. Monthly savings = Income - Expenses = $4,200 - $2,800 = $1,400
+2. Total savings in 3 months = $1,400 × 3 = $4,200
+3. Vacation cost = $1,500
+4. $4,200 > $1,500, so yes, they can afford it.
+   They'll have $4,200 - $1,500 = $2,700 left over.
+
+Answer: Yes, they can afford the vacation.
+```
+
+**Why CoT helps here:** Without step-by-step reasoning, the model might jump to an answer and make arithmetic errors. The phrase "Let's think step by step" elicits structured reasoning that reduces errors on multi-step math problems.
+</details>
+
+---
+
+### Exercise 3: Structured Output Extraction
+
+Write a prompt that extracts structured information from a job posting. The output should be valid JSON with fields: `title`, `company`, `location`, `salary_range`, `required_skills` (list), and `experience_years` (number). Handle the case where a field is not mentioned in the posting.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+EXTRACTION_PROMPT = """
+Extract job information from the posting below and return it as JSON.
+Use null for any fields not mentioned.
+
+Required JSON structure:
+{{
+  "title": "job title",
+  "company": "company name",
+  "location": "city/remote",
+  "salary_range": "e.g. $80,000-$100,000 or null",
+  "required_skills": ["skill1", "skill2"],
+  "experience_years": 3
+}}
+
+Job posting:
+{posting}
+
+JSON:
+"""
+
+# Example usage
+posting = """
+Senior ML Engineer at DataCorp
+San Francisco, CA (hybrid)
+We're looking for someone with 5+ years of experience in Python and PyTorch.
+Knowledge of distributed training and MLflow is a plus.
+"""
+
+# Expected output:
+# {
+#   "title": "Senior ML Engineer",
+#   "company": "DataCorp",
+#   "location": "San Francisco, CA (hybrid)",
+#   "salary_range": null,
+#   "required_skills": ["Python", "PyTorch"],
+#   "experience_years": 5
+# }
+```
+
+**Key design decisions:**
+- Use double braces `{{` `}}` to escape literal braces in Python f-strings/`.format()` templates
+- Providing the exact schema reduces hallucinated fields
+- `null` instruction prevents the model from inventing data for missing fields
+- Adding "JSON:" at the end primes the model to output JSON directly
+</details>
+
+---
+
+### Exercise 4: Self-Consistency Implementation
+
+Implement the self-consistency prompting technique that generates multiple reasoning paths and returns the most common answer. The function should work for any yes/no or short-answer question.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from collections import Counter
+
+def self_consistency(
+    prompt: str,
+    model,
+    n_samples: int = 5,
+    temperature: float = 0.7
+) -> tuple[str, dict]:
+    """
+    Generate multiple reasoning paths and return the majority answer.
+
+    Args:
+        prompt: The question prompt (should include CoT instruction)
+        model: A callable model.generate(prompt, temperature) -> str
+        n_samples: Number of independent samples to generate
+        temperature: Sampling temperature (>0 for diversity)
+
+    Returns:
+        (final_answer, vote_counts)
+    """
+    answers = []
+
+    for _ in range(n_samples):
+        response = model.generate(prompt, temperature=temperature)
+        answer = extract_final_answer(response)
+        answers.append(answer)
+
+    vote_counts = Counter(answers)
+    final_answer = vote_counts.most_common(1)[0][0]
+
+    return final_answer, dict(vote_counts)
+
+
+def extract_final_answer(response: str) -> str:
+    """Extract the answer from a CoT response."""
+    # Look for "The answer is X" pattern
+    import re
+    match = re.search(r"(?:answer is|therefore)[:\s]+(.+?)(?:\.|$)",
+                      response, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    # Fall back to last non-empty line
+    lines = [l.strip() for l in response.strip().split('\n') if l.strip()]
+    return lines[-1] if lines else response.strip()
+
+
+# Usage example
+cot_prompt = """
+Q: If a train travels 120 km in 1.5 hours, and then 80 km in 1 hour,
+   what is its average speed for the entire journey?
+
+Let's think step by step.
+"""
+
+# With self-consistency (temperature > 0 generates diverse paths)
+# All correct paths converge: (120+80) / (1.5+1) = 200/2.5 = 80 km/h
+```
+
+**Why this works:** Temperature > 0 causes the model to explore different reasoning paths. Incorrect paths tend to disagree with each other, while correct reasoning paths consistently converge on the same answer. Majority voting filters out individual errors.
+</details>
+
+---
+
+### Exercise 5: Prompt Template Evaluation
+
+The following prompt template for a code review task has several weaknesses. Identify at least four problems and write an improved version.
+
+```python
+# Original (weak) prompt
+REVIEW_PROMPT = "Review this code: {code}"
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Problems with the original prompt:**
+1. **No role/expertise context** — the model doesn't know what kind of reviewer to be
+2. **No output structure** — response format is unpredictable (bullet list? paragraph? score?)
+3. **No review criteria** — security? performance? style? correctness? all of them?
+4. **No language specification** — different languages have different best practices
+5. **No severity guidance** — all issues treated equally; critical bugs not distinguished from nits
+
+**Improved version:**
+```python
+CODE_REVIEW_PROMPT = """
+You are a senior software engineer conducting a thorough code review.
+
+Review the following {language} code and provide feedback organized by severity.
+
+Code to review:
+```{language}
+{code}
+```
+
+Provide your review in this exact format:
+
+## Critical Issues (must fix before merging)
+- [issue]: [explanation and suggested fix]
+
+## Warnings (should fix)
+- [issue]: [explanation and suggested fix]
+
+## Suggestions (nice to have)
+- [issue]: [explanation and suggested fix]
+
+## Summary
+[2-3 sentence overall assessment including what the code does well]
+"""
+
+# Usage
+review = CODE_REVIEW_PROMPT.format(
+    language="python",
+    code="""
+def get_user(id):
+    return db.execute(f"SELECT * FROM users WHERE id = {id}")
+"""
+)
+# Expected: Critical issue flagged for SQL injection vulnerability
+```
+
+The improved prompt enforces consistent structure, focuses the model's expertise, and separates critical issues from minor suggestions — making the output actionable for developers.
+</details>
+
+---
+
 ## Next Steps
 
 Learn about Retrieval-Augmented Generation (RAG) systems in [09_RAG_Basics.md](./09_RAG_Basics.md).

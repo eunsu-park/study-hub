@@ -16,6 +16,7 @@ spec:
   replicas: 3
 
   # Deployment strategy
+  # Why: RollingUpdate (not Recreate) ensures zero-downtime deploys — maxSurge=1 limits extra resource consumption, maxUnavailable=1 keeps at least 2 of 3 replicas serving traffic
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -40,6 +41,7 @@ spec:
         prometheus.io/path: "/metrics"
 
     spec:
+      # Why: Pod-level securityContext enforces non-root at the admission level — even if the Dockerfile forgets USER, K8s will reject the container from running as root
       # Security context for the pod
       securityContext:
         runAsNonRoot: true
@@ -129,6 +131,7 @@ spec:
           successThreshold: 1
           failureThreshold: 30  # 30 * 10s = 5 minutes max startup time
 
+        # Why: readOnlyRootFilesystem + drop ALL capabilities follows the principle of least privilege — an attacker who gains code execution cannot install tools, modify binaries, or use kernel capabilities like NET_RAW
         # Security context for the container
         securityContext:
           allowPrivilegeEscalation: false
@@ -139,7 +142,8 @@ spec:
             drop:
             - ALL
 
-        # Volume mounts (if needed)
+        # Why: emptyDir volumes provide writable scratch space because readOnlyRootFilesystem blocks writes — Python needs /tmp for tempfiles, and the app may need /app/cache for local caching
+      # Volume mounts (if needed)
         volumeMounts:
         - name: tmp
           mountPath: /tmp
@@ -224,6 +228,7 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
+  # Why: Asymmetric scaling behavior — slow scale-down (5 min window) prevents flapping during transient load drops, while fast scale-up (0s window) ensures responsiveness to traffic spikes
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300  # Wait 5 min before scaling down

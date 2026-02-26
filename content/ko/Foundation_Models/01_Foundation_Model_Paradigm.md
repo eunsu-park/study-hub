@@ -560,3 +560,144 @@ print(response.choices[0].message.content)
 - [Stanford HAI Foundation Models Report](https://crfm.stanford.edu/report.html)
 - [HuggingFace Model Hub](https://huggingface.co/models)
 - [Papers With Code - Foundation Models](https://paperswithcode.com/methods/category/foundation-models)
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: Foundation Model 분류
+
+다음 각 모델에 대해 (a) 유형(언어, 비전, 멀티모달, 생성형, 오디오, 코드)과 (b) 인코더 전용, 디코더 전용, 인코더-디코더 중 어떤 아키텍처를 사용하는지 분류하고, 이유를 설명하세요.
+
+1. GPT-4
+2. BERT
+3. T5
+4. DALL-E 3
+5. Whisper
+
+<details>
+<summary>정답 보기</summary>
+
+1. **GPT-4** — 언어 모델(비전 변형에서는 멀티모달), **디코더 전용**. 인과 마스크(causal mask)를 사용해 과거 토큰만 참조하며 자기회귀적(autoregressive)으로 텍스트를 생성합니다.
+2. **BERT** — 언어 모델(임베딩/이해), **인코더 전용**. 양방향 셀프 어텐션(Masked LM)을 통해 문맥이 풍부한 토큰 표현을 생성합니다.
+3. **T5** — 언어 모델(텍스트-투-텍스트), **인코더-디코더**. 인코더는 양방향 어텐션으로 입력을 처리하고, 디코더는 자기회귀적으로 출력을 생성합니다.
+4. **DALL-E 3** — 생성형 모델(텍스트 → 이미지). 버전에 따라 아키텍처가 다르며(VQVAE + 트랜스포머 / 확산 모델), 텍스트 설명을 이미지 표현으로 변환합니다.
+5. **Whisper** — 오디오 모델(오디오 ↔ 텍스트), **인코더-디코더**. 오디오 인코더가 멜 스펙트로그램 특징을 처리하고, 디코더가 전사(transcription) 토큰을 생성합니다.
+
+</details>
+
+---
+
+### 연습 문제 2: In-context Learning 프롬프트 설계
+
+PERSON과 LOCATION 개체를 식별하는 **개체명 인식(NER, Named Entity Recognition)** 태스크를 위한 Few-shot 프롬프트를 작성하세요. 세 가지 예시를 포함하고, 마지막에 레이블이 없는 테스트 문장을 추가하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+ner_prompt = """
+다음 문장에서 PERSON과 LOCATION 개체를 추출하세요.
+
+문장: "Albert Einstein was born in Ulm, Germany."
+개체: PERSON: Albert Einstein | LOCATION: Ulm, Germany
+
+문장: "Marie Curie conducted research in Paris."
+개체: PERSON: Marie Curie | LOCATION: Paris
+
+문장: "Elon Musk founded SpaceX in Hawthorne, California."
+개체: PERSON: Elon Musk | LOCATION: Hawthorne, California
+
+문장: "Alan Turing worked at Bletchley Park during World War II."
+개체:"""
+
+# 예상 출력:
+# PERSON: Alan Turing | LOCATION: Bletchley Park
+```
+
+핵심 설계 원칙:
+- 모든 예시에서 일관된 형식 유지(패턴 추출을 용이하게 함)
+- 각 예시에서 동일한 개체 유형 제시
+- 마지막 항목은 모델이 완성할 수 있도록 동일한 구조적 지점에서 종료
+
+</details>
+
+---
+
+### 연습 문제 3: 패러다임 비교 분석
+
+**전통적 ML 파이프라인**과 **Foundation Model 파이프라인**을 다음 차원에서 비교하고, 각 차원마다 구체적인 예시를 제시하세요.
+
+| 차원 | 전통적 ML | Foundation Model |
+|------|----------|-----------------|
+| 태스크별 데이터 | ? | ? |
+| 태스크별 학습 | ? | ? |
+| 지식 전이(Knowledge transfer) | ? | ? |
+| 적응 방법 | ? | ? |
+| 실패 유형 | ? | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 차원 | 전통적 ML | Foundation Model |
+|------|----------|-----------------|
+| 태스크별 데이터 | 각 태스크마다 별도의 레이블 데이터셋 필요 (예: 분류기마다 1만 개의 레이블 이미지) | 모든 태스크에서 공유되는 대규모 사전 학습 코퍼스 (예: 1조 토큰) |
+| 태스크별 학습 | 각 태스크마다 처음부터 모델을 학습하거나 독립적으로 파인튜닝 | 한 번의 대규모 사전 학습 후, 태스크마다 경량 적응 |
+| 지식 전이(Knowledge transfer) | 제한적 — 감성 분석기가 번역 모델에 도움이 되지 않음 | 강력 — 언어, 사실, 추론 지식이 태스크 간에 전이 |
+| 적응 방법 | 태스크별 레이블 데이터로 재학습/파인튜닝 | 프롬프트 엔지니어링, Few-shot 예시, 또는 파라미터 효율적 파인튜닝(LoRA) |
+| 실패 유형 | 데이터 드리프트(Data drift) — 새 태스크에 비용이 많이 드는 데이터 수집 필요 | 환각(Hallucination) — 그럴듯하지만 부정확한 출력을 생성할 수 있음 |
+
+</details>
+
+---
+
+### 연습 문제 4: Emergent Capabilities 임계값 분석
+
+다음 능력들은 서로 다른 규모 임계값에서 창발(Emergence)하는 것이 관찰되었습니다. **가장 먼저 창발하는 것부터 마지막 순서로** 나열하고, 각 능력이 이전 능력보다 더 큰 규모를 필요로 하는 이유를 간단히 설명하세요.
+
+- Chain-of-Thought 추론(Chain-of-Thought reasoning)
+- 간단한 3자리 덧셈
+- 마음 이론(Theory of Mind)
+- 단어 철자 복원(Word unscrambling)
+
+<details>
+<summary>정답 보기</summary>
+
+**창발 순서 (빠른 순 → 느린 순):**
+
+1. **간단한 3자리 덧셈** (~10^22 FLOPs) — 기본적인 자릿수 패턴과 올림 연산을 학습해야 합니다. 구성해야 할 서브 스킬(sub-skill)이 상대적으로 적습니다.
+
+2. **단어 철자 복원(Word unscrambling)** (~10^22 FLOPs) — 문자 패턴 인식과 어휘 지식이 필요하지만, 독립적인 어휘 태스크입니다.
+
+3. **Chain-of-Thought 추론** (~10^23 FLOPs) — 사실적 지식뿐만 아니라 다단계 문제를 분해하고 생성된 텍스트에서 중간 상태를 유지하는 능력이 필요합니다. 훨씬 더 풍부한 내부 표현이 요구됩니다.
+
+4. **마음 이론(Theory of Mind)** (~10^24 FLOPs) — 다른 에이전트의 믿음과 의도를 모델링해야 합니다. "Alice는 Bob이 ...라고 생각한다고 믿는다"와 같이 중첩된 추론이 필요합니다. 네 가지 중 가장 복잡한 구성적 추론입니다.
+
+패턴: 나중에 창발하는 능력일수록 더 많은 서브 스킬을 구성하고 더 추상적인 내부 상태를 유지해야 하며, 이는 규모 증가에 따른 추가적인 표현 용량이 필요합니다.
+
+</details>
+
+---
+
+### 연습 문제 5: RLHF 파이프라인 설계
+
+ChatGPT 학습 과정은 네 단계로 구성됩니다. 아래 각 단계에서 필요한 데이터와 학습하는 내용을 설명하세요.
+
+1. 사전 학습(Pre-training) (GPT-3.5 기반)
+2. 지도 파인튜닝(Supervised Fine-tuning, SFT)
+3. 보상 모델 학습(Reward Model Training)
+4. PPO를 이용한 RLHF
+
+<details>
+<summary>정답 보기</summary>
+
+| 단계 | 필요한 데이터 | 학습 내용 |
+|------|------------|---------|
+| **1. 사전 학습(Pre-training)** | 대규모 웹 텍스트 코퍼스 (수천억 개의 토큰) | 다음 토큰 예측; 광범위한 언어, 사실, 추론 지식 |
+| **2. 지도 파인튜닝(SFT)** | 사람이 작성한 고품질 지시-응답 쌍 (수천~수만 개의 예시) | 지시사항을 따르고 잘 구조화된 유용한 응답 생성 방법 |
+| **3. 보상 모델 학습** | 사람 어노테이터가 순위를 매긴 모델 응답 쌍 (하나의 응답이 다른 것보다 선호됨) | 사람의 선호도 점수 예측 — 모델 출력에 스칼라 보상을 부여 |
+| **4. PPO를 이용한 RLHF** | 보상 모델(환경으로서) + SFT 모델(시작 정책으로서) | 보상(사람의 선호도)을 최대화하는 응답을 생성하되, SFT 분포에서 너무 벗어나지 않도록 학습(KL 페널티를 통해) |
+
+핵심 인사이트: 각 단계는 서로 다른 측면을 개선합니다 — (1) 원시 지식, (2) 지시사항 형식, (3) 선호도 모델, (4) 정렬(alignment) 최적화.
+
+</details>

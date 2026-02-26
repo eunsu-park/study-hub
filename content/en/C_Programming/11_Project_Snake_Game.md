@@ -1,12 +1,24 @@
 # Project 10: Terminal Snake Game
 
-Create a classic snake game that runs in the terminal.
+**Previous**: [Project 8: Hash Table](./10_Project_Hash_Table.md) | **Next**: [Project 11: Mini Shell](./12_Project_Mini_Shell.md)
+
+---
 
 ## Learning Objectives
-- Terminal control (ANSI escape codes)
-- Asynchronous keyboard input handling
-- Game loop implementation
-- Timer and frame management
+
+After completing this lesson, you will be able to:
+
+1. Apply ANSI escape codes to clear the screen, move the cursor, hide/show the cursor, and render colored text
+2. Configure the terminal for raw mode using `termios` to capture keystrokes without line buffering
+3. Implement non-blocking keyboard input using `VMIN`/`VTIME` settings and escape-sequence parsing for arrow keys
+4. Design a game loop that follows the Input-Update-Render cycle with frame-rate control via `usleep`
+5. Build a snake data structure using a linked list where the head grows and the tail shrinks each frame
+6. Implement collision detection against walls and the snake's own body
+7. Compare raw ANSI-based rendering with the `ncurses` library approach and identify trade-offs
+
+---
+
+Building a game forces you to combine nearly everything you have learned so far -- structs, linked lists, dynamic memory, bit flags, and terminal I/O -- into a single program that must respond to user input in real time. The snake game is a perfect vehicle because its rules are simple enough to focus on the systems-programming challenges: raw terminal control, non-blocking input, and a tight update-render loop that must run at a consistent frame rate.
 
 ## Prerequisites
 - Structures and pointers

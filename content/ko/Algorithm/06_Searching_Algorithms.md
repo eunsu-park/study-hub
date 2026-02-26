@@ -1,5 +1,18 @@
 # 탐색 알고리즘 (Search Algorithms)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 선형 탐색(linear search), 이진 탐색(binary search), 해시 탐색(hash search)을 시간 복잡도, 전제 조건, 적합한 사용 사례 측면에서 비교할 수 있다
+2. 반복문과 재귀를 이용한 이진 탐색을 구현하고, 정렬된 배열에서 O(log n) 시간이 달성되는 이유를 설명할 수 있다
+3. 이진 탐색 변형(lower bound, upper bound)을 적용하여 목표 값의 첫 번째·마지막 등장 위치를 찾는 문제를 해결할 수 있다
+4. 최적화 문제를 정답에 대한 이진 탐색(parametric search, 파라메트릭 서치) 문제로 변환하여 솔루션을 설계할 수 있다
+5. 해시 기반 조회가 평균 O(1) 시간을 달성하는 이유와 정렬 배열 이진 탐색 대비 한계를 설명할 수 있다
+6. 데이터 구조(정렬 여부, 범위 제약, 중복 존재)에 따라 가장 효율적인 탐색 전략을 선택할 수 있다
+
+---
+
 ## 개요
 
 탐색은 데이터에서 원하는 값을 찾는 기본적인 연산입니다. 이 레슨에서는 선형 탐색, 이진 탐색, 파라메트릭 서치, 해시 탐색 등 다양한 탐색 기법을 학습합니다.
@@ -130,27 +143,34 @@ int binarySearch(int arr[], int n, int target) {
     int right = n - 1;
 
     while (left <= right) {
+        // (left + right) / 2 대신 left + (right - left) / 2를 사용:
+        // 두 값이 클 때 (left + right)가 32비트 정수 오버플로우(overflow)를 일으킬 수 있음
+        // (예: left = right = 1.5 x 10^9 → 합이 INT_MAX 초과).
+        // 이 형태는 먼저 빼서 범위 내에 유지 — C/C++/Java처럼 정수 너비가
+        // 고정된 언어에서 필수. Python의 임의 정밀도 정수에서는 단순 형태도 안전하지만
+        // 이 스타일이 모범 사례로 간주됨.
         int mid = left + (right - left) / 2;  // 오버플로우 방지
 
         if (arr[mid] == target) {
             return mid;
         } else if (arr[mid] < target) {
-            left = mid + 1;
+            left = mid + 1;   // 오른쪽 절반에 있음
         } else {
-            right = mid - 1;
+            right = mid - 1;  // 왼쪽 절반에 있음
         }
     }
 
-    return -1;
+    return -1;  // 모든 후보를 소진 — 존재하지 않음
 }
 
 // C - 재귀
 int binarySearchRecursive(int arr[], int left, int right, int target) {
+    // 기저 조건(base case): 빈 탐색 범위 — 원소가 존재하지 않음
     if (left > right) {
         return -1;
     }
 
-    int mid = left + (right - left) / 2;
+    int mid = left + (right - left) / 2;  // 동일한 오버플로우 안전 중간점
 
     if (arr[mid] == target) {
         return mid;
@@ -244,19 +264,25 @@ lower_bound(9) = 7  (없음, 배열 끝)
 // C
 int lowerBound(int arr[], int n, int target) {
     int left = 0;
+    // right = n (마지막 유효 인덱스 + 1), n - 1이 아님:
+    // target이 모든 원소보다 클 때 결과가 n이 될 수 있으며,
+    // 이는 "끝에 삽입"을 의미 — n - 1을 사용하면 이 경우를 놓침
     int right = n;
 
+    // 루프 조건이 left < right (<= 아님): [left, right) 범위는 반개구간(half-open)이므로
+    // left == right이면 범위가 비어서 완료
     while (left < right) {
         int mid = left + (right - left) / 2;
 
         if (arr[mid] < target) {
-            left = mid + 1;
+            left = mid + 1;  // mid는 확실히 답이 아님 — 제외
         } else {
+            // arr[mid] >= target: mid가 답일 수 있으므로 범위에 유지
             right = mid;
         }
     }
 
-    return left;
+    return left;  // left == right: target의 삽입 지점
 }
 ```
 
@@ -314,11 +340,14 @@ upper_bound(5) = 5  (5보다 큰 첫 원소 6의 인덱스)
 // C
 int upperBound(int arr[], int n, int target) {
     int left = 0;
-    int right = n;
+    int right = n;  // lowerBound와 동일한 반개구간(half-open) [left, right) 규약
 
     while (left < right) {
         int mid = left + (right - left) / 2;
 
+        // lowerBound와의 유일한 차이: < 대신 <=.
+        // 이로 인해 동일 값 원소가 left를 앞으로 밀어, 결과가
+        // target의 모든 등장 *다음* 한 위치에 오게 됨
         if (arr[mid] <= target) {
             left = mid + 1;
         } else {
@@ -384,26 +413,30 @@ int searchRotated(const vector<int>& arr, int target) {
     int right = arr.size() - 1;
 
     while (left <= right) {
-        int mid = left + (right - left) / 2;
+        int mid = left + (right - left) / 2;  // 오버플로우 안전 중간점
 
         if (arr[mid] == target) {
             return mid;
         }
 
-        // 왼쪽 부분이 정렬됨
+        // 핵심 통찰: 회전된 배열에서 두 절반 중 적어도 하나는 항상
+        // 연속적으로 정렬되어 있음. 어느 쪽이 정렬되었는지 판단한 후,
+        // target이 그 정렬된 범위 안에 있는지 확인.
+
+        // 왼쪽이 정렬됨: arr[left] <= arr[mid]이면 여기에 회전 지점 없음
         if (arr[left] <= arr[mid]) {
             if (arr[left] <= target && target < arr[mid]) {
-                right = mid - 1;
+                right = mid - 1;  // target이 정렬된 왼쪽 절반 안에 있음
             } else {
-                left = mid + 1;
+                left = mid + 1;   // target은 (회전 가능한) 오른쪽 절반에 있어야 함
             }
         }
-        // 오른쪽 부분이 정렬됨
+        // 오른쪽이 정렬됨: 회전 지점이 왼쪽 절반에 있음
         else {
             if (arr[mid] < target && target <= arr[right]) {
-                left = mid + 1;
+                left = mid + 1;   // target이 정렬된 오른쪽 절반 안에 있음
             } else {
-                right = mid - 1;
+                right = mid - 1;  // target은 (회전된) 왼쪽 절반에 있어야 함
             }
         }
     }
@@ -475,7 +508,7 @@ def search_rotated(arr, target):
 bool canMake(const vector<int>& cables, int k, long long length) {
     long long count = 0;
     for (int cable : cables) {
-        count += cable / length;
+        count += cable / length;  // 정수 나눗셈으로 이 길이의 조각이 몇 개 나오는지 계산
     }
     return count >= k;
 }
@@ -483,15 +516,17 @@ bool canMake(const vector<int>& cables, int k, long long length) {
 long long maxCableLength(vector<int>& cables, int k) {
     long long left = 1;
     long long right = *max_element(cables.begin(), cables.end());
-    long long answer = 0;
+    long long answer = 0;  // 0 = "아직 유효한 답을 찾지 못함"
 
     while (left <= right) {
         long long mid = (left + right) / 2;
 
         if (canMake(cables, k, mid)) {
+            // mid가 가능 — 기록하고 더 큰(더 좋은) 답을 탐색
             answer = mid;
             left = mid + 1;  // 더 긴 길이 시도
         } else {
+            // mid가 너무 큼 — 탐색 범위를 축소
             right = mid - 1;
         }
     }
@@ -575,6 +610,9 @@ def max_cut_height(trees, m):
 ```cpp
 // C++
 bool canInstall(const vector<int>& houses, int c, int dist) {
+    // 탐욕법(greedy): 마지막 공유기에서 충분히 먼 첫 번째 집에 항상 설치 —
+    // 더 일찍 설치하는 것이 향후 설치를 방해하지 않으므로 탐욕적 선택이 유효
+    // (오른쪽에 더 많은 여유 공간만 남김)
     int count = 1;
     int lastPos = houses[0];
 
@@ -589,6 +627,8 @@ bool canInstall(const vector<int>& houses, int c, int dist) {
 }
 
 int maxMinDistance(vector<int>& houses, int c) {
+    // 먼저 정렬 필수: canInstall은 연속 위치가 인접한 것에 의존하며,
+    // 이진 탐색 범위 [1, max_gap]은 정렬된 입력에서만 의미 있음
     sort(houses.begin(), houses.end());
 
     int left = 1;
@@ -599,7 +639,7 @@ int maxMinDistance(vector<int>& houses, int c) {
         int mid = (left + right) / 2;
 
         if (canInstall(houses, c, mid)) {
-            answer = mid;
+            answer = mid;   // mid가 가능 — 기록하고 더 큰 값 시도
             left = mid + 1;
         } else {
             right = mid - 1;

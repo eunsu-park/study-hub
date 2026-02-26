@@ -1,13 +1,23 @@
 # 16. Flask 웹 프레임워크 기초
 
-## 학습 목표
+**이전**: [JavaScript 모듈 시스템](./15_JS_Modules.md)
 
-- Flask의 핵심 개념과 구조 이해
-- 라우팅, 템플릿, 폼 처리 습득
-- 데이터베이스 연동 및 RESTful API 구현
-- 블루프린트를 활용한 대규모 애플리케이션 구조화
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 라우트(route), 템플릿(template), 정적 파일을 갖춘 최소한의 Flask 애플리케이션 생성
+2. 변수 컨버터(variable converter)와 여러 HTTP 메서드를 사용하여 동적 URL 라우트 정의
+3. Jinja2 템플릿 상속(template inheritance), 매크로(macro), 필터(filter)를 사용하여 HTML 페이지 구성
+4. 순수 Flask와 Flask-WTF를 모두 사용하여 유효성 검사와 함께 폼 제출 처리
+5. Flask-SQLAlchemy를 사용하여 SQLite 데이터베이스에서 CRUD 연산 수행
+6. 애플리케이션 팩토리(application factory) 패턴으로 블루프린트(blueprint)를 사용하여 대규모 Flask 애플리케이션 구성
+7. JSON 응답과 JWT 인증을 포함한 RESTful API 엔드포인트 구축 및 보안
+8. Gunicorn과 Docker를 사용하여 Flask 애플리케이션 배포
 
 ---
+
+이 과정에서 지금까지 모든 상호작용은 브라우저에서 이루어졌습니다. Flask는 서버로 로직을 이동시킬 수 있게 해줍니다 -- 인증 처리, 데이터베이스에 데이터 유지, 동적 페이지 제공 등이 가능합니다. 마이크로프레임워크(micro-framework)로서 Flask는 생산적으로 작업하기에 충분한 구조만을 제공하면서 아키텍처 결정을 개발자의 손에 맡기므로, 웹 개발자에게 이상적인 첫 번째 백엔드 프레임워크입니다.
 
 ## 1. Flask 소개
 

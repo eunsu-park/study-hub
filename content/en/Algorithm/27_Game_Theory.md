@@ -108,30 +108,36 @@ def nim_game(piles):
     """
     Determine winner of Nim game
     Returns: True if first player wins
+    The XOR theorem holds because XOR = 0 means every bit is "balanced" across piles —
+    any move that changes one pile will unbalance some bit, and the second player
+    can always restore balance, eventually leaving the first player with all-zero piles.
     """
     xor_sum = 0
     for pile in piles:
-        xor_sum ^= pile
+        xor_sum ^= pile  # Accumulate bitwise XOR across all piles
 
-    return xor_sum != 0
+    return xor_sum != 0  # Non-zero XOR means first player can always make it zero
 
 def nim_winning_move(piles):
     """
     Find optimal move to win
     Returns: (pile index, stones to take) or None
+    Strategy: reduce some pile to make total XOR = 0, forcing the opponent into a losing state.
     """
     xor_sum = 0
     for pile in piles:
         xor_sum ^= pile
 
     if xor_sum == 0:
-        return None  # Already in losing state
+        return None  # Already in losing state — every move creates a winning state for opponent
 
-    # Find move that makes XOR sum 0
+    # Find a pile where XOR-ing with xor_sum reduces it.
+    # target = pile ^ xor_sum gives the value that pile must become so that
+    # the new XOR sum is zero; target < pile ensures we remove stones (not add).
     for i, pile in enumerate(piles):
         target = pile ^ xor_sum
         if target < pile:
-            return (i, pile - target)
+            return (i, pile - target)  # Take (pile - target) stones from pile i
 
     return None
 
@@ -202,29 +208,33 @@ Grundy(G1 + G2) = Grundy(G1) XOR Grundy(G2)
 ```python
 def calculate_grundy(state, get_next_states, memo=None):
     """
-    Calculate Grundy number for a state
-    state: current game state
-    get_next_states: function returning possible next states
+    Calculate Grundy number for a state.
+    The Grundy number encodes the entire strategic value of a game position as a
+    single integer equivalent to a Nim pile of that size — this is why you can
+    combine independent games by XOR-ing their Grundy numbers.
     """
     if memo is None:
         memo = {}
 
     if state in memo:
-        return memo[state]
+        return memo[state]  # Memoization avoids exponential re-computation of overlapping states
 
     next_states = get_next_states(state)
 
     if not next_states:
-        # No moves possible = Grundy 0
+        # Terminal state: no moves available means the current player loses (normal play convention)
+        # A losing state is equivalent to an empty Nim pile — Grundy number 0
         memo[state] = 0
         return 0
 
-    # Set of Grundy numbers of next states
+    # Collect Grundy numbers of all reachable next states
     grundy_set = set()
     for next_state in next_states:
         grundy_set.add(calculate_grundy(next_state, get_next_states, memo))
 
-    # Calculate mex
+    # mex (minimum excludant) = smallest non-negative integer NOT in grundy_set.
+    # It represents the "first gap" — the current state acts like a Nim pile you
+    # cannot reduce to any size equal to a reachable position's Grundy number.
     mex = 0
     while mex in grundy_set:
         mex += 1
@@ -330,12 +340,15 @@ def minimax(state, depth, is_maximizing, get_moves, evaluate, is_terminal):
 def alphabeta(state, depth, alpha, beta, is_maximizing,
               get_moves, evaluate, is_terminal):
     """
-    Minimax optimized with alpha-beta pruning
-    alpha: Max player's best (lower bound)
-    beta: Min player's best (upper bound)
+    Minimax optimized with alpha-beta pruning.
+    alpha = the best score Max can guarantee so far (lower bound for Max)
+    beta  = the best score Min can guarantee so far (upper bound for Max)
+    We prune when beta <= alpha because Max will never choose a branch that
+    gives Min a value better than what Max can already guarantee elsewhere.
+    In the best case (perfect move ordering), this reduces O(b^d) to O(b^(d/2)).
     """
     if depth == 0 or is_terminal(state):
-        return evaluate(state)
+        return evaluate(state)  # Leaf node — return static evaluation
 
     moves = get_moves(state)
 
@@ -346,9 +359,9 @@ def alphabeta(state, depth, alpha, beta, is_maximizing,
             eval_score = alphabeta(next_state, depth - 1, alpha, beta, False,
                                    get_moves, evaluate, is_terminal)
             max_eval = max(max_eval, eval_score)
-            alpha = max(alpha, eval_score)
+            alpha = max(alpha, eval_score)  # Update Max's lower bound
             if beta <= alpha:
-                break  # Prune
+                break  # Min already has a better option elsewhere — this subtree is irrelevant
         return max_eval
     else:
         min_eval = float('inf')
@@ -357,9 +370,9 @@ def alphabeta(state, depth, alpha, beta, is_maximizing,
             eval_score = alphabeta(next_state, depth - 1, alpha, beta, True,
                                    get_moves, evaluate, is_terminal)
             min_eval = min(min_eval, eval_score)
-            beta = min(beta, eval_score)
+            beta = min(beta, eval_score)  # Update Min's upper bound
             if beta <= alpha:
-                break  # Prune
+                break  # Max already has a better option elsewhere — this subtree is irrelevant
         return min_eval
 
 # Call

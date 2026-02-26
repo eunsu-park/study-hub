@@ -1,12 +1,22 @@
 # 20. Search Systems
 
+**Previous**: [Observability and Monitoring](./19_Observability_Monitoring.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Search is a fundamental component of most applications. This lesson covers how search engines work internally — from inverted indexes and text analysis to distributed search architecture and ranking algorithms. We focus primarily on Elasticsearch as the most widely adopted solution.
+1. Explain how an inverted index works and why it enables sub-second full-text search over billions of documents
+2. Describe the text analysis pipeline (tokenization, normalization, stemming, stop words) and its impact on search quality
+3. Design an Elasticsearch cluster architecture with appropriate shard counts, replica strategies, and node roles
+4. Construct Elasticsearch queries using match, bool, multi-match, and function-score queries to meet different search requirements
+5. Explain the BM25 ranking algorithm and techniques for boosting relevance (field weighting, decay functions, custom scoring)
+6. Scale a search system horizontally through index sharding, routing, caching, and tiered storage strategies
+7. Implement autocomplete and search-as-you-type features using edge n-grams and completion suggesters
 
 ---
+
+Search is so deeply embedded in how we use software that users notice immediately when it does not work well -- returning irrelevant results, feeling slow, or missing obvious matches. Behind every search box, from e-commerce product search to log exploration in Kibana, sits an inverted index coupled with a carefully tuned ranking algorithm. Understanding search internals lets you design systems that return the right results in milliseconds, even as the corpus grows to hundreds of millions of documents.
 
 ## Table of Contents
 
@@ -697,9 +707,9 @@ User types → debounce → edge-ngram match + completion suggest
 
 ---
 
-## Next Steps
-- [19. Observability and Monitoring](./19_Observability_Monitoring.md)
-- [15. Distributed Systems Concepts](./15_Distributed_Systems_Concepts.md)
+**Previous**: [Observability and Monitoring](./19_Observability_Monitoring.md)
+
+---
 
 ## References
 - [Elasticsearch: The Definitive Guide](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)

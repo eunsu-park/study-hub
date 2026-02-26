@@ -12,15 +12,18 @@ Every software organization has a process, whether it is defined or not. The que
 - Software quality assurance concepts (Lesson 07)
 - Basic project management (Lesson 10)
 
-**Learning Objectives**:
-- Understand why improving software processes produces better outcomes
-- Describe the CMM/CMMI maturity model and its five levels
-- Identify how ISO/IEC 12207 and 15504/33000 standards apply to process assessment
-- Apply PSP and TSP disciplines to personal and team-level improvement
-- Facilitate effective retrospectives using Start/Stop/Continue, 4Ls, and fishbone formats
-- Conduct root cause analysis using 5 Whys and fishbone diagrams
-- Design a metrics-driven improvement program using the GQM approach
-- Distinguish process tailoring from wholesale adoption of standard frameworks
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand why improving software processes produces better outcomes
+2. Describe the CMM/CMMI maturity model and its five levels
+3. Identify how ISO/IEC 12207 and 15504/33000 standards apply to process assessment
+4. Apply PSP and TSP disciplines to personal and team-level improvement
+5. Facilitate effective retrospectives using Start/Stop/Continue, 4Ls, and fishbone formats
+6. Conduct root cause analysis using 5 Whys and fishbone diagrams
+7. Design a metrics-driven improvement program using the GQM approach
+8. Distinguish process tailoring from wholesale adoption of standard frameworks
 
 ---
 
@@ -181,6 +184,11 @@ Requirements Management:
 [ ] Requirements are traceable to test cases.
 
 Score: ___/20  Maturity Indicator: 1-8=Level 1, 9-14=Level 2, 15-20=Level 3
+
+# Why compare scores between respondents?
+# Divergence between team members reveals the real problem: not just process
+# weakness, but inconsistent understanding of the process — a sign that the
+# process is undocumented, unclear, or applied differently by different people.
 ```
 
 **Walking the wall**: Have each team member explain their part of the process as if explaining it to a new hire. Gaps and contradictions in the narrative reveal process weaknesses.
@@ -427,6 +435,11 @@ Developed by Victor Basili at the University of Maryland, GQM provides a top-dow
 **Example GQM model:**
 
 ```
+# Why structure goals this formally?
+# Without explicit Purpose/Object/Quality/Viewpoint, teams drift toward
+# vanity metrics that look good on dashboards but don't drive improvement.
+# The structured format forces clarity: "improve what, for whom, in what context?"
+
 GOAL: Reduce the number of defects that escape to production
        [Purpose: Reduce] [Object: Defects] [Quality: Reliability]
        [Viewpoint: QA Team] [Context: Web platform, Q2 2026]
@@ -438,6 +451,10 @@ QUESTIONS:
   Q4: Which modules have the highest defect density?
 
 METRICS:
+  # Why tie every metric to a question?
+  # Metrics without a clear question invite "measurement theater" — collecting
+  # data nobody acts on. Each metric here directly answers a specific question
+  # that determines whether the goal is being met.
   Q1 → M1: # production defects per release / # features released
   Q2 → M2: Defects by phase of injection (requirements/design/code)
   Q3 → M3: Defects found in code review / total defects found
@@ -477,6 +494,11 @@ Plan-Do-Check-Act (also called Deming Cycle) is the operational engine of contin
     │            │
     └─── Check──┘
 
+# Why a cycle, not a linear process?
+# Improvement is never "done." Each Act feeds back into the next Plan.
+# The cycle prevents both premature standardization (acting without checking)
+# and analysis paralysis (planning without doing).
+
 Plan:  Identify a problem and plan an improvement
 Do:    Implement the improvement in a limited way (experiment)
 Check: Measure the outcome against the expected result
@@ -499,9 +521,21 @@ CI Pipeline → QA → Staging → Production
 
        [3 days]  [1 day]  [2 days]  [3 days]    [1 day]    [2 days]  [1 day]
 
+# How to classify "value-added" vs "waste":
+#   Value-added: Activities that directly transform the work product toward
+#     what the customer wants (development, code review, CI pipeline).
+#     Ask: "Would the customer pay for this step?"
+#   Waste: Time where the work item is waiting, queued, or blocked — no
+#     transformation is happening (backlog sitting, waiting for environment,
+#     handoff delays, context switching between tasks).
+
 Total lead time: ~13 days
 Value-added time: ~6 days (development + review + pipeline)
+  # Why these 3? They directly transform code: writing it, improving it, verifying it.
 Waste: ~7 days (waiting, queue time, context switching)
+  # Why is this waste? The work item exists but nobody is actively transforming it.
+  # Reducing waste (e.g., eliminating approval queues) often yields bigger gains
+  # than speeding up development itself.
 ```
 
 Identifying and eliminating waste — waiting, rework, unnecessary approvals — is often more impactful than writing faster code.

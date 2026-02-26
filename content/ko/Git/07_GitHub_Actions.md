@@ -1,5 +1,24 @@
 # GitHub Actions
 
+**이전**: [Git 고급 명령어](./06_Git_Advanced.md) | **다음**: [Git 워크플로우 전략](./08_Git_Workflow_Strategies.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. GitHub Actions가 무엇이며 CI/CD 파이프라인(CI/CD pipeline)에서 어떤 역할을 하는지 설명할 수 있습니다
+2. 핵심 개념인 워크플로우(workflow), 잡(job), 스텝(step), 러너(runner), 이벤트(event)를 식별할 수 있습니다
+3. 푸시(push) 또는 풀 리퀘스트(pull request) 이벤트에 반응하는 기본 워크플로우 YAML 파일을 작성할 수 있습니다
+4. 잡 간 의존성이 있는 멀티 잡 파이프라인(multi-job pipeline)을 구성할 수 있습니다
+5. 워크플로우에서 환경 변수(environment variables), 시크릿(secrets), 매트릭스 빌드(matrix builds)를 활용할 수 있습니다
+6. GitHub 마켓플레이스(GitHub Marketplace)에서 서드파티 액션(third-party actions)을 선택하고 연동할 수 있습니다
+
+---
+
+수동 테스트와 배포는 번거롭고 오류가 발생하기 쉬우며 속도도 느립니다. GitHub Actions를 사용하면 이러한 작업을 자동화하여, 매번 푸시할 때마다 테스트가 실행되고, PR이 병합될 때마다 스테이징(staging)에 배포되며, 릴리스마다 아티팩트(artifact)가 빌드됩니다 — GitHub 생태계를 벗어나지 않고도 말이죠. CI/CD 자동화를 이해하는 것은 현대 소프트웨어 개발과 데브옵스(DevOps)의 핵심 역량입니다.
+
 ## 1. GitHub Actions란?
 
 GitHub Actions는 **CI/CD 자동화 플랫폼**입니다. 코드 푸시, PR 생성 등의 이벤트에 따라 자동으로 워크플로우를 실행합니다.
@@ -1021,6 +1040,40 @@ act -j build
 | `if` | 조건부 실행 |
 | `needs` | Job 의존성 |
 | `strategy.matrix` | 매트릭스 빌드 |
+
+---
+
+## 연습 문제
+
+### 연습 1: 첫 번째 CI 워크플로우
+1. 원하는 저장소에 `.github/workflows/ci.yml` 파일을 만듭니다.
+2. `main`을 대상으로 하는 `push`와 `pull_request` 이벤트에 반응하는 워크플로우를 작성합니다.
+3. `ubuntu-latest`에서 실행되며, 코드를 체크아웃(checkout)하고 `echo "All checks passed"`를 실행하는 잡(job)을 하나 추가합니다.
+4. 파일을 푸시하고 **Actions** 탭에서 워크플로우가 성공적으로 실행되는지 확인합니다.
+
+### 연습 2: 의존성이 있는 멀티 잡 파이프라인
+연습 1의 워크플로우를 `lint`, `test`, `deploy` 세 개의 잡으로 확장합니다.
+- `test`는 `lint`가 성공한 뒤 실행되어야 합니다(`needs` 사용).
+- `deploy`는 `lint`와 `test` 모두 완료된 뒤 실행되어야 합니다(`needs: [lint, test]` 사용).
+- `deploy`에 `if: github.ref == 'refs/heads/main'`을 추가하여 main 브랜치에서만 실행되도록 합니다.
+- Actions 실행 UI에서 잡 의존성 그래프가 올바른지 확인합니다.
+
+### 연습 3: 매트릭스 빌드(Matrix Build)
+파이썬 프로젝트(또는 `echo`로 대체)를 매트릭스 전략을 사용하여 파이썬 버전 `3.10`, `3.11`, `3.12`에서 테스트하는 워크플로우를 만듭니다.
+- `python-version: ${{ matrix.python-version }}`과 함께 `actions/setup-python@v5`를 사용합니다.
+- 하나가 실패해도 모든 매트릭스 잡이 실행되도록 `fail-fast: false`를 추가합니다.
+- Actions 실행에 3개의 별도 잡이 표시되는지 확인합니다.
+
+### 연습 4: 시크릿(Secrets)과 환경 변수
+1. 저장소 설정에서 `MY_SECRET`이라는 시크릿을 임의의 값으로 추가합니다.
+2. 시크릿 값 자체를 출력하지 않고 `"Secret length: X"` (X는 시크릿 값의 길이)를 출력하는 워크플로우 스텝을 작성합니다 — `${#MY_SECRET}` 같은 셸 표현식을 사용합니다.
+3. 시크릿 값을 직접 echo하려 해도 로그에서 마스킹(masking)되는 것을 확인합니다.
+
+### 연습 5: 의존성 캐싱(Dependency Caching)
+기존 CI 워크플로우에 의존성 캐싱을 추가합니다:
+1. `cache: 'npm'`과 함께 `actions/setup-node@v4`를 사용합니다(또는 `cache: 'pip'`와 함께 `actions/setup-python@v5`).
+2. 워크플로우를 두 번 실행합니다 — 두 번째 실행에서 스텝 로그의 "Cache restored" 메시지로 캐시가 복원되었는지 확인합니다.
+3. 첫 번째 실행(cold cache)과 두 번째 실행(warm cache)의 소요 시간을 비교하여 절약된 시간을 측정합니다.
 
 ---
 

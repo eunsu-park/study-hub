@@ -31,7 +31,7 @@ Foundation Models(기반 모델)은 대규모 데이터로 사전 학습되어 �
 | [04_Pretraining_Objectives.md](04_Pretraining_Objectives.md) | 목적함수 | Causal LM, Masked LM, Prefix LM, UL2 | ⭐⭐⭐ |
 | [05_Data_Curation.md](05_Data_Curation.md) | 데이터 큐레이션 | The Pile, RedPajama, 중복제거, 품질 필터링 | ⭐⭐⭐ |
 | [06_Pretraining_Infrastructure.md](06_Pretraining_Infrastructure.md) | 학습 인프라 | FSDP, DeepSpeed ZeRO, 분산학습 | ⭐⭐⭐⭐ |
-| [07_Tokenization_Advanced.md](07_Tokenization_Advanced.md) | Tokenization | BPE, Unigram, 다국어, Tokenizer-free | ⭐⭐⭐ |
+| [07_Tokenization_Deep_Dive.md](07_Tokenization_Deep_Dive.md) | Tokenization | BPE, Unigram, 다국어, Tokenizer-free | ⭐⭐⭐ |
 
 ### Section 3: 최신 LLM 아키텍처 (08-11)
 | 파일 | 주제 | 핵심 내용 | 난이도 |
@@ -52,7 +52,7 @@ Foundation Models(기반 모델)은 대규모 데이터로 사전 학습되어 �
 ### Section 5: Multimodal Foundation Models (16-18)
 | 파일 | 주제 | 핵심 내용 | 난이도 |
 |------|------|----------|--------|
-| [16_Vision_Language_Deep.md](16_Vision_Language_Deep.md) | Vision-Language | LLaVA, Qwen-VL, Visual Instruction Tuning | ⭐⭐⭐⭐ |
+| [16_Vision_Language_Advanced.md](16_Vision_Language_Advanced.md) | Vision-Language | LLaVA, Qwen-VL, Visual Instruction Tuning | ⭐⭐⭐⭐ |
 | [17_GPT4V_Gemini.md](17_GPT4V_Gemini.md) | GPT-4V & Gemini | Multimodal Input, Interleaved, API 활용 | ⭐⭐⭐ |
 | [18_Audio_Video_Foundation.md](18_Audio_Video_Foundation.md) | Audio/Video | Whisper, AudioLM, MusicGen, VideoLLaMA | ⭐⭐⭐⭐ |
 
@@ -134,7 +134,7 @@ Foundation Models(기반 모델)은 대규모 데이터로 사전 학습되어 �
 | Deep_Learning 레슨 | Foundation_Models 확장 |
 |-------------------|----------------------|
 | 19_ViT | 10_Long_Context (ViT 기반 확장) |
-| 20_CLIP | 16_Vision_Language_Deep (LLaVA 등) |
+| 20_CLIP | 16_Vision_Language_Advanced (LLaVA 등) |
 | 21_Self_Supervised | 12_DINOv2 (최신 SSL) |
 | 17_Diffusion | 15_Image_Generation_Advanced (SDXL, ControlNet) |
 

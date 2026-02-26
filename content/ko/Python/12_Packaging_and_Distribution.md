@@ -1,11 +1,22 @@
 # 12. 패키징 및 배포 (Packaging & Distribution)
 
-## 학습 목표
-- Python 패키지 구조와 표준 이해
-- pyproject.toml을 활용한 현대적 패키지 설정
-- Poetry를 활용한 의존성 관리
-- PyPI 배포 과정 이해
-- 버전 관리 및 릴리스 자동화
+**이전**: [테스트와 품질](./11_Testing_and_Quality.md) | **다음**: [데이터클래스](./13_Dataclasses.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. src 레이아웃(src layout)을 포함한 표준 Python 패키지 디렉터리 구조와 그 장점을 설명합니다
+2. 빌드 시스템(build system), 메타데이터(metadata), 도구 설정을 포함하는 PEP 621 기반의 완전한 `pyproject.toml`을 작성합니다
+3. 필수(required), 선택적(optional), 개발(development) 의존성을 구별하고 버전 제약(version constraint)을 지정합니다
+4. Poetry를 사용하여 Python 패키지를 생성, 관리, 빌드, 배포합니다
+5. `twine` 또는 Poetry를 사용하여 TestPyPI와 PyPI에 패키지를 배포합니다
+6. 시맨틱 버전 관리(SemVer, Semantic Versioning)를 적용하고 체계적인 CHANGELOG를 유지합니다
+7. Trusted Publisher를 사용하여 GitHub Actions를 통해 PyPI 자동 배포(automated publishing)를 설정합니다
+
+---
+
+코드를 패키징하고 배포하는 방법을 아는 것은 스크립트 묶음을 다른 사람이 의존할 수 있는 재사용 가능한 설치형 라이브러리로 탈바꿈시키는 것입니다. 팀 내부 도구를 공유하든 오픈소스 프로젝트를 PyPI에 배포하든, 적절한 메타데이터와 고정된 의존성(pinned dependencies), 자동화된 릴리스를 갖춘 잘 구조화된 패키지는 전문성을 드러내고 협업을 훨씬 원활하게 만듭니다.
 
 ## 목차
 1. [패키지 구조](#1-패키지-구조)

@@ -1,5 +1,26 @@
 # 데코레이터 (Decorators)
 
+**이전**: [타입 힌트](./01_Type_Hints.md) | **다음**: [컨텍스트 매니저](./03_Context_Managers.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `@decorator` 문법이 함수 래핑(wrapping)의 syntactic sugar임을 설명할 수 있습니다
+2. `*args`와 `**kwargs`를 받는 기본 데코레이터를 구현할 수 있습니다
+3. `functools.wraps`를 적용해 데코레이트된 함수의 메타데이터를 보존할 수 있습니다
+4. 자체 설정 인자를 받는 데코레이터를 작성할 수 있습니다(3단계 중첩 구조)
+5. `__call__` 메서드를 사용해 클래스 기반(class-based) 데코레이터를 구현할 수 있습니다
+6. `@property`, `@staticmethod`, `@classmethod`, `@lru_cache`의 차이를 구분할 수 있습니다
+7. 데코레이터 체이닝(chaining)을 적용하고 아래에서 위로의 평가 순서를 설명할 수 있습니다
+8. 클래스 전체를 수정하거나 확장하는 클래스 데코레이터를 작성할 수 있습니다(예: 싱글톤 패턴)
+
+---
+
+데코레이터는 파이썬에서 가장 강력한 추상화 메커니즘 중 하나입니다. 로깅 추가, 인증 강제, 비용이 큰 결과 캐싱, 입력 검증 등을 처리할 때마다 동일한 문제에 직면하게 됩니다. 바로 핵심 함수를 지저분하게 만드는 횡단 관심사(cross-cutting logic)입니다. 데코레이터를 사용하면 이러한 반복 코드를 재사용 가능한 래퍼로 분리해 비즈니스 로직을 깔끔하게 유지하면서, 단 하나의 `@` 줄로 선언적으로 기능을 추가할 수 있습니다. Flask, Django, pytest 같은 프레임워크는 라우팅, 미들웨어, 테스트 픽스처에 데코레이터를 적극적으로 활용합니다.
+
+> **비유:** 데코레이터는 선물 포장지가 선물을 감싸는 방식으로 함수를 감쌉니다. 안의 선물은 변하지 않지만, 포장이 리본(로깅), 카드(타이밍 측정), 보안 테이프(인증)를 바깥에 덧붙입니다.
+
 ## 1. 데코레이터란?
 
 데코레이터는 함수나 클래스를 수정하지 않고 기능을 추가하는 패턴입니다. `@` 문법을 사용하여 적용합니다.
@@ -109,7 +130,8 @@ print(greet.__doc__)   # None (docstring 손실!)
 from functools import wraps
 
 def my_decorator(func):
-    @wraps(func)  # 메타데이터 보존
+    @wraps(func)  # @wraps가 없으면 greet.__name__이 'wrapper'가 되어 help(), 로깅(logging),
+                  # 디버거나 문서 생성기 같은 인트로스펙션(introspection) 기반 도구들이 잘못된 정보를 보게 됨
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
@@ -216,7 +238,12 @@ say_hello()  # 호출 횟수: 3
 
 ```python
 class Retry:
-    """실패 시 재시도하는 데코레이터"""
+    """실패 시 재시도하는 데코레이터.
+
+    왜 인라인(inline) try/except 대신 데코레이터를 사용하는가? 재시도 로직은 횡단 관심사(cross-cutting concern)로,
+    취약한 호출 지점마다 동일한 반복 코드가 필요하게 됨. 데코레이터를 사용하면 호출 지점은 깔끔하게
+    유지되고, 재시도 정책을 한 곳에서 변경할 수 있음.
+    """
 
     def __init__(self, max_attempts=3):
         self.max_attempts = max_attempts
@@ -230,7 +257,7 @@ class Retry:
                 except Exception as e:
                     print(f"시도 {attempt} 실패: {e}")
                     if attempt == self.max_attempts:
-                        raise
+                        raise  # 마지막 시도에서 원래 예외를 다시 발생시킴
         return wrapper
 
 @Retry(max_attempts=3)
@@ -393,7 +420,8 @@ from functools import wraps
 
 def memoize(func):
     """결과를 캐싱하는 데코레이터"""
-    cache = {}
+    cache = {}  # 클로저(closure)에 캡처된 딕셔너리가 호출 간에 유지됨; 키는 인자 튜플
+                # (해시 가능(hashable)해야 함 — 리스트나 딕셔너리를 인자로 전달하면 실패)
 
     @wraps(func)
     def wrapper(*args):
@@ -503,7 +531,7 @@ print(greet("World"))  # <b><i>Hello, World</i></b>
 ```python
 def singleton(cls):
     """싱글톤 패턴 데코레이터"""
-    instances = {}
+    instances = {}  # 문자열 이름이 아닌 클래스 객체를 키로 사용하여 서브클래스를 독립적으로 관리
 
     @wraps(cls)
     def get_instance(*args, **kwargs):
@@ -576,4 +604,4 @@ DEBUG 플래그가 True일 때만 디버그 정보를 출력하는 데코레이�
 
 ## 다음 단계
 
-[03_Context_Managers.md](./03_Context_Managers.md)에서 with문과 리소스 관리를 배워봅시다!
+[컨텍스트 매니저 (Context Managers)](./03_Context_Managers.md)에서 with문과 리소스 관리를 배워봅시다!

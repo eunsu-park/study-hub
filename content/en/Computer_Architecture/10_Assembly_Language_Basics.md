@@ -1,14 +1,26 @@
 # Assembly Language Basics
 
-## Overview
-
-Assembly language is a low-level programming language that corresponds 1:1 with machine code. It represents instructions that the processor directly understands in a human-readable form. In this lesson, we'll learn the basics of x86 and ARM assembly, major instruction types, and how to write simple programs.
+**Previous**: [09_Instruction_Set_Architecture.md](./09_Instruction_Set_Architecture.md) | **Next**: [11_Pipelining.md](./11_Pipelining.md)
 
 **Difficulty**: ⭐⭐⭐
 
 **Prerequisites**: Instruction Set Architecture (ISA), Basic CPU structure
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the relationship between assembly language and machine code
+2. Identify common registers and their conventions (general-purpose, stack pointer, frame pointer)
+3. Write simple assembly programs using data transfer, arithmetic, and branch instructions
+4. Trace the execution of an assembly program by hand
+5. Explain how high-level language constructs (if/else, loops, function calls) map to assembly
+
+---
+
+Assembly language is the thinnest layer of abstraction above raw machine code. Learning assembly does not mean you will program in it daily -- but it gives you x-ray vision into what your C, Python, or Java programs actually do on the hardware. When you need to optimize performance, debug a crash dump, or understand a security exploit, assembly knowledge is indispensable.
 
 ## Table of Contents
 

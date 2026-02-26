@@ -13,14 +13,17 @@ Software quality does not emerge accidentally. It is the result of deliberate pr
 - Familiarity with software testing concepts
 - Basic programming knowledge
 
-**Learning Objectives**:
-- Define software quality using IEEE and ISO 25010 frameworks
-- Distinguish between quality assurance, quality control, and testing
-- Apply the cost of quality model to software projects
-- Compute and interpret common software metrics (cyclomatic complexity, cohesion, coupling)
-- Use static analysis tools to measure and improve code quality
-- Identify and manage technical debt
-- Conduct and participate in effective code reviews
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define software quality using IEEE and ISO 25010 frameworks
+2. Distinguish between quality assurance, quality control, and testing
+3. Apply the cost of quality model to software projects
+4. Compute and interpret common software metrics (cyclomatic complexity, cohesion, coupling)
+5. Use static analysis tools to measure and improve code quality
+6. Identify and manage technical debt
+7. Conduct and participate in effective code reviews
 
 ---
 
@@ -799,6 +802,108 @@ def get_user_data(user_id):
   - McCabe, T. J. (1976). "A Complexity Measure." *IEEE Transactions on Software Engineering*.
   - Fagan, M. E. (1976). "Design and Code Inspections to Reduce Errors in Program Development." *IBM Systems Journal*.
   - Cunningham, W. (1992). "The WyCash Portfolio Management System." *OOPSLA*.
+
+---
+
+## Exercises
+
+### Exercise 1: Distinguish QA, QC, and Testing
+
+For each activity below, classify it as Quality Assurance (QA), Quality Control (QC), or Testing. Where an activity spans more than one category, explain why.
+
+1. Writing a coding standard that requires all functions to have docstrings
+2. Running the automated test suite before merging a pull request
+3. Reviewing a requirements document for completeness and consistency
+4. Measuring defect density per KLOC across the last five releases
+5. Running Bandit to find security issues in Python source code before execution
+6. Auditing the CI/CD pipeline to confirm security scans are being run on every commit
+
+### Exercise 2: Calculate and Interpret Software Metrics
+
+Given the following Python function, calculate the Cyclomatic Complexity (CC) manually. Then answer the questions below.
+
+```python
+def process_refund(order, reason):
+    if order is None or reason is None:
+        return {"error": "Missing input"}
+    if order.status not in ("delivered", "shipped"):
+        return {"error": "Order not eligible for refund"}
+    if reason == "damaged":
+        refund_pct = 100
+    elif reason == "partial":
+        if order.days_since_delivery <= 7:
+            refund_pct = 50
+        else:
+            refund_pct = 25
+    elif reason == "wrong_item":
+        refund_pct = 100
+    else:
+        return {"error": "Invalid reason"}
+    amount = order.total * (refund_pct / 100)
+    return {"refund": amount, "pct": refund_pct}
+```
+
+(a) What is the CC? List each decision point you counted.
+(b) Is this CC acceptable? What is the recommended action from the CC risk table?
+(c) Identify one refactoring strategy that would reduce CC without changing behavior.
+
+### Exercise 3: Apply the Cost of Quality Model
+
+A small SaaS team has the following monthly expenses:
+
+| Activity | Monthly Cost |
+|----------|-------------|
+| Automated test infrastructure (CI runners) | $1,200 |
+| Weekly code review sessions (2 engineers × 3 hrs × $80/hr) | $1,920 |
+| Developer training on secure coding | $800 |
+| Bug fixing before each release | $9,000 |
+| Customer support for production incidents | $14,000 |
+| Emergency hotfixes and rollbacks | $6,500 |
+
+(a) Categorize each cost using the four CoQ categories (Prevention, Appraisal, Internal Failure, External Failure).
+(b) What is the total Cost of Quality? What percentage is Prevention + Appraisal vs. Failure?
+(c) The team is considering investing $3,000/month more in Prevention (better testing tools and linting in CI). Based on the 1-10-100 rule, estimate the minimum reduction in Failure costs needed to break even on this investment.
+
+### Exercise 4: Design a Technical Debt Reduction Plan
+
+A static analysis scan of a legacy payments module reveals:
+
+- 23 functions with CC > 15
+- 58% test coverage (target: 85%)
+- 3 confirmed SQL injection vulnerabilities (SAST findings)
+- 140 duplicated code blocks
+- 8 deprecated API calls
+
+(a) Using Fowler's Technical Debt Quadrant, classify each category.
+(b) Rank the five categories by priority for a team that can dedicate 20% of sprint capacity to debt reduction. Justify your ranking.
+(c) Write a 4-sprint debt reduction plan assigning work packages to each sprint, keeping production risk in mind.
+
+### Exercise 5: Write a Pull Request Review
+
+Below is a simplified Python route handler. Review it as if you were a senior engineer conducting a PR review. Identify at least six issues across the correctness, security, performance, and maintainability dimensions. For each issue, describe what could go wrong and provide a corrected code snippet.
+
+```python
+@app.route("/transfer", methods=["POST"])
+def transfer():
+    data = request.json
+    from_id = data["from_account"]
+    to_id = data["to_account"]
+    amount = data["amount"]
+    conn = db.connect()
+    from_bal = conn.execute(
+        "SELECT balance FROM accounts WHERE id = " + str(from_id)
+    ).fetchone()[0]
+    if from_bal >= amount:
+        conn.execute(
+            "UPDATE accounts SET balance = balance - " + str(amount) +
+            " WHERE id = " + str(from_id)
+        )
+        conn.execute(
+            "UPDATE accounts SET balance = balance + " + str(amount) +
+            " WHERE id = " + str(to_id)
+        )
+    return jsonify({"status": "ok"})
+```
 
 ---
 

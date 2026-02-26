@@ -1,10 +1,18 @@
 # 16. Storage Management
 
+**Previous**: [Container Internals](./15_Container_Internals.md) | **Next**: [SELinux and AppArmor](./17_SELinux_AppArmor.md)
+
 ## Learning Objectives
-- LVM (Logical Volume Manager) configuration and management
-- Understanding and configuring RAID levels
-- Filesystem selection and optimization
-- Disk encryption with LUKS
+
+After completing this lesson, you will be able to:
+
+1. Create and manage LVM physical volumes, volume groups, and logical volumes
+2. Extend and shrink LVM volumes and use LVM snapshots for consistent backups
+3. Compare RAID levels (0, 1, 5, 6, 10) and configure software RAID with mdadm
+4. Select the appropriate filesystem (ext4, XFS, Btrfs) based on workload requirements
+5. Encrypt disks with LUKS and configure automatic unlocking at boot
+6. Combine LUKS encryption with LVM for secure, flexible storage
+7. Monitor disk health with SMART and perform routine filesystem maintenance
 
 ## Table of Contents
 1. [Storage Fundamentals](#1-storage-fundamentals)
@@ -16,6 +24,8 @@
 7. [Practice Exercises](#7-practice-exercises)
 
 ---
+
+Data is the most valuable asset on any server, and the storage layer is what protects it. A misconfigured RAID array, an unencrypted disk, or a full partition can lead to data loss, security breaches, or extended downtime. This lesson covers the essential storage technologies -- LVM for flexibility, RAID for redundancy, modern filesystems for reliability, and LUKS for encryption -- that every Linux administrator must master to build production-grade storage infrastructure.
 
 ## 1. Storage Fundamentals
 
@@ -647,11 +657,7 @@ lvremove -f /dev/vg/snap_backup
 
 ---
 
-## Next Steps
-
-- [13_Systemd_Advanced](13_Systemd_Advanced.md) - systemd review
-- [14_Performance_Tuning](14_Performance_Tuning.md) - I/O tuning
-- [15_Container_Internals](15_Container_Internals.md) - Container volumes
+---
 
 ## References
 
@@ -662,4 +668,4 @@ lvremove -f /dev/vg/snap_backup
 
 ---
 
-[← Previous: Container Internals](15_Container_Internals.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Container Internals](./15_Container_Internals.md) | **Next**: [SELinux and AppArmor](./17_SELinux_AppArmor.md)

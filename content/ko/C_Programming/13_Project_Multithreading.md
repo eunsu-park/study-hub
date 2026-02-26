@@ -1,12 +1,25 @@
 # 프로젝트 12: 멀티스레드 프로그래밍
 
+**이전**: [프로젝트 11: 미니 쉘](./12_Project_Mini_Shell.md) | **다음**: [임베디드 프로그래밍 기초](./14_Embedded_Basics.md)
+
 pthread 라이브러리를 사용한 멀티스레드 프로그래밍을 배웁니다.
 
-## 학습 목표
-- 스레드 생성과 관리
-- 뮤텍스를 이용한 동기화
-- 조건 변수 사용
-- 생산자-소비자 패턴 구현
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `pthread_create`와 `pthread_join`을 사용하여 POSIX 스레드(POSIX thread)를 생성하고 관리할 수 있습니다
+2. 구조체를 통해 스레드에 데이터를 전달하고 반환값을 받을 수 있습니다
+3. 공유 변수에 대한 비동기 접근으로 인한 경쟁 조건(race condition)을 식별할 수 있습니다
+4. 뮤텍스 잠금(mutex lock)을 사용하여 공유 데이터 접근을 동기화하고 데이터 손상을 방지할 수 있습니다
+5. 적절한 대기 루프와 함께 조건 변수(condition variable)를 사용하여 스레드 실행을 조율할 수 있습니다
+6. 경계 버퍼(bounded buffer)를 사용하여 생산자-소비자(producer-consumer) 패턴을 구현할 수 있습니다
+7. 동시성 큐에서 작업을 분배하는 스레드 풀(thread pool)을 구축할 수 있습니다
+8. 읽기-쓰기 잠금(read-write lock)을 사용하여 동시 읽기는 허용하고 쓰기는 배타적으로 처리할 수 있습니다
+
+---
+
+동시성(concurrency)은 시스템 프로그래밍에서 가장 도전적인 영역 중 하나이지만, 동시에 가장 보람 있는 영역이기도 합니다. 수천 개의 연결을 처리하는 웹 서버를 구축하든, 병렬로 숫자를 처리하는 데이터 파이프라인을 만들든, 스레드(thread)·뮤텍스(mutex)·조건 변수(condition variable)를 이해하면 현대의 멀티코어 하드웨어를 최대한 활용할 수 있는 도구를 갖추게 됩니다. 이 프로젝트는 첫 번째 스레드 생성부터 재사용 가능한 스레드 풀 구현까지 단계별로 안내합니다.
 
 ## 사전 지식
 - 포인터
@@ -31,7 +44,7 @@ void* print_message(void* arg) {
     char* message = (char*)arg;
 
     for (int i = 0; i < 5; i++) {
-        printf("[스레드] %s - %d\n", message, i);
+        printf("[Thread] %s - %d\n", message, i);
         sleep(1);
     }
 
@@ -45,20 +58,20 @@ int main(void) {
     // 스레드 생성
     int result = pthread_create(&thread, NULL, print_message, (void*)msg);
     if (result != 0) {
-        fprintf(stderr, "스레드 생성 실패: %d\n", result);
+        fprintf(stderr, "Thread creation failed: %d\n", result);
         return 1;
     }
 
     // 메인 스레드도 작업 수행
     for (int i = 0; i < 5; i++) {
-        printf("[메인] Main thread - %d\n", i);
+        printf("[Main] Main thread - %d\n", i);
         sleep(1);
     }
 
     // 스레드 종료 대기
     pthread_join(thread, NULL);
 
-    printf("모든 작업 완료\n");
+    printf("All tasks completed\n");
     return 0;
 }
 ```
@@ -92,7 +105,7 @@ typedef struct {
 void* thread_func(void* arg) {
     ThreadData* data = (ThreadData*)arg;
 
-    printf("스레드 %d (%s) 시작\n", data->id, data->name);
+    printf("Thread %d (%s) started\n", data->id, data->name);
 
     // 작업 시뮬레이션
     int sum = 0;
@@ -100,7 +113,7 @@ void* thread_func(void* arg) {
         sum += i;
     }
 
-    printf("스레드 %d 완료: sum = %d\n", data->id, sum);
+    printf("Thread %d completed: sum = %d\n", data->id, sum);
 
     return NULL;
 }
@@ -116,19 +129,19 @@ int main(void) {
 
         int result = pthread_create(&threads[i], NULL, thread_func, &data[i]);
         if (result != 0) {
-            fprintf(stderr, "스레드 %d 생성 실패\n", i);
+            fprintf(stderr, "Thread %d creation failed\n", i);
             exit(1);
         }
     }
 
-    printf("모든 스레드 생성 완료. 대기 중...\n");
+    printf("All threads created. Waiting...\n");
 
     // 모든 스레드 대기
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(threads[i], NULL);
     }
 
-    printf("프로그램 종료\n");
+    printf("Program finished\n");
     return 0;
 }
 ```
@@ -152,7 +165,7 @@ void* calculate_sum(void* arg) {
         *result += i;
     }
 
-    printf("스레드: 1부터 %d까지 합 계산 완료\n", n);
+    printf("Thread: Sum from 1 to %d calculated\n", n);
     return result;
 }
 
@@ -167,7 +180,7 @@ int main(void) {
     pthread_join(thread, &ret_val);
 
     long* result = (long*)ret_val;
-    printf("결과: %ld\n", *result);
+    printf("Result: %ld\n", *result);
 
     free(result);  // 동적 할당된 메모리 해제
     return 0;
@@ -176,7 +189,7 @@ int main(void) {
 
 ---
 
-## 2단계: 경쟁 조건 (Race Condition)
+## 2단계: 경쟁 조건(Race Condition)
 
 여러 스레드가 동시에 공유 데이터에 접근하면 문제가 발생합니다.
 
@@ -219,9 +232,9 @@ int main(void) {
 
     // 예상: NUM_THREADS * ITERATIONS = 1,000,000
     // 실제: 그보다 적은 값 (경쟁 조건으로 인한 손실)
-    printf("예상값: %d\n", NUM_THREADS * ITERATIONS);
-    printf("실제값: %d\n", counter);
-    printf("손실: %d\n", NUM_THREADS * ITERATIONS - counter);
+    printf("Expected: %d\n", NUM_THREADS * ITERATIONS);
+    printf("Actual: %d\n", counter);
+    printf("Lost: %d\n", NUM_THREADS * ITERATIONS - counter);
 
     return 0;
 }
@@ -229,14 +242,14 @@ int main(void) {
 
 실행 결과:
 ```
-예상값: 1000000
-실제값: 847293
-손실: 152707
+Expected: 1000000
+Actual: 847293
+Lost: 152707
 ```
 
 ---
 
-## 3단계: 뮤텍스 (Mutex)
+## 3단계: 뮤텍스(Mutex)
 
 뮤텍스로 공유 자원에 대한 접근을 동기화합니다.
 
@@ -258,7 +271,7 @@ void* increment_safe(void* arg) {
 
     for (int i = 0; i < ITERATIONS; i++) {
         pthread_mutex_lock(&mutex);    // 잠금
-        counter++;                      // 임계 구역
+        counter++;                      // 임계 구역(critical section)
         pthread_mutex_unlock(&mutex);  // 해제
     }
 
@@ -276,8 +289,8 @@ int main(void) {
         pthread_join(threads[i], NULL);
     }
 
-    printf("예상값: %d\n", NUM_THREADS * ITERATIONS);
-    printf("실제값: %d\n", counter);
+    printf("Expected: %d\n", NUM_THREADS * ITERATIONS);
+    printf("Actual: %d\n", counter);
 
     pthread_mutex_destroy(&mutex);
     return 0;
@@ -343,7 +356,7 @@ int account_get_balance(Account* acc) {
 
 // 이체 (두 계좌 간)
 int account_transfer(Account* from, Account* to, int amount) {
-    // 데드락 방지: 항상 같은 순서로 잠금
+    // 데드락(deadlock) 방지: 항상 같은 순서로 잠금
     // 주소값이 작은 계좌 먼저 잠금
     Account* first = (from < to) ? from : to;
     Account* second = (from < to) ? to : from;
@@ -375,7 +388,7 @@ void* depositor(void* arg) {
 
     for (int i = 0; i < 100; i++) {
         int new_balance = account_deposit(ta->acc, 100);
-        printf("[입금자 %d] 입금 100원 -> 잔액: %d\n", ta->thread_id, new_balance);
+        printf("[Depositor %d] Deposited 100 -> Balance: %d\n", ta->thread_id, new_balance);
         usleep(rand() % 10000);
     }
 
@@ -388,9 +401,9 @@ void* withdrawer(void* arg) {
     for (int i = 0; i < 100; i++) {
         int result = account_withdraw(ta->acc, 100);
         if (result >= 0) {
-            printf("[출금자 %d] 출금 100원 -> 잔액: %d\n", ta->thread_id, result);
+            printf("[Withdrawer %d] Withdrew 100 -> Balance: %d\n", ta->thread_id, result);
         } else {
-            printf("[출금자 %d] 잔액 부족\n", ta->thread_id);
+            printf("[Withdrawer %d] Insufficient balance\n", ta->thread_id);
         }
         usleep(rand() % 10000);
     }
@@ -402,7 +415,7 @@ int main(void) {
     srand(time(NULL));
 
     Account* acc = account_create(10000);
-    printf("초기 잔액: %d\n\n", account_get_balance(acc));
+    printf("Initial balance: %d\n\n", account_get_balance(acc));
 
     pthread_t depositors[3];
     pthread_t withdrawers[3];
@@ -428,8 +441,8 @@ int main(void) {
         pthread_join(withdrawers[i], NULL);
     }
 
-    printf("\n최종 잔액: %d\n", account_get_balance(acc));
-    printf("예상 잔액: %d (초기 10000 + 입금 30000 - 출금 최대 30000)\n", 10000);
+    printf("\nFinal balance: %d\n", account_get_balance(acc));
+    printf("Expected balance: %d (initial 10000 + deposits 30000 - withdrawals max 30000)\n", 10000);
 
     account_destroy(acc);
     return 0;
@@ -438,7 +451,7 @@ int main(void) {
 
 ---
 
-## 4단계: 조건 변수 (Condition Variable)
+## 4단계: 조건 변수(Condition Variable)
 
 특정 조건이 만족될 때까지 스레드를 대기시킵니다.
 
@@ -461,12 +474,12 @@ void* waiter(void* arg) {
     pthread_mutex_lock(&mutex);
 
     while (!ready) {  // 조건이 false인 동안 대기
-        printf("[대기자 %d] 조건 대기 중...\n", id);
+        printf("[Waiter %d] Waiting for condition...\n", id);
         pthread_cond_wait(&cond, &mutex);  // 대기 (뮤텍스 해제됨)
     }
     // pthread_cond_wait에서 깨어나면 뮤텍스 다시 획득됨
 
-    printf("[대기자 %d] 조건 만족! 작업 시작\n", id);
+    printf("[Waiter %d] Condition satisfied! Starting work\n", id);
 
     pthread_mutex_unlock(&mutex);
     return NULL;
@@ -479,7 +492,7 @@ void* signaler(void* arg) {
 
     pthread_mutex_lock(&mutex);
     ready = true;
-    printf("[신호자] 조건 설정 완료. 신호 전송!\n");
+    printf("[Signaler] Condition set. Broadcasting signal!\n");
     pthread_cond_broadcast(&cond);  // 모든 대기자에게 신호
     pthread_mutex_unlock(&mutex);
 
@@ -514,11 +527,11 @@ int main(void) {
 
 ---
 
-## 5단계: 생산자-소비자 패턴
+## 5단계: 생산자-소비자(Producer-Consumer) 패턴
 
 가장 중요한 동기화 패턴 중 하나입니다.
 
-### 경계 버퍼 (Bounded Buffer)
+### 경계 버퍼(Bounded Buffer)
 
 ```c
 // producer_consumer.c
@@ -571,7 +584,7 @@ void buffer_put(BoundedBuffer* bb, int item) {
 
     // 버퍼가 가득 찼으면 대기
     while (bb->count == BUFFER_SIZE) {
-        printf("[생산자] 버퍼 가득 참. 대기...\n");
+        printf("[Producer] Buffer full. Waiting...\n");
         pthread_cond_wait(&bb->not_full, &bb->mutex);
     }
 
@@ -580,7 +593,7 @@ void buffer_put(BoundedBuffer* bb, int item) {
     bb->in = (bb->in + 1) % BUFFER_SIZE;
     bb->count++;
 
-    printf("[생산자] 아이템 %d 생산 (버퍼: %d/%d)\n",
+    printf("[Producer] Item %d produced (buffer: %d/%d)\n",
            item, bb->count, BUFFER_SIZE);
 
     // 소비자에게 알림
@@ -594,7 +607,7 @@ int buffer_get(BoundedBuffer* bb, int* item) {
 
     // 버퍼가 비어있고 생산 완료 아니면 대기
     while (bb->count == 0 && !bb->done) {
-        printf("[소비자] 버퍼 비어있음. 대기...\n");
+        printf("[Consumer] Buffer empty. Waiting...\n");
         pthread_cond_wait(&bb->not_empty, &bb->mutex);
     }
 
@@ -609,7 +622,7 @@ int buffer_get(BoundedBuffer* bb, int* item) {
     bb->out = (bb->out + 1) % BUFFER_SIZE;
     bb->count--;
 
-    printf("[소비자] 아이템 %d 소비 (버퍼: %d/%d)\n",
+    printf("[Consumer] Item %d consumed (buffer: %d/%d)\n",
            *item, bb->count, BUFFER_SIZE);
 
     // 생산자에게 알림
@@ -635,7 +648,7 @@ void* producer(void* arg) {
         buffer_put(bb, i);
     }
 
-    printf("[생산자] 생산 완료\n");
+    printf("[Producer] Production complete\n");
     buffer_set_done(bb);
 
     return NULL;
@@ -650,7 +663,7 @@ void* consumer(void* arg) {
         usleep((rand() % 800) * 1000);  // 0~800ms 처리 시간
     }
 
-    printf("[소비자] 소비 완료\n");
+    printf("[Consumer] Consumption complete\n");
     return NULL;
 }
 
@@ -675,7 +688,7 @@ int main(void) {
     pthread_join(cons[1], NULL);
 
     buffer_destroy(bb);
-    printf("\n프로그램 종료\n");
+    printf("\nProgram finished\n");
 
     return 0;
 }
@@ -683,7 +696,7 @@ int main(void) {
 
 ---
 
-## 6단계: 스레드 풀 (Thread Pool)
+## 6단계: 스레드 풀(Thread Pool)
 
 실제 서버 프로그램에서 많이 사용하는 패턴입니다.
 
@@ -797,14 +810,14 @@ void* worker_thread(void* arg) {
     ThreadPool* pool = (ThreadPool*)arg;
     Task task;
 
-    printf("[워커] 스레드 시작 (TID: %lu)\n", pthread_self());
+    printf("[Worker] Thread started (TID: %lu)\n", pthread_self());
 
     while (queue_pop(&pool->queue, &task)) {
-        printf("[워커 %lu] 작업 실행\n", pthread_self());
+        printf("[Worker %lu] Executing task\n", pthread_self());
         task.function(task.arg);
     }
 
-    printf("[워커 %lu] 스레드 종료\n", pthread_self());
+    printf("[Worker %lu] Thread exiting\n", pthread_self());
     return NULL;
 }
 
@@ -853,9 +866,9 @@ typedef struct {
 void process_work(void* arg) {
     WorkItem* item = (WorkItem*)arg;
 
-    printf("작업 %d 처리 중 (값: %d)...\n", item->id, item->value);
+    printf("Processing task %d (value: %d)...\n", item->id, item->value);
     usleep((rand() % 500 + 100) * 1000);  // 100~600ms 처리
-    printf("작업 %d 완료!\n", item->id);
+    printf("Task %d completed!\n", item->id);
 
     free(item);
 }
@@ -863,7 +876,7 @@ void process_work(void* arg) {
 int main(void) {
     srand(time(NULL));
 
-    printf("스레드 풀 생성 (크기: %d)\n\n", POOL_SIZE);
+    printf("Creating thread pool (size: %d)\n\n", POOL_SIZE);
     ThreadPool* pool = pool_create(POOL_SIZE);
 
     // 작업 제출
@@ -872,17 +885,17 @@ int main(void) {
         item->id = i;
         item->value = rand() % 100;
 
-        printf("작업 %d 제출 (값: %d)\n", i, item->value);
+        printf("Submitting task %d (value: %d)\n", i, item->value);
         pool_submit(pool, process_work, item);
 
         usleep(100000);  // 100ms 간격
     }
 
-    printf("\n모든 작업 제출 완료. 풀 종료 대기...\n\n");
+    printf("\nAll tasks submitted. Waiting for pool shutdown...\n\n");
     sleep(2);  // 작업 처리 대기
 
     pool_shutdown(pool);
-    printf("\n프로그램 종료\n");
+    printf("\nProgram finished\n");
 
     return 0;
 }
@@ -890,7 +903,7 @@ int main(void) {
 
 ---
 
-## 7단계: 읽기-쓰기 잠금 (Read-Write Lock)
+## 7단계: 읽기-쓰기 잠금(Read-Write Lock)
 
 읽기는 동시에, 쓰기는 배타적으로 허용합니다.
 
@@ -918,7 +931,7 @@ void* reader(void* arg) {
     for (int i = 0; i < 5; i++) {
         pthread_rwlock_rdlock(&shared.lock);  // 읽기 잠금
 
-        printf("[독자 %d] 데이터 읽음: %d\n", id, shared.data);
+        printf("[Reader %d] Read data: %d\n", id, shared.data);
         usleep(100000);  // 읽기 중...
 
         pthread_rwlock_unlock(&shared.lock);
@@ -936,7 +949,7 @@ void* writer(void* arg) {
         pthread_rwlock_wrlock(&shared.lock);  // 쓰기 잠금 (배타적)
 
         shared.data = rand() % 1000;
-        printf("[작가 %d] 데이터 씀: %d\n", id, shared.data);
+        printf("[Writer %d] Wrote data: %d\n", id, shared.data);
         usleep(200000);  // 쓰기 중...
 
         pthread_rwlock_unlock(&shared.lock);
@@ -978,7 +991,7 @@ int main(void) {
     }
 
     pthread_rwlock_destroy(&shared.lock);
-    printf("완료\n");
+    printf("Complete\n");
 
     return 0;
 }
@@ -1103,7 +1116,7 @@ int main(void) {
         arr2[i] = arr1[i];  // 복사
     }
 
-    printf("배열 크기: %d\n\n", n);
+    printf("Array size: %d\n\n", n);
 
     // 단일 스레드 정렬
     clock_t start = clock();
@@ -1111,8 +1124,8 @@ int main(void) {
     clock_t end = clock();
     double single_time = (double)(end - start) / CLOCKS_PER_SEC;
 
-    printf("단일 스레드: %.3f초\n", single_time);
-    printf("정렬 검증: %s\n\n", is_sorted(arr1, n) ? "OK" : "FAIL");
+    printf("Single-threaded: %.3f seconds\n", single_time);
+    printf("Sort verification: %s\n\n", is_sorted(arr1, n) ? "OK" : "FAIL");
 
     // 멀티스레드 정렬
     start = clock();
@@ -1121,10 +1134,10 @@ int main(void) {
     end = clock();
     double parallel_time = (double)(end - start) / CLOCKS_PER_SEC;
 
-    printf("멀티스레드: %.3f초\n", parallel_time);
-    printf("정렬 검증: %s\n\n", is_sorted(arr2, n) ? "OK" : "FAIL");
+    printf("Multithreaded: %.3f seconds\n", parallel_time);
+    printf("Sort verification: %s\n\n", is_sorted(arr2, n) ? "OK" : "FAIL");
 
-    printf("속도 향상: %.2fx\n", single_time / parallel_time);
+    printf("Speedup: %.2fx\n", single_time / parallel_time);
 
     free(arr1);
     free(arr2);
@@ -1137,13 +1150,13 @@ int main(void) {
 
 ## 연습 문제
 
-### 연습 1: 식사하는 철학자
+### 연습 1: 식사하는 철학자(Dining Philosophers)
 5명의 철학자가 원탁에 앉아 있고, 젓가락 5개가 있습니다.
 - 철학자는 생각하거나 식사합니다
 - 식사하려면 양쪽 젓가락이 필요합니다
-- 데드락 없이 구현하세요
+- 데드락(deadlock) 없이 구현하세요
 
-### 연습 2: 장벽 (Barrier)
+### 연습 2: 장벽(Barrier)
 N개의 스레드가 모두 도착할 때까지 대기하는 장벽을 구현하세요.
 
 ```c
@@ -1157,8 +1170,8 @@ typedef struct {
 void barrier_wait(Barrier* b);
 ```
 
-### 연습 3: 세마포어 구현
-뮤텍스와 조건 변수를 사용하여 카운팅 세마포어를 구현하세요.
+### 연습 3: 세마포어(Semaphore) 구현
+뮤텍스와 조건 변수를 사용하여 카운팅 세마포어(counting semaphore)를 구현하세요.
 
 ```c
 typedef struct {
@@ -1190,12 +1203,12 @@ N×N 행렬 곱셈을 여러 스레드로 나누어 계산하세요.
 
 | 개념 | 설명 |
 |------|------|
-| 경쟁 조건 | 여러 스레드의 동시 접근으로 인한 버그 |
-| 뮤텍스 | 상호 배제 (한 번에 하나만 접근) |
-| 조건 변수 | 조건 만족까지 대기 |
-| 데드락 | 서로 상대방의 자원을 기다리며 멈춤 |
-| 생산자-소비자 | 데이터 생성/처리 분리 패턴 |
-| 스레드 풀 | 미리 생성된 스레드로 작업 처리 |
+| 경쟁 조건(race condition) | 여러 스레드의 동시 접근으로 인한 버그 |
+| 뮤텍스(mutex) | 상호 배제(mutual exclusion) - 한 번에 하나만 접근 |
+| 조건 변수(condition variable) | 조건 만족까지 대기 |
+| 데드락(deadlock) | 서로 상대방의 자원을 기다리며 멈춤 |
+| 생산자-소비자(producer-consumer) | 데이터 생성/처리 분리 패턴 |
+| 스레드 풀(thread pool) | 미리 생성된 스레드로 작업 처리 |
 
 ---
 
@@ -1238,10 +1251,14 @@ valgrind --tool=helgrind ./program
 10. ✅ 해시 테이블 (해시 함수)
 11. ✅ 뱀 게임 (터미널 제어)
 12. ✅ 미니 쉘 (프로세스 관리)
-13. ✅ 멀티스레드 (동시성)
+13. ✅ 멀티스레드(multithreading) (동시성)
 
 다음 학습 추천:
 - 네트워크 프로그래밍 (소켓)
 - 시스템 콜 심화
 - 리눅스 커널 모듈
 - 임베디드 시스템
+
+---
+
+**이전**: [프로젝트 11: 미니 쉘](./12_Project_Mini_Shell.md) | **다음**: [임베디드 프로그래밍 기초](./14_Embedded_Basics.md)

@@ -12,15 +12,18 @@ Claude Code is not limited to the terminal. It integrates deeply into the two mo
 - Lesson 02: Claude Code Getting Started (CLI basics)
 - Familiarity with either VS Code or a JetBrains IDE
 
-**Learning Objectives**:
-- Install and configure the Claude Code extension for VS Code
-- Install and configure the Claude Code plugin for JetBrains IDEs
-- Use the Claude Code panel for conversational coding within the IDE
-- Review inline diffs and accept/reject proposed changes
-- Use @-mentions to provide file context efficiently
-- Navigate Plan mode review within the IDE
-- Apply keyboard shortcuts for common operations
-- Compare terminal-only vs. IDE-integrated workflows and choose the right one
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Install and configure the Claude Code extension for VS Code
+2. Install and configure the Claude Code plugin for JetBrains IDEs
+3. Use the Claude Code panel for conversational coding within the IDE
+4. Review inline diffs and accept/reject proposed changes
+5. Use @-mentions to provide file context efficiently
+6. Navigate Plan mode review within the IDE
+7. Apply keyboard shortcuts for common operations
+8. Compare terminal-only vs. IDE-integrated workflows and choose the right one
 
 ---
 

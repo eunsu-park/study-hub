@@ -1,12 +1,32 @@
 # Tables and Data Types
 
+**Previous**: [Database Management](./02_Database_Management.md) | **Next**: [CRUD Basics](./04_CRUD_Basics.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create tables using `CREATE TABLE` with appropriate column definitions
+2. Distinguish among PostgreSQL numeric types (INTEGER, NUMERIC, SERIAL) and choose the right one
+3. Compare character types (CHAR, VARCHAR, TEXT) and date/time types (DATE, TIMESTAMP, TIMESTAMPTZ)
+4. Apply special data types including BOOLEAN, JSONB, UUID, arrays, and ENUM
+5. Implement constraints (PRIMARY KEY, NOT NULL, UNIQUE, CHECK, FOREIGN KEY) to enforce data integrity
+6. Modify existing tables with ALTER TABLE (add/drop columns, change types, manage constraints)
+7. Design a multi-table schema with proper foreign key relationships
+
+---
+
+Tables are the fundamental building blocks of any relational database. Every piece of data your application stores -- user profiles, product catalogs, financial transactions -- ultimately lives inside a table with carefully chosen columns, data types, and constraints. Getting the schema right at design time prevents countless headaches later, from subtle data corruption to slow queries.
+
 ## 1. Table Basic Concepts
 
 A table is a structure that stores data organized into rows and columns.
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                    users 테이블                       │
+│                    users table                        │
 ├────────┬──────────┬─────────────────┬───────────────┤
 │   id   │   name   │      email      │  created_at   │
 ├────────┼──────────┼─────────────────┼───────────────┤
@@ -14,7 +34,7 @@ A table is a structure that stores data organized into rows and columns.
 │   2    │  이영희  │ lee@email.com   │ 2024-01-16    │
 │   3    │  박민수  │ park@email.com  │ 2024-01-17    │
 └────────┴──────────┴─────────────────┴───────────────┘
-  컬럼(Column)           ↑ 각 행은 하나의 레코드
+  Column                 ↑ each row is one record
 ```
 
 ---
@@ -24,9 +44,9 @@ A table is a structure that stores data organized into rows and columns.
 ### Basic Syntax
 
 ```sql
-CREATE TABLE 테이블명 (
-    컬럼명1 데이터타입 [제약조건],
-    컬럼명2 데이터타입 [제약조건],
+CREATE TABLE table_name (
+    column1 data_type [constraints],
+    column2 data_type [constraints],
     ...
 );
 ```
@@ -58,11 +78,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 ### Integer Types
 
-| 타입 | 크기 | 범위 |
-|------|------|------|
+| Type | Size | Range |
+|------|------|-------|
 | `SMALLINT` | 2 bytes | -32,768 ~ 32,767 |
 | `INTEGER` (INT) | 4 bytes | -2,147,483,648 ~ 2,147,483,647 |
-| `BIGINT` | 8 bytes | -9경 ~ 9경 |
+| `BIGINT` | 8 bytes | -9 quintillion ~ 9 quintillion |
 
 ```sql
 CREATE TABLE products (
@@ -74,19 +94,21 @@ CREATE TABLE products (
 
 ### Auto-Increment (Serial)
 
-| 타입 | 범위 |
-|------|------|
+| Type | Range |
+|------|-------|
 | `SMALLSERIAL` | 1 ~ 32,767 |
 | `SERIAL` | 1 ~ 2,147,483,647 |
-| `BIGSERIAL` | 1 ~ 9경 |
+| `BIGSERIAL` | 1 ~ 9 quintillion |
 
 ```sql
 CREATE TABLE orders (
-    id SERIAL PRIMARY KEY,  -- 자동으로 1, 2, 3, ... 증가
+    id SERIAL PRIMARY KEY,  -- automatically increments: 1, 2, 3, ...
     order_date DATE
 );
 
--- PostgreSQL 10+ 에서는 IDENTITY 권장
+-- IDENTITY (SQL standard) is preferred over SERIAL in PG 10+ because SERIAL creates
+-- a separate sequence with loose coupling — IDENTITY ties the sequence to the column
+-- lifecycle and prevents accidental manual inserts that break the sequence
 CREATE TABLE orders (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     order_date DATE
@@ -95,19 +117,21 @@ CREATE TABLE orders (
 
 ### Floating-Point Types
 
-| 타입 | 설명 |
-|------|------|
-| `REAL` | 4 bytes, 6자리 정밀도 |
-| `DOUBLE PRECISION` | 8 bytes, 15자리 정밀도 |
-| `NUMERIC(p, s)` | 정확한 숫자 (p: 전체 자릿수, s: 소수점 자릿수) |
-| `DECIMAL(p, s)` | NUMERIC과 동일 |
+| Type | Description |
+|------|-------------|
+| `REAL` | 4 bytes, 6-digit precision |
+| `DOUBLE PRECISION` | 8 bytes, 15-digit precision |
+| `NUMERIC(p, s)` | Exact number (p: total digits, s: decimal places) |
+| `DECIMAL(p, s)` | Identical to NUMERIC |
 
 ```sql
+-- Use NUMERIC for money/financial data — it is exact (no rounding errors).
+-- REAL/DOUBLE PRECISION are faster but approximate; 0.1 + 0.2 ≠ 0.3 in float.
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
-    price NUMERIC(10, 2),      -- 최대 10자리, 소수점 2자리 (예: 99999999.99)
-    weight REAL,               -- 부동 소수점
-    rating DOUBLE PRECISION    -- 더 정밀한 부동 소수점
+    price NUMERIC(10, 2),      -- up to 10 digits, 2 decimal places (e.g. 99999999.99)
+    weight REAL,               -- floating point (use for measurements where rounding is OK)
+    rating DOUBLE PRECISION    -- higher-precision floating point
 );
 
 INSERT INTO products (price, weight, rating) VALUES
@@ -118,28 +142,28 @@ INSERT INTO products (price, weight, rating) VALUES
 
 ## 4. Character Data Types
 
-| 타입 | 설명 |
-|------|------|
-| `CHAR(n)` | 고정 길이 문자열 (남는 공간은 공백으로 채움) |
-| `VARCHAR(n)` | 가변 길이 문자열 (최대 n자) |
-| `TEXT` | 길이 제한 없는 문자열 |
+| Type | Description |
+|------|-------------|
+| `CHAR(n)` | Fixed-length string (padded with spaces to fill remaining space) |
+| `VARCHAR(n)` | Variable-length string (up to n characters) |
+| `TEXT` | Unlimited-length string |
 
 ```sql
 CREATE TABLE articles (
     id SERIAL PRIMARY KEY,
-    code CHAR(10),           -- 항상 10자 (코드 등에 사용)
-    title VARCHAR(200),      -- 최대 200자
-    content TEXT             -- 길이 제한 없음
+    code CHAR(10),           -- always 10 characters (used for codes, etc.)
+    title VARCHAR(200),      -- up to 200 characters
+    content TEXT             -- no length limit
 );
 ```
 
 ### VARCHAR vs TEXT
 
 ```sql
--- 실질적으로 큰 차이 없음. PostgreSQL에서는 TEXT 선호하는 경우도 많음
+-- No significant difference in practice. TEXT is often preferred in PostgreSQL
 CREATE TABLE posts (
-    title VARCHAR(255),  -- 길이 제한이 필요한 경우
-    body TEXT            -- 길이 제한이 필요 없는 경우
+    title VARCHAR(255),  -- when a length limit is needed
+    body TEXT            -- when no length limit is needed
 );
 ```
 
@@ -147,13 +171,13 @@ CREATE TABLE posts (
 
 ## 5. Date/Time Data Types
 
-| 타입 | 설명 | 예시 |
-|------|------|------|
-| `DATE` | 날짜만 | 2024-01-15 |
-| `TIME` | 시간만 | 14:30:00 |
-| `TIMESTAMP` | 날짜 + 시간 | 2024-01-15 14:30:00 |
-| `TIMESTAMPTZ` | 날짜 + 시간 + 타임존 | 2024-01-15 14:30:00+09 |
-| `INTERVAL` | 시간 간격 | 2 days 3 hours |
+| Type | Description | Example |
+|------|-------------|---------|
+| `DATE` | Date only | 2024-01-15 |
+| `TIME` | Time only | 14:30:00 |
+| `TIMESTAMP` | Date + time | 2024-01-15 14:30:00 |
+| `TIMESTAMPTZ` | Date + time + timezone | 2024-01-15 14:30:00+09 |
+| `INTERVAL` | Time interval | 2 days 3 hours |
 
 ```sql
 CREATE TABLE events (
@@ -167,37 +191,37 @@ CREATE TABLE events (
 );
 
 INSERT INTO events (event_name, event_date, start_time, duration) VALUES
-('회의', '2024-01-20', '14:00:00', '2 hours'),
-('워크샵', '2024-01-25', '09:00:00', '1 day');
+('Meeting', '2024-01-20', '14:00:00', '2 hours'),
+('Workshop', '2024-01-25', '09:00:00', '1 day');
 ```
 
 ### Date/Time Functions
 
 ```sql
--- 현재 시간
+-- Current time
 SELECT NOW();                    -- 2024-01-15 14:30:00.123456+09
 SELECT CURRENT_DATE;             -- 2024-01-15
 SELECT CURRENT_TIME;             -- 14:30:00.123456+09
-SELECT CURRENT_TIMESTAMP;        -- NOW()와 동일
+SELECT CURRENT_TIMESTAMP;        -- same as NOW()
 
--- 날짜 연산
+-- Date arithmetic
 SELECT NOW() + INTERVAL '1 day';
 SELECT NOW() - INTERVAL '2 hours';
-SELECT '2024-01-20'::DATE - '2024-01-15'::DATE;  -- 5 (일수)
+SELECT '2024-01-20'::DATE - '2024-01-15'::DATE;  -- 5 (number of days)
 
--- 날짜 추출
+-- Date extraction
 SELECT EXTRACT(YEAR FROM NOW());
 SELECT EXTRACT(MONTH FROM NOW());
-SELECT EXTRACT(DOW FROM NOW());  -- 요일 (0=일요일)
+SELECT EXTRACT(DOW FROM NOW());  -- day of week (0 = Sunday)
 ```
 
 ---
 
 ## 6. Boolean Data Type
 
-| 값 | TRUE | FALSE | NULL |
-|------|------|-------|------|
-| 입력 | true, 't', 'yes', 'y', '1' | false, 'f', 'no', 'n', '0' | null |
+| Value | TRUE | FALSE | NULL |
+|-------|------|-------|------|
+| Input | true, 't', 'yes', 'y', '1' | false, 'f', 'no', 'n', '0' | null |
 
 ```sql
 CREATE TABLE users (
@@ -209,7 +233,7 @@ CREATE TABLE users (
 
 INSERT INTO users (name, is_active, is_admin) VALUES
 ('김철수', true, false),
-('관리자', true, true);
+('Admin', true, true);
 
 SELECT * FROM users WHERE is_active = true;
 SELECT * FROM users WHERE NOT is_admin;
@@ -219,10 +243,10 @@ SELECT * FROM users WHERE NOT is_admin;
 
 ## 7. JSON Data Types
 
-| 타입 | 설명 |
-|------|------|
-| `JSON` | JSON 텍스트 저장 (매번 파싱) |
-| `JSONB` | JSON 바이너리 저장 (인덱싱 가능, 권장) |
+| Type | Description |
+|------|-------------|
+| `JSON` | Stores JSON as text (parsed on every access) |
+| `JSONB` | Stores JSON in binary format (indexable, recommended) |
 
 ```sql
 CREATE TABLE products (
@@ -232,22 +256,22 @@ CREATE TABLE products (
 );
 
 INSERT INTO products (name, attributes) VALUES
-('노트북', '{"brand": "Samsung", "ram": 16, "storage": "512GB"}'),
-('마우스', '{"brand": "Logitech", "wireless": true, "color": "black"}');
+('Laptop', '{"brand": "Samsung", "ram": 16, "storage": "512GB"}'),
+('Mouse', '{"brand": "Logitech", "wireless": true, "color": "black"}');
 
--- JSON 데이터 조회
+-- Query JSON data
 SELECT name, attributes->>'brand' AS brand FROM products;
 SELECT name, attributes->'ram' AS ram FROM products;
 
--- JSON 조건 검색
+-- JSON conditional search
 SELECT * FROM products WHERE attributes->>'brand' = 'Samsung';
 SELECT * FROM products WHERE (attributes->>'ram')::int >= 16;
 
--- JSON 배열
+-- JSON array
 INSERT INTO products (name, attributes) VALUES
-('키보드', '{"brand": "Keychron", "colors": ["white", "black", "gray"]}');
+('Keyboard', '{"brand": "Keychron", "colors": ["white", "black", "gray"]}');
 
-SELECT attributes->'colors'->0 FROM products WHERE name = '키보드';  -- "white"
+SELECT attributes->'colors'->0 FROM products WHERE name = 'Keyboard';  -- "white"
 ```
 
 ---
@@ -279,13 +303,13 @@ CREATE TABLE posts (
 );
 
 INSERT INTO posts (title, tags) VALUES
-('PostgreSQL 입문', ARRAY['database', 'postgresql', 'sql']),
-('Docker 시작하기', '{"docker", "container", "devops"}');
+('PostgreSQL Basics', ARRAY['database', 'postgresql', 'sql']),
+('Getting Started with Docker', '{"docker", "container", "devops"}');
 
--- 배열 조회
-SELECT title, tags[1] FROM posts;  -- 첫 번째 요소
+-- Array query
+SELECT title, tags[1] FROM posts;  -- first element
 
--- 배열 포함 여부
+-- Array containment check
 SELECT * FROM posts WHERE 'docker' = ANY(tags);
 SELECT * FROM posts WHERE tags @> ARRAY['sql'];
 ```
@@ -311,13 +335,13 @@ INSERT INTO user_moods (user_id, current_mood) VALUES (1, 'happy');
 ### PRIMARY KEY
 
 ```sql
--- 단일 컬럼 기본키
+-- Single column primary key
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100)
 );
 
--- 복합 기본키
+-- Composite primary key
 CREATE TABLE order_items (
     order_id INTEGER,
     product_id INTEGER,
@@ -331,7 +355,7 @@ CREATE TABLE order_items (
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,  -- NULL 허용 안함
+    name VARCHAR(100) NOT NULL,  -- NULL not allowed
     email VARCHAR(255) NOT NULL
 );
 ```
@@ -341,11 +365,11 @@ CREATE TABLE users (
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,  -- 중복 불가
-    phone VARCHAR(20) UNIQUE             -- 중복 불가 (NULL은 여러 개 가능)
+    email VARCHAR(255) UNIQUE NOT NULL,  -- no duplicates allowed
+    phone VARCHAR(20) UNIQUE             -- no duplicates (multiple NULLs are allowed)
 );
 
--- 복합 유니크
+-- Composite unique
 CREATE TABLE memberships (
     user_id INTEGER,
     group_id INTEGER,
@@ -363,7 +387,7 @@ CREATE TABLE orders (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-INSERT INTO orders DEFAULT VALUES;  -- 모든 컬럼 기본값 사용
+INSERT INTO orders DEFAULT VALUES;  -- use default values for all columns
 ```
 
 ### CHECK
@@ -377,7 +401,7 @@ CREATE TABLE products (
     discount NUMERIC(3, 2) CHECK (discount >= 0 AND discount <= 1)
 );
 
--- 이름 있는 제약조건
+-- Named constraints
 CREATE TABLE employees (
     id SERIAL PRIMARY KEY,
     age INTEGER,
@@ -390,39 +414,42 @@ CREATE TABLE employees (
 ### FOREIGN KEY
 
 ```sql
--- 부모 테이블
+-- Parent table
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL
 );
 
--- 자식 테이블
+-- Child table
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
     category_id INTEGER REFERENCES categories(id)
 );
 
--- 상세 옵션
+-- Choose ON DELETE action based on business rules:
+-- CASCADE: child data is meaningless without parent (e.g., order_items without order)
+-- SET NULL: child can exist independently (e.g., products when category is removed)
+-- RESTRICT: deletion should be blocked if children exist (safest default)
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
     category_id INTEGER,
     FOREIGN KEY (category_id) REFERENCES categories(id)
-        ON DELETE CASCADE      -- 부모 삭제 시 자식도 삭제
-        ON UPDATE CASCADE      -- 부모 수정 시 자식도 수정
+        ON DELETE CASCADE      -- delete children when parent is deleted
+        ON UPDATE CASCADE      -- update children when parent is updated
 );
 ```
 
 ### ON DELETE / ON UPDATE Options
 
-| 옵션 | 설명 |
-|------|------|
-| `CASCADE` | 부모와 함께 삭제/수정 |
-| `SET NULL` | NULL로 설정 |
-| `SET DEFAULT` | 기본값으로 설정 |
-| `RESTRICT` | 삭제/수정 불가 (기본값) |
-| `NO ACTION` | RESTRICT와 유사 |
+| Option | Description |
+|--------|-------------|
+| `CASCADE` | Delete/update along with parent |
+| `SET NULL` | Set to NULL |
+| `SET DEFAULT` | Set to default value |
+| `RESTRICT` | Prevent delete/update (default) |
+| `NO ACTION` | Similar to RESTRICT |
 
 ---
 
@@ -448,7 +475,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS phone;
 ALTER TABLE users ALTER COLUMN name TYPE VARCHAR(200);
 ALTER TABLE users ALTER COLUMN age TYPE SMALLINT;
 
--- 데이터 변환이 필요한 경우
+-- When data conversion is needed
 ALTER TABLE users ALTER COLUMN price TYPE INTEGER USING price::INTEGER;
 ```
 
@@ -461,23 +488,23 @@ ALTER TABLE users RENAME COLUMN name TO full_name;
 ### Add/Drop Constraints
 
 ```sql
--- NOT NULL 추가
+-- Add NOT NULL
 ALTER TABLE users ALTER COLUMN email SET NOT NULL;
 
--- NOT NULL 제거
+-- Drop NOT NULL
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 
--- DEFAULT 설정
+-- Set DEFAULT
 ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';
 
--- DEFAULT 제거
+-- Drop DEFAULT
 ALTER TABLE users ALTER COLUMN status DROP DEFAULT;
 
--- 제약조건 추가
+-- Add constraint
 ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email);
 ALTER TABLE users ADD CONSTRAINT valid_age CHECK (age >= 0);
 
--- 제약조건 삭제
+-- Drop constraint
 ALTER TABLE users DROP CONSTRAINT users_email_unique;
 ```
 
@@ -492,13 +519,13 @@ ALTER TABLE users RENAME TO members;
 ## 11. Table Deletion
 
 ```sql
--- 기본 삭제
+-- Basic drop
 DROP TABLE users;
 
--- 존재하는 경우에만 삭제
+-- Drop only if it exists
 DROP TABLE IF EXISTS users;
 
--- 의존 객체와 함께 삭제
+-- Drop with dependent objects
 DROP TABLE users CASCADE;
 ```
 
@@ -507,16 +534,16 @@ DROP TABLE users CASCADE;
 ## 12. Table Information
 
 ```sql
--- 테이블 목록
+-- List tables
 \dt
 
--- 테이블 구조
+-- Table structure
 \d users
 
--- 상세 정보
+-- Detailed information
 \d+ users
 
--- SQL 쿼리로 확인
+-- Check via SQL query
 SELECT
     column_name,
     data_type,
@@ -533,7 +560,7 @@ WHERE table_name = 'users';
 ### Practice: Online Shopping Mall Table Design
 
 ```sql
--- 1. 사용자 테이블
+-- 1. Users table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -545,7 +572,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 2. 카테고리 테이블
+-- 2. Categories table
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -553,7 +580,7 @@ CREATE TABLE categories (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 3. 상품 테이블
+-- 3. Products table
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     category_id INTEGER REFERENCES categories(id),
@@ -567,7 +594,7 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 4. 주문 테이블
+-- 4. Orders table
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
@@ -580,7 +607,7 @@ CREATE TABLE orders (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 5. 주문 상세 테이블
+-- 5. Order items table
 CREATE TABLE order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
@@ -590,13 +617,11 @@ CREATE TABLE order_items (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 테이블 구조 확인
+-- Check table structure
 \dt
 \d products
 ```
 
 ---
 
-## Next Steps
-
-Learn about data insertion, querying, updating, and deletion in [04_CRUD_Basics.md](./04_CRUD_Basics.md)!
+**Previous**: [Database Management](./02_Database_Management.md) | **Next**: [CRUD Basics](./04_CRUD_Basics.md)

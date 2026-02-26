@@ -1,15 +1,18 @@
 # Ansible Basics
 
+**Previous**: [Virtualization (KVM)](./21_Virtualization_KVM.md) | **Next**: [Advanced Networking](./23_Advanced_Networking.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Ansible concepts and architecture
-- Inventory and Ad-hoc commands
-- Writing and executing Playbooks
-- Roles and variable management
-
-**Difficulty**: ⭐⭐⭐ (Intermediate-Advanced)
+1. Explain Ansible's agentless push-based architecture and how it differs from Puppet and Chef
+2. Define inventories in INI and YAML formats with groups, variables, and dynamic sources
+3. Execute ad-hoc commands across multiple hosts using common Ansible modules
+4. Write playbooks with tasks, conditionals, loops, handlers, and blocks
+5. Organize automation code into reusable roles with proper directory structure
+6. Manage variables across multiple scopes and use Jinja2 templates for configuration files
+7. Encrypt sensitive data with Ansible Vault for secure credential management
 
 ---
 
@@ -25,6 +28,8 @@ Through this document, you will learn:
 8. [Ansible Vault](#8-ansible-vault)
 
 ---
+
+Managing one server by hand is feasible; managing ten is tedious; managing hundreds is impossible without automation. Ansible solves this by letting you describe your desired infrastructure state in simple YAML files and applying it across any number of servers over SSH -- no agents to install, no complex setup. It is the most widely adopted configuration management tool in the industry, and learning it is a force multiplier for any system administrator.
 
 ## 1. Ansible Overview
 
@@ -1027,10 +1032,6 @@ all:
 
 ---
 
-## Next Steps
-
-- [23_Advanced_Networking.md](./23_Advanced_Networking.md) - VLAN, bonding, iptables/nftables
-
 ---
 
 ## References
@@ -1039,3 +1040,7 @@ all:
 - [Ansible Galaxy](https://galaxy.ansible.com/)
 - [Ansible Best Practices](https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html)
 - `ansible-doc -l`, `ansible-doc <module>`
+
+---
+
+**Previous**: [Virtualization (KVM)](./21_Virtualization_KVM.md) | **Next**: [Advanced Networking](./23_Advanced_Networking.md)

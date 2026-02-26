@@ -1,11 +1,24 @@
 # 18. Table Partitioning
 
+**Previous**: [Window Functions](./17_Window_Functions.md) | **Next**: [Full-Text Search](./19_Full_Text_Search.md)
+
+---
+
 ## Learning Objectives
-- Understand partitioning concepts and necessity
-- Utilize PostgreSQL declarative partitioning
-- Implement Range, List, Hash partitioning
-- Partition pruning and performance optimization
-- Automate partition maintenance
+
+After completing this lesson, you will be able to:
+
+1. Explain the concept of table partitioning and identify when it provides meaningful performance benefits
+2. Create range-partitioned tables for time-series data with proper primary key and index design
+3. Implement list partitioning for categorical data such as regions or statuses
+4. Set up hash partitioning for even data distribution when no natural range or category exists
+5. Verify partition pruning behavior using EXPLAIN ANALYZE and avoid common pitfalls that defeat pruning
+6. Manage partitions dynamically including adding, detaching, dropping, and automating creation with pg_cron
+7. Convert an existing non-partitioned table to a partitioned table with minimal downtime
+
+---
+
+As tables grow from millions to billions of rows, even well-indexed queries can slow down because indexes themselves become large and maintenance operations like VACUUM and backup take longer. Partitioning splits a single logical table into smaller physical pieces, each containing a subset of the data. This lets PostgreSQL scan only the relevant partitions, maintain smaller indexes, and drop entire partitions instantly instead of running expensive DELETE statements. For any system dealing with time-series data, event logs, or high-volume transactional data, partitioning is an essential scaling strategy.
 
 ## Table of Contents
 1. [Partitioning Overview](#1-partitioning-overview)
@@ -83,7 +96,9 @@
 ### 2.1 Basic Structure
 
 ```sql
--- Create parent table (specify partition key)
+-- Partition key choice is critical: pick the column most frequently used in WHERE clauses.
+-- order_date is ideal here because queries almost always filter by time range,
+-- enabling partition pruning to skip irrelevant months entirely.
 CREATE TABLE orders (
     id BIGSERIAL,
     customer_id INT NOT NULL,
@@ -321,7 +336,9 @@ SELECT create_hash_partitions('logs', 8);
 ### 5.1 Verify Pruning Behavior
 
 ```sql
--- Check pruning with execution plan
+-- Partition pruning is the key performance win: the planner eliminates partitions that
+-- cannot contain matching rows BEFORE execution begins, turning a 12-partition table
+-- into a single-partition scan when the WHERE clause matches one month.
 EXPLAIN (ANALYZE, COSTS OFF)
 SELECT * FROM orders
 WHERE order_date = '2024-02-15';
@@ -345,12 +362,12 @@ SET enable_partition_pruning = on;
 ### 5.3 Cases Where Pruning Fails
 
 ```sql
--- 1. Function applied: pruning fails
--- Bad example
+-- 1. Functions on the partition key defeat pruning — the planner cannot infer which
+-- partitions to skip when the key is wrapped in EXTRACT() or other functions
 SELECT * FROM orders
 WHERE EXTRACT(YEAR FROM order_date) = 2024;
 
--- Good example
+-- Rewrite as a range predicate so the planner can match partition boundaries directly
 SELECT * FROM orders
 WHERE order_date >= '2024-01-01' AND order_date < '2025-01-01';
 
@@ -616,12 +633,12 @@ WHERE start_date < CURRENT_DATE - INTERVAL '90 days';
 
 ---
 
-## Next Steps
-- [15. Advanced Query Optimization](./15_Query_Optimization.md)
-- [16. Replication and High Availability](./16_Replication_HA.md)
-
 ## References
 - [PostgreSQL Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
 - [Partition Pruning](https://www.postgresql.org/docs/current/ddl-partitioning.html#DDL-PARTITION-PRUNING)
 - [pg_partman Extension](https://github.com/pgpartman/pg_partman)
 - [Best Practices for Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html#DDL-PARTITIONING-OVERVIEW)
+
+---
+
+**Previous**: [Window Functions](./17_Window_Functions.md) | **Next**: [Full-Text Search](./19_Full_Text_Search.md)

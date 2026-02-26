@@ -1,15 +1,17 @@
 # Kernel Management
 
+**Previous**: [Backup and Recovery](./19_Backup_Recovery.md) | **Next**: [Virtualization (KVM)](./21_Virtualization_KVM.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Linux kernel structure and version management
-- Kernel module management (load, unload, configure)
-- Kernel compilation and installation
-- GRUB bootloader configuration
-
-**Difficulty**: Advanced
+1. Interpret Linux kernel version numbers and manage installed kernel packages
+2. Load, unload, and configure kernel modules using modprobe and persistent configuration files
+3. Blacklist problematic modules and manage automatic module loading with DKMS
+4. Download kernel source, configure build options, and compile a custom kernel
+5. Configure the GRUB bootloader including default entries, timeout, and kernel parameters
+6. Manage initramfs images and tune runtime kernel parameters with sysctl
 
 ---
 
@@ -24,6 +26,8 @@ Through this document, you will learn:
 7. [Kernel Parameters](#7-kernel-parameters)
 
 ---
+
+The kernel is the heart of every Linux system -- it manages hardware, schedules processes, and enforces security boundaries. While most administrators use distribution-provided kernels, understanding how to manage kernel versions, load modules, and configure boot parameters is essential for tasks like enabling hardware support, applying security patches, optimizing server workloads, and recovering from boot failures.
 
 ## 1. Kernel Overview
 
@@ -720,10 +724,6 @@ sudo sysctl -p /etc/sysctl.d/99-webserver.conf
 
 ---
 
-## Next Steps
-
-- [21_Virtualization_KVM.md](./21_Virtualization_KVM.md) - libvirt, virsh, VM management
-
 ---
 
 ## References
@@ -732,3 +732,7 @@ sudo sysctl -p /etc/sysctl.d/99-webserver.conf
 - [Kernel Documentation](https://www.kernel.org/doc/html/latest/)
 - [GRUB Manual](https://www.gnu.org/software/grub/manual/)
 - `man modprobe`, `man dkms`, `man sysctl`
+
+---
+
+**Previous**: [Backup and Recovery](./19_Backup_Recovery.md) | **Next**: [Virtualization (KVM)](./21_Virtualization_KVM.md)

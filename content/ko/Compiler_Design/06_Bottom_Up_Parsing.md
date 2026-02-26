@@ -1542,4 +1542,4 @@ F -> ( error )     // 잘못된 괄호 표현식에서 복구
 
 ---
 
-[이전: 05_Top_Down_Parsing.md](./05_Top_Down_Parsing.md) | [다음: 07_Abstract_Syntax_Trees.md](./07_Abstract_Syntax_Trees.md) | [개요](./00_Overview.md)
+[이전: 하향식 파싱](./05_Top_Down_Parsing.md) | [다음: 추상 구문 트리](./07_Abstract_Syntax_Trees.md) | [개요](./00_Overview.md)

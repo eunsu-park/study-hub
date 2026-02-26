@@ -1,12 +1,22 @@
 # CSS Animations
 
+**Previous**: [Build Tools & Development Environment](./13_Build_Tools_Environment.md) | **Next**: [JavaScript Module System](./15_JS_Modules.md)
+
 ## Learning Objectives
-- Implement smooth state changes with CSS transitions
-- Apply element transformations with CSS transform
-- Create complex animations using @keyframes
-- Understand performance optimization and accessibility considerations
+
+After completing this lesson, you will be able to:
+
+1. Implement smooth state changes between CSS property values using transitions
+2. Apply 2D and 3D transformations including translate, scale, rotate, and skew
+3. Create multi-step animations with `@keyframes` and control playback with animation properties
+4. Build scroll-driven animations using Intersection Observer and modern CSS scroll timelines
+5. Optimize animation performance by targeting GPU-accelerated properties (`transform`, `opacity`)
+6. Respect user preferences by implementing `prefers-reduced-motion` media queries
+7. Combine transitions, transforms, and keyframe animations in practical UI patterns
 
 ---
+
+Static pages feel lifeless. Thoughtful animations guide user attention, communicate state changes, and make interfaces feel responsive and polished. However, poorly implemented animations can degrade performance and exclude users with motion sensitivities. This lesson teaches you to create performant, accessible animations using only CSS -- no JavaScript libraries required.
 
 ## 1. CSS Transition
 
@@ -773,8 +783,59 @@ if (prefersReducedMotion) {
 2. Use `will-change` judiciously
 3. Avoid layout properties like `left`, `width`
 
-### Next Steps
-- [15_JS_Modules.md](./15_JS_Modules.md): JavaScript Module System
+---
+
+## Exercises
+
+### Exercise 1: Animated Navigation Menu
+
+Build a horizontal navigation bar with the following animated behaviors using only CSS transitions (no JavaScript):
+
+1. Each nav link has a colored underline that grows from `width: 0` to `width: 100%` on hover, centered to both sides.
+2. On hover, the link text smoothly shifts color over 0.25 s.
+3. A dropdown sub-menu slides down with `max-height` transition when the parent `<li>` is hovered.
+
+> **Performance note**: Use `transform` and `opacity` where possible. Explain in a comment why animating `max-height` is acceptable here despite not being GPU-accelerated.
+
+### Exercise 2: Loading Skeleton Screen
+
+Implement a skeleton loading screen using CSS animations:
+
+1. Create a card-shaped skeleton with placeholder blocks for an image, a title line, and two body lines.
+2. Apply a shimmer effect using a `@keyframes` animation that moves a semi-transparent gradient from left to right across each block, repeating infinitely.
+3. Add a `.loaded` class toggle (you can use a `setTimeout` in a `<script>` block to simulate data loading) that fades the skeleton out and fades the real content in using `opacity` and `transition`.
+
+```css
+/* Shimmer keyframe skeleton */
+@keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+}
+
+.skeleton-block {
+    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite;
+}
+```
+
+### Exercise 3: Scroll-Triggered Section Reveal
+
+Create a single-page layout with five content sections stacked vertically. Each section should animate in when it scrolls into the viewport:
+
+1. Use `IntersectionObserver` with a `threshold` of `0.15` to detect visibility.
+2. Alternate the entrance direction: odd-numbered sections slide in from the left, even-numbered sections slide in from the right.
+3. Once a section has animated in, `unobserve` it so the animation only plays once.
+4. Wrap all animation CSS in a `@media (prefers-reduced-motion: no-preference)` block so users who prefer reduced motion see the content immediately without animation.
+
+### Exercise 4: CSS-Only Accordion with Smooth Height Transition (Advanced)
+
+Build a FAQ accordion entirely in CSS using the `:checked` pseudo-class (no JavaScript):
+
+1. Each FAQ item is a `<details>` element or uses a hidden checkbox + label trick.
+2. The answer panel transitions from `max-height: 0` to `max-height: 500px` (with `overflow: hidden`) over 0.4 s when opened.
+3. A `+` icon on the right rotates 45 degrees to become `×` when the panel is open, using a `transform: rotate` transition.
+4. Only one panel should be open at a time — explain in a comment what CSS limitation prevents a pure-CSS "only one open" constraint and what the workaround is.
 
 ---
 
@@ -784,3 +845,7 @@ if (prefersReducedMotion) {
 - [MDN CSS Animations](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Animations)
 - [Cubic Bezier Generator](https://cubic-bezier.com/)
 - [Animate.css](https://animate.style/) - Animation library
+
+---
+
+**Previous**: [Build Tools & Development Environment](./13_Build_Tools_Environment.md) | **Next**: [JavaScript Module System](./15_JS_Modules.md)

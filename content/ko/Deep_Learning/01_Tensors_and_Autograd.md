@@ -38,6 +38,8 @@
 
 ## 2. NumPy vs PyTorch 텐서 비교
 
+NumPy가 이미 n차원 배열을 제공하는데 왜 새로운 자료구조가 필요할까요? NumPy 배열은 CPU에서만 동작하며 기울기 추적(gradient tracking) 개념이 없습니다. PyTorch 텐서는 추가적인 메타데이터를 가지고 있습니다 — `device`(CPU 또는 GPU), `requires_grad`(연산 기록 여부), 그리고 계산 그래프(computational graph)에 대한 참조 — 이것들이 함께 자동 미분(automatic differentiation)을 가능하게 하며, 이는 모든 신경망 학습의 근간입니다. 한마디로, PyTorch 텐서는 NumPy 배열에 *모델 학습에 필요한 기록 장치*를 더한 것입니다.
+
 ### 생성
 
 ```python
@@ -62,7 +64,7 @@ pt_rand = torch.randn(3, 4)
 tensor = torch.from_numpy(np_arr)
 
 # PyTorch → NumPy
-array = tensor.numpy()  # CPU 텐서만 가능
+array = tensor.numpy()  # Only works for CPU tensors
 ```
 
 ### 주요 차이점
@@ -80,17 +82,21 @@ array = tensor.numpy()  # CPU 텐서만 가능
 
 PyTorch의 핵심 기능으로, 역전파를 자동으로 계산합니다.
 
+신경망을 학습하려면 손실(loss)을 모든 매개변수에 대해 미분해야 합니다 — 수백만 개의 편미분이 필요할 수 있습니다. 이를 손으로 계산하는 것은 비현실적입니다. Autograd는 순전파(forward pass) 중 모든 연산을 계산 그래프에 기록하고, 그래프를 역순으로 탐색하여 연쇄법칙(chain rule)을 통해 모든 기울기를 자동으로 계산함으로써 이 문제를 해결합니다. 이것이 "모델 정의"에서 "모델 학습"으로의 도약을 거의 힘들이지 않고 가능하게 하는 핵심입니다.
+
 ### 기본 사용법
 
 ```python
-# requires_grad=True로 미분 추적 활성화
+# Why: requires_grad=True tells PyTorch to record every operation on this tensor
+# into the computational graph, so that gradients can be computed later via .backward().
 x = torch.tensor([2.0], requires_grad=True)
 y = x ** 2 + 3 * x + 1  # y = x² + 3x + 1
 
-# 역전파 (dy/dx 계산)
+# Why: .backward() traverses the computational graph in reverse (topological order)
+# to compute all partial derivatives via the chain rule.
 y.backward()
 
-# 기울기 확인
+# Check gradient
 print(x.grad)  # tensor([7.])  # dy/dx = 2x + 3 = 2*2 + 3 = 7
 ```
 
@@ -104,14 +110,29 @@ print(x.grad)  # tensor([7.])  # dy/dx = 2x + 3 = 2*2 + 3 = 7
     3x ────┘
 ```
 
-- **순전파**: 입력 → 출력 방향으로 계산
-- **역전파**: 출력 → 입력 방향으로 기울기 계산
+- **순전파(Forward pass)**: 입력에서 출력으로 연산합니다. 각 연산(`**`, `*`, `+`)은 방향성 비순환 그래프(DAG)의 노드로 기록됩니다. PyTorch는 이 그래프를 동적으로 구축합니다 — 연산을 실행할 때마다 새로운 그래프가 생성됩니다.
+- **역전파(Backward pass)**: 출력에서 시작하여 PyTorch가 그래프를 역순(위상 정렬 역순)으로 순회하며 각 노드에서 연쇄법칙(Chain Rule)을 적용하여 ∂y/∂x를 계산합니다. `.backward()` 완료 후 그래프는 기본적으로 **소멸**됩니다(`retain_graph=False`), 메모리를 해제합니다.
+
+**연쇄법칙(Chain Rule) 실습 — 구체적 예시.** 합성 함수 `y = f(g(x))`에서 `g(x) = x²`, `f(u) = 3u + 1`인 경우, `x = 2`일 때:
+
+```
+Forward:  g = x² = 4,   y = 3g + 1 = 13
+Backward: dy/dg = 3,    dg/dx = 2x = 4
+          dy/dx = (dy/dg) × (dg/dx) = 3 × 4 = 12
+```
+
+각 노드는 자신의 *국소 미분*(local derivative, 입력 대비 출력의 변화율)만 알면 되고, 연쇄법칙이 이를 곱해줍니다. 이것이 바로 autograd가 계산 그래프의 모든 노드에서 수행하는 작업입니다 — 네트워크가 아무리 깊어도 동일한 원리입니다.
 
 ### 기울기 누적과 초기화
 
 ```python
-# 기울기는 누적됨
-x.grad.zero_()  # 학습 루프에서 항상 초기화 필요
+# PyTorch accumulates gradients by default — calling backward() adds to
+# existing .grad values rather than replacing them.  This is intentional:
+# it allows gradient accumulation across multiple mini-batches (useful when
+# the desired batch size exceeds GPU memory).  However, in a standard
+# training loop you must zero gradients before each step, otherwise the
+# optimizer uses the *sum* of all past gradients.
+x.grad.zero_()  # Reset to 0; without this, gradients from previous steps pile up
 ```
 
 ---
@@ -122,16 +143,16 @@ x.grad.zero_()  # 학습 루프에서 항상 초기화 필요
 a = torch.tensor([[1, 2], [3, 4]], dtype=torch.float32)
 b = torch.tensor([[5, 6], [7, 8]], dtype=torch.float32)
 
-# 기본 연산
-c = a + b           # 요소별 덧셈
-c = a * b           # 요소별 곱셈 (아다마르 곱)
-c = a @ b           # 행렬 곱셈
-c = torch.matmul(a, b)  # 행렬 곱셈
+# Basic operations
+c = a + b           # Element-wise addition
+c = a * b           # Element-wise multiplication (Hadamard product)
+c = a @ b           # Matrix multiplication
+c = torch.matmul(a, b)  # Matrix multiplication
 
-# 브로드캐스팅
+# Broadcasting
 a = torch.tensor([[1], [2], [3]])  # (3, 1)
 b = torch.tensor([10, 20, 30])     # (3,)
-c = a + b  # (3, 3) 자동 확장
+c = a + b  # (3, 3) automatic expansion
 ```
 
 ---
@@ -139,22 +160,22 @@ c = a + b  # (3, 3) 자동 확장
 ## 5. GPU 연산
 
 ```python
-# GPU 사용 가능 확인
+# Check GPU availability
 if torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
 
-# 텐서를 GPU로 이동
+# Move tensor to GPU
 x = torch.randn(1000, 1000)
 x_gpu = x.to(device)
-# 또는
+# Or
 x_gpu = x.cuda()
 
-# 연산 (같은 디바이스에서 수행)
+# Operations (performed on the same device)
 y_gpu = x_gpu @ x_gpu
 
-# 결과를 CPU로 가져오기
+# Bring result back to CPU
 y_cpu = y_gpu.cpu()
 ```
 
@@ -177,7 +198,7 @@ def f(x):
     return x**3 + 2*x**2 - 5*x + 3
 
 def df(x):
-    """수동으로 미분 계산"""
+    """Manually compute derivative"""
     return 3*x**2 + 4*x - 5
 
 x = 2.0
@@ -205,28 +226,34 @@ print(f"f'({x.item()}) = {x.grad.item()}")  # 15.0
 ### in-place 연산
 
 ```python
-# in-place 연산은 autograd와 충돌할 수 있음
+# In-place operations can conflict with autograd
 x = torch.tensor([1.0], requires_grad=True)
-# x += 1  # 오류 발생 가능
-x = x + 1  # 새 텐서 생성 (안전)
+# x += 1  # May cause error
+x = x + 1  # Create new tensor (safe)
 ```
 
 ### 기울기 추적 비활성화
 
 ```python
-# 추론 시 메모리 절약
+# Why: During inference we don't need gradients, so wrapping in torch.no_grad()
+# skips building the computational graph — saving memory and improving speed
+# (typically 20-30% faster for forward-only passes).
 with torch.no_grad():
-    y = model(x)  # 기울기 계산 안 함
+    y = model(x)  # No gradient computation
 
-# 또는
+# Or
 x.requires_grad = False
 ```
 
 ### detach()
 
 ```python
-# 계산 그래프에서 분리
-y = x.detach()  # y는 기울기 추적 안 함
+# Detach from computational graph — creates a new tensor that shares the
+# same data but is not part of the autograd graph.  Common uses:
+#   1. Prevent gradients flowing into a frozen sub-network (e.g., target
+#      network in DQN, discriminator update in GANs)
+#   2. Convert a tracked tensor to a plain value for logging/plotting
+y = x.detach()  # y has the same values as x but no gradient history
 ```
 
 ---
@@ -240,26 +267,26 @@ PyTorch 2.0의 핵심 기능으로, 모델을 컴파일하여 성능을 향상�
 ```python
 import torch
 
-# 모델 정의
+# Define model
 model = MyModel()
 
-# 모델 컴파일 (PyTorch 2.0+)
+# Compile the model (PyTorch 2.0+)
 compiled_model = torch.compile(model)
 
-# 사용법은 동일
+# Usage is the same
 output = compiled_model(input_data)
 ```
 
 ### 컴파일 모드
 
 ```python
-# 기본 모드 (균형)
+# Default mode (balanced)
 model = torch.compile(model)
 
-# 최대 성능 모드
+# Maximum performance mode
 model = torch.compile(model, mode="max-autotune")
 
-# 메모리 절약 모드
+# Memory-saving mode
 model = torch.compile(model, mode="reduce-overhead")
 ```
 
@@ -268,14 +295,14 @@ model = torch.compile(model, mode="reduce-overhead")
 ```python
 from torch.func import vmap, grad, jacrev
 
-# vmap: 배치 연산 자동화
+# vmap: Automatic batch operations
 def single_fn(x):
     return x ** 2
 
 batched_fn = vmap(single_fn)
-result = batched_fn(torch.randn(10, 3))  # 배치 처리
+result = batched_fn(torch.randn(10, 3))  # Batch processing
 
-# grad: 함수형 그래디언트
+# grad: Functional gradients
 def f(x):
     return (x ** 2).sum()
 
@@ -287,11 +314,11 @@ print(grad_f(x))  # 2 * x
 ### 주의사항
 
 ```python
-# torch.compile은 첫 실행 시 컴파일 시간이 소요됨
-# 프로덕션에서는 warm-up 권장
+# torch.compile has compilation overhead on first run
+# Warm-up recommended for production
 
-# 동적 shape에서 재컴파일 발생 가능
-# dynamic=True 옵션으로 완화
+# Dynamic shapes may cause recompilation
+# Mitigate with dynamic=True option
 model = torch.compile(model, dynamic=True)
 ```
 
@@ -317,4 +344,4 @@ model = torch.compile(model, dynamic=True)
 
 ## 다음 단계
 
-[02_Neural_Network_Basics.md](./02_Neural_Network_Basics.md)에서 이 텐서와 자동 미분을 사용해 신경망을 구축합니다.
+[신경망 기초](./02_Neural_Network_Basics.md)에서 이 텐서와 자동 미분을 사용해 신경망을 구축합니다.

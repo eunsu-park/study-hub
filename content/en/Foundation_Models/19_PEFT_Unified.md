@@ -1,5 +1,17 @@
 # 19. PEFT (Parameter-Efficient Fine-Tuning) Unified
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why Parameter-Efficient Fine-Tuning (PEFT) is necessary and quantify the memory and storage savings it provides over full fine-tuning
+2. Derive the mathematical basis of LoRA (Low-Rank Adaptation) and implement it using the Hugging Face PEFT library
+3. Compare additive, reparameterization, and selective PEFT strategies, evaluating their trade-offs in trainable parameters and downstream performance
+4. Apply QLoRA to fine-tune large language models on consumer hardware by combining quantization with low-rank adapters
+5. Design a PEFT training pipeline that selects the appropriate method (LoRA, Prefix Tuning, Prompt Tuning) based on task requirements and hardware constraints
+
+---
+
 ## Overview
 
 PEFT methodologies enable efficient adaptation by training only a small set of parameters instead of the entire model. This lesson covers various PEFT techniques in a unified manner.
@@ -664,3 +676,201 @@ def recommend_peft_method(
 3. Liu et al. (2024). "DoRA: Weight-Decomposed Low-Rank Adaptation"
 4. Houlsby et al. (2019). "Parameter-Efficient Transfer Learning for NLP"
 5. [HuggingFace PEFT](https://github.com/huggingface/peft)
+
+---
+
+## Exercises
+
+### Exercise 1: LoRA Trainable Parameter Calculation
+A LLaMA-7B model has attention layers with query projection weight matrices of shape (4096, 4096). Calculate the number of trainable parameters for LoRA applied to these matrices at rank r=8 vs. r=64, and compare to full fine-tuning. Then compute the parameter reduction ratio.
+
+```python
+# Given:
+# - d_model = 4096
+# - num_attention_layers = 32
+# - LoRA applied to q_proj and v_proj only
+# - LoRA matrices: W_A (d x r) and W_B (r x d)
+
+# Full fine-tuning params for q_proj + v_proj across all layers:
+full_ft_params = ???
+
+# LoRA params at r=8:
+lora_r8_params = ???
+
+# LoRA params at r=64:
+lora_r64_params = ???
+
+# Reduction ratio for r=8:
+reduction_ratio = ???
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+d_model = 4096
+num_layers = 32
+
+# Full fine-tuning: q_proj + v_proj per layer
+# Each weight matrix: 4096 × 4096 = 16,777,216 params
+# 2 matrices (q + v) × 32 layers
+full_ft_params = 2 * d_model * d_model * num_layers
+               = 2 * 4096 * 4096 * 32
+               = 1,073,741,824 ≈ 1.07B params
+
+# LoRA at r=8:
+# Each LoRA: W_A (4096×8) + W_B (8×4096) = 32,768 + 32,768 = 65,536 params
+# 2 matrices × 32 layers
+lora_r8_params = 2 * (d_model * 8 + 8 * d_model) * num_layers
+               = 2 * (32768 + 32768) * 32
+               = 2 * 65,536 * 32
+               = 4,194,304 ≈ 4.2M params
+
+# LoRA at r=64:
+lora_r64_params = 2 * (d_model * 64 + 64 * d_model) * num_layers
+                = 2 * (262,144 + 262,144) * 32
+                = 33,554,432 ≈ 33.6M params
+
+# Reduction ratios:
+reduction_r8 = full_ft_params / lora_r8_params
+             = 1,073,741,824 / 4,194,304
+             ≈ 256x fewer trainable params (0.39% of full FT)
+
+reduction_r64 = full_ft_params / lora_r64_params
+              = 1,073,741,824 / 33,554,432
+              ≈ 32x fewer trainable params (3.1% of full FT)
+
+# Summary:
+# r=8: 4.2M params (0.06% of 7B model total params = 7B × q+v only ≈ 2B)
+# r=64: 33.6M params (0.48% of 7B model)
+# Both dramatically reduce memory for optimizer states + gradients
+```
+
+Note: At r=8, the LoRA adapter adds only ~4.2M parameters — comparable to a tiny 2-layer MLP, yet enables significant task adaptation. The `lora_alpha` hyperparameter (scaling factor = alpha/r) determines the effective learning rate for these matrices relative to the frozen weights.
+
+</details>
+
+### Exercise 2: QLoRA Memory Analysis
+QLoRA combines 4-bit quantization (NF4 format) with LoRA adapters. For a LLaMA-13B model, calculate the approximate memory usage for (A) full fine-tuning in FP16, (B) LoRA in BF16, and (C) QLoRA with NF4 base + BF16 adapters.
+
+| Component | Full FT (FP16) | LoRA (BF16) | QLoRA (NF4 + BF16) |
+|-----------|----------------|-------------|---------------------|
+| Model weights | ??? | ??? | ??? |
+| Optimizer states (Adam) | ??? | ??? | ??? |
+| Gradients | ??? | N/A (frozen) | N/A (frozen) |
+| LoRA adapters + optimizer | N/A | ??? | ??? |
+| **Total** | **???** | **???** | **???** |
+
+<details>
+<summary>Show Answer</summary>
+
+Assumptions: 13B parameters, LoRA r=8 on q+v proj (32 layers) ≈ 8M trainable params.
+
+| Component | Full FT (FP16) | LoRA (BF16) | QLoRA (NF4 + BF16) |
+|-----------|----------------|-------------|---------------------|
+| Model weights | 13B × 2B/param = **26GB** | 13B × 2B/param = **26GB** | 13B × 0.5B/param* = **6.5GB** |
+| Optimizer states (Adam: 2× FP32) | 13B × 8B/param = **104GB** | N/A (frozen) | N/A (frozen) |
+| Gradients (FP16) | 13B × 2B/param = **26GB** | N/A (frozen) | N/A (frozen) |
+| LoRA adapters (BF16) | N/A | 8M × 2B/param = **16MB** | 8M × 2B/param = **16MB** |
+| LoRA optimizer (Adam, FP32) | N/A | 8M × 8B/param = **64MB** | 8M × 8B/param = **64MB** |
+| **Total** | **~156GB** | **~26GB** | **~6.6GB** |
+
+*NF4 = 4-bit quantization = 0.5 bytes/parameter
+
+**Analysis**:
+- Full FT requires ~156GB → needs 2× A100 80GB minimum
+- LoRA BF16 requires ~26GB → fits on single A100 80GB (with activations)
+- QLoRA NF4 requires ~6.6GB → fits on a single consumer GPU (RTX 3090/4090 24GB)!
+
+This is why QLoRA was revolutionary: it enabled fine-tuning 13B+ models on hardware previously used only for inference. The key insight is that quantization is applied only to the frozen base model weights — the LoRA adapters remain in BF16 for training stability.
+
+</details>
+
+### Exercise 3: LoRA Rank Selection
+You are fine-tuning a 7B LLM for three different tasks. For each task, select the appropriate LoRA rank and justify your choice. Consider the task complexity, data size, and desired behavior.
+
+| Task | Training Data | Target Behavior | Recommended Rank | Justification |
+|------|--------------|-----------------|-----------------|---------------|
+| A) Translate tech docs EN→FR | 50K sentence pairs | Precise translation | ??? | ??? |
+| B) Learn a new proprietary API style | 200 examples | Code generation in custom style | ??? | ??? |
+| C) General instruction following improvement | 100K diverse examples | Better general assistant | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Task | Recommended Rank | Justification |
+|------|-----------------|---------------|
+| A) Translation EN→FR | **r=4 or r=8** | Translation is a well-defined task that the base model already partially knows (French is in pretraining data). Low rank captures the fine-grained alignment needed without over-fitting the specific domain vocabulary. Higher rank risks memorizing corpus-specific phrases. 50K pairs is substantial — low rank generalizes better. |
+| B) Proprietary API style | **r=16 or r=32** | Learning a completely new, proprietary API style requires capturing specific syntactic patterns the base model has never seen. With only 200 examples, we need sufficient rank to express novel code patterns. But we should also use a higher `lora_dropout` (0.1-0.2) to prevent over-fitting with so little data. |
+| C) General instruction following | **r=64 or r=128** | Improving general instruction following requires broad behavioral changes across many task types — following format instructions, chain-of-thought reasoning, refusing harmful requests. This requires higher-rank adapters to express diverse behavioral patterns. With 100K diverse examples, there's enough data to support higher rank without over-fitting. |
+
+**General heuristic**:
+- r=1-4: Very targeted style or format adjustment
+- r=8-16: Single task domain adaptation (most common default)
+- r=32-64: Multi-task or complex behavioral changes
+- r=128-256: Near-full-fine-tuning capability needed
+
+The `lora_alpha` parameter should usually be set to 2×r (alpha=16 for r=8) as a starting point.
+
+</details>
+
+### Exercise 4: Adapter vs. LoRA: Inference Speed Trade-off
+Both Adapters (bottleneck modules) and LoRA add parameters for fine-tuning, but they have different inference time characteristics. Explain why LoRA can be "merged" into the base model for zero inference overhead, while Adapters cannot, and describe the formula for merging.
+
+```python
+# LoRA weight merging
+class MergeableLoRA:
+    def merge_weights(self):
+        """
+        Merge LoRA into base weight for inference
+        Original: y = Wx + BAx (two sequential operations)
+        Merged:   y = (W + BA)x (one operation, same result)
+        """
+        # W: original frozen weight (d × d)
+        # B: LoRA B matrix (d × r)
+        # A: LoRA A matrix (r × d)
+        # scaling: alpha / rank
+
+        W_merged = self.W + (self.lora_B @ self.lora_A) * (self.alpha / self.rank)
+        return W_merged
+
+# Why can't Adapters do this?
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Why LoRA can be merged**:
+
+LoRA adds a residual path: `y = W·x + (B·A)·x = (W + B·A)·x`
+
+This is algebraically equivalent to a single matrix multiplication with the merged weight `W' = W + scaling × (B·A)`. The key property: both the original path and the LoRA path are **linear operations applied to the same input** at the same point in the network. Simple matrix addition combines them:
+
+```python
+# Before merging: 2 sequential operations
+y_lora = W @ x + (lora_B @ lora_A) * (alpha / rank) @ x
+
+# After merging: 1 operation (same numerical result)
+W_merged = W + (lora_B @ lora_A) * (alpha / rank)  # done once offline
+y_merged = W_merged @ x  # at inference time
+```
+
+**Why Adapters cannot be merged**:
+
+Adapter modules are **non-linear bottleneck networks** inserted sequentially in the computation graph:
+
+```
+x → LayerNorm → Down-project → Activation → Up-project → Add residual → y
+```
+
+The adapter includes a non-linear activation function (typically GELU or ReLU) between the down and up projections. Non-linear operations cannot be collapsed into a single linear weight matrix. There is no way to express `Up(GELU(Down(x))) + x` as a single matrix multiplication `W_merged · x`.
+
+**Inference overhead comparison**:
+- **LoRA (merged)**: Zero extra computation — identical to the original base model inference
+- **LoRA (unmerged)**: +2 matrix multiplications per LoRA layer per token
+- **Adapters**: Sequential forward pass through bottleneck (down + activation + up), cannot be skipped
+- **Prefix Tuning**: Extends the K/V sequence length, increasing attention computation proportionally
+
+LoRA's mergeability is a key practical advantage: you can train efficiently (small adapter) and deploy at full base model speed.
+
+</details>

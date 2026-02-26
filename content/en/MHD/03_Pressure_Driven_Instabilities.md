@@ -449,16 +449,25 @@ def rayleigh_taylor_growth_rate(k, g, rho1, rho2, B0, kx_frac=0):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Wavenumber along field
+    # kx is the component of the wavevector along the magnetic field;
+    # only this component stretches and bends field lines, so only
+    # perturbations with kx ≠ 0 feel the magnetic tension stabilization.
     kx = kx_frac * k
 
-    # Atwood number
+    # The Atwood number A = (ρ₂-ρ₁)/(ρ₂+ρ₁) normalizes the density contrast:
+    # A=1 is the limiting case of heavy over vacuum (maximum drive), while
+    # A→0 means nearly equal densities (vanishing RT drive).
     A = (rho2 - rho1) / (rho2 + rho1)
 
-    # Alfvén speed squared
+    # vA² = B₀²/(μ₀(ρ₁+ρ₂)) uses the sum of densities because both fluid
+    # layers contribute to the inertia that the magnetic tension must
+    # accelerate; this is the Alfvén speed of the combined system.
     vA2 = B0**2 / (mu0 * (rho1 + rho2))
 
-    # Dispersion relation: ω² = -gkA + vA²kx²
+    # The dispersion relation ω² = -gkA + vA²kx² shows a competition:
+    # the -gkA (gravity) term drives instability, while vA²kx² (magnetic
+    # tension along B) stabilizes modes with k∥B — but perturbations
+    # with k⊥B (kx=0) are unaffected by the field and remain unstable.
     omega_sq = -g * k * A + vA2 * kx**2
 
     if omega_sq < 0:
@@ -588,7 +597,12 @@ def ballooning_stability_boundary(s_vals):
     --------
     alpha_crit: critical alpha for marginal stability
     """
-    # Empirical fit: α_crit ≈ 0.6 * s
+    # The linear approximation α_crit ≈ 0.6s comes from the leading-order
+    # expansion of the full ballooning eigenvalue problem in the (s,α) plane:
+    # higher shear (s) decouples neighboring flux surfaces and suppresses
+    # the flute-like interchange drive, allowing a larger pressure gradient (α)
+    # before the mode goes unstable.  The coefficient 0.6 is an empirical fit
+    # to numerical solutions of the ballooning equation.
     alpha_crit = 0.6 * s_vals
 
     return alpha_crit
@@ -613,10 +627,17 @@ def compute_alpha_parameter(r, p, q, B0, R0):
     """
     mu0 = 4*np.pi*1e-7
 
-    # Numerical derivative
+    # Centered finite difference gives second-order accuracy in dr without
+    # requiring the analytic form of dp/dr, which may not be available
+    # for numerically-computed pressure profiles.
     dr = 0.001
     dpdx = (p(r + dr) - p(r - dr)) / (2*dr)
 
+    # α = -(2μ₀R₀²q²/B₀²)(dp/dr) is the dimensionless pressure gradient that
+    # appears in the ballooning equation.  The q² factor reflects that higher-q
+    # flux surfaces have more toroidal length per poloidal circuit, amplifying
+    # the destabilizing curvature-pressure interaction; R₀²/B₀² sets the
+    # scale of the curvature drive relative to the restoring tension.
     alpha = -(2*mu0*R0**2*q**2/B0**2) * dpdx
 
     return alpha
@@ -837,21 +858,32 @@ def evaluate_mercier_criterion(r, q, p, Bp, R0):
     # Compute derivatives numerically
     dr = 0.001
 
-    # Shear contribution
+    # D_S = (1/4)(r q'/q)² is always ≥ 0: magnetic shear (q'/q) stabilizes
+    # interchange by decoupling adjacent flux surfaces, preventing them from
+    # moving coherently — the 1/4 prefactor is the Mercier coefficient that
+    # quantifies the minimum shear needed to overcome the pressure drive.
     dqdx = (q(r + dr) - q(r - dr)) / (2*dr)
     D_S = 0.25 * ((r / q(r)) * dqdx)**2
 
-    # Magnetic well contribution
+    # D_W captures the magnetic well: when dp/dr < 0 (pressure decreasing
+    # outward) and B_p is finite, D_W is negative, indicating a destabilizing
+    # interchange drive; the (1 + 2q²) factor accounts for both the poloidal
+    # and toroidal parts of the curvature.
     dpdx = (p(r + dr) - p(r - dr)) / (2*dr)
     D_W = (mu0 * r / Bp(r)**2) * dpdx * (1 + 2*q(r)**2)
 
-    # Geodesic curvature
+    # D_G = r²/(R₀²q²) is the geodesic curvature correction: the non-circular
+    # poloidal trajectory of field lines in a torus adds an extra stabilizing
+    # curvature component that is absent in a straight cylinder.
     D_G = r**2 / (R0**2 * q(r)**2)
 
     # Total
     D_I = D_S + D_W + D_G
 
-    # Stability criterion
+    # The threshold 1/4 is the Mercier stability criterion: D_I > 1/4 means
+    # the combined shear + geodesic stabilization exceeds the pressure drive.
+    # It is a necessary (not sufficient) condition — passing D_I > 1/4 does
+    # not rule out global modes that are not captured by local analysis.
     stable = D_I > 0.25
 
     return D_I, D_S, D_W, D_G, stable

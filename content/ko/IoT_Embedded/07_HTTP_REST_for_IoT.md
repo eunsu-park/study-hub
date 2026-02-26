@@ -1,11 +1,21 @@
 # 07. HTTP/REST for IoT
 
+**이전**: [MQTT 프로토콜](./06_MQTT_Protocol.md) | **다음**: [Edge AI (TFLite)](./08_Edge_AI_TFLite.md)
+
 ## 학습 목표
 
-- Flask를 이용한 IoT 서버 구축
-- 센서 데이터 수집 API 설계
-- RESTful API 설계 원칙 이해
-- JSON 데이터 처리 및 검증
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. Flask를 사용하여 IoT 데이터 수집 서버를 구축할 수 있다
+2. 적절한 CRUD 연산을 갖춘 RESTful 센서 데이터 API를 설계할 수 있다
+3. 리소스 명명 규칙과 HTTP 메서드를 포함한 RESTful 설계 원칙을 적용할 수 있다
+4. 데코레이터와 Pydantic 모델을 사용하여 수신 JSON 데이터를 검증할 수 있다
+5. 센서 데이터 쿼리에 페이지네이션(pagination)과 필터링을 구현할 수 있다
+6. 게이트웨이 서버에서 HTTP와 MQTT를 통합할 수 있다
+
+---
+
+MQTT가 실시간 장치 간 메시징에 탁월하다면, HTTP/REST는 웹 대시보드, 모바일 앱 통합, 또는 기존 엔터프라이즈 시스템과의 상호 운용성이 필요한 IoT 시스템에 여전히 필수적입니다. 게이트웨이의 REST API는 브라우저, 스마트폰, 클라우드 서비스 등 어떤 클라이언트든 인터넷 전체를 구동하는 동일한 표준 웹 프로토콜로 센서 데이터를 조회하거나 명령을 보낼 수 있게 해줍니다.
 
 ---
 
@@ -810,8 +820,8 @@ if __name__ == "__main__":
 
 ## 다음 단계
 
-- [08_Edge_AI_TFLite.md](08_Edge_AI_TFLite.md): 센서 데이터 AI 분석
-- [10_Home_Automation_Project.md](10_Home_Automation_Project.md): REST API 기반 스마트홈
+- [Edge AI - TensorFlow Lite](08_Edge_AI_TFLite.md): 센서 데이터 AI 분석
+- [홈 자동화 프로젝트](10_Home_Automation_Project.md): REST API 기반 스마트홈
 
 ---
 

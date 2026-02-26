@@ -1,5 +1,25 @@
 # Process Management
 
+**Previous**: [User and Group Management](./06_User_Group_Management.md) | **Next**: [Package Management](./08_Package_Management.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a process is and describe the Linux process lifecycle and states
+2. List and inspect running processes using ps, pstree, and top/htop
+3. Terminate processes using kill, killall, and pkill with appropriate signals
+4. Manage foreground and background jobs using job control (fg, bg, jobs, &)
+5. Keep processes running after logout with nohup and disown
+6. Manage system services using systemctl (start, stop, enable, status)
+7. Adjust process priority using nice and renice
+
+---
+
+Everything happening on a Linux system -- from the init process (PID 1) to your interactive shell session -- is a process. Understanding how to monitor, control, and terminate processes is critical for troubleshooting a slow server, stopping a runaway script, or ensuring a critical service stays running after you log out.
+
+> **Analogy: Restaurant Kitchen** -- Processes are orders being cooked in the kitchen. The kernel is the head chef who decides which dish gets the stove next (scheduling), sends sous chefs to work in parallel (threads), and stops a burnt dish before it sets off the fire alarm (killing a process). `ps` is the order board, and `top` is the kitchen's live status display.
+
 ## 1. Process Concepts
 
 A process is an instance of a running program.
@@ -535,6 +555,4 @@ ps aux | grep Z
 
 ---
 
-## Next Steps
-
-Let's learn about package management in [08_Package_Management.md](./08_Package_Management.md)!
+**Previous**: [User and Group Management](./06_User_Group_Management.md) | **Next**: [Package Management](./08_Package_Management.md)

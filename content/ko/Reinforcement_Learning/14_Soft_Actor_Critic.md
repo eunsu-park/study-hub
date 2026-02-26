@@ -184,13 +184,19 @@ class GaussianActor(nn.Module):
         std = log_std.exp()
         normal = Normal(mean, std)
 
-        # Reparameterization trick: z = μ + σ·ε
+        # 재파라미터화 트릭(reparameterization trick)으로 rsample을 사용하는 이유:
+        # 확률적 샘플링 단계를 통해 그래디언트가 흐를 수 있게 한다 — z = μ + σ·ε로
+        # 무작위성을 고정된 ε ~ N(0,I)로 이동시켜 actor 손실을 μ와 σ에 대해 미분할 수 있다
         z = normal.rsample()
 
-        # Squash through tanh
+        # tanh 스쿼싱(squashing)을 사용하는 이유: 무한한 가우시안 샘플을 (-1, 1) 범위로 매핑하여
+        # 연속 제어에서 흔한 유계 행동 공간(예: 관절 토크)에 맞춘다;
+        # 스쿼싱 없이는 정책이 액추에이터를 포화시키는 임의로 큰 행동을 생성할 수 있다
         action = torch.tanh(z)
 
-        # Log probability with correction for tanh squashing
+        # 보정 항 -log(1 - action^2 + 1e-6)이 필요한 이유: 로그 확률의 변수 변환 공식에서는
+        # tanh의 로그 절대 야코비안(log absolute Jacobian)을 빼야 한다; 이를 생략하면
+        # log_prob이 부정확해져 엔트로피 추정과 actor 그래디언트가 잘못된다
         log_prob = normal.log_prob(z) - torch.log(1 - action.pow(2) + 1e-6)
         log_prob = log_prob.sum(dim=-1, keepdim=True)
 
@@ -251,10 +257,16 @@ class SACAgent:
 
         # Networks
         self.actor = GaussianActor(state_dim, action_dim, hidden_dim)
+        # 트윈 크리틱(twin critics)을 사용하는 이유: min(Q1, Q2)를 타깃으로 사용하면
+        # 단일 Q-네트워크 사용 시 발생하는 과대추정(overestimation) 편향을 방지한다 —
+        # 과대추정은 actor가 잘못된 높은 Q-값을 활용하게 하여 정책 붕괴를 일으킨다;
+        # 트윈 크리틱은 TD3에서 처음 효과가 입증되었다
         self.critic = TwinQCritic(state_dim, action_dim, hidden_dim)
         self.critic_target = copy.deepcopy(self.critic)
 
-        # Freeze target parameters
+        # 타깃 파라미터를 동결하는 이유: 타깃 네트워크는 critic 업데이트 중 안정적인
+        # 회귀 타깃을 제공한다; 타깃으로 그래디언트가 흐르면 이동 타깃(moving-target) 문제가
+        # 발생하여 학습을 불안정하게 만든다
         for param in self.critic_target.parameters():
             param.requires_grad = False
 
@@ -264,7 +276,11 @@ class SACAgent:
 
         # Temperature (alpha)
         if auto_alpha:
+            # 기본 목표 엔트로피를 -action_dim으로 설정하는 이유: 정책이 거의 균일해지지 않으면서
+            # 모든 고가치 행동을 탐험할 충분한 자유를 갖도록 "행동 차원당 1비트"를 설정하는 경험적 방법
             self.target_entropy = target_entropy or -action_dim
+            # log_alpha를 최적화하는 이유 (alpha 직접 대신): log_alpha는 제약이 없고 그래디언트가
+            # 잘 작동한다; 지수화(exponentiating)를 통해 클리핑이나 사영(projection) 없이 alpha > 0을 보장한다
             self.log_alpha = torch.zeros(1, requires_grad=True)
             self.alpha = self.log_alpha.exp().item()
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=lr)
@@ -287,7 +303,13 @@ class SACAgent:
         with torch.no_grad():
             next_actions, next_log_probs = self.actor.sample(next_states)
             q1_target, q2_target = self.critic_target(next_states, next_actions)
+            # 트윈 타깃의 최솟값을 사용하는 이유: 벨만 타깃에서 Q1과 Q2의 최솟값을 취하면
+            # 비관적 Q-추정값이 전파되어, critic이 자신의 (종종 낙관적인) 예측을 부트스트랩할 때
+            # 누적되는 상향 편향을 상쇄한다
             q_target = torch.min(q1_target, q2_target)
+            # 타깃에서 alpha * log_prob을 빼는 이유: 이것이 소프트 벨만 백업(soft Bellman backup)이다 —
+            # 엔트로피 보너스는 정책의 로그 확률로 모든 보상을 증강하여, 정책이 확률적으로 유지되고
+            # 모든 고가치 행동을 탐험하도록 장려한다
             target = rewards + self.gamma * (1 - dones) * \
                      (q_target - self.alpha * next_log_probs)
 
@@ -322,6 +344,11 @@ class SACAgent:
         for param, target_param in zip(
             self.critic.parameters(), self.critic_target.parameters()
         ):
+            # 작은 τ(0.005)로 소프트 업데이트를 사용하는 이유: 온라인 가중치를 타깃으로 천천히
+            # 블렌딩(θ' ← τθ + (1-τ)θ')하면 연속적인 그래디언트 스텝에서 타깃이 안정적으로 유지된다 —
+            # 이는 매 스텝마다 actor가 업데이트되는 SAC, TD3 같은 연속 행동 알고리즘에 매우 중요하다;
+            # 반면 DQN은 이산 행동 공간의 정책이 작은 타깃 변동에 덜 민감하기 때문에
+            # 일반적으로 N 스텝마다 하드 업데이트(τ=1)를 사용한다
             target_param.data.copy_(
                 self.tau * param.data + (1 - self.tau) * target_param.data
             )

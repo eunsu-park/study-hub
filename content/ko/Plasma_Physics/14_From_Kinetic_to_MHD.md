@@ -616,15 +616,27 @@ print()
 
 # Define validity regions
 # 1. MHD: ω << ω_ci, L >> ρ_i
+# 0.1 계수는 보수적인 안전 여유입니다: MHD 순서는 ω/ω_ci → 0을 가정하므로
+# 고차 보정(ε = ω/ω_ci)을 ~10% 미만으로 유지하기 위해 최소 한 자릿수의
+# 분리가 필요합니다. 유사하게, L > 10ρ_i는 FLR 보정(ε = ρ_i/L)이
+# 유체 기술이 성립하기에 충분히 작도록 보장합니다.
 MHD = (omega_grid < 0.1 * omega_ci) & (L_grid > 10 * rho_i)
 
 # 2. Hall MHD: ω << ω_ci, L ~ d_i
+# Hall 효과는 L ~ d_i에서 O(1)이 됩니다; 상한 L < 100 d_i는
+# Hall 항(d_i/L)이 처음으로 ~1% 이상 증가하는 지점을 표시하여
+# MHD와 Hall MHD 영역 사이의 전환 구간을 정의합니다.
 Hall_MHD = (omega_grid < 0.1 * omega_ci) & (L_grid > 10 * rho_i) & (L_grid < 100 * d_i)
 
 # 3. Two-fluid: ω << ω_ce, L > d_e
+# 이유체 이론은 전자 skin depth d_e(전자 관성이 O(1)이 됨)와
+# ω ~ ω_ce(전자 사이클로트론 공명이 포함되지 않음)에서 붕괴됩니다.
+# 0.1 계수는 MHD와 동일한 한 자릿수 안전 여유를 제공합니다.
 Two_Fluid = (omega_grid < 0.1 * omega_ce) & (L_grid > 10 * d_e)
 
 # 4. Gyrokinetic: ω ~ ω_ci, L ~ ρ_i
+# Gyrokinetics는 ω_ci 근처와 L ~ ρ_i에서 유효한 섭동 이론입니다;
+# 이 특성값들 주변 한 자릿수를 벗어나면 부정확해집니다.
 Gyrokinetic = (omega_grid > 0.01 * omega_ci) & (omega_grid < omega_ci) & \
               (L_grid > rho_i) & (L_grid < 100 * rho_i)
 
@@ -711,6 +723,10 @@ beta_example = 1.0
 anisotropy = np.linspace(1, 5, 100)
 threshold_value = mirror_instability_threshold(beta_example)
 
+# np.where는 인과율을 강제합니다: 성장률은 임계값 미만에서 정확히 0으로,
+# 거울 모드가 그 조건에서 선형적으로 안정하기 때문입니다(불안정성의 에너지 원천이 없음).
+# sqrt(β_perp) 앞 계수는 자기 압력에 대한 더 높은 플라즈마 압력이
+# 불안정성을 위한 더 많은 자유 에너지를 제공함을 반영합니다.
 gamma_normalized = np.where(anisotropy > threshold_value,
                              np.sqrt(beta_example) * (anisotropy - threshold_value),
                              0)

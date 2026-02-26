@@ -1,5 +1,18 @@
 # Hash Table
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how a hash function maps keys to bucket indices and why O(1) average-case lookup is achievable
+2. Compare chaining and open addressing as collision resolution strategies, including their trade-offs in load factor and memory usage
+3. Implement a hash table from scratch in C or Python, including insert, delete, and search operations
+4. Use built-in hash map structures (Python dict, C++ unordered_map) to solve two-sum, grouping, and frequency-counting problems
+5. Identify scenarios where a hash table's worst-case O(n) behavior occurs and describe mitigations such as resizing and better hash functions
+6. Design solutions to common interview patterns (duplicate detection, subarray sum, grouping by key) using hash tables
+
+---
+
 ## Overview
 
 A hash table is a data structure that stores key-value pairs, enabling insertion, deletion, and search operations in O(1) average time. It is one of the most commonly used data structures in coding interviews.
@@ -112,9 +125,15 @@ print(hash_division("abc", 10))  # (97+98+99) % 10 = 4
 ```python
 def hash_multiplication(key, table_size):
     """Multiplication method: floor(m * (k*A mod 1))"""
+    # The golden ratio's fractional part is theoretically optimal for minimizing
+    # clustering — it is maximally irrational, so multiples of it are as evenly
+    # spread around the unit interval as possible
     A = 0.6180339887  # Fractional part of golden ratio (recommended)
     if isinstance(key, str):
         key = sum(ord(c) for c in key)
+    # Multiply key by A, take only the fractional part (mod 1), then scale to
+    # [0, table_size) — this makes the hash independent of table_size, which is
+    # an advantage over the division method when the table is frequently resized
     return int(table_size * ((key * A) % 1))
 
 # Example
@@ -252,14 +271,18 @@ class HashTableLinearProbing:
         return hash(key) % self.size
 
     def put(self, key, value):
-        if self.count >= self.size * 0.7:  # Resize when load factor > 70%
+        # Resize at 70% load factor — beyond this threshold, probe chains grow
+        # long enough that average O(1) performance degrades toward O(n)
+        if self.count >= self.size * 0.7:
             self._resize()
 
         index = self._hash(key)
         while self.keys[index] is not None:
             if self.keys[index] == key:
-                self.values[index] = value  # Update
+                self.values[index] = value  # Update existing key in-place
                 return
+            # Wrap around with modulo so probing treats the table as circular —
+            # without this, we would fall off the end and miss empty slots at index 0
             index = (index + 1) % self.size
 
         self.keys[index] = key
@@ -273,6 +296,8 @@ class HashTableLinearProbing:
             if self.keys[index] == key:
                 return self.values[index]
             index = (index + 1) % self.size
+            # Stop if we've wrapped all the way around — the key does not exist
+            # (an absent key is confirmed only by a None slot or a full circle)
             if index == start:  # Made full circle
                 break
         return None
@@ -346,7 +371,11 @@ class HashTableDoubleHashing:
 ```python
 class HashMap:
     def __init__(self, initial_capacity=16, load_factor=0.75):
+        # Power-of-two initial capacity (16) is conventional — modern hash maps
+        # use bitwise AND instead of modulo for speed when capacity is a power of 2
         self.capacity = initial_capacity
+        # 0.75 load factor is the empirically found sweet spot: below this,
+        # memory is wasted; above this, collision chains degrade average O(1)
         self.load_factor = load_factor
         self.size = 0
         self.buckets = [[] for _ in range(self.capacity)]
@@ -356,11 +385,13 @@ class HashMap:
 
     def put(self, key, value):
         if self.size >= self.capacity * self.load_factor:
-            self._resize()
+            self._resize()  # Double capacity to restore low load factor
 
         index = self._hash(key)
         bucket = self.buckets[index]
 
+        # Scan the chain first — upsert semantics mean an existing key must be
+        # updated, not duplicated (duplicate keys would break get() correctness)
         for i, (k, v) in enumerate(bucket):
             if k == key:
                 bucket[i] = (key, value)
@@ -391,10 +422,12 @@ class HashMap:
 
     def _resize(self):
         old_buckets = self.buckets
-        self.capacity *= 2
+        self.capacity *= 2  # Double to amortize resize cost over future inserts
         self.buckets = [[] for _ in range(self.capacity)]
         self.size = 0
 
+        # Re-hash all existing entries — bucket indices change because
+        # hash(key) % capacity depends on the new (larger) capacity
         for bucket in old_buckets:
             for key, value in bucket:
                 self.put(key, value)
@@ -731,11 +764,14 @@ def longest_consecutive(nums):
     Example: [100, 4, 200, 1, 3, 2] → 4 (1, 2, 3, 4)
     Time: O(n)
     """
+    # Convert to set for O(1) membership checks — sorting would be O(n log n)
     num_set = set(nums)
     max_length = 0
 
     for num in num_set:
-        # Only explore starting points (num-1 shouldn't exist)
+        # Only start a new sequence from its lowest element; if num-1 exists,
+        # this num is not a starting point — skipping non-starts avoids
+        # re-scanning every element of every chain, keeping overall cost O(n)
         if num - 1 not in num_set:
             current = num
             length = 1
@@ -791,22 +827,28 @@ class LRUCache:
     """
     def __init__(self, capacity):
         self.capacity = capacity
+        # OrderedDict remembers insertion order and supports O(1) move_to_end —
+        # combining a dict (O(1) lookup) with order tracking achieves O(1) get/put
+        # without the manual doubly-linked list + hash map that LRU normally needs
         self.cache = OrderedDict()
 
     def get(self, key):
         if key not in self.cache:
             return -1
-        # Move to most recently used
+        # Mark as most recently used by moving to the "end" of the ordered dict —
+        # the "front" (oldest end) is what we evict, so access promotes to the back
         self.cache.move_to_end(key)
         return self.cache[key]
 
     def put(self, key, value):
         if key in self.cache:
+            # Update and refresh recency in one step — inserting without moving
+            # would leave a stale position in the order
             self.cache.move_to_end(key)
         self.cache[key] = value
 
         if len(self.cache) > self.capacity:
-            # Remove least recently used item
+            # Evict the least recently used item at the front (last=False)
             self.cache.popitem(last=False)
 
 

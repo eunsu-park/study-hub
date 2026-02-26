@@ -1,5 +1,18 @@
 # 최단 경로 (Shortest Path)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 다익스트라(Dijkstra), 벨만-포드(Bellman-Ford), 플로이드-워셜(Floyd-Warshall), 0-1 BFS 알고리즘을 시간 복잡도, 음수 가중치 지원 여부, 적용 사례 기준으로 비교할 수 있다
+2. 우선순위 큐(priority queue)를 사용하여 다익스트라 알고리즘을 구현하고 음수 가중치가 없어야 하는 이유를 설명할 수 있다
+3. 벨만-포드 알고리즘을 구현하고 이를 이용해 그래프의 음수 사이클(negative-weight cycle)을 감지할 수 있다
+4. 플로이드-워셜 알고리즘을 구현하여 모든 쌍 최단 경로(all-pairs shortest paths)를 구하고 동적 프로그래밍 점화식을 추적할 수 있다
+5. 덱(deque)을 이용한 0-1 BFS를 적용하여 간선 가중치가 0 또는 1로 제한된 문제를 풀 수 있다
+6. 그래프의 특성에 따라 주어진 문제에 가장 적합한 최단 경로 알고리즘을 선택할 수 있다
+
+---
+
 ## 개요
 
 가중치가 있는 그래프에서 두 정점 사이의 최단 경로를 찾는 알고리즘을 학습합니다. Dijkstra, Bellman-Ford, Floyd-Warshall 알고리즘을 다룹니다.
@@ -135,6 +148,9 @@ typedef pair<int, int> pii;  // {거리, 정점}
 vector<int> dijkstra(const vector<vector<pii>>& adj, int start) {
     int V = adj.size();
     vector<int> dist(V, INT_MAX);
+    // 거리 기준 최소 힙 — 탐욕적 선택은 항상 가장 가까운 미완료 노드를
+    // 처리하는 것이며, 간선 가중치가 비음수이므로 이 노드의 최단 경로가
+    // 확정됨을 보장한다: 다른 경로는 반드시 더 길기 때문
     priority_queue<pii, vector<pii>, greater<pii>> pq;
 
     dist[start] = 0;
@@ -144,10 +160,14 @@ vector<int> dijkstra(const vector<vector<pii>>& adj, int start) {
         auto [d, u] = pq.top();
         pq.pop();
 
-        // 이미 처리된 정점이면 스킵
+        // 지연 삭제(lazy deletion): 더 짧은 경로를 찾으면 이전 항목을
+        // 제거하지 않고 새 항목을 push한다; 이 검사가 오래된(구식) 항목을
+        // 버린다 — C++ priority_queue에 decrease-key 연산이 없기 때문에 발생
         if (d > dist[u]) continue;
 
         for (auto [v, weight] : adj[u]) {
+            // 완화(relaxation): u를 거치면 v까지의 알려진 거리가 개선되면
+            // 갱신하고 push하여 더 나은 거리에서 재고려되도록 한다
             if (dist[u] + weight < dist[v]) {
                 dist[v] = dist[u] + weight;
                 pq.push({dist[v], v});
@@ -171,16 +191,23 @@ from collections import defaultdict
 def dijkstra(graph, start):
     dist = {node: float('inf') for node in graph}
     dist[start] = 0
-    pq = [(0, start)]  # (거리, 정점)
+    # 우선순위 큐는 (거리, 정점)을 저장; Python의 heapq는 최소 힙이므로
+    # 항상 가장 작은 알려진 거리의 정점이 먼저 pop됨 —
+    # 이것이 다익스트라를 올바르게 만드는 탐욕적 선택을 구현
+    pq = [(0, start)]
 
     while pq:
         d, u = heapq.heappop(pq)
 
-        # 이미 처리된 정점이면 스킵
+        # 오래된 항목 검사: 이 항목이 push된 이후 u까지의 더 저렴한 경로가
+        # 이미 확정됨; 중복 완화 작업을 피하기 위해 건너뜀
         if d > dist[u]:
             continue
 
         for v, weight in graph[u]:
+            # 간선 완화(relaxation): u를 거치는 경로가 더 나으면 기록하고
+            # enqueue; 비음수 가중치는 힙에서 pop된 정점의 거리가
+            # 확정 후 재수정될 필요 없음을 보장
             if dist[u] + weight < dist[v]:
                 dist[v] = dist[u] + weight
                 heapq.heappush(pq, (dist[v], v))
@@ -393,13 +420,16 @@ def bellman_ford(V, edges, start):
     dist = [float('inf')] * V
     dist[start] = 0
 
-    # V-1번 반복
+    # V-1번 완화 라운드: V개 정점 그래프에서 최단 경로는 최대 V-1개 간선을
+    # 가질 수 있으므로, V-1번 라운드면 모든 최단 경로를 찾을 수 있다
+    # (다익스트라와 달리 음수 가중치가 있어도 동작)
     for _ in range(V - 1):
         for u, v, w in edges:
             if dist[u] != float('inf') and dist[u] + w < dist[v]:
                 dist[v] = dist[u] + w
 
-    # 음수 사이클 확인
+    # V번째 완화 라운드에서 여전히 거리가 개선되면 음수 사이클을 의미:
+    # 최단 경로가 무한히 짧아지므로 유한한 답이 존재하지 않음
     for u, v, w in edges:
         if dist[u] != float('inf') and dist[u] + w < dist[v]:
             return None  # 음수 사이클
@@ -511,7 +541,8 @@ vector<vector<int>> initDist(int V) {
 def floyd_warshall(V, edges):
     INF = float('inf')
 
-    # 초기화
+    # 초기화: 자기 자신까지의 거리는 0;
+    # 다른 모든 쌍은 INF로 시작 (아직 알려진 경로 없음)
     dist = [[INF] * V for _ in range(V)]
     for i in range(V):
         dist[i][i] = 0
@@ -519,10 +550,15 @@ def floyd_warshall(V, edges):
     for u, v, w in edges:
         dist[u][v] = w
 
-    # 플로이드-워셜
+    # DP 점화식: 중간 집합 {0..k}를 경유하는 dist[i][j] =
+    # min(k를 사용하지 않는 경로, k를 경유지로 사용하는 경로).
+    # k에 대한 외부 루프가 가장 바깥에 와야 dist[i][j] 갱신 시
+    # dist[i][k]와 dist[k][j]가 이미 중간 정점 {0..k-1}에 대해
+    # 최적인 상태여야 하기 때문
     for k in range(V):
         for i in range(V):
             for j in range(V):
+                # 완화: i→j를 k를 경유하면 알려진 최적 경로보다 개선되는가?
                 if dist[i][k] + dist[k][j] < dist[i][j]:
                     dist[i][j] = dist[i][k] + dist[k][j]
 
@@ -640,8 +676,14 @@ def zero_one_bfs(graph, start, n):
                 dist[v] = dist[u] + weight
 
                 if weight == 0:
+                    # 비용 0 간선: v는 u와 같은 "거리 레벨"에 있다;
+                    # 앞에 push하여 가중치 1 노드보다 먼저 처리되도록 하고,
+                    # 앞이 항상 최솟값을 유지하는 불변식을 보존
                     dq.appendleft(v)
                 else:
+                    # 가중치 1 간선: v는 한 레벨 더 먼 곳에 있다; 표준 BFS처럼
+                    # 뒤에 push — 이 덱 트릭이 우선순위 큐를 대체하여
+                    # O(E log V) 대신 O(V+E)를 달성
                     dq.append(v)
 
     return dist

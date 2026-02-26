@@ -11,13 +11,16 @@ Software projects have a notoriously high failure rate. Studies by the Standish 
 - Familiarity with Agile and traditional SDLC models (Lessons 02–03)
 - Some experience working on a software project
 
-**Learning Objectives**:
-- Understand the project management triangle and its implications for decision-making
-- Learn how to plan a software project: scope, schedule, and resources
-- Apply risk management techniques including risk registers and response strategies
-- Track project progress using Earned Value Management (EVM)
-- Distinguish between traditional (plan-driven) and Agile project management
-- Identify common causes of project failure and mitigation strategies
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the project management triangle and its implications for decision-making
+2. Learn how to plan a software project: scope, schedule, and resources
+3. Apply risk management techniques including risk registers and response strategies
+4. Track project progress using Earned Value Management (EVM)
+5. Distinguish between traditional (plan-driven) and Agile project management
+6. Identify common causes of project failure and mitigation strategies
 
 ---
 

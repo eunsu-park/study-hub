@@ -1,5 +1,26 @@
 # Decorators
 
+**Previous**: [Type Hints](./01_Type_Hints.md) | **Next**: [Context Managers](./03_Context_Managers.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how the `@decorator` syntax is syntactic sugar for function wrapping
+2. Implement basic decorators that accept `*args` and `**kwargs`
+3. Apply `functools.wraps` to preserve the decorated function's metadata
+4. Write decorators that accept their own configuration arguments (three-level nesting)
+5. Implement class-based decorators using the `__call__` method
+6. Distinguish between `@property`, `@staticmethod`, `@classmethod`, and `@lru_cache`
+7. Apply decorator chaining and explain the bottom-to-top evaluation order
+8. Write class decorators that modify or enhance entire classes (e.g., singleton pattern)
+
+---
+
+Decorators are one of Python's most powerful abstraction mechanisms. Every time you add logging, enforce authentication, cache expensive results, or validate inputs, you face the same problem: cross-cutting logic that clutters the core function. Decorators let you factor out that boilerplate into reusable wrappers, keeping business logic clean while adding capabilities declaratively with a single `@` line. Frameworks like Flask, Django, and pytest rely heavily on decorators for routing, middleware, and test fixtures.
+
+> **Analogy:** a decorator wraps a function the way gift paper wraps a present: the gift inside is unchanged, but the wrapping adds a bow (logging), a card (timing), or security tape (authentication) on the outside.
+
 ## 1. What are Decorators?
 
 Decorators are a pattern that adds functionality without modifying the function or class. They use the `@` syntax.
@@ -109,7 +130,8 @@ print(greet.__doc__)   # None (docstring lost!)
 from functools import wraps
 
 def my_decorator(func):
-    @wraps(func)  # Preserve metadata
+    @wraps(func)  # Without @wraps, greet.__name__ would be 'wrapper' — breaking help(), logging,
+                  # and any introspection-based tools like debuggers or documentation generators
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
     return wrapper
@@ -216,7 +238,12 @@ say_hello()  # Call count: 3
 
 ```python
 class Retry:
-    """Decorator that retries on failure"""
+    """Decorator that retries on failure.
+
+    Why a decorator instead of inline try/except?  Retry logic is cross-cutting:
+    every fragile call site would need the same boilerplate loop.  A decorator
+    keeps the call sites clean and lets you change the retry policy in one place.
+    """
 
     def __init__(self, max_attempts=3):
         self.max_attempts = max_attempts
@@ -230,7 +257,7 @@ class Retry:
                 except Exception as e:
                     print(f"Attempt {attempt} failed: {e}")
                     if attempt == self.max_attempts:
-                        raise
+                        raise  # Re-raise the original exception on final attempt
         return wrapper
 
 @Retry(max_attempts=3)
@@ -393,7 +420,8 @@ from functools import wraps
 
 def memoize(func):
     """Decorator that caches results"""
-    cache = {}
+    cache = {}  # Closure-captured dict persists across calls; keys are arg tuples
+                # (must be hashable — lists/dicts as args would fail)
 
     @wraps(func)
     def wrapper(*args):
@@ -503,7 +531,7 @@ Decorators can be applied to entire classes.
 ```python
 def singleton(cls):
     """Singleton pattern decorator"""
-    instances = {}
+    instances = {}  # Keyed by class object (not string name) to support subclasses independently
 
     @wraps(cls)
     def get_instance(*args, **kwargs):
@@ -574,6 +602,4 @@ Create a decorator that outputs debug information only when a DEBUG flag is True
 
 ---
 
-## Next Steps
-
-Check out [03_Context_Managers.md](./03_Context_Managers.md) to learn about with statements and resource management!
+**Previous**: [Type Hints](./01_Type_Hints.md) | **Next**: [Context Managers](./03_Context_Managers.md)

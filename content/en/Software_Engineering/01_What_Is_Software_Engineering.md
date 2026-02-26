@@ -12,13 +12,16 @@ Software engineering is the disciplined application of engineering principles to
 - Some programming experience in any language
 - Familiarity with the basic idea of software projects
 
-**Learning Objectives**:
-- Define software engineering and distinguish it from programming and computer science
-- Explain the origins and significance of the software crisis
-- Describe the essential characteristics of software that make it challenging to engineer
-- Identify the major categories of software systems
-- List the core principles that guide software engineering practice
-- Recognize the professional roles found in software engineering teams
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define software engineering and distinguish it from programming and computer science
+2. Explain the origins and significance of the software crisis
+3. Describe the essential characteristics of software that make it challenging to engineer
+4. Identify the major categories of software systems
+5. List the core principles that guide software engineering practice
+6. Recognize the professional roles found in software engineering teams
 
 ---
 

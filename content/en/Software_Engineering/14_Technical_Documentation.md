@@ -12,15 +12,18 @@ Documentation is code's memory. Code tells you *what* a system does; documentati
 - [What Is Software Engineering](./01_What_Is_Software_Engineering.md) — understanding the software lifecycle
 - Basic familiarity with Markdown syntax
 
-**Learning Objectives**:
-- Identify the distinct types of technical documentation and their audiences
-- Apply the docs-as-code workflow to maintain documentation alongside source code
-- Write an Architecture Decision Record (ADR) in standard format
-- Describe the OpenAPI specification and how it enables API documentation
-- Structure a README file effectively for a software project
-- Apply the C4 model to create layered architecture diagrams
-- Diagnose and address documentation rot
-- Distinguish between runbooks and playbooks and know when to use each
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the distinct types of technical documentation and their audiences
+2. Apply the docs-as-code workflow to maintain documentation alongside source code
+3. Write an Architecture Decision Record (ADR) in standard format
+4. Describe the OpenAPI specification and how it enables API documentation
+5. Structure a README file effectively for a software project
+6. Apply the C4 model to create layered architecture diagrams
+7. Diagnose and address documentation rot
+8. Distinguish between runbooks and playbooks and know when to use each
 
 ---
 

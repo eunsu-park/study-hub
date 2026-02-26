@@ -17,6 +17,8 @@
 
 ### Concept
 
+Early CNN layers learn universal features (edges, textures, colors) that are useful regardless of task. Only the final layers specialize to the original dataset. By freezing early layers and retraining final layers, you leverage these universal features even with a small dataset. This works because visual features are hierarchical: edges combine into textures, textures into parts, parts into objects — and the lower levels of this hierarchy are shared across virtually all image recognition tasks.
+
 ```
 Model trained on ImageNet
         ↓
@@ -37,14 +39,18 @@ Model trained on ImageNet
 
 ## 2. Transfer Learning Strategies
 
+**When to fine-tune vs feature-extract?** Small dataset + similar domain (e.g., classifying dog breeds using an ImageNet model) -- freeze most layers and only train the head. Large dataset + different domain (e.g., medical X-rays) -- fine-tune all layers with a small learning rate so the network can adapt its low-level features to the new image distribution. In between, gradual unfreezing offers a safe middle ground.
+
 ### Strategy 1: Feature Extraction
 
 ```python
-# Freeze pretrained model weights
+# Freeze: prevents gradient updates to pretrained weights, preserving
+# the learned universal features (edges, textures, shapes)
 for param in model.parameters():
     param.requires_grad = False
 
-# Replace only the last layer
+# Replace the classification head to match our number of classes;
+# pretrained weights for everything else remain intact
 model.fc = nn.Linear(2048, num_classes)
 ```
 
@@ -55,11 +61,13 @@ model.fc = nn.Linear(2048, num_classes)
 ### Strategy 2: Fine-tuning
 
 ```python
-# Train all or some layers
+# Unfreeze all layers for fine-tuning
 for param in model.parameters():
     param.requires_grad = True
 
-# Use low learning rate
+# Use a very low learning rate (1e-5) — large updates would destroy
+# the pretrained features. The goal is to gently nudge the weights
+# toward the new domain, not to learn from scratch.
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
 ```
 
@@ -97,18 +105,20 @@ import torch.nn as nn
 import torchvision.models as models
 from torchvision import transforms, datasets
 
-# 1. Load pretrained model
+# 1. Load pretrained model — weights were learned from 1.2M ImageNet images
 model = models.resnet50(weights='IMAGENET1K_V2')
 
-# 2. Use as feature extractor (freeze weights)
+# 2. Freeze all backbone weights — only the new head will be trained,
+# so we optimize far fewer parameters (much faster, less overfitting)
 for param in model.parameters():
     param.requires_grad = False
 
-# 3. Replace last layer
+# 3. Replace the classification head to match our number of classes;
+# the new layers are randomly initialized and will be the only trainable params
 num_features = model.fc.in_features
 model.fc = nn.Sequential(
-    nn.Dropout(0.5),
-    nn.Linear(num_features, 256),
+    nn.Dropout(0.5),                    # Regularize the high-dimensional backbone output
+    nn.Linear(num_features, 256),       # Reduce from 2048 to 256 — bottleneck prevents overfitting
     nn.ReLU(),
     nn.Dropout(0.3),
     nn.Linear(256, num_classes)
@@ -146,13 +156,15 @@ val_transform = transforms.Compose([
 ### Discriminative Learning Rates
 
 ```python
-# Different learning rates for each layer
+# Different learning rates for each layer group — earlier layers learn
+# universal features that need minimal adjustment (tiny LR), while later
+# layers and the FC head are more task-specific and need larger updates
 optimizer = torch.optim.Adam([
-    {'params': model.layer1.parameters(), 'lr': 1e-5},
-    {'params': model.layer2.parameters(), 'lr': 5e-5},
-    {'params': model.layer3.parameters(), 'lr': 1e-4},
-    {'params': model.layer4.parameters(), 'lr': 5e-4},
-    {'params': model.fc.parameters(), 'lr': 1e-3},
+    {'params': model.layer1.parameters(), 'lr': 1e-5},   # Edges, textures — nearly universal
+    {'params': model.layer2.parameters(), 'lr': 5e-5},   # Low-level combinations
+    {'params': model.layer3.parameters(), 'lr': 1e-4},   # Mid-level features
+    {'params': model.layer4.parameters(), 'lr': 5e-4},   # High-level, task-specific features
+    {'params': model.fc.parameters(), 'lr': 1e-3},       # New head — learns from scratch
 ])
 ```
 
@@ -329,6 +341,58 @@ def mixup(x, y, alpha=0.2):
 - [ ] Switch model.train() / model.eval()
 - [ ] Apply data augmentation
 - [ ] Set up early stopping
+
+---
+
+## Exercises
+
+### Exercise 1: Feature Extraction vs Fine-tuning Comparison
+
+Compare feature extraction and full fine-tuning strategies on a small dataset.
+
+1. Use the Flowers102 dataset and limit training to 500 samples.
+2. Strategy A: Freeze all layers of ResNet-18, train only the final FC layer for 10 epochs.
+3. Strategy B: Unfreeze all layers and fine-tune with `lr=1e-5` for 10 epochs.
+4. Record final validation accuracy for both strategies.
+5. Explain the trade-off: when does feature extraction win, and when does fine-tuning win?
+
+### Exercise 2: Gradual Unfreezing Schedule
+
+Implement the three-stage gradual unfreezing strategy from the lesson.
+
+1. Load a pretrained ResNet-18.
+2. Stage 1 (epochs 1-5): Train only the final FC layer.
+3. Stage 2 (epochs 6-10): Also unfreeze `layer4`.
+4. Stage 3 (epochs 11-20): Unfreeze all layers with `lr=1e-5`.
+5. Plot validation accuracy across all 20 epochs, marking the stage boundaries with vertical lines.
+
+### Exercise 3: Discriminative Learning Rates
+
+Apply discriminative learning rates (different LR per layer group) and observe the effect.
+
+1. Load a pretrained ResNet-18.
+2. Set up an optimizer with 5 parameter groups: `layer1` (lr=1e-5), `layer2` (lr=3e-5), `layer3` (lr=1e-4), `layer4` (lr=3e-4), `fc` (lr=1e-3).
+3. Train for 15 epochs on CIFAR-10 (use a small subset of 2000 samples).
+4. Compare against training with a uniform lr=1e-4 for the same epochs.
+5. Explain the intuition: why should earlier layers use smaller learning rates?
+
+### Exercise 4: Domain Gap Investigation
+
+Explore how domain similarity between source (ImageNet) and target affects transfer learning quality.
+
+1. Choose two target datasets: CIFAR-10 (natural images, similar to ImageNet) and a medical or texture dataset from `torchvision.datasets` or a custom folder.
+2. For each dataset, compare performance of: (a) training from scratch, (b) feature extraction only, (c) full fine-tuning.
+3. Present results in a table.
+4. Explain why the domain gap causes different strategies to win for different datasets.
+
+### Exercise 5: ImageNet Normalization — What Happens Without It
+
+Empirically verify that ImageNet normalization is critical for transfer learning.
+
+1. Load a pretrained EfficientNet-B0.
+2. Run two experiments on a 100-sample evaluation set: (a) with the correct ImageNet normalization `mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225]`, (b) with no normalization (or wrong normalization like `mean=0.5, std=0.5`).
+3. Compare the top-1 accuracy for both.
+4. Visualize a sample image under both preprocessing schemes and explain why the shifted input distribution breaks the pretrained model's feature detectors.
 
 ---
 

@@ -1,14 +1,27 @@
 # Control Unit
 
-## Overview
-
-The Control Unit is a core component of the CPU that decodes instructions and coordinates all components within the CPU by generating appropriate control signals. In this lesson, we'll learn about the role of the control unit, two implementation approaches (hardwired and microprogrammed control), and the structure of microinstructions.
+**Previous**: [07_CPU_Architecture_Basics.md](./07_CPU_Architecture_Basics.md) | **Next**: [09_Instruction_Set_Architecture.md](./09_Instruction_Set_Architecture.md)
 
 **Difficulty**: ⭐⭐⭐
 
 **Prerequisites**: CPU Architecture Basics, Logic Circuits, State Machines
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the role of the control unit in the instruction execution cycle
+2. Distinguish hardwired control from microprogrammed control
+3. Trace how an instruction's opcode maps to specific control signals
+4. Describe the structure of a microinstruction (micro-ops, sequencing, condition)
+5. Compare the tradeoffs between hardwired (speed) and microprogrammed (flexibility) control
+6. Explain how control signals activate the datapath components
+
+---
+
+If the ALU is the calculator and registers are the scratch paper, the control unit is the brain that decides what to calculate and when. It transforms the abstract meaning of an instruction into the concrete electrical signals that make the hardware act. Understanding control unit design reveals why RISC processors can be simpler and faster than CISC designs.
 
 ## Table of Contents
 
@@ -20,6 +33,8 @@ The Control Unit is a core component of the CPU that decodes instructions and co
 6. [Practice Problems](#6-practice-problems)
 
 ---
+
+> The control unit is like an orchestra conductor. It does not play any instrument itself, but its signals -- the tempo, the cue to start, the gesture to soften -- determine what every other part of the CPU does and when. Just as a conductor interprets a musical score (the instruction) and coordinates the violins (ALU), percussion (memory), and brass (registers) to produce a symphony, the control unit decodes each instruction and generates the precise control signals that orchestrate the datapath.
 
 ## 1. Role of the Control Unit
 

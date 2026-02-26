@@ -1,5 +1,17 @@
 # 14. Unified Vision Models
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the paradigm shift from task-specific to unified vision models and articulate the key advantages of the unified approach
+2. Describe the architectures and training strategies of major unified vision models such as Florence, PaLI, and Unified-IO
+3. Implement prompt-based task conditioning to enable a single model to handle multiple vision tasks
+4. Compare different unification strategies (sequence-to-sequence, contrastive, generative) and their trade-offs
+5. Evaluate the zero-shot and few-shot transfer capabilities of unified vision models across diverse benchmarks
+
+---
+
 ## Overview
 
 Unified Vision Models represent a paradigm that processes various vision tasks (classification, detection, segmentation, etc.) with a **single model**. Instead of task-specific models, the goal is to build general-purpose vision models.
@@ -684,3 +696,186 @@ Trade-offs:
 ### Related Lessons
 - [12_DINOv2_Self_Supervised.md](12_DINOv2_Self_Supervised.md)
 - [13_Segment_Anything.md](13_Segment_Anything.md)
+
+---
+
+## Exercises
+
+### Exercise 1: Task Unification Strategies
+Compare the three unification strategies used in major unified vision models. Fill in the table and then recommend a strategy for a team that needs to add a new task (3D depth estimation) to an existing production system with minimal re-training.
+
+| Strategy | Example Models | How Tasks are Unified | Trade-offs |
+|----------|---------------|----------------------|------------|
+| Seq2Seq with special tokens | ??? | ??? | ??? |
+| Contrastive + task heads | ??? | ??? | ??? |
+| Prompt-conditioned generation | ??? | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Strategy | Example Models | How Tasks are Unified | Trade-offs |
+|----------|---------------|----------------------|------------|
+| Seq2Seq with special tokens | Unified-IO, OFA | All inputs/outputs are tokenized into a shared sequence; special tokens delimit modalities (`<image>`, `<box>`) | Most flexible; handles arbitrary I/O; but complex tokenization scheme and slower generation |
+| Contrastive + task heads | Florence, CLIP-based | Shared encoder produces features; task-specific heads decode for each task | Fast inference; task-specific components scale independently; but heads can diverge and knowledge sharing is limited |
+| Prompt-conditioned generation | PaLI, Florence-2 | Natural language prompts select task behavior; single generative decoder | Most user-friendly; zero-shot generalization; but output format parsing can be fragile for structured tasks (e.g., bounding boxes) |
+
+**Recommendation for adding 3D depth estimation**: Use the **Contrastive + task heads** strategy. Reasoning:
+- The shared encoder (already pre-trained) provides rich visual features — no encoder re-training needed.
+- Only a new depth estimation head needs to be added and trained (lightweight decoder as in DINOv2 examples).
+- Existing production tasks are unaffected; the new head can be deployed independently.
+- Seq2Seq would require re-training the whole model to learn depth token generation; prompt-based would need the model to learn to output depth as text, which is unwieldy.
+
+</details>
+
+### Exercise 2: PaLI Task Format Design
+PaLI unifies tasks via natural language prompts. Design appropriate input/output formats for these three tasks, following the pattern shown in the lesson:
+
+A) **Dense object counting**: Count every visible instance of a specified object class and return the number.
+
+B) **Temporal reasoning (video frame pair)**: Given two frames from a video, describe the motion that occurred.
+
+C) **Document layout analysis**: Given a page image, identify and locate each structural element (title, paragraph, table, figure).
+
+<details>
+<summary>Show Answer</summary>
+
+**A) Dense object counting**:
+- Input: `"<image> Count the number of [object] in this image."` (e.g., "Count the number of cars in this image.")
+- Output: `"3"` (pure number)
+- Alternative with explanation: `"There are 3 cars: 2 in the foreground and 1 partially visible on the right."` (more robust for training)
+- Design note: For accuracy, also consider chain-of-thought output: `"Scanning left to right: car at (100,200), car at (350,300), car at (580,250). Total: 3."`
+
+**B) Temporal reasoning (video frame pair)**:
+- Input: `"<image1> <image2> Describe the motion or change that occurred between these two frames."`
+- Output: `"A red car moved from the left side of the frame to the center, traveling approximately 50% of the frame width."`
+- Alternative for quantitative motion: `"Describe the motion with direction, speed estimate, and any objects that appeared or disappeared."`
+
+**C) Document layout analysis**:
+- Input: `"<image> Identify all structural elements in this document page and their locations."`
+- Output structured as text:
+  ```
+  title: "Introduction to Neural Networks" [0.05, 0.02, 0.95, 0.08]
+  paragraph: "This paper presents..." [0.05, 0.10, 0.95, 0.35]
+  figure: [0.10, 0.38, 0.90, 0.65]
+  table: [0.05, 0.68, 0.95, 0.92]
+  ```
+  Where `[x1, y1, x2, y2]` are normalized coordinates (0-1 range). This format follows the Unified-IO convention of encoding spatial information as discretized text tokens.
+
+</details>
+
+### Exercise 3: Unified-IO Tokenization
+Unified-IO converts all inputs/outputs into token sequences. Trace through the tokenization of the following object detection output:
+
+- Image: 640×480
+- Detected object: "bicycle" at bounding box (x1=128, y1=96, x2=384, y2=384)
+- num_bins = 1000, text vocab size = 50000, special tokens = 8
+
+```python
+class UnifiedIOTokenizer:
+    def __init__(self, vocab_size=50000, num_bins=1000):
+        self.vocab_size = vocab_size
+        self.num_bins = num_bins
+        self.SPECIAL_TOKENS = {
+            '<box>': vocab_size,      # = 50000
+            '</box>': vocab_size + 1, # = 50001
+            # ... 6 more special tokens
+        }
+
+    def tokenize_bbox(self, bbox, image_size):
+        # bbox = (x1, y1, x2, y2) in pixel coordinates
+        # image_size = (W, H)
+        # Step 1: Normalize to [0, 1]
+        # Step 2: Discretize to num_bins bins
+        # Step 3: Wrap with <box> special tokens
+        pass
+
+# What is the token sequence for the bicycle detection above?
+# Show your work.
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+# Step 1: Normalize to [0, 1]
+W, H = 640, 480
+x1_norm = 128 / 640 = 0.200
+y1_norm = 96 / 480  = 0.200
+x2_norm = 384 / 640 = 0.600
+y2_norm = 384 / 480 = 0.800
+
+# Step 2: Discretize to 1000 bins (multiply by num_bins, take floor)
+x1_bin = int(0.200 * 1000) = 200
+y1_bin = int(0.200 * 1000) = 200
+x2_bin = int(0.600 * 1000) = 600
+y2_bin = int(0.800 * 1000) = 800
+
+# Note: bin tokens are offset by vocab_size + num_special_tokens
+# to avoid collision with text tokens
+# Offset = 50000 + 8 = 50008
+x1_token = 200 + 50008 = 50208
+y1_token = 200 + 50008 = 50208
+x2_token = 600 + 50008 = 50608
+y2_token = 800 + 50008 = 50808
+
+# Step 3: Full token sequence for "bicycle at (128,96,384,384)"
+# Text token for "bicycle" = some id in [0, 49999]
+# Let's say bicycle_token = 12345
+
+token_sequence = [
+    12345,   # "bicycle" text token
+    50000,   # <box> special token
+    50208,   # x1 bin token
+    50208,   # y1 bin token
+    50608,   # x2 bin token
+    50808,   # y2 bin token
+    50001,   # </box> special token
+]
+# The full detection output is: "bicycle <box> 200 200 600 800 </box>"
+```
+
+Key insight: The coordinate bin values (200, 200, 600, 800) are stored as token IDs offset into a dedicated coordinate vocabulary range, completely separate from both text tokens and special tokens. This allows a single transformer to generate text and coordinates in the same sequence without ambiguity.
+
+</details>
+
+### Exercise 4: Versatility vs. Specialization Trade-off
+A startup has a computer vision product that needs to perform 5 tasks: (1) quality control defect detection, (2) product classification, (3) OCR on product labels, (4) generating product descriptions for e-commerce, and (5) visual similarity search.
+
+Compare the two architecture strategies below and recommend one, explaining your reasoning:
+
+- **Strategy A**: Train one unified model (Florence-2 style) to handle all 5 tasks with task-specific prompt tokens.
+- **Strategy B**: Use 5 specialized models, each fine-tuned for one task.
+
+<details>
+<summary>Show Answer</summary>
+
+**Strategy A (Unified model) — Pros**:
+- Single model to maintain, deploy, and update.
+- Shared representations may improve data efficiency (e.g., OCR features help description generation).
+- Zero-shot or few-shot adaptation to new tasks.
+- Lower infrastructure cost (one GPU server).
+
+**Strategy A — Cons**:
+- Task interference: tasks with very different output structures (defect detection bounding boxes vs. OCR text vs. similarity embeddings) may compete during training.
+- Individual task accuracy may be suboptimal vs. specialized models.
+- Harder to iterate on one task without potentially impacting others.
+
+**Strategy B (Specialized models) — Pros**:
+- Each model can be optimized to maximum accuracy for its specific task.
+- Failures are isolated — a bug in the OCR model doesn't affect defect detection.
+- Independent update cycles for each task.
+
+**Strategy B — Cons**:
+- 5 models to maintain, deploy, and monitor.
+- No knowledge sharing between tasks.
+- Higher infrastructure cost (5 deployments).
+- Redundant feature extraction (5 models all encode images separately).
+
+**Recommendation**: A **hybrid approach** — use a strong unified backbone (e.g., DINOv2 or Florence encoder) as the shared feature extractor, but train lightweight specialized heads for each task. This captures the best of both strategies:
+- Single image encoder = single inference cost for feature extraction.
+- Specialized heads = maximum accuracy per task.
+- Tasks 1-4 use generative or classification heads; Task 5 (similarity search) uses the CLS embedding directly with a vector database.
+
+If forced to choose: Strategy A is better for the startup at an early stage (simpler infrastructure, easier to ship), but tasks with very different output formats (similarity embeddings vs. bounding box detection) may need to be separated regardless.
+
+</details>

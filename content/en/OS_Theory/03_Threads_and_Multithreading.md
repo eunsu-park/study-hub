@@ -1,10 +1,23 @@
 # Threads and Multithreading
 
-## Overview
-
-A thread is a lightweight execution unit that runs within a process. This lesson covers the differences between threads and processes, user/kernel threads, multithreading models, and pthread API.
+**Previous**: [Process Concepts](./02_Process_Concepts.md) | **Next**: [CPU Scheduling Basics](./04_CPU_Scheduling_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish threads from processes and explain what resources threads share versus keep private
+2. Explain why threads are considered lightweight compared to processes in terms of creation, switching, and memory overhead
+3. Compare user-level threads and kernel-level threads, identifying the tradeoffs of each approach
+4. Describe the three multithreading models (many-to-one, one-to-one, many-to-many) and identify which model modern operating systems use
+5. Implement basic multithreaded programs using the POSIX pthread API
+6. Analyze thread safety issues such as race conditions in shared-memory concurrency
+
+---
+
+Modern CPUs have multiple cores, but even a single core can run many threads. Threads let a single process do multiple things at once -- handle user input while downloading a file while rendering the UI. Understanding threads is essential for writing responsive, efficient software. This lesson covers the differences between threads and processes, user-level versus kernel-level threads, multithreading models, and the pthread API that brings these concepts to life in C.
 
 ## Table of Contents
 
@@ -803,6 +816,132 @@ Why TCB is smaller than PCB:
 Result: Thread context switch is faster than process context switch.
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Race Condition and GIL
+
+Run `examples/OS_Theory/03_threading_demo.py` and observe the race condition and GIL demos.
+
+**Tasks:**
+1. In `demo_race_condition()`, change the iteration count to 1,000,000. Does the unsafe counter ever produce the correct result? Run 10 times and record the error rate
+2. Explain why Python's GIL prevents the race condition for simple integer increments but NOT for check-then-act patterns (like `if balance > 0: balance -= 1`)
+3. Modify the threading demo to use `threading.RLock` (reentrant lock) and demonstrate a scenario where a regular `Lock` would deadlock but `RLock` succeeds
+
+### Exercise 2: Thread vs Process Performance
+
+Write a benchmark comparing thread creation vs process creation overhead:
+
+```python
+import threading, multiprocessing, time
+
+def worker():
+    pass  # minimal work
+
+def benchmark(label, create_func, n=1000):
+    start = time.perf_counter()
+    items = [create_func(target=worker) for _ in range(n)]
+    for item in items:
+        item.start()
+    for item in items:
+        item.join()
+    elapsed = time.perf_counter() - start
+    print(f"{label}: {elapsed*1000:.1f} ms for {n} workers")
+
+benchmark("Threads", threading.Thread)
+benchmark("Processes", multiprocessing.Process, n=100)
+```
+
+**Tasks:**
+1. Run the benchmark and compare thread vs process creation time
+2. Why is process creation slower? What additional setup does fork() require?
+3. Add a CPU-bound task (sum 1 to 1M) and compare total execution time — when do processes win?
+
+### Exercise 3: Thread Pool Pattern
+
+Implement a simple thread pool that reuses threads instead of creating new ones:
+
+**Tasks:**
+1. Create a `ThreadPool(n_workers)` class with a `submit(func, *args)` method
+2. Use a `queue.Queue` for task distribution
+3. Test with 100 tasks on a pool of 4 workers and verify all tasks complete
+4. Compare the total time vs creating 100 individual threads
+
+---
+
+## Exercises
+
+### Exercise 1: Thread vs Process Resource Sharing
+
+A web server creates a new **thread** for each incoming request. For each resource listed below, state whether it is **shared** among all threads or **private** to each thread, and explain why.
+
+| Resource | Shared or Private? | Why? |
+|----------|--------------------|------|
+| Global variable `int total_requests` | | |
+| Local variable `char buf[4096]` inside the handler | | |
+| Open file descriptor for the access log | | |
+| errno value | | |
+| Heap-allocated `malloc()`'d request object | | |
+| Signal disposition (SIGTERM → graceful shutdown) | | |
+
+### Exercise 2: Multithreading Model Comparison
+
+A student is choosing a threading model for a new application. Evaluate each scenario and recommend the most appropriate model (N:1, 1:1, or M:N), explaining your reasoning.
+
+1. A scientific simulation that parallelizes matrix multiplication across 8 CPU cores on a 12-core machine
+2. A legacy embedded system with no kernel thread support that needs cooperative multitasking
+3. A high-concurrency server handling 10,000 simultaneous connections on a 4-core system
+4. A simple desktop GUI app that offloads one background task to keep the UI responsive
+
+### Exercise 3: Race Condition Analysis
+
+Examine the following code run by two threads simultaneously. Identify all race conditions and for each one, describe: (a) the shared resource involved, (b) a concrete interleaving that causes incorrect behavior, and (c) a fix.
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+
+int counter = 0;
+int log_count = 0;
+FILE *log_file;
+
+void *worker(void *arg) {
+    int id = *(int *)arg;
+    for (int i = 0; i < 1000; i++) {
+        counter++;                            // (A)
+        fprintf(log_file, "thread %d: %d\n", id, counter);  // (B)
+        log_count++;                          // (C)
+    }
+    return NULL;
+}
+```
+
+1. How many race conditions exist? List each one.
+2. What is the expected value of `counter` after both threads finish if no synchronization is used? What range of values is actually possible?
+3. Fix the race conditions using `pthread_mutex_t`.
+
+### Exercise 4: TCB Fields Under Context Switch
+
+A thread is preempted mid-execution. List the fields that must be saved into the Thread Control Block (TCB) at the moment of preemption, and explain what would go wrong if each field were NOT saved.
+
+| TCB Field | Consequence if NOT saved |
+|-----------|--------------------------|
+| Program Counter | |
+| Stack Pointer | |
+| General-purpose registers | |
+| Floating-point registers | |
+| Thread state | |
+
+### Exercise 5: Designing for Concurrency
+
+A single-threaded image-processing server sequentially: (1) receives an image over the network, (2) resizes it, (3) applies a filter, (4) saves to disk. The measured times are: network I/O 200ms, resize 50ms, filter 150ms, disk I/O 100ms. The server handles one request at a time.
+
+1. What is the total latency for one request and the maximum throughput (requests/second)?
+2. Redesign the server using multithreading to maximize throughput. Describe your design (number of threads, what each does, how they communicate).
+3. Which steps can benefit from true parallelism on a multi-core CPU? Which are limited by I/O even with threads?
+4. What is the theoretical maximum throughput of your multithreaded design if CPU steps can overlap with I/O steps?
 
 ---
 

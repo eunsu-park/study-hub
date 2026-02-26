@@ -766,15 +766,23 @@ def parker_solar_wind():
 
     # 코로나 온도
     T_corona = 1.5e6   # K
+    # c_s = √(kT/m_p): 등온 음속(isothermal sound speed)은 문제의 스케일을 설정한다.
+    # 임계 반경 r_c = GM/(2c_s²)이 음속에 의존하므로, 코로나가 뜨거울수록
+    # 음속점이 안쪽으로 이동하여 더 빠른 가속과 높은 종단 풍속을 가능하게 한다.
     c_s = np.sqrt(k_B * T_corona / m_p)  # 음속
 
     # 임계 반경
+    # r_c는 흐름이 아음속에서 초음속으로 전환되는 지점이다. 이 지점에서 Parker
+    # 방정식은 축퇴(0/0)하므로, 물리적으로 올바른 해는 이 점을 부드럽게 통과해야
+    # 한다 — 가능한 모든 해 중에서 물리적 해를 선택하는 "천음속(transonic)" 조건이다.
     r_c = G * M_sun / (2 * c_s**2)
 
     print(f"음속: {c_s/1e3:.1f} km/s")
     print(f"임계 반경: {r_c/R_sun:.2f} R_sun")
 
     # 반경 격자
+    # 로그 간격은 dv/dr이 큰 태양 근처 가속 구간과 v가 거의 일정한
+    # 원거리 태양풍 구간 모두를 각 반경에서 동일한 분율적 분해능으로 포착한다.
     r = np.logspace(np.log10(R_sun), np.log10(215*R_sun), 1000)  # 1 R_sun에서 1 AU
 
     # ODE 정의: dv/dr
@@ -786,7 +794,9 @@ def parker_solar_wind():
         return numerator / denominator
 
     # 임계점 해 찾기
-    # r_c를 약간 지나서 약간 초음속으로 시작
+    # 정확히 r_c가 아닌 1.01 r_c에서 시작하는 이유는 ODE가 임계점에서
+    # 제거 가능한 특이점(removable singularity)을 가지기 때문이다.
+    # 아주 작은 오프셋을 주면 적분기가 분모가 0이 되는 상황 없이 그 지점을 통과할 수 있다.
     r_start_idx = np.argmin(np.abs(r - r_c * 1.01))
     r_start = r[r_start_idx]
     v_start = c_s * 1.01
@@ -796,6 +806,9 @@ def parker_solar_wind():
     v_out = odeint(dv_dr, v_start, r_out).flatten()
 
     # r_c에서 안쪽으로 적분
+    # r_c 양방향으로 적분한 뒤 이어 붙이면 유일한 천음속 해를 추적할 수 있다.
+    # 다른 분기는 아음속 상태로 멈추거나 코로나에 도달하기 전에 초음속으로 발산하여
+    # 물리적으로 타당하지 않다.
     r_in = r[:r_start_idx+1][::-1]
     v_in_rev = odeint(dv_dr, c_s * 0.99, r_in).flatten()
     v_in = v_in_rev[::-1]
@@ -806,6 +819,9 @@ def parker_solar_wind():
 
     # 질량 보존으로부터 밀도
     # ρ v r² = ρ_c c_s r_c²
+    # 이는 적분된 연속 방정식(Ṁ = 상수)이다. v가 증가하고 r²가 커지면
+    # ρ는 급격히 감소해야 한다 — 태양풍이 코로나 기저에 비해 지구 근처에서
+    # 백만 배 희박한 이유를 설명한다.
     rho_c = 1e-12  # kg/m^3 (임의 정규화)
     rho_sol = rho_c * c_s * r_c**2 / (v_sol * r_sol**2)
 
@@ -889,6 +905,9 @@ def flux_tube_rise():
     r_top = R_sun           # 광구
 
     # 층화 (단순화된 지수)
+    # 스케일 높이 H_p를 가진 지수 밀도 프로파일은 대류층 전체의 올바른 차수
+    # 규모의 변화를 제공한다. 또한 ρ_e가 높은 타코클라인(tachocline) 근처에서
+    # 부력이 더 크고, ρ_e가 급격히 떨어지는 표면 근처에서 더 작도록 한다.
     H_p = 5e7  # 압력 스케일 높이 ~ 50 Mm
     rho_0 = 1e-1  # kg/m^3 (r_bottom에서, 근사)
 
@@ -907,6 +926,10 @@ def flux_tube_rise():
 
     def rho_int(rho_e, B):
         """압력 균형으로부터 내부 밀도."""
+        # 플럭스 튜브 내부는 추가된 자기 압력 B²/(2μ₀)을 균형 잡기 위해
+        # 외부보다 낮은 기체 압력을 가져야 한다. 등온 기체(p=ρc_s²)에서
+        # 이는 직접적으로 ρ_i < ρ_e를 의미하며, 이것이 튜브를 위로 밀어올리는
+        # 부력(buoyancy)의 원천이다.
         p_e = rho_e * c_s**2
         p_i = p_e - B**2 / (2*mu_0)
         return p_i / c_s**2
@@ -937,9 +960,15 @@ def flux_tube_rise():
         Delta_rho = rho_e - rho_i
 
         # 부력 가속도
+        # a_buoy = (Δρ/ρ_e) g는 압축성 유체에서의 아르키메데스(Archimedes) 법칙이다:
+        # 분율적 밀도 결핍 × g는 단위 질량당 순 상향력을 준다.
+        # 강한 자기장(큰 B)은 큰 Δρ를 만들어 강력한 부력을 발생시킨다.
         a_buoy = (Delta_rho / rho_e) * g
 
         # 저항
+        # v_z²/(2H_p) 형태는 압력 스케일 높이로 정규화된 공기역학적 저항을 반영한다:
+        # 종단 속도(terminal velocity)에서 저항이 부력과 정확히 균형을 이루어
+        # 튜브가 대류층을 통해 상승할 수 있는 속도를 제한하고 상승 시간을 결정한다.
         a_drag = -C_D * v_z[n]**2 / (2 * H_p)
 
         # 속도 업데이트

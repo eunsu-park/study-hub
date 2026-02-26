@@ -23,6 +23,7 @@ services:
       - FLASK_ENV=${FLASK_ENV:-production}
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=redis://cache:6379/0
+    # Why: service_healthy (not just service_started) prevents race conditions — the web app won't start until Postgres and Redis actually accept connections
     depends_on:
       db:
         condition: service_healthy
@@ -32,6 +33,7 @@ services:
       - app-network
     volumes:
       # Mount code for development (comment out in production)
+      # Why: :ro (read-only) mount lets you edit code on the host and see changes immediately, while preventing the container from accidentally modifying source files
       - ./app.py:/app/app.py:ro
     restart: unless-stopped
     healthcheck:
@@ -45,6 +47,7 @@ services:
   # PostgreSQL Database
   # --------------------------------------------------------------------------
   db:
+    # Why: alpine variant is ~70MB vs ~400MB for the full image — for a database, the slim OS barely matters since Postgres bundles its own libs
     image: postgres:16-alpine
     container_name: postgres_db
     environment:
@@ -75,6 +78,7 @@ services:
   cache:
     image: redis:7-alpine
     container_name: redis_cache
+    # Why: --appendonly yes enables AOF persistence so cached data survives container restarts; --requirepass prevents unauthorized access from other containers on the same network
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       # Named volume for cache persistence (optional)
@@ -94,6 +98,7 @@ services:
 # ============================================================================
 # Networks
 # ============================================================================
+# Why: An explicit bridge network isolates this stack's traffic from other Docker containers — services communicate by name (e.g., "db", "cache") via Docker's built-in DNS
 networks:
   app-network:
     driver: bridge

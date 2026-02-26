@@ -424,19 +424,27 @@ def langmuir_dispersion_kinetic(k, omega_pe, v_th, num_points=100):
             omega_solutions.append(omega_pe)
             continue
 
-        # Search for real part of ω
+        # The search range starts at ω_pe because Langmuir waves always propagate
+        # above the cutoff frequency — below ω_pe, k^2 < 0 so no real wave exists.
+        # The upper limit ω_pe * 1.5 is sufficient because thermal corrections only
+        # push ω up to ~ω_pe * (1 + 3/2 * (k λ_D)^2), well within this range.
         omega_range = np.linspace(omega_pe, omega_pe * 1.5, num_points)
 
         epsilon = []
         for omega in omega_range:
             zeta = omega / (k_val * v_th)
             Z_val = plasma_dispersion_Z(zeta)
+            # Only the real part of ε is used here because we seek the real frequency;
+            # Im(ε) gives the Landau damping rate, which is separately exponentially
+            # small for ζ >> 1 and would require a different solver to extract.
             eps = 1 - (omega_pe**2 / (k_val**2 * v_th**2)) * (1 + zeta * Z_val)
             epsilon.append(np.real(eps))
 
         epsilon = np.array(epsilon)
 
-        # Find zero crossing
+        # Sign change in Re(ε) marks the zero crossing: ε = 0 is the dispersion relation.
+        # Using the first sign change avoids picking up spurious roots from the oscillatory
+        # tail of Z(ζ) at smaller ζ values.
         sign_changes = np.where(np.diff(np.sign(epsilon)))[0]
         if len(sign_changes) > 0:
             idx = sign_changes[0]
@@ -462,7 +470,9 @@ print(f"Plasma frequency: f_pe = {omega_pe / (2*np.pi) / 1e9:.2f} GHz")
 print(f"Thermal velocity: v_th = {v_th / 1e6:.2f} Mm/s")
 print(f"Debye length: λ_D = {lambda_D * 1e6:.2f} μm")
 
-# Wavenumber array
+# Normalising k by 1/λ_D is the natural choice because k λ_D is the single
+# dimensionless parameter controlling both the Bohm-Gross correction and the
+# onset of strong Landau damping; the range 0.01-2 spans cold-plasma to kinetic regimes.
 k = np.linspace(0.01, 2, 100) / lambda_D  # Normalize to 1/λ_D
 
 # Compute dispersions
@@ -534,7 +544,8 @@ def ion_acoustic_dispersion(k, n, T_e, T_i, m_i, Z=1):
     T_e_J = T_e * e
     T_i_J = T_i * e
 
-    # Ion acoustic speed
+    # c_s uses T_e rather than T_i because the restoring force for ion acoustic waves
+    # is electron pressure: hot electrons form a Boltzmann sheath that pulls ions back.
     c_s = np.sqrt(k_B * T_e_J / m_i)
 
     # Debye length
@@ -542,14 +553,18 @@ def ion_acoustic_dispersion(k, n, T_e, T_i, m_i, Z=1):
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
     lambda_D = v_th_e / omega_pe
 
-    # Real frequency
+    # The 1/√(1 + k²λ_D²) factor is a finite Debye-length correction: when
+    # k λ_D → 1, charge screening softens the restoring force and ω saturates,
+    # preventing the dispersion from growing beyond ω ~ ω_pe * √(m_e/m_i).
     omega_real = k * c_s / np.sqrt(1 + k**2 * lambda_D**2)
 
     # Damping rate (approximate, for T_e >> T_i)
     v_th_i = np.sqrt(2 * k_B * T_i_J / m_i)
     zeta_i = omega_real / (k * v_th_i)
 
-    # Landau damping (asymptotic form for large ζ)
+    # Ion Landau damping is exponentially small only when T_i << T_e (i.e., ζ_i >> 1).
+    # The (T_i/T_e)^(3/2) prefactor captures how the ion tail population at v ~ c_s
+    # shrinks relative to the bulk as T_i decreases — fewer resonant ions means weaker damping.
     gamma = -np.sqrt(np.pi/8) * (omega_real / (k * lambda_D)) * \
             (T_i / T_e)**(3/2) * np.exp(-1/(2*k**2*lambda_D**2) - 3/2)
 
@@ -636,9 +651,14 @@ def hybrid_frequencies(n, B, Z=1, A=1):
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
+    # Upper hybrid frequency is the quadrature sum of plasma and cyclotron frequencies
+    # because the two restoring mechanisms (space-charge oscillation and Lorentz force)
+    # act independently at perpendicular propagation and their energies simply add.
     omega_UH = np.sqrt(omega_pe**2 + omega_ce**2)
 
-    # Lower hybrid
+    # The lower hybrid formula uses harmonic addition (1/ω²) because the two limiting
+    # regimes contribute in series: at low density (ω_pi ≪ ω_ci) ions are magnetised
+    # and ω_LH → √(ω_ci ω_ce); at high density they are unmagnetised and ω_LH → ω_pi.
     term1 = 1 / (omega_ci * omega_ce)
     term2 = 1 / (omega_pi**2 + omega_ci**2)
     omega_LH = 1 / np.sqrt(term1 + term2)
@@ -652,7 +672,9 @@ def hybrid_frequencies(n, B, Z=1, A=1):
         'omega_LH': omega_LH
     }
 
-# Parameter ranges
+# Scanning B at fixed n shows how the two frequencies scale differently:
+# ω_UH ~ √(ω_pe² + ω_ce²) is dominated by ω_pe at low B and by ω_ce at high B,
+# while ω_LH ~ √(ω_ci ω_ce) grows linearly with B throughout.
 B_array = np.linspace(0.5, 10, 100)  # T
 n_ref = 1e20  # m^-3
 

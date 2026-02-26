@@ -2,125 +2,149 @@
 
 [Previous: Data Preprocessing](./06_Data_Preprocessing.md) | [Next: Data Visualization Basics](./08_Data_Visualization_Basics.md)
 
-## Overview
+---
 
-Descriptive statistics summarize data characteristics, and EDA (Exploratory Data Analysis) is the process of visualizing and exploring data to discover patterns and insights.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Calculate measures of central tendency including mean, median, mode, and trimmed mean
+2. Calculate measures of dispersion including variance, standard deviation, IQR, and coefficient of variation
+3. Describe distribution shape using skewness and kurtosis and interpret their values
+4. Apply the `describe` method and compute correlation and covariance matrices on DataFrames
+5. Implement a systematic EDA workflow covering univariate, bivariate, and multivariate analysis
+6. Apply normality tests (Shapiro-Wilk, Kolmogorov-Smirnov, Anderson-Darling) and interpret Q-Q plots
+7. Compare groups using t-tests, ANOVA, and chi-square tests within an exploratory context
+8. Identify when to use EDA automation libraries such as ydata-profiling and sweetviz
 
 ---
 
-## 1. 기술통계량
+Before you can model data or draw conclusions, you need to understand what you are working with. Descriptive statistics condense thousands of data points into a handful of interpretable numbers, while EDA uses visualization and systematic exploration to reveal hidden patterns, anomalies, and relationships. Together they form the indispensable first stage of every data science project, guiding every decision that follows.
 
-### 1.1 중심 경향 측도
+---
+
+## 1. Descriptive Statistics
+
+### 1.1 Measures of Central Tendency
 
 ```python
 import pandas as pd
 import numpy as np
 from scipy import stats
 
-data = [10, 15, 20, 25, 30, 35, 40, 100]  # 이상치 포함
+data = [10, 15, 20, 25, 30, 35, 40, 100]  # includes outlier
 s = pd.Series(data)
 
-# 평균 (Mean)
-print(f"평균: {s.mean():.2f}")  # 34.38
+# Mean
+print(f"Mean: {s.mean():.2f}")  # 34.38
 
-# 중앙값 (Median)
-print(f"중앙값: {s.median():.2f}")  # 27.50
+# Median
+print(f"Median: {s.median():.2f}")  # 27.50
 
-# 최빈값 (Mode)
+# Mode
 data_with_mode = [1, 2, 2, 3, 3, 3, 4, 4]
-print(f"최빈값: {pd.Series(data_with_mode).mode().values}")  # [3]
+print(f"Mode: {pd.Series(data_with_mode).mode().values}")  # [3]
 
-# 절사평균 (Trimmed Mean) - 이상치 영향 감소
-print(f"절사평균(10%): {stats.trim_mean(data, 0.1):.2f}")
+# Trimmed Mean - reduces outlier influence
+# Choose trimmed mean over regular mean when you suspect outliers but don't want to
+# remove them entirely: the regular mean is pulled toward the outlier (here: 100),
+# while the trimmed mean discards the top and bottom 10% of values before averaging,
+# giving a more stable estimate of the "typical" value without permanently deleting data.
+print(f"Trimmed Mean (10%): {stats.trim_mean(data, 0.1):.2f}")
 
-# 가중평균
+# Weighted Mean
 values = [10, 20, 30]
 weights = [0.2, 0.3, 0.5]
 weighted_mean = np.average(values, weights=weights)
-print(f"가중평균: {weighted_mean}")
+print(f"Weighted Mean: {weighted_mean}")
 ```
 
-### 1.2 산포 측도
+### 1.2 Measures of Dispersion
 
 ```python
 s = pd.Series([10, 15, 20, 25, 30, 35, 40])
 
-# 범위 (Range)
-print(f"범위: {s.max() - s.min()}")
+# Range
+print(f"Range: {s.max() - s.min()}")
 
-# 분산 (Variance)
-print(f"분산(표본): {s.var():.2f}")
-print(f"분산(모집단): {s.var(ddof=0):.2f}")
+# Variance
+print(f"Variance (sample): {s.var():.2f}")
+print(f"Variance (population): {s.var(ddof=0):.2f}")
 
-# 표준편차 (Standard Deviation)
-print(f"표준편차(표본): {s.std():.2f}")
-print(f"표준편차(모집단): {s.std(ddof=0):.2f}")
+# Standard Deviation
+print(f"Std Dev (sample): {s.std():.2f}")
+print(f"Std Dev (population): {s.std(ddof=0):.2f}")
 
-# 사분위범위 (IQR)
+# Interquartile Range (IQR)
 Q1 = s.quantile(0.25)
 Q3 = s.quantile(0.75)
 IQR = Q3 - Q1
 print(f"IQR: {IQR}")
 
-# 변동계수 (CV) - 상대적 산포
+# Coefficient of Variation (CV) - relative dispersion
+# CV tells you what std dev alone cannot: how large the spread is *relative to the
+# mean*. This matters when comparing datasets with different units or scales —
+# e.g., income in dollars (std ≈ 20,000) vs height in cm (std ≈ 8) are incomparable
+# by std dev alone, but CV (std/mean) expresses both as a unitless fraction,
+# making cross-dataset comparisons meaningful.
 cv = s.std() / s.mean()
-print(f"변동계수: {cv:.4f}")
+print(f"CV: {cv:.4f}")
 
-# 평균절대편차 (MAD)
+# Mean Absolute Deviation (MAD)
 mad = (s - s.mean()).abs().mean()
 print(f"MAD: {mad:.2f}")
 ```
 
-### 1.3 분포 형태 측도
+### 1.3 Measures of Distribution Shape
 
 ```python
 s = pd.Series([1, 2, 2, 3, 3, 3, 4, 4, 5, 10])
 
-# 왜도 (Skewness) - 비대칭 정도
-print(f"왜도: {s.skew():.4f}")
-# > 0: 오른쪽 꼬리 (양의 왜도)
-# < 0: 왼쪽 꼬리 (음의 왜도)
-# = 0: 대칭
+# Skewness - degree of asymmetry
+print(f"Skewness: {s.skew():.4f}")
+# > 0: right tail (positive skew)
+# < 0: left tail (negative skew)
+# = 0: symmetric
 
-# 첨도 (Kurtosis) - 꼬리 두께
-print(f"첨도: {s.kurtosis():.4f}")
-# > 0: 정규분포보다 뾰족 (두꺼운 꼬리)
-# < 0: 정규분포보다 평평 (얇은 꼬리)
-# = 0: 정규분포와 유사
+# Kurtosis - tail thickness
+print(f"Kurtosis: {s.kurtosis():.4f}")
+# > 0: more peaked than normal (heavy tails)
+# < 0: flatter than normal (thin tails)
+# = 0: similar to normal distribution
 
-# scipy 사용 (Fisher 정의)
-print(f"왜도 (scipy): {stats.skew(s):.4f}")
-print(f"첨도 (scipy): {stats.kurtosis(s):.4f}")
+# Using scipy (Fisher definition)
+print(f"Skewness (scipy): {stats.skew(s):.4f}")
+print(f"Kurtosis (scipy): {stats.kurtosis(s):.4f}")
 ```
 
-### 1.4 백분위수와 분위수
+### 1.4 Percentiles and Quantiles
 
 ```python
 s = pd.Series(range(1, 101))
 
-# 백분위수
-print(f"25번째 백분위수: {s.quantile(0.25)}")
-print(f"50번째 백분위수: {s.quantile(0.50)}")
-print(f"75번째 백분위수: {s.quantile(0.75)}")
-print(f"90번째 백분위수: {s.quantile(0.90)}")
+# Percentiles
+print(f"25th percentile: {s.quantile(0.25)}")
+print(f"50th percentile: {s.quantile(0.50)}")
+print(f"75th percentile: {s.quantile(0.75)}")
+print(f"90th percentile: {s.quantile(0.90)}")
 
-# 여러 분위수 한번에
+# Multiple quantiles at once
 print(s.quantile([0.1, 0.25, 0.5, 0.75, 0.9]))
 
-# 5수 요약 (Five-number summary)
-print("5수 요약:")
-print(f"최소: {s.min()}")
+# Five-number summary
+print("Five-number summary:")
+print(f"Min: {s.min()}")
 print(f"Q1: {s.quantile(0.25)}")
-print(f"중앙값: {s.median()}")
+print(f"Median: {s.median()}")
 print(f"Q3: {s.quantile(0.75)}")
-print(f"최대: {s.max()}")
+print(f"Max: {s.max()}")
 ```
 
 ---
 
-## 2. DataFrame 기술통계
+## 2. DataFrame Descriptive Statistics
 
-### 2.1 describe 메서드
+### 2.1 The describe Method
 
 ```python
 df = pd.DataFrame({
@@ -129,17 +153,17 @@ df = pd.DataFrame({
     'department': ['IT', 'HR', 'IT', 'Sales', 'IT', 'HR', 'Sales']
 })
 
-# 수치형 열만
+# Numeric columns only
 print(df.describe())
 
-# 모든 열 (범주형 포함)
+# All columns (including categorical)
 print(df.describe(include='all'))
 
-# 특정 백분위수 지정
+# Custom percentiles
 print(df.describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9]))
 ```
 
-### 2.2 상관분석
+### 2.2 Correlation Analysis
 
 ```python
 df = pd.DataFrame({
@@ -148,28 +172,28 @@ df = pd.DataFrame({
     'C': [5, 4, 3, 2, 1]
 })
 
-# 피어슨 상관계수 (선형 관계)
-print("피어슨 상관계수:")
+# Pearson correlation coefficient (linear relationship)
+print("Pearson Correlation:")
 print(df.corr())
 
-# 스피어만 상관계수 (순위 기반, 비선형 관계)
-print("\n스피어만 상관계수:")
+# Spearman correlation coefficient (rank-based, non-linear relationship)
+print("\nSpearman Correlation:")
 print(df.corr(method='spearman'))
 
-# 켄달 상관계수 (순위 기반)
-print("\n켄달 상관계수:")
+# Kendall correlation coefficient (rank-based)
+print("\nKendall Correlation:")
 print(df.corr(method='kendall'))
 
-# 특정 열 간 상관계수
-print(f"\nA와 B의 상관계수: {df['A'].corr(df['B']):.4f}")
+# Correlation between specific columns
+print(f"\nCorrelation between A and B: {df['A'].corr(df['B']):.4f}")
 
-# p-value와 함께
+# With p-value
 from scipy.stats import pearsonr, spearmanr
 corr, p_value = pearsonr(df['A'], df['B'])
-print(f"상관계수: {corr:.4f}, p-value: {p_value:.4f}")
+print(f"Correlation: {corr:.4f}, p-value: {p_value:.4f}")
 ```
 
-### 2.3 공분산
+### 2.3 Covariance
 
 ```python
 df = pd.DataFrame({
@@ -177,24 +201,24 @@ df = pd.DataFrame({
     'Y': [2, 4, 5, 4, 5]
 })
 
-# 공분산 행렬
+# Covariance matrix
 print(df.cov())
 
-# 두 변수 간 공분산
-print(f"X와 Y의 공분산: {df['X'].cov(df['Y']):.4f}")
+# Covariance between two variables
+print(f"Covariance of X and Y: {df['X'].cov(df['Y']):.4f}")
 ```
 
 ---
 
-## 3. 탐색적 데이터 분석 (EDA)
+## 3. Exploratory Data Analysis (EDA)
 
-### 3.1 데이터 개요 파악
+### 3.1 Data Overview
 
 ```python
 import pandas as pd
 import numpy as np
 
-# 샘플 데이터 생성
+# Generate sample data
 np.random.seed(42)
 df = pd.DataFrame({
     'id': range(1, 1001),
@@ -204,70 +228,70 @@ df = pd.DataFrame({
     'category': np.random.choice(['A', 'B', 'C', 'D'], 1000),
     'score': np.random.normal(75, 15, 1000)
 })
-df.loc[np.random.choice(1000, 50), 'income'] = np.nan  # 결측치 추가
+df.loc[np.random.choice(1000, 50), 'income'] = np.nan  # add missing values
 
-# 1. 기본 정보
+# 1. Basic information
 print("="*50)
-print("1. 데이터 기본 정보")
+print("1. Basic Data Information")
 print("="*50)
-print(f"행 수: {len(df)}")
-print(f"열 수: {len(df.columns)}")
-print(f"\n컬럼 목록: {df.columns.tolist()}")
-print(f"\n데이터 타입:\n{df.dtypes}")
+print(f"Rows: {len(df)}")
+print(f"Columns: {len(df.columns)}")
+print(f"\nColumn list: {df.columns.tolist()}")
+print(f"\nData types:\n{df.dtypes}")
 
-# 2. 결측치 현황
+# 2. Missing value summary
 print("\n" + "="*50)
-print("2. 결측치 현황")
+print("2. Missing Value Summary")
 print("="*50)
 missing = df.isnull().sum()
 missing_pct = (missing / len(df) * 100).round(2)
 missing_df = pd.DataFrame({
-    '결측치 수': missing,
-    '결측치 비율(%)': missing_pct
+    'Missing Count': missing,
+    'Missing Rate (%)': missing_pct
 })
-print(missing_df[missing_df['결측치 수'] > 0])
+print(missing_df[missing_df['Missing Count'] > 0])
 
-# 3. 기술통계
+# 3. Descriptive statistics
 print("\n" + "="*50)
-print("3. 수치형 변수 기술통계")
+print("3. Descriptive Statistics for Numeric Variables")
 print("="*50)
 print(df.describe())
 
-# 4. 범주형 변수 빈도
+# 4. Categorical variable frequencies
 print("\n" + "="*50)
-print("4. 범주형 변수 빈도")
+print("4. Categorical Variable Frequencies")
 print("="*50)
 for col in df.select_dtypes(include='object').columns:
     print(f"\n[{col}]")
     print(df[col].value_counts())
 ```
 
-### 3.2 단변량 분석
+### 3.2 Univariate Analysis
 
 ```python
 import matplotlib.pyplot as plt
 
-# 수치형 변수
+# Numeric variables
 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 numeric_cols.remove('id')
 
 fig, axes = plt.subplots(2, len(numeric_cols), figsize=(15, 8))
 
 for i, col in enumerate(numeric_cols):
-    # 히스토그램
+    # Histogram
     axes[0, i].hist(df[col].dropna(), bins=30, edgecolor='black', alpha=0.7)
     axes[0, i].set_title(f'{col} - Histogram')
     axes[0, i].set_xlabel(col)
     axes[0, i].set_ylabel('Frequency')
 
-    # 박스플롯
+    # Boxplot
     axes[1, i].boxplot(df[col].dropna())
     axes[1, i].set_title(f'{col} - Boxplot')
 
 plt.tight_layout()
 plt.show()
 
-# 범주형 변수
+# Categorical variables
 categorical_cols = df.select_dtypes(include='object').columns.tolist()
 
 fig, axes = plt.subplots(1, len(categorical_cols), figsize=(12, 4))
@@ -283,12 +307,12 @@ plt.tight_layout()
 plt.show()
 ```
 
-### 3.3 이변량 분석
+### 3.3 Bivariate Analysis
 
 ```python
 import seaborn as sns
 
-# 수치형 vs 수치형: 산점도
+# Numeric vs Numeric: Scatter plot
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 axes[0].scatter(df['age'], df['income'], alpha=0.5)
@@ -304,7 +328,7 @@ axes[1].set_title('Age vs Score')
 plt.tight_layout()
 plt.show()
 
-# 범주형 vs 수치형: 박스플롯
+# Categorical vs Numeric: Boxplot
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 df.boxplot(column='income', by='gender', ax=axes[0])
@@ -313,20 +337,20 @@ axes[0].set_title('Income by Gender')
 df.boxplot(column='score', by='category', ax=axes[1])
 axes[1].set_title('Score by Category')
 
-plt.suptitle('')  # 자동 생성된 제목 제거
+plt.suptitle('')  # remove auto-generated title
 plt.tight_layout()
 plt.show()
 
-# 범주형 vs 범주형: 교차표
-print("Gender와 Category 교차표:")
+# Categorical vs Categorical: Cross-tabulation
+print("Cross-tabulation of Gender and Category:")
 print(pd.crosstab(df['gender'], df['category']))
-print(pd.crosstab(df['gender'], df['category'], normalize='index'))  # 행 기준 비율
+print(pd.crosstab(df['gender'], df['category'], normalize='index'))  # row-wise proportions
 ```
 
-### 3.4 다변량 분석
+### 3.4 Multivariate Analysis
 
 ```python
-# 상관행렬 히트맵
+# Correlation matrix heatmap
 numeric_df = df[['age', 'income', 'score']].dropna()
 correlation_matrix = numeric_df.corr()
 
@@ -337,7 +361,7 @@ plt.title('Correlation Matrix')
 plt.tight_layout()
 plt.show()
 
-# 산점도 행렬 (Pair Plot)
+# Scatter matrix (Pair Plot)
 sns.pairplot(df[['age', 'income', 'score', 'gender']].dropna(),
              hue='gender', diag_kind='hist')
 plt.suptitle('Pair Plot', y=1.02)
@@ -347,33 +371,33 @@ plt.show()
 
 ---
 
-## 4. 분포 분석
+## 4. Distribution Analysis
 
-### 4.1 분포 확인
+### 4.1 Checking Distributions
 
 ```python
 from scipy import stats
 
 data = df['income'].dropna()
 
-# 정규성 검정 - Shapiro-Wilk (n < 5000)
+# Normality test - Shapiro-Wilk (n < 5000)
 if len(data) < 5000:
     stat, p_value = stats.shapiro(data[:5000])
-    print(f"Shapiro-Wilk 검정: 통계량={stat:.4f}, p-value={p_value:.4f}")
+    print(f"Shapiro-Wilk test: statistic={stat:.4f}, p-value={p_value:.4f}")
 
-# 정규성 검정 - Kolmogorov-Smirnov
+# Normality test - Kolmogorov-Smirnov
 stat, p_value = stats.kstest(data, 'norm',
                              args=(data.mean(), data.std()))
-print(f"K-S 검정: 통계량={stat:.4f}, p-value={p_value:.4f}")
+print(f"K-S test: statistic={stat:.4f}, p-value={p_value:.4f}")
 
-# 정규성 검정 - Anderson-Darling
+# Normality test - Anderson-Darling
 result = stats.anderson(data, dist='norm')
-print(f"Anderson-Darling 검정: 통계량={result.statistic:.4f}")
+print(f"Anderson-Darling test: statistic={result.statistic:.4f}")
 
-# 시각적 확인: Q-Q plot
+# Visual check: Q-Q plot
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 히스토그램과 정규분포 곡선
+# Histogram with normal distribution curve
 axes[0].hist(data, bins=50, density=True, alpha=0.7, edgecolor='black')
 x = np.linspace(data.min(), data.max(), 100)
 axes[0].plot(x, stats.norm.pdf(x, data.mean(), data.std()),
@@ -389,29 +413,29 @@ plt.tight_layout()
 plt.show()
 ```
 
-### 4.2 분포 변환
+### 4.2 Distribution Transformation
 
 ```python
-# 로그 정규분포 데이터
+# Log-normally distributed data
 data = df['income'].dropna()
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-# 원본
+# Original
 axes[0, 0].hist(data, bins=50, edgecolor='black', alpha=0.7)
 axes[0, 0].set_title(f'Original (Skew: {stats.skew(data):.2f})')
 
-# 로그 변환
+# Log transformation
 log_data = np.log1p(data)
 axes[0, 1].hist(log_data, bins=50, edgecolor='black', alpha=0.7)
 axes[0, 1].set_title(f'Log Transform (Skew: {stats.skew(log_data):.2f})')
 
-# 제곱근 변환
+# Square root transformation
 sqrt_data = np.sqrt(data)
 axes[1, 0].hist(sqrt_data, bins=50, edgecolor='black', alpha=0.7)
 axes[1, 0].set_title(f'Square Root Transform (Skew: {stats.skew(sqrt_data):.2f})')
 
-# Box-Cox 변환
+# Box-Cox transformation
 boxcox_data, lambda_param = stats.boxcox(data)
 axes[1, 1].hist(boxcox_data, bins=50, edgecolor='black', alpha=0.7)
 axes[1, 1].set_title(f'Box-Cox Transform (λ={lambda_param:.2f}, Skew: {stats.skew(boxcox_data):.2f})')
@@ -422,49 +446,51 @@ plt.show()
 
 ---
 
-## 5. 그룹별 분석
+## 5. Group-wise Analysis
 
-### 5.1 그룹별 기술통계
+### 5.1 Group-wise Descriptive Statistics
 
 ```python
-# 그룹별 요약
-print("성별 그룹별 통계:")
+# Group-wise summary
+print("Statistics by gender group:")
 print(df.groupby('gender')[['age', 'income', 'score']].agg(['mean', 'std', 'count']))
 
-print("\n카테고리별 통계:")
+print("\nStatistics by category:")
 print(df.groupby('category')[['income', 'score']].describe())
 
-# 다중 그룹
-print("\n성별 & 카테고리별 평균 소득:")
+# Multiple groups
+print("\nMean income by gender and category:")
 print(df.groupby(['gender', 'category'])['income'].mean().unstack())
 ```
 
-### 5.2 그룹 간 비교
+### 5.2 Between-Group Comparisons
 
 ```python
-# t-검정 (두 그룹)
+# t-test (two groups)
 male_income = df[df['gender'] == 'M']['income'].dropna()
 female_income = df[df['gender'] == 'F']['income'].dropna()
 
 stat, p_value = stats.ttest_ind(male_income, female_income)
-print(f"독립표본 t-검정: t={stat:.4f}, p-value={p_value:.4f}")
+print(f"Independent samples t-test: t={stat:.4f}, p-value={p_value:.4f}")
 
-# ANOVA (세 그룹 이상)
+# ANOVA (three or more groups)
 groups = [df[df['category'] == cat]['score'].dropna() for cat in df['category'].unique()]
 stat, p_value = stats.f_oneway(*groups)
 print(f"ANOVA: F={stat:.4f}, p-value={p_value:.4f}")
 
-# 카이제곱 검정 (범주형 변수)
+# Chi-square test (categorical variables)
 contingency_table = pd.crosstab(df['gender'], df['category'])
 chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
-print(f"카이제곱 검정: χ²={chi2:.4f}, p-value={p_value:.4f}")
+print(f"Chi-square test: χ²={chi2:.4f}, p-value={p_value:.4f}")
 ```
 
 ---
 
-## 6. EDA 자동화 라이브러리
+## 6. EDA Automation Libraries
 
 ### 6.1 pandas-profiling (ydata-profiling)
+
+Automated profiling is most appropriate when you are starting fresh on an unfamiliar dataset and need a broad overview quickly — it catches missing-value patterns, distributions, correlations, and duplicates in one shot. For production pipelines or when you need targeted domain-specific checks, manual EDA gives you more control and is more reproducible.
 
 ```python
 # pip install ydata-profiling
@@ -474,7 +500,7 @@ print(f"카이제곱 검정: χ²={chi2:.4f}, p-value={p_value:.4f}")
 # report = ProfileReport(df, title="EDA Report", explorative=True)
 # report.to_file("eda_report.html")
 
-# 간소화 버전 (대용량 데이터)
+# Minimal version (for large datasets)
 # report = ProfileReport(df, minimal=True)
 ```
 
@@ -488,69 +514,70 @@ print(f"카이제곱 검정: χ²={chi2:.4f}, p-value={p_value:.4f}")
 # report = sv.analyze(df)
 # report.show_html("sweetviz_report.html")
 
-# 두 데이터셋 비교
+# Compare two datasets — particularly useful for train/test split validation:
+# if the two distributions diverge strongly, your model may face distribution shift.
 # report = sv.compare(df1, df2)
 ```
 
 ---
 
-## 7. EDA 체크리스트
+## 7. EDA Checklist
 
 ```markdown
-## EDA 체크리스트
+## EDA Checklist
 
-### 1. 데이터 개요
-- [ ] 행/열 수 확인
-- [ ] 데이터 타입 확인
-- [ ] 메모리 사용량 확인
+### 1. Data Overview
+- [ ] Check number of rows and columns
+- [ ] Check data types
+- [ ] Check memory usage
 
-### 2. 결측치
-- [ ] 결측치 존재 여부
-- [ ] 결측치 비율
-- [ ] 결측치 패턴 (MCAR, MAR, MNAR)
+### 2. Missing Values
+- [ ] Check for missing values
+- [ ] Check missing value rate
+- [ ] Check missing value patterns (MCAR, MAR, MNAR)
 
-### 3. 수치형 변수
-- [ ] 기술통계 (평균, 중앙값, 표준편차 등)
-- [ ] 분포 형태 (왜도, 첨도)
-- [ ] 이상치 존재 여부
-- [ ] 히스토그램/박스플롯
+### 3. Numeric Variables
+- [ ] Descriptive statistics (mean, median, std, etc.)
+- [ ] Distribution shape (skewness, kurtosis)
+- [ ] Check for outliers
+- [ ] Histogram / Boxplot
 
-### 4. 범주형 변수
-- [ ] 카테고리 수
-- [ ] 빈도 분포
-- [ ] 희소 카테고리 존재 여부
+### 4. Categorical Variables
+- [ ] Number of categories
+- [ ] Frequency distribution
+- [ ] Check for rare categories
 
-### 5. 변수 간 관계
-- [ ] 상관분석 (수치형)
-- [ ] 교차표 (범주형)
-- [ ] 그룹별 비교
+### 5. Relationships Between Variables
+- [ ] Correlation analysis (numeric)
+- [ ] Cross-tabulation (categorical)
+- [ ] Group-wise comparisons
 
-### 6. 타겟 변수
-- [ ] 타겟 분포 (불균형 여부)
-- [ ] 타겟과 특성 간 관계
+### 6. Target Variable
+- [ ] Target distribution (class imbalance)
+- [ ] Relationship between target and features
 ```
 
 ---
 
 ## Practice Problems
 
-### Problem 1: 기술통계
-다음 데이터의 5수 요약을 구하세요.
+### Problem 1: Descriptive Statistics
+Compute the five-number summary for the following data.
 
 ```python
 data = [12, 15, 18, 22, 25, 28, 30, 35, 40, 100]
 s = pd.Series(data)
 
 # Solution
-print(f"최소: {s.min()}")
+print(f"Min: {s.min()}")
 print(f"Q1: {s.quantile(0.25)}")
-print(f"중앙값: {s.median()}")
+print(f"Median: {s.median()}")
 print(f"Q3: {s.quantile(0.75)}")
-print(f"최대: {s.max()}")
+print(f"Max: {s.max()}")
 ```
 
-### Problem 2: 상관분석
-두 변수 간의 상관계수를 구하고 해석하세요.
+### Problem 2: Correlation Analysis
+Compute and interpret the correlation coefficient between two variables.
 
 ```python
 df = pd.DataFrame({
@@ -560,12 +587,12 @@ df = pd.DataFrame({
 
 # Solution
 corr = df['study_hours'].corr(df['score'])
-print(f"상관계수: {corr:.4f}")
-# 강한 양의 상관관계 (공부 시간이 늘수록 점수 증가)
+print(f"Correlation: {corr:.4f}")
+# Strong positive correlation (score increases with study hours)
 ```
 
-### Problem 3: 그룹 비교
-그룹별 평균과 표준편차를 구하세요.
+### Problem 3: Group Comparison
+Compute mean and standard deviation by group.
 
 ```python
 df = pd.DataFrame({
@@ -583,8 +610,8 @@ print(df.groupby('group')['value'].agg(['mean', 'std']))
 
 | Measure Type | Measure | Function |
 |----------|------|------|
-| 중심 경향 | 평균, 중앙값, 최빈값 | `mean()`, `median()`, `mode()` |
-| 산포 | 분산, 표준편차, IQR | `var()`, `std()`, `quantile()` |
-| 분포 형태 | 왜도, 첨도 | `skew()`, `kurtosis()` |
-| 관계 | 상관계수, 공분산 | `corr()`, `cov()` |
-| 요약 | 기술통계 | `describe()` |
+| Central Tendency | Mean, Median, Mode | `mean()`, `median()`, `mode()` |
+| Dispersion | Variance, Std Dev, IQR | `var()`, `std()`, `quantile()` |
+| Distribution Shape | Skewness, Kurtosis | `skew()`, `kurtosis()` |
+| Relationship | Correlation, Covariance | `corr()`, `cov()` |
+| Summary | Descriptive Statistics | `describe()` |

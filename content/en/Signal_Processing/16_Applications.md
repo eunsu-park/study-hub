@@ -10,15 +10,18 @@ Signal processing is not merely a theoretical discipline -- it is an engineering
 
 **Prerequisites**: DFT/FFT, filtering (FIR/IIR), modulation basics, correlation, spectral analysis
 
-**Learning Objectives**:
-- Understand audio signal representation and implement digital audio effects
-- Implement pitch detection using autocorrelation and cepstrum methods
-- Describe analog and digital modulation schemes (AM, FM, ASK, FSK, PSK, QAM)
-- Explain pulse shaping, matched filtering, and OFDM fundamentals
-- Apply matched filtering and chirp compression to radar signal processing
-- Compute and interpret the ambiguity function for radar waveform design
-- Process biomedical signals (ECG, EEG) using the techniques from this course
-- Implement working demonstrations of each application in Python
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand audio signal representation and implement digital audio effects
+2. Implement pitch detection using autocorrelation and cepstrum methods
+3. Describe analog and digital modulation schemes (AM, FM, ASK, FSK, PSK, QAM)
+4. Explain pulse shaping, matched filtering, and OFDM fundamentals
+5. Apply matched filtering and chirp compression to radar signal processing
+6. Compute and interpret the ambiguity function for radar waveform design
+7. Process biomedical signals (ECG, EEG) using the techniques from this course
+8. Implement working demonstrations of each application in Python
 
 ---
 

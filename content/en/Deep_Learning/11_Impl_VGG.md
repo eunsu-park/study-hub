@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the VGGNet architectural philosophy of using very deep networks with uniformly small 3×3 convolutional filters.
+2. Analyze the receptive field equivalence between stacked 3×3 convolutions and larger single convolutions, and compare their parameter counts.
+3. Describe the VGG-16 and VGG-19 configurations, including block structure, channel progression, and classifier head design.
+4. Implement a VGGNet family member (e.g., VGG-16) from scratch in PyTorch using modular block construction.
+5. Apply transfer learning with a pretrained VGGNet to a custom classification task using fine-tuning techniques.
+6. Identify the limitations of VGGNet (parameter count, memory footprint) and explain how later architectures addressed them.
+
+---
+
 ## Overview
 
 VGGNet finished 2nd in ILSVRC 2014, proposed by Karen Simonyan and Andrew Zisserman. The paper "Very Deep Convolutional Networks for Large-Scale Image Recognition" demonstrated that **stacking small 3x3 filters deeply** is effective.

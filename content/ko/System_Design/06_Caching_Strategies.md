@@ -1,14 +1,27 @@
 # 캐싱 전략
 
-## 개요
+**이전**: [리버스 프록시와 API 게이트웨이](./05_Reverse_Proxy_API_Gateway.md) | **다음**: [분산 캐시 시스템](./07_Distributed_Cache_Systems.md)
 
-이 문서에서는 캐싱의 핵심 전략과 패턴을 다룹니다. Cache-Aside, Read-Through, Write-Through, Write-Behind 패턴의 차이를 이해하고, 캐시 무효화, TTL 설정, 그리고 캐시 침투/눈사태/핫키 문제와 해결책을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 캐싱이 시스템 성능을 향상시키고 부하를 줄이는 데 가장 효과적인 기법 중 하나인 이유를 설명할 수 있다
+2. Cache-Aside, Read-Through, Write-Through, Write-Behind 패턴을 비교하고, 각 패턴의 일관성과 성능 트레이드오프(trade-off)를 파악할 수 있다
+3. 캐시 무효화(Cache Invalidation) 전략(TTL 기반, 이벤트 기반, 버전 기반)을 설명하고, 왜 무효화가 캐싱에서 가장 어려운 문제로 여겨지는지 설명할 수 있다
+4. 캐시 침투(Cache Penetration), 캐시 눈사태(Cache Avalanche), 핫키(Hot Key) 문제 등 일반적인 캐시 장애 유형을 진단하고 해결할 수 있다
+5. 브라우저, CDN, 애플리케이션, 데이터베이스 캐시를 포함하는 다중 계층 캐싱 아키텍처를 설계할 수 있다
+6. 주어진 읽기/쓰기 워크로드에 적합한 캐싱 패턴을 선택할 수 있다
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md)
 
 ---
+
+가장 빠른 데이터베이스 쿼리는 아예 실행하지 않아도 되는 쿼리입니다. 캐싱은 자주 접근되는 데이터를 필요한 곳 가까이에 저장함으로써, 수십 밀리초가 걸리는 데이터베이스 조회를 마이크로초 수준의 인메모리(in-memory) 읽기로 전환합니다. 잘 구현하면 백엔드 부하를 수십 배 줄일 수 있지만, 잘못 구현하면 오래된 데이터, 썬더링 허드(Thundering Herd), 그리고 원인을 알 수 없는 불일관성을 초래합니다. 이 레슨은 효과적으로 캐싱을 적용하기 위해 필요한 패턴과 함정을 알려드립니다.
 
 ## 목차
 
@@ -18,8 +31,7 @@
 4. [캐시 문제와 해결책](#4-캐시-문제와-해결책)
 5. [CDN 캐싱](#5-cdn-캐싱)
 6. [연습 문제](#6-연습-문제)
-7. [다음 단계](#7-다음-단계)
-8. [참고 자료](#8-참고-자료)
+7. [참고 자료](#7-참고-자료)
 
 ---
 
@@ -139,6 +151,14 @@
 
 ## 2. 캐싱 전략 패턴
 
+> **비유 -- 편의점**
+>
+> 캐싱은 편의점과 창고의 차이로 생각해볼 수 있습니다. **창고**(데이터베이스)에는 모든 것이 있지만, 멀리 있어서 물건을 가져오는 데 시간이 걸립니다. **편의점**(캐시)은 바로 근처에 있으며, 가장 인기 있는 상품만 소량 진열되어 있습니다 -- 필요한 것을 몇 초 만에 구할 수 있습니다.
+>
+> **Cache-Aside**는 당신이 먼저 편의점을 확인하는 방식입니다. 물건이 없으면 창고까지 직접 가서 하나를 가져와 편의점에 채워 두고 다음에 대비합니다. **Write-Through**는 새 물건이 입고될 때마다 편의점이 창고에서 자동으로 재입고하는 방식입니다. **Write-Behind**는 편의점이 새 상품을 즉시 받아들이고, 나중에 일괄로 창고에 서류를 보내는 방식입니다.
+>
+> 까다로운 부분은? 편의점의 재고가 언제 구식이 되는지 아는 것입니다 -- 이것이 바로 캐시 무효화(Cache Invalidation) 문제이며, Phil Karlton이 "컴퓨터 과학에서 어려운 것은 딱 두 가지뿐이다: 캐시 무효화와 이름 짓기"라고 유명하게 말한 이유입니다.
+
 ### 2.1 Cache-Aside (Lazy Loading)
 
 ```
@@ -210,6 +230,45 @@
 │  • 캐시-DB 불일치 가능성                                        │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+**주석이 달린 구현:**
+
+```python
+def get_user(user_id):
+    cache_key = f"user:{user_id}"
+
+    # 1단계: 캐시를 먼저 확인 — 워밍된 캐시에서 대부분의 읽기에
+    # 대해 DB 왕복을 피함 (합리적인 히트율 가정)
+    user = cache.get(cache_key)
+    if user is not None:           # 명시적 None 체크: 빈 결과의 캐시도 유효
+        return user
+
+    # 2단계: 캐시 미스 — 캐시에 쓰기 *전에* DB를 조회하여
+    # 실제 현재 값을 캐시함 (추측값이나 오래된 값이 아닌)
+    user = db.query("SELECT * FROM users WHERE id = %s", (user_id,))
+
+    # 3단계: TTL과 함께 캐시에 저장
+    # TTL = 3600초 (1시간): 신선도와 DB 부하의 균형
+    # TTL 없이는 캐시 무효화를 우회하는 쓰기(예: 직접 DB 마이그레이션)
+    # 이후 오래된 데이터가 무기한 유지될 수 있음
+    if user is not None:
+        cache.set(cache_key, user, ttl=3600)
+
+    return user
+
+
+def update_user(user_id, data):
+    # DB에 먼저 쓰기 — DB가 진실의 원천(source of truth)
+    # 캐시를 먼저 무효화하고 DB 쓰기가 실패하면, 다음 읽기가 이전 값을
+    # 다시 캐시함 (수용 가능). 하지만 캐시를 먼저 업데이트하고 DB가
+    # 실패하면 잘못된 데이터를 제공하게 됨
+    db.execute("UPDATE users SET ... WHERE id = %s", (user_id,))
+
+    # 캐시 항목을 업데이트가 아닌 무효화(삭제)
+    # 삭제가 더 안전: DB 쓰기와 캐시 업데이트 사이에 동시 읽기가
+    # 오래된 데이터를 다시 캐시하는 경쟁 조건을 회피
+    cache.delete(f"user:{user_id}")
 ```
 
 ### 2.2 Read-Through
@@ -920,26 +979,41 @@ c) 로그인 상태 API
    (또는: Cache-Control: private, no-cache)
 ```
 
+## 실습 과제
+
+### 실습 1: 캐시 전략 비교
+
+`examples/System_Design/06_cache_strategies.py`를 사용하여 캐시 동작을 탐구하세요.
+
+**과제:**
+1. 모든 데모를 실행하고 cache-aside, write-through, write-back의 차이를 관찰하세요
+2. **write-around** 전략을 추가하세요: 쓰기는 DB로 직접 전달되고, 캐시는 읽기 미스(read miss) 시에만 채워집니다
+3. 혼합 워크로드에서 네 가지 전략(cache-aside, write-through, write-back, write-around)을 비교하세요: 1000회 연산 중 읽기 70%, 쓰기 30%
+4. 각 전략별 지표를 추적하세요: DB 읽기 횟수, DB 쓰기 횟수, 캐시 히트 수, 총 "시뮬레이션 지연 시간(simulated latency)"
+
+### 실습 2: 캐시 워밍(Cache Warming)
+
+콜드 스타트(cold-start) 시나리오를 위한 캐시 워밍 전략을 구현하세요.
+
+**과제:**
+1. `CacheAside` 클래스에 자주 접근되는 키를 사전에 로드하는 `warm(keys)` 메서드를 추가하세요
+2. 콜드 스타트를 시뮬레이션하세요: 워밍 적용 전후의 성능(첫 100회 요청에 대한 히트율)을 비교하세요
+3. "top-K" 워밍 전략을 구현하세요: 접근 로그를 분석하여 가장 자주 접근되는 K개의 키를 찾고, 해당 키만 워밍합니다
+4. 크기 100인 캐시에서 Zipf 분포(Zipf-distributed) 접근 패턴을 사용할 때 최적의 K 값은 무엇인가요?
+
+### 실습 3: 캐시 스탬피드(Cache Stampede) 방지
+
+캐시 스탬피드(thundering herd)를 방지하는 기법을 구현하세요.
+
+**과제:**
+1. 스탬피드를 시뮬레이션하세요: 100개의 동시 읽기 요청이 동일한 키에 동시에 미스하여 100번의 DB 읽기가 발생하는 상황
+2. **락 기반 방지(lock-based prevention)** 를 구현하세요: 하나의 읽기 요청만 DB에서 데이터를 가져오고, 나머지는 대기합니다
+3. **확률적 조기 만료(probabilistic early expiration)** 를 구현하세요: 실제 만료 전에 캐시 항목을 미리 갱신합니다(TTL에 지터(jitter) 추가)
+4. 세 가지 방식(보호 없음, 락, 조기 만료)을 DB 부하와 평균 지연 시간 측면에서 비교하세요
+
 ---
 
-## 7. 다음 단계
-
-캐싱 전략을 이해했다면, 분산 캐시 시스템을 학습하세요.
-
-### 다음 레슨
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md)
-
-### 관련 레슨
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md) - 프록시 캐싱
-
-### 추천 실습
-1. Redis에서 캐시 패턴 구현해보기
-2. Nginx 캐싱 설정 실습
-3. Cache-Control 헤더 테스트
-
----
-
-## 8. 참고 자료
+## 7. 참고 자료
 
 ### 문서
 - [Redis Caching](https://redis.io/docs/manual/client-side-caching/)
@@ -953,6 +1027,10 @@ c) 로그인 상태 API
 
 ### 참고 자료
 - [Caching Strategies](https://aws.amazon.com/caching/best-practices/)
+
+---
+
+**이전**: [리버스 프록시와 API 게이트웨이](./05_Reverse_Proxy_API_Gateway.md) | **다음**: [분산 캐시 시스템](./07_Distributed_Cache_Systems.md)
 
 ---
 

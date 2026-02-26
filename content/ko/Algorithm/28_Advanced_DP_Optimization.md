@@ -1,5 +1,9 @@
 # 29. 고급 DP 최적화 (Advanced DP Optimization)
 
+**이전**: [게임 이론](./27_Game_Theory.md) | **다음**: [문제 풀이 전략](./29_Problem_Solving.md)
+
+---
+
 ## 학습 목표
 - Convex Hull Trick (CHT) 이해와 구현
 - 분할 정복 최적화 (D&C Optimization)
@@ -68,38 +72,46 @@ CHT = 직선들의 하한(또는 상한) envelope 관리
 ```python
 class ConvexHullTrickMin:
     """
-    최솟값 쿼리용 CHT
-    조건: 직선의 기울기가 단조 감소, 쿼리 x가 단조 증가
+    최솟값 쿼리용 CHT.
+    조건: 직선의 기울기가 단조 감소, 쿼리 x가 단조 증가.
+    핵심 아이디어: 각 j에 대해 직선 y = a[j]*x + c[j]를 정의. dp[i] = x = b[i]에서
+    이 직선들을 평가한 최솟값. CHT는 "하한 envelope(lower envelope)"만 유지 --
+    어딘가에서 최소가 되는 직선의 부분집합만 남기고 이웃에 항상 지는 직선은 버림.
     """
     def __init__(self):
-        self.lines = []  # (기울기, y절편)
-        self.ptr = 0
+        self.lines = []  # (기울기, y절편) -- 하한 볼록 껍질로 유지
+        self.ptr = 0     # 단조 포인터: 쿼리 x가 비감소이므로 유효
 
     def bad(self, l1, l2, l3):
-        """l2가 불필요한지 확인"""
-        # 교점(l1, l2).x >= 교점(l2, l3).x 면 l2 불필요
+        """l2가 지배당하는지(l1과 l3 사이에서 절대 하한 envelope에 나타나지 않는지) 확인.
+        l1과 l3의 교점이 l1과 l2의 교점보다 왼쪽에 있을 때 l2는 불필요 --
+        l3이 l2가 l1을 이기기 전에 l2를 이기기 때문.
+        """
         return (l3[1] - l1[1]) * (l1[0] - l2[0]) <= (l2[1] - l1[1]) * (l1[0] - l3[0])
 
     def add_line(self, m, b):
-        """직선 y = mx + b 추가"""
+        """직선 y = mx + b 추가 -- 뒤에서부터 지배당하는 직선들을 제거"""
         line = (m, b)
+        # 새 직선이 이전 직선을 envelope에서 불필요하게 만들면 pop.
+        # 덱이 하한 볼록 껍질을 정렬된 순서로 유지하게 함.
         while len(self.lines) >= 2 and self.bad(self.lines[-2], self.lines[-1], line):
             self.lines.pop()
         self.lines.append(line)
 
     def query(self, x):
-        """x에서의 최솟값"""
+        """x에서의 최솟값 -- x가 비감소일 때 상각 O(1)"""
         if not self.lines:
             return float('inf')
 
-        # 포인터 이동 (x가 단조 증가할 때)
+        # x가 비감소이므로, 최적 직선 포인터는 앞으로만 이동할 수 있음.
+        # 이 상각 O(1) 쿼리(모든 호출에 걸쳐)가 CHT를 총 O(n)으로 만드는 핵심.
         while self.ptr < len(self.lines) - 1:
             m1, b1 = self.lines[self.ptr]
             m2, b2 = self.lines[self.ptr + 1]
             if m1 * x + b1 > m2 * x + b2:
-                self.ptr += 1
+                self.ptr += 1  # 다음 직선이 이 x에서 더 좋음 -- 영구적으로 전진
             else:
-                break
+                break  # 현재 직선이 최적 -- 멈춤
 
         m, b = self.lines[self.ptr]
         return m * x + b
@@ -274,6 +286,10 @@ def dnc_optimization(n, k, cost):
     """
     dp[k][n] 계산 (k개의 그룹으로 n개 원소 분할)
     cost(i, j): 구간 [i, j)의 비용
+    D&C가 여기서 동작하는 이유: 최적 분할점 opt[i]가 i가 증가함에 따라 단조 비감소.
+    따라서 중간점의 opt를 찾으면, 왼쪽 반의 opt는 <= 이고 오른쪽 반의 opt는 >= 임을
+    알 수 있어 -- 각 레벨에서 탐색 범위를 절반으로 줄임.
+    이것이 행 당 O(N²)를 O(N log N)으로 바꿈.
     """
     INF = float('inf')
     dp = [[INF] * (n + 1) for _ in range(k + 1)]
@@ -287,15 +303,19 @@ def dnc_optimization(n, k, cost):
         best_cost = INF
         best_opt = opt_lo
 
+        # [opt_lo, min(opt_hi, dp_mid)] 범위에서만 탐색 -- 단조성이
+        # dp_mid의 실제 최적이 이 제한된 범위 내에 있음을 보장
         for opt in range(opt_lo, min(opt_hi, dp_mid) + 1):
             current_cost = dp[row - 1][opt] + cost(opt, dp_mid)
             if current_cost < best_cost:
                 best_cost = current_cost
-                best_opt = opt
+                best_opt = opt  # 이 중간점의 최적 분할점 기록
 
         dp[row][dp_mid] = best_cost
 
-        # 분할 정복
+        # 왼쪽 반: 최적 분할은 최대 best_opt (단조성)
+        # 오른쪽 반: 최적 분할은 최소 best_opt (단조성)
+        # 이 제약이 재귀를 O(N²)가 아닌 O(N log N)으로 만드는 핵심
         compute(row, dp_lo, dp_mid - 1, opt_lo, best_opt)
         compute(row, dp_mid + 1, dp_hi, best_opt, opt_hi)
 
@@ -413,44 +433,54 @@ for length in range(2, n+1):
 ```python
 def optimal_bst(freq):
     """
-    최적 이진 탐색 트리 구성 비용
-    freq[i]: i번째 키의 탐색 빈도
+    최적 이진 탐색 트리 구성 비용.
+    freq[i]: i번째 키의 탐색 빈도.
+    Knuth 최적화가 적용되는 이유: 비용 함수가 사각 부등식(quadrangle inequality)을
+    만족하여 opt[i][j-1] <= opt[i][j] <= opt[i+1][j]가 보장됨.
+    이 단조성이 O(N³) DP를 각 내부 루프를 축소하여 O(N²)로 줄임.
     """
     n = len(freq)
     INF = float('inf')
 
-    # prefix sum for range cost
+    # 프리픽스 합으로 O(1) 구간 비용 쿼리 -- 이것 없이는 각 cost() 호출이 O(N)
     prefix = [0] * (n + 1)
     for i in range(n):
         prefix[i + 1] = prefix[i] + freq[i]
 
     def cost(i, j):
+        # [i, j) 구간의 총 빈도 = 이 서브트리가 자식으로 붙을 때 추가되는 깊이 비용 --
+        # [i, j)의 모든 노드가 한 레벨 더 깊어짐
         return prefix[j] - prefix[i]
 
-    # dp[i][j]: 구간 [i, j)의 최소 비용
+    # dp[i][j]: [i, j) 키들의 최소 가중 탐색 비용
     dp = [[0] * (n + 1) for _ in range(n + 1)]
+    # opt[i][j]: dp[i][j]를 달성하는 루트 인덱스 -- 다음 반복의 범위를 한정하는 데 사용
     opt = [[0] * (n + 1) for _ in range(n + 1)]
 
-    # 길이 1
+    # 기저: 단일 키 구간
     for i in range(n):
         dp[i][i + 1] = freq[i]
-        opt[i][i + 1] = i
+        opt[i][i + 1] = i  # [i, i+1)의 유일한 키가 루트여야 함
 
-    # 길이 2 이상
+    # 증가하는 구간 길이로 채움 -- Knuth의 한계는 더 짧은 구간(opt를 정의하는)이
+    # 이미 계산되었을 때만 유효
     for length in range(2, n + 1):
         for i in range(n - length + 1):
             j = i + length
             dp[i][j] = INF
 
-            # Knuth 최적화: opt[i][j-1] ~ opt[i+1][j]
+            # Knuth의 제약: opt[i][j-1]과 opt[i+1][j] 사이에서만 탐색.
+            # 정확성은 cost(i, j)에 대한 사각 부등식에서 유래.
             lo = opt[i][j - 1]
             hi = opt[i + 1][j] if i + 1 <= n and j <= n else j - 1
 
             for k in range(lo, min(hi, j - 1) + 1):
+                # k가 루트: dp[i][k]는 왼쪽 서브트리, dp[k+1][j]는 오른쪽 서브트리.
+                # cost(i, j)는 [i, j)의 모든 노드가 1레벨 깊어지는 것을 반영.
                 val = dp[i][k] + dp[k + 1][j] + cost(i, j)
                 if val < dp[i][j]:
                     dp[i][j] = val
-                    opt[i][j] = k
+                    opt[i][j] = k  # 더 큰 구간에서 사용할 최적 루트 기록
 
     return dp[0][n]
 

@@ -5,6 +5,17 @@
 > **Prerequisites**: Basic Math Typesetting, Packages & Document Classes
 > **Objective**: Master advanced mathematical typesetting including multi-line equations, matrices, theorem environments, and specialized notation for physics and computer science.
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use the `amsmath` package environments (`align`, `gather`, `multline`) to typeset multi-line equations with proper alignment
+2. Construct matrices and arrays of various styles using `pmatrix`, `bmatrix`, `vmatrix`, and related environments
+3. Define and use theorem-like environments (`theorem`, `lemma`, `proof`) with the `amsthm` package
+4. Apply specialized notation packages for physics (`physics`) and computer science (pseudocode, complexity notation)
+5. Typeset commutative diagrams and category theory constructs using appropriate LaTeX packages
+6. Diagnose and resolve common `amsmath` errors such as mismatched environments and invalid spacing commands
+
 ---
 
 ## Introduction
@@ -764,6 +775,6 @@ With these tools, you can typeset virtually any mathematical content at a profes
 ---
 
 **Navigation**:
-- [Previous: 04_Math_Basics.md](04_Math_Basics.md)
-- [Next: 06_Floats_and_Figures.md](06_Floats_and_Figures.md)
+- [Previous: Mathematical Typesetting Basics](04_Math_Basics.md)
+- [Next: Floats, Figures & Tables](06_Floats_and_Figures.md)
 - [Back to Overview](00_Overview.md)

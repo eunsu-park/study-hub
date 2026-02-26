@@ -690,6 +690,41 @@ features = average([encode(template.format(class_name)) for template in template
 
 ---
 
+## Exercises
+
+### Exercise 1: Understand the InfoNCE Loss
+
+For a batch of N=4 image-text pairs, manually trace through the `clip_loss` function:
+1. Sketch the 4×4 similarity matrix. Which entries are the "positive" pairs (ground-truth matches)?
+2. Explain why both `loss_i2t` (image→text) and `loss_t2i` (text→image) are needed. What asymmetry would result from using only one direction?
+3. What is the effect of temperature on the loss? If temperature is very small (e.g., 0.01), what happens to the softmax distribution? If very large (e.g., 10.0)?
+
+### Exercise 2: Zero-shot Classification with OpenAI CLIP
+
+Using the `clip` library:
+1. Load the `ViT-B/32` model and preprocess a sample image (e.g., a photo of a cat).
+2. Classify the image against 10 CIFAR-10 class names using the template `"a photo of a {}"`.
+3. Print the top-3 predicted classes and their probabilities.
+4. Repeat with 5 different prompt templates (e.g., `"a blurry photo of a {}"`, `"a drawing of a {}"`) and average the text embeddings (ensemble). Does ensemble prompting improve confidence for the correct class?
+
+### Exercise 3: Build an Image Retrieval System
+
+Using a pre-trained CLIP model, implement a simple text-to-image search engine:
+1. Download 50 images from 5 different categories (10 per category).
+2. Precompute and cache image embeddings for all 50 images using `model.encode_image`.
+3. Given a text query like `"a red sports car"`, retrieve the top-5 most similar images using cosine similarity.
+4. Visualize the top-5 results and evaluate retrieval precision (how many retrieved images actually match the query category?).
+
+### Exercise 4: Fine-tune CLIP with a Linear Probe
+
+Using CLIP as a frozen feature extractor:
+1. Implement `CLIPLinearProbe` with the provided code, freezing all CLIP parameters.
+2. Extract CLIP image features for the CIFAR-10 training set and train a linear classifier on top.
+3. Evaluate on the CIFAR-10 test set and compare accuracy to: (a) zero-shot CLIP, (b) a CNN trained from scratch.
+4. Now unfreeze the CLIP model and fine-tune end-to-end with a small learning rate (`lr=1e-5`). Does full fine-tuning improve over the linear probe? What is the risk of full fine-tuning for downstream tasks?
+
+---
+
 ## References
 
 - CLIP: https://arxiv.org/abs/2103.00020

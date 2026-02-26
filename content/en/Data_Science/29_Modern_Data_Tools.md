@@ -2,9 +2,23 @@
 
 [Previous: Survival Analysis](./28_Survival_Analysis.md)
 
-## Overview
+---
 
-Polars and DuckDB represent the next generation of data processing tools, offering significant speed improvements over Pandas for medium-to-large datasets. This lesson covers Polars' lazy evaluation and expression API, DuckDB's in-process SQL engine, Apache Arrow interoperability, and practical migration patterns from Pandas.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the performance limitations of Pandas and explain when modern alternatives are warranted
+2. Apply Polars' expression API for filtering, aggregation, and column transformations on large datasets
+3. Explain how Polars' lazy evaluation and query optimization (predicate pushdown, projection pushdown) improve performance
+4. Use DuckDB to run SQL queries directly against DataFrames, Parquet files, and CSV files without a server
+5. Describe the role of Apache Arrow as a zero-copy interchange format between Polars, Pandas, and DuckDB
+6. Translate common Pandas operations into their Polars equivalents
+7. Evaluate when to use Pandas, Polars, or DuckDB based on dataset size, workflow requirements, and team familiarity
+
+---
+
+Pandas is the workhorse of data science, but it was designed in an era of single-core processors and datasets that fit comfortably in memory. As data volumes grow, its single-threaded, eager-evaluation model becomes a bottleneck. Polars and DuckDB represent the next generation of data tools -- leveraging multi-core parallelism, lazy evaluation, and columnar storage to deliver order-of-magnitude speedups without requiring a distributed computing cluster.
 
 ---
 

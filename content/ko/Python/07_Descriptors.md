@@ -1,5 +1,24 @@
 # 디스크립터 (Descriptors)
 
+**이전**: [메타클래스](./06_Metaclasses.md) | **다음**: [비동기 프로그래밍](./08_Async_Programming.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 디스크립터 프로토콜(descriptor protocol) (`__get__`, `__set__`, `__delete__`)과 속성 접근에서의 역할을 설명할 수 있습니다
+2. 데이터 디스크립터(data descriptor)와 비데이터 디스크립터(non-data descriptor)를 구분하고, 속성 조회 체인에서의 우선순위를 설명할 수 있습니다
+3. `__get__` 메서드를 구현하고 클래스 레벨 및 인스턴스 레벨 접근을 처리할 수 있습니다
+4. 디스크립터 프로토콜을 사용해 `property`를 처음부터 재구현할 수 있습니다
+5. 타입 검사와 범위 강제를 위한 속성 검증 디스크립터(validation descriptor)를 작성할 수 있습니다
+6. `__set_name__`을 사용해 디스크립터에 할당된 속성 이름을 자동으로 캡처할 수 있습니다
+7. ORM 스타일 필드 클래스(`StringField`, `IntegerField`)와 `CachedProperty` 디스크립터를 구현할 수 있습니다
+8. Python의 메서드, `staticmethod`, `classmethod`가 디스크립터로 구현된 원리를 설명할 수 있습니다
+
+---
+
+디스크립터는 Python의 가장 친숙한 기능들 뒤에 숨어 있는 메커니즘입니다: `property`, `classmethod`, `staticmethod`, 그리고 일반 메서드 바인딩까지 모두 디스크립터로 구현되어 있습니다. `obj.attr`을 작성할 때 Python은 단순히 딕셔너리 키를 조회하는 것이 아니라, 디스크립터가 접근을 가로채고, 검증하고, 변환할 수 있는 정교한 조회 체인을 실행합니다. 디스크립터를 마스터하면 Django나 SQLAlchemy의 ORM 필드처럼 어떤 클래스에서도 깔끔하게 동작하는 재사용 가능한 속성 레벨 동작(검증, 지연 계산, 접근 제어)을 구현할 수 있습니다.
+
 ## 1. 디스크립터란?
 
 디스크립터는 속성 접근을 커스터마이징하는 객체입니다. `__get__`, `__set__`, `__delete__` 중 하나 이상을 구현합니다.
@@ -550,4 +569,4 @@ print(MyClass().class_func())  # class: MyClass
 
 ## 다음 단계
 
-[08_Async_Programming.md](./08_Async_Programming.md)에서 async/await를 배워봅시다!
+[비동기 프로그래밍 (Async Programming)](./08_Async_Programming.md)에서 async/await를 배워봅시다!

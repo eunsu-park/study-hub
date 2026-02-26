@@ -706,6 +706,368 @@ Disadvantages:
 
 ---
 
+## 8. Expert Routing Mechanisms
+
+The router is the brain of an MoE model — it decides which experts process each token. The choice of routing strategy profoundly affects model quality, training stability, and inference efficiency. This section dives deep into routing strategies, load balancing, and capacity management.
+
+### 8.1 Token Routing Strategies
+
+#### Top-K Routing (Standard)
+
+The most common approach: a learned linear layer scores each expert, and the top K experts are selected.
+
+```
+Input token x → Linear(dim, n_experts) → logits
+                                          ↓
+                               Top-K selection → softmax over K
+                                          ↓
+                               Weighted sum of K expert outputs
+
+Used by: Mixtral (K=2), GLaM (K=2), GShard (K=2)
+```
+
+#### Expert Choice Routing (Zhou et al., 2022)
+
+Instead of tokens choosing experts, **experts choose tokens**. Each expert selects the top-C tokens it is most confident about.
+
+```
+Standard (token chooses expert):
+  Each token picks its best K experts → load can be uneven
+
+Expert Choice (expert chooses tokens):
+  Each expert picks its best C tokens → perfect load balance
+
+  For E experts, N tokens, capacity factor C:
+  Each expert processes exactly (N × C / E) tokens
+
+Advantages:
+  • Guaranteed load balance (no auxiliary loss needed)
+  • Experts see tokens they are most suited for
+
+Disadvantages:
+  • Some tokens may not be selected by any expert (dropped)
+  • Some tokens may be selected by too many experts (redundant)
+  • Harder to implement efficiently for autoregressive decoding
+
+Used by: Zhou et al. (2022), some Google internal models
+```
+
+#### Hash Routing (Roller et al., 2021)
+
+A non-learned, deterministic routing strategy based on hashing:
+
+```
+expert_id = hash(token_id) % n_experts
+
+Advantages:
+  • No learnable parameters in the router
+  • Perfectly balanced by design
+  • No routing collapse or instability
+
+Disadvantages:
+  • No input-dependent specialization
+  • Cannot adapt routing based on context
+  • Primarily used as a baseline or for analysis
+
+Surprisingly, hash routing performs reasonably well, suggesting
+that much of MoE's benefit comes from increased capacity
+rather than intelligent routing.
+```
+
+### 8.2 Router Architecture Details
+
+#### Softmax Gate (Standard)
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SoftmaxRouter(nn.Module):
+    """
+    Standard softmax router.
+
+    Why softmax: We want a probability distribution over experts
+    so that the weighted combination of expert outputs is well-
+    scaled. Softmax ensures non-negative weights that sum to 1
+    (among selected experts after top-k filtering).
+    """
+    def __init__(self, dim, num_experts, top_k=2):
+        super().__init__()
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+        self.top_k = top_k
+
+    def forward(self, x):
+        # x: (batch, seq_len, dim)
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        # Select top-K experts
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+
+        # Softmax over selected experts only
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        return top_k_probs, top_k_indices, logits
+```
+
+#### Noisy Top-K (Shazeer et al., 2017)
+
+Adding noise to router logits before top-K selection improves exploration during training:
+
+```python
+class NoisyTopKRouter(nn.Module):
+    """
+    Noisy Top-K Gating from the original MoE paper (Shazeer 2017).
+
+    Why add noise: Without noise, the router tends to converge
+    early to always selecting the same experts (rich-get-richer).
+    Gaussian noise encourages exploration, helping all experts
+    receive training signal.
+    """
+    def __init__(self, dim, num_experts, top_k=2):
+        super().__init__()
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+        self.noise_linear = nn.Linear(dim, num_experts, bias=False)
+        self.top_k = top_k
+
+    def forward(self, x):
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        if self.training:
+            # Learnable noise scale
+            noise_stddev = F.softplus(self.noise_linear(x))
+            noise = torch.randn_like(logits) * noise_stddev
+            logits = logits + noise
+
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        return top_k_probs, top_k_indices, logits
+```
+
+### 8.3 Load Balancing Loss and Auxiliary Loss
+
+Without explicit encouragement, routers tend to route most tokens to a few "favorite" experts (winner-take-all collapse). Auxiliary losses prevent this.
+
+#### Standard Load Balancing Loss (Switch Transformer)
+
+```python
+def switch_load_balancing_loss(router_logits, expert_indices, num_experts):
+    """
+    Load balancing loss from Switch Transformer (Fedus et al., 2022).
+
+    Intuition: We want each expert to receive roughly 1/E of all
+    tokens AND roughly 1/E of the total routing probability mass.
+    The loss penalizes deviation from uniform distribution.
+
+    L_balance = E × Σ_e (f_e × p_e)
+
+    f_e = fraction of tokens routed to expert e
+    p_e = mean routing probability for expert e (before top-k)
+    E   = number of experts
+
+    The ideal value of (f_e × p_e) for each expert is 1/E²,
+    so the ideal total loss is E × E × (1/E²) = 1.0.
+    Values > 1.0 indicate imbalance.
+    """
+    batch, seq_len = expert_indices.shape[:2]
+    num_tokens = batch * seq_len
+
+    # f_e: fraction of tokens dispatched to each expert
+    f = torch.zeros(num_experts, device=router_logits.device)
+    for e in range(num_experts):
+        f[e] = (expert_indices == e).float().sum() / num_tokens
+
+    # p_e: mean routing probability for each expert (from full softmax)
+    full_probs = F.softmax(router_logits, dim=-1)  # (batch, seq, n_experts)
+    p = full_probs.mean(dim=[0, 1])  # (n_experts,)
+
+    # Balance loss
+    loss = num_experts * (f * p).sum()
+
+    return loss
+```
+
+#### Z-Loss (ST-MoE, Zoph et al., 2022)
+
+An additional auxiliary loss that penalizes large router logits to improve stability:
+
+```python
+def z_loss(router_logits):
+    """
+    Z-loss penalizes large router logit magnitudes.
+
+    Why: Large logits lead to very peaked softmax distributions,
+    which cause training instability. Z-loss acts as a soft
+    regularizer on the router's output scale.
+
+    L_z = (1/N) × Σ (log Σ exp(logits))²
+    """
+    log_z = torch.logsumexp(router_logits, dim=-1)  # (batch, seq)
+    return (log_z ** 2).mean()
+```
+
+### 8.4 Capacity Factor and Overflow Handling
+
+Each expert has a maximum **capacity** — the number of tokens it can process per forward pass. This is critical for efficient batched computation.
+
+```
+Capacity = (total_tokens / num_experts) × capacity_factor
+
+capacity_factor (CF):
+  CF = 1.0 → each expert processes exactly 1/E of tokens (tight)
+  CF = 1.5 → 50% buffer for uneven routing (typical)
+  CF = 2.0 → generous buffer, wastes some computation
+
+Overflow: When more tokens are routed to an expert than its
+capacity allows, excess tokens are DROPPED (their expert
+output is zero, only the residual connection passes through).
+
+Underflow: When fewer tokens are routed, the expert's buffer
+has padding (wasted computation but no correctness issue).
+```
+
+```python
+def apply_capacity_factor(expert_indices, num_experts, capacity_factor=1.5):
+    """
+    Apply capacity constraints to expert assignments.
+
+    Why capacity factor > 1.0: Even with load balancing loss,
+    routing is never perfectly uniform. A buffer of 1.25-1.5
+    prevents frequent token dropping while keeping memory bounded.
+    """
+    batch, seq_len, top_k = expert_indices.shape
+    total_tokens = batch * seq_len
+    capacity = int((total_tokens / num_experts) * capacity_factor)
+
+    # Track how many tokens each expert has accepted
+    expert_load = torch.zeros(num_experts, dtype=torch.long)
+    overflow_mask = torch.zeros(batch, seq_len, top_k, dtype=torch.bool)
+
+    for b in range(batch):
+        for s in range(seq_len):
+            for k in range(top_k):
+                e = expert_indices[b, s, k].item()
+                if expert_load[e] < capacity:
+                    expert_load[e] += 1
+                else:
+                    overflow_mask[b, s, k] = True  # This assignment is dropped
+
+    return overflow_mask, expert_load
+```
+
+### 8.5 Switch Transformer vs GShard Routing Comparison
+
+```
+┌──────────────────┬──────────────────────┬──────────────────────┐
+│ Feature          │ Switch Transformer   │ GShard               │
+├──────────────────┼──────────────────────┼──────────────────────┤
+│ Top-K            │ K=1 (single expert)  │ K=2 (two experts)    │
+│ Capacity factor  │ 1.0-1.5              │ 2.0                  │
+│ Overflow         │ Drop token           │ Drop token           │
+│ Aux loss         │ L_balance            │ L_balance + L_load   │
+│ Noise            │ Not used             │ Noisy top-k          │
+│ Expert count     │ 128-2048             │ 64-512               │
+│ Quality at scale │ Good with many exp.  │ Better per-expert    │
+│ Communication    │ Lower (K=1)          │ Higher (K=2)         │
+│ Typical use      │ Extreme scale (>1T)  │ Moderate scale       │
+├──────────────────┼──────────────────────┼──────────────────────┤
+│ Key Insight      │ Simplicity: 1 expert │ Robustness: 2 experts│
+│                  │ per token is enough  │ provide redundancy   │
+│                  │ at large scale       │ and smoother training│
+└──────────────────┴──────────────────────┴──────────────────────┘
+
+Modern practice (Mixtral, DeepSeek):
+- K=2 (GShard-style) has become the default
+- Combined with improved load balancing (auxiliary loss + z-loss)
+- Capacity factor of 1.25-1.5 (empirically tuned)
+```
+
+### 8.6 Complete Router Example
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class MoERouter(nn.Module):
+    """
+    Complete MoE Router with load balancing and capacity management.
+
+    This implementation combines the key ideas from Switch Transformer,
+    GShard, and ST-MoE into a single practical router.
+    """
+    def __init__(
+        self,
+        dim: int,
+        num_experts: int,
+        top_k: int = 2,
+        capacity_factor: float = 1.5,
+        balance_loss_weight: float = 0.01,
+        z_loss_weight: float = 0.001,
+    ):
+        super().__init__()
+        self.num_experts = num_experts
+        self.top_k = top_k
+        self.capacity_factor = capacity_factor
+        self.balance_loss_weight = balance_loss_weight
+        self.z_loss_weight = z_loss_weight
+
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+
+    def forward(self, x):
+        """
+        Args:
+            x: (batch, seq_len, dim)
+
+        Returns:
+            expert_probs: (batch, seq_len, top_k)
+            expert_indices: (batch, seq_len, top_k)
+            aux_loss: scalar auxiliary loss for training
+        """
+        batch, seq_len, dim = x.shape
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        # Top-K selection
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        # Compute auxiliary losses during training
+        aux_loss = torch.tensor(0.0, device=x.device)
+        if self.training:
+            # Load balancing loss
+            full_probs = F.softmax(logits, dim=-1)
+            p = full_probs.mean(dim=[0, 1])  # Mean prob per expert
+
+            num_tokens = batch * seq_len
+            f = torch.zeros(self.num_experts, device=x.device)
+            for e in range(self.num_experts):
+                f[e] = (top_k_indices == e).float().sum() / (num_tokens * self.top_k)
+
+            balance_loss = self.num_experts * (f * p).sum()
+
+            # Z-loss for stability
+            log_z = torch.logsumexp(logits, dim=-1)
+            z_loss_val = (log_z ** 2).mean()
+
+            aux_loss = (self.balance_loss_weight * balance_loss +
+                        self.z_loss_weight * z_loss_val)
+
+        return top_k_probs, top_k_indices, aux_loss
+
+
+# Usage example
+router = MoERouter(dim=4096, num_experts=8, top_k=2)
+x = torch.randn(2, 10, 4096)
+probs, indices, aux_loss = router(x)
+
+print(f"Expert probs: {probs.shape}")      # (2, 10, 2)
+print(f"Expert indices: {indices.shape}")    # (2, 10, 2)
+print(f"Auxiliary loss: {aux_loss.item():.4f}")
+```
+
+---
+
 ## Summary
 
 ### Mistral Core
@@ -745,3 +1107,148 @@ Disadvantages:
 - [Mistral GitHub](https://github.com/mistralai/mistral-src)
 - [HuggingFace Mistral](https://huggingface.co/mistralai)
 - [vLLM MoE Support](https://docs.vllm.ai/)
+
+---
+
+## Exercises
+
+### Exercise 1: MoE Effective Parameter Analysis
+
+Mixtral 8x7B has 8 experts per MoE layer, activates 2 per token (Top-2 routing), and has 46.7B total parameters with 12.9B active parameters per forward pass.
+
+1. Why does Mixtral activate only 12.9B parameters for each token despite having 46.7B total?
+2. What is the "computation efficiency ratio" (active / total) and what does it mean for inference cost vs a dense 46.7B model?
+3. If Mixtral had K=4 (instead of K=2), how would active parameters and inference cost change?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Why only 12.9B active parameters:**
+
+In each MoE layer, the router selects only 2 of 8 experts to process each token. The non-selected 6 experts simply don't execute — their computations are skipped entirely. The transformer attention layers (shared across all tokens) plus only 2/8 of the FFN parameters are active. Approximately:
+- Shared attention params + 2/8 of MoE FFN params ≈ 12.9B per token
+
+**2. Computation efficiency ratio:**
+
+```
+Efficiency ratio = 12.9B / 46.7B ≈ 27.6%
+```
+
+This means each forward pass only costs ~27.6% of what a dense 46.7B model would cost. Yet the model has 46.7B parameters worth of knowledge capacity. This is the core MoE trade-off: pay for inference like a ~13B dense model but benefit from 46.7B parameter capacity.
+
+**3. Effect of K=4:**
+- Active parameters would roughly double: ~25.8B per forward pass
+- Inference cost increases proportionally (2× more expert computations per token)
+- Computation efficiency ratio: 25.8 / 46.7 ≈ 55.2%
+- The model becomes a 25.8B-equivalent dense model in terms of compute, but still has 46.7B knowledge capacity
+- Quality typically improves with K=4 but at the cost of losing the efficiency advantage
+
+</details>
+
+---
+
+### Exercise 2: Sliding Window Attention Memory Analysis
+
+Mistral 7B uses Sliding Window Attention (SWA) with window size W=4096 and rolling buffer KV cache.
+
+1. Standard self-attention has O(n²) memory complexity for n tokens. What is the memory complexity of SWA for n tokens?
+2. For a sequence of 32,768 tokens (32K), compare the KV cache memory for standard MHA vs SWA (assume 32 heads, head_dim=128, fp16, 32 layers).
+3. What information is lost when a token "falls out" of the sliding window, and how does the multi-layer architecture partially compensate?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Memory complexity of SWA:**
+SWA stores only the last W tokens in the KV cache. As n grows, memory stays bounded:
+- **O(W × d)** = O(d) — effectively constant with respect to sequence length, since W is fixed.
+- More precisely: O(n) time (each token is processed once) but O(W) KV cache space.
+
+**2. KV cache memory comparison for n=32768 tokens:**
+
+Standard MHA (stores all n tokens):
+```
+32768 × 2 (K+V) × 32 heads × 128 head_dim × 2 bytes × 32 layers
+= 32768 × 2 × 32 × 128 × 2 × 32 = 17,179,869,184 bytes ≈ 16 GB
+```
+
+SWA (stores only last W=4096 tokens):
+```
+4096 × 2 × 32 × 128 × 2 × 32 = 2,147,483,648 bytes ≈ 2 GB
+```
+
+**SWA saves ~14 GB** of KV cache memory for 32K tokens — an 8× reduction.
+
+**3. Information loss and compensation:**
+
+When a token falls outside the window (older than W positions back), direct attention to it is lost. However, the multi-layer architecture partially compensates through the **receptive field expansion** property:
+- Layer 1 can attend to the last W tokens
+- Layer 2 attends to tokens that Layer 1 already "summarized" — effectively seeing W² tokens of history
+- After k layers: receptive field ≈ W × k
+
+For Mistral 7B with 32 layers and W=4096: effective receptive field ≈ 4096 × 32 = 131,072 tokens — far beyond the window size. Early context is implicitly "compressed" into intermediate representations rather than directly accessible.
+
+</details>
+
+---
+
+### Exercise 3: Load Balancing Loss Implementation
+
+The lesson shows the Switch Transformer load balancing loss. Explain what would happen to expert utilization during training if this loss were **not** included, and trace through why router collapse occurs.
+
+<details>
+<summary>Show Answer</summary>
+
+**Without load balancing loss, router collapse proceeds as follows:**
+
+**Step 1: Initial asymmetry**
+During initialization, the router's linear layer has random weights. By chance, some experts receive slightly higher routing probabilities for common input patterns. This asymmetry is tiny but present.
+
+**Step 2: Rich-get-richer dynamics**
+The "preferred" experts receive more training tokens → their parameters improve more → their outputs are better → the reward signal (lower loss) for routing to them is higher → the router learns to prefer them more strongly.
+
+**Step 3: Expert collapse**
+After sufficient training, 1-2 experts receive nearly all tokens. The other 6-7 experts receive almost no gradient signal and stagnate. Their parameters don't improve because they're never trained.
+
+**Step 4: Complete collapse**
+The model effectively becomes equivalent to a dense model with only 1-2 FFN matrices — it loses all the capacity benefits of having 8 experts. The total parameter count is still 8× larger (all expert weights still exist) but only 1-2 are useful.
+
+**What the load balancing loss does:**
+By penalizing when `f_e` (fraction of tokens to expert e) deviates from uniform (1/E), the loss creates a gradient signal that pushes the router to distribute tokens more evenly. Combined with noisy top-k (adding exploration noise to router logits), this prevents early convergence to a degenerate solution.
+
+</details>
+
+---
+
+### Exercise 4: MoE vs Dense Trade-off Decision
+
+You are choosing between two architectures for a production language model:
+- **Model A**: Dense 13B parameter model
+- **Model B**: Sparse MoE with 8 experts, top-2 routing, 46.7B total parameters, 13B active
+
+Both have approximately the same inference compute cost. Evaluate which to choose for each scenario:
+
+1. Deployment on a memory-constrained edge server (32GB total RAM).
+2. A research lab that regularly fine-tunes on small domain-specific datasets.
+3. A production API that needs maximum knowledge breadth across diverse topics.
+4. A system requiring exactly reproducible outputs for the same input.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Memory-constrained edge server (32GB RAM):**
+- **Choose Dense 13B** — Model B requires loading all 46.7B parameters (~93GB in fp16), far exceeding the 32GB limit even with quantization. Dense 13B needs ~26GB in fp16. For edge deployment with tight memory budgets, dense models are strongly preferred.
+
+**2. Research lab, fine-tuning on small datasets:**
+- **Choose Dense 13B** — MoE models are notoriously harder to fine-tune:
+  - The router must learn appropriate expert assignments simultaneously
+  - Small datasets don't provide enough signal to properly update all experts
+  - Fine-tuning instability is more common (some experts collapse, some over-specialize)
+  - Dense models fine-tune more predictably and efficiently on small datasets.
+
+**3. Maximum knowledge breadth across diverse topics:**
+- **Choose MoE 46.7B** — The entire motivation for MoE is that different experts can specialize in different domains (coding, reasoning, language patterns, factual knowledge). With 46.7B total parameters, Model B has far more capacity for diverse knowledge than the 13B dense model. For a general-purpose API, this breadth advantage is significant.
+
+**4. Exactly reproducible outputs:**
+- **Prefer Dense 13B** (but caveats apply to both) — MoE introduces an additional source of non-determinism: the discrete top-K routing decision. Minor floating-point differences between hardware runs can flip which expert is selected, changing outputs even with temperature=0. Dense models only have floating-point precision as a source of non-determinism. Note: with sufficient precision control, both can be made deterministic.
+
+</details>

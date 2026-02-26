@@ -1,16 +1,21 @@
 # Z-Transform
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define the bilateral and unilateral Z-transforms and compute them for common discrete-time signals.
+2. Determine the Region of Convergence (ROC) for a Z-transform and explain how it relates to signal causality and system stability.
+3. Apply Z-transform properties (linearity, time shift, convolution) to analyze discrete-time systems.
+4. Compute inverse Z-transforms using partial fraction expansion, power series expansion, and the residue method.
+5. Analyze LTI systems using transfer functions, pole-zero plots, and determine stability from pole locations.
+6. Relate the Z-transform to the DTFT and the Laplace transform, identifying when each representation applies.
+
+---
+
 ## Overview
 
 The Z-transform is the discrete-time counterpart of the Laplace transform. It converts difference equations into algebraic equations, enabling analysis of discrete-time LTI systems in the complex $z$-plane. The Z-transform provides powerful tools for determining system stability, frequency response, and transfer functions. This lesson covers Z-transform theory, properties, inverse methods, and applications to digital system analysis.
-
-**Learning Objectives:**
-- Define and compute bilateral and unilateral Z-transforms
-- Determine the Region of Convergence (ROC) and its implications
-- Apply Z-transform properties for system analysis
-- Compute inverse Z-transforms using multiple methods
-- Analyze LTI systems using transfer functions, poles, and zeros
-- Relate the Z-transform to the DTFT and Laplace transform
 
 **Prerequisites:** [06. Discrete Fourier Transform](06_Discrete_Fourier_Transform.md)
 

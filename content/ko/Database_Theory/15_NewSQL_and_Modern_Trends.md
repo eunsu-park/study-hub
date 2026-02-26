@@ -8,15 +8,18 @@ NoSQL 혁명 이후 데이터베이스 환경은 극적으로 진화했습니다
 
 **난이도**: ⭐⭐⭐
 
-**학습 목표**:
-- NewSQL 설계 철학과 ACID를 수평적 확장성과 어떻게 조화시키는지 설명
-- Google Spanner의 TrueTime 메커니즘과 외부 일관성 설명
-- CockroachDB, TiDB, Spanner 아키텍처 비교
-- 벡터 데이터베이스와 유사도 검색 알고리즘(HNSW, IVF) 이해
-- 시계열 데이터베이스 최적화 설명
-- 대규모 분석을 위한 그래프 분석 플랫폼 평가
-- Database-as-a-Service 제공 서비스 평가
-- 데이터 레이크하우스 패러다임과 데이터베이스와의 관계 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. NewSQL 설계 철학과 ACID를 수평적 확장성과 어떻게 조화시키는지 설명
+2. Google Spanner의 TrueTime 메커니즘과 외부 일관성 설명
+3. CockroachDB, TiDB, Spanner 아키텍처 비교
+4. 벡터 데이터베이스와 유사도 검색 알고리즘(HNSW, IVF) 이해
+5. 시계열 데이터베이스 최적화 설명
+6. 대규모 분석을 위한 그래프 분석 플랫폼 평가
+7. Database-as-a-Service 제공 서비스 평가
+8. 데이터 레이크하우스 패러다임과 데이터베이스와의 관계 이해
 
 ---
 

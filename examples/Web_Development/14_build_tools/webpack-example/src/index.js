@@ -26,6 +26,8 @@ function initApp() {
 
     console.log(`📅 현재 시간: ${formatDate(new Date())}`);
 
+    // Why: Dynamic import() splits the extra content into a separate chunk, so users only
+    // download it when they click the button - reducing initial bundle size
     // 동적 임포트 (Code Splitting) 예제
     const loadMoreBtn = document.getElementById('loadMore');
     if (loadMoreBtn) {
@@ -47,6 +49,8 @@ if (document.readyState === 'loading') {
     initApp();
 }
 
+// Why: Webpack's module.hot API enables in-place updates during development, preserving
+// app state; the require() call inside the callback gets the latest version of the module
 // HMR (Hot Module Replacement)
 if (module.hot) {
     module.hot.accept('./components/greeting', () => {

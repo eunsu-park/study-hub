@@ -1,5 +1,18 @@
 # 최소 신장 트리 (Minimum Spanning Tree)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 최소 신장 트리(MST, Minimum Spanning Tree)를 정의하고 일반 신장 트리(spanning tree)와 구별되는 속성을 설명할 수 있다
+2. 경로 압축(path compression)과 랭크 기반 합치기(union by rank)를 적용한 유니온-파인드(Union-Find) 자료구조를 구현할 수 있다
+3. 탐욕적(greedy) 간선 선택과 Union-Find를 이용한 크루스칼(Kruskal) 알고리즘으로 MST를 구성할 수 있다
+4. 우선순위 큐(priority queue)를 사용하여 시작 정점에서 MST를 확장하는 프림(Prim) 알고리즘을 구현할 수 있다
+5. 크루스칼과 프림 알고리즘을 시간 복잡도 및 희소(sparse)/밀집(dense) 그래프 적합성 기준으로 비교할 수 있다
+6. 네트워크 설계 및 군집화(clustering)와 같은 실용적인 문제에 MST 알고리즘을 적용할 수 있다
+
+---
+
 ## 개요
 
 최소 신장 트리(MST)는 그래프의 모든 정점을 연결하면서 간선 가중치 합이 최소인 트리입니다. Kruskal과 Prim 알고리즘, 그리고 Union-Find 자료구조를 학습합니다.
@@ -176,6 +189,8 @@ void init(int n) {
 
 int find(int x) {
     if (parent[x] != x) {
+        // 경로 압축: x를 루트에 직접 연결하여 이후 find() 호출이 O(1)이 되도록 한다.
+        // 이것이 없으면 n개 노드의 퇴화 체인에서 쿼리당 O(n)이 소요된다.
         parent[x] = find(parent[x]);
     }
     return parent[x];
@@ -187,14 +202,18 @@ void unite(int x, int y) {
 
     if (px == py) return;
 
-    // 랭크가 작은 트리를 큰 트리에 붙임
+    // 랭크 기반 합치기: 항상 짧은 트리를 더 높은 트리 아래에 붙인다.
+    // 이렇게 하면 트리 높이가 최대 O(log n)으로 유지되어,
+    // 경로 압축 없이도 find()가 O(n)이 아닌 O(log n)이 된다.
+    // 경로 압축과 결합하면 상각 비용이 거의 O(1)이 된다
+    // — 정확히는 O(α(n))이며 α는 역 아커만(inverse Ackermann) 함수.
     if (rank_arr[px] < rank_arr[py]) {
         parent[px] = py;
     } else if (rank_arr[px] > rank_arr[py]) {
         parent[py] = px;
     } else {
         parent[py] = px;
-        rank_arr[px]++;
+        rank_arr[px]++;  // 두 트리의 높이가 같을 때만 랭크 증가
     }
 }
 ```
@@ -209,11 +228,13 @@ private:
 
 public:
     UnionFind(int n) : parent(n), rank_(n, 0) {
-        iota(parent.begin(), parent.end(), 0);
+        iota(parent.begin(), parent.end(), 0);  // 각 노드가 자기 자신의 루트로 시작
     }
 
     int find(int x) {
         if (parent[x] != x) {
+            // 경로 압축: 매 find마다 루트까지의 경로를 축소하여
+            // 같은 원소에 대한 반복 쿼리가 상각 O(1)이 되도록 한다.
             parent[x] = find(parent[x]);
         }
         return parent[x];
@@ -221,13 +242,15 @@ public:
 
     bool unite(int x, int y) {
         int px = find(x), py = find(y);
-        if (px == py) return false;
+        if (px == py) return false;  // 이미 같은 컴포넌트 — 이 간선을 추가하면 사이클이 됨
 
+        // px가 항상 더 높은 랭크의 루트가 되도록 교환;
+        // 작은 트리를 큰 트리 아래에 붙여 트리 높이를 O(log n)으로 제한.
         if (rank_[px] < rank_[py]) swap(px, py);
         parent[py] = px;
-        if (rank_[px] == rank_[py]) rank_[px]++;
+        if (rank_[px] == rank_[py]) rank_[px]++;  // 높이가 같았으므로: 합친 트리는 하나 더 높아짐
 
-        return true;
+        return true;  // true를 반환하여 새로운 MST 간선이 수락되었음을 알림
     }
 
     bool connected(int x, int y) {
@@ -334,7 +357,8 @@ int kruskal(int V, int E) {
     for (int i = 0; i < V; i++)
         parent[i] = i;
 
-    // 정렬
+    // 간선을 가중치 순으로 정렬 — 탐욕적 정확성은 사이클을 만들지 않는
+    // 전역 최소 비용 간선을 항상 선택하는 것에 의존한다 (컷 속성).
     qsort(edges, E, sizeof(Edge), cmp);
 
     int mstWeight = 0;
@@ -345,6 +369,9 @@ int kruskal(int V, int E) {
         int pv = find(edges[i].v);
 
         if (pu != pv) {
+            // 서로 다른 컴포넌트: 이 간선은 사이클 없이 안전하게 연결한다.
+            // V개 정점의 신장 트리는 정확히 V-1개 간선을 가지므로
+            // edgeCount가 V-1에 도달하면 중단한다.
             parent[pu] = pv;
             mstWeight += edges[i].weight;
             edgeCount++;

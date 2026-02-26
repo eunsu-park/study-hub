@@ -1,12 +1,26 @@
 # Sequential Logic Circuits
 
-## Overview
-
-Sequential logic circuits are digital circuits where outputs are determined not only by current inputs but also by previous state (memory). In this lesson, we will learn about basic memory elements such as latches and flip-flops, as well as registers and counters built using them. These form the foundation of core computer components such as CPU registers, memory, and state machines.
+**Previous**: [Combinational Logic Circuits](./05_Combinational_Logic.md) | **Next**: [CPU Architecture Basics](./07_CPU_Architecture_Basics.md)
 
 **Difficulty**: ⭐⭐ (Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish combinational logic from sequential logic
+2. Explain the SR, D, JK, and T flip-flops and their characteristic tables
+3. Describe how registers store data using groups of flip-flops
+4. Design a synchronous counter using flip-flops
+5. Model a finite state machine with a state diagram and state table
+6. Explain the role of the clock signal in synchronizing sequential circuits
+7. Calculate the maximum clock frequency from setup time, hold time, and propagation delay
+
+---
+
+Combinational circuits have no memory -- their output depends only on current inputs. Sequential circuits add the crucial ability to remember past inputs, enabling the storage of data and the step-by-step execution of instructions. Registers, counters, and state machines are the building blocks that transform a passive circuit into an active, programmable computer.
 
 ## Table of Contents
 

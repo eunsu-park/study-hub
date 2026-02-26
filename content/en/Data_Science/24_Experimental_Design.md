@@ -2,9 +2,24 @@
 
 [Previous: Nonparametric Statistics](./23_Nonparametric_Statistics.md) | [Next: Practical Projects](./25_Practical_Projects.md)
 
-## Overview
+---
 
-Experimental design is a systematic methodology for inferring causal relationships. This chapter covers the basic principles of experimental design, A/B testing, sample size determination through power analysis, and sequential testing methods.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the three core principles of experimental design: randomization, replication, and blocking
+2. Implement simple and stratified randomization for participant assignment
+3. Describe the A/B testing workflow from hypothesis formulation through decision making
+4. Calculate required sample sizes using power analysis for two-proportion comparisons
+5. Compare frequentist and Bayesian approaches to A/B test analysis
+6. Identify the peeking problem and apply alpha spending functions (O'Brien-Fleming, Pocock) for sequential testing
+7. Apply multiple comparison corrections (Bonferroni, Holm-Bonferroni) and explain why they are necessary
+8. Evaluate common A/B testing pitfalls including novelty effects, network effects, and Simpson's paradox
+
+---
+
+Observational data can reveal correlations, but only well-designed experiments can establish causation. Whether you are running an A/B test on a website, evaluating a medical treatment, or comparing teaching methods, the principles of experimental design determine whether your conclusions are trustworthy. Getting the design right before collecting data -- randomization, sufficient sample size, proper controls -- saves you from drawing false conclusions that no amount of post-hoc analysis can fix.
 
 ---
 

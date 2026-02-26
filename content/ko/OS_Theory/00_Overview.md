@@ -49,49 +49,49 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_OS_Overview.md](./01_OS_Overview.md) | ⭐ | OS 정의, 역할, 역사, 커널 구조 |
-| [02_Process_Concepts.md](./02_Process_Concepts.md) | ⭐⭐ | 프로세스 메모리 구조, PCB, 상태 전이 |
-| [03_Threads_and_Multithreading.md](./03_Threads_and_Multithreading.md) | ⭐⭐ | 스레드 vs 프로세스, 멀티스레딩 모델 |
+| [운영체제 개요](./01_OS_Overview.md) | ⭐ | OS 정의, 역할, 역사, 커널 구조 |
+| [프로세스 개념](./02_Process_Concepts.md) | ⭐⭐ | 프로세스 메모리 구조, PCB, 상태 전이 |
+| [스레드와 멀티스레딩](./03_Threads_and_Multithreading.md) | ⭐⭐ | 스레드 vs 프로세스, 멀티스레딩 모델 |
 
 ### CPU 스케줄링 (04-06)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [04_CPU_Scheduling_Basics.md](./04_CPU_Scheduling_Basics.md) | ⭐⭐ | CPU/I/O burst, 스케줄링 목표, 스케줄러 종류 |
-| [05_Scheduling_Algorithms.md](./05_Scheduling_Algorithms.md) | ⭐⭐⭐ | FCFS, SJF, SRTF, Priority, RR, 간트 차트 |
-| [06_Advanced_Scheduling.md](./06_Advanced_Scheduling.md) | ⭐⭐⭐ | MLFQ, 멀티프로세서 스케줄링, 실시간 스케줄링 |
+| [CPU 스케줄링 기초](./04_CPU_Scheduling_Basics.md) | ⭐⭐ | CPU/I/O burst, 스케줄링 목표, 스케줄러 종류 |
+| [스케줄링 알고리즘](./05_Scheduling_Algorithms.md) | ⭐⭐⭐ | FCFS, SJF, SRTF, Priority, RR, 간트 차트 |
+| [고급 스케줄링](./06_Advanced_Scheduling.md) | ⭐⭐⭐ | MLFQ, 멀티프로세서 스케줄링, 실시간 스케줄링 |
 
 ### 프로세스 동기화 (07-09)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [07_Synchronization_Basics.md](./07_Synchronization_Basics.md) | ⭐⭐⭐ | 경쟁 상태, 임계 구역, Peterson's Solution |
-| [08_Synchronization_Tools.md](./08_Synchronization_Tools.md) | ⭐⭐⭐ | 뮤텍스, 세마포어, 모니터, 고전 동기화 문제 |
-| [09_Deadlock.md](./09_Deadlock.md) | ⭐⭐⭐ | 데드락 조건, 예방, 회피, 탐지, 은행원 알고리즘 |
+| [동기화 기초](./07_Synchronization_Basics.md) | ⭐⭐⭐ | 경쟁 상태, 임계 구역, Peterson's Solution |
+| [동기화 도구](./08_Synchronization_Tools.md) | ⭐⭐⭐ | 뮤텍스, 세마포어, 모니터, 고전 동기화 문제 |
+| [데드락](./09_Deadlock.md) | ⭐⭐⭐ | 데드락 조건, 예방, 회피, 탐지, 은행원 알고리즘 |
 
 ### 메모리 관리 (10-13)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [10_Memory_Management_Basics.md](./10_Memory_Management_Basics.md) | ⭐⭐ | 주소 바인딩, 스와핑, 메모리 할당 개요 |
-| [11_Contiguous_Memory_Allocation.md](./11_Contiguous_Memory_Allocation.md) | ⭐⭐⭐ | First-fit, Best-fit, 단편화, 압축 |
-| [12_Paging.md](./12_Paging.md) | ⭐⭐⭐ | 페이지 테이블, TLB, 다단계 페이징 |
-| [13_Segmentation.md](./13_Segmentation.md) | ⭐⭐⭐ | 세그먼트 테이블, 페이징과 비교 |
+| [메모리 관리 기초](./10_Memory_Management_Basics.md) | ⭐⭐ | 주소 바인딩, 스와핑, 메모리 할당 개요 |
+| [연속 메모리 할당](./11_Contiguous_Memory_Allocation.md) | ⭐⭐⭐ | First-fit, Best-fit, 단편화, 압축 |
+| [페이징](./12_Paging.md) | ⭐⭐⭐ | 페이지 테이블, TLB, 다단계 페이징 |
+| [세그멘테이션](./13_Segmentation.md) | ⭐⭐⭐ | 세그먼트 테이블, 페이징과 비교 |
 
 ### 가상 메모리 (14-15)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [14_Virtual_Memory.md](./14_Virtual_Memory.md) | ⭐⭐⭐ | 요구 페이징, 페이지 폴트, 유효/무효 비트 |
-| [15_Page_Replacement.md](./15_Page_Replacement.md) | ⭐⭐⭐ | FIFO, LRU, LFU, Clock, 스레싱 |
+| [가상 메모리](./14_Virtual_Memory.md) | ⭐⭐⭐ | 요구 페이징, 페이지 폴트, 유효/무효 비트 |
+| [페이지 교체](./15_Page_Replacement.md) | ⭐⭐⭐ | FIFO, LRU, LFU, Clock, 스레싱 |
 
 ### 파일 시스템과 I/O (16-18)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [16_File_System_Basics.md](./16_File_System_Basics.md) | ⭐⭐ | 파일 개념, 디렉토리 구조, 접근 방법 |
-| [17_File_System_Implementation.md](./17_File_System_Implementation.md) | ⭐⭐⭐ | 할당 방법, FAT, inode, 저널링 |
-| [18_IO_and_IPC.md](./18_IO_and_IPC.md) | ⭐⭐⭐ | I/O 하드웨어, DMA, IPC 통신 |
+| [파일 시스템 기초](./16_File_System_Basics.md) | ⭐⭐ | 파일 개념, 디렉토리 구조, 접근 방법 |
+| [파일 시스템 구현](./17_File_System_Implementation.md) | ⭐⭐⭐ | 할당 방법, FAT, inode, 저널링 |
+| [I/O와 IPC](./18_IO_and_IPC.md) | ⭐⭐⭐ | I/O 하드웨어, DMA, IPC 통신 |
 
 ---
 

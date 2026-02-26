@@ -1,5 +1,26 @@
 # 뷰와 인덱스
 
+**이전**: [서브쿼리와 CTE](./08_Subqueries_and_CTE.md) | **다음**: [함수와 프로시저](./10_Functions_and_Procedures.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 뷰(View)가 무엇인지 설명하고 그 장점(쿼리 단순화, 보안, 논리적 독립성)을 서술한다
+2. DDL 구문을 사용해 뷰를 생성·교체·이름 변경·삭제한다
+3. 일반 뷰와 구체화된 뷰(Materialized View)를 구분하고 각각 언제 사용할지 설명한다
+4. 뷰가 업데이트 가능한지 판단하고 데이터 무결성을 위해 WITH CHECK OPTION을 적용한다
+5. B-tree 인덱스(Index)가 조회를 어떻게 가속하는지 설명하고 쓰기 성능과의 트레이드오프를 서술한다
+6. 단일 컬럼·복합·부분·표현식·유니크 인덱스를 생성한다
+7. 인덱스 유형(B-tree, Hash, GIN, GiST)을 비교하고 주어진 사용 사례에 적합한 것을 선택한다
+8. EXPLAIN / EXPLAIN ANALYZE 출력을 읽고 인덱스가 사용되고 있는지 확인한다
+
+---
+
+데이터베이스가 커질수록 두 가지 문제가 나타납니다. 복잡한 쿼리를 반복 작성하는 번거로움과, 전체 테이블을 순차 스캔하는 속도 저하가 그것입니다. 뷰(View)는 쿼리를 간단한 이름 뒤에 캡슐화하여 첫 번째 문제를 해결하고, 인덱스(Index)는 필요한 행에 대한 빠른 조회 경로를 PostgreSQL에 제공하여 두 번째 문제를 해결합니다. 이 두 도구를 함께 사용하면 유지보수하기 쉽고 성능이 뛰어난 데이터베이스 애플리케이션을 구축할 수 있습니다.
+
 ## 1. 뷰 (VIEW) 개념
 
 뷰는 저장된 쿼리로, 가상의 테이블처럼 사용할 수 있습니다.
@@ -521,6 +542,4 @@ EXPLAIN ANALYZE SELECT * FROM test_orders WHERE user_id = 500;
 
 ---
 
-## 다음 단계
-
-[10_Functions_and_Procedures.md](./10_Functions_and_Procedures.md)에서 사용자 정의 함수를 배워봅시다!
+**이전**: [서브쿼리와 CTE](./08_Subqueries_and_CTE.md) | **다음**: [함수와 프로시저](./10_Functions_and_Procedures.md)

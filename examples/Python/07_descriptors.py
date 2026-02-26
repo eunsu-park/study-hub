@@ -37,7 +37,8 @@ class Descriptor:
     def __get__(self, instance, owner):
         """Called when attribute is accessed."""
         if instance is None:
-            # Accessed on class, not instance
+            # Why: When accessed via the class (MyClass.attr), instance is None — returning
+            # self allows introspection of the descriptor object rather than raising an error
             print(f"  __get__ called on class {owner.__name__}")
             return self
 
@@ -82,6 +83,8 @@ MyClass.attr
 section("Data vs Non-Data Descriptors")
 
 
+# Why: Data descriptors (with __set__) take priority over instance __dict__ in Python's
+# attribute lookup order, enabling validation that can't be bypassed by direct assignment
 class DataDescriptor:
     """Data descriptor - has __get__ AND __set__."""
 
@@ -143,6 +146,8 @@ class PositiveNumber:
             return self
         return instance.__dict__.get(self.name)
 
+    # Why: Storing values in instance.__dict__ (not on the descriptor) keeps per-instance
+    # data separate, so each object has its own validated value without shared-state bugs
     def __set__(self, instance, value):
         if not isinstance(value, (int, float)):
             raise TypeError(f"{self.name} must be a number")
@@ -288,6 +293,8 @@ print(f"Celsius: {temp.celsius}°C")
 section("Cached Property Descriptor")
 
 
+# Why: This is a non-data descriptor (no __set__), so after the first access stores the
+# result in instance.__dict__, subsequent accesses bypass the descriptor entirely — O(1)
 class CachedProperty:
     """Descriptor that caches computed property value."""
 

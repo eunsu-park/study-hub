@@ -62,29 +62,29 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 def entropy(p):
-    """엔트로피 계산 (0*log(0) = 0으로 처리)"""
+    """Compute entropy (treat 0*log(0) = 0)"""
     p = np.array(p)
-    p = p[p > 0]  # 0 제거
+    p = p[p > 0]  # Remove zeros
     return -np.sum(p * np.log2(p))
 
-# 이진 분포의 엔트로피
+# Entropy of binary distribution
 p_range = np.linspace(0.01, 0.99, 100)
 H_binary = [-p * np.log2(p) - (1-p) * np.log2(1-p) for p in p_range]
 
 plt.figure(figsize=(14, 4))
 
-# 이진 엔트로피
+# Binary entropy
 plt.subplot(131)
 plt.plot(p_range, H_binary, linewidth=2)
 plt.axhline(1, color='r', linestyle='--', alpha=0.5, label='Maximum H=1')
 plt.axvline(0.5, color='g', linestyle='--', alpha=0.5, label='p=0.5')
-plt.xlabel('p (확률)')
+plt.xlabel('p (probability)')
 plt.ylabel('H(X) (bits)')
 plt.title('Binary Entropy Function')
 plt.legend()
 plt.grid(True)
 
-# 주사위 vs 편향된 주사위
+# Fair die vs biased die
 fair_die = [1/6] * 6
 biased_die = [0.5, 0.3, 0.1, 0.05, 0.03, 0.02]
 
@@ -102,7 +102,7 @@ plt.title('Dice Distributions')
 plt.legend()
 plt.grid(True, axis='y')
 
-# 다양한 분포의 엔트로피
+# Entropy of various distributions
 n_outcomes = 10
 distributions = {
     'Uniform': np.ones(n_outcomes) / n_outcomes,
@@ -110,7 +110,7 @@ distributions = {
     'Very Peaked': stats.norm.pdf(np.arange(n_outcomes), 5, 0.5),
 }
 
-# 정규화
+# Normalize
 for key in distributions:
     distributions[key] /= distributions[key].sum()
 
@@ -123,7 +123,7 @@ plt.ylabel('Entropy (bits)')
 plt.title('Entropy of Different Distributions')
 plt.grid(True, axis='y')
 
-# 각 막대에 값 표시
+# Display values on each bar
 for i, (bar, h) in enumerate(zip(bars, entropies)):
     plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.05,
              f'{h:.2f}', ha='center', va='bottom')
@@ -132,7 +132,7 @@ plt.tight_layout()
 plt.savefig('entropy_examples.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("균등 분포가 최대 엔트로피를 가짐!")
+print("Uniform distribution has maximum entropy!")
 print(f"Fair die: {H_fair:.3f} bits")
 print(f"Biased die: {H_biased:.3f} bits")
 ```
@@ -202,11 +202,11 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 
-# 이진 교차 엔트로피 시각화
-y_true = np.array([0, 0, 1, 1])  # 실제 레이블
+# Binary cross-entropy visualization
+y_true = np.array([0, 0, 1, 1])  # True labels
 y_pred_range = np.linspace(0.01, 0.99, 100)
 
-# 각 샘플에 대한 손실
+# Loss for each sample
 fig, axes = plt.subplots(1, 4, figsize=(16, 4))
 
 for i, y in enumerate(y_true):
@@ -227,14 +227,14 @@ plt.tight_layout()
 plt.savefig('binary_cross_entropy.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# PyTorch 구현 검증
+# PyTorch implementation verification
 y_true_tensor = torch.tensor([0., 0., 1., 1.])
 y_pred_tensor = torch.tensor([0.1, 0.2, 0.8, 0.9])
 
 bce_loss = nn.BCELoss()
 loss = bce_loss(y_pred_tensor, y_true_tensor)
 
-# 수동 계산
+# Manual computation
 manual_loss = -(y_true_tensor * torch.log(y_pred_tensor) +
                 (1 - y_true_tensor) * torch.log(1 - y_pred_tensor)).mean()
 
@@ -242,15 +242,15 @@ print(f"PyTorch BCE Loss: {loss.item():.4f}")
 print(f"Manual BCE Loss: {manual_loss.item():.4f}")
 print(f"Difference: {abs(loss - manual_loss).item():.10f}")
 
-# 카테고리컬 교차 엔트로피
-print("\n카테고리컬 교차 엔트로피:")
-y_true_cat = torch.tensor([2])  # 클래스 2가 정답
-y_pred_logits = torch.tensor([[1.0, 2.0, 3.0, 1.5]])  # 로짓
+# Categorical cross-entropy
+print("\nCategorical Cross-Entropy:")
+y_true_cat = torch.tensor([2])  # Class 2 is correct
+y_pred_logits = torch.tensor([[1.0, 2.0, 3.0, 1.5]])  # Logits
 
 ce_loss = nn.CrossEntropyLoss()
 loss_cat = ce_loss(y_pred_logits, y_true_cat)
 
-# 수동 계산
+# Manual computation
 y_pred_softmax = torch.softmax(y_pred_logits, dim=1)
 manual_loss_cat = -torch.log(y_pred_softmax[0, 2])
 
@@ -312,15 +312,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 두 개의 가우시안 혼합을 타겟으로
+# Target: mixture of two Gaussians
 np.random.seed(42)
 x = np.linspace(-5, 10, 1000)
 
-# 타겟: 두 개의 가우시안 혼합
+# Target: mixture of two Gaussians
 p = 0.5 * stats.norm.pdf(x, 0, 1) + 0.5 * stats.norm.pdf(x, 5, 1)
-p = p / np.trapz(p, x)  # 정규화
+p = p / np.trapz(p, x)  # Normalize
 
-# Forward KL로 근사 (mode-covering)
+# Approximate with Forward KL (mode-covering)
 def kl_divergence_forward(mu, sigma, x, p_true):
     q = stats.norm.pdf(x, mu, sigma)
     q = q / np.trapz(q, x)
@@ -328,7 +328,7 @@ def kl_divergence_forward(mu, sigma, x, p_true):
     kl = np.trapz(p_true * np.log((p_true + 1e-10) / (q + 1e-10)), x)
     return kl
 
-# Reverse KL로 근사 (mode-seeking)
+# Approximate with Reverse KL (mode-seeking)
 def kl_divergence_reverse(mu, sigma, x, p_true):
     q = stats.norm.pdf(x, mu, sigma)
     q = q / np.trapz(q, x)
@@ -336,7 +336,7 @@ def kl_divergence_reverse(mu, sigma, x, p_true):
     kl = np.trapz(q * np.log((q + 1e-10) / (p_true + 1e-10)), x)
     return kl
 
-# 그리드 서치로 최적화 (실제로는 경사하강법 사용)
+# Grid search optimization (in practice, use gradient descent)
 mu_range = np.linspace(-2, 7, 50)
 sigma_range = np.linspace(0.5, 3, 30)
 
@@ -358,14 +358,14 @@ for mu in mu_range:
             best_reverse_kl = rkl
             best_reverse_params = (mu, sigma)
 
-# 최적 분포
+# Optimal distributions
 q_forward = stats.norm.pdf(x, *best_forward_params)
 q_forward = q_forward / np.trapz(q_forward, x)
 
 q_reverse = stats.norm.pdf(x, *best_reverse_params)
 q_reverse = q_reverse / np.trapz(q_reverse, x)
 
-# 시각화
+# Visualization
 plt.figure(figsize=(14, 5))
 
 plt.subplot(121)
@@ -396,9 +396,9 @@ plt.tight_layout()
 plt.savefig('forward_vs_reverse_kl.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("Forward KL (mode-covering): 두 모드 사이에 넓게 퍼짐")
+print("Forward KL (mode-covering): Spreads broadly between both modes")
 print(f"  Best params: μ={best_forward_params[0]:.2f}, σ={best_forward_params[1]:.2f}")
-print("\nReverse KL (mode-seeking): 한 모드를 선택")
+print("\nReverse KL (mode-seeking): Selects one mode")
 print(f"  Best params: μ={best_reverse_params[0]:.2f}, σ={best_reverse_params[1]:.2f}")
 ```
 
@@ -451,14 +451,14 @@ import matplotlib.pyplot as plt
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.datasets import make_classification
 
-# 데이터 생성
+# Generate data
 X, y = make_classification(n_samples=1000, n_features=20, n_informative=10,
                           n_redundant=5, n_repeated=0, random_state=42)
 
-# 상호 정보량 계산
+# Compute mutual information
 mi = mutual_info_classif(X, y, random_state=42)
 
-# 시각화
+# Visualization
 plt.figure(figsize=(14, 4))
 
 plt.subplot(131)
@@ -468,7 +468,7 @@ plt.ylabel('Mutual Information')
 plt.title('Mutual Information with Target')
 plt.grid(True, axis='y')
 
-# 상호 정보량이 높은 특징 vs 낮은 특징
+# Features with high vs low mutual information
 high_mi_idx = np.argmax(mi)
 low_mi_idx = np.argmin(mi)
 
@@ -490,12 +490,12 @@ plt.tight_layout()
 plt.savefig('mutual_information.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("상호 정보량이 높은 특징:")
+print("Features with high mutual information:")
 top_features = np.argsort(mi)[-5:][::-1]
 for idx in top_features:
     print(f"  Feature {idx}: MI = {mi[idx]:.4f}")
 
-print("\n상호 정보량이 낮은 특징:")
+print("\nFeatures with low mutual information:")
 bottom_features = np.argsort(mi)[:5]
 for idx in bottom_features:
     print(f"  Feature {idx}: MI = {mi[idx]:.4f}")
@@ -557,27 +557,27 @@ This is the loss function for VAE!
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Jensen 부등식 시각화
+# Jensen's inequality visualization
 np.random.seed(42)
 
-# 볼록 함수: f(x) = x^2
+# Convex function: f(x) = x^2
 x_values = np.linspace(-2, 2, 100)
 f_convex = x_values**2
 
-# 샘플
+# Samples
 samples = np.array([-1.5, -0.5, 0.5, 1.5])
 weights = np.array([0.25, 0.25, 0.25, 0.25])
 
-# 기대값
+# Expectation
 E_x = np.sum(weights * samples)
 f_E_x = E_x**2
 
-# f(x)의 기대값
+# Expectation of f(x)
 E_f_x = np.sum(weights * samples**2)
 
 plt.figure(figsize=(14, 5))
 
-# 볼록 함수
+# Convex function
 plt.subplot(121)
 plt.plot(x_values, f_convex, 'b-', linewidth=2, label='f(x) = x²')
 plt.scatter(samples, samples**2, color='r', s=100, zorder=5,
@@ -599,7 +599,7 @@ plt.title('Jensen\'s Inequality (Convex)\nf(E[X]) ≤ E[f(X)]')
 plt.legend()
 plt.grid(True)
 
-# 오목 함수: g(x) = log(x)
+# Concave function: g(x) = log(x)
 x_values_pos = np.linspace(0.1, 3, 100)
 g_concave = np.log(x_values_pos)
 
@@ -698,19 +698,19 @@ class VAE(nn.Module):
         return self.decode(z), mu, logvar
 
 def vae_loss(recon_x, x, mu, logvar):
-    # 재구성 손실 (Binary Cross-Entropy)
+    # Reconstruction loss (Binary Cross-Entropy)
     BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
 
-    # KL 발산: D_KL(q(z|x) || p(z))
-    # p(z) = N(0, I)이므로 해석적으로 계산 가능
+    # KL divergence: D_KL(q(z|x) || p(z))
+    # Since p(z) = N(0, I), can be computed analytically
     # KL = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     return BCE + KLD, BCE, KLD
 
-# 간단한 테스트
+# Simple test
 model = VAE(input_dim=784, latent_dim=20)
-x = torch.randn(32, 784)  # 배치 크기 32
+x = torch.randn(32, 784)  # Batch size 32
 
 recon_x, mu, logvar = model(x)
 loss, bce, kld = vae_loss(recon_x, x, mu, logvar)
@@ -747,7 +747,7 @@ This is used for theoretical understanding of deep learning.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# JS 발산 시각화
+# JS divergence visualization
 def js_divergence(p, q):
     """Jensen-Shannon divergence"""
     m = 0.5 * (p + q)
@@ -755,7 +755,7 @@ def js_divergence(p, q):
     kl_qm = np.sum(q * np.log((q + 1e-10) / (m + 1e-10)))
     return 0.5 * kl_pm + 0.5 * kl_qm
 
-# 두 분포
+# Two distributions
 n_bins = 10
 p = np.random.dirichlet(np.ones(n_bins))
 q = np.random.dirichlet(np.ones(n_bins))
@@ -791,9 +791,9 @@ for bar, val in zip(bars, divergences):
     plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
              f'{val:.3f}', ha='center', va='bottom')
 
-# JS 발산의 대칭성
+# Symmetry of JS divergence
 plt.subplot(133)
-# 다양한 분포 쌍에 대해
+# For various distribution pairs
 n_tests = 20
 kl_diffs = []
 js_vals = []
@@ -822,8 +822,8 @@ plt.show()
 print(f"KL(P||Q) = {kl_pq:.4f}")
 print(f"KL(Q||P) = {kl_qp:.4f}")
 print(f"JS(P||Q) = {js_pq:.4f}")
-print(f"\nKL은 비대칭, JS는 대칭!")
-print(f"JS(P||Q) = JS(Q||P) 항상 성립")
+print(f"\nKL is asymmetric, JS is symmetric!")
+print(f"JS(P||Q) = JS(Q||P) always holds")
 ```
 
 ## Practice Problems

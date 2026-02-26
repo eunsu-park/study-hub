@@ -1,12 +1,24 @@
 # 20. Security and Access Control
 
+**Previous**: [Full-Text Search](./19_Full_Text_Search.md)
+
+---
+
 ## Learning Objectives
-- Manage roles and privileges effectively
-- Implement Row-Level Security (RLS)
-- Configure pg_hba.conf for authentication
-- Set up SSL/TLS encrypted connections
-- Enable audit logging for compliance
-- Apply security best practices
+
+After completing this lesson, you will be able to:
+
+1. Design a role hierarchy with group roles, login roles, and the principle of least privilege
+2. Grant and revoke object-level and column-level privileges on schemas, tables, sequences, and functions
+3. Implement Row-Level Security (RLS) policies for multi-tenant isolation and department-based access control
+4. Configure pg_hba.conf authentication rules with appropriate methods (scram-sha-256, peer, cert)
+5. Set up SSL/TLS encrypted connections including client certificate authentication
+6. Enable audit logging using both built-in PostgreSQL logging and the pgAudit extension
+7. Apply security best practices including SQL injection prevention, data encryption with pgcrypto, and connection security hardening
+
+---
+
+Security is not a feature you bolt on at the end -- it must be designed into your database from the start. A misconfigured PostgreSQL instance can expose sensitive data, allow privilege escalation, or become an entry point for attackers. This lesson walks through PostgreSQL's defense-in-depth security model: from network-level controls and authentication, through fine-grained authorization and row-level security, to encryption and audit logging. Whether you are building a multi-tenant SaaS application or hardening an existing deployment, these techniques form the foundation of a secure PostgreSQL environment.
 
 ## Table of Contents
 1. [Security Overview](#1-security-overview)
@@ -722,13 +734,13 @@ CREATE ROLE api_admin LOGIN PASSWORD '...' IN ROLE web_admin;
 
 ---
 
-## Next Steps
-- [19. Full-Text Search](./19_Full_Text_Search.md)
-- [15. Query Optimization](./15_Query_Optimization.md)
-
 ## References
 - [PostgreSQL Roles](https://www.postgresql.org/docs/current/user-manag.html)
 - [Row-Level Security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
 - [pg_hba.conf](https://www.postgresql.org/docs/current/auth-pg-hba-conf.html)
 - [SSL Support](https://www.postgresql.org/docs/current/ssl-tcp.html)
 - [pgAudit](https://www.pgaudit.org/)
+
+---
+
+**Previous**: [Full-Text Search](./19_Full_Text_Search.md)

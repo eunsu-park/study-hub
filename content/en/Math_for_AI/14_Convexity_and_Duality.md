@@ -31,37 +31,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
-# 볼록 집합 vs 비볼록 집합 시각화
+# Convex set vs non-convex set visualization
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# 볼록 집합 (다각형)
+# Convex set (polygon)
 convex_points = np.array([[0, 0], [2, 0], [2.5, 1], [1.5, 2], [0.5, 1.5]])
 axes[0].add_patch(Polygon(convex_points, fill=True, alpha=0.3, color='blue'))
 axes[0].plot(convex_points[:, 0], convex_points[:, 1], 'bo-')
 
-# 두 점 연결
+# Connect two points
 p1, p2 = convex_points[0], convex_points[3]
-axes[0].plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=2, label='선분')
+axes[0].plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=2, label='Line segment')
 axes[0].scatter(*p1, color='red', s=100, zorder=5)
 axes[0].scatter(*p2, color='red', s=100, zorder=5)
-axes[0].set_title('볼록 집합: 두 점 사이 선분이 집합 내부')
+axes[0].set_title('Convex set: line segment between two points stays inside')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 axes[0].set_aspect('equal')
 
-# 비볼록 집합 (초승달 모양)
+# Non-convex set (crescent shape)
 theta = np.linspace(0, 2*np.pi, 100)
 outer = np.column_stack([np.cos(theta), np.sin(theta)])
 inner = np.column_stack([0.5*np.cos(theta) + 0.3, 0.5*np.sin(theta)])
 crescent = np.vstack([outer[:50], inner[50:0:-1]])
 axes[1].add_patch(Polygon(crescent, fill=True, alpha=0.3, color='orange'))
 
-# 볼록성 위반 보이기
+# Show convexity violation
 p1, p2 = crescent[10], crescent[-10]
-axes[1].plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=2, label='선분 (외부 지나감)')
+axes[1].plot([p1[0], p2[0]], [p1[1], p2[1]], 'r-', linewidth=2, label='Line segment (exits set)')
 axes[1].scatter(*p1, color='red', s=100, zorder=5)
 axes[1].scatter(*p2, color='red', s=100, zorder=5)
-axes[1].set_title('비볼록 집합: 선분이 집합 밖으로')
+axes[1].set_title('Non-convex set: line segment exits the set')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 axes[1].set_aspect('equal')
@@ -89,53 +89,53 @@ $$
 $$
 
 ```python
-# 볼록 함수 vs 비볼록 함수
+# Convex function vs non-convex function
 x = np.linspace(-3, 3, 200)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-# 1. 볼록 함수: f(x) = x^2
+# 1. Convex function: f(x) = x^2
 axes[0, 0].plot(x, x**2, 'b-', linewidth=2, label='$f(x) = x^2$')
 x0 = 1.0
-axes[0, 0].plot(x, x0**2 + 2*x0*(x - x0), 'r--', label=f'접선 (x={x0})')
+axes[0, 0].plot(x, x0**2 + 2*x0*(x - x0), 'r--', label=f'Tangent (x={x0})')
 axes[0, 0].scatter([x0], [x0**2], color='red', s=100, zorder=5)
-axes[0, 0].set_title('볼록 함수: 함수가 접선 위에')
+axes[0, 0].set_title('Convex function: function lies above tangent')
 axes[0, 0].legend()
 axes[0, 0].grid(True, alpha=0.3)
 
-# 2. 비볼록 함수: f(x) = x^3
+# 2. Non-convex function: f(x) = x^3
 axes[0, 1].plot(x, x**3, 'b-', linewidth=2, label='$f(x) = x^3$')
 x0 = -1.0
-axes[0, 1].plot(x, x0**3 + 3*x0**2*(x - x0), 'r--', label=f'접선 (x={x0})')
+axes[0, 1].plot(x, x0**3 + 3*x0**2*(x - x0), 'r--', label=f'Tangent (x={x0})')
 axes[0, 1].scatter([x0], [x0**3], color='red', s=100, zorder=5)
-axes[0, 1].set_title('비볼록 함수: 함수가 접선 아래로')
+axes[0, 1].set_title('Non-convex function: function dips below tangent')
 axes[0, 1].legend()
 axes[0, 1].grid(True, alpha=0.3)
 
-# 3. 강볼록 함수: f(x) = x^2 + 2x + 1
+# 3. Strongly convex function: f(x) = x^2 + 2x + 1
 axes[1, 0].plot(x, x**2 + 2*x + 1, 'b-', linewidth=2, label='$f(x) = x^2 + 2x + 1$')
 minimum = -1  # f'(x) = 2x + 2 = 0
 axes[1, 0].scatter([minimum], [minimum**2 + 2*minimum + 1], color='green', s=100,
-                   zorder=5, label='전역 최솟값')
-axes[1, 0].set_title('강볼록 함수: 유일한 전역 최솟값')
+                   zorder=5, label='Global minimum')
+axes[1, 0].set_title('Strongly convex function: unique global minimum')
 axes[1, 0].legend()
 axes[1, 0].grid(True, alpha=0.3)
 
-# 4. 헤시안 확인
+# 4. Hessian check
 def hessian_demo():
-    """2변량 함수의 헤시안"""
+    """Hessian of a bivariate function"""
     from mpl_toolkits.mplot3d import Axes3D
 
     x1 = np.linspace(-2, 2, 50)
     x2 = np.linspace(-2, 2, 50)
     X1, X2 = np.meshgrid(x1, x2)
 
-    # 볼록: f(x1, x2) = x1^2 + x2^2
+    # Convex: f(x1, x2) = x1^2 + x2^2
     Z = X1**2 + X2**2
 
     ax = fig.add_subplot(2, 2, 4, projection='3d')
     ax.plot_surface(X1, X2, Z, cmap='viridis', alpha=0.7)
-    ax.set_title('2변량 볼록 함수: $f(x_1, x_2) = x_1^2 + x_2^2$')
+    ax.set_title('Bivariate convex function: $f(x_1, x_2) = x_1^2 + x_2^2$')
     ax.set_xlabel('$x_1$')
     ax.set_ylabel('$x_2$')
     ax.set_zlabel('$f(x_1, x_2)$')
@@ -144,22 +144,22 @@ hessian_demo()
 plt.tight_layout()
 plt.show()
 
-# 헤시안 양의 정부호 확인
+# Check positive semidefiniteness of Hessian
 def check_convexity(f, grad, hessian, x):
-    """2차 조건으로 볼록성 확인"""
+    """Check convexity via second-order condition"""
     H = hessian(x)
     eigenvalues = np.linalg.eigvals(H)
-    print(f"점 {x}에서:")
-    print(f"  헤시안 고유값: {eigenvalues}")
-    print(f"  모두 >= 0? {np.all(eigenvalues >= -1e-10)}")
+    print(f"At point {x}:")
+    print(f"  Hessian eigenvalues: {eigenvalues}")
+    print(f"  All >= 0? {np.all(eigenvalues >= -1e-10)}")
     return np.all(eigenvalues >= -1e-10)
 
-# 예: f(x) = x^T A x (A가 양의 정부호)
+# Example: f(x) = x^T A x (A is positive definite)
 A = np.array([[2, 0], [0, 3]])
 hessian = lambda x: 2 * A
 x_test = np.array([1.0, 1.0])
 is_convex = check_convexity(None, None, hessian, x_test)
-print(f"\n함수 x^T A x는 볼록: {is_convex}")
+print(f"\nFunction x^T A x is convex: {is_convex}")
 ```
 
 ### 1.3 Epigraph Perspective
@@ -180,7 +180,7 @@ This perspective is useful for geometric understanding of convex functions.
 ```python
 from scipy.optimize import minimize
 
-# 볼록 함수: 어디서 시작해도 같은 최솟값
+# Convex function: same minimum regardless of starting point
 def convex_func(x):
     return x[0]**2 + x[1]**2 + 2*x[0] + 3*x[1]
 
@@ -190,19 +190,19 @@ starting_points = [
     np.array([0.0, -8.0])
 ]
 
-print("볼록 함수 최적화:")
+print("Convex function optimization:")
 for i, x0 in enumerate(starting_points):
     result = minimize(convex_func, x0, method='BFGS')
-    print(f"시작점 {i+1} {x0}: 최솟값 위치 {result.x}, 값 {result.fun:.4f}")
+    print(f"Starting point {i+1} {x0}: minimum at {result.x}, value {result.fun:.4f}")
 
-# 비볼록 함수: 시작점에 따라 다른 결과
+# Non-convex function: different results depending on starting point
 def nonconvex_func(x):
     return np.sin(x[0]) + np.cos(x[1]) + 0.1*(x[0]**2 + x[1]**2)
 
-print("\n비볼록 함수 최적화:")
+print("\nNon-convex function optimization:")
 for i, x0 in enumerate(starting_points):
     result = minimize(nonconvex_func, x0, method='BFGS')
-    print(f"시작점 {i+1} {x0}: 최솟값 위치 {result.x}, 값 {result.fun:.4f}")
+    print(f"Starting point {i+1} {x0}: minimum at {result.x}, value {result.fun:.4f}")
 ```
 
 ---
@@ -235,7 +235,7 @@ $$
 - $\nu_j$: Lagrange multipliers for equality constraints
 
 ```python
-# 간단한 예제: min x^2 + y^2 s.t. x + y = 1
+# Simple example: min x^2 + y^2 s.t. x + y = 1
 def primal_objective(x):
     return x[0]**2 + x[1]**2
 
@@ -243,10 +243,10 @@ def equality_constraint(x):
     return x[0] + x[1] - 1
 
 def lagrangian(x, nu):
-    """라그랑지안: L(x, ν) = x^2 + y^2 + ν(x + y - 1)"""
+    """Lagrangian: L(x, ν) = x^2 + y^2 + ν(x + y - 1)"""
     return primal_objective(x) + nu * equality_constraint(x)
 
-# 시각화
+# Visualization
 x_range = np.linspace(-1, 2, 100)
 y_range = np.linspace(-1, 2, 100)
 X, Y = np.meshgrid(x_range, y_range)
@@ -254,24 +254,24 @@ Z = X**2 + Y**2
 
 plt.figure(figsize=(10, 8))
 plt.contour(X, Y, Z, levels=20, alpha=0.6)
-plt.plot(x_range, 1 - x_range, 'r-', linewidth=3, label='제약: x + y = 1')
+plt.plot(x_range, 1 - x_range, 'r-', linewidth=3, label='Constraint: x + y = 1')
 
-# 최적해 (라그랑주 조건으로부터)
+# Optimal solution (from Lagrange conditions)
 # ∇_x L = 2x + ν = 0, ∇_y L = 2y + ν = 0, x + y = 1
 # => x = y = 1/2
 optimal_x = np.array([0.5, 0.5])
-plt.scatter(*optimal_x, color='green', s=200, zorder=5, label=f'최적해 {optimal_x}')
+plt.scatter(*optimal_x, color='green', s=200, zorder=5, label=f'Optimal solution {optimal_x}')
 
 plt.xlabel('x')
 plt.ylabel('y')
-plt.title('제약 최적화: 라그랑주 승수법')
+plt.title('Constrained optimization: Lagrange multiplier method')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.axis('equal')
 plt.show()
 
-print(f"최적해: x = {optimal_x}")
-print(f"최적값: f(x*) = {primal_objective(optimal_x):.4f}")
+print(f"Optimal solution: x = {optimal_x}")
+print(f"Optimal value: f(x*) = {primal_objective(optimal_x):.4f}")
 ```
 
 ### 2.3 Dual Function
@@ -310,28 +310,28 @@ $$
 - There exists feasible $x$ such that all $g_i(x) < 0$ (strict inequality)
 
 ```python
-# 강 쌍대성 예제: 2차 계획법 (QP)
+# Strong duality example: Quadratic programming (QP)
 from scipy.optimize import minimize
 import cvxpy as cp
 
-# 원초 문제: min 1/2 x^T Q x + c^T x, s.t. Ax <= b
+# Primal problem: min 1/2 x^T Q x + c^T x, s.t. Ax <= b
 Q = np.array([[2, 0], [0, 2]])
 c = np.array([1, 1])
 A = np.array([[1, 1], [-1, 0], [0, -1]])
 b = np.array([1, 0, 0])
 
-# CVXPY로 원초 문제 풀기
+# Solve primal problem with CVXPY
 x_primal = cp.Variable(2)
 objective_primal = cp.Minimize(0.5 * cp.quad_form(x_primal, Q) + c @ x_primal)
 constraints_primal = [A @ x_primal <= b]
 prob_primal = cp.Problem(objective_primal, constraints_primal)
 p_star = prob_primal.solve()
 
-print(f"원초 문제:")
-print(f"  최적값: p* = {p_star:.4f}")
-print(f"  최적해: x* = {x_primal.value}")
+print(f"Primal problem:")
+print(f"  Optimal value: p* = {p_star:.4f}")
+print(f"  Optimal solution: x* = {x_primal.value}")
 
-# 쌍대 문제 (유도 생략, 이론적으로)
+# Dual problem (derivation omitted, theoretical)
 # max -1/2 λ^T (A Q^{-1} A^T) λ - b^T λ - 1/2 c^T Q^{-1} c, s.t. λ >= 0, A^T λ = -c
 lambda_dual = cp.Variable(3)
 Q_inv = np.linalg.inv(Q)
@@ -342,11 +342,11 @@ constraints_dual = [lambda_dual >= 0, A.T @ lambda_dual == -c]
 prob_dual = cp.Problem(objective_dual, constraints_dual)
 d_star = prob_dual.solve()
 
-print(f"\n쌍대 문제:")
-print(f"  최적값: d* = {d_star:.4f}")
-print(f"  최적 승수: λ* = {lambda_dual.value}")
+print(f"\nDual problem:")
+print(f"  Optimal value: d* = {d_star:.4f}")
+print(f"  Optimal multipliers: λ* = {lambda_dual.value}")
 
-print(f"\n강 쌍대성 확인: p* - d* = {p_star - d_star:.6f} ≈ 0")
+print(f"\nStrong duality check: p* - d* = {p_star - d_star:.6f} ≈ 0")
 ```
 
 ---
@@ -416,43 +416,43 @@ from sklearn.svm import SVC
 from sklearn.datasets import make_classification
 import matplotlib.pyplot as plt
 
-# 간단한 2D 데이터
+# Simple 2D data
 np.random.seed(42)
 X, y = make_classification(n_samples=100, n_features=2, n_informative=2,
                            n_redundant=0, n_clusters_per_class=1, flip_y=0.1,
                            class_sep=1.5, random_state=42)
 y = 2*y - 1  # {0, 1} -> {-1, 1}
 
-# SVM 훈련 (선형 커널)
-svm = SVC(kernel='linear', C=1000)  # C가 크면 하드 마진에 근접
+# Train SVM (linear kernel)
+svm = SVC(kernel='linear', C=1000)  # Large C approximates hard margin
 svm.fit(X, y)
 
-# 결과
+# Results
 w = svm.coef_[0]
 b = svm.intercept_[0]
 support_vectors = svm.support_vectors_
 alphas = svm.dual_coef_[0]  # α_i * y_i
 
-print("SVM 결과:")
-print(f"  가중치 w: {w}")
-print(f"  절편 b: {b}")
-print(f"  서포트 벡터 수: {len(support_vectors)}")
-print(f"  쌍대 계수 (α_i * y_i): {alphas[:5]}...")  # 처음 5개만
+print("SVM results:")
+print(f"  Weight w: {w}")
+print(f"  Intercept b: {b}")
+print(f"  Number of support vectors: {len(support_vectors)}")
+print(f"  Dual coefficients (α_i * y_i): {alphas[:5]}...")  # First 5 only
 
-# 시각화
+# Visualization
 plt.figure(figsize=(10, 8))
-plt.scatter(X[y==1, 0], X[y==1, 1], c='blue', marker='o', label='클래스 +1')
-plt.scatter(X[y==-1, 0], X[y==-1, 1], c='red', marker='s', label='클래스 -1')
+plt.scatter(X[y==1, 0], X[y==1, 1], c='blue', marker='o', label='Class +1')
+plt.scatter(X[y==-1, 0], X[y==-1, 1], c='red', marker='s', label='Class -1')
 plt.scatter(support_vectors[:, 0], support_vectors[:, 1], s=200, linewidth=2,
-            facecolors='none', edgecolors='green', label='서포트 벡터')
+            facecolors='none', edgecolors='green', label='Support vectors')
 
-# 결정 경계
+# Decision boundary
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 x_plot = np.linspace(x_min, x_max, 100)
 y_plot = -(w[0] * x_plot + b) / w[1]
-plt.plot(x_plot, y_plot, 'k-', linewidth=2, label='결정 경계')
+plt.plot(x_plot, y_plot, 'k-', linewidth=2, label='Decision boundary')
 
-# 마진
+# Margin
 margin = 1 / np.linalg.norm(w)
 y_plot_margin_up = y_plot + margin * np.sqrt(1 + (w[0]/w[1])**2)
 y_plot_margin_down = y_plot - margin * np.sqrt(1 + (w[0]/w[1])**2)
@@ -462,7 +462,7 @@ plt.fill_between(x_plot, y_plot_margin_down, y_plot_margin_up, alpha=0.1, color=
 
 plt.xlabel('$x_1$')
 plt.ylabel('$x_2$')
-plt.title(f'SVM: 마진 = {2*margin:.3f}')
+plt.title(f'SVM: margin = {2*margin:.3f}')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
@@ -481,7 +481,7 @@ $$
 **Example**: Polynomial kernel $k(x, x') = (x^T x' + 1)^2$
 
 ```python
-# 비선형 SVM (RBF 커널)
+# Nonlinear SVM (RBF kernel)
 from sklearn.datasets import make_moons
 
 X_nonlinear, y_nonlinear = make_moons(n_samples=200, noise=0.15, random_state=42)
@@ -490,7 +490,7 @@ y_nonlinear = 2*y_nonlinear - 1
 svm_rbf = SVC(kernel='rbf', gamma=2, C=1.0)
 svm_rbf.fit(X_nonlinear, y_nonlinear)
 
-# 결정 경계 시각화
+# Decision boundary visualization
 h = 0.02
 x_min, x_max = X_nonlinear[:, 0].min() - 0.5, X_nonlinear[:, 0].max() + 0.5
 y_min, y_max = X_nonlinear[:, 1].min() - 0.5, X_nonlinear[:, 1].max() + 0.5
@@ -502,18 +502,18 @@ plt.figure(figsize=(10, 8))
 plt.contourf(xx, yy, Z, levels=20, cmap='RdBu', alpha=0.6)
 plt.contour(xx, yy, Z, levels=[0], colors='black', linewidths=2)
 plt.scatter(X_nonlinear[y_nonlinear==1, 0], X_nonlinear[y_nonlinear==1, 1],
-            c='blue', marker='o', edgecolors='k', label='클래스 +1')
+            c='blue', marker='o', edgecolors='k', label='Class +1')
 plt.scatter(X_nonlinear[y_nonlinear==-1, 0], X_nonlinear[y_nonlinear==-1, 1],
-            c='red', marker='s', edgecolors='k', label='클래스 -1')
+            c='red', marker='s', edgecolors='k', label='Class -1')
 plt.scatter(svm_rbf.support_vectors_[:, 0], svm_rbf.support_vectors_[:, 1],
-            s=200, linewidth=2, facecolors='none', edgecolors='green', label='서포트 벡터')
+            s=200, linewidth=2, facecolors='none', edgecolors='green', label='Support vectors')
 plt.xlabel('$x_1$')
 plt.ylabel('$x_2$')
-plt.title('비선형 SVM (RBF 커널)')
+plt.title('Nonlinear SVM (RBF kernel)')
 plt.legend()
 plt.show()
 
-print(f"서포트 벡터 수: {len(svm_rbf.support_vectors_)}")
+print(f"Number of support vectors: {len(svm_rbf.support_vectors_)}")
 ```
 
 ---
@@ -532,27 +532,27 @@ $$
 ### 4.2 Geometric Interpretation
 
 ```python
-# 펜첼 켤레 시각화
+# Fenchel conjugate visualization
 def fenchel_conjugate_demo():
     x = np.linspace(-3, 3, 200)
     f_x = x**2  # f(x) = x^2
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    # 원 함수
+    # Original function
     axes[0].plot(x, f_x, 'b-', linewidth=2, label='$f(x) = x^2$')
 
-    # 여러 기울기의 접선
+    # Tangent lines with various slopes
     slopes = [-2, 0, 2, 4]
     colors = ['red', 'green', 'orange', 'purple']
 
     for y, color in zip(slopes, colors):
         # f*(y) = sup_x (yx - x^2)
-        # 최대화: d/dx (yx - x^2) = y - 2x = 0 => x* = y/2
+        # Maximize: d/dx (yx - x^2) = y - 2x = 0 => x* = y/2
         x_star = y / 2
         f_star_y = y * x_star - x_star**2  # = y^2/4
 
-        # 접선: yx - f*(y)
+        # Tangent line: yx - f*(y)
         tangent = y * x - f_star_y
 
         axes[0].plot(x, tangent, color=color, linestyle='--', alpha=0.7,
@@ -562,20 +562,20 @@ def fenchel_conjugate_demo():
 
     axes[0].set_xlabel('x')
     axes[0].set_ylabel('f(x)')
-    axes[0].set_title('펜첼 켤레: 접선 관점')
+    axes[0].set_title('Fenchel conjugate: tangent line perspective')
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
     axes[0].set_ylim(-2, 10)
 
-    # 켤레 함수
+    # Conjugate function
     y_range = np.linspace(-4, 4, 100)
     f_star = y_range**2 / 4  # f*(y) = y^2/4 for f(x) = x^2
 
     axes[1].plot(y_range, f_star, 'b-', linewidth=2, label='$f^*(y) = y^2/4$')
     axes[1].scatter(slopes, [s**2/4 for s in slopes], color=colors, s=100, zorder=5)
-    axes[1].set_xlabel('y (기울기)')
+    axes[1].set_xlabel('y (slope)')
     axes[1].set_ylabel('$f^*(y)$')
-    axes[1].set_title('펜첼 켤레 함수')
+    axes[1].set_title('Fenchel conjugate function')
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
@@ -603,37 +603,37 @@ f^*(y) = \sum_i y_i \log y_i \quad \text{(negative entropy)}
 $$
 
 ```python
-# 펜첼 켤레 계산 예제
+# Fenchel conjugate computation examples
 def conjugate_squared_norm(y):
-    """f(x) = 1/2 ||x||^2의 켤레"""
+    """Conjugate of f(x) = 1/2 ||x||^2"""
     return 0.5 * np.linalg.norm(y)**2
 
 def conjugate_indicator_ball(y, radius=1.0):
-    """f(x) = I_{||x|| <= r}의 켤레 (support function)"""
+    """Conjugate of f(x) = I_{||x|| <= r} (support function)"""
     return radius * np.linalg.norm(y)
 
-# 검증: f**(x) = f(x) (이중 켤레)
+# Verification: f**(x) = f(x) (biconjugate theorem)
 x_test = np.array([1.0, 2.0])
 f_x = 0.5 * np.linalg.norm(x_test)**2
 
-# f**를 수치적으로 계산
+# Numerically compute f**
 from scipy.optimize import minimize_scalar
 
 def double_conjugate(x):
-    """이중 켤레 f**(x) = sup_y (x^T y - f*(y))"""
-    # 1차원으로 단순화 (예시)
+    """Biconjugate f**(x) = sup_y (x^T y - f*(y))"""
+    # Simplified to 1D (illustrative)
     def negative_objective(y_norm):
-        y = y_norm * x / np.linalg.norm(x)  # 방향 고정
+        y = y_norm * x / np.linalg.norm(x)  # Fix direction
         return -(np.dot(x, y) - conjugate_squared_norm(y))
 
     result = minimize_scalar(negative_objective, bounds=(0, 10), method='bounded')
     return -result.fun
 
 f_double_star_x = double_conjugate(x_test)
-print(f"이중 켤레 정리 검증:")
+print(f"Biconjugate theorem verification:")
 print(f"  f(x) = {f_x:.4f}")
 print(f"  f**(x) = {f_double_star_x:.4f}")
-print(f"  일치: {np.isclose(f_x, f_double_star_x)}")
+print(f"  Matches: {np.isclose(f_x, f_double_star_x)}")
 ```
 
 ---
@@ -660,15 +660,15 @@ This is called **soft thresholding**.
 
 ```python
 def soft_threshold(v, lambda_param):
-    """L1 근위 연산자 (소프트 임계값)"""
+    """L1 proximal operator (soft thresholding)"""
     return np.sign(v) * np.maximum(np.abs(v) - lambda_param, 0)
 
-# 시각화
+# Visualization
 v = np.linspace(-3, 3, 200)
 lambda_values = [0.5, 1.0, 1.5]
 
 plt.figure(figsize=(10, 6))
-plt.plot(v, v, 'k--', label='항등 함수 (λ=0)', alpha=0.5)
+plt.plot(v, v, 'k--', label='Identity function (λ=0)', alpha=0.5)
 
 for lam in lambda_values:
     prox_v = soft_threshold(v, lam)
@@ -676,7 +676,7 @@ for lam in lambda_values:
 
 plt.xlabel('v')
 plt.ylabel('prox(v)')
-plt.title('L1 근위 연산자 (소프트 임계값)')
+plt.title('L1 proximal operator (soft thresholding)')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.axhline(0, color='black', linewidth=0.5)
@@ -694,25 +694,25 @@ x_{k+1} = \text{prox}_{\alpha g}(x_k - \alpha \nabla f(x_k))
 $$
 
 ```python
-# LASSO 문제: min 1/2 ||Ax - b||^2 + λ||x||_1
+# LASSO problem: min 1/2 ||Ax - b||^2 + λ||x||_1
 def lasso_proximal_gradient(A, b, lambda_param, max_iter=1000, alpha=0.01):
-    """근위 경사 하강법으로 LASSO 풀기"""
+    """Solve LASSO via proximal gradient descent"""
     n = A.shape[1]
     x = np.zeros(n)
     losses = []
 
     for k in range(max_iter):
-        # 매끄러운 부분의 그래디언트: ∇(1/2 ||Ax - b||^2) = A^T(Ax - b)
+        # Gradient of smooth part: ∇(1/2 ||Ax - b||^2) = A^T(Ax - b)
         residual = A @ x - b
         grad_f = A.T @ residual
 
-        # 경사 하강
+        # Gradient descent step
         x_temp = x - alpha * grad_f
 
-        # 근위 연산 (L1)
+        # Proximal operation (L1)
         x = soft_threshold(x_temp, alpha * lambda_param)
 
-        # 손실 계산
+        # Compute loss
         loss = 0.5 * np.sum(residual**2) + lambda_param * np.sum(np.abs(x))
         losses.append(loss)
 
@@ -721,43 +721,43 @@ def lasso_proximal_gradient(A, b, lambda_param, max_iter=1000, alpha=0.01):
 
     return x, losses
 
-# 테스트: 희소 회귀
+# Test: sparse regression
 np.random.seed(42)
 n, p = 100, 50
 A = np.random.randn(n, p)
 x_true = np.zeros(p)
-x_true[:10] = np.random.randn(10)  # 10개만 0이 아님
+x_true[:10] = np.random.randn(10)  # Only 10 are nonzero
 b = A @ x_true + 0.1 * np.random.randn(n)
 
 lambda_param = 0.1
 x_lasso, losses = lasso_proximal_gradient(A, b, lambda_param, max_iter=1000, alpha=0.001)
 
-# 결과
+# Results
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 손실 함수
+# Loss function
 axes[0].plot(losses)
-axes[0].set_xlabel('반복')
-axes[0].set_ylabel('손실')
-axes[0].set_title('LASSO 근위 경사 하강법: 수렴')
+axes[0].set_xlabel('Iteration')
+axes[0].set_ylabel('Loss')
+axes[0].set_title('LASSO proximal gradient descent: convergence')
 axes[0].set_yscale('log')
 axes[0].grid(True, alpha=0.3)
 
-# 계수 비교
-axes[1].stem(x_true, linefmt='b-', markerfmt='bo', basefmt=' ', label='실제 계수')
-axes[1].stem(x_lasso, linefmt='r-', markerfmt='rs', basefmt=' ', label='추정 계수 (LASSO)')
-axes[1].set_xlabel('계수 인덱스')
-axes[1].set_ylabel('값')
-axes[1].set_title(f'LASSO 결과 (λ={lambda_param})')
+# Coefficient comparison
+axes[1].stem(x_true, linefmt='b-', markerfmt='bo', basefmt=' ', label='True coefficients')
+axes[1].stem(x_lasso, linefmt='r-', markerfmt='rs', basefmt=' ', label='Estimated coefficients (LASSO)')
+axes[1].set_xlabel('Coefficient index')
+axes[1].set_ylabel('Value')
+axes[1].set_title(f'LASSO result (λ={lambda_param})')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.show()
 
-print(f"0이 아닌 계수 수:")
-print(f"  실제: {np.sum(x_true != 0)}")
-print(f"  추정: {np.sum(np.abs(x_lasso) > 1e-3)}")
+print(f"Number of nonzero coefficients:")
+print(f"  True: {np.sum(x_true != 0)}")
+print(f"  Estimated: {np.sum(np.abs(x_lasso) > 1e-3)}")
 ```
 
 ---
@@ -785,15 +785,15 @@ The dual problem connects to **entropy maximization**.
 where $\mathcal{L}_\rho$ is the augmented Lagrangian.
 
 ```python
-# ADMM으로 LASSO 풀기
+# Solve LASSO with ADMM
 def lasso_admm(A, b, lambda_param, rho=1.0, max_iter=100):
-    """ADMM으로 LASSO: min 1/2||Ax-b||^2 + λ||z||_1, s.t. x = z"""
+    """ADMM for LASSO: min 1/2||Ax-b||^2 + λ||z||_1, s.t. x = z"""
     n, p = A.shape
     x = np.zeros(p)
     z = np.zeros(p)
-    u = np.zeros(p)  # 스케일된 쌍대 변수
+    u = np.zeros(p)  # Scaled dual variable
 
-    # 사전 계산
+    # Precompute
     AtA = A.T @ A
     Atb = A.T @ b
     I = np.eye(p)
@@ -801,36 +801,36 @@ def lasso_admm(A, b, lambda_param, rho=1.0, max_iter=100):
     losses = []
 
     for k in range(max_iter):
-        # x 업데이트: (A^T A + ρI)x = A^T b + ρ(z - u)
+        # x update: (A^T A + ρI)x = A^T b + ρ(z - u)
         x = np.linalg.solve(AtA + rho * I, Atb + rho * (z - u))
 
-        # z 업데이트: soft thresholding
+        # z update: soft thresholding
         z_old = z.copy()
         z = soft_threshold(x + u, lambda_param / rho)
 
-        # u 업데이트 (쌍대 변수)
+        # u update (dual variable)
         u = u + x - z
 
-        # 손실
+        # Loss
         loss = 0.5 * np.linalg.norm(A @ x - b)**2 + lambda_param * np.linalg.norm(z, 1)
         losses.append(loss)
 
-        # 수렴 확인
+        # Convergence check
         if np.linalg.norm(z - z_old) < 1e-4:
             break
 
     return x, z, losses
 
-# 비교: Proximal Gradient vs ADMM
+# Comparison: Proximal Gradient vs ADMM
 x_admm, z_admm, losses_admm = lasso_admm(A, b, lambda_param, rho=1.0, max_iter=100)
 
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-plt.plot(losses, label='근위 경사 하강법')
+plt.plot(losses, label='Proximal gradient descent')
 plt.plot(losses_admm, label='ADMM')
-plt.xlabel('반복')
-plt.ylabel('손실')
-plt.title('수렴 속도 비교')
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
+plt.title('Convergence speed comparison')
 plt.legend()
 plt.yscale('log')
 plt.grid(True, alpha=0.3)
@@ -838,15 +838,15 @@ plt.grid(True, alpha=0.3)
 plt.subplot(1, 2, 2)
 plt.stem(x_lasso, linefmt='b-', markerfmt='bo', basefmt=' ', label='Proximal GD')
 plt.stem(z_admm, linefmt='r-', markerfmt='rs', basefmt=' ', label='ADMM')
-plt.xlabel('계수 인덱스')
-plt.ylabel('값')
-plt.title('최종 계수 비교')
+plt.xlabel('Coefficient index')
+plt.ylabel('Value')
+plt.title('Final coefficient comparison')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
-print(f"계수 차이 (L2): {np.linalg.norm(x_lasso - z_admm):.6f}")
+print(f"Coefficient difference (L2): {np.linalg.norm(x_lasso - z_admm):.6f}")
 ```
 
 ### 6.3 Real-World Applications

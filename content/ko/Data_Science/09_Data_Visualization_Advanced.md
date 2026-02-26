@@ -2,9 +2,24 @@
 
 [이전: 데이터 시각화 기초](./08_Data_Visualization_Basics.md) | [다음: EDA에서 추론으로](./10_From_EDA_to_Inference.md)
 
-## 개요
+---
 
-Seaborn은 Matplotlib을 기반으로 한 통계적 데이터 시각화 라이브러리입니다. 보다 아름다운 기본 스타일과 통계적 그래프를 쉽게 만들 수 있습니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Seaborn의 테마(theme), 스타일(style), 색상 팔레트(color palette)를 적용하여 출판 수준의 그래프를 제작할 수 있습니다
+2. 히스토그램(histogram), KDE, ECDF, 러그 플롯(rug plot)을 포함한 분포 시각화를 구현할 수 있습니다
+3. 카운트 플롯(count plot), 막대 그래프(bar plot), 상자 그림(box plot), 바이올린 플롯(violin plot), 스웜 플롯(swarm plot)을 사용한 범주형(categorical) 시각화를 만들 수 있습니다
+4. 산점도(scatter plot), 회귀 플롯(regression plot), 결합 플롯(joint plot), 쌍 플롯(pair plot)을 포함한 관계(relationship) 시각화를 적용할 수 있습니다
+5. 상관 행렬(correlation matrix)과 피벗 테이블(pivot table) 데이터를 위한 히트맵(heatmap)과 클러스터 히트맵(clustered heatmap)을 구현할 수 있습니다
+6. 다중 패널 조건부 플롯(multi-panel conditional plot)을 생성하기 위해 `FacetGrid`와 `PairGrid`를 활용할 수 있습니다
+7. 오차 막대(error bar), 신뢰 구간(confidence interval), 참조선(reference line)을 포함한 통계적 주석(statistical annotation)을 적용할 수 있습니다
+8. `GridSpec`을 사용하여 대시보드 형태의 레이아웃을 구성하고, 다양한 형식으로 그림을 내보낼 수 있습니다
+
+---
+
+Matplotlib이 픽셀 수준의 제어를 제공한다면, Seaborn은 훨씬 적은 코드로 통계적으로 의미 있는 시각화를 만들 수 있게 해줍니다. Pandas DataFrame과의 긴밀한 통합, 신뢰 구간(confidence interval), 분포 피팅(distribution fitting), 패싯(faceting)에 대한 기본 지원 덕분에 Seaborn은 탐색적(exploratory) 그래픽과 프레젠테이션 그래픽 모두에서 필수 라이브러리로 자리잡고 있습니다. Seaborn의 고수준 API와 Matplotlib의 커스터마이징 기능을 결합하면 두 라이브러리의 장점을 모두 누릴 수 있습니다.
 
 ---
 
@@ -582,3 +597,77 @@ plt.close()
 | 결합 | `jointplot()`, `pairplot()` | 다변량 분석 |
 | 히트맵 | `heatmap()`, `clustermap()` | 행렬 데이터 |
 | 다중 플롯 | `FacetGrid`, `PairGrid`, `catplot()` | 조건별 서브플롯 |
+
+---
+
+## 연습 문제
+
+### 연습 1: 분포 심층 분석
+
+여러 분포 차트 유형을 사용하여 단일 변수를 다각도에서 분석하세요.
+
+1. tips 데이터셋을 로드하세요: `tips = sns.load_dataset('tips')`.
+2. `total_bill` 열에 대해 2×2 그림을 생성하세요:
+   - 좌상단: `histplot` (30개 빈, density=True, KDE 오버레이 포함).
+   - 우상단: Lunch vs. Dinner 그룹을 비교하는 `kdeplot` (`hue='time'`, `fill=True` 사용).
+   - 좌하단: 흡연자(Smoker) vs. 비흡연자(Non-Smoker) 그룹을 비교하는 `ecdfplot`.
+   - 우하단: 모든 관측값의 `rugplot` 오버레이가 있는 `kdeplot`.
+3. 각 패널에 무엇을 보여주는지 설명하는 제목을 추가하세요.
+4. 이중 봉우리(bimodality)를 감지하는 데 가장 유용한 차트 유형은 무엇인가요? 이유를 설명하세요.
+
+### 연습 2: 바이올린 플롯 vs. 박스 플롯 비교
+
+서로 다른 수준의 상세 정보를 전달하는 분포 플롯을 비교하세요.
+
+1. tips 데이터셋을 사용하여, 요일별 `total_bill`을 비교하는 1×3 그림을 생성하세요:
+   - 왼쪽 패널: 표준 `boxplot`.
+   - 중앙 패널: 성별(sex)에 대해 `split=True`를 적용한 `violinplot`.
+   - 오른쪽 패널: `swarmplot` 오버레이가 있는 `boxplot` (`color='k'`, `alpha=0.4`, `size=3` 사용).
+2. `sns.set_palette()`를 사용하여 세 패널 전체에 일관된 색상 팔레트를 적용하세요.
+3. 각 박스/바이올린 위에 `ax.text()`를 사용하여 표본 크기(n)를 적절한 x 위치에 표시하세요.
+4. 답하세요: 바이올린 플롯에서는 볼 수 있지만 박스 플롯에서는 숨겨진 정보는 무엇인가요?
+
+### 연습 3: lmplot을 활용한 회귀 분석 그리드
+
+하위 그룹에 따른 회귀 관계 변화를 탐색하세요.
+
+1. tips 데이터셋으로 다음 조건의 `lmplot`을 생성하세요:
+   - `x='total_bill'`, `y='tip'`
+   - `hue='smoker'` (패널당 두 개의 선)
+   - `col='time'` (두 열: Lunch, Dinner)
+   - `row='sex'` (두 행: Male, Female)
+2. 이는 각 셀에 흡연자/비흡연자 회귀선이 있는 2×2 그리드를 생성합니다.
+3. 신뢰 구간을 살펴보세요: 어느 하위 그룹에서 회귀가 가장 불확실한가요? 이유는 무엇인가요?
+4. `fig.suptitle()`을 추가하고 `fig.subplots_adjust(top=0.92)`로 제목 겹침을 방지하세요.
+5. 네 패널을 바탕으로, 팁과 청구금액(tip-bill) 관계가 그룹 전반에 걸쳐 일관적인지 두 문장으로 설명하세요.
+
+### 연습 4: 사용자 정의 매핑을 사용한 FacetGrid
+
+`FacetGrid.map_dataframe()`을 사용하여 다중 패널 시각화를 만드세요.
+
+1. tips 데이터셋으로 `col='day'` (4열), `col_wrap=2` (행당 2개 래핑), `height=4`로 `FacetGrid`를 생성하세요.
+2. 각 facet에 다음을 그리는 사용자 정의 플로팅 함수를 매핑하세요:
+   - `total_bill` vs. `tip` 산점도
+   - `np.polyfit`으로 계산한 회귀선
+   - 좌상단 모서리에 텍스트 주석으로 피어슨(Pearson) 상관 계수
+3. `g.set_axis_labels()`로 공유 x축 레이블 "Total Bill ($)"과 y축 레이블 "Tip ($)"을 추가하세요.
+4. `g.set_titles()`로 요일명과 표본 크기가 포함된 패널별 제목을 추가하세요.
+5. 200 DPI PNG로 그림을 내보내세요.
+
+### 연습 5: GridSpec을 활용한 대시보드 레이아웃
+
+Matplotlib GridSpec을 사용하여 tips 데이터셋의 다중 차트 대시보드를 만드세요.
+
+1. `GridSpec(3, 3)` 레이아웃의 `16×12` 그림을 생성하세요.
+2. 다음 패널을 배치하세요:
+   - 0행, 0-1열 (넓은): `time`으로 색상 구분된 `total_bill`의 KDE 분포.
+   - 0행, 2열: 요일별 건수의 파이 차트.
+   - 1행, 전체 열 (전폭): `total_bill` vs. `tip` 산점도, `hue='time'`, `size='size'`.
+   - 2행, 0열: `sex`별 `tip_pct` 박스 플롯.
+   - 2행, 1열: 오차 막대(표준 편차)가 있는 요일별 평균 팁 막대 차트.
+   - 2행, 2열: `day × time`으로 피벗된 평균 팁 히트맵.
+3. `sns.set_theme(style='whitegrid')`를 전역으로 적용하세요.
+4. `y=1.02`에 볼드체 `suptitle` "Restaurant Tips Dashboard"를 추가하세요.
+5. `bbox_inches='tight'`로 PDF로 저장하세요.
+
+[이전: 데이터 시각화 기초](./08_Data_Visualization_Basics.md) | [다음: EDA에서 추론으로](./10_From_EDA_to_Inference.md)

@@ -32,7 +32,8 @@ run_parallel() {
     local job_count=0
 
     for cmd in "${commands[@]}"; do
-        # Wait if we've reached the concurrency limit
+        # Why: this loop implements a semaphore — blocking new job launches until
+        # a slot opens, keeping concurrency at max_jobs without over-subscribing.
         while [[ ${#pids[@]} -ge $max_jobs ]]; do
             wait_for_any_pid pids
         done
@@ -62,10 +63,12 @@ run_parallel() {
 wait_for_any_pid() {
     local -n pid_array=$1
 
-    # Wait for any child process
+    # Why: wait -n blocks until ANY child finishes (bash 4.3+), enabling a
+    # worker-pool pattern without busy-polling each PID individually.
     wait -n 2>/dev/null || true
 
-    # Remove finished PIDs from array
+    # Why: kill -0 sends no signal but checks if the process exists. This is
+    # the standard way to probe liveness without affecting the target process.
     local -a still_running=()
     for pid in "${pid_array[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then

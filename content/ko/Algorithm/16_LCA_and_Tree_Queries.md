@@ -160,7 +160,10 @@ class BinaryLiftingLCA:
                     self.depth[neighbor] = self.depth[node] + 1
                     queue.append(neighbor)
 
-        # ancestor 테이블 채우기
+        # ancestor 테이블 상향식 채우기: ancestor[node][k] = 2^k번째 조상.
+        # 각 레벨을 이전 레벨에서 도출: 2^k 단계 점프는 먼저 2^(k-1) 단계
+        # 점프하고, 그 중간점에서 다시 2^(k-1) 점프하면 된다.
+        # 이렇게 하면 각 쿼리를 재계산하지 않고 O(N log N)에 테이블을 채운다.
         for k in range(1, self.LOG):
             for node in range(n):
                 mid = self.ancestor[node][k-1]
@@ -169,6 +172,9 @@ class BinaryLiftingLCA:
 
     def kth_ancestor(self, node, k):
         """node의 k번째 조상 반환 (없으면 -1)"""
+        # k를 이진수로 분해: 각 설정된 비트에 대해 독립적으로 점프.
+        # 예) k=13 (1101₂) → 8 + 4 + 1 단계를 3번의 테이블 조회로 처리
+        # 13번의 개별 부모 이동 대신.
         for i in range(self.LOG):
             if k & (1 << i):
                 node = self.ancestor[node][i]
@@ -181,14 +187,16 @@ class BinaryLiftingLCA:
         if self.depth[u] < self.depth[v]:
             u, v = v, u
 
-        # 깊이 맞추기
+        # 깊이 맞추기: 더 깊은 노드를 v와 같은 레벨로 올린다.
         diff = self.depth[u] - self.depth[v]
         u = self.kth_ancestor(u, diff)
 
         if u == v:
             return u
 
-        # 동시에 올라가기 (이진 탐색)
+        # O(log N)에 동시에 올라가기: 가장 큰 점프부터 내림차순으로 순회하여
+        # LCA를 절대 초과하지 않는다. 이 루프 이후 u와 v는 LCA 바로
+        # 한 단계 아래에 위치하므로, ancestor[u][0]이 답이다.
         for k in range(self.LOG - 1, -1, -1):
             if self.ancestor[u][k] != self.ancestor[v][k]:
                 u = self.ancestor[u][k]
@@ -370,6 +378,9 @@ class EulerTourLCA:
         for i in range(m):
             self.sparse[0][i] = i
 
+        # O(N log N)으로 구축: 각 항목은 크기 2^(k-1)인 겹치지 않는 두 반을 병합.
+        # 쿼리는 나중에 이 미리 계산된 범위를 재사용하여 겹치는 두 개의
+        # 2의 거듭제곱 윈도우로 임의의 [l,r] RMQ를 O(1)에 답한다.
         # sparse[k][i] = 구간 [i, i+2^k) 중 최소 깊이 위치
         for k in range(1, self.LOG):
             for i in range(m - (1 << k) + 1):
@@ -384,6 +395,10 @@ class EulerTourLCA:
         """구간 [l, r]에서 최소 깊이 위치 반환"""
         length = r - l + 1
         k = int(math.log2(length))
+        # 크기 2^k인 두 겹치는 윈도우가 전체 [l, r]을 커버한다.
+        # 최솟값 쿼리에서 겹침은 무해하다 — 중복 원소의 min을 취해도
+        # 결과가 변하지 않기 때문 — 이것이 스파스 테이블을 쿼리당
+        # O(1)로 만드는 핵심 속성이다.
         left = self.sparse[k][l]
         right = self.sparse[k][r - (1 << k) + 1]
         if self.depth_arr[left] <= self.depth_arr[right]:

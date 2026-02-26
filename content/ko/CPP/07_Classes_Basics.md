@@ -1,5 +1,26 @@
 # 클래스 기초
 
+**이전**: [포인터와 참조](./06_Pointers_and_References.md) | **다음**: [클래스 심화](./08_Classes_Advanced.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 클래스(class)가 무엇인지, 데이터와 동작을 하나의 타입으로 어떻게 결합하는지 설명할 수 있습니다
+2. `public`, `private`, `protected` 접근 지정자(access specifier)를 적용하여 캡슐화(encapsulation)를 강제할 수 있습니다
+3. 생성자(constructor)(기본, 매개변수 있는)를 구현하고 멤버 초기화 목록(member initializer list)을 활용할 수 있습니다
+4. 객체가 범위를 벗어날 때 자원을 해제하는 소멸자(destructor)를 설계할 수 있습니다
+5. `this` 포인터를 모호성 해소와 메서드 체이닝(method chaining)에 적용할 수 있습니다
+6. `const` 멤버 함수와 비-`const` 멤버 함수를 구별하고, getter가 `const`여야 하는 이유를 설명할 수 있습니다
+7. 클래스 선언을 헤더(`.h`)와 구현(`.cpp`) 파일에 분리하여 구성할 수 있습니다
+8. C++에서 `struct`와 `class`를 비교하고 관례에 따른 사용법을 설명할 수 있습니다
+
+---
+
+클래스(class)는 C++에서 객체 지향 프로그래밍(object-oriented programming)으로 나아가는 관문입니다. 은행 계좌, 센서, 게임 캐릭터와 같은 실세계 개체를 데이터와 그 데이터를 다루는 연산을 하나로 묶은 독립적인 단위로 모델링할 수 있게 해줍니다. 생성자가 객체를 초기화하는 방식, 접근 지정자가 불변 조건(invariant)을 보호하는 방식, 소멸자가 자원을 정리하는 방식을 이해하면, 앞으로 마주치게 될 사실상 모든 C++ 라이브러리와 프레임워크의 개념적 토대를 갖추게 됩니다.
+
 ## 1. 클래스란?
 
 클래스는 데이터와 함수를 하나로 묶은 사용자 정의 타입입니다.
@@ -691,6 +712,4 @@ int main() {
 
 ---
 
-## 다음 단계
-
-[08_Classes_Advanced.md](./08_Classes_Advanced.md)에서 연산자 오버로딩, 복사/이동을 배워봅시다!
+**이전**: [포인터와 참조](./06_Pointers_and_References.md) | **다음**: [클래스 심화](./08_Classes_Advanced.md)

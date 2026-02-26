@@ -1,8 +1,24 @@
 # 교차검증과 하이퍼파라미터 튜닝
 
-## 개요
+**이전**: [모델 평가](./04_Model_Evaluation.md) | **다음**: [결정 트리](./06_Decision_Trees.md)
 
-교차검증은 모델의 일반화 성능을 더 정확하게 평가하고, 하이퍼파라미터 튜닝은 최적의 모델 설정을 찾는 과정입니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 단일 학습/테스트 분할이 신뢰할 수 있는 모델 평가에 왜 불충분한지 설명한다
+2. K-Fold, Stratified K-Fold, 시계열 교차검증(Time Series cross-validation) 전략을 구현한다
+3. 다중 지표 평가를 위해 cross_val_score와 cross_validate를 비교한다
+4. 그리드 서치(Grid Search)와 랜덤 서치(Randomized Search)를 적용하여 하이퍼파라미터를 체계적으로 튜닝한다
+5. 중첩 교차검증(nested cross-validation)이 모델 선택과 모델 평가를 어떻게 분리하는지 설명한다
+6. scikit-learn 파이프라인(Pipeline) 내에서 하이퍼파라미터 튜닝을 시연한다
+7. 그리드 서치, 랜덤 서치, 베이즈 최적화(Bayesian optimization) 간의 트레이드오프를 평가한다
+
+---
+
+단일 학습/테스트 분할로 평가한 모델은 오해의 소지가 있는 결과를 낼 수 있습니다 — 데이터가 분할된 방식에서 운이 좋거나 나빴을 수도 있습니다. 교차검증(cross-validation)은 일반화 성능을 더 견고하게 추정하며, 하이퍼파라미터 튜닝(hyperparameter tuning)은 기본 설정에 만족하지 않고 선택한 알고리즘에서 최대한의 성능을 끌어내도록 보장합니다.
 
 ---
 

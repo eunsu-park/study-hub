@@ -1,18 +1,26 @@
 # HTTP and HTTPS
 
-## Overview
+**Previous**: [DNS](./12_DNS.md) | **Next**: [Other Application Protocols](./14_Other_Application_Protocols.md)
 
-HTTP (HyperText Transfer Protocol) is an application layer protocol for exchanging data between clients and servers on the web. HTTPS is a protocol that enhances security by adding TLS/SSL encryption to HTTP.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the structure of an HTTP request and response, including headers and body
+2. Differentiate between HTTP methods (GET, POST, PUT, PATCH, DELETE) and their properties (safety, idempotency, cacheability)
+3. Interpret HTTP status codes and categorize them by class (1xx--5xx)
+4. Compare the key improvements across HTTP/1.0, HTTP/1.1, HTTP/2, and HTTP/3
+5. Explain how HTTPS uses TLS/SSL to provide confidentiality, integrity, and authentication
+6. Outline the TLS 1.2 and TLS 1.3 handshake processes
+7. Describe the certificate chain of trust and distinguish between DV, OV, and EV certificates
+
+---
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Understand HTTP request/response structure
-- Master HTTP methods and status codes
-- Identify differences between HTTP versions
-- Understand HTTPS and TLS/SSL operation principles
-
----
+HTTP is the language of the web. Every click, every API call, and every page load is an HTTP conversation between a client and a server. Understanding HTTP deeply -- its methods, status codes, headers, and evolution through versions -- is foundational for web development, API design, and network troubleshooting. HTTPS, the secured variant, is now the baseline expectation for any production service.
 
 ## Table of Contents
 
@@ -24,8 +32,7 @@ HTTP (HyperText Transfer Protocol) is an application layer protocol for exchangi
 6. [HTTPS and TLS/SSL](#6-https-and-tlsssl)
 7. [Certificates](#7-certificates)
 8. [Practice Problems](#8-practice-problems)
-9. [Next Steps](#9-next-steps)
-10. [References](#10-references)
+9. [References](#9-references)
 
 ---
 
@@ -826,6 +833,261 @@ openssl x509 -in certificate.crt -text -noout
 
 ---
 
+## 7.5 Deep Dive: HTTP/2 and HTTP/3 (QUIC)
+
+While Section 5 introduced the version differences at a high level, this section explores the internal mechanics that make HTTP/2 and HTTP/3 dramatically faster -- and when you should adopt them.
+
+### HTTP/1.1 Limitations in Detail
+
+HTTP/1.1 has served the web for decades, but its design creates fundamental bottlenecks:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│              HTTP/1.1 Head-of-Line (HOL) Blocking                     │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Connection 1:  [Request A]──────────────────►[Response A]           │
+│                                [Request B waits]──►[Response B]      │
+│                                                                      │
+│  Problem: If Response A is slow (large file, slow query),            │
+│  Request B cannot start on the same connection.                      │
+│                                                                      │
+│  Workaround: browsers open 6-8 parallel TCP connections              │
+│  → 6-8x TCP handshakes, 6-8x TLS handshakes, 6-8x slow start       │
+│  → Server resource exhaustion under load                             │
+│  → Domain sharding hacks (assets1.example.com, assets2.example.com)  │
+│                                                                      │
+│  Other HTTP/1.1 issues:                                              │
+│  - Text-based headers: ~800 bytes per request (cookies, user-agent)  │
+│  - No header compression: same headers repeated every request        │
+│  - No server push: client must discover and request each resource    │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### HTTP/2: Binary Framing and Multiplexing
+
+HTTP/2 fundamentally redesigns the transport layer while keeping HTTP semantics (methods, status codes, headers) unchanged:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                   HTTP/2 Binary Framing Layer                         │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  HTTP/1.1:  "GET /index.html HTTP/1.1\r\nHost: example.com\r\n..."  │
+│              (text-based, human-readable)                             │
+│                                                                      │
+│  HTTP/2:    [Frame Header (9 bytes)][Frame Payload]                  │
+│              ┌──────────────────────────────────┐                    │
+│              │ Length (24 bits)                  │                    │
+│              │ Type (8 bits): HEADERS/DATA/...  │                    │
+│              │ Flags (8 bits)                   │                    │
+│              │ Stream Identifier (31 bits)      │  ← multiplexing   │
+│              └──────────────────────────────────┘                    │
+│                                                                      │
+│  Streams: Each request-response pair gets a unique stream ID         │
+│  Frames from different streams interleave on ONE TCP connection      │
+│                                                                      │
+│  Single Connection:                                                  │
+│  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┐                │
+│  │ S1:H │ S2:H │ S1:D │ S3:H │ S2:D │ S1:D │ S3:D │                │
+│  └──────┴──────┴──────┴──────┴──────┴──────┴──────┘                │
+│  S=Stream, H=HEADERS frame, D=DATA frame                            │
+│  All streams share one TCP connection — no HOL blocking at HTTP      │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### HTTP/2 Stream Prioritization
+
+Clients can assign priorities to streams so the server knows which resources matter most:
+
+```
+Priority Tree (HTTP/2):
+
+          ┌─────────┐
+          │ Root     │
+          └────┬────┘
+       ┌───────┼───────┐
+       ▼       ▼       ▼
+   [Stream 1] [Stream 3] [Stream 5]
+   index.html  app.css    hero.jpg
+   Weight: 256  Weight: 220  Weight: 100
+       │
+       ▼
+   [Stream 7]
+   analytics.js
+   Weight: 32
+   (depends on Stream 1 — load JS only after HTML)
+```
+
+**Practical impact**: CSS and HTML get highest priority (render-blocking), images get lower priority, and analytics scripts load last.
+
+### HPACK Header Compression
+
+HTTP/2 uses HPACK to dramatically reduce header overhead:
+
+```
+First request:
+  Headers: Host: example.com, Accept: text/html, Cookie: session=abc123...
+  Transmitted: Full headers (~800 bytes)
+  Indexed in static/dynamic table
+
+Second request (same connection):
+  Headers: Host: example.com, Accept: text/html, Cookie: session=abc123...
+  Transmitted: Only index references (~20 bytes!)
+  Why: HPACK sends just the table index for previously-seen headers
+
+Savings: ~95% reduction in header size for subsequent requests
+```
+
+### HTTP/2 Server Push
+
+The server can proactively send resources before the client requests them:
+
+```bash
+# Client requests index.html
+# Server responds with index.html AND pushes style.css and app.js
+
+# Nginx configuration for HTTP/2 Server Push
+# Why: eliminates 1 RTT for critical resources (CSS, JS)
+location = /index.html {
+    http2_push /static/style.css;
+    http2_push /static/app.js;
+}
+
+# Check with curl:
+# Why -v shows the pushed resources in the output
+curl -v --http2 https://example.com/index.html
+```
+
+**Note**: HTTP/2 Server Push has been deprecated in Chrome (2022) in favor of `103 Early Hints`. Many CDNs no longer support it. The concept lives on in Early Hints.
+
+### HTTP/3 and QUIC: The UDP Revolution
+
+HTTP/3 replaces TCP with QUIC, a UDP-based protocol that integrates transport and encryption:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│            HTTP/2 over TCP vs HTTP/3 over QUIC                        │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  HTTP/2 + TCP:                    HTTP/3 + QUIC:                     │
+│  ┌──────────────┐                ┌──────────────┐                    │
+│  │   HTTP/2     │                │   HTTP/3     │                    │
+│  ├──────────────┤                ├──────────────┤                    │
+│  │    TLS 1.3   │  2 handshakes  │    QUIC      │  1 combined       │
+│  ├──────────────┤  (TCP + TLS)   │  (TLS 1.3   │  handshake        │
+│  │    TCP       │                │   built-in)  │                    │
+│  ├──────────────┤                ├──────────────┤                    │
+│  │    IP        │                │    UDP       │                    │
+│  └──────────────┘                ├──────────────┤                    │
+│                                  │    IP        │                    │
+│  Connection: 2-3 RTT             └──────────────┘                    │
+│  (TCP handshake + TLS handshake)  Connection: 1 RTT                  │
+│                                   (0-RTT on reconnection!)           │
+│                                                                      │
+│  TCP HOL blocking:                QUIC independent streams:          │
+│  Packet loss on stream 1          Packet loss on stream 1            │
+│  blocks ALL streams               blocks ONLY stream 1               │
+│  (TCP sees one byte stream)       (QUIC knows about streams)         │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### QUIC Connection Migration
+
+One of QUIC's most innovative features: connections survive IP address changes.
+
+```
+Traditional TCP:
+  Phone on WiFi (IP: 192.168.1.10) ──TCP──► Server
+  Phone switches to 4G (IP: 10.0.0.5)
+  → TCP connection breaks (different IP = different connection)
+  → Full reconnection: TCP handshake + TLS handshake + re-auth
+
+QUIC Connection Migration:
+  Phone on WiFi (IP: 192.168.1.10) ──QUIC──► Server
+  Phone switches to 4G (IP: 10.0.0.5)
+  → QUIC connection survives! (identified by Connection ID, not IP)
+  → Zero interruption, no re-handshake
+
+Why: QUIC identifies connections by a 64-bit Connection ID,
+     not by the (source IP, source port, dest IP, dest port) tuple
+```
+
+### 0-RTT Connection Establishment
+
+When reconnecting to a previously-visited server, QUIC can send data in the very first packet:
+
+```
+First connection:     1-RTT (exchange keys, then send data)
+Reconnection:         0-RTT (send data immediately using cached keys)
+
+  [Client]                              [Server]
+      │                                        │
+      │──(1) ClientHello + 0-RTT Data ──────▶│   ← Data in first packet!
+      │                                        │
+      │◀─(2) ServerHello + Handshake ─────────│
+      │                                        │
+      │◀════════ Full Communication ══════════▶│
+
+Caveat: 0-RTT data is NOT replay-safe. Only use for
+idempotent requests (GET). Never use for POST/PUT.
+```
+
+### Comprehensive Comparison: HTTP/1.1 vs 2 vs 3
+
+| Feature | HTTP/1.1 | HTTP/2 | HTTP/3 |
+|---------|----------|--------|--------|
+| **Year** | 1997 | 2015 | 2022 |
+| **Transport** | TCP | TCP | QUIC (UDP) |
+| **Format** | Text | Binary frames | Binary frames |
+| **Multiplexing** | No (1 req/response at a time) | Yes (streams) | Yes (streams) |
+| **HOL Blocking** | HTTP-level + TCP-level | TCP-level only | None |
+| **Header Compression** | None | HPACK | QPACK |
+| **Encryption** | Optional (HTTPS) | Practically required | Always (TLS 1.3 built-in) |
+| **Connection Setup** | 1 RTT (TCP) + 2 RTT (TLS 1.2) | 1 RTT (TCP) + 1 RTT (TLS 1.3) | 1 RTT (0-RTT on reconnect) |
+| **Connection Migration** | No | No | Yes (Connection ID) |
+| **Server Push** | No | Yes (deprecated in practice) | Yes (rarely used) |
+| **Adoption (2025)** | ~20% of sites | ~35% of sites | ~30% of sites |
+
+### When to Adopt HTTP/3
+
+```
+Adopt HTTP/3 when:
+✓ Your users are on mobile networks (connection migration helps)
+✓ Users are geographically distant (0-RTT reduces latency)
+✓ Your site loads many small resources (multiplexing without HOL)
+✓ Your CDN supports it (Cloudflare, Fastly, Akamai all do)
+
+Stay with HTTP/2 when:
+✓ Your infrastructure doesn't support UDP (some firewalls block it)
+✓ You need fine-grained traffic inspection (QUIC is always encrypted)
+✓ You're in a controlled environment (internal services, low latency)
+```
+
+### Testing HTTP/2 and HTTP/3
+
+```bash
+# Check if a server supports HTTP/2
+# Why: --http2 forces HTTP/2; -I fetches headers only
+curl -I --http2 https://example.com
+
+# Check if a server supports HTTP/3 (requires curl 7.66+)
+# Why: --http3 attempts QUIC connection
+curl -I --http3 https://example.com
+
+# See the negotiated protocol
+curl -w "Protocol: %{http_version}\n" -o /dev/null -s https://example.com
+
+# Check with openssl (HTTP/2 ALPN negotiation)
+# Why: shows whether the server advertises h2 (HTTP/2) in ALPN
+openssl s_client -connect example.com:443 -alpn h2
+```
+
+---
+
 ## 8. Practice Problems
 
 ### Basic Problems
@@ -885,13 +1147,7 @@ curl -X POST http://api.example.com/users \
 
 ---
 
-## 9. Next Steps
-
-In [14_Other_Application_Protocols.md](./14_Other_Application_Protocols.md), let's learn about other application layer protocols such as DHCP, FTP, SMTP, and SSH!
-
----
-
-## 10. References
+## 9. References
 
 ### RFC Documents
 
@@ -913,3 +1169,7 @@ In [14_Other_Application_Protocols.md](./14_Other_Application_Protocols.md), let
 - Postman - API testing tool
 - Charles Proxy - HTTP proxy/monitoring
 - Wireshark - Packet analysis
+
+---
+
+**Previous**: [DNS](./12_DNS.md) | **Next**: [Other Application Protocols](./14_Other_Application_Protocols.md)

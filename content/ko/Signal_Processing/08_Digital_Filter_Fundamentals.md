@@ -1,16 +1,21 @@
 # 디지털 필터 기초
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 구조, 안정성, 위상 응답(Phase Response), 계산 비용 측면에서 FIR과 IIR 필터를 구분할 수 있습니다.
+2. 차분 방정식(Difference Equation), Z 영역 전달 함수(Transfer Function), 주파수 응답을 사용하여 디지털 필터를 분석할 수 있습니다.
+3. FIR 필터의 선형 위상(Linear Phase) 조건을 설명하고 위상에 민감한 응용에서의 중요성을 기술할 수 있습니다.
+4. 통과대역 리플(Passband Ripple), 저지대역 감쇠(Stopband Attenuation), 전이 대역폭(Transition Width)을 포함한 필터 규격을 해석할 수 있습니다.
+5. FIR 및 IIR 필터를 직접형(Direct Form), 종속형(Cascade), 격자형(Lattice) 구조로 구현할 수 있습니다.
+6. 고정소수점 구현에서 계수 양자화(Coefficient Quantization), 오버플로우(Overflow), 한계 사이클(Limit Cycle)을 포함한 양자화 효과를 인식하고 평가할 수 있습니다.
+
+---
+
 ## 개요
 
 디지털 필터는 신호 처리의 핵심 도구로, 주파수 성분을 선택적으로 통과시키거나 제거함으로써 신호의 스펙트럼을 형성합니다. 이 레슨에서는 두 가지 기본 필터 유형인 FIR과 IIR의 표현 방식, 설계 트레이드오프, 구현 구조, 그리고 양자화 효과를 포함한 실용적인 고려 사항을 다룹니다. 이 기초를 이해하는 것은 구체적인 필터 설계 방법을 배우기 전에 반드시 필요합니다.
-
-**학습 목표:**
-- FIR과 IIR 필터의 차이 및 트레이드오프 구분
-- 차분 방정식(difference equation), 전달 함수(transfer function), 주파수 응답을 이용한 필터 분석
-- 선형 위상(linear phase) 조건과 그 중요성 이해
-- 필터 규격(통과대역 리플(passband ripple), 저지대역 감쇠(stopband attenuation), 전이 대역폭(transition width)) 해석
-- 다양한 필터 구조(직접형(direct form), 종속형(cascade), 격자형(lattice)) 구현
-- 고정소수점 구현에서의 양자화 효과 인식
 
 **선수 학습:** [07. Z-변환](07_Z_Transform.md)
 

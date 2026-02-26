@@ -2,9 +2,21 @@
 
 [이전: 베이지안 추론](./19_Bayesian_Inference.md) | [다음: 시계열 모형](./21_Time_Series_Models.md)
 
-## 개요
+## 학습 목표
 
-시계열 데이터는 시간 순서로 수집된 데이터입니다. 이 장에서는 시계열의 구성요소, 정상성 개념, 자기상관 분석, 그리고 시계열 분해 방법을 학습합니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 시계열(Time Series)의 네 가지 구성요소인 추세(trend), 계절성(seasonality), 순환(cycle), 잔차(residual)를 식별하고 설명할 수 있습니다
+2. 정상(stationary) 시계열과 비정상(non-stationary) 시계열을 구별하고, 모델링에서 정상성(Stationarity)이 중요한 이유를 설명할 수 있습니다
+3. ADF 및 KPSS 단위근(unit root) 검정을 적용하고 두 검정의 결합 결과를 해석할 수 있습니다
+4. 1차 차분(first differencing)과 계절 차분(seasonal differencing)을 사용하여 비정상 시계열을 정상 시계열로 변환할 수 있습니다
+5. ACF(자기상관함수)와 PACF(편자기상관함수)를 계산하고 해석하여 AR, MA, ARMA 후보 모델을 식별할 수 있습니다
+6. 가법(additive), 승법(multiplicative), STL 분해를 수행하고 계절성 강도를 평가할 수 있습니다
+7. 시각화, 정상성 검정, 분해를 결합하여 포괄적인 탐색적 시계열 분석을 수행할 수 있습니다
+
+---
+
+대부분의 통계적 방법은 관측치가 독립적이라고 가정하지만, 시계열 데이터는 본질적으로 순서가 있고 자기상관(autocorrelated)되어 있습니다 — 오늘의 값은 어제의 값에 의존합니다. 이러한 시간적 구조를 무시하면 오해를 불러일으키는 결론과 부정확한 예측으로 이어집니다. 이 레슨에서는 시계열 모델을 적합하기 전에 필요한 기본 개념과 진단 도구를 소개합니다: 시계열에 숨겨진 구성요소를 이해하고, 정상성 여부를 검정하고, 해석 가능한 부분으로 분해하는 방법을 다룹니다.
 
 ---
 
@@ -36,6 +48,9 @@ t = np.arange(n_points)
 
 # 구성요소
 trend = 0.05 * t  # 선형 추세
+# 2π/365는 연간 주기에 대한 각주파수(angular frequency)입니다: 사인파 한 주기 = 2π 라디안,
+# 365일에 정확히 한 번의 완전한 주기가 필요합니다. 분모를 바꾸면 (예: 7) 주기가 달라집니다 —
+# 분모 값이 곧 시간 단위의 주기(period)입니다.
 seasonal = 10 * np.sin(2 * np.pi * t / 365)  # 연간 계절성
 weekly = 3 * np.sin(2 * np.pi * t / 7)  # 주간 패턴
 noise = np.random.normal(0, 2, n_points)  # 잡음
@@ -52,6 +67,9 @@ ts_data = pd.DataFrame({
     'weekly': weekly,
     'noise': noise
 })
+# 'date'를 DatetimeIndex(날짜형 인덱스)로 설정하면, 정수 인덱스로는 불가능한
+# 강력한 시간 기반 연산을 사용할 수 있습니다: .resample('W')로 주별 리샘플링,
+# .rolling(7)로 이동 윈도우, ts_data['2022-06':'2022-12']처럼 직관적인 날짜 슬라이싱 등.
 ts_data.set_index('date', inplace=True)
 
 # 시각화
@@ -423,6 +441,10 @@ axes[1].set_title(f'1차 차분 (ADF p={adfuller(diff1)[1]:.4f})')
 axes[1].grid(True, alpha=0.3)
 
 # 계절 차분 (lag=365)
+# 일반 1차 차분은 선형 추세를 제거하지만 계절 구조는 그대로 남습니다 —
+# 어제에서 오늘을 빼는 것으로는 1년 주기를 소거할 수 없기 때문입니다.
+# 계절 차분(lag=s)은 각 관측치에서 정확히 한 시즌 전 같은 시점의 값을 빼서
+# 주기 s인 패턴을 제거합니다.
 seasonal_diff = seasonal_ts[365:] - seasonal_ts[:-365]
 axes[2].plot(seasonal_diff)
 axes[2].set_title(f'계절 차분 (lag=365) (ADF p={adfuller(seasonal_diff)[1]:.4f})')

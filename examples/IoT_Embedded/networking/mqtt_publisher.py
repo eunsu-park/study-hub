@@ -35,7 +35,8 @@ class MQTTPublisher:
         self.port = port
         self.sensor_id = sensor_id
 
-        # Create MQTT client
+        # Why: Including the sensor_id in the client_id ensures uniqueness on the broker.
+        # MQTT brokers disconnect the old session when a duplicate client_id connects.
         self.client = mqtt.Client(client_id=f"publisher_{sensor_id}")
         self.client.on_connect = self._on_connect
         self.client.on_publish = self._on_publish
@@ -66,6 +67,9 @@ class MQTTPublisher:
         """Connect to broker"""
         print(f"Connecting to {self.broker}:{self.port}...")
         self.client.connect(self.broker, self.port, keepalive=60)
+        # Why: loop_start() runs the MQTT network loop in a background thread,
+        # allowing the main thread to continue publishing. Without it, callbacks
+        # (on_connect, on_publish) would never fire.
         self.client.loop_start()
 
         # Wait for connection
@@ -129,6 +133,9 @@ def main():
         print("Publishing sensor data... (Ctrl+C to stop)")
         while True:
             data = publisher.generate_sensor_data()
+            # Why: QoS 1 guarantees at-least-once delivery (broker ACKs receipt).
+            # retain=True stores the last message so new subscribers immediately
+            # get the latest reading without waiting for the next publish cycle.
             publisher.publish(args.topic, data, qos=1, retain=True)
             time.sleep(args.interval)
 

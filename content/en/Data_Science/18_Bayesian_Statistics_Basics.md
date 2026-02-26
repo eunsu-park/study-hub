@@ -2,9 +2,25 @@
 
 [Previous: Generalized Linear Models](./17_Generalized_Linear_Models.md) | [Next: Bayesian Inference](./19_Bayesian_Inference.md)
 
-## Overview
+---
 
-Bayesian statistics interprets probability as **a degree of uncertainty** and combines prior knowledge with data for inference. This chapter covers the differences between frequentist and Bayesian paradigms, Bayes' theorem, and core concepts including prior distributions, likelihood, and posterior distributions.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare the frequentist and Bayesian interpretations of probability, parameters, and intervals
+2. Apply Bayes' theorem to compute posterior probabilities for discrete and continuous problems
+3. Demonstrate sequential Bayesian updating and explain how the posterior evolves with new data
+4. Identify and implement conjugate prior pairs (Beta-Binomial, Normal-Normal, Gamma-Poisson)
+5. Distinguish between MLE, MAP, and posterior mean estimation and explain when each is appropriate
+6. Describe the connection between MAP estimation and regularization (Ridge, Lasso)
+7. Design and interpret a Bayesian A/B test, including probability of improvement and expected lift
+
+---
+
+> **Updating beliefs with evidence.** Imagine a doctor who initially estimates a 1% chance you have a rare disease (prior). A positive test result arrives -- but the test has a 5% false-positive rate (likelihood). Bayes' theorem combines the prior belief with the new evidence to give an updated probability (posterior) of roughly 17%. The key insight: your final belief depends on *both* what you knew before *and* what the data tells you. This is Bayesian thinking -- a formal framework for learning from evidence.
+
+Frequentist methods treat parameters as fixed unknowns and answer questions about data; Bayesian methods treat parameters as uncertain quantities and answer questions directly about those parameters. This shift in perspective lets you incorporate prior knowledge, produce intuitive probability statements about hypotheses, and update beliefs seamlessly as new data arrives. This lesson lays the conceptual and computational foundations of Bayesian thinking.
 
 ---
 

@@ -1,12 +1,25 @@
 # 객체지향 프로그래밍 기초
 
+**이전**: [파이썬 기초](./15_Python_Basics.md)
+
 > **참고**: 이 레슨은 선수 지식 복습용입니다. 고급 레슨(데코레이터, 메타클래스 등)을 시작하기 전에 OOP 기초가 부족하다면 이 내용을 먼저 학습하세요.
 
-## 학습 목표
-- 클래스와 객체(인스턴스)의 개념 이해
-- 생성자, 인스턴스/클래스 변수, 메서드 활용
-- 상속, 다형성, 캡슐화 원리 파악
-- 특수 메서드(매직 메서드) 기본 활용
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 클래스(class)와 객체(object)/인스턴스(instance)의 관계를 설명하고, 클래스 정의로부터 인스턴스를 생성할 수 있습니다
+2. 생성자(`__init__`)를 작성하고, 인스턴스 변수(instance variable), 클래스 변수(class variable), `self`의 역할을 구분할 수 있습니다
+3. 인스턴스 메서드(instance method), 클래스 메서드(`@classmethod`), 정적 메서드(`@staticmethod`)를 구현할 수 있습니다
+4. 단일·다중 상속(inheritance)을 적용하고, `super()`를 사용하며, 메서드 결정 순서(MRO, Method Resolution Order)를 설명할 수 있습니다
+5. 명명 관례(public, protected, private)와 `@property` 데코레이터를 활용해 캡슐화(encapsulation)를 구현할 수 있습니다
+6. 다형성(polymorphism)과 덕 타이핑(duck typing)을 설명하고, 공통 인터페이스(interface)를 통해 객체를 다루는 코드를 작성할 수 있습니다
+7. 특수(매직) 메서드(special/magic method)를 사용해 연산자 오버로딩(operator overloading)과 컨테이너 프로토콜(container protocol)을 구현할 수 있습니다
+8. `abc` 모듈을 사용해 추상 기반 클래스(abstract base class)를 정의하고 인터페이스 계약(interface contract)을 강제할 수 있습니다
+
+---
+
+객체지향 프로그래밍(OOP, Object-Oriented Programming)은 중대형 파이썬 애플리케이션을 구조화하는 지배적인 패러다임입니다. 현실 세계의 개념을 명확한 인터페이스를 가진 클래스로 모델링하는 방법, 상속(inheritance)을 통해 코드를 재사용하는 방법, 캡슐화(encapsulation)로 내부 상태를 보호하는 방법을 이해하면 이후 레슨에서 다루는 데코레이터(decorator), 메타클래스(metaclass), 디스크립터(descriptor) 같은 고급 패턴에 대비할 수 있습니다.
 
 ---
 
@@ -796,9 +809,80 @@ print(circle.describe())  # Area: 28.27..., Perimeter: 18.84...
 ### 다음 단계
 
 OOP 기초를 마쳤다면 다음 레슨으로:
-- [02_Decorators.md](./02_Decorators.md): 데코레이터
-- [06_Metaclasses.md](./06_Metaclasses.md): 메타클래스
-- [07_Descriptors.md](./07_Descriptors.md): 디스크립터
+- [데코레이터 (Decorators)](./02_Decorators.md): 데코레이터
+- [메타클래스 (Metaclasses)](./06_Metaclasses.md): 메타클래스
+- [디스크립터 (Descriptors)](./07_Descriptors.md): 디스크립터
+
+---
+
+## 연습 문제
+
+### 연습 1: 클래스 기초
+
+객체 모델에 대한 이해를 다지기 위해 클래스를 처음부터 만드세요.
+
+1. 다음을 갖는 `BankAccount` 클래스를 정의하세요:
+   - 인스턴스 변수: `owner` (str), `balance` (float, 기본값 0.0)
+   - 클래스 변수: `interest_rate` (float, 기본값 0.02)
+   - 메서드: `deposit(amount)`, `withdraw(amount)`, `apply_interest()`, `__str__`
+2. `deposit`과 `withdraw`에 유효성 검사를 추가하세요: 두 금액 모두 양수여야 하며, `withdraw`는 잔액이 충분한지 확인해야 합니다. 실패 시 설명적인 메시지와 함께 `ValueError`를 발생시키세요.
+3. 딕셔너리 `{"owner": "Alice", "balance": 500.0}`에서 `BankAccount`를 생성하는 클래스 메서드 `from_dict(cls, data)`를 추가하세요.
+4. `amount > 0`이면 `True`를 반환하는 정적 메서드 `is_valid_amount(amount)`를 추가하세요.
+5. 두 계좌를 만들고 입출금하고, 이자를 적용하세요. `BankAccount.interest_rate = 0.03`을 통해 `interest_rate` 변경이 모든 인스턴스에 적용됨을 시연하세요.
+
+### 연습 2: 상속 계층
+
+`super()`와 메서드 재정의(method overriding)를 연습하기 위해 3단계 상속 계층을 만드세요.
+
+1. 다음을 갖는 기본 클래스 `Employee`를 정의하세요:
+   - `__init__(self, name, emp_id, base_salary)`
+   - `calculate_pay()` → `base_salary` 반환
+   - `__str__` → 예: `"Employee Alice (E001): $3000.00/month"`
+2. `team_size`를 추가하고 팀원당 $500 보너스를 더하도록 `calculate_pay()`를 재정의하는 `Manager(Employee)`를 생성하세요.
+3. `hourly_rate`와 `hours_worked`를 추가하고, `base_salary`를 무시하고 `hourly_rate * hours_worked`를 반환하도록 `calculate_pay()`를 재정의하는 `Contractor(Employee)`를 생성하세요.
+4. `Employee`, `Manager`, `Contractor` 객체의 혼합 리스트를 받아 형식화된 급여 요약을 출력하는 함수 `payroll_report(employees)`를 작성하세요.
+5. `isinstance()`와 `issubclass()`로 계층 구조가 올바른지 검증하고, `Manager`의 MRO(메서드 결정 순서, Method Resolution Order)를 출력하세요.
+
+### 연습 3: 프로퍼티(Property)를 이용한 캡슐화
+
+속성 접근 인터페이스를 유지하면서 불변 조건을 강제하는 `@property` 데코레이터를 사용하세요.
+
+1. `radius`가 프로퍼티인 `Circle` 클래스를 만드세요:
+   - getter는 저장된 반지름을 반환합니다.
+   - setter는 반지름이 음수이면 `ValueError`를 발생시킵니다.
+   - 읽기 전용 프로퍼티 `area`와 `circumference`를 추가하세요.
+2. `width`와 `height`가 프로퍼티(둘 다 양수여야 함)인 `Rectangle` 클래스를 만드세요. 계산된 프로퍼티 `aspect_ratio = width / height`를 추가하세요.
+3. 관련 치수를 `factor`만큼 곱하는 `scale(factor)` 메서드를 두 클래스 모두에 추가하세요. `factor`가 음수이면 setter의 유효성 검사가 실행되는지 확인하세요.
+4. 네임 맹글링(name mangling)을 시연하세요: `__init__`에서 `uuid.uuid4()`로 생성한 private `__id` 속성을 추가하고, `obj.__id`로는 접근할 수 없지만 `obj._ClassName__id`로는 접근할 수 있음을 보이세요.
+5. `@property`를 일반 속성 대신 언제 선택할지 설명하세요. 접근 시 유효성 검사 또는 계산이 필요한 실제 예시 두 가지를 제시하세요.
+
+### 연습 4: 매직 메서드(Magic Method)와 연산자 오버로딩
+
+매직 메서드를 사용하여 풍부한 `Fraction` 클래스를 구현하세요.
+
+1. 정수 `numerator`와 `denominator`를 저장하는 `Fraction` 클래스를 만드세요:
+   - `__init__`: `math.gcd`를 사용하여 기약분수 형태로 저장; 분모가 0이면 `ZeroDivisionError` 발생.
+   - `__str__`: `"3/4"`
+   - `__repr__`: `"Fraction(3, 4)"`
+2. 산술 연산자 `__add__`, `__sub__`, `__mul__`, `__truediv__`를 구현하세요. 각각 기약분수 형태의 새 `Fraction`을 반환해야 합니다.
+3. 비교 연산자 `__eq__`, `__lt__`, `__le__`, `__gt__`, `__ge__`를 구현하세요 (비교에 교차 곱셈 사용).
+4. `__abs__`, `__neg__`, `__float__` (Python float으로 변환)를 구현하세요.
+5. `__hash__`를 구현하여 `Fraction` 객체를 집합에 저장하거나 딕셔너리 키로 사용할 수 있도록 검증하세요. 시연: `{Fraction(1,2), Fraction(2,4)}`는 하나의 요소만 가져야 합니다.
+
+### 연습 5: 추상 기반 클래스(Abstract Base Class)와 다형성
+
+추상 기반 클래스를 사용하여 플러그인 방식의 시스템을 설계하세요.
+
+1. `abc.ABC`와 `@abstractmethod`를 사용하여 다음 추상 메서드를 가진 추상 클래스 `DataExporter`를 정의하세요:
+   - `export(data: list, filepath: str) -> None`
+   - `get_extension() -> str`
+   - `data`가 리스트가 아니면 `TypeError`를 발생시키는 구체 메서드 `validate(data)`.
+2. 두 개의 구체 익스포터를 구현하세요:
+   - `CSVExporter`: `csv` 모듈을 사용하여 데이터(딕셔너리 리스트)를 CSV 파일에 씁니다.
+   - `JSONExporter`: `json` 모듈과 `indent=2`를 사용하여 데이터를 JSON 파일에 씁니다.
+3. `DataExporter` 인스턴스 리스트를 받아 각각을 호출하면서 `filepath_base`에 올바른 확장자를 추가하는 함수 `export_all(data, filepath_base, exporters)`를 작성하세요.
+4. 덕 타이핑(duck typing) 시연: `DataExporter`를 상속받지 않지만 `export()`와 `get_extension()`을 구현하는 `MarkdownExporter`를 작성하세요. 덕 타이핑 덕분에 `export_all`과 함께 작동함을 보이세요.
+5. `isinstance()`를 사용하여 혼합 리스트에서 어느 익스포터가 `DataExporter`의 진정한 서브클래스인지, 어느 것이 덕 타입 구현인지 확인하세요. 추상 기반 클래스 계약을 강제하는 것과 덕 타이핑에 의존하는 것 중 언제 무엇을 선택할지 성찰하세요.
 
 ---
 

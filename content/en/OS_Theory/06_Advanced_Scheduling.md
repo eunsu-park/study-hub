@@ -1,10 +1,24 @@
 # Advanced Scheduling
 
-## Overview
-
-In this lesson, we learn about advanced scheduling techniques used in real operating systems. We explore MLFQ (Multi-Level Feedback Queue), multiprocessor scheduling, and real-time scheduling.
+**Previous**: [Scheduling Algorithms](./05_Scheduling_Algorithms.md) | **Next**: [Synchronization Basics](./07_Synchronization_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how MLFQ adapts to process behavior without requiring prior knowledge of burst times
+2. Analyze MLFQ problems (starvation, gaming) and describe their solutions (priority boost, cumulative accounting)
+3. Distinguish symmetric from asymmetric multiprocessing and explain their scheduling implications
+4. Explain processor affinity and load balancing, and describe the tradeoff between cache efficiency and even workload distribution
+5. Distinguish hard real-time from soft real-time scheduling and identify appropriate use cases for each
+6. Compare Rate Monotonic Scheduling (RMS) and Earliest Deadline First (EDF) in terms of priority assignment, utilization bounds, and overhead
+7. Evaluate scheduling algorithm tradeoffs for different workloads, from general-purpose to real-time systems
+
+---
+
+Real systems do not use simple textbook algorithms -- they combine and adapt them. Linux's CFS, Windows' thread scheduler, and real-time systems each solve scheduling differently because they optimize for different goals. This lesson explores the advanced scheduling techniques used in production operating systems: MLFQ, multiprocessor scheduling with affinity and load balancing, real-time scheduling guarantees, and the Linux Completely Fair Scheduler.
 
 ## Table of Contents
 
@@ -774,6 +788,106 @@ When process A has nice value 0 and process B has nice value 5, calculate how mu
 (Exact ratio: 1024/335 ≈ 3.06x)
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: MLFQ Simulator
+
+Run `examples/OS_Theory/06_mlfq_sim.py` and experiment with the configuration.
+
+**Tasks:**
+1. Add a third job type: a mixed workload that alternates between 5ms CPU bursts and I/O. Observe which queue it stabilizes in
+2. Change the priority boost interval from 50 to 200. How does this affect the starvation behavior of CPU-bound jobs?
+3. Implement "gaming prevention": if a job voluntarily releases the CPU just before its quantum expires, still count it as a full quantum use
+
+### Exercise 2: CFS Virtual Runtime
+
+Implement a simplified CFS (Completely Fair Scheduler) simulator:
+
+**Tasks:**
+1. Create a `CFSScheduler` with a red-black tree (use `sortedcontainers.SortedList`) keyed by virtual runtime
+2. Implement `vruntime += actual_runtime × (base_weight / process_weight)` where nice=0 has weight 1024
+3. Run 3 processes with nice values (0, 5, -5) for 100ms and verify the CPU time ratio matches the weight ratio
+
+### Exercise 3: Real-Time Scheduling Verification
+
+Implement and verify Rate-Monotonic Scheduling (RMS):
+
+**Tasks:**
+1. Given tasks T1(P=50, C=10), T2(P=80, C=20), T3(P=200, C=50), calculate utilization and check the RMS bound
+2. Simulate the first 400ms of execution and draw the Gantt chart
+3. Add T4(P=100, C=30). Does the task set remain schedulable? Verify with both the RMS bound and simulation
+
+---
+
+## Exercises
+
+### Exercise 1: MLFQ Process Placement
+
+A 3-level MLFQ has the following configuration:
+- Q0 (highest): time quantum = 4ms, new processes start here
+- Q1 (medium): time quantum = 8ms
+- Q2 (lowest): FCFS (no preemption)
+- Priority boost: every 50ms, all processes move to Q0
+
+Three processes arrive at t=0:
+- Job A: CPU-intensive, never voluntarily yields (runs until preempted)
+- Job B: I/O-intensive, does I/O after every 2ms of CPU work
+- Job C: arrives at t=20ms, moderate CPU use (6ms bursts)
+
+1. Trace Job A's queue level at t=5ms, t=15ms, t=30ms, t=60ms
+2. Trace Job B's queue level at t=5ms, t=15ms, t=30ms
+3. When Job C arrives at t=20ms, in which queue does it start? How does this affect Jobs A and B?
+4. Without the priority boost, what problem does Job A eventually experience? How does the boost fix it?
+
+### Exercise 2: Processor Affinity and Load Balancing
+
+A 4-core NUMA system has two NUMA nodes: Node 0 (cores 0,1) and Node 1 (cores 2,3). Memory access within a node takes 10ns; cross-node access takes 40ns. Processes A, B, C, D are assigned:
+
+| Process | Current Core | NUMA Node | Cache State |
+|---------|-------------|-----------|-------------|
+| A | 0 | 0 | Hot (lots of cached data) |
+| B | 1 | 0 | Hot |
+| C | 2 | 1 | Warm |
+| D | 3 | 1 | Cold |
+
+Core 0 becomes idle. Three ready processes are available: X (needs Node 0 memory), Y (needs Node 1 memory), Z (no NUMA preference, cache cold).
+
+1. From a **hard affinity** perspective, what is the rule the scheduler must follow?
+2. From a **soft affinity** perspective, which of {X, Y, Z} should the scheduler prefer for Core 0 and why?
+3. If the system uses **pull migration** to balance load, which core should pull work from which core, and what is the cost of migrating process Y from Core 2 to Core 0?
+4. When is it beneficial to **not** balance load (i.e., allow one core to be busier than another)?
+
+### Exercise 3: Rate Monotonic Scheduling Feasibility
+
+Determine whether each task set is **schedulable** under Rate Monotonic Scheduling. Use the RMS utilization bound: U ≤ n(2^(1/n) − 1). Show all calculations.
+
+**Task Set 1:**
+- T1: Period=20ms, Execution=5ms
+- T2: Period=50ms, Execution=10ms
+- T3: Period=100ms, Execution=20ms
+
+**Task Set 2:**
+- T1: Period=10ms, Execution=4ms
+- T2: Period=25ms, Execution=8ms
+- T3: Period=50ms, Execution=12ms
+
+For each task set:
+1. Calculate the total CPU utilization
+2. Calculate the RMS bound for n tasks
+3. State whether the task set is guaranteed schedulable, possibly schedulable, or definitely not schedulable
+4. For the task set that fails the RMS bound, can EDF schedule it? How does EDF handle overload differently from RMS?
+
+### Exercise 4: CFS Virtual Runtime
+
+Linux CFS assigns each process a weight based on its nice value. Three processes with nice values -10 (weight=9548), 0 (weight=1024), and 10 (weight=110) all start at t=0 with vruntime=0. The scheduler always runs the process with the lowest vruntime. Assume a scheduling period of 10ms.
+
+1. Calculate the ideal CPU time each process receives in the first 10ms based on their weights
+2. After 10ms of execution (with each process getting its ideal share), what is the vruntime of each process?
+3. If the nice=10 process performs I/O for 5ms and then returns, how does CFS prevent it from getting a large burst of CPU time to "catch up"?
+4. Why does CFS use virtual runtime rather than simply giving each process a fixed time slice?
 
 ---
 

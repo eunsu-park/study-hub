@@ -1,11 +1,22 @@
 # 11. Web Accessibility (A11y)
 
+**Previous**: [TypeScript Fundamentals](./10_TypeScript_Basics.md) | **Next**: [SEO Basics](./12_SEO_Basics.md)
+
 ## Learning Objectives
-- Understand the importance of web accessibility and legal requirements
-- Learn WCAG guidelines and compliance levels
-- Improve accessibility using ARIA attributes
-- Implement keyboard navigation
-- Test screen reader compatibility
+
+After completing this lesson, you will be able to:
+
+1. Explain the business and legal rationale for web accessibility compliance
+2. Apply the four WCAG principles (Perceivable, Operable, Understandable, Robust) to evaluate a web page
+3. Write semantic HTML that conveys meaning to assistive technologies
+4. Use ARIA roles, states, and properties to enhance non-native interactive components
+5. Implement keyboard navigation patterns including focus management and focus traps
+6. Provide accessible forms with proper labels, error messages, and groupings
+7. Audit a web page for accessibility using automated tools and manual testing checklists
+
+---
+
+Over one billion people worldwide live with some form of disability, and many more experience temporary or situational impairments. Building accessible websites is not just a legal obligation -- it is a professional responsibility and a competitive advantage. Accessible design improves the experience for all users, strengthens SEO, and ensures your work reaches the widest possible audience.
 
 ## Table of Contents
 1. [Accessibility Overview](#1-accessibility-overview)
@@ -644,13 +655,13 @@ menu.addEventListener('keydown', (e) => {
 
 ---
 
-## Next Steps
-- [10. TypeScript Basics](./10_TypeScript_Basics.md)
-- [12. SEO Basics](./12_SEO_Basics.md)
-
 ## References
 - [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [MDN Accessibility](https://developer.mozilla.org/en-US/docs/Web/Accessibility)
 - [WebAIM](https://webaim.org/)
 - [A11y Project](https://www.a11yproject.com/)
 - [Deque University](https://dequeuniversity.com/)
+
+---
+
+**Previous**: [TypeScript Fundamentals](./10_TypeScript_Basics.md) | **Next**: [SEO Basics](./12_SEO_Basics.md)

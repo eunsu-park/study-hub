@@ -1,5 +1,17 @@
 # Bitmask Dynamic Programming
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Perform fundamental bit operations (AND, OR, XOR, shift, set, clear, toggle) and apply common bit manipulation tricks
+2. Represent subsets of a small set as integer bitmasks and enumerate all subsets or submasks efficiently
+3. Design Bitmask DP solutions by defining states that encode which elements have been used
+4. Implement the Traveling Salesman Problem (TSP) using Bitmask DP with O(2^n × n) time complexity
+5. Apply Bitmask DP to assignment and matching problems where subsets of items must be tracked across states
+
+---
+
 ## Overview
 
 Bitmask DP is a technique that represents set states as bits to perform dynamic programming. It efficiently solves subset problems when n is small (n <= 20).
@@ -169,6 +181,13 @@ def iterate_submasks(mask):
     """
     Iterate all submasks of mask (excluding empty)
     Example: mask = 5 (101) → 5, 4, 1
+
+    Why (submask - 1) & mask works:
+    Subtracting 1 flips the lowest set bit of submask to 0 and turns all
+    lower bits on.  ANDing with mask then clears any bits that were never
+    set in the original mask, keeping us strictly within its subsets.
+    This visits every submask in O(2^popcount(mask)) steps — far cheaper
+    than iterating all 2^n masks and filtering.
     """
     submask = mask
     while submask > 0:
@@ -307,24 +326,31 @@ def tsp(dist):
     dist[i][j] = cost from city i to j
     Time: O(n² × 2^n)
     Space: O(n × 2^n)
+
+    Why bitmask: We need to track exactly which cities have been visited.
+    A bitmask encodes this as a single integer (bit i = city i visited),
+    enabling O(1) membership test and set operations.  The full state
+    space is 2^n × n — exponential but tractable for n ≤ 20, whereas
+    brute-force over all n! permutations is far worse.
     """
     n = len(dist)
     INF = float('inf')
 
-    # dp[mask][i] = min cost at mask state, at city i
+    # dp[mask][i] = min cost to visit exactly the cities in mask, ending at city i
     dp = [[INF] * n for _ in range(1 << n)]
-    dp[1][0] = 0  # Start from city 0
+    dp[1][0] = 0  # Only city 0 visited (mask=0b1), cost 0
 
     for mask in range(1 << n):
         for last in range(n):
             if dp[mask][last] == INF:
                 continue
             if not (mask & (1 << last)):
+                # last must be in the visited set — skip inconsistent states
                 continue
 
             for next_city in range(n):
                 if mask & (1 << next_city):
-                    continue
+                    continue  # Already visited — no revisiting allowed
                 if dist[last][next_city] == INF:
                     continue
 
@@ -334,7 +360,8 @@ def tsp(dist):
                     dp[mask][last] + dist[last][next_city]
                 )
 
-    # Return to starting point (0) after visiting all cities
+    # Return to starting point (0) after visiting all cities.
+    # The round-trip cost adds the final leg back to city 0.
     full_mask = (1 << n) - 1
     result = INF
     for last in range(n):

@@ -29,6 +29,8 @@ LinkedStack* lstack_create(void) {
 }
 
 // 스택 해제 (모든 메모리 해제)
+// Why: every malloc must have a matching free — without this traversal-and-free,
+// every remaining node would be a memory leak (N nodes = N leaks)
 void lstack_destroy(LinkedStack *s) {
     Node *current = s->top;
     while (current) {
@@ -45,6 +47,8 @@ bool lstack_isEmpty(LinkedStack *s) {
 }
 
 // Push - 맨 위에 요소 추가 (O(1))
+// Why: linked-list stack has no capacity limit unlike array-based stacks — each
+// push is a single malloc, so the only limit is available heap memory
 bool lstack_push(LinkedStack *s, int value) {
     Node *node = malloc(sizeof(Node));
     if (!node) {
@@ -66,6 +70,8 @@ bool lstack_pop(LinkedStack *s, int *value) {
         return false;
     }
 
+    // Why: saving data and advancing top BEFORE freeing prevents use-after-free —
+    // accessing node->data or node->next after free() is undefined behavior
     Node *node = s->top;
     *value = node->data;
     s->top = node->next;  // top을 다음 노드로 이동

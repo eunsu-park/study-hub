@@ -1,18 +1,27 @@
 # Practical Network Tools
 
-## Overview
+**Previous**: [Security Threats and Response](./16_Security_Threats_Response.md) | **Next**: [IPv6](./18_IPv6.md)
 
-Network management and troubleshooting require various tools. In this chapter, you'll learn how to use practical network tools frequently used in production environments, including ping, traceroute, netstat, tcpdump, and Wireshark.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use `ping` to test connectivity and interpret RTT, TTL, and packet loss statistics
+2. Trace the path of packets with `traceroute`/`mtr` and identify problematic hops
+3. Inspect open ports and active connections using `ss` and `netstat`
+4. Perform DNS lookups with `dig` and `nslookup` and interpret the output sections
+5. Capture and filter network packets with `tcpdump` using BPF syntax
+6. Navigate the Wireshark interface, apply display filters, and follow TCP streams
+7. Use `curl` to test HTTP endpoints with custom methods, headers, and authentication
+8. Apply a systematic, layer-by-layer methodology to diagnose network problems
+
+---
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Use basic network diagnostic tools
-- Learn packet capture and analysis methods
-- Understand DNS query tool usage
-- Learn systematic network troubleshooting methodology
-
----
+Knowing how networks work in theory is only half the battle -- you also need to be able to observe, diagnose, and fix them in practice. This lesson puts concrete tools in your hands: the same tools that network engineers and system administrators reach for every day when something goes wrong. From a simple `ping` to deep packet inspection with Wireshark, these utilities transform abstract protocol knowledge into actionable troubleshooting skills.
 
 ## Table of Contents
 
@@ -1313,21 +1322,6 @@ echo "=== Diagnostics Complete ==="
 
 ---
 
-## Congratulations!
+---
 
-You have completed all networking learning materials.
-
-### Next Learning Path
-
-1. **Advanced Learning**
-   - Network certifications: CCNA, CompTIA Network+
-   - Security certifications: CompTIA Security+, CEH
-
-2. **Lab Environment**
-   - Network simulation with GNS3, Packet Tracer
-   - Build home lab
-
-3. **Related Fields**
-   - Cloud networking (AWS, GCP, Azure)
-   - Container networking (Kubernetes, Docker)
-   - SDN (Software Defined Networking)
+**Previous**: [Security Threats and Response](./16_Security_Threats_Response.md) | **Next**: [IPv6](./18_IPv6.md)

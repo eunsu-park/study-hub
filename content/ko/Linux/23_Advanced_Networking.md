@@ -1,13 +1,18 @@
 # 고급 네트워킹
 
+**이전**: [Ansible 기초](./22_Ansible_Basics.md) | **다음**: [클라우드 통합](./24_Cloud_Integration.md)
+
 ## 학습 목표
 
-이 문서를 통해 다음을 학습합니다:
+이 레슨을 마치면 다음을 할 수 있습니다:
 
-- VLAN 설정과 802.1Q 태깅
-- NIC Bonding/Teaming
-- 브릿지 네트워킹
-- iptables와 nftables 심화
+1. 802.1Q VLAN 인터페이스를 생성하고 설정하여 네트워크 트래픽을 분리한다
+2. 이중화를 위해 active-backup 및 802.3ad(LACP) 모드로 NIC 본딩(Bonding)을 구성한다
+3. VM과 컨테이너를 네트워크에 연결하기 위한 Linux 브릿지(Bridge) 인터페이스를 설정한다
+4. 상태 기반 필터링(Stateful Filtering), 속도 제한(Rate Limiting), NAT를 포함한 고급 iptables 규칙을 작성한다
+5. iptables 설정을 현대적인 nftables 문법으로 변환한다
+6. 멀티 ISP 환경을 위한 정책 기반(Policy-Based) 및 멀티패스(Multipath) 라우팅을 구현한다
+7. HTB 큐잉 디시플린(Queuing Discipline)을 사용하여 tc 명령으로 트래픽을 제어한다
 
 **난이도**: ⭐⭐⭐⭐ (고급)
 
@@ -24,6 +29,8 @@
 7. [Traffic Control (tc)](#7-traffic-control-tc)
 
 ---
+
+현대의 데이터센터와 클라우드 환경은 기본 IP 설정을 훨씬 뛰어넘는 네트워킹 역량을 요구합니다. VLAN은 브로드캐스트 도메인을 분리하고, 본딩(Bonding)은 링크 이중화를 제공하며, 브릿지(Bridge)는 가상 머신을 물리 네트워크에 연결하고, 방화벽은 보안 경계를 강화합니다. 이러한 고급 네트워킹 개념을 숙달하면 실제 환경에서 복원력 있고, 안전하며, 고성능의 인프라를 설계할 수 있습니다.
 
 ## 1. VLAN 설정
 
@@ -712,7 +719,7 @@ tc qdisc show dev eth0
 
 ## 다음 단계
 
-- [24_Cloud_Integration.md](./24_Cloud_Integration.md) - cloud-init, AWS CLI
+- [클라우드 통합](./24_Cloud_Integration.md) - cloud-init, AWS CLI
 
 ---
 

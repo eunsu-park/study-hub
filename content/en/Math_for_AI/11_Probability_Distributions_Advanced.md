@@ -64,23 +64,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 지수족 분포들의 로그 분배 함수 시각화
+# Log partition function of exponential family distributions
 
-# 베르누이: η = log(p/(1-p)), A(η) = log(1 + e^η)
+# Bernoulli: η = log(p/(1-p)), A(η) = log(1 + e^η)
 eta_bernoulli = np.linspace(-5, 5, 100)
 A_bernoulli = np.log(1 + np.exp(eta_bernoulli))
 p_bernoulli = 1 / (1 + np.exp(-eta_bernoulli))  # p = sigmoid(η)
 
-# 가우시안 (평균만): η = μ, A(η) = η²/2 (분산=1 고정)
+# Gaussian (mean only): η = μ, A(η) = η²/2 (variance=1 fixed)
 eta_gaussian = np.linspace(-3, 3, 100)
 A_gaussian = eta_gaussian**2 / 2
 
 plt.figure(figsize=(14, 4))
 
-# 베르누이
+# Bernoulli
 plt.subplot(131)
 plt.plot(eta_bernoulli, A_bernoulli, linewidth=2)
-plt.xlabel('η (자연 매개변수)')
+plt.xlabel('η (natural parameter)')
 plt.ylabel('A(η)')
 plt.title('Bernoulli: A(η) = log(1 + exp(η))')
 plt.grid(True)
@@ -92,7 +92,7 @@ plt.ylabel('p = dA/dη')
 plt.title('Bernoulli: E[X] = sigmoid(η)')
 plt.grid(True)
 
-# 가우시안
+# Gaussian
 plt.subplot(133)
 plt.plot(eta_gaussian, A_gaussian, linewidth=2, color='red')
 plt.xlabel('η (= μ)')
@@ -104,8 +104,8 @@ plt.tight_layout()
 plt.savefig('exponential_family_log_partition.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("A(η)의 미분 = 기대값 E[T(X)]")
-print("A(η)의 2차 미분 = 분산 Var(T(X))")
+print("Derivative of A(η) = Expectation E[T(X)]")
+print("Second derivative of A(η) = Variance Var(T(X))")
 ```
 
 ## 2. Examples of Exponential Family
@@ -179,16 +179,16 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-# 다양한 지수족 분포
+# Various exponential family distributions
 x_range = np.linspace(0, 10, 1000)
 
-# 포아송 분포들 (λ 변화)
+# Poisson distributions (varying λ)
 lambdas = [1, 2, 4]
 x_poisson = np.arange(0, 15)
 
 plt.figure(figsize=(14, 9))
 
-# 포아송
+# Poisson
 plt.subplot(331)
 for lam in lambdas:
     pmf = stats.poisson.pmf(x_poisson, lam)
@@ -199,7 +199,7 @@ plt.title('Poisson Distribution')
 plt.legend()
 plt.grid(True)
 
-# 지수 분포 (감마의 특수 케이스, α=1)
+# Exponential distribution (special case of Gamma, α=1)
 plt.subplot(332)
 for lam in lambdas:
     pdf = stats.expon.pdf(x_range, scale=1/lam)
@@ -210,7 +210,7 @@ plt.title('Exponential Distribution')
 plt.legend()
 plt.grid(True)
 
-# 감마 분포
+# Gamma distribution
 plt.subplot(333)
 alphas = [1, 2, 5]
 beta = 1
@@ -223,7 +223,7 @@ plt.title('Gamma Distribution')
 plt.legend()
 plt.grid(True)
 
-# 베타 분포
+# Beta distribution
 x_beta = np.linspace(0, 1, 1000)
 plt.subplot(334)
 params = [(0.5, 0.5), (2, 2), (5, 2)]
@@ -236,7 +236,7 @@ plt.title('Beta Distribution')
 plt.legend()
 plt.grid(True)
 
-# 가우시안 (다양한 μ)
+# Gaussian (various μ)
 plt.subplot(335)
 mus = [-1, 0, 1]
 sigma = 1
@@ -250,7 +250,7 @@ plt.title('Gaussian Distribution')
 plt.legend()
 plt.grid(True)
 
-# 베르누이 (다양한 p)
+# Bernoulli (various p)
 plt.subplot(336)
 ps = [0.2, 0.5, 0.8]
 x_bern = [0, 1]
@@ -264,7 +264,7 @@ plt.xticks([0, 1])
 plt.legend()
 plt.grid(True)
 
-# 카테고리컬 (다항)
+# Categorical (multinomial)
 plt.subplot(337)
 categories = ['A', 'B', 'C', 'D']
 probs1 = [0.25, 0.25, 0.25, 0.25]
@@ -280,7 +280,7 @@ plt.xticks(x_pos, categories)
 plt.legend()
 plt.grid(True, axis='y')
 
-# 다항 정규분포 (2D 등고선)
+# Multivariate normal (2D contour)
 plt.subplot(338)
 x1 = np.linspace(-3, 3, 100)
 x2 = np.linspace(-3, 3, 100)
@@ -294,13 +294,13 @@ plt.ylabel('x₂')
 plt.title('Bivariate Gaussian')
 plt.grid(True)
 
-# 디리클레 (단순화: 3D를 2D로 투영)
+# Dirichlet (simplified: project 3D to 2D)
 plt.subplot(339)
 from matplotlib.patches import Polygon
-# 2-simplex 시각화 (합=1 제약)
+# Visualize 2-simplex (sum=1 constraint)
 alpha_params = [(1, 1, 1), (2, 5, 2), (10, 5, 3)]
 for alpha in alpha_params:
-    # 간단한 표현: 각 모서리에 가중치
+    # Simple representation: weights at each vertex
     label = f'α=({alpha[0]},{alpha[1]},{alpha[2]})'
     plt.text(0.5, sum(alpha)/30, label, ha='center')
 plt.text(0.5, 0.5, 'Dirichlet\n(simplex)', ha='center', va='center',
@@ -314,7 +314,7 @@ plt.tight_layout()
 plt.savefig('exponential_family_examples.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("모든 지수족 분포는 동일한 수학적 구조를 공유합니다!")
+print("All exponential family distributions share the same mathematical structure!")
 ```
 
 ## 3. Conjugate Priors
@@ -386,13 +386,13 @@ import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 
-# 베타-베르누이 켤레 시연
+# Beta-Bernoulli conjugacy demonstration
 np.random.seed(42)
 
-# 사전분포: Beta(2, 2) (약간 중앙 선호)
+# Prior: Beta(2, 2) (slight preference for center)
 alpha_prior, beta_prior = 2, 2
 
-# 진짜 동전: p = 0.7
+# True coin: p = 0.7
 true_p = 0.7
 n_flips = [0, 1, 5, 20, 100]
 
@@ -401,34 +401,34 @@ theta_range = np.linspace(0, 1, 1000)
 plt.figure(figsize=(14, 8))
 
 for i, n in enumerate(n_flips):
-    # 데이터 생성
+    # Generate data
     if n > 0:
         data = np.random.binomial(1, true_p, n)
-        k = data.sum()  # 성공 횟수
+        k = data.sum()  # Number of successes
     else:
         k = 0
 
-    # 사후분포
+    # Posterior distribution
     alpha_post = alpha_prior + k
     beta_post = beta_prior + (n - k)
 
-    # 시각화
+    # Visualization
     plt.subplot(2, 3, i+1)
 
-    # 사전분포 (첫 번째 플롯에만)
+    # Prior (only in first plot)
     if i == 0:
         prior = stats.beta.pdf(theta_range, alpha_prior, beta_prior)
         plt.plot(theta_range, prior, 'b--', linewidth=2, label='Prior')
 
-    # 사후분포
+    # Posterior distribution
     posterior = stats.beta.pdf(theta_range, alpha_post, beta_post)
     plt.plot(theta_range, posterior, 'r-', linewidth=2, label='Posterior')
 
-    # 진짜 값
+    # True value
     plt.axvline(true_p, color='g', linestyle='--', alpha=0.7,
                 label=f'True p={true_p}')
 
-    # 사후 평균
+    # Posterior mean
     post_mean = alpha_post / (alpha_post + beta_post)
     plt.axvline(post_mean, color='orange', linestyle='--', alpha=0.7,
                 label=f'Post mean={post_mean:.3f}')
@@ -439,7 +439,7 @@ for i, n in enumerate(n_flips):
     plt.legend(fontsize=8)
     plt.grid(True)
 
-# 6번째 플롯: 순차적 업데이트
+# 6th plot: sequential update
 plt.subplot(2, 3, 6)
 alphas = [alpha_prior]
 betas = [beta_prior]
@@ -450,7 +450,7 @@ for flip in range(n_total):
     alphas.append(alphas[-1] + result)
     betas.append(betas[-1] + (1 - result))
 
-# 평균의 변화
+# Change in mean
 means = [a / (a + b) for a, b in zip(alphas, betas)]
 plt.plot(means, linewidth=2, label='Posterior mean')
 plt.axhline(true_p, color='g', linestyle='--', label=f'True p={true_p}')
@@ -464,10 +464,10 @@ plt.tight_layout()
 plt.savefig('conjugate_beta_bernoulli.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("켤레 사전분포의 장점:")
-print("1. 사후분포가 닫힌 형태 (Beta 유지)")
-print("2. 순차적 업데이트 가능")
-print("3. 데이터가 많아지면 진짜 값으로 수렴")
+print("Advantages of conjugate priors:")
+print("1. Posterior has a closed form (remains Beta)")
+print("2. Sequential updates are possible")
+print("3. Converges to the true value as data increases")
 ```
 
 ### 3.5 Main Conjugate Pairs
@@ -541,16 +541,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 2D 가우시안 시각화
+# 2D Gaussian visualization
 mu = np.array([0, 0])
 Sigma = np.array([[1, 0.8],
                   [0.8, 1]])
 
-# 샘플링
+# Sampling
 np.random.seed(42)
 samples = np.random.multivariate_normal(mu, Sigma, 500)
 
-# 그리드
+# Grid
 x1 = np.linspace(-3, 3, 100)
 x2 = np.linspace(-3, 3, 100)
 X1, X2 = np.meshgrid(x1, x2)
@@ -562,7 +562,7 @@ pdf = rv.pdf(pos)
 
 plt.figure(figsize=(14, 4))
 
-# 등고선과 샘플
+# Contour and samples
 plt.subplot(131)
 plt.contour(X1, X2, pdf, levels=10, cmap='viridis')
 plt.scatter(samples[:, 0], samples[:, 1], alpha=0.3, s=10)
@@ -572,9 +572,9 @@ plt.title('Bivariate Gaussian\n(ρ=0.8)')
 plt.axis('equal')
 plt.grid(True)
 
-# 주변분포
+# Marginal distribution
 plt.subplot(132)
-# x1의 주변분포
+# Marginal distribution of x1
 mu_x1 = mu[0]
 sigma_x1 = np.sqrt(Sigma[0, 0])
 x1_range = np.linspace(-3, 3, 100)
@@ -589,12 +589,12 @@ plt.title('Marginal Distribution')
 plt.legend()
 plt.grid(True)
 
-# 조건부 분포
+# Conditional distribution
 plt.subplot(133)
-# x2 = 1로 조건부
+# Condition on x2 = 1
 x2_cond = 1.0
 
-# 조건부 평균과 분산
+# Conditional mean and variance
 mu_cond = mu[0] + Sigma[0, 1] / Sigma[1, 1] * (x2_cond - mu[1])
 sigma_cond = np.sqrt(Sigma[0, 0] - Sigma[0, 1]**2 / Sigma[1, 1])
 
@@ -603,7 +603,7 @@ pdf_cond = stats.norm.pdf(x1_range, mu_cond, sigma_cond)
 plt.plot(x1_range, pdf_cond, linewidth=2,
          label=f'p(x₁|x₂={x2_cond})')
 
-# 조건부 샘플 추출
+# Extract conditional samples
 cond_samples = samples[np.abs(samples[:, 1] - x2_cond) < 0.1, 0]
 plt.hist(cond_samples, bins=20, density=True, alpha=0.5,
          label='Conditional samples')
@@ -618,14 +618,14 @@ plt.tight_layout()
 plt.savefig('multivariate_gaussian.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 수식 검증
-print("조건부 분포 파라미터:")
+# Formula verification
+print("Conditional distribution parameters:")
 print(f"  μ_(x₁|x₂={x2_cond}) = {mu_cond:.3f}")
 print(f"  σ_(x₁|x₂={x2_cond}) = {sigma_cond:.3f}")
 
-print("\n공분산 행렬:")
+print("\nCovariance matrix:")
 print(Sigma)
-print(f"\n상관계수: ρ = {Sigma[0,1] / np.sqrt(Sigma[0,0] * Sigma[1,1]):.3f}")
+print(f"\nCorrelation coefficient: ρ = {Sigma[0,1] / np.sqrt(Sigma[0,0] * Sigma[1,1]):.3f}")
 ```
 
 ### 4.5 Geometry of Covariance Matrix
@@ -636,15 +636,15 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 def plot_gaussian_ellipse(mu, Sigma, ax, color='blue', label=''):
-    """가우시안의 등고선 타원 그리기"""
-    # 고유값 분해
+    """Draw the contour ellipse of a Gaussian"""
+    # Eigenvalue decomposition
     eigenvalues, eigenvectors = np.linalg.eig(Sigma)
 
-    # 타원의 각도
+    # Angle of ellipse
     angle = np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0])
     angle = np.degrees(angle)
 
-    # 2-sigma 타원
+    # 2-sigma ellipse
     width, height = 2 * 2 * np.sqrt(eigenvalues)
 
     ellipse = Ellipse(mu, width, height, angle=angle,
@@ -652,7 +652,7 @@ def plot_gaussian_ellipse(mu, Sigma, ax, color='blue', label=''):
                       linewidth=2, label=label)
     ax.add_patch(ellipse)
 
-    # 주축 그리기
+    # Draw principal axes
     for i in range(2):
         v = eigenvectors[:, i] * 2 * np.sqrt(eigenvalues[i])
         ax.arrow(mu[0], mu[1], v[0], v[1],
@@ -661,7 +661,7 @@ def plot_gaussian_ellipse(mu, Sigma, ax, color='blue', label=''):
 
 mu = np.array([0, 0])
 
-# 다양한 공분산 행렬
+# Various covariance matrices
 Sigmas = [
     (np.array([[1, 0], [0, 1]]), 'Isotropic'),
     (np.array([[2, 0], [0, 0.5]]), 'Diagonal'),
@@ -673,10 +673,10 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 12))
 axes = axes.flatten()
 
 for ax, (Sigma, title) in zip(axes, Sigmas):
-    # 등고선 타원
+    # Contour ellipse
     plot_gaussian_ellipse(mu, Sigma, ax, color='blue', label='2σ ellipse')
 
-    # 샘플
+    # Samples
     samples = np.random.multivariate_normal(mu, Sigma, 200)
     ax.scatter(samples[:, 0], samples[:, 1], alpha=0.3, s=10)
 
@@ -689,7 +689,7 @@ for ax, (Sigma, title) in zip(axes, Sigmas):
     ax.grid(True)
     ax.legend()
 
-    # 공분산 행렬 표시
+    # Display covariance matrix
     ax.text(0.05, 0.95, f'Σ =\n{Sigma}',
             transform=ax.transAxes, fontsize=9,
             verticalalignment='top',
@@ -751,9 +751,9 @@ class GaussianMixture:
     def fit(self, X):
         n, d = X.shape
 
-        # 초기화
+        # Initialize
         self.pi = np.ones(self.K) / self.K
-        # k-means++ 스타일 초기화
+        # k-means++ style initialization
         idx = np.random.choice(n, self.K, replace=False)
         self.mu = X[idx]
         self.Sigma = np.array([np.eye(d) for _ in range(self.K)])
@@ -822,7 +822,7 @@ class GaussianMixture:
     def predict_proba(self, X):
         return self._e_step(X)
 
-# 3개의 가우시안으로 데이터 생성
+# Generate data from 3 Gaussians
 np.random.seed(42)
 n_samples = 300
 
@@ -831,18 +831,18 @@ X2 = np.random.randn(n_samples, 2) @ np.array([[1, -0.3], [-0.3, 0.5]]) + np.arr
 X3 = np.random.randn(n_samples, 2) @ np.array([[0.5, 0], [0, 1.5]]) + np.array([0, 5])
 X = np.vstack([X1, X2, X3])
 
-# GMM 학습
+# Train GMM
 gmm = GaussianMixture(n_components=3, max_iter=100)
 gmm.fit(X)
 
-# 예측
+# Predict
 labels = gmm.predict(X)
 proba = gmm.predict_proba(X)
 
-# 시각화
+# Visualization
 fig = plt.figure(figsize=(16, 5))
 
-# 데이터
+# Data
 ax1 = plt.subplot(131)
 ax1.scatter(X[:, 0], X[:, 1], alpha=0.3, s=10)
 ax1.set_title('Original Data')
@@ -850,14 +850,14 @@ ax1.set_xlabel('x₁')
 ax1.set_ylabel('x₂')
 ax1.grid(True)
 
-# GMM 결과
+# GMM results
 ax2 = plt.subplot(132)
 ax2.scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', alpha=0.5, s=10)
 for k in range(gmm.K):
     ax2.scatter(gmm.mu[k, 0], gmm.mu[k, 1],
                marker='x', s=300, linewidths=4, color='red')
 
-    # 2-sigma 타원
+    # 2-sigma ellipse
     from matplotlib.patches import Ellipse
     eigenvalues, eigenvectors = np.linalg.eig(gmm.Sigma[k])
     angle = np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]))
@@ -872,14 +872,14 @@ ax2.set_xlabel('x₁')
 ax2.set_ylabel('x₂')
 ax2.grid(True)
 
-# 확률 밀도
+# Probability density
 ax3 = plt.subplot(133)
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
 xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100),
                      np.linspace(y_min, y_max, 100))
 
-# GMM의 확률 밀도
+# GMM probability density
 Z = np.zeros_like(xx)
 for k in range(gmm.K):
     Z += gmm.pi[k] * stats.multivariate_normal.pdf(
@@ -964,24 +964,24 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 간단한 GLM: 포아송 회귀
+# Simple GLM: Poisson regression
 from scipy import stats
 
-# 데이터 생성
+# Generate data
 np.random.seed(42)
 n = 200
 X = np.random.randn(n, 2)
 true_w = np.array([1.5, -0.8])
 true_b = 0.5
 
-# 로그 링크: log(λ) = w^T x + b
+# Log link: log(λ) = w^T x + b
 log_lambda = X @ true_w + true_b
 lambda_true = np.exp(log_lambda)
 
-# 포아송 샘플링
+# Poisson sampling
 y = np.random.poisson(lambda_true)
 
-# PyTorch로 포아송 회귀
+# Poisson regression with PyTorch
 X_tensor = torch.FloatTensor(X)
 y_tensor = torch.FloatTensor(y)
 
@@ -997,11 +997,11 @@ class PoissonRegression(nn.Module):
 model = PoissonRegression(2)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# 포아송 NLL
+# Poisson NLL
 def poisson_nll(pred, target):
     return -torch.mean(target * torch.log(pred + 1e-8) - pred)
 
-# 학습
+# Training
 losses = []
 for epoch in range(1000):
     optimizer.zero_grad()
@@ -1011,7 +1011,7 @@ for epoch in range(1000):
     optimizer.step()
     losses.append(loss.item())
 
-# 결과
+# Results
 learned_w = model.linear.weight.data.numpy().squeeze()
 learned_b = model.linear.bias.data.numpy()[0]
 

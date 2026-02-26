@@ -1,8 +1,24 @@
 # Model Evaluation
 
-## Overview
+**Previous**: [Logistic Regression](./03_Logistic_Regression.md) | **Next**: [Cross-Validation and Hyperparameters](./05_Cross_Validation_Hyperparameters.md)
 
-Model evaluation is the process of objectively measuring the performance of trained models. Different evaluation metrics are used for classification and regression problems.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Interpret a confusion matrix and identify Type I and Type II errors
+2. Calculate precision, recall, F1-score, and accuracy from a confusion matrix
+3. Explain when accuracy alone is insufficient and which metric to prioritize instead
+4. Compare ROC-AUC and PR-AUC curves and describe when each is more appropriate
+5. Evaluate regression models using MAE, MSE, RMSE, R-squared, and MAPE
+6. Apply learning curves and validation curves to diagnose underfitting and overfitting
+7. Select the appropriate evaluation metric based on the problem context (balanced vs. imbalanced, classification vs. regression)
+
+---
+
+Training a model is only half the story -- you need to know how well it actually performs on unseen data. Choosing the wrong evaluation metric can lead you to deploy a model that looks great on paper but fails in production, especially when classes are imbalanced or when different types of errors carry different costs.
 
 ---
 

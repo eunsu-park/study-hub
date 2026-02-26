@@ -1,10 +1,25 @@
 # CPU Scheduling Basics
 
-## Overview
-
-CPU scheduling is the process of determining which of the ready processes should be allocated the CPU. This lesson covers CPU burst and I/O burst, scheduling goals, preemptive/non-preemptive scheduling, and the roles of various schedulers.
+**Previous**: [Threads and Multithreading](./03_Threads_and_Multithreading.md) | **Next**: [Scheduling Algorithms](./05_Scheduling_Algorithms.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the CPU-I/O burst cycle and how it characterizes process behavior
+2. Distinguish CPU-bound processes from I/O-bound processes and explain their scheduling implications
+3. List and prioritize scheduling criteria including throughput, turnaround time, waiting time, and response time
+4. Distinguish preemptive from non-preemptive scheduling and identify the decision points for each
+5. Describe the roles of long-term, short-term, and medium-term schedulers in a multi-level scheduling architecture
+6. Explain what the dispatcher does and why minimizing dispatch latency matters
+
+---
+
+Your computer runs dozens of processes simultaneously, but there are only a few CPU cores. CPU scheduling is the art of deciding which process gets the CPU next -- and it directly determines whether your system feels snappy or sluggish. This lesson covers the CPU-I/O burst cycle, scheduling goals and metrics, the distinction between preemptive and non-preemptive scheduling, and the roles of the various schedulers and the dispatcher.
+
+> **Analogy -- The Doctor's Waiting Room**: CPU scheduling is like a doctor's waiting room: who gets seen next depends on urgency, arrival time, and how long each visit takes. A patient with a 5-minute check-up stuck behind a 2-hour surgery consultation will be frustrated -- just like a short process waiting behind a long one. Different scheduling policies are different triage rules: first-come-first-served, shortest-appointment-first, or highest-urgency-first. No single rule is perfect for every clinic, and the same is true for operating systems.
 
 ## Table of Contents
 
@@ -19,6 +34,8 @@ CPU scheduling is the process of determining which of the ready processes should
 ---
 
 ## 1. What is CPU Scheduling?
+
+> **Analogy**: Think of CPU scheduling like a bank teller serving customers in a queue. Some customers have quick transactions (CPU-bound), others need to visit the vault (I/O-bound). The scheduler decides who gets served next and for how long -- balancing fairness, efficiency, and responsiveness.
 
 ### Definition
 
@@ -234,6 +251,8 @@ Calculation Example:
 └─────────────────────────────────────────────────────────┘
 ```
 
+**Why Waiting Time = Turnaround Time - Burst Time**: Turnaround time is the total wall-clock time a process spends in the system, from arrival to completion. During that interval, the process is doing one of two things: either actively running on the CPU (burst time) or sitting in the Ready queue waiting for its turn (waiting time). Since these are the only two activities, subtracting the time spent running from the total time gives exactly the time spent waiting. In formula form: `Waiting = Turnaround - Burst`. This identity is especially useful when you already have a Gantt chart -- you can read off completion times directly and derive waiting times without tracking every queue entry and exit.
+
 ### Trade-offs Between Goals
 
 ```
@@ -295,6 +314,8 @@ Calculation Example:
 └─────────────────────────────────────────────────────────┘
 ```
 
+**Why non-preemptive scheduling exists**: Non-preemptive scheduling is simple to implement because the scheduler only needs to make a decision when a process voluntarily gives up the CPU. There is no need to handle timer interrupts or worry about race conditions from mid-execution context switches. This simplicity makes it attractive for batch systems where throughput matters more than response time. However, the downside is the **convoy effect**: if a long CPU-bound process arrives first, every short process behind it must wait, inflating the average waiting time dramatically -- like being stuck behind a slow truck on a single-lane road.
+
 ### Preemptive Scheduling
 
 ```
@@ -326,6 +347,8 @@ Calculation Example:
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**Why preemptive scheduling is essential for interactive systems**: In an interactive system (desktop, phone, web server), users expect immediate feedback. If a long computation is running and a user clicks a button, preemptive scheduling ensures the OS can interrupt that computation and give the UI thread a chance to respond. Without preemption, the user would have to wait until the computation finishes -- potentially seconds or minutes. The trade-off is increased complexity: the OS must handle context switches carefully to avoid race conditions, and each switch costs CPU time (typically 1-10 microseconds). SJF with preemption (SRTF) is theoretically optimal for average wait time, but it requires predicting future burst lengths -- which is why most real-world systems use time-sliced Round Robin or multi-level feedback queues instead.
 
 ### Comparison
 
@@ -738,6 +761,126 @@ Describe three main tasks performed by the dispatcher, and explain the impact on
 - Increased system overhead
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: CPU Burst Analysis
+
+Write a script that analyzes the CPU burst pattern of a real workload:
+
+```python
+import time, random
+
+def simulate_workload():
+    """Simulate alternating CPU and I/O bursts."""
+    bursts = []
+    for _ in range(20):
+        # CPU burst
+        cpu_start = time.perf_counter()
+        total = sum(range(random.randint(10000, 100000)))
+        cpu_time = time.perf_counter() - cpu_start
+        bursts.append(("CPU", cpu_time))
+
+        # I/O burst (simulated)
+        io_time = random.uniform(0.001, 0.01)
+        time.sleep(io_time)
+        bursts.append(("IO", io_time))
+
+    return bursts
+```
+
+**Tasks:**
+1. Run the simulation and classify the workload as CPU-bound or I/O-bound based on burst ratio
+2. Plot a histogram of CPU burst durations — does it match the exponential distribution described in theory?
+3. Calculate the CPU utilization: `sum(CPU bursts) / total time`
+
+### Exercise 2: Scheduling Metrics Calculator
+
+Build a function that computes all scheduling metrics from a Gantt chart:
+
+**Tasks:**
+1. Given a list of `(process_id, start_time, end_time)` tuples and arrival times, compute: waiting time, turnaround time, response time for each process
+2. Compute system-wide metrics: throughput, CPU utilization, average waiting time
+3. Test with the process set: P1(arrive=0, burst=8), P2(arrive=1, burst=4), P3(arrive=2, burst=9), P4(arrive=3, burst=5) under FCFS
+
+### Exercise 3: Preemption Simulator
+
+Extend the concept from `examples/OS_Theory/05_scheduling_sim.py`:
+
+**Tasks:**
+1. Add a `priority_preemptive()` scheduler that preempts whenever a higher-priority process arrives
+2. Test with: P1(arrive=0, burst=7, priority=3), P2(arrive=2, burst=4, priority=1), P3(arrive=4, burst=1, priority=2), P4(arrive=5, burst=4, priority=2)
+3. Compare the average waiting time against non-preemptive priority scheduling
+
+---
+
+## Exercises
+
+### Exercise 1: CPU-Bound vs I/O-Bound Classification
+
+For each workload below, classify it as **CPU-bound**, **I/O-bound**, or **mixed**. Then predict which scheduling criteria (throughput, response time, fairness) are most important for that workload and why.
+
+| Workload | Classification | Most Important Criterion | Reasoning |
+|----------|---------------|--------------------------|-----------|
+| Video transcoder converting 4K footage | | | |
+| Interactive text editor | | | |
+| Database query with many disk reads | | | |
+| Machine learning model training | | | |
+| Web browser loading a webpage | | | |
+| `cp` command copying 10 GB file | | | |
+
+### Exercise 2: Scheduling Metrics Calculation
+
+Five processes arrive at the following times with the given CPU burst lengths. Use **FCFS** (First-Come-First-Served) and compute the metrics.
+
+| Process | Arrival Time | CPU Burst |
+|---------|-------------|-----------|
+| P1 | 0 | 10 |
+| P2 | 1 | 4 |
+| P3 | 2 | 7 |
+| P4 | 3 | 3 |
+| P5 | 4 | 5 |
+
+1. Draw the Gantt chart
+2. Calculate waiting time for each process
+3. Calculate turnaround time for each process
+4. Calculate response time for each process
+5. Compute average waiting time, average turnaround time, and CPU utilization
+
+### Exercise 3: Preemption Decision Points
+
+For each OS event listed below, determine whether it is a **preemptive** scheduling decision point, a **non-preemptive** decision point, or **neither** (not a scheduling decision point). Explain your reasoning.
+
+| Event | Type | Reason |
+|-------|------|--------|
+| Running process calls `read()` (blocks on I/O) | | |
+| Timer interrupt fires (time quantum expired) | | |
+| Higher-priority process moves from Waiting to Ready | | |
+| Running process calls `exit()` | | |
+| New process is created with `fork()` | | |
+| I/O device sends completion interrupt | | |
+
+### Exercise 4: Scheduler Type Roles
+
+A large batch processing system uses all three scheduler types. Describe what decision each scheduler makes in the following scenario:
+
+> A university's computing cluster runs overnight batch jobs (weather simulations), interactive student terminals, and a file archiving process. At 2 AM, 50 new batch jobs are submitted, the cluster is at 80% memory, and one simulation has been swapped out.
+
+1. What does the **long-term scheduler** decide? What criteria does it use?
+2. What does the **short-term scheduler** decide? How frequently does it run?
+3. What does the **medium-term scheduler** decide? Why was it needed in this scenario?
+4. Which scheduler type is most critical for interactive terminal response time?
+
+### Exercise 5: Dispatcher Latency Analysis
+
+A system has a dispatch latency of 3 microseconds and performs 5,000 context switches per second.
+
+1. How much total time per second is spent in the dispatcher?
+2. What percentage of CPU time is consumed by dispatching alone?
+3. The system designer wants to reduce dispatch latency to 1 microsecond. List three specific operations that contribute to dispatch latency and describe how they could be optimized.
+4. If the context switch rate is reduced from 5,000 to 1,000 per second by using a longer time quantum, but average response time increases from 10ms to 25ms, is this a worthwhile trade-off for: (a) a batch processing server? (b) an interactive desktop OS?
 
 ---
 

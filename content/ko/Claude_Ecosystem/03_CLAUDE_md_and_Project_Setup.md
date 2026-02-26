@@ -13,13 +13,16 @@ CLAUDE.md는 Claude Code 생태계에서 가장 중요한 설정 파일입니다
 - 마크다운 문법 기초 지식
 - Claude Code로 설정할 프로젝트
 
-**학습 목표**:
-- CLAUDE.md가 존재하는 이유와 Claude가 이를 활용하는 방법 이해
-- 다양한 프로젝트 유형에 맞는 효과적인 CLAUDE.md 작성
-- `.claude/` 디렉토리 구조 설정
-- 설정 계층 구조(전역, 프로젝트, 로컬) 탐색
-- 커밋 대상과 gitignore 대상에 대한 올바른 결정
-- 팀 공유 Claude Code 설정의 모범 사례 적용
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. CLAUDE.md가 존재하는 이유와 Claude가 이를 활용하는 방법 이해
+2. 다양한 프로젝트 유형에 맞는 효과적인 CLAUDE.md 작성
+3. `.claude/` 디렉토리 구조 설정
+4. 설정 계층 구조(전역, 프로젝트, 로컬) 탐색
+5. 커밋 대상과 gitignore 대상에 대한 올바른 결정
+6. 팀 공유 Claude Code 설정의 모범 사례 적용
 
 ---
 

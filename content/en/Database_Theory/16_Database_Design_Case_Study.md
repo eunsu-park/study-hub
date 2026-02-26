@@ -8,15 +8,18 @@ This capstone lesson brings together everything from the preceding fifteen lesso
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Learning Objectives**:
-- Conduct requirements analysis for a database system
-- Produce a complete ER diagram from business requirements
-- Map an ER model to a relational schema and normalize to BCNF
-- Make informed decisions about physical design (indexing, partitioning, denormalization)
-- Analyze query plans and apply optimization techniques
-- Design transaction strategies with appropriate isolation levels
-- Evaluate design tradeoffs and document decisions
-- Recognize and avoid common database design mistakes
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Conduct requirements analysis for a database system
+2. Produce a complete ER diagram from business requirements
+3. Map an ER model to a relational schema and normalize to BCNF
+4. Make informed decisions about physical design (indexing, partitioning, denormalization)
+5. Analyze query plans and apply optimization techniques
+6. Design transaction strategies with appropriate isolation levels
+7. Evaluate design tradeoffs and document decisions
+8. Recognize and avoid common database design mistakes
 
 ---
 

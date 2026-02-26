@@ -1,9 +1,23 @@
 # Testing Fundamentals
 
+**Previous**: [Error Handling Strategies](./09_Error_Handling.md) | **Next**: [Debugging & Profiling](./11_Debugging_and_Profiling.md)
+
 > **Topic**: Programming
 > **Lesson**: 10 of 16
 > **Prerequisites**: Functions and Methods, Error Handling, Object-Oriented Programming
-> **Objective**: Master different types of testing (unit, integration, E2E), understand TDD and BDD, learn to use test doubles effectively, and write tests that provide confidence without brittleness.
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the test pyramid and allocate testing effort appropriately across unit, integration, and end-to-end tests
+2. Write unit tests following the Arrange-Act-Assert pattern with descriptive naming conventions in Python, JavaScript, and Java
+3. Apply Test-Driven Development (TDD) using the Red-Green-Refactor cycle to implement new features
+4. Distinguish between test double types (dummy, stub, mock, spy, fake) and select the right one for each testing scenario
+5. Write integration tests for database interactions and REST API endpoints
+6. Set up end-to-end tests using browser automation tools (Selenium, Playwright, Cypress)
+7. Interpret code coverage metrics (line, branch, path) and set realistic coverage targets
+8. Use property-based testing to discover edge cases that example-based tests miss
 
 ---
 
@@ -1145,7 +1159,6 @@ Properties to test:
 
 ---
 
-## Navigation
+---
 
-**Previous Lesson**: [09_Error_Handling.md](09_Error_Handling.md)
-**Next Lesson**: [11_Debugging_and_Profiling.md](11_Debugging_and_Profiling.md)
+**Previous**: [Error Handling Strategies](./09_Error_Handling.md) | **Next**: [Debugging & Profiling](./11_Debugging_and_Profiling.md)

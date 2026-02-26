@@ -7,6 +7,8 @@
 - Understand Alfven velocity and MHD waves
 - Learn concepts of magnetic pressure and magnetic tension
 
+**Why This Lesson Matters:** Magnetohydrodynamics (MHD) governs some of the most energetic phenomena in the universe: solar flares, astrophysical jets, stellar dynamos, and fusion reactor plasmas. By coupling fluid dynamics with Maxwell's equations, MHD captures how conducting fluids and magnetic fields interact -- the magnetic field exerts forces on the fluid, while the fluid's motion stretches and amplifies the field. Understanding MHD is essential for space weather prediction, controlled fusion, and astrophysical modeling.
+
 ---
 
 ## 1. Introduction to MHD
@@ -405,6 +407,12 @@ def ideal_mhd_equations():
 ## 4. Alfven Velocity
 
 ### 4.1 Definition and Physical Meaning
+
+The Alfven velocity is the fundamental speed scale of MHD, analogous to the speed of sound in fluid mechanics. It represents the speed at which transverse perturbations propagate along magnetic field lines:
+
+$$v_A = \frac{B}{\sqrt{\mu_0 \rho}}$$
+
+where $B$ is the magnetic field strength, $\mu_0$ is the vacuum permeability, and $\rho$ is the mass density. The key insight: it arises from the balance between magnetic tension (the restoring force, $\sim B^2/\mu_0$) and inertia ($\sim \rho v^2$). The plasma beta $\beta = 2\mu_0 p / B^2$ compares thermal to magnetic pressure and determines which force dominates the dynamics.
 
 ```
 Alfven Velocity:
@@ -1179,6 +1187,25 @@ MHD Basics Key Points:
    - Field lines frozen to fluid
    - Valid when Rm >> 1
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Alfven Velocity and Plasma Beta
+For the solar corona with magnetic field B = 10 G = 10⁻³ T and number density n = 10⁸ cm⁻³ = 10¹⁴ m⁻³ (proton plasma), calculate: (a) the Alfven velocity vA = B/√(μ₀ρ) where ρ = n·mp, (b) the sound speed cs = √(γp/ρ) at T = 10⁶ K, and (c) the plasma beta β = 2μ₀p/B². Classify this environment as magnetically dominated (β < 1) or thermally dominated (β > 1) and explain the physical implication for wave propagation.
+
+### Exercise 2: MHD Wave Phase Velocities
+For a plasma with vA = 2cs, compute the phase velocities of all three MHD wave modes (fast magnetosonic, Alfven, slow magnetosonic) at propagation angles θ = 0°, 30°, 60°, and 90° relative to the background magnetic field B₀. Use the dispersion relations given in Section 5.1. Plot the Friedrichs diagram showing all three wave mode surfaces in polar coordinates (v⊥ vs v‖). At which angle does the fast wave achieve its maximum speed?
+
+### Exercise 3: Magnetic Pressure Equilibrium
+A current sheet separates a region with magnetic field B₁ = 10 G and thermal pressure p₁ = 0.5 × 10⁻³ Pa from a field-free region (B₂ = 0) with thermal pressure p₂. Using total pressure balance p + B²/(2μ₀) = constant across the current sheet, calculate p₂. Then verify that the jump in total pressure is zero, which is the equilibrium condition.
+
+### Exercise 4: Frozen-in Theorem and Magnetic Diffusion
+For a resistive plasma with electrical conductivity σ = 10⁶ S/m and characteristic length L = 1 Mm = 10⁶ m, compute: (a) the magnetic diffusivity η = 1/(μ₀σ), (b) the magnetic diffusion timescale τdiff = μ₀σL², and (c) the magnetic Reynolds number Rm = μ₀σvL for a flow velocity v = 100 km/s. Is the frozen-in condition valid? Compare τdiff to the Alfven crossing time τA = L/vA using B = 10 G, n = 10¹⁴ m⁻³.
+
+### Exercise 5: Ideal MHD Conservative Form
+Write out explicitly all seven components of the conservative variable vector U and flux vector F(U) for 1D ideal MHD. Then verify that your expressions are dimensionally consistent by checking the units of each component. Starting from the induction equation dB/dt = ∇×(v×B), show algebraically that this is equivalent to the flux form used in the conservative MHD system.
 
 ---
 

@@ -1,12 +1,21 @@
 # 08. Kubernetes Advanced
 
+**Previous**: [Kubernetes Security](./07_Kubernetes_Security.md) | **Next**: [Helm Package Management](./09_Helm_Package_Management.md)
+
 ## Learning Objectives
-- Routing external traffic through Ingress
-- Managing stateful applications with StatefulSet
-- Using PersistentVolume/PersistentVolumeClaim
-- Advanced usage of ConfigMap and Secret
-- Using DaemonSet and Job
-- Advanced scheduling techniques
+
+After completing this lesson, you will be able to:
+
+1. Configure Ingress resources to route external HTTP/HTTPS traffic to cluster services
+2. Deploy stateful applications using StatefulSet with stable network identities
+3. Provision persistent storage with PersistentVolume and PersistentVolumeClaim
+4. Apply advanced ConfigMap and Secret patterns including file mounts and dynamic updates
+5. Use DaemonSet for node-level agents and Job/CronJob for batch workloads
+6. Implement advanced scheduling with node affinity, taints, tolerations, and topology spread
+
+---
+
+The basic Kubernetes primitives -- Pods, Deployments, and Services -- cover many use cases, but production workloads demand more. Databases need stable storage and network identities, web applications need external HTTP routing with TLS, and cluster-wide agents must run on every node. This lesson introduces the advanced Kubernetes resources and scheduling techniques that bridge the gap between simple container orchestration and production-grade infrastructure.
 
 ## Table of Contents
 1. [Ingress](#1-ingress)
@@ -172,7 +181,7 @@ kind: Ingress
 metadata:
   name: tls-ingress
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Force HTTPS — prevents sensitive data from traveling over plaintext HTTP
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   ingressClassName: nginx
@@ -218,7 +227,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
 
-    # Rate Limiting
+    # Rate Limiting — protects backend from DoS and abusive clients
     nginx.ingress.kubernetes.io/limit-rps: "100"
     nginx.ingress.kubernetes.io/limit-connections: "50"
 
@@ -232,7 +241,7 @@ metadata:
     nginx.ingress.kubernetes.io/auth-secret: basic-auth
     nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
 
-    # Custom headers
+    # Custom headers — security headers that defend against clickjacking and MIME-sniffing attacks
     nginx.ingress.kubernetes.io/configuration-snippet: |
       add_header X-Frame-Options "SAMEORIGIN";
       add_header X-Content-Type-Options "nosniff";
@@ -301,7 +310,7 @@ spec:
   ports:
   - port: 80
     name: web
-  clusterIP: None  # Headless Service
+  clusterIP: None  # Headless Service — gives each pod a stable DNS name (pod-name.svc) instead of a single cluster IP
   selector:
     app: web
 
@@ -311,7 +320,7 @@ kind: StatefulSet
 metadata:
   name: web
 spec:
-  serviceName: "web-headless"  # Connect to Headless Service
+  serviceName: "web-headless"  # Connect to Headless Service — required for stable per-pod DNS names
   replicas: 3
   selector:
     matchLabels:
@@ -336,7 +345,7 @@ spec:
   - metadata:
       name: www
     spec:
-      accessModes: ["ReadWriteOnce"]
+      accessModes: ["ReadWriteOnce"]  # Each pod gets its own PVC — prevents data corruption from concurrent writes
       storageClassName: standard
       resources:
         requests:
@@ -344,12 +353,12 @@ spec:
 
   # Update strategy
   updateStrategy:
-    type: RollingUpdate
+    type: RollingUpdate  # Zero-downtime deploy: new pods start before old ones terminate
     rollingUpdate:
-      partition: 0  # Only Pods >= this number are updated
+      partition: 0  # Only Pods >= this number are updated — useful for canary-testing a subset of replicas
 
   # Pod management policy
-  podManagementPolicy: OrderedReady  # Or Parallel
+  podManagementPolicy: OrderedReady  # Or Parallel — OrderedReady ensures each pod is Running before starting the next (safe for leader election)
 ```
 
 ### 2.3 Database StatefulSet
@@ -396,7 +405,7 @@ metadata:
 spec:
   selector:
     app: mysql
-    statefulset.kubernetes.io/pod-name: mysql-0  # Primary only
+    statefulset.kubernetes.io/pod-name: mysql-0  # Primary only — routes all write traffic to the leader, preventing split-brain
   ports:
   - port: 3306
 
@@ -456,14 +465,14 @@ spec:
           requests:
             cpu: 500m
             memory: 1Gi
-        livenessProbe:
+        livenessProbe:  # liveness restarts the pod if MySQL hangs; separate from readiness to avoid cascading restarts
           exec:
             command: ["mysqladmin", "ping"]
-          initialDelaySeconds: 30
+          initialDelaySeconds: 30  # Give MySQL time to initialize before checking — avoids restart loops on slow starts
           periodSeconds: 10
-        readinessProbe:
+        readinessProbe:  # readiness gates traffic; a failing probe removes the pod from the Service
           exec:
-            command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]
+            command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]  # Verifies the query engine is ready, not just the process
           initialDelaySeconds: 5
           periodSeconds: 2
 
@@ -573,9 +582,9 @@ metadata:
 provisioner: kubernetes.io/gce-pd  # Varies by cloud provider
 parameters:
   type: pd-ssd
-reclaimPolicy: Delete  # Delete or Retain
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer  # Or Immediate
+reclaimPolicy: Delete  # Delete or Retain — Delete auto-cleans cloud disks; use Retain for databases that need manual backup before deletion
+allowVolumeExpansion: true  # Lets you grow PVCs in place — avoids data migration when storage needs increase
+volumeBindingMode: WaitForFirstConsumer  # Delays provisioning until a pod is scheduled — ensures the disk is in the same zone as the pod
 
 ---
 # AWS EBS StorageClass
@@ -930,7 +939,7 @@ spec:
         monitoring: "true"
 
       tolerations:
-      # Deploy on master nodes too
+      # Deploy on master nodes too — monitoring must cover control-plane nodes for full cluster visibility
       - key: node-role.kubernetes.io/control-plane
         operator: Exists
         effect: NoSchedule
@@ -956,8 +965,8 @@ spec:
             cpu: 100m
             memory: 50Mi
 
-      hostNetwork: true
-      hostPID: true
+      hostNetwork: true  # Needed so the exporter can see host-level network metrics and bind to the node's IP
+      hostPID: true  # Required to enumerate host processes for per-process metrics
 
       volumes:
       - name: proc
@@ -968,9 +977,9 @@ spec:
           path: /sys
 
   updateStrategy:
-    type: RollingUpdate
+    type: RollingUpdate  # Zero-downtime: updates one node at a time so monitoring coverage is never fully lost
     rollingUpdate:
-      maxUnavailable: 1
+      maxUnavailable: 1  # Only one node loses its exporter during rollout — balances speed vs observability gap
 ```
 
 ### 5.2 Job
@@ -985,10 +994,10 @@ spec:
   # Completion conditions
   completions: 1        # Number of successful Pods required
   parallelism: 1        # Number of concurrent Pods
-  backoffLimit: 3       # Retry count on failure
-  activeDeadlineSeconds: 600  # Maximum execution time
+  backoffLimit: 3       # Retry count on failure — prevents infinite retry loops on permanent errors
+  activeDeadlineSeconds: 600  # Maximum execution time — hard kill prevents runaway jobs from consuming resources forever
 
-  # Delete after completion
+  # Delete after completion — auto-cleanup keeps the cluster tidy and avoids accumulating finished pods
   ttlSecondsAfterFinished: 3600
 
   template:
@@ -1034,13 +1043,13 @@ spec:
   schedule: "0 2 * * *"  # Daily at 2 AM
   timeZone: "Asia/Seoul"
 
-  # Concurrency policy
+  # Concurrency policy — Forbid prevents overlapping backup runs that could corrupt data
   concurrencyPolicy: Forbid  # Allow, Forbid, or Replace
 
-  # Starting deadline
+  # Starting deadline — if the scheduler misses the window by >300s, skip this run rather than starting a stale backup
   startingDeadlineSeconds: 300
 
-  # Success/failure history
+  # Success/failure history — keep enough history for debugging but avoid cluttering etcd with old Job objects
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
 
@@ -1167,7 +1176,7 @@ spec:
                   - cache
               topologyKey: kubernetes.io/hostname
 
-        # Deploy on different nodes than other Pods of same app
+        # Deploy on different nodes than other Pods of same app — ensures a single node failure doesn't take down all replicas
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
@@ -1245,10 +1254,10 @@ spec:
         app: distributed
     spec:
       topologySpreadConstraints:
-      # Even distribution across zones
+      # Even distribution across zones — survives an entire AZ outage with minimal capacity loss
       - maxSkew: 1
         topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: DoNotSchedule
+        whenUnsatisfiable: DoNotSchedule  # Hard constraint: refuse to schedule rather than create an imbalanced deployment
         labelSelector:
           matchLabels:
             app: distributed
@@ -1317,12 +1326,6 @@ spec:
 
 ---
 
-## Next Steps
-
-- [09_Helm_Package_Management](09_Helm_Package_Management.md) - Helm charts
-- [10_CI_CD_Pipelines](10_CI_CD_Pipelines.md) - Automated deployment
-- [07_Kubernetes_Security](07_Kubernetes_Security.md) - Review security
-
 ## References
 
 - [Kubernetes Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/)
@@ -1332,4 +1335,65 @@ spec:
 
 ---
 
-[← Previous: Kubernetes Security](07_Kubernetes_Security.md) | [Next: Helm Package Management →](09_Helm_Package_Management.md) | [Table of Contents](00_Overview.md)
+## Exercises
+
+### Exercise 1: Deploy a Stateful Application with StatefulSet
+
+Experience the difference between a Deployment and a StatefulSet by deploying a replicated database.
+
+1. Write a StatefulSet manifest for a 3-replica Redis cluster using `redis:7-alpine`
+2. Include a headless Service (`clusterIP: None`) with the same selector
+3. Apply both manifests and observe that each Pod gets a stable, ordered name (`redis-0`, `redis-1`, `redis-2`)
+4. Exec into `redis-0` and set a key: `redis-cli set mykey "hello"`
+5. Delete `redis-0` and observe Kubernetes recreate it with the same name and ordinal
+6. Verify the key is gone after recreation (no persistent storage yet) — note the difference from a PVC-backed StatefulSet
+
+### Exercise 2: Provision Persistent Storage with PVC
+
+Attach a PersistentVolumeClaim to a StatefulSet to give each replica its own storage.
+
+1. Update the StatefulSet from Exercise 1 to include a `volumeClaimTemplate` requesting 1Gi of storage
+2. Apply and confirm each Pod has its own PVC: `kubectl get pvc`
+3. Exec into `redis-0` and set a key, then delete the Pod
+4. After `redis-0` restarts, exec back in and confirm the key is still present
+5. Run `kubectl get pv` to see the dynamically provisioned PersistentVolume
+6. Delete the StatefulSet and observe whether the PVCs are retained or deleted
+
+### Exercise 3: Expose a Service with Ingress
+
+Configure an Ingress resource to route external HTTP traffic to multiple Services.
+
+1. Enable the Nginx Ingress controller on minikube: `minikube addons enable ingress`
+2. Create two Deployments and their ClusterIP Services: `app-v1` on port 8080 and `app-v2` on port 8081
+3. Write an Ingress manifest that routes:
+   - `/v1` path → `app-v1` Service
+   - `/v2` path → `app-v2` Service
+4. Apply the Ingress and get its IP: `kubectl get ingress`
+5. Add the IP to `/etc/hosts` (e.g., `192.168.x.x myapp.local`)
+6. Test routing: `curl http://myapp.local/v1` and `curl http://myapp.local/v2`
+
+### Exercise 4: Run a Batch Workload with Job and CronJob
+
+Use Job and CronJob resources to run one-time and scheduled batch tasks.
+
+1. Write a Job manifest that runs a container, prints "Batch job complete", and exits with code 0
+2. Apply it and observe the Pod run to completion: `kubectl get jobs` and `kubectl get pods`
+3. Read the job logs: `kubectl logs job/my-job`
+4. Write a CronJob that runs the same task every minute using schedule `*/1 * * * *`
+5. Wait 2 minutes and confirm multiple Jobs were created: `kubectl get jobs`
+6. Set `successfulJobsHistoryLimit: 3` and `failedJobsHistoryLimit: 1` in the CronJob spec and apply it
+
+### Exercise 5: Control Pod Placement with Node Affinity
+
+Use scheduling rules to influence which nodes workloads run on.
+
+1. Label one of your minikube nodes (or the control-plane): `kubectl label node minikube tier=frontend`
+2. Write a Deployment that uses `nodeAffinity` to require placement on nodes with `tier=frontend`
+3. Apply it and verify the Pods are scheduled on the labeled node: `kubectl get pods -o wide`
+4. Add a second label `tier=backend` to a different node (or remove and re-add on the same node for minikube)
+5. Create a second Deployment with `preferredDuringSchedulingIgnoredDuringExecution` affinity for `tier=backend` nodes
+6. Observe the scheduling behavior — preferred affinity does not block scheduling if no matching node exists
+
+---
+
+**Previous**: [Kubernetes Security](./07_Kubernetes_Security.md) | **Next**: [Helm Package Management](./09_Helm_Package_Management.md)

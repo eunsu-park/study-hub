@@ -1,5 +1,18 @@
 # Stack and Queue Applications
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the LIFO and FIFO principles of stacks and queues and identify their O(1) core operations
+2. Implement parenthesis validation using a stack to detect mismatched or unclosed brackets
+3. Evaluate postfix (Reverse Polish Notation) expressions by applying the stack-based evaluation algorithm
+4. Apply the monotonic stack pattern to solve next-greater-element and largest-rectangle problems efficiently
+5. Use a queue to implement breadth-first search (BFS) for level-order traversal and shortest-path problems
+6. Leverage a deque to solve sliding-window maximum problems in O(n) time
+
+---
+
 ## Overview
 
 Stacks and queues are fundamental data structures, but they play crucial roles in various algorithm problems. This lesson covers frequently used patterns in practice such as parenthesis checking, postfix notation, and monotonic stacks.
@@ -191,8 +204,12 @@ bool isValid(const char* s) {
         char c = s[i];
 
         if (c == '(' || c == '[' || c == '{') {
+            // Push opening brackets; a stack is perfect here because the most
+            // recently opened bracket must be closed first (LIFO matches nesting)
             stack[++top] = c;
         } else {
+            // An unmatched closing bracket with nothing on the stack means the
+            // string is invalid before we even check the bracket type
             if (top == -1) return false;
 
             char topChar = stack[top--];
@@ -203,6 +220,7 @@ bool isValid(const char* s) {
         }
     }
 
+    // A non-empty stack means there are unclosed openers — also invalid
     return top == -1;
 }
 ```
@@ -568,16 +586,23 @@ Largest rectangle: height 5, width 2 → area 10
 // C++
 int largestRectangleArea(const vector<int>& heights) {
     int n = heights.size();
-    stack<int> st;
+    stack<int> st;  // Stores indices of bars in ascending height order
     int maxArea = 0;
 
+    // Appending a sentinel height 0 at i == n forces all remaining bars on the
+    // stack to be popped and processed — avoids a separate post-loop flush
     for (int i = 0; i <= n; i++) {
         int h = (i == n) ? 0 : heights[i];
 
+        // Pop every bar taller than h: h is the right boundary that limits those
+        // bars, so this is their last chance to compute their maximum rectangle
         while (!st.empty() && heights[st.top()] > h) {
             int height = heights[st.top()];
             st.pop();
 
+            // Width extends to the nearest shorter bar on both sides — the new
+            // stack top is the closest shorter bar to the left, and i is the
+            // closest shorter bar to the right
             int width = st.empty() ? i : i - st.top() - 1;
             maxArea = max(maxArea, height * width);
         }
@@ -686,11 +711,14 @@ void bfs(vector<vector<int>>& graph, int start) {
     queue<int> q;
 
     q.push(start);
+    // Mark visited *before* enqueuing, not after dequeuing — this prevents the
+    // same node from being enqueued multiple times via different neighbors,
+    // which would corrupt the level-order guarantee and waste O(n) work
     visited[start] = true;
 
     while (!q.empty()) {
         int node = q.front();
-        q.pop();
+        q.pop();  // Process in FIFO order — guarantees shortest-path distances
 
         cout << node << " ";
 
@@ -894,23 +922,27 @@ Deque approach: Keep only maximum candidates (monotonic decreasing deque)
 ```cpp
 // C++
 vector<int> maxSlidingWindow(const vector<int>& nums, int k) {
-    deque<int> dq;  // Store indices, monotonic decreasing
+    deque<int> dq;  // Stores indices; values in dq are monotonically decreasing
     vector<int> result;
 
     for (int i = 0; i < nums.size(); i++) {
-        // Remove elements outside window
+        // Evict the front if it has slid outside the current window — we check
+        // by index so we don't need a separate "window start" variable
         while (!dq.empty() && dq.front() < i - k + 1) {
             dq.pop_front();
         }
 
-        // Remove smaller elements (keep maximum candidates)
+        // Discard from the back any index whose value is smaller than nums[i]:
+        // those elements can never be a future window maximum because nums[i]
+        // is both larger and will outlast them in the window
         while (!dq.empty() && nums[dq.back()] < nums[i]) {
             dq.pop_back();
         }
 
         dq.push_back(i);
 
-        // Store result when window is complete
+        // The front of dq is always the index of the window's maximum —
+        // delay output until the first full window is formed
         if (i >= k - 1) {
             result.push_back(nums[dq.front()]);
         }

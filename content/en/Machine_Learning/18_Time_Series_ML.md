@@ -1,8 +1,24 @@
 # Time Series Machine Learning
 
-## Overview
+**Previous**: [Imbalanced Data](./17_Imbalanced_Data.md) | **Next**: [AutoML and Hyperparameter Optimization](./19_AutoML_Hyperparameter_Optimization.md)
 
-This lesson covers machine learning approaches to time series forecasting and classification. Unlike classical statistical methods (ARIMA, SARIMA — see Data_Science L20-21), ML approaches treat forecasting as a supervised learning problem by engineering temporal features and using tree-based models, Prophet, or specialized classifiers.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how to reframe a time series forecasting problem as supervised learning using lag features
+2. Engineer temporal features including lags, rolling statistics, calendar components, and Fourier terms
+3. Apply TimeSeriesSplit and walk-forward validation to avoid temporal data leakage in cross-validation
+4. Train tree-based models (GradientBoosting, XGBoost, LightGBM) for time series forecasting
+5. Compare multi-step forecasting strategies (recursive, direct, multi-output) and their error characteristics
+6. Describe when to use Prophet versus tree-based approaches for business forecasting
+7. Evaluate forecasts using MAE, RMSE, MAPE, sMAPE, and MASE, and interpret each metric's strengths
+
+---
+
+Classical time series methods like ARIMA model a single series at a time using linear autocorrelation structure. But what if you have dozens of exogenous features, non-linear relationships, or hundreds of related series? Machine learning approaches reframe forecasting as a tabular supervised learning problem -- engineer temporal features, feed them to gradient-boosted trees, and leverage the same tools you already know. This lesson shows you when and how to make that shift, from feature engineering to proper temporal validation.
 
 ---
 

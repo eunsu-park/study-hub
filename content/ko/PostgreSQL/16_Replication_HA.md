@@ -1,11 +1,24 @@
 # 16. 복제와 고가용성 (Replication & High Availability)
 
+**이전**: [쿼리 최적화](./15_Query_Optimization.md) | **다음**: [윈도우 함수](./17_Window_Functions.md)
+
+---
+
 ## 학습 목표
-- PostgreSQL 복제 아키텍처와 종류 이해
-- 스트리밍 복제 구성 및 관리
-- 논리 복제를 활용한 선택적 데이터 복제
-- 페일오버 전략과 자동화 구현
-- 고가용성 클러스터 설계
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 물리적 복제(스트리밍 복제)와 논리적 복제(Logical Replication)를 비교하고 각각의 적절한 사용 사례를 식별할 수 있다
+2. WAL 설정과 복제 슬롯(Replication Slot)을 포함한 Primary-Standby 스트리밍 복제 환경을 구성할 수 있다
+3. 선택적 테이블 복제를 위해 Publication과 Subscription을 사용한 논리적 복제를 설정할 수 있다
+4. 시스템 뷰를 사용하여 복제 지연(Replication Lag), 슬롯 상태, WAL 누적을 모니터링할 수 있다
+5. 수동 페일오버(Failover)와 스위치오버(Switchover) 작업을 수행하고, pg_rewind로 이전 Primary를 복구할 수 있다
+6. Patroni, etcd, HAProxy를 활용한 고가용성(High Availability) 아키텍처를 설계할 수 있다
+7. 복제 클러스터와 커넥션 풀링(PgBouncer)을 통합할 수 있다
+
+---
+
+다운타임은 비용을 초래하고 사용자의 신뢰를 떨어뜨립니다. 가용성이 중요한 모든 애플리케이션 -- 사실상 거의 모든 프로덕션 시스템 -- 에서 단일 PostgreSQL 서버는 단일 장애 지점(Single Point of Failure)이 됩니다. 복제(Replication)는 스탠바이 서버에 데이터 복사본을 생성하여 읽기 트래픽을 처리하고, 재해 복구(Disaster Recovery)를 제공하며, Primary 장애 발생 시 수 초 내에 역할을 전환할 수 있게 합니다. 이 레슨에서는 기본적인 스트리밍 복제부터 자동 페일오버를 갖춘 프로덕션 수준의 고가용성 구성까지 전체 스펙트럼을 다룹니다.
 
 ## 목차
 1. [복제 개요](#1-복제-개요)
@@ -52,7 +65,9 @@
 ### 1.3 WAL (Write-Ahead Logging) 기초
 
 ```sql
--- WAL 설정 확인
+-- WAL(Write-Ahead Log)은 이미 장애 복구를 위해 기록됨 — 복제는 동일한 WAL 레코드를
+-- 대기 서버로 전송할 뿐이므로 Primary에 최소한의 오버헤드만 추가.
+-- 이 이중 목적 설계가 PostgreSQL 복제가 기본적으로 효율적인 이유
 SHOW wal_level;           -- replica 또는 logical
 SHOW max_wal_senders;     -- WAL 송신 프로세스 수
 SHOW max_replication_slots;
@@ -93,10 +108,10 @@ SELECT pg_walfile_name(pg_current_wal_lsn());  -- WAL 파일명
 ```bash
 # postgresql.conf (Primary)
 listen_addresses = '*'
-wal_level = replica
-max_wal_senders = 5
-wal_keep_size = 1GB
-max_replication_slots = 5
+wal_level = replica          # 스트리밍 복제에 필요한 최소 레벨
+max_wal_senders = 5          # Standby당 1개 + pg_basebackup 여유분
+wal_keep_size = 1GB          # 느린 Standby가 슬롯 없이도 따라잡을 수 있도록 WAL 보관
+max_replication_slots = 5    # 슬롯은 WAL 재활용 방지 — Standby마다 하나씩 생성 권장
 
 # 동기 복제 설정 (선택적)
 synchronous_commit = on
@@ -130,9 +145,11 @@ pg_basebackup -h primary_host -U replicator -D /var/lib/postgresql/data \
 
 ```bash
 # postgresql.conf (Standby)
-hot_standby = on                  # 읽기 쿼리 허용
-hot_standby_feedback = on         # 쿼리 충돌 방지
-max_standby_streaming_delay = 30s # 쿼리 대기 시간
+hot_standby = on                  # WAL 재생 중에도 읽기 쿼리 허용
+hot_standby_feedback = on         # Primary에 Standby 쿼리 상태 전달 — Primary가
+                                  # Standby가 아직 필요한 행을 vacuum하는 것을 방지
+max_standby_streaming_delay = 30s # Standby 쿼리가 WAL 재생을 차단할 수 있는 시간
+                                  # — 데이터 최신성과 쿼리 안정성 사이의 균형
 ```
 
 ```bash
@@ -758,12 +775,12 @@ SELECT
 
 ---
 
-## 다음 단계
-- [17. 윈도우 함수와 분석](./17_Window_Functions.md)
-- [18. 테이블 파티셔닝](./18_Table_Partitioning.md)
-
 ## 참고 자료
 - [PostgreSQL Replication](https://www.postgresql.org/docs/current/high-availability.html)
 - [Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html)
 - [Patroni Documentation](https://patroni.readthedocs.io/)
 - [pg_basebackup](https://www.postgresql.org/docs/current/app-pgbasebackup.html)
+
+---
+
+**이전**: [쿼리 최적화](./15_Query_Optimization.md) | **다음**: [윈도우 함수](./17_Window_Functions.md)

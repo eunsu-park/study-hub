@@ -1,11 +1,22 @@
 # 10. TypeScript 기초 (TypeScript Fundamentals)
 
-## 학습 목표
-- TypeScript의 장점과 JavaScript와의 관계 이해
-- 기본 타입 시스템 마스터
-- 인터페이스와 타입 별칭 활용
-- 제네릭을 통한 재사용 가능한 코드 작성
-- 유틸리티 타입과 고급 타입 기능 이해
+**이전**: [실전 프로젝트](./09_Practical_Projects.md) | **다음**: [웹 접근성](./11_Web_Accessibility.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 대규모 프로젝트에서 TypeScript가 순수 JavaScript보다 유리한 점을 설명한다
+2. TypeScript의 기본 타입 시스템(type system)을 사용해 변수, 함수, 반환 타입에 어노테이션을 추가한다
+3. 인터페이스(interface)로 객체 형태를 정의하고, 타입 별칭(type alias)을 언제 사용할지 구분한다
+4. 제네릭(generics)을 사용하여 재사용 가능하고 타입 안전한 함수와 클래스를 구현한다
+5. `extends`와 `keyof`를 사용한 제네릭 제약(generic constraints)으로 타입 관계를 강제한다
+6. `Partial`, `Pick`, `Omit`, `Record` 등 내장 유틸리티 타입(utility types)을 활용한다
+7. `tsconfig.json`으로 TypeScript 프로젝트를 설정하고 JavaScript로 컴파일한다
+
+---
+
+JavaScript의 유연성은 그것의 가장 큰 강점인 동시에 규모가 커질수록 가장 큰 약점이 되기도 합니다. TypeScript는 정적 타입 레이어를 추가하여 컴파일 시점에 오류를 잡아냅니다 — 사용자에게 배포되기 전에 말이죠. TypeScript를 채택한다고 해서 JavaScript를 포기하는 것이 아닙니다. 유효한 JavaScript 프로그램은 이미 유효한 TypeScript입니다. 이 레슨은 현대 웹 개발에서 TypeScript를 없어서는 안 될 도구로 만드는 핵심 타입 시스템 기능들을 익히게 합니다.
 
 ## 목차
 1. [TypeScript 소개](#1-typescript-소개)
@@ -65,7 +76,7 @@ npx tsc --init
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "strict": true,
+    "strict": true,          // strictNullChecks, noImplicitAny 등 10가지 이상의 검사를 활성화 — 일반 JS에서 런타임 오류가 될 버그를 컴파일 시점에 포착
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -460,6 +471,7 @@ button.click(); // OK
 
 ```typescript
 // 제네릭 함수
+// T는 인수 타입에서 추론됨 — 수동 캐스팅 없이 TypeScript가 arg와 반환값이 같은 타입임을 보장
 function identity<T>(arg: T): T {
   return arg;
 }
@@ -467,7 +479,7 @@ function identity<T>(arg: T): T {
 // 사용
 let output1 = identity<string>("hello");
 let output2 = identity<number>(42);
-let output3 = identity("auto"); // 타입 추론
+let output3 = identity("auto"); // 타입 추론 — 인수로부터 T = string을 자동으로 추론
 
 // 제네릭 배열
 function firstElement<T>(arr: T[]): T | undefined {
@@ -573,7 +585,7 @@ interface User {
   age?: number;
 }
 
-// Partial<T> - 모든 속성 선택적으로
+// Partial<T> - 모든 User 필드를 선택적으로 만듦 — 일부 필드만 변경하는 업데이트 함수에 유용
 type PartialUser = Partial<User>;
 // { id?: number; name?: string; email?: string; age?: number }
 
@@ -584,11 +596,11 @@ type RequiredUser = Required<User>;
 // Readonly<T> - 모든 속성 읽기 전용
 type ReadonlyUser = Readonly<User>;
 
-// Pick<T, K> - 특정 속성만 선택
+// Pick<T, K> - 필요한 필드만 선택; 공개 타입에서 민감한 필드(예: password, token) 노출 방지에 활용
 type UserBasic = Pick<User, "id" | "name">;
 // { id: number; name: string }
 
-// Omit<T, K> - 특정 속성 제외
+// Omit<T, K> - 원하지 않는 필드 제외; 서버 생성 필드(id, createdAt 등)를 제거한 "입력(input)" 타입 생성에 유용
 type UserWithoutEmail = Omit<User, "email">;
 // { id: number; name: string; age?: number }
 ```

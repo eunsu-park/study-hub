@@ -39,25 +39,26 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Environment_Setup.md](./01_Environment_Setup.md) | ⭐ | 개발 환경, Hello World |
-| [02_Variables_and_Types.md](./02_Variables_and_Types.md) | ⭐ | 기본 타입, 상수, 형변환 |
-| [03_Operators_and_Control_Flow.md](./03_Operators_and_Control_Flow.md) | ⭐ | 연산자, if/switch, 반복문 |
-| [04_Functions.md](./04_Functions.md) | ⭐⭐ | 함수 정의, 오버로딩, 기본값 |
-| [05_Arrays_and_Strings.md](./05_Arrays_and_Strings.md) | ⭐⭐ | 배열, C문자열, string |
-| [06_Pointers_and_References.md](./06_Pointers_and_References.md) | ⭐⭐ | 포인터, 참조자, 동적 메모리 |
-| [07_Classes_Basics.md](./07_Classes_Basics.md) | ⭐⭐⭐ | 클래스, 생성자, 소멸자 |
-| [08_Classes_Advanced.md](./08_Classes_Advanced.md) | ⭐⭐⭐ | 연산자 오버로딩, 복사/이동 |
-| [09_Inheritance_and_Polymorphism.md](./09_Inheritance_and_Polymorphism.md) | ⭐⭐⭐ | 상속, 가상함수, 추상클래스 |
-| [10_STL_Containers.md](./10_STL_Containers.md) | ⭐⭐⭐ | vector, map, set |
-| [11_STL_Algorithms_Iterators.md](./11_STL_Algorithms_Iterators.md) | ⭐⭐⭐ | algorithm, iterator |
-| [12_Templates.md](./12_Templates.md) | ⭐⭐⭐ | 함수/클래스 템플릿 |
-| [13_Exceptions_and_File_IO.md](./13_Exceptions_and_File_IO.md) | ⭐⭐⭐⭐ | try/catch, fstream |
-| [14_Smart_Pointers_Memory.md](./14_Smart_Pointers_Memory.md) | ⭐⭐⭐⭐ | unique_ptr, shared_ptr |
-| [15_Modern_CPP.md](./15_Modern_CPP.md) | ⭐⭐⭐⭐ | C++11/14/17/20 기능 |
-| [16_Multithreading_Concurrency.md](./16_Multithreading_Concurrency.md) | ⭐⭐⭐⭐ | std::thread, mutex, async/future |
-| [17_CPP20_Advanced.md](./17_CPP20_Advanced.md) | ⭐⭐⭐⭐⭐ | Concepts, Ranges, Coroutines |
-| [18_Design_Patterns.md](./18_Design_Patterns.md) | ⭐⭐⭐⭐ | Singleton, Factory, Observer, CRTP |
-| [19_Project_Student_Management.md](./19_Project_Student_Management.md) | ⭐⭐⭐ | STL, 파일 I/O, 스마트 포인터, 예외 처리 |
+| [환경설정과 첫 프로그램](./01_Environment_Setup.md) | ⭐ | 개발 환경, Hello World |
+| [변수와 자료형](./02_Variables_and_Types.md) | ⭐ | 기본 타입, 상수, 형변환 |
+| [연산자와 제어문](./03_Operators_and_Control_Flow.md) | ⭐ | 연산자, if/switch, 반복문 |
+| [함수](./04_Functions.md) | ⭐⭐ | 함수 정의, 오버로딩, 기본값 |
+| [배열과 문자열](./05_Arrays_and_Strings.md) | ⭐⭐ | 배열, C문자열, string |
+| [포인터와 참조](./06_Pointers_and_References.md) | ⭐⭐ | 포인터, 참조자, 동적 메모리 |
+| [클래스 기초](./07_Classes_Basics.md) | ⭐⭐⭐ | 클래스, 생성자, 소멸자 |
+| [클래스 심화](./08_Classes_Advanced.md) | ⭐⭐⭐ | 연산자 오버로딩, 복사/이동 |
+| [상속과 다형성](./09_Inheritance_and_Polymorphism.md) | ⭐⭐⭐ | 상속, 가상함수, 추상클래스 |
+| [STL 컨테이너](./10_STL_Containers.md) | ⭐⭐⭐ | vector, map, set |
+| [STL 알고리즘과 반복자(Iterators)](./11_STL_Algorithms_Iterators.md) | ⭐⭐⭐ | algorithm, iterator |
+| [템플릿](./12_Templates.md) | ⭐⭐⭐ | 함수/클래스 템플릿 |
+| [예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md) | ⭐⭐⭐⭐ | try/catch, fstream |
+| [스마트 포인터와 메모리 관리](./14_Smart_Pointers_Memory.md) | ⭐⭐⭐⭐ | unique_ptr, shared_ptr |
+| [모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md) | ⭐⭐⭐⭐ | C++11/14/17/20 기능 |
+| [멀티스레딩과 동시성](./16_Multithreading_Concurrency.md) | ⭐⭐⭐⭐ | std::thread, mutex, async/future |
+| [C++20 심화](./17_CPP20_Advanced.md) | ⭐⭐⭐⭐⭐ | Concepts, Ranges, Coroutines |
+| [C++ 디자인 패턴](./18_Design_Patterns.md) | ⭐⭐⭐⭐ | Singleton, Factory, Observer, CRTP |
+| [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md) | ⭐⭐⭐ | STL, 파일 I/O, 스마트 포인터, 예외 처리 |
+| [레슨 20: CMake와 빌드 시스템(Build Systems)](./20_CMake_and_Build_Systems.md) | ⭐⭐⭐ | CMakeLists.txt, 타겟, FetchContent, CTest |
 
 ---
 

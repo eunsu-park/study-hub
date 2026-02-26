@@ -1,8 +1,26 @@
 # Dimensionality Reduction
 
-## Overview
+**Previous**: [Clustering](./11_Clustering.md) | **Next**: [Pipelines and Practice](./13_Pipelines_and_Practice.md)
 
-Dimensionality reduction transforms high-dimensional data into lower dimensions while preserving important information. It's used for visualization, noise reduction, and improving model performance.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the curse of dimensionality and why high-dimensional data harms model performance
+2. Distinguish between feature selection and feature extraction approaches
+3. Implement PCA and interpret principal components, explained variance ratios, and scree plots
+4. Apply t-SNE and UMAP for non-linear visualization and compare their behavior with PCA
+5. Choose the number of PCA components using cumulative explained variance thresholds
+6. Implement filter, wrapper, and embedded feature selection methods using scikit-learn
+7. Evaluate the impact of dimensionality reduction on downstream classification performance
+
+---
+
+Real-world datasets routinely contain dozens, hundreds, or even thousands of features -- yet most of the useful information often lies along a much smaller number of directions. Dimensionality reduction lets you find those directions, stripping away noise and redundancy so that models train faster, visualizations become meaningful, and the curse of dimensionality no longer cripples your algorithms. Mastering these techniques is a prerequisite for working with any high-dimensional data, from genomics to computer vision to NLP embeddings.
+
+> **Shadows on the wall.** Imagine shining a flashlight on a complex 3D sculpture -- the shadow on the wall is a 2D representation that captures the sculpture's essential shape, though some detail is lost. PCA works the same way: it finds the "viewing angle" (principal components) that casts the most informative shadow when projecting high-dimensional data down to fewer dimensions. The first principal component is the direction that preserves the most variance -- the angle that makes the shadow most recognizable.
 
 ---
 

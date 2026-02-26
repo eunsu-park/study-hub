@@ -7,6 +7,21 @@ Demonstrates basic Bayesian inference concepts:
 - Posterior computation
 - Credible intervals
 - Comparison with frequentist approach
+
+Theory:
+- Bayes' theorem updates beliefs: posterior = likelihood * prior / evidence.
+  The prior encodes what we knew before data; the likelihood summarizes the
+  data's evidence; the posterior is our updated belief.
+- Conjugate priors yield closed-form posteriors: Beta-Binomial for proportions,
+  Normal-Normal for means. This avoids numerical integration.
+- The posterior mean is a precision-weighted average of the prior mean and the
+  MLE. With more data, the likelihood dominates and the posterior converges
+  to the MLE regardless of the prior (Bayesian consistency).
+- Credible intervals have a direct probability interpretation: "P(parameter
+  in interval | data) = 0.95", unlike frequentist CIs which describe
+  long-run coverage of the procedure.
+
+Adapted from Data_Science Lesson 17.
 """
 
 import numpy as np
@@ -61,6 +76,10 @@ def bayes_theorem_discrete():
     print(f"         = ({p_pos_given_disease}×{p_disease}) / {p_pos:.4f}")
     print(f"         = {p_disease_given_pos:.4f}")
 
+    # Why: This is the "base rate neglect" problem. Despite a 95% sensitive test,
+    # the posterior probability is low because the prior (1% prevalence) is so
+    # small. Most positive tests are false positives when the condition is rare.
+    # This is why screening tests need very high specificity for rare diseases.
     print(f"\nResult: Only {p_disease_given_pos*100:.2f}% chance of disease despite positive test!")
     print(f"Reason: Low prevalence (strong prior)")
 
@@ -71,7 +90,10 @@ def beta_binomial_conjugate():
 
     print("Estimating coin bias θ (probability of heads)")
 
-    # Prior: Beta(α, β)
+    # Why: Beta(2,2) is a weakly informative prior centered at 0.5 (fairness).
+    # It's equivalent to having seen 2 heads and 2 tails before collecting data.
+    # Alpha+beta (the "pseudocount") controls prior strength — larger values
+    # mean the prior resists being overwhelmed by data.
     alpha_prior = 2
     beta_prior = 2
     print(f"\nPrior: Beta({alpha_prior}, {beta_prior})")
@@ -85,7 +107,9 @@ def beta_binomial_conjugate():
 
     print(f"\nObserved data: {n_heads} heads, {n_tails} tails in {n_total} flips")
 
-    # Posterior: Beta(α + n_heads, β + n_tails)
+    # Why: Beta-Binomial conjugacy means the posterior is also Beta, with
+    # parameters updated by simply adding observed counts. No integration needed.
+    # This "count updating" is the hallmark of conjugate families.
     alpha_post = alpha_prior + n_heads
     beta_post = beta_prior + n_tails
 
@@ -152,7 +176,10 @@ def normal_normal_conjugate():
     print(f"\nPrior: N({mu_0}, {sigma_0}²)")
 
     # Posterior: N(μₙ, σₙ²)
-    # Precision formulation
+    # Why: The "precision" (1/variance) formulation reveals that the posterior
+    # precision is the SUM of prior and likelihood precisions. The posterior mean
+    # is a precision-weighted average — whichever source (prior or data) is more
+    # precise contributes more to the final estimate.
     tau_0 = 1 / sigma_0**2  # Prior precision
     tau_likelihood = n / known_sigma**2  # Likelihood precision
 
@@ -215,7 +242,10 @@ def prior_influence():
 
     print(f"\nData: {n_successes} successes in {n} trials")
 
-    # Different priors
+    # Why: Beta(1,1) is uniform (maximally uninformative) — all values of theta
+    # are equally likely a priori. Beta(5,5) is like having seen 10 coin flips.
+    # Beta(20,20) is like having seen 40 flips — it takes substantial data to
+    # override such a strong prior. This demonstrates "prior sensitivity."
     priors = [
         ("Weak (uninformative)", 1, 1),
         ("Moderate", 5, 5),
@@ -261,12 +291,17 @@ def credible_vs_confidence():
     data = np.random.binomial(1, true_theta, n)
     n_heads = np.sum(data)
 
-    # Frequentist CI
+    # Why: The frequentist CI uses the Normal approximation to the Binomial.
+    # It says nothing about where theta actually is — only about the procedure's
+    # long-run coverage. It can produce impossible values (< 0 or > 1) for
+    # proportions near boundaries.
     p_hat = n_heads / n
     se = np.sqrt(p_hat * (1 - p_hat) / n)
     freq_ci = stats.norm.interval(0.95, p_hat, se)
 
-    # Bayesian CI (uniform prior)
+    # Why: The Bayesian credible interval is derived from the posterior Beta
+    # distribution. It respects the [0,1] constraint and has a direct
+    # probabilistic interpretation: "P(theta in this interval | data) = 0.95."
     alpha_post = 1 + n_heads
     beta_post = 1 + (n - n_heads)
     bayes_ci = stats.beta.interval(0.95, alpha_post, beta_post)

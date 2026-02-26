@@ -441,8 +441,15 @@ def coulomb_logarithm(n_e, T_e, Z=1):
     ln_Lambda : float
         Coulomb logarithm
     """
+    # The NRL Plasma Formulary defines ln_Lambda in CGS (cm^-3), so we must
+    # convert; using the SI formula directly would give an incorrect constant.
     n_e_cgs = n_e * 1e-6  # Convert to cm^-3
 
+    # Two regimes because the dominant minimum impact parameter changes:
+    # at low T_e (< 10 Z^2 eV), b_min is the classical 90° scattering length b_90;
+    # at high T_e, b_min switches to the de Broglie wavelength (quantum limit).
+    # Using the wrong branch can overestimate ln_Lambda by ~1-2, which propagates
+    # directly into collision frequencies and resistivity.
     if T_e < 10 * Z**2:
         ln_Lambda = 23 - np.log(np.sqrt(n_e_cgs) * Z * T_e**(-1.5))
     else:
@@ -459,6 +466,10 @@ def nu_ei(n_e, T_e, Z=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e, Z)
 
+    # The T_e^(-3/2) scaling is the most important physics here: faster electrons
+    # spend less time near an ion, so the effective cross-section ∝ v^(-4) ∝ T^(-2),
+    # offset by the T^(1/2) increase in thermal speed, giving the net T^(-3/2).
+    # This is why Ohmic heating in tokamaks becomes inefficient above ~1 keV.
     return 2.91e-6 * n_e * Z * ln_Lambda / T_e**1.5
 
 def nu_ee(n_e, T_e, ln_Lambda=None):
@@ -470,6 +481,9 @@ def nu_ee(n_e, T_e, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e)
 
+    # nu_ee ~ nu_ei / 2 numerically; like-particle collisions transfer momentum
+    # less efficiently (center-of-mass frame), hence the smaller prefactor (1.45
+    # vs. 2.91), but the same T^(-3/2) physics applies.
     return 1.45e-6 * n_e * ln_Lambda / T_e**1.5
 
 def nu_ii(n_i, T_i, Z=1, A=1, ln_Lambda=None):
@@ -481,7 +495,9 @@ def nu_ii(n_i, T_i, Z=1, A=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_i, T_i, Z)
 
-    # Conversion factor
+    # The sqrt(m_e / m_i) factor captures that ions are slower by sqrt(m_i/m_e),
+    # giving nu_ii / nu_ei ~ sqrt(m_e/m_i) ~ 1/43 for hydrogen — ions collide
+    # far less frequently, so ion transport is governed by slower timescales.
     factor = 1.45e-6 * np.sqrt(m_e / (A * m_p))
     return factor * n_i * Z**4 * ln_Lambda / T_i**1.5
 
@@ -503,9 +519,17 @@ def spitzer_resistivity(T_e, Z=1, ln_Lambda=None):
     eta : float
         Resistivity [Ohm*m]
     """
+    # When ln_Lambda is not supplied, use the canonical estimate of 15 rather than
+    # computing it from n_e (which we don't have here); resistivity depends only
+    # weakly on ln_Lambda (logarithmically), so the fixed-value approximation
+    # introduces < 30% error across most laboratory and fusion plasmas.
     if ln_Lambda is None:
         ln_Lambda = 15  # Typical value
 
+    # eta ∝ T_e^(-3/2) is the direct consequence of nu_ei ∝ T_e^(-3/2):
+    # hotter plasmas conduct better because electrons scatter less frequently.
+    # At T_e ~ 10 keV (fusion-relevant), eta approaches that of room-temperature
+    # copper, making Ohmic current drive feasible but Ohmic heating negligible.
     return 5.2e-5 * Z * ln_Lambda / T_e**1.5
 
 def mean_free_path(n_e, T_e, Z=1, ln_Lambda=None):
@@ -517,6 +541,10 @@ def mean_free_path(n_e, T_e, Z=1, ln_Lambda=None):
     if ln_Lambda is None:
         ln_Lambda = coulomb_logarithm(n_e, T_e, Z)
 
+    # lambda_mfp = v_te / nu_ei ∝ T_e^2 / n: the T^2 scaling means that even a
+    # modest temperature increase dramatically extends the mean free path, which
+    # is why fusion-grade plasmas (T ~ 10 keV) are effectively collisionless on
+    # device scales (lambda_mfp >> machine size).
     return 3.44e11 * T_e**2 / (n_e * Z * ln_Lambda)
 
 # Demonstration
@@ -571,6 +599,11 @@ if __name__ == "__main__":
     print("-"*70)
 
     # Energy equipartition time
+    # The factor m_i / (2 m_e) in tau_eq reflects the inefficiency of energy
+    # transfer between light electrons and heavy ions: most of the electron's
+    # kinetic energy is returned after each collision, so many collisions are
+    # needed to equilibrate temperatures — this is why T_e ≠ T_i is common in
+    # auxiliary-heated tokamaks even at relatively high density.
     tau_eq = (A * m_p) / (2 * m_e * nu_ei_val)
     print(f"\nEnergy Equipartition:")
     print(f"  τ_eq = {tau_eq:.3e} s = {tau_eq*1000:.1f} ms")

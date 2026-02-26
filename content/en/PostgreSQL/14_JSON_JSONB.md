@@ -1,10 +1,23 @@
 # 14. PostgreSQL JSON/JSONB Features
 
+**Previous**: [Backup and Operations](./13_Backup_and_Operations.md) | **Next**: [Query Optimization](./15_Query_Optimization.md)
+
+---
+
 ## Learning Objectives
-- Understand differences between JSON and JSONB types
-- Store and query JSON data
-- Use JSON operators and functions
-- Optimize JSON searches with GIN indexes
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between the JSON and JSONB data types and choose the appropriate one for a given use case
+2. Store, modify, and delete JSON data using PostgreSQL's built-in functions and operators
+3. Query nested JSON structures using arrow operators (`->`, `->>`, `#>`, `#>>`)
+4. Apply containment (`@>`), existence (`?`), and merge (`||`) operators on JSONB data
+5. Create GIN indexes on JSONB columns and verify their usage with EXPLAIN ANALYZE
+6. Implement real-world patterns including schema-less event logging, EAV replacement, and document versioning
+
+---
+
+Modern applications frequently deal with semi-structured data -- user preferences, API responses, event payloads, and configuration blobs -- that do not fit neatly into rigid relational columns. PostgreSQL's native JSON/JSONB support lets you store and query this flexible data alongside your relational tables, with full indexing and transactional guarantees. This eliminates the need for a separate document database in many architectures, simplifying your stack while preserving the power of SQL.
 
 ## Table of Contents
 1. [JSON vs JSONB](#1-json-vs-jsonb)
@@ -45,7 +58,8 @@
 ### 1.2 Basic Usage
 
 ```sql
--- Create table
+-- JSONB stores pre-parsed binary — supports GIN indexing and containment operators (@>, ?)
+-- JSON stores raw text — reparsed on every access, no index support; use only for write-once/read-raw scenarios
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -185,6 +199,8 @@ SELECT * FROM products
 WHERE attributes->'brand' = '"Dell"'::jsonb;
 
 -- @> : Contains (left contains right)
+-- Prefer @> over ->> = for filtering — @> leverages GIN indexes for O(1) lookups
+-- instead of scanning and extracting every row's text value
 SELECT * FROM products
 WHERE attributes @> '{"brand": "Dell"}'::jsonb;
 
@@ -352,11 +368,11 @@ FROM products, jsonb_array_elements(attributes->'tags') AS elem;
 ### 5.1 GIN Index
 
 ```sql
--- Basic GIN index (supports all operators)
+-- Default GIN: supports @>, ?, ?|, ?& — use when queries need multiple operator types
 CREATE INDEX idx_products_attrs
 ON products USING GIN (attributes);
 
--- jsonb_path_ops (smaller, faster, @> operator only)
+-- jsonb_path_ops: 2-3x smaller index, faster @> lookups — choose when only containment queries are needed
 CREATE INDEX idx_products_attrs_path
 ON products USING GIN (attributes jsonb_path_ops);
 
@@ -391,7 +407,8 @@ SELECT pg_size_pretty(pg_indexes_size('products'));
 ### 5.3 Performance Optimization
 
 ```sql
--- Frequently used keys as separate columns
+-- Extract hot-path keys into dedicated columns — B-tree on a scalar column is faster
+-- and more memory-efficient than GIN on the entire JSONB document
 ALTER TABLE products ADD COLUMN brand VARCHAR(100);
 UPDATE products SET brand = attributes->>'brand';
 CREATE INDEX idx_products_brand_col ON products(brand);
@@ -416,7 +433,8 @@ ANALYZE products;
 ### 6.1 Schema-less Table
 
 ```sql
--- Event log table
+-- JSONB shines for event logs: each event type has different fields, so a fixed schema
+-- would require constant ALTER TABLE or wide nullable columns. JSONB accommodates any shape.
 CREATE TABLE events (
     id BIGSERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL,
@@ -444,14 +462,16 @@ AND occurred_at > NOW() - INTERVAL '7 days';
 ### 6.2 Replacing EAV
 
 ```sql
--- Traditional EAV (slow, complex)
+-- EAV requires one row per attribute — querying "all attributes for product X" means
+-- joining/pivoting many rows, and you lose type safety (everything is VARCHAR)
 CREATE TABLE product_attributes_eav (
     product_id INT,
     attribute_name VARCHAR(100),
     attribute_value VARCHAR(255)
 );
 
--- JSONB replacement (fast, simple)
+-- JSONB collapses all attributes into one indexed column — single-row reads,
+-- native types (number, boolean, array), and GIN-accelerated containment queries
 CREATE TABLE products_jsonb (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100),
@@ -596,12 +616,6 @@ CHECK (validate_product_attributes(attributes));
 
 ---
 
-## Next Steps
-
-- [15_Query_Optimization](15_Query_Optimization.md) - JSON query optimization
-- [17_Window_Functions](17_Window_Functions.md) - JSON with window functions
-- [PostgreSQL JSON Documentation](https://www.postgresql.org/docs/current/functions-json.html)
-
 ## References
 
 - [PostgreSQL JSON Functions](https://www.postgresql.org/docs/current/functions-json.html)
@@ -610,4 +624,4 @@ CHECK (validate_product_attributes(attributes));
 
 ---
 
-[← Previous: Backup and Recovery](13_Backup_and_Operations.md) | [Next: Advanced Query Optimization →](15_Query_Optimization.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Backup and Operations](./13_Backup_and_Operations.md) | **Next**: [Query Optimization](./15_Query_Optimization.md)

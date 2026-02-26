@@ -8,16 +8,19 @@ Transport Layer Security (TLS) is the protocol that makes HTTPS possible. It sec
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Learning Objectives**:
-- Understand the complete TLS 1.3 handshake step by step
-- Explain certificate chains and the web of trust
-- Work with X.509 certificates using OpenSSL and Python
-- Understand Certificate Authorities and certificate issuance
-- Configure Let's Encrypt with the ACME protocol
-- Implement certificate pinning and mutual TLS (mTLS)
-- Create self-signed certificates for development
-- Identify and fix common TLS misconfigurations
-- Test TLS configurations using standard tools
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the complete TLS 1.3 handshake step by step
+2. Explain certificate chains and the web of trust
+3. Work with X.509 certificates using OpenSSL and Python
+4. Understand Certificate Authorities and certificate issuance
+5. Configure Let's Encrypt with the ACME protocol
+6. Implement certificate pinning and mutual TLS (mTLS)
+7. Create self-signed certificates for development
+8. Identify and fix common TLS misconfigurations
+9. Test TLS configurations using standard tools
 
 ---
 

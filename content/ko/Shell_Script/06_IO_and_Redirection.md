@@ -2,9 +2,25 @@
 
 **난이도**: ⭐⭐⭐
 
-**이전**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md) | **다음**: [07_String_Processing.md](./07_String_Processing.md)
+**이전**: [함수와 라이브러리](./05_Functions_and_Libraries.md) | **다음**: [문자열 처리와 텍스트 조작](./07_String_Processing.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 파일 디스크립터(file descriptor)의 작동 방식을 설명하고 다중 스트림 I/O를 위한 사용자 정의 FD를 생성할 수 있습니다
+2. 고급 리다이렉션(redirection) 기법을 적용하여 stdout과 stderr를 분리, 병합, 교환, 저장/복원할 수 있습니다
+3. 인라인 데이터와 템플릿 생성을 위해 히어 도큐먼트(here document)와 히어 스트링(here string)을 작성할 수 있습니다
+4. 파이프라인에서 서브셸(subshell) 변수 스코프 문제를 피하기 위해 프로세스 치환(process substitution)을 활용할 수 있습니다
+5. 이름 있는 파이프(named pipe, FIFO)를 사용하여 생산자-소비자(producer-consumer) 통신을 구현할 수 있습니다
+6. 서브셸 스코프 손실과 PIPESTATUS 확인을 포함한 일반적인 파이프 함정을 식별할 수 있습니다
+7. 원자적(atomic) 파일 업데이트, 파일 잠금(file-locking) 루틴, 다중 대상 로깅 패턴을 작성할 수 있습니다
+
+---
+
+I/O 리다이렉션은 데이터 파이프라인, 로깅, 프로세스 조정을 위한 셸 스크립팅을 강력하게 만드는 핵심입니다. 단순한 `>` 와 `|` 를 넘어서, bash는 중간 파일 없이 정교한 데이터 흐름을 구축할 수 있는 파일 디스크립터(file descriptor), 프로세스 치환(process substitution), 히어 도큐먼트(here document), 이름 있는 파이프(named pipe)를 제공합니다. 로그 핸들러를 작성하거나, 다중 스트림 명령 출력을 파싱하거나, 동시 생산자-소비자 워크플로우를 구축할 때 이 기술들이 필요합니다.
 
 ## 1. 파일 디스크립터(File Descriptors)
 

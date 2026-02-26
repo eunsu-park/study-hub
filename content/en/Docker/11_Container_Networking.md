@@ -1,12 +1,18 @@
 # Container Networking
 
+**Previous**: [CI/CD Pipelines](./10_CI_CD_Pipelines.md) | **Next**: [Security Best Practices](./12_Security_Best_Practices.md)
+
 ## Learning Objectives
-- Understand Docker network drivers and their use cases
-- Master bridge, host, overlay, and macvlan networks
-- Configure custom networks with subnets, gateways, and DNS
-- Implement service discovery and inter-container communication
-- Troubleshoot network connectivity issues
-- Apply network security best practices
+
+After completing this lesson, you will be able to:
+
+1. Explain Docker network drivers (bridge, host, overlay, macvlan) and their appropriate use cases
+2. Configure custom bridge networks with subnets, gateways, and IP allocation
+3. Implement overlay networks for multi-host container communication in Swarm clusters
+4. Apply DNS-based service discovery for inter-container communication
+5. Configure advanced port mapping strategies including host binding and protocol selection
+6. Implement network security with isolation, encryption, and access controls
+7. Troubleshoot container network connectivity issues using diagnostic tools
 
 ## Table of Contents
 1. [Docker Network Drivers](#1-docker-network-drivers)
@@ -21,6 +27,10 @@
 10. [Practice Exercises](#10-practice-exercises)
 
 **Difficulty**: ⭐⭐⭐
+
+---
+
+Container networking is one of the most complex yet essential aspects of running Docker in production. Every container needs to communicate -- with other containers, with the host, and with the outside world -- and the networking model you choose directly impacts performance, security, and reliability. This lesson takes a deep dive into Docker's network drivers, DNS-based service discovery, and security configurations, equipping you to design and troubleshoot container networks with confidence.
 
 ---
 
@@ -142,7 +152,7 @@ docker network create \
   --gateway 172.25.0.1 \
   my-custom-network
 
-# Create with IP range reservation
+# Create with IP range reservation — carves out a smaller pool for dynamic allocation, leaving room for static IPs outside the range
 docker network create \
   --subnet 172.26.0.0/16 \
   --ip-range 172.26.5.0/24 \
@@ -194,24 +204,24 @@ services:
     image: nginx
     networks:
       - frontend
-      - backend
+      - backend  # web bridges both networks — it reverse-proxies public traffic to the backend tier
 
   app:
     image: myapp:latest
     networks:
       backend:
-        ipv4_address: 172.28.0.100
+        ipv4_address: 172.28.0.100  # Static IP — useful when external config or firewalls reference a fixed address
 
   db:
     image: postgres
     networks:
-      - backend
+      - backend  # db is only on backend — unreachable from the frontend network, reducing attack surface
 
 networks:
   frontend:
     driver: bridge
   backend:
-    driver: bridge
+    driver: bridge  # Separate bridge isolates backend traffic — containers on frontend cannot sniff DB queries
     ipam:
       config:
         - subnet: 172.28.0.0/16
@@ -358,14 +368,14 @@ docker network create \
   --subnet 10.0.9.0/24 \
   my-overlay
 
-# Create with encryption
+# Create with encryption — IPsec encrypts VXLAN traffic so inter-node communication is confidential even on untrusted networks
 docker network create \
   --driver overlay \
   --opt encrypted \
   --subnet 10.0.10.0/24 \
   secure-overlay
 
-# Create attachable overlay (for standalone containers)
+# Create attachable overlay (for standalone containers) — without --attachable, only Swarm services can join
 docker network create \
   --driver overlay \
   --attachable \
@@ -434,7 +444,7 @@ networks:
   backend:
     driver: overlay
     driver_opts:
-      encrypted: "true"
+      encrypted: "true"  # Encrypt DB traffic between nodes — prevents eavesdropping on the physical network
 
 volumes:
   db-data:
@@ -485,7 +495,7 @@ docker network create \
 ### MTU Configuration
 
 ```bash
-# Set MTU (Maximum Transmission Unit)
+# Set MTU (Maximum Transmission Unit) — match the underlying network's MTU to avoid packet fragmentation and throughput loss
 docker network create \
   --driver bridge \
   --opt com.docker.network.driver.mtu=1450 \
@@ -641,6 +651,7 @@ networks:
 
 ```bash
 # Create multiple containers with same name (using --network-alias)
+# DNS round-robin provides basic load balancing without an external LB — good enough for internal service-to-service calls
 docker run -d --name api1 --network my-net --network-alias api myapi:latest
 docker run -d --name api2 --network my-net --network-alias api myapi:latest
 docker run -d --name api3 --network my-net --network-alias api myapi:latest
@@ -667,7 +678,7 @@ docker run -d -P nginx
 # Publish to specific host port
 docker run -d -p 8080:80 nginx
 
-# Publish to specific interface
+# Publish to specific interface — binds only to loopback, preventing external network access to this port
 docker run -d -p 127.0.0.1:8080:80 nginx
 # Only accessible from localhost
 
@@ -800,12 +811,12 @@ services:
     image: postgres
     networks:
       - backend
-    # db is NOT exposed to frontend network
+    # db is NOT exposed to frontend network — even if the web tier is compromised, the DB is unreachable
 
 networks:
   frontend:
   backend:
-    internal: true  # No external access
+    internal: true  # No external access — containers on this network cannot reach the internet, reducing data exfiltration risk
 ```
 
 ### Internal Networks
@@ -824,7 +835,7 @@ docker run -d --name isolated-db --network internal-net postgres
 ### Inter-Container Communication (ICC)
 
 ```bash
-# Disable ICC (containers can't talk to each other by default)
+# Disable ICC (containers can't talk to each other by default) — forces explicit port publishing for communication, tightening isolation
 docker network create \
   --driver bridge \
   --opt com.docker.network.bridge.enable_icc=false \
@@ -1244,12 +1255,74 @@ In this lesson, you learned:
 - Leverage embedded DNS for service discovery
 - Monitor and troubleshoot with proper tooling
 
-**Next Steps**:
-- Implement network policies for production environments
-- Explore service mesh solutions (Istio, Linkerd) for advanced networking
-- Learn about CNI plugins for Kubernetes
-- Study network performance optimization techniques
+---
+
+## Exercises
+
+### Exercise 1: Explore Docker Network Drivers
+
+Observe how bridge, host, and none network drivers behave differently.
+
+1. Run a container on the default bridge network and inspect its IP: `docker run --rm alpine ip addr`
+2. Run a container with host networking and compare the interfaces: `docker run --rm --network host alpine ip addr`
+3. Run a container with no networking and confirm there is no external connectivity: `docker run --rm --network none alpine ping -c 1 8.8.8.8`
+4. List all networks: `docker network ls`
+5. Inspect the default bridge network to see connected containers and subnet: `docker network inspect bridge`
+6. Explain in writing the difference in isolation between `bridge`, `host`, and `none` drivers
+
+### Exercise 2: Create a Custom Bridge Network with DNS Resolution
+
+Use a user-defined network to enable automatic service discovery between containers.
+
+1. Create a custom bridge network: `docker network create --subnet 192.168.100.0/24 mynet`
+2. Start a container named `server` on the network: `docker run -d --name server --network mynet nginx:alpine`
+3. Start a second container on the same network and test DNS resolution: `docker run --rm --network mynet alpine ping -c 3 server`
+4. Now try the same ping using the default bridge network — it should fail by name: `docker run --rm alpine ping -c 3 server`
+5. Connect the `server` container to a second network: `docker network create mynet2 && docker network connect mynet2 server`
+6. Verify the container now has interfaces on both networks: `docker inspect server | grep -A 20 Networks`
+
+### Exercise 3: Multi-Container Communication with Docker Compose Networks
+
+Use Compose's built-in networking to implement a frontend/backend/database tier with isolation.
+
+1. Write a `docker-compose.yml` with three services: `frontend` (nginx), `backend` (any HTTP server), `db` (postgres)
+2. Define two networks: `web-tier` (frontend + backend) and `data-tier` (backend + db)
+3. Assign each service to the appropriate networks
+4. Start the stack: `docker compose up -d`
+5. Exec into `frontend` and confirm it can reach `backend`: `docker compose exec frontend wget -qO- http://backend`
+6. Exec into `frontend` and confirm it cannot reach `db` by hostname: `docker compose exec frontend ping db`
+7. Exec into `backend` and confirm it can reach both `frontend` and `db`
+
+### Exercise 4: Inspect and Debug Network Connectivity
+
+Use diagnostic tools to troubleshoot a broken container network.
+
+1. Start two containers on separate custom networks (no shared network):
+   ```bash
+   docker network create net-a
+   docker network create net-b
+   docker run -d --name container-a --network net-a nginx:alpine
+   docker run -d --name container-b --network net-b nginx:alpine
+   ```
+2. Attempt to ping `container-a` from `container-b` — confirm it fails
+3. Use `docker inspect` to find both containers' IP addresses
+4. Try `docker exec container-b ping <IP-of-container-a>` — confirm it also fails (different subnets, no routing)
+5. Connect `container-b` to `net-a`: `docker network connect net-a container-b`
+6. Retry the ping by name and by IP — confirm both now succeed
+7. Use `docker network inspect net-a` to confirm both containers appear in the network
+
+### Exercise 5: Port Mapping and Host Binding
+
+Practice fine-grained port mapping including protocol selection and interface binding.
+
+1. Run a container and map port 80 to host port 8080: `docker run -d -p 8080:80 nginx:alpine`
+2. Verify it is accessible: `curl http://localhost:8080`
+3. Run another container that only binds on loopback: `docker run -d -p 127.0.0.1:8081:80 nginx:alpine`
+4. Confirm it is accessible from `127.0.0.1:8081` but not from `0.0.0.0:8081`
+5. Run a UDP service and map the port with explicit protocol: `docker run -d -p 5353:53/udp some-dns-image` (or use a container that listens on UDP)
+6. List all port mappings: `docker ps --format "table {{.Names}}\t{{.Ports}}"`
+7. Clean up all test containers: `docker rm -f $(docker ps -aq)`
 
 ---
 
-[Previous: 10_CI_CD_Pipelines](./10_CI_CD_Pipelines.md) | [Next: 12_Security_Best_Practices](./12_Security_Best_Practices.md)
+**Previous**: [CI/CD Pipelines](./10_CI_CD_Pipelines.md) | **Next**: [Security Best Practices](./12_Security_Best_Practices.md)

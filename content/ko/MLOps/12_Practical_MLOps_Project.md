@@ -1,5 +1,17 @@
 # 실전 MLOps 프로젝트
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 데이터 소싱, 피처 스토어(feature store), 모델 학습, 모델 레지스트리(model registry), 서빙(serving), 드리프트 모니터링을 하나의 일관된 시스템으로 통합하는 완전한 엔드투엔드(end-to-end) MLOps 파이프라인을 설계할 수 있다
+2. 프로덕션 MLOps 프로젝트를 위한 기술 스택(Kubernetes, Airflow, MLflow, Feast, TorchServe, Prometheus/Grafana)을 선택하고 그 이유를 설명할 수 있다
+3. 코드나 데이터 변경 시 자동으로 테스트를 실행하고, 모델을 재학습하며, 배포하는 GitHub Actions CI/CD 파이프라인을 구현할 수 있다
+4. 피처 스토어, 실험 추적기(experiment tracker), 모델 레지스트리, 서빙 엔드포인트(serving endpoint), 모니터링 등 모든 MLOps 컴포넌트를 실제 프로젝트에 통합할 수 있다
+5. 관찰 가능성(observability), 롤백(rollback) 역량, 장애 복구 절차를 평가하여 MLOps 파이프라인의 프로덕션 준비 상태를 검토할 수 있다
+
+---
+
 ## 1. E2E MLOps 파이프라인 설계
 
 실제 프로덕션 환경에서 작동하는 완전한 MLOps 파이프라인을 구축합니다.
@@ -190,9 +202,9 @@ class DataIngestion:
 
     def validate(self, df: pd.DataFrame) -> bool:
         """데이터 검증"""
+        # Great Expectations로 선언적 검증 — 비용이 큰 학습 전에 빠르게 실패(fail fast)
         ge_df = ge.from_pandas(df)
 
-        # 기본 검증
         results = [
             ge_df.expect_column_to_exist("user_id"),
             ge_df.expect_column_to_exist("target"),
@@ -248,6 +260,7 @@ class FeatureEngineering:
         features = raw_df.copy()
 
         # 집계 피처
+        # clip(lower=1)로 신규 사용자(tenure 0)의 0 나누기 방지
         features["purchase_frequency"] = (
             features["total_purchases"] / features["tenure_months"].clip(lower=1)
         )
@@ -315,8 +328,8 @@ class ModelTrainer:
 
     def train(self, X_train, y_train, X_val, y_val) -> Dict[str, Any]:
         """모델 학습"""
+        # 컨텍스트 매니저(context manager)로 학습 중 크래시 시에도 실행(run) 종료 보장
         with mlflow.start_run() as run:
-            # 파라미터 로깅
             params = self.config["model"]["params"]
             mlflow.log_params(params)
             mlflow.log_param("model_type", self.config["model"]["type"])
@@ -325,7 +338,7 @@ class ModelTrainer:
             model = RandomForestClassifier(**params)
             model.fit(X_train, y_train)
 
-            # 교차 검증
+            # CV로 과적합(overfitting) 조기 감지 — cv_std가 높으면 불안정한 성능 신호
             cv_scores = cross_val_score(model, X_train, y_train, cv=5)
             mlflow.log_metric("cv_mean", cv_scores.mean())
             mlflow.log_metric("cv_std", cv_scores.std())
@@ -337,7 +350,7 @@ class ModelTrainer:
             for name, value in metrics.items():
                 mlflow.log_metric(name, value)
 
-            # 모델 저장
+            # 시그니처(signature)로 입출력 스키마 강제 — 서빙 시 형상 불일치(shape mismatch) 포착
             signature = mlflow.models.infer_signature(X_train, y_pred)
             mlflow.sklearn.log_model(
                 model, "model",
@@ -362,6 +375,7 @@ class ModelTrainer:
 
     def validate_quality_gates(self, metrics: Dict[str, float]) -> bool:
         """품질 게이트 검증"""
+        # 품질 게이트(quality gate)로 현재 프로덕션보다 나쁜 모델 배포 방지
         gates = self.config["quality_gates"]
         passed = all(
             metrics.get(metric, 0) >= threshold
@@ -478,7 +492,7 @@ def training_pipeline(
         input_data=ingest_task.outputs["output_data"]
     )
 
-    # 3. 조건부 학습
+    # 조건부 게이트: 데이터 검증 실패 시 비용이 큰 GPU 학습 건너뜀
     with dsl.Condition(validate_task.output == True):
         train_task = train_model(
             input_data=validate_task.outputs["output_data"],
@@ -538,9 +552,11 @@ class PredictionResponse(BaseModel):
     prediction: str
     features: dict
 
+# 시작 이벤트에서 모델 한 번 로드 — 요청당 100-500ms 모델 역직렬화(deserialization) 방지
 @app.on_event("startup")
 async def load_resources():
     global model, store
+    # URI "models:/name/Production"은 항상 최신 Production 스테이지(stage)로 해석
     model = mlflow.sklearn.load_model("models:/churn-prediction/Production")
     store = FeatureStore(repo_path="./features")
 
@@ -585,6 +601,7 @@ async def predict(request: PredictionRequest):
         )
 
     except Exception as e:
+        # 에러율 별도 추적 — 급증은 피처 스토어(Feature Store) 또는 모델 문제를 나타냄
         PREDICTIONS.labels(status="error").inc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -616,6 +633,7 @@ spec:
     metadata:
       labels:
         app: churn-prediction
+      # Prometheus 어노테이션으로 자동 검색(auto-discovery) — 수동 스크레이프(scrape) 설정 불필요
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
@@ -638,6 +656,7 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "500m"
+          # liveness는 멈춘 파드 재시작; readiness는 모델 로드 완료 전까지 트래픽 차단
           livenessProbe:
             httpGet:
               path: /health
@@ -741,7 +760,7 @@ class RetrainingOrchestrator:
         metrics: Dict[str, float]
     ) -> tuple[bool, str]:
         """재학습 조건 확인"""
-        # 1. 성능 저하
+        # 우선순위: 성능(반응적) → 드리프트(선제적) → 스케줄(안전망)
         for metric, threshold in self.config["quality_thresholds"].items():
             if metrics.get(metric, 1.0) < threshold:
                 return True, f"Performance degradation: {metric}={metrics[metric]}"
@@ -770,7 +789,7 @@ class RetrainingOrchestrator:
         # 새 데이터로 학습
         training_result = self.trainer.train_on_latest_data()
 
-        # 품질 게이트 통과 시 배포
+        # 품질 게이트로 더 나쁜 모델 배포 방지 — 재학습이 항상 개선을 보장하지 않음
         if self.trainer.validate_quality_gates(training_result["metrics"]):
             self._deploy_model(training_result["run_id"])
             training_result["deployed"] = True
@@ -786,6 +805,7 @@ class RetrainingOrchestrator:
 
         # 모델 등록 및 Production으로 승격
         result = mlflow.register_model(model_uri, self.config["model_name"])
+        # archive_existing_versions=True로 Production 모델이 항상 하나만 존재하도록 보장
         client.transition_model_version_stage(
             name=self.config["model_name"],
             version=result.version,
@@ -834,6 +854,7 @@ jobs:
           result=$(python scripts/check_drift.py)
           echo "should_retrain=$result" >> $GITHUB_OUTPUT
 
+  # 드리프트 감지 또는 수동 강제 시에만 학습 실행 — 컴퓨팅 비용 절약
   train:
     needs: check-drift
     if: needs.check-drift.outputs.should_retrain == 'true' || github.event.inputs.force_retrain == 'true'

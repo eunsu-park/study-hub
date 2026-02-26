@@ -2,9 +2,23 @@
 
 [Previous: Introduction to Bayesian Statistics](./18_Bayesian_Statistics_Basics.md) | [Next: Time Series Basics](./20_Time_Series_Basics.md)
 
-## Overview
+---
 
-For complex models where conjugate priors don't apply, the posterior distribution cannot be calculated analytically. This chapter covers Bayesian inference using MCMC (Markov Chain Monte Carlo) methods and the PyMC library.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why MCMC is necessary when conjugate priors are unavailable and the posterior has no closed form
+2. Implement the Metropolis-Hastings algorithm from scratch and tune the proposal distribution for an appropriate acceptance rate
+3. Build and sample Bayesian models using PyMC, including specifying priors, likelihoods, and sampling parameters
+4. Implement Bayesian linear regression and compare posterior estimates with frequentist OLS results
+5. Compare competing models using WAIC, LOO-CV, and interpret Bayes factors
+6. Perform posterior predictive checks to assess model fit and detect model misspecification
+7. Evaluate MCMC convergence using R-hat, effective sample size, trace plots, and autocorrelation diagnostics
+
+---
+
+The previous lesson showed how conjugate priors yield elegant closed-form posteriors, but most real-world models are too complex for that luxury. When the posterior cannot be computed analytically, MCMC algorithms let you draw samples from it instead -- turning an intractable integral into a simulation problem. This lesson teaches you both the theory behind MCMC and the practical workflow of modern Bayesian modeling with PyMC.
 
 ---
 

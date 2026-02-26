@@ -1,5 +1,18 @@
 # 동적 프로그래밍 (Dynamic Programming)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 동적 프로그래밍(DP)의 두 가지 핵심 조건인 최적 부분 구조(optimal substructure)와 중복 부분 문제(overlapping subproblems)를 설명하고 DP 적용 가능 여부를 판단할 수 있다
+2. 하향식(top-down) 메모이제이션(memoization)과 상향식(bottom-up) 타뷸레이션(tabulation) 방식을 구현하고 두 접근법의 장단점을 비교할 수 있다
+3. 피보나치(Fibonacci), 동전 거스름돈(coin change), 최장 증가 부분 수열(LIS) 등 대표적인 1D DP 문제를 풀 수 있다
+4. 배낭 문제(knapsack)와 격자 경로 수 계산 등 2D DP 문제를 해결할 수 있다
+5. 최장 공통 부분 수열(LCS, Longest Common Subsequence)과 편집 거리(edit distance) 문제에 문자열 DP 기법을 적용할 수 있다
+6. 상태 머신 DP(state machine DP)와 자릿수 DP(digit DP) 패턴에 맞는 DP 풀이를 설계할 수 있다
+
+---
+
 ## 개요
 
 동적 프로그래밍(DP)은 복잡한 문제를 간단한 하위 문제로 나누어 해결하는 알고리즘 설계 기법입니다. 중복되는 하위 문제의 결과를 저장하여 효율성을 높입니다.
@@ -14,7 +27,8 @@
 4. [1D DP](#4-1d-dp)
 5. [2D DP](#5-2d-dp)
 6. [문자열 DP](#6-문자열-dp)
-7. [연습 문제](#7-연습-문제)
+7. [상태 머신 DP와 자릿수 DP](#7-상태-머신-dp와-자릿수-dp)
+8. [연습 문제](#8-연습-문제)
 
 ---
 
@@ -91,8 +105,9 @@ int memo[100];
 
 int fib(int n) {
     if (n <= 1) return n;
-    if (memo[n] != -1) return memo[n];
+    if (memo[n] != -1) return memo[n];  // 캐시된 결과 반환 — O(2^n) 재계산 방지
 
+    // 반환 전 저장하여, 이후 fib(n) 호출 시 O(1)로 즉시 반환
     memo[n] = fib(n-1) + fib(n-2);
     return memo[n];
 }
@@ -240,17 +255,22 @@ dp[6]=min(dp[5]+1, dp[3]+1, dp[2]+1)=2  (3+3)
 ```cpp
 // C++
 int coinChange(vector<int>& coins, int amount) {
-    vector<int> dp(amount + 1, amount + 1);  // 불가능한 값으로 초기화
-    dp[0] = 0;
+    // INT_MAX 대신 amount+1(불가능한 값)로 초기화 — dp[i-coin]+1 연산 시
+    // 오버플로우 방지
+    vector<int> dp(amount + 1, amount + 1);
+    dp[0] = 0;  // 기저 사례: 금액 0을 만드는 데 동전 0개 필요
 
     for (int i = 1; i <= amount; i++) {
         for (int coin : coins) {
             if (coin <= i) {
+                // 이 동전 종류를 사용해 보기: 더 작은 부분 금액(i - coin)의
+                // 최적 해에 동전 1개를 추가
                 dp[i] = min(dp[i], dp[i - coin] + 1);
             }
         }
     }
 
+    // dp[amount]가 여전히 센티넬 값이면 유효한 조합이 존재하지 않음
     return dp[amount] > amount ? -1 : dp[amount];
 }
 ```
@@ -290,8 +310,12 @@ coin=5: [1, 1, 2, 2, 3, 4]
 ```python
 def coin_combinations(coins, amount):
     dp = [0] * (amount + 1)
-    dp[0] = 1
+    dp[0] = 1  # 금액 0을 만드는 방법: 동전을 하나도 사용하지 않는 1가지
 
+    # 바깥 루프를 동전 종류, 안쪽 루프를 금액으로 순회 — 이 순서가
+    # 각 동전 종류를 조합(combination)당 한 번만 세도록 보장 (순서 없는 집합).
+    # 루프 순서를 바꾸면(바깥 금액, 안쪽 동전) 같은 동전들의 모든 순열
+    # (permutation)을 별개의 방법으로 세게 되어, 조합이 아닌 순열 개수가 됨.
     for coin in coins:
         for i in range(coin, amount + 1):
             dp[i] += dp[i - coin]
@@ -514,7 +538,13 @@ int knapsackOptimized(int W, vector<int>& weights, vector<int>& values) {
     vector<int> dp(W + 1, 0);
 
     for (int i = 0; i < n; i++) {
-        for (int w = W; w >= weights[i]; w--) {  // 역순!
+        // 용량을 역순(W부터 weights[i]까지)으로 순회.
+        // 정순 순회하면 dp[w - weights[i]]가 같은 패스에서 이미 물건 i를
+        // 포함한 값으로 갱신되어, 같은 물건을 여러 번 사용 가능 — 이는
+        // 무제한 배낭(unbounded knapsack) 문제가 됨.
+        // 역순 순회는 dp[w - weights[i]]가 이전 물건까지의 값을 유지하므로,
+        // 0/1 제약(각 물건 최대 1번 사용)을 보장함.
+        for (int w = W; w >= weights[i]; w--) {
             dp[w] = max(dp[w], dp[w - weights[i]] + values[i]);
         }
     }
@@ -649,13 +679,18 @@ H    0  1  1  2  2  3  3
 // C++
 int longestCommonSubsequence(string s1, string s2) {
     int m = s1.length(), n = s2.length();
+    // 0으로 채워진 추가 행/열이 기저 사례(base case) 역할:
+    // 빈 문자열과 임의 문자열의 LCS는 0
     vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
 
     for (int i = 1; i <= m; i++) {
         for (int j = 1; j <= n; j++) {
             if (s1[i-1] == s2[j-1]) {
+                // 문자 일치: 두 문자 없이 구한 LCS(dp[i-1][j-1])에 1 추가.
+                // 일치하는 문자가 소비되었으므로 i-1/j-1(i/j 아님)을 참조
                 dp[i][j] = dp[i-1][j-1] + 1;
             } else {
+                // 불일치: s1[i-1]을 제외하거나 s2[j-1]을 제외한 것 중 더 나은 LCS
                 dp[i][j] = max(dp[i-1][j], dp[i][j-1]);
             }
         }
@@ -708,14 +743,21 @@ int minDistance(string word1, string word2) {
     int m = word1.length(), n = word2.length();
     vector<vector<int>> dp(m + 1, vector<int>(n + 1));
 
-    for (int i = 0; i <= m; i++) dp[i][0] = i;
-    for (int j = 0; j <= n; j++) dp[0][j] = j;
+    // 기저 사례: 빈 문자열로 변환하려면 다른 문자열의 길이만큼
+    // 삽입(또는 삭제) 연산이 필요
+    for (int i = 0; i <= m; i++) dp[i][0] = i;  // word1의 i개 문자 모두 삭제
+    for (int j = 0; j <= n; j++) dp[0][j] = j;  // word2의 j개 문자 모두 삽입
 
     for (int i = 1; i <= m; i++) {
         for (int j = 1; j <= n; j++) {
             if (word1[i-1] == word2[j-1]) {
+                // 문자가 이미 일치: 이 위치에서 연산 불필요
                 dp[i][j] = dp[i-1][j-1];
             } else {
+                // 세 가지 연산을 모두 시도하고 가장 저렴한 것 선택:
+                // word1[i-1] 삭제  → word1[0..i-2]와 word2[0..j-1] 정렬 비용
+                // word2[j-1] 삽입  → word1[0..i-1]과 word2[0..j-2] 정렬 비용
+                // word1[i-1] 교체  → word1[0..i-2]와 word2[0..j-2] 정렬 비용
                 dp[i][j] = 1 + min({dp[i-1][j],      // 삭제
                                     dp[i][j-1],      // 삽입
                                     dp[i-1][j-1]});  // 교체
@@ -751,7 +793,237 @@ def min_distance(word1, word2):
 
 ---
 
-## 7. 연습 문제
+## 7. 상태 머신 DP와 자릿수 DP (State Machine DP & Digit DP)
+
+기본적인 1D/2D 패턴을 넘어, 두 가지 고급 DP 패러다임이 넓은 범위의 문제를 우아하게 해결합니다: **상태 머신 DP(State Machine DP)**와 **자릿수 DP(Digit DP)**.
+
+### 7.1 상태 머신 DP (State Machine DP)
+
+#### 개념
+
+상태 머신 DP에서는 문제를 유한 상태 기계(Finite State Machine)로 모델링합니다:
+- **상태(State)**가 노드 (예: "주식 보유 중", "쿨다운", "주식 미보유")
+- **전이(Transition)**가 간선이며 비용이나 보상이 연결됨
+- DP 테이블은 각 시간 단계에서 각 상태의 최적값을 추적
+
+```
+이것이 강력한 이유: 복잡해 보이는 많은 문제들이 상태 다이어그램을
+그리면 단순해집니다. 점화식이 전이에서 직접 도출됩니다.
+
+일반적인 패턴:
+  dp[i][state] = i단계에서 "state" 상태일 때의 최적값
+
+전이:
+  dp[i][next_state] = optimize(dp[i-1][prev_state] + transition_cost)
+```
+
+#### 예제: 쿨다운이 있는 주식 매매 최대 이익 (Best Time to Buy and Sell Stock with Cooldown)
+
+**문제**: 주식 가격이 주어질 때, 최대 이익을 구하라. 매도 후 하루를 쉬어야(Cooldown) 다시 매수할 수 있다.
+
+```
+상태 머신(State Machine):
+
+  ┌──────────┐   buy    ┌──────────┐   sell   ┌──────────┐
+  │          │ ───────► │          │ ───────► │          │
+  │  REST    │          │  HOLD    │          │ COOLDOWN │
+  │ (미보유)  │ ◄─────── │ (보유중)  │          │ (대기 1일)│
+  └──────────┘   wait   └──────────┘          └──────────┘
+       ▲                     │ hold                │
+       │                     └──────┘              │
+       │              (계속 보유)                    │
+       └───────────────────────────────────────────┘
+                         wait (cooldown → rest)
+
+상태:
+  REST     = 미보유, 매수 가능
+  HOLD     = 현재 주식 보유 중
+  COOLDOWN = 방금 매도, 하루 대기 필요
+
+전이:
+  REST[i]     = max(REST[i-1], COOLDOWN[i-1])
+  HOLD[i]     = max(HOLD[i-1], REST[i-1] - price[i])
+  COOLDOWN[i] = HOLD[i-1] + price[i]
+```
+
+```python
+def max_profit_with_cooldown(prices):
+    """
+    State Machine DP for stock trading with cooldown.
+
+    Why three states: The cooldown constraint means we cannot
+    simply track "buy" and "sell" — we need an explicit cooldown
+    state to enforce the one-day waiting period after selling.
+
+    Time: O(n), Space: O(1)
+    """
+    if len(prices) <= 1:
+        return 0
+
+    # Initial states on day 0
+    rest = 0                    # Not holding, haven't done anything
+    hold = -prices[0]           # Bought on day 0
+    cooldown = float('-inf')    # Cannot be in cooldown on day 0
+
+    for i in range(1, len(prices)):
+        new_rest = max(rest, cooldown)           # Stay resting or finish cooldown
+        new_hold = max(hold, rest - prices[i])   # Keep holding or buy today
+        new_cooldown = hold + prices[i]          # Sell today → enter cooldown
+
+        rest, hold, cooldown = new_rest, new_hold, new_cooldown
+
+    # Answer: best of resting or just finished cooldown (never end while holding)
+    return max(rest, cooldown)
+
+
+# Example
+prices = [1, 2, 3, 0, 2]
+print(max_profit_with_cooldown(prices))  # Output: 3
+# Explanation: buy@1, sell@3, cooldown, buy@0, sell@2 → profit = 2 + 1 = 3
+```
+
+#### 기타 상태 머신 DP 문제
+
+```
+1. 거래 수수료가 있는 주식 → 2개 상태: HOLD, REST
+   REST[i] = max(REST[i-1], HOLD[i-1] + price[i] - fee)
+   HOLD[i] = max(HOLD[i-1], REST[i-1] - price[i])
+
+2. 최대 K번 거래 가능한 주식 → 2K+1개 상태
+   dp[i][j] 여기서 j는 (거래 횟수, 보유 여부) 인코딩
+
+3. 원형 집 도둑 → 선형 House Robber 2번 실행
+   ("털었다" / "건너뛰었다" 상태의 상태 머신)
+```
+
+### 7.2 자릿수 DP (Digit DP)
+
+#### 개념
+
+자릿수 DP는 [0, N] (또는 [L, R]) 범위에서 자릿수 수준의 제약 조건을 만족하는 숫자를 세는 기법입니다. 모든 숫자를 순회하는 대신, **자릿수별로** 처리하며 다음을 추적합니다:
+
+- `pos`: 현재 자릿수 위치 (최상위 자릿수부터 최하위까지)
+- `tight`: 아직 N의 자릿수에 바운드되어 있는지 (True이면 현재 자릿수는 최대 N의 해당 위치 자릿수까지)
+- `state`: 문제별 상태 (예: 마지막 자릿수, 자릿수 합 mod k 등)
+
+```
+왜 Digit DP인가:
+N까지 모든 숫자를 브루트포스로 확인하면 O(N)이고,
+N이 10^18일 때 너무 느립니다. Digit DP는 log10(N)개의
+자릿수를 처리하며 작은 상태 공간 → 보통 O(log N × |states|).
+
+템플릿:
+  count(pos, tight, state) =
+    for digit d in 0 .. (N[pos] if tight else 9):
+      count(pos+1, tight && (d == N[pos]), transition(state, d))
+```
+
+#### 예제: 연속된 같은 자릿수가 없는 N 이하의 숫자 세기
+
+**문제**: N이 주어질 때, 1부터 N까지 인접한 두 자릿수가 같지 않은 숫자의 개수를 구하라.
+
+예시) N=20: 유효한 숫자는 1-9 (모두 한 자리), 10, 12-19, 20. 무효: 11. 개수 = 19.
+
+```python
+from functools import lru_cache
+
+def count_no_consecutive_equal(N):
+    """
+    Digit DP: Count numbers in [1, N] with no consecutive equal digits.
+
+    Why we track last_digit: To check the "no consecutive equal"
+    constraint, we only need to know the immediately preceding digit.
+    This keeps the state space small: 10 possible last digits + 1
+    sentinel for "no digit placed yet".
+
+    State:
+      pos   — current digit position (0-indexed from MSD)
+      tight — still bounded by N?
+      last  — the last digit placed (-1 if none yet)
+      started — have we placed a nonzero digit? (handles leading zeros)
+
+    Time: O(log N × 10 × 10 × 2 × 2) ≈ O(log N × 400)
+    """
+    digits = [int(c) for c in str(N)]
+    n = len(digits)
+
+    @lru_cache(maxsize=None)
+    def dp(pos, tight, last, started):
+        """Return count of valid numbers from position pos onward."""
+        if pos == n:
+            return 1 if started else 0  # Must have placed at least one digit
+
+        limit = digits[pos] if tight else 9
+        count = 0
+
+        for d in range(0, limit + 1):
+            # Skip consecutive equal digits
+            if started and d == last:
+                continue
+
+            new_tight = tight and (d == limit)
+
+            if not started and d == 0:
+                # Leading zero: don't count as "started", reset last
+                count += dp(pos + 1, new_tight, -1, False)
+            else:
+                count += dp(pos + 1, new_tight, d, True)
+
+        return count
+
+    return dp(0, True, -1, False)
+
+
+# Examples
+print(count_no_consecutive_equal(20))    # 19 (only "11" is invalid)
+print(count_no_consecutive_equal(100))   # 90 (11, 22, 33, ..., 99 are invalid → 10 invalid)
+print(count_no_consecutive_equal(1000))  # 819
+```
+
+#### 범위 [L, R]에서 숫자 세기
+
+일반적인 트릭: [1, R]의 유효한 수 개수에서 [1, L-1]의 유효한 수 개수를 빼면 됩니다.
+
+```python
+def count_in_range(L, R):
+    """Count numbers in [L, R] with no consecutive equal digits."""
+    return count_no_consecutive_equal(R) - count_no_consecutive_equal(L - 1)
+```
+
+#### 기타 자릿수 DP 문제
+
+```
+1. 자릿수 합이 S인 수 세기
+   상태: (pos, tight, current_sum)
+
+2. K로 나누어떨어지는 수 세기
+   상태: (pos, tight, remainder_mod_k)
+
+3. 서로 다른 자릿수가 최대 D개인 수 세기
+   상태: (pos, tight, bitmask_of_used_digits)
+
+4. "럭키 넘버" 세기 (4와 7만 포함)
+   상태: (pos, tight)
+```
+
+### 7.3 비교
+
+```
+┌────────────────┬──────────────────────────┬──────────────────────────┐
+│                │ 상태 머신 DP             │ 자릿수 DP                │
+├────────────────┼──────────────────────────┼──────────────────────────┤
+│ 핵심 아이디어  │ FSM 전이로 모델링        │ 자릿수별 처리 + tight    │
+│                │                          │ 바운드                   │
+│ 상태 공간      │ 작음 (2-5개 상태)        │ pos × tight × 커스텀     │
+│ 시간 복잡도    │ O(n × states)            │ O(log N × state_size)    │
+│ 주요 용도      │ 시퀀스 최적화            │ [L, R] 범위 세기         │
+│ 예시           │ 주식 매매, 도둑          │ 자릿수 합, 나눗셈 가능성 │
+└────────────────┴──────────────────────────┴──────────────────────────┘
+```
+
+---
+
+## 8. 연습 문제
 
 ### 추천 문제
 

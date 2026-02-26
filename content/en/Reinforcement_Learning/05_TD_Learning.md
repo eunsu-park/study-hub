@@ -72,6 +72,8 @@ def td0_prediction(env, policy, n_episodes=10000, alpha=0.1, gamma=0.99):
     Returns:
         V: State value function
     """
+    # defaultdict(float) starts every unseen state at 0 — a safe neutral prior
+    # that doesn't bias the agent toward or away from unvisited states
     V = defaultdict(float)
 
     for episode in range(n_episodes):
@@ -87,8 +89,12 @@ def td0_prediction(env, policy, n_episodes=10000, alpha=0.1, gamma=0.99):
             if done:
                 td_target = reward  # Terminal state: V(s') = 0
             else:
+                # Bootstrap: blend actual reward with discounted estimate of V(s') —
+                # this lets us update immediately without waiting for the episode to end
                 td_target = reward + gamma * V[next_state]
 
+            # TD error = how wrong our current estimate was; alpha controls
+            # how aggressively we correct it (high alpha = fast but noisy)
             td_error = td_target - V[state]
             V[state] = V[state] + alpha * td_error
 
@@ -420,6 +426,7 @@ def n_step_td(env, policy, n=3, n_episodes=1000, alpha=0.1, gamma=0.99):
     for episode in range(n_episodes):
         states = []
         rewards = [0]  # R_0 = 0 (not used)
+        # T starts at infinity so the action loop runs until a terminal is found
         T = float('inf')  # Terminal time
         t = 0
 
@@ -440,14 +447,19 @@ def n_step_td(env, policy, n=3, n_episodes=1000, alpha=0.1, gamma=0.99):
 
                 state = next_state
 
+            # tau is n steps behind the current time step — we can only update
+            # state tau once we have n actual rewards ahead of it
             tau = t - n + 1  # Time to update
 
             if tau >= 0:
-                # Calculate n-step return
+                # Sum n discounted real rewards starting from tau+1;
+                # using actual rewards reduces bias compared to pure bootstrapping
                 G = sum(gamma ** (i - tau - 1) * rewards[i]
                         for i in range(tau + 1, min(tau + n, T) + 1))
 
                 if tau + n < T:
+                    # Append bootstrap estimate only when the episode hasn't ended —
+                    # at the boundary we use pure MC return (no V needed)
                     G += gamma ** n * V[states[tau + n]]
 
                 # Update
@@ -497,7 +509,8 @@ def td_lambda(env, policy, lambd=0.8, n_episodes=1000, alpha=0.1, gamma=0.99):
     V = defaultdict(float)
 
     for episode in range(n_episodes):
-        # Initialize eligibility trace
+        # Reset traces at episode start — eligibility is episode-scoped so that
+        # credit from one episode never bleeds into the next
         E = defaultdict(float)
 
         state, _ = env.reset()
@@ -514,12 +527,16 @@ def td_lambda(env, policy, lambd=0.8, n_episodes=1000, alpha=0.1, gamma=0.99):
             else:
                 delta = reward + gamma * V[next_state] - V[state]
 
-            # Increase eligibility for current state
+            # Accumulate trace for the visited state — states visited more recently
+            # or more frequently receive a larger eligibility and thus a bigger update
             E[state] += 1  # accumulating traces
 
-            # Update all states
+            # Propagate TD error to ALL states weighted by their eligibility —
+            # this is the key efficiency gain over forward-view n-step TD
             for s in E:
                 V[s] += alpha * delta * E[s]
+                # gamma*lambda decay: gamma discounts future rewards, lambda
+                # controls how far back credit propagates (lambda=0 → TD(0), lambda=1 → MC)
                 E[s] *= gamma * lambd  # Decay trace
 
             state = next_state
@@ -572,8 +589,12 @@ def cliff_walking_td():
     # State: 0-47 (4x12 grid)
     # Actions: 0=up, 1=right, 2=down, 3=left
 
+    # lambda initializer ensures each new state gets its own zero array —
+    # sharing one array across states would corrupt all Q-values
     Q = defaultdict(lambda: np.zeros(4))
     epsilon = 0.1
+    # alpha=0.5 is higher than the 0.1 used in prediction — faster learning
+    # is viable here because the cliff environment has clear reward structure
     alpha = 0.5
     gamma = 0.99
     n_episodes = 500
@@ -597,6 +618,7 @@ def cliff_walking_td():
             total_reward += reward
 
             # Q-learning update (detailed in next lesson)
+            # best_next=0 at terminal avoids adding phantom future value after the episode ends
             best_next = np.max(Q[next_state]) if not done else 0
             Q[state][action] += alpha * (reward + gamma * best_next - Q[state][action])
 

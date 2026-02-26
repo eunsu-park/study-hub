@@ -1,12 +1,20 @@
 # 01. IoT Overview
 
+**Next**: [Raspberry Pi Setup](./02_Raspberry_Pi_Setup.md)
+
 ## Learning Objectives
 
-- Understand the definition and core concepts of IoT (Internet of Things)
-- Identify components of IoT system architecture
-- Understand the difference between edge computing and cloud computing
-- Learn overview of major IoT protocols
-- Recognize IoT security considerations
+After completing this lesson, you will be able to:
+
+1. Define IoT (Internet of Things) and explain its core concepts
+2. Identify the components of a three-layer IoT system architecture
+3. Compare edge computing and cloud computing trade-offs
+4. Describe major IoT protocols and their appropriate use cases
+5. Recognize common IoT security threats and best practices
+
+---
+
+The Internet of Things is reshaping every industry -- from agriculture to healthcare to manufacturing. Understanding IoT fundamentals is the essential first step before building any connected device or sensor network, because the architectural decisions you make early (which protocol, where to process data, how to secure devices) cascade through every stage of your project.
 
 ---
 
@@ -496,12 +504,4 @@ List 3 potential security vulnerabilities for a home smart door lock and propose
 
 ---
 
-## Next Steps
-
-- [02_Raspberry_Pi_Setup.md](02_Raspberry_Pi_Setup.md): Build practice environment with Raspberry Pi setup
-- [06_MQTT_Protocol.md](06_MQTT_Protocol.md): Advanced MQTT protocol learning
-- [12_Cloud_IoT_Integration.md](12_Cloud_IoT_Integration.md): Cloud IoT service integration
-
----
-
-*Last updated: 2026-02-01*
+**Next**: [Raspberry Pi Setup](./02_Raspberry_Pi_Setup.md)

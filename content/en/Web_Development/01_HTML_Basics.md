@@ -1,5 +1,26 @@
 # HTML Basics
 
+**Next**: [HTML Forms and Tables](./02_HTML_Forms_Tables.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what HTML is and describe its role in web development
+2. Describe the structure of an HTML5 document including DOCTYPE, head, and body
+3. Apply heading, paragraph, and text-formatting tags to structure content
+4. Distinguish between block-level and inline elements
+5. Implement ordered, unordered, and description lists
+6. Write hyperlinks with appropriate attributes and embed images with alt text
+7. Identify the purpose of semantic HTML5 elements such as header, nav, main, article, and footer
+8. Apply semantic markup to improve accessibility and SEO
+
+---
+
+Every web page you visit -- from a simple blog to a complex web application -- begins with HTML. It is the universal language that browsers understand, and mastering it is the non-negotiable first step toward building anything on the web. Without solid HTML foundations, CSS styling and JavaScript interactivity have nothing meaningful to attach to.
+
+> **Analogy:** HTML is the skeleton of a web page, CSS is the skin and clothing, and JavaScript is the muscles that make it move. Without a solid skeleton, styling and behavior have nothing to hang on -- which is why HTML comes first.
+
 ## Table of Contents
 1. [What is HTML?](#what-is-html)
 2. [HTML Document Structure](#html-document-structure)
@@ -490,13 +511,12 @@ Create a simple blog post page:
 ## Summary
 
 This lesson covered:
-1. ✅ HTML document basic structure
-2. ✅ Basic tags (headings, paragraphs, text formatting)
-3. ✅ Lists (unordered, ordered, description lists)
-4. ✅ Links and images
-5. ✅ Semantic HTML and importance
+1. HTML document basic structure
+2. Basic tags (headings, paragraphs, text formatting)
+3. Lists (unordered, ordered, description lists)
+4. Links and images
+5. Semantic HTML and importance
 
-**Next Steps:**
-- Learn about HTML forms and tables
-- Practice creating various types of web pages
-- Apply semantic HTML in real projects
+---
+
+**Next**: [HTML Forms and Tables](./02_HTML_Forms_Tables.md)

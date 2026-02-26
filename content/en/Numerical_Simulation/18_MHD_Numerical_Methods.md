@@ -8,11 +8,15 @@
 - Implement simple MHD shock tube problem
 - Learn div B = 0 constraint handling methods
 
+**Why This Lesson Matters:** Numerically solving MHD equations is significantly harder than solving ordinary fluid dynamics (Euler/Navier-Stokes) for two reasons: (1) MHD has 7 characteristic wave speeds instead of 3, making Riemann solvers much more complex, and (2) the divergence-free constraint $\nabla \cdot \mathbf{B} = 0$ has no physical analogue in hydrodynamics and must be maintained numerically to prevent unphysical magnetic monopole forces. The methods developed here -- conservative finite volumes, Godunov schemes, and divergence cleaning -- are the foundation of modern MHD simulation codes used in astrophysics and fusion research.
+
 ---
 
 ## 1. Conservative Form of MHD Equations
 
 ### 1.1 1D MHD Conservative Form
+
+The conservative form $\partial \mathbf{U}/\partial t + \partial \mathbf{F}/\partial x = 0$ is essential for correctly capturing shocks and discontinuities. By the Lax-Wendroff theorem, conservative schemes converge to the correct weak solution, while non-conservative schemes may converge to the wrong shock speed.
 
 ```
 1D Ideal MHD Conservative Form:
@@ -1058,6 +1062,25 @@ MHD Numerical Methods Key Points:
    - Grid convergence tests
    - Check conserved quantities
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: MHD Wave Speed Calculation
+For a plasma state with ρ = 1.0, p = 0.5, Bx = 1.0, By = 0.5, Bz = 0.0, and γ = 5/3, compute all seven MHD characteristic speeds: ±cf, ±ca, ±cs, and the entropy wave speed vx = 0. Use the formulas for fast magnetosonic speed cf, Alfven speed ca = |Bx|/√ρ, and slow magnetosonic speed cs given in Section 1.2. Verify the ordering vx - cf ≤ vx - ca ≤ vx - cs ≤ vx ≤ vx + cs ≤ vx + ca ≤ vx + cf.
+
+### Exercise 2: Lax-Friedrichs Numerical Diffusion
+Apply the Lax-Friedrichs scheme to the 1D scalar advection equation ∂u/∂t + a∂u/∂x = 0 with periodic boundary conditions. Using a Gaussian initial condition, run the simulation for 10 wave periods and compare the result to the exact solution (which should be the original Gaussian). Measure the amplitude decay and width broadening as a function of the Courant number S = a·dt/dx ∈ {0.5, 0.8, 0.95}. Show that numerical diffusion is proportional to (1 - S²)/2 × dx.
+
+### Exercise 3: Brio-Wu Shock Tube with HLL vs Lax-Friedrichs
+Run the Brio-Wu shock tube test with both the HLL flux and the Lax-Friedrichs flux using Nx = 400 cells and CFL = 0.5 at t = 0.1. Plot density, velocity, and By profiles side by side. Identify the compound wave structure (fast rarefaction, compound wave, contact discontinuity, slow shock, fast rarefaction) in both solutions. Which flux function resolves the intermediate states more sharply? Quantify the difference by measuring the width of the contact discontinuity in each solution.
+
+### Exercise 4: div B Error Monitoring
+Modify the MHD_1D_Solver class to add a method that computes the discrete divergence of B at each cell interface using central differences. For 2D, the finite volume divergence at cell (i,j) is: (div B)_{i,j} = (Bx_{i+1/2,j} - Bx_{i-1/2,j})/dx + (By_{i,j+1/2} - By_{i,j-1/2})/dy. Implement a 2D toy problem (e.g., a smooth initial magnetic field vortex advected by a uniform flow) and plot the L2 norm of div B over time. Compare the div B growth rate with and without Powell source term corrections.
+
+### Exercise 5: Grid Convergence Test
+Run the Brio-Wu shock tube with grid resolutions Nx = 100, 200, 400, and 800 cells using the HLL flux. At t = 0.1, compute the L1 error in density relative to the Nx = 1600 reference solution: L1 = (1/Nx)Σ|ρ_num(xi) - ρ_ref(xi)|. Plot L1 versus dx on a log-log scale and measure the observed convergence rate. In smooth regions the scheme should approach first order, and near discontinuities the convergence rate should be reduced. Explain why using MUSCL reconstruction would improve convergence in smooth regions.
 
 ---
 

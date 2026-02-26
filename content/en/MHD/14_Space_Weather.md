@@ -575,11 +575,15 @@ def magnetopause_standoff(v_sw, n_sw, B_0=3.12e-5, R_E=6371e3):
     mu_0 = 4 * np.pi * 1e-7
     m_p = 1.673e-27  # proton mass (kg)
 
-    # Dynamic pressure
+    # Dynamic pressure = ρv²: the ram pressure of the solar wind plasma that
+    # must be balanced by the magnetospheric field pressure — this is the
+    # fundamental competition that sets the magnetopause location
     rho_sw = n_sw * m_p
     P_dyn = rho_sw * v_sw**2
 
-    # Standoff distance
+    # The 1/6 power comes from the dipole field B ∝ r^{-3}; squaring gives
+    # B² ∝ r^{-6}, so balancing B²/(2μ₀) = P_dyn and solving for r yields r ∝ P_dyn^{-1/6}
+    # — a weak dependence, meaning you need a 64× pressure increase to halve r_mp
     r_mp = R_E * (B_0**2 / (2 * mu_0 * P_dyn))**(1/6)
 
     return r_mp / R_E  # Return in Earth radii
@@ -715,17 +719,27 @@ def dst_evolution(Dst_0, v_sw_series, B_z_series, dt, a=1e-3, b=0.5, tau=8*3600)
     for i in range(N):
         Dst_series[i] = Dst
 
-        # Solar wind electric field (in mV/m)
+        # Take the southward component (B_z < 0) because only southward IMF
+        # drives dayside reconnection, which opens the magnetopause and allows
+        # solar wind energy to enter and energize the ring current; northward
+        # IMF closes the magnetopause and reconnection ceases
         B_s = max(-B_z_series[i], 0) * 1e9  # Convert to nT, take southward component
+        # E_sw = v_sw * B_s is the interplanetary electric field (mV/m):
+        # it represents the rate at which flux is transferred from the IMF into
+        # the magnetosphere, so stronger electric field → faster ring current injection
         E_sw = v_sw_series[i] / 1e3 * B_s / 1e6  # mV/m
 
-        # Injection function
+        # Threshold b ≈ 0.5 mV/m: below this, the magnetopause is closed enough
+        # that reconnection is negligible and the ring current is not being driven;
+        # this avoids unphysical Dst responses to very weak solar wind electric fields
         if E_sw > b:
             Q = a * (E_sw - b)
         else:
             Q = 0
 
-        # Burton equation
+        # The -Dst/tau decay term models ring current loss by charge exchange of
+        # energetic ions with cold neutral hydrogen; τ ≈ 8 hours is the mean
+        # lifetime before ions are neutralized and lost from the radiation belt
         dDst_dt = Q - Dst / tau
 
         Dst += dDst_dt * dt
@@ -803,9 +817,15 @@ def cme_transit_time(v_0, v_sw=400e3, gamma_inv=86400, r_target=1.496e11):
     t = 0
     dt = 600  # 10 min
     r = 0
+    # Start the integration from 0.1 AU (not the solar surface) because the
+    # drag-based model is only valid in the heliosphere beyond the CME initiation
+    # region; the CME has already been accelerated/decelerated close to the Sun
     r_0 = 0.1 * r_target  # Start at 0.1 AU (close to Sun)
 
     while r < r_target:
+        # The velocity decays exponentially toward v_sw: a fast CME is decelerated
+        # by aerodynamic drag from the ambient solar wind, while a slow CME is
+        # accelerated — both converge toward v_sw on a timescale γ^{-1} ≈ 1 day
         v = v_sw + (v_0 - v_sw) * np.exp(-t / gamma_inv)
         r += v * dt
         t += dt
@@ -856,15 +876,21 @@ def gic_estimate(dB_dt, rho_earth=1000, L=100e3):
     """
     mu_0 = 4 * np.pi * 1e-7
 
-    # Induced electric field (rough estimate)
-    # E ~ (dB/dt) * sqrt(ρ/(2πμ₀f))
-    # For quasi-DC, use simplified scaling
+    # The induced E-field scales as √(ρ_earth/μ₀): ground resistivity amplifies
+    # the GIC because high-resistivity crust (e.g., Precambrian shield in Canada)
+    # forces the induced current to flow in surface conductors (power lines)
+    # rather than dispersing through the ground — this is why Quebec and Finland
+    # are more vulnerable than lower-latitude regions with conductive geology
     E = (dB_dt * 1e-9 / 60) * np.sqrt(rho_earth / mu_0) / 1000  # V/km
 
-    # Voltage over line
+    # Voltage over line: longer lines accumulate more of the spatially extended
+    # induced electric field, so 1000 km continental transmission lines are
+    # much more at risk than short urban distribution lines
     V = E * L / 1e3  # V
 
-    # Current (assuming line resistance R ~ 0.1 Ω)
+    # GIC = V/R: the low resistance of power transformers (~0.1 Ω) means even
+    # small induced voltages drive large quasi-DC currents, which saturate the
+    # iron core and cause half-cycle distortion, reactive power demand, and heating
     R_line = 0.1  # Ω
     GIC = V / R_line  # A
 

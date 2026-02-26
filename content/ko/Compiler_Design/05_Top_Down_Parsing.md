@@ -1793,4 +1793,4 @@ $A \to S\ d$가 간접 좌재귀를 생성함에 주목하세요. 알고리즘�
 
 ---
 
-[Previous: 04_Context_Free_Grammars.md](./04_Context_Free_Grammars.md) | [Next: 06_Bottom_Up_Parsing.md](./06_Bottom_Up_Parsing.md) | [Overview](./00_Overview.md)
+[이전: 문맥 자유 문법](./04_Context_Free_Grammars.md) | [다음: 상향식 파싱](./06_Bottom_Up_Parsing.md) | [개요](./00_Overview.md)

@@ -93,10 +93,11 @@ safe_write() {
         return 1
     fi
 
+    # Why: writing to a temp file in the same directory, then mv-ing, makes
+    # the update atomic — readers never see a half-written file.
     local temp_file
     temp_file=$(mktemp "${target_dir}/.tmp.XXXXXX")
 
-    # Write to temp file
     if ! echo "$content" > "$temp_file"; then
         echo -e "${RED}✗${NC} Failed to write to temp file" >&2
         rm -f "$temp_file"
@@ -119,6 +120,8 @@ require_cmd() {
     local cmd="$1"
     local install_hint="${2:-}"
 
+    # Why: fail-fast dependency checking at script start prevents cryptic
+    # "command not found" errors halfway through a long-running operation.
     if ! command -v "$cmd" &> /dev/null; then
         echo -e "${RED}✗${NC} Required command not found: $cmd" >&2
 
@@ -155,7 +158,8 @@ retry() {
             echo -e "${YELLOW}⚠${NC} Command failed, retrying in ${delay}s..."
             sleep "$delay"
 
-            # Exponential backoff
+            # Why: exponential backoff avoids overwhelming a recovering service
+            # with rapid retries — each wait doubles to give it breathing room.
             delay=$((delay * 2))
         fi
 

@@ -1,15 +1,20 @@
 # Discrete Fourier Transform
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the relationship between the DTFT, DFT, and FFT and describe how the DFT arises from sampling the DTFT.
+2. Apply DFT properties including linearity, circular shift, circular convolution, and Parseval's theorem.
+3. Explain spectral leakage and implement windowing strategies (Hann, Hamming, Blackman) to reduce it.
+4. Implement the FFT algorithm using NumPy and use it for spectral analysis of real-world signals.
+5. Analyze the Cooley-Tukey algorithm's divide-and-conquer structure and explain its O(N log N) computational advantage.
+
+---
+
 ## Overview
 
 The Discrete Fourier Transform (DFT) is the computational workhorse of digital signal processing. It converts a finite-length sequence of samples into a finite-length sequence of frequency components. Coupled with the Fast Fourier Transform (FFT) algorithm, the DFT enables efficient spectral analysis, filtering, correlation, and countless other applications. This lesson covers DFT theory, properties, the FFT algorithm, and practical usage.
-
-**Learning Objectives:**
-- Understand the relationship between DTFT, DFT, and FFT
-- Apply DFT properties including circular convolution and Parseval's theorem
-- Explain spectral leakage and windowing strategies
-- Implement and use FFT for spectral analysis of real-world signals
-- Understand the Cooley-Tukey algorithm and its computational advantages
 
 **Prerequisites:** [05. Sampling and Reconstruction](05_Sampling_and_Reconstruction.md)
 

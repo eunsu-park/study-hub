@@ -15,6 +15,8 @@
 
 ## 1. What is RNN?
 
+A feedforward network processes each input independently — it has no concept of order or context. "The dog bit the man" and "The man bit the dog" would look identical if we treat words as a bag. RNNs maintain a hidden state that carries context from previous time steps, making them aware of sequence order and history.
+
 ### Characteristics of Sequential Data
 
 ```
@@ -38,6 +40,8 @@ x(t): Current input
 h(t-1): Previous hidden state
 ```
 
+**Intuition**: Think of this as: [new context] = blend([new input], [previous context]). W_xh extracts features from the current input, W_hh selectively remembers relevant parts of the previous context, and tanh squashes the result to [-1, 1], preventing values from exploding. The same weights (W_xh, W_hh) are reused at every time step — the network acts like a program that *loops*, not a circuit of fixed size.
+
 ---
 
 ## 2. RNN Structure
@@ -55,6 +59,8 @@ h(t-1): Previous hidden state
 
 ### Parameter Sharing
 
+**Why share weights across time steps?** Using different weights for each time step would: (1) require knowing the sequence length in advance, (2) need O(T) parameters growing with sequence length, and (3) not generalize to different-length sequences at test time. Sharing weights makes the RNN length-agnostic — the same transition function is applied at every step, just like a `for` loop in code.
+
 - Same W_xh, W_hh used at all time steps
 - Can process variable-length sequences
 
@@ -71,9 +77,12 @@ import torch.nn as nn
 # Create RNN
 rnn = nn.RNN(
     input_size=10,    # Input dimension
-    hidden_size=20,   # Hidden state dimension
-    num_layers=2,     # Number of RNN layers
-    batch_first=True  # Input: (batch, seq, feature)
+    hidden_size=20,   # Hidden state dimension — 20 is small for demo;
+                      # real tasks typically use 128-512
+    num_layers=2,     # Number of RNN layers — stacking adds depth,
+                      # letting higher layers learn more abstract patterns
+    batch_first=True  # batch_first=True: input shape is (batch, seq_len, features)
+                      # instead of (seq_len, batch, features) — matches DataLoader convention
 )
 
 # Input shape: (batch_size, seq_len, input_size)
@@ -162,6 +171,8 @@ h100 ← W_hh × W_hh × ... × W_hh × h1
 ```
 
 ### Cause
+
+After T time steps, the gradient with respect to early inputs is proportional to the product: grad ~ product_i(tanh'(.) * W_hh) over T steps. Since |tanh'| <= 1, this product shrinks exponentially with T — the network effectively "forgets" information from early time steps. Conversely, if the spectral radius of W_hh exceeds 1, the product grows exponentially, causing exploding gradients.
 
 - |W_hh| > 1: Exploding gradients
 - |W_hh| < 1: Vanishing gradients
@@ -293,6 +304,59 @@ output_padded, _ = pad_packed_sequence(output, batch_first=True)
 rnn = nn.RNN(input_size, hidden_size, batch_first=True)
 output, h_n = rnn(x)  # output: all, h_n: last
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Understand Hidden State Shape
+
+Verify your understanding of RNN output shapes.
+
+1. Create `nn.RNN(input_size=5, hidden_size=16, num_layers=2, batch_first=True)`.
+2. Pass a batch of shape `(8, 20, 5)` (batch=8, seq_len=20, features=5).
+3. Print the shapes of `output` and `h_n`.
+4. Explain what each dimension represents. Specifically: why is `h_n.shape[0] == 2` (equal to `num_layers`)?
+5. Repeat with `bidirectional=True` and explain how the shapes change.
+
+### Exercise 2: Sine Wave Prediction
+
+Train an RNN to predict the next value in a sine wave sequence.
+
+1. Use the `generate_sin_data` function from the lesson to create 1000 training samples with `seq_len=30`.
+2. Build and train `SinPredictor` for 50 epochs using MSE loss and Adam optimizer.
+3. Plot 5 test predictions (model output) against the ground truth values.
+4. Report the final test MSE. Discuss why a simple RNN may struggle with longer sequences.
+
+### Exercise 3: Bidirectional RNN for Sentiment Classification
+
+Build a bidirectional RNN text classifier.
+
+1. Use a toy dataset: create 200 sentences labeled positive (1) or negative (0) — you can invent simple rules (e.g., sentences containing "good", "great" → positive).
+2. Build a `CharRNN` with `bidirectional=True`.
+3. Combine the forward and backward final hidden states by concatenation before the FC layer.
+4. Train for 20 epochs and report accuracy on a held-out 20% split.
+5. Explain in one sentence why bidirectionality helps for classification but is inapplicable for sequence generation.
+
+### Exercise 4: Gradient Clipping Effect
+
+Observe exploding gradients and how clipping prevents them.
+
+1. Build a 5-layer stacked RNN on a sequence of 100 steps.
+2. Initialize weights with large values using `torch.nn.init.normal_(std=2.0)`.
+3. Run one forward + backward pass (without clipping) and print the gradient norm.
+4. Apply `torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)` and print the gradient norm again.
+5. Train for 30 epochs with and without gradient clipping and compare the loss curves.
+
+### Exercise 5: Many-to-Many Sequence Labeling
+
+Implement a POS-tagging style model that labels every token in a sequence.
+
+1. Create synthetic data: sequences of integers where each element's label is `element % 3` (giving 3 classes).
+2. Use `RNNSeq2Seq` to output a prediction at every time step.
+3. Apply `nn.CrossEntropyLoss` over all time steps simultaneously.
+4. Train for 30 epochs and report per-token accuracy.
+5. Visualize the predicted label sequence vs the true labels for 3 test samples.
 
 ---
 

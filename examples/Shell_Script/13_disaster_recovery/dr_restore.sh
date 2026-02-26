@@ -142,6 +142,8 @@ restore_filesystem() {
     fi
 
     # Find tar archives
+    # Why: mapfile safely loads find output into an array, handling filenames
+    # with spaces or special chars — unlike for-loop globbing which can break.
     local archives
     mapfile -t archives < <(find "$backup_path" -name "*.tar*" -type f)
 
@@ -263,7 +265,8 @@ restore_config() {
         return 0
     fi
 
-    # Extract to temporary location first
+    # Why: extracting configs to a temp dir first lets the operator review
+    # before overwriting production files — a safety net against blind restores.
     local temp_dir
     temp_dir="$(mktemp -d)"
     trap 'rm -rf "$temp_dir"' EXIT
@@ -343,7 +346,8 @@ main() {
         exit 0
     fi
 
-    # Verify integrity before restore
+    # Why: verifying checksums before restoring prevents corrupted data from
+    # silently replacing good production data — fail early, fail safe.
     if ! verify_backup_integrity "$backup_date"; then
         die "Backup integrity check failed. Aborting restore."
     fi

@@ -1,5 +1,25 @@
 # STL Algorithms and Iterators
 
+**Previous**: [STL Containers](./10_STL_Containers.md) | **Next**: [Templates](./12_Templates.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Classify the five iterator categories and identify which containers provide each kind
+2. Write lambda expressions with various capture modes (by value, by reference, mixed)
+3. Apply STL search algorithms (`find`, `find_if`, `binary_search`) to locate elements in containers
+4. Use sorting algorithms (`sort`, `partial_sort`, `nth_element`) with custom comparators
+5. Combine modifying algorithms (`copy`, `transform`, `remove`/`erase`) to reshape container data
+6. Perform numeric reductions with `accumulate` and generate sequences with `iota`
+7. Execute set operations (`set_union`, `set_intersection`, `set_difference`) on sorted ranges
+
+---
+
+The STL algorithms library turns C++ from a language where you hand-roll every loop into one where common data operations are a single function call. Rather than reinventing searching, sorting, and transforming logic for every project, you compose well-tested, highly optimized building blocks that the standard library already provides. Mastering iterators and algorithms is what separates code that merely compiles from code that is concise, correct, and performant.
+
 ## 1. Iterator
 
 Iterators are pointer-like objects that point to container elements.
@@ -689,6 +709,62 @@ int main() {
 | `reverse` | Reverse |
 | `accumulate` | Accumulate |
 | `min_element`, `max_element` | Min/max |
+
+---
+
+## Exercises
+
+### Exercise 1: Lambda Capture Modes
+
+Write a program that demonstrates all four lambda capture modes. Create two local variables `int base = 10` and `int multiplier = 3`. Write four lambdas:
+- Captures `base` by value and returns `base + n` for a given `n`.
+- Captures `multiplier` by reference and doubles it inside the lambda (verify the original changed).
+- Captures everything by value (`[=]`) and computes `base * multiplier + n`.
+- Captures everything by reference (`[&]`) and increments both variables.
+
+Print the variables after each lambda call and explain which captures can observe the change.
+
+### Exercise 2: Pipeline with transform and accumulate
+
+Given a `std::vector<std::string> words = {"hello", "world", "cpp", "algorithms"}`:
+
+1. Use `std::transform` to create a new vector where each string is replaced by its length (`words.size()`).
+2. Use `std::accumulate` with a lambda to compute the total character count across all words.
+3. Use `std::find_if` to locate the first word longer than 5 characters.
+4. Use `std::count_if` to count how many words have an even number of characters.
+
+Write all steps without raw loops — only STL algorithms and lambdas.
+
+### Exercise 3: Sort with Custom Comparator
+
+Create a `struct Person { std::string name; int age; };` and a `std::vector<Person>`. Populate it with at least five people. Then:
+1. Sort by age ascending.
+2. Sort by name alphabetically (case-insensitive if you can).
+3. Sort by name length, then by name alphabetically as a tie-breaker.
+
+Use lambdas as comparators for `std::sort` in each step and print the vector after each sort.
+
+### Exercise 4: Erase-Remove Idiom
+
+Start with `std::vector<int> v = {1, 5, 2, 8, 3, 7, 4, 6, 9, 10}`.
+
+1. Remove all even numbers using the erase-remove idiom (`std::remove_if` + `v.erase`).
+2. From the remaining odd numbers, keep only those greater than 3 (apply the idiom again).
+3. Confirm the final vector contains exactly `{5, 7, 9}`.
+
+Explain in a comment why `std::remove_if` alone is not sufficient to shrink the vector.
+
+### Exercise 5: Set Operations on Sorted Ranges
+
+Create two sorted `std::vector<int>` collections representing the members of two clubs:
+- Club A: `{1, 3, 5, 7, 9, 11}`
+- Club B: `{3, 6, 9, 12, 15}`
+
+Use STL set algorithms to compute and print:
+1. All members who belong to either club (union).
+2. Members who belong to both clubs (intersection).
+3. Members who are in Club A but not Club B (difference).
+4. Members who are in exactly one club but not both (symmetric difference — use `std::set_symmetric_difference`).
 
 ---
 

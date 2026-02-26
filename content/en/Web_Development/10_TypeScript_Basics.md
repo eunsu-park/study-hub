@@ -1,11 +1,24 @@
 # 10. TypeScript Fundamentals
 
+**Previous**: [Practical Projects](./09_Practical_Projects.md) | **Next**: [Web Accessibility](./11_Web_Accessibility.md)
+
 ## Learning Objectives
-- Understand TypeScript advantages and relationship with JavaScript
-- Master the basic type system
-- Utilize interfaces and type aliases
-- Write reusable code with generics
-- Understand utility types and advanced type features
+
+After completing this lesson, you will be able to:
+
+1. Explain the advantages of TypeScript over plain JavaScript for large-scale projects
+2. Annotate variables, functions, and return types using TypeScript's basic type system
+3. Define object shapes with interfaces and distinguish when to use type aliases
+4. Implement reusable, type-safe functions and classes using generics
+5. Apply generic constraints with `extends` and `keyof` to enforce type relationships
+6. Leverage built-in utility types such as `Partial`, `Pick`, `Omit`, and `Record`
+7. Configure a TypeScript project with `tsconfig.json` and compile to JavaScript
+
+---
+
+JavaScript's flexibility is both its greatest strength and its biggest liability at scale. TypeScript adds a static type layer that catches entire categories of bugs at compile time -- before they ever reach your users. Adopting TypeScript does not mean abandoning JavaScript; every valid JavaScript program is already valid TypeScript. This lesson equips you with the core type system features that make TypeScript indispensable for modern web development.
+
+> **Analogy:** TypeScript is JavaScript with guardrails. You can still drive at full speed, but the guardrails keep you from going off the cliff. The type system catches mistakes at compile time that would otherwise crash at runtime, turning "Uncaught TypeError" into a red squiggly line in your editor.
 
 ## Table of Contents
 1. [Introduction to TypeScript](#1-introduction-to-typescript)
@@ -65,7 +78,7 @@ npx tsc --init
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "strict": true,
+    "strict": true,          // Enables strictNullChecks, noImplicitAny, and 10+ other checks — catches bugs at compile time that would be runtime errors in plain JS
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -460,6 +473,7 @@ button.click(); // OK
 
 ```typescript
 // Generic function
+// T is inferred from the argument type — TypeScript ensures arg and return value share the same type without manual casting
 function identity<T>(arg: T): T {
   return arg;
 }
@@ -467,7 +481,7 @@ function identity<T>(arg: T): T {
 // Usage
 let output1 = identity<string>("hello");
 let output2 = identity<number>(42);
-let output3 = identity("auto"); // Type inference
+let output3 = identity("auto"); // Type inference — TypeScript infers T = string from the argument
 
 // Generic array
 function firstElement<T>(arr: T[]): T | undefined {
@@ -573,7 +587,7 @@ interface User {
   age?: number;
 }
 
-// Partial<T> - Make all properties optional
+// Partial<T> - Makes all User fields optional — useful for update functions where you only change some fields
 type PartialUser = Partial<User>;
 // { id?: number; name?: string; email?: string; age?: number }
 
@@ -584,11 +598,11 @@ type RequiredUser = Required<User>;
 // Readonly<T> - Make all properties readonly
 type ReadonlyUser = Readonly<User>;
 
-// Pick<T, K> - Select specific properties
+// Pick<T, K> - Select only the fields you need; avoids exposing sensitive fields (e.g., password, token) in public types
 type UserBasic = Pick<User, "id" | "name">;
 // { id: number; name: string }
 
-// Omit<T, K> - Exclude specific properties
+// Omit<T, K> - Exclude fields you don't want; useful for creating "input" types that drop server-generated fields like id or createdAt
 type UserWithoutEmail = Omit<User, "email">;
 // { id: number; name: string; age?: number }
 ```
@@ -735,12 +749,12 @@ type UserUpdate = Partial<Omit<User, "id">>;
 
 ---
 
-## Next Steps
-- [11. Web Accessibility](./11_Web_Accessibility.md)
-- [12. SEO Basics](./12_SEO_Basics.md)
-
 ## References
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/)
 - [TypeScript Playground](https://www.typescriptlang.org/play)
 - [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped)
 - [TypeScript Deep Dive](https://basarat.gitbook.io/typescript/)
+
+---
+
+**Previous**: [Practical Projects](./09_Practical_Projects.md) | **Next**: [Web Accessibility](./11_Web_Accessibility.md)

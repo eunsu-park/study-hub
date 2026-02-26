@@ -13,13 +13,16 @@ Claude Code can read files, write code, and execute arbitrary shell commands on 
 - [03. CLAUDE.md and Project Setup](./03_CLAUDE_md_and_Project_Setup.md)
 - Understanding of file system permissions and shell commands
 
-**Learning Objectives**:
-- Understand why permission controls exist and the threat model they address
-- Configure each of the five permission modes
-- Write allow/deny rules with glob patterns for fine-grained control
-- Set up file access rules to restrict read and edit operations
-- Choose the appropriate mode for different workflows
-- Apply security best practices including the principle of least privilege
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand why permission controls exist and the threat model they address
+2. Configure each of the five permission modes
+3. Write allow/deny rules with glob patterns for fine-grained control
+4. Set up file access rules to restrict read and edit operations
+5. Choose the appropriate mode for different workflows
+6. Apply security best practices including the principle of least privilege
 
 ---
 

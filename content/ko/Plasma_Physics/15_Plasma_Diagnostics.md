@@ -621,16 +621,21 @@ V = np.linspace(-20, 20, 100)
 I_true = langmuir_current(V, n_e_true, T_e_true * 1.6e-19, V_p_true, V_f_true, A_p)
 I_noisy = I_true + np.random.normal(0, 0.1e-6, len(V))
 
-# Fit in electron retardation region
+# 전자 지연 영역에서만 피팅합니다: V_p 미만에서 전자 전류는
+# 볼츠만 지수함수를 따르므로 로그 공간의 선형 피팅이 T_e를
+# 직접 제공합니다. 포화 영역을 포함하면 선형성이 깨집니다.
 mask = (V > 0) & (V < V_p_true)
 V_fit = V[mask]
 I_fit = I_noisy[mask]
 
-# Take log of electron current (approximate, ignoring ion current)
+# 1e-6 A 오프셋은 원점을 이동시켜 노이즈로 인한 log(0) 또는
+# log(음수)를 방지합니다. 이 오프셋은 포화 전류의 ~1/1000 수준으로,
+# 기울기와 이에서 추론되는 온도를 크게 편향시키지 않습니다.
 I_e_approx = I_fit + 1e-6  # shift to avoid log(negative)
 ln_I = np.log(np.abs(I_e_approx))
 
-# Linear fit: ln(I) = (e/k_B T_e) * V + const
+# 선형 피팅: ln(I) = (e/k_B T_e) * V + const
+# 볼츠만 인자가 I_e ∝ exp(eV/kT_e)를 주므로 기울기가 T_e를 인코딩합니다.
 p = np.polyfit(V_fit, ln_I, 1)
 slope = p[0]
 
@@ -643,7 +648,9 @@ print(f"  True T_e = {T_e_true:.2f} eV")
 print(f"  Fitted T_e = {T_e_fit:.2f} eV")
 print()
 
-# Find V_p (knee of curve)
+# 이차 도함수로 V_p를 찾습니다: I-V 곡선은 V_p에서 지수적(전자 지연)에서
+# 평탄(포화)으로 전환됩니다. 이차 도함수는 이 변곡점에서 날카롭게 피크를
+# 이루며, "무릎"을 수동으로 식별하지 않아도 되는 견고한 수치 기준을 제공합니다.
 dI_dV = np.gradient(I_noisy, V)
 d2I_dV2 = np.gradient(dI_dV, V)
 idx_Vp = np.argmax(d2I_dV2)
@@ -701,7 +708,9 @@ def abel_inversion(r_impact, line_integral):
     r = r_impact[idx]
     L = line_integral[idx]
 
-    # Compute derivative dL/dr
+    # 선 적분의 수치 도함수: 아벨 역변환은 L 자체가 아닌 dL/dr을 필요로 합니다.
+    # np.gradient는 2차 중앙 차분을 사용하며, 단순 유한 차분보다 노이즈 증폭을
+    # 더 잘 억제합니다.
     dL_dr = np.gradient(L, r)
 
     # Abel inversion: n(r) = -(1/π) ∫_r^a (dL/dr') / sqrt(r'^2 - r^2) dr'
@@ -710,6 +719,10 @@ def abel_inversion(r_impact, line_integral):
     for i in range(len(r)):
         ri = r[i]
         # Integrate from ri to r_max
+        # 1e-10 정규화 항은 피적분함수가 r' = ri에서 발산하는 것을 방지합니다
+        # (하한에서의 제곱근 특이점). 이것은 정확한 아벨 변환에서 적분 가능한
+        # 특이점이지만, 유한 이산화로 인해 분모가 정확히 0이 됩니다;
+        # 1e-10은 dr²보다 훨씬 작으므로 적분을 편향시키지 않습니다.
         integrand = dL_dr[i:] / np.sqrt(r[i:]**2 - ri**2 + 1e-10)  # avoid division by zero
         n_r[i] = -1/np.pi * np.trapz(integrand, r[i:])
 
@@ -730,7 +743,12 @@ line_integral = np.zeros(N_chords)
 for i, r_imp in enumerate(r_impact):
     # Integrate along the chord
     # For cylindrical symmetry: ∫ n dl = 2 ∫_r_imp^a n(r) r dr / sqrt(r^2 - r_imp^2)
+    # r_imp + 1e-6에서 시작하면 코드 접점에서의 기하학적 특이점을 피할 수 있습니다
+    # (sqrt(r^2 - r_imp^2) → 0). 오프셋은 플라즈마 반경 a ~ 0.5 m에 비해 무시할 수 있습니다.
     r_chord = np.linspace(r_imp + 1e-6, a, 200)
+    # r/sqrt(r^2 - r_imp^2) 인자는 코드 경로 야코비안입니다: r(반경 좌표)에서의
+    # 적분을 시선 방향을 따른 적분으로 변환하며, 코드가 각 반경 셸과 이루는
+    # 비스듬한 각도를 고려합니다.
     integrand = n_0 * (1 - (r_chord/a)**2)**2 * r_chord / np.sqrt(r_chord**2 - r_imp**2)
     line_integral[i] = 2 * np.trapz(integrand, r_chord)
 
@@ -808,7 +826,8 @@ T_true = 1000  # eV (1 keV)
 
 sigma_true = doppler_width(T_true, m_C, lambda_0)
 
-# Wavelength grid
+# ±3σ 범위는 가우스 선 프로파일의 99.7%를 포함합니다; 더 넓게 확장하면
+# 노이즈가 지배하는 날개 부분에 스펙트럼 분해능을 낭비하여 피팅을 개선하지 않습니다.
 lambda_grid = np.linspace(lambda_0 - 3*sigma_true, lambda_0 + 3*sigma_true, 200)
 
 # True spectrum
@@ -818,12 +837,16 @@ I_true = gaussian(lambda_grid, 1.0, lambda_0, sigma_true)
 I_noisy = I_true + np.random.normal(0, 0.02, len(lambda_grid))
 
 # Fit Gaussian
+# 초기 추정값으로 sigma_true * 1.2(예상보다 약간 넓음)를 사용합니다: 너무 좁게 시작하면
+# 노이즈가 좁은 거짓 피크를 만들 경우 최적화가 국소 최소값에 갇힐 수 있습니다;
+# 약간 넓게 시작하면 이를 방지합니다.
 p0 = [1.0, lambda_0, sigma_true * 1.2]  # initial guess
 popt, pcov = curve_fit(gaussian, lambda_grid, I_noisy, p0=p0)
 
 A_fit, mu_fit, sigma_fit = popt
 
-# Infer temperature
+# σ_λ = λ₀ σ_v/c와 σ_v = sqrt(kT/m)을 역변환하여 온도를 추론합니다:
+# T = m c² (σ_λ/λ₀)² / k_B. 1.6e-19로 나누면 줄(Joule)을 eV로 변환합니다.
 T_fit = (m_C * c**2 / k_B) * (sigma_fit / lambda_0)**2 / 1.6e-19  # eV
 
 print("Doppler Broadening Analysis:")

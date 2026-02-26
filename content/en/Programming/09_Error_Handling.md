@@ -1,9 +1,23 @@
 # Error Handling Strategies
 
+**Previous**: [Clean Code & Code Smells](./08_Clean_Code.md) | **Next**: [Testing Fundamentals](./10_Testing_Fundamentals.md)
+
 > **Topic**: Programming
 > **Lesson**: 9 of 16
 > **Prerequisites**: Functions and Methods, Data Structures, Program Flow Control
-> **Objective**: Understand error handling strategies across programming paradigms, learn when to use exceptions vs return values, and apply defensive programming techniques to build robust software.
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Classify errors by type (syntax, runtime, logic, resource, network, user input) and select appropriate handling strategies for each
+2. Implement try/catch/finally exception handling in Python, JavaScript, Java, and C++
+3. Design custom exception hierarchies for domain-specific error scenarios
+4. Compare exception-based and return-value-based error handling (Go, Rust) and choose the right approach for a given context
+5. Apply defensive programming techniques including input validation, preconditions, postconditions, and invariants
+6. Implement the fail-fast principle and graceful degradation patterns such as circuit breakers and retry with exponential backoff
+7. Write clear, actionable error messages tailored to both developer and end-user audiences
+8. Use structured logging with appropriate severity levels (DEBUG through CRITICAL) to support production debugging
 
 ---
 
@@ -986,7 +1000,4 @@ Compare the two approaches. When would you use each?
 
 ---
 
-## Navigation
-
-**Previous Lesson**: [08_Design_Patterns.md](08_Design_Patterns.md)
-**Next Lesson**: [10_Testing_Fundamentals.md](10_Testing_Fundamentals.md)
+**Previous**: [Clean Code & Code Smells](./08_Clean_Code.md) | **Next**: [Testing Fundamentals](./10_Testing_Fundamentals.md)

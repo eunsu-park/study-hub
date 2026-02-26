@@ -51,18 +51,22 @@ class ONNXModel:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_path}")
 
+        # Why: ONNX Runtime selects the execution provider (CPU, CUDA, TensorRT)
+        # at session creation time. Auto-detecting available providers lets the
+        # same code run on a GPU server or a CPU-only Raspberry Pi without changes.
         if providers is None:
-            # 사용 가능한 프로바이더 자동 선택
             available = ort.get_available_providers()
             if 'CUDAExecutionProvider' in available:
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
                 providers = ['CPUExecutionProvider']
 
-        # 세션 옵션 설정
+        # Why: ORT_ENABLE_ALL applies constant folding, operator fusion, and
+        # memory planning at load time. This one-time cost yields ~15-30% speedup
+        # across all subsequent inferences — critical for edge latency budgets.
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        sess_options.intra_op_num_threads = 4  # CPU 스레드 수
+        sess_options.intra_op_num_threads = 4
 
         # 세션 생성
         self.session = ort.InferenceSession(
@@ -166,12 +170,15 @@ class ImageClassifier(ONNXModel):
         # NumPy 배열로 변환
         img_array = np.array(image).astype(np.float32)
 
-        # 정규화 (ImageNet 표준)
+        # Why: ImageNet-trained models (ResNet, EfficientNet, etc.) were trained
+        # with these exact mean/std values. Skipping normalization or using
+        # different values will produce meaningless softmax outputs.
         mean = np.array([0.485, 0.456, 0.406]) * 255
         std = np.array([0.229, 0.224, 0.225]) * 255
         img_array = (img_array - mean) / std
 
-        # HWC to CHW
+        # Why: PyTorch-exported ONNX models expect CHW layout (Channels, Height,
+        # Width), but PIL loads images as HWC. This transpose is a silent requirement.
         img_array = img_array.transpose(2, 0, 1)
 
         # 배치 차원 추가
@@ -352,7 +359,9 @@ class YOLODetector:
                     scores.append(float(confidence * class_score))
                     class_ids.append(int(class_id))
 
-        # NMS (Non-Maximum Suppression)
+        # Why: Without NMS, overlapping detections of the same object produce
+        # duplicate bounding boxes. NMS keeps only the highest-confidence box
+        # among those with IoU above the threshold.
         if boxes:
             indices = cv2.dnn.NMSBoxes(
                 boxes, scores, self.conf_threshold, self.iou_threshold

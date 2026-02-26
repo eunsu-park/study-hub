@@ -1,16 +1,21 @@
 # Digital Filter Fundamentals
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between FIR and IIR filters in terms of structure, stability, phase response, and computational cost.
+2. Analyze digital filters using difference equations, transfer functions (Z-domain), and frequency response.
+3. Explain linear phase conditions for FIR filters and describe their importance in phase-sensitive applications.
+4. Interpret filter specifications including passband ripple, stopband attenuation, and transition width.
+5. Implement FIR and IIR filters in direct form, cascade, and lattice structures.
+6. Recognize and evaluate quantization effects (coefficient quantization, overflow, limit cycles) in fixed-point implementations.
+
+---
+
 ## Overview
 
 Digital filters are the workhorses of signal processing, shaping signal spectra by selectively passing or rejecting frequency components. This lesson covers the two fundamental filter types -- FIR and IIR -- their representations, design trade-offs, implementation structures, and practical considerations including quantization effects. Understanding these fundamentals is essential before tackling specific filter design methods.
-
-**Learning Objectives:**
-- Distinguish between FIR and IIR filters and their trade-offs
-- Analyze filters using difference equations, transfer functions, and frequency response
-- Understand linear phase conditions and their importance
-- Interpret filter specifications (passband ripple, stopband attenuation, transition width)
-- Implement various filter structures (direct form, cascade, lattice)
-- Recognize quantization effects in fixed-point implementations
 
 **Prerequisites:** [07. Z-Transform](07_Z_Transform.md)
 

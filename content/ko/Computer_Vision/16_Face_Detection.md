@@ -1,8 +1,23 @@
 # 얼굴 검출 및 인식 (Face Detection and Recognition)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. OpenCV의 하르 캐스케이드(Haar Cascade) 분류기를 사용하여 얼굴 및 눈 검출을 구현할 수 있다
+2. dlib의 HOG 기반 얼굴 검출기를 적용하고 68개 얼굴 랜드마크(facial landmarks)를 추출할 수 있다
+3. OpenCV의 LBPH(Local Binary Patterns Histograms)를 사용하여 얼굴 인식(face recognition) 시스템을 구축할 수 있다
+4. face_recognition 라이브러리를 사용하여 이미지에서 얼굴을 인코딩, 비교, 식별할 수 있다
+5. 하르 캐스케이드, dlib HOG, 딥러닝 기반 얼굴 검출기의 정확도와 성능 트레이드오프를 비교할 수 있다
+6. 웹캠 피드를 사용하여 실시간 얼굴 검출 및 인식 파이프라인(real-time face detection and recognition pipeline)을 설계할 수 있다
+
+---
+
 ## 개요
 
 얼굴 검출과 인식은 컴퓨터 비전의 가장 실용적인 응용 분야입니다. Haar Cascade, dlib, face_recognition 라이브러리를 활용한 다양한 얼굴 처리 기술을 학습합니다.
+
+얼굴 검출(face detection)은 얼굴 인식, 감정 분석, 시선 추적, 출석 관리, 인물 사진 자동화 등 광범위한 후속 작업을 가능하게 하는 필수적인 첫 번째 단계입니다. 정확한 바운딩 박스와 낮은 오탐지율로 검출을 올바르게 수행하는 것이 그 위에 구축되는 모든 것의 품질을 직접 결정합니다.
 
 **난이도**: ⭐⭐⭐⭐
 
@@ -26,33 +41,35 @@
 
 ### 얼굴 검출 원리
 
+적분 이미지(integral image, 합산 영역 테이블(summed-area table))가 Haar Cascade를 실용적으로 만드는 핵심입니다. 적분 이미지 없이는 임의의 직사각형 영역의 픽셀 합을 계산하는 데 O(w×h) 연산이 필요합니다. 적분 이미지를 사용하면 직사각형 크기에 관계없이 정확히 4번의 배열 조회만으로 임의의 직사각형 합을 구할 수 있어 O(1)이 됩니다. 이 상수 시간 특성 덕분에 수천 개의 Haar 피처(feature)를 각 윈도우 위치에서 실시간 비디오에 충분할 만큼 빠르게 평가할 수 있습니다.
+
 ```
-Haar Cascade 얼굴 검출 과정:
+Haar Cascade Face Detection Process:
 
-1. 적분 이미지 계산
-   ┌─────────────────┐
-   │ 원본 이미지     │ → 적분 이미지 (빠른 특징 계산)
-   └─────────────────┘
+1. Compute integral image
+   +-----------------+
+   | Original image  | -> Integral image (fast feature computation)
+   +-----------------+
 
-2. 다양한 크기의 윈도우로 스캔
-   ┌─────────────────────────────┐
-   │  ┌──┐                       │
-   │  │  │  → 작은 윈도우       │
-   │  └──┘                       │
-   │     ┌─────┐                 │
-   │     │     │ → 중간 윈도우   │
-   │     └─────┘                 │
-   │        ┌────────┐           │
-   │        │        │ → 큰 윈도우│
-   │        └────────┘           │
-   └─────────────────────────────┘
+2. Scan with windows of various sizes
+   +-----------------------------+
+   |  +--+                       |
+   |  |  |  -> Small window      |
+   |  +--+                       |
+   |     +-----+                 |
+   |     |     | -> Medium window|
+   |     +-----+                 |
+   |        +--------+           |
+   |        |        | -> Large  |
+   |        +--------+           |
+   +-----------------------------+
 
-3. 각 윈도우에서 Cascade 분류기 적용
+3. Apply Cascade classifier at each window
 
-   윈도우 → Stage 1 → Stage 2 → ... → Stage N
-           (얼굴?)   (얼굴?)         (얼굴!)
+   Window -> Stage 1 -> Stage 2 -> ... -> Stage N
+            (face?)   (face?)         (face!)
 
-4. 검출 결과 그룹화 (중복 제거)
+4. Group detection results (remove duplicates)
 ```
 
 ### 기본 얼굴 검출
@@ -63,45 +80,51 @@ import numpy as np
 
 def detect_faces_haar(img, scale_factor=1.1, min_neighbors=5,
                       min_size=(30, 30)):
-    """Haar Cascade를 이용한 얼굴 검출"""
+    """Face detection using Haar Cascade"""
 
-    # Cascade 분류기 로드
+    # Load Cascade classifier
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     )
 
-    # 그레이스케일 변환
+    # Grayscale conversion
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
 
-    # 히스토그램 평활화 (조명 보정)
+    # Histogram equalization spreads pixel intensities across the full range,
+    # reducing the effect of uneven lighting that would otherwise cause the
+    # Haar feature responses to vary with ambient brightness
     gray = cv2.equalizeHist(gray)
 
-    # 얼굴 검출
+    # Face detection
     faces = face_cascade.detectMultiScale(
         gray,
-        scaleFactor=scale_factor,
-        minNeighbors=min_neighbors,
-        minSize=min_size,
-        flags=cv2.CASCADE_SCALE_IMAGE
+        scaleFactor=scale_factor,   # 1.1 = 10% size reduction per pyramid level;
+                                    # smaller values (1.05) catch more scales but are slower
+        minNeighbors=min_neighbors, # Requires this many overlapping detections before
+                                    # accepting a hit — the primary knob to trade recall vs precision
+        minSize=min_size,           # Skip windows smaller than this; set based on the
+                                    # expected minimum face size in the scene
+        flags=cv2.CASCADE_SCALE_IMAGE  # Scales the image rather than the detector window;
+                                       # more numerically stable across the pyramid
     )
 
     return faces
 
-# 사용 예
+# Usage example
 img = cv2.imread('photo.jpg')
 faces = detect_faces_haar(img)
 
-# 결과 그리기
+# Draw results
 for (x, y, w, h) in faces:
     cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
-    # 얼굴 중심점
+    # Face center point
     center = (x + w//2, y + h//2)
     cv2.circle(img, center, 3, (0, 0, 255), -1)
 
-print(f"검출된 얼굴 수: {len(faces)}")
+print(f"Faces detected: {len(faces)}")
 cv2.imshow('Face Detection', img)
 cv2.waitKey(0)
 ```
@@ -112,7 +135,7 @@ cv2.waitKey(0)
 import cv2
 
 class HaarFaceEyeDetector:
-    """Haar Cascade 기반 얼굴/눈 검출기"""
+    """Haar Cascade-based face/eye detector"""
 
     def __init__(self):
         self.face_cascade = cv2.CascadeClassifier(
@@ -126,13 +149,13 @@ class HaarFaceEyeDetector:
         )
 
     def detect(self, img, detect_eyes=True):
-        """얼굴과 눈 검출"""
+        """Detect face and eyes"""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
 
         results = []
 
-        # 얼굴 검출
+        # Face detection
         faces = self.face_cascade.detectMultiScale(
             gray, 1.1, 5, minSize=(60, 60)
         )
@@ -144,21 +167,25 @@ class HaarFaceEyeDetector:
             }
 
             if detect_eyes:
-                # 얼굴 상단 50%에서 눈 검출
+                # Restricting to the top 50% of the face ROI is critical: the eye
+                # cascade produces many false positives in the mouth/chin region
+                # (nostrils, teeth gaps look like "eyes" to a trained Haar cascade)
                 roi_gray = gray[y:y+h//2, x:x+w]
 
-                # 일반 눈 검출 시도
+                # Try regular eye detection
                 eyes = self.eye_cascade.detectMultiScale(
                     roi_gray, 1.1, 3, minSize=(20, 20)
                 )
 
-                # 안경 착용자용 검출 시도 (일반 검출 실패 시)
+                # Fall back to the glasses-aware cascade when fewer than 2 eyes
+                # are found — glasses change the local contrast pattern that the
+                # standard eye cascade was trained on, causing missed detections
                 if len(eyes) < 2:
                     eyes = self.eye_glasses_cascade.detectMultiScale(
                         roi_gray, 1.1, 3, minSize=(20, 20)
                     )
 
-                # 가장 그럴듯한 두 눈 선택
+                # Select best two eyes
                 eyes = self._select_best_eyes(eyes, w)
 
                 for (ex, ey, ew, eh) in eyes:
@@ -169,17 +196,17 @@ class HaarFaceEyeDetector:
         return results
 
     def _select_best_eyes(self, eyes, face_width):
-        """가장 좋은 두 눈 선택"""
+        """Select best two eyes"""
         if len(eyes) <= 2:
             return eyes
 
-        # 눈 크기와 y 좌표로 필터링
-        eyes = sorted(eyes, key=lambda e: e[1])  # y 좌표로 정렬
+        # Filter by eye size and y-coordinate
+        eyes = sorted(eyes, key=lambda e: e[1])  # Sort by y-coordinate
 
-        # 상위 4개 후보에서 선택
+        # Select from top 4 candidates
         candidates = eyes[:4]
 
-        # x 좌표 기준 왼쪽/오른쪽 분리
+        # Separate left/right by x-coordinate
         mid_x = face_width // 2
         left_eyes = [e for e in candidates if e[0] + e[2]//2 < mid_x]
         right_eyes = [e for e in candidates if e[0] + e[2]//2 >= mid_x]
@@ -193,16 +220,16 @@ class HaarFaceEyeDetector:
         return result
 
     def draw_results(self, img, results):
-        """결과 시각화"""
+        """Visualize results"""
         output = img.copy()
 
         for face_data in results:
             x, y, w, h = face_data['face_rect']
 
-            # 얼굴 사각형
+            # Face rectangle
             cv2.rectangle(output, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-            # 눈
+            # Eyes
             for (ex, ey, ew, eh) in face_data['eyes']:
                 center = (ex + ew//2, ey + eh//2)
                 radius = (ew + eh) // 4
@@ -210,7 +237,7 @@ class HaarFaceEyeDetector:
 
         return output
 
-# 사용 예
+# Usage example
 detector = HaarFaceEyeDetector()
 img = cv2.imread('portrait.jpg')
 results = detector.detect(img)
@@ -225,10 +252,10 @@ cv2.imshow('Detection', output)
 ### dlib 설치
 
 ```bash
-# dlib 설치 (C++ 컴파일러 필요)
+# dlib installation (requires C++ compiler)
 pip install dlib
 
-# 또는 conda 사용 (더 쉬움)
+# Or use conda (easier)
 conda install -c conda-forge dlib
 ```
 
@@ -239,27 +266,28 @@ import cv2
 import dlib
 import numpy as np
 
-# HOG 기반 얼굴 검출기
+# HOG-based face detector
 detector = dlib.get_frontal_face_detector()
 
-# 이미지 로드
+# Load image
 img = cv2.imread('photo.jpg')
 rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# 얼굴 검출
-# 두 번째 인자: 업샘플링 횟수 (0=원본, 1=2배, 2=4배)
+# Upsample by 1 level (2× each dimension) before detection: dlib's HOG
+# detector has a minimum face size (~80px); upsampling lets it find smaller
+# faces at the cost of ~4× more computation.  Use 0 for real-time scenarios.
 faces = detector(rgb, 1)
 
-print(f"검출된 얼굴 수: {len(faces)}")
+print(f"Faces detected: {len(faces)}")
 
-# 결과 시각화
+# Visualize results
 for face in faces:
     x1, y1 = face.left(), face.top()
     x2, y2 = face.right(), face.bottom()
     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-    # 신뢰도 점수 (dlib 검출기는 기본적으로 점수 제공)
-    # detector.run()을 사용하면 점수도 얻을 수 있음
+    # Confidence score (dlib detector provides scores by default)
+    # Use detector.run() to get scores
 
 cv2.imshow('dlib HOG Detection', img)
 cv2.waitKey(0)
@@ -271,8 +299,8 @@ cv2.waitKey(0)
 import cv2
 import dlib
 
-# CNN 얼굴 검출기 (모델 파일 필요)
-# 다운로드: http://dlib.net/files/mmod_human_face_detector.dat.bz2
+# CNN face detector (requires model file)
+# Download: http://dlib.net/files/mmod_human_face_detector.dat.bz2
 cnn_detector = dlib.cnn_face_detection_model_v1(
     'mmod_human_face_detector.dat'
 )
@@ -280,7 +308,7 @@ cnn_detector = dlib.cnn_face_detection_model_v1(
 img = cv2.imread('photo.jpg')
 rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# CNN 검출
+# CNN detection
 detections = cnn_detector(rgb, 1)
 
 for d in detections:
@@ -298,22 +326,22 @@ for d in detections:
 ### Haar vs dlib 비교
 
 ```
-┌────────────────┬──────────────────┬──────────────────┐
-│     항목       │   Haar Cascade   │   dlib HOG       │
-├────────────────┼──────────────────┼──────────────────┤
-│ 속도           │ 빠름             │ 중간             │
-│ 정확도         │ 중간             │ 높음             │
-│ 오검출         │ 많음             │ 적음             │
-│ 측면 얼굴      │ 별도 모델 필요   │ 지원 안 함       │
-│ 작은 얼굴      │ 잘 검출          │ 검출 어려움      │
-│ 설치 용이성    │ OpenCV 기본 포함 │ 별도 설치 필요   │
-│ 메모리 사용    │ 적음             │ 중간             │
-└────────────────┴──────────────────┴──────────────────┘
++----------------+------------------+------------------+
+|     Item       |   Haar Cascade   |   dlib HOG       |
++----------------+------------------+------------------+
+| Speed          | Fast             | Medium           |
+| Accuracy       | Medium           | High             |
+| False Positives| Many             | Few              |
+| Profile Face   | Separate model   | Not supported    |
+| Small Faces    | Detects well     | Harder to detect |
+| Installation   | Included w/OpenCV| Separate install |
+| Memory Usage   | Low              | Medium           |
++----------------+------------------+------------------+
 
-dlib CNN 검출기:
-- 가장 정확하지만 GPU 없이는 느림
-- 측면 얼굴도 잘 검출
-- 작은 얼굴 검출 우수
+dlib CNN Detector:
+- Most accurate but slow without GPU
+- Detects profile faces well
+- Excellent small face detection
 ```
 
 ---
@@ -323,28 +351,28 @@ dlib CNN 검출기:
 ### 68 포인트 랜드마크 구조
 
 ```
-얼굴 랜드마크 68 포인트:
+Face Landmarks 68 Points:
 
         17-21    22-26
          ____     ____
     0   /    \   /    \   16
-    |  │ 36-41│ │42-47 │  |
+    |  | 36-41| |42-47 |  |
     |   \____/   \____/   |
     |      48-67          |
     |      /    \         |
     |     /      \        |
    8     \________/
 
-포인트 그룹:
-- 0-16:   턱 라인 (jaw)
-- 17-21:  왼쪽 눈썹 (left eyebrow)
-- 22-26:  오른쪽 눈썹 (right eyebrow)
-- 27-35:  코 (nose)
-- 36-41:  왼쪽 눈 (left eye)
-- 42-47:  오른쪽 눈 (right eye)
-- 48-67:  입 (mouth)
-  - 48-59: 외부 입술 (outer lip)
-  - 60-67: 내부 입술 (inner lip)
+Point Groups:
+- 0-16:   Jawline
+- 17-21:  Left eyebrow
+- 22-26:  Right eyebrow
+- 27-35:  Nose
+- 36-41:  Left eye
+- 42-47:  Right eye
+- 48-67:  Mouth
+  - 48-59: Outer lip
+  - 60-67: Inner lip
 ```
 
 ### 랜드마크 검출
@@ -354,25 +382,25 @@ import cv2
 import dlib
 import numpy as np
 
-# 검출기와 예측기 로드
+# Load detector and predictor
 detector = dlib.get_frontal_face_detector()
-# 다운로드: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+# Download: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
 def get_landmarks(img):
-    """얼굴 랜드마크 검출"""
+    """Detect face landmarks"""
     rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 얼굴 검출
+    # Face detection
     faces = detector(rgb, 1)
 
     all_landmarks = []
 
     for face in faces:
-        # 랜드마크 예측
+        # Predict landmarks
         shape = predictor(rgb, face)
 
-        # dlib shape를 numpy 배열로 변환
+        # Convert dlib shape to numpy array
         landmarks = np.zeros((68, 2), dtype=np.int32)
         for i in range(68):
             landmarks[i] = (shape.part(i).x, shape.part(i).y)
@@ -386,26 +414,26 @@ def get_landmarks(img):
     return all_landmarks
 
 def draw_landmarks(img, landmarks_data, draw_indices=False):
-    """랜드마크 시각화"""
+    """Visualize landmarks"""
     output = img.copy()
 
     for data in landmarks_data:
         landmarks = data['landmarks']
 
-        # 모든 포인트 그리기
+        # Draw all points
         for i, (x, y) in enumerate(landmarks):
             cv2.circle(output, (x, y), 2, (0, 255, 0), -1)
             if draw_indices:
                 cv2.putText(output, str(i), (x-5, y-5),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), 1)
 
-        # 연결선 그리기
-        # 턱 라인
+        # Draw connecting lines
+        # Jawline
         for i in range(16):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (255, 255, 0), 1)
 
-        # 눈썹
+        # Eyebrows
         for i in range(17, 21):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (255, 255, 0), 1)
@@ -413,7 +441,7 @@ def draw_landmarks(img, landmarks_data, draw_indices=False):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (255, 255, 0), 1)
 
-        # 코
+        # Nose
         for i in range(27, 30):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (255, 255, 0), 1)
@@ -421,7 +449,7 @@ def draw_landmarks(img, landmarks_data, draw_indices=False):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (255, 255, 0), 1)
 
-        # 눈
+        # Eyes
         eye_indices = [(36,41), (42,47)]
         for start, end in eye_indices:
             for i in range(start, end):
@@ -430,7 +458,7 @@ def draw_landmarks(img, landmarks_data, draw_indices=False):
             cv2.line(output, tuple(landmarks[end]), tuple(landmarks[start]),
                     (0, 255, 255), 1)
 
-        # 입
+        # Mouth
         for i in range(48, 59):
             cv2.line(output, tuple(landmarks[i]), tuple(landmarks[i+1]),
                     (0, 0, 255), 1)
@@ -445,7 +473,7 @@ def draw_landmarks(img, landmarks_data, draw_indices=False):
 
     return output
 
-# 사용 예
+# Usage example
 img = cv2.imread('face.jpg')
 landmarks_data = get_landmarks(img)
 result = draw_landmarks(img, landmarks_data)
@@ -461,9 +489,9 @@ import numpy as np
 from scipy.spatial import distance as dist
 
 class FaceLandmarkAnalyzer:
-    """얼굴 랜드마크 분석기"""
+    """Face landmark analyzer"""
 
-    # 랜드마크 인덱스 정의
+    # Landmark index definitions
     JAWLINE = list(range(0, 17))
     LEFT_EYEBROW = list(range(17, 22))
     RIGHT_EYEBROW = list(range(22, 27))
@@ -479,7 +507,7 @@ class FaceLandmarkAnalyzer:
         self.predictor = dlib.shape_predictor(predictor_path)
 
     def get_landmarks(self, img):
-        """랜드마크 추출"""
+        """Extract landmarks"""
         rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         faces = self.detector(rgb, 0)
 
@@ -492,34 +520,36 @@ class FaceLandmarkAnalyzer:
         return landmarks
 
     def eye_aspect_ratio(self, eye_points):
-        """눈 종횡비 (EAR) 계산 - 졸음 감지에 사용"""
-        # 수직 거리
+        """Compute Eye Aspect Ratio (EAR) - used for drowsiness detection"""
+        # EAR = (vertical_height) / (horizontal_width) — a scale-invariant ratio.
+        # Dividing by the horizontal distance normalizes for face size, so the
+        # same threshold (~0.2) signals a closed eye whether the face is near or far.
         A = dist.euclidean(eye_points[1], eye_points[5])
         B = dist.euclidean(eye_points[2], eye_points[4])
-        # 수평 거리
+        # Average two vertical measurements to handle asymmetric eye shapes
         C = dist.euclidean(eye_points[0], eye_points[3])
 
         ear = (A + B) / (2.0 * C)
         return ear
 
     def mouth_aspect_ratio(self, mouth_points):
-        """입 종횡비 (MAR) 계산 - 하품 감지에 사용"""
-        # 수직 거리
+        """Compute Mouth Aspect Ratio (MAR) - used for yawn detection"""
+        # Vertical distances
         A = dist.euclidean(mouth_points[2], mouth_points[10])  # 51, 59
         B = dist.euclidean(mouth_points[4], mouth_points[8])   # 53, 57
-        # 수평 거리
+        # Horizontal distance
         C = dist.euclidean(mouth_points[0], mouth_points[6])   # 49, 55
 
         mar = (A + B) / (2.0 * C)
         return mar
 
     def get_face_angle(self, landmarks):
-        """얼굴 기울기 각도 계산"""
-        # 양쪽 눈 중심점 사용
+        """Compute face tilt angle"""
+        # Use eye center points
         left_eye_center = landmarks[self.LEFT_EYE].mean(axis=0)
         right_eye_center = landmarks[self.RIGHT_EYE].mean(axis=0)
 
-        # 각도 계산
+        # Compute angle
         dY = right_eye_center[1] - left_eye_center[1]
         dX = right_eye_center[0] - left_eye_center[0]
         angle = np.degrees(np.arctan2(dY, dX))
@@ -527,23 +557,23 @@ class FaceLandmarkAnalyzer:
         return angle
 
     def analyze_face(self, img):
-        """얼굴 종합 분석"""
+        """Comprehensive face analysis"""
         landmarks = self.get_landmarks(img)
         if landmarks is None:
             return None
 
-        # 눈 분석
+        # Eye analysis
         left_eye = landmarks[self.LEFT_EYE]
         right_eye = landmarks[self.RIGHT_EYE]
         left_ear = self.eye_aspect_ratio(left_eye)
         right_ear = self.eye_aspect_ratio(right_eye)
         avg_ear = (left_ear + right_ear) / 2.0
 
-        # 입 분석
+        # Mouth analysis
         outer_lip = landmarks[self.OUTER_LIP]
         mar = self.mouth_aspect_ratio(outer_lip)
 
-        # 얼굴 각도
+        # Face angle
         angle = self.get_face_angle(landmarks)
 
         return {
@@ -551,21 +581,21 @@ class FaceLandmarkAnalyzer:
             'eye_aspect_ratio': avg_ear,
             'mouth_aspect_ratio': mar,
             'face_angle': angle,
-            'eyes_closed': avg_ear < 0.2,  # 임계값 기반
+            'eyes_closed': avg_ear < 0.2,  # Threshold-based
             'mouth_open': mar > 0.5
         }
 
-# 사용 예
+# Usage example
 analyzer = FaceLandmarkAnalyzer('shape_predictor_68_face_landmarks.dat')
 img = cv2.imread('face.jpg')
 analysis = analyzer.analyze_face(img)
 
 if analysis:
-    print(f"눈 종횡비 (EAR): {analysis['eye_aspect_ratio']:.3f}")
-    print(f"입 종횡비 (MAR): {analysis['mouth_aspect_ratio']:.3f}")
-    print(f"얼굴 기울기: {analysis['face_angle']:.1f}도")
-    print(f"눈 감음: {analysis['eyes_closed']}")
-    print(f"입 벌림: {analysis['mouth_open']}")
+    print(f"Eye Aspect Ratio (EAR): {analysis['eye_aspect_ratio']:.3f}")
+    print(f"Mouth Aspect Ratio (MAR): {analysis['mouth_aspect_ratio']:.3f}")
+    print(f"Face tilt: {analysis['face_angle']:.1f} degrees")
+    print(f"Eyes closed: {analysis['eyes_closed']}")
+    print(f"Mouth open: {analysis['mouth_open']}")
 ```
 
 ---
@@ -575,24 +605,24 @@ if analysis:
 ### LBP (Local Binary Patterns) 이해
 
 ```
-LBP: 각 픽셀 주변의 패턴을 이진 코드로 표현
+LBP: Represents pattern around each pixel as binary code
 
-   주변 픽셀       비교 (> 중심?)     이진 코드
-   ┌───┬───┬───┐    ┌───┬───┬───┐
-   │ 6 │ 5 │ 2 │    │ 1 │ 1 │ 0 │    11000011
-   ├───┼───┼───┤    ├───┼───┼───┤    = 195
-   │ 7 │[4]│ 1 │    │ 1 │   │ 0 │
-   ├───┼───┼───┤    ├───┼───┼───┤
-   │ 8 │ 3 │ 2 │    │ 1 │ 0 │ 0 │
-   └───┴───┴───┘    └───┴───┴───┘
+   Surrounding pixels  Comparison (> center?)    Binary code
+   +---+---+---+    +---+---+---+
+   | 6 | 5 | 2 |    | 1 | 1 | 0 |    11000011
+   +---+---+---+    +---+---+---+    = 195
+   | 7 |[4]| 1 |    | 1 |   | 0 |
+   +---+---+---+    +---+---+---+
+   | 8 | 3 | 2 |    | 1 | 0 | 0 |
+   +---+---+---+    +---+---+---+
 
-   중심 픽셀(4)과 주변 비교:
+   Compare center pixel (4) with neighbors:
    6>4=1, 5>4=1, 2<4=0, 1<4=0, 2<4=0, 3<4=0, 8>4=1, 7>4=1
 
 LBPH (LBP Histogram):
-- 이미지를 여러 셀로 분할
-- 각 셀에서 LBP 히스토그램 계산
-- 모든 히스토그램을 연결하여 특징 벡터 생성
+- Divide image into multiple cells
+- Compute LBP histogram per cell
+- Concatenate all histograms for feature vector
 ```
 
 ### LBPH 얼굴 인식기
@@ -603,22 +633,24 @@ import numpy as np
 import os
 
 class LBPHFaceRecognizer:
-    """LBPH 기반 얼굴 인식기"""
+    """LBPH-based face recognizer"""
 
     def __init__(self):
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
         self.recognizer = cv2.face.LBPHFaceRecognizer_create(
-            radius=1,        # LBP 반경
-            neighbors=8,     # 이웃 수
-            grid_x=8,        # x 방향 셀 수
-            grid_y=8         # y 방향 셀 수
+            radius=1,        # Pixel spacing for neighbor comparison; radius=1 captures
+                             # fine micro-texture detail; larger radius captures coarser patterns
+            neighbors=8,     # 8 neighbors = 8-bit code, giving 256 possible LBP values;
+                             # more neighbors increase discriminability but also noise sensitivity
+            grid_x=8,        # Dividing the face into an 8×8 spatial grid preserves location
+            grid_y=8         # information — "which region" matters as much as "what texture"
         )
         self.label_names = {}
 
     def prepare_training_data(self, data_dir):
-        """학습 데이터 준비"""
+        """Prepare training data"""
         faces = []
         labels = []
 
@@ -636,14 +668,14 @@ class LBPHFaceRecognizer:
                 if img is None:
                     continue
 
-                # 얼굴 검출
+                # Face detection
                 detected_faces = self.face_cascade.detectMultiScale(
                     img, 1.1, 5, minSize=(50, 50)
                 )
 
                 for (x, y, w, h) in detected_faces:
                     face_roi = img[y:y+h, x:x+w]
-                    # 크기 정규화
+                    # Size normalization
                     face_roi = cv2.resize(face_roi, (100, 100))
                     faces.append(face_roi)
                     labels.append(label_id)
@@ -651,24 +683,24 @@ class LBPHFaceRecognizer:
         return faces, labels
 
     def train(self, faces, labels):
-        """모델 학습"""
+        """Train model"""
         self.recognizer.train(faces, np.array(labels))
-        print(f"학습 완료: {len(set(labels))}명, {len(faces)}개 이미지")
+        print(f"Training complete: {len(set(labels))} people, {len(faces)} images")
 
     def save_model(self, path):
-        """모델 저장"""
+        """Save model"""
         self.recognizer.save(path)
-        # 라벨 이름도 저장
+        # Also save label names
         np.save(path + '_labels.npy', self.label_names)
 
     def load_model(self, path):
-        """모델 로드"""
+        """Load model"""
         self.recognizer.read(path)
         self.label_names = np.load(path + '_labels.npy',
                                    allow_pickle=True).item()
 
     def predict(self, img):
-        """얼굴 인식"""
+        """Face recognition"""
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
 
         faces = self.face_cascade.detectMultiScale(gray, 1.1, 5, minSize=(50, 50))
@@ -680,8 +712,11 @@ class LBPHFaceRecognizer:
 
             label, confidence = self.recognizer.predict(face_roi)
 
-            # confidence가 낮을수록 좋음 (LBPH)
-            # 일반적으로 50 이하면 매우 좋은 매칭
+            # LBPH confidence is a histogram distance (lower = better match),
+            # unlike probability scores where higher is better.
+            # Threshold at 100 is a practical heuristic: values below 50 indicate
+            # a very strong match, 50-100 is uncertain, above 100 is likely a
+            # different person or unrecognized face.
             name = self.label_names.get(label, "Unknown")
             if confidence > 100:
                 name = "Unknown"
@@ -695,7 +730,7 @@ class LBPHFaceRecognizer:
         return results
 
     def draw_results(self, img, results):
-        """결과 시각화"""
+        """Visualize results"""
         output = img.copy()
 
         for result in results:
@@ -703,7 +738,7 @@ class LBPHFaceRecognizer:
             name = result['name']
             conf = result['confidence']
 
-            # 색상: 인식 성공(녹색), 실패(빨간색)
+            # Color: green for recognized, red for unknown
             color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
 
             cv2.rectangle(output, (x, y), (x+w, y+h), color, 2)
@@ -714,9 +749,9 @@ class LBPHFaceRecognizer:
 
         return output
 
-# 사용 예
+# Usage example
 """
-데이터 디렉토리 구조:
+Data directory structure:
 faces/
     person1/
         img1.jpg
@@ -726,13 +761,13 @@ faces/
         img2.jpg
 """
 
-# 학습
+# Training
 recognizer = LBPHFaceRecognizer()
 faces, labels = recognizer.prepare_training_data('faces')
 recognizer.train(faces, labels)
 recognizer.save_model('face_model.yml')
 
-# 인식
+# Recognition
 recognizer.load_model('face_model.yml')
 test_img = cv2.imread('test.jpg')
 results = recognizer.predict(test_img)
@@ -757,23 +792,23 @@ import face_recognition
 import cv2
 import numpy as np
 
-# 이미지 로드
+# Load image
 img = face_recognition.load_image_file('photo.jpg')
 
-# 얼굴 위치 검출
+# Face location detection
 face_locations = face_recognition.face_locations(img)
-# 또는 CNN 모델 사용 (더 정확)
+# Or use CNN model (more accurate)
 # face_locations = face_recognition.face_locations(img, model='cnn')
 
-print(f"검출된 얼굴 수: {len(face_locations)}")
+print(f"Faces detected: {len(face_locations)}")
 
-# 얼굴 인코딩 (128차원 특징 벡터)
+# Face encoding (128-dimensional feature vector)
 face_encodings = face_recognition.face_encodings(img, face_locations)
 
-# 얼굴 랜드마크
+# Face landmarks
 face_landmarks = face_recognition.face_landmarks(img, face_locations)
 
-# 결과 시각화
+# Visualize results
 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 for (top, right, bottom, left) in face_locations:
     cv2.rectangle(img_bgr, (left, top), (right, bottom), (0, 255, 0), 2)
@@ -790,28 +825,28 @@ import numpy as np
 import os
 
 class FaceRecognitionSystem:
-    """face_recognition 기반 얼굴 인식 시스템"""
+    """face_recognition-based face recognition system"""
 
     def __init__(self):
         self.known_encodings = []
         self.known_names = []
 
     def add_face(self, img_path, name):
-        """알려진 얼굴 추가"""
+        """Add known face"""
         img = face_recognition.load_image_file(img_path)
         encodings = face_recognition.face_encodings(img)
 
         if len(encodings) > 0:
             self.known_encodings.append(encodings[0])
             self.known_names.append(name)
-            print(f"'{name}' 얼굴 등록 완료")
+            print(f"'{name}' face registered")
             return True
         else:
-            print(f"'{img_path}'에서 얼굴을 찾을 수 없습니다")
+            print(f"No face found in '{img_path}'")
             return False
 
     def load_faces_from_directory(self, data_dir):
-        """디렉토리에서 얼굴 로드"""
+        """Load faces from directory"""
         for person_name in os.listdir(data_dir):
             person_dir = os.path.join(data_dir, person_name)
             if not os.path.isdir(person_dir):
@@ -821,18 +856,18 @@ class FaceRecognitionSystem:
                 img_path = os.path.join(person_dir, img_name)
                 self.add_face(img_path, person_name)
 
-        print(f"총 {len(self.known_encodings)}개 얼굴 로드 완료")
+        print(f"Total {len(self.known_encodings)} faces loaded")
 
     def recognize(self, img, tolerance=0.6):
-        """얼굴 인식"""
-        # RGB 변환
+        """Face recognition"""
+        # RGB conversion
         if isinstance(img, str):
             img = face_recognition.load_image_file(img)
         elif len(img.shape) == 3 and img.shape[2] == 3:
             # BGR to RGB
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # 얼굴 검출 및 인코딩
+        # Face detection and encoding
         face_locations = face_recognition.face_locations(img)
         face_encodings = face_recognition.face_encodings(img, face_locations)
 
@@ -840,12 +875,18 @@ class FaceRecognitionSystem:
 
         for (top, right, bottom, left), encoding in zip(face_locations,
                                                          face_encodings):
-            # 알려진 얼굴들과 비교
+            # tolerance=0.6 is the recommended default for the 128-d dlib embedding:
+            # it corresponds to an Euclidean distance threshold below which two faces
+            # are considered the same person.  Lower (0.4-0.5) is stricter and reduces
+            # false accepts; higher (0.7) improves recall in poor lighting or aging cases.
             matches = face_recognition.compare_faces(
                 self.known_encodings, encoding, tolerance=tolerance
             )
 
-            # 거리 계산 (낮을수록 유사)
+            # face_distance returns Euclidean distances in 128-d embedding space.
+            # Using argmin rather than just the first True match is important when
+            # multiple known faces pass the tolerance threshold — we want the closest
+            # one, not the one that appears first in the list.
             distances = face_recognition.face_distance(
                 self.known_encodings, encoding
             )
@@ -854,7 +895,7 @@ class FaceRecognitionSystem:
             confidence = 0.0
 
             if True in matches:
-                # 가장 가까운 매칭 찾기
+                # Find closest match
                 best_match_idx = np.argmin(distances)
                 if matches[best_match_idx]:
                     name = self.known_names[best_match_idx]
@@ -869,7 +910,7 @@ class FaceRecognitionSystem:
         return results
 
     def save_encodings(self, path):
-        """인코딩 저장"""
+        """Save encodings"""
         data = {
             'encodings': self.known_encodings,
             'names': self.known_names
@@ -877,25 +918,25 @@ class FaceRecognitionSystem:
         np.save(path, data)
 
     def load_encodings(self, path):
-        """인코딩 로드"""
+        """Load encodings"""
         data = np.load(path, allow_pickle=True).item()
         self.known_encodings = data['encodings']
         self.known_names = data['names']
 
-# 사용 예
+# Usage example
 system = FaceRecognitionSystem()
 
-# 알려진 얼굴 등록
+# Register known faces
 system.add_face('known_faces/person1.jpg', 'Alice')
 system.add_face('known_faces/person2.jpg', 'Bob')
-# 또는 디렉토리에서 로드
+# Or load from directory
 # system.load_faces_from_directory('known_faces')
 
-# 인식
+# Recognition
 test_img = cv2.imread('test.jpg')
 results = system.recognize(test_img)
 
-# 시각화
+# Visualization
 for result in results:
     top, right, bottom, left = result['location']
     name = result['name']
@@ -918,13 +959,13 @@ import numpy as np
 import os
 
 def cluster_faces(image_dir, output_dir='clustered'):
-    """유사한 얼굴끼리 그룹화"""
+    """Group similar faces together"""
 
     encodings = []
     image_paths = []
     face_locations_list = []
 
-    # 모든 이미지에서 얼굴 인코딩 추출
+    # Extract face encodings from all images
     for img_name in os.listdir(image_dir):
         img_path = os.path.join(image_dir, img_name)
         img = face_recognition.load_image_file(img_path)
@@ -937,19 +978,19 @@ def cluster_faces(image_dir, output_dir='clustered'):
             image_paths.append(img_path)
             face_locations_list.append(location)
 
-    # DBSCAN 클러스터링
-    # eps: 동일 클러스터로 간주할 거리 임계값
-    # min_samples: 클러스터 형성에 필요한 최소 샘플 수
+    # DBSCAN clustering
+    # eps: distance threshold for same cluster
+    # min_samples: minimum samples to form a cluster
     clt = DBSCAN(metric='euclidean', eps=0.5, min_samples=2)
     clt.fit(encodings)
 
-    # 클러스터별 결과 정리
+    # Organize results by cluster
     label_ids = np.unique(clt.labels_)
-    num_unique = len(label_ids[label_ids > -1])  # -1은 노이즈
+    num_unique = len(label_ids[label_ids > -1])  # -1 is noise
 
-    print(f"발견된 고유 인물 수: {num_unique}")
+    print(f"Unique people found: {num_unique}")
 
-    # 클러스터별로 이미지 저장
+    # Save images by cluster
     os.makedirs(output_dir, exist_ok=True)
 
     for label_id in label_ids:
@@ -961,7 +1002,7 @@ def cluster_faces(image_dir, output_dir='clustered'):
             folder = os.path.join(output_dir, f'person_{label_id}')
 
         os.makedirs(folder, exist_ok=True)
-        print(f"클러스터 {label_id}: {len(indices)}개 얼굴")
+        print(f"Cluster {label_id}: {len(indices)} faces")
 
     return clt.labels_, image_paths, face_locations_list
 ```
@@ -977,7 +1018,7 @@ import cv2
 import time
 
 def realtime_face_detection():
-    """실시간 얼굴 검출 (Haar Cascade)"""
+    """Real-time face detection (Haar Cascade)"""
 
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
@@ -996,24 +1037,24 @@ def realtime_face_detection():
         if not ret:
             break
 
-        # 프레임 축소 (속도 향상)
+        # Reduce frame size (speed up)
         small_frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
         gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
 
-        # 얼굴 검출
+        # Face detection
         faces = face_cascade.detectMultiScale(
             gray,
-            scaleFactor=1.2,  # 빠른 검출을 위해 증가
+            scaleFactor=1.2,  # Increase for faster detection
             minNeighbors=4,
             minSize=(30, 30)
         )
 
-        # 좌표 스케일 복원
+        # Scale coordinates back
         for (x, y, w, h) in faces:
             x, y, w, h = x*2, y*2, w*2, h*2
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-        # FPS 계산
+        # Compute FPS
         fps_counter += 1
         elapsed = time.time() - start_time
         if elapsed >= 1.0:
@@ -1021,7 +1062,7 @@ def realtime_face_detection():
             fps_counter = 0
             start_time = time.time()
 
-        # FPS 표시
+        # Display FPS
         cv2.putText(frame, f'FPS: {fps:.1f}', (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         cv2.putText(frame, f'Faces: {len(faces)}', (10, 60),
@@ -1047,15 +1088,18 @@ import numpy as np
 import time
 
 class RealtimeFaceRecognition:
-    """실시간 얼굴 인식 시스템"""
+    """Real-time face recognition system"""
 
     def __init__(self):
         self.known_encodings = []
         self.known_names = []
-        self.process_every_n_frames = 3  # 매 n번째 프레임만 처리
+        # Process every 3rd frame: face encoding is too slow for 30 FPS on CPU.
+        # Skipping frames and reusing the previous detection result is nearly
+        # invisible to viewers since faces don't move more than ~10px per frame.
+        self.process_every_n_frames = 3
 
     def add_known_face(self, img_path, name):
-        """알려진 얼굴 추가"""
+        """Add known face"""
         img = face_recognition.load_image_file(img_path)
         encoding = face_recognition.face_encodings(img)
 
@@ -1064,7 +1108,7 @@ class RealtimeFaceRecognition:
             self.known_names.append(name)
 
     def run(self, camera_id=0):
-        """실시간 인식 실행"""
+        """Run real-time recognition"""
         cap = cv2.VideoCapture(camera_id)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -1081,13 +1125,15 @@ class RealtimeFaceRecognition:
             if not ret:
                 break
 
-            # 크기 축소 (속도 향상)
+            # Scale down to 1/4 size: face_locations runs on the small frame
+            # (16× fewer pixels = ~16× faster), then we multiply coordinates by 4
+            # to map detections back to the original frame for drawing
             small_frame = cv2.resize(frame, None, fx=0.25, fy=0.25)
             rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-            # 매 n번째 프레임만 처리
+            # Process every nth frame
             if frame_count % self.process_every_n_frames == 0:
-                # 얼굴 검출
+                # Face detection
                 face_locations = face_recognition.face_locations(rgb_small)
                 face_encodings = face_recognition.face_encodings(
                     rgb_small, face_locations
@@ -1112,7 +1158,7 @@ class RealtimeFaceRecognition:
 
                     face_names.append(name)
 
-            # 결과 표시 (좌표 스케일 복원)
+            # Display results (scale coordinates back)
             for (top, right, bottom, left), name in zip(face_locations,
                                                          face_names):
                 top *= 4
@@ -1123,13 +1169,13 @@ class RealtimeFaceRecognition:
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
 
-                # 이름 배경
+                # Name background
                 cv2.rectangle(frame, (left, bottom - 25), (right, bottom),
                              color, cv2.FILLED)
                 cv2.putText(frame, name, (left + 6, bottom - 6),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
-            # FPS 계산 및 표시
+            # Compute and display FPS
             frame_count += 1
             if frame_count % 30 == 0:
                 fps = 30 / (time.time() - fps_time)
@@ -1144,13 +1190,13 @@ class RealtimeFaceRecognition:
             if key == ord('q'):
                 break
             elif key == ord('s'):
-                # 's' 키로 현재 프레임 저장
+                # Save current frame with 's' key
                 cv2.imwrite(f'capture_{frame_count}.jpg', frame)
 
         cap.release()
         cv2.destroyAllWindows()
 
-# 사용 예
+# Usage example
 system = RealtimeFaceRecognition()
 system.add_known_face('alice.jpg', 'Alice')
 system.add_known_face('bob.jpg', 'Bob')
@@ -1160,37 +1206,37 @@ system.run()
 ### 성능 최적화 팁
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   실시간 처리 최적화 전략                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ 1. 프레임 크기 축소                                         │
-│    - 1/4 크기로 축소하면 처리량 16배 감소                   │
-│    - small = cv2.resize(frame, None, fx=0.25, fy=0.25)     │
-│                                                             │
-│ 2. 프레임 스킵                                              │
-│    - 매 프레임 처리 불필요                                  │
-│    - 2-5 프레임마다 검출 수행                               │
-│    - 중간 프레임은 이전 결과 사용                           │
-│                                                             │
-│ 3. ROI 기반 처리                                            │
-│    - 이전 검출 위치 주변만 검색                             │
-│    - 트래킹과 검출 조합                                     │
-│                                                             │
-│ 4. 모델 선택                                                │
-│    - Haar: 가장 빠름, 정확도 낮음                          │
-│    - dlib HOG: 중간                                         │
-│    - dlib CNN: 느림, GPU 권장                               │
-│    - face_recognition: dlib 기반                            │
-│                                                             │
-│ 5. 멀티스레딩                                               │
-│    - 검출과 표시를 별도 스레드로                            │
-│    - Queue로 프레임 전달                                    │
-│                                                             │
-│ 6. GPU 가속                                                 │
-│    - dlib CUDA 빌드                                         │
-│    - OpenCV DNN (CUDA backend)                              │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                   Real-time Processing Optimization           |
++-------------------------------------------------------------+
+|                                                              |
+| 1. Frame size reduction                                      |
+|    - Reducing to 1/4 size decreases processing 16x          |
+|    - small = cv2.resize(frame, None, fx=0.25, fy=0.25)      |
+|                                                              |
+| 2. Frame skipping                                            |
+|    - Not every frame needs processing                        |
+|    - Detect every 2-5 frames                                 |
+|    - Use previous results for intermediate frames            |
+|                                                              |
+| 3. ROI-based processing                                      |
+|    - Only search around previous detection location          |
+|    - Combine tracking with detection                         |
+|                                                              |
+| 4. Model selection                                           |
+|    - Haar: Fastest, lower accuracy                          |
+|    - dlib HOG: Medium                                        |
+|    - dlib CNN: Slow, GPU recommended                         |
+|    - face_recognition: dlib-based                            |
+|                                                              |
+| 5. Multi-threading                                           |
+|    - Separate detection and display threads                  |
+|    - Use Queue for frame passing                             |
+|                                                              |
+| 6. GPU acceleration                                          |
+|    - dlib CUDA build                                         |
+|    - OpenCV DNN (CUDA backend)                               |
++-------------------------------------------------------------+
 ```
 
 ---
@@ -1217,7 +1263,7 @@ import csv
 class AttendanceSystem:
     def __init__(self):
         self.attendance_log = {}  # {name: last_check_time}
-        self.cooldown = 3600  # 1시간
+        self.cooldown = 3600  # 1 hour
 
     def mark_attendance(self, name):
         now = datetime.datetime.now()
@@ -1248,10 +1294,10 @@ class AttendanceSystem:
 ```python
 import dlib
 from scipy.spatial import distance as dist
-import pygame  # 경고음용
+import pygame  # For alert sound
 
 EAR_THRESHOLD = 0.25
-CONSEC_FRAMES = 20  # 연속 프레임 수
+CONSEC_FRAMES = 20  # Consecutive frame count
 
 def eye_aspect_ratio(eye):
     A = dist.euclidean(eye[1], eye[5])
@@ -1259,8 +1305,8 @@ def eye_aspect_ratio(eye):
     C = dist.euclidean(eye[0], eye[3])
     return (A + B) / (2.0 * C)
 
-counter = 0  # 연속 프레임 카운터
-# EAR < THRESHOLD가 CONSEC_FRAMES 이상 지속되면 경고
+counter = 0  # Consecutive frame counter
+# Alert when EAR < THRESHOLD persists for CONSEC_FRAMES or more
 ```
 
 </details>
@@ -1282,7 +1328,7 @@ def mosaic_face(img, rect, scale=0.1):
     x, y, w, h = rect
     roi = img[y:y+h, x:x+w]
 
-    # 축소 후 확대 (모자이크 효과)
+    # Reduce then enlarge (mosaic effect)
     small = cv2.resize(roi, None, fx=scale, fy=scale)
     mosaic = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
 
@@ -1308,19 +1354,19 @@ def mosaic_face(img, rect, scale=0.1):
 import numpy as np
 
 def align_face(img, left_eye, right_eye, desired_size=(256, 256)):
-    # 눈 사이 각도 계산
+    # Compute angle between eyes
     dY = right_eye[1] - left_eye[1]
     dX = right_eye[0] - left_eye[0]
     angle = np.degrees(np.arctan2(dY, dX))
 
-    # 회전 중심 (양 눈 중간점)
+    # Rotation center (midpoint between eyes)
     center = ((left_eye[0] + right_eye[0]) // 2,
               (left_eye[1] + right_eye[1]) // 2)
 
-    # 회전 행렬
+    # Rotation matrix
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
 
-    # 회전 적용
+    # Apply rotation
     aligned = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
 
     return aligned
@@ -1341,22 +1387,22 @@ def align_face(img, left_eye, right_eye, desired_size=(256, 256)):
 <summary>힌트</summary>
 
 ```python
-# 감정 판단 기준 예시:
-# - 행복: 입꼬리가 올라감 (입 양끝 y좌표 < 입 중앙 y좌표)
-# - 놀람: 눈과 입이 크게 열림 (EAR 높음, MAR 높음)
-# - 슬픔: 눈썹이 처짐, 입꼬리가 내려감
-# - 무표정: 변화가 적음
+# Example emotion judgment criteria:
+# - Happy: Mouth corners raised (mouth ends y < mouth center y)
+# - Surprised: Eyes and mouth wide open (high EAR, high MAR)
+# - Sad: Eyebrows drooped, mouth corners down
+# - Neutral: Little change
 
 def analyze_emotion(landmarks):
-    # 입 분석
+    # Mouth analysis
     mouth = landmarks[48:68]
-    mouth_height = mouth[14][1] - mouth[10][1]  # 입 높이
+    mouth_height = mouth[14][1] - mouth[10][1]  # Mouth height
 
-    # 눈 분석
+    # Eye analysis
     left_eye = landmarks[36:42]
     ear = eye_aspect_ratio(left_eye)
 
-    # 규칙 기반 판단
+    # Rule-based judgment
     if mouth_height > threshold and ear > threshold:
         return "Surprised"
     # ...
@@ -1368,7 +1414,7 @@ def analyze_emotion(landmarks):
 
 ## 다음 단계
 
-- [17_Video_Processing.md](./17_Video_Processing.md) - VideoCapture, 배경 차분, 옵티컬 플로우
+- [비디오 처리 (Video Processing)](./17_Video_Processing.md) - VideoCapture, 배경 차분, 옵티컬 플로우
 
 ---
 

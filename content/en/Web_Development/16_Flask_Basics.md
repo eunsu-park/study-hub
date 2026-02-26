@@ -1,13 +1,23 @@
 # 16. Flask Web Framework Basics
 
+**Previous**: [JavaScript Module System](./15_JS_Modules.md)
+
 ## Learning Objectives
 
-- Understand Flask's core concepts and structure
-- Master routing, templates, and form handling
-- Implement database integration and RESTful APIs
-- Structure large-scale applications using blueprints
+After completing this lesson, you will be able to:
+
+1. Create a minimal Flask application with routes, templates, and static files
+2. Define dynamic URL routes with variable converters and multiple HTTP methods
+3. Build HTML pages using Jinja2 template inheritance, macros, and filters
+4. Handle form submissions with validation using both raw Flask and Flask-WTF
+5. Perform CRUD operations on a SQLite database using Flask-SQLAlchemy
+6. Organize a large Flask application into blueprints with an application factory pattern
+7. Build and secure RESTful API endpoints with JSON responses and JWT authentication
+8. Deploy a Flask application using Gunicorn and Docker
 
 ---
+
+So far in this course, all interactivity has lived in the browser. Flask lets you move logic to the server -- handling authentication, persisting data in databases, and serving dynamic pages. As a micro-framework, Flask gives you just enough structure to be productive while leaving architectural decisions in your hands, making it an ideal first backend framework for web developers.
 
 ## 1. Introduction to Flask
 
@@ -39,14 +49,14 @@ Flask is a micro web framework written in Python.
 ### 1.2 Installation and Setup
 
 ```bash
-# 가상환경 생성
+# create virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Flask 설치
+# install Flask
 pip install flask
 
-# 추가 패키지 (권장)
+# additional packages (recommended)
 pip install flask-sqlalchemy flask-migrate flask-wtf python-dotenv
 ```
 
@@ -67,12 +77,12 @@ if __name__ == '__main__':
 ```
 
 ```bash
-# 실행
+# run
 python app.py
-# 또는
+# or
 flask run --debug
 
-# 브라우저에서 http://127.0.0.1:5000 접속
+# open http://127.0.0.1:5000 in your browser
 ```
 
 ---
@@ -86,12 +96,12 @@ from flask import Flask
 
 app = Flask(__name__)
 
-# 기본 라우트
+# default route
 @app.route('/')
 def index():
     return 'Home Page'
 
-# 정적 경로
+# static path
 @app.route('/about')
 def about():
     return 'About Page'
@@ -104,22 +114,22 @@ def contact():
 ### 2.2 Dynamic URLs
 
 ```python
-# 문자열 변수
+# string variable
 @app.route('/user/<username>')
 def show_user(username):
     return f'User: {username}'
 
-# 정수 변수
+# integer variable
 @app.route('/post/<int:post_id>')
 def show_post(post_id):
     return f'Post #{post_id}'
 
-# 경로 변수 (슬래시 포함)
+# path variable (includes slashes)
 @app.route('/path/<path:subpath>')
 def show_path(subpath):
     return f'Path: {subpath}'
 
-# 여러 변수
+# multiple variables
 @app.route('/user/<username>/post/<int:post_id>')
 def user_post(username, post_id):
     return f'{username}\'s Post #{post_id}'
@@ -130,7 +140,7 @@ def user_post(username, post_id):
 ```python
 from flask import request
 
-# GET (기본값)
+# GET (default)
 @app.route('/search')
 def search():
     query = request.args.get('q', '')
@@ -142,7 +152,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        # 로그인 처리
+        # process login
         return f'Logging in as {username}'
     return '''
         <form method="post">
@@ -152,7 +162,7 @@ def login():
         </form>
     '''
 
-# RESTful 스타일
+# RESTful style
 @app.route('/api/users', methods=['GET', 'POST'])
 def users():
     if request.method == 'GET':
@@ -187,12 +197,12 @@ def profile(username):
 
 @app.route('/redirect-example')
 def redirect_example():
-    # url_for로 URL 생성
+    # build URLs with url_for
     home_url = url_for('index')  # '/'
     admin_url = url_for('admin')  # '/admin'
     profile_url = url_for('profile', username='alice')  # '/user/alice'
 
-    # 리다이렉트
+    # redirect
     return redirect(url_for('profile', username='guest'))
 ```
 
@@ -203,7 +213,7 @@ def redirect_example():
 ### 3.1 Basic Templates
 
 ```
-프로젝트 구조:
+Project structure:
 my_app/
 ├── app.py
 ├── templates/
@@ -305,18 +315,18 @@ def user(name):
 ### 3.2 Jinja2 Syntax
 
 ```html
-<!-- 변수 출력 -->
+<!-- variable output -->
 <p>{{ variable }}</p>
 <p>{{ user.name }}</p>
 <p>{{ items[0] }}</p>
 
-<!-- 필터 -->
+<!-- filters -->
 <p>{{ name|upper }}</p>
 <p>{{ text|truncate(100) }}</p>
 <p>{{ date|datetime('%Y-%m-%d') }}</p>
 <p>{{ html_content|safe }}</p>
 
-<!-- 조건문 -->
+<!-- conditional -->
 {% if user.is_admin %}
     <p>Admin Panel</p>
 {% elif user.is_staff %}
@@ -325,21 +335,21 @@ def user(name):
     <p>User Panel</p>
 {% endif %}
 
-<!-- 반복문 -->
+<!-- loop -->
 {% for item in items %}
     <p>{{ loop.index }}. {{ item }}</p>
 {% endfor %}
 
-<!-- loop 변수 -->
+<!-- loop variables -->
 {% for user in users %}
-    {{ loop.index }}     {# 1부터 시작하는 인덱스 #}
-    {{ loop.index0 }}    {# 0부터 시작하는 인덱스 #}
-    {{ loop.first }}     {# 첫 번째 반복이면 True #}
-    {{ loop.last }}      {# 마지막 반복이면 True #}
-    {{ loop.length }}    {# 전체 항목 수 #}
+    {{ loop.index }}     {# 1-based index #}
+    {{ loop.index0 }}    {# 0-based index #}
+    {{ loop.first }}     {# True if first iteration #}
+    {{ loop.last }}      {# True if last iteration #}
+    {{ loop.length }}    {# total number of items #}
 {% endfor %}
 
-<!-- 매크로 (재사용 가능한 템플릿 함수) -->
+<!-- macro (reusable template function) -->
 {% macro input(name, type='text', value='') %}
     <input type="{{ type }}" name="{{ name }}" value="{{ value }}">
 {% endmacro %}
@@ -347,15 +357,15 @@ def user(name):
 {{ input('username') }}
 {{ input('password', type='password') }}
 
-<!-- 매크로 가져오기 -->
+<!-- import macro -->
 {% from 'macros.html' import input %}
 
-<!-- 블록 -->
+<!-- block -->
 {% block sidebar %}
     <aside>Default Sidebar</aside>
 {% endblock %}
 
-<!-- 부모 블록 내용 포함 -->
+<!-- include parent block content -->
 {% block content %}
     {{ super() }}
     <p>Additional content</p>
@@ -379,10 +389,10 @@ def format_datetime(value, format='%Y-%m-%d %H:%M'):
 
 @app.template_filter('money')
 def format_money(value):
-    return f'{value:,.0f}원'
+    return f'{value:,.0f} KRW'
 
-# 템플릿에서 사용: {{ post.created_at|datetime('%Y년 %m월 %d일') }}
-# 템플릿에서 사용: {{ price|money }}
+# Usage in template: {{ post.created_at|datetime('%Y년 %m월 %d일') }}
+# Usage in template: {{ price|money }}
 ```
 
 ---
@@ -395,7 +405,7 @@ def format_money(value):
 from flask import Flask, render_template, request, redirect, url_for, flash
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key'  # flash 메시지용
+app.secret_key = 'your-secret-key'  # for flash messages
 
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
@@ -404,13 +414,13 @@ def contact():
         email = request.form.get('email')
         message = request.form.get('message')
 
-        # 간단한 유효성 검사
+        # simple validation
         if not name or not email:
-            flash('이름과 이메일은 필수입니다.', 'error')
+            flash('Name and email are required.', 'error')
             return redirect(url_for('contact'))
 
-        # 데이터 처리 (예: 이메일 전송, DB 저장)
-        flash('메시지가 전송되었습니다.', 'success')
+        # process data (e.g., send email, save to DB)
+        flash('Message sent successfully.', 'success')
         return redirect(url_for('index'))
 
     return render_template('contact.html')
@@ -463,11 +473,11 @@ from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationE
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[
-        DataRequired(message='사용자명을 입력하세요.'),
-        Length(min=3, max=20, message='3-20자 사이로 입력하세요.')
+        DataRequired(message='Please enter your username.'),
+        Length(min=3, max=20, message='Must be between 3 and 20 characters.')
     ])
     password = PasswordField('Password', validators=[
-        DataRequired(message='비밀번호를 입력하세요.')
+        DataRequired(message='Please enter your password.')
     ])
     remember = BooleanField('Remember Me')
 
@@ -478,29 +488,29 @@ class RegistrationForm(FlaskForm):
     ])
     email = StringField('Email', validators=[
         DataRequired(),
-        Email(message='유효한 이메일 주소를 입력하세요.')
+        Email(message='Please enter a valid email address.')
     ])
     password = PasswordField('Password', validators=[
         DataRequired(),
-        Length(min=8, message='비밀번호는 최소 8자 이상이어야 합니다.')
+        Length(min=8, message='Password must be at least 8 characters.')
     ])
     confirm_password = PasswordField('Confirm Password', validators=[
         DataRequired(),
-        EqualTo('password', message='비밀번호가 일치하지 않습니다.')
+        EqualTo('password', message='Passwords do not match.')
     ])
 
     def validate_username(self, field):
-        # 커스텀 유효성 검사
+        # custom validation
         if field.data.lower() in ['admin', 'root', 'administrator']:
-            raise ValidationError('사용할 수 없는 사용자명입니다.')
+            raise ValidationError('This username is not allowed.')
 
 class ContactForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     email = StringField('Email', validators=[DataRequired(), Email()])
     category = SelectField('Category', choices=[
-        ('general', '일반 문의'),
-        ('support', '기술 지원'),
-        ('feedback', '피드백')
+        ('general', 'General Inquiry'),
+        ('support', 'Technical Support'),
+        ('feedback', 'Feedback')
     ])
     message = TextAreaField('Message', validators=[
         DataRequired(),
@@ -521,10 +531,10 @@ def login():
     form = LoginForm()
 
     if form.validate_on_submit():
-        # form.username.data, form.password.data 사용
+        # use form.username.data, form.password.data
         username = form.username.data
-        # 로그인 로직...
-        flash(f'{username}님, 환영합니다!', 'success')
+        # login logic...
+        flash(f'Welcome, {username}!', 'success')
         return redirect(url_for('index'))
 
     return render_template('login.html', form=form)
@@ -534,8 +544,8 @@ def register():
     form = RegistrationForm()
 
     if form.validate_on_submit():
-        # 회원가입 로직...
-        flash('회원가입이 완료되었습니다.', 'success')
+        # registration logic...
+        flash('Registration complete.', 'success')
         return redirect(url_for('login'))
 
     return render_template('register.html', form=form)
@@ -586,7 +596,7 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB 제한
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 
 def allowed_file(filename):
@@ -597,23 +607,23 @@ def allowed_file(filename):
 def upload_file():
     if request.method == 'POST':
         if 'file' not in request.files:
-            flash('파일이 없습니다.')
+            flash('No file found.')
             return redirect(request.url)
 
         file = request.files['file']
 
         if file.filename == '':
-            flash('선택된 파일이 없습니다.')
+            flash('No file selected.')
             return redirect(request.url)
 
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            flash(f'{filename} 업로드 완료!')
+            flash(f'{filename} uploaded successfully!')
             return redirect(url_for('index'))
         else:
-            flash('허용되지 않는 파일 형식입니다.')
+            flash('File type not allowed.')
             return redirect(request.url)
 
     return '''
@@ -642,7 +652,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# 모델 정의
+# define models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -650,7 +660,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(128))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # 관계: 1:N
+    # relationship: 1:N
     posts = db.relationship('Post', backref='author', lazy='dynamic')
 
     def __repr__(self):
@@ -663,10 +673,10 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # 외래 키
+    # foreign key
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-    # 관계: N:M (태그)
+    # relationship: N:M (tags)
     tags = db.relationship('Tag', secondary='post_tags', backref='posts')
 
     def __repr__(self):
@@ -676,13 +686,13 @@ class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
 
-# 다대다 관계를 위한 연결 테이블
+# association table for many-to-many relationship
 post_tags = db.Table('post_tags',
     db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True)
 )
 
-# 데이터베이스 생성
+# create database
 with app.app_context():
     db.create_all()
 ```
@@ -695,7 +705,7 @@ user = User(username='alice', email='alice@example.com')
 db.session.add(user)
 db.session.commit()
 
-# 여러 개 추가
+# add multiple
 users = [
     User(username='bob', email='bob@example.com'),
     User(username='charlie', email='charlie@example.com')
@@ -704,21 +714,21 @@ db.session.add_all(users)
 db.session.commit()
 
 # Read
-# 전체 조회
+# fetch all
 all_users = User.query.all()
 
-# ID로 조회
+# fetch by ID
 user = User.query.get(1)  # deprecated in SQLAlchemy 2.0
 user = db.session.get(User, 1)  # SQLAlchemy 2.0+
 
-# 조건 조회
+# fetch with condition
 user = User.query.filter_by(username='alice').first()
 users = User.query.filter(User.email.like('%@example.com')).all()
 
-# 정렬
+# sort
 users = User.query.order_by(User.created_at.desc()).all()
 
-# 페이지네이션
+# pagination
 page = User.query.paginate(page=1, per_page=10)
 # page.items, page.has_next, page.has_prev, page.pages
 
@@ -727,7 +737,7 @@ user = User.query.filter_by(username='alice').first()
 user.email = 'newemail@example.com'
 db.session.commit()
 
-# 또는 bulk update
+# or bulk update
 User.query.filter_by(username='alice').update({'email': 'new@example.com'})
 db.session.commit()
 
@@ -736,7 +746,7 @@ user = User.query.filter_by(username='alice').first()
 db.session.delete(user)
 db.session.commit()
 
-# 또는 bulk delete
+# or bulk delete
 User.query.filter(User.created_at < some_date).delete()
 db.session.commit()
 ```
@@ -767,16 +777,16 @@ def user_create():
         username = request.form['username']
         email = request.form['email']
 
-        # 중복 확인
+        # check for duplicates
         if User.query.filter_by(username=username).first():
-            flash('이미 존재하는 사용자명입니다.', 'error')
+            flash('Username already exists.', 'error')
             return redirect(url_for('user_create'))
 
         user = User(username=username, email=email)
         db.session.add(user)
         db.session.commit()
 
-        flash('사용자가 생성되었습니다.', 'success')
+        flash('User created successfully.', 'success')
         return redirect(url_for('user_detail', user_id=user.id))
 
     return render_template('users/create.html')
@@ -790,7 +800,7 @@ def user_edit(user_id):
     if request.method == 'POST':
         user.email = request.form['email']
         db.session.commit()
-        flash('사용자 정보가 수정되었습니다.', 'success')
+        flash('User information updated.', 'success')
         return redirect(url_for('user_detail', user_id=user.id))
 
     return render_template('users/edit.html', user=user)
@@ -803,7 +813,7 @@ def user_delete(user_id):
 
     db.session.delete(user)
     db.session.commit()
-    flash('사용자가 삭제되었습니다.', 'success')
+    flash('User deleted.', 'success')
     return redirect(url_for('user_list'))
 ```
 
@@ -823,16 +833,16 @@ migrate = Migrate(app, db)
 ```
 
 ```bash
-# 마이그레이션 초기화
+# initialize migrations
 flask db init
 
-# 마이그레이션 생성
+# create migration
 flask db migrate -m "Initial migration"
 
-# 마이그레이션 적용
+# apply migration
 flask db upgrade
 
-# 롤백
+# rollback
 flask db downgrade
 ```
 
@@ -851,16 +861,16 @@ app.secret_key = 'your-secret-key'
 @app.route('/login', methods=['POST'])
 def login():
     username = request.form['username']
-    # 인증 로직...
+    # authentication logic...
     session['user_id'] = user.id
     session['username'] = user.username
-    session.permanent = True  # 세션 유지 (기본 31일)
+    session.permanent = True  # persist session (default 31 days)
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 def logout():
     session.clear()
-    # 또는 특정 키만 삭제
+    # or delete a specific key
     # session.pop('user_id', None)
     return redirect(url_for('index'))
 
@@ -882,9 +892,9 @@ def set_cookie():
     response.set_cookie(
         'theme',
         'dark',
-        max_age=60*60*24*30,  # 30일
+        max_age=60*60*24*30,  # 30 days
         httponly=True,
-        secure=True,  # HTTPS에서만
+        secure=True,  # HTTPS only
         samesite='Lax'
     )
     return response
@@ -962,7 +972,7 @@ from .forms import LoginForm, RegistrationForm
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        # 로그인 로직
+        # login logic
         return redirect(url_for('main.index'))
     return render_template('auth/login.html', form=form)
 
@@ -970,14 +980,14 @@ def login():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        # 회원가입 로직
-        flash('회원가입이 완료되었습니다.')
+        # registration logic
+        flash('Registration complete.')
         return redirect(url_for('auth.login'))
     return render_template('auth/register.html', form=form)
 
 @auth_bp.route('/logout')
 def logout():
-    # 로그아웃 로직
+    # logout logic
     return redirect(url_for('main.index'))
 ```
 
@@ -1021,11 +1031,11 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # 확장 초기화
+    # initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # 블루프린트 등록
+    # register blueprints
     from app.auth import auth_bp
     from app.main import main_bp
     from app.api import api_bp
@@ -1034,7 +1044,7 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp, url_prefix='/api')
 
-    # 에러 핸들러 등록
+    # register error handlers
     from app.errors import register_error_handlers
     register_error_handlers(app)
 
@@ -1082,7 +1092,7 @@ from flask import Flask, jsonify, request, abort
 
 app = Flask(__name__)
 
-# 샘플 데이터
+# sample data
 books = [
     {'id': 1, 'title': 'Flask Web Development', 'author': 'Miguel Grinberg'},
     {'id': 2, 'title': 'Python Crash Course', 'author': 'Eric Matthes'},
@@ -1132,7 +1142,7 @@ def delete_book(book_id):
     books.remove(book)
     return '', 204
 
-# 에러 핸들러
+# error handlers
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404
@@ -1163,7 +1173,7 @@ app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 
 jwt = JWTManager(app)
 
-# 토큰 블랙리스트 (로그아웃된 토큰)
+# token blacklist (logged-out tokens)
 blacklist = set()
 
 @jwt.token_in_blocklist_loader
@@ -1175,7 +1185,7 @@ def login():
     username = request.json.get('username')
     password = request.json.get('password')
 
-    # 사용자 인증 로직
+    # user authentication logic
     user = authenticate(username, password)
     if not user:
         return jsonify({'error': 'Invalid credentials'}), 401
@@ -1296,7 +1306,7 @@ def not_found(error):
 
 @app.errorhandler(500)
 def internal_error(error):
-    db.session.rollback()  # 트랜잭션 롤백
+    db.session.rollback()  # rollback transaction
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Internal server error'}), 500
     return render_template('errors/500.html'), 500
@@ -1307,7 +1317,7 @@ def forbidden(error):
         return jsonify({'error': 'Forbidden'}), 403
     return render_template('errors/403.html'), 403
 
-# 커스텀 예외
+# custom exception
 class ValidationError(Exception):
     def __init__(self, message, status_code=400):
         super().__init__()
@@ -1320,7 +1330,7 @@ def handle_validation_error(error):
     response.status_code = error.status_code
     return response
 
-# 사용
+# usage
 @app.route('/api/validate', methods=['POST'])
 def validate():
     if 'name' not in request.json:
@@ -1355,12 +1365,12 @@ def setup_logging(app):
         app.logger.setLevel(logging.INFO)
         app.logger.info('Application startup')
 
-# 사용
+# usage
 @app.route('/api/action')
 def action():
     app.logger.info('Action performed by user')
     try:
-        # 로직
+        # logic
         pass
     except Exception as e:
         app.logger.error(f'Error occurred: {e}')
@@ -1431,13 +1441,13 @@ def test_api_create_book(client):
 ### 10.2 Running Tests
 
 ```bash
-# 테스트 실행
+# run tests
 pytest
 
-# 상세 출력
+# verbose output
 pytest -v
 
-# 커버리지
+# coverage
 pip install pytest-cov
 pytest --cov=app --cov-report=html
 ```
@@ -1457,7 +1467,7 @@ class ProductionConfig:
     SQLALCHEMY_DATABASE_URI = os.environ['DATABASE_URL']
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # 보안 설정
+    # security settings
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
@@ -1468,10 +1478,10 @@ class ProductionConfig:
 ```bash
 pip install gunicorn
 
-# 실행
+# run
 gunicorn -w 4 -b 0.0.0.0:8000 "app:create_app()"
 
-# 또는 gunicorn.conf.py 사용
+# or use gunicorn.conf.py
 gunicorn -c gunicorn.conf.py "app:create_app()"
 ```
 
@@ -1573,3 +1583,7 @@ Create a Todo list API:
 - [Flask-SQLAlchemy Documentation](https://flask-sqlalchemy.palletsprojects.com/)
 - [Flask Mega-Tutorial](https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world)
 - [Real Python Flask Tutorials](https://realpython.com/tutorials/flask/)
+
+---
+
+**Previous**: [JavaScript Module System](./15_JS_Modules.md)

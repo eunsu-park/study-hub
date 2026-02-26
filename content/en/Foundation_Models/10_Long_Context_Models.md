@@ -1,5 +1,18 @@
 # 10. Long Context Models
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why standard Transformer self-attention has O(n²) time and memory complexity and identify the practical context length limits this imposes.
+2. Compare efficient attention mechanisms (sparse attention, linear attention, FlashAttention) and explain how each reduces computational cost while preserving model quality.
+3. Describe position encoding extension techniques (RoPE, ALiBi, YaRN, LongRoPE) and explain how they enable models trained on short contexts to generalize to longer sequences.
+4. Analyze the "lost in the middle" phenomenon in long-context models and explain its implications for retrieval, agent design, and document understanding tasks.
+5. Implement sliding window and chunked attention patterns, and compare them to full attention in terms of accuracy and memory usage.
+6. Evaluate long-context benchmarks (SCROLLS, L-Eval, RULER) and discuss the trade-offs between context length, inference latency, and memory footprint in production deployments.
+
+---
+
 ## Overview
 
 Standard Transformer Self-Attention has limitations in processing long sequences due to O(n²) complexity. This lesson covers various techniques for extending context length.
@@ -754,3 +767,161 @@ def process_long_document(model, document, chunk_size=4096, overlap=512):
 ### Related Lessons
 - [08_LLaMA_Family.md](08_LLaMA_Family.md) - RoPE Basics
 - [09_Mistral_MoE.md](09_Mistral_MoE.md) - Sliding Window Attention
+
+---
+
+## Exercises
+
+### Exercise 1: Attention Complexity Analysis
+
+For a sequence of n=8192 tokens with d_model=4096 and 32 attention heads (head_dim=128):
+
+1. Calculate the memory required to store the full attention weight matrix (n × n) in fp16.
+2. What is the theoretical peak memory for standard full attention vs FlashAttention? (FlashAttention reduces attention memory from O(n²) to O(n) by operating in tiles.)
+3. At what sequence length does the attention weight matrix alone exceed 40GB (a single A100 GPU)?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Full attention weight matrix memory (n=8192):**
+
+For each of 32 heads, attention weights are shape (n × n):
+```
+32 heads × 8192 × 8192 × 2 bytes (fp16)
+= 32 × 67,108,864 × 2
+= 4,294,967,296 bytes
+≈ 4 GB
+```
+
+**2. Peak memory comparison:**
+
+Standard attention materializes the full n×n matrix:
+- Attention weights: **~4 GB** (as calculated above)
+- Plus softmax, dropout, etc.: roughly 2-3× → ~8-12 GB just for attention
+
+FlashAttention computes attention in tiles (SRAM blocks) without storing the full matrix:
+- O(n × d) = 8192 × 128 × 32 × 2 bytes ≈ **64 MB**
+- This is ~60-180× less memory for n=8192
+
+**3. When does attention matrix exceed 40GB?**
+
+Memory for attention matrix = 32 × n² × 2 bytes = 64n²
+
+```
+64 × n² = 40 × 10⁹
+n² = 40 × 10⁹ / 64 = 625,000,000
+n = √625,000,000 ≈ 25,000 tokens
+```
+
+At about **25K tokens**, the attention weight matrix alone would fill a single A100 GPU — not counting model parameters, activations, or gradients.
+
+</details>
+
+---
+
+### Exercise 2: "Lost in the Middle" Phenomenon
+
+Research has shown that LLMs perform best when relevant information is at the beginning or end of a long context, and worst when it's in the middle.
+
+1. Propose a hypothesis explaining why this phenomenon occurs based on the training process.
+2. For a RAG system that retrieves 10 documents to answer a question, suggest two practical mitigation strategies.
+3. How does this phenomenon affect agent system design where accumulated tool outputs are placed in context?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Hypothesis for "lost in the middle":**
+
+During training on natural documents, relevant information for predictions tends to appear:
+- At the beginning (introductions, premises, context-setting)
+- At the end (conclusions, answers, resolutions)
+
+The middle of long documents often contains supporting detail, transitions, and elaboration that is less frequently the direct "answer" target during next-token prediction training. The model's attention mechanisms may implicitly learn to weight early (strong causal position signal in absolute PE) and late tokens more heavily. Additionally, gradient flow during backpropagation may be stronger for positions at the boundaries of long sequences.
+
+**2. RAG mitigation strategies:**
+
+- **Reranking and position-aware ordering**: Place the most relevant retrieved documents at the beginning and end of the context, not in the middle. If you have 10 documents and can estimate relevance, put #1 and #2 at positions 1 and 10, and fill the middle with less relevant documents.
+
+- **Lost-in-the-middle-aware chunking**: Instead of concatenating all documents, use a "sandwich" prompt structure: the question first, then context, then the question again. Or use multiple shorter context windows with aggregation rather than one very long context.
+
+**3. Impact on agent system design:**
+
+Tool outputs accumulated during multi-step agent execution tend to grow the context as the task progresses — with early tool results pushed toward the middle. This means:
+- Early important results (e.g., initial search establishing the user's goal) may be "forgotten"
+- The agent may over-rely on the most recent tool outputs (at the end) even when earlier results are more relevant
+- **Mitigation**: Use a running "scratchpad" or structured state summary that is refreshed at the top of the context each turn, rather than pure context accumulation. Prioritize recency for raw tool outputs but maintain an explicit summary of critical findings from earlier steps.
+
+</details>
+
+---
+
+### Exercise 3: Position Encoding Extension Strategy
+
+A 7B model was trained with RoPE at 4K context. You want to extend it to 32K context without full retraining. Compare these three approaches:
+
+| Approach | Description | Key parameters | Trade-off |
+|----------|-------------|---------------|-----------|
+| Direct inference at 32K | Just run the model at longer lengths | None | ? |
+| Position Interpolation | Scale positions down | Scale factor s = 8 | ? |
+| YaRN | NTK-aware interpolation with attention temperature | Scale + attention factor | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Approach | Description | Key parameters | Trade-off |
+|----------|-------------|---------------|-----------|
+| **Direct inference at 32K** | Use positions 4097-32768 which were never seen in training | None | Catastrophic — RoPE values at positions >4K are completely out-of-distribution. The attention patterns collapse because the model has no learned behavior for these rotation angles. Performance degrades severely beyond training length. |
+| **Position Interpolation** | Scale all positions by s=32K/4K=8 so max position is 4K | s=8 (compression factor) | Works but degrades quality for short sequences: after scaling, positions 1-512 are compressed into 0-64, making it harder to distinguish nearby tokens. Requires some fine-tuning (even 100-1000 steps) to restore quality. Better than direct inference, simpler than YaRN. |
+| **YaRN** | Applies different scaling to different frequency components of RoPE; adds attention temperature scaling (1/√s multiplier) | Scale + attention scaling factor | Best quality among the three; specifically addresses the frequency-specific distortion introduced by uniform scaling. The attention temperature prevents the attention distribution from becoming too peaked at long ranges. Minor fine-tuning recommended but often works zero-shot. Preferred method in practice. |
+
+**Practical recommendation:** Use YaRN for the best quality extension; use Position Interpolation if simplicity is preferred. Never use direct inference beyond ~1.5-2× training length.
+
+</details>
+
+---
+
+### Exercise 4: FlashAttention Algorithm Understanding
+
+FlashAttention's key innovation is computing attention in "tiles" that fit in GPU SRAM, avoiding materializing the full O(n²) attention matrix. Explain:
+
+1. Why is the naive computation `Attention(Q,K,V) = softmax(QK^T/√d)V` problematic for memory when n is large?
+2. What is the "online softmax" trick that enables FlashAttention to compute exact (not approximate) attention without storing the full matrix?
+3. Why does FlashAttention typically run faster than standard attention even though it computes more arithmetic operations?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Memory problem with naive attention:**
+
+The naive implementation materializes these intermediate tensors:
+- `S = QK^T`: shape (n × n) — full attention score matrix
+- `P = softmax(S)`: shape (n × n) — normalized attention weights
+- `O = PV`: shape (n × d) — output
+
+For n=32K and fp16: QK^T alone is 32768 × 32768 × 2 bytes ≈ 2 GB per head, times 32 heads = 64 GB — far exceeding GPU memory.
+
+**2. Online softmax trick:**
+
+Standard softmax requires two passes: first find the maximum (for numerical stability), then compute exp values. FlashAttention uses an incremental (online) update rule:
+
+For each new tile of K,V processed:
+```
+# New block S_new = Q · K_new^T
+# Maintain running max m and sum of exps l
+m_new = max(m_old, max(S_new))
+l_new = exp(m_old - m_new) * l_old + sum(exp(S_new - m_new))
+O_new = (exp(m_old - m_new) * l_old * O_old + exp(S_new - m_new) * V_new) / l_new
+```
+
+This allows the exact final softmax to be computed without ever storing the full n×n matrix — only the running statistics (m, l) and the current output (n × d) are needed in memory.
+
+**3. Why FlashAttention is faster despite more arithmetic:**
+
+Standard attention is **memory-bandwidth bound**, not compute bound. The bottleneck is not the floating-point multiplications — it's reading and writing the large intermediate matrices (S, P) to and from HBM (high-bandwidth memory). Even though HBM is fast, reading 2 GB of data per forward pass per head is extremely slow compared to SRAM operations.
+
+FlashAttention keeps all intermediate data in SRAM (fast on-chip cache):
+- SRAM bandwidth: ~19 TB/s (vs HBM: ~2 TB/s)
+- By computing each tile entirely in SRAM without HBM round-trips, the total data movement to HBM is reduced by O(n) factor
+- This wall-clock speedup (2-4×) occurs despite 10-15% more arithmetic operations
+
+</details>

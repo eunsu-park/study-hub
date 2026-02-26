@@ -61,11 +61,12 @@ EOF
 # ============================================================================
 
 parse_arguments() {
+    # Why: declaring OPTIND as local resets it to 1 for this function, allowing
+    # parse_arguments to be called multiple times without stale index state.
     local OPTIND OPTARG opt
 
-    # getopts format: "vho:n:"
-    # - Letters without colon: flag options (no argument)
-    # - Letters with colon: options that require an argument
+    # Why: getopts is POSIX-standard and handles combined flags (-vn 3)
+    # automatically. The colon after a letter means "requires an argument".
     while getopts "vho:n:" opt; do
         case "$opt" in
             v)
@@ -98,7 +99,8 @@ parse_arguments() {
         esac
     done
 
-    # Shift processed options
+    # Why: OPTIND points past the last parsed option. Shifting by OPTIND-1
+    # removes all processed flags, leaving only positional arguments in $@.
     shift $((OPTIND - 1))
 
     # Remaining arguments are positional

@@ -5,6 +5,17 @@
 > **Prerequisites**: Document Structure, Packages
 > **Objective**: Master the placement and management of figures, images, and tables using LaTeX's float system, including captions, labels, cross-references, and advanced positioning techniques.
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how LaTeX's float system works and why figures and tables are placed differently from regular text
+2. Insert images using the `graphicx` package and control their size, rotation, and alignment
+3. Add captions and labels to floats, then reference them with `\ref` and `\autoref`
+4. Use float placement specifiers (`h`, `t`, `b`, `p`, `H`) to influence where floats appear on the page
+5. Create side-by-side figures using `subfigure` or `minipage` environments
+6. Manage float accumulation in long documents using `\FloatBarrier` and related techniques
+
 ---
 
 ## Introduction
@@ -838,6 +849,6 @@ Understanding floats is essential for creating professional LaTeX documents. Whi
 ---
 
 **Navigation**:
-- [Previous: 05_Math_Advanced.md](05_Math_Advanced.md)
-- [Next: 07_Tables_Advanced.md](07_Tables_Advanced.md)
+- [Previous: Advanced Mathematics](05_Math_Advanced.md)
+- [Next: Advanced Tables](07_Tables_Advanced.md)
 - [Back to Overview](00_Overview.md)

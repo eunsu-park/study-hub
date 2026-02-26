@@ -1,5 +1,26 @@
 # Functions and Procedures
 
+**Previous**: [Views and Indexes](./09_Views_and_Indexes.md) | **Next**: [Transactions](./11_Transactions.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use PostgreSQL built-in functions for strings, numbers, and dates
+2. Create simple SQL functions with CREATE FUNCTION ... LANGUAGE SQL
+3. Write PL/pgSQL functions with variables, IF-ELSE branching, CASE, and loops
+4. Return table data from functions using RETURNS TABLE, RETURNS SETOF, and OUT parameters
+5. Implement exception handling with BEGIN ... EXCEPTION blocks and RAISE
+6. Create stored procedures (PROCEDURE) and explain how they differ from functions
+7. Apply CREATE OR REPLACE to modify existing functions without dropping them
+8. List, inspect, and drop user-defined functions and procedures
+
+---
+
+Built-in functions handle the most common transformations, but every application eventually needs custom logic that lives inside the database itself. User-defined functions and procedures let you encapsulate business rules -- tax calculations, tier classifications, input validation -- right next to the data, reducing round trips and ensuring that the logic is applied consistently no matter which client connects.
+
 ## 1. Built-in Functions
 
 PostgreSQL provides various built-in functions.
@@ -544,6 +565,4 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## Next Steps
-
-Learn about transactions and concurrency control in [11_Transactions.md](./11_Transactions.md)!
+**Previous**: [Views and Indexes](./09_Views_and_Indexes.md) | **Next**: [Transactions](./11_Transactions.md)

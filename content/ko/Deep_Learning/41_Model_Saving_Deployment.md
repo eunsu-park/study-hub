@@ -4,12 +4,16 @@
 
 # 41. 모델 저장 및 배포
 
-## 학습 목표
+## 학습 목표(Learning Objectives)
 
-- PyTorch 모델 저장 방법
-- ONNX 변환
-- TorchScript 사용
-- 추론 최적화
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. state_dict와 체크포인트를 사용한 PyTorch 모델 저장 및 로드
+2. TorchScript(tracing, scripting)를 사용한 모델 내보내기
+3. 크로스 프레임워크 배포를 위한 ONNX 변환
+4. `torch.export()`를 사용한 그래프 캡처 (PyTorch 2.x)
+5. 추론 최적화 기법 적용 (양자화, 컴파일)
+6. REST API, Docker, 모바일, 클라우드 플랫폼을 통한 모델 배포
 
 ---
 
@@ -164,7 +168,77 @@ print("ONNX 모델 검증 통과")
 
 ---
 
-## 4. 추론 최적화
+## 4. torch.export() (PyTorch 2.x)
+
+### 개념
+
+`torch.export()`는 TorchScript의 PyTorch 2.x 후속 기능입니다. TorchDynamo를 사용하여 전체 연산 그래프를 캡처하고 깔끔하고 이식 가능한 `ExportedProgram`을 생성합니다.
+
+```
+TorchScript (레거시) → torch.export() (PyTorch 2.x 권장)
+- 안전한 그래프 캡처 (무음 오류 없음)
+- torch.compile() 생태계와 호환
+- 동적 형상(dynamic shapes) 지원 개선
+```
+
+### 기본 사용법
+
+```python
+import torch
+
+model = MyModel().eval()
+example_input = (torch.randn(1, 3, 224, 224),)
+
+# 모델 내보내기
+exported = torch.export.export(model, example_input)
+
+# 내보낸 모델 실행
+output = exported.module()(torch.randn(1, 3, 224, 224))
+```
+
+### 동적 형상(Dynamic Shapes)
+
+```python
+from torch.export import Dim
+
+# 동적 차원 정의
+batch = Dim("batch", min=1, max=32)
+dynamic_shapes = {"x": {0: batch}}
+
+exported = torch.export.export(
+    model,
+    (torch.randn(4, 3, 224, 224),),
+    dynamic_shapes=dynamic_shapes,
+)
+
+# [1, 32] 범위의 모든 배치 크기에서 동작
+output = exported.module()(torch.randn(8, 3, 224, 224))
+```
+
+### 저장과 로드
+
+```python
+# 저장
+torch.export.save(exported, "model_exported.pt2")
+
+# 로드
+loaded = torch.export.load("model_exported.pt2")
+output = loaded.module()(input_data)
+```
+
+### torch.export() vs TorchScript
+
+| 기능 | TorchScript | torch.export() |
+|------|------------|----------------|
+| 그래프 캡처 | Tracing 또는 Scripting | TorchDynamo (자동) |
+| Python 지원 | 제한된 부분 집합 | 전체 Python 시맨틱스 |
+| 동적 형상 | 수동 어노테이션 | 퍼스트 클래스 지원 |
+| 정확성 | 무음 실패 가능 | 안전한 캡처 또는 명확한 에러 |
+| 생태계 | 레거시 | torch.compile과 통합 |
+
+---
+
+## 5. 추론 최적화
 
 ### eval 모드
 
@@ -203,7 +277,7 @@ model_quantized = torch.quantization.convert(model_prepared)
 
 ---
 
-## 5. 배포 옵션
+## 6. 배포 옵션
 
 ### Flask API
 
@@ -273,7 +347,7 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ---
 
-## 6. 모바일 배포
+## 7. 모바일 배포
 
 ### PyTorch Mobile
 
@@ -295,7 +369,7 @@ val outputTensor = module.forward(IValue.from(inputTensor)).toTensor()
 
 ---
 
-## 7. 클라우드 배포
+## 8. 클라우드 배포
 
 ### AWS SageMaker
 
@@ -332,7 +406,7 @@ api.upload_file(
 
 ---
 
-## 8. 베스트 프랙티스
+## 9. 베스트 프랙티스
 
 ### 저장 전 체크리스트
 
@@ -377,6 +451,7 @@ torch.save(save_dict, 'model_v1.0.pth')
 | Python 배포 | state_dict |
 | C++ 배포 | TorchScript |
 | 범용 배포 | ONNX |
+| PyTorch 2.x 생태계 | torch.export() |
 | 모바일 | PyTorch Mobile |
 
 ### 핵심 코드
@@ -385,9 +460,13 @@ torch.save(save_dict, 'model_v1.0.pth')
 # 저장
 torch.save(model.state_dict(), 'model.pth')
 
-# TorchScript
+# TorchScript (레거시)
 traced = torch.jit.trace(model.eval(), example_input)
 traced.save('model.pt')
+
+# torch.export() (PyTorch 2.x 권장)
+exported = torch.export.export(model.eval(), (example_input,))
+torch.export.save(exported, 'model.pt2')
 
 # ONNX
 torch.onnx.export(model, example_input, 'model.onnx')
@@ -397,4 +476,4 @@ torch.onnx.export(model, example_input, 'model.onnx')
 
 ## 다음 단계
 
-[39_Practical_Image_Classification.md](./39_Practical_Image_Classification.md)에서 실전 프로젝트를 진행합니다.
+[실전 이미지 분류 프로젝트](./39_Practical_Image_Classification.md)에서 실전 프로젝트를 진행합니다.

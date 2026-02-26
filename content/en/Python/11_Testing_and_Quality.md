@@ -1,11 +1,22 @@
 # 11. Testing & Quality Assurance
 
+**Previous**: [Performance Optimization](./10_Performance_Optimization.md) | **Next**: [Packaging & Distribution](./12_Packaging_and_Distribution.md)
+
 ## Learning Objectives
-- Master pytest framework basics and advanced features
-- Understand effective test writing patterns
-- Use mocking for isolated testing
-- Measure and improve code coverage
-- Automate testing and CI/CD integration
+
+After completing this lesson, you will be able to:
+
+1. Write and organize tests using the pytest framework, including test discovery conventions and execution options
+2. Implement fixtures for test setup and teardown with appropriate scope management
+3. Apply parametrized testing to cover multiple input scenarios with minimal code duplication
+4. Use `unittest.mock` and `pytest-mock` to isolate units under test from external dependencies
+5. Measure code coverage with `pytest-cov` and configure coverage thresholds and exclusions
+6. Distinguish between the Arrange-Act-Assert and Given-When-Then test patterns
+7. Apply test markers to categorize, skip, and selectively run test subsets
+
+---
+
+Automated testing is the single most effective practice for maintaining software quality over time. Without tests, every refactor is a gamble and every deployment is a source of anxiety. A well-structured test suite not only catches regressions early but also serves as living documentation of how your code is intended to behave.
 
 ## Table of Contents
 1. [pytest Basics](#1-pytest-basics)
@@ -807,12 +818,12 @@ def test_process_payment(mocker):
 
 ---
 
-## Next Steps
-- [12. Packaging and Distribution](./12_Packaging_and_Distribution.md)
-- [13. Dataclasses](./13_Dataclasses.md)
-
 ## References
 - [pytest Documentation](https://docs.pytest.org/)
 - [pytest-mock](https://pytest-mock.readthedocs.io/)
 - [pytest-cov](https://pytest-cov.readthedocs.io/)
 - [unittest.mock](https://docs.python.org/3/library/unittest.mock.html)
+
+---
+
+**Previous**: [Performance Optimization](./10_Performance_Optimization.md) | **Next**: [Packaging & Distribution](./12_Packaging_and_Distribution.md)

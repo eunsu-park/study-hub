@@ -19,6 +19,8 @@
         aside { background-color: #fdebd0; }
         footer { background-color: #d5dbdb; }
 
+        /* Why: 3fr/1fr ratio mirrors the classic "main content + sidebar" pattern readers expect,
+           and grid makes it easy to collapse to single column on mobile */
         .container {
             display: grid;
             grid-template-columns: 3fr 1fr;
@@ -32,6 +34,8 @@
          의미를 가진 HTML5 태그들을 학습합니다.
     ============================================= -->
 
+    <!-- Why: Semantic elements like <header>, <nav>, <main> replace generic <div>s so screen readers
+         can build a document outline and let users jump between landmark regions -->
     <!-- header: 페이지 또는 섹션의 헤더 -->
     <header>
         <h1>시맨틱 HTML5</h1>
@@ -55,6 +59,8 @@
             <h2>메인 콘텐츠 (main)</h2>
             <p>main 태그는 페이지당 하나만 사용하며, 고유한 콘텐츠를 담습니다.</p>
 
+            <!-- Why: <article> signals content that is self-contained and redistributable (e.g., via RSS),
+                 whereas <section> groups related content within a larger context -->
             <!-- article: 독립적인 콘텐츠 -->
             <article id="article1">
                 <h3>기사 (article)</h3>
@@ -120,6 +126,8 @@
         </aside>
     </div>
 
+    <!-- Why: <details>/<summary> provides native disclosure widgets without JavaScript,
+         ensuring the expand/collapse behavior works even when JS is disabled -->
     <!-- details와 summary -->
     <section>
         <h2>details와 summary</h2>

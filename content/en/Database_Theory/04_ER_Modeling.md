@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of conceptual database design and describe where ER modeling fits in the overall database design process.
+2. Identify and model entity types, attributes (simple, composite, multivalued, derived), and relationship types using standard ER notation.
+3. Specify cardinality ratios (1:1, 1:N, M:N) and participation constraints (total, partial) for relationship types.
+4. Model weak entities and their identifying relationships, distinguishing them from regular entity types.
+5. Apply Enhanced ER (EER) constructs — specialization, generalization, and aggregation — to represent complex data structures.
+6. Execute the ER-to-relational mapping algorithm to transform an ER diagram into a complete relational schema.
+
+---
+
 The Entity-Relationship (ER) model, introduced by Peter Chen in 1976, is the most widely used approach for conceptual database design. It provides a graphical notation for representing the structure of data at a high level of abstraction, independent of any particular DBMS. This lesson covers the ER model, its Enhanced version (EER), and the systematic algorithm for converting an ER diagram into a relational schema.
 
 ## Table of Contents

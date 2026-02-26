@@ -424,19 +424,27 @@ def langmuir_dispersion_kinetic(k, omega_pe, v_th, num_points=100):
             omega_solutions.append(omega_pe)
             continue
 
-        # Search for real part of ω
+        # 탐색 범위가 ω_pe에서 시작하는 이유는 Langmuir 파동은 항상 차단 주파수보다
+        # 위에서 전파하기 때문입니다 — ω_pe 아래에서는 k^2 < 0이므로 실수 파동이 없습니다.
+        # 상한 ω_pe * 1.5는 열 보정이 ω를 ~ω_pe * (1 + 3/2 * (k λ_D)^2) 까지만
+        # 올리기 때문에 충분합니다.
         omega_range = np.linspace(omega_pe, omega_pe * 1.5, num_points)
 
         epsilon = []
         for omega in omega_range:
             zeta = omega / (k_val * v_th)
             Z_val = plasma_dispersion_Z(zeta)
+            # ε의 실수 부분만 사용하는 이유는 실수 주파수를 찾기 위해서입니다;
+            # Im(ε)은 Landau 감쇠율을 주지만 ζ >> 1에서 지수적으로 작으며
+            # 이를 추출하려면 별도의 풀이 방법이 필요합니다.
             eps = 1 - (omega_pe**2 / (k_val**2 * v_th**2)) * (1 + zeta * Z_val)
             epsilon.append(np.real(eps))
 
         epsilon = np.array(epsilon)
 
-        # Find zero crossing
+        # Re(ε)의 부호 변화는 영점을 표시합니다: ε = 0이 분산 관계입니다.
+        # 첫 번째 부호 변화를 사용하면 더 작은 ζ값에서 Z(ζ)의 진동하는 꼬리로 인한
+        # 가짜 근(spurious root)을 피할 수 있습니다.
         sign_changes = np.where(np.diff(np.sign(epsilon)))[0]
         if len(sign_changes) > 0:
             idx = sign_changes[0]
@@ -463,6 +471,9 @@ print(f"Thermal velocity: v_th = {v_th / 1e6:.2f} Mm/s")
 print(f"Debye length: λ_D = {lambda_D * 1e6:.2f} μm")
 
 # Wavenumber array
+# k를 1/λ_D로 정규화하는 것이 자연스러운 선택입니다. k λ_D가 Bohm-Gross 보정과
+# 강한 Landau 감쇠 시작을 모두 제어하는 단일 무차원 매개변수이기 때문입니다;
+# 범위 0.01-2는 차가운 플라즈마 regime에서 운동 regime까지 포괄합니다.
 k = np.linspace(0.01, 2, 100) / lambda_D  # Normalize to 1/λ_D
 
 # Compute dispersions
@@ -534,7 +545,8 @@ def ion_acoustic_dispersion(k, n, T_e, T_i, m_i, Z=1):
     T_e_J = T_e * e
     T_i_J = T_i * e
 
-    # Ion acoustic speed
+    # c_s는 T_i 대신 T_e를 사용합니다. 이온 음향 파동의 복원력이
+    # 전자 압력이기 때문입니다: 뜨거운 전자가 Boltzmann 장벽을 형성하여 이온을 당겨 돌려보냅니다.
     c_s = np.sqrt(k_B * T_e_J / m_i)
 
     # Debye length
@@ -542,14 +554,18 @@ def ion_acoustic_dispersion(k, n, T_e, T_i, m_i, Z=1):
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
     lambda_D = v_th_e / omega_pe
 
-    # Real frequency
+    # 1/√(1 + k²λ_D²) 인자는 유한 Debye 길이 보정입니다: k λ_D → 1이 되면
+    # 전하 차폐가 복원력을 약화시키고 ω가 포화하여
+    # ω ~ ω_pe * √(m_e/m_i)를 넘지 않도록 합니다.
     omega_real = k * c_s / np.sqrt(1 + k**2 * lambda_D**2)
 
     # Damping rate (approximate, for T_e >> T_i)
     v_th_i = np.sqrt(2 * k_B * T_i_J / m_i)
     zeta_i = omega_real / (k * v_th_i)
 
-    # Landau damping (asymptotic form for large ζ)
+    # 이온 Landau 감쇠는 T_i << T_e (즉, ζ_i >> 1)일 때만 지수적으로 작습니다.
+    # (T_i/T_e)^(3/2) 앞 계수는 v ~ c_s에서 이온 꼬리 밀도가
+    # T_i가 감소함에 따라 어떻게 줄어드는지 반영합니다 — 공명 이온이 적을수록 감쇠가 약해집니다.
     gamma = -np.sqrt(np.pi/8) * (omega_real / (k * lambda_D)) * \
             (T_i / T_e)**(3/2) * np.exp(-1/(2*k**2*lambda_D**2) - 3/2)
 
@@ -636,9 +652,14 @@ def hybrid_frequencies(n, B, Z=1, A=1):
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
+    # Upper hybrid 주파수는 플라즈마 주파수와 사이클로트론 주파수의 직교 합(quadrature sum)입니다.
+    # 수직 전파에서 두 복원 메커니즘(공간 전하 진동과 Lorentz 힘)이
+    # 독립적으로 작용하여 에너지가 단순히 더해지기 때문입니다.
     omega_UH = np.sqrt(omega_pe**2 + omega_ce**2)
 
-    # Lower hybrid
+    # lower hybrid 공식은 조화 합(harmonic addition, 1/ω²)을 사용합니다.
+    # 두 극한 regime이 직렬로 기여하기 때문입니다: 낮은 밀도(ω_pi ≪ ω_ci)에서 이온은
+    # 자화되어 ω_LH → √(ω_ci ω_ce)이고; 높은 밀도에서는 비자화되어 ω_LH → ω_pi입니다.
     term1 = 1 / (omega_ci * omega_ce)
     term2 = 1 / (omega_pi**2 + omega_ci**2)
     omega_LH = 1 / np.sqrt(term1 + term2)
@@ -653,6 +674,9 @@ def hybrid_frequencies(n, B, Z=1, A=1):
     }
 
 # Parameter ranges
+# 고정된 n에서 B를 스캔하면 두 주파수가 어떻게 다르게 스케일하는지 보여줍니다:
+# ω_UH ~ √(ω_pe² + ω_ce²)는 낮은 B에서 ω_pe가 지배하고 높은 B에서 ω_ce가 지배하는 반면,
+# ω_LH ~ √(ω_ci ω_ce)는 B에 대해 전체적으로 선형으로 증가합니다.
 B_array = np.linspace(0.5, 10, 100)  # T
 n_ref = 1e20  # m^-3
 

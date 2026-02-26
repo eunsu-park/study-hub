@@ -9,6 +9,19 @@
 > **선행 학습(Prerequisites)**: 함수 종속성(Functional dependencies, Lesson 05), BCNF까지의 정규화(normalization through BCNF, Lesson 06)
 > **목표(Objective)**: 다치 종속성과 4NF(Multivalued dependencies and 4NF), 조인 종속성과 5NF(Join dependencies and 5NF), DKNF의 이론적 이상(theoretical ideal of DKNF), 그리고 실무 시스템을 위한 실용적 비정규화 전략(practical denormalization strategies)을 이해합니다
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 다치 종속성(Multivalued Dependency, MVD)을 정의하고 BCNF를 만족하는 릴레이션이 MVD로 인해 여전히 중복을 포함할 수 있는 이유를 설명합니다.
+2. 비자명 다치 종속성(Non-trivial MVD)을 탐지하여 릴레이션이 제4정규형(4NF)을 만족하는지 판단합니다.
+3. 조인 종속성(Join Dependency)을 정의하고 제5정규형(5NF)을 달성하기 위해 릴레이션을 분해해야 하는 조건을 설명합니다.
+4. 도메인-키 정규형(Domain-Key Normal Form, DKNF)의 이론적 이상을 서술하고 실용적 한계를 설명합니다.
+5. 비정규화(Denormalization)가 성능을 향상시키는 시나리오를 식별하고, 파생 컬럼, 요약 테이블, 사전 조인 테이블 등 일반적인 비정규화 패턴을 적용합니다.
+6. 데이터베이스 스키마 설계 시 더 높은 정규형과 실무적 성능 요구사항 간의 트레이드오프를 평가합니다.
+
+---
+
 ## 1. 소개(Introduction)
 
 Lesson 06에서 우리는 함수 종속성이 BCNF까지의 정규화를 어떻게 이끄는지 살펴보았습니다. 그러나 BCNF는 **모든** 형태의 중복성을 제거하지 않습니다. BCNF에 있는 릴레이션이 여전히 다른 종류의 제약조건에 의해 야기된 중복 데이터를 포함하는 상황이 있습니다: **다치 종속성(multivalued dependencies)**과 **조인 종속성(join dependencies)**입니다.

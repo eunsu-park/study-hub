@@ -1,5 +1,26 @@
 # 백업과 운영
 
+**이전**: [트리거](./12_Triggers.md) | **다음**: [JSON과 JSONB](./14_JSON_JSONB.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 수행할 수 있습니다:
+
+1. 백업 전략(backup strategy)의 중요성을 설명하고, 논리적 백업(logical backup)과 물리적 백업(physical backup)을 구별한다
+2. pg_dump와 pg_dumpall을 사용하여 선택적 백업 및 전체 클러스터 백업을 수행한다
+3. psql과 pg_restore를 다양한 포맷 옵션으로 사용하여 데이터베이스를 복원한다
+4. WAL 아카이빙(WAL archiving)을 설정하고 pg_basebackup으로 물리적 백업을 수행한다
+5. 보존 정책(retention policy)과 cron 스케줄링을 적용한 자동 백업 스크립트를 작성한다
+6. pg_stat_activity, 잠금 쿼리(lock query), 캐시 히트율(cache hit ratio)을 활용하여 데이터베이스 상태를 모니터링한다
+7. VACUUM, ANALYZE, REINDEX를 포함한 정기 유지보수 작업을 수행한다
+8. 느린 쿼리 감지 및 연결 감사(connection auditing)를 위한 PostgreSQL 로깅을 설정한다
+
+---
+
+테스트되지 않은 백업 전략을 가진 데이터베이스는 재앙을 기다리는 것과 다름없습니다. 하드웨어 장애, 인적 오류, 소프트웨어 버그는 언제든지 발생할 수 있으며, 그럴 때 백업은 사소한 불편과 치명적인 데이터 손실을 가르는 차이가 됩니다. 백업 외에도 성능 모니터링, 연결 관리, 유지보수 작업 등의 일상적인 운영(day-to-day operations)은 PostgreSQL 설치 환경을 건강하고 응답성 있게 유지합니다. 이 레슨에서는 모든 PostgreSQL 실무자에게 필요한 핵심 DBA 툴킷을 다룹니다.
+
 ## 1. 백업의 중요성
 
 데이터베이스 백업은 데이터 손실을 방지하는 가장 중요한 작업입니다.
@@ -532,15 +553,4 @@ CALL run_maintenance();
 
 ---
 
-## 마무리
-
-이것으로 PostgreSQL 학습 자료를 마칩니다.
-
-**학습 순서 복습**:
-1. 기초 → DB 관리 → 테이블 → CRUD → 조건/정렬
-2. JOIN → 집계 → 서브쿼리 → 뷰/인덱스
-3. 함수 → 트랜잭션 → 트리거 → 백업/운영
-
-더 깊이 있는 학습을 위해:
-- [PostgreSQL 공식 문서](https://www.postgresql.org/docs/)
-- [PostgreSQL Tutorial](https://www.postgresqltutorial.com/)
+**이전**: [트리거](./12_Triggers.md) | **다음**: [JSON과 JSONB](./14_JSON_JSONB.md)

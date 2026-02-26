@@ -1,5 +1,18 @@
 # Apache Spark Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Apache Spark architecture including the Driver, Executors, and Cluster Manager, and describe how Spark's in-memory processing achieves performance gains over Hadoop MapReduce
+2. Distinguish between RDDs (Resilient Distributed Datasets), DataFrames, and Datasets, and explain when to use each abstraction
+3. Create a SparkSession and perform basic data loading, transformation, and action operations
+4. Apply common DataFrame transformations such as filtering, grouping, joining, and aggregation using the PySpark API
+5. Explain lazy evaluation and describe how Spark's DAG execution model optimizes query plans
+6. Configure Spark job parameters and read data from distributed storage sources such as HDFS, S3, and Parquet files
+
+---
+
 ## Overview
 
 Apache Spark is a unified analytics engine for large-scale data processing. It provides faster performance than Hadoop MapReduce through in-memory processing and supports both batch processing and streaming.
@@ -128,15 +141,21 @@ Spark execution flow:
 # Example code flow
 from pyspark.sql import SparkSession
 
+# SparkSession is the unified entry point since Spark 2.0 — replaces the separate
+# SparkContext, SQLContext, and HiveContext that earlier versions required
 spark = SparkSession.builder.appName("Example").getOrCreate()
 
-# Transformations (Lazy - not executed)
+# Transformations are lazy — Spark builds a DAG (execution plan) but does NOT
+# read or process any data yet. This enables the Catalyst optimizer to reorder
+# and fuse operations before execution.
 df = spark.read.csv("data.csv", header=True)  # Read plan
 df2 = df.filter(df.age > 20)                  # Filter plan
 df3 = df2.groupBy("city").count()             # Aggregation plan
 
-# Action (triggers actual execution)
-result = df3.collect()  # Create job → Stages → Tasks → Execute
+# Actions trigger the full DAG execution. collect() materializes all data to the
+# Driver — safe for small results but will OOM on large datasets (use .show() or
+# .write instead for large outputs).
+result = df3.collect()
 ```
 
 ---
@@ -150,16 +169,23 @@ RDD is Spark's fundamental data structure, an immutable distributed collection o
 ```python
 from pyspark import SparkContext
 
+# "local[*]" runs Spark in local mode using all available CPU cores — ideal for
+# development/testing. In production, use "yarn" or "k8s://..." for cluster mode.
 sc = SparkContext("local[*]", "RDD Example")
 
 # Ways to create RDD
-# 1. From collection
+# 1. parallelize() distributes a local Python collection across partitions.
+# Default partition count = number of cores. Useful for testing; in production
+# data comes from external sources.
 rdd1 = sc.parallelize([1, 2, 3, 4, 5])
 
-# 2. From external data
+# 2. textFile creates one partition per HDFS block (128MB default) — Spark
+# automatically parallelizes reading based on file size
 rdd2 = sc.textFile("data.txt")
 
-# 3. From existing RDD transformation
+# 3. Transformations always produce new RDDs — RDDs are immutable, which enables
+# lineage-based fault recovery: if a partition is lost, Spark replays only
+# the transformations needed to recompute that partition
 rdd3 = rdd1.map(lambda x: x * 2)
 
 # RDD properties
@@ -174,55 +200,64 @@ D - Dataset: Data collection
 
 ```python
 # Transformations (Lazy)
-# - Return new RDD
-# - Only create execution plan
+# - Return new RDD without executing — Spark records the computation as a lineage
+#   graph. This laziness enables the optimizer to combine operations and minimize
+#   data movement before any work happens.
 
 rdd = sc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-# map: Apply function to each element
+# map: 1-to-1 transformation, preserves partition count
 mapped = rdd.map(lambda x: x * 2)  # [2, 4, 6, ...]
 
-# filter: Select elements matching condition
+# filter: Narrows data early to reduce downstream processing — always push
+# filters as early as possible in the pipeline
 filtered = rdd.filter(lambda x: x % 2 == 0)  # [2, 4, 6, 8, 10]
 
-# flatMap: map then flatten
+# flatMap: 1-to-many mapping — useful for tokenization (e.g., splitting lines into words)
 flat = rdd.flatMap(lambda x: [x, x*2])  # [1, 2, 2, 4, 3, 6, ...]
 
-# distinct: Remove duplicates
+# distinct: Requires shuffle (expensive) — only use when duplicates actually matter
 distinct = rdd.distinct()
 
-# union: Merge two RDDs
+# union: Logical merge without data movement — partitions from both RDDs are concatenated
 union = rdd.union(sc.parallelize([11, 12]))
 
-# groupByKey: Group by key
+# groupByKey: Shuffles ALL values to the key's partition — memory-intensive because
+# all values for a key must fit in memory. Prefer reduceByKey when possible.
 pairs = sc.parallelize([("a", 1), ("b", 2), ("a", 3)])
 grouped = pairs.groupByKey()  # [("a", [1, 3]), ("b", [2])]
 
-# reduceByKey: Reduce by key
+# reduceByKey: Performs local combine BEFORE shuffle (like a mini-MapReduce combiner),
+# drastically reducing network transfer. Always prefer over groupByKey + reduce.
 reduced = pairs.reduceByKey(lambda a, b: a + b)  # [("a", 4), ("b", 2)]
 
 
 # Actions (Eager)
-# - Return results or save
-# - Trigger actual execution
+# - Trigger the full lineage execution — Spark submits a job to the cluster,
+#   breaking it into stages at shuffle boundaries and tasks per partition.
 
-# collect: Return all elements to Driver
+# collect: Pulls ALL data to Driver memory — use only for small results.
+# For large datasets, use take() or write to storage instead.
 result = rdd.collect()  # [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-# count: Count elements
+# count: Triggers execution but returns a single number — safe for any data size
 count = rdd.count()  # 10
 
-# first / take: First element / n elements
+# first / take: Only processes enough partitions to get N elements — much
+# cheaper than collect() for previewing data
 first = rdd.first()  # 1
 take3 = rdd.take(3)  # [1, 2, 3]
 
-# reduce: Reduce all
+# reduce: Combines all elements into one — runs in parallel within each partition
+# then aggregates results on the Driver
 total = rdd.reduce(lambda a, b: a + b)  # 55
 
-# foreach: Apply function to each element (side effect)
+# foreach: Runs on executors (not Driver) — use for side effects like writing
+# to external systems. Return values are discarded.
 rdd.foreach(lambda x: print(x))
 
-# saveAsTextFile: Save to file
+# saveAsTextFile: Writes one file per partition — use coalesce() first if you
+# want fewer output files
 rdd.saveAsTextFile("output/")
 ```
 
@@ -238,22 +273,29 @@ sales = sc.parallelize([
     ("Food", 30),
 ])
 
-# Sum by key
+# reduceByKey pre-aggregates within each partition before shuffling — far more
+# efficient than groupByKey().mapValues(sum) which shuffles raw values first
 total_by_category = sales.reduceByKey(lambda a, b: a + b)
 # [("Electronics", 300), ("Clothing", 125), ("Food", 30)]
 
-# Average by key
+# combineByKey is the most general aggregation — use when the accumulated type
+# differs from the value type (here: value=int, accumulator=(sum, count) tuple).
+# Three functions handle: creating the first accumulator, merging a value into
+# an existing accumulator, and merging two accumulators across partitions.
 count_sum = sales.combineByKey(
-    lambda v: (v, 1),                      # createCombiner
-    lambda acc, v: (acc[0] + v, acc[1] + 1),  # mergeValue
-    lambda acc1, acc2: (acc1[0] + acc2[0], acc1[1] + acc2[1])  # mergeCombiner
+    lambda v: (v, 1),                      # createCombiner: first value in partition
+    lambda acc, v: (acc[0] + v, acc[1] + 1),  # mergeValue: add to existing accumulator
+    lambda acc1, acc2: (acc1[0] + acc2[0], acc1[1] + acc2[1])  # mergeCombiner: cross-partition merge
 )
 avg_by_category = count_sum.mapValues(lambda x: x[0] / x[1])
 
-# Sort
+# sortByKey requires full shuffle to range-partition data — expensive for large datasets.
+# Only sort when the consumer truly needs ordered output.
 sorted_rdd = sales.sortByKey()
 
-# Join
+# Join shuffles both RDDs by key and matches records — produces a Cartesian product
+# per key. If one side is small (< 10MB), consider broadcast join via sc.broadcast()
+# to avoid the expensive shuffle.
 inventory = sc.parallelize([
     ("Electronics", 50),
     ("Clothing", 100),
@@ -351,29 +393,32 @@ spark-submit \
 ```python
 from pyspark.sql import SparkSession
 
-# Basic SparkSession
+# getOrCreate() reuses an existing SparkSession if one exists in the JVM —
+# prevents the common error of creating multiple sessions in notebooks
 spark = SparkSession.builder \
     .appName("My Application") \
     .getOrCreate()
 
-# With configuration
+# Production configuration — set these BEFORE creating the session;
+# some configs (like executor memory) are immutable after JVM startup.
 spark = SparkSession.builder \
     .appName("My Application") \
     .master("local[*]") \
-    .config("spark.sql.shuffle.partitions", 200) \
-    .config("spark.executor.memory", "4g") \
-    .config("spark.driver.memory", "2g") \
-    .config("spark.sql.adaptive.enabled", "true") \
-    .enableHiveSupport() \
+    .config("spark.sql.shuffle.partitions", 200) \   # 200 is the default — tune to ~2-3x core count for small clusters
+    .config("spark.executor.memory", "4g") \          # Heap memory per executor — set based on available node RAM
+    .config("spark.driver.memory", "2g") \            # Driver needs enough RAM for collect() results and broadcast variables
+    .config("spark.sql.adaptive.enabled", "true") \   # AQE dynamically optimizes at runtime — strongly recommended for Spark 3.x
+    .enableHiveSupport() \                            # Required only for Hive metastore access — adds startup overhead if unused
     .getOrCreate()
 
-# Access SparkContext
+# SparkContext is the low-level RDD API — still needed for broadcast variables,
+# accumulators, and RDD operations not available through DataFrame API
 sc = spark.sparkContext
 
 # Check configuration
 print(spark.conf.get("spark.sql.shuffle.partitions"))
 
-# Stop session
+# Always stop the session when done to release cluster resources and flush logs
 spark.stop()
 ```
 
@@ -382,28 +427,33 @@ spark.stop()
 ```python
 # Frequently used configurations
 common_configs = {
-    # Memory settings
+    # Memory settings — executor memory is split between execution (shuffles, joins)
+    # and storage (caches). memoryOverhead covers off-heap memory (Python processes, JVM overhead).
     "spark.executor.memory": "4g",
     "spark.driver.memory": "2g",
-    "spark.executor.memoryOverhead": "512m",
+    "spark.executor.memoryOverhead": "512m",  # Increase for PySpark — Python workers use off-heap
 
-    # Parallelism settings
-    "spark.executor.cores": "4",
-    "spark.default.parallelism": "100",
-    "spark.sql.shuffle.partitions": "200",
+    # Parallelism — these determine task count. Too few = underutilized cores.
+    # Too many = excessive scheduling overhead and small tasks.
+    "spark.executor.cores": "4",              # Cores per executor — 4-5 is typical sweet spot
+    "spark.default.parallelism": "100",       # For RDD operations (not SQL)
+    "spark.sql.shuffle.partitions": "200",    # For DataFrame/SQL shuffles — start with 2-3x total cores
 
-    # Serialization settings
+    # Kryo is 10x faster and more compact than Java serialization — register
+    # your classes with kryo.classesToRegister for best results
     "spark.serializer": "org.apache.spark.serializer.KryoSerializer",
 
-    # Adaptive Query Execution (Spark 3.0+)
+    # AQE re-optimizes the query plan at runtime based on actual data statistics —
+    # handles data skew and partition coalescing that static planning cannot predict
     "spark.sql.adaptive.enabled": "true",
-    "spark.sql.adaptive.coalescePartitions.enabled": "true",
-    "spark.sql.adaptive.skewJoin.enabled": "true",
+    "spark.sql.adaptive.coalescePartitions.enabled": "true",   # Merges small post-shuffle partitions
+    "spark.sql.adaptive.skewJoin.enabled": "true",             # Splits skewed partitions automatically
 
     # Cache settings
-    "spark.storage.memoryFraction": "0.6",
+    "spark.storage.memoryFraction": "0.6",    # 60% of executor memory for caching — lower if you need more execution memory
 
-    # Shuffle settings
+    # Shuffle compression reduces network I/O at the cost of CPU — almost always
+    # a net win because shuffles are typically network-bound, not CPU-bound
     "spark.shuffle.compress": "true",
 }
 
@@ -423,28 +473,31 @@ spark = SparkSession.builder \
 ```python
 from pyspark.sql import SparkSession
 
-# Create SparkSession
 spark = SparkSession.builder \
     .appName("Word Count") \
     .getOrCreate()
 
 sc = spark.sparkContext
 
-# Read text file
+# textFile splits input by HDFS block boundaries — each block becomes a partition,
+# enabling parallel reading across the cluster
 text_rdd = sc.textFile("input.txt")
 
-# Word count logic
+# Classic MapReduce pattern expressed as RDD transformations:
+# flatMap → map → reduceByKey is the canonical word count pipeline.
 word_counts = text_rdd \
-    .flatMap(lambda line: line.split()) \
-    .map(lambda word: (word.lower(), 1)) \
-    .reduceByKey(lambda a, b: a + b) \
-    .sortBy(lambda x: x[1], ascending=False)
+    .flatMap(lambda line: line.split()) \     # 1 line → many words (1-to-N mapping)
+    .map(lambda word: (word.lower(), 1)) \    # Normalize case to avoid "The" vs "the" as separate keys
+    .reduceByKey(lambda a, b: a + b) \        # Local combine + shuffle — far more efficient than groupByKey
+    .sortBy(lambda x: x[1], ascending=False)  # Global sort requires full shuffle — do last
 
-# Print results
+# take(10) only scans enough partitions to return 10 results —
+# avoid collect() which would pull the entire vocabulary to the Driver
 for word, count in word_counts.take(10):
     print(f"{word}: {count}")
 
-# Save to file
+# Writes one part-NNNNN file per partition. Use coalesce(1) for a single file,
+# but only if output is small — single-file writes cannot be parallelized.
 word_counts.saveAsTextFile("output/word_counts")
 
 spark.stop()
@@ -458,7 +511,8 @@ from pyspark.sql.functions import col, sum as _sum, avg
 
 spark = SparkSession.builder.appName("DataFrame Example").getOrCreate()
 
-# Create DataFrame
+# DataFrames are the preferred API over RDDs — they leverage the Catalyst optimizer
+# for automatic query optimization (predicate pushdown, column pruning, etc.)
 data = [
     ("Alice", "Engineering", 50000),
     ("Bob", "Engineering", 60000),
@@ -466,16 +520,22 @@ data = [
     ("Diana", "Marketing", 55000),
 ]
 
+# Schema inference from Python tuples — works for prototyping but use explicit
+# StructType schemas in production for type safety and better Parquet performance
 df = spark.createDataFrame(data, ["name", "department", "salary"])
 
-# Basic operations
+# show() is an action — triggers execution but limits output (default 20 rows)
+# unlike collect() which pulls everything to the Driver
 df.show()
 df.printSchema()
 
-# Filtering
+# Column-based filtering uses Catalyst to push predicates down to the data source
+# when possible (e.g., Parquet row group filtering, JDBC WHERE clause pushdown)
 df.filter(col("salary") > 50000).show()
 
-# Aggregation
+# groupBy triggers a shuffle to co-locate rows with the same key — the most
+# expensive operation in most Spark jobs. Catalyst may rewrite this as a
+# partial aggregate + final aggregate to reduce shuffle volume.
 df.groupBy("department") \
     .agg(
         _sum("salary").alias("total_salary"),
@@ -483,7 +543,8 @@ df.groupBy("department") \
     ) \
     .show()
 
-# Using SQL
+# SQL and DataFrame APIs produce identical execution plans under the hood —
+# choose whichever is more readable for the query at hand
 df.createOrReplaceTempView("employees")
 spark.sql("""
     SELECT department, AVG(salary) as avg_salary

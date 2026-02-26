@@ -1,12 +1,25 @@
 # Network Fundamentals
 
-## Overview
-
-A network is a system where two or more computers are connected to exchange data. In this lesson, we'll learn the basic concepts of networking, types, topologies, and communication methods. Understanding network fundamentals is the first step to understanding modern IT infrastructure.
+**Next**: [OSI 7-Layer Model](./02_OSI_7_Layer_Model.md)
 
 **Difficulty**: ⭐ (Beginner)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a network is and describe its core components (nodes, links, protocols)
+2. Distinguish between PAN, LAN, MAN, and WAN by range and use case
+3. Compare network topologies (bus, star, ring, mesh, hybrid) and identify their trade-offs
+4. Distinguish between packet switching and circuit switching
+5. Compare the client-server and peer-to-peer communication models
+6. Identify common network devices and the OSI layer at which each operates
+
+---
+
+Every time you load a web page, send a message, or stream a video, data travels across a network -- often passing through dozens of devices and thousands of kilometers in milliseconds. Understanding how networks are structured, how devices connect, and how data finds its way from sender to receiver is the foundation of every other topic in networking and modern IT infrastructure.
 
 ## Table of Contents
 
@@ -1009,9 +1022,7 @@ Logical topology: Path that data flows
 
 ---
 
-## Next Steps
-
-- [02_OSI_7_Layer_Model.md](./02_OSI_7_Layer_Model.md) - OSI reference model and layer-specific functions
+**Next**: [OSI 7-Layer Model](./02_OSI_7_Layer_Model.md)
 
 ---
 

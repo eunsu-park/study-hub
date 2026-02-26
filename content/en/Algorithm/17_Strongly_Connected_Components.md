@@ -92,7 +92,11 @@ class KosarajuSCC:
         self.reverse_graph[v].append(u)
 
     def find_sccs(self):
-        # Step 1: DFS on original graph, record finish order
+        # Step 1: DFS on original graph, record finish order.
+        # A node finishes (is appended) only after all reachable nodes are done,
+        # so nodes in a "sink" SCC (no outgoing edges to other SCCs) finish first.
+        # Reversing this order means we start step 2 from "source" SCCs —
+        # nodes that can reach everything but cannot be reached from outside.
         visited = [False] * self.n
         finish_order = []
 
@@ -101,13 +105,18 @@ class KosarajuSCC:
             for neighbor in self.graph[node]:
                 if not visited[neighbor]:
                     dfs1(neighbor)
-            finish_order.append(node)
+            finish_order.append(node)  # Append AFTER all descendants are visited
 
         for i in range(self.n):
             if not visited[i]:
                 dfs1(i)
 
-        # Step 2: DFS on reversed graph in reverse order
+        # Step 2: DFS on the REVERSED graph in reverse finish order.
+        # Reversing all edges means "reachable from u in reversed graph" equals
+        # "can reach u in the original graph."  Starting from the highest-finish
+        # node (a source SCC root), a DFS on the reversed graph is trapped within
+        # the same SCC — it cannot escape into another SCC because those edges
+        # were reversed.  Each DFS tree here is therefore exactly one SCC.
         visited = [False] * self.n
         sccs = []
 
@@ -262,18 +271,27 @@ class TarjanSCC:
         self.disc[node] = self.low[node] = self.time
         self.time += 1
         self.stack.append(node)
-        self.on_stack[node] = True
+        self.on_stack[node] = True  # Track stack membership separately from "visited"
 
         for neighbor in self.graph[node]:
             if self.disc[neighbor] == -1:
-                # Unvisited node
+                # Tree edge: recurse, then propagate the lowest reachable disc time
+                # back up — this is how a back-edge deep in the subtree influences
+                # the low value of all ancestors on the path.
                 self.dfs(neighbor)
                 self.low[node] = min(self.low[node], self.low[neighbor])
             elif self.on_stack[neighbor]:
-                # Node on stack (back edge)
+                # Back edge to an ancestor still on the current DFS stack:
+                # this node can "escape" to that ancestor, so update low.
+                # We check on_stack (not just visited) because a neighbor that
+                # has already been popped into a completed SCC is in a different
+                # component — following that cross-edge would incorrectly merge
+                # two separate SCCs.
                 self.low[node] = min(self.low[node], self.disc[neighbor])
 
-        # If this is an SCC root
+        # disc[node] == low[node] means nothing below this node has a back edge
+        # reaching above it — it is the topmost (oldest) node of its SCC.
+        # Pop everything down to and including this node to form the SCC.
         if self.disc[node] == self.low[node]:
             component = []
             while True:

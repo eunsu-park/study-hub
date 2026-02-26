@@ -767,15 +767,25 @@ def small_scale_dynamo_growth():
 
     for eta in eta_vals:
         Rm = u_rms * ell / eta
+        # Rm_c ~ 60은 저항성 확산이 난류 신장을 이기는 임계값이다.
+        # 이 값은 소규모 다이나모 작용에 필요한 최소 자기 레이놀즈 수를 결정하며,
+        # 카잔체프(Kazantsev) 이론과 직접 수치 시뮬레이션(DNS)에 의해 확인되었다.
         Rm_c = 60  # Critical magnetic Reynolds number
 
         if Rm > Rm_c:
             # Growth rate (simplified Kazantsev)
+            # γ ∝ √(Rm/Rm_c - 1) — (Rm - Rm_c)에 대한 제곱근 의존성은
+            # 초임계 분기(supercritical bifurcation)를 반영한다: 임계값 바로 위에서
+            # 다이나모는 약하게 불안정하며(γ 작음), Rm이 Rm_c를 충분히 초과해야
+            # 비로소 강력한 증폭이 가능하다.
             gamma = (u_rms / ell) * np.sqrt((Rm - Rm_c) / Rm_c) * 0.1
         else:
             gamma = 0  # No dynamo
 
         # Resistive timescale
+        # τ_η = ℓ²/η는 저항성이 상관 길이 전체에 걸쳐 자기장을 확산시키는 데
+        # 걸리는 시간이다. 이 손실항을 포함함으로써 모델이 증폭과 옴(Ohmic) 감쇠
+        # 사이의 경쟁을 올바르게 반영한다.
         tau_eta = ell**2 / eta
 
         # Differential equation: dE_B/dt = 2*gamma*E_B - E_B/tau_eta
@@ -826,6 +836,10 @@ def magnetic_helicity_evolution():
     dt = t[1] - t[0]
 
     # Two scenarios: closed vs open boundaries
+    # 닫힌/열린 경계 비교는 핵심 진단이다: 닫힌 상자에서는 총 헬리시티가
+    # 저항성 감쇠를 제외하면 보존되므로 대규모 자기장이 파국적으로 포화되는 반면,
+    # 열린 경계는 소규모 헬리시티가 빠져나갈 수 있어 소광(quenching)을 완화하고
+    # 자기장이 더 성장하도록 허용한다.
     scenarios = {
         'Closed (no flux)': 0.0,
         'Open (with flux)': flux_rate
@@ -844,9 +858,14 @@ def magnetic_helicity_evolution():
         # Time evolution
         for n in range(len(t) - 1):
             # Helicity production (from alpha effect and field growth)
+            # α₀ B²는 헬리시티 난류가 대규모 자기장에 헬리시티를 주입하는 속도에 대한
+            # 평균장(mean-field) 근사, 즉 ⟨u × b⟩ · B̄이며 α-효과 순환의 일부이다.
             production = alpha0 * B_rms[n]**2
 
             # Resistive dissipation
+            # 2η/L² × H_B는 옴(Ohmic) 헬리시티 감쇠율이다. 계수 2는
+            # dH_B/dt = -2η ∫ J·B dV ≈ -2η k² H_B 관계에서 유래하며,
+            # 여기서 k ~ 1/L은 대규모 자기장의 지배 파수이다.
             dissipation = (2 * eta / L**2) * H_B[n]
 
             # Helicity flux (for open boundaries)
@@ -858,6 +877,9 @@ def magnetic_helicity_evolution():
 
             # Simple model for field growth with helicity constraint
             # α-quenching: α_eff = α0 / (1 + |H_B| / H_sat)
+            # 이 소광 공식은 역반응(back-reaction)을 포착한다: 성장하는 대규모
+            # 헬리시티는 반대 부호의 소규모 헬리시티를 축적하여(총량 보존) α-효과를
+            # 억제한다 — 이것이 파국적 소광(catastrophic quenching)의 메커니즘이다.
             H_sat = 0.1
             alpha_eff = alpha0 / (1 + np.abs(H_B[n]) / H_sat)
 
@@ -915,6 +937,9 @@ def turbulent_cascade_with_dynamo():
       Dynamo: energy input from stretching
     """
     # Wavenumber bins (logarithmic)
+    # 로그 간격 빈을 사용하는 이유는 캐스케이드가 k에서 수십 배에 걸쳐 있기 때문이다.
+    # log(k)에서 등간격으로 배치하면 관성 범위(inertial range)의 각 십진 배(decade)가
+    # 동일한 수의 쉘로 표현되어 균일한 분해능을 보장한다.
     N_bins = 20
     k = np.logspace(0, 2, N_bins)
     dk = np.diff(np.log(k))
@@ -934,6 +959,9 @@ def turbulent_cascade_with_dynamo():
     E_B = np.zeros(N_bins)
 
     # Initial kinetic energy (inject at large scales)
+    # 강제 쉘(forcing shell, 대규모)에만 에너지를 주입하는 것은
+    # 초기 스펙트럼을 미리 지정하여 결과를 편향시키지 않고,
+    # 순방향 캐스케이드(forward cascade)가 자연스럽게 발전하는 것을 관찰하기 위함이다.
     E_K[forcing_k] = 1.0
 
     # Storage
@@ -952,19 +980,31 @@ def turbulent_cascade_with_dynamo():
 
         for i in range(1, N_bins - 1):
             # Forward cascade for kinetic
+            # 상향 유한 차분(upwind finite difference)은 높은 k(작은 스케일)로
+            # 흐르는 에너지 플럭스를 근사한다. 음의 부호는 플럭스 발산을 각 쉘에서의
+            # 손실로 변환한다.
             T_K[i] = -0.5 * (E_K[i] - E_K[i-1]) / dk[i]
 
             # Forward cascade for magnetic (Iroshnikov-Kraichnan)
+            # 자기 에너지에 대해 더 작은 계수(0.3 대 0.5)를 사용하는 이유는
+            # MHD에서 유체역학 대비 캐스케이드 속도가 감소하기 때문이다:
+            # 알프벤(Alfvén) 파동 전파가 와류(eddy) 상호작용을 약화시키며,
+            # 이는 IK 이론 및 더 얕은 -3/2 스펙트럼과 일치한다.
             T_B[i] = -0.3 * (E_B[i] - E_B[i-1]) / dk[i]
 
         # Dynamo effect: kinetic energy → magnetic energy at small scales
         Dynamo = np.zeros(N_bins)
         for i in range(N_bins):
             if k[i] > k[forcing_k]:
-                # Stretching proportional to strain rate ~ k E_K^{1/2}
+                # 신장률(stretching rate) ~ k × E_K^{1/2} (스케일 1/k에서의 변형률)
+                # 포화 인자 (1 - E_B/E_K)는 자기 에너지가 등분배(equipartition)에
+                # 가까워질 때 증폭을 차단하며, 역운동학(kinematic) 성장을 멈추는
+                # 로렌츠(Lorentz) 힘 역반응을 포착한다.
                 Dynamo[i] = 0.1 * k[i] * np.sqrt(E_K[i]) * (1 - E_B[i] / (E_K[i] + 1e-10))
 
         # Magnetic-kinetic coupling (Lorentz force back-reaction)
+        # M 항은 J×B 힘을 통해 자기장에서 운동 에너지로 에너지를 전달하며,
+        # 로렌츠(Lorentz) 일이 난류를 변형시키는 동역학적 포화를 포착하는 데 필수적이다.
         M = 0.05 * E_B * np.sqrt(E_K + 1e-10)
 
         # Dissipation

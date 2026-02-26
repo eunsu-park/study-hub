@@ -2,9 +2,23 @@
 
 [Previous: Sampling and Estimation](./12_Sampling_and_Estimation.md) | [Next: Advanced Hypothesis Testing](./14_Hypothesis_Testing_Advanced.md)
 
-## Overview
+---
 
-**Confidence Intervals (CI)** provide a range expected to contain a parameter. While point estimation provides a "single value," interval estimation provides a "range of uncertainty."
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the correct frequentist interpretation of a confidence interval and common misconceptions
+2. Construct Z-intervals and t-intervals for a population mean and describe when each applies
+3. Calculate confidence intervals for population proportions using normal approximation and the Wilson method
+4. Derive confidence intervals for population variance using the chi-square distribution
+5. Compute confidence intervals for the difference of two means (independent and paired) and two proportions
+6. Implement bootstrap confidence intervals (percentile and BCa methods) for arbitrary statistics
+7. Apply `scipy.stats` and `statsmodels` functions to compute confidence intervals efficiently
+
+---
+
+A point estimate like a sample mean gives you a single best guess, but it tells you nothing about how uncertain that guess is. Confidence intervals quantify that uncertainty by providing a plausible range for the true parameter. Understanding how to construct, interpret, and choose among different interval methods is essential for honest reporting of any data analysis result.
 
 ---
 

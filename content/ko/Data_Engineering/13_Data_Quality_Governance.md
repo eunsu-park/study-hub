@@ -1,5 +1,18 @@
 # 데이터 품질과 거버넌스
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 데이터 품질의 6가지 핵심 차원(정확성, 완전성, 일관성, 적시성, 유일성, 유효성)을 정의하고, 각 차원이 하위 분석에 미치는 영향을 설명할 수 있습니다.
+2. Great Expectations 또는 dbt 테스트와 같은 도구를 사용하여 프로덕션 파이프라인의 이상을 감지하는 자동화된 데이터 품질 검사를 구현할 수 있습니다.
+3. 데이터 카탈로그(Data Catalog), 계보(Lineage) 추적, 소유권(Ownership) 정책을 포함한 데이터 거버넌스(Data Governance) 프레임워크를 설계할 수 있습니다.
+4. 파이프라인 건전성을 실시간으로 모니터링하기 위한 데이터 품질 메트릭 수집 및 알림 패턴을 적용할 수 있습니다.
+5. 데이터 옵저버빌리티(Data Observability) 플랫폼을 평가하고, 스키마 변경, 널(Null) 비율 급증, 분포 변화 감지 능력을 비교할 수 있습니다.
+6. 데이터 거버넌스 정책과 GDPR 또는 CCPA와 같은 규제 준수 요건 사이의 관계를 분석할 수 있습니다.
+
+---
+
 ## 개요
 
 데이터 품질은 데이터의 정확성, 완전성, 일관성을 보장하는 것이고, 데이터 거버넌스는 데이터 자산을 체계적으로 관리하는 프레임워크입니다. 신뢰할 수 있는 데이터 파이프라인을 위해 필수적입니다.
@@ -62,10 +75,13 @@ class DataQualityMetrics:
 def calculate_quality_metrics(df: pd.DataFrame, table_name: str) -> DataQualityMetrics:
     """품질 메트릭 계산"""
 
-    # 완전성: NULL 수
+    # 완전성: 전체가 아닌 컬럼별 NULL 수를 계산합니다,
+    # 단일 중요 컬럼(예: 기본 키)이 50% null인 것이
+    # 여러 선택적 컬럼에 null이 조금씩 있는 것보다 훨씬 심각하기 때문입니다
     null_count = {col: df[col].isna().sum() for col in df.columns}
 
-    # 유일성: 중복 수
+    # 유일성: 행 전체 중복 제거는 최소 한 번 전달 시스템(Kafka, S3 이벤트)에서
+    # 흔히 발생하는 정확한 중복 수집을 감지합니다
     duplicate_count = df.duplicated().sum()
 
     return DataQualityMetrics(
@@ -83,12 +99,16 @@ def quality_score(metrics: DataQualityMetrics) -> float:
     scores = []
 
     # 완전성 점수 (NULL 비율)
+    # 테이블이 비어있거나 컬럼이 없을 때 0으로 나누기 방지
     total_cells = metrics.row_count * len(metrics.null_count)
     total_nulls = sum(metrics.null_count.values())
     completeness = (1 - total_nulls / total_cells) * 100 if total_cells > 0 else 100
     scores.append(completeness)
 
     # 유일성 점수 (중복 비율)
+    # 여기서는 두 차원의 단순 평균을 사용합니다; 프로덕션에서는
+    # 비즈니스 영향에 따라 가중치를 부여해야 합니다 (예: 금융 데이터에서
+    # 유일성 실패는 치명적일 수 있지만, 로그의 완전성 격차는 허용 가능합니다)
     uniqueness = (1 - metrics.duplicate_count / metrics.row_count) * 100 if metrics.row_count > 0 else 100
     scores.append(uniqueness)
 
@@ -115,10 +135,13 @@ great_expectations init
 import great_expectations as gx
 import pandas as pd
 
-# Context 생성
+# GX는 모든 설정, 데이터 소스, Expectation Suite를 관리하는 중앙 진입점으로
+# "Context"를 사용합니다 — dbt가 profiles.yml을 단일 설정 허브로 쓰는 것과 유사합니다
 context = gx.get_context()
 
-# 데이터 소스 추가
+# 데이터 소스 추가 — 로컬/개발 환경 검증을 위한 Pandas 데이터 소스
+# 프로덕션에서는 데이터를 메모리에 로드하지 않고 제자리에서 검증하기 위해
+# SQLAlchemy 또는 Spark 데이터 소스로 교체하세요
 datasource = context.sources.add_pandas("my_datasource")
 
 # 데이터 에셋 정의
@@ -127,13 +150,16 @@ data_asset = datasource.add_dataframe_asset(name="orders")
 # DataFrame 로드
 df = pd.read_csv("orders.csv")
 
-# Batch Request
+# Batch Request — "어떤 데이터"와 "어떤 Expectations"을 분리합니다.
+# 동일한 Expectation Suite로 서로 다른 배치를 검증할 수 있습니다
+# (예: 어제 데이터, 오늘 데이터, 백필 배치)
 batch_request = data_asset.build_batch_request(dataframe=df)
 
 # Expectation Suite 생성
 suite = context.add_expectation_suite("orders_suite")
 
-# Validator 생성
+# Validator 생성 — 데이터(배치)와 규칙(Suite) 사이의 다리 역할
+# Validator는 Expectations을 구체적인 SQL/Pandas 검사로 구체화합니다
 validator = context.get_validator(
     batch_request=batch_request,
     expectation_suite_name="orders_suite"
@@ -143,57 +169,70 @@ validator = context.get_validator(
 ### 2.3 Expectations 정의
 
 ```python
-# 기본 Expectations
+# 각 Expectation은 6가지 품질 차원 중 하나에 매핑됩니다.
+# 차원별로 Expectations을 구성하면 어떤 품질 측면이 실패했는지 명확히 파악되어
+# 타겟 수정이 가능합니다.
 
-# NULL 없음
+# 완전성: 기본 키는 절대 null이어서는 안 됩니다 — order_id가 null이면
+# 다운스트림 조인과 집계가 신뢰할 수 없게 됩니다
 validator.expect_column_values_to_not_be_null("order_id")
 
-# 유니크
+# 유일성: order_id 중복은 매출/건수 지표를 부풀립니다.
+# 실패 시 소스의 최소 한 번 전달 방식을 조사하세요.
 validator.expect_column_values_to_be_unique("order_id")
 
-# 값 범위
+# 유효성: 범위 검사는 데이터 손상(음수 금액)과
+# 단위 오류(센트 vs 달러)를 나타낼 수 있는 이상값(>100만)을 감지합니다
 validator.expect_column_values_to_be_between(
     "amount",
     min_value=0,
     max_value=1000000
 )
 
-# 허용 값 목록
+# 유효성: 열거형 검사는 소스 시스템의 스키마 드리프트(Schema Drift)나
+# 처리되지 않은 비즈니스 상태 전환을 나타내는 예상치 못한 status 값을 감지합니다
 validator.expect_column_values_to_be_in_set(
     "status",
     ["pending", "completed", "cancelled", "refunded"]
 )
 
-# 정규식 매칭
+# 정확성: 정규식으로 이메일 형식 검증 — 데이터 입력 오류와
+# 이메일 기반 고객 매칭을 깨뜨리는 쓰레기 값을 포착합니다
 validator.expect_column_values_to_match_regex(
     "email",
     r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 )
 
-# 테이블 행 수
+# 완전성: 볼륨 검사는 업스트림 추출 실패를 감지합니다.
+# 행 수가 1000 미만으로 떨어지면 소스 쿼리가 실패했거나
+# 부분 결과를 반환했을 가능성이 높습니다
 validator.expect_table_row_count_to_be_between(
     min_value=1000,
     max_value=1000000
 )
 
-# 컬럼 존재
+# 일관성: 스키마 드리프트 감지 — 업스트림 시스템이 데이터 팀과
+# 조율 없이 컬럼을 추가, 제거, 또는 이름 변경할 때 포착합니다
 validator.expect_table_columns_to_match_set(
     ["order_id", "customer_id", "amount", "status", "order_date"]
 )
 
-# 날짜 형식
+# 유효성: 날짜 형식 검사는 다운스트림 파싱 실패를 예방합니다.
+# 혼합된 형식(MM/DD vs YYYY-MM-DD)은 흔한 조용한 데이터 손상입니다
 validator.expect_column_values_to_match_strftime_format(
     "order_date",
     "%Y-%m-%d"
 )
 
-# 참조 무결성 (다른 테이블)
+# 일관성: 테이블 간 참조 무결성 — 고아(Orphan) customer_id는
+# orders와 customers 추출 작업 간의 동기화 지연을 나타냅니다
 validator.expect_column_values_to_be_in_set(
     "customer_id",
     customer_ids_list  # 고객 테이블의 ID 목록
 )
 
-# Suite 저장
+# discard_failed_expectations=False는 실패한 Expectations을 포함한 모든 것을 보존합니다.
+# 이는 Suite를 반복적으로 개발할 때 중요합니다
 validator.save_expectation_suite(discard_failed_expectations=False)
 ```
 
@@ -251,11 +290,16 @@ def validate_data(**kwargs):
     """Great Expectations 검증 Task"""
     context = gx.get_context()
 
-    # Checkpoint 실행
+    # Checkpoint는 배치 요청 + Expectation Suite + 액션(예: 결과 저장,
+    # Slack 알림)을 묶습니다. Checkpoint를 통해 실행하면 수동 실행과
+    # 예약된 실행 모두에서 일관된 검증 동작이 보장됩니다
     result = context.run_checkpoint(
         checkpoint_name="orders_checkpoint"
     )
 
+    # 실패 시 예외를 발생시키면 Airflow가 이 태스크를 FAILED로 표시하고,
+    # default_args에 설정된 이메일/Slack 알림을 트리거하며 다운스트림 태스크를 차단합니다
+    # — 파이프라인의 품질 게이트 역할을 합니다
     if not result.success:
         raise ValueError("Data quality check failed!")
 
@@ -286,9 +330,13 @@ def check_row_count(**kwargs):
     df = pd.read_parquet(f"/data/{kwargs['ds']}/orders.parquet")
     row_count = len(df)
 
-    # XCom으로 메트릭 저장
+    # XCom에 메트릭을 푸시하면 다운스트림 태스크(브랜칭 결정 등)가
+    # 파일을 다시 읽지 않고 카운트에 접근할 수 있습니다 — 중복 I/O를 방지합니다
     kwargs['ti'].xcom_push(key='row_count', value=row_count)
 
+    # 1000 임계값은 상식적 최솟값입니다: 실제 일일 주문량은 ~10,000+입니다.
+    # 1000 미만이면 보통 진짜 낮은 비즈니스 활동이 아니라
+    # 부분 추출 실패를 의미합니다
     if row_count < 1000:
         raise ValueError(f"Row count too low: {row_count}")
 
@@ -299,13 +347,18 @@ def check_freshness(**kwargs):
     """데이터 신선도 검증"""
     from datetime import datetime, timedelta
 
-    # 파일 수정 시간 확인
+    # 파일 mtime을 데이터 신선도의 프록시로 사용합니다 — 단순하지만 효과적입니다.
+    # 프로덕션에서는 더 정확한 신선도 측정을 위해 데이터 내부의
+    # MAX(event_timestamp)를 확인하는 것이 좋습니다
     import os
     file_path = f"/data/{kwargs['ds']}/orders.parquet"
     mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
 
     age_hours = (datetime.now() - mtime).total_seconds() / 3600
 
+    # 24시간 임계값은 일일 파이프라인 SLA와 일치합니다.
+    # 데이터가 24시간보다 오래됐다면 파이프라인이 실행되지 않았거나
+    # 업스트림 소스가 오래됐을 가능성이 높습니다
     if age_hours > 24:
         raise ValueError(f"Data too old: {age_hours:.1f} hours")
 
@@ -317,6 +370,9 @@ def decide_next_step(**kwargs):
     ti = kwargs['ti']
     row_count = ti.xcom_pull(task_ids='check_row_count', key='row_count')
 
+    # 적응형 처리: 대규모 배치는 분산 컴퓨팅을 위해 Spark를 사용하고,
+    # 소규모 배치는 오버헤드를 줄이기 위해 Pandas를 사용합니다
+    # — 비용을 최적화하고 소규모 데이터셋에서 Spark 기동 지연을 방지합니다
     if row_count > 10000:
         return 'process_large_batch'
     else:
@@ -340,6 +396,9 @@ with DAG('quality_checks_dag', ...) as dag:
         python_callable=decide_next_step,
     )
 
+    # 두 검사가 병렬로 실행(팬인)된 후 브랜칭 — 둘 중 하나라도
+    # 실패하면 branch 태스크는 절대 실행되지 않아, 불량 데이터가
+    # 다운스트림으로 흐르는 것을 방지합니다
     [check_rows, check_fresh] >> branch
 ```
 
@@ -395,6 +454,9 @@ with DAG('quality_checks_dag', ...) as dag:
 
 ```python
 # DataHub 메타데이터 수집 예시
+# 프로그래밍 방식의 메타데이터 전송은 CI/CD 파이프라인의 일부로
+# 카탈로그를 자동으로 업데이트합니다 — 스키마나 소유권이 변경될 때
+# 수동 데이터 입력이 필요하지 않습니다
 from datahub.emitter.mce_builder import make_dataset_urn
 from datahub.emitter.rest_emitter import DatahubRestEmitter
 from datahub.metadata.schema_classes import (
@@ -405,17 +467,21 @@ from datahub.metadata.schema_classes import (
     NumberTypeClass,
 )
 
-# Emitter 생성
+# REST Emitter는 DataHub GMS(Generalized Metadata Service)에 메타데이터를 전송합니다.
+# 비동기, 고처리량 전송을 위해서는 KafkaEmitter를 사용하세요
 emitter = DatahubRestEmitter(gms_server="http://localhost:8080")
 
-# 데이터셋 URN
+# URN(Uniform Resource Name)은 모든 플랫폼에서 각 데이터셋을 고유하게 식별합니다.
+# 3부 구조(플랫폼.이름.환경)는 dev와 prod 환경에서 동일한 테이블 이름이
+# 존재할 때 명칭 충돌을 방지합니다
 dataset_urn = make_dataset_urn(
     platform="postgres",
     name="analytics.public.fact_orders",
     env="PROD"
 )
 
-# 데이터셋 속성
+# Custom Properties는 DataHub UI에서 필터링/검색할 수 있는 거버넌스 메타데이터를 저장합니다.
+# 여기서 PII 상태를 태깅하면 다운스트림에서 자동 접근 제어 적용이 가능합니다
 properties = DatasetPropertiesClass(
     description="주문 팩트 테이블",
     customProperties={
@@ -425,7 +491,9 @@ properties = DatasetPropertiesClass(
     }
 )
 
-# 스키마 정의
+# 스키마 정의 — 필드 수준 메타데이터를 등록하면 영향 분석이 가능합니다:
+# "amount"를 "order_amount"로 이름 변경 시 DataHub가 이 필드를 참조하는
+# 모든 대시보드와 다운스트림 모델을 식별할 수 있습니다
 schema = SchemaMetadataClass(
     schemaName="fact_orders",
     platform=f"urn:li:dataPlatform:postgres",
@@ -516,6 +584,9 @@ models:
 
 ```python
 # OpenLineage를 사용한 리니지 추적
+# OpenLineage는 특정 벤더에 종속되지 않는 리니지 이벤트 오픈 표준입니다.
+# 이를 통해 이종 파이프라인(Spark + Airflow + dbt)이 단일 백엔드(예: Marquez, DataHub)에
+# 벤더 종속 없이 리니지를 전송할 수 있습니다
 from openlineage.client import OpenLineageClient
 from openlineage.client.run import Run, Job, RunEvent, RunState
 from openlineage.client.facet import (
@@ -528,17 +599,20 @@ import uuid
 
 client = OpenLineageClient(url="http://localhost:5000")
 
-# Job 정의
+# Job 정의 — Namespace + name은 조직 전체에서 작업을 고유하게 식별합니다.
+# 팀 간 리니지 발견을 위해 일관된 네이밍 컨벤션(예: team.pipeline_name)을 사용하세요
 job = Job(
     namespace="my_pipeline",
     name="transform_orders"
 )
 
-# Run 시작
+# 실행당 UUID는 각 실행을 독립적으로 추적할 수 있게 합니다.
+# run_id를 통해 특정 파이프라인 실패 디버깅이 가능합니다
 run_id = str(uuid.uuid4())
 run = Run(runId=run_id)
 
-# 입력 데이터셋
+# 입력 데이터셋 — 스키마 패싯과 함께 입력을 선언하면 자동 영향 분석이 가능합니다:
+# raw.orders가 변경되면 리니지 그래프가 영향받는 다운스트림 작업과 데이터셋을 보여줍니다
 input_datasets = [
     {
         "namespace": "postgres",
@@ -562,7 +636,8 @@ output_datasets = [
     }
 ]
 
-# Start 이벤트
+# START 이벤트는 실행 시작을 표시합니다 — 리니지 소비자가 진행 중인 작업을 추적하고
+# 중단/멈춤 파이프라인을 감지할 수 있습니다
 client.emit(
     RunEvent(
         eventType=RunState.START,
@@ -576,7 +651,8 @@ client.emit(
 
 # ... 실제 변환 작업 ...
 
-# Complete 이벤트
+# COMPLETE 이벤트로 실행을 닫습니다. START와 COMPLETE 모두 전송하면 소요 시간 추적이 됩니다.
+# COMPLETE가 수신되지 않으면 모니터링이 해당 실행을 잠재적 실패로 플래그할 수 있습니다
 client.emit(
     RunEvent(
         eventType=RunState.COMPLETE,
@@ -629,7 +705,11 @@ client.emit(
 from enum import Enum
 
 class DataClassification(Enum):
-    """데이터 민감도 분류"""
+    """데이터 민감도 분류
+    최소 민감에서 최대 민감까지 4단계. 이 계층 구조는 접근 제어 정책에 직접 매핑됩니다:
+    예를 들어 RESTRICTED는 미사용 데이터 암호화와 비권한 사용자에 대한
+    컬럼 수준 마스킹이 필요합니다.
+    """
     PUBLIC = "public"           # 공개 가능
     INTERNAL = "internal"       # 내부 사용
     CONFIDENTIAL = "confidential"  # 기밀
@@ -638,6 +718,10 @@ class DataClassification(Enum):
 class DataClassifier:
     """자동 데이터 분류"""
 
+    # 흔한 PII 유형에 대한 정규식 패턴. 거짓 음성(False Negative)을 최소화하기 위해
+    # 의도적으로 폭넓게 작성했습니다 — 비-PII를 과분류(제한)하는 것이
+    # 실제 PII를 과소분류(노출)하는 것보다 낫습니다. 거짓 양성은
+    # 수동 검토 시 화이트리스트에 추가할 수 있습니다
     PII_PATTERNS = {
         'email': r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+',
         'phone': r'\d{3}-\d{3,4}-\d{4}',
@@ -655,11 +739,15 @@ class DataClassifier:
         """컬럼 분류"""
         column_lower = column_name.lower()
 
-        # 컬럼명 기반 분류
+        # 컬럼명 기반 검사를 먼저 실행합니다. O(1)이고
+        # 데이터를 읽지 않고도 가장 일반적인 케이스를 포착하기 때문입니다
         if any(pii in column_lower for pii in cls.PII_COLUMN_NAMES):
             return DataClassification.RESTRICTED
 
-        # 값 패턴 기반 분류
+        # 값 기반 검사를 폴백으로 사용합니다: 일반적인 이름의 컬럼(예:
+        # 실제로 주민번호가 들어있는 'field_1')에서 PII를 포착합니다.
+        # 100개 샘플링은 정확도와 성능 사이의 균형을 맞춥니다 —
+        # 대형 테이블에서 모든 행을 스캔하면 너무 느립니다
         import re
         for value in sample_values[:100]:  # 샘플링
             if value is None:
@@ -668,6 +756,8 @@ class DataClassifier:
                 if re.match(pattern, str(value)):
                     return DataClassification.RESTRICTED
 
+        # 기본값을 INTERNAL(PUBLIC이 아님)로 설정합니다 — 안전한 기본값입니다:
+        # 데이터는 사람이 검토한 후 명시적으로 PUBLIC으로 승격되어야 합니다
         return DataClassification.INTERNAL
 ```
 

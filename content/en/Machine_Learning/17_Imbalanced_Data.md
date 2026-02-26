@@ -1,8 +1,24 @@
 # Handling Imbalanced Data
 
-## Overview
+**Previous**: [Model Explainability](./16_Model_Explainability.md) | **Next**: [Time Series ML](./18_Time_Series_ML.md)
 
-Imbalanced datasets occur when one class significantly outnumbers the other(s). Standard classifiers tend to predict the majority class, resulting in misleadingly high accuracy. This lesson covers evaluation metrics, sampling techniques, cost-sensitive learning, and threshold optimization for imbalanced classification problems.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why accuracy is misleading for imbalanced datasets and select appropriate metrics (F1, PR-AUC, MCC)
+2. Compare Precision-Recall curves with ROC curves and identify when PR-AUC is more informative
+3. Implement SMOTE and its variants (Borderline-SMOTE, SMOTE-ENN) for synthetic oversampling
+4. Apply cost-sensitive learning using class weights and sample weights in tree-based models
+5. Optimize the classification threshold using cost-based analysis
+6. Build a complete imbalanced classification pipeline using imblearn that avoids data leakage
+7. Decide when to reframe an extreme imbalance problem as anomaly detection
+
+---
+
+A fraud detection model that achieves 99.9% accuracy sounds impressive -- until you realize it does so by labeling every transaction as legitimate, missing every single fraud. Imbalanced data is the norm in real-world ML: fraud, rare diseases, manufacturing defects, and intrusions are all needle-in-a-haystack problems where the minority class is the one that matters most. This lesson teaches you to evaluate, sample, re-weight, and threshold-tune your way to models that actually catch the rare events you care about.
 
 ---
 

@@ -1,5 +1,18 @@
 # 08. BERT
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. BERT의 핵심 혁신(양방향 컨텍스트, 마스크 언어 모델링(Masked Language Modeling, MLM), 다음 문장 예측(Next Sentence Prediction, NSP))을 설명하고, GPT와 같은 단방향 언어 모델과 대비합니다.
+2. MLM 목적함수의 수학적 공식을 서술하고 토큰 마스킹 전략(80/10/10 분할)을 설명합니다.
+3. 다중 헤드 자기 어텐션(Multi-Head Self-Attention), 피드포워드 층(Feed-Forward Layer), 위치 임베딩(Positional Embedding)을 포함하여 PyTorch에서 BERT 인코더 아키텍처를 처음부터 구현합니다.
+4. 텍스트 분류, 개체명 인식(Named Entity Recognition), 질의응답(Question Answering)과 같은 다운스트림 작업을 위해 사전 훈련된 BERT 모델을 파인튜닝(Fine-tuning)합니다.
+5. BERT의 특수 토큰([CLS], [SEP], [MASK])을 해석하고 사전 훈련과 파인튜닝 과정에서 이들이 어떻게 사용되는지 설명합니다.
+6. BERT-base와 BERT-large 구성을 비교하고 모델 크기와 작업 성능 간의 트레이드오프를 평가합니다.
+
+---
+
 ## 개요
 
 BERT (Bidirectional Encoder Representations from Transformers)는 Google이 2018년에 발표한 모델로, NLP 분야에 혁명을 일으켰습니다. **양방향 컨텍스트**를 사용하여 단어의 의미를 이해합니다.

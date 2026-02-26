@@ -546,7 +546,11 @@ kappa_values = [3, 5, 10, 100]
 colors = ['red', 'orange', 'green', 'blue']
 for kappa_val, color in zip(kappa_values, colors):
     if kappa_val > 3/2:
+        # κ는 분포가 정규화 가능하려면 > 3/2이어야 합니다 (모든 속도에 대한
+        # 적분은 지수(power-law exponent) κ+1 > 5/2일 때만 수렴합니다).
         f_kappa = kappa_1d(v, n0, T, m, kappa_val)
+        # κ = 100은 선형 척도에서 Maxwellian과 수치적으로 구별할 수 없지만,
+        # "κ → ∞"로 표시하여 학생들에게 이론적 극한을 명시적으로 보여줍니다.
         label = f'κ = {kappa_val}' if kappa_val < 100 else 'κ → ∞ (Maxwellian)'
         ax.plot(v/1e3, f_kappa, color=color, linewidth=2, label=label)
 
@@ -554,6 +558,9 @@ ax.set_xlabel('v (km/s)', fontsize=12)
 ax.set_ylabel('f(v) (s/m⁴)', fontsize=12)
 ax.set_title('Kappa Distributions (Non-thermal Tails)', fontsize=14, fontweight='bold')
 ax.set_yscale('log')
+# 로그 척도가 여기서 필수적입니다: 초열적(suprathermal) 증강은 f가 수십 배
+# 차이나는 꼬리(v >> v_th)에서만 보입니다. 선형 척도에서는 피크 근처에서
+# 모든 곡선이 동일하게 보여, 멱법칙(power-law) 꼬리의 핵심 물리가 숨겨집니다.
 ax.grid(True, alpha=0.3, which='both')
 ax.legend()
 
@@ -614,13 +621,17 @@ def compute_moments(v_array, f_array):
     """
     Compute moments of 1D distribution function
     """
-    # Density
+    # 밀도: Simpson 규칙(simps)을 사용합니다. np.trapz보다 O(h^4) 오차를 가집니다
+    # (trapz는 O(h^2)). 이는 f가 매끄럽지만 곡선 형태의 꼬리를 가질 때 중요하며,
+    # 이는 Maxwellian 및 kappa 분포를 거친 속도 격자에서 샘플링할 때 전형적입니다.
     n = simps(f_array, v_array)
 
-    # Mean velocity
+    # 평균 속도: n (n0가 아닌)으로 나누어 분포가 기준 밀도 n0에서
+    # 벗어났을 때도 진정한 평균 속도를 제공합니다.
     u = simps(v_array * f_array, v_array) / n
 
-    # Variance (temperature measure)
+    # 분산: u ≠ 0인 이동(drifting) 분포에서 열 분산을 올바르게 얻기 위해
+    # 계산된 평균 u (0이 아닌)에 대해 상대적으로 계산합니다.
     var = simps((v_array - u)**2 * f_array, v_array) / n
 
     # Thermal velocity
@@ -688,27 +699,41 @@ def vlasov_1d_solver(x, v, f0, E_func, dt, num_steps, q, m):
     for n in range(num_steps):
         t = n * dt
 
-        # Step 1: Advection in x (∂f/∂t + v ∂f/∂x = 0)
-        # Use upwind scheme
+        # Step 1: x 방향 이류(advection) (∂f/∂t + v ∂f/∂x = 0)
+        # 연산자 분리(operator splitting)는 6D Vlasov 방정식을 두 개의 1D 이류로
+        # 분리합니다 (x와 v 방향 각각). 각각 독립적으로 풀립니다. dt가 작을 때
+        # 유효합니다 (Strang 분리는 전반적으로 O(dt^2) 정확도를 줍니다).
+        # 풍상(upwind) 방식 사용: 이류 방정식에 대해 안정적(소산적)이기 때문에 선택됩니다.
+        # 스텐실(stencil)은 항상 정보가 이동하는 방향인 상류(upstream) 쪽에서
+        # 도함수를 취하여 f에 비물리적 진동이 나타나는 것을 방지합니다.
         f_new = np.zeros_like(f)
         for j in range(Nv):
             for i in range(Nx):
                 if v[j] > 0:
-                    i_up = (i - 1) % Nx  # periodic BC
+                    i_up = (i - 1) % Nx  # 입자가 +x 방향으로 이동; 정보는 왼쪽 셀에서 옵니다.
+                    # 주기적 경계 조건(periodic BC) (% Nx)은 f가 x=0과 x=L에서 동일하다는
+                    # 가정을 강제합니다 — 공간적으로 주기적인 플라즈마 파동에 적합합니다.
                     f_new[i, j] = f[i, j] - v[j] * dt / dx * (f[i, j] - f[i_up, j])
                 else:
                     i_up = (i + 1) % Nx
                     f_new[i, j] = f[i, j] - v[j] * dt / dx * (f[i_up, j] - f[i, j])
         f = f_new.copy()
 
-        # Step 2: Acceleration in v (∂f/∂t + (q/m)E ∂f/∂v = 0)
+        # Step 2: v 방향 가속(acceleration) (∂f/∂t + (q/m)E ∂f/∂v = 0)
+        # 전기장은 현재 시간 t (t+dt가 아닌)에서 재평가되어 명시적 시간 적분을 1차로 유지합니다.
+        # t에서 E를 사용하는 것은 v 공간에서의 순방향 Euler 스텝과 동등합니다 —
+        # 단순하지만 정확도를 위해 작은 dt가 필요합니다.
         E = E_func(x, t)
         f_new = np.zeros_like(f)
         for i in range(Nx):
-            a = q * E[i] / m  # acceleration
+            a = q * E[i] / m  # 가속도 = q*E/m (속도 공간에서의 Newton의 법칙)
             for j in range(Nv):
                 if a > 0:
                     j_up = max(j - 1, 0)
+                    # 양의 가속도는 f를 더 높은 v 방향으로 이동시킵니다: 풍상 셀로 왼쪽
+                    # 이웃(더 낮은 v)을 사용합니다. 경계에서 클램핑(j_up = 0)하여
+                    # 입자가 속도 공간에서 감싸지 않도록 합니다 —
+                    # 위치와 달리 속도는 이 설정에서 물리적 한계를 가집니다.
                     f_new[i, j] = f[i, j] - a * dt / dv * (f[i, j] - f[i, j_up])
                 else:
                     j_up = min(j + 1, Nv - 1)
@@ -724,8 +749,14 @@ def vlasov_1d_solver(x, v, f0, E_func, dt, num_steps, q, m):
 
 # Setup 1D problem
 Nx, Nv = 128, 128
+# Lx = 2π/k는 박스를 정확히 하나의 파장으로 설정합니다. 이를 통해 주기적 경계 조건이
+# 파동과 일치합니다: f(x=0) = f(x=Lx). 박스가 파장의 분수를 포함하면
+# 인위적인 반사가 발생합니다.
 Lx = 2 * np.pi / 0.5  # wavelength
 x = np.linspace(0, Lx, Nx)
+# 속도 격자는 100 eV에서 ±3×10^5 m/s ≈ ±6 v_th를 커버하여 Maxwellian의 >99.9%를 포함합니다.
+# v_th가 너무 적으면 입자가 손실되어 보존이 위반됩니다;
+# 너무 많이 늘이면 지수적으로 작은 꼬리에 격자점을 낭비합니다.
 v = np.linspace(-3e5, 3e5, Nv)
 
 X, V = np.meshgrid(x, v, indexing='ij')
@@ -734,6 +765,9 @@ X, V = np.meshgrid(x, v, indexing='ij')
 n0 = 1e19
 T0 = 100 * e / k_B
 k_wave = 0.5  # wavenumber (1/m)
+# 작은 진폭(1%)은 섭동을 선형 영역에 유지하여 시뮬레이션 결과를
+# 선형 파동 이론(Landau 감쇠 등)과 직접 비교할 수 있게 합니다.
+# 더 큰 진폭은 입자 포획과 비선형 포화를 일으킵니다.
 amplitude = 0.01
 
 f0 = np.zeros((Nx, Nv))

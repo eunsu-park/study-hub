@@ -1,5 +1,24 @@
 # Context Managers
 
+**Previous**: [Decorators](./02_Decorators.md) | **Next**: [Iterators & Generators](./04_Iterators_and_Generators.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of the `with` statement and how it guarantees resource cleanup
+2. Implement a context manager class with `__enter__` and `__exit__` methods
+3. Describe the role of each `__exit__` parameter (`exc_type`, `exc_val`, `exc_tb`) and control exception propagation
+4. Write generator-based context managers using `@contextmanager` from `contextlib`
+5. Apply `contextlib` utilities: `suppress`, `redirect_stdout`, `closing`, and `ExitStack`
+6. Compose multiple context managers in a single `with` statement
+7. Implement practical patterns such as timers, temporary directory changes, and transactions
+8. Write async context managers using `__aenter__` / `__aexit__` and `@asynccontextmanager`
+
+---
+
+Resource leaks -- unclosed files, unreleased locks, dangling database connections -- are among the most insidious bugs in long-running applications. Python's `with` statement and the context manager protocol provide a deterministic, exception-safe way to acquire and release resources. Whether you are opening files, managing database transactions, or temporarily changing global state, context managers ensure that cleanup code always runs, even when exceptions interrupt the happy path.
+
 ## 1. What are Context Managers?
 
 Context managers are used with the `with` statement to automatically handle setup and cleanup of resources.
@@ -539,6 +558,4 @@ Create a context manager that temporarily replaces a function for testing purpos
 
 ---
 
-## Next Steps
-
-Check out [04_Iterators_and_Generators.md](./04_Iterators_and_Generators.md) to learn about iterators and yield!
+**Previous**: [Decorators](./02_Decorators.md) | **Next**: [Iterators & Generators](./04_Iterators_and_Generators.md)

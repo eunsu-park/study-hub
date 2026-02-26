@@ -561,3 +561,144 @@ print(response.choices[0].message.content)
 - [Stanford HAI Foundation Models Report](https://crfm.stanford.edu/report.html)
 - [HuggingFace Model Hub](https://huggingface.co/models)
 - [Papers With Code - Foundation Models](https://paperswithcode.com/methods/category/foundation-models)
+
+---
+
+## Exercises
+
+### Exercise 1: Foundation Model Classification
+
+For each of the following models, identify (a) its type (Language, Vision, Multimodal, Generative, Audio, Code) and (b) whether it uses an encoder-only, decoder-only, or encoder-decoder architecture. Explain your reasoning.
+
+1. GPT-4
+2. BERT
+3. T5
+4. DALL-E 3
+5. Whisper
+
+<details>
+<summary>Show Answer</summary>
+
+1. **GPT-4** — Language Model (and Multimodal in its vision variant), **decoder-only**. It generates text autoregressively using a causal mask, attending only to past tokens.
+2. **BERT** — Language Model (embedding/understanding), **encoder-only**. It uses bidirectional self-attention (masked LM) to produce context-rich token representations.
+3. **T5** — Language Model (text-to-text), **encoder-decoder**. The encoder processes the input with bidirectional attention; the decoder generates the output autoregressively.
+4. **DALL-E 3** — Generative Model (Text → Image), architecture varies by version (VQVAE + transformer / diffusion). It maps text descriptions into image representations.
+5. **Whisper** — Audio Model (Audio ↔ Text), **encoder-decoder**. An audio encoder processes mel-spectrogram features; a decoder generates transcription tokens.
+
+</details>
+
+---
+
+### Exercise 2: In-context Learning Prompt Design
+
+Write a few-shot prompt for a **named entity recognition (NER)** task that identifies PERSON and LOCATION entities. Include three examples in the prompt, then add an unlabeled test sentence.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+ner_prompt = """
+Extract PERSON and LOCATION entities from the following sentences.
+
+Sentence: "Albert Einstein was born in Ulm, Germany."
+Entities: PERSON: Albert Einstein | LOCATION: Ulm, Germany
+
+Sentence: "Marie Curie conducted research in Paris."
+Entities: PERSON: Marie Curie | LOCATION: Paris
+
+Sentence: "Elon Musk founded SpaceX in Hawthorne, California."
+Entities: PERSON: Elon Musk | LOCATION: Hawthorne, California
+
+Sentence: "Alan Turing worked at Bletchley Park during World War II."
+Entities:"""
+
+# Expected output:
+# PERSON: Alan Turing | LOCATION: Bletchley Park
+```
+
+Key design principles:
+- Consistent format across all examples (makes pattern extraction easier)
+- Same entity types demonstrated in each example
+- The final item ends at the same structural point to guide completion
+
+</details>
+
+---
+
+### Exercise 3: Paradigm Comparison Analysis
+
+Compare the **Traditional ML Pipeline** and the **Foundation Model Pipeline** across the following dimensions. Provide a concrete example for each dimension.
+
+| Dimension | Traditional ML | Foundation Model |
+|-----------|---------------|-----------------|
+| Data per task | ? | ? |
+| Training per task | ? | ? |
+| Knowledge transfer | ? | ? |
+| Adaptation method | ? | ? |
+| Failure mode | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Dimension | Traditional ML | Foundation Model |
+|-----------|---------------|-----------------|
+| Data per task | Each task needs its own labeled dataset (e.g., 10K labeled images for each classifier) | One massive pre-training corpus shared across all tasks (e.g., 1T tokens) |
+| Training per task | Full model trained from scratch or fine-tuned independently for each task | Single large pre-training run; lightweight adaptation per task |
+| Knowledge transfer | Limited — a sentiment classifier doesn't help a translation model | Strong — linguistic, factual, and reasoning knowledge transfers across tasks |
+| Adaptation method | Retrain / fine-tune with task-specific labeled data | Prompt engineering, few-shot examples, or parameter-efficient fine-tuning (LoRA) |
+| Failure mode | Data drift — new tasks require expensive data collection | Hallucination — model may generate plausible but incorrect outputs |
+
+</details>
+
+---
+
+### Exercise 4: Emergent Capabilities Threshold Analysis
+
+The following capabilities have been observed to emerge at different scale thresholds. Order them from **earliest to latest emergence** (in terms of training compute) and briefly explain why each requires more scale than the previous one.
+
+- Chain-of-Thought reasoning
+- Simple 3-digit addition
+- Theory of Mind
+- Word unscrambling
+
+<details>
+<summary>Show Answer</summary>
+
+**Emergence order (earliest → latest):**
+
+1. **Simple 3-digit addition** (~10^22 FLOPs) — Requires learning basic digit patterns and carry operations. Relatively few sub-skills to compose.
+
+2. **Word unscrambling** (~10^22 FLOPs) — Requires letter pattern recognition and vocabulary knowledge, but is a self-contained lexical task.
+
+3. **Chain-of-Thought reasoning** (~10^23 FLOPs) — Requires not just factual knowledge, but the ability to decompose multi-step problems and maintain intermediate state in generated text. This demands a much richer internal representation.
+
+4. **Theory of Mind** (~10^24 FLOPs) — Requires modeling other agents' beliefs and intentions, which involves nested reasoning ("Alice believes that Bob thinks..."). This is the most compositionally complex of the four.
+
+The pattern: later-emerging capabilities require composing more sub-skills and maintaining more abstract internal state, both of which benefit from the additional representational capacity that comes with scale.
+
+</details>
+
+---
+
+### Exercise 5: RLHF Pipeline Design
+
+The ChatGPT training process involves four stages. For each stage below, identify what data is required and what is learned.
+
+1. Pre-training (GPT-3.5 base)
+2. Supervised Fine-tuning (SFT)
+3. Reward Model Training
+4. RLHF with PPO
+
+<details>
+<summary>Show Answer</summary>
+
+| Stage | Data Required | What is Learned |
+|-------|--------------|-----------------|
+| **1. Pre-training** | Massive web-scale text corpus (hundreds of billions of tokens) | Next-token prediction; broad linguistic, factual, and reasoning knowledge |
+| **2. SFT** | Human-written high-quality instruction-response pairs (thousands to tens of thousands of examples) | To follow instructions and produce well-structured, helpful responses |
+| **3. Reward Model Training** | Pairs of model responses ranked by human annotators (one response preferred over another) | To predict human preference scores — assigns a scalar reward to any model output |
+| **4. RLHF with PPO** | The reward model (as an environment) + the SFT model (as starting policy) | To generate responses that maximize reward (human preference) while not drifting too far from the SFT distribution (via KL penalty) |
+
+The key insight: each stage refines a different aspect — (1) raw knowledge, (2) instruction format, (3) preference model, (4) alignment optimization.
+
+</details>

@@ -1,5 +1,17 @@
 # Greedy Algorithms
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the greedy choice property and optimal substructure as conditions for a greedy algorithm to yield a globally optimal solution
+2. Identify problem types where greedy approaches succeed versus where they fail, using counterexamples
+3. Implement greedy solutions for classic problems including activity selection, interval scheduling, and Huffman coding
+4. Apply greedy techniques to solve task scheduling and resource allocation problems
+5. Compare greedy algorithms with Dynamic Programming and determine which paradigm is more appropriate for a given problem
+
+---
+
 ## Overview
 
 Greedy algorithms make the locally optimal choice at each step. While they don't always guarantee an optimal solution, they can efficiently find optimal solutions for certain problems.
@@ -122,7 +134,11 @@ struct Activity {
 };
 
 int maxActivities(vector<Activity>& activities) {
-    // Sort by end time
+    // Sort by END time, not start time.
+    // Finishing earliest leaves the most room for subsequent activities —
+    // this is the greedy choice whose optimality is proven by the "exchange
+    // argument": any solution that picks a later-ending activity first can
+    // be swapped for the earliest-ending one without losing feasibility.
     sort(activities.begin(), activities.end(),
          [](const Activity& a, const Activity& b) {
              return a.end < b.end;
@@ -133,6 +149,7 @@ int maxActivities(vector<Activity>& activities) {
 
     for (int i = 1; i < activities.size(); i++) {
         if (activities[i].start >= lastEnd) {
+            // No overlap with the last selected activity: greedily take it
             count++;
             lastEnd = activities[i].end;
         }
@@ -311,6 +328,10 @@ int minMeetingRooms(vector<pair<int,int>>& meetings) {
 
 ```python
 def min_meeting_rooms(meetings):
+    # Separate and sort starts and ends independently.
+    # This lets us simulate a timeline sweep without building explicit events —
+    # whenever the next start comes before the next end, a new room is needed;
+    # otherwise an existing room becomes free.
     starts = sorted([m[0] for m in meetings])
     ends = sorted([m[1] for m in meetings])
 
@@ -320,12 +341,12 @@ def min_meeting_rooms(meetings):
 
     while i < len(starts):
         if starts[i] < ends[j]:
-            rooms += 1
+            rooms += 1   # A new meeting starts before the earliest-ending one finishes
             i += 1
         else:
-            rooms -= 1
+            rooms -= 1   # The earliest-ending meeting has finished; reuse its room
             j += 1
-        max_rooms = max(max_rooms, rooms)
+        max_rooms = max(max_rooms, rooms)  # Track peak concurrent usage
 
     return max_rooms
 ```
@@ -396,13 +417,20 @@ def min_jumps(nums):
         return 0
 
     jumps = 0
-    current_end = 0
-    farthest = 0
+    current_end = 0   # Right boundary of the current jump's reachable range
+    farthest = 0      # Farthest position reachable from anywhere in the current range
 
+    # We iterate only up to len-2: reaching the last index IS the goal,
+    # so we never need to count a jump FROM the last position.
     for i in range(len(nums) - 1):
         farthest = max(farthest, i + nums[i])
 
         if i == current_end:
+            # We've exhausted all positions reachable with `jumps` jumps.
+            # Must take one more jump to advance into [current_end+1, farthest].
+            # Choosing `farthest` as the new boundary is the greedy insight:
+            # we don't commit to a specific landing spot — we just note that
+            # the next jump can reach as far as `farthest`.
             jumps += 1
             current_end = farthest
 

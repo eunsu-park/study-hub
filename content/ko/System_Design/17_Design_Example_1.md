@@ -1,10 +1,25 @@
 # 실전 설계 예제 1 (Practical Design Examples 1)
 
+**이전**: [합의 알고리즘](./16_Consensus_Algorithms.md) | **다음**: [실전 설계 예제 2](./18_Design_Example_2.md)
+
 난이도: ⭐⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-이 장에서는 실제 시스템 설계 면접에서 자주 등장하는 세 가지 시스템을 설계합니다: URL 단축기, 페이스트빈, Rate Limiter. 각 예제는 요구사항 정의, 용량 추정, 고수준 설계, 상세 설계의 순서로 진행됩니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 요구사항 정의, 용량 추정(Capacity Estimation), 고수준 설계, 상세 설계로 이어지는 구조화된 설계 방법론(Design Methodology)을 실제 시스템 문제에 적용할 수 있습니다
+2. 키 생성(Key Generation), 충돌 회피(Collision Avoidance), 리다이렉션(Redirection) 성능, 분석(Analytics)을 고려한 URL 단축기 서비스를 설계할 수 있습니다
+3. 가변 크기 페이로드(Variable-size Payload), 만료 정책(Expiration Policy), 접근 제어(Access Control)를 처리하는 Pastebin 형태의 콘텐츠 저장 서비스를 설계할 수 있습니다
+4. 토큰 버킷(Token Bucket), 슬라이딩 윈도우(Sliding Window), 고정 윈도우(Fixed Window) 알고리즘을 사용한 Rate Limiter를 설계하고 각 알고리즘의 트레이드오프를 평가할 수 있습니다
+5. 저장소, 대역폭, QPS(Query Per Second) 요구사항에 대한 대략적인 용량 추정(Back-of-the-envelope Estimation)을 수행할 수 있습니다
+6. 캐싱(Caching), 데이터베이스 파티셔닝(Database Partitioning), 복제(Replication) 전략을 통해 각 설계의 병목(Bottleneck)을 식별하고 해결할 수 있습니다
+
+---
+
+시스템 설계 면접은 시간 압박 속에서 분산 시스템에 관한 모든 지식을 하나의 일관된 아키텍처(Architecture)로 통합할 수 있는지를 테스트합니다. 이 레슨에서 다루는 세 가지 시스템 — URL 단축기(URL Shortener), 페이스트빈(Pastebin), Rate Limiter — 은 표면상 단순해 보이지만 실제로는 해싱(Hashing), 저장소 트레이드오프, 캐싱(Caching), 분산 협조(Distributed Coordination)를 다루기 때문에 면접에서 가장 자주 출제됩니다. 이 예제들을 풀어나가다 보면 어떤 설계 문제에도 적용할 수 있는 구조적 사고력이 길러집니다.
 
 ---
 
@@ -827,12 +842,6 @@
 
 ---
 
-## 다음 단계
-
-[18_Design_Example_2.md](./18_Design_Example_2.md)에서 뉴스 피드, 채팅 시스템, 알림 시스템을 설계해봅시다!
-
----
-
 ## 참고 자료
 
 - "System Design Interview" - Alex Xu
@@ -840,3 +849,7 @@
 - bit.ly, TinyURL 아키텍처 분석
 - Stripe Rate Limiting Best Practices
 - GitHub API Rate Limiting
+
+---
+
+**이전**: [합의 알고리즘](./16_Consensus_Algorithms.md) | **다음**: [실전 설계 예제 2](./18_Design_Example_2.md)

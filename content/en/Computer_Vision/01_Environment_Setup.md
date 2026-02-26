@@ -6,11 +6,14 @@ OpenCV (Open Source Computer Vision Library) is an open-source library for real-
 
 **Difficulty**: ⭐ (Beginner)
 
-**Learning Objectives**:
-- Install OpenCV and configure development environment
-- Verify version and write first program
-- Understand the relationship between OpenCV and NumPy
-- Understand how images are represented as ndarrays
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Install OpenCV and configure development environment
+2. Verify version and write first program
+3. Understand the relationship between OpenCV and NumPy
+4. Understand how images are represented as ndarrays
 
 ---
 
@@ -100,16 +103,19 @@ OpenCV is a computer vision library originally started by Intel and now maintain
 ### Installation via pip
 
 ```bash
-# Basic installation (sufficient for most cases)
+# Basic installation: covers ~95% of use cases (filtering, detection, video I/O)
+# Choose this when you don't need patented algorithms like SIFT/SURF
 pip install opencv-python
 
-# Installation with extra features (SIFT, SURF, etc.)
+# contrib adds extra modules including SIFT, SURF, ArUco, and face recognition
+# Use this when you need research-grade features not yet in the main module
 pip install opencv-contrib-python
 
-# Install with NumPy and matplotlib (recommended)
+# Install with NumPy and matplotlib (recommended for development)
+# NumPy is required at runtime; matplotlib makes Jupyter-based visualization easy
 pip install opencv-python numpy matplotlib
 
-# Install specific version
+# Install specific version (useful when pinning for reproducible environments)
 pip install opencv-python==4.8.0.76
 
 # Upgrade
@@ -231,15 +237,16 @@ plt.show()
 import cv2
 import numpy as np
 
-# Check OpenCV version
+# Check OpenCV version — important because APIs change between major versions
 print(f"OpenCV version: {cv2.__version__}")
 # Output example: OpenCV version: 4.8.0
 
-# Check NumPy version
+# NumPy version matters: OpenCV relies on NumPy's array layout (C-contiguous)
 print(f"NumPy version: {np.__version__}")
 # Output example: NumPy version: 1.24.3
 
-# Check build information (detailed)
+# getBuildInformation() reveals whether GPU (CUDA/OpenCL) and optimized BLAS
+# libraries are available — useful for diagnosing performance bottlenecks
 print(cv2.getBuildInformation())
 ```
 
@@ -273,14 +280,15 @@ else:
 import cv2
 import numpy as np
 
-# Create black image (300x400, 3 channels)
+# np.zeros creates a black canvas: dtype=uint8 gives the [0, 255] range
+# that OpenCV functions expect — using float here would cause display issues
 img = np.zeros((300, 400, 3), dtype=np.uint8)
 
-# Add text
+# Add text — useful as a quick smoke test without needing an image file on disk
 cv2.putText(img, 'Hello OpenCV!', (50, 150),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
-# Draw circle (center, radius, color, thickness)
+# Draw circle: thickness=2 (outline); use -1 for a filled circle
 cv2.circle(img, (200, 200), 50, (0, 255, 0), 2)
 
 # Display
@@ -336,12 +344,13 @@ print(f"Average brightness: {np.mean(img):.2f}")
 print(f"Maximum: {np.max(img)}")
 print(f"Minimum: {np.min(img)}")
 
-# Adjust brightness with array operations
+# np.clip prevents uint8 overflow: without it, 255 + 1 wraps around to 0
+# (silent integer overflow), which creates dark spots instead of bright ones
 brighter = np.clip(img + 50, 0, 255).astype(np.uint8)
 darker = np.clip(img - 50, 0, 255).astype(np.uint8)
 
-# Comparison operations
-bright_pixels = img > 200  # Boolean array
+# Boolean array: True/False mask for downstream masking or counting pixels
+bright_pixels = img > 200
 
 # Statistics
 print(f"Standard deviation: {np.std(img):.2f}")
@@ -377,6 +386,8 @@ print(f"OpenCV: {time.time() - start:.4f}s")
 ---
 
 ## 6. Images are ndarrays
+
+Understanding this connection is what separates OpenCV from older image libraries: because an image is just a NumPy array, you can apply the full power of NumPy — slicing, broadcasting, vectorized math — directly to pixel data without writing a single loop.
 
 ### Image Data Structure
 

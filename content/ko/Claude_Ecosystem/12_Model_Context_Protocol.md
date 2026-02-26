@@ -13,15 +13,18 @@
 - 클라이언트-서버 아키텍처에 대한 기본 이해
 - JSON과 API에 대한 친숙함
 
-**학습 목표**:
-- MCP가 무엇이며 왜 존재하는지 설명할 수 있다
-- MCP 아키텍처(클라이언트, 서버, 전송 계층)를 설명할 수 있다
-- MCP의 세 가지 기본 요소인 Resources, Tools, Prompts를 구별할 수 있다
-- 일반적인 서비스(GitHub, PostgreSQL, Slack)를 위한 사전 구축 MCP 서버를 설정할 수 있다
-- stdio 및 HTTP 전송을 사용하여 MCP 서버를 Claude Code에 연결할 수 있다
-- MCP 서버의 인증을 설정할 수 있다
-- 서드파티 MCP 서버 생태계를 탐색할 수 있다
-- AI를 외부 시스템에 연결할 때의 보안 고려사항을 평가할 수 있다
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. MCP가 무엇이며 왜 존재하는지 설명할 수 있다
+2. MCP 아키텍처(클라이언트, 서버, 전송 계층)를 설명할 수 있다
+3. MCP의 세 가지 기본 요소인 Resources, Tools, Prompts를 구별할 수 있다
+4. 일반적인 서비스(GitHub, PostgreSQL, Slack)를 위한 사전 구축 MCP 서버를 설정할 수 있다
+5. stdio 및 HTTP 전송을 사용하여 MCP 서버를 Claude Code에 연결할 수 있다
+6. MCP 서버의 인증을 설정할 수 있다
+7. 서드파티 MCP 서버 생태계를 탐색할 수 있다
+8. AI를 외부 시스템에 연결할 때의 보안 고려사항을 평가할 수 있다
 
 ---
 

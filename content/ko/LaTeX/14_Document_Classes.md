@@ -5,6 +5,19 @@
 > **선수지식**: Lessons 01-06 (문서 구조, 서식)
 > **목표**: 표준 및 전문 문서 클래스를 이해하고, 학술 논문, 학위논문, 이력서, 출판물을 위한 전문 템플릿 생성
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 표준 문서 클래스(`article`, `report`, `book`, `letter`)의 차이를 구분하고 문서 유형에 적합한 것을 선택할 수 있다
+2. 전문 출판물을 위해 `memoir`, `KOMA-Script`, 학술지별 클래스 등 특수 클래스를 구성할 수 있다
+3. 초록(abstract), 섹션, 참고문헌, 학술지 서식이 포함된 완전한 학술 논문(academic paper) 템플릿을 구축할 수 있다
+4. 기관 요건에 맞는 앞부분(front matter), 장(chapter), 부록(appendix)이 있는 학위논문(thesis/dissertation) 템플릿을 만들 수 있다
+5. `moderncv` 또는 유사한 클래스를 사용하여 이력서(curriculum vitae, CV) 또는 레주메(résumé)를 설계할 수 있다
+6. 기존 LaTeX 템플릿의 클래스 옵션(class option), 패키지, 레이아웃 파라미터를 수정하여 새로운 요구 사항에 맞게 변형할 수 있다
+
+---
+
 ## 소개
 
 **문서 클래스(Document Class)**는 모든 LaTeX 문서의 기초로, 맨 첫 줄에 지정됩니다:
@@ -1131,5 +1144,5 @@ IEEE 또는 ACM 템플릿 다운로드 (또는 Overleaf 사용):
 
 **탐색**
 
-- 이전: [13_Custom_Commands.md](13_Custom_Commands.md)
-- 다음: [15_Automation_and_Build.md](15_Automation_and_Build.md)
+- 이전: [사용자 정의 명령 및 환경(Custom Commands & Environments)](13_Custom_Commands.md)
+- 다음: [빌드 시스템 및 자동화(Build Systems & Automation)](15_Automation_and_Build.md)

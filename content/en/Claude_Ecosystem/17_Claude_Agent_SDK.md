@@ -14,14 +14,17 @@ The Claude Agent SDK (`claude-code-sdk`) provides programmatic access to the sam
 - Claude Code CLI installed (the SDK depends on it)
 - Familiarity with async programming (Python asyncio or TypeScript async/await)
 
-**Learning Objectives**:
-- Understand the Agent SDK's architecture and relationship to Claude Code
-- Install and configure the SDK in Python and TypeScript
-- Create agents with custom system prompts and tool configurations
-- Process streaming events from agent execution
-- Configure model selection, turn limits, and permission settings
-- Integrate MCP servers with SDK-based agents
-- Handle errors, retries, and edge cases in agent workflows
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the Agent SDK's architecture and relationship to Claude Code
+2. Install and configure the SDK in Python and TypeScript
+3. Create agents with custom system prompts and tool configurations
+4. Process streaming events from agent execution
+5. Configure model selection, turn limits, and permission settings
+6. Integrate MCP servers with SDK-based agents
+7. Handle errors, retries, and edge cases in agent workflows
 
 ---
 

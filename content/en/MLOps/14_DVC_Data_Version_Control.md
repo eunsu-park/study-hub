@@ -1,5 +1,17 @@
 # DVC — Data Version Control
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why Git alone is insufficient for ML project versioning and describe how DVC's metafile approach bridges the gap for large data and model files
+2. Initialize DVC in a project, track datasets and model artifacts, and connect to remote storage backends (S3, GCS, Azure Blob)
+3. Define DVC pipelines with `dvc.yaml` and `params.yaml` to create reproducible, DAG-based ML workflows with dependency tracking
+4. Use DVC experiments to compare runs across different hyperparameters and data versions, and visualize results with `dvc plots`
+5. Integrate DVC with GitHub Actions and CML (Continuous Machine Learning) to automate training and report model metrics in pull requests
+
+---
+
 ## Overview
 
 DVC (Data Version Control) extends Git to handle large files, datasets, and ML pipelines. While Git tracks code, DVC tracks data and model artifacts using lightweight metafiles. This lesson covers DVC fundamentals, remote storage, pipelines, experiment tracking, CML for CI/CD integration, and best practices for data versioning in ML projects.
@@ -136,9 +148,11 @@ dvc list . --dvc-only       # Show all DVC-tracked files
 ```yaml
 # dvc.yaml — ML pipeline definition
 stages:
+  # Each stage declares deps, params, outs — DVC hashes these to skip unchanged stages
   prepare:
     cmd: python src/prepare.py
     deps:
+      # Both code and data as deps — changing either triggers re-run
       - src/prepare.py
       - data/raw/
     params:
@@ -171,9 +185,11 @@ stages:
     outs:
       - models/model.pkl
     metrics:
+      # cache: false keeps metrics in git — enables dvc metrics diff across commits
       - metrics/train_metrics.json:
           cache: false
     plots:
+      # x/y mapping lets dvc plots render interactive charts without extra code
       - metrics/roc_curve.csv:
           x: fpr
           y: tpr
@@ -181,6 +197,7 @@ stages:
   evaluate:
     cmd: python src/evaluate.py
     deps:
+      # Depends on model + test data — changing training code triggers full downstream
       - src/evaluate.py
       - models/model.pkl
       - data/prepared/test.csv
@@ -318,7 +335,8 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 
 def train():
-    # Load params
+    # Load params from params.yaml — single source of truth for hyperparameters
+    # DVC tracks params.yaml changes to decide which stages need re-running
     with open("params.yaml") as f:
         params = yaml.safe_load(f)["train"]
 
@@ -347,12 +365,12 @@ def train():
         "auc": round(roc_auc_score(y_test, y_proba), 4),
     }
 
-    # Save metrics (DVC tracks this file)
+    # JSON format enables dvc metrics diff — DVC parses and compares values across commits
     Path("metrics").mkdir(exist_ok=True)
     with open("metrics/train_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
-    # Save model
+    # Save model — DVC caches this artifact and links it to the commit hash
     import pickle
     Path("models").mkdir(exist_ok=True)
     with open("models/model.pkl", "wb") as f:
@@ -388,6 +406,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # CML and DVC installed as separate steps — version-pinned actions ensure reproducibility
       - uses: iterative/setup-cml@v2
       - uses: iterative/setup-dvc@v1
 
@@ -397,17 +416,19 @@ jobs:
       - name: Pull data
         run: dvc pull
         env:
+          # Credentials as secrets, not in config — never expose keys in repo
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Train and evaluate
+        # dvc repro skips unchanged stages — CI runs only what the PR actually changed
         run: dvc repro
 
       - name: Create CML report
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Metrics comparison
+          # --md outputs a markdown table — renders natively in PR comments
           echo "## Model Metrics" >> report.md
           echo "" >> report.md
           dvc metrics diff --md >> report.md
@@ -417,7 +438,7 @@ jobs:
           echo "## Plots" >> report.md
           dvc plots diff --open >> report.md
 
-          # Publish report as PR comment
+          # PR comment makes metrics visible in code review — no need to check logs
           cml comment create report.md
 ```
 
@@ -438,10 +459,12 @@ jobs:
       - uses: iterative/setup-cml@v2
       - name: Launch cloud runner
         env:
+          # PERSONAL_ACCESS_TOKEN (not GITHUB_TOKEN) — needs repo scope to register self-hosted runners
           REPO_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
+          # CML provisions a GPU instance on-demand — no persistent infrastructure cost
           cml runner launch \
             --cloud aws \
             --cloud-region us-east-1 \
@@ -449,7 +472,9 @@ jobs:
             --labels cml-gpu
 
   train:
+    # needs: ensures the GPU runner is ready before training starts
     needs: launch-runner
+    # Label matching routes this job to the CML-provisioned GPU instance
     runs-on: [self-hosted, cml-gpu]
     steps:
       - uses: actions/checkout@v4
@@ -458,6 +483,7 @@ jobs:
           pip install -r requirements.txt
           dvc pull
           dvc repro
+          # Push updated artifacts back — other branches/PRs can pull the latest model
           dvc push
 ```
 
@@ -492,14 +518,14 @@ dvc remote add -d httpremote https://my-server.com/dvc-store
 ### 6.2 Access Control
 
 ```bash
-# Use environment variables for credentials (CI/CD)
+# Environment variables preferred in CI/CD — no credential files to manage
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 
-# Or configure in DVC
+# For local development — --local flag is critical for security
 dvc remote modify --local s3remote access_key_id mykey
 dvc remote modify --local s3remote secret_access_key mysecret
-# --local stores in .dvc/config.local (gitignored)
+# --local stores in .dvc/config.local (gitignored) — never leaks to repo
 
 # Push/pull specific files
 dvc push data/training.csv.dvc   # Push specific file
@@ -569,3 +595,62 @@ Use DVC experiments for hyperparameter search:
 
 - **L15**: LLMOps — operational patterns for LLM applications
 - Return to **L03** (MLflow Basics) to compare MLflow vs DVC for experiment tracking
+
+---
+
+## Exercises
+
+### Exercise 1: Initialize a DVC Project
+
+Set up a minimal DVC-tracked ML project from scratch:
+
+1. Create a new directory, initialize Git, then run `dvc init`
+2. Create a small CSV file (`data/sample.csv`) with at least 100 rows of synthetic data and track it with `dvc add`
+3. Inspect the generated `.dvc` metafile — what fields does it contain, and what is the purpose of the `md5` hash?
+4. Commit the metafile to Git. Then modify the CSV (add 10 more rows), re-track with `dvc add`, and commit the updated metafile
+5. Run `dvc diff HEAD~1` and interpret the output. What changed between commits?
+6. Configure a local directory (e.g., `/tmp/dvc-remote`) as a DVC remote and push your data: `dvc push`
+
+### Exercise 2: Build a Three-Stage DVC Pipeline
+
+Using the `dvc.yaml` structure from Section 3.1 as a reference, create a three-stage pipeline for a text classification task:
+
+1. **`prepare` stage**: Read a raw CSV file (`data/raw.csv`) and split it 80/20 into train and test sets. Parameterize the split ratio and random seed in `params.yaml`
+2. **`featurize` stage**: Convert text in the train/test sets to TF-IDF features. Parameterize `max_features` and `ngram_range`
+3. **`train` stage**: Train a logistic regression model on the features. Parameterize `C` (regularization) and `max_iter`. Save metrics to `metrics/eval.json` with at least `accuracy` and `f1`
+
+Then:
+- Run `dvc repro` and confirm the full pipeline executes
+- Change `max_features` in `params.yaml` and run `dvc repro` again — confirm only the `featurize` and `train` stages re-run (not `prepare`)
+- Run `dvc metrics show` and `dvc dag` to inspect results
+
+### Exercise 3: Hyperparameter Search with DVC Experiments
+
+Using the pipeline from Exercise 2, conduct a hyperparameter search:
+
+1. Queue five experiments varying the `C` parameter: `[0.01, 0.1, 1.0, 10.0, 100.0]`
+2. Run all experiments in parallel with `dvc exp run --run-all --parallel 3`
+3. Display results with `dvc exp show` — which value of `C` gives the best F1 score?
+4. Apply the best experiment to the workspace with `dvc exp apply`
+5. Commit the winning parameters to Git with a descriptive message (e.g., `"feat: tuned C=10 gives F1=0.91"`)
+6. Compare the best and worst experiments with `dvc exp diff`
+
+### Exercise 4: CML Pull Request Report
+
+Set up a GitHub Actions workflow using CML that automatically posts a model metrics report on every pull request:
+
+1. Create `.github/workflows/cml_report.yaml` that triggers on `pull_request`
+2. The workflow should: install DVC and CML, pull data from a configured remote, run `dvc repro`, and generate a report
+3. The report (`report.md`) must include: a metrics comparison table (`dvc metrics diff --md`), and a note about which stage(s) were re-executed
+4. Use `cml comment create report.md` to post the report as a PR comment
+5. Describe what secrets you would need to configure in GitHub and why (e.g., `AWS_ACCESS_KEY_ID` for S3 remote access)
+
+### Exercise 5: MLflow vs DVC Comparison
+
+Write a structured comparison of MLflow and DVC for experiment tracking in a team ML project:
+
+1. List three capabilities that DVC provides that MLflow does not (or does poorly)
+2. List three capabilities that MLflow provides that DVC does not (or does poorly)
+3. Describe a project scenario where you would choose DVC over MLflow, and explain why
+4. Describe a project scenario where you would choose MLflow over DVC, and explain why
+5. Propose an architecture where both tools are used together — what role does each play, and how do they complement each other without duplication?

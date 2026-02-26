@@ -1,5 +1,17 @@
 # ML 프로젝트 라이프사이클
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ML 프로젝트 라이프사이클의 각 단계인 문제 정의, 데이터 수집, 피처 엔지니어링(feature engineering), 모델 학습, 검증, 배포, 모니터링을 설명하고 각 단계가 어떻게 연결되는지 서술할 수 있다
+2. 타겟 변수, 성공 지표(success metric), 운영 제약사항을 정의하여 비즈니스 목표를 잘 범위가 설정된 ML 문제로 전환할 수 있다
+3. ML 파이프라인 각 단계에서 데이터 무결성을 보장하기 위한 데이터 검증 및 품질 검사를 구현할 수 있다
+4. 재현 가능하고 신뢰할 수 있는 ML 시스템을 구축하기 위해 피처 엔지니어링과 모델 검증 모범 사례를 적용할 수 있다
+5. 데이터 드리프트(data drift)와 성능 저하 같은 모니터링 신호를 기반으로 재학습(retraining) 전략을 설계할 수 있다
+
+---
+
 ## 1. ML 프로젝트 단계 개요
 
 머신러닝 프로젝트는 단순히 모델을 학습시키는 것을 넘어, 데이터 수집부터 모니터링까지 전체 생명주기를 관리해야 합니다.
@@ -119,6 +131,7 @@ class DataPipeline:
 
     def extract(self) -> Dict[str, pd.DataFrame]:
         """다양한 소스에서 데이터 추출"""
+        # 소스별 분리 추출 — 독립적 재시도와 스키마 검증이 가능
         data = {}
 
         # 데이터베이스에서 추출
@@ -143,14 +156,14 @@ class DataPipeline:
     def transform(self, raw_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """데이터 변환 및 전처리"""
 
-        # 데이터 조인
+        # left join으로 이벤트 트래킹이 불완전해도 모든 거래 데이터를 보존
         df = raw_data["transactions"].merge(
             raw_data["user_events"],
             on="user_id",
             how="left"
         )
 
-        # 결측치 처리
+        # 순서 중요: null이 이상치 탐지를 왜곡할 수 있으므로 결측치를 먼저 처리
         df = self.handle_missing(df)
 
         # 이상치 처리
@@ -163,6 +176,8 @@ class DataPipeline:
 
     def validate(self, df: pd.DataFrame) -> bool:
         """데이터 품질 검증"""
+        # 검증을 transform과 별도 단계로 분리 — 비용이 큰 후속 처리 전에
+        # 조기 실패(fail-fast)를 가능하게 함
         validations = {
             "row_count": len(df) > self.config["min_rows"],
             "null_ratio": df.isnull().mean().max() < 0.1,
@@ -174,11 +189,12 @@ class DataPipeline:
 
     def load(self, df: pd.DataFrame, destination: str):
         """처리된 데이터 저장"""
-        # 버전 정보 추가
+        # 데이터 자체에 버전 메타데이터 포함 — 파일명 규칙에만 의존하지 않고
+        # 계보 추적(lineage tracing)을 가능하게 함
         df["_data_version"] = self.config["version"]
         df["_processed_at"] = datetime.now()
 
-        # 저장
+        # CSV 대신 Parquet — 컬럼형 포맷으로 3-10배 압축률과 스키마 검증 제공
         df.to_parquet(
             f"{destination}/data_v{self.config['version']}.parquet",
             index=False
@@ -189,6 +205,7 @@ class DataPipeline:
 
 ```yaml
 # dvc.yaml - DVC 파이프라인 정의
+# deps/outs 선언으로 변경되지 않은 스테이지를 건너뛰어 대규모 파이프라인에서 수 시간을 절약
 stages:
   prepare_data:
     cmd: python src/data/prepare.py
@@ -204,12 +221,14 @@ stages:
     deps:
       - src/train.py
       - data/processed/train.parquet
+    # params를 별도 추적 — 코드 변경 없이 하이퍼파라미터만 변경해도 DVC가 감지
     params:
       - train.epochs
       - train.learning_rate
     outs:
       - models/model.pkl
     metrics:
+      # cache: false로 메트릭을 git에 보관(DVC 저장소가 아닌) — 커밋 간 쉬운 비교 가능
       - metrics/train_metrics.json:
           cache: false
 ```
@@ -254,14 +273,15 @@ class FeatureEngineer:
 
     def create_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """피처 생성"""
+        # 원본을 변경하지 않고 새 DataFrame에 빌드 — 피처 계보(lineage) 추적 용이
         features = pd.DataFrame()
 
-        # 시간 기반 피처
+        # 시간 기반 피처 — 주기적 행동 패턴 포착(예: 주말 vs 평일 사용량)
         features["hour"] = df["timestamp"].dt.hour
         features["day_of_week"] = df["timestamp"].dt.dayofweek
         features["is_weekend"] = features["day_of_week"].isin([5, 6]).astype(int)
 
-        # 집계 피처
+        # 롤링 집계로 최근 행동 트렌드 포착 — 누적 합계보다 예측력이 높음
         features["total_purchases_30d"] = self.rolling_aggregate(
             df, "purchase_amount", window=30, agg="sum"
         )
@@ -269,12 +289,12 @@ class FeatureEngineer:
             df, "session_duration", window=7, agg="mean"
         )
 
-        # 비율 피처
+        # 비율 피처 — 시간으로 정규화하여 가입 기간이 다른 사용자 간 비교를 가능하게 함
         features["purchase_frequency"] = (
             df["purchase_count"] / df["days_since_signup"]
         ).fillna(0)
 
-        # 상호작용 피처
+        # 상호작용 피처 — 피처 간 교차 비율이 비선형 관계를 드러내는 경우가 많음
         features["value_per_session"] = (
             df["total_purchase_value"] / df["session_count"]
         ).fillna(0)
@@ -284,6 +304,8 @@ class FeatureEngineer:
     def encode_categoricals(self, df: pd.DataFrame) -> pd.DataFrame:
         """범주형 변수 인코딩"""
         for col in self.config["categorical_features"]:
+            # 첫 호출에서만 fit_transform, 추론 시에는 transform만 사용
+            # — 테스트/운영 데이터로부터의 데이터 누수(data leakage) 방지
             if col not in self.encoders:
                 self.encoders[col] = LabelEncoder()
                 df[col] = self.encoders[col].fit_transform(df[col])
@@ -308,6 +330,8 @@ class FeatureEngineer:
 
     def save_transformers(self, path: str):
         """인코더/스케일러 저장"""
+        # 모델과 함께 변환기(transformer)를 저장 — 추론 시 재학습 없이
+        # 일관된 인코딩/스케일링을 보장하기 위해 필수
         import joblib
         joblib.dump({
             "encoders": self.encoders,
@@ -327,7 +351,7 @@ from feast import FeatureStore
 # Feature Store 초기화
 fs = FeatureStore(repo_path="./feature_repo")
 
-# 피처 가져오기 (학습용 - 오프라인)
+# 오프라인 스토어(offline store)로 학습 — point-in-time 조인으로 미래 데이터 누수 방지
 training_df = fs.get_historical_features(
     entity_df=entity_df,  # entity_id, event_timestamp
     features=[
@@ -338,7 +362,7 @@ training_df = fs.get_historical_features(
     ]
 ).to_df()
 
-# 피처 가져오기 (추론용 - 온라인)
+# 온라인 스토어(online store)로 추론 — 사전 구체화된 키-값 조회로 저지연(<10ms) 서빙
 feature_vector = fs.get_online_features(
     features=[
         "user_features:total_purchases",
@@ -378,11 +402,12 @@ class ModelTrainer:
         params: dict
     ):
         """MLflow 추적이 포함된 학습"""
+        # 컨텍스트 매니저(context manager)로 학습 중 크래시가 발생해도 실행 종료를 보장
         with mlflow.start_run():
-            # 파라미터 로깅
+            # 파라미터를 먼저 기록 — 학습이 실패해도 어떤 설정이 문제였는지 진단 가능
             mlflow.log_params(params)
 
-            # 데이터 정보 로깅
+            # 데이터셋 크기 기록 — 실행 간 데이터 파이프라인의 암묵적 문제 감지
             mlflow.log_param("train_size", len(X_train))
             mlflow.log_param("val_size", len(X_val))
 
@@ -398,19 +423,22 @@ class ModelTrainer:
             metrics = self.calculate_metrics(y_val, val_predictions, val_proba)
             mlflow.log_metrics(metrics)
 
-            # 모델 저장
+            # 시그니처(signature)와 함께 모델 저장 — 서빙 시 입력 스키마를 강제하여
+            # 스키마 불일치로 인한 무음 예측 오류(silent prediction error)를 방지
             mlflow.sklearn.log_model(
                 model, "model",
                 signature=mlflow.models.infer_signature(X_train, val_predictions)
             )
 
-            # 피처 중요도 저장
+            # 피처 중요도는 디버깅과 이해관계자 신뢰 구축에 활용
             self.log_feature_importance(model, X_train.columns)
 
             return model, metrics
 
     def hyperparameter_tuning(self, X, y, n_trials: int = 100):
         """Optuna를 이용한 하이퍼파라미터 튜닝"""
+        # GridSearch 대신 Optuna — 베이지안 최적화(Bayesian optimization)로
+        # 전수 탐색보다 훨씬 적은 시행 횟수로 좋은 파라미터를 탐색
         def objective(trial):
             params = {
                 "n_estimators": trial.suggest_int("n_estimators", 50, 300),
@@ -440,9 +468,12 @@ class ModelTrainer:
 # training_pipeline.yaml
 pipeline:
   name: "churn-prediction-training"
+  # 비첨두 시간대에 스케줄링 — 서빙 워크로드와 GPU/CPU 경합 방지
   schedule: "0 2 * * *"  # 매일 오전 2시
 
   stages:
+    # 검증을 피처 엔지니어링과 분리 — 불량 데이터에 대한 피처 계산 전에
+    # 조기 실패(fail fast) 가능
     - name: data_validation
       script: src/validate_data.py
       inputs:
@@ -524,6 +555,8 @@ class ModelValidator:
         min_improvement: float = 0.01
     ) -> Dict[str, Any]:
         """베이스라인 모델과 비교"""
+        # 항상 프로덕션 베이스라인과 비교 — 절대 임계값은 통과하지만
+        # 현재 서빙 중인 모델보다 나쁜 모델 배포를 방지
         results = {"improved": True, "details": {}}
 
         for metric_name in new_metrics:
@@ -637,7 +670,8 @@ class ModelDeployer:
         archive_current: bool = True
     ):
         """모델을 프로덕션으로 승격"""
-        # 현재 프로덕션 모델 아카이브
+        # 승격 전에 아카이브 — 프로덕션 버전이 정확히 하나만 존재하도록 보장하고
+        # 롤백 이력을 유지
         if archive_current:
             current_prod = self.get_production_model(model_name)
             if current_prod:
@@ -658,7 +692,8 @@ class ModelDeployer:
 
     def rollback(self, model_name: str):
         """이전 버전으로 롤백"""
-        # 아카이브된 버전 중 가장 최근 버전 찾기
+        # 가장 최근 아카이브 버전 선택 — 현재 피처 스키마 및 데이터 분포와
+        # 호환될 가능성이 가장 높음
         versions = self.client.search_model_versions(
             f"name='{model_name}'"
         )
@@ -742,17 +777,18 @@ class RetrainingTrigger:
             "reasons": []
         }
 
-        # 1. 성능 저하 체크
+        # 1. 성능 저하 — 가장 직접적인 신호; 개념 드리프트(concept drift)를 포착
         if metrics.get("accuracy", 1.0) < self.config["min_accuracy"]:
             triggers["should_retrain"] = True
             triggers["reasons"].append("accuracy_degradation")
 
-        # 2. 데이터 드리프트 체크
+        # 2. 데이터 드리프트(PSI) — 성능 하락 전 조기 경고;
+        # 레이블이 아직 없어도 분포 변화를 감지
         if metrics.get("psi", 0) > self.config["max_psi"]:
             triggers["should_retrain"] = True
             triggers["reasons"].append("data_drift")
 
-        # 3. 시간 기반 재학습
+        # 3. 시간 기반 재학습 — 메트릭이 감지하지 못하는 점진적 드리프트에 대한 안전망
         days_since_training = metrics.get("days_since_training", 0)
         if days_since_training > self.config["max_days_without_training"]:
             triggers["should_retrain"] = True

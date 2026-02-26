@@ -1,5 +1,27 @@
 # Serverless Functions (Lambda / Cloud Functions)
 
+**Previous**: [Virtual Machines](./04_Virtual_Machines.md) | **Next**: [Container Services](./06_Container_Services.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the serverless execution model and its event-driven architecture
+2. Compare AWS Lambda and GCP Cloud Functions in terms of runtimes, limits, and triggers
+3. Identify the causes and mitigation strategies for cold starts
+4. Deploy a serverless function using the console and CLI on both platforms
+5. Configure event sources (HTTP, storage, message queues) to trigger functions
+6. Design serverless applications that handle concurrency and scaling automatically
+7. Calculate serverless costs based on invocation count, duration, and memory
+
+---
+
+Serverless computing removes the need to provision and manage servers entirely. You write the function, define what triggers it, and the cloud provider handles everything else -- scaling, patching, and capacity planning. This model is ideal for event-driven workloads and can dramatically reduce operational overhead and cost for bursty, unpredictable traffic patterns.
+
+> **Analogy — The Light Switch**: Traditional servers are like leaving the lights on 24/7 in every room. Even when nobody's home, you're paying the electricity bill. Serverless is like motion-activated lights — power flows only when someone walks in, and shuts off automatically when they leave. You don't manage the wiring or the bulbs; you just define *what should happen when the light turns on*.
+
 ## 1. Serverless Overview
 
 ### 1.1 What is Serverless?
@@ -552,6 +574,167 @@ def resize_image(cloud_event):
 
 - [06_Container_Services.md](./06_Container_Services.md) - Container services
 - [11_Managed_Relational_DB.md](./11_Managed_Relational_DB.md) - Database integration
+
+---
+
+## Exercises
+
+### Exercise 1: Serverless vs VM Trade-off Analysis
+
+For each of the following use cases, determine whether serverless (Lambda/Cloud Functions) or a traditional VM (EC2/Compute Engine) is the better fit. Justify your answer.
+
+1. A REST API endpoint that receives ~500 requests per day, each taking < 200ms.
+2. A video transcoding service that processes 4K video files for up to 30 minutes per job.
+3. An event-driven pipeline that processes messages from a queue whenever new orders arrive.
+4. A long-running machine learning training job that runs for 6 hours continuously.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Serverless** — 500 requests/day is extremely low. A VM would sit idle for 99.9% of the time. Lambda's free tier covers 1M requests/month, so this workload would cost essentially $0. The < 200ms execution is well within serverless limits.
+
+2. **VM** — AWS Lambda has a maximum execution time of 15 minutes; GCP Cloud Functions (1st gen) has 9 minutes. A 30-minute transcoding job cannot run on either platform. Use an EC2 instance or a container-based solution (ECS/GKE) instead.
+
+3. **Serverless** — Event-driven queue processing is a textbook serverless use case. Lambda and Cloud Functions have native integrations with SQS/Pub-Sub. Serverless scales automatically with message volume and scales to zero when the queue is empty.
+
+4. **VM** — A 6-hour continuous run exceeds all serverless time limits. Long-running ML training requires persistent state and dedicated resources; use an EC2 GPU instance (p3/g4dn family) or managed ML platforms (SageMaker, Vertex AI).
+
+</details>
+
+### Exercise 2: Cold Start Root Cause and Mitigation
+
+A company's Lambda function handles user authentication. During peak hours it performs well (~50ms response), but first-morning requests regularly take 3–4 seconds, causing user complaints.
+
+1. What is causing the 3–4 second latency? Explain the mechanism.
+2. Propose two concrete mitigation strategies with their trade-offs.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Cold start**. When no Lambda instance has executed the function recently (overnight inactivity), AWS recycles the container. The first invocation must: spin up a new container, initialize the language runtime (e.g., Python interpreter), import all dependencies, and run any global initialization code. For a Python function with large authentication libraries (e.g., `boto3`, JWT libraries), this initialization can take 2–4 seconds. Subsequent "warm" invocations reuse the initialized container and take only 50ms.
+
+2. **Mitigation strategies**:
+
+   **Strategy A — Provisioned Concurrency**
+   - Configure Lambda to keep N pre-initialized containers always warm.
+   - Trade-off: Eliminates cold starts entirely for up to N concurrent invocations, but you pay for the provisioned concurrency hours even when no requests come in. Cost increases proportionally with N.
+   ```bash
+   aws lambda put-provisioned-concurrency-config \
+       --function-name my-auth-function \
+       --qualifier prod \
+       --provisioned-concurrent-executions 5
+   ```
+
+   **Strategy B — Scheduled Warm-up with CloudWatch Events**
+   - Create a CloudWatch Events rule that pings the function every 5 minutes to keep containers warm.
+   - Trade-off: Low cost (stays within free tier for a few warm-up pings), but only keeps a small number of containers warm. If the first morning spike requires 50 concurrent executions, most will still cold start. Works well for single-instance scenarios.
+
+</details>
+
+### Exercise 3: Lambda Cost Estimation
+
+Estimate the monthly AWS Lambda cost for a function with the following characteristics:
+- Memory: 512 MB
+- Average execution duration: 400ms
+- Invocations: 5 million per month
+- Architecture: x86
+
+Use these prices: $0.20 per 1M requests, $0.0000166667 per GB-second. Free tier: 1M requests and 400,000 GB-seconds per month.
+
+<details>
+<summary>Show Answer</summary>
+
+**Step 1: Request cost**
+- Total invocations: 5,000,000
+- Free tier: 1,000,000
+- Billable invocations: 4,000,000
+- Cost: 4,000,000 / 1,000,000 × $0.20 = **$0.80**
+
+**Step 2: Compute cost (GB-seconds)**
+- GB-seconds per invocation: 0.5 GB × 0.4 seconds = 0.2 GB-seconds
+- Total GB-seconds: 5,000,000 × 0.2 = 1,000,000 GB-seconds
+- Free tier: 400,000 GB-seconds
+- Billable GB-seconds: 600,000 GB-seconds
+- Cost: 600,000 × $0.0000166667 = **$10.00**
+
+**Total monthly cost: $0.80 + $10.00 = $10.80**
+
+**Optimization insight**: Switching to ARM (Graviton2) architecture reduces compute cost by 20%, bringing the compute cost to ~$8.00 and total to ~$8.80/month — a saving of ~$2/month or ~$24/year for this function alone.
+
+</details>
+
+### Exercise 4: Event Source Configuration
+
+You are building a system where: (1) users upload images to an S3 bucket, and (2) a Lambda function automatically creates a thumbnail for each uploaded image.
+
+Describe the event source mapping you need to configure and identify any important configuration detail to prevent an infinite loop.
+
+<details>
+<summary>Show Answer</summary>
+
+**Event source configuration**:
+- Configure an **S3 Event Notification** on the source bucket to trigger Lambda on `s3:ObjectCreated:*` events.
+- This means every time a new object is uploaded to the bucket, Lambda is invoked with an event containing the bucket name and object key.
+
+**Infinite loop problem**: If the Lambda function writes the generated thumbnail back to the same S3 bucket (not a subfolder or different bucket), the thumbnail upload itself triggers another Lambda invocation, which creates another thumbnail, which triggers another invocation — causing an infinite recursive loop and unexpected charges.
+
+**Solutions**:
+1. **Separate output bucket**: Write thumbnails to a different S3 bucket (e.g., `my-bucket-thumbnails`). Only configure the trigger on the source bucket.
+2. **Prefix/suffix filtering**: Configure the S3 trigger to only fire for objects under a specific prefix (e.g., `uploads/`) and NOT for the thumbnails prefix. Write thumbnails to `thumbnails/`. In the Lambda code, add a guard:
+   ```python
+   if key.startswith("thumbnails/"):
+       return  # Skip thumbnail files to prevent infinite loop
+   ```
+   Both code-level and S3-notification-level filtering are recommended as defense in depth.
+
+</details>
+
+### Exercise 5: Serverless Architecture Design
+
+Design a serverless architecture for an e-commerce order processing system. When a customer places an order:
+1. The order is saved to a database.
+2. An inventory check is performed.
+3. A confirmation email is sent.
+4. Analytics data is recorded.
+
+Identify which AWS services would be used, how they connect, and why serverless is appropriate for this workflow.
+
+<details>
+<summary>Show Answer</summary>
+
+**Architecture**:
+
+```
+Customer → API Gateway → Lambda (Order Handler)
+                               │
+                               ├── DynamoDB (save order)
+                               │
+                               └── SNS Topic "order-created"
+                                       │
+                         ┌─────────────┼──────────────┐
+                         ▼             ▼              ▼
+                    Lambda          Lambda         Lambda
+                 (Inventory)       (Email)      (Analytics)
+                      │               │              │
+                  DynamoDB         SES/SNS       Kinesis/S3
+               (inventory DB)   (send email)   (data lake)
+```
+
+**Service roles**:
+- **API Gateway**: HTTP endpoint that receives order requests and triggers the Order Handler Lambda.
+- **Lambda (Order Handler)**: Saves the order to DynamoDB, then publishes an `order-created` event to SNS. Returns a response to the customer.
+- **SNS Topic**: Fan-out hub that delivers the event to multiple downstream Lambdas simultaneously (parallel processing).
+- **Lambda (Inventory)**: Checks and decrements inventory in DynamoDB.
+- **Lambda (Email)**: Sends a confirmation email via SES.
+- **Lambda (Analytics)**: Records event data to Kinesis Data Firehose → S3 for later analysis.
+
+**Why serverless is appropriate**:
+- Each step is event-driven and short-lived (< 15 minutes).
+- Traffic is bursty (unpredictable order volume); serverless scales to zero and back automatically.
+- Loose coupling via SNS means each function can fail independently without affecting others.
+- Cost is proportional to actual order volume — no idle capacity costs.
+
+</details>
 
 ---
 

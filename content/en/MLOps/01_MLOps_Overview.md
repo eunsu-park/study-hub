@@ -1,5 +1,17 @@
 # MLOps Overview
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define MLOps and explain how it addresses the gap between machine learning model development and reliable production deployment
+2. Describe the four core principles of MLOps — reproducibility, automation, monitoring, and versioning — and explain why each is necessary
+3. Identify the three maturity levels of MLOps and determine which level is appropriate for a given organization or project
+4. Design an end-to-end ML pipeline that covers data validation, feature engineering, training, evaluation, and deployment
+5. Explain the key differences between DevOps and MLOps and describe the unique challenges that data and model management introduce
+
+---
+
 ## 1. What is MLOps?
 
 MLOps (Machine Learning Operations) is a practical methodology for automating and efficiently managing the development, deployment, and operation of machine learning models.
@@ -26,7 +38,8 @@ Core Principles of MLOps
 """
 
 # 1. Reproducibility
-# - Must be able to get identical results with the same data and code
+# Without this, debugging a production failure requires guessing which data/code version was used;
+# pinning all three (data, code, seed) makes any past run exactly reconstructable.
 experiment_config = {
     "data_version": "v1.2.0",
     "code_version": "git:abc123",
@@ -35,7 +48,8 @@ experiment_config = {
 }
 
 # 2. Automation
-# - Minimize manual work, automate with pipelines
+# Manual hand-offs between stages introduce human error and make the pipeline non-repeatable;
+# a defined stage list is the contract that every run follows the same sequence.
 pipeline_stages = [
     "data_validation",
     "feature_engineering",
@@ -45,7 +59,8 @@ pipeline_stages = [
 ]
 
 # 3. Monitoring
-# - Continuously monitor model performance and data quality
+# Models silently degrade as the real world drifts away from training data;
+# these three metrics together catch degradation at the model, latency, and data layers independently.
 monitoring_metrics = {
     "model_accuracy": 0.95,
     "prediction_latency_p99": "50ms",
@@ -53,7 +68,8 @@ monitoring_metrics = {
 }
 
 # 4. Versioning
-# - Version control for data, code, and models
+# Data, model, and config must be versioned together — a model artifact alone is meaningless
+# without knowing which data it was trained on and which config was active at deployment.
 versions = {
     "data": "s3://bucket/data/v2.0/",
     "model": "models/classifier_v3.2.1",
@@ -194,6 +210,9 @@ class Level2_CICDCT:
     - Automated rollback on performance degradation
     """
     def continuous_training(self):
+        # CT (Continuous Training) means the pipeline re-executes automatically when
+        # triggered by data events or drift detection — not by a human pressing "run".
+        # This is what separates Level 2 from Level 1's scheduled or manual retraining.
         if detect_drift() or new_data_available():
             trigger_training_pipeline()
         if model_performance_degraded():
@@ -390,12 +409,16 @@ class MLOpsPipeline:
 
     def data_ingestion(self):
         """Data collection and validation"""
+        # Validation is a separate step from ingestion because bad data silently corrupts models;
+        # catching schema errors and outliers here prevents expensive downstream retraining.
         raw_data = self.load_data(self.config["data_source"])
         validated_data = self.validate_data(raw_data)
         return validated_data
 
     def feature_engineering(self, data):
         """Feature engineering"""
+        # Reading from a feature store (not computing inline) ensures training and serving
+        # use the exact same feature logic, eliminating training-serving skew.
         features = self.feature_store.get_features(
             entity_ids=data["entity_ids"],
             feature_list=self.config["features"]
@@ -404,6 +427,8 @@ class MLOpsPipeline:
 
     def train(self, features):
         """Model training"""
+        # The experiment tracker context wraps training so every artifact — metrics,
+        # parameters, the model file — is atomically associated with one run ID.
         with self.experiment_tracker.start_run():
             model = self.train_model(features)
             metrics = self.evaluate(model)
@@ -412,6 +437,9 @@ class MLOpsPipeline:
 
     def register(self, model):
         """Model registration"""
+        # Registering to "staging" first enforces a human or automated quality gate
+        # before any model can reach production; skipping this step risks deploying
+        # a regression silently.
         if self.passes_quality_gate(model):
             self.model_registry.register(
                 model=model,
@@ -425,6 +453,8 @@ class MLOpsPipeline:
 
     def monitor(self):
         """Model monitoring"""
+        # Closing the feedback loop: drift detection here is what enables Level 2 CT —
+        # the pipeline retriggers itself without human intervention.
         if self.detect_drift():
             self.trigger_retraining()
 ```
@@ -457,9 +487,10 @@ X_train, X_test, y_train, y_test = train_test_split(
     iris.data, iris.target, test_size=0.2, random_state=42
 )
 
-# Start MLflow experiment
+# The context manager ensures the run is closed cleanly even if training raises an exception;
+# a run left open in RUNNING state cannot be compared in the UI until it is ended.
 with mlflow.start_run(run_name="random-forest-v1"):
-    # Log hyperparameters
+    # Log hyperparameters before training so the run is identifiable even if it fails mid-run.
     params = {"n_estimators": 100, "max_depth": 5}
     mlflow.log_params(params)
 

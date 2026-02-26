@@ -1,8 +1,22 @@
 """
-통계 분석 (Statistical Analysis)
-Basic Statistical Analysis with Python
+Statistical Analysis — Descriptive and Inferential Statistics
 
-기초 통계 분석 방법을 다룹니다.
+Demonstrates:
+- Descriptive statistics (central tendency, spread, shape)
+- Correlation analysis (Pearson, Spearman)
+- Hypothesis testing (t-tests, chi-square, ANOVA)
+- Normality tests (Shapiro-Wilk, Kolmogorov-Smirnov)
+- Confidence intervals and effect sizes (Cohen's d)
+
+Theory:
+- Descriptive statistics summarize data; inferential statistics generalize
+  from a sample to a population using probability models.
+- A p-value is the probability of observing data at least as extreme as
+  the sample, assuming H0 is true. It is NOT the probability that H0 is true.
+- Statistical significance (p < alpha) does not imply practical importance —
+  always report effect size alongside p-values.
+
+Adapted from Data_Science Lesson 04.
 """
 
 import numpy as np
@@ -11,57 +25,67 @@ from scipy import stats
 
 
 # =============================================================================
-# 1. 기술 통계 (Descriptive Statistics)
+# 1. Descriptive Statistics
 # =============================================================================
 def descriptive_stats():
-    """기술 통계량"""
-    print("\n[1] 기술 통계량")
+    """Descriptive statistics: central tendency, spread, shape."""
+    print("\n[1] Descriptive Statistics")
     print("=" * 50)
 
     np.random.seed(42)
-    data = np.random.normal(100, 15, 1000)  # 평균 100, 표준편차 15
+    data = np.random.normal(100, 15, 1000)  # mean=100, std=15
 
-    print(f"데이터 크기: {len(data)}")
-    print(f"\n중심 경향:")
-    print(f"  평균 (Mean):    {np.mean(data):.2f}")
-    print(f"  중앙값 (Median): {np.median(data):.2f}")
-    print(f"  최빈값 (Mode):   {stats.mode(data.round(), keepdims=False).mode:.2f}")
+    print(f"Sample size: {len(data)}")
+    print(f"\nCentral Tendency:")
+    print(f"  Mean:    {np.mean(data):.2f}")
+    print(f"  Median:  {np.median(data):.2f}")
+    print(f"  Mode:    {stats.mode(data.round(), keepdims=False).mode:.2f}")
 
-    print(f"\n산포도:")
-    print(f"  분산 (Variance): {np.var(data, ddof=1):.2f}")
-    print(f"  표준편차 (Std):  {np.std(data, ddof=1):.2f}")
-    print(f"  범위 (Range):    {np.ptp(data):.2f}")
-    print(f"  IQR:             {stats.iqr(data):.2f}")
+    # Why: ddof=1 gives the sample variance (Bessel's correction), which is
+    # an unbiased estimator of the population variance. ddof=0 (default in
+    # NumPy) gives the population variance and would underestimate when
+    # applied to a sample.
+    print(f"\nSpread:")
+    print(f"  Variance (ddof=1): {np.var(data, ddof=1):.2f}")
+    print(f"  Std Dev (ddof=1):  {np.std(data, ddof=1):.2f}")
+    print(f"  Range:             {np.ptp(data):.2f}")
+    print(f"  IQR:               {stats.iqr(data):.2f}")
 
-    print(f"\n분위수:")
+    print(f"\nPercentiles:")
     percentiles = [25, 50, 75, 90, 95, 99]
     for p in percentiles:
         print(f"  {p}th percentile: {np.percentile(data, p):.2f}")
 
-    print(f"\n형태:")
-    print(f"  왜도 (Skewness):  {stats.skew(data):.4f}")
-    print(f"  첨도 (Kurtosis):  {stats.kurtosis(data):.4f}")
+    # Why: Skewness measures asymmetry (0 = symmetric); kurtosis measures
+    # tail heaviness (0 = normal). Together they characterize how the
+    # distribution deviates from Gaussian — important for deciding whether
+    # parametric tests are appropriate.
+    print(f"\nShape:")
+    print(f"  Skewness:  {stats.skew(data):.4f}")
+    print(f"  Kurtosis:  {stats.kurtosis(data):.4f}")
 
 
 # =============================================================================
-# 2. 상관 분석 (Correlation Analysis)
+# 2. Correlation Analysis
 # =============================================================================
 def correlation_analysis():
-    """상관 분석"""
-    print("\n[2] 상관 분석")
+    """Correlation analysis (Pearson, Spearman)."""
+    print("\n[2] Correlation Analysis")
     print("=" * 50)
 
     np.random.seed(42)
     n = 100
 
-    # 상관된 데이터 생성
+    # Generate data with known correlations
     x = np.random.randn(n)
-    y = 2 * x + np.random.randn(n) * 0.5  # 강한 양의 상관
-    z = -0.5 * x + np.random.randn(n)     # 약한 음의 상관
-    w = np.random.randn(n)                 # 무상관
+    y = 2 * x + np.random.randn(n) * 0.5  # strong positive correlation
+    z = -0.5 * x + np.random.randn(n)     # weak negative correlation
+    w = np.random.randn(n)                 # no correlation
 
-    # 피어슨 상관계수
-    print("피어슨 상관계수 (Pearson):")
+    # Why: Pearson measures linear correlation; Spearman measures monotonic
+    # correlation (based on ranks). Use Spearman when the relationship is
+    # monotonic but not necessarily linear, or when data has outliers.
+    print("Pearson correlation:")
     corr_xy, p_xy = stats.pearsonr(x, y)
     corr_xz, p_xz = stats.pearsonr(x, z)
     corr_xw, p_xw = stats.pearsonr(x, w)
@@ -70,139 +94,144 @@ def correlation_analysis():
     print(f"  x-z: r = {corr_xz:.4f}, p = {p_xz:.4e}")
     print(f"  x-w: r = {corr_xw:.4f}, p = {p_xw:.4e}")
 
-    # 스피어만 순위 상관계수
-    print("\n스피어만 순위 상관계수 (Spearman):")
+    print("\nSpearman rank correlation:")
     corr_s, p_s = stats.spearmanr(x, y)
-    print(f"  x-y: ρ = {corr_s:.4f}, p = {p_s:.4e}")
+    print(f"  x-y: rho = {corr_s:.4f}, p = {p_s:.4e}")
 
-    # DataFrame 상관 행렬
+    # Correlation matrix
     df = pd.DataFrame({'x': x, 'y': y, 'z': z, 'w': w})
-    print("\n상관 행렬:")
+    print("\nCorrelation matrix:")
     print(df.corr().round(4))
 
 
 # =============================================================================
-# 3. 가설 검정 기초
+# 3. Hypothesis Testing
 # =============================================================================
 def hypothesis_testing():
-    """가설 검정"""
-    print("\n[3] 가설 검정 기초")
+    """Hypothesis testing (t-tests)."""
+    print("\n[3] Hypothesis Testing")
     print("=" * 50)
 
     np.random.seed(42)
 
-    # 단일 표본 t-검정
-    print("\n[단일 표본 t-검정]")
-    sample = np.random.normal(105, 15, 50)  # 실제 평균 105
-    t_stat, p_value = stats.ttest_1samp(sample, 100)  # H0: μ = 100
+    # One-sample t-test
+    print("\n[One-sample t-test]")
+    sample = np.random.normal(105, 15, 50)  # true mean = 105
+    t_stat, p_value = stats.ttest_1samp(sample, 100)  # H0: mu = 100
 
-    print(f"표본 평균: {np.mean(sample):.2f}")
-    print(f"H0: μ = 100")
-    print(f"t-통계량: {t_stat:.4f}")
+    print(f"Sample mean: {np.mean(sample):.2f}")
+    print(f"H0: mu = 100")
+    print(f"t-statistic: {t_stat:.4f}")
     print(f"p-value: {p_value:.4f}")
-    print(f"결론: {'H0 기각' if p_value < 0.05 else 'H0 채택'} (α=0.05)")
+    print(f"Conclusion: {'Reject H0' if p_value < 0.05 else 'Fail to reject H0'} (alpha=0.05)")
 
-    # 독립 표본 t-검정
-    print("\n[독립 표본 t-검정]")
+    # Why: ttest_ind assumes independent samples and (by default) equal
+    # variances. If variances differ, pass equal_var=False to use Welch's
+    # t-test, which is more robust and generally recommended.
+    print("\n[Independent two-sample t-test]")
     group1 = np.random.normal(100, 10, 50)
     group2 = np.random.normal(105, 10, 50)
 
     t_stat, p_value = stats.ttest_ind(group1, group2)
 
-    print(f"그룹1 평균: {np.mean(group1):.2f}")
-    print(f"그룹2 평균: {np.mean(group2):.2f}")
-    print(f"H0: μ1 = μ2")
-    print(f"t-통계량: {t_stat:.4f}")
+    print(f"Group 1 mean: {np.mean(group1):.2f}")
+    print(f"Group 2 mean: {np.mean(group2):.2f}")
+    print(f"H0: mu1 = mu2")
+    print(f"t-statistic: {t_stat:.4f}")
     print(f"p-value: {p_value:.4f}")
-    print(f"결론: {'H0 기각' if p_value < 0.05 else 'H0 채택'} (α=0.05)")
+    print(f"Conclusion: {'Reject H0' if p_value < 0.05 else 'Fail to reject H0'} (alpha=0.05)")
 
-    # 대응 표본 t-검정
-    print("\n[대응 표본 t-검정]")
+    # Paired t-test (same subjects, before/after)
+    print("\n[Paired t-test]")
     before = np.random.normal(100, 10, 30)
-    after = before + np.random.normal(5, 3, 30)  # 평균 5 증가
+    after = before + np.random.normal(5, 3, 30)  # mean increase of 5
 
     t_stat, p_value = stats.ttest_rel(before, after)
 
-    print(f"사전 평균: {np.mean(before):.2f}")
-    print(f"사후 평균: {np.mean(after):.2f}")
-    print(f"H0: μ_차이 = 0")
-    print(f"t-통계량: {t_stat:.4f}")
+    print(f"Before mean: {np.mean(before):.2f}")
+    print(f"After mean: {np.mean(after):.2f}")
+    print(f"H0: mean_difference = 0")
+    print(f"t-statistic: {t_stat:.4f}")
     print(f"p-value: {p_value:.4f}")
-    print(f"결론: {'H0 기각' if p_value < 0.05 else 'H0 채택'} (α=0.05)")
+    print(f"Conclusion: {'Reject H0' if p_value < 0.05 else 'Fail to reject H0'} (alpha=0.05)")
 
 
 # =============================================================================
-# 4. 카이제곱 검정
+# 4. Chi-Square Test
 # =============================================================================
 def chi_square_test():
-    """카이제곱 검정"""
-    print("\n[4] 카이제곱 검정")
+    """Chi-square test (goodness-of-fit and independence)."""
+    print("\n[4] Chi-Square Test")
     print("=" * 50)
 
-    # 적합도 검정
-    print("\n[적합도 검정]")
-    observed = np.array([18, 22, 20, 15, 25])  # 관측 빈도
-    expected = np.array([20, 20, 20, 20, 20])  # 기대 빈도
+    # Goodness-of-fit test
+    print("\n[Goodness-of-fit test]")
+    observed = np.array([18, 22, 20, 15, 25])  # observed frequencies
+    expected = np.array([20, 20, 20, 20, 20])  # expected frequencies
 
     chi2, p_value = stats.chisquare(observed, expected)
 
-    print(f"관측값: {observed}")
-    print(f"기대값: {expected}")
-    print(f"χ² = {chi2:.4f}")
+    print(f"Observed: {observed}")
+    print(f"Expected: {expected}")
+    print(f"chi2 = {chi2:.4f}")
     print(f"p-value = {p_value:.4f}")
-    print(f"결론: {'분포 다름' if p_value < 0.05 else '분포 같음'}")
+    print(f"Conclusion: {'Distribution differs' if p_value < 0.05 else 'Distribution matches'}")
 
-    # 독립성 검정
-    print("\n[독립성 검정 (교차표)]")
+    # Why: The independence test checks whether two categorical variables
+    # are associated. It compares observed cell counts to expected counts
+    # under the null hypothesis of independence.
+    print("\n[Independence test (contingency table)]")
     contingency_table = np.array([
-        [30, 20, 10],  # 그룹 A
-        [15, 25, 20],  # 그룹 B
-        [25, 15, 25]   # 그룹 C
+        [30, 20, 10],  # Group A
+        [15, 25, 20],  # Group B
+        [25, 15, 25]   # Group C
     ])
 
-    print("교차표:")
+    print("Contingency table:")
     print(contingency_table)
 
     chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
 
-    print(f"\nχ² = {chi2:.4f}")
-    print(f"자유도 = {dof}")
+    print(f"\nchi2 = {chi2:.4f}")
+    print(f"Degrees of freedom = {dof}")
     print(f"p-value = {p_value:.4f}")
-    print(f"결론: {'독립 아님' if p_value < 0.05 else '독립'}")
+    print(f"Conclusion: {'Not independent' if p_value < 0.05 else 'Independent'}")
 
 
 # =============================================================================
-# 5. 분산 분석 (ANOVA)
+# 5. ANOVA (Analysis of Variance)
 # =============================================================================
 def anova_test():
-    """ANOVA"""
-    print("\n[5] 분산 분석 (ANOVA)")
+    """One-way ANOVA and Kruskal-Wallis test."""
+    print("\n[5] ANOVA")
     print("=" * 50)
 
     np.random.seed(42)
 
-    # 세 그룹 데이터
+    # Three groups with different means
     group1 = np.random.normal(100, 10, 30)
     group2 = np.random.normal(105, 10, 30)
     group3 = np.random.normal(110, 10, 30)
 
-    print(f"그룹1 평균: {np.mean(group1):.2f}")
-    print(f"그룹2 평균: {np.mean(group2):.2f}")
-    print(f"그룹3 평균: {np.mean(group3):.2f}")
+    print(f"Group 1 mean: {np.mean(group1):.2f}")
+    print(f"Group 2 mean: {np.mean(group2):.2f}")
+    print(f"Group 3 mean: {np.mean(group3):.2f}")
 
-    # 일원 분산 분석
+    # Why: ANOVA tests whether at least one group mean differs. It is
+    # preferred over multiple t-tests because running N pairwise t-tests
+    # inflates the family-wise error rate (multiple comparison problem).
     f_stat, p_value = stats.f_oneway(group1, group2, group3)
 
-    print(f"\n일원 분산 분석 (One-way ANOVA)")
-    print(f"H0: μ1 = μ2 = μ3")
-    print(f"F-통계량: {f_stat:.4f}")
+    print(f"\nOne-way ANOVA")
+    print(f"H0: mu1 = mu2 = mu3")
+    print(f"F-statistic: {f_stat:.4f}")
     print(f"p-value: {p_value:.4f}")
-    print(f"결론: {'그룹 간 차이 있음' if p_value < 0.05 else '그룹 간 차이 없음'}")
+    print(f"Conclusion: {'Groups differ' if p_value < 0.05 else 'No significant difference'}")
 
-    # Kruskal-Wallis (비모수)
-    print("\n[비모수 검정: Kruskal-Wallis]")
+    # Non-parametric alternative (does not assume normality)
+    print("\n[Non-parametric: Kruskal-Wallis]")
     h_stat, p_value = stats.kruskal(group1, group2, group3)
-    print(f"H-통계량: {h_stat:.4f}")
+    print(f"H-statistic: {h_stat:.4f}")
     print(f"p-value: {p_value:.4f}")
 
 

@@ -6,6 +6,8 @@
 /**
  * @brief Clear input buffer after invalid input
  */
+// Why: after a failed extraction (e.g., letters when expecting int), the stream enters a
+// fail state — clear() resets the flags, and ignore() discards the bad input from the buffer
 void clearInput() {
     std::cin.clear();
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -57,6 +59,8 @@ void addStudentInteractive(StudentDatabase& db) {
     std::cin >> gpa;
 
     try {
+        // Why: make_shared bundles object + control block in one allocation and returns
+        // a shared_ptr — needed here because the database stores shared_ptr for multi-reference access
         auto student = std::make_shared<Student>(id, name, major, gpa);
         db.addStudent(student);
         std::cout << "Student added successfully!\n";
@@ -219,6 +223,8 @@ int main() {
                     std::cout << "Invalid choice. Please try again.\n";
             }
 
+        // Why: catch specific exceptions first, then general std::exception — C++ matches
+        // the first compatible handler, so a general catch before specific ones would hide them
         } catch (const StudentNotFoundException& e) {
             std::cerr << "Error: " << e.what() << "\n";
         } catch (const std::exception& e) {

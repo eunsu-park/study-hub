@@ -99,19 +99,24 @@ total_reward = 0
 done = False
 
 while not done:
-    # 1. Agent selects action (random here)
+    # Why random action here: without a learned policy, random sampling serves as a
+    # baseline to demonstrate the agent-environment loop. In practice, a learned
+    # policy (e.g., epsilon-greedy) would replace this.
     action = env.action_space.sample()
 
-    # 2. Apply action to environment
+    # Why env.step returns 5 values: Gymnasium separates "terminated" (natural end,
+    # e.g., pole fell) from "truncated" (time limit reached), which is important for
+    # correctly computing returns — truncation should not zero out future value.
     next_state, reward, terminated, truncated, info = env.step(action)
 
-    # 3. Accumulate reward
+    # Accumulate reward to measure policy performance across the episode
     total_reward += reward
 
-    # 4. Update state
+    # Why overwrite state: the Markov property means only the current state matters
     state = next_state
 
-    # 5. Check termination condition
+    # Why combine terminated and truncated: both end the episode, but they have
+    # different semantics for bootstrapping (see TD learning lessons)
     done = terminated or truncated
 
 print(f"Total reward: {total_reward}")
@@ -193,6 +198,8 @@ def calculate_return(rewards, gamma=0.99):
     Returns:
         G: Discounted cumulative reward
     """
+    # Why reverse iteration: exploits the recurrence G_t = r_t + gamma * G_{t+1},
+    # computing the discounted return in O(n) with a single backward pass
     G = 0
     for r in reversed(rewards):
         G = r + gamma * G
@@ -335,17 +342,21 @@ class EpsilonGreedy:
         With probability ε: random action (exploration)
         With probability 1-ε: best action (exploitation)
         """
+        # Why epsilon-greedy: the simplest strategy to balance exploration and
+        # exploitation. With probability epsilon we try random actions to discover
+        # potentially better options; otherwise we use the best known action.
         if np.random.random() < self.epsilon:
-            # Exploration: random action
             return np.random.randint(self.n_actions)
         else:
-            # Exploitation: highest value action
             return np.argmax(self.q_values)
 
     def update(self, action, reward):
         """Update action value (incremental average)"""
         self.action_counts[action] += 1
         n = self.action_counts[action]
+        # Why incremental mean update: equivalent to computing the full mean but
+        # requires only O(1) memory and computation per update. The step size 1/n
+        # gives equal weight to all past rewards, converging to the true mean.
         self.q_values[action] += (reward - self.q_values[action]) / n
 ```
 

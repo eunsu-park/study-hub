@@ -13,6 +13,7 @@ metadata:
 
     # NGINX specific annotations
     nginx.ingress.kubernetes.io/rewrite-target: /
+    # Why: Forcing SSL redirect at the Ingress level guarantees no HTTP traffic reaches the app — this is more reliable than app-level redirects because it catches all paths including health checks from external sources
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 
@@ -21,6 +22,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://example.com"
 
+    # Why: Rate limiting at the Ingress prevents DDoS and abuse before requests reach the app — 100 RPS with 50 concurrent connections protects backend pods from being overwhelmed
     # Rate limiting
     nginx.ingress.kubernetes.io/limit-rps: "100"
     nginx.ingress.kubernetes.io/limit-connections: "50"
@@ -36,12 +38,14 @@ metadata:
     # Connection upgrade (for WebSockets)
     nginx.ingress.kubernetes.io/proxy-upgrade: "true"
 
+    # Why: Security headers are injected at the Ingress so every backend service gets them automatically — doing it here means individual apps don't need to implement them, ensuring consistent security posture
     # Custom headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "X-XSS-Protection: 1; mode=block";
 
+    # Why: cert-manager automates the entire TLS lifecycle (issue, renew, rotate) via Let's Encrypt — without it, you'd manually manage certificates and risk outages from expiration
     # cert-manager for automatic TLS certificate
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 
@@ -60,6 +64,7 @@ metadata:
 
 spec:
   # TLS configuration
+# Why: TLS termination at the Ingress means backend pods handle plain HTTP — this simplifies app code and centralizes certificate management in one place
   tls:
   - hosts:
     - flask-app.example.com

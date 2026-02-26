@@ -1,5 +1,24 @@
 # Package Management
 
+**Previous**: [Process Management](./07_Process_Management.md) | **Next**: [Shell Scripting](./09_Shell_Scripting.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how package managers resolve dependencies and verify integrity
+2. Install, update, search, and remove packages using APT (Ubuntu/Debian)
+3. Perform the same operations using DNF/YUM (CentOS/RHEL)
+4. Add third-party repositories and manage GPG keys
+5. Query package information and find which package owns a file using dpkg and rpm
+6. Compile software from source when packages are not available
+7. Pin package versions to prevent unwanted upgrades
+8. Evaluate CentOS migration options (Rocky Linux, AlmaLinux) after CentOS EOL
+
+---
+
+Installing software on Linux is fundamentally different from downloading installers on Windows or macOS. Package managers handle everything automatically -- fetching the software, resolving dependencies, verifying checksums, and placing files in the correct locations. Keeping your system up to date through the package manager is one of the single most important things you can do for security and stability.
+
 ## 1. Package Management Concepts
 
 Package managers automate software installation, updates, and removal.
@@ -724,6 +743,4 @@ sudo dnf autoremove
 
 ---
 
-## Next Steps
-
-Let's learn about shell scripting in [09_Shell_Scripting.md](./09_Shell_Scripting.md)!
+**Previous**: [Process Management](./07_Process_Management.md) | **Next**: [Shell Scripting](./09_Shell_Scripting.md)

@@ -1,5 +1,26 @@
 # PostgreSQL Basics
 
+**Next**: [Database Management](./02_Database_Management.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what PostgreSQL is and describe its key features (ACID, MVCC, extensibility)
+2. Compare PostgreSQL with other popular databases (MySQL, SQLite)
+3. Install PostgreSQL using Docker, Homebrew, or a Linux package manager
+4. Connect to a PostgreSQL server using the `psql` command-line client
+5. Identify and use essential psql meta-commands (`\l`, `\dt`, `\d`, `\c`)
+6. Write and execute basic SQL statements (SELECT, CREATE DATABASE)
+7. Apply fundamental SQL syntax rules (case sensitivity, comments, semicolons)
+8. Troubleshoot common connection and startup errors
+
+---
+
+PostgreSQL is one of the most advanced open-source relational databases available today. Whether you are building a small web application or designing a large-scale analytics platform, PostgreSQL provides the reliability, extensibility, and standards compliance that professional developers and data engineers rely on. This lesson walks you through installation, first connection, and the essential commands that form the starting point of your PostgreSQL journey.
+
 ## 1. What is PostgreSQL?
 
 PostgreSQL is an open-source relational database management system (RDBMS).
@@ -47,7 +68,9 @@ PostgreSQL is an open-source relational database management system (RDBMS).
 The fastest way to get started.
 
 ```bash
-# Run PostgreSQL 16 container
+# Docker isolates PostgreSQL from your host system — you can experiment freely,
+# break things, and "docker rm" to start fresh without affecting other installations.
+# It also guarantees identical setups across machines (reproducibility).
 docker run --name postgres-study \
   -e POSTGRES_PASSWORD=mypassword \
   -e POSTGRES_USER=myuser \
@@ -302,10 +325,12 @@ WHERE active = true;
 ### Create Database
 
 ```sql
--- Basic creation
+-- Each database is an isolated namespace — tables in one DB cannot see tables in another.
+-- Create separate databases for dev, test, and prod to prevent accidental cross-contamination.
 CREATE DATABASE mydb;
 
--- With options
+-- Specify encoding and locale upfront — they are immutable after creation.
+-- UTF8 supports all languages; locale affects sort order and string comparison.
 CREATE DATABASE mydb
     ENCODING 'UTF8'
     LC_COLLATE 'ko_KR.UTF-8'
@@ -445,6 +470,4 @@ docker restart postgres-study
 
 ---
 
-## Next Steps
-
-Learn about database and user management in detail in [02_Database_Management.md](./02_Database_Management.md)!
+**Next**: [Database Management](./02_Database_Management.md)

@@ -6,13 +6,16 @@ Binarization is the process of converting a grayscale image into a black and whi
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
-**Learning Objectives**:
-- `cv2.threshold()` function and various flags
-- OTSU automatic threshold determination
-- Adaptive Thresholding
-- Multi-level thresholding
-- HSV color-based thresholding
-- Document binarization and shadow handling
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. `cv2.threshold()` function and various flags
+2. OTSU automatic threshold determination
+3. Adaptive Thresholding
+4. Multi-level thresholding
+5. HSV color-based thresholding
+6. Document binarization and shadow handling
 
 ---
 
@@ -234,6 +237,8 @@ find_optimal_threshold(img)
 
 ## 3. OTSU Automatic Threshold
 
+Choosing a threshold manually requires inspecting each image, which is impractical for batch processing. Otsu's method solves this by treating threshold selection as an optimization problem: find the value that best separates the histogram into two compact, well-separated clusters. The result is a data-driven threshold that works consistently across images with varying exposure.
+
 ### OTSU Algorithm
 
 ```
@@ -272,10 +277,11 @@ import cv2
 
 img = cv2.imread('image.jpg', cv2.IMREAD_GRAYSCALE)
 
-# Add OTSU flag (bitwise OR operation)
-# Set thresh value to 0 (OTSU determines automatically)
+# Why thresh=0 when using OTSU: the value is ignored — OpenCV overwrites it with the
+# computed optimal threshold; passing 0 signals intent and avoids confusion
 ret, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
+# ret is the threshold Otsu found; inspecting it tells you about the image contrast
 print(f"Threshold determined by OTSU: {ret}")
 
 cv2.imshow('Original', img)
@@ -326,7 +332,9 @@ img = cv2.imread('noisy_image.jpg', cv2.IMREAD_GRAYSCALE)
 # Direct OTSU
 _, otsu_direct = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-# OTSU after Gaussian blur (recommended)
+# Why blur before OTSU: noise creates many tiny histogram spikes that can shift
+# Otsu's variance calculation toward a wrong valley; blurring merges these spikes
+# back into the two main peaks, making the bimodal structure clearer
 blur = cv2.GaussianBlur(img, (5, 5), 0)
 ret, otsu_blur = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
@@ -341,6 +349,8 @@ cv2.destroyAllWindows()
 ---
 
 ## 4. Adaptive Thresholding - adaptiveThreshold()
+
+Global thresholding (including Otsu) uses one threshold for the entire image, which fails when illumination is uneven — the shadow side of a document may be darker than the brightest foreground pixels on the bright side. Adaptive thresholding computes a separate threshold for each pixel based on its local neighborhood, making it robust to gradients in lighting and the standard choice for document scanning.
 
 ### What is Adaptive Thresholding?
 
@@ -384,18 +394,21 @@ img = cv2.imread('document.jpg', cv2.IMREAD_GRAYSCALE)
 # adaptiveThreshold(src, maxValue, adaptiveMethod, thresholdType,
 #                   blockSize, C)
 # adaptiveMethod: ADAPTIVE_THRESH_MEAN_C or ADAPTIVE_THRESH_GAUSSIAN_C
-# blockSize: Local area size (odd number)
+# blockSize: Local area size (must be odd — required so there is a single center pixel)
 # C: Constant subtracted from calculated mean/weighted mean
 
-# MEAN_C: Local area mean
+# MEAN_C: treats all neighbors equally — fast but can be noisy at edges
 adaptive_mean = cv2.adaptiveThreshold(
     img, 255,
     cv2.ADAPTIVE_THRESH_MEAN_C,
     cv2.THRESH_BINARY,
-    11, 2
+    11, 2  # blockSize=11 captures ~11px lighting variation; C=2 prevents noise pixels
+           # from flipping to white (background subtraction)
 )
 
-# GAUSSIAN_C: Gaussian weighted mean of local area (greater weight at center)
+# Why GAUSSIAN_C preferred: pixels near the center of the block are more likely to
+# share the same illumination as the target pixel; down-weighting distant neighbors
+# produces a smoother, less noisy threshold map than MEAN_C
 adaptive_gaussian = cv2.adaptiveThreshold(
     img, 255,
     cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -432,6 +445,11 @@ cv2.destroyAllWindows()
 │                                                                 │
 │   Threshold calculation:                                        │
 │   T(x,y) = mean(blockSize × blockSize area) - C               │
+│                                                                 │
+│   Geometric intuition: the local mean estimates the background  │
+│   brightness around pixel (x,y); subtracting C lowers the bar  │
+│   so that only pixels noticeably brighter than their surroundings│
+│   (i.e., ink on paper) pass the test                           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -722,13 +740,15 @@ def binarize_document(img, method='adaptive'):
         gray = img.copy()
 
     if method == 'otsu':
-        # OTSU
+        # Why blur before OTSU: smoothing collapses noise spikes in the histogram so
+        # Otsu finds the true valley between background and foreground peaks
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         _, binary = cv2.threshold(blur, 0, 255,
                                    cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     elif method == 'adaptive':
-        # Adaptive
+        # Why blockSize=21, C=15: a 21px block handles typical shadow gradients in
+        # A4 scans; C=15 is aggressive enough to suppress paper texture noise
         binary = cv2.adaptiveThreshold(
             gray, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -749,7 +769,8 @@ def binarize_document(img, method='adaptive'):
             21, 15
         )
 
-        # AND operation on both results
+        # Why AND: a pixel is kept only if *both* methods agree it is foreground;
+        # this intersection removes false positives that each method produces alone
         binary = cv2.bitwise_and(otsu, adaptive)
 
     return binary
@@ -838,13 +859,17 @@ def divide_binarization(img, blur_kernel=21):
     else:
         gray = img.copy()
 
-    # Estimate background (strong blur)
+    # Why strong blur (blur_kernel=21): we want the background illumination map,
+    # not any text content; the kernel must be large enough that all text is blurred away
     bg = cv2.GaussianBlur(gray, (blur_kernel, blur_kernel), 0)
 
-    # Divide operation (multiply by 255 to maintain range)
+    # Why divide: gray/bg normalizes each pixel by local brightness; a dark ink pixel
+    # on a shadowed background divides to a low ratio just like on a bright background,
+    # making the result illumination-independent
     divided = cv2.divide(gray, bg, scale=255)
 
-    # Binarization
+    # Why OTSU on the divided image: after division the histogram is reliably bimodal
+    # (ink vs paper), so Otsu finds a stable threshold without manual tuning
     _, binary = cv2.threshold(divided, 0, 255,
                                cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 

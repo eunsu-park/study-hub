@@ -12,6 +12,9 @@ void print_binary(unsigned char n) {
 }
 
 // 비트 조작 매크로
+// Why: wrapping every parameter in parentheses prevents operator precedence bugs —
+// without them, SET_BIT(x, a+b) would expand to (x |= (1 << a+b)) where + binds
+// tighter than <<, giving the wrong bit position
 #define SET_BIT(reg, bit)    ((reg) |= (1 << (bit)))
 #define CLEAR_BIT(reg, bit)  ((reg) &= ~(1 << (bit)))
 #define TOGGLE_BIT(reg, bit) ((reg) ^= (1 << (bit)))
@@ -57,6 +60,9 @@ int main(void) {
     // 플래그 예제
     printf("=== 플래그 관리 예제 ===\n\n");
 
+    // Why: using bit shifts (1 << N) for flag values ensures each flag occupies
+    // exactly one bit — a single byte can store 8 independent boolean flags,
+    // far more memory-efficient than 8 separate bool variables
     #define FLAG_RUNNING   (1 << 0)
     #define FLAG_ERROR     (1 << 1)
     #define FLAG_CONNECTED (1 << 2)
@@ -79,7 +85,8 @@ int main(void) {
     print_binary(flags);
     printf("\n\n");
 
-    // 플래그 확인
+    // Why: bitwise AND with a flag mask tests that specific bit — if the bit is set,
+    // the result is non-zero (truthy); if cleared, the result is zero (falsy)
     if (flags & FLAG_RUNNING) {
         printf("시스템이 실행 중입니다.\n");
     }
@@ -91,7 +98,8 @@ int main(void) {
     }
     printf("\n");
 
-    // 플래그 해제
+    // Why: ~FLAG_RUNNING inverts to 0b11111110, and AND clears only bit 0 —
+    // this is the only safe way to clear one bit without affecting the others
     flags &= ~FLAG_RUNNING;
     printf("RUNNING 플래그 해제: ");
     print_binary(flags);

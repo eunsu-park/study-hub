@@ -1,14 +1,27 @@
 # Parallel Processing and Multicore
 
-## Overview
-
-As single-processor performance improvements reach physical limits, modern computers are achieving higher performance through multicore and parallel processing. This lesson covers the fundamental concepts of parallel processing, multiprocessor/multicore architectures, cache coherence problems, synchronization mechanisms, and parallel computing using GPUs.
+**Previous**: [17_IO_Systems.md](./17_IO_Systems.md)
 
 **Difficulty**: ⭐⭐⭐⭐
 
 **Prerequisites**: CPU architecture, cache memory, memory hierarchy
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why clock frequency scaling hit a power wall
+2. Describe Flynn's taxonomy (SISD, SIMD, MISD, MIMD)
+3. Explain Amdahl's law and calculate theoretical speedup limits
+4. Compare shared-memory and distributed-memory multiprocessor architectures
+5. Describe cache coherence protocols (MESI) and why they are necessary
+6. Explain the role of GPUs and SIMT execution in modern computing
+
+---
+
+For decades, CPUs got faster every year by increasing clock frequency. That era ended around 2005 when power consumption hit a wall. The industry's answer was multicore -- putting multiple processors on a single chip. Understanding parallel processing explains why a 16-core processor is not 16x faster than a single core, why cache coherence is hard, and why GPUs dominate machine learning workloads.
 
 ## Table of Contents
 
@@ -869,6 +882,11 @@ Hardware-supported atomic operations:
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
 │  Test-and-Set (TAS):                                        │
+│  // Why atomicity matters: if read and write were separate   │
+│  // instructions, two threads could both read 0 ("unlocked") │
+│  // before either writes 1 — both would believe they acquired│
+│  // the lock. The hardware LOCK prefix on x86 ensures the    │
+│  // read-modify-write completes as one indivisible operation. │
 │  ┌───────────────────────────────────────────────────┐     │
 │  │  int TAS(int *lock) {                             │     │
 │  │      int old = *lock;   // Read                   │     │
@@ -927,6 +945,15 @@ Hardware-supported atomic operations:
 │  Problem: Bus traffic on every TAS                          │
 │                                                             │
 │  Test-and-Test-and-Set (TTAS):                              │
+│  // Why TTAS is much better than plain TAS: each TAS issues │
+│  // a LOCK'd bus transaction that forces all other caches to │
+│  // invalidate their copy — even when the lock is held and   │
+│  // the attempt will fail. With TTAS, the inner while loop   │
+│  // reads from the local cache (Shared state) generating zero│
+│  // bus traffic. Only when the value changes (lock released) │
+│  // does it attempt the expensive TAS. This reduces bus      │
+│  // contention from O(N) per spin iteration to O(1) on       │
+│  // release, where N is the number of waiting cores.         │
 │  ┌───────────────────────────────────────────────────┐     │
 │  │  void lock(int *lock) {                           │     │
 │  │      while (1) {                                  │     │
@@ -989,6 +1016,12 @@ Hardware-supported atomic operations:
 │               Lock-Free Counter Example                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
+│  // Why the CAS retry loop works: if no other thread modified│
+│  // counter between our load and CAS, the exchange succeeds │
+│  // and we're done. If another thread did increment it, CAS │
+│  // fails, 'old' is updated to the current value, and we    │
+│  // retry with the fresh value. Progress is guaranteed       │
+│  // because at least one thread succeeds per round.          │
 │  void increment(atomic_int *counter) {                      │
 │      int old, new;                                         │
 │      do {                                                  │
@@ -1110,11 +1143,22 @@ Hardware-supported atomic operations:
 
 ```cuda
 // Vector addition CUDA kernel
+// Why __global__: this qualifier tells the NVCC compiler that vectorAdd runs on
+// the GPU (device) but is callable from the CPU (host). Each of the million
+// threads executes this same function body but with a different idx value —
+// this is the SIMT (Single Instruction, Multiple Threads) execution model.
 
 __global__ void vectorAdd(float *A, float *B, float *C, int N) {
     // Calculate global thread index
+    // Why this formula: blockIdx.x identifies which block this thread belongs to,
+    // blockDim.x is the number of threads per block (256), and threadIdx.x is the
+    // thread's position within its block. Together they produce a unique index
+    // from 0 to N-1 across all threads in the grid.
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
+    // Why the bounds check: the grid may launch more threads than N elements
+    // (since blocksPerGrid rounds up). Without this guard, out-of-bounds threads
+    // would read/write past the end of the arrays — causing memory corruption.
     if (idx < N) {
         C[idx] = A[idx] + B[idx];
     }
@@ -1140,7 +1184,13 @@ int main() {
     cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
     // Kernel execution configuration
+    // Why 256 threads per block: this is a common sweet spot. GPU SMs have a
+    // limited number of registers and shared memory; 256 threads balances
+    // occupancy (enough warps to hide memory latency) against resource pressure.
+    // Too few threads → SM idles; too many → register spilling to slow local memory.
     int threadsPerBlock = 256;
+    // Why round up: if N=1000000 and threadsPerBlock=256, we need ceil(1000000/256)
+    // = 3907 blocks. The (N + 255) / 256 formula is the integer ceiling trick.
     int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
 
     // Execute kernel

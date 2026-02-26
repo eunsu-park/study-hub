@@ -8,15 +8,18 @@ The database landscape has evolved dramatically since the NoSQL revolution. A ne
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Explain the NewSQL design philosophy and how it reconciles ACID with horizontal scalability
-- Describe Google Spanner's TrueTime mechanism and external consistency
-- Compare CockroachDB, TiDB, and Spanner architectures
-- Understand vector databases and similarity search algorithms (HNSW, IVF)
-- Explain time-series database optimizations
-- Evaluate graph analytics platforms for large-scale analysis
-- Assess Database-as-a-Service offerings
-- Understand the data lakehouse paradigm and its relationship to databases
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the NewSQL design philosophy and how it reconciles ACID with horizontal scalability
+2. Describe Google Spanner's TrueTime mechanism and external consistency
+3. Compare CockroachDB, TiDB, and Spanner architectures
+4. Understand vector databases and similarity search algorithms (HNSW, IVF)
+5. Explain time-series database optimizations
+6. Evaluate graph analytics platforms for large-scale analysis
+7. Assess Database-as-a-Service offerings
+8. Understand the data lakehouse paradigm and its relationship to databases
 
 ---
 

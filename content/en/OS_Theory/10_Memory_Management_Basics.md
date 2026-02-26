@@ -1,10 +1,22 @@
 # Memory Management Basics ⭐⭐
 
-## Overview
-
-Memory management in operating systems is a core function that efficiently allocates and manages memory required for program execution. In this chapter, we'll learn about address binding, logical/physical address translation, and dynamic loading and swapping.
+**Previous**: [Deadlock](./09_Deadlock.md) | **Next**: [Contiguous Memory Allocation](./11_Contiguous_Memory_Allocation.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish logical addresses from physical addresses
+2. Explain address binding at compile time, load time, and run time
+3. Describe the role of the MMU in address translation
+4. Explain swapping and its performance implications
+5. Compare different memory allocation strategies
+
+---
+
+Every variable, every function, every data structure in your program lives somewhere in memory. The OS decides where -- and that decision affects performance, security, and whether your program can even run. Memory management is the bridge between your program's abstract view of memory and the physical RAM chips on the motherboard.
 
 ## Table of Contents
 

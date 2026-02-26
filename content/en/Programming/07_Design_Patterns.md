@@ -1,13 +1,25 @@
 # Design Patterns
 
-> **Topic**: Programming
-> **Lesson**: 7 of 16
-> **Prerequisites**: Understanding of OOP principles (encapsulation, inheritance, polymorphism), basic programming experience
-> **Objective**: Master common design patterns (Gang of Four and beyond), recognize when to apply them, and understand their trade-offs
+**Previous**: [Functional Programming Concepts](./06_Functional_Programming.md) | **Next**: [Clean Code & Code Smells](./08_Clean_Code.md)
 
-## Introduction
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define what a design pattern is and name its four essential elements (name, problem, solution, consequences)
+2. Classify patterns into creational, structural, and behavioral categories
+3. Implement key creational patterns (Singleton, Factory Method, Builder) and explain when each is appropriate
+4. Implement key structural patterns (Adapter, Decorator, Facade, Proxy, Composite) and identify real-world examples
+5. Implement key behavioral patterns (Observer, Strategy, Command, Iterator, State, Template Method) and contrast their intents
+6. Evaluate when a design pattern adds value versus when it introduces unnecessary complexity
+7. Recognize common anti-patterns (God Object, Golden Hammer, Lava Flow) and explain how to avoid them
+8. Explain how modern language features (first-class functions, pattern matching) reduce the need for certain classical patterns
+
+---
 
 Design patterns are reusable solutions to commonly occurring problems in software design. They provide a shared vocabulary for developers and encapsulate best practices refined over decades. This lesson covers the classic Gang of Four (GoF) patterns, when to use them, and when they might be overkill.
+
+> **📌 Analogy:** Design patterns are like a chef's recipe book: proven combinations of ingredients and techniques for common dishes. You do not reinvent how to make a roux every time -- you apply the known recipe and focus your creativity on what makes your dish unique.
 
 ## What Are Design Patterns?
 
@@ -1497,5 +1509,4 @@ For each scenario, explain why using a design pattern would be overkill:
 
 ---
 
-**Previous**: [06_Functional_Programming.md](06_Functional_Programming.md)
-**Next**: [08_Clean_Code.md](08_Clean_Code.md)
+**Previous**: [Functional Programming Concepts](./06_Functional_Programming.md) | **Next**: [Clean Code & Code Smells](./08_Clean_Code.md)

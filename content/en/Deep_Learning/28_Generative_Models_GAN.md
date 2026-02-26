@@ -49,8 +49,16 @@ G training: Make D classify fakes as real
 ### Min-Max Game
 
 ```python
-# GAN objective function (min-max game)
-# min_G max_D V(D, G) = E[log D(x)] + E[log(1 - D(G(z)))]
+# GAN objective function (min-max game):
+#
+#   min_G max_D  V(D, G) = E_x[log D(x)] + E_z[log(1 - D(G(z)))]
+#
+# Symbol definitions:
+#   D(·)  — Discriminator: maps an image to probability of being real
+#   G(·)  — Generator: maps latent noise z to a synthetic image
+#   x     — sample from the real data distribution p_data
+#   z     — sample from a prior noise distribution (typically N(0, I))
+#   E_x   — expectation over real data;  E_z — expectation over noise
 
 # D's goal: Maximize V(D, G)
 #   - D(x) → 1 (classify real as real)
@@ -71,7 +79,7 @@ import torch
 import torch.nn as nn
 
 class Generator(nn.Module):
-    """간단한 Generator (⭐⭐)"""
+    """Simple Generator (⭐⭐)"""
     def __init__(self, latent_dim=100, img_shape=(1, 28, 28)):
         super().__init__()
         self.img_shape = img_shape
@@ -89,7 +97,7 @@ class Generator(nn.Module):
             *block(256, 512),
             *block(512, 1024),
             nn.Linear(1024, int(torch.prod(torch.tensor(img_shape)))),
-            nn.Tanh()  # 출력: [-1, 1]
+            nn.Tanh()  # output: [-1, 1]
         )
 
     def forward(self, z):
@@ -101,7 +109,7 @@ class Generator(nn.Module):
 
 ```python
 class Discriminator(nn.Module):
-    """간단한 Discriminator (⭐⭐)"""
+    """Simple Discriminator (⭐⭐)"""
     def __init__(self, img_shape=(1, 28, 28)):
         super().__init__()
 
@@ -112,7 +120,7 @@ class Discriminator(nn.Module):
             nn.Linear(512, 256),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(256, 1),
-            nn.Sigmoid()  # 출력: [0, 1] 확률
+            nn.Sigmoid()  # output: [0, 1] probability
         )
 
     def forward(self, img):
@@ -138,22 +146,25 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
             batch_size = real_imgs.size(0)
             real_imgs = real_imgs.to(device)
 
-            # 레이블
+            # Labels
             real_labels = torch.ones(batch_size, 1, device=device)
             fake_labels = torch.zeros(batch_size, 1, device=device)
 
             # ==================
-            # Discriminator 학습
+            # Train Discriminator
             # ==================
             optimizer_D.zero_grad()
 
-            # 진짜 이미지
+            # Real images
             real_output = discriminator(real_imgs)
             d_loss_real = criterion(real_output, real_labels)
 
-            # 가짜 이미지
+            # Fake images
             z = torch.randn(batch_size, latent_dim, device=device)
             fake_imgs = generator(z)
+            # .detach() is critical: D's loss must NOT backpropagate into G.
+            # Without detach, optimizer_D.step() would update D to also
+            # minimize G's generation quality — breaking the adversarial game.
             fake_output = discriminator(fake_imgs.detach())
             d_loss_fake = criterion(fake_output, fake_labels)
 
@@ -162,13 +173,19 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
             optimizer_D.step()
 
             # ==================
-            # Generator 학습
+            # Train Generator
             # ==================
             optimizer_G.zero_grad()
 
-            # D가 가짜를 진짜로 판단하도록
+            # Pass fakes through D again (without detach this time, so
+            # gradients flow from D's output back through G's parameters).
+            # We use *real* labels because G wants D to believe fakes are real.
+            # This is the "non-saturating" loss: instead of minimizing
+            # log(1 - D(G(z))) (which saturates when D is confident), we
+            # maximize log(D(G(z))) — same optimum, but stronger gradients
+            # early in training when G is still poor.
             fake_output = discriminator(fake_imgs)
-            g_loss = criterion(fake_output, real_labels)  # 진짜 레이블 사용
+            g_loss = criterion(fake_output, real_labels)
 
             g_loss.backward()
             optimizer_G.step()
@@ -193,7 +210,7 @@ d_loss = criterion(D(real), 1) + criterion(D(G(z)), 0)
 g_loss = criterion(D(G(z)), 1)  # -log(D(G(z)))
 
 # G loss (original, saturating)
-# g_loss = -criterion(D(G(z)), 0)  # log(1 - D(G(z))) - 잘 안 씀
+# g_loss = -criterion(D(G(z)), 0)  # log(1 - D(G(z))) - rarely used
 ```
 
 ### Wasserstein Loss (WGAN)
@@ -203,11 +220,11 @@ def wasserstein_loss(y_pred, y_true):
     """Wasserstein distance (Earth Mover's Distance)"""
     return torch.mean(y_pred * y_true)
 
-# D (Critic) loss - 최대화
+# D (Critic) loss - maximize
 d_loss = torch.mean(D(real)) - torch.mean(D(G(z)))
-# → 최소화하려면 부호 반전: -D(real) + D(G(z))
+# → To minimize, flip sign: -D(real) + D(G(z))
 
-# G loss - 최소화
+# G loss - minimize
 g_loss = -torch.mean(D(G(z)))
 
 # Weight Clipping (WGAN)
@@ -222,15 +239,15 @@ def gradient_penalty(discriminator, real_imgs, fake_imgs, device):
     """Gradient Penalty for WGAN-GP (⭐⭐⭐)"""
     batch_size = real_imgs.size(0)
 
-    # 랜덤 interpolation
+    # Random interpolation
     alpha = torch.rand(batch_size, 1, 1, 1, device=device)
     interpolated = alpha * real_imgs + (1 - alpha) * fake_imgs
     interpolated.requires_grad_(True)
 
-    # Discriminator 출력
+    # Discriminator output
     d_interpolated = discriminator(interpolated)
 
-    # Gradient 계산
+    # Gradient computation
     gradients = torch.autograd.grad(
         outputs=d_interpolated,
         inputs=interpolated,
@@ -291,8 +308,8 @@ class DCGANGenerator(nn.Module):
         super().__init__()
 
         self.main = nn.Sequential(
-            # 입력: z (latent_dim,)
-            # 출력: (ngf*8, 4, 4)
+            # Input: z (latent_dim,)
+            # Output: (ngf*8, 4, 4)
             nn.ConvTranspose2d(latent_dim, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
             nn.ReLU(True),
@@ -393,7 +410,7 @@ class DCGANDiscriminator(nn.Module):
 from torch.nn.utils import spectral_norm
 
 class SNDiscriminator(nn.Module):
-    """Spectral Normalization 적용 Discriminator (⭐⭐⭐)"""
+    """Discriminator with Spectral Normalization (⭐⭐⭐)"""
     def __init__(self, nc=3, ndf=64):
         super().__init__()
 
@@ -424,14 +441,14 @@ class SNDiscriminator(nn.Module):
 real_labels = torch.ones(batch_size, 1, device=device) * 0.9  # 1.0 → 0.9
 fake_labels = torch.zeros(batch_size, 1, device=device)
 
-# 또는 noisy labels
+# Or noisy labels
 real_labels = 0.7 + 0.3 * torch.rand(batch_size, 1, device=device)  # [0.7, 1.0]
 ```
 
 ### Two Time-Scale Update Rule (TTUR)
 
 ```python
-# D는 더 높은 학습률
+# D uses higher learning rate
 optimizer_D = torch.optim.Adam(D.parameters(), lr=0.0004, betas=(0.0, 0.9))
 optimizer_G = torch.optim.Adam(G.parameters(), lr=0.0001, betas=(0.0, 0.9))
 ```
@@ -439,13 +456,13 @@ optimizer_G = torch.optim.Adam(G.parameters(), lr=0.0001, betas=(0.0, 0.9))
 ### Progressive Growing
 
 ```python
-# 작은 해상도에서 시작해서 점진적으로 키움
+# Start at small resolution and progressively grow
 # ProGAN (Progressive GAN)
 
 resolutions = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
 
-# 각 해상도에서 일정 epoch 학습 후 다음 해상도로
-# Fade-in: 새 레이어를 점진적으로 추가
+# Train at each resolution for some epochs, then move to next
+# Fade-in: progressively add new layers
 ```
 
 ---
@@ -508,12 +525,12 @@ class AdaIN(nn.Module):
 ### Style Mixing
 
 ```python
-# 서로 다른 z에서 w 생성
+# Generate w from different z values
 z1, z2 = torch.randn(2, latent_dim)
 w1, w2 = mapping(z1), mapping(z2)
 
-# 특정 레이어까지는 w1, 그 이후는 w2 사용
-# → 스타일 혼합 (coarse: w1, fine: w2)
+# Use w1 up to certain layer, w2 after
+# → Style mixing (coarse: w1, fine: w2)
 ```
 
 ---
@@ -530,12 +547,12 @@ def generate_samples(generator, latent_dim, num_samples=64):
         fake_imgs = generator(z)
     return fake_imgs
 
-# 시각화
+# Visualization
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 
 def show_generated_images(images, nrow=8):
-    """생성된 이미지 그리드 표시"""
+    """Display grid of generated images"""
     # [-1, 1] → [0, 1]
     images = (images + 1) / 2
     grid = vutils.make_grid(images.cpu(), nrow=nrow, normalize=False)
@@ -550,7 +567,7 @@ def show_generated_images(images, nrow=8):
 
 ```python
 def interpolate_latent(generator, z1, z2, steps=10):
-    """잠재 공간 보간 (⭐⭐)"""
+    """Latent space interpolation (⭐⭐)"""
     generator.eval()
     images = []
 
@@ -562,9 +579,9 @@ def interpolate_latent(generator, z1, z2, steps=10):
 
     return torch.cat(images, dim=0)
 
-# Spherical interpolation (slerp) - 더 나은 결과
+# Spherical interpolation (slerp) - better results
 def slerp(z1, z2, alpha):
-    """구면 선형 보간"""
+    """Spherical linear interpolation"""
     omega = torch.acos((z1 * z2).sum() / (z1.norm() * z2.norm()))
     return (torch.sin((1 - alpha) * omega) / torch.sin(omega)) * z1 + \
            (torch.sin(alpha * omega) / torch.sin(omega)) * z2
@@ -573,7 +590,7 @@ def slerp(z1, z2, alpha):
 ### FID (Frechet Inception Distance)
 
 ```python
-# FID 계산 (pytorch-fid 라이브러리 사용)
+# FID computation (using pytorch-fid library)
 # pip install pytorch-fid
 
 # from pytorch_fid import fid_score
@@ -583,7 +600,7 @@ def slerp(z1, z2, alpha):
 #     device=device,
 #     dims=2048
 # )
-# 낮을수록 좋음 (0이 완벽)
+# Lower is better (0 is perfect)
 ```
 
 ---
@@ -597,13 +614,13 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 
-# 하이퍼파라미터
+# Hyperparameters
 latent_dim = 100
 lr = 0.0002
 batch_size = 64
 epochs = 50
 
-# 데이터
+# Data
 transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize([0.5], [0.5])  # [-1, 1]
@@ -612,27 +629,27 @@ transform = transforms.Compose([
 mnist = datasets.MNIST('data', train=True, download=True, transform=transform)
 dataloader = DataLoader(mnist, batch_size=batch_size, shuffle=True)
 
-# 간단한 모델
+# Simple models
 G = Generator(latent_dim=latent_dim, img_shape=(1, 28, 28)).to(device)
 D = Discriminator(img_shape=(1, 28, 28)).to(device)
 
-# 옵티마이저
+# Optimizers
 optimizer_G = torch.optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
 optimizer_D = torch.optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
 
 criterion = nn.BCELoss()
 
-# 학습
+# Training
 for epoch in range(epochs):
     for real_imgs, _ in dataloader:
         batch_size = real_imgs.size(0)
         real_imgs = real_imgs.to(device)
 
-        # 레이블
+        # Labels
         real = torch.ones(batch_size, 1, device=device)
         fake = torch.zeros(batch_size, 1, device=device)
 
-        # D 학습
+        # Train D
         optimizer_D.zero_grad()
         z = torch.randn(batch_size, latent_dim, device=device)
         fake_imgs = G(z)
@@ -641,7 +658,7 @@ for epoch in range(epochs):
         d_loss.backward()
         optimizer_D.step()
 
-        # G 학습
+        # Train G
         optimizer_G.zero_grad()
         g_loss = criterion(D(fake_imgs), real)
         g_loss.backward()
@@ -650,10 +667,10 @@ for epoch in range(epochs):
     if (epoch + 1) % 10 == 0:
         print(f"Epoch {epoch+1}: D={d_loss.item():.4f}, G={g_loss.item():.4f}")
 
-        # 샘플 저장
+        # Save samples
         with torch.no_grad():
             sample = G(torch.randn(16, latent_dim, device=device))
-            # 저장 코드...
+            # save code...
 ```
 
 ---
@@ -678,6 +695,21 @@ for epoch in range(epochs):
 5. Periodically check generated images
 ```
 
+### Mode Collapse
+
+Mode collapse is the most common GAN failure mode: **G learns to produce only a few types of output** instead of covering the full data distribution.
+
+**Why it happens**: G finds a single output (or a few) that reliably fools D, then has no incentive to diversify. D eventually catches on and shifts its decision boundary, but G simply jumps to a different narrow mode — creating an oscillation rather than convergence.
+
+**Signs of mode collapse**:
+- Generated images look nearly identical across different noise inputs
+- FID score improves but then plateaus or oscillates
+
+**Mitigations**:
+- **WGAN/WGAN-GP**: The Wasserstein distance provides meaningful gradients even when D is confident, encouraging G to cover more modes
+- **Spectral Normalization**: Constrains D's Lipschitz constant, preventing it from becoming too sharp and forcing G into a corner
+- **Diversity regularization**: Penalize G when different z inputs produce similar outputs
+
 ### Loss Function Comparison
 
 | Loss Function | Advantages | Disadvantages |
@@ -686,6 +718,47 @@ for epoch in range(epochs):
 | WGAN | Stable training | Weight clipping |
 | WGAN-GP | Very stable | Computational cost |
 | Hinge | Simple and effective | - |
+
+---
+
+## Exercises
+
+### Exercise 1: Explain the Min-Max Game
+
+In your own words, explain why GAN training is formulated as a min-max game. Specifically:
+1. What objective does the Discriminator maximize and why?
+2. What objective does the Generator minimize and why?
+3. Why does the "non-saturating" Generator loss (`-log D(G(z))`) work better than the original formulation (`log(1 - D(G(z)))`) early in training? Hint: consider what happens to the gradient when D is confident.
+
+### Exercise 2: Implement Weight Initialization for DCGAN
+
+The DCGAN paper specifies that all Conv and BatchNorm weights should be initialized from a Normal distribution with `mean=0.0, std=0.02`. Review the `_init_weights` method in `DCGANGenerator` and answer:
+1. Why is custom weight initialization important for GAN stability compared to PyTorch's default initialization?
+2. Modify the `DCGANGenerator` to also initialize the `BatchNorm` bias to `0` using `nn.init.constant_`. Verify your change matches what `DCGANDiscriminator._init_weights` already does.
+
+### Exercise 3: Train a Vanilla GAN on MNIST
+
+Using the provided `Generator`, `Discriminator`, and training loop code, train a GAN on the MNIST dataset:
+1. Set `latent_dim=100`, `batch_size=64`, `epochs=50`, `lr=0.0002`.
+2. Save a grid of 16 generated images every 10 epochs using `show_generated_images`.
+3. Plot the discriminator loss and generator loss curves over training.
+4. Observe and describe: does either loss converge? What does the training behavior tell you about the adversarial game?
+
+### Exercise 4: Compare WGAN vs Vanilla GAN
+
+Replace the BCE loss in the training loop with the Wasserstein loss:
+1. Implement the WGAN training loop with weight clipping (`clamp_(-0.01, 0.01)` after each discriminator step).
+2. Remove the `Sigmoid` activation from the Discriminator (WGAN uses an unconstrained "critic").
+3. Train both Vanilla GAN and WGAN on MNIST for 20 epochs.
+4. Compare the generated image quality and training stability. Document your observations: which version shows more stable loss curves?
+
+### Exercise 5: Implement and Evaluate Latent Space Interpolation
+
+Using a trained MNIST GAN:
+1. Sample two random latent vectors `z1` and `z2`.
+2. Implement both linear interpolation and spherical interpolation (`slerp`) between `z1` and `z2` with 10 steps.
+3. Generate and visualize the image sequence for both interpolation methods.
+4. Explain why spherical interpolation tends to produce smoother transitions than linear interpolation for Gaussian latent spaces. Hint: think about the expected norm of a random Gaussian vector and what happens in the middle of a linear interpolation.
 
 ---
 

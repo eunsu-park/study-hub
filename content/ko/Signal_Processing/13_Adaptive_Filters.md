@@ -10,14 +10,17 @@
 
 **선수 지식**: FIR/IIR 필터 설계, 선형대수, 기본 최적화 개념
 
-**학습 목표**:
-- 위너 필터(Wiener filter)를 최적 MMSE 선형 필터로 유도
-- 최급강하법(method of steepest descent)과 수렴 특성 이해
-- LMS 알고리즘 유도 및 구현, 수렴 동작 분석
-- 향상된 수렴을 위한 정규화 LMS(Normalized LMS, NLMS) 구현
-- 행렬 역 보조정리(matrix inversion lemma)를 이용한 RLS 알고리즘 유도 및 구현
-- 복잡도, 수렴, 추적 측면에서 LMS와 RLS 비교
-- 시스템 식별, 잡음 제거, 에코 제거, 등화에 적응 필터 적용
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 위너 필터(Wiener filter)를 최적 MMSE 선형 필터로 유도
+2. 최급강하법(method of steepest descent)과 수렴 특성 이해
+3. LMS 알고리즘 유도 및 구현, 수렴 동작 분석
+4. 향상된 수렴을 위한 정규화 LMS(Normalized LMS, NLMS) 구현
+5. 행렬 역 보조정리(matrix inversion lemma)를 이용한 RLS 알고리즘 유도 및 구현
+6. 복잡도, 수렴, 추적 측면에서 LMS와 RLS 비교
+7. 시스템 식별, 잡음 제거, 에코 제거, 등화에 적응 필터 적용
 
 ---
 

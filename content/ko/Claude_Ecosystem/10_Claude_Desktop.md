@@ -13,14 +13,17 @@ Claude Desktop은 macOS와 Windows용 독립형 애플리케이션으로, 로컬
 - 레슨 02: Claude Code 시작하기 (Claude Code에 대한 기본 친숙도)
 - Git 기초 (브랜치, 커밋, 워크트리)
 
-**학습 목표**:
-- Claude Desktop이 무엇이며 claude.ai 및 Claude Code CLI와 어떻게 다른지 이해
-- macOS 또는 Windows에서 Claude Desktop 설치 및 설정
-- git 워크트리 격리를 통한 병렬 세션으로 동시 작업
-- Claude 내에서 웹 애플리케이션을 실행하고 보기 위한 앱 미리보기 사용
-- PR 모니터링 및 CI 수정 워크플로를 위한 GitHub 통합 활용
-- 데스크톱 전용 설정 구성
-- Claude Desktop이 Claude Code CLI와 어떻게 통합되는지 이해
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Claude Desktop이 무엇이며 claude.ai 및 Claude Code CLI와 어떻게 다른지 이해
+2. macOS 또는 Windows에서 Claude Desktop 설치 및 설정
+3. git 워크트리 격리를 통한 병렬 세션으로 동시 작업
+4. Claude 내에서 웹 애플리케이션을 실행하고 보기 위한 앱 미리보기 사용
+5. PR 모니터링 및 CI 수정 워크플로를 위한 GitHub 통합 활용
+6. 데스크톱 전용 설정 구성
+7. Claude Desktop이 Claude Code CLI와 어떻게 통합되는지 이해
 
 ---
 

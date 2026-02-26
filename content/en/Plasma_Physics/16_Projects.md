@@ -209,8 +209,14 @@ def boris_step(r, v, E, B, q, m, dt):
     v_minus = v + (q * dt / (2 * m)) * E
 
     # Magnetic rotation
+    # t_vec = (q dt/2m) B is half the rotation angle vector; the Boris trick
+    # decomposes the full rotation into two cross-products to avoid computing
+    # a full rotation matrix while remaining exactly time-reversible.
     t_vec = (q * dt / (2 * m)) * B
     t_mag_sq = np.dot(t_vec, t_vec)
+    # s_vec = 2t/(1+|t|²) is the double-angle formula for the rotation:
+    # this exact form conserves kinetic energy in a static B field to machine
+    # precision, which is why Boris is preferred over simple Euler integration.
     s_vec = 2 * t_vec / (1 + t_mag_sq)
 
     v_prime = v_minus + np.cross(v_minus, t_vec)
@@ -219,7 +225,8 @@ def boris_step(r, v, E, B, q, m, dt):
     # Half electric push
     v_new = v_plus + (q * dt / (2 * m)) * E
 
-    # Position update
+    # Position update using the already-updated velocity (leap-frog ordering)
+    # ensures second-order accuracy in both position and velocity.
     r_new = r + v_new * dt
 
     return r_new, v_new
@@ -825,12 +832,20 @@ def solve_poisson_fft(rho, dx, L):
 
     # Wavenumbers
     k = 2 * np.pi * np.fft.fftfreq(Nx, d=dx)
+    # k[0] = 0 (DC mode) would produce division by zero in φ_k = -ρ_k/(ε₀k²).
+    # Setting k[0] = 1 temporarily makes the denominator finite; the resulting
+    # phi_k[0] is immediately overridden below so it has no physical effect.
     k[0] = 1  # avoid division by zero (DC component is arbitrary for periodic)
 
     # Fourier transform of potential: φ_k = -ρ_k / (ε₀ k²)
     phi_k = -rho_k / (epsilon_0 * k**2)
+    # Setting the DC potential to zero fixes the additive gauge freedom: in a
+    # periodic domain only differences in potential are physical, and a non-zero
+    # mean would shift all particle energies without affecting the dynamics.
     phi_k[0] = 0  # set DC component to zero
 
+    # Differentiate in Fourier space: exact spectral differentiation avoids the
+    # truncation error of finite-difference stencils for dφ/dx.
     # Electric field: E = -dφ/dx → E_k = i k φ_k
     E_k = 1j * k * phi_k
 
@@ -990,9 +1005,20 @@ def solve_poisson_fft(rho, dx):
     Nx = len(rho)
     rho_k = np.fft.fft(rho)
     k = 2 * np.pi * np.fft.fftfreq(Nx, d=dx)
+    # k[0] = 0 (the DC/zero-frequency mode) would cause division by zero in
+    # phi_k = -rho_k / (ε₀ k²). Setting k[0] = 1 is a placeholder that makes
+    # the division well-defined; the resulting phi_k[0] is overwritten next.
     k[0] = 1  # avoid division by zero
     phi_k = -rho_k / (epsilon_0 * k**2)
+    # Force the DC component of the potential to zero: with periodic boundaries,
+    # the absolute potential is arbitrary (only ∇φ matters physically), and
+    # a non-zero DC term would accumulate numerical drift. Setting phi_k[0] = 0
+    # fixes the gauge and ensures the mean electric field is zero, consistent
+    # with overall charge neutrality (∫ρ dx = 0 for a quasi-neutral plasma).
     phi_k[0] = 0
+    # Differentiate in Fourier space: E = -dφ/dx → E_k = ik φ_k.
+    # Multiplication by ik is exact (no finite-difference error), which is one
+    # reason spectral methods are preferred for the Poisson step.
     E_k = 1j * k * phi_k
     E = np.real(np.fft.ifft(E_k))
     return E
@@ -1003,20 +1029,28 @@ energy_history = []
 
 # Time-stepping loop
 for n in range(Nt):
-    # Compute density
+    # Compute density by integrating f over velocity space: n_e = ∫f dv.
+    # This moment reduction is exact and is why kinetic Vlasov simulations
+    # can recover fluid moments without any closure assumption.
     n_e = np.trapz(f, v_grid, axis=1)
 
     # Solve Poisson
+    # rho = e(n_i - n_e): ions are a fixed background (n_i = n_0), so only
+    # electron density fluctuations drive the self-consistent electric field.
     rho = e * (n_0 - n_e)
     E = solve_poisson_fft(rho, dx)
 
-    # Store diagnostics
+    # Store diagnostics before advancing f so we record the state that
+    # corresponds to the electric field just computed (consistent snapshot).
     E_history.append(np.max(np.abs(E)))
     field_energy = 0.5 * epsilon_0 * np.sum(E**2) * dx
     kinetic_energy = 0.5 * m_e * np.sum(f * (v_grid[np.newaxis, :]**2) * dx * dv)
     energy_history.append(field_energy + kinetic_energy)
 
-    # Split-step advection
+    # Strang splitting (half-x, full-v, half-x) achieves second-order accuracy
+    # in time: splitting at first order would give only O(dt) accuracy, while
+    # this symmetric arrangement cancels the leading error term, matching the
+    # accuracy of Runge-Kutta 2 at the same cost.
     f = advect_x(f, v_grid, dt / 2)
     f = advect_v(f, E, dt)
     f = advect_x(f, v_grid, dt / 2)
@@ -1117,6 +1151,105 @@ By completing these projects, you will have hands-on experience with the computa
 - **MHD** codes for fusion equilibrium and stability (e.g., NIMROD, M3D-C1)
 
 Congratulations on completing the Plasma Physics course! You now have a solid foundation in both the theory and computation of plasma physics.
+
+---
+
+## Exercises
+
+### Exercise 1: Boris Algorithm Convergence Study
+
+The Boris algorithm is second-order accurate in time. Verify this empirically by measuring how the gyroradius error scales with the time step.
+
+**Steps**:
+1. Set up an electron gyrating in a uniform magnetic field $\mathbf{B} = 0.1\,\text{T}\,\hat{\mathbf{z}}$ with $v_\perp = 10^6\,\text{m/s}$ and no initial parallel velocity.
+2. Compute the analytical gyroradius $\rho_c = m_e v_\perp / (eB)$ and cyclotron period $T_c = 2\pi m_e / (eB)$.
+3. Run the simulation for exactly 10 cyclotron periods using time steps $\Delta t = T_c / N$ for $N \in \{10, 20, 50, 100, 200, 500\}$.
+4. After 10 periods, measure the positional error: the deviation of the particle's position from its starting point (the orbit should close exactly).
+5. Plot the positional error vs. $\Delta t$ on a log-log scale and fit the slope. Confirm the slope is close to 2, consistent with second-order convergence.
+6. Also measure the energy drift $\Delta E_{kin} / E_{kin,0}$ at each time step size and verify it remains bounded (not growing) for all $N$.
+
+**Expected result**: Positional error $\propto (\Delta t)^2$; energy is conserved to machine precision regardless of $\Delta t$.
+
+---
+
+### Exercise 2: Loss Cone in a Magnetic Mirror
+
+A magnetic mirror confines particles only if their pitch angle exceeds the loss cone angle. Derive the loss cone angle analytically and then verify it numerically using the particle orbit simulator.
+
+**Steps**:
+1. For a magnetic mirror with mirror ratio $R_m = B_{max}/B_{min}$ (use $B_{min} = 0.1\,\text{T}$ at $z=0$ and $B_{max} = 0.5\,\text{T}$ at the mirror points), derive the loss cone half-angle:
+   $$\sin^2\alpha_{lc} = \frac{B_{min}}{B_{max}} = \frac{1}{R_m}$$
+2. Launch 50 electrons from the midplane ($z=0$) with the same speed $v = 5 \times 10^6\,\text{m/s}$ but with pitch angles $\alpha$ uniformly sampled from $0°$ to $90°$ (where $\alpha$ is the angle between $\mathbf{v}$ and $\mathbf{B}$).
+3. Integrate each orbit for $t_{final} = 50\,\mu\text{s}$ using the magnetic mirror field from Section 1.3.
+4. Classify each particle as confined (bouncing) or lost (reaching $|z| > z_{mirror}$) and record its initial pitch angle.
+5. Plot the confinement outcome vs. pitch angle. Mark the theoretical loss cone boundary and compare with your numerical results.
+6. Estimate the fraction of an isotropic distribution that would be confined.
+
+**Hint**: The adiabatic invariant $\mu = m v_\perp^2 / (2B)$ is conserved. Use this to derive the pitch angle at the mirror point and determine the condition for reflection.
+
+---
+
+### Exercise 3: Cutoff and Resonance Identification in the CMA Diagram
+
+The Clemmow-Mullaly-Allis (CMA) diagram organizes all cold plasma wave modes by their cutoffs and resonances. Build this diagram numerically and identify the named wave modes.
+
+**Steps**:
+1. Choose a fixed magnetic field $B_0 = 0.05\,\text{T}$. Define dimensionless axes:
+   - $X = \omega_{pe}^2 / \omega^2$ (density parameter, varied by changing $n$ or $\omega$)
+   - $Y = \omega_{ce} / \omega$ (magnetization parameter)
+2. On a grid of $(X, Y)$ values with $X \in [0, 4]$ and $Y \in [0, 3]$, compute the Stix parameters $S$, $D$, $P$ for each point (treat $\omega$ as fixed and vary $n$ to change $X$).
+3. Draw the cutoff lines:
+   - $P = 0$ (O-mode cutoff: $\omega = \omega_{pe}$, i.e., $X = 1$)
+   - $R = S + D = 0$ (R cutoff)
+   - $L = S - D = 0$ (L cutoff)
+4. Draw the resonance lines:
+   - $S = 0$ (upper and lower hybrid resonances)
+   - $\tan^2\theta = -P/S$ for $\theta = 0$ and $\theta = \pi/2$ (parallel and perpendicular resonances)
+5. Color the regions by which wave modes propagate (both $n_\pm^2 > 0$, one positive, or both negative/evanescent).
+6. Label the regions with their standard names: O-mode, X-mode, R-wave, L-wave, whistler mode, lower hybrid wave.
+
+**Reference**: The diagram should reproduce Figure 1-8 in T. H. Stix, *Waves in Plasmas* (AIP, 1992).
+
+---
+
+### Exercise 4: Two-Stream Instability Growth Rate Measurement
+
+The two-stream instability is one of the most important kinetic plasma instabilities. Measure its linear growth rate numerically and compare with the analytical prediction.
+
+**Steps**:
+1. Modify the Vlasov-Poisson solver from Project 3 to accept a two-beam initial condition:
+   $$f_0(x, v) = \frac{n_0}{2}\left[\mathcal{M}(v - v_0) + \mathcal{M}(v + v_0)\right](1 + \alpha\cos(k_0 x))$$
+   where $\mathcal{M}(v) = (2\pi v_{th}^2)^{-1/2}\exp(-v^2/2v_{th}^2)$, beam speed $v_0 = 3v_{th}$, $v_{th} = 10^6\,\text{m/s}$, $\alpha = 0.01$.
+2. Choose the perturbation wavenumber $k_0$ to lie in the unstable band: for symmetric beams the instability is strongest near $k_0 \approx \omega_{pe} / v_0$. Verify this is in the unstable region using the cold-beam dispersion relation:
+   $$1 = \frac{\omega_{pe}^2/2}{(\omega - kv_0)^2} + \frac{\omega_{pe}^2/2}{(\omega + kv_0)^2}$$
+3. Run the simulation and record $\max_x |E(x, t)|$ at each time step.
+4. Identify the linear growth phase (where $\ln|E|$ grows linearly in time) and measure the numerical growth rate $\gamma_{num}$ by fitting a straight line.
+5. Compare $\gamma_{num}$ with the analytical imaginary part of $\omega$ obtained by solving the cold-beam dispersion relation numerically (using `numpy.roots` on the polynomial form).
+6. Plot the phase space $f(x, v)$ at three times: initial, mid-saturation, and after saturation. Describe the vortex structures (phase space holes) that appear at saturation.
+
+**Expected result**: During the linear phase, $|E| \propto e^{\gamma t}$ with $\gamma \approx \omega_{pe}/2\sqrt{2}$ for $v_0 \gg v_{th}$ and $k = \omega_{pe}/v_0$.
+
+---
+
+### Exercise 5: Integrated Mini-Project — Whistler Wave Propagation and Dispersion
+
+Whistler waves are right-hand circularly polarized electromagnetic waves that propagate below the electron cyclotron frequency. They play an important role in radiation belt dynamics and ionospheric communication. Design and carry out an integrated mini-project that connects all three main projects.
+
+**Part A — Dispersion diagram** (using Project 2 code):
+1. Compute and plot the whistler wave branch ($\omega < \omega_{ce}$, parallel propagation, R-mode) on a $\omega$-$k$ diagram.
+2. Overplot the group velocity $v_g = d\omega/dk$ as a function of frequency and identify the frequency of maximum group velocity.
+3. Show that the group velocity is approximately $v_g \approx 2c\sqrt{\omega/\omega_{pe}^2 \cdot \omega_{ce}}$ in the limit $\omega_{ce} \ll \omega_{pe}$ and verify numerically.
+
+**Part B — Temporal dispersion** (analytical calculation):
+1. A lightning stroke generates a broadband impulse. Consider two frequencies $f_1 = 5\,\text{kHz}$ and $f_2 = 10\,\text{kHz}$ propagating through the ionosphere (use $n_e = 10^{10}\,\text{m}^{-3}$, $B_0 = 5 \times 10^{-5}\,\text{T}$, $L = 1000\,\text{km}$).
+2. Calculate the travel time $t = L/v_g(\omega)$ for each frequency.
+3. The time delay between arrivals is the "whistler dispersion." Estimate the time separation $\Delta t = t_1 - t_2$ and compare with observed whistler dispersions (typically 1–10 seconds).
+
+**Part C — Particle resonance** (analytical):
+1. Electrons can resonate with whistler waves via the cyclotron resonance condition: $\omega - k v_\parallel = \omega_{ce}$ (for electrons). Given the whistler wave at $f = 5\,\text{kHz}$, find the resonant electron energy (in keV) for this ionospheric plasma.
+2. Discuss how this resonance leads to pitch angle scattering and loss of radiation belt electrons into the atmosphere (wave-particle interaction(파동-입자 상호작용) in action).
+
+**Deliverable**: A single Python script that generates three figures (dispersion diagram, group velocity curve, travel time vs. frequency) with appropriate annotations, plus a short written discussion of the wave-particle resonance.
 
 ---
 

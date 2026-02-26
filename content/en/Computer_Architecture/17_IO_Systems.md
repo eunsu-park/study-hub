@@ -1,14 +1,27 @@
 # I/O Systems
 
-## Overview
-
-Input/Output (I/O) systems handle data transfer between the CPU and external devices (keyboard, disk, network, etc.). The design of the I/O system significantly impacts overall system performance and is implemented using various methods such as polling, interrupts, and DMA. This lesson covers the structure and operating principles of I/O systems.
+**Previous**: [16_Virtual_Memory.md](./16_Virtual_Memory.md) | **Next**: [18_Parallel_Processing_Multicore.md](./18_Parallel_Processing_Multicore.md)
 
 **Difficulty**: ⭐⭐⭐
 
 **Prerequisites**: CPU architecture, memory systems
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the bus architecture connecting CPU, memory, and I/O devices
+2. Compare programmed I/O, interrupt-driven I/O, and DMA
+3. Explain how DMA transfers data without CPU involvement
+4. Describe the evolution from shared buses to point-to-point interconnects (PCIe)
+5. Explain memory-mapped I/O vs port-mapped I/O
+6. Analyze I/O bottlenecks and their impact on system performance
+
+---
+
+A computer that cannot communicate with the outside world is useless. I/O systems connect the CPU to disks, networks, displays, and keyboards -- and their design determines whether your SSD feels fast or slow, whether your network card can keep up with gigabit traffic, and whether your GPU can feed frames to your display fast enough. I/O is often the true bottleneck in system performance.
 
 ## Table of Contents
 
@@ -230,8 +243,14 @@ I/O Device Controller Registers:
 #define READY_BIT   0x01   // Ready bit mask
 
 // Character output (polling)
+// Why polling is used here despite being wasteful: for fast devices like a UART
+// running at the CPU's own speed, the ready bit flips almost immediately. The
+// loop body executes only a few times, so the simplicity of polling (no interrupt
+// setup, no context switch) outweighs the brief busy-wait cost.
 void putchar_polling(char c) {
     // Wait until device is ready (Busy Wait)
+    // Why we check READY_BIT in a loop: the UART transmit buffer may still hold
+    // a previous character. Writing before it drains would overwrite and lose data.
     while ((inb(STATUS_REG) & READY_BIT) == 0) {
         // CPU keeps looping and checking
         // Unable to do anything else
@@ -419,6 +438,10 @@ IDT Entry Structure (64-bit):
 #define KEYBOARD_PORT   0x60
 
 // Keyboard buffer
+// Why volatile: the ISR and main code run asynchronously — the ISR modifies
+// buffer_head from interrupt context while getchar_interrupt reads it in normal
+// context. Without volatile, the compiler may cache buffer_head in a register
+// and never see the ISR's update, causing an infinite wait loop.
 volatile char keyboard_buffer[256];
 volatile int buffer_head = 0;
 volatile int buffer_tail = 0;
@@ -426,6 +449,8 @@ volatile int buffer_tail = 0;
 // Interrupt handler (ISR)
 void keyboard_handler(void) {
     // 1. Read scancode
+    // Why read immediately: the keyboard controller holds only one scancode.
+    // If we delay, the next keystroke overwrites it before we read — losing input.
     unsigned char scancode = inb(KEYBOARD_PORT);
 
     // 2. Store in buffer
@@ -433,6 +458,9 @@ void keyboard_handler(void) {
     buffer_head = (buffer_head + 1) % 256;
 
     // 3. Send EOI (notify interrupt complete)
+    // Why EOI is mandatory: the PIC blocks all interrupts at or below this IRQ's
+    // priority until it receives EOI. Forgetting EOI freezes the keyboard (and
+    // potentially the timer, since IRQ 0 is lower-numbered but same priority group).
     outb(0x20, 0x20);  // EOI to PIC
 }
 
@@ -666,10 +694,18 @@ Definition: Direct data transfer between I/O device and memory without CPU
 #define DMA_MASK_REG    0x0A
 
 // DMA transfer setup
+// Why this multi-step register dance: the legacy ISA DMA controller (8237A) uses
+// 8-bit I/O ports to program 16/24-bit addresses and counts. Each 16-bit value
+// must be written as two successive byte-writes (low byte, then high byte),
+// synchronized by the flip-flop. This awkward protocol is a relic of the 8-bit
+// IBM PC bus — modern DMA (bus-mastering PCIe) avoids it entirely.
 void setup_dma_read(void* buffer, size_t count) {
     uint32_t addr = (uint32_t)buffer;
 
     // 1. Mask DMA channel (disable)
+    // Why mask first: prevents the DMA controller from acting on a half-configured
+    // channel. Without masking, a stale DREQ signal could trigger a transfer to
+    // the old address while we're writing the new one.
     outb(DMA_MASK_REG, DMA_CHANNEL | 0x04);
 
     // 2. Reset flip-flop
@@ -888,6 +924,12 @@ Preventing collisions when multiple devices share bus:
 │  - Most devices in modern PCs also use MMIO                 │
 │                                                             │
 │  Example:                                                   │
+│  // Why volatile: without it the compiler may optimize away │
+│  // repeated reads (caching the value in a register) or     │
+│  // reorder/eliminate writes — but I/O registers have side  │
+│  // effects: reading clears status bits, writing triggers   │
+│  // hardware actions. volatile forces every access to go    │
+│  // through to the actual memory-mapped address.            │
 │  volatile uint32_t* reg = (uint32_t*)0xFE200000;           │
 │  *reg = value;         // Write to I/O register            │
 │  value = *reg;         // Read from I/O register           │

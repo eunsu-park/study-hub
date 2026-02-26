@@ -1,5 +1,25 @@
 # C Language Environment Setup
 
+**Previous**: [C Programming Learning Guide](./00_Overview.md) | **Next**: [C Language Basics Quick Review](./02_C_Basics_Review.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Install and configure a C compiler (GCC or Clang) on macOS, Windows, or Linux
+2. Configure VS Code with extensions and build tasks for C development
+3. Compile and run a "Hello World" program from the command line
+4. Apply recommended compiler flags (`-Wall`, `-Wextra`, `-std=c11`, `-g`) to catch errors early
+5. Build multi-file projects using a Makefile with variables, pattern rules, and phony targets
+6. Debug C programs using `printf` tracing, GDB breakpoints, and VS Code's integrated debugger
+7. Organize a C project into `src/`, `include/`, `build/`, and `tests/` directories
+
+---
+
+Before writing a single line of C, you need a working toolchain -- a compiler to translate your source code into machine instructions, an editor to write it in, and a terminal to run it. This lesson walks you through setting up that toolchain on every major operating system so that, by the end, you can compile, run, and debug C programs with confidence.
+
 ## 1. What You Need for C Development
 
 | Component | Description |
@@ -326,6 +346,70 @@ If all steps succeed, your environment is ready!
 
 ---
 
+## Exercises
+
+### Exercise 1: Verify Your Toolchain
+
+Run the environment verification checklist from Section 7 and capture the output. Then answer the following questions:
+
+1. What version of GCC or Clang is installed on your system?
+2. What is the default size of `int` and `long` on your platform? Write a short program using `sizeof` to find out and compare with the values shown in Section 3.
+3. On Windows (WSL or MinGW), is the `long` type 4 or 8 bytes? Why might it differ from Linux?
+
+### Exercise 2: Compiler Flags Exploration
+
+Compile the following intentionally broken program four times, each time with a different set of flags, and note the difference in warnings and errors produced:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int x;                    // Uninitialized variable
+    float ratio = 1 / 3;     // Integer division (likely a bug)
+    printf("%d %f\n", x, ratio);
+    return 0;
+}
+```
+
+- Compile 1: `gcc buggy.c -o buggy` (no flags)
+- Compile 2: `gcc -Wall buggy.c -o buggy`
+- Compile 3: `gcc -Wall -Wextra buggy.c -o buggy`
+- Compile 4: `gcc -Wall -Wextra -std=c11 buggy.c -o buggy`
+
+Record which flags caught which warnings. Explain why `-Wextra` catches more issues than `-Wall` alone.
+
+### Exercise 3: Multi-File Makefile
+
+Create a small two-file project and write a Makefile to build it:
+
+1. Create `math_utils.h` with prototypes for `int square(int n)` and `int cube(int n)`.
+2. Create `math_utils.c` implementing both functions.
+3. Create `main.c` that includes `math_utils.h`, reads an integer from the user with `scanf`, and prints its square and cube.
+4. Write a Makefile using variables (`CC`, `CFLAGS`), a pattern rule (`%.o: %.c`), and a `clean` phony target.
+5. Verify that running `make` produces the executable and `make clean` removes all build artifacts.
+
+### Exercise 4: GDB Step-Through
+
+Write a program that computes the factorial of a number using a loop, compile it with `-g`, and use GDB to:
+
+1. Set a breakpoint at the start of the loop body.
+2. Step through three iterations with `next`, printing the loop counter and running product after each step.
+3. Change the value of the loop counter mid-execution using GDB's `set variable` command.
+4. Continue and observe how the changed value affects the final result.
+
+Write a brief account of what you observed and why modifying a variable mid-execution is useful for debugging.
+
+### Exercise 5: Project Structure Scaffold
+
+Create the full directory structure from Section 7 (`src/`, `include/`, `build/`, `tests/`) for a small project of your choice (e.g., a simple string utility library). Write a Makefile that:
+
+- Compiles all `.c` files in `src/` into object files placed in `build/`.
+- Links the object files into a final executable.
+- Has a `test` target that compiles and runs `tests/test_utils.c`.
+- Uses `-MMD -MP` flags to generate automatic dependency files so that changing a header triggers recompilation of dependent sources.
+
+---
+
 ## Next Steps
 
-Let's quickly review C language core syntax in [02_C_Basics_Review.md](./02_C_Basics_Review.md)!
+Let's quickly review C language core syntax in [C Language Basics Quick Review](./02_C_Basics_Review.md)!

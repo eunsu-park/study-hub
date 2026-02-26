@@ -13,14 +13,17 @@ Claude Desktop is a standalone application for macOS and Windows that provides a
 - Lesson 02: Claude Code Getting Started (basic familiarity with Claude Code)
 - Git basics (branches, commits, worktrees)
 
-**Learning Objectives**:
-- Understand what Claude Desktop is and how it differs from claude.ai and Claude Code CLI
-- Install and configure Claude Desktop on macOS or Windows
-- Use parallel sessions with git worktree isolation for concurrent work
-- Use App Preview to run and view web applications within Claude
-- Leverage GitHub integration for PR monitoring and CI fix workflows
-- Configure Desktop-specific settings
-- Understand how Claude Desktop integrates with Claude Code CLI
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand what Claude Desktop is and how it differs from claude.ai and Claude Code CLI
+2. Install and configure Claude Desktop on macOS or Windows
+3. Use parallel sessions with git worktree isolation for concurrent work
+4. Use App Preview to run and view web applications within Claude
+5. Leverage GitHub integration for PR monitoring and CI fix workflows
+6. Configure Desktop-specific settings
+7. Understand how Claude Desktop integrates with Claude Code CLI
 
 ---
 

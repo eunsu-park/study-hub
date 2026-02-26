@@ -73,6 +73,8 @@ interface Config {
     timeout: number;
 }
 
+// Why: Declaration merging lets libraries expose extensible interfaces that consumers can
+// augment without modifying the original source - this is why interfaces are preferred for public APIs
 // 두 선언이 자동으로 병합됨
 const config: Config = {
     apiUrl: "https://api.example.com",
@@ -145,6 +147,8 @@ interface Movable {
     move(distance: number): void;
 }
 
+// Why: Implementing multiple interfaces enforces that a class satisfies all required
+// contracts at compile time, enabling polymorphism without the fragility of inheritance chains
 class Dog implements Animal, Movable {
     constructor(public name: string) {}
 
@@ -176,6 +180,8 @@ function firstElement<T>(arr: T[]): T | undefined {
     return arr[0];
 }
 
+// Why: K extends keyof T constrains the key parameter to valid property names of T,
+// turning runtime "property not found" errors into compile-time type errors
 // 제네릭 객체 함수
 function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
     return obj[key];
@@ -193,6 +199,8 @@ console.log(`getProperty: ${getProperty(person, "name")}`);
 // 8. 제네릭 인터페이스
 // ============================================
 
+// Why: Making ApiResponse generic avoids duplicating the wrapper structure for every endpoint
+// and ensures type safety flows from the API response all the way to component code
 interface ApiResponse<T> {
     data: T;
     status: number;
@@ -370,6 +378,8 @@ type Optional<T> = {
     [P in keyof T]?: T[P];
 };
 
+// Why: Template literal types combined with mapped types auto-generate getter signatures,
+// ensuring type-safe accessor patterns that stay in sync as the source type evolves
 type Getters<T> = {
     [P in keyof T as `get${Capitalize<string & P>}`]: () => T[P];
 };

@@ -1,5 +1,25 @@
 # Docker Basics
 
+**Next**: [Docker Images and Containers](./02_Images_and_Containers.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what Docker is and why it solves the "works on my machine" problem
+2. Distinguish between containers and virtual machines in terms of architecture and resource usage
+3. Describe the core concepts of Docker: images, containers, and Docker Hub
+4. Install Docker on macOS, Windows, or Linux
+5. Verify a Docker installation by running test containers
+6. Describe the Docker workflow from CLI command to running container
+7. Run basic containers with port mapping and common options
+
+---
+
+Before Docker, deploying software was notoriously fragile: an application that worked perfectly on one machine would fail mysteriously on another due to different library versions, OS configurations, or missing dependencies. Docker eliminates this entire class of problems by packaging applications together with their complete runtime environment into lightweight, portable containers. Understanding Docker is now a foundational skill for developers, DevOps engineers, and anyone involved in modern software delivery.
+
+> **Analogy -- Shipping Container:** Before standardized shipping containers, every port needed different equipment to handle different cargo shapes. Docker does the same for software: it packages an application with all its dependencies into a standardized container that runs identically on any machine -- your laptop, a test server, or a production cluster.
+
 ## 1. What is Docker?
 
 Docker is a **container-based virtualization platform**. It packages applications and their execution environments so they can run identically anywhere.
@@ -121,25 +141,25 @@ brew install --cask docker
 ### Linux (Ubuntu)
 
 ```bash
-# 1. Remove old versions
+# 1. Remove old versions — prevents conflicts with the official Docker packages
 sudo apt remove docker docker-engine docker.io containerd runc
 
 # 2. Install required packages
 sudo apt update
 sudo apt install ca-certificates curl gnupg lsb-release
 
-# 3. Add Docker GPG key
+# 3. Add Docker GPG key — verifies package integrity; prevents tampered downloads
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-# 4. Add Docker repository
+# 4. Add Docker repository — uses Docker's own repo for latest stable releases
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # 5. Install Docker
 sudo apt update
 sudo apt install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# 6. Add user to docker group (to use without sudo)
+# 6. Add user to docker group — avoids typing sudo for every docker command
 sudo usermod -aG docker $USER
 # Log out and log back in
 ```
@@ -227,7 +247,8 @@ docker ps -a
 ### Example 2: Run Nginx Web Server
 
 ```bash
-# Run Nginx container (background)
+# -d: Detached mode — container runs in background, freeing the terminal
+# -p 8080:80: Port mapping — host port 8080 → container port 80
 docker run -d -p 8080:80 nginx
 
 # Access in browser at http://localhost:8080
@@ -235,7 +256,7 @@ docker run -d -p 8080:80 nginx
 # Check running containers
 docker ps
 
-# Stop container
+# Stop container — sends SIGTERM for graceful shutdown; SIGKILL after 10s timeout
 docker stop <container-ID>
 ```
 
@@ -253,6 +274,4 @@ docker stop <container-ID>
 
 ---
 
-## Next Steps
-
-Let's dive deeper into images and containers in [02_Images_and_Containers.md](./02_Images_and_Containers.md)!
+**Next**: [Docker Images and Containers](./02_Images_and_Containers.md)

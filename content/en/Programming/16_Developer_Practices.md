@@ -1,9 +1,25 @@
 # Developer Practices and Ethics
 
+**Previous**: [Software Architecture Basics](./15_Software_Architecture.md)
+
 > **Topic**: Programming
 > **Lesson**: 16 of 16
 > **Prerequisites**: Software development experience, version control, basic understanding of software lifecycle
-> **Objective**: Learn professional development practices including technical debt management, documentation strategies, open source contribution, software ethics, and career growth principles
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Classify technical debt using Martin Fowler's quadrant (deliberate/accidental, prudent/reckless) and prioritize repayment strategies
+2. Apply documentation best practices: code comments that explain "why," API docstrings, architecture diagrams (C4 model), and project READMEs
+3. Contribute to open source projects following standard workflows (fork, branch, PR) and community etiquette
+4. Select appropriate open source licenses (MIT, Apache 2.0, GPL, AGPL) based on project goals and compatibility requirements
+5. Apply ethical principles to software development: privacy by design, algorithmic fairness, accessibility (WCAG), and security responsibility
+6. Recognize and avoid dark patterns in UI/UX design
+7. Build sustainable career practices including continuous learning habits, T-shaped skill development, and imposter syndrome management
+8. Apply the pragmatic programmer mindset: care about craft, DRY principle, prototype to learn, and refactor continuously
+
+---
 
 ## Introduction
 
@@ -814,16 +830,6 @@ Professional software development extends far beyond writing code:
 
 Great developers combine **technical skill** with **professionalism, ethics, and continuous growth**. The code you write today becomes the legacy you leave tomorrow—make it count.
 
-## Navigation
-
-[← Previous: Software Architecture](15_Software_Architecture.md)
-
 ---
 
-**End of Programming Topic**
-
-You've completed all 16 lessons. Continue exploring related topics:
-- **Algorithm**: Deep dive into data structures and algorithms
-- **System_Design**: Scalable, distributed systems
-- **Security**: Application security and cryptography
-- **Language-specific topics**: Python, C_Programming, CPP
+**Previous**: [Software Architecture Basics](./15_Software_Architecture.md)

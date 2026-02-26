@@ -648,6 +648,9 @@ def mirror_field(z, B0=1e-3, L=10.0, R=5.0):
     L: mirror length scale (m)
     R: mirror ratio B_max/B_min
     """
+    # 포물선 프로파일은 해석적으로 단순하면서도 z=0에서 B_min부터 |z|=L에서 B_max까지
+    # 매끄럽고 단조롭게 증가하는 것을 제공합니다. 이는 실제 Helmholtz 코일
+    # 거울 장치의 축상 자기장을 잘 근사합니다.
     return B0 * (1 + (z / L)**2 * (R - 1))
 
 def mirror_grad(z, B0=1e-3, L=10.0, R=5.0):
@@ -671,9 +674,15 @@ def equations_of_motion_mirror(t, state, q, m, B0, L, R):
     F_lorentz = q * np.cross(v, B_vec)
 
     # Mirror force (adiabatic approximation)
+    # 저장된 상수를 사용하지 않고 현재 vx,vy로부터 매 스텝에서 μ를 재계산합니다.
+    # 이를 통해 μ가 수치적으로 얼마나 잘 보존되는지 모니터링할 수 있으며,
+    # 평행 힘에 대한 유도 중심 근사는 여전히 사용합니다.
     # mu = m * (vx^2 + vy^2) / (2 * B)
     v_perp_sq = vx**2 + vy**2
     mu = m * v_perp_sq / (2 * B)
+    # F_mirror = -μ ∂B/∂z: 이는 단열 불변량(adiabatic invariant)으로부터 유도된
+    # 기울기 힘입니다. B가 증가하는 방향을 반대하기 때문에 음수입니다.
+    # 포획된 입자는 평행 운동 에너지가 모두 수직 에너지로 변환되기 전에 반사됩니다.
     F_mirror = -mu * mirror_grad(z, B0, L, R)
 
     # Total force (Lorentz + mirror force in z-direction)
@@ -724,6 +733,10 @@ B0 = 1e-3  # Tesla
 L = 10.0   # meters
 R = 5.0    # mirror ratio
 
+# 손실 원뿔 공식: sin^2(alpha_c) = B_min/B_max = 1/R.
+# 이는 μ 보존으로부터 옵니다: 거울점에서 v_perp = v_total이므로
+# (v_perp,0)^2 / v^2 = B_min/B_max. 피치각이 더 작은 입자는
+# 반사될 만큼 v_perp가 충분하지 않아 탈출합니다 — "손실 원뿔 내에 있습니다".
 alpha_c = np.arcsin(1/np.sqrt(R)) * 180/np.pi  # degrees
 
 print(f"Mirror ratio R = {R}")
@@ -816,6 +829,10 @@ ax5.legend()
 ax5.grid(True)
 
 # Adiabatic invariant μ
+# 단열 불변량(adiabatic invariant) μ — μ(0)으로 정규화하여 플롯함으로써
+# 1로부터의 편차가 직접 분수적 수치 오차를 보여줍니다. 잘 해상된 시뮬레이션은
+# 바운스 내내 μ/μ(0)을 ~1% 이내로 유지합니다; 더 큰 드리프트는 dt가 너무 크거나
+# 기울기 척도가 단열 근사가 성립하기에 너무 가파름을 나타냅니다.
 B_traj_trap = mirror_field(traj_trap[:, 2], B0, L, R)
 mu_trap = m_p * v_perp_trap**2 / (2 * B_traj_trap)
 
@@ -833,6 +850,9 @@ plt.savefig('magnetic_mirror.png', dpi=150)
 print("\nSaved: magnetic_mirror.png")
 
 # Calculate bounce period
+# v_z (평행 속도)의 부호 변화를 감지하여 바운스 주기를 계산합니다.
+# 부호 변화는 v_z가 0을 통과했음을 의미합니다 — 입자가 거울점에서 방향을 바꿨습니다.
+# 연속적인 반전 사이의 시간이 반(half) 바운스 주기입니다.
 z_positions = traj_trap[:, 2]
 # Find turning points (where v_z changes sign)
 v_z = traj_trap[:, 5]
@@ -951,17 +971,22 @@ def tokamak_field(R, Z, R0=2.0, a=0.5, B0=3.0, q=2.0):
     B0: field at magnetic axis (T)
     q: safety factor
     """
-    # Toroidal field (1/R dependence)
+    # 환형 장(toroidal field)은 직선 중심 솔레노이드 코일에 의해 생성되기 때문에
+    # 1/R로 감소합니다; Ampere의 법칙에 의해 B_phi * 2πR = const → B_phi ∝ 1/R.
+    # 이 1/R 변화는 바나나 궤도 드리프트를 일으키는 기울기와 곡률을 모두 만듭니다.
     B_phi = B0 * R0 / R
 
-    # Poloidal field (simplified, from plasma current)
+    # 폴로이달 장(poloidal field) 모델: 플라즈마 내부에서 선형(균일 전류 밀도),
+    # 외부에서는 쌍극자 형태. 이를 통해 안전 인자(safety factor) q = rB_phi/(R0 B_theta)가
+    # 내부에서 일정하게 됩니다 — 완전한 Grad-Shafranov를 피한 단순화입니다.
     r = np.sqrt((R - R0)**2 + Z**2)
     if r < a:
         B_theta = B0 * r / (q * R0)
     else:
         B_theta = B0 * a**2 / (q * R0 * r)
 
-    # Components in cylindrical coordinates
+    # 폴로이달 장을 국소 폴로이달 각도를 사용하여 원통 좌표(R,Z) 성분으로 변환합니다.
+    # 부호 규약은 B_theta가 자기 축(magnetic axis) 주위를 순환하도록 합니다.
     B_R = -B_theta * Z / r if r > 1e-6 else 0
     B_Z = B_theta * (R - R0) / r if r > 1e-6 else 0
 
@@ -1023,7 +1048,10 @@ plt.tight_layout()
 plt.savefig('tokamak_field.png', dpi=150)
 print("Saved: tokamak_field.png")
 
-# Calculate trapping fraction
+# 소 ε 근사 f_trap ≈ sqrt(2ε)를 사용하여 포획 비율을 계산합니다.
+# 이 추정은 토카막 거울에 대한 손실 원뿔 조건에서 옵니다: sin^2(alpha) < 1 - B_out/B_in ≈ 2ε인
+# 입자가 포획됩니다. ε ~ 0.3(전형적인 종횡비)에 대해, 약 77%의 입자가 바나나 궤도에
+# 있습니다 — 신고전적 수송(neoclassical transport)에서 지배적인 효과입니다.
 epsilon = a / R0
 f_trapped = np.sqrt(2 * epsilon)
 print(f"\nTokamak parameters:")

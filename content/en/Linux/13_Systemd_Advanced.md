@@ -1,10 +1,23 @@
-# 13. Advanced systemd
+# Advanced systemd
+
+**Previous**: [Security and Firewall](./12_Security_and_Firewall.md)
 
 ## Learning Objectives
-- Understand systemd architecture and operation principles
-- Write custom service units
-- Schedule tasks with timer units
-- Socket activation and dependency management
+
+After completing this lesson, you will be able to:
+
+1. Describe the systemd architecture, unit types, and unit file locations
+2. Write custom service unit files with appropriate Type, Exec, and Restart directives
+3. Apply security hardening options (ProtectSystem, PrivateTmp, NoNewPrivileges) to service units
+4. Create timer units as a modern replacement for cron jobs
+5. Implement socket activation to start services on demand and improve boot performance
+6. Configure unit dependencies and ordering with Requires, Wants, After, and Before
+7. Query, filter, and manage system logs using journalctl and journald configuration
+8. Analyze boot performance and dependency chains with systemd-analyze
+
+---
+
+systemd is the init system and service manager that runs as PID 1 on virtually all modern Linux distributions. It replaced the older SysVinit and Upstart systems, bringing parallel service startup, on-demand activation, and unified logging. Whether you are deploying a web application, scheduling backups, or debugging why a service fails to start, you will be working with systemd. This lesson goes beyond the basic `systemctl start/stop` commands to show you how to write your own unit files and leverage systemd's full capabilities.
 
 ## Table of Contents
 1. [systemd Architecture](#1-systemd-architecture)
@@ -846,12 +859,6 @@ journalctl -u nginx -g "error|warning"  # -g is grep pattern
 
 ---
 
-## Next Steps
-
-- [14_Performance_Tuning](14_Performance_Tuning.md) - System performance optimization
-- [15_Container_Internals](15_Container_Internals.md) - cgroups, namespaces
-- [systemd Official Documentation](https://systemd.io/)
-
 ## References
 
 - [systemd Documentation](https://www.freedesktop.org/software/systemd/man/)
@@ -860,4 +867,4 @@ journalctl -u nginx -g "error|warning"  # -g is grep pattern
 
 ---
 
-[← Previous: Security and Firewall](12_Security_and_Firewall.md) | [Next: Performance Tuning →](14_Performance_Tuning.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Security and Firewall](./12_Security_and_Firewall.md)

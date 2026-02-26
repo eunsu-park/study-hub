@@ -10,14 +10,17 @@ This lesson establishes the foundational vocabulary: what signals are, how we cl
 
 **Difficulty**: ⭐⭐
 
-**Learning Objectives**:
-- Define continuous-time and discrete-time signals mathematically
-- Classify signals by their properties (deterministic/random, periodic/aperiodic, energy/power)
-- Recognize and generate fundamental signal types (impulse, step, exponential, sinusoid)
-- Perform basic signal operations (shifting, scaling, reflection)
-- Define the input-output model of a system
-- Identify and verify key system properties (linearity, time-invariance, causality, stability)
-- Apply BIBO stability criteria
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define continuous-time and discrete-time signals mathematically
+2. Classify signals by their properties (deterministic/random, periodic/aperiodic, energy/power)
+3. Recognize and generate fundamental signal types (impulse, step, exponential, sinusoid)
+4. Perform basic signal operations (shifting, scaling, reflection)
+5. Define the input-output model of a system
+6. Identify and verify key system properties (linearity, time-invariance, causality, stability)
+7. Apply BIBO stability criteria
 
 ---
 

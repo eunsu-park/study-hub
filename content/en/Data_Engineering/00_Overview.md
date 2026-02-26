@@ -45,8 +45,10 @@ Data Engineering Overview → Data Modeling → ETL/ELT Concepts
 | [17_Spark_Structured_Streaming.md](./17_Spark_Structured_Streaming.md) | Spark Structured Streaming | ⭐⭐⭐⭐ | Unbounded tables, watermarking, stateful processing, Kafka integration |
 | [18_CDC_Debezium.md](./18_CDC_Debezium.md) | CDC with Debezium | ⭐⭐⭐ | Log-based CDC, Debezium+Kafka Connect, event format, outbox pattern |
 | [19_Lakehouse_Practical_Patterns.md](./19_Lakehouse_Practical_Patterns.md) | Lakehouse Practical Patterns | ⭐⭐⭐⭐ | Medallion architecture, MERGE/SCD2, compaction, time travel, Iceberg |
+| [20_Dagster_Asset_Orchestration.md](./20_Dagster_Asset_Orchestration.md) | Dagster Asset Orchestration | ⭐⭐⭐ | Software-defined assets, Dagster vs Airflow, partitioned assets, sensors, dbt integration |
+| [21_Data_Versioning_and_Contracts.md](./21_Data_Versioning_and_Contracts.md) | Data Versioning and Data Contracts | ⭐⭐⭐⭐ | lakeFS, DVC comparison, schema contracts, contract testing, data mesh |
 
-**Total Lessons**: 19
+**Total Lessons**: 21
 
 ---
 
@@ -131,12 +133,14 @@ pip install prefect
 ### Phase 6: Practical Project (14)
 14. **E2E Pipeline**: Airflow + Spark + dbt integration
 
-### Phase 7: Advanced Topics (15-19)
+### Phase 7: Advanced Topics (15-21)
 15. **Airflow TaskFlow API**: Modern Airflow patterns
 16. **Kafka Streams & ksqlDB**: Stream processing with SQL
 17. **Spark Structured Streaming**: Real-time Spark
 18. **CDC with Debezium**: Change data capture
 19. **Lakehouse Patterns**: Production Delta Lake / Iceberg
+20. **Dagster**: Asset-based orchestration
+21. **Data Versioning & Contracts**: lakeFS, data contracts, data mesh
 
 ---
 

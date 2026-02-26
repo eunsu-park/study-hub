@@ -100,14 +100,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 데이터 생성
+# Generate data
 np.random.seed(42)
 true_mu = 5.0
 true_sigma = 2.0
 n_samples = 100
 data = np.random.normal(true_mu, true_sigma, n_samples)
 
-# MLE 계산
+# Compute MLE
 mu_mle = np.mean(data)
 sigma2_mle = np.var(data, ddof=0)  # ddof=0: MLE (biased)
 sigma_mle = np.sqrt(sigma2_mle)
@@ -115,13 +115,13 @@ sigma_mle = np.sqrt(sigma2_mle)
 print(f"True parameters: μ={true_mu}, σ={true_sigma}")
 print(f"MLE estimates: μ={mu_mle:.3f}, σ={sigma_mle:.3f}")
 
-# 로그 우도 함수 시각화
+# Visualize log-likelihood function
 def log_likelihood(mu, sigma, data):
     n = len(data)
     return -n/2 * np.log(2*np.pi) - n * np.log(sigma) - \
            np.sum((data - mu)**2) / (2 * sigma**2)
 
-# μ에 대한 로그 우도
+# Log-likelihood with respect to μ
 mu_range = np.linspace(3, 7, 100)
 ll_mu = [log_likelihood(m, true_sigma, data) for m in mu_range]
 
@@ -136,7 +136,7 @@ plt.title('Log-Likelihood vs μ')
 plt.legend()
 plt.grid(True)
 
-# σ에 대한 로그 우도
+# Log-likelihood with respect to σ
 sigma_range = np.linspace(0.5, 4, 100)
 ll_sigma = [log_likelihood(true_mu, s, data) for s in sigma_range]
 
@@ -149,7 +149,7 @@ plt.title('Log-Likelihood vs σ')
 plt.legend()
 plt.grid(True)
 
-# 히스토그램과 MLE 분포
+# Histogram and MLE distribution
 plt.subplot(133)
 plt.hist(data, bins=30, density=True, alpha=0.7, label='Data')
 x = np.linspace(data.min(), data.max(), 100)
@@ -230,10 +230,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 데이터: 10번 중 8번 앞면
+# Data: 8 heads out of 10 flips
 n, k = 10, 8
 
-# 우도 함수
+# Likelihood function
 theta_range = np.linspace(0.01, 0.99, 100)
 likelihood = stats.binom.pmf(k, n, theta_range)
 
@@ -241,15 +241,15 @@ likelihood = stats.binom.pmf(k, n, theta_range)
 theta_mle = k / n
 
 # MAP with Beta prior (α, β)
-alpha, beta = 2, 2  # 약한 사전분포
+alpha, beta = 2, 2  # Weak prior
 prior = stats.beta.pdf(theta_range, alpha, beta)
 posterior = likelihood * prior
-posterior = posterior / np.trapz(posterior, theta_range)  # 정규화
+posterior = posterior / np.trapz(posterior, theta_range)  # Normalize
 theta_map = theta_range[np.argmax(posterior)]
 
 plt.figure(figsize=(14, 4))
 
-# 우도
+# Likelihood
 plt.subplot(131)
 plt.plot(theta_range, likelihood / np.max(likelihood), label='Likelihood')
 plt.axvline(theta_mle, color='r', linestyle='--', label=f'MLE={theta_mle:.2f}')
@@ -259,7 +259,7 @@ plt.title('Likelihood Function')
 plt.legend()
 plt.grid(True)
 
-# 사전분포
+# Prior distribution
 plt.subplot(132)
 plt.plot(theta_range, prior, label=f'Beta({alpha},{beta})')
 plt.xlabel('θ')
@@ -268,7 +268,7 @@ plt.title('Prior Distribution')
 plt.legend()
 plt.grid(True)
 
-# 사후분포
+# Posterior distribution
 plt.subplot(133)
 plt.plot(theta_range, posterior, label='Posterior', linewidth=2)
 plt.axvline(theta_mle, color='r', linestyle='--', alpha=0.7, label=f'MLE={theta_mle:.2f}')
@@ -283,22 +283,22 @@ plt.tight_layout()
 plt.savefig('mle_vs_map.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-# 데이터가 적을 때의 차이
-print("데이터가 적을 때 (n=10, k=8):")
+# Difference with small data
+print("With small data (n=10, k=8):")
 print(f"MLE: {theta_mle:.3f}")
 print(f"MAP: {theta_map:.3f}")
 
-# 데이터가 많을 때
+# With large data
 n2, k2 = 1000, 800
 theta_mle2 = k2 / n2
 likelihood2 = stats.binom.pmf(k2, n2, theta_range)
 posterior2 = likelihood2 * prior
 theta_map2 = theta_range[np.argmax(posterior2)]
 
-print("\n데이터가 많을 때 (n=1000, k=800):")
+print("\nWith large data (n=1000, k=800):")
 print(f"MLE: {theta_mle2:.3f}")
 print(f"MAP: {theta_map2:.3f}")
-print("→ 데이터가 많으면 MLE와 MAP가 수렴")
+print("→ With more data, MLE and MAP converge")
 ```
 
 ### 3.4 Role of Prior Distribution
@@ -359,15 +359,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 사전분포 시각화
+# Visualize prior distributions
 w_range = np.linspace(-3, 3, 1000)
 
-# 가우시안 사전분포 (L2)
+# Gaussian prior (L2)
 sigma_w = 1.0
 gaussian_prior = stats.norm.pdf(w_range, 0, sigma_w)
 log_gaussian = stats.norm.logpdf(w_range, 0, sigma_w)
 
-# 라플라스 사전분포 (L1)
+# Laplace prior (L1)
 b = 1.0
 laplace_prior = stats.laplace.pdf(w_range, 0, b)
 log_laplace = stats.laplace.logpdf(w_range, 0, b)
@@ -407,8 +407,8 @@ plt.tight_layout()
 plt.savefig('regularization_prior.png', dpi=150, bbox_inches='tight')
 plt.show()
 
-print("L2 (Gaussian)는 큰 가중치에 quadratic penalty")
-print("L1 (Laplace)는 모든 가중치에 linear penalty → 희소성")
+print("L2 (Gaussian) applies a quadratic penalty to large weights")
+print("L1 (Laplace) applies a linear penalty to all weights → sparsity")
 ```
 
 ## 5. EM Algorithm (Expectation-Maximization)
@@ -480,9 +480,9 @@ class GMM:
     def fit(self, X):
         n, d = X.shape
 
-        # 초기화: k-means++
+        # Initialize: k-means++ style
         self.pi = np.ones(self.K) / self.K
-        # 랜덤 초기화
+        # Random initialization
         idx = np.random.choice(n, self.K, replace=False)
         self.mu = X[idx]
         self.Sigma = np.array([np.eye(d) for _ in range(self.K)])
@@ -496,13 +496,13 @@ class GMM:
             # M-step
             self._m_step(X, gamma)
 
-            # 로그 우도 계산
+            # Compute log-likelihood
             log_likelihood = self._compute_log_likelihood(X)
 
             if iteration % 10 == 0:
                 print(f"Iteration {iteration}: log-likelihood = {log_likelihood:.2f}")
 
-            # 수렴 확인
+            # Check convergence
             if abs(log_likelihood - log_likelihood_old) < self.tol:
                 print(f"Converged at iteration {iteration}")
                 break
@@ -519,7 +519,7 @@ class GMM:
             gamma[:, k] = self.pi[k] * stats.multivariate_normal.pdf(
                 X, self.mu[k], self.Sigma[k])
 
-        # 정규화
+        # Normalize
         gamma /= gamma.sum(axis=1, keepdims=True)
         return gamma
 
@@ -529,17 +529,17 @@ class GMM:
         # Effective number of points assigned to each cluster
         Nk = gamma.sum(axis=0)
 
-        # 혼합 비율 업데이트
+        # Update mixing proportions
         self.pi = Nk / n
 
-        # 평균 업데이트
+        # Update means
         self.mu = (gamma.T @ X) / Nk[:, np.newaxis]
 
-        # 공분산 업데이트
+        # Update covariances
         for k in range(self.K):
             diff = X - self.mu[k]
             self.Sigma[k] = (gamma[:, k:k+1] * diff).T @ diff / Nk[k]
-            # 수치 안정성
+            # Numerical stability
             self.Sigma[k] += 1e-6 * np.eye(X.shape[1])
 
     def _compute_log_likelihood(self, X):
@@ -559,24 +559,24 @@ class GMM:
         gamma = self._e_step(X)
         return np.argmax(gamma, axis=1)
 
-# 테스트: 3개의 가우시안 혼합
+# Test: 3 Gaussian mixture
 np.random.seed(42)
 n_samples = 300
 
-# 3개의 클러스터 생성
+# Generate 3 clusters
 X1 = np.random.randn(n_samples, 2) + np.array([0, 0])
 X2 = np.random.randn(n_samples, 2) + np.array([5, 5])
 X3 = np.random.randn(n_samples, 2) + np.array([0, 5])
 X = np.vstack([X1, X2, X3])
 
-# GMM 학습
+# Train GMM
 gmm = GMM(K=3, max_iter=100)
 gmm.fit(X)
 
-# 예측
+# Predict
 labels = gmm.predict(X)
 
-# 시각화
+# Visualization
 plt.figure(figsize=(12, 4))
 
 plt.subplot(131)
@@ -596,7 +596,7 @@ plt.xlabel('x1')
 plt.ylabel('x2')
 plt.grid(True)
 
-# 결정 경계
+# Decision boundaries
 plt.subplot(133)
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
@@ -667,11 +667,11 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 간단한 로지스틱 회귀 예제
+# Simple logistic regression example
 np.random.seed(42)
 torch.manual_seed(42)
 
-# 데이터 생성
+# Generate data
 n = 200
 X = np.random.randn(n, 2)
 y = (X[:, 0] + X[:, 1] > 0).astype(np.float32)
@@ -679,12 +679,12 @@ y = (X[:, 0] + X[:, 1] > 0).astype(np.float32)
 X_tensor = torch.FloatTensor(X)
 y_tensor = torch.FloatTensor(y)
 
-# 로지스틱 회귀 모델
+# Logistic regression model
 model = nn.Linear(2, 1)
-criterion = nn.BCEWithLogitsLoss()  # 이진 교차 엔트로피 = 베르누이 MLE
+criterion = nn.BCEWithLogitsLoss()  # Binary cross-entropy = Bernoulli MLE
 optimizer = optim.SGD(model.parameters(), lr=0.1)
 
-# 학습
+# Training
 losses = []
 for epoch in range(1000):
     optimizer.zero_grad()
@@ -694,7 +694,7 @@ for epoch in range(1000):
     optimizer.step()
     losses.append(loss.item())
 
-# 시각화
+# Visualization
 plt.figure(figsize=(12, 4))
 
 plt.subplot(131)
@@ -713,7 +713,7 @@ plt.title('Data')
 plt.legend()
 plt.grid(True)
 
-# 결정 경계
+# Decision boundary
 plt.subplot(133)
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1

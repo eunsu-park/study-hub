@@ -1,5 +1,23 @@
 # 파일시스템 탐색
 
+**이전**: [리눅스 기초](./01_Linux_Basics.md) | **다음**: [파일/디렉토리 관리](./03_File_Directory_Management.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 리눅스 파일시스템 계층 표준(Filesystem Hierarchy Standard, FHS)과 주요 디렉토리의 목적을 설명한다
+2. 절대 경로(absolute path)와 상대 경로(relative path)를 구분한다
+3. cd, pwd, 특수 디렉토리 기호(~, .., -, .)를 사용해 파일시스템을 탐색한다
+4. ls로 디렉토리 내용을 나열하고 긴 형식(long-format) 출력을 해석한다
+5. find, locate, which, whereis를 사용해 파일을 검색한다
+6. file과 stat 명령어로 파일 메타데이터를 확인한다
+7. 와일드카드 패턴(globbing)을 사용해 파일을 효율적으로 매칭한다
+
+---
+
+리눅스에서 모든 파일과 디렉토리는 `/`를 루트로 하는 단일 통합 트리 안에 존재합니다. 별도의 드라이브 문자(C:, D:)를 사용하는 Windows와 달리, 리눅스는 장치, 설정, 사용자 데이터를 모두 하나의 계층 구조 아래 구성합니다. 어디에 무엇이 있는지 알고 어떻게 이동하는지 아는 것이 모든 리눅스 시스템에서 생산적으로 작업하는 첫걸음입니다.
+
 ## 1. 리눅스 디렉토리 구조
 
 리눅스는 FHS(Filesystem Hierarchy Standard)를 따르는 트리 구조입니다.
@@ -461,4 +479,4 @@ cat /etc/passwd | head -5
 
 ## 다음 단계
 
-[03_File_Directory_Management.md](./03_File_Directory_Management.md)에서 파일과 디렉토리를 생성, 복사, 이동, 삭제하는 방법을 배워봅시다!
+[파일과 디렉토리 관리](./03_File_Directory_Management.md)에서 파일과 디렉토리를 생성, 복사, 이동, 삭제하는 방법을 배워봅시다!

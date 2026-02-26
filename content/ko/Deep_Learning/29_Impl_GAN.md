@@ -4,6 +4,19 @@
 
 # 29. 생성적 적대 신경망(Generative Adversarial Networks, GAN)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. GAN 미니맥스(Minimax) 목적함수를 공식화하고, 적대적 학습 게임에서 생성자(Generator)와 판별자(Discriminator)의 역할을 설명합니다.
+2. 고정된 생성자에 대한 최적 판별자 D*(x)를 유도하고, 이를 사용하여 GAN 목적함수가 젠슨-섀넌 발산(Jensen-Shannon Divergence)을 최소화함을 보입니다.
+3. GAN 학습의 일반적인 불안정성(모드 붕괴(Mode Collapse), 기울기 소실, 비수렴)을 식별하고 설명하며, 이를 완화하는 기법을 서술합니다.
+4. PyTorch에서 생성자에는 전치 합성곱(Transposed Convolution), 판별자에는 스트라이드 합성곱(Strided Convolution)을 사용하여 DCGAN(Deep Convolutional GAN)을 처음부터 구현합니다.
+5. 이미지 데이터셋에서 GAN을 훈련하고, 시각적 검사와 프레쳇 인셉션 거리(Fréchet Inception Distance, FID) 지표를 사용하여 생성 샘플 품질을 평가합니다.
+6. GAN 변형(DCGAN, WGAN, 조건부 GAN)을 비교하고, 각각이 학습 안정성 향상을 위해 도입한 아키텍처 또는 손실 수정 사항을 설명합니다.
+
+---
+
 ## 개요
 
 생성적 적대 신경망(Generative Adversarial Networks, GAN)은 생성자(Generator)와 판별자(Discriminator) 간의 적대적 게임을 통해 현실적인 데이터를 생성하는 방법을 학습합니다. "Generative Adversarial Networks" (Goodfellow et al., 2014)
@@ -481,4 +494,4 @@ fake_images = G(z, labels)
 - Gulrajani et al. (2017). "Improved Training of Wasserstein GANs"
 - Miyato et al. (2018). "Spectral Normalization for GANs"
 - Karras et al. (2019). "A Style-Based Generator Architecture for GANs"
-- [28_Generative_Models_GAN.md](./28_Generative_Models_GAN.md)
+- [생성 모델 - GAN (Generative Adversarial Networks)](./28_Generative_Models_GAN.md)

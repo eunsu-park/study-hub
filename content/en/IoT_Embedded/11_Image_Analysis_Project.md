@@ -1,11 +1,21 @@
 # 11. Image Analysis Project
 
+**Previous**: [Home Automation Project](./10_Home_Automation_Project.md) | **Next**: [Cloud IoT Integration](./12_Cloud_IoT_Integration.md)
+
 ## Learning Objectives
 
-- Pi Camera setup and picamera2 library usage
-- Implement real-time video streaming
-- Object detection using TFLite
-- Build motion detection system
+After completing this lesson, you will be able to:
+
+1. Set up the Pi Camera hardware and configure picamera2 for image capture
+2. Capture still images and record video programmatically
+3. Implement MJPEG and WebSocket-based real-time video streaming servers
+4. Perform real-time object detection using TFLite on camera frames
+5. Build a frame-differencing motion detection system with MQTT alerts
+6. Trigger video recording automatically when motion is detected
+
+---
+
+Adding a camera to your IoT system opens up an entirely new dimension of sensing. Instead of measuring a single variable like temperature, a camera can detect people, identify objects, read license plates, or monitor an entire room. This project combines the Pi Camera with the Edge AI skills from earlier lessons to build practical vision systems that run entirely on local hardware.
 
 ---
 
@@ -949,10 +959,4 @@ if __name__ == "__main__":
 
 ---
 
-## Next Steps
-
-- [12_Cloud_IoT_Integration.md](12_Cloud_IoT_Integration.md): Video data cloud integration
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [Home Automation Project](./10_Home_Automation_Project.md) | **Next**: [Cloud IoT Integration](./12_Cloud_IoT_Integration.md)

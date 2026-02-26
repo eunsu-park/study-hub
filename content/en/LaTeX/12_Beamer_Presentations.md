@@ -5,6 +5,19 @@
 > **Prerequisites**: Basic LaTeX document structure (Lesson 1), figures and tables (Lesson 5)
 > **Objective**: Master the Beamer class for creating professional presentations with overlays, themes, animations, and advanced features
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create a well-structured Beamer presentation with frames, title slides, and table-of-contents navigation
+2. Apply built-in Beamer themes, color themes, and font themes to achieve a consistent visual style
+3. Use overlay specifications (`\pause`, `\only`, `\uncover`) to build slide content incrementally
+4. Insert figures, tables, and mathematical equations into Beamer frames with appropriate sizing
+5. Customize Beamer templates to create a unique institutional or personal presentation theme
+6. Export and distribute Beamer presentations as PDF handouts with speaker notes
+
+---
+
 ## Introduction
 
 Beamer is a LaTeX document class for creating presentation slides (slideshows). Unlike PowerPoint or Google Slides, Beamer presentations are created using code, ensuring consistent typography, easy version control, seamless integration of mathematical formulas, and programmatic control over slide content. Beamer is the standard for academic and technical presentations in mathematics, physics, computer science, and engineering.
@@ -1163,5 +1176,5 @@ Beamer provides professional, consistent, and maintainable presentations with La
 
 ---
 
-**Previous**: [11_TikZ_Advanced.md](11_TikZ_Advanced.md)
+**Previous**: [Advanced TikZ & PGFPlots](11_TikZ_Advanced.md)
 **Next**: [13_Bibliography_Management.md](13_Bibliography_Management.md)

@@ -42,22 +42,22 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Type_Hints.md](./01_Type_Hints.md) | ⭐⭐ | Type Hints, typing 모듈, mypy |
-| [02_Decorators.md](./02_Decorators.md) | ⭐⭐ | 함수/클래스 데코레이터, @wraps |
-| [03_Context_Managers.md](./03_Context_Managers.md) | ⭐⭐ | with문, contextlib |
-| [04_Iterators_and_Generators.md](./04_Iterators_and_Generators.md) | ⭐⭐⭐ | __iter__, yield, itertools |
-| [05_Closures_and_Scope.md](./05_Closures_and_Scope.md) | ⭐⭐⭐ | LEGB, nonlocal, 클로저 패턴 |
-| [06_Metaclasses.md](./06_Metaclasses.md) | ⭐⭐⭐ | type, __new__, __init_subclass__ |
-| [07_Descriptors.md](./07_Descriptors.md) | ⭐⭐⭐⭐ | __get__, __set__, property 구현 |
-| [08_Async_Programming.md](./08_Async_Programming.md) | ⭐⭐⭐⭐ | async/await, asyncio |
-| [09_Functional_Programming.md](./09_Functional_Programming.md) | ⭐⭐⭐⭐ | map, filter, functools |
-| [10_Performance_Optimization.md](./10_Performance_Optimization.md) | ⭐⭐⭐⭐ | 프로파일링, 최적화 기법 |
-| [11_Testing_and_Quality.md](./11_Testing_and_Quality.md) | ⭐⭐⭐ | pytest, fixtures, mocking, coverage |
-| [12_Packaging_and_Distribution.md](./12_Packaging_and_Distribution.md) | ⭐⭐⭐ | pyproject.toml, Poetry, PyPI |
-| [13_Dataclasses.md](./13_Dataclasses.md) | ⭐⭐ | @dataclass, field(), frozen |
-| [14_Pattern_Matching.md](./14_Pattern_Matching.md) | ⭐⭐⭐ | match/case, 구조 패턴, 가드 |
-| [15_Python_Basics.md](./15_Python_Basics.md) | ⭐ | 변수, 자료형, 제어문, 함수, 자료구조 (선수 지식 복습) |
-| [16_OOP_Basics.md](./16_OOP_Basics.md) | ⭐⭐ | 클래스, 상속, 캡슐화, 다형성 (선수 지식 복습) |
+| [타입 힌팅 (Type Hints)](./01_Type_Hints.md) | ⭐⭐ | Type Hints, typing 모듈, mypy |
+| [데코레이터 (Decorators)](./02_Decorators.md) | ⭐⭐ | 함수/클래스 데코레이터, @wraps |
+| [컨텍스트 매니저 (Context Managers)](./03_Context_Managers.md) | ⭐⭐ | with문, contextlib |
+| [이터레이터와 제너레이터 (Iterators & Generators)](./04_Iterators_and_Generators.md) | ⭐⭐⭐ | __iter__, yield, itertools |
+| [클로저와 스코프 (Closures & Scope)](./05_Closures_and_Scope.md) | ⭐⭐⭐ | LEGB, nonlocal, 클로저 패턴 |
+| [메타클래스 (Metaclasses)](./06_Metaclasses.md) | ⭐⭐⭐ | type, __new__, __init_subclass__ |
+| [디스크립터 (Descriptors)](./07_Descriptors.md) | ⭐⭐⭐⭐ | __get__, __set__, property 구현 |
+| [비동기 프로그래밍 (Async Programming)](./08_Async_Programming.md) | ⭐⭐⭐⭐ | async/await, asyncio |
+| [함수형 프로그래밍 (Functional Programming)](./09_Functional_Programming.md) | ⭐⭐⭐⭐ | map, filter, functools |
+| [성능 최적화 (Performance Optimization)](./10_Performance_Optimization.md) | ⭐⭐⭐⭐ | 프로파일링, 최적화 기법 |
+| [테스트 및 품질 관리 (Testing & Quality Assurance)](./11_Testing_and_Quality.md) | ⭐⭐⭐ | pytest, fixtures, mocking, coverage |
+| [패키징 및 배포 (Packaging & Distribution)](./12_Packaging_and_Distribution.md) | ⭐⭐⭐ | pyproject.toml, Poetry, PyPI |
+| [데이터클래스 (Dataclasses)](./13_Dataclasses.md) | ⭐⭐ | @dataclass, field(), frozen |
+| [패턴 매칭 (Pattern Matching)](./14_Pattern_Matching.md) | ⭐⭐⭐ | match/case, 구조 패턴, 가드 |
+| [파이썬 기초 문법](./15_Python_Basics.md) | ⭐ | 변수, 자료형, 제어문, 함수, 자료구조 (선수 지식 복습) |
+| [객체지향 프로그래밍 기초](./16_OOP_Basics.md) | ⭐⭐ | 클래스, 상속, 캡슐화, 다형성 (선수 지식 복습) |
 
 ---
 

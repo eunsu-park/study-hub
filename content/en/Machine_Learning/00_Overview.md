@@ -44,6 +44,7 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
 | [18_Time_Series_ML.md](./18_Time_Series_ML.md) | Time Series ML | Lag/Rolling Features, TimeSeriesSplit, Prophet, Tree-based Forecasting |
 | [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML & Hyperparameter Optimization | Optuna, Auto-sklearn, FLAML, H2O AutoML |
 | [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | Anomaly Detection | Isolation Forest, LOF, One-Class SVM, PyOD |
+| [21_Advanced_Ensemble.md](./21_Advanced_Ensemble.md) | Advanced Ensemble | Stacking, Blending, Meta-Learner, Diverse Base Learners, Competition Strategies |
 
 ---
 

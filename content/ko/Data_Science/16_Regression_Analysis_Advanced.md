@@ -2,9 +2,21 @@
 
 [이전: 분산분석](./15_ANOVA.md) | [다음: 일반화 선형모형](./17_Generalized_Linear_Models.md)
 
-## 개요
+## 학습 목표
 
-이 장에서는 **다중회귀분석(Multiple Regression)**의 심화 내용을 다룹니다. 회귀 가정의 검토, 진단 플롯, 다중공선성 문제, 그리고 변수 선택 방법을 학습합니다.
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. `statsmodels`를 사용하여 다중회귀모형(Multiple Regression)을 적합하고 해석할 수 있으며, 표준화 계수(Standardized Coefficients)도 포함하여 분석할 수 있다
+2. 진단 플롯과 공식 검정을 통해 선형성(Linearity), 독립성(Independence), 등분산성(Homoscedasticity), 정규성(Normality)의 네 가지 회귀 가정을 모두 평가할 수 있다
+3. 레버리지(Leverage), Cook의 거리(Cook's Distance), DFFITS를 사용하여 영향력 있는 관측치를 식별할 수 있다
+4. VIF(분산팽창지수, Variance Inflation Factor)로 다중공선성(Multicollinearity)을 진단하고 변수 제거, 주성분분석(PCA), 릿지 회귀(Ridge Regression) 등의 해결책을 적용할 수 있다
+5. 전진선택법(Forward Selection), 후진제거법(Backward Elimination), 단계적 선택법(Stepwise Selection)을 구현할 수 있다
+6. 수정 결정계수(Adjusted R-squared), AIC, BIC, 교차검증(Cross-validation)을 사용하여 후보 모형들을 비교할 수 있다
+7. 부분회귀 플롯(Partial Regression Plot)과 CCPR 플롯을 활용하여 개별 예측변수의 기여도를 시각적으로 평가할 수 있다
+
+---
+
+단순회귀분석(Simple Regression)은 하나의 변수가 다른 변수를 예측하는지 알려줍니다. 반면 다중회귀분석(Multiple Regression)은 여러 예측변수가 함께 어떻게 작용하는지, 그리고 어떤 경우에 오해를 불러일으킬 수 있는지를 보여줍니다. 공선성(Collinear) 예측변수는 계수 부호를 뒤집을 수 있고, 가정 위반은 p-값을 무효화할 수 있으며, 관련 없는 변수를 포함하면 분산이 증가합니다. 이 레슨은 이러한 함정을 진단하고 신뢰할 수 있는 회귀모형을 체계적으로 구축하는 방법을 가르칩니다.
 
 ---
 

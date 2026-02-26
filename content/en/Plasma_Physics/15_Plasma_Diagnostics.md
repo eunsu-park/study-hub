@@ -621,16 +621,21 @@ V = np.linspace(-20, 20, 100)
 I_true = langmuir_current(V, n_e_true, T_e_true * 1.6e-19, V_p_true, V_f_true, A_p)
 I_noisy = I_true + np.random.normal(0, 0.1e-6, len(V))
 
-# Fit in electron retardation region
+# Fit in electron retardation region only: below V_p the electron current
+# follows a Boltzmann exponential, so a linear fit in log-space gives T_e
+# directly. Including the saturation region would break the linearity.
 mask = (V > 0) & (V < V_p_true)
 V_fit = V[mask]
 I_fit = I_noisy[mask]
 
-# Take log of electron current (approximate, ignoring ion current)
+# Adding 1e-6 A shifts the origin to avoid log(0) or log(negative) from noise.
+# The shift is ~1000× smaller than the saturation current, so it does not
+# significantly bias the slope and hence the inferred temperature.
 I_e_approx = I_fit + 1e-6  # shift to avoid log(negative)
 ln_I = np.log(np.abs(I_e_approx))
 
 # Linear fit: ln(I) = (e/k_B T_e) * V + const
+# The slope encodes T_e because the Boltzmann factor gives I_e ∝ exp(eV/kT_e).
 p = np.polyfit(V_fit, ln_I, 1)
 slope = p[0]
 
@@ -643,7 +648,10 @@ print(f"  True T_e = {T_e_true:.2f} eV")
 print(f"  Fitted T_e = {T_e_fit:.2f} eV")
 print()
 
-# Find V_p (knee of curve)
+# Find V_p via the second derivative: the I-V curve transitions from exponential
+# (electron retardation) to flat (saturation) at V_p. The second derivative
+# peaks sharply at this inflection point, providing a robust numerical criterion
+# that does not require manual identification of the "knee".
 dI_dV = np.gradient(I_noisy, V)
 d2I_dV2 = np.gradient(dI_dV, V)
 idx_Vp = np.argmax(d2I_dV2)
@@ -701,7 +709,9 @@ def abel_inversion(r_impact, line_integral):
     r = r_impact[idx]
     L = line_integral[idx]
 
-    # Compute derivative dL/dr
+    # Numerical derivative of the line-integral: Abel inversion requires dL/dr,
+    # not L itself. np.gradient uses second-order central differences, which
+    # suppresses noise amplification better than a simple finite difference.
     dL_dr = np.gradient(L, r)
 
     # Abel inversion: n(r) = -(1/π) ∫_r^a (dL/dr') / sqrt(r'^2 - r^2) dr'
@@ -710,6 +720,11 @@ def abel_inversion(r_impact, line_integral):
     for i in range(len(r)):
         ri = r[i]
         # Integrate from ri to r_max
+        # The 1e-10 regularizer prevents the integrand from diverging at r' = ri
+        # (the square-root singularity at the lower limit). This is an integrable
+        # singularity in the exact Abel transform, but finite discretization makes
+        # the denominator exactly zero; 1e-10 is much smaller than dr² so it does
+        # not bias the integral.
         integrand = dL_dr[i:] / np.sqrt(r[i:]**2 - ri**2 + 1e-10)  # avoid division by zero
         n_r[i] = -1/np.pi * np.trapz(integrand, r[i:])
 
@@ -730,7 +745,13 @@ line_integral = np.zeros(N_chords)
 for i, r_imp in enumerate(r_impact):
     # Integrate along the chord
     # For cylindrical symmetry: ∫ n dl = 2 ∫_r_imp^a n(r) r dr / sqrt(r^2 - r_imp^2)
+    # Starting at r_imp + 1e-6 rather than r_imp avoids the geometric singularity
+    # at the chord tangent point where sqrt(r^2 - r_imp^2) → 0. The offset is
+    # negligible relative to the plasma radius a ~ 0.5 m.
     r_chord = np.linspace(r_imp + 1e-6, a, 200)
+    # The factor r/sqrt(r^2 - r_imp^2) is the chord-path Jacobian: it converts
+    # integration in r (radial coordinate) to integration along the line of sight,
+    # accounting for the oblique angle the chord makes with each radial shell.
     integrand = n_0 * (1 - (r_chord/a)**2)**2 * r_chord / np.sqrt(r_chord**2 - r_imp**2)
     line_integral[i] = 2 * np.trapz(integrand, r_chord)
 
@@ -808,7 +829,8 @@ T_true = 1000  # eV (1 keV)
 
 sigma_true = doppler_width(T_true, m_C, lambda_0)
 
-# Wavelength grid
+# ±3σ range covers 99.7% of the Gaussian line profile; extending further would
+# waste spectral resolution on noise-dominated wings without improving the fit.
 lambda_grid = np.linspace(lambda_0 - 3*sigma_true, lambda_0 + 3*sigma_true, 200)
 
 # True spectrum
@@ -818,12 +840,16 @@ I_true = gaussian(lambda_grid, 1.0, lambda_0, sigma_true)
 I_noisy = I_true + np.random.normal(0, 0.02, len(lambda_grid))
 
 # Fit Gaussian
+# Initial guess uses sigma_true * 1.2 (slightly wider than expected): starting
+# too narrow can cause the optimizer to get trapped in a local minimum if noise
+# creates a narrow false peak; starting slightly wide avoids this.
 p0 = [1.0, lambda_0, sigma_true * 1.2]  # initial guess
 popt, pcov = curve_fit(gaussian, lambda_grid, I_noisy, p0=p0)
 
 A_fit, mu_fit, sigma_fit = popt
 
-# Infer temperature
+# Infer temperature by inverting σ_λ = λ₀ σ_v/c and σ_v = sqrt(kT/m):
+# T = m c² (σ_λ/λ₀)² / k_B. The division by 1.6e-19 converts Joules to eV.
 T_fit = (m_C * c**2 / k_B) * (sigma_fit / lambda_0)**2 / 1.6e-19  # eV
 
 print("Doppler Broadening Analysis:")

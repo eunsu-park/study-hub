@@ -1,8 +1,23 @@
 # Object Detection Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the principles of template matching and implement it with different similarity metrics using OpenCV
+2. Apply multi-scale template matching to handle objects at varying sizes in an image
+3. Describe how Haar Cascade classifiers work and use a pre-trained cascade to detect objects
+4. Implement HOG (Histogram of Oriented Gradients) feature extraction and combine it with an SVM classifier for pedestrian detection
+5. Compare the strengths and limitations of template matching, Haar Cascade, and HOG+SVM approaches
+6. Design a detection pipeline that selects the most appropriate classical method for a given detection task
+
+---
+
 ## Overview
 
 We will learn fundamental methods for detecting specific objects in images. This lesson covers the principles and implementation of traditional object detection techniques including template matching, Haar Cascade, and HOG+SVM.
+
+Classical detection methods remain relevant alongside deep learning because they require no training data, run efficiently on edge devices with limited compute, and are interpretable — making them the right tool when you have a well-defined target appearance and cannot afford the overhead of a neural network.
 
 **Difficulty**: ***
 
@@ -59,7 +74,9 @@ template = cv2.imread('template.jpg', cv2.IMREAD_GRAYSCALE)
 # Template size
 h, w = template.shape
 
-# Perform template matching
+# TM_CCOEFF_NORMED is preferred: subtracting the mean makes it invariant to
+# additive lighting changes, and normalization constrains scores to [-1, 1]
+# so a threshold of 0.8 has consistent meaning regardless of image brightness
 result = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
 
 # Find min/max locations
@@ -76,6 +93,8 @@ cv2.waitKey(0)
 ```
 
 ### Understanding Template Matching Results
+
+The result map has dimensions `(W-w+1) × (H-h+1)` because the template must fit entirely inside the source image — it cannot be placed with its center closer than `w/2` pixels from any edge. There are exactly `W-w+1` valid horizontal positions and `H-h+1` valid vertical positions.
 
 ```
 Source Image (W x H)     Template (w x h)     Result Image
@@ -175,7 +194,8 @@ def find_multiple_matches(img, template, threshold=0.8):
     # Template matching
     result = cv2.matchTemplate(img_gray, template_gray, cv2.TM_CCOEFF_NORMED)
 
-    # Find locations above threshold
+    # Threshold at 0.8+ selects only high-confidence hits; lower values
+    # flood-fill the area around each true match with many overlapping detections
     locations = np.where(result >= threshold)
 
     # Draw results
@@ -183,7 +203,9 @@ def find_multiple_matches(img, template, threshold=0.8):
     matches = []
 
     for pt in zip(*locations[::-1]):  # Convert to x, y order
-        # Simple Non-Maximum Suppression
+        # Greedy NMS: suppress any new candidate whose top-left corner falls
+        # within half the template size of an already-accepted match,
+        # preventing the same object from being counted multiple times
         is_new = True
         for existing in matches:
             if abs(pt[0] - existing[0]) < w//2 and abs(pt[1] - existing[1]) < h//2:
@@ -255,7 +277,9 @@ def multi_scale_template_matching(img, template, scale_range=(0.5, 1.5),
 
     # Match at various scales
     for scale in np.arange(scale_range[0], scale_range[1] + scale_step, scale_step):
-        # Resize template
+        # Resize the template rather than the source image so that
+        # coordinates in the result map remain in the original image space,
+        # avoiding a second coordinate transform after finding the best match
         new_w = int(tw * scale)
         new_h = int(th * scale)
 
@@ -500,17 +524,21 @@ gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 # Detect faces
 faces = face_cascade.detectMultiScale(
     gray,           # Input image (grayscale)
-    scaleFactor=1.1, # Image reduction ratio
-    minNeighbors=5,  # Minimum neighbors (higher = stricter)
-    minSize=(30, 30), # Minimum object size
-    maxSize=(300, 300) # Maximum object size
+    scaleFactor=1.1, # Each pyramid level is 10% smaller; lower (1.05) is more thorough but slower
+    minNeighbors=5,  # Higher values reduce false positives at the cost of missing real detections
+    minSize=(30, 30),  # Skipping windows smaller than 30×30 avoids wasting time
+                       # on regions too small to be a face in the expected scene scale
+    maxSize=(300, 300) # Upper bound prevents the cascade from producing giant false
+                       # positives when a high-contrast region spans the whole frame
 )
 
 # Draw detection results
 for (x, y, w, h) in faces:
     cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
-    # Detect eyes within face region
+    # Eye detection runs only inside the already-confirmed face ROI, not the full image.
+    # This dramatically reduces the search space and eliminates false positives from
+    # eye-like patterns (buttons, circles) outside face regions.
     roi_gray = gray[y:y+h, x:x+w]
     roi_color = img[y:y+h, x:x+w]
 
@@ -606,7 +634,10 @@ class FaceFeatureDetector:
 
         results = []
 
-        # Detect faces
+        # Detect faces first: the cascade order matters because eye and smile
+        # detectors produce too many false positives on arbitrary image regions.
+        # Running them only inside confirmed face bounding boxes (ROI) constrains
+        # the problem and makes the pipeline both faster and more accurate.
         faces = self.face_cascade.detectMultiScale(gray, 1.1, 5,
                                                     minSize=(60, 60))
 
@@ -628,6 +659,9 @@ class FaceFeatureDetector:
 
             # Detect smile in bottom half of face
             smile_roi = face_roi_gray[h//2:, :]
+            # minNeighbors=20 is intentionally high for smiles: the smile cascade
+            # is noisier than the face cascade, so a strict consensus requirement
+            # prevents every open mouth or shadow from being flagged as a smile
             smiles = self.smile_cascade.detectMultiScale(smile_roi, 1.7, 20,
                                                           minSize=(25, 25))
             face_data['smiling'] = len(smiles) > 0
@@ -859,11 +893,16 @@ def visualize_hog(img):
     # Use scikit-image's hog (includes visualization)
     features, hog_image = hog(
         resized,
-        orientations=9,        # Number of gradient direction bins
-        pixels_per_cell=(8, 8),  # Cell size
-        cells_per_block=(2, 2),  # Cells per block
+        orientations=9,          # 9 bins cover 0-180° in 20° steps; coarse enough
+                                 # to be robust to small pose changes, fine enough
+                                 # to distinguish different edge orientations
+        pixels_per_cell=(8, 8),  # 8×8 cells capture local texture at pedestrian scale;
+                                 # smaller cells are noisier, larger cells lose spatial detail
+        cells_per_block=(2, 2),  # 2×2 block normalization reduces sensitivity to local
+                                 # illumination variation — the key advantage of HOG over raw gradients
         visualize=True,
-        block_norm='L2-Hys'
+        block_norm='L2-Hys'      # Clipped L2 norm prevents a single large gradient from
+                                 # dominating the descriptor (more stable than plain L2)
     )
 
     # Rescale for visualization
@@ -893,9 +932,11 @@ def train_hog_svm_classifier(positive_samples, negative_samples):
     """HOG + SVM classifier training (conceptual example)"""
 
     # HOG descriptor setup
-    win_size = (64, 128)
-    block_size = (16, 16)
-    block_stride = (8, 8)
+    win_size = (64, 128)    # 1:2 aspect ratio matches the typical standing-person bounding box;
+                            # Dalal & Triggs used this exact size in the original 2005 paper
+    block_size = (16, 16)   # Two cells per side: large enough for meaningful normalization context
+    block_stride = (8, 8)   # 50% overlap between adjacent blocks provides redundant coverage
+                            # that improves robustness at the cost of a larger descriptor
     cell_size = (8, 8)
     nbins = 9
 
@@ -931,6 +972,9 @@ def train_hog_svm_classifier(positive_samples, negative_samples):
     )
 
     # SVM training
+    # C=0.01 (small regularization) encourages a wider margin, which generalizes
+    # better on HOG features that already capture appearance structure; high C
+    # risks overfitting to training-set lighting and pose variations
     clf = svm.LinearSVC(C=0.01)
     clf.fit(X_train, y_train)
 

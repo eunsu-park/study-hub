@@ -4,6 +4,19 @@
 
 # 31. Variational Autoencoder (VAE)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. VAE의 생성 모델 목표를 설명하고, 주변 우도(Marginal Likelihood) p(x)의 직접적인 최대화가 왜 다루기 어려운지(Intractable) 서술합니다.
+2. 변분 추론(Variational Inference) 프레임워크로부터 증거 하한(Evidence Lower BOund, ELBO)을 유도하고, 그 두 구성 요소(재구성 손실과 KL 발산 정규화)를 해석합니다.
+3. 재파라미터화 트릭(Reparameterization Trick)을 설명하고, 확률적 샘플링 단계를 통한 역전파 기울기에 왜 필요한지 설명합니다.
+4. 인코더(사후 확률 네트워크), 디코더(우도 네트워크), ELBO 손실 계산을 포함하여 PyTorch에서 VAE를 처음부터 구현합니다.
+5. 잠재 공간 보간(Latent Space Interpolation)과 산술 연산을 수행하여 VAE가 매끄럽고 구조화된 잠재 다양체(Latent Manifold)를 학습함을 시연합니다.
+6. 학습 안정성, 출력 선명도, 잠재 공간 해석 가능성 측면에서 VAE와 GAN을 비교하고, 각각이 탁월한 시나리오를 식별합니다.
+
+---
+
 ## 개요
 
 Variational Autoencoder (VAE)는 생성 모델의 기초가 되는 아키텍처로, 데이터의 잠재 표현(latent representation)을 학습하고 새로운 샘플을 생성할 수 있습니다. "Auto-Encoding Variational Bayes" (Kingma & Welling, 2013)
@@ -220,4 +233,4 @@ Free Bits:
 
 - Kingma & Welling (2013). "Auto-Encoding Variational Bayes"
 - Higgins et al. (2017). "β-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework"
-- [30_Generative_Models_VAE.md](./30_Generative_Models_VAE.md)
+- [생성 모델 - VAE (Variational Autoencoder)](./30_Generative_Models_VAE.md)

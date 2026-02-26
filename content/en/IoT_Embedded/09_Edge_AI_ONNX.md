@@ -1,12 +1,21 @@
 # 09. Edge AI - ONNX Runtime
 
+**Previous**: [Edge AI - TensorFlow Lite](./08_Edge_AI_TFLite.md) | **Next**: [Home Automation Project](./10_Home_Automation_Project.md)
+
 ## Learning Objectives
 
-- Understand ONNX (Open Neural Network Exchange) overview
-- Learn ONNX Runtime installation and usage
-- Study model optimization techniques
-- Deploy on Raspberry Pi
-- Implement object detection examples
+After completing this lesson, you will be able to:
+
+1. Explain the ONNX open format and its role in cross-framework model portability
+2. Compare ONNX Runtime with TensorFlow Lite for edge deployment
+3. Convert PyTorch and TensorFlow models to the ONNX format
+4. Validate, simplify, and quantize ONNX models for edge performance
+5. Run inference using ONNX Runtime on Raspberry Pi
+6. Implement object detection with a YOLO ONNX model
+
+---
+
+Not every machine learning model is trained in TensorFlow. If your team uses PyTorch, scikit-learn, or another framework, ONNX provides a universal interchange format so you can still deploy models to edge devices. ONNX Runtime gives you a second high-performance inference engine alongside TFLite, ensuring you are never locked into a single framework for your IoT AI workloads.
 
 ---
 
@@ -760,11 +769,4 @@ if __name__ == "__main__":
 
 ---
 
-## Next Steps
-
-- [10_Home_Automation_Project.md](10_Home_Automation_Project.md): AI-based smart home
-- [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md): Image analysis project
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [Edge AI - TensorFlow Lite](./08_Edge_AI_TFLite.md) | **Next**: [Home Automation Project](./10_Home_Automation_Project.md)

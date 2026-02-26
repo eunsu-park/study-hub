@@ -1,10 +1,24 @@
 # 15. PostgreSQL 쿼리 최적화 심화
 
+**이전**: [JSON과 JSONB](./14_JSON_JSONB.md) | **다음**: [복제와 고가용성](./16_Replication_HA.md)
+
+---
+
 ## 학습 목표
-- EXPLAIN ANALYZE 출력 완전 이해
-- 쿼리 플래너 동작 원리 파악
-- 인덱스 선택 전략 수립
-- 복잡한 쿼리 최적화 기법
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. EXPLAIN ANALYZE 출력에서 비용 추정치, 실제 실행 시간, 버퍼 통계, 반복 횟수를 읽고 해석할 수 있다
+2. PostgreSQL 쿼리 플래너(Query Planner)가 SQL을 실행 계획(Execution Plan)으로 변환하는 과정을 설명할 수 있다
+3. 쿼리 패턴에 따라 적절한 인덱스 타입(B-tree, Hash, GIN, GiST, BRIN)을 선택할 수 있다
+4. 복합 인덱스, 부분 인덱스, 커버링 인덱스를 효과적으로 설계할 수 있다
+5. Nested Loop, Hash Join, Merge Join 알고리즘을 비교하고 각각이 선택되는 조건을 예측할 수 있다
+6. 테이블 통계와 비용 파라미터를 활용하여 플래너 결정을 이해하고 영향을 줄 수 있다
+7. 쿼리 리팩토링, 구체화된 뷰(Materialized View), 파티셔닝 등 고급 최적화 기법을 적용할 수 있다
+
+---
+
+5밀리초와 5초의 차이는 반응하는 애플리케이션과 답답한 사용자 경험의 차이입니다. PostgreSQL의 쿼리 옵티마이저(Query Optimizer)는 매우 정교하지만, 최선의 성능을 발휘하려면 정확한 통계, 잘 선택된 인덱스, 적절히 구조화된 쿼리가 필요합니다. 플래너가 어떻게 생각하는지, 그리고 플래너가 생성하는 실행 계획을 어떻게 읽는지 이해하면 추측에 의존하지 않고 체계적으로 성능 병목을 진단하고 해결할 수 있습니다.
 
 ## 목차
 1. [EXPLAIN ANALYZE 심화](#1-explain-analyze-심화)
@@ -18,6 +32,8 @@
 ---
 
 ## 1. EXPLAIN ANALYZE 심화
+
+> **비유 -- GPS로 이해하는 쿼리 옵티마이저**: GPS가 현재 교통 상황을 바탕으로 고속도로, 골목길, 유료도로 등 여러 경로를 평가하여 가장 빠른 길을 선택하듯, PostgreSQL의 쿼리 플래너도 순차 스캔(Sequential Scan), 인덱스 스캔(Index Scan), 해시 조인(Hash Join), 병합 조인(Merge Join) 등 다양한 실행 전략을 평가하고 가장 낮은 비용을 가진 방법을 선택합니다. EXPLAIN 출력을 읽는 것은 GPS가 선택한 경로를 확인하는 것과 같습니다 -- 데이터베이스가 데이터에 도달하기 위해 어떤 "도로"를 이용할지 정확히 알려줍니다.
 
 ### 1.1 EXPLAIN 옵션
 
@@ -719,12 +735,6 @@ AND o.created_at > '2024-01-01';
 
 ---
 
-## 다음 단계
-
-- [16_복제와_고가용성](16_Replication_HA.md) - 읽기 분산
-- [17_윈도우_함수_분석](17_Window_Functions.md) - 고급 분석
-- [PostgreSQL Performance](https://wiki.postgresql.org/wiki/Performance_Optimization)
-
 ## 참고 자료
 
 - [PostgreSQL EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html)
@@ -734,4 +744,4 @@ AND o.created_at > '2024-01-01';
 
 ---
 
-[← 이전: JSON/JSONB 기능](14_JSON_JSONB.md) | [다음: 복제와 고가용성 →](16_Replication_HA.md) | [목차](00_Overview.md)
+**이전**: [JSON과 JSONB](./14_JSON_JSONB.md) | **다음**: [복제와 고가용성](./16_Replication_HA.md)

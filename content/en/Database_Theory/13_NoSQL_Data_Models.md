@@ -8,14 +8,17 @@ The relational model has served as the dominant paradigm for data management sin
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Explain why the relational model struggles at web scale
-- State and interpret the CAP theorem with its formal proof sketch
-- Contrast BASE and ACID consistency models
-- Design data models using key-value, document, wide-column, and graph paradigms
-- Write basic queries in each NoSQL paradigm
-- Apply a decision framework to select the appropriate data model
-- Understand polyglot persistence and its architectural implications
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why the relational model struggles at web scale
+2. State and interpret the CAP theorem with its formal proof sketch
+3. Contrast BASE and ACID consistency models
+4. Design data models using key-value, document, wide-column, and graph paradigms
+5. Write basic queries in each NoSQL paradigm
+6. Apply a decision framework to select the appropriate data model
+7. Understand polyglot persistence and its architectural implications
 
 ---
 
@@ -242,6 +245,9 @@ BASE is a backronym proposed by Eric Brewer as the counterpoint to ACID:
 | **Basically Available** | The system guarantees availability (in the CAP sense) |
 | **Soft state** | The state of the system may change over time, even without input, due to eventual consistency propagation |
 | **Eventually consistent** | Given enough time without new updates, all replicas will converge to the same state |
+
+> **Analogy -- News Spreading Through a Town**:
+> Imagine a small town without internet or TV, where news spreads only by word of mouth. When something happens (a new store opens), the people nearby hear about it first. Over the next few hours, they tell their neighbors, who tell their neighbors, and so on. At any given moment, some residents know the news while others do not -- the town is in a "soft state." But given enough time with no new events, *everyone* eventually hears the same story. This is eventual consistency: there is no single broadcast that updates everyone simultaneously (unlike ACID's "all-or-nothing" commit), but the system converges to a consistent state over time. The trade-off is that if you ask two residents at the same moment, you might get different answers -- which is acceptable for a social media "likes" counter but unacceptable for a bank balance.
 
 ### 3.3 Detailed Comparison
 
@@ -505,7 +511,10 @@ Index         →      Index
 **CRUD Operations**:
 
 ```javascript
-// INSERT
+// INSERT — Customer data is embedded directly inside the order document.
+// This is intentional denormalization: we duplicate the customer's name and email
+// so that displaying an order never requires a second query (JOIN equivalent).
+// Trade-off: if Alice changes her email, we must update every order document.
 db.orders.insertOne({
   customer: { name: "Alice", email: "alice@example.com" },
   items: [
@@ -518,22 +527,29 @@ db.orders.insertOne({
 });
 
 // FIND (Query)
-// Find all pending orders for Alice
+// Dot notation ("customer.name") reaches into the embedded document —
+// this works because MongoDB indexes nested fields natively.
+// In a relational DB, this would require a JOIN between orders and customers tables.
 db.orders.find({
   "customer.name": "Alice",
   "status": "pending"
 });
 
-// Find orders with total > 100, sorted by date
+// Find orders with total > 100, sorted by date.
+// The sort + limit pattern is efficient when a compound index on
+// {total: 1, created_at: -1} exists — MongoDB uses the index to avoid in-memory sorting.
 db.orders.find({ total: { $gt: 100 } })
          .sort({ created_at: -1 })
          .limit(10);
 
-// Find orders containing a specific product
+// Querying inside an array: "items.product" matches any element in the items array.
+// MongoDB automatically creates a "multikey index" for array fields,
+// so this query can still use an index despite items being an array.
 db.orders.find({ "items.product": "Widget" });
 
 // UPDATE
-// Set order status to shipped
+// $set modifies only the specified field; other fields remain untouched.
+// $currentDate automatically sets a timestamp — useful for audit trails.
 db.orders.updateOne(
   { _id: ObjectId("...") },
   {
@@ -542,29 +558,38 @@ db.orders.updateOne(
   }
 );
 
-// Add an item to an existing order
+// $push appends to an array in place — no need to read-modify-write the whole document.
+// This is atomic at the document level (MongoDB guarantees single-document atomicity).
 db.orders.updateOne(
   { _id: ObjectId("...") },
   { $push: { items: { product: "Doohickey", qty: 3, price: 5.99 } } }
 );
 
-// DELETE
+// DELETE — deleteMany removes all matching documents in one operation.
+// No cascading deletes like relational FKs; the application must handle related cleanup.
 db.orders.deleteMany({ status: "cancelled" });
 ```
 
 **Aggregation Pipeline**: MongoDB's framework for complex data processing:
 
 ```javascript
-// Revenue by product category in the last 30 days
+// Revenue by product category in the last 30 days.
+// The aggregation pipeline processes documents through sequential stages,
+// similar to UNIX pipes: each stage transforms and passes data to the next.
 db.orders.aggregate([
-  // Stage 1: Filter recent orders
+  // Stage 1: Filter early — $match at the top of the pipeline uses indexes
+  // and reduces the data volume for all subsequent stages (like WHERE in SQL).
   { $match: {
     created_at: { $gte: new Date(Date.now() - 30*24*60*60*1000) },
     status: { $ne: "cancelled" }
   }},
-  // Stage 2: Unwind items array (one document per item)
+  // Stage 2: $unwind "flattens" the items array — each array element becomes
+  // its own document. This is necessary because we want to group by individual
+  // products, but items are embedded inside order documents (denormalized).
   { $unwind: "$items" },
-  // Stage 3: Group by product and sum revenue
+  // Stage 3: Group by product and compute aggregates.
+  // Because items were embedded (not in a separate collection), we can compute
+  // this without any JOIN — the trade-off of denormalization pays off here.
   { $group: {
     _id: "$items.product",
     total_revenue: { $sum: { $multiply: ["$items.qty", "$items.price"] } },
@@ -585,12 +610,16 @@ In document databases, the key design decision is **embedding vs referencing**:
 **Embedding** (denormalization):
 
 ```json
+// Embedding orders inside the user document — a single read fetches the user
+// AND all their orders. This avoids the equivalent of a JOIN.
+// Trade-off: the document grows with each order, and MongoDB has a 16 MB document
+// size limit. Suitable when the number of embedded items is bounded (one-to-few).
 {
   "_id": "user_1001",
   "name": "Alice",
   "orders": [
-    { "order_id": "O001", "total": 44.97, "items": [...] },
-    { "order_id": "O002", "total": 89.50, "items": [...] }
+    { "order_id": "O001", "total": 44.97, "items": ["..."] },
+    { "order_id": "O002", "total": 89.50, "items": ["..."] }
   ]
 }
 ```
@@ -598,12 +627,14 @@ In document databases, the key design decision is **embedding vs referencing**:
 **Referencing** (normalization):
 
 ```json
-// Users collection
+// Users collection — the user document stays small and stable.
 { "_id": "user_1001", "name": "Alice" }
 
-// Orders collection
-{ "_id": "O001", "user_id": "user_1001", "total": 44.97, "items": [...] }
-{ "_id": "O002", "user_id": "user_1001", "total": 89.50, "items": [...] }
+// Orders collection — orders reference the user by ID, like a foreign key.
+// A second query (or $lookup) is needed to fetch the user's orders.
+// This is better when the number of orders per user is unbounded.
+{ "_id": "O001", "user_id": "user_1001", "total": 44.97, "items": ["..."] }
+{ "_id": "O002", "user_id": "user_1001", "total": 89.50, "items": ["..."] }
 ```
 
 **Decision criteria**:
@@ -715,14 +746,18 @@ Apache Cassandra is a distributed wide-column store designed for high availabili
 **CQL (Cassandra Query Language)**:
 
 ```sql
--- Create keyspace (like a database)
+-- Create keyspace (like a database).
+-- NetworkTopologyStrategy with 3 replicas per datacenter ensures that
+-- even if 2 nodes fail in a DC, one copy of every partition survives.
 CREATE KEYSPACE ecommerce
 WITH replication = {
   'class': 'NetworkTopologyStrategy',
   'dc1': 3, 'dc2': 3
 };
 
--- Create table with compound primary key
+-- Create table with compound primary key.
+-- The partition key choice is the single most important design decision in Cassandra:
+-- it determines data distribution AND query efficiency.
 CREATE TABLE ecommerce.orders (
   customer_id UUID,
   order_date TIMESTAMP,
@@ -733,26 +768,36 @@ CREATE TABLE ecommerce.orders (
   PRIMARY KEY ((customer_id), order_date, order_id)
 ) WITH CLUSTERING ORDER BY (order_date DESC);
 
--- The PRIMARY KEY has two parts:
---   Partition key: (customer_id) → determines which node stores the data
---   Clustering key: order_date, order_id → determines sort order within partition
+-- PRIMARY KEY anatomy:
+--   Partition key: (customer_id) — Cassandra hashes this value to decide which
+--     node stores the data. All orders for one customer live on the SAME node,
+--     making "get all orders for customer X" a single-node read (fast).
+--   Clustering key: order_date, order_id — within a partition, rows are stored
+--     sorted by these columns on disk. DESC order means the most recent orders
+--     are physically first, making "latest N orders" a sequential disk read.
 
 -- Insert data
 INSERT INTO ecommerce.orders (customer_id, order_date, order_id, total, status)
 VALUES (uuid(), '2024-11-15', uuid(), 44.97, 'shipped');
 
--- Query by partition key (FAST - goes to one node)
+-- Query by partition key (FAST — the coordinator hashes customer_id to locate
+-- the exact node; no other nodes are contacted). O(1) node lookup.
 SELECT * FROM ecommerce.orders
 WHERE customer_id = 550e8400-e29b-41d4-a716-446655440000;
 
--- Query with clustering key range (FAST - sequential read within partition)
+-- Query with clustering key range (FAST — because order_date is the clustering
+-- key, rows within this partition are sorted by date on disk. Cassandra reads
+-- a contiguous byte range — essentially a sequential scan, not a random seek).
 SELECT * FROM ecommerce.orders
 WHERE customer_id = 550e8400-e29b-41d4-a716-446655440000
   AND order_date >= '2024-01-01'
   AND order_date < '2025-01-01';
 
--- Query without partition key (SLOW - requires ALLOW FILTERING, scans all nodes)
--- ANTI-PATTERN: avoid this in production!
+-- Query without partition key (SLOW — Cassandra has no idea which node holds
+-- 'pending' orders, so it must broadcast to ALL nodes and scan every partition.
+-- ALLOW FILTERING is required to acknowledge this full-cluster scan).
+-- ANTI-PATTERN: avoid this in production! Create a separate table with
+-- status as the partition key if you need this query.
 SELECT * FROM ecommerce.orders WHERE status = 'pending' ALLOW FILTERING;
 ```
 

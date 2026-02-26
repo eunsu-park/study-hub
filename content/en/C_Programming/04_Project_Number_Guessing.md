@@ -1,14 +1,23 @@
 # Project 2: Number Guessing Game
 
-## Learning Objectives
-
-What you will learn through this project:
-- Random number generation (`rand`, `srand`, `time`)
-- Loops (`while`, `do-while`)
-- Conditional statement usage
-- Game logic implementation
+**Previous**: [Project 1: Basic Arithmetic Calculator](./03_Project_Calculator.md) | **Next**: [Project 3: Address Book Program](./05_Project_Address_Book.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement pseudo-random number generation using `rand`, `srand`, and `time` with a configurable range
+2. Build game loops with `while` and `do-while` that repeat until a win, loss, or quit condition
+3. Apply conditional statements to provide directional hints and proximity feedback
+4. Design a difficulty system that adjusts number range and attempt limits via `switch-case`
+5. Implement input validation that rejects out-of-range or non-numeric entries without crashing
+6. Track session statistics using a struct and compute derived metrics like win rate and average attempts
+
+---
+
+Games are an excellent way to internalize loop and conditional logic because the feedback is immediate -- you see the program respond to every decision you make. In this project you will build a number-guessing game that seeds a random target, gives the player hints, tracks scores, and supports multiple difficulty levels, all while reinforcing the C fundamentals from the previous lessons.
 
 ## Game Rules
 
@@ -552,4 +561,4 @@ gcc -Wall -Wextra -std=c11 guess_game.c -o guess_game
 
 ## Next Step
 
-[05_Project_Address_Book.md](./05_Project_Address_Book.md) -> Let's learn about structs and file I/O!
+[Project 3: Address Book Program](./05_Project_Address_Book.md) -> Let's learn about structs and file I/O!

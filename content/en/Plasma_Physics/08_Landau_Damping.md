@@ -561,9 +561,18 @@ def plasma_dispersion_function(zeta):
     Z(zeta) = i*sqrt(pi) * w(zeta)
     where w(z) is the Faddeeva function
     """
+    # We use scipy's wofz (Faddeeva / Voigt function w(z) = exp(-z^2)*erfc(-iz))
+    # rather than numerical quadrature because: (1) wofz is computed to machine
+    # precision using Rybicki's algorithm — far more accurate than any quadrature
+    # for a Gaussian integrand with a near-real pole; (2) it handles complex ζ
+    # correctly for Im(ζ) < 0, reproducing the analytic continuation demanded by
+    # the Landau prescription without any manual contour deformation.
     return 1j * np.sqrt(np.pi) * wofz(zeta)
 
 # Plot Z(ζ) for real ζ
+# 1000 points over [-5, 5] is enough to resolve the oscillatory Re[Z] near ζ=0
+# without aliasing; at |ζ| > 5 the function is well-approximated by its asymptotic
+# expansion 1/ζ + ... so a finer grid is not needed there.
 zeta_real = np.linspace(-5, 5, 1000)
 Z_real = plasma_dispersion_function(zeta_real)
 
@@ -622,17 +631,26 @@ print(f"  ω_pe = {omega_pe:.2e} rad/s")
 print(f"  v_th = {v_th:.2e} m/s")
 print(f"  λ_D = {lambda_D:.2e} m")
 
-# Range of k*lambda_D
+# Range of k*lambda_D: start at 0.1, not 0, because the Landau formula diverges
+# as (kλ_D)^-3 for k→0, and physically Landau damping is exponentially suppressed
+# anyway (the exp(-1/(2k²λ_D²)) factor → 0). The upper limit k_lambda_D = 3 is
+# where the wave is so heavily damped it is no longer a propagating mode.
 k_lambda_D = np.linspace(0.1, 3, 100)
 k_array = k_lambda_D / lambda_D
 
-# Dispersion relation (Bohm-Gross)
+# Dispersion relation (Bohm-Gross): valid for kλ_D << 1 where thermal corrections
+# are small. Using 100 points gives smooth curves; coarser sampling would show
+# artefacts in the log-scale damping plot near the exponential cutoff.
 omega_r = omega_pe * np.sqrt(1 + 3 * k_lambda_D**2)
 
-# Landau damping rate
+# Landau damping rate: the formula uses the analytic Maxwellian result from the
+# Landau contour integral. The prefactor sqrt(π/8) comes from the Gaussian integral
+# evaluated at the resonance v = ω_r/k, and (kλ_D)^-3 sets the overall scale.
 gamma = -np.sqrt(np.pi / 8) * (omega_pe / k_lambda_D**3) * np.exp(-1 / (2 * k_lambda_D**2))
 
-# Damping decrement
+# Damping decrement |γ|/ω_r: the physically meaningful quantity — how many radians
+# the wave oscillates before decaying by 1/e. Values ≪ 1 indicate a well-propagating
+# wave; values ~ 1 indicate the wave is overdamped and no longer coherent.
 damping_decrement = -gamma / omega_r
 
 # Plotting
@@ -737,21 +755,36 @@ class VlasovPoisson1D:
     def compute_electric_field(self):
         """Solve Poisson equation for E-field (periodic BC)"""
         n = self.compute_density()
+        # Subtract n0 to get the net charge density: at equilibrium electrons
+        # neutralise the background ion density, so only perturbations produce E.
+        # Using self.q (negative for electrons) automatically gives the correct sign
+        # of ρ without needing a separate ion density array.
         rho = self.q * (n - self.n0)  # charge density (background neutrality)
 
-        # Fourier transform
+        # FFT-based Poisson solver exploits the convolution theorem:
+        # d²φ/dx² becomes -k²φ_k in Fourier space, turning the PDE into a
+        # simple algebraic divide-by-k². This is spectrally accurate (infinite-order)
+        # and costs only O(N log N) — far cheaper than a direct matrix solve.
         rho_k = np.fft.fft(rho)
         k_modes = 2 * np.pi * np.fft.fftfreq(self.Nx, self.dx)
 
         # Poisson: -ε₀ d²φ/dx² = ρ → φ_k = -rho_k / (ε₀ k²)
         phi_k = np.zeros_like(rho_k, dtype=complex)
+        # Only divide modes 1: onward; k=0 is handled separately to avoid 0/0.
         phi_k[1:] = -rho_k[1:] / (epsilon_0 * k_modes[1:]**2)
+        # Set DC (k=0) mode to zero: a spatially uniform potential contributes no
+        # electric field (E = -∇φ), and quasi-neutrality ensures the net charge in
+        # the periodic box is zero, making φ_0 physically irrelevant (gauge choice).
         phi_k[0] = 0  # Set DC component to zero (neutrality)
 
-        # E = -dφ/dx → E_k = i*k*φ_k
+        # Compute E = -dφ/dx in Fourier space: derivative → multiply by ik.
+        # The factor i*k is exact in spectral space; finite-difference stencils
+        # would introduce O(dx^2) error in the gradient that would accumulate and
+        # corrupt the Landau damping measurement over many simulation timesteps.
         E_k = 1j * k_modes * phi_k
 
-        # Inverse FFT
+        # Inverse FFT back to physical space; take .real to discard the numerical
+        # imaginary part (~machine epsilon) that arises from floating-point roundoff.
         E = np.fft.ifft(E_k).real
 
         return E
@@ -759,11 +792,20 @@ class VlasovPoisson1D:
     def step(self, dt):
         """Operator splitting: advection in x, then in v"""
         # Step 1: Advection in x (∂f/∂t + v ∂f/∂x = 0)
+        # The Vlasov equation is split into two 1D advections using Lie-Trotter
+        # operator splitting. Each half is a pure advection with a constant
+        # coefficient (v is fixed during x-advection, a is fixed during v-advection),
+        # which is unconditionally stable with the upwind scheme if CFL ≤ 1.
         f_new = np.zeros_like(self.f)
         for j in range(self.Nv):
-            # Upwind scheme
+            # Upwind differencing: for v[j] > 0 particles move right, so the
+            # "upstream" (information source) is the left neighbor. Choosing
+            # the correct upwind direction prevents unphysical modes from growing
+            # and provides the numerical dissipation needed to suppress aliasing.
             if self.v[j] > 0:
                 for i in range(self.Nx):
+                    # Periodic BC: wrap around using modulo to match the assumption
+                    # that the plasma is spatially periodic with period Lx (one wave).
                     i_up = (i - 1) % self.Nx
                     f_new[i, j] = self.f[i, j] - self.v[j] * dt / self.dx * \
                                  (self.f[i, j] - self.f[i_up, j])
@@ -775,12 +817,18 @@ class VlasovPoisson1D:
         self.f = f_new.copy()
 
         # Step 2: Acceleration in v (∂f/∂t + a ∂f/∂v = 0)
+        # Re-compute E after the x-advection step so the electric field is consistent
+        # with the updated density — this is the explicit time-coupling between the
+        # Vlasov and Poisson equations that captures the self-consistent wave dynamics.
         E = self.compute_electric_field()
         f_new = np.zeros_like(self.f)
         for i in range(self.Nx):
-            a = self.q * E[i] / self.m  # acceleration
+            a = self.q * E[i] / self.m  # acceleration = Lorentz force / mass
             for j in range(self.Nv):
                 if a > 0:
+                    # Positive acceleration shifts f toward higher v; upstream = lower v.
+                    # Clamping at 0 (not wrapping) because particles that reach v_max
+                    # should effectively leave the grid — velocity is not periodic.
                     j_up = max(j - 1, 0)
                     f_new[i, j] = self.f[i, j] - a * dt / self.dv * \
                                  (self.f[i, j] - self.f[i, j_up])
@@ -809,6 +857,10 @@ class VlasovPoisson1D:
         return np.array(times), np.array(E_history)
 
 # Simulation parameters
+# Nx=64 cells in x: enough for one wavelength to be well-resolved (>50 points/wave)
+# while keeping the nested loop (Nx*Nv per step) tractable in pure Python.
+# Nv=128 cells in v: twice as many as Nx because the velocity distribution has
+# sharper features near v=v_ph (resonance), requiring finer resolution there.
 Nx = 64
 Nv = 128
 n0 = 1e18  # m^-3
@@ -818,8 +870,16 @@ q = -e
 
 # Domain
 lambda_D = np.sqrt(epsilon_0 * k_B * (T_eV * e / k_B) / (n0 * e**2))
+# kλ_D = 0.3 is chosen to be in the "interesting" damping regime: large enough that
+# damping is measurable within a few plasma periods, but small enough that the wave
+# still propagates coherently (not overdamped). This matches the worked example in
+# Section 3.5 and allows direct comparison with the analytic γ formula.
 k_mode = 0.3 / lambda_D  # kλ_D = 0.3
+# Box length = exactly one wavelength, so the periodic BC is self-consistent and
+# no spurious reflection modes are introduced at the domain boundaries.
 Lx = 2 * np.pi / k_mode
+# v_max = 5 v_th covers >99.99% of the Maxwellian; the resonant particles at
+# v_ph = ω_r/k ~ 1.05 ω_pe/k are well inside this range for kλ_D=0.3.
 v_max = 5 * np.sqrt(k_B * (T_eV * e / k_B) / m)
 
 # Initialize solver
@@ -893,8 +953,15 @@ def particle_in_wave(E0, k, m, q, v_ph, num_particles=100, duration=1e-7, dt=1e-
     Simulate particles in a static wave (wave frame)
     """
     # Particle initial conditions
+    # Fix random seed so the plot is reproducible — same particles every run,
+    # making it easy to compare "before" and "after" snapshots qualitatively.
     np.random.seed(42)
+    # Spread initial positions uniformly across one wavelength so the initial
+    # phase-space distribution is flat in x, unbiased toward any wave phase.
     x0 = np.random.uniform(0, 2*np.pi/k, num_particles)
+    # Initialise velocities near v_ph with a small spread: these are the resonant
+    # particles. The narrow spread (1e4 << v_th) means all particles start barely
+    # inside or outside the trapping region, so the separatrix is clearly visible.
     v0 = np.random.normal(v_ph, 1e4, num_particles)  # spread around v_ph
 
     # Storage
@@ -913,9 +980,15 @@ def particle_in_wave(E0, k, m, q, v_ph, num_particles=100, duration=1e-7, dt=1e-
         E = E0 * np.sin(k * x)
         a = q * E / m
 
-        # Velocity Verlet
+        # Velocity Verlet (leapfrog) is used instead of RK4 because the potential
+        # is conservative (no dissipation), and Verlet exactly conserves the
+        # symplectic structure of Hamiltonian mechanics. This prevents secular
+        # energy drift over the many bounce periods we simulate, which RK4 (a
+        # dissipative integrator) would introduce due to truncation error.
         v_half = v + 0.5 * a * dt
         x_new = x + v_half * dt
+        # Wrap positions into [0, λ] because the wave is periodic; this is exactly
+        # equivalent to the particle moving freely through an infinite periodic lattice.
         x_new = x_new % (2 * np.pi / k)  # periodic
 
         E_new = E0 * np.sin(k * x_new)
@@ -958,7 +1031,10 @@ ax1.set_xlim(0, 1)
 ax2.scatter(x_traj[:, -1] * k / (2*np.pi), (v_traj[:, -1] - v_ph) / 1e3,
            c='red', s=10, alpha=0.6, label='Particles')
 
-# Separatrix
+# Separatrix: the boundary between trapped and passing particles in the wave frame.
+# It is the contour of constant energy H = (1/2)m(v')^2 - eΦ(x) = 0, which gives
+# v_sep(x) = sqrt(2eΦ_0(1 + cos(kx))/m). Plotting it confirms the simulation
+# correctly captures the cat's-eye phase-space structure predicted by theory.
 phi_0 = E0 / k
 v_sep = np.sqrt(2 * e * phi_0 / m_e)
 x_sep = np.linspace(0, 2*np.pi, 100)

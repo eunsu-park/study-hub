@@ -63,6 +63,8 @@ def without_wraps(func: Callable) -> Callable:
     return wrapper
 
 
+# Why: Without @wraps, the decorated function loses its __name__, __doc__, and __module__,
+# breaking introspection tools like help(), debuggers, and serialization frameworks
 def with_wraps(func: Callable) -> Callable:
     """Decorator with functools.wraps."""
     @functools.wraps(func)
@@ -157,6 +159,8 @@ print(f"All results: {len(results)} greetings")
 section("Retry Decorator")
 
 
+# Why: The triple-nested structure (factory -> decorator -> wrapper) is necessary because
+# the outer function captures decorator arguments, while the middle receives the function
 def retry(max_attempts: int = 3, delay: float = 0.1):
     """Retry decorator for handling transient failures."""
     def decorator(func: Callable) -> Callable:
@@ -204,6 +208,8 @@ except Exception as e:
 section("Memoization Decorator")
 
 
+# Why: The cache dict lives in the closure's scope, surviving across calls but remaining
+# invisible to callers — this encapsulation avoids polluting the global namespace
 def memoize(func: Callable) -> Callable:
     """Cache function results."""
     cache = {}
@@ -255,6 +261,8 @@ print(f"Cache info: {fib_cached.cache_info()}")
 section("Class Decorator")
 
 
+# Why: Using a decorator for singleton is simpler than a metaclass approach and doesn't
+# alter the class hierarchy — the dict in the closure stores the single instance per class
 def singleton(cls):
     """Singleton decorator - only one instance allowed."""
     instances = {}
@@ -310,6 +318,8 @@ def exclaim(func: Callable) -> Callable:
     return wrapper
 
 
+# Why: Decorator stacking applies bottom-up (closest to function first), so the data flow
+# is: get_message -> uppercase -> exclaim, like mathematical function composition f(g(x))
 @exclaim
 @uppercase
 def get_message(name: str) -> str:

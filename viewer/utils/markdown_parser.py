@@ -1,5 +1,8 @@
 """Markdown parsing utilities with syntax highlighting and LaTeX support."""
+import os
 import re
+from functools import lru_cache
+
 import markdown
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
@@ -103,6 +106,32 @@ def extract_title(content: str) -> str:
     if match:
         return match.group(1).strip()
     return ""
+
+
+_CACHE_SIZE = 64
+
+
+def parse_markdown_cached(filepath: str) -> dict:
+    """Cached version of parse_markdown. Cache invalidated by file mtime."""
+    mtime = os.path.getmtime(filepath)
+    return _parse_markdown_cached(filepath, mtime)
+
+
+@lru_cache(maxsize=_CACHE_SIZE)
+def _parse_markdown_cached(filepath: str, mtime: float) -> dict:
+    with open(filepath, encoding="utf-8") as f:
+        content = f.read()
+    return parse_markdown(content)
+
+
+def estimate_reading_time(content: str) -> int:
+    """Estimate reading time in minutes (~200 wpm text, ~100 wpm code)."""
+    code_blocks = re.findall(r'```[\s\S]*?```', content)
+    text = re.sub(r'```[\s\S]*?```', '', content)
+    text_words = len(text.split())
+    code_words = sum(len(b.split()) for b in code_blocks)
+    minutes = text_words / 200 + code_words / 100
+    return max(1, round(minutes))
 
 
 def extract_excerpt(content: str, max_length: int = 200) -> str:

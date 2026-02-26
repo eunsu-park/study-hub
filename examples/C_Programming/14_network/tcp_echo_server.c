@@ -33,14 +33,19 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    /* Allow address reuse */
+    // Why: SO_REUSEADDR allows binding to a port still in TIME_WAIT state —
+    // without it, restarting the server after a crash would fail for ~60 seconds
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     /* Bind */
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
+        // Why: INADDR_ANY binds to all network interfaces (0.0.0.0) — binding to a
+        // specific IP would reject connections arriving on other interfaces
         .sin_addr.s_addr = INADDR_ANY,
+        // Why: htons converts port from host byte order to network byte order (big-endian)
+        // — x86 is little-endian, so without this the port number would be byte-swapped
         .sin_port = htons(port)
     };
 
@@ -59,7 +64,8 @@ int main(int argc, char *argv[]) {
     printf("TCP Echo Server listening on port %d (max %d clients)\n",
            port, MAX_CLIENTS);
 
-    /* Setup select */
+    // Why: select() lets a single thread handle multiple clients — without it,
+    // you'd need one thread per client, which doesn't scale past thousands of connections
     int client_fds[MAX_CLIENTS];
     for (int i = 0; i < MAX_CLIENTS; i++)
         client_fds[i] = -1;

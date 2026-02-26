@@ -1,10 +1,25 @@
 # Virtual Memory ⭐⭐⭐
 
-## Overview
-
-Virtual Memory is a memory management technique that allows programs larger than physical memory to run. We'll learn core concepts including demand paging, page fault handling, and Copy-on-Write.
+**Previous**: [Segmentation](./13_Segmentation.md) | **Next**: [Page Replacement](./15_Page_Replacement.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the concept of virtual memory and its benefits for multiprogramming and memory isolation
+2. Describe demand paging and how it reduces memory usage by loading pages only when needed
+3. Trace the page fault handling sequence step-by-step, from trap to instruction restart
+4. Calculate the effective memory access time given page fault rates and service times
+5. Explain how the valid/invalid bit and dirty bit work in page table entries
+6. Distinguish pure demand paging from prepaging and describe when each is appropriate
+7. Implement Copy-on-Write semantics and explain how it accelerates fork()
+8. Describe memory-mapped files (mmap) and their advantages over traditional file I/O
+
+---
+
+Virtual memory is perhaps the most transformative idea in OS design. It lets a process use more memory than physically exists, enables memory isolation between processes, and makes sharing efficient. Every modern OS relies on it -- and understanding it explains why your computer can run dozens of applications simultaneously without running out of RAM.
 
 ## Table of Contents
 
@@ -19,6 +34,8 @@ Virtual Memory is a memory management technique that allows programs larger than
 ---
 
 ## 1. Virtual Memory Concept
+
+> Virtual memory is like a hotel's room reservation system. The hotel (physical memory) has 100 rooms, but it has accepted 200 reservations (processes). This works because not all guests are in their rooms at the same time -- some are at the pool, some are out sightseeing. The hotel only needs enough rooms for the guests actually present. Similarly, virtual memory lets the OS promise more memory than physically exists, loading pages from disk only when they are actually needed.
 
 ### 1.1 What is Virtual Memory?
 

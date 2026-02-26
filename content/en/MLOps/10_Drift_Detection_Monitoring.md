@@ -1,5 +1,17 @@
 # 10. Drift Detection & Monitoring
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between data drift, concept drift, and label drift, and explain how each type degrades model performance in production
+2. Implement statistical drift detection tests (KS test, PSI, chi-squared) to detect distribution shifts in input features
+3. Build a model monitoring pipeline that collects prediction logs, computes drift metrics, and triggers alerts when thresholds are exceeded
+4. Use Evidently AI or similar tools to generate automated data quality and drift monitoring reports
+5. Design a retraining trigger strategy that responds to detected drift while minimizing unnecessary retraining overhead
+
+---
+
 ## 1. Drift Concepts
 
 Drift is the phenomenon where data or model performance changes over time.
@@ -89,6 +101,7 @@ def kolmogorov_smirnov_test(
     threshold: float = 0.05
 ) -> Tuple[float, bool]:
     """KS test - Test difference between two distributions"""
+    # Non-parametric: no distribution assumption needed, unlike t-test or chi-squared
     statistic, p_value = stats.ks_2samp(reference, current)
     is_drift = p_value < threshold
     return statistic, is_drift
@@ -99,12 +112,12 @@ def population_stability_index(
     n_bins: int = 10
 ) -> float:
     """PSI - Population Stability Index"""
-    # Create histograms
+    # Binning captures shape changes that summary stats (mean/std) miss
     bins = np.histogram_bin_edges(reference, bins=n_bins)
     ref_hist, _ = np.histogram(reference, bins=bins, density=True)
     cur_hist, _ = np.histogram(current, bins=bins, density=True)
 
-    # Prevent zeros
+    # Prevent log(0) which would produce -inf and corrupt the PSI value
     ref_hist = np.where(ref_hist == 0, 0.0001, ref_hist)
     cur_hist = np.where(cur_hist == 0, 0.0001, cur_hist)
 
@@ -126,6 +139,7 @@ def jensen_shannon_divergence(
     n_bins: int = 10
 ) -> float:
     """Jensen-Shannon Divergence"""
+    # Symmetric and bounded [0,1] — easier to threshold than KL divergence
     from scipy.spatial.distance import jensenshannon
 
     bins = np.histogram_bin_edges(reference, bins=n_bins)
@@ -163,14 +177,14 @@ def domain_classifier_drift(
     - Train classifier to distinguish reference from current data
     - AUC close to 0.5 indicates no drift
     """
-    # Generate labels
+    # Catches multivariate drift that per-feature tests miss (e.g., correlation shifts)
     X = np.vstack([reference, current])
     y = np.hstack([
         np.zeros(len(reference)),
         np.ones(len(current))
     ])
 
-    # Train and evaluate classifier
+    # Cross-validation prevents overfitting to noise — AUC=0.5 means no learnable drift
     clf = RandomForestClassifier(n_estimators=100, random_state=42)
     scores = cross_val_score(clf, X, y, cv=5, scoring="roc_auc")
     mean_auc = scores.mean()
@@ -192,7 +206,7 @@ def multivariate_drift_pca(
     from sklearn.decomposition import PCA
     from scipy.spatial.distance import mahalanobis
 
-    # PCA dimensionality reduction
+    # PCA reduces curse of dimensionality — Mahalanobis fails with more features than samples
     pca = PCA(n_components=n_components)
     ref_pca = pca.fit_transform(reference)
     cur_pca = pca.transform(current)
@@ -206,6 +220,7 @@ def multivariate_drift_pca(
     try:
         distance = mahalanobis(ref_mean, cur_mean, np.linalg.inv(ref_cov))
     except np.linalg.LinAlgError:
+        # Singular covariance (collinear features) — fall back to Euclidean
         distance = np.linalg.norm(ref_mean - cur_mean)
 
     return distance
@@ -236,7 +251,7 @@ from evidently.metrics import (
 reference_data = pd.read_csv("reference_data.csv")
 current_data = pd.read_csv("current_data.csv")
 
-# Column mapping
+# Explicit mapping ensures Evidently picks the right statistical test per column type
 column_mapping = ColumnMapping(
     target="target",
     prediction="prediction",
@@ -354,14 +369,15 @@ from evidently.tests import (
     TestNumberOfRows
 )
 
-# Define test suite
+# Test suite returns pass/fail — integrate into CI/CD to gate deployments on data quality
 test_suite = TestSuite(tests=[
-    # Presets
+    # Preset covers all columns; individual tests add stricter thresholds for critical features
     DataDriftTestPreset(),
 
     # Individual tests
     TestColumnDrift(column_name="monthly_charges", stattest_threshold=0.1),
     TestShareOfMissingValues(column_name="age", lt=0.05),
+    # Domain constraints catch data pipeline bugs (e.g., negative age from encoding errors)
     TestColumnValueRange(column_name="age", left=18, right=100),
     TestNumberOfRows(gte=1000),
 ])
@@ -411,9 +427,11 @@ class ModelMonitor:
         column_mapping,
         alert_thresholds: Dict[str, float]
     ):
+        # Reference data loaded once at init — avoids re-reading from storage each monitoring cycle
         self.reference_data = reference_data
         self.column_mapping = column_mapping
         self.thresholds = alert_thresholds
+        # History enables trend analysis — single-point drift is noise, sustained drift is real
         self.monitoring_history = []
 
     def check_data_drift(self, current_data: pd.DataFrame) -> Dict[str, Any]:
@@ -484,6 +502,7 @@ class ModelMonitor:
             "alerts": []
         }
 
+        # Actuals often arrive delayed (hours/days) — drift detection works without them
         if predictions is not None and actuals is not None:
             result["performance"] = self.check_model_performance(predictions, actuals)
             result["alerts"] = self.generate_alerts(
@@ -531,7 +550,7 @@ Expose Prometheus metrics
 from prometheus_client import Gauge, Counter, Histogram, start_http_server
 import time
 
-# Define metrics
+# Gauge (not Counter) because drift score can increase or decrease over time
 DRIFT_SCORE = Gauge(
     "model_drift_score",
     "Current drift score",
@@ -549,6 +568,7 @@ PREDICTIONS_TOTAL = Counter(
     ["model_version"]
 )
 
+# Histogram buckets aligned with SLA tiers — enables percentile alerting (p50, p95, p99)
 PREDICTION_LATENCY = Histogram(
     "prediction_latency_seconds",
     "Prediction latency in seconds",
@@ -651,6 +671,7 @@ class SlackAlerter:
             drifted_cols = drift_result.get("number_of_drifted_columns", 0)
             drift_share = drift_result.get("drift_share", 0)
 
+            # Severity escalation: >50% features drifted likely means upstream data pipeline broke
             self.send_alert(
                 title="Data Drift Detected",
                 message=f"{drifted_cols} features drifted ({drift_share:.1%})",
@@ -680,6 +701,7 @@ class RetrainingTrigger:
     ):
         self.drift_threshold = drift_threshold
         self.performance_threshold = performance_threshold
+        # Cooldown prevents retraining loops when drift is persistent but data hasn't stabilized
         self.cooldown_hours = cooldown_hours
         self.last_retrain = None
 
@@ -695,11 +717,11 @@ class RetrainingTrigger:
             if hours_since < self.cooldown_hours:
                 return False, f"In cooldown period ({hours_since:.1f}h)"
 
-        # Drift-based
+        # Drift check first: proactive signal before performance degrades
         if drift_score > self.drift_threshold:
             return True, f"High drift score: {drift_score:.2f}"
 
-        # Performance-based
+        # Performance check second: reactive signal when labels are available
         if performance < self.performance_threshold:
             return True, f"Low performance: {performance:.4f}"
 

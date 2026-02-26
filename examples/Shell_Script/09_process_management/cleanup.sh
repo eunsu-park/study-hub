@@ -70,6 +70,8 @@ cleanup_on_exit() {
     fi
 
     # Kill background processes
+    # Why: kill then wait prevents zombie processes. The || true guards against
+    # race conditions where the process exits between our check and kill.
     if [[ -n "$BG_PROCESS_PID" ]] && kill -0 "$BG_PROCESS_PID" 2>/dev/null; then
         echo "Terminating background process (PID $BG_PROCESS_PID)..."
         kill "$BG_PROCESS_PID" 2>/dev/null || true
@@ -118,13 +120,13 @@ cleanup_on_hangup() {
 setup_traps() {
     echo -e "${CYAN}Setting up signal handlers...${NC}"
 
-    # EXIT: Always called when script exits (success or failure)
+    # Why: EXIT trap guarantees cleanup runs whether the script succeeds, fails,
+    # or is interrupted — the shell equivalent of a finally block.
     trap cleanup_on_exit EXIT
 
-    # SIGINT: Interrupt from keyboard (Ctrl+C)
+    # Why: separate INT/TERM traps let us log the specific signal before
+    # exiting with the conventional 128+signal code that callers expect.
     trap cleanup_on_interrupt INT
-
-    # SIGTERM: Termination signal
     trap cleanup_on_terminate TERM
 
     # SIGHUP: Hangup detected on controlling terminal
@@ -167,6 +169,8 @@ acquire_lock() {
     local lock_name="${1:-script}"
     LOCK_FILE="/tmp/${lock_name}.lock"
 
+    # Why: checking if the PID in the lock file is still alive detects stale
+    # locks from crashed processes, preventing permanent lockouts.
     if [[ -f "$LOCK_FILE" ]]; then
         local lock_pid
         lock_pid=$(cat "$LOCK_FILE")

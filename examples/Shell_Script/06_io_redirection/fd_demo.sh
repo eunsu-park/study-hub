@@ -15,7 +15,8 @@ demo_custom_fd() {
     local output_file="/tmp/fd_demo_output.txt"
     local error_file="/tmp/fd_demo_error.txt"
 
-    # Open custom file descriptors
+    # Why: custom FDs (3, 4) let you write to multiple outputs simultaneously
+    # without temp files — keeping stdout/stderr free for their normal roles.
     exec 3>"$output_file"  # FD 3 for normal output
     exec 4>"$error_file"   # FD 4 for error output
 
@@ -25,7 +26,8 @@ demo_custom_fd() {
     echo "More output data" >&3
     echo "More error data" >&4
 
-    # Close custom file descriptors
+    # Why: closing FDs explicitly releases the file handles and flushes
+    # buffered writes — forgetting this can leak FDs in long-running scripts.
     exec 3>&-
     exec 4>&-
 
@@ -182,7 +184,8 @@ demo_save_restore_stdout() {
 
     echo "This goes to original stdout"
 
-    # Save original stdout to FD 6
+    # Why: duplicating stdout to FD 6 before redirecting it lets us restore
+    # the original stdout later — the shell equivalent of saving/restoring state.
     exec 6>&1
 
     # Redirect stdout to file
@@ -241,7 +244,8 @@ demo_noclobber() {
 
     echo "Original content" > "$test_file"
 
-    # Enable noclobber
+    # Why: noclobber (-C) prevents accidental file overwrites via >, forcing
+    # you to use >| deliberately — a safety net for production scripts.
     set -C
 
     echo "Noclobber enabled (set -C)"

@@ -1,5 +1,18 @@
 # 11. Small Language Models
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Justify the use of Small Language Models (SLMs) over large models for edge deployment, cost-sensitive applications, and privacy-critical domains by comparing latency, hardware requirements, and task performance.
+2. Describe the architectural choices and training data strategies (e.g., "textbooks are all you need") used by leading SLMs such as Phi-3, Gemma 2, and Qwen 2.5 to maximize capability at small scale.
+3. Apply model compression techniques including quantization (GPTQ, AWQ, GGUF), pruning, and knowledge distillation to reduce SLM memory footprint and inference latency.
+4. Implement efficient inference for SLMs using frameworks such as llama.cpp, Ollama, or ExLlamaV2, and benchmark throughput and latency trade-offs.
+5. Fine-tune an SLM for a specific domain or task using parameter-efficient methods (LoRA, QLoRA), and evaluate the improvement against the base model.
+6. Design a deployment architecture that selects and routes between SLMs and LLMs based on task complexity, cost constraints, and latency requirements.
+
+---
+
 ## Overview
 
 While large models (100B+) are making headlines, **Small Language Models (SLM)** are more practical for real production environments. This lesson covers the architecture, training strategies, and usage methods for models with 7B parameters or fewer.
@@ -885,3 +898,160 @@ if __name__ == "__main__":
 ### Related Lessons
 - [../LLM_and_NLP/11_Model_Quantization.md](../LLM_and_NLP/11_Model_Quantization.md)
 - [19_PEFT_Unified.md](19_PEFT_Unified.md)
+
+---
+
+## Exercises
+
+### Exercise 1: SLM Use Case Analysis
+
+For each scenario, determine whether an SLM (≤7B) or an LLM (70B+) is more appropriate and justify your answer with at least two reasons.
+
+1. A mobile app that provides real-time grammar correction while typing, running on a smartphone with no internet connection.
+2. A legal firm's document review system that must analyze 200-page contracts for compliance issues across 50+ jurisdictions.
+3. A customer service chatbot for a single e-commerce platform that handles refund requests, order tracking, and product FAQs.
+4. A scientific research assistant that must synthesize findings across 500+ recent papers in a specialized field.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Mobile grammar correction → SLM**
+- **Privacy**: Grammar correction of personal messages should not leave the device; on-device inference requires small models.
+- **Latency**: Real-time correction (< 100ms) requires a model that can run fast on mobile CPUs/NPUs; a 70B model is physically impossible.
+- **Hardware constraints**: Smartphones have 6-16GB RAM; a 7B model quantized to 4-bit needs ~4GB.
+
+**2. Legal contract analysis (200-page, 50+ jurisdictions) → LLM**
+- **Long context**: 200-page contracts can be 150K+ tokens; only LLMs with large context windows (e.g., Gemini 1.5 Pro, GPT-4o, Claude) can handle full documents.
+- **Breadth of knowledge**: Legal reasoning across 50+ jurisdictions requires deep, broad legal knowledge that smaller models lack.
+- **Accuracy stakes**: Legal errors have serious consequences; accuracy over efficiency.
+
+**3. E-commerce customer service → SLM**
+- **Narrow domain**: Refunds, order tracking, and product FAQs form a limited, well-defined task scope that a fine-tuned SLM can handle effectively.
+- **Cost and throughput**: Customer service handles thousands of queries per day; SLM inference is dramatically cheaper.
+- **Fine-tuning advantage**: A fine-tuned 7B model on company-specific data often outperforms a general 70B model on this narrow domain.
+
+**4. Scientific research synthesis (500+ papers) → LLM**
+- **Context length**: Synthesizing across 500 papers requires either a very large context window or complex RAG; LLMs better support both.
+- **Deep reasoning**: Scientific synthesis requires understanding complex chains of causality, experimental methodology, and statistical reasoning — capabilities that scale with model size.
+- **Nuanced evaluation**: Identifying conflicting findings and resolving them requires strong reasoning capabilities.
+
+</details>
+
+---
+
+### Exercise 2: Knowledge Distillation Loss Design
+
+Knowledge distillation trains a student model to mimic a teacher's behavior. The standard distillation loss combines hard labels (true answers) and soft labels (teacher probabilities):
+
+```python
+L_distill = α × L_hard(student_logits, true_labels) +
+            (1-α) × L_soft(student_logits/T, teacher_logits/T)
+```
+
+1. What does the temperature parameter T control in the soft label distribution?
+2. Why is a high temperature (T > 1) used during distillation rather than T = 1?
+3. What value of α would you choose if you want to prioritize preserving the teacher's learned knowledge representations over fitting the training labels, and why?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Temperature T controls sharpness of the probability distribution:**
+
+At T=1, the distribution is standard softmax. As T increases, the distribution becomes softer (more uniform). As T → ∞, all classes get equal probability. For example, if a teacher assigns [0.90, 0.09, 0.01] at T=1, at T=4 this might become [0.45, 0.35, 0.20] — revealing the teacher's "beliefs" about class relationships.
+
+**2. Why high temperature (T > 1) during distillation:**
+
+The teacher's softmax at T=1 is often dominated by a single class (e.g., 0.99, 0.01, 0.00). The non-zero probabilities for wrong classes encode the teacher's **dark knowledge** — structured information about similarity relationships between classes (e.g., "this looks slightly like class B as well as class A"). At T=1, this signal is drowned out by the dominant class probability. High temperature amplifies these small probabilities, giving the student richer gradient signal about the teacher's internal representations and similarity structure.
+
+**3. α value to prioritize teacher knowledge:**
+
+Choose **α close to 0** (e.g., α = 0.1 or even 0.0).
+
+When α=0, only the soft label loss is used — the student learns purely from the teacher's probability distributions without reference to true labels. This maximizes transfer of the teacher's representation knowledge.
+
+When α=1, only hard labels are used — standard supervised learning, no distillation benefit.
+
+In practice, α=0.1-0.3 is common for knowledge preservation. The small hard-label component prevents the student from drifting too far from correct answers (especially important when the teacher makes systematic errors), while the dominant soft-label component transfers the rich representational knowledge.
+
+</details>
+
+---
+
+### Exercise 3: Quantization Format Comparison
+
+Compare GPTQ, AWQ, and GGUF on the following dimensions:
+
+| Dimension | GPTQ | AWQ | GGUF |
+|-----------|------|-----|------|
+| Quantization approach | ? | ? | ? |
+| Calibration data required | ? | ? | ? |
+| Best use case | ? | ? | ? |
+| Mixed precision support | ? | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Dimension | GPTQ | AWQ | GGUF |
+|-----------|------|-----|------|
+| **Quantization approach** | Post-training quantization using Hessian information to minimize layer-wise reconstruction error. Updates remaining weights to compensate for quantization error in removed weights. | Activation-aware quantization: protects the 1% of "salient" weights (those multiplied by large activations) from quantization while aggressively quantizing the rest. | Format-agnostic container format (used by llama.cpp) supporting multiple quantization types (Q4_0, Q4_K_M, Q8_0, etc.), using block-wise quantization. |
+| **Calibration data required** | Yes — needs ~128 calibration samples to compute Hessians for optimal weight rounding. | Yes — needs activation statistics from calibration data (~128 samples) to identify salient weights. | No — static quantization without calibration; newer formats (Q4_K_M) use k-means clustering. |
+| **Best use case** | GPU inference on NVIDIA hardware; good for 4-bit models served with vLLM or HuggingFace. | GPU inference; often slightly better quality than GPTQ at same bit-width due to saliency-aware protection. | CPU and edge inference (Apple Silicon, x86); primary format for Ollama and llama.cpp ecosystem. |
+| **Mixed precision support** | Limited — typically uniform bit-width per layer. | Yes — naturally supports mixed precision by protecting salient weights at higher precision. | Yes — GGUF supports per-tensor mixed precision (e.g., higher precision for attention weights, lower for FFN). |
+
+**Key insight:** For GPU deployment, AWQ is generally preferred over GPTQ for better accuracy-efficiency tradeoff. For CPU/edge deployment (Raspberry Pi, Apple M-chip laptops), GGUF with llama.cpp is the standard.
+
+</details>
+
+---
+
+### Exercise 4: "Textbooks Are All You Need" Data Strategy
+
+The Phi family of SLMs achieves strong performance at 1-7B parameter scales by training primarily on high-quality synthetic "textbook" data rather than raw web text.
+
+1. Why might synthetic textbook data be more efficient than raw web data for training small models?
+2. What are the risks or limitations of this approach?
+3. How would you design a data quality filter to identify "textbook-like" content in a web-crawled dataset?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Why synthetic textbooks are more efficient:**
+
+- **Information density**: Raw web text includes ads, repetitive boilerplate, SEO-optimized filler, and low-quality content. Textbooks contain dense, organized, pedagogically structured knowledge with minimal redundancy.
+- **Reasoning patterns**: Textbooks explicitly show problem-solving steps, definitions, examples, and logical progressions — exactly the patterns a model needs to learn reasoning. Web text is mostly assertions without justification.
+- **Conceptual coverage**: A curated textbook dataset can be designed to systematically cover concepts across domains, rather than following the arbitrary distribution of web text which over-represents popular topics and under-represents rare but important ones.
+- **Small models need efficiency**: Small models (1-7B) have limited capacity. High-quality, dense signal allows them to learn more per token than from noisy, redundant data.
+
+**2. Risks and limitations:**
+
+- **Synthetic distribution mismatch**: LLM-generated synthetic data has a different style from natural text — it may be too formal, use repetitive phrasings, or have the biases of the generating model. The student model may learn to imitate this artificial style.
+- **Generator bias amplification**: If the teacher LLM has errors or biases in its understanding, the synthetic data propagates and potentially amplifies these systematically.
+- **Limited diversity**: Manually curated or generated textbooks may under-represent certain types of reasoning (e.g., informal arguments, colloquial language, domain-specific jargon) that are important for real-world deployment.
+- **Evaluation contamination**: Benchmarks designed to evaluate general knowledge may overlap with the synthetic training data.
+
+**3. Textbook quality filter design:**
+
+```python
+def is_textbook_like(text: str) -> bool:
+    signals = []
+
+    # Structural signals
+    has_definitions = bool(re.search(r'\b(is defined as|refers to|means that)\b', text))
+    has_examples = bool(re.search(r'\b(for example|for instance|such as|e\.g\.)\b', text))
+    has_steps = bool(re.search(r'\b(step [0-9]+|first,|second,|finally,)\b', text))
+
+    # Content signals
+    avg_sentence_length = len(text.split()) / max(text.count('.'), 1)
+    good_length = 15 < avg_sentence_length < 40  # Not too short/long
+
+    # Quality signals
+    unique_word_ratio = len(set(text.lower().split())) / max(len(text.split()), 1)
+    high_vocabulary = unique_word_ratio > 0.5
+
+    signals = [has_definitions, has_examples, has_steps, good_length, high_vocabulary]
+    return sum(signals) >= 3  # Require at least 3 of 5 signals
+```
+
+More sophisticated approaches use a classifier trained to distinguish Wikipedia/textbook text from web boilerplate, or use a strong LLM to score educational value.
+
+</details>

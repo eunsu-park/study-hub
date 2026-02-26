@@ -1,14 +1,27 @@
 # Routing Protocols
 
-## Overview
-
-This document covers the types and characteristics of dynamic routing protocols. You'll learn about the operating principles of major routing protocols such as RIP, OSPF, and BGP, and understand the appropriate environments for each protocol.
+**Previous**: [Routing Basics](./08_Routing_Basics.md) | **Next**: [TCP Protocol](./10_TCP_Protocol.md)
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 3-4 hours
 **Prerequisites**: [08_Routing_Basics.md](./08_Routing_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Classify routing protocols as IGP vs. EGP and distance vector vs. link state
+2. Explain how RIP works, including its hop count metric and limitations
+3. Describe OSPF operation, including areas, LSAs, SPF calculation, and DR/BDR election
+4. Explain the role of BGP as the Internet's inter-domain routing protocol and how it uses path attributes
+5. Define an Autonomous System (AS) and explain its significance in Internet routing
+6. Compare RIP, OSPF, and BGP and recommend the appropriate protocol for a given network scenario
+
+---
+
+Dynamic routing protocols are what make the Internet self-healing and scalable. When a link goes down or a new network comes online, routing protocols automatically detect the change and recalculate optimal paths -- no manual intervention needed. From RIP in small labs to BGP governing the global Internet routing table of over 900,000 prefixes, these protocols are the invisible intelligence behind every packet's journey.
 
 ## Table of Contents
 
@@ -19,8 +32,7 @@ This document covers the types and characteristics of dynamic routing protocols.
 5. [BGP (Border Gateway Protocol)](#5-bgp-border-gateway-protocol)
 6. [AS (Autonomous System)](#6-as-autonomous-system)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -487,15 +499,21 @@ Down → Init → 2-Way → ExStart → Exchange → Loading → Full
 
 **Cisco Router**:
 ```
+! Process ID 1 is locally significant — routers with different IDs can still form adjacencies
 Router(config)# router ospf 1
+! area 0 = backbone; ALL inter-area traffic must transit area 0 (hierarchical design reduces LSDB flooding)
+! Wildcard mask 0.255.255.255 = inverse of subnet mask; 0 bits must match, 255 bits are "don't care"
 Router(config-router)# network 10.0.0.0 0.255.255.255 area 0
+! Separate area 1 limits SPF recalculation scope — topology changes in area 1 don't trigger re-computation in area 0
 Router(config-router)# network 192.168.1.0 0.0.0.255 area 1
 ```
 
 **Linux (FRR)**:
 ```
 router ospf
+ # FRR uses CIDR notation instead of wildcard masks — same semantics, more intuitive syntax
  network 10.0.0.0/8 area 0.0.0.0
+ # Dotted-decimal area IDs (0.0.0.1 = area 1) — required format in FRR/Quagga
  network 192.168.1.0/24 area 0.0.0.1
 ```
 
@@ -614,8 +632,11 @@ Idle → Connect → OpenSent → OpenConfirm → Established
 
 **Cisco Router (eBGP)**:
 ```
+! BGP uses TCP port 179 — reliable transport prevents route flapping from lost packets
 Router(config)# router bgp 100
+! remote-as 200 ≠ local AS 100, so this is an eBGP session (different trust level: AD=20 vs iBGP's AD=200)
 Router(config-router)# neighbor 203.0.113.1 remote-as 200
+! Explicit mask required — BGP does NOT auto-summarize; you advertise exactly the prefix you specify
 Router(config-router)# network 10.0.0.0 mask 255.0.0.0
 ```
 
@@ -623,6 +644,7 @@ Router(config-router)# network 10.0.0.0 mask 255.0.0.0
 ```
 router bgp 100
  neighbor 203.0.113.1 remote-as 200
+ # address-family separates IPv4/IPv6/VPN route tables — one BGP process handles multiple protocols
  address-family ipv4 unicast
   network 10.0.0.0/8
  exit-address-family
@@ -845,25 +867,11 @@ d) Single path branch: **Static Routing** (+ default route)
 
 ---
 
-## 8. Next Steps
-
-Once you understand routing protocols, move on to the transport layer.
-
-### Next Lesson
-- [10_TCP_Protocol.md](./10_TCP_Protocol.md) - TCP 3-way handshake, flow control
-
-### Related Lessons
-- [08_Routing_Basics.md](./08_Routing_Basics.md) - Basic routing concepts
-- [15_Network_Security_Basics.md](./15_Network_Security_Basics.md) - Firewall, VPN
-
-### Recommended Practice
-1. Configure OSPF in GNS3/Packet Tracer
-2. Analyze routing tables with `show ip route`
-3. Check Internet routes with BGP Looking Glass
+**Previous**: [Routing Basics](./08_Routing_Basics.md) | **Next**: [TCP Protocol](./10_TCP_Protocol.md)
 
 ---
 
-## 9. References
+## 8. References
 
 ### RFC Documents
 
@@ -875,15 +883,16 @@ Once you understand routing protocols, move on to the transport layer.
 ### Useful Tools
 
 ```bash
-# BGP route lookup
+# BGP route lookup — Looking Glass servers let you see the Internet from another AS's perspective
 # BGP Looking Glass: https://lg.he.net/
 
-# AS information lookup
+# AS information lookup — RADB (Routing Assets Database) contains IRR records with route objects and policies
 whois -h whois.radb.net AS15169
 
-# Path tracing
-traceroute -A google.com    # Show AS numbers (Linux)
-mtr google.com              # Real-time trace
+# Path tracing — -A shows AS numbers at each hop, revealing which organizations carry your traffic
+traceroute -A google.com
+# mtr combines traceroute + ping for real-time latency monitoring per hop
+mtr google.com
 ```
 
 ### Learning Resources

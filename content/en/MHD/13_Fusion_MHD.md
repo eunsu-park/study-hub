@@ -607,7 +607,14 @@ def troyon_beta_limit(I_p, a, B_0, C_Troyon=2.8):
     beta_N : normalized beta limit (%)
     beta_percent : absolute beta limit (%)
     """
+    # C_Troyon = 2.8 is the empirical Troyon coefficient, determined from
+    # MHD stability calculations across many configurations; it encodes the
+    # fact that the marginal ideal kink mode becomes unstable when β exceeds
+    # this normalized threshold — not a fundamental constant, but a fit to simulations
     beta_N = C_Troyon  # Troyon limit (% T m / MA)
+    # β_N * I_p / (a * B_0) converts normalized beta to absolute beta (percent):
+    # higher current buys more beta because the stronger poloidal field resists
+    # the kink mode, allowing higher pressure before instability is triggered
     beta_percent = beta_N * I_p / (a * B_0)
     return beta_N, beta_percent
 
@@ -659,16 +666,26 @@ def sawtooth_period(a, T_e, n_e, B, S_exp=0.6):
     epsilon_0 = 8.854e-12  # F/m
     mu_0 = 4 * np.pi * 1e-7  # H/m
 
-    # Spitzer resistivity
+    # Spitzer resistivity — the T_e^{-3/2} dependence is the key: hotter plasmas
+    # are much better conductors (faster electrons have longer mean free paths),
+    # so a higher-temperature tokamak core will resist reconnection longer,
+    # extending the time between sawtooth crashes
     ln_Lambda = 15.0  # Coulomb logarithm (approximate)
     eta = (e**2 * ln_Lambda * m_e**0.5) / (12 * np.pi**1.5 * epsilon_0**2 * (e * T_e)**1.5)
 
-    # Lundquist number
+    # tau_R is the resistive diffusion time — how long it takes magnetic flux
+    # to diffuse through the plasma against Ohmic resistance; this sets the
+    # overall timescale on which reconnection can proceed
     tau_R = mu_0 * a**2 / eta
+    # tau_A is the Alfvén crossing time — the fastest an MHD wave can transmit
+    # information across the plasma; the ratio S = tau_R/tau_A (Lundquist number)
+    # measures how strongly the field resists diffusion relative to ideal MHD
     tau_A = a / (B / np.sqrt(mu_0 * n_e * m_e * 1836))  # Alfven time (approximation)
     S = tau_R / tau_A
 
-    # Sawtooth period scaling
+    # S_exp ≈ 0.6 from simulations: the sawtooth period grows sub-linearly with S
+    # because reconnection is not pure Sweet-Parker (S^{-1/2}) but involves
+    # partial reconnection and the Kadomtsev constraint; the factor 50 is empirical
     tau_sawtooth = tau_R / S**S_exp * 50  # Empirical factor
 
     return tau_sawtooth, S, eta
@@ -720,13 +737,20 @@ def disruption_forces(I_p, dI_dt, R, a, b_wall):
     """
     mu_0 = 4 * np.pi * 1e-7
 
-    # Mutual inductance (simple model)
+    # Mutual inductance captures how strongly the decaying plasma current couples
+    # to the vessel — the log(8R/a) term comes from the exact analytic formula for
+    # a circular current loop, and determines how much flux is linked to the structure
     M = mu_0 * R * (np.log(8 * R / a) - 2 + 0.5)  # H
 
-    # Vertical force (simplified)
+    # F_z = I * dI/dt * M / (2πR): the force arises because a changing current
+    # induces eddy currents in the vessel, which then interact with the decaying
+    # plasma current — faster current quenches produce larger forces, which is
+    # why ITER requires τ_CQ > 150 ms to keep F_z below structural limits
     F_z = abs(I_p * 1e6 * dI_dt * 1e6 * M / (2 * np.pi * R)) / 1e6  # MN
 
-    # Loop voltage
+    # V_loop is the inductive voltage driving runaway electrons: during the current
+    # quench, the collapsing flux induces a toroidal electric field E = V_loop/(2πR);
+    # if E exceeds the Dreicer field, electrons are freely accelerated to relativistic energies
     V_loop = abs(M * dI_dt * 1e6)  # V
 
     return F_z, V_loop
@@ -785,7 +809,13 @@ def safety_factor_profile(r, a, R, B_0, I_p, profile='parabolic', nu=1.0):
         # j(r) = j_0 (1 - (r/a)^2)^nu
         # I(r) = 2π ∫ j(r') r' dr'
         # For simplicity, approximate q(r)
+        # q_edge is determined by the total current I_p; the formula comes from
+        # Ampere's law integrated over the full cross-section, and sets the
+        # stability floor — if q_edge < 2, external kink modes can drive a disruption
         q_edge = (a**2 * B_0) / (mu_0 * R * I_p * 1e6) * 2 * np.pi
+        # q_0 = q_edge / (nu+1): a more peaked current (larger nu) has more current
+        # on-axis, creating a smaller q on-axis — if q_0 < 1, sawteeth can occur;
+        # nu+1 is the normalization factor for the parabolic current integral
         q_0 = q_edge / (nu + 1)
         q = q_0 + (q_edge - q_0) * (r / a)**2
     elif profile == 'flat':
@@ -940,7 +970,10 @@ def ntm_island_evolution(w0, Delta_prime_bs, Delta_prime_class, r_s, tau_R, t_ma
         w_array[i] = w
 
         # Modified Rutherford equation: dw/dt = (r_s/τ_R) * (Δ'_class + L_qp/w^2)
-        # Simplified: Δ'_bs ~ L_qp / w^2
+        # The classical term Δ'_class * w is negative (stabilizing) for classically
+        # stable modes; the bootstrap drive L_qp/w^2 is positive (destabilizing) and
+        # diverges for small w — so there is a critical seed island below which the
+        # classical damping wins, and above which the NTM grows to large amplitude
         if w > 1e-6:  # Avoid singularity
             dw_dt = (r_s / tau_R) * (Delta_prime_class * w + Delta_prime_bs / w)
         else:
@@ -953,8 +986,8 @@ def ntm_island_evolution(w0, Delta_prime_bs, Delta_prime_class, r_s, tau_R, t_ma
         if w < 0:
             w = 0
             break
-        if w > 0.5:  # Cap at half minor radius
-            break
+        if w > 0.5:  # Cap at half minor radius; beyond this the island engulfs
+            break    # much of the plasma and the model assumptions break down
 
     return t_array[:i+1], w_array[:i+1]
 
@@ -1009,7 +1042,13 @@ def rfp_taylor_state(r, a, mu_a):
     """
     from scipy.special import jv  # Bessel function
 
+    # x = μ * r is the dimensionless argument; scaling by μa allows the same
+    # Bessel function solution to describe any RFP with different μa values —
+    # the reversal occurs where J_0(μr) = 0, i.e., x = 2.405, 5.52, ...
     x = mu_a * r / a
+    # ∇×B = μB gives B_z ∝ J_0(μr) and B_θ ∝ J_1(μr): these Bessel functions
+    # are the eigenmodes of the curl operator in cylindrical geometry, and the
+    # RFP chooses the minimum-energy state (Taylor state) with lowest magnetic helicity
     B_z = jv(0, x)  # J_0
     B_theta = jv(1, x)  # J_1
 

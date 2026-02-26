@@ -1,5 +1,24 @@
 # Iterators & Generators
 
+**Previous**: [Context Managers](./03_Context_Managers.md) | **Next**: [Closures & Scope](./05_Closures_and_Scope.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between iterables and iterators and explain the `__iter__` / `__next__` protocol
+2. Trace how a `for` loop internally uses `iter()` and `next()` with `StopIteration`
+3. Implement custom iterator classes with separate iterable and iterator objects for reusability
+4. Write generator functions using `yield` and explain their lazy evaluation behavior
+5. Compare generator expressions with list comprehensions in terms of memory efficiency
+6. Apply `yield from` for delegation and recursive generators (e.g., flattening nested structures)
+7. Use advanced generator features: `send()`, `throw()`, and `close()`
+8. Apply `itertools` functions (`chain`, `groupby`, `islice`, `product`, `combinations`) to build efficient data pipelines
+
+---
+
+Processing a million-row CSV file should not require loading a million rows into memory. Iterators and generators are Python's answer to this problem: they produce values one at a time, on demand, keeping memory consumption constant regardless of data size. From reading log files line-by-line to chaining transformation stages in a data pipeline, the iterator protocol underpins much of Python's elegance and efficiency in handling sequences.
+
 ## 1. Iterables and Iterators
 
 ### Concept Distinction
@@ -539,6 +558,4 @@ Create a generator that traverses a binary tree.
 
 ---
 
-## Next Steps
-
-Check out [05_Closures_and_Scope.md](./05_Closures_and_Scope.md) to learn about variable scope and closures!
+**Previous**: [Context Managers](./03_Context_Managers.md) | **Next**: [Closures & Scope](./05_Closures_and_Scope.md)

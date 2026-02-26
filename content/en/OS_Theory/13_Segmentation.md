@@ -1,10 +1,26 @@
 # Segmentation ⭐⭐⭐
 
-## Overview
-
-Segmentation is a memory management technique that divides programs into logical units called segments. It separates meaningful units like code, data, and stack, making protection and sharing easier.
+**Previous**: [Paging](./12_Paging.md) | **Next**: [Virtual Memory](./14_Virtual_Memory.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain segmentation as a logical view of memory that reflects how programmers think about programs
+2. Describe the structure of a segment table entry, including base, limit, and protection fields
+3. Perform segment-based address translation given a segment number and offset
+4. Compare segmentation with paging across multiple dimensions including fragmentation, protection, and sharing
+5. Explain segmented paging and why modern systems combine both approaches
+6. Analyze how Intel x86 architecture implements segmentation in protected mode
+7. Distinguish between external fragmentation in segmentation and internal fragmentation in paging
+
+---
+
+While paging divides memory into fixed-size blocks for the OS's convenience, segmentation divides it according to the program's logical structure -- code, data, stack, heap. Segmentation reflects how programmers actually think about memory, making it a natural complement to paging. Understanding segmentation is essential because modern systems like x86 combine both techniques, and concepts like segment-level protection underpin memory safety in every OS you use today.
+
+> **Analogy**: Segmentation mirrors the programmer's mental model: code, data, stack, and heap are separate logical units, each with its own base address and size limit. Think of it like a filing cabinet where each drawer (segment) holds a different category of documents -- one for contracts, one for invoices, one for correspondence. Each drawer can be a different size, locked independently, and shared with specific people. Paging, by contrast, is like cutting all documents into same-sized pages regardless of content.
 
 ## Table of Contents
 
@@ -305,6 +321,10 @@ int translate_segment_address(uint16_t segment, uint32_t offset,
     }
 
     // 3. Limit check
+    // Why: Hardware checks the limit BEFORE adding the offset to the base address.
+    // This prevents buffer overflows into adjacent segments -- if a buggy program
+    // tries to access beyond its segment boundary, the hardware traps immediately
+    // rather than silently corrupting another segment's memory.
     if (offset >= entry->limit) {
         printf("ERROR: Offset %u >= Limit %u in segment %d\n",
                offset, entry->limit, segment);
@@ -320,6 +340,12 @@ int translate_segment_address(uint16_t segment, uint32_t offset,
     }
 
     // 5. Physical address calculation
+    // Why: The base+limit pair in each segment table entry provides both relocation
+    // and protection in a single mechanism. The base address relocates the segment
+    // to anywhere in physical memory (so segments don't need contiguous logical-to-physical
+    // mapping), while the limit ensures every access stays within bounds. This is why
+    // segmentation gives per-segment protection "for free" -- the same hardware that
+    // translates addresses also enforces boundaries.
     *physical = entry->base + offset;
     return 0;
 }

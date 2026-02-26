@@ -15,15 +15,18 @@ Even with proper setup and best practices, issues will arise when working with C
 - Basic knowledge of MCP ([Lesson 12](./12_Model_Context_Protocol.md))
 - Understanding of API fundamentals ([Lesson 15](./15_Claude_API_Fundamentals.md))
 
-**Learning Objectives**:
-- Diagnose and resolve permission errors systematically
-- Debug hook configuration and execution failures
-- Manage context window limitations effectively
-- Troubleshoot MCP server connection problems
-- Handle API errors with appropriate retry strategies
-- Identify and resolve performance issues
-- Use the `/doctor` command for built-in diagnostics
-- Know where to find help when self-diagnosis is not sufficient
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Diagnose and resolve permission errors systematically
+2. Debug hook configuration and execution failures
+3. Manage context window limitations effectively
+4. Troubleshoot MCP server connection problems
+5. Handle API errors with appropriate retry strategies
+6. Identify and resolve performance issues
+7. Use the `/doctor` command for built-in diagnostics
+8. Know where to find help when self-diagnosis is not sufficient
 
 ---
 

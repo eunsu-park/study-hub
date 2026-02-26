@@ -4,6 +4,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
 CONTENT_DIR = BASE_DIR.parent / "content"
+EXAMPLES_DIR = BASE_DIR.parent / "examples"
 
 class Config:
     """Base configuration."""
@@ -11,6 +12,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{BASE_DIR / 'data.db'}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     CONTENT_DIR = CONTENT_DIR
+    EXAMPLES_DIR = EXAMPLES_DIR
 
     # Language settings
     SUPPORTED_LANGUAGES = ["ko", "en"]

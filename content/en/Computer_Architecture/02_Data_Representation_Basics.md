@@ -1,12 +1,25 @@
 # Data Representation Basics
 
-## Overview
-
-Computers represent all data in binary (0s and 1s). In this lesson, we'll learn about number systems, base conversion methods, data units, and the concept of complements. This forms the foundation for understanding how computers process data.
+**Previous**: [Computer System Overview](./01_Computer_System_Overview.md) | **Next**: [Integer and Floating-Point Representation](./03_Integer_Float_Representation.md)
 
 **Difficulty**: ⭐ (Basic)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Convert numbers between binary, octal, decimal, and hexadecimal
+2. Explain why computers use binary representation
+3. Perform binary addition and subtraction with carry/borrow
+4. Represent negative numbers using sign-magnitude, 1's complement, and 2's complement
+5. Explain overflow detection in binary arithmetic
+6. Distinguish between data units (bit, nibble, byte, word) and their roles
+
+---
+
+Computers do not understand decimal numbers, letters, or images -- they only understand sequences of 0s and 1s. Everything in computing, from the color of a pixel to the price of a stock, must be encoded as binary. Understanding data representation reveals why integer overflow bugs happen, why floating-point arithmetic has surprises, and how data is stored at the hardware level.
 
 ## Table of Contents
 

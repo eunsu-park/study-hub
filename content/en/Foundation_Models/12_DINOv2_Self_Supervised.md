@@ -722,3 +722,106 @@ class DepthEstimator(nn.Module):
 - [DINO GitHub](https://github.com/facebookresearch/dino)
 - [DINOv2 GitHub](https://github.com/facebookresearch/dinov2)
 - [HuggingFace DINOv2](https://huggingface.co/facebook/dinov2-base)
+
+---
+
+## Exercises
+
+### Exercise 1: Centering and Collapse Prevention
+In the DINO loss, the teacher output is "centered" by subtracting a running mean before applying softmax. Explain what mode collapse looks like in a self-distillation setup (without centering) and why subtracting the center vector prevents it. Additionally, why is the center computed as an exponential moving average (EMA) of teacher outputs rather than a batch mean?
+
+<details>
+<summary>Show Answer</summary>
+
+**Mode collapse without centering**: Without centering, the teacher can converge to outputting a constant distribution — one dimension always dominates (e.g., always class 0). The student then trivially minimizes cross-entropy by copying this constant output. Both networks collapse to a degenerate solution that ignores the input entirely.
+
+**Why centering prevents this**: By subtracting the running mean `c` from teacher logits before softmax, the net effect forces the distribution to have zero-mean logits. No single dimension can persistently dominate — the softmax is pushed toward a more uniform distribution, which forces the student to learn genuine input-dependent patterns.
+
+**Why EMA over batch mean**: A single-batch mean is noisy and can introduce instability. An EMA center (`c ← m*c + (1-m)*batch_mean`) provides a smooth, stable estimate of the global teacher output distribution across many batches. It also requires no synchronization across GPUs (unlike a true global batch mean), making it efficient in distributed training.
+
+</details>
+
+### Exercise 2: Multi-crop Local-to-Global Correspondence
+DINO uses 2 global crops (224×224) fed to both teacher and student, plus 6-8 local crops (96×96) fed only to the student. Describe the key insight this design encodes and why the local crops are NOT fed to the teacher.
+
+<details>
+<summary>Show Answer</summary>
+
+**Core insight**: The multi-crop strategy enforces "local-to-global correspondence" — the student must predict what the teacher sees in the full image (global context) given only a small patch (local crop). This forces the student to learn semantically meaningful representations: to know that a small patch of a dog's ear belongs to the same object as the full dog image, the student must develop semantic understanding.
+
+**Why local crops go to the student only**: If local crops were also fed to the teacher:
+1. The teacher would produce noisy targets from small, context-poor patches.
+2. The high-quality, stable target signal comes from the global crops — the teacher has access to the full image context.
+3. Feeding local crops to the teacher would also significantly increase compute cost (teacher runs N+2 times instead of 2 times per batch).
+
+The asymmetry is intentional: teacher = stable global signal, student = learns from limited local views.
+
+</details>
+
+### Exercise 3: DINOv2 iBOT Loss Analysis
+DINOv2 combines DINO loss (CLS-token level) with iBOT loss (patch-token level). Complete the following analysis:
+
+```python
+# DINOv2 total loss
+# L_total = L_DINO + lambda * L_iBOT
+# L_DINO: cross-entropy between teacher and student CLS tokens
+# L_iBOT: cross-entropy between teacher and student on MASKED patch tokens
+
+# Question A: What does each loss component capture?
+# L_DINO captures: ???
+# L_iBOT captures: ???
+
+# Question B: If lambda = 0 (iBOT disabled), what capability is lost?
+# Answer: ???
+
+# Question C: The student has some patches masked (tokens replaced with [MASK]).
+# The teacher sees the FULL image. Why is this asymmetry important for iBOT?
+# Answer: ???
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Question A**:
+- `L_DINO` captures **global image-level semantics** via CLS tokens — it trains the model to produce consistent global representations across different crops/views.
+- `L_iBOT` captures **local patch-level semantics** — it trains the model to predict what each masked patch should look like in context, enabling dense/spatial understanding.
+
+**Question B**: Without iBOT (λ=0), the model loses its **dense visual feature quality**. The patch tokens would not be trained to encode spatially meaningful, local semantic information. Tasks like segmentation (which rely on patch-level features) would degrade significantly, since only the CLS token gets a strong training signal.
+
+**Question C**: The asymmetry is essential because:
+- The **teacher** sees the complete, unmasked image → it produces **ground-truth patch representations** as learning targets.
+- The **student** must **predict** the masked patches from context → it must model the relationship between visible patches and their masked neighbors.
+- If the teacher were also masked, it couldn't produce reliable targets (it would be guessing too). The teacher's unmasked view provides a stable supervisory signal for each masked position.
+
+</details>
+
+### Exercise 4: DINOv2 Feature Evaluation
+You want to evaluate DINOv2-Base (86M parameters) as a frozen backbone for two downstream tasks: (A) image classification on a small 10-class dataset with 500 labeled examples, and (B) semantic segmentation on a medical image dataset.
+
+For each task, describe which DINOv2 feature type (CLS token, patch tokens, or both) you would use, and propose a simple head architecture. Justify your choices.
+
+<details>
+<summary>Show Answer</summary>
+
+**Task A: Image classification (500 labeled examples)**
+
+- **Feature**: CLS token (shape: `[batch, 768]`)
+- **Head**: Linear classifier or shallow MLP (e.g., Linear(768, 10))
+- **Justification**: With only 500 examples, we need maximum regularization. A linear probe on the CLS token avoids overfitting while leveraging DINOv2's rich global semantic representation. k-NN classification (no head at all) also works well and serves as a strong baseline. The CLS token aggregates global information, which is ideal for whole-image classification.
+
+**Task B: Semantic segmentation (medical images)**
+
+- **Feature**: Patch tokens (shape: `[batch, n_patches, 768]`) reshaped to spatial grid
+- **Head**: Lightweight decoder, e.g.:
+  ```python
+  # n_patches = (518/14)^2 = 37^2 = 1369 for DINOv2 ViT-L/14 @ 518px
+  # Reshape to (batch, 768, 37, 37), then upsample
+  nn.Sequential(
+      nn.Conv2d(768, 256, 1),
+      nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1),
+      nn.ConvTranspose2d(128, num_classes, 4, stride=2, padding=1),
+  )
+  ```
+- **Justification**: Segmentation requires spatially-grounded, per-pixel predictions. Patch tokens carry spatial/local semantic information that the CLS token discards. DINOv2's patch tokens are particularly high-quality because iBOT training explicitly optimizes patch-level representations. The frozen backbone plus a lightweight convolutional decoder is data-efficient — critical for medical datasets where labeled data is scarce.
+
+</details>

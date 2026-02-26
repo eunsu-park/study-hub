@@ -160,7 +160,10 @@ class BinaryLiftingLCA:
                     self.depth[neighbor] = self.depth[node] + 1
                     queue.append(neighbor)
 
-        # Fill ancestor table
+        # Fill ancestor table bottom-up: ancestor[node][k] = 2^k-th ancestor.
+        # We derive each level from the previous: to jump 2^k steps, first
+        # jump 2^(k-1) steps, then jump another 2^(k-1) from that midpoint.
+        # This fills the table in O(N log N) rather than recomputing each query.
         for k in range(1, self.LOG):
             for node in range(n):
                 mid = self.ancestor[node][k-1]
@@ -169,6 +172,9 @@ class BinaryLiftingLCA:
 
     def kth_ancestor(self, node, k):
         """Return k-th ancestor of node (or -1 if doesn't exist)"""
+        # Decompose k in binary: jump over each set bit independently.
+        # E.g., k=13 (1101₂) → jump 8 + 4 + 1 steps using 3 table lookups
+        # instead of 13 individual parent hops.
         for i in range(self.LOG):
             if k & (1 << i):
                 node = self.ancestor[node][i]
@@ -181,14 +187,16 @@ class BinaryLiftingLCA:
         if self.depth[u] < self.depth[v]:
             u, v = v, u
 
-        # Align depth
+        # Align depth: bring the deeper node up to the same level as v.
         diff = self.depth[u] - self.depth[v]
         u = self.kth_ancestor(u, diff)
 
         if u == v:
             return u
 
-        # Climb together (binary search)
+        # Climb together in O(log N): iterate from the largest jump downward
+        # so we never overshoot the LCA.  After this loop u and v are just
+        # one step below their LCA, so ancestor[u][0] is the answer.
         for k in range(self.LOG - 1, -1, -1):
             if self.ancestor[u][k] != self.ancestor[v][k]:
                 u = self.ancestor[u][k]
@@ -370,6 +378,9 @@ class EulerTourLCA:
         for i in range(m):
             self.sparse[0][i] = i
 
+        # Build in O(N log N): each entry merges two non-overlapping halves
+        # of size 2^(k-1).  Queries will later reuse these precomputed ranges
+        # to answer any [l,r] RMQ in O(1) via two overlapping power-of-2 windows.
         # sparse[k][i] = position with minimum depth in range [i, i+2^k)
         for k in range(1, self.LOG):
             for i in range(m - (1 << k) + 1):
@@ -384,6 +395,10 @@ class EulerTourLCA:
         """Return position with minimum depth in range [l, r]"""
         length = r - l + 1
         k = int(math.log2(length))
+        # Two overlapping windows of size 2^k together cover the full [l, r].
+        # Overlap is harmless for min-queries because taking the min of a
+        # duplicated element doesn't change the result — this is the key
+        # property that makes sparse tables O(1) per query.
         left = self.sparse[k][l]
         right = self.sparse[k][r - (1 << k) + 1]
         if self.depth_arr[left] <= self.depth_arr[right]:

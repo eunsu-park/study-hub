@@ -44,32 +44,32 @@ This orthogonality relationship means that $\cos(mx)$ and $\sin(nx)$ point in di
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 삼각 함수의 직교성 수치적 검증 ---
+# --- Numerical verification of orthogonality of trigonometric functions ---
 x = np.linspace(-np.pi, np.pi, 10000)
 dx = x[1] - x[0]
 
-# cos(mx) * cos(nx) 적분
-print("=== cos(mx) * cos(nx) 직교성 검증 ===")
+# Integral of cos(mx) * cos(nx)
+print("=== Orthogonality check: cos(mx) * cos(nx) ===")
 for m in range(0, 4):
     for n in range(0, 4):
         integral = np.trapz(np.cos(m * x) * np.cos(n * x), x)
         if abs(integral) > 1e-10:
             print(f"  m={m}, n={n}: {integral:.4f}")
 
-# cos(mx) * sin(nx) 적분 (항상 0)
-print("\n=== cos(mx) * sin(nx) 직교성 검증 ===")
+# Integral of cos(mx) * sin(nx) (always 0)
+print("\n=== Orthogonality check: cos(mx) * sin(nx) ===")
 for m in range(1, 4):
     for n in range(1, 4):
         integral = np.trapz(np.cos(m * x) * np.sin(n * x), x)
-        print(f"  m={m}, n={n}: {integral:.6f}")  # 모두 ≈ 0
+        print(f"  m={m}, n={n}: {integral:.6f}")  # all ≈ 0
 
-# 출력:
-# === cos(mx) * cos(nx) 직교성 검증 ===
+# Output:
+# === Orthogonality check: cos(mx) * cos(nx) ===
 #   m=0, n=0: 6.2832  (= 2*pi)
 #   m=1, n=1: 3.1416  (= pi)
 #   m=2, n=2: 3.1416  (= pi)
 #   m=3, n=3: 3.1416  (= pi)
-# === cos(mx) * sin(nx) 직교성 검증 ===
+# === Orthogonality check: cos(mx) * sin(nx) ===
 #   m=1, n=1: 0.000000
 #   ...
 ```
@@ -132,18 +132,18 @@ $$f(x) = \frac{4}{\pi} \left( \sin x + \frac{\sin 3x}{3} + \frac{\sin 5x}{5} + \
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 구형파의 푸리에 급수 수렴 시각화 ---
+# --- Visualize convergence of Fourier series for square wave ---
 x = np.linspace(-2 * np.pi, 2 * np.pi, 2000)
 
-# 원래 구형파 (주기 2*pi)
+# Original square wave (period 2*pi)
 square_wave = np.sign(np.sin(x))
 
-# 푸리에 급수 부분합 (N항까지)
+# Partial sum of Fourier series (up to N terms)
 def fourier_square(x, N):
-    """구형파의 푸리에 급수 부분합 (N개의 사인 항)"""
+    """Partial sum of Fourier series for square wave (N sine terms)"""
     result = np.zeros_like(x)
     for k in range(N):
-        n = 2 * k + 1  # 홀수만
+        n = 2 * k + 1  # odd terms only
         result += np.sin(n * x) / n
     return (4 / np.pi) * result
 
@@ -151,9 +151,9 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 terms = [1, 3, 10, 50]
 
 for ax, N in zip(axes.flat, terms):
-    ax.plot(x, square_wave, 'k--', alpha=0.3, linewidth=1, label='원래 함수')
+    ax.plot(x, square_wave, 'k--', alpha=0.3, linewidth=1, label='Original function')
     ax.plot(x, fourier_square(x, N), 'b-', linewidth=1.5, label=f'N={N}')
-    ax.set_title(f'구형파 푸리에 급수: {N}항')
+    ax.set_title(f'Square wave Fourier series: {N} terms')
     ax.set_xlabel('x')
     ax.set_ylabel('f(x)')
     ax.set_ylim(-1.5, 1.5)
@@ -188,33 +188,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols, sin, cos, pi, integrate, simplify
 
-# --- SymPy를 이용한 해석적 계수 계산 ---
+# --- Analytical coefficient computation using SymPy ---
 x_sym, n_sym = symbols('x n', real=True)
 
-# 톱니파의 b_n 계수
+# b_n coefficients for sawtooth wave
 b_n_expr = (1 / pi) * integrate(x_sym * sin(n_sym * x_sym), (x_sym, -pi, pi))
 print(f"b_n = {simplify(b_n_expr)}")
-# 출력: b_n = -2*cos(pi*n)/n = 2*(-1)^(n+1)/n
+# Output: b_n = -2*cos(pi*n)/n = 2*(-1)^(n+1)/n
 
-# --- 톱니파 푸리에 급수 시각화 ---
+# --- Visualize Fourier series for sawtooth wave ---
 x = np.linspace(-2 * np.pi, 2 * np.pi, 2000)
 
-# 원래 톱니파 (주기 2*pi)
+# Original sawtooth wave (period 2*pi)
 sawtooth = x - 2 * np.pi * np.round(x / (2 * np.pi))
 
 def fourier_sawtooth(x, N):
-    """톱니파의 푸리에 급수 부분합"""
+    """Partial sum of Fourier series for sawtooth wave"""
     result = np.zeros_like(x)
     for n in range(1, N + 1):
         result += ((-1) ** (n + 1) / n) * np.sin(n * x)
     return 2 * result
 
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(x, sawtooth, 'k--', alpha=0.3, linewidth=1, label='원래 함수')
+ax.plot(x, sawtooth, 'k--', alpha=0.3, linewidth=1, label='Original function')
 for N, color in [(3, 'blue'), (10, 'green'), (50, 'red')]:
     ax.plot(x, fourier_sawtooth(x, N), color=color, linewidth=1.2, label=f'N={N}')
 
-ax.set_title('톱니파의 푸리에 급수')
+ax.set_title('Fourier series of sawtooth wave')
 ax.set_xlabel('x')
 ax.set_ylabel('f(x)')
 ax.legend()
@@ -274,11 +274,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import quad
 
-# --- 깁스 현상 시각화 ---
+# --- Visualize Gibbs phenomenon ---
 x = np.linspace(-0.5, 0.5, 5000)
 
 def fourier_square_detail(x, N):
-    """구형파의 부분합 (불연속점 x=0 근처 확대)"""
+    """Partial sum of square wave (zoom near discontinuity at x=0)"""
     result = np.zeros_like(x)
     for k in range(N):
         n = 2 * k + 1
@@ -287,24 +287,24 @@ def fourier_square_detail(x, N):
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# (좌) 다양한 N에 대한 불연속점 근처 거동
+# (left) Behavior near discontinuity for various N
 for N in [10, 50, 200, 1000]:
     axes[0].plot(x, fourier_square_detail(x, N), linewidth=1, label=f'N={N}')
 axes[0].axhline(y=1, color='k', linestyle='--', alpha=0.3)
 axes[0].axhline(y=-1, color='k', linestyle='--', alpha=0.3)
-axes[0].set_title('깁스 현상: 불연속점(x=0) 근처')
+axes[0].set_title('Gibbs phenomenon: near discontinuity (x=0)')
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('$S_N(x)$')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# (우) 이론적 overshoot 계산
+# (right) Theoretical overshoot calculation
 # Si(pi) = integral_0^pi sin(t)/t dt
 Si_pi, _ = quad(lambda t: np.sin(t) / t, 0, np.pi)
 overshoot = 2 * Si_pi / np.pi - 1
-print(f"이론적 overshoot: {overshoot:.4f} ({overshoot*100:.2f}%)")
+print(f"Theoretical overshoot: {overshoot:.4f} ({overshoot*100:.2f}%)")
 
-# N에 따른 최대값 변화
+# Maximum value as a function of N
 N_values = np.arange(5, 505, 5)
 max_values = []
 x_fine = np.linspace(0.0001, 0.5, 10000)
@@ -314,10 +314,10 @@ for N in N_values:
 
 axes[1].plot(N_values, max_values, 'b-', linewidth=1)
 axes[1].axhline(y=1 + overshoot * 2, color='r', linestyle='--',
-                label=f'이론값: {1 + overshoot*2:.4f}')
+                label=f'Theoretical: {1 + overshoot*2:.4f}')
 axes[1].axhline(y=1, color='k', linestyle='--', alpha=0.3)
-axes[1].set_title('항의 수(N)에 따른 최대값')
-axes[1].set_xlabel('N (항의 수)')
+axes[1].set_title('Maximum value vs number of terms (N)')
+axes[1].set_xlabel('N (number of terms)')
 axes[1].set_ylabel('$\\max S_N(x)$')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
@@ -378,32 +378,32 @@ In physics problems, the appropriate extension is chosen according to boundary c
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 반구간 전개 시각화 ---
-# f(x) = x(pi - x), 0 < x < pi 에서 정의
+# --- Visualize half-range expansion ---
+# f(x) = x(pi - x), defined for 0 < x < pi
 
 x_half = np.linspace(0, np.pi, 500)
 f_half = x_half * (np.pi - x_half)
 
-# 우함수 확장 (코사인 급수)
+# Even extension (cosine series)
 def cosine_expansion(x, N):
-    """f(x) = x(pi - x)의 코사인 급수"""
+    """Cosine series for f(x) = x(pi - x)"""
     # a_0 = (2/pi) * integral_0^pi x(pi-x) dx = pi^2/3
     a0 = np.pi**2 / 3
     result = a0 / 2 * np.ones_like(x)
     for n in range(1, N + 1):
-        # a_n 계산: a_n = (2/pi) * integral_0^pi x(pi-x)*cos(nx) dx
+        # a_n: a_n = (2/pi) * integral_0^pi x(pi-x)*cos(nx) dx
         if n % 2 == 0:
             a_n = -4 / (n**2)
         else:
             a_n = -4 / (n**2)
-        # 정확한 계산: a_n = -4/(n^2) (모든 n에 대해 -2(1 + (-1)^n)/(n^2))
+        # Exact: a_n = -4/(n^2) (i.e. -2(1 + (-1)^n)/(n^2) for all n)
         a_n = -2 * (1 + (-1)**n) / (n**2)
         result += a_n * np.cos(n * x)
     return result
 
-# 기함수 확장 (사인 급수)
+# Odd extension (sine series)
 def sine_expansion(x, N):
-    """f(x) = x(pi - x)의 사인 급수"""
+    """Sine series for f(x) = x(pi - x)"""
     result = np.zeros_like(x)
     for n in range(1, N + 1):
         # b_n = (2/pi) * integral_0^pi x(pi-x)*sin(nx) dx
@@ -419,22 +419,22 @@ N = 20
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 우함수 확장
+# Even extension
 f_even = np.abs(x_full) * (np.pi - np.abs(x_full))
-axes[0].plot(x_full, f_even, 'k--', alpha=0.3, label='우함수 확장 원본')
-axes[0].plot(x_full, cosine_expansion(x_full, N), 'b-', label=f'코사인 급수 (N={N})')
-axes[0].set_title('우함수 확장 → 코사인 급수')
+axes[0].plot(x_full, f_even, 'k--', alpha=0.3, label='Even extension (original)')
+axes[0].plot(x_full, cosine_expansion(x_full, N), 'b-', label=f'Cosine series (N={N})')
+axes[0].set_title('Even extension → Cosine series')
 axes[0].set_xlabel('x')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 기함수 확장
+# Odd extension
 f_odd = np.where(x_full >= 0,
                  x_full * (np.pi - x_full),
                  -(-x_full) * (np.pi - (-x_full)))
-axes[1].plot(x_full, f_odd, 'k--', alpha=0.3, label='기함수 확장 원본')
-axes[1].plot(x_full, sine_expansion(x_full, N), 'r-', label=f'사인 급수 (N={N})')
-axes[1].set_title('기함수 확장 → 사인 급수')
+axes[1].plot(x_full, f_odd, 'k--', alpha=0.3, label='Odd extension (original)')
+axes[1].plot(x_full, sine_expansion(x_full, N), 'r-', label=f'Sine series (N={N})')
+axes[1].set_title('Odd extension → Sine series')
 axes[1].set_xlabel('x')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
@@ -488,25 +488,25 @@ $$\frac{1}{\pi}\int_{-\pi}^{\pi} x^2 \, dx = \frac{2\pi^2}{3} = \sum_{n=1}^{\inf
 ```python
 import numpy as np
 
-# --- 파르세발 정리 수치 검증 ---
+# --- Numerical verification of Parseval's theorem ---
 x = np.linspace(-np.pi, np.pi, 100000)
 dx = x[1] - x[0]
 
-# 구형파
+# Square wave
 f_square = np.sign(np.sin(x + 1e-15))
 lhs = np.trapz(f_square**2, x) / np.pi
-print(f"구형파 |f|^2 적분 / pi = {lhs:.6f}")
+print(f"Square wave |f|^2 integral / pi = {lhs:.6f}")
 
-# 우변: 푸리에 계수의 제곱합
+# Right side: sum of squares of Fourier coefficients
 rhs = 0
 for k in range(10000):
     n = 2 * k + 1
     b_n = 4 / (n * np.pi)
     rhs += b_n**2
 print(f"sum b_n^2 = {rhs:.6f}")
-print(f"오차: {abs(lhs - rhs):.2e}")
+print(f"Error: {abs(lhs - rhs):.2e}")
 
-# 급수의 합 계산
+# Compute series sums
 series_sum = sum(1 / (2*k+1)**2 for k in range(100000))
 print(f"\nsum 1/(2k+1)^2 = {series_sum:.10f}")
 print(f"pi^2/8         = {np.pi**2/8:.10f}")
@@ -515,10 +515,10 @@ series_all = sum(1 / n**2 for n in range(1, 100001))
 print(f"\nsum 1/n^2      = {series_all:.10f}")
 print(f"pi^2/6         = {np.pi**2/6:.10f}")
 
-# 출력:
-# 구형파 |f|^2 적분 / pi = 2.000000
+# Output:
+# Square wave |f|^2 integral / pi = 2.000000
 # sum b_n^2 = 1.999999
-# 오차: 5.07e-05
+# Error: 5.07e-05
 # sum 1/(2k+1)^2 = 1.2337005501
 # pi^2/8         = 1.2337005501
 # sum 1/n^2      = 1.6449240669
@@ -566,20 +566,20 @@ $$\frac{1}{2\pi} \int_{-\pi}^{\pi} |f(x)|^2 \, dx = \sum_{n=-\infty}^{\infty} |c
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 복소 푸리에 계수와 주파수 스펙트럼 ---
-# 구형파, 톱니파, 삼각파의 스펙트럼 비교
+# --- Complex Fourier coefficients and frequency spectrum ---
+# Compare spectra of square, sawtooth, and triangle waves
 
 x = np.linspace(-np.pi, np.pi, 10000, endpoint=False)
 dx = x[1] - x[0]
 
-# 파형 정의
+# Define waveforms
 square = np.sign(np.sin(x + 1e-15))
-sawtooth = x / np.pi  # 정규화
+sawtooth = x / np.pi  # normalized
 triangle = 1 - 2 * np.abs(x) / np.pi
 
-# 복소 푸리에 계수 수치 계산
+# Numerically compute complex Fourier coefficients
 def compute_cn(f, x, n_max):
-    """복소 푸리에 계수 c_n을 수치적으로 계산"""
+    """Numerically compute complex Fourier coefficients c_n"""
     cn = {}
     for n in range(-n_max, n_max + 1):
         integrand = f * np.exp(-1j * n * x)
@@ -591,29 +591,29 @@ cn_square = compute_cn(square, x, n_max)
 cn_sawtooth = compute_cn(sawtooth, x, n_max)
 cn_triangle = compute_cn(triangle, x, n_max)
 
-# 스펙트럼 시각화
+# Visualize spectra
 fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-waveforms = [('구형파', cn_square), ('톱니파', cn_sawtooth), ('삼각파', cn_triangle)]
+waveforms = [('Square wave', cn_square), ('Sawtooth wave', cn_sawtooth), ('Triangle wave', cn_triangle)]
 
 for j, (name, cn) in enumerate(waveforms):
     ns = sorted(cn.keys())
     amplitudes = [np.abs(cn[n]) for n in ns]
     phases = [np.angle(cn[n]) for n in ns]
 
-    # 진폭 스펙트럼
+    # Amplitude spectrum
     axes[0, j].stem(ns, amplitudes, linefmt='b-', markerfmt='bo', basefmt='k-')
-    axes[0, j].set_title(f'{name} - 진폭 스펙트럼')
-    axes[0, j].set_xlabel('n (주파수)')
+    axes[0, j].set_title(f'{name} - Amplitude spectrum')
+    axes[0, j].set_xlabel('n (frequency)')
     axes[0, j].set_ylabel('$|c_n|$')
     axes[0, j].grid(True, alpha=0.3)
 
-    # 위상 스펙트럼
-    # 진폭이 매우 작은 성분의 위상은 의미 없으므로 필터링
+    # Phase spectrum
+    # Filter out components with very small amplitude
     significant = [n for n in ns if np.abs(cn[n]) > 1e-10]
     sig_phases = [np.angle(cn[n]) for n in significant]
     axes[1, j].stem(significant, sig_phases, linefmt='r-', markerfmt='ro', basefmt='k-')
-    axes[1, j].set_title(f'{name} - 위상 스펙트럼')
-    axes[1, j].set_xlabel('n (주파수)')
+    axes[1, j].set_title(f'{name} - Phase spectrum')
+    axes[1, j].set_xlabel('n (frequency)')
     axes[1, j].set_ylabel('$\\arg(c_n)$')
     axes[1, j].set_ylim(-np.pi - 0.3, np.pi + 0.3)
     axes[1, j].grid(True, alpha=0.3)
@@ -651,17 +651,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
-# --- 진동하는 현: 초기 변위의 푸리에 분해 ---
-L = 1.0  # 현의 길이
-c = 1.0  # 파동 속도
-N = 20   # 고조파 수
+# --- Vibrating string: Fourier decomposition of initial displacement ---
+L = 1.0  # String length
+c = 1.0  # Wave speed
+N = 20   # Number of harmonics
 
-# 초기 변위: 삼각형 (중앙을 잡아당긴 형태)
+# Initial displacement: triangle (plucked at center)
 def initial_displacement(x, L):
-    """삼각형 초기 변위: 중앙에서 최대"""
+    """Triangular initial displacement: maximum at center"""
     return np.where(x <= L/2, 2*x/L, 2*(L-x)/L)
 
-# 사인 급수 계수 계산
+# Compute sine series coefficients
 x_int = np.linspace(0, L, 10000)
 f_init = initial_displacement(x_int, L)
 
@@ -670,18 +670,18 @@ for n in range(1, N + 1):
     integrand = f_init * np.sin(n * np.pi * x_int / L)
     b_n[n] = 2 / L * np.trapz(integrand, x_int)
 
-print("고조파 계수 b_n:")
+print("Harmonic coefficients b_n:")
 for n in range(1, 8):
     print(f"  b_{n} = {b_n[n]:+.6f}")
 
-# 시간 t에서의 변위
+# Displacement at time t
 def string_displacement(x, t, b_n, L, c):
     u = np.zeros_like(x)
     for n in range(1, len(b_n)):
         u += b_n[n] * np.sin(n * np.pi * x / L) * np.cos(n * np.pi * c * t / L)
     return u
 
-# 여러 시점에서의 현의 모양 시각화
+# Visualize string shape at multiple times
 x = np.linspace(0, L, 500)
 times = [0, 0.1, 0.25, 0.4, 0.5]
 
@@ -691,16 +691,16 @@ for t in times:
     u = string_displacement(x, t, b_n, L, c)
     axes[0].plot(x, u, label=f't = {t:.2f}')
 
-axes[0].set_title('진동하는 현의 시간 변화')
+axes[0].set_title('Vibrating string: time evolution')
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('u(x, t)')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 고조파 스펙트럼
+# Harmonic spectrum
 axes[1].bar(range(1, N + 1), np.abs(b_n[1:]), color='steelblue', alpha=0.7)
-axes[1].set_title('고조파 계수 $|b_n|$')
-axes[1].set_xlabel('고조파 번호 n')
+axes[1].set_title('Harmonic coefficients $|b_n|$')
+axes[1].set_xlabel('Harmonic number n')
 axes[1].set_ylabel('$|b_n|$')
 axes[1].grid(True, alpha=0.3)
 
@@ -730,16 +730,16 @@ Unlike the wave equation, in the heat equation, harmonic components undergo **ex
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 열전도 문제의 푸리에 급수 해 ---
+# --- Fourier series solution to heat conduction problem ---
 L = 1.0
-alpha = 0.01  # 열확산율
+alpha = 0.01  # Thermal diffusivity
 
-# 초기 온도 분포: 중앙에 집중된 열원
+# Initial temperature: heat source concentrated at center
 def initial_temp(x, L):
-    """가우시안 형태의 초기 온도"""
+    """Gaussian initial temperature distribution"""
     return np.exp(-50 * (x - L/2)**2)
 
-# 사인 급수 계수
+# Sine series coefficients
 x_int = np.linspace(0, L, 10000)
 f_init = initial_temp(x_int, L)
 N = 50
@@ -749,7 +749,7 @@ for n in range(1, N + 1):
     integrand = f_init * np.sin(n * np.pi * x_int / L)
     b_n[n] = 2 / L * np.trapz(integrand, x_int)
 
-# 열전도 해
+# Heat equation solution
 def heat_solution(x, t, b_n, L, alpha):
     u = np.zeros_like(x)
     for n in range(1, len(b_n)):
@@ -757,7 +757,7 @@ def heat_solution(x, t, b_n, L, alpha):
         u += b_n[n] * np.sin(n * np.pi * x / L) * decay
     return u
 
-# 시각화
+# Visualization
 x = np.linspace(0, L, 500)
 times = [0, 0.5, 1.0, 2.0, 5.0, 10.0]
 
@@ -767,20 +767,20 @@ for t in times:
     u = heat_solution(x, t, b_n, L, alpha)
     axes[0].plot(x, u, label=f't = {t:.1f}')
 
-axes[0].set_title('열전도: 온도 분포의 시간 변화')
+axes[0].set_title('Heat conduction: time evolution of temperature')
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('u(x, t)')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 각 모드의 감쇠
+# Decay of each mode
 t_range = np.linspace(0, 10, 200)
 for n in [1, 2, 3, 5, 10]:
     decay = np.abs(b_n[n]) * np.exp(-n**2 * np.pi**2 * alpha * t_range / L**2)
     axes[1].plot(t_range, decay, label=f'n={n} (|b_{n}|={np.abs(b_n[n]):.3f})')
 
-axes[1].set_title('고조파 모드의 지수적 감쇠')
-axes[1].set_xlabel('시간 t')
+axes[1].set_title('Exponential decay of harmonic modes')
+axes[1].set_xlabel('Time t')
 axes[1].set_ylabel('$|b_n| e^{-n^2 \\pi^2 \\alpha t / L^2}$')
 axes[1].legend()
 axes[1].set_yscale('log')
@@ -819,60 +819,60 @@ where a $\text{sinc}$ function-shaped envelope determines the frequency spectrum
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 전자기파 주파수 분석 ---
+# --- EM wave frequency analysis ---
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# (1) AM 변조 신호
+# (1) AM modulated signal
 t = np.linspace(0, 1, 10000)
-fc = 50   # 반송파 주파수 (Hz)
-fm = 5    # 변조 주파수 (Hz)
-m = 0.7   # 변조 지수
+fc = 50   # Carrier frequency (Hz)
+fm = 5    # Modulation frequency (Hz)
+m = 0.7   # Modulation index
 
 signal = (1 + m * np.cos(2 * np.pi * fm * t)) * np.cos(2 * np.pi * fc * t)
 
 axes[0, 0].plot(t[:2000], signal[:2000], 'b-', linewidth=0.5)
-axes[0, 0].set_title('AM 변조 신호 (시간 영역)')
-axes[0, 0].set_xlabel('시간 (s)')
+axes[0, 0].set_title('AM modulated signal (time domain)')
+axes[0, 0].set_xlabel('Time (s)')
 axes[0, 0].set_ylabel('s(t)')
 axes[0, 0].grid(True, alpha=0.3)
 
-# FFT를 이용한 스펙트럼 분석
+# Spectral analysis using FFT
 N_fft = len(t)
 freq = np.fft.fftfreq(N_fft, d=t[1] - t[0])
 S = np.fft.fft(signal) / N_fft
 
-# 양의 주파수만 표시
+# Show only positive frequencies
 pos_mask = freq > 0
 axes[0, 1].plot(freq[pos_mask], 2 * np.abs(S[pos_mask]), 'r-', linewidth=1)
-axes[0, 1].set_title('AM 변조 신호 (주파수 스펙트럼)')
-axes[0, 1].set_xlabel('주파수 (Hz)')
-axes[0, 1].set_ylabel('진폭')
+axes[0, 1].set_title('AM modulated signal (frequency spectrum)')
+axes[0, 1].set_xlabel('Frequency (Hz)')
+axes[0, 1].set_ylabel('Amplitude')
 axes[0, 1].set_xlim(0, 100)
 axes[0, 1].grid(True, alpha=0.3)
-# 반송파(fc), 상측파대(fc+fm), 하측파대(fc-fm) 표시
+# Mark carrier (fc), upper sideband (fc+fm), lower sideband (fc-fm)
 for f_label, label in [(fc, '$f_c$'), (fc+fm, '$f_c+f_m$'), (fc-fm, '$f_c-f_m$')]:
     axes[0, 1].axvline(x=f_label, color='gray', linestyle='--', alpha=0.5)
     axes[0, 1].text(f_label, 0.45, label, ha='center', fontsize=9)
 
-# (2) 구형 펄스 열의 스펙트럼
-T_pulse = 0.1    # 주기 (s)
-tau = 0.02        # 펄스 폭 (s)
+# (2) Rectangular pulse train spectrum
+T_pulse = 0.1    # Period (s)
+tau = 0.02        # Pulse width (s)
 t2 = np.linspace(0, 0.5, 10000)
 
-# 구형 펄스 열 생성
+# Generate rectangular pulse train
 pulse_train = np.zeros_like(t2)
 for k in range(int(0.5 / T_pulse) + 1):
     center = k * T_pulse
     pulse_train[(t2 >= center) & (t2 < center + tau)] = 1.0
 
 axes[1, 0].plot(t2, pulse_train, 'b-', linewidth=1)
-axes[1, 0].set_title(f'구형 펄스 열 (T={T_pulse}s, τ={tau}s)')
-axes[1, 0].set_xlabel('시간 (s)')
+axes[1, 0].set_title(f'Rectangular pulse train (T={T_pulse}s, τ={tau}s)')
+axes[1, 0].set_xlabel('Time (s)')
 axes[1, 0].set_ylabel('f(t)')
 axes[1, 0].set_ylim(-0.2, 1.4)
 axes[1, 0].grid(True, alpha=0.3)
 
-# 구형 펄스 열의 FFT
+# FFT of rectangular pulse train
 N_fft2 = len(t2)
 freq2 = np.fft.fftfreq(N_fft2, d=t2[1] - t2[0])
 S2 = np.fft.fft(pulse_train) / N_fft2
@@ -880,15 +880,15 @@ S2 = np.fft.fft(pulse_train) / N_fft2
 pos_mask2 = freq2 > 0
 axes[1, 1].stem(freq2[pos_mask2][:50], 2 * np.abs(S2[pos_mask2][:50]),
                 linefmt='r-', markerfmt='ro', basefmt='k-')
-axes[1, 1].set_title('구형 펄스 열의 주파수 스펙트럼')
-axes[1, 1].set_xlabel('주파수 (Hz)')
-axes[1, 1].set_ylabel('진폭')
+axes[1, 1].set_title('Frequency spectrum of rectangular pulse train')
+axes[1, 1].set_xlabel('Frequency (Hz)')
+axes[1, 1].set_ylabel('Amplitude')
 axes[1, 1].grid(True, alpha=0.3)
 
-# sinc 포락선 표시
+# Show sinc envelope
 f_env = np.linspace(0.1, freq2[pos_mask2][49], 500)
 envelope = tau / T_pulse * np.abs(np.sinc(f_env * tau))
-axes[1, 1].plot(f_env, 2 * envelope, 'b--', alpha=0.5, linewidth=2, label='sinc 포락선')
+axes[1, 1].plot(f_env, 2 * envelope, 'b--', alpha=0.5, linewidth=2, label='sinc envelope')
 axes[1, 1].legend()
 
 plt.tight_layout()
@@ -945,14 +945,14 @@ The initial temperature of a rod of length $L$ is $u(x, 0) = u_0$ (constant), an
 (b) Analyze the rate at which the temperature approaches 0 as $t \to \infty$. (Decay time constant of the fundamental mode $\tau_1 = L^2 / (\pi^2 \alpha)$)
 
 ```python
-# --- 연습 문제 풀이 보조 코드 ---
+# --- Auxiliary code for practice problems ---
 import numpy as np
 from sympy import symbols, cos, sin, pi, integrate, simplify, Rational
 
 x, n = symbols('x n', real=True, positive=True)
 
-# 문제 1: f(x) = x^2의 푸리에 계수
-print("=== 문제 1: f(x) = x^2 ===")
+# Problem 1: Fourier coefficients of f(x) = x^2
+print("=== Problem 1: f(x) = x^2 ===")
 a0 = (1 / pi) * integrate(x**2, (x, -pi, pi))
 print(f"a_0 = {a0}")
 
@@ -960,8 +960,8 @@ a_n = (1 / pi) * integrate(x**2 * cos(n * x), (x, -pi, pi))
 a_n_simplified = simplify(a_n)
 print(f"a_n = {a_n_simplified}")
 
-# 문제 2: 파르세발 정리 적용
-print("\n=== 문제 2: 파르세발 정리 ===")
+# Problem 2: Applying Parseval's theorem
+print("\n=== Problem 2: Parseval's theorem ===")
 lhs = (1 / pi) * integrate(x**4, (x, -pi, pi))
 print(f"(1/pi) * integral x^4 dx = {lhs}")
 
@@ -969,7 +969,7 @@ print(f"(1/pi) * integral x^4 dx = {lhs}")
 # pi^4/9/2 + 16 * sum 1/n^4 = 2*pi^4/5
 # => sum 1/n^4 = (2*pi^4/5 - pi^4/18) / 16 = pi^4/90
 print(f"sum 1/n^4 = pi^4/90 = {float(pi**4/90):.10f}")
-print(f"수치 검증: {sum(1/k**4 for k in range(1, 100001)):.10f}")
+print(f"Numerical check: {sum(1/k**4 for k in range(1, 100001)):.10f}")
 ```
 
 ---

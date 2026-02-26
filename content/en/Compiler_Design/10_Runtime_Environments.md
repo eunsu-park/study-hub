@@ -1694,4 +1694,4 @@ Test with a program that creates a closure and then throws an exception through 
 
 ---
 
-[Previous: 09_Intermediate_Representations.md](./09_Intermediate_Representations.md) | [Next: 11_Code_Generation.md](./11_Code_Generation.md) | [Overview](./00_Overview.md)
+[Previous: Intermediate Representations](./09_Intermediate_Representations.md) | [Next: Code Generation](./11_Code_Generation.md) | [Overview](./00_Overview.md)

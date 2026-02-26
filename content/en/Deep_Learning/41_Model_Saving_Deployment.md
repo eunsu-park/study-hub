@@ -6,10 +6,14 @@
 
 ## Learning Objectives
 
-- PyTorch model saving methods
-- ONNX conversion
-- Using TorchScript
-- Inference optimization
+After completing this lesson, you will be able to:
+
+1. Save and load PyTorch models using state_dict and checkpoints
+2. Export models with TorchScript (tracing and scripting)
+3. Convert models to ONNX for cross-framework deployment
+4. Use `torch.export()` for graph capture (PyTorch 2.x)
+5. Apply inference optimization techniques (quantization, compilation)
+6. Deploy models via REST API, Docker, mobile, and cloud platforms
 
 ---
 
@@ -18,11 +22,11 @@
 ### Saving state_dict (Recommended)
 
 ```python
-# 저장
+# Save
 torch.save(model.state_dict(), 'model_weights.pth')
 
-# 로드
-model = MyModel()  # 같은 구조 필요
+# Load
+model = MyModel()  # Same structure required
 model.load_state_dict(torch.load('model_weights.pth'))
 model.eval()
 ```
@@ -30,10 +34,10 @@ model.eval()
 ### Saving Full Model
 
 ```python
-# 저장
+# Save
 torch.save(model, 'model_full.pth')
 
-# 로드
+# Load
 model = torch.load('model_full.pth')
 model.eval()
 ```
@@ -41,7 +45,7 @@ model.eval()
 ### Saving Checkpoint
 
 ```python
-# 저장
+# Save
 checkpoint = {
     'epoch': epoch,
     'model_state_dict': model.state_dict(),
@@ -51,7 +55,7 @@ checkpoint = {
 }
 torch.save(checkpoint, 'checkpoint.pth')
 
-# 로드
+# Load
 checkpoint = torch.load('checkpoint.pth')
 model.load_state_dict(checkpoint['model_state_dict'])
 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -74,15 +78,15 @@ Run model without Python dependency
 ### Tracing
 
 ```python
-# 예시 입력으로 추적
+# Trace with example input
 model.eval()
 example_input = torch.randn(1, 3, 224, 224)
 traced_model = torch.jit.trace(model, example_input)
 
-# 저장
+# Save
 traced_model.save('model_traced.pt')
 
-# 로드
+# Load
 loaded_model = torch.jit.load('model_traced.pt')
 output = loaded_model(example_input)
 ```
@@ -90,7 +94,7 @@ output = loaded_model(example_input)
 ### Scripting
 
 ```python
-# 제어 흐름 있는 모델
+# Model with control flow
 class MyModel(nn.Module):
     def forward(self, x):
         if x.sum() > 0:
@@ -140,10 +144,10 @@ torch.onnx.export(
 import onnxruntime as ort
 import numpy as np
 
-# 세션 생성
+# Create session
 session = ort.InferenceSession("model.onnx")
 
-# 추론
+# Inference
 input_name = session.get_inputs()[0].name
 output_name = session.get_outputs()[0].name
 
@@ -156,20 +160,90 @@ result = session.run([output_name], {input_name: input_data})
 ```python
 import onnx
 
-# 모델 로드 및 검증
+# Load and validate model
 onnx_model = onnx.load("model.onnx")
 onnx.checker.check_model(onnx_model)
-print("ONNX 모델 검증 통과")
+print("ONNX model validation passed")
 ```
 
 ---
 
-## 4. Inference Optimization
+## 4. torch.export() (PyTorch 2.x)
+
+### Concept
+
+`torch.export()` is the PyTorch 2.x successor to TorchScript. It captures the full computation graph using TorchDynamo, producing a clean, portable `ExportedProgram`.
+
+```
+TorchScript (legacy) → torch.export() (PyTorch 2.x recommended)
+- Sound graph capture (no silent correctness issues)
+- Works with torch.compile() ecosystem
+- Better support for dynamic shapes
+```
+
+### Basic Usage
+
+```python
+import torch
+
+model = MyModel().eval()
+example_input = (torch.randn(1, 3, 224, 224),)
+
+# Export the model
+exported = torch.export.export(model, example_input)
+
+# Run the exported model
+output = exported.module()(torch.randn(1, 3, 224, 224))
+```
+
+### Dynamic Shapes
+
+```python
+from torch.export import Dim
+
+# Define dynamic dimensions
+batch = Dim("batch", min=1, max=32)
+dynamic_shapes = {"x": {0: batch}}
+
+exported = torch.export.export(
+    model,
+    (torch.randn(4, 3, 224, 224),),
+    dynamic_shapes=dynamic_shapes,
+)
+
+# Works with any batch size in range [1, 32]
+output = exported.module()(torch.randn(8, 3, 224, 224))
+```
+
+### Saving and Loading
+
+```python
+# Save
+torch.export.save(exported, "model_exported.pt2")
+
+# Load
+loaded = torch.export.load("model_exported.pt2")
+output = loaded.module()(input_data)
+```
+
+### torch.export() vs TorchScript
+
+| Feature | TorchScript | torch.export() |
+|---------|------------|----------------|
+| Graph capture | Tracing or scripting | TorchDynamo (automatic) |
+| Python support | Limited subset | Full Python semantics |
+| Dynamic shapes | Manual annotation | First-class support |
+| Correctness | Silent failures possible | Sound capture or clear error |
+| Ecosystem | Legacy | Integrates with torch.compile |
+
+---
+
+## 5. Inference Optimization
 
 ### eval Mode
 
 ```python
-model.eval()  # Dropout, BatchNorm 비활성화
+model.eval()  # Disable Dropout and BatchNorm
 ```
 
 ### no_grad
@@ -189,21 +263,21 @@ with torch.inference_mode():
 ### Quantization
 
 ```python
-# 동적 양자화 (간단)
+# Dynamic quantization (simple)
 quantized_model = torch.quantization.quantize_dynamic(
     model, {nn.Linear}, dtype=torch.qint8
 )
 
-# 정적 양자화 (더 최적화)
+# Static quantization (more optimized)
 model.qconfig = torch.quantization.get_default_qconfig('fbgemm')
 model_prepared = torch.quantization.prepare(model)
-# 캘리브레이션 데이터로 실행
+# Run with calibration data
 model_quantized = torch.quantization.convert(model_prepared)
 ```
 
 ---
 
-## 5. Deployment Options
+## 6. Deployment Options
 
 ### Flask API
 
@@ -273,12 +347,12 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ---
 
-## 6. Mobile Deployment
+## 7. Mobile Deployment
 
 ### PyTorch Mobile
 
 ```python
-# 모바일용 최적화
+# Optimize for mobile
 traced_model = torch.jit.trace(model, example_input)
 optimized_model = torch.utils.mobile_optimizer.optimize_for_mobile(traced_model)
 optimized_model._save_for_lite_interpreter("model_mobile.ptl")
@@ -295,7 +369,7 @@ val outputTensor = module.forward(IValue.from(inputTensor)).toTensor()
 
 ---
 
-## 7. Cloud Deployment
+## 8. Cloud Deployment
 
 ### AWS SageMaker
 
@@ -332,18 +406,18 @@ api.upload_file(
 
 ---
 
-## 8. Best Practices
+## 9. Best Practices
 
 ### Pre-Save Checklist
 
 ```python
-# 1. eval 모드
+# 1. eval mode
 model.eval()
 
-# 2. GPU → CPU (범용성)
+# 2. GPU → CPU (portability)
 model.cpu()
 
-# 3. 검증
+# 3. Validation
 with torch.no_grad():
     test_output = model(test_input.cpu())
     assert test_output.shape == expected_shape
@@ -377,17 +451,22 @@ torch.save(save_dict, 'model_v1.0.pth')
 | Python deployment | state_dict |
 | C++ deployment | TorchScript |
 | Universal deployment | ONNX |
+| PyTorch 2.x ecosystem | torch.export() |
 | Mobile | PyTorch Mobile |
 
 ### Core Code
 
 ```python
-# 저장
+# Save
 torch.save(model.state_dict(), 'model.pth')
 
-# TorchScript
+# TorchScript (legacy)
 traced = torch.jit.trace(model.eval(), example_input)
 traced.save('model.pt')
+
+# torch.export() (PyTorch 2.x recommended)
+exported = torch.export.export(model.eval(), (example_input,))
+torch.export.save(exported, 'model.pt2')
 
 # ONNX
 torch.onnx.export(model, example_input, 'model.onnx')

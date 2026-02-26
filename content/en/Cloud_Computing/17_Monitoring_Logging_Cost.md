@@ -1,5 +1,25 @@
 # Monitoring, Logging & Cost Management
 
+**Previous**: [Infrastructure as Code](./16_Infrastructure_as_Code.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why monitoring, logging, and alerting are essential for production cloud systems
+2. Compare AWS CloudWatch and GCP Cloud Monitoring/Logging service features
+3. Configure custom metrics, dashboards, and alarms for key application indicators
+4. Set up centralized log collection and structured log queries
+5. Implement distributed tracing to diagnose latency in microservice architectures
+6. Use cost management tools (Cost Explorer, Budgets) to track and optimize cloud spending
+7. Design a tagging strategy for cost allocation across teams and projects
+
+---
+
+Building cloud infrastructure is only half the job -- operating it reliably requires continuous visibility into performance, errors, and costs. Without monitoring, you discover outages from angry users. Without logging, you debug blind. Without cost management, a forgotten resource can silently drain your budget. This lesson covers the observability and financial controls that keep cloud environments healthy and predictable.
+
 ## 1. Monitoring Overview
 
 ### 1.1 Why Monitoring is Needed
@@ -536,6 +556,311 @@ aws sns subscribe \
 
 - [09_Virtual_Private_Cloud.md](./09_Virtual_Private_Cloud.md) - VPC Flow Logs
 - [14_Security_Services.md](./14_Security_Services.md) - Security Monitoring
+
+---
+
+## Exercises
+
+### Exercise 1: Monitoring Service Mapping
+
+You are designing the observability stack for a new application. For each requirement, identify the correct AWS and GCP service.
+
+| Requirement | AWS Service | GCP Service |
+|---|---|---|
+| Track how long your Lambda function takes to execute | ? | ? |
+| Store and search application log output | ? | ? |
+| Get an automated notification when disk usage exceeds 90% | ? | ? |
+| Trace a request through multiple microservices to find a bottleneck | ? | ? |
+| Query last 24 hours of error logs using SQL-like syntax | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Requirement | AWS Service | GCP Service |
+|---|---|---|
+| Track how long your Lambda function takes to execute | CloudWatch Metrics (`Lambda/Duration`) | Cloud Monitoring (`cloudfunctions.googleapis.com/function/execution_times`) |
+| Store and search application log output | CloudWatch Logs | Cloud Logging |
+| Get an automated notification when disk usage exceeds 90% | CloudWatch Alarm + SNS | Cloud Monitoring Alerting Policy + Notification Channel |
+| Trace a request through multiple microservices to find a bottleneck | AWS X-Ray | Cloud Trace |
+| Query last 24 hours of error logs using SQL-like syntax | CloudWatch Logs Insights | Cloud Logging (with Log Analytics / BigQuery export) |
+
+Note: For GCP log querying, Cloud Logging uses its own filter syntax (not SQL), but logs can be exported to BigQuery for SQL-based analysis. CloudWatch Logs Insights has its own query language that resembles SQL.
+
+</details>
+
+---
+
+### Exercise 2: CloudWatch Alarm Design
+
+Your production web application has the following SLO (Service Level Objective) requirements:
+- Availability: respond to health checks within 5 seconds
+- Latency: p95 response time must be under 2 seconds
+- Error rate: HTTP 5xx errors must stay below 1% of requests
+
+Write the CloudWatch CLI commands to create alarms for each of these three SLOs, alerting the SNS topic `arn:aws:sns:ap-northeast-2:123456789012:prod-alerts`.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# 1. Health check availability: ALB unhealthy host count alarm
+aws cloudwatch put-metric-alarm \
+    --alarm-name "prod-unhealthy-hosts" \
+    --alarm-description "ALB has unhealthy targets" \
+    --metric-name UnHealthyHostCount \
+    --namespace AWS/ApplicationELB \
+    --dimensions Name=LoadBalancer,Value=app/my-alb/1234567890abcdef \
+    --statistic Average \
+    --period 60 \
+    --threshold 1 \
+    --comparison-operator GreaterThanOrEqualToThreshold \
+    --evaluation-periods 2 \
+    --alarm-actions arn:aws:sns:ap-northeast-2:123456789012:prod-alerts
+
+# 2. Latency: p95 target response time > 2 seconds
+aws cloudwatch put-metric-alarm \
+    --alarm-name "prod-high-latency-p95" \
+    --alarm-description "p95 latency exceeds 2 seconds" \
+    --metric-name TargetResponseTime \
+    --namespace AWS/ApplicationELB \
+    --dimensions Name=LoadBalancer,Value=app/my-alb/1234567890abcdef \
+    --extended-statistic p95 \
+    --period 300 \
+    --threshold 2 \
+    --comparison-operator GreaterThanThreshold \
+    --evaluation-periods 3 \
+    --alarm-actions arn:aws:sns:ap-northeast-2:123456789012:prod-alerts
+
+# 3. Error rate: 5xx errors > 1% of total requests
+# Use a metric math alarm to calculate the ratio
+aws cloudwatch put-metric-alarm \
+    --alarm-name "prod-high-5xx-rate" \
+    --alarm-description "5xx error rate exceeds 1%" \
+    --metrics '[
+        {"Id":"e1","Expression":"m2/m1*100","Label":"5xx Rate %"},
+        {"Id":"m1","MetricStat":{"Metric":{"Namespace":"AWS/ApplicationELB","MetricName":"RequestCount","Dimensions":[{"Name":"LoadBalancer","Value":"app/my-alb/1234567890abcdef"}]},"Period":300,"Stat":"Sum"},"ReturnData":false},
+        {"Id":"m2","MetricStat":{"Metric":{"Namespace":"AWS/ApplicationELB","MetricName":"HTTPCode_Target_5XX_Count","Dimensions":[{"Name":"LoadBalancer","Value":"app/my-alb/1234567890abcdef"}]},"Period":300,"Stat":"Sum"},"ReturnData":false}
+    ]' \
+    --comparison-operator GreaterThanThreshold \
+    --threshold 1 \
+    --evaluation-periods 2 \
+    --alarm-actions arn:aws:sns:ap-northeast-2:123456789012:prod-alerts
+```
+
+Note: The error rate alarm uses metric math (`--metrics` with an `Expression`) to compute the percentage. This avoids alarming on raw counts (which would fire during low-traffic periods) and instead measures the ratio.
+
+</details>
+
+---
+
+### Exercise 3: Log Query with CloudWatch Logs Insights
+
+Your application logs structured JSON. A customer reported an error at approximately 14:30 UTC on 2024-03-15. Write a Logs Insights query to find the 20 most recent `ERROR` level log entries in the `/myapp/production` log group that include the string `payment`, and display their timestamp, request ID, and error message.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Start the query
+aws logs start-query \
+    --log-group-name /myapp/production \
+    --start-time $(date -d "2024-03-15T14:00:00Z" +%s) \
+    --end-time $(date -d "2024-03-15T15:00:00Z" +%s) \
+    --query-string '
+        fields @timestamp, requestId, message
+        | filter level = "ERROR" and message like /payment/
+        | sort @timestamp desc
+        | limit 20
+    '
+
+# Note the queryId from the output, then retrieve results:
+aws logs get-query-results --query-id <QUERY_ID>
+```
+
+**Logs Insights query syntax breakdown:**
+- `fields` — select which fields to display
+- `filter` — filter rows (like SQL WHERE); supports `and`, `or`, `not`, `like /regex/`
+- `sort` — order results; `@timestamp` is a built-in field
+- `limit` — cap the number of results returned
+
+**Common Logs Insights patterns:**
+```
+# Count errors by type
+fields errorType
+| filter level = "ERROR"
+| stats count(*) as errorCount by errorType
+| sort errorCount desc
+
+# 95th percentile latency by endpoint
+fields endpoint, duration
+| stats pct(duration, 95) as p95 by endpoint
+| sort p95 desc
+```
+
+</details>
+
+---
+
+### Exercise 4: AWS Budget Alert
+
+Your team has a monthly AWS budget of $500. You want to receive email alerts at 60%, 80%, and 100% of actual spend, and also a forecast alert when the predicted month-end spend is projected to exceed 110% of the budget. Write the AWS CLI command.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+aws budgets create-budget \
+    --account-id 123456789012 \
+    --budget '{
+        "BudgetName": "Monthly-500USD",
+        "BudgetLimit": {
+            "Amount": "500",
+            "Unit": "USD"
+        },
+        "TimeUnit": "MONTHLY",
+        "BudgetType": "COST"
+    }' \
+    --notifications-with-subscribers '[
+        {
+            "Notification": {
+                "NotificationType": "ACTUAL",
+                "ComparisonOperator": "GREATER_THAN",
+                "Threshold": 60,
+                "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+                {"SubscriptionType": "EMAIL", "Address": "team@example.com"}
+            ]
+        },
+        {
+            "Notification": {
+                "NotificationType": "ACTUAL",
+                "ComparisonOperator": "GREATER_THAN",
+                "Threshold": 80,
+                "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+                {"SubscriptionType": "EMAIL", "Address": "team@example.com"}
+            ]
+        },
+        {
+            "Notification": {
+                "NotificationType": "ACTUAL",
+                "ComparisonOperator": "GREATER_THAN",
+                "Threshold": 100,
+                "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+                {"SubscriptionType": "EMAIL", "Address": "team@example.com"}
+            ]
+        },
+        {
+            "Notification": {
+                "NotificationType": "FORECASTED",
+                "ComparisonOperator": "GREATER_THAN",
+                "Threshold": 110,
+                "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+                {"SubscriptionType": "EMAIL", "Address": "team@example.com"}
+            ]
+        }
+    ]'
+```
+
+Key points:
+- `NotificationType: "ACTUAL"` triggers when real charges exceed the threshold
+- `NotificationType: "FORECASTED"` triggers when AWS predicts end-of-month spend will exceed the threshold — gives you early warning before you actually overspend
+- Up to 5 notifications per budget, each with up to 10 subscribers
+- Budgets can also trigger SNS topics (for automated remediation like shutting down dev instances)
+
+</details>
+
+---
+
+### Exercise 5: Cost Optimization Analysis
+
+Your AWS Cost Explorer shows that last month's bill was $1,200 — significantly higher than the expected $600. The breakdown shows:
+- EC2: $800 (expected ~$200)
+- S3: $150 (expected ~$50)
+- Data Transfer: $200 (expected ~$30)
+
+List the most likely causes and the CLI commands or console actions you would use to investigate each.
+
+<details>
+<summary>Show Answer</summary>
+
+**EC2 ($800 vs $200 expected — 4x over):**
+
+Likely causes:
+1. Forgotten running instances (especially large instance types)
+2. Instances not using Reserved Instances or Savings Plans
+3. Wrong instance type (e.g., someone accidentally launched `m5.4xlarge`)
+
+Investigation:
+```bash
+# List all running instances with instance type and launch time
+aws ec2 describe-instances \
+    --filters "Name=instance-state-name,Values=running" \
+    --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,LaunchTime,Tags[?Key==`Name`].Value|[0]]' \
+    --output table
+
+# Check for unused Reserved Instances
+aws ec2 describe-reserved-instances \
+    --filters "Name=state,Values=active"
+
+# Get rightsizing recommendations
+aws compute-optimizer get-ec2-instance-recommendations \
+    --query 'instanceRecommendations[?finding==`OVER_PROVISIONED`]'
+```
+
+**S3 ($150 vs $50 — 3x over):**
+
+Likely causes:
+1. Objects stored in STANDARD class that should be in STANDARD_IA or GLACIER
+2. Bucket versioning enabled with many old versions accumulating
+3. Expired multipart uploads not cleaned up
+
+Investigation:
+```bash
+# Check storage classes distribution per bucket
+aws s3api list-buckets --query 'Buckets[*].Name' --output text | \
+    xargs -I {} aws s3api list-objects-v2 --bucket {} \
+    --query 'Contents[*].[StorageClass]' --output text | sort | uniq -c
+
+# Check lifecycle policies are in place
+aws s3api get-bucket-lifecycle-configuration --bucket my-bucket
+```
+
+**Data Transfer ($200 vs $30 — 6.7x over):**
+
+Likely causes:
+1. Data transferred out of AWS to the internet (most expensive: ~$0.09/GB)
+2. Cross-AZ traffic (EC2 <-> RDS in different AZs)
+3. NAT Gateway traffic (data processed through NAT costs ~$0.045/GB)
+
+Investigation:
+```bash
+# Check VPC Flow Logs for traffic patterns
+aws logs start-query \
+    --log-group-name VPCFlowLogs \
+    --start-time ... --end-time ... \
+    --query-string 'stats sum(bytes) as total_bytes by dstAddr | sort total_bytes desc | limit 20'
+
+# Review Cost Explorer by usage type to identify the specific transfer type
+aws ce get-cost-and-usage \
+    --time-period Start=2024-01-01,End=2024-01-31 \
+    --granularity MONTHLY \
+    --metrics BlendedCost \
+    --group-by Type=DIMENSION,Key=USAGE_TYPE
+```
+
+General cost hygiene checklist:
+- Enable AWS Cost Anomaly Detection (automatically alerts on unexpected spending spikes)
+- Tag all resources with `Project`, `Environment`, `Owner` for cost attribution
+- Set up budget alerts before you launch production workloads, not after
+
+</details>
 
 ---
 

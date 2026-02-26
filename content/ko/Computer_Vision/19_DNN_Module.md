@@ -1,5 +1,17 @@
 # 딥러닝 DNN 모듈 (Deep Neural Network Module)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. OpenCV의 DNN 모듈이 다양한 프레임워크의 사전 학습된 모델을 로드하고 추론하는 방식을 설명할 수 있습니다.
+2. `readNet()`으로 모델을 로드하고 `blobFromImage()`로 입력을 전처리하는 과정을 구현할 수 있습니다.
+3. DNN 모듈을 적용하여 이미지와 비디오 스트림에서 YOLO 기반 객체 검출(Object Detection)을 수행할 수 있습니다.
+4. 실시간 객체 검출 과제에서 SSD와 YOLO 아키텍처를 비교할 수 있습니다.
+5. DNN 기반 얼굴 검출(Face Detection)과 ONNX 모델 추론을 완전한 파이프라인으로 구현할 수 있습니다.
+
+---
+
 ## 개요
 
 OpenCV의 DNN 모듈은 사전 학습된 딥러닝 모델을 로드하고 추론하는 기능을 제공합니다. TensorFlow, Caffe, Darknet, ONNX 등 다양한 프레임워크의 모델을 지원하며, CPU와 GPU에서 효율적으로 실행할 수 있습니다.
@@ -25,33 +37,35 @@ OpenCV의 DNN 모듈은 사전 학습된 딥러닝 모델을 로드하고 추론
 
 ## 1. cv2.dnn 모듈 개요
 
+OpenCV DNN 모듈은 실제 배포 문제를 해결합니다. PyTorch나 TensorFlow로 모델을 훈련했지만, 이 무거운 프레임워크(framework)를 엣지 디바이스(edge device)에 탑재하거나 C++ 애플리케이션에 내장하는 것은 현실적으로 어렵습니다. DNN 모듈을 사용하면 추가 런타임(runtime) 의존성 없이 OpenCV만으로 모든 주요 프레임워크의 모델에서 추론(inference)을 실행할 수 있습니다. 이는 의존성 최소화가 중요한 임베디드 시스템(embedded system), 모바일 앱, 프로덕션 파이프라인(production pipeline)에서 특히 중요합니다.
+
 ### DNN 모듈의 특징
 
 ```
-OpenCV DNN 모듈:
+OpenCV DNN Module:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        cv2.dnn                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  지원 프레임워크:                                               │
+│  Supported Frameworks:                                          │
 │  ┌─────────────┬─────────────┬─────────────┬─────────────┐     │
 │  │   Caffe     │ TensorFlow  │   Darknet   │    ONNX     │     │
 │  │  (.caffemodel,│ (.pb)     │  (.weights, │  (.onnx)    │     │
 │  │   .prototxt)│             │   .cfg)     │             │     │
 │  └─────────────┴─────────────┴─────────────┴─────────────┘     │
 │                                                                 │
-│  실행 백엔드:                                                   │
+│  Execution Backends:                                            │
 │  ┌─────────────┬─────────────┬─────────────┬─────────────┐     │
 │  │    CPU      │   OpenCL    │    CUDA     │   Vulkan    │     │
-│  │  (기본)     │   (GPU)     │   (NVIDIA)  │   (다중GPU) │     │
+│  │  (default)  │   (GPU)     │   (NVIDIA)  │  (multi-GPU)│     │
 │  └─────────────┴─────────────┴─────────────┴─────────────┘     │
 │                                                                 │
-│  특징:                                                          │
-│  - 추론 전용 (학습 불가)                                        │
-│  - 최적화된 연산                                                │
-│  - 다양한 하드웨어 지원                                         │
-│  - 간단한 API                                                   │
+│  Features:                                                      │
+│  - Inference only (no training)                                 │
+│  - Optimized operations                                         │
+│  - Multiple hardware support                                    │
+│  - Simple API                                                   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -59,37 +73,37 @@ OpenCV DNN 모듈:
 ### 기본 워크플로우
 
 ```
-DNN 추론 워크플로우:
+DNN Inference Workflow:
 
-1. 모델 로딩
+1. Model Loading
    ┌──────────────────┐
-   │  readNet()       │ → 모델 파일 로드
+   │  readNet()       │ → Load model file
    └────────┬─────────┘
             │
             ▼
-2. 백엔드/타겟 설정
+2. Backend/Target Setup
    ┌──────────────────┐
    │ setPreferableBackend()│ → CPU/CUDA/OpenCL
    │ setPreferableTarget() │
    └────────┬─────────┘
             │
             ▼
-3. 입력 전처리
+3. Input Preprocessing
    ┌──────────────────┐
-   │ blobFromImage()  │ → 이미지 → Blob
+   │ blobFromImage()  │ → Image → Blob
    └────────┬─────────┘
             │
             ▼
-4. 추론 실행
+4. Run Inference
    ┌──────────────────┐
    │ net.setInput()   │
-   │ net.forward()    │ → 추론 결과
+   │ net.forward()    │ → Inference result
    └────────┬─────────┘
             │
             ▼
-5. 결과 후처리
+5. Post-processing
    ┌──────────────────┐
-   │ NMS, 시각화 등   │
+   │ NMS, visualization, etc. │
    └──────────────────┘
 ```
 
@@ -102,28 +116,28 @@ DNN 추론 워크플로우:
 ```python
 import cv2
 
-# Caffe 모델 로딩
+# Loading Caffe model
 net_caffe = cv2.dnn.readNetFromCaffe(
-    'deploy.prototxt',      # 네트워크 구조
-    'model.caffemodel'      # 가중치
+    'deploy.prototxt',      # Network structure
+    'model.caffemodel'      # Weights
 )
 
-# TensorFlow 모델 로딩
+# Loading TensorFlow model
 net_tf = cv2.dnn.readNetFromTensorflow(
-    'frozen_inference_graph.pb',  # 동결된 그래프
-    'graph.pbtxt'                 # 텍스트 그래프 (선택)
+    'frozen_inference_graph.pb',  # Frozen graph
+    'graph.pbtxt'                 # Text graph (optional)
 )
 
-# Darknet (YOLO) 모델 로딩
+# Loading Darknet (YOLO) model
 net_darknet = cv2.dnn.readNetFromDarknet(
-    'yolov3.cfg',           # 설정 파일
-    'yolov3.weights'        # 가중치
+    'yolov3.cfg',           # Config file
+    'yolov3.weights'        # Weights
 )
 
-# ONNX 모델 로딩
+# Loading ONNX model
 net_onnx = cv2.dnn.readNetFromONNX('model.onnx')
 
-# 범용 함수 (자동 감지)
+# Generic function (auto-detect)
 net = cv2.dnn.readNet('model.weights', 'model.cfg')
 ```
 
@@ -134,26 +148,26 @@ import cv2
 
 net = cv2.dnn.readNet('model.weights', 'model.cfg')
 
-# 백엔드 설정
-# - cv2.dnn.DNN_BACKEND_OPENCV: OpenCV 내장 (기본)
+# Backend options
+# - cv2.dnn.DNN_BACKEND_OPENCV: OpenCV built-in (default)
 # - cv2.dnn.DNN_BACKEND_CUDA: NVIDIA CUDA
 # - cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE: Intel OpenVINO
 
-# 타겟 설정
-# - cv2.dnn.DNN_TARGET_CPU: CPU (기본)
+# Target options
+# - cv2.dnn.DNN_TARGET_CPU: CPU (default)
 # - cv2.dnn.DNN_TARGET_OPENCL: OpenCL GPU
 # - cv2.dnn.DNN_TARGET_CUDA: NVIDIA GPU
-# - cv2.dnn.DNN_TARGET_CUDA_FP16: NVIDIA GPU (반정밀도)
+# - cv2.dnn.DNN_TARGET_CUDA_FP16: NVIDIA GPU (half precision)
 
-# CPU 실행 (기본)
+# CPU execution (default)
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
-# CUDA GPU 실행 (OpenCV가 CUDA 지원으로 빌드된 경우)
+# CUDA GPU execution (if OpenCV is built with CUDA support)
 # net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
 # net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-# 사용 가능한 백엔드 확인
+# Check available backends
 print("Available backends:", cv2.dnn.getAvailableBackends())
 ```
 
@@ -164,19 +178,19 @@ import cv2
 
 net = cv2.dnn.readNet('yolov3.cfg', 'yolov3.weights')
 
-# 레이어 이름 목록
+# Layer names list
 layer_names = net.getLayerNames()
-print(f"총 레이어 수: {len(layer_names)}")
-print("레이어 목록 (일부):", layer_names[:10])
+print(f"Total layers: {len(layer_names)}")
+print("Layer list (partial):", layer_names[:10])
 
-# 출력 레이어 (연결되지 않은 레이어)
+# Output layers (unconnected layers)
 output_layers = net.getUnconnectedOutLayers()
 output_layer_names = [layer_names[i - 1] for i in output_layers]
-print("출력 레이어:", output_layer_names)
+print("Output layers:", output_layer_names)
 
-# 특정 레이어 정보
+# Specific layer info
 layer = net.getLayer(0)
-print(f"레이어 타입: {layer.type}")
+print(f"Layer type: {layer.type}")
 ```
 
 ---
@@ -187,33 +201,33 @@ print(f"레이어 타입: {layer.type}")
 
 ```
 Blob (Binary Large Object):
-DNN 모델 입력을 위한 4차원 텐서
+4-dimensional tensor for DNN model input
 
-차원 구조:
+Dimension structure:
 ┌─────────────────────────────────────────────────────────────┐
 │  Blob Shape: (N, C, H, W)                                   │
 │                                                             │
-│  N: 배치 크기 (Batch Size)                                  │
-│     - 한 번에 처리할 이미지 수                              │
+│  N: Batch Size                                              │
+│     - Number of images to process at once                   │
 │                                                             │
-│  C: 채널 수 (Channels)                                      │
-│     - RGB: 3, 그레이스케일: 1                               │
+│  C: Number of Channels                                      │
+│     - RGB: 3, Grayscale: 1                                  │
 │                                                             │
-│  H: 높이 (Height)                                           │
-│     - 모델이 요구하는 입력 높이                             │
+│  H: Height                                                  │
+│     - Input height required by model                        │
 │                                                             │
-│  W: 너비 (Width)                                            │
-│     - 모델이 요구하는 입력 너비                             │
+│  W: Width                                                   │
+│     - Input width required by model                         │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 
-예시: YOLO (416x416)
+Example: YOLO (416x416)
 blob.shape = (1, 3, 416, 416)
              │  │   │    │
-             │  │   │    └── 너비 416
-             │  │   └── 높이 416
-             │  └── RGB 3채널
-             └── 이미지 1장
+             │  │   │    └── Width 416
+             │  │   └── Height 416
+             │  └── RGB 3 channels
+             └── 1 image
 ```
 
 ### blobFromImage 사용법
@@ -224,30 +238,31 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# 기본 Blob 생성
+# Basic Blob creation
 blob = cv2.dnn.blobFromImage(
-    img,                    # 입력 이미지
-    scalefactor=1/255.0,    # 스케일 팩터 (정규화)
-    size=(416, 416),        # 목표 크기
-    mean=(0, 0, 0),         # 평균값 빼기
-    swapRB=True,            # BGR → RGB
-    crop=False              # 크롭 여부
+    img,                    # Input image
+    scalefactor=1/255.0,    # Divide by 255 to map [0,255]→[0,1]; the model was trained on this range
+    size=(416, 416),        # Target size
+    mean=(0, 0, 0),         # Mean subtraction — set to (0,0,0) for YOLO since it uses pure [0,1] normalization;
+                            #   ImageNet-trained models use per-channel means instead (e.g. 104,117,123)
+    swapRB=True,            # OpenCV loads images as BGR; most DNN models expect RGB — this fixes the mismatch
+    crop=False              # False = stretch to fit; True = center-crop (changes aspect ratio, hurts accuracy)
 )
 
 print(f"Blob shape: {blob.shape}")  # (1, 3, 416, 416)
 
-# 다양한 전처리 옵션
+# Various preprocessing options
 
-# 1. ImageNet 스타일 (mean subtraction)
+# 1. ImageNet style (mean subtraction)
 blob_imagenet = cv2.dnn.blobFromImage(
     img,
-    scalefactor=1.0,
+    scalefactor=1.0,         # No rescaling — the model was trained on raw [0,255] with only mean subtracted
     size=(224, 224),
-    mean=(104.0, 117.0, 123.0),  # ImageNet 평균
+    mean=(104.0, 117.0, 123.0),  # Per-channel ImageNet mean (BGR order); subtracting removes dataset-wide color bias
     swapRB=True
 )
 
-# 2. YOLO 스타일 (0-1 정규화)
+# 2. YOLO style (0-1 normalization)
 blob_yolo = cv2.dnn.blobFromImage(
     img,
     scalefactor=1/255.0,
@@ -256,7 +271,7 @@ blob_yolo = cv2.dnn.blobFromImage(
     swapRB=True
 )
 
-# 3. SSD 스타일
+# 3. SSD style
 blob_ssd = cv2.dnn.blobFromImage(
     img,
     scalefactor=1.0,
@@ -273,9 +288,9 @@ import cv2
 import numpy as np
 
 def prepare_batch(images, size=(416, 416)):
-    """여러 이미지를 배치로 처리"""
+    """Process multiple images as a batch"""
 
-    # 방법 1: blobFromImages 사용
+    # Method 1: Using blobFromImages
     blob = cv2.dnn.blobFromImages(
         images,
         scalefactor=1/255.0,
@@ -287,12 +302,12 @@ def prepare_batch(images, size=(416, 416)):
 
     return blob
 
-# 사용 예
+# Usage example
 images = [cv2.imread(f'image{i}.jpg') for i in range(4)]
 batch_blob = prepare_batch(images)
 print(f"Batch blob shape: {batch_blob.shape}")  # (4, 3, 416, 416)
 
-# 네트워크에 입력
+# Input to network
 net.setInput(batch_blob)
 outputs = net.forward()
 ```
@@ -305,7 +320,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def visualize_blob(blob):
-    """Blob 내용 시각화"""
+    """Visualize blob contents"""
 
     # blob shape: (N, C, H, W)
     n, c, h, w = blob.shape
@@ -313,14 +328,14 @@ def visualize_blob(blob):
     for i in range(n):
         fig, axes = plt.subplots(1, c+1, figsize=(15, 4))
 
-        # 각 채널 표시
+        # Display each channel
         for j in range(c):
             channel = blob[i, j, :, :]
             axes[j].imshow(channel, cmap='gray')
             axes[j].set_title(f'Channel {j}')
             axes[j].axis('off')
 
-        # 합성 이미지 (RGB로 재조합)
+        # Combined image (recombine as RGB)
         if c == 3:
             combined = np.transpose(blob[i], (1, 2, 0))  # CHW → HWC
             combined = (combined * 255).astype(np.uint8)
@@ -332,7 +347,7 @@ def visualize_blob(blob):
         plt.tight_layout()
         plt.show()
 
-# 사용 예
+# Usage example
 img = cv2.imread('image.jpg')
 blob = cv2.dnn.blobFromImage(img, 1/255.0, (416, 416), swapRB=True)
 visualize_blob(blob)
@@ -346,32 +361,32 @@ visualize_blob(blob)
 
 ```
 YOLO (You Only Look Once):
-실시간 객체 검출 알고리즘
+Real-time object detection algorithm
 
-특징:
-- 단일 패스로 검출 (End-to-End)
-- 빠른 속도 (실시간 가능)
-- 전체 이미지 컨텍스트 사용
+Features:
+- Single pass detection (End-to-End)
+- Fast speed (real-time capable)
+- Uses full image context
 
-출력 구조:
+Output structure:
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
-│  각 검출에 대해:                                            │
+│  For each detection:                                        │
 │  [center_x, center_y, width, height, confidence, class_scores...]│
 │                                                             │
-│  - center_x, center_y: 바운딩 박스 중심 (0-1 정규화)        │
-│  - width, height: 박스 크기 (0-1 정규화)                    │
-│  - confidence: 객체 존재 확률                               │
-│  - class_scores: 각 클래스별 확률 (80개)                    │
+│  - center_x, center_y: Bounding box center (0-1 normalized) │
+│  - width, height: Box size (0-1 normalized)                 │
+│  - confidence: Object presence probability                  │
+│  - class_scores: Probability for each class (80 classes)    │
 │                                                             │
-│  예: COCO 데이터셋 (80 클래스)                              │
-│  출력 벡터 길이 = 4 + 1 + 80 = 85                          │
+│  Example: COCO dataset (80 classes)                         │
+│  Output vector length = 4 + 1 + 80 = 85                     │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 
-YOLO 버전별 특징:
+YOLO version comparison:
 ┌─────────┬──────────┬──────────┬───────────────────┐
-│ 버전    │ 입력크기 │  mAP     │ 속도 (FPS)        │
+│ Version │ Input    │  mAP     │ Speed (FPS)       │
 ├─────────┼──────────┼──────────┼───────────────────┤
 │ YOLOv3  │ 416x416  │ 33.0     │ ~35 (GPU)         │
 │ YOLOv3-tiny│ 416x416│ 15.0    │ ~220 (GPU)        │
@@ -387,64 +402,69 @@ import cv2
 import numpy as np
 
 class YOLODetector:
-    """YOLOv3 객체 검출기"""
+    """YOLOv3 Object Detector"""
 
     def __init__(self, config_path, weights_path, names_path,
                  conf_threshold=0.5, nms_threshold=0.4):
-        # 모델 로딩
+        # Load model
         self.net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
         self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
-        # 클래스 이름 로딩
+        # Load class names
         with open(names_path, 'r') as f:
             self.classes = [line.strip() for line in f.readlines()]
 
-        # 출력 레이어 이름
+        # Output layer names — YOLO has 3 detection heads (at different scales);
+        # getUnconnectedOutLayers() finds them automatically regardless of model variant
         layer_names = self.net.getLayerNames()
         self.output_layers = [layer_names[i - 1]
                               for i in self.net.getUnconnectedOutLayers()]
 
-        # 임계값
+        # conf_threshold=0.5: only keep detections with >50% class confidence;
+        #   lower values increase recall but add false positives
+        # nms_threshold=0.4: during NMS, boxes with IoU > 0.4 are suppressed;
+        #   lower = more aggressive suppression (fewer duplicate boxes)
         self.conf_threshold = conf_threshold
         self.nms_threshold = nms_threshold
 
-        # 색상 (클래스별)
+        # Seed ensures consistent per-class colors across runs for easy visual tracking
         np.random.seed(42)
         self.colors = np.random.randint(0, 255, size=(len(self.classes), 3),
                                         dtype=np.uint8)
 
     def detect(self, img):
-        """객체 검출"""
+        """Object detection"""
         height, width = img.shape[:2]
 
-        # Blob 생성
+        # Create blob
         blob = cv2.dnn.blobFromImage(img, 1/255.0, (416, 416),
                                       swapRB=True, crop=False)
 
-        # 추론
+        # Inference
         self.net.setInput(blob)
         outputs = self.net.forward(self.output_layers)
 
-        # 결과 파싱
+        # Parse results
         boxes = []
         confidences = []
         class_ids = []
 
         for output in outputs:
             for detection in output:
+                # detection[0:4] = bbox, detection[4] = objectness (YOLOv3), detection[5:] = class probs
                 scores = detection[5:]
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
 
                 if confidence > self.conf_threshold:
-                    # 바운딩 박스 좌표 (정규화됨)
+                    # YOLO outputs coordinates normalized to [0,1]; multiply by image dims to get pixels
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
                     w = int(detection[2] * width)
                     h = int(detection[3] * height)
 
-                    # 좌상단 좌표
+                    # Convert from center format (cx,cy,w,h) to top-left format (x,y,w,h) for NMSBoxes
                     x = int(center_x - w / 2)
                     y = int(center_y - h / 2)
 
@@ -452,7 +472,8 @@ class YOLODetector:
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
 
-        # Non-Maximum Suppression
+        # NMS removes redundant overlapping boxes — YOLO generates many candidates per object,
+        # NMS keeps only the highest-confidence box when boxes overlap by more than nms_threshold IoU
         indices = cv2.dnn.NMSBoxes(boxes, confidences,
                                     self.conf_threshold, self.nms_threshold)
 
@@ -469,7 +490,7 @@ class YOLODetector:
         return results
 
     def draw(self, img, results):
-        """결과 시각화"""
+        """Visualize results"""
         for det in results:
             x, y, w, h = det['box']
             color = [int(c) for c in self.colors[det['class_id']]]
@@ -482,8 +503,8 @@ class YOLODetector:
 
         return img
 
-# 사용 예
-# 모델 파일 다운로드 필요:
+# Usage example
+# Model files download required:
 # - yolov3.cfg: https://github.com/pjreddie/darknet/blob/master/cfg/yolov3.cfg
 # - yolov3.weights: https://pjreddie.com/media/files/yolov3.weights
 # - coco.names: https://github.com/pjreddie/darknet/blob/master/data/coco.names
@@ -498,7 +519,7 @@ img = cv2.imread('street.jpg')
 results = detector.detect(img)
 output = detector.draw(img, results)
 
-print(f"검출된 객체 수: {len(results)}")
+print(f"Detected objects: {len(results)}")
 for r in results:
     print(f"  - {r['class_name']}: {r['confidence']:.2%}")
 
@@ -513,27 +534,27 @@ import cv2
 import numpy as np
 
 def yolo_tiny_detect(img, conf_threshold=0.5):
-    """YOLOv3-tiny를 이용한 빠른 검출"""
+    """Fast detection using YOLOv3-tiny"""
 
-    # YOLOv3-tiny 로딩
+    # Load YOLOv3-tiny
     net = cv2.dnn.readNetFromDarknet('yolov3-tiny.cfg', 'yolov3-tiny.weights')
 
-    # 클래스 이름
+    # Class names
     with open('coco.names', 'r') as f:
         classes = [line.strip() for line in f.readlines()]
 
-    # 출력 레이어
+    # Output layers
     layer_names = net.getLayerNames()
     output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
     height, width = img.shape[:2]
 
-    # Blob 및 추론
+    # Blob and inference
     blob = cv2.dnn.blobFromImage(img, 1/255.0, (416, 416), swapRB=True)
     net.setInput(blob)
     outputs = net.forward(output_layers)
 
-    # 결과 파싱
+    # Parse results
     boxes, confidences, class_ids = [], [], []
 
     for output in outputs:
@@ -558,7 +579,7 @@ def yolo_tiny_detect(img, conf_threshold=0.5):
     # NMS
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, 0.4)
 
-    # 결과 그리기
+    # Draw results
     for i in indices:
         x, y, w, h = boxes[i]
         label = f"{classes[class_ids[i]]}: {confidences[i]:.2f}"
@@ -577,34 +598,34 @@ def yolo_tiny_detect(img, conf_threshold=0.5):
 
 ```
 SSD (Single Shot MultiBox Detector):
-다중 스케일 특징맵을 이용한 객체 검출
+Object detection using multi-scale feature maps
 
-특징:
-- 다양한 크기의 객체 검출에 강함
-- YOLO보다 작은 객체 검출 우수
-- 다양한 백본 네트워크 사용 가능 (VGG, MobileNet 등)
+Features:
+- Strong at detecting objects of various sizes
+- Better at detecting small objects than YOLO
+- Various backbone networks available (VGG, MobileNet, etc.)
 
-아키텍처:
+Architecture:
 ┌────────────────────────────────────────────────────────────┐
 │                                                            │
-│  입력 이미지 (300x300)                                     │
+│  Input Image (300x300)                                     │
 │       │                                                    │
 │       ▼                                                    │
 │  ┌──────────┐                                              │
-│  │ 백본     │ VGG16, MobileNet 등                         │
-│  │ 네트워크 │                                              │
+│  │ Backbone │ VGG16, MobileNet, etc.                      │
+│  │ Network  │                                              │
 │  └────┬─────┘                                              │
 │       │                                                    │
 │       ▼                                                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
 │  │ 38x38    │  │ 19x19    │  │ 10x10    │  │ 5x5 ...  │   │
-│  │ 특징맵   │  │ 특징맵   │  │ 특징맵   │  │ 특징맵   │   │
+│  │ Feature  │  │ Feature  │  │ Feature  │  │ Feature  │   │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   │
 │       │             │             │             │          │
 │       └─────────────┴─────────────┴─────────────┘          │
 │                         │                                  │
 │                         ▼                                  │
-│                    NMS → 최종 검출                         │
+│                    NMS → Final Detection                   │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -616,9 +637,9 @@ import cv2
 import numpy as np
 
 class SSDDetector:
-    """MobileNet SSD 객체 검출기"""
+    """MobileNet SSD Object Detector"""
 
-    # COCO 클래스 (MobileNet SSD v2)
+    # COCO classes (MobileNet SSD v2)
     CLASSES = ["background", "person", "bicycle", "car", "motorcycle",
                "airplane", "bus", "train", "truck", "boat", "traffic light",
                "fire hydrant", "stop sign", "parking meter", "bench", "bird",
@@ -645,10 +666,10 @@ class SSDDetector:
                                         dtype=np.uint8)
 
     def detect(self, img):
-        """객체 검출"""
+        """Object detection"""
         height, width = img.shape[:2]
 
-        # Blob 생성 (SSD는 300x300 또는 512x512 입력)
+        # Create blob (SSD uses 300x300 or 512x512 input)
         blob = cv2.dnn.blobFromImage(img, size=(300, 300),
                                       mean=(127.5, 127.5, 127.5),
                                       scalefactor=1/127.5,
@@ -659,15 +680,15 @@ class SSDDetector:
 
         results = []
 
-        # 출력 shape: (1, 1, N, 7)
-        # 각 검출: [batch_id, class_id, confidence, x1, y1, x2, y2]
+        # Output shape: (1, 1, N, 7)
+        # Each detection: [batch_id, class_id, confidence, x1, y1, x2, y2]
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
 
             if confidence > self.conf_threshold:
                 class_id = int(detections[0, 0, i, 1])
 
-                # 좌표 (정규화됨 → 픽셀)
+                # Coordinates (normalized → pixels)
                 x1 = int(detections[0, 0, i, 3] * width)
                 y1 = int(detections[0, 0, i, 4] * height)
                 x2 = int(detections[0, 0, i, 5] * width)
@@ -683,7 +704,7 @@ class SSDDetector:
         return results
 
     def draw(self, img, results):
-        """결과 시각화"""
+        """Visualize results"""
         for det in results:
             x, y, w, h = det['box']
             color = [int(c) for c in self.colors[det['class_id']]]
@@ -696,8 +717,8 @@ class SSDDetector:
 
         return img
 
-# 사용 예
-# 모델 다운로드:
+# Usage example
+# Model download:
 # ssd_mobilenet_v2_coco_2018_03_29.pbtxt
 # frozen_inference_graph.pb
 
@@ -714,7 +735,7 @@ import cv2
 import numpy as np
 
 def ssd_caffe_detect(img, prototxt, caffemodel, conf_threshold=0.5):
-    """Caffe SSD 검출 (MobileNet 백본)"""
+    """Caffe SSD detection (MobileNet backbone)"""
 
     CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
                "bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
@@ -725,7 +746,7 @@ def ssd_caffe_detect(img, prototxt, caffemodel, conf_threshold=0.5):
 
     height, width = img.shape[:2]
 
-    # Blob 생성
+    # Create blob
     blob = cv2.dnn.blobFromImage(
         cv2.resize(img, (300, 300)),
         0.007843,  # 1/127.5
@@ -769,33 +790,34 @@ import cv2
 import numpy as np
 
 class DNNFaceDetector:
-    """DNN 기반 얼굴 검출기 (res10_300x300)"""
+    """DNN-based Face Detector (res10_300x300)"""
 
     def __init__(self, model_path, config_path=None, conf_threshold=0.5):
         """
-        모델 다운로드:
+        Model download:
         - deploy.prototxt: https://github.com/opencv/opencv/blob/master/samples/dnn/face_detector/deploy.prototxt
         - res10_300x300_ssd_iter_140000.caffemodel
         """
 
         if config_path:
-            # Caffe 모델
+            # Caffe model
             self.net = cv2.dnn.readNetFromCaffe(config_path, model_path)
         else:
-            # TensorFlow 모델
+            # TensorFlow model
             self.net = cv2.dnn.readNetFromTensorflow(model_path)
 
         self.conf_threshold = conf_threshold
 
     def detect(self, img):
-        """얼굴 검출"""
+        """Face detection"""
         height, width = img.shape[:2]
 
-        # Blob 생성
+        # Create blob
         blob = cv2.dnn.blobFromImage(
             img, 1.0, (300, 300),
-            (104.0, 177.0, 123.0),  # 평균값
-            swapRB=False,
+            (104.0, 177.0, 123.0),  # Per-channel means the res10 model was trained with (BGR order);
+                                    # using the training-time means keeps pixel distributions matched
+            swapRB=False,           # The Caffe res10 model was trained on BGR, matching OpenCV's native order
             crop=False
         )
 
@@ -813,7 +835,7 @@ class DNNFaceDetector:
                 )
                 x1, y1, x2, y2 = box.astype(int)
 
-                # 경계 체크
+                # Boundary check
                 x1 = max(0, x1)
                 y1 = max(0, y1)
                 x2 = min(width, x2)
@@ -827,7 +849,7 @@ class DNNFaceDetector:
         return faces
 
     def draw(self, img, faces):
-        """결과 시각화"""
+        """Visualize results"""
         for face in faces:
             x, y, w, h = face['box']
             conf = face['confidence']
@@ -839,7 +861,7 @@ class DNNFaceDetector:
 
         return img
 
-# 사용 예
+# Usage example
 detector = DNNFaceDetector(
     'res10_300x300_ssd_iter_140000.caffemodel',
     'deploy.prototxt'
@@ -849,7 +871,7 @@ img = cv2.imread('group_photo.jpg')
 faces = detector.detect(img)
 output = detector.draw(img, faces)
 
-print(f"검출된 얼굴 수: {len(faces)}")
+print(f"Detected faces: {len(faces)}")
 cv2.imshow('DNN Face Detection', output)
 cv2.waitKey(0)
 ```
@@ -861,9 +883,9 @@ import cv2
 import time
 
 def realtime_dnn_face_detection():
-    """실시간 DNN 얼굴 검출"""
+    """Real-time DNN face detection"""
 
-    # 모델 로딩
+    # Load model
     net = cv2.dnn.readNetFromCaffe(
         'deploy.prototxt',
         'res10_300x300_ssd_iter_140000.caffemodel'
@@ -882,7 +904,7 @@ def realtime_dnn_face_detection():
 
         h, w = frame.shape[:2]
 
-        # Blob 생성
+        # Create blob
         blob = cv2.dnn.blobFromImage(
             frame, 1.0, (300, 300),
             (104.0, 177.0, 123.0), False, False
@@ -891,10 +913,12 @@ def realtime_dnn_face_detection():
         net.setInput(blob)
         detections = net.forward()
 
-        # 검출 결과 처리
+        # Process detection results
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
 
+            # 0.5 threshold balances precision and recall for real-time use;
+            # lower values catch more faces but add false positives that hurt UX
             if confidence > 0.5:
                 box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                 x1, y1, x2, y2 = box.astype(int)
@@ -904,7 +928,7 @@ def realtime_dnn_face_detection():
                 cv2.putText(frame, label, (x1, y1 - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # FPS 계산
+        # Calculate FPS
         frame_count += 1
         if time.time() - fps_time >= 1.0:
             fps = frame_count
@@ -922,7 +946,7 @@ def realtime_dnn_face_detection():
     cap.release()
     cv2.destroyAllWindows()
 
-# 실행
+# Run
 realtime_dnn_face_detection()
 ```
 
@@ -934,7 +958,7 @@ import time
 import numpy as np
 
 def compare_face_detectors(img):
-    """Haar와 DNN 얼굴 검출 비교"""
+    """Compare Haar and DNN face detection"""
 
     # Haar Cascade
     haar = cv2.CascadeClassifier(
@@ -950,12 +974,12 @@ def compare_face_detectors(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = img.shape[:2]
 
-    # Haar 검출
+    # Haar detection
     start = time.time()
     haar_faces = haar.detectMultiScale(gray, 1.1, 5, minSize=(30, 30))
     haar_time = time.time() - start
 
-    # DNN 검출
+    # DNN detection
     start = time.time()
     blob = cv2.dnn.blobFromImage(img, 1.0, (300, 300),
                                   (104.0, 177.0, 123.0), False, False)
@@ -963,7 +987,7 @@ def compare_face_detectors(img):
     dnn_detections = dnn_net.forward()
     dnn_time = time.time() - start
 
-    # 결과 시각화
+    # Visualize results
     img_haar = img.copy()
     img_dnn = img.copy()
 
@@ -985,7 +1009,7 @@ def compare_face_detectors(img):
     cv2.putText(img_dnn, f"DNN: {dnn_count} faces, {dnn_time*1000:.1f}ms",
                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-    # 결과 표시
+    # Display results
     combined = np.hstack([img_haar, img_dnn])
     cv2.imshow('Haar vs DNN', combined)
     cv2.waitKey(0)
@@ -995,7 +1019,7 @@ def compare_face_detectors(img):
         'dnn': {'count': dnn_count, 'time': dnn_time}
     }
 
-# 비교 실행
+# Run comparison
 # result = compare_face_detectors(cv2.imread('group.jpg'))
 ```
 
@@ -1012,13 +1036,13 @@ import cv2
 import numpy as np
 
 class YOLOv8Detector:
-    """YOLOv8 ONNX 객체 검출기"""
+    """YOLOv8 ONNX Object Detector"""
 
     def __init__(self, onnx_model_path, conf_threshold=0.5, iou_threshold=0.4):
         """
-        YOLOv8 검출기 초기화
+        Initialize YOLOv8 detector
 
-        YOLOv8을 ONNX로 내보내기:
+        To export YOLOv8 to ONNX:
         pip install ultralytics
         yolo export model=yolov8n.pt format=onnx
         """
@@ -1026,7 +1050,7 @@ class YOLOv8Detector:
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
 
-        # COCO 클래스 이름 (80개 클래스)
+        # COCO class names (80 classes)
         self.classes = [
             "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train",
             "truck", "boat", "traffic light", "fire hydrant", "stop sign",
@@ -1043,64 +1067,64 @@ class YOLOv8Detector:
             "hair drier", "toothbrush"
         ]
 
-        # 각 클래스별 랜덤 색상 생성
+        # Generate random colors for each class
         np.random.seed(42)
         self.colors = np.random.randint(0, 255, size=(len(self.classes), 3),
                                         dtype=np.uint8)
 
     def detect(self, img):
         """
-        YOLOv8 객체 검출
+        YOLOv8 object detection
 
-        YOLOv8 출력 형식 (YOLOv5와 다름):
-        - Shape: (1, 84, 8400) for 640x640 입력
-        - 첫 4개 행: [x_center, y_center, width, height]
-        - 4-83행: 클래스 확률 (80개 클래스)
-        - objectness score 없음 (YOLOv5와 차이점)
+        YOLOv8 output format (different from YOLOv5):
+        - Shape: (1, 84, 8400) for 640x640 input
+        - First 4 rows: [x_center, y_center, width, height]
+        - Rows 4-83: class probabilities (80 classes)
+        - No objectness score (unlike YOLOv5)
         """
         height, width = img.shape[:2]
 
-        # 전처리: letterbox resize
-        input_size = 640
+        # Preprocessing: letterbox resize
+        input_size = 640  # YOLOv8 was trained at 640×640; using a different size degrades accuracy
         blob = cv2.dnn.blobFromImage(
             img,
-            scalefactor=1/255.0,
+            scalefactor=1/255.0,  # Normalize to [0,1] — YOLOv8 training uses this range (no per-channel mean)
             size=(input_size, input_size),
-            mean=(0, 0, 0),
-            swapRB=True,
-            crop=False
+            mean=(0, 0, 0),       # No mean subtraction for YOLO-family models; they rely on [0,1] scaling alone
+            swapRB=True,          # Convert BGR→RGB to match YOLOv8's training data format
+            crop=False            # Preserve aspect ratio via padding rather than cropping to avoid distortion
         )
 
-        # 추론
+        # Inference
         self.net.setInput(blob)
         outputs = self.net.forward()
 
-        # YOLOv8 출력 shape: (1, 84, 8400)
-        # 처리를 쉽게 하기 위해 (8400, 84)로 전치
+        # YOLOv8 output shape: (1, 84, 8400)
+        # Transpose to (8400, 84) for easier processing
         outputs = outputs[0].transpose()  # (8400, 84)
 
         boxes = []
         confidences = []
         class_ids = []
 
-        # 좌표 변환을 위한 스케일 팩터
+        # Scale factors for coordinate conversion
         x_scale = width / input_size
         y_scale = height / input_size
 
         for detection in outputs:
-            # 클래스 점수 추출 (4-83행)
+            # Extract class scores (rows 4-83)
             class_scores = detection[4:]
             class_id = np.argmax(class_scores)
             confidence = class_scores[class_id]
 
             if confidence > self.conf_threshold:
-                # 바운딩 박스 추출 (0-3행: cx, cy, w, h)
+                # Extract bounding box (rows 0-3: cx, cy, w, h)
                 cx = detection[0] * x_scale
                 cy = detection[1] * y_scale
                 w = detection[2] * x_scale
                 h = detection[3] * y_scale
 
-                # 좌상단 좌표로 변환
+                # Convert to top-left corner format
                 x = int(cx - w / 2)
                 y = int(cy - h / 2)
 
@@ -1126,7 +1150,7 @@ class YOLOv8Detector:
         return results
 
     def draw(self, img, results):
-        """검출 결과 시각화"""
+        """Visualize detection results"""
         for det in results:
             x, y, w, h = det['box']
             class_id = det['class_id']
@@ -1134,10 +1158,10 @@ class YOLOv8Detector:
 
             color = [int(c) for c in self.colors[class_id]]
 
-            # 바운딩 박스 그리기
+            # Draw bounding box
             cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
 
-            # 레이블 그리기
+            # Draw label
             label = f"{det['class_name']}: {confidence:.2f}"
             (label_w, label_h), _ = cv2.getTextSize(
                 label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
@@ -1150,18 +1174,18 @@ class YOLOv8Detector:
 
         return img
 
-# 사용 예
-# 먼저 YOLOv8 모델을 내보내기:
+# Usage example
+# First, export YOLOv8 model:
 # pip install ultralytics
 # yolo export model=yolov8n.pt format=onnx
-# 이렇게 하면 yolov8n.onnx가 생성됨
+# This creates yolov8n.onnx
 
 detector = YOLOv8Detector('yolov8n.onnx', conf_threshold=0.5)
 img = cv2.imread('street.jpg')
 results = detector.detect(img)
 output = detector.draw(img, results)
 
-print(f"{len(results)}개의 객체 검출:")
+print(f"Detected {len(results)} objects:")
 for r in results:
     print(f"  - {r['class_name']}: {r['confidence']:.2%}")
 
@@ -1180,54 +1204,54 @@ import numpy as np
 
 class SAMONNXDetector:
     """
-    OpenCV를 이용한 간소화된 SAM ONNX 추론
+    Simplified SAM ONNX inference with OpenCV
 
-    SAM은 두 가지 구성 요소로 이루어집니다:
-    1. Image Encoder: 입력 이미지를 임베딩으로 인코딩
-    2. Mask Decoder: 임베딩과 프롬프트로부터 마스크 생성
+    SAM consists of two components:
+    1. Image Encoder: Encodes input image to embeddings
+    2. Mask Decoder: Generates masks from embeddings and prompts
 
-    SAM을 ONNX로 내보내기:
+    To export SAM to ONNX, see:
     https://github.com/facebookresearch/segment-anything
     """
 
     def __init__(self, encoder_path, decoder_path):
         """
-        ONNX 모델로 SAM 초기화
+        Initialize SAM with ONNX models
 
         Args:
-            encoder_path: 인코더 ONNX 모델 경로
-            decoder_path: 디코더 ONNX 모델 경로
+            encoder_path: Path to encoder ONNX model
+            decoder_path: Path to decoder ONNX model
         """
         self.encoder = cv2.dnn.readNetFromONNX(encoder_path)
         self.decoder = cv2.dnn.readNetFromONNX(decoder_path)
-        self.image_size = 1024  # SAM 기본 크기
+        self.image_size = 1024  # SAM default size
 
     def preprocess(self, img):
-        """SAM 인코더용 이미지 전처리"""
-        # 1024x1024로 리사이즈
+        """Preprocess image for SAM encoder"""
+        # Resize to 1024x1024
         h, w = img.shape[:2]
         scale = self.image_size / max(h, w)
         new_h, new_w = int(h * scale), int(w * scale)
 
         resized = cv2.resize(img, (new_w, new_h))
 
-        # 정사각형으로 패딩
+        # Pad to square
         padded = np.zeros((self.image_size, self.image_size, 3), dtype=np.uint8)
         padded[:new_h, :new_w] = resized
 
-        # 정규화 (ImageNet 스타일)
+        # Normalize (ImageNet style)
         normalized = padded.astype(np.float32) / 255.0
         mean = np.array([0.485, 0.456, 0.406])
         std = np.array([0.229, 0.224, 0.225])
         normalized = (normalized - mean) / std
 
-        # blob으로 변환 (1, 3, 1024, 1024)
+        # Convert to blob (1, 3, 1024, 1024)
         blob = cv2.dnn.blobFromImage(normalized, 1.0, swapRB=True)
 
         return blob, scale
 
     def encode_image(self, img):
-        """인코더를 사용하여 이미지 임베딩 생성"""
+        """Generate image embeddings using encoder"""
         blob, scale = self.preprocess(img)
         self.encoder.setInput(blob)
         embeddings = self.encoder.forward()
@@ -1235,43 +1259,43 @@ class SAMONNXDetector:
 
     def segment_with_point(self, img, point_coords, point_labels):
         """
-        포인트 프롬프트로 이미지 분할
+        Segment image with point prompts
 
         Args:
-            img: 입력 이미지
-            point_coords: (x, y) 좌표 리스트
-            point_labels: 레이블 리스트 (1=전경, 0=배경)
+            img: Input image
+            point_coords: List of (x, y) coordinates
+            point_labels: List of labels (1=foreground, 0=background)
 
         Returns:
-            분할 마스크
+            Segmentation mask
         """
-        # 이미지 임베딩 가져오기
+        # Get image embeddings
         embeddings, scale = self.encode_image(img)
 
-        # 포인트 좌표 스케일링
+        # Scale point coordinates
         scaled_coords = np.array(point_coords) * scale
 
-        # 디코더 입력 준비
+        # Prepare decoder inputs
         point_coords_input = scaled_coords.reshape(1, -1, 2).astype(np.float32)
         point_labels_input = np.array(point_labels).reshape(1, -1).astype(np.float32)
 
-        # 디코더 실행
-        # 참고: 실제 SAM ONNX 디코더는 특정 입력 형식을 가짐
-        # 이것은 간소화된 버전 - 공식 SAM ONNX 내보내기 참조
+        # Run decoder
+        # Note: Actual SAM ONNX decoder has specific input format
+        # This is simplified - refer to official SAM ONNX export
         self.decoder.setInput(embeddings, 'image_embeddings')
-        # 디코더를 위한 추가 입력이 여기에 설정됨
+        # Additional inputs for decoder would be set here
 
         mask = self.decoder.forward()
 
         return mask
 
-# 개념적 사용법 (실제 SAM ONNX 모델 필요)
+# Conceptual usage (requires actual SAM ONNX models)
 # sam = SAMONNXDetector('sam_vit_h_encoder.onnx', 'sam_vit_h_decoder.onnx')
 # img = cv2.imread('image.jpg')
 #
-# # 포인트 프롬프트로 분할
-# point_coords = [(100, 150)]  # 클릭 위치
-# point_labels = [1]  # 전경 포인트
+# # Segment with point prompt
+# point_coords = [(100, 150)]  # Click location
+# point_labels = [1]  # Foreground point
 # mask = sam.segment_with_point(img, point_coords, point_labels)
 ```
 
@@ -1297,17 +1321,17 @@ class SAMONNXDetector:
 #### 7.3.1 빠른 시작: ONNX를 이용한 YOLOv11
 
 ```python
-# Ultralytics 설치
+# Install Ultralytics
 # pip install ultralytics
 
-# YOLOv11을 ONNX로 내보내기 (Python)
+# Export YOLOv11 to ONNX (Python)
 from ultralytics import YOLO
 
-model = YOLO('yolov11n.pt')  # n, s, m, l, x 변형
-model.export(format='onnx', dynamic=False)  # yolov11n.onnx 생성
+model = YOLO('yolov11n.pt')  # n, s, m, l, x variants
+model.export(format='onnx', dynamic=False)  # Creates yolov11n.onnx
 
-# 그런 다음 OpenCV로 사용 (위의 YOLOv8 예제와 동일)
-# detector = YOLOv8Detector('yolov11n.onnx')  # API 호환
+# Then use with OpenCV (same as YOLOv8 example above)
+# detector = YOLOv8Detector('yolov11n.onnx')  # API compatible
 ```
 
 #### 7.3.2 RT-DETR: 트랜스포머 기반 검출
@@ -1319,26 +1343,26 @@ import cv2
 import numpy as np
 
 class RTDETRDetector:
-    """RT-DETR ONNX 검출기 (NMS 불필요)"""
+    """RT-DETR ONNX Detector (NMS-free)"""
 
     def __init__(self, onnx_path, conf_threshold=0.5):
         self.net = cv2.dnn.readNetFromONNX(onnx_path)
         self.conf_threshold = conf_threshold
 
-        # COCO 클래스 (YOLO와 동일)
-        self.classes = ["person", "bicycle", "car", ...]  # 80개 클래스
+        # COCO classes (same as YOLO)
+        self.classes = ["person", "bicycle", "car", ...]  # 80 classes
 
     def detect(self, img):
         """
-        RT-DETR 검출 (NMS 불필요)
+        RT-DETR detection (no NMS required)
 
-        출력 형식: 직접 바운딩 박스와 점수
-        Shape: (1, 300, 6) - 상위 300개 검출
-        각 검출: [x1, y1, x2, y2, confidence, class_id]
+        Output format: Direct bounding boxes and scores
+        Shape: (1, 300, 6) - top 300 detections
+        Each detection: [x1, y1, x2, y2, confidence, class_id]
         """
         height, width = img.shape[:2]
 
-        # 전처리 (RT-DETR은 640x640 사용)
+        # Preprocessing (RT-DETR uses 640x640)
         blob = cv2.dnn.blobFromImage(
             img, 1/255.0, (640, 640),
             mean=(0, 0, 0), swapRB=True, crop=False
@@ -1347,14 +1371,14 @@ class RTDETRDetector:
         self.net.setInput(blob)
         outputs = self.net.forward()
 
-        # 출력 파싱 (이미 모델이 NMS 필터링함)
+        # Parse outputs (already NMS-filtered by model)
         results = []
         for detection in outputs[0]:  # (300, 6)
             confidence = detection[4]
             if confidence > self.conf_threshold:
                 class_id = int(detection[5])
 
-                # 좌표 스케일링
+                # Scale coordinates
                 x1 = int(detection[0] * width)
                 y1 = int(detection[1] * height)
                 x2 = int(detection[2] * width)
@@ -1369,7 +1393,7 @@ class RTDETRDetector:
 
         return results
 
-# RT-DETR을 ONNX로 내보내기:
+# Export RT-DETR to ONNX:
 # pip install ultralytics
 # yolo export model=rtdetr-l.pt format=onnx
 ```
@@ -1424,12 +1448,12 @@ YOLO와 SSD의 성능을 비교하는 프로그램을 작성하세요.
 
 ```python
 def compare_detectors(img, yolo_detector, ssd_detector):
-    # YOLO 검출
+    # YOLO detection
     yolo_start = time.time()
     yolo_results = yolo_detector.detect(img)
     yolo_time = time.time() - yolo_start
 
-    # SSD 검출
+    # SSD detection
     ssd_start = time.time()
     ssd_results = ssd_detector.detect(img)
     ssd_time = time.time() - ssd_start
@@ -1495,11 +1519,11 @@ class DetectionTracker:
 
     def process(self, frame):
         if self.frame_count % self.detect_every_n == 0:
-            # 새로운 검출
+            # New detection
             detections = self.detector.detect(frame)
             self.update_trackers(frame, detections)
         else:
-            # 기존 트래커 업데이트
+            # Update existing trackers
             self.update_existing_trackers(frame)
 
         self.frame_count += 1
@@ -1536,7 +1560,7 @@ def ensemble_detection(img, detectors, weights=None):
             all_scores.append(r['confidence'] * weight)
             all_classes.append(r['class_id'])
 
-    # Soft-NMS 또는 Weighted Box Fusion
+    # Soft-NMS or Weighted Box Fusion
     final_results = weighted_nms(all_boxes, all_scores, all_classes)
     return final_results
 ```
@@ -1569,11 +1593,11 @@ class ObjectCounter:
         results = self.detector.detect(frame)
 
         for obj in results:
-            # 객체 중심 y 좌표
+            # Object center y coordinate
             _, y, _, h = obj['box']
             center_y = y + h // 2
 
-            # 이전 위치와 비교하여 라인 통과 확인
+            # Compare with previous position to check line crossing
             if obj['id'] in self.tracked_objects:
                 prev_y = self.tracked_objects[obj['id']]
                 if prev_y < self.count_line_y <= center_y:
@@ -1590,7 +1614,7 @@ class ObjectCounter:
 
 ## 다음 단계
 
-- [20_Practical_Projects.md](./20_Practical_Projects.md) - 문서 스캐너, 차선 검출, AR 마커, 얼굴 필터
+- [실전 프로젝트 (Practical Projects)](./20_Practical_Projects.md) - 문서 스캐너, 차선 검출, AR 마커, 얼굴 필터
 
 ---
 

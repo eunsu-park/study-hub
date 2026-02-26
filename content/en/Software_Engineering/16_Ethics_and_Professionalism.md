@@ -12,15 +12,18 @@ Software engineering has produced systems that land spacecraft on Mars, sequence
 - [What Is Software Engineering](./01_What_Is_Software_Engineering.md) — the scope and responsibility of the discipline
 - No prior ethics background required
 
-**Learning Objectives**:
-- Summarize the ACM/IEEE Software Engineering Code of Ethics and its eight principles
-- Analyze historical software failures through an ethical lens
-- Identify ethical dimensions in common software engineering decisions
-- Explain the principles of responsible AI: fairness, transparency, and accountability
-- Describe intellectual property concepts relevant to software engineers
-- Discuss privacy regulations (GDPR, CCPA) at a conceptual level
-- Outline career paths and professional development options in software engineering
-- Explain the concept of sustainable software engineering
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Summarize the ACM/IEEE Software Engineering Code of Ethics and its eight principles
+2. Analyze historical software failures through an ethical lens
+3. Identify ethical dimensions in common software engineering decisions
+4. Explain the principles of responsible AI: fairness, transparency, and accountability
+5. Describe intellectual property concepts relevant to software engineers
+6. Discuss privacy regulations (GDPR, CCPA) at a conceptual level
+7. Outline career paths and professional development options in software engineering
+8. Explain the concept of sustainable software engineering
 
 ---
 

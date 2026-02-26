@@ -6,18 +6,29 @@ from typing import Optional
 from .markdown_parser import extract_title, extract_excerpt
 
 
+SKIP_EXTENSIONS = {
+    ".pyc", ".o", ".so", ".dylib", ".class", ".exe",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg",
+    ".pdf", ".zip", ".tar", ".gz", ".bz2",
+    ".pkl", ".npy", ".npz", ".h5", ".hdf5",
+    ".db", ".sqlite", ".sqlite3",
+    ".woff", ".woff2", ".ttf", ".eot",
+}
+
+
 def create_fts_table(db_path: Path):
     """Create FTS5 virtual table for full-text search."""
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Drop existing table to recreate with language column
+    # Drop existing table to recreate
     cursor.execute("DROP TABLE IF EXISTS search_fts")
 
-    # Create FTS5 virtual table with language support
+    # Create FTS5 virtual table with content_type column
     cursor.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
             language,
+            content_type,
             topic,
             filename,
             title,
@@ -35,10 +46,11 @@ def build_search_index(content_dir: Path, db_path: Path, lang: str = "ko"):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Delete existing entries for this language
-    cursor.execute("DELETE FROM search_fts WHERE language = ?", (lang,))
+    # Delete existing lesson entries for this language
+    cursor.execute("DELETE FROM search_fts WHERE language = ? AND content_type = 'lesson'", (lang,))
 
     # Index all markdown files for this language
+    count = 0
     for topic_dir in content_dir.iterdir():
         if not topic_dir.is_dir() or topic_dir.name.startswith("."):
             continue
@@ -49,31 +61,77 @@ def build_search_index(content_dir: Path, db_path: Path, lang: str = "ko"):
                 content = md_file.read_text(encoding="utf-8")
                 title = extract_title(content) or md_file.stem
                 cursor.execute(
-                    "INSERT INTO search_fts (language, topic, filename, title, content) VALUES (?, ?, ?, ?, ?)",
-                    (lang, topic, md_file.name, title, content),
+                    "INSERT INTO search_fts (language, content_type, topic, filename, title, content) VALUES (?, ?, ?, ?, ?, ?)",
+                    (lang, "lesson", topic, md_file.name, title, content),
                 )
+                count += 1
             except Exception as e:
                 print(f"Error indexing {md_file}: {e}")
 
     conn.commit()
     conn.close()
-    print(f"Search index built successfully for {lang}.")
+    print(f"Search index built: {count} lessons for {lang}.")
 
 
-def search(db_path: Path, query: str, lang: str = "ko", limit: int = 50) -> list[dict]:
+def build_example_index(examples_dir: Path, db_path: Path):
+    """Build or rebuild the search index for example code files."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Delete existing example entries
+    cursor.execute("DELETE FROM search_fts WHERE content_type = 'example'")
+
+    count = 0
+    for topic_dir in examples_dir.iterdir():
+        if not topic_dir.is_dir() or topic_dir.name.startswith("."):
+            continue
+
+        topic = topic_dir.name
+        for filepath in topic_dir.rglob("*"):
+            if not filepath.is_file():
+                continue
+            if filepath.suffix in SKIP_EXTENSIONS:
+                continue
+            if "__pycache__" in str(filepath) or ".DS_Store" in filepath.name:
+                continue
+
+            try:
+                content = filepath.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, PermissionError):
+                continue
+
+            rel_path = filepath.relative_to(topic_dir)
+            try:
+                cursor.execute(
+                    "INSERT INTO search_fts (language, content_type, topic, filename, title, content) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("example", "example", topic, str(rel_path), filepath.name, content),
+                )
+                count += 1
+            except Exception as e:
+                print(f"Error indexing {filepath}: {e}")
+
+    conn.commit()
+    conn.close()
+    print(f"Example index built: {count} files.")
+
+
+def search(db_path: Path, query: str, lang: str = "ko", topic: str = "",
+           content_type: str = "", limit: int = 50) -> list[dict]:
     """
-    Search the index for matching documents in a specific language.
+    Search the index for matching documents.
 
     Args:
         db_path: Path to the SQLite database
         query: Search query string
         lang: Language code to search in
+        topic: Optional topic filter
+        content_type: Optional content type filter ('lesson', 'example', or '' for all)
         limit: Maximum number of results
 
     Returns:
-        list of dicts with topic, filename, title, and snippet
+        list of dicts with topic, filename, title, snippet, and content_type
     """
-    if not query.strip():
+    if len(query.strip()) < 2:
         return []
 
     conn = sqlite3.connect(db_path)
@@ -82,21 +140,53 @@ def search(db_path: Path, query: str, lang: str = "ko", limit: int = 50) -> list
     # Escape special FTS5 characters
     safe_query = query.replace('"', '""')
 
+    # Build FTS5 query: if user wraps in quotes, use phrase search; otherwise OR
+    stripped = query.strip()
+    if stripped.startswith('"') and stripped.endswith('"') and len(stripped) > 2:
+        fts_query = f'"{safe_query}"'
+    else:
+        words = safe_query.split()
+        if len(words) == 1:
+            fts_query = f'"{words[0]}"'
+        else:
+            fts_query = " OR ".join(f'"{w}"' for w in words if w)
+
+    # Build WHERE clause
+    conditions = ["search_fts MATCH ?"]
+    params = [fts_query]
+
+    # Language filter: for lessons use lang; for examples use 'example'; for all, OR both
+    if content_type == "lesson":
+        conditions.append("language = ?")
+        params.append(lang)
+    elif content_type == "example":
+        conditions.append("content_type = 'example'")
+    else:
+        conditions.append("(language = ? OR content_type = 'example')")
+        params.append(lang)
+
+    if topic:
+        conditions.append("topic = ?")
+        params.append(topic)
+
+    params.append(limit)
+    where_clause = " AND ".join(conditions)
+
     try:
-        # Search with language filter
         cursor.execute(
-            """
-            SELECT topic, filename, title, snippet(search_fts, 4, '<mark>', '</mark>', '...', 50) as snippet
+            f"""
+            SELECT topic, filename, title,
+                   snippet(search_fts, 5, '<mark>', '</mark>', '...', 50) as snippet,
+                   content_type
             FROM search_fts
-            WHERE search_fts MATCH ? AND language = ?
+            WHERE {where_clause}
             ORDER BY rank
             LIMIT ?
             """,
-            (f'"{safe_query}"', lang, limit),
+            params,
         )
         results = cursor.fetchall()
     except sqlite3.OperationalError:
-        # Table might not exist yet
         return []
     finally:
         conn.close()
@@ -107,6 +197,7 @@ def search(db_path: Path, query: str, lang: str = "ko", limit: int = 50) -> list
             "filename": row[1],
             "title": row[2],
             "snippet": row[3],
+            "content_type": row[4],
         }
         for row in results
     ]

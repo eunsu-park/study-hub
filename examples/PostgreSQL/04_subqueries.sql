@@ -71,7 +71,10 @@ WHERE salary_rank <= 5;
 -- 3. EXISTS / NOT EXISTS
 -- =============================================================================
 
--- 프로젝트에 참여 중인 직원
+-- Why: EXISTS is preferred over IN for correlated existence checks because it
+-- short-circuits (stops scanning as soon as one match is found) and handles NULL
+-- values safely. SELECT 1 is a convention — the actual value doesn't matter,
+-- only whether any row is returned.
 SELECT e.first_name, e.last_name
 FROM employees e
 WHERE EXISTS (
@@ -111,7 +114,9 @@ WHERE dept_id IN (
     WHERE dept_name = 'Engineering'
 );
 
--- 프로젝트에 참여하지 않는 직원 (NOT IN 주의: NULL 처리)
+-- Why: NOT IN has a dangerous gotcha — if the subquery returns ANY NULL value,
+-- the entire NOT IN evaluates to NULL (not TRUE), returning zero rows. Prefer
+-- NOT EXISTS for safety, or ensure the subquery column is NOT NULL.
 SELECT first_name, last_name
 FROM employees
 WHERE emp_id NOT IN (
@@ -213,7 +218,9 @@ SELECT
 FROM high_earners h
 LEFT JOIN dept_names dn ON h.emp_id = dn.emp_id;
 
--- CTE를 여러 번 참조
+-- Why: A CTE can be referenced multiple times in the main query, avoiding
+-- duplicate subquery logic. PostgreSQL 12+ inlines CTEs by default (treating
+-- them like subqueries), so there is usually no performance penalty.
 WITH emp_summary AS (
     SELECT
         dept_id,
@@ -253,7 +260,9 @@ WITH RECURSIVE numbers AS (
 )
 SELECT n FROM numbers;
 
--- 조직도 (직원-관리자 계층)
+-- Why: Recursive CTEs are the SQL-standard way to traverse hierarchical data
+-- (trees/graphs) without knowing the depth upfront. The ARRAY path column
+-- prevents infinite loops and enables proper ordering of the hierarchy.
 WITH RECURSIVE org_chart AS (
     -- Base case: 최상위 관리자 (manager_id가 NULL)
     SELECT
@@ -297,7 +306,10 @@ SELECT date FROM date_series;
 -- 9. LATERAL JOIN (상관 서브쿼리의 대안)
 -- =============================================================================
 
--- 각 부서의 상위 2명
+-- Why: LATERAL is the key enabler for "top-N per group" queries. Unlike a regular
+-- subquery, LATERAL can reference columns from preceding tables (here d.dept_id),
+-- making the LIMIT apply independently for each department. This is far more
+-- efficient than window functions when N is small.
 SELECT d.dept_name, top_employees.*
 FROM departments d
 CROSS JOIN LATERAL (

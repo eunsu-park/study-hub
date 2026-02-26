@@ -80,51 +80,51 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 
-# 베이즈 정리 예제: 의료 진단
-# 질병 유병률: 1%
+# Bayes' theorem example: medical diagnosis
+# Disease prevalence: 1%
 P_disease = 0.01
 P_no_disease = 1 - P_disease
 
-# 검사 정확도
-# 민감도 (sensitivity): 병이 있을 때 양성 확률
+# Test accuracy
+# Sensitivity: probability of positive given disease
 P_positive_given_disease = 0.95
-# 특이도 (specificity): 병이 없을 때 음성 확률
+# Specificity: probability of negative given no disease
 P_negative_given_no_disease = 0.95
 P_positive_given_no_disease = 1 - P_negative_given_no_disease
 
-# 전확률: 양성 검사 확률
+# Total probability: probability of positive test
 P_positive = (P_positive_given_disease * P_disease +
               P_positive_given_no_disease * P_no_disease)
 
-# 베이즈 정리: 양성일 때 실제 병이 있을 확률
+# Bayes' theorem: probability of disease given positive test
 P_disease_given_positive = (P_positive_given_disease * P_disease) / P_positive
 
-print("의료 진단 예제 (베이즈 정리)")
-print(f"질병 유병률 (사전 확률): {P_disease:.1%}")
-print(f"검사 민감도: {P_positive_given_disease:.1%}")
-print(f"검사 특이도: {P_negative_given_no_disease:.1%}")
-print(f"\n양성 검사 확률 (전확률): {P_positive:.4f}")
-print(f"양성일 때 실제 병이 있을 확률 (사후 확률): {P_disease_given_positive:.1%}")
-print(f"\n해석: 검사가 양성이어도 실제 병이 있을 확률은 {P_disease_given_positive:.1%}에 불과")
-print("       (낮은 유병률로 인해 위양성이 많음)")
+print("Medical Diagnosis Example (Bayes' Theorem)")
+print(f"Disease prevalence (prior probability): {P_disease:.1%}")
+print(f"Test sensitivity: {P_positive_given_disease:.1%}")
+print(f"Test specificity: {P_negative_given_no_disease:.1%}")
+print(f"\nProbability of positive test (total probability): {P_positive:.4f}")
+print(f"Probability of disease given positive test (posterior): {P_disease_given_positive:.1%}")
+print(f"\nInterpretation: Even with a positive test, the probability of actually having the disease is only {P_disease_given_positive:.1%}")
+print("       (Many false positives due to low disease prevalence)")
 
-# 시각화: 베이즈 정리
+# Visualization: Bayes' theorem
 fig, ax = plt.subplots(figsize=(12, 6))
 
-categories = ['사전 확률\n(병 있음)', '우도\n(양성|병)', '사후 확률\n(병|양성)']
+categories = ['Prior Probability\n(Disease)', 'Likelihood\n(Positive|Disease)', 'Posterior Probability\n(Disease|Positive)']
 probabilities = [P_disease, P_positive_given_disease, P_disease_given_positive]
 colors = ['skyblue', 'lightgreen', 'salmon']
 
 bars = ax.bar(categories, probabilities, color=colors, edgecolor='black', linewidth=2)
 
-# 값 표시
+# Display values
 for bar, prob in zip(bars, probabilities):
     height = bar.get_height()
     ax.text(bar.get_x() + bar.get_width()/2., height,
             f'{prob:.1%}', ha='center', va='bottom', fontsize=14, fontweight='bold')
 
-ax.set_ylabel('확률', fontsize=13)
-ax.set_title('베이즈 정리: 의료 진단 예제', fontsize=15)
+ax.set_ylabel('Probability', fontsize=13)
+ax.set_title("Bayes' Theorem: Medical Diagnosis Example", fontsize=15)
 ax.set_ylim(0, 1.0)
 ax.grid(True, alpha=0.3, axis='y')
 
@@ -186,25 +186,25 @@ from scipy import stats
 
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
 
-# 1. 이산: 이항 분포
+# 1. Discrete: Binomial distribution
 n, p = 10, 0.5
 x_binom = np.arange(0, n+1)
 pmf_binom = stats.binom.pmf(x_binom, n, p)
 cdf_binom = stats.binom.cdf(x_binom, n, p)
 
 axes[0, 0].bar(x_binom, pmf_binom, color='skyblue', edgecolor='black')
-axes[0, 0].set_title('이항 분포 PMF\n$n=10, p=0.5$', fontsize=12)
+axes[0, 0].set_title('Binomial PMF\n$n=10, p=0.5$', fontsize=12)
 axes[0, 0].set_xlabel('x')
 axes[0, 0].set_ylabel('P(X=x)')
 axes[0, 0].grid(True, alpha=0.3)
 
 axes[1, 0].step(x_binom, cdf_binom, where='post', linewidth=2, color='blue')
-axes[1, 0].set_title('이항 분포 CDF', fontsize=12)
+axes[1, 0].set_title('Binomial CDF', fontsize=12)
 axes[1, 0].set_xlabel('x')
 axes[1, 0].set_ylabel('P(X≤x)')
 axes[1, 0].grid(True, alpha=0.3)
 
-# 2. 연속: 정규 분포
+# 2. Continuous: Normal distribution
 mu, sigma = 0, 1
 x_norm = np.linspace(-4, 4, 1000)
 pdf_norm = stats.norm.pdf(x_norm, mu, sigma)
@@ -212,18 +212,18 @@ cdf_norm = stats.norm.cdf(x_norm, mu, sigma)
 
 axes[0, 1].plot(x_norm, pdf_norm, linewidth=2, color='red')
 axes[0, 1].fill_between(x_norm, pdf_norm, alpha=0.3, color='red')
-axes[0, 1].set_title('정규 분포 PDF\n$\mu=0, \sigma=1$', fontsize=12)
+axes[0, 1].set_title('Normal PDF\n$\mu=0, \sigma=1$', fontsize=12)
 axes[0, 1].set_xlabel('x')
 axes[0, 1].set_ylabel('f(x)')
 axes[0, 1].grid(True, alpha=0.3)
 
 axes[1, 1].plot(x_norm, cdf_norm, linewidth=2, color='darkred')
-axes[1, 1].set_title('정규 분포 CDF', fontsize=12)
+axes[1, 1].set_title('Normal CDF', fontsize=12)
 axes[1, 1].set_xlabel('x')
 axes[1, 1].set_ylabel('F(x)')
 axes[1, 1].grid(True, alpha=0.3)
 
-# 3. 연속: 지수 분포
+# 3. Continuous: Exponential distribution
 lam = 1.0
 x_exp = np.linspace(0, 5, 1000)
 pdf_exp = stats.expon.pdf(x_exp, scale=1/lam)
@@ -231,13 +231,13 @@ cdf_exp = stats.expon.cdf(x_exp, scale=1/lam)
 
 axes[0, 2].plot(x_exp, pdf_exp, linewidth=2, color='green')
 axes[0, 2].fill_between(x_exp, pdf_exp, alpha=0.3, color='green')
-axes[0, 2].set_title('지수 분포 PDF\n$\lambda=1$', fontsize=12)
+axes[0, 2].set_title('Exponential PDF\n$\lambda=1$', fontsize=12)
 axes[0, 2].set_xlabel('x')
 axes[0, 2].set_ylabel('f(x)')
 axes[0, 2].grid(True, alpha=0.3)
 
 axes[1, 2].plot(x_exp, cdf_exp, linewidth=2, color='darkgreen')
-axes[1, 2].set_title('지수 분포 CDF', fontsize=12)
+axes[1, 2].set_title('Exponential CDF', fontsize=12)
 axes[1, 2].set_xlabel('x')
 axes[1, 2].set_ylabel('F(x)')
 axes[1, 2].grid(True, alpha=0.3)
@@ -247,9 +247,9 @@ plt.savefig('pmf_pdf_cdf.png', dpi=150)
 plt.show()
 
 print("PMF vs PDF:")
-print("  PMF (이산): 특정 값의 확률 P(X=x)")
-print("  PDF (연속): 확률 밀도, 구간 확률은 적분으로 계산")
-print("  CDF: 누적 확률 P(X≤x), 이산/연속 모두 정의")
+print("  PMF (discrete): probability at a specific value P(X=x)")
+print("  PDF (continuous): probability density, interval probability computed by integration")
+print("  CDF: cumulative probability P(X≤x), defined for both discrete and continuous")
 ```
 
 ### 2.5 Joint, Marginal, and Conditional Distributions
@@ -264,44 +264,44 @@ $$p_X(x) = \sum_y p_{X,Y}(x, y)$$ or $$f_X(x) = \int f_{X,Y}(x, y) dy$$
 $$p_{X|Y}(x|y) = \frac{p_{X,Y}(x, y)}{p_Y(y)}$$
 
 ```python
-# 결합 분포 예제: 이변량 정규분포
+# Joint distribution example: bivariate normal distribution
 from scipy.stats import multivariate_normal
 
-# 파라미터
+# Parameters
 mu = np.array([0, 0])
 cov = np.array([[1, 0.7],
                 [0.7, 1]])
 
-# 그리드
+# Grid
 x = np.linspace(-3, 3, 100)
 y = np.linspace(-3, 3, 100)
 X, Y = np.meshgrid(x, y)
 pos = np.dstack((X, Y))
 
-# 결합 PDF
+# Joint PDF
 rv = multivariate_normal(mu, cov)
 Z = rv.pdf(pos)
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 등고선
+# Contour plot
 ax = axes[0]
 contour = ax.contourf(X, Y, Z, levels=15, cmap='viridis')
 plt.colorbar(contour, ax=ax)
 ax.set_xlabel('X', fontsize=12)
 ax.set_ylabel('Y', fontsize=12)
-ax.set_title('결합 분포 $f_{X,Y}(x,y)$ (이변량 정규)', fontsize=14)
+ax.set_title('Joint Distribution $f_{X,Y}(x,y)$ (Bivariate Normal)', fontsize=14)
 ax.grid(True, alpha=0.3)
 
-# 주변 분포
+# Marginal distributions
 ax = axes[1]
 marginal_X = stats.norm.pdf(x, mu[0], np.sqrt(cov[0, 0]))
 marginal_Y = stats.norm.pdf(y, mu[1], np.sqrt(cov[1, 1]))
-ax.plot(x, marginal_X, linewidth=3, label='주변 분포 $f_X(x)$', color='blue')
-ax.plot(y, marginal_Y, linewidth=3, label='주변 분포 $f_Y(y)$', color='red')
-ax.set_xlabel('값', fontsize=12)
-ax.set_ylabel('밀도', fontsize=12)
-ax.set_title('주변 분포', fontsize=14)
+ax.plot(x, marginal_X, linewidth=3, label='Marginal $f_X(x)$', color='blue')
+ax.plot(y, marginal_Y, linewidth=3, label='Marginal $f_Y(y)$', color='red')
+ax.set_xlabel('Value', fontsize=12)
+ax.set_ylabel('Density', fontsize=12)
+ax.set_title('Marginal Distributions', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 
@@ -309,8 +309,8 @@ plt.tight_layout()
 plt.savefig('joint_marginal_distributions.png', dpi=150)
 plt.show()
 
-print(f"공분산 행렬:\n{cov}")
-print(f"상관계수: {cov[0,1] / np.sqrt(cov[0,0] * cov[1,1]):.2f}")
+print(f"Covariance matrix:\n{cov}")
+print(f"Correlation coefficient: {cov[0,1] / np.sqrt(cov[0,0] * cov[1,1]):.2f}")
 ```
 
 ## 3. Expectation and Variance
@@ -362,52 +362,52 @@ $$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 몬테카를로로 기댓값과 분산 추정
+# Monte Carlo estimation of expectation and variance
 np.random.seed(42)
 
-# 정규 분포 샘플링
+# Sampling from normal distribution
 mu, sigma = 2, 1.5
 samples = np.random.normal(mu, sigma, 10000)
 
-# 기댓값과 분산 추정
+# Estimate expectation and variance
 estimated_mean = np.mean(samples)
 estimated_var = np.var(samples, ddof=0)
 estimated_std = np.std(samples, ddof=0)
 
-print("몬테카를로 추정")
-print(f"이론적 평균: {mu}, 추정 평균: {estimated_mean:.4f}")
-print(f"이론적 분산: {sigma**2}, 추정 분산: {estimated_var:.4f}")
-print(f"이론적 표준편차: {sigma}, 추정 표준편차: {estimated_std:.4f}")
+print("Monte Carlo Estimation")
+print(f"Theoretical mean: {mu}, Estimated mean: {estimated_mean:.4f}")
+print(f"Theoretical variance: {sigma**2}, Estimated variance: {estimated_var:.4f}")
+print(f"Theoretical std dev: {sigma}, Estimated std dev: {estimated_std:.4f}")
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 히스토그램 + 이론적 PDF
+# Histogram + theoretical PDF
 ax = axes[0]
 ax.hist(samples, bins=50, density=True, alpha=0.7, color='skyblue',
-        edgecolor='black', label='샘플 히스토그램')
+        edgecolor='black', label='Sample histogram')
 x = np.linspace(mu - 4*sigma, mu + 4*sigma, 1000)
 pdf = stats.norm.pdf(x, mu, sigma)
-ax.plot(x, pdf, linewidth=3, color='red', label='이론적 PDF')
+ax.plot(x, pdf, linewidth=3, color='red', label='Theoretical PDF')
 ax.axvline(estimated_mean, color='green', linestyle='--', linewidth=2,
-           label=f'추정 평균 = {estimated_mean:.2f}')
+           label=f'Estimated mean = {estimated_mean:.2f}')
 ax.set_xlabel('x', fontsize=12)
-ax.set_ylabel('밀도', fontsize=12)
-ax.set_title(f'정규 분포 샘플링 (μ={mu}, σ={sigma})', fontsize=14)
+ax.set_ylabel('Density', fontsize=12)
+ax.set_title(f'Normal Distribution Sampling (μ={mu}, σ={sigma})', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 
-# 샘플 크기에 따른 수렴
+# Convergence with increasing sample size
 ax = axes[1]
 sample_sizes = np.arange(10, 10001, 10)
 running_means = [np.mean(samples[:n]) for n in sample_sizes]
 
 ax.plot(sample_sizes, running_means, linewidth=2, color='blue',
-        label='누적 평균')
-ax.axhline(mu, color='red', linestyle='--', linewidth=2, label=f'이론적 평균 = {mu}')
-ax.set_xlabel('샘플 크기', fontsize=12)
-ax.set_ylabel('누적 평균', fontsize=12)
-ax.set_title('대수의 법칙 (Law of Large Numbers)', fontsize=14)
+        label='Running mean')
+ax.axhline(mu, color='red', linestyle='--', linewidth=2, label=f'Theoretical mean = {mu}')
+ax.set_xlabel('Sample size', fontsize=12)
+ax.set_ylabel('Running mean', fontsize=12)
+ax.set_title('Law of Large Numbers', fontsize=14)
 ax.legend(fontsize=11)
 ax.grid(True, alpha=0.3)
 
@@ -415,30 +415,30 @@ plt.tight_layout()
 plt.savefig('expectation_variance_estimation.png', dpi=150)
 plt.show()
 
-# 공분산 예제
+# Covariance example
 np.random.seed(42)
 n = 1000
 
-# 양의 상관관계
+# Positive correlation
 X1 = np.random.randn(n)
 Y1 = 0.8 * X1 + 0.3 * np.random.randn(n)
 
-# 음의 상관관계
+# Negative correlation
 X2 = np.random.randn(n)
 Y2 = -0.8 * X2 + 0.3 * np.random.randn(n)
 
-# 독립
+# Independent
 X3 = np.random.randn(n)
 Y3 = np.random.randn(n)
 
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-datasets = [(X1, Y1, '양의 상관'), (X2, Y2, '음의 상관'), (X3, Y3, '독립 (상관 없음)')]
+datasets = [(X1, Y1, 'Positive Correlation'), (X2, Y2, 'Negative Correlation'), (X3, Y3, 'Independent (No Correlation)')]
 for idx, (X, Y, title) in enumerate(datasets):
     ax = axes[idx]
     ax.scatter(X, Y, alpha=0.5, s=20, edgecolors='k', linewidths=0.5)
 
-    # 통계량 계산
+    # Compute statistics
     cov = np.cov(X, Y)[0, 1]
     corr = np.corrcoef(X, Y)[0, 1]
 
@@ -452,11 +452,11 @@ plt.tight_layout()
 plt.savefig('covariance_correlation.png', dpi=150)
 plt.show()
 
-print("\n공분산과 상관계수:")
-print("  Cov > 0: 양의 관계 (X 증가 → Y 증가)")
-print("  Cov < 0: 음의 관계 (X 증가 → Y 감소)")
-print("  Cov = 0: 선형 관계 없음 (독립이면 Cov=0, 역은 성립 안 함)")
-print("  ρ ∈ [-1, 1]: 정규화된 공분산 (단위 무관)")
+print("\nCovariance and Correlation:")
+print("  Cov > 0: Positive relationship (X increases → Y increases)")
+print("  Cov < 0: Negative relationship (X increases → Y decreases)")
+print("  Cov = 0: No linear relationship (independence implies Cov=0, but not vice versa)")
+print("  ρ ∈ [-1, 1]: Normalized covariance (unit-independent)")
 ```
 
 ## 4. Common Probability Distributions
@@ -508,93 +508,93 @@ import matplotlib.pyplot as plt
 
 fig, axes = plt.subplots(3, 3, figsize=(18, 15))
 
-# 1. 베르누이
+# 1. Bernoulli
 ax = axes[0, 0]
 p = 0.7
 x = [0, 1]
 pmf = [1-p, p]
 ax.bar(x, pmf, color='skyblue', edgecolor='black', width=0.4)
-ax.set_title(f'베르누이 (p={p})', fontsize=12)
+ax.set_title(f'Bernoulli (p={p})', fontsize=12)
 ax.set_xticks([0, 1])
 ax.set_ylabel('P(X=x)')
 
-# 2. 이항
+# 2. Binomial
 ax = axes[0, 1]
 n, p = 20, 0.5
 x = np.arange(0, n+1)
 pmf = stats.binom.pmf(x, n, p)
 ax.bar(x, pmf, color='lightgreen', edgecolor='black')
-ax.set_title(f'이항 (n={n}, p={p})', fontsize=12)
+ax.set_title(f'Binomial (n={n}, p={p})', fontsize=12)
 ax.set_xlabel('x')
 
-# 3. 포아송
+# 3. Poisson
 ax = axes[0, 2]
 lam = 5
 x = np.arange(0, 20)
 pmf = stats.poisson.pmf(x, lam)
 ax.bar(x, pmf, color='salmon', edgecolor='black')
-ax.set_title(f'포아송 (λ={lam})', fontsize=12)
+ax.set_title(f'Poisson (λ={lam})', fontsize=12)
 ax.set_xlabel('x')
 
-# 4. 균등
+# 4. Uniform
 ax = axes[1, 0]
 a, b = 0, 1
 x = np.linspace(-0.5, 1.5, 1000)
 pdf = stats.uniform.pdf(x, a, b-a)
 ax.plot(x, pdf, linewidth=3, color='blue')
 ax.fill_between(x, pdf, alpha=0.3, color='blue')
-ax.set_title(f'균등 (a={a}, b={b})', fontsize=12)
+ax.set_title(f'Uniform (a={a}, b={b})', fontsize=12)
 ax.set_ylabel('f(x)')
 
-# 5. 정규 (여러 파라미터)
+# 5. Normal (various parameters)
 ax = axes[1, 1]
 x = np.linspace(-5, 5, 1000)
 params = [(0, 1), (0, 0.5), (1, 1)]
 for mu, sigma in params:
     pdf = stats.norm.pdf(x, mu, sigma)
     ax.plot(x, pdf, linewidth=2, label=f'μ={mu}, σ={sigma}')
-ax.set_title('정규 분포', fontsize=12)
+ax.set_title('Normal Distribution', fontsize=12)
 ax.legend(fontsize=9)
 
-# 6. 지수
+# 6. Exponential
 ax = axes[1, 2]
 x = np.linspace(0, 5, 1000)
 lambdas = [0.5, 1, 2]
 for lam in lambdas:
     pdf = stats.expon.pdf(x, scale=1/lam)
     ax.plot(x, pdf, linewidth=2, label=f'λ={lam}')
-ax.set_title('지수 분포', fontsize=12)
+ax.set_title('Exponential Distribution', fontsize=12)
 ax.legend(fontsize=9)
 
-# 7. 감마
+# 7. Gamma
 ax = axes[2, 0]
 x = np.linspace(0, 20, 1000)
 params = [(1, 1), (2, 2), (5, 1)]
 for k, theta in params:
     pdf = stats.gamma.pdf(x, k, scale=theta)
     ax.plot(x, pdf, linewidth=2, label=f'k={k}, θ={theta}')
-ax.set_title('감마 분포', fontsize=12)
+ax.set_title('Gamma Distribution', fontsize=12)
 ax.set_ylabel('f(x)')
 ax.legend(fontsize=9)
 
-# 8. 베타
+# 8. Beta
 ax = axes[2, 1]
 x = np.linspace(0, 1, 1000)
 params = [(0.5, 0.5), (2, 2), (5, 2)]
 for alpha, beta in params:
     pdf = stats.beta.pdf(x, alpha, beta)
     ax.plot(x, pdf, linewidth=2, label=f'α={alpha}, β={beta}')
-ax.set_title('베타 분포', fontsize=12)
+ax.set_title('Beta Distribution', fontsize=12)
 ax.legend(fontsize=9)
 
-# 9. 카이제곱
+# 9. Chi-squared
 ax = axes[2, 2]
 x = np.linspace(0, 15, 1000)
 dfs = [2, 4, 6]
 for df in dfs:
     pdf = stats.chi2.pdf(x, df)
     ax.plot(x, pdf, linewidth=2, label=f'df={df}')
-ax.set_title('카이제곱 분포', fontsize=12)
+ax.set_title('Chi-squared Distribution', fontsize=12)
 ax.legend(fontsize=9)
 
 for ax in axes.flat:
@@ -604,13 +604,13 @@ plt.tight_layout()
 plt.savefig('common_distributions.png', dpi=150)
 plt.show()
 
-print("머신러닝에서의 활용:")
-print("  베르누이/이항: 이진 분류")
-print("  카테고리컬: 다항 분류")
-print("  정규: 연속 데이터, 오차 모델, VAE 잠재 공간")
-print("  포아송: 카운트 데이터 (추천 시스템, 웹 트래픽)")
-print("  베타: 베이지안 추론의 사전분포")
-print("  지수/감마: 대기 시간, 생존 분석")
+print("Applications in machine learning:")
+print("  Bernoulli/Binomial: Binary classification")
+print("  Categorical: Multi-class classification")
+print("  Normal: Continuous data, error models, VAE latent space")
+print("  Poisson: Count data (recommendation systems, web traffic)")
+print("  Beta: Prior distribution in Bayesian inference")
+print("  Exponential/Gamma: Waiting times, survival analysis")
 ```
 
 ### 4.3 Multivariate Normal Distribution
@@ -627,16 +627,16 @@ from scipy.stats import multivariate_normal
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 다변량 정규분포 시각화
+# Multivariate normal distribution visualization
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
 mu = np.array([0, 0])
 covs = [
-    np.array([[1, 0], [0, 1]]),      # 독립
-    np.array([[1, 0.8], [0.8, 1]]),  # 양의 상관
-    np.array([[1, -0.8], [-0.8, 1]]) # 음의 상관
+    np.array([[1, 0], [0, 1]]),      # Independent
+    np.array([[1, 0.8], [0.8, 1]]),  # Positive correlation
+    np.array([[1, -0.8], [-0.8, 1]]) # Negative correlation
 ]
-titles = ['독립 (ρ=0)', '양의 상관 (ρ=0.8)', '음의 상관 (ρ=-0.8)']
+titles = ['Independent (ρ=0)', 'Positive Correlation (ρ=0.8)', 'Negative Correlation (ρ=-0.8)']
 
 x = np.linspace(-3, 3, 100)
 y = np.linspace(-3, 3, 100)
@@ -659,10 +659,10 @@ plt.tight_layout()
 plt.savefig('multivariate_normal.png', dpi=150)
 plt.show()
 
-print("다변량 정규분포:")
-print("  - 고차원 데이터 모델링의 기본")
-print("  - 가우시안 프로세스, GMM, VAE 등에서 핵심")
-print("  - 공분산 행렬로 변수 간 의존성 표현")
+print("Multivariate Normal Distribution:")
+print("  - Fundamental building block for high-dimensional data modeling")
+print("  - Core component in Gaussian processes, GMM, VAE, etc.")
+print("  - Covariance matrix captures dependencies between variables")
 ```
 
 ## 5. Advanced Bayes' Theorem
@@ -688,20 +688,20 @@ from scipy import stats
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 베타-이항 모델: 동전의 앞면 확률 추정
-# 사전분포: Beta(α, β)
-# 우도: Binomial
-# 사후분포: Beta(α + n_heads, β + n_tails)
+# Beta-Binomial model: estimating the probability of heads for a coin
+# Prior: Beta(α, β)
+# Likelihood: Binomial
+# Posterior: Beta(α + n_heads, β + n_tails)
 
 np.random.seed(42)
 
-# 진짜 동전 확률 (알 수 없다고 가정)
+# True coin probability (assumed unknown)
 true_p = 0.7
 
-# 사전분포 (균등 사전: Beta(1, 1))
+# Prior distribution (uniform prior: Beta(1, 1))
 alpha_prior, beta_prior = 1, 1
 
-# 동전 던지기 시뮬레이션
+# Coin flip simulation
 n_flips_list = [0, 1, 5, 20, 100]
 data = np.random.binomial(1, true_p, 100)
 
@@ -714,44 +714,44 @@ for idx, n_flips in enumerate(n_flips_list):
     ax = axes[idx]
 
     if n_flips == 0:
-        # 사전분포만
+        # Prior distribution only
         prior_pdf = stats.beta.pdf(p_vals, alpha_prior, beta_prior)
-        ax.plot(p_vals, prior_pdf, linewidth=3, color='blue', label='사전분포')
+        ax.plot(p_vals, prior_pdf, linewidth=3, color='blue', label='Prior')
     else:
-        # 데이터
+        # Data
         observed_data = data[:n_flips]
         n_heads = np.sum(observed_data)
         n_tails = n_flips - n_heads
 
-        # 사후분포
+        # Posterior distribution
         alpha_post = alpha_prior + n_heads
         beta_post = beta_prior + n_tails
         posterior_pdf = stats.beta.pdf(p_vals, alpha_post, beta_post)
 
-        # 사전분포
+        # Prior distribution
         prior_pdf = stats.beta.pdf(p_vals, alpha_prior, beta_prior)
 
         ax.plot(p_vals, prior_pdf, linewidth=2, color='blue', linestyle='--',
-                label='사전분포', alpha=0.7)
-        ax.plot(p_vals, posterior_pdf, linewidth=3, color='red', label='사후분포')
+                label='Prior', alpha=0.7)
+        ax.plot(p_vals, posterior_pdf, linewidth=3, color='red', label='Posterior')
 
-        # MAP 추정 (최대 사후 확률)
+        # MAP estimate (maximum a posteriori)
         map_estimate = (alpha_post - 1) / (alpha_post + beta_post - 2)
         ax.axvline(map_estimate, color='red', linestyle=':', linewidth=2,
                    label=f'MAP = {map_estimate:.3f}')
 
-    # 진짜 확률
+    # True probability
     ax.axvline(true_p, color='green', linestyle='--', linewidth=2,
-               label=f'진짜 p = {true_p}')
+               label=f'True p = {true_p}')
 
-    ax.set_xlabel('p (앞면 확률)', fontsize=11)
-    ax.set_ylabel('밀도', fontsize=11)
-    ax.set_title(f'동전 {n_flips}번 던진 후' if n_flips > 0 else '사전분포', fontsize=12)
+    ax.set_xlabel('p (head probability)', fontsize=11)
+    ax.set_ylabel('Density', fontsize=11)
+    ax.set_title(f'After {n_flips} coin flips' if n_flips > 0 else 'Prior Distribution', fontsize=12)
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0, 1)
 
-# 수렴 곡선
+# Convergence curve
 ax = axes[-1]
 n_range = np.arange(1, 101)
 map_estimates = []
@@ -763,11 +763,11 @@ for n in n_range:
     map_est = (alpha_post - 1) / (alpha_post + beta_post - 2)
     map_estimates.append(map_est)
 
-ax.plot(n_range, map_estimates, linewidth=2, color='red', label='MAP 추정')
-ax.axhline(true_p, color='green', linestyle='--', linewidth=2, label=f'진짜 p = {true_p}')
-ax.set_xlabel('동전 던진 횟수', fontsize=11)
-ax.set_ylabel('추정된 p', fontsize=11)
-ax.set_title('베이지안 학습 수렴', fontsize=12)
+ax.plot(n_range, map_estimates, linewidth=2, color='red', label='MAP estimate')
+ax.axhline(true_p, color='green', linestyle='--', linewidth=2, label=f'True p = {true_p}')
+ax.set_xlabel('Number of coin flips', fontsize=11)
+ax.set_ylabel('Estimated p', fontsize=11)
+ax.set_title('Bayesian Learning Convergence', fontsize=12)
 ax.legend(fontsize=10)
 ax.grid(True, alpha=0.3)
 
@@ -775,10 +775,10 @@ plt.tight_layout()
 plt.savefig('bayesian_update_coin.png', dpi=150)
 plt.show()
 
-print("베이지안 업데이트:")
-print("  - 데이터가 늘어날수록 사후분포가 진짜 값 주변에 집중")
-print("  - 사전분포의 영향은 데이터가 많아지면 감소")
-print("  - 불확실성을 분포로 표현 (점 추정이 아님)")
+print("Bayesian Update:")
+print("  - As data increases, the posterior concentrates around the true value")
+print("  - The influence of the prior decreases as data grows")
+print("  - Uncertainty is expressed as a distribution (not a point estimate)")
 ```
 
 ## 6. Probability in Machine Learning
@@ -804,33 +804,33 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 데이터 생성
+# Generate data
 X, y = make_classification(n_samples=300, n_features=2, n_informative=2,
                            n_redundant=0, n_clusters_per_class=1,
                            random_state=42)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# 생성 모델: 나이브 베이즈
+# Generative model: Naive Bayes
 generative_model = GaussianNB()
 generative_model.fit(X_train, y_train)
 
-# 판별 모델: 로지스틱 회귀
+# Discriminative model: Logistic Regression
 discriminative_model = LogisticRegression()
 discriminative_model.fit(X_train, y_train)
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
-# 그리드
+# Grid
 x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
 y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
 xx, yy = np.meshgrid(np.linspace(x_min, x_max, 200),
                      np.linspace(y_min, y_max, 200))
 
 models = [
-    (generative_model, '생성 모델 (나이브 베이즈)', axes[0]),
-    (discriminative_model, '판별 모델 (로지스틱 회귀)', axes[1])
+    (generative_model, 'Generative Model (Naive Bayes)', axes[0]),
+    (discriminative_model, 'Discriminative Model (Logistic Regression)', axes[1])
 ]
 
 for model, title, ax in models:
@@ -854,9 +854,9 @@ plt.tight_layout()
 plt.savefig('generative_vs_discriminative.png', dpi=150)
 plt.show()
 
-print("생성 vs 판별:")
-print("  생성: P(X,Y) 전체 분포 모델링 → 샘플 생성 가능")
-print("  판별: P(Y|X) 조건부만 → 예측만 가능, 보통 더 높은 성능")
+print("Generative vs Discriminative:")
+print("  Generative: Models full distribution P(X,Y) → can generate samples")
+print("  Discriminative: Models only P(Y|X) conditional → prediction only, usually higher accuracy")
 ```
 
 ### 6.2 Naive Bayes Classifier
@@ -878,31 +878,31 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import classification_report
 
-# 텍스트 분류 예제
+# Text classification example
 categories = ['alt.atheism', 'soc.religion.christian', 'comp.graphics', 'sci.med']
 train = fetch_20newsgroups(subset='train', categories=categories, random_state=42)
 test = fetch_20newsgroups(subset='test', categories=categories, random_state=42)
 
-# 특징 추출 (Bag-of-Words)
+# Feature extraction (Bag-of-Words)
 vectorizer = CountVectorizer(max_features=1000)
 X_train = vectorizer.fit_transform(train.data)
 X_test = vectorizer.transform(test.data)
 
-# 나이브 베이즈 학습
+# Train Naive Bayes
 nb_model = MultinomialNB()
 nb_model.fit(X_train, train.target)
 
-# 예측
+# Predict
 y_pred = nb_model.predict(X_test)
 
-print("나이브 베이즈 텍스트 분류:")
+print("Naive Bayes Text Classification:")
 print(classification_report(test.target, y_pred, target_names=test.target_names))
 
-print("\n나이브 베이즈의 특징:")
-print("  - 조건부 독립 가정 (naive) → 계산 효율적")
-print("  - 고차원 데이터에서도 잘 작동 (텍스트 분류)")
-print("  - 확률적 해석 가능")
-print("  - 작은 데이터셋에서도 합리적 성능")
+print("\nCharacteristics of Naive Bayes:")
+print("  - Conditional independence assumption (naive) → computationally efficient")
+print("  - Works well in high-dimensional data (text classification)")
+print("  - Probabilistic interpretation available")
+print("  - Reasonable performance even with small datasets")
 ```
 
 ### 6.3 Probabilistic Graphical Models
@@ -913,11 +913,11 @@ print("  - 작은 데이터셋에서도 합리적 성능")
 - **Applications**: speech recognition, natural language processing, computer vision
 
 ```python
-# 간단한 베이지안 네트워크 예제 (개념적)
+# Simple Bayesian network example (conceptual)
 import networkx as nx
 import matplotlib.pyplot as plt
 
-# 베이지안 네트워크 구조
+# Bayesian network structure
 # Rain → Sprinkler, Rain → Grass Wet, Sprinkler → Grass Wet
 G = nx.DiGraph()
 G.add_edges_from([('Rain', 'Sprinkler'), ('Rain', 'Grass Wet'),
@@ -927,16 +927,16 @@ plt.figure(figsize=(10, 6))
 pos = {'Rain': (0.5, 1), 'Sprinkler': (0, 0), 'Grass Wet': (1, 0)}
 nx.draw(G, pos, with_labels=True, node_size=3000, node_color='lightblue',
         font_size=12, font_weight='bold', arrowsize=20, arrows=True)
-plt.title('베이지안 네트워크: 비 → 스프링클러, 잔디 젖음', fontsize=14)
+plt.title('Bayesian Network: Rain → Sprinkler, Grass Wet', fontsize=14)
 plt.tight_layout()
 plt.savefig('bayesian_network_example.png', dpi=150)
 plt.show()
 
-print("확률적 그래프 모델:")
-print("  - 변수 간 의존성을 그래프로 표현")
-print("  - 조건부 독립성으로 계산 효율화")
-print("  - 추론: 관측된 변수로 숨겨진 변수 추정")
-print("  - 학습: 데이터로부터 그래프 구조와 확률 파라미터 학습")
+print("Probabilistic Graphical Models:")
+print("  - Represent dependencies between variables as a graph")
+print("  - Computational efficiency via conditional independence")
+print("  - Inference: estimate hidden variables from observed variables")
+print("  - Learning: learn graph structure and probability parameters from data")
 ```
 
 ## Practice Problems

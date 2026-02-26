@@ -2,9 +2,24 @@
 
 [다음: NumPy 고급](./02_NumPy_Advanced.md)
 
-## 개요
+---
 
-NumPy(Numerical Python)는 Python에서 수치 계산을 위한 핵심 라이브러리입니다. 다차원 배열 객체와 배열 연산을 위한 다양한 함수를 제공합니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 리스트, 특수 생성자, 순차 생성기를 이용해 NumPy 배열을 생성하다
+2. shape, dtype, ndim, 메모리 레이아웃 등 배열 속성(attribute)을 설명하다
+3. 기본 인덱싱(indexing), 슬라이싱(slicing), 불리언 인덱싱(boolean indexing), 팬시 인덱싱(fancy indexing)을 적용하여 배열 요소를 선택하다
+4. 배열 재구성(reshaping), 평탄화(flattening), 전치(transposition) 연산을 구현하다
+5. 요소별 산술 연산, 유니버설 함수(ufuncs), 집계 함수(aggregation functions)를 적용하다
+6. 브로드캐스팅(broadcasting) 규칙을 설명하고, 형태가 다른 배열 간 연산에 적용하다
+7. 스태킹(stacking), 연결(concatenation), 분할(splitting) 함수를 이용해 배열을 결합하고 분할하다
+8. 뷰(view)와 복사(copy)를 구분하고, 각각이 언제 생성되는지 식별하다
+
+---
+
+NumPy(Numerical Python)는 과학·데이터 지향 Python 라이브러리 대부분이 기반으로 삼는 핵심 토대입니다. 머신 러닝을 위한 데이터 전처리, 통계 분석, 대규모 시뮬레이션 등 어떤 작업을 하든 효율적인 수치 계산은 여기서 시작됩니다. NumPy 배열과 연산을 완전히 익히면 순수 Python 리스트 대비 데이터 워크플로우 속도를 비약적으로 높일 수 있습니다.
 
 ---
 
@@ -35,6 +50,9 @@ print(arr3.shape)  # (2, 2, 2)
 
 ```python
 # 0으로 채워진 배열
+# np.empty 대신 zeros를 사용하는 이유: zeros는 결정적인(deterministic) 초기값을 보장합니다.
+# np.empty는 메모리를 할당만 하고 초기화하지 않으므로, 해당 메모리에 이전에 있던 임의의
+# 값이 들어가 버그를 재현하기 매우 어렵게 만들 수 있습니다.
 zeros = np.zeros((3, 4))
 print(zeros)
 
@@ -51,6 +69,9 @@ eye = np.eye(3)
 print(eye)
 
 # 빈 배열 (초기화되지 않은 값)
+# np.empty는 모든 요소를 즉시 덮어쓸 것이 확실하고 성능이 매우 중요할 때만 사용하세요.
+# 초기화를 건너뛰기 때문에 빠르지만, 하나라도 먼저 읽으면 쓰레기 값이 사용되어
+# 안전하지 않습니다.
 empty = np.empty((2, 3))
 ```
 
@@ -58,10 +79,15 @@ empty = np.empty((2, 3))
 
 ```python
 # arange: 범위 지정
+# 스텝 크기(step size)가 중요할 때 사용합니다 (예: 정확히 2 단위씩).
+# 주의: 부동소수점(floating-point) 스텝을 사용할 경우 반올림으로 인해 원소 개수가 달라질 수 있습니다.
 arr = np.arange(0, 10, 2)  # 0부터 10 미만, 2씩 증가
 print(arr)  # [0 2 4 6 8]
 
 # linspace: 등간격 분할
+# 원소 개수(number of points)가 중요할 때 사용합니다 (예: 두 경계 사이에 정확히 100개 샘플 필요).
+# linspace는 항상 끝점을 포함하고 정확한 개수를 보장합니다.
+# 스텝 크기를 개수에서 역산하므로 arange와 달리 부동소수점 오차가 없습니다.
 arr = np.linspace(0, 1, 5)  # 0부터 1까지 5개로 균등 분할
 print(arr)  # [0.   0.25 0.5  0.75 1.  ]
 
@@ -369,6 +395,8 @@ print(np.argmax(arr))  # 5 (최댓값의 인덱스)
 ## 6. 브로드캐스팅
 
 브로드캐스팅은 크기가 다른 배열 간의 연산을 가능하게 하는 NumPy의 핵심 기능입니다.
+
+핵심 직관: NumPy는 크기 1인 차원을 따라 더 작은 배열을 **가상으로 복사(virtually copy)**하여 더 큰 배열의 shape에 맞춥니다 — 실제로 추가 메모리는 할당하지 않습니다. 덕분에 `row`를 2차원 배열로 직접 타일링(tiling)하지 않고도 `arr + row`처럼 간결하게 쓸 수 있으며, 메모리 비용도 없습니다.
 
 ### 6.1 브로드캐스팅 규칙
 

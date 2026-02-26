@@ -48,6 +48,8 @@ Feature Store ← 드리프트/모니터링 ← TorchServe/Triton ← 모델 서
 | [13_CICD_for_ML.md](./13_CICD_for_ML.md) | ML을 위한 CI/CD | ⭐⭐⭐ | ML 파이프라인 CI/CD, 데이터/모델 검증 게이트, 배포 전략, 롤백 |
 | [14_DVC_Data_Version_Control.md](./14_DVC_Data_Version_Control.md) | DVC 데이터 버전 관리 | ⭐⭐⭐ | DVC 파이프라인, 실험 추적, CML, 원격 저장소 |
 | [15_LLMOps.md](./15_LLMOps.md) | LLMOps | ⭐⭐⭐⭐ | 프롬프트 버전 관리, RAG 운영, LLM 평가, 가드레일, 비용 관리 |
+| [16_Model_Testing_and_Validation.md](./16_Model_Testing_and_Validation.md) | 모델 테스트와 검증 | ⭐⭐⭐ | 데이터/모델/행동/인프라 테스트, 공정성, 섀도우 배포, CI/CD 자동화 |
+| [17_Cloud_MLOps_Platforms.md](./17_Cloud_MLOps_Platforms.md) | 클라우드 MLOps 플랫폼 | ⭐⭐⭐⭐ | SageMaker, Vertex AI, Azure ML, 플랫폼 비교, 비용 최적화 |
 
 ---
 

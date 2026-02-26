@@ -1693,4 +1693,4 @@ function baz():
 
 ---
 
-[Previous: 09_Intermediate_Representations.md](./09_Intermediate_Representations.md) | [Next: 11_Code_Generation.md](./11_Code_Generation.md) | [Overview](./00_Overview.md)
+[이전: 중간 표현](./09_Intermediate_Representations.md) | [다음: 코드 생성](./11_Code_Generation.md) | [개요](./00_Overview.md)

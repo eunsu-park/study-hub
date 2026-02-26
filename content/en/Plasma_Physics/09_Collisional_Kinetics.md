@@ -478,14 +478,22 @@ def slowing_down_frequency(v, n, T_e, ln_Lambda=15):
     T_J = T_e * e  # Convert to Joules
     v_th = np.sqrt(2 * T_J / m_e)
 
-    # Coulomb collision frequency
+    # Gamma encodes the fundamental Coulomb scattering cross-section:
+    # e^4 comes from two charges interacting, ln_Lambda sums contributions
+    # from all impact parameters between the 90° deflection radius and Debye length.
     Gamma = n * e**4 * ln_Lambda / (4 * np.pi * epsilon_0**2 * m_e**2)
 
-    # Slowing-down frequency (high-velocity limit)
+    # The 1/v^3 dependence is the hallmark of Coulomb drag: fast particles
+    # spend less time near each field particle, so the effective cross-section shrinks.
+    # The v > 3*v_th threshold identifies the regime where the background
+    # acts as a stationary scattering medium (test particle far outruns thermal particles).
     if v > 3 * v_th:
         nu_s = Gamma / v**3
     else:
-        # Include thermal correction (approximate)
+        # Chandrasekhar's phi function accounts for the fraction of background
+        # particles slower than the test particle — only those contribute drag
+        # in the same direction. This correction is essential near v ~ v_th where
+        # half the background moves faster and partly cancels the drag.
         x = v / v_th
         phi = (np.erf(x) - 2*x*np.exp(-x**2)/np.sqrt(np.pi)) / (2*x**2)
         nu_s = Gamma * phi / v**3
@@ -519,7 +527,9 @@ def dv_dt(v, t, n, T_e, E_field=0):
 
     nu_s = slowing_down_frequency(v, n, T_e)
 
-    # Slowing down plus electric field acceleration
+    # The competition between drag (-nu_s * v) and electric acceleration (eE/m_e)
+    # determines runaway: when E > E_Dreicer, friction can never balance the field
+    # for high-v particles because nu_s * v ∝ 1/v^2 → 0 as v → ∞.
     dvdt = -nu_s * v + e * E_field / m_e
 
     return dvdt
@@ -609,27 +619,35 @@ def braginskii_coefficients(n, T, B, Z=1, A=1, ln_Lambda=15):
     T_J = T * e
     m_i = A * 1.673e-27  # kg
 
-    # Collision time
+    # Braginskii showed tau ~ T^(3/2)/n from the Fokker-Planck collision operator;
+    # the T^(3/2) scaling reflects that faster particles have smaller Coulomb cross-sections.
     tau_e = 12 * np.pi**(3/2) * epsilon_0**2 * m_e**(1/2) * T_J**(3/2) / \
             (n * e**4 * ln_Lambda * np.sqrt(2))
+    # Ion collision time is longer by sqrt(m_i/m_e) because heavier ions move slower
+    # and interact less frequently for the same temperature.
     tau_i = np.sqrt(m_i / m_e) * tau_e
 
     # Cyclotron frequencies
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
-    # Parallel coefficients
+    # Parallel transport is set by random-walk mean-free-path: κ ~ n*T*τ/m ~ v_th^2/ν.
+    # The Braginskii numerical prefactors (3.16, 3.9) come from the full Fokker-Planck
+    # solution accounting for the non-Maxwellian correction to the distribution function.
     kappa_par_e = 3.16 * n * T_J * tau_e / m_e
     kappa_par_i = 3.9 * n * T_J * tau_i / m_i
     eta_par = 0.96 * n * T_J * tau_i
     sigma_par = 1.96 * n * e**2 * tau_e / m_e
 
-    # Perpendicular coefficients
+    # Perpendicular conductivity is suppressed by (ω_c τ)^2 because particles must
+    # scatter (break their cyclotron orbit) to step across field lines; each step is
+    # only one Larmor radius, giving κ_⊥ ~ nT / (m * ω_c^2 * τ).
     kappa_perp_e = 4.66 * n * T_J / (m_e * omega_ce**2 * tau_e)
     kappa_perp_i = 2.0 * n * T_J / (m_i * omega_ci**2 * tau_i)
     eta_perp_0 = 0.73 * n * T_J / (omega_ci**2 * tau_i)
 
-    # Anisotropy ratios
+    # The anisotropy ratio κ_∥/κ_⊥ ~ (ω_c τ)^2 quantifies how strongly
+    # the magnetic field suppresses cross-field heat flow.
     chi_e = kappa_par_e / kappa_perp_e
     chi_i = kappa_par_i / kappa_perp_i
 
@@ -753,23 +771,34 @@ def neoclassical_diffusion(r, R, B_0, n, T, Z=1, A=1):
             (n * Z**4 * e**4 * ln_Lambda * np.sqrt(2))
     nu_ii = 1 / tau_i
 
-    # Bounce frequency
+    # Bounce frequency is the rate at which a trapped particle traverses its banana orbit;
+    # v_th / (π R √ε) arises because the trapped particle covers a poloidal arc ~π R
+    # at its parallel velocity v_th * √ε (only the small parallel component survives).
     omega_b = v_th / (np.pi * R * np.sqrt(epsilon))
 
-    # Collisionality
+    # ν* < 1 means particles complete many bounces before scattering — the banana regime.
+    # ν* quantifies whether geometry (bouncing) or collisions dominate particle dynamics.
     nu_star = nu_ii / omega_b
 
-    # Classical diffusion
+    # Classical diffusion is a random walk with step size ρ_L and step rate ν_ii;
+    # this is the Bohm-free-path estimate before any toroidal geometry corrections.
     D_classical = rho_L**2 * nu_ii
 
-    # Neoclassical regimes
+    # In the banana regime, the effective step size is the banana width ~ ρ_L / √ε,
+    # much larger than the Larmor radius, giving D_nc ~ D_classical / ε^(3/2).
     if nu_star < 0.1:  # Banana regime
         D_nc = D_classical / epsilon**(3/2)
         regime = "Banana"
     elif nu_star < 10:  # Plateau regime
+        # In the plateau regime the orbit-averaging partially recovers classical scaling;
+        # the ε^(-1) enhancement comes from the fraction of trapped particles ~ √ε
+        # combined with their widened step size.
         D_nc = D_classical / epsilon
         regime = "Plateau"
     else:  # Pfirsch-Schlüter
+        # In the high-collisionality PS regime, the q^2 factor arises because the
+        # poloidal circulation of particles generates a return current that enhances
+        # the effective cross-field step by the safety factor q.
         q = r * B_0 / (R * (B_0 * r / R))  # Approximate safety factor
         D_nc = D_classical * q**2
         regime = "Pfirsch-Schlüter"
@@ -844,6 +873,10 @@ epsilon_array = r_array / R
 L_p = 1.0  # Pressure scale length (m)
 beta_p = 0.5  # Poloidal beta
 
+# Bootstrap current arises because the banana-orbit drift is asymmetric: on the
+# outer leg, trapped particles carry a net counter-current that the passing particles
+# must compensate, producing a self-driven current proportional to √ε (trapped fraction).
+# The (1 + ε^2) denominator regularises the formula at large ε where geometry saturates.
 j_bs_coeff = epsilon_array**(1/2) / (1 + epsilon_array**2)
 
 ax4.plot(r_array, j_bs_coeff, 'b-', linewidth=2)

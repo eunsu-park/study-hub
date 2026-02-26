@@ -2,9 +2,25 @@
 
 **난이도**: ⭐⭐⭐⭐
 
-**이전**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md) | **다음**: [16_Project_Monitor.md](./16_Project_Monitor.md)
+**이전**: [작업 실행기](./14_Project_Task_Runner.md) | **다음**: [시스템 모니터링 도구](./16_Project_Monitor.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. rsync를 이용한 파일 동기화와 원격 명령 실행을 수행하는 SSH 기반 배포 스크립트를 구축할 수 있습니다.
+2. 이전 버전으로 즉각적인 롤백(rollback)이 가능한 심볼릭 링크(symlink) 기반 릴리스 디렉토리 구조를 구현할 수 있습니다.
+3. 각 호스트 사이에 헬스 체크(health check)를 수행하며 서버에 순차적으로 배포하는 롤링 배포(rolling deployment) 전략을 작성할 수 있습니다.
+4. 각 배포 단계 후 애플리케이션 응답성을 확인하는 헬스 체크 프로브(health check probe)를 설정할 수 있습니다.
+5. 헬스 체크 실패 시 이전 릴리스로 되돌리는 자동 롤백(automatic rollback) 로직을 구현할 수 있습니다.
+6. 적절한 시그널 전달(signal forwarding), 설정 템플릿(configuration templating), 그레이스풀 셧다운(graceful shutdown)을 갖춘 Docker 엔트리포인트(entrypoint) 스크립트를 작성할 수 있습니다.
+7. `.env` 파일, 호스트 인벤토리(host inventory), 배포 전략을 사용하여 환경별 설정을 관리할 수 있습니다.
+
+---
+
+코드를 프로덕션에 배포하는 것은 셸 스크립팅 기술이 가장 높은 레버리지와 가장 높은 위험을 가지는 영역입니다. 잘 작성된 배포 스크립트는 실패 시 자동 롤백과 함께 수 분 내에 서버 플릿에 변경 사항을 푸시할 수 있지만, 잘못 작성된 스크립트는 전체 서비스를 다운시킬 수 있습니다. 이 프로젝트는 SSH, rsync, 시그널 처리(signal handling), 에러 관리를 통합하여 단일 VPS부터 다중 서버 프로덕션 환경까지 실제 인프라에 적용할 수 있는 배포 자동화를 구축합니다.
 
 ## 1. 개요
 
@@ -1229,6 +1245,70 @@ acquire_lock() {
 acquire_lock || exit 1
 rolling_deploy
 ```
+
+## 연습 문제
+
+### 연습 1: 헬스 체크(Health Check) 함수 구현하기
+
+견고한 헬스 체크 함수를 구현하는 `health_check.sh` 스크립트를 작성하세요:
+
+```bash
+health_check() {
+    local url="$1"
+    local max_attempts="${2:-5}"
+    local interval="${3:-3}"
+    # Your implementation here
+}
+```
+
+함수는 다음을 수행해야 합니다:
+- `curl -sf`를 사용하여 URL 확인 (무음 모드, HTTP 오류 시 실패)
+- `interval`초 간격으로 최대 `max_attempts`회 재시도
+- 각 재시도 시 진행 상황 출력: `"Attempt 1/5: checking http://..."`
+- 성공 시 0, 모든 시도 실패 시 1 반환
+- 시도당 5초 타임아웃을 위해 `curl --max-time 5` 사용
+
+`http://httpbin.org/status/200`(통과해야 함)과 `http://httpbin.org/status/503`(재시도 후 실패해야 함)을 사용하여 테스트하세요.
+
+### 연습 2: 심볼릭 링크(Symlink) 기반 릴리즈 관리자 구축하기
+
+Capistrano 스타일의 디렉토리 구조를 모방하는 로컬 릴리즈 관리 시스템을 구현하세요:
+
+```
+releases/
+    20240115_143022/   ← old release
+    20240116_091500/   ← current release (symlinked)
+current -> releases/20240116_091500
+```
+
+세 가지 서브커맨드(subcommand)를 가진 `release.sh` 스크립트를 작성하세요:
+- `release.sh deploy <source_dir>` — `source_dir`을 `releases/$(date +%Y%m%d_%H%M%S)/`에 복사한 다음 `ln -sfn`을 사용하여 원자적으로 `current` 심볼릭 링크 업데이트
+- `release.sh rollback` — 가장 최근 릴리즈 두 개를 읽어 `current`가 두 번째로 최신 릴리즈를 가리키도록 업데이트하고 어떤 버전이 복원되었는지 출력
+- `release.sh list` — 타임스탬프와 함께 모든 릴리즈를 나열하고 현재 릴리즈를 `*`로 표시
+
+### 연습 3: 환경별(Environment-Specific) 설정 추가하기
+
+여러 환경을 지원하도록 배포 스크립트 개념을 확장하세요. 다음을 생성하세요:
+- `APP_PORT`, `DB_HOST`, `LOG_LEVEL`, `HEALTH_URL`을 설정하는 `staging.env`와 `production.env` 파일을 가진 `configs/` 디렉토리
+- 적절한 `.env` 파일을 소스(source)하고 모든 필수 변수가 설정되었는지 검증하는 `load_config <environment>` 함수
+- `-e staging` 또는 `-e production`을 받아 진행 전에 `load_config`를 호출하는 deploy 명령어
+- `DEPLOY_CONFIRMED=yes` 환경 변수가 설정되어 있거나 사용자가 대화형 확인 프롬프트에서 `yes`를 입력하지 않는 한 프로덕션 배포 방지
+
+### 연습 4: 롤링 배포(Rolling Deployment) 시뮬레이션
+
+실제 SSH 없이 로컬 디렉토리를 "호스트"로 사용하는 롤링 배포 시뮬레이션을 구현하세요:
+- 세 개의 서버를 시뮬레이션하기 위해 세 개의 디렉토리 `/tmp/server_{1,2,3}/app/` 생성
+- 세 개의 "서버"를 순회하며 각 서버에 대해: 버전 문자열을 가진 `version.txt` 파일 생성, 1초 대기, 가짜 헬스 체크 실행을 수행하는 `rolling_deploy <version>` 함수 작성
+- 가짜 헬스 체크가 실패를 반환하면 (server_2가 실패하도록 시뮬레이션), 배포를 중단하고 이미 배포된 서버를 `version.txt` 삭제로 롤백
+- 마지막에 요약 출력: 성공한 서버, 실패한 서버, 롤백 발생 여부
+
+### 연습 5: Docker 엔트리포인트(Entrypoint) 스크립트 작성하기
+
+웹 애플리케이션 컨테이너를 위한 프로덕션 품질의 `entrypoint.sh`를 만드세요:
+- 신호(signal) 올바르게 전달: 애플리케이션 프로세스를 우아하게 종료하기 위해 `SIGTERM`과 `SIGINT` 트랩
+- `SERVER_NAME`, `APP_PORT`, `WORKER_PROCESSES` 환경 변수로부터 `sed` 또는 `envsubst`를 사용하여 `nginx.conf` 템플릿 생성
+- 시작 시 필수 환경 변수(`DATABASE_URL`, `SECRET_KEY`) 검증하고 누락된 경우 코드 78(설정 오류)로 종료
+- 설정 검증 후, 메인 프로세스(`"$@"`로 전달된 `CMD` 인수)를 `exec`하여 PID 1이 되고 신호를 직접 수신하도록 함
 
 ---
 

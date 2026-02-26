@@ -1,5 +1,25 @@
 # Virtual Machines (EC2 / Compute Engine)
 
+**Previous**: [Regions and Availability Zones](./03_Regions_Availability_Zones.md) | **Next**: [Serverless Functions](./05_Serverless_Functions.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare AWS EC2 and GCP Compute Engine service features and terminology
+2. Select appropriate instance types based on workload requirements (compute, memory, GPU)
+3. Configure and launch a virtual machine using the console and CLI
+4. Explain pricing models (on-demand, reserved, spot/preemptible) and choose cost-effective options
+5. Implement auto-scaling groups to handle variable traffic loads
+6. Attach storage volumes and configure networking for VM instances
+7. Apply SSH key pairs and security groups to control VM access
+
+---
+
+Virtual machines are the most fundamental building block of cloud computing. Whether you are hosting a web application, running a batch job, or training a machine learning model, you will almost certainly use VMs at some point. Mastering VM provisioning, sizing, and pricing is the first step toward building cost-effective, scalable cloud architectures.
+
 ## 1. Virtual Machine Overview
 
 Virtual machines (VMs) are the most fundamental computing resources in the cloud.
@@ -547,6 +567,177 @@ gcloud compute instances describe web-server \
 
 - [05_Serverless_Functions.md](./05_Serverless_Functions.md) - Serverless functions
 - [08_Block_and_File_Storage.md](./08_Block_and_File_Storage.md) - Block storage (EBS/PD)
+
+---
+
+## Exercises
+
+### Exercise 1: Instance Type Selection
+
+Match each workload with the most appropriate EC2 instance family and explain your reasoning:
+
+1. A web application with highly variable traffic that can spike 10x during promotions but is quiet overnight.
+2. An in-memory analytics engine that loads a 200 GB dataset entirely into RAM for fast queries.
+3. A batch job that performs intensive mathematical simulations (pure CPU, no GPU) for several hours.
+4. A deep learning model training job that requires GPU acceleration.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **t family (e.g., t3.medium or t3.large)** — Burstable instances accumulate CPU credits during quiet periods and spend them during spikes. They are cost-effective for variable workloads that don't need sustained high-CPU all the time. For very large sustained spikes, an Auto Scaling Group with on-demand m-family would be better.
+
+2. **r family (e.g., r5.2xlarge or r6i.2xlarge)** — Memory-optimized instances provide high RAM-to-vCPU ratios. An r5.2xlarge has 64 GB RAM, and an r5.4xlarge provides 128 GB. For a 200 GB dataset, you'd need r5.8xlarge (256 GB) or similar.
+
+3. **c family (e.g., c5.2xlarge or c6i.4xlarge)** — Compute-optimized instances offer the highest vCPU count and performance per dollar for CPU-bound workloads. The c5/c6i family is specifically tuned for compute-intensive applications like scientific modeling, HPC, and video encoding.
+
+4. **p or g family (e.g., p3.2xlarge with V100 GPU, or g4dn.xlarge with T4 GPU)** — GPU instances. `p` instances (p3/p4) use high-end NVIDIA GPUs designed for deep learning training. `g` instances (g4dn/g5) are more cost-effective for both training smaller models and inference.
+
+</details>
+
+### Exercise 2: SSH Key Pair Creation and Instance Connection
+
+Describe the complete sequence of steps (CLI commands) to:
+1. Create a new EC2 key pair named `my-web-key` and save the private key file.
+2. Launch a t3.micro Amazon Linux 2023 instance with that key pair (use `ami-0c55b159cbfafe1f0` as a placeholder AMI ID).
+3. SSH into the instance using the key file.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Step 1: Create key pair and save private key
+aws ec2 create-key-pair \
+    --key-name my-web-key \
+    --query 'KeyMaterial' \
+    --output text > my-web-key.pem
+
+# Set correct permissions (required for SSH)
+chmod 400 my-web-key.pem
+
+# Step 2: Launch instance with key pair
+aws ec2 run-instances \
+    --image-id ami-0c55b159cbfafe1f0 \
+    --instance-type t3.micro \
+    --key-name my-web-key \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=WebServer}]'
+
+# Get the public IP address of the new instance
+aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=WebServer" \
+    --query 'Reservations[0].Instances[0].PublicIpAddress' \
+    --output text
+
+# Step 3: SSH into the instance
+# Replace <PUBLIC_IP> with the actual public IP from the previous command
+ssh -i my-web-key.pem ec2-user@<PUBLIC_IP>
+```
+
+**Notes**:
+- `chmod 400` is mandatory; SSH will refuse to use a key file that is world-readable.
+- For Amazon Linux 2023, the default user is `ec2-user`. For Ubuntu, it is `ubuntu`.
+- The security group must allow inbound TCP port 22 from your IP for SSH to work.
+
+</details>
+
+### Exercise 3: Auto Scaling Group Scenario
+
+Your web application currently runs on a single EC2 `m5.large` instance. Traffic analysis shows that on weekdays between 9 AM–6 PM you need 4 instances, and overnight/weekends you only need 1. Design an Auto Scaling configuration to handle this automatically.
+
+Describe: the desired/min/max capacity settings, and the type of scaling policy you would use.
+
+<details>
+<summary>Show Answer</summary>
+
+**Auto Scaling Group Configuration**:
+- **Minimum capacity**: 1 — Always have at least one instance to serve requests at off-peak times.
+- **Maximum capacity**: 5 — Upper bound to prevent runaway cost from accidental scaling loops.
+- **Desired capacity**: 1 (initial) — Start at minimum; scaling policies will adjust it.
+
+**Scaling Policy**: **Scheduled Scaling** is ideal here because the traffic pattern is predictable and time-based:
+
+```bash
+# Scale up to 4 instances at 9 AM on weekdays
+aws autoscaling put-scheduled-update-group-action \
+    --auto-scaling-group-name my-asg \
+    --scheduled-action-name scale-up-weekday \
+    --recurrence "0 9 * * 1-5" \
+    --desired-capacity 4
+
+# Scale back to 1 instance at 6 PM on weekdays
+aws autoscaling put-scheduled-update-group-action \
+    --auto-scaling-group-name my-asg \
+    --scheduled-action-name scale-down-weekday \
+    --recurrence "0 18 * * 1-5" \
+    --desired-capacity 1
+```
+
+**Recommended addition**: Add a **Target Tracking** policy on CPU utilization (e.g., maintain 60% average CPU) as a safety net for unexpected traffic spikes outside scheduled hours.
+
+</details>
+
+### Exercise 4: Pricing Model Decision
+
+A data analytics team is planning to run a nightly batch processing cluster that:
+- Runs every night from 11 PM to 5 AM (6 hours)
+- Requires 20 `c5.2xlarge` instances during the run
+- Can tolerate a run being interrupted and restarted (the job is checkpointed)
+- Has been running consistently for 18 months
+
+Which pricing model should they use for these instances, and approximately how much cost savings could they achieve compared to On-Demand? Explain your reasoning.
+
+<details>
+<summary>Show Answer</summary>
+
+**Recommended pricing model**: **Spot Instances**
+
+**Reasoning**:
+- The job is checkpointed, so interruptions can be tolerated — this is the key prerequisite for Spot.
+- Spot instances offer up to **90% discount** compared to On-Demand.
+- For `c5.2xlarge` in `us-east-1`, On-Demand is approximately $0.34/hour. At 90% discount, Spot would be approximately $0.034/hour.
+
+**Cost comparison** (approximate, prices vary):
+- On-Demand: 20 instances × $0.34/hr × 6 hrs × 30 nights = **$1,224/month**
+- Spot (90% off): 20 instances × $0.034/hr × 6 hrs × 30 nights = **$122/month**
+- **Savings: ~$1,100/month (~$13,200/year)**
+
+**Why not Reserved Instances?** Reserved Instances require 1–3 year commitment and are priced for continuous usage. These instances only run 6 hours/day. A Reserved Instance for a VM that runs 6/24 hours (25% utilization) would not be cost-effective compared to Spot.
+
+**Best practice**: Use a Spot Fleet with multiple instance types and AZs to minimize interruption probability.
+
+</details>
+
+### Exercise 5: GCP Custom Machine Type vs AWS Equivalents
+
+A GCP workload requires exactly 6 vCPUs and 20 GB of RAM. No standard GCP machine type has this exact configuration.
+
+1. Write the `gcloud` command to create a custom machine type instance with these specifications in zone `asia-northeast3-a`.
+2. What is the equivalent approach in AWS EC2, and why does AWS not offer custom instance types?
+
+<details>
+<summary>Show Answer</summary>
+
+1. **GCP custom machine type**:
+```bash
+gcloud compute instances create custom-instance \
+    --zone=asia-northeast3-a \
+    --custom-cpu=6 \
+    --custom-memory=20GB \
+    --image-family=ubuntu-2204-lts \
+    --image-project=ubuntu-os-cloud
+```
+
+GCP requires custom memory to be a multiple of 256 MB. 20 GB (20480 MB) is a valid multiple.
+
+2. **AWS equivalent approach**: AWS does not offer custom instance types. In AWS, you choose from a catalog of predefined types. For 6 vCPU / 20 GB RAM, you would look for the closest match:
+   - `c5.xlarge` = 4 vCPU, 8 GB (too small)
+   - `m5.2xlarge` = 8 vCPU, 32 GB (over-provisioned but closest balanced option)
+   - `c5.2xlarge` = 8 vCPU, 16 GB (compute-focused, slightly over on CPU)
+
+   **Why no custom types in AWS?** AWS optimizes its physical hardware and hypervisor configurations around specific instance families, enabling predictable performance guarantees and economies of scale. GCP uses a more flexible allocation model that allows arbitrary combinations within per-zone resource limits.
+
+   **Practical impact**: GCP's custom machine types let you right-size precisely and avoid paying for unused vCPUs or RAM. In AWS, you typically over-provision to the nearest available size.
+
+</details>
 
 ---
 

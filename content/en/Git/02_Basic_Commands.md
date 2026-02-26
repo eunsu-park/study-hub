@@ -1,5 +1,24 @@
 # Git Basic Commands
 
+**Previous**: [Git Basics](./01_Git_Basics.md) | **Next**: [Branches](./03_Branches.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify the four states of a tracked file (untracked, modified, staged, committed)
+2. Use `git status` to inspect the current state of the working directory
+3. Stage changes selectively with `git add` and unstage them when needed
+4. Write meaningful commit messages following best practices
+5. Trace project history using `git log` and its formatting options
+6. Compare file versions with `git diff` (working directory vs. staging vs. repository)
+
+---
+
+The handful of commands covered in this lesson -- `status`, `add`, `commit`, `log`, and `diff` -- form the daily rhythm of every Git user. Mastering them turns version control from an afterthought into a natural part of your coding workflow, giving you confidence to experiment freely because every change is recorded and reversible.
+
 ## 1. Check File Status - git status
 
 Check the current state of the repository.

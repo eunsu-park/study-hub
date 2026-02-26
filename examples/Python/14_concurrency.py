@@ -102,11 +102,13 @@ counter = 0
 counter_lock = threading.Lock()
 
 
+# Why: Without the lock, += is not atomic (it's read-modify-write under the hood),
+# so concurrent threads can interleave and lose increments (a classic race condition)
 def increment_with_lock(name: str, iterations: int):
     """Increment counter with lock."""
     global counter
     for _ in range(iterations):
-        with counter_lock:  # Acquire lock
+        with counter_lock:
             counter += 1
 
 
@@ -140,11 +142,11 @@ def download_file(file_id: int) -> dict:
 # Using ThreadPoolExecutor
 start = time.perf_counter()
 
+# Why: ThreadPoolExecutor manages a fixed thread pool, avoiding the overhead of creating
+# and destroying threads per task — the 'with' block ensures clean shutdown and join
 with ThreadPoolExecutor(max_workers=4) as executor:
-    # Submit tasks
     futures = [executor.submit(download_file, i) for i in range(10)]
 
-    # Collect results
     results = [future.result() for future in futures]
 
 elapsed = time.perf_counter() - start
@@ -185,6 +187,8 @@ def producer(num_items: int):
 def consumer(worker_id: int):
     """Consume items."""
     while True:
+        # Why: Using timeout instead of blocking forever allows consumers to detect when
+        # production is done and exit gracefully, preventing deadlocks on empty queues
         try:
             item = task_queue.get(timeout=0.5)
             print(f"  Consumer-{worker_id}: Processing {item}")
@@ -345,6 +349,8 @@ def daemon_worker():
     print("  Daemon: Finished")  # Won't print if main exits
 
 
+# Why: Daemon threads are killed when the main thread exits, making them suitable for
+# background tasks (heartbeats, monitors) that should not prevent program termination
 daemon = threading.Thread(target=daemon_worker, daemon=True)
 daemon.start()
 

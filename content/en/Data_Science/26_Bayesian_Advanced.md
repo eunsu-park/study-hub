@@ -2,9 +2,22 @@
 
 [Previous: Practical Projects](./25_Practical_Projects.md) | [Next: Causal Inference](./27_Causal_Inference.md)
 
-## Overview
+---
 
-This lesson extends the Bayesian foundations from L15-L16 into advanced computational methods. We cover Hamiltonian Monte Carlo (HMC) and its NUTS variant, Variational Inference (VI) as a scalable alternative to MCMC, hierarchical models for grouped data, and model comparison with WAIC and LOO-CV. All examples use PyMC.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how Hamiltonian Monte Carlo (HMC) uses gradient information to sample more efficiently than Metropolis-Hastings
+2. Describe how the NUTS sampler automatically tunes the trajectory length and why it is the default in modern probabilistic programming frameworks
+3. Compare MCMC and Variational Inference (ADVI) in terms of accuracy, speed, and appropriate use cases
+4. Implement a hierarchical (multilevel) model in PyMC and explain the concept of partial pooling and shrinkage
+5. Apply Bayesian model comparison using LOO-CV and WAIC, and interpret Pareto k diagnostics
+6. Evaluate MCMC convergence using R-hat, effective sample size (ESS), divergence checks, and posterior predictive checks
+
+---
+
+Basic MCMC methods like Metropolis-Hastings get the job done for simple models, but they struggle with high-dimensional parameter spaces and scale poorly to large datasets. Advanced computational Bayesian methods -- HMC/NUTS for efficient sampling, Variational Inference for speed, and hierarchical models for grouped data -- unlock the full power of the Bayesian framework, letting you build richer models and draw reliable conclusions even when the problem is complex.
 
 ---
 

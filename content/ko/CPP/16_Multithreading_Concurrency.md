@@ -1,8 +1,24 @@
 # 멀티스레딩과 동시성
 
-## 개요
+**이전**: [모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md) | **다음**: [C++20 심화](./17_CPP20_Advanced.md)
 
-현대 프로세서의 멀티코어 성능을 활용하려면 멀티스레딩 프로그래밍이 필수입니다. C++11부터 표준 라이브러리에 스레딩 지원이 추가되었으며, 이 장에서는 std::thread, 동기화 기법, 그리고 비동기 프로그래밍을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `std::thread`, `join()`, `detach()`를 사용하여 스레드를 생성하고 관리할 수 있습니다
+2. 데이터 경쟁(Data Race)을 식별하고 `std::mutex`와 락 가드(Lock Guard)로 공유 상태를 보호할 수 있습니다
+3. 생산자-소비자(Producer-Consumer) 패턴에서 `std::condition_variable`을 사용하여 스레드 실행을 조율할 수 있습니다
+4. `std::atomic` 연산을 사용하여 공유 변수에 대한 락-프리(Lock-Free) 업데이트를 수행할 수 있습니다
+5. `std::async`, `std::future`, `std::promise`로 비동기 코드를 작성할 수 있습니다
+6. 워커 스레드들에 태스크를 분배하는 기본 스레드 풀(Thread Pool)을 구현할 수 있습니다
+7. 흔한 동시성 버그인 데드락(Deadlock), 라이브락(Livelock), 기아 상태(Starvation)를 진단하고 예방할 수 있습니다
+
+---
+
+현대 프로세서는 빠른 클럭 속도가 아닌 병렬성을 통해 성능을 제공합니다. 싱글 스레드 프로그램은 이러한 하드웨어의 대부분을 유휴 상태로 방치합니다. 멀티스레딩을 사용하면 모든 코어를 활용할 수 있지만, 데이터 경쟁(Data Race), 데드락(Deadlock), 순서 문제 같이 코드를 순차적으로 읽는 것만으로는 발견할 수 없는 전혀 새로운 종류의 버그가 생겨납니다. C++ 스레딩 기본 요소와 올바른 사용 패턴을 익히는 것은 오늘날의 멀티코어 머신에서 빠르고 정확한 소프트웨어를 작성하기 위해 필수적입니다.
 
 **난이도**: ⭐⭐⭐⭐
 
@@ -939,7 +955,7 @@ public:
 
 ## 다음 단계
 
-- [17_C++20_심화.md](./17_C++20_심화.md) - Concepts, Ranges, Coroutines
+- [C++20 심화](./17_CPP20_Advanced.md) - Concepts, Ranges, Coroutines
 
 ---
 
@@ -948,3 +964,7 @@ public:
 - [C++ Concurrency in Action (책)](https://www.manning.com/books/c-plus-plus-concurrency-in-action-second-edition)
 - [cppreference - Thread support](https://en.cppreference.com/w/cpp/thread)
 - [C++17 parallel algorithms](https://en.cppreference.com/w/cpp/algorithm#Execution_policies)
+
+---
+
+**이전**: [모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md) | **다음**: [C++20 심화](./17_CPP20_Advanced.md)

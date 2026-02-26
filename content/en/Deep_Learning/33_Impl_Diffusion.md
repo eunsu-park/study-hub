@@ -4,6 +4,19 @@
 
 # 33. Diffusion Models (DDPM)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the forward diffusion process — the Markov chain that gradually adds Gaussian noise — and derive the closed-form expression q(x_t | x_0) using the cumulative noise schedule.
+2. Formulate the reverse process and explain how a neural network is trained to predict and remove noise at each timestep.
+3. Derive the simplified DDPM training objective (noise prediction loss) from the ELBO and explain why this parameterization works in practice.
+4. Implement the DDPM training loop and inference (reverse diffusion sampling) from scratch in PyTorch using a U-Net noise predictor.
+5. Implement and compare noise schedules (linear and cosine) and explain how the choice of schedule affects generation quality.
+6. Compare DDPM with GAN and VAE in terms of sample quality, training stability, inference speed, and likelihood estimation.
+
+---
+
 ## Overview
 
 Denoising Diffusion Probabilistic Models (DDPM) are powerful generative models that learn to generate data by reversing a gradual noising process. "Denoising Diffusion Probabilistic Models" (Ho et al., 2020)

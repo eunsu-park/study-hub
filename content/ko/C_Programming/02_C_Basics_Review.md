@@ -1,5 +1,26 @@
 # C 언어 기초 빠른 복습
 
+**이전**: [C 언어 환경 설정](./01_Environment_Setup.md) | **다음**: [프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. C의 정적 타입(static typing), 수동 메모리 관리(manual memory management), 컴파일 실행(compiled execution)을 Python 또는 JavaScript의 동등 개념과 구별하기
+2. 최소한의 C 프로그램에서 `#include`, `main`, 세미콜론, 중괄호의 역할 설명하기
+3. `printf`와 `scanf` 사용 시 각 기본 자료형에 맞는 올바른 형식 지정자(format specifier) 식별하기
+4. 포인터 선언(pointer declaration), 주소 연산자(`&`), 역참조 연산자(`*`)를 구현하여 값을 참조로 전달하기
+5. 고정 크기 배열(fixed-size array)을 만들고 순회하며, `arr[i]`와 `*(arr + i)`의 동등성 설명하기
+6. C에서 안전한 문자열 조작을 위해 `strlen`, `strcpy`, `strcat`, `strcmp` 적용하기
+7. `typedef`를 사용하여 구조체(struct)를 설계하고, 점(`.`) 연산자와 화살표(`->`) 연산자 모두를 통해 멤버에 접근하며, 포인터로 구조체를 함수에 전달하기
+8. `malloc`, `free`, NULL 검사 패턴을 적용하여 메모리 누수(memory leak) 없이 힙(heap) 메모리를 할당하고 해제하기
+
+---
+
+Python, JavaScript, 또는 다른 고급 언어를 이미 알고 있다면, 변수, 반복문, 함수, 자료구조 등 대부분의 프로그래밍 개념은 이미 익숙할 것입니다. C가 특별한 이유는 하드웨어와 얼마나 가까이 있는가에 있습니다: 모든 정수의 정확한 크기를 직접 선택하고, 모든 메모리 바이트를 직접 관리하며, 운영체제와 직접 소통합니다. 이 레슨에서는 C의 핵심 문법을 빠르게 훑어봄으로써, 다음 레슨에서 바로 실제 프로젝트를 시작할 수 있도록 합니다.
+
 > 다른 프로그래밍 언어 경험이 있는 분을 위한 C 핵심 문법 정리
 
 ## 1. C 언어의 특징
@@ -9,15 +30,15 @@
 | 특징 | Python/JS | C |
 |------|-----------|---|
 | **메모리 관리** | 자동 (GC) | 수동 (malloc/free) |
-| **타입 시스템** | 동적 타입 | 정적 타입 |
-| **실행 방식** | 인터프리터 | 컴파일 |
+| **타입 시스템** | 동적 타입(dynamic typing) | 정적 타입(static typing) |
+| **실행 방식** | 인터프리터(interpreter) | 컴파일(compiled) |
 | **추상화 수준** | 높음 | 낮음 (하드웨어 가까움) |
 
 ### C 언어를 배워야 하는 이유
 
-- 시스템 프로그래밍 (OS, 드라이버)
-- 임베디드 시스템
-- 성능이 중요한 애플리케이션
+- 시스템 프로그래밍(systems programming) (OS, 드라이버)
+- 임베디드 시스템(embedded systems)
+- 성능이 중요한 애플리케이션(performance-critical applications)
 - 다른 언어의 기반 이해 (Python, Ruby는 C로 작성)
 
 ---
@@ -90,7 +111,7 @@ int main(void) {
 }
 ```
 
-### 형식 지정자 (printf)
+### 형식 지정자(Format Specifier) (printf)
 
 | 지정자 | 타입 | 예시 |
 |--------|------|------|
@@ -113,11 +134,11 @@ printf("포인터 크기: %zu 바이트\n", sizeof(int*));
 
 ---
 
-## 4. 포인터 (C의 핵심!)
+## 4. 포인터(Pointer) (C의 핵심!)
 
 ### 포인터란?
 
-**메모리 주소를 저장하는 변수**입니다.
+**메모리 주소(memory address)를 저장하는 변수**입니다.
 
 ```
 메모리:
@@ -152,8 +173,8 @@ int main(void) {
 
 | 연산자 | 의미 | 예시 |
 |--------|------|------|
-| `&` | 주소 연산자 | `&x` → x의 주소 |
-| `*` | 역참조 연산자 | `*p` → p가 가리키는 값 |
+| `&` | 주소 연산자(address operator) | `&x` → x의 주소 |
+| `*` | 역참조 연산자(dereference operator) | `*p` → p가 가리키는 값 |
 
 ### 왜 포인터가 필요한가?
 
@@ -324,7 +345,7 @@ int main(void) {
 
 ---
 
-## 7. 구조체
+## 7. 구조체(Struct)
 
 ### 기본 구조체
 
@@ -341,7 +362,7 @@ struct Person {
 
 int main(void) {
     // 구조체 변수 선언 및 초기화
-    struct Person p1 = {"홍길동", 25, 175.5};
+    struct Person p1 = {"John Doe", 25, 175.5};
 
     // 멤버 접근 (. 연산자)
     printf("이름: %s\n", p1.name);
@@ -349,7 +370,7 @@ int main(void) {
 
     // 멤버 수정
     p1.age = 26;
-    strcpy(p1.name, "김철수");
+    strcpy(p1.name, "Jane Smith");
 
     return 0;
 }
@@ -364,7 +385,7 @@ typedef struct {
 } Person;  // 이제 'struct' 키워드 없이 사용
 
 int main(void) {
-    Person p1 = {"홍길동", 25};
+    Person p1 = {"John Doe", 25};
     printf("%s\n", p1.name);
     return 0;
 }
@@ -384,7 +405,7 @@ void birthday(Person *p) {
 }
 
 int main(void) {
-    Person p1 = {"홍길동", 25};
+    Person p1 = {"John Doe", 25};
 
     birthday(&p1);
     printf("나이: %d\n", p1.age);  // 26
@@ -399,7 +420,7 @@ int main(void) {
 
 ---
 
-## 8. 동적 메모리 할당
+## 8. 동적 메모리 할당(Dynamic Memory Allocation)
 
 ### malloc / free
 
@@ -440,7 +461,7 @@ int main(void) {
 }
 ```
 
-### 메모리 누수 주의
+### 메모리 누수(Memory Leak) 주의
 
 ```c
 // 나쁜 예: 메모리 누수
@@ -457,13 +478,13 @@ void good(void) {
     *p = 42;
     // 사용 후...
     free(p);
-    p = NULL;  // dangling pointer 방지
+    p = NULL;  // 댕글링 포인터(dangling pointer) 방지
 }
 ```
 
 ---
 
-## 9. 헤더 파일
+## 9. 헤더 파일(Header File)
 
 ### 헤더 파일 구조
 
@@ -533,8 +554,57 @@ gcc main.c utils.c -o program
 
 ---
 
+## 연습 문제
+
+### 연습 1: 자료형 크기와 형식 지정자(Format Specifier)
+
+3절에서 다룬 모든 자료형(`char`, `short`, `int`, `long`, `long long`, `unsigned int`, `float`, `double`)의 크기(바이트 단위)와 샘플 값을 출력하는 프로그램을 작성하세요. 각 타입에 맞는 올바른 형식 지정자를 사용하세요. 그런 다음 다음에 답하세요:
+
+1. `sizeof` 출력에 `%d` 대신 `%zu`를 사용하는 이유는 무엇인가요?
+2. 64비트 시스템에서 `long long` 값을 출력할 때 `%d`를 사용하면 어떤 일이 발생하나요?
+
+### 연습 2: 포인터 swap 해부
+
+4절의 `wrong_swap` / `swap` 예제를 복사하여 다음과 같이 확장하세요:
+
+1. `wrong_swap` 내부에 `%p`를 사용하여 `a`와 `b`의 *주소(address)*를 출력하는 `printf` 문을 추가하세요. `swap` 내부의 포인터 매개변수에도 동일하게 하세요.
+2. `main`에서 두 함수를 호출하고, 각 호출 전에 `x`와 `y`의 주소를 출력하세요.
+3. 다음을 서면으로 확인하세요: `wrong_swap` 내부에서 출력된 주소가 `x`와 `y`의 주소와 다른 이유는 무엇이고, `swap` 내부의 주소는 왜 동일한가요?
+
+### 연습 3: 배열과 포인터 산술(Pointer Arithmetic)
+
+`int arr[] = {10, 20, 30, 40, 50}`을 선언하는 프로그램을 작성하고:
+
+1. 인덱스(`arr[i]`)를 사용하여 배열을 순회하며 각 요소를 출력하세요.
+2. 포인터(`int *p = arr; ... *(p + i)`)를 사용하여 다시 순회하며 각 요소를 출력하세요.
+3. 인덱스 없이 포인터 자체를 증가시켜(`p++`) 세 번째로 순회하세요.
+4. `sizeof`를 사용하여 요소 개수를 계산하고, 세 가지 루프가 동일한 출력을 생성하는지 확인하세요.
+
+### 연습 4: 동적 문자열 빌더(Dynamic String Builder)
+
+다음 기능을 하는 `char *build_greeting(const char *name)` 함수를 구현하세요:
+
+1. `"Hello, <name>!"` 문자열을 저장하기에 정확히 적당한 메모리를 동적으로 할당하세요(`strlen`과 `malloc` 사용).
+2. `strcpy`와 `strcat`을 사용하여 문자열을 구성하세요.
+3. 호출자에게 포인터를 반환하며, 호출자가 `free`를 호출할 책임을 집니다.
+
+`build_greeting`을 호출하고, 결과를 출력하고, 메모리를 해제하는 `main`을 작성하세요. Valgrind가 있으면 프로그램을 실행하거나, 수동 확인을 추가하여 메모리 누수(memory leak)가 없음을 확인하세요.
+
+### 연습 5: 구조체(Struct) 기반 학생 레코드
+
+`char name[64]`, `int id`, `float gpa` 필드를 갖는 `Student`라는 `typedef struct`를 정의하세요. 그런 다음:
+
+1. `malloc`을 사용하여 3개의 `Student` 구조체 배열을 동적으로 할당하세요.
+2. `->` 연산자를 사용하여 학생의 세부 정보를 출력하는 `void print_student(const Student *s)` 함수를 작성하세요.
+3. `delta`를 학생의 GPA에 더하는(최대 4.0으로 제한) `void raise_gpa(Student *s, float delta)` 함수를 작성하세요.
+4. 각 학생에 `raise_gpa`를 호출한 후 `print_student`로 결과를 확인하고, 최종적으로 배열을 `free`하세요.
+
+---
+
 ## 다음 단계
 
 이제 실제 프로젝트를 만들어보겠습니다!
 
-[03_Project_Calculator.md](./03_Project_Calculator.md) → 첫 번째 프로젝트 시작!
+[프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md) → 첫 번째 프로젝트 시작!
+
+**이전**: [C 언어 환경 설정](./01_Environment_Setup.md) | **다음**: [프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md)

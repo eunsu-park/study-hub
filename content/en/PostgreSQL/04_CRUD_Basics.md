@@ -1,6 +1,24 @@
 # CRUD Basics
 
-CRUD stands for Create, Read, Update, and Delete - the basic operations for database data.
+**Previous**: [Tables and Data Types](./03_Tables_and_Data_Types.md) | **Next**: [Conditions and Sorting](./05_Conditions_and_Sorting.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what CRUD stands for and why these four operations form the foundation of data manipulation
+2. Write INSERT statements to add single and multiple rows, using DEFAULT values and RETURNING
+3. Write SELECT statements with column aliases, DISTINCT, and simple expressions
+4. Write UPDATE statements with WHERE clauses and verify changes with RETURNING
+5. Write DELETE statements safely and distinguish DELETE from TRUNCATE
+6. Implement UPSERT logic using ON CONFLICT (DO NOTHING / DO UPDATE)
+7. Apply best practices for safe data modification (SELECT-first verification, transactions)
+
+---
+
+Almost every interaction between an application and its database boils down to one of four operations: creating new records, reading existing ones, updating values, or deleting rows. Mastering CRUD in SQL is like learning the four basic arithmetic operations in math -- everything more advanced builds on top of them.
 
 ## 0. Practice Setup
 
@@ -55,7 +73,8 @@ INSERT INTO users DEFAULT VALUES;  -- Error: NOT NULL columns
 ### RETURNING - Return Inserted Data
 
 ```sql
--- Return generated ID after insert
+-- RETURNING avoids a separate SELECT after INSERT — the database returns the generated
+-- values (id, timestamps) in the same round-trip, reducing latency by 50%
 INSERT INTO users (name, email, age, city)
 VALUES ('Tommy Shin', 'shin@email.com', 5, 'Springfield')
 RETURNING id;
@@ -222,7 +241,9 @@ RETURNING *;
 ### TRUNCATE - Empty Table
 
 ```sql
--- Faster than DELETE (no logging, delete entire table)
+-- TRUNCATE bypasses row-level WAL logging — it deallocates pages directly,
+-- making it orders of magnitude faster than DELETE for clearing large tables.
+-- Trade-off: no per-row triggers fire, and RETURNING is not available.
 TRUNCATE TABLE users;
 
 -- Restart SERIAL
@@ -252,7 +273,8 @@ Insert or update if conflict occurs.
 ### Ignore on Conflict
 
 ```sql
--- Do nothing if already exists
+-- ON CONFLICT DO NOTHING is ideal for idempotent inserts — retrying the same request
+-- (e.g., from a message queue) won't produce duplicate rows or raise an error
 INSERT INTO users (name, email, age, city)
 VALUES ('John Kim', 'kim@email.com', 35, 'Busan')
 ON CONFLICT (email) DO NOTHING;
@@ -440,6 +462,4 @@ COMMIT;  -- or ROLLBACK;
 
 ---
 
-## Next Steps
-
-Learn about WHERE clauses and ORDER BY in detail in [05_Conditions_and_Sorting.md](./05_Conditions_and_Sorting.md)!
+**Previous**: [Tables and Data Types](./03_Tables_and_Data_Types.md) | **Next**: [Conditions and Sorting](./05_Conditions_and_Sorting.md)

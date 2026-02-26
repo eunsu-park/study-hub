@@ -1,11 +1,22 @@
 # 14. Pattern Matching
 
+**Previous**: [Dataclasses](./13_Dataclasses.md) | **Next**: [Python Basics](./15_Python_Basics.md)
+
 ## Learning Objectives
-- Understand Python 3.10+ match/case syntax
-- Master various pattern types
-- Use structural pattern matching
-- Apply guards and OR patterns
-- Learn practical usage patterns
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose and syntax of Python 3.10+ structural pattern matching (`match`/`case`)
+2. Write literal patterns, OR patterns, and wildcard patterns for value-based dispatching
+3. Apply sequence and mapping patterns to destructure lists, tuples, and dictionaries
+4. Use class patterns with `__match_args__` to match dataclass and custom object attributes
+5. Implement guards (`if` conditions) to add runtime constraints to pattern branches
+6. Apply the AS pattern to bind matched sub-expressions to named variables
+7. Design practical applications including API response handlers, state machines, and AST interpreters
+
+---
+
+Before Python 3.10, dispatching on the shape of data required nested `if`/`elif` chains or dictionary lookups that quickly became hard to read. Structural pattern matching brings a declarative, exhaustive approach to decomposing complex data structures, making code that processes JSON responses, parses commands, or walks abstract syntax trees dramatically clearer.
 
 ## Table of Contents
 1. [Pattern Matching Basics](#1-pattern-matching-basics)
@@ -865,12 +876,12 @@ print(sum_tree(tree))  # 21 (1+2+3+4+5+6)
 
 ---
 
-## Next Steps
-- [11. Testing and Quality Assurance](./11_Testing_and_Quality.md)
-- [13. Dataclasses](./13_Dataclasses.md)
-
 ## References
 - [PEP 634 - Structural Pattern Matching](https://peps.python.org/pep-0634/)
 - [PEP 635 - Motivation and Rationale](https://peps.python.org/pep-0635/)
 - [PEP 636 - Tutorial](https://peps.python.org/pep-0636/)
 - [Python 3.10 What's New](https://docs.python.org/3/whatsnew/3.10.html)
+
+---
+
+**Previous**: [Dataclasses](./13_Dataclasses.md) | **Next**: [Python Basics](./15_Python_Basics.md)

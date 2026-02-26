@@ -11,6 +11,8 @@
 
 ### Definition
 
+Think of a network flow as water flowing through a system of pipes. Each pipe has a maximum capacity, water must be conserved at junctions (what flows in must flow out), and the goal is to maximize throughput from source to sink.
+
 A **flow network** consists of:
 - **Directed graph** G = (V, E)
 - **Capacity function** c(u, v): maximum flow an edge can accommodate
@@ -31,9 +33,9 @@ Numbers: Edge capacities
 
 ### Flow Conditions
 
-1. **Capacity constraint**: 0 ≤ f(u,v) ≤ c(u,v)
-2. **Flow conservation**: Except for source/sink, incoming flow = outgoing flow
-3. **Skew symmetry**: f(u,v) = -f(v,u)
+1. **Capacity constraint**: 0 ≤ f(u,v) ≤ c(u,v)  *(no pipe carries more water than its diameter allows)*
+2. **Flow conservation**: Except for source/sink, incoming flow = outgoing flow  *(water doesn't accumulate at junctions — every drop that enters must exit)*
+3. **Skew symmetry**: f(u,v) = -f(v,u)  *(if 3 units flow from u to v, that same flow is represented as -3 from v to u, enabling residual graph arithmetic)*
 
 ### Maximum Flow Problem
 
@@ -100,22 +102,30 @@ class MaxFlow:
 
     def add_edge(self, u, v, cap):
         self.capacity[u][v] += cap
+        # No explicit reverse edge needed: self.flow[v][u] starts at 0,
+        # so residual capacity (cap - flow) = cap in the forward direction,
+        # and flow[neighbor][source] -= result below handles the backward bookkeeping
 
     def dfs(self, source, sink, visited, min_cap):
         if source == sink:
-            return min_cap
+            return min_cap  # Reached sink — return the bottleneck capacity along this path
 
         visited.add(source)
 
         for neighbor in self.capacity[source]:
+            # Residual capacity = original capacity minus what's already flowing
             residual = self.capacity[source][neighbor] - self.flow[source][neighbor]
 
             if neighbor not in visited and residual > 0:
+                # Track the tightest bottleneck seen so far along this DFS path
                 new_cap = min(min_cap, residual)
                 result = self.dfs(neighbor, sink, visited, new_cap)
 
                 if result > 0:
                     self.flow[source][neighbor] += result
+                    # Backward edge: decreasing flow[neighbor][source] means we
+                    # are "crediting" capacity back, allowing future paths to
+                    # reroute flow that was sent along a suboptimal route
                     self.flow[neighbor][source] -= result
                     return result
 
@@ -124,12 +134,14 @@ class MaxFlow:
     def max_flow(self, source, sink):
         total_flow = 0
 
+        # Keep finding augmenting paths until none remain —
+        # each iteration pushes at least 1 unit of flow, so the loop terminates
         while True:
             visited = set()
             path_flow = self.dfs(source, sink, visited, float('inf'))
 
             if path_flow == 0:
-                break
+                break  # No augmenting path found — residual graph is exhausted
 
             total_flow += path_flow
 
@@ -176,9 +188,12 @@ class EdmondsKarp:
     def add_edge(self, u, v, cap):
         self.capacity[u][v] += cap
         self.graph[u].append(v)
-        self.graph[v].append(u)  # Add reverse direction too
+        self.graph[v].append(u)  # Add reverse direction too — needed for residual graph traversal
 
     def bfs(self, source, sink, parent):
+        # BFS finds the shortest augmenting path — Edmonds-Karp guarantees O(VE²)
+        # by always choosing the path with fewest edges, preventing the pathological
+        # O(E × max_flow) behavior of DFS-based Ford-Fulkerson
         visited = [False] * self.n
         visited[source] = True
         queue = deque([source])
@@ -187,21 +202,24 @@ class EdmondsKarp:
             node = queue.popleft()
 
             for neighbor in self.graph[node]:
+                # Only traverse edges with remaining residual capacity
                 if not visited[neighbor] and self.capacity[node][neighbor] > 0:
                     visited[neighbor] = True
                     parent[neighbor] = node
                     if neighbor == sink:
-                        return True
+                        return True  # Path found — stop BFS early
                     queue.append(neighbor)
 
-        return False
+        return False  # No path to sink — max flow reached
 
     def max_flow(self, source, sink):
         parent = [-1] * self.n
         total_flow = 0
 
+        # Each BFS call finds one augmenting path and saturates at least one edge,
+        # so there are at most O(VE) augmenting path iterations before termination
         while self.bfs(source, sink, parent):
-            # Find minimum residual capacity along the path
+            # Find minimum residual capacity along the path (the bottleneck edge)
             path_flow = float('inf')
             node = sink
             while node != source:
@@ -209,7 +227,10 @@ class EdmondsKarp:
                 path_flow = min(path_flow, self.capacity[prev][node])
                 node = prev
 
-            # Update flow
+            # Update capacities: forward edges decrease, backward edges increase.
+            # Increasing capacity[node][prev] creates a "cancel" option for
+            # future paths — this is the key mechanism that lets the algorithm
+            # undo a previous suboptimal routing decision
             node = sink
             while node != source:
                 prev = parent[node]
@@ -218,7 +239,7 @@ class EdmondsKarp:
                 node = prev
 
             total_flow += path_flow
-            parent = [-1] * self.n
+            parent = [-1] * self.n  # Reset parent array for next BFS
 
         return total_flow
 
@@ -305,6 +326,8 @@ public:
 
 **Maximum flow = Capacity of minimum cut**
 
+Intuitively, think of a cut as a bottleneck — a set of edges whose removal disconnects all source-to-sink paths. The minimum cut is the tightest bottleneck: no flow can exceed its total capacity, because every unit of flow must cross the cut. Conversely, the max-flow algorithm saturates this bottleneck exactly — when the algorithm terminates, the saturated edges across the residual graph boundary form the minimum cut. Backward edges in the residual graph are essential to this process: they allow the algorithm to reroute flow that was sent along a suboptimal path, effectively "undoing" earlier decisions so that the final flow configuration crosses the minimum cut at full capacity.
+
 ### What is a Cut?
 
 A set of edges that partitions the graph into source side (S) and sink side (T)
@@ -326,10 +349,12 @@ def find_min_cut(self, source, sink):
     """
     Returns edges forming the minimum cut after computing max flow
     """
-    # First compute max flow
+    # First compute max flow — this saturates all bottleneck edges across the min cut
     max_flow_value = self.max_flow(source, sink)
 
-    # Find nodes reachable from source in residual graph
+    # After max flow, BFS the residual graph from source.
+    # Nodes reachable from source form the "S-side" of the min cut.
+    # The sink is unreachable because all augmenting paths are exhausted.
     visited = [False] * self.n
     queue = deque([source])
     visited[source] = True
@@ -337,11 +362,17 @@ def find_min_cut(self, source, sink):
     while queue:
         node = queue.popleft()
         for neighbor in range(self.n):
+            # Only traverse edges with remaining residual capacity
             if not visited[neighbor] and self.capacity[node][neighbor] > 0:
                 visited[neighbor] = True
                 queue.append(neighbor)
 
-    # Min cut = edges from visited → unvisited (with original capacity > 0)
+    # Min cut edges cross from the reachable (S) side to the unreachable (T) side.
+    # We check original_capacity (not current residual capacity) to identify edges
+    # that existed in the original graph — some may now have 0 residual because
+    # they are fully saturated and form the min cut boundary.
+    # Without tracking original_capacity, we cannot distinguish between edges that
+    # were never in the graph (capacity 0) and edges that were saturated by flow.
     min_cut_edges = []
     for u in range(self.n):
         if visited[u]:
@@ -402,20 +433,26 @@ class BipartiteMatching:
         for right in self.adj[node]:
             if visited[right]:
                 continue
+            # Mark visited to prevent this DFS from revisiting the same right node,
+            # which would cause infinite recursion in the augmenting path search
             visited[right] = True
 
-            # Right node is unmatched or existing match can be rerouted
+            # Right node is unmatched, or its current left partner can find another match.
+            # This recursive call is the augmenting path step: it tries to "bump"
+            # the existing match partner to a different right node, freeing this slot.
             if match_right[right] == -1 or self.dfs(match_right[right], visited, match_right):
-                match_right[right] = node
+                match_right[right] = node  # Reassign (or assign) this right node to current left node
                 return True
 
-        return False
+        return False  # No augmenting path found from this left node
 
     def max_matching(self):
-        match_right = [-1] * self.right  # Match partner for right nodes
+        match_right = [-1] * self.right  # match_right[r] = which left node is matched to right node r
         result = 0
 
         for left_node in range(self.left):
+            # Fresh visited array per left node — ensures DFS can explore all alternative
+            # augmenting paths without being blocked by earlier iterations
             visited = [False] * self.right
             if self.dfs(left_node, visited, match_right):
                 result += 1
@@ -636,10 +673,16 @@ class Dinic:
         self.graph = [[] for _ in range(n)]
 
     def add_edge(self, u, v, cap):
+        # Each forward edge stores a reference index to its backward edge and vice versa.
+        # This paired-index trick allows O(1) lookup of the reverse edge during flow updates,
+        # avoiding the need to search the adjacency list for the corresponding backward edge.
         self.graph[u].append([v, cap, len(self.graph[v])])
-        self.graph[v].append([u, 0, len(self.graph[u]) - 1])
+        self.graph[v].append([u, 0, len(self.graph[u]) - 1])  # Reverse edge with capacity 0
 
     def bfs(self, source, sink):
+        # BFS assigns each node a "level" (distance from source in the residual graph).
+        # This level graph restricts DFS to only advance toward the sink, preventing cycles
+        # and ensuring each blocking flow phase makes progress.
         self.level = [-1] * self.n
         self.level[source] = 0
         queue = deque([source])
@@ -651,36 +694,40 @@ class Dinic:
                     self.level[next_node] = self.level[node] + 1
                     queue.append(next_node)
 
-        return self.level[sink] != -1
+        return self.level[sink] != -1  # False means no path exists — max flow reached
 
     def dfs(self, node, sink, flow):
         if node == sink:
-            return flow
+            return flow  # Reached sink — return the bottleneck capacity for this path
 
         while self.iter[node] < len(self.graph[node]):
             edge = self.graph[node][self.iter[node]]
             next_node, cap, rev = edge
 
+            # Only advance along edges that go exactly one level deeper (level graph constraint)
             if cap > 0 and self.level[next_node] == self.level[node] + 1:
                 d = self.dfs(next_node, sink, min(flow, cap))
                 if d > 0:
-                    edge[1] -= d
-                    self.graph[next_node][rev][1] += d
+                    edge[1] -= d                        # Decrease forward edge capacity
+                    self.graph[next_node][rev][1] += d  # Increase reverse edge capacity (residual)
                     return d
 
-            self.iter[node] += 1
+            self.iter[node] += 1  # This edge is exhausted — advance to next neighbor
 
-        return 0
+        return 0  # Dead end in level graph; backtrack
 
     def max_flow(self, source, sink):
         flow = 0
 
+        # Outer loop: rebuild the level graph with BFS after each blocking flow phase.
+        # Each BFS phase increases the shortest augmenting path length by at least 1,
+        # so there are at most O(V) BFS phases, giving the O(V²E) total complexity.
         while self.bfs(source, sink):
-            self.iter = [0] * self.n
+            self.iter = [0] * self.n  # iter[node] tracks the next edge to try — avoids revisiting
             while True:
                 f = self.dfs(source, sink, float('inf'))
                 if f == 0:
-                    break
+                    break  # Blocking flow complete — rebuild level graph
                 flow += f
 
         return flow

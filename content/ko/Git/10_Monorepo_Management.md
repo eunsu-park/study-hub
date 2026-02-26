@@ -1,10 +1,24 @@
 # 10. 모노레포 관리
 
-## 학습 목표
-- 모노레포 개념과 장단점 이해
-- Nx, Turborepo를 활용한 빌드 최적화
-- 의존성 관리와 코드 공유 전략
-- 대규모 모노레포 성능 최적화
+**이전**: [고급 Git 기법](./09_Advanced_Git_Techniques.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 모노레포(Monorepo) 개념을 설명하고 멀티레포(Polyrepo) 방식과 비교할 수 있습니다
+2. 팀 규모와 프로젝트 유형에 따른 모노레포의 장단점을 파악할 수 있습니다
+3. Nx를 설정하여 빌드 캐싱과 의존성 그래프 인식 기반의 모노레포를 관리할 수 있습니다
+4. Turborepo를 설정하여 패키지 전반에 걸친 병렬·캐시 빌드를 조율할 수 있습니다
+5. 모노레포 내에서 의존성 관리 및 코드 공유 전략을 적용할 수 있습니다
+6. 영향받은 항목만 테스트하는 방식과 원격 캐싱을 활용하여 모노레포용 CI/CD 파이프라인을 최적화할 수 있습니다
+7. 대규모 모노레포를 위한 Git 성능 기법(스파스 체크아웃(sparse checkout), 부분 클론(partial clone))을 구현할 수 있습니다
+
+---
+
+조직이 성장하면 수십 개의 분산된 저장소를 관리하는 일이 조율의 악몽이 됩니다 — 버전 불일치, 중복된 CI 설정, 동기화 릴리스가 필요한 크로스 레포(cross-repo) 의존성 업데이트가 그 원인입니다. 모노레포(Monorepo)는 모든 코드를 단일 저장소에 두어 이 문제를 해결하지만, 빌드 성능, 접근 제어, 도구 구성 면에서 고유한 도전 과제를 안겨줍니다. 이 레슨은 모노레포를 효과적으로 운영하기 위한 도구와 전략을 제공합니다.
 
 ## 목차
 1. [모노레포 개요](#1-모노레포-개요)
@@ -860,6 +874,42 @@ jobs:
 - [pnpm Workspaces](https://pnpm.io/workspaces)
 - [Monorepo Explained](https://monorepo.tools/)
 - [Changesets](https://github.com/changesets/changesets)
+
+---
+
+## 연습 문제
+
+### 연습 1: pnpm 워크스페이스 모노레포 설정
+1. `packages/*`와 `apps/*`를 워크스페이스로 선언하는 `pnpm-workspace.yaml`이 있는 모노레포 루트를 만듭니다.
+2. `packages/utils/`를 만들고 `package.json`(`name: "@myorg/utils"`)과 `formatDate(date: Date): string` 함수를 내보내는 작은 `src/index.ts`를 작성합니다.
+3. `apps/web/`을 만들고 `"workspace:*"`로 `@myorg/utils`에 의존하도록 설정한 뒤, `formatDate`를 임포트하고 호출합니다.
+4. 루트에서 `pnpm install`을 실행하고 심볼릭 링크가 올바르게 해석되는지 확인합니다.
+
+### 연습 2: Nx 의존성 그래프 탐구
+1. `npx create-nx-workspace@latest`로 Nx 워크스페이스를 만듭니다.
+2. React 애플리케이션(`nx generate @nx/react:app my-app`)과 공유 유틸리티 라이브러리(`nx generate @nx/js:lib shared-utils`)를 생성합니다.
+3. `my-app` 내에서 `shared-utils`의 함수를 임포트합니다.
+4. `nx graph`를 실행하고 `my-app`과 `shared-utils` 사이의 의존성 엣지를 캡처(또는 설명)합니다.
+5. `nx affected:build --base=main`을 실행하고 어떤 프로젝트가 포함되었는지, 그리고 그 이유를 설명합니다.
+
+### 연습 3: Turborepo 파이프라인 설정
+다음 요구사항을 만족하는 `turbo.json`을 작성합니다:
+- `build`는 모든 업스트림 패키지의 `build`에 의존합니다(`^build`).
+- `test`는 로컬 `build`가 먼저 완료된 후 실행됩니다.
+- `lint`는 의존성이 없으며 결과가 캐시됩니다.
+- `dev`는 캐시되지 않으며 지속적으로 실행됩니다.
+- 캐시 출력 디렉토리: `dist/**`와 `.next/**`(`.next/cache/**` 제외).
+
+`turbo build --dry-run`을 실행하고 태스크 실행 순서를 확인하여 설정이 올바른지 검증합니다.
+
+### 연습 4: GitHub Actions로 변경된 패키지만 CI 실행
+다음을 수행하는 GitHub Actions 워크플로우를 작성합니다:
+1. 영향 분석에 필요한 `fetch-depth: 0`과 함께 `actions/checkout@v4`를 사용합니다.
+2. `dorny/paths-filter` 또는 Nx `affected` 명령어로 변경된 패키지를 감지합니다.
+3. PR로 영향받은 패키지에 대해서만 빌드와 테스트를 실행합니다(전체 모노레포가 아니라).
+4. `actions/cache@v4`로 Turborepo 또는 Nx 캐시 디렉토리를 실행 간에 캐시합니다.
+
+YAML 파일 안에 `fetch-depth: 0`이 필요한 이유를 주석으로 설명합니다.
 
 ---
 

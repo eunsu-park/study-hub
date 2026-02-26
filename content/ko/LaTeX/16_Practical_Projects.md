@@ -5,6 +5,19 @@
 > **선수지식**: 모든 이전 레슨 (01-15)
 > **목표**: 학습한 모든 개념을 세 가지 완전한 실제 프로젝트에 적용: 학술 논문, Beamer 프레젠테이션, 과학 포스터
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 모든 이전 레슨의 기술을 종합하여 올바른 구조와 참고문헌을 갖춘 완전히 컴파일 가능한 학술 연구 논문(academic research paper)을 생성할 수 있다
+2. 사용자 정의 테마(custom theme), 오버레이(overlay), 내장 TikZ 다이어그램을 포함한 다중 슬라이드 Beamer 학회 발표를 구축할 수 있다
+3. 다중 열 레이아웃(multi-column layout), PGFPlots 차트, QR 코드를 사용하여 A0 형식의 과학 포스터(scientific poster)를 구성할 수 있다
+4. 마스터 문서(master document), 분리된 장(chapter) 파일, 공유 전문부(shared preamble)가 있는 다중 파일 LaTeX 프로젝트를 관리할 수 있다
+5. 복잡한 실제 LaTeX 문서의 컴파일 오류(compilation error)를 문제 해결(troubleshoot)하고 디버깅(debug)할 수 있다
+6. 완성된 문서를 전문 출판 기준(professional publication standards)에 따라 평가하고 개선이 필요한 영역을 식별할 수 있다
+
+---
+
 ## 소개
 
 이 마지막 레슨은 이전 15개 레슨의 모든 내용을 **세 가지 완전하고 컴파일 가능한 프로젝트**로 통합합니다:
@@ -50,20 +63,20 @@
 **파일: `paper.tex`**
 
 ```latex
-\documentclass[conference]{IEEEtran}
+\documentclass[conference]{IEEEtran}  % IEEEtran 클래스: IEEE 학회 형식 제공; [conference]는 2단 레이아웃 선택
 
-% Packages
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
-\usepackage{subcaption}
-\usepackage{booktabs}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
-\usepackage[backend=biber,style=ieee,sorting=none]{biblatex}
-\usepackage[hidelinks]{hyperref}
-\usepackage{cleveref}
+% 패키지 — 순서 중요: hyperref는 링크 충돌 방지를 위해 거의 마지막에 로드
+\usepackage[utf8]{inputenc}       % 소스에서 직접 비ASCII 문자(악센트, 움라우트) 허용
+\usepackage[T1]{fontenc}          % PDF에서 악센트 문자의 올바른 하이픈과 복사-붙여넣기 보장
+\usepackage{amsmath,amssymb,amsthm}  % amsmath: align/gather 환경; amssymb: \mathbb; amsthm: 정리 환경
+\usepackage{graphicx}             % \includegraphics에 필요 — 이것 없이는 이미지 삽입 불가
+\usepackage{subcaption}           % 개별 캡션이 있는 하위 그림 지원 (subfig는 deprecated)
+\usepackage{booktabs}             % 전문적 품질의 표를 위한 \toprule, \midrule, \bottomrule 제공
+\usepackage{algorithm}            % 알고리즘 의사코드용 플로트 래퍼 — 그림처럼 배치 관리
+\usepackage{algpseudocode}        % \State, \For, \If 제공 — 알고리즘 의사코드 서식
+\usepackage[backend=biber,style=ieee,sorting=none]{biblatex}  % biber: 유니코드 지원 백엔드; sorting=none: 인용 순서
+\usepackage[hidelinks]{hyperref}  % \ref, \cite를 클릭 가능하게; hidelinks는 인쇄 시 색상 박스 제거
+\usepackage{cleveref}             % \cref가 "Fig.", "Eq." 등 자동 접두사 — 수동 "Figure~\ref{}" 불필요
 
 % Bibliography
 \addbibresource{references.bib}
@@ -328,10 +341,10 @@ Future work will explore hybrid architectures combining LSTM and attention mecha
 ### 컴파일
 
 ```bash
-pdflatex paper.tex
-biber paper
-pdflatex paper.tex
-pdflatex paper.tex
+pdflatex paper.tex    # 1차 패스: 인용 키와 라벨 참조가 있는 .aux 생성
+biber paper           # .aux를 읽고 .bib 항목 해석하여 .bbl 작성 — pdflatex 패스 사이에 실행 필수
+pdflatex paper.tex    # 2차 패스: 참고문헌 포함; 전방 참조는 아직 ??로 표시될 수 있음
+pdflatex paper.tex    # 3차 패스: 모든 상호 참조 해석 — \ref가 이전 패스의 라벨 위치에 의존하므로 필요
 ```
 
 또는 `latexmk` 사용:
@@ -378,35 +391,35 @@ latexmk -pdf paper.tex
 **파일: `presentation.tex`**
 
 ```latex
-\documentclass[aspectratio=169]{beamer}
+\documentclass[aspectratio=169]{beamer}  % 16:9 비율은 최신 프로젝터에 적합; 기본값은 4:3
 
-% Theme
+% 테마 — Madrid는 섹션 네비게이션이 있는 헤더/푸터 제공; default 색상 테마는 커스터마이징 기반
 \usetheme{Madrid}
 \usecolortheme{default}
 
-% Custom colors
+% 사용자 정의 색상 — 한번 정의하면 전체에서 재사용; 이 두 값만 변경하면 전체 프레젠테이션 테마 변경
 \definecolor{primaryblue}{RGB}{0,82,155}
 \definecolor{secondaryorange}{RGB}{255,127,0}
-\setbeamercolor{structure}{fg=primaryblue}
-\setbeamercolor{alerted text}{fg=secondaryorange}
+\setbeamercolor{structure}{fg=primaryblue}       % 제목, 불릿, 네비게이션 제어 — "브랜드" 색상
+\setbeamercolor{alerted text}{fg=secondaryorange} % \alert{} 강조용 — 대비 색상으로 주의 유도
 
-% Packages
+% 패키지
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows,positioning}
-\usepackage{listings}
+\usetikzlibrary{shapes,arrows,positioning}  % 순서도 노드 모양과 상대 위치 지정에 필요
+\usepackage{listings}   % 구문 강조가 있는 코드 목록 — minted는 대안이지만 --shell-escape 필요
 \usepackage{booktabs}
 
-% Listings style
+% 목록 스타일 — 전역으로 한번 설정; lstlisting 옵션으로 개별 재정의 가능
 \lstset{
-  basicstyle=\ttfamily\small,
+  basicstyle=\ttfamily\small,              % 축소된 고정폭 글꼴 — 슬라이드당 더 많은 코드 표시
   keywordstyle=\color{primaryblue}\bfseries,
   commentstyle=\color{gray}\itshape,
   stringstyle=\color{secondaryorange},
-  showstringspaces=false,
-  frame=single
+  showstringspaces=false,                  % 문자열 내 공백 표시 숨김 — 깔끔한 외관
+  frame=single                             % 코드 블록 주위 박스 — 슬라이드 콘텐츠와 시각적 분리
 }
 
 % Title
@@ -737,16 +750,16 @@ pdfpc presentation.pdf
 **파일: `poster.tex`**
 
 ```latex
-\documentclass[a0paper,portrait]{tikzposter}
+\documentclass[a0paper,portrait]{tikzposter}  % tikzposter 클래스: A0 스케일링, 블록 레이아웃, 포스터 전용 타이포그래피 처리
 
-% Packages
+% 패키지
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath,amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\usepackage{qrcode}
+\usepackage{pgfplots}           % LaTeX 내에서 출판 품질의 플롯을 직접 렌더링 — 외부 이미지 파일 불필요
+\pgfplotsset{compat=1.18}       % PGFPlots 동작을 1.18 버전에 고정 — 패키지 업데이트 시 레이아웃 변경 방지
+\usepackage{qrcode}             % LaTeX에서 직접 QR 코드 생성 — 보충 자료 링크에 유용
 
 % Theme
 \usetheme{Default}
@@ -1069,9 +1082,61 @@ pdflatex poster.tex
 
 **축하합니다!** LaTeX 과정의 16개 레슨을 모두 완료했습니다. 이제 학술 및 전문 맥락에서 전문 문서, 프레젠테이션, 포스터를 생성하는 기술을 갖추었습니다.
 
+## 연습 문제
+
+### 연습 1: 학술 논문 템플릿 수정
+
+프로젝트 1의 `paper.tex` 템플릿을 가져와 다른 분야에 맞게 수정합니다.
+
+1. `conference` 옵션을 제거하여 문서 클래스를 `IEEEtran` (학회 형식)에서 단일 열(single-column) 형식으로 변경합니다.
+2. 제목과 저자 정보를 자신의 것(또는 가상의 것)으로 교체합니다.
+3. 초록(abstract)을 수정하여 다른 연구 주제(예: 이미지 분류(image classification), 자연어 처리(natural language processing), 로보틱스)를 설명합니다.
+4. `references.bib` 파일을 수정합니다 — 올바른 BibTeX 항목 유형(`@article`, `@inproceedings`, 또는 `@book`)을 사용하여 새 항목을 최소 두 개 추가합니다.
+5. `latexmk -pdf paper.tex`로 논문을 컴파일하고 출력에 `??` 플레이스홀더가 없는지 확인합니다.
+
+### 연습 2: Beamer 테마 사용자 정의
+
+프로젝트 2의 `presentation.tex` 템플릿을 시작점으로 하여 시각적으로 구별되는 프레젠테이션을 만듭니다.
+
+1. `\usetheme{Madrid}`를 `Warsaw`, `Berlin`, 또는 `CambridgeUS`와 같은 다른 내장 테마로 변경합니다.
+2. 기본 색상을 재정의합니다: `primaryblue` (RGB 0,82,155)를 원하는 색상으로 바꾸고, 모든 `\setbeamercolor` 호출을 그에 맞게 업데이트합니다.
+3. "Research Questions"와 "Model Architectures" 사이에 세 번째 모델(예: GRU)을 소개하는 새 슬라이드를 추가합니다. `\begin{columns}`를 사용하여 왼쪽에 짧은 설명을, 오른쪽에 간단한 TikZ 다이어그램(최소 3개 노드)을 배치합니다.
+4. 새 슬라이드의 내용을 `\item<N->` 오버레이(overlay) 구문을 사용하여 글머리 기호가 하나씩 나타나도록 변환합니다.
+5. 컴파일 후 다중 페이지 PDF를 검토하여 오버레이 애니메이션이 올바른지 확인합니다.
+
+### 연습 3: 2열 학술 포스터 제작
+
+`tikzposter`를 사용하여 3열 대신 2열로 된 단순화된 과학 포스터(scientific poster)를 만듭니다.
+
+1. 프로젝트 3의 `poster.tex` 템플릿을 시작점으로 하여 각 `\column{0.5}`로 설정해 2열 레이아웃으로 변경합니다.
+2. "Results: Efficiency" 블록을 완전히 제거하고 "Introduction", "Model Architectures", "Datasets", "Results: Accuracy", "Conclusion"만 남깁니다.
+3. "Results: Accuracy" 블록의 PGFPlots 막대 차트 크기를 조정합니다: `width=\linewidth`, `height=12cm`로 설정하여 넓어진 열을 채웁니다.
+4. 포스터 색상 체계를 변경합니다: 원하는 새 색상 두 개를 정의하고 `blocktitlebgcolor`와 `backgroundcolor`에 적용합니다.
+5. `pdflatex poster.tex`로 컴파일하고 레이아웃이 균형 잡혀 보이는지 확인합니다.
+
+### 연습 4: 공유 전문부(Preamble)가 있는 다중 파일 프로젝트
+
+프로젝트 1의 학술 논문을 다중 파일 구조로 재구성하여 프로젝트 관리(project management)를 연습합니다.
+
+1. `myproject/` 디렉토리를 만들고 그 안에 `preamble.tex`, `main.tex`, `sections/methods.tex` 세 개의 파일을 생성합니다.
+2. `paper.tex`의 모든 `\usepackage` 선언과 `\newcommand` 정의를 `preamble.tex`로 이동합니다. `main.tex`에서 `\input{preamble}`로 불러옵니다.
+3. 전체 "Methodology" 섹션(`\section{Methodology}`부터 `algorithm` 환경까지)을 `sections/methods.tex`로 추출합니다. `main.tex`에서 `\input{sections/methods}`로 포함합니다.
+4. `references.bib`를 `bib/` 하위 디렉토리로 이동하고 `preamble.tex`의 `\addbibresource{bib/references.bib}`를 업데이트합니다.
+5. `latexmk -pdf main.tex`로 `main.tex`에서 컴파일하고 단일 파일 버전과 동일하게 컴파일되는지 확인합니다.
+
+### 연습 5: 엔드투엔드 출판 패키지
+
+세 가지 프로젝트 유형을 모두 통합하는 완전하고 일관성 있는 출판 패키지(publication package)를 제작합니다.
+
+1. 새 연구 주제(시계열 예측과 다른 주제)를 선택합니다. 두 단락 분량의 초록을 작성하고 최소 세 가지 연구 질문을 정의합니다.
+2. 동일한 연구를 설명하는 `paper.tex` (IEEEtran 템플릿 사용), `presentation.tex` (8–10개 슬라이드), `poster.tex` (3열 A0)를 만듭니다. 세 파일 모두에서 제목, 저자명, 핵심 발견이 일관되게 유지되도록 합니다.
+3. Beamer 프레젠테이션에 `\begin{frame}[allowframebreaks]{References}\printbibliography\end{frame}` 슬라이드를 추가하고 논문에서 사용한 동일한 `.bib` 파일을 공유합니다.
+4. 포스터에는 최소 네 개의 데이터 포인트가 있는 PGFPlots 차트를 추가하여 주요 결과 중 하나를 시각화합니다. `\legend{}`를 사용하여 데이터 시리즈에 레이블을 붙입니다.
+5. `paper`, `talk`, `poster` 세 가지 타겟이 있는 `Makefile`을 작성합니다. 각 타겟은 해당 소스 파일에 `latexmk -pdf`를 실행하고, 보조 파일을 삭제하는 `clean` 타겟도 포함합니다.
+
 ---
 
 **탐색**
 
-- 이전: [15_Automation_and_Build.md](15_Automation_and_Build.md)
+- 이전: [빌드 시스템 및 자동화(Build Systems & Automation)](15_Automation_and_Build.md)
 - 과정 종료

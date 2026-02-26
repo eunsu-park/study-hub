@@ -98,7 +98,8 @@ public:
     }
 };
 
-// Full specialization for bool
+// Why: full specialization provides a completely different implementation for bool,
+// since the generic version would print 0/1 instead of the more readable "true"/"false"
 template<>
 class Printer<bool> {
 public:
@@ -160,7 +161,8 @@ void demo_variadic_templates() {
 }
 
 // ============ SFINAE (Substitution Failure Is Not An Error) ============
-// Enable if T is integral
+// Why: SFINAE lets the compiler silently discard overloads that don't match type
+// constraints, rather than raising a hard error — this enables type-based dispatch
 template<typename T>
 typename std::enable_if<std::is_integral<T>::value, T>::type
 double_value(T value) {
@@ -188,6 +190,8 @@ void demo_sfinae() {
 template<typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
+// Why: requires expressions let you specify exactly what operations a type must support,
+// giving precise compiler errors instead of deep template instantiation failures
 template<typename T>
 concept Addable = requires(T a, T b) {
     { a + b } -> std::convertible_to<T>;
@@ -269,6 +273,8 @@ void demo_template_template() {
 }
 
 // ============ Compile-Time Computation ============
+// Why: template recursion computes values at compile time, embedding the result directly
+// in the binary — zero runtime cost, but constexpr functions (below) are now preferred
 template<int N>
 struct Factorial {
     static constexpr int value = N * Factorial<N - 1>::value;

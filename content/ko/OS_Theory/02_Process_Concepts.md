@@ -1,10 +1,24 @@
 # 프로세스 개념
 
-## 개요
-
-프로세스(Process)는 실행 중인 프로그램을 의미합니다. 이 레슨에서는 프로세스의 메모리 구조, 프로세스 제어 블록(PCB), 프로세스 상태 전이, 그리고 컨텍스트 스위치에 대해 학습합니다.
+**이전**: [운영체제 개요](./01_OS_Overview.md) | **다음**: [스레드와 멀티스레딩](./03_Threads_and_Multithreading.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 프로세스(Process)를 정의하고 프로그램(Program)과 구별할 수 있다
+2. 텍스트(Text), 데이터(Data), BSS, 힙(Heap), 스택(Stack) 섹션을 포함한 프로세스 메모리 레이아웃을 설명할 수 있다
+3. 프로세스 제어 블록(Process Control Block, PCB)의 내용과 프로세스 관리에서의 역할을 설명할 수 있다
+4. 5-상태 모델과 7-상태 모델을 통해 프로세스 상태 전이를 추적할 수 있다
+5. fork()를 사용한 프로세스 생성 방식과 exec()를 사용한 프로그램 교체 방식을 구별할 수 있다
+6. 컨텍스트 스위치(Context Switch)의 직접 비용과 간접 비용을 분석할 수 있다
+7. 좀비(Zombie) 프로세스와 고아(Orphan) 프로세스를 설명하고 운영체제가 이를 처리하는 방법을 설명할 수 있다
+
+---
+
+디스크에 저장된 프로그램은 요리책 속의 레시피와 같습니다 -- 생동감 없는 텍스트에 불과합니다. 프로세스는 그 레시피가 실제로 요리되고 있는 것입니다: 재료가 준비되고, 오븐이 예열되고, 타이머가 돌아가고 있는 상태입니다. 프로세스를 이해한다는 것은 컴퓨터가 어떻게 프로그램에 생명을 불어넣는지를 이해하는 것입니다. 이 레슨에서는 프로세스 메모리 구조, 프로세스 제어 블록(PCB), 프로세스 상태 전이, 컨텍스트 스위치를 다룹니다 -- 운영체제가 실행 중인 프로그램을 관리하는 핵심 메커니즘입니다.
 
 ## 목차
 
@@ -223,39 +237,20 @@ PCB (Process Control Block) = 프로세스를 관리하기 위한 모든 정보�
 // Linux 커널의 프로세스 구조체 (간략화)
 struct task_struct {
     // 프로세스 식별
-    pid_t pid;                    // 프로세스 ID
-    pid_t tgid;                   // 스레드 그룹 ID
+    pid_t pid;                    // 프로세스 ID — 수천 개의 프로세스 중에서 이 프로세스를 고유하게
+                                  // 식별하여 커널이 추적, 스케줄링, 시그널 전송을 할 수 있게 함
+    pid_t tgid;                   // 스레드 그룹 ID — 같은 주소 공간을 공유하는 스레드들을 그룹화하여
+                                  // 시그널/종료가 개별 스레드가 아닌 전체 스레드 그룹에 영향을 미치도록 함
 
     // 프로세스 상태
     volatile long state;          // TASK_RUNNING, TASK_INTERRUPTIBLE...
+                                  // 스케줄러가 이 필드를 확인하여 프로세스가 CPU 시간을 받을 수
+                                  // 있는지, 아니면 이벤트를 기다려야 하는지 결정함
 
     // 스케줄링 정보
-    int prio;                     // 동적 우선순위
-    int static_prio;              // 정적 우선순위
-    struct sched_entity se;       // 스케줄링 엔티티
-
-    // CPU 컨텍스트
-    struct thread_struct thread;  // CPU 레지스터 상태
-
-    // 메모리 관리
-    struct mm_struct *mm;         // 메모리 디스크립터
-
-    // 파일 시스템
-    struct files_struct *files;   // 열린 파일 테이블
-    struct fs_struct *fs;         // 파일 시스템 정보
-
-    // 프로세스 관계
-    struct task_struct *parent;   // 부모 프로세스
-    struct list_head children;    // 자식 프로세스 리스트
-    struct list_head sibling;     // 형제 프로세스 리스트
-
-    // 시그널
-    struct signal_struct *signal;
-
-    // 타이밍 정보
-    u64 utime, stime;            // 사용자/시스템 CPU 시간
-    u64 start_time;              // 시작 시간
-};
+    int prio;                     // 동적 우선순위 — 런타임에 조정되어 대화형(Interactive) 프로세스는
+                                  // 응답성 향상을, CPU 독점 프로세스는 우선순위 하락을 받음
+    int static_prio;              // 정적 우선순위 — 사용자가 nice로 설정; 동적 우선
 ```
 
 ### 프로세스 테이블
@@ -837,9 +832,202 @@ main  c2   c1    c3
 
 ---
 
+## 실습 과제
+
+### 실습 1: 프로세스 생명주기 시뮬레이션
+
+`examples/OS_Theory/02_process_demo.py`를 실행하고 출력을 관찰하세요.
+
+**과제:**
+1. 우선순위 3인 새 프로세스 "P5"를 추가하고 상태 전이를 추적하세요: NEW → READY → RUNNING → WAITING → READY → RUNNING → TERMINATED
+2. `ProcessTable`을 수정하여 각 프로세스가 각 상태에서 보낸 총 시간을 추적하도록 하세요
+3. 어떤 상태에서든 강제로 TERMINATED로 전환하는 `kill_process(pid)` 메서드를 추가하세요
+
+### 실습 2: 프로세스 트리 탐색
+
+시스템 도구를 사용하여 머신의 프로세스 계층 구조를 탐색하세요:
+
+```bash
+# Linux
+pstree -p | head -30
+
+# macOS
+ps -axo pid,ppid,comm | head -30
+```
+
+**과제:**
+1. init/launchd 프로세스(PID 1)를 식별하고 자식 프로세스 3단계를 추적하세요
+2. 현재 셸의 PPID는 무엇인가요? PID 1까지 조상을 추적하세요
+3. `os.getpid()`와 `os.getppid()`를 사용하여 자신의 조상을 출력하는 Python 스크립트를 작성하세요
+
+### 실습 3: 문맥 교환 오버헤드
+
+파이프 기반 핑퐁을 사용하여 두 프로세스 간의 문맥 교환(Context Switch) 오버헤드를 측정하세요:
+
+```python
+import os, time
+
+def measure_context_switches(n=10000):
+    r1, w1 = os.pipe()
+    r2, w2 = os.pipe()
+
+    pid = os.fork()
+    if pid == 0:
+        for _ in range(n):
+            os.read(r1, 1)
+            os.write(w2, b'x')
+        os._exit(0)
+    else:
+        start = time.perf_counter()
+        for _ in range(n):
+            os.write(w1, b'x')
+            os.read(r2, 1)
+        elapsed = time.perf_counter() - start
+        os.wait()
+        print(f"{n} 왕복: {elapsed*1000:.1f} ms")
+        print(f"교환당: {elapsed/n*1e6:.1f} µs")
+
+measure_context_switches()
+```
+
+**과제:**
+1. 스크립트를 실행하고 교환당 지연 시간을 해석하세요
+2. 이론적 최솟값(레지스터 저장/복원 시간)과 어떻게 비교되나요?
+3. 레지스터 저장/복원 외에 문맥 교환 오버헤드에 기여하는 추가 비용은 무엇인가요?
+
+---
+
+## 연습 문제
+
+### 연습 1: 메모리 레이아웃 분석
+
+아래 프로그램에서 각 변수 또는 표현식이 어느 메모리 섹션(텍스트(Text), 데이터(Data), BSS, 힙(Heap), 스택(Stack))에 위치하는지 명시하고, 그 이유를 간략히 설명하세요.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int server_port = 8080;          // (1)
+char *app_name;                  // (2)
+static int request_count = 0;   // (3)
+
+void handle_request(int id) {
+    char buf[256];               // (4)
+    static int call_num = 0;     // (5)
+    int *data = malloc(1024);    // (6) data 자체는 어디에? data가 가리키는 곳은?
+    free(data);
+}
+```
+
+### 연습 2: 프로세스 상태 전이
+
+시스템에 P1, P2, P3, P4 네 개의 프로세스가 있습니다. 아래 이벤트를 바탕으로 각 타임 스텝에서 각 프로세스의 상태를 추적하세요. 사용할 상태: 신규(New), 준비(Ready), 실행(Running), 대기(Waiting), 종료(Terminated).
+
+| 시간 | 이벤트 |
+|------|--------|
+| t=0 | P1 생성, P2 생성 |
+| t=1 | P1이 CPU에 디스패치됨 |
+| t=2 | P3 생성 |
+| t=3 | P1이 파일 읽기(I/O) 요청 |
+| t=4 | P2 디스패치; P4 생성 |
+| t=5 | P1의 I/O 완료 |
+| t=6 | P2의 타임 슬라이스(time slice) 만료 |
+| t=7 | P1 디스패치; P3 디스패치(멀티코어) |
+| t=8 | P3가 exit() 호출 |
+
+표를 채우세요:
+
+| 프로세스 | t=0 | t=1 | t=2 | t=3 | t=4 | t=5 | t=6 | t=7 | t=8 |
+|----------|-----|-----|-----|-----|-----|-----|-----|-----|-----|
+| P1 | | | | | | | | | |
+| P2 | | | | | | | | | |
+| P3 | | | | | | | | | |
+| P4 | | | | | | | | | |
+
+### 연습 3: fork() 출력 예측
+
+아래 프로그램의 정확한 출력을 예측하세요. 각 줄이 몇 번 출력되는지도 포함합니다. 버퍼링 문제는 없고 PID가 1000, 1001, 1002 순서로 할당된다고 가정합니다.
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int x = 0;
+
+int main() {
+    printf("start\n");
+
+    pid_t p1 = fork();
+    if (p1 == 0) {
+        x = 10;
+        printf("child1: x=%d\n", x);
+        return 0;
+    }
+
+    pid_t p2 = fork();
+    if (p2 == 0) {
+        x = 20;
+        printf("child2: x=%d\n", x);
+        return 0;
+    }
+
+    wait(NULL);
+    wait(NULL);
+    printf("parent: x=%d\n", x);
+    return 0;
+}
+```
+
+1. 원래 프로세스를 포함하여 총 몇 개의 프로세스가 생성되나요?
+2. 종료 시 부모 프로세스에서 `x`의 값은 얼마인가요? 그 이유는?
+3. 두 자식 프로세스의 출력 순서가 바뀔 수 있나요? 이유는?
+
+### 연습 4: 좀비(Zombie)와 고아(Orphan) 프로세스
+
+다음 코드를 읽고 질문에 답하세요.
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+int main() {
+    pid_t pid = fork();
+
+    if (pid > 0) {
+        // Parent
+        printf("Parent sleeping...\n");
+        sleep(60);   // Does NOT call wait()
+        printf("Parent done\n");
+    } else {
+        // Child
+        printf("Child exiting immediately\n");
+        exit(0);
+    }
+    return 0;
+}
+```
+
+1. 부모가 잠든 동안 자식 프로세스가 `exit(0)`을 호출하면 어떤 상태가 되나요? 이유는?
+2. 리눅스(Linux)의 커맨드라인 도구를 사용하여 이 상태를 어떻게 확인할 수 있나요?
+3. 이 상황을 예방하기 위해 부모 코드에 어떤 변경이 필요한가요?
+4. 부모가 `sleep(60)`이 끝나기 전에 충돌(crash)한다면 자식은 어떻게 되나요? 어떤 프로세스가 자식을 입양하나요?
+
+### 연습 5: 컨텍스트 스위치(Context Switch) 비용 추정
+
+어떤 시스템이 초당 1,000번의 컨텍스트 스위치를 수행합니다. 각 스위치의 직접 오버헤드(레지스터 저장/복원)는 약 5마이크로초이고, 간접 오버헤드(TLB 플러시, 캐시 워밍)는 추가로 15마이크로초입니다.
+
+1. 초당 컨텍스트 스위치로 인해 손실되는 총 CPU 시간을 계산하세요
+2. 이를 1GHz 단일 코어 CPU의 초당 전체 사이클 수 대비 백분율로 나타내세요
+3. 타임 퀀텀(time quantum)을 두 배로 늘려 초당 컨텍스트 스위치를 500회로 줄인다면 새로운 오버헤드 비율은 얼마인가요?
+4. 오버헤드가 줄어도 컨텍스트 스위치를 줄이면 성능이 저하되는 두 가지 워크로드(workload) 유형을 말하세요
+
+---
+
 ## 다음 단계
 
-- [03_Threads_and_Multithreading.md](./03_Threads_and_Multithreading.md) - 스레드 개념과 멀티스레딩 모델
+- [스레드와 멀티스레딩](./03_Threads_and_Multithreading.md) - 스레드 개념과 멀티스레딩 모델
 
 ---
 

@@ -532,10 +532,15 @@ def two_stream_dispersion(k, omega_p0, omega_pb, v0):
     """
     def dispersion_eq(omega_complex):
         omega = omega_complex[0] + 1j * omega_complex[1]
+        # The dispersion relation is written as ε = 0 with two separate Langmuir
+        # terms: the background contributes ω_p0²/ω² (stationary) and the beam
+        # contributes ω_pb²/(ω - kv0)² in the beam rest frame, Doppler-shifted back.
         eps = 1 - omega_p0**2/omega**2 - omega_pb**2/(omega - k*v0)**2
         return [np.real(eps), np.imag(eps)]
 
-    # Initial guess
+    # Starting near (ω_p0, 0) because the instability is a perturbation of the
+    # background Langmuir wave; a small imaginary part seeds the root-finder in the
+    # upper half-plane where growing solutions (Im ω > 0) live.
     omega_guess = [omega_p0, 0.1 * omega_p0]
 
     sol = fsolve(dispersion_eq, omega_guess)
@@ -549,16 +554,20 @@ e = 1.602e-19  # C
 epsilon_0 = 8.854e-12  # F/m
 
 omega_p0 = np.sqrt(n0 * e**2 / (epsilon_0 * m_e))
+# ω_pb << ω_p0 because n_b << n_0; this is the weak-beam limit where the
+# perturbative growth rate γ ~ ω_p0 (n_b/n_0)^(1/3) is valid.
 omega_pb = np.sqrt(nb_frac * n0 * e**2 / (epsilon_0 * m_e))
 
-# Beam velocity
+# v0 is chosen so that the resonance condition k v0 ~ ω_p0 falls in the middle
+# of the scan range; this ensures the peak growth region is fully resolved.
 v0 = 2 * omega_p0 * (1e8 / omega_p0)  # Choose v0 ~ ω_p0/k_typical
 
 print(f"Background plasma frequency: ω_p0 = {omega_p0:.2e} rad/s")
 print(f"Beam plasma frequency: ω_pb = {omega_pb:.2e} rad/s")
 print(f"Beam velocity: v0 = {v0:.2e} m/s")
 
-# Wavenumber scan
+# Scanning k around ω_p0/v0 centres the scan on the resonant wavenumber kv0 = ω_p0
+# where the Langmuir wave phase velocity matches the beam — peak growth occurs here.
 k_array = np.linspace(0.5, 3, 100) * omega_p0 / v0
 
 omega_real = []
@@ -616,11 +625,19 @@ def weibel_growth_rate(T_perp, T_parallel, n, B0=0):
     γ_max ≈ ω_pe √[(T_⊥ - T_∥)/T_∥]
     """
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
+    # The anisotropy A = (T_⊥ - T_∥)/T_∥ is the sole dimensionless free-energy
+    # parameter in the Weibel problem; it measures how far the distribution departs
+    # from isotropy and hence how much energy is available to drive the instability.
     anisotropy = (T_perp - T_parallel) / T_parallel
 
+    # γ_max ~ ω_pe √A comes from the Vlasov–Maxwell analysis: the magnetic
+    # perturbation couples to the anisotropic current, and ω_pe sets the time scale
+    # for the electromagnetic response to the resulting current filaments.
     if anisotropy > 0:
         gamma_max = omega_pe * np.sqrt(anisotropy)
     else:
+        # Negative anisotropy (T_∥ > T_⊥) would drive the firehose instability,
+        # not Weibel; return zero to indicate no Weibel growth in that regime.
         gamma_max = 0
 
     return gamma_max, omega_pe
@@ -765,17 +782,24 @@ def srs_growth_rate(I_laser, n, T_e, lambda_laser=1.053e-6):
     omega_0 = 2 * np.pi * c / lambda_laser
     omega_pe = np.sqrt(n * e**2 / (epsilon_0 * m_e))
 
-    # Quiver velocity
+    # E_0 is derived from the time-averaged Poynting flux I = ε_0 c E_0²/2;
+    # the quiver velocity v_osc = eE_0/(m_e ω_0) characterises how strongly
+    # laser-field oscillations displace electrons relative to ions — it is the
+    # natural measure of pump amplitude in all parametric instability formulas.
     E_0 = np.sqrt(2 * I_laser / (c * epsilon_0))
     v_osc = e * E_0 / (m_e * omega_0)
 
-    # Scattered wave frequency (backward scattering)
+    # In backscatter geometry ω_s = ω_0 - ω_pe because the Langmuir wave (ω_pe)
+    # carries the frequency mismatch; the approximation is valid when ω_pe << ω_0.
     omega_s = omega_0 - omega_pe  # Approximate
 
-    # Langmuir wavenumber
+    # k_L = 2ω_0/c is the backscatter wavenumber: the scattered EM wave reverses
+    # direction (k_s ≈ -k_0) so the Langmuir wave must satisfy k_L = k_0 + |k_s| ≈ 2k_0.
     k_L = 2 * omega_0 / c  # Backscatter
 
-    # Growth rate
+    # The √(ω_0/ω_s) factor enhances growth because the scattered wave is near
+    # its cutoff (ω_s close to ω_pe), making its group velocity small and allowing
+    # longer coherent energy transfer from the pump to the daughter waves.
     gamma_SRS = (k_L * v_osc / 4) * np.sqrt(omega_0 / omega_s)
 
     return gamma_SRS

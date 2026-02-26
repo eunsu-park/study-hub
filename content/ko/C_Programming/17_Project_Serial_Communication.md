@@ -1,13 +1,24 @@
 # 프로젝트 16: 시리얼 통신
 
+**이전**: [프로젝트 15: GPIO 제어](./16_Project_GPIO_Control.md) | **다음**: [디버깅과 메모리 분석](./18_Debugging_Memory_Analysis.md)
+
 UART 시리얼 통신을 이용한 PC와의 양방향 데이터 교환을 배웁니다.
 
-## 학습 목표
-- UART 통신 원리 이해
-- 시리얼 데이터 송수신
-- 문자열 파싱
-- 명령어 인터프리터 구현
-- 디버깅 기법
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 보레이트(baud rate), 데이터 비트, 패리티(parity), 스톱 비트 등 UART 통신 파라미터 설명하기
+2. `Serial.print()`, `Serial.write()`, `sprintf()`를 사용하여 시리얼로 형식화된 데이터 전송하기
+3. 시리얼 입력을 문자 단위로 수신하고 버퍼에 쌓아 완전한 한 줄로 만들기
+4. `strtok()`와 `atoi()`를 사용하여 인자가 있는 명령어 문자열 파싱하기
+5. 프레이밍(framing), 체크섬(checksum), 상태 머신(state machine) 수신기를 갖춘 간단한 바이너리 통신 프로토콜 설계 및 구현하기
+6. 디버그 매크로(debug macro)와 시리얼 로깅을 사용하여 임베디드 프로그램 동작 진단하기
+7. help, 상태 조회, 장치 제어 명령어를 갖춘 터미널 스타일 명령어 인터페이스 구축하기
+
+---
+
+시리얼 통신은 임베디드 장치가 외부 세계와 소통하는 가장 오래되고 보편적인 방법입니다. Wi-Fi와 Bluetooth가 등장하기 훨씬 전부터, 엔지니어들은 시리얼 터미널에 흘러가는 텍스트를 읽으며 하드웨어를 디버깅했습니다. UART를 이해하면 안정적인 디버깅 채널을 갖게 되고, 이후에 접하게 될 모든 상위 레벨 프로토콜의 기초를 다질 수 있습니다.
 
 ## 사전 지식
 - Arduino 기본 구조
@@ -26,12 +37,12 @@ UART 시리얼 통신을 이용한 PC와의 양방향 데이터 교환을 배웁
 UART 통신 구조:
 
 Arduino                           PC
-┌─────────┐                    ┌─────────┐
-│         │───── TX ─────────→│ RX      │
-│  MCU    │                    │  USB    │
-│         │←───── RX ─────────│ TX      │
-│         │───── GND ─────────│ GND     │
-└─────────┘                    └─────────┘
++---------+                    +---------+
+|         |----- TX ---------->| RX      |
+|  MCU    |                    |  USB    |
+|         |<----- RX ----------| TX      |
+|         |----- GND ----------| GND     |
++---------+                    +---------+
 
 - TX (Transmit): 데이터 송신
 - RX (Receive): 데이터 수신
@@ -47,10 +58,10 @@ Baud Rate (보레이트):
 - 송신측과 수신측이 같아야 함
 
 데이터 프레임:
-┌─────┬────────────┬────────┬─────┐
-│Start│  Data bits │ Parity │Stop │
-│ bit │ (5-9 bits) │ (opt)  │bit  │
-└─────┴────────────┴────────┴─────┘
++-----+------------+--------+-----+
+|Start|  Data bits | Parity |Stop |
+| bit | (5-9 bits) | (opt)  |bit  |
++-----+------------+--------+-----+
 
 일반적인 설정: 8N1
 - 8 데이터 비트
@@ -63,12 +74,12 @@ Baud Rate (보레이트):
 ```
 문자 'A' (ASCII 65 = 0b01000001) 전송:
 
-HIGH ─────┐     ┌─────┐                 ┌─────────
-          │     │     │                 │
-LOW       └─────┘     └─────────────────┘
-          │Start│  0  1  0  0  0  0  0  1 │ Stop │
-          │ bit │      Data bits (LSB first)│ bit │
-                        ← 'A' = 0x41 →
+HIGH -----+     +-----+                 +---------
+          |     |     |                 |
+LOW       +-----+     +-----------------+
+          |Start|  0  1  0  0  0  0  0  1 | Stop |
+          | bit |      Data bits (LSB first)| bit |
+                        <- 'A' = 0x41 ->
 
 시간: 1/9600 ≈ 104μs per bit
 1 문자 = 10 bits = 약 1.04ms
@@ -109,29 +120,29 @@ Serial.setTimeout(ms);       // 타임아웃 설정 (기본 1000ms)
 
 ```cpp
 // serial_output.ino
-// 다양한 형식의 시리얼 출력
+// Various serial output formats
 
 void setup() {
     Serial.begin(9600);
 
-    // 연결 대기 (선택적)
+    // Wait for connection (optional)
     while (!Serial) {
-        ; // USB 연결 대기
+        ; // Wait for USB connection
     }
 
     Serial.println("=== Serial Output Demo ===");
 }
 
 void loop() {
-    // 문자열 출력
+    // String output
     Serial.println("Hello, World!");
 
-    // 숫자 출력
+    // Number output
     int num = 42;
     Serial.print("Number: ");
     Serial.println(num);
 
-    // 다양한 진법
+    // Various bases
     Serial.print("Decimal: ");
     Serial.println(255, DEC);    // 255
 
@@ -144,12 +155,12 @@ void loop() {
     Serial.print("Hex:     ");
     Serial.println(255, HEX);    // FF
 
-    // 실수 출력
+    // Float output
     float pi = 3.14159;
     Serial.print("Pi: ");
-    Serial.println(pi, 4);       // 소수점 4자리
+    Serial.println(pi, 4);       // 4 decimal places
 
-    // 포맷 문자열 (sprintf 사용)
+    // Format string (using sprintf)
     char buffer[50];
     sprintf(buffer, "x=%d, y=%d, val=%.2f", 10, 20, 3.14);
     Serial.println(buffer);
@@ -162,7 +173,7 @@ void loop() {
 
 ```cpp
 // serial_input.ino
-// 시리얼 입력 처리
+// Serial input handling
 
 void setup() {
     Serial.begin(9600);
@@ -170,12 +181,12 @@ void setup() {
 }
 
 void loop() {
-    // 수신 데이터가 있는지 확인
+    // Check if data received
     if (Serial.available() > 0) {
-        // 한 문자 읽기
+        // Read one character
         char c = Serial.read();
 
-        // 에코 (받은 문자 그대로 출력)
+        // Echo (output received character)
         Serial.print("Received: '");
         Serial.print(c);
         Serial.print("' (ASCII ");
@@ -193,37 +204,37 @@ void loop() {
 
 ```cpp
 // serial_readline.ino
-// 한 줄씩 읽기
+// Read line by line
 
 String inputString = "";
 bool stringComplete = false;
 
 void setup() {
     Serial.begin(9600);
-    inputString.reserve(200);  // 메모리 예약
+    inputString.reserve(200);  // Reserve memory
     Serial.println("Enter a line:");
 }
 
 void loop() {
-    // 한 줄 완성되면 처리
+    // Process when line is complete
     if (stringComplete) {
         Serial.print("You entered: ");
         Serial.println(inputString);
 
-        // 초기화
+        // Reset
         inputString = "";
         stringComplete = false;
     }
 }
 
-// 시리얼 이벤트 (자동 호출)
+// Serial event (called automatically)
 void serialEvent() {
     while (Serial.available()) {
         char c = (char)Serial.read();
 
         if (c == '\n') {
             stringComplete = true;
-        } else if (c != '\r') {  // CR 무시
+        } else if (c != '\r') {  // Ignore CR
             inputString += c;
         }
     }
@@ -234,7 +245,7 @@ void serialEvent() {
 
 ```cpp
 // serial_char_array.ino
-// char 배열 사용 (String 대신)
+// Using char array (instead of String)
 
 #define MAX_INPUT 64
 
@@ -248,13 +259,13 @@ void setup() {
 }
 
 void loop() {
-    // 데이터 수신
+    // Receive data
     while (Serial.available() && !lineReady) {
         char c = Serial.read();
 
         if (c == '\n' || c == '\r') {
             if (inputIndex > 0) {
-                inputBuffer[inputIndex] = '\0';  // 문자열 종료
+                inputBuffer[inputIndex] = '\0';  // Null terminate
                 lineReady = true;
             }
         } else if (inputIndex < MAX_INPUT - 1) {
@@ -262,12 +273,12 @@ void loop() {
         }
     }
 
-    // 완성된 라인 처리
+    // Process completed line
     if (lineReady) {
         Serial.print("Command: ");
         Serial.println(inputBuffer);
 
-        // 처리 후 초기화
+        // Reset after processing
         inputIndex = 0;
         lineReady = false;
     }
@@ -282,7 +293,7 @@ void loop() {
 
 ```cpp
 // serial_commands.ino
-// 간단한 명령어 처리
+// Simple command handling
 
 const int LED_PIN = 13;
 
@@ -295,8 +306,8 @@ void setup() {
 }
 
 void processCommand(String cmd) {
-    cmd.trim();  // 앞뒤 공백 제거
-    cmd.toUpperCase();  // 대문자로 변환
+    cmd.trim();  // Remove leading/trailing whitespace
+    cmd.toUpperCase();  // Convert to uppercase
 
     if (cmd == "ON") {
         digitalWrite(LED_PIN, HIGH);
@@ -338,7 +349,7 @@ void loop() {
 
 ```cpp
 // serial_args.ino
-// 인자가 있는 명령어 처리
+// Command handling with arguments
 
 const int LED_PINS[] = {9, 10, 11, 12};
 const int NUM_LEDS = 4;
@@ -386,7 +397,7 @@ void processCommand(char* input) {
     char* cmd = strtok(input, " ");
     if (cmd == NULL) return;
 
-    // 대문자로 변환
+    // Convert to uppercase
     for (int i = 0; cmd[i]; i++) {
         cmd[i] = toupper(cmd[i]);
     }
@@ -450,7 +461,7 @@ void loop() {
 
 ```cpp
 // serial_calculator.ino
-// 시리얼로 수식을 입력받아 계산
+// Receive expression via serial and calculate
 
 void setup() {
     Serial.begin(9600);
@@ -488,7 +499,7 @@ void processExpression(char* expr) {
     float num1, num2;
     char op;
 
-    // 수식 파싱: "num1 op num2"
+    // Parse expression: "num1 op num2"
     int parsed = sscanf(expr, "%f %c %f", &num1, &op, &num2);
 
     if (parsed == 3) {
@@ -517,10 +528,10 @@ void loop() {
             if (inputIndex > 0) {
                 inputBuffer[inputIndex] = '\0';
 
-                // 종료 명령 확인
+                // Check quit command
                 if (strcmp(inputBuffer, "quit") == 0) {
                     Serial.println("Goodbye!");
-                    while (1);  // 정지
+                    while (1);  // Stop
                 }
 
                 processExpression(inputBuffer);
@@ -543,9 +554,9 @@ void loop() {
 
 ```cpp
 // serial_protocol.ino
-// 간단한 통신 프로토콜 구현
+// Simple communication protocol implementation
 
-// 프로토콜 형식:
+// Protocol format:
 // <STX><TYPE><LENGTH><DATA><CHECKSUM><ETX>
 // STX = 0x02 (Start of Text)
 // ETX = 0x03 (End of Text)
@@ -553,7 +564,7 @@ void loop() {
 #define STX 0x02
 #define ETX 0x03
 
-// 메시지 타입
+// Message types
 #define MSG_LED_SET     0x01
 #define MSG_LED_GET     0x02
 #define MSG_TEMP_GET    0x03
@@ -606,8 +617,8 @@ void processMessage(byte type, byte* data, byte length) {
 
         case MSG_TEMP_GET:
             {
-                // 임의의 온도 값 (실제로는 센서에서 읽음)
-                byte temp[] = {25, 50};  // 25.50도
+                // Arbitrary temperature value (would read from sensor)
+                byte temp[] = {25, 50};  // 25.50 degrees
                 sendMessage(MSG_TEMP_GET, temp, 2);
             }
             break;
@@ -617,7 +628,7 @@ void processMessage(byte type, byte* data, byte length) {
     }
 }
 
-// 수신 상태 머신
+// Receive state machine
 enum RxState { WAIT_STX, WAIT_TYPE, WAIT_LENGTH, WAIT_DATA, WAIT_CHECKSUM, WAIT_ETX };
 RxState rxState = WAIT_STX;
 
@@ -684,9 +695,9 @@ void loop() {
 
 ```cpp
 // serial_json.ino
-// JSON 형식 통신 (ArduinoJson 라이브러리 필요)
+// JSON format communication (requires ArduinoJson library)
 
-// Library Manager에서 "ArduinoJson" 설치
+// Install "ArduinoJson" from Library Manager
 
 #include <ArduinoJson.h>
 
@@ -756,7 +767,7 @@ void loop() {
     }
 }
 
-// 사용 예:
+// Usage examples:
 // {"cmd":"set_led","state":true}
 // {"cmd":"get_status"}
 // {"cmd":"set_name","name":"MyDevice"}
@@ -770,9 +781,9 @@ void loop() {
 
 ```cpp
 // debug_macros.ino
-// 디버그 출력 매크로
+// Debug output macros
 
-#define DEBUG 1  // 0으로 변경하면 디버그 출력 비활성화
+#define DEBUG 1  // Set to 0 to disable debug output
 
 #if DEBUG
     #define DEBUG_PRINT(x)    Serial.print(x)
@@ -820,7 +831,7 @@ void loop() {
 
 ```cpp
 // serial_monitor.ino
-// 실시간 변수 모니터링
+// Real-time variable monitoring
 
 const int SENSOR_PIN = A0;
 const int LED_PIN = 13;
@@ -834,28 +845,28 @@ unsigned long uptime = 0;
 int loopCount = 0;
 
 void setup() {
-    Serial.begin(115200);  // 빠른 속도 사용
+    Serial.begin(115200);  // Use fast speed
     pinMode(LED_PIN, OUTPUT);
 
-    // CSV 헤더 출력
+    // Print CSV header
     Serial.println("time_ms,sensor,led,loop_count");
 }
 
 void loop() {
     loopCount++;
 
-    // 센서 읽기
+    // Read sensor
     sensorValue = analogRead(SENSOR_PIN);
 
-    // LED 제어 (센서값에 따라)
+    // LED control (based on sensor value)
     ledState = (sensorValue > 512) ? HIGH : LOW;
     digitalWrite(LED_PIN, ledState);
 
-    // 주기적으로 데이터 출력
+    // Print data periodically
     if (millis() - lastPrint >= printInterval) {
         lastPrint = millis();
 
-        // CSV 형식 출력
+        // CSV format output
         Serial.print(millis());
         Serial.print(",");
         Serial.print(sensorValue);
@@ -868,15 +879,15 @@ void loop() {
     }
 }
 
-// Serial Plotter에서 그래프로 확인 가능
-// Tools → Serial Plotter
+// Can view as graph in Serial Plotter
+// Tools -> Serial Plotter
 ```
 
 ### 상태 머신 디버깅
 
 ```cpp
 // state_debug.ino
-// 상태 머신 디버깅
+// State machine debugging
 
 enum State { IDLE, RUNNING, PAUSED, ERROR };
 State currentState = IDLE;
@@ -914,7 +925,7 @@ void loop() {
             break;
 
         case RUNNING:
-            digitalWrite(13, (millis() / 500) % 2);  // LED 깜빡임
+            digitalWrite(13, (millis() / 500) % 2);  // LED blink
             if (btn2) currentState = PAUSED;
             break;
 
@@ -924,7 +935,7 @@ void loop() {
             break;
 
         case ERROR:
-            // 에러 처리
+            // Error handling
             break;
     }
 
@@ -939,18 +950,18 @@ void loop() {
 
 ```cpp
 // terminal_interface.ino
-// 완성된 터미널 인터페이스
+// Complete terminal interface
 
 #define VERSION "1.0.0"
 #define MAX_CMD_LEN 64
 #define MAX_ARGS 8
 
-// 핀 설정
+// Pin setup
 const int LED_PINS[] = {9, 10, 11, 12, 13};
 const int NUM_LEDS = 5;
 const int BUTTON_PIN = 2;
 
-// 변수
+// Variables
 char cmdBuffer[MAX_CMD_LEN];
 int cmdIndex = 0;
 bool echoEnabled = true;
@@ -1087,10 +1098,10 @@ int freeMemory() {
 }
 
 void processCommand(char* cmd) {
-    // 빈 명령 무시
+    // Ignore empty command
     if (strlen(cmd) == 0) return;
 
-    // 토큰 분리
+    // Tokenize
     char* argv[MAX_ARGS];
     int argc = 0;
 
@@ -1100,12 +1111,12 @@ void processCommand(char* cmd) {
         token = strtok(NULL, " ");
     }
 
-    // 소문자로 변환 (명령어만)
+    // Convert to lowercase (command only)
     for (int i = 0; argv[0][i]; i++) {
         argv[0][i] = tolower(argv[0][i]);
     }
 
-    // 명령어 처리
+    // Command processing
     if (strcmp(argv[0], "help") == 0) {
         printHelp();
     }
@@ -1139,7 +1150,7 @@ void processCommand(char* cmd) {
     else if (strcmp(argv[0], "reboot") == 0) {
         Serial.println("Rebooting...");
         delay(100);
-        asm volatile ("jmp 0");  // 소프트 리셋
+        asm volatile ("jmp 0");  // Soft reset
     }
     else {
         Serial.print("Unknown command: ");
@@ -1152,7 +1163,7 @@ void loop() {
     while (Serial.available()) {
         char c = Serial.read();
 
-        // Enter 키
+        // Enter key
         if (c == '\r' || c == '\n') {
             if (echoEnabled) Serial.println();
 
@@ -1167,11 +1178,11 @@ void loop() {
             if (cmdIndex > 0) {
                 cmdIndex--;
                 if (echoEnabled) {
-                    Serial.print("\b \b");  // 지우기
+                    Serial.print("\b \b");  // Erase
                 }
             }
         }
-        // 일반 문자
+        // Normal character
         else if (cmdIndex < MAX_CMD_LEN - 1 && c >= 32) {
             cmdBuffer[cmdIndex++] = c;
             if (echoEnabled) Serial.print(c);
@@ -1211,11 +1222,11 @@ PC에서 바이트 시퀀스를 보내면 해석하여 LED를 제어하는 바�
 
 | 개념 | 설명 |
 |------|------|
-| Baud Rate | 초당 전송 비트 수 |
+| Baud Rate(보레이트) | 초당 전송 비트 수 |
 | UART | 비동기 시리얼 통신 |
 | TX/RX | 송신/수신 핀 |
-| 버퍼 | 수신 데이터 임시 저장소 |
-| 프로토콜 | 통신 규약 |
+| 버퍼(buffer) | 수신 데이터 임시 저장소 |
+| 프로토콜(protocol) | 통신 규약 |
 
 ---
 
@@ -1223,10 +1234,10 @@ PC에서 바이트 시퀀스를 보내면 해석하여 LED를 제어하는 바�
 
 4개의 임베디드 기초 문서를 완료했습니다:
 
-1. ✅ 임베디드 기초 - 개념, Arduino 환경
-2. ✅ 비트 연산 심화 - 마스킹, 레지스터, volatile
-3. ✅ GPIO 제어 - LED, 버튼, 디바운싱
-4. ✅ 시리얼 통신 - UART, 파싱, 디버깅
+1. 임베디드 기초 - 개념, Arduino 환경
+2. 비트 연산 심화 - 마스킹, 레지스터, volatile
+3. GPIO 제어 - LED, 버튼, 디바운싱
+4. 시리얼 통신 - UART, 파싱, 디버깅
 
 ### 다음 학습 추천
 
@@ -1243,3 +1254,5 @@ PC에서 바이트 시퀀스를 보내면 해석하여 LED를 제어하는 바�
 - **Wokwi**: https://wokwi.com (무료 시뮬레이터)
 - **TinkerCAD**: https://tinkercad.com/circuits
 - **Arduino 공식**: https://www.arduino.cc
+
+**이전**: [프로젝트 15: GPIO 제어](./16_Project_GPIO_Control.md) | **다음**: [디버깅과 메모리 분석](./18_Debugging_Memory_Analysis.md)

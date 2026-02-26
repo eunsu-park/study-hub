@@ -88,18 +88,18 @@ C_Programming은 마이크로컨트롤러의 저수준 하드웨어 제어를 �
 
 | 파일명 | 난이도 | 주제 | 핵심 내용 |
 |--------|--------|------|-----------|
-| [01_IoT_Overview.md](01_IoT_Overview.md) | ⭐ | IoT 개요 | IoT 정의, 아키텍처, 프로토콜 |
-| [02_Raspberry_Pi_Setup.md](02_Raspberry_Pi_Setup.md) | ⭐ | 라즈베리파이 설정 | OS 설치, SSH, GPIO 핀아웃 |
-| [03_Python_GPIO_Control.md](03_Python_GPIO_Control.md) | ⭐⭐ | GPIO 제어 | RPi.GPIO, gpiozero, 센서 |
-| [04_WiFi_Networking.md](04_WiFi_Networking.md) | ⭐⭐ | WiFi 네트워킹 | 소켓, HTTP 클라이언트 |
-| [05_BLE_Connectivity.md](05_BLE_Connectivity.md) | ⭐⭐⭐ | BLE 연결 | GATT, bleak 라이브러리 |
-| [06_MQTT_Protocol.md](06_MQTT_Protocol.md) | ⭐⭐ | MQTT 프로토콜 | Mosquitto, paho-mqtt |
-| [07_HTTP_REST_for_IoT.md](07_HTTP_REST_for_IoT.md) | ⭐⭐ | HTTP/REST | Flask 서버, API 설계 |
-| [08_Edge_AI_TFLite.md](08_Edge_AI_TFLite.md) | ⭐⭐⭐ | Edge AI (TFLite) | 모델 변환, 추론 |
-| [09_Edge_AI_ONNX.md](09_Edge_AI_ONNX.md) | ⭐⭐⭐ | Edge AI (ONNX) | ONNX Runtime, 최적화 |
-| [10_Home_Automation_Project.md](10_Home_Automation_Project.md) | ⭐⭐⭐ | 홈 자동화 | 스마트홈, MQTT 제어 |
-| [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md) | ⭐⭐⭐ | 영상 분석 | Pi Camera, 객체 검출 |
-| [12_Cloud_IoT_Integration.md](12_Cloud_IoT_Integration.md) | ⭐⭐⭐ | 클라우드 IoT | AWS IoT, GCP Pub/Sub |
+| [IoT 개요](01_IoT_Overview.md) | ⭐ | IoT 개요 | IoT 정의, 아키텍처, 프로토콜 |
+| [라즈베리파이 설정](02_Raspberry_Pi_Setup.md) | ⭐ | 라즈베리파이 설정 | OS 설치, SSH, GPIO 핀아웃 |
+| [Python GPIO 제어](03_Python_GPIO_Control.md) | ⭐⭐ | GPIO 제어 | RPi.GPIO, gpiozero, 센서 |
+| [WiFi 네트워킹](04_WiFi_Networking.md) | ⭐⭐ | WiFi 네트워킹 | 소켓, HTTP 클라이언트 |
+| [BLE 연결](05_BLE_Connectivity.md) | ⭐⭐⭐ | BLE 연결 | GATT, bleak 라이브러리 |
+| [MQTT 프로토콜](06_MQTT_Protocol.md) | ⭐⭐ | MQTT 프로토콜 | Mosquitto, paho-mqtt |
+| [HTTP/REST for IoT](07_HTTP_REST_for_IoT.md) | ⭐⭐ | HTTP/REST | Flask 서버, API 설계 |
+| [Edge AI - TensorFlow Lite](08_Edge_AI_TFLite.md) | ⭐⭐⭐ | Edge AI (TFLite) | 모델 변환, 추론 |
+| [Edge AI - ONNX Runtime](09_Edge_AI_ONNX.md) | ⭐⭐⭐ | Edge AI (ONNX) | ONNX Runtime, 최적화 |
+| [홈 자동화 프로젝트](10_Home_Automation_Project.md) | ⭐⭐⭐ | 홈 자동화 | 스마트홈, MQTT 제어 |
+| [영상 분석 프로젝트](11_Image_Analysis_Project.md) | ⭐⭐⭐ | 영상 분석 | Pi Camera, 객체 검출 |
+| [클라우드 IoT 통합](12_Cloud_IoT_Integration.md) | ⭐⭐⭐ | 클라우드 IoT | AWS IoT, GCP Pub/Sub |
 
 **난이도 범례**: ⭐ 입문 | ⭐⭐ 초급 | ⭐⭐⭐ 중급
 

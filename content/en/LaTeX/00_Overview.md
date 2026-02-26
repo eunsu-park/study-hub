@@ -9,15 +9,15 @@ A comprehensive guide to LaTeX document preparation system, covering document st
 | 01 | [Introduction & Setup](01_Introduction_and_Setup.md) | TeX/LaTeX overview, installation, editors, first document |
 | 02 | [Document Structure](02_Document_Structure.md) | Document classes, preamble, sectioning, organization |
 | 03 | [Text Formatting](03_Text_Formatting.md) | Fonts, sizes, emphasis, colors, spacing |
-| 04 | [Lists & Environments](04_Lists_and_Environments.md) | Itemize, enumerate, description, custom lists |
-| 05 | [Tables](05_Tables.md) | Tabular environment, multirow, multicolumn, booktabs |
-| 06 | [Figures & Graphics](06_Figures_and_Graphics.md) | Includegraphics, subfigures, positioning, captions |
-| 07 | [Mathematical Typesetting I](07_Mathematical_Typesetting_I.md) | Inline math, display math, symbols, operators |
-| 08 | [Mathematical Typesetting II](08_Mathematical_Typesetting_II.md) | Matrices, alignments, theorems, advanced equations |
-| 09 | [Cross-References](09_Cross_References.md) | Labels, references, hyperref, cleveref |
-| 10 | [Bibliography](10_Bibliography.md) | BibTeX, BibLaTeX, citation styles, reference management |
-| 11 | [Presentations with Beamer](11_Presentations_with_Beamer.md) | Slides, themes, overlays, handouts |
-| 12 | [Graphics with TikZ](12_Graphics_with_TikZ.md) | Drawing diagrams, plots, flowcharts, scientific illustrations |
+| 04 | [Mathematical Typesetting Basics](04_Math_Basics.md) | Inline/display math, Greek letters, fractions, delimiters, basic symbols |
+| 05 | [Advanced Mathematics](05_Math_Advanced.md) | Multi-line equations, matrices, theorem environments, amsmath |
+| 06 | [Floats, Figures & Tables](06_Floats_and_Figures.md) | Float system, graphicx, subfigures, captions, positioning |
+| 07 | [Advanced Tables](07_Tables_Advanced.md) | Booktabs, multirow/multicolumn, colored cells, long tables |
+| 08 | [Cross-References & Citations](08_Cross_References.md) | Labels, references, BibTeX, BibLaTeX, citation styles |
+| 09 | [Page Layout & Typography](09_Page_Layout.md) | Geometry, fancyhdr, line spacing, indentation, fonts |
+| 10 | [TikZ Graphics Basics](10_TikZ_Basics.md) | Coordinate system, basic shapes, styles, nodes, labels |
+| 11 | [Advanced TikZ & PGFPlots](11_TikZ_Advanced.md) | Loops, trees, graphs, PGFPlots, scientific illustrations |
+| 12 | [Beamer Presentations](12_Beamer_Presentations.md) | Frames, themes, overlays, incremental content, handouts |
 | 13 | [Custom Commands](13_Custom_Commands.md) | Macros, environments, counters, personal packages |
 | 14 | [Document Classes](14_Document_Classes.md) | Article, report, book, KOMA-Script, thesis templates |
 | 15 | [Automation & Build](15_Automation_and_Build.md) | latexmk, arara, Makefile, CI/CD, version control |
@@ -31,11 +31,12 @@ A comprehensive guide to LaTeX document preparation system, covering document st
 
 ## Learning Path
 
-1. **Beginners**: Start with lessons 01-06 to learn document basics
-2. **Academic Writing**: Focus on lessons 07-10 for mathematical papers
-3. **Presentations**: Jump to lesson 11 after completing basics
-4. **Advanced**: Lessons 12-15 for graphics, customization, and workflows
-5. **Integration**: Lesson 16 brings everything together in real projects
+1. **Beginners**: Start with lessons 01-03 for document structure and formatting
+2. **Academic Writing**: Focus on lessons 04-08 for math, figures, tables, and references
+3. **Page Design**: Lesson 09 for layout and typography customization
+4. **Graphics & Presentations**: Lessons 10-12 for TikZ and Beamer
+5. **Advanced**: Lessons 13-15 for custom commands, document classes, and build automation
+6. **Integration**: Lesson 16 brings everything together in real projects
 
 ## Example Code
 

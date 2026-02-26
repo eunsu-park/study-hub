@@ -1,15 +1,17 @@
 # Backup and Recovery
 
+**Previous**: [Log Management](./18_Log_Management.md) | **Next**: [Kernel Management](./20_Kernel_Management.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Efficient backup using rsync
-- Deduplication backup with Borg Backup
-- System image backup and recovery
-- Disaster recovery (DR) strategy planning
-
-**Difficulty**: Advanced
+1. Design a backup strategy using the 3-2-1 rule with appropriate RTO and RPO targets
+2. Perform incremental backups with rsync using hard links for space efficiency
+3. Configure Borg Backup repositories with encryption, compression, and automated pruning
+4. Create system-level disk images using dd and LVM snapshots
+5. Execute a bare-metal disaster recovery procedure from backup to bootable system
+6. Automate backup workflows with systemd timers and implement monitoring alerts
 
 ---
 
@@ -24,6 +26,8 @@ Through this document, you will learn:
 7. [Automation and Monitoring](#7-automation-and-monitoring)
 
 ---
+
+Every system will eventually face a failure -- whether from hardware defects, human error, ransomware, or natural disaster. The question is not *if* you will need to recover data, but *when*. A well-designed backup and recovery strategy is the insurance policy that keeps your business running. This lesson covers the tools, techniques, and planning principles that transform backup from a checkbox item into a battle-tested recovery capability.
 
 ## 1. Backup Strategy Overview
 
@@ -891,10 +895,6 @@ borg extract /backup/borg-repo::backup-2024-01-15 etc/nginx
 
 ---
 
-## Next Steps
-
-- [20_Kernel_Management.md](./20_Kernel_Management.md) - Kernel compilation, modules, GRUB configuration
-
 ---
 
 ## References
@@ -903,3 +903,7 @@ borg extract /backup/borg-repo::backup-2024-01-15 etc/nginx
 - [Borg Backup Documentation](https://borgbackup.readthedocs.io/)
 - [Clonezilla](https://clonezilla.org/)
 - `man rsync`, `man tar`, `man dd`, `man borg`
+
+---
+
+**Previous**: [Log Management](./18_Log_Management.md) | **Next**: [Kernel Management](./20_Kernel_Management.md)

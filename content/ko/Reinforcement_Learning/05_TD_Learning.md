@@ -72,6 +72,8 @@ def td0_prediction(env, policy, n_episodes=10000, alpha=0.1, gamma=0.99):
     Returns:
         V: 상태 가치 함수
     """
+    # defaultdict(float)은 방문하지 않은 상태를 0으로 초기화 — 에이전트가
+    # 미방문 상태에 대해 편향 없이 중립적으로 시작할 수 있는 안전한 초기값
     V = defaultdict(float)
 
     for episode in range(n_episodes):
@@ -87,8 +89,12 @@ def td0_prediction(env, policy, n_episodes=10000, alpha=0.1, gamma=0.99):
             if done:
                 td_target = reward  # 종료 상태: V(s') = 0
             else:
+                # 부트스트랩(Bootstrap): 실제 보상과 V(s')의 할인 추정값을 혼합 —
+                # 에피소드 종료를 기다리지 않고 즉시 업데이트할 수 있는 핵심 원리
                 td_target = reward + gamma * V[next_state]
 
+            # TD 오차(error)는 현재 추정이 얼마나 틀렸는지를 나타내며, alpha는
+            # 수정 강도를 조절 (alpha가 크면 빠르지만 불안정, 작으면 안정적이지만 느림)
             td_error = td_target - V[state]
             V[state] = V[state] + alpha * td_error
 
@@ -420,6 +426,8 @@ def n_step_td(env, policy, n=3, n_episodes=1000, alpha=0.1, gamma=0.99):
     for episode in range(n_episodes):
         states = []
         rewards = [0]  # R_0 = 0 (사용하지 않음)
+        # T를 무한대로 시작하면 종료 상태(terminal)를 발견할 때까지
+        # 행동 루프가 자연스럽게 계속 실행됨
         T = float('inf')  # 종료 시점
         t = 0
 
@@ -440,14 +448,19 @@ def n_step_td(env, policy, n=3, n_episodes=1000, alpha=0.1, gamma=0.99):
 
                 state = next_state
 
+            # tau는 현재 시점에서 n 스텝 뒤처진 위치 — tau 이후 n개의
+            # 실제 보상이 확보되어야 비로소 상태 tau를 업데이트할 수 있음
             tau = t - n + 1  # 업데이트할 시점
 
             if tau >= 0:
-                # n-step 리턴 계산
+                # tau+1부터 n개의 실제 보상을 할인 합산;
+                # 실제 보상을 더 많이 사용할수록 순수 부트스트랩보다 편향이 줄어듦
                 G = sum(gamma ** (i - tau - 1) * rewards[i]
                         for i in range(tau + 1, min(tau + n, T) + 1))
 
                 if tau + n < T:
+                    # 에피소드가 아직 끝나지 않았을 때만 부트스트랩 추정값을 더함 —
+                    # 경계에서는 순수 MC 리턴이 되어 V가 필요 없음
                     G += gamma ** n * V[states[tau + n]]
 
                 # 업데이트
@@ -497,7 +510,8 @@ def td_lambda(env, policy, lambd=0.8, n_episodes=1000, alpha=0.1, gamma=0.99):
     V = defaultdict(float)
 
     for episode in range(n_episodes):
-        # Eligibility trace 초기화
+        # 에피소드 시작 시 trace를 초기화 — eligibility(자격)는 에피소드 단위로
+        # 관리되므로 한 에피소드의 크레딧이 다음 에피소드로 누출되지 않음
         E = defaultdict(float)
 
         state, _ = env.reset()
@@ -514,12 +528,16 @@ def td_lambda(env, policy, lambd=0.8, n_episodes=1000, alpha=0.1, gamma=0.99):
             else:
                 delta = reward + gamma * V[next_state] - V[state]
 
-            # 현재 상태의 eligibility 증가
+            # 방문한 상태의 trace를 누적 — 최근에 또는 자주 방문한 상태일수록
+            # eligibility가 커져 더 큰 업데이트를 받음
             E[state] += 1  # accumulating traces
 
-            # 모든 상태 업데이트
+            # TD 오차를 eligibility 가중치로 모든 상태에 전파 —
+            # 이것이 순방향(forward-view) n-step TD보다 효율적인 핵심 이유
             for s in E:
                 V[s] += alpha * delta * E[s]
+                # gamma*lambda 감쇠: gamma는 미래 보상을 할인하고, lambda는
+                # 크레딧이 얼마나 과거로 전파될지를 결정 (lambda=0 → TD(0), lambda=1 → MC)
                 E[s] *= gamma * lambd  # trace 감소
 
             state = next_state
@@ -572,8 +590,12 @@ def cliff_walking_td():
     # 상태: 0-47 (4x12 그리드)
     # 행동: 0=up, 1=right, 2=down, 3=left
 
+    # lambda 초기화를 사용하면 새 상태마다 독립적인 0 배열이 생성됨 —
+    # 하나의 배열을 여러 상태가 공유하면 모든 Q값이 오염될 수 있음
     Q = defaultdict(lambda: np.zeros(4))
     epsilon = 0.1
+    # alpha=0.5는 예측(prediction)에서 쓰는 0.1보다 높음 — 절벽 환경은
+    # 보상 구조가 명확하여 공격적인 학습률도 안정적으로 동작함
     alpha = 0.5
     gamma = 0.99
     n_episodes = 500
@@ -597,6 +619,8 @@ def cliff_walking_td():
             total_reward += reward
 
             # Q-learning 업데이트 (다음 레슨에서 상세히)
+            # 종료 상태에서 best_next=0으로 설정해 에피소드 종료 후 가상의
+            # 미래 가치가 추가되는 것을 방지
             best_next = np.max(Q[next_state]) if not done else 0
             Q[state][action] += alpha * (reward + gamma * best_next - Q[state][action])
 

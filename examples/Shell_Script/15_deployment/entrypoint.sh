@@ -54,6 +54,8 @@ validate_required_vars() {
 
     local missing_vars=()
 
+    # Why: ${!var} (indirect expansion) dereferences the variable whose name
+    # is stored in $var — enabling generic validation of a dynamic variable list.
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var:-}" ]]; then
             missing_vars+=("$var")
@@ -143,6 +145,8 @@ wait_for_service() {
     local start_time
     start_time=$(date +%s)
 
+    # Why: nc -z (zero I/O mode) tests TCP connectivity without sending data,
+    # making it the lightest possible health probe for dependency readiness.
     while ! nc -z "$host" "$port" 2>/dev/null; do
         local current_time
         current_time=$(date +%s)
@@ -228,7 +232,8 @@ cleanup() {
     exit 0
 }
 
-# Trap signals for graceful shutdown
+# Why: Docker sends SIGTERM on "docker stop". Trapping it lets us gracefully
+# drain connections and save state before the container is killed.
 trap cleanup SIGTERM SIGINT SIGQUIT
 
 # ============================================================================
@@ -281,7 +286,8 @@ main() {
     # Step 5: Start the application
     log_info "Starting application..."
 
-    # Default command if none provided
+    # Why: "set --" replaces the positional parameters, providing a default
+    # command while preserving the ability to override via docker run args.
     if [[ $# -eq 0 ]]; then
         set -- "/app/bin/server"
     fi

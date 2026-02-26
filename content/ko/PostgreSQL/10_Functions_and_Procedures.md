@@ -1,5 +1,26 @@
 # 함수와 프로시저
 
+**이전**: [뷰와 인덱스](./09_Views_and_Indexes.md) | **다음**: [트랜잭션](./11_Transactions.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 문자열·숫자·날짜에 대한 PostgreSQL 내장 함수(Built-in Function)를 활용한다
+2. `CREATE FUNCTION ... LANGUAGE SQL`을 사용해 간단한 SQL 함수를 생성한다
+3. 변수·IF-ELSE 분기·CASE·반복문을 포함한 PL/pgSQL 함수를 작성한다
+4. `RETURNS TABLE`, `RETURNS SETOF`, OUT 파라미터를 사용해 함수에서 테이블 데이터를 반환한다
+5. `BEGIN ... EXCEPTION` 블록과 RAISE를 사용해 예외 처리를 구현한다
+6. 저장 프로시저(PROCEDURE)를 생성하고 함수와의 차이점을 설명한다
+7. `CREATE OR REPLACE`를 적용해 기존 함수를 삭제하지 않고 수정한다
+8. 사용자 정의 함수와 프로시저를 목록 조회·내용 확인·삭제한다
+
+---
+
+내장 함수는 가장 일반적인 변환을 처리해 주지만, 모든 애플리케이션은 결국 데이터베이스 내부에 위치해야 하는 커스텀 로직을 필요로 합니다. 사용자 정의 함수와 프로시저를 사용하면 세금 계산, 등급 분류, 입력 유효성 검사 같은 비즈니스 규칙을 데이터 바로 옆에 캡슐화할 수 있습니다. 이를 통해 왕복 통신 횟수를 줄이고, 어떤 클라이언트가 접속하더라도 동일한 로직이 일관되게 적용되도록 보장합니다.
+
 ## 1. 내장 함수
 
 PostgreSQL은 다양한 내장 함수를 제공합니다.
@@ -544,6 +565,4 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 다음 단계
-
-[11_Transactions.md](./11_Transactions.md)에서 트랜잭션과 동시성 제어를 배워봅시다!
+**이전**: [뷰와 인덱스](./09_Views_and_Indexes.md) | **다음**: [트랜잭션](./11_Transactions.md)

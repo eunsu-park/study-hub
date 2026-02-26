@@ -2,9 +2,25 @@
 
 [이전: 신뢰구간](./13_Confidence_Intervals.md) | [다음: 분산분석](./15_ANOVA.md)
 
-## 개요
+---
 
-이 장에서는 기본적인 가설검정을 넘어서 **검정력(Power)**, **효과크기(Effect Size)**, **표본크기 결정(Sample Size Determination)**, 그리고 **다중검정 문제(Multiple Testing Problem)**를 다룹니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 제1종 오류(Type I Error), 제2종 오류(Type II Error), 통계적 검정력(Statistical Power)을 구별하고 그 관계를 시각화할 수 있다
+2. 집단 비교를 위한 효과 크기(Effect Size) — 코헨의 d(Cohen's d), 헤지스 g(Hedges' g), 글래스의 델타(Glass's delta) — 를 계산하고 해석할 수 있다
+3. 검정력 분석(Power Analysis)을 수행하여 연구에 필요한 최소 표본 크기를 결정할 수 있다
+4. 다중 검정(Multiple Testing)이 가족별 오류율(Family-Wise Error Rate, FWER)을 어떻게 높이는지 설명하고 이론적 FWER을 계산할 수 있다
+5. p-값 집합에 본페로니(Bonferroni), 홀름(Holm), 벤야미니-호흐베르크(Benjamini-Hochberg) 교정을 적용할 수 있다
+6. FWER 제어 방법과 FDR(False Discovery Rate) 제어 방법을 보수성(conservatism)과 발견율(discovery rate) 측면에서 비교할 수 있다
+7. `pingouin`과 `statsmodels`를 이용해 포괄적인 가설검정 워크플로우를 구현할 수 있다
+
+---
+
+> **얼마나 놀라야 할까요?** p-값(p-value)을 "놀라움 측정기"라고 생각해 보세요. 아무 흥미로운 일도 일어나지 않는다고 가정(귀무가설)한 뒤, "만약 그게 사실이라면, 내가 방금 관측한 데이터는 얼마나 놀라운가?"라고 묻는 것입니다. p-값이 아주 작다는 것은, 귀무가설이 참일 경우 이 데이터는 *매우* 놀라운 결과라는 의미입니다 — 너무 놀랍기 때문에 그 가정 자체를 의심하기 시작하게 됩니다. p-값은 가설이 참일 확률을 알려주는 것이 아니라, 데이터가 귀무 시나리오(null scenario)와 얼마나 양립하기 어려운지를 나타냅니다.
+
+결과가 "통계적으로 유의하다"는 사실을 아는 것은 시작에 불과합니다. 효과의 크기는 얼마나 됩니까? 연구는 그 효과를 감지할 만큼 충분한 검정력을 갖추고 있었습니까? 그리고 수십 개의 검정을 동시에 수행할 때, 당신의 "발견"들 중 몇 개가 오경보일까요? 이 레슨에서는 연구 계획을 위한 검정력 분석(Power Analysis), 실질적 중요성을 측정하기 위한 효과 크기(Effect Size), 그리고 다수의 동시 비교에서 오류율을 제어하기 위한 다중 검정 교정(Multiple Testing Correction) 도구를 갖추게 됩니다.
 
 ---
 
@@ -87,6 +103,11 @@ def visualize_errors(mu_0, mu_1, sigma, n, alpha=0.05):
     ax.axvline(critical_lower, color='red', linestyle='--', lw=1.5)
 
     # β와 Power 계산
+    # 왜 이 수식이 β와 같은가: 대립 분포(alt_dist)를 두 기각역(rejection boundary) 사이에서
+    # 적분합니다. 그 중간 영역의 넓이는 H₁이 참임에도 불구하고 검정통계량이 "기각 실패"
+    # 구간에 떨어질 확률 — 이것이 바로 제2종 오류(Type II Error)의 정의입니다.
+    # Power = 1 - β는 그 여사건(complementary event)으로, H₁이 참일 때 H₀를 올바르게
+    # 기각할 확률입니다.
     beta = alt_dist.cdf(critical_upper) - alt_dist.cdf(critical_lower)
     power = 1 - beta
 
@@ -157,6 +178,11 @@ def effect_sizes(group1, group2):
     d = cohens_d(group1, group2)
 
     # Hedges' g (작은 표본 보정)
+    # 왜 Cohen's d를 보정하나요? 소표본에서는 합동 표준편차(pooled std)가 모집단 σ를
+    # 과소추정하는 경향이 있어 |d|가 약간 과장됩니다. 보정계수 1 - 3/(4N-9)는 이 편향을
+    # 줄이기 위해 d를 0 방향으로 축소합니다.
+    # N이 커질수록 보정계수는 1에 수렴하고 Hedges' g는 Cohen's d에 가까워집니다 —
+    # 그룹당 n > 20이면 두 지표는 사실상 동일합니다.
     n1, n2 = len(group1), len(group2)
     correction = 1 - (3 / (4*(n1+n2) - 9))
     g = d * correction
@@ -553,9 +579,15 @@ def benjamini_hochberg(p_values, alpha=0.05):
     sorted_p = p_values[sorted_indices]
 
     # BH 임계값: (i/n) * α
+    # 왜 순위별로 임계값을 다르게 하나요? BH 절차는 모든 기각 중 거짓 발견(FDR)의
+    # 기대 비율을 제어합니다 — 하나의 거짓 발견 확률(FWER)이 아닙니다.
+    # 더 작은 p-값(높은 순위)에 더 엄격한 임계값을 부여함으로써 Bonferroni보다 많은
+    # 발견을 허용하면서도 그 발견들 중 허위의 비율을 α 이하로 유지합니다.
     bh_thresholds = (np.arange(1, n+1) / n) * alpha
 
-    # 기각 결정
+    # 기각 결정: p ≤ 임계값인 마지막(최대) 순위를 찾아, 그 순위까지의 모든 가설을 기각.
+    # 자신의 임계값을 넘지 않아도 더 강한 가설들과 함께 기각되는 이유가 바로 이것입니다 —
+    # 이 "마지막 교차점까지 기각" 규칙이 BH를 정합적(coherent)으로 만듭니다.
     below_threshold = sorted_p <= bh_thresholds
     if np.any(below_threshold):
         max_i = np.max(np.where(below_threshold)[0])

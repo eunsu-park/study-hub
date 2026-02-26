@@ -1,5 +1,25 @@
 # 스마트 포인터와 메모리 관리
 
+**이전**: [예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md) | **다음**: [모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 수동 메모리 관리의 대표적인 함정(누수, 이중 해제, 댕글링 포인터)을 식별할 수 있다
+2. RAII 원칙을 적용하여 자원 수명을 객체 스코프에 결합시킬 수 있다
+3. `unique_ptr`로 단독 소유권을 표현하고, `std::move`로 소유권을 이전할 수 있다
+4. `shared_ptr`로 공유 소유권을 구현하고, 참조 카운팅(reference counting)이 동작하는 방식을 설명할 수 있다
+5. `weak_ptr`로 순환 참조를 끊고, `lock()`을 사용하여 안전하게 승격시킬 수 있다
+6. 주어진 소유권 시나리오에 맞는 스마트 포인터 타입을 올바르게 선택할 수 있다
+7. 모던 C++ 모범 사례에 따라 함수에 스마트 포인터를 전달하고 반환할 수 있다
+
+---
+
+수동 `new`/`delete`는 전통적인 C++ 코드에서 버그의 가장 큰 원인입니다. 메모리 누수, 이중 해제, 댕글링 포인터는 수많은 운영 장애와 보안 취약점을 초래해 왔습니다. 스마트 포인터(Smart Pointer)는 소유권 의미론(ownership semantics)을 타입 시스템에 직접 인코딩함으로써 이러한 버그 유형 전체를 제거합니다. `unique_ptr`, `shared_ptr`, `weak_ptr` 중 언제 무엇을 사용할지 내면화하고 나면, 원시 포인터(raw pointer)로는 불가능했던 수준으로 안전하고 이해하기 쉬운 코드를 작성할 수 있습니다.
+
 ## 1. 메모리 관리의 어려움
 
 C++에서 수동 메모리 관리는 여러 문제를 일으킬 수 있습니다.
@@ -285,6 +305,8 @@ int main() {
 
 공유 소유권을 가지는 스마트 포인터입니다. 여러 `shared_ptr`이 같은 객체를 공유할 수 있습니다.
 
+> **비유 — 도서관 공유 도서**: `shared_ptr`은 도서관 대출 시스템과 같습니다. 여러 독자(소유자)가 같은 책을 대출할 수 있습니다. 내부 카운터가 아직 책을 가진 독자 수를 추적합니다. 마지막 독자가 책을 반납(카운터가 0으로 감소)할 때만 도서관이 책을 서가에 돌려놓습니다(메모리 해제). `weak_ptr`은 실제로 대출하지 않고 책이 아직 존재하는지 목록을 통해 확인하는 것과 같습니다.
+
 ### 기본 사용법
 
 ```cpp
@@ -396,7 +418,7 @@ int main() {
 
 ## 5. weak_ptr
 
-`shared_ptr`의 순환 참조 문제를 해결합니다. 참조 카운트를 증가시키지 않습니다.
+`shared_ptr`의 순환 참조(circular reference) 문제를 해결합니다. 참조 카운트를 증가시키지 않습니다.
 
 ### 순환 참조 문제
 
@@ -914,7 +936,323 @@ shared_ptr:
 
 ---
 
-## 12. 연습 문제
+## 12. 고급 스마트 포인터 패턴(Advanced Smart Pointer Patterns)
+
+### 순환 참조 해소 이외의 weak_ptr 활용
+
+`weak_ptr`은 순환 참조(circular reference)를 끊기 위해 가장 많이 소개되지만, 다른 유용한 활용 사례가 여럿 있습니다:
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <string>
+#include <unordered_map>
+
+/* 활용 사례 1: 옵저버 패턴(Observer Pattern)
+ * weak_ptr을 쓰는 이유: 옵저버가 서브젝트(subject)를 생존시키면 안 됩니다.
+ * 서브젝트가 소멸되면 옵저버는 댕글링 참조를 유지하거나 소멸을
+ * 방해하지 않고 우아하게 이를 발견해야 합니다. */
+class EventEmitter {
+    std::vector<std::weak_ptr<std::function<void(const std::string&)>>> listeners;
+
+public:
+    void subscribe(std::shared_ptr<std::function<void(const std::string&)>> listener) {
+        listeners.push_back(listener);
+    }
+
+    void emit(const std::string& event) {
+        /* 한 번의 순회로 만료된 리스너를 정리 */
+        auto it = listeners.begin();
+        while (it != listeners.end()) {
+            if (auto sp = it->lock()) {
+                (*sp)(event);     /* 리스너가 살아있음: 호출 */
+                ++it;
+            } else {
+                it = listeners.erase(it);  /* 리스너가 사라짐: 제거 */
+            }
+        }
+    }
+};
+
+/* 활용 사례 2: 자동 만료 캐시(Cache with Automatic Expiration)
+ * weak_ptr을 쓰는 이유: 캐시가 객체 소멸을 방해하면 안 됩니다.
+ * 다른 곳에서 참조가 없으면 캐시 항목이 자연스럽게 만료됩니다. */
+template <typename Key, typename Value>
+class WeakCache {
+    std::unordered_map<Key, std::weak_ptr<Value>> cache_;
+
+public:
+    std::shared_ptr<Value> get(const Key& key) {
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            if (auto sp = it->second.lock()) {
+                return sp;   /* 캐시 히트: 객체가 아직 살아있음 */
+            }
+            cache_.erase(it);  /* 만료됨: 오래된 항목 정리 */
+        }
+        return nullptr;  /* 캐시 미스 */
+    }
+
+    void put(const Key& key, std::shared_ptr<Value> value) {
+        cache_[key] = value;
+    }
+};
+```
+
+### 리소스 관리를 위한 커스텀 삭제자(Custom Deleter)
+
+커스텀 삭제자는 `unique_ptr`과 `shared_ptr`을 힙 메모리뿐만 아니라 **모든** 리소스의 RAII 래퍼로 변환합니다:
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <cstdio>
+
+/* 패턴 1: FILE* 래퍼
+ * 커스텀 삭제자를 쓰는 이유: fopen/fclose는 획득/해제 의미론을 따르며,
+ * 이는 RAII에 완벽하게 매핑됩니다. 커스텀 삭제자가 fclose를 호출합니다. */
+auto make_file(const char* path, const char* mode) {
+    /* 람다 삭제자: unique_ptr이 스코프를 벗어날 때 자동 호출 */
+    auto deleter = [](FILE* f) {
+        if (f) {
+            std::cout << "  Closing file\n";
+            fclose(f);
+        }
+    };
+    return std::unique_ptr<FILE, decltype(deleter)>(fopen(path, mode), deleter);
+}
+
+/* 패턴 2: C 라이브러리 정리 (예: OpenSSL, SQLite, SDL)
+ * 이유: 많은 C 라이브러리가 불투명 포인터(opaque pointer)와 대응하는
+ * 해제 함수를 반환합니다. unique_ptr로 감싸면 예외 시 리소스 누수를 방지합니다. */
+struct SDL_Window;
+void SDL_DestroyWindow(SDL_Window*);  /* 설명용 전방 선언 */
+
+// auto window = std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)>(
+//     SDL_CreateWindow(...), SDL_DestroyWindow
+// );
+
+/* 패턴 3: shared_ptr + 커스텀 삭제자 (더 간단한 문법)
+ * shared_ptr이 더 쉬운 이유: 삭제자가 타입 소거(type-erased)되므로
+ * shared_ptr 타입에 영향을 주지 않습니다. decltype 사용이 불필요합니다. */
+void demo_shared_deleter() {
+    auto sp = std::shared_ptr<FILE>(
+        fopen("/dev/null", "w"),
+        [](FILE* f) { if (f) fclose(f); }
+    );
+    /* sp는 그냥 std::shared_ptr<FILE> -- 삭제자는 내부에 숨겨져 있음 */
+    if (sp) {
+        fprintf(sp.get(), "Hello from shared_ptr!\n");
+    }
+}
+
+int main() {
+    {
+        auto f = make_file("/tmp/test_smart.txt", "w");
+        if (f) {
+            fprintf(f.get(), "Written via unique_ptr with custom deleter\n");
+            std::cout << "File is open\n";
+        }
+    }   /* f 소멸 → fclose 자동 호출 */
+    std::cout << "File has been closed\n";
+
+    demo_shared_deleter();
+
+    return 0;
+}
+```
+
+### make_unique/make_shared vs 원시 new: 예외 안전성(Exception Safety)
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+
+class Widget {
+public:
+    Widget(int v) : value(v) { std::cout << "Widget(" << v << ")\n"; }
+    ~Widget() { std::cout << "~Widget(" << value << ")\n"; }
+    int value;
+};
+
+void might_throw() {
+    throw std::runtime_error("oops");
+}
+
+/* 위험: 원시 new를 쓰면 메모리 누수가 발생할 수 있습니다!
+ * C++17 이전에는 컴파일러가 인자를 임의 순서로 평가할 수 있었습니다:
+ *   1. new Widget(1)         -- Widget 할당
+ *   2. might_throw()         -- 예외 발생! 1단계의 Widget이 누수
+ *   3. std::shared_ptr(...)  -- 도달하지 못함
+ * C++17에서 순서가 고정되었지만, make_shared가 여전히 권장됩니다. */
+void unsafe_call(std::shared_ptr<Widget> w, int x) {
+    std::cout << "Widget value: " << w->value << ", x: " << x << "\n";
+}
+
+/* 안전: make_shared는 할당 + 생성을 원자적으로 수행합니다.
+ * 다른 인자가 예외를 던져도 메모리 누수가 없습니다. */
+void safe_call(std::shared_ptr<Widget> w, int x) {
+    std::cout << "Widget value: " << w->value << ", x: " << x << "\n";
+}
+
+int main() {
+    /* 이것을 권장: */
+    auto w = std::make_shared<Widget>(42);
+
+    /* unique_ptr도 마찬가지: */
+    auto u = std::make_unique<Widget>(99);
+
+    /* make_shared의 추가 이점:
+     * 객체와 제어 블록(control block)을 한 번의 할당으로 처리.
+     * new를 쓰면 두 번 할당됩니다:
+     *   std::shared_ptr<Widget>(new Widget(42))
+     *     → 할당 1: new Widget
+     *     → 할당 2: 제어 블록 (참조 카운트, weak 카운트, 삭제자) */
+    std::cout << "Widget: " << w->value << "\n";
+
+    return 0;
+}
+```
+
+### Pimpl 관용구(Pimpl Idiom)와 unique_ptr (컴파일 방화벽)
+
+Pimpl(Pointer to Implementation) 관용구는 구현 세부사항을 포인터 뒤에 숨겨 컴파일 시간 의존성을 줄입니다. `unique_ptr`이 Pimpl에 자연스러운 선택입니다.
+
+**widget.h** (헤더 -- 사용자에게 노출):
+```cpp
+#ifndef WIDGET_H
+#define WIDGET_H
+
+#include <memory>
+#include <string>
+
+/* Pimpl을 쓰는 이유: 구현(필드 추가, 타입 변경)을 바꿔도
+ * widget.cpp만 재컴파일하면 됩니다. widget.h를 포함하는 모든 파일을
+ * 재컴파일할 필요가 없습니다. 대형 프로젝트에서 빌드 시간을
+ * 극적으로 단축합니다. */
+class Widget {
+public:
+    Widget(const std::string& name, int value);
+    ~Widget();  /* 헤더에 선언하고 .cpp에서 정의해야 함 */
+
+    /* 이동 연산도 헤더에 선언, .cpp에서 정의
+     * 이유: 컴파일러가 이동 연산을 생성하려면 ~Impl을 봐야 하지만,
+     * Impl은 .cpp 파일에서만 정의됩니다. */
+    Widget(Widget&& other) noexcept;
+    Widget& operator=(Widget&& other) noexcept;
+
+    /* 복사 불가 (선택적 설계) */
+    Widget(const Widget&) = delete;
+    Widget& operator=(const Widget&) = delete;
+
+    void doWork();
+    std::string getName() const;
+
+private:
+    struct Impl;                      /* 전방 선언만 */
+    std::unique_ptr<Impl> pImpl_;     /* "컴파일 방화벽" */
+};
+
+#endif
+```
+
+**widget.cpp** (구현 -- 사용자에게 숨겨짐):
+```cpp
+#include "widget.h"
+#include <iostream>
+#include <vector>
+#include <algorithm>
+// widget.h 사용자에게 영향을 주지 않고 무거운 헤더를 포함 가능
+
+/* 실제 구현 구조체 -- widget.h를 포함하는 파일을
+ * 재컴파일하지 않고 자유롭게 변경 가능 */
+struct Widget::Impl {
+    std::string name;
+    int value;
+    std::vector<int> history;   /* 이 필드를 추가해도 헤더가 변경되지 않음 */
+
+    Impl(const std::string& n, int v) : name(n), value(v) {}
+};
+
+/* 소멸자는 Impl이 완전한 곳에서 정의해야 합니다.
+ * 이유: unique_ptr이 Impl에 대해 delete를 호출하려면
+ * Impl의 크기와 소멸자를 알아야 합니다. */
+Widget::Widget(const std::string& name, int value)
+    : pImpl_(std::make_unique<Impl>(name, value)) {}
+
+Widget::~Widget() = default;  /* 이제 컴파일러가 ~Impl을 볼 수 있음 */
+
+Widget::Widget(Widget&& other) noexcept = default;
+Widget& Widget::operator=(Widget&& other) noexcept = default;
+
+void Widget::doWork() {
+    pImpl_->history.push_back(pImpl_->value);
+    std::cout << "Widget '" << pImpl_->name << "' doing work (value="
+              << pImpl_->value << ", history size="
+              << pImpl_->history.size() << ")\n";
+}
+
+std::string Widget::getName() const {
+    return pImpl_->name;
+}
+```
+
+### C API 래퍼를 위한 unique_ptr
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <cstdlib>
+#include <cstring>
+
+/* C 라이브러리 API 시뮬레이션 */
+typedef struct {
+    char* data;
+    size_t size;
+} CBuffer;
+
+CBuffer* cbuffer_create(size_t size) {
+    CBuffer* buf = (CBuffer*)malloc(sizeof(CBuffer));
+    buf->data = (char*)calloc(size, 1);
+    buf->size = size;
+    return buf;
+}
+
+void cbuffer_destroy(CBuffer* buf) {
+    if (buf) {
+        free(buf->data);
+        free(buf);
+    }
+}
+
+/* 커스텀 삭제자를 사용한 C++ RAII 래퍼.
+ * 이유: create/destroy 쌍을 따르는 모든 C API에 이 패턴이 동작합니다.
+ * unique_ptr이 예외 발생 시에도 cbuffer_destroy 호출을 보장합니다. */
+using CBufferPtr = std::unique_ptr<CBuffer, decltype(&cbuffer_destroy)>;
+
+CBufferPtr make_cbuffer(size_t size) {
+    return CBufferPtr(cbuffer_create(size), cbuffer_destroy);
+}
+
+int main() {
+    {
+        auto buf = make_cbuffer(256);
+        std::strncpy(buf->data, "Hello from C API wrapper!", buf->size - 1);
+        std::cout << "Buffer: " << buf->data << "\n";
+        std::cout << "Size: " << buf->size << "\n";
+    }   /* cbuffer_destroy 자동 호출 */
+
+    std::cout << "Buffer has been destroyed\n";
+
+    return 0;
+}
+```
+
+---
+
+## 13. 연습 문제
 
 ### 연습 1: 리소스 매니저
 
@@ -932,4 +1270,8 @@ shared_ptr:
 
 ## 다음 단계
 
-[15_Modern_CPP.md](./15_Modern_CPP.md)에서 C++11/14/17/20의 주요 기능을 배워봅시다!
+[모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md)에서 C++11/14/17/20의 주요 기능을 배워봅시다!
+
+---
+
+**이전**: [예외 처리와 파일 입출력](./13_Exceptions_and_File_IO.md) | **다음**: [모던 C++ (C++11/14/17/20)](./15_Modern_CPP.md)

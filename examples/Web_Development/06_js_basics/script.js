@@ -21,6 +21,8 @@ function runVariables() {
     clearOutput();
     log('=== 변수 (var, let, const) ===\n');
 
+    // Why: var is function-scoped and hoisted, leading to subtle bugs in loops and closures;
+    // prefer let/const which are block-scoped and caught by linters
     // var - 함수 스코프 (비권장)
     var oldVar = "I'm var";
     log(`var oldVar = "${oldVar}"`);
@@ -58,6 +60,8 @@ function runDataTypes() {
     clearOutput();
     log('=== 데이터 타입 ===\n');
 
+    // Why: JS has 8 primitive types but typeof null === "object" is a well-known spec bug;
+    // understanding primitives vs references prevents mutation surprises with objects/arrays
     // 기본 타입
     let str = "문자열";
     let num = 42;
@@ -119,6 +123,7 @@ function runOperators() {
 
     // 비교 연산자
     log('\n--- 비교 연산자 ---');
+    // Why: Always prefer === over == to avoid implicit coercion surprises (e.g., 0 == "" is true)
     log(`5 == "5" : ${5 == "5"} (타입 변환 후 비교)`);
     log(`5 === "5" : ${5 === "5"} (타입까지 비교)`);
     log(`5 != "5" : ${5 != "5"}`);
@@ -136,6 +141,8 @@ function runOperators() {
     let status = age >= 18 ? "성인" : "미성년자";
     log(`나이: ${age}, 상태: ${status}`);
 
+    // Why: ?? differs from || by only falling back on null/undefined, not on falsy values
+    // like 0 or "". This prevents bugs where 0 is a valid value but || would discard it
     // Nullish coalescing (??)
     log('\n--- Nullish Coalescing (??) ---');
     let value1 = null ?? "기본값";
@@ -306,6 +313,8 @@ function runFunctions() {
     };
     log(greet2("김철수"));
 
+    // Why: Arrow functions lexically bind `this`, making them safer for callbacks where
+    // traditional functions would lose the enclosing context
     // 화살표 함수
     log('\n--- 화살표 함수 ---');
     const greet3 = (name) => `Hey, ${name}!`;
@@ -338,6 +347,8 @@ function runFunctions() {
     })(3, 4);
     log(`IIFE 결과: ${result}`);
 
+    // Why: Closures capture the outer scope's variables, enabling private state that cannot be
+    // accessed or tampered with from outside - the foundation of the module pattern
     // 클로저
     log('\n--- 클로저 ---');
     function createCounter() {
@@ -399,6 +410,8 @@ function runArrays() {
     log(`join("-"): "${numbers.join("-")}"`);
     log(`reverse(): [${[...numbers].reverse()}]`);
 
+    // Why: Higher-order functions (map/filter/reduce) express intent declaratively, replacing
+    // error-prone manual loops with composable, chainable transformations
     // 고차 함수
     log('\n--- 고차 함수 ---');
     const nums = [1, 2, 3, 4, 5];
@@ -521,6 +534,8 @@ function runClasses() {
     log(`new Animal("동물")`);
     log(`animal.speak(): "${animal.speak()}"`);
 
+    // Why: ES6 class syntax is syntactic sugar over prototype chains, making inheritance
+    // readable while preserving JS's prototype-based delegation model under the hood
     // 상속
     log('\n--- 상속 ---');
     class Dog extends Animal {
@@ -589,6 +604,8 @@ function runClasses() {
     log(`MathUtil.add(3, 4): ${MathUtil.add(3, 4)}`);
     log(`MathUtil.multiply(3, 4): ${MathUtil.multiply(3, 4)}`);
 
+    // Why: The # private field syntax provides true encapsulation enforced by the engine at
+    // runtime, unlike the _underscore convention which is merely a naming hint
     // Private 필드 (# 문법, ES2022)
     log('\n--- Private 필드 ---');
     class BankAccount {

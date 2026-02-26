@@ -8,6 +8,20 @@ Demonstrates hypothesis testing methods:
 - p-value computation
 - Statistical power analysis
 - Multiple testing correction (Bonferroni, FDR)
+
+Theory:
+- A hypothesis test asks: "Is the observed pattern unlikely under the null?"
+  The p-value measures how surprising the data would be if H0 were true.
+- Type I error (false positive) is controlled by alpha; Type II (false negative)
+  depends on sample size, effect size, and alpha. Power = 1 - P(Type II).
+- The t-test assumes approximately Normal data (robust with n > 30 by CLT).
+  Chi-square tests require expected cell counts >= 5 for valid approximation.
+- ANOVA tests whether any group mean differs, but does not say which one.
+  Post-hoc tests (Tukey, Bonferroni) are needed for pairwise comparisons.
+- Multiple testing inflates the family-wise error rate. With 20 independent
+  tests at alpha=0.05, P(at least one false positive) ~ 64%.
+
+Adapted from Data_Science Lessons 14-15.
 """
 
 import numpy as np
@@ -45,7 +59,9 @@ def one_sample_t_test():
     print(f"Sample mean: {np.mean(sample):.2f}")
     print(f"Sample std: {np.std(sample, ddof=1):.2f}")
 
-    # Perform t-test
+    # Why: The one-sample t-test compares the sample mean to a known reference
+    # value. It uses the t-distribution (not z) because we estimate sigma from
+    # the sample, adding uncertainty that matters in small samples.
     t_stat, p_value = stats.ttest_1samp(sample, mu_0)
 
     print(f"\nTest results:")
@@ -88,21 +104,28 @@ def two_sample_t_test():
     print(f"  mean = {np.mean(group2):.2f}")
     print(f"  std = {np.std(group2, ddof=1):.2f}")
 
-    # Independent samples t-test (equal variance assumed)
+    # Why: The classic (Student's) t-test assumes equal variances in both groups.
+    # When this assumption holds, it is slightly more powerful than Welch's.
     t_stat, p_value = stats.ttest_ind(group1, group2)
 
     print(f"\nIndependent samples t-test (equal variance):")
     print(f"  t-statistic: {t_stat:.4f}")
     print(f"  p-value: {p_value:.6f}")
 
-    # Welch's t-test (unequal variance)
+    # Why: Welch's t-test (equal_var=False) does NOT assume equal variances.
+    # It adjusts the degrees of freedom using the Welch-Satterthwaite equation.
+    # Recommended as the default because it is robust even when variances are
+    # equal, whereas the classic test fails when they differ.
     t_stat_welch, p_value_welch = stats.ttest_ind(group1, group2, equal_var=False)
 
     print(f"\nWelch's t-test (unequal variance):")
     print(f"  t-statistic: {t_stat_welch:.4f}")
     print(f"  p-value: {p_value_welch:.6f}")
 
-    # Effect size (Cohen's d)
+    # Why: Cohen's d expresses the difference in units of standard deviations,
+    # making it comparable across studies regardless of scale. Guidelines:
+    # d=0.2 small, d=0.5 medium, d=0.8 large. Always report effect size
+    # alongside p-values — significance without practical importance misleads.
     pooled_std = np.sqrt((np.var(group1, ddof=1) + np.var(group2, ddof=1)) / 2)
     cohens_d = (np.mean(group2) - np.mean(group1)) / pooled_std
     print(f"\nEffect size (Cohen's d): {cohens_d:.4f}")
@@ -128,7 +151,10 @@ def paired_t_test():
     print(f"  Mean: {np.mean(after):.2f}")
     print(f"  Std: {np.std(after, ddof=1):.2f}")
 
-    # Paired t-test
+    # Why: The paired t-test analyzes the DIFFERENCES within each pair, not the
+    # raw values. This removes between-subject variability, dramatically
+    # increasing power when subjects vary widely but treatment effects are
+    # consistent. It assumes the differences are approximately Normal.
     t_stat, p_value = stats.ttest_rel(after, before)
 
     differences = after - before
@@ -185,6 +211,10 @@ def chi_square_test():
     print(f"Treatment A:       {contingency_table[0,0]}       {contingency_table[0,1]}")
     print(f"Treatment B:       {contingency_table[1,0]}       {contingency_table[1,1]}")
 
+    # Why: The chi-square test of independence checks whether two categorical
+    # variables are associated. It compares observed frequencies to those
+    # expected under independence. Valid when all expected cell counts >= 5;
+    # otherwise use Fisher's exact test.
     chi2_stat, p_value, dof, expected_freq = stats.chi2_contingency(contingency_table)
 
     print(f"\nχ² statistic: {chi2_stat:.4f}")
@@ -215,7 +245,10 @@ def one_way_anova():
         print(f"    mean = {np.mean(group):.2f}")
         print(f"    std = {np.std(group, ddof=1):.2f}")
 
-    # Perform ANOVA
+    # Why: ANOVA tests H0: all group means are equal by comparing between-group
+    # variance to within-group variance. A significant F means at least one mean
+    # differs, but not which one. Assumes equal variances (Levene's test) and
+    # Normal residuals (robust with n > 20 per group).
     f_stat, p_value = stats.f_oneway(group1, group2, group3)
 
     print(f"\nOne-way ANOVA results:")
@@ -322,7 +355,9 @@ def multiple_testing_correction():
     print(f"  Smallest p-value: {np.min(p_values):.6f}")
     print(f"  Largest p-value: {np.max(p_values):.6f}")
 
-    # Bonferroni correction
+    # Why: Bonferroni divides alpha by the number of tests to control the
+    # family-wise error rate. Conservative but simple — Holm-Bonferroni is
+    # uniformly more powerful and should generally be preferred.
     bonferroni_alpha = alpha / n_tests
     bonferroni_rejections = np.sum(p_values < bonferroni_alpha)
 
@@ -330,7 +365,10 @@ def multiple_testing_correction():
     print(f"  Adjusted α: {bonferroni_alpha:.6f}")
     print(f"  Significant tests: {bonferroni_rejections}")
 
-    # Benjamini-Hochberg (FDR)
+    # Why: Benjamini-Hochberg controls the False Discovery Rate (expected
+    # proportion of false positives among rejections), not the family-wise
+    # error rate. This is less stringent than Bonferroni and more appropriate
+    # when many tests are conducted (e.g., genomics, A/B test suites).
     sorted_p = np.sort(p_values)
     sorted_indices = np.argsort(p_values)
 

@@ -53,6 +53,8 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+        /* Why: Replacing the default outline with a visible border+shadow preserves focus visibility
+           for keyboard users while matching the design language of the form */
         input:focus, textarea:focus, select:focus {
             outline: none;
             border-color: #4CAF50;
@@ -104,6 +106,8 @@
 <body>
     <h1>HTML 폼 예제</h1>
 
+    <!-- Why: POST prevents form data from appearing in the URL/browser history, essential for
+         sensitive fields like passwords; GET would expose credentials in server logs -->
     <!-- 기본 폼 -->
     <form action="/submit" method="POST">
         <h2>회원가입 폼</h2>
@@ -114,6 +118,8 @@
 
             <div class="form-group">
                 <label for="username">사용자명 *</label>
+                <!-- Why: Using native validation attributes (required, pattern, minlength) gives
+                     immediate feedback without JavaScript and works even if scripts fail to load -->
                 <input type="text" id="username" name="username"
                        placeholder="영문, 숫자 조합"
                        required
@@ -304,6 +310,8 @@
 
             <div class="form-group">
                 <label for="browser">브라우저 (datalist)</label>
+                <!-- Why: datalist combines free text input with autocomplete suggestions, giving users
+                     both flexibility and guidance - unlike select which restricts to predefined options -->
                 <input type="text" id="browser" name="browser"
                        list="browsers"
                        placeholder="브라우저 선택 또는 입력">

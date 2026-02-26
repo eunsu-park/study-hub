@@ -1,12 +1,22 @@
 # JavaScript Module System
 
+**Previous**: [CSS Animations](./14_CSS_Animations.md) | **Next**: [Flask Web Framework Basics](./16_Flask_Basics.md)
+
 ## Learning Objectives
-- Understand ES Modules (ESM) import/export syntax
-- Identify differences between CommonJS and ESM
-- Utilize dynamic import and code splitting
-- Understand the role of module bundlers
+
+After completing this lesson, you will be able to:
+
+1. Export and import values using ES Module named exports, default exports, and re-exports
+2. Distinguish between CommonJS (`require`/`module.exports`) and ES Modules (`import`/`export`)
+3. Load modules conditionally at runtime using dynamic `import()` expressions
+4. Apply code splitting strategies to reduce initial bundle size in production
+5. Organize project files using barrel files and standard directory conventions
+6. Explain how bundlers perform dependency resolution, tree shaking, and minification
+7. Implement common module patterns including factory, singleton, and plugin patterns
 
 ---
+
+As web applications grow beyond a few hundred lines, managing code in a single file becomes untenable. Modules let you split code into focused, reusable units with explicit dependencies -- eliminating global scope pollution and making large codebases navigable. ES Modules are now the standard across both browsers and Node.js, and understanding them is essential for working with any modern framework or build tool.
 
 ## 1. The Need for Modules
 
@@ -704,8 +714,118 @@ import { formatDate } from '@utils';
 3. **Avoid Circular Dependencies**: Organize dependency direction
 4. **Utilize Dynamic Imports**: Lazy load large modules
 
-### Next Steps
-- [13_Build_Tools_Environment.md](./13_Build_Tools_Environment.md): Build tools (Vite, webpack)
+---
+
+## Exercises
+
+### Exercise 1: Refactor a Global-Scope Script into ES Modules
+
+Given the following single-file script that pollutes the global scope, split it into properly structured ES Modules:
+
+```javascript
+// Before: everything in one file with global variables
+var TAX_RATE = 0.1;
+
+function calculateTax(price) {
+    return price * TAX_RATE;
+}
+
+function formatCurrency(amount) {
+    return '$' + amount.toFixed(2);
+}
+
+function createCartItem(name, price) {
+    return { name, price, tax: calculateTax(price) };
+}
+
+function printCart(items) {
+    items.forEach(item => {
+        console.log(item.name + ': ' + formatCurrency(item.price + item.tax));
+    });
+}
+```
+
+**Tasks**:
+1. Create `constants.js` exporting `TAX_RATE`.
+2. Create `tax.js` exporting `calculateTax`, importing `TAX_RATE` from `constants.js`.
+3. Create `format.js` exporting `formatCurrency`.
+4. Create `cart.js` exporting `createCartItem` and `printCart`, importing from the other modules.
+5. Create a `index.js` entry point that imports from `cart.js` and runs a demo.
+
+### Exercise 2: Implement Dynamic Import for Route-Based Code Splitting
+
+Build a minimal client-side router that lazy-loads page modules on demand:
+
+```javascript
+// pages/home.js
+export default function render() {
+    return '<h1>Welcome Home</h1>';
+}
+
+// pages/about.js
+export default function render() {
+    return '<h1>About Us</h1>';
+}
+
+// router.js (complete this)
+const routes = {
+    '/': () => import('./pages/home.js'),
+    '/about': () => import('./pages/about.js'),
+};
+
+async function navigate(path) {
+    // TODO: Load the correct module, call its default export render(),
+    // and display the result in document.getElementById('app')
+}
+```
+
+**Tasks**:
+1. Complete the `navigate` function. Handle unknown routes with a 404 message.
+2. Add a loading indicator that appears during the `import()` call and disappears once the module is loaded.
+3. Listen to `popstate` events and `hashchange` events so the browser back/forward buttons trigger navigation.
+
+### Exercise 3: Create a Plugin System Using Module Patterns
+
+Design and implement a plugin system following the pattern from Section 5.4:
+
+```javascript
+// app.js
+class EventEmitter {
+    constructor() { this.listeners = {}; }
+    on(event, fn) { /* ... */ }
+    emit(event, data) { /* ... */ }
+}
+
+class App extends EventEmitter {
+    constructor() {
+        super();
+        this.plugins = [];
+    }
+    use(plugin) { /* install plugin, store reference, return this */ }
+}
+
+export default new App();
+```
+
+**Tasks**:
+1. Implement `EventEmitter.on` and `EventEmitter.emit`.
+2. Create a `loggerPlugin` that hooks into `app.emit` and logs every event to the console.
+3. Create a `analyticsPlugin` that counts events and exposes an `app.getAnalytics()` method.
+4. Write a `main.js` entry point that registers both plugins and emits several events to demonstrate the system.
+
+### Exercise 4: Barrel File and Tree Shaking Audit (Advanced)
+
+Create a `utils/` directory with the following modules and a barrel file, then analyze tree shaking behavior:
+
+1. `utils/string.js` — exports `capitalize`, `truncate`, `slugify`
+2. `utils/number.js` — exports `clamp`, `randomInt`, `formatPercent`
+3. `utils/date.js` — exports `formatDate`, `daysBetween`, `isWeekend`
+4. `utils/index.js` — re-exports everything from all three files
+
+**Analysis tasks**:
+- In `app.js`, import only `{ capitalize, clamp }` from `'./utils/index.js'`. List which functions a bundler with tree shaking would include in the final bundle and which it would remove.
+- Rewrite the imports to import directly from the specific submodule files instead of the barrel. Explain when this alternative approach is preferable.
+- Add a `sideEffects: false` entry to a hypothetical `package.json` and explain what this tells the bundler.
 
 ---
 
@@ -715,3 +835,7 @@ import { formatDate } from '@utils';
 - [Node.js ESM Documentation](https://nodejs.org/api/esm.html)
 - [Vite Guide](https://vitejs.dev/guide/)
 - [JavaScript Module Pattern](https://www.patterns.dev/posts/module-pattern)
+
+---
+
+**Previous**: [CSS Animations](./14_CSS_Animations.md) | **Next**: [Flask Web Framework Basics](./16_Flask_Basics.md)

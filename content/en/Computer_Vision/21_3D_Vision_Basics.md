@@ -1,5 +1,17 @@
 # 3D Vision Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the principles of stereo vision, including epipolar geometry and the disparity-to-depth relationship.
+2. Implement depth map generation using OpenCV's stereo matching algorithms (StereoBM, StereoSGBM).
+3. Define point clouds and explain how to generate them from depth maps and camera intrinsics.
+4. Apply Open3D to visualize, process, and analyze 3D point cloud data.
+5. Describe the 3D reconstruction pipeline and implement a basic structure-from-motion workflow.
+
+---
+
 ## Overview
 
 3D vision is the technology for extracting and reconstructing three-dimensional information from 2D images. This covers the fundamentals of stereo vision, depth maps, point cloud processing, and 3D reconstruction.
@@ -122,6 +134,8 @@ Key Matrices:
 │                   │ p'^T * F * p = 0                        │
 └───────────────────┴─────────────────────────────────────────┘
 ```
+
+**Why is the epipolar constraint so important?** Without it, finding the corresponding point of pixel p in the right image would require searching the entire 2D image — an O(W×H) problem for every pixel. The epipolar constraint tells us that the match must lie on a specific line (the epipolar line), reducing the search to a 1D problem along that line. After stereo rectification (aligning both images so epipolar lines are horizontal), this further simplifies to scanning along the same row — which is why rectification is a standard preprocessing step before disparity computation.
 
 ### Disparity and Depth
 
@@ -252,19 +266,22 @@ def compute_disparity_bm(left, right, num_disparities=64, block_size=15):
 
     # Create StereoBM
     stereo = cv2.StereoBM_create(
-        numDisparities=num_disparities,  # Multiple of 16
-        blockSize=block_size              # Odd number, 5~21
+        numDisparities=num_disparities,  # Must be a multiple of 16; larger values
+                                         # search a wider range of depths but cost more compute
+        blockSize=block_size              # Odd number, 5~21; larger blocks give smoother
+                                         # disparity but lose fine detail at depth boundaries
     )
 
     # Parameter tuning (optional)
     stereo.setMinDisparity(0)
-    stereo.setSpeckleWindowSize(100)
+    stereo.setSpeckleWindowSize(100)   # Remove isolated "speckle" blobs of bad disparities
     stereo.setSpeckleRange(32)
     stereo.setPreFilterType(cv2.STEREO_BM_PREFILTER_NORMALIZED_RESPONSE)
     stereo.setPreFilterSize(9)
     stereo.setPreFilterCap(31)
-    stereo.setTextureThreshold(10)
-    stereo.setUniquenessRatio(15)
+    stereo.setTextureThreshold(10)     # Skip textureless regions where matching is unreliable
+    stereo.setUniquenessRatio(15)      # Reject ambiguous matches: best match must be at least
+                                       # 15% better than the second-best candidate
 
     # Compute disparity
     disparity = stereo.compute(left, right)
@@ -312,7 +329,11 @@ def compute_disparity_sgbm(left, right, num_disparities=64, block_size=5):
         gray_left, gray_right = left, right
 
     # SGBM parameters
-    # P1, P2: Penalty for disparity difference between adjacent pixels
+    # P1, P2: Penalty for disparity difference between adjacent pixels.
+    # P1 penalizes small 1-pixel disparity changes (smooth surfaces),
+    # P2 penalizes larger jumps (depth discontinuities). P2 > P1 enforces
+    # piecewise-smooth disparity maps. The *3*block_size^2 scaling is the
+    # OpenCV-recommended baseline that keeps penalties proportional to block area.
     P1 = 8 * 3 * block_size ** 2
     P2 = 32 * 3 * block_size ** 2
 
@@ -322,12 +343,14 @@ def compute_disparity_sgbm(left, right, num_disparities=64, block_size=5):
         blockSize=block_size,
         P1=P1,
         P2=P2,
-        disp12MaxDiff=1,
+        disp12MaxDiff=1,           # Left-right consistency check tolerance;
+                                    # tight value (1) catches occlusion artifacts
         uniquenessRatio=10,
         speckleWindowSize=100,
         speckleRange=32,
         preFilterCap=63,
-        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
+        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY  # Aggregates cost along 3 directions
+                                               # for better accuracy vs. the default 5-way
     )
 
     # Compute disparity
@@ -395,19 +418,26 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
         mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
     )
 
-    # Right matcher (for left-right consistency check)
+    # Right matcher (for left-right consistency check): computing disparity in
+    # both directions lets the WLS filter identify occlusions and unreliable
+    # regions where left and right estimates disagree
     right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
 
     # Compute disparity
     left_disp = left_matcher.compute(gray_left, gray_right)
     right_disp = right_matcher.compute(gray_right, gray_left)
 
-    # WLS filter
+    # WLS (Weighted Least Squares) filter: smooths the disparity map while
+    # preserving depth edges by weighting smoothness with image color gradients —
+    # pixels with similar color get smoothed together; edges are kept sharp
     wls_filter = cv2.ximgproc.createDisparityWLSFilter(left_matcher)
-    wls_filter.setLambda(80000)
-    wls_filter.setSigmaColor(1.2)
+    wls_filter.setLambda(80000)    # Higher lambda = stronger smoothness; trade-off
+                                    # between noise suppression and edge preservation
+    wls_filter.setSigmaColor(1.2)  # Color sensitivity: lower values preserve more
+                                    # edges but allow more noise to pass through
 
-    # Apply filter
+    # Apply filter: uses the right disparity as a confidence guide to fill
+    # occluded pixels that only the right matcher could observe
     filtered_disp = wls_filter.filter(left_disp, left, None, right_disp)
     filtered_disp = filtered_disp.astype(np.float32) / 16.0
 
@@ -759,12 +789,16 @@ import numpy as np
 def estimate_pose_from_essential(pts1, pts2, K):
     """Estimate relative pose from Essential Matrix"""
 
-    # Calculate Essential Matrix
+    # Use Essential (not Fundamental) Matrix because we have calibrated cameras:
+    # E encodes only the relative rotation and translation (5 DOF), while F
+    # would also absorb unknown intrinsics. Using K here normalizes the points
+    # to metric coordinates, giving a more geometrically meaningful constraint.
     E, mask = cv2.findEssentialMat(
         pts1, pts2, K,
-        method=cv2.RANSAC,
-        prob=0.999,
-        threshold=1.0
+        method=cv2.RANSAC,   # RANSAC rejects mismatches; essential for noisy matches
+        prob=0.999,           # High confidence: accept some extra iterations to avoid
+                              # returning a matrix fit to outliers
+        threshold=1.0         # Epipolar line distance tolerance in pixels
     )
 
     print(f"Inlier ratio: {np.sum(mask) / len(mask) * 100:.1f}%")

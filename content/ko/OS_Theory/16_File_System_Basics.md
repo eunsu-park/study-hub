@@ -1,10 +1,24 @@
 # 파일 시스템 기초 ⭐⭐⭐
 
-## 개요
-
-파일 시스템은 운영체제가 데이터를 디스크에 저장하고 관리하는 방법을 정의합니다. 파일의 개념, 속성, 연산, 디렉토리 구조, 접근 방법 등 핵심 개념을 학습합니다.
+**이전**: [페이지 교체](./15_Page_Replacement.md) | **다음**: [파일 시스템 구현](./17_File_System_Implementation.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. OS 관점에서 파일의 정의를 설명하고, 파일이 원시 디스크 저장소를 어떻게 추상화하는지 이해할 수 있습니다
+2. open, read, write, seek, close를 포함한 일반적인 파일 속성과 연산을 설명할 수 있습니다
+3. 순차 접근(sequential access)과 직접 접근(direct access), 인덱스 접근(indexed access) 방법을 구별할 수 있습니다
+4. 단일 레벨(flat), 계층형(hierarchical), 비순환 그래프(acyclic-graph) 디렉토리 구조를 비교할 수 있습니다
+5. 접근 제어 목록(access control list)과 권한 목록(capability list)을 이용한 파일 보호 메커니즘을 설명할 수 있습니다
+6. 열린 파일 테이블(open file table) 구조와 fork() 시 파일 디스크립터(file descriptor)가 작동하는 방식을 분석할 수 있습니다
+7. 하드 링크(hard link)와 심볼릭 링크(symbolic link)를 구별하고 각각의 장단점을 설명할 수 있습니다
+
+---
+
+파일(file)은 영구 데이터를 위한 주요 추상화입니다. 컴퓨터에 있는 모든 문서, 사진, 설정 파일, 데이터베이스가 파일입니다. 파일 시스템은 OS가 이러한 파일들을 조직하고, 이름을 붙이고, 보호하는 방법입니다 — 자기 섹터(magnetic sector)나 플래시 셀(flash cell)로 이루어진 원시 디스크를, 우리가 매일 사용하는 친숙한 폴더 계층 구조로 변환합니다. 파일 시스템 기초를 이해하는 것은 시스템 관리부터 데이터베이스 설계에 이르기까지 모든 것의 토대가 됩니다.
 
 ## 목차
 
@@ -892,7 +906,7 @@ fork() 시 자식은 부모의 fd table을 복사합니다.
 
 ## 다음 단계
 
-[17_File_System_Implementation.md](./17_File_System_Implementation.md)에서 파일 시스템의 내부 구현을 배워봅시다!
+[파일 시스템 구현](./17_File_System_Implementation.md)에서 파일 시스템의 내부 구현을 배워봅시다!
 
 ---
 

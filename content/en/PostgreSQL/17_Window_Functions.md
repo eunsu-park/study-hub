@@ -1,11 +1,24 @@
 # 17. Window Functions & Analytics Queries
 
+**Previous**: [Replication and High Availability](./16_Replication_HA.md) | **Next**: [Table Partitioning](./18_Table_Partitioning.md)
+
+---
+
 ## Learning Objectives
-- Understand window function concepts and differences from regular aggregate functions
-- Master OVER clause, partitions, and frame concepts
-- Utilize ranking functions (ROW_NUMBER, RANK, DENSE_RANK)
-- Utilize analytical functions (LEAD, LAG, FIRST_VALUE)
-- Improve practical analytical query writing skills
+
+After completing this lesson, you will be able to:
+
+1. Explain how window functions differ from regular aggregate functions and why they preserve individual rows
+2. Construct OVER clauses with PARTITION BY, ORDER BY, and frame specifications
+3. Apply ranking functions (ROW_NUMBER, RANK, DENSE_RANK, NTILE) to produce ordered rankings within partitions
+4. Use analytical functions (LAG, LEAD, FIRST_VALUE, LAST_VALUE) to compare rows across a result set
+5. Calculate running totals, moving averages, and cumulative statistics using aggregate window functions
+6. Distinguish between ROWS, RANGE, and GROUPS frame types and select the correct one for a given analysis
+7. Solve practical analytical problems including growth rates, outlier detection, sessionization, and gap filling
+
+---
+
+Business intelligence and data analysis often require calculations that look across multiple rows -- rankings, running totals, period-over-period comparisons, and moving averages. Traditional GROUP BY collapses rows into summaries, losing the individual detail you need. Window functions solve this elegantly: they perform calculations across a set of related rows while keeping every row in the result. Once you master window functions, complex analytical queries that would otherwise require multiple subqueries or procedural code become concise single-pass SQL statements.
 
 ## Table of Contents
 1. [Window Function Basics](#1-window-function-basics)
@@ -679,11 +692,11 @@ LIMIT 1;
 
 ---
 
-## Next Steps
-- [18. Table Partitioning](./18_Table_Partitioning.md)
-- [14. JSON/JSONB Features](./14_JSON_JSONB.md)
-
 ## References
 - [PostgreSQL Window Functions](https://www.postgresql.org/docs/current/functions-window.html)
 - [Window Function Tutorial](https://www.postgresql.org/docs/current/tutorial-window.html)
 - [SQL Window Functions](https://mode.com/sql-tutorial/sql-window-functions/)
+
+---
+
+**Previous**: [Replication and High Availability](./16_Replication_HA.md) | **Next**: [Table Partitioning](./18_Table_Partitioning.md)

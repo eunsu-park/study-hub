@@ -1,12 +1,27 @@
 # Apache Airflow Basics
 
-## Introduction
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Apache Airflow architecture and describe the roles of each core component (Web Server, Scheduler, Executor, Worker, Metadata DB)
+2. Define a DAG (Directed Acyclic Graph) in Python and configure task dependencies using Airflow operators
+3. Implement common Airflow operators including PythonOperator, BashOperator, and PostgresOperator
+4. Use XComs and Airflow Variables to share data and configuration between tasks
+5. Apply scheduling with cron expressions and configure backfilling and catchup behavior
+6. Debug and monitor DAG runs using the Airflow Web UI and logs
+
+---
+
+## Overview
 
 Apache Airflow is a platform for programmatically authoring, scheduling, and monitoring workflows. It manages complex data pipelines by defining DAGs (Directed Acyclic Graphs) in Python.
 
 ---
 
 ## 1. Airflow Architecture
+
+Before diving into components, it helps to understand the problem Airflow solves. A plain cron job can schedule a single script, but it has no built-in support for complex task dependencies, automatic retries on failure, backfilling historical date ranges, or a centralized UI for observability. Airflow addresses all of these: it models pipelines as DAGs with explicit dependencies, provides configurable retry/alerting policies, supports backfill with a single CLI command, and ships with a web UI that shows task status, logs, and execution history in one place.
 
 ### 1.1 Core Components
 
@@ -51,6 +66,9 @@ Apache Airflow is a platform for programmatically authoring, scheduling, and mon
 
 ```python
 # airflow.cfg settings
+# The executor determines how many tasks can run in parallel and whether
+# they run on the same machine or across a cluster.  Choosing the wrong
+# executor is the #1 cause of "my DAGs are slow" complaints.
 executor_types = {
     "SequentialExecutor": "Single process, for development",
     "LocalExecutor": "Multi-process, single machine",
@@ -58,9 +76,10 @@ executor_types = {
     "KubernetesExecutor": "Run as K8s Pods"
 }
 
-# Recommended configuration
-# Development: LocalExecutor
-# Production: CeleryExecutor or KubernetesExecutor
+# Recommended configuration:
+# Development → LocalExecutor (no external broker needed, still parallel)
+# Production  → CeleryExecutor (persistent workers, lower cold-start)
+#            or KubernetesExecutor (per-task isolation, auto-scaling to zero)
 ```
 
 ---
@@ -73,6 +92,8 @@ executor_types = {
 # docker-compose.yaml
 version: '3.8'
 
+# YAML anchor (&airflow-common) avoids duplicating config across services —
+# all Airflow components share the same image, env vars, and volume mounts.
 x-airflow-common: &airflow-common
   image: apache/airflow:2.7.0
   environment:
@@ -80,11 +101,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    # Redis as Celery broker: lightweight, no authentication for local dev.
+    # In production, use a managed Redis or RabbitMQ with TLS.
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
+    # Pause new DAGs by default so they don't start running immediately on
+    # deploy — gives operators time to review before enabling.
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
   volumes:
+    # Mount local directories so DAG code changes are picked up without
+    # rebuilding the Docker image — essential for a fast dev loop.
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
@@ -185,13 +212,19 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 
-# DAG default arguments
+# default_args are inherited by every task in the DAG, reducing boilerplate.
+# Override per-task when a specific operator needs different retry behavior.
 default_args = {
     'owner': 'data_team',
+    # depends_on_past=False: each run is independent. Set to True only when
+    # a task genuinely needs the previous day's run to have succeeded first
+    # (e.g., incremental aggregation that reads yesterday's output).
     'depends_on_past': False,
     'email': ['data-team@company.com'],
     'email_on_failure': True,
     'email_on_retry': False,
+    # 3 retries with 5-min delay: gives transient issues (network blips,
+    # temporary DB locks) time to resolve without human intervention.
     'retries': 3,
     'retry_delay': timedelta(minutes=5),
 }
@@ -203,7 +236,10 @@ with DAG(
     description='Simple example DAG',
     schedule_interval='0 9 * * *',  # Daily at 9 AM
     start_date=datetime(2024, 1, 1),
-    catchup=False,  # Skip past runs
+    # Prevent backfill flooding: without catchup=False, Airflow schedules
+    # ALL missed runs since start_date on first deployment — if start_date
+    # is 2024-01-01 and today is 2024-06-15, that's ~165 concurrent runs.
+    catchup=False,
     tags=['example', 'tutorial'],
 ) as dag:
 
@@ -246,23 +282,27 @@ from airflow import DAG
 
 dag = DAG(
     # Required parameters
-    dag_id='my_dag',                    # Unique identifier
-    start_date=datetime(2024, 1, 1),    # Start date
+    dag_id='my_dag',                    # Unique identifier (must be unique across all DAGs)
+    start_date=datetime(2024, 1, 1),    # Earliest data_interval the scheduler will create
 
     # Schedule related
     schedule_interval='@daily',         # Execution frequency
-    # schedule_interval='0 0 * * *'     # Cron expression
-    # schedule_interval=timedelta(days=1)
+    # schedule_interval='0 0 * * *'     # Cron expression (more precise control)
+    # schedule_interval=timedelta(days=1)  # timedelta for non-calendar intervals
 
     # Execution control
-    catchup=False,                      # Whether to run past executions
-    max_active_runs=1,                  # Limit concurrent runs
-    max_active_tasks=10,                # Limit concurrent tasks
+    catchup=False,                      # See note above about backfill flooding
+    # max_active_runs=1: prevents overlapping runs for non-idempotent pipelines.
+    # Increase for idempotent DAGs that can safely run in parallel.
+    max_active_runs=1,
+    # max_active_tasks limits parallelism *within* a single run — useful to
+    # avoid overwhelming a shared resource (e.g., a database connection pool).
+    max_active_tasks=10,
 
     # Other
     default_args=default_args,          # Default arguments
     description='DAG description',
-    tags=['production', 'etl'],
+    tags=['production', 'etl'],         # Tags enable filtering in the web UI
     doc_md="""
     ## DAG Documentation
     This DAG performs daily ETL.
@@ -295,7 +335,9 @@ from airflow.operators.email import EmailOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.http.operators.http import SimpleHttpOperator
 
-# 1. PythonOperator - Execute Python function
+# 1. PythonOperator — best when you need complex logic, library imports, or
+# DataFrame manipulation.  Use this over BashOperator when the task involves
+# more than a one-liner shell command.
 def my_function(arg1, arg2):
     return arg1 + arg2
 
@@ -307,7 +349,9 @@ python_task = PythonOperator(
 )
 
 
-# 2. BashOperator - Execute Bash command
+# 2. BashOperator — ideal for calling CLI tools (dbt run, spark-submit),
+# running shell scripts, or quick file operations.  Prefer this over
+# PythonOperator when the task is essentially a shell command.
 bash_task = BashOperator(
     task_id='bash_task',
     bash_command='echo "Hello" && date',
@@ -316,12 +360,15 @@ bash_task = BashOperator(
 )
 
 
-# 3. EmptyOperator - Dummy task (group dependencies)
+# 3. EmptyOperator — zero-cost DAG structure nodes.  Use as start/end
+# markers or to fan-in/fan-out parallel branches without running any logic.
 start = EmptyOperator(task_id='start')
 end = EmptyOperator(task_id='end')
 
 
-# 4. PostgresOperator - Execute SQL
+# 4. PostgresOperator — executes SQL directly against a managed connection.
+# Prefer this over PythonOperator + psycopg2 for simple SQL statements
+# because it handles connection lifecycle and templating automatically.
 sql_task = PostgresOperator(
     task_id='sql_task',
     postgres_conn_id='my_postgres',
@@ -332,7 +379,9 @@ sql_task = PostgresOperator(
 )
 
 
-# 5. EmailOperator - Send email
+# 5. EmailOperator — sends notification emails via the configured SMTP
+# connection.  Use for success summaries or reports; for failure alerts,
+# prefer email_on_failure in default_args (fires automatically).
 email_task = EmailOperator(
     task_id='send_email',
     to='user@example.com',
@@ -341,7 +390,8 @@ email_task = EmailOperator(
 )
 
 
-# 6. SimpleHttpOperator - HTTP request
+# 6. SimpleHttpOperator — calls external REST APIs.  The response_check
+# lambda lets you define custom success criteria beyond HTTP 2xx status.
 http_task = SimpleHttpOperator(
     task_id='http_task',
     http_conn_id='my_api',
@@ -376,6 +426,9 @@ with DAG('branch_example', ...) as dag:
 
     weekday_task = EmptyOperator(task_id='weekday_task')
     weekend_task = EmptyOperator(task_id='weekend_task')
+    # trigger_rule='none_failed_min_one_success': the join task runs as long
+    # as at least one branch succeeded and none failed.  Default 'all_success'
+    # would never trigger because the un-chosen branch is always "skipped".
     join_task = EmptyOperator(task_id='join', trigger_rule='none_failed_min_one_success')
 
     branch_task >> [weekday_task, weekend_task] >> join_task
@@ -391,7 +444,10 @@ from typing import Any
 class MyCustomOperator(BaseOperator):
     """Custom operator example"""
 
-    template_fields = ['param']  # Fields supporting Jinja templates
+    # template_fields: Airflow renders Jinja templates in these fields before
+    # execute() runs, enabling dynamic values like {{ ds }} or {{ params.x }}.
+    # Any field NOT listed here will be treated as a literal string.
+    template_fields = ['param']
 
     @apply_defaults
     def __init__(
@@ -407,14 +463,16 @@ class MyCustomOperator(BaseOperator):
         """Task execution logic"""
         self.log.info(f"Executing with param: {self.param}")
 
-        # Access execution info from context
+        # context dict provides runtime metadata (dates, task instance,
+        # DAG run info) — avoids hardcoding values that change per run.
         execution_date = context['ds']
         task_instance = context['ti']
 
         # Business logic
         result = f"Processed {self.param} on {execution_date}"
 
-        # Return result via XCom
+        # Returning a value automatically pushes it to XCom with
+        # key='return_value', making it available to downstream tasks.
         return result
 
 
@@ -483,13 +541,15 @@ trigger_rules = {
     'always': 'Always run',
 }
 
-# Usage example
+# Usage example: join after a branch — runs even if one branch was skipped,
+# as long as none actually *failed*.
 task_join = EmptyOperator(
     task_id='join',
     trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
 )
 
-# Error handling task
+# Error handling task: only runs when at least one upstream failed —
+# useful for cleanup or alert tasks that should not run on success.
 task_error_handler = EmptyOperator(
     task_id='error_handler',
     trigger_rule=TriggerRule.ONE_FAILED,
@@ -525,6 +585,9 @@ dag = DAG(
 
 ```python
 # Airflow 2.0+ data interval concept
+# Understanding this is critical: the DAG runs AFTER the interval ends,
+# not at the start. This "end-of-period" convention ensures the full
+# day's data exists before the pipeline processes it.
 """
 schedule_interval = @daily, start_date = 2024-01-01
 
@@ -580,14 +643,19 @@ def extract_data(**kwargs):
     """Extract data"""
     import pandas as pd
 
-    ds = kwargs['ds']  # execution date (YYYY-MM-DD)
+    # kwargs['ds'] is the logical date (YYYY-MM-DD) — Airflow injects this
+    # automatically, so the same DAG code works for any date during backfills.
+    ds = kwargs['ds']
 
-    # Extract data from source
+    # Filter by ds to ensure idempotent extraction: re-running this task
+    # for the same date always pulls the same data partition.
     query = f"""
         SELECT * FROM source_table
         WHERE date = '{ds}'
     """
 
+    # Parquet preserves column types across the E→T boundary;
+    # CSV would lose datetime/decimal precision.
     # df = pd.read_sql(query, source_conn)
     # df.to_parquet(f'/tmp/extract_{ds}.parquet')
 
@@ -642,13 +710,16 @@ with DAG(
         """,
     )
 
+    # Post-load validation: fail loudly if no rows were loaded.
+    # The 1/0 trick causes a division-by-zero error that Airflow interprets
+    # as a task failure, triggering the configured retry and alert policies.
     validate = PostgresOperator(
         task_id='validate',
         postgres_conn_id='warehouse',
         sql="""
             SELECT
                 CASE WHEN COUNT(*) > 0 THEN 1
-                     ELSE 1/0  -- Raise error
+                     ELSE 1/0  -- Intentional error to fail the task
                 END
             FROM target_table
             WHERE date = '{{ ds }}';

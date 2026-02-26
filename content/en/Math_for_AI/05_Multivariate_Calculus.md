@@ -40,33 +40,33 @@ import numpy as np
 import sympy as sp
 from sympy import symbols, diff, exp, sin, cos, simplify
 
-# 심볼 정의
+# Define symbols
 x, y = symbols('x y')
 
-# 함수 정의
+# Define function
 f = x**2 + 3*x*y + y**2
 
-# 편미분
+# Partial derivatives
 df_dx = diff(f, x)
 df_dy = diff(f, y)
 
-print("함수:", f)
+print("Function:", f)
 print(f"∂f/∂x = {df_dx}")
 print(f"∂f/∂y = {df_dy}")
 
-# 특정 점에서 계산
+# Evaluate at a specific point
 point = {x: 1, y: 2}
-print(f"\n점 (1, 2)에서:")
+print(f"\nAt point (1, 2):")
 print(f"  f(1,2) = {f.subs(point)}")
 print(f"  ∂f/∂x(1,2) = {df_dx.subs(point)}")
 print(f"  ∂f/∂y(1,2) = {df_dy.subs(point)}")
 
-# 복잡한 함수
+# More complex function
 g = exp(x**2 + y**2) * sin(x*y)
 dg_dx = simplify(diff(g, x))
 dg_dy = simplify(diff(g, y))
 
-print(f"\n함수: g(x,y) = {g}")
+print(f"\nFunction: g(x,y) = {g}")
 print(f"∂g/∂x = {dg_dx}")
 print(f"∂g/∂y = {dg_dy}")
 ```
@@ -77,72 +77,72 @@ print(f"∂g/∂y = {dg_dy}")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# 함수 정의: f(x, y) = x^2 + y^2
+# Define function: f(x, y) = x^2 + y^2
 def f(x, y):
     return x**2 + y**2
 
-# 격자 생성
+# Create grid
 x_vals = np.linspace(-3, 3, 100)
 y_vals = np.linspace(-3, 3, 100)
 X, Y = np.meshgrid(x_vals, y_vals)
 Z = f(X, Y)
 
-# 특정 점
+# Specific point
 x0, y0 = 1.0, 1.5
 z0 = f(x0, y0)
 
 fig = plt.figure(figsize=(16, 6))
 
-# 3D 표면
+# 3D surface
 ax1 = fig.add_subplot(131, projection='3d')
 ax1.plot_surface(X, Y, Z, cmap='viridis', alpha=0.7)
-ax1.scatter([x0], [y0], [z0], c='red', s=100, label=f'점 ({x0}, {y0})')
+ax1.scatter([x0], [y0], [z0], c='red', s=100, label=f'Point ({x0}, {y0})')
 
-# x 방향 접선 (y 고정)
+# Tangent in x direction (y fixed)
 x_line = np.linspace(x0-1, x0+1, 50)
 y_line = np.full_like(x_line, y0)
 z_line = f(x_line, y_line)
-ax1.plot(x_line, y_line, z_line, 'r-', linewidth=3, label='y 고정 (∂f/∂x)')
+ax1.plot(x_line, y_line, z_line, 'r-', linewidth=3, label='y fixed (∂f/∂x)')
 
-# y 방향 접선 (x 고정)
+# Tangent in y direction (x fixed)
 x_line2 = np.full(50, x0)
 y_line2 = np.linspace(y0-1, y0+1, 50)
 z_line2 = f(x_line2, y_line2)
-ax1.plot(x_line2, y_line2, z_line2, 'b-', linewidth=3, label='x 고정 (∂f/∂y)')
+ax1.plot(x_line2, y_line2, z_line2, 'b-', linewidth=3, label='x fixed (∂f/∂y)')
 
-ax1.set_title('편미분의 기하학적 의미', fontsize=12)
+ax1.set_title('Geometric Meaning of Partial Derivatives', fontsize=12)
 ax1.set_xlabel('x')
 ax1.set_ylabel('y')
 ax1.set_zlabel('f(x,y)')
 ax1.legend()
 
-# x 고정 단면
+# Cross section with x fixed
 ax2 = fig.add_subplot(132)
 y_slice = np.linspace(-3, 3, 100)
 z_slice = f(x0, y_slice)
 ax2.plot(y_slice, z_slice, 'b-', linewidth=2)
 ax2.plot([y0], [z0], 'ro', markersize=10)
-# 접선
+# Tangent line
 slope_y = 2*y0  # ∂f/∂y = 2y
 tangent_y = z0 + slope_y * (y_slice - y0)
-ax2.plot(y_slice, tangent_y, 'r--', linewidth=2, label=f'접선 (기울기={slope_y:.1f})')
-ax2.set_title(f'x={x0} 고정 단면', fontsize=12)
+ax2.plot(y_slice, tangent_y, 'r--', linewidth=2, label=f'Tangent (slope={slope_y:.1f})')
+ax2.set_title(f'Cross section with x={x0} fixed', fontsize=12)
 ax2.set_xlabel('y')
 ax2.set_ylabel('f(x,y)')
 ax2.grid(True, alpha=0.3)
 ax2.legend()
 
-# y 고정 단면
+# Cross section with y fixed
 ax3 = fig.add_subplot(133)
 x_slice = np.linspace(-3, 3, 100)
 z_slice = f(x_slice, y0)
 ax3.plot(x_slice, z_slice, 'r-', linewidth=2)
 ax3.plot([x0], [z0], 'ro', markersize=10)
-# 접선
+# Tangent line
 slope_x = 2*x0  # ∂f/∂x = 2x
 tangent_x = z0 + slope_x * (x_slice - x0)
-ax3.plot(x_slice, tangent_x, 'b--', linewidth=2, label=f'접선 (기울기={slope_x:.1f})')
-ax3.set_title(f'y={y0} 고정 단면', fontsize=12)
+ax3.plot(x_slice, tangent_x, 'b--', linewidth=2, label=f'Tangent (slope={slope_x:.1f})')
+ax3.set_title(f'Cross section with y={y0} fixed', fontsize=12)
 ax3.set_xlabel('x')
 ax3.set_ylabel('f(x,y)')
 ax3.grid(True, alpha=0.3)
@@ -152,7 +152,7 @@ plt.tight_layout()
 plt.savefig('partial_derivatives_geometry.png', dpi=150, bbox_inches='tight')
 plt.close()
 
-print("편미분 기하학 시각화 저장: partial_derivatives_geometry.png")
+print("Partial derivative geometry visualization saved: partial_derivatives_geometry.png")
 ```
 
 ### 1.5 Higher-Order Partial Derivatives
@@ -162,18 +162,18 @@ Schwarz's theorem: If $f$ is $C^2$ class, the order of partial derivatives doesn
 $$\frac{\partial^2 f}{\partial x \partial y} = \frac{\partial^2 f}{\partial y \partial x}$$
 
 ```python
-# 슈바르츠 정리 검증
+# Verify Schwarz's theorem
 x, y = symbols('x y')
 f = x**3 * y**2 + x * y**3
 
-# 혼합 편미분
+# Mixed partial derivatives
 f_xy = diff(diff(f, x), y)
 f_yx = diff(diff(f, y), x)
 
-print("함수:", f)
+print("Function:", f)
 print(f"∂²f/∂x∂y = {f_xy}")
 print(f"∂²f/∂y∂x = {f_yx}")
-print(f"동일한가? {simplify(f_xy - f_yx) == 0}")
+print(f"Are they equal? {simplify(f_xy - f_yx) == 0}")
 ```
 
 ## 2. Gradient
@@ -193,45 +193,45 @@ The gradient indicates:
 The gradient is perpendicular to contour lines (level sets).
 
 ```python
-# 등고선과 그래디언트 시각화
+# Visualize contour lines and gradient
 def f(x, y):
-    """함수: f(x, y) = x^2 + 2y^2"""
+    """Function: f(x, y) = x^2 + 2y^2"""
     return x**2 + 2*y**2
 
 def grad_f(x, y):
-    """그래디언트: ∇f = [2x, 4y]"""
+    """Gradient: ∇f = [2x, 4y]"""
     return np.array([2*x, 4*y])
 
-# 격자
+# Grid
 x = np.linspace(-3, 3, 300)
 y = np.linspace(-3, 3, 300)
 X, Y = np.meshgrid(x, y)
 Z = f(X, Y)
 
-# 그래디언트 계산 지점
+# Points to compute gradient at
 n_points = 15
 x_grad = np.linspace(-2.5, 2.5, n_points)
 y_grad = np.linspace(-2.5, 2.5, n_points)
 X_grad, Y_grad = np.meshgrid(x_grad, y_grad)
 
-# 각 점에서 그래디언트
+# Gradient at each point
 U = 2 * X_grad
 V = 4 * Y_grad
 
-# 그래디언트 크기로 정규화 (화살표 길이 조정)
+# Normalize by gradient magnitude (adjust arrow length)
 norm = np.sqrt(U**2 + V**2)
 U_norm = U / (norm + 1e-8) * 0.3
 V_norm = V / (norm + 1e-8) * 0.3
 
 plt.figure(figsize=(10, 8))
-# 등고선
+# Contour lines
 contours = plt.contour(X, Y, Z, levels=15, cmap='viridis', alpha=0.6)
 plt.clabel(contours, inline=True, fontsize=8)
-# 그래디언트 벡터
+# Gradient vectors
 plt.quiver(X_grad, Y_grad, U_norm, V_norm, norm, cmap='Reds',
            scale=1, scale_units='xy', width=0.004)
-plt.colorbar(label='그래디언트 크기')
-plt.title('등고선과 그래디언트 (그래디언트 ⊥ 등고선)', fontsize=14)
+plt.colorbar(label='Gradient magnitude')
+plt.title('Contour Lines and Gradient (Gradient ⊥ Contours)', fontsize=14)
 plt.xlabel('x')
 plt.ylabel('y')
 plt.axis('equal')
@@ -240,15 +240,15 @@ plt.tight_layout()
 plt.savefig('gradient_contour.png', dpi=150)
 plt.close()
 
-print("등고선-그래디언트 시각화 저장: gradient_contour.png")
+print("Contour-gradient visualization saved: gradient_contour.png")
 ```
 
 ### 2.3 Gradient Descent Visualization
 
 ```python
-# 그래디언트 하강법 경로
+# Gradient descent path
 def gradient_descent_2d(grad_f, x0, learning_rate=0.1, n_steps=50):
-    """2D 그래디언트 하강법"""
+    """2D gradient descent"""
     path = [x0]
     x = x0.copy()
 
@@ -259,22 +259,22 @@ def gradient_descent_2d(grad_f, x0, learning_rate=0.1, n_steps=50):
 
     return np.array(path)
 
-# 초기점
+# Initial point
 x0 = np.array([2.5, 2.0])
 
-# 경로 계산
+# Compute path
 path = gradient_descent_2d(grad_f, x0, learning_rate=0.15, n_steps=30)
 
-# 시각화
+# Visualization
 plt.figure(figsize=(10, 8))
 plt.contour(X, Y, Z, levels=20, cmap='viridis', alpha=0.6)
 plt.plot(path[:, 0], path[:, 1], 'ro-', linewidth=2, markersize=6,
-         label='그래디언트 하강 경로')
-plt.plot(path[0, 0], path[0, 1], 'go', markersize=12, label='시작점')
-plt.plot(path[-1, 0], path[-1, 1], 'r*', markersize=20, label='종료점')
-plt.plot(0, 0, 'b*', markersize=20, label='최솟값')
+         label='Gradient descent path')
+plt.plot(path[0, 0], path[0, 1], 'go', markersize=12, label='Start point')
+plt.plot(path[-1, 0], path[-1, 1], 'r*', markersize=20, label='End point')
+plt.plot(0, 0, 'b*', markersize=20, label='Minimum')
 plt.colorbar(label='f(x, y)')
-plt.title('그래디언트 하강법 경로', fontsize=14)
+plt.title('Gradient Descent Path', fontsize=14)
 plt.xlabel('x')
 plt.ylabel('y')
 plt.legend()
@@ -284,15 +284,15 @@ plt.tight_layout()
 plt.savefig('gradient_descent_path.png', dpi=150)
 plt.close()
 
-print("그래디언트 하강법 경로 저장: gradient_descent_path.png")
-print(f"시작: {path[0]}, 종료: {path[-1]}, 최솟값: [0, 0]")
-print(f"최종 함수 값: {f(path[-1, 0], path[-1, 1]):.6f}")
+print("Gradient descent path saved: gradient_descent_path.png")
+print(f"Start: {path[0]}, End: {path[-1]}, Minimum: [0, 0]")
+print(f"Final function value: {f(path[-1, 0], path[-1, 1]):.6f}")
 ```
 
 ### 2.4 Gradient Magnitude and Learning Rate
 
 ```python
-# 다양한 학습률로 실험
+# Experiment with various learning rates
 learning_rates = [0.05, 0.15, 0.3, 0.5]
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 12))
@@ -306,7 +306,7 @@ for idx, lr in enumerate(learning_rates):
     axes[idx].plot(path[0, 0], path[0, 1], 'go', markersize=12)
     axes[idx].plot(path[-1, 0], path[-1, 1], 'r*', markersize=15)
     axes[idx].plot(0, 0, 'b*', markersize=15)
-    axes[idx].set_title(f'학습률 = {lr}\n최종 값: {f(path[-1,0], path[-1,1]):.4f}',
+    axes[idx].set_title(f'Learning rate = {lr}\nFinal value: {f(path[-1,0], path[-1,1]):.4f}',
                         fontsize=11)
     axes[idx].set_xlabel('x')
     axes[idx].set_ylabel('y')
@@ -317,7 +317,7 @@ plt.tight_layout()
 plt.savefig('gradient_descent_learning_rates.png', dpi=150)
 plt.close()
 
-print("학습률 비교 시각화 저장: gradient_descent_learning_rates.png")
+print("Learning rate comparison visualization saved: gradient_descent_learning_rates.png")
 ```
 
 ## 3. Directional Derivative
@@ -339,17 +339,17 @@ The directional derivative is maximum when $\mathbf{u}$ points in the direction 
 $$\max_{\|\mathbf{u}\|=1} D_\mathbf{u} f = \|\nabla f\|$$
 
 ```python
-# 방향 도함수 시각화
+# Directional derivative visualization
 point = np.array([1.5, 1.0])
 grad_at_point = grad_f(point[0], point[1])
 grad_norm = np.linalg.norm(grad_at_point)
 
-# 다양한 방향
+# Various directions
 n_directions = 36
 angles = np.linspace(0, 2*np.pi, n_directions)
 directions = np.array([np.cos(angles), np.sin(angles)]).T
 
-# 각 방향으로 방향 도함수 계산
+# Compute directional derivative in each direction
 directional_derivatives = []
 for u in directions:
     Du_f = np.dot(grad_at_point, u)
@@ -357,28 +357,28 @@ for u in directions:
 
 directional_derivatives = np.array(directional_derivatives)
 
-# 극좌표 플롯
+# Polar plot
 fig = plt.figure(figsize=(14, 6))
 
-# 극좌표 플롯
+# Polar plot
 ax1 = fig.add_subplot(121, projection='polar')
 ax1.plot(angles, directional_derivatives, 'b-', linewidth=2)
 ax1.fill(angles, directional_derivatives, alpha=0.3)
-ax1.set_title('방향 도함수 크기\n(각도별)', fontsize=12)
+ax1.set_title('Directional Derivative Magnitude\n(by angle)', fontsize=12)
 ax1.grid(True)
 
-# 2D 플롯
+# 2D plot
 ax2 = fig.add_subplot(122)
 ax2.contour(X, Y, Z, levels=15, cmap='viridis', alpha=0.6)
-ax2.plot(point[0], point[1], 'ro', markersize=12, label='평가 점')
+ax2.plot(point[0], point[1], 'ro', markersize=12, label='Evaluation point')
 
-# 그래디언트 방향 (최대)
+# Gradient direction (maximum)
 grad_unit = grad_at_point / grad_norm
 ax2.arrow(point[0], point[1], grad_unit[0]*0.5, grad_unit[1]*0.5,
           head_width=0.15, head_length=0.1, fc='red', ec='red',
-          linewidth=2, label=f'그래디언트 (최대: {grad_norm:.2f})')
+          linewidth=2, label=f'Gradient (max: {grad_norm:.2f})')
 
-# 몇 가지 다른 방향
+# Several other directions
 sample_angles = [0, np.pi/4, np.pi/2, 3*np.pi/4]
 colors = ['blue', 'green', 'orange', 'purple']
 for angle, color in zip(sample_angles, colors):
@@ -388,7 +388,7 @@ for angle, color in zip(sample_angles, colors):
               head_width=0.1, head_length=0.08, fc=color, ec=color,
               alpha=0.6, linewidth=1.5)
 
-ax2.set_title('다양한 방향의 도함수', fontsize=12)
+ax2.set_title('Derivatives in Various Directions', fontsize=12)
 ax2.set_xlabel('x')
 ax2.set_ylabel('y')
 ax2.legend()
@@ -399,9 +399,9 @@ plt.tight_layout()
 plt.savefig('directional_derivative.png', dpi=150)
 plt.close()
 
-print("방향 도함수 시각화 저장: directional_derivative.png")
-print(f"점 {point}에서 그래디언트: {grad_at_point}")
-print(f"그래디언트 크기 (최대 방향 도함수): {grad_norm:.4f}")
+print("Directional derivative visualization saved: directional_derivative.png")
+print(f"Gradient at point {point}: {grad_at_point}")
+print(f"Gradient magnitude (max directional derivative): {grad_norm:.4f}")
 ```
 
 ## 4. Multivariate Chain Rule
@@ -419,20 +419,20 @@ $$\frac{dz}{dt} = \nabla f \cdot \frac{d\mathbf{x}}{dt}$$
 ### 4.2 Chain Rule Example
 
 ```python
-# 체인 룰: z = f(x, y) = x^2 + y^2, x(t) = cos(t), y(t) = sin(t)
+# Chain rule: z = f(x, y) = x^2 + y^2, x(t) = cos(t), y(t) = sin(t)
 t = symbols('t')
 x_t = sp.cos(t)
 y_t = sp.sin(t)
 
-# 함수
+# Function
 z = x_t**2 + y_t**2
 
-# 방법 1: 직접 미분
+# Method 1: Direct differentiation
 dz_dt_direct = diff(z, t)
 print("z(t) =", simplify(z))
-print(f"dz/dt (직접) = {simplify(dz_dt_direct)}")
+print(f"dz/dt (direct) = {simplify(dz_dt_direct)}")
 
-# 방법 2: 체인 룰
+# Method 2: Chain rule
 x_sym, y_sym = symbols('x y')
 f = x_sym**2 + y_sym**2
 df_dx = diff(f, x_sym)
@@ -443,8 +443,8 @@ dy_dt = diff(y_t, t)
 dz_dt_chain = df_dx.subs(x_sym, x_t).subs(y_sym, y_t) * dx_dt + \
               df_dy.subs(x_sym, x_t).subs(y_sym, y_t) * dy_dt
 
-print(f"dz/dt (체인 룰) = {simplify(dz_dt_chain)}")
-print(f"동일한가? {simplify(dz_dt_direct - dz_dt_chain) == 0}")
+print(f"dz/dt (chain rule) = {simplify(dz_dt_chain)}")
+print(f"Are they equal? {simplify(dz_dt_direct - dz_dt_chain) == 0}")
 ```
 
 ### 4.3 Backpropagation and Chain Rule
@@ -455,29 +455,29 @@ Backpropagation in neural networks is the repeated application of the multivaria
 import torch
 import torch.nn as nn
 
-# 간단한 계산 그래프
+# Simple computation graph
 x = torch.tensor(2.0, requires_grad=True)
 y = torch.tensor(3.0, requires_grad=True)
 
 # z = f(x, y) = x^2 + xy + y^2
 z = x**2 + x*y + y**2
 
-# 자동 미분
+# Automatic differentiation
 z.backward()
 
-print("계산 그래프: z = x² + xy + y²")
+print("Computation graph: z = x² + xy + y²")
 print(f"x = {x.item()}, y = {y.item()}")
 print(f"z = {z.item()}")
-print(f"\n자동 미분:")
+print(f"\nAutomatic differentiation:")
 print(f"∂z/∂x = {x.grad.item()}")
 print(f"∂z/∂y = {y.grad.item()}")
 
-# 수동 계산
+# Manual computation
 x_val, y_val = 2.0, 3.0
 dz_dx_manual = 2*x_val + y_val  # ∂z/∂x = 2x + y
 dz_dy_manual = x_val + 2*y_val  # ∂z/∂y = x + 2y
 
-print(f"\n수동 계산:")
+print(f"\nManual computation:")
 print(f"∂z/∂x = 2x + y = {dz_dx_manual}")
 print(f"∂z/∂y = x + 2y = {dz_dy_manual}")
 ```
@@ -499,19 +499,19 @@ $$f(\mathbf{x}_0 + \boldsymbol{\delta}) \approx f(\mathbf{x}_0) + \nabla f(\math
 ### 5.3 Taylor Expansion Visualization
 
 ```python
-# 테일러 전개 근사
+# Taylor expansion approximation
 def f_example(x, y):
     return np.exp(-(x**2 + y**2)) * np.sin(x) * np.cos(y)
 
 def grad_f_example(x, y):
-    """수치 그래디언트"""
+    """Numerical gradient"""
     h = 1e-5
     df_dx = (f_example(x+h, y) - f_example(x-h, y)) / (2*h)
     df_dy = (f_example(x, y+h) - f_example(x, y-h)) / (2*h)
     return np.array([df_dx, df_dy])
 
 def hessian_f_example(x, y):
-    """수치 헤시안"""
+    """Numerical Hessian"""
     h = 1e-5
     H = np.zeros((2, 2))
     grad_base = grad_f_example(x, y)
@@ -530,42 +530,42 @@ def hessian_f_example(x, y):
 
     return H
 
-# 전개 중심점
+# Expansion center point
 x0, y0 = 0.5, 0.5
 f0 = f_example(x0, y0)
 grad0 = grad_f_example(x0, y0)
 H0 = hessian_f_example(x0, y0)
 
-# 격자
+# Grid
 x_range = np.linspace(-0.5, 1.5, 100)
 y_range = np.linspace(-0.5, 1.5, 100)
 X_grid, Y_grid = np.meshgrid(x_range, y_range)
 
-# 원 함수
+# Original function
 Z_true = f_example(X_grid, Y_grid)
 
-# 1차 근사
+# 1st-order approximation
 delta_x = X_grid - x0
 delta_y = Y_grid - y0
 Z_linear = f0 + grad0[0]*delta_x + grad0[1]*delta_y
 
-# 2차 근사
+# 2nd-order approximation
 Z_quadratic = np.zeros_like(Z_true)
 for i in range(len(y_range)):
     for j in range(len(x_range)):
         delta = np.array([delta_x[i, j], delta_y[i, j]])
         Z_quadratic[i, j] = f0 + grad0 @ delta + 0.5 * delta @ H0 @ delta
 
-# 시각화
+# Visualization
 fig = plt.figure(figsize=(18, 5))
 
-titles = ['원 함수', '1차 테일러 근사 (선형)', '2차 테일러 근사 (이차)']
+titles = ['Original Function', '1st-order Taylor Approximation (Linear)', '2nd-order Taylor Approximation (Quadratic)']
 Z_list = [Z_true, Z_linear, Z_quadratic]
 
 for idx, (title, Z) in enumerate(zip(titles, Z_list)):
     ax = fig.add_subplot(1, 3, idx+1, projection='3d')
     ax.plot_surface(X_grid, Y_grid, Z, cmap='viridis', alpha=0.8)
-    ax.scatter([x0], [y0], [f0], c='red', s=100, label='전개 중심')
+    ax.scatter([x0], [y0], [f0], c='red', s=100, label='Expansion center')
     ax.set_title(title, fontsize=12)
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -576,13 +576,13 @@ plt.tight_layout()
 plt.savefig('taylor_expansion.png', dpi=150)
 plt.close()
 
-# 오차 계산
+# Compute errors
 error_linear = np.abs(Z_true - Z_linear).max()
 error_quad = np.abs(Z_true - Z_quadratic).max()
 
-print("테일러 전개 시각화 저장: taylor_expansion.png")
-print(f"1차 근사 최대 오차: {error_linear:.6f}")
-print(f"2차 근사 최대 오차: {error_quad:.6f}")
+print("Taylor expansion visualization saved: taylor_expansion.png")
+print(f"1st-order approximation max error: {error_linear:.6f}")
+print(f"2nd-order approximation max error: {error_quad:.6f}")
 ```
 
 ### 5.4 Mathematical Foundation of Newton's Method
@@ -593,7 +593,7 @@ $$\mathbf{x}_{k+1} = \mathbf{x}_k - H^{-1}(\mathbf{x}_k) \nabla f(\mathbf{x}_k)$
 
 ```python
 def newton_method_2d(f, grad_f, hess_f, x0, tol=1e-6, max_iter=20):
-    """2D 뉴턴 방법"""
+    """2D Newton's method"""
     path = [x0]
     x = x0.copy()
 
@@ -601,23 +601,23 @@ def newton_method_2d(f, grad_f, hess_f, x0, tol=1e-6, max_iter=20):
         grad = grad_f(x[0], x[1])
         hess = hess_f(x[0], x[1])
 
-        # 뉴턴 스텝
+        # Newton step
         try:
             delta = np.linalg.solve(hess, -grad)
         except np.linalg.LinAlgError:
-            print(f"특이 헤시안 at iteration {i}")
+            print(f"Singular Hessian at iteration {i}")
             break
 
         x = x + delta
         path.append(x.copy())
 
         if np.linalg.norm(delta) < tol:
-            print(f"수렴 at iteration {i}")
+            print(f"Converged at iteration {i}")
             break
 
     return np.array(path)
 
-# 테스트 함수: f(x, y) = (x-1)^2 + 2(y-2)^2
+# Test function: f(x, y) = (x-1)^2 + 2(y-2)^2
 def f_newton(x, y):
     return (x - 1)**2 + 2*(y - 2)**2
 
@@ -627,12 +627,12 @@ def grad_f_newton(x, y):
 def hess_f_newton(x, y):
     return np.array([[2, 0], [0, 4]])
 
-# 뉴턴 방법 vs 그래디언트 하강
+# Newton's method vs gradient descent
 x0_newton = np.array([0.0, 0.0])
 path_newton = newton_method_2d(f_newton, grad_f_newton, hess_f_newton, x0_newton)
 path_gd = gradient_descent_2d(grad_f_newton, x0_newton, learning_rate=0.2, n_steps=50)
 
-# 시각화
+# Visualization
 x_plt = np.linspace(-0.5, 2.5, 200)
 y_plt = np.linspace(-0.5, 3.5, 200)
 X_plt, Y_plt = np.meshgrid(x_plt, y_plt)
@@ -641,12 +641,12 @@ Z_plt = f_newton(X_plt, Y_plt)
 plt.figure(figsize=(10, 8))
 plt.contour(X_plt, Y_plt, Z_plt, levels=25, cmap='viridis', alpha=0.6)
 plt.plot(path_gd[:, 0], path_gd[:, 1], 'ro-', linewidth=2, markersize=5,
-         label=f'그래디언트 하강 ({len(path_gd)} 단계)')
+         label=f'Gradient descent ({len(path_gd)} steps)')
 plt.plot(path_newton[:, 0], path_newton[:, 1], 'bo-', linewidth=2, markersize=7,
-         label=f'뉴턴 방법 ({len(path_newton)} 단계)')
-plt.plot(1, 2, 'g*', markersize=20, label='최솟값')
+         label=f"Newton's method ({len(path_newton)} steps)")
+plt.plot(1, 2, 'g*', markersize=20, label='Minimum')
 plt.colorbar(label='f(x, y)')
-plt.title('뉴턴 방법 vs 그래디언트 하강법', fontsize=14)
+plt.title("Newton's Method vs Gradient Descent", fontsize=14)
 plt.xlabel('x')
 plt.ylabel('y')
 plt.legend()
@@ -655,9 +655,9 @@ plt.tight_layout()
 plt.savefig('newton_vs_gradient_descent.png', dpi=150)
 plt.close()
 
-print("뉴턴 vs GD 시각화 저장: newton_vs_gradient_descent.png")
-print(f"뉴턴 방법 단계: {len(path_newton)}, 최종: {path_newton[-1]}")
-print(f"GD 단계: {len(path_gd)}, 최종: {path_gd[-1]}")
+print("Newton vs GD visualization saved: newton_vs_gradient_descent.png")
+print(f"Newton's method steps: {len(path_newton)}, final: {path_newton[-1]}")
+print(f"GD steps: {len(path_gd)}, final: {path_gd[-1]}")
 ```
 
 ## 6. Loss Landscape Visualization
@@ -665,15 +665,15 @@ print(f"GD 단계: {len(path_gd)}, 최종: {path_gd[-1]}")
 ### 6.1 Loss Function Landscape
 
 ```python
-# 비등방 손실 함수 (조건수가 큰 경우)
+# Anisotropic loss function (large condition number)
 def loss_anisotropic(x, y):
-    """길쭉한 골짜기 형태의 손실 함수"""
+    """Loss function shaped like an elongated valley"""
     return 0.5 * x**2 + 10 * y**2
 
 def grad_loss_anisotropic(x, y):
     return np.array([x, 20*y])
 
-# 시각화
+# Visualization
 x_loss = np.linspace(-10, 10, 300)
 y_loss = np.linspace(-3, 3, 300)
 X_loss, Y_loss = np.meshgrid(x_loss, y_loss)
@@ -681,27 +681,27 @@ Z_loss = loss_anisotropic(X_loss, Y_loss)
 
 fig = plt.figure(figsize=(16, 6))
 
-# 3D 표면
+# 3D surface
 ax1 = fig.add_subplot(131, projection='3d')
 ax1.plot_surface(X_loss, Y_loss, Z_loss, cmap='viridis', alpha=0.8,
                  vmin=0, vmax=50)
-ax1.set_title('3D 손실 지형\n(높은 조건수)', fontsize=12)
+ax1.set_title('3D Loss Landscape\n(High condition number)', fontsize=12)
 ax1.set_xlabel('$w_1$')
 ax1.set_ylabel('$w_2$')
 ax1.set_zlabel('Loss')
 ax1.view_init(elev=25, azim=45)
 
-# 등고선
+# Contour lines
 ax2 = fig.add_subplot(132)
 contours = ax2.contour(X_loss, Y_loss, Z_loss, levels=30, cmap='viridis')
 ax2.clabel(contours, inline=True, fontsize=8)
-ax2.set_title('등고선 (길쭉한 골짜기)', fontsize=12)
+ax2.set_title('Contour Lines (Elongated Valley)', fontsize=12)
 ax2.set_xlabel('$w_1$')
 ax2.set_ylabel('$w_2$')
 ax2.axis('equal')
 ax2.grid(True, alpha=0.3)
 
-# 그래디언트 하강 경로
+# Gradient descent path
 ax3 = fig.add_subplot(133)
 ax3.contour(X_loss, Y_loss, Z_loss, levels=30, cmap='viridis', alpha=0.6)
 
@@ -709,10 +709,10 @@ x0_loss = np.array([8.0, 2.5])
 path_slow = gradient_descent_2d(grad_loss_anisotropic, x0_loss,
                                  learning_rate=0.05, n_steps=100)
 ax3.plot(path_slow[:, 0], path_slow[:, 1], 'r.-', linewidth=1.5,
-         markersize=3, label='느린 수렴')
-ax3.plot(x0_loss[0], x0_loss[1], 'go', markersize=10, label='시작')
-ax3.plot(0, 0, 'b*', markersize=15, label='최솟값')
-ax3.set_title('그래디언트 하강 경로\n(지그재그)', fontsize=12)
+         markersize=3, label='Slow convergence')
+ax3.plot(x0_loss[0], x0_loss[1], 'go', markersize=10, label='Start')
+ax3.plot(0, 0, 'b*', markersize=15, label='Minimum')
+ax3.set_title('Gradient Descent Path\n(Zigzag)', fontsize=12)
 ax3.set_xlabel('$w_1$')
 ax3.set_ylabel('$w_2$')
 ax3.legend()
@@ -723,20 +723,20 @@ plt.tight_layout()
 plt.savefig('loss_landscape_anisotropic.png', dpi=150)
 plt.close()
 
-print("비등방 손실 지형 시각화 저장: loss_landscape_anisotropic.png")
+print("Anisotropic loss landscape visualization saved: loss_landscape_anisotropic.png")
 ```
 
 ### 6.2 Saddle Point
 
 ```python
-# 안장점 함수: f(x, y) = x^2 - y^2
+# Saddle point function: f(x, y) = x^2 - y^2
 def saddle_function(x, y):
     return x**2 - y**2
 
 def grad_saddle(x, y):
     return np.array([2*x, -2*y])
 
-# 시각화
+# Visualization
 x_saddle = np.linspace(-3, 3, 200)
 y_saddle = np.linspace(-3, 3, 200)
 X_saddle, Y_saddle = np.meshgrid(x_saddle, y_saddle)
@@ -744,29 +744,29 @@ Z_saddle = saddle_function(X_saddle, Y_saddle)
 
 fig = plt.figure(figsize=(16, 6))
 
-# 3D 표면
+# 3D surface
 ax1 = fig.add_subplot(131, projection='3d')
 ax1.plot_surface(X_saddle, Y_saddle, Z_saddle, cmap='coolwarm', alpha=0.8)
-ax1.scatter([0], [0], [0], c='red', s=100, label='안장점')
-ax1.set_title('안장점 함수: $f(x,y) = x^2 - y^2$', fontsize=12)
+ax1.scatter([0], [0], [0], c='red', s=100, label='Saddle point')
+ax1.set_title('Saddle Point Function: $f(x,y) = x^2 - y^2$', fontsize=12)
 ax1.set_xlabel('x')
 ax1.set_ylabel('y')
 ax1.set_zlabel('f')
 ax1.legend()
 
-# 등고선
+# Contour lines
 ax2 = fig.add_subplot(132)
 contours = ax2.contour(X_saddle, Y_saddle, Z_saddle, levels=30, cmap='coolwarm')
 ax2.clabel(contours, inline=True, fontsize=8)
-ax2.plot(0, 0, 'ro', markersize=10, label='안장점 (0, 0)')
-ax2.set_title('등고선 (쌍곡선 형태)', fontsize=12)
+ax2.plot(0, 0, 'ro', markersize=10, label='Saddle point (0, 0)')
+ax2.set_title('Contour Lines (Hyperbolic Shape)', fontsize=12)
 ax2.set_xlabel('x')
 ax2.set_ylabel('y')
 ax2.legend()
 ax2.axis('equal')
 ax2.grid(True, alpha=0.3)
 
-# 다양한 시작점에서 GD
+# GD from various starting points
 ax3 = fig.add_subplot(133)
 ax3.contour(X_saddle, Y_saddle, Z_saddle, levels=30, cmap='coolwarm', alpha=0.6)
 
@@ -779,8 +779,8 @@ for start, color in zip(start_points, colors):
     ax3.plot(path[:, 0], path[:, 1], 'o-', color=color, linewidth=1.5,
              markersize=4, alpha=0.7)
 
-ax3.plot(0, 0, 'r*', markersize=20, label='안장점')
-ax3.set_title('안장점 근처 GD 경로\n(불안정)', fontsize=12)
+ax3.plot(0, 0, 'r*', markersize=20, label='Saddle point')
+ax3.set_title('GD Paths Near Saddle Point\n(Unstable)', fontsize=12)
 ax3.set_xlabel('x')
 ax3.set_ylabel('y')
 ax3.legend()
@@ -791,7 +791,7 @@ plt.tight_layout()
 plt.savefig('saddle_point.png', dpi=150)
 plt.close()
 
-print("안장점 시각화 저장: saddle_point.png")
+print("Saddle point visualization saved: saddle_point.png")
 ```
 
 ### 6.3 Condition Number and Convergence Rate
@@ -803,13 +803,13 @@ $$\kappa(H) = \frac{\lambda_{\max}(H)}{\lambda_{\min}(H)}$$
 Higher condition number makes optimization more difficult.
 
 ```python
-# 조건수 비교
+# Condition number comparison
 def well_conditioned(x, y):
-    """조건수 = 1"""
+    """Condition number = 1"""
     return x**2 + y**2
 
 def ill_conditioned(x, y):
-    """조건수 = 100"""
+    """Condition number = 100"""
     return x**2 + 100*y**2
 
 def grad_well(x, y):
@@ -818,7 +818,7 @@ def grad_well(x, y):
 def grad_ill(x, y):
     return np.array([2*x, 200*y])
 
-# 헤시안과 조건수
+# Hessian and condition number
 H_well = np.array([[2, 0], [0, 2]])
 H_ill = np.array([[2, 0], [0, 200]])
 
@@ -828,10 +828,10 @@ eigs_ill = np.linalg.eigvals(H_ill)
 cond_well = np.max(eigs_well) / np.min(eigs_well)
 cond_ill = np.max(eigs_ill) / np.min(eigs_ill)
 
-print(f"Well-conditioned 조건수: {cond_well:.2f}")
-print(f"Ill-conditioned 조건수:  {cond_ill:.2f}")
+print(f"Well-conditioned condition number: {cond_well:.2f}")
+print(f"Ill-conditioned condition number:  {cond_ill:.2f}")
 
-# GD 경로 비교
+# GD path comparison
 x0_cond = np.array([3.0, 3.0])
 path_well = gradient_descent_2d(grad_well, x0_cond, learning_rate=0.2, n_steps=30)
 path_ill = gradient_descent_2d(grad_ill, x0_cond, learning_rate=0.005, n_steps=100)
@@ -846,7 +846,7 @@ Z_well = well_conditioned(X_grid, Y_grid)
 
 axes[0].contour(X_grid, Y_grid, Z_well, levels=20, cmap='viridis', alpha=0.6)
 axes[0].plot(path_well[:, 0], path_well[:, 1], 'ro-', linewidth=2, markersize=4)
-axes[0].set_title(f'Well-conditioned (κ={cond_well:.1f})\n{len(path_well)} 단계',
+axes[0].set_title(f'Well-conditioned (κ={cond_well:.1f})\n{len(path_well)} steps',
                   fontsize=12)
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('y')
@@ -857,7 +857,7 @@ axes[0].grid(True, alpha=0.3)
 Z_ill = ill_conditioned(X_grid, Y_grid)
 axes[1].contour(X_grid, Y_grid, Z_ill, levels=30, cmap='viridis', alpha=0.6)
 axes[1].plot(path_ill[:, 0], path_ill[:, 1], 'ro-', linewidth=1.5, markersize=3)
-axes[1].set_title(f'Ill-conditioned (κ={cond_ill:.1f})\n{len(path_ill)} 단계',
+axes[1].set_title(f'Ill-conditioned (κ={cond_ill:.1f})\n{len(path_ill)} steps',
                   fontsize=12)
 axes[1].set_xlabel('x')
 axes[1].set_ylabel('y')
@@ -868,7 +868,7 @@ plt.tight_layout()
 plt.savefig('condition_number.png', dpi=150)
 plt.close()
 
-print("조건수 비교 시각화 저장: condition_number.png")
+print("Condition number comparison visualization saved: condition_number.png")
 ```
 
 ## 7. ML Applications
@@ -878,46 +878,46 @@ print("조건수 비교 시각화 저장: condition_number.png")
 A convex function has a positive semi-definite Hessian.
 
 ```python
-# MSE 손실의 볼록성 확인
+# Check convexity of MSE loss
 from sklearn.datasets import make_regression
 
 X_reg, y_reg = make_regression(n_samples=100, n_features=2, noise=10, random_state=42)
 
 def mse_loss(w):
-    """MSE 손실: L(w) = (1/2n) ||y - Xw||^2"""
+    """MSE loss: L(w) = (1/2n) ||y - Xw||^2"""
     pred = X_reg @ w
     return 0.5 * np.mean((y_reg - pred)**2)
 
 def grad_mse(w):
-    """그래디언트: ∇L = -(1/n) X^T (y - Xw)"""
+    """Gradient: ∇L = -(1/n) X^T (y - Xw)"""
     residual = y_reg - X_reg @ w
     return -X_reg.T @ residual / len(y_reg)
 
 def hess_mse(w):
-    """헤시안: H = (1/n) X^T X"""
+    """Hessian: H = (1/n) X^T X"""
     return X_reg.T @ X_reg / len(y_reg)
 
-# 헤시안의 고유값 (볼록성 확인)
+# Eigenvalues of Hessian (convexity check)
 w_sample = np.random.randn(2)
 H = hess_mse(w_sample)
 eigenvalues = np.linalg.eigvalsh(H)
 
-print("MSE 손실 함수 볼록성 분석:")
-print(f"헤시안의 고유값: {eigenvalues}")
-print(f"모두 양수? {np.all(eigenvalues >= -1e-10)}")
-print("→ MSE는 볼록 함수 (전역 최솟값 보장)")
+print("MSE loss function convexity analysis:")
+print(f"Eigenvalues of Hessian: {eigenvalues}")
+print(f"All positive? {np.all(eigenvalues >= -1e-10)}")
+print("→ MSE is a convex function (global minimum guaranteed)")
 ```
 
 ### 7.2 Gradient-Based Optimization Comparison
 
 ```python
-# 다양한 최적화 알고리즘 비교
+# Compare various optimization algorithms
 from scipy.optimize import minimize
 
-# 시작점
+# Starting point
 w0 = np.array([2.0, -1.5])
 
-# 최적화 알고리즘
+# Optimization algorithms
 methods = ['BFGS', 'CG', 'Newton-CG', 'L-BFGS-B']
 results = {}
 
@@ -932,14 +932,14 @@ for method in methods:
     results[method] = result
 
     print(f"\n{method}:")
-    print(f"  최적 w: {result.x}")
-    print(f"  최종 손실: {result.fun:.6f}")
-    print(f"  반복 횟수: {result.nit}")
-    print(f"  함수 평가: {result.nfev}")
+    print(f"  Optimal w: {result.x}")
+    print(f"  Final loss: {result.fun:.6f}")
+    print(f"  Iterations: {result.nit}")
+    print(f"  Function evaluations: {result.nfev}")
 
-# 해석해와 비교
+# Compare with analytical solution
 w_analytic = np.linalg.lstsq(X_reg, y_reg, rcond=None)[0]
-print(f"\n해석해 (Normal Equation): {w_analytic}")
+print(f"\nAnalytical solution (Normal Equation): {w_analytic}")
 ```
 
 ## Practice Problems

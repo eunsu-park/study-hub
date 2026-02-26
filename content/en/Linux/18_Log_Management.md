@@ -1,15 +1,17 @@
 # Log Management
 
+**Previous**: [SELinux and AppArmor](./17_SELinux_AppArmor.md) | **Next**: [Backup and Recovery](./19_Backup_Recovery.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- systemd-journald configuration and usage
-- rsyslog configuration and filtering
-- Log rotation with logrotate
-- Remote log collection setup
-
-**Difficulty**: Intermediate-Advanced
+1. Configure systemd-journald for persistent storage and query logs with journalctl
+2. Write advanced journalctl queries using time, priority, service, and field filters
+3. Configure rsyslog rules, filters, and templates for structured log processing
+4. Set up logrotate policies to manage log file size and retention
+5. Deploy a centralized remote logging infrastructure with rsyslog over TLS
+6. Analyze web server and system logs using tools like lnav and GoAccess
 
 ---
 
@@ -24,6 +26,8 @@ Through this document, you will learn:
 7. [Log Analysis Tools](#7-log-analysis-tools)
 
 ---
+
+Logs are the flight recorder of your servers. When an intrusion occurs, a service crashes, or performance degrades, logs are the first place you look for answers. Effective log management means more than just writing files to /var/log -- it means structuring, rotating, centralizing, and querying logs efficiently so that you can detect problems in minutes rather than days.
 
 ## 1. Linux Log System Overview
 
@@ -815,10 +819,6 @@ auth.*  /var/log/auth-all.log
 
 ---
 
-## Next Steps
-
-- [19_Backup_Recovery.md](./19_Backup_Recovery.md) - rsync, Borg Backup, disaster recovery strategy
-
 ---
 
 ## References
@@ -827,3 +827,7 @@ auth.*  /var/log/auth-all.log
 - [rsyslog Documentation](https://www.rsyslog.com/doc/)
 - [logrotate Manual](https://linux.die.net/man/8/logrotate)
 - `man journalctl`, `man rsyslog.conf`, `man logrotate`
+
+---
+
+**Previous**: [SELinux and AppArmor](./17_SELinux_AppArmor.md) | **Next**: [Backup and Recovery](./19_Backup_Recovery.md)

@@ -8,15 +8,18 @@ Security engineering is the discipline of building systems that remain dependabl
 
 **Difficulty**: ⭐⭐
 
-**Learning Objectives**:
-- Understand the CIA Triad and extended security properties
-- Apply threat modeling methodologies (STRIDE, DREAD) to real systems
-- Identify attack surfaces and threat vectors in software architectures
-- Design layered defenses using the defense-in-depth principle
-- Apply the principle of least privilege in system design
-- Distinguish security by design from security by obscurity
-- Perform basic risk assessments using standard frameworks
-- Interpret Common Vulnerability Scoring System (CVSS) scores
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the CIA Triad and extended security properties
+2. Apply threat modeling methodologies (STRIDE, DREAD) to real systems
+3. Identify attack surfaces and threat vectors in software architectures
+4. Design layered defenses using the defense-in-depth principle
+5. Apply the principle of least privilege in system design
+6. Distinguish security by design from security by obscurity
+7. Perform basic risk assessments using standard frameworks
+8. Interpret Common Vulnerability Scoring System (CVSS) scores
 
 ---
 

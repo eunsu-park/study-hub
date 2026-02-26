@@ -32,22 +32,22 @@ HTML 기초 ────▶ CSS 기초 ─────────▶ JS 기초
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_HTML_Basics.md](./01_HTML_Basics.md) | ⭐ | 태그, 구조, 시맨틱 HTML |
-| [02_HTML_Forms_Tables.md](./02_HTML_Forms_Tables.md) | ⭐ | form, input, table |
-| [03_CSS_Basics.md](./03_CSS_Basics.md) | ⭐⭐ | 선택자, 속성, 박스 모델 |
-| [04_CSS_Layout.md](./04_CSS_Layout.md) | ⭐⭐ | Flexbox, Grid |
-| [05_CSS_Responsive.md](./05_CSS_Responsive.md) | ⭐⭐ | 미디어 쿼리, 모바일 대응 |
-| [06_JS_Basics.md](./06_JS_Basics.md) | ⭐⭐ | 변수, 함수, 자료형 |
-| [07_JS_Events_DOM.md](./07_JS_Events_DOM.md) | ⭐⭐⭐ | DOM 조작, 이벤트 핸들링 |
-| [08_JS_Async.md](./08_JS_Async.md) | ⭐⭐⭐ | Promise, async/await, fetch |
-| [09_Practical_Projects.md](./09_Practical_Projects.md) | ⭐⭐⭐ | 종합 예제 프로젝트 |
-| [10_TypeScript_Basics.md](./10_TypeScript_Basics.md) | ⭐⭐⭐ | 타입 시스템, 인터페이스, 제네릭 |
-| [11_Web_Accessibility.md](./11_Web_Accessibility.md) | ⭐⭐ | WCAG, ARIA, 키보드 네비게이션 |
-| [12_SEO_Basics.md](./12_SEO_Basics.md) | ⭐⭐ | 메타 태그, 구조화 데이터, Open Graph |
-| [13_Build_Tools_Environment.md](./13_Build_Tools_Environment.md) | ⭐⭐⭐ | npm/yarn, Vite, webpack 기초 |
-| [14_CSS_Animations.md](./14_CSS_Animations.md) | ⭐⭐ | transition, transform, @keyframes |
-| [15_JS_Modules.md](./15_JS_Modules.md) | ⭐⭐⭐ | ES Modules, import/export, 동적 import |
-| [16_Flask_Basics.md](./16_Flask_Basics.md) | ⭐⭐⭐ | Flask 라우팅, 템플릿, 폼, DB 연동, REST API |
+| [HTML 기초](./01_HTML_Basics.md) | ⭐ | 태그, 구조, 시맨틱 HTML |
+| [HTML 폼과 테이블](./02_HTML_Forms_Tables.md) | ⭐ | form, input, table |
+| [CSS 기초](./03_CSS_Basics.md) | ⭐⭐ | 선택자, 속성, 박스 모델 |
+| [CSS 레이아웃](./04_CSS_Layout.md) | ⭐⭐ | Flexbox, Grid |
+| [CSS 반응형 디자인](./05_CSS_Responsive.md) | ⭐⭐ | 미디어 쿼리, 모바일 대응 |
+| [JavaScript 기초](./06_JS_Basics.md) | ⭐⭐ | 변수, 함수, 자료형 |
+| [JavaScript 이벤트와 DOM](./07_JS_Events_DOM.md) | ⭐⭐⭐ | DOM 조작, 이벤트 핸들링 |
+| [JavaScript 비동기 프로그래밍](./08_JS_Async.md) | ⭐⭐⭐ | Promise, async/await, fetch |
+| [실전 프로젝트](./09_Practical_Projects.md) | ⭐⭐⭐ | 종합 예제 프로젝트 |
+| [TypeScript 기초 (TypeScript Fundamentals)](./10_TypeScript_Basics.md) | ⭐⭐⭐ | 타입 시스템, 인터페이스, 제네릭 |
+| [웹 접근성 (Web Accessibility - A11y)](./11_Web_Accessibility.md) | ⭐⭐ | WCAG, ARIA, 키보드 네비게이션 |
+| [SEO 기초 (Search Engine Optimization)](./12_SEO_Basics.md) | ⭐⭐ | 메타 태그, 구조화 데이터, Open Graph |
+| [빌드 도구와 개발 환경 (Build Tools & Development Environment)](./13_Build_Tools_Environment.md) | ⭐⭐⭐ | npm/yarn, Vite, webpack 기초 |
+| [CSS 애니메이션 (CSS Animations)](./14_CSS_Animations.md) | ⭐⭐ | transition, transform, @keyframes |
+| [JavaScript 모듈 시스템](./15_JS_Modules.md) | ⭐⭐⭐ | ES Modules, import/export, 동적 import |
+| [Flask 웹 프레임워크 기초](./16_Flask_Basics.md) | ⭐⭐⭐ | Flask 라우팅, 템플릿, 폼, DB 연동, REST API |
 
 ---
 

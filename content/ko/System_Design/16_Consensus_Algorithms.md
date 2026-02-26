@@ -1,12 +1,23 @@
 # 합의 알고리즘 (Consensus Algorithms)
 
-난이도: ⭐⭐⭐⭐
+**이전**: [분산 시스템 개념](./15_Distributed_Systems_Concepts.md) | **다음**: [실전 설계 예제 1](./17_Design_Example_1.md)
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-분산 시스템에서 합의(Consensus)는 여러 노드가 하나의 값에 동의하는 것입니다. 이 장에서는 합의 문제의 정의, Paxos와 Raft 알고리즘, Byzantine Fault Tolerance, 그리고 ZooKeeper와 etcd의 활용을 학습합니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 합의 문제(consensus problem)와 그 세 가지 정확성 속성(합의(agreement), 유효성(validity), 종료(termination))을 정의할 수 있습니다
+2. Basic Paxos의 역할(제안자(proposer), 수락자(acceptor), 학습자(learner))과 두 단계 프로토콜을 설명하고, 경쟁하는 제안들을 어떻게 처리하는지 설명할 수 있습니다
+3. Raft의 리더 선출(leader election), 로그 복제(log replication), 안전성 메커니즘을 설명하고, Raft가 Paxos보다 더 이해하기 쉽도록 설계된 이유를 말할 수 있습니다
+4. 충돌 결함 허용(crash fault tolerance, CFT)과 비잔틴 결함 허용(Byzantine fault tolerance, BFT)을 구분하고 각각에 필요한 최소 노드 수를 제시할 수 있습니다
+5. 실용적인 합의 구현체(ZooKeeper ZAB, etcd Raft, Consul)를 비교하고, 조정(coordination), 설정 관리(configuration), 리더 선출에서의 사용 사례를 설명할 수 있습니다
+6. 리더 장애, 분산 투표(split vote), 네트워크 파티션(network partition) 등 합의 프로토콜 실행 시나리오를 추적하며 분석할 수 있습니다
 
 ---
+
+합의(Consensus)는 모든 신뢰할 수 있는 분산 시스템의 심장 박동입니다: 데이터베이스 복제 클러스터가 어느 쓰기가 먼저 커밋되었는지 합의하는 방법이고, Kubernetes 컨트롤 플레인이 리더를 선출하는 방법이며, 블록체인이 트랜잭션을 검증하는 방법입니다. 합의를 잘못 구현하면 스플릿 브레인(split-brain) 시나리오, 데이터 손실, 또는 조용한 데이터 오염으로 이어집니다. 이 레슨은 여러분이 매일 사용하는 도구들을 뒷받침하는 알고리즘인 Paxos와 Raft를 명확하게 이해하고, 실제 운영 환경에서 그 보장(guarantees)과 한계(limitations)에 대해 논리적으로 추론할 수 있게 해줍니다.
 
 ## 목차
 
@@ -96,7 +107,11 @@
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+> **FLP의 직관적 이해**: 완전 비동기(fully asynchronous) 네트워크에서는 메시지 전달 시간에 상한이 없습니다. 이는 느린 노드와 장애가 발생한 노드를 구별할 수 없다는 것을 의미합니다 — 메시지가 아직 전송 중인지, 발신자가 실패한 것인지 확신할 수 없습니다. 이 근본적인 모호성 때문에 어떤 알고리즘도 항상 종료됨(liveness)을 보장하면서 동시에 상충하는 값을 결정하지 않음(safety)을 보장할 수 없습니다. 실제 시스템은 *부분 동기(partial synchrony)* — 메시지가 미지의 유한 시간 내에 결국 전달된다는 가정 — 을 도입하여 FLP를 우회하며, 이것이 Paxos와 Raft 같은 알고리즘이 실제로 작동하는 이유입니다.
+
 ### 장애 모델
+
+**f** = 시스템이 허용해야 하는 장애 수로 정의합니다.
 
 | 모델 | 설명 | 필요 노드 수 |
 |------|------|-------------|
@@ -104,9 +119,15 @@
 | Omission Failure | 메시지 손실 가능 | 2f + 1 |
 | Byzantine Failure | 악의적/임의의 행동 | 3f + 1 |
 
+**정족수(quorum) 직관**: `2f + 1`개 노드에서 `f`개가 장애를 일으켜도 나머지 `f + 1`개가 여전히 과반수(strict majority)를 형성하여 진행할 수 있습니다. 비잔틴 장애의 경우 악의적 노드가 상충하는 메시지를 보낼 수 있으므로, 적대자를 이길 수 있는 충분한 정직한 노드가 필요하여 `3f + 1`이 요구됩니다.
+
 ---
 
 ## 2. Paxos 알고리즘
+
+> **📌 비유 — 다수결 회의록**
+>
+> 다른 사무실에 있는 다섯 명의 동료가 이메일(전화나 채팅 없이)로 단 하나의 회의 시간에 합의하려 한다고 상상해보세요. 한 사람이 "화요일 오후 3시"를 **제안(propose)**하고 모두에게 일단 수락해달라고 요청합니다. 과반수(5명 중 3명)가 "네, 일단 적어두겠습니다"라고 답하면, 제안자는 **확정(confirm)** 메시지를 보내고 그 시간이 최종 결정됩니다. 만약 두 사람이 동시에 서로 다른 시간을 제안하면, 그룹은 항상 더 높은 순번의 제안을 우선시함으로써 문제를 해결합니다 — 이것이 바로 Paxos와 Raft가 경쟁하는 리더들 사이의 충돌을 해결하는 정확한 메커니즘입니다.
 
 ### Paxos 개요
 
@@ -199,6 +220,52 @@
 │  - 없으면 자신이 원하는 값 제안                                         │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+**단순화된 단일 결의(single-decree) Paxos 의사 코드:**
+
+```python
+class PaxosProposer:
+    def __init__(self, node_id, acceptors):
+        self.node_id = node_id
+        self.acceptors = acceptors
+        self.proposal_number = 0
+
+    def propose(self, value):
+        while True:
+            # 고유하고 단조 증가하는 제안 번호 생성
+            # 더 높은 번호가 항상 이김 — Paxos가 충돌을 해결하는 방식
+            self.proposal_number += 1
+            n = self.proposal_number
+
+            # Phase 1 — Prepare: acceptor들에게 n보다 낮은 번호의
+            # 제안은 수락하지 않겠다는 약속(promise)을 요청
+            promises = []
+            for acceptor in self.acceptors:
+                resp = acceptor.prepare(n)
+                if resp.promised:
+                    promises.append(resp)
+
+            # 과반수가 필요 — 두 정족수는 반드시 최소 한 노드가
+            # 겹쳐야 하며, 이것이 상충하는 결정을 방지
+            if len(promises) < len(self.acceptors) // 2 + 1:
+                continue  # 더 높은 n으로 재시도
+
+            # acceptor가 이미 값을 수락했다면, 우리 값 대신 그 값을
+            # 반드시 제안해야 함. 이 규칙이 안전성을 보장:
+            # 값이 한번 선택되면 모든 미래 제안은 같은 값으로 수렴
+            prev = [p for p in promises if p.accepted_value is not None]
+            if prev:
+                value = max(prev, key=lambda p: p.accepted_n).accepted_value
+
+            # Phase 2 — Accept: acceptor들에게 (n, value)를 수락 요청
+            accepted = sum(
+                1 for a in self.acceptors if a.accept(n, value)
+            )
+
+            if accepted >= len(self.acceptors) // 2 + 1:
+                return value  # 합의 달성!
+            # 아니면: 더 높은 n의 제안이 선점함; 반복하여 재시도
 ```
 
 ### Paxos 충돌 해결
@@ -755,9 +822,7 @@ Follower: [1,1] [2,2] [2,3] [2,4]
 
 ---
 
-## 다음 단계
-
-[17_Design_Example_1.md](./17_Design_Example_1.md)에서 URL 단축기, 페이스트빈, Rate Limiter 설계를 실습해봅시다!
+**이전**: [분산 시스템 개념](./15_Distributed_Systems_Concepts.md) | **다음**: [실전 설계 예제 1](./17_Design_Example_1.md)
 
 ---
 

@@ -5,6 +5,17 @@
 > **선수지식**: 부동체와 그림, 문서 구조
 > **목표**: booktabs를 사용한 전문 형식, 다중 행 및 다중 열 셀, 색상 표, 여러 페이지에 걸친 긴 표, 연구 논문 및 기술 문서를 위한 정교한 표 레이아웃 등 고급 표 생성 기법 마스터하기.
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `booktabs` 패키지를 적용하여 전문적인 수평선(horizontal rule)이 있는 출판 품질 표(publication-quality table)를 만들 수 있다
+2. `\multicolumn`과 `\multirow`를 사용하여 셀을 가로 및 세로로 병합(merge)할 수 있다
+3. `colortbl` 패키지를 사용하여 행, 열, 개별 셀에 배경색(background color)을 추가할 수 있다
+4. `longtable`을 사용하여 일관된 헤더(header)와 푸터(footer)로 여러 페이지에 걸쳐 나뉘는 긴 표(long table)를 만들 수 있다
+5. 루프(loop)와 `pgfplotstable` 패키지를 사용하여 데이터로부터 표를 자동 생성할 수 있다
+6. 가독성(readability)을 높이고 학술지나 학회 서식 지침을 충족하도록 표 디자인을 평가할 수 있다
+
 ---
 
 ## 소개
@@ -790,6 +801,6 @@ Item 1   ...    ...    ...    ...    ...    ...
 ---
 
 **내비게이션**:
-- [이전: 06_Floats_and_Figures.md](06_Floats_and_Figures.md)
-- [다음: 08_Cross_References.md](08_Cross_References.md)
+- [이전: 부동체, 그림 & 표](06_Floats_and_Figures.md)
+- [다음: 상호 참조 & 인용](08_Cross_References.md)
 - [개요로 돌아가기](00_Overview.md)

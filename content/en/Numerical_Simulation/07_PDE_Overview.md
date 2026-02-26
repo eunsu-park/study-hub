@@ -8,6 +8,8 @@
 
 ---
 
+**Why This Lesson Matters:** While ODEs describe how quantities change in time alone, most physical phenomena -- heat conduction, wave propagation, fluid flow, electromagnetic fields -- involve variation in both space and time. PDEs are the mathematical language for these multi-dimensional phenomena. Understanding PDE classification is essential because each type (elliptic, parabolic, hyperbolic) demands fundamentally different numerical strategies and boundary condition treatments.
+
 ## 1. What is a Partial Differential Equation?
 
 ### 1.1 Definition
@@ -64,6 +66,8 @@ Major physical phenomena and corresponding PDEs
 ## 2. PDE Classification
 
 ### 2.1 Classification of Second-Order Linear PDEs
+
+The classification of second-order linear PDEs parallels the classification of conic sections ($Ax^2 + Bxy + Cy^2 = \ldots$) -- hence the names elliptic, parabolic, and hyperbolic. The discriminant $\Delta = B^2 - 4AC$ determines the nature of the characteristic curves, which in turn dictate how information propagates through the domain and what types of boundary/initial conditions are needed.
 
 General form of second-order linear PDE:
 ```
@@ -183,7 +187,7 @@ def visualize_pde_types():
 
 ### 3.1 Types of Boundary Conditions
 
-Appropriate boundary conditions are required to solve PDEs.
+Appropriate boundary conditions are required to solve PDEs. Think of boundary conditions as the "constraints" that select a unique solution from the infinite family of functions satisfying the PDE. Choosing the wrong type or number of boundary conditions leads to an ill-posed problem: no solution, non-unique solutions, or solutions that blow up from tiny perturbations.
 
 ```python
 """
@@ -494,6 +498,8 @@ problem.summary()
 
 ### 5.1 Hadamard's Well-Posedness Criteria
 
+Well-posedness is not just an abstract mathematical requirement -- it directly affects whether a numerical simulation will produce meaningful results. If a problem is ill-posed, numerical errors (which are always present) will be amplified catastrophically, and no amount of grid refinement can fix it. Verifying well-posedness before writing a single line of code is therefore essential.
+
 For a PDE problem to be "well-posed", it must satisfy three conditions:
 
 1. **Existence**: A solution must exist
@@ -582,8 +588,10 @@ def stability_demonstration():
     alpha = 0.01  # Thermal diffusivity
 
     # CFL stability condition: dt <= dx² / (2*alpha)
-    dt_stable = 0.4 * dx**2 / (2 * alpha)  # Stable
-    dt_unstable = 1.5 * dx**2 / (2 * alpha)  # Unstable
+    # Physical intuition: diffusion spreads information by one grid cell in time dx²/(2α).
+    # Exceeding this means the numerical scheme "outpaces" the physics, causing instability.
+    dt_stable = 0.4 * dx**2 / (2 * alpha)  # Stable: safety factor of 0.4
+    dt_unstable = 1.5 * dx**2 / (2 * alpha)  # Unstable: exceeds limit by 50%
 
     print(f"Grid spacing dx = {dx:.4f}")
     print(f"Thermal diffusivity α = {alpha}")

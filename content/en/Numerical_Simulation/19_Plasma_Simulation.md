@@ -8,6 +8,8 @@
 - Implement 1D electrostatic PIC simulation
 - Simulate two-stream instability
 
+**Why This Lesson Matters:** The Particle-In-Cell (PIC) method bridges the gap between fluid models (which average over velocity distributions) and full kinetic theory (which is analytically intractable). By tracking individual particles on a spatial grid, PIC captures non-equilibrium phenomena like wave-particle interactions, Landau damping, and plasma instabilities that fluid models miss. PIC is the primary tool for modeling laser-plasma interactions, particle accelerators, spacecraft charging, and kinetic turbulence in space plasmas.
+
 ---
 
 ## 1. Introduction to PIC Method
@@ -156,7 +158,15 @@ def pic_scales():
 
 ## 2. Particle Pusher: Boris Algorithm
 
+The Boris algorithm is the most widely used particle integrator in plasma physics, and for good reason: it is second-order accurate, time-reversible, and exactly conserves energy in a pure magnetic field (no electric field). The key insight is splitting the Lorentz force into electric acceleration and magnetic rotation, handling each with an appropriate scheme.
+
 ### 2.1 Equations of Motion
+
+The charged particle equation of motion under the Lorentz force is:
+
+$$m\frac{d\mathbf{v}}{dt} = q(\mathbf{E} + \mathbf{v} \times \mathbf{B})$$
+
+The magnetic force $q\mathbf{v} \times \mathbf{B}$ is always perpendicular to the velocity, so it changes direction but not speed -- this is why the Boris rotation step is designed to preserve $|\mathbf{v}|$ exactly. The electric force $q\mathbf{E}$ changes both speed and direction, and is handled by simple half-step acceleration.
 
 ```
 Equations of motion for charged particles:
@@ -1156,6 +1166,25 @@ PIC Simulation Essentials:
    - Phase space distribution
    - Dispersion relation
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: E×B Drift with Boris Algorithm
+Using the boris_pusher function, simulate a proton (charge q = +e, mass mp = 1.673×10⁻²⁷ kg) in crossed uniform fields: electric field E = 1000 V/m in the x-direction and magnetic field B = 0.01 T in the z-direction. The theoretical E×B drift velocity is vd = E/B in the y-direction, independent of charge and mass. Run the simulation for 10 cyclotron periods, record the guiding center trajectory, and verify that the drift speed matches the theoretical value vd = E×B / B² = E/B. Also verify that the Boris algorithm conserves kinetic energy in a pure magnetic field (no electric field).
+
+### Exercise 2: CIC vs NGP Charge Density Comparison
+Set up a 1D domain with 100 grid cells and place 10,000 electrons initialized with a Maxwell-Boltzmann velocity distribution at thermal velocity vth = 1 (normalized units). Compute the charge density on the grid using both NGP and CIC interpolation schemes. Plot both density profiles on the same axis and compute the high-frequency noise level (standard deviation relative to mean density) for each method. Show that CIC reduces noise by approximately a factor of √(N_cell) compared to NGP for the same number of particles.
+
+### Exercise 3: Langmuir Wave Frequency Measurement
+Initialize a 1D electrostatic PIC simulation with Nx = 64 cells, L = 4λD (Debye lengths), N = 10,000 electrons, and a sinusoidal density perturbation of amplitude δn/n = 0.01 at wavenumber k = 2π/L. Record the electrostatic field energy as a function of time. Use the FFT of the field energy time series to measure the oscillation frequency ωpe. Compare your measured frequency to the theoretical plasma frequency ωpe = √(ne²/(ε₀me)) in normalized units (ωpe = 1). At what wavenumber k does the Bohm-Gross dispersion ω² = ωpe²(1 + 3k²λD²) predict a 10% correction over ωpe?
+
+### Exercise 4: Two-Stream Instability Growth Rate Measurement
+Run the two-stream instability simulation with drift velocities v₀ ∈ {1.0, 2.0, 3.0, 5.0} (normalized by the thermal velocity). For each v₀, measure the linear growth rate γ by fitting an exponential to the field energy during the early exponential growth phase (E_field ∝ exp(2γt)). Plot the measured γ versus v₀ and compare to the theoretical maximum growth rate γmax ≈ (√3/2)ωpe obtained from the two-beam dispersion relation. At what v₀ does the growth rate saturate, and what physical effect causes this?
+
+### Exercise 5: Particle Number and Numerical Heating
+Run three PIC simulations of a single-species Maxwellian plasma (no instability driver) for 500 plasma periods using N_ppc ∈ {10, 50, 200} particles per cell. In an ideal simulation with no numerical heating, the total kinetic energy should remain constant. Plot the total kinetic energy as a function of time for all three cases. Measure the numerical heating rate (energy increase per plasma period) and verify that it decreases approximately as 1/N_ppc. What is the minimum N_ppc needed to keep numerical heating below 1% of the initial energy over 500 periods?
 
 ---
 

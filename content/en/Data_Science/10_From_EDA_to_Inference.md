@@ -1,15 +1,22 @@
-# From EDA to Statistical Inference
+# 10. From EDA to Statistical Inference
+
+---
 
 ## Learning Objectives
-- Understand the limitations of descriptive statistics and EDA
-- Distinguish between populations and samples and the need for inference
-- Recognize different types of statistical questions (estimation, testing, prediction)
-- Learn when to use which statistical method based on data type and research question
-- Connect EDA findings to formal statistical tests
-- Avoid common pitfalls in statistical inference
-- Transition from exploratory analysis to confirmatory analysis
 
-**Difficulty**: ⭐⭐ (Intermediate)
+After completing this lesson, you will be able to:
+
+1. Explain the limitations of descriptive statistics and EDA for drawing general conclusions
+2. Distinguish between populations and samples and describe why sampling variability necessitates inference
+3. Identify different types of statistical questions: estimation, hypothesis testing, prediction, and association
+4. Apply a decision guide to select the appropriate statistical method based on data type and research question
+5. Demonstrate the end-to-end workflow from exploratory analysis to confirmatory hypothesis testing
+6. Identify common pitfalls including p-hacking, confusing correlation with causation, and ignoring assumptions
+7. Distinguish between statistical significance and practical significance using effect sizes
+
+---
+
+You have spent the previous lessons mastering data manipulation, visualization, and descriptive statistics -- powerful tools for exploring what is happening in your dataset. But exploration alone cannot tell you whether an observed pattern is real or merely a product of random chance, nor whether your findings generalize beyond the data at hand. This lesson bridges the gap from exploratory analysis to formal statistical inference, equipping you with the thinking framework needed to draw rigorous, defensible conclusions from data.
 
 ---
 

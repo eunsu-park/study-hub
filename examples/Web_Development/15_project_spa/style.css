@@ -22,6 +22,8 @@
     box-sizing: border-box;
 }
 
+/* Why: flex column on body with min-height 100vh ensures the footer sticks to the bottom of
+   the viewport even when page content is short, without using fixed positioning */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
@@ -246,6 +248,8 @@ body {
     border-color: var(--primary-color);
 }
 
+/* Why: Off-canvas pattern (left:-100%) hides the mobile menu without display:none, allowing
+   CSS transitions on the slide-in and keeping the menu in the accessibility tree */
 /* Mobile Responsive */
 @media screen and (max-width: 768px) {
     .nav-menu {

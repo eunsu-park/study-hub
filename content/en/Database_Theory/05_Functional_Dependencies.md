@@ -9,6 +9,19 @@
 > **Prerequisites**: Relational model concepts (relations, tuples, attributes, keys), basic set theory
 > **Objective**: Understand functional dependencies as the formal foundation for database normalization, master Armstrong's axioms, compute attribute closures, derive candidate keys, and compute minimal covers
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define functional dependencies (FDs) and explain their role as the formal foundation for relational schema design and normalization.
+2. Apply Armstrong's axioms (reflexivity, augmentation, transitivity) and derived rules to infer new functional dependencies from a given set.
+3. Compute the attribute closure of a set of attributes under a given set of FDs to determine key membership.
+4. Identify all candidate keys of a relation by systematically analyzing functional dependencies.
+5. Compute a minimal cover (canonical cover) for a set of functional dependencies by eliminating redundancies.
+6. Explain how anomalies (insertion, deletion, update) arise from poor schema design and how FDs formalize the criteria for avoiding them.
+
+---
+
 ## 1. Introduction
 
 Functional dependencies (FDs) are the most important concept in relational database design theory. They formalize the notion of "one attribute uniquely determines another" and provide the mathematical foundation for normalization — the process of organizing a database to reduce redundancy and prevent anomalies.

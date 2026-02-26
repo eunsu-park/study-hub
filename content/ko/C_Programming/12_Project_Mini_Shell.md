@@ -1,12 +1,24 @@
 # 프로젝트 11: 미니 쉘
 
-간단한 명령어 쉘을 직접 구현해봅니다.
+**이전**: [프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md) | **다음**: [프로젝트 12: 멀티스레드 프로그래밍](./13_Project_Multithreading.md)
 
-## 학습 목표
-- 프로세스 생성 (fork)
-- 프로그램 실행 (exec 계열)
-- 파이프와 리다이렉션
-- 시그널 처리 기초
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 모든 명령줄 쉘의 핵심인 읽기-파싱-실행(Read-Parse-Execute) 루프를 구현합니다
+2. `fork`로 자식 프로세스를 생성하고 `execvp`로 외부 프로그램을 실행합니다
+3. 쉘 자체 프로세스에서 실행해야 하는 내장 명령어(`cd`, `pwd`, `echo`, `export`)를 구현합니다
+4. `<`, `>`, `>>` 토큰을 감지하고 `dup2`로 파일 디스크립터를 재연결하는 리다이렉션(Redirection) 파서를 설계합니다
+5. `pipe`, `dup2`, 그리고 조율된 `fork`/`wait` 호출로 여러 명령어를 연결하는 파이프(Pipe) 실행기를 구축합니다
+6. Ctrl+C가 포그라운드(Foreground) 명령을 중단하되 쉘 자체는 종료하지 않도록 `SIGINT` 핸들러를 구성합니다
+7. 명령 인수에서 환경변수 확장(`$VAR`)과 와일드카드 글로빙(Wildcard Globbing, `*`, `?`)을 구현합니다
+
+---
+
+쉘은 매일 다른 프로그램을 실행하는 데 사용하는 프로그램이지만, 대부분의 개발자는 내부를 들여다보지 않습니다. 미니 쉘을 처음부터 구축하는 것은 프로세스, 파일 디스크립터, 파이프, 시그널, 환경변수라는 Unix의 근본적인 구성 요소들을 모두 연결하기 때문에 가장 보람 있는 시스템 프로그래밍 실습 중 하나입니다. 이 프로젝트를 마치면 Enter를 누른 순간부터 명령의 출력이 화면에 나타나는 순간 사이에 무슨 일이 일어나는지 이해할 수 있습니다.
 
 ## 사전 지식
 - 문자열 처리
@@ -51,7 +63,7 @@ void execute(char** args) {
     pid_t pid = fork();
 
     if (pid < 0) {
-        perror("fork 실패");
+        perror("fork failed");
         return;
     }
 
@@ -92,7 +104,7 @@ int main(void) {
 
         // exit 명령어
         if (strcmp(args[0], "exit") == 0) {
-            printf("쉘을 종료합니다.\n");
+            printf("Exiting shell.\n");
             break;
         }
 
@@ -118,7 +130,7 @@ minish> exit
 
 ---
 
-## 2단계: 내장 명령어 (Built-in Commands)
+## 2단계: 내장 명령어(Built-in Commands)
 
 일부 명령어는 외부 프로그램이 아닌 쉘 자체에서 처리해야 합니다.
 
@@ -151,14 +163,14 @@ int builtin_cd(char** args) {
         // 인자 없으면 홈 디렉토리
         path = getenv("HOME");
         if (path == NULL) {
-            fprintf(stderr, "cd: HOME 환경변수가 설정되지 않음\n");
+            fprintf(stderr, "cd: HOME environment variable not set\n");
             return 1;
         }
     } else if (strcmp(args[1], "-") == 0) {
-        // cd - : 이전 디렉토리
+        // cd -: 이전 디렉토리
         path = getenv("OLDPWD");
         if (path == NULL) {
-            fprintf(stderr, "cd: OLDPWD 환경변수가 설정되지 않음\n");
+            fprintf(stderr, "cd: OLDPWD environment variable not set\n");
             return 1;
         }
         printf("%s\n", path);
@@ -224,16 +236,16 @@ int builtin_echo(char** args) {
 int builtin_help(char** args) {
     (void)args;
 
-    printf("\n=== Mini Shell 도움말 ===\n\n");
-    printf("내장 명령어:\n");
-    printf("  cd [디렉토리]  - 디렉토리 변경\n");
-    printf("  pwd           - 현재 디렉토리 출력\n");
-    printf("  echo [텍스트]  - 텍스트 출력\n");
-    printf("  export VAR=값  - 환경변수 설정\n");
-    printf("  env           - 환경변수 목록\n");
-    printf("  help          - 이 도움말\n");
-    printf("  exit          - 쉘 종료\n");
-    printf("\n외부 명령어는 PATH에서 검색됩니다.\n\n");
+    printf("\n=== Mini Shell Help ===\n\n");
+    printf("Built-in commands:\n");
+    printf("  cd [directory]  - Change directory\n");
+    printf("  pwd             - Print current directory\n");
+    printf("  echo [text]     - Print text\n");
+    printf("  export VAR=val  - Set environment variable\n");
+    printf("  env             - List environment variables\n");
+    printf("  help            - Display this help\n");
+    printf("  exit            - Exit shell\n");
+    printf("\nExternal commands are searched in PATH.\n\n");
 
     return 0;
 }
@@ -294,7 +306,7 @@ int execute_builtin(char** args) {
 
 ---
 
-## 3단계: 리다이렉션 구현
+## 3단계: 리다이렉션(Redirection) 구현
 
 `>`, `>>`, `<` 연산자를 처리합니다.
 
@@ -420,13 +432,13 @@ void execute_with_redirect(char** args) {
 ```bash
 minish> ls -l > files.txt
 minish> cat < files.txt
-minish> echo "추가 내용" >> files.txt
+minish> echo "additional content" >> files.txt
 minish> wc -l < files.txt
 ```
 
 ---
 
-## 4단계: 파이프 구현
+## 4단계: 파이프(Pipe) 구현
 
 `|` 연산자로 명령어를 연결합니다.
 
@@ -750,24 +762,24 @@ int builtin_unset(char** args) {
 int builtin_help(void) {
     printf("\n");
     printf("╔═══════════════════════════════════════╗\n");
-    printf("║        Mini Shell 도움말              ║\n");
+    printf("║        Mini Shell Help                ║\n");
     printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 내장 명령어:                          ║\n");
-    printf("║   cd [dir]    디렉토리 변경           ║\n");
-    printf("║   pwd         현재 디렉토리           ║\n");
-    printf("║   echo [...]  텍스트 출력             ║\n");
-    printf("║   export V=X  환경변수 설정           ║\n");
-    printf("║   unset VAR   환경변수 삭제           ║\n");
-    printf("║   help        이 도움말               ║\n");
-    printf("║   exit [N]    쉘 종료                 ║\n");
+    printf("║ Built-in commands:                    ║\n");
+    printf("║   cd [dir]    Change directory        ║\n");
+    printf("║   pwd         Print current directory ║\n");
+    printf("║   echo [...]  Print text              ║\n");
+    printf("║   export V=X  Set environment var     ║\n");
+    printf("║   unset VAR   Unset environment var   ║\n");
+    printf("║   help        Display this help       ║\n");
+    printf("║   exit [N]    Exit shell              ║\n");
     printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 리다이렉션:                           ║\n");
-    printf("║   cmd > file  출력을 파일로           ║\n");
-    printf("║   cmd >> file 출력을 파일에 추가      ║\n");
-    printf("║   cmd < file  파일에서 입력           ║\n");
+    printf("║ Redirection:                          ║\n");
+    printf("║   cmd > file  Redirect output to file║\n");
+    printf("║   cmd >> file Append output to file  ║\n");
+    printf("║   cmd < file  Read input from file   ║\n");
     printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 파이프:                               ║\n");
-    printf("║   cmd1 | cmd2 출력을 다음 명령 입력으로 ║\n");
+    printf("║ Pipes:                                ║\n");
+    printf("║   cmd1 | cmd2 Pipe output to next cmd║\n");
     printf("╚═══════════════════════════════════════╝\n");
     printf("\n");
     return 0;
@@ -928,7 +940,7 @@ int main(void) {
     signal(SIGINT, sigint_handler);
 
     printf("\n\033[1;36m=== Mini Shell ===\033[0m\n");
-    printf("'help' 입력하여 도움말 보기\n\n");
+    printf("Type 'help' for help\n\n");
 
     while (1) {
         print_prompt();
@@ -978,7 +990,7 @@ gcc -o minishell minishell.c -Wall -Wextra
 
 ```bash
 === Mini Shell ===
-'help' 입력하여 도움말 보기
+Type 'help' for help
 
 ~ ❯ help
 ~ ❯ pwd
@@ -1002,7 +1014,7 @@ hello
 
 ## 6단계: 추가 기능
 
-### 히스토리 기능
+### 히스토리(History) 기능
 
 ```c
 #define HISTORY_SIZE 100
@@ -1042,7 +1054,7 @@ void free_history(void) {
 }
 ```
 
-### 백그라운드 실행 (&)
+### 백그라운드 실행(&)
 
 ```c
 // & 체크
@@ -1080,7 +1092,7 @@ void run_command(char** args) {
 }
 ```
 
-### 와일드카드 확장 (*)
+### 와일드카드 확장(Wildcard Expansion, *)
 
 ```c
 #include <glob.h>
@@ -1144,14 +1156,18 @@ readline 라이브러리를 사용하여 탭 자동완성을 구현하세요.
 
 | 개념 | 설명 |
 |------|------|
-| 파이프 | 프로세스 간 단방향 통신 |
-| 리다이렉션 | 입출력 방향 변경 |
-| 환경변수 | 프로세스에 전달되는 설정 |
-| 시그널 | 프로세스에 보내는 알림 |
+| 파이프(Pipe) | 프로세스 간 단방향 통신 |
+| 리다이렉션(Redirection) | 입출력 방향 변경 |
+| 환경변수(Environment Variables) | 프로세스에 전달되는 설정 |
+| 시그널(Signal) | 프로세스에 보내는 알림 |
 
 ---
 
 ## 다음 단계
 
 미니 쉘을 완성했다면 다음 프로젝트로 넘어가세요:
-- [프로젝트 12: 멀티스레드 프로그래밍](12_프로젝트_멀티스레드.md) - pthread 활용
+- [프로젝트 12: 멀티스레드 프로그래밍](./13_Project_Multithreading.md) - pthread 활용
+
+---
+
+**이전**: [프로젝트 10: 터미널 뱀 게임](./11_Project_Snake_Game.md) | **다음**: [프로젝트 12: 멀티스레드 프로그래밍](./13_Project_Multithreading.md)

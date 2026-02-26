@@ -1,14 +1,18 @@
 """Study Materials Web Viewer - Flask Application with Multi-language Support."""
 import os
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from functools import wraps
 
+import yaml
+
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, make_response
 from models import db, LessonRead, Bookmark
 from config import Config
-from utils.markdown_parser import parse_markdown, extract_excerpt
-from utils.search import search, build_search_index, create_fts_table
+from utils.markdown_parser import parse_markdown, parse_markdown_cached, extract_excerpt, estimate_reading_time
+from utils.search import search, build_search_index, build_example_index, create_fts_table
+from utils.examples import get_example_topics, get_example_files, highlight_file
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -17,6 +21,7 @@ app.config.from_object(Config)
 db.init_app(app)
 
 CONTENT_DIR = Config.CONTENT_DIR
+EXAMPLES_DIR = Config.EXAMPLES_DIR
 SUPPORTED_LANGS = set(Config.SUPPORTED_LANGUAGES)
 DEFAULT_LANG = Config.DEFAULT_LANGUAGE
 LANGUAGE_NAMES = Config.LANGUAGE_NAMES
@@ -57,22 +62,84 @@ def validate_lang(f):
     return decorated_function
 
 
+_topic_metadata_cache = None
+
+
+def load_topic_metadata() -> dict:
+    """Load tier definitions and topic assignments from topic_metadata.yaml."""
+    global _topic_metadata_cache
+    if _topic_metadata_cache is not None:
+        return _topic_metadata_cache
+
+    yaml_path = CONTENT_DIR / "topic_metadata.yaml"
+    if not yaml_path.exists():
+        _topic_metadata_cache = {"tiers": [], "topics": {}}
+        return _topic_metadata_cache
+
+    with open(yaml_path, encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    _topic_metadata_cache = data or {"tiers": [], "topics": {}}
+    return _topic_metadata_cache
+
+
+def get_tier_for_topic(topic_name: str) -> dict | None:
+    """Get tier info for a single topic. Returns None if not classified."""
+    meta = load_topic_metadata()
+    topic_meta = meta.get("topics", {}).get(topic_name)
+    if not topic_meta:
+        return None
+    tier_id = topic_meta.get("tier")
+    for tier in meta.get("tiers", []):
+        if tier["id"] == tier_id:
+            return tier
+    return None
+
+
+def get_tier_groups(topics: list[dict], lang: str) -> OrderedDict:
+    """Group topics by tier. Returns OrderedDict keyed by tier id."""
+    meta = load_topic_metadata()
+    tiers = meta.get("tiers", [])
+    topic_assignments = meta.get("topics", {})
+
+    groups = OrderedDict()
+    for tier in tiers:
+        groups[tier["id"]] = []
+
+    for topic in topics:
+        assignment = topic_assignments.get(topic["name"])
+        tier_id = assignment["tier"] if assignment else None
+        if tier_id and tier_id in groups:
+            groups[tier_id].append(topic)
+        else:
+            groups.setdefault("uncategorized", []).append(topic)
+
+    return groups
+
+
 def get_topics(lang: str) -> list[dict]:
     """Get list of all topics with lesson counts for a language."""
     content_dir = get_content_dir(lang)
     if not content_dir.exists():
         return []
 
+    meta = load_topic_metadata()
+    topic_assignments = meta.get("topics", {})
+
     topics = []
     for topic_dir in sorted(content_dir.iterdir()):
         if not topic_dir.is_dir() or topic_dir.name.startswith("."):
             continue
         lessons = list(topic_dir.glob("*.md"))
-        topics.append({
+        topic_info = {
             "name": topic_dir.name,
             "lesson_count": len(lessons),
             "display_name": topic_dir.name.replace("_", " "),
-        })
+        }
+        # Inject tier info
+        assignment = topic_assignments.get(topic_dir.name)
+        if assignment:
+            topic_info["tier"] = assignment.get("tier")
+        topics.append(topic_info)
     return topics
 
 
@@ -90,6 +157,7 @@ def get_lessons(lang: str, topic: str) -> list[dict]:
             "filename": md_file.name,
             "title": title,
             "display_name": md_file.stem.replace("_", " "),
+            "reading_time": estimate_reading_time(content),
         })
     return lessons
 
@@ -187,6 +255,11 @@ def index(lang: str):
 
     bookmark_count = Bookmark.query.filter_by(language=lang).count()
 
+    # Tier grouping
+    meta = load_topic_metadata()
+    tiers = meta.get("tiers", [])
+    tier_groups = get_tier_groups(topics, lang)
+
     response = make_response(render_template(
         "index.html",
         topics=topics,
@@ -197,6 +270,8 @@ def index(lang: str):
         recent_reads=recent_items,
         bookmarks=bookmark_items,
         bookmark_count=bookmark_count,
+        tiers=tiers,
+        tier_groups=tier_groups,
     ))
     response.set_cookie("lang", lang, max_age=60*60*24*365)
     return response
@@ -216,6 +291,8 @@ def topic(lang: str, name: str):
         lesson["is_bookmarked"] = is_bookmarked(lang, name, lesson["filename"])
 
     progress = get_progress(lang, name)
+    tier = get_tier_for_topic(name)
+    has_examples = (EXAMPLES_DIR / name).is_dir()
     return render_template(
         "topic.html",
         topic=name,
@@ -224,6 +301,8 @@ def topic(lang: str, name: str):
         progress=progress,
         lang=lang,
         languages=get_available_languages(),
+        tier=tier,
+        has_examples=has_examples,
     )
 
 
@@ -235,16 +314,18 @@ def lesson(lang: str, name: str, filename: str):
     if not filepath.exists():
         abort(404)
 
-    content = filepath.read_text(encoding="utf-8")
-    parsed = parse_markdown(content)
+    parsed = parse_markdown_cached(str(filepath))
 
     # Get prev/next lessons for navigation
     lessons = get_lessons(lang, name)
     current_idx = next(
         (i for i, l in enumerate(lessons) if l["filename"] == filename), -1
     )
-    prev_lesson = lessons[current_idx - 1] if current_idx > 0 else None
-    next_lesson = lessons[current_idx + 1] if current_idx < len(lessons) - 1 else None
+    if current_idx < 0:
+        prev_lesson = next_lesson = None
+    else:
+        prev_lesson = lessons[current_idx - 1] if current_idx > 0 else None
+        next_lesson = lessons[current_idx + 1] if current_idx < len(lessons) - 1 else None
 
     return render_template(
         "lesson.html",
@@ -265,16 +346,22 @@ def lesson(lang: str, name: str, filename: str):
 @app.route("/<lang>/search")
 @validate_lang
 def search_page(lang: str):
-    """Search page."""
+    """Search page with topic and content type filters."""
     query = request.args.get("q", "")
+    topic_filter = request.args.get("topic", "")
+    type_filter = request.args.get("type", "")
     results = []
     if query:
         db_path = Path(app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", ""))
-        results = search(db_path, query, lang=lang)
+        results = search(db_path, query, lang=lang, topic=topic_filter, content_type=type_filter)
+    topics = get_topics(lang)
     return render_template(
         "search.html",
         query=query,
         results=results,
+        topics=topics,
+        topic_filter=topic_filter,
+        type_filter=type_filter,
         lang=lang,
         languages=get_available_languages(),
     )
@@ -330,6 +417,70 @@ def bookmarks(lang: str):
     )
 
 
+# Example Routes
+@app.route("/<lang>/examples")
+@validate_lang
+def examples_index(lang: str):
+    """Examples index - list all example topics."""
+    topics = get_example_topics(EXAMPLES_DIR)
+    total_files = sum(t["file_count"] for t in topics)
+    return render_template(
+        "examples_index.html",
+        topics=topics,
+        total_files=total_files,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/<lang>/examples/<topic_name>")
+@validate_lang
+def examples_topic(lang: str, topic_name: str):
+    """Examples topic - list files in a topic."""
+    topic_dir = EXAMPLES_DIR / topic_name
+    if not topic_dir.exists():
+        abort(404)
+    files = get_example_files(topic_dir)
+    return render_template(
+        "examples_topic.html",
+        topic=topic_name,
+        display_name=topic_name.replace("_", " "),
+        files=files,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/<lang>/examples/<topic_name>/<path:filepath>")
+@validate_lang
+def example_view(lang: str, topic_name: str, filepath: str):
+    """Example file viewer with syntax highlighting."""
+    full_path = EXAMPLES_DIR / topic_name / filepath
+    if not full_path.exists() or not full_path.is_file():
+        abort(404)
+    highlighted = highlight_file(full_path)
+    return render_template(
+        "example_file.html",
+        topic=topic_name,
+        display_name=topic_name.replace("_", " "),
+        filepath=filepath,
+        filename=full_path.name,
+        highlighted=highlighted,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/raw/examples/<topic_name>/<path:filepath>")
+def example_raw(topic_name: str, filepath: str):
+    """Serve raw example file for download."""
+    from flask import send_from_directory
+    topic_dir = EXAMPLES_DIR / topic_name
+    if not (topic_dir / filepath).exists():
+        abort(404)
+    return send_from_directory(topic_dir, filepath, as_attachment=True)
+
+
 # API Routes
 @app.route("/api/mark-read", methods=["POST"])
 def api_mark_read():
@@ -340,6 +491,8 @@ def api_mark_read():
     filename = data.get("filename")
     is_read = data.get("is_read", True)
 
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({"error": "Unsupported language"}), 400
     if not topic or not filename:
         return jsonify({"error": "Missing topic or filename"}), 400
 
@@ -364,6 +517,8 @@ def api_bookmark():
     topic = data.get("topic")
     filename = data.get("filename")
 
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({"error": "Unsupported language"}), 400
     if not topic or not filename:
         return jsonify({"error": "Missing topic or filename"}), 400
 
@@ -398,11 +553,13 @@ def api_search():
     """Search API endpoint."""
     query = request.args.get("q", "")
     lang = request.args.get("lang", DEFAULT_LANG)
+    topic_filter = request.args.get("topic", "")
+    type_filter = request.args.get("type", "")
     if not query:
         return jsonify({"results": []})
 
     db_path = Path(app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", ""))
-    results = search(db_path, query, lang=lang)
+    results = search(db_path, query, lang=lang, topic=topic_filter, content_type=type_filter)
     return jsonify({"results": results})
 
 
@@ -433,14 +590,18 @@ def init_db():
 
 @app.cli.command("build-index")
 def build_index():
-    """Build the search index for all languages."""
+    """Build the search index for all languages and examples."""
     db_path = Path(app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", ""))
     for lang in SUPPORTED_LANGS:
         lang_content_dir = get_content_dir(lang)
         if lang_content_dir.exists():
             print(f"Building index for {lang}...")
             build_search_index(lang_content_dir, db_path, lang=lang)
-    print("Search index built for all languages.")
+    # Index example code files
+    if EXAMPLES_DIR.exists():
+        print("Building example code index...")
+        build_example_index(EXAMPLES_DIR, db_path)
+    print("Search index built for all languages and examples.")
 
 
 if __name__ == "__main__":

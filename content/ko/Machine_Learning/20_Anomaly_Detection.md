@@ -1,8 +1,24 @@
 # 이상 탐지(Anomaly Detection)
 
-## 개요
+**이전**: [AutoML과 하이퍼파라미터 최적화](./19_AutoML_Hyperparameter_Optimization.md)
 
-이상 탐지(Anomaly Detection)는 예상 동작에서 크게 벗어난 데이터 포인트, 이벤트, 또는 패턴을 식별합니다. 분류(Classification)와 달리, 이상 탐지는 이상 클래스에 대한 레이블 데이터가 거의 없거나 전혀 없이 작동하는 경우가 많습니다. 이는 사기 탐지(Fraud Detection), 시스템 모니터링(System Monitoring), 제조 품질 관리, 사이버 보안(Cybersecurity)에 필수적입니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 점 이상(point anomaly), 맥락적 이상(contextual anomaly), 집합적 이상(collective anomaly)을 구별하고 각각의 실제 사례를 식별할 수 있습니다
+2. 단변량 및 다변량 이상치 탐지를 위한 통계적 방법(Z-점수(Z-score), IQR, 마할라노비스 거리(Mahalanobis distance))을 적용할 수 있습니다
+3. 격리 포레스트(Isolation Forest)를 구현하고 이상치가 평균 경로 길이가 짧은 이유를 설명할 수 있습니다
+4. 서로 다른 데이터 특성에 따라 지역 이상치 인수(LOF, Local Outlier Factor), 단일 클래스 SVM(One-Class SVM), 격리 포레스트(Isolation Forest)를 비교할 수 있습니다
+5. 여러 방법의 정규화된 점수를 결합하여 앙상블 이상치 탐지기(ensemble anomaly detector)를 구축할 수 있습니다
+6. 롤링 Z-점수(rolling Z-score)와 EWMA 관리도(control chart)를 사용하여 시계열 데이터에서 이상을 탐지할 수 있습니다
+7. 정답 레이블이 없을 때 안정성 분석(stability analysis)을 사용하여 이상 탐지 모델을 평가할 수 있습니다
+
+---
+
+대부분의 머신러닝은 찾고자 하는 것을 알고 있다고 가정합니다. 즉, 모든 클래스에 대한 레이블 예시를 보유하고 있다고 가정하는 것입니다. 이상 탐지(anomaly detection)는 이 가정을 뒤집습니다. 예상치 못한 것, 드문 것, 한 번도 보지 못한 것을 찾아내야 하며, 이 때 이상 클래스에 대한 레이블 데이터가 거의 없거나 전혀 없는 경우가 많습니다. 사기 거래 탐지, 제조 결함 탐지부터 서버 상태 모니터링에 이르기까지, 이상 탐지는 ML에서 가장 실용적으로 중요하면서도 방법론적으로 독특한 분야 중 하나입니다. 이 레슨에서는 간단한 통계 검정부터 앙상블 방법까지, 데이터의 건초 더미에서 바늘을 찾기 위한 완전한 도구 모음을 제공합니다.
 
 ---
 
@@ -678,6 +694,7 @@ print(f"낮은 신뢰도 (5번 중 1번): {((stability_score > 0) & (stability_s
 
 ### 다음 단계
 
+- **다음**: [L21 — 고급 앙상블](21_Advanced_Ensemble.md)
 - **L17**: 불균형 데이터(Imbalanced Data) — 레이블이 있는 이상치가 있으면 분류로 처리
 - **Deep_Learning**: 고차원 이상 탐지를 위한 오토인코더(Autoencoder)
 - **Data_Science L23**: 비모수 통계(Nonparametric Statistics) — 이상치에 대한 부트스트랩과 순열 검정

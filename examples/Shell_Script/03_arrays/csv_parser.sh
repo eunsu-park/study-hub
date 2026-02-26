@@ -18,6 +18,8 @@ parse_csv() {
         return 1
     fi
 
+    # Why: IFS= prevents leading/trailing whitespace trimming, and -r prevents
+    # backslash interpretation — both essential for faithful CSV line reading.
     while IFS= read -r line; do
         ((line_num++))
 
@@ -29,8 +31,8 @@ parse_csv() {
             # First line is headers
             headers=("${fields[@]}")
         else
-            # Store row data as comma-separated string
-            # (bash arrays of arrays are tricky, so we serialize)
+            # Why: bash has no nested arrays, so we serialize each row as a CSV
+            # string. printf -v writes to a variable without spawning a subshell.
             local row_data
             printf -v row_data '%s,' "${fields[@]}"
             row_data="${row_data%,}"  # Remove trailing comma
@@ -45,6 +47,8 @@ parse_csv() {
 # Handles quoted fields with commas inside
 parse_csv_line() {
     local line="$1"
+    # Why: nameref (-n) lets parse_csv_line write directly into the caller's
+    # array variable, avoiding the subshell boundary that would lose the data.
     local -n result_array="$2"
 
     result_array=()
@@ -248,7 +252,8 @@ main() {
     echo "  get_column <column_name>"
 }
 
-# Run demo if executed directly
+# Why: BASH_SOURCE[0] vs $0 check lets this file be both a sourceable library
+# and a standalone script — sourcing skips main(), direct execution runs it.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

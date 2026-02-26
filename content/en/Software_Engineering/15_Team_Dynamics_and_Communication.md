@@ -12,15 +12,18 @@ Software engineering is fundamentally a team endeavor. Even a technically brilli
 - [What Is Software Engineering](./01_What_Is_Software_Engineering.md) — roles and organizational context
 - [Agile and Iterative Development](./03_Agile_and_Iterative_Development.md) — Scrum ceremonies and team practices
 
-**Learning Objectives**:
-- Compare functional, cross-functional, and feature team structures and their trade-offs
-- Explain Conway's Law and the Inverse Conway Maneuver
-- Describe the four team types in Team Topologies
-- Distinguish synchronous and asynchronous communication and know when to use each
-- Apply best practices for giving and receiving feedback in code review
-- Explain psychological safety and its relationship to team performance
-- Identify sources of conflict in software teams and apply resolution strategies
-- Describe knowledge-sharing practices: pair programming, mob programming, and tech talks
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare functional, cross-functional, and feature team structures and their trade-offs
+2. Explain Conway's Law and the Inverse Conway Maneuver
+3. Describe the four team types in Team Topologies
+4. Distinguish synchronous and asynchronous communication and know when to use each
+5. Apply best practices for giving and receiving feedback in code review
+6. Explain psychological safety and its relationship to team performance
+7. Identify sources of conflict in software teams and apply resolution strategies
+8. Describe knowledge-sharing practices: pair programming, mob programming, and tech talks
 
 ---
 

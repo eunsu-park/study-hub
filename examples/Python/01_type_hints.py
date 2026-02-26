@@ -87,6 +87,8 @@ print(process_id(12345))
 print(process_id("USER_789"))
 
 
+# Why: Optional[X] is equivalent to Union[X, None] — it signals to callers that they
+# must handle the None case, preventing AttributeError on missing results
 def find_user(user_id: int) -> Optional[Dict[str, str]]:
     """Return user dict or None if not found."""
     users = {1: {"name": "Alice"}, 2: {"name": "Bob"}}
@@ -105,6 +107,8 @@ print(f"find_user(99): {user}")
 
 section("TypeVar and Generics")
 
+# Why: TypeVar preserves the caller's type through generic functions, so mypy/pyright
+# can infer that first_element([1,2,3]) returns Optional[int], not Optional[Any]
 T = TypeVar('T')
 
 
@@ -154,6 +158,8 @@ print(f"str_stack: {str_stack}")
 section("Protocol (Structural Subtyping)")
 
 
+# Why: Protocol enables structural subtyping (duck typing with static checks) — classes
+# satisfy the interface by having matching methods, without inheriting from a base class
 class Drawable(Protocol):
     """Protocol for drawable objects."""
 
@@ -225,6 +231,8 @@ print(f"apply_operation(5, 3, multiply) -> {result2}")
 section("Runtime Type Checking with isinstance")
 
 
+# Why: isinstance() is the runtime counterpart to Union type hints — type checkers
+# narrow the type inside each branch, enabling safe attribute/method access
 def process_value(value: Union[int, str, List[int]]) -> str:
     """Process different types at runtime."""
     if isinstance(value, int):

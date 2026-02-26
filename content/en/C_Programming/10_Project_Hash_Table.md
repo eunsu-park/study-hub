@@ -1,14 +1,24 @@
 # Project 8: Hash Table
 
-## Learning Objectives
-
-What you will learn through this project:
-- Hash function principles
-- Hash table structure
-- Collision handling (chaining, open addressing)
-- Practical application: Simple dictionary program
+**Previous**: [Project 7: Stack and Queue](./09_Project_Stack_Queue.md) | **Next**: [Project 10: Terminal Snake Game](./11_Project_Snake_Game.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how a hash function converts a key into an array index and why uniform distribution matters
+2. Compare popular string hash functions (simple sum, djb2, sdbm, FNV-1a) and evaluate their collision behavior
+3. Implement a chaining hash table that resolves collisions with per-bucket linked lists
+4. Implement an open-addressing hash table using linear probing and the DELETED sentinel
+5. Design insert, search, and delete operations with correct handling of collisions and tombstones
+6. Build a complete interactive dictionary program with add, search, delete, and list commands
+7. Identify when to resize a hash table based on load factor and explain the rehashing process
+
+---
+
+A hash table is the data structure behind Python's `dict`, JavaScript's `Object`, and nearly every key-value store in production software. It achieves average O(1) lookup by converting a key into an array index through a hash function -- a trick that seems almost magical until you build one yourself and confront the inevitable collisions. This project demystifies that magic by implementing both chaining and open-addressing strategies from scratch.
 
 ## What Is a Hash Table?
 
@@ -772,4 +782,4 @@ gcc -Wall -std=c11 dictionary.c -o dictionary
 
 ## Next Step
 
-[11_Project_Snake_Game.md](./11_Project_Snake_Game.md) -> Let's make a terminal game!
+[Project 10: Terminal Snake Game](./11_Project_Snake_Game.md) -> Let's make a terminal game!

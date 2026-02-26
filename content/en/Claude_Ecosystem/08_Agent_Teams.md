@@ -13,15 +13,18 @@ While subagents are powerful for delegating isolated tasks, many real-world proj
 - Understanding of parallel task execution
 - Familiarity with project management concepts (task lists, work coordination)
 
-**Learning Objectives**:
-- Understand the difference between Agent Teams and isolated subagents
-- Explain the team architecture: team lead (orchestrator) + specialized agents
-- Describe how agents coordinate work through shared task lists
-- Set up and configure an Agent Team for a complex task
-- Define team member roles and capabilities appropriately
-- Apply Agent Teams to real-world scenarios (migration, review, documentation)
-- Identify limitations and cost implications of multi-agent workflows
-- Decide when Agent Teams add value vs. when simpler approaches suffice
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the difference between Agent Teams and isolated subagents
+2. Explain the team architecture: team lead (orchestrator) + specialized agents
+3. Describe how agents coordinate work through shared task lists
+4. Set up and configure an Agent Team for a complex task
+5. Define team member roles and capabilities appropriately
+6. Apply Agent Teams to real-world scenarios (migration, review, documentation)
+7. Identify limitations and cost implications of multi-agent workflows
+8. Decide when Agent Teams add value vs. when simpler approaches suffice
 
 ---
 

@@ -7,6 +7,8 @@
 - 2D FDTD (TM, TE 모드)
 - PML (Perfectly Matched Layer) 개념
 
+**이 레슨이 중요한 이유:** FDTD(유한차분 시간영역법, Finite-Difference Time-Domain)는 전산전자기학의 핵심 방법입니다. 그 매력은 단순함에 있습니다: 엇갈린 Yee 격자에서의 리프프로그(Leapfrog) 시간 전진은 가우스 법칙을 자연스럽게 만족하며 시간과 공간 모두에서 2차 정확도를 제공합니다. 시간 영역에서 직접 동작하므로, FDTD는 단일 시뮬레이션 실행으로 광대역 소스, 비선형 재료, 복잡한 기하학을 처리할 수 있습니다.
+
 ---
 
 ## 1. 1D FDTD 완전 구현
@@ -1165,17 +1167,189 @@ def rectangular_waveguide():
 
 ## 7. 연습 문제
 
-### 연습 1: 소스 비교
-가우시안 펄스와 Ricker wavelet을 소스로 사용할 때 1D FDTD 결과를 비교하시오. 주파수 응답 특성을 분석하시오.
+### 연습 1: 소스(Source) 비교
+가우시안 펄스(Gaussian pulse)와 리커 파렛(Ricker wavelet)을 소스로 사용하여 1D FDTD 결과를 비교하시오. 주파수 응답 특성을 분석하시오.
 
-### 연습 2: ABC 성능
-1차 Mur ABC와 2차 Mur ABC의 반사 계수를 비교하시오. 입사각에 따른 성능을 분석하시오.
+<details><summary>정답 보기</summary>
 
-### 연습 3: PML 최적화
-PML 층 두께(5, 10, 15, 20)와 다항식 차수(2, 3, 4)에 따른 흡수 성능을 비교하시오.
+```python
+import numpy as np
+import matplotlib.pyplot as plt
 
-### 연습 4: 도파관 모드
-TE10 차단 주파수 이하와 이상에서의 도파관 전파를 시뮬레이션하고 차이를 분석하시오.
+def compare_fdtd_sources(N=200, Nt=400, dx=1e-3):
+    """가우시안 펄스 vs 리커 파렛 소스 비교"""
+    dt = dx / (2 * 3e8)  # CFL (S=0.5)
+
+    def run_fdtd(source_type):
+        Ez = np.zeros(N); Hy = np.zeros(N)
+        src_pos = N // 4
+        t0, spread = 30, 10  # 가우시안 파라미터
+        f_c = 1e10  # 리커 중심 주파수
+        output = []
+
+        for t in range(Nt):
+            if source_type == 'gaussian':
+                src = np.exp(-0.5 * ((t - t0) / spread)**2)
+            else:  # Ricker wavelet
+                tau = (t - t0) * dt
+                src = (1 - 2*(np.pi*f_c*tau)**2) * np.exp(-(np.pi*f_c*tau)**2)
+
+            Ez[src_pos] += src
+            Hy[:-1] += 0.1 * (Ez[1:] - Ez[:-1])
+            Ez[1:]  += 0.1 * (Hy[1:] - Hy[:-1])
+            output.append(Ez[3*N//4])
+
+        return np.array(output)
+
+    out_gauss  = run_fdtd('gaussian')
+    out_ricker = run_fdtd('ricker')
+
+    # 주파수 스펙트럼 비교
+    freq = np.fft.fftfreq(Nt, d=dt)
+    spec_g = np.abs(np.fft.fft(out_gauss))
+    spec_r = np.abs(np.fft.fft(out_ricker))
+    pos_mask = freq > 0
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    axes[0,0].plot(out_gauss);  axes[0,0].set_title('가우시안 펄스 시간 응답')
+    axes[0,1].plot(out_ricker); axes[0,1].set_title('리커 파렛 시간 응답')
+    axes[1,0].plot(freq[pos_mask]/1e9, spec_g[pos_mask], 'b-')
+    axes[1,0].set_xlabel('주파수 (GHz)'); axes[1,0].set_title('가우시안 스펙트럼')
+    axes[1,1].plot(freq[pos_mask]/1e9, spec_r[pos_mask], 'r-')
+    axes[1,1].set_xlabel('주파수 (GHz)'); axes[1,1].set_title('리커 스펙트럼')
+    plt.tight_layout()
+    plt.savefig('source_comparison.png', dpi=150)
+    plt.close()
+    print("가우시안: DC 성분 포함, 저주파 중심의 넓은 스펙트럼")
+    print("리커:    DC=0, 중심 주파수 f_c 주변 대역통과 스펙트럼")
+
+compare_fdtd_sources()
+```
+
+가우시안 펄스는 DC 성분을 포함한 넓은 스펙트럼을 가지며 시간 응답 분석에 적합합니다. 리커 파렛은 DC 성분이 없고 중심 주파수 f_c 주변에 에너지가 집중되어 특정 주파수 대역 분석에 유리합니다.
+</details>
+
+### 연습 2: ABC(Absorbing Boundary Condition) 성능 비교
+1차 Mur ABC와 2차 Mur ABC의 반사 계수를 비교하시오. 입사각에 따른 성능 차이를 분석하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def mur_abc_comparison():
+    """1차 vs 2차 Mur ABC 반사 계수 비교"""
+    N = 200; Nt = 600
+    dx = 1e-3; dt = dx / (3e8 * 2)
+    S = 3e8 * dt / dx
+
+    def run_with_abc(order):
+        Ez = np.zeros(N + 2)
+        Hy = np.zeros(N + 1)
+        Ez_prev = np.zeros(N + 2)
+        Ez_prev2 = np.zeros(N + 2)
+        src_pos = N // 4
+        monitor_pos = src_pos - 20
+        ref_signal = []
+
+        for t in range(Nt):
+            Ez_prev2[:] = Ez_prev[:]
+            Ez_prev[:]  = Ez[:]
+            if t < 60:
+                Ez[src_pos] += np.exp(-0.5*((t-30)/10)**2)
+            Hy[:] += S * (Ez[1:] - Ez[:-1])
+            Ez[1:-1] += S * (Hy[1:] - Hy[:-1])
+            if order == 1:
+                Ez[-1] = Ez_prev[-2] + (S-1)/(S+1) * (Ez[-2] - Ez_prev[-1])
+            elif order == 2:
+                coeff1 = (S - 1) / (S + 1)
+                coeff2 = 2 * S / (S + 1)
+                Ez[-1] = (-Ez_prev2[-1] + coeff1*(Ez[-2]+Ez_prev2[-2])
+                           + coeff2*(Ez_prev[-2]+Ez_prev[-1]))
+            ref_signal.append(Ez[monitor_pos])
+        return np.array(ref_signal)
+
+    ref1 = run_with_abc(1)
+    ref2 = run_with_abc(2)
+    R1 = np.max(np.abs(ref1[100:]))
+    R2 = np.max(np.abs(ref2[100:]))
+    print(f"1차 Mur ABC 반사 계수: R ≈ {R1:.4f} ({20*np.log10(max(R1,1e-16)):.1f} dB)")
+    print(f"2차 Mur ABC 반사 계수: R ≈ {R2:.4f} ({20*np.log10(max(R2,1e-16)):.1f} dB)")
+    print("2차가 1차보다 약 10~20 dB 더 낮은 반사 계수를 가짐")
+
+mur_abc_comparison()
+```
+
+2차 Mur ABC는 더 넓은 입사각 범위에서 우수한 성능을 제공하지만 구현이 복잡합니다. 현재는 PML(완전 정합층)이 가장 널리 사용되는 ABC입니다.
+</details>
+
+### 연습 3: PML(Perfectly Matched Layer) 최적화
+PML 층 두께(5, 10, 15, 20 셀)와 다항식 차수(2, 3, 4)에 따른 흡수 성능을 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def pml_optimization_study():
+    """PML 두께 및 차수에 따른 흡수 성능 비교"""
+    def pml_reflection_coeff(d_pml, poly_order, dx=1e-3):
+        R_target = 1e-8
+        sigma_max = -(poly_order + 1) / (2 * d_pml * dx) * np.log(R_target)
+        sigma_profile = np.array([(i/d_pml)**poly_order * sigma_max
+                                   for i in range(d_pml)])
+        R_theory = np.exp(-2 * np.sum(sigma_profile) * dx / (3e8 * 8.854e-12))
+        return R_theory
+
+    print(f"{'두께(셀)':>8} {'차수':>6} {'반사계수':>14} {'dB':>10}")
+    print("-" * 45)
+    for d in [5, 10, 15, 20]:
+        for order in [2, 3, 4]:
+            R = pml_reflection_coeff(d, order)
+            dB = 20 * np.log10(max(R, 1e-16))
+            print(f"{d:>8} {order:>6} {R:>14.2e} {dB:>10.1f}")
+    print("\n권장값: 두께 8~16 셀, 차수 2~3")
+
+pml_optimization_study()
+```
+
+두께가 두꺼울수록, 차수가 높을수록 이론적 반사 계수가 낮아지지만, 실제로는 격자 이산화 오차로 최적 성능이 제한됩니다.
+</details>
+
+### 연습 4: 도파관 모드(Waveguide Modes)
+직사각형 도파관에서 TE10 차단 주파수 이하와 이상의 주파수로 전파를 시뮬레이션하고 결과 차이를 분석하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def waveguide_mode_simulation():
+    """직사각형 도파관 TE10 모드 분석"""
+    a = 0.02    # 폭 [m] (2 cm)
+    c = 3e8
+
+    f_cutoff = c / (2 * a)
+    print(f"TE10 차단 주파수: f_c = {f_cutoff/1e9:.2f} GHz")
+
+    for f_test in [f_cutoff * 0.8, f_cutoff * 1.5]:
+        k0 = 2 * np.pi * f_test / c
+        kc = np.pi / a
+        k_sq = k0**2 - kc**2
+
+        if k_sq > 0:
+            beta = np.sqrt(k_sq)
+            lambda_g = 2 * np.pi / beta
+            v_phase = 2 * np.pi * f_test / beta
+            print(f"\nf = {f_test/1e9:.2f} GHz (전파 가능):")
+            print(f"  위상 상수 β = {beta:.2f} rad/m")
+            print(f"  도파관 파장 λ_g = {lambda_g*100:.2f} cm")
+            print(f"  위상 속도 v_p = {v_phase/c:.3f}c")
+        else:
+            alpha = np.sqrt(-k_sq)
+            print(f"\nf = {f_test/1e9:.2f} GHz (에바네슨트, 차단):")
+            print(f"  감쇠 상수 α = {alpha:.2f} Np/m")
+            print(f"  감쇠율 = {20*alpha*np.log10(np.e):.1f} dB/m")
+
+waveguide_mode_simulation()
+```
+
+차단 주파수 이하에서는 에바네슨트(evanescent) 파로 에너지 전달이 불가능합니다. 차단 주파수 이상에서는 TE10 모드가 전파되며, 위상 속도 v_p > c이지만 에너지는 군속도 v_g = c²/v_p < c로 전달됩니다.
+</details>
 
 ---
 
@@ -1229,6 +1403,25 @@ FDTD 구현 핵심:
    - 파장당 10-20 셀
    - 수치 분산 최소화
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: 하드 소스(Hard Source)와 소프트 소스(Soft Source) 반사 필드 비교
+FDTD_1D 클래스를 사용하여 x = 150 mm에 완전 도체(PEC) 반사판이 있는 1D 도메인을 설정하세요. x = 50 mm에서 하드 소스(hard source)와 소프트 소스(soft source)를 각각 사용하여 가우시안 펄스(Gaussian pulse)를 입사시키세요. 펄스가 반사되어 소스 영역으로 돌아온 후, 두 경우에 대해 소스 위치에서의 필드를 비교하세요. 하드 소스는 늦은 시간에 아티팩트(artifact)를 생성하지만 소프트 소스는 생성하지 않는 이유를 설명하세요.
+
+### 연습 2: Mur ABC 각도 의존성(Angle Dependence)
+중심에 점 소스(point source)가 있는 2D FDTD TM 시뮬레이션을 구현하세요. 세 면의 완전 도체(PEC) 경계를 1차 Mur ABC로 교체하고, 나머지 한 면은 PEC로 유지하세요. ABC가 수직 입사파와 45° 입사파를 각각 얼마나 잘 흡수하는지 시각적으로 비교하세요. 각 경계에서 5셀 떨어진 프로브 위치에서 펄스 도착 전후의 최대 필드 진폭을 기록하여 각도별 반사 계수(reflection coefficient)를 추정하세요.
+
+### 연습 3: PML 두께(Thickness) 최적화
+FDTD_2D_TM_PML 클래스를 사용하여 PML 레이어 수 4, 8, 12, 16 셀로 시뮬레이션을 실행하세요. 각 경우에 중앙에 프로브를 배치하고, 주 펄스가 도메인을 빠져나간 후 반사 잡음(spurious reflected field) 최대 진폭을 측정하세요. 반사 수준(dB)을 PML 두께의 함수로 그려보고 -40 dB 반사를 달성하는 데 필요한 최소 두께를 결정하세요. PML 차수(order 2, 3, 4)는 이 결과에 어떤 영향을 주나요?
+
+### 연습 4: 도파관(Waveguide) 모드 차단 주파수(Cutoff Frequency) 검증
+직사각형 도파관(rectangular waveguide) 시뮬레이션 코드를 사용하여 동작 주파수를 (a) 0.8×fc, (b) fc, (c) 1.2×fc로 설정하세요 (fc는 TE10 차단 주파수). 각 경우에 300 스텝에서 Ez 필드 스냅샷을 그리세요. 케이스 (a)와 (b)에서는 지수적 감쇠(exponential decay) 또는 비전파(no propagation)를 관찰하고, 케이스 (c)에서는 안내파(guided wave) 전파를 관찰하세요. 정상파(standing wave) 패턴에서 도파관 파장(guide wavelength) λg를 측정하고 이론값 λg = λ/√(1-(fc/f)²)과 비교하세요.
+
+### 연습 5: 가우시안 펄스(Gaussian Pulse) 스펙트럼 분석
+가우시안 펄스(t0 = 1×10⁻¹⁰ s, tau = 3×10⁻¹¹ s)로 1D FDTD를 실행하세요. 소스 근처와 도메인 끝(유전체 슬래브 통과 전후)에 있는 두 프로브 위치에서 시계열(time series)을 기록하세요. 각 시계열의 FFT를 계산하고 크기 스펙트럼(magnitude spectrum)을 그리세요. 다음을 확인하세요: (a) 소스 스펙트럼의 -3 dB 대역폭(bandwidth), (b) 유전체 슬래브로 인한 주파수 의존적 감쇠(frequency-dependent attenuation), (c) 슬래브를 통한 전파로 인한 위상 이동(phase shift).
 
 ---
 

@@ -12,15 +12,18 @@
 - [소프트웨어 엔지니어링이란](./01_What_Is_Software_Engineering.md) — 역할과 조직 맥락
 - [애자일과 반복적 개발](./03_Agile_and_Iterative_Development.md) — 스크럼 의식과 팀 관행
 
-**학습 목표**:
-- 기능팀(functional team), 다기능팀(cross-functional team), 피처팀(feature team) 구조와 그 트레이드오프를 비교한다
-- 콘웨이의 법칙(Conway's Law)과 역 콘웨이 전략(Inverse Conway Maneuver)을 설명한다
-- 팀 토폴로지(Team Topologies)의 네 가지 팀 유형을 설명한다
-- 동기(synchronous) 및 비동기(asynchronous) 커뮤니케이션을 구분하고 각각의 사용 시점을 파악한다
-- 코드 리뷰에서 피드백을 주고받는 모범 사례를 적용한다
-- 심리적 안전감(psychological safety)과 팀 성과의 관계를 설명한다
-- 소프트웨어 팀에서의 갈등 원인을 파악하고 해결 전략을 적용한다
-- 페어 프로그래밍(pair programming), 몹 프로그래밍(mob programming), 기술 발표 등 지식 공유 관행을 설명한다
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 기능팀(functional team), 다기능팀(cross-functional team), 피처팀(feature team) 구조와 그 트레이드오프를 비교한다
+2. 콘웨이의 법칙(Conway's Law)과 역 콘웨이 전략(Inverse Conway Maneuver)을 설명한다
+3. 팀 토폴로지(Team Topologies)의 네 가지 팀 유형을 설명한다
+4. 동기(synchronous) 및 비동기(asynchronous) 커뮤니케이션을 구분하고 각각의 사용 시점을 파악한다
+5. 코드 리뷰에서 피드백을 주고받는 모범 사례를 적용한다
+6. 심리적 안전감(psychological safety)과 팀 성과의 관계를 설명한다
+7. 소프트웨어 팀에서의 갈등 원인을 파악하고 해결 전략을 적용한다
+8. 페어 프로그래밍(pair programming), 몹 프로그래밍(mob programming), 기술 발표 등 지식 공유 관행을 설명한다
 
 ---
 

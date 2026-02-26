@@ -486,6 +486,304 @@ output = model.generate(input_ids, max_length=50, do_sample=True,
 
 ---
 
+## Exercises
+
+### Exercise 1: Generation Strategy Comparison
+
+Using HuggingFace's GPT-2, generate text from the same prompt with four different strategies: greedy decoding, temperature sampling (T=0.5), top-k sampling (k=50), and top-p sampling (p=0.9). Compare the outputs and explain when you would choose each strategy in a real application.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
+import torch
+
+tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+model = GPT2LMHeadModel.from_pretrained('gpt2')
+model.eval()
+
+prompt = "The future of artificial intelligence is"
+input_ids = tokenizer.encode(prompt, return_tensors='pt')
+
+def decode(output):
+    return tokenizer.decode(output[0], skip_special_tokens=True)
+
+# 1. Greedy decoding - always picks the most likely token
+greedy = model.generate(input_ids, max_new_tokens=30, do_sample=False)
+print("GREEDY:", decode(greedy))
+# Deterministic, often repetitive
+
+# 2. Temperature sampling (T=0.5) - sharper distribution, less random
+low_temp = model.generate(
+    input_ids, max_new_tokens=30, do_sample=True, temperature=0.5
+)
+print("\nTEMP=0.5:", decode(low_temp))
+# More focused, less diverse but still varied
+
+# 3. Top-k sampling (k=50)
+top_k = model.generate(
+    input_ids, max_new_tokens=30, do_sample=True, top_k=50
+)
+print("\nTOP-K=50:", decode(top_k))
+# Excludes very unlikely tokens, stable quality
+
+# 4. Top-p (nucleus) sampling (p=0.9)
+top_p = model.generate(
+    input_ids, max_new_tokens=30, do_sample=True, top_p=0.9, temperature=1.0
+)
+print("\nTOP-P=0.9:", decode(top_p))
+# Adaptive vocabulary size based on cumulative probability
+```
+
+**When to use each strategy**:
+
+| Strategy | Best for | Why |
+|----------|----------|-----|
+| Greedy | Translation, factual QA | Maximizes likelihood, consistent and reproducible |
+| Temperature (low) | Code generation, formal text | Controlled creativity, near-deterministic |
+| Temperature (high) | Brainstorming, poetry | High diversity, may sacrifice coherence |
+| Top-k | Dialogue, chatbots | Prevents rare artifacts while allowing variety |
+| Top-p | Creative writing, storytelling | Adapts vocabulary size to context complexity |
+
+In practice, **top-p combined with temperature** (e.g., `p=0.9, temperature=0.8`) is the most commonly used strategy for general-purpose generation as it combines both forms of control.
+
+</details>
+
+### Exercise 2: KV Cache Memory Savings
+
+Explain the computational benefit of KV Cache (Key-Value Cache) during autoregressive generation. Calculate how many times the key and value matrices are recomputed (without cache) vs computed (with cache) when generating 100 new tokens given a 50-token prompt, assuming 12 attention layers.
+
+<details>
+<summary>Show Answer</summary>
+
+**Without KV Cache**:
+
+At each generation step `t`, the model computes K and V for the entire sequence seen so far (prompt + generated tokens). So at step `t`, it processes `50 + t` tokens through all 12 layers.
+
+```python
+# Without KV Cache: total KV computations
+prompt_len = 50
+new_tokens = 100
+num_layers = 12
+
+# For each new token, recompute K and V for all previous tokens
+total_kv_without_cache = 0
+for t in range(new_tokens):
+    seq_len = prompt_len + t + 1  # Current sequence length
+    total_kv_without_cache += seq_len * num_layers
+
+print(f"Total KV computations without cache: {total_kv_without_cache}")
+# = sum(51 to 150) * 12 = 10050 * 12 = 120,600
+
+# With KV Cache: compute K and V only for the NEW token
+total_kv_with_cache = new_tokens * num_layers
+print(f"Total KV computations with cache: {total_kv_with_cache}")
+# = 100 * 12 = 1,200
+
+speedup = total_kv_without_cache / total_kv_with_cache
+print(f"Speedup: {speedup:.1f}x")
+# ≈ 100.5x speedup in KV computation
+```
+
+**How KV Cache works**:
+
+```python
+# Conceptual KV Cache mechanism
+class AttentionWithCache:
+    def forward(self, x, past_kv=None):
+        # Compute Q, K, V for current token only
+        q = self.W_q(x)  # Only for new token: (batch, 1, d_k)
+        k = self.W_k(x)  # Only for new token: (batch, 1, d_k)
+        v = self.W_v(x)  # Only for new token: (batch, 1, d_k)
+
+        if past_kv is not None:
+            past_k, past_v = past_kv
+            # Concatenate with cached K, V from previous steps
+            k = torch.cat([past_k, k], dim=1)  # (batch, seq+1, d_k)
+            v = torch.cat([past_v, v], dim=1)
+
+        # Attend using full K, V but only new Q
+        attn = softmax(q @ k.T / sqrt(d_k)) @ v  # (batch, 1, d_k)
+
+        return attn, (k, v)  # Return updated cache
+```
+
+**Memory trade-off**: KV Cache trades computation for memory — it must store K and V for all previous tokens. For GPT-3 with 96 layers, 175B parameters, and context length 4096: each K and V matrix is `(batch, seq, 128, d_k)`, requiring ~10GB of GPU memory just for the cache. This is why LLM inference requires careful memory management.
+
+</details>
+
+### Exercise 3: In-Context Learning Prompt Design
+
+Design three versions of a prompt for a text classification task (classifying movie reviews as positive/negative): zero-shot, few-shot (3 examples), and chain-of-thought. Explain why each progressively improves model performance.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
+
+# Version 1: Zero-shot
+zero_shot_prompt = """Classify the following movie review as Positive or Negative.
+
+Review: "The acting was superb and the story kept me engaged throughout."
+Sentiment:"""
+
+# Version 2: Few-shot (3 examples)
+few_shot_prompt = """Classify the following movie review as Positive or Negative.
+
+Review: "Absolutely terrible. I walked out after 30 minutes."
+Sentiment: Negative
+
+Review: "One of the best films I've seen this decade. Masterpiece!"
+Sentiment: Positive
+
+Review: "Mediocre plot but the cinematography saved it somewhat."
+Sentiment: Negative
+
+Review: "The acting was superb and the story kept me engaged throughout."
+Sentiment:"""
+
+# Version 3: Chain-of-Thought
+cot_prompt = """Classify the following movie review as Positive or Negative.
+Think step by step before giving your final answer.
+
+Review: "Absolutely terrible. I walked out after 30 minutes."
+Reasoning: The reviewer says "absolutely terrible" which is very negative, and they
+left early (walked out after 30 minutes), showing they couldn't finish watching.
+Sentiment: Negative
+
+Review: "The acting was superb and the story kept me engaged throughout."
+Reasoning:"""
+```
+
+**Why each approach progressively improves performance**:
+
+**Zero-shot**: Relies entirely on patterns learned during pre-training. The model must infer the task from the format alone. Works for simple tasks where the model has seen similar formats during training.
+
+**Few-shot**: Provides concrete input-output examples that:
+- Disambiguate the task format (what "Sentiment:" should look like)
+- Demonstrate the output vocabulary ("Positive", "Negative" — not "pos", "neg", or "good")
+- Calibrate the model's decision boundary with real examples
+
+GPT-3's paper showed few-shot performance often matches fine-tuned models on standard benchmarks.
+
+**Chain-of-Thought**: Forces the model to:
+- Identify relevant evidence in the text
+- Reason explicitly before committing to an answer
+- Reduce errors from "jumping to conclusions"
+
+CoT is particularly valuable for nuanced reviews where sentiment isn't immediately obvious (e.g., mixed reviews, sarcasm). The intermediate reasoning steps also make the model's decisions more interpretable.
+
+</details>
+
+### Exercise 4: Autoregressive Training Setup
+
+Write a complete training loop for a small character-level GPT model. The model should learn to generate sequences character by character. Show how the input and target sequences are constructed, how the causal language modeling loss is computed, and how to monitor training progress.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class TinyGPT(nn.Module):
+    def __init__(self, vocab_size, d_model=64, num_heads=4, num_layers=2, max_len=128):
+        super().__init__()
+        self.token_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = nn.Embedding(max_len, d_model)
+
+        encoder_layer = nn.TransformerDecoderLayer(
+            d_model=d_model, nhead=num_heads, dim_feedforward=d_model*4,
+            batch_first=True, dropout=0.1
+        )
+        # Use TransformerDecoder with causal mask for autoregressive behavior
+        self.blocks = nn.ModuleList([
+            nn.TransformerDecoderLayer(d_model, num_heads, d_model*4, batch_first=True)
+            for _ in range(num_layers)
+        ])
+        self.ln_f = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head.weight = self.token_emb.weight  # Weight tying
+
+    def forward(self, input_ids, causal_mask=None):
+        seq_len = input_ids.size(1)
+        if causal_mask is None:
+            # Create causal mask: True = masked (cannot attend)
+            causal_mask = torch.triu(
+                torch.ones(seq_len, seq_len, device=input_ids.device), diagonal=1
+            ).bool()
+
+        pos = torch.arange(seq_len, device=input_ids.device)
+        x = self.token_emb(input_ids) + self.pos_emb(pos)
+
+        for block in self.blocks:
+            x = block(x, x, tgt_mask=causal_mask, memory_mask=causal_mask)
+
+        return self.head(self.ln_f(x))
+
+# Character-level dataset preparation
+text = "Hello, World! This is a training example for our tiny GPT model."
+chars = sorted(set(text))
+stoi = {c: i for i, c in enumerate(chars)}
+itos = {i: c for i, c in enumerate(chars)}
+vocab_size = len(chars)
+
+# Encode text
+data = torch.tensor([stoi[c] for c in text])
+
+def get_batch(data, block_size=32, batch_size=4):
+    """Create input/target pairs for CLM training"""
+    starts = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([data[s:s+block_size] for s in starts])
+    # Target is input shifted by 1: predict next character
+    y = torch.stack([data[s+1:s+block_size+1] for s in starts])
+    return x, y
+
+# Training loop
+model = TinyGPT(vocab_size)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+model.train()
+for step in range(200):
+    x, y = get_batch(data)
+    logits = model(x)  # (batch, seq, vocab_size)
+
+    # Causal LM loss: predict each next token
+    loss = F.cross_entropy(
+        logits.view(-1, vocab_size),  # (batch*seq, vocab)
+        y.view(-1)                    # (batch*seq,)
+    )
+
+    optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # Gradient clipping
+    optimizer.step()
+
+    if step % 50 == 0:
+        print(f"Step {step}: loss = {loss.item():.4f}, "
+              f"perplexity = {torch.exp(loss).item():.2f}")
+
+# Generation
+model.eval()
+with torch.no_grad():
+    start = torch.tensor([[stoi['H']]])  # Start with 'H'
+    for _ in range(30):
+        logits = model(start)
+        next_char = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        start = torch.cat([start, next_char], dim=1)
+    print("Generated:", ''.join([itos[i.item()] for i in start[0]]))
+```
+
+**Key design decisions explained**:
+- **Input vs target offset**: `x = data[t:t+L]`, `y = data[t+1:t+L+1]` — this means for position `i` in `x`, the model predicts `y[i] = x[i+1]`. All positions are trained simultaneously in one forward pass.
+- **Gradient clipping**: `clip_grad_norm_(..., 1.0)` prevents exploding gradients, critical for transformer training.
+- **Perplexity**: `exp(loss)` is a more interpretable metric — a perplexity of 2 means the model is as uncertain as a fair coin toss between 2 tokens on average.
+
+</details>
+
 ## Next Steps
 
 Learn about the HuggingFace Transformers library in [06_HuggingFace_Basics.md](./06_HuggingFace_Basics.md).

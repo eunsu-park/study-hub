@@ -1,11 +1,22 @@
 # 14. 패턴 매칭 (Pattern Matching)
 
-## 학습 목표
-- Python 3.10+ match/case 문법 이해
-- 다양한 패턴 유형 마스터
-- 구조적 패턴 매칭 활용
-- 가드와 OR 패턴 사용
-- 실무 활용 패턴 학습
+**이전**: [데이터클래스](./13_Dataclasses.md) | **다음**: [파이썬 기초](./15_Python_Basics.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Python 3.10+의 구조적 패턴 매칭(structural pattern matching) `match`/`case` 문법의 목적과 구문을 설명할 수 있습니다
+2. 값 기반 분기를 위한 리터럴 패턴(literal pattern), OR 패턴, 와일드카드 패턴(wildcard pattern)을 작성할 수 있습니다
+3. 시퀀스 패턴(sequence pattern)과 매핑 패턴(mapping pattern)으로 리스트, 튜플, 딕셔너리를 분해(destructure)할 수 있습니다
+4. `__match_args__`를 활용한 클래스 패턴(class pattern)으로 데이터클래스와 커스텀 객체의 속성을 매칭할 수 있습니다
+5. 가드(`if` 조건)를 구현하여 패턴 분기에 런타임 제약을 추가할 수 있습니다
+6. AS 패턴(AS pattern)으로 매칭된 하위 표현식을 명명된 변수에 바인딩할 수 있습니다
+7. API 응답 핸들러, 상태 머신(state machine), AST 인터프리터 등 실용적인 응용 프로그램을 설계할 수 있습니다
+
+---
+
+Python 3.10 이전에는 데이터의 형태에 따라 분기하려면 중첩된 `if`/`elif` 체인이나 딕셔너리 조회를 사용해야 했고, 이는 금세 읽기 어려워졌습니다. 구조적 패턴 매칭은 복잡한 데이터 구조를 분해하는 선언적이고 망라적인 접근 방식을 제공하여, JSON 응답을 처리하거나 명령을 파싱하거나 추상 구문 트리(abstract syntax tree)를 순회하는 코드를 훨씬 명확하게 만들어줍니다.
 
 ## 목차
 1. [패턴 매칭 기초](#1-패턴-매칭-기초)

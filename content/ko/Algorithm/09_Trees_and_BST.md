@@ -1,5 +1,18 @@
 # 트리와 이진 탐색 트리 (Tree and BST)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 트리의 핵심 용어(루트, 리프, 깊이, 높이, 완전 이진 트리 vs 포화 이진 트리)를 정의하고 연결 노드로 이진 트리(binary tree)를 표현할 수 있다
+2. 중위(in-order), 전위(pre-order), 후위(post-order) 트리 순회를 재귀 및 반복 방식으로 구현하고, 주어진 트리에 대한 출력을 예측할 수 있다
+3. 이진 탐색 트리(BST, Binary Search Tree)의 삽입, 탐색, 삭제 연산을 구현하고 각 단계에서 유지되는 BST 불변 조건을 설명할 수 있다
+4. BST 연산 시간 복잡도를 O(h)로 분석하고, 균형 트리(balanced tree)와 편향 트리(degenerate/skewed tree) 간의 성능 차이를 비교할 수 있다
+5. AVL 트리와 레드-블랙 트리(Red-Black tree)가 회전(rotation)과 재균형(rebalancing)을 통해 O(log n) 높이를 유지하는 방법을 설명할 수 있다
+6. 레벨 순서 순회(level-order traversal), 최소 공통 조상(LCA, Lowest Common Ancestor), 경로 합(path sum) 등의 문제를 해결하기 위해 트리 순회 기법을 적용할 수 있다
+
+---
+
 ## 개요
 
 트리는 계층적 구조를 나타내는 비선형 자료구조입니다. 이진 탐색 트리(BST)는 효율적인 탐색, 삽입, 삭제를 지원합니다.
@@ -13,7 +26,8 @@
 3. [이진 탐색 트리](#3-이진-탐색-트리)
 4. [BST 연산](#4-bst-연산)
 5. [균형 트리 개념](#5-균형-트리-개념)
-6. [연습 문제](#6-연습-문제)
+6. [AVL 트리와 Red-Black 트리 시각화](#6-avl-트리와-red-black-트리-시각화)
+7. [연습 문제](#7-연습-문제)
 
 ---
 
@@ -192,13 +206,21 @@ def inorder_iterative(root):
     stack = []
     curr = root
 
+    # 미방문 노드(curr)가 있거나 처리 대기 중인 노드(stack)가 있는 한 계속;
+    # 서브트리 사이에서 스택이 비워지므로 두 조건 모두 필요
     while curr or stack:
+        # 가장 왼쪽 노드까지 내려가며 조상을 스택에 push하여
+        # 왼쪽 서브트리 처리 후 돌아올 수 있게 함
         while curr:
             stack.append(curr)
             curr = curr.left
 
+        # 스택의 최상단이 정렬 순서상 다음 노드 —
+        # 왼쪽 서브트리는 완전히 처리됨
         curr = stack.pop()
         result.append(curr.val)
+        # 오른쪽 서브트리로 이동; None이면 외부 while 루프가
+        # 대신 다음 조상을 pop함
         curr = curr.right
 
     return result
@@ -247,15 +269,20 @@ def level_order(root):
 
     while queue:
         level = []
+        # 각 반복 시작 시 len(queue)를 스냅샷하여 현재 레벨의
+        # 노드만 처리하고, 큐에 추가되는 자식은 처리하지 않음
         for _ in range(len(queue)):
             node = queue.popleft()
             level.append(node.val)
 
+            # 다음 레벨을 위해 자식을 큐에 추가; None 자식은 건너뛰어
+            # 큐에 센티널 값을 저장하지 않음
             if node.left:
                 queue.append(node.left)
             if node.right:
                 queue.append(node.right)
 
+        # 각 내부 루프는 정확히 한 레벨 분량의 값을 생성
         result.append(level)
 
     return result
@@ -445,20 +472,25 @@ def delete_node(root, key):
     if not root:
         return None
 
+    # BST 속성이 O(h) 시간에 대상 노드로 안내
     if key < root.val:
         root.left = delete_node(root.left, key)
     elif key > root.val:
         root.right = delete_node(root.right, key)
     else:
+        # 노드 발견 — 세 가지 삭제 케이스를 처리:
+        # 케이스 1 & 2: 자식이 0개 또는 1개 — 단순히 노드를 잘라냄
         if not root.left:
             return root.right
         if not root.right:
             return root.left
 
-        # 후속자 찾기
+        # 케이스 3: 자식 2개 — 중위 후속자(오른쪽 서브트리의 최솟값)로
+        # 값을 대체하여 BST 속성을 유지;
+        # 그 다음 오른쪽 서브트리에서 후속자를 삭제
         successor = root.right
         while successor.left:
-            successor = successor.left
+            successor = successor.left  # 가장 왼쪽 노드 = 오른쪽 서브트리에서 가장 작은 값
 
         root.val = successor.val
         root.right = delete_node(root.right, successor.val)
@@ -520,7 +552,377 @@ def is_valid_bst(root, min_val=float('-inf'), max_val=float('inf')):
 
 ---
 
-## 6. 연습 문제
+## 6. AVL 트리와 Red-Black 트리 시각화
+
+균형 트리의 회전(Rotation)을 시각적 다이어그램과 함께 이해하면 훨씬 쉽습니다. 이 섹션에서는 AVL 회전, Red-Black 트리 삽입 케이스, 단계별 삽입 추적을 다룹니다.
+
+### 6.1 AVL 트리 회전(Rotation)
+
+AVL 트리는 모든 노드에서 왼쪽과 오른쪽 서브트리의 높이 차이(**균형 인수**, Balance Factor)가 최대 1인 불변식을 유지합니다. 삽입이나 삭제로 이 조건이 깨지면 **회전**을 통해 균형을 복원합니다.
+
+#### 단일 우회전 (LL Case)
+
+왼쪽 자식의 왼쪽 서브트리에 삽입하여 노드가 왼쪽으로 무거워진 경우:
+
+```
+Before (insert 5):           After right rotation at 30:
+
+        30  (bf=+2)                  20
+       /                            /  \
+      20  (bf=+1)                 10    30
+     /
+    10
+
+The left child (20) becomes the new root of this subtree.
+30 adopts 20's right child (if any) as its left child.
+```
+
+#### 단일 좌회전 (RR Case)
+
+LL 케이스의 거울상 — 오른쪽 자식의 오른쪽 서브트리에 삽입하여 노드가 오른쪽으로 무거워진 경우:
+
+```
+Before (insert 30):          After left rotation at 10:
+
+    10  (bf=-2)                      20
+      \                             /  \
+      20  (bf=-1)                 10    30
+        \
+        30
+
+The right child (20) becomes the new root.
+10 adopts 20's left child (if any) as its right child.
+```
+
+#### 좌-우 이중 회전 (LR Case)
+
+노드가 왼쪽으로 무거운데, 불균형이 왼쪽 자식의 **오른쪽** 서브트리에 있는 경우입니다. 두 번의 회전이 필요합니다: 먼저 왼쪽 자식을 좌회전, 그 다음 노드를 우회전합니다.
+
+```
+Before (insert 25):
+
+        30  (bf=+2)
+       /
+      20  (bf=-1)
+        \
+        25
+
+Step 1 — Left rotate at 20:     Step 2 — Right rotate at 30:
+
+        30                               25
+       /                                /  \
+      25                              20    30
+     /
+    20
+```
+
+#### 우-좌 이중 회전 (RL Case)
+
+LR 케이스의 거울상 — 오른쪽으로 무거운데, 불균형이 오른쪽 자식의 왼쪽 서브트리에 있는 경우:
+
+```
+Before (insert 25):
+
+    20  (bf=-2)
+      \
+      30  (bf=+1)
+      /
+    25
+
+Step 1 — Right rotate at 30:    Step 2 — Left rotate at 20:
+
+    20                                   25
+      \                                 /  \
+      25                              20    30
+        \
+        30
+```
+
+### 6.2 Red-Black 트리 삽입 케이스
+
+Red-Black 트리는 다음 규칙을 강제합니다:
+1. 모든 노드는 빨강(Red) 또는 검정(Black)
+2. 루트(Root)는 검정
+3. 연속된 두 빨강 노드 불가 (빨강 노드의 자식은 반드시 검정)
+4. 루트에서 모든 NULL 리프까지의 경로에 있는 검정 노드 수가 동일
+
+새 노드를 삽입하면 (항상 **빨강**으로 색칠) 위반이 발생할 수 있으며, 재색칠(Recoloring)과 회전(Rotation)으로 수정합니다.
+
+#### Case 1: 삼촌(Uncle)이 빨강 (재색칠)
+
+부모와 삼촌이 모두 빨강이면 단순히 재색칠합니다:
+
+```
+Before:                       After recolor:
+
+      G(B)                         G(R) ← may violate at grandparent
+     /   \                        /   \
+   P(R)  U(R)                  P(B)  U(B)
+   /                           /
+  N(R) ← new                 N(R)
+
+Recolor parent and uncle to black, grandparent to red.
+Then recurse upward from grandparent.
+```
+
+#### Case 2: 삼촌이 검정, 삼각형(Triangle) 구조 (회전하여 직선으로 변환)
+
+새 노드, 부모, 조부모가 "삼각형"을 이루는 경우 (예: 오른쪽 자식의 왼쪽 자식):
+
+```
+Before (triangle):            After rotate at P:
+
+      G(B)                         G(B)
+     /   \                        /   \
+   P(R)  U(B)                  N(R)  U(B)
+     \                         /
+     N(R)                    P(R)
+
+Left-rotate at P to convert triangle into a line.
+Then apply Case 3.
+```
+
+#### Case 3: 삼촌이 검정, 직선(Line) 구조 (회전 + 재색칠)
+
+새 노드, 부모, 조부모가 "직선"을 이루는 경우 (예: 왼쪽-왼쪽):
+
+```
+Before (line):                After rotate at G + recolor:
+
+      G(B)                         P(B)
+     /   \                        /   \
+   P(R)  U(B)                  N(R)  G(R)
+   /                                   \
+  N(R)                                 U(B)
+
+Right-rotate at G, swap colors of P and G.
+```
+
+#### 4가지 회전 패턴 요약
+
+```
+┌────────────────────┬──────────────────────────────────────────────┐
+│ 구성               │ 동작                                         │
+├────────────────────┼──────────────────────────────────────────────┤
+│ Uncle Red          │ P, U → 검정, G → 빨강으로 재색칠, 위로 재귀  │
+│ Uncle Black, LL    │ G 우회전, P/G 색상 교환                      │
+│ Uncle Black, RR    │ G 좌회전, P/G 색상 교환                      │
+│ Uncle Black, LR    │ P 좌회전 → LL 변환, LL 수정                  │
+│ Uncle Black, RL    │ P 우회전 → RR 변환, RR 수정                  │
+└────────────────────┴──────────────────────────────────────────────┘
+```
+
+### 6.3 단계별 AVL 삽입 추적
+
+빈 AVL 트리에 **[10, 20, 30, 25, 28]** 순서로 삽입:
+
+```
+Step 1: Insert 10              Step 2: Insert 20
+
+    10                             10
+                                     \
+                                     20
+
+Step 3: Insert 30 → RR violation at 10 (bf=-2), left rotate:
+
+    10  (bf=-2)                    20
+      \                           /  \
+      20           →            10    30
+        \
+        30
+
+Step 4: Insert 25 → RL violation at 30 (bf=+1→ok), tree is balanced:
+
+        20
+       /  \
+     10    30
+           /
+         25
+
+Step 5: Insert 28 → RL at 30: right-rotate 25/28, then left-rotate 30/28:
+
+        20                         20                         20
+       /  \                       /  \                       /  \
+     10    30  (bf=+2)  →      10    30         →         10    28
+           /                         /                         /  \
+         25 (bf=-1)               28                         25    30
+           \                     /
+           28                  25
+```
+
+### 6.4 Python 트리 시각화 코드
+
+```python
+class AVLNode:
+    """AVL tree node with height tracking."""
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.height = 1  # New nodes start at height 1
+
+
+def print_tree(node, prefix="", is_left=True):
+    """
+    Print a binary tree in a readable ASCII format.
+
+    Why this approach: Recursive prefix-building produces clean,
+    indented output that clearly shows parent-child relationships.
+    Each node displays its key and balance factor (for AVL trees).
+    """
+    if node is None:
+        return
+
+    # Right subtree first (appears on top in the output)
+    print_tree(node.right, prefix + ("│   " if is_left else "    "), False)
+
+    # Current node
+    connector = "└── " if is_left else "┌── "
+    bf = get_balance(node)
+    print(f"{prefix}{connector}{node.key} (bf={bf:+d})")
+
+    # Left subtree
+    print_tree(node.left, prefix + ("    " if is_left else "│   "), True)
+
+
+def height(node):
+    return node.height if node else 0
+
+
+def get_balance(node):
+    """Balance factor = left height - right height."""
+    if not node:
+        return 0
+    return height(node.left) - height(node.right)
+
+
+def right_rotate(y):
+    """
+    Right rotation (LL case fix).
+
+         y              x
+        / \            / \
+       x   C   →     A   y
+      / \                / \
+     A   B              B   C
+    """
+    x = y.left
+    B = x.right
+
+    x.right = y
+    y.left = B
+
+    y.height = 1 + max(height(y.left), height(y.right))
+    x.height = 1 + max(height(x.left), height(x.right))
+
+    return x
+
+
+def left_rotate(x):
+    """
+    Left rotation (RR case fix).
+
+       x                y
+      / \              / \
+     A   y     →      x   C
+        / \          / \
+       B   C        A   B
+    """
+    y = x.right
+    B = y.left
+
+    y.left = x
+    x.right = B
+
+    x.height = 1 + max(height(x.left), height(x.right))
+    y.height = 1 + max(height(y.left), height(y.right))
+
+    return y
+
+
+def avl_insert(node, key):
+    """
+    Insert a key into an AVL tree and rebalance.
+
+    The function returns the new root of the subtree after
+    insertion and any necessary rotations.
+    """
+    # Standard BST insert
+    if not node:
+        return AVLNode(key)
+
+    if key < node.key:
+        node.left = avl_insert(node.left, key)
+    elif key > node.key:
+        node.right = avl_insert(node.right, key)
+    else:
+        return node  # Duplicate keys not allowed
+
+    # Update height
+    node.height = 1 + max(height(node.left), height(node.right))
+
+    # Check balance
+    bf = get_balance(node)
+
+    # LL Case: left-heavy, inserted into left-left
+    if bf > 1 and key < node.left.key:
+        return right_rotate(node)
+
+    # RR Case: right-heavy, inserted into right-right
+    if bf < -1 and key > node.right.key:
+        return left_rotate(node)
+
+    # LR Case: left-heavy, inserted into left-right
+    if bf > 1 and key > node.left.key:
+        node.left = left_rotate(node.left)
+        return right_rotate(node)
+
+    # RL Case: right-heavy, inserted into right-left
+    if bf < -1 and key < node.right.key:
+        node.right = right_rotate(node.right)
+        return left_rotate(node)
+
+    return node
+
+
+# Demo: build AVL tree and visualize
+if __name__ == "__main__":
+    root = None
+    for key in [10, 20, 30, 25, 28, 5, 3]:
+        root = avl_insert(root, key)
+        print(f"\n--- After inserting {key} ---")
+        print_tree(root)
+```
+
+### 6.5 AVL vs Red-Black 트리 — 언제 어떤 것을 사용할까
+
+```
+┌────────────────────┬──────────────────────┬──────────────────────┐
+│ 기준               │ AVL 트리             │ Red-Black 트리       │
+├────────────────────┼──────────────────────┼──────────────────────┤
+│ 균형 엄격도        │ 엄격 (bf ≤ 1)        │ 느슨 (≤ 2× 깊이)    │
+│ 탐색 속도          │ 더 빠름 (높이 낮음)   │ 약간 느림            │
+│ 삽입/삭제          │ 느림 (회전 많음)      │ 빠름 (회전 적음)     │
+│ 삽입당 회전 수     │ 최대 O(log n)        │ 최대 2               │
+│ 삭제당 회전 수     │ 최대 O(log n)        │ 최대 3               │
+│ 노드당 메모리      │ 높이(Height, int)    │ 색상(Color, 1 bit)   │
+│ 적합한 용도        │ 읽기 위주 워크로드    │ 쓰기 위주 워크로드   │
+│ 실제 사용          │ 데이터베이스, 검색    │ std::map, TreeMap    │
+└────────────────────┴──────────────────────┴──────────────────────┘
+
+경험 법칙:
+- 검색이 주된 작업이라면 → AVL 트리
+  (엄격한 균형 = 낮은 트리 = 빠른 검색)
+- 삽입/삭제가 빈번하다면 → Red-Black 트리
+  (수정당 회전이 적어 쓰기 성능이 우수)
+- 대부분의 표준 라이브러리(C++ std::map, Java TreeMap)는
+  Red-Black 트리를 사용합니다. 범용적으로 읽기와 쓰기가
+  혼합되며, 회전이 적어 구현이 간단하기 때문입니다.
+```
+
+---
+
+## 7. 연습 문제
 
 ### 문제 1: 최소 공통 조상 (LCA)
 

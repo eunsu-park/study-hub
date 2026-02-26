@@ -664,3 +664,161 @@ test_questions = [
 ### 추가 자료
 - [BIG-bench](https://github.com/google/BIG-bench)
 - [Chain-of-Thought Hub](https://github.com/FranxYao/chain-of-thought-hub)
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 지표 선택과 창발 착시(Emergence Mirage)
+
+Schaeffer et al. (2023)은 창발적 능력이 지표 선택의 부산물일 수 있다고 주장합니다. 증가하는 컴퓨트 규모에 따라 다자리(multi-digit) 덧셈으로 평가받는 모델을 생각해보세요.
+
+1. **정확도(Accuracy)** (완전 일치)를 지표로 사용하면 왜 "급격한 전환(phase transition)"처럼 보이는지 설명하세요.
+2. **토큰 수준 정확도(Token-level accuracy)** (자릿수별 정확도)를 사용하면 왜 부드러운 곡선이 나타나는지 설명하세요.
+3. 어떤 지표를 선호해야 하며, 각 지표는 어떤 맥락에서 적절할 수 있나요?
+
+<details>
+<summary>정답 보기</summary>
+
+**파트 1: 정확도가 급격한 전환을 만드는 이유**
+
+정확도(완전 일치)는 임계값 지표입니다: 전체 답이 맞으면(1) 또는 틀리면(0)입니다. 모델이 5자리 중 2자리를 맞추다가 4자리를 맞추게 되더라도 정확도 점수는 여전히 0입니다. 모든 자릿수를 맞추는 임계값을 넘어야만 정확도가 1로 급등합니다. 이렇게 점진적 향상을 가리기 때문에 갑작스러운 "창발"처럼 보입니다.
+
+**파트 2: 토큰 수준 정확도가 부드러운 이유**
+
+토큰 수준 정확도는 부분적 진전을 반영합니다: 5자리 중 3자리를 정확히 예측하면 0.6점을 받습니다. 모델이 규모가 커지면서 점점 더 많은 자릿수를 맞추면 이 지표는 완만하게 상승하여 내재된 점진적 향상을 드러냅니다.
+
+**파트 3: 어떤 지표를 선호할 것인가**
+
+- **정확도**는 태스크가 완전한 정확성을 요구할 때 적절합니다(예: 한 자릿수라도 틀린 계산기는 쓸모없음). 능력이 실용적으로 사용 가능한지를 올바르게 반영합니다.
+- **토큰 수준 정확도**는 모델의 내부 학습 궤적을 이해하고 완전한 정확도가 언제 나타날지 예측하는 데 더 적합합니다.
+- **창발 메커니즘 연구**를 위해서는 연속 지표가 선호됩니다. **배포 결정**을 위해서는 태스크 수준 정확도가 더 의미 있습니다.
+
+어떤 지표도 "틀리지" 않습니다 — 서로 다른 질문에 답할 뿐입니다.
+
+</details>
+
+---
+
+### 연습 문제 2: Self-Consistency 구현
+
+아래 `self_consistency` 함수를 완성하세요. 이 함수는 수학 문제에 대해 Chain-of-Thought 프롬프팅을 사용하여 `n_samples`개의 응답을 생성하고, 각 응답에서 숫자 최종 답을 추출한 후, 가장 많이 나온 답을 반환해야 합니다.
+
+```python
+import re
+from collections import Counter
+
+def extract_numeric_answer(response: str) -> str:
+    """응답에서 마지막으로 언급된 숫자를 추출합니다."""
+    numbers = re.findall(r'\b\d+(?:\.\d+)?\b', response)
+    return numbers[-1] if numbers else "unknown"
+
+def self_consistency(question: str, model, n_samples: int = 5, temperature: float = 0.7) -> str:
+    """
+    TODO: Self-consistency 디코딩을 구현하세요.
+    1. 질문에 대한 CoT 프롬프트 구성
+    2. 모델에서 n_samples개의 응답 생성
+    3. 각 응답에서 숫자 답 추출
+    4. 다수결 투표 답 반환
+    """
+    # 여기에 구현하세요
+    pass
+```
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import re
+from collections import Counter
+
+def extract_numeric_answer(response: str) -> str:
+    """응답에서 마지막으로 언급된 숫자를 추출합니다."""
+    numbers = re.findall(r'\b\d+(?:\.\d+)?\b', response)
+    return numbers[-1] if numbers else "unknown"
+
+def self_consistency(question: str, model, n_samples: int = 5, temperature: float = 0.7) -> str:
+    """
+    Self-consistency 디코딩:
+    여러 CoT 경로를 생성하고 다수결 투표를 수행합니다.
+    """
+    # 1단계: CoT 프롬프트 구성
+    cot_prompt = f"Q: {question}\nA: Let's think step by step."
+
+    # 2단계: 여러 응답 생성
+    answers = []
+    for _ in range(n_samples):
+        response = model.generate(cot_prompt, temperature=temperature)
+        answer = extract_numeric_answer(response)
+        answers.append(answer)
+
+    # 3단계: 다수결 투표
+    counter = Counter(answers)
+    majority_answer = counter.most_common(1)[0][0]
+
+    return majority_answer
+
+# 왜 작동하는가:
+# - 잘못된 추론 경로는 다양한 오답을 생성하는 경향이 있음
+# - 올바른 추론 경로는 같은 정답으로 수렴하는 경향이 있음
+# - 다수결 투표로 개별적인 오류를 걸러냄
+```
+
+</details>
+
+---
+
+### 연습 문제 3: 능력 이끌어내기(Capability Elicitation) 실험 설계
+
+**역할 부여(Role assignment, 페르소나 프롬프팅)**가 논리 퍼즐에서 모델의 정확도를 향상시키는지 테스트하는 실험을 설계하세요. 다음을 명시하세요:
+
+1. 독립 변수(조작하는 것)
+2. 종속 변수(측정하는 것)
+3. 통제 조건과 최소 두 가지 처치 조건
+4. 통제해야 할 잠재적 교란 변수(confound)
+
+<details>
+<summary>정답 보기</summary>
+
+**실험 설계:**
+
+**1. 독립 변수:** 시스템 프롬프트에서 모델에 부여하는 역할/페르소나.
+
+**2. 종속 변수:** 표준화된 논리 퍼즐 세트(예: 공개된 논리 벤치마크의 50문제)에 대한 정확도(% 정확).
+
+**3. 조건:**
+- **통제(Control):** 페르소나 없음 — 단순 프롬프트: `"Solve the following logic puzzle: {puzzle}"`
+- **처치 A (전문가):** `"You are a world-class logician with 30 years of experience. Solve the following logic puzzle: {puzzle}"`
+- **처치 B (교사):** `"You are a patient teacher explaining logical reasoning. Solve the following logic puzzle step by step: {puzzle}"`
+
+**4. 잠재적 교란 변수:**
+- **온도(Temperature)와 샘플링:** 다른 프롬프트가 샘플링 무작위성과 다르게 상호작용할 수 있습니다. `temperature=0` (탐욕적 디코딩)으로 통제하거나, 동일한 온도로 여러 시드를 사용하여 평균을 냅니다.
+- **문제 순서 효과:** 위치 편향을 방지하기 위해 조건 간 퍼즐 순서를 무작위화합니다.
+- **CoT vs CoT 없음:** "교사" 프롬프트는 암묵적으로 단계별 추론을 장려합니다. 페르소나 효과와 CoT 효과를 분리하려면 모든 조건에서 "step by step" 표현을 동일하게 포함하거나 제외해야 합니다.
+
+</details>
+
+---
+
+### 연습 문제 4: Tree of Thoughts vs Chain-of-Thought
+
+CoT (Chain-of-Thought)와 ToT (Tree of Thoughts)를 다음 차원에서 비교하세요. 각 셀에 트레이드오프를 간단히 설명하세요.
+
+| 차원 | CoT | ToT |
+|------|-----|-----|
+| 탐색 전략 | ? | ? |
+| 계산 비용 | ? | ? |
+| 적합한 문제 유형 | ? | ? |
+| 실패 유형 | ? | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 차원 | CoT | ToT |
+|------|-----|-----|
+| **탐색 전략** | 단일 선형 경로 — 탐욕적 좌→우 생성. 빠르지만 잠재적으로 잘못된 방향에 일찍 확정됨. | 트리 구조 BFS/DFS — 여러 분기를 탐색하고 역추적. 더 철저하지만 많은 부분 상태를 생성하고 평가해야 함. |
+| **계산 비용** | 낮음 — 단일 응답 길이에 비례. 일반적으로 1× 비용. | 높음 — 분기 계수 × 깊이 × 평가 비용에 비례. CoT보다 10-100× 더 비쌀 수 있음. |
+| **적합한 문제 유형** | 각 단계가 자연스럽게 이전 단계에서 따르는 순차적 추론 태스크 (산술, 간단한 QA). | 초기 결정이 이후 옵션을 강하게 제약하고 역추적이 가치 있는 조합적 또는 계획 문제 (퍼즐, 다단계 계획, 코드 디버깅). |
+| **실패 유형** | **연쇄 오류(Cascading error)** — 초기의 한 가지 잘못된 단계가 전체 체인에 전파되어 확신에 찬 오답을 생성. | **평가 병목(Evaluation bottleneck)** — 품질이 노드 평가 함수의 정확도에 달려 있음. 빈약한 평가자는 올바른 분기를 잘못 가지치기하거나 잘못된 분기에 과투자함. |
+
+</details>

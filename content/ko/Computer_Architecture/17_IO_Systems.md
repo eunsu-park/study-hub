@@ -1,14 +1,27 @@
 # 입출력 시스템
 
-## 개요
-
-입출력(I/O) 시스템은 CPU와 외부 장치(키보드, 디스크, 네트워크 등) 간의 데이터 전송을 담당합니다. I/O 시스템의 설계는 시스템 전체 성능에 큰 영향을 미치며, 폴링, 인터럽트, DMA 등 다양한 방식으로 구현됩니다. 이 레슨에서는 I/O 시스템의 구조와 동작 원리를 학습합니다.
+**이전**: [가상 메모리](./16_Virtual_Memory.md) | **다음**: [병렬 처리와 멀티코어](./18_Parallel_Processing_Multicore.md)
 
 **난이도**: ⭐⭐⭐
 
 **선수 지식**: CPU 구조, 메모리 시스템
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. CPU, 메모리, I/O 장치를 연결하는 버스(bus) 아키텍처를 설명할 수 있다
+2. 프로그램 I/O(폴링), 인터럽트 기반 I/O, DMA를 비교할 수 있다
+3. DMA가 CPU 개입 없이 데이터를 전송하는 방식을 설명할 수 있다
+4. 공유 버스에서 포인트-투-포인트 인터커넥트(PCIe)로의 발전 과정을 설명할 수 있다
+5. 메모리 맵 I/O(Memory-Mapped I/O)와 포트 맵 I/O(Port-Mapped I/O)를 설명할 수 있다
+6. I/O 병목 현상과 시스템 성능에 미치는 영향을 분석할 수 있다
+
+---
+
+외부 세계와 통신할 수 없는 컴퓨터는 쓸모가 없다. I/O 시스템은 CPU를 디스크, 네트워크, 디스플레이, 키보드와 연결하며, 그 설계에 따라 SSD가 빠르게 느껴지는지, 네트워크 카드가 기가비트 트래픽을 감당할 수 있는지, GPU가 디스플레이에 충분한 프레임을 공급할 수 있는지가 결정된다. I/O는 종종 시스템 성능의 진정한 병목이 된다.
 
 ## 목차
 
@@ -228,8 +241,15 @@ I/O 장치 컨트롤러의 레지스터:
 #define READY_BIT   0x01   // Ready 비트 마스크
 
 // 문자 출력 (폴링)
+// 폴링(Polling)이 낭비임에도 여기서 사용되는 이유: UART처럼 CPU 속도에 근접한
+// 고속 장치에서는 Ready 비트가 거의 즉시 설정된다. 루프 본문이 몇 번만 실행되므로,
+// 인터럽트 설정이나 컨텍스트 스위치(context switch) 없는 폴링의 단순함이
+// 짧은 대기 비용보다 더 유리하다.
 void putchar_polling(char c) {
     // 장치가 준비될 때까지 대기 (Busy Wait)
+    // 루프에서 READY_BIT을 확인하는 이유: UART 송신 버퍼가 아직 이전 문자를
+    // 보유하고 있을 수 있다. 버퍼가 비워지기 전에 쓰면 이전 데이터를 덮어써
+    // 데이터가 손실된다.
     while ((inb(STATUS_REG) & READY_BIT) == 0) {
         // CPU가 계속 루프를 돌며 확인
         // 아무 일도 하지 못함
@@ -417,6 +437,10 @@ IDT Entry 구조 (64비트):
 #define KEYBOARD_PORT   0x60
 
 // 키보드 버퍼
+// volatile이 필요한 이유: ISR과 메인 코드가 비동기적으로 실행된다 — ISR은
+// 인터럽트 컨텍스트에서 buffer_head를 수정하고, getchar_interrupt는 일반
+// 컨텍스트에서 읽는다. volatile 없이는 컴파일러가 buffer_head를 레지스터에
+// 캐싱하여 ISR의 업데이트를 영원히 감지하지 못해 무한 대기 루프에 빠진다.
 volatile char keyboard_buffer[256];
 volatile int buffer_head = 0;
 volatile int buffer_tail = 0;
@@ -424,6 +448,8 @@ volatile int buffer_tail = 0;
 // 인터럽트 핸들러 (ISR)
 void keyboard_handler(void) {
     // 1. 스캔코드 읽기
+    // 즉시 읽어야 하는 이유: 키보드 컨트롤러는 스캔코드를 1개만 보관한다.
+    // 읽기를 지연하면 다음 키 입력이 현재 값을 덮어써 입력이 유실된다.
     unsigned char scancode = inb(KEYBOARD_PORT);
 
     // 2. 버퍼에 저장
@@ -431,6 +457,9 @@ void keyboard_handler(void) {
     buffer_head = (buffer_head + 1) % 256;
 
     // 3. EOI 전송 (인터럽트 완료 알림)
+    // EOI가 필수인 이유: PIC(Programmable Interrupt Controller)는 EOI를 받을
+    // 때까지 해당 IRQ 이하 우선순위의 모든 인터럽트를 차단한다. EOI를 빠뜨리면
+    // 키보드(및 동일 우선순위 그룹의 타이머 등)가 완전히 멈춘다.
     outb(0x20, 0x20);  // PIC에 EOI
 }
 
@@ -664,10 +693,18 @@ void init_keyboard(void) {
 #define DMA_MASK_REG    0x0A
 
 // DMA 전송 설정
+// 이 다단계 레지스터 설정이 필요한 이유: 레거시 ISA DMA 컨트롤러(8237A)는
+// 8비트 I/O 포트로 16/24비트 주소와 카운트를 프로그래밍한다. 각 16비트 값을
+// 하위 바이트, 상위 바이트 순서로 두 번 연속 써야 하며, 플립플롭(flip-flop)으로
+// 동기화한다. 이 번거로운 프로토콜은 8비트 IBM PC 버스의 유산이며,
+// 현대 DMA(버스 마스터링 PCIe)는 이를 완전히 회피한다.
 void setup_dma_read(void* buffer, size_t count) {
     uint32_t addr = (uint32_t)buffer;
 
     // 1. DMA 채널 마스크 (비활성화)
+    // 먼저 마스크하는 이유: 반만 설정된 채널에서 DMA 컨트롤러가 동작하는 것을
+    // 방지. 마스크 없이는 잔존 DREQ 신호가 새 주소를 쓰는 도중에 이전 주소로
+    // 전송을 시작할 수 있다.
     outb(DMA_MASK_REG, DMA_CHANNEL | 0x04);
 
     // 2. 플립플롭 리셋
@@ -886,6 +923,12 @@ void dma_complete_handler(void) {
 │  - 현대 PC에서도 대부분의 장치가 MMIO 사용                   │
 │                                                             │
 │  예시:                                                      │
+│  // volatile이 필요한 이유: 없으면 컴파일러가 반복 읽기를    │
+│  // 최적화(레지스터에 캐싱)하거나 쓰기를 재배열/제거할 수    │
+│  // 있다. 하지만 I/O 레지스터는 부작용(side effect)이 있어: │
+│  // 읽기가 상태 비트를 클리어하고, 쓰기가 하드웨어 동작을   │
+│  // 트리거한다. volatile은 모든 접근이 실제 메모리 맵       │
+│  // 주소(memory-mapped address)를 거치도록 강제한다.        │
 │  volatile uint32_t* reg = (uint32_t*)0xFE200000;           │
 │  *reg = value;         // I/O 레지스터에 쓰기               │
 │  value = *reg;         // I/O 레지스터에서 읽기             │

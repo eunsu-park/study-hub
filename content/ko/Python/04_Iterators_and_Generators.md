@@ -1,5 +1,24 @@
 # 이터레이터와 제너레이터 (Iterators & Generators)
 
+**이전**: [컨텍스트 매니저](./03_Context_Managers.md) | **다음**: [클로저와 스코프](./05_Closures_and_Scope.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 이터러블(iterable)과 이터레이터(iterator)를 구분하고 `__iter__` / `__next__` 프로토콜을 설명한다
+2. `for`문이 내부적으로 `iter()`와 `next()`를 사용하여 `StopIteration`을 처리하는 과정을 추적한다
+3. 재사용 가능성을 위해 이터러블과 이터레이터 객체를 분리하여 커스텀 이터레이터 클래스를 구현한다
+4. `yield`를 사용하는 제너레이터 함수를 작성하고 지연 평가(lazy evaluation) 동작을 설명한다
+5. 메모리 효율성 측면에서 제너레이터 표현식과 리스트 컴프리헨션을 비교한다
+6. 위임과 재귀적 제너레이터(예: 중첩 구조 평탄화)에 `yield from`을 적용한다
+7. 제너레이터 고급 기능인 `send()`, `throw()`, `close()`를 사용한다
+8. `itertools` 함수(`chain`, `groupby`, `islice`, `product`, `combinations`)를 활용하여 효율적인 데이터 파이프라인을 구축한다
+
+---
+
+백만 행짜리 CSV 파일을 처리할 때 백만 개의 행을 모두 메모리에 올릴 필요는 없습니다. 이터레이터(iterator)와 제너레이터(generator)는 이 문제에 대한 Python의 해답으로, 값을 필요할 때마다 하나씩 생성하여 데이터 크기에 관계없이 메모리 사용량을 일정하게 유지합니다. 로그 파일을 한 줄씩 읽는 것부터 데이터 파이프라인에서 변환 단계를 연결하는 것까지, 이터레이터 프로토콜은 시퀀스를 다루는 Python의 우아함과 효율성의 근간을 이룹니다.
+
 ## 1. 이터러블과 이터레이터
 
 ### 개념 구분
@@ -541,4 +560,4 @@ print(list(islice(primes(), 10)))
 
 ## 다음 단계
 
-[05_Closures_and_Scope.md](./05_Closures_and_Scope.md)에서 변수 스코프와 클로저를 배워봅시다!
+[클로저와 스코프 (Closures & Scope)](./05_Closures_and_Scope.md)에서 변수 스코프와 클로저를 배워봅시다!

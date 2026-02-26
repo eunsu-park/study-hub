@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the historical significance of LeNet-5 and describe the architectural innovations it introduced to CNN design.
+2. Calculate the output spatial dimensions of a convolutional layer given input size, kernel size, padding, and stride.
+3. Describe the role of average pooling (subsampling) in LeNet-5 and explain how it reduces spatial resolution.
+4. Implement LeNet-5 from scratch in PyTorch, correctly specifying each layer's parameters and activation functions.
+5. Train LeNet-5 on the MNIST dataset and evaluate classification performance using accuracy and loss metrics.
+6. Analyze the learned convolutional filters and feature maps to develop intuition about what each layer represents.
+
+---
+
 ## Overview
 
 LeNet-5 is the first successful Convolutional Neural Network proposed by Yann LeCun in 1998. It showed excellent performance on handwritten digit recognition (MNIST) and laid the foundation for modern CNNs.

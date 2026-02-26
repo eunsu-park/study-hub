@@ -6,12 +6,15 @@
 
 **난이도**: ⭐⭐ (초급-중급)
 
-**학습 목표**:
-- `cv2.resize()`와 보간법(interpolation) 이해
-- 회전, 뒤집기 함수 사용
-- 어파인 변환 (warpAffine) 활용
-- 원근 변환 (warpPerspective) 활용
-- 문서 스캔/교정 예제 구현
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `cv2.resize()`와 보간법(interpolation) 이해
+2. 회전, 뒤집기 함수 사용
+3. 어파인 변환 (warpAffine) 활용
+4. 원근 변환 (warpPerspective) 활용
+5. 문서 스캔/교정 예제 구현
 
 ---
 
@@ -38,13 +41,15 @@ import cv2
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# 방법 1: 직접 크기 지정 (width, height 순서!)
+# dsize argument is (width, height) — the reverse of img.shape which is (height, width)
+# This is a common source of bugs: always double-check the axis order
 resized = cv2.resize(img, (640, 480))
 
-# 방법 2: 비율로 지정
-resized = cv2.resize(img, None, fx=0.5, fy=0.5)  # 50%로 축소
+# fx/fy are scale factors; passing dsize=None tells resize to compute size from them
+resized = cv2.resize(img, None, fx=0.5, fy=0.5)  # Reduce to 50%
 
-# 방법 3: 한 쪽 기준으로 비율 유지
+# Computing the height from ratio ensures the aspect ratio is maintained exactly
+# (integer rounding can introduce a 1px error, but this is usually acceptable)
 new_width = 800
 ratio = new_width / w
 new_height = int(h * ratio)
@@ -55,30 +60,30 @@ resized = cv2.resize(img, (new_width, new_height))
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       보간법 비교                               │
+│                       Interpolation Comparison                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   보간법                   특징                   사용 상황      │
+│   Method                   Features              Use Cases      │
 │   ───────────────────────────────────────────────────────────   │
-│   INTER_NEAREST           최근접 이웃            빠름, 저품질   │
-│   (최근접 보간)            블록 현상 발생         실시간 처리    │
+│   INTER_NEAREST           Nearest neighbor      Fast, low qual. │
+│   (Nearest interpolation) Blocky artifacts      Real-time proc. │
 │                                                                │
-│   INTER_LINEAR            선형 보간 (기본값)     균형 잡힌 선택 │
-│   (양선형 보간)            부드러운 결과          일반적 리사이즈│
+│   INTER_LINEAR            Linear (default)      Balanced choice │
+│   (Bilinear interpolation) Smooth results      General resizing │
 │                                                                │
-│   INTER_AREA              영역 보간              축소에 최적   │
-│   (영역 기반)              모아레 현상 방지       다운샘플링     │
+│   INTER_AREA              Area interpolation    Best for shrink │
+│   (Area-based)             Prevents moiré       Downsampling    │
 │                                                                │
-│   INTER_CUBIC             3차 보간               확대에 좋음   │
-│   (바이큐빅)               부드럽고 선명          품질 중시      │
+│   INTER_CUBIC             Cubic interpolation   Good for enlarg.│
+│   (Bicubic)                Smooth and sharp     Quality focus   │
 │                                                                │
-│   INTER_LANCZOS4          란초스 보간            최고 품질     │
-│   (8x8 이웃)               가장 선명              속도 느림     │
+│   INTER_LANCZOS4          Lanczos interpolation Best quality    │
+│   (8x8 neighbors)          Sharpest            Slow speed      │
 │                                                                │
-│   권장:                                                        │
-│   - 축소: INTER_AREA                                           │
-│   - 확대: INTER_CUBIC 또는 INTER_LANCZOS4                      │
-│   - 실시간: INTER_LINEAR 또는 INTER_NEAREST                    │
+│   Recommendations:                                              │
+│   - Shrinking: INTER_AREA                                       │
+│   - Enlarging: INTER_CUBIC or INTER_LANCZOS4                    │
+│   - Real-time: INTER_LINEAR or INTER_NEAREST                    │
 │                                                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -92,15 +97,16 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg')
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# 먼저 축소 후 확대하여 차이 비교
-small = cv2.resize(img, None, fx=0.1, fy=0.1)  # 10%로 축소
+# Shrink to 10% then scale back up to full size — this stress-tests each
+# interpolation method by forcing it to reconstruct information that was discarded
+small = cv2.resize(img, None, fx=0.1, fy=0.1)
 
 interpolations = [
-    ('NEAREST', cv2.INTER_NEAREST),
-    ('LINEAR', cv2.INTER_LINEAR),
-    ('AREA', cv2.INTER_AREA),
-    ('CUBIC', cv2.INTER_CUBIC),
-    ('LANCZOS4', cv2.INTER_LANCZOS4),
+    ('NEAREST', cv2.INTER_NEAREST),   # Blocky but fast — good for pixel art or masks
+    ('LINEAR', cv2.INTER_LINEAR),     # Default: smooth, fast, good general choice
+    ('AREA', cv2.INTER_AREA),         # Best for downscaling — averages pixel blocks
+    ('CUBIC', cv2.INTER_CUBIC),       # Better upscaling quality; uses 4x4 neighbors
+    ('LANCZOS4', cv2.INTER_LANCZOS4), # Best quality; uses 8x8 neighbors — slowest
 ]
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -127,7 +133,7 @@ plt.show()
 import cv2
 
 def resize_with_aspect_ratio(img, width=None, height=None, inter=cv2.INTER_AREA):
-    """비율을 유지하면서 리사이즈"""
+    """Resize while maintaining aspect ratio"""
     h, w = img.shape[:2]
 
     if width is None and height is None:
@@ -144,21 +150,21 @@ def resize_with_aspect_ratio(img, width=None, height=None, inter=cv2.INTER_AREA)
 
 
 def resize_to_fit(img, max_width, max_height, inter=cv2.INTER_AREA):
-    """최대 크기 내에 맞추면서 비율 유지"""
+    """Fit within maximum size while maintaining aspect ratio"""
     h, w = img.shape[:2]
 
     ratio_w = max_width / w
     ratio_h = max_height / h
     ratio = min(ratio_w, ratio_h)
 
-    if ratio >= 1:  # 이미 작으면 그대로
+    if ratio >= 1:  # Already small enough
         return img
 
     new_size = (int(w * ratio), int(h * ratio))
     return cv2.resize(img, new_size, interpolation=inter)
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('large_image.jpg')
 img_fit = resize_to_fit(img, 800, 600)
 img_width = resize_with_aspect_ratio(img, width=640)
@@ -172,19 +178,19 @@ img_width = resize_with_aspect_ratio(img, width=640)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        flip() 동작                              │
+│                        flip() Operation                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   flipCode = 1 (수평)     flipCode = 0 (수직)    flipCode = -1  │
+│   flipCode = 1 (horizontal)   flipCode = 0 (vertical)  flipCode = -1│
 │                                                                 │
-│   원본     결과            원본     결과          원본    결과   │
+│   Original  Result            Original  Result         Original Result│
 │   ┌───┐   ┌───┐           ┌───┐   ┌───┐         ┌───┐  ┌───┐  │
 │   │1 2│   │2 1│           │1 2│   │3 4│         │1 2│  │4 3│  │
 │   │3 4│   │4 3│           │3 4│   │1 2│         │3 4│  │2 1│  │
 │   └───┘   └───┘           └───┘   └───┘         └───┘  └───┘  │
 │                                                                 │
-│   좌우 반전              상하 반전              둘 다 반전      │
-│   (거울 효과)            (물에 비친 효과)       (180도 회전)    │
+│   Left-right flip         Top-bottom flip         Both flips   │
+│   (Mirror effect)         (Water reflection)      (180° rotation)│
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -194,20 +200,20 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# 수평 뒤집기 (좌우 반전)
+# Horizontal flip (left-right)
 flipped_h = cv2.flip(img, 1)
 
-# 수직 뒤집기 (상하 반전)
+# Vertical flip (top-bottom)
 flipped_v = cv2.flip(img, 0)
 
-# 양방향 뒤집기 (180도 회전과 동일)
+# Both directions (equivalent to 180° rotation)
 flipped_both = cv2.flip(img, -1)
 
-# NumPy로도 가능
+# Also possible with NumPy
 import numpy as np
-flipped_h_np = img[:, ::-1]      # 수평
-flipped_v_np = img[::-1, :]      # 수직
-flipped_both_np = img[::-1, ::-1]  # 양방향
+flipped_h_np = img[:, ::-1]      # Horizontal
+flipped_v_np = img[::-1, :]      # Vertical
+flipped_both_np = img[::-1, ::-1]  # Both
 ```
 
 ### cv2.rotate()
@@ -217,19 +223,19 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# 90도 시계방향
+# 90 degrees clockwise
 rotated_90_cw = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
 
-# 90도 반시계방향
+# 90 degrees counter-clockwise
 rotated_90_ccw = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-# 180도
+# 180 degrees
 rotated_180 = cv2.rotate(img, cv2.ROTATE_180)
 
-# 이미지 크기 변화 확인
-print(f"원본: {img.shape}")           # (H, W, C)
-print(f"90도: {rotated_90_cw.shape}") # (W, H, C) - 가로세로 교환
-print(f"180도: {rotated_180.shape}")  # (H, W, C) - 동일
+# Check image size changes
+print(f"Original: {img.shape}")           # (H, W, C)
+print(f"90°: {rotated_90_cw.shape}") # (W, H, C) - swapped
+print(f"180°: {rotated_180.shape}")  # (H, W, C) - same
 ```
 
 ### 임의 각도 회전
@@ -238,36 +244,36 @@ print(f"180도: {rotated_180.shape}")  # (H, W, C) - 동일
 import cv2
 
 def rotate_image(img, angle, center=None, scale=1.0):
-    """임의 각도로 이미지 회전"""
+    """Rotate image by arbitrary angle"""
     h, w = img.shape[:2]
 
     if center is None:
         center = (w // 2, h // 2)
 
-    # 회전 행렬 생성
+    # Create rotation matrix
     M = cv2.getRotationMatrix2D(center, angle, scale)
 
-    # 회전 적용
+    # Apply rotation
     rotated = cv2.warpAffine(img, M, (w, h))
 
     return rotated
 
 
 def rotate_image_full(img, angle):
-    """이미지가 잘리지 않도록 회전 (캔버스 확장)"""
+    """Rotate image without cropping (expand canvas)"""
     h, w = img.shape[:2]
     center = (w // 2, h // 2)
 
-    # 회전 행렬
+    # Rotation matrix
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
 
-    # 회전 후 새 경계 계산
+    # Calculate new bounds after rotation
     cos = abs(M[0, 0])
     sin = abs(M[0, 1])
     new_w = int(h * sin + w * cos)
     new_h = int(h * cos + w * sin)
 
-    # 이동량 조정
+    # Adjust translation
     M[0, 2] += (new_w - w) / 2
     M[1, 2] += (new_h - h) / 2
 
@@ -276,32 +282,35 @@ def rotate_image_full(img, angle):
     return rotated
 
 
-# 사용 예
+# Usage examples
 img = cv2.imread('image.jpg')
-rotated_30 = rotate_image(img, 30)       # 30도 회전 (일부 잘림)
-rotated_45_full = rotate_image_full(img, 45)  # 45도 회전 (전체 보존)
+rotated_30 = rotate_image(img, 30)       # 30° rotation (partially cropped)
+rotated_45_full = rotate_image_full(img, 45)  # 45° rotation (fully preserved)
 ```
 
 ---
 
 ## 3. 어파인 변환 - warpAffine()
 
+어파인 변환(Affine Transformation)은 카메라 기울기 보정, 이미지 스티칭 전 정렬, 객체 포즈 정규화에 핵심적으로 사용됩니다. 핵심 개념은 회전, 스케일, 이동, 전단(Shear)의 어떠한 조합도 단일 2×3 행렬 곱셈으로 표현할 수 있다는 것입니다. 따라서 여러 변환을 합성할 때는 단순히 행렬을 곱하면 되고, 변환을 하나씩 순서대로 적용할 때의 정밀도 손실도 없습니다.
+
 ### 어파인 변환이란?
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      어파인 변환                                 │
+│                      Affine Transformation                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   어파인 변환은 직선을 직선으로, 평행선을 평행선으로 유지하는 변환    │
+│   Affine transformation preserves lines as lines and parallel   │
+│   lines as parallel lines                                       │
 │                                                                 │
-│   포함되는 변환:                                                 │
-│   - 이동 (Translation)                                          │
-│   - 회전 (Rotation)                                             │
-│   - 스케일 (Scale)                                              │
-│   - 전단 (Shear)                                                │
+│   Included transformations:                                     │
+│   - Translation                                                 │
+│   - Rotation                                                    │
+│   - Scale                                                       │
+│   - Shear                                                       │
 │                                                                 │
-│   변환 행렬 (2x3):                                               │
+│   Transformation matrix (2x3):                                  │
 │   ┌         ┐   ┌                    ┐                         │
 │   │ a  b  tx│   │ scale*cos  -sin  tx│                         │
 │   │ c  d  ty│ = │ sin   scale*cos  ty│                         │
@@ -314,6 +323,8 @@ rotated_45_full = rotate_image_full(img, 45)  # 45도 회전 (전체 보존)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+행렬의 `[a, b; c, d]` 부분은 회전과 스케일을 인코딩합니다. 순수 회전(각도 θ)의 경우 `a=cos θ, b=-sin θ, c=sin θ, d=cos θ`입니다. `[tx, ty]` 열은 이동 벡터로, 선형 변환이 적용된 후 이미지를 이동시킵니다. 그래서 `getRotationMatrix2D`가 2×3 행렬을 반환하는 것입니다. 즉, 회전과 이동을 하나의 단계로 합칩니다.
+
 ### 이동 (Translation)
 
 ```python
@@ -323,13 +334,16 @@ import numpy as np
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# 이동 행렬: x방향 100, y방향 50 이동
+# Identity (a=d=1, b=c=0) + pure translation: the simplest affine transform
+# tx, ty move the image right/down; negative values move it left/up
 tx, ty = 100, 50
 M = np.float32([
     [1, 0, tx],
     [0, 1, ty]
 ])
 
+# Output size (w, h) must be specified explicitly — pixels shifted outside
+# this canvas are simply discarded (no automatic padding)
 translated = cv2.warpAffine(img, M, (w, h))
 
 cv2.imshow('Original', img)
@@ -346,13 +360,16 @@ import cv2
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# getRotationMatrix2D(center, angle, scale)
 center = (w // 2, h // 2)
-angle = 45  # 반시계방향 45도
-scale = 0.7  # 70% 크기
+angle = 45   # Positive = counter-clockwise (OpenCV convention)
+scale = 0.7  # Combining scale here avoids a separate resize call
 
+# getRotationMatrix2D builds the 2x3 matrix automatically, placing center at origin,
+# applying rotation+scale, then translating back — saves manual matrix construction
 M = cv2.getRotationMatrix2D(center, angle, scale)
 
+# Keeping (w, h) as output size means corners may be cropped; use rotate_image_full
+# (below) when you need the entire rotated image to remain visible
 rotated = cv2.warpAffine(img, M, (w, h))
 ```
 
@@ -365,7 +382,7 @@ import numpy as np
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# 수평 전단
+# Horizontal shear
 shear_x = 0.3
 M_shear_x = np.float32([
     [1, shear_x, 0],
@@ -373,7 +390,7 @@ M_shear_x = np.float32([
 ])
 sheared_x = cv2.warpAffine(img, M_shear_x, (int(w + h * shear_x), h))
 
-# 수직 전단
+# Vertical shear
 shear_y = 0.3
 M_shear_y = np.float32([
     [1, 0, 0],
@@ -391,27 +408,27 @@ import numpy as np
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# 원본의 3점
+# 3 points from source
 src_pts = np.float32([
-    [0, 0],      # 좌상단
-    [w-1, 0],    # 우상단
-    [0, h-1]     # 좌하단
+    [0, 0],      # Top-left
+    [w-1, 0],    # Top-right
+    [0, h-1]     # Bottom-left
 ])
 
-# 변환 후 3점
+# 3 points after transformation
 dst_pts = np.float32([
-    [50, 50],    # 좌상단
-    [w-50, 30],  # 우상단
-    [30, h-50]   # 좌하단
+    [50, 50],    # Top-left
+    [w-50, 30],  # Top-right
+    [30, h-50]   # Bottom-left
 ])
 
-# 어파인 변환 행렬 계산
+# Calculate affine transformation matrix
 M = cv2.getAffineTransform(src_pts, dst_pts)
 
-# 변환 적용
+# Apply transformation
 result = cv2.warpAffine(img, M, (w, h))
 
-# 점 표시
+# Mark points
 for pt in src_pts.astype(int):
     cv2.circle(img, tuple(pt), 5, (0, 0, 255), -1)
 
@@ -423,40 +440,45 @@ for pt in dst_pts.astype(int):
 
 ## 4. 원근 변환 - warpPerspective()
 
+어파인 변환이 평행선을 평행하게 유지하는 반면, 원근 변환(Perspective Transformation)은 카메라의 투영 기하학 전체를 모델링할 수 있습니다. 즉, 평행선이 소실점에서 수렴하는 현상까지 표현합니다. 기울어진 문서를 "펼치거나", 차선 감지를 위해 조감도(Bird's Eye View)를 생성하거나, 비스듬히 찍힌 이미지를 정면으로 정렬하는 데 사용하는 도구입니다.
+
 ### 원근 변환이란?
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       원근 변환                                  │
+│                       Perspective Transformation                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   원근 변환은 사다리꼴을 직사각형으로 (또는 그 반대로) 변환         │
-│   3D 공간에서 촬영된 이미지를 정면에서 본 것처럼 변환               │
+│   Perspective transformation converts trapezoid to rectangle    │
+│   (or vice versa). Transforms images captured in 3D space as if │
+│   viewed from the front                                         │
 │                                                                 │
-│   실제 활용:                                                     │
-│   - 문서 스캔 (기울어진 문서 → 정면)                             │
-│   - 차선 검출 (Bird's eye view)                                 │
-│   - QR 코드 인식                                                │
-│   - 이미지 교정                                                  │
+│   Practical applications:                                       │
+│   - Document scanning (tilted document → front view)            │
+│   - Lane detection (Bird's eye view)                            │
+│   - QR code recognition                                         │
+│   - Image rectification                                         │
 │                                                                 │
-│   변환 행렬 (3x3):                                               │
+│   Transformation matrix (3x3):                                  │
 │   ┌             ┐                                               │
 │   │ h11 h12 h13 │                                               │
 │   │ h21 h22 h23 │                                               │
 │   │ h31 h32 h33 │                                               │
 │   └             ┘                                               │
 │                                                                 │
-│   원본 (사다리꼴)          결과 (직사각형)                        │
+│   Source (trapezoid)           Result (rectangle)               │
 │   ┌─────────────┐         ┌─────────────────┐                   │
 │   │ ┌─────────┐ │         │ ┌─────────────┐ │                   │
 │   │ │         │ │   ───▶  │ │             │ │                   │
-│   │ │ 문서    │ │         │ │    문서     │ │                   │
+│   │ │ Document│ │         │ │   Document  │ │                   │
 │   │ │         │ │         │ │             │ │                   │
 │   │ └───────────┘│         │ └─────────────┘ │                   │
 │   └─────────────┘         └─────────────────┘                   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+3×3 단응사상(Homography) 행렬 H는 소스의 임의 점 (x, y)를 목적지 (x', y')로 동차 좌표계(Homogeneous Coordinates)를 통해 매핑합니다. [x', y', w'] = H·[x, y, 1] 이후 w'로 나눕니다. w'(세 번째 요소)로 나누는 연산이 어파인 변환에서는 불가능한 수렴선 효과를 가능하게 합니다. H는 자유도가 8개(9개 요소 중 스케일 1개 제외)이므로 정확히 4쌍의 점 대응이 필요합니다.
 
 ### 4점을 이용한 원근 변환
 
@@ -467,15 +489,17 @@ import numpy as np
 img = cv2.imread('tilted_document.jpg')
 h, w = img.shape[:2]
 
-# 원본의 4점 (문서의 네 꼭짓점)
+# Corners must be ordered consistently (e.g., TL, TR, BR, BL) to match dst_pts
+# A mislabelled point swaps two corners and produces a twisted "butterfly" warp
 src_pts = np.float32([
-    [100, 50],    # 좌상단
-    [500, 80],    # 우상단
-    [550, 400],   # 우하단
-    [50, 380]     # 좌하단
+    [100, 50],    # Top-left
+    [500, 80],    # Top-right
+    [550, 400],   # Bottom-right
+    [50, 380]     # Bottom-left
 ])
 
-# 변환 후 4점 (정면 직사각형)
+# dst_pts defines a perfect rectangle — this is what makes the output "front-facing"
+# The output size (500, 400) should match these rectangle dimensions
 dst_pts = np.float32([
     [0, 0],
     [500, 0],
@@ -483,13 +507,14 @@ dst_pts = np.float32([
     [0, 400]
 ])
 
-# 원근 변환 행렬 계산
+# getPerspectiveTransform solves for the 8 degrees of freedom using the 4 point pairs
 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
-# 변환 적용
+# warpPerspective applies the homography pixel-by-pixel using inverse mapping
+# (samples source coordinates for each destination pixel to avoid holes)
 result = cv2.warpPerspective(img, M, (500, 400))
 
-# 점 표시
+# Mark points
 img_with_pts = img.copy()
 for i, pt in enumerate(src_pts.astype(int)):
     cv2.circle(img_with_pts, tuple(pt), 10, (0, 0, 255), -1)
@@ -510,12 +535,12 @@ import numpy as np
 
 def get_birds_eye_view(img, src_pts, width, height):
     """
-    원근 변환으로 조감도(위에서 본 시점) 생성
+    Create bird's eye view using perspective transformation
 
     Parameters:
-    - img: 입력 이미지
-    - src_pts: 원본의 4점 (좌상, 우상, 우하, 좌하)
-    - width, height: 출력 이미지 크기
+    - img: Input image
+    - src_pts: 4 points from source (top-left, top-right, bottom-right, bottom-left)
+    - width, height: Output image size
     """
     dst_pts = np.float32([
         [0, 0],
@@ -530,16 +555,16 @@ def get_birds_eye_view(img, src_pts, width, height):
     return warped, M
 
 
-# 차선 검출용 예시
+# Example for lane detection
 img = cv2.imread('road.jpg')
 h, w = img.shape[:2]
 
-# 도로 영역 4점 (사다리꼴)
+# 4 points of road area (trapezoid)
 road_pts = np.float32([
-    [w * 0.4, h * 0.6],   # 좌상단
-    [w * 0.6, h * 0.6],   # 우상단
-    [w * 0.9, h * 0.95],  # 우하단
-    [w * 0.1, h * 0.95]   # 좌하단
+    [w * 0.4, h * 0.6],   # Top-left
+    [w * 0.6, h * 0.6],   # Top-right
+    [w * 0.9, h * 0.95],  # Bottom-right
+    [w * 0.1, h * 0.95]   # Bottom-left
 ])
 
 birds_eye, M = get_birds_eye_view(img, road_pts, 400, 600)
@@ -553,28 +578,28 @@ birds_eye, M = get_birds_eye_view(img, road_pts, 400, 600)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   문서 스캔 파이프라인                            │
+│                   Document Scan Pipeline                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   입력 이미지                                                    │
+│   Input image                                                   │
 │       │                                                         │
 │       ▼                                                         │
-│   전처리 (그레이스케일, 블러, 엣지)                               │
+│   Preprocessing (grayscale, blur, edge)                         │
 │       │                                                         │
 │       ▼                                                         │
-│   윤곽선 검출 (findContours)                                     │
+│   Contour detection (findContours)                              │
 │       │                                                         │
 │       ▼                                                         │
-│   사각형 검출 (approxPolyDP로 4점 근사)                          │
+│   Rectangle detection (approximate to 4 points with approxPolyDP)│
 │       │                                                         │
 │       ▼                                                         │
-│   꼭짓점 정렬 (좌상, 우상, 우하, 좌하)                            │
+│   Order corners (top-left, top-right, bottom-right, bottom-left)│
 │       │                                                         │
 │       ▼                                                         │
-│   원근 변환 (warpPerspective)                                    │
+│   Perspective transformation (warpPerspective)                  │
 │       │                                                         │
 │       ▼                                                         │
-│   후처리 (이진화, 선명화)                                         │
+│   Post-processing (binarization, sharpening)                    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -586,17 +611,17 @@ import cv2
 import numpy as np
 
 def order_points(pts):
-    """4점을 좌상, 우상, 우하, 좌하 순으로 정렬"""
+    """Order 4 points: top-left, top-right, bottom-right, bottom-left"""
     rect = np.zeros((4, 2), dtype=np.float32)
 
-    # 합이 가장 작은 점 = 좌상단
-    # 합이 가장 큰 점 = 우하단
+    # Point with smallest sum = top-left
+    # Point with largest sum = bottom-right
     s = pts.sum(axis=1)
     rect[0] = pts[np.argmin(s)]
     rect[2] = pts[np.argmax(s)]
 
-    # 차가 가장 작은 점 = 우상단
-    # 차가 가장 큰 점 = 좌하단
+    # Point with smallest difference = top-right
+    # Point with largest difference = bottom-left
     d = np.diff(pts, axis=1)
     rect[1] = pts[np.argmin(d)]
     rect[3] = pts[np.argmax(d)]
@@ -605,21 +630,22 @@ def order_points(pts):
 
 
 def four_point_transform(img, pts):
-    """4점을 이용한 원근 변환"""
+    """Perspective transformation using 4 points"""
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
 
-    # 새 이미지의 너비 계산
+    # Measure both top and bottom edges: a tilted document will have different
+    # projected widths; taking the max preserves all content without cropping
     width_top = np.linalg.norm(tr - tl)
     width_bottom = np.linalg.norm(br - bl)
     max_width = int(max(width_top, width_bottom))
 
-    # 새 이미지의 높이 계산
+    # Same logic for height: left and right edges may project to different lengths
     height_left = np.linalg.norm(bl - tl)
     height_right = np.linalg.norm(br - tr)
     max_height = int(max(height_left, height_right))
 
-    # 목적지 점
+    # Destination points
     dst = np.float32([
         [0, 0],
         [max_width - 1, 0],
@@ -627,7 +653,7 @@ def four_point_transform(img, pts):
         [0, max_height - 1]
     ])
 
-    # 원근 변환
+    # Perspective transformation
     M = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(img, M, (max_width, max_height))
 
@@ -635,25 +661,29 @@ def four_point_transform(img, pts):
 
 
 def find_document(img):
-    """이미지에서 문서 영역을 자동 검출"""
-    # 전처리
+    """Automatically detect document region in image"""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Blur before Canny: Gaussian smoothing suppresses pixel-level noise that
+    # would otherwise create spurious edges and fragmented contours
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edged = cv2.Canny(blurred, 75, 200)
 
-    # 윤곽선 검출
+    # RETR_EXTERNAL retrieves only outermost contours — sufficient for finding
+    # the document border without getting confused by text/graphics inside it
     contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL,
                                     cv2.CHAIN_APPROX_SIMPLE)
+    # Only examine the 5 largest contours — a document is almost always the
+    # biggest rectangular region in the frame
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
 
     doc_contour = None
     for contour in contours:
-        # 윤곽선 근사
         peri = cv2.arcLength(contour, True)
+        # 0.02 * peri is the epsilon tolerance: 2% of perimeter — small enough
+        # to ignore fine detail, large enough to collapse near-rectangular edges to 4 pts
         approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
 
-        # 4점이면 문서로 간주
-        if len(approx) == 4:
+        if len(approx) == 4:  # Only a 4-vertex polygon is a candidate document
             doc_contour = approx
             break
 
@@ -661,29 +691,29 @@ def find_document(img):
 
 
 def scan_document(img):
-    """문서 스캔 메인 함수"""
-    # 원본 크기 저장
+    """Main document scan function"""
+    # Save original size
     orig = img.copy()
     ratio = img.shape[0] / 500.0
 
-    # 리사이즈 (처리 속도 향상)
+    # Resize (improve processing speed)
     img = cv2.resize(img, (int(img.shape[1] / ratio), 500))
 
-    # 문서 검출
+    # Detect document
     doc_contour = find_document(img)
 
     if doc_contour is None:
-        print("문서를 찾을 수 없습니다.")
+        print("Document not found.")
         return None
 
-    # 원본 크기에 맞게 좌표 조정
+    # Adjust coordinates to original size
     doc_contour = doc_contour.reshape(4, 2) * ratio
 
-    # 원근 변환
+    # Perspective transformation
     warped = four_point_transform(orig, doc_contour)
 
-    # 후처리 (선택적)
-    # 그레이스케일 + 적응형 이진화
+    # Post-processing (optional)
+    # Grayscale + adaptive binarization
     warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     warped_binary = cv2.adaptiveThreshold(
         warped_gray, 255,
@@ -694,7 +724,7 @@ def scan_document(img):
     return warped, warped_binary
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('document_photo.jpg')
 result_color, result_binary = scan_document(img)
 
@@ -723,11 +753,11 @@ def click_event(event, x, y, flags, param):
             cv2.imshow('Select 4 corners', param)
 
             if len(points) == 4:
-                print("4점 선택 완료! 's' 키를 눌러 변환하세요.")
+                print("4 points selected! Press 's' to transform.")
 
 
 def manual_perspective_transform(img):
-    """마우스로 4점을 선택하여 원근 변환"""
+    """Select 4 points with mouse for perspective transformation"""
     global points
     points = []
 
@@ -735,13 +765,13 @@ def manual_perspective_transform(img):
     cv2.imshow('Select 4 corners', img_display)
     cv2.setMouseCallback('Select 4 corners', click_event, img_display)
 
-    print("문서의 4개 꼭짓점을 시계방향으로 클릭하세요 (좌상단부터)")
+    print("Click 4 corners of document clockwise (starting from top-left)")
 
     while True:
         key = cv2.waitKey(1) & 0xFF
         if key == ord('s') and len(points) == 4:
             break
-        elif key == ord('r'):  # 리셋
+        elif key == ord('r'):  # Reset
             points = []
             img_display = img.copy()
             cv2.imshow('Select 4 corners', img_display)
@@ -757,7 +787,7 @@ def manual_perspective_transform(img):
     return result
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('document.jpg')
 result = manual_perspective_transform(img)
 
@@ -776,12 +806,12 @@ if result is not None:
 폴더 내의 모든 이미지를 가로 800px로 리사이즈하고 (비율 유지), 품질 90%의 JPEG로 저장하는 스크립트를 작성하세요.
 
 ```python
-# 힌트
+# Hint
 import os
 import glob
 
 def batch_resize(input_folder, output_folder, max_width=800):
-    # os.listdir 또는 glob.glob 사용
+    # Use os.listdir or glob.glob
     pass
 ```
 
@@ -802,7 +832,7 @@ def batch_resize(input_folder, output_folder, max_width=800):
 
 ```python
 def create_mosaic(images, rows, cols, cell_size=(200, 200)):
-    """이미지들을 rows x cols 그리드로 배치"""
+    """Arrange images in rows x cols grid"""
     pass
 ```
 
@@ -811,17 +841,17 @@ def create_mosaic(images, rows, cols, cell_size=(200, 200)):
 이미지에서 직사각형 카드를 검출하고, 그 위에 다른 이미지를 오버레이하는 간단한 AR 효과를 구현하세요.
 
 ```python
-# 힌트: 원근 변환의 역방향 사용
-# 1. 카드 영역 검출
-# 2. 오버레이할 이미지를 카드 영역에 맞게 변환
-# 3. 원본에 합성
+# Hint: Use reverse perspective transformation
+# 1. Detect card region
+# 2. Transform overlay image to fit card region
+# 3. Composite with original
 ```
 
 ---
 
 ## 7. 다음 단계
 
-[05_Image_Filtering.md](./05_Image_Filtering.md)에서 블러, 샤프닝, 커스텀 필터 등 이미지 필터링 기법을 학습합니다!
+[이미지 필터링](./05_Image_Filtering.md)에서 블러, 샤프닝, 커스텀 필터 등 이미지 필터링 기법을 학습합니다!
 
 **다음에 배울 내용**:
 - 커널과 컨볼루션 개념
@@ -843,8 +873,8 @@ def create_mosaic(images, rows, cols, cell_size=(200, 200)):
 
 | 폴더 | 관련 내용 |
 |------|----------|
-| [03_Color_Spaces.md](./03_Color_Spaces.md) | 색상 변환, 엣지 검출 전처리 |
-| [09_Contours.md](./09_Contours.md) | 문서 영역 검출에 활용 |
+| [색상 공간](./03_Color_Spaces.md) | 색상 변환, 엣지 검출 전처리 |
+| [윤곽선 검출 (Contour Detection)](./09_Contours.md) | 문서 영역 검출에 활용 |
 
 ### 추가 참고
 

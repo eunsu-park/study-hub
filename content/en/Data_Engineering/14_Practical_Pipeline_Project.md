@@ -1,5 +1,18 @@
 # Practical Pipeline Project
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Architect an end-to-end data pipeline integrating multiple tools (Airflow, Spark, dbt, Great Expectations) to satisfy real-world business requirements.
+2. Implement a medallion architecture (bronze, silver, gold layers) on a cloud data lake to progressively refine raw data into analytics-ready datasets.
+3. Orchestrate multi-step pipeline DAGs in Airflow that coordinate ingestion, transformation, quality validation, and alerting tasks.
+4. Design data ingestion patterns for heterogeneous sources including relational databases, object storage (S3), and event streams (Kafka).
+5. Apply monitoring and alerting strategies to detect pipeline failures and data quality regressions, and route notifications via Slack or email.
+6. Evaluate the trade-offs of batch vs. streaming ingestion when building production analytics pipelines.
+
+---
+
 ## Overview
 
 In this lesson, we'll integrate all the technologies learned so far to build a real data pipeline. We'll design an end-to-end pipeline using Airflow for orchestration, Spark for large-scale processing, dbt for transformations, and Great Expectations for quality validation.
@@ -58,6 +71,17 @@ In this lesson, we'll integrate all the technologies learned so far to build a r
 │   │   │ Bronze  │→│ Silver  │→│  Gold   │                  │  │
 │   │   │  (Raw)  │  │(Cleaned)│  │(Curated)│                  │  │
 │   │   └─────────┘  └─────────┘  └─────────┘                 │  │
+│   │                                                            │  │
+│   │   Why three layers?                                        │  │
+│   │   - Bronze: immutable raw data for auditability — if a     │  │
+│   │     transformation bug corrupts Silver/Gold, you can       │  │
+│   │     always reprocess from Bronze without re-extracting     │  │
+│   │   - Silver: cleaned, deduplicated, type-standardized —     │  │
+│   │     a single source of validated truth that multiple       │  │
+│   │     Gold tables can build upon                             │  │
+│   │   - Gold: business-ready aggregates and dimensional        │  │
+│   │     models optimized for fast BI queries — avoids          │  │
+│   │     expensive ad-hoc JOINs on raw data                     │  │
 │   └─────────────────────────────────────────────────────────┘  │
 │                   ↓                                             │
 │   ┌───────────────────────────────────────────────────────────┐│
@@ -150,6 +174,11 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.dbt.cloud.operators.dbt import DbtCloudRunJobOperator
 from airflow.utils.task_group import TaskGroup
 
+# default_args are inherited by every task in the DAG, reducing boilerplate.
+# retries=2 with 5-min delay handles transient failures (network blips,
+# temporary resource contention) without human intervention.
+# depends_on_past=False means each daily run is independent — a Monday
+# failure won't block Tuesday's run from starting.
 default_args = {
     'owner': 'data-team',
     'depends_on_past': False,
@@ -175,6 +204,10 @@ with DAG(
     # ============================================
     # Extract: Extract from data sources
     # ============================================
+    # TaskGroup organizes related tasks into a collapsible unit in the Airflow UI.
+    # This is purely organizational (not a scheduling boundary) — all tasks inside
+    # still execute independently. Without grouping, a pipeline with 15+ tasks
+    # becomes unreadable in the Graph view.
     with TaskGroup(group_id='extract') as extract_group:
 
         extract_orders = SparkSubmitOperator(
@@ -222,6 +255,10 @@ with DAG(
     # ============================================
     # Quality Check: Bronze layer quality validation
     # ============================================
+    # Quality gate between Bronze and Silver: catches data issues (missing files,
+    # schema drift, null spikes) before they propagate downstream. Fixing bad data
+    # in Bronze is 10x cheaper than fixing corrupted Gold aggregates that already
+    # fed dashboards and ML models.
     with TaskGroup(group_id='quality_bronze') as quality_bronze:
 
         def run_great_expectations(checkpoint_name: str, **kwargs):
@@ -246,6 +283,9 @@ with DAG(
     # ============================================
     # Transform: Create Silver layer with Spark
     # ============================================
+    # Silver layer = cleaned, deduplicated, type-standardized data.
+    # Spark is used here (not dbt) because Spark handles large-scale file-based
+    # transformations on the data lake, while dbt operates on the warehouse SQL engine.
     with TaskGroup(group_id='transform_spark') as transform_spark:
 
         process_orders = SparkSubmitOperator(
@@ -269,9 +309,16 @@ with DAG(
     # ============================================
     # Transform: Create Gold layer with dbt
     # ============================================
+    # Gold layer = business-ready aggregates and dimensional models.
+    # dbt handles warehouse-side SQL transformations (staging → marts),
+    # while Spark handled the file-based lake transformations above.
+    # This separation lets each tool operate in its strength zone.
     with TaskGroup(group_id='transform_dbt') as transform_dbt:
 
         def run_dbt_command(command: str, **kwargs):
+            # Subprocess execution because dbt CLI is the standard interface.
+            # In production, prefer DbtCloudRunJobOperator or the dbt Python API
+            # to avoid shell injection risks and get better error reporting.
             import subprocess
             result = subprocess.run(
                 f"cd /opt/dbt && dbt {command} --profiles-dir /opt/dbt",
@@ -289,6 +336,9 @@ with DAG(
             op_kwargs={'command': 'run --select staging marts'},
         )
 
+        # dbt test runs AFTER dbt run to validate the freshly materialized models.
+        # This catches data quality regressions introduced by the transformation
+        # logic itself (e.g., a JOIN producing unexpected NULLs).
         dbt_test = PythonOperator(
             task_id='dbt_test',
             python_callable=run_dbt_command,
@@ -300,6 +350,10 @@ with DAG(
     # ============================================
     # Quality Check: Gold layer quality validation
     # ============================================
+    # Second quality gate at the Gold layer catches issues introduced by
+    # transformations (incorrect joins, aggregation bugs). Having quality
+    # gates at both Bronze AND Gold provides defense-in-depth: Bronze
+    # catches source problems, Gold catches transformation problems.
     quality_gold = PythonOperator(
         task_id='quality_gold',
         python_callable=run_great_expectations,
@@ -324,7 +378,10 @@ with DAG(
 
     end = EmptyOperator(task_id='end')
 
-    # Task dependencies
+    # Task dependencies follow the medallion architecture:
+    # Extract → Quality(Bronze) → Transform(Silver) → Transform(Gold) → Quality(Gold) → Notify
+    # This linear chain ensures data quality is validated before each layer transition,
+    # preventing bad data from propagating to downstream consumers.
     start >> extract_group >> quality_bronze >> transform_spark >> transform_dbt >> quality_gold >> notify >> end
 ```
 
@@ -351,6 +408,8 @@ def main():
         .getOrCreate()
 
     # JDBC read configuration
+    # In production, store credentials in a secrets manager (AWS Secrets Manager,
+    # Vault) and inject via environment variables — never hardcode passwords.
     jdbc_url = "jdbc:postgresql://postgres:5432/ecommerce"
     properties = {
         "user": "postgres",
@@ -358,7 +417,9 @@ def main():
         "driver": "org.postgresql.Driver"
     }
 
-    # Incremental extraction (when date specified)
+    # Incremental extraction when date is specified: only pull rows updated on
+    # that date, avoiding full table scans that would be expensive on large tables.
+    # The subquery alias "AS t" is required by Spark's JDBC reader for pushdown queries.
     if args.date:
         query = f"""
             (SELECT * FROM {args.table}
@@ -374,7 +435,9 @@ def main():
         properties=properties
     )
 
-    # Save to Bronze layer
+    # Save to Bronze layer as Parquet.
+    # mode("overwrite") is safe here because each date partition is written to
+    # its own path (via Airflow templating), so we only overwrite that day's data.
     df.write \
         .mode("overwrite") \
         .parquet(args.output)
@@ -403,12 +466,17 @@ def main():
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
+    # AQE (Adaptive Query Execution) dynamically adjusts shuffle partitions and
+    # join strategies at runtime based on actual data sizes — eliminates the need
+    # to manually tune spark.sql.shuffle.partitions for varying daily volumes.
     spark = SparkSession.builder \
         .appName("Process Clickstream") \
         .config("spark.sql.adaptive.enabled", "true") \
         .getOrCreate()
 
-    # Define JSON schema
+    # Explicitly defining the schema avoids a costly schema-inference pass that
+    # requires reading the entire JSON dataset twice. For large clickstream logs
+    # (millions of events/day), this can save minutes of processing time.
     schema = StructType([
         StructField("event_id", StringType()),
         StructField("user_id", StringType()),
@@ -419,10 +487,14 @@ def main():
         StructField("properties", MapType(StringType(), StringType())),
     ])
 
-    # Read JSON
+    # Read JSON with pre-defined schema (no inference overhead)
     df = spark.read.schema(schema).json(args.input)
 
-    # Clean and transform
+    # Clean and transform:
+    # - Null filters remove malformed events that would cause join failures downstream
+    # - Extracting event_date/hour enables time-based partitioning for efficient queries
+    # - getItem("product_id") flattens the nested properties map into a top-level column,
+    #   which is much faster to query than repeatedly parsing nested JSON
     processed_df = df \
         .filter(col("event_id").isNotNull()) \
         .filter(col("user_id").isNotNull()) \
@@ -442,7 +514,9 @@ def main():
             "timestamp"
         )
 
-    # Save partitioned
+    # Dual partitioning (date + hour) enables both daily batch queries and
+    # hourly drill-down queries to prune efficiently. Over-partitioning
+    # (e.g., by minute) would create too many small files, degrading read performance.
     processed_df.write \
         .mode("overwrite") \
         .partitionBy("event_date", "event_hour") \
@@ -475,12 +549,16 @@ def main():
         .appName("Daily Aggregation") \
         .getOrCreate()
 
-    # Read Silver layer
+    # Read Silver layer — customers and products are loaded as full snapshots
+    # (no date partition) because they are slowly-changing dimensions;
+    # orders are date-partitioned for incremental processing.
     orders = spark.read.parquet(f"s3://data-lake/silver/orders/{args.date}/")
     customers = spark.read.parquet("s3://data-lake/silver/customers/")
     products = spark.read.parquet("s3://data-lake/silver/products/")
 
-    # Daily sales aggregation
+    # Daily sales aggregation — pre-computing these aggregates in the Gold layer
+    # means BI dashboards can read directly without running expensive GROUP BYs
+    # on raw fact tables, reducing query latency from minutes to seconds.
     daily_sales = orders \
         .filter(col("order_date") == args.date) \
         .join(products, "product_id") \
@@ -493,10 +571,14 @@ def main():
             count("order_id").alias("order_count"),
             sum("amount").alias("total_revenue"),
             avg("amount").alias("avg_order_value"),
+            # countDistinct is more expensive than count but critical for
+            # understanding customer reach vs order volume
             countDistinct("customer_id").alias("unique_customers")
         )
 
-    # Customer segment aggregation
+    # Customer segment aggregation — separate from daily_sales because
+    # it has a different grain (segment-level vs category/region),
+    # serving different business questions (segmentation vs product analytics)
     customer_segments = orders \
         .filter(col("order_date") == args.date) \
         .join(customers, "customer_id") \
@@ -532,6 +614,9 @@ if __name__ == "__main__":
 -- dbt/models/staging/stg_orders.sql
 {{
     config(
+        -- Materialized as view for fast iteration: rebuilds instantly during
+        -- development. For production with high query volume, consider switching
+        -- to table or incremental to avoid re-reading Silver on every query.
         materialized='view',
         schema='staging'
     )
@@ -546,12 +631,16 @@ cleaned AS (
         order_id,
         customer_id,
         product_id,
+        -- Explicit CAST ensures consistent types regardless of how the source
+        -- system serialized the data (some sources emit dates as strings)
         CAST(order_date AS DATE) AS order_date,
         CAST(amount AS DECIMAL(12, 2)) AS amount,
         CAST(quantity AS INT) AS quantity,
         status,
         CURRENT_TIMESTAMP AS loaded_at
     FROM source
+    -- Filter out null PKs and non-positive amounts at the staging layer
+    -- so all downstream models can trust these invariants without rechecking
     WHERE order_id IS NOT NULL
       AND amount > 0
 )
@@ -565,9 +654,15 @@ SELECT * FROM cleaned
 -- dbt/models/marts/fct_orders.sql
 {{
     config(
+        -- Incremental materialization processes only new data since last run,
+        -- critical for fact tables that grow by millions of rows daily.
+        -- A full rebuild (dbt run --full-refresh) can be forced when needed.
         materialized='incremental',
         unique_key='order_id',
         schema='marts',
+        -- Day-level partitioning matches the pipeline's daily schedule;
+        -- most BI queries filter by date range, so partition pruning
+        -- delivers major cost savings on cloud warehouses.
         partition_by={
             'field': 'order_date',
             'data_type': 'date',
@@ -592,7 +687,9 @@ SELECT
     o.order_id,
     o.order_date,
 
-    -- Customer information
+    -- Customer information — denormalized into the fact table for query
+    -- convenience. BI tools can filter/group by segment and region without
+    -- requiring users to write manual JOINs.
     o.customer_id,
     c.customer_name,
     c.customer_segment,
@@ -603,7 +700,8 @@ SELECT
     p.product_name,
     p.category,
 
-    -- Metrics
+    -- Metrics — computing cost and profit at the fact level enables direct
+    -- aggregation in Gold-layer summaries without re-joining product costs
     o.quantity,
     o.amount AS order_amount,
     p.unit_cost * o.quantity AS cost_amount,
@@ -615,6 +713,9 @@ SELECT
     -- Metadata
     o.loaded_at
 
+-- LEFT JOINs preserve orders even when dimension data is missing (e.g.,
+-- a new customer not yet in dim_customers). INNER JOIN would silently
+-- drop these orders, causing revenue undercounting.
 FROM orders o
 LEFT JOIN customers c ON o.customer_id = c.customer_id
 LEFT JOIN products p ON o.product_id = p.product_id
@@ -653,7 +754,10 @@ SELECT
     AVG(order_amount) AS avg_order_value,
     SUM(profit_amount) AS total_profit,
 
-    -- Profit margin
+    -- Prevents division-by-zero when total revenue is 0 (e.g., a day with only
+    -- cancelled orders or a newly launched region with no completed sales).
+    -- NULLIF returns NULL instead of 0, making the division yield NULL rather
+    -- than a database error, which is safer for downstream BI tools.
     ROUND(SUM(profit_amount) / NULLIF(SUM(order_amount), 0) * 100, 2) AS profit_margin_pct,
 
     -- Period comparison (with dbt_utils)
@@ -804,8 +908,14 @@ def push_metrics_to_prometheus(metrics: PipelineMetrics):
     """Push metrics to Prometheus"""
     from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
+    # Fresh registry per push to avoid stale metrics from previous runs.
+    # Without this, metric labels from a failed pipeline could linger
+    # and confuse Grafana dashboards.
     registry = CollectorRegistry()
 
+    # Gauge (not Counter) because pipeline duration is a point-in-time value,
+    # not an ever-increasing counter. Gauges allow Prometheus to track
+    # whether runs are getting slower over time.
     duration = Gauge(
         'pipeline_duration_seconds',
         'Pipeline duration',
@@ -824,6 +934,8 @@ def push_metrics_to_prometheus(metrics: PipelineMetrics):
     )
     records.labels(pipeline_name=metrics.pipeline_name).set(metrics.records_processed)
 
+    # Quality score enables Grafana alerts on degradation trends — e.g.,
+    # alert if quality drops below 95% for 3 consecutive runs
     quality = Gauge(
         'pipeline_quality_score',
         'Quality score',
@@ -832,6 +944,9 @@ def push_metrics_to_prometheus(metrics: PipelineMetrics):
     )
     quality.labels(pipeline_name=metrics.pipeline_name).set(metrics.quality_score)
 
+    # Push gateway is used (instead of pull) because pipeline jobs are short-lived
+    # and may not be running when Prometheus scrapes. The push gateway acts as
+    # an intermediary that holds metrics until Prometheus collects them.
     push_to_gateway('localhost:9091', job='data_pipeline', registry=registry)
 ```
 
@@ -851,6 +966,9 @@ class AlertManager:
 
     def send_slack_alert(self, message: str, severity: str = "info"):
         """Slack notification"""
+        # Color-coded attachments provide instant visual severity in Slack —
+        # on-call engineers can triage red (error) vs orange (warning) at a glance
+        # without reading the full message.
         color = {
             "info": "#36a64f",
             "warning": "#ffa500",
@@ -868,6 +986,9 @@ class AlertManager:
 
     def send_pagerduty_alert(self, message: str):
         """PagerDuty notification (for critical issues)"""
+        # PagerDuty is reserved for critical failures that need immediate human
+        # response (e.g., pipeline down for >1 hour). Routing non-critical issues
+        # to Slack only prevents alert fatigue and keeps PagerDuty signals meaningful.
         if not self.pagerduty_key:
             return
 

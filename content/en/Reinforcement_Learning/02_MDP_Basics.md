@@ -100,6 +100,8 @@ class MDP:
         self.actions = ['left', 'right']
 
         # Discount factor
+        # γ=0.9 means a reward 10 steps away is worth only 0.9^10 ≈ 35% of an immediate reward —
+        # this prevents the agent from equally weighting the distant future and the present
         self.gamma = 0.9
 
         # Transition probabilities: P[s][a] = [(prob, next_state, reward, done), ...]
@@ -110,12 +112,16 @@ class MDP:
         P = {}
 
         # Transitions from state s0
+        # Wall collision gives -1: the negative reward teaches the agent that
+        # bumping walls wastes time and should be avoided
         P['s0'] = {
             'left': [(1.0, 's0', -1, False)],      # Hit wall
             'right': [(1.0, 's1', 0, False)]       # Move to s1
         }
 
         # Transitions from state s1
+        # 80/20 stochastic split models real-world uncertainty — the agent must learn
+        # a robust policy that accounts for uncontrolled slippage, not just the happy path
         P['s1'] = {
             'left': [(1.0, 's0', 0, False)],       # Move to s0
             'right': [(0.8, 's2', 0, False),       # 80%: move to s2
@@ -128,7 +134,8 @@ class MDP:
             'right': [(1.0, 'terminal', +10, True)] # Reach goal!
         }
 
-        # Terminal state
+        # Terminal state absorbs all actions with zero reward — this prevents the
+        # agent from trying to "escape" the goal and artificially inflating returns
         P['terminal'] = {
             'left': [(1.0, 'terminal', 0, True)],
             'right': [(1.0, 'terminal', 0, True)]
@@ -144,6 +151,8 @@ class MDP:
         """Execute one step in environment (stochastic transition)"""
         transitions = self.P[state][action]
         probs = [t[0] for t in transitions]
+        # np.random.choice with p= samples from the full probability distribution in one call —
+        # this correctly handles multi-outcome stochastic transitions without manual loops
         idx = np.random.choice(len(transitions), p=probs)
         prob, next_state, reward, done = transitions[idx]
         return next_state, reward, done
@@ -234,11 +243,15 @@ def compute_state_value(mdp, policy, state, gamma, depth=100):
     (average return over multiple episodes)
     """
     returns = []
+    # 1000 episodes gives a statistically stable average — fewer episodes produce
+    # high variance estimates; more would be accurate but computationally wasteful
     n_episodes = 1000
 
     for _ in range(n_episodes):
         s = state
         episode_return = 0
+        # Start discount at 1.0 so the first reward is undiscounted (r * γ^0 = r),
+        # then multiply by gamma each step to implement γ^k weighting automatically
         discount = 1.0
 
         for _ in range(depth):
@@ -254,6 +267,8 @@ def compute_state_value(mdp, policy, state, gamma, depth=100):
 
         returns.append(episode_return)
 
+    # Average over episodes to approximate E_π[G_t | S_t=state] —
+    # by the law of large numbers this converges to the true V^π(state)
     return np.mean(returns)
 ```
 
@@ -270,11 +285,14 @@ def compute_action_value(mdp, policy, state, action, gamma, depth=100):
     n_episodes = 1000
 
     for _ in range(n_episodes):
-        # First action is given
+        # First action is given — this is what distinguishes Q(s,a) from V(s):
+        # we fix the first action, then let the policy take over for all subsequent steps
         s = state
         next_s, reward, done = mdp.step(s, action)
 
         episode_return = reward
+        # Discount starts at gamma (not 1.0) because the first reward is already
+        # collected above; all subsequent rewards belong to step k≥1, so they scale by γ^k
         discount = gamma
         s = next_s
 
@@ -345,6 +363,8 @@ def bellman_expectation_v(mdp, policy, V, state, gamma):
 
     V(s) = Σ_a π(a|s) * Σ_{s',r} P(s',r|s,a) * [r + γV(s')]
     """
+    # Terminal states always have value 0 — there are no future rewards to collect,
+    # so adding a base case here prevents the recursion from looping infinitely
     if state == 'terminal':
         return 0
 
@@ -355,8 +375,12 @@ def bellman_expectation_v(mdp, policy, V, state, gamma):
 
         for prob, next_state, reward, done in mdp.get_transitions(state, action):
             if done:
+                # When transitioning to terminal, future value is zero — we only
+                # credit the immediate reward, not γ * V(terminal)
                 value += action_prob * prob * reward
             else:
+                # The two-level sum (over actions, then over outcomes) computes the
+                # full expectation: E_π[r + γV(s')] = Σ_a π(a|s) Σ_{s'} P(s'|s,a)[r + γV(s')]
                 value += action_prob * prob * (reward + gamma * V.get(next_state, 0))
 
     return value
@@ -374,7 +398,8 @@ def bellman_expectation_q(mdp, policy, Q, state, action, gamma):
         if done:
             value += prob * reward
         else:
-            # Expected value at next state
+            # V(s') = Σ_a' π(a'|s') Q(s',a') — converting Q back to V at the next
+            # state lets us express Q entirely in terms of existing Q estimates
             next_value = sum(
                 policy.get_action_prob(next_state, a) * Q.get((next_state, a), 0)
                 for a in mdp.actions
@@ -414,6 +439,8 @@ def bellman_optimality_v(mdp, V, state, gamma):
     if state == 'terminal':
         return 0
 
+    # Initialize to -inf so any real action value will replace it —
+    # using 0 would be wrong when all actions yield negative returns
     max_value = float('-inf')
 
     for action in mdp.actions:
@@ -425,6 +452,8 @@ def bellman_optimality_v(mdp, V, state, gamma):
             else:
                 action_value += prob * (reward + gamma * V.get(next_state, 0))
 
+        # The max replaces the policy's weighted average — optimality means we
+        # always commit to the single best action rather than averaging over all actions
         max_value = max(max_value, action_value)
 
     return max_value
@@ -442,6 +471,8 @@ def bellman_optimality_q(mdp, Q, state, action, gamma):
         if done:
             value += prob * reward
         else:
+            # max over next actions encodes the optimality principle: at s', we
+            # assume the agent will always take the best available action onward
             max_next_q = max(Q.get((next_state, a), 0) for a in mdp.actions)
             value += prob * (reward + gamma * max_next_q)
 
@@ -582,6 +613,8 @@ class GridWorld:
         Return transition probabilities
         80% intended direction, 10% each for slipping left/right
         """
+        # Early return for terminal states avoids indexing into action_deltas for a
+        # state that has no meaningful transitions — keeps the absorbing-state contract clean
         if self.is_terminal(state):
             return [(1.0, state, 0, True)]
 
@@ -590,18 +623,23 @@ class GridWorld:
         # Intended direction
         intended_delta = self.action_deltas[action]
 
-        # Slip directions
+        # Slip directions are perpendicular to the intended action — this models
+        # real environments where uncertainty is orthogonal, not backward (which would
+        # be even harder to recover from and rarely matches physical slip dynamics)
         if action in ['up', 'down']:
             slip_actions = ['left', 'right']
         else:
             slip_actions = ['up', 'down']
 
-        # Add transitions for each direction
+        # Bundling all three outcomes into one list lets us loop uniformly over the
+        # probability-weighted directions rather than duplicating the transition logic
         directions = [(0.8, action), (0.1, slip_actions[0]), (0.1, slip_actions[1])]
 
         for prob, dir_action in directions:
             delta = self.action_deltas[dir_action]
             next_state = self._move(state, delta)
+            # Reward is evaluated at the outcome state, not the intended state —
+            # the agent gets penalized for landing on an obstacle even when it slipped there
             reward = self.get_reward(state, action, next_state)
             done = self.is_terminal(next_state)
             transitions.append((prob, next_state, reward, done))

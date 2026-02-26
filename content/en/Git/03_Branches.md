@@ -1,5 +1,25 @@
 # Git Branches
 
+**Previous**: [Basic Commands](./02_Basic_Commands.md) | **Next**: [GitHub Getting Started](./04_GitHub_Getting_Started.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a Git branch is and why branches enable safe, parallel development
+2. Create, switch, rename, and delete branches using Git commands
+3. Merge branches with `git merge` and explain fast-forward vs. three-way merge
+4. Identify and resolve merge conflicts manually
+5. Apply branch naming conventions used in professional teams
+
+---
+
+Real-world software projects rarely proceed in a straight line. You might be halfway through a new feature when an urgent bug report arrives, or two teammates may need to work on unrelated changes at the same time. Branches solve this by letting each line of work proceed independently, merging results only when ready. Understanding branches is the key to unlocking Git's full collaborative power.
+
+> **Analogy -- Parallel Universes**: Think of your `main` branch as the "real" timeline. Creating a branch is like spawning a parallel universe -- you can experiment freely, rewrite history, or even break things without affecting the original timeline. When your parallel universe produces something valuable, you merge it back, incorporating only the good changes. If the experiment fails, you simply delete the universe -- no harm done to the original.
+
 ## 1. What are Branches?
 
 Branches are independent workspaces. You can develop new features or fix bugs without affecting the main code.

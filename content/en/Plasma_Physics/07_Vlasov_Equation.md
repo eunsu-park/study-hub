@@ -545,14 +545,21 @@ ax = axes[1, 0]
 kappa_values = [3, 5, 10, 100]
 colors = ['red', 'orange', 'green', 'blue']
 for kappa_val, color in zip(kappa_values, colors):
+    # kappa must be > 3/2 for the distribution to be normalisable (the integral over
+    # all velocities converges only when the power-law exponent κ+1 > 5/2).
     if kappa_val > 3/2:
         f_kappa = kappa_1d(v, n0, T, m, kappa_val)
+        # κ = 100 is numerically indistinguishable from Maxwellian on linear scale,
+        # but labelling it "κ → ∞" shows students the theoretical limit explicitly.
         label = f'κ = {kappa_val}' if kappa_val < 100 else 'κ → ∞ (Maxwellian)'
         ax.plot(v/1e3, f_kappa, color=color, linewidth=2, label=label)
 
 ax.set_xlabel('v (km/s)', fontsize=12)
 ax.set_ylabel('f(v) (s/m⁴)', fontsize=12)
 ax.set_title('Kappa Distributions (Non-thermal Tails)', fontsize=14, fontweight='bold')
+# Log scale is essential here: the suprathermal enhancement is only visible in the
+# far tail (v >> v_th), where f spans many decades. A linear scale would make all
+# curves look identical near the peak, hiding the key physics of the power-law tail.
 ax.set_yscale('log')
 ax.grid(True, alpha=0.3, which='both')
 ax.legend()
@@ -614,13 +621,18 @@ def compute_moments(v_array, f_array):
     """
     Compute moments of 1D distribution function
     """
-    # Density
+    # Use Simpson's rule (simps) rather than np.trapz because simps has O(h^4) error
+    # vs O(h^2) for trapz — important when f has smooth but curved tails, which is
+    # typical of Maxwellian and kappa distributions sampled on a coarse velocity grid.
     n = simps(f_array, v_array)
 
-    # Mean velocity
+    # Divide by n (not n0) so the formula gives the true mean velocity even when the
+    # distribution has been perturbed away from the reference density n0.
     u = simps(v_array * f_array, v_array) / n
 
     # Variance (temperature measure)
+    # Compute variance relative to the calculated mean u (not 0) to get the thermal
+    # variance correctly for a drifting distribution where u ≠ 0.
     var = simps((v_array - u)**2 * f_array, v_array) / n
 
     # Thermal velocity
@@ -689,11 +701,20 @@ def vlasov_1d_solver(x, v, f0, E_func, dt, num_steps, q, m):
         t = n * dt
 
         # Step 1: Advection in x (∂f/∂t + v ∂f/∂x = 0)
-        # Use upwind scheme
+        # Operator splitting separates the 6D Vlasov equation into two 1D advections
+        # (in x and v), each of which is solved independently. This is valid when dt
+        # is small (Strang splitting gives O(dt^2) accuracy overall).
+        # Use upwind scheme: upwind differencing is chosen here because it is stable
+        # (dissipative) for the advection equation. The stencil always takes the
+        # derivative from the direction the information is traveling — upstream —
+        # preventing non-physical oscillations from appearing in f.
         f_new = np.zeros_like(f)
         for j in range(Nv):
             for i in range(Nx):
                 if v[j] > 0:
+                    # Particle moves in +x; information comes from the left cell.
+                    # Periodic BC (% Nx) enforces the assumption that f is the same
+                    # at x=0 and x=L — appropriate for a spatially periodic plasma wave.
                     i_up = (i - 1) % Nx  # periodic BC
                     f_new[i, j] = f[i, j] - v[j] * dt / dx * (f[i, j] - f[i_up, j])
                 else:
@@ -702,12 +723,19 @@ def vlasov_1d_solver(x, v, f0, E_func, dt, num_steps, q, m):
         f = f_new.copy()
 
         # Step 2: Acceleration in v (∂f/∂t + (q/m)E ∂f/∂v = 0)
+        # The electric field is re-evaluated at the current time t (not t+dt) to keep
+        # the explicit time-stepping first-order. Using E at t makes this equivalent
+        # to a forward Euler step in v-space — simple but requires small dt for accuracy.
         E = E_func(x, t)
         f_new = np.zeros_like(f)
         for i in range(Nx):
-            a = q * E[i] / m  # acceleration
+            a = q * E[i] / m  # acceleration = q*E/m (Newton's law in velocity space)
             for j in range(Nv):
                 if a > 0:
+                    # Positive acceleration shifts f toward higher v: use left-neighbor
+                    # (lower v) as the upwind cell. Clamp at boundary (j_up = 0) to
+                    # prevent particles from wrapping around in velocity space —
+                    # unlike position, velocity has physical limits in this setup.
                     j_up = max(j - 1, 0)
                     f_new[i, j] = f[i, j] - a * dt / dv * (f[i, j] - f[i, j_up])
                 else:
@@ -724,8 +752,14 @@ def vlasov_1d_solver(x, v, f0, E_func, dt, num_steps, q, m):
 
 # Setup 1D problem
 Nx, Nv = 128, 128
+# Lx = 2π/k sets the box to exactly one wavelength, ensuring the periodic BC is
+# consistent with the wave: f(x=0) = f(x=Lx) by construction, avoiding artificial
+# reflections that would arise if the box contained a fractional number of waves.
 Lx = 2 * np.pi / 0.5  # wavelength
 x = np.linspace(0, Lx, Nx)
+# Velocity grid covers ±3×10^5 m/s ≈ ±6 v_th at 100 eV, capturing >99.9% of the
+# Maxwellian. Truncating at too few v_th would lose particles and violate conservation;
+# extending too far wastes grid points on the exponentially small tail.
 v = np.linspace(-3e5, 3e5, Nv)
 
 X, V = np.meshgrid(x, v, indexing='ij')
@@ -734,6 +768,9 @@ X, V = np.meshgrid(x, v, indexing='ij')
 n0 = 1e19
 T0 = 100 * e / k_B
 k_wave = 0.5  # wavenumber (1/m)
+# Small amplitude (1%) keeps the perturbation in the linear regime so the simulation
+# result can be compared directly with linear wave theory (Landau damping, etc.).
+# Larger amplitudes would drive particle trapping and nonlinear saturation.
 amplitude = 0.01
 
 f0 = np.zeros((Nx, Nv))

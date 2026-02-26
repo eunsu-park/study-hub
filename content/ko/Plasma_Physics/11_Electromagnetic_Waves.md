@@ -555,15 +555,24 @@ def stix_parameters(omega, n, B, Z=1, A=1):
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
-    # Stix parameters (sum over electrons and ions)
+    # S, D, P는 차가운 플라즈마 유전 텐서의 세 독립 성분입니다.
+    # S (합)는 x와 y 성분을 결합하는 대각 원소입니다; 공명 분모 ω² - ω_cs²는
+    # 사이클로트론 주파수 근처에서 발산하여 고유 주파수 근처에서 회전하는 입자의
+    # 특이 응답을 반영합니다.
     S = 1 - omega_pe**2 / (omega**2 - omega_ce**2) - \
         omega_pi**2 / (omega**2 - omega_ci**2)
 
+    # D (차이)는 좌/우 대칭을 깨는 비대각 자이로트로픽(gyrotropic) 원소입니다;
+    # 자기장이 없으면 (ω_cs → 0) 사라지며 Faraday 회전을 유발합니다.
     D = omega_ce * omega_pe**2 / (omega * (omega**2 - omega_ce**2)) + \
         omega_ci * omega_pi**2 / (omega * (omega**2 - omega_ci**2))
 
+    # P (플라즈마)는 사이클로트론 운동이 관련 없는 B 방향의 응답을 지배합니다;
+    # 전자만 있는 경우 비자화 유전체 (1 - ω_pe²/ω²)로 환원됩니다.
     P = 1 - omega_pe**2 / omega**2 - omega_pi**2 / omega**2
 
+    # R과 L은 B를 따른 우원형 및 좌원형 편광에 대한 굴절률의 제곱입니다;
+    # 평행 전파에 대한 파동 방정식의 행렬식에서 인수로 나옵니다.
     R = S + D
     L = S - D
 
@@ -587,7 +596,10 @@ print(f"Electron cyclotron frequency: f_ce = {f_ce / 1e9:.2f} GHz")
 print(f"Ion cyclotron frequency: f_ci = {f_ci / 1e6:.2f} MHz")
 print(f"Electron plasma frequency: f_pe = {f_pe / 1e9:.2f} GHz")
 
-# Frequency scan
+# 0.1-100 GHz를 스캔하면 물리적으로 중요한 모든 공명을 포괄합니다
+# (f_ci ~ MHz는 훨씬 아래에, f_ce ~ 56 GHz는 중간에, f_pe ~ GHz는 밀도에 따라 위치).
+# 5000점 해상도는 전파와 소산(evanescent) regime 사이 전환을 표시하는
+# f_ce 근처 S와 D의 급격한 부호 변화를 해석합니다.
 f = np.linspace(0.1, 100, 5000) * 1e9  # Hz
 omega = 2 * np.pi * f
 
@@ -697,12 +709,17 @@ def cma_diagram():
     UH_res_Y = np.linspace(0, 1.5, 100)
     UH_res_X = 1 - UH_res_Y**2
 
-    # Plot cutoff/resonance curves
+    # 각 경계는 파동이 전파에서 소산(evanescent)으로 전환하는 곳(차단)이거나
+    # 유한에서 무한 파수로 전환하는 곳(공명)입니다. (X, Y) 공간에서 이를 그리면
+    # 밀도나 B가 변할 때 플라즈마가 다이어그램에서 어떤 경로를 통과하는지 보여주어
+    # 안테나/발사 설계에 필수적입니다.
     ax.plot([1, 1], [0, 2], 'b-', linewidth=2, label='O-mode cutoff ($X=1$)')
     ax.plot(R_cutoff_X, R_cutoff_Y, 'r-', linewidth=2,
             label='R-wave cutoff ($X=1-Y$)')
     ax.plot(L_cutoff_X, L_cutoff_Y, 'g-', linewidth=2,
             label='L-wave cutoff ($X=1+Y$)')
+    # upper hybrid 공명은 O-mode 전파 영역(X < 1) 안에 위치합니다.
+    # 이것이 X-mode가 저밀도 측에서 도달할 수 있는 반면 O-mode는 도달할 수 없는 이유입니다.
     ax.plot(UH_res_X, UH_res_Y, 'm--', linewidth=2,
             label='Upper hybrid res ($X=1-Y^2$)')
 
@@ -742,14 +759,21 @@ def whistler_dispersion(k, omega_pe, omega_ce):
     Whistler wave dispersion: ω ≈ k²c²ω_ce/ω_pe².
     """
     c = 3e8
-    # From k²c²ω_ce/ω_pe² = ω, solve for ω
-    # This is approximate; use quadratic formula
-    # ω ≈ k²c²ω_ce/ω_pe² for ω << ω_ce
+    # ω ∝ k² 스케일링(이상 분산)은 휘슬러 한계 ω_ci << ω << ω_ce에서
+    # R-파 표현 n² = R ≈ ω_pe² / (ω ω_ce)에서 옵니다;
+    # kc/ω = n을 재배열하면 ω = k²c²ω_ce / ω_pe²가 됩니다 — 높은 주파수가
+    # 더 큰 위상 속도를 가지므로 더 빨리 이동하여 먼저 도달합니다 (하강 톤).
     omega = k**2 * c**2 * omega_ce / omega_pe**2
+    # 이온 기여를 R에서 무시합니다. 휘슬러 주파수에서 ω >> ω_ci이므로
+    # 이온이 파동에 응답하기에 너무 느려 χ_i ≈ 0이기 때문입니다.
+    # 0.5 ω_ce에서의 상한은 휘슬러 근사의 유효성을 강제합니다;
+    # ω_ce 근처에서는 공명 발산이 중요하므로 완전한 R 표현을 사용해야 합니다.
     omega = np.minimum(omega, 0.5 * omega_ce)  # Limit to whistler range
     return omega
 
-# Magnetospheric parameters
+# 자기권 매개변수는 f_pe와 f_ce를 모두 kHz 범위에 위치시키도록 선택했습니다:
+# 이 낮은 밀도(n ~ 10^6 m^-3)에서 f_pe ~ 9 kHz이고, B ~ 50 μT는
+# f_ce ~ 1.4 MHz를 줍니다 — 가청 주파수 휘슬러에 대해 ω_ci << ω << ω_ce를 만족합니다.
 n = 1e6  # m^-3 (magnetosphere)
 B = 5e-5  # T (Earth's magnetic field at magnetosphere)
 

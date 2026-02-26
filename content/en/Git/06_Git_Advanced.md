@@ -1,5 +1,25 @@
 # Advanced Git Commands
 
+**Previous**: [GitHub Collaboration](./05_GitHub_Collaboration.md) | **Next**: [GitHub Actions](./07_GitHub_Actions.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use `git stash` to temporarily shelve work in progress and restore it later
+2. Apply `git rebase` to linearize commit history and compare it with merge-based workflows
+3. Rewrite commit history using interactive rebase (`rebase -i`) for squashing, reordering, and editing
+4. Use `git cherry-pick` to selectively apply individual commits from other branches
+5. Recover lost commits and branches using `git reflog`
+6. Identify the commit that introduced a bug using `git bisect`
+7. Tag releases with `git tag` and explain annotated vs. lightweight tags
+
+---
+
+Once you are comfortable with everyday Git commands, you will inevitably encounter situations that require more surgical precision: transplanting a single commit, cleaning up a messy history before a code review, or finding the exact commit that broke a test. The advanced commands in this lesson give you that precision, turning Git from a simple save-and-share tool into a powerful debugging and history-management system.
+
 ## 1. git stash - Temporarily Save Work
 
 Temporarily save work in progress and restore it later.
@@ -446,6 +466,203 @@ git clean -fdx
 
 ---
 
+## 7. Interactive Rebase Conflict Resolution
+
+When cleaning up branch history with `git rebase -i`, conflicts are common -- especially when commits touch the same lines. Understanding the full interactive rebase workflow and how to handle conflicts mid-rebase is critical for maintaining a clean, linear history.
+
+### 7.1 Interactive Rebase Commands In-Depth
+
+```bash
+# Start interactive rebase for the last 5 commits
+# Why: opens an editor where you choose what to do with each commit
+git rebase -i HEAD~5
+```
+
+The editor presents each commit on its own line with an action keyword:
+
+```
+pick   a1b2c3d  feat: add user login
+pick   e4f5g6h  fix: typo in login form
+pick   i7j8k9l  feat: add password reset
+pick   m0n1o2p  fix: reset email template
+pick   q3r4s5t  refactor: extract auth module
+```
+
+**Available commands and when to use each:**
+
+| Command | Effect | When to Use |
+|---------|--------|-------------|
+| `pick` (p) | Keep the commit as-is | Default; commit needs no changes |
+| `reword` (r) | Keep changes, edit the message | Fixing a typo or improving clarity in the commit message |
+| `edit` (e) | Pause at this commit for amending | Need to split a commit or change its content |
+| `squash` (s) | Merge into previous commit, combine messages | Folding a fix into the feature commit it belongs to |
+| `fixup` (f) | Merge into previous commit, discard this message | Same as squash but the fix message is not worth keeping |
+| `drop` (d) | Delete the commit entirely | Removing debug commits or experiments |
+
+### 7.2 Why Conflicts Happen During Rebase
+
+Rebase replays your commits one by one on top of a new base. Each replayed commit is essentially a patch applied to a potentially different codebase. A conflict occurs when:
+
+```
+Original branch:
+  base ─── A ─── B ─── C   (your feature)
+                  \
+                   X ─── Y  (main advanced)
+
+Rebase replays A, B, C on top of Y:
+  base ─── X ─── Y ─── A' ─── B' ─── C'
+
+If commit B modifies a line that X also modified,
+Git cannot auto-merge → conflict at B'
+```
+
+Key insight: during a multi-commit rebase, Git may stop **multiple times** -- once for each commit that conflicts. You resolve each conflict independently before continuing.
+
+### 7.3 Step-by-Step: Resolving Conflicts During Interactive Rebase
+
+```bash
+# Step 1: Start the interactive rebase
+# Why: we want to squash the last 4 commits into 2 clean ones
+git rebase -i HEAD~4
+
+# Suppose we set up the editor like this:
+# pick   a1b2c3d  feat: add user model
+# squash e4f5g6h  fix: user model validation
+# pick   i7j8k9l  feat: add user API
+# squash m0n1o2p  fix: API error handling
+
+# Step 2: Git begins replaying. If a conflict occurs, it stops:
+# CONFLICT (content): Merge conflict in src/models/user.py
+# error: could not apply e4f5g6h... fix: user model validation
+
+# Step 3: Check which files have conflicts
+git status
+# Both modified: src/models/user.py
+
+# Step 4: Open the conflicting file and resolve manually
+# Look for conflict markers:
+#   <<<<<<< HEAD
+#   (code from the new base)
+#   =======
+#   (code from your commit being replayed)
+#   >>>>>>> e4f5g6h (fix: user model validation)
+
+# Step 5: After resolving, stage the fixed files
+# Why: staging tells Git "I have resolved this file"
+git add src/models/user.py
+
+# Step 6: Continue the rebase
+# Why: Git picks up where it stopped and replays the next commit
+git rebase --continue
+
+# If another conflict occurs at a later commit, repeat steps 3-6
+```
+
+### 7.4 Rebase Control Commands
+
+```bash
+# Continue after resolving a conflict
+# Why: proceed to the next commit in the rebase sequence
+git rebase --continue
+
+# Abort the entire rebase and return to the original state
+# Why: something went wrong and you want to start over
+# This is always safe -- your branch returns to exactly how it was
+git rebase --abort
+
+# Skip the current commit entirely
+# Why: if this commit is no longer needed (e.g., the fix was already
+# incorporated upstream), you can drop it during conflict resolution
+git rebase --skip
+```
+
+### 7.5 Rebase vs Merge: Decision Guide
+
+```
+                    Use REBASE when...              Use MERGE when...
+                    ──────────────────              ─────────────────
+Audience            Local/personal branch           Shared/public branch
+History goal        Clean, linear history           Preserve branch topology
+Conflict handling   Resolve per-commit              Resolve once
+Risk                Rewrites history                Safe (additive)
+Typical workflow    Feature branch cleanup           Integrating feature → main
+                    before opening a PR
+```
+
+**The Golden Rule**: Never rebase commits that others have already pulled. Rebasing rewrites commit hashes, which creates duplicate commits and confusion for collaborators.
+
+```bash
+# Safe pattern: rebase your feature branch onto latest main before pushing
+git switch feature-branch
+git fetch origin
+
+# Why: bring your local commits on top of the latest remote main
+git rebase origin/main
+
+# Now push (may need --force-with-lease for an already-pushed branch)
+# Why: --force-with-lease is safer than --force because it checks
+# that no one else pushed to the branch since your last fetch
+git push --force-with-lease
+```
+
+### 7.6 Practical Example: Cleaning Up a Messy Branch
+
+A common real-world scenario: you have been working on a feature and accumulated a series of messy commits that you want to clean up before opening a pull request.
+
+```bash
+# Your branch has these commits:
+# abc1111  feat: add payment form (WIP)
+# abc2222  fix: form validation bug
+# abc3333  add console.log for debugging
+# abc4444  feat: payment form - complete
+# abc5555  remove console.log
+# abc6666  fix: CSS alignment
+# abc7777  feat: add payment confirmation page
+
+# Goal: squash into 2 clean commits
+git rebase -i HEAD~7
+
+# In the editor, reorganize:
+pick   abc1111  feat: add payment form (WIP)
+fixup  abc2222  fix: form validation bug
+fixup  abc3333  add console.log for debugging
+fixup  abc4444  feat: payment form - complete
+fixup  abc5555  remove console.log
+fixup  abc6666  fix: CSS alignment
+pick   abc7777  feat: add payment confirmation page
+
+# Result: 2 clean commits
+# - "feat: add payment form (WIP)" contains all form work
+# - "feat: add payment confirmation page" is separate
+
+# If you want to also reword the first commit:
+reword abc1111  feat: add payment form (WIP)
+fixup  abc2222  fix: form validation bug
+# ... (same as above)
+
+# Git will open a second editor to let you change the message to:
+# "feat: add payment form with validation"
+```
+
+### 7.7 Recovering from a Bad Rebase
+
+If a rebase goes wrong and you already completed it (cannot `--abort`), use `git reflog` to recover:
+
+```bash
+# Why: reflog records every HEAD movement, including before the rebase
+git reflog
+# abc9999 HEAD@{0}: rebase (finish): ...
+# def0000 HEAD@{1}: rebase (start): ...
+# ghi1111 HEAD@{2}: commit: your last commit before rebase
+
+# Restore to the state before the rebase started
+git reset --hard ghi1111
+```
+
+This safety net means you can always experiment with rebase without fear of permanent data loss.
+
+---
+
 ## Command Summary
 
 | Command | Description |
@@ -461,6 +678,41 @@ git clean -fdx
 | `git reflog` | HEAD movement history |
 | `git blame` | Line-by-line authors |
 | `git bisect` | Find bug commit |
+
+---
+
+## Exercises
+
+### Exercise 1: Stash Round-trip
+1. Modify two tracked files but do not stage them.
+2. Run `git stash push -m "wip: exercise 1"` and confirm the working directory is clean.
+3. Create a new commit on the current branch.
+4. Restore your stash with `git stash pop` and resolve any conflicts.
+5. Use `git stash show -p` on a stash entry to read its diff before applying it.
+
+### Exercise 2: Interactive Rebase Cleanup
+1. Create a new branch and make 5 commits: two feature commits, two "fix typo" commits, and one debug `console.log` commit.
+2. Run `git rebase -i HEAD~5`.
+3. Squash the typo-fix commits into their respective feature commits using `squash` or `fixup`, and `drop` the debug commit.
+4. Verify the result with `git log --oneline` — you should have exactly 2 clean commits.
+
+### Exercise 3: Cherry-pick a Hotfix
+1. On a `feature` branch, create a commit that fixes a critical bug (e.g., write a small fix to a file and commit it with `fix: critical security patch`).
+2. Note the commit hash with `git log --oneline -1`.
+3. Switch to `main` and cherry-pick only that commit using its hash.
+4. Confirm the fix is on `main` but the rest of the feature branch is not.
+
+### Exercise 4: reset vs revert Decision
+1. Create three commits on a local-only branch (`A`, `B`, `C`).
+2. Use `git reset --soft HEAD~1` to undo commit `C`. Observe that the changes are still staged.
+3. Re-commit, then use `git reset --hard HEAD~1` to undo it completely. Confirm the file changes are gone.
+4. Now push the branch, make another commit `D`, then use `git revert HEAD` to undo `D` without rewriting history. Explain why `reset` is inappropriate here.
+
+### Exercise 5: Recover with reflog
+1. Create a branch with two commits, then run `git reset --hard HEAD~2` — the commits are now "lost".
+2. Run `git reflog` and locate the SHA of the most recent lost commit.
+3. Recover the work by running `git reset --hard <sha>`.
+4. As a bonus, simulate a deleted branch: delete a branch with `git branch -D`, then use `git reflog` to find its tip and recreate it with `git branch <name> <sha>`.
 
 ---
 

@@ -1,14 +1,27 @@
 # Load Balancing
 
-## Overview
+**Previous**: [Network Fundamentals Review](./03_Network_Fundamentals_Review.md) | **Next**: [Reverse Proxy & API Gateway](./05_Reverse_Proxy_API_Gateway.md)
 
-This document covers the core concepts of Load Balancing. You'll learn the differences between L4/L7 load balancers, various traffic distribution algorithms, Sticky Sessions, and health check mechanisms.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a load balancer does and why it is essential for horizontally scaled systems
+2. Distinguish between Layer 4 and Layer 7 load balancers and select the appropriate type for a given scenario
+3. Compare distribution algorithms (round robin, weighted round robin, least connections, IP hash) and their trade-offs
+4. Describe how sticky sessions work and identify when they are necessary versus harmful
+5. Implement health check mechanisms to detect and route around unhealthy backend servers
+6. Design a highly available load balancer setup using active-passive or active-active configurations
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Study Time**: 2-3 hours
 **Prerequisites**: [03_Network_Fundamentals_Review.md](./03_Network_Fundamentals_Review.md)
 
 ---
+
+When millions of requests pour into a service every second, no single server can handle the flood alone. A load balancer acts as the traffic cop that decides which backend server should process each incoming request, ensuring no single machine is overwhelmed while others sit idle. Getting this distribution right is the difference between a responsive application and one that collapses under its own success.
 
 ## Table of Contents
 
@@ -19,8 +32,7 @@ This document covers the core concepts of Load Balancing. You'll learn the diffe
 5. [Health Checks](#5-health-checks)
 6. [High Availability Configuration](#6-high-availability-configuration)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -238,6 +250,14 @@ Load balancing is a technique that distributes incoming network traffic across m
 
 ## 3. Distribution Algorithms
 
+> **Analogy -- Netflix Queue and the Grocery Store**
+>
+> Imagine a grocery store with five checkout lanes. A **round-robin** load balancer is like a greeter who sends each new customer to the next lane in sequence -- lane 1, lane 2, lane 3, lane 4, lane 5, then back to lane 1. Simple, but it ignores the fact that lane 3 might already have someone with a cart full of items.
+>
+> A **least-connections** balancer is like a smart greeter who always points you to the lane with the fewest people. And **weighted** distribution is like having some lanes staffed with experienced cashiers who can handle twice the throughput -- so the greeter sends two people there for every one to the slower lanes.
+>
+> Netflix uses similar logic at massive scale: when you press play, a load balancer decides which of hundreds of streaming servers should send you the video, optimizing for server load, geographic proximity, and available bandwidth -- all in milliseconds.
+
 ### 3.1 Round Robin
 
 ```
@@ -346,6 +366,32 @@ Load balancing is a technique that distributes incoming network traffic across m
 │           (WebSocket)                                           │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+**Pseudocode:**
+
+```python
+def least_connections_route(servers, request):
+    # Unlike round-robin (stateless), least-connections must track live
+    # connection counts — more accurate but requires atomic updates
+    min_server = None
+    min_score = float('inf')
+
+    for server in servers:
+        if not server.healthy:
+            continue
+        # Weighted variant: normalize by capacity so a powerful server
+        # with 10 connections can still beat a weak one with 3
+        score = server.active_connections / server.weight
+
+        if score < min_score:
+            min_score = score
+            min_server = server
+
+    # Atomically increment BEFORE forwarding — prevents two concurrent
+    # requests from both choosing the same "least loaded" server
+    min_server.active_connections += 1
+    forward(request, min_server)
 ```
 
 ### 3.4 IP Hash
@@ -940,25 +986,41 @@ Architecture:
 
 ---
 
-## 8. Next Steps
+## Hands-On Exercises
 
-Now that you understand load balancing, learn about reverse proxy and API gateway.
+### Exercise 1: Load Balancer Algorithm Comparison
 
-### Next Lesson
-- [05_Reverse_Proxy_API_Gateway.md](./05_Reverse_Proxy_API_Gateway.md)
+Use `examples/System_Design/04_load_balancer.py` to explore load balancer behavior.
 
-### Related Lessons
-- [02_Scalability_Basics.md](./02_Scalability_Basics.md) - Stateless architecture
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - Session storage
+**Tasks:**
+1. Run all demos and observe the distribution for each algorithm
+2. Add a new scenario: 5 servers where one has 3× the weight of others. Compare weighted round-robin vs. least-connections for 1000 requests with random connection durations (1-20s)
+3. Implement a new algorithm: **Weighted Least Connections** — combine server weights with active connection counts
+4. Test with a mix of long-running (10s) and short (1s) requests. Which algorithm achieves the best balance?
 
-### Recommended Practice
-1. Configure load balancer with Nginx
-2. HAProxy practice
-3. AWS ALB/NLB comparison test
+### Exercise 2: Health Check Simulator
+
+Extend the load balancer with health check functionality.
+
+**Tasks:**
+1. Add a `health_check()` method that marks servers as healthy/unhealthy based on success/failure counts
+2. Implement a configurable threshold: mark unhealthy after N consecutive failures, healthy after M consecutive successes
+3. Simulate a scenario where one server starts failing at t=10, recovers at t=30
+4. Track metrics: requests served by each server, requests dropped during transitions, total downtime detected
+
+### Exercise 3: Session Affinity with Failover
+
+Implement IP-hash load balancing with graceful failover.
+
+**Tasks:**
+1. Start with `IPHashLB` from the example code
+2. When a server goes down, redistribute only that server's clients to remaining servers using consistent hashing (reference `07_consistent_hashing.py`)
+3. When the server recovers, gradually migrate clients back (not all at once)
+4. Measure the percentage of clients that change servers during failover vs. modular hash approach
 
 ---
 
-## 9. References
+## 8. References
 
 ### Tools
 - [Nginx](https://nginx.org/) - Web server & load balancer
@@ -972,6 +1034,10 @@ Now that you understand load balancing, learn about reverse proxy and API gatewa
 
 ### Online Resources
 - [High Availability Load Balancers](https://www.nginx.com/blog/nginx-high-availability-with-haproxy/)
+
+---
+
+**Previous**: [Network Fundamentals Review](./03_Network_Fundamentals_Review.md) | **Next**: [Reverse Proxy & API Gateway](./05_Reverse_Proxy_API_Gateway.md)
 
 ---
 

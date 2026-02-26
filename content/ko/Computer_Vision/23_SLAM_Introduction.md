@@ -1,5 +1,18 @@
 # SLAM 입문 (Visual SLAM Introduction)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. SLAM(Simultaneous Localization and Mapping)을 정의하고 미지의 환경에서 동시 위치 추정과 지도 작성이 어떻게 이루어지는지 설명할 수 있습니다.
+2. 특징점 매칭(Feature Matching)을 사용한 비주얼 오도메트리(Visual Odometry)를 구현하여 연속 프레임 간 카메라 자세를 추정할 수 있습니다.
+3. ORB-SLAM 파이프라인의 특징점 추출, 추적(Tracking), 지역 매핑(Local Mapping), 루프 클로저(Loop Closure) 단계를 설명할 수 있습니다.
+4. 센서 특성, 정확도, 계산 비용 측면에서 Visual SLAM과 LiDAR SLAM을 비교할 수 있습니다.
+5. 루프 클로저(Loop Closure) 검출의 개념과 SLAM 시스템에서 누적 드리프트를 보정하는 역할을 설명할 수 있습니다.
+6. 기본적인 SLAM 시뮬레이션을 구현하고 실측 데이터(Ground Truth)와 비교하여 궤적 정확도를 평가할 수 있습니다.
+
+---
+
 ## 개요
 
 SLAM (Simultaneous Localization and Mapping)은 로봇이나 자율주행 시스템이 미지의 환경에서 지도를 작성하면서 동시에 자신의 위치를 추정하는 기술입니다. Visual SLAM, LiDAR SLAM, Loop Closure의 기초를 다룹니다.
@@ -26,34 +39,47 @@ SLAM (Simultaneous Localization and Mapping)은 로봇이나 자율주행 시스
 
 ### SLAM이란?
 
+SLAM은 자율 주행에서 근본적인 부트스트랩 문제를 해결합니다. 위치를 파악하려면 지도가 필요하고, 지도를 만들려면 위치를 알아야 합니다. SLAM은 이 두 가지를 순차적으로 해결하는 대신, 로봇의 궤적과 지도 모두에 대한 결합 확률 분포(Joint Probability Distribution)를 유지하며 새로운 센서 데이터가 들어올 때마다 두 가지를 동시에 업데이트합니다.
+
+SLAM 사후 확률(Posterior)은 이 결합 불확실성을 포착합니다:
+
+**p(x_{1:t}, m | z_{1:t}, u_{1:t})**
+
+- **x_{1:t}**: 로봇의 전체 궤적 (매 시간 단계의 자세)
+- **m**: 지도 (랜드마크 위치 또는 점유 격자 셀)
+- **z_{1:t}**: 지금까지의 모든 센서 관측 (픽셀 특징점, 레이저 반사값)
+- **u_{1:t}**: 모든 제어 입력 (휠 오도메트리(Wheel Odometry), IMU)
+
+핵심 통찰은 관측값 z가 자세와 지도를 *동시에* 제약한다는 것입니다. 로봇이 알려진 랜드마크를 다시 방문할 때, 두 값 모두에 대한 불확실성이 줄어듭니다. 이것이 루프 클로저(Loop Closure)가 그렇게 극적인 보정을 만들어내는 이유입니다.
+
 ```
 SLAM (Simultaneous Localization and Mapping):
-동시적 위치추정 및 지도작성
+Simultaneous localization and mapping
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  핵심 질문:                                                     │
-│  "지도 없이 어떻게 위치를 알 수 있는가?"                        │
-│  "위치를 모르면서 어떻게 지도를 만들 수 있는가?"                │
+│  Key Questions:                                                 │
+│  "How can you know your position without a map?"                │
+│  "How can you build a map without knowing your position?"       │
 │                                                                 │
-│  → 둘을 동시에 해결! (닭과 달걀 문제)                           │
+│  → Solve both simultaneously! (Chicken and egg problem)         │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────┐     │
 │  │                                                        │     │
-│  │     센서 데이터                                        │     │
-│  │     (카메라, LiDAR, IMU)                               │     │
+│  │     Sensor Data                                        │     │
+│  │     (Camera, LiDAR, IMU)                               │     │
 │  │            │                                           │     │
 │  │            ▼                                           │     │
 │  │     ┌──────────────┐                                   │     │
 │  │     │    SLAM      │                                   │     │
-│  │     │   알고리즘   │                                   │     │
+│  │     │  Algorithm   │                                   │     │
 │  │     └──────┬───────┘                                   │     │
 │  │            │                                           │     │
 │  │     ┌──────┴───────┐                                   │     │
 │  │     │              │                                   │     │
 │  │     ▼              ▼                                   │     │
 │  │  ┌─────────┐  ┌─────────┐                             │     │
-│  │  │  지도   │  │  위치   │                             │     │
+│  │  │   Map   │  │  Pose   │                             │     │
 │  │  │  (Map)  │  │ (Pose)  │                             │     │
 │  │  └─────────┘  └─────────┘                             │     │
 │  │                                                        │     │
@@ -61,70 +87,78 @@ SLAM (Simultaneous Localization and Mapping):
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
-응용 분야:
+Applications:
 ┌─────────────────┬─────────────────────────────────────────┐
-│ 분야            │ 예시                                    │
+│ Field           │ Examples                                │
 ├─────────────────┼─────────────────────────────────────────┤
-│ 자율주행        │ 자동차, 드론, 배달 로봇                 │
-│ 증강현실        │ ARKit, ARCore, HoloLens                 │
-│ 로봇 청소기     │ Roomba, Roborock                        │
-│ 3D 스캐닝       │ 건축, 문화재 복원                       │
-│ 내비게이션      │ 실내 위치 인식                          │
+│ Autonomous      │ Cars, drones, delivery robots           │
+│ Driving         │                                         │
+├─────────────────┼─────────────────────────────────────────┤
+│ Augmented       │ ARKit, ARCore, HoloLens                 │
+│ Reality         │                                         │
+├─────────────────┼─────────────────────────────────────────┤
+│ Robot Vacuum    │ Roomba, Roborock                        │
+│ Cleaners        │                                         │
+├─────────────────┼─────────────────────────────────────────┤
+│ 3D Scanning     │ Architecture, cultural heritage         │
+│                 │ restoration                             │
+├─────────────────┼─────────────────────────────────────────┤
+│ Navigation      │ Indoor localization                     │
 └─────────────────┴─────────────────────────────────────────┘
 ```
 
 ### SLAM 분류
 
 ```
-SLAM 방식 분류:
+SLAM Method Classification:
 
-1. 센서 기반 분류
+1. Sensor-based Classification
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
 │  Visual SLAM (V-SLAM)                                           │
-│  - 카메라 (단안, 스테레오, RGB-D)                               │
-│  - 특징점 기반 또는 직접 방식                                   │
-│  - 예: ORB-SLAM, LSD-SLAM, DSO                                 │
+│  - Camera (monocular, stereo, RGB-D)                            │
+│  - Feature-based or direct methods                              │
+│  - Examples: ORB-SLAM, LSD-SLAM, DSO                            │
 │                                                                 │
 │  LiDAR SLAM                                                     │
-│  - 레이저 스캐너                                                │
-│  - 포인트 클라우드 매칭                                         │
-│  - 예: Cartographer, LOAM, LeGO-LOAM                           │
+│  - Laser scanner                                                │
+│  - Point cloud matching                                         │
+│  - Examples: Cartographer, LOAM, LeGO-LOAM                      │
 │                                                                 │
 │  Visual-Inertial SLAM                                           │
-│  - 카메라 + IMU 융합                                            │
-│  - 예: VINS-Mono, OKVIS, MSCKF                                 │
+│  - Camera + IMU fusion                                          │
+│  - Examples: VINS-Mono, OKVIS, MSCKF                            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
-2. 방법론 기반 분류
+2. Methodology-based Classification
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  필터 기반 (Filter-based)                                       │
-│  - EKF-SLAM, UKF-SLAM                                          │
-│  - 실시간 업데이트                                              │
-│  - 선형화 오류 누적 문제                                        │
+│  Filter-based                                                   │
+│  - EKF-SLAM, UKF-SLAM                                           │
+│  - Real-time updates                                            │
+│  - Linearization error accumulation issues                      │
 │                                                                 │
-│  그래프 기반 (Graph-based)                                      │
-│  - 포즈 그래프 최적화                                           │
-│  - 번들 조정                                                    │
-│  - 더 정확하지만 계산 비용 높음                                 │
+│  Graph-based                                                    │
+│  - Pose graph optimization                                      │
+│  - Bundle adjustment                                            │
+│  - More accurate but computationally expensive                  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
-3. 프론트엔드/백엔드
+3. Front-end/Back-end
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  프론트엔드 (Front-end)                                         │
-│  - 센서 데이터 처리                                             │
-│  - 특징 추출 및 매칭                                            │
-│  - 초기 포즈 추정                                               │
-│  - 루프 클로저 탐지                                             │
+│  Front-end                                                      │
+│  - Sensor data processing                                       │
+│  - Feature extraction and matching                              │
+│  - Initial pose estimation                                      │
+│  - Loop closure detection                                       │
 │                                                                 │
-│  백엔드 (Back-end)                                              │
-│  - 전역 최적화                                                  │
-│  - 그래프 최적화                                                │
-│  - 불확실성 추정                                                │
+│  Back-end                                                       │
+│  - Global optimization                                          │
+│  - Graph optimization                                           │
+│  - Uncertainty estimation                                       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -137,38 +171,38 @@ SLAM 방식 분류:
 
 ```
 Visual Odometry (VO):
-연속된 이미지로부터 카메라 움직임 추정
+Estimating camera motion from consecutive images
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  프레임 t-1        프레임 t          프레임 t+1                 │
+│  Frame t-1        Frame t          Frame t+1                    │
 │  ┌───────┐        ┌───────┐        ┌───────┐                   │
 │  │   📷  │──T₁───▶│   📷  │──T₂───▶│   📷  │                   │
 │  └───────┘        └───────┘        └───────┘                   │
 │                                                                 │
-│  누적 포즈: P_t = T₁ * T₂ * ... * T_t                           │
+│  Accumulated Pose: P_t = T₁ * T₂ * ... * T_t                    │
 │                                                                 │
-│  문제점:                                                        │
-│  - 누적 오차 (drift)                                            │
-│  - 스케일 모호성 (단안 카메라)                                  │
-│  - 빠른 움직임에 취약                                           │
+│  Problems:                                                      │
+│  - Accumulated drift                                            │
+│  - Scale ambiguity (monocular camera)                           │
+│  - Vulnerable to fast motion                                    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
-VO 파이프라인:
+VO Pipeline:
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  1. 이미지 획득                                                 │
+│  1. Image Acquisition                                           │
 │       ▼                                                         │
-│  2. 특징 추출 (ORB, SIFT, Harris corners)                       │
+│  2. Feature Extraction (ORB, SIFT, Harris corners)              │
 │       ▼                                                         │
-│  3. 특징 매칭/추적 (BF Matcher, Optical Flow)                   │
+│  3. Feature Matching/Tracking (BF Matcher, Optical Flow)        │
 │       ▼                                                         │
-│  4. 모션 추정 (Essential Matrix, PnP)                           │
+│  4. Motion Estimation (Essential Matrix, PnP)                   │
 │       ▼                                                         │
-│  5. 지역 최적화 (Local BA)                                      │
+│  5. Local Optimization (Local BA)                               │
 │       ▼                                                         │
-│  6. 포즈 업데이트                                               │
+│  6. Pose Update                                                 │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -180,33 +214,39 @@ import cv2
 import numpy as np
 
 class MonocularVO:
-    """단안 Visual Odometry"""
+    """Monocular Visual Odometry"""
 
     def __init__(self, K, detector='ORB'):
         """
-        K: 카메라 내부 파라미터 행렬
-        detector: 특징점 검출기 ('ORB', 'SIFT', 'FAST')
+        K: Camera intrinsic parameter matrix
+        detector: Feature detector ('ORB', 'SIFT', 'FAST')
         """
         self.K = K
         self.focal = K[0, 0]
         self.pp = (K[0, 2], K[1, 2])  # principal point
 
-        # 특징점 검출기
+        # Feature detector
         if detector == 'ORB':
+            # ORB is preferred over SIFT for real-time VO: binary descriptors
+            # enable Hamming-distance matching (~10x faster than SIFT's L2),
+            # and ORB is patent-free with comparable repeatability outdoors.
             self.detector = cv2.ORB_create(3000)
         elif detector == 'SIFT':
             self.detector = cv2.SIFT_create(3000)
         else:
             self.detector = cv2.FastFeatureDetector_create(threshold=25)
 
-        # 광학 흐름 파라미터
+        # Optical flow parameters
         self.lk_params = dict(
-            winSize=(21, 21),
-            maxLevel=3,
+            winSize=(21, 21),   # 21×21 search window: large enough to handle ~10px/frame motion
+                                # without losing the feature, but small enough to stay on one surface
+            maxLevel=3,         # 3-level pyramid lets us track features displaced up to ~80px
+                                # (21 * 2^3) — covers typical camera motion between frames
             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01)
+            # Stop when displacement < 0.01px OR after 30 iterations — trades accuracy vs speed
         )
 
-        # 상태
+        # State
         self.prev_frame = None
         self.prev_pts = None
         self.cur_R = np.eye(3)
@@ -214,7 +254,7 @@ class MonocularVO:
         self.trajectory = []
 
     def detect_features(self, img):
-        """특징점 검출"""
+        """Detect features"""
         if hasattr(self.detector, 'detectAndCompute'):
             kp, _ = self.detector.detectAndCompute(img, None)
         else:
@@ -224,7 +264,7 @@ class MonocularVO:
         return pts.reshape(-1, 1, 2)
 
     def track_features(self, prev_img, cur_img, prev_pts):
-        """광학 흐름으로 특징점 추적"""
+        """Track features using optical flow"""
 
         cur_pts, status, err = cv2.calcOpticalFlowPyrLK(
             prev_img, cur_img, prev_pts, None, **self.lk_params
@@ -237,53 +277,66 @@ class MonocularVO:
         return prev_pts, cur_pts
 
     def estimate_pose(self, pts1, pts2):
-        """Essential Matrix로 포즈 추정"""
+        """Estimate pose using Essential Matrix"""
 
         E, mask = cv2.findEssentialMat(
             pts1, pts2, self.K,
-            method=cv2.RANSAC,
-            prob=0.999,
-            threshold=1.0
+            method=cv2.RANSAC,  # RANSAC discards outlier matches from incorrect tracking
+                                # or moving objects; without it, even a few bad matches
+                                # corrupt the entire Essential Matrix estimate
+            prob=0.999,         # 99.9% confidence that at least one sample is outlier-free;
+                                # higher than typical (0.99) because VO errors compound over time
+            threshold=1.0       # 1.0px Sampson distance tolerance — tight enough to reject
+                                # mismatches yet forgiving of sub-pixel calibration residuals
         )
 
+        # recoverPose selects the unique R,t from the 4 possible decompositions
+        # by checking which solution has the most points in front of both cameras
         _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K)
 
         return R, t
 
     def process_frame(self, frame):
-        """프레임 처리"""
+        """Process frame"""
 
-        # 그레이스케일 변환
+        # Convert to grayscale
         if len(frame.shape) == 3:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         else:
             gray = frame
 
         if self.prev_frame is None:
-            # 첫 프레임
+            # First frame
             self.prev_frame = gray
             self.prev_pts = self.detect_features(gray)
             return self.cur_R, self.cur_t
 
-        # 특징점 추적
+        # Track features
         if self.prev_pts is not None and len(self.prev_pts) > 0:
             prev_pts, cur_pts = self.track_features(
                 self.prev_frame, gray, self.prev_pts
             )
 
             if len(prev_pts) >= 8:
-                # 포즈 추정
+                # 8 is the theoretical minimum for the 8-point algorithm that
+                # underlies findEssentialMat; in practice more is better, but
+                # we need at least this many to have a determined linear system
                 R, t = self.estimate_pose(
                     prev_pts.reshape(-1, 2),
                     cur_pts.reshape(-1, 2)
                 )
 
-                # 포즈 누적
+                # Accumulate pose in world frame: translation must be rotated
+                # by the *current* world-to-camera rotation before adding,
+                # so that all increments are expressed in the same reference frame
                 self.cur_t = self.cur_t + self.cur_R @ t
                 self.cur_R = R @ self.cur_R
 
-                # 새 특징점이 필요하면 검출
+                # Detect new features if needed
                 if len(cur_pts) < 1000:
+                    # Replenish when tracked count falls below threshold —
+                    # too few features degrades pose estimation accuracy and
+                    # increases drift; 1000 is a practical balance for HD video
                     new_pts = self.detect_features(gray)
                     if len(cur_pts) > 0:
                         self.prev_pts = np.vstack([
@@ -301,16 +354,16 @@ class MonocularVO:
 
         self.prev_frame = gray
 
-        # 궤적 저장
+        # Save trajectory
         self.trajectory.append(self.cur_t.copy())
 
         return self.cur_R, self.cur_t
 
     def get_trajectory(self):
-        """궤적 반환"""
+        """Return trajectory"""
         return np.array([t.ravel() for t in self.trajectory])
 
-# 사용 예
+# Usage example
 K = np.array([
     [718.856, 0, 607.1928],
     [0, 718.856, 185.2157],
@@ -328,13 +381,13 @@ while cap.isOpened():
 
     R, t = vo.process_frame(frame)
 
-    # 현재 위치 출력
+    # Print current position
     x, y, z = t.ravel()
     print(f"Position: x={x:.2f}, y={y:.2f}, z={z:.2f}")
 
 cap.release()
 
-# 궤적 시각화
+# Visualize trajectory
 trajectory = vo.get_trajectory()
 ```
 
@@ -342,7 +395,7 @@ trajectory = vo.get_trajectory()
 
 ```python
 class StereoVO:
-    """스테레오 Visual Odometry"""
+    """Stereo Visual Odometry"""
 
     def __init__(self, K, baseline, detector='ORB'):
         self.K = K
@@ -350,15 +403,20 @@ class StereoVO:
         self.focal = K[0, 0]
 
         self.detector = cv2.ORB_create(3000)
+        # NORM_HAMMING matches binary ORB descriptors by XOR bit-count,
+        # which is much faster than L2 for floating-point descriptors like SIFT
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-        # 스테레오 매처
+        # Stereo matcher — SGBM (Semi-Global Block Matching) enforces
+        # disparity smoothness along multiple scan-line directions,
+        # giving more complete depth maps than local block matching alone
         self.stereo = cv2.StereoSGBM_create(
             minDisparity=0,
-            numDisparities=128,
-            blockSize=5,
-            P1=8 * 3 * 5 ** 2,
-            P2=32 * 3 * 5 ** 2
+            numDisparities=128,  # Search range 0–128px; covers ~2–50m depth at typical baselines
+            blockSize=5,         # 5×5 matching window: small enough to preserve edges,
+                                 # large enough for reliable texture matching
+            P1=8 * 3 * 5 ** 2,  # Penalty for disparity change of 1 — standard heuristic
+            P2=32 * 3 * 5 ** 2  # Penalty for larger jumps; P2 > P1 discourages discontinuities
         )
 
         self.prev_pts_3d = None
@@ -368,11 +426,11 @@ class StereoVO:
         self.cur_t = np.zeros((3, 1))
 
     def compute_depth(self, left, right):
-        """스테레오 매칭으로 깊이 계산"""
+        """Compute depth using stereo matching"""
 
         disparity = self.stereo.compute(left, right).astype(np.float32) / 16.0
 
-        # 시차 → 깊이
+        # Disparity → depth
         depth = np.zeros_like(disparity)
         valid = disparity > 0
         depth[valid] = self.focal * self.baseline / disparity[valid]
@@ -380,7 +438,7 @@ class StereoVO:
         return depth
 
     def get_3d_points(self, kp, depth):
-        """2D 키포인트를 3D로 변환"""
+        """Convert 2D keypoints to 3D"""
 
         fx = self.K[0, 0]
         fy = self.K[1, 1]
@@ -396,7 +454,8 @@ class StereoVO:
             if 0 <= x < depth.shape[1] and 0 <= y < depth.shape[0]:
                 z = depth[y, x]
 
-                if z > 0 and z < 100:  # 유효한 깊이
+                if z > 0 and z < 100:  # 0–100m: reject invalid (0) and implausibly far points;
+                                       # stereo becomes unreliable beyond ~baseline×50 range
                     X = (pt.pt[0] - cx) * z / fx
                     Y = (pt.pt[1] - cy) * z / fy
                     pts_3d.append([X, Y, z])
@@ -405,19 +464,19 @@ class StereoVO:
         return np.array(pts_3d), valid_indices
 
     def process_frame(self, left, right):
-        """스테레오 프레임 처리"""
+        """Process stereo frame"""
 
-        # 그레이스케일
+        # Convert to grayscale
         gray_left = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
         gray_right = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
 
-        # 깊이 계산
+        # Compute depth
         depth = self.compute_depth(gray_left, gray_right)
 
-        # 특징 검출
+        # Detect features
         kp, desc = self.detector.detectAndCompute(gray_left, None)
 
-        # 3D 점 계산
+        # Compute 3D points
         pts_3d, valid_idx = self.get_3d_points(kp, depth)
 
         if self.prev_pts_3d is None:
@@ -426,16 +485,19 @@ class StereoVO:
             self.prev_desc = desc[valid_idx]
             return self.cur_R, self.cur_t
 
-        # 이전 프레임과 매칭
+        # Match with previous frame
         matches = self.bf.knnMatch(self.prev_desc, desc[valid_idx], k=2)
 
         good_matches = []
         for m, n in matches:
+            # Lowe's ratio test: accept only matches where the best is
+            # significantly better than the second-best (0.7 threshold).
+            # This rejects ambiguous matches in repetitive textures.
             if m.distance < 0.7 * n.distance:
                 good_matches.append(m)
 
         if len(good_matches) >= 6:
-            # 3D-2D 대응점
+            # 3D-2D correspondences
             obj_points = np.array([
                 self.prev_pts_3d[m.queryIdx] for m in good_matches
             ])
@@ -443,7 +505,10 @@ class StereoVO:
                 kp[valid_idx[m.trainIdx]].pt for m in good_matches
             ])
 
-            # PnP로 포즈 추정
+            # PnP (Perspective-n-Point): given 3D map points and their 2D
+            # projections, recover camera pose directly — more stable than
+            # Essential Matrix decomposition because depth is already known.
+            # RANSAC variant handles moving objects and descriptor mismatches.
             success, rvec, tvec, inliers = cv2.solvePnPRansac(
                 obj_points, img_points, self.K, None
             )
@@ -451,11 +516,11 @@ class StereoVO:
             if success and inliers is not None and len(inliers) > 10:
                 R, _ = cv2.Rodrigues(rvec)
 
-                # 포즈 누적
+                # Accumulate pose
                 self.cur_t = self.cur_t + self.cur_R @ tvec
                 self.cur_R = R @ self.cur_R
 
-        # 상태 업데이트
+        # Update state
         self.prev_pts_3d = pts_3d
         self.prev_kp = [kp[i] for i in valid_idx]
         self.prev_desc = desc[valid_idx]
@@ -470,18 +535,18 @@ class StereoVO:
 ### ORB-SLAM 개요
 
 ```
-ORB-SLAM 아키텍처:
+ORB-SLAM Architecture:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  ORB-SLAM: 가장 널리 사용되는 Visual SLAM 시스템                │
+│  ORB-SLAM: Most widely used Visual SLAM system                  │
 │                                                                 │
-│  버전:                                                          │
-│  - ORB-SLAM (2015): 단안                                        │
-│  - ORB-SLAM2 (2017): 단안/스테레오/RGB-D                        │
-│  - ORB-SLAM3 (2021): Visual-Inertial, 다중 맵                   │
+│  Versions:                                                      │
+│  - ORB-SLAM (2015): Monocular                                   │
+│  - ORB-SLAM2 (2017): Monocular/Stereo/RGB-D                     │
+│  - ORB-SLAM3 (2021): Visual-Inertial, multi-map                 │
 │                                                                 │
-│  3개의 병렬 스레드:                                             │
+│  Three parallel threads:                                        │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │                                                         │    │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │    │
@@ -503,25 +568,25 @@ ORB-SLAM 아키텍처:
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 
-Tracking 스레드:
-- 매 프레임 처리
-- ORB 특징 추출
-- 이전 프레임 또는 맵과 매칭
-- 초기 포즈 추정
-- 키프레임 결정
+Tracking Thread:
+- Process every frame
+- ORB feature extraction
+- Match with previous frame or map
+- Initial pose estimation
+- Keyframe decision
 
-Local Mapping 스레드:
-- 새 키프레임 삽입
-- 최근 MapPoint 컬링
-- 새 MapPoint 생성
+Local Mapping Thread:
+- Insert new keyframes
+- Cull recent MapPoints
+- Create new MapPoints
 - Local Bundle Adjustment
-- 중복 키프레임 제거
+- Remove redundant keyframes
 
-Loop Closing 스레드:
-- 루프 후보 검출 (DBoW2)
-- 루프 검증 및 보정
-- Essential Graph 최적화
-- 전역 Bundle Adjustment
+Loop Closing Thread:
+- Detect loop candidates (DBoW2)
+- Verify and correct loops
+- Essential Graph optimization
+- Global Bundle Adjustment
 ```
 
 ### ORB 특징과 Bag of Words
@@ -531,7 +596,7 @@ import cv2
 import numpy as np
 
 class ORBVocabulary:
-    """ORB 기반 Bag of Words"""
+    """ORB-based Bag of Words"""
 
     def __init__(self, num_words=1000):
         self.orb = cv2.ORB_create(1000)
@@ -540,7 +605,7 @@ class ORBVocabulary:
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     def train(self, images):
-        """이미지로부터 vocabulary 학습"""
+        """Train vocabulary from images"""
 
         all_descriptors = []
 
@@ -552,23 +617,27 @@ class ORBVocabulary:
 
         all_desc = np.vstack(all_descriptors)
 
-        # K-means 클러스터링
+        # K-means clusters descriptors into "visual words" — each cluster
+        # center becomes a prototype that any descriptor can be quantized to.
+        # This lets us compare images by word-frequency histogram rather than
+        # exhaustive descriptor matching, reducing query cost from O(N·M) to O(N).
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
                    100, 0.2)
         _, labels, centers = cv2.kmeans(
             all_desc.astype(np.float32),
-            self.num_words,
+            self.num_words,  # Vocabulary size: more words → finer discrimination,
+                             # but slower lookup and larger database memory footprint
             None,
             criteria,
-            10,
+            10,              # 10 random restarts pick the best clustering (lowest inertia)
             cv2.KMEANS_RANDOM_CENTERS
         )
 
         self.vocabulary = centers.astype(np.uint8)
-        print(f"Vocabulary 생성 완료: {self.num_words} words")
+        print(f"Vocabulary created: {self.num_words} words")
 
     def compute_bow(self, img):
-        """이미지의 BoW 벡터 계산"""
+        """Compute BoW vector for image"""
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, desc = self.orb.detectAndCompute(gray, None)
@@ -576,50 +645,57 @@ class ORBVocabulary:
         if desc is None:
             return np.zeros(self.num_words)
 
-        # 각 디스크립터를 가장 가까운 vocabulary word에 할당
+        # Assign each descriptor to nearest vocabulary word
         matches = self.bf.match(desc, self.vocabulary)
 
         bow = np.zeros(self.num_words)
         for m in matches:
-            bow[m.trainIdx] += 1
+            bow[m.trainIdx] += 1  # Accumulate word frequencies (term frequency)
 
-        # 정규화
-        bow = bow / (np.linalg.norm(bow) + 1e-6)
+        # L2-normalize so cosine similarity (dot product) is scale-invariant —
+        # images with more features shouldn't score higher just because of feature count
+        bow = bow / (np.linalg.norm(bow) + 1e-6)  # 1e-6 avoids division by zero on blank frames
 
         return bow
 
     def compute_similarity(self, bow1, bow2):
-        """두 BoW 벡터의 유사도"""
+        """Similarity between two BoW vectors"""
         return np.dot(bow1, bow2)
 
 
 class SimpleSLAM:
-    """간단한 SLAM 시스템 (ORB-SLAM 컨셉)"""
+    """Simple SLAM system (ORB-SLAM concept)"""
 
     def __init__(self, K):
         self.K = K
         self.orb = cv2.ORB_create(2000)
+        # crossCheck=True enforces mutual consistency: match A→B is kept only if
+        # B also maps back to A as its nearest neighbor, eliminating one-sided matches.
+        # This is simpler than Lowe's ratio test and works well for keyframe matching
+        # where both descriptor sets are from the same detector.
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
-        # 맵
-        self.keyframes = []      # 키프레임 목록
-        self.map_points = []     # 3D 포인트
-        self.poses = []          # 키프레임 포즈
+        # Map
+        self.keyframes = []      # Keyframe list
+        self.map_points = []     # 3D points
+        self.poses = []          # Keyframe poses
 
-        # 현재 상태
+        # Current state
         self.cur_R = np.eye(3)
         self.cur_t = np.zeros((3, 1))
         self.prev_frame = None
         self.prev_kp = None
         self.prev_desc = None
 
-        # 키프레임 기준
-        self.kf_threshold = 30   # 최소 매칭 수
+        # Keyframe criteria: 30 matches is the practical lower bound before
+        # Essential Matrix estimation becomes unreliable. Below this, RANSAC
+        # may converge to a degenerate solution (e.g., pure rotation).
+        self.kf_threshold = 30   # Minimum matches
 
     def is_keyframe(self, num_matches, motion):
-        """키프레임 여부 결정"""
+        """Decide if keyframe"""
 
-        # 간단한 기준: 매칭 수가 적거나 움직임이 크면 키프레임
+        # Simple criteria: keyframe if few matches or large motion
         translation = np.linalg.norm(motion)
 
         if num_matches < self.kf_threshold or translation > 0.5:
@@ -627,7 +703,7 @@ class SimpleSLAM:
         return False
 
     def add_keyframe(self, frame, kp, desc, pose):
-        """키프레임 추가"""
+        """Add keyframe"""
 
         keyframe = {
             'frame': frame.copy(),
@@ -639,16 +715,16 @@ class SimpleSLAM:
         self.keyframes.append(keyframe)
         self.poses.append(pose)
 
-        print(f"Keyframe 추가: 총 {len(self.keyframes)}개")
+        print(f"Keyframe added: total {len(self.keyframes)}")
 
     def process_frame(self, frame):
-        """프레임 처리 (Tracking)"""
+        """Process frame (Tracking)"""
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         kp, desc = self.orb.detectAndCompute(gray, None)
 
         if self.prev_frame is None:
-            # 첫 프레임 → 키프레임
+            # First frame → keyframe
             pose = {'R': np.eye(3), 't': np.zeros((3, 1))}
             self.add_keyframe(gray, kp, desc, pose)
             self.prev_frame = gray
@@ -656,29 +732,29 @@ class SimpleSLAM:
             self.prev_desc = desc
             return self.cur_R, self.cur_t
 
-        # 이전 프레임과 매칭
+        # Match with previous frame
         matches = self.bf.match(self.prev_desc, desc)
         matches = sorted(matches, key=lambda x: x.distance)[:500]
 
         if len(matches) >= 8:
-            # 매칭점 추출
+            # Extract matched points
             pts1 = np.float32([self.prev_kp[m.queryIdx].pt for m in matches])
             pts2 = np.float32([kp[m.trainIdx].pt for m in matches])
 
-            # Essential Matrix로 포즈 추정
+            # Estimate pose using Essential Matrix
             E, mask = cv2.findEssentialMat(pts1, pts2, self.K)
             _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K)
 
-            # 포즈 누적
+            # Accumulate pose
             self.cur_t = self.cur_t + self.cur_R @ t
             self.cur_R = R @ self.cur_R
 
-            # 키프레임 체크
+            # Check keyframe
             if self.is_keyframe(len(matches), t):
                 pose = {'R': self.cur_R.copy(), 't': self.cur_t.copy()}
                 self.add_keyframe(gray, kp, desc, pose)
 
-        # 상태 업데이트
+        # Update state
         self.prev_frame = gray
         self.prev_kp = kp
         self.prev_desc = desc
@@ -686,12 +762,14 @@ class SimpleSLAM:
         return self.cur_R, self.cur_t
 
     def get_camera_trajectory(self):
-        """카메라 궤적 반환"""
+        """Return camera trajectory"""
         trajectory = []
         for pose in self.poses:
             R = pose['R']
             t = pose['t']
-            # 카메라 위치 = -R^T * t
+            # Camera position in world frame = -R^T * t
+            # Because t is the world origin expressed in camera coordinates,
+            # we invert the transform: world position = R^T * (-t)
             pos = -R.T @ t
             trajectory.append(pos.ravel())
         return np.array(trajectory)
@@ -708,29 +786,29 @@ LiDAR SLAM:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  LiDAR 센서 특징:                                               │
-│  - 360도 스캔                                                   │
-│  - 정확한 거리 측정                                             │
-│  - 조명 조건에 강건                                             │
-│  - 풍부한 3D 포인트 클라우드                                    │
+│  LiDAR Sensor Characteristics:                                  │
+│  - 360-degree scanning                                          │
+│  - Accurate distance measurement                                │
+│  - Robust to lighting conditions                                │
+│  - Rich 3D point clouds                                         │
 │                                                                 │
-│  LiDAR 종류:                                                    │
+│  LiDAR Types:                                                   │
 │  ┌──────────────────┬─────────────────────────────────────┐     │
-│  │ 2D LiDAR         │ 평면 스캔, 저렴, 로봇 청소기        │     │
-│  │ (예: RPLiDAR)    │                                     │     │
+│  │ 2D LiDAR         │ Planar scan, affordable, robot      │     │
+│  │ (e.g., RPLiDAR)  │ vacuum cleaners                     │     │
 │  ├──────────────────┼─────────────────────────────────────┤     │
-│  │ 3D LiDAR         │ 3D 포인트 클라우드, 자율주행       │     │
-│  │ (예: Velodyne)   │                                     │     │
+│  │ 3D LiDAR         │ 3D point clouds, autonomous         │     │
+│  │ (e.g., Velodyne) │ driving                             │     │
 │  ├──────────────────┼─────────────────────────────────────┤     │
-│  │ Solid-State      │ 무회전, 소형, 최신 트렌드          │     │
-│  │ (예: Livox)      │                                     │     │
+│  │ Solid-State      │ Non-rotating, compact, latest       │     │
+│  │ (e.g., Livox)    │ trend                               │     │
 │  └──────────────────┴─────────────────────────────────────┘     │
 │                                                                 │
-│  주요 알고리즘:                                                 │
-│  - ICP (Iterative Closest Point)                               │
-│  - NDT (Normal Distributions Transform)                        │
-│  - LOAM (LiDAR Odometry and Mapping)                           │
-│  - LeGO-LOAM (Lightweight Ground-Optimized)                    │
+│  Key Algorithms:                                                │
+│  - ICP (Iterative Closest Point)                                │
+│  - NDT (Normal Distributions Transform)                         │
+│  - LOAM (LiDAR Odometry and Mapping)                            │
+│  - LeGO-LOAM (Lightweight Ground-Optimized)                     │
 │  - Cartographer (Google)                                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -738,22 +816,24 @@ LiDAR SLAM:
 
 ### ICP (Iterative Closest Point)
 
+ICP는 LiDAR SLAM의 핵심 하위 문제를 해결합니다. 서로 다른 시간에 캡처된 두 개의 겹치는 포인트 클라우드(Point Cloud)가 주어졌을 때, 두 클라우드를 가장 잘 정렬하는 강체 변환(Rigid-Body Transform, 회전 + 평행 이동)을 찾는 것입니다. 이 정렬을 통해 인공 랜드마크나 GPS 없이도 스캔 사이에 로봇이 얼마나 이동했는지를 알 수 있습니다.
+
 ```python
 import numpy as np
 from scipy.spatial import KDTree
 
 def icp(source, target, max_iterations=50, tolerance=1e-6):
     """
-    ICP 알고리즘으로 두 포인트 클라우드 정합
+    ICP algorithm for aligning two point clouds
 
     Parameters:
-        source: 소스 포인트 클라우드 (N x 3)
-        target: 타겟 포인트 클라우드 (M x 3)
+        source: Source point cloud (N x 3)
+        target: Target point cloud (M x 3)
 
     Returns:
-        R: 회전 행렬 (3 x 3)
-        t: 평행 이동 벡터 (3,)
-        transformed: 변환된 소스 포인트
+        R: Rotation matrix (3 x 3)
+        t: Translation vector (3,)
+        transformed: Transformed source points
     """
 
     src = source.copy()
@@ -762,65 +842,77 @@ def icp(source, target, max_iterations=50, tolerance=1e-6):
     R_total = np.eye(3)
     t_total = np.zeros(3)
 
-    # KD-Tree로 효율적인 최근접 탐색
+    # KD-Tree indexes the *target* cloud for O(log M) nearest-neighbor queries
+    # instead of O(N·M) brute force — critical when clouds have 10k+ points
     tree = KDTree(target)
 
     for i in range(max_iterations):
-        # 1. 최근접 대응점 찾기
+        # 1. Find nearest correspondences (the "Closest Point" in ICP's name)
+        #    Assumes the current alignment is good enough that the nearest
+        #    target point is the correct correspondent — improves each iteration
         distances, indices = tree.query(src)
         correspondences = target[indices]
 
-        # 2. 변환 추정 (SVD)
+        # 2. Estimate transformation (SVD)
+        #    The Orthogonal Procrustes Problem: given matched point pairs,
+        #    find the rotation R that minimizes sum of squared distances.
+        #    SVD of the cross-covariance matrix H gives the optimal solution.
         src_centroid = np.mean(src, axis=0)
         tgt_centroid = np.mean(correspondences, axis=0)
 
         src_centered = src - src_centroid
         tgt_centered = correspondences - tgt_centroid
 
-        H = src_centered.T @ tgt_centered
+        H = src_centered.T @ tgt_centered  # 3×3 cross-covariance matrix
         U, _, Vt = np.linalg.svd(H)
         R = Vt.T @ U.T
 
-        # 반사 보정
+        # Correct reflection: det(R) = -1 means SVD returned an improper rotation
+        # (reflection). Flipping the last row of Vt forces a proper rotation (det=+1).
         if np.linalg.det(R) < 0:
             Vt[-1, :] *= -1
             R = Vt.T @ U.T
 
         t = tgt_centroid - R @ src_centroid
 
-        # 3. 변환 적용
+        # 3. Apply transformation
         src = (R @ src.T).T + t
 
-        # 누적 변환
+        # Accumulate transformation
         R_total = R @ R_total
         t_total = R @ t_total + t
 
-        # 4. 수렴 확인
+        # 4. Check convergence
         mean_error = np.mean(distances)
         if abs(prev_error - mean_error) < tolerance:
-            print(f"ICP 수렴: {i+1} 반복, 오차: {mean_error:.6f}")
+            print(f"ICP converged: {i+1} iterations, error: {mean_error:.6f}")
             break
         prev_error = mean_error
 
     return R_total, t_total, src
 
 class LiDARSLAM:
-    """간단한 2D LiDAR SLAM"""
+    """Simple 2D LiDAR SLAM"""
 
     def __init__(self, map_resolution=0.05):
         self.resolution = map_resolution
         self.pose = np.array([0.0, 0.0, 0.0])  # x, y, theta
         self.trajectory = [self.pose.copy()]
 
-        # 점유 격자 맵
+        # Occupancy grid map — initialize all cells to 0.5 (maximum uncertainty)
+        # so that unvisited areas are neither claimed free nor occupied.
+        # 0.5 is the prior probability; updates push cells toward 0 (free) or 1 (occupied).
         self.map_size = 1000
         self.occupancy_map = np.ones((self.map_size, self.map_size)) * 0.5
         self.map_origin = np.array([self.map_size // 2, self.map_size // 2])
+        # Center origin so the robot can map equally in all directions
 
     def scan_to_points(self, scan_ranges, scan_angles):
-        """스캔 데이터를 2D 포인트로 변환"""
+        """Convert scan data to 2D points"""
 
         valid = (scan_ranges > 0.1) & (scan_ranges < 30.0)
+        # 0.1m minimum: filters out the robot's own body returns
+        # 30.0m maximum: beyond this, 2D LiDAR returns become unreliable
         ranges = scan_ranges[valid]
         angles = scan_angles[valid]
 
@@ -830,7 +922,7 @@ class LiDARSLAM:
         return np.column_stack([x, y])
 
     def transform_points(self, points, pose):
-        """포인트를 월드 좌표로 변환"""
+        """Transform points to world coordinates"""
 
         x, y, theta = pose
         R = np.array([
@@ -842,54 +934,57 @@ class LiDARSLAM:
         return transformed
 
     def point_to_grid(self, points):
-        """포인트를 그리드 좌표로 변환"""
+        """Convert points to grid coordinates"""
 
         grid_x = (points[:, 0] / self.resolution + self.map_origin[0]).astype(int)
         grid_y = (points[:, 1] / self.resolution + self.map_origin[1]).astype(int)
 
-        # 맵 범위 내로 제한
+        # Limit to map bounds
         valid = (grid_x >= 0) & (grid_x < self.map_size) & \
                 (grid_y >= 0) & (grid_y < self.map_size)
 
         return grid_x[valid], grid_y[valid], valid
 
     def update_map(self, scan_points, pose):
-        """점유 격자 맵 업데이트"""
+        """Update occupancy grid map"""
 
         world_points = self.transform_points(scan_points, pose)
         gx, gy, valid = self.point_to_grid(world_points)
 
-        # 점유 확률 업데이트 (로그 오즈)
+        # Update occupancy probability (log odds)
+        # +0.1 per hit: laser endpoint = occupied. Log-odds representation
+        # would be more principled, but this additive approximation is fast
+        # and sufficient for simple mapping (see Problem 4 for full log-odds).
         self.occupancy_map[gy, gx] = np.clip(
             self.occupancy_map[gy, gx] + 0.1, 0, 1
         )
 
     def match_scan(self, current_points, previous_points):
-        """스캔 매칭으로 상대 이동 추정"""
+        """Estimate relative motion using scan matching"""
 
         if len(previous_points) < 10 or len(current_points) < 10:
             return np.array([0, 0, 0])
 
-        # ICP 적용
+        # Apply ICP
         R, t, _ = icp(current_points, previous_points)
 
-        # 2D에서 theta 추출
+        # Extract theta in 2D
         theta = np.arctan2(R[1, 0], R[0, 0])
 
         return np.array([t[0], t[1], theta])
 
     def process_scan(self, scan_ranges, scan_angles, prev_scan=None):
-        """스캔 처리"""
+        """Process scan"""
 
         current_points = self.scan_to_points(scan_ranges, scan_angles)
 
         if prev_scan is not None:
             prev_points = self.scan_to_points(prev_scan[0], prev_scan[1])
 
-            # 스캔 매칭
+            # Scan matching
             delta_pose = self.match_scan(current_points, prev_points)
 
-            # 포즈 업데이트
+            # Update pose
             self.pose[2] += delta_pose[2]
             R = np.array([
                 [np.cos(self.pose[2]), -np.sin(self.pose[2])],
@@ -897,20 +992,20 @@ class LiDARSLAM:
             ])
             self.pose[:2] += R @ delta_pose[:2]
 
-        # 맵 업데이트
+        # Update map
         self.update_map(current_points, self.pose)
 
-        # 궤적 저장
+        # Save trajectory
         self.trajectory.append(self.pose.copy())
 
         return self.pose
 
     def get_occupancy_map(self):
-        """점유 맵 반환"""
+        """Return occupancy map"""
         return self.occupancy_map
 
     def get_trajectory(self):
-        """궤적 반환"""
+        """Return trajectory"""
         return np.array(self.trajectory)
 ```
 
@@ -921,33 +1016,33 @@ class LiDARSLAM:
 ### Loop Closure 개념
 
 ```
-Loop Closure (루프 폐합):
-이전에 방문한 장소를 재인식하여 누적 오차 보정
+Loop Closure:
+Recognizing previously visited places to correct accumulated drift
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  문제: Drift (누적 오차)                                        │
+│  Problem: Drift (accumulated error)                             │
 │                                                                 │
-│       실제 경로        추정 경로 (drift 있음)                   │
+│       Actual Path      Estimated Path (with drift)              │
 │       ┌─────────┐      ┌─────────┐                              │
 │       │         │      │         ╲                              │
 │       │         │      │          ╲                             │
 │       │         │      │           ╲                            │
 │       └─────────┘      └────────────╲                           │
-│       (폐곡선)          (열린 곡선)                             │
+│       (closed loop)     (open curve)                            │
 │                                                                 │
-│  해결: Loop Closure                                             │
-│       1. 현재 위치가 이전에 방문한 곳인지 탐지                  │
-│       2. 루프 제약 조건 추가                                    │
-│       3. 포즈 그래프 최적화                                     │
+│  Solution: Loop Closure                                         │
+│       1. Detect if current location was visited before          │
+│       2. Add loop constraint                                    │
+│       3. Pose graph optimization                                │
 │                                                                 │
 │       ┌─────────┐                                               │
-│       │    ●────●  ← 루프 탐지                                  │
+│       │    ●────●  ← Loop detection                             │
 │       │    │    │                                               │
-│       │    │    │  ← 그래프 최적화                              │
+│       │    │    │  ← Graph optimization                         │
 │       │    ●────●                                               │
 │       └─────────┘                                               │
-│       (보정된 경로)                                             │
+│       (corrected path)                                          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -960,7 +1055,7 @@ import numpy as np
 from collections import deque
 
 class LoopClosureDetector:
-    """Bag of Words 기반 루프 클로저 탐지"""
+    """Bag of Words-based loop closure detection"""
 
     def __init__(self, vocabulary_size=1000, min_score=0.3):
         self.orb = cv2.ORB_create(2000)
@@ -968,18 +1063,21 @@ class LoopClosureDetector:
 
         self.vocabulary = None
         self.vocabulary_size = vocabulary_size
-        self.min_score = min_score
+        self.min_score = min_score  # 0.3: empirically chosen floor — below this,
+                                    # BoW similarity is likely coincidental overlap
 
-        # 키프레임 데이터베이스
+        # Keyframe database
         self.keyframe_bows = []
         self.keyframe_descs = []
         self.keyframe_kps = []
 
-        # 최근 N개 키프레임은 루프 후보에서 제외
+        # Exclude recent N keyframes from loop candidates — nearby frames are
+        # always visually similar (temporal correlation), so excluding them
+        # prevents false positives from consecutive keyframes being flagged as loops
         self.temporal_window = 30
 
     def build_vocabulary(self, training_images):
-        """Vocabulary 구축"""
+        """Build vocabulary"""
 
         all_descriptors = []
 
@@ -1002,7 +1100,7 @@ class LoopClosureDetector:
         self.vocabulary = self.vocabulary.astype(np.uint8)
 
     def compute_bow(self, descriptors):
-        """BoW 벡터 계산"""
+        """Compute BoW vector"""
 
         if self.vocabulary is None or descriptors is None:
             return None
@@ -1013,7 +1111,7 @@ class LoopClosureDetector:
         for m in matches:
             bow[m.trainIdx] += 1
 
-        # L2 정규화
+        # L2 normalization
         norm = np.linalg.norm(bow)
         if norm > 0:
             bow = bow / norm
@@ -1021,7 +1119,7 @@ class LoopClosureDetector:
         return bow
 
     def add_keyframe(self, frame):
-        """키프레임 추가"""
+        """Add keyframe"""
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         kp, desc = self.orb.detectAndCompute(gray, None)
@@ -1038,7 +1136,7 @@ class LoopClosureDetector:
         return len(self.keyframe_bows) - 1
 
     def detect_loop(self, query_idx):
-        """루프 후보 탐지"""
+        """Detect loop candidates"""
 
         if query_idx < self.temporal_window + 1:
             return None, 0
@@ -1048,7 +1146,7 @@ class LoopClosureDetector:
         best_match = -1
         best_score = 0
 
-        # 시간적으로 멀리 떨어진 키프레임만 검색
+        # Search only temporally distant keyframes
         for i in range(query_idx - self.temporal_window):
             score = np.dot(query_bow, self.keyframe_bows[i])
 
@@ -1062,28 +1160,36 @@ class LoopClosureDetector:
         return None, 0
 
     def verify_loop(self, query_idx, candidate_idx, min_inliers=50):
-        """기하학적 검증으로 루프 확인"""
+        """Verify loop using geometric verification"""
 
         desc1 = self.keyframe_descs[query_idx]
         desc2 = self.keyframe_descs[candidate_idx]
         kp1 = self.keyframe_kps[query_idx]
         kp2 = self.keyframe_kps[candidate_idx]
 
-        # 특징점 매칭
+        # Feature matching
         matches = self.bf.knnMatch(desc1, desc2, k=2)
 
         good_matches = []
         for m, n in matches:
+            # 0.75 ratio test (slightly looser than typical 0.7 used in VO)
+            # because loop frames can be viewed from significantly different
+            # angles, making descriptors somewhat less similar even for true matches
             if m.distance < 0.75 * n.distance:
                 good_matches.append(m)
 
         if len(good_matches) < 8:
             return False, None
 
-        # Fundamental Matrix로 기하학적 검증
+        # Geometric verification using Fundamental Matrix
         pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
         pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
 
+        # We use the Fundamental Matrix (not Essential) here because we don't
+        # need calibrated coordinates — just a geometric consistency check.
+        # Inlier count under RANSAC is our confidence signal: many random
+        # descriptor matches will fail the epipolar constraint, so a high
+        # inlier count strongly suggests these two frames share real 3D structure.
         F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC)
 
         if mask is None:
@@ -1104,20 +1210,20 @@ class LoopClosureDetector:
 
 
 class PoseGraphOptimizer:
-    """간단한 포즈 그래프 최적화"""
+    """Simple pose graph optimization"""
 
     def __init__(self):
-        self.poses = []         # 노드 (포즈)
-        self.edges = []         # 엣지 (상대 변환)
-        self.loop_constraints = []  # 루프 제약
+        self.poses = []         # Nodes (poses)
+        self.edges = []         # Edges (relative transforms)
+        self.loop_constraints = []  # Loop constraints
 
     def add_pose(self, pose):
-        """포즈 노드 추가"""
+        """Add pose node"""
         self.poses.append(pose.copy())
         return len(self.poses) - 1
 
     def add_odometry_edge(self, i, j, relative_pose, info_matrix=None):
-        """오도메트리 엣지 추가"""
+        """Add odometry edge"""
 
         if info_matrix is None:
             info_matrix = np.eye(3)
@@ -1130,10 +1236,13 @@ class PoseGraphOptimizer:
         })
 
     def add_loop_constraint(self, i, j, relative_pose, info_matrix=None):
-        """루프 제약 추가"""
+        """Add loop constraint"""
 
         if info_matrix is None:
-            # 루프 제약은 높은 가중치
+            # Loop constraints get 100× higher weight than odometry edges because
+            # they are geometrically verified (RANSAC inliers confirm real overlap),
+            # while odometry accumulates noise continuously. The optimizer should
+            # strongly prefer satisfying a verified loop over individual odometry steps.
             info_matrix = np.eye(3) * 100
 
         self.loop_constraints.append({
@@ -1144,21 +1253,21 @@ class PoseGraphOptimizer:
         })
 
     def optimize(self, num_iterations=10):
-        """그래프 최적화 (Gauss-Newton)"""
+        """Graph optimization (Gauss-Newton)"""
 
-        # 간단한 구현 (실제로는 g2o, Ceres 등 사용)
-        print("포즈 그래프 최적화는 g2o 등 전문 라이브러리 권장")
+        # Simple implementation (in practice, use g2o, Ceres, etc.)
+        print("Pose graph optimization recommended to use specialized libraries like g2o")
 
-        # 루프 제약을 이용한 간단한 보정
+        # Simple correction using loop constraints
         for constraint in self.loop_constraints:
             i = constraint['from']
             j = constraint['to']
 
-            # 누적 드리프트 계산
+            # Calculate accumulated drift
             drift = self.poses[j][:2] - self.poses[i][:2]
             drift -= constraint['measurement'][:2]
 
-            # 선형 보간으로 드리프트 분배
+            # Distribute drift using linear interpolation
             for k in range(i, j + 1):
                 alpha = (k - i) / (j - i) if j > i else 0
                 self.poses[k][:2] -= alpha * drift
@@ -1177,37 +1286,40 @@ import cv2
 import numpy as np
 
 class SimpleVSLAM:
-    """간단한 Visual SLAM 시스템"""
+    """Simple Visual SLAM system"""
 
     def __init__(self, K):
         self.K = K
 
-        # 모듈
+        # Modules
         self.vo = MonocularVO(K)
         self.loop_detector = LoopClosureDetector()
         self.pose_graph = PoseGraphOptimizer()
 
-        # 상태
+        # State
         self.frame_count = 0
+        # Sample one keyframe every 10 frames: frequent enough to capture
+        # scene change, sparse enough that consecutive keyframes have meaningful
+        # baseline for loop detection (adjacent frames are too similar to be useful)
         self.keyframe_interval = 10
 
     def process_frame(self, frame):
-        """프레임 처리"""
+        """Process frame"""
 
         self.frame_count += 1
 
         # Visual Odometry
         R, t = self.vo.process_frame(frame)
 
-        # 키프레임 추가
+        # Add keyframe
         if self.frame_count % self.keyframe_interval == 0:
             kf_idx = self.loop_detector.add_keyframe(frame)
 
-            # 포즈 그래프에 노드 추가
-            pose = np.array([t[0, 0], t[1, 0], 0])  # 2D 근사
+            # Add node to pose graph
+            pose = np.array([t[0, 0], t[1, 0], 0])  # 2D approximation
             node_idx = self.pose_graph.add_pose(pose)
 
-            # 이전 키프레임과 엣지 연결
+            # Connect edge with previous keyframe
             if node_idx > 0:
                 prev_pose = self.pose_graph.poses[node_idx - 1]
                 relative = pose - prev_pose
@@ -1215,8 +1327,10 @@ class SimpleVSLAM:
                     node_idx - 1, node_idx, relative
                 )
 
-            # 루프 탐지
-            if kf_idx > 30:  # 충분한 키프레임 후
+            # Loop detection
+            if kf_idx > 30:  # Need at least 30 keyframes before loop search:
+                             # fewer than this and the BoW vocabulary hasn't seen
+                             # enough variety to distinguish places reliably
                 candidate, score = self.loop_detector.detect_loop(kf_idx)
 
                 if candidate is not None:
@@ -1227,23 +1341,23 @@ class SimpleVSLAM:
                     if verified:
                         print(f"Loop detected: {kf_idx} -> {candidate}")
 
-                        # 루프 제약 추가
+                        # Add loop constraint
                         relative = pose - self.pose_graph.poses[candidate]
                         self.pose_graph.add_loop_constraint(
                             candidate, node_idx, relative
                         )
 
-                        # 최적화
+                        # Optimize
                         self.pose_graph.optimize()
 
         return R, t
 
     def get_map(self):
-        """맵 반환"""
+        """Return map"""
         return self.vo.get_trajectory()
 
     def get_optimized_trajectory(self):
-        """최적화된 궤적 반환"""
+        """Return optimized trajectory"""
         return np.array(self.pose_graph.poses)
 ```
 
@@ -1254,11 +1368,11 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 def visualize_slam_result(trajectory, loop_closures=None):
-    """SLAM 결과 시각화"""
+    """Visualize SLAM results"""
 
     fig = plt.figure(figsize=(12, 5))
 
-    # 2D 궤적
+    # 2D trajectory
     ax1 = fig.add_subplot(121)
     ax1.plot(trajectory[:, 0], trajectory[:, 1], 'b-', linewidth=1)
     ax1.scatter(trajectory[0, 0], trajectory[0, 1],
@@ -1280,7 +1394,7 @@ def visualize_slam_result(trajectory, loop_closures=None):
     ax1.axis('equal')
     ax1.grid(True)
 
-    # 3D 궤적
+    # 3D trajectory
     ax2 = fig.add_subplot(122, projection='3d')
     ax2.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2],
             'b-', linewidth=1)
@@ -1294,16 +1408,16 @@ def visualize_slam_result(trajectory, loop_closures=None):
     plt.show()
 
 def visualize_occupancy_map(occupancy_map, trajectory=None):
-    """점유 맵 시각화"""
+    """Visualize occupancy map"""
 
     plt.figure(figsize=(10, 10))
 
-    # 맵 표시
+    # Display map
     plt.imshow(occupancy_map, cmap='gray', origin='lower')
 
-    # 궤적 오버레이
+    # Overlay trajectory
     if trajectory is not None:
-        # 맵 좌표로 변환
+        # Convert to map coordinates
         map_center = occupancy_map.shape[0] // 2
         resolution = 0.05
         traj_map = trajectory / resolution + map_center
@@ -1341,7 +1455,7 @@ def visualize_occupancy_map(occupancy_map, trajectory=None):
 E, mask = cv2.findEssentialMat(pts1, pts2, K)
 _, R, t, _ = cv2.recoverPose(E, pts1, pts2, K)
 
-# 포즈 누적
+# Accumulate pose
 cur_t = cur_t + cur_R @ t
 cur_R = R @ cur_R
 ```
@@ -1362,10 +1476,10 @@ BoW 기반 루프 클로저를 구현하세요.
 <summary>힌트</summary>
 
 ```python
-# BoW 유사도
+# BoW similarity
 score = np.dot(bow1, bow2)
 
-# 기하학적 검증
+# Geometric verification
 F, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC)
 inliers = np.sum(mask)
 ```
@@ -1386,7 +1500,7 @@ ICP 알고리즘을 구현하세요.
 <summary>힌트</summary>
 
 ```python
-# SVD로 R, t 계산
+# Calculate R, t using SVD
 H = src_centered.T @ tgt_centered
 U, _, Vt = np.linalg.svd(H)
 R = Vt.T @ U.T
@@ -1409,7 +1523,7 @@ LiDAR 데이터로 점유 격자 맵을 생성하세요.
 <summary>힌트</summary>
 
 ```python
-# 로그 오즈 업데이트
+# Log odds update
 log_odds = np.log(p / (1 - p))
 log_odds[occupied] += 0.5
 log_odds[free] -= 0.2
@@ -1432,17 +1546,17 @@ VO, 루프 클로저, 맵핑을 통합한 SLAM을 구현하세요.
 <summary>힌트</summary>
 
 ```python
-# 통합 시스템
+# Integrated system
 class SLAM:
     def process(self, frame):
-        # 1. 트래킹
+        # 1. Tracking
         pose = self.track(frame)
 
-        # 2. 키프레임이면 맵 업데이트
+        # 2. Update map if keyframe
         if self.is_keyframe():
             self.local_mapping()
 
-            # 3. 루프 탐지
+            # 3. Loop detection
             if self.detect_loop():
                 self.optimize_graph()
 ```

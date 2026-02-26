@@ -2,9 +2,23 @@
 
 [이전: EDA에서 추론으로](./10_From_EDA_to_Inference.md) | [다음: 표본추출과 추정](./12_Sampling_and_Estimation.md)
 
-## 개요
+---
 
-확률론은 통계학의 수학적 기초입니다. 이 장에서는 고급 통계학을 학습하기 전에 반드시 이해해야 할 확률론의 핵심 개념들을 복습합니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 콜모고로프(Kolmogorov)의 세 가지 공리를 설명하고 프로그래밍으로 검증할 수 있습니다.
+2. 이산(discrete) 및 연속(continuous) 확률변수(random variable)와 해당 분포 함수(PMF, PDF, CDF)를 구분할 수 있습니다.
+3. 주요 확률분포(이항(binomial), 포아송(Poisson), 정규(normal), 지수(exponential), 감마(gamma), 베타(beta))와 각 파라미터를 설명할 수 있습니다.
+4. 결합(joint), 주변(marginal), 조건부(conditional) 확률을 계산하고 베이즈 정리(Bayes' theorem)를 적용할 수 있습니다.
+5. 확률변수의 기대값(expected value), 분산(variance), 공분산(covariance), 상관계수(correlation)를 계산할 수 있습니다.
+6. 시뮬레이션을 통해 대수의 법칙(Law of Large Numbers)과 중심극한정리(Central Limit Theorem)를 적용할 수 있습니다.
+7. 분포 피팅(distribution fitting)을 구현하고 `scipy.stats` 분포 객체를 효과적으로 활용할 수 있습니다.
+
+---
+
+확률론은 이후 레슨에서 접하게 될 모든 통계적 방법의 기반입니다. 분포(distribution), 기대값(expectation), 극한 정리(limit theorem)에 대한 확실한 이해 없이는 가설 검정(hypothesis testing), 회귀 분석(regression), 베이즈 추론(Bayesian inference) 같은 기법들이 이치에 맞는 도구가 아닌 불투명한 공식처럼 보일 수 있습니다. 이 복습 레슨은 이후 내용을 쌓아 올리기 전에 확률론적 기초를 탄탄히 다지는 것을 목표로 합니다.
 
 ---
 

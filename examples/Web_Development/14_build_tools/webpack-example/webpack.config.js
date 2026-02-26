@@ -19,6 +19,8 @@ module.exports = (env, argv) => {
         },
 
         // 출력 설정
+        // Why: contenthash in production filenames enables aggressive browser caching - when code changes,
+        // the hash changes, busting the cache; in dev, plain names enable easier debugging
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: isProduction ? '[name].[contenthash].js' : '[name].js',
@@ -35,6 +37,8 @@ module.exports = (env, argv) => {
             port: 3000,
             open: true,
             hot: true,  // HMR 활성화
+            // Why: historyApiFallback redirects all 404s to index.html, enabling client-side
+            // routing in SPAs where the server doesn't know about frontend routes
             historyApiFallback: true,  // SPA 라우팅 지원
             compress: true,
             // 프록시 설정
@@ -76,6 +80,8 @@ module.exports = (env, argv) => {
                     ]
                 },
 
+                // Why: 'asset' type auto-decides between inline (data URL) and file based on size -
+                // small images inline to save HTTP requests, large ones stay as files to avoid bloating JS bundles
                 // 이미지 처리 (asset modules)
                 {
                     test: /\.(png|jpe?g|gif|svg|webp)$/i,
@@ -155,6 +161,8 @@ module.exports = (env, argv) => {
                     }
                 }
             },
+            // Why: Extracting the runtime into a separate chunk prevents its hash from changing
+            // in all entry bundles when only one module changes, preserving cache validity
             // 런타임 청크 분리
             runtimeChunk: 'single',
         },
@@ -169,6 +177,8 @@ module.exports = (env, argv) => {
             maxAssetSize: 250000,
         },
 
+        // Why: Filesystem caching persists build results to disk between runs, cutting
+        // rebuild times dramatically for large projects (often from minutes to seconds)
         // 캐시 설정
         cache: {
             type: 'filesystem',

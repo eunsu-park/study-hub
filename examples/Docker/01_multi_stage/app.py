@@ -13,6 +13,7 @@ import os
 import signal
 import sys
 
+# Why: Containers write logs to stdout/stderr — structured logging with timestamps lets log aggregators (ELK, Loki) parse and correlate events across services
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -64,17 +65,19 @@ def graceful_shutdown(signum, frame):
     sys.exit(0)
 
 
+# Why: Docker sends SIGTERM on `docker stop`; without a handler the process ignores it and gets SIGKILL after the timeout, losing in-flight requests
 # Register signal handlers for graceful shutdown
 signal.signal(signal.SIGTERM, graceful_shutdown)
 signal.signal(signal.SIGINT, graceful_shutdown)
 
 
 if __name__ == '__main__':
+# Why: Environment variables are the 12-factor way to inject config — they work identically in Docker, K8s, and CI, avoiding baked-in config files
     # Get configuration from environment variables
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('DEBUG', 'False').lower() == 'true'
 
     logger.info(f"Starting Flask application on port {port}")
 
-    # Use 0.0.0.0 to accept connections from outside the container
+    # Why: Binding to 0.0.0.0 is required inside containers — 127.0.0.1 only accepts loopback traffic, making the app unreachable through Docker's port mapping
     app.run(host='0.0.0.0', port=port, debug=debug)

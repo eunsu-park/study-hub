@@ -1,5 +1,17 @@
 # 17. GPT-4V, GPT-4o, Gemini & Claude 3
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. GPT-4V, GPT-4o, Gemini 1.5 Pro, Claude 3의 핵심 기능과 한계를 상용 멀티모달 AI 시스템으로서 설명할 수 있다
+2. 각 시스템의 API를 호출하여 이미지 이해, OCR, 시각적 추론(visual reasoning) 태스크를 수행할 수 있다
+3. GPT-4o, Gemini 1.5 Pro, Claude 3 모델 패밀리 간의 멀티모달 아키텍처와 컨텍스트 윈도우(context window) 크기를 비교할 수 있다
+4. 문서 분석 파이프라인과 시각적 질의응답(Visual Question Answering) 시스템 등 실용적인 멀티모달 애플리케이션을 설계할 수 있다
+5. 프로덕션 사용 사례에서 상용 멀티모달 API를 선택할 때 비용, 지연 시간(latency), 기능 간 트레이드오프를 평가할 수 있다
+
+---
+
 ## 개요
 
 GPT-4V(ision), GPT-4o, Gemini, Claude 3는 현재 가장 강력한 상용 멀티모달 AI입니다. 이 레슨에서는 이들의 기능, API 사용법, 그리고 실전 응용 사례를 다룹니다.
@@ -1112,3 +1124,319 @@ print(f"Gemini Pro cost: ${gemini_cost:.2f}")
 ### 관련 레슨
 - [16_Vision_Language_Advanced.md](16_Vision_Language_Advanced.md)
 - [24_API_Evaluation.md](24_API_Evaluation.md)
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 프로덕션 사용 사례별 모델 선택
+레슨의 비교 표를 사용하여 다음 프로덕션 사용 사례에 가장 적합한 모델을 선택하세요. 특정 기능 또는 비용 고려사항을 참조하여 선택을 정당화하세요.
+
+| 사용 사례 | 선택된 모델 | 핵심 정당화 |
+|----------|------------|------------|
+| A) 손으로 쓴 의료 기록 전사 (하루 1만 페이지, 비용 민감) | ??? | ??? |
+| B) 2시간 보안 카메라 영상에서 이상 탐지 | ??? | ??? |
+| C) 고객 지원을 위한 실시간 음성 도우미 | ??? | ??? |
+| D) 복잡한 다단계 추론을 포함한 법적 계약 검토 | ??? | ??? |
+| E) 전자상거래 카탈로그 제품 설명 생성 (하루 10만 개 이미지) | ??? | ??? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 사용 사례 | 선택된 모델 | 핵심 정당화 |
+|----------|------------|------------|
+| A) 손으로 쓴 의료 기록 전사 | `gpt-4o-mini` 또는 `claude-3-haiku` | 높은 볼륨 + 비용 민감 → 가장 저렴하고 유능한 모델. 두 모델 모두 강력한 OCR 성능. GPT-4o-mini는 $0.15/1M 토큰으로, 페이지당 약 1K 토큰의 1만 페이지 = 하루 $1.50. 의료 맥락은 높은 정확도 필요, 배포 전 샘플링으로 검증 필요. |
+| B) 2시간 보안 영상 분석 | `gemini-1.5-pro` | 네이티브 비디오 지원과 충분한 컨텍스트(2M 토큰)를 가진 **유일한 옵션**. 2시간 × 263 토큰/초 ≈ 190만 토큰 — Gemini 1.5 Pro의 2M 컨텍스트 내에 맞음. GPT-4o와 Claude 모두 비디오 입력을 네이티브로 지원하지 않음. |
+| C) 실시간 음성 도우미 | `gpt-4o-audio-preview` | 네이티브 실시간 오디오 입출력과 평균 320ms 응답 시간을 가진 **유일한 옵션**. "omni" 모델은 별도의 음성-텍스트 변환 단계 없이 음성을 네이티브로 처리. |
+| D) 법적 계약 검토 + 복잡한 추론 | `claude-sonnet-4-20250514` 또는 `claude-3-opus` | Claude가 추론과 코딩에서 최고 순위; Constitutional AI 훈련이 고위험 결정에 더 잘 보정됨. 200K 컨텍스트로 긴 계약서 처리 가능. 안전 중요 → Claude의 신중하고 미묘한 응답이 환각(hallucination) 위험 감소. |
+| E) 전자상거래 설명 (하루 10만 이미지) | `gemini-1.5-flash` 또는 `gpt-4o-mini` | 가장 높은 볼륨 → 가장 저렴한 모델. Gemini 1.5 Flash($0.075/1M 입력 토큰)가 가장 저렴. 단순 설명 태스크는 최대 성능이 필요 없음 — 소규모로 먼저 품질 테스트. |
+
+</details>
+
+### 연습 문제 2: GPT-4V 이미지 토큰 비용 계산
+GPT-4V는 `detail` 파라미터에 따라 다르게 청구됩니다. 다음 배치 작업의 총 API 비용을 계산하세요:
+
+- 태스크: `detail="high"`로 500개 제품 이미지를 처리하여 구조화된 데이터 추출
+- 이미지당 평균 프롬프트 길이: 200 토큰
+- 이미지당 평균 응답 길이: 800 토큰
+- GPT-4o 가격: 입력 $5.00/1M 토큰, 출력 $15.00/1M 토큰
+- 고해상도 이미지: 기본 765 토큰 + 타일당 170 토큰 (각 이미지는 1024×1024 → 4개 타일 생성)
+
+```python
+# 계산:
+# 1. 500개 이미지의 총 이미지 토큰
+# 2. 총 프롬프트 토큰 (텍스트만)
+# 3. 총 출력 토큰
+# 4. USD 총 비용
+```
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+# 설정
+num_images = 500
+prompt_tokens_per_image = 200  # 텍스트 프롬프트 토큰
+response_tokens_per_image = 800
+gpt4o_input_price = 5.00 / 1_000_000   # 토큰당
+gpt4o_output_price = 15.00 / 1_000_000  # 토큰당
+
+# 고해상도 이미지 토큰 계산
+# 고해상도 1024×1024:
+#   기본 토큰: 765
+#   타일: 1024/512 = 2 × 2 = 4타일, 각 512×512
+#   타일 토큰: 4타일 × 170 토큰/타일 = 680
+#   이미지당 총계: 765 + 680 = 1445 토큰
+image_tokens_per_image = 765 + (4 * 170)  # = 1445
+total_image_tokens = 500 * 1445  # = 722,500 토큰
+
+# 텍스트 토큰
+total_prompt_tokens = 500 * 200  # = 100,000 토큰
+total_output_tokens = 500 * 800  # = 400,000 토큰
+
+# 총 입력 토큰 = 이미지 + 텍스트 프롬프트
+total_input_tokens = total_image_tokens + total_prompt_tokens
+                   = 722,500 + 100,000 = 822,500 토큰
+
+# 비용 계산
+input_cost = 822,500 * (5.00 / 1_000_000) = $4.11
+output_cost = 400,000 * (15.00 / 1_000_000) = $6.00
+
+total_cost = $4.11 + $6.00 = 500개 이미지에 $10.11
+
+# 이미지당 비용 분석:
+cost_per_image = $10.11 / 500 = $0.020 per image
+
+# 비교: detail="low" 사용 시
+# 저해상도: 이미지당 85 토큰
+low_detail_image_tokens = 500 * 85 = 42,500 토큰
+low_detail_input_cost = (42,500 + 100,000) * (5.00 / 1_000_000) = $0.71
+low_detail_output_cost = $6.00  # 동일 출력
+low_detail_total = $6.71  # 34% 저렴하지만 품질 낮음
+```
+
+핵심 통찰: 이 배치 작업에서 출력 토큰이 비용을 지배합니다($10.11 중 $6.00 = 59%). 고해상도에서 저해상도로 전환하는 것보다 응답 길이를 줄이는 것이 비용 최적화에 더 효과적입니다.
+
+</details>
+
+### 연습 문제 3: 구조화된 출력을 위한 프롬프트 엔지니어링
+제품 이미지에서 구조화된 데이터를 추출하는 강건한 Claude API 프롬프트를 설계하세요. 출력은 특정 스키마와 일치하는 유효한 JSON이어야 하며, 프롬프트는 엣지 케이스(edge case)를 우아하게 처리해야 합니다.
+
+요구사항:
+- 추출: 제품명, 브랜드, 가격(보이는 경우), 색상, 치수(보이는 경우), 눈에 보이는 결함
+- 유효한 JSON 반환 (`json.loads()`로 파싱 가능)
+- 정보가 보이지 않으면 데이터를 날조하지 말고 `null` 사용
+- 각 추출된 필드에 대한 신뢰도 점수 (0-1)
+
+```python
+import anthropic
+import json
+
+def extract_product_data(image_path: str) -> dict:
+    client = anthropic.Anthropic()
+
+    # 여기에 프롬프트 설계
+    prompt = """???"""
+
+    # 구현
+    pass
+```
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import anthropic
+import json
+import base64
+import re
+
+def extract_product_data(image_path: str) -> dict:
+    client = anthropic.Anthropic()
+
+    with open(image_path, "rb") as f:
+        image_data = base64.standard_b64encode(f.read()).decode("utf-8")
+
+    media_type = "image/jpeg"
+    if image_path.endswith(".png"):
+        media_type = "image/png"
+
+    prompt = """이 제품 이미지를 분석하고 구조화된 데이터를 추출하세요.
+
+정확히 이 스키마와 일치하는 유효한 JSON 객체만 반환하세요:
+{
+  "product_name": string or null,
+  "product_name_confidence": number (0.0-1.0),
+  "brand": string or null,
+  "brand_confidence": number (0.0-1.0),
+  "price": string or null,
+  "price_confidence": number (0.0-1.0),
+  "color": string or null,
+  "color_confidence": number (0.0-1.0),
+  "dimensions": string or null,
+  "dimensions_confidence": number (0.0-1.0),
+  "visible_defects": array of strings (없으면 빈 배열),
+  "defects_confidence": number (0.0-1.0)
+}
+
+규칙:
+1. 이미지에서 확인할 수 없는 필드에는 null 사용 — 절대 날조하거나 추측하지 마세요
+2. 신뢰도 점수는 각 필드가 얼마나 명확하게 보이는지/읽히는지를 반영합니다:
+   - 1.0: 명확히 보이며 모호하지 않음
+   - 0.7: 보이지만 부분적으로 가려지거나 추론 필요
+   - 0.4: 맥락에서 추론, 직접 보이지 않음
+   - null 필드 → 신뢰도 점수 0.0
+3. JSON 객체만 반환하고 다른 텍스트 없음
+4. 치수는 보이는 경우 단위 포함 (예: "30cm × 20cm × 10cm")"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": image_data,
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    )
+
+    response_text = message.content[0].text
+
+    # 모델이 지시에도 불구하고 추가 텍스트를 추가하는 경우에도 JSON 추출
+    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group())
+
+    return json.loads(response_text)  # 직접 파싱을 폴백으로 시도
+```
+
+핵심 설계 결정:
+- 프롬프트의 명시적 스키마는 모델이 필드 이름을 임의로 만드는 것을 방지합니다.
+- 누락 데이터에 `null` 사용은 검증되지 않은 정보의 환각을 방지합니다.
+- 신뢰도 점수는 다운스트림 로직이 언제 사람 검토를 위해 플래그를 세울지 결정할 수 있게 합니다(예: 신뢰도 < 0.6).
+- 정규식(regex) 폴백은 모델이 지시에도 불구하고 서문 텍스트를 추가하는 경우를 처리합니다.
+- 필드별 개별 신뢰도 점수가 단일 전체 신뢰도보다 더 유용합니다.
+
+</details>
+
+### 연습 문제 4: Gemini 긴 컨텍스트 비디오 분석 설계
+Gemini 1.5 Pro를 사용하여 소매점의 8시간 감시 영상을 분석하는 프로덕션 시스템을 설계하세요. 시스템은 다음을 수행해야 합니다:
+1. 절도 사건 탐지
+2. 고객 흐름 패턴 추적
+3. 피크 시간 식별
+4. 일일 요약 보고서 생성
+
+설계에서 2M 토큰 컨텍스트 제한, 비용 관리, 출력 신뢰성을 다루세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**아키텍처 설계**:
+
+**문제**: 8시간 × 3600초 × ~263 토큰/초 ≈ 757만 토큰 — Gemini 1.5 Pro의 2M 컨텍스트를 3.8배 초과.
+
+**해결책: 핵심 프레임 샘플링을 사용한 슬라이딩 윈도우**:
+
+```python
+import google.generativeai as genai
+from datetime import datetime, timedelta
+
+class SurveillanceAnalyzer:
+
+    def __init__(self):
+        self.model = genai.GenerativeModel('gemini-1.5-pro')
+        self.segment_duration = 90 * 60  # 90분 세그먼트 (2M 컨텍스트 내)
+
+    def analyze_day(self, video_path: str) -> dict:
+        """8시간 영상을 세그먼트로 처리"""
+        results = {
+            'shoplifting_incidents': [],
+            'customer_flow': [],
+            'peak_hours': [],
+            'summary': ''
+        }
+
+        # 10분 오버랩으로 90분 세그먼트로 분할
+        # (오버랩은 세그먼트 경계에서 사건을 놓치지 않도록 방지)
+        segments = self._split_video(video_path, segment_minutes=90, overlap_minutes=10)
+
+        for i, (segment_path, start_time) in enumerate(segments):
+            segment_result = self._analyze_segment(segment_path, start_time, i)
+            self._merge_results(results, segment_result)
+
+        # 집계된 데이터로 최종 합성 프롬프트
+        results['summary'] = self._generate_summary(results)
+
+        return results
+
+    def _analyze_segment(self, video_path: str, start_time: datetime, segment_idx: int) -> dict:
+        """단일 90분 세그먼트 분석"""
+
+        video_file = self._upload_and_wait(video_path)
+
+        prompt = f"""이 소매점 감시 영상 세그먼트를 분석하세요
+        (세그먼트 {segment_idx+1}, {start_time.strftime('%H:%M')} 시작).
+
+        다음을 식별하세요:
+        1. 절도(SHOPLIFTING): 의심스러운 행동 (물건 숨기기, 계산대 우회).
+           각 사건에 대해: 타임스탬프, 프레임 내 위치, 설명, 신뢰도 (HIGH/MEDIUM/LOW)
+
+        2. 고객_흐름(CUSTOMER_FLOW): 15분 간격의 대략적인 고객 수.
+           형식: [{{time: "HH:MM", count: N}}]
+
+        3. 이상징후(ANOMALIES): 기타 주목할 만한 이벤트.
+
+        JSON으로 반환하며 키는: shoplifting_incidents, customer_flow, anomalies.
+        절도의 경우 HIGH 또는 MEDIUM 신뢰도 사건만 보고하세요.
+        """
+
+        response = self.model.generate_content(
+            [prompt, video_file],
+            generation_config={"temperature": 0.1}  # 사실적 분석을 위한 낮은 온도
+        )
+
+        return self._parse_response(response.text, start_time)
+
+    def _generate_summary(self, results: dict) -> str:
+        """집계된 결과에서 최종 보고서 생성"""
+
+        summary_prompt = f"""오늘의 소매점 감시 분석을 기반으로:
+
+        - 탐지된 사건: {len(results['shoplifting_incidents'])}
+        - 추적된 총 고객 수: {sum(h['count'] for h in results['customer_flow'])}
+        - 피크 시간대: {self._find_peak(results['customer_flow'])}
+
+        매장 관리자를 위한 간결한 일일 보안 및 운영 보고서를 작성하세요.
+        직원 배치 조정 및 보안 집중 영역에 대한 권장 사항을 포함하세요."""
+
+        # 텍스트 전용 최종 합성 (비디오 재업로드 불필요)
+        response = self.model.generate_content(summary_prompt)
+        return response.text
+```
+
+**비용 관리**:
+- 8시간 × 263 토큰/초 = 757만 입력 토큰
+- $1.25/1M 토큰으로 = 비디오 처리에 하루 약 $9.46
+- 텍스트 출력 추가: ~$5.00/1M × 약 2만 출력 토큰 = 약 $0.10
+- 총계 ≈ $9.56/일 — 프레임 레이트 감소(원본 대신 1fps)로 50-75% 비용 절감 가능
+
+**신뢰성 개선**:
+- 사실적 분석을 위한 낮은 온도(0.1)로 날조된 사건 감소.
+- HIGH/MEDIUM 신뢰도 사건만 보고하여 거짓 양성(false positive) 감소.
+- 10분 오버랩 세그먼트로 경계에서 사건을 놓치지 않도록 보장.
+- 최종 합성 단계(텍스트 전용)로 보고서 생성을 위한 비디오 재업로드 방지.
+
+</details>

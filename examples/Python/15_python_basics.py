@@ -129,7 +129,8 @@ print("\nFruits:")
 for fruit in fruits:
     print(f"  {fruit}")
 
-# Enumerate
+# Why: enumerate() is preferred over manual index tracking (range(len(...))) because it
+# avoids off-by-one errors and keeps the loop body focused on the values, not bookkeeping
 print("\nEnumerated:")
 for index, fruit in enumerate(fruits):
     print(f"  {index}: {fruit}")
@@ -214,7 +215,8 @@ name = "Alice"
 age = 30
 pi = 3.14159
 
-# f-strings (Python 3.6+)
+# Why: f-strings are the preferred formatting method since Python 3.6 — they are faster
+# than .format() and % because the expressions are compiled inline, not parsed at runtime
 print(f"f-string: {name} is {age} years old")
 print(f"Expression: 2 + 2 = {2 + 2}")
 print(f"Formatted: pi = {pi:.2f}")
@@ -341,6 +343,8 @@ person = {
 print(f"Dict: {person}")
 print(f"Name: {person['name']}")
 print(f"Age: {person.get('age')}")
+# Why: dict.get() with a default avoids KeyError for missing keys, making code more
+# robust than bracket access when the key's presence is uncertain
 print(f"Country (default): {person.get('country', 'USA')}")
 
 # Add/modify
@@ -371,7 +375,8 @@ import os
 # Create temp file
 temp_file = os.path.join(tempfile.gettempdir(), "python_basics_demo.txt")
 
-# Writing
+# Why: The 'with' statement guarantees the file is closed even if an exception occurs,
+# preventing resource leaks — this is Python's idiomatic replacement for try/finally
 with open(temp_file, 'w') as f:
     f.write("Hello, File I/O!\n")
     f.write("Python is awesome.\n")
@@ -407,6 +412,8 @@ def divide(a: float, b: float) -> float:
         result = a / b
         print(f"  {a} / {b} = {result}")
         return result
+    # Why: Catching specific exception types (not bare 'except:') prevents silently
+    # swallowing unexpected errors like MemoryError or KeyboardInterrupt
     except ZeroDivisionError:
         print(f"  Error: Cannot divide by zero")
         return None

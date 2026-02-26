@@ -1,5 +1,17 @@
 # Weights & Biases (W&B)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the core features of Weights & Biases — Experiments, Sweeps, Artifacts, Tables, and Reports — and explain when to use each
+2. Instrument a training loop with `wandb.init`, `wandb.log`, and `wandb.finish` to track metrics, hyperparameters, and model checkpoints
+3. Configure and run W&B Sweeps for automated hyperparameter optimization using grid, random, and Bayesian search strategies
+4. Use W&B Artifacts to version datasets and models, enabling reproducible experiment lineage tracking
+5. Create W&B Reports that document and share experiment results and visualizations with collaborators
+
+---
+
 ## 1. W&B Overview
 
 Weights & Biases is a platform for ML experiment tracking, hyperparameter tuning, and model management.
@@ -73,7 +85,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     iris.data, iris.target, test_size=0.2, random_state=42
 )
 
-# Initialize W&B
+# Initialize W&B — all subsequent wandb.log() calls are associated with this run;
+# config is stored as a snapshot, so changing params later won't affect the logged record
 wandb.init(
     project="iris-classification",    # Project name
     name="random-forest-baseline",    # Run name
@@ -86,7 +99,8 @@ wandb.init(
     notes="Initial baseline experiment"
 )
 
-# Access config
+# Access config via wandb.config — ensures hyperparams come from the single source of truth,
+# enabling Sweeps to override values without changing code
 config = wandb.config
 
 # Train model
@@ -138,7 +152,8 @@ model = nn.Sequential(
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=wandb.config.get("lr", 0.001))
 
-# Track model graph in W&B
+# wandb.watch hooks into autograd to log gradients and parameter norms —
+# helps diagnose vanishing/exploding gradients without manual instrumentation
 wandb.watch(model, criterion, log="all", log_freq=100)
 
 # Training loop
@@ -173,7 +188,8 @@ for epoch in range(wandb.config.get("epochs", 10)):
         "val_accuracy": val_accuracy
     })
 
-    # Save checkpoint
+    # Save only when improving — avoids storing redundant checkpoints;
+    # wandb.save uploads to cloud so checkpoints survive even if the machine is preempted
     if val_accuracy > best_accuracy:
         torch.save(model.state_dict(), "best_model.pth")
         wandb.save("best_model.pth")
@@ -279,7 +295,9 @@ import wandb
 # Sweep configuration
 sweep_config = {
     "name": "hyperparam-sweep",
-    "method": "bayes",  # random, grid, bayes
+    # Bayesian method models metric as a function of params — converges faster
+    # than random/grid by exploring promising regions more densely
+    "method": "bayes",
     "metric": {
         "name": "val_accuracy",
         "goal": "maximize"
@@ -310,6 +328,8 @@ sweep_config = {
             "max": 0.5
         }
     },
+    # Hyperband early termination kills underperforming runs early —
+    # saves compute by stopping runs that are unlikely to beat the current best
     "early_terminate": {
         "type": "hyperband",
         "min_iter": 5,
@@ -440,7 +460,8 @@ dataset_artifact = wandb.Artifact(
 dataset_artifact.add_file("data/train.csv")
 dataset_artifact.add_dir("data/images/")
 
-# Add remote reference (reference without download)
+# add_reference stores a pointer, not the data — avoids duplicating large datasets
+# while still tracking them in the lineage graph
 dataset_artifact.add_reference("s3://bucket/large_data/")
 
 # Upload
@@ -478,13 +499,14 @@ model_artifact = wandb.Artifact(
 torch.save(model.state_dict(), "model.pth")
 model_artifact.add_file("model.pth")
 
-# Also add config file
+# Bundle config alongside the model — ensures inference uses the same hyperparams
 model_artifact.add_file("config.yaml")
 
 # Upload
 wandb.log_artifact(model_artifact)
 
-# Link model to specific alias
+# Aliases act as mutable pointers (like git tags) — "production" always points to
+# the current serving version, making downstream consumers version-agnostic
 wandb.run.link_artifact(model_artifact, "model-registry/churn-model", aliases=["latest", "production"])
 
 wandb.finish()
@@ -599,7 +621,8 @@ Using MLflow and W&B Together
 import mlflow
 import wandb
 
-# Initialize both platforms
+# Dual tracking: MLflow for model registry/serving, W&B for visualization/collaboration
+# — each platform's strength complements the other
 wandb.init(project="dual-tracking")
 mlflow.set_experiment("dual-tracking")
 

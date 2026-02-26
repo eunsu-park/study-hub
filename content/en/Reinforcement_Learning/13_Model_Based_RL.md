@@ -140,18 +140,25 @@ class DynaQ:
         return np.argmax(self.Q[state])
 
     def update(self, s, a, r, s_next, done):
-        # Step 1: Direct RL update
+        # Step 1: Direct RL update — always apply one real TD update first
+        # so the Q-table reflects actual transitions before the model is used
         target = r if done else r + self.gamma * np.max(self.Q[s_next])
         self.Q[s, a] += self.alpha * (target - self.Q[s, a])
 
-        # Step 2: Model learning
+        # Step 2: Model learning — store the deterministic observed transition;
+        # this simple tabular model is exact for the visited (s,a) pairs but
+        # cannot generalize to unvisited states (unlike neural network models)
         self.model[(s, a)] = (r, s_next, done)
         if (s, a) not in self.visited:
             self.visited.append((s, a))
 
-        # Step 3: Planning (n simulated updates)
+        # Step 3: Planning (n simulated updates) — reusing the stored model
+        # for n Q-updates costs far less than n real environment steps;
+        # larger n_planning gives more sample efficiency at the cost of
+        # more computation per real step
         for _ in range(self.n_planning):
-            # Sample random previously visited (s, a)
+            # Why sample uniformly from visited pairs: ensures all parts of
+            # the known state space are updated equally, not just recent states
             idx = np.random.randint(len(self.visited))
             sim_s, sim_a = self.visited[idx]
             sim_r, sim_s_next, sim_done = self.model[(sim_s, sim_a)]
@@ -239,6 +246,10 @@ class EnsembleDynamicsModel(nn.Module):
 
     def __init__(self, state_dim, action_dim, n_models=5, hidden_dim=256):
         super().__init__()
+        # Why an ensemble of 5 models: a single model cannot distinguish
+        # "I've seen this region and it's predictable" from "I haven't seen
+        # this region at all" — disagreement between models is a cheap proxy
+        # for epistemic uncertainty without requiring Bayesian inference
         self.models = nn.ModuleList([
             DynamicsModel(state_dim, action_dim, hidden_dim)
             for _ in range(n_models)
@@ -249,11 +260,13 @@ class EnsembleDynamicsModel(nn.Module):
         next_states = torch.stack([p[0] for p in predictions])
         rewards = torch.stack([p[1] for p in predictions])
 
-        # Mean prediction
+        # Mean prediction — averaging reduces variance compared to any single model
         mean_next_state = next_states.mean(dim=0)
         mean_reward = rewards.mean(dim=0)
 
-        # Uncertainty (disagreement between models)
+        # Why std as uncertainty: high disagreement among models signals that
+        # we are in a region of the state space with little training data;
+        # MBPO uses this to terminate rollouts before errors compound
         uncertainty = next_states.std(dim=0).mean(dim=-1)
 
         return mean_next_state, mean_reward, uncertainty
@@ -275,12 +288,20 @@ class ModelTrainer:
             for i, (model, optimizer) in enumerate(
                 zip(self.ensemble.models, self.optimizers)
             ):
-                # Each model trained on different bootstrap sample
+                # Why each model is trained on a different bootstrap sample:
+                # if all models saw the same data they would converge to
+                # similar predictions, defeating the purpose of the ensemble;
+                # random sampling introduces diversity in model weights
                 states, actions, rewards, next_states = \
                     replay_buffer.sample(batch_size)
 
                 pred_next_states, pred_rewards = model(states, actions)
 
+                # Why separate state and reward losses: they have different
+                # scales and semantics; training jointly with equal weight
+                # is a simplification — in practice, reward prediction is
+                # often easier (scalar vs high-dim state) so its gradient
+                # shouldn't dominate
                 state_loss = nn.MSELoss()(pred_next_states, next_states)
                 reward_loss = nn.MSELoss()(pred_rewards, rewards)
                 loss = state_loss + reward_loss
@@ -390,6 +411,10 @@ class MBPO:
 
     def _generate_model_rollouts(self):
         """Branch short rollouts from real states."""
+        # Why branch from real states: starting from states that were actually
+        # observed keeps the rollout anchored to the real distribution;
+        # errors compound quickly in pure imagination — real-state branching
+        # limits the "distance" the model can drift from the true dynamics
         states = self.env_buffer.sample_states(self.rollouts_per_step)
 
         for state in states:
@@ -400,10 +425,17 @@ class MBPO:
                     s.unsqueeze(0), a.unsqueeze(0)
                 )
 
-                # Stop rollout if model is uncertain
+                # Why truncate on high uncertainty: ensemble disagreement
+                # signals that the model is extrapolating beyond its training
+                # data; continuing the rollout would add unreliable transitions
+                # that corrupt the policy's value estimates
                 if uncertainty.item() > 0.5:
                     break
 
+                # Why mark done=False for model transitions: the model does
+                # not simulate terminal conditions reliably; treating all
+                # simulated transitions as non-terminal avoids spurious
+                # value truncation at artificial episode ends
                 self.model_buffer.add(
                     s.numpy(), a.numpy(), r.item(),
                     s_next.squeeze(0).detach().numpy(), False

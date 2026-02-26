@@ -1,5 +1,26 @@
 # CSS 기초
 
+**이전**: [HTML 폼과 테이블](./02_HTML_Forms_Tables.md) | **다음**: [CSS 레이아웃](./04_CSS_Layout.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 웹 개발에서 CSS의 역할을 설명하고, 인라인(inline), 내부(internal), 외부(external) 스타일시트를 비교할 수 있다
+2. 선택자-속성-값(selector-property-value) 문법으로 CSS 규칙을 작성할 수 있다
+3. 기본 선택자(전체, 태그, 클래스, ID), 결합 선택자(combinator), 가상 클래스/가상 요소(pseudo-class/pseudo-element) 선택자를 구별할 수 있다
+4. CSS 박스 모델(box model)(content, padding, border, margin)을 적용하여 요소의 크기와 여백을 제어할 수 있다
+5. 여러 규칙이 동일한 요소를 대상으로 할 때, 우선순위(specificity)가 어떤 규칙을 적용할지 결정하는 방식을 설명할 수 있다
+6. 상속(inheritance)되는 CSS 속성을 구별하고, `inherit`, `initial`, `unset`으로 상속을 제어할 수 있다
+7. 색상, 타이포그래피(typography), 배경, 그라디언트(gradient), 그림자를 구현할 수 있다
+8. CSS 리셋(reset)을 적용하여 브라우저 기본 스타일을 정규화할 수 있다
+
+---
+
+HTML이 웹 페이지의 뼈대를 제공한다면, CSS는 그 시각적 정체성 전체를 담당합니다. 동일한 HTML 문서도 어떤 CSS를 적용하느냐에 따라 날것의 텍스트 덤프처럼 보일 수도 있고, 세련된 매거진 레이아웃처럼 보일 수도 있습니다. CSS를 익히면 사용자가 보는 모든 픽셀—폰트 선택, 색상 팔레트, 여백, 그림자, 애니메이션까지—을 정밀하게 제어할 수 있습니다.
+
+> **비유:** HTML과 CSS를 방을 짓고 꾸미는 과정으로 생각해 보세요. HTML은 벽과 가구를 만드는 작업(구조)이고, CSS는 벽 색상, 가구 천, 조명을 선택하는 인테리어 디자이너입니다. 선택자(selector)는 디자이너가 특정 벽("창문 옆에 있는 벽")을 가리키는 방식이고, 속성(property)은 그 벽에 적용하는 디자인 결정입니다.
+
 ## 1. CSS란?
 
 CSS(Cascading Style Sheets)는 HTML 요소의 스타일을 정의하는 언어입니다.
@@ -1013,4 +1034,4 @@ body {
 
 ## 다음 단계
 
-[04_CSS_Layout.md](./04_CSS_Layout.md)에서 Flexbox와 Grid를 배워봅시다!
+[CSS 레이아웃](./04_CSS_Layout.md)에서 Flexbox와 Grid를 배워봅시다!

@@ -1,10 +1,23 @@
 # Pipelining
 
-## Overview
-
-Pipelining is a technique that increases CPU throughput by executing multiple instructions simultaneously. Like the washer-dryer analogy, the next task starts before the current one finishes, improving overall efficiency.
+**Previous**: [10_Assembly_Language_Basics.md](./10_Assembly_Language_Basics.md) | **Next**: [12_Branch_Prediction.md](./12_Branch_Prediction.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how pipelining increases instruction throughput without reducing latency
+2. Describe the classic 5-stage pipeline (IF, ID, EX, MEM, WB)
+3. Identify data hazards, control hazards, and structural hazards
+4. Explain forwarding (bypassing) as a data hazard solution
+5. Explain branch prediction as a control hazard mitigation
+6. Calculate pipeline speedup and analyze why it is less than the ideal N times
+
+---
+
+Pipelining is the single most impactful technique in processor design. Without it, a CPU would execute one instruction at a time, wasting most of its hardware. Modern processors pipeline dozens of stages, achieving throughput close to one instruction per clock cycle -- but hazards (data dependencies, branches) constantly threaten this ideal. Understanding pipelining explains why instruction order matters for performance.
 
 ## Table of Contents
 
@@ -16,6 +29,8 @@ Pipelining is a technique that increases CPU throughput by executing multiple in
 6. [Practice Problems](#6-practice-problems)
 
 ---
+
+> Pipelining is like a car assembly line. Instead of one worker building an entire car from start to finish (sequential execution), the assembly line has specialized stations -- one installs the engine, the next adds wheels, the next paints the body. Each station works on a different car simultaneously. The time to build one car does not change, but the factory produces a finished car much more frequently. CPU pipelining applies the same principle: different stages of the processor work on different instructions at the same time.
 
 ## 1. Pipelining Concept
 
@@ -198,14 +213,20 @@ Solution: Harvard architecture (separate instruction/data memory)
 Three types:
 
 1. RAW (Read After Write) - Most common
+   # RAW hazard: sub reads $s0 before add's WB stage writes it back
+   # This is the most frequent hazard because most instructions consume a previous result
    add $s0, $t0, $t1    # Write to $s0
    sub $t2, $s0, $t3    # Read $s0 ← Not written yet!
 
 2. WAR (Write After Read)
+   # WAR hazard: rare in in-order pipelines because reads (ID) always precede writes (WB)
+   # Becomes a real problem only in out-of-order execution (see Lesson 13)
    sub $t2, $s0, $t3    # Read $s0
    add $s0, $t0, $t1    # Write to $s0
 
 3. WAW (Write After Write)
+   # WAW hazard: only possible in pipelines that allow multiple writes in flight
+   # In a simple 5-stage pipeline, instructions write back in order, so WAW cannot occur
    add $s0, $t0, $t1    # Write to $s0
    sub $s0, $t2, $t3    # Write to $s0
 ```
@@ -216,6 +237,9 @@ Three types:
 add $s0, $t0, $t1
 sub $t2, $s0, $t3
 
+# Why this is a problem: add computes $s0 in EX (cycle 3) but only writes it to
+# the register file in WB (cycle 5). Meanwhile sub needs $s0 as an ALU input in
+# its EX stage (cycle 4) — one cycle before the value is available in the register file.
 Time:    1    2    3    4    5    6    7
 add:    IF   ID   EX  MEM  [WB] ← $s0 written
 sub:         IF   ID  [EX] ← $s0 needed!
@@ -229,6 +253,10 @@ but sub needs $s0 in cycle 4
 ### 4.3 Control Hazards
 
 ```
+# Why control hazards exist: the branch outcome is not known until EX (cycle 3),
+# but the pipeline has already fetched the next 2 instructions (add, sub) assuming
+# no branch. If the branch IS taken, those 2 instructions are wrong — they must be
+# flushed, wasting 2 cycles. This is the "branch penalty."
 beq $t0, $t1, target    # Branch decision
 add $t2, $t3, $t4       # Should this execute?
 sub $t5, $t6, $t7       # Should this execute?
@@ -296,7 +324,13 @@ Execution possible without stalls!
 
 Forwarding conditions:
 1. EX/MEM.RegisterRd == ID/EX.RegisterRs
+   # Why EX/MEM: the producing instruction just finished EX — its ALU result sits
+   # in the EX/MEM pipeline register. Forward it to the consuming instruction's
+   # ALU input before EX begins, avoiding a 1-cycle stall.
 2. MEM/WB.RegisterRd == ID/EX.RegisterRs
+   # Why MEM/WB: the producer is one stage further along (finished MEM).
+   # If condition 1 didn't match (e.g., an instruction in between), this
+   # catches the 2-cycle-old result — still faster than waiting for WB.
 ```
 
 ### 5.3 Load-Use Hazard
@@ -304,6 +338,11 @@ Forwarding conditions:
 ```
 Cases that cannot be resolved by forwarding:
 
+# Why forwarding fails here: lw produces its data at the END of MEM stage,
+# but add needs it at the START of its EX stage — which is the same cycle.
+# The data literally does not exist yet when the ALU needs it, so a 1-cycle
+# stall is unavoidable. This is why compilers try to schedule an unrelated
+# instruction between a load and its consumer ("load delay slot scheduling").
 lw  $s0, 0($t0)     # Load from memory
 add $t2, $s0, $t3   # Use immediately
 
@@ -336,6 +375,10 @@ Dynamic Prediction:
 ```
 Place always-executed instruction in slot after branch instruction
 
+# Why delayed branch works: the instruction after beq ALWAYS executes (the pipeline
+# has already fetched it before the branch resolves). Instead of wasting that slot
+# with a NOP, the compiler fills it with a useful instruction that is needed regardless
+# of branch outcome — turning a penalty cycle into productive work.
 beq $t0, $t1, target
 add $t2, $t3, $t4    # Delay slot (always executed)
 ...
@@ -365,15 +408,17 @@ Compiler places branch-independent instruction in delay slot
 
 4. Find the data hazards in the following code:
 ```assembly
-add $s0, $t0, $t1
-sub $s1, $s0, $t2
-and $s2, $s0, $s1
+add $s0, $t0, $t1   # Produces $s0
+sub $s1, $s0, $t2   # Reads $s0 (1 instr after add) and produces $s1
+and $s2, $s0, $s1   # Reads $s0 (2 instr after add) and $s1 (1 instr after sub)
+# Hint: check every producer-consumer pair — which reads happen before the write-back?
 ```
 
 5. Which hazard cannot be resolved by forwarding?
 ```assembly
-lw  $s0, 0($t0)
-add $t1, $s0, $t2
+lw  $s0, 0($t0)     # Data available after MEM stage
+add $t1, $s0, $t2   # Needs $s0 at start of EX — same cycle MEM finishes
+# Hint: can the MEM output be forwarded in time for the next instruction's EX input?
 ```
 
 ### Performance Calculation

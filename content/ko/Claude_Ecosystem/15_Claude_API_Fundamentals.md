@@ -13,14 +13,17 @@ Claude API는 Claude 모델에 프로그래밍 방식으로 접근할 수 있게
 - Anthropic API 키 (console.anthropic.com에서 발급)
 - REST API 및 HTTP에 대한 기본 이해
 
-**학습 목표**:
-- Python과 TypeScript에서 인증 및 클라이언트 SDK 설정하기
-- 시스템 프롬프트를 포함한 Messages API 요청 구성 및 전송하기
-- 콘텐츠 블록과 사용량 메타데이터를 포함한 API 응답 처리하기
-- 실시간 응답 전달을 위한 스트리밍 구현하기
-- 토큰을 효과적으로 관리하기 (계산, 예산 설정, 최적화)
-- 적절한 재시도 로직과 지수 백오프(Exponential Backoff)로 오류 처리하기
-- Claude API를 사용한 완전한 애플리케이션 구축하기
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Python과 TypeScript에서 인증 및 클라이언트 SDK 설정하기
+2. 시스템 프롬프트를 포함한 Messages API 요청 구성 및 전송하기
+3. 콘텐츠 블록과 사용량 메타데이터를 포함한 API 응답 처리하기
+4. 실시간 응답 전달을 위한 스트리밍 구현하기
+5. 토큰을 효과적으로 관리하기 (계산, 예산 설정, 최적화)
+6. 적절한 재시도 로직과 지수 백오프(Exponential Backoff)로 오류 처리하기
+7. Claude API를 사용한 완전한 애플리케이션 구축하기
 
 ---
 

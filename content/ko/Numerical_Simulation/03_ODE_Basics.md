@@ -1,8 +1,22 @@
 # 상미분방정식 기초
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 상미분방정식(ODE, Ordinary Differential Equation)을 정의하고 차수(Order), 선형성(Linearity), 동차성(Homogeneity)에 따라 분류할 수 있습니다.
+2. 간단한 물리 모델에 대해 변수분리법(Separation of Variables), 적분인자법(Integrating Factor)으로 1계 ODE를 해석적으로 풀 수 있습니다.
+3. 물리 시스템 설명으로부터 초기값 문제(IVP, Initial Value Problem)와 경계값 문제(BVP, Boundary Value Problem)를 정식화할 수 있습니다.
+4. 해의 존재성과 유일성(Existence and Uniqueness) 개념을 설명하고 성립 조건을 파악할 수 있습니다.
+5. ODE를 사용하여 물리 현상(지수 성장, 조화 진동자 등)을 모델링하고 분석할 수 있습니다.
+
+---
+
 ## 개요
 
 상미분방정식(ODE)은 하나의 독립변수에 대한 미분을 포함하는 방정식입니다. 물리적 시스템의 시간 변화를 기술하는 데 널리 사용됩니다.
+
+**이 레슨이 중요한 이유:** ODE는 가장 단순한 미분방정식이지만, 놀라울 정도로 광범위한 현상을 기술합니다: 방사성 붕괴(radioactive decay), 인구 동역학(population dynamics), 전기 회로, 기계적 진동자, 화학 반응, 궤도 역학(orbital mechanics). ODE의 해석적 구조와 수치 해법 모두를 마스터하는 것은, 이 교재의 나머지를 지배하는 편미분방정식(PDE)을 다루기 위한 필수적인 첫 번째 단계입니다.
 
 ---
 
@@ -216,6 +230,8 @@ second_order_examples()
 
 ### 3.1 존재성과 유일성
 
+IVP를 수치적으로 풀기 전에, 해가 존재하는지, 그리고 유일한지를 먼저 물어야 합니다. 피카르-린델뢰프 정리(Picard-Lindelof theorem)는 리프시츠 조건(Lipschitz condition)을 통해 답을 제공합니다. 초기점 근처에서 $f$가 $y$에 대해 리프시츠 연속이면 해가 존재하고 유일합니다. 이것은 실용적으로도 중요합니다: 유일성이 실패하면 수치 솔버가 구현 세부사항에 따라 여러 해 중 어느 것이든 수렴할 수 있기 때문입니다.
+
 ```python
 """
 리프시츠 조건 (Lipschitz Condition):
@@ -309,6 +325,8 @@ convert_to_system()
 ---
 
 ## 4. 위상 평면 분석
+
+위상 평면 분석(phase plane analysis)은 ODE를 실제로 풀지 않고도 해의 기하학적 관점을 제공합니다. 모든 점에서 벡터장 $(\dot{y}_1, \dot{y}_2)$를 그리면 가능한 모든 궤적을 한눈에 시각화하고, 평형점(equilibrium point)을 파악하며, 안정성을 판별할 수 있습니다. 이러한 정성적 이해는 종종 단일 수치 해보다 더 가치 있습니다.
 
 ### 4.1 평형점과 안정성
 

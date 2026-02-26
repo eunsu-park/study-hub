@@ -470,6 +470,16 @@ Mathematical conditions:
 - Wave equation: c·Δt/Δx ≤ 1
 ```
 
+### The CFL Condition: Physical Intuition
+
+The Courant-Friedrichs-Lewy (CFL) condition is the most important stability constraint in explicit finite difference methods:
+
+```
+c · Δt / Δx ≤ 1     (Courant number C ≤ 1)
+```
+
+The physical meaning is elegant: **the numerical domain of dependence must contain the physical domain of dependence**. Information in a PDE propagates at speed c. In one time step Δt, physical information travels a distance c·Δt. The numerical stencil reaches Δx in one step. If c·Δt > Δx, the physical wave outruns the numerical grid, and the scheme misses critical information — leading to instability.
+
 ```python
 def cfl_condition_demo():
     """Demonstrate CFL condition"""

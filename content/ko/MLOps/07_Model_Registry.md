@@ -1,5 +1,17 @@
 # 모델 레지스트리
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ML 라이프사이클에서 모델 레지스트리(Model Registry)의 역할을 정의하고 데이터 사이언티스트와 ML 엔지니어 간 협업을 어떻게 가능하게 하는지 설명할 수 있다
+2. 시맨틱 버전닝(semantic versioning) 관례를 사용하여 모델 버전을 관리하고 MLflow Model Registry API로 모델을 등록할 수 있다
+3. 모델 스테이지 전환(Staging → Production → Archived)을 관리하고 프로덕션 승격을 위한 승인 워크플로우(approval workflow)를 구현할 수 있다
+4. 클라우드 관리형 모델 레지스트리(AWS SageMaker, Google Vertex AI, Azure ML)와 자체 호스팅 MLflow를 비교하고 트레이드오프를 평가할 수 있다
+5. 접근 제어(access control), 감사 로그(audit logging), 롤백(rollback) 절차를 포함하는 모델 레지스트리 거버넌스 프레임워크를 설계할 수 있다
+
+---
+
 ## 1. 모델 레지스트리 개념
 
 모델 레지스트리는 ML 모델의 중앙 저장소로, 버전 관리, 메타데이터 추적, 배포 관리를 담당합니다.
@@ -328,6 +340,8 @@ class ModelApprovalWorkflow:
         quality_gates: Dict[str, float]
     ) -> Dict[str, Any]:
         """Staging 승격 검증"""
+        # 품질 게이트를 코드로 검증 — 수동 확인에 의존하면 사람의 실수로
+        # 품질 미달 모델이 배포될 수 있음
         model_version = self.client.get_model_version(model_name, version)
         run = self.client.get_run(model_version.run_id)
         metrics = run.data.metrics
@@ -356,6 +370,8 @@ class ModelApprovalWorkflow:
         version: str
     ) -> Dict[str, Any]:
         """Production 승격 검증"""
+        # Staging을 거치지 않은 직접 Production 배포를 방지 —
+        # 검증 태그와 설명이 있는지 확인하여 거버넌스(governance)를 강제
         model_version = self.client.get_model_version(model_name, version)
 
         checks = {
@@ -742,7 +758,8 @@ class ModelRollback:
 
     def rollback_to_previous(self, model_name: str) -> str:
         """이전 Production 버전으로 롤백"""
-        # 아카이브된 버전 중 가장 최근 찾기
+        # 아카이브된 버전 중 가장 최근 찾기 — 현재 피처 스키마와
+        # 데이터 분포에 호환될 가능성이 가장 높은 버전
         versions = self.client.search_model_versions(
             f"name='{model_name}'"
         )
@@ -758,14 +775,14 @@ class ModelRollback:
         # 가장 최근 아카이브 버전
         latest_archived = max(archived, key=lambda x: int(x.version))
 
-        # 현재 Production 아카이브
+        # 삭제가 아닌 아카이브 — 사후 분석(post-mortem)을 위해 아티팩트를 보존
         current_prod = self.get_production_version(model_name)
         if current_prod:
             self.client.transition_model_version_stage(
                 model_name, current_prod.version, "Archived"
             )
 
-            # 롤백 태그 추가
+            # 롤백 사유를 태그로 기록 — 왜 이 버전이 프로덕션에서 제거되었는지 감사 추적(audit trail) 생성
             self.client.set_model_version_tag(
                 model_name, current_prod.version,
                 "rollback_reason", "Performance degradation"

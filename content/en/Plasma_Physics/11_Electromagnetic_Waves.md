@@ -555,15 +555,24 @@ def stix_parameters(omega, n, B, Z=1, A=1):
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
-    # Stix parameters (sum over electrons and ions)
+    # S, D, P are the three independent components of the cold-plasma dielectric tensor.
+    # S (sum) is the diagonal element coupling x and y components; the resonance
+    # denominator ω² - ω_cs² diverges at cyclotron frequency, reflecting the
+    # singular response of gyrating particles near their natural frequency.
     S = 1 - omega_pe**2 / (omega**2 - omega_ce**2) - \
         omega_pi**2 / (omega**2 - omega_ci**2)
 
+    # D (difference) is the off-diagonal gyrotropic element that breaks left/right
+    # symmetry; it vanishes without a magnetic field (ω_cs → 0) and causes Faraday rotation.
     D = omega_ce * omega_pe**2 / (omega * (omega**2 - omega_ce**2)) + \
         omega_ci * omega_pi**2 / (omega * (omega**2 - omega_ci**2))
 
+    # P (plasma) governs response along B where cyclotron motion is irrelevant;
+    # it reduces to the unmagnetised dielectric (1 - ω_pe²/ω²) for electrons alone.
     P = 1 - omega_pe**2 / omega**2 - omega_pi**2 / omega**2
 
+    # R and L are the refractive indices squared for right and left circular polarisations
+    # along B; they factor from the determinant of the wave equation for parallel propagation.
     R = S + D
     L = S - D
 
@@ -587,7 +596,10 @@ print(f"Electron cyclotron frequency: f_ce = {f_ce / 1e9:.2f} GHz")
 print(f"Ion cyclotron frequency: f_ci = {f_ci / 1e6:.2f} MHz")
 print(f"Electron plasma frequency: f_pe = {f_pe / 1e9:.2f} GHz")
 
-# Frequency scan
+# Scanning 0.1-100 GHz covers all physically relevant resonances (f_ci ~ MHz is
+# far below, f_ce ~ 56 GHz sits mid-range, f_pe ~ GHz depending on density).
+# The 5000-point resolution resolves the sharp sign changes in S and D near f_ce
+# that mark the transition between propagating and evanescent regimes.
 f = np.linspace(0.1, 100, 5000) * 1e9  # Hz
 omega = 2 * np.pi * f
 
@@ -697,12 +709,17 @@ def cma_diagram():
     UH_res_Y = np.linspace(0, 1.5, 100)
     UH_res_X = 1 - UH_res_Y**2
 
-    # Plot cutoff/resonance curves
+    # Each boundary is where a wave transitions from propagating to evanescent (cutoffs)
+    # or from finite to infinite wavenumber (resonances). Plotting them in (X, Y) space
+    # is powerful because a plasma's path through the diagram as density or B changes
+    # shows which modes it passes through — essential for antenna/launching design.
     ax.plot([1, 1], [0, 2], 'b-', linewidth=2, label='O-mode cutoff ($X=1$)')
     ax.plot(R_cutoff_X, R_cutoff_Y, 'r-', linewidth=2,
             label='R-wave cutoff ($X=1-Y$)')
     ax.plot(L_cutoff_X, L_cutoff_Y, 'g-', linewidth=2,
             label='L-wave cutoff ($X=1+Y$)')
+    # The upper hybrid resonance sits inside the O-mode propagating region (X < 1),
+    # which is why X-mode can reach it from the low-density side while O-mode cannot.
     ax.plot(UH_res_X, UH_res_Y, 'm--', linewidth=2,
             label='Upper hybrid res ($X=1-Y^2$)')
 
@@ -742,14 +759,21 @@ def whistler_dispersion(k, omega_pe, omega_ce):
     Whistler wave dispersion: ω ≈ k²c²ω_ce/ω_pe².
     """
     c = 3e8
-    # From k²c²ω_ce/ω_pe² = ω, solve for ω
-    # This is approximate; use quadratic formula
-    # ω ≈ k²c²ω_ce/ω_pe² for ω << ω_ce
+    # The ω ∝ k² scaling (anomalous dispersion) comes from the R-wave expression
+    # n² = R ≈ ω_pe² / (ω ω_ce) in the whistler limit ω_ci << ω << ω_ce;
+    # rearranging kc/ω = n gives ω = k²c²ω_ce / ω_pe² — higher frequencies
+    # have larger phase velocity, so they travel faster and arrive first (descending tone).
     omega = k**2 * c**2 * omega_ce / omega_pe**2
+    # Ion contribution to R is neglected here because at whistler frequencies
+    # ω >> ω_ci, so ions are too slow to respond to the wave and χ_i ≈ 0.
+    # The cap at 0.5 ω_ce enforces the validity of the whistler approximation;
+    # near ω_ce the full R expression must be used as the resonance divergence matters.
     omega = np.minimum(omega, 0.5 * omega_ce)  # Limit to whistler range
     return omega
 
-# Magnetospheric parameters
+# Magnetospheric parameters are chosen to place f_pe and f_ce both in the kHz range:
+# at these low densities (n ~ 10^6 m^-3) f_pe ~ 9 kHz, while B ~ 50 μT gives
+# f_ce ~ 1.4 MHz — satisfying ω_ci << ω << ω_ce for audio-frequency whistlers.
 n = 1e6  # m^-3 (magnetosphere)
 B = 5e-5  # T (Earth's magnetic field at magnetosphere)
 

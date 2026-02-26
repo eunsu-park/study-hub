@@ -1,10 +1,25 @@
 # Page Replacement ⭐⭐⭐⭐
 
-## Overview
-
-Page replacement algorithms determine which page to evict when physical memory is insufficient. Learn about major algorithms including FIFO, Optimal, LRU, Belady's Anomaly, and thrashing.
+**Previous**: [Virtual Memory](./14_Virtual_Memory.md) | **Next**: [File System Basics](./16_File_System_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why page replacement is necessary when physical memory is over-allocated
+2. Implement FIFO, LRU, and Clock page replacement algorithms
+3. Demonstrate Belady's anomaly with a concrete FIFO example
+4. Compare page replacement algorithms by miss rate and implementation complexity
+5. Explain thrashing and how working set models prevent it
+6. Analyze the relationship between page frame allocation and page fault rate
+7. Distinguish stack algorithms from non-stack algorithms and explain why this matters
+8. Evaluate the Page Fault Frequency (PFF) method for dynamic frame allocation
+
+---
+
+When physical memory is full and a new page is needed, the OS must choose a victim page to evict. This choice directly affects your system's performance -- a bad replacement policy can cause thrashing, where the OS spends more time swapping pages than running your programs. The algorithms in this lesson range from the theoretically optimal (but unimplementable) to practical approximations used in real operating systems like Linux.
 
 ## Table of Contents
 

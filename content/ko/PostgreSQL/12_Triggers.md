@@ -1,5 +1,26 @@
 # 트리거
 
+**이전**: [트랜잭션](./11_Transactions.md) | **다음**: [백업과 운영](./13_Backup_and_Operations.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 트리거(Trigger)의 목적과 데이터 변경 이벤트에 대한 자동 응답 방식을 설명할 수 있습니다
+2. PL/pgSQL에서 TRIGGER 타입을 반환하는 트리거 함수(Trigger Function)를 생성할 수 있습니다
+3. BEFORE 트리거와 AFTER 트리거를 구분하고 주어진 사용 사례에 적합한 실행 시점을 선택할 수 있습니다
+4. 트리거 함수 내에서 NEW와 OLD 레코드 변수를 사용하여 행 데이터에 접근할 수 있습니다
+5. FOR EACH ROW와 FOR EACH STATEMENT 트리거의 실행 단위(Granularity)를 비교할 수 있습니다
+6. WHEN 절을 사용하여 조건부 트리거(Conditional Trigger)를 구현할 수 있습니다
+7. 감사 로그(Audit Log), 타임스탬프 자동 갱신, 재고 관리 등 실용적인 트리거 기반 솔루션을 구축할 수 있습니다
+8. 트리거를 목록 조회, 활성화, 비활성화, 삭제하는 방식으로 관리할 수 있습니다
+
+---
+
+트리거(Trigger)를 사용하면 비즈니스 규칙을 데이터베이스 계층에 직접 내장할 수 있어, 감사 추적 유지, 데이터 유효성 검사, 파생 컬럼 갱신 같은 중요한 로직이 데이터 변경 시 자동으로 실행됩니다. 모든 애플리케이션이 올바른 함수를 호출하는 것을 기억하는 대신, 데이터베이스 자체가 일관성을 강제합니다. 이는 트리거를 모든 운영 PostgreSQL 시스템에서 데이터 무결성(Data Integrity)을 위한 필수 도구로 만듭니다.
+
 ## 1. 트리거 개념
 
 트리거는 특정 이벤트(INSERT, UPDATE, DELETE)가 발생할 때 자동으로 실행되는 함수입니다.
@@ -441,6 +462,4 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 다음 단계
-
-[13_Backup_and_Operations.md](./13_Backup_and_Operations.md)에서 백업과 운영을 배워봅시다!
+**이전**: [트랜잭션](./11_Transactions.md) | **다음**: [백업과 운영](./13_Backup_and_Operations.md)

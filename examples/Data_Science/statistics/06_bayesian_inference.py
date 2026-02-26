@@ -7,6 +7,22 @@ Demonstrates advanced Bayesian inference methods:
 - Posterior sampling
 - Convergence diagnostics (trace plots)
 - Bayesian linear regression
+
+Theory:
+- When the posterior has no closed form, MCMC generates samples from it by
+  constructing a Markov chain whose stationary distribution IS the posterior.
+- Metropolis-Hastings proposes a new state and accepts/rejects based on the
+  density ratio. The acceptance rate (ideally 20-50%) controls the trade-off
+  between exploration and mixing speed.
+- Gibbs sampling is a special case of MH where each variable is sampled from
+  its full conditional — acceptance rate is always 100%, but it requires
+  knowing the conditional distributions.
+- Convergence diagnostics (R-hat, ESS, trace plots) are essential: MCMC
+  results are only valid AFTER the chain has converged. The burn-in period
+  discards the transient phase. Multiple chains from different starting
+  points help detect non-convergence.
+
+Adapted from Data_Science Lesson 18.
 """
 
 import numpy as np
@@ -41,7 +57,9 @@ def metropolis_hastings_normal():
         """Log of target distribution."""
         return stats.norm.logpdf(x, target_mean, target_std)
 
-    # MCMC parameters
+    # Why: proposal_std controls the step size. Too small = high acceptance but
+    # slow exploration (random walk). Too large = low acceptance, chain gets
+    # "stuck." Optimal acceptance rate for 1D Gaussian is ~44%.
     n_samples = 10000
     proposal_std = 3
     burn_in = 1000
@@ -61,7 +79,9 @@ def metropolis_hastings_normal():
         # Propose new state
         proposed = current + np.random.normal(0, proposal_std)
 
-        # Acceptance ratio
+        # Why: We work in log-space to avoid numerical underflow with very small
+        # densities. The acceptance ratio pi(x*)/pi(x) cancels the normalizing
+        # constant — this is MH's key advantage: we only need unnormalized densities.
         log_ratio = log_target(proposed) - log_target(current)
         accept_prob = min(1, np.exp(log_ratio))
 
@@ -80,7 +100,9 @@ def metropolis_hastings_normal():
     print(f"  Sample mean: {np.mean(samples_after_burnin):.3f} (true: {target_mean})")
     print(f"  Sample std: {np.std(samples_after_burnin, ddof=1):.3f} (true: {target_std})")
 
-    # Effective sample size (simple autocorrelation-based estimate)
+    # Why: MCMC samples are autocorrelated, so N raw samples contain less info
+    # than N independent samples. ESS estimates how many independent samples the
+    # chain is "worth." Low ESS (< 100) means the chain hasn't explored enough.
     autocorr_lag1 = np.corrcoef(samples_after_burnin[:-1], samples_after_burnin[1:])[0, 1]
     ess_approx = len(samples_after_burnin) * (1 - autocorr_lag1) / (1 + autocorr_lag1)
 
@@ -160,7 +182,10 @@ def gibbs_sampling_bivariate():
     print(f"  ρ = {rho}")
     print(f"  σ_x = {sigma_x}, σ_y = {sigma_y}")
 
-    # Conditional distributions
+    # Why: Gibbs sampling requires the full conditional distribution of each
+    # variable. For the bivariate Normal, the conditional X|Y is also Normal
+    # with mean that depends linearly on Y and variance reduced by (1-rho^2).
+    # Higher correlation means the conditional is tighter (more informative).
     def sample_x_given_y(y):
         """Sample x | y from conditional normal."""
         mu_cond = mu[0] + rho * (sigma_x / sigma_y) * (y - mu[1])
@@ -265,7 +290,10 @@ def bayesian_linear_regression():
     # Design matrix
     X = np.column_stack([np.ones(n), x])
 
-    # Prior for coefficients: N(0, 100*I) - weakly informative
+    # Why: A weakly informative prior N(0, 100*I) says "coefficients are
+    # probably within a few dozen units of zero" without strongly constraining
+    # the fit. The prior variance (100) is large relative to expected
+    # coefficient magnitudes, so data will dominate the posterior.
     prior_mean = np.zeros(2)
     prior_cov = 100 * np.eye(2)
 
@@ -393,7 +421,10 @@ def convergence_diagnostics():
         chains.append(np.array(samples))
         print(f"  Chain {chain_id+1}: start={start:5.1f}, mean={np.mean(samples[burn_in:]):.3f}")
 
-    # Gelman-Rubin diagnostic (simple version)
+    # Why: Gelman-Rubin R-hat compares within-chain variance (W) to between-chain
+    # variance (B). If chains have converged to the same distribution, W and B
+    # should be similar (R-hat near 1). R-hat > 1.1 suggests non-convergence.
+    # Using multiple chains with dispersed starting points is essential.
     chains_after_burnin = [c[burn_in:] for c in chains]
 
     # Within-chain variance

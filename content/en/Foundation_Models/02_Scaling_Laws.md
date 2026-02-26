@@ -561,3 +561,166 @@ Inference-optimal: Smaller N, larger D
 ### Additional Resources
 - [Epoch AI Compute Trends](https://epochai.org/trends)
 - [AI Scaling Calculator](https://www.lesswrong.com/posts/midXmMb2Xg37F2Kgn/ai-scaling-calculator)
+
+---
+
+## Exercises
+
+### Exercise 1: Chinchilla Optimal Allocation
+
+Using the Chinchilla rule (D ≈ 20 × N) and the compute formula C ≈ 6 × N × D, answer the following:
+
+1. If you have a compute budget of 6 × 10^23 FLOPs, what are the Chinchilla-optimal values for N (parameters) and D (training tokens)?
+2. GPT-3 trained a 175B parameter model on 300B tokens. Is GPT-3 over-trained or under-trained according to Chinchilla? By what factor?
+
+<details>
+<summary>Show Answer</summary>
+
+**Part 1: Chinchilla-optimal allocation for C = 6 × 10^23 FLOPs**
+
+From the Chinchilla optimal rule: D = 20N, so:
+
+```
+C = 6 × N × D = 6 × N × 20N = 120 × N²
+N² = C / 120 = 6×10²³ / 120 = 5×10²¹
+N = √(5×10²¹) ≈ 2.24×10¹⁰ ≈ 22B parameters
+D = 20 × 22B = 440B tokens
+```
+
+**Part 2: GPT-3 assessment**
+
+Chinchilla-optimal for 175B params: D* = 20 × 175B = 3.5T tokens
+GPT-3 actual: D = 300B tokens
+
+300B / 3500B ≈ 0.086 → GPT-3 was trained on only ~8.6% of the optimal token count.
+GPT-3 is severely **under-trained** by a factor of ~11.7× (3.5T / 300B).
+
+</details>
+
+---
+
+### Exercise 2: Training Cost Estimation
+
+Use the `estimate_training_cost` function logic from the lesson to estimate the training cost of a hypothetical 13B parameter model trained on 260B tokens (Chinchilla-optimal), assuming A100 GPUs at $2/hour.
+
+Show your calculation step by step.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+N = 13e9    # 13B parameters
+D = 260e9   # 260B tokens (= 20 × 13B, Chinchilla-optimal)
+
+# Step 1: Total FLOPs
+total_flops = 6 * N * D
+# = 6 × 13×10⁹ × 260×10⁹
+# = 6 × 3.38×10²¹
+# = 2.028×10²² FLOPs
+
+# Step 2: A100 effective throughput
+gpu_flops_per_sec = 300e12  # 300 TFLOPS
+
+# Step 3: Total GPU-seconds
+gpu_seconds = total_flops / gpu_flops_per_sec
+# = 2.028×10²² / 3×10¹⁴
+# = 6.76×10⁷ GPU-seconds
+
+# Step 4: GPU-hours
+gpu_hours = gpu_seconds / 3600
+# ≈ 18,778 GPU-hours
+
+# Step 5: Cost
+cost = gpu_hours * 2.0
+# ≈ $37,556
+```
+
+Approximate training cost: **~$37,600** on a single A100 equivalent.
+With 8 GPUs running in parallel: ~$4,700, taking ~2,347 GPU-hours of wall-clock time.
+
+</details>
+
+---
+
+### Exercise 3: Over-training vs Compute-optimal Trade-off
+
+Explain in your own words why a deployment-focused organization might choose to **over-train a smaller model** rather than follow the Chinchilla compute-optimal recipe. What are the trade-offs?
+
+<details>
+<summary>Show Answer</summary>
+
+**Why over-train a smaller model:**
+
+- **Inference cost dominates in production.** Inference cost scales with model size N (memory bandwidth, compute per token). If a model serves millions of requests per day, even a modest reduction in N (e.g., 7B vs 13B) saves enormous ongoing costs.
+- **Train once, infer trillions of times.** The training cost is a one-time expense; inference costs accumulate indefinitely. Chinchilla is "training-optimal" but not "total-cost-of-ownership optimal."
+- **Over-training improves the small model's quality** until it matches or exceeds a larger Chinchilla-optimal model on many benchmarks (Mistral 7B > LLaMA 2 13B on some tasks).
+
+**Trade-offs:**
+
+| Factor | Chinchilla-optimal | Over-training |
+|--------|-------------------|---------------|
+| Training efficiency | Maximum | Diminishing returns on data |
+| Inference cost | Higher (larger N) | Lower (smaller N) |
+| Deployment flexibility | Less portable | More portable / edge-friendly |
+| Data requirement | Moderate | Very large (may exhaust quality data) |
+
+The key insight: the "optimal" strategy depends on whether compute is measured at training time or total deployment lifetime.
+
+</details>
+
+---
+
+### Exercise 4: Power Law Interpretation
+
+The Chinchilla scaling law states: L(N, D) = E + A/N^α + B/D^β, where α ≈ 0.34 and β ≈ 0.28.
+
+1. If you double the number of parameters N while keeping D fixed, by what factor does the parameter-dependent component A/N^α decrease?
+2. Which has a stronger marginal effect on loss reduction: doubling N or doubling D? Explain why.
+
+<details>
+<summary>Show Answer</summary>
+
+**Part 1: Effect of doubling N**
+
+```
+A / (2N)^α = A / (2^α × N^α) = (A / N^α) × (1 / 2^α)
+
+Reduction factor = 1 / 2^0.34 ≈ 1 / 1.265 ≈ 0.790
+```
+
+Doubling N reduces the parameter component by ~21% (it becomes 0.79× of its original value).
+
+**Part 2: Doubling N vs doubling D**
+
+- Doubling N: parameter component multiplied by 2^(-0.34) ≈ 0.790
+- Doubling D: data component multiplied by 2^(-0.28) ≈ 0.825
+
+**Doubling N has a stronger effect** (0.790 < 0.825), because α = 0.34 > β = 0.28 — the loss decreases more steeply with parameters than with data.
+
+However, in practice the total effect also depends on the current ratio of A/N^α vs B/D^β. When a model is under-trained (data is the bottleneck), adding data has larger absolute impact despite the smaller exponent.
+
+</details>
+
+---
+
+### Exercise 5: Inference Scaling Analysis
+
+OpenAI's o1 model family exemplifies "inference-time scaling" rather than traditional training-time scaling. Describe three concrete techniques that can improve model performance by spending more compute at inference time, and explain what task types benefit most from each.
+
+<details>
+<summary>Show Answer</summary>
+
+| Technique | Mechanism | Best Task Types |
+|-----------|-----------|-----------------|
+| **Chain-of-Thought (CoT)** | Generate explicit reasoning steps before the final answer, using token generation budget for intermediate computation | Multi-step math, logical deduction, word problems |
+| **Self-Consistency** | Sample multiple independent reasoning paths (high temperature), then take the majority vote on the final answer | Arithmetic, factual QA, tasks with a single correct answer where individual paths may err |
+| **Tree of Thoughts (ToT) / Beam Search** | Explore a branching tree of intermediate reasoning states, evaluate each node, and prune unpromising branches | Planning tasks, puzzles (e.g., 24-game), code generation with verification, multi-hop reasoning |
+
+**Why inference scaling is powerful:**
+- No additional training required — the base model's capabilities are better elicited
+- Can be applied retroactively to already-deployed models
+- Particularly effective for tasks where correct reasoning chains exist in the training distribution (math, code, logic)
+
+**Limitation:** Inference scaling increases latency and cost per query proportionally to the number of samples or tree nodes explored.
+
+</details>

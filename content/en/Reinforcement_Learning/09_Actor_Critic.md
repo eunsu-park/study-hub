@@ -77,7 +77,10 @@ class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
 
-        # Shared feature extraction
+        # Shared feature extraction: actor and critic share early layers because
+        # low-level state representations (e.g., position, velocity) are useful
+        # for both policy decisions and value estimation — sharing reduces computation
+        # and forces the network to learn representations beneficial to both heads
         self.shared = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU()
@@ -88,9 +91,12 @@ class ActorCritic(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim)
+            # No activation here — softmax is applied in forward() so we can
+            # work with raw logits, which is numerically more stable
         )
 
-        # Critic (value)
+        # Critic outputs a scalar value V(s), not per-action values — it estimates
+        # how good the *current state* is on average, independent of any specific action
         self.critic = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -105,6 +111,8 @@ class ActorCritic(nn.Module):
 
     def get_action(self, state):
         policy, value = self.forward(state)
+        # Categorical distribution enables stochastic action selection — essential
+        # for exploration; log_prob is stored for the policy gradient update
         dist = torch.distributions.Categorical(policy)
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -162,7 +170,9 @@ class A2CAgent:
         return torch.tensor(returns)
 
     def update(self, next_state):
-        # Next state value (bootstrapping)
+        # Bootstrapping: instead of waiting for the episode to end, we estimate
+        # the remaining return using the critic — this is what makes Actor-Critic
+        # an online algorithm capable of updating mid-episode
         with torch.no_grad():
             _, next_value = self.network(
                 torch.FloatTensor(next_state).unsqueeze(0)
@@ -174,12 +184,19 @@ class A2CAgent:
         log_probs = torch.stack(self.log_probs)
         entropies = torch.stack(self.entropies)
 
-        # Advantage
+        # Detach values from the computational graph for advantage calculation —
+        # we treat the critic's estimate as a fixed baseline, not a target to
+        # differentiate through; only the actor_loss should update via log_probs
         advantages = returns - values.detach()
 
-        # Compute losses
+        # Policy gradient loss: REINFORCE with baseline — multiply log probability
+        # by advantage so actions better than average are reinforced, worse ones suppressed
         actor_loss = -(log_probs * advantages).mean()
+        # MSE loss trains the critic to accurately predict discounted returns —
+        # a more accurate baseline reduces actor gradient variance over time
         critic_loss = F.mse_loss(values, returns)
+        # Entropy bonus encourages exploration by penalizing overly confident policies;
+        # negative sign because we maximize entropy but minimize the total loss
         entropy_loss = -entropies.mean()
 
         total_loss = (actor_loss +
@@ -189,6 +206,8 @@ class A2CAgent:
         # Update
         self.optimizer.zero_grad()
         total_loss.backward()
+        # Gradient clipping prevents exploding gradients — common in RNNs and
+        # environments with sparse or high-variance rewards; 0.5 is a conservative bound
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), 0.5)
         self.optimizer.step()
 
@@ -267,14 +286,21 @@ where δ_t = r_t + γV(s_{t+1}) - V(s_t)
 def compute_gae(rewards, values, next_values, dones, gamma=0.99, lam=0.95):
     """Generalized Advantage Estimation"""
     advantages = []
+    # Traverse backwards because GAE is a recursive sum: A_t depends on A_{t+1}.
+    # Computing forward would require storing all future deltas first; backward
+    # traversal lets us accumulate the running sum gae in a single pass
     gae = 0
 
     for t in reversed(range(len(rewards))):
         if dones[t]:
+            # Episode boundary: future returns beyond this point don't belong to
+            # this trajectory, so reset the accumulator to prevent value leakage
             delta = rewards[t] - values[t]
             gae = delta
         else:
             delta = rewards[t] + gamma * next_values[t] - values[t]
+            # GAE combines TD-1 (low variance, high bias) with Monte Carlo (high variance,
+            # low bias) via lambda: lam=0 gives pure TD, lam=1 gives Monte Carlo returns
             gae = delta + gamma * lam * gae
 
         advantages.insert(0, gae)
@@ -387,6 +413,8 @@ class ContinuousActorCritic(nn.Module):
 
         # Actor: mean and standard deviation
         self.actor_mean = nn.Linear(hidden_dim, action_dim)
+        # log_std as a learnable parameter (not state-dependent) keeps the policy
+        # simpler and more stable early in training; exp() ensures std > 0 always
         self.actor_log_std = nn.Parameter(torch.zeros(action_dim))
 
         # Critic
@@ -403,8 +431,12 @@ class ContinuousActorCritic(nn.Module):
         mean, std, value = self.forward(state)
 
         if deterministic:
+            # At test time, use the mean directly — no exploration noise needed
+            # since we want the best known action, not a random sample
             action = mean
         else:
+            # Normal distribution models continuous action spaces; sampling adds
+            # stochastic exploration proportional to the learned std
             dist = torch.distributions.Normal(mean, std)
             action = dist.sample()
 
@@ -414,6 +446,8 @@ class ContinuousActorCritic(nn.Module):
         mean, std, value = self.forward(state)
         dist = torch.distributions.Normal(mean, std)
 
+        # Sum log_probs across action dimensions: for multivariate Normal with
+        # independent dimensions, the joint log-probability is the sum of marginals
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         entropy = dist.entropy().sum(-1, keepdim=True)
 
@@ -454,6 +488,8 @@ class RunningMeanStd:
     def __init__(self):
         self.mean = 0
         self.var = 1
+        # Small initial count prevents division-by-zero before any data is seen
+        # while having negligible effect once real samples arrive
         self.count = 1e-4
 
     def update(self, x):
@@ -464,12 +500,16 @@ class RunningMeanStd:
         delta = batch_mean - self.mean
         total_count = self.count + batch_count
 
+        # Welford's online algorithm: updates mean and variance incrementally
+        # without storing all past data — O(1) memory regardless of episode count
         self.mean += delta * batch_count / total_count
         self.var = (self.var * self.count + batch_var * batch_count +
                    delta**2 * self.count * batch_count / total_count) / total_count
         self.count = total_count
 
     def normalize(self, x):
+        # 1e-8 epsilon prevents division by zero when variance is near zero
+        # (e.g., if all rewards in a batch are identical)
         return (x - self.mean) / (np.sqrt(self.var) + 1e-8)
 ```
 

@@ -44,7 +44,8 @@ public:
 void demo_unique_ptr() {
     std::cout << "\n=== unique_ptr (Exclusive Ownership) ===\n";
 
-    // Create unique_ptr with make_unique
+    // Why: make_unique avoids a potential memory leak if an exception is thrown between
+    // new and the unique_ptr construction — it also makes the ownership intent explicit
     std::unique_ptr<Resource> ptr1 = std::make_unique<Resource>("unique-1");
     ptr1->use();
 
@@ -80,7 +81,8 @@ void demo_unique_ptr() {
 void demo_shared_ptr() {
     std::cout << "\n=== shared_ptr (Shared Ownership) ===\n";
 
-    // Create shared_ptr with make_shared
+    // Why: make_shared allocates the control block and object in a single allocation,
+    // improving cache locality and reducing memory overhead compared to separate new + shared_ptr
     std::shared_ptr<Resource> ptr1 = std::make_shared<Resource>("shared-1");
     std::cout << "  ptr1 use_count: " << ptr1.use_count() << "\n";
 
@@ -107,7 +109,9 @@ class Node {
 public:
     std::string name;
     std::shared_ptr<Node> next;
-    std::weak_ptr<Node> prev;  // weak_ptr to avoid cycle
+    // Why: weak_ptr breaks the circular reference — if both prev and next were shared_ptr,
+    // the reference counts would never reach zero and the nodes would leak
+    std::weak_ptr<Node> prev;
 
     Node(const std::string& n) : name(n) {
         std::cout << "  [Node '" << name << "' created]\n";
@@ -200,7 +204,11 @@ void demo_container() {
 // ============ Polymorphism with Smart Pointers ============
 class Shape {
 public:
+    // Why: virtual destructor ensures derived class destructors are called when deleting
+    // through a base pointer — without this, derived resources would leak
     virtual ~Shape() = default;
+    // Why: pure virtual (= 0) makes Shape abstract, forcing each subclass to provide
+    // its own draw implementation — the base class defines the interface contract only
     virtual void draw() const = 0;
 };
 

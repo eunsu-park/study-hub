@@ -62,59 +62,59 @@
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [01_Environment_Setup.md](./01_Environment_Setup.md) | ⭐ | OpenCV 설치, opencv-python vs contrib, 버전 확인 |
-| [02_Image_Basics.md](./02_Image_Basics.md) | ⭐ | imread, imshow, imwrite, 픽셀 접근, ROI |
-| [03_Color_Spaces.md](./03_Color_Spaces.md) | ⭐⭐ | BGR/RGB, HSV, LAB, cvtColor, 채널 분리 |
-| [04_Geometric_Transforms.md](./04_Geometric_Transforms.md) | ⭐⭐ | resize, rotate, flip, warpAffine, warpPerspective |
+| [환경 설정 및 기초](./01_Environment_Setup.md) | ⭐ | OpenCV 설치, opencv-python vs contrib, 버전 확인 |
+| [이미지 기초 연산](./02_Image_Basics.md) | ⭐ | imread, imshow, imwrite, 픽셀 접근, ROI |
+| [색상 공간](./03_Color_Spaces.md) | ⭐⭐ | BGR/RGB, HSV, LAB, cvtColor, 채널 분리 |
+| [기하학적 변환](./04_Geometric_Transforms.md) | ⭐⭐ | resize, rotate, flip, warpAffine, warpPerspective |
 
 ### 이미지 처리 (05-08)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [05_Image_Filtering.md](./05_Image_Filtering.md) | ⭐⭐ | blur, GaussianBlur, medianBlur, bilateralFilter |
-| [06_Morphology.md](./06_Morphology.md) | ⭐⭐ | erode, dilate, opening, closing, gradient |
-| [07_Thresholding.md](./07_Thresholding.md) | ⭐⭐ | threshold, OTSU, adaptiveThreshold |
-| [08_Edge_Detection.md](./08_Edge_Detection.md) | ⭐⭐⭐ | Sobel, Scharr, Laplacian, Canny |
+| [이미지 필터링](./05_Image_Filtering.md) | ⭐⭐ | blur, GaussianBlur, medianBlur, bilateralFilter |
+| [모폴로지 연산](./06_Morphology.md) | ⭐⭐ | erode, dilate, opening, closing, gradient |
+| [이진화 및 임계처리](./07_Thresholding.md) | ⭐⭐ | threshold, OTSU, adaptiveThreshold |
+| [엣지 검출 (Edge Detection)](./08_Edge_Detection.md) | ⭐⭐⭐ | Sobel, Scharr, Laplacian, Canny |
 
 ### 객체 분석 (09-12)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [09_Contours.md](./09_Contours.md) | ⭐⭐⭐ | findContours, drawContours, 계층 구조, approxPolyDP |
-| [10_Shape_Analysis.md](./10_Shape_Analysis.md) | ⭐⭐⭐ | moments, boundingRect, convexHull, matchShapes |
-| [11_Hough_Transform.md](./11_Hough_Transform.md) | ⭐⭐⭐ | HoughLines, HoughLinesP, HoughCircles |
-| [12_Histogram_Analysis.md](./12_Histogram_Analysis.md) | ⭐⭐ | calcHist, equalizeHist, CLAHE, backprojection |
+| [윤곽선 검출 (Contour Detection)](./09_Contours.md) | ⭐⭐⭐ | findContours, drawContours, 계층 구조, approxPolyDP |
+| [도형 분석 (Shape Analysis)](./10_Shape_Analysis.md) | ⭐⭐⭐ | moments, boundingRect, convexHull, matchShapes |
+| [허프 변환 (Hough Transform)](./11_Hough_Transform.md) | ⭐⭐⭐ | HoughLines, HoughLinesP, HoughCircles |
+| [히스토그램 분석 (Histogram Analysis)](./12_Histogram_Analysis.md) | ⭐⭐ | calcHist, equalizeHist, CLAHE, backprojection |
 
 ### 특징 및 검출 (13-15)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [13_Feature_Detection.md](./13_Feature_Detection.md) | ⭐⭐⭐ | Harris, FAST, SIFT, ORB, 키포인트/디스크립터 |
-| [14_Feature_Matching.md](./14_Feature_Matching.md) | ⭐⭐⭐ | BFMatcher, FLANN, ratio test, homography |
-| [15_Object_Detection_Basics.md](./15_Object_Detection_Basics.md) | ⭐⭐⭐ | template matching, Haar cascade, HOG+SVM |
+| [특징점 검출 (Feature Detection)](./13_Feature_Detection.md) | ⭐⭐⭐ | Harris, FAST, SIFT, ORB, 키포인트/디스크립터 |
+| [특징점 매칭 (Feature Matching)](./14_Feature_Matching.md) | ⭐⭐⭐ | BFMatcher, FLANN, ratio test, homography |
+| [객체 검출 기초 (Object Detection Basics)](./15_Object_Detection_Basics.md) | ⭐⭐⭐ | template matching, Haar cascade, HOG+SVM |
 
 ### 고급 주제 (16-18)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [16_Face_Detection.md](./16_Face_Detection.md) | ⭐⭐⭐⭐ | Haar/dlib 얼굴검출, 랜드마크, LBPH, face_recognition |
-| [17_Video_Processing.md](./17_Video_Processing.md) | ⭐⭐⭐ | VideoCapture, VideoWriter, 배경차분, 옵티컬플로우 |
-| [18_Camera_Calibration.md](./18_Camera_Calibration.md) | ⭐⭐⭐⭐ | 카메라 행렬, 왜곡 보정, 체스보드 캘리브레이션 |
+| [얼굴 검출 및 인식 (Face Detection and Recognition)](./16_Face_Detection.md) | ⭐⭐⭐⭐ | Haar/dlib 얼굴검출, 랜드마크, LBPH, face_recognition |
+| [비디오 처리 (Video Processing)](./17_Video_Processing.md) | ⭐⭐⭐ | VideoCapture, VideoWriter, 배경차분, 옵티컬플로우 |
+| [카메라 캘리브레이션 (Camera Calibration)](./18_Camera_Calibration.md) | ⭐⭐⭐⭐ | 카메라 행렬, 왜곡 보정, 체스보드 캘리브레이션 |
 
 ### DNN 및 실전 (19-20)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [19_DNN_Module.md](./19_DNN_Module.md) | ⭐⭐⭐⭐ | cv2.dnn, readNet, blobFromImage, YOLO, SSD |
-| [20_Practical_Projects.md](./20_Practical_Projects.md) | ⭐⭐⭐⭐ | 문서스캐너, 차선검출, AR마커, 얼굴필터 |
+| [딥러닝 DNN 모듈 (Deep Neural Network Module)](./19_DNN_Module.md) | ⭐⭐⭐⭐ | cv2.dnn, readNet, blobFromImage, YOLO, SSD |
+| [실전 프로젝트 (Practical Projects)](./20_Practical_Projects.md) | ⭐⭐⭐⭐ | 문서스캐너, 차선검출, AR마커, 얼굴필터 |
 
 ### 3D 비전 (21-23)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
-| [21_3D_Vision_Basics.md](./21_3D_Vision_Basics.md) | ⭐⭐⭐ | 스테레오 비전, 깊이 맵, 포인트 클라우드, 3D 재구성 |
-| [22_Depth_Estimation.md](./22_Depth_Estimation.md) | ⭐⭐⭐⭐ | 단안 깊이 추정, MiDaS, DPT, Structure from Motion |
-| [23_SLAM_Introduction.md](./23_SLAM_Introduction.md) | ⭐⭐⭐⭐ | Visual SLAM, ORB-SLAM, LiDAR SLAM, Loop Closure |
+| [3D 비전 기초 (3D Vision Basics)](./21_3D_Vision_Basics.md) | ⭐⭐⭐ | 스테레오 비전, 깊이 맵, 포인트 클라우드, 3D 재구성 |
+| [단안 깊이 추정 (Monocular Depth Estimation)](./22_Depth_Estimation.md) | ⭐⭐⭐⭐ | 단안 깊이 추정, MiDaS, DPT, Structure from Motion |
+| [SLAM 입문 (Visual SLAM Introduction)](./23_SLAM_Introduction.md) | ⭐⭐⭐⭐ | Visual SLAM, ORB-SLAM, LiDAR SLAM, Loop Closure |
 
 ---
 

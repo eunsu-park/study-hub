@@ -5,6 +5,19 @@
 > **사전 요구 사항**: 레슨 2 (문서 구조)
 > **목표**: 텍스트 스타일, 글꼴, 색상, 목록, 인용, 축자(verbatim) 텍스트, 특수 문자, 간격, 정렬 및 각주 마스터하기
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 글꼴 스타일 명령(bold, italic, underline, emphasis)을 적용하고 여러 스타일을 올바르게 조합할 수 있다
+2. 표준 LaTeX 명령과 `xcolor` 패키지를 사용하여 글꼴 패밀리(font family), 크기(size), 색상(color)을 변경할 수 있다
+3. 순서 있는 목록(ordered list), 순서 없는 목록(unordered list), 설명 목록(description list)을 만들고 중첩 및 사용자 정의 변형을 구현할 수 있다
+4. `verbatim` 및 `listings` 환경을 사용하여 축자 텍스트(verbatim text)와 소스 코드(source code)를 표시할 수 있다
+5. 특수 문자(special character)를 이스케이프(escape)하고 올바른 인용 부호, 줄임표, 기호를 생성할 수 있다
+6. 텍스트 정렬(alignment), 줄 간격(line spacing), 단락 들여쓰기(paragraph indentation)를 제어하여 특정 서식 요구 사항을 충족할 수 있다
+
+---
+
 ## 글꼴 스타일
 
 LaTeX는 텍스트 모양을 변경하기 위한 여러 명령을 제공합니다.
@@ -962,5 +975,5 @@ Another one.\footnote{Dagger}
 ---
 
 **탐색**
-- 이전: [02_Document_Structure.md](02_Document_Structure.md)
-- 다음: [04_Math_Basics.md](04_Math_Basics.md)
+- 이전: [문서 구조](02_Document_Structure.md)
+- 다음: [수학 조판 기초](04_Math_Basics.md)

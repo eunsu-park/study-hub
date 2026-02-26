@@ -101,19 +101,23 @@ total_reward = 0
 done = False
 
 while not done:
-    # 1. 에이전트가 행동 선택 (여기서는 랜덤)
+    # 랜덤 행동을 사용하는 이유: 학습된 정책이 없는 상태에서 랜덤 샘플링은 에이전트-환경 루프를
+    # 시연하기 위한 기준선 역할을 한다. 실제로는 학습된 정책(예: epsilon-greedy)이 이를 대체한다.
     action = env.action_space.sample()
 
-    # 2. 환경에 행동 적용
+    # env.step이 5개 값을 반환하는 이유: Gymnasium은 "terminated"(자연 종료, 예: 막대 쓰러짐)와
+    # "truncated"(시간 제한 도달)를 분리하는데, 이는 리턴(return)을 올바르게 계산하는 데 중요하다 —
+    # truncation은 미래 가치를 0으로 만들어서는 안 된다.
     next_state, reward, terminated, truncated, info = env.step(action)
 
-    # 3. 보상 누적
+    # 에피소드 전반의 정책 성능을 측정하기 위해 보상을 누적한다
     total_reward += reward
 
-    # 4. 상태 업데이트
+    # 상태를 덮어쓰는 이유: 마르코프 속성(Markov property)에 따라 현재 상태만이 중요하다
     state = next_state
 
-    # 5. 종료 조건 확인
+    # terminated와 truncated를 합치는 이유: 둘 다 에피소드를 종료하지만, 부트스트래핑(bootstrapping)에
+    # 대해 서로 다른 의미를 가진다 (TD 학습 레슨 참고)
     done = terminated or truncated
 
 print(f"Total reward: {total_reward}")
@@ -195,6 +199,8 @@ def calculate_return(rewards, gamma=0.99):
     Returns:
         G: 할인된 누적 보상
     """
+    # 역방향 반복을 사용하는 이유: G_t = r_t + gamma * G_{t+1} 점화식을 활용하여
+    # 단일 역방향 패스로 O(n) 시간에 할인된 리턴을 계산한다
     G = 0
     for r in reversed(rewards):
         G = r + gamma * G
@@ -337,6 +343,9 @@ class EpsilonGreedy:
         확률 ε로 랜덤 행동 (탐험)
         확률 1-ε로 최선 행동 (활용)
         """
+        # epsilon-greedy를 사용하는 이유: 탐험(Exploration)과 활용(Exploitation)을 균형 있게 조합하는
+        # 가장 단순한 전략이다. epsilon 확률로 랜덤 행동을 시도하여 더 나은 선택지를 발견하고,
+        # 그 외에는 현재 알려진 최선의 행동을 사용한다.
         if np.random.random() < self.epsilon:
             # 탐험: 랜덤 행동
             return np.random.randint(self.n_actions)
@@ -348,6 +357,9 @@ class EpsilonGreedy:
         """행동 가치 업데이트 (점진적 평균)"""
         self.action_counts[action] += 1
         n = self.action_counts[action]
+        # 점진적 평균 업데이트를 사용하는 이유: 전체 평균을 계산하는 것과 동일하지만
+        # 업데이트당 O(1) 메모리와 계산만 필요하다. 스텝 크기 1/n은 모든 과거 보상에
+        # 동등한 가중치를 부여하여 실제 평균으로 수렴한다.
         self.q_values[action] += (reward - self.q_values[action]) / n
 ```
 

@@ -6,12 +6,15 @@
 
 **난이도**: ⭐ (입문)
 
-**학습 목표**:
-- `cv2.imread()`, `cv2.imshow()`, `cv2.imwrite()` 함수 마스터
-- IMREAD 플래그 이해 및 활용
-- 이미지 좌표 시스템 이해 (y, x 순서)
-- 픽셀 단위 접근 및 수정
-- ROI(관심 영역) 설정과 이미지 복사
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `cv2.imread()`, `cv2.imshow()`, `cv2.imwrite()` 함수 마스터
+2. IMREAD 플래그 이해 및 활용
+3. 이미지 좌표 시스템 이해 (y, x 순서)
+4. 픽셀 단위 접근 및 수정
+5. ROI(관심 영역) 설정과 이미지 복사
 
 ---
 
@@ -36,24 +39,24 @@
 ```python
 import cv2
 
-# 기본 사용 (컬러로 읽기)
+# imread returns None silently on failure (no exception) — always guard against
+# this; skipping the check leads to cryptic AttributeError crashes later
 img = cv2.imread('image.jpg')
 
-# 읽기 실패 확인 (항상 해야 함!)
 if img is None:
-    print("Error: 이미지를 읽을 수 없습니다.")
+    print("Error: Cannot read image.")
 else:
-    print(f"이미지 로드 성공: {img.shape}")
+    print(f"Image loaded successfully: {img.shape}")
 ```
 
 ### IMREAD 플래그
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       IMREAD 플래그 비교                        │
+│                       IMREAD Flag Comparison                    │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   원본 이미지 (PNG, 알파 채널 포함)                             │
+│   Original Image (PNG with alpha channel)                      │
 │   ┌─────────────────────────────────────────────────────┐      │
 │   │  R   G   B   A  │  R   G   B   A  │  R   G   B   A  │      │
 │   │ 255 100  50 200 │ 255 100  50 200 │ 255 100  50 200 │      │
@@ -68,7 +71,7 @@ else:
 │   │ 50 100 255│      │    123    │     │ 50 100 255 200│       │
 │   └───────────┘      └───────────┘     └───────────────┘       │
 │   shape: (H,W,3)     shape: (H,W)      shape: (H,W,4)          │
-│   3채널 BGR          2차원, 단일값     알파 채널 보존            │
+│   3-channel BGR      2D, single value  Alpha channel preserved  │
 │                                                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -78,29 +81,26 @@ else:
 ```python
 import cv2
 
-# 1. IMREAD_COLOR (기본값, 1)
-# - 컬러로 읽기 (알파 채널 무시)
-# - 항상 3채널 BGR로 변환
+# IMREAD_COLOR: always produces a 3-channel BGR array regardless of source format
+# (even for grayscale JPEGs) — this consistency simplifies downstream processing
 img_color = cv2.imread('image.png', cv2.IMREAD_COLOR)
-img_color = cv2.imread('image.png', 1)  # 동일
-img_color = cv2.imread('image.png')     # 기본값이므로 생략 가능
+img_color = cv2.imread('image.png', 1)  # Same
+img_color = cv2.imread('image.png')     # Can omit (default)
 
-# 2. IMREAD_GRAYSCALE (0)
-# - 그레이스케일로 읽기
-# - 2차원 배열 반환
+# IMREAD_GRAYSCALE: returns a 2D array — saves 2/3 of memory vs COLOR for tasks
+# that don't need color (edge detection, thresholding, template matching)
 img_gray = cv2.imread('image.png', cv2.IMREAD_GRAYSCALE)
-img_gray = cv2.imread('image.png', 0)  # 동일
+img_gray = cv2.imread('image.png', 0)  # Same
 
-# 3. IMREAD_UNCHANGED (-1)
-# - 원본 그대로 읽기 (알파 채널 포함)
-# - PNG의 투명도 정보 필요할 때 사용
+# IMREAD_UNCHANGED: the only flag that preserves the alpha channel —
+# essential when you need transparency data (compositing, masking operations)
 img_unchanged = cv2.imread('image.png', cv2.IMREAD_UNCHANGED)
-img_unchanged = cv2.imread('image.png', -1)  # 동일
+img_unchanged = cv2.imread('image.png', -1)  # Same
 
-# 결과 비교
+# Compare results
 print(f"COLOR: {img_color.shape}")        # (H, W, 3)
 print(f"GRAYSCALE: {img_gray.shape}")     # (H, W)
-print(f"UNCHANGED: {img_unchanged.shape}") # (H, W, 4) - PNG의 경우
+print(f"UNCHANGED: {img_unchanged.shape}") # (H, W, 4) - for PNG
 ```
 
 ### 추가 플래그
@@ -108,14 +108,14 @@ print(f"UNCHANGED: {img_unchanged.shape}") # (H, W, 4) - PNG의 경우
 ```python
 import cv2
 
-# IMREAD_ANYDEPTH: 16비트/32비트 이미지 그대로 로드
+# IMREAD_ANYDEPTH: Load 16-bit/32-bit images as is
 img_depth = cv2.imread('depth_map.png', cv2.IMREAD_ANYDEPTH)
 
-# IMREAD_ANYCOLOR: 가능한 컬러 포맷 유지
+# IMREAD_ANYCOLOR: Maintain possible color formats
 img_any = cv2.imread('image.jpg', cv2.IMREAD_ANYCOLOR)
 
-# 플래그 조합
-# 16비트 그레이스케일 + 컬러 형식 유지
+# Combining flags
+# 16-bit grayscale + maintain color format
 img_combined = cv2.imread('image.tiff',
                           cv2.IMREAD_ANYDEPTH | cv2.IMREAD_ANYCOLOR)
 ```
@@ -125,17 +125,17 @@ img_combined = cv2.imread('image.tiff',
 ```python
 import cv2
 
-# 지원되는 주요 포맷
+# Supported major formats
 formats = [
     'image.jpg',   # JPEG
-    'image.png',   # PNG (알파 채널 지원)
+    'image.png',   # PNG (alpha channel supported)
     'image.bmp',   # BMP
     'image.tiff',  # TIFF
     'image.webp',  # WebP
     'image.ppm',   # PPM/PGM/PBM
 ]
 
-# 포맷별 읽기
+# Read by format
 for filepath in formats:
     img = cv2.imread(filepath)
     if img is not None:
@@ -153,13 +153,13 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# 창에 이미지 표시
+# Display image in window
 cv2.imshow('Window Name', img)
 
-# 키 입력 대기
-key = cv2.waitKey(0)  # 0 = 무한 대기
+# Wait for key press
+key = cv2.waitKey(0)  # 0 = wait indefinitely
 
-# 모든 창 닫기
+# Close all windows
 cv2.destroyAllWindows()
 ```
 
@@ -167,24 +167,24 @@ cv2.destroyAllWindows()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      waitKey() 동작                             │
+│                      waitKey() Behavior                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   cv2.waitKey(delay)                                            │
 │                                                                 │
-│   delay = 0   → 키 입력까지 무한 대기                           │
-│   delay > 0   → delay 밀리초 대기 후 자동 진행                   │
-│   delay = 1   → 최소 대기 (비디오 재생에 자주 사용)              │
+│   delay = 0   → Wait indefinitely until key press               │
+│   delay > 0   → Wait delay milliseconds then proceed            │
+│   delay = 1   → Minimum wait (often used for video playback)    │
 │                                                                 │
-│   반환값: 눌린 키의 ASCII 코드 (-1 = 시간 초과)                  │
+│   Return value: ASCII code of pressed key (-1 = timeout)        │
 │                                                                 │
-│   예시:                                                         │
+│   Examples:                                                     │
 │   key = cv2.waitKey(0)                                          │
-│   if key == 27:        # ESC 키                                 │
+│   if key == 27:        # ESC key                                │
 │       break                                                     │
-│   elif key == ord('q'):  # 'q' 키                               │
+│   elif key == ord('q'):  # 'q' key                              │
 │       break                                                     │
-│   elif key == ord('s'):  # 's' 키                               │
+│   elif key == ord('s'):  # 's' key                              │
 │       cv2.imwrite('saved.jpg', img)                             │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -198,26 +198,26 @@ import cv2
 img1 = cv2.imread('image1.jpg')
 img2 = cv2.imread('image2.jpg')
 
-# 여러 창 표시
+# Display multiple windows
 cv2.imshow('Image 1', img1)
 cv2.imshow('Image 2', img2)
 
-# 창 위치 지정
+# Set window position
 cv2.namedWindow('Positioned', cv2.WINDOW_NORMAL)
-cv2.moveWindow('Positioned', 100, 100)  # x=100, y=100 위치
+cv2.moveWindow('Positioned', 100, 100)  # x=100, y=100 position
 cv2.imshow('Positioned', img1)
 
-# 창 크기 조절 가능하게 설정
+# Make window resizable
 cv2.namedWindow('Resizable', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Resizable', 800, 600)
 cv2.imshow('Resizable', img1)
 
 cv2.waitKey(0)
 
-# 특정 창만 닫기
+# Close specific window
 cv2.destroyWindow('Image 1')
 
-# 모든 창 닫기
+# Close all windows
 cv2.destroyAllWindows()
 ```
 
@@ -227,24 +227,26 @@ cv2.destroyAllWindows()
 import cv2
 
 img = cv2.imread('image.jpg')
-original = img.copy()
+original = img.copy()  # Keep a pristine copy — img will be modified in-loop
 
 while True:
     cv2.imshow('Interactive', img)
-    key = cv2.waitKey(1) & 0xFF  # 하위 8비트만 사용
+    # & 0xFF masks the return value to 8 bits: on Linux, waitKey() can return
+    # values > 255 due to keyboard modifier flags; masking ensures reliable comparison
+    key = cv2.waitKey(1) & 0xFF
 
     if key == 27:  # ESC
         break
-    elif key == ord('r'):  # 'r' - 원본 복원
+    elif key == ord('r'):  # 'r' - restore original
         img = original.copy()
-        print("원본으로 복원")
-    elif key == ord('g'):  # 'g' - 그레이스케일
+        print("Restored to original")
+    elif key == ord('g'):  # 'g' - grayscale
         img = cv2.cvtColor(original, cv2.COLOR_BGR2GRAY)
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        print("그레이스케일 적용")
-    elif key == ord('s'):  # 's' - 저장
+        print("Applied grayscale")
+    elif key == ord('s'):  # 's' - save
         cv2.imwrite('output.jpg', img)
-        print("저장 완료")
+        print("Saved")
 
 cv2.destroyAllWindows()
 ```
@@ -257,7 +259,7 @@ import matplotlib.pyplot as plt
 
 img = cv2.imread('image.jpg')
 
-# matplotlib 사용 (BGR → RGB 변환 필요)
+# Using matplotlib (need BGR → RGB conversion)
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 plt.figure(figsize=(10, 6))
@@ -266,7 +268,7 @@ plt.title('Image Display in Jupyter')
 plt.axis('off')
 plt.show()
 
-# 여러 이미지 동시 표시
+# Display multiple images simultaneously
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
 axes[0].imshow(img_rgb)
@@ -278,7 +280,7 @@ axes[1].imshow(gray, cmap='gray')
 axes[1].set_title('Grayscale')
 axes[1].axis('off')
 
-# B, G, R 채널 분리
+# Split B, G, R channels
 b, g, r = cv2.split(img)
 axes[2].imshow(r, cmap='gray')
 axes[2].set_title('Red Channel')
@@ -299,15 +301,15 @@ import cv2
 
 img = cv2.imread('input.jpg')
 
-# 기본 저장
+# Basic save
 success = cv2.imwrite('output.jpg', img)
 
 if success:
-    print("저장 성공!")
+    print("Save successful!")
 else:
-    print("저장 실패!")
+    print("Save failed!")
 
-# 포맷 변환하여 저장
+# Save with format conversion
 cv2.imwrite('output.png', img)   # JPEG → PNG
 cv2.imwrite('output.bmp', img)   # JPEG → BMP
 ```
@@ -319,17 +321,17 @@ import cv2
 
 img = cv2.imread('input.jpg')
 
-# JPEG 품질 (0-100, 기본값 95)
+# JPEG is lossy: quality=95 is near-lossless (good for archiving); quality=30
+# cuts file size dramatically at the cost of visible artifacts — use for thumbnails
 cv2.imwrite('high_quality.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 cv2.imwrite('low_quality.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 30])
 
-# PNG 압축 레벨 (0-9, 기본값 3)
-# 0 = 압축 없음 (빠름, 큰 파일)
-# 9 = 최대 압축 (느림, 작은 파일)
+# PNG is lossless — compression only affects speed/file size, never quality
+# Use compression=0 when writing many frames in a loop (speed matters more)
 cv2.imwrite('fast_compress.png', img, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 cv2.imwrite('max_compress.png', img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
-# WebP 품질 (0-100)
+# WebP offers better compression than JPEG at equivalent visual quality
 cv2.imwrite('output.webp', img, [cv2.IMWRITE_WEBP_QUALITY, 80])
 ```
 
@@ -341,7 +343,7 @@ import os
 
 img = cv2.imread('input.jpg')
 
-# 다양한 품질로 저장
+# Save with various qualities
 qualities = [10, 30, 50, 70, 90]
 for q in qualities:
     filename = f'quality_{q}.jpg'
@@ -364,21 +366,21 @@ img = cv2.imread('image.jpg')
 # shape: (height, width, channels)
 print(f"Shape: {img.shape}")
 height, width, channels = img.shape
-print(f"높이: {height}px")
-print(f"너비: {width}px")
-print(f"채널: {channels}")
+print(f"Height: {height}px")
+print(f"Width: {width}px")
+print(f"Channels: {channels}")
 
-# dtype: 데이터 타입
-print(f"데이터 타입: {img.dtype}")  # uint8
+# dtype: data type
+print(f"Data type: {img.dtype}")  # uint8
 
-# size: 전체 원소 개수
-print(f"전체 원소: {img.size}")  # H * W * C
+# size: total number of elements
+print(f"Total elements: {img.size}")  # H * W * C
 
-# 그레이스케일 이미지
+# Grayscale image
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-print(f"그레이 Shape: {gray.shape}")  # (height, width) - 채널 없음
+print(f"Gray Shape: {gray.shape}")  # (height, width) - no channels
 
-# 안전하게 채널 수 확인
+# Safely check channel count
 if len(img.shape) == 3:
     h, w, c = img.shape
 else:
@@ -393,38 +395,38 @@ import cv2
 import os
 
 def get_image_info(filepath):
-    """이미지 파일의 상세 정보를 딕셔너리로 반환"""
+    """Returns detailed image file information as dictionary"""
     info = {'filepath': filepath}
 
-    # 파일 존재 확인
+    # Check file exists
     if not os.path.exists(filepath):
-        info['error'] = '파일이 존재하지 않습니다'
+        info['error'] = 'File does not exist'
         return info
 
-    # 파일 크기
+    # File size
     info['file_size_kb'] = os.path.getsize(filepath) / 1024
 
-    # 이미지 로드
+    # Load image
     img = cv2.imread(filepath, cv2.IMREAD_UNCHANGED)
     if img is None:
-        info['error'] = '이미지를 읽을 수 없습니다'
+        info['error'] = 'Cannot read image'
         return info
 
-    # 기본 정보
+    # Basic info
     info['shape'] = img.shape
     info['dtype'] = str(img.dtype)
     info['height'] = img.shape[0]
     info['width'] = img.shape[1]
     info['channels'] = img.shape[2] if len(img.shape) == 3 else 1
 
-    # 통계 정보
+    # Statistics
     info['min_value'] = int(img.min())
     info['max_value'] = int(img.max())
     info['mean_value'] = float(img.mean())
 
     return info
 
-# 사용 예
+# Usage example
 info = get_image_info('sample.jpg')
 for key, value in info.items():
     print(f"{key}: {value}")
@@ -438,10 +440,10 @@ for key, value in info.items():
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     OpenCV 좌표 시스템                          │
+│                     OpenCV Coordinate System                    │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   (0,0) ────────────────────────────────▶ x (width, 열)         │
+│   (0,0) ────────────────────────────────▶ x (width, columns)    │
 │     │                                                           │
 │     │    ┌───────────────────────────┐                         │
 │     │    │ (0,0)  (1,0)  (2,0)  ...  │                         │
@@ -450,13 +452,13 @@ for key, value in info.items():
 │     │    │  ...    ...    ...   ...  │                         │
 │     │    └───────────────────────────┘                         │
 │     ▼                                                           │
-│   y (height, 행)                                                │
+│   y (height, rows)                                              │
 │                                                                 │
-│   중요! 배열 인덱싱: img[y, x] 또는 img[행, 열]                  │
-│         OpenCV 함수: (x, y) 순서 사용                           │
+│   Important! Array indexing: img[y, x] or img[row, column]     │
+│              OpenCV functions: (x, y) order                     │
 │                                                                 │
-│   예: img[100, 200]     → y=100, x=200 위치의 픽셀              │
-│       cv2.circle(img, (200, 100), ...)  → x=200, y=100 위치     │
+│   e.g.: img[100, 200]     → pixel at y=100, x=200              │
+│         cv2.circle(img, (200, 100), ...)  → at x=200, y=100    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -469,20 +471,20 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# 단일 픽셀 읽기 (y, x 순서!)
-pixel = img[100, 200]  # y=100, x=200 위치
-print(f"픽셀 값 (BGR): {pixel}")  # [B, G, R]
+# Read single pixel (y, x order!)
+pixel = img[100, 200]  # position y=100, x=200
+print(f"Pixel value (BGR): {pixel}")  # [B, G, R]
 
-# 개별 채널 접근
+# Access individual channels
 b = img[100, 200, 0]  # Blue
 g = img[100, 200, 1]  # Green
 r = img[100, 200, 2]  # Red
 print(f"B={b}, G={g}, R={r}")
 
-# 그레이스케일 이미지
+# Grayscale image
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-pixel_gray = gray[100, 200]  # 단일 값
-print(f"그레이스케일 값: {pixel_gray}")
+pixel_gray = gray[100, 200]  # single value
+print(f"Grayscale value: {pixel_gray}")
 ```
 
 ### 픽셀 수정
@@ -493,16 +495,16 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# 단일 픽셀 수정
-img[100, 200] = [255, 0, 0]  # 파란색으로 변경
+# Modify single pixel
+img[100, 200] = [255, 0, 0]  # Change to blue
 
-# 영역 수정 (100x100 영역을 빨간색으로)
-img[0:100, 0:100] = [0, 0, 255]  # BGR에서 빨간색
+# Modify region (100x100 region to red)
+img[0:100, 0:100] = [0, 0, 255]  # Red in BGR
 
-# 특정 채널만 수정
-img[0:100, 100:200, 0] = 0    # Blue 채널을 0으로
-img[0:100, 100:200, 1] = 0    # Green 채널을 0으로
-img[0:100, 100:200, 2] = 255  # Red 채널을 255로
+# Modify specific channel only
+img[0:100, 100:200, 0] = 0    # Blue channel to 0
+img[0:100, 100:200, 1] = 0    # Green channel to 0
+img[0:100, 100:200, 2] = 255  # Red channel to 255
 
 cv2.imshow('Modified', img)
 cv2.waitKey(0)
@@ -516,30 +518,30 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# item(): 단일 값 접근 (더 빠름)
+# item(): access single value (faster)
 b = img.item(100, 200, 0)
 g = img.item(100, 200, 1)
 r = img.item(100, 200, 2)
 
-# itemset(): 단일 값 수정 (더 빠름)
+# itemset(): modify single value (faster)
 img.itemset((100, 200, 0), 255)  # Blue = 255
 img.itemset((100, 200, 1), 0)    # Green = 0
 img.itemset((100, 200, 2), 0)    # Red = 0
 
-# 성능 비교
+# Performance comparison
 import time
 
-# 일반 인덱싱
+# Regular indexing
 start = time.time()
 for i in range(10000):
     val = img[100, 200, 0]
-print(f"일반 인덱싱: {time.time() - start:.4f}초")
+print(f"Regular indexing: {time.time() - start:.4f}s")
 
-# item() 사용
+# Using item()
 start = time.time()
 for i in range(10000):
     val = img.item(100, 200, 0)
-print(f"item(): {time.time() - start:.4f}초")
+print(f"item(): {time.time() - start:.4f}s")
 ```
 
 ---
@@ -550,10 +552,10 @@ print(f"item(): {time.time() - start:.4f}초")
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       ROI 개념                                   │
+│                       ROI Concept                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   원본 이미지 (img)                                              │
+│   Original Image (img)                                          │
 │   ┌────────────────────────────────────┐                        │
 │   │                                    │                        │
 │   │      y1──────────────┐             │                        │
@@ -567,9 +569,9 @@ print(f"item(): {time.time() - start:.4f}초")
 │                                                                 │
 │   roi = img[y1:y2, x1:x2]                                       │
 │                                                                 │
-│   주의: NumPy 슬라이싱은 뷰(view)를 반환!                         │
-│         roi 수정 → 원본도 수정됨                                 │
-│         복사가 필요하면 .copy() 사용                              │
+│   Note: NumPy slicing returns a view!                           │
+│         roi modification → original also modified               │
+│         Use .copy() if copy is needed                           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -581,14 +583,14 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# ROI 추출 (y1:y2, x1:x2)
-# 좌상단 (100, 50)부터 우하단 (300, 250)까지
+# Extract ROI (y1:y2, x1:x2)
+# From top-left (100, 50) to bottom-right (300, 250)
 roi = img[50:250, 100:300]
 
-print(f"원본 크기: {img.shape}")
-print(f"ROI 크기: {roi.shape}")  # (200, 200, 3)
+print(f"Original size: {img.shape}")
+print(f"ROI size: {roi.shape}")  # (200, 200, 3)
 
-# ROI 표시
+# Display ROI
 cv2.imshow('Original', img)
 cv2.imshow('ROI', roi)
 cv2.waitKey(0)
@@ -602,14 +604,15 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# ROI 복사 (중요: .copy() 사용)
+# .copy() creates an independent array — without it, roi is a view into img,
+# and modifying it would unexpectedly change the source region too
 roi = img[50:150, 100:200].copy()
 
-# 다른 위치에 붙여넣기
-img[200:300, 300:400] = roi  # 크기가 같아야 함!
+# Paste to another location — NumPy assigns by value, so this is a true copy
+img[200:300, 300:400] = roi  # Sizes must match!
 
-# 이미지 내 영역 복사
-# 좌상단 100x100을 우하단에 복사
+# Copy region within image — copy() is critical here: without it, reading the
+# source and writing to the destination could overlap and corrupt the result
 src_region = img[0:100, 0:100].copy()
 img[-100:, -100:] = src_region
 
@@ -627,18 +630,18 @@ import numpy as np
 img = cv2.imread('image.jpg')
 original_value = img[100, 100, 0]
 
-# 뷰 (View) - 원본과 메모리 공유
+# View - shares memory with original
 roi_view = img[50:150, 50:150]
-roi_view[:] = 0  # ROI를 검은색으로
-print(f"원본 변경됨: {img[100, 100, 0]}")  # 0
+roi_view[:] = 0  # Make ROI black
+print(f"Original modified: {img[100, 100, 0]}")  # 0
 
-# 원본 복원
+# Restore original
 img = cv2.imread('image.jpg')
 
-# 복사 (Copy) - 독립적인 메모리
+# Copy - independent memory
 roi_copy = img[50:150, 50:150].copy()
-roi_copy[:] = 0  # 복사본만 검은색으로
-print(f"원본 유지됨: {img[100, 100, 0]}")  # 원래 값
+roi_copy[:] = 0  # Only copy becomes black
+print(f"Original preserved: {img[100, 100, 0]}")  # Original value
 ```
 
 ### 전체 이미지 복사
@@ -648,20 +651,20 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# 방법 1: .copy() 메서드
+# Method 1: .copy() method
 img_copy1 = img.copy()
 
-# 방법 2: NumPy copy
+# Method 2: NumPy copy
 import numpy as np
 img_copy2 = np.copy(img)
 
-# 방법 3: 슬라이싱 후 copy (권장하지 않음)
+# Method 3: Slicing then copy (not recommended)
 img_copy3 = img[:].copy()
 
-# 잘못된 복사 (뷰 생성)
-img_wrong = img  # 같은 객체 참조!
+# Wrong copy (creates view)
+img_wrong = img  # Same object reference!
 img_wrong[0, 0] = [0, 0, 0]
-print(f"원본도 변경됨: {img[0, 0]}")  # [0, 0, 0]
+print(f"Original also changed: {img[0, 0]}")  # [0, 0, 0]
 ```
 
 ### 실용적인 ROI 예제
@@ -670,10 +673,10 @@ print(f"원본도 변경됨: {img[0, 0]}")  # [0, 0, 0]
 import cv2
 
 def extract_face_region(img, x, y, w, h):
-    """얼굴 영역 추출 (경계 체크 포함)"""
+    """Extract face region (with boundary check)"""
     h_img, w_img = img.shape[:2]
 
-    # 경계 체크
+    # Boundary check
     x1 = max(0, x)
     y1 = max(0, y)
     x2 = min(w_img, x + w)
@@ -683,10 +686,10 @@ def extract_face_region(img, x, y, w, h):
 
 
 def apply_mosaic(img, x, y, w, h, ratio=0.1):
-    """특정 영역에 모자이크 적용"""
+    """Apply mosaic to specific region"""
     roi = img[y:y+h, x:x+w]
 
-    # 축소 후 확대 (모자이크 효과)
+    # Shrink then enlarge (mosaic effect)
     small = cv2.resize(roi, None, fx=ratio, fy=ratio,
                        interpolation=cv2.INTER_NEAREST)
     mosaic = cv2.resize(small, (w, h),
@@ -696,7 +699,7 @@ def apply_mosaic(img, x, y, w, h, ratio=0.1):
     return img
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('image.jpg')
 img = apply_mosaic(img, 100, 100, 200, 200, ratio=0.05)
 cv2.imshow('Mosaic', img)
@@ -713,12 +716,12 @@ cv2.destroyAllWindows()
 하나의 이미지를 세 가지 모드(COLOR, GRAYSCALE, UNCHANGED)로 읽고 각각의 shape를 비교하세요. PNG 파일(투명도 포함)과 JPEG 파일로 테스트해보세요.
 
 ```python
-# 힌트
+# Hint
 import cv2
 
 filepath = 'test.png'
-# COLOR, GRAYSCALE, UNCHANGED로 읽기
-# shape 비교
+# Read in COLOR, GRAYSCALE, UNCHANGED
+# Compare shapes
 ```
 
 ### 연습 2: 이미지 품질 분석기
@@ -726,7 +729,7 @@ filepath = 'test.png'
 JPEG 이미지를 다양한 품질(10, 30, 50, 70, 90)로 저장하고, 각각의 파일 크기와 PSNR(Peak Signal-to-Noise Ratio)을 계산하세요.
 
 ```python
-# 힌트: PSNR 계산
+# Hint: PSNR calculation
 def calculate_psnr(original, compressed):
     mse = np.mean((original.astype(float) - compressed.astype(float)) ** 2)
     if mse == 0:
@@ -742,9 +745,9 @@ def calculate_psnr(original, compressed):
 
 ```
 ┌────┬────┬────┬────┐
-│빨강│노랑│초록│청록│
+│Red │Yell│Gren│Cyan│
 ├────┼────┼────┼────┤
-│파랑│보라│흰색│검정│
+│Blue│Prpl│Wht │Blck│
 ├────┼────┼────┼────┤
 │... │... │... │... │
 └────┴────┴────┴────┘
@@ -756,8 +759,8 @@ def calculate_psnr(original, compressed):
 
 ```python
 def add_border(img, thickness=10, color=(0, 0, 255)):
-    """이미지에 테두리 추가"""
-    # 힌트: numpy.pad 또는 cv2.copyMakeBorder 사용
+    """Add border to image"""
+    # Hint: use numpy.pad or cv2.copyMakeBorder
     pass
 ```
 
@@ -766,16 +769,16 @@ def add_border(img, thickness=10, color=(0, 0, 255)):
 300x300 이미지를 만들고 왼쪽에서 오른쪽으로 검은색에서 흰색으로 변하는 수평 그라디언트를 만드세요. 반복문 없이 NumPy 브로드캐스팅을 사용하세요.
 
 ```python
-# 힌트
+# Hint
 import numpy as np
-gradient = np.linspace(0, 255, 300)  # 0~255 값 300개
+gradient = np.linspace(0, 255, 300)  # 300 values from 0~255
 ```
 
 ---
 
 ## 8. 다음 단계
 
-[03_Color_Spaces.md](./03_Color_Spaces.md)에서 BGR, RGB, HSV, LAB 등 다양한 색상 공간과 색상 기반 객체 추적을 학습합니다!
+[색상 공간](./03_Color_Spaces.md)에서 BGR, RGB, HSV, LAB 등 다양한 색상 공간과 색상 기반 객체 추적을 학습합니다!
 
 **다음에 배울 내용**:
 - BGR vs RGB 차이점
@@ -798,5 +801,5 @@ gradient = np.linspace(0, 255, 300)  # 0~255 값 300개
 | 폴더 | 관련 내용 |
 |------|----------|
 | [Python/](../Python/) | NumPy 슬라이싱, 배열 연산 |
-| [01_Environment_Setup.md](./01_Environment_Setup.md) | 설치 및 기본 개념 |
+| [환경 설정 및 기초](./01_Environment_Setup.md) | 설치 및 기본 개념 |
 

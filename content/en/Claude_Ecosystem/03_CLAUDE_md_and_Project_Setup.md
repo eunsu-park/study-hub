@@ -13,13 +13,16 @@ CLAUDE.md is the most important configuration file in the Claude Code ecosystem.
 - Familiarity with Markdown syntax
 - A project you want to configure for Claude Code
 
-**Learning Objectives**:
-- Understand why CLAUDE.md exists and how Claude uses it
-- Write effective CLAUDE.md files for different project types
-- Configure the `.claude/` directory structure
-- Navigate the settings hierarchy (global, project, local)
-- Make informed decisions about what to commit vs gitignore
-- Apply best practices for team-shared Claude Code configuration
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand why CLAUDE.md exists and how Claude uses it
+2. Write effective CLAUDE.md files for different project types
+3. Configure the `.claude/` directory structure
+4. Navigate the settings hierarchy (global, project, local)
+5. Make informed decisions about what to commit vs gitignore
+6. Apply best practices for team-shared Claude Code configuration
 
 ---
 

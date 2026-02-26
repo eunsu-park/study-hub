@@ -24,6 +24,8 @@ validate_email() {
 
     # Email regex: local-part@domain.tld
     # Simplified pattern for demonstration
+    # Why: storing the regex in a variable prevents quoting issues — bash's =~
+    # applies different parsing rules to literal vs variable patterns.
     local email_regex='^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
     if [[ "$email" =~ $email_regex ]]; then
@@ -48,8 +50,8 @@ validate_ipv4() {
         return 1
     fi
 
-    # Check each octet is in valid range (0-255)
-    # BASH_REMATCH[1-4] contain the four octets
+    # Why: BASH_REMATCH captures each parenthesized group from the regex, so
+    # we get individual octets for range-checking — regex alone can't verify <= 255.
     local octet
     for i in 1 2 3 4; do
         octet="${BASH_REMATCH[$i]}"
@@ -102,7 +104,8 @@ validate_date() {
 validate_semver() {
     local version="$1"
 
-    # Semantic versioning regex: major.minor.patch[-prerelease][+buildmetadata]
+    # Why: nested groups (...(...)...) let BASH_REMATCH capture both the full
+    # optional part (e.g., "-beta.1") and its inner value (e.g., "beta.1").
     local semver_regex='^([0-9]+)\.([0-9]+)\.([0-9]+)(-([a-zA-Z0-9.-]+))?(\+([a-zA-Z0-9.-]+))?$'
 
     if [[ ! "$version" =~ $semver_regex ]]; then

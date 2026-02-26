@@ -1,12 +1,21 @@
 # Microservices Patterns
 
+**Previous**: [Microservices Fundamentals](./13_Microservices_Basics.md) | **Next**: [Distributed Systems Concepts](./15_Distributed_Systems_Concepts.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Successfully operating a microservices architecture requires various patterns and tools. In this chapter, we'll learn about Service Discovery, Circuit Breaker, Bulkhead Pattern, Service Mesh, and Distributed Tracing.
+1. Explain client-side and server-side service discovery mechanisms and compare registry-based approaches (Consul, Eureka) with DNS-based solutions
+2. Implement the Circuit Breaker pattern to prevent cascading failures across dependent services
+3. Apply the Bulkhead pattern to isolate failures and protect critical resources from being exhausted by a single component
+4. Describe the architecture of a service mesh (data plane vs control plane) and the role of sidecar proxies
+5. Design a distributed tracing strategy using trace context propagation, span hierarchies, and sampling policies
+6. Evaluate when to apply each pattern based on system maturity, operational complexity, and failure modes
 
 ---
+
+Building microservices is the easy part -- keeping hundreds of them running reliably in production is where the real engineering challenge begins. A single slow downstream service can cascade into a system-wide outage if you have no circuit breakers, and debugging a request that touches twelve services is nearly impossible without distributed tracing. The patterns in this lesson are the operational backbone that separates a resilient microservices deployment from a fragile one.
 
 ## Table of Contents
 
@@ -925,9 +934,7 @@ Design distributed tracing for an order processing system:
 
 ---
 
-## Next Steps
-
-In [15_Distributed_Systems_Concepts.md](./15_Distributed_Systems_Concepts.md), let's learn about fundamental concepts of distributed systems, time, and leader election algorithms!
+**Previous**: [Microservices Fundamentals](./13_Microservices_Basics.md) | **Next**: [Distributed Systems Concepts](./15_Distributed_Systems_Concepts.md)
 
 ---
 

@@ -1,8 +1,24 @@
 # Decision Tree
 
-## Overview
+**Previous**: [Cross-Validation and Hyperparameters](./05_Cross_Validation_Hyperparameters.md) | **Next**: [Ensemble Learning - Bagging](./07_Ensemble_Bagging.md)
 
-Decision trees are algorithms that make decisions by splitting data according to features into a tree structure. They are intuitive and easy to interpret, making them widely used in practice.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the structure of a decision tree (root, internal nodes, leaves) and how predictions are made
+2. Calculate entropy, Gini impurity, and information gain for a candidate split
+3. Explain the CART algorithm and its greedy split-search process
+4. Apply pre-pruning hyperparameters (max_depth, min_samples_split, min_samples_leaf) to control overfitting
+5. Implement cost-complexity pruning (CCP) and select the optimal alpha via cross-validation
+6. Interpret feature importance scores from a trained decision tree
+7. Compare classification trees and regression trees and identify appropriate use cases for each
+
+---
+
+Decision trees are among the most intuitive machine learning algorithms -- they mirror the way humans make decisions by asking a sequence of yes/no questions. Their transparency makes them invaluable when you need to explain predictions to stakeholders, and they serve as the building blocks for powerful ensemble methods like Random Forest and Gradient Boosting.
 
 ---
 
@@ -95,9 +111,20 @@ for name, importance in zip(iris.feature_names, clf.feature_importances_):
 import numpy as np
 
 def entropy(y):
-    """Calculate information entropy"""
+    """Calculate information entropy.
+
+    Entropy measures disorder/uncertainty in the class distribution.
+    A node with all samples from one class has entropy=0 (perfectly pure).
+    A node with evenly mixed classes has maximum entropy — the worst possible
+    split because we gain no information about which class a sample belongs to.
+    Decision trees choose splits that maximally reduce entropy (information gain).
+    """
     _, counts = np.unique(y, return_counts=True)
-    probabilities = counts / len(y)
+    probabilities = counts / len(y)  # fraction of samples belonging to each class
+    # log2(p) ≤ 0 for p ∈ (0,1], so the negation makes H(y) ≥ 0 —
+    # entropy is by convention a non-negative quantity
+    # + 1e-10 prevents log(0) which is undefined — zero-probability classes
+    # (absent from this node) would produce -inf and crash the computation
     return -np.sum(probabilities * np.log2(probabilities + 1e-10))
 
 # Examples
@@ -117,7 +144,9 @@ print(f"  Balanced node [2:2]: {entropy(y_balanced):.4f}")  # 1 (maximum)
 def gini_impurity(y):
     """Calculate Gini impurity"""
     _, counts = np.unique(y, return_counts=True)
-    probabilities = counts / len(y)
+    probabilities = counts / len(y)  # each element = fraction of samples in that class
+    # 1 - Σp² equals the probability that two randomly drawn samples belong
+    # to *different* classes — pure nodes score 0, maximally mixed nodes score ~0.5
     return 1 - np.sum(probabilities ** 2)
 
 print("\nGini impurity examples:")
@@ -143,7 +172,9 @@ def information_gain(parent, left_child, right_child, criterion='gini'):
     else:
         impurity_func = entropy
 
-    # Weighted average impurity
+    # Weighted average impurity: child impurities are weighted by their sample
+    # counts to account for uneven splits — a large pure child is worth more
+    # than a small pure child, so the split quality is measured proportionally
     n = len(left_child) + len(right_child)
     n_left, n_right = len(left_child), len(right_child)
 

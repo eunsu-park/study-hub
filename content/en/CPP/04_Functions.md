@@ -1,5 +1,26 @@
 # Functions
 
+**Previous**: [Operators and Control Flow](./03_Operators_and_Control_Flow.md) | **Next**: [Arrays and Strings](./05_Arrays_and_Strings.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of functions and describe the relationship between declaration (prototype) and definition
+2. Compare pass-by-value, pass-by-reference, pass-by-pointer, and `const` reference parameter passing
+3. Implement functions with default parameters and apply the right-to-left default rule
+4. Design overloaded functions that differ by parameter type or count
+5. Apply recursion to solve problems such as factorial and Fibonacci, and compare recursive vs. iterative solutions
+6. Implement callback patterns using function pointers
+7. Identify when to use `inline` functions for performance hints
+8. Apply C++17 structured bindings to capture multiple return values from a function
+
+---
+
+Functions are the primary tool for managing complexity in any nontrivial program. They let you name a piece of logic, reuse it in many places, and reason about each piece independently. In professional C++ codebases, well-designed function signatures -- choosing the right parameter-passing strategy and return type -- are often what separate maintainable code from fragile code.
+
 ## 1. What is a Function?
 
 A function is a block of code that performs a specific task.

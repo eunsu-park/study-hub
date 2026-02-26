@@ -1,10 +1,23 @@
 # Paging ⭐⭐⭐
 
-## Overview
-
-Paging is a memory management technique that divides physical memory into fixed-size blocks (frames) and the logical address space of processes into blocks of the same size (pages), allowing non-contiguous allocation. It completely eliminates external fragmentation.
+**Previous**: [Contiguous Memory Allocation](./11_Contiguous_Memory_Allocation.md) | **Next**: [Segmentation](./13_Segmentation.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how paging eliminates external fragmentation
+2. Perform manual page-to-frame address translation
+3. Describe the structure and purpose of a page table entry
+4. Explain why TLBs are critical for paging performance
+5. Compare single-level, multi-level, hashed, and inverted page tables
+6. Calculate the memory overhead of page tables
+
+---
+
+Paging is one of the most important ideas in operating systems. It lets the OS give each process the illusion of a large, contiguous address space while actually scattering the process across physical memory. This decoupling of logical and physical addresses enables memory protection, sharing, and virtual memory.
 
 ## Table of Contents
 
@@ -20,6 +33,8 @@ Paging is a memory management technique that divides physical memory into fixed-
 ---
 
 ## 1. Basic Concepts of Paging
+
+> Think of a bookshelf (physical memory) with numbered slots (frames) and a textbook (process) with numbered pages. The pages do not need to be placed in consecutive slots -- page 1 might go in slot 5, page 2 in slot 12. A page table is the index card that maps each page number to its slot location. This simple idea -- non-contiguous allocation with a lookup table -- eliminates external fragmentation entirely.
 
 ### 1.1 Pages and Frames
 

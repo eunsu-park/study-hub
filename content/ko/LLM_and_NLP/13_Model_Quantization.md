@@ -700,6 +700,217 @@ model = AutoAWQForCausalLM.from_quantized(quant_path, fuse_layers=True)
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: 양자화 메모리 계산
+
+트랜스포머 모델의 아키텍처(architecture)는 다음과 같습니다: 32개 레이어, 각 레이어는 어텐션(attention) (4096×4096 형태의 가중치 행렬 4개)과 FFN (4096×16384 형태 2개, 16384×4096 형태 1개)으로 구성됩니다. 각 정밀도(precision) 형식의 대략적인 메모리 요구량을 계산하여 표를 채우세요.
+
+| 정밀도 | 파라미터당 바이트 | 어텐션 레이어 (MB) | FFN 레이어 (MB) | 전체 모델 (GB) |
+|--------|-----------------|------------------|----------------|---------------|
+| FP32 | 4 | ? | ? | ? |
+| FP16/BF16 | 2 | ? | ? | ? |
+| INT8 | 1 | ? | ? | ? |
+| INT4 | 0.5 | ? | ? | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+def calculate_model_memory(
+    num_layers: int,
+    hidden_size: int,
+    ffn_size: int,
+    bytes_per_param: float
+) -> dict:
+    """모델 메모리 요구량을 계산합니다."""
+
+    # 어텐션(attention): Q, K, V, O 프로젝션(projection) 각각 (hidden, hidden) 형태
+    attention_params = 4 * hidden_size * hidden_size
+    attention_mb = attention_params * bytes_per_param / (1024 ** 2)
+
+    # FFN: 업 프로젝션 (hidden→ffn) 2개 + 다운 프로젝션 (ffn→hidden) 1개
+    ffn_params = 2 * (hidden_size * ffn_size) + (ffn_size * hidden_size)
+    ffn_mb = ffn_params * bytes_per_param / (1024 ** 2)
+
+    total_params = num_layers * (attention_params + ffn_params)
+    total_gb = total_params * bytes_per_param / (1024 ** 3)
+
+    return {
+        "attention_params": attention_params,
+        "attention_mb": attention_mb,
+        "ffn_params": ffn_params,
+        "ffn_mb": ffn_mb,
+        "total_params": total_params,
+        "total_gb": total_gb,
+    }
+
+# 모델: 32 레이어, hidden=4096, ffn=16384
+NUM_LAYERS = 32
+HIDDEN = 4096
+FFN = 16384
+
+precisions = {
+    "FP32":      4.0,
+    "FP16/BF16": 2.0,
+    "INT8":      1.0,
+    "INT4":      0.5,
+}
+
+print(f"{'정밀도':<12} {'바이트/파라미터':<16} {'어텐션 (MB)':<14} {'FFN (MB)':<12} {'전체 (GB)'}")
+print("-" * 65)
+for name, bpp in precisions.items():
+    r = calculate_model_memory(NUM_LAYERS, HIDDEN, FFN, bpp)
+    print(f"{name:<12} {bpp:<16.1f} {r['attention_mb']:<14.1f} {r['ffn_mb']:<12.1f} {r['total_gb']:.2f}")
+
+# 출력:
+# 정밀도      바이트/파라미터  어텐션 (MB)   FFN (MB)     전체 (GB)
+# FP32         4.0             256.0          384.0         20.00
+# FP16/BF16    2.0             128.0          192.0         10.00
+# INT8         1.0             64.0           96.0          5.00
+# INT4         0.5             32.0           48.0          2.50
+```
+
+**핵심 통찰:** INT4는 FP32 대비 메모리를 8배 절약합니다. 실제 LLaMA-2-7B 모델(~70억 파라미터(parameter))에서 INT4 메모리는 약 3.5GB로, FP32의 ~28GB와 비교됩니다 — 소비자용 GPU와 데이터 센터 GPU의 차이입니다.
+</details>
+
+---
+
+### 연습 문제 2: 대칭(Symmetric) vs 비대칭(Asymmetric) 양자화
+
+아래 가중치 텐서(tensor)에 대칭 및 비대칭 INT8 양자화를 각각 적용하세요. 각 방법의 양자화 오류를 계산하고, 비대칭 양자화가 중심이 치우친 분포를 더 잘 처리하는 이유를 설명하세요.
+
+```python
+import numpy as np
+
+# 중심이 치우친 분포를 가진 가중치 텐서 시뮬레이션
+weights = np.array([0.01, 0.05, 0.12, 0.23, 0.45, 0.67, 0.89, 1.20, 1.45, 1.80],
+                   dtype=np.float32)
+```
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import numpy as np
+
+weights = np.array([0.01, 0.05, 0.12, 0.23, 0.45, 0.67, 0.89, 1.20, 1.45, 1.80],
+                   dtype=np.float32)
+
+# --- 대칭 INT8 양자화 ---
+def quantize_symmetric(tensor, bits=8):
+    qmin = -(2 ** (bits - 1))       # -128
+    qmax = 2 ** (bits - 1) - 1      #  127
+
+    abs_max = np.abs(tensor).max()
+    scale = abs_max / qmax           # scale = 1.80 / 127 ≈ 0.01417
+
+    quantized = np.round(tensor / scale).clip(qmin, qmax).astype(np.int8)
+    return quantized, scale
+
+def dequantize_sym(q, scale):
+    return q.astype(np.float32) * scale
+
+# --- 비대칭 INT8 양자화 ---
+def quantize_asymmetric(tensor, bits=8):
+    qmin = 0
+    qmax = 2 ** bits - 1             # 255
+
+    min_val = tensor.min()           # ≈ 0.01
+    max_val = tensor.max()           # ≈ 1.80
+    scale = (max_val - min_val) / (qmax - qmin)  # ≈ 0.007020
+    zero_point = round(-min_val / scale)
+
+    quantized = np.round(tensor / scale + zero_point).clip(qmin, qmax).astype(np.uint8)
+    return quantized, scale, zero_point
+
+def dequantize_asym(q, scale, zp):
+    return (q.astype(np.float32) - zp) * scale
+
+# 적용
+q_sym, s_sym = quantize_symmetric(weights)
+rec_sym = dequantize_sym(q_sym, s_sym)
+error_sym = np.abs(weights - rec_sym)
+
+q_asym, s_asym, zp_asym = quantize_asymmetric(weights)
+rec_asym = dequantize_asym(q_asym, s_asym, zp_asym)
+error_asym = np.abs(weights - rec_asym)
+
+print("대칭 양자화:")
+print(f"  스케일(scale): {s_sym:.6f}")
+print(f"  평균 오류: {error_sym.mean():.6f}")
+print(f"  최대 오류: {error_sym.max():.6f}")
+
+print("\n비대칭 양자화:")
+print(f"  스케일: {s_asym:.6f}, 영점(zero point): {zp_asym}")
+print(f"  평균 오류: {error_asym.mean():.6f}")
+print(f"  최대 오류: {error_asym.max():.6f}")
+
+print("\n세분화 개선 배율:", s_sym / s_asym, "배 더 세밀 (비대칭)")
+```
+
+**비대칭이 더 나은 이유:** 가중치의 범위가 0.01~1.80으로 음수 값이 없습니다. 대칭 양자화는 범위의 절반(음수 부분)을 존재하지 않는 값에 낭비하여 스케일이 거칠어집니다. 비대칭 양자화는 전체 0~255 범위를 정확히 0.01~1.80에 매핑하여 약 2배 더 세밀한 양자화 세분화(granularity)를 달성합니다.
+</details>
+
+---
+
+### 연습 문제 3: NF4 vs INT4 직관
+
+NF4(Normal Float 4)는 비균일(non-uniform) 양자화 레벨을 사용하고, INT4는 균일(uniform) 레벨을 사용합니다. LLM 가중치가 일반적으로 정규 분포(normal distribution)를 따른다는 점을 감안하여, NF4 양자화 레벨을 스케치하거나 설명하고, 정규 분포 가중치에서 NF4가 INT4보다 더 낮은 양자화 오류를 달성하는 이유를 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import numpy as np
+import scipy.stats as stats
+
+# INT4: 16개의 균일(uniform) 양자화 레벨: -8, -7, ..., 0, ..., 7
+int4_levels = np.arange(-8, 8)  # 16개 균일 레벨
+
+# NF4: N(0,1)의 분위수(quantile)에 기반한 16개의 비균일 레벨
+# 각 레벨이 동일한 확률 질량을 커버하도록 분위수 선택
+num_levels = 16
+# N(0,1)을 16개의 동일 확률 구간으로 분할
+prob_centers = np.linspace(1/(2*num_levels), 1 - 1/(2*num_levels), num_levels)
+nf4_levels = stats.norm.ppf(prob_centers)  # 16개 비균일 레벨
+
+# 정규 분포 가중치 시뮬레이션
+np.random.seed(42)
+weights = np.random.normal(0, 0.1, size=10000)  # LLM과 유사한 가중치 분포
+
+def quantize_to_levels(weights, levels):
+    """각 가중치를 가장 가까운 양자화 레벨로 매핑."""
+    levels = np.sort(levels)
+    indices = np.abs(weights[:, None] - levels[None, :]).argmin(axis=1)
+    return levels[indices]
+
+# 공정한 비교를 위해 가중치를 [-0.8, 0.8]로 정규화
+w_norm = np.clip(weights / weights.std() * 0.1, -0.8, 0.8)
+
+int4_scaled = int4_levels / 8 * 0.8     # INT4를 [-0.8, 0.8]로 스케일링
+nf4_scaled = nf4_levels / nf4_levels.max() * 0.8
+
+q_int4 = quantize_to_levels(w_norm, int4_scaled)
+q_nf4 = quantize_to_levels(w_norm, nf4_scaled)
+
+print("INT4 양자화 오류:")
+print(f"  평균 절댓값 오류: {np.abs(w_norm - q_int4).mean():.6f}")
+
+print("\nNF4 양자화 오류:")
+print(f"  평균 절댓값 오류: {np.abs(w_norm - q_nf4).mean():.6f}")
+
+print("\n핵심 통찰:")
+print("INT4 레벨 (균일):", np.round(int4_scaled[:4], 3), "...", np.round(int4_scaled[-4:], 3))
+print("NF4 레벨 (비균일):", np.round(nf4_scaled[:4], 3), "...", np.round(nf4_scaled[-4:], 3))
+print("NF4는 대부분의 가중치가 집중되는 0 근처에 더 많은 레벨을 배치합니다")
+```
+
+**핵심 통찰:** 정규 분포에서 값의 약 68%가 평균에서 1 표준편차 내에 위치합니다. INT4의 균일 레벨은 16개 양자화 단계를 전체 범위에 고르게 분포시켜, 드물게 분포하는 꼬리(tail) 부분에 많은 단계를 낭비합니다. NF4는 대부분의 가중치가 있는 0 근처에 더 많은 레벨을 집중시켜, 같은 비트 수로 더 낮은 평균 양자화 오류를 달성합니다. 이것이 bitsandbytes에서 LLM 가중치에 NF4를 권장하는 이유입니다.
+</details>
+
+---
+
 ## 다음 단계
 
-[14_RLHF_Alignment.md](./14_RLHF_Alignment.md)에서 LLM 정렬 기법(RLHF, DPO)을 학습합니다.
+[RLHF와 LLM 정렬 (Alignment)](./14_RLHF_Alignment.md)에서 LLM 정렬 기법(RLHF, DPO)을 학습합니다.

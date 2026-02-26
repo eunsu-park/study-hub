@@ -1,14 +1,27 @@
 # Routing Basics
 
-## Overview
-
-This document covers the fundamental concepts of network routing. Routing is the core of data transmission between networks, the process by which packets find the optimal path from source to destination.
+**Previous**: [Subnetting Practice](./07_Subnetting_Practice.md) | **Next**: [Routing Protocols](./09_Routing_Protocols.md)
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 2-3 hours
 **Prerequisites**: [07_Subnetting_Practice.md](./07_Subnetting_Practice.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what routing is and describe the role of a router in inter-network communication
+2. Read and interpret a routing table, identifying destination, next hop, metric, and interface fields
+3. Configure static routes and explain when static routing is appropriate
+4. Describe how dynamic routing differs from static routing and list its advantages
+5. Explain the concept of a default gateway and its role in host communication
+6. Apply the longest prefix match rule to determine how a router selects the best route for a packet
+
+---
+
+Routing is how the Internet works at its core. When you send a packet to a server on the other side of the world, it must traverse dozens of routers, each independently deciding where to forward the packet next. Understanding routing tables, static vs. dynamic routing, and prefix matching is essential for designing networks, diagnosing "destination unreachable" errors, and configuring anything from a home router to an enterprise backbone.
 
 ## Table of Contents
 
@@ -703,25 +716,11 @@ Branch B and C follow the same pattern
 
 ---
 
-## 8. Next Steps
-
-Once you understand routing basics, proceed to the next topic.
-
-### Next Lesson
-- [09_Routing_Protocols.md](./09_Routing_Protocols.md) - RIP, OSPF, BGP
-
-### Related Lessons
-- [07_Subnetting_Practice.md](./07_Subnetting_Practice.md) - Subnet calculations
-- [10_TCP_Protocol.md](./10_TCP_Protocol.md) - TCP communication
-
-### Recommended Practice
-1. Check your routing table with `ip route` or `route print`
-2. Trace Internet paths with `traceroute`
-3. Configure static routing in Packet Tracer
+**Previous**: [Subnetting Practice](./07_Subnetting_Practice.md) | **Next**: [Routing Protocols](./09_Routing_Protocols.md)
 
 ---
 
-## 9. References
+## 8. References
 
 ### Command Reference
 

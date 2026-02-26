@@ -1,10 +1,24 @@
 # Advanced Control Flow ⭐⭐
 
-**이전**: [03_Arrays_and_Data.md](./03_Arrays_and_Data.md) | **다음**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md)
+**이전**: [배열과 데이터 구조](./03_Arrays_and_Data.md) | **다음**: [함수와 라이브러리](./05_Functions_and_Libraries.md)
 
 ---
 
-이 레슨은 bash의 고급 제어 흐름 구조를 다룹니다. 다양한 테스트 명령 변형, 산술 평가, 패턴 매칭, 대화형 메뉴, 그리고 정교한 흐름 제어 패턴을 포함합니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `[ ]`, `[[ ]]`, `(( ))` 테스트 구문(test construct)의 차이를 구별하고 각 상황에 맞는 것을 선택할 수 있다
+2. 패턴 매칭(pattern matching), 정규식 매칭(regex matching), 안전한 변수 처리 등 `[[ ]]`의 고급 기능을 활용할 수 있다
+3. `(( ))`와 `bc`를 사용해 정수 및 부동소수점 산술(arithmetic)을 수행할 수 있다
+4. 확장 글로빙(extended globbing, `extglob`) 패턴을 활성화하고 고급 파일명 매칭에 활용할 수 있다
+5. `select`로 대화형 메뉴(interactive menu)를 구성하고 사용자 입력을 검증할 수 있다
+6. 선택지 결합(alternation), 문자 클래스(character class), 확장 글로빙을 활용한 고급 `case` 패턴을 작성할 수 있다
+7. 재시도 루프(retry loop), 상태 머신(state machine), 시그널 기반 흐름 제어(signal-driven flow control) 패턴을 구현할 수 있다
+
+---
+
+기본적인 `if/else`와 `for` 루프만으로는 프로덕션 스크립트를 작성하기에 부족합니다. 실전 스크립트는 복잡한 조건을 검증하고, 숫자를 비교하고, 대화형 메뉴를 만들고, 타임아웃이 있는 재시도 로직을 구현해야 합니다. 이 레슨에서는 bash의 조건문과 반복문 구조를 망라하여, 올바르고 표현력 있는 제어 흐름(control flow)을 작성하는 방법을 배웁니다.
 
 ## 1. Test Commands Comparison
 

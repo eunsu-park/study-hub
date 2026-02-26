@@ -1,5 +1,26 @@
 # PostgreSQL 기초
 
+**다음**: [데이터베이스 관리](./02_Database_Management.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. PostgreSQL이 무엇인지 설명하고 주요 특징(ACID, MVCC, 확장성)을 기술할 수 있다
+2. PostgreSQL과 다른 대표적인 데이터베이스(MySQL, SQLite)를 비교할 수 있다
+3. Docker, Homebrew, 또는 Linux 패키지 관리자를 사용하여 PostgreSQL을 설치할 수 있다
+4. `psql` 명령줄 클라이언트를 사용하여 PostgreSQL 서버에 접속할 수 있다
+5. 필수 psql 메타 명령어(`\l`, `\dt`, `\d`, `\c`)를 식별하고 사용할 수 있다
+6. 기본 SQL 구문(SELECT, CREATE DATABASE)을 작성하고 실행할 수 있다
+7. SQL의 기본 문법 규칙(대소문자 구분, 주석, 세미콜론)을 적용할 수 있다
+8. 일반적인 접속 및 시작 오류를 해결할 수 있다
+
+---
+
+PostgreSQL은 오늘날 사용 가능한 가장 발전된 오픈소스 관계형 데이터베이스(Relational Database) 중 하나입니다. 소규모 웹 애플리케이션을 구축하든 대규모 분석 플랫폼을 설계하든, PostgreSQL은 전문 개발자와 데이터 엔지니어가 의지하는 안정성, 확장성, 그리고 표준 준수를 제공합니다. 이 레슨은 설치부터 첫 번째 접속, 그리고 PostgreSQL 여정의 출발점이 되는 필수 명령어들을 단계별로 안내합니다.
+
 ## 1. PostgreSQL이란?
 
 PostgreSQL(포스트그레스큐엘)은 오픈소스 관계형 데이터베이스 관리 시스템(RDBMS)입니다.
@@ -47,7 +68,9 @@ PostgreSQL(포스트그레스큐엘)은 오픈소스 관계형 데이터베이�
 가장 빠르게 시작할 수 있는 방법입니다.
 
 ```bash
-# PostgreSQL 16 컨테이너 실행
+# Docker는 호스트 시스템으로부터 PostgreSQL을 격리 — 자유롭게 실험하고,
+# 문제가 생기면 "docker rm"으로 초기화 가능. 다른 설치에 영향 없음.
+# 또한 머신 간 동일한 환경을 보장 (재현성)
 docker run --name postgres-study \
   -e POSTGRES_PASSWORD=mypassword \
   -e POSTGRES_USER=myuser \
@@ -302,10 +325,12 @@ WHERE active = true;
 ### 데이터베이스 생성
 
 ```sql
--- 기본 생성
+-- 각 데이터베이스는 격리된 네임스페이스 — 한 DB의 테이블은 다른 DB의 테이블을 볼 수 없음.
+-- 개발/테스트/프로덕션용 별도 DB를 만들어 실수로 인한 교차 오염 방지
 CREATE DATABASE mydb;
 
--- 옵션 지정
+-- 인코딩과 로케일은 생성 후 변경 불가이므로 미리 지정.
+-- UTF8은 모든 언어 지원; 로케일은 정렬 순서와 문자열 비교에 영향
 CREATE DATABASE mydb
     ENCODING 'UTF8'
     LC_COLLATE 'ko_KR.UTF-8'
@@ -445,6 +470,4 @@ docker restart postgres-study
 
 ---
 
-## 다음 단계
-
-[02_Database_Management.md](./02_Database_Management.md)에서 데이터베이스와 사용자 관리를 자세히 다뤄봅시다!
+**다음**: [데이터베이스 관리](./02_Database_Management.md)

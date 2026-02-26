@@ -8,6 +8,8 @@
 #define MAX_SIZE 5
 
 // 원형 큐 구조체
+// Why: separate count field avoids the classic circular queue dilemma — without it,
+// front==rear is ambiguous (empty or full), and one slot must be wasted to distinguish
 typedef struct {
     int data[MAX_SIZE];
     int front;  // 첫 번째 요소 위치
@@ -39,6 +41,8 @@ bool queue_enqueue(CircularQueue *q, int value) {
         return false;
     }
 
+    // Why: modulo arithmetic wraps the index back to 0 after reaching MAX_SIZE-1,
+    // reusing slots freed by dequeue — a linear queue would waste all dequeued space
     q->rear = (q->rear + 1) % MAX_SIZE;  // 원형으로 순환
     q->data[q->rear] = value;
     q->count++;
@@ -52,6 +56,8 @@ bool queue_dequeue(CircularQueue *q, int *value) {
         return false;
     }
 
+    // Why: copying value BEFORE advancing front ensures we read valid data —
+    // advancing first would lose track of where the element was
     *value = q->data[q->front];
     q->front = (q->front + 1) % MAX_SIZE;  // 원형으로 순환
     q->count--;

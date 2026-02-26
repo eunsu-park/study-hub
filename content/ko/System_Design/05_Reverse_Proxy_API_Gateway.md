@@ -1,14 +1,27 @@
 # 리버스 프록시와 API 게이트웨이
 
-## 개요
+**이전**: [로드 밸런싱](./04_Load_Balancing.md) | **다음**: [캐싱 전략](./06_Caching_Strategies.md)
 
-이 문서에서는 리버스 프록시의 역할과 API 게이트웨이 패턴을 다룹니다. SSL 종료, 압축, 캐싱 등 리버스 프록시의 핵심 기능과 인증/인가, 라우팅, Rate Limiting 알고리즘을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. 리버스 프록시(Reverse Proxy)가 무엇인지, 포워드 프록시(Forward Proxy)와 어떻게 다른지 설명할 수 있다
+2. SSL 종료(SSL Termination), 압축(Compression), 응답 캐싱 등 리버스 프록시의 핵심 기능을 설명할 수 있다
+3. API 게이트웨이(API Gateway) 패턴을 정의하고, 이 패턴이 클라이언트와 마이크로서비스 간 통신을 어떻게 단순화하는지 설명할 수 있다
+4. 토큰 버킷(Token Bucket), 리키 버킷(Leaky Bucket), 고정 윈도우(Fixed Window), 슬라이딩 윈도우(Sliding Window) 등 Rate Limiting 알고리즘을 비교하고 주어진 상황에 맞는 알고리즘을 선택할 수 있다
+5. SSL 오프로딩(SSL Offloading), 캐싱, 요청 라우팅을 제공하는 리버스 프록시 설정을 설계할 수 있다
+6. 단독 리버스 프록시와 완전한 API 게이트웨이 솔루션 중 어느 것을 사용할지 평가할 수 있다
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [04_Load_Balancing.md](./04_Load_Balancing.md)
 
 ---
+
+마이크로서비스 세계에서 클라이언트가 수십 개의 백엔드 서비스에 직접 접근해야 한다면, 호텔 투숙객에게 직접 주방, 세탁실, 유지보수 실을 찾아다니라고 하는 것과 같습니다. 리버스 프록시와 API 게이트웨이는 보안, 라우팅, 공통 관심사를 처리하는 단일 정문(Front Door) 역할을 하여, 백엔드 팀이 비즈니스 로직에 집중할 수 있게 해줍니다. 이 패턴들을 마스터하는 것은 깔끔하고 안전하며 고성능의 아키텍처를 설계하는 데 필수적입니다.
 
 ## 목차
 
@@ -17,8 +30,7 @@
 3. [API 게이트웨이 패턴](#3-api-게이트웨이-패턴)
 4. [Rate Limiting](#4-rate-limiting)
 5. [연습 문제](#5-연습-문제)
-6. [다음 단계](#6-다음-단계)
-7. [참고 자료](#7-참고-자료)
+6. [참고 자료](#6-참고-자료)
 
 ---
 
@@ -879,25 +891,42 @@ else:
 
 ---
 
-## 6. 다음 단계
+## 실습 과제
 
-리버스 프록시와 API 게이트웨이를 이해했다면, 캐싱 전략을 학습하세요.
+### 실습 1: Rate Limiting 알고리즘 비교
 
-### 다음 레슨
-- [06_Caching_Strategies.md](./06_Caching_Strategies.md)
+`examples/System_Design/05_rate_limiter.py`를 사용하여 Rate Limiting 동작을 탐구하세요.
 
-### 관련 레슨
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - 트래픽 분산
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - Redis, Memcached
+**과제:**
+1. 모든 데모를 실행하고 토큰 버킷(token bucket)과 슬라이딩 윈도우(sliding window)의 동작을 비교하세요
+2. 새로운 트래픽 패턴을 만드세요: 초당 5개 요청의 정상 상태에 10초마다 20개 요청의 버스트가 발생하는 경우
+3. 두 알고리즘 모두 평균 10 req/s를 허용하도록 설정하세요. 버스트가 많은 패턴을 어느 쪽이 더 잘 처리하는지 비교하세요
+4. 서로 다른 클라이언트 IP에 대해 별도의 제한을 추적하는 **클라이언트별(per-client)** Rate Limiter를 구현하세요
 
-### 추천 실습
-1. Nginx 리버스 프록시 설정 실습
-2. Kong Gateway 설치 및 플러그인 테스트
-3. Rate Limiting 직접 구현해보기
+### 실습 2: API 게이트웨이 라우터
+
+요청을 서로 다른 백엔드 서비스로 라우팅하는 간단한 API 게이트웨이를 구축하세요.
+
+**과제:**
+1. 경로를 등록하는 `Gateway` 클래스를 구현하세요: `gateway.route("/api/users/*", user_service)`
+2. 경로 파라미터 추출을 추가하세요: `/api/users/123` → `service=user_service, params={"id": "123"}`
+3. 미들웨어 체인(middleware chain)을 지원하세요: 인증(authentication) → Rate Limiting → 로깅(logging) → 서비스로 전달
+4. 요청/응답 변환을 구현하세요: 내부 헤더 제거, CORS 헤더 추가
+5. 백엔드 서비스별 서킷 브레이커(circuit breaker)를 추가하세요 (`14_circuit_breaker.py` 참고)
+
+### 실습 3: 리버스 프록시 캐시(Reverse Proxy Cache)
+
+백엔드 서비스 앞에 위치하는 캐싱 리버스 프록시를 구현하세요.
+
+**과제:**
+1. 설정 가능한 TTL로 GET 응답을 캐싱하는 `CachingProxy`를 구축하세요
+2. `Cache-Control` 헤더 파싱을 구현하세요: `max-age`, `no-cache`, `no-store`를 준수하세요
+3. 동일 경로에 대한 POST/PUT/DELETE 요청 시 캐시를 무효화하세요
+4. 다양한 워크로드에서 캐시 히트율(cache hit rate)을 측정하세요: 읽기 중심(90% GET)과 쓰기 중심(50% POST)
 
 ---
 
-## 7. 참고 자료
+## 6. 참고 자료
 
 ### 도구
 - [Nginx](https://nginx.org/)
@@ -911,6 +940,10 @@ else:
 
 ### 알고리즘
 - [Token Bucket vs Leaky Bucket](https://www.cloudflare.com/learning/bots/what-is-rate-limiting/)
+
+---
+
+**이전**: [로드 밸런싱](./04_Load_Balancing.md) | **다음**: [캐싱 전략](./06_Caching_Strategies.md)
 
 ---
 

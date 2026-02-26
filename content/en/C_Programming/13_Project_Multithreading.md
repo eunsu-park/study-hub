@@ -1,12 +1,25 @@
 # Project 12: Multithreaded Programming
 
+**Previous**: [Project 11: Mini Shell](./12_Project_Mini_Shell.md) | **Next**: [Embedded Programming Basics](./14_Embedded_Basics.md)
+
 Learn multithreaded programming using the pthread library.
 
 ## Learning Objectives
-- Thread creation and management
-- Synchronization with mutexes
-- Using condition variables
-- Implementing producer-consumer pattern
+
+After completing this lesson, you will be able to:
+
+1. Create and manage POSIX threads using `pthread_create` and `pthread_join`
+2. Pass data to threads through structures and retrieve return values
+3. Identify race conditions caused by unsynchronized access to shared variables
+4. Synchronize shared data access using mutex locks to prevent data corruption
+5. Coordinate thread execution using condition variables with proper wait loops
+6. Implement the producer-consumer pattern with a bounded buffer
+7. Build a thread pool that dispatches tasks from a concurrent queue
+8. Use read-write locks to allow concurrent readers with exclusive writers
+
+---
+
+Concurrency is one of the most challenging aspects of systems programming, but it is also one of the most rewarding. Whether you are building a web server that handles thousands of connections or a data pipeline that crunches numbers in parallel, understanding threads, mutexes, and condition variables gives you the tools to harness modern multi-core hardware. This project takes you from your first thread all the way to a reusable thread pool.
 
 ## Prerequisites
 - Pointers

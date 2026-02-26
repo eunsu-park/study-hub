@@ -1,5 +1,18 @@
 # Trees and Binary Search Trees (Tree and BST)
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define core tree terminology (root, leaf, depth, height, complete vs. full binary tree) and represent a binary tree using linked nodes
+2. Implement in-order, pre-order, and post-order tree traversals both recursively and iteratively, and predict the output for a given tree
+3. Implement Binary Search Tree (BST) insert, search, and delete operations, explaining the BST invariant maintained at each step
+4. Analyze BST operation time complexity as O(h) and contrast performance between balanced and degenerate (skewed) trees
+5. Explain how AVL trees and Red-Black trees maintain O(log n) height through rotations and rebalancing
+6. Apply tree traversal techniques to solve problems such as level-order traversal, lowest common ancestor, and path sum
+
+---
+
 ## Overview
 
 A tree is a non-linear data structure that represents hierarchical structures. Binary Search Trees (BST) support efficient search, insertion, and deletion operations.
@@ -13,7 +26,8 @@ A tree is a non-linear data structure that represents hierarchical structures. B
 3. [Binary Search Tree](#3-binary-search-tree)
 4. [BST Operations](#4-bst-operations)
 5. [Balanced Tree Concepts](#5-balanced-tree-concepts)
-6. [Practice Problems](#6-practice-problems)
+6. [AVL and Red-Black Tree Visualization](#6-avl-and-red-black-tree-visualization)
+7. [Practice Problems](#7-practice-problems)
 
 ---
 
@@ -192,13 +206,22 @@ def inorder_iterative(root):
     stack = []
     curr = root
 
+    # Loop continues as long as there is an unvisited node (curr) or
+    # nodes waiting to be processed (stack) — both conditions are needed
+    # because the stack empties between subtrees
     while curr or stack:
+        # Descend to the leftmost node, pushing ancestors onto the stack
+        # so we can return to them after their left subtree is finished
         while curr:
             stack.append(curr)
             curr = curr.left
 
+        # The top of the stack is the next node in sorted order —
+        # its left subtree is fully processed
         curr = stack.pop()
         result.append(curr.val)
+        # Move to the right subtree; if it is None the outer while-loop
+        # will pop the next ancestor instead
         curr = curr.right
 
     return result
@@ -247,15 +270,20 @@ def level_order(root):
 
     while queue:
         level = []
+        # Snapshot len(queue) at the start of each iteration so we only
+        # process nodes from the current level, not the children we enqueue
         for _ in range(len(queue)):
             node = queue.popleft()
             level.append(node.val)
 
+            # Enqueue children for the next level; None children are skipped
+            # to avoid storing sentinel values in the queue
             if node.left:
                 queue.append(node.left)
             if node.right:
                 queue.append(node.right)
 
+        # Each inner loop produces exactly one level's worth of values
         result.append(level)
 
     return result
@@ -445,20 +473,25 @@ def delete_node(root, key):
     if not root:
         return None
 
+    # BST property guides us toward the target node in O(h) time
     if key < root.val:
         root.left = delete_node(root.left, key)
     elif key > root.val:
         root.right = delete_node(root.right, key)
     else:
+        # Node found — handle the three deletion cases:
+        # Case 1 & 2: zero or one child — simply splice the node out
         if not root.left:
             return root.right
         if not root.right:
             return root.left
 
-        # Find successor
+        # Case 3: two children — replace value with in-order successor
+        # (minimum of right subtree) so the BST property is preserved;
+        # then delete the successor from the right subtree
         successor = root.right
         while successor.left:
-            successor = successor.left
+            successor = successor.left  # Leftmost node = smallest in right subtree
 
         root.val = successor.val
         root.right = delete_node(root.right, successor.val)
@@ -520,7 +553,377 @@ def is_valid_bst(root, min_val=float('-inf'), max_val=float('inf')):
 
 ---
 
-## 6. Practice Problems
+## 6. AVL and Red-Black Tree Visualization
+
+Understanding balanced tree rotations is much easier with visual diagrams. This section walks through AVL rotations, Red-Black tree insertion cases, and a step-by-step insertion trace.
+
+### 6.1 AVL Tree Rotations
+
+An AVL tree maintains the invariant that for every node, the height difference between its left and right subtrees (the **balance factor**) is at most 1. When an insertion or deletion violates this, we restore balance through **rotations**.
+
+#### Single Right Rotation (LL Case)
+
+When a node becomes left-heavy because of an insertion into the left child's left subtree:
+
+```
+Before (insert 5):           After right rotation at 30:
+
+        30  (bf=+2)                  20
+       /                            /  \
+      20  (bf=+1)                 10    30
+     /
+    10
+
+The left child (20) becomes the new root of this subtree.
+30 adopts 20's right child (if any) as its left child.
+```
+
+#### Single Left Rotation (RR Case)
+
+Mirror of the LL case — a node becomes right-heavy due to an insertion into the right child's right subtree:
+
+```
+Before (insert 30):          After left rotation at 10:
+
+    10  (bf=-2)                      20
+      \                             /  \
+      20  (bf=-1)                 10    30
+        \
+        30
+
+The right child (20) becomes the new root.
+10 adopts 20's left child (if any) as its right child.
+```
+
+#### Left-Right Rotation (LR Case)
+
+The node is left-heavy, but the imbalance is in the left child's **right** subtree. We need two rotations: first left-rotate the left child, then right-rotate the node.
+
+```
+Before (insert 25):
+
+        30  (bf=+2)
+       /
+      20  (bf=-1)
+        \
+        25
+
+Step 1 — Left rotate at 20:     Step 2 — Right rotate at 30:
+
+        30                               25
+       /                                /  \
+      25                              20    30
+     /
+    20
+```
+
+#### Right-Left Rotation (RL Case)
+
+Mirror of the LR case — right-heavy, with imbalance in the right child's left subtree:
+
+```
+Before (insert 25):
+
+    20  (bf=-2)
+      \
+      30  (bf=+1)
+      /
+    25
+
+Step 1 — Right rotate at 30:    Step 2 — Left rotate at 20:
+
+    20                                   25
+      \                                 /  \
+      25                              20    30
+        \
+        30
+```
+
+### 6.2 Red-Black Tree Insert Cases
+
+A Red-Black tree enforces these rules:
+1. Every node is red or black
+2. The root is black
+3. No two consecutive red nodes (red node's children must be black)
+4. Every path from root to a NULL leaf has the same number of black nodes
+
+After inserting a new node (always colored **red**), violations are fixed through recoloring and rotations.
+
+#### Case 1: Uncle is Red (Recolor)
+
+When both the parent and uncle are red, we simply recolor:
+
+```
+Before:                       After recolor:
+
+      G(B)                         G(R) ← may violate at grandparent
+     /   \                        /   \
+   P(R)  U(R)                  P(B)  U(B)
+   /                           /
+  N(R) ← new                 N(R)
+
+Recolor parent and uncle to black, grandparent to red.
+Then recurse upward from grandparent.
+```
+
+#### Case 2: Uncle is Black, Triangle (Rotate to Line)
+
+The new node, its parent, and grandparent form a "triangle" (e.g., left child of right child):
+
+```
+Before (triangle):            After rotate at P:
+
+      G(B)                         G(B)
+     /   \                        /   \
+   P(R)  U(B)                  N(R)  U(B)
+     \                         /
+     N(R)                    P(R)
+
+Left-rotate at P to convert triangle into a line.
+Then apply Case 3.
+```
+
+#### Case 3: Uncle is Black, Line (Rotate + Recolor)
+
+The new node, parent, and grandparent form a "line" (e.g., left-left):
+
+```
+Before (line):                After rotate at G + recolor:
+
+      G(B)                         P(B)
+     /   \                        /   \
+   P(R)  U(B)                  N(R)  G(R)
+   /                                   \
+  N(R)                                 U(B)
+
+Right-rotate at G, swap colors of P and G.
+```
+
+#### All Four Rotation Patterns Summary
+
+```
+┌────────────────────┬──────────────────────────────────────────────┐
+│ Configuration      │ Action                                       │
+├────────────────────┼──────────────────────────────────────────────┤
+│ Uncle Red          │ Recolor P, U → black, G → red, recurse      │
+│ Uncle Black, LL    │ Right-rotate G, swap P/G colors              │
+│ Uncle Black, RR    │ Left-rotate G, swap P/G colors               │
+│ Uncle Black, LR    │ Left-rotate P → becomes LL, then fix LL     │
+│ Uncle Black, RL    │ Right-rotate P → becomes RR, then fix RR    │
+└────────────────────┴──────────────────────────────────────────────┘
+```
+
+### 6.3 Step-by-Step AVL Insertion Trace
+
+Insert the sequence **[10, 20, 30, 25, 28]** into an empty AVL tree:
+
+```
+Step 1: Insert 10              Step 2: Insert 20
+
+    10                             10
+                                     \
+                                     20
+
+Step 3: Insert 30 → RR violation at 10 (bf=-2), left rotate:
+
+    10  (bf=-2)                    20
+      \                           /  \
+      20           →            10    30
+        \
+        30
+
+Step 4: Insert 25 → RL violation at 30 (bf=+1→ok), tree is balanced:
+
+        20
+       /  \
+     10    30
+           /
+         25
+
+Step 5: Insert 28 → RL at 30: right-rotate 25/28, then left-rotate 30/28:
+
+        20                         20                         20
+       /  \                       /  \                       /  \
+     10    30  (bf=+2)  →      10    30         →         10    28
+           /                         /                         /  \
+         25 (bf=-1)               28                         25    30
+           \                     /
+           28                  25
+```
+
+### 6.4 Python Tree Visualization
+
+```python
+class AVLNode:
+    """AVL tree node with height tracking."""
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.height = 1  # New nodes start at height 1
+
+
+def print_tree(node, prefix="", is_left=True):
+    """
+    Print a binary tree in a readable ASCII format.
+
+    Why this approach: Recursive prefix-building produces clean,
+    indented output that clearly shows parent-child relationships.
+    Each node displays its key and balance factor (for AVL trees).
+    """
+    if node is None:
+        return
+
+    # Right subtree first (appears on top in the output)
+    print_tree(node.right, prefix + ("│   " if is_left else "    "), False)
+
+    # Current node
+    connector = "└── " if is_left else "┌── "
+    bf = get_balance(node)
+    print(f"{prefix}{connector}{node.key} (bf={bf:+d})")
+
+    # Left subtree
+    print_tree(node.left, prefix + ("    " if is_left else "│   "), True)
+
+
+def height(node):
+    return node.height if node else 0
+
+
+def get_balance(node):
+    """Balance factor = left height - right height."""
+    if not node:
+        return 0
+    return height(node.left) - height(node.right)
+
+
+def right_rotate(y):
+    """
+    Right rotation (LL case fix).
+
+         y              x
+        / \            / \
+       x   C   →     A   y
+      / \                / \
+     A   B              B   C
+    """
+    x = y.left
+    B = x.right
+
+    x.right = y
+    y.left = B
+
+    y.height = 1 + max(height(y.left), height(y.right))
+    x.height = 1 + max(height(x.left), height(x.right))
+
+    return x
+
+
+def left_rotate(x):
+    """
+    Left rotation (RR case fix).
+
+       x                y
+      / \              / \
+     A   y     →      x   C
+        / \          / \
+       B   C        A   B
+    """
+    y = x.right
+    B = y.left
+
+    y.left = x
+    x.right = B
+
+    x.height = 1 + max(height(x.left), height(x.right))
+    y.height = 1 + max(height(y.left), height(y.right))
+
+    return y
+
+
+def avl_insert(node, key):
+    """
+    Insert a key into an AVL tree and rebalance.
+
+    The function returns the new root of the subtree after
+    insertion and any necessary rotations.
+    """
+    # Standard BST insert
+    if not node:
+        return AVLNode(key)
+
+    if key < node.key:
+        node.left = avl_insert(node.left, key)
+    elif key > node.key:
+        node.right = avl_insert(node.right, key)
+    else:
+        return node  # Duplicate keys not allowed
+
+    # Update height
+    node.height = 1 + max(height(node.left), height(node.right))
+
+    # Check balance
+    bf = get_balance(node)
+
+    # LL Case: left-heavy, inserted into left-left
+    if bf > 1 and key < node.left.key:
+        return right_rotate(node)
+
+    # RR Case: right-heavy, inserted into right-right
+    if bf < -1 and key > node.right.key:
+        return left_rotate(node)
+
+    # LR Case: left-heavy, inserted into left-right
+    if bf > 1 and key > node.left.key:
+        node.left = left_rotate(node.left)
+        return right_rotate(node)
+
+    # RL Case: right-heavy, inserted into right-left
+    if bf < -1 and key < node.right.key:
+        node.right = right_rotate(node.right)
+        return left_rotate(node)
+
+    return node
+
+
+# Demo: build AVL tree and visualize
+if __name__ == "__main__":
+    root = None
+    for key in [10, 20, 30, 25, 28, 5, 3]:
+        root = avl_insert(root, key)
+        print(f"\n--- After inserting {key} ---")
+        print_tree(root)
+```
+
+### 6.5 AVL vs Red-Black Tree — When to Use Which
+
+```
+┌────────────────────┬──────────────────────┬──────────────────────┐
+│ Criterion          │ AVL Tree             │ Red-Black Tree       │
+├────────────────────┼──────────────────────┼──────────────────────┤
+│ Balance strictness │ Strict (bf ≤ 1)      │ Relaxed (≤ 2× depth) │
+│ Search speed       │ Faster (shorter)     │ Slightly slower      │
+│ Insert/Delete      │ Slower (more rotate) │ Faster (fewer rotate)│
+│ Rotations/insert   │ Up to O(log n)       │ At most 2            │
+│ Rotations/delete   │ Up to O(log n)       │ At most 3            │
+│ Memory per node    │ Height (int)         │ Color (1 bit)        │
+│ Best for           │ Read-heavy workloads │ Write-heavy workloads│
+│ Real-world usage   │ Databases, lookups   │ std::map, TreeMap    │
+└────────────────────┴──────────────────────┴──────────────────────┘
+
+Rule of thumb:
+- If your workload is mostly searches → AVL tree
+  (stricter balance = shorter tree = faster lookups)
+- If your workload has frequent inserts/deletes → Red-Black tree
+  (fewer rotations per modification = faster writes)
+- Most standard library implementations (C++ std::map, Java TreeMap)
+  use Red-Black trees because general-purpose usage involves
+  a mix of reads and writes, and fewer rotations simplify the code.
+```
+
+---
+
+## 7. Practice Problems
 
 ### Problem 1: Lowest Common Ancestor (LCA)
 

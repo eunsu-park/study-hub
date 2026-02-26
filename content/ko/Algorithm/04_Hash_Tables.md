@@ -1,5 +1,18 @@
 # 해시 테이블 (Hash Table)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 해시 함수(hash function)가 키를 버킷 인덱스에 매핑하는 방식과 평균 O(1) 조회가 가능한 이유를 설명할 수 있다
+2. 충돌 해결(collision resolution) 전략으로서 체이닝(chaining)과 개방 주소법(open addressing)을 부하율(load factor) 및 메모리 사용 측면에서 비교할 수 있다
+3. C 또는 Python으로 삽입, 삭제, 탐색 연산을 포함한 해시 테이블(hash table)을 직접 구현할 수 있다
+4. 내장 해시맵 구조(Python dict, C++ unordered_map)를 사용하여 두 수의 합(two-sum), 그룹화, 빈도수 계산 문제를 해결할 수 있다
+5. 해시 테이블의 최악 O(n) 시나리오가 발생하는 상황을 식별하고 리사이징(resizing) 및 개선된 해시 함수 등의 완화 방법을 설명할 수 있다
+6. 해시 테이블을 사용하여 중복 탐지, 부분 배열 합(subarray sum), 키에 의한 그룹화 등 일반적인 인터뷰 패턴에 대한 솔루션을 설계할 수 있다
+
+---
+
 ## 개요
 
 해시 테이블은 키-값 쌍을 저장하는 자료구조로, 평균 O(1) 시간에 삽입, 삭제, 검색이 가능합니다. 코딩 인터뷰에서 가장 많이 사용되는 자료구조 중 하나입니다.
@@ -112,9 +125,14 @@ print(hash_division("abc", 10))  # (97+98+99) % 10 = 4
 ```python
 def hash_multiplication(key, table_size):
     """곱셈 방법: floor(m * (k*A mod 1))"""
+    # 황금비(golden ratio)의 소수 부분은 클러스터링(clustering) 최소화에 이론적으로 최적 —
+    # 최대한 무리수(irrational)이므로 배수들이 단위 구간에 가능한 한 고르게 분포됨
     A = 0.6180339887  # 황금비의 소수 부분 (권장)
     if isinstance(key, str):
         key = sum(ord(c) for c in key)
+    # 키에 A를 곱하고 소수 부분만 취한 후(mod 1), [0, table_size)로 스케일링 —
+    # 해시가 table_size에 독립적이므로 테이블이 자주 리사이징될 때
+    # 나눗셈 방법(division method)보다 유리함
     return int(table_size * ((key * A) % 1))
 
 # 예시
@@ -252,14 +270,18 @@ class HashTableLinearProbing:
         return hash(key) % self.size
 
     def put(self, key, value):
-        if self.count >= self.size * 0.7:  # 부하율 70% 초과 시 리사이징 필요
+        # 부하율(load factor) 70%에서 리사이징 — 이 임계값을 넘으면 탐사 체인(probe chain)이
+        # 길어져서 평균 O(1) 성능이 O(n)으로 저하됨
+        if self.count >= self.size * 0.7:
             self._resize()
 
         index = self._hash(key)
         while self.keys[index] is not None:
             if self.keys[index] == key:
-                self.values[index] = value  # 업데이트
+                self.values[index] = value  # 기존 키를 제자리에서 업데이트
                 return
+            # 모듈로(modulo)로 순환하여 테이블을 원형으로 취급 —
+            # 이것이 없으면 끝에서 벗어나 인덱스 0의 빈 슬롯을 놓치게 됨
             index = (index + 1) % self.size
 
         self.keys[index] = key
@@ -273,7 +295,9 @@ class HashTableLinearProbing:
             if self.keys[index] == key:
                 return self.values[index]
             index = (index + 1) % self.size
-            if index == start:  # 한 바퀴 돌았으면
+            # 한 바퀴를 완전히 돌면 중단 — 키가 존재하지 않음이 확인됨
+            # (부재한 키는 None 슬롯 또는 완전한 순환으로만 확정 가능)
+            if index == start:
                 break
         return None
 
@@ -346,7 +370,11 @@ class HashTableDoubleHashing:
 ```python
 class HashMap:
     def __init__(self, initial_capacity=16, load_factor=0.75):
+        # 2의 거듭제곱 초기 용량(16)은 관례 — 현대 해시맵은 용량이 2의 거듭제곱일 때
+        # 모듈로 대신 비트 AND를 사용하여 속도를 높임
         self.capacity = initial_capacity
+        # 0.75 부하율(load factor)은 경험적으로 발견된 최적점: 이보다 낮으면
+        # 메모리 낭비, 이보다 높으면 충돌 체인이 평균 O(1)을 저하시킴
         self.load_factor = load_factor
         self.size = 0
         self.buckets = [[] for _ in range(self.capacity)]
@@ -356,11 +384,13 @@ class HashMap:
 
     def put(self, key, value):
         if self.size >= self.capacity * self.load_factor:
-            self._resize()
+            self._resize()  # 용량을 두 배로 늘려 낮은 부하율 복원
 
         index = self._hash(key)
         bucket = self.buckets[index]
 
+        # 먼저 체인을 스캔 — 업서트(upsert) 의미론에 따라 기존 키는 중복 생성이 아닌
+        # 갱신해야 함 (중복 키는 get()의 정확성을 깨뜨림)
         for i, (k, v) in enumerate(bucket):
             if k == key:
                 bucket[i] = (key, value)
@@ -391,10 +421,12 @@ class HashMap:
 
     def _resize(self):
         old_buckets = self.buckets
-        self.capacity *= 2
+        self.capacity *= 2  # 두 배로 늘려 향후 삽입에 대해 리사이즈 비용을 분산(amortize)
         self.buckets = [[] for _ in range(self.capacity)]
         self.size = 0
 
+        # 모든 기존 항목을 재해시(re-hash) — hash(key) % capacity가
+        # 새로운 (더 큰) capacity에 의존하므로 버킷 인덱스가 변경됨
         for bucket in old_buckets:
             for key, value in bucket:
                 self.put(key, value)
@@ -731,11 +763,14 @@ def longest_consecutive(nums):
     예: [100, 4, 200, 1, 3, 2] → 4 (1, 2, 3, 4)
     시간: O(n)
     """
+    # set으로 변환하여 O(1) 멤버십 확인 — 정렬하면 O(n log n)이 됨
     num_set = set(nums)
     max_length = 0
 
     for num in num_set:
-        # 수열의 시작점만 탐색 (num-1이 없어야 시작점)
+        # 수열의 가장 작은 원소에서만 새 수열을 시작; num-1이 존재하면
+        # 이 num은 시작점이 아님 — 시작점이 아닌 것을 건너뛰어야
+        # 모든 체인의 모든 원소를 재스캔하지 않으므로 전체 비용이 O(n)으로 유지됨
         if num - 1 not in num_set:
             current = num
             length = 1
@@ -791,22 +826,28 @@ class LRUCache:
     """
     def __init__(self, capacity):
         self.capacity = capacity
+        # OrderedDict는 삽입 순서를 기억하고 O(1) move_to_end를 지원 —
+        # dict(O(1) 조회)와 순서 추적을 결합하여 LRU가 일반적으로 필요로 하는
+        # 수동 이중 연결 리스트(doubly-linked list) + 해시맵 없이 O(1) get/put 달성
         self.cache = OrderedDict()
 
     def get(self, key):
         if key not in self.cache:
             return -1
-        # 최근 사용으로 이동
+        # 순서의 "끝"으로 이동하여 최근 사용으로 표시 —
+        # "앞"(가장 오래된 쪽)이 제거 대상이므로, 접근하면 뒤쪽으로 승격
         self.cache.move_to_end(key)
         return self.cache[key]
 
     def put(self, key, value):
         if key in self.cache:
+            # 한 번에 갱신하고 최근 사용 순서를 갱신 — 이동 없이 삽입하면
+            # 순서에서 오래된 위치에 남게 됨
             self.cache.move_to_end(key)
         self.cache[key] = value
 
         if len(self.cache) > self.capacity:
-            # 가장 오래된 항목 제거
+            # 앞쪽(last=False)의 가장 오래전에 사용된 항목을 제거
             self.cache.popitem(last=False)
 
 

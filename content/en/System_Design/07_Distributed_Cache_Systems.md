@@ -1,14 +1,27 @@
 # Distributed Cache Systems
 
-## Overview
+**Previous**: [Caching Strategies](./06_Caching_Strategies.md) | **Next**: [Database Scaling](./08_Database_Scaling.md)
 
-This document covers core concepts of distributed cache systems. Learn about Redis data structures and cluster configuration, comparison with Memcached, and Consistent Hashing.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why a single-node cache is insufficient for large-scale systems and how distributed caches solve this problem
+2. Describe key Redis data structures (strings, hashes, lists, sets, sorted sets) and identify appropriate use cases for each
+3. Compare Redis Cluster and Redis Sentinel architectures for high availability and horizontal scaling
+4. Evaluate the trade-offs between Redis and Memcached and select the right tool for a given workload
+5. Implement consistent hashing with virtual nodes to distribute keys evenly across cache nodes
+6. Design a distributed caching tier that handles node failures and rebalancing with minimal disruption
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 2-3 hours
 **Prerequisites**: [06_Caching_Strategies.md](./06_Caching_Strategies.md)
 
 ---
+
+In the previous lesson you learned caching patterns; now the question becomes: where does that cache actually live when your system spans dozens or hundreds of servers? A single Redis instance can handle impressive throughput, but it is still a single point of failure with limited memory. Distributed cache systems like Redis Cluster and Memcached pools spread data across multiple nodes, giving you both the capacity and resilience that production systems demand.
 
 ## Table of Contents
 
@@ -18,8 +31,7 @@ This document covers core concepts of distributed cache systems. Learn about Red
 4. [Memcached Comparison](#4-memcached-comparison)
 5. [Consistent Hashing](#5-consistent-hashing)
 6. [Practice Problems](#6-practice-problems)
-7. [Next Steps](#7-next-steps)
-8. [References](#8-references)
+7. [References](#7-references)
 
 ---
 
@@ -807,25 +819,42 @@ SREM user:B:followers "A"
 
 ---
 
-## 7. Next Steps
+## Hands-On Exercises
 
-If you've understood distributed cache, learn about database scaling next.
+### Exercise 1: Consistent Hashing Deep Dive
 
-### Next Lesson
-- [08_Database_Scaling.md](./08_Database_Scaling.md)
+Use `examples/System_Design/07_consistent_hashing.py` to explore consistent hashing.
 
-### Related Lessons
-- [06_Caching_Strategies.md](./06_Caching_Strategies.md) - Caching patterns
-- [09_Database_Replication.md](./09_Database_Replication.md) - Replication strategies
+**Tasks:**
+1. Run all demos and observe the impact of virtual nodes on distribution balance
+2. Experiment: what's the minimum number of virtual nodes needed to keep all servers within ±5% of ideal distribution for 10,000 keys?
+3. Implement **weighted consistent hashing**: give a "large" server 2× the virtual nodes of a "small" server. Verify it gets ~2× the keys
+4. Simulate a rolling deployment: add 1 node, verify redistribution, add another. Track cumulative key movement
 
-### Recommended Practice
-1. Install Redis and practice data structures
-2. Configure Redis Sentinel
-3. Implement consistent hashing yourself
+### Exercise 2: Cache Cluster Replication
+
+Build a multi-node cache cluster with replication.
+
+**Tasks:**
+1. Create 3 cache nodes using consistent hashing for primary assignment
+2. For each key, replicate to N-1 clockwise neighbors on the ring (replication factor = 2)
+3. Implement read: try primary, fall back to replica on failure
+4. Simulate node failure: kill one node, verify all keys are still readable from replicas
+5. Measure read latency (1 hop vs. 2 hops) and write amplification (writes × replication factor)
+
+### Exercise 3: Cache Eviction Policy Comparison
+
+Compare eviction policies for a distributed cache workload.
+
+**Tasks:**
+1. Implement LRU, LFU, and Random eviction in a cache with capacity 100
+2. Generate Zipf-distributed access patterns (80/20 rule): 20% of keys get 80% of accesses
+3. Run 10,000 requests and compare hit rates for each policy
+4. Repeat with a uniform access pattern. Which policy benefits most from skewed access?
 
 ---
 
-## 8. References
+## 7. References
 
 ### Official Documentation
 - [Redis Documentation](https://redis.io/documentation)
@@ -837,6 +866,10 @@ If you've understood distributed cache, learn about database scaling next.
 
 ### Papers
 - "Consistent Hashing and Random Trees" - Karger et al.
+
+---
+
+**Previous**: [Caching Strategies](./06_Caching_Strategies.md) | **Next**: [Database Scaling](./08_Database_Scaling.md)
 
 ---
 

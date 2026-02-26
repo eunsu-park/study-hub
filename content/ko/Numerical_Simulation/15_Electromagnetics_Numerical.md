@@ -7,6 +7,8 @@
 - Yee 격자 구조 파악
 - 전자기파의 Courant 조건 학습
 
+**이 레슨이 중요한 이유:** 맥스웰 방정식(Maxwell's Equations)은 전기, 자기, 빛을 하나의 프레임워크로 통합합니다. 유체와 달리 전자기파는 빛의 속도로 전파되며 진공에서도 전파될 수 있습니다. 전자기학을 위한 수치 방법(특히 FDTD)은 안테나, 도파관, 광결정(Photonic Crystal) 설계 및 전자기 호환성 분석에 사용됩니다. E장과 H장이 반 격자점만큼 엇갈린 Yee 격자(Yee Lattice)는 가우스 법칙을 자동으로 만족하는 우아한 이산화로, 산업 표준이 되었습니다.
+
 ---
 
 ## 1. Maxwell 방정식 복습
@@ -979,17 +981,218 @@ cem_methods_comparison()
 
 ## 7. 연습 문제
 
-### 연습 1: Maxwell 방정식
+### 연습 1: Maxwell 방정식(Maxwell's Equations) 파동 방정식 유도
 Faraday 법칙과 Ampère 법칙을 결합하여 자기장 B에 대한 파동 방정식을 유도하시오.
 
-### 연습 2: 1D FDTD
-1D FDTD 코드에서 매질 경계면(ε₁ → ε₂)에서의 반사와 투과를 시뮬레이션하시오. 반사 계수와 투과 계수를 Fresnel 공식과 비교하시오.
+<details><summary>정답 보기</summary>
 
-### 연습 3: Courant 조건
-2D 등방성 격자에서 Courant 수 S = 0.5와 S = 1.0의 수치 분산을 비교하시오. 어느 경우가 더 정확한가?
+Faraday 법칙: ∇ × E = -∂B/∂t
 
-### 연습 4: Yee 격자
-3D Yee 격자에서 Ex 업데이트에 필요한 H 성분들의 위치를 도시하고, 업데이트 방정식을 작성하시오.
+Ampère 법칙 (비전도성 매질, J = 0): ∇ × B = με ∂E/∂t
+
+Faraday 법칙의 양변에 curl을 적용:
+```
+∇ × (∇ × E) = -∂(∇ × B)/∂t = -με ∂²E/∂t²
+```
+
+벡터 항등식 ∇ × (∇ × E) = ∇(∇·E) - ∇²E를 사용하고,
+소스가 없는 매질에서 ∇·E = 0이면:
+
+```
+-∇²E = -με ∂²E/∂t²
+∇²E = με ∂²E/∂t²
+```
+
+이것은 파동 방정식 ∇²E = (1/c²)∂²E/∂t² (c = 1/√με)입니다.
+
+마찬가지로 B에 대해:
+```python
+# 파동 속도 계산
+import numpy as np
+mu_0  = 4 * np.pi * 1e-7    # 진공 투자율 [H/m]
+eps_0 = 8.854e-12            # 진공 유전율 [F/m]
+
+c = 1 / np.sqrt(mu_0 * eps_0)
+print(f"진공에서 빛의 속도 c = {c:.4e} m/s")
+# 결과: c ≈ 2.9979×10^8 m/s (광속과 일치)
+
+# 매질에서 (예: 유리, eps_r = 2.25)
+eps_r = 2.25
+n = np.sqrt(eps_r)  # 굴절률
+c_medium = c / n
+print(f"유리에서 빛의 속도 = {c_medium:.4e} m/s")
+print(f"굴절률 n = {n:.2f}")
+```
+
+E와 B 모두 속도 c = 1/√με로 전파하는 파동 방정식을 만족하며, 이것이 빛이 전자기파임을 보여주는 Maxwell의 핵심 결과입니다.
+</details>
+
+### 연습 2: 1D FDTD 경계면 반사 및 투과
+1D FDTD 코드에서 매질 경계면(ε₁ → ε₂)에서의 반사와 투과를 시뮬레이션하시오. 수치 반사 계수와 투과 계수를 Fresnel 공식과 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+수직 입사에서 Fresnel 공식: R = ((n₁-n₂)/(n₁+n₂))², T = 4n₁n₂/(n₁+n₂)²
+
+```python
+def fdtd_1d_interface():
+    """1D FDTD - 매질 경계면에서 반사/투과"""
+    import numpy as np
+
+    N  = 200          # 격자 점 수
+    Nt = 500          # 시간 스텝 수
+    dx = 1e-3         # 격자 간격 [m]
+    dt = dx / (2 * 3e8)  # CFL 조건 (S=0.5)
+    c  = 3e8
+
+    # 매질 분포: 0~N/2 는 진공(eps_r=1), N/2~N은 유전체(eps_r=4)
+    eps_r = np.ones(N)
+    eps_r[N//2:] = 4.0
+    n = np.sqrt(eps_r)
+
+    Ez = np.zeros(N)
+    Hy = np.zeros(N)
+
+    # Fresnel 반사/투과 계수 (이론)
+    n1, n2 = 1.0, 2.0  # sqrt(eps_r)
+    R_theory = ((n1 - n2) / (n1 + n2))**2
+    T_theory = 4 * n1 * n2 / (n1 + n2)**2
+    print(f"이론값: R = {R_theory:.4f}, T = {T_theory:.4f}")
+
+    # 가우시안 펄스 소스
+    source_pos = N // 4
+    t0, spread = 30, 10
+
+    E_inc_max = 0; E_ref_max = 0; E_trans_max = 0
+    for t in range(Nt):
+        # 소스
+        pulse = np.exp(-0.5 * ((t - t0) / spread)**2)
+        Ez[source_pos] += pulse
+
+        # FDTD 업데이트 (간략화)
+        Hy[:-1] += dt/(dx * 4e-7*np.pi) * (Ez[1:] - Ez[:-1])
+        Ez[1:]  += dt/(dx * eps_r[1:] * 8.854e-12) * (Hy[1:] - Hy[:-1])
+
+        if t == t0: E_inc_max = max(E_inc_max, abs(Ez[source_pos]))
+        if t > t0 + 50:
+            E_ref_max   = max(E_ref_max,   abs(Ez[N//4 - 20]))
+            E_trans_max = max(E_trans_max, abs(Ez[3*N//4]))
+
+    R_num = (E_ref_max / E_inc_max)**2
+    T_num = (E_trans_max / E_inc_max)**2 * n2 / n1
+    print(f"수치값: R ≈ {R_num:.4f}, T ≈ {T_num:.4f}")
+    print(f"에너지 보존: R + T = {R_num + T_num:.4f} (이론: 1.0)")
+
+fdtd_1d_interface()
+```
+
+수직 입사의 경우 n₁=1.0, n₂=2.0(ε_r=4)에서 이론값 R ≈ 0.111, T ≈ 0.889입니다. FDTD 결과는 Courant 조건을 충족하는 한 이 값에 근접해야 합니다. 에너지 보존 R + T = 1을 수치적으로 검증하는 것이 중요합니다.
+</details>
+
+### 연습 3: Courant 조건(Courant Condition)과 수치 분산
+2D 등방성 격자에서 Courant 수 S = 0.5와 S = 1.0의 수치 위상 속도를 계산하고 비교하시오. 어느 경우가 이론 속도 c에 더 가까운가?
+
+<details><summary>정답 보기</summary>
+
+2D FDTD에서 수치 분산 관계식은 파수 방향에 따라 달라집니다.
+
+```python
+def numerical_dispersion_2d():
+    """2D FDTD 수치 분산 분석"""
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # 격자 간격과 시간 스텝
+    dx = dy = 1.0   # 단위 정규화
+    c  = 1.0        # 단위 속도
+
+    theta = np.pi / 4  # 45도 전파 방향 (가장 불리한 경우)
+
+    for S in [0.5, 1.0]:
+        dt = S * dx / (c * np.sqrt(2))  # 2D CFL 조건
+
+        # 파수 범위 (0부터 Nyquist까지)
+        kx_vals = np.linspace(1e-6, np.pi/dx, 100)
+        ky_vals = kx_vals * np.sin(theta) / np.cos(theta)
+
+        c_num_list = []
+        for kx, ky in zip(kx_vals, ky_vals):
+            # 2D FDTD 수치 분산: sin²(ω*dt/2) = (c*dt)²/dx² * sin²(kx*dx/2)
+            #                                    + (c*dt)²/dy² * sin²(ky*dy/2)
+            rhs = (c*dt/dx)**2 * np.sin(kx*dx/2)**2 + (c*dt/dy)**2 * np.sin(ky*dy/2)**2
+            if rhs <= 1:
+                omega = 2 * np.arcsin(np.sqrt(rhs)) / dt
+                k_mag = np.sqrt(kx**2 + ky**2)
+                c_num = omega / k_mag
+                c_num_list.append(c_num / c)  # 이론 속도로 정규화
+
+        k_range = np.linspace(0, np.pi, len(c_num_list))
+        plt.plot(k_range, c_num_list, label=f'S = {S}')
+
+    plt.axhline(y=1.0, color='k', linestyle='--', label='이론 속도 c')
+    plt.xlabel('k·dx'); plt.ylabel('수치 위상 속도 / c')
+    plt.title('2D FDTD 수치 분산 (θ=45°)')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('numerical_dispersion.png', dpi=150)
+    plt.close()
+
+    print("결론: S=1.0은 1D에서 분산이 없지만, 2D에서는 방향 의존성 발생")
+    print("S=0.5는 2D에서 더 등방성에 가까운 분산 특성을 보임")
+
+numerical_dispersion_2d()
+```
+
+1D에서는 S=1.0이 완벽한 분산 없는 전파를 제공하지만, 2D에서는 S = 1/√2 ≈ 0.707이 안정성 한계이고 분산 특성은 전파 방향에 따라 달라집니다. S = 0.5는 안전하고 더 등방적인 수치 분산을 제공합니다.
+</details>
+
+### 연습 4: Yee 격자(Yee Lattice) Ex 업데이트
+3D Yee 격자에서 Ex를 업데이트하는 데 필요한 H 성분들의 위치를 도시하고, 업데이트 방정식을 유도하시오.
+
+<details><summary>정답 보기</summary>
+
+Yee 격자에서 전기장 Ex는 (i+½, j, k) 위치에 있고, 이를 업데이트하려면 Ampère 법칙을 사용합니다:
+
+∂Ex/∂t = (1/ε)[∂Hz/∂y - ∂Hy/∂z]
+
+필요한 H 성분 위치:
+- Hz(i+½, j+½, k): x-z 평면의 Hz (y 방향 차분용)
+- Hz(i+½, j-½, k): x-z 평면의 Hz
+- Hy(i+½, j, k+½): x-y 평면의 Hy (z 방향 차분용)
+- Hy(i+½, j, k-½): x-y 평면의 Hy
+
+```python
+def yee_update_ex(Ex, Hy, Hz, dt, dy, dz, eps):
+    """
+    3D Yee 격자에서 Ex 업데이트
+
+    Ex[i, j, k] 위치: (i+1/2, j, k)
+    Hy[i, j, k] 위치: (i+1/2, j, k+1/2)
+    Hz[i, j, k] 위치: (i+1/2, j+1/2, k)
+
+    업데이트 방정식:
+    Ex^{n+1}[i,j,k] = Ex^n[i,j,k]
+        + dt/(eps*dy) * (Hz^{n+1/2}[i,j,k] - Hz^{n+1/2}[i,j-1,k])
+        - dt/(eps*dz) * (Hy^{n+1/2}[i,j,k] - Hy^{n+1/2}[i,j,k-1])
+    """
+    # 내부 점 업데이트 (경계 제외)
+    Ex[1:-1, 1:-1, 1:-1] += (
+        + dt/(eps * dy) * (Hz[1:-1, 1:-1, 1:-1] - Hz[1:-1, :-2, 1:-1])
+        - dt/(eps * dz) * (Hy[1:-1, 1:-1, 1:-1] - Hy[1:-1, 1:-1, :-2])
+    )
+    return Ex
+
+print("Yee 격자 Ex 업데이트 방정식:")
+print("Ex^{n+1}[i,j,k] = Ex^n[i,j,k]")
+print("  + (dt/ε/Δy) * (Hz[i,j,k] - Hz[i,j-1,k])")
+print("  - (dt/ε/Δz) * (Hy[i,j,k] - Hy[i,j,k-1])")
+print()
+print("핵심 특징: 시간상에서 엇갈린 배치(leapfrog) + 공간 엇갈린 격자")
+print("→ 전기장과 자기장이 시간 및 공간에서 서로 반 스텝씩 엇갈림")
+```
+
+Yee 격자의 핵심 아이디어는 전기장과 자기장을 공간적으로 엇갈리게 배치하여 Maxwell 방정식의 curl 연산을 자연스럽게 이산화하는 것입니다. 이 엇갈린 배치(staggered grid)는 발산 조건(∇·B = 0, ∇·D = ρ)을 수치적으로 정확히 만족시킵니다.
+</details>
 
 ---
 
@@ -1041,6 +1244,25 @@ Faraday 법칙과 Ampère 법칙을 결합하여 자기장 B에 대한 파동 �
    - 도체: σ > 0
    - 손실 매질: Ca, Cb 계수 수정
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: 파동 방정식(Wave Equation) 유도
+소스가 없는 진공에서 패러데이 법칙(Faraday's law) (∇×E = -∂B/∂t)과 앙페르-맥스웰 법칙(Ampère-Maxwell law) (∇×B = μ₀ε₀ ∂E/∂t)에서 출발하여 E에 대한 파동 방정식 ∇²E = (1/c²) ∂²E/∂t²을 유도하세요. 각 대수적 단계를 명확히 나타내고, 벡터 항등식(vector identity) ∇×(∇×F) = ∇(∇·F) - ∇²F가 어디에 사용되는지 밝히세요.
+
+### 연습 2: 1차원 FDTD 유전체 경계면(Dielectric Interface)
+이 레슨의 1D FDTD 코드를 구현하고 x = L/2에 비투자율(relative permittivity) εr = 4인 유전체 반공간(dielectric half-space, 유리 시뮬레이션)을 추가하세요. x = L/4에서 가우시안 펄스(Gaussian pulse)를 입사시키세요. 적절한 프로브 위치에서 입사, 반사, 투과 전기장 진폭을 기록하세요. 시뮬레이션에서 얻은 반사 계수(reflection coefficient) |r| = (√εr1 - √εr2)/(√εr1 + √εr2)와 투과 계수(transmission coefficient) |t| = 2√εr1/(√εr1 + √εr2)를 수직 입사에 대한 프레넬 공식(Fresnel formula)과 비교하세요.
+
+### 연습 3: Courant 수(Courant Number)와 안정성(Stability)
+1D FDTD 코드를 사용하여 Courant 수 S = 0.5, 0.99, 1.01에 대해 각각 시뮬레이션을 실행하세요. 각 경우에 대해 최대 필드 진폭을 500번째 타임 스텝까지 시간에 따라 그려보세요. 다음을 정량화하세요: (a) 안정 케이스에서 도달하는 최대 진폭, (b) S = 1.01 케이스에서 불안정성이 눈에 띄게 나타나기까지 몇 타임 스텝이 소요되는지. Courant 조건(Courant condition)의 물리적 의미를 설명하세요.
+
+### 연습 4: 수치 분산(Numerical Dispersion) 측정
+긴 1D FDTD 시뮬레이션(Nx = 1000, n_steps = 5000)에 주파수 f = 5 GHz의 정현파(sinusoidal) 소스를 사용하세요. 정상 상태(steady state)에 도달한 후, 도메인 내 정상파(standing wave) 패턴의 파장을 측정하세요. 측정된 파장 λ_FDTD = c/f_num을 해석적 파장 λ = c/f와 비교하여 분산 오차(dispersion error)를 정량화하세요. dx = λ/10과 dx = λ/20으로 반복 실험하여 해상도에 따른 분산 오차 변화를 관찰하세요.
+
+### 연습 5: 2D TM 모드 원기둥 산란(Cylinder Scattering)
+2D FDTD TM 모드 코드를 확장하여 200×200 격자(dx = dy = 1 mm)에서 반지름 r = 10 mm인 완전 도체(PEC, Perfectly Conducting) 원형 실린더에 의한 평면파 산란을 시뮬레이션하세요. 실린더를 중앙에 배치하고 한쪽에서 선 소스(line source, y 방향으로 균일)를 입사시키세요. 300 스텝 후 산란 필드 패턴을 그려보고 음영 영역(shadow region), 정반사(specular reflection), 전방 산란(forward scattering)을 식별하세요. 실린더 반지름을 두 배로 늘리면 산란 패턴이 어떻게 변하나요?
 
 ---
 

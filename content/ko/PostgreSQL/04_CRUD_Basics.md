@@ -1,6 +1,24 @@
 # CRUD 기본
 
-CRUD는 Create(생성), Read(읽기), Update(수정), Delete(삭제)의 약자로, 데이터베이스의 기본 작업입니다.
+**이전**: [테이블과 데이터타입](./03_Tables_and_Data_Types.md) | **다음**: [조건과 정렬](./05_Conditions_and_Sorting.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. CRUD가 무엇의 약자인지 설명하고, 이 네 가지 연산이 데이터 조작의 기초를 이루는 이유를 설명할 수 있습니다
+2. DEFAULT 값과 RETURNING을 활용하여 단일 및 다중 행을 추가하는 INSERT 문을 작성할 수 있습니다
+3. 컬럼 별칭(alias), DISTINCT, 간단한 표현식을 사용한 SELECT 문을 작성할 수 있습니다
+4. WHERE 절을 포함한 UPDATE 문을 작성하고 RETURNING으로 변경 내용을 확인할 수 있습니다
+5. DELETE 문을 안전하게 작성하고 DELETE와 TRUNCATE의 차이를 구별할 수 있습니다
+6. ON CONFLICT(DO NOTHING / DO UPDATE)를 사용하여 UPSERT 로직을 구현할 수 있습니다
+7. 안전한 데이터 수정을 위한 모범 사례(SELECT 우선 확인, 트랜잭션)를 적용할 수 있습니다
+
+---
+
+애플리케이션과 데이터베이스 간의 거의 모든 상호작용은 네 가지 연산 중 하나로 귀결됩니다: 새 레코드 생성, 기존 레코드 읽기, 값 수정, 행 삭제입니다. SQL에서 CRUD를 익히는 것은 수학에서 사칙연산을 배우는 것과 같습니다 — 더 고급적인 모든 것들이 이 위에 쌓입니다.
 
 ## 0. 실습 준비
 
@@ -55,7 +73,8 @@ INSERT INTO users DEFAULT VALUES;  -- 에러: NOT NULL 컬럼 때문
 ### RETURNING - 삽입된 데이터 반환
 
 ```sql
--- 삽입 후 생성된 ID 반환
+-- RETURNING은 INSERT 후 별도 SELECT를 불필요하게 함 — 생성된 값(id, 타임스탬프)을
+-- 같은 왕복(round-trip)으로 반환하여 지연 시간을 50% 절감
 INSERT INTO users (name, email, age, city)
 VALUES ('신짱구', 'shin@email.com', 5, '떡잎마을')
 RETURNING id;
@@ -222,7 +241,9 @@ RETURNING *;
 ### TRUNCATE - 테이블 비우기
 
 ```sql
--- DELETE보다 빠름 (로그 없이 전체 삭제)
+-- TRUNCATE는 행 단위 WAL 로깅 우회 — 페이지를 직접 해제하여
+-- 대용량 테이블 비우기에 DELETE보다 수십~수백 배 빠름.
+-- 트레이드오프: 행별 트리거 미실행, RETURNING 사용 불가
 TRUNCATE TABLE users;
 
 -- SERIAL 재시작
@@ -252,7 +273,8 @@ TRUNCATE TABLE users CASCADE;
 ### 충돌 시 무시
 
 ```sql
--- 이미 존재하면 아무것도 안 함
+-- ON CONFLICT DO NOTHING은 멱등성(idempotent) 삽입에 이상적 — 동일한 요청을
+-- 재시도해도(예: 메시지 큐에서) 중복 행이나 에러가 발생하지 않음
 INSERT INTO users (name, email, age, city)
 VALUES ('김철수', 'kim@email.com', 35, '부산')
 ON CONFLICT (email) DO NOTHING;
@@ -440,6 +462,6 @@ COMMIT;  -- 또는 ROLLBACK;
 
 ---
 
-## 다음 단계
+---
 
-[05_Conditions_and_Sorting.md](./05_Conditions_and_Sorting.md)에서 WHERE 절과 ORDER BY를 자세히 다뤄봅시다!
+**이전**: [테이블과 데이터타입](./03_Tables_and_Data_Types.md) | **다음**: [조건과 정렬](./05_Conditions_and_Sorting.md)

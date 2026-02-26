@@ -1,11 +1,24 @@
 # 17. 윈도우 함수와 분석 쿼리 (Window Functions & Analytics)
 
+**이전**: [복제와 고가용성](./16_Replication_HA.md) | **다음**: [테이블 파티셔닝](./18_Table_Partitioning.md)
+
+---
+
 ## 학습 목표
-- 윈도우 함수의 개념과 일반 집계 함수와의 차이 이해
-- OVER 절과 파티션, 프레임 개념 마스터
-- 순위 함수 (ROW_NUMBER, RANK, DENSE_RANK) 활용
-- 분석 함수 (LEAD, LAG, FIRST_VALUE) 활용
-- 실무 분석 쿼리 작성 능력 향상
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 윈도우 함수(Window Function)가 일반 집계 함수와 어떻게 다른지, 왜 개별 행을 유지하는지 설명한다
+2. PARTITION BY, ORDER BY, 프레임(Frame) 지정을 포함한 OVER 절을 구성한다
+3. 순위 함수(ROW_NUMBER, RANK, DENSE_RANK, NTILE)를 적용하여 파티션 내 정렬된 순위를 생성한다
+4. 분석 함수(LAG, LEAD, FIRST_VALUE, LAST_VALUE)를 사용하여 결과 집합 전반의 행을 비교한다
+5. 집계 윈도우 함수를 사용하여 누적 합계(Running Total), 이동 평균(Moving Average), 누적 통계를 계산한다
+6. ROWS, RANGE, GROUPS 프레임 유형을 구별하고 분석 목적에 맞는 것을 선택한다
+7. 성장률, 이상치 탐지, 세션화(Sessionization), 간격 채우기(Gap Filling) 등 실무 분석 문제를 해결한다
+
+---
+
+비즈니스 인텔리전스와 데이터 분석에서는 여러 행에 걸친 계산, 즉 순위, 누적 합계, 기간 간 비교, 이동 평균이 자주 필요합니다. 전통적인 GROUP BY는 행을 요약으로 압축하여 필요한 개별 세부 정보를 잃게 만듭니다. 윈도우 함수(Window Function)는 이 문제를 우아하게 해결합니다. 관련된 행 집합에 걸쳐 계산을 수행하면서도 결과의 모든 행을 유지합니다. 윈도우 함수를 마스터하면, 여러 서브쿼리나 절차적 코드가 필요했던 복잡한 분석 쿼리가 간결한 단일 패스(Single-Pass) SQL 문으로 간단히 표현됩니다.
 
 ## 목차
 1. [윈도우 함수 기초](#1-윈도우-함수-기초)
@@ -679,9 +692,7 @@ LIMIT 1;
 
 ---
 
-## 다음 단계
-- [18. 테이블 파티셔닝](./18_Table_Partitioning.md)
-- [14. JSON/JSONB 기능](./14_JSON_JSONB.md)
+**이전**: [복제와 고가용성](./16_Replication_HA.md) | **다음**: [테이블 파티셔닝](./18_Table_Partitioning.md)
 
 ## 참고 자료
 - [PostgreSQL Window Functions](https://www.postgresql.org/docs/current/functions-window.html)

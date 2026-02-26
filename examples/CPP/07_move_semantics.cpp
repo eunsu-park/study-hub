@@ -82,7 +82,8 @@ public:
         return *this;
     }
 
-    // Move constructor
+    // Why: noexcept on the move constructor is critical — STL containers (e.g., vector)
+    // only use move instead of copy during reallocation if the move is guaranteed not to throw
     Buffer(Buffer&& other) noexcept
         : size_(other.size_), data_(other.data_),
           name_(std::move(other.name_) + "_moved") {
@@ -174,7 +175,8 @@ void process_rvalue(int&& x) {
     std::cout << "  Processing rvalue: " << x << "\n";
 }
 
-// Universal reference with perfect forwarding
+// Why: T&& with a deduced template parameter is a forwarding (universal) reference — it
+// binds to both lvalues and rvalues, and std::forward preserves the original value category
 template<typename T>
 void forward_to_process(T&& arg) {
     if constexpr (std::is_lvalue_reference_v<T>) {
@@ -195,9 +197,11 @@ void demo_perfect_forwarding() {
 }
 
 // ============ Rule of Zero ============
+// Why: Rule of Zero — by using RAII members (vector, string), the compiler-generated
+// destructor, copy, and move operations are correct, eliminating manual resource management
 class SimpleBuffer {
 private:
-    std::vector<int> data_;   // STL handles memory
+    std::vector<int> data_;
     std::string name_;
 
 public:
@@ -260,7 +264,8 @@ public:
         std::cout << "  [MoveOnly constructor: " << name_ << "]\n";
     }
 
-    // Delete copy
+    // Why: deleting copy operations enforces unique ownership semantics at compile time —
+    // any accidental copy attempt becomes a compile error rather than a runtime bug
     MoveOnly(const MoveOnly&) = delete;
     MoveOnly& operator=(const MoveOnly&) = delete;
 

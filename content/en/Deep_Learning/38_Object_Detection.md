@@ -1067,6 +1067,39 @@ model.train(
 
 ---
 
+## Exercises
+
+### Exercise 1: Understand IoU and Implement GIoU
+
+1. Using the provided `calculate_iou` function, compute the IoU for the following pairs of boxes: `(a) [0,0,100,100] vs [50,50,150,150]`, `(b) [0,0,100,100] vs [200,200,300,300]`, `(c) [0,0,100,100] vs [0,0,100,100]`. Verify the results match your intuition.
+2. Implement GIoU (Generalized IoU): `GIoU = IoU - (area_enclosing - area_union) / area_enclosing`, where the enclosing box is the smallest box containing both predicted and ground-truth boxes.
+3. For the non-overlapping pair `(b)`, show that GIoU gives a more informative gradient signal than standard IoU. Explain why this matters for training.
+
+### Exercise 2: Run YOLOv8 Inference on Your Own Image
+
+Using the Ultralytics library:
+1. Load `yolov8n.pt` (nano model) and run inference on a photograph of your choice containing multiple objects.
+2. Print the detected object names, confidence scores, and bounding box coordinates.
+3. Save the annotated result image using `results[0].save("my_result.jpg")`.
+4. Now run the same image through `yolov8x.pt` (extra-large model). Compare the number of detections and confidence scores between nano and extra-large. What trade-offs does this illustrate?
+
+### Exercise 3: Fine-tune Faster R-CNN on a Custom Dataset
+
+Using `torchvision`'s Faster R-CNN:
+1. Create a small custom dataset of at least 2 classes (you can use a subset of COCO or create a synthetic dataset with random rectangles).
+2. Implement a `torch.utils.data.Dataset` class that returns images and targets in the Faster R-CNN format: `{"boxes": tensor, "labels": tensor}`.
+3. Instantiate `CustomFasterRCNN(num_classes=3)` (background + 2 classes) and run 5 training iterations.
+4. Verify that `loss_dict` contains four keys (`loss_classifier`, `loss_box_reg`, `loss_objectness`, `loss_rpn_box_reg`) and describe what each loss component is responsible for.
+
+### Exercise 4: Analyze Anchor Generation and IoU Matching
+
+1. Using `generate_anchors`, generate all anchor boxes for a `(38, 50)` feature map with `stride=16`.
+2. Plot all 9 anchor shapes (3 scales × 3 ratios) centered at the feature map origin on a blank 600×800 canvas.
+3. For a ground-truth box `[200, 150, 400, 350]`, compute the IoU between this box and all 9 anchor shapes at position `(h=9, w=12)` (a nearby feature map cell).
+4. Which anchor has the highest IoU? What does this tell you about the importance of choosing anchor sizes that match the expected object scales in your dataset?
+
+---
+
 ## References
 
 ### Papers

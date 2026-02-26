@@ -43,28 +43,29 @@ Address Book ▶ Hash Table
 
 | Filename | Difficulty | Key Content |
 |--------|--------|----------|
-| [01_Environment_Setup.md](./01_Environment_Setup.md) | ⭐ | Development environment setup, compiler installation |
-| [02_C_Basics_Review.md](./02_C_Basics_Review.md) | ⭐ | Variables, data types, operators, control structures, functions |
-| [03_Project_Calculator.md](./03_Project_Calculator.md) | ⭐ | Functions, switch-case, scanf |
-| [04_Project_Number_Guessing.md](./04_Project_Number_Guessing.md) | ⭐ | Loops, random numbers, conditionals |
-| [05_Project_Address_Book.md](./05_Project_Address_Book.md) | ⭐⭐ | Structures, arrays, file I/O |
-| [06_Project_Dynamic_Array.md](./06_Project_Dynamic_Array.md) | ⭐⭐ | malloc, realloc, free |
-| [07_Project_Linked_List.md](./07_Project_Linked_List.md) | ⭐⭐⭐ | Pointers, dynamic data structures |
-| [08_Project_File_Encryption.md](./08_Project_File_Encryption.md) | ⭐⭐ | File processing, bit operations |
-| [09_Project_Stack_Queue.md](./09_Project_Stack_Queue.md) | ⭐⭐ | Data structures, LIFO/FIFO |
-| [10_Project_Hash_Table.md](./10_Project_Hash_Table.md) | ⭐⭐⭐ | Hashing, collision handling |
-| [11_Project_Snake_Game.md](./11_Project_Snake_Game.md) | ⭐⭐⭐ | Terminal control, game loop |
-| [12_Project_Mini_Shell.md](./12_Project_Mini_Shell.md) | ⭐⭐⭐⭐ | fork, exec, pipes |
-| [13_Project_Multithreading.md](./13_Project_Multithreading.md) | ⭐⭐⭐⭐ | pthread, synchronization |
-| [14_Embedded_Basics.md](./14_Embedded_Basics.md) | ⭐ | Arduino, GPIO basics |
-| [15_Bit_Operations.md](./15_Bit_Operations.md) | ⭐⭐ | Bit masking, registers |
-| [16_Project_GPIO_Control.md](./16_Project_GPIO_Control.md) | ⭐⭐ | LED, button, debouncing |
-| [17_Project_Serial_Communication.md](./17_Project_Serial_Communication.md) | ⭐⭐ | UART, command parsing |
-| [18_Debugging_Memory_Analysis.md](./18_Debugging_Memory_Analysis.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
-| [19_Advanced_Embedded_Protocols.md](./19_Advanced_Embedded_Protocols.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
-| [20_Advanced_Pointers.md](./20_Advanced_Pointers.md) | ⭐⭐⭐ | Pointer arithmetic, multi-level pointers, function pointers, dynamic memory |
-| [21_Network_Programming.md](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP sockets, client-server, I/O multiplexing (select/poll) |
-| [22_IPC_and_Signals.md](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | Pipes, shared memory, message queues, signal handling |
+| [C Language Environment Setup](./01_Environment_Setup.md) | ⭐ | Development environment setup, compiler installation |
+| [C Language Basics Quick Review](./02_C_Basics_Review.md) | ⭐ | Variables, data types, operators, control structures, functions |
+| [Project 1: Basic Arithmetic Calculator](./03_Project_Calculator.md) | ⭐ | Functions, switch-case, scanf |
+| [Project 2: Number Guessing Game](./04_Project_Number_Guessing.md) | ⭐ | Loops, random numbers, conditionals |
+| [Project 3: Address Book Program](./05_Project_Address_Book.md) | ⭐⭐ | Structures, arrays, file I/O |
+| [Project 4: Dynamic Array](./06_Project_Dynamic_Array.md) | ⭐⭐ | malloc, realloc, free |
+| [Project 5: Linked List](./07_Project_Linked_List.md) | ⭐⭐⭐ | Pointers, dynamic data structures |
+| [Project 6: File Encryption Tool](./08_Project_File_Encryption.md) | ⭐⭐ | File processing, bit operations |
+| [Project 7: Stack and Queue](./09_Project_Stack_Queue.md) | ⭐⭐ | Data structures, LIFO/FIFO |
+| [Project 8: Hash Table](./10_Project_Hash_Table.md) | ⭐⭐⭐ | Hashing, collision handling |
+| [Project 10: Terminal Snake Game](./11_Project_Snake_Game.md) | ⭐⭐⭐ | Terminal control, game loop |
+| [Project 11: Mini Shell](./12_Project_Mini_Shell.md) | ⭐⭐⭐⭐ | fork, exec, pipes |
+| [Project 12: Multithreaded Programming](./13_Project_Multithreading.md) | ⭐⭐⭐⭐ | pthread, synchronization |
+| [Embedded Programming Basics](./14_Embedded_Basics.md) | ⭐ | Arduino, GPIO basics |
+| [Advanced Bit Operations](./15_Bit_Operations.md) | ⭐⭐ | Bit masking, registers |
+| [Project 15: GPIO Control](./16_Project_GPIO_Control.md) | ⭐⭐ | LED, button, debouncing |
+| [Project 16: Serial Communication](./17_Project_Serial_Communication.md) | ⭐⭐ | UART, command parsing |
+| [Debugging and Memory Analysis](./18_Debugging_Memory_Analysis.md) | ⭐⭐⭐ | GDB, Valgrind, AddressSanitizer |
+| [Advanced Embedded Protocols](./19_Advanced_Embedded_Protocols.md) | ⭐⭐⭐ | PWM, I2C, SPI, ADC |
+| [Advanced C Pointers](./20_Advanced_Pointers.md) | ⭐⭐⭐ | Pointer arithmetic, multi-level pointers, function pointers, dynamic memory |
+| [Network Programming in C](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP sockets, client-server, I/O multiplexing (select/poll) |
+| [Inter-Process Communication and Signals](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | Pipes, shared memory, message queues, signal handling |
+| [Testing and Profiling in C](./23_Testing_and_Profiling.md) | ⭐⭐⭐ | Unit testing (Unity, assert.h), gprof, Valgrind, optimization |
 
 ---
 

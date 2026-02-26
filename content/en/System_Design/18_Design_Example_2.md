@@ -1,12 +1,21 @@
 # Practical Design Examples 2
 
+**Previous**: [Practical Design Examples 1](./17_Design_Example_1.md) | **Next**: [Observability and Monitoring](./19_Observability_Monitoring.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-In this chapter, we design social media and real-time communication systems: News Feed/Timeline, Chat System, and Notification System. These systems handle large-scale users, where real-time responsiveness and scalability are critical challenges.
+1. Design a news feed/timeline system addressing fan-out strategies (push vs pull vs hybrid) and ranking algorithms
+2. Design a real-time chat system handling WebSocket connections, message ordering, delivery receipts, and offline storage
+3. Design a notification system supporting multiple channels (push, email, SMS), template management, and user preference handling
+4. Analyze the trade-offs between precomputation (fan-out on write) and on-demand computation (fan-out on read) for social graph workloads
+5. Apply connection management techniques (heartbeats, reconnection, presence detection) for persistent WebSocket architectures
+6. Evaluate delivery guarantee requirements across different real-time system types and choose appropriate strategies
 
 ---
+
+The systems in this lesson -- news feeds, chat, and notifications -- are among the most user-facing and latency-sensitive services at any social platform. Facebook's news feed serves over 2 billion users with personalized, ranked content; WhatsApp delivers 100 billion messages per day with end-to-end encryption; and every major app relies on a notification system to re-engage users across push, email, and SMS channels. Designing these systems teaches you to think about fan-out at scale, real-time delivery, and the delicate balance between freshness and compute cost.
 
 ## Table of Contents
 
@@ -948,14 +957,7 @@ Design to handle the following scenarios:
 
 ---
 
-## Conclusion
-
-Through this series, we learned the core concepts and patterns of system design. In actual interviews or projects, it's important to clarify requirements, consider trade-offs, and create scalable designs.
-
-Next steps:
-- Analyze actual open-source system code
-- Study company tech blogs (Netflix, Uber, Twitter, etc.)
-- Practice mock system design interviews
+**Previous**: [Practical Design Examples 1](./17_Design_Example_1.md) | **Next**: [Observability and Monitoring](./19_Observability_Monitoring.md)
 
 ---
 

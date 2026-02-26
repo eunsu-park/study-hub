@@ -1,5 +1,27 @@
 # Machine Learning Overview
 
+**Next**: [Linear Regression](./02_Linear_Regression.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what machine learning is and how it differs from traditional programming
+2. Distinguish between supervised, unsupervised, and reinforcement learning
+3. Describe the end-to-end machine learning workflow from problem definition to deployment
+4. Identify overfitting and underfitting and explain the bias-variance tradeoff
+5. Apply train/validation/test splitting strategies correctly
+6. Demonstrate the use of scikit-learn's estimator and transformer interfaces
+7. Implement feature scaling using StandardScaler and MinMaxScaler
+
+---
+
+Every day, you interact with machine learning systems -- from email spam filters to product recommendations to voice assistants. What makes these systems powerful is their ability to learn patterns from data rather than following hand-coded rules. Understanding the core concepts, workflow, and pitfalls of ML is the essential first step before diving into any specific algorithm.
+
+---
+
 ## 1. What is Machine Learning?
 
 Machine Learning is an algorithm that learns from data to perform predictions or decisions without explicit programming.
@@ -103,15 +125,20 @@ from sklearn.datasets import load_iris
 iris = load_iris()
 X, y = iris.data, iris.target
 
-# 2. Split data
+# 2. Split data BEFORE scaling to prevent data leakage — if we scale on the
+# full dataset, test set statistics (mean, std) leak into training and the
+# reported accuracy becomes overly optimistic
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.2, random_state=42  # Fixes random seed for reproducible train/test splits across runs
 )
 
 # 3. Data preprocessing (scaling)
+# Standardization (zero mean, unit variance) ensures gradient-based optimizers
+# converge efficiently; features with larger scales would dominate the loss
+# landscape otherwise, causing slow or biased training
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+X_test_scaled = scaler.transform(X_test)  # transform only — no refitting on test data
 
 # 4. Train model
 model = LogisticRegression(max_iter=200)
@@ -121,6 +148,8 @@ model.fit(X_train_scaled, y_train)
 y_pred = model.predict(X_test_scaled)
 
 # 6. Evaluate
+# Accuracy alone is misleading for imbalanced classes — classification_report
+# shows per-class precision/recall to reveal if the model ignores minority classes
 print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred, target_names=iris.target_names))
@@ -200,8 +229,8 @@ Total Error = Bias² + Variance + Noise
 Bias: Error due to model simplicity
 Variance: Sensitivity of model to data changes
 
-High bias → Underfitting
-High variance → Overfitting
+High bias → Underfitting   (model too rigid to capture the underlying signal)
+High variance → Overfitting  (model memorizes noise in the training data)
 ```
 
 ### 4.4 Feature Scaling

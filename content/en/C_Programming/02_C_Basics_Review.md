@@ -1,5 +1,26 @@
 # C Language Basics Quick Review
 
+**Previous**: [C Language Environment Setup](./01_Environment_Setup.md) | **Next**: [Project 1: Basic Arithmetic Calculator](./03_Project_Calculator.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish C's static typing, manual memory management, and compiled execution from Python or JavaScript equivalents
+2. Explain the role of `#include`, `main`, semicolons, and curly braces in a minimal C program
+3. Identify the correct format specifier for each basic data type when using `printf` and `scanf`
+4. Implement pointer declaration, address-of (`&`), and dereference (`*`) to pass values by reference
+5. Build and iterate over fixed-size arrays, and explain the equivalence of `arr[i]` and `*(arr + i)`
+6. Apply `strlen`, `strcpy`, `strcat`, and `strcmp` for safe string manipulation in C
+7. Design structs with `typedef`, access members through both dot and arrow operators, and pass structs to functions via pointers
+8. Apply `malloc`, `free`, and NULL-check patterns to allocate and release heap memory without leaks
+
+---
+
+If you already know Python, JavaScript, or another high-level language, most programming concepts are familiar -- variables, loops, functions, and data structures. What makes C different is how close it sits to the hardware: you choose the exact size of every integer, manage every byte of memory yourself, and talk directly to the operating system. This lesson gives you a rapid-fire tour of C's core syntax so you can start building real projects in the next lesson.
+
 > A summary of core C syntax for those with experience in other programming languages
 
 ## 1. Characteristics of C
@@ -533,8 +554,55 @@ gcc main.c utils.c -o program
 
 ---
 
+## Exercises
+
+### Exercise 1: Data Type Sizes and Format Specifiers
+
+Write a program that prints the size (in bytes) and a sample value for every data type covered in Section 3: `char`, `short`, `int`, `long`, `long long`, `unsigned int`, `float`, and `double`. Use the correct format specifier for each type. Then answer:
+
+1. Why is `%zu` used for `sizeof` output rather than `%d`?
+2. What happens if you use `%d` to print a `long long` value on a 64-bit system?
+
+### Exercise 2: Pointer Swap Dissection
+
+Copy the `wrong_swap` / `swap` example from Section 4 and extend it:
+
+1. Add `printf` statements inside `wrong_swap` to print the *addresses* of `a` and `b` using `%p`. Do the same inside `swap` for the pointer parameters.
+2. Call both functions in `main` and print the addresses of `x` and `y` before each call.
+3. Confirm in writing: why do the addresses printed inside `wrong_swap` differ from the addresses of `x` and `y`, while those inside `swap` are the same?
+
+### Exercise 3: Array and Pointer Arithmetic
+
+Write a program that declares `int arr[] = {10, 20, 30, 40, 50}` and then:
+
+1. Iterates through the array using an index (`arr[i]`), printing each element.
+2. Iterates again using a pointer (`int *p = arr; ... *(p + i)`), printing each element.
+3. Iterates a third time by advancing the pointer itself (`p++`) without using an index.
+4. Uses `sizeof` to compute the number of elements and confirm all three loops print identical output.
+
+### Exercise 4: Dynamic String Builder
+
+Implement a function `char *build_greeting(const char *name)` that:
+
+1. Dynamically allocates exactly the right amount of memory to hold the string `"Hello, <name>!"` (use `strlen` and `malloc`).
+2. Constructs the string using `strcpy` and `strcat`.
+3. Returns the pointer to the caller, who is responsible for calling `free`.
+
+Write `main` to call `build_greeting`, print the result, and free it. Run the program under Valgrind (if available) or add a manual check to confirm no memory is leaked.
+
+### Exercise 5: Struct-Based Student Record
+
+Define a `typedef struct` called `Student` with fields `char name[64]`, `int id`, and `float gpa`. Then:
+
+1. Dynamically allocate an array of 3 `Student` structs using `malloc`.
+2. Write a function `void print_student(const Student *s)` that prints a student's details using the `->` operator.
+3. Write a function `void raise_gpa(Student *s, float delta)` that adds `delta` to the student's GPA (cap at 4.0).
+4. Call `raise_gpa` on each student, then call `print_student` to verify, and finally `free` the array.
+
+---
+
 ## Next Steps
 
 Now let's build actual projects!
 
-[03_Project_Calculator.md](./03_Project_Calculator.md) → Start the first project!
+[Project 1: Basic Arithmetic Calculator](./03_Project_Calculator.md) → Start the first project!

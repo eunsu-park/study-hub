@@ -1,5 +1,24 @@
 # 네트워크 기초
 
+**이전**: [셸 스크립팅](./09_Shell_Scripting.md) | **다음**: [시스템 모니터링](./11_System_Monitoring.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. IP 주소 체계, 서브넷팅, 주요 포트 할당 설명
+2. ip addr, ip link, ip route를 사용하여 네트워크 인터페이스 확인 및 설정
+3. ping, traceroute, mtr로 네트워크 연결 테스트
+4. dig, nslookup, host를 사용하여 DNS 조회 수행
+5. ss, netstat, lsof로 열린 포트와 소켓 연결 검사
+6. 키 기반 인증을 사용하여 SSH로 원격 시스템에 안전하게 연결
+7. scp, rsync, sftp를 사용하여 시스템 간 파일 전송
+8. Netplan(Ubuntu)과 NetworkManager(CentOS)로 영구적인 네트워크 설정 구성
+
+---
+
+네트워킹은 리눅스 서버를 유용하게 만드는 핵심 요소입니다. 웹 애플리케이션이 왜 접근 불가능한지 진단하거나, 원격 관리를 위한 SSH 접근을 설정하거나, 프로덕션 서버에 정적 IP를 설정하는 등 네트워킹 명령어는 시스템 관리자가 가장 자주 사용하는 도구 중 하나입니다.
+
 ## 1. 네트워크 기본 개념
 
 ### IP 주소
@@ -574,4 +593,4 @@ ls -la ~/test_sync/dest/
 
 ## 다음 단계
 
-[11_System_Monitoring.md](./11_System_Monitoring.md)에서 시스템 모니터링을 배워봅시다!
+[시스템 모니터링](./11_System_Monitoring.md)에서 시스템 모니터링을 배워봅시다!

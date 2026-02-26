@@ -5,6 +5,19 @@
 > **선수지식**: Lessons 01-08 (특히 수식 조판)
 > **목표**: 사용자 정의 명령, 환경, 개인 패키지를 생성하여 효율성을 향상시키고 일관성을 유지하는 방법 학습
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `\newcommand`와 `\renewcommand`를 사용하여 선택 인자(optional argument)와 필수 인자(mandatory argument)를 받는 새로운 명령을 정의할 수 있다
+2. `\newenvironment`를 사용하여 반복되는 문서 구조를 캡슐화(encapsulate)하는 사용자 정의 환경을 만들 수 있다
+3. `\newcommand`를 활용하여 일관된 조판을 보장하는 개인 수학 표기법(mathematical notation) 라이브러리를 구축할 수 있다
+4. 사용자 정의 명령을 개인 `.sty` 파일로 패키징하여 여러 문서에서 재사용할 수 있다
+5. 복잡한 인자 문법(argument syntax)을 가진 강력한 명령을 정의하기 위해 `xparse`를 적용할 수 있다
+6. 문서의 사용자 정의 명령 정의를 검토하여 충돌(conflict)을 감지하고 유지 보수성(maintainability)을 관리할 수 있다
+
+---
+
 ## 소개
 
 사용자 정의 명령과 환경은 다음을 가능하게 하는 강력한 기능입니다:
@@ -864,4 +877,4 @@ Now \R works in text and $\R$ in math.
 **탐색**
 
 - 이전: [12_Graphics_with_TikZ.md](12_Graphics_with_TikZ.md)
-- 다음: [14_Document_Classes.md](14_Document_Classes.md)
+- 다음: [문서 클래스 및 템플릿(Document Classes & Templates)](14_Document_Classes.md)

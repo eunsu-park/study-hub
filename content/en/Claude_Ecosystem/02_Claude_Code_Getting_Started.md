@@ -14,13 +14,16 @@ Claude Code is a command-line AI coding assistant that runs directly in your ter
 - A code editor and a project to work with
 - Node.js 18+ installed (for npm installation)
 
-**Learning Objectives**:
-- Install Claude Code and authenticate
-- Start and navigate an interactive session
-- Understand the core tools Claude Code uses (Read, Write, Edit, Bash, Glob, Grep)
-- Follow the read-edit-test-commit workflow
-- Use basic slash commands for session management
-- Complete a practical debugging walkthrough from start to finish
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Install Claude Code and authenticate
+2. Start and navigate an interactive session
+3. Understand the core tools Claude Code uses (Read, Write, Edit, Bash, Glob, Grep)
+4. Follow the read-edit-test-commit workflow
+5. Use basic slash commands for session management
+6. Complete a practical debugging walkthrough from start to finish
 
 ---
 

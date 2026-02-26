@@ -5,6 +5,19 @@
 > **Prerequisites**: Lesson 3 (Text Formatting)
 > **Objective**: Master inline and display math modes, Greek letters, subscripts/superscripts, fractions, roots, operators, delimiters, and mathematical symbols
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between inline math mode and display math mode, and choose the appropriate one for each context
+2. Write Greek letters, subscripts, superscripts, fractions, and square roots using standard LaTeX commands
+3. Use delimiter commands (`\left`, `\right`) to produce automatically sized brackets and parentheses
+4. Produce common mathematical operators, relations, and symbols from LaTeX's symbol library
+5. Format sums, products, integrals, and limits with correct placement of bounds in display mode
+6. Apply the `equation`, `align`, and related environments to number and reference equations
+
+---
+
 ## Introduction to Math Mode
 
 LaTeX's mathematical typesetting is one of its most powerful features. Unlike regular text, mathematical notation requires special formatting rules, spacing, and symbols.
@@ -85,7 +98,7 @@ E = mc^2
 For numbered equations:
 
 ```latex
-\begin{equation}
+\begin{equation}  % equation environment auto-numbers for cross-referencing with \label and \ref
 E = mc^2
 \end{equation}
 ```
@@ -100,7 +113,7 @@ The equation number can be referenced (covered in later lessons).
 ### Unnumbered Equation
 
 ```latex
-\begin{equation*}
+\begin{equation*}  % The * variant suppresses the equation number — use when no reference is needed
 E = mc^2
 \end{equation*}
 ```
@@ -128,10 +141,10 @@ The `amsmath` package is **essential** for serious mathematical typesetting.
 **Additional math packages**:
 
 ```latex
-\usepackage{amsmath}    % Enhanced math
-\usepackage{amssymb}    % Additional symbols (requires amsfonts)
-\usepackage{amsthm}     % Theorem environments
-\usepackage{mathtools}  % Extensions to amsmath
+\usepackage{amsmath}    % Required for align, gather, equation*, and other multi-line math environments
+\usepackage{amssymb}    % Provides \mathbb, \mathfrak, and hundreds of extra math symbols (loads amsfonts)
+\usepackage{amsthm}     % Adds theorem, lemma, proof environments with consistent numbering
+\usepackage{mathtools}  % Fixes amsmath edge cases and adds \coloneqq, \DeclarePairedDelimiter, etc.
 ```
 
 ## Greek Letters
@@ -374,15 +387,15 @@ n! = \prod_{i=1}^{n} i
 ### Integrals
 
 ```latex
-% Simple integral
+% Simple integral — \, inserts a thin space before dx (typographic convention separating integrand from differential)
 $\int f(x) \, dx$
 
-% Definite integral
+% Definite integral — subscript/superscript on \int set the bounds of integration
 \[
 \int_{0}^{\infty} e^{-x} \, dx = 1
 \]
 
-% Multiple integrals
+% Multiple integrals — \iint and \iiint provide properly spaced integral signs (from amsmath)
 \[
 \iint_{D} f(x,y) \, dx \, dy
 \]
@@ -474,22 +487,23 @@ $\left(\frac{1}{2}\right)$
 **Important**: `\left` and `\right` must be paired, even if one is invisible:
 
 ```latex
-% Right delimiter only
+% Right delimiter only — evaluate derivative at a specific point
 \[
-\left. \frac{dy}{dx} \right|_{x=0}
+\left. \frac{dy}{dx} \right|_{x=0}  % \left. is an invisible delimiter (empty) to balance the required \left/\right pair
 \]
 ```
 
-The `\left.` creates an invisible left delimiter.
+The `\left.` creates an invisible left delimiter. Every `\right` must be paired with a `\left`, so `\left.` acts as a "dummy" that produces no visible output.
 
 ### Manual Sizing
 
 Fine control over delimiter size:
 
 ```latex
+% Five size levels — use manual sizing when \left/\right produces inconsistent or overly large delimiters
 ( \big( \Big( \bigg( \Bigg(
 
-% Example
+% Example — nested brackets with explicit size control for visual consistency across equations
 \[
 \Bigg( \bigg( \Big( \big( ( x ) \big) \Big) \bigg) \Bigg)
 \]
@@ -578,8 +592,8 @@ x^2 & \text{if } x \geq 0 \\
 
 **For single letters** in upright (non-italic):
 ```latex
-$\mathrm{d}x$  % Upright d for differential
-$\mathrm{e}^x$ % Upright e for Euler's number
+$\mathrm{d}x$  % Upright d for differential — distinguishes operator d from variable d
+$\mathrm{e}^x$ % Upright e for Euler's number — ISO convention to avoid confusion with variable e
 ```
 
 ## Spacing in Math Mode
@@ -611,9 +625,9 @@ $x\!y$
 
 **Common uses**:
 ```latex
-$\int f(x) \, dx$          % Thin space before dx
-$f(x) = 0 \quad \text{if}$ % Quad for text separation
-$e^{i\pi} \!+ 1 = 0$       % Negative space for tightening
+$\int f(x) \, dx$          % Thin space before dx — convention to visually separate integrand from differential
+$f(x) = 0 \quad \text{if}$ % Quad space — provides clear separation between math and explanatory text
+$e^{i\pi} \!+ 1 = 0$       % Negative thin space — tightens gap when default spacing looks too wide
 ```
 
 ## Common Mathematical Symbols
@@ -710,13 +724,13 @@ $\triangle$     % Triangle
 
 ```latex
 \documentclass{article}
-\usepackage{amsmath}
+\usepackage{amsmath}  % Needed for \[ \] display math to work reliably with all features
 
 \begin{document}
 
 The solutions to the quadratic equation $ax^2 + bx + c = 0$ are given by:
 \[
-x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}  % \pm produces the ± symbol for both roots in one expression
 \]
 where $a \neq 0$.
 
@@ -728,12 +742,12 @@ where $a \neq 0$.
 ```latex
 The derivative of $f(x) = x^n$ is:
 \[
-\frac{d}{dx}(x^n) = nx^{n-1}
+\frac{d}{dx}(x^n) = nx^{n-1}  % \frac creates a vertical fraction — preferred over a/b in display mode
 \]
 
 The fundamental theorem of calculus states:
 \[
-\int_a^b f(x) \, dx = F(b) - F(a)
+\int_a^b f(x) \, dx = F(b) - F(a)  % \, before dx is a thin space — standard typographic convention
 \]
 where $F'(x) = f(x)$.
 ```
@@ -741,14 +755,15 @@ where $F'(x) = f(x)$.
 ### Example 3: Linear Algebra
 
 ```latex
+% \vec adds an arrow accent; \mathbb requires amssymb for blackboard-bold number set notation
 For vectors $\vec{u}, \vec{v} \in \mathbb{R}^n$, the dot product is:
 \[
-\vec{u} \cdot \vec{v} = \sum_{i=1}^{n} u_i v_i
+\vec{u} \cdot \vec{v} = \sum_{i=1}^{n} u_i v_i  % \cdot is the centered dot used for scalar product
 \]
 
 The magnitude of a vector is:
 \[
-\|\vec{v}\| = \sqrt{\sum_{i=1}^{n} v_i^2}
+\|\vec{v}\| = \sqrt{\sum_{i=1}^{n} v_i^2}  % \| produces double vertical bars for the norm notation
 \]
 ```
 
@@ -757,9 +772,10 @@ The magnitude of a vector is:
 ```latex
 For sets $A, B \subseteq X$:
 \[
-(A \cup B)^c = A^c \cap B^c \quad \text{(De Morgan's Law)}
+(A \cup B)^c = A^c \cap B^c \quad \text{(De Morgan's Law)}  % \quad separates the equation from the annotation
 \]
 
+% \forall, \exists, \implies are logic symbols; \; adds a thick space for readability between quantifiers
 For all $x \in \mathbb{R}$:
 \[
 \forall \epsilon > 0, \; \exists \delta > 0 \text{ such that } |x - a| < \delta \implies |f(x) - f(a)| < \epsilon
@@ -849,5 +865,5 @@ You now have the foundation for mathematical typesetting in LaTeX. In the next l
 ---
 
 **Navigation**
-- Previous: [03_Text_Formatting.md](03_Text_Formatting.md)
+- Previous: [Text Formatting](03_Text_Formatting.md)
 - Next: [05_Advanced_Math.md](05_Advanced_Math.md)

@@ -46,6 +46,9 @@ $$\text{subject to} \quad \mathbb{E}[D_{KL}(\pi_{\theta_{old}} || \pi_\theta)] \
 ### 2.3 TRPO의 문제점
 
 - 2차 미분(Hessian) 계산 필요
+
+  Hessian은 2차 편미분으로 이루어진 행렬입니다. n개의 파라미터에 대해 O(n²)의 공간이 필요하므로, 수백만 개의 파라미터를 가진 신경망에서는 사실상 사용이 불가능합니다. PPO는 단순한 클리핑(clipping) 제약과 1차 경사 하강법(first-order gradient descent)을 사용하여 이 문제를 회피합니다.
+
 - Conjugate gradient 알고리즘 필요
 - 구현이 복잡하고 계산 비용이 높음
 
@@ -66,10 +69,13 @@ $$L^{CLIP}(\theta) = \mathbb{E}\left[\min(r_t(\theta) A_t, \text{clip}(r_t(\thet
 ```python
 def compute_ppo_loss(ratio, advantage, clip_epsilon=0.2):
     """PPO Clipped 손실"""
-    # 클리핑된 비율
+    # 확률 비율(probability ratio)을 [1-ε, 1+ε]로 클리핑 — 훈련을 불안정하게 만들 수 있는
+    # 파국적인 대규모 정책 업데이트를 방지한다; ε=0.2는 최대 20% 변화를 의미한다
     clipped_ratio = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon)
 
-    # 두 항 중 작은 값 선택
+    # 클리핑된 목표와 클리핑되지 않은 목표 중 최솟값을 선택: 이는 비관적 하한(pessimistic bound)이다 —
+    # advantage > 0이면 min이 비율을 1+ε 이상으로 증가하지 못하게 막고(이익 상한);
+    # advantage < 0이면 비율이 1-ε 아래로 내려가지 못하게 막는다(처벌 상한)
     loss1 = ratio * advantage
     loss2 = clipped_ratio * advantage
 
@@ -212,6 +218,8 @@ class PPOAgent:
         last_value = rollout['last_value']
 
         advantages = np.zeros_like(rewards)
+        # 역방향 순회로 GAE 합을 단일 패스에서 누적한다;
+        # last_value는 마지막 스텝의 부트스트랩(bootstrap) 값을 제공한다
         last_gae = 0
 
         for t in reversed(range(len(rewards))):
@@ -220,10 +228,15 @@ class PPOAgent:
             else:
                 next_value = values[t + 1]
 
+            # 에피소드 종료 시 다음 상태의 기여를 마스킹(masking)한다 —
+            # (1 - done)을 곱하면 루프 내 if-분기 없이 종료 전이에서
+            # 미래 부트스트랩 값을 깔끔하게 0으로 만든다
             next_non_terminal = 1.0 - dones[t]
             delta = rewards[t] + self.gamma * next_value * next_non_terminal - values[t]
             advantages[t] = last_gae = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae
 
+        # Returns = advantages + values: Critic은 이 returns를 예측하도록 학습하고,
+        # 0을 중심으로 정규화된 advantages가 Actor 업데이트를 유도한다
         returns = advantages + values
         return advantages, returns
 
@@ -231,7 +244,8 @@ class PPOAgent:
         """PPO 업데이트"""
         advantages, returns = self.compute_gae(rollout)
 
-        # 정규화
+        # Advantages를 평균 0, 단위 분산으로 정규화 — 환경 간 보상 스케일 차이에 대한
+        # 민감도를 줄이고 경사(gradient) 크기를 안정시킨다
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # 텐서 변환
@@ -241,9 +255,12 @@ class PPOAgent:
         returns = torch.FloatTensor(returns)
         advantages = torch.FloatTensor(advantages)
 
-        # 여러 에폭 업데이트
+        # 여러 에폭 업데이트: 동일한 롤아웃 데이터를 여러 번 재사용하여 샘플 효율성을 높인다 —
+        # 이것이 업데이트 후 데이터를 버리는 A2C 같은 온-폴리시(on-policy) 방법에 비한
+        # PPO의 핵심 장점이다
         for _ in range(self.update_epochs):
-            # 미니배치 생성
+            # 무작위 순열로 미니배치를 구성하면 롤아웃의 시간적 상관관계를 끊어
+            # 업데이트 에폭 전반에 걸쳐 경사 분산을 줄인다
             indices = np.random.permutation(len(states))
 
             for start in range(0, len(states), self.batch_size):
@@ -261,10 +278,12 @@ class PPOAgent:
                     batch_states, batch_actions
                 )
 
-                # 비율 계산
+                # 로그 공간에서의 비율 계산: exp(log π_new - log π_old)는
+                # π_new / π_old와 동일하지만 작은 확률값에서도 오버플로(overflow)를 방지한다
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)
 
-                # Clipped 손실
+                # 클리핑된 대리 목표(clipped surrogate objective): surr1은 클리핑 없는 업데이트,
+                # surr2는 정책 변화를 제한한다; min을 취함으로써 비관적(보수적) 하한이 된다
                 surr1 = ratio * batch_advantages
                 surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * batch_advantages
                 actor_loss = -torch.min(surr1, surr2).mean()
@@ -272,7 +291,8 @@ class PPOAgent:
                 # 가치 손실
                 critic_loss = F.mse_loss(values.squeeze(), batch_returns)
 
-                # 엔트로피 보너스
+                # 엔트로피 보너스: total_loss를 최소화하면서 엔트로피를 최대화하려 하므로
+                # 음수 부호를 붙인다 — 훈련 내내 탐험을 장려한다
                 entropy_loss = -entropy.mean()
 
                 # 총 손실
@@ -281,6 +301,8 @@ class PPOAgent:
                 # 업데이트
                 self.optimizer.zero_grad()
                 loss.backward()
+                # 경사 클리핑(gradient clipping): 하나의 나쁜 미니배치가
+                # 정책을 붕괴시키는 폭주 업데이트를 방지한다
                 nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
@@ -374,7 +396,9 @@ class ContinuousPPONetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=64):
         super().__init__()
 
-        # Actor
+        # Actor: PPO에서 연속 행동에 ReLU 대신 Tanh 활성화를 선호하는 이유는
+        # 출력을 (-1, 1)로 제한하여 Normal 분포의 평균이 도달 불가능한 값으로 발산하는
+        # 극단적인 pre-activation을 방지하기 때문이다
         self.actor_mean = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.Tanh(),
@@ -382,6 +406,8 @@ class ContinuousPPONetwork(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, action_dim)
         )
+        # log_std를 0으로 초기화(std=1): 최대 탐험 상태에서 시작하여
+        # 훈련이 진행될수록 불확실성을 줄이는 방향으로 학습한다
         self.actor_log_std = nn.Parameter(torch.zeros(action_dim))
 
         # Critic
@@ -406,6 +432,8 @@ class ContinuousPPONetwork(nn.Module):
         if action is None:
             action = dist.sample()
 
+        # 행동 차원에 걸쳐 log_prob를 합산: 차원별로 독립적인 가우시안(Gaussian)을 가정하므로
+        # 결합 로그 확률(joint log-prob) = 주변 확률의 합 (인수분해된 분포)
         log_prob = dist.log_prob(action).sum(-1)
         entropy = dist.entropy().sum(-1)
 
@@ -484,6 +512,82 @@ r(θ) = π_θ(a|s) / π_θ_old(a|s)  # 정책 비율
 - 정책 변화를 [1-ε, 1+ε] 범위로 제한
 - 급격한 업데이트 방지
 - 학습 안정성 확보
+
+---
+
+## 연습 문제
+
+### 연습 1: TRPO vs PPO 트레이드오프 분석
+
+TRPO와 PPO의 이론적·실용적 차이를 분석하세요.
+
+1. TRPO가 KL 발산의 헤시안(Hessian)을 필요로 하는 이유를 설명하세요. n개의 파라미터를 가진 네트워크에서 n×n 헤시안을 계산하고 역행렬을 구하는 계산 복잡도는 얼마인가요?
+2. PPO의 클리핑 목적함수가 2차 정보 없이 TRPO의 제약을 어떻게 근사하는지 설명하세요.
+3. 레슨 내용을 바탕으로 다음 비교표를 완성하세요:
+
+| 속성 | TRPO | PPO-Clip |
+|-----|------|----------|
+| 제약 방식 | | |
+| 경사 차수 | | |
+| 구현 복잡도 | | |
+| 메모리 비용 | | |
+| 전형적인 실행 속도 | | |
+
+4. PPO의 소프트 클리핑보다 TRPO의 하드 제약이 반드시 필요한 시나리오는 어떤 경우인가요?
+
+### 연습 2: 클리핑 동작 시각화
+
+PPO 클리핑 목적함수가 다양한 비율(ratio) 값에 어떻게 반응하는지 시각화하세요.
+
+1. 어드밴티지 값 A ∈ {-2.0, -1.0, -0.5, 0.5, 1.0, 2.0}와 ε = 0.2에 대해, r ∈ [0.5, 1.5] 범위에서 L^CLIP(r)을 계산하세요:
+   ```python
+   import numpy as np
+   import matplotlib.pyplot as plt
+
+   def l_clip(r, A, eps=0.2):
+       clipped = np.clip(r, 1 - eps, 1 + eps)
+       return np.minimum(r * A, clipped * A)
+   ```
+2. 각 어드밴티지 값에 대한 L^CLIP을 r의 함수로 같은 축에 그리세요.
+3. 클리핑 경계선(r = 0.8, r = 1.2)을 수직 점선으로 표시하세요.
+4. A > 0일 때 클리핑 영역 밖에서 함수가 평탄(기울기 0)한 이유와, A < 0일 때 그렇지 않은 이유를 설명하세요.
+
+### 연습 3: GAE 람다(Lambda) 민감도
+
+GAE 람다 파라미터가 편향-분산 트레이드오프에 미치는 영향을 조사하세요.
+
+1. LunarLander-v2에서 `gae_lambda` ∈ {0.0, 0.5, 0.9, 0.95, 1.0}만 변경하면서 다섯 개의 PPO 에이전트를 200,000 타임스텝 동안 학습시키세요.
+2. 각 실행에 대해 기록하세요:
+   - 평균 에피소드 보상 (마지막 20 에피소드)
+   - 에피소드 보상의 표준 편차
+3. 다섯 가지 설정의 학습 곡선을 그리세요.
+4. 편향-분산 트레이드오프 측면에서 결과를 설명하세요:
+   - λ = 0: 1-스텝 TD 어드밴티지 (낮은 분산, 높은 편향)
+   - λ = 1: 몬테카를로 어드밴티지 (높은 분산, 편향 없음)
+5. 어떤 λ 값이 가장 잘 작동하나요? 레슨의 기본값 λ = 0.95와 일치하나요?
+
+### 연습 4: PPO-Penalty 구현
+
+Section 5.2의 KL 페널티 방식의 PPO를 구현하고 PPO-Clip과 비교하세요.
+
+1. Section 5.2의 `ppo_penalty_loss(ratio, advantage, old_probs, new_probs, beta)`를 구현하세요.
+2. 적응형 베타(adaptive beta) 조정을 추가하세요: 각 업데이트 에폭 후 평균 KL 발산을 측정하여:
+   - KL > 1.5 × target_kl이면: beta를 2배로 증가
+   - KL < target_kl / 1.5이면: beta를 2로 나눔
+   - target_kl = 0.01 사용
+3. PPO-Penalty와 PPO-Clip을 CartPole-v1에서 각각 100,000 타임스텝 동안 학습시키세요.
+4. 학습 곡선을 그리고 최종 성능을 기록하세요.
+5. 적응형 베타(adaptive beta)가 KL 발산을 target_kl 근처로 효과적으로 제어하나요?
+
+### 연습 5: 벡터화 환경(Vectorized Environment) PPO
+
+더 빠른 데이터 수집을 위해 여러 병렬 환경을 활용하도록 PPO를 확장하세요.
+
+1. `gymnasium.vector.SyncVectorEnv`를 사용하여 CartPole-v1 환경 4개를 병렬로 생성하세요.
+2. 모든 4개의 환경에서 동시에 n_steps 전이를 수집하도록 `collect_rollouts()`를 수정하여, `(n_steps × 4,)` 형태의 버퍼를 만드세요.
+3. 동일한 n_steps에 대해 전체 롤아웃 크기가 4배 커졌는지 확인하세요.
+4. 100,000 총 타임스텝 동안 학습하고, Section 4.2의 단일 환경 버전과 실제 실행 시간을 비교하세요.
+5. 분석: 4개의 환경을 사용하면 학습 품질이 변하나요, 아니면 속도만 달라지나요? 샘플 다양성 측면에서 이유를 설명하세요.
 
 ---
 

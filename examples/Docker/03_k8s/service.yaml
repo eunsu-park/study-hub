@@ -12,6 +12,7 @@ metadata:
     app: flask-app
   annotations:
     description: "Internal service for Flask application"
+# Why: ClusterIP is chosen over NodePort/LoadBalancer because external traffic enters through the Ingress — the Service only needs to be reachable inside the cluster
 spec:
   type: ClusterIP
 
@@ -21,6 +22,7 @@ spec:
   #   clientIP:
   #     timeoutSeconds: 10800
 
+# Why: port 80 → targetPort 5000 decouples the cluster-facing port from the app's internal port — consumers use the standard HTTP port while the container keeps its own convention
   ports:
   - port: 80          # Service port
     targetPort: 5000  # Container port
@@ -95,6 +97,7 @@ spec:
 #   # externalTrafficPolicy: Local  # Preserves client IP but may cause imbalance
 
 ---
+# Why: Providing both a regular and headless Service gives flexibility — the regular Service handles normal load-balanced traffic, while the headless one supports service discovery and direct pod-to-pod communication
 # Headless Service (for direct pod access)
 # Returns pod IPs directly instead of load balancing
 # Useful for StatefulSets or service discovery
@@ -105,6 +108,7 @@ metadata:
   labels:
     app: flask-app
 spec:
+# Why: Headless service (clusterIP: None) returns individual pod IPs via DNS instead of a virtual IP — essential for StatefulSets or when clients need direct pod addressing for things like gRPC streaming
   clusterIP: None  # Makes it headless
   ports:
   - port: 5000

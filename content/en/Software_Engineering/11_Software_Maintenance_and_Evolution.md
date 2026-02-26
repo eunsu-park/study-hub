@@ -11,14 +11,17 @@ Software does not wear out the way physical machinery does. A database binary st
 - Basic software design principles
 - Familiarity with version control (Git)
 
-**Learning Objectives**:
-- Distinguish the four types of software maintenance and know when each applies
-- Explain Lehman's Laws and their implications for long-lived systems
-- Evaluate strategies for modernizing legacy systems
-- Apply refactoring techniques to improve code without changing behavior
-- Understand reverse engineering, software aging, and migration strategies
-- Select appropriate deprecation policies for APIs and services
-- Measure maintenance health using key metrics
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish the four types of software maintenance and know when each applies
+2. Explain Lehman's Laws and their implications for long-lived systems
+3. Evaluate strategies for modernizing legacy systems
+4. Apply refactoring techniques to improve code without changing behavior
+5. Understand reverse engineering, software aging, and migration strategies
+6. Select appropriate deprecation policies for APIs and services
+7. Measure maintenance health using key metrics
 
 ---
 

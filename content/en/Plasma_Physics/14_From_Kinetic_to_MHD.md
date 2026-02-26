@@ -616,15 +616,27 @@ print()
 
 # Define validity regions
 # 1. MHD: ω << ω_ci, L >> ρ_i
+# Factor 0.1 is a conservative safety margin: MHD ordering assumes ω/ω_ci → 0,
+# so we require at least an order-of-magnitude separation to keep higher-order
+# corrections (ε = ω/ω_ci) below ~10%. Similarly, L > 10ρ_i ensures FLR
+# corrections (ε = ρ_i/L) are small enough for the fluid description to hold.
 MHD = (omega_grid < 0.1 * omega_ci) & (L_grid > 10 * rho_i)
 
 # 2. Hall MHD: ω << ω_ci, L ~ d_i
+# Hall effects become O(1) when L ~ d_i; the upper bound L < 100 d_i marks
+# where the Hall term (d_i/L) first becomes appreciable (>1%), defining the
+# transition zone between MHD and Hall MHD regimes.
 Hall_MHD = (omega_grid < 0.1 * omega_ci) & (L_grid > 10 * rho_i) & (L_grid < 100 * d_i)
 
 # 3. Two-fluid: ω << ω_ce, L > d_e
+# Two-fluid theory breaks down at the electron skin depth d_e (electron inertia
+# becomes O(1)) and at ω ~ ω_ce (electron cyclotron resonance is not included).
+# The factor 0.1 provides the same order-of-magnitude safety margin as for MHD.
 Two_Fluid = (omega_grid < 0.1 * omega_ce) & (L_grid > 10 * d_e)
 
 # 4. Gyrokinetic: ω ~ ω_ci, L ~ ρ_i
+# Gyrokinetics is a perturbative theory valid near ω_ci and L ~ ρ_i; it
+# becomes inaccurate outside a decade around these characteristic values.
 Gyrokinetic = (omega_grid > 0.01 * omega_ci) & (omega_grid < omega_ci) & \
               (L_grid > rho_i) & (L_grid < 100 * rho_i)
 
@@ -711,6 +723,10 @@ beta_example = 1.0
 anisotropy = np.linspace(1, 5, 100)
 threshold_value = mirror_instability_threshold(beta_example)
 
+# np.where enforces causality: growth rate is exactly zero below threshold,
+# because the mirror mode is linearly stable there (no energy source for the
+# instability). The sqrt(β_perp) prefactor reflects that higher plasma pressure
+# relative to magnetic pressure provides more free energy for the instability.
 gamma_normalized = np.where(anisotropy > threshold_value,
                              np.sqrt(beta_example) * (anisotropy - threshold_value),
                              0)

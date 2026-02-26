@@ -12,14 +12,17 @@ This lesson covers the major garbage collection algorithms and their trade-offs,
 
 **Prerequisites**: [10. Runtime Environments](./10_Runtime_Environments.md)
 
-**Learning Objectives**:
-- Compare manual and automatic memory management approaches
-- Implement reference counting with cycle detection
-- Understand tracing collectors: mark-sweep, mark-compact, and copying
-- Explain generational GC and why it works (the generational hypothesis)
-- Describe incremental and concurrent GC algorithms using tri-color marking
-- Analyze GC strategies in real systems (JVM, Go, Python, Rust)
-- Reason about GC tuning and performance trade-offs
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare manual and automatic memory management approaches
+2. Implement reference counting with cycle detection
+3. Understand tracing collectors: mark-sweep, mark-compact, and copying
+4. Explain generational GC and why it works (the generational hypothesis)
+5. Describe incremental and concurrent GC algorithms using tri-color marking
+6. Analyze GC strategies in real systems (JVM, Go, Python, Rust)
+7. Reason about GC tuning and performance trade-offs
 
 ---
 

@@ -562,7 +562,10 @@ def prim2cons(prim):
     B2 = Bx**2 + By**2 + Bz**2
     vdotB = vx*Bx + vy*By + vz*Bz
 
-    # Specific enthalpy
+    # Specific enthalpy h = 1 + (Γ/Γ-1)(p/ρ): includes rest-mass energy density
+    # unlike the non-relativistic case; at low p/ρ this reduces to h≈1, recovering
+    # Newtonian dynamics — but for ultra-relativistic pressure (p ~ ρc²) the
+    # enthalpy dominates the inertia, making relativistic flows fundamentally different
     h = 1.0 + GAMMA/(GAMMA-1.0) * p/rho
 
     # Comoving magnetic field
@@ -570,13 +573,25 @@ def prim2cons(prim):
     bx = Bx/W + W*vx*vdotB/C**2
     by = By/W + W*vy*vdotB/C**2
     bz = Bz/W + W*vz*vdotB/C**2
+    # b2 = B²/W² + (v·B)²/(W²c²): the comoving field magnitude is smaller than
+    # the lab-frame B by the Lorentz factor — a highly boosted jet sees a weaker
+    # magnetic field in its own frame, which is why high-σ magnetospheres require
+    # the full relativistic treatment to correctly compute wave speeds and pressures
     b2 = (B2 + (vdotB)**2/C**2) / W**2
 
-    # Conserved variables
+    # D = ρW: the 3+1 conserved density includes the Lorentz factor because
+    # a moving fluid element is length-contracted, so its rest-mass density is
+    # enhanced by W — this is the relativistic analogue of mass conservation
     D = rho * W
+    # S = (ρh + b²)W²v - (v·B)B: momentum density mixes kinetic and electromagnetic
+    # contributions; the (v·B)B term corrects for the fact that B is not purely
+    # transverse in the comoving frame, distinguishing SRMHD from SRHD
     Sx = (rho*h + b2)*W**2*vx - (vdotB)*Bx/(4.0*np.pi)
     Sy = (rho*h + b2)*W**2*vy - (vdotB)*By/(4.0*np.pi)
     Sz = (rho*h + b2)*W**2*vz - (vdotB)*Bz/(4.0*np.pi)
+    # τ = total energy - rest mass energy: subtracting Dc² isolates the
+    # non-rest-mass energy (kinetic + thermal + magnetic), which is what evolves
+    # dynamically; including D*c² would create numerical cancellation for v≪c
     tau = (rho*h + b2)*W**2 - p - b2/2.0 - D*C**2
 
     return np.array([D, Sx, Sy, Sz, tau, Bx, By, Bz])
@@ -589,7 +604,10 @@ def cons2prim(cons, prim_guess):
     # Initial guess
     rho, vx, vy, vz, p = prim_guess[:5]
 
-    # Newton-Raphson iteration (simplified)
+    # Primitive recovery is the hardest step in SRMHD: unlike classical MHD where
+    # conserved → primitive is algebraic, here W, ρ, v, p are nonlinearly coupled
+    # because W depends on v which depends on p which depends on W — so iteration
+    # is unavoidable; the Newton-Raphson loop solves this coupled system simultaneously
     max_iter = 50
     tol = 1e-10
 
@@ -600,7 +618,9 @@ def cons2prim(cons, prim_guess):
         vdotB = vx*Bx + vy*By + vz*Bz
         b2 = (Bx**2 + By**2 + Bz**2 + (vdotB)**2/C**2) / W**2
 
-        # Residuals
+        # Residuals measure how far the current guess is from satisfying the
+        # conserved variable definitions; all three residuals must vanish together
+        # because D, Sx, τ are not independent — they all couple through W and p
         f1 = D - rho*W
         f2 = Sx - ((rho*h + b2)*W**2*vx - (vdotB)*Bx/(4.0*np.pi))
         f3 = tau - ((rho*h + b2)*W**2 - p - b2/2.0 - D*C**2)
@@ -608,7 +628,9 @@ def cons2prim(cons, prim_guess):
         if abs(f1) + abs(f2) + abs(f3) < tol:
             break
 
-        # Simple update (damped)
+        # Damped update (0.5 blending): the Newton step can overshoot — especially
+        # for high W or near vacuum — so half-weighting the new estimate against the
+        # old provides stability at the cost of slower convergence
         rho = D / W
         p_new = (tau + D*C**2 + p + b2/2.0) / (W**2) - rho*h - b2
         p = 0.5 * p + 0.5 * max(p_new, 1e-10)
@@ -621,7 +643,9 @@ def cons2prim(cons, prim_guess):
             vy = Sy / (rho*h*W**2)
             vz = Sz / (rho*h*W**2)
 
-        # Limit velocity
+        # Enforce |v| < c: if the Newton step produces a superluminal velocity
+        # (possible during convergence before the iteration has settled), scale it
+        # back to 0.99c — a physical floor that prevents W from becoming complex
         v = np.sqrt(vx**2 + vy**2 + vz**2)
         if v >= C:
             scale = 0.99 * C / v
@@ -629,7 +653,9 @@ def cons2prim(cons, prim_guess):
             vy *= scale
             vz *= scale
 
-    # Apply floors
+    # Apply floors to prevent ρ → 0 or p → 0 (vacuum): without floors the Lorentz
+    # factor W diverges and the simulation crashes; 1e-10 is small enough not to
+    # affect the physical solution but large enough to keep W finite
     rho = max(rho, 1e-10)
     p = max(p, 1e-10)
 
@@ -692,17 +718,22 @@ def hll_flux(pL, pR):
     lamL = (vxL - cfL) / (1.0 - vxL*cfL/C**2)
     lamR = (vxR + cfR) / (1.0 + vxR*cfR/C**2)
 
-    # HLL flux
+    # HLL flux: three-wave approximation that captures the outermost left- and
+    # right-moving fast waves (λL, λR), with the intermediate state determined
+    # by the Rankine-Hugoniot conditions — simpler than HLLD but more diffusive
+    # at contact discontinuities; acceptable here because we only need fast-wave accuracy
     consL = prim2cons(pL)
     consR = prim2cons(pR)
     FL = flux(pL)
     FR = flux(pR)
 
     if lamL >= 0:
-        return FL
+        return FL          # All waves move right: use left state
     elif lamR <= 0:
-        return FR
+        return FR          # All waves move left: use right state
     else:
+        # λL*λR*(consR - consL) is the "upwinding correction" that enforces entropy
+        # and prevents the solution from violating causality across the Riemann fan
         F_hll = (lamR*FL - lamL*FR + lamL*lamR*(consR - consL)) / (lamR - lamL)
         return F_hll
 
@@ -735,12 +766,18 @@ def evolve_srmhd():
                           abs((vx - cf)/(1.0 - vx*cf/C**2)))
             v_max = max(v_max, v_signal)
 
+        # CFL = 0.4 is more conservative than the classical 0.5 maximum:
+        # relativistic wave speeds approach c in the signal estimate, and
+        # the fast magnetosonic wave can be close to c for high-σ plasmas —
+        # the safety margin prevents the solver from stepping outside the
+        # light cone where causality would be violated numerically
         dt = CFL * dx / v_max
         if t + dt > t_end:
             dt = t_end - t
 
-        # RK2 time integration
-        # Stage 1
+        # RK2 (Heun's method): two-stage predictor-corrector achieves second-order
+        # accuracy — Stage 1 gives a first-order predictor (forward Euler), and
+        # Stage 2 averages the initial and predicted fluxes to get second-order accuracy
         flux_arr = np.zeros((NX+1, 8))
         for i in range(NX+1):
             if i == 0:
@@ -754,7 +791,9 @@ def evolve_srmhd():
         for i in range(NX):
             cons_1[i] -= dt/dx * (flux_arr[i+1] - flux_arr[i])
 
-        # Recover primitives
+        # After updating cons, immediately recover primitives before Stage 2:
+        # in SRMHD we cannot defer this recovery because the flux function requires
+        # primitive variables — there is no direct path from conserved to fluxes
         prim_1 = np.array([cons2prim(cons_1[i], prim[i]) for i in range(NX)])
 
         # Stage 2
@@ -770,6 +809,9 @@ def evolve_srmhd():
         for i in range(NX):
             cons_2[i] -= dt/dx * (flux_arr[i+1] - flux_arr[i])
 
+        # Final RK2 update = arithmetic average of Stage 1 and Stage 2 estimates;
+        # this averaging is what cancels the leading-order error term and promotes
+        # the scheme from first-order to second-order temporal accuracy
         cons = 0.5 * (cons + cons_2)
         prim = np.array([cons2prim(cons[i], prim_1[i]) for i in range(NX)])
 

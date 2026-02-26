@@ -4,6 +4,19 @@
 
 # 35. CLIP (Contrastive Language-Image Pre-training)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. CLIP 학습 목적함수(이미지-텍스트 쌍에 대한 대조 학습)를 설명하고, InfoNCE 손실이 시각과 언어 표현을 어떻게 정렬하는지 서술합니다.
+2. CLIP의 이중 인코더 아키텍처(비전 인코더 + 텍스트 인코더)를 설명하고, 공유 임베딩 공간이 어떻게 크로스 모달 유사도 계산을 가능하게 하는지 설명합니다.
+3. 유사도 행렬에 대한 대칭 크로스 엔트로피 손실(Symmetric Cross-Entropy Loss)을 포함하여 PyTorch에서 CLIP 대조 학습 루프를 처음부터 구현합니다.
+4. 텍스트 프롬프트를 구성하고 이미지-텍스트 유사도를 계산하여 사전 훈련된 CLIP 모델로 제로샷(Zero-shot) 이미지 분류를 수행합니다.
+5. 이미지 검색, 시맨틱 이미지 검색, 퓨샷(Few-shot) 분류를 위한 동결 특성(Frozen Features) 등 다운스트림 작업에 CLIP 임베딩을 적용합니다.
+6. InfoNCE 손실에서 온도 스케일링(Temperature Scaling)의 역할을 분석하고, 데이터 규모와 프롬프트 엔지니어링이 CLIP의 제로샷 성능에 어떤 영향을 미치는지 설명합니다.
+
+---
+
 ## 개요
 
 CLIP은 이미지와 텍스트를 같은 임베딩 공간에 매핑하여 zero-shot 이미지 분류를 가능하게 합니다. "Learning Transferable Visual Models From Natural Language Supervision" (Radford et al., 2021)
@@ -217,4 +230,4 @@ final_embedding = mean(text_embeddings)
 
 - Radford et al. (2021). "Learning Transferable Visual Models From Natural Language Supervision"
 - [OpenAI CLIP](https://github.com/openai/CLIP)
-- [34_CLIP_Multimodal.md](./34_CLIP_Multimodal.md)
+- [CLIP과 멀티모달 학습](./34_CLIP_Multimodal.md)

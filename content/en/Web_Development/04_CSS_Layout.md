@@ -1,12 +1,23 @@
 # CSS Layout
 
-## Overview
+**Previous**: [CSS Basics](./03_CSS_Basics.md) | **Next**: [CSS Responsive Design](./05_CSS_Responsive.md)
 
-CSS layout is the technique of arranging web page elements in desired positions. Modern web development primarily uses **Flexbox** and **CSS Grid**.
+## Learning Objectives
 
-**Prerequisites**: [03_CSS_Basics.md](./03_CSS_Basics.md)
+After completing this lesson, you will be able to:
+
+1. Explain why float-based layouts are considered legacy and when they are still appropriate
+2. Apply Flexbox to create one-dimensional layouts including navigation bars, card rows, and centering patterns
+3. Describe the Flexbox axis model (main axis vs. cross axis) and configure direction, wrapping, and alignment
+4. Apply CSS Grid to create two-dimensional layouts with explicit rows and columns
+5. Implement named grid areas using grid-template-areas for readable page layouts
+6. Compare Flexbox and Grid and choose the appropriate system for a given layout requirement
+7. Distinguish between static, relative, absolute, fixed, and sticky positioning
+8. Implement practical layout patterns such as sticky footers, modals, and sidebar-plus-content designs
 
 ---
+
+Knowing CSS properties is only half the battle; the other half is arranging elements where you want them on the page. Layout is the skill that transforms a vertical stack of content blocks into a professional multi-column design with headers, sidebars, and footers. Modern CSS provides two powerful and complementary systems -- Flexbox for one-dimensional flows and Grid for two-dimensional grids -- that together can handle virtually any layout challenge.
 
 ## Table of Contents
 
@@ -33,9 +44,9 @@ An older method, now mainly used only for text wrapping.
 
 /* Clear float */
 .clearfix::after {
-    content: "";
-    display: table;
-    clear: both;
+    content: "";    /* Creates the pseudo-element — without content it has no size and won't render */
+    display: table; /* Creates a block formatting context, forcing the pseudo-element to contain floats */
+    clear: both;    /* Pushes this pseudo-element below all preceding floats, so the parent regains height */
 }
 ```
 
@@ -195,7 +206,7 @@ Ratio of remaining space to occupy
 ```css
 .item {
     flex-grow: 0;  /* Default: don't grow */
-    flex-grow: 1;  /* Occupy 1 part of remaining space */
+    flex-grow: 1;  /* 1 = takes equal share of remaining space; use 2 to get double the share */
     flex-grow: 2;  /* Occupy 2 parts of remaining space */
 }
 ```
@@ -381,7 +392,7 @@ Define column and row sizes.
     grid-template-columns: 200px 1fr 1fr;
 
     /* repeat function */
-    grid-template-columns: repeat(3, 1fr);      /* 1fr 1fr 1fr */
+    grid-template-columns: repeat(3, 1fr);      /* 1fr = 1 fraction of available space; three equal columns that resize proportionally */
     grid-template-columns: repeat(4, 100px);    /* 100px 100px 100px 100px */
 
     /* auto-fill / auto-fit */
@@ -633,6 +644,8 @@ Individual item alignment
 ```
 
 ---
+
+> **Analogy:** Flexbox is a one-dimensional ruler -- it arranges items along a single row or column. Grid is a two-dimensional chessboard -- it controls both rows and columns simultaneously. Reach for Flexbox when you need a line of items, and Grid when you need a full page layout.
 
 ## Flexbox vs Grid
 
@@ -1112,10 +1125,6 @@ Center a div in the middle of the screen (3 methods).
 
 ---
 
-## Next Steps
-
-- [05_CSS_Responsive.md](./05_CSS_Responsive.md) - Media Queries and Responsive Design
-
 ---
 
 ## References
@@ -1124,3 +1133,7 @@ Center a div in the middle of the screen (3 methods).
 - [CSS Tricks: Grid Guide](https://css-tricks.com/snippets/css/complete-guide-grid/)
 - [Flexbox Froggy](https://flexboxfroggy.com/) - Flexbox game
 - [Grid Garden](https://cssgridgarden.com/) - Grid game
+
+---
+
+**Previous**: [CSS Basics](./03_CSS_Basics.md) | **Next**: [CSS Responsive Design](./05_CSS_Responsive.md)

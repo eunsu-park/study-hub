@@ -6,12 +6,15 @@ Morphological Operations are operations based on the shape of binary or grayscal
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
-**Learning Objectives**:
-- Understanding Structuring Elements
-- Erosion and Dilation operations
-- Opening and Closing operations
-- Gradient, Top-hat, and Black-hat operations
-- Noise removal and object separation applications
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understanding Structuring Elements
+2. Erosion and Dilation operations
+3. Opening and Closing operations
+4. Gradient, Top-hat, and Black-hat operations
+5. Noise removal and object separation applications
 
 ---
 
@@ -31,6 +34,8 @@ Morphological Operations are operations based on the shape of binary or grayscal
 ---
 
 ## 1. Morphological Operations Overview
+
+Pixel-level filters like Gaussian blur treat all pixels equally, but many real-world tasks require reasoning about object *shape* — removing speckle noise without blurring object boundaries, or separating two touching cells. Morphological operations fill this gap by probing image structure with a shaped mask, making them the standard toolkit for binary image cleanup and shape analysis.
 
 ### What is Morphology?
 
@@ -110,7 +115,8 @@ import numpy as np
 # ksize: (width, height) size
 # anchor: Reference point (default: center)
 
-# Rectangle
+# Why MORPH_RECT: treats all directions equally — use when objects have
+# roughly rectangular or straight edges (text, PCB traces)
 rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 print("RECT (5x5):\n", rect_kernel)
 
@@ -118,7 +124,9 @@ print("RECT (5x5):\n", rect_kernel)
 cross_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (5, 5))
 print("\nCROSS (5x5):\n", cross_kernel)
 
-# Ellipse
+# Why MORPH_ELLIPSE: approximates a disk — preferred for circular/rounded
+# objects (cells, coins) because it avoids introducing rectangular artifacts
+# at diagonals that MORPH_RECT would create
 ellipse_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 print("\nELLIPSE (5x5):\n", ellipse_kernel)
 
@@ -161,6 +169,8 @@ plt.show()
 ---
 
 ## 3. Erosion - erode()
+
+Erosion answers the question "does the foreground completely cover this kernel-shaped region?" — if not, the pixel is eliminated. This makes it the go-to tool for removing isolated noise dots (which can never fully cover the kernel) and for breaking thin bridges between touching objects before counting them separately.
 
 ### Erosion Operation Principle
 
@@ -211,12 +221,13 @@ import numpy as np
 img = cv2.imread('binary_image.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 
-# Create structuring element
+# Why MORPH_RECT (3x3): the smallest kernel that still has a meaningful neighborhood;
+# larger kernels erode more aggressively and may destroy the objects you want to keep
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
 # erode(src, kernel, iterations=1)
-# iterations: Number of iterations (default 1)
-
+# Why iterations: repeating erosion N times is equivalent to eroding with a larger
+# kernel but cheaper to compute — use iterations to tune removal strength incrementally
 eroded_1 = cv2.erode(binary, kernel, iterations=1)
 eroded_2 = cv2.erode(binary, kernel, iterations=2)
 eroded_3 = cv2.erode(binary, kernel, iterations=3)
@@ -263,6 +274,8 @@ cv2.destroyAllWindows()
 ---
 
 ## 4. Dilation - dilate()
+
+Dilation is the dual of erosion: it asks "does the foreground touch any part of this kernel region?" If yes, the pixel is set. This makes it ideal for reconnecting broken strokes and filling small gaps, and it is always paired with erosion (as opening or closing) so the overall object size is preserved.
 
 ### Dilation Operation Principle
 
@@ -366,6 +379,8 @@ plt.show()
 
 ## 5. Opening and Closing - morphologyEx()
 
+Raw erosion shrinks objects permanently; raw dilation expands them. Opening and closing combine both operations so the net effect targets a *specific defect type* (noise dots or holes) while keeping object size approximately the same — this symmetry is why they are preferred over bare erosion/dilation in almost every practical pipeline.
+
 ### Opening
 
 ```
@@ -425,18 +440,22 @@ import numpy as np
 img = cv2.imread('binary_image.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 
+# Why (5,5): kernel must be larger than the noise/holes you want to remove;
+# a 5x5 kernel removes features smaller than ~5 pixels in diameter
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 
 # morphologyEx(src, op, kernel, iterations=1)
 # op: Operation type
 
-# Opening: Noise removal
+# Why MORPH_OPEN first: erosion removes small noise dots; the subsequent dilation
+# restores the larger objects to their original size (erode → dilate = opening)
 opening = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
-# Closing: Hole filling
+# Closing: Hole filling (dilate → erode; expands to fill holes, then contracts back)
 closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-# Opening then Closing (Noise removal + Hole filling)
+# Why open before close: opening on the raw image avoids noise dots being "healed"
+# into the object by the closing step — order matters
 clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 clean = cv2.morphologyEx(clean, cv2.MORPH_CLOSE, kernel)
 
@@ -653,16 +672,19 @@ def remove_noise_morphology(binary_img, noise_size=3):
     - binary_img: Binary image
     - noise_size: Maximum size of noise to remove
     """
-    # Kernel size = noise size * 2 + 1
+    # Why noise_size * 2 + 1: the kernel must fully contain the largest noise dot
+    # (radius noise_size → diameter noise_size*2) and be odd for a centered anchor
     kernel_size = noise_size * 2 + 1
+    # Why MORPH_ELLIPSE: circular objects (cells, blobs) are better modeled with a
+    # disk-shaped kernel — avoids introducing rectangular bias at diagonals
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (kernel_size, kernel_size)
     )
 
-    # Opening to remove small noise dots
+    # Opening to remove small noise dots (erode kills noise, dilate restores objects)
     cleaned = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel)
 
-    # Closing to fill small holes
+    # Closing to fill small holes (dilate bridges gaps, erode restores boundaries)
     cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
 
     return cleaned
@@ -686,11 +708,16 @@ def separate_objects(binary_img, erosion_iterations=3):
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
-    # Erosion to shrink objects (break connections)
+    # Why multiple erosion iterations instead of a large kernel: iterating with a
+    # small kernel is cheaper and lets you tune separation strength without rebuilding
+    # the structuring element; each pass peels off one layer from every boundary
     eroded = cv2.erode(binary_img, kernel, iterations=erosion_iterations)
 
-    # Distance transform to find center points (optional)
+    # Distance transform to find center points — the peak of the distance map is
+    # the point farthest from any background pixel, i.e., the object center
     dist_transform = cv2.distanceTransform(eroded, cv2.DIST_L2, 5)
+    # Why 0.5 * max: keeps only the top half of distance values, retaining confident
+    # object cores while discarding ambiguous border regions
     _, sure_fg = cv2.threshold(
         dist_transform, 0.5 * dist_transform.max(), 255, 0
     )

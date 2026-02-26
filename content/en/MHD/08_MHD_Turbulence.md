@@ -464,10 +464,17 @@ k = 2 * np.pi * np.fft.fftfreq(N, d=L/N)
 k[0] = 1e-10  # Avoid division by zero
 
 # Power spectrum: E(k) ~ k^{-5/3}
+# We prescribe the K41 spectrum rather than evolving the Navier-Stokes
+# equations because this gives us a clean test case for structure functions;
+# the goal here is to measure ζ_p, not to simulate the dynamics.
 P_k = k**(-5/3)
 P_k[0] = 0  # Zero mean
 
 # Random phases
+# Assigning uniformly random phases makes the synthetic field statistically
+# homogeneous and isotropic — the same assumption underpinning K41 theory —
+# so deviations of ζ_p from p/3 in our measurement are due to finite-sample
+# noise, not physical intermittency.
 phase = np.exp(2j * np.pi * np.random.rand(N))
 
 # Velocity in Fourier space
@@ -480,6 +487,9 @@ v = np.fft.ifft(v_k).real
 v = v / np.std(v)
 
 # Compute structure functions
+# Logarithmic spacing of lags captures both the inertial range (small ℓ)
+# and the energy-containing scales (large ℓ) — linear spacing would waste
+# most samples in the inertial range where the physics is self-similar.
 lags = np.logspace(np.log10(L/N), np.log10(L/4), 30)
 orders = [1, 2, 3, 4, 5, 6]
 S_p = {p: [] for p in orders}
@@ -491,6 +501,9 @@ for lag in lags:
     delta_v = v[lag_idx:] - v[:-lag_idx]
 
     for p in orders:
+        # Taking absolute value before the p-th power is essential: without
+        # it, odd-order S_p would be zero by symmetry (the field has zero
+        # mean), giving no information about the velocity increment PDF.
         S_p[p].append(np.mean(np.abs(delta_v)**p))
 
 # Convert to arrays
@@ -522,6 +535,10 @@ ax.grid(True, alpha=0.3)
 ax = axes[1]
 
 # Fit power-law to extract exponents
+# A linear fit in log-log space directly gives the scaling exponent ζ_p;
+# deviations of ζ_p from the K41 line p/3 at high p diagnose intermittency
+# because rare intense events (current sheets) contribute disproportionately
+# to high-order moments even when they occupy little volume.
 zeta_p = []
 for p in orders:
     # Fit log(S_p) vs log(ell)
@@ -637,17 +654,31 @@ f_ion = 0.5        # Ion gyrofrequency (spectral break)
 f_electron = 50    # Electron scales
 
 # Energy-containing range: flat or slightly rising
+# The slight positive slope captures the large-scale energy reservoir
+# (solar wind streams, CME-driven structures) that inject energy into
+# the inertial range; the turbulence itself lives at higher frequencies.
 E_energy = np.where(f < f_inertial, 1e2 * (f / f_inertial)**0.5, 0)
 
 # Inertial range: -5/3 slope
+# The Kolmogorov/GS95 -5/3 slope persists over roughly two decades because
+# in this range energy is transferred without dissipation — the "pipeline"
+# between the source at large scales and the sink at ion scales.
 E_inertial = np.where((f >= f_inertial) & (f < f_ion),
                       1e2 * (f / f_inertial)**(-5/3), 0)
 
 # Dissipation range (ion scales): -2.8 slope
+# The steepening to ~-2.8 at ion scales reflects the onset of kinetic
+# damping (ion Landau damping, cyclotron resonance): waves of wavelength
+# λ ~ ρ_i interact resonantly with ions and deposit energy as heat, breaking
+# the self-similar cascade that produced the -5/3 inertial range.
 E_dissipation = np.where((f >= f_ion) & (f < f_electron),
                          1e2 * (f_ion / f_inertial)**(-5/3) * (f / f_ion)**(-2.8), 0)
 
 # Electron dissipation: steeper
+# At electron scales the slope steepens further to ~-4 because electrons
+# also begin to damp the fluctuations; the remaining energy is dissipated
+# as electron heating, which is why the solar wind is observed to heat
+# electrons differently from ions.
 E_electron = np.where(f >= f_electron,
                       1e2 * (f_ion / f_inertial)**(-5/3) * (f_electron / f_ion)**(-2.8) * (f / f_electron)**(-4), 0)
 
@@ -655,6 +686,9 @@ E_electron = np.where(f >= f_electron,
 E_total = E_energy + E_inertial + E_dissipation + E_electron
 
 # Add noise to make it realistic
+# Multiplicative log-normal noise mimics the variance of a real single-point
+# spacecraft measurement: the spectrum is a noisy sample from an ensemble,
+# and the scatter is proportional to the signal (not additive).
 np.random.seed(42)
 E_total *= 10**(np.random.normal(0, 0.1, len(f)))
 
@@ -731,15 +765,27 @@ import matplotlib.pyplot as plt
 k = np.logspace(-1, 2, 200)
 
 # Kolmogorov (hydrodynamic)
+# k^{-5/3} arises from dimensional analysis: in the inertial range the only
+# relevant quantities are ε (energy flux) and k, giving E(k) ~ ε^{2/3} k^{-5/3}.
 E_K41 = k**(-5/3)
 
 # Iroshnikov-Kraichnan (MHD, isotropic)
+# IK assumes isotropic Alfvén wave collisions; each interaction is weakened
+# by the ratio (v_ℓ/v_A)², making the cascade slower and the spectrum
+# shallower (k^{-3/2}).  IK gets the physics partially right but ignores
+# the critical role of anisotropy.
 E_IK = k**(-3/2)
 
 # Goldreich-Sridhar (MHD, anisotropic, perpendicular)
+# GS95 recovers k^{-5/3} in k_⊥ because perpendicular eddies cascade
+# like Kolmogorov while the parallel dynamics are constrained by Alfvén
+# wave propagation (critical balance) — distinguishing it from K41 only
+# in the anisotropy (k_∥ ∝ k_⊥^{2/3}), not the perpendicular slope.
 E_GS = k**(-5/3)
 
 # Normalize at k=1
+# Normalizing at k=1 sets a common reference so the plot reveals the slope
+# differences rather than arbitrary amplitude offsets between theories.
 E_K41 = E_K41 / E_K41[np.argmin(np.abs(k - 1))]
 E_IK = E_IK / E_IK[np.argmin(np.abs(k - 1))]
 E_GS = E_GS / E_GS[np.argmin(np.abs(k - 1))]
@@ -785,9 +831,17 @@ import matplotlib.pyplot as plt
 k_perp = np.logspace(-1, 2, 100)
 
 # Goldreich-Sridhar anisotropy relation
+# k_∥ ∝ k_⊥^{2/3} is the signature of critical balance: at each perpendicular
+# scale ℓ_⊥ the Alfvén crossing time τ_A = ℓ_∥/v_A equals the eddy turnover
+# time τ_nl = ℓ_⊥/δv.  Eddies that violate this balance either cascade
+# immediately (τ_nl < τ_A) or become wave-like (τ_nl > τ_A), so the
+# turbulence self-organizes to stay exactly on this anisotropy curve.
 k_para_GS = k_perp**(2/3)
 
 # Isotropic (IK)
+# IK assumes k_∥ = k_⊥ (spherically symmetric energy distribution), which
+# neglects the fact that Alfvén waves carry energy preferentially along B_0;
+# this is the fundamental flaw that causes IK to predict the wrong spectrum.
 k_para_iso = k_perp
 
 # Plot
@@ -809,6 +863,9 @@ ax.grid(True, alpha=0.3, which='both')
 
 # Panel 2: Aspect ratio
 ax = axes[1]
+# k_∥/k_⊥ = k_⊥^{-1/3} → 0 as k_⊥ → ∞, meaning small-scale eddies are
+# highly elongated along B_0 (ℓ_∥ ≫ ℓ_⊥ in real space); this anisotropy
+# makes MHD turbulence fundamentally different from isotropic Navier-Stokes.
 aspect_GS = k_para_GS / k_perp  # = k_perp^{-1/3}
 aspect_iso = np.ones_like(k_perp)
 

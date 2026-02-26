@@ -13,16 +13,19 @@ One of Claude Code's most powerful capabilities is launching **subagents** — s
 - Lesson 03: CLAUDE.md and Project Setup
 - Basic understanding of context windows and token limits
 
-**Learning Objectives**:
-- Understand what subagents are and how they differ from the main Claude Code session
-- Explain context isolation and why it matters for complex tasks
-- Distinguish between the three built-in subagent types (Explore, Plan, General-Purpose)
-- Use the Task tool to launch subagents with appropriate parameters
-- Run multiple subagents in parallel for independent tasks
-- Use background agents and retrieve their output
-- Create custom agent definitions using the /agents command
-- Write effective YAML configurations for custom agents
-- Decide when to use subagents vs. doing work directly in the main session
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand what subagents are and how they differ from the main Claude Code session
+2. Explain context isolation and why it matters for complex tasks
+3. Distinguish between the three built-in subagent types (Explore, Plan, General-Purpose)
+4. Use the Task tool to launch subagents with appropriate parameters
+5. Run multiple subagents in parallel for independent tasks
+6. Use background agents and retrieve their output
+7. Create custom agent definitions using the /agents command
+8. Write effective YAML configurations for custom agents
+9. Decide when to use subagents vs. doing work directly in the main session
 
 ---
 

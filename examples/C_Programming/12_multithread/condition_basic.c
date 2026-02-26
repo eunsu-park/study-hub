@@ -14,8 +14,13 @@ void* waiter(void* arg) {
 
     pthread_mutex_lock(&mutex);
 
+    // Why: "while (!ready)" instead of "if (!ready)" guards against spurious
+    // wakeups and lost signals — the condition must be re-verified after each return
     while (!ready) {  // 조건이 false인 동안 대기
         printf("[대기자 %d] 조건 대기 중...\n", id);
+        // Why: cond_wait atomically releases the mutex and puts the thread to sleep —
+        // this prevents the "missed signal" bug where the signal fires between
+        // unlocking and sleeping
         pthread_cond_wait(&cond, &mutex);  // 대기 (뮤텍스 해제됨)
     }
     // pthread_cond_wait에서 깨어나면 뮤텍스 다시 획득됨
@@ -31,6 +36,9 @@ void* signaler(void* arg) {
 
     sleep(2);  // 2초 대기
 
+    // Why: modifying the shared flag (ready) and signaling must both happen under
+    // the same mutex — otherwise a waiter might check ready between the set and
+    // the signal, see false, and sleep forever
     pthread_mutex_lock(&mutex);
     ready = true;
     printf("[신호자] 조건 설정 완료. 신호 전송!\n");

@@ -515,18 +515,34 @@ class ParticleTracer:
         """
         q_over_m = self.q / self.m
 
-        # Half electric push
+        # Half electric push: apply E acceleration for dt/2 before the rotation.
+        # Splitting E and B this way isolates the purely rotational magnetic step,
+        # which lets us handle the stiff B-field term exactly without any
+        # stability constraint on dt (unlike a naive Euler step for the full force).
         v_minus = self.v + 0.5 * q_over_m * E * dt
 
-        # Magnetic rotation
+        # Construct the rotation vectors t and s for the magnetic half-step.
+        # t = (q/m) * B * (dt/2) is the half-angle of rotation in the plane
+        # perpendicular to B. The Cayley-Klein (tan half-angle) parameterization
+        # is chosen because it maps exactly onto a unit-magnitude rotation:
+        # |v_plus| == |v_minus| is guaranteed algebraically, not just
+        # approximately, regardless of how large |t| is. Naive cross-product
+        # rotation (v += v x omega * dt) would shrink or grow |v| by (1 ± |t|^2).
         t = 0.5 * q_over_m * B * dt
         t_mag_sq = np.dot(t, t)
+        # s = 2t / (1 + |t|^2) is the second half of the Cayley-Klein map.
+        # Together, v_prime = v + v x t and v_plus = v_minus + v_prime x s
+        # implement an exact rotation by angle 2*arctan(|t|) around B.
         s = 2 * t / (1 + t_mag_sq)
 
         v_prime = v_minus + np.cross(v_minus, t)
         v_plus = v_minus + np.cross(v_prime, s)
 
-        # Half electric push
+        # Second half electric push: the symmetric half-step structure (E/2 →
+        # rotate → E/2) makes the algorithm time-reversible (replacing dt → -dt
+        # and reversing v recovers the initial state exactly). Time-reversibility
+        # is what prevents the secular energy drift that plagues one-sided methods
+        # like the simple Euler integrator over many gyroperiods.
         self.v = v_plus + 0.5 * q_over_m * E * dt
 
         # Position update
@@ -549,6 +565,10 @@ class ParticleTracer:
         """
         t = 0.0
         while t < t_max:
+            # Re-evaluate fields at the current position each step to support
+            # spatially and temporally varying fields (non-uniform B, oscillating E).
+            # For uniform static fields, this is redundant but keeps the interface
+            # general without a significant performance cost.
             E = E_func(self.x, t)
             B = B_func(self.x, t)
 
@@ -556,9 +576,13 @@ class ParticleTracer:
 
             t += dt
             self.t_history.append(t)
+            # Store copies rather than references so that subsequent in-place
+            # updates to self.x and self.v do not overwrite the recorded history.
             self.x_history.append(self.x.copy())
             self.v_history.append(self.v.copy())
 
+        # Convert to arrays only at the end to avoid O(N^2) memory reallocation
+        # that would occur if we appended rows to a numpy array inside the loop.
         self.x_history = np.array(self.x_history)
         self.v_history = np.array(self.v_history)
         self.t_history = np.array(self.t_history)
@@ -568,12 +592,16 @@ class ParticleTracer:
 def example_gyration():
     """Pure gyration in uniform magnetic field."""
 
-    # Magnetic field: 0.1 T in z-direction
+    # B in the z-direction with E = 0: the simplest setup that produces pure
+    # circular (gyro) motion without any drift. Choosing B along z lets us
+    # directly read off the gyration in the xy-plane in the trajectory plot.
     B0 = 0.1  # Tesla
     B_func = lambda x, t: np.array([0, 0, B0])
     E_func = lambda x, t: np.array([0, 0, 0])
 
-    # Electron with perpendicular velocity
+    # Initial velocity purely in x so that the initial Larmor radius is r_L = v_x/omega_c,
+    # making it trivial to verify against the analytic formula without resolving
+    # a vector decomposition into parallel and perpendicular components.
     v_perp = 1e6  # m/s
     x0 = [0, 0, 0]
     v0 = [v_perp, 0, 0]
@@ -777,6 +805,12 @@ def validate_energy_conservation():
     B0 = 1.0
     v0 = 1e6
 
+    # Three configs test different energy-conservation scenarios:
+    # "B only" — total KE must be strictly constant (B does no work);
+    # "E⊥ + B" — E×B drift does no work, so KE is again conserved;
+    # "E∥ + B" — E accelerates along B, so KE grows while PE decreases;
+    # tracking all three reveals which parts of the Boris algorithm preserve
+    # which conservation laws, and demonstrates where naive integrators fail.
     configs = [
         ("B only", lambda x, t: np.array([0, 0, 0]),
                     lambda x, t: np.array([0, 0, B0])),
@@ -792,13 +826,19 @@ def validate_energy_conservation():
         electron = ParticleTracer(q=-e, m=m_e, x0=[0, 0, 0], v0=[v0, 0, 0])
 
         T_gyro = 2 * np.pi * m_e / (e * B0)
+        # dt = T_gyro / 100 is a commonly used rule of thumb: 100 steps per
+        # gyroperiod keeps the Boris rotation small enough that the discrete
+        # orbit closely tracks the analytic circle, while still being 10x
+        # coarser than what an explicit Euler integrator would require.
         dt = T_gyro / 100
         electron.trace(E_func, B_func, t_max=10*T_gyro, dt=dt)
 
         # Compute kinetic energy
         KE = 0.5 * m_e * np.sum(electron.v_history**2, axis=1)
 
-        # Potential energy (for E∥ case)
+        # For E∥, add electrostatic potential energy so the conserved quantity
+        # is the total mechanical energy KE + PE, not just KE. Omitting PE in
+        # this case would show a growing KE and falsely suggest non-conservation.
         if name == "E∥ + B":
             PE = -(-e) * 1e3 * electron.x_history[:, 2]
             total_E = KE + PE
@@ -814,6 +854,9 @@ def validate_energy_conservation():
         ax.set_ylabel('Normalized Total Energy', fontsize=11)
         ax.set_title(name, fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
+        # y-limits ±0.001 reveal sub-0.1% energy drift that distinguishes
+        # the Boris algorithm's near-perfect conservation from methods that
+        # accumulate secular errors.
         ax.set_ylim(0.999, 1.001)
 
     plt.tight_layout()

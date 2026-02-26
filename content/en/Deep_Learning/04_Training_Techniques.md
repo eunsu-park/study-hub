@@ -37,6 +37,8 @@ W(t+1) = W(t) - η × ∇L
 
 ## 2. Momentum
 
+Think of a ball rolling down a hilly landscape. Without momentum, the ball moves only based on the local slope — it can get stuck in small dips or oscillate in narrow valleys. With momentum, the ball accumulates velocity from past gradients. This lets it roll through small local minima and dampens oscillations in directions where the gradient keeps changing sign.
+
 Adds inertia to reduce oscillations.
 
 ```
@@ -48,8 +50,11 @@ W(t+1) = W(t) - η × v(t)
 
 ```python
 def sgd_momentum(W, grad, v, lr=0.01, beta=0.9):
+    # Why exponential moving average?  v accumulates past gradients with
+    # exponential decay (beta=0.9 means ~10-step memory).  This smooths out
+    # noisy per-sample gradients and builds up speed in consistent directions.
     v = beta * v + grad          # Update velocity
-    W = W - lr * v               # Update weights
+    W = W - lr * v               # Update weights using smoothed direction
     return W, v
 ```
 
@@ -66,23 +71,34 @@ optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 Combines advantages of Momentum and RMSprop.
 
 ```
-m(t) = β₁ × m(t-1) + (1-β₁) × g      # 1st moment
-v(t) = β₂ × v(t-1) + (1-β₂) × g²     # 2nd moment
+m(t) = β₁ × m(t-1) + (1-β₁) × g      # 1st moment (mean of gradients)
+v(t) = β₂ × v(t-1) + (1-β₂) × g²     # 2nd moment (mean of squared gradients)
 m̂ = m / (1 - β₁ᵗ)                    # Bias correction
 v̂ = v / (1 - β₂ᵗ)
 W = W - η × m̂ / (√v̂ + ε)
 ```
 
+**Why bias correction?** Both `m` and `v` are initialized to 0. At step `t=1` with default `β₁=0.9`: `m₁ = 0.9 × 0 + 0.1 × g₁ = 0.1 × g₁`. This underestimates the true gradient mean by a factor of 10. Dividing by `(1 - β₁^t) = (1 - 0.9^1) = 0.1` corrects this: `m̂₁ = 0.1 × g₁ / 0.1 = g₁`. Without this correction, the first few updates would be far too small. The bias vanishes as `t` grows (since `β₁^t → 0`).
+
 ### NumPy Implementation
 
 ```python
 def adam(W, grad, m, v, t, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8):
+    # Why first moment?  m tracks the exponential moving average of gradients —
+    # this is the "momentum" component, smoothing noisy gradient estimates.
     m = beta1 * m + (1 - beta1) * grad
+    # Why second moment?  v tracks the EMA of squared gradients — this estimates
+    # per-parameter gradient variance, giving each weight its own adaptive lr.
     v = beta2 * v + (1 - beta2) * (grad ** 2)
 
+    # Why bias correction?  m and v are initialized to 0, so early estimates
+    # are biased toward zero.  Dividing by (1 - beta^t) exactly cancels this.
     m_hat = m / (1 - beta1 ** t)
     v_hat = v / (1 - beta2 ** t)
 
+    # Why divide by sqrt(v_hat)?  Parameters with large gradient variance get
+    # smaller effective lr (cautious updates), while stable gradients get larger
+    # lr (confident updates).  eps prevents division by zero.
     W = W - lr * m_hat / (np.sqrt(v_hat) + eps)
     return W, m, v
 ```
@@ -96,6 +112,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 ---
 
 ## 4. Learning Rate Scheduling
+
+Why not use a fixed learning rate? A high learning rate enables fast initial progress — the model quickly moves out of bad regions of the loss landscape — but oscillates and overshoots near the optimum. A low learning rate converges smoothly but can be painfully slow in early epochs. Learning rate scheduling gives the best of both worlds: start high for speed, decay over time for precision.
 
 Adjust learning rate during training.
 
@@ -230,6 +248,8 @@ class CNNWithBatchNorm(nn.Module):
 
 ## 7. Weight Decay (L2 Regularization)
 
+Why penalize large weights? Large weights amplify small input variations, making the model overly sensitive to training noise (overfitting). L2 regularization adds `lambda * ||W||^2` to the loss, which pushes all weights proportionally toward zero — a smooth, gentle shrinkage. In contrast, L1 regularization drives some weights to *exactly* zero (useful for feature selection but less common in deep learning). L2 is the default choice because it produces smoother optimization landscapes.
+
 Penalizes weight magnitudes.
 
 ### Formula
@@ -357,6 +377,55 @@ for epoch in range(epochs):
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Adam vs SGD Convergence
+
+Compare Adam and SGD optimizers on a simple regression task.
+
+1. Generate synthetic data: `y = 2x + 1 + noise` with 200 samples.
+2. Train a single linear layer for 200 epochs using both `torch.optim.SGD(lr=0.01)` and `torch.optim.Adam(lr=0.001)`.
+3. Record and plot the training loss curve for each optimizer.
+4. Note how quickly each converges and how stable the loss curve is.
+
+### Exercise 2: Implement Adam from Scratch
+
+Implement the Adam update rule in NumPy without using any optimizer library.
+
+1. Initialize `m=0`, `v=0`, `t=0` for a single parameter `W`.
+2. Simulate 100 gradient steps using random gradients drawn from `N(0, 1)`.
+3. Apply the bias-corrected Adam update at each step.
+4. Compare the final `W` value against `torch.optim.Adam` to verify correctness.
+
+### Exercise 3: Learning Rate Scheduling Comparison
+
+Observe how different schedules affect training dynamics.
+
+1. Train a small MLP on MNIST for 20 epochs using Adam with `lr=0.01`.
+2. Compare three schedulers: no scheduling, `StepLR(step_size=5, gamma=0.5)`, and `CosineAnnealingLR(T_max=20)`.
+3. Plot validation accuracy vs. epoch for all three cases.
+4. Explain why a high initial learning rate combined with decay often outperforms a fixed low rate.
+
+### Exercise 4: Dropout Regularization Effect
+
+Empirically verify that dropout reduces overfitting.
+
+1. Create a small dataset by sampling 500 points from MNIST training data.
+2. Train two identical 3-layer MLPs for 50 epochs — one with `Dropout(0.5)`, one without.
+3. Record both training accuracy and validation accuracy.
+4. Plot the accuracy gap (train - val) for each model. Explain the observed regularization effect.
+
+### Exercise 5: Early Stopping with Model Checkpointing
+
+Extend the `EarlyStopping` class to save the best model checkpoint.
+
+1. Add a `save_path` parameter to `EarlyStopping.__init__`.
+2. When validation loss improves, save the model with `torch.save(model.state_dict(), save_path)`.
+3. After training ends (either by early stop or epoch limit), reload the best checkpoint and evaluate on the test set.
+4. Compare test accuracy using the final checkpoint vs. the best checkpoint. Explain when saving the best model matters most.
 
 ---
 

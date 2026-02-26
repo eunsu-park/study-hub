@@ -440,6 +440,192 @@ attn = softmax(scores) @ V
 
 ---
 
+## Exercises
+
+### Exercise 1: Causal Mask Behavior
+
+For a sequence of length 5, write out the full causal mask matrix (by hand or code). Then explain: given the 3rd token (index 2) in the sequence, which tokens can it attend to and why? What would happen if this mask were absent during autoregressive generation?
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import torch
+
+def create_causal_mask(seq_len):
+    """Lower triangular matrix: 1 = attend, 0 = blocked"""
+    return torch.tril(torch.ones(seq_len, seq_len))
+
+mask = create_causal_mask(5)
+print(mask)
+# tensor([[1., 0., 0., 0., 0.],
+#         [1., 1., 0., 0., 0.],
+#         [1., 1., 1., 0., 0.],
+#         [1., 1., 1., 1., 0.],
+#         [1., 1., 1., 1., 1.]])
+```
+
+**Reading the mask for token at index 2 (3rd token)**:
+- Row 2 is `[1, 1, 1, 0, 0]`
+- It can attend to tokens at positions 0, 1, and 2 (itself and all previous tokens)
+- It **cannot** attend to tokens at positions 3 and 4 (future tokens)
+
+**Effect in the attention computation**:
+```python
+# Positions with mask=0 get -1e9 score before softmax
+scores[mask == 0] = -1e9
+# After softmax, these positions have attention weight ≈ 0
+# So the output vector is a weighted sum of only past+current tokens
+```
+
+**Without the causal mask**:
+- During training: the model could "cheat" by looking at future tokens to predict the next word, making the task trivially easy but the model useless for actual generation.
+- During inference: future tokens don't exist yet (they're being generated one by one), so the model would produce incoherent output or require all tokens to be known upfront.
+
+The causal mask enforces the **autoregressive property**: the prediction of position `t` depends only on positions `0` through `t-1`.
+
+</details>
+
+### Exercise 2: Encoder vs Decoder Architecture Differences
+
+Fill in the following comparison table, and then write one sentence explaining why BERT cannot be used directly for open-ended text generation while GPT cannot be used directly for tasks requiring full bidirectional understanding.
+
+| Feature | BERT (Encoder) | GPT (Decoder) |
+|---------|----------------|---------------|
+| Attention type | ? | ? |
+| Training objective | ? | ? |
+| Typical use cases | ? | ? |
+| Can see future tokens? | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Feature | BERT (Encoder) | GPT (Decoder) |
+|---------|----------------|---------------|
+| Attention type | Bidirectional self-attention | Causal (unidirectional) self-attention |
+| Training objective | MLM + NSP | Next token prediction (CLM) |
+| Typical use cases | Classification, NER, QA, similarity | Text generation, dialogue, completion |
+| Can see future tokens? | Yes (full sequence visible) | No (only past tokens visible) |
+
+**Why BERT cannot generate text**:
+BERT is trained to fill in masked tokens given both left and right context. At inference time, generation requires predicting token `t` before token `t+1` exists, but BERT has no mechanism for autoregressive generation — it expects a complete (masked) input, not a partial one to extend.
+
+**Why GPT cannot do bidirectional tasks well**:
+GPT's causal masking means each token's representation is computed only from past tokens. For tasks like NER or QA where a token's label may depend on future context (e.g., determining if "Washington" is a person or place requires seeing subsequent words), GPT's unidirectional attention is fundamentally limited.
+
+</details>
+
+### Exercise 3: Positional Encoding Properties
+
+The sinusoidal positional encoding uses frequencies based on the formula `PE(pos, 2i) = sin(pos / 10000^(2i/d_model))`. Implement a function to compute this encoding and verify two key properties: (1) different positions produce different encodings, and (2) the relative offset between positions is consistent regardless of the absolute position.
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import torch
+import torch.nn.functional as F
+import math
+
+def sinusoidal_encoding(max_len, d_model):
+    """Compute sinusoidal positional encodings"""
+    pe = torch.zeros(max_len, d_model)
+    position = torch.arange(0, max_len).unsqueeze(1).float()
+    div_term = torch.exp(torch.arange(0, d_model, 2).float() *
+                         (-math.log(10000.0) / d_model))
+
+    pe[:, 0::2] = torch.sin(position * div_term)  # Even dimensions
+    pe[:, 1::2] = torch.cos(position * div_term)  # Odd dimensions
+    return pe
+
+pe = sinusoidal_encoding(max_len=100, d_model=64)
+
+# Property 1: Different positions produce different encodings
+pos_5 = pe[5]
+pos_10 = pe[10]
+pos_50 = pe[50]
+
+sim_5_10 = F.cosine_similarity(pos_5.unsqueeze(0), pos_10.unsqueeze(0)).item()
+sim_5_50 = F.cosine_similarity(pos_5.unsqueeze(0), pos_50.unsqueeze(0)).item()
+print(f"Similarity pos 5 vs 10: {sim_5_10:.4f}")   # < 1.0 (distinct)
+print(f"Similarity pos 5 vs 50: {sim_5_50:.4f}")   # Even less similar (more distant)
+
+# Property 2: Consistent relative offset
+# The dot product pe[pos] · pe[pos+k] should be similar for any pos, given same k
+offset = 5
+dots = []
+for pos in [0, 10, 20, 50]:
+    dot = (pe[pos] * pe[pos + offset]).sum().item()
+    dots.append(dot)
+    print(f"Dot product pe[{pos}] · pe[{pos+offset}] = {dot:.4f}")
+
+# All values should be approximately the same
+print(f"Std of dot products: {torch.tensor(dots).std():.4f}")  # Should be small
+```
+
+**Key properties**:
+1. Each position gets a unique encoding vector (verified by cosine similarities < 1.0).
+2. The dot product `pe[pos] · pe[pos+k]` is approximately constant for fixed offset `k`, regardless of absolute `pos`. This allows the model to learn relative position patterns that generalize across positions.
+
+These properties make sinusoidal encodings suitable for sequences of any length, even lengths not seen during training — a key advantage over learned positional embeddings.
+
+</details>
+
+### Exercise 4: Weight Tying in Language Models
+
+In the `GPTModel` implementation, there is the line `self.head.weight = self.token_embedding.weight`. Explain what "weight tying" means in this context, why it is done, and what the practical benefits are.
+
+<details>
+<summary>Show Answer</summary>
+
+**What weight tying means**:
+
+The output projection layer (`self.head`) maps from the hidden dimension back to vocabulary size to produce logits for next-token prediction. The token embedding matrix maps from vocabulary indices to the hidden dimension. Weight tying sets these two matrices to be literally the same object in memory:
+
+```python
+# Without weight tying: two separate matrices
+# embedding: (vocab_size, d_model)  →  maps token_id → vector
+# head:      (d_model, vocab_size)  →  maps vector → logit per token
+
+# With weight tying: they share the same data
+self.head.weight = self.token_embedding.weight
+# head.weight is embedding.weight.T effectively
+# (PyTorch linear uses W @ x, so the weight shape is (out, in) = (vocab, d_model))
+# This means: input embedding and output embedding are the same matrix
+```
+
+**Why it is done**:
+
+There is an elegant symmetry: if a word's embedding vector is close to the hidden state `h`, then the model should assign high probability to that word as the next token. The input embedding and the output projection matrix are performing inverse operations on the same semantic space.
+
+**Practical benefits**:
+
+1. **Parameter reduction**: Eliminates one `vocab_size × d_model` matrix. For GPT-2 with vocab_size=50,257 and d_model=768, this saves ~38.6M parameters.
+
+2. **Regularization**: Forcing the input and output embeddings to be the same adds an implicit constraint that helps prevent overfitting on the language modeling objective.
+
+3. **Better embedding quality**: The shared matrix receives gradient updates from both the embedding (input) direction and the prediction (output) direction, often resulting in higher-quality word representations.
+
+```python
+# Verify weight tying in practice
+import torch.nn as nn
+
+class TiedModel(nn.Module):
+    def __init__(self, vocab_size=1000, d_model=64):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head.weight = self.embedding.weight  # Tie weights
+
+# Count parameters
+model = TiedModel()
+total_params = sum(p.numel() for p in model.parameters())
+print(f"Total parameters: {total_params}")  # 64,000 (only one copy of the matrix)
+# Without tying: 128,000 parameters (two separate matrices)
+```
+
+</details>
+
 ## Next Steps
 
 Learn BERT's architecture and training methods in detail in [04_BERT_Understanding.md](./04_BERT_Understanding.md).

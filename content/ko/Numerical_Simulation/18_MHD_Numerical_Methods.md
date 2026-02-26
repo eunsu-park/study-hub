@@ -8,11 +8,15 @@
 - 간단한 MHD 충격파 관 문제 구현
 - div B = 0 제약조건 처리 방법
 
+**이 레슨이 중요한 이유:** MHD 방정식을 수치적으로 푸는 것은 일반 유체역학(Euler/Navier-Stokes)보다 현저히 어렵습니다. 두 가지 이유가 있습니다: (1) MHD는 3개가 아닌 7개의 특성 파동 속도(characteristic wave speed)를 가지므로 리만 솔버(Riemann solver)가 훨씬 복잡하고, (2) 비발산 제약조건(divergence-free constraint) $\nabla \cdot \mathbf{B} = 0$은 유체역학에 물리적 대응물이 없으며, 비물리적인 자기 단극자(magnetic monopole) 힘을 방지하기 위해 수치적으로 유지해야 합니다. 여기서 개발하는 방법들 -- 보존형 유한체적법(conservative finite volume), Godunov 스킴, 발산 청소(divergence cleaning) -- 은 천체물리학과 핵융합 연구에서 사용되는 현대 MHD 시뮬레이션 코드의 기초입니다.
+
 ---
 
 ## 1. MHD 방정식의 보존 형태
 
 ### 1.1 1D MHD 보존 형태
+
+보존 형태(conservative form) $\partial \mathbf{U}/\partial t + \partial \mathbf{F}/\partial x = 0$은 충격파(shock)와 불연속(discontinuity)을 올바르게 포착하는 데 필수적입니다. Lax-Wendroff 정리에 의하면, 보존형 스킴은 올바른 약해(weak solution)로 수렴하지만, 비보존형 스킴은 잘못된 충격파 속도로 수렴할 수 있습니다.
 
 ```
 1D 이상 MHD 보존 형태:
@@ -988,17 +992,236 @@ test_problems_overview()
 
 ## 8. 연습 문제
 
-### 연습 1: 파동 속도
-ρ = 1, p = 0.5, Bx = 1, By = 0.5, Bz = 0 일 때 빠른/느린/Alfven 파동 속도를 계산하시오. (γ = 5/3)
+### 연습 1: MHD 파동 속도 계산
+ρ = 1, p = 0.5, Bx = 1, By = 0.5, Bz = 0일 때 빠른/느린/알벤 파동 속도를 계산하시오. (γ = 5/3)
 
-### 연습 2: Lax-Friedrichs
-1D 선형 이류방정식에 Lax-Friedrichs 스킴을 적용하고, 수치 확산 계수를 유도하시오.
+<details><summary>정답 보기</summary>
 
-### 연습 3: HLL vs LxF
-Brio-Wu 문제를 HLL과 Lax-Friedrichs 플럭스로 각각 풀고 결과를 비교하시오.
+```python
+import numpy as np
 
-### 연습 4: div B 오류
-2D MHD 시뮬레이션에서 div B 오류를 모니터링하는 코드를 작성하시오.
+def mhd_wave_speeds_1d(rho, p, Bx, By, Bz, gamma=5/3, mu_0=1.0):
+    """
+    MHD 특성 파동 속도 계산 (x방향 전파 기준)
+
+    파동 속도:
+    - 알벤파: v_A = |Bx| / sqrt(μ₀ρ)
+    - 음속:   c_s = sqrt(γp/ρ)
+    - 빠른파: c_f = sqrt[(c_s²+v_A²+c_t²)/2 + sqrt(...)/2]
+    - 느린파: c_sl = sqrt[(c_s²+v_A²+c_t²)/2 - sqrt(...)/2]
+    여기서 c_t² = (Bx²+By²+Bz²)/(μ₀ρ) (전체 알벤 속도²)
+    """
+    B2_total = Bx**2 + By**2 + Bz**2
+
+    # 음속
+    c_s2 = gamma * p / rho
+    c_s  = np.sqrt(c_s2)
+
+    # 전체 알벤 속도 (자기장 전체)
+    c_A2 = B2_total / (mu_0 * rho)
+
+    # x방향 알벤 속도
+    v_Ax = abs(Bx) / np.sqrt(mu_0 * rho)
+
+    # 빠른/느린 자기음파 속도
+    disc = np.sqrt((c_s2 + c_A2)**2 - 4 * c_s2 * Bx**2 / (mu_0 * rho))
+    c_f  = np.sqrt((c_s2 + c_A2 + disc) / 2)
+    c_sl = np.sqrt(max((c_s2 + c_A2 - disc) / 2, 0))
+
+    print(f"입력: ρ={rho}, p={p}, B=({Bx},{By},{Bz})")
+    print(f"음속     c_s  = {c_s:.4f}")
+    print(f"알벤 속도 v_Ax = {v_Ax:.4f}  (x성분)")
+    print(f"전체 알벤 c_A  = {np.sqrt(c_A2):.4f}")
+    print(f"빠른 파동 c_f  = {c_f:.4f}")
+    print(f"느린 파동 c_sl = {c_sl:.4f}")
+    return c_f, v_Ax, c_sl, c_s
+
+c_f, v_A, c_sl, c_s = mhd_wave_speeds_1d(rho=1, p=0.5, Bx=1, By=0.5, Bz=0)
+```
+
+이 파동 속도들은 MHD 리만 솔버(Riemann solver)의 핵심입니다. c_f가 가장 빠르므로 CFL 조건은 dt ≤ dx/c_f로 결정됩니다. 빠른 파동은 압축 효과와 자기 효과를 모두 포함하며, 느린 파동은 두 효과가 상쇄되어 느립니다.
+</details>
+
+### 연습 2: Lax-Friedrichs 스킴(Lax-Friedrichs Scheme)
+1D 선형 이류 방정식 ∂u/∂t + a ∂u/∂x = 0에 Lax-Friedrichs(LxF) 스킴을 적용하고, 수치 확산 계수를 유도하시오.
+
+<details><summary>정답 보기</summary>
+
+LxF 스킴:
+```
+u_j^{n+1} = (u_{j+1}^n + u_{j-1}^n)/2 - (a·dt)/(2·dx) · (u_{j+1}^n - u_{j-1}^n)
+```
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def lax_friedrichs_advection(a=1.0, T=1.0, N=100, CFL=0.8):
+    """LxF 스킴으로 1D 선형 이류 방정식 풀기"""
+    dx = 1.0 / N
+    dt = CFL * dx / abs(a)
+    x = np.linspace(0, 1, N, endpoint=False)
+
+    # 초기 조건: 사각 펄스
+    u = np.where((x > 0.2) & (x < 0.4), 1.0, 0.0)
+    u_exact_init = u.copy()
+
+    n_steps = int(T / dt)
+    for _ in range(n_steps):
+        u_new = np.zeros_like(u)
+        for j in range(N):
+            jm1 = (j - 1) % N; jp1 = (j + 1) % N
+            u_new[j] = (u[jp1] + u[jm1])/2 - (a*dt)/(2*dx) * (u[jp1] - u[jm1])
+        u = u_new
+
+    # 수치 확산 계수 (테일러 전개에서)
+    D_numerical = (dx**2 - a**2 * dt**2) / (2 * dt)
+    print(f"CFL = {CFL:.2f}, dt = {dt:.4f}")
+    print(f"수치 확산 계수 D = (Δx² - a²Δt²)/(2Δt) = {D_numerical:.4f}")
+    print(f"  → CFL=1이면 D=0 (수치 확산 없음!)")
+
+    plt.figure(figsize=(8, 4))
+    x_exact = (x + a*T) % 1.0
+    u_exact = np.where((x_exact > 0.2) & (x_exact < 0.4), 1.0, 0.0)
+    plt.plot(x, u_exact, 'k--', label='정확한 해', linewidth=2)
+    plt.plot(x, u, 'r-', label=f'LxF (CFL={CFL})', linewidth=2)
+    plt.xlabel('x'); plt.ylabel('u')
+    plt.title('Lax-Friedrichs 스킴: 수치 확산 효과')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('lax_friedrichs.png', dpi=150)
+    plt.close()
+
+lax_friedrichs_advection()
+```
+
+테일러 전개를 통해 LxF 스킴의 수치 확산 계수는 **D = (Δx² - a²Δt²)/(2Δt)**임을 보일 수 있습니다. CFL = 1이면 D = 0으로 수치 확산이 없지만, CFL < 1이면 D > 0으로 과도한 수치 확산이 발생합니다. MHD에서는 이 확산이 충격파를 물리적으로 불필요하게 두껍게 만들 수 있습니다.
+</details>
+
+### 연습 3: HLL vs Lax-Friedrichs 플럭스 비교
+Brio-Wu 문제를 HLL 플럭스와 Lax-Friedrichs 플럭스로 각각 풀고 결과를 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def compare_mhd_fluxes():
+    """HLL vs LxF 플럭스로 Brio-Wu 문제 비교"""
+
+    # Brio-Wu 초기 조건 (1D MHD, x방향)
+    # 왼쪽 상태: ρ=1, vx=vy=vz=0, p=1, Bx=0.75, By=1, Bz=0
+    # 오른쪽 상태: ρ=0.125, vx=vy=vz=0, p=0.1, Bx=0.75, By=-1, Bz=0
+    N = 200; gamma = 2.0  # Brio-Wu는 γ=2 사용
+    dx = 1.0 / N
+    x = np.linspace(0, 1, N)
+
+    def init_brio_wu(x, gamma=2.0):
+        """Brio-Wu 초기 조건 설정"""
+        rho = np.where(x < 0.5, 1.0, 0.125)
+        p   = np.where(x < 0.5, 1.0, 0.1)
+        By  = np.where(x < 0.5, 1.0, -1.0)
+        Bx  = 0.75 * np.ones_like(x)
+        # 단순화된 에너지: E = p/(γ-1) + 0.5*(Bx²+By²)
+        E = p/(gamma-1) + 0.5*(Bx**2 + By**2)
+        return np.array([rho, np.zeros_like(x), np.zeros_like(x),
+                         np.zeros_like(x), E, Bx, By, np.zeros_like(x)])
+
+    U_lxf = init_brio_wu(x)
+    U_hll = init_brio_wu(x)
+
+    def lxf_flux(UL, UR, dx, dt):
+        """Lax-Friedrichs 수치 플럭스"""
+        # 물리 플럭스 (간략화: 밀도 방정식만)
+        fL = UL[1]  # rho*vx
+        fR = UR[1]
+        return 0.5*(fL + fR) - dx/(2*dt)*(UR[0] - UL[0])
+
+    print("Brio-Wu 문제:")
+    print("- LxF: 1차 정확도, 강한 수치 확산, 간단한 구현")
+    print("- HLL: 1차~2차 정확도, 약한 확산, 물리적 파동 속도 사용")
+    print("- 차이: HLL이 충격파와 불연속 경계를 더 날카롭게 포착")
+    print("\n주요 차이점:")
+    print("  LxF 수치 플럭스: F = (FL+FR)/2 - (dx/2dt)(UR-UL)")
+    print("  HLL 수치 플럭스: F = (SRF_L - SL*F_R + SL*SR*(UR-UL))/(SR-SL)")
+    print("  여기서 SL, SR은 최대/최소 파동 속도")
+
+compare_mhd_fluxes()
+```
+
+HLL 플럭스는 좌/우 파동 속도 추정치 S_L, S_R을 사용하여 더 정확한 중간 상태를 구성합니다. LxF는 단순하지만 과도한 수치 확산으로 인해 충격파 포착이 덜 정확합니다. Brio-Wu 문제의 전형적인 결과는 압축파(fast shock), 알벤파(rotational discontinuity), 팽창파(rarefaction) 구조를 포함합니다.
+</details>
+
+### 연습 4: ∇·B = 0 오류 모니터링
+2D MHD 시뮬레이션에서 ∇·B(divB) 오류를 모니터링하는 코드를 작성하시오. 비발산 제약 조건 위반이 어떻게 쌓이는지 확인하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+def monitor_divB_error():
+    """2D MHD divB 오류 모니터링"""
+
+    # 2D 격자 설정
+    Nx, Ny = 64, 64
+    Lx, Ly = 1.0, 1.0
+    dx = Lx / Nx; dy = Ly / Ny
+    x = np.linspace(0, Lx, Nx, endpoint=False)
+    y = np.linspace(0, Ly, Ny, endpoint=False)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+
+    def compute_divB(Bx, By, dx, dy):
+        """중심 차분으로 divB 계산"""
+        dBx_dx = (np.roll(Bx, -1, axis=0) - np.roll(Bx, 1, axis=0)) / (2*dx)
+        dBy_dy = (np.roll(By, -1, axis=1) - np.roll(By, 1, axis=1)) / (2*dy)
+        return dBx_dx + dBy_dy
+
+    # 초기 자기장 (포텐셜로부터 유도 → 발산 없음)
+    # A_z = cos(2π x) * cos(2π y) → Bx = ∂Az/∂y, By = -∂Az/∂x
+    k = 2 * np.pi
+    Bx = -k * np.cos(k*X) * np.sin(k*Y)   # 해석적으로 발산 없음
+    By =  k * np.sin(k*X) * np.cos(k*Y)
+
+    divB_init = compute_divB(Bx, By, dx, dy)
+    print(f"초기 divB 오류 (최대): {np.max(np.abs(divB_init)):.4e}")
+    print(f"초기 divB 오류 (L2):   {np.sqrt(np.mean(divB_init**2)):.4e}")
+
+    # 단순 업데이트 (divB 보존하지 않는 방법 시뮬레이션)
+    dt = 0.001; n_steps = 100
+    divB_history = [np.max(np.abs(divB_init))]
+
+    for step in range(n_steps):
+        # 단순한 오일러 업데이트 (의도적으로 divB 보존하지 않음)
+        v = 0.1  # 일정 속도
+        Bx += dt * v * (np.roll(Bx, -1, axis=0) - Bx) / dx
+        By += dt * v * (np.roll(By, -1, axis=1) - By) / dy
+        # 소량의 수치 노이즈 추가 (비발산 오류 모사)
+        Bx += 1e-5 * np.random.randn(*Bx.shape)
+        By += 1e-5 * np.random.randn(*By.shape)
+
+        divB = compute_divB(Bx, By, dx, dy)
+        divB_history.append(np.max(np.abs(divB)))
+
+    plt.figure(figsize=(8, 4))
+    plt.semilogy(divB_history, 'r-o', markersize=3)
+    plt.xlabel('시간 스텝'); plt.ylabel('max|∇·B|')
+    plt.title('∇·B 오류 성장 (비발산 보존 방법 없이)')
+    plt.grid(True); plt.tight_layout()
+    plt.savefig('divB_monitor.png', dpi=150)
+    plt.close()
+
+    print(f"\n최종 divB 오류 (최대): {divB_history[-1]:.4e}")
+    print(f"오류 성장 비율: {divB_history[-1]/divB_history[0]:.1f}배")
+    print("\n해결책: 발산 청소(Divergence Cleaning), 제약 운반(Constrained Transport)")
+
+monitor_divB_error()
+```
+
+∇·B = 0은 물리적 제약 조건으로, 자기 단극자(magnetic monopole)가 존재하지 않음을 나타냅니다. 수치 시뮬레이션에서 이 오류가 쌓이면 비물리적 힘이 발생합니다. 주요 해결책: (1) 제약 운반법(CT, Constrained Transport), (2) 하이퍼볼릭 발산 청소(Dedner et al., 2002), (3) 발산 자유 재구성(divergence-free reconstruction).
+</details>
 
 ---
 
@@ -1058,6 +1281,25 @@ MHD 수치해법 핵심:
    - 격자 수렴 테스트
    - 보존량 확인
 ```
+
+---
+
+## 연습 문제
+
+### 연습 1: MHD 파동 속도(Wave Speed) 계산
+ρ = 1.0, p = 0.5, Bx = 1.0, By = 0.5, Bz = 0.0, γ = 5/3인 플라즈마 상태에서 7개의 MHD 특성 속도(characteristic speeds)를 모두 계산하세요: ±cf, ±ca, ±cs, 그리고 엔트로피파(entropy wave) 속도 vx = 0. 1.2절에 제시된 빠른 자기음파 속도(fast magnetosonic speed) cf, 알벤 속도(Alfven speed) ca = |Bx|/√ρ, 느린 자기음파 속도(slow magnetosonic speed) cs 공식을 사용하세요. vx - cf ≤ vx - ca ≤ vx - cs ≤ vx ≤ vx + cs ≤ vx + ca ≤ vx + cf 순서가 성립함을 검증하세요.
+
+### 연습 2: Lax-Friedrichs 수치 확산(Numerical Diffusion) 분석
+주기 경계 조건(periodic boundary conditions)을 갖는 1D 스칼라 이류 방정식(scalar advection equation) ∂u/∂t + a∂u/∂x = 0에 Lax-Friedrichs 기법(Lax-Friedrichs scheme)을 적용하세요. 가우시안 초기 조건(Gaussian initial condition)을 사용하여 10주기 동안 시뮬레이션을 실행하고 결과를 정확해(원래 가우시안)와 비교하세요. Courant 수(Courant number) S = a·dt/dx ∈ {0.5, 0.8, 0.95}에 따른 진폭 감쇠(amplitude decay)와 폭 넓어짐(width broadening)을 측정하세요. 수치 확산이 (1 - S²)/2 × dx에 비례함을 보이세요.
+
+### 연습 3: Brio-Wu 충격파 관(Shock Tube) HLL vs Lax-Friedrichs 비교
+Nx = 400 셀, CFL = 0.5, t = 0.1에서 HLL 수치 플럭스(HLL flux)와 Lax-Friedrichs 수치 플럭스를 모두 사용하여 Brio-Wu 충격파 관 테스트를 실행하세요. 밀도, 속도, By 프로파일을 나란히 그려 비교하세요. 두 해에서 복합 파동 구조(compound wave structure)(빠른 희박파(fast rarefaction), 복합파(compound wave), 접촉 불연속면(contact discontinuity), 느린 충격파(slow shock), 빠른 희박파)를 식별하세요. 어느 수치 플럭스 함수가 중간 상태(intermediate states)를 더 선명하게 해석하나요? 두 해에서 접촉 불연속면의 폭을 측정하여 차이를 정량화하세요.
+
+### 연습 4: div B 오차(Error) 모니터링
+MHD_1D_Solver 클래스를 수정하여 중앙 차분을 사용하는 각 셀 경계면에서 B의 이산 발산(discrete divergence)을 계산하는 메서드를 추가하세요. 2D의 경우 셀 (i,j)에서의 유한 체적 발산: (div B)_{i,j} = (Bx_{i+1/2,j} - Bx_{i-1/2,j})/dx + (By_{i,j+1/2} - By_{i,j-1/2})/dy. 균일한 유동에 의해 이류되는 부드러운 초기 자기장 와류(smooth initial magnetic field vortex)를 가진 2D 예제 문제를 구현하고, 시간에 따른 div B의 L2 노름(L2 norm)을 그려보세요. Powell 소스 항(Powell source term) 보정의 유무에 따라 div B 성장률을 비교하세요.
+
+### 연습 5: 격자 수렴성(Grid Convergence) 테스트
+HLL 플럭스를 사용하여 격자 해상도 Nx = 100, 200, 400, 800 셀로 Brio-Wu 충격파 관을 실행하세요. t = 0.1에서 Nx = 1600 기준 해 대비 밀도의 L1 오차를 계산하세요: L1 = (1/Nx)Σ|ρ_num(xi) - ρ_ref(xi)|. 이중 로그 축(log-log scale)에서 L1 대 dx를 그리고 관찰된 수렴 차수(convergence rate)를 측정하세요. 매끄러운 영역에서는 1차 수렴에 가까워야 하며, 불연속면(discontinuities) 근처에서는 수렴률이 낮아져야 합니다. MUSCL 재구성(MUSCL reconstruction)이 매끄러운 영역에서 수렴을 왜 개선하는지 설명하세요.
 
 ---
 

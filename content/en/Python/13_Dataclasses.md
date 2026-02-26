@@ -1,11 +1,22 @@
 # 13. Dataclasses
 
+**Previous**: [Packaging & Distribution](./12_Packaging_and_Distribution.md) | **Next**: [Pattern Matching](./14_Pattern_Matching.md)
+
 ## Learning Objectives
-- Understand the purpose and advantages of the dataclasses module
-- Master @dataclass decorator and options
-- Use field() function for advanced field configuration
-- Apply advanced features like inheritance, immutability, and slots
-- Understand comparison with Pydantic and selection criteria
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of the `dataclasses` module and the boilerplate it eliminates compared to regular classes
+2. Use the `@dataclass` decorator with options such as `order`, `frozen`, `slots`, and `kw_only`
+3. Apply the `field()` function to configure default factories, exclude fields from repr/compare, and attach metadata
+4. Implement `__post_init__` and `InitVar` for computed fields and initialization-only parameters
+5. Use utility functions (`asdict`, `astuple`, `replace`, `fields`) to convert and inspect dataclass instances
+6. Apply dataclass inheritance and composition patterns while avoiding default-value ordering pitfalls
+7. Compare `dataclasses` with Pydantic and identify the appropriate choice for different use cases
+
+---
+
+Python classes that primarily hold data often require a surprising amount of repetitive code: `__init__`, `__repr__`, `__eq__`, and more. The `dataclasses` module, introduced in Python 3.7, generates these methods automatically from type-annotated field declarations, letting you focus on the data itself rather than the plumbing. Understanding dataclasses is essential for writing concise, correct, and maintainable data-oriented code.
 
 ## Table of Contents
 1. [Dataclass Basics](#1-dataclass-basics)
@@ -758,12 +769,12 @@ print(restored)
 
 ---
 
-## Next Steps
-- [14. Pattern Matching](./14_Pattern_Matching.md)
-- [11. Testing and Quality Assurance](./11_Testing_and_Quality.md)
-
 ## References
 - [Python dataclasses Documentation](https://docs.python.org/3/library/dataclasses.html)
 - [PEP 557 - Data Classes](https://peps.python.org/pep-0557/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)
 - [attrs Library](https://www.attrs.org/) (alternative)
+
+---
+
+**Previous**: [Packaging & Distribution](./12_Packaging_and_Distribution.md) | **Next**: [Pattern Matching](./14_Pattern_Matching.md)

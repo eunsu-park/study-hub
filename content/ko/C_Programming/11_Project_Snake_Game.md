@@ -1,12 +1,24 @@
 # 프로젝트 10: 터미널 뱀 게임
 
-터미널에서 동작하는 클래식 뱀 게임을 만들어봅니다.
+**이전**: [프로젝트 8: 해시 테이블](./10_Project_Hash_Table.md) | **다음**: [프로젝트 11: 미니 쉘](./12_Project_Mini_Shell.md)
 
-## 학습 목표
-- 터미널 제어 (ANSI escape codes)
-- 비동기 키보드 입력 처리
-- 게임 루프 구현
-- 타이머와 프레임 관리
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. ANSI 이스케이프 코드(ANSI escape codes)를 사용하여 화면 지우기, 커서 이동, 커서 숨기기/보이기, 색상 텍스트 렌더링을 수행
+2. `termios`를 이용해 터미널을 로우 모드(raw mode)로 구성하여 라인 버퍼링 없이 키 입력 캡처
+3. `VMIN`/`VTIME` 설정과 이스케이프 시퀀스(escape sequence) 파싱을 통한 방향키 비차단(non-blocking) 키보드 입력 구현
+4. `usleep`으로 프레임 레이트를 제어하는 입력-업데이트-렌더 사이클의 게임 루프 설계
+5. 매 프레임마다 머리가 성장하고 꼬리가 줄어드는 연결 리스트를 이용한 뱀 자료구조 구현
+6. 벽 및 뱀 자신의 몸과의 충돌 감지 구현
+7. 로우 ANSI 기반 렌더링과 `ncurses` 라이브러리 방식을 비교하고 장단점 파악
+
+---
+
+게임을 만들다 보면 구조체, 연결 리스트, 동적 메모리, 비트 플래그, 터미널 I/O 등 지금까지 배운 거의 모든 것을 하나의 프로그램으로 통합하게 됩니다. 뱀 게임은 이 목적에 딱 맞는 소재입니다. 규칙이 충분히 단순하여 시스템 프로그래밍의 핵심 도전 과제인 로우 터미널 제어, 비차단 입력, 일정한 프레임 레이트로 실행되어야 하는 타이트한 업데이트-렌더 루프에 집중할 수 있기 때문입니다.
 
 ## 사전 지식
 - 구조체와 포인터
@@ -17,7 +29,7 @@
 
 ## 1단계: ANSI Escape Codes 이해
 
-터미널에서 그래픽을 표현하기 위해 ANSI escape codes를 사용합니다.
+터미널에서 그래픽을 표현하기 위해 ANSI 이스케이프 코드(ANSI escape codes)를 사용합니다.
 
 ### 기본 ANSI 코드
 
@@ -54,13 +66,13 @@ int main(void) {
 
     // 여러 위치에 출력
     MOVE_CURSOR(5, 10);
-    printf(COLOR_RED "빨간색 텍스트" COLOR_RESET);
+    printf(COLOR_RED "Red Text" COLOR_RESET);
 
     MOVE_CURSOR(7, 10);
-    printf(COLOR_GREEN "초록색 텍스트" COLOR_RESET);
+    printf(COLOR_GREEN "Green Text" COLOR_RESET);
 
     MOVE_CURSOR(9, 10);
-    printf(COLOR_BLUE "파란색 텍스트" COLOR_RESET);
+    printf(COLOR_BLUE "Blue Text" COLOR_RESET);
 
     // 박스 그리기
     MOVE_CURSOR(12, 5);
@@ -73,7 +85,7 @@ int main(void) {
     printf("└────────────────────┘");
 
     MOVE_CURSOR(15, 10);
-    printf(COLOR_YELLOW "박스 안의 텍스트" COLOR_RESET);
+    printf(COLOR_YELLOW "Text in Box" COLOR_RESET);
 
     sleep(3);
 
@@ -187,7 +199,7 @@ int main(void) {
     atexit(disable_raw_mode);  // 프로그램 종료시 자동 복원
 
     printf("\033[2J\033[H");  // 화면 지우기
-    printf("방향키 또는 WASD로 이동, Q로 종료\n\n");
+    printf("Move with arrow keys or WASD, Q to quit\n\n");
 
     int x = 10, y = 5;
 
@@ -214,7 +226,7 @@ int main(void) {
         usleep(50000);  // 50ms 대기
     }
 
-    printf("\033[22;1H종료합니다.\n");
+    printf("\033[22;1HExiting.\n");
     return 0;
 }
 ```
@@ -683,10 +695,10 @@ void draw_game(Game* g) {
 
     // 점수
     MOVE(HEIGHT + 1, 1);
-    printf(YELLOW "점수: %d  길이: %d" RESET, g->score, g->length);
+    printf(YELLOW "Score: %d  Length: %d" RESET, g->score, g->length);
 
     MOVE(HEIGHT + 2, 1);
-    printf("조작: ↑↓←→ 또는 WASD, Q: 종료");
+    printf("Controls: ↑↓←→ or WASD, Q: Quit");
 
     fflush(stdout);
 }
@@ -696,10 +708,10 @@ void draw_game_over(Game* g) {
     printf(BOLD RED "GAME OVER!" RESET);
 
     MOVE(HEIGHT / 2 + 1, WIDTH / 2 - 6);
-    printf("최종 점수: %d", g->score);
+    printf("Final Score: %d", g->score);
 
     MOVE(HEIGHT / 2 + 2, WIDTH / 2 - 8);
-    printf("R: 재시작, Q: 종료");
+    printf("R: Restart, Q: Quit");
 
     fflush(stdout);
 }
@@ -744,7 +756,7 @@ int main(void) {
     game_free(game);
 
     MOVE(HEIGHT + 4, 1);
-    printf("게임을 종료합니다.\n");
+    printf("Exiting game.\n");
 
     return 0;
 }
@@ -914,11 +926,11 @@ void game_end(Game* g) {
 
     if (g->score > highscore) {
         MOVE(HEIGHT / 2 + 3, WIDTH / 2 - 8);
-        printf("\033[33m★ 신기록! ★\033[0m");
+        printf("\033[33m★ New Record! ★\033[0m");
         save_highscore(g->score);
     } else {
         MOVE(HEIGHT / 2 + 3, WIDTH / 2 - 8);
-        printf("최고 기록: %d", highscore);
+        printf("High Score: %d", highscore);
     }
 }
 ```
@@ -1150,7 +1162,7 @@ WASD와 방향키로 각각 조작하는 2인 모드를 구현하세요.
 
 ### 연습 4: AI 뱀
 자동으로 음식을 찾아가는 AI 뱀을 추가하세요.
-- 힌트: BFS 또는 간단한 휴리스틱 사용
+- 힌트: BFS 또는 간단한 휴리스틱(heuristic) 사용
 
 ---
 
@@ -1160,9 +1172,9 @@ WASD와 방향키로 각각 조작하는 2인 모드를 구현하세요.
 |------|------|
 | ANSI Escape Codes | 터미널 화면 제어 (커서, 색상) |
 | termios | 터미널 입출력 설정 |
-| Raw 모드 | 버퍼링 없는 즉시 입력 |
-| 게임 루프 | 입력 → 업데이트 → 렌더링 반복 |
-| 프레임 레이트 | usleep으로 속도 조절 |
+| Raw 모드(Raw mode) | 버퍼링 없는 즉시 입력 |
+| 게임 루프(Game loop) | 입력 → 업데이트 → 렌더링 반복 |
+| 프레임 레이트(Frame rate) | usleep으로 속도 조절 |
 | ncurses | 터미널 UI 라이브러리 |
 
 ---
@@ -1170,4 +1182,8 @@ WASD와 방향키로 각각 조작하는 2인 모드를 구현하세요.
 ## 다음 단계
 
 뱀 게임을 완성했다면 다음 프로젝트로 넘어가세요:
-- [프로젝트 11: 미니 쉘](11_프로젝트_미니쉘.md) - 간단한 명령어 쉘 구현
+- [프로젝트 11: 미니 쉘](12_Project_Mini_Shell.md) - 간단한 명령어 쉘 구현
+
+---
+
+**이전**: [프로젝트 8: 해시 테이블](./10_Project_Hash_Table.md) | **다음**: [프로젝트 11: 미니 쉘](./12_Project_Mini_Shell.md)

@@ -1,10 +1,25 @@
 # Parameter Expansion and Variable Attributes ⭐⭐
 
-**Previous**: [01_Shell_Fundamentals.md](./01_Shell_Fundamentals.md) | **Next**: [03_Arrays_and_Data.md](./03_Arrays_and_Data.md)
+**Previous**: [Shell Fundamentals and Execution Environment](./01_Shell_Fundamentals.md) | **Next**: [Arrays and Data Structures](./03_Arrays_and_Data.md)
 
 ---
 
-This lesson explores bash parameter expansion, a powerful feature that allows you to manipulate variables directly in the shell without external tools. We'll cover string operations, default values, variable attributes, and practical patterns.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply string removal operators (`#`, `##`, `%`, `%%`) to extract path components and file extensions
+2. Use search-and-replace expansion (`/`, `//`) for in-place string transformations
+3. Implement substring extraction and length queries without external commands
+4. Configure default, alternate, and error values for unset or empty variables
+5. Apply case conversion operators for portable string normalization
+6. Use indirect variable references (`${!var}`) for dynamic variable lookup
+7. Configure variable attributes with `declare` (integer, readonly, nameref, export)
+8. Combine parameter expansion techniques to build efficient, fork-free text processing
+
+---
+
+Parameter expansion is one of bash's most underused features. Instead of spawning subprocesses for `sed`, `awk`, or `cut` to do simple string manipulation, parameter expansion handles it inline -- making scripts faster and more readable. You need these techniques whenever you parse file paths, process configuration values, validate input, or build strings dynamically in performance-sensitive loops.
 
 ## 1. String Removal Operators
 
@@ -1749,4 +1764,4 @@ is_subpath "/var/www/html" "/var/www/html/../../../../etc/passwd"
 
 ---
 
-**Previous**: [01_Shell_Fundamentals.md](./01_Shell_Fundamentals.md) | **Next**: [03_Arrays_and_Data.md](./03_Arrays_and_Data.md)
+**Previous**: [Shell Fundamentals and Execution Environment](./01_Shell_Fundamentals.md) | **Next**: [Arrays and Data Structures](./03_Arrays_and_Data.md)

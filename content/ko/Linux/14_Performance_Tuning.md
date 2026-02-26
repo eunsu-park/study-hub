@@ -1,10 +1,18 @@
 # 14. Linux 성능 튜닝
 
+**이전**: [Systemd 고급](./13_Systemd_Advanced.md) | **다음**: [컨테이너 내부 구조](./15_Container_Internals.md)
+
 ## 학습 목표
-- 시스템 성능 모니터링 및 분석
-- sysctl을 통한 커널 파라미터 최적화
-- CPU, 메모리, I/O 성능 튜닝
-- perf와 flamegraph를 활용한 프로파일링
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. USE 방법론(USE Methodology)을 적용하여 성능 병목을 체계적으로 식별한다
+2. top, vmstat, mpstat, iostat 등의 도구로 시스템 성능을 모니터링한다
+3. CPU 스케줄링, 거버너(governor) 설정, 프로세스 어피니티(affinity)를 튜닝한다
+4. swappiness와 더티 페이지(dirty page) 비율 등 sysctl 파라미터로 메모리 동작을 최적화한다
+5. 워크로드에 맞는 적절한 I/O 스케줄러를 선택하고 구성한다
+6. 고성능 네트워킹을 위한 TCP/IP 스택 파라미터를 튜닝한다
+7. perf로 애플리케이션을 프로파일링하고 플레임그래프(flamegraph)로 병목을 분석한다
 
 ## 목차
 1. [성능 분석 기초](#1-성능-분석-기초)
@@ -16,6 +24,8 @@
 7. [연습 문제](#7-연습-문제)
 
 ---
+
+느린 서버는 사용자를 답답하게 할 뿐만 아니라 수익 손실, SLA 위반, 그리고 연쇄 장애로 이어질 수 있습니다. 성능 튜닝(Performance Tuning)은 먼저 측정하고, 그 다음 CPU 스케줄링, 메모리 관리, I/O 경로, 네트워크 스택에 대해 정밀하게 조정을 가하는 방법론입니다. 이 기술을 익히면 재부팅 후 막연히 기다리는 엔지니어에서, 정확한 병목을 찾아 자신 있게 해결하는 엔지니어로 성장할 수 있습니다.
 
 ## 1. 성능 분석 기초
 
@@ -604,6 +614,230 @@ cat /proc/sys/fs/file-nr
 
 echo -e "\n=== 네트워크 연결 ==="
 ss -s
+```
+
+---
+
+## 6.6 심화: perf와 플레임그래프 프로파일링(perf and Flamegraph Profiling)
+
+`perf` 도구와 플레임그래프(Flamegraph)는 리눅스에서 CPU 프로파일링의 표준입니다. 앞 섹션에서 기본 명령어를 소개했지만, 이 섹션에서는 원시 프로파일링 데이터를 실질적인 성능 개선 방안으로 전환하는 데 필요한 방법론, 이벤트 유형, 해석 기술을 깊이 다룹니다.
+
+### perf 이벤트 이해
+
+`perf`는 하드웨어 및 소프트웨어 이벤트를 샘플링하거나 카운팅하여 동작합니다. 어떤 이벤트를 사용할지 아는 것이 절반의 싸움입니다.
+
+```bash
+# 현재 시스템에서 사용 가능한 모든 이벤트 목록
+# Why: 커널/CPU에 따라 노출되는 카운터가 다름
+perf list
+
+# 하드웨어 카운터 (PMU 기반, 매우 낮은 오버헤드)
+# - cycles             : 소비된 CPU 클록 사이클
+# - instructions       : 완료된 명령어 수
+# - cache-references   : L3 캐시 조회 횟수
+# - cache-misses       : L3 캐시 미스 (데이터가 캐시에 없음 → RAM에서 가져옴)
+# - branch-misses      : 분기 예측 실패 (파이프라인 지연)
+
+# 소프트웨어 이벤트 (커널 수준)
+# - page-faults        : 디스크/swap에서 메모리 페이지를 가져옴
+# - context-switches   : 프로세스/스레드 컨텍스트 스위치
+# - cpu-migrations     : 프로세스가 CPU 간 이동
+
+# 트레이스포인트(Tracepoint) (상세한 커널 함수 추적)
+# - sched:sched_switch : 스케줄러 컨텍스트 스위치 상세
+# - block:block_rq_issue : 블록 디바이스 I/O 요청
+```
+
+### perf stat: 빠른 성능 요약
+
+```bash
+# 명령어의 상위 수준 성능 프로필 얻기
+# Why: perf stat은 "요약 보고서" 제공 -- 워크로드가
+# CPU 바운드인지, 메모리 바운드인지, 분기 예측 실패가 있는지 파악
+perf stat ./my-program
+
+# 출력 예시와 읽는 방법:
+#  1,234,567,890  cycles              # 총 CPU 사이클
+#  2,345,678,901  instructions        # 1.90 IPC (사이클당 명령어 수)
+#     12,345,678  cache-misses        # cache-references의 5.2%
+#      1,234,567  branch-misses       # branches의 0.8%
+
+# 주목할 핵심 지표:
+# - IPC < 1.0 → 메모리 바운드일 가능성 (CPU가 데이터를 기다리는 중)
+# - IPC > 2.0 → CPU 효율적, 다른 곳에서 병목 찾기
+# - 캐시 미스 비율 > 10% → 데이터 지역성 불량, 구조 재편 고려
+# - 분기 미스 비율 > 5% → 분기 없는(branchless) 알고리즘 고려
+
+# 상세 모드: L1/L2 캐시, TLB 통계 추가
+# Why: -d는 캐시 계층에 대한 더 세밀한 통찰 제공
+perf stat -d ./my-program
+
+# 통계적 신뢰도를 위한 반복 측정
+# Why: 단일 실행은 노이즈가 있을 수 있음; 5회 실행으로 평균 + 표준편차 확인
+perf stat -r 5 ./my-program
+```
+
+### perf record + perf report: 샘플링 워크플로우
+
+```bash
+# 30초 동안 99Hz로 CPU 콜 스택 기록
+# Why -F 99: 100Hz 타이머와의 에일리어싱 회피; 일반적인 모범 사례
+# Why -g: 의미 있는 분석을 위한 콜 그래프(스택 트레이스) 캡처
+# Why -a: 시스템 전체 (모든 CPU, 모든 프로세스)
+perf record -F 99 -a -g -- sleep 30
+
+# 특정 프로세스 대상
+# Why --: perf 인자와 명령어/PID를 분리
+perf record -F 99 -g -p $(pgrep my-program) -- sleep 30
+
+# 기록된 데이터를 대화형으로 분석
+# Why: perf report는 핫 함수를 드릴다운할 수 있는 TUI를 열어줌
+perf report
+
+# 텍스트 기반 출력 (스크립팅이나 원격 세션에 유용)
+# Why --stdio: TUI 없이 stdout에 직접 출력
+perf report --stdio --sort=dso,symbol
+
+# 특정 함수의 호출자 표시
+# Why: 비용이 많이 드는 함수를 누가 호출하는지 추적
+perf report --call-graph=callee --symbol-filter=malloc
+```
+
+### perf top: 실시간 모니터링
+
+```bash
+# 가장 뜨거운(hottest) 함수의 실시간 뷰 (시스템 전체)
+# Why: perf top은 함수 버전의 "top" -- 현재 CPU 사이클이
+# 어디에서 소비되고 있는지 보여줌
+perf top
+
+# 특정 프로세스 모니터링
+perf top -p $(pgrep nginx)
+
+# 라이브 뷰에서 콜 그래프 표시
+# Why -g: 어떤 함수가 뜨거운지뿐만 아니라 누가 호출했는지 확인
+perf top -g
+
+# 특정 이벤트로 필터링 (예: 캐시 미스)
+# Why: 캐시 동작이 불량한 함수를 찾는 데 도움
+perf top -e cache-misses
+```
+
+### 플레임그래프 생성: 전체 파이프라인
+
+Brendan Gregg의 플레임그래프는 스택 트레이스를 대화형 SVG 시각화로 변환합니다. 워크플로우는 3단계 파이프라인입니다:
+
+```
+perf record → perf script → stackcollapse-perf.pl → flamegraph.pl → SVG
+```
+
+```bash
+# 단계 1: FlameGraph 도구 클론 (최초 1회 설정)
+git clone https://github.com/brendangregg/FlameGraph /opt/FlameGraph
+
+# 단계 2: 프로파일링 데이터 기록
+# Why -F 99: 99Hz로 샘플링 (100Hz가 아닌 이유: 타이머와 동기화 방지)
+# Why -a: 전체 시스템 그림을 위해 모든 CPU 대상
+# Why -g: 콜 그래프 필수 -- 없으면 플레임그래프에 스택이 없음
+perf record -F 99 -a -g -- sleep 60
+
+# 단계 3: 바이너리 perf 데이터를 읽을 수 있는 스택 트레이스로 변환
+# Why: perf script가 collapse 도구가 파싱하는 텍스트를 출력
+perf script > /tmp/perf.out
+
+# 단계 4: 스택을 한 줄 형식으로 축약
+# Why: stackcollapse가 동일한 스택을 카운트하여 "stack;stack;func count" 생성
+/opt/FlameGraph/stackcollapse-perf.pl /tmp/perf.out > /tmp/perf.folded
+
+# 단계 5: SVG 플레임그래프 생성
+# Why: flamegraph.pl이 브라우저에서 열 수 있는 대화형 SVG 생성
+/opt/FlameGraph/flamegraph.pl /tmp/perf.folded > /tmp/flamegraph.svg
+
+# 또는 3-5단계를 하나의 파이프라인으로 결합
+perf script | /opt/FlameGraph/stackcollapse-perf.pl | \
+  /opt/FlameGraph/flamegraph.pl > /tmp/flamegraph.svg
+
+# 브라우저에서 열기
+xdg-open /tmp/flamegraph.svg  # 또는: open /tmp/flamegraph.svg (macOS)
+```
+
+### 플레임그래프 읽는 법
+
+플레임그래프는 컴팩트한 시각적 형태로 풍부한 정보를 담고 있습니다:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                    플레임그래프 읽는 법                                │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Y축 (수직): 콜 스택 깊이                                             │
+│    - 아래: 진입점 (예: main, _start)                                  │
+│    - 위: CPU 시간이 실제로 소비되는 리프(leaf) 함수                    │
+│                                                                      │
+│  X축 (수평): 시간이 아님! 알파벳순으로 정렬됨                          │
+│    - 박스의 너비 = 해당 함수의 CPU 시간 비율                           │
+│      (모든 자식 함수 포함)                                             │
+│    - 상단의 넓은 박스 = CPU 핫스팟 (가장 조치가 필요한 부분)           │
+│                                                                      │
+│  색상: 무작위 따뜻한 색상 팔레트 (기본적으로 의미 없음)                │
+│    - 일부 도구는 색상으로 구분: 사용자 vs 커널,                        │
+│      언어 런타임 vs 애플리케이션 코드                                  │
+│                                                                      │
+│  대화형 기능 (브라우저에서 SVG):                                       │
+│    - 박스 클릭 → 해당 서브트리로 확대                                  │
+│    - Ctrl+F → 함수 이름 검색 (일치하는 부분 강조)                      │
+│    - "Reset Zoom" 클릭 → 확대 해제                                    │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 주의할 일반적인 성능 패턴
+
+| 패턴 | 관찰 내용 | 가능한 원인 | 조치 |
+|------|----------|------------|------|
+| **길고 좁은 타워** | 깊은 콜 스택, 얇은 너비 | 재귀 알고리즘 | 반복(iterative) 방식 고려 |
+| **상단의 넓은 평탄 구간** | 단일 함수가 대부분의 CPU 소비 | 핫 루프 또는 비용이 큰 연산 | 알고리즘 또는 자료구조 최적화 |
+| **넓은 `malloc`/`free`** | 메모리 할당이 지배적 | 과도한 힙 할당 | 오브젝트 풀 또는 아레나 할당자 사용 |
+| **넓은 `__GI___libc_read`** | I/O 시스템 콜이 CPU 소비 | I/O 바운드 워크로드 | 버퍼링 추가, 비동기 I/O 사용 |
+| **넓은 `spin_lock`** | 커널 잠금 경합 | 멀티스레드 코드의 잠금 경합 | 임계 구역 축소, 잠금 없는 구조 사용 |
+| **톱니 패턴** | GC/런타임 함수의 주기적 스파이크 | 가비지 컬렉션(Garbage Collection) 일시 정지 | GC 파라미터 튜닝, 할당률 감소 |
+
+### Off-CPU 플레임그래프
+
+표준 플레임그래프는 on-CPU 시간을 보여줍니다. Off-CPU 플레임그래프는 스레드가 **대기하는**(I/O, 잠금, 슬립에 블로킹된) 위치를 보여줍니다. 둘을 함께 보면 완전한 그림을 얻을 수 있습니다.
+
+```bash
+# 스케줄러 이벤트를 기록하여 off-CPU 시간 캡처
+# Why -e sched:sched_switch: 모든 컨텍스트 스위치 캡처
+# 이를 통해 스레드가 무엇에 블로킹되어 있는지 드러남
+perf record -e sched:sched_switch -a -g -- sleep 30
+
+# Off-CPU 플레임그래프 생성 (다른 collapse 스크립트 필요)
+perf script | /opt/FlameGraph/stackcollapse-perf.pl | \
+  /opt/FlameGraph/flamegraph.pl --color=io --title="Off-CPU Flamegraph" \
+  > /tmp/offcpu-flamegraph.svg
+```
+
+### Brendan Gregg의 성능 분석 방법론
+
+Gregg는 무작위 도구 사용 대신 체계적인 접근법을 권장합니다:
+
+```
+1. USE 방법론 (리소스별: CPU, 메모리, 디스크, 네트워크)
+   - 사용률(Utilization) → 포화도(Saturation) → 에러(Errors)
+
+2. 워크로드 특성 분석(Workload Characterization)
+   - 누가 부하를 일으키는가? (perf top, pidstat)
+   - 어떤 유형의 작업인가? (CPU, I/O, 네트워크)
+
+3. 드릴다운 분석(Drill-Down Analysis)
+   - 넓게 시작 (perf stat), 좁혀가기 (perf record → flamegraph)
+   - On-CPU 플레임그래프 → 핫 코드 경로 찾기
+   - Off-CPU 플레임그래프 → 블로킹/대기 찾기
+
+4. 지연 시간 분석(Latency Analysis)
+   - perf trace (strace와 유사하나 오버헤드가 더 낮음)
+   - bpftrace로 커스텀 지연 시간 히스토그램
 ```
 
 ---

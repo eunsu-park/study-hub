@@ -1195,5 +1195,5 @@ Promise.all([
 
 ## 내비게이션
 
-**이전 레슨**: [10_Testing_Fundamentals.md](10_Testing_Fundamentals.md)
-**다음 레슨**: [12_Concurrency_and_Parallelism.md](12_Concurrency_and_Parallelism.md)
+**이전 레슨**: [테스팅 기초(Testing Fundamentals)](10_Testing_Fundamentals.md)
+**다음 레슨**: [동시성 및 병렬성(Concurrency & Parallelism)](12_Concurrency_and_Parallelism.md)

@@ -1,15 +1,18 @@
 # High Availability Cluster
 
+**Previous**: [Cloud Integration](./24_Cloud_Integration.md) | **Next**: [Troubleshooting Guide](./26_Troubleshooting_Guide.md)
+
 ## Learning Objectives
 
-Through this document, you will learn:
+After completing this lesson, you will be able to:
 
-- Concepts of High Availability (HA) clusters
-- Pacemaker and Corosync configuration
-- Storage replication with DRBD
-- Failover and Fencing
-
-**Difficulty**: ⭐⭐⭐⭐⭐ (Expert)
+1. Explain the components of an HA cluster architecture including Corosync, Pacemaker, and DRBD
+2. Set up a two-node cluster using pcs with proper quorum and property configuration
+3. Create and manage Pacemaker resources including virtual IPs, filesystems, and services
+4. Define resource groups, ordering constraints, and colocation constraints for correct failover
+5. Configure DRBD for real-time block-level replication between cluster nodes
+6. Implement STONITH fencing to prevent split-brain scenarios in production
+7. Test failover procedures and monitor cluster health with crm_mon and pcs
 
 ---
 
@@ -24,6 +27,8 @@ Through this document, you will learn:
 7. [Production Cluster Setup](#7-production-cluster-setup)
 
 ---
+
+For critical services like databases, web applications, and file servers, even minutes of downtime can mean lost revenue and broken SLAs. High Availability clustering eliminates single points of failure by running services across multiple nodes that automatically take over when one fails. This lesson covers the complete HA stack -- Corosync for cluster communication, Pacemaker for resource management, DRBD for data replication, and fencing for split-brain prevention -- giving you the skills to build systems that survive hardware failures without manual intervention.
 
 ## 1. High Availability Overview
 
@@ -701,10 +706,6 @@ sudo drbdadm status all
 
 ---
 
-## Next Steps
-
-- [26_Troubleshooting_Guide.md](./26_Troubleshooting_Guide.md) - System problem diagnosis and resolution
-
 ---
 
 ## References
@@ -713,3 +714,7 @@ sudo drbdadm status all
 - [DRBD User's Guide](https://linbit.com/drbd-user-guide/)
 - [Red Hat HA Cluster](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/configuring_and_managing_high_availability_clusters/index)
 - `man pcs`, `man corosync`, `man drbdadm`
+
+---
+
+**Previous**: [Cloud Integration](./24_Cloud_Integration.md) | **Next**: [Troubleshooting Guide](./26_Troubleshooting_Guide.md)

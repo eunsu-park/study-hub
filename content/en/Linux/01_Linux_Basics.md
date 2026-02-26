@@ -1,5 +1,24 @@
 # Linux Basics
 
+**Next**: [Filesystem Navigation](./02_Filesystem_Navigation.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what Linux is and describe its key characteristics
+2. Identify major Linux distributions and their use cases
+3. Distinguish between the terminal, shell, and kernel
+4. Construct commands using the correct syntax of command, options, and arguments
+5. Use the man pages and --help to find information about any command
+6. Execute basic system information commands (whoami, hostname, date, uname)
+7. Navigate command history using history, Ctrl+R, and bang operators
+8. Apply essential keyboard shortcuts for efficient terminal use
+
+---
+
+Linux is the backbone of modern computing infrastructure. From web servers and cloud platforms to smartphones (Android) and supercomputers, Linux powers the vast majority of the systems the world depends on. Understanding Linux is not just a useful skill -- it is a foundational competency for any developer, system administrator, or DevOps engineer. This lesson introduces the core concepts you need to start working confidently in a Linux environment.
+
 ## 1. What is Linux?
 
 Linux is an open-source operating system developed by Linus Torvalds in 1991.
@@ -404,6 +423,4 @@ history
 
 ---
 
-## Next Steps
-
-Learn about Linux directory structure and navigation commands in [02_Filesystem_Navigation.md](./02_Filesystem_Navigation.md)!
+**Next**: [Filesystem Navigation](./02_Filesystem_Navigation.md)

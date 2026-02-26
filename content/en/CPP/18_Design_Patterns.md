@@ -1,10 +1,23 @@
 # 18. C++ Design Patterns
 
+**Previous**: [Advanced C++20](./17_CPP20_Advanced.md) | **Next**: [Project: Student Management System](./19_Project_Student_Management.md)
+
+---
+
 ## Learning Objectives
-- Understand core GoF design patterns
-- Implement patterns using modern C++
-- Master C++-specific idioms like CRTP and PIMPL
-- Learn pattern selection criteria and use cases
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose and classification of GoF design patterns (Creational, Structural, Behavioral)
+2. Implement creational patterns (Singleton, Factory Method, Builder) using modern C++ idioms
+3. Apply structural patterns (Adapter, Decorator, Facade) to compose flexible object hierarchies
+4. Use behavioral patterns (Observer, Strategy, Command, Template Method) to encapsulate varying behavior
+5. Leverage C++-specific idioms including CRTP for static polymorphism and PIMPL for compilation firewalls
+6. Evaluate trade-offs between pattern-based and lambda/function-based approaches in modern C++
+
+---
+
+Design patterns are not academic exercises--they are battle-tested solutions to problems that every non-trivial C++ project encounters. Knowing when a Factory simplifies object creation, when an Observer decouples modules, or when CRTP eliminates virtual-call overhead lets you write architectures that are flexible without being over-engineered. Combined with modern C++ features like smart pointers, lambdas, and templates, these patterns become lighter and more expressive than their textbook forms.
 
 ## Table of Contents
 1. [Design Patterns Overview](#1-design-patterns-overview)
@@ -2062,4 +2075,4 @@ class PluginManager {
 
 ---
 
-[<- Previous: Advanced C++20](17_C++20_Advanced.md) | [Table of Contents](00_Overview.md)
+**Previous**: [Advanced C++20](./17_CPP20_Advanced.md) | **Next**: [Project: Student Management System](./19_Project_Student_Management.md)

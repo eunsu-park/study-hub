@@ -59,6 +59,8 @@ code {
    Flexbox 스타일
    ============================================ */
 
+/* Why: display:flex on a container immediately makes its children flex items, enabling
+   powerful alignment (justify/align) that was nearly impossible with float-based layouts */
 .flex-container {
     display: flex;
     background-color: #ecf0f1;
@@ -157,6 +159,8 @@ code {
     flex-wrap: wrap;
 }
 
+/* Why: flex:1 distributes equal width while flex-direction:column inside each card
+   pushes the footer to the bottom, keeping cards visually aligned regardless of content length */
 .card {
     flex: 1;
     min-width: 200px;
@@ -225,6 +229,8 @@ code {
     height: 60px;
 }
 
+/* Why: The fr unit distributes remaining space proportionally, adapting to container width
+   without fixed pixel calculations - the Grid equivalent of flex-grow */
 /* 기본 Grid */
 .basic-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -252,6 +258,8 @@ code {
     gap: 10px;
 }
 
+/* Why: auto-fill creates empty tracks to reserve space for potential items, while auto-fit
+   collapses empty tracks so existing items stretch - the distinction matters for responsive grids */
 .columns-auto-fill {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 10px;
@@ -295,6 +303,8 @@ code {
     grid-row: 3 / 5;
 }
 
+/* Why: Named grid areas provide a visual ASCII-art layout in the code itself, making
+   complex layouts readable and easy to reorganize via media queries */
 /* grid-template-areas */
 .areas-example {
     grid-template-areas:
@@ -374,6 +384,8 @@ code {
     grid-column: span 2;
 }
 
+/* Why: The dashboard combines named grid areas for the outer layout with a nested grid inside
+   dash-main, demonstrating that Grid layouts can be composed hierarchically */
 /* 대시보드 */
 .dashboard {
     display: grid;

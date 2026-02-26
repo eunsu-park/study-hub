@@ -1,5 +1,17 @@
 # 21. Continued Pre-training
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why continued pre-training is necessary for domain adaptation and how it differs from instruction tuning and standard fine-tuning
+2. Design a continued pre-training pipeline that sequences domain pre-training followed by instruction tuning for a target domain
+3. Identify and mitigate catastrophic forgetting by applying data mixing strategies that blend domain and general-purpose corpora
+4. Implement continued pre-training on a base LLM using large-scale domain data with appropriate learning rate scheduling
+5. Evaluate the impact of continued pre-training by comparing domain-specific benchmarks before and after adaptation
+
+---
+
 ## Overview
 
 Continued Pre-training is a method of further training existing pre-trained models to adapt them to specific domains or tasks. Unlike typical fine-tuning, it performs language modeling on large amounts of domain data.
@@ -662,3 +674,207 @@ class CodeCPT:
 2. Ke et al. (2023). "Continual Pre-training of Language Models"
 3. Ibrahim et al. (2024). "Simple and Scalable Strategies to Continually Pre-train Large Language Models"
 4. Xie et al. (2023). "Efficient Continual Pre-training for Building Domain Specific Large Language Models"
+
+---
+
+## Exercises
+
+### Exercise 1: Continued Pre-training vs. Instruction Tuning
+A biomedical AI company wants to build a model that answers clinician questions about drug interactions. They have two resources: (A) 50GB of PubMed abstracts and clinical trial reports, and (B) 5,000 curated question-answer pairs from expert pharmacologists.
+
+Explain why the company should do both continued pre-training AND instruction tuning rather than either alone. Describe the ideal training pipeline order.
+
+<details>
+<summary>Show Answer</summary>
+
+**Why instruction tuning alone is insufficient**:
+- The base model (e.g., LLaMA-7B) knows very little about drug interactions, rare side effects, drug-drug interaction mechanisms, or pharmacokinetic terminology.
+- 5,000 QA pairs can teach the model to answer in the right format, but they cannot inject the vast factual knowledge needed to answer novel questions correctly.
+- The model would learn to pattern-match the QA format ("Q: What are the side effects of X? A: The side effects of X are...") while hallucinating the actual medical content.
+- Example failure: "What is the CYP3A4 interaction between ketoconazole and midazolam?" — the base model lacks this pharmacological knowledge; 5K QA pairs are insufficient to teach all possible drug pair interactions.
+
+**Why continued pre-training alone is insufficient**:
+- After pre-training on PubMed abstracts, the model understands biomedical language but still behaves as a text completion engine.
+- Asked "What are the contraindications of warfarin?", it might continue: "...warfarin has several documented contraindications, including... (continues with a different paper excerpt)" rather than giving a structured clinical answer.
+- It cannot follow instructions, answer questions concisely, or format responses appropriately for clinical use.
+
+**Ideal pipeline**:
+```
+Base LLM (LLaMA-7B)
+    ↓
+[Phase 1] Continued Pre-training
+    - Data: 50GB PubMed + clinical trials
+    - Objective: Causal LM on domain text
+    - LR: 5e-6 (low, 1/5 of base LR)
+    - Goal: Inject pharmacological knowledge
+    ↓
+Domain-adapted LLM (knows pharmacology)
+    ↓
+[Phase 2] Supervised Fine-tuning (SFT)
+    - Data: 5,000 clinical QA pairs
+    - Objective: Instruction following
+    - LR: 1e-5
+    - Goal: Format responses for clinical use
+    ↓
+Medical Instruction-Following LLM
+    ↓
+[Optional Phase 3] RLHF/DPO
+    - Data: Clinical expert preferences
+    - Goal: Align with clinical best practices
+```
+
+The sequence matters: you can't instruction-tune first (the model has no domain knowledge to apply to instructions) and you can't skip instruction tuning (domain pre-training doesn't teach the model to be helpful).
+
+</details>
+
+### Exercise 2: Catastrophic Forgetting Data Mixing
+During continued pre-training on domain data, catastrophic forgetting can degrade the model's general capabilities. A team trains LLaMA-7B on 50GB of medical data and finds that afterward the model:
+- Improved: Medical QA accuracy +25%
+- Degraded: General reasoning (BBH benchmark) -18%, Coding (HumanEval) -31%
+
+Propose a data mixing strategy to recover the coding and reasoning capabilities while retaining the medical knowledge gain.
+
+<details>
+<summary>Show Answer</summary>
+
+**Analysis of degradation**:
+- **Coding -31%**: Severe degradation suggests Python/code syntax was heavily displaced by medical terminology. The model "forgot" programming patterns.
+- **Reasoning -18%**: Moderate degradation — general reasoning partially displaced but not catastrophic.
+- **Root cause**: The 50GB medical dataset contained nearly zero code or mathematical reasoning. The model's representations were overwritten by medical text patterns.
+
+**Data Mixing Strategy**:
+
+```python
+# Replay-based mixing: blend domain data with general data
+mixing_proportions = {
+    "medical": 0.55,       # Primary target (reduced from 100%)
+    "code": 0.20,          # Recovery: code specifically (matches degradation severity)
+    "general_text": 0.15,  # General reasoning recovery
+    "math": 0.10,          # Supports reasoning capabilities
+}
+# Total: 1.0
+
+# Training data composition per batch:
+# For a 50GB medical corpus:
+# - Medical: 50GB × 0.55 = 27.5GB (still enough for domain adaptation)
+# - Code (e.g., from The Stack): ~18GB
+# - General (e.g., SlimPajama subset): ~14GB
+# - Math (e.g., OpenWebMath): ~9GB
+```
+
+**Key principles**:
+1. **Proportional recovery**: Code gets 20% (vs. reasoning's 15%) because coding degraded more severely (31% vs. 18%).
+2. **Medical still dominant** (55%): Maintains the primary domain adaptation goal.
+3. **Diverse mixing**: Using multiple non-medical sources prevents the model from over-specializing in any single replacement domain.
+4. **Evaluation during training**: Monitor all three benchmarks (medical, coding, reasoning) at regular intervals; stop when coding/reasoning recover to within 5% of baseline while medical performance peaks.
+
+**Expected outcome**: Medical QA: +20% (slight reduction from +25% but still substantial), Coding: -5% (vs. -31% without mixing), Reasoning: -3% (vs. -18% without mixing).
+
+</details>
+
+### Exercise 3: Learning Rate and Data Order Strategy
+A team is continuing pre-training on 10B tokens of financial news data. Explain the rationale for using a much lower learning rate than the original pre-training, and describe how data ordering (curriculum) could improve the final model quality.
+
+<details>
+<summary>Show Answer</summary>
+
+**Lower learning rate rationale**:
+
+During original pre-training, the model trained from random initialization on ~1T+ tokens. High learning rates were appropriate because:
+- Weights started at random values — large updates were needed to build any useful representations.
+- The large dataset provided enough gradient signal to justify aggressive updates.
+
+During continued pre-training:
+- The model already has well-calibrated weights representing excellent general language understanding.
+- High learning rate → large weight updates → catastrophic forgetting of general capabilities (the existing good representations are overwritten).
+- Low learning rate (e.g., 5e-6 vs. original 3e-4) ensures:
+  - New domain knowledge is integrated **on top of** existing representations.
+  - The model makes small, conservative adjustments rather than overwriting existing circuits.
+  - The loss surface for the domain data is explored cautiously around the existing good minimum.
+
+**Warm-up**: Use 3-5% warm-up steps even with low LR — the initial gradient estimates for domain data are noisy and warm-up prevents destabilizing the model early.
+
+**Curriculum learning for financial news**:
+
+```
+Recommended ordering:
+Phase 1: High-quality, clean text (10%)
+   - Well-edited financial reports (10-K, 10-Q filings)
+   - Establishes domain vocabulary
+
+Phase 2: Structured domain data (40%)
+   - Analyst reports, earnings call transcripts
+   - Builds financial reasoning patterns
+
+Phase 3: Diverse domain data (40%)
+   - News articles, press releases, market commentary
+   - Broad coverage of domain language
+
+Phase 4: Noisy/social data (10%)
+   - Reddit/Twitter financial discussions
+   - Slang, abbreviations, informal usage
+```
+
+**Rationale**: Starting with high-quality, formal text establishes clean representations for financial concepts. Adding noisier data later means the model has a stable foundation to build slang/informal mappings on, rather than confusing them from the start. This is similar to how humans learn formal language before slang.
+
+**Cosine LR decay with restarts**: Use cosine schedule that decays to 1/10 of initial LR, optionally with a brief warm restart at the phase boundaries — this helps the model transition between data distributions without destabilization.
+
+</details>
+
+### Exercise 4: Continued Pre-training Evaluation
+After continued pre-training a 7B LLM on legal documents, design a minimal evaluation suite that measures whether the adaptation was successful without regressing general capabilities.
+
+Specify: (A) what metrics to measure, (B) what datasets or tests to use, and (C) a threshold at which you'd consider the training a success.
+
+<details>
+<summary>Show Answer</summary>
+
+**Evaluation Suite Design**:
+
+**A) Metrics to measure**:
+
+Domain-specific metrics:
+1. **Legal NER F1**: Named entity recognition for legal entities (case names, statutes, parties).
+2. **Legal QA accuracy**: Question answering on legal questions (e.g., CUAD dataset — contract clauses).
+3. **Legal document perplexity**: Perplexity on held-out legal text (measures language model quality on domain).
+4. **Citation format accuracy**: Does the model correctly format legal citations (Bluebook style)?
+
+General capability metrics (regression tests):
+5. **BIG-Bench Hard (BBH)**: General reasoning benchmark — 23 challenging reasoning tasks.
+6. **MMLU**: 57-subject knowledge benchmark — general knowledge preservation.
+7. **HellaSwag**: Commonsense reasoning.
+8. **HumanEval** (optional, if coding was in original pretraining): Coding preservation.
+
+**B) Datasets and tests**:
+
+```python
+evaluation_suite = {
+    # Domain-specific
+    "legal_ner": "LexNER or MultiLegalPile NER annotations",
+    "legal_qa": "CUAD (Contract Understanding Atticus Dataset) - 510 contracts",
+    "legal_perplexity": "Held-out 10% of legal pretraining data",
+
+    # General capabilities (baseline from base model)
+    "bbh": "BIG-Bench Hard - 6,511 examples",
+    "mmlu": "MMLU - 14,000+ examples, 57 subjects",
+    "hellaswag": "HellaSwag - 10,000 validation examples",
+}
+```
+
+**C) Success thresholds**:
+
+| Metric | Baseline (pre-CPT) | Target (post-CPT) | Pass/Fail |
+|--------|-------------------|-------------------|-----------|
+| Legal QA accuracy | ~25% (random LLM) | ≥60% | Domain goal |
+| Legal document perplexity | ~40 | ≤15 | Language quality |
+| BBH accuracy | Measured baseline | ≥ baseline - 5% | Regression tolerance |
+| MMLU accuracy | Measured baseline | ≥ baseline - 5% | Regression tolerance |
+| HellaSwag | Measured baseline | ≥ baseline - 3% | Regression tolerance |
+
+**Success condition**: ALL of the following:
+- Legal QA accuracy ≥ 60%
+- BBH regression ≤ 5% (e.g., 45% → 42.75% is acceptable)
+- MMLU regression ≤ 5%
+- If any general capability drops > 8%, rerun with more replay data (increase general data mixing ratio by 10-15%)
+
+</details>

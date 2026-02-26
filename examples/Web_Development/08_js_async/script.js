@@ -52,6 +52,8 @@ function runCallbackHell() {
     log(output, '=== 콜백 지옥 예시 ===', true);
     log(output, '사용자 정보 조회 시작...');
 
+    // Why: Nested callbacks create rightward drift that is hard to read, test, and debug -
+    // this "pyramid of doom" motivates the switch to Promises and async/await
     // 콜백 지옥 (피라미드 형태)
     setTimeout(() => {
         log(output, '1. 사용자 ID 조회 완료: user_123');
@@ -236,6 +238,8 @@ async function runPromiseAll() {
 
     const startTime = Date.now();
 
+    // Why: Creating promises first, then awaiting Promise.all runs tasks concurrently -
+    // if we awaited each sequentially, total time would be 3.3s instead of ~1.5s
     const task1 = delay(1000).then(() => '작업 1 완료');
     const task2 = delay(1500).then(() => '작업 2 완료');
     const task3 = delay(800).then(() => '작업 3 완료');
@@ -313,6 +317,8 @@ async function fetchUsers() {
     try {
         const response = await fetch('https://jsonplaceholder.typicode.com/users?_limit=5');
 
+        // Why: fetch only rejects on network failure, not HTTP errors; checking response.ok
+        // catches 4xx/5xx status codes that would otherwise silently return invalid data
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -407,6 +413,8 @@ async function testErrorHandling() {
     // 패턴 2: 에러 래핑
     log(output, '\n2. 에러 래핑 패턴:');
 
+    // Why: Returning {data, error} tuples instead of throwing makes error handling explicit
+    // at call sites and avoids deeply nested try-catch blocks in calling code
     async function safeFetch(url) {
         try {
             const response = await fetch(url);
@@ -436,6 +444,8 @@ async function testNetworkError() {
     log(output, '존재하지 않는 URL에 요청...\n');
 
     try {
+        // Why: AbortController provides a standard way to cancel fetch requests,
+        // preventing memory leaks and stale responses when the user navigates away or a timeout fires
         // 타임아웃 구현
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -526,6 +536,8 @@ function stopTimer() {
     }
 }
 
+// Why: Debounce delays execution until the user stops triggering events, preventing
+// expensive operations (API calls, DOM updates) from firing on every keystroke or scroll
 // Debounce 구현
 function debounce(func, wait) {
     let timeout;

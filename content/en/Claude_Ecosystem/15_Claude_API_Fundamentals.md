@@ -13,14 +13,17 @@ The Claude API provides programmatic access to Claude models, enabling you to in
 - An Anthropic API key (from console.anthropic.com)
 - Basic familiarity with REST APIs and HTTP
 
-**Learning Objectives**:
-- Set up authentication and client SDKs in Python and TypeScript
-- Construct and send Messages API requests with system prompts
-- Process API responses including content blocks and usage metadata
-- Implement streaming for real-time response delivery
-- Manage tokens effectively (counting, budgeting, optimizing)
-- Handle errors with proper retry logic and exponential backoff
-- Build complete applications using the Claude API
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Set up authentication and client SDKs in Python and TypeScript
+2. Construct and send Messages API requests with system prompts
+3. Process API responses including content blocks and usage metadata
+4. Implement streaming for real-time response delivery
+5. Manage tokens effectively (counting, budgeting, optimizing)
+6. Handle errors with proper retry logic and exponential backoff
+7. Build complete applications using the Claude API
 
 ---
 

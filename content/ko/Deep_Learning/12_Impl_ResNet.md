@@ -1,5 +1,18 @@
 # 05. ResNet
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 깊은 네트워크에서의 성능 저하 문제(Degradation Problem)를 설명하고, 이것이 과적합(Overfitting)이나 기울기 소실(Vanishing Gradient)만으로 귀인될 수 없는 이유를 서술합니다.
+2. 잔차 학습(Residual Learning) 프레임워크 — F(x) + x — 를 공식화하고, 참조되지 않은 매핑보다 잔차 매핑 학습이 왜 더 쉬운지 설명합니다.
+3. 기본 잔차 블록(Basic Residual Block)과 병목 잔차 블록(Bottleneck Residual Block)을 구별하고, 각각이 언제 사용되는지 설명합니다.
+4. PyTorch에서 잔차 블록과 스킵 연결(Skip Connection)을 올바르게 구성하여 ResNet 변형(예: ResNet-50)을 처음부터 구현합니다.
+5. 블록 간에 입력과 출력 차원이 다를 때 차원 일치 스킵 연결(프로젝션 스킵 연결, Projection Shortcut)을 처리합니다.
+6. 정확도, 파라미터 수, 연산 비용 측면에서 ResNet 깊이 변형(ResNet-18, 34, 50, 101, 152)의 트레이드오프를 평가합니다.
+
+---
+
 ## 개요
 
 ResNet(Residual Network)은 2015년 ILSVRC에서 1위를 차지한 혁명적인 모델입니다. Kaiming He 등이 제안한 **Skip Connection (Residual Connection)**을 통해 수백 개 이상의 레이어를 학습할 수 있게 되었습니다.

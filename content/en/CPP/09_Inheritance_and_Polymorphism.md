@@ -1,5 +1,26 @@
 # Inheritance and Polymorphism
 
+**Previous**: [Advanced Classes](./08_Classes_Advanced.md) | **Next**: [STL Containers](./10_STL_Containers.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain inheritance and implement derived classes using `public`, `protected`, and `private` inheritance
+2. Identify the constructor and destructor call order in an inheritance hierarchy
+3. Distinguish between function overriding (without `virtual`) and polymorphic dispatch (with `virtual`)
+4. Apply the `override` and `final` keywords (C++11) to make intent explicit and catch errors at compile time
+5. Design abstract classes using pure virtual functions and implement interface patterns
+6. Explain why base-class destructors should be `virtual` and identify the memory-leak scenario when they are not
+7. Identify the diamond problem in multiple inheritance and resolve it with virtual inheritance
+8. Apply `dynamic_cast` and `typeid` for safe runtime type identification (RTTI)
+
+---
+
+Inheritance and polymorphism are the mechanisms that let you write code against a general interface and have it work seamlessly with any specific implementation. This is the foundation of plugin architectures, GUI frameworks, and game engines -- anywhere you need to add new behavior without rewriting existing code. Understanding how the virtual dispatch table works under the hood will also help you make informed decisions about when polymorphism is the right tool and when simpler alternatives suffice.
+
 ## 1. What is Inheritance?
 
 Inheritance is when a new class (child) inherits properties and methods from an existing class (parent).
@@ -721,6 +742,63 @@ int main() {
 | Abstract class | Contains pure virtual functions |
 | `virtual ~Base()` | Virtual destructor |
 | `dynamic_cast` | Safe downcasting |
+
+---
+
+## Exercises
+
+### Exercise 1: Constructor/Destructor Order
+
+Create a three-level inheritance chain: `Vehicle` → `Car` → `ElectricCar`. Each class should print a message in its constructor and destructor. In `main`, create an `ElectricCar` object on the stack and verify the output order matches your expectations (base first for construction, derived first for destruction). Then change the variable to a `Vehicle*` pointing to a heap-allocated `ElectricCar`, delete it, and observe what changes if `Vehicle`'s destructor is not `virtual`. Explain why.
+
+### Exercise 2: Polymorphic Shape Area Calculator
+
+Design an abstract base class `Shape` with a pure virtual method `double area() const`. Derive at least three concrete classes: `Circle`, `Rectangle`, and `Triangle`. Store all three in a `std::vector<Shape*>`, iterate over it, and print each shape's area using the base-class pointer. Verify that the correct `area()` implementation is called for each object (polymorphic dispatch).
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+class Shape {
+public:
+    virtual double area() const = 0;
+    virtual std::string name() const = 0;
+    virtual ~Shape() = default;
+};
+
+// Implement Circle, Rectangle, Triangle here ...
+
+int main() {
+    std::vector<Shape*> shapes;
+    // Add objects and iterate ...
+    return 0;
+}
+```
+
+### Exercise 3: override and final Safety
+
+Given the following base class, add a derived class `FastLogger` that overrides `log()` using the `override` keyword. Then intentionally introduce a signature mismatch (e.g., change the parameter type) and observe the compiler error. Finally, mark `FastLogger::log()` as `final` and attempt to override it in a third class to see the compile-time error.
+
+```cpp
+class Logger {
+public:
+    virtual void log(const std::string& message) {
+        std::cout << "[LOG] " << message << std::endl;
+    }
+    virtual ~Logger() = default;
+};
+```
+
+Explain in a comment why catching these errors at compile time is preferable to discovering them at runtime.
+
+### Exercise 4: Interface Composition
+
+Define two pure-virtual interfaces: `Drawable` (with `void draw() const`) and `Resizable` (with `void resize(double factor)`). Implement a `Canvas` class that stores a `std::vector<Drawable*>` and calls `draw()` on each element. Then create a `Square` class that implements both interfaces. Add several `Square` objects to a `Canvas`, resize some of them, and draw all of them.
+
+### Exercise 5: Resolving the Diamond Problem
+
+Create the classic diamond hierarchy: `Person` → `Employee`, `Person` → `Student`, `Employee` + `Student` → `WorkingStudent`. The `Person` class should have a `std::string name` member and a `greet()` method. Without virtual inheritance, demonstrate the ambiguity error. Then fix it with `virtual public` inheritance and confirm that `WorkingStudent` can call `greet()` unambiguously.
 
 ---
 

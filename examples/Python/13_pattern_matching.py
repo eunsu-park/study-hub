@@ -109,6 +109,8 @@ print(f"(3, 4): {process_point((3, 4))}")
 section("Guards (if clauses)")
 
 
+# Why: Guards (if clauses) extend pattern matching beyond structural shape — they add
+# runtime conditions that can't be expressed by patterns alone (e.g., value comparisons)
 def categorize_point(point: tuple) -> str:
     """Use guards to add conditions."""
     match point:
@@ -196,6 +198,8 @@ print(f"['create', 'file', 'a.txt', 'b.txt']: {parse_command(['create', 'file', 
 section("Mapping Patterns")
 
 
+# Why: Mapping patterns match on key presence (not exhaustive), so extra keys in the dict
+# are silently ignored — ideal for JSON/API payloads where the full schema isn't controlled
 def handle_event(event: dict) -> str:
     """Match dictionary patterns."""
     match event:
@@ -274,6 +278,8 @@ print(describe_shape(r))
 section("Nested Patterns")
 
 
+# Why: Recursive pattern matching naturally maps to tree-structured data like ASTs,
+# making expression evaluators far more readable than equivalent if/elif chains
 def evaluate(expr: list) -> float:
     """Simple expression evaluator with nested patterns."""
     match expr:
@@ -424,6 +430,8 @@ print(process_json(comment))
 section("State Machine Example")
 
 
+# Why: Matching on (state, event) tuples makes state machine transitions declarative —
+# each case clause is a single transition rule, easy to read and extend without nesting
 def transition(state: str, event: tuple) -> tuple[str, str]:
     """Simple state machine using pattern matching."""
     match (state, event):

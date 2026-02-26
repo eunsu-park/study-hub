@@ -2,9 +2,25 @@
 
 **Difficulty**: ⭐⭐⭐⭐
 
-**Previous**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md) | **Next**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md)
+**Previous**: [Portability and Best Practices](./12_Portability_and_Best_Practices.md) | **Next**: [Project: Task Runner](./14_Project_Task_Runner.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why shell scripts benefit from automated testing and distinguish between unit, integration, end-to-end, and smoke tests
+2. Write Bats test files using `@test` blocks, `setup`/`teardown` hooks, and built-in assertion helpers
+3. Apply mocking and stubbing techniques to isolate tests from external commands and side effects
+4. Practice test-driven development (TDD) by writing failing tests first, then implementing the code to pass them
+5. Implement common testing patterns including temporary file fixtures, environment variable isolation, and output capture
+6. Configure CI pipelines (GitHub Actions, GitLab CI) to run Bats tests automatically on every commit
+7. Generate test reports in TAP and JUnit XML formats for integration with CI dashboards
+
+---
+
+Shell scripts that manage deployments, backups, and infrastructure are often modified under pressure and tested only in production. A single regression in a deployment script can take down a service. Automated testing catches these regressions before they reach production, gives you confidence to refactor aging scripts, and serves as executable documentation of how the script should behave. The Bats framework makes shell script testing as straightforward as testing in any other language.
 
 ## 1. Why Test Shell Scripts?
 
@@ -1127,6 +1143,60 @@ process_data() {
 - Test error handling when any stage fails
 - Verify the final output format
 
+## Exercises
+
+### Exercise 1: Write Your First Bats Test Suite
+
+Install Bats and write a test file `test_greet.bats` for the following function saved in `greet.sh`:
+
+```bash
+greet() {
+    local name="${1:-World}"
+    echo "Hello, ${name}!"
+}
+```
+
+Your test suite must include:
+- A test that verifies the default greeting (`Hello, World!`) when no argument is passed
+- A test that verifies the personalized greeting when a name is provided
+- A `setup` function that sources `greet.sh` before each test
+- Run with `bats test_greet.bats` and confirm all tests pass
+
+### Exercise 2: Mock an External Command
+
+Write a function `send_report.sh` that calls `curl` to POST a JSON payload to a URL. Then write a Bats test that:
+- Creates a fake `curl` stub in a temporary directory at the start of the test
+- Prepends that directory to `PATH` so the stub is found instead of the real `curl`
+- Verifies that `curl` was called with the correct URL and `-X POST` flag (by having the stub log its arguments to a file)
+- Restores `PATH` in teardown
+
+### Exercise 3: Practice Test-Driven Development
+
+Implement a `validate_config.sh` script using TDD. Follow the red-green-refactor cycle:
+1. Write a failing test for `validate_port <number>` (must accept 1-65535, reject everything else)
+2. Write the minimal code to make it pass
+3. Write a failing test for `validate_hostname <host>` (must accept valid hostnames, reject IPs and empty strings)
+4. Write the minimal code to make it pass
+5. Refactor both functions to share a common `_validate` helper while keeping all tests green
+
+### Exercise 4: Generate a JUnit Report
+
+Configure your Bats test suite from Exercise 1 (or a new suite) to output a JUnit XML report. Steps:
+- Install `bats-support` and `bats-assert` helper libraries
+- Run Bats with the `--formatter junit` flag and redirect output to `test-results.xml`
+- Open the XML file and identify the `<testsuite>`, `<testcase>`, and (if any failures exist) `<failure>` elements
+- Intentionally break one test and re-run to see the failure recorded in the XML
+
+### Exercise 5: Set Up GitHub Actions CI for Shell Tests
+
+Create a `.github/workflows/test.yml` file that:
+- Triggers on every `push` to `main` and on every pull request
+- Runs on `ubuntu-latest`
+- Installs Bats using `apt-get` or the official Bats action
+- Runs all `*.bats` files found under the `tests/` directory
+- Fails the workflow if any test fails
+- Uploads the JUnit XML report as a workflow artifact using `actions/upload-artifact`
+
 ---
 
-**Previous**: [12_Portability_and_Best_Practices.md](./12_Portability_and_Best_Practices.md) | **Next**: [14_Project_Task_Runner.md](./14_Project_Task_Runner.md)
+**Previous**: [Portability and Best Practices](./12_Portability_and_Best_Practices.md) | **Next**: [Project: Task Runner](./14_Project_Task_Runner.md)

@@ -1,5 +1,17 @@
 # 트라이 (Trie)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 트라이(Trie) 자료구조를 설명하고 공통 접두사(prefix)를 공유하여 문자열을 저장하는 방식을 서술할 수 있다
+2. 삽입(insert), 검색(search), 접두사 확인(prefix-check) 연산을 포함한 트라이를 Python으로 구현할 수 있다
+3. 트라이 연산의 시간/공간 복잡도를 해시맵 및 정렬 배열과 비교하여 분석할 수 있다
+4. 트라이 구조를 자동완성(autocomplete) 및 사전(dictionary) 검색 문제에 적용할 수 있다
+5. XOR 트라이(XOR Trie)를 구현하여 정수 배열에서 최대 XOR 문제를 풀 수 있다
+
+---
+
 ## 개요
 
 트라이(Trie)는 문자열을 효율적으로 저장하고 검색하는 트리 자료구조입니다. 접두사 트리(Prefix Tree)라고도 불리며, 자동완성, 사전 검색 등에 활용됩니다.
@@ -100,6 +112,8 @@ p = 접두사 길이, n = 단어 수
 ```python
 class TrieNode:
     def __init__(self):
+        # 고정 크기 26개 슬롯 배열로 인덱스를 통한 O(1) 자식 접근 제공
+        # (트레이드오프: 알파벳 사용이 희소할 때 메모리 낭비)
         self.children = [None] * 26  # a-z
         self.is_end = False
 
@@ -108,6 +122,7 @@ class Trie:
         self.root = TrieNode()
 
     def _char_to_index(self, c):
+        # 'a'→0 ... 'z'→25로 매핑하여 각 문자가 직접 배열 인덱스가 됨
         return ord(c) - ord('a')
 
     def insert(self, word):
@@ -115,9 +130,12 @@ class Trie:
         node = self.root
         for c in word:
             idx = self._char_to_index(c)
+            # 느긋한(lazy) 노드 생성 — 실제로 나타나는 문자에 대해서만 메모리 할당
             if node.children[idx] is None:
                 node.children[idx] = TrieNode()
             node = node.children[idx]
+        # 순회 중이 아니라 여기서 끝 표시를 하여 접두사('app')와 전체 단어('apple')가
+        # 같은 경로를 공유하되 이 플래그로 구분되게 함
         node.is_end = True
 
     def search(self, word):
@@ -128,6 +146,7 @@ class Trie:
             if node.children[idx] is None:
                 return False
             node = node.children[idx]
+        # is_end 검사로 "app"(단어)과 "appl"(단순 접두사)을 구분
         return node.is_end
 
     def starts_with(self, prefix):
@@ -194,7 +213,11 @@ class TrieDict:
             if depth == len(word):
                 if not node.is_end:
                     return False  # 단어 없음
+                # 단어 끝 표시를 해제; 노드 자체는 다른 단어의
+                # 접두사 노드로 여전히 필요할 수 있으므로 아직 삭제하지 않음
                 node.is_end = False
+                # 자식이 없을 때만(다른 단어와 공유되지 않을 때만)
+                # 부모에게 이 노드를 제거해도 된다는 신호를 보냄
                 return len(node.children) == 0
 
             c = word[depth]
@@ -204,7 +227,10 @@ class TrieDict:
             should_delete = _delete(node.children[c], word, depth + 1)
 
             if should_delete:
+                # 더 이상의 의존 대상이 없으므로 이 자식을 안전하게 가지치기
                 del node.children[c]
+                # 이 노드도 더 이상 필요하지 않으면 가지치기 신호를 위로 전파 —
+                # 끝 표시도 아니고 다른 단어의 분기점도 아닌 경우
                 return len(node.children) == 0 and not node.is_end
 
             return False
@@ -472,15 +498,21 @@ class XORTrie:
         node = self.root
         result = 0
 
+        # 최상위 비트부터 최하위 비트까지 처리;
+        # 탐욕적 비트별 최대화가 동작하는 이유는 각 비트 위치가
+        # 하위 모든 비트의 합보다 더 큰 값을 가지기 때문
         for i in range(self.max_bits - 1, -1, -1):
             bit = (num >> i) & 1
-            # 반대 비트를 선택하면 XOR이 최대
+            # XOR은 비트가 다를 때 1이므로, 반대 비트가 항상
+            # 이 위치에서의 기여를 최대화함
             opposite = 1 - bit
 
             if opposite in node:
+                # 이 XOR 비트를 1로 만드는 경로를 선택
                 result |= (1 << i)
                 node = node[opposite]
             elif bit in node:
+                # 반대 비트를 사용할 수 없음 — 이 XOR 비트는 0이 됨
                 node = node[bit]
             else:
                 break

@@ -426,8 +426,11 @@ class MHD2D:
         self.y = np.linspace(0.5*self.dy, Ly - 0.5*self.dy, Ny)
         self.X, self.Y = np.meshgrid(self.x, self.y, indexing='ij')
 
-        # Staggered grid for magnetic field (CT)
-        # Bx at (i-1/2, j), By at (i, j-1/2)
+        # Staggered grid for magnetic field (CT):
+        # Bx lives on x-faces (i±1/2, j) and By on y-faces (i, j±1/2) so that
+        # the discrete divergence ∂_x Bx + ∂_y By uses values from opposite faces
+        # of the same cell — this is the geometric core of CT: the update from
+        # Faraday's law on these staggered positions preserves ∇·B = 0 exactly
         self.x_Bx = np.linspace(0, Lx, Nx+1)
         self.y_By = np.linspace(0, Ly, Ny+1)
 
@@ -438,12 +441,16 @@ class MHD2D:
         self.mz = np.zeros((Nx, Ny))
         self.E = np.ones((Nx, Ny))
 
-        # Magnetic field (staggered)
+        # Bx has Nx+1 values in x because it lives on cell faces, not centers;
+        # there are always one more face than cell in each direction — this extra
+        # index is what allows the CT update to touch both sides of every cell
         self.Bx = np.zeros((Nx+1, Ny))  # Face-centered in x
         self.By = np.zeros((Nx, Ny+1))  # Face-centered in y
         self.Bz = np.zeros((Nx, Ny))    # Cell-centered (if needed)
 
-        # Electric field (edge-centered)
+        # Ez at cell corners (Nx+1, Ny+1): the discrete curl of Ez via differences
+        # at the 4 surrounding corners is what updates Bx and By in Faraday's law —
+        # placing Ez at corners ensures each face flux is updated consistently
         self.Ez = np.zeros((Nx+1, Ny+1))
 
         self.t = 0.0
@@ -468,11 +475,17 @@ class MHD2D:
         """Compute timestep based on CFL condition."""
         rho, vx, vy, vz, p, Bx, By, Bz = self.primitive_variables()
 
-        # Fast magnetosonic speed
+        # Fast magnetosonic speed cf = √(cs² + vA²) is used — not just cs or vA
+        # alone — because cf is the fastest signal speed in MHD; the CFL condition
+        # requires that no information propagates more than one cell per timestep,
+        # and the fast magnetosonic wave is the envelope of all wave modes
         cs = np.sqrt(self.gamma * p / rho)
         va = np.sqrt((Bx**2 + By**2 + Bz**2) / rho)
         cf = np.sqrt(cs**2 + va**2)
 
+        # Separate dt_x and dt_y constraints: in 2D both must be satisfied
+        # simultaneously — taking min() enforces the strictest of both directions
+        # so that waves in neither direction can outrun the update
         dt_x = self.dx / np.max(np.abs(vx) + cf)
         dt_y = self.dy / np.max(np.abs(vy) + cf)
 
@@ -496,7 +509,9 @@ def update_magnetic_field_CT(self):
     # Need velocities and B fields at corners
     # Simple averaging (can be improved with Riemann solver values)
 
-    # Average vx to y-edges
+    # Average vx to y-edges: we need vx at corners to compute Ez = vx*By - vy*Bx;
+    # averaging adjacent cell values to the shared face is the simplest consistent
+    # interpolation that does not introduce spurious directional bias
     vx_avg_y = 0.5 * (self.mx[:-1, :] / self.rho[:-1, :] + self.mx[1:, :] / self.rho[1:, :])
     vx_avg_y = np.pad(vx_avg_y, ((1,0), (0,0)), mode='wrap')  # Periodic
 
@@ -504,7 +519,10 @@ def update_magnetic_field_CT(self):
     vy_avg_x = 0.5 * (self.my[:, :-1] / self.rho[:, :-1] + self.my[:, 1:] / self.rho[:, 1:])
     vy_avg_x = np.pad(vy_avg_x, ((0,0), (1,0)), mode='wrap')
 
-    # Average Bx to corners (from faces)
+    # Bx lives on x-faces so must be averaged to corners; the ±1/2 face neighbor
+    # in the y-direction gives the corner value — this average is simple but
+    # production codes replace it with upwind estimates from Riemann solver results
+    # to reduce numerical dissipation at current sheets
     Bx_corner = 0.5 * (self.Bx[:, :-1] + self.Bx[:, 1:])
     Bx_corner = np.pad(Bx_corner, ((0,0), (0,1)), mode='wrap')
 
@@ -512,17 +530,19 @@ def update_magnetic_field_CT(self):
     By_corner = 0.5 * (self.By[:-1, :] + self.By[1:, :])
     By_corner = np.pad(By_corner, ((0,1), (0,0)), mode='wrap')
 
-    # Compute Ez at corners
-    # This is simplified; production codes use Riemann solver at faces
+    # Ez = vx*By - vy*Bx at corners: this is the z-component of -v×B (Ohm's law
+    # in ideal MHD), and placing it at corners is the key to CT — each face flux
+    # is updated by the curl of Ez at the two corners bounding that face, so the
+    # discrete ∇·B = 0 is preserved as a telescoping sum of corner Ez values
     self.Ez = vx_avg_y * By_corner - vy_avg_x * Bx_corner
 
-    # Update Bx using Ez (discrete Faraday's law)
-    # ∂Bx/∂t = -∂Ez/∂y
+    # ∂Bx/∂t = -∂Ez/∂y: differencing Ez at adjacent corners gives a consistent
+    # discrete Faraday's law — the sign ensures that a positive Ez at the upper
+    # corner reduces Bx (consistent with the right-hand rule of ∂B/∂t = -∇×E)
     dt = self.compute_dt()
     self.Bx[:, :] -= dt / self.dy * (self.Ez[:, 1:] - self.Ez[:, :-1])
 
-    # Update By
-    # ∂By/∂t = ∂Ez/∂x
+    # ∂By/∂t = +∂Ez/∂x (opposite sign to Bx update, from the anti-symmetric curl)
     self.By[:, :] += dt / self.dx * (self.Ez[1:, :] - self.Ez[:-1, :])
 ```
 
@@ -587,7 +607,10 @@ def init_orszag_tang(mhd, gamma=5/3):
     """Initialize Orszag-Tang vortex."""
     X, Y = mhd.X, mhd.Y
 
-    # Density and pressure
+    # ρ = γ² and p = γ come from the Orszag-Tang normalization: at these values
+    # the Alfvén Mach number is O(1), placing the problem in the interesting
+    # regime where kinetic and magnetic energies are comparable — this β~1 choice
+    # ensures both shocks and current sheets form during the evolution
     mhd.rho[:, :] = gamma**2
     p = gamma * np.ones_like(mhd.rho)
 
@@ -600,19 +623,27 @@ def init_orszag_tang(mhd, gamma=5/3):
     mhd.my = mhd.rho * vy
     mhd.mz = mhd.rho * vz
 
-    # Magnetic field (staggered grid)
-    # Bx at (i-1/2, j)
+    # Magnetic field initialized on the staggered grid so that CT immediately
+    # has a divergence-free starting point; evaluating Bx at face positions
+    # x_{i-1/2} rather than cell centers ensures the initial ∇·B is identically
+    # zero in the discrete CT sense — not just approximately zero
     X_Bx, Y_Bx = np.meshgrid(mhd.x_Bx, mhd.y, indexing='ij')
+    # The 1/√(4π) normalization in Gaussian units makes the Alfvén speed vA = 1
+    # at the reference density, which simplifies comparison between runs
     mhd.Bx[:, :] = -np.sin(2 * np.pi * Y_Bx) / np.sqrt(4 * np.pi)
 
-    # By at (i, j-1/2)
+    # By uses sin(4πX) (double frequency compared to Bx) to break the symmetry
+    # between x and y directions — a purely symmetric initial field would remain
+    # symmetric forever and miss the off-axis reconnection that makes the test interesting
     X_By, Y_By = np.meshgrid(mhd.x, mhd.y_By, indexing='ij')
     mhd.By[:, :] = np.sin(4 * np.pi * X_By) / np.sqrt(4 * np.pi)
 
     # Bz (cell-centered, zero)
     mhd.Bz[:, :] = 0.0
 
-    # Total energy
+    # Average staggered Bx,By to cell centers before computing total energy:
+    # the energy must be consistent with the staggered B representation to avoid
+    # an unphysical energy mismatch at t=0 that would drive spurious flows
     Bx_cc = 0.5 * (mhd.Bx[:-1, :] + mhd.Bx[1:, :])
     By_cc = 0.5 * (mhd.By[:, :-1] + mhd.By[:, 1:])
     B2 = Bx_cc**2 + By_cc**2
@@ -703,8 +734,13 @@ def init_kelvin_helmholtz(mhd, V0=1.0, a=0.1, dv=0.01, B0=0.0):
     # Pressure (uniform)
     p = 1.0 * np.ones_like(mhd.rho)
 
-    # Velocity shear
+    # tanh profile gives smooth shear with characteristic thickness a;
+    # using a=0.1 keeps the shear layer resolved on the grid while being thin
+    # enough to have a fast KH growth rate γ_KH ~ k*V0/2 with large k available
     vx = -V0 * np.tanh(Y / a)
+    # Small sinusoidal perturbation seeds the fastest-growing KH mode (k = 2π);
+    # dv << V0 ensures the system starts in the linear regime so we can observe
+    # exponential growth before nonlinear saturation sets in
     vy = dv * np.sin(2 * np.pi * X)
     vz = np.zeros_like(vx)
 
@@ -712,7 +748,9 @@ def init_kelvin_helmholtz(mhd, V0=1.0, a=0.1, dv=0.01, B0=0.0):
     mhd.my = mhd.rho * vy
     mhd.mz = mhd.rho * vz
 
-    # Magnetic field (uniform in x)
+    # Uniform Bx field aligned with the flow: magnetic tension opposes bending
+    # of field lines by KH rolls — stabilization occurs when vA = B0/√(μ₀ρ) > V0,
+    # so varying B0 from 0 to 2 spans the transition from unstable to stable regimes
     mhd.Bx[:, :] = B0
     mhd.By[:, :] = 0.0
     mhd.Bz[:, :] = 0.0

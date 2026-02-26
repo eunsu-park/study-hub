@@ -12,14 +12,17 @@ Claude Projects and Artifacts are features of the Claude web and desktop interfa
 - Basic familiarity with Claude (web interface or desktop app)
 - Understanding of how LLMs use context (helpful but not required)
 
-**Learning Objectives**:
-- Create and manage Claude Projects for organized workspaces
-- Add documents, code, and custom instructions as project knowledge
-- Understand how Claude uses project knowledge to ground its responses
-- Create, edit, and iterate on Artifacts (code, documents, HTML, diagrams)
-- Set up team collaboration with shared projects
-- Choose between Projects and CLAUDE.md for different use cases
-- Apply best practices for organizing knowledge in projects
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create and manage Claude Projects for organized workspaces
+2. Add documents, code, and custom instructions as project knowledge
+3. Understand how Claude uses project knowledge to ground its responses
+4. Create, edit, and iterate on Artifacts (code, documents, HTML, diagrams)
+5. Set up team collaboration with shared projects
+6. Choose between Projects and CLAUDE.md for different use cases
+7. Apply best practices for organizing knowledge in projects
 
 ---
 

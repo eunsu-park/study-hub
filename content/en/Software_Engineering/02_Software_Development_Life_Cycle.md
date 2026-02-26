@@ -12,12 +12,15 @@ Every software system passes through a predictable set of phases from its concep
 - [Lesson 1: What Is Software Engineering](./01_What_Is_Software_Engineering.md)
 - Basic familiarity with software projects
 
-**Learning Objectives**:
-- Describe the standard phases of the software development life cycle
-- Explain the Waterfall, V-Model, Incremental, Spiral, RAD, and Prototyping models
-- Identify the strengths, weaknesses, and appropriate use cases of each model
-- Apply a decision framework to choose a model for a given project
-- Understand how process models relate to risk, requirements stability, and team size
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the standard phases of the software development life cycle
+2. Explain the Waterfall, V-Model, Incremental, Spiral, RAD, and Prototyping models
+3. Identify the strengths, weaknesses, and appropriate use cases of each model
+4. Apply a decision framework to choose a model for a given project
+5. Understand how process models relate to risk, requirements stability, and team size
 
 ---
 

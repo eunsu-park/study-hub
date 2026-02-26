@@ -1,5 +1,25 @@
 # NoSQL Databases
 
+**Previous**: [Managed Relational Databases](./11_Managed_Relational_DB.md) | **Next**: [Identity and Access Management](./13_Identity_Access_Management.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the CAP theorem and how NoSQL databases make trade-offs between consistency and availability
+2. Distinguish between key-value, document, wide-column, and in-memory NoSQL database types
+3. Compare AWS DynamoDB and GCP Firestore/Bigtable in features and pricing models
+4. Design a DynamoDB table with appropriate partition keys and sort keys
+5. Configure read/write capacity modes (provisioned vs. on-demand) for cost optimization
+6. Implement secondary indexes for flexible query patterns
+7. Identify workloads where NoSQL is a better fit than relational databases
+
+---
+
+Not every workload fits the relational model. Applications with massive scale, flexible schemas, or single-digit-millisecond latency requirements often benefit from NoSQL databases. Cloud-managed NoSQL services provide automatic scaling, built-in replication, and zero server management, making them a natural fit for modern distributed applications.
+
 ## 1. NoSQL Overview
 
 ### 1.1 NoSQL vs RDBMS
@@ -531,6 +551,204 @@ def update_user(user_id, data):
 
 - [13_Identity_Access_Management.md](./13_Identity_Access_Management.md) - IAM
 - [11_Managed_Relational_DB.md](./11_Managed_Relational_DB.md) - RDB
+
+---
+
+## Exercises
+
+### Exercise 1: NoSQL vs RDBMS Selection
+
+For each scenario, determine whether a relational database (RDS/Cloud SQL) or a NoSQL database (DynamoDB/Firestore) is the better fit. Justify your answer.
+
+1. An e-commerce platform needs to store orders, customers, and products with strong referential integrity and complex joins for reporting.
+2. A real-time gaming leaderboard that must handle 100,000 score updates per second with consistent single-digit millisecond reads.
+3. A social media application stores user profiles where each user can have different optional fields (some have bios, others have company info, etc.).
+4. A banking application that processes fund transfers and requires atomicity across debit and credit operations.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **Relational (RDBMS)** — Complex joins across orders/customers/products and strong referential integrity (foreign keys) are RDBMS strengths. NoSQL databases do not support multi-table joins natively; you'd have to denormalize everything or perform multiple round trips.
+
+2. **NoSQL (DynamoDB)** — Leaderboards require extreme write throughput and low-latency reads. DynamoDB's on-demand mode scales to handle 100,000 WPS automatically. A DynamoDB table with `gameId` as partition key and `score` as sort key, plus a Global Secondary Index, enables sorted leaderboard queries in milliseconds.
+
+3. **NoSQL (DynamoDB or Firestore)** — Flexible, schemaless document storage is a NoSQL strength. DynamoDB attributes are optional — you only store what exists for each user. Adding a new field type (e.g., "company info") requires no schema migration.
+
+4. **Relational (RDBMS)** — ACID transactions are critical for financial operations. A fund transfer must atomically debit one account and credit another. RDS supports multi-row, multi-table transactions. DynamoDB supports transactions but only within a single table or across a limited set of items.
+
+</details>
+
+### Exercise 2: DynamoDB Key Design
+
+You are designing a DynamoDB table for an order management system. Orders have the following query patterns:
+- Retrieve a specific order by order ID.
+- List all orders for a specific customer, sorted by order date.
+- Get all orders placed in the last 7 days (across all customers).
+
+Design the primary key (partition key and sort key) and any Global Secondary Index (GSI) needed to support these query patterns.
+
+<details>
+<summary>Show Answer</summary>
+
+**Primary key design**:
+
+| Key | Attribute | Reason |
+|-----|-----------|--------|
+| Partition Key (HASH) | `customerId` | Groups all orders for a customer on the same partition for efficient retrieval |
+| Sort Key (RANGE) | `orderDate#orderId` | Enables range queries by date. Prefix `orderDate` (ISO format: `2026-02-24`) ensures lexicographic sort by date; append `orderId` to guarantee uniqueness |
+
+This design supports:
+- **Query 2** (all orders for a customer, sorted by date): `Query(customerId="C-001")` with optional date range filter on the sort key.
+- **Query 1** (specific order): Provide both `customerId` and the full sort key `orderDate#orderId`.
+
+**GSI for cross-customer date queries (Query 3)**:
+
+| | Attribute |
+|--|-----------|
+| GSI Partition Key | `orderDate` (date only, e.g., `2026-02-24`) |
+| GSI Sort Key | `orderId` |
+
+To get all orders in the last 7 days: Query the GSI with `orderDate` for each of the 7 date values. This is a scatter-gather pattern.
+
+```bash
+aws dynamodb create-table \
+    --table-name Orders \
+    --attribute-definitions \
+        AttributeName=customerId,AttributeType=S \
+        AttributeName=orderDateOrderId,AttributeType=S \
+        AttributeName=orderDate,AttributeType=S \
+        AttributeName=orderId,AttributeType=S \
+    --key-schema \
+        AttributeName=customerId,KeyType=HASH \
+        AttributeName=orderDateOrderId,KeyType=RANGE \
+    --global-secondary-indexes '[{
+        "IndexName": "OrdersByDate",
+        "KeySchema": [
+            {"AttributeName": "orderDate", "KeyType": "HASH"},
+            {"AttributeName": "orderId", "KeyType": "RANGE"}
+        ],
+        "Projection": {"ProjectionType": "ALL"}
+    }]' \
+    --billing-mode PAY_PER_REQUEST
+```
+
+</details>
+
+### Exercise 3: Capacity Mode Selection
+
+A DynamoDB table serves a product catalog. Usage patterns are:
+- Weekdays: ~50 reads/second, ~5 writes/second consistently.
+- Black Friday: peaks at 2,000 reads/second and 500 writes/second for ~6 hours.
+- Weekends: minimal traffic (~10 reads/second).
+
+Should you use Provisioned or On-Demand capacity? Justify your answer and estimate the cost difference.
+
+<details>
+<summary>Show Answer</summary>
+
+**Recommendation: On-Demand capacity**
+
+**Reasoning**:
+- The traffic pattern is highly variable with a 40x peak-to-average ratio during Black Friday.
+- On-Demand scales instantly to any level without pre-provisioning, handling the 2,000 RPS peak without throttling.
+- With Provisioned capacity set for Black Friday peaks, you'd pay for 2,000 RCU and 500 WCU all year round — even during off-peak weekends when only 10 reads/second are needed.
+
+**Cost comparison** (approximate, based on `ap-northeast-2` pricing):
+
+**On-Demand**:
+- Normal weekday: 50 reads × 3600 × 16 hours × $0.000000125/RCU = ~$0.36/day
+- Black Friday (6 hours peak): 2000 × 6 × 3600 × $0.000000125 = ~$5.40 + writes
+- Total for the year: roughly **$200–300/year**
+
+**Provisioned at Black Friday peak (2,000 RCU, 500 WCU)**:
+- 2,000 RCU × $0.00013/hour × 8,760 hours = **~$2,277/year** (just for reads)
+- Plus write capacity
+
+**Savings with On-Demand**: Several thousand dollars per year.
+
+**When Provisioned would be better**: If the load was consistently 50 reads/second all year with no spikes, Provisioned at 50 RCU would cost: 50 × $0.00013 × 8,760 = ~$57/year — much cheaper than On-Demand for predictable workloads. Use Provisioned for steady, predictable traffic; On-Demand for variable or unpredictable traffic.
+
+</details>
+
+### Exercise 4: ElastiCache Use Case
+
+An e-commerce application currently queries RDS MySQL for product details on every page load. The product catalog has 50,000 products that change at most once per day. Response time for product pages is 800ms, mostly due to database queries.
+
+Describe how you would use ElastiCache (Redis) to improve response time. Include: the caching pattern, cache key design, and TTL strategy.
+
+<details>
+<summary>Show Answer</summary>
+
+**Caching pattern: Cache-Aside (Lazy Loading)**
+
+```
+Application request for product detail:
+1. Check cache: GET product:{product_id}
+2. If CACHE HIT → return cached data (1-5ms response time)
+3. If CACHE MISS → query RDS, store in cache, return data
+```
+
+**Cache key design**:
+- Individual product: `product:{product_id}` (e.g., `product:12345`)
+- Product list by category: `products:category:{category_id}:page:{page}` (e.g., `products:category:electronics:page:1`)
+
+**TTL strategy**:
+- Products are updated at most once per day → set TTL to **3600 seconds (1 hour)** or **86400 seconds (24 hours)**.
+- A 1-hour TTL means: after a product update, the stale cached value expires within 1 hour. For most product details (price, description), this is acceptable.
+- For time-sensitive data (inventory count, flash sale prices): use a shorter TTL (60 seconds) or actively invalidate the cache key when data changes.
+
+**Cache invalidation on update**:
+```python
+# When product is updated
+def update_product(product_id, data):
+    db.update(f"UPDATE products SET ... WHERE id={product_id}")
+    redis.delete(f"product:{product_id}")  # Invalidate immediately
+```
+
+**Expected improvement**: Database queries for cached products drop by ~95% (only cache misses hit the database). Response time for product pages drops from 800ms to ~50ms (Redis in-memory lookup + minor processing).
+
+</details>
+
+### Exercise 5: DynamoDB Global Tables
+
+A gaming company has players in South Korea (Asia-Pacific) and the United States. They want their DynamoDB player profile table to be available with low latency in both regions and survive a complete regional outage.
+
+1. What DynamoDB feature enables this?
+2. What are the consistency implications to understand before using this feature?
+3. Write the CLI commands to add a replica region.
+
+<details>
+<summary>Show Answer</summary>
+
+1. **DynamoDB Global Tables** — A fully managed, multi-region, multi-active replication feature. Writes to the table in any region are automatically replicated to all other regions, typically within 1 second. Each region has a fully writable local copy.
+
+2. **Consistency implications**:
+   - **Eventual consistency between regions**: A write in Seoul may take up to ~1 second to appear in Virginia. If a Korean player updates their profile, a US player (or a US-region read) may briefly see the old value.
+   - **Conflict resolution**: If two regions simultaneously update the same item (e.g., player buys something in both regions due to a network partition), DynamoDB uses **"last writer wins"** (based on timestamp). The losing write is silently discarded.
+   - **Within-region reads**: Strongly consistent reads are available within a single region; cross-region reads are always eventually consistent.
+   - **Design recommendation**: Design the application so that writes for a given user are always routed to their home region to minimize cross-region conflicts.
+
+3. **CLI to add a replica region**:
+```bash
+# First, the table must be in on-demand or provisioned mode
+# Add us-east-1 as a replica region
+aws dynamodb update-table \
+    --table-name PlayerProfiles \
+    --replica-updates '[{
+        "Create": {
+            "RegionName": "us-east-1"
+        }
+    }]' \
+    --region ap-northeast-2
+
+# Verify replica status
+aws dynamodb describe-table \
+    --table-name PlayerProfiles \
+    --region ap-northeast-2 \
+    --query 'Table.Replicas'
+```
+
+</details>
 
 ---
 

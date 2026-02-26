@@ -88,7 +88,9 @@ section("field() with default_factory")
 class TodoList:
     """Todo list with mutable default."""
     owner: str
-    items: List[str] = field(default_factory=list)  # Correct way for mutable defaults
+    # Why: Using a mutable default like [] would be shared across all instances (classic Python
+    # gotcha); default_factory=list creates a new list per instance, preventing shared state
+    items: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=lambda: ["general"])
 
 
@@ -184,6 +186,8 @@ except ValueError as e:
 section("Frozen Dataclasses (Immutable)")
 
 
+# Why: frozen=True makes instances hashable (usable as dict keys/set members) and prevents
+# accidental mutation — it generates __hash__ and raises FrozenInstanceError on assignment
 @dataclass(frozen=True)
 class ImmutablePoint:
     """Immutable point - cannot modify after creation."""
@@ -215,6 +219,8 @@ except FrozenInstanceError as e:
 section("Comparison and Ordering")
 
 
+# Why: order=True auto-generates __lt__, __le__, __gt__, __ge__ by comparing fields
+# in declaration order — ideal for version tuples where (major, minor, patch) sorts naturally
 @dataclass(order=True)
 class Version:
     """Version with automatic ordering."""
@@ -495,6 +501,8 @@ class BlogPost:
     views: int = 0
     slug: str = field(init=False)
 
+    # Why: __post_init__ runs after the auto-generated __init__, allowing derived fields
+    # (like slug) to be computed from constructor arguments without overriding __init__
     def __post_init__(self):
         """Generate slug from title."""
         self.slug = self.title.lower().replace(" ", "-")

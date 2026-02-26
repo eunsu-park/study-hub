@@ -1,18 +1,28 @@
 # 기타 애플리케이션 프로토콜
 
-## 개요
+**이전**: [HTTP와 HTTPS](./13_HTTP_and_HTTPS.md) | **다음**: [네트워크 보안 기초](./15_Network_Security_Basics.md)
 
-HTTP 외에도 네트워크에서는 다양한 애플리케이션 계층 프로토콜이 사용됩니다. 이 장에서는 DHCP, FTP, 이메일 프로토콜(SMTP, POP3, IMAP), SSH, Telnet, WebSocket 등을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. DHCP DORA 과정을 설명하고 IP 주소가 임대(Lease)되고 갱신되는 방법을 기술할 수 있다
+2. FTP 능동(Active) 모드와 수동(Passive) 모드를 비교하고 방화벽 측면의 영향을 식별할 수 있다
+3. SMTP, POP3, IMAP를 구분하고 이메일 전송에서 각각의 역할을 설명할 수 있다
+4. SSH 공개키 인증(Public Key Authentication)을 설명하고 터널링(Tunneling) 활용 사례를 제시할 수 있다
+5. Telnet이 왜 보안에 취약한지 설명하고 SSH를 그 대안으로 제시할 수 있다
+6. WebSocket의 양방향(Bidirectional) 통신과 HTTP 요청-응답 방식을 비교하고 업그레이드 핸드셰이크(Upgrade Handshake)를 설명할 수 있다
+7. 주요 응용 계층 프로토콜의 기본 포트 번호를 기억할 수 있다
+
+---
 
 **난이도**: ⭐⭐
 
-**학습 목표**:
-- 각 프로토콜의 역할과 동작 원리 이해
-- 프로토콜별 포트 번호 숙지
-- 보안 고려사항 파악
-- 실무에서의 활용 방법 학습
+인터넷은 웹 페이지 그 이상으로 돌아갑니다. 노트북이 IP 주소를 받을 때, 이메일을 보낼 때, 파일을 전송하거나 원격 터미널을 열 때마다, 전문화된 응용 계층 프로토콜이 동작하고 있습니다. 이 레슨에서는 HTTP 이외에 가장 중요한 프로토콜들 -- 일상적인 네트워크 작업을 가능하게 하는 프로토콜들 -- 을 살펴봅니다.
 
----
+> **적재적소의 도구(Right Tool for the Job)**: 이 레슨의 각 프로토콜은 HTTP가 처리할 수 없는(또는 처리해서는 안 되는) 특정 통신 문제를 해결하기 위해 존재합니다. DHCP는 *"장치가 아직 주소가 없을 때 어떻게 네트워크에 참여하는가?"*를 해결합니다. FTP는 *"디렉토리 탐색과 함께 대용량 파일을 효율적으로 전송하는 방법은?"*을 해결합니다. SMTP/POP3/IMAP은 *"오프라인일 수 있는 수신자에게 불안정한 링크를 통해 비동기적으로 메시지를 전달하는 방법은?"*을 해결합니다. SSH는 *"모든 키 입력이 중요한 상황에서 원격 머신을 안전하게 운영하는 방법은?"*을 해결합니다. WebSocket은 *"끊임없는 폴링(Polling) 없이 서버 이벤트를 실시간으로 클라이언트에 전달하는 방법은?"*을 해결합니다. 각 프로토콜이 해결하는 *문제*를 이해하면 어떤 것을 선택해야 하는지, 그리고 다른 대안이 왜 부족한지 쉽게 기억할 수 있습니다.
 
 ## 목차
 
@@ -23,8 +33,7 @@ HTTP 외에도 네트워크에서는 다양한 애플리케이션 계층 프로�
 5. [Telnet](#5-telnet)
 6. [WebSocket](#6-websocket)
 7. [연습 문제](#7-연습-문제)
-8. [다음 단계](#8-다음-단계)
-9. [참고 자료](#9-참고-자료)
+8. [참고 자료](#8-참고-자료)
 
 ---
 
@@ -216,21 +225,23 @@ FTP(File Transfer Protocol)는 클라이언트와 서버 간에 파일을 전송
 
 ### FTP 주요 명령어
 
+> **왜 FTP는 바이너리 옵코드(Binary Opcode) 대신 별도의 텍스트 명령어를 사용하는가?** FTP는 1970년대 초에 설계되었으며, 사람이 읽을 수 있는 프로토콜이 디버깅을 쉽게 했습니다 -- 말 그대로 포트 21에 텔넷으로 접속해서 명령어를 입력할 수 있었습니다. 이 텍스트 기반 제어 채널(Control Channel)은 스크립팅과 자동화도 매우 쉽게 만들어 줍니다. 대가로 장황함이 있지만, 제어 메시지는 파일 데이터에 비해 매우 작으므로 거의 영향이 없습니다.
+
 | 명령 | 설명 | 예시 |
 |------|------|------|
-| USER | 사용자명 전송 | `USER username` |
-| PASS | 비밀번호 전송 | `PASS password` |
-| LIST | 디렉토리 목록 | `LIST` |
-| CWD | 디렉토리 변경 | `CWD /home/user` |
-| PWD | 현재 디렉토리 | `PWD` |
-| RETR | 파일 다운로드 | `RETR file.txt` |
-| STOR | 파일 업로드 | `STOR file.txt` |
-| DELE | 파일 삭제 | `DELE file.txt` |
-| MKD | 디렉토리 생성 | `MKD newdir` |
-| RMD | 디렉토리 삭제 | `RMD olddir` |
-| PASV | Passive 모드 | `PASV` |
-| PORT | Active 모드 | `PORT 192,168,1,100,4,1` |
-| QUIT | 연결 종료 | `QUIT` |
+| USER | 사용자명 전송 -- 인증(Authentication) 핸드셰이크를 시작; 서버는 접근 권한 부여 전에 신원을 확인해야 함 | `USER username` |
+| PASS | 비밀번호 전송 -- 인증을 완료; 평문(Plaintext)으로 전송되므로 오늘날에는 SFTP가 권장됨 | `PASS password` |
+| LIST | 디렉토리 목록 -- 다운로드 전에 원격 파일을 탐색할 수 있게 함 | `LIST` |
+| CWD | 디렉토리 변경 -- 원격 파일시스템을 탐색; FTP는 셸(Shell)을 모방하여 사용자가 탐색 가능 | `CWD /home/user` |
+| PWD | 현재 디렉토리 -- CWD 후 현재 위치를 확인하여 잘못된 경로에 업로드하는 실수를 방지 | `PWD` |
+| RETR | 파일 다운로드 -- 데이터 연결을 통해 서버에서 클라이언트로 "검색(Retrieve)" | `RETR file.txt` |
+| STOR | 파일 업로드 -- 클라이언트에서 서버로 "저장(Store)"; RETR의 보완 명령 | `STOR file.txt` |
+| DELE | 파일 삭제 -- 셸 없이 원격 파일 관리 | `DELE file.txt` |
+| MKD | 디렉토리 생성 -- 업로드 전 원격 파일 구조를 정리 | `MKD newdir` |
+| RMD | 디렉토리 삭제 -- 원격 구조를 정리 | `RMD olddir` |
+| PASV | Passive 모드 -- 서버가 역으로 연결하는 대신 대기하도록 지시; 클라이언트가 인바운드 연결을 수락할 수 없는 NAT/방화벽(Firewall) 문제를 해결 | `PASV` |
+| PORT | Active 모드 -- 데이터 전송을 위해 클라이언트가 어떤 포트에서 대기하는지 서버에 알림; 공인 IP가 있고 방화벽이 없는 경우에만 동작 | `PORT 192,168,1,100,4,1` |
+| QUIT | 연결 종료 -- 세션을 깔끔하게 종료하여 서버가 리소스를 해제할 수 있도록 함 | `QUIT` |
 
 ### FTP 응답 코드
 
@@ -360,16 +371,18 @@ ftp> bye             # 연결 종료
 
 ### SMTP 주요 명령어
 
+> **왜 SMTP는 이메일 전체를 한 번에 보내는 대신 다단계 명령어 시퀀스를 사용하는가?** 각 명령어는 서버 응답 코드(Response Code)를 발생시켜, 오류를 조기에 감지하는 체크포인트(Checkpoint)를 만듭니다. 수신자 주소가 유효하지 않으면 서버는 RCPT TO 단계에서 거부합니다 -- 클라이언트가 대용량 첨부 파일을 업로드하여 대역폭을 낭비하기 전에 말입니다. 이 "봉투 먼저, 내용 나중에(Envelope First, Content Second)" 설계는 라우팅 정보와 메시지 본문을 분리하여, 중계 서버(Relay Server)가 봉투만으로 메일을 전달할 수 있게 합니다.
+
 | 명령 | 설명 |
 |------|------|
-| HELO/EHLO | 클라이언트 식별 (EHLO는 확장 SMTP) |
-| MAIL FROM | 발신자 지정 |
-| RCPT TO | 수신자 지정 |
-| DATA | 메일 내용 시작 |
-| QUIT | 연결 종료 |
-| AUTH | 인증 |
-| STARTTLS | TLS 암호화 시작 |
-| RSET | 트랜잭션 초기화 |
+| HELO/EHLO | 클라이언트 식별 (EHLO는 확장 SMTP). 왜 자기 소개를 하는가? 서버가 이를 통해 어떤 기능(AUTH, STARTTLS, SIZE 제한)을 제공할지 결정합니다. EHLO는 기능 협상(Feature Negotiation)을 가능하게 하기 위해 HELO를 대체했습니다. |
+| MAIL FROM | 발신자 지정 -- 반송 처리(Bounce Handling)에 사용되는 "봉투 발신자(Envelope From)" 주소를 정의합니다 (읽는 사람에게 보이는 "From:" 헤더와는 다름) |
+| RCPT TO | 수신자 지정 -- 여러 수신자에 대해 반복 가능; 서버는 메시지 본문을 수락하기 전에 각 수신자를 검증합니다 |
+| DATA | 메일 내용 시작 -- 봉투 명령어에서 실제 메시지 본문으로의 전환을 알리며, 단독 "."이 있는 줄로 종료됩니다 |
+| QUIT | 연결 종료 -- 서버가 큐잉(Queuing)을 완료하고 TCP 소켓을 해제할 수 있도록 합니다 |
+| AUTH | 인증 -- 개방형 릴레이(Open Relay)를 방지하기 위해 발신자의 신원을 증명합니다; 이것 없이는 누구나 서버를 사용해 스팸을 보낼 수 있습니다 |
+| STARTTLS | TLS 암호화 시작 -- 세션 중간에 평문 연결을 암호화 연결로 업그레이드하여, 자격 증명(Credentials)과 메시지 내용을 도청(Eavesdropping)으로부터 보호합니다 |
+| RSET | 트랜잭션 초기화 -- 연결을 끊지 않고 현재 메시지를 포기합니다; 클라이언트가 작성 중 오류를 감지했을 때 유용합니다 |
 
 ### POP3 (Post Office Protocol v3)
 
@@ -555,37 +568,62 @@ SSH(Secure Shell)는 네트워크 상에서 암호화된 원격 접속을 제공
 # 기본 접속
 ssh user@hostname
 ssh -p 2222 user@hostname    # 포트 지정
+# 왜 포트를 변경하는가? SSH를 22번 포트에서 옮기면 인터넷 전체에서 기본 포트를
+# 스캔하는 봇(Bot)의 자동화된 무차별 대입(Brute-force) 로그인 시도를 줄일 수 있습니다.
 
 # 키 생성
 ssh-keygen -t ed25519 -C "email@example.com"
+# 왜 ed25519인가? 타원 곡선 암호화(Elliptic Curve Cryptography)를 사용하여
+# RSA-3072와 동등한 보안을 훨씬 짧은 키(256비트)로 제공하므로, 핸드셰이크가
+# 더 빠르고 키 관리가 간단합니다.
 ssh-keygen -t rsa -b 4096
+# 왜 4096비트인가? RSA-2048은 2030년까지의 보안 최소 기준으로 간주됩니다.
+# 4096은 수명이 긴 키에 추가 여유를 제공하며, 대가는 약간 느려진
+# 핸드셰이크(Handshake)입니다.
 
 # 공개키 복사
 ssh-copy-id user@hostname
 ssh-copy-id -i ~/.ssh/id_ed25519.pub user@hostname
+# 왜 ssh-copy-id를 사용하는가? 올바른 권한(600)으로 공개키를 원격
+# authorized_keys 파일에 안전하게 추가합니다. 파일 권한이 너무 넓으면
+# SSH가 해당 키를 거부하는 흔한 실수를 방지할 수 있습니다.
 
 # 파일 전송 (SCP)
 scp file.txt user@host:/path/
 scp user@host:/path/file.txt ./
 scp -r directory/ user@host:/path/
+# 왜 FTP 대신 SCP인가? SCP는 기존 SSH 암호화 채널(Encrypted Channel)을 재사용
+# 하므로, 추가 포트를 열거나 별도의 자격 증명을 구성할 필요가 없습니다.
 
 # SFTP
 sftp user@hostname
+# 왜 SCP 대신 SFTP인가? SFTP는 전송 재개(Resumable Transfer), 디렉토리 목록,
+# 원격 파일 작업(이름 변경, 삭제) 등 SCP에 없는 기능을 지원합니다.
 ```
 
 ### SSH 터널링
+
+> **왜 포트를 직접 열지 않고 SSH를 통해 터널링하는가?** SSH 터널링은 두 가지 문제를 동시에 해결합니다: 평문으로 전송될 트래픽을 암호화하고, 거의 항상 허용되는 22번 포트에 편승하여 방화벽(Firewall) 제한을 우회합니다. 운영 환경에서 데이터베이스 접근이 데이터베이스 포트를 네트워크에 노출하는 대신 SSH 점프 서버(Jump Server)를 통하는 이유가 바로 이것입니다.
 
 ```bash
 # 로컬 포트 포워딩
 # 로컬 8080 → 원격 서버 경유 → 대상 서버 80
 ssh -L 8080:target.example.com:80 user@jump.example.com
+# 왜 로컬 포워딩인가? 자신의 머신에서는 접근할 수 없지만 점프 서버에서는
+# 접근 가능한 서비스(예: 내부 DB)에 접근해야 할 때 사용합니다. 터널은
+# 해당 서비스가 마치 localhost에서 실행되는 것처럼 만듭니다.
 
 # 원격 포트 포워딩
 # 원격 서버 8080 → 로컬 머신 80
 ssh -R 8080:localhost:80 user@remote.example.com
+# 왜 원격 포워딩인가? 라우터에서 NAT나 포트 포워딩을 설정하지 않고도
+# 로컬 개발 서버를 인터넷에 노출하고 싶을 때 사용합니다.
 
 # 동적 포트 포워딩 (SOCKS 프록시)
 ssh -D 1080 user@proxy.example.com
+# 왜 동적 포워딩인가? 범용 SOCKS 프록시(Proxy)를 생성하여 모든 트래픽을
+# SSH 서버를 통해 라우팅합니다 -- 신뢰할 수 없는 네트워크에서 브라우징을
+# 암호화하거나 지역 제한 콘텐츠에 접근할 때 유용합니다.
 ```
 
 ```
@@ -893,13 +931,7 @@ Host: example.com
 
 ---
 
-## 8. 다음 단계
-
-[15_Network_Security_Basics.md](./15_Network_Security_Basics.md)에서 방화벽, NAT, VPN 등 네트워크 보안 기초를 배워봅시다!
-
----
-
-## 9. 참고 자료
+## 8. 참고 자료
 
 ### RFC 문서
 
@@ -924,3 +956,7 @@ Host: example.com
 | HTTP | 80 | 443 (HTTPS) |
 | POP3 | 110 | 995 |
 | IMAP | 143 | 993 |
+
+---
+
+**이전**: [HTTP와 HTTPS](./13_HTTP_and_HTTPS.md) | **다음**: [네트워크 보안 기초](./15_Network_Security_Basics.md)

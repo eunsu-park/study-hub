@@ -1,13 +1,24 @@
 # 19. 프로젝트: 학생 관리 시스템
 
-## 학습 목표
-- 실제 애플리케이션에서 STL 컨테이너(vector, map, set) 적용하기
-- 캡슐화와 데이터 검증을 활용한 클래스 설계하기
-- 직렬화(serialization)와 역직렬화(deserialization)를 사용한 파일 I/O 구현하기
-- 견고한 에러 관리를 위한 예외 처리 사용하기
-- 자동 메모리 관리를 위한 스마트 포인터 활용하기
-- 메뉴 기반 CLI 인터페이스 구축하기
-- 모던 C++ 모범 사례 연습하기
+**이전**: [C++ 디자인 패턴](./18_Design_Patterns.md) | **다음**: [CMake와 빌드 시스템](./20_CMake_and_Build_Systems.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 관심사의 명확한 분리(데이터, 저장소, UI)를 갖춘 멀티 클래스 C++ 애플리케이션을 설계한다
+2. 효율적인 조회, 정렬, 고유성 보장을 위해 STL 컨테이너(`map`, `vector`, `set`)를 적용한다
+3. 입력 검증(input validation)과 의미 있는 오류 메시지를 포함한 CRUD 연산을 구현한다
+4. `stringstream`을 사용하여 구조화된 데이터를 CSV 파일로 직렬화(serialize)하고 역직렬화(deserialize)한다
+5. 예외 처리(exception handling)로 잘못된 입력을 우아하게 처리하는 메뉴 기반 CLI를 구축한다
+6. 연산자 오버로딩(operator overloading)(`<<`, `<`, `==`)을 사용하여 사용자 정의 타입을 STL 알고리즘 및 I/O와 통합한다
+7. 완전한 프로젝트에서 const 정확성(const correctness), RAII, 모던 C++ 모범 사례를 연습한다
+
+---
+
+지금까지 각 레슨은 C++ 기능을 개별적으로 다루었습니다. 이 프로젝트는 그것들을 하나의 완결된 작동 애플리케이션으로 통합합니다. 학생 관리 시스템을 처음부터 구축하면 클래스를 어떻게 구조화할지, 어떤 컨테이너를 선택할지, 오류를 어떻게 처리할지와 같은 설계 결정을 직접 내려야 하며, 이는 실제 소프트웨어 개발의 도전과 유사합니다. 이러한 프로젝트를 통해 개별적으로 습득한 지식이 진정한 실력으로 발전합니다.
 
 ## 목차
 1. [프로젝트 개요](#1-프로젝트-개요)
@@ -843,7 +854,65 @@ Data saved to students.csv
 
 ---
 
+## 연습 문제
+
+### 연습 1: 수강 과목 등록 기능 추가
+
+`Student` 클래스를 확장하여 수강 과목 목록을 지원하세요. 다음을 추가하세요:
+- `std::vector<std::string> courses` 멤버.
+- `enrollCourse(const std::string& course)` — 이미 등록되지 않은 경우에만 과목을 추가합니다 (`std::find` 사용).
+- `dropCourse(const std::string& course)` — 과목을 제거합니다; 등록되지 않은 경우 `std::runtime_error`를 던집니다.
+- `getCourses() const` — 벡터를 반환합니다.
+- CSV 필드에서 과목을 `|`로 구분하여 지속 저장하도록 `serialize()` / `deserialize()`를 업데이트합니다.
+
+두 과목을 등록하고 하나를 삭제한 후 직렬화(serialization) 왕복이 올바르게 동작하는지 확인하여 테스트하세요.
+
+### 연습 2: StudentDatabase에 통계 기능 확장
+
+`StudentDatabase`에 다음 메서드를 추가하세요:
+
+1. `std::map<std::string, double> gpaDistribution() const` — 문자 등급(`"A"`, `"B"`, `"C"`, `"D"`, `"F"`)을 해당 범위의 학생 비율에 매핑한 맵을 반환합니다.
+2. `double medianGpa() const` — 모든 학생의 중앙값(median) GPA를 반환합니다 (GPA 복사본을 정렬하고 중간값을 선택하세요; 짝수 크기 컬렉션도 처리하세요).
+3. `std::vector<Student> belowAverage() const` — GPA가 학급 평균보다 엄격하게 낮은 모든 학생을 반환합니다.
+
+`main.cpp`에 메뉴 옵션 11, 12, 13을 추가하여 이 메서드를 호출하고 결과를 표시하세요.
+
+### 연습 3: 사용자 정의 예외(Custom Exception) 계층
+
+프로젝트에서 `std::runtime_error`와 `std::invalid_argument`의 사용을 사용자 정의 예외 계층으로 교체하세요:
+
+```cpp
+class StudentException : public std::exception { ... };
+class StudentNotFoundException : public StudentException { ... };
+class DuplicateStudentException : public StudentException { ... };
+class InvalidStudentDataException : public StudentException { ... };
+```
+
+각 예외는 설명적인 메시지를 포함해야 하며, 해당되는 경우 관련 학생 ID도 포함해야 합니다. `Student.cpp`와 `StudentDatabase.cpp` 모두에서 모든 throw 위치와 catch 블록을 업데이트하세요. `StudentException`을 잡으면 세 가지 파생 타입이 모두 처리되는지 확인하세요.
+
+### 연습 4: 정렬 및 필터링 기능 향상
+
+`StudentDatabase`에 세 가지 새로운 쿼리 메서드를 추가하세요:
+
+1. `std::vector<Student> sortedByName() const` — 이름 알파벳순으로 정렬된 모든 학생을 반환합니다 (대소문자 무시).
+2. `std::vector<Student> sortedByAge() const` — 나이 오름차순으로 정렬된 모든 학생을 반환합니다.
+3. `std::vector<Student> filterByAgeRange(int minAge, int maxAge) const` — 나이가 범위 내에 있는 학생을 반환합니다 (경계 포함).
+
+람다 비교자/술어(predicate)와 함께 `std::sort` 또는 `std::copy_if`를 사용하여 각 메서드를 구현하세요. 대응하는 메뉴 항목을 추가하세요.
+
+### 연습 5: CSV 일괄 가져오기
+
+`StudentDatabase`에 `int importFromCsv(const std::string& filename)` 메서드를 추가하세요:
+1. 지정된 파일을 열고 모든 줄을 읽습니다.
+2. 각 줄을 `Student`로 역직렬화(deserialize)하려고 시도합니다.
+3. 검증에 실패한 줄은 건너뜁니다 (예외를 잡아 경고를 로깅).
+4. ID가 이미 데이터베이스에 있는 학생은 건너뜁니다 (덮어쓰지 않음).
+5. 성공적으로 가져온 학생 수를 반환합니다.
+
+유효한 레코드 5개와 유효하지 않은 레코드 2개(예: 음수 GPA, 빈 이름)가 있는 테스트 CSV 파일을 작성하고, 가져오기를 실행하여 올바른 개수와 기존 레코드가 변경되지 않았음을 확인하세요.
+
+---
+
 ## 네비게이션
-- 이전: [18. 디자인 패턴(Design Patterns)](18_Design_Patterns.md)
-- 다음: [개요](00_Overview.md)
-- [개요로 돌아가기](00_Overview.md)
+
+**이전**: [C++ 디자인 패턴](./18_Design_Patterns.md) | **다음**: [CMake와 빌드 시스템](./20_CMake_and_Build_Systems.md)

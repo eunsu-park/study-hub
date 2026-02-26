@@ -2,9 +2,24 @@
 
 [Previous: NumPy Basics](./01_NumPy_Basics.md) | [Next: Pandas Basics](./03_Pandas_Basics.md)
 
-## Overview
+---
 
-This covers advanced NumPy features including linear algebra, statistical functions, random number generation, structured arrays, and performance optimization techniques.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Implement matrix multiplication, decomposition, and linear system solving using `np.linalg`
+2. Calculate descriptive statistics, correlation coefficients, and covariance matrices with NumPy
+3. Apply the new-style random number generator (`default_rng`) to sample from various probability distributions
+4. Describe structured arrays and record arrays for heterogeneous tabular data
+5. Compare C-order and Fortran-order memory layouts and explain their performance implications
+6. Demonstrate vectorized operations and explain why they outperform Python loops
+7. Apply advanced indexing techniques including `np.where`, masked arrays, and `np.take`/`np.put`
+8. Implement array persistence using binary (`.npy`/`.npz`) and text (CSV) formats, and use memory mapping for large datasets
+
+---
+
+Once you are comfortable creating and manipulating arrays, the next step is leveraging NumPy's powerful computational toolkit. From solving systems of linear equations to generating reproducible random samples, these advanced features turn NumPy into a complete numerical computing environment. Understanding memory layout and vectorization will also help you write code that runs orders of magnitude faster than naive Python loops.
 
 ---
 

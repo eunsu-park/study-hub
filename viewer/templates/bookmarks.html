@@ -37,32 +37,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    document.querySelectorAll('.btn-remove-bookmark').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const item = this.closest('.bookmark-item');
-            const page = document.querySelector('.bookmarks-page');
-            const lang = page.dataset.lang;
-            const topic = item.dataset.topic;
-            const filename = item.dataset.filename;
-
-            const response = await fetch('/api/bookmark', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lang, topic, filename })
-            });
-
-            if (response.ok) {
-                item.remove();
-                // Update count
-                const count = document.querySelectorAll('.bookmark-item').length;
-                document.querySelector('.header-subtitle').textContent = count + ' bookmarked lessons';
-
-                if (count === 0) {
-                    location.reload();
-                }
-            }
-        });
-    });
-</script>
+<script src="{{ url_for('static', filename='js/bookmarks.js') }}"></script>
 {% endblock %}

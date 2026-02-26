@@ -12,13 +12,16 @@ Claude is Anthropic's family of large language models designed for safety, helpf
 - No prior AI experience required
 - Basic familiarity with software development concepts is helpful
 
-**Learning Objectives**:
-- Understand the Claude model family and when to use each model
-- Identify Claude's core capabilities and differentiators
-- Navigate the product ecosystem: Claude.ai, Claude Code, Claude Desktop, API
-- Understand context windows, tokens, and how Claude processes text
-- Make informed decisions about model selection based on task requirements
-- Understand the pricing model and cost considerations
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the Claude model family and when to use each model
+2. Identify Claude's core capabilities and differentiators
+3. Navigate the product ecosystem: Claude.ai, Claude Code, Claude Desktop, API
+4. Understand context windows, tokens, and how Claude processes text
+5. Make informed decisions about model selection based on task requirements
+6. Understand the pricing model and cost considerations
 
 ---
 

@@ -47,7 +47,8 @@ log_task() {
 # Task Discovery and Help
 # ============================================================================
 
-# Get all defined tasks
+# Why: declare -F lists all function names. Filtering by prefix turns naming
+# convention (task::*) into auto-discovery — no manual task registry needed.
 list_tasks() {
     declare -F | awk '{print $3}' | grep "^${TASK_PREFIX}" | sed "s/^${TASK_PREFIX}//"
 }
@@ -113,6 +114,8 @@ depends_on() {
             exit 1
         fi
 
+        # Why: tracking executed tasks prevents diamond-dependency re-runs.
+        # If A depends on B and C, and both depend on D, D runs only once.
         if ! has_executed "$dep"; then
             log_info "Running dependency: $dep"
             run_task "$dep"
@@ -187,6 +190,8 @@ run_task() {
 # ============================================================================
 
 ## Clean build artifacts and temporary files
+# Why: the ## comment above the function serves double-duty — it's both a
+# human-readable doc and machine-parsed by get_task_help for --help output.
 task::clean() {
     log_info "Removing build artifacts..."
 

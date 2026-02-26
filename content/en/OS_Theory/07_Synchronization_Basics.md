@@ -1,10 +1,22 @@
 # Synchronization Basics
 
-## Overview
-
-When concurrently executing processes or threads access shared resources, problems can arise. In this lesson, we'll learn about Race Conditions, Critical Sections, and synchronization methods including Peterson's Solution and hardware-supported approaches.
+**Previous**: [Advanced Scheduling](./06_Advanced_Scheduling.md) | **Next**: [Synchronization Tools](./08_Synchronization_Tools.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define a race condition and explain why it occurs in concurrent programs
+2. Identify the three requirements for a critical section solution (mutual exclusion, progress, bounded waiting)
+3. Trace Peterson's algorithm step-by-step and explain why both `flag[]` and `turn` are necessary
+4. Explain the test-and-set and compare-and-swap hardware instructions
+5. Distinguish busy waiting from blocking synchronization
+
+---
+
+Concurrency bugs are among the hardest to find and reproduce because they depend on timing. A race condition might crash your program once in a million runs -- but that one time could corrupt a database or cause a security breach. Mastering synchronization is what separates programs that work "most of the time" from programs that are provably correct.
 
 ## Table of Contents
 
@@ -18,6 +30,8 @@ When concurrently executing processes or threads access shared resources, proble
 ---
 
 ## 1. Race Condition
+
+> Imagine two people trying to walk through a revolving door at the same time from opposite sides. Without coordination, they jam the door and neither gets through. This is the essence of a race condition -- multiple actors accessing a shared resource without proper synchronization, leading to unpredictable results.
 
 ### Definition
 
@@ -893,6 +907,163 @@ Explain the problems with busy waiting and suggest solutions.
    - Call `sched_yield()`
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Peterson's Algorithm Verification
+
+Run `examples/OS_Theory/07_sync_primitives.py` and analyze the Peterson's algorithm demo.
+
+**Tasks:**
+1. Modify `PetersonLock` to remove the `turn` variable. Run `demo_peterson()` and explain why mutual exclusion fails
+2. Increase the iteration count to 500,000 and run 5 times. Record the actual count vs expected. What's the maximum error you observe?
+3. Implement a `FilterLock` that generalizes Peterson's algorithm to N threads (use N-1 levels of flag arrays)
+
+### Exercise 2: Atomic Operations Comparison
+
+Compare the performance of different synchronization primitives:
+
+```python
+import threading, time
+
+def benchmark_lock(lock_type, label, n=1_000_000):
+    counter = [0]
+    lock = lock_type()
+
+    def worker():
+        for _ in range(n // 2):
+            lock.acquire()
+            counter[0] += 1
+            lock.release()
+
+    t0 = threading.Thread(target=worker)
+    t1 = threading.Thread(target=worker)
+    start = time.perf_counter()
+    t0.start(); t1.start()
+    t0.join(); t1.join()
+    elapsed = time.perf_counter() - start
+    print(f"{label}: {elapsed:.3f}s, count={counter[0]}")
+```
+
+**Tasks:**
+1. Benchmark `threading.Lock`, `threading.RLock`, and `threading.Semaphore(1)`. Rank by performance
+2. Explain why `Lock` is typically faster than `RLock` and `Semaphore`
+3. Test with no lock at all and report the error rate — how does Python's GIL affect the result?
+
+### Exercise 3: Barrier Implementation
+
+Study the `SimpleBarrier` in `examples/OS_Theory/07_sync_primitives.py`.
+
+**Tasks:**
+1. The current barrier uses an `Event` per generation. Implement an alternative using a `Condition` variable instead
+2. Add a `barrier.wait()` return value that identifies one thread as the "leader" (returns True for exactly one thread per barrier phase)
+3. Test your barrier with 8 threads and 5 phases, verifying all Phase N completes before any Phase N+1 starts
+
+---
+
+## Exercises
+
+### Exercise 1: Race Condition Identification
+
+Examine the following code that implements a simple bank account. Two threads run `transfer()` concurrently.
+
+```c
+#include <stdio.h>
+#include <pthread.h>
+
+int account_A = 1000;
+int account_B = 500;
+
+void transfer(int *from, int *to, int amount) {
+    if (*from >= amount) {       // Step 1: Check balance
+        *from -= amount;         // Step 2: Deduct
+        *to   += amount;         // Step 3: Credit
+    }
+}
+
+void *thread1(void *arg) { transfer(&account_A, &account_B, 200); return NULL; }
+void *thread2(void *arg) { transfer(&account_A, &account_B, 900); return NULL; }
+```
+
+1. Identify the critical section(s) in this code
+2. Describe a specific interleaving of thread1 and thread2 that results in account_A having a negative balance, given that both transfers initially pass the check
+3. What is the total money in the system at the start? Can a race condition change this total? Explain
+4. Fix the code using a global `pthread_mutex_t` to ensure correct behavior
+
+### Exercise 2: Critical Section Requirements Analysis
+
+For each proposed "solution" to the two-process critical section problem, identify which of the three requirements it violates (mutual exclusion, progress, bounded waiting). Assume two processes P0 and P1.
+
+**Proposed Solution A** — Simple turn variable:
+```c
+int turn = 0;
+// Process Pi:
+while (turn != i);  // wait
+// Critical section
+turn = 1 - i;       // give turn to other
+```
+
+**Proposed Solution B** — Flag only, no turn:
+```c
+bool flag[2] = {false, false};
+// Process Pi:
+flag[i] = true;
+while (flag[1-i]);  // wait
+// Critical section
+flag[i] = false;
+```
+
+For each solution:
+1. Does it satisfy mutual exclusion? Prove or give a counterexample
+2. Does it satisfy progress? Prove or give a counterexample
+3. Does it satisfy bounded waiting? Explain
+
+### Exercise 3: Peterson's Algorithm Step-Through
+
+Peterson's algorithm for processes P0 and P1:
+```c
+bool flag[2] = {false, false};
+int turn;
+
+// Process Pi (i=0 or 1):
+flag[i] = true;
+turn = 1 - i;
+while (flag[1-i] && turn == 1-i);  // busy wait
+// --- Critical Section ---
+flag[i] = false;
+```
+
+Trace through the following interleaving where P0 and P1 both try to enter at the same time. Record the values of `flag[0]`, `flag[1]`, and `turn` after each step. Which process enters the critical section first?
+
+| Step | Action | flag[0] | flag[1] | turn | Result |
+|------|--------|---------|---------|------|--------|
+| 1 | P0: flag[0]=true | | | | |
+| 2 | P1: flag[1]=true | | | | |
+| 3 | P0: turn=1 | | | | |
+| 4 | P1: turn=0 | | | | |
+| 5 | P0: checks while | | | | |
+| 6 | P1: checks while | | | | |
+
+Explain: why does assigning `turn` last guarantee that exactly one process proceeds?
+
+### Exercise 4: TAS and CAS Semantics
+
+**Part A**: Show how Test-and-Set (TAS) can implement a spinlock. Write pseudocode for `lock()` and `unlock()` using `TestAndSet(bool *target)`.
+
+**Part B**: Show how Compare-and-Swap (CAS) can implement a lock-free counter increment. Write pseudocode for `atomic_increment(int *counter)` using `CompareAndSwap(int *value, int expected, int new_val)`.
+
+**Part C**: A spinlock using TAS satisfies mutual exclusion but may violate bounded waiting. Describe a scenario with 3 processes where one process never acquires the lock. Then describe the modification needed (ticket lock) to guarantee bounded waiting.
+
+### Exercise 5: Busy Waiting vs Blocking
+
+A system has 100 threads competing for a critical section that takes on average 2ms to execute. The system has 4 CPU cores.
+
+1. If threads use a **spinlock** (busy waiting), how much CPU time is wasted while 99 threads wait for 1 thread to finish? Express as percentage of 4-core capacity.
+2. If threads use a **mutex** (blocking), what happens to waiting threads and why does this not waste CPU?
+3. Give one scenario where a spinlock is **preferred** over a blocking mutex, and explain why.
+4. What is the "dual-mode" strategy used by Linux's `mutex_spin_on_owner()`? Why does it combine both approaches?
 
 ---
 

@@ -2173,4 +2173,4 @@ This requires analyzing the control flow graph of each function. Start with a si
 
 ---
 
-[Previous: 07_Abstract_Syntax_Trees.md](./07_Abstract_Syntax_Trees.md) | [Next: 09_Intermediate_Representations.md](./09_Intermediate_Representations.md) | [Overview](./00_Overview.md)
+[Previous: Abstract Syntax Trees](./07_Abstract_Syntax_Trees.md) | [Next: Intermediate Representations](./09_Intermediate_Representations.md) | [Overview](./00_Overview.md)

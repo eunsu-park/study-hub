@@ -1,10 +1,24 @@
 # 10. Monorepo Management
 
+**Previous**: [Advanced Git Techniques](./09_Advanced_Git_Techniques.md)
+
+---
+
 ## Learning Objectives
-- Understand monorepo concepts and pros/cons
-- Build optimization with Nx and Turborepo
-- Dependency management and code sharing strategies
-- Performance optimization for large-scale monorepos
+
+After completing this lesson, you will be able to:
+
+1. Explain the monorepo concept and compare it with the polyrepo approach
+2. Identify the advantages and disadvantages of monorepos for different team sizes and project types
+3. Configure Nx to manage a monorepo with build caching and dependency graph awareness
+4. Configure Turborepo to orchestrate parallel, cached builds across packages
+5. Apply dependency management and code-sharing strategies within a monorepo
+6. Optimize CI/CD pipelines for monorepos using affected-only testing and remote caching
+7. Implement Git performance techniques (sparse checkout, partial clone) for large monorepos
+
+---
+
+As organizations grow, managing dozens of separate repositories becomes a coordination nightmare -- version mismatches, duplicated CI configs, and cross-repo dependency updates that require synchronized releases. Monorepos solve this by putting all code in a single repository, but they bring their own challenges around build performance, access control, and tooling. This lesson equips you with the tools and strategies to run a monorepo effectively.
 
 ## Table of Contents
 1. [Monorepo Overview](#1-monorepo-overview)
@@ -860,6 +874,42 @@ jobs:
 - [pnpm Workspaces](https://pnpm.io/workspaces)
 - [Monorepo Explained](https://monorepo.tools/)
 - [Changesets](https://github.com/changesets/changesets)
+
+---
+
+## Exercises
+
+### Exercise 1: Set Up a pnpm Workspace Monorepo
+1. Create a monorepo root with `pnpm-workspace.yaml` that declares `packages/*` and `apps/*` as workspaces.
+2. Create `packages/utils/` with a `package.json` (`name: "@myorg/utils"`) and a small `src/index.ts` that exports a `formatDate(date: Date): string` function.
+3. Create `apps/web/` that depends on `@myorg/utils` via `"workspace:*"`, imports `formatDate`, and calls it.
+4. Run `pnpm install` from the root and verify the symlink resolves correctly.
+
+### Exercise 2: Nx Dependency Graph Exploration
+1. Create an Nx workspace with `npx create-nx-workspace@latest`.
+2. Generate a React application (`nx generate @nx/react:app my-app`) and a shared utility library (`nx generate @nx/js:lib shared-utils`).
+3. Import a function from `shared-utils` inside `my-app`.
+4. Run `nx graph` and take a screenshot (or describe) the dependency edge between `my-app` and `shared-utils`.
+5. Run `nx affected:build --base=main` and explain which projects were included and why.
+
+### Exercise 3: Turborepo Pipeline Configuration
+Write a `turbo.json` for a monorepo with the following requirements:
+- `build` depends on the `build` of all upstream packages (`^build`).
+- `test` depends on the local `build` completing first.
+- `lint` has no dependencies and its results are cached.
+- `dev` is not cached and runs persistently.
+- Cache output directories: `dist/**` and `.next/**` (excluding `.next/cache/**`).
+
+Verify your configuration is correct by running `turbo build --dry-run` and inspecting the task execution order.
+
+### Exercise 4: Affected-only CI with GitHub Actions
+Write a GitHub Actions workflow that:
+1. Uses `actions/checkout@v4` with `fetch-depth: 0` (required for affected analysis).
+2. Detects changed packages using `dorny/paths-filter` or the Nx `affected` command.
+3. Runs build and test only for the packages affected by the PR (not the entire monorepo).
+4. Caches the Turborepo or Nx cache directory between runs using `actions/cache@v4`.
+
+Explain in a comment inside the YAML file why `fetch-depth: 0` is necessary.
 
 ---
 

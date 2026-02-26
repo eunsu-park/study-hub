@@ -1,8 +1,24 @@
 # Model Explainability
 
-## Overview
+**Previous**: [Feature Engineering](./15_Feature_Engineering.md) | **Next**: [Imbalanced Data](./17_Imbalanced_Data.md)
 
-Model explainability helps us understand why a model makes specific predictions. As ML models are deployed in high-stakes domains (healthcare, finance, criminal justice), the ability to explain predictions is not just nice-to-have — it's often a legal and ethical requirement.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between intrinsic interpretability and post-hoc explainability methods
+2. Compare impurity-based and permutation-based feature importance and identify their limitations
+3. Explain Shapley values theory and apply SHAP to generate both global and local explanations
+4. Implement LIME to explain individual predictions and compare its results with SHAP
+5. Interpret Partial Dependence Plots, ICE plots, and ALE plots for feature effect visualization
+6. Apply explainability techniques to detect fairness and bias issues in ML models
+7. Design an explainability wrapper for production models that returns predictions with human-readable reasons
+
+---
+
+A model that makes accurate predictions but cannot explain them is a liability in any high-stakes domain. Regulators demand explanations (GDPR Article 22, EU AI Act), clinicians refuse to trust black boxes, and data scientists need to debug models that fail silently. This lesson gives you the tools -- SHAP, LIME, PDP, ALE -- to open any black-box model and understand what it has actually learned, turning opaque predictions into actionable insights.
 
 ---
 

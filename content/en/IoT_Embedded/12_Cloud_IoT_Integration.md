@@ -1,12 +1,21 @@
 # 12. Cloud IoT Integration
 
+**Previous**: [Image Analysis Project](./11_Image_Analysis_Project.md)
+
 ## Learning Objectives
 
-- AWS IoT Core overview and setup
-- GCP IoT (Pub/Sub) integration
-- Implement MQTT bridge
-- Device registration and authentication
-- Cloud data collection and analysis
+After completing this lesson, you will be able to:
+
+1. Describe AWS IoT Core architecture and its core components
+2. Register IoT devices with certificates on AWS IoT Core
+3. Publish sensor data to GCP Cloud Pub/Sub from a Raspberry Pi
+4. Build an MQTT bridge that forwards local messages to cloud services
+5. Implement bidirectional cloud-to-device communication
+6. Store and analyze IoT time-series data using InfluxDB and dashboard APIs
+
+---
+
+Edge processing handles real-time decisions, but cloud integration is where IoT data becomes truly valuable at scale. Cloud services provide unlimited storage, powerful analytics, fleet management for thousands of devices, and integration with machine learning pipelines. This final lesson connects your local IoT system to the cloud, completing the full data pipeline from sensor to insight.
 
 ---
 
@@ -1028,26 +1037,4 @@ if __name__ == "__main__":
 
 ---
 
-## Conclusion
-
-In this lesson, we learned how to integrate IoT devices with cloud services. Using AWS IoT Core and GCP Pub/Sub, you can build large-scale IoT systems.
-
-### Course Summary
-
-| Lesson | Topic | Core Technologies |
-|------|------|----------|
-| 01 | IoT Overview | Architecture, protocols |
-| 02 | Raspberry Pi | Setup, SSH, GPIO |
-| 03 | GPIO Control | gpiozero, sensors |
-| 04 | WiFi | Sockets, HTTP |
-| 05 | BLE | bleak, GATT |
-| 06 | MQTT | paho-mqtt, Mosquitto |
-| 07 | REST API | Flask, JSON |
-| 08-09 | Edge AI | TFLite, ONNX |
-| 10 | Home Automation | Relay, web dashboard |
-| 11 | Image Analysis | picamera2, motion detection |
-| 12 | Cloud IoT | AWS, GCP, bridge |
-
----
-
-*Last updated: 2026-02-01*
+**Previous**: [Image Analysis Project](./11_Image_Analysis_Project.md)

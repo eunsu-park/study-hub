@@ -14,14 +14,17 @@ In the previous lesson, you learned what MCP is and how to connect pre-built ser
 - Basic knowledge of JSON Schema
 - Node.js 18+ (for TypeScript) or Python 3.10+ (for Python)
 
-**Learning Objectives**:
-- Scaffold and configure an MCP server project in TypeScript and Python
-- Define resources with URI templates and dynamic content handlers
-- Define tools with JSON Schema input validation and handler functions
-- Define prompt templates with typed arguments
-- Configure transports for local (stdio) and remote (HTTP/SSE) deployment
-- Test MCP servers using the MCP Inspector and unit tests
-- Deploy, secure, and publish MCP servers
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Scaffold and configure an MCP server project in TypeScript and Python
+2. Define resources with URI templates and dynamic content handlers
+3. Define tools with JSON Schema input validation and handler functions
+4. Define prompt templates with typed arguments
+5. Configure transports for local (stdio) and remote (HTTP/SSE) deployment
+6. Test MCP servers using the MCP Inspector and unit tests
+7. Deploy, secure, and publish MCP servers
 
 ---
 

@@ -5,6 +5,19 @@
 > **선수지식**: 기본 LaTeX 문서 구조(레슨 1), 패키지
 > **목표**: 페이지 레이아웃 커스터마이징, 여백, 헤더/푸터, 간격 및 고급 타이포그래피 기법 숙달
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `geometry` 패키지를 사용하여 페이지 크기, 여백(margin), 방향(orientation)을 구성할 수 있다
+2. `fancyhdr` 패키지를 사용하여 장(chapter)·절(section) 표시가 포함된 맞춤형 헤더(header)와 푸터(footer)를 설계할 수 있다
+3. 특정 스타일 요구 사항을 충족하도록 줄 간격(line spacing), 단락 간격(paragraph spacing), 들여쓰기(indentation)를 조정할 수 있다
+4. `multicol` 패키지를 사용하여 다단 레이아웃(multi-column layout)을 구현할 수 있다
+5. `microtype` 패키지를 사용하여 마이크로타이포그래피(microtypography) 개선을 적용함으로써 텍스트 정렬과 간격을 향상시킬 수 있다
+6. `fontspec`(XeLaTeX/LuaLaTeX) 또는 레거시(legacy) LaTeX 글꼴 명령을 사용하여 적절한 글꼴을 선택하고 로드할 수 있다
+
+---
+
 ## 소개
 
 전문적인 문서는 페이지 레이아웃과 타이포그래피에 대한 정밀한 제어를 필요로 합니다. LaTeX는 여백과 헤더부터 줄 간격과 다단 레이아웃에 이르기까지 페이지 디자인의 모든 측면을 커스터마이징할 수 있는 강력한 패키지와 명령어를 제공합니다. 이 레슨은 출판 품질의 전문적인 타이포그래피를 갖춘 문서를 만드는 데 필수적인 도구를 다룹니다.
@@ -950,4 +963,4 @@ Text here.
 ---
 
 **이전**: [08_Custom_Commands.md](08_Custom_Commands.md)
-**다음**: [10_TikZ_Basics.md](10_TikZ_Basics.md)
+**다음**: [TikZ 그래픽 기초(TikZ Graphics Basics)](10_TikZ_Basics.md)

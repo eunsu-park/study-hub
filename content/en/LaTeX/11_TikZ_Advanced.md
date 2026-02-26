@@ -5,6 +5,19 @@
 > **Prerequisites**: TikZ Basics (Lesson 10), basic mathematics
 > **Objective**: Master advanced TikZ techniques and learn PGFPlots for creating publication-quality data visualizations and complex diagrams
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Use `\foreach` loops to generate repetitive graphical elements and complex patterns programmatically
+2. Create tree and graph structures using TikZ's tree-drawing libraries
+3. Plot mathematical functions and datasets with publication-quality formatting using the PGFPlots package
+4. Apply TikZ decorations, patterns, and shadings to enhance diagram aesthetics
+5. Construct complex technical diagrams such as neural network architectures and finite state machines
+6. Combine PGFPlots charts with TikZ annotations to produce figures ready for journal submission
+
+---
+
 ## Introduction
 
 Building on TikZ fundamentals, this lesson covers advanced techniques for creating sophisticated graphics. You'll learn PGFPlots for data visualization, advanced TikZ features like foreach loops, trees, decorations, and patterns, and how to create complex diagrams such as neural networks, state machines, and publication-quality plots.
@@ -1049,5 +1062,5 @@ With these advanced TikZ and PGFPlots techniques, you can create sophisticated d
 
 ---
 
-**Previous**: [10_TikZ_Basics.md](10_TikZ_Basics.md)
-**Next**: [12_Beamer_Presentations.md](12_Beamer_Presentations.md)
+**Previous**: [TikZ Graphics Basics](10_TikZ_Basics.md)
+**Next**: [Beamer Presentations](12_Beamer_Presentations.md)

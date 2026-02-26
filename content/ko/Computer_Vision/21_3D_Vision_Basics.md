@@ -1,5 +1,17 @@
 # 3D 비전 기초 (3D Vision Basics)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 스테레오 비전(Stereo Vision)의 원리, 에피폴라 기하학(Epipolar Geometry), 시차-깊이(Disparity-to-Depth) 관계를 설명할 수 있습니다.
+2. OpenCV의 스테레오 매칭 알고리즘(StereoBM, StereoSGBM)을 사용하여 깊이 맵(Depth Map)을 생성할 수 있습니다.
+3. 포인트 클라우드(Point Cloud)를 정의하고 깊이 맵과 카메라 내부 파라미터로부터 생성하는 방법을 설명할 수 있습니다.
+4. Open3D를 적용하여 3D 포인트 클라우드 데이터를 시각화, 처리, 분석할 수 있습니다.
+5. 3D 재구성(3D Reconstruction) 파이프라인을 기술하고 기본적인 Structure from Motion 워크플로우를 구현할 수 있습니다.
+
+---
+
 ## 개요
 
 3D 비전은 2D 이미지로부터 3차원 정보를 추출하고 복원하는 기술입니다. 스테레오 비전, 깊이 맵, 포인트 클라우드 처리, 3D 재구성의 기초를 다룹니다.
@@ -27,62 +39,62 @@
 ### 3D 비전의 목표
 
 ```
-3D 비전 파이프라인:
+3D Vision Pipeline:
 
 ┌──────────────────────────────────────────────────────────────────┐
 │                                                                  │
-│  2D 이미지 ─────▶ 깊이 추정 ─────▶ 3D 재구성                    │
+│  2D Image ─────▶ Depth Estimation ─────▶ 3D Reconstruction       │
 │      │                                                           │
 │      │           ┌─────────────┐                                 │
-│      └──────────▶│ 깊이 정보   │──────▶ 포인트 클라우드          │
+│      └──────────▶│ Depth Info  │──────▶ Point Cloud              │
 │                  └─────────────┘            │                    │
 │                                             │                    │
 │                                             ▼                    │
 │                                      ┌─────────────┐             │
-│                                      │  3D 메쉬    │             │
-│                                      │  3D 모델    │             │
+│                                      │  3D Mesh    │             │
+│                                      │  3D Model   │             │
 │                                      └─────────────┘             │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 
-깊이 추출 방법:
+Depth Extraction Methods:
 ┌─────────────────────┬──────────────────────────────────────────┐
-│ 방법                │ 설명                                     │
+│ Method              │ Description                              │
 ├─────────────────────┼──────────────────────────────────────────┤
-│ 스테레오 비전       │ 두 카메라의 시차로 깊이 계산             │
-│ 구조광 (Structured) │ 알려진 패턴을 투사하여 깊이 측정         │
-│ ToF (Time-of-Flight)│ 빛의 비행 시간으로 거리 측정             │
-│ 단안 깊이 추정      │ 단일 카메라 + 딥러닝으로 깊이 예측       │
-│ LiDAR               │ 레이저 스캐닝으로 정밀 깊이 측정         │
+│ Stereo Vision       │ Calculate depth from disparity of 2 cams │
+│ Structured Light    │ Measure depth by projecting known pattern│
+│ ToF (Time-of-Flight)│ Measure distance by light travel time    │
+│ Monocular Depth Est.│ Predict depth with single cam + DL       │
+│ LiDAR               │ Precise depth measurement by laser scan  │
 └─────────────────────┴──────────────────────────────────────────┘
 ```
 
 ### 좌표계 이해
 
 ```
-카메라 좌표계:
+Camera Coordinate System:
 
-        Y (위)
+        Y (up)
         │
         │
         │
-        │_________ X (오른쪽)
+        │_________ X (right)
        /
       /
-     Z (카메라 정면 방향)
+     Z (camera forward direction)
 
-월드 좌표계 → 카메라 좌표계 변환:
+World Coordinate System → Camera Coordinate System Transform:
 P_cam = R * P_world + t
 
-이미지 좌표계:
-┌─────────────────────▶ u (가로, 픽셀)
+Image Coordinate System:
+┌─────────────────────▶ u (horizontal, pixels)
 │
-│   ● (cx, cy) 주점
+│   ● (cx, cy) principal point
 │
 ▼
-v (세로, 픽셀)
+v (vertical, pixels)
 
-3D → 2D 투영:
+3D → 2D Projection:
 u = fx * (X/Z) + cx
 v = fy * (Y/Z) + cy
 ```
@@ -94,44 +106,46 @@ v = fy * (Y/Z) + cy
 ### 에피폴라 기하학
 
 ```
-에피폴라 기하학 (Epipolar Geometry):
+Epipolar Geometry:
 
-             에피폴 (e)
+             Epipole (e)
               │
    ┌──────────┼──────────┐
    │          │          │
-   │    ●─────┼──────────┼─────● 에피폴라 선
+   │    ●─────┼──────────┼─────● Epipolar line
    │   P      │          │   P'
    │          │          │
    └──────────┴──────────┘
-       왼쪽         오른쪽
-       이미지       이미지
+       Left          Right
+       Image         Image
 
-3D 점 P가 왼쪽 이미지의 점 p에 투영되면,
-오른쪽 이미지에서는 에피폴라 선 위 어딘가에 p'로 투영됨.
+If 3D point P projects to point p in the left image,
+it projects to p' somewhere on the epipolar line in the right image.
 
-핵심 행렬들:
+Key Matrices:
 ┌───────────────────┬─────────────────────────────────────────┐
-│ 행렬              │ 설명                                    │
+│ Matrix            │ Description                             │
 ├───────────────────┼─────────────────────────────────────────┤
-│ Essential Matrix  │ 정규화된 좌표계에서 기하학적 관계       │
-│ (E)               │ E = [t]x * R                            │
+│ Essential Matrix  │ Geometric relationship in normalized    │
+│ (E)               │ coordinates. E = [t]x * R               │
 ├───────────────────┼─────────────────────────────────────────┤
-│ Fundamental Matrix│ 픽셀 좌표계에서 기하학적 관계           │
-│ (F)               │ F = K'^(-T) * E * K^(-1)               │
+│ Fundamental Matrix│ Geometric relationship in pixel         │
+│ (F)               │ coordinates. F = K'^(-T) * E * K^(-1)   │
 │                   │ p'^T * F * p = 0                        │
 └───────────────────┴─────────────────────────────────────────┘
 ```
 
+**에피폴라 제약 조건이 왜 중요한가?** 이 제약 조건이 없으면 왼쪽 이미지의 픽셀 p에 대응하는 점을 오른쪽 이미지 전체에서 검색해야 합니다 — 모든 픽셀에 대해 O(W×H) 문제입니다. 에피폴라 제약 조건은 대응점이 특정 선(에피폴라 선) 위에 있어야 한다고 알려주어 검색을 1D 문제로 줄입니다. 스테레오 정렬(rectification, 두 이미지를 에피폴라 선이 수평이 되도록 정렬) 후에는 같은 행을 따라 스캔하는 것으로 더욱 단순화됩니다 — 이것이 정렬이 시차(disparity) 계산 전 표준 전처리 단계인 이유입니다.
+
 ### 시차와 깊이
 
 ```
-스테레오 시차 (Disparity):
+Stereo Disparity:
 
-왼쪽 카메라         오른쪽 카메라
+Left Camera          Right Camera
     C_L ─────────────── C_R
      │                    │
-     │    b (베이스라인)   │
+     │    b (baseline)    │
      │    ◄─────────────► │
      │                    │
      │                    │
@@ -139,26 +153,26 @@ v = fy * (Y/Z) + cy
     p_L        d        p_R
     ●─────────────────────●
     │                     │
-    │     시차 (d)        │
+    │     Disparity (d)   │
     │     d = x_L - x_R   │
 
-깊이 계산:
+Depth Calculation:
 Z = (f * b) / d
 
-여기서:
-- Z: 깊이 (카메라로부터의 거리)
-- f: 초점 거리
-- b: 베이스라인 (두 카메라 사이 거리)
-- d: 시차 (픽셀 단위)
+Where:
+- Z: Depth (distance from camera)
+- f: Focal length
+- b: Baseline (distance between two cameras)
+- d: Disparity (in pixels)
 
-시차 범위 예시:
+Disparity Range Example:
 ┌─────────────────────────────────────────┐
-│ 거리    │ 시차 (f=500, b=0.1m)          │
-├─────────┼───────────────────────────────┤
-│ 1m      │ 50 픽셀                       │
-│ 5m      │ 10 픽셀                       │
-│ 10m     │ 5 픽셀                        │
-│ 무한대  │ 0 픽셀                        │
+│ Distance │ Disparity (f=500, b=0.1m)    │
+├──────────┼──────────────────────────────┤
+│ 1m       │ 50 pixels                    │
+│ 5m       │ 10 pixels                    │
+│ 10m      │ 5 pixels                     │
+│ Infinity │ 0 pixels                     │
 └─────────────────────────────────────────┘
 ```
 
@@ -170,7 +184,7 @@ import numpy as np
 
 def stereo_calibrate(obj_points, img_points_left, img_points_right,
                      K1, D1, K2, D2, img_size):
-    """스테레오 카메라 캘리브레이션"""
+    """Stereo camera calibration"""
 
     flags = (cv2.CALIB_FIX_INTRINSIC +
              cv2.CALIB_RATIONAL_MODEL)
@@ -185,35 +199,35 @@ def stereo_calibrate(obj_points, img_points_left, img_points_right,
         flags=flags
     )
 
-    print(f"스테레오 캘리브레이션 RMS 오차: {ret:.4f}")
-    print(f"\n회전 행렬 R:\n{R}")
-    print(f"\n평행 이동 벡터 T:\n{T.ravel()}")
-    print(f"\n베이스라인: {np.linalg.norm(T):.4f} 단위")
+    print(f"Stereo calibration RMS error: {ret:.4f}")
+    print(f"\nRotation matrix R:\n{R}")
+    print(f"\nTranslation vector T:\n{T.ravel()}")
+    print(f"\nBaseline: {np.linalg.norm(T):.4f} units")
 
     return R, T, E, F
 
 def stereo_rectify(K1, D1, K2, D2, img_size, R, T):
-    """스테레오 정류 (Rectification)"""
+    """Stereo Rectification"""
 
-    # 정류 변환 계산
+    # Calculate rectification transform
     R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
         K1, D1,
         K2, D2,
         img_size,
         R, T,
-        alpha=0,  # 0: 유효 픽셀만, 1: 모든 픽셀
+        alpha=0,  # 0: valid pixels only, 1: all pixels
         newImageSize=img_size
     )
 
-    # Q 행렬: 시차 → 3D 변환에 사용
+    # Q matrix: used for disparity → 3D conversion
     # [X Y Z W]^T = Q * [x y disparity 1]^T
-    print("Q 행렬 (시차 → 3D 변환):")
+    print("Q matrix (disparity → 3D transform):")
     print(Q)
 
     return R1, R2, P1, P2, Q, roi1, roi2
 
 def create_rectification_maps(K, D, R, P, img_size):
-    """정류 맵 생성"""
+    """Generate rectification maps"""
 
     map1, map2 = cv2.initUndistortRectifyMap(
         K, D, R, P, img_size, cv2.CV_32FC1
@@ -222,7 +236,7 @@ def create_rectification_maps(K, D, R, P, img_size):
     return map1, map2
 
 def rectify_stereo_pair(img_left, img_right, maps_left, maps_right):
-    """스테레오 이미지 쌍 정류"""
+    """Rectify stereo image pair"""
 
     rect_left = cv2.remap(img_left, maps_left[0], maps_left[1],
                           cv2.INTER_LINEAR)
@@ -243,44 +257,47 @@ import cv2
 import numpy as np
 
 def compute_disparity_bm(left, right, num_disparities=64, block_size=15):
-    """StereoBM을 이용한 시차 맵 계산"""
+    """Compute disparity map using StereoBM"""
 
-    # 그레이스케일 변환
+    # Convert to grayscale
     if len(left.shape) == 3:
         left = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
         right = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
 
-    # StereoBM 생성
+    # Create StereoBM
     stereo = cv2.StereoBM_create(
-        numDisparities=num_disparities,  # 16의 배수
-        blockSize=block_size              # 홀수, 5~21
+        numDisparities=num_disparities,  # Must be a multiple of 16; larger values
+                                         # search a wider range of depths but cost more compute
+        blockSize=block_size              # Odd number, 5~21; larger blocks give smoother
+                                         # disparity but lose fine detail at depth boundaries
     )
 
-    # 파라미터 조정 (선택)
+    # Parameter tuning (optional)
     stereo.setMinDisparity(0)
-    stereo.setSpeckleWindowSize(100)
+    stereo.setSpeckleWindowSize(100)   # Remove isolated "speckle" blobs of bad disparities
     stereo.setSpeckleRange(32)
     stereo.setPreFilterType(cv2.STEREO_BM_PREFILTER_NORMALIZED_RESPONSE)
     stereo.setPreFilterSize(9)
     stereo.setPreFilterCap(31)
-    stereo.setTextureThreshold(10)
-    stereo.setUniquenessRatio(15)
+    stereo.setTextureThreshold(10)     # Skip textureless regions where matching is unreliable
+    stereo.setUniquenessRatio(15)      # Reject ambiguous matches: best match must be at least
+                                       # 15% better than the second-best candidate
 
-    # 시차 계산
+    # Compute disparity
     disparity = stereo.compute(left, right)
 
-    # 시차 값 정규화 (16배로 스케일되어 있음)
+    # Normalize disparity values (scaled by 16)
     disparity = disparity.astype(np.float32) / 16.0
 
     return disparity
 
 def visualize_disparity(disparity):
-    """시차 맵 시각화"""
+    """Visualize disparity map"""
 
-    # 유효한 시차만 사용
+    # Use only valid disparity
     valid_mask = disparity > 0
 
-    # 정규화
+    # Normalize
     disp_vis = np.zeros_like(disparity)
     if np.any(valid_mask):
         disp_min = np.min(disparity[valid_mask])
@@ -289,10 +306,10 @@ def visualize_disparity(disparity):
 
     disp_vis = disp_vis.astype(np.uint8)
 
-    # 컬러맵 적용
+    # Apply colormap
     disp_color = cv2.applyColorMap(disp_vis, cv2.COLORMAP_JET)
 
-    # 유효하지 않은 영역은 검은색으로
+    # Black out invalid regions
     disp_color[~valid_mask] = [0, 0, 0]
 
     return disp_color
@@ -302,17 +319,21 @@ def visualize_disparity(disparity):
 
 ```python
 def compute_disparity_sgbm(left, right, num_disparities=64, block_size=5):
-    """StereoSGBM을 이용한 시차 맵 계산"""
+    """Compute disparity map using StereoSGBM"""
 
-    # 그레이스케일 변환
+    # Convert to grayscale
     if len(left.shape) == 3:
         gray_left = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
         gray_right = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
     else:
         gray_left, gray_right = left, right
 
-    # SGBM 파라미터
-    # P1, P2: 인접 픽셀 간 시차 차이에 대한 페널티
+    # SGBM parameters
+    # P1, P2: Penalty for disparity difference between adjacent pixels.
+    # P1 penalizes small 1-pixel disparity changes (smooth surfaces),
+    # P2 penalizes larger jumps (depth discontinuities). P2 > P1 enforces
+    # piecewise-smooth disparity maps. The *3*block_size^2 scaling is the
+    # OpenCV-recommended baseline that keeps penalties proportional to block area.
     P1 = 8 * 3 * block_size ** 2
     P2 = 32 * 3 * block_size ** 2
 
@@ -322,49 +343,51 @@ def compute_disparity_sgbm(left, right, num_disparities=64, block_size=5):
         blockSize=block_size,
         P1=P1,
         P2=P2,
-        disp12MaxDiff=1,
+        disp12MaxDiff=1,           # Left-right consistency check tolerance;
+                                    # tight value (1) catches occlusion artifacts
         uniquenessRatio=10,
         speckleWindowSize=100,
         speckleRange=32,
         preFilterCap=63,
-        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
+        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY  # Aggregates cost along 3 directions
+                                               # for better accuracy vs. the default 5-way
     )
 
-    # 시차 계산
+    # Compute disparity
     disparity = stereo.compute(gray_left, gray_right)
     disparity = disparity.astype(np.float32) / 16.0
 
     return disparity
 
 def disparity_to_depth(disparity, Q):
-    """시차 맵을 깊이 맵으로 변환"""
+    """Convert disparity map to depth map"""
 
-    # Q 행렬을 이용한 3D 재투영
+    # 3D reprojection using Q matrix
     # points_3d[y, x] = [X, Y, Z, W]
     points_3d = cv2.reprojectImageTo3D(disparity, Q)
 
-    # Z 값 (깊이) 추출
+    # Extract Z value (depth)
     depth = points_3d[:, :, 2]
 
-    # 유효하지 않은 깊이 필터링
+    # Filter invalid depth
     valid_mask = (disparity > 0) & (depth > 0) & (depth < 10000)
     depth[~valid_mask] = 0
 
     return depth, points_3d
 
 def create_depth_colormap(depth, max_depth=10.0):
-    """깊이 맵 시각화"""
+    """Visualize depth map"""
 
-    # 깊이 클리핑
+    # Clip depth
     depth_clipped = np.clip(depth, 0, max_depth)
 
-    # 정규화 (0-255)
+    # Normalize (0-255)
     depth_norm = (depth_clipped / max_depth * 255).astype(np.uint8)
 
-    # 컬러맵 적용 (가까운 = 빨강, 먼 = 파랑)
+    # Apply colormap (close = red, far = blue)
     depth_color = cv2.applyColorMap(255 - depth_norm, cv2.COLORMAP_JET)
 
-    # 유효하지 않은 영역 마스킹
+    # Mask invalid regions
     depth_color[depth <= 0] = [0, 0, 0]
 
     return depth_color
@@ -374,13 +397,13 @@ def create_depth_colormap(depth, max_depth=10.0):
 
 ```python
 def compute_disparity_with_wls(left, right, num_disparities=64):
-    """WLS 필터로 개선된 시차 맵 계산"""
+    """Compute improved disparity map with WLS filter"""
 
-    # 그레이스케일
+    # Grayscale
     gray_left = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
     gray_right = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
 
-    # 왼쪽 매처
+    # Left matcher
     left_matcher = cv2.StereoSGBM_create(
         minDisparity=0,
         numDisparities=num_disparities,
@@ -395,19 +418,26 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
         mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY
     )
 
-    # 오른쪽 매처 (왼쪽-오른쪽 일관성 검사용)
+    # Right matcher (for left-right consistency check): computing disparity in
+    # both directions lets the WLS filter identify occlusions and unreliable
+    # regions where left and right estimates disagree
     right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
 
-    # 시차 계산
+    # Compute disparity
     left_disp = left_matcher.compute(gray_left, gray_right)
     right_disp = right_matcher.compute(gray_right, gray_left)
 
-    # WLS 필터
+    # WLS (Weighted Least Squares) filter: smooths the disparity map while
+    # preserving depth edges by weighting smoothness with image color gradients —
+    # pixels with similar color get smoothed together; edges are kept sharp
     wls_filter = cv2.ximgproc.createDisparityWLSFilter(left_matcher)
-    wls_filter.setLambda(80000)
-    wls_filter.setSigmaColor(1.2)
+    wls_filter.setLambda(80000)    # Higher lambda = stronger smoothness; trade-off
+                                    # between noise suppression and edge preservation
+    wls_filter.setSigmaColor(1.2)  # Color sensitivity: lower values preserve more
+                                    # edges but allow more noise to pass through
 
-    # 필터 적용
+    # Apply filter: uses the right disparity as a confidence guide to fill
+    # occluded pixels that only the right matcher could observe
     filtered_disp = wls_filter.filter(left_disp, left, None, right_disp)
     filtered_disp = filtered_disp.astype(np.float32) / 16.0
 
@@ -425,29 +455,29 @@ import cv2
 import numpy as np
 
 def create_point_cloud(depth, rgb, K):
-    """깊이 맵과 RGB 이미지로 포인트 클라우드 생성"""
+    """Create point cloud from depth map and RGB image"""
 
     h, w = depth.shape
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
-    # 픽셀 좌표 그리드
+    # Pixel coordinate grid
     u = np.arange(w)
     v = np.arange(h)
     u, v = np.meshgrid(u, v)
 
-    # 유효한 깊이 마스크
+    # Valid depth mask
     valid = depth > 0
 
-    # 3D 좌표 계산
+    # Calculate 3D coordinates
     Z = depth[valid]
     X = (u[valid] - cx) * Z / fx
     Y = (v[valid] - cy) * Z / fy
 
-    # 포인트 클라우드 (N x 3)
+    # Point cloud (N x 3)
     points = np.stack([X, Y, Z], axis=-1)
 
-    # 색상 정보 (N x 3)
+    # Color information (N x 3)
     if len(rgb.shape) == 3:
         colors = rgb[valid]
     else:
@@ -456,12 +486,12 @@ def create_point_cloud(depth, rgb, K):
     return points, colors
 
 def subsample_point_cloud(points, colors, voxel_size=0.01):
-    """복셀 그리드로 포인트 클라우드 다운샘플링"""
+    """Downsample point cloud using voxel grid"""
 
-    # 복셀 인덱스 계산
+    # Calculate voxel indices
     voxel_indices = np.floor(points / voxel_size).astype(int)
 
-    # 고유한 복셀만 선택
+    # Select only unique voxels
     _, unique_indices = np.unique(
         voxel_indices, axis=0, return_index=True
     )
@@ -469,11 +499,11 @@ def subsample_point_cloud(points, colors, voxel_size=0.01):
     return points[unique_indices], colors[unique_indices]
 
 def save_point_cloud_ply(filename, points, colors):
-    """PLY 형식으로 포인트 클라우드 저장"""
+    """Save point cloud in PLY format"""
 
     n_points = len(points)
 
-    # PLY 헤더
+    # PLY header
     header = f"""ply
 format ascii 1.0
 element vertex {n_points}
@@ -493,38 +523,38 @@ end_header
             r, g, b = colors[i]
             f.write(f"{x:.6f} {y:.6f} {z:.6f} {int(r)} {int(g)} {int(b)}\n")
 
-    print(f"저장됨: {filename} ({n_points} 포인트)")
+    print(f"Saved: {filename} ({n_points} points)")
 ```
 
 ### 포인트 클라우드 처리
 
 ```python
 def remove_outliers_statistical(points, colors, nb_neighbors=20, std_ratio=2.0):
-    """통계적 이상치 제거"""
+    """Statistical outlier removal"""
 
     from scipy.spatial import KDTree
 
-    # KD-Tree 구축
+    # Build KD-Tree
     tree = KDTree(points)
 
-    # 각 점의 k-NN 거리 계산
+    # Calculate k-NN distance for each point
     distances, _ = tree.query(points, k=nb_neighbors + 1)
-    mean_distances = np.mean(distances[:, 1:], axis=1)  # 자기 자신 제외
+    mean_distances = np.mean(distances[:, 1:], axis=1)  # Exclude self
 
-    # 전체 평균과 표준편차
+    # Global mean and standard deviation
     global_mean = np.mean(mean_distances)
     global_std = np.std(mean_distances)
 
-    # 이상치 마스크
+    # Outlier mask
     threshold = global_mean + std_ratio * global_std
     inlier_mask = mean_distances < threshold
 
-    print(f"이상치 제거: {len(points)} → {np.sum(inlier_mask)} 포인트")
+    print(f"Outlier removal: {len(points)} → {np.sum(inlier_mask)} points")
 
     return points[inlier_mask], colors[inlier_mask]
 
 def estimate_normals(points, k=30):
-    """포인트 클라우드 법선 벡터 추정"""
+    """Estimate point cloud normal vectors"""
 
     from scipy.spatial import KDTree
     from numpy.linalg import eig
@@ -533,15 +563,15 @@ def estimate_normals(points, k=30):
     normals = np.zeros_like(points)
 
     for i, point in enumerate(points):
-        # k-NN 검색
+        # k-NN search
         _, indices = tree.query(point, k=k)
         neighbors = points[indices]
 
-        # 공분산 행렬
+        # Covariance matrix
         centered = neighbors - np.mean(neighbors, axis=0)
         cov = np.dot(centered.T, centered) / k
 
-        # 가장 작은 고유값의 고유벡터가 법선
+        # Eigenvector of smallest eigenvalue is the normal
         eigenvalues, eigenvectors = eig(cov)
         min_idx = np.argmin(eigenvalues)
         normals[i] = eigenvectors[:, min_idx]
@@ -562,13 +592,13 @@ import open3d as o3d
 import numpy as np
 
 def create_open3d_point_cloud(points, colors=None):
-    """Open3D 포인트 클라우드 생성"""
+    """Create Open3D point cloud"""
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
 
     if colors is not None:
-        # 색상을 0-1 범위로 정규화
+        # Normalize colors to 0-1 range
         if colors.max() > 1:
             colors = colors / 255.0
         pcd.colors = o3d.utility.Vector3dVector(colors)
@@ -576,9 +606,9 @@ def create_open3d_point_cloud(points, colors=None):
     return pcd
 
 def visualize_point_cloud(pcd):
-    """포인트 클라우드 시각화"""
+    """Visualize point cloud"""
 
-    # 좌표축 추가
+    # Add coordinate frame
     coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
         size=0.5, origin=[0, 0, 0]
     )
@@ -592,29 +622,29 @@ def visualize_point_cloud(pcd):
     )
 
 def process_point_cloud_open3d(pcd):
-    """Open3D로 포인트 클라우드 처리"""
+    """Process point cloud with Open3D"""
 
-    print(f"원본 포인트 수: {len(pcd.points)}")
+    print(f"Original point count: {len(pcd.points)}")
 
-    # 1. 다운샘플링
+    # 1. Downsampling
     pcd_down = pcd.voxel_down_sample(voxel_size=0.02)
-    print(f"다운샘플링 후: {len(pcd_down.points)}")
+    print(f"After downsampling: {len(pcd_down.points)}")
 
-    # 2. 이상치 제거
+    # 2. Outlier removal
     pcd_clean, _ = pcd_down.remove_statistical_outlier(
         nb_neighbors=20,
         std_ratio=2.0
     )
-    print(f"이상치 제거 후: {len(pcd_clean.points)}")
+    print(f"After outlier removal: {len(pcd_clean.points)}")
 
-    # 3. 법선 추정
+    # 3. Normal estimation
     pcd_clean.estimate_normals(
         search_param=o3d.geometry.KDTreeSearchParamHybrid(
             radius=0.1, max_nn=30
         )
     )
 
-    # 4. 법선 방향 정렬
+    # 4. Orient normals consistently
     pcd_clean.orient_normals_consistent_tangent_plane(k=15)
 
     return pcd_clean
@@ -624,36 +654,36 @@ def process_point_cloud_open3d(pcd):
 
 ```python
 def reconstruct_mesh_poisson(pcd, depth=9):
-    """포아송 표면 재구성"""
+    """Poisson surface reconstruction"""
 
-    # 법선이 필요함
+    # Normals required
     if not pcd.has_normals():
         pcd.estimate_normals()
         pcd.orient_normals_consistent_tangent_plane(k=15)
 
-    # 포아송 재구성
+    # Poisson reconstruction
     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
         pcd, depth=depth
     )
 
-    # 저밀도 영역 제거
+    # Remove low-density regions
     densities = np.asarray(densities)
     density_threshold = np.quantile(densities, 0.01)
     vertices_to_remove = densities < density_threshold
     mesh.remove_vertices_by_mask(vertices_to_remove)
 
-    print(f"메쉬 정점 수: {len(mesh.vertices)}")
-    print(f"메쉬 삼각형 수: {len(mesh.triangles)}")
+    print(f"Mesh vertices: {len(mesh.vertices)}")
+    print(f"Mesh triangles: {len(mesh.triangles)}")
 
     return mesh
 
 def reconstruct_mesh_ball_pivoting(pcd):
-    """볼 피벗팅 표면 재구성"""
+    """Ball pivoting surface reconstruction"""
 
     if not pcd.has_normals():
         pcd.estimate_normals()
 
-    # 반경 추정
+    # Estimate radii
     distances = pcd.compute_nearest_neighbor_distance()
     avg_dist = np.mean(distances)
     radii = [avg_dist, avg_dist * 2, avg_dist * 4]
@@ -665,45 +695,45 @@ def reconstruct_mesh_ball_pivoting(pcd):
     return mesh
 
 def save_mesh(mesh, filename):
-    """메쉬 저장"""
+    """Save mesh"""
     o3d.io.write_triangle_mesh(filename, mesh)
-    print(f"메쉬 저장됨: {filename}")
+    print(f"Mesh saved: {filename}")
 ```
 
 ### RGBD 이미지 처리
 
 ```python
 def create_rgbd_from_opencv(color_img, depth_img, K):
-    """OpenCV 이미지를 Open3D RGBD로 변환"""
+    """Convert OpenCV images to Open3D RGBD"""
 
     # BGR → RGB
     color_rgb = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB)
 
-    # Open3D 이미지로 변환
+    # Convert to Open3D images
     color_o3d = o3d.geometry.Image(color_rgb)
     depth_o3d = o3d.geometry.Image(depth_img.astype(np.float32))
 
-    # RGBD 이미지 생성
+    # Create RGBD image
     rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
         color_o3d, depth_o3d,
         depth_scale=1000.0,  # mm → m
-        depth_trunc=3.0,     # 최대 깊이
+        depth_trunc=3.0,     # Maximum depth
         convert_rgb_to_intensity=False
     )
 
     return rgbd
 
 def rgbd_to_point_cloud(rgbd, K, width, height):
-    """RGBD 이미지에서 포인트 클라우드 생성"""
+    """Create point cloud from RGBD image"""
 
-    # Open3D 카메라 파라미터
+    # Open3D camera parameters
     intrinsic = o3d.camera.PinholeCameraIntrinsic(
         width, height,
         K[0, 0], K[1, 1],  # fx, fy
         K[0, 2], K[1, 2]   # cx, cy
     )
 
-    # 포인트 클라우드 생성
+    # Create point cloud
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
         rgbd, intrinsic
     )
@@ -718,34 +748,34 @@ def rgbd_to_point_cloud(rgbd, K, width, height):
 ### 다중 뷰 스테레오 (MVS) 개념
 
 ```
-다중 뷰 스테레오 파이프라인:
+Multi-View Stereo Pipeline:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  1. 이미지 수집                                                 │
-│     여러 각도에서 대상 촬영                                     │
+│  1. Image Acquisition                                           │
+│     Capture subject from multiple angles                        │
 │         📷 📷 📷 📷 📷                                          │
 │                                                                 │
-│  2. 특징점 검출 및 매칭                                         │
-│     SIFT, ORB 등으로 이미지 간 대응점 찾기                      │
+│  2. Feature Detection and Matching                              │
+│     Find correspondences between images using SIFT, ORB, etc.   │
 │         ● ─────────── ●                                         │
 │                                                                 │
 │  3. Structure from Motion (SfM)                                 │
-│     카메라 포즈 추정 + 희소 포인트 클라우드                     │
+│     Camera pose estimation + sparse point cloud                 │
 │         📷────┐    ●                                            │
 │         📷────┼────● ●                                          │
 │         📷────┘    ●                                            │
 │                                                                 │
-│  4. 조밀 재구성 (Dense Reconstruction)                          │
-│     모든 픽셀에 대해 깊이 추정                                  │
+│  4. Dense Reconstruction                                        │
+│     Estimate depth for all pixels                               │
 │         [:::::::::::]                                           │
 │                                                                 │
-│  5. 메쉬 생성                                                   │
-│     포인트 클라우드 → 삼각형 메쉬                               │
+│  5. Mesh Generation                                             │
+│     Point cloud → Triangle mesh                                 │
 │         ▲▲▲▲▲▲▲▲                                              │
 │                                                                 │
-│  6. 텍스처 매핑                                                 │
-│     원본 이미지로 메쉬에 텍스처 적용                            │
+│  6. Texture Mapping                                             │
+│     Apply texture to mesh using original images                 │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -757,59 +787,63 @@ import cv2
 import numpy as np
 
 def estimate_pose_from_essential(pts1, pts2, K):
-    """Essential Matrix로 상대 포즈 추정"""
+    """Estimate relative pose from Essential Matrix"""
 
-    # Essential Matrix 계산
+    # Use Essential (not Fundamental) Matrix because we have calibrated cameras:
+    # E encodes only the relative rotation and translation (5 DOF), while F
+    # would also absorb unknown intrinsics. Using K here normalizes the points
+    # to metric coordinates, giving a more geometrically meaningful constraint.
     E, mask = cv2.findEssentialMat(
         pts1, pts2, K,
-        method=cv2.RANSAC,
-        prob=0.999,
-        threshold=1.0
+        method=cv2.RANSAC,   # RANSAC rejects mismatches; essential for noisy matches
+        prob=0.999,           # High confidence: accept some extra iterations to avoid
+                              # returning a matrix fit to outliers
+        threshold=1.0         # Epipolar line distance tolerance in pixels
     )
 
-    print(f"인라이어 비율: {np.sum(mask) / len(mask) * 100:.1f}%")
+    print(f"Inlier ratio: {np.sum(mask) / len(mask) * 100:.1f}%")
 
-    # Essential Matrix에서 R, t 복구
+    # Recover R, t from Essential Matrix
     _, R, t, mask = cv2.recoverPose(E, pts1, pts2, K)
 
-    print(f"\n회전 행렬 R:\n{R}")
-    print(f"\n평행 이동 벡터 t (단위 벡터):\n{t.ravel()}")
+    print(f"\nRotation matrix R:\n{R}")
+    print(f"\nTranslation vector t (unit vector):\n{t.ravel()}")
 
     return R, t
 
 def triangulate_points(pts1, pts2, K, R, t):
-    """두 뷰에서 3D 점 삼각측량"""
+    """Triangulate 3D points from two views"""
 
-    # 투영 행렬 구성
+    # Construct projection matrices
     P1 = K @ np.hstack([np.eye(3), np.zeros((3, 1))])
     P2 = K @ np.hstack([R, t])
 
-    # 삼각측량
+    # Triangulation
     pts1_h = pts1.T  # (2, N)
     pts2_h = pts2.T
 
     points_4d = cv2.triangulatePoints(P1, P2, pts1_h, pts2_h)
 
-    # 동차 좌표 → 3D 좌표
+    # Homogeneous coordinates → 3D coordinates
     points_3d = points_4d[:3] / points_4d[3]
 
     return points_3d.T  # (N, 3)
 
 def incremental_sfm(images, K):
-    """증분적 SfM (간단한 버전)"""
+    """Incremental SfM (simple version)"""
 
-    # SIFT 검출기
+    # SIFT detector
     sift = cv2.SIFT_create()
 
-    # 첫 두 이미지로 초기화
+    # Initialize with first two images
     kp1, desc1 = sift.detectAndCompute(images[0], None)
     kp2, desc2 = sift.detectAndCompute(images[1], None)
 
-    # 매칭
+    # Matching
     bf = cv2.BFMatcher()
     matches = bf.knnMatch(desc1, desc2, k=2)
 
-    # 비율 테스트
+    # Ratio test
     good_matches = []
     for m, n in matches:
         if m.distance < 0.75 * n.distance:
@@ -818,23 +852,23 @@ def incremental_sfm(images, K):
     pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
     pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
 
-    # 초기 포즈 및 3D 점
+    # Initial pose and 3D points
     R, t = estimate_pose_from_essential(pts1, pts2, K)
     points_3d = triangulate_points(pts1, pts2, K, R, t)
 
-    # 카메라 포즈 저장
+    # Store camera poses
     camera_poses = [
-        {'R': np.eye(3), 't': np.zeros((3, 1))},  # 첫 번째 카메라
-        {'R': R, 't': t}                           # 두 번째 카메라
+        {'R': np.eye(3), 't': np.zeros((3, 1))},  # First camera
+        {'R': R, 't': t}                           # Second camera
     ]
 
-    print(f"초기 3D 점 수: {len(points_3d)}")
+    print(f"Initial 3D points: {len(points_3d)}")
 
-    # 이후 이미지 추가 (PnP로 포즈 추정)
+    # Add subsequent images (estimate pose using PnP)
     for i in range(2, len(images)):
         kp_new, desc_new = sift.detectAndCompute(images[i], None)
 
-        # 이전 이미지와 매칭
+        # Match with previous image
         matches = bf.knnMatch(desc2, desc_new, k=2)
 
         good_matches = []
@@ -842,11 +876,11 @@ def incremental_sfm(images, K):
             if m.distance < 0.75 * n.distance:
                 good_matches.append(m)
 
-        # 3D-2D 대응점
+        # 3D-2D correspondences
         obj_points = points_3d[[m.queryIdx for m in good_matches]]
         img_points = np.float32([kp_new[m.trainIdx].pt for m in good_matches])
 
-        # PnP로 포즈 추정
+        # Estimate pose using PnP
         success, rvec, tvec, inliers = cv2.solvePnPRansac(
             obj_points, img_points, K, None
         )
@@ -854,9 +888,9 @@ def incremental_sfm(images, K):
         if success:
             R_new, _ = cv2.Rodrigues(rvec)
             camera_poses.append({'R': R_new, 't': tvec})
-            print(f"이미지 {i} 등록 완료 (인라이어: {len(inliers)})")
+            print(f"Image {i} registered (inliers: {len(inliers)})")
 
-        # 다음 반복을 위해 업데이트
+        # Update for next iteration
         desc2 = desc_new
 
     return points_3d, camera_poses
@@ -865,23 +899,23 @@ def incremental_sfm(images, K):
 ### 번들 조정 (Bundle Adjustment)
 
 ```
-번들 조정 (Bundle Adjustment):
-카메라 파라미터와 3D 점 위치를 동시에 최적화
+Bundle Adjustment:
+Simultaneously optimize camera parameters and 3D point positions
 
-최소화 목표:
+Minimization Objective:
 E = Σ_i Σ_j || x_ij - π(K, R_i, t_i, X_j) ||²
 
-여기서:
-- x_ij: 이미지 i에서 관측된 점 j의 2D 좌표
-- π(): 3D → 2D 투영 함수
-- K: 카메라 내부 파라미터
-- R_i, t_i: 카메라 i의 포즈
-- X_j: 3D 점 j의 좌표
+Where:
+- x_ij: 2D coordinates of point j observed in image i
+- π(): 3D → 2D projection function
+- K: Camera intrinsic parameters
+- R_i, t_i: Camera i's pose
+- X_j: 3D coordinates of point j
 
-최적화 도구:
+Optimization Tools:
 - Ceres Solver
 - g2o
-- SciPy (작은 문제용)
+- SciPy (for small problems)
 ```
 
 ---
@@ -902,7 +936,7 @@ E = Σ_i Σ_j || x_ij - π(K, R_i, t_i, X_j) ||²
 <summary>힌트</summary>
 
 ```python
-# 파라미터 튜닝 필요
+# Parameter tuning needed
 stereo = cv2.StereoSGBM_create(
     numDisparities=128,
     blockSize=5,
@@ -910,7 +944,7 @@ stereo = cv2.StereoSGBM_create(
     P2=32 * 3 * 5 ** 2
 )
 
-# WLS 필터로 개선
+# Improve with WLS filter
 wls_filter = cv2.ximgproc.createDisparityWLSFilter(stereo)
 ```
 
@@ -932,15 +966,15 @@ wls_filter = cv2.ximgproc.createDisparityWLSFilter(stereo)
 ```python
 import open3d as o3d
 
-# 이상치 제거
+# Outlier removal
 pcd_clean, _ = pcd.remove_statistical_outlier(
     nb_neighbors=20, std_ratio=2.0
 )
 
-# 다운샘플링
+# Downsampling
 pcd_down = pcd_clean.voxel_down_sample(0.02)
 
-# 평면 추출 (RANSAC)
+# Plane extraction (RANSAC)
 plane_model, inliers = pcd_down.segment_plane(
     distance_threshold=0.01,
     ransac_n=3,
@@ -967,10 +1001,10 @@ plane_model, inliers = pcd_down.segment_plane(
 # Essential Matrix
 E, mask = cv2.findEssentialMat(pts1, pts2, K)
 
-# 포즈 복구
+# Pose recovery
 _, R, t, _ = cv2.recoverPose(E, pts1, pts2, K)
 
-# 삼각측량
+# Triangulation
 points_4d = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
 points_3d = points_4d[:3] / points_4d[3]
 ```
@@ -991,16 +1025,16 @@ points_3d = points_4d[:3] / points_4d[3]
 <summary>힌트</summary>
 
 ```python
-# 법선 추정
+# Normal estimation
 pcd.estimate_normals()
 pcd.orient_normals_consistent_tangent_plane(k=15)
 
-# 포아송 재구성
+# Poisson reconstruction
 mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
     pcd, depth=9
 )
 
-# 저밀도 영역 제거
+# Remove low-density regions
 densities = np.asarray(densities)
 mesh.remove_vertices_by_mask(densities < np.quantile(densities, 0.01))
 ```
@@ -1021,16 +1055,16 @@ mesh.remove_vertices_by_mask(densities < np.quantile(densities, 0.01))
 <summary>힌트</summary>
 
 ```python
-# 리맵핑 맵 미리 계산
+# Pre-compute remapping maps
 map1_left, map2_left = cv2.initUndistortRectifyMap(...)
 map1_right, map2_right = cv2.initUndistortRectifyMap(...)
 
 while True:
-    # 정류
+    # Rectification
     rect_left = cv2.remap(left, map1_left, map2_left, cv2.INTER_LINEAR)
     rect_right = cv2.remap(right, map1_right, map2_right, cv2.INTER_LINEAR)
 
-    # 시차 계산 (SGBM)
+    # Disparity calculation (SGBM)
     disparity = stereo.compute(rect_left, rect_right)
 ```
 
@@ -1040,7 +1074,7 @@ while True:
 
 ## 다음 단계
 
-- [22_Depth_Estimation.md](./22_Depth_Estimation.md) - 단안 깊이 추정, MiDaS, DPT, Structure from Motion
+- [단안 깊이 추정 (Monocular Depth Estimation)](./22_Depth_Estimation.md) - 단안 깊이 추정, MiDaS, DPT, Structure from Motion
 
 ---
 

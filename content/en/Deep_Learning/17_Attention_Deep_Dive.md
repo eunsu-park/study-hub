@@ -858,6 +858,59 @@ with torch.backends.cuda.sdp_kernel(enable_flash=True):
 
 ---
 
+## Exercises
+
+### Exercise 1: Attention Memory Scaling
+
+Empirically measure how attention memory grows with sequence length.
+
+1. Write a function that allocates Q, K, V tensors of shape `(1, 1, seq_len, 64)` in float32 on CPU.
+2. Run standard attention (`Q @ K.T / sqrt(d_k)` followed by softmax and `weights @ V`) for `seq_len` values of 512, 1024, 2048, 4096.
+3. Use Python's `tracemalloc` or `torch.cuda.max_memory_allocated()` (if CUDA available) to record peak memory at each length.
+4. Plot memory vs. sequence length on a log-log scale and confirm the O(n²) trend.
+5. Explain at what sequence length a single A100 GPU (80 GB) would run out of memory for 12-head MHA in float16.
+
+### Exercise 2: Online Softmax Verification
+
+Verify that the online softmax algorithm from the lesson produces identical results to standard softmax.
+
+1. Create a vector of scores with 100 elements.
+2. Compute standard softmax: `exp(scores - max) / sum(exp(scores - max))`.
+3. Implement the online softmax algorithm that processes the scores in 4 blocks of 25.
+4. Compare the outputs element-by-element and confirm they match to within `1e-6`.
+5. Explain why numerical stability (subtracting the max) is required and what happens without it.
+
+### Exercise 3: Attention Pattern Analysis
+
+Analyze what patterns different attention heads learn in a pretrained model.
+
+1. Load a small pretrained Transformer from `transformers` (e.g., `distilbert-base-uncased`).
+2. Pass 3 different sentences (a declarative, a question, and a list) through the model.
+3. Extract and visualize the 6 attention heads from layer 2 for each sentence.
+4. For each head, identify whether it shows diagonal (local), first-token, or uniform pattern using the `analyze_attention_patterns` function from the lesson.
+5. Report which heads behave differently across sentence types and hypothesize what each head specializes in.
+
+### Exercise 4: RoPE vs Sinusoidal Encoding
+
+Compare the positional encoding approaches on a length-extrapolation task.
+
+1. Build two small Transformers (2 layers, `d_model=128`): one with sinusoidal encoding and one with RoPE.
+2. Train both on sequences of length 64 using a copy task (predict input tokens at the output).
+3. Evaluate both models on sequences of length 128 (out-of-distribution length).
+4. Report accuracy at both lengths and explain why RoPE generalizes better to unseen lengths.
+
+### Exercise 5: Local Attention vs Full Attention Trade-off
+
+Implement and compare `LocalAttention` and full attention on a long sequence task.
+
+1. Generate a long sequence task with `seq_len=2048`: the label is the token at position 0 (global information).
+2. Train a 2-layer Transformer using full attention and another using `LocalAttention(window_size=128)`.
+3. Measure training time per epoch and peak memory usage for both.
+4. Compare accuracy after 20 epochs.
+5. Explain why the local attention model struggles with this specific task and how BigBird's global tokens would solve the problem.
+
+---
+
 ## References
 
 - Flash Attention: https://arxiv.org/abs/2205.14135

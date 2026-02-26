@@ -1,5 +1,17 @@
 # CI/CD for Machine Learning
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how ML CI/CD differs from traditional software CI/CD by identifying the additional triggers, artifacts, and quality gates specific to machine learning systems
+2. Implement a GitHub Actions workflow that automates data validation, model training, evaluation gating, and conditional deployment for an ML project
+3. Design evaluation gates that enforce minimum performance thresholds before a model is promoted from staging to production
+4. Apply shadow deployment, canary rollout, and blue-green deployment strategies to safely release new model versions in production
+5. Implement automated rollback procedures that detect production performance degradation and revert to a previous model version
+
+---
+
 ## Overview
 
 CI/CD for ML extends traditional software CI/CD with data validation, model training, evaluation gates, and deployment strategies specific to ML systems. This lesson covers ML pipeline automation with GitHub Actions, data and model validation gates, deployment strategies (shadow, canary, blue-green), rollback patterns, and testing strategies unique to ML systems.
@@ -116,6 +128,7 @@ jobs:
         run: pytest tests/unit/ -v --cov=src --cov-report=xml
 
   # ── Stage 2: Data Validation ──
+  # Separate from code quality: data issues are independent of code correctness
   data-validation:
     runs-on: ubuntu-latest
     needs: code-quality
@@ -206,6 +219,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+      # Start at 10% to limit blast radius — if 10% shows degradation, 90% of users unaffected
       - name: Canary deploy (10%)
         run: |
           python scripts/deploy.py \
@@ -282,7 +296,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
         "detail": f"Missing columns: {missing}" if missing else "OK",
     })
 
-    # 4. Target distribution check (detect label shift)
+    # Label shift detection: extreme class imbalance signals upstream data pipeline issues
     target_col = config.get("target_column", "target")
     if target_col in df.columns:
         value_counts = df[target_col].value_counts(normalize=True)
@@ -307,7 +321,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
                 "detail": f"{out_of_range} values out of [{bounds['min']}, {bounds['max']}]",
             })
 
-    # 6. Duplicate check
+    # Duplicates inflate training metrics and cause data leakage in cross-validation
     dup_count = df.duplicated().sum()
     max_dup_pct = config.get("max_duplicate_percent", 1.0)
     dup_pct = dup_count / len(df) * 100
@@ -326,6 +340,7 @@ def validate_training_data(data_path, config_path="configs/data_validation.json"
         status = "PASS" if r["passed"] else "FAIL"
         print(f"  [{status}] {r['check']}: {r['detail']}")
 
+    # Exit code 1 causes CI pipeline to fail — blocks training on bad data
     return 0 if all_passed else 1
 
 
@@ -399,7 +414,7 @@ def evaluate_model(model_version, config_path="configs/eval_gate.json"):
         "passed": p99_latency <= max_latency,
     })
 
-    # 3. Improvement over production
+    # Require improvement over production — prevents deploying equally accurate but riskier models
     # prod_accuracy = get_production_model_accuracy()
     prod_accuracy = 0.928  # placeholder
     min_improvement = config.get("min_improvement", 0.005)
@@ -411,7 +426,7 @@ def evaluate_model(model_version, config_path="configs/eval_gate.json"):
         "passed": improvement >= min_improvement,
     })
 
-    # 4. Model size check
+    # Large models increase cold start time and memory cost in serverless/container deployments
     # model_size_mb = get_model_size(model_version)
     model_size_mb = 245.0  # placeholder
     max_size_mb = config.get("max_model_size_mb", 500)
@@ -495,6 +510,7 @@ class CanaryDeployer:
 
     def __init__(self, model_version, steps=None):
         self.model_version = model_version
+        # Exponential traffic ramp: catch issues early with minimal user impact
         self.steps = steps or [5, 10, 25, 50, 100]  # Traffic percentages
         self.current_step = 0
 
@@ -519,6 +535,7 @@ class CanaryDeployer:
 
     def rollback(self):
         """Rollback: route all traffic to previous version."""
+        # Setting to 0% keeps the old version active — no separate deployment needed
         print(f"ROLLBACK: Removing v{self.model_version} from traffic")
         self.deploy_canary(0)
 
@@ -629,6 +646,7 @@ class TestModel:
 
     def test_beats_baseline(self, trained_model, sample_data):
         """Model accuracy exceeds random baseline."""
+        # A model worse than majority-class voting is harmful — catches training bugs
         from sklearn.metrics import accuracy_score
         preds = trained_model.predict(sample_data["X_test"])
         accuracy = accuracy_score(sample_data["y_test"], preds)
@@ -645,7 +663,7 @@ class TestModel:
 
     def test_directionality(self, trained_model):
         """Known feature changes produce expected prediction changes."""
-        # Higher income should increase credit approval probability
+        # Directional tests verify the model learned causal relationships, not just correlations
         x_low = np.array([[30, 30000, 1]])
         x_high = np.array([[30, 100000, 1]])
         pred_low = trained_model.predict_proba(x_low)[0][1]
@@ -654,6 +672,7 @@ class TestModel:
 
     def test_serialization_roundtrip(self, trained_model, tmp_path):
         """Model survives save/load cycle."""
+        # Catches custom layer/transform issues that break during pickle/unpickle
         model_path = tmp_path / "model.pkl"
         with open(model_path, "wb") as f:
             pickle.dump(trained_model, f)
@@ -794,3 +813,67 @@ Write a comprehensive test suite for an ML pipeline:
 
 - **L14**: DVC — version control for data and ML experiments
 - **L15**: LLMOps — CI/CD patterns specific to LLM applications
+
+---
+
+## Exercises
+
+### Exercise 1: Identify ML CI/CD Differences
+
+Review the GitHub Actions workflow in Section 2.1 and answer the following questions:
+
+1. What are the five job stages in the workflow? Describe what each stage does in one sentence.
+2. Why does the `train` job have `if: ${{ !inputs.skip_training }}`? In what scenario would you use the `skip_training` input?
+3. What is the purpose of the `needs:` keyword in each job, and what happens if a dependency job fails?
+4. The pipeline uses two separate deployment environments: `staging` and `production`. Explain why this separation matters for ML systems specifically (not just general software).
+
+### Exercise 2: Write a Data Validation Script
+
+Implement a standalone data validation function for a customer churn dataset. The dataset has these columns: `customer_id` (string), `age` (int, range 18–100), `monthly_spend` (float, range 0–10000), `churn` (binary 0/1).
+
+Your function must:
+
+1. Check that the dataset has at least 500 rows
+2. Verify all four required columns are present
+3. Detect any null values exceeding 3% per column
+4. Validate that `age` values fall within [18, 100] and `monthly_spend` within [0, 10000]
+5. Ensure the minority class in `churn` represents at least 5% of rows
+6. Print a validation report and return `True` if all checks pass, `False` otherwise
+
+Test your function by intentionally introducing failures (e.g., add a row with `age=150`) and confirm the report catches them.
+
+### Exercise 3: Implement an Evaluation Gate
+
+Using the `evaluate_model` pattern from Section 4.1 as a reference, write an evaluation gate for a regression model that predicts house prices. The gate must enforce:
+
+1. MAE (Mean Absolute Error) <= $15,000
+2. R² score >= 0.85
+3. p99 inference latency <= 80ms
+4. Model file size <= 200MB
+5. At least 2% improvement in MAE over the current production model (production MAE = $17,500)
+
+The function should print a formatted report showing each check's result and exit with code 1 if any check fails. Use placeholder values for metrics you cannot compute (e.g., `mae = 13200.0`).
+
+### Exercise 4: Compare Deployment Strategies
+
+For each of the following scenarios, choose the most appropriate deployment strategy (shadow, canary, blue-green, or A/B test) and justify your choice:
+
+1. A fraud detection model update where even a brief increase in false negatives could cost millions
+2. A recommendation engine update where you want to measure long-term click-through rate improvement over two weeks
+3. A safety-critical autonomous vehicle perception model that must roll back in under one second if issues appear
+4. A text classification model with low-stakes output (internal document tagging) where simplicity is the priority
+
+For each scenario, also describe one specific metric you would monitor and a threshold that would trigger rollback.
+
+### Exercise 5: Design a Full ML CI/CD Pipeline
+
+Design a complete ML CI/CD pipeline for a credit scoring model at a bank. Create a `dvc.yaml`-style specification or GitHub Actions YAML that includes:
+
+1. **Triggers**: code changes to `src/`, weekly schedule, and manual dispatch with a `force_retrain` option
+2. **Data validation gate**: minimum 10,000 rows, schema check, no feature with >5% nulls, label distribution check
+3. **Training stage**: parameterized by `configs/model.yaml`, outputs model registered in MLflow
+4. **Evaluation gate**: accuracy >= 0.88, AUC >= 0.92, p99 latency <= 100ms, fairness check (demographic parity >= 0.80 across age groups), model must improve by at least 1% AUC over production
+5. **Deployment**: canary at 5% → monitor 30 min → 25% → monitor 30 min → 100%, with automatic rollback if error rate exceeds 1%
+6. **Rollback mechanism**: feature flag-based rollback that requires no redeployment
+
+Document any assumptions you make about the infrastructure (e.g., "assumes Kubernetes with Istio for traffic splitting").

@@ -1,13 +1,24 @@
 # Network Programming in C
 
-## Objectives
+**Previous**: [Advanced C Pointers](./20_Advanced_Pointers.md) | **Next**: [Inter-Process Communication and Signals](./22_IPC_and_Signals.md)
 
-- Understand socket API fundamentals for TCP and UDP
-- Implement client-server communication patterns
-- Learn I/O multiplexing with select/poll for concurrent connections
-- Handle network byte order and address conversion
+## Learning Objectives
 
-**Difficulty**: ⭐⭐⭐⭐ (Advanced)
+After completing this lesson, you will be able to:
+
+1. Create TCP and UDP sockets and configure address structures with proper byte-order conversion
+2. Implement a TCP echo server that binds, listens, accepts connections, and exchanges data
+3. Write a TCP client that connects to a remote server and handles the send/recv loop
+4. Handle partial reads and writes with robust `send_all` and `recv_exact` helper functions
+5. Build a UDP sender and receiver using `sendto()` and `recvfrom()`
+6. Multiplex multiple client connections in a single thread using `select()` or `poll()`
+7. Apply practical patterns such as length-prefix message framing and non-blocking sockets
+
+---
+
+Network programming turns a standalone program into a connected service. Whether you are building a chat server, a REST API, or a distributed system, the Berkeley socket API is the foundation upon which all higher-level networking libraries are built. Learning sockets in C gives you an unobstructed view of how data actually moves across the wire -- knowledge that pays dividends no matter which language or framework you use later.
+
+**Difficulty**: Advanced
 
 ---
 
@@ -759,4 +770,53 @@ Write a minimal HTTP/1.1 client that:
 
 ---
 
-[Previous: 20_Advanced_Pointers](./20_Advanced_Pointers.md) | [Next: 22_IPC_and_Signals](./22_IPC_and_Signals.md)
+## Exercises
+
+### Exercise 1: Byte-Order Conversion Practice
+
+Write a standalone program that demonstrates byte-order conversion:
+
+1. Declare a `uint16_t` port value of `8080` and a `uint32_t` IP address for `"192.168.10.1"`.
+2. Convert each to network byte order with `htons` / `htonl` and print the raw hexadecimal value before and after conversion (use `%x`).
+3. Convert back with `ntohs` / `ntohl` and verify you recover the original values.
+4. Use `inet_pton` to convert the string `"192.168.10.1"` to a binary `struct in_addr`, then convert it back to a string with `inet_ntop` and confirm they match.
+
+Explain in a comment block why skipping byte-order conversion causes silent bugs on little-endian machines.
+
+### Exercise 2: TCP Time Server
+
+Build a minimal TCP server that sends the current date and time to every client that connects:
+
+1. Create a listening socket on port `7777` with `SO_REUSEADDR` set.
+2. In the accept loop, call `time()` and `ctime()` to get the current time as a string.
+3. Send the time string to the client using `send_all` (the robust helper from Section 2.4) to handle partial writes.
+4. Close the client socket immediately after sending.
+5. Test with `nc 127.0.0.1 7777` or a simple client that connects, reads one line, and prints it.
+
+### Exercise 3: UDP Ping-Pong with Packet Loss Simulation
+
+Extend the UDP sender/receiver from Section 3.2:
+
+1. In the receiver, add a simulated 20% packet loss: generate a random number on each `recvfrom` and drop (do not echo) the packet 20% of the time, printing "DROPPED" to stderr.
+2. In the sender, implement a timeout-based retry loop: after `sendto`, use `setsockopt(SO_RCVTIMEO)` to set a 500 ms receive timeout on the socket; if `recvfrom` returns `EAGAIN`/`EWOULDBLOCK`, retransmit up to 5 times before giving up.
+3. Run both programs and observe the retry behavior in the output.
+
+### Exercise 4: poll()-Based Echo Server Upgrade
+
+Start from the `select()`-based server in Section 4.2 and rewrite the I/O multiplexing layer using `poll()`:
+
+1. Replace `fd_set` / `FD_SET` / `FD_ISSET` with a `struct pollfd` array.
+2. When a client disconnects, remove it by swapping with the last entry in the array and decrementing `nfds` (the same technique shown in Section 4.3).
+3. Add a 5-second idle timeout to `poll()`: if no activity occurs for 5 seconds, print "Server idle..." and continue waiting.
+4. Verify with `telnet` or `nc` that multiple clients can connect, send messages, and disconnect cleanly without affecting each other.
+
+### Exercise 5: Length-Prefixed Message Protocol
+
+Implement a complete request-response protocol using the length-prefix framing from Section 5.1:
+
+1. Define a simple protocol: the client sends a length-prefixed message containing a command (`"UPPER"`, `"LOWER"`, or `"REVERSE"`), followed by a space, followed by a string (e.g., `"UPPER hello world"`).
+2. The server reads the length-prefixed message with `recv_message`, parses the command and argument, transforms the string accordingly, and replies with a length-prefixed response.
+3. The client receives and prints the response, then sends the next command from a predefined list.
+4. Ensure both sides use `send_all` and `recv_exact` throughout to handle partial reads and writes correctly.
+
+---

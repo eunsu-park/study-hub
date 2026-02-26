@@ -1,5 +1,24 @@
 # 컨테이너 서비스 (ECS/EKS/Fargate vs GKE/Cloud Run)
 
+**이전**: [서버리스 함수](./05_Serverless_Functions.md) | **다음**: [객체 스토리지](./07_Object_Storage.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 컨테이너가 가상 머신과 리소스 격리 및 효율성 측면에서 어떻게 다른지 설명할 수 있다
+2. AWS 컨테이너 서비스(ECS, EKS, Fargate)와 GCP 동등 서비스(GKE, Cloud Run)를 비교할 수 있다
+3. 관리형 오케스트레이션 서비스를 사용해 컨테이너화된 애플리케이션을 배포할 수 있다
+4. 서버리스 컨테이너(Fargate, Cloud Run)와 자체 관리 클러스터의 차이를 구분할 수 있다
+5. 이미지 저장을 위해 컨테이너 레지스트리(ECR, Artifact Registry)를 설정할 수 있다
+6. 확장, 네트워킹, 서비스 디스커버리를 고려한 컨테이너 배포 전략을 설계할 수 있다
+
+---
+
+컨테이너(Container)는 현대 애플리케이션 배포의 표준 단위가 되었습니다. 코드와 의존성을 이식 가능한 이미지로 패키징하여 개발, 스테이징, 프로덕션 환경에서 동일하게 실행됩니다. 클라우드 제공자는 클러스터 관리를 추상화하는 관리형 컨테이너 서비스를 제공하여, 팀이 인프라 운영 대신 소프트웨어 개발과 배포에 집중할 수 있게 합니다.
+
 ## 1. 컨테이너 개요
 
 ### 1.1 컨테이너 vs VM
@@ -726,6 +745,143 @@ aws apprunner create-service \
 
 - [07_Object_Storage.md](./07_Object_Storage.md) - 객체 스토리지
 - [09_Virtual_Private_Cloud.md](./09_Virtual_Private_Cloud.md) - VPC 네트워킹
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: 컨테이너 vs VM 트레이드오프
+
+팀이 모놀리식(monolithic) 웹 애플리케이션을 클라우드로 마이그레이션하고 있습니다. EC2 VM에서 실행하는 것과 Docker로 컨테이너화하여 ECS Fargate에 배포하는 것을 놓고 논의 중입니다.
+
+컨테이너 방식의 장점 두 가지와 VM을 선택하는 것이 더 나은 두 가지 시나리오를 찾아보세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**컨테이너(Fargate)의 장점**:
+1. **이식성(portability)과 일관성** — Docker 이미지는 애플리케이션과 모든 의존성을 캡슐화합니다. 동일한 이미지가 개발, CI/CD, 프로덕션 환경에서 동일하게 실행되어 "내 컴퓨터에서는 되는데" 문제를 없앱니다.
+2. **밀도(density)와 비용 효율성** — 여러 컨테이너가 호스트 OS 커널을 공유하므로, 각각 자체 OS가 있는 VM보다 훨씬 적은 메모리를 사용합니다. Fargate는 태스크(task)가 예약한 CPU/메모리에 대해서만 요금을 청구하며, 유휴 EC2 오버헤드가 없습니다.
+
+**VM(EC2)이 더 나은 시나리오**:
+1. **전체 OS 접근 또는 커널 수준 커스터마이징이 필요한 애플리케이션** — 일부 워크로드(예: 커스텀 커널 모듈, 특수 하드웨어 드라이버, `/proc`와 `/sys`를 수정하는 애플리케이션)는 컨테이너가 제공할 수 없는 루트 수준 OS 접근이 필요합니다.
+2. **컨테이너화할 수 없는 레거시 애플리케이션** — 특정 OS 버전, 레지스트리 항목(Windows), COM 객체에 대한 강한 의존성이 있다면, 컨테이너화에 상당한 리팩토링이 필요할 수 있습니다. EC2 VM에서 직접 실행하는 것이 실용적인 마이그레이션 경로일 수 있습니다.
+
+</details>
+
+### 연습 문제 2: 서비스 선택
+
+각 시나리오에 가장 적합한 AWS 컨테이너 서비스(ECS on EC2, ECS Fargate, EKS, App Runner)를 선택하고 이유를 설명하세요:
+
+1. 소규모 스타트업이 인프라 관리 없이 자동 HTTPS로 간단한 컨테이너화된 REST API를 배포하려 합니다.
+2. 플랫폼 팀이 50개 이상의 마이크로서비스를 관리하며 고급 네트워킹, 커스텀 어드미션 컨트롤러(admission controller), 멀티 클라우드 이식성이 필요합니다.
+3. 머신러닝 팀이 데이터셋을 처리하고 종료하는 GPU 가속 학습 작업을 컨테이너로 실행합니다.
+4. 회사가 워크로드에 커스텀 EC2 인스턴스 유형(예: 스토리지 최적화 i3 인스턴스)이 필요합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+1. **AWS App Runner** — 인프라 관리 없음: 클러스터, 태스크 정의(task definition), 로드 밸런서 설정이 필요하지 않습니다. App Runner가 HTTPS, 스케일링, 로드 밸런싱, 배포를 자동으로 처리합니다. 단순한 무상태(stateless) 서비스에 이상적입니다.
+
+2. **Amazon EKS** — 쿠버네티스(Kubernetes)는 복잡한 마이크로서비스 플랫폼의 업계 표준입니다. 커스텀 리소스 정의(CRD), 어드미션 웹훅(admission webhook), 파드 보안 정책(pod security policy), 서비스 메시(Istio) 통합은 쿠버네티스 네이티브 기능입니다. 멀티 클라우드 이식성은 쿠버네티스의 강점입니다(동일한 매니페스트가 GKE, AKS에서 실행 가능).
+
+3. **GPU가 있는 ECS Fargate** 또는 **GPU 노드 그룹이 있는 EKS** — 시작, 처리, 종료하는 배치 스타일 작업은 ECS 태스크 또는 쿠버네티스 Job에 적합합니다. GPU 워크로드의 경우 두 플랫폼 모두 GPU 지원 인스턴스를 지원합니다.
+
+4. **ECS on EC2** — Fargate가 지원하지 않는 특정 EC2 인스턴스 유형(i3, c5n 등)이 필요하거나 특정 드라이버가 있는 물리적 하드웨어를 연결해야 할 때, 기본 EC2 노드를 직접 관리해야 합니다. ECS on EC2는 컨테이너 오케스트레이션을 제공하면서 인스턴스 유형에 대한 완전한 제어권을 유지합니다.
+
+</details>
+
+### 연습 문제 3: 컨테이너 레지스트리(Container Registry) 워크플로우
+
+다음 CLI 명령어 순서를 설명하세요:
+1. 계정 `123456789012`의 `ap-northeast-2` 리전에서 AWS ECR에 Docker를 인증합니다.
+2. 로컬 `Dockerfile`에서 Docker 이미지를 빌드하고 저장소 이름 `my-app`과 태그 `v1.0`으로 ECR에 태그합니다.
+3. ECR에 이미지를 푸시합니다.
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+# 1단계: Docker를 ECR에 인증
+aws ecr get-login-password --region ap-northeast-2 | \
+    docker login --username AWS --password-stdin \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
+
+# 2단계: 이미지 빌드 및 태그
+docker build -t my-app .
+docker tag my-app:latest \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:v1.0
+
+# (선택 사항) latest 태그도 추가
+docker tag my-app:latest \
+    123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
+
+# 3단계: ECR에 푸시
+docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:v1.0
+docker push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/my-app:latest
+```
+
+**참고**: 푸시 전에 ECR 저장소를 생성해야 합니다. 아직 없다면:
+```bash
+aws ecr create-repository --repository-name my-app --region ap-northeast-2
+```
+
+</details>
+
+### 연습 문제 4: Cloud Run 트래픽 분할(Traffic Splitting)
+
+`asia-northeast3` 리전의 `payment-service`라는 Cloud Run 서비스의 새 버전을 배포했습니다. 새 리비전(revision)은 `payment-service-00003-xyz`이고 이전 안정 버전은 `payment-service-00002-abc`입니다.
+
+신규 버전으로 트래픽의 10%, 이전 버전으로 90%를 라우팅하는 `gcloud` 명령어를 작성하고(카나리 배포, canary deployment), 이 패턴이 유용한 이유를 설명하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+```bash
+gcloud run services update-traffic payment-service \
+    --region=asia-northeast3 \
+    --to-revisions=payment-service-00003-xyz=10,payment-service-00002-abc=90
+```
+
+**이 패턴(카나리 배포)이 유용한 이유**:
+- **위험 감소**: 실제 사용자의 10%만 새 버전에 접근합니다. 심각한 버그(충돌, 데이터 손상)가 있더라도 100%가 아닌 10%의 사용자만 영향을 받습니다.
+- **실제 트래픽 테스트**: 합성 테스트와 스테이징 환경이 모든 프로덕션 조건을 재현하지 못할 수 있습니다. 카나리 배포는 실제 프로덕션 트래픽 패턴에 새 버전을 노출합니다.
+- **점진적 롤아웃**: 10% 카나리가 좋은 지표(오류율, 지연 시간)를 보이면 50%, 100%로 늘릴 수 있습니다. 문제가 발생하면 안정 버전으로 100% 즉시 롤백합니다.
+
+새 버전을 100%로 승격:
+```bash
+gcloud run services update-traffic payment-service \
+    --region=asia-northeast3 \
+    --to-latest
+```
+
+</details>
+
+### 연습 문제 5: Fargate vs Cloud Run 비교
+
+AWS Fargate와 GCP Cloud Run의 아키텍처 차이를 분석하세요. 초당 ~100개 요청을 처리하며 가끔 10배 급증이 있는 무상태(stateless) HTTP 마이크로서비스의 경우, 어느 것을 선택하겠으며 핵심 운영 차이점은 무엇입니까?
+
+<details>
+<summary>정답 보기</summary>
+
+**핵심 아키텍처 차이**:
+
+| 측면 | AWS Fargate | GCP Cloud Run |
+|------|-------------|---------------|
+| **스케일링 모델** | 최소/최대 태스크 수 설정; 기본적으로 최솟값(0이 아님)으로 스케일 다운 | 0으로 스케일 다운; 요청 기반 자동 스케일링 |
+| **시작 시간** | 새 태스크의 컨테이너 콜드 스타트; 보통 30~60초 | 빠른 콜드 스타트; 보통 수 초 |
+| **요금 기준** | 태스크 실행 중 vCPU-시간과 GB-시간당 (유휴 상태 포함) | 실제 요청 처리 중 vCPU-초와 GB-초당만 |
+| **클러스터 요건** | ECS 클러스터 필요(서버리스이지만 클러스터 설정 필요) | 완전 관리형, 클러스터 개념 없음 |
+| **트래픽 분할** | ALB 가중 대상 그룹 필요 | 리비전(revision) 기반 트래픽 분할 내장 |
+
+**이 시나리오에 대한 권장**: **GCP Cloud Run**이 이 워크로드에 더 적합합니다:
+1. **비용**: 초당 100건의 요청은 기본 부하가 있지만, Cloud Run의 요청별 과금 방식이 버스티 워크로드에 더 저렴합니다. Fargate는 급증 사이의 유휴 시간에도 과금됩니다.
+2. **스케일링**: Cloud Run의 빠른 스케일 아웃이 10배 급증을 잘 처리합니다. 내장된 트래픽 분할로 안전한 배포가 가능합니다.
+3. **단순성**: 클러스터 관리, 태스크 정의 버전 관리, ALB 설정이 필요 없습니다.
+
+AWS에서는 **App Runner**가 단순성 측면에서 Cloud Run에 더 가까운 동등물입니다. Fargate는 세밀한 네트워킹(VPC, 보안 그룹, 프라이빗 서브넷), 영구 연결, 또는 다른 ECS 기반 서비스와의 통합이 필요할 때 더 적합합니다.
+
+</details>
 
 ---
 

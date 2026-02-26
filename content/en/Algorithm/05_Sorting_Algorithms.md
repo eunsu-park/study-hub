@@ -1,5 +1,18 @@
 # Sorting Algorithms
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare sorting algorithms (Bubble, Selection, Insertion, Merge, Quick, Heap, Counting) by their best, average, and worst-case time complexity and space complexity
+2. Distinguish between stable and unstable sorting algorithms and explain when stability matters
+3. Implement Merge Sort and Quick Sort from scratch, articulating the divide-and-conquer strategy behind each
+4. Explain why Counting Sort achieves O(n+k) time and identify the constraints that make it applicable
+5. Analyze Quick Sort's worst-case behavior and describe pivot-selection strategies that mitigate it
+6. Select the most appropriate sorting algorithm for a given problem based on input size, value range, memory constraints, and stability requirements
+
+---
+
 ## Overview
 
 Sorting is a fundamental yet critical algorithm for arranging data in a specific order. This lesson covers the principles, implementations, and time/space complexity of various sorting algorithms.
@@ -82,6 +95,8 @@ Pass 4: → [2, 3, 4, 5, 8] ← Complete
 // C
 void bubbleSort(int arr[], int n) {
     for (int i = 0; i < n - 1; i++) {
+        // Inner loop stops at n - i - 1: after pass i, the last i elements are
+        // already in their final sorted position — no need to re-examine them
         for (int j = 0; j < n - i - 1; j++) {
             if (arr[j] > arr[j + 1]) {
                 int temp = arr[j];
@@ -106,6 +121,8 @@ void bubbleSortOptimized(int arr[], int n) {
             }
         }
 
+        // If no swap occurred, the array is already sorted — this turns
+        // best-case complexity from O(n²) to O(n) for nearly-sorted input
         if (!swapped) break;  // Already sorted
     }
 }
@@ -363,6 +380,8 @@ void merge(int arr[], int left, int mid, int right) {
     int n1 = mid - left + 1;
     int n2 = right - mid;
 
+    // Temporary arrays are necessary — merging directly into arr would
+    // overwrite elements still needed for comparison on the other side
     int* L = (int*)malloc(n1 * sizeof(int));
     int* R = (int*)malloc(n2 * sizeof(int));
 
@@ -372,6 +391,8 @@ void merge(int arr[], int left, int mid, int right) {
     int i = 0, j = 0, k = left;
 
     while (i < n1 && j < n2) {
+        // <= (not <) preserves stability: equal elements from the left subarray
+        // come first, maintaining their original relative order
         if (L[i] <= R[j]) {
             arr[k++] = L[i++];
         } else {
@@ -379,6 +400,7 @@ void merge(int arr[], int left, int mid, int right) {
         }
     }
 
+    // Drain any remaining elements — at most one of these loops will execute
     while (i < n1) arr[k++] = L[i++];
     while (j < n2) arr[k++] = R[j++];
 
@@ -388,6 +410,7 @@ void merge(int arr[], int left, int mid, int right) {
 
 void mergeSort(int arr[], int left, int right) {
     if (left < right) {
+        // Overflow-safe midpoint: avoids integer overflow when left + right > INT_MAX
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);
@@ -511,10 +534,13 @@ pivot position
 // C - Lomuto partitioning
 int partition(int arr[], int low, int high) {
     int pivot = arr[high];
+    // i starts one position before the subarray — it marks the boundary of the
+    // "elements smaller than pivot" region; i increments only when we extend it
     int i = low - 1;
 
     for (int j = low; j < high; j++) {
         if (arr[j] < pivot) {
+            // Extend the smaller-than-pivot region and swap the new element into it
             i++;
             int temp = arr[i];
             arr[i] = arr[j];
@@ -522,6 +548,8 @@ int partition(int arr[], int low, int high) {
         }
     }
 
+    // Place pivot at its final position (i + 1): everything to the left is
+    // smaller, everything to the right is larger — this guarantees O(n) partition
     int temp = arr[i + 1];
     arr[i + 1] = arr[high];
     arr[high] = temp;
@@ -533,6 +561,8 @@ void quickSort(int arr[], int low, int high) {
     if (low < high) {
         int pi = partition(arr, low, high);
 
+        // Pivot is already in its final sorted position — exclude it from both
+        // recursive calls to avoid an infinite loop and unnecessary comparisons
         quickSort(arr, low, pi - 1);
         quickSort(arr, pi + 1, high);
     }
@@ -640,6 +670,8 @@ Sorting process:
 // C
 void heapify(int arr[], int n, int i) {
     int largest = i;
+    // In a 0-indexed binary heap stored as an array, children of node i are at
+    // 2*i+1 (left) and 2*i+2 (right); this arithmetic replaces an explicit tree
     int left = 2 * i + 1;
     int right = 2 * i + 2;
 
@@ -654,17 +686,22 @@ void heapify(int arr[], int n, int i) {
         arr[i] = arr[largest];
         arr[largest] = temp;
 
+        // Recursively fix the subtree that was disturbed by the swap —
+        // a single swap may violate the heap property further down the tree
         heapify(arr, n, largest);
     }
 }
 
 void heapSort(int arr[], int n) {
-    // Build max heap
+    // Build max heap by heapifying from the last internal node upward —
+    // leaf nodes are trivially valid heaps, so starting at n/2-1 skips them
+    // and achieves O(n) build time (not O(n log n))
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    // Extract elements one by one
+    // Repeatedly move the heap's root (current maximum) to the sorted suffix,
+    // then restore the heap property over the remaining n-i-1 elements
     for (int i = n - 1; i > 0; i--) {
         int temp = arr[0];
         arr[0] = arr[i];
@@ -847,6 +884,8 @@ def counting_sort(arr):
 
     max_val = max(arr)
     min_val = min(arr)
+    # Shift values so min_val maps to index 0 — allows negative or large-offset
+    # integers without allocating a huge array from 0 to max_val
     range_val = max_val - min_val + 1
 
     count = [0] * range_val
@@ -855,12 +894,17 @@ def counting_sort(arr):
     for x in arr:
         count[x - min_val] += 1
 
+    # Convert counts to cumulative sums: count[i] now gives the 1-based position
+    # of the *last* occurrence of value (min_val + i) in the output
     for i in range(1, range_val):
         count[i] += count[i - 1]
 
+    # Traverse the input backward to achieve stability: among equal elements,
+    # the one that appeared last in the input gets placed last in the output,
+    # preserving their original relative order (same as a stable sort guarantees)
     for i in range(len(arr) - 1, -1, -1):
         output[count[arr[i] - min_val] - 1] = arr[i]
-        count[arr[i] - min_val] -= 1
+        count[arr[i] - min_val] -= 1  # Decrement so the next equal element goes one slot earlier
 
     return output
 ```

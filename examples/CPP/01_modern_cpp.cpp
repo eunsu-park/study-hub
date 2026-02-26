@@ -25,6 +25,8 @@
 namespace fs = std::filesystem;
 
 // ============ C++20 Concepts ============
+// Why: concepts replace SFINAE and enable_if with readable constraint syntax —
+// the compiler produces clear error messages when a type doesn't satisfy the concept
 template<typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
@@ -39,6 +41,8 @@ void demo_structured_bindings() {
 
     // Tuple decomposition
     auto tuple = std::make_tuple(42, "hello", 3.14);
+    // Why: structured bindings eliminate verbose std::get<N>() calls and make
+    // the code self-documenting by giving meaningful names to each element
     auto [num, str, pi] = tuple;
     std::cout << "Tuple: " << num << ", " << str << ", " << pi << "\n";
 
@@ -55,6 +59,8 @@ void demo_structured_bindings() {
 }
 
 // ============ std::optional ============
+// Why: optional encodes "may not have a value" in the type system, forcing callers
+// to handle the empty case — safer than returning sentinel values like -1 or throwing
 std::optional<int> safe_divide(int a, int b) {
     if (b == 0) return std::nullopt;
     return a / b;
@@ -93,7 +99,8 @@ void demo_variant() {
     var = "hello";
     std::cout << "Variant holds string: " << std::get<std::string>(var) << "\n";
 
-    // Visitor pattern
+    // Why: std::visit with if constexpr provides compile-time type dispatch,
+    // ensuring all variant alternatives are handled without runtime type-checking overhead
     std::visit([](auto&& arg) {
         using T = std::decay_t<decltype(arg)>;
         if constexpr (std::is_same_v<T, int>)
@@ -126,6 +133,8 @@ void demo_any() {
 // ============ if constexpr ============
 template<typename T>
 void print_type(T value) {
+    // Why: if constexpr evaluates branches at compile time and discards the false branch,
+    // so code that wouldn't compile for a given type is safely eliminated
     if constexpr (std::is_integral_v<T>) {
         std::cout << "Integer: " << value << "\n";
     } else if constexpr (std::is_floating_point_v<T>) {

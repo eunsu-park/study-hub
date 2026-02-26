@@ -1,5 +1,18 @@
 # Complexity Analysis
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why hardware-independent complexity analysis is necessary for comparing algorithms
+2. Apply Big O notation to express the time and space complexity of common algorithms
+3. Analyze iterative and recursive code to determine its time complexity class
+4. Distinguish between best-case, average-case, and worst-case complexity
+5. Compare the practical trade-offs between time complexity and space complexity when selecting an algorithm
+6. Evaluate algorithm scalability by identifying how different complexity classes perform as input size grows
+
+---
+
 ## Overview
 
 Learn how to measure algorithm efficiency. Understanding Big O notation and the ability to analyze time/space complexity of code is fundamental to algorithm learning.
@@ -180,14 +193,16 @@ int binarySearch(int arr[], int n, int target) {
     int left = 0, right = n - 1;
 
     while (left <= right) {
+        // Use left + (right - left) / 2 instead of (left + right) / 2 —
+        // the naive form overflows when left + right exceeds INT_MAX (2^31-1)
         int mid = left + (right - left) / 2;
 
         if (arr[mid] == target)
             return mid;
         else if (arr[mid] < target)
-            left = mid + 1;
+            left = mid + 1;  // Target must be in the right half; discard left
         else
-            right = mid - 1;
+            right = mid - 1; // Target must be in the left half; discard right
     }
     return -1;
 }
@@ -282,12 +297,15 @@ def find_max_builtin(arr):
 ```c
 // C - Merge sort (concept)
 void mergeSort(int arr[], int left, int right) {
+    // left < right, not left != right: handles length-1 subarrays without
+    // extra base-case logic — a single element is already sorted
     if (left < right) {
+        // Compute mid with overflow-safe arithmetic (same reason as binary search)
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);      // T(n/2)
         mergeSort(arr, mid + 1, right); // T(n/2)
-        merge(arr, left, mid, right);   // O(n)
+        merge(arr, left, mid, right);   // O(n) — the cost that drives the log factor
     }
 }
 // T(n) = 2T(n/2) + O(n) = O(n log n)
@@ -367,16 +385,21 @@ int fibonacci(int n) {
 // C++ - Generate subsets
 void generateSubsets(vector<int>& arr, int index, vector<int>& current) {
     if (index == arr.size()) {
-        // Print current subset
+        // Base case: we've made an include/exclude decision for every element —
+        // 'current' now holds one complete subset
         for (int x : current) cout << x << " ";
         cout << endl;
         return;
     }
 
-    // Exclude current element
+    // Exclude-before-include ordering is arbitrary; both branches must be explored
+    // because each element has exactly two choices, giving 2ⁿ total paths
+
+    // Exclude current element — recurse without modifying 'current'
     generateSubsets(arr, index + 1, current);
 
-    // Include current element
+    // Include current element — push/pop maintains the invariant that 'current'
+    // is the same state before and after this branch (backtracking)
     current.push_back(arr[index]);
     generateSubsets(arr, index + 1, current);
     current.pop_back();
@@ -390,9 +413,14 @@ def generate_subsets(arr):
     result = []
     n = len(arr)
 
+    # 1 << n is the same as 2^n; each integer i represents one subset
+    # where bit j being set means arr[j] is included — avoids explicit recursion
     for i in range(1 << n):  # 2^n iterations
         subset = []
         for j in range(n):
+            # Check if bit j is set in i; each bit corresponds to one element's
+            # include/exclude decision — this is the iterative equivalent of the
+            # recursive two-branch approach above
             if i & (1 << j):
                 subset.append(arr[j])
         result.append(subset)
@@ -460,15 +488,20 @@ int* copyArray(int arr[], int n) {
 ```cpp
 // C++ - Merge process in merge sort
 void merge(vector<int>& arr, int left, int mid, int right) {
+    // Temporary buffer is necessary because merging in-place would overwrite
+    // elements still needed for comparison — we trade O(n) space for correctness
     vector<int> temp(right - left + 1);  // O(n) additional space
 
     int i = left, j = mid + 1, k = 0;
     while (i <= mid && j <= right) {
+        // <= (not <) preserves stability: equal elements from the left half
+        // are placed before those from the right half, maintaining original order
         if (arr[i] <= arr[j])
             temp[k++] = arr[i++];
         else
             temp[k++] = arr[j++];
     }
+    // Drain whichever half still has elements; at most one of these loops runs
     while (i <= mid) temp[k++] = arr[i++];
     while (j <= right) temp[k++] = arr[j++];
 

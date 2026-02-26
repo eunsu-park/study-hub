@@ -2,7 +2,25 @@
 
 **Difficulty**: ⭐⭐
 
-**Previous**: [04_Advanced_Control_Flow.md](./04_Advanced_Control_Flow.md) | **Next**: [06_IO_and_Redirection.md](./06_IO_and_Redirection.md)
+**Previous**: [Advanced Control Flow](./04_Advanced_Control_Flow.md) | **Next**: [I/O and Redirection](./06_IO_and_Redirection.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare return value patterns (echo capture, global variable, nameref, status code) and select the right one for each situation
+2. Write recursive functions in bash for tree traversal and memoized computation
+3. Create reusable function libraries with proper sourcing and path resolution
+4. Apply namespacing conventions to prevent function and variable collisions across libraries
+5. Implement callback and event-handler patterns for extensible script design
+6. Explain bash's dynamic scoping rules and avoid common variable scope pitfalls
+7. Write well-documented, input-validated functions following best-practice templates
+
+---
+
+As scripts grow beyond a few hundred lines, they need the same modular structure that any software project demands: reusable functions, shared libraries, clear interfaces, and predictable scoping. Bash functions behave differently from functions in most programming languages -- they lack true return values, use dynamic scoping, and share a global namespace by default. Understanding these mechanics is essential for building maintainable automation toolkits.
 
 ## 1. Return Value Patterns
 
@@ -1058,4 +1076,4 @@ Write a profiler that:
 - Generates a performance report
 - Example: `profile my_function arg1 arg2`
 
-**Previous**: [04_Advanced_Control_Flow.md](./04_Advanced_Control_Flow.md) | **Next**: [06_IO_and_Redirection.md](./06_IO_and_Redirection.md)
+**Previous**: [Advanced Control Flow](./04_Advanced_Control_Flow.md) | **Next**: [I/O and Redirection](./06_IO_and_Redirection.md)

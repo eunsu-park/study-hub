@@ -2,9 +2,24 @@
 
 [Previous: Time Series Basics](./20_Time_Series_Basics.md) | [Next: Multivariate Analysis](./22_Multivariate_Analysis.md)
 
-## Overview
+---
 
-In this chapter, we will learn AR, MA, ARMA, and ARIMA models. We will cover theoretical background, model identification through ACF/PACF, parameter estimation, and forecasting methods.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the structure and stationarity conditions of AR(p) models
+2. Describe how MA(q) models represent a time series as a weighted sum of past shocks
+3. Distinguish between AR, MA, ARMA, and ARIMA models based on ACF/PACF patterns
+4. Apply the Box-Jenkins methodology to identify, estimate, and diagnose time series models
+5. Compare candidate models using AIC and BIC information criteria
+6. Implement rolling and fixed-horizon forecasts and evaluate their performance with RMSE and MAE
+7. Trace the complete ARIMA modeling pipeline from stationarity testing through forecasting
+8. Apply Vector Autoregression (VAR) for multivariate time series, including Granger causality, impulse response analysis, and variance decomposition
+
+---
+
+Time series data is everywhere -- stock prices, sensor readings, web traffic -- yet a single snapshot tells you nothing about what comes next. AR, MA, ARMA, and ARIMA models give you a principled framework for capturing the temporal structure hidden in sequential observations, enabling you to forecast future values and quantify the uncertainty of those forecasts. Mastering the Box-Jenkins methodology for identifying and diagnosing these models is a foundational skill for any data scientist working with temporal data.
 
 ---
 
@@ -909,7 +924,224 @@ result = complete_arima_analysis(y_sample, 'Sample Time Series')
 
 ---
 
-## 9. Practice Problems
+## 9. Vector Autoregression (VAR)
+
+All the models above -- AR, MA, ARMA, ARIMA -- handle a single time series. But in practice, economic and scientific variables move together: GDP and unemployment, temperature and pressure, stock prices across sectors. **Vector Autoregression (VAR)** extends the AR framework to multiple time series simultaneously, letting each variable depend on its own past *and* the past of every other variable in the system.
+
+### 9.1 VAR(p) Model Formulation
+
+A VAR(p) model for a K-dimensional time series **Y**ₜ = (Y₁ₜ, Y₂ₜ, ..., Yₖₜ)' is:
+
+$$\mathbf{Y}_t = \mathbf{c} + \mathbf{A}_1 \mathbf{Y}_{t-1} + \mathbf{A}_2 \mathbf{Y}_{t-2} + \cdots + \mathbf{A}_p \mathbf{Y}_{t-p} + \mathbf{u}_t$$
+
+Where:
+- **c**: K x 1 vector of intercepts
+- **A**ᵢ: K x K coefficient matrices (one per lag)
+- **u**ₜ: K x 1 white noise vector with E(**u**ₜ) = **0** and covariance matrix Σ
+
+For a bivariate VAR(1) with variables Y and X:
+
+$$\begin{pmatrix} Y_t \\ X_t \end{pmatrix} = \begin{pmatrix} c_1 \\ c_2 \end{pmatrix} + \begin{pmatrix} a_{11} & a_{12} \\ a_{21} & a_{22} \end{pmatrix} \begin{pmatrix} Y_{t-1} \\ X_{t-1} \end{pmatrix} + \begin{pmatrix} u_{1t} \\ u_{2t} \end{pmatrix}$$
+
+The off-diagonal elements (a₁₂, a₂₁) capture **cross-variable dynamics** -- this is what makes VAR powerful compared to running separate AR models for each variable.
+
+### 9.2 Fitting a VAR Model in Python
+
+```python
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.stattools import adfuller
+
+np.random.seed(42)
+
+# --- Simulate a bivariate VAR(2) process ---
+# Why simulate? It lets us verify that the estimator recovers the true parameters.
+n = 500
+K = 2
+y = np.zeros((n, K))
+
+# True coefficient matrices
+A1 = np.array([[0.5, 0.1],
+               [0.2, 0.3]])
+A2 = np.array([[-0.2, 0.0],
+               [0.1, -0.1]])
+
+for t in range(2, n):
+    y[t] = A1 @ y[t-1] + A2 @ y[t-2] + np.random.multivariate_normal(
+        [0, 0], [[1.0, 0.3], [0.3, 0.8]]
+    )
+
+df_var = pd.DataFrame(y, columns=['GDP_growth', 'Inflation'])
+
+# Check stationarity -- VAR requires all series to be stationary
+for col in df_var.columns:
+    adf_p = adfuller(df_var[col])[1]
+    print(f"{col}: ADF p-value = {adf_p:.4f} ({'Stationary' if adf_p < 0.05 else 'Non-stationary'})")
+
+# Fit VAR with automatic lag selection
+# Why use information criteria? They balance fit against overfitting,
+# which is especially important in VAR because the number of parameters
+# grows as K^2 * p (quadratically in the number of variables).
+model = VAR(df_var)
+lag_order = model.select_order(maxlags=8)
+print("\n=== Lag Order Selection ===")
+print(lag_order.summary())
+
+# Fit the selected model
+result = model.fit(maxlags=8, ic='aic')
+print(f"\nSelected lag order: {result.k_ar}")
+print(result.summary())
+```
+
+### 9.3 Granger Causality
+
+Granger causality asks: does knowing the past of variable X improve the forecast of variable Y beyond what Y's own past provides? It is a statistical test of *predictive precedence*, not true causation.
+
+```python
+from statsmodels.tsa.stattools import grangercausalitytests
+
+# Test whether Inflation Granger-causes GDP_growth
+# Why Granger causality matters: If X Granger-causes Y, including X's lags
+# in the model significantly reduces Y's forecast error. This guides
+# which variables belong in your VAR system.
+print("=== Granger Causality: Inflation -> GDP_growth ===")
+gc_result = grangercausalitytests(df_var[['GDP_growth', 'Inflation']], maxlag=4)
+
+print("\n=== Granger Causality: GDP_growth -> Inflation ===")
+gc_result = grangercausalitytests(df_var[['Inflation', 'GDP_growth']], maxlag=4)
+
+# Interpret: if p-value < 0.05 at any lag, reject the null hypothesis
+# that the second variable does NOT Granger-cause the first.
+```
+
+### 9.4 Impulse Response Functions (IRF)
+
+An IRF traces how a one-unit shock to one variable propagates through the system over time. This is arguably the most important tool for interpreting VAR results -- it reveals the *dynamic multiplier effects* between variables.
+
+```python
+# Compute impulse response functions
+# Why orthogonalize? Raw shocks are typically correlated across variables.
+# Orthogonalized IRFs use Cholesky decomposition of the error covariance
+# matrix to isolate the effect of a "pure" shock to one variable.
+irf = result.irf(periods=20)
+
+# Plot IRFs with confidence bands
+fig = irf.plot(orth=True, impulse='GDP_growth', response='Inflation')
+plt.suptitle('Orthogonalized IRF: Shock to GDP_growth -> Inflation')
+plt.tight_layout()
+plt.show()
+
+fig = irf.plot(orth=True, impulse='Inflation', response='GDP_growth')
+plt.suptitle('Orthogonalized IRF: Shock to Inflation -> GDP_growth')
+plt.tight_layout()
+plt.show()
+
+# Cumulative IRF -- shows the long-run (accumulated) effect
+fig = irf.plot_cum_effects(orth=True)
+plt.suptitle('Cumulative Impulse Response Functions')
+plt.tight_layout()
+plt.show()
+```
+
+### 9.5 Forecast Error Variance Decomposition (FEVD)
+
+FEVD answers: at forecast horizon h, what fraction of variable Y's forecast uncertainty is attributable to shocks from variable X? It quantifies the relative importance of each shock source over time.
+
+```python
+# Compute FEVD
+fevd = result.fevd(periods=20)
+print("=== Forecast Error Variance Decomposition ===")
+print(fevd.summary())
+
+# Plot FEVD
+fig = fevd.plot()
+plt.suptitle('Forecast Error Variance Decomposition')
+plt.tight_layout()
+plt.show()
+
+# Why FEVD matters: In macroeconomics, FEVD helps answer questions like
+# "What fraction of output volatility is driven by monetary policy shocks
+# vs. supply shocks?" It moves beyond point estimates to show the
+# structural importance of each variable in the system.
+```
+
+### 9.6 Forecasting with VAR
+
+```python
+# Forecast the next 10 periods
+forecast_steps = 10
+forecast = result.forecast(df_var.values[-result.k_ar:], steps=forecast_steps)
+
+# Forecast with confidence intervals
+forecast_ci = result.forecast_interval(
+    df_var.values[-result.k_ar:], steps=forecast_steps, alpha=0.05
+)
+point_forecast, lower_ci, upper_ci = forecast_ci
+
+# Visualization
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+for i, col in enumerate(df_var.columns):
+    # Last 50 observed values
+    axes[i].plot(range(n-50, n), df_var[col].values[-50:], 'b-', label='Observed')
+
+    # Forecasts
+    fcast_idx = range(n, n + forecast_steps)
+    axes[i].plot(fcast_idx, point_forecast[:, i], 'r-', label='Forecast')
+    axes[i].fill_between(fcast_idx, lower_ci[:, i], upper_ci[:, i],
+                         color='r', alpha=0.2, label='95% CI')
+    axes[i].axvline(n, color='k', linestyle='--', alpha=0.5)
+    axes[i].set_title(f'{col} Forecast')
+    axes[i].legend()
+    axes[i].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+```
+
+### 9.7 VAR vs VECM: When Series Are Cointegrated
+
+VAR assumes all series are stationary. If your series are non-stationary but share a common stochastic trend (i.e., they are **cointegrated**), you should use a **Vector Error Correction Model (VECM)** instead. VECM is essentially a VAR in first differences plus error correction terms that capture the long-run equilibrium relationship.
+
+| Aspect | VAR | VECM |
+|--------|-----|------|
+| Input series | Stationary (or differenced) | Non-stationary but cointegrated |
+| Long-run relationship | Not modeled | Explicitly modeled via cointegrating equations |
+| When to use | Variables move independently | Variables share a common long-run trend |
+| Differencing | Difference first, then fit VAR | No need to difference -- VECM handles it |
+| Test first | ADF/KPSS for stationarity | Johansen test for cointegration rank |
+
+```python
+from statsmodels.tsa.vector_ar.vecm import coint_johansen, VECM
+
+# Simulate cointegrated series (Y and X share a common trend)
+np.random.seed(42)
+n = 300
+trend = np.cumsum(np.random.normal(0, 1, n))  # Common stochastic trend
+x = trend + np.random.normal(0, 0.5, n)
+y_coint = 0.8 * trend + np.random.normal(0, 0.5, n)  # Cointegrated with x
+
+df_coint = pd.DataFrame({'Y': y_coint, 'X': x})
+
+# Johansen cointegration test
+# Why Johansen? Unlike Engle-Granger (limited to 2 variables),
+# Johansen handles any number of variables and tests for the
+# number of cointegrating relationships (rank).
+johansen_result = coint_johansen(df_coint, det_order=0, k_ar_diff=2)
+print("=== Johansen Cointegration Test ===")
+print(f"Trace statistic: {johansen_result.lr1}")
+print(f"Critical values (90%, 95%, 99%): {johansen_result.cvt}")
+
+# Fit VECM if cointegrated
+vecm = VECM(df_coint, k_ar_diff=2, coint_rank=1)
+vecm_result = vecm.fit()
+print("\n=== VECM Results ===")
+print(vecm_result.summary())
+```
+
+**Rule of thumb**: Always test for cointegration before fitting a VAR on levels. If you find cointegration, VECM preserves valuable long-run information that differencing would destroy.
+
+---
+
+## 10. Practice Problems
 
 ### Problem 1: Model Identification
 Identify the model corresponding to the following ACF/PACF patterns:
@@ -931,7 +1163,7 @@ Compare advantages and disadvantages of train-test split vs rolling forecast.
 
 ---
 
-## 10. Key Summary
+## 11. Key Summary
 
 ### ARIMA Model Framework
 

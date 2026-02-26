@@ -38,6 +38,8 @@ A tensor is a generalized concept of multi-dimensional arrays.
 
 ## 2. NumPy vs PyTorch Tensor Comparison
 
+Why do we need a new data structure when NumPy already provides n-dimensional arrays? NumPy arrays live on the CPU and have no concept of gradient tracking. PyTorch tensors carry additional metadata — `device` (CPU or GPU), `requires_grad` (whether to record operations), and a reference to the computational graph — that together enable automatic differentiation, the backbone of all neural network training. In short, a PyTorch tensor is a NumPy array *plus* the bookkeeping needed to train models.
+
 ### Creation
 
 ```python
@@ -80,14 +82,18 @@ array = tensor.numpy()  # Only works for CPU tensors
 
 A core feature of PyTorch that automatically computes backpropagation.
 
+Training a neural network requires computing the gradient of the loss with respect to every parameter — potentially millions of partial derivatives. Doing this by hand is impractical. Autograd solves this by recording every operation in a computational graph during the forward pass, then walking the graph in reverse to compute all gradients automatically via the chain rule. This is what makes the leap from "defining a model" to "training a model" almost effortless.
+
 ### Basic Usage
 
 ```python
-# Enable gradient tracking with requires_grad=True
+# Why: requires_grad=True tells PyTorch to record every operation on this tensor
+# into the computational graph, so that gradients can be computed later via .backward().
 x = torch.tensor([2.0], requires_grad=True)
 y = x ** 2 + 3 * x + 1  # y = x² + 3x + 1
 
-# Backpropagation (compute dy/dx)
+# Why: .backward() traverses the computational graph in reverse (topological order)
+# to compute all partial derivatives via the chain rule.
 y.backward()
 
 # Check gradient
@@ -104,14 +110,29 @@ print(x.grad)  # tensor([7.])  # dy/dx = 2x + 3 = 2*2 + 3 = 7
     3x ────┘
 ```
 
-- **Forward pass**: Computation from input → output
-- **Backward pass**: Gradient computation from output → input
+- **Forward pass**: Computation from input → output. Each operation (`**`, `*`, `+`) is recorded as a node in a directed acyclic graph (DAG). PyTorch builds this graph dynamically — every time you run a computation, a fresh graph is created.
+- **Backward pass**: Starting at the output, PyTorch walks the graph in reverse (topological order) and applies the chain rule at each node to compute ∂y/∂x. After `.backward()` completes, the graph is **destroyed** by default (`retain_graph=False`), freeing memory.
+
+**Chain Rule in Action — a concrete example.** Consider a composite function `y = f(g(x))` where `g(x) = x²` and `f(u) = 3u + 1`. For `x = 2`:
+
+```
+Forward:  g = x² = 4,   y = 3g + 1 = 13
+Backward: dy/dg = 3,    dg/dx = 2x = 4
+          dy/dx = (dy/dg) × (dg/dx) = 3 × 4 = 12
+```
+
+Each node only needs its *local* derivative (how its output changes w.r.t. its input), and the chain rule multiplies them together. This is exactly what autograd does at every node in the computational graph — no matter how deep the network.
 
 ### Gradient Accumulation and Initialization
 
 ```python
-# Gradients accumulate
-x.grad.zero_()  # Always initialize in training loop
+# PyTorch accumulates gradients by default — calling backward() adds to
+# existing .grad values rather than replacing them.  This is intentional:
+# it allows gradient accumulation across multiple mini-batches (useful when
+# the desired batch size exceeds GPU memory).  However, in a standard
+# training loop you must zero gradients before each step, otherwise the
+# optimizer uses the *sum* of all past gradients.
+x.grad.zero_()  # Reset to 0; without this, gradients from previous steps pile up
 ```
 
 ---
@@ -214,7 +235,9 @@ x = x + 1  # Create new tensor (safe)
 ### Disabling Gradient Tracking
 
 ```python
-# Save memory during inference
+# Why: During inference we don't need gradients, so wrapping in torch.no_grad()
+# skips building the computational graph — saving memory and improving speed
+# (typically 20-30% faster for forward-only passes).
 with torch.no_grad():
     y = model(x)  # No gradient computation
 
@@ -225,8 +248,12 @@ x.requires_grad = False
 ### detach()
 
 ```python
-# Detach from computational graph
-y = x.detach()  # y does not track gradients
+# Detach from computational graph — creates a new tensor that shares the
+# same data but is not part of the autograd graph.  Common uses:
+#   1. Prevent gradients flowing into a frozen sub-network (e.g., target
+#      network in DQN, discriminator update in GANs)
+#   2. Convert a tracked tensor to a plain value for logging/plotting
+y = x.detach()  # y has the same values as x but no gradient history
 ```
 
 ---

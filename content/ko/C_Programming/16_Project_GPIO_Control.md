@@ -1,13 +1,24 @@
 # 프로젝트 15: GPIO 제어
 
+**이전**: [비트 연산 심화](./15_Bit_Operations.md) | **다음**: [프로젝트 16: 시리얼 통신](./17_Project_Serial_Communication.md)
+
 GPIO(General Purpose Input/Output)로 LED와 버튼을 제어합니다.
 
-## 학습 목표
-- GPIO 입출력 개념 이해
-- LED 제어 (디지털 출력)
-- 버튼 읽기 (디지털 입력)
-- 풀업/풀다운 저항 이해
-- 디바운싱 기법 습득
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `pinMode()`를 사용하여 GPIO 핀을 디지털 입력 또는 출력으로 설정하기
+2. `digitalWrite()`로 LED를 구동하고 다중 LED 점등 패턴 만들기
+3. 내부 풀업 저항(pull-up resistor)을 사용하여 `digitalRead()`로 버튼 상태 읽기
+4. 풀업(pull-up)과 풀다운(pull-down) 저항 구성의 차이 설명하기
+5. 소프트웨어 디바운싱(debouncing)을 구현하여 기계식 스위치 바운스로 인한 오작동 방지하기
+6. 고성능을 위해 레지스터 직접 조작(DDRx, PORTx, PINx)으로 GPIO 핀 제어하기
+7. 버튼 입력과 LED 패턴 출력을 결합한 인터랙티브 프로젝트 구축하기
+
+---
+
+GPIO 핀은 프로그램의 물리적인 손입니다 -- 소프트웨어가 현실 세계에 닿아 무언가를 켜고, 버튼 입력을 감지하고, 환경에 반응할 수 있게 해줍니다. 이 프로젝트는 LED 하나를 깜빡이는 수준을 넘어, 버튼으로 패턴과 속도를 선택하는 인터랙티브 컨트롤러를 만드는 도전입니다. 디지털 입출력(I/O)과 비트 연산에 대해 배운 모든 것을 종합적으로 활용합니다.
 
 ## 사전 지식
 - Arduino 기본 구조 (setup, loop)
@@ -25,39 +36,39 @@ GPIO(General Purpose Input/Output)로 LED와 버튼을 제어합니다.
 GPIO 핀의 두 가지 모드:
 
 출력 모드 (OUTPUT)
-┌─────────────────────────────────────┐
-│  MCU가 핀에 전압을 출력              │
-│  - HIGH: 5V (또는 3.3V)             │
-│  - LOW: 0V (GND)                    │
-│  예: LED 켜기/끄기, 릴레이 제어      │
-└─────────────────────────────────────┘
++-------------------------------------+
+|  MCU가 핀에 전압을 출력              |
+|  - HIGH: 5V (또는 3.3V)             |
+|  - LOW: 0V (GND)                    |
+|  예: LED 켜기/끄기, 릴레이 제어      |
++-------------------------------------+
 
 입력 모드 (INPUT)
-┌─────────────────────────────────────┐
-│  MCU가 핀의 전압을 읽음              │
-│  - HIGH: 임계값 이상 (약 3V)        │
-│  - LOW: 임계값 미만 (약 1.5V)       │
-│  예: 버튼 상태 읽기, 센서 읽기       │
-└─────────────────────────────────────┘
++-------------------------------------+
+|  MCU가 핀의 전압을 읽음              |
+|  - HIGH: 임계값 이상 (약 3V)        |
+|  - LOW: 임계값 미만 (약 1.5V)       |
+|  예: 버튼 상태 읽기, 센서 읽기       |
++-------------------------------------+
 ```
 
 ### Arduino Uno의 GPIO 핀
 
 ```
 Arduino Uno 핀 배치:
-┌────────────────────────────────────────────────┐
-│                                                │
-│  디지털 핀: 0 ~ 13 (총 14개)                   │
-│  - 0, 1: Serial 통신용 (TX, RX)               │
-│  - 2, 3: 외부 인터럽트 가능                    │
-│  - 3, 5, 6, 9, 10, 11: PWM 출력 가능 (~)      │
-│  - 13: 내장 LED 연결                          │
-│                                                │
-│  아날로그 핀: A0 ~ A5 (총 6개)                 │
-│  - 아날로그 입력 가능 (ADC)                    │
-│  - 디지털 입출력으로도 사용 가능               │
-│                                                │
-└────────────────────────────────────────────────┘
++------------------------------------------------+
+|                                                |
+|  디지털 핀: 0 ~ 13 (총 14개)                   |
+|  - 0, 1: Serial 통신용 (TX, RX)               |
+|  - 2, 3: 외부 인터럽트 가능                    |
+|  - 3, 5, 6, 9, 10, 11: PWM 출력 가능 (~)      |
+|  - 13: 내장 LED 연결                          |
+|                                                |
+|  아날로그 핀: A0 ~ A5 (총 6개)                 |
+|  - 아날로그 입력 가능 (ADC)                    |
+|  - 디지털 입출력으로도 사용 가능               |
+|                                                |
++------------------------------------------------+
 ```
 
 ---
@@ -70,41 +81,41 @@ Arduino Uno 핀 배치:
 LED 연결 방법:
 
 방법 1: 핀 → 저항 → LED → GND (싱킹)
-┌──────┐
-│ 핀 9 │───[330Ω]───[LED]───GND
-└──────┘
++------+
+│ 핀 9 │───[330R]───[LED]───GND
++------+
 * HIGH 출력 시 LED 켜짐
 
 방법 2: VCC → LED → 저항 → 핀 (소싱)
-          VCC───[LED]───[330Ω]───│ 핀 9 │
-                                 └──────┘
+          VCC───[LED]───[330R]───│ 핀 9 │
+                                 +------+
 * LOW 출력 시 LED 켜짐
 
 저항값 계산:
 R = (V_supply - V_led) / I_led
   = (5V - 2V) / 10mA
-  = 300Ω → 330Ω 사용 (표준 저항값)
+  = 300R → 330R 사용 (표준 저항값)
 ```
 
 ### 기본 LED 켜기/끄기
 
 ```cpp
 // led_basic.ino
-// 가장 기본적인 LED 제어
+// Most basic LED control
 
-const int LED_PIN = 9;  // LED 연결 핀
+const int LED_PIN = 9;  // LED connected pin
 
 void setup() {
-    // 핀 모드를 출력으로 설정
+    // Set pin mode to output
     pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-    // LED 켜기 (HIGH = 5V 출력)
+    // Turn LED on (HIGH = 5V output)
     digitalWrite(LED_PIN, HIGH);
-    delay(1000);  // 1초 대기
+    delay(1000);  // Wait 1 second
 
-    // LED 끄기 (LOW = 0V 출력)
+    // Turn LED off (LOW = 0V output)
     digitalWrite(LED_PIN, LOW);
     delay(1000);
 }
@@ -116,7 +127,7 @@ Wokwi (https://wokwi.com)에서 다음과 같이 회로를 구성합니다:
 
 1. Arduino Uno 추가
 2. LED 추가 (부품 목록에서 검색)
-3. 저항 추가 (330Ω)
+3. 저항 추가 (330 ohms)
 4. 연결:
    - 핀 9 → 저항 → LED 양극(+, 긴 다리)
    - LED 음극(-, 짧은 다리) → GND
@@ -125,26 +136,26 @@ Wokwi (https://wokwi.com)에서 다음과 같이 회로를 구성합니다:
 
 ```cpp
 // led_sequence.ino
-// 여러 LED 순차적으로 켜기
+// Light multiple LEDs sequentially
 
 const int LED_PINS[] = {9, 10, 11, 12};
 const int NUM_LEDS = 4;
 
 void setup() {
-    // 모든 LED 핀을 출력으로 설정
+    // Set all LED pins to output
     for (int i = 0; i < NUM_LEDS; i++) {
         pinMode(LED_PINS[i], OUTPUT);
     }
 }
 
 void loop() {
-    // 순차적으로 켜기
+    // Turn on sequentially
     for (int i = 0; i < NUM_LEDS; i++) {
         digitalWrite(LED_PINS[i], HIGH);
         delay(200);
     }
 
-    // 순차적으로 끄기
+    // Turn off sequentially
     for (int i = 0; i < NUM_LEDS; i++) {
         digitalWrite(LED_PINS[i], LOW);
         delay(200);
@@ -156,7 +167,7 @@ void loop() {
 
 ```cpp
 // led_patterns.ino
-// 다양한 LED 패턴
+// Various LED patterns
 
 const int LED_PINS[] = {9, 10, 11, 12};
 const int NUM_LEDS = 4;
@@ -167,38 +178,38 @@ void setup() {
     }
 }
 
-// 모든 LED 상태 설정
+// Set all LED states
 void setLEDs(int pattern) {
     for (int i = 0; i < NUM_LEDS; i++) {
         digitalWrite(LED_PINS[i], (pattern >> i) & 1);
     }
 }
 
-// 왕복 패턴 (나이트 라이더)
+// Knight Rider pattern
 void knightRider() {
-    // 왼쪽으로
+    // Left
     for (int i = 0; i < NUM_LEDS; i++) {
         setLEDs(1 << i);
         delay(100);
     }
-    // 오른쪽으로
+    // Right
     for (int i = NUM_LEDS - 2; i > 0; i--) {
         setLEDs(1 << i);
         delay(100);
     }
 }
 
-// 깜빡임 패턴
+// Blink pattern
 void blinkAll(int times, int delayMs) {
     for (int i = 0; i < times; i++) {
-        setLEDs(0x0F);  // 모두 켜기
+        setLEDs(0x0F);  // All on
         delay(delayMs);
-        setLEDs(0x00);  // 모두 끄기
+        setLEDs(0x00);  // All off
         delay(delayMs);
     }
 }
 
-// 채우기 패턴
+// Fill pattern
 void fillPattern() {
     for (int i = 0; i < NUM_LEDS; i++) {
         setLEDs((1 << (i + 1)) - 1);  // 0001, 0011, 0111, 1111
@@ -233,13 +244,13 @@ void loop() {
 
 방법 1: 외부 풀다운 저항 사용
         VCC (5V)
-          │
-        [버튼]
-          │
-    ┌─────┼─────┐
-    │           │
-  [핀]       [10kΩ]
-                │
+          |
+        [Button]
+          |
+    +-----+-----+
+    |           |
+  [Pin]       [10k]
+                |
               GND
 
 - 버튼 안 누름: 핀 = LOW (저항이 GND로 당김)
@@ -247,20 +258,20 @@ void loop() {
 
 방법 2: 외부 풀업 저항 사용
         VCC (5V)
-          │
-       [10kΩ]
-          │
-    ┌─────┼─────┐
-    │           │
-  [핀]       [버튼]
-                │
+          |
+       [10k]
+          |
+    +-----+-----+
+    |           |
+  [Pin]       [Button]
+                |
               GND
 
 - 버튼 안 누름: 핀 = HIGH (저항이 VCC로 당김)
 - 버튼 누름: 핀 = LOW (GND 연결)
 
 방법 3: 내부 풀업 저항 사용 (권장)
-  [핀]───[버튼]───GND
+  [Pin]---[Button]---GND
 
 - pinMode(pin, INPUT_PULLUP) 사용
 - 외부 저항 불필요
@@ -272,13 +283,13 @@ void loop() {
 
 ```cpp
 // button_basic.ino
-// 버튼으로 LED 제어
+// Control LED with button
 
 const int BUTTON_PIN = 2;
 const int LED_PIN = 13;
 
 void setup() {
-    // 내부 풀업 저항 사용
+    // Use internal pull-up resistor
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(LED_PIN, OUTPUT);
 
@@ -286,10 +297,10 @@ void setup() {
 }
 
 void loop() {
-    // 버튼 상태 읽기
+    // Read button state
     int buttonState = digitalRead(BUTTON_PIN);
 
-    // 버튼 누르면 LED 켜기 (LOW = 눌림)
+    // Turn on LED when button pressed (LOW = pressed)
     if (buttonState == LOW) {
         digitalWrite(LED_PIN, HIGH);
         Serial.println("Button pressed!");
@@ -297,7 +308,7 @@ void loop() {
         digitalWrite(LED_PIN, LOW);
     }
 
-    delay(10);  // 짧은 대기
+    delay(10);  // Short delay
 }
 ```
 
@@ -305,13 +316,13 @@ void loop() {
 
 ```cpp
 // button_toggle.ino
-// 버튼 누를 때마다 LED 상태 토글
+// Toggle LED state with each button press
 
 const int BUTTON_PIN = 2;
 const int LED_PIN = 13;
 
 bool ledState = false;
-bool lastButtonState = HIGH;  // 풀업이므로 HIGH가 기본
+bool lastButtonState = HIGH;  // HIGH is default with pull-up
 
 void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -321,9 +332,9 @@ void setup() {
 void loop() {
     bool currentButtonState = digitalRead(BUTTON_PIN);
 
-    // 버튼이 눌렸을 때 (HIGH → LOW 변화)
+    // When button is pressed (HIGH -> LOW transition)
     if (lastButtonState == HIGH && currentButtonState == LOW) {
-        ledState = !ledState;  // LED 상태 토글
+        ledState = !ledState;  // Toggle LED state
         digitalWrite(LED_PIN, ledState);
     }
 
@@ -334,7 +345,7 @@ void loop() {
 
 ---
 
-## 4. 디바운싱 (Debouncing)
+## 4. 디바운싱(Debouncing)
 
 ### 바운싱 문제
 
@@ -344,12 +355,12 @@ void loop() {
 실제 버튼 신호 (바운싱):
 
     버튼 누름                    버튼 뗌
-        ↓                         ↓
-HIGH ─────┐   ┌─┐ ┌─┐        ┌─┐ ┌────────
-          │   │ │ │ │        │ │ │
-LOW       └───┘ └─┘ └────────┘ └─┘
+        |                         |
+HIGH -----+   +-+ +-+        +-+ +--------
+          |   | | | |        | | |
+LOW       +---+ +-+ +--------+ +-+
 
-         ↑↑↑ 바운싱 노이즈 ↑↑↑
+         ^^^ 바운싱 노이즈 ^^^
 
 시간: 약 1~50ms 동안 발생
 ```
@@ -358,7 +369,7 @@ LOW       └───┘ └─┘ └────────┘ └─┘
 
 ```cpp
 // debounce_software.ino
-// 소프트웨어 디바운싱
+// Software debouncing
 
 const int BUTTON_PIN = 2;
 const int LED_PIN = 13;
@@ -377,19 +388,19 @@ void setup() {
 void loop() {
     bool reading = digitalRead(BUTTON_PIN);
 
-    // 상태 변화 감지
+    // Detect state change
     if (reading != lastButtonState) {
-        lastDebounceTime = millis();  // 타이머 리셋
+        lastDebounceTime = millis();  // Reset timer
     }
 
-    // 일정 시간 동안 상태가 유지되면 확정
+    // Confirm after stable for set time
     if ((millis() - lastDebounceTime) > debounceDelay) {
         static bool buttonState = HIGH;
 
         if (reading != buttonState) {
             buttonState = reading;
 
-            // 버튼 눌림 확정 (HIGH → LOW)
+            // Button press confirmed (HIGH -> LOW)
             if (buttonState == LOW) {
                 ledState = !ledState;
                 digitalWrite(LED_PIN, ledState);
@@ -402,11 +413,11 @@ void loop() {
 }
 ```
 
-### Bounce 클래스 만들기
+### Button 클래스 만들기
 
 ```cpp
 // button_class.ino
-// 재사용 가능한 버튼 클래스
+// Reusable button class
 
 class Button {
 private:
@@ -429,7 +440,7 @@ public:
         pinMode(pin, INPUT_PULLUP);
     }
 
-    // 업데이트 및 눌림 감지
+    // Update and detect press
     bool pressed() {
         bool reading = digitalRead(pin);
 
@@ -442,7 +453,7 @@ public:
                 currentState = reading;
                 if (currentState == LOW) {
                     lastState = reading;
-                    return true;  // 버튼 눌림!
+                    return true;  // Button pressed!
                 }
             }
         }
@@ -451,13 +462,13 @@ public:
         return false;
     }
 
-    // 현재 상태 (누르고 있는지)
+    // Current state (is being held)
     bool isPressed() {
         return currentState == LOW;
     }
 };
 
-// 사용 예
+// Usage example
 Button btn1(2);
 Button btn2(3);
 const int LED1 = 12;
@@ -496,27 +507,27 @@ void loop() {
 
 ```cpp
 // led_controller.ino
-// 버튼으로 LED 패턴과 속도 제어
+// Control LED pattern and speed with buttons
 
 const int LED_PINS[] = {9, 10, 11, 12};
 const int NUM_LEDS = 4;
-const int BTN_PATTERN = 2;  // 패턴 변경 버튼
-const int BTN_SPEED = 3;    // 속도 변경 버튼
+const int BTN_PATTERN = 2;  // Pattern change button
+const int BTN_SPEED = 3;    // Speed change button
 
-// 상태 변수
+// State variables
 int currentPattern = 0;
 const int NUM_PATTERNS = 4;
-int speedLevel = 1;  // 0=빠름, 1=보통, 2=느림
+int speedLevel = 1;  // 0=fast, 1=normal, 2=slow
 const int SPEEDS[] = {50, 150, 300};
 
-// 디바운싱 변수
+// Debouncing variables
 bool lastBtnPattern = HIGH;
 bool lastBtnSpeed = HIGH;
 unsigned long lastDebouncePattern = 0;
 unsigned long lastDebounceSpeed = 0;
 const unsigned long debounceDelay = 50;
 
-// 패턴 타이밍
+// Pattern timing
 unsigned long lastPatternUpdate = 0;
 int patternStep = 0;
 
@@ -538,12 +549,12 @@ void setLEDs(byte pattern) {
     }
 }
 
-// 패턴 0: 순차 점등
+// Pattern 0: Sequential lighting
 void pattern0() {
     setLEDs(1 << (patternStep % NUM_LEDS));
 }
 
-// 패턴 1: 나이트 라이더
+// Pattern 1: Knight Rider
 void pattern1() {
     int pos = patternStep % (NUM_LEDS * 2 - 2);
     if (pos >= NUM_LEDS) {
@@ -552,7 +563,7 @@ void pattern1() {
     setLEDs(1 << pos);
 }
 
-// 패턴 2: 채우기
+// Pattern 2: Fill
 void pattern2() {
     int step = patternStep % (NUM_LEDS * 2);
     if (step < NUM_LEDS) {
@@ -562,7 +573,7 @@ void pattern2() {
     }
 }
 
-// 패턴 3: 번갈아 깜빡임
+// Pattern 3: Alternating blink
 void pattern3() {
     if (patternStep % 2 == 0) {
         setLEDs(0b0101);  // LED 0, 2
@@ -600,7 +611,7 @@ bool checkButton(int pin, bool& lastState, unsigned long& lastTime) {
 }
 
 void loop() {
-    // 버튼 1: 패턴 변경
+    // Button 1: Change pattern
     if (checkButton(BTN_PATTERN, lastBtnPattern, lastDebouncePattern)) {
         currentPattern = (currentPattern + 1) % NUM_PATTERNS;
         patternStep = 0;
@@ -608,14 +619,14 @@ void loop() {
         Serial.println(currentPattern);
     }
 
-    // 버튼 2: 속도 변경
+    // Button 2: Change speed
     if (checkButton(BTN_SPEED, lastBtnSpeed, lastDebounceSpeed)) {
         speedLevel = (speedLevel + 1) % 3;
         Serial.print("Speed: ");
         Serial.println(SPEEDS[speedLevel]);
     }
 
-    // 패턴 업데이트
+    // Update pattern
     if (millis() - lastPatternUpdate >= SPEEDS[speedLevel]) {
         lastPatternUpdate = millis();
         updatePattern();
@@ -629,7 +640,7 @@ void loop() {
 부품 목록:
 - Arduino Uno x1
 - LED x4 (빨강, 노랑, 초록, 파랑)
-- 저항 330Ω x4
+- 저항 330 ohm x4
 - 버튼 x2
 
 연결:
@@ -648,49 +659,49 @@ Arduino 함수 대신 레지스터를 직접 제어하면 훨씬 빠릅니다.
 
 ```cpp
 // register_gpio.ino
-// 레지스터로 직접 GPIO 제어
+// Direct GPIO control with registers
 
 void setup() {
-    // DDRB: 포트 B 방향 레지스터 (핀 8-13)
-    // 비트 1~4를 출력으로 설정 (핀 9-12)
+    // DDRB: Port B Direction Register (pins 8-13)
+    // Set bits 1-4 to output (pins 9-12)
     DDRB |= 0b00011110;
 
-    // DDRD: 포트 D 방향 레지스터 (핀 0-7)
-    // 비트 2, 3을 입력으로 (핀 2, 3)
+    // DDRD: Port D Direction Register (pins 0-7)
+    // Set bits 2, 3 to input (pins 2, 3)
     DDRD &= ~0b00001100;
 
-    // PORTD: 풀업 활성화
+    // PORTD: Enable pull-up
     PORTD |= 0b00001100;
 
     Serial.begin(9600);
 }
 
 void loop() {
-    // PIND: 포트 D 입력 레지스터
-    // 버튼 1 (핀 2) 확인
-    if (!(PIND & 0b00000100)) {  // 비트 2
-        // 모든 LED 켜기
+    // PIND: Port D Input Register
+    // Check button 1 (pin 2)
+    if (!(PIND & 0b00000100)) {  // Bit 2
+        // All LEDs on
         PORTB |= 0b00011110;
         Serial.println("All ON");
     }
 
-    // 버튼 2 (핀 3) 확인
-    if (!(PIND & 0b00001000)) {  // 비트 3
-        // 모든 LED 끄기
+    // Check button 2 (pin 3)
+    if (!(PIND & 0b00001000)) {  // Bit 3
+        // All LEDs off
         PORTB &= ~0b00011110;
         Serial.println("All OFF");
     }
 
-    // LED 시프트 패턴
+    // LED shift pattern
     static unsigned long lastUpdate = 0;
-    static byte ledPattern = 0b00000010;  // 핀 9부터 시작
+    static byte ledPattern = 0b00000010;  // Start from pin 9
 
     if (millis() - lastUpdate > 200) {
         lastUpdate = millis();
 
         PORTB = (PORTB & ~0b00011110) | ledPattern;
 
-        // 왼쪽으로 시프트
+        // Shift left
         ledPattern <<= 1;
         if (ledPattern > 0b00010000) {
             ledPattern = 0b00000010;
@@ -732,7 +743,7 @@ Arduino Uno 포트 매핑:
 
 ```cpp
 // reaction_game.ino
-// LED가 켜지면 버튼을 누르고 반응 시간 측정
+// Press button when LED turns on and measure reaction time
 
 const int LED_PIN = 13;
 const int BUTTON_PIN = 2;
@@ -759,19 +770,19 @@ void loop() {
 
     switch (state) {
         case WAITING:
-            // 버튼 누르면 게임 시작
+            // Press button to start game
             if (buttonPressed) {
                 state = READY;
                 waitStart = millis();
                 Serial.println("\nGet ready...");
 
-                // 버튼 떼기 대기
+                // Wait for button release
                 while (digitalRead(BUTTON_PIN) == LOW);
             }
             break;
 
         case READY:
-            // 랜덤 시간 후 LED 켜기
+            // Turn on LED after random time
             if (millis() - waitStart > random(2000, 5000)) {
                 digitalWrite(LED_PIN, HIGH);
                 ledOnTime = millis();
@@ -779,7 +790,7 @@ void loop() {
                 Serial.println("GO!");
             }
 
-            // 일찍 누르면 실패
+            // Too early press = fail
             if (buttonPressed) {
                 Serial.println("Too early! Try again.");
                 state = WAITING;
@@ -787,14 +798,14 @@ void loop() {
             break;
 
         case PLAYING:
-            // 버튼 누르면 시간 측정
+            // Measure time when button pressed
             if (buttonPressed) {
                 reactionTime = millis() - ledOnTime;
                 digitalWrite(LED_PIN, LOW);
                 state = RESULT;
             }
 
-            // 타임아웃 (3초)
+            // Timeout (3 seconds)
             if (millis() - ledOnTime > 3000) {
                 digitalWrite(LED_PIN, LOW);
                 Serial.println("Too slow! (> 3 seconds)");
@@ -816,7 +827,7 @@ void loop() {
 
             Serial.println("\nPress button to play again");
 
-            // 버튼 떼기 대기
+            // Wait for button release
             while (digitalRead(BUTTON_PIN) == LOW);
             delay(500);
 
@@ -863,14 +874,16 @@ void loop() {
 
 | 개념 | 설명 |
 |------|------|
-| 풀업 저항 | 입력 핀을 HIGH로 유지, 버튼 누르면 LOW |
-| 풀다운 저항 | 입력 핀을 LOW로 유지, 버튼 누르면 HIGH |
-| 디바운싱 | 버튼 노이즈 제거 기법 |
-| 레지스터 | DDRx (방향), PORTx (출력), PINx (입력) |
+| 풀업 저항(pull-up resistor) | 입력 핀을 HIGH로 유지, 버튼 누르면 LOW |
+| 풀다운 저항(pull-down resistor) | 입력 핀을 LOW로 유지, 버튼 누르면 HIGH |
+| 디바운싱(debouncing) | 버튼 노이즈 제거 기법 |
+| 레지스터(register) | DDRx (방향), PORTx (출력), PINx (입력) |
 
 ---
 
 ## 다음 단계
 
 GPIO 제어를 익혔다면 다음 문서로 넘어가세요:
-- [16. 시리얼 통신](16_프로젝트_시리얼통신.md) - UART 통신과 디버깅
+- [17. 시리얼 통신](17_Project_Serial_Communication.md) - UART 통신과 디버깅
+
+**이전**: [비트 연산 심화](./15_Bit_Operations.md) | **다음**: [프로젝트 16: 시리얼 통신](./17_Project_Serial_Communication.md)

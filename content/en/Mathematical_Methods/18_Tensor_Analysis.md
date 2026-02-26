@@ -49,43 +49,43 @@ In general, **tensors can be defined as multilinear maps**. A rank-$(p,q)$ tenso
 ```python
 import numpy as np
 
-# === 2차원 회전 변환에서 텐서 변환 법칙 검증 ===
+# === Verification of tensor transformation law under 2D rotation ===
 
-# 회전 각도
-theta = np.pi / 6  # 30도
+# Rotation angle
+theta = np.pi / 6  # 30 degrees
 
-# 변환 행렬: x'^i = R^i_j x^j
+# Transformation matrix: x'^i = R^i_j x^j
 R = np.array([
     [np.cos(theta), np.sin(theta)],
     [-np.sin(theta), np.cos(theta)]
 ])
-print(f"회전 행렬 R (θ = {np.degrees(theta):.0f}°):")
+print(f"Rotation matrix R (θ = {np.degrees(theta):.0f}°):")
 print(R)
 
-# --- Rank-1 텐서 (벡터) 변환 ---
-A = np.array([3.0, 4.0])  # 원래 좌표계의 벡터
+# --- Rank-1 tensor (vector) transformation ---
+A = np.array([3.0, 4.0])  # vector in original coordinate system
 A_prime = R @ A            # A'^i = R^i_j A^j
-print(f"\n원래 벡터: A = {A}")
-print(f"변환된 벡터: A' = {A_prime}")
+print(f"\nOriginal vector: A = {A}")
+print(f"Transformed vector: A' = {A_prime}")
 print(f"|A| = {np.linalg.norm(A):.4f}, |A'| = {np.linalg.norm(A_prime):.4f}")
-# 크기 보존 확인
+# Verify magnitude preservation
 
-# --- Rank-2 텐서 변환 ---
-# 응력 텐서 예시
+# --- Rank-2 tensor transformation ---
+# Example stress tensor
 T = np.array([
     [10.0, 3.0],
     [3.0,  5.0]
-])  # 대칭 텐서
+])  # symmetric tensor
 
 # T'^{ij} = R^i_k R^j_l T^{kl} = R T R^T
 T_prime = R @ T @ R.T
-print(f"\n원래 텐서:\n{T}")
-print(f"변환된 텐서:\n{T_prime}")
+print(f"\nOriginal tensor:\n{T}")
+print(f"Transformed tensor:\n{T_prime}")
 
-# 텐서의 불변량(trace, determinant) 확인
+# Verify tensor invariants (trace, determinant)
 print(f"\ntr(T) = {np.trace(T):.4f}, tr(T') = {np.trace(T_prime):.4f}")
 print(f"det(T) = {np.linalg.det(T):.4f}, det(T') = {np.linalg.det(T_prime):.4f}")
-# 대각합과 행렬식은 좌표 변환에 불변
+# Trace and determinant are invariant under coordinate transformation
 ```
 
 ---
@@ -160,45 +160,45 @@ $$
 ```python
 import numpy as np
 
-# === numpy.einsum: 아인슈타인 합산 규약의 Python 구현 ===
+# === numpy.einsum: Python implementation of Einstein summation convention ===
 
 A = np.array([1.0, 2.0, 3.0])
 B = np.array([4.0, 5.0, 6.0])
 
-# 내적: A^i B_i
+# Dot product: A^i B_i
 dot = np.einsum('i,i->', A, B)
-print(f"내적 A·B = {dot}")  # 32.0
+print(f"Dot product A·B = {dot}")  # 32.0
 
-# 외적 (텐서곱): C^{ij} = A^i B^j
+# Outer product (tensor product): C^{ij} = A^i B^j
 outer = np.einsum('i,j->ij', A, B)
-print(f"\n외적 A⊗B:\n{outer}")
+print(f"\nOuter product A⊗B:\n{outer}")
 
-# 행렬-벡터 곱: (Mv)^i = M^{ij} v_j
+# Matrix-vector product: (Mv)^i = M^{ij} v_j
 M = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=float)
 v = np.array([1.0, 0.0, -1.0])
 Mv = np.einsum('ij,j->i', M, v)
 print(f"\nMv = {Mv}")
 
-# 행렬 곱: (AB)^{ik} = A^{ij} B^{jk}
+# Matrix product: (AB)^{ik} = A^{ij} B^{jk}
 N = np.random.rand(3, 3)
 MN = np.einsum('ij,jk->ik', M, N)
-print(f"\n행렬 곱 MN (einsum):\n{MN}")
-print(f"행렬 곱 MN (numpy):  \n{M @ N}")
+print(f"\nMatrix product MN (einsum):\n{MN}")
+print(f"Matrix product MN (numpy):  \n{M @ N}")
 
-# 대각합(trace): T^i_i
+# Trace: T^i_i
 trace = np.einsum('ii->', M)
 print(f"\ntr(M) = {trace}")
 
-# 이중 축약(double contraction): A_{ij} B_{ij}
+# Double contraction: A_{ij} B_{ij}
 A2 = np.random.rand(3, 3)
 B2 = np.random.rand(3, 3)
 double_contract = np.einsum('ij,ij->', A2, B2)
-print(f"A:B (이중 축약) = {double_contract:.4f}")
+print(f"A:B (double contraction) = {double_contract:.4f}")
 
-# --- 레비-치비타 기호와 외적 ---
-# 3차원 레비-치비타 기호 생성
+# --- Levi-Civita symbol and cross product ---
+# Generate 3D Levi-Civita symbol
 def levi_civita_3d():
-    """3차원 레비-치비타 기호 ε_{ijk}를 생성"""
+    """Generate the 3D Levi-Civita symbol ε_{ijk}"""
     eps = np.zeros((3, 3, 3))
     eps[0, 1, 2] = eps[1, 2, 0] = eps[2, 0, 1] = 1
     eps[0, 2, 1] = eps[2, 1, 0] = eps[1, 0, 2] = -1
@@ -206,17 +206,17 @@ def levi_civita_3d():
 
 eps = levi_civita_3d()
 
-# 외적: (A × B)_i = ε_{ijk} A_j B_k
+# Cross product: (A × B)_i = ε_{ijk} A_j B_k
 cross_einsum = np.einsum('ijk,j,k->i', eps, A, B)
 cross_numpy = np.cross(A, B)
 print(f"\nA × B (einsum): {cross_einsum}")
 print(f"A × B (numpy):  {cross_numpy}")
 
-# ε-δ 항등식 검증: ε_{ijk} ε_{imn} = δ_{jm}δ_{kn} - δ_{jn}δ_{km}
+# Verify ε-δ identity: ε_{ijk} ε_{imn} = δ_{jm}δ_{kn} - δ_{jn}δ_{km}
 lhs = np.einsum('ijk,imn->jkmn', eps, eps)
 delta = np.eye(3)
 rhs = np.einsum('jm,kn->jkmn', delta, delta) - np.einsum('jn,km->jkmn', delta, delta)
-print(f"\nε-δ 항등식 검증: {np.allclose(lhs, rhs)}")
+print(f"\nε-δ identity verification: {np.allclose(lhs, rhs)}")
 ```
 
 ---
@@ -263,47 +263,47 @@ $$
 import numpy as np
 import sympy as sp
 
-# === 극좌표 ↔ 직교좌표 변환에서 반변/공변 벡터 ===
+# === Contravariant/covariant vectors in polar ↔ Cartesian transformation ===
 
 r_val, theta_val = 2.0, np.pi / 4  # (r, θ) = (2, 45°)
 
-# 직교 좌표 → 극좌표 변환의 야코비안
+# Jacobian of the Cartesian → polar coordinate transformation
 # x = r cosθ, y = r sinθ
-# ∂x^i/∂x'^j 계산 (x' = 극좌표, x = 직교좌표)
+# Computing ∂x^i/∂x'^j (x' = polar coords, x = Cartesian coords)
 
-# ∂(x,y)/∂(r,θ) : 직교를 극좌표로 미분
+# ∂(x,y)/∂(r,θ): differentiate Cartesian w.r.t. polar coordinates
 J = np.array([
     [np.cos(theta_val), -r_val * np.sin(theta_val)],  # ∂x/∂r, ∂x/∂θ
     [np.sin(theta_val),  r_val * np.cos(theta_val)]   # ∂y/∂r, ∂y/∂θ
 ])
 
-# 역야코비안: ∂(r,θ)/∂(x,y)
+# Inverse Jacobian: ∂(r,θ)/∂(x,y)
 J_inv = np.linalg.inv(J)
 
-print("야코비안 ∂(x,y)/∂(r,θ):")
+print("Jacobian ∂(x,y)/∂(r,θ):")
 print(J)
-print(f"\n역야코비안 ∂(r,θ)/∂(x,y):")
+print(f"\nInverse Jacobian ∂(r,θ)/∂(x,y):")
 print(J_inv)
 
-# 직교좌표에서의 벡터 (반변 성분)
+# Vector in Cartesian coordinates (contravariant components)
 A_cart = np.array([1.0, 1.0])  # (Ax, Ay)
 
-# 반변 변환: A'^i = (∂x'^i/∂x^j) A^j
-# 극좌표의 반변 성분 = J_inv @ A_cart
+# Contravariant transformation: A'^i = (∂x'^i/∂x^j) A^j
+# Contravariant components in polar = J_inv @ A_cart
 A_polar_contra = J_inv @ A_cart
-print(f"\n직교좌표 벡터 A = {A_cart}")
-print(f"극좌표 반변 성분 (A^r, A^θ) = {A_polar_contra}")
+print(f"\nCartesian vector A = {A_cart}")
+print(f"Polar contravariant components (A^r, A^θ) = {A_polar_contra}")
 
-# 공변 변환: A'_i = (∂x^j/∂x'^i) A_j
-# 극좌표의 공변 성분 = J^T @ A_cart
+# Covariant transformation: A'_i = (∂x^j/∂x'^i) A_j
+# Covariant components in polar = J^T @ A_cart
 A_polar_cov = J.T @ A_cart
-print(f"극좌표 공변 성분 (A_r, A_θ) = {A_polar_cov}")
+print(f"Polar covariant components (A_r, A_θ) = {A_polar_cov}")
 
-# 극좌표의 계량 텐서로 검증: g_{ij} = diag(1, r²)
+# Verify using the polar coordinate metric tensor: g_{ij} = diag(1, r²)
 g = np.diag([1.0, r_val**2])
 A_cov_from_contra = g @ A_polar_contra
-print(f"\ng_{ij} A^j = {A_cov_from_contra}")
-print(f"직접 계산한 공변 성분과 일치: {np.allclose(A_polar_cov, A_cov_from_contra)}")
+print(f"\ng_{{ij}} A^j = {A_cov_from_contra}")
+print(f"Matches directly computed covariant components: {np.allclose(A_polar_cov, A_cov_from_contra)}")
 ```
 
 ---
@@ -363,17 +363,17 @@ $$
 ```python
 import sympy as sp
 
-# === 다양한 좌표계에서 계량 텐서 계산 ===
+# === Metric tensor computation in various coordinate systems ===
 
 def compute_metric(coords, transform):
     """
-    좌표 변환으로부터 계량 텐서를 계산한다.
+    Compute the metric tensor from a coordinate transformation.
 
     Parameters:
-        coords: 곡선좌표 변수 리스트
-        transform: 직교좌표 표현 리스트 [x(...), y(...), z(...)]
+        coords: list of curvilinear coordinate variables
+        transform: list of Cartesian coordinate expressions [x(...), y(...), z(...)]
     Returns:
-        계량 텐서 행렬 (SymPy Matrix)
+        metric tensor matrix (SymPy Matrix)
     """
     n = len(coords)
     r = sp.Matrix(transform)
@@ -384,7 +384,7 @@ def compute_metric(coords, transform):
             g[j, i] = g[i, j]
     return g
 
-# 구면 좌표
+# Spherical coordinates
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 g_sph = compute_metric(
     [r, theta, phi],
@@ -392,13 +392,13 @@ g_sph = compute_metric(
      r * sp.sin(theta) * sp.sin(phi),
      r * sp.cos(theta)]
 )
-print("구면 좌표 계량 텐서:")
+print("Spherical coordinate metric tensor:")
 sp.pprint(g_sph)
 print(f"det(g) = {sp.trigsimp(g_sph.det())}")
 print(f"sqrt(|g|) = {sp.sqrt(sp.trigsimp(g_sph.det()))}")
 # r^4 sin^2(theta) → sqrt = r^2 sin(theta)
 
-# 2차원 구면 (r = R 고정)
+# 2D sphere (r = R fixed)
 R = sp.Symbol('R', positive=True)
 g_sphere = compute_metric(
     [theta, phi],
@@ -406,17 +406,17 @@ g_sphere = compute_metric(
      R * sp.sin(theta) * sp.sin(phi),
      R * sp.cos(theta)]
 )
-print("\n2차원 구면 계량 텐서:")
+print("\n2D sphere metric tensor:")
 sp.pprint(g_sphere)
 
-# 역계량 텐서
+# Inverse metric tensor
 g_sph_inv = g_sph.inv()
-print("\n구면 좌표 역계량 텐서 g^{ij}:")
+print("\nSpherical coordinate inverse metric tensor g^{ij}:")
 sp.pprint(sp.simplify(g_sph_inv))
 
-# 검증: g^{ik} g_{kj} = δ^i_j
+# Verify: g^{ik} g_{kj} = δ^i_j
 identity_check = sp.simplify(g_sph_inv * g_sph)
-print(f"\ng^{{ik}} g_{{kj}} = I 검증: {identity_check == sp.eye(3)}")
+print(f"\ng^{{ik}} g_{{kj}} = I verification: {identity_check == sp.eye(3)}")
 ```
 
 ---
@@ -474,42 +474,42 @@ $$
 ```python
 import numpy as np
 
-# === 텐서 대수 연산 ===
+# === Tensor algebra operations ===
 
-# rank-2 텐서 (3×3)
+# rank-2 tensor (3×3)
 T = np.array([
     [1, 2, 3],
     [4, 5, 6],
     [7, 8, 9]
 ], dtype=float)
 
-# 대칭 부분과 반대칭 부분 분해
+# Decompose into symmetric and antisymmetric parts
 T_sym = 0.5 * (T + T.T)       # T_{(ij)}
 T_antisym = 0.5 * (T - T.T)   # T_{[ij]}
-print("원래 텐서 T:")
+print("Original tensor T:")
 print(T)
-print("\n대칭 부분 T_{(ij)}:")
+print("\nSymmetric part T_{(ij)}:")
 print(T_sym)
-print("\n반대칭 부분 T_{[ij]}:")
+print("\nAntisymmetric part T_{[ij]}:")
 print(T_antisym)
-print(f"\n복원 검증: T = T_sym + T_antisym? {np.allclose(T, T_sym + T_antisym)}")
+print(f"\nReconstruction check: T = T_sym + T_antisym? {np.allclose(T, T_sym + T_antisym)}")
 
-# 텐서곱 (outer product)
+# Tensor product (outer product)
 A = np.array([1, 2, 3], dtype=float)
 B = np.array([4, 5, 6], dtype=float)
 AB_outer = np.einsum('i,j->ij', A, B)  # A^i B^j
-print(f"\n텐서곱 A⊗B:\n{AB_outer}")
+print(f"\nTensor product A⊗B:\n{AB_outer}")
 
-# 축약 (contraction)
-# rank-2 텐서의 trace: T^i_i
+# Contraction
+# trace of rank-2 tensor: T^i_i
 trace_T = np.einsum('ii->', T)
-print(f"\n축약 (trace): T^i_i = {trace_T}")
+print(f"\nContraction (trace): T^i_i = {trace_T}")
 
-# rank-4 텐서에서 축약
+# Contraction of rank-4 tensor
 R = np.random.rand(3, 3, 3, 3)
-# R^i_{jkl} → 첫째와 셋째 인덱스 축약 → R^i_{jil} = S_{jl}
+# R^i_{jkl} → contract first and third indices → R^i_{jil} = S_{jl}
 S = np.einsum('ijil->jl', R)
-print(f"\nrank-4 텐서 축약 결과 (rank-2): shape = {S.shape}")
+print(f"\nRank-4 tensor contraction result (rank-2): shape = {S.shape}")
 ```
 
 ---
@@ -575,17 +575,17 @@ In flat space, geodesics are straight lines; on a sphere, they are great circles
 ```python
 import sympy as sp
 
-# === 크리스토펠 기호 계산 함수 ===
+# === Christoffel symbol calculation function ===
 
 def christoffel_symbols(g, coords):
     """
-    계량 텐서로부터 크리스토펠 기호 Γ^k_{ij}를 계산한다.
+    Compute Christoffel symbols Γ^k_{ij} from the metric tensor.
 
     Parameters:
-        g: 계량 텐서 (SymPy Matrix)
-        coords: 좌표 변수 리스트
+        g: metric tensor (SymPy Matrix)
+        coords: list of coordinate variables
     Returns:
-        Γ[k][i][j] 형태의 3차원 리스트
+        3D list in the form Γ[k][i][j]
     """
     n = len(coords)
     g_inv = g.inv()
@@ -607,14 +607,14 @@ def christoffel_symbols(g, coords):
                 Gamma[k][i][j] = sp.simplify(s)
     return Gamma
 
-# --- 구면 좌표에서 크리스토펠 기호 ---
+# --- Christoffel symbols in spherical coordinates ---
 r, theta, phi = sp.symbols('r theta phi', positive=True)
 g_sph = sp.diag(1, r**2, r**2 * sp.sin(theta)**2)
 coords_sph = [r, theta, phi]
 
 Gamma_sph = christoffel_symbols(g_sph, coords_sph)
 
-print("구면 좌표의 0이 아닌 크리스토펠 기호:")
+print("Non-zero Christoffel symbols in spherical coordinates:")
 names = ['r', 'θ', 'φ']
 for k in range(3):
     for i in range(3):
@@ -622,19 +622,19 @@ for k in range(3):
             if Gamma_sph[k][i][j] != 0:
                 print(f"  Γ^{names[k]}_{{{names[i]}{names[j]}}} = {Gamma_sph[k][i][j]}")
 
-# --- 2차원 구면 위의 측지선 (수치 계산) ---
+# --- Geodesics on 2D sphere (numerical computation) ---
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
 def geodesic_sphere(tau, y, R_val=1.0):
     """
-    단위 구면 위의 측지선 방정식.
+    Geodesic equation on the unit sphere.
     y = [θ, φ, dθ/dτ, dφ/dτ]
     """
     th, ph, dth, dph = y
 
-    # 2차원 구면의 크리스토펠 기호
+    # Christoffel symbols for the 2D sphere
     # Γ^θ_{φφ} = -sinθ cosθ
     # Γ^φ_{θφ} = Γ^φ_{φθ} = cosθ/sinθ
 
@@ -643,18 +643,18 @@ def geodesic_sphere(tau, y, R_val=1.0):
 
     return [dth, dph, d2th, d2ph]
 
-# 초기 조건: 적도에서 북동 방향으로 출발
+# Initial conditions: depart from equator in northeast direction
 th0, ph0 = np.pi / 2, 0.0
-dth0, dph0 = -0.3, 1.0  # 북쪽으로 약간 + 동쪽으로
+dth0, dph0 = -0.3, 1.0  # slightly northward + eastward
 
 y0 = [th0, ph0, dth0, dph0]
 sol = solve_ivp(geodesic_sphere, [0, 8], y0, max_step=0.01, dense_output=True)
 
-# 구면 위에 측지선 표시
+# Display geodesic on sphere
 fig = plt.figure(figsize=(8, 8))
 ax = fig.add_subplot(111, projection='3d')
 
-# 구면 그리기
+# Draw sphere
 u = np.linspace(0, np.pi, 40)
 v = np.linspace(0, 2*np.pi, 40)
 U, V = np.meshgrid(u, v)
@@ -663,19 +663,19 @@ Y = np.sin(U) * np.sin(V)
 Z = np.cos(U)
 ax.plot_surface(X, Y, Z, alpha=0.15, color='lightblue')
 
-# 측지선 (대원)
+# Geodesic (great circle)
 th_geo = sol.y[0]
 ph_geo = sol.y[1]
 xg = np.sin(th_geo) * np.cos(ph_geo)
 yg = np.sin(th_geo) * np.sin(ph_geo)
 zg = np.cos(th_geo)
-ax.plot(xg, yg, zg, 'r-', linewidth=2.5, label='측지선 (대원)')
-ax.plot([xg[0]], [yg[0]], [zg[0]], 'go', markersize=8, label='출발점')
+ax.plot(xg, yg, zg, 'r-', linewidth=2.5, label='Geodesic (great circle)')
+ax.plot([xg[0]], [yg[0]], [zg[0]], 'go', markersize=8, label='Starting point')
 
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
-ax.set_title('구면 위의 측지선')
+ax.set_title('Geodesic on sphere')
 ax.legend()
 plt.tight_layout()
 plt.savefig('geodesic_sphere.png', dpi=150, bbox_inches='tight')
@@ -744,11 +744,11 @@ $G_{ij}$ satisfies $\nabla_i G^{ij} = 0$ (by Bianchi identities), which is direc
 ```python
 import sympy as sp
 
-# === 리만 곡률 텐서 계산 함수 ===
+# === Riemann curvature tensor calculation function ===
 
 def riemann_tensor(Gamma, coords):
     """
-    크리스토펠 기호로부터 리만 곡률 텐서 R^l_{kij}를 계산한다.
+    Compute the Riemann curvature tensor R^l_{kij} from Christoffel symbols.
     """
     n = len(coords)
     R = [[[[sp.Integer(0) for _ in range(n)]
@@ -771,7 +771,7 @@ def riemann_tensor(Gamma, coords):
     return R
 
 def ricci_tensor(R_riem, n):
-    """리치 텐서 R_{ij} = R^k_{ikj}"""
+    """Ricci tensor R_{ij} = R^k_{ikj}"""
     Ric = sp.zeros(n, n)
     for i in range(n):
         for j in range(n):
@@ -782,23 +782,23 @@ def ricci_tensor(R_riem, n):
     return Ric
 
 def scalar_curvature(Ric, g_inv, n):
-    """스칼라 곡률 R = g^{ij} R_{ij}"""
+    """Scalar curvature R = g^{ij} R_{ij}"""
     R_scalar = sp.Integer(0)
     for i in range(n):
         for j in range(n):
             R_scalar += g_inv[i, j] * Ric[i, j]
     return sp.simplify(R_scalar)
 
-# --- 2차원 구면 (r = a)의 가우스 곡률 계산 ---
+# --- Gaussian curvature of 2D sphere (r = a) ---
 theta, phi = sp.symbols('theta phi', positive=True)
 a = sp.Symbol('a', positive=True)
 
 g_sphere = sp.diag(a**2, a**2 * sp.sin(theta)**2)
 coords_sphere = [theta, phi]
 
-# 크리스토펠 기호
+# Christoffel symbols
 Gamma_sp = christoffel_symbols(g_sphere, coords_sphere)
-print("2차원 구면의 0이 아닌 크리스토펠 기호:")
+print("Non-zero Christoffel symbols of 2D sphere:")
 snames = ['θ', 'φ']
 for k in range(2):
     for i in range(2):
@@ -806,23 +806,23 @@ for k in range(2):
             if Gamma_sp[k][i][j] != 0:
                 print(f"  Γ^{snames[k]}_{{{snames[i]}{snames[j]}}} = {Gamma_sp[k][i][j]}")
 
-# 리만 텐서
+# Riemann tensor
 R_riem_sp = riemann_tensor(Gamma_sp, coords_sphere)
 
-# 리치 텐서
+# Ricci tensor
 Ric_sp = ricci_tensor(R_riem_sp, 2)
-print(f"\n리치 텐서 R_{{ij}}:")
+print(f"\nRicci tensor R_{{ij}}:")
 sp.pprint(Ric_sp)
 
-# 스칼라 곡률
+# Scalar curvature
 g_sp_inv = g_sphere.inv()
 R_sc = scalar_curvature(Ric_sp, g_sp_inv, 2)
-print(f"\n스칼라 곡률 R = {R_sc}")
+print(f"\nScalar curvature R = {R_sc}")
 
-# 가우스 곡률 (2차원에서 K = R/2)
+# Gaussian curvature (in 2D: K = R/2)
 K = sp.simplify(R_sc / 2)
-print(f"가우스 곡률 K = R/2 = {K}")
-# 출력: K = 1/a^2 (양의 일정한 곡률 → 구면)
+print(f"Gaussian curvature K = R/2 = {K}")
+# Output: K = 1/a^2 (positive constant curvature → sphere)
 ```
 
 ---
@@ -843,20 +843,20 @@ $\sigma_{ij}$ is a symmetric tensor ($\sigma_{ij} = \sigma_{ji}$, by conservatio
 import numpy as np
 import matplotlib.pyplot as plt
 
-# === 2D 응력 텐서의 모어 원 (Mohr's Circle) ===
-# 응력 텐서 σ = [[σ_xx, τ_xy], [τ_xy, σ_yy]]
+# === Mohr's Circle for 2D stress tensor ===
+# Stress tensor σ = [[σ_xx, τ_xy], [τ_xy, σ_yy]]
 sigma_xx, sigma_yy, tau_xy = 50.0, 20.0, 15.0
 sigma = np.array([[sigma_xx, tau_xy],
                    [tau_xy, sigma_yy]])
 
-# 주응력 (고유값)
+# Principal stresses (eigenvalues)
 eigenvalues, eigenvectors = np.linalg.eigh(sigma)
-sigma_1 = eigenvalues[1]  # 최대 주응력
-sigma_2 = eigenvalues[0]  # 최소 주응력
-print(f"주응력: σ₁ = {sigma_1:.2f} MPa, σ₂ = {sigma_2:.2f} MPa")
-print(f"주응력 방향:\n{eigenvectors}")
+sigma_1 = eigenvalues[1]  # maximum principal stress
+sigma_2 = eigenvalues[0]  # minimum principal stress
+print(f"Principal stresses: σ₁ = {sigma_1:.2f} MPa, σ₂ = {sigma_2:.2f} MPa")
+print(f"Principal stress directions:\n{eigenvectors}")
 
-# 모어 원 그리기
+# Draw Mohr's circle
 center = (sigma_1 + sigma_2) / 2
 radius = (sigma_1 - sigma_2) / 2
 
@@ -864,16 +864,16 @@ fig, ax = plt.subplots(figsize=(8, 6))
 circle = plt.Circle((center, 0), radius, fill=False, color='blue', linewidth=2)
 ax.add_patch(circle)
 
-# 원래 응력 상태 표시
+# Show original stress state
 ax.plot(sigma_xx, tau_xy, 'ro', markersize=8, label=f'(σ_xx, τ_xy) = ({sigma_xx}, {tau_xy})')
 ax.plot(sigma_yy, -tau_xy, 'go', markersize=8, label=f'(σ_yy, -τ_xy) = ({sigma_yy}, {-tau_xy})')
-ax.plot([sigma_1, sigma_2], [0, 0], 'k^', markersize=10, label=f'주응력 σ₁={sigma_1:.1f}, σ₂={sigma_2:.1f}')
+ax.plot([sigma_1, sigma_2], [0, 0], 'k^', markersize=10, label=f'Principal stresses σ₁={sigma_1:.1f}, σ₂={sigma_2:.1f}')
 
 ax.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
 ax.axvline(x=0, color='gray', linestyle='-', alpha=0.3)
-ax.set_xlabel('법선 응력 σ (MPa)')
-ax.set_ylabel('전단 응력 τ (MPa)')
-ax.set_title('모어 원 (Mohr\'s Circle)')
+ax.set_xlabel('Normal stress σ (MPa)')
+ax.set_ylabel('Shear stress τ (MPa)')
+ax.set_title("Mohr's Circle")
 ax.set_aspect('equal')
 ax.legend(fontsize=9)
 ax.grid(True, alpha=0.3)
@@ -905,12 +905,12 @@ This representation makes covariance under Lorentz transformations manifest.
 ```python
 import numpy as np
 
-# === 전자기장 텐서 구성 및 로렌츠 변환 ===
+# === Electromagnetic field tensor construction and Lorentz transformation ===
 
-c = 1.0  # 자연 단위 (c = 1)
+c = 1.0  # natural units (c = 1)
 
 def em_field_tensor(E, B):
-    """전기장 E와 자기장 B로부터 전자기장 텐서 F_μν를 구성한다."""
+    """Construct the electromagnetic field tensor F_μν from electric field E and magnetic field B."""
     Ex, Ey, Ez = E
     Bx, By, Bz = B
     F = np.array([
@@ -921,19 +921,19 @@ def em_field_tensor(E, B):
     ])
     return F
 
-# x 방향 전기장만 있는 경우
+# Pure electric field in x direction
 E = np.array([1.0, 0.0, 0.0])
 B = np.array([0.0, 0.0, 0.0])
 F = em_field_tensor(E, B)
-print("전자기장 텐서 F_μν (순수 전기장):")
+print("Electromagnetic field tensor F_μν (pure electric field):")
 print(F)
 
-# 로렌츠 변환 (x 방향, 속도 v = 0.6c)
+# Lorentz transformation (x direction, velocity v = 0.6c)
 v = 0.6
 gamma = 1.0 / np.sqrt(1 - v**2)
 beta = v
 
-# 로렌츠 변환 행렬 Λ^μ'_ν
+# Lorentz transformation matrix Λ^μ'_ν
 Lambda = np.array([
     [gamma,      -gamma*beta, 0, 0],
     [-gamma*beta, gamma,      0, 0],
@@ -941,29 +941,29 @@ Lambda = np.array([
     [0,           0,          0, 1]
 ])
 
-# 텐서 변환: F'^{μν} = Λ^μ_α Λ^ν_β F^{αβ}
-# 먼저 F^{μν} = η^{μα} η^{νβ} F_{αβ} (민코프스키 계량으로 인덱스 올림)
-eta = np.diag([-1, 1, 1, 1])  # 민코프스키 계량 (-,+,+,+)
+# Tensor transformation: F'^{μν} = Λ^μ_α Λ^ν_β F^{αβ}
+# First raise indices: F^{μν} = η^{μα} η^{νβ} F_{αβ} (using Minkowski metric)
+eta = np.diag([-1, 1, 1, 1])  # Minkowski metric (-,+,+,+)
 F_up = eta @ F @ eta           # F^{μν}
 
 F_prime_up = Lambda @ F_up @ Lambda.T
-F_prime = eta @ F_prime_up @ eta  # F'_{μν}로 내림
+F_prime = eta @ F_prime_up @ eta  # lower to F'_{μν}
 
-print(f"\n로렌츠 변환 후 (v = {v}c):")
+print(f"\nAfter Lorentz transformation (v = {v}c):")
 print(f"F'_μν:")
 print(np.round(F_prime, 4))
 
-# 변환된 전기장과 자기장 추출
+# Extract transformed electric and magnetic fields
 E_prime = np.array([F_prime[0, 1], F_prime[0, 2], F_prime[0, 3]]) * (-c)
 B_prime = np.array([F_prime[2, 3], F_prime[3, 1], F_prime[1, 2]])
-print(f"\n변환된 전기장: E' = {np.round(E_prime, 4)}")
-print(f"변환된 자기장: B' = {np.round(B_prime, 4)}")
-print("순수 전기장이 로렌츠 변환에 의해 자기장 성분을 획득함!")
+print(f"\nTransformed electric field: E' = {np.round(E_prime, 4)}")
+print(f"Transformed magnetic field: B' = {np.round(B_prime, 4)}")
+print("The pure electric field acquires a magnetic component under Lorentz transformation!")
 
-# 로렌츠 불변량 검증
+# Verify Lorentz invariants
 inv1 = -0.5 * np.einsum('ij,ij->', F, F)   # F_{μν}F^{μν}/2
 inv1_prime = -0.5 * np.einsum('ij,ij->', F_prime, F_prime)
-print(f"\n로렌츠 불변량 F_μν F^μν: 원래 = {inv1:.4f}, 변환 후 = {inv1_prime:.4f}")
+print(f"\nLorentz invariant F_μν F^μν: original = {inv1:.4f}, after transformation = {inv1_prime:.4f}")
 ```
 
 ### 8.3 General Relativity: Einstein Field Equations
@@ -990,11 +990,11 @@ where $r_s = 2GM/c^2$ is the Schwarzschild radius.
 ```python
 import sympy as sp
 
-# === 슈바르츠실트 계량의 크리스토펠 기호 계산 ===
+# === Christoffel symbol computation for the Schwarzschild metric ===
 t, r, theta, phi = sp.symbols('t r theta phi')
 r_s, c_sym = sp.symbols('r_s c', positive=True)
 
-# 슈바르츠실트 계량 텐서 (대각)
+# Schwarzschild metric tensor (diagonal)
 f = 1 - r_s / r  # f(r) = 1 - r_s/r
 
 g_schw = sp.diag(
@@ -1005,13 +1005,13 @@ g_schw = sp.diag(
 )
 coords_schw = [t, r, theta, phi]
 
-print("슈바르츠실트 계량 텐서:")
+print("Schwarzschild metric tensor:")
 sp.pprint(g_schw)
 
-# 크리스토펠 기호 계산 (시간 소요 가능)
+# Compute Christoffel symbols (may take some time)
 Gamma_schw = christoffel_symbols(g_schw, coords_schw)
 
-print("\n슈바르츠실트 계량의 0이 아닌 크리스토펠 기호:")
+print("\nNon-zero Christoffel symbols of the Schwarzschild metric:")
 coord_names = ['t', 'r', 'θ', 'φ']
 for k in range(4):
     for i in range(4):

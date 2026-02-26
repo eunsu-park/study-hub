@@ -1,5 +1,18 @@
 # 배열과 문자열 (Arrays and Strings)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 핵심 배열 연산(접근, 삽입, 삭제, 탐색)의 시간 복잡도를 상기하고 각 연산이 적용되는 상황을 설명할 수 있다
+2. 투 포인터(two pointers) 기법을 구현하여 쌍의 합, 팰린드롬 확인 등의 문제를 O(n) 시간에 해결할 수 있다
+3. 슬라이딩 윈도우(sliding window) 패턴을 적용하여 중복 계산 없이 부분 배열 또는 부분 문자열 통계를 효율적으로 계산할 수 있다
+4. 프리픽스 합(prefix sum)을 사용하여 O(n) 전처리 후 구간 합 쿼리를 O(1)에 응답할 수 있다
+5. 문자 빈도수 카운팅(frequency counting)을 해시맵(hash map) 패턴으로 인식하고 애너그램(anagram) 및 중복 탐지 문제에 적용할 수 있다
+6. 문제의 제약 조건과 목표에 따라 투 포인터, 슬라이딩 윈도우, 프리픽스 합 중 적절한 기법을 선택할 수 있다
+
+---
+
 ## 개요
 
 배열과 문자열은 가장 기본적인 자료구조입니다. 이 레슨에서는 배열/문자열 문제에서 자주 사용되는 핵심 테크닉인 2포인터, 슬라이딩 윈도우, 프리픽스 합을 학습합니다.
@@ -113,6 +126,10 @@ left → [1]  [2]  [4]  [6]  [8]  [10]
 ```c
 // C
 void twoSum(int arr[], int n, int target) {
+    // 양끝에서 시작 — 배열이 정렬되어 있으므로 동작함:
+    // 합이 너무 작으면 left를 오른쪽으로 이동하여 합을 증가시키고,
+    // 합이 너무 크면 right를 왼쪽으로 이동하여 합을 감소시킴.
+    // 정렬되지 않은 배열은 O(n²) 중첩 탐색이 필요함.
     int left = 0;
     int right = n - 1;
 
@@ -124,9 +141,9 @@ void twoSum(int arr[], int n, int target) {
                    arr[left], arr[right], target);
             return;
         } else if (sum < target) {
-            left++;
+            left++;   // 더 큰 값이 필요 — 큰 원소 쪽으로 이동
         } else {
-            right--;
+            right--;  // 더 작은 값이 필요 — 작은 원소 쪽으로 이동
         }
     }
     printf("Not found\n");
@@ -281,9 +298,13 @@ fast ↓
 int removeDuplicates(int arr[], int n) {
     if (n == 0) return 0;
 
+    // slow는 쓰기 위치를 표시 — [0..slow]이 중복 제거된 접두사(prefix)임.
+    // 읽기(fast)와 쓰기(slow)를 분리하여 추가 메모리 없이 제자리(in-place) 수정 가능
     int slow = 0;
 
     for (int fast = 1; fast < n; fast++) {
+        // 새로운 고유 값을 찾았을 때만 쓰기; 정렬된 배열에서는
+        // 중복 원소가 연속되므로 단순 != 비교만으로 충분
         if (arr[fast] != arr[slow]) {
             slow++;
             arr[slow] = arr[fast];
@@ -385,7 +406,8 @@ int maxSumNaive(int arr[], int n, int k) {
 
 // C - Sliding Window: O(n)
 int maxSumSliding(int arr[], int n, int k) {
-    // 첫 윈도우 합 계산
+    // 처음 k개 원소로 윈도우를 초기화; 슬라이딩 시작 전에 유효한 기준값이 필요 —
+    // 이를 별도로 계산해야 오프바이원(off-by-one) 오류를 방지할 수 있음
     int windowSum = 0;
     for (int i = 0; i < k; i++) {
         windowSum += arr[i];
@@ -393,7 +415,8 @@ int maxSumSliding(int arr[], int n, int k) {
 
     int maxSum = windowSum;
 
-    // 윈도우 슬라이딩
+    // 왼쪽 끝에서 빠지는 원소를 빼고 오른쪽 끝에 새 원소를 더하여 윈도우를 슬라이딩 —
+    // O(k)를 다시 계산하는 대신 O(1) 갱신을 수행하는 것이 슬라이딩 윈도우 기법의 핵심
     for (int i = k; i < n; i++) {
         windowSum += arr[i] - arr[i - k];  // 새 원소 추가, 이전 원소 제거
         if (windowSum > maxSum) {
@@ -472,13 +495,17 @@ left=4, right=5: [4,3] → 합=7 >= 7, 길이=2 ← 최소!
 ```c
 // C
 int minSubArrayLen(int arr[], int n, int target) {
-    int minLen = n + 1;  // 불가능한 값으로 초기화
+    // n + 1(가능한 최대 길이보다 1 큰 값)로 초기화하면 유효한 윈도우가
+    // 항상 더 작으므로 — 별도의 "미발견" 플래그가 불필요
+    int minLen = n + 1;
     int left = 0;
     int sum = 0;
 
     for (int right = 0; right < n; right++) {
         sum += arr[right];
 
+        // 윈도우가 조건을 만족하는 한 왼쪽에서 축소 —
+        // *최단* 유효 윈도우를 원하므로 탐욕적(greedy)으로 줄임
         while (sum >= target) {
             int len = right - left + 1;
             if (len < minLen) {
@@ -555,12 +582,16 @@ def min_sub_array_len(arr, target):
 ```cpp
 // C++
 int lengthOfLongestSubstring(const string& s) {
+    // set은 현재 윈도우에 어떤 문자가 있는지 추적 — O(1) 멤버십 테스트로
+    // 윈도우를 다시 스캔하지 않고도 중복을 감지할 수 있음
     unordered_set<char> seen;
     int maxLen = 0;
     int left = 0;
 
     for (int right = 0; right < s.length(); right++) {
-        // 중복이 있으면 left 이동
+        // 새 문자 s[right]가 더 이상 중복이 아닐 때까지 왼쪽에서 제거 —
+        // 중복 위치로 바로 점프할 수 없는 이유는 set이 실제 윈도우 내용과
+        // 동기화되지 않게 되기 때문
         while (seen.count(s[right])) {
             seen.erase(s[left]);
             left++;
@@ -723,10 +754,14 @@ public:
     PrefixSum2D(const vector<vector<int>>& matrix) {
         int m = matrix.size();
         int n = matrix[0].size();
+        // (m+1) x (n+1)로 할당하여 0으로 채운 추가 행/열을 만듦 —
+        // 이 센티넬(sentinel) 경계 덕분에 수식에서 i==0 또는 j==0인 경우를 특별 처리하지 않아도 됨
         prefix.resize(m + 1, vector<int>(n + 1, 0));
 
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
+                // 포함-배제(inclusion-exclusion): 위와 왼쪽 프리픽스를 더하고,
+                // 두 번 세어진 왼쪽 위 영역을 빼고, 현재 셀을 더함
                 prefix[i + 1][j + 1] = matrix[i][j]
                                      + prefix[i][j + 1]
                                      + prefix[i + 1][j]
@@ -735,8 +770,10 @@ public:
         }
     }
 
-    // (r1,c1)~(r2,c2) 부분 행렬의 합
+    // (r1,c1)~(r2,c2) 부분 행렬의 합 — 부분 행렬 크기에 관계없이 O(1) 쿼리
     int query(int r1, int c1, int r2, int c2) {
+        // 역방향 포함-배제: 겹치지 않는 두 외부 띠를 빼고,
+        // 두 번 빠진 모서리 영역을 다시 더함
         return prefix[r2 + 1][c2 + 1]
              - prefix[r1][c2 + 1]
              - prefix[r2 + 1][c1]

@@ -1,4 +1,4 @@
-# 14. Complex Analysis (복소해석)
+# 14. Complex Analysis
 
 ## Learning Objectives
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 1. Analytic Functions (해석함수)
+## 1. Analytic Functions
 
 ### 1.1 Complex Differentiation and the Cauchy-Riemann Conditions
 
@@ -35,7 +35,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def check_cauchy_riemann(u_func, v_func, x, y, h=1e-7):
-    """코시-리만 조건을 수치적으로 검증"""
+    """Numerically verify the Cauchy-Riemann conditions"""
     du_dx = (u_func(x + h, y) - u_func(x - h, y)) / (2 * h)
     du_dy = (u_func(x, y + h) - u_func(x, y - h)) / (2 * h)
     dv_dx = (v_func(x + h, y) - v_func(x - h, y)) / (2 * h)
@@ -44,7 +44,7 @@ def check_cauchy_riemann(u_func, v_func, x, y, h=1e-7):
     cond1 = np.abs(du_dx - dv_dy)   # ∂u/∂x = ∂v/∂y
     cond2 = np.abs(du_dy + dv_dx)   # ∂u/∂y = -∂v/∂x
 
-    print(f"점 ({x}, {y}): |∂u/∂x - ∂v/∂y| = {cond1:.2e}, "
+    print(f"Point ({x}, {y}): |∂u/∂x - ∂v/∂y| = {cond1:.2e}, "
           f"|∂u/∂y + ∂v/∂x| = {cond2:.2e}")
     return cond1 < 1e-5 and cond2 < 1e-5
 
@@ -52,13 +52,13 @@ def check_cauchy_riemann(u_func, v_func, x, y, h=1e-7):
 u = lambda x, y: x**2 - y**2
 v = lambda x, y: 2 * x * y
 
-print("=== f(z) = z² 코시-리만 검증 ===")
+print("=== Cauchy-Riemann verification for f(z) = z² ===")
 for pt in [(1, 1), (2, -1), (0.5, 3)]:
     analytic = check_cauchy_riemann(u, v, *pt)
-    print(f"  해석적: {analytic}")
+    print(f"  Analytic: {analytic}")
 ```
 
-### 1.2 Harmonic Functions (조화함수)
+### 1.2 Harmonic Functions
 
 The real part $u$ and imaginary part $v$ of an analytic function each satisfy **Laplace's equation**:
 
@@ -74,17 +74,17 @@ import sympy as sp
 x, y = sp.symbols('x y', real=True)
 
 def is_harmonic(expr):
-    """라플라시안이 0인지 확인"""
+    """Check if the Laplacian is 0"""
     lap = sp.simplify(sp.diff(expr, x, 2) + sp.diff(expr, y, 2))
     return lap, lap == 0
 
-# f(z) = z³의 실수부/허수부
+# Real and imaginary parts of f(z) = z³
 u_expr = x**3 - 3*x*y**2      # Re(z³)
 v_expr = 3*x**2*y - y**3      # Im(z³)
 
 for name, expr in [("Re(z³)", u_expr), ("Im(z³)", v_expr)]:
     lap, harmonic = is_harmonic(expr)
-    print(f"{name} = {expr}: ∇² = {lap}, 조화함수: {harmonic}")
+    print(f"{name} = {expr}: ∇² = {lap}, harmonic: {harmonic}")
 ```
 
 ### 1.3 Examples of Analytic Functions
@@ -102,7 +102,7 @@ Analytic functions frequently appearing in physics:
 from matplotlib.colors import hsv_to_rgb
 
 def domain_coloring(f, xlim=(-2, 2), ylim=(-2, 2), N=500):
-    """복소함수의 도메인 컬러링 시각화 (위상→색상, 크기→명도)"""
+    """Domain coloring visualization of complex function (phase→color, magnitude→brightness)"""
     xv = np.linspace(*xlim, N)
     yv = np.linspace(*ylim, N)
     X, Y = np.meshgrid(xv, yv)
@@ -120,15 +120,15 @@ def domain_coloring(f, xlim=(-2, 2), ylim=(-2, 2), N=500):
     ax.set_xlabel('Re(z)'); ax.set_ylabel('Im(z)')
     plt.tight_layout(); plt.show()
 
-# domain_coloring(lambda z: z**3)       # z³의 도메인 컬러링
-# domain_coloring(lambda z: np.exp(z))  # e^z의 도메인 컬러링
+# domain_coloring(lambda z: z**3)       # domain coloring of z³
+# domain_coloring(lambda z: np.exp(z))  # domain coloring of e^z
 ```
 
 ---
 
-## 2. Complex Integrals (복소 적분)
+## 2. Complex Integrals
 
-### 2.1 Contour Integrals (경로 적분)
+### 2.1 Contour Integrals
 
 Integrating a complex function along a path $C$ is called a **contour integral**:
 
@@ -140,7 +140,7 @@ $$\oint \frac{dz}{(z - z_0)^n} = \begin{cases} 2\pi i & n = 1 \\ 0 & n \neq 1 \e
 
 ```python
 def contour_integral_circle(f, z0=0, r=1, N=10000):
-    """원형 경로 |z-z0|=r 위에서의 경로 적분 (수치 계산)"""
+    """Contour integral over circular path |z-z0|=r (numerical computation)"""
     t = np.linspace(0, 2*np.pi, N, endpoint=False)
     dt = 2*np.pi / N
     z = z0 + r * np.exp(1j * t)
@@ -149,18 +149,18 @@ def contour_integral_circle(f, z0=0, r=1, N=10000):
 
 # ∮ 1/z dz = 2πi
 I1 = contour_integral_circle(lambda z: 1/z)
-print(f"∮ 1/z dz = {I1:.6f}  (이론값: {2*np.pi*1j:.6f})")
+print(f"∮ 1/z dz = {I1:.6f}  (theoretical: {2*np.pi*1j:.6f})")
 
 # ∮ 1/z² dz = 0
 I2 = contour_integral_circle(lambda z: 1/z**2)
-print(f"∮ 1/z² dz = {I2:.6f}  (이론값: 0)")
+print(f"∮ 1/z² dz = {I2:.6f}  (theoretical: 0)")
 
-# ∮ e^z/z dz = 2πi (코시 공식: f(0)=e⁰=1)
+# ∮ e^z/z dz = 2πi (Cauchy's formula: f(0)=e⁰=1)
 I3 = contour_integral_circle(lambda z: np.exp(z)/z)
-print(f"∮ e^z/z dz = {I3:.6f}  (이론값: {2*np.pi*1j:.6f})")
+print(f"∮ e^z/z dz = {I3:.6f}  (theoretical: {2*np.pi*1j:.6f})")
 ```
 
-### 2.2 Cauchy's Integral Theorem (코시 적분 정리)
+### 2.2 Cauchy's Integral Theorem
 
 If $f(z)$ is analytic in a simply connected region $D$, then for any closed curve $C$ in $D$:
 
@@ -168,7 +168,7 @@ $$\oint_C f(z)\, dz = 0$$
 
 **Physical meaning**: This is equivalent to the circulation of a conservative force being zero. The integral of an analytic function is path-independent.
 
-### 2.3 Cauchy's Integral Formula (코시 적분 공식)
+### 2.3 Cauchy's Integral Formula
 
 If $f(z)$ is analytic inside $C$ and $z_0$ is an interior point:
 
@@ -184,7 +184,7 @@ This formula means that analytic functions are infinitely differentiable, and bo
 from math import factorial
 
 def cauchy_derivative(f, z0, n=0, r=1, N=10000):
-    """코시 적분 공식으로 f^(n)(z0) 계산"""
+    """Compute f^(n)(z0) using Cauchy's integral formula"""
     t = np.linspace(0, 2*np.pi, N, endpoint=False)
     dt = 2*np.pi / N
     z = z0 + r * np.exp(1j * t)
@@ -192,18 +192,18 @@ def cauchy_derivative(f, z0, n=0, r=1, N=10000):
     integrand = f(z) / (z - z0)**(n + 1) * dz_dt
     return np.sum(integrand) * dt * factorial(n) / (2*np.pi*1j)
 
-# 검증: f(z) = sin(z)
+# Verification: f(z) = sin(z)
 f = lambda z: np.sin(z)
-print("코시 공식 검증: f(z) = sin(z)")
-print(f"  f(0)   = {cauchy_derivative(f, 0, 0):.6f}  (정확값: 0)")
-print(f"  f'(0)  = {cauchy_derivative(f, 0, 1):.6f}  (정확값: 1)")
-print(f"  f''(0) = {cauchy_derivative(f, 0, 2):.6f}  (정확값: 0)")
-print(f"  f'''(0)= {cauchy_derivative(f, 0, 3):.6f}  (정확값: -1)")
+print("Cauchy formula verification: f(z) = sin(z)")
+print(f"  f(0)   = {cauchy_derivative(f, 0, 0):.6f}  (exact: 0)")
+print(f"  f'(0)  = {cauchy_derivative(f, 0, 1):.6f}  (exact: 1)")
+print(f"  f''(0) = {cauchy_derivative(f, 0, 2):.6f}  (exact: 0)")
+print(f"  f'''(0)= {cauchy_derivative(f, 0, 3):.6f}  (exact: -1)")
 ```
 
 ---
 
-## 3. Series Expansions (급수 전개)
+## 3. Series Expansions
 
 ### 3.1 Taylor Series
 
@@ -215,7 +215,7 @@ The radius of convergence $R$ is the distance from $z_0$ to the nearest singular
 
 **Example**: The radius of convergence of the Taylor series of $f(z) = 1/(1+z^2)$ around $z=0$ is $R=1$. This is because there are poles at $z = \pm i$. Although there are no singularities on the real axis, singularities in the complex plane determine the radius of convergence.
 
-### 3.2 Laurent Series (로랑 급수)
+### 3.2 Laurent Series
 
 If $f(z)$ is analytic in an annular region $r < |z - z_0| < R$:
 
@@ -226,20 +226,20 @@ Terms with $n < 0$ are called the **principal part**, and specifically $a_{-1}$ 
 ```python
 z = sp.Symbol('z')
 
-# 로랑 급수: e^z / z³ (z=0 주위)
+# Laurent series: e^z / z³ (around z=0)
 f1 = sp.exp(z) / z**3
-print("e^z/z³ 의 로랑 급수:")
+print("Laurent series of e^z/z³:")
 print(f"  {sp.series(f1, z, 0, n=5)}")
-print(f"  유수 (z⁻¹ 계수) = 1/2\n")
+print(f"  Residue (z⁻¹ coefficient) = 1/2\n")
 
-# 로랑 급수: 1/(z(z-1)) (z=0 주위)
+# Laurent series: 1/(z(z-1)) (around z=0)
 f2 = 1 / (z * (z - 1))
-print("1/(z(z-1)) 의 로랑 급수 (z=0 주위):")
+print("Laurent series of 1/(z(z-1)) (around z=0):")
 print(f"  {sp.series(f2, z, 0, n=4)}")
 
-# z=1 주위
+# around z=1
 w = sp.Symbol('w')
-print("\n1/(z(z-1)) 의 로랑 급수 (z=1 주위, w=z-1):")
+print("\nLaurent series of 1/(z(z-1)) (around z=1, w=z-1):")
 print(f"  {sp.series(f2.subs(z, w+1), w, 0, n=4)}")
 ```
 
@@ -254,11 +254,11 @@ print(f"  {sp.series(f2.subs(z, w+1), w, 0, n=4)}")
 **Casorati-Weierstrass theorem**: Near an essential singularity, the function takes on almost every complex value.
 
 ```python
-# 특이점 분류 확인
+# Singularity classification verification
 cases = [
-    ("sin(z)/z (z=0, 제거가능)", sp.sin(z)/z, z, 0),
-    ("1/(z-1)³ (z=1, 3차 극점)", 1/(z-1)**3, z, 1),
-    ("exp(1/z) (z=0, 본질적)", sp.exp(1/z), z, 0),
+    ("sin(z)/z (z=0, removable)", sp.sin(z)/z, z, 0),
+    ("1/(z-1)³ (z=1, pole of order 3)", 1/(z-1)**3, z, 1),
+    ("exp(1/z) (z=0, essential)", sp.exp(1/z), z, 0),
 ]
 
 for name, expr, var, pt in cases:
@@ -272,7 +272,7 @@ for name, expr, var, pt in cases:
 
 ---
 
-## 4. Residue Theorem (유수 정리)
+## 4. Residue Theorem
 
 ### 4.1 Definition and Calculation of Residues
 
@@ -297,7 +297,7 @@ examples = [
     ("z/(z²-3z+2)", z/(z**2-3*z+2), 2),
 ]
 
-print("=== 유수 계산 ===")
+print("=== Residue calculation ===")
 for name, expr, z0 in examples:
     print(f"Res[{name}, z={z0}] = {sp.residue(expr, z, z0)}")
 ```
@@ -308,7 +308,7 @@ If $f(z)$ is analytic inside a closed curve $C$ except for a finite number of si
 
 $$\oint_C f(z)\, dz = 2\pi i \sum_{k=1}^{n} \text{Res}_{z=z_k} f(z)$$
 
-### 4.3 Jordan's Lemma (조르당 보조정리)
+### 4.3 Jordan's Lemma
 
 When calculating real integrals using the residue theorem, we must verify that the contribution from the infinite semicircular path is zero. **Jordan's lemma** guarantees this.
 
@@ -337,15 +337,15 @@ import numpy as np
 
 z = sp.Symbol('z')
 
-# --- 유형 1: ∫₀²π dθ/(2 + cosθ) ---
-print("=== 유형 1: ∫₀²π dθ/(2 + cosθ) ===")
+# --- Type 1: ∫₀²π dθ/(2 + cosθ) ---
+print("=== Type 1: ∫₀²π dθ/(2 + cosθ) ===")
 integrand1 = 2 / (sp.I * (z**2 + 4*z + 1))
-inner_pole = -2 + sp.sqrt(3)  # |z| < 1인 극점
+inner_pole = -2 + sp.sqrt(3)  # pole with |z| < 1
 res1 = sp.residue(integrand1, z, inner_pole)
 result1 = sp.simplify(2 * sp.pi * sp.I * res1)
-print(f"유수 정리: {result1} = {float(result1):.6f}")
+print(f"Residue theorem: {result1} = {float(result1):.6f}")
 num1, _ = quad(lambda t: 1/(2 + np.cos(t)), 0, 2*np.pi)
-print(f"수치 검증: {num1:.6f}\n")
+print(f"Numerical verification: {num1:.6f}\n")
 ```
 
 #### Type 2: Rational functions — $\int_{-\infty}^{\infty} \frac{P(x)}{Q(x)}\, dx$
@@ -357,13 +357,13 @@ Use an upper half-plane semicircular path. As $R \to \infty$, the integral over 
 $$\int_{-\infty}^{\infty} \frac{P(x)}{Q(x)}\, dx = 2\pi i \sum_{\text{Im}(z_k) > 0} \text{Res}_{z=z_k} \frac{P(z)}{Q(z)}$$
 
 ```python
-# --- 유형 2: ∫₋∞^∞ dx/(x²+1)² ---
-print("=== 유형 2: ∫₋∞^∞ dx/(x²+1)² ===")
+# --- Type 2: ∫₋∞^∞ dx/(x²+1)² ---
+print("=== Type 2: ∫₋∞^∞ dx/(x²+1)² ===")
 res2 = sp.residue(1/(z**2+1)**2, z, sp.I)
 result2 = sp.simplify(2 * sp.pi * sp.I * res2)
-print(f"유수 정리: {result2} = {float(result2):.6f}")
+print(f"Residue theorem: {result2} = {float(result2):.6f}")
 num2, _ = quad(lambda x: 1/(x**2+1)**2, -100, 100)
-print(f"수치 검증: {num2:.6f}\n")
+print(f"Numerical verification: {num2:.6f}\n")
 ```
 
 #### Type 3: Fourier-type integrals — $\int_{-\infty}^{\infty} f(x) e^{iax}\, dx$ ($a > 0$)
@@ -375,14 +375,14 @@ $$\int_{-\infty}^{\infty} f(x) e^{iax}\, dx = 2\pi i \sum_{\text{Im}(z_k) > 0} \
 Integrals containing $\cos(ax)$ or $\sin(ax)$ use $e^{iax}$ and then take the real or imaginary part.
 
 ```python
-# --- 유형 3: ∫₋∞^∞ cos(x)/(x²+1) dx = π/e ---
-print("=== 유형 3: ∫₋∞^∞ cos(x)/(x²+1) dx ===")
+# --- Type 3: ∫₋∞^∞ cos(x)/(x²+1) dx = π/e ---
+print("=== Type 3: ∫₋∞^∞ cos(x)/(x²+1) dx ===")
 f3 = sp.exp(sp.I*z) / (z**2 + 1)
 res3 = sp.residue(f3, z, sp.I)
 result3 = sp.simplify(2 * sp.pi * sp.I * res3)
-print(f"유수 정리: Re({result3}) = π/e = {float(sp.pi/sp.E):.6f}")
+print(f"Residue theorem: Re({result3}) = π/e = {float(sp.pi/sp.E):.6f}")
 num3, _ = quad(lambda x: np.cos(x)/(x**2+1), -100, 100)
-print(f"수치 검증: {num3:.6f}\n")
+print(f"Numerical verification: {num3:.6f}\n")
 ```
 
 #### Type 4: Branch cut integrals — $\int_0^{\infty} x^{a-1} f(x)\, dx$ ($0 < a < 1$)
@@ -402,17 +402,17 @@ $$\int_0^{\infty} \frac{x^{a-1}}{1+x} dx - e^{2\pi i(a-1)} \int_0^{\infty} \frac
 $$(1 - e^{2\pi i(a-1)}) I = -2\pi i e^{i\pi a} \implies I = \frac{\pi}{\sin(\pi a)}$$
 
 ```python
-# --- 유형 4: ∫₀^∞ x^{a-1}/(1+x) dx = π/sin(πa) ---
-print("=== 유형 4: ∫₀^∞ x^{a-1}/(1+x) dx ===")
+# --- Type 4: ∫₀^∞ x^{a-1}/(1+x) dx = π/sin(πa) ---
+print("=== Type 4: ∫₀^∞ x^{a-1}/(1+x) dx ===")
 for a in [0.25, 0.5, 0.75]:
     theory = np.pi / np.sin(np.pi * a)
     numerical, _ = quad(lambda x: x**(a-1)/(1+x), 0, np.inf)
-    print(f"  a = {a}: π/sin(πa) = {theory:.6f}, 수치 = {numerical:.6f}")
+    print(f"  a = {a}: π/sin(πa) = {theory:.6f}, numerical = {numerical:.6f}")
 ```
 
 ---
 
-## 5. Conformal Mapping (등각사상)
+## 5. Conformal Mapping
 
 ### 5.1 Definition and Properties of Conformal Mapping
 
@@ -430,11 +430,11 @@ $$w = \frac{az + b}{cz + d}, \quad ad - bc \neq 0$$
 
 ```python
 def mobius_transform(z, a, b, c, d):
-    """뫼비우스 변환 w = (az+b)/(cz+d)"""
+    """Mobius transformation w = (az+b)/(cz+d)"""
     return (a*z + b) / (c*z + d)
 
-def plot_mobius(a, b, c, d, title="뫼비우스 변환"):
-    """격자선의 뫼비우스 변환 시각화"""
+def plot_mobius(a, b, c, d, title="Mobius transformation"):
+    """Visualization of Mobius transformation of grid lines"""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     t = np.linspace(-2, 2, 300)
 
@@ -450,14 +450,14 @@ def plot_mobius(a, b, c, d, title="뫼비우스 변환"):
         m = np.abs(wv) < 10
         axes[1].plot(wv.real[m], wv.imag[m], 'r-', alpha=0.4, lw=0.7)
 
-    for ax, lab in zip(axes, ['z-평면', 'w-평면']):
+    for ax, lab in zip(axes, ['z-plane', 'w-plane']):
         ax.set_xlim(-4,4); ax.set_ylim(-4,4)
         ax.set_aspect('equal'); ax.grid(True, alpha=0.3); ax.set_title(lab)
     fig.suptitle(f'{title}: w=({a}z+{b})/({c}z+{d})')
     plt.tight_layout(); plt.show()
 
-# 케일리 변환 (상반면→단위원): w = (z-i)/(z+i)
-# plot_mobius(1, -1j, 1, 1j, "케일리 변환")
+# Cayley transform (upper half-plane → unit disk): w = (z-i)/(z+i)
+# plot_mobius(1, -1j, 1, 1j, "Cayley transform")
 ```
 
 ### 5.3 Physics Applications (Fluid Mechanics, Electric Field)
@@ -477,8 +477,8 @@ $\phi$ is the velocity potential, $\psi$ is the streamline function.
 | Around cylinder | $U(z + a^2/z)$ | Radius $a$ |
 
 ```python
-def plot_flow(W_func, xlim=(-3,3), ylim=(-3,3), N=400, title="유선도"):
-    """복소 포텐셜로부터 유선도와 등포텐셜선 시각화"""
+def plot_flow(W_func, xlim=(-3,3), ylim=(-3,3), N=400, title="Streamline plot"):
+    """Visualization of streamlines and equipotential lines from complex potential"""
     xv = np.linspace(*xlim, N); yv = np.linspace(*ylim, N)
     X, Y = np.meshgrid(xv, yv); Z = X + 1j*Y
 
@@ -489,21 +489,21 @@ def plot_flow(W_func, xlim=(-3,3), ylim=(-3,3), N=400, title="유선도"):
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     axes[0].contour(X, Y, psi, levels=30, colors='blue', linewidths=0.8)
-    axes[0].set_title(f'{title} - 유선 (ψ=const)')
+    axes[0].set_title(f'{title} - streamlines (ψ=const)')
     axes[1].contour(X, Y, phi, levels=30, colors='red', linewidths=0.8)
-    axes[1].set_title(f'{title} - 등포텐셜선 (φ=const)')
+    axes[1].set_title(f'{title} - equipotential lines (φ=const)')
     for ax in axes:
         ax.set_aspect('equal'); ax.set_xlabel('x'); ax.set_ylabel('y')
     plt.tight_layout(); plt.show()
 
-# 순환 있는 원주 주위 흐름
+# Flow around cylinder with circulation
 U, a, Gamma = 1.0, 1.0, 2*np.pi
 W_cyl = lambda z: U*(z + a**2/z) - 1j*Gamma/(2*np.pi)*np.log(z)
-# plot_flow(W_cyl, title="순환 있는 원주 주위 흐름")
+# plot_flow(W_cyl, title="Flow around cylinder with circulation")
 
-# 전기 쌍극자 (+q at z=d, -q at z=-d)
+# Electric dipole (+q at z=d, -q at z=-d)
 W_dipole = lambda z: -1/(2*np.pi) * (np.log(z-0.5) - np.log(z+0.5))
-# plot_flow(W_dipole, title="전기 쌍극자 전위")
+# plot_flow(W_dipole, title="Electric dipole potential")
 ```
 
 **Joukowski transformation and lift**: $w = z + c^2/z$ maps a circle to an airfoil. Lift per unit length by the Kutta-Joukowski theorem:
@@ -512,7 +512,7 @@ $$L = \rho U \Gamma$$
 
 This result is elegantly derived from the residue theorem.
 
-### 5.4 Schwarz-Christoffel Mapping (슈바르츠-크리스토펠 사상)
+### 5.4 Schwarz-Christoffel Mapping
 
 **Problem**: Find a conformal mapping that maps the upper half-plane to a polygonal region.
 
@@ -526,7 +526,7 @@ where $A$ is a complex constant.
 
 ---
 
-## 6. Analytic Continuation (해석적 연속)
+## 6. Analytic Continuation
 
 ### 6.1 Basic Concept
 
@@ -541,7 +541,7 @@ When a function $f(z)$ is defined in a region $D_1$, if an analytic function $g(
 **Riemann zeta function**: $\zeta(s) = \sum_{n=1}^{\infty} n^{-s}$ converges for $\text{Re}(s) > 1$, but through analytic continuation it extends to the entire complex plane except $s = 1$. This is used in physics for **zeta function regularization** (Casimir effect, etc.).
 
 ```python
-# 감마 함수의 해석적 연속 시각화
+# Visualization of analytic continuation of the gamma function
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import gamma
@@ -558,7 +558,7 @@ for n in range(0, -5, -1):
 
 plt.xlabel('z')
 plt.ylabel('Γ(z)')
-plt.title('감마 함수의 해석적 연속 (음의 정수에서 극점)')
+plt.title('Analytic continuation of the gamma function (poles at negative integers)')
 plt.grid(True, alpha=0.3)
 plt.axhline(0, color='k', linewidth=0.5)
 plt.tight_layout()
@@ -567,7 +567,7 @@ plt.show()
 
 ---
 
-## Exercises (연습 문제)
+## Exercises
 
 ### Basic Problems
 
@@ -606,14 +606,14 @@ z = sp.Symbol('z')
 # ∫₀²π dθ/(5+4cosθ) → ∮ 1/(i(2z²+5z+2)) dz
 integrand = 1 / (sp.I * (2*z**2 + 5*z + 2))
 poles = sp.solve(2*z**2 + 5*z + 2, z)
-print(f"극점: {poles}")  # z=-1/2 (내부), z=-2 (외부)
+print(f"Poles: {poles}")  # z=-1/2 (interior), z=-2 (exterior)
 res = sp.residue(integrand, z, sp.Rational(-1, 2))
-print(f"적분값: {sp.simplify(2*sp.pi*sp.I*res)}")  # 2π/3
+print(f"Integral value: {sp.simplify(2*sp.pi*sp.I*res)}")  # 2π/3
 ```
 
 ---
 
-## References (참고 자료)
+## References
 
 ### Textbooks
 - **Boas, M. L.** *Mathematical Methods in the Physical Sciences*, 3rd ed., Ch. 14
@@ -637,4 +637,4 @@ print(f"적분값: {sp.simplify(2*sp.pi*sp.I*res)}")  # 2π/3
 
 ## Next Lesson
 
-In [15. Laplace Transform (라플라스 변환)](15_Laplace_Transform.md), we will cover the definition and properties of the Laplace transform, inverse transforms, and applications to differential equations.
+In [15. Laplace Transform](15_Laplace_Transform.md), we will cover the definition and properties of the Laplace transform, inverse transforms, and applications to differential equations.

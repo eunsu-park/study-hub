@@ -1,10 +1,25 @@
 # 19. 관측 가능성과 모니터링
 
+**이전**: [실전 설계 예제 2](./18_Design_Example_2.md) | **다음**: [검색 시스템](./20_Search_Systems.md)
+
 난이도: ⭐⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-관측 가능성(Observability)은 시스템의 외부 출력으로부터 내부 상태를 이해할 수 있는 능력입니다. 이 레슨에서는 관측 가능성의 세 가지 기둥(three pillars)인 메트릭(metrics), 로그(logs), 트레이스(traces)와 더불어 대규모 분산 시스템 모니터링을 위한 실용적인 도구 및 프레임워크를 다룹니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 관측 가능성(Observability)을 정의하고 전통적인 모니터링(Monitoring)과 구별하며, 분산 시스템에서 중요한 이유를 설명할 수 있다
+2. 관측 가능성의 세 가지 기둥(메트릭, 로그, 트레이스)을 설명하고, 장애 조사 중 이들이 서로 어떻게 보완하는지 설명할 수 있다
+3. Prometheus 방식의 풀 기반(pull-based) 수집, 시계열 저장소, Grafana 대시보드를 활용하여 메트릭 파이프라인(metrics pipeline)을 설계할 수 있다
+4. ELK 스택 또는 Loki를 이용해 대규모 로그 수집, 인덱싱, 쿼리를 위한 중앙 집중식 로깅 시스템(centralized logging system)을 아키텍처로 구성할 수 있다
+5. OpenTelemetry를 사용하여 분산 트레이싱(distributed tracing)을 구현하고 서비스 경계를 넘어 요청을 연관지을 수 있다
+6. SLI(서비스 수준 지표), SLO(서비스 수준 목표), 오류 예산(error budget)을 정의하고, 노이즈를 최소화하면서 실제 장애를 감지하는 경보(alerting) 전략을 설계할 수 있다
+
+---
+
+사용자가 "앱이 느려요"라고 보고할 때, 관측 가능성이 갖춰진 시스템은 병목이 데이터베이스 커넥션 풀 포화인지, 느린 서드파티 API인지, 아니면 특정 파드의 가비지 컬렉션 일시 중지인지 몇 분 안에 파악하게 해줍니다. 관측 가능성 없이는 팀이 추측에 의존하여 "수정 시도"를 맹목적으로 배포하게 됩니다. SLI, SLO, 오류 예산을 공식화한 Google의 SRE 관행은, 관측 가능성에 투자하면 업계 전반에 걸쳐 평균 복구 시간(Mean Time to Recovery)과 온콜 번아웃(on-call burnout)이 직접적으로 줄어든다는 것을 보여주었습니다.
 
 ---
 
@@ -676,9 +691,9 @@ def process_order(order_id):
 
 ---
 
-## 다음 단계
-- [20. 검색 시스템](./20_Search_Systems.md)
-- [13. 마이크로서비스 기초](./13_Microservices_Basics.md)
+**이전**: [실전 설계 예제 2](./18_Design_Example_2.md) | **다음**: [검색 시스템](./20_Search_Systems.md)
+
+---
 
 ## 참고 자료
 - [Google SRE Book: Monitoring](https://sre.google/sre-book/monitoring-distributed-systems/)

@@ -562,9 +562,15 @@ kx = fftfreq(N, L/(2*np.pi*N)) * 2*np.pi
 ky = fftfreq(N, L/(2*np.pi*N)) * 2*np.pi
 KX, KY = np.meshgrid(kx, ky)
 K2 = KX**2 + KY**2
+# K2[0,0] = 1 avoids division by zero in the pressure projection P⊥ = k/k²;
+# the k=0 (mean) mode has zero divergence by definition, so setting K2=1 there
+# gives P⊥ = 0, which correctly leaves the mean field unchanged
 K2[0, 0] = 1.0  # Avoid division by zero
 
-# Dealiasing mask (2/3 rule)
+# Dealiasing mask (2/3 rule): keep only |k| ≤ N/3 (not N/2) because the product
+# of two functions with max wavenumber N/3 produces modes up to 2N/3 ≤ N/2 — still
+# within the Nyquist limit — so no aliasing occurs; modes beyond N/3 are zeroed out
+# before IFFT to prevent aliased high-k content from contaminating lower modes
 kmax = N // 3
 dealias = (np.abs(KX) <= kmax) & (np.abs(KY) <= kmax)
 
@@ -575,15 +581,27 @@ vy = np.random.randn(N, N) * 0.1
 Bx = np.sin(2*X) * np.cos(Y)
 By = -np.cos(X) * np.sin(2*Y)
 
-# Enforce incompressibility
+# Project initial v and B onto their divergence-free subspaces before the first
+# time step — random initial fields will generically have nonzero divergence, and
+# even a small ∇·v ≠ 0 at t=0 would create a spurious pressure that grows each step
 vx_hat = fftn(vx)
 vy_hat = fftn(vy)
+# div_v in spectral space = ik_x * vx_hat + ik_y * vy_hat: in spectral space
+# differentiation is exact (no truncation error), so this divergence is the
+# machine-precision representative of the continuous divergence
 div_v = 1j*KX*vx_hat + 1j*KY*vy_hat
+# Subtract the potential part (k * (k·v)/k²): this is the Helmholtz decomposition —
+# any vector field splits uniquely into curl-free (potential) + divergence-free parts;
+# subtracting the potential part leaves only the solenoidal (divergence-free) remainder
 vx_hat -= 1j*KX*div_v/K2
 vy_hat -= 1j*KY*div_v/K2
 vx = np.real(ifftn(vx_hat))
 vy = np.real(ifftn(vy_hat))
 
+# Same divergence cleaning for B: ∇·B = 0 is a constraint required by Maxwell's
+# equations; in the spectral method it is maintained at every step by the projection
+# in project_divergence_free(), but ensuring it holds at t=0 prevents accumulation
+# of machine-precision errors from amplifying over many time steps
 Bx_hat = fftn(Bx)
 By_hat = fftn(By)
 div_B = 1j*KX*Bx_hat + 1j*KY*By_hat
@@ -597,6 +615,11 @@ def compute_nonlinear(vx, vy, Bx, By):
     # Velocity advection
     vx_hat = fftn(vx)
     vy_hat = fftn(vy)
+    # Derivatives computed in spectral space (exact) then transformed back:
+    # this is the pseudo-spectral strategy — ik*f_hat gives the exact spectral
+    # derivative, which is then multiplied with the field in physical space;
+    # doing the multiplication in physical space avoids the expensive convolution
+    # sum that would result from doing it entirely in spectral space
     dvx_dx = np.real(ifftn(1j*KX*vx_hat))
     dvx_dy = np.real(ifftn(1j*KY*vx_hat))
     dvy_dx = np.real(ifftn(1j*KX*vy_hat))
@@ -605,7 +628,9 @@ def compute_nonlinear(vx, vy, Bx, By):
     NL_vx = -(vx*dvx_dx + vy*dvx_dy)
     NL_vy = -(vx*dvy_dx + vy*dvy_dy)
 
-    # Magnetic tension
+    # Magnetic tension (B·∇)B: this term is what makes MHD different from
+    # pure hydrodynamics — tension along field lines resists bending, which
+    # is the physical mechanism behind Alfvén wave propagation and magnetic braking
     Bx_hat = fftn(Bx)
     By_hat = fftn(By)
     dBx_dx = np.real(ifftn(1j*KX*Bx_hat))
@@ -616,7 +641,9 @@ def compute_nonlinear(vx, vy, Bx, By):
     NL_vx += Bx*dBx_dx + By*dBx_dy
     NL_vy += Bx*dBy_dx + By*dBy_dy
 
-    # Induction equation
+    # Induction equation RHS: ∇×(v×B) written out component-wise as vx*∂B - B*∂v;
+    # the anti-symmetric structure preserves magnetic helicity under ideal evolution —
+    # any deviation from this form would introduce spurious helicity injection
     NL_Bx = vx*dBx_dx + vy*dBx_dy - Bx*dvx_dx - By*dvx_dy
     NL_By = vx*dBy_dx + vy*dBy_dy - Bx*dvy_dx - By*dvy_dy
 
@@ -639,13 +666,19 @@ def rhs(vx, vy, Bx, By, t):
     NL_vx += forcing_vx
     NL_vy += forcing_vy
 
-    # FFT
+    # Apply dealiasing mask after FFT-ing the nonlinear products: the physical-space
+    # multiplication created high-k modes up to 2*kmax that would alias back into
+    # the simulation wavenumbers without this mask — the dealias array zeros those
+    # modes so they cannot contaminate the energy cascade toward lower wavenumbers
     NL_vx_hat = fftn(NL_vx) * dealias
     NL_vy_hat = fftn(NL_vy) * dealias
     NL_Bx_hat = fftn(NL_Bx) * dealias
     NL_By_hat = fftn(NL_By) * dealias
 
-    # Project to divergence-free
+    # Project nonlinear velocity forcing to divergence-free subspace: even though
+    # v is already divergence-free, the nonlinear term (v·∇)v may generate a
+    # compressible component; projecting removes it and implicitly enforces the
+    # pressure equation without needing to solve a Poisson equation explicitly
     NL_vx_hat, NL_vy_hat = project_divergence_free(NL_vx_hat, NL_vy_hat)
     NL_Bx_hat, NL_By_hat = project_divergence_free(NL_Bx_hat, NL_By_hat)
 
@@ -655,6 +688,10 @@ def rhs(vx, vy, Bx, By, t):
     Bx_hat = fftn(Bx)
     By_hat = fftn(By)
 
+    # -ν*k²*v_hat is exact spectral diffusion: no spatial truncation error, unlike
+    # finite differences where ∇²v ≈ (v_{i+1}-2v_i+v_{i-1})/Δx² has O(Δx²) error;
+    # spectral diffusion is exact because Fourier modes are eigenfunctions of ∇²,
+    # which is why spectral methods achieve exponential convergence for smooth flows
     dvx_dt_hat = NL_vx_hat - nu*K2*vx_hat
     dvy_dt_hat = NL_vy_hat - nu*K2*vy_hat
     dBx_dt_hat = NL_Bx_hat - eta*K2*Bx_hat

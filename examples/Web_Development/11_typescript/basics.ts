@@ -82,6 +82,8 @@ printId(42);
 // 4. 리터럴 타입 (Literal Types)
 // ============================================
 
+// Why: Literal types restrict values to an exact set at compile time, turning invalid
+// inputs (e.g., "diagonal") into type errors instead of silent runtime bugs
 // 특정 값만 허용
 type Direction = "up" | "down" | "left" | "right";
 type DiceValue = 1 | 2 | 3 | 4 | 5 | 6;
@@ -108,6 +110,8 @@ let anything: any = "hello";
 anything = 42;
 anything = true;
 
+// Why: unknown is the type-safe alternative to any - it accepts all values but forces you to
+// narrow the type before using it, catching bugs that any would silently allow
 // unknown: 모든 타입 허용, 사용 시 타입 체크 필요
 let unknownValue: unknown = "hello";
 
@@ -134,6 +138,8 @@ console.log(`any 값: ${anything}`);
 // 6. 타입 별칭 (Type Alias)
 // ============================================
 
+// Why: Type aliases give meaningful names to complex types, improving readability and
+// enabling reuse across the codebase without duplicating structural definitions
 type Point = {
     x: number;
     y: number;
@@ -168,6 +174,8 @@ type Circle = { kind: "circle"; radius: number };
 type Rectangle = { kind: "rectangle"; width: number; height: number };
 type Shape = Circle | Rectangle;
 
+// Why: Discriminated unions use a literal "kind" field so TypeScript can narrow the type
+// in each switch branch, providing exhaustive checking and eliminating type casts
 // 판별 유니온 (Discriminated Union)
 function getArea(shape: Shape): number {
     switch (shape.kind) {
@@ -232,6 +240,8 @@ function sumAll(...numbers: number[]): number {
     return numbers.reduce((acc, cur) => acc + cur, 0);
 }
 
+// Why: Overload signatures let callers see distinct input-output contracts, giving better
+// IntelliSense hints than a single union signature that obscures which output type maps to which input
 // 오버로드 시그니처
 function format(value: string): string;
 function format(value: number): string;
@@ -256,6 +266,8 @@ console.log(`숫자 포맷: ${format(3.14159)}`);
 // 10. 열거형 (Enum)
 // ============================================
 
+// Why: Enums group related constants under one namespace and provide reverse mapping,
+// but prefer string enums or union literals in modern TS for better tree-shaking
 // 숫자 열거형
 enum Direction2 {
     Up = 1,

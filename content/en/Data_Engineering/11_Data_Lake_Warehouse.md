@@ -1,5 +1,18 @@
 # Data Lake and Data Warehouse
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare the architectural differences between Data Lakes, Data Warehouses, and Lakehouse systems, including Schema-on-Write vs. Schema-on-Read approaches.
+2. Explain the role of dimensional modeling (star and snowflake schemas) in analytical query performance.
+3. Evaluate trade-offs in selecting a storage architecture based on data volume, variety, and query patterns.
+4. Design a Lakehouse architecture using open table formats such as Delta Lake or Apache Iceberg.
+5. Implement ETL/ELT pipelines that move data across bronze, silver, and gold layers in a medallion architecture.
+6. Analyze the cost and scalability implications of major cloud data warehouse and data lake solutions.
+
+---
+
 ## Overview
 
 Data storage architecture is central to an organization's data strategy. Understanding the characteristics and use cases of Data Lakes, Data Warehouses, and the Lakehouse architecture that combines both.
@@ -52,6 +65,8 @@ Data storage architecture is central to an organization's data strategy. Underst
 -- Snowflake/BigQuery style analytical queries
 
 -- Monthly sales trend
+-- Why a star-schema join? Joining facts to dimensions enables slicing metrics
+-- by any dimension attribute without denormalizing the entire dataset.
 SELECT
     d.year,
     d.month,
@@ -59,7 +74,10 @@ SELECT
     SUM(f.sales_amount) AS total_sales,
     COUNT(DISTINCT f.customer_sk) AS unique_customers,
     AVG(f.sales_amount) AS avg_order_value,
-    -- Month-over-month growth rate
+    -- NULLIF prevents division-by-zero when the prior month has no sales
+    -- (e.g., first month in the dataset or seasonal gaps).
+    -- LAG window function compares sequential months without a self-join,
+    -- which is far more efficient on columnar warehouses.
     (SUM(f.sales_amount) - LAG(SUM(f.sales_amount)) OVER (ORDER BY d.year, d.month))
         / NULLIF(LAG(SUM(f.sales_amount)) OVER (ORDER BY d.year, d.month), 0) * 100
         AS mom_growth_pct
@@ -71,6 +89,9 @@ ORDER BY d.year, d.month;
 
 
 -- Customer LTV by segment
+-- CTE isolates per-customer aggregation so the outer query can compute
+-- segment-level statistics cleanly — avoids nested subqueries and
+-- makes the logic testable independently.
 WITH customer_metrics AS (
     SELECT
         c.customer_sk,
@@ -89,6 +110,8 @@ SELECT
     COUNT(*) AS customer_count,
     AVG(total_orders) AS avg_orders,
     AVG(total_revenue) AS avg_ltv,
+    -- Median is more robust than AVG for skewed revenue distributions;
+    -- a few whale customers can inflate AVG dramatically.
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_revenue) AS median_ltv
 FROM customer_metrics
 GROUP BY customer_segment
@@ -184,17 +207,26 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Raw → Processed (Bronze → Silver)
+# Bronze holds immutable raw data for auditability and reprocessing.
+# Silver applies cleaning and deduplication so downstream consumers
+# don't repeat these steps — a single source of clean truth.
 def process_raw_orders():
-    # Read raw JSON
+    # Read raw JSON — schema-on-read means we accept any shape here
+    # and apply structure only during processing (Data Lake philosophy)
     raw_df = spark.read.json("s3://my-data-lake/raw/orders/")
 
-    # Cleaning
+    # Filter nulls and deduplicate: raw sources often contain duplicates
+    # from at-least-once delivery; dedup on business key prevents
+    # inflated counts in downstream aggregations
     processed_df = raw_df \
         .filter(col("order_id").isNotNull()) \
         .withColumn("processed_at", current_timestamp()) \
         .dropDuplicates(["order_id"])
 
-    # Save as Parquet
+    # Parquet provides columnar compression (10-30x vs JSON) and
+    # predicate pushdown for efficient analytical queries.
+    # Partitioning by year/month enables partition pruning — queries
+    # that filter on date only scan relevant directories.
     processed_df.write \
         .mode("overwrite") \
         .partitionBy("year", "month") \
@@ -202,10 +234,15 @@ def process_raw_orders():
 
 
 # Processed → Curated (Silver → Gold)
+# Gold layer contains business-ready aggregates and dimensional models
+# optimized for fast queries — BI tools read from here directly.
 def create_fact_sales():
     orders = spark.read.parquet("s3://my-data-lake/processed/orders/")
     customers = spark.read.parquet("s3://my-data-lake/processed/customers/")
 
+    # Join at the Gold layer to pre-compute the dimensional model;
+    # doing this once here avoids repeated expensive joins in every
+    # downstream query or dashboard
     fact_sales = orders \
         .join(customers, "customer_id") \
         .select(
@@ -243,6 +280,10 @@ def create_fact_sales():
 def choose_architecture(requirements: dict) -> str:
     """Architecture selection guide"""
 
+    # Weighted scoring by counting matching factors.
+    # In practice, factors should be weighted differently (e.g., governance
+    # compliance may be non-negotiable), but equal weights keep this
+    # heuristic simple and easy to extend.
     warehouse_factors = [
         requirements.get('structured_data_only', False),
         requirements.get('sql_analytics_primary', False),
@@ -250,6 +291,9 @@ def choose_architecture(requirements: dict) -> str:
         requirements.get('fast_query_response', False),
     ]
 
+    # Lake has more factors because it serves a wider range of use cases;
+    # this naturally biases the score toward Lake when requirements are mixed,
+    # reflecting the industry trend of starting with a Lake/Lakehouse.
     lake_factors = [
         requirements.get('unstructured_data', False),
         requirements.get('ml_workloads', False),
@@ -263,6 +307,8 @@ def choose_architecture(requirements: dict) -> str:
     elif sum(lake_factors) > sum(warehouse_factors):
         return "Data Lake recommended"
     else:
+        # Tie-breaking toward Lakehouse: when neither side dominates,
+        # Lakehouse gives you both SQL performance and raw-data flexibility
         return "Consider Lakehouse"
 ```
 
@@ -329,6 +375,9 @@ from pyspark.sql import SparkSession
 from delta import *
 
 # Delta Lake configuration
+# Both extensions are required: DeltaSparkSessionExtension adds Delta-specific
+# SQL commands (MERGE, OPTIMIZE), while DeltaCatalog enables Spark to resolve
+# Delta tables by name rather than only by path.
 spark = SparkSession.builder \
     .appName("DeltaLake") \
     .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
@@ -336,6 +385,9 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Create Delta table
+# Writing as Delta (vs raw Parquet) adds a _delta_log transaction log that
+# provides ACID transactions, schema enforcement, and time travel — all
+# impossible with plain Parquet files.
 df = spark.createDataFrame([
     (1, "Alice", 100),
     (2, "Bob", 200),
@@ -346,7 +398,8 @@ df.write.format("delta").save("/data/delta/users")
 # Read
 delta_df = spark.read.format("delta").load("/data/delta/users")
 
-# Access via SQL
+# Registering a SQL table on top of the Delta path enables BI tools and
+# SQL analysts to query the data without knowing the physical file location.
 spark.sql("CREATE TABLE users USING DELTA LOCATION '/data/delta/users'")
 spark.sql("SELECT * FROM users").show()
 ```
@@ -357,6 +410,9 @@ spark.sql("SELECT * FROM users").show()
 from delta.tables import DeltaTable
 
 # MERGE (Upsert)
+# MERGE is the key operation that distinguishes Lakehouse from plain Data Lakes.
+# Without it, you'd need to read-all → filter → union → write-all for any update,
+# which is expensive and not atomic.
 delta_table = DeltaTable.forPath(spark, "/data/delta/users")
 
 new_data = spark.createDataFrame([
@@ -364,6 +420,9 @@ new_data = spark.createDataFrame([
     (3, "Charlie", 300),        # Insert
 ], ["id", "name", "amount"])
 
+# The merge condition defines the business key for matching.
+# whenMatchedUpdate handles existing records (SCD Type 1 overwrites),
+# while whenNotMatchedInsert handles new records — both in a single atomic pass.
 delta_table.alias("target").merge(
     new_data.alias("source"),
     "target.id = source.id"
@@ -378,12 +437,15 @@ delta_table.alias("target").merge(
 
 
 # Time Travel (query historical versions)
+# Time travel is invaluable for debugging data issues — you can compare
+# the current state with a prior version to see exactly what changed.
 # By version number
 df_v0 = spark.read.format("delta") \
     .option("versionAsOf", 0) \
     .load("/data/delta/users")
 
-# By timestamp
+# By timestamp — useful when you know "the data was correct yesterday"
+# but don't know the exact version number
 df_yesterday = spark.read.format("delta") \
     .option("timestampAsOf", "2024-01-14") \
     .load("/data/delta/users")
@@ -394,16 +456,25 @@ delta_table.history().show()
 
 
 # Vacuum (cleanup old files)
+# 168 hours (7 days) balances storage cost against the need for time travel.
+# Shorter retention saves storage but loses the ability to query or rollback
+# to older versions. Never vacuum below the default 7-day threshold without
+# confirming no concurrent readers depend on old files.
 delta_table.vacuum(retentionHours=168)  # 7 days retention
 
 
-# Schema evolution
+# Schema evolution — mergeSchema=true allows adding new columns from
+# incoming data without breaking existing readers.
+# Without this, writes with new columns would fail with a schema mismatch error.
 spark.read.format("delta") \
     .option("mergeSchema", "true") \
     .load("/data/delta/users")
 
 
 # Z-Order optimization (query performance)
+# Z-ordering co-locates related data in the same files based on the specified
+# columns, dramatically improving query pruning for filters on those columns.
+# Choose columns that appear most frequently in WHERE clauses.
 delta_table.optimize().executeZOrderBy("date", "customer_id")
 ```
 
@@ -416,6 +487,9 @@ delta_table.optimize().executeZOrderBy("date", "customer_id")
 ```python
 from pyspark.sql import SparkSession
 
+# Iceberg uses a catalog-centric design: all table metadata lives in the catalog
+# (here Hive Metastore), which makes tables engine-independent — the same table
+# can be queried from Spark, Trino, Flink, or Dremio without data duplication.
 spark = SparkSession.builder \
     .appName("Iceberg") \
     .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \
@@ -425,6 +499,10 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Create Iceberg table
+# bucket(16, id) is a "hidden partition": Iceberg hashes the id into 16 buckets
+# for even data distribution. Unlike Hive-style partitioning, the user doesn't
+# need to know the partitioning scheme when querying — Iceberg rewrites the
+# filter predicate automatically (partition evolution).
 spark.sql("""
     CREATE TABLE iceberg.db.users (
         id INT,
@@ -441,11 +519,14 @@ spark.sql("""
     (2, 'Bob', 200.00)
 """)
 
-# Time Travel
+# Time Travel — Iceberg uses a snapshot-based model (vs Delta's log-based),
+# storing a manifest list per snapshot. This makes multi-engine time travel
+# possible since any engine can read the snapshot metadata directly.
 spark.sql("SELECT * FROM iceberg.db.users VERSION AS OF 1").show()
 spark.sql("SELECT * FROM iceberg.db.users TIMESTAMP AS OF '2024-01-15'").show()
 
-# Check snapshots
+# Snapshots metadata table exposes the full version history including
+# operation type, added/deleted files, and summary statistics
 spark.sql("SELECT * FROM iceberg.db.users.snapshots").show()
 ```
 

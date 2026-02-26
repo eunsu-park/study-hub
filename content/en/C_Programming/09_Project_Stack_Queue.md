@@ -1,14 +1,24 @@
 # Project 7: Stack and Queue
 
-## Learning Objectives
-
-What you will learn through this project:
-- Stack and Queue data structures
-- LIFO and FIFO concepts
-- Array/linked list based implementation
-- Practical applications: bracket checking, postfix notation calculator
+**Previous**: [Project 6: File Encryption Tool](./08_Project_File_Encryption.md) | **Next**: [Project 8: Hash Table](./10_Project_Hash_Table.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish LIFO (stack) and FIFO (queue) ordering and identify real-world examples of each
+2. Implement a fixed-size array-based stack with push, pop, peek, isEmpty, and isFull operations
+3. Implement a linked-list-based stack with O(1) push and pop using head insertion
+4. Build a circular queue that reuses array slots via modular arithmetic to avoid wasted space
+5. Implement a linked-list-based queue with O(1) enqueue and dequeue using front and rear pointers
+6. Apply a stack to solve the bracket-matching problem by pairing opening and closing delimiters
+7. Build a postfix-notation calculator that uses a stack to evaluate arithmetic expressions
+
+---
+
+Stacks and queues are the two simplest abstract data types, yet they appear everywhere: the function call stack that keeps your program running, the undo buffer in your editor, the print queue on your operating system, and the BFS frontier in graph algorithms. Mastering their implementation in C teaches you not only the data structures themselves but also the discipline of writing clean, reusable ADT interfaces with consistent error handling.
 
 ## Stack
 
@@ -713,4 +723,4 @@ gcc -Wall -std=c11 postfix_calc.c -o postfix_calc
 
 ## Next Step
 
-[10_Project_Hash_Table.md](./10_Project_Hash_Table.md) -> Let's learn about hash tables!
+[Project 8: Hash Table](./10_Project_Hash_Table.md) -> Let's learn about hash tables!

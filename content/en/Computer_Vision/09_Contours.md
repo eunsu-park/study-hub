@@ -1,5 +1,18 @@
 # Contour Detection
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what contours are and how they represent object boundaries in binary images
+2. Implement contour detection using OpenCV's findContours() with different retrieval and approximation modes
+3. Analyze contour hierarchy to distinguish outer and inner contours in complex scenes
+4. Calculate contour properties such as area, perimeter, bounding box, and moments
+5. Apply contour approximation methods to simplify shape representations
+6. Design a workflow to count and separate objects in an image using contour analysis
+
+---
+
 ## Overview
 
 A contour is a curve of continuous points having the same color or brightness, representing the shape of an object. This lesson covers contour detection using findContours(), hierarchy structure, approximation, area/perimeter calculation, and more.
@@ -71,6 +84,12 @@ gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
 
 # Detect contours
+# RETR_EXTERNAL: only retrieves the outermost contours — ideal when objects
+# don't have holes and you want to avoid counting inner boundaries as separate objects.
+# For nested shapes (e.g., donut, letter "O"), use RETR_CCOMP or RETR_TREE instead.
+# CHAIN_APPROX_SIMPLE: compresses collinear points, storing only endpoints.
+# A rectangle's 4 sides collapse from ~hundreds of pixels to just 4 points,
+# saving significant memory and speeding up downstream processing.
 contours, hierarchy = cv2.findContours(
     binary,
     cv2.RETR_EXTERNAL,      # External contours only
@@ -241,6 +260,8 @@ compare_retrieval_modes('nested_shapes.jpg')
 
 ## 3. Contour Hierarchy
 
+Real images contain nested shapes — a donut has an outer ring and an inner hole; a document scanner needs to distinguish the page boundary from text blocks inside it. Hierarchy captures these parent-child containment relationships so you can query "give me only the outermost shape" or "give me all holes inside object #2" without resorting to manual spatial intersection tests.
+
 ### hierarchy Structure
 
 ```
@@ -281,6 +302,8 @@ def analyze_hierarchy(image_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
 
+    # RETR_TREE is chosen here because we want the full parent-child tree,
+    # not just two levels — essential when shapes are nested more than one level deep.
     contours, hierarchy = cv2.findContours(
         binary,
         cv2.RETR_TREE,
@@ -291,6 +314,8 @@ def analyze_hierarchy(image_path):
         print("No contours found.")
         return
 
+    # OpenCV returns hierarchy as shape (1, N, 4); squeeze the leading dimension
+    # so we can index it as hierarchy[i] = [next, prev, first_child, parent].
     hierarchy = hierarchy[0]  # (1, N, 4) -> (N, 4)
 
     print("Hierarchy analysis:")
@@ -805,7 +830,10 @@ def count_objects(image_path, min_area=100):
         binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    # Size filtering
+    # Area filtering removes noise contours caused by thresholding artifacts.
+    # Without this step, every small speckle becomes a counted "object."
+    # The threshold (min_area) should be set relative to the smallest real object
+    # you expect — not a fixed constant, as image resolution and scale vary.
     valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
 
     result = img.copy()

@@ -1,8 +1,22 @@
 # Video Processing
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain how VideoCapture and VideoWriter work to read and write video files and camera streams in OpenCV.
+2. Implement frame-by-frame video processing pipelines with accurate FPS measurement.
+3. Apply background subtraction algorithms (MOG2, KNN) to detect moving objects in video.
+4. Implement optical flow techniques (Lucas-Kanade, Farneback) to analyze motion between frames.
+5. Compare and select appropriate object tracking algorithms for different video analysis tasks.
+
+---
+
 ## Overview
 
 Video is a sequence of continuous image frames. We will learn to process video files and camera streams using OpenCV, and explore motion analysis methods using background subtraction and optical flow.
+
+Unlike single-image processing, video introduces a temporal dimension: each frame has a predecessor and successor, so algorithms can exploit motion cues unavailable in still images. This also adds real-time constraints — a processing pipeline that takes 50 ms per frame limits throughput to 20 FPS, making performance awareness essential for video work.
 
 **Difficulty**: ***
 
@@ -107,12 +121,16 @@ if not cap.isOpened():
     print("Cannot open camera")
     exit()
 
-# Set camera properties
+# Set camera properties — explicitly request resolution and FPS because
+# cameras often default to a lower mode; requesting forces negotiation
+# with the driver (actual values may still differ, always verify after setting)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 cap.set(cv2.CAP_PROP_FPS, 30)
 
-# Set buffer size (reduce latency)
+# BUFFERSIZE=1 keeps only the most recent frame in the driver buffer,
+# trading throughput for latency — critical for real-time applications
+# where a stale frame is worse than a dropped one
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 print(f"Camera resolution: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
@@ -187,9 +205,11 @@ height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = 30.0
 
 # Codec setup (4-character code)
-# 'XVID': for AVI container
-# 'mp4v': for MP4 container
-# 'MJPG': Motion JPEG
+# 'XVID': for AVI container — widely compatible, moderate compression
+# 'mp4v': for MP4 container — good balance of compatibility and file size
+# 'MJPG': Motion JPEG — fast but large files (each frame independently compressed)
+# 'avc1'/'X264': H.264 — highest compression ratio but requires codec install
+# Choose mp4v when portability matters; use XVID when H.264 is unavailable
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
 # Create VideoWriter
@@ -481,6 +501,9 @@ class FPSCounter:
 
     def __init__(self, avg_frames=30):
         self.frame_times = []
+        # avg_frames=30 gives a ~1-second rolling window at 30 FPS —
+        # large enough to smooth out single-frame spikes, small enough
+        # to respond to genuine performance changes within seconds
         self.avg_frames = avg_frames
         self.last_time = time.time()
 
@@ -490,7 +513,8 @@ class FPSCounter:
         self.frame_times.append(current_time - self.last_time)
         self.last_time = current_time
 
-        # Keep only last N frames
+        # Sliding window: discard the oldest sample so the average
+        # reflects recent performance rather than startup conditions
         if len(self.frame_times) > self.avg_frames:
             self.frame_times.pop(0)
 
@@ -498,6 +522,9 @@ class FPSCounter:
         """Return current FPS"""
         if len(self.frame_times) == 0:
             return 0
+        # Averaging inter-frame intervals then inverting is more stable
+        # than counting frames in a fixed time window, because it handles
+        # irregular processing times without a separate timer thread
         avg_time = sum(self.frame_times) / len(self.frame_times)
         return 1.0 / avg_time if avg_time > 0 else 0
 
@@ -632,9 +659,13 @@ import numpy as np
 
 # Create MOG2 background subtractor
 backSub = cv2.createBackgroundSubtractorMOG2(
-    history=500,          # Number of frames for background learning
-    varThreshold=16,      # Variance threshold for background classification
-    detectShadows=True    # Shadow detection
+    history=500,          # Frames used to build background model —
+                          # larger = slower adaptation to scene changes
+                          # (e.g., 500 frames at 30 FPS ≈ 16 seconds of memory)
+    varThreshold=16,      # Mahalanobis distance threshold for classifying a pixel
+                          # as foreground; lower = more sensitive but more noise
+    detectShadows=True    # Marks shadows as 127 (gray) instead of 255 (white),
+                          # letting you remove them separately to avoid false positives
 )
 
 cap = cv2.VideoCapture(0)
@@ -651,7 +682,11 @@ while True:
     # Remove shadows (127 -> 0)
     fgMask_no_shadow = cv2.threshold(fgMask, 200, 255, cv2.THRESH_BINARY)[1]
 
-    # Remove noise
+    # Remove noise with morphological operations:
+    # OPEN (erode then dilate) removes small speckles/salt noise
+    # CLOSE (dilate then erode) fills holes inside detected objects
+    # ELLIPSE kernel is rotationally symmetric — better for blob-shaped objects
+    # than RECT, which leaves corner artifacts
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     fgMask_clean = cv2.morphologyEx(fgMask_no_shadow, cv2.MORPH_OPEN, kernel)
     fgMask_clean = cv2.morphologyEx(fgMask_clean, cv2.MORPH_CLOSE, kernel)
@@ -768,16 +803,23 @@ import numpy as np
 
 # Lucas-Kanade parameters
 lk_params = dict(
-    winSize=(15, 15),      # Search window size
-    maxLevel=2,            # Pyramid levels
+    winSize=(15, 15),      # Search window: larger = handles bigger motion but slower
+                           # and prone to aperture problem on textureless regions
+    maxLevel=2,            # Image pyramid levels: pyramid lets LK handle fast motion
+                           # by first estimating flow on a downsampled image, then
+                           # refining on higher resolution (maxLevel=2 → 3 scales)
     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+    # Stop iterating when error < 0.03 OR after 10 iterations — combining both
+    # prevents wasting time on converged estimates and limits worst-case cost
 )
 
 # Feature detection parameters
 feature_params = dict(
-    maxCorners=100,        # Maximum feature count
-    qualityLevel=0.3,      # Quality level
-    minDistance=7,         # Minimum distance
+    maxCorners=100,        # Cap at 100 to keep tracking computationally feasible
+    qualityLevel=0.3,      # Keep only corners scoring ≥ 30% of the strongest one,
+                           # filtering weak features that would drift under noise
+    minDistance=7,         # Enforce spatial spread so features cover the whole frame,
+                           # not just one high-contrast region
     blockSize=7
 )
 
@@ -898,13 +940,18 @@ while True:
     # Farneback optical flow
     flow = cv2.calcOpticalFlowFarneback(
         prvs, next_gray,
-        None,           # Initial flow
-        pyr_scale=0.5,  # Pyramid scale
-        levels=3,       # Pyramid levels
-        winsize=15,     # Window size
-        iterations=3,   # Iterations
-        poly_n=5,       # Polynomial size
-        poly_sigma=1.2, # Gaussian sigma
+        None,           # Initial flow (None = start from zero displacement)
+        pyr_scale=0.5,  # Each pyramid level is half the previous resolution —
+                        # 0.5 is the standard choice; lower values handle larger
+                        # motions but increase computation
+        levels=3,       # 3 pyramid levels cover displacements up to ~8× winsize
+        winsize=15,     # Neighborhood for polynomial expansion; larger = smoother
+                        # flow but blurs motion boundaries
+        iterations=3,   # Refinement passes per pyramid level; 3 is enough for
+                        # typical video, more iterations rarely improve quality
+        poly_n=5,       # Pixel neighborhood size for polynomial fit (5 or 7)
+        poly_sigma=1.2, # Gaussian weighting of the neighborhood; must match poly_n
+                        # (use 1.1 for poly_n=5, 1.5 for poly_n=7)
         flags=0
     )
 

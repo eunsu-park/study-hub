@@ -562,9 +562,15 @@ kx = fftfreq(N, L/(2*np.pi*N)) * 2*np.pi
 ky = fftfreq(N, L/(2*np.pi*N)) * 2*np.pi
 KX, KY = np.meshgrid(kx, ky)
 K2 = KX**2 + KY**2
+# K2[0,0] = 1은 압력 투영 P⊥ = k/k²에서 0으로 나누는 것을 방지;
+# k=0 (평균) 모드는 정의상 발산이 없으므로 K2=1로 설정하면
+# P⊥ = 0이 되어 평균 장을 변경하지 않고 올바르게 남김
 K2[0, 0] = 1.0  # Avoid division by zero
 
-# Dealiasing mask (2/3 rule)
+# 비앨리아싱 마스크(Dealiasing Mask) (2/3 규칙): |k| ≤ N/3만 유지 (N/2가 아님),
+# 최대 파수 N/3을 가진 두 함수의 곱이 최대 2N/3 ≤ N/2까지 모드를 생성하기 때문 —
+# 나이퀴스트 한계 내에서 앨리아싱이 없음; N/3을 넘는 모드는 역 FFT 전에 0으로 설정하여
+# 앨리아싱된 고-k 내용이 낮은 모드를 오염시키는 것을 방지
 kmax = N // 3
 dealias = (np.abs(KX) <= kmax) & (np.abs(KY) <= kmax)
 
@@ -575,15 +581,26 @@ vy = np.random.randn(N, N) * 0.1
 Bx = np.sin(2*X) * np.cos(Y)
 By = -np.cos(X) * np.sin(2*Y)
 
-# Enforce incompressibility
+# 첫 번째 타임스텝 전에 초기 v와 B를 발산 없는 부분공간으로 투영:
+# 임의의 초기 장은 일반적으로 0이 아닌 발산을 가지며, t=0에서 작은 ∇·v ≠ 0도
+# 각 스텝에서 성장하는 가짜 압력을 생성할 것임
 vx_hat = fftn(vx)
 vy_hat = fftn(vy)
+# 스펙트럴 공간에서의 div_v = ik_x * vx_hat + ik_y * vy_hat: 스펙트럴 공간에서
+# 미분이 정확(절단 오차 없음)하므로, 이 발산은 연속 발산의 기계 정밀도 대표임
 div_v = 1j*KX*vx_hat + 1j*KY*vy_hat
+# 포텐셜 부분 빼기 (k * (k·v)/k²): 이것이 Helmholtz 분해(Helmholtz Decomposition) —
+# 임의의 벡터 장은 고유하게 컬 없는(포텐셜) + 발산 없는 부분으로 분리됨;
+# 포텐셜 부분을 빼면 솔레노이달(Solenoidal, 발산 없는) 나머지만 남음
 vx_hat -= 1j*KX*div_v/K2
 vy_hat -= 1j*KY*div_v/K2
 vx = np.real(ifftn(vx_hat))
 vy = np.real(ifftn(vy_hat))
 
+# B에 대한 동일한 발산 청소: ∇·B = 0은 Maxwell 방정식에서 요구되는 제약;
+# 스펙트럴 방법에서는 project_divergence_free()의 투영으로 매 스텝마다 유지되지만,
+# t=0에서 이것이 성립하도록 보장하면 많은 타임스텝에 걸쳐 기계 정밀도 오차가
+# 증폭되는 것을 방지함
 Bx_hat = fftn(Bx)
 By_hat = fftn(By)
 div_B = 1j*KX*Bx_hat + 1j*KY*By_hat
@@ -597,6 +614,10 @@ def compute_nonlinear(vx, vy, Bx, By):
     # Velocity advection
     vx_hat = fftn(vx)
     vy_hat = fftn(vy)
+    # 스펙트럴 공간에서 도함수를 계산(정확)한 후 물리 공간으로 변환:
+    # 이것이 유사 스펙트럴(Pseudo-Spectral) 전략 — ik*f_hat이 정확한 스펙트럴 도함수를 제공하고,
+    # 그런 다음 물리 공간에서 장과 곱해짐; 물리 공간에서 곱셈하면 스펙트럴 공간에서
+    # 완전히 수행했을 때 발생할 비싼 합성곱(Convolution)을 피함
     dvx_dx = np.real(ifftn(1j*KX*vx_hat))
     dvx_dy = np.real(ifftn(1j*KY*vx_hat))
     dvy_dx = np.real(ifftn(1j*KX*vy_hat))
@@ -605,7 +626,9 @@ def compute_nonlinear(vx, vy, Bx, By):
     NL_vx = -(vx*dvx_dx + vy*dvx_dy)
     NL_vy = -(vx*dvy_dx + vy*dvy_dy)
 
-    # Magnetic tension
+    # 자기 장력(Magnetic Tension) (B·∇)B: 이 항이 MHD를 순수 유체역학과 다르게 만듦 —
+    # 장선을 따른 장력이 굽힘에 저항하며,
+    # 이것이 Alfvén 파 전파와 자기 제동(Magnetic Braking) 뒤의 물리적 메커니즘
     Bx_hat = fftn(Bx)
     By_hat = fftn(By)
     dBx_dx = np.real(ifftn(1j*KX*Bx_hat))
@@ -616,7 +639,9 @@ def compute_nonlinear(vx, vy, Bx, By):
     NL_vx += Bx*dBx_dx + By*dBx_dy
     NL_vy += Bx*dBy_dx + By*dBy_dy
 
-    # Induction equation
+    # 유도 방정식(Induction Equation) 우변: ∇×(v×B)을 성분별로 vx*∂B - B*∂v로 전개;
+    # 반대칭 구조가 이상 진화 하에서 자기 헬리시티(Magnetic Helicity)를 보존 —
+    # 이 형식에서 벗어나면 가짜 헬리시티 주입이 도입됨
     NL_Bx = vx*dBx_dx + vy*dBx_dy - Bx*dvx_dx - By*dvx_dy
     NL_By = vx*dBy_dx + vy*dBy_dy - Bx*dvy_dx - By*dvy_dy
 
@@ -639,13 +664,17 @@ def rhs(vx, vy, Bx, By, t):
     NL_vx += forcing_vx
     NL_vy += forcing_vy
 
-    # FFT
+    # 비선형 곱 FFT 후 비앨리아싱 마스크 적용: 물리 공간 곱셈이 앨리아싱 없이
+    # 2*kmax까지 높은-k 모드를 생성 — dealias 배열이 이 마스크 이상의 모드를 0으로 설정하여
+    # 에너지 계단(Energy Cascade)에서 낮은 모드를 오염시키지 않도록 함
     NL_vx_hat = fftn(NL_vx) * dealias
     NL_vy_hat = fftn(NL_vy) * dealias
     NL_Bx_hat = fftn(NL_Bx) * dealias
     NL_By_hat = fftn(NL_By) * dealias
 
-    # Project to divergence-free
+    # 비선형 속도 강제를 발산 없는 부분공간으로 투영: v가 이미 발산 없더라도,
+    # 비선형 항 (v·∇)v가 압축 가능한 성분을 생성할 수 있음; 투영이 이를 제거하고
+    # Poisson 방정식을 명시적으로 풀 필요 없이 압력 방정식을 암묵적으로 강제함
     NL_vx_hat, NL_vy_hat = project_divergence_free(NL_vx_hat, NL_vy_hat)
     NL_Bx_hat, NL_By_hat = project_divergence_free(NL_Bx_hat, NL_By_hat)
 
@@ -655,6 +684,10 @@ def rhs(vx, vy, Bx, By, t):
     Bx_hat = fftn(Bx)
     By_hat = fftn(By)
 
+    # -ν*k²*v_hat은 정확한 스펙트럴 확산: ∇²v ≈ (v_{i+1}-2v_i+v_{i-1})/Δx²가
+    # O(Δx²) 오차를 가지는 유한 차분과 달리 공간 절단 오차가 없음;
+    # Fourier 모드가 ∇²의 고유함수(Eigenfunctions)이기 때문에 스펙트럴 확산이 정확하며,
+    # 이것이 스펙트럴 방법이 매끄러운 흐름에서 지수 수렴을 달성하는 이유
     dvx_dt_hat = NL_vx_hat - nu*K2*vx_hat
     dvy_dt_hat = NL_vy_hat - nu*K2*vy_hat
     dBx_dt_hat = NL_Bx_hat - eta*K2*Bx_hat

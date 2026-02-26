@@ -1,5 +1,17 @@
 # 07. Model Registry
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define the role of a Model Registry in the ML lifecycle and explain how it enables collaboration between data scientists and ML engineers
+2. Implement model versioning using semantic versioning conventions and register models with MLflow's Model Registry API
+3. Manage model stage transitions (Staging → Production → Archived) and implement approval workflows for production promotion
+4. Compare cloud-managed model registries (AWS SageMaker, Google Vertex AI, Azure ML) against self-hosted MLflow and evaluate the trade-offs
+5. Design a governance framework for a model registry that includes access control, audit logging, and rollback procedures
+
+---
+
 ## Overview
 
 A **Model Registry** is a central storage system that manages the entire lifecycle of machine learning models. It provides systematic version control, metadata management, and deployment stage management for trained models. The model registry is a critical component that ensures collaboration between data scientists and ML engineers, enabling safe deployment and rollback of models.
@@ -98,6 +110,8 @@ from typing import Dict, List, Optional
 @dataclass
 class ModelMetadata:
     """Model metadata schema"""
+    # Structured metadata as a dataclass — enforces a consistent schema across teams;
+    # without this, teams use ad-hoc tags and crucial information gets lost
 
     # Basic information
     model_name: str
@@ -128,7 +142,8 @@ class ModelMetadata:
     owner: str
     tags: List[str]
 
-    # Compliance
+    # Compliance — required for regulated industries (finance, healthcare);
+    # audit trail proves which model was approved, by whom, and when
     approval_status: str  # "pending", "approved", "rejected"
     approver: Optional[str]
     approval_date: Optional[datetime]
@@ -259,8 +274,8 @@ class ModelApprovalWorkflow:
         reason: str
     ):
         """Request transition to Staging"""
-
-        # Add approval request tag
+        # Tags serve as a lightweight approval audit trail — stored alongside the model
+        # so governance info is never separated from the artifact it governs
         self.client.set_model_version_tag(
             name=model_name,
             version=version,
@@ -338,8 +353,8 @@ class ModelApprovalWorkflow:
         validation_results: dict
     ):
         """Request transition to Production"""
-
-        # Add validation results
+        # Attach validation results as evidence — approver can verify
+        # that the model passed quality gates without re-running tests
         for metric, value in validation_results.items():
             self.client.set_model_version_tag(
                 name=model_name,
@@ -540,6 +555,8 @@ print(f"Best model: version {best['version']} with F1={best['metric_value']}")
 # .github/workflows/train_and_register.yml
 name: Train and Register Model
 
+# Trigger on model code or data changes — avoids unnecessary retraining
+# when only docs or infra changes are pushed
 on:
   push:
     branches: [ main ]
@@ -846,7 +863,8 @@ class ModelRollback:
         rollback_by: str
     ) -> Optional[str]:
         """Rollback to previous Production version"""
-
+        # Use production history (not just "latest Archived") — ensures we restore
+        # the version that was actually serving, not an unrelated archived experiment
         history = self.get_production_history(model_name)
 
         if len(history) < 2:
@@ -858,14 +876,16 @@ class ModelRollback:
 
         print(f"Rolling back from v{current_version} to v{previous_version}")
 
-        # Archive current version
+        # Archive (not delete) current version — preserves the artifact for post-mortem
+        # analysis of what went wrong
         self.client.transition_model_version_stage(
             name=model_name,
             version=current_version,
             stage="Archived"
         )
 
-        # Add rollback tags to current version
+        # Record rollback reason as tag — creates an audit trail explaining why
+        # this version was removed from production
         self.client.set_model_version_tag(
             name=model_name,
             version=current_version,

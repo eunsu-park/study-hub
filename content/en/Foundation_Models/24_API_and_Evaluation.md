@@ -1,5 +1,17 @@
 # 24. API & Evaluation
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare commercial LLM API providers (OpenAI, Anthropic, Google) across pricing, context length, and capability dimensions
+2. Implement robust API client wrappers that handle rate limiting, retries, token counting, and cost tracking
+3. Apply prompt engineering techniques and caching strategies to optimize API costs in production applications
+4. Evaluate LLM performance using standard benchmarks (MMLU, HellaSwag, HumanEval) and explain what each benchmark measures
+5. Design a comprehensive LLM evaluation pipeline that combines automated benchmarks with LLM-as-a-judge and human evaluation
+
+---
+
 ## Overview
 
 This lesson covers how to use commercial LLM APIs, cost optimization, and benchmarks and methodologies for evaluating LLM performance.
@@ -810,4 +822,181 @@ class HumanEvaluation:
 1. [OpenAI API Documentation](https://platform.openai.com/docs)
 2. [Anthropic Claude Documentation](https://docs.anthropic.com/)
 3. Zheng et al. (2023). "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena"
+
+---
+
+## Exercises
+
+### Exercise 1: API Cost Calculation and Model Selection
+Your team builds a document summarization service. Each request involves a 2,000-token document (input) and produces a 300-token summary (output). You need to handle 10,000 requests per day.
+
+A) Calculate the daily cost for: GPT-4o ($5/1M input, $15/1M output) vs. Claude 3 Haiku ($0.25/1M input, $1.25/1M output).
+B) At what daily request volume does the cost difference become significant enough to justify switching from GPT-4o to Haiku (>$100/day savings)?
+C) If 20% of requests are "complex" (require reasoning, high quality), propose a routing strategy.
+
+<details>
+<summary>Show Answer</summary>
+
+**A) Daily cost at 10,000 requests**:
+
+```python
+requests_per_day = 10_000
+input_tokens_per_req = 2_000
+output_tokens_per_req = 300
+
+# GPT-4o: $5/1M input, $15/1M output
+gpt4o_input_cost = (requests_per_day * input_tokens_per_req / 1_000_000) * 5
+                 = (10_000 * 2_000 / 1_000_000) * 5 = 20M tokens * $5/M = $100/day
+
+gpt4o_output_cost = (requests_per_day * output_tokens_per_req / 1_000_000) * 15
+                  = (10_000 * 300 / 1_000_000) * 15 = 3M tokens * $15/M = $45/day
+
+gpt4o_total = $100 + $45 = $145/day
+
+# Claude 3 Haiku: $0.25/1M input, $1.25/1M output
+haiku_input_cost = 20M tokens * $0.25/M = $5/day
+haiku_output_cost = 3M tokens * $1.25/M = $3.75/day
+haiku_total = $5 + $3.75 = $8.75/day
+
+# Daily savings with Haiku: $145 - $8.75 = $136.25/day
+```
+
+**B) Volume threshold for >$100/day savings**:
+
+```python
+# Cost per request:
+gpt4o_per_req = (2000/1M * $5) + (300/1M * $15) = $0.01 + $0.0045 = $0.0145
+haiku_per_req = (2000/1M * $0.25) + (300/1M * $1.25) = $0.0005 + $0.000375 = $0.000875
+
+savings_per_req = $0.0145 - $0.000875 = $0.013625
+
+# To save >$100/day:
+min_requests = $100 / $0.013625 ≈ 7,339 requests/day
+```
+**Answer: At 7,339+ requests/day, switching saves >$100/day.** At 10K requests/day you save $136/day = ~$4,100/month.
+
+**C) Routing strategy for mixed complexity**:
+
+```python
+def route_request(document: str, task_complexity: str) -> str:
+    """Route to appropriate model based on complexity"""
+    if task_complexity == "complex":  # 20% of requests
+        # Legal contracts, technical papers, multi-document synthesis
+        return "claude-3-sonnet"  # Balance of quality and cost
+    else:  # 80% of requests
+        # News articles, product descriptions, standard reports
+        return "claude-3-haiku"
+
+# Cost with routing (10K requests/day):
+# 2,000 complex → Sonnet ($3/1M in, $15/1M out)
+#   2,000 * (2000 * $3/M + 300 * $15/M) = $12 + $9 = $21/day
+# 8,000 simple → Haiku
+#   8,000 * (2000 * $0.25/M + 300 * $1.25/M) = $4 + $3 = $7/day
+# Total with routing: $28/day vs. $145/day all-GPT4o → 80% cost reduction
+```
+
+</details>
+
+### Exercise 2: LLM-as-a-Judge Bias Analysis
+LLM-as-a-Judge uses a powerful LLM to score model outputs. Identify three specific biases that can distort LLM judge evaluations, and propose a mitigation strategy for each.
+
+<details>
+<summary>Show Answer</summary>
+
+**Bias 1: Position bias (order bias)**
+
+The LLM judge tends to favor the response that appears first (or last) in the prompt, regardless of quality.
+
+- **Example**: When comparing Response A vs. Response B, the same judge scores A=7, B=5 in one order, but A=5, B=7 when the order is reversed.
+- **Mitigation**: Always evaluate both orderings (A vs. B AND B vs. A) and average the results. For pairwise comparison, if the judge is inconsistent across orderings, treat it as a tie. This is called **positional debiasing** and is used in Chatbot Arena.
+
+**Bias 2: Verbosity bias (length preference)**
+
+LLM judges tend to rate longer, more detailed responses as higher quality, even when a concise answer is more appropriate.
+
+- **Example**: A 500-word answer is scored higher than a 50-word answer even when the 50-word answer is more accurate and directly answers the question.
+- **Mitigation**: Add explicit scoring criteria that penalize unnecessary length: "A high-quality answer is one that accurately answers the question concisely. Longer answers are not automatically better." Also provide a reference answer length as a calibration anchor.
+
+**Bias 3: Self-enhancement bias (if judge = same family as evaluated model)**
+
+If GPT-4 is used to judge GPT-4 vs. Claude-3, it may systematically favor its own model's style and content.
+
+- **Example**: GPT-4 judge scores GPT-4o answers +0.3 points higher than equally good Claude responses on average.
+- **Mitigation**: Use multiple judges from different model families and ensemble their scores. For critical evaluations, include at least one judge from a different provider than the evaluated model. Report judge-model agreement (if judges from different families agree, the result is more trustworthy).
+
+</details>
+
+### Exercise 3: Benchmark Selection for Specific Use Cases
+You are evaluating an LLM for three different product deployments. Choose the most relevant benchmark from the list {MMLU, HumanEval, MT-Bench, GSM8K, HellaSwag, MATH} for each, and explain what a high score on that benchmark guarantees — and what it does NOT guarantee.
+
+| Deployment | Primary Use | Best Benchmark | Guarantees | Does NOT guarantee |
+|------------|------------|----------------|------------|-------------------|
+| A) AI coding assistant for Python developers | Code completion, debugging | ??? | ??? | ??? |
+| B) Customer service chatbot for multi-turn support | Dialogue, policy adherence | ??? | ??? | ??? |
+| C) Financial analysis assistant for investment reports | Quantitative reasoning | ??? | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Deployment | Best Benchmark | Guarantees | Does NOT guarantee |
+|------------|----------------|------------|-------------------|
+| A) AI coding assistant | **HumanEval** (Python code generation, pass@k) | Ability to generate syntactically correct, functionally complete Python functions for common algorithmic tasks | Performance on domain-specific code (finance, medical APIs), ability to debug existing code, code review quality, performance on long (100+ line) functions |
+| B) Customer service chatbot | **MT-Bench** (multi-turn conversation quality, 1-10 scoring) | Quality of multi-turn dialogue coherence, ability to maintain context across conversation turns, handling of follow-up questions | Adherence to specific company policies or prohibited topics, actual customer satisfaction, handling of ambiguous real-world requests, performance on domain-specific vocabulary |
+| C) Financial analysis assistant | **GSM8K + MATH** (mathematical reasoning at different difficulty levels) | Accurate arithmetic, algebraic manipulation, structured mathematical reasoning, solving word problems with quantitative content | Domain-specific financial knowledge (CAPM, Black-Scholes), regulatory compliance awareness, ability to handle real financial data formats, detecting data inconsistencies in reports |
+
+**Key insight**: Every benchmark evaluates a proxy for real-world capability. A model that scores 90% on HumanEval may still fail on company-specific codebases. Always supplement benchmarks with domain-specific evaluation sets representative of your actual deployment.
+
+</details>
+
+### Exercise 4: Evaluation Pipeline Design
+Design a production evaluation pipeline for a customer-facing legal document Q&A system. The system retrieves relevant clauses and generates answers. Specify the evaluation dimensions, metrics, and scoring thresholds.
+
+<details>
+<summary>Show Answer</summary>
+
+**Production Evaluation Pipeline**:
+
+```
+Evaluation Pipeline:
+┌──────────────────────────────────────────────────┐
+│  Input: (question, retrieved_clauses, answer)    │
+│                                                  │
+│  Dimension 1: Factual Accuracy                   │
+│  Dimension 2: Legal Citation Correctness         │
+│  Dimension 3: Completeness                       │
+│  Dimension 4: Safety (no harmful advice)         │
+│  Dimension 5: Fluency                            │
+└──────────────────────────────────────────────────┘
+```
+
+**Evaluation dimensions and metrics**:
+
+| Dimension | Method | Metric | Pass Threshold |
+|-----------|--------|--------|----------------|
+| Factual accuracy | LLM-as-Judge with reference answers | 1-5 score | ≥ 4.0 average |
+| Citation correctness | Rule-based: check if cited clause # appears in retrieved docs | Precision/Recall | Citation precision ≥ 90% |
+| Completeness | LLM-as-Judge: "Does the answer address all parts of the question?" | Binary + score | ≥ 80% rated "complete" |
+| Safety | Keyword filters + LLM classifier for "definitive legal advice" | Binary flag | 0% rate of definitive advice without disclaimer |
+| Fluency | Automated: perplexity + grammar check | Score 1-5 | ≥ 4.0 |
+
+**Offline vs. Online evaluation**:
+
+```python
+# Offline (development):
+# - Golden test set of 200 legal Q&A pairs (human-curated)
+# - Run after every model update
+# - Gate: all 5 dimensions must pass thresholds
+
+# Online (production):
+# - Sample 1% of live queries for human review
+# - Track:
+#   - User satisfaction (thumbs up/down)
+#   - Escalation rate (how often user asks follow-up because answer was unclear)
+#   - Refusal rate (model adds too many disclaimers → user can't get answer)
+# - Alert if accuracy drops > 5% below baseline
+```
+
+**Critical safety rule for legal domain**: Any answer that could be construed as specific legal advice must include a disclaimer: "This is not legal advice. Consult a licensed attorney for your specific situation." The evaluation pipeline must flag and reject any answer that makes a definitive legal conclusion without this caveat.
+
+</details>
 4. Chen et al. (2021). "Evaluating Large Language Models Trained on Code" (HumanEval)

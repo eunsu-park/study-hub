@@ -1,5 +1,17 @@
 # 17. GPT-4V, GPT-4o, Gemini & Claude 3
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the key capabilities and limitations of GPT-4V, GPT-4o, Gemini 1.5 Pro, and Claude 3 as commercial multimodal AI systems
+2. Implement API calls to each of these systems to perform image understanding, OCR, and visual reasoning tasks
+3. Compare the multimodal architectures and context window sizes across GPT-4o, Gemini 1.5 Pro, and Claude 3 model families
+4. Design practical multimodal applications such as document analysis pipelines and visual question answering systems
+5. Evaluate the cost, latency, and capability trade-offs when selecting a commercial multimodal API for a production use case
+
+---
+
 ## Overview
 
 GPT-4V(ision), GPT-4o, Gemini, and Claude 3 are currently the most powerful commercial multimodal AI systems. This lesson covers their features, API usage, and practical applications.
@@ -1112,3 +1124,319 @@ print(f"Gemini Pro cost: ${gemini_cost:.2f}")
 ### Related Lessons
 - [16_Vision_Language_Advanced.md](16_Vision_Language_Advanced.md)
 - [24_API_Evaluation.md](24_API_Evaluation.md)
+
+---
+
+## Exercises
+
+### Exercise 1: Model Selection for Production Use Cases
+Using the comparison table from the lesson, select the most appropriate model for each of the following production use cases. Justify your choice by referencing specific capabilities or cost considerations.
+
+| Use Case | Selected Model | Key Justification |
+|----------|---------------|-------------------|
+| A) Transcribe handwritten medical records (10K pages/day, cost-sensitive) | ??? | ??? |
+| B) Analyze 2-hour security camera footage to detect anomalies | ??? | ??? |
+| C) Real-time voice assistant for customer support | ??? | ??? |
+| D) Legal contract review with complex multi-step reasoning | ??? | ??? |
+| E) Generate product descriptions for an e-commerce catalog (100K images/day) | ??? | ??? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Use Case | Selected Model | Key Justification |
+|----------|---------------|-------------------|
+| A) Transcribe handwritten medical records | `gpt-4o-mini` or `claude-3-haiku` | High volume + cost sensitivity → cheapest capable model. Both have strong OCR. At $0.15/1M tokens (GPT-4o-mini), 10K pages at ~1K tokens/page = $1.50/day. Medical context requires high accuracy, so verify with sampling before deployment. |
+| B) 2-hour security footage analysis | `gemini-1.5-pro` | **Only option** with native video support and sufficient context (2M tokens). 2 hours × 263 tokens/second ≈ 1.9M tokens — fits within Gemini 1.5 Pro's 2M context. Neither GPT-4o nor Claude supports video input natively. |
+| C) Real-time voice assistant | `gpt-4o-audio-preview` | **Only option** with native real-time audio input/output and 320ms average response time. The "omni" model handles voice natively without a separate speech-to-text step. |
+| D) Legal contract review + complex reasoning | `claude-sonnet-4-20250514` or `claude-3-opus` | Claude ranks highest in reasoning and coding; Constitutional AI training makes it better calibrated for high-stakes decisions. 200K context handles long contracts. Safety-critical → Claude's careful, nuanced responses reduce hallucination risk. |
+| E) E-commerce descriptions (100K images/day) | `gemini-1.5-flash` or `gpt-4o-mini` | Highest volume → lowest cost model. Gemini 1.5 Flash ($0.075/1M input tokens) is the cheapest. Simple descriptive task doesn't require maximum capability — test quality at small scale first. |
+
+</details>
+
+### Exercise 2: GPT-4V Image Token Cost Calculation
+GPT-4V charges differently based on the `detail` parameter. Calculate the total API cost for the following batch job:
+
+- Task: Process 500 product images with `detail="high"` to extract structured data
+- Average prompt length: 200 tokens per image
+- Average response length: 800 tokens per image
+- GPT-4o pricing: $5.00/1M input tokens, $15.00/1M output tokens
+- High-detail image: 765 base tokens + 170 tokens per tile (each image is 1024×1024 → generates 4 tiles)
+
+```python
+# Calculate:
+# 1. Total image tokens for 500 images
+# 2. Total prompt tokens (text only)
+# 3. Total output tokens
+# 4. Total cost in USD
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+# Setup
+num_images = 500
+prompt_tokens_per_image = 200  # text prompt tokens
+response_tokens_per_image = 800
+gpt4o_input_price = 5.00 / 1_000_000   # per token
+gpt4o_output_price = 15.00 / 1_000_000  # per token
+
+# Image token calculation for high detail
+# 1024×1024 at high detail:
+#   Base tokens: 765
+#   Tiles: 1024/512 = 2 × 2 = 4 tiles, each 512×512
+#   Tile tokens: 4 tiles × 170 tokens/tile = 680
+#   Total per image: 765 + 680 = 1445 tokens
+image_tokens_per_image = 765 + (4 * 170)  # = 1445
+total_image_tokens = 500 * 1445  # = 722,500 tokens
+
+# Text tokens
+total_prompt_tokens = 500 * 200  # = 100,000 tokens
+total_output_tokens = 500 * 800  # = 400,000 tokens
+
+# Total input tokens = image + text prompt
+total_input_tokens = total_image_tokens + total_prompt_tokens
+                   = 722,500 + 100,000 = 822,500 tokens
+
+# Cost calculation
+input_cost = 822,500 * (5.00 / 1_000_000) = $4.11
+output_cost = 400,000 * (15.00 / 1_000_000) = $6.00
+
+total_cost = $4.11 + $6.00 = $10.11 for 500 images
+
+# Per-image cost breakdown:
+cost_per_image = $10.11 / 500 = $0.020 per image
+
+# Comparison: using detail="low" instead
+# Low detail: 85 tokens per image
+low_detail_image_tokens = 500 * 85 = 42,500 tokens
+low_detail_input_cost = (42,500 + 100,000) * (5.00 / 1_000_000) = $0.71
+low_detail_output_cost = $6.00  # same output
+low_detail_total = $6.71  # 34% cheaper, but lower quality
+```
+
+Key insight: For this batch job, output tokens dominate the cost ($6.00 of $10.11 = 59%). Reducing response length is more impactful than switching from high to low detail for cost optimization.
+
+</details>
+
+### Exercise 3: Prompt Engineering for Structured Output
+Design a robust API prompt for Claude that extracts structured data from a product image. The output must be valid JSON matching a specific schema, and the prompt must handle edge cases gracefully.
+
+Requirements:
+- Extract: product name, brand, price (if visible), color, dimensions (if visible), any visible defects
+- Return valid JSON (parseable with `json.loads()`)
+- If information is not visible, use `null` rather than fabricating data
+- Confidence score (0-1) for each extracted field
+
+```python
+import anthropic
+import json
+
+def extract_product_data(image_path: str) -> dict:
+    client = anthropic.Anthropic()
+
+    # Design the prompt here
+    prompt = """???"""
+
+    # Your implementation
+    pass
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import anthropic
+import json
+import base64
+import re
+
+def extract_product_data(image_path: str) -> dict:
+    client = anthropic.Anthropic()
+
+    with open(image_path, "rb") as f:
+        image_data = base64.standard_b64encode(f.read()).decode("utf-8")
+
+    media_type = "image/jpeg"
+    if image_path.endswith(".png"):
+        media_type = "image/png"
+
+    prompt = """Analyze this product image and extract structured data.
+
+Return ONLY a valid JSON object with exactly this schema:
+{
+  "product_name": string or null,
+  "product_name_confidence": number (0.0-1.0),
+  "brand": string or null,
+  "brand_confidence": number (0.0-1.0),
+  "price": string or null,
+  "price_confidence": number (0.0-1.0),
+  "color": string or null,
+  "color_confidence": number (0.0-1.0),
+  "dimensions": string or null,
+  "dimensions_confidence": number (0.0-1.0),
+  "visible_defects": array of strings (empty array if none),
+  "defects_confidence": number (0.0-1.0)
+}
+
+Rules:
+1. Use null for fields you cannot determine from the image — NEVER fabricate or guess
+2. Confidence scores reflect how clearly visible/readable each field is:
+   - 1.0: Clearly visible and unambiguous
+   - 0.7: Visible but partially obscured or requires inference
+   - 0.4: Inferred from context, not directly visible
+   - null field → confidence score of 0.0
+3. Return ONLY the JSON object, no other text
+4. Dimensions should include units if visible (e.g., "30cm × 20cm × 10cm")"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": image_data,
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    )
+
+    response_text = message.content[0].text
+
+    # Extract JSON even if model adds extra text despite instructions
+    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group())
+
+    return json.loads(response_text)  # Try direct parse as fallback
+```
+
+Key design decisions:
+- Explicit schema in the prompt prevents the model from inventing field names.
+- `null` for missing data prevents hallucination of unverifiable information.
+- Confidence scores enable downstream logic to decide when to flag for human review (e.g., confidence < 0.6).
+- Regex fallback handles cases where the model adds preamble text despite instructions.
+- Separate confidence score per field is more useful than a single overall confidence.
+
+</details>
+
+### Exercise 4: Gemini Long-Context Video Analysis Design
+Design a production system that uses Gemini 1.5 Pro to analyze 8-hour surveillance footage from a retail store. The system must:
+1. Detect shoplifting incidents
+2. Track customer flow patterns
+3. Identify peak hours
+4. Generate an end-of-day summary report
+
+Address the 2M token context limit, cost management, and output reliability in your design.
+
+<details>
+<summary>Show Answer</summary>
+
+**Architecture Design**:
+
+**Challenge**: 8 hours × 3600 seconds × ~263 tokens/second ≈ 7.57M tokens — exceeds Gemini 1.5 Pro's 2M context by 3.8x.
+
+**Solution: Sliding window with key-frame sampling**:
+
+```python
+import google.generativeai as genai
+from datetime import datetime, timedelta
+
+class SurveillanceAnalyzer:
+
+    def __init__(self):
+        self.model = genai.GenerativeModel('gemini-1.5-pro')
+        self.segment_duration = 90 * 60  # 90-minute segments (fits in 2M context)
+
+    def analyze_day(self, video_path: str) -> dict:
+        """Process 8-hour footage in segments"""
+        results = {
+            'shoplifting_incidents': [],
+            'customer_flow': [],
+            'peak_hours': [],
+            'summary': ''
+        }
+
+        # Split into 90-minute segments with 10-minute overlaps
+        # (overlap prevents missing incidents at segment boundaries)
+        segments = self._split_video(video_path, segment_minutes=90, overlap_minutes=10)
+
+        for i, (segment_path, start_time) in enumerate(segments):
+            segment_result = self._analyze_segment(segment_path, start_time, i)
+            self._merge_results(results, segment_result)
+
+        # Final synthesis prompt with aggregated data
+        results['summary'] = self._generate_summary(results)
+
+        return results
+
+    def _analyze_segment(self, video_path: str, start_time: datetime, segment_idx: int) -> dict:
+        """Analyze a single 90-minute segment"""
+
+        video_file = self._upload_and_wait(video_path)
+
+        prompt = f"""Analyze this retail surveillance footage segment
+        (Segment {segment_idx+1}, starting at {start_time.strftime('%H:%M')}).
+
+        Identify:
+        1. SHOPLIFTING: Any suspicious behavior (concealing items, bypassing checkout).
+           For each incident: timestamp, location in frame, description, confidence (HIGH/MEDIUM/LOW)
+
+        2. CUSTOMER_FLOW: Approximate customer count in 15-minute intervals.
+           Format: [{{time: "HH:MM", count: N}}]
+
+        3. ANOMALIES: Any other noteworthy events.
+
+        Return as JSON with keys: shoplifting_incidents, customer_flow, anomalies.
+        Only report HIGH or MEDIUM confidence incidents for shoplifting.
+        """
+
+        response = self.model.generate_content(
+            [prompt, video_file],
+            generation_config={"temperature": 0.1}  # Low temp for factual analysis
+        )
+
+        return self._parse_response(response.text, start_time)
+
+    def _generate_summary(self, results: dict) -> str:
+        """Generate final report from aggregated results"""
+
+        summary_prompt = f"""Based on today's retail surveillance analysis:
+
+        - Detected incidents: {len(results['shoplifting_incidents'])}
+        - Total customers tracked: {sum(h['count'] for h in results['customer_flow'])}
+        - Peak period: {self._find_peak(results['customer_flow'])}
+
+        Write a concise end-of-day security and operations report for store management.
+        Include recommendations for staffing adjustments and security focus areas."""
+
+        # Text-only final synthesis (no video upload needed)
+        response = self.model.generate_content(summary_prompt)
+        return response.text
+```
+
+**Cost management**:
+- 8 hours at 263 tokens/second = 7.57M input tokens
+- At $1.25/1M tokens = ~$9.46 per day for video processing
+- Plus text output: ~$5.00/1M × estimated 20K output tokens = ~$0.10
+- Total ≈ $9.56/day — may justify reducing frame rate (1 fps instead of original) to cut costs by 50-75%
+
+**Reliability improvements**:
+- Low temperature (0.1) for factual analysis reduces hallucinated incidents.
+- Only report HIGH/MEDIUM confidence incidents to reduce false positives.
+- 10-minute overlapping segments ensure incidents at boundaries are not missed.
+- Final synthesis step (text-only) avoids re-uploading video for report generation.
+
+</details>

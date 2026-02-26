@@ -1,5 +1,17 @@
 # Feature Store
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Feature Store의 역할을 설명하고 오프라인 스토어(offline store)와 온라인 스토어(online store) 컴포넌트가 학습-서빙 불일치(training-serving skew) 문제를 어떻게 해결하는지 서술할 수 있다
+2. Feast 또는 유사 피처 스토어를 사용하여 피처 뷰(feature view), 엔티티(entity), 데이터 소스(data source)를 구현하고 피처를 정의 및 등록할 수 있다
+3. 동일한 피처 스토어에서 모델 학습(오프라인)과 실시간 추론(온라인)에 일관된 피처를 검색할 수 있다
+4. 관리형 피처 스토어(AWS SageMaker Feature Store, Google Vertex AI Feature Store, Databricks Feature Store)와 오픈소스 대안을 비교할 수 있다
+5. 계산된 피처를 스토어에 쓰고 프로덕션 추론을 위한 피처 최신성(feature freshness)을 유지하는 피처 엔지니어링 파이프라인을 설계할 수 있다
+
+---
+
 ## 1. Feature Store 개념
 
 Feature Store는 ML 피처를 중앙에서 관리, 저장, 서빙하는 플랫폼입니다.
@@ -146,7 +158,7 @@ from datetime import timedelta
 from feast import Entity, Feature, FeatureView, Field, FileSource, ValueType
 from feast.types import Float32, Int64, String
 
-# Entity 정의 (피처의 키)
+# 엔티티(Entity)는 조인 키 — 모든 피처 조회가 이 키를 통해 해결됨 (기본 키와 유사)
 user = Entity(
     name="user_id",
     description="Customer ID",
@@ -164,6 +176,7 @@ user_source = FileSource(
 user_features = FeatureView(
     name="user_features",
     entities=[user],
+    # TTL로 오래된 피처 서빙 방지 — 데이터가 너무 오래되면 재구체화(re-materialization) 강제
     ttl=timedelta(days=1),  # Time to Live
     schema=[
         Field(name="total_purchases", dtype=Int64),
@@ -174,6 +187,7 @@ user_features = FeatureView(
     ],
     online=True,   # 온라인 스토어 활성화
     source=user_source,
+    # 태그로 팀 간 피처 검색 가능 — 레지스트리에서 검색 가능
     tags={
         "team": "ml-platform",
         "owner": "data-science"
@@ -193,6 +207,7 @@ import pandas as pd
 )
 def user_derived_features(inputs: pd.DataFrame) -> pd.DataFrame:
     """실시간 계산 피처"""
+    # 온디맨드(on-demand) 피처는 요청 시 계산 — 파생 값은 구체화(materialization) 불필요
     df = pd.DataFrame()
     df["purchase_frequency"] = inputs["total_purchases"] / inputs["tenure_months"]
     df["is_high_value"] = (inputs["avg_purchase_amount"] > 100).astype(int)
@@ -234,6 +249,7 @@ transaction_features = FeatureView(
 # 시간 윈도우 집계 (StreamFeatureView - Feast 0.26+)
 from feast import StreamFeatureView, PushSource
 
+# PushSource는 배치와 스트리밍을 연결 — 동일한 피처, 다른 수집 경로
 push_source = PushSource(
     name="transaction_push_source",
     batch_source=transaction_source
@@ -242,6 +258,7 @@ push_source = PushSource(
 streaming_features = StreamFeatureView(
     name="transaction_streaming_features",
     entities=[user],
+    # 스트리밍 피처는 짧은 TTL — 오래된 실시간 피처는 없는 것보다 더 나쁨
     ttl=timedelta(hours=1),
     schema=[
         Field(name="transaction_count_1h", dtype=Int64),
@@ -303,7 +320,7 @@ entity_df = pd.DataFrame({
     ])
 })
 
-# 히스토리컬 피처 조회 (Point-in-time 정확)
+# Point-in-time 조인으로 데이터 누수(leakage) 방지 — 각 event_timestamp 시점의 피처만 사용
 training_df = store.get_historical_features(
     entity_df=entity_df,
     features=[
@@ -335,8 +352,8 @@ from feast import FeatureStore
 
 store = FeatureStore(repo_path="./feature_repo")
 
-# 온라인 스토어에 피처 로드 (materialization)
-# 오프라인 → 온라인 동기화
+# 구체화(materialization)로 최신 값을 온라인 스토어(Redis/DynamoDB)에 복사하여 저지연 서빙
+# 증분(incremental)은 새 데이터만 동기화 — 전체 구체화는 전체 이력을 재처리
 store.materialize_incremental(end_date=datetime.now())
 
 # 또는 전체 기간 재동기화
@@ -407,6 +424,7 @@ class ModelWithFeatureStore:
     """Feature Store 통합 모델 서버"""
 
     def __init__(self, model_path: str, feature_repo_path: str):
+        # 모델과 스토어를 시작 시 한 번 로드 — 피처 조회는 요청당 ~1-5ms 추가
         self.model = joblib.load(model_path)
         self.store = FeatureStore(repo_path=feature_repo_path)
         self.feature_list = [
@@ -425,7 +443,7 @@ class ModelWithFeatureStore:
             entity_rows=[{"user_id": user_id}]
         ).to_dict()
 
-        # 2. 피처 벡터 생성
+        # 학습과 동일한 피처 정의 사용 — 학습/서빙 스큐(training/serving skew) 제거
         feature_names = [f.split(":")[1] for f in self.feature_list]
         feature_vector = np.array([
             [features[name][0] for name in feature_names]
@@ -466,6 +484,7 @@ import joblib
 import numpy as np
 
 app = FastAPI()
+# 모듈 레벨 초기화: 모델과 스토어를 프로세스 시작 시 한 번 로드, 요청마다 로드하지 않음
 store = FeatureStore(repo_path="./feature_repo")
 model = joblib.load("models/churn_model.pkl")
 
@@ -546,6 +565,7 @@ class FeatureEngineeringPipeline:
 
     def compute_user_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """사용자 피처 계산"""
+        # 사용자 수준 집계 — 배치 파이프라인과 온라인 서빙에서 동일한 로직 사용
         user_features = df.groupby("user_id").agg({
             "transaction_amount": ["count", "sum", "mean"],
             "transaction_date": ["min", "max"]
@@ -567,7 +587,7 @@ class FeatureEngineeringPipeline:
             pd.to_datetime(user_features["first_purchase_date"])
         ).dt.days // 30
 
-        # 타임스탬프 추가
+        # Feast는 point-in-time 조인과 TTL 만료를 위해 타임스탬프 필수
         user_features["event_timestamp"] = today
         user_features["created_timestamp"] = today
 
@@ -575,7 +595,7 @@ class FeatureEngineeringPipeline:
 
     def validate_features(self, df: pd.DataFrame) -> bool:
         """피처 검증"""
-        # Null 체크
+        # 쓰기 전 검증 — 잘못된 피처는 온라인 스토어를 오염시켜 모든 다운스트림 모델에 영향
         if df.isnull().sum().sum() > 0:
             print("Warning: Null values detected")
             return False
@@ -620,7 +640,7 @@ pipeline = FeatureEngineeringPipeline(
 )
 features = pipeline.run()
 
-# Feast 피처 동기화
+# 배치 쓰기 후 구체화 — 온라인 스토어가 최신 계산된 피처를 반영해야 함
 store = FeatureStore(repo_path="./feature_repo")
 store.materialize_incremental(end_date=datetime.now())
 ```
@@ -647,7 +667,7 @@ def process_streaming_event(event: dict):
         "transaction_timestamp": datetime.now()
     }])
 
-    # Feature Store에 푸시
+    # 푸시(push)는 배치 파이프라인을 우회 — 거의 실시간으로 온라인 스토어를 업데이트하여 최신 피처 제공
     store.push(
         push_source_name="transaction_push_source",
         df=feature_df

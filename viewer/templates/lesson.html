@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/icons.html" import icon %}
 
 {% block title %}{{ title }} - Study Viewer{% endblock %}
 
@@ -26,20 +27,20 @@
         {% endif %}
     </div>
     <div class="toolbar-actions">
-        <button class="btn btn-read {% if is_read %}active{% endif %}" data-action="mark-read" title="Mark as read">
-            <span class="icon">{% if is_read %}✓{% else %}○{% endif %}</span>
+        <button class="btn btn-read {% if is_read %}active{% endif %}" data-action="mark-read" title="Mark as read" aria-pressed="{{ 'true' if is_read else 'false' }}">
+            <span class="icon"><span class="icon-check">{{ icon('check', 16) }}</span><span class="icon-circle">{{ icon('circle', 16) }}</span></span>
             <span class="text">{% if is_read %}Read{% else %}Mark as read{% endif %}</span>
         </button>
-        <button class="btn btn-bookmark {% if is_bookmarked %}active{% endif %}" data-action="bookmark" title="Bookmark">
-            <span class="icon">🔖</span>
+        <button class="btn btn-bookmark {% if is_bookmarked %}active{% endif %}" data-action="bookmark" title="Bookmark" aria-pressed="{{ 'true' if is_bookmarked else 'false' }}">
+            <span class="icon">{{ icon('bookmark', 16) }}</span>
             <span class="text">{% if is_bookmarked %}Bookmarked{% else %}Bookmark{% endif %}</span>
         </button>
         <button class="btn btn-copy-link" data-action="copy-link" title="Copy link">
-            <span class="icon">🔗</span>
+            <span class="icon">{{ icon('link', 16) }}</span>
             <span class="text">Copy link</span>
         </button>
         <a href="{{ url_for('topic', lang=lang, name=topic) }}" class="btn btn-topic-link" title="Back to topic list">
-            <span class="icon">📋</span>
+            <span class="icon">{{ icon('list', 16) }}</span>
             <span class="text">Topic list</span>
         </a>
     </div>
@@ -81,105 +82,9 @@
 </article>
 
 <!-- Scroll to top floating button -->
-<button class="scroll-to-top" id="scroll-to-top" title="Scroll to top" aria-label="Scroll to top">↑</button>
+<button class="scroll-to-top" id="scroll-to-top" title="Scroll to top" aria-label="Scroll to top">&uarr;</button>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const article = document.querySelector('.lesson-article');
-        const lang = article.dataset.lang;
-        const topic = article.dataset.topic;
-        const filename = article.dataset.filename;
-
-        // Mark as read - sync all instances
-        document.querySelectorAll('[data-action="mark-read"]').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                const isRead = !this.classList.contains('active');
-                const response = await fetch('/api/mark-read', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lang, topic, filename, is_read: isRead })
-                });
-                if (response.ok) {
-                    document.querySelectorAll('[data-action="mark-read"]').forEach(b => {
-                        b.classList.toggle('active', isRead);
-                        b.querySelector('.icon').textContent = isRead ? '✓' : '○';
-                        b.querySelector('.text').textContent = isRead ? 'Read' : 'Mark as read';
-                    });
-                }
-            });
-        });
-
-        // Bookmark - sync all instances
-        document.querySelectorAll('[data-action="bookmark"]').forEach(btn => {
-            btn.addEventListener('click', async function() {
-                const response = await fetch('/api/bookmark', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lang, topic, filename })
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    document.querySelectorAll('[data-action="bookmark"]').forEach(b => {
-                        b.classList.toggle('active', data.bookmarked);
-                        b.querySelector('.text').textContent = data.bookmarked ? 'Bookmarked' : 'Bookmark';
-                    });
-                }
-            });
-        });
-
-        // Copy link - independent feedback per button
-        document.querySelectorAll('[data-action="copy-link"]').forEach(btn => {
-            btn.addEventListener('click', function() {
-                navigator.clipboard.writeText(window.location.href);
-                const textEl = this.querySelector('.text');
-                const originalText = textEl.textContent;
-                textEl.textContent = 'Copied!';
-                setTimeout(() => { textEl.textContent = originalText; }, 2000);
-            });
-        });
-
-        // Add copy buttons to code blocks
-        document.querySelectorAll('pre code').forEach((block) => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'code-block-wrapper';
-            block.parentNode.insertBefore(wrapper, block.parentNode.firstChild);
-            wrapper.appendChild(block.parentNode.removeChild(block).parentNode || block);
-
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'code-copy-btn';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(block.textContent);
-                copyBtn.textContent = 'Copied!';
-                setTimeout(() => copyBtn.textContent = 'Copy', 2000);
-            });
-            wrapper.querySelector('pre').appendChild(copyBtn);
-        });
-
-        // Scroll to top button
-        const scrollBtn = document.getElementById('scroll-to-top');
-        window.addEventListener('scroll', function() {
-            scrollBtn.classList.toggle('visible', window.scrollY > 300);
-        });
-        scrollBtn.addEventListener('click', function() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-
-        // Keyboard shortcuts: ← → for lesson navigation
-        document.addEventListener('keydown', function(e) {
-            const tag = document.activeElement.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-            if (e.key === 'ArrowLeft') {
-                const prevLink = document.querySelector('.nav-prev');
-                if (prevLink) { prevLink.click(); }
-            } else if (e.key === 'ArrowRight') {
-                const nextLink = document.querySelector('.nav-next');
-                if (nextLink) { nextLink.click(); }
-            }
-        });
-    });
-</script>
+<script src="{{ url_for('static', filename='js/lesson.js') }}"></script>
 {% endblock %}

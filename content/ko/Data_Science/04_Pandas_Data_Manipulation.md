@@ -2,9 +2,24 @@
 
 [이전: Pandas 기초](./03_Pandas_Basics.md) | [다음: Pandas 고급](./05_Pandas_Advanced.md)
 
-## 개요
+---
 
-Pandas의 핵심 데이터 조작 기법인 필터링, 정렬, 그룹화, 병합에 대해 다룹니다. 이 기법들은 실무 데이터 분석에서 가장 많이 사용됩니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 조건 필터링, 문자열 기반 필터링, `query` 메서드를 적용하여 데이터프레임(DataFrame)에서 행을 선택할 수 있습니다
+2. 오름차순/내림차순을 자유롭게 지정하며 단일 열 및 다중 열 정렬을 구현할 수 있습니다
+3. 집계(aggregation), 변환(transformation), 그룹 필터링을 포함한 그룹바이(GroupBy) 연산을 수행할 수 있습니다
+4. `agg` 메서드에 이름이 지정된 집계(named aggregation)를 적용하여 그룹별 여러 통계를 계산할 수 있습니다
+5. `merge`와 `concat`을 사용하여 SQL 스타일 조인(내부, 왼쪽, 오른쪽, 외부)을 구현할 수 있습니다
+6. 데이터 재구조화를 위한 `pivot`, `pivot_table`, `melt`, `stack`, `unstack`을 비교하고 적용할 수 있습니다
+7. `duplicated`와 `drop_duplicates`를 사용하여 중복 행을 식별하고 제거할 수 있습니다
+8. 범주형 변수 간의 관계를 요약하기 위해 교차 집계(cross-tabulation)를 적용할 수 있습니다
+
+---
+
+데이터를 불러오는 것은 시작에 불과합니다. 진정한 분석 능력은 데이터를 재구조화하고, 결합하고, 요약하는 데서 나옵니다. 행 필터링, 카테고리별 그룹화, 여러 테이블 조인, 넓은 형식(wide)과 긴 형식(long) 간의 피벗은 데이터 분석가가 매일 사용하는 연산들입니다. 이러한 조작 기법을 익히면 복잡한 비즈니스 질문에 단 몇 줄의 코드로 답할 수 있습니다.
 
 ---
 
@@ -566,6 +581,137 @@ ct = pd.crosstab(df['gender'], df['department'],
                  values=df['salary'], aggfunc='mean')
 print(ct)
 ```
+
+---
+
+## 8. Pandas 2.0+ PyArrow 백엔드
+
+Pandas 2.0(2023년 4월 릴리스)에서 Apache Arrow를 백엔드 dtype 시스템으로 일급 지원(First-class support)하기 시작했습니다. 이것은 Pandas가 만들어진 이래 가장 큰 내부 변경으로, 지원되는 타입에 대해 레거시 NumPy 기반 메모리 레이아웃을 Arrow의 컬럼형 포맷으로 대체합니다. 대규모 데이터셋을 효율적으로 다루려면 PyArrow 백엔드를 언제, 어떻게 사용하는지 이해하는 것이 필수적입니다.
+
+### 8.1 왜 PyArrow인가?
+
+전통적인 Pandas 백엔드는 NumPy 배열을 사용하는데, 여러 한계가 있습니다:
+- **네이티브 nullable 정수/실수 없음**: 정수 열에 `NaN`이 하나만 있어도 전체 열이 `float64`로 강제 변환되어 메모리 낭비와 미묘한 버그를 유발합니다.
+- **문자열이 Python 객체로 저장**: 각 문자열이 힙(Heap)에 별도의 Python 객체로 존재하여, 높은 메모리 오버헤드와 느린 연산을 초래합니다.
+- **제로 카피 읽기 불가**: Parquet 파일을 로드할 때 Arrow에서 NumPy 포맷으로 데이터를 복사해야 합니다.
+
+PyArrow는 컬럼형(Columnar), 캐시 친화적(Cache-friendly) 메모리 레이아웃으로 이 세 가지 문제를 모두 해결합니다.
+
+### 8.2 PyArrow 백엔드 활성화
+
+```python
+import pandas as pd
+import numpy as np
+
+# 방법 1: PyArrow 백엔드로 직접 읽기
+# 왜 engine="pyarrow"을 사용하는가? Arrow에서 NumPy로의 복사를 피하여
+# 전체 파이프라인에서 데이터를 Arrow 포맷으로 유지할 수 있기 때문이다.
+# df = pd.read_csv("data.csv", dtype_backend="pyarrow")
+# df = pd.read_parquet("data.parquet", dtype_backend="pyarrow")
+
+# 방법 2: 명시적 Arrow 타입으로 DataFrame 생성
+df_arrow = pd.DataFrame({
+    'id': pd.array([1, 2, 3, None], dtype="int64[pyarrow]"),
+    'name': pd.array(["Alice", "Bob", None, "Diana"], dtype="string[pyarrow]"),
+    'score': pd.array([95.5, None, 88.0, 92.3], dtype="float64[pyarrow]"),
+})
+
+print(df_arrow.dtypes)
+# id        int64[pyarrow]
+# name     string[pyarrow]
+# score   float64[pyarrow]
+
+print(df_arrow)
+# 참고: None 값이 타입 강제 변환 없이 NA로 보존된다
+```
+
+### 8.3 Nullable 타입: NaN 강제 변환 없음
+
+```python
+# --- 전통적 NumPy 백엔드: NaN이 float 변환을 강제 ---
+df_numpy = pd.DataFrame({'values': [1, 2, None, 4]})
+print(f"NumPy dtype: {df_numpy['values'].dtype}")  # float64 (강제!)
+print(df_numpy['values'].tolist())  # [1.0, 2.0, nan, 4.0]
+
+# --- PyArrow 백엔드: 정수는 정수로 유지 ---
+df_pa = pd.DataFrame({'values': pd.array([1, 2, None, 4], dtype="int64[pyarrow]")})
+print(f"PyArrow dtype: {df_pa['values'].dtype}")  # int64[pyarrow]
+print(df_pa['values'].tolist())  # [1, 2, <NA>, 4]
+
+# 왜 이것이 중요한가: 데이터 파이프라인에서 정수 ID(user_id, order_id)는
+# 절대 float으로 변환되어서는 안 된다. PyArrow에서는 1이 1.0이 아니라 1로 유지된다.
+# 이는 1 != 1.0인 조인(Join)과 그룹바이(GroupBy) 연산에서 버그를 방지한다.
+```
+
+### 8.4 PyArrow의 문자열 성능
+
+```python
+import time
+
+# 대규모 문자열 Series 생성
+n = 500_000
+strings_object = pd.Series(["hello_world_" + str(i) for i in range(n)], dtype="object")
+strings_arrow = pd.Series(
+    ["hello_world_" + str(i) for i in range(n)], dtype="string[pyarrow]"
+)
+
+# 메모리 비교
+print(f"object dtype 메모리:       {strings_object.memory_usage(deep=True) / 1e6:.1f} MB")
+print(f"string[pyarrow] 메모리:    {strings_arrow.memory_usage(deep=True) / 1e6:.1f} MB")
+
+# 속도 비교: str.contains
+start = time.time()
+_ = strings_object.str.contains("999")
+time_object = time.time() - start
+
+start = time.time()
+_ = strings_arrow.str.contains("999")
+time_arrow = time.time() - start
+
+print(f"\nstr.contains 속도:")
+print(f"  object dtype:       {time_object:.3f}s")
+print(f"  string[pyarrow]:    {time_arrow:.3f}s")
+print(f"  속도 향상:            {time_object / time_arrow:.1f}x")
+
+# 왜 PyArrow 문자열이 빠른가: Arrow는 문자열을 연속 버퍼에 오프셋 배열과
+# 함께 저장하여 SIMD 가속 연산이 가능하다. Python 객체 문자열은 힙에
+# 분산되어 캐시 미스(Cache miss)를 유발한다.
+```
+
+### 8.5 PyArrow 엔진으로 Parquet 입출력
+
+```python
+# Parquet은 Arrow의 네이티브 파일 포맷이다 — PyArrow 백엔드를 사용하면
+# 비용이 큰 직렬화(Serialization)를 피하는 제로 카피 읽기가 가능하다.
+
+# Parquet 쓰기
+df_sample = pd.DataFrame({
+    'id': pd.array(range(1000), dtype="int64[pyarrow]"),
+    'category': pd.array(["A", "B", "C"] * 333 + ["A"], dtype="string[pyarrow]"),
+    'value': pd.array(np.random.randn(1000), dtype="float64[pyarrow]"),
+})
+
+df_sample.to_parquet("sample.parquet", engine="pyarrow")
+
+# PyArrow 백엔드로 Parquet 읽기 — 거의 제로 카피
+df_loaded = pd.read_parquet("sample.parquet", dtype_backend="pyarrow")
+print(df_loaded.dtypes)
+print(f"메모리 사용량: {df_loaded.memory_usage(deep=True).sum() / 1e3:.1f} KB")
+```
+
+### 8.6 PyArrow 백엔드 사용 시점
+
+| 시나리오 | 권장사항 | 이유 |
+|----------|---------|------|
+| 대규모 데이터셋 (>100K행) | PyArrow 사용 | 낮은 메모리, 빠른 연산 |
+| 문자열이 많은 데이터 (로그, 텍스트) | PyArrow 사용 | 2-10배 적은 메모리, 빠른 `.str` |
+| 결측 정수가 있는 데이터 | PyArrow 사용 | float 강제 변환 방지 |
+| Parquet 기반 파이프라인 | PyArrow 사용 | 제로 카피 읽기 |
+| 소규모 데이터셋 (<10K행) | 어느 것이든 가능 | 오버헤드 무시 가능 |
+| NumPy 상호운용이 필요한 레거시 코드 | NumPy 유지 | 일부 라이브러리가 NumPy 배열을 기대 |
+| GPU 워크플로우 (cuDF) | PyArrow 사용 | cuDF가 Arrow 포맷을 네이티브로 사용 |
+
+**호환성 참고**: Pandas 2.2+ 기준으로 대부분의 연산이 PyArrow 백엔드 DataFrame과 매끄럽게 동작합니다. 그러나 일부 서드파티 라이브러리는 `.to_numpy()` 변환이 필요할 수 있습니다. 마이그레이션 전에 항상 전체 파이프라인을 테스트하세요.
 
 ---
 

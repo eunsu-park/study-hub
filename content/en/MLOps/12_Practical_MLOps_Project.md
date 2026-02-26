@@ -1,5 +1,17 @@
 # 12. Practical MLOps Project
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Architect a complete end-to-end MLOps pipeline that integrates data sourcing, a feature store, model training, model registry, serving, and drift monitoring into a cohesive system
+2. Select and justify a technology stack (Kubernetes, Airflow, MLflow, Feast, TorchServe, Prometheus/Grafana) for a production MLOps project
+3. Implement a CI/CD pipeline with GitHub Actions that automatically runs tests, retrains the model, and deploys it upon code or data changes
+4. Integrate all MLOps components — feature store, experiment tracker, model registry, serving endpoint, and monitoring — into a working project
+5. Evaluate the production readiness of an MLOps pipeline by assessing observability, rollback capability, and failure recovery procedures
+
+---
+
 ## 1. E2E MLOps Pipeline Design
 
 Build a complete MLOps pipeline that operates in a real production environment.
@@ -190,9 +202,9 @@ class DataIngestion:
 
     def validate(self, df: pd.DataFrame) -> bool:
         """Validate data"""
+        # Great Expectations provides declarative assertions — fail fast before expensive training
         ge_df = ge.from_pandas(df)
 
-        # Basic validation
         results = [
             ge_df.expect_column_to_exist("user_id"),
             ge_df.expect_column_to_exist("target"),
@@ -248,6 +260,7 @@ class FeatureEngineering:
         features = raw_df.copy()
 
         # Aggregation features
+        # clip(lower=1) prevents division by zero for new users with 0 tenure
         features["purchase_frequency"] = (
             features["total_purchases"] / features["tenure_months"].clip(lower=1)
         )
@@ -315,8 +328,8 @@ class ModelTrainer:
 
     def train(self, X_train, y_train, X_val, y_val) -> Dict[str, Any]:
         """Train model"""
+        # Context manager ensures run closure even if training crashes mid-epoch
         with mlflow.start_run() as run:
-            # Log parameters
             params = self.config["model"]["params"]
             mlflow.log_params(params)
             mlflow.log_param("model_type", self.config["model"]["type"])
@@ -325,7 +338,7 @@ class ModelTrainer:
             model = RandomForestClassifier(**params)
             model.fit(X_train, y_train)
 
-            # Cross-validation
+            # CV detects overfitting early — high cv_std signals unstable performance
             cv_scores = cross_val_score(model, X_train, y_train, cv=5)
             mlflow.log_metric("cv_mean", cv_scores.mean())
             mlflow.log_metric("cv_std", cv_scores.std())
@@ -337,7 +350,7 @@ class ModelTrainer:
             for name, value in metrics.items():
                 mlflow.log_metric(name, value)
 
-            # Save model
+            # Signature enforces input/output schema — catches shape mismatches at serving time
             signature = mlflow.models.infer_signature(X_train, y_pred)
             mlflow.sklearn.log_model(
                 model, "model",
@@ -362,6 +375,7 @@ class ModelTrainer:
 
     def validate_quality_gates(self, metrics: Dict[str, float]) -> bool:
         """Validate quality gates"""
+        # Quality gates prevent deploying a model worse than current production
         gates = self.config["quality_gates"]
         passed = all(
             metrics.get(metric, 0) >= threshold
@@ -478,7 +492,7 @@ def training_pipeline(
         input_data=ingest_task.outputs["output_data"]
     )
 
-    # 3. Conditional training
+    # Conditional gate: skip expensive GPU training if data validation fails
     with dsl.Condition(validate_task.output == True):
         train_task = train_model(
             input_data=validate_task.outputs["output_data"],
@@ -538,9 +552,11 @@ class PredictionResponse(BaseModel):
     prediction: str
     features: dict
 
+# Startup event loads model once — avoids 100-500ms model deserialization per request
 @app.on_event("startup")
 async def load_resources():
     global model, store
+    # URI "models:/name/Production" always resolves to the latest Production stage
     model = mlflow.sklearn.load_model("models:/churn-prediction/Production")
     store = FeatureStore(repo_path="./features")
 
@@ -585,6 +601,7 @@ async def predict(request: PredictionRequest):
         )
 
     except Exception as e:
+        # Track error rate separately — spikes indicate feature store or model issues
         PREDICTIONS.labels(status="error").inc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -616,6 +633,7 @@ spec:
     metadata:
       labels:
         app: churn-prediction
+      # Prometheus annotations enable auto-discovery — no manual scrape config needed
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
@@ -638,6 +656,7 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "500m"
+          # Liveness restarts hung pods; readiness gates traffic until model is loaded
           livenessProbe:
             httpGet:
               path: /health
@@ -741,7 +760,7 @@ class RetrainingOrchestrator:
         metrics: Dict[str, float]
     ) -> tuple[bool, str]:
         """Check retraining conditions"""
-        # 1. Performance degradation
+        # Priority order: performance (reactive) → drift (proactive) → schedule (safety net)
         for metric, threshold in self.config["quality_thresholds"].items():
             if metrics.get(metric, 1.0) < threshold:
                 return True, f"Performance degradation: {metric}={metrics[metric]}"
@@ -770,7 +789,7 @@ class RetrainingOrchestrator:
         # Train with new data
         training_result = self.trainer.train_on_latest_data()
 
-        # Deploy if quality gates pass
+        # Quality gate prevents deploying a worse model — retraining doesn't guarantee improvement
         if self.trainer.validate_quality_gates(training_result["metrics"]):
             self._deploy_model(training_result["run_id"])
             training_result["deployed"] = True
@@ -786,6 +805,7 @@ class RetrainingOrchestrator:
 
         # Register model and promote to Production
         result = mlflow.register_model(model_uri, self.config["model_name"])
+        # archive_existing_versions=True ensures only one Production model at a time
         client.transition_model_version_stage(
             name=self.config["model_name"],
             version=result.version,
@@ -834,6 +854,7 @@ jobs:
           result=$(python scripts/check_drift.py)
           echo "should_retrain=$result" >> $GITHUB_OUTPUT
 
+  # Train only runs if drift detected or manually forced — saves compute costs
   train:
     needs: check-drift
     if: needs.check-drift.outputs.should_retrain == 'true' || github.event.inputs.force_retrain == 'true'

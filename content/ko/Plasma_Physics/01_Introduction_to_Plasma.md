@@ -463,27 +463,40 @@ class PlasmaParameters:
         """Compute all plasma parameters."""
 
         # Debye length [m]
+        # T_e는 eV 단위로 주어지므로 eV_to_K를 곱해 켈빈으로, 다시 k_B를 곱해
+        # 줄 단위로 변환한다. 이렇게 하면 단위 변환이 클래스 전체에 분산되지 않는다.
         self.lambda_D = np.sqrt(epsilon_0 * k_B * self.T_e * eV_to_K /
                                 (self.n_e * e**2))
 
         # Plasma parameter (number of particles in Debye sphere)
+        # N_D >> 1은 집단적 플라즈마 행동의 핵심 기준이다;
+        # lambda_D 계산 직후 여기에 함께 두면 차폐 스케일을 구한 즉시
+        # 플라즈마 기준을 확인하기가 매우 쉬워진다.
         self.N_D = self.n_e * (4*np.pi/3) * self.lambda_D**3
 
         # Electron plasma frequency [rad/s]
+        # omega_pe는 밀도에만 의존하고 온도에는 의존하지 않는다.
+        # 이온 배경의 복원력에서 비롯되며, 열압력에서 비롯되지 않기 때문이다.
         self.omega_pe = np.sqrt(self.n_e * e**2 / (epsilon_0 * m_e))
         self.f_pe = self.omega_pe / (2*np.pi)  # [Hz]
 
         # Ion plasma frequency [rad/s]
+        # omega_pi << omega_pe (sqrt(m_e/m_i) 만큼 작다); 둘 다 유지하면
+        # 많은 유체 근사의 토대가 되는 전자/이온 시간스케일 분리를 쉽게 검증할 수 있다.
         self.omega_pi = np.sqrt(self.n_e * self.Z**2 * e**2 /
                                 (epsilon_0 * self.m_i))
         self.f_pi = self.omega_pi / (2*np.pi)  # [Hz]
 
         # Thermal velocities [m/s]
+        # lambda_D와 동일한 eV_to_K * k_B 패턴을 사용해 단위 변환을 일관되게 유지한다;
+        # v_te와 v_ti는 이후 모든 drift의 속도 스케일을 결정한다.
         self.v_te = np.sqrt(k_B * self.T_e * eV_to_K / m_e)
         self.v_ti = np.sqrt(k_B * self.T_i * eV_to_K / self.m_i)
 
         if self.B > 0:
-            # Electron gyrofrequency [rad/s]
+            # Gyrofrequency와 Larmor 반경은 B > 0일 때만 의미가 있다;
+            # 이 조건으로 보호하면 0으로 나누기를 방지하고,
+            # B = 0일 때 자기화 효과가 적용되지 않음을 호출자에게 명확히 알린다.
             self.omega_ce = e * self.B / m_e
             self.f_ce = self.omega_ce / (2*np.pi)  # [Hz]
 
@@ -492,10 +505,14 @@ class PlasmaParameters:
             self.f_ci = self.omega_ci / (2*np.pi)  # [Hz]
 
             # Larmor radii [m]
+            # r_Le = v_te / omega_ce를 사용하는 것은, 열속도가 이미 온도 의존성을
+            # 깔끔하게 담고 있어 정확한 공식 mv/qB보다 간결하기 때문이다.
             self.r_Le = self.v_te / self.omega_ce
             self.r_Li = self.v_ti / self.omega_ci
 
             # Plasma beta
+            # 열압력에 T_e + T_i를 합산해야 beta가 두 종을 모두 반영한다;
+            # beta < 1이면 자기압력이 지배적이어서 플라즈마를 가두고 있다는 의미다.
             p_thermal = self.n_e * k_B * (self.T_e + self.T_i) * eV_to_K
             p_magnetic = self.B**2 / (2 * mu_0)
             self.beta = p_thermal / p_magnetic
@@ -513,6 +530,8 @@ class PlasmaParameters:
         print("="*60)
         print(f"Input Parameters:")
         print(f"  Electron density:     n_e = {self.n_e:.3e} m^-3")
+        # 온도를 eV와 K 두 단위로 모두 출력해, 두 표기법을 사용하는 표와 직접 비교할 수 있게 한다
+        # (플라즈마 문헌은 eV, 열역학 문헌은 K를 사용한다).
         print(f"  Electron temperature: T_e = {self.T_e:.3f} eV ({self.T_e*eV_to_K:.3e} K)")
         print(f"  Ion temperature:      T_i = {self.T_i:.3f} eV ({self.T_i*eV_to_K:.3e} K)")
         print(f"  Magnetic field:       B   = {self.B:.3f} T")
@@ -522,12 +541,16 @@ class PlasmaParameters:
         print(f"Debye Shielding:")
         print(f"  Debye length:         λ_D = {self.lambda_D:.3e} m")
         print(f"  Plasma parameter:     N_D = {self.N_D:.3e}")
+        # 임계값으로 1이 아닌 100을 사용하는 것은 보수적인 선택이다: N_D >> 1이 이론적
+        # 요건이지만, N_D ~ 100이어야 통계적 평균이 신뢰할 만하다.
         print(f"  Plasma criterion:     N_D >> 1? {self.N_D > 100}")
         print("-"*60)
 
         print(f"Plasma Frequencies:")
         print(f"  Electron plasma freq: ω_pe = {self.omega_pe:.3e} rad/s ({self.f_pe:.3e} Hz)")
         print(f"  Ion plasma freq:      ω_pi = {self.omega_pi:.3e} rad/s ({self.f_pi:.3e} Hz)")
+        # 비율을 출력하면 전자가 이온보다 얼마나 빠르게 진동하는지 즉시 확인할 수 있고,
+        # 플라즈마 이론 전반에서 활용되는 전자/이온 시간스케일 분리의 근거를 제공한다.
         print(f"  Ratio:                ω_pe/ω_pi = {self.omega_pe/self.omega_pi:.2f}")
         print("-"*60)
 
@@ -545,6 +568,9 @@ class PlasmaParameters:
             print(f"  Ion Larmor:           r_Li = {self.r_Li:.3e} m")
             print(f"  Plasma beta:          β    = {self.beta:.3e}")
             print(f"  Regime:               ", end="")
+            # beta 임계값(0.01, 0.1, 10)은 실질적으로 의미 있는 경계에 해당한다:
+            # β < 0.01은 자기권 심부와 토카막 중심부에서 전형적으로, 자기력선 굽힘이 무시 가능하며;
+            # β > 10은 자기장이 역학적으로 무관함을 의미한다.
             if self.beta < 0.01:
                 print("Strongly magnetized (β << 1)")
             elif self.beta < 0.1:
@@ -570,6 +596,9 @@ class PlasmaParameters:
 
 # Example usage
 if __name__ == "__main__":
+    # 세 가지 예시는 밀도에서 ~13차수, 온도에서 4차수에 걸쳐 있으며,
+    # 질적으로 서로 다른 영역을 대표하도록 선택되었다: 핵융합(강한 자기화, 무충돌),
+    # 우주(약한 자기화, 무충돌), 산업용 플라즈마(비자기화, 부분 충돌).
     print("\n### Example 1: Tokamak Core ###\n")
     tokamak = PlasmaParameters(n_e=1e20, T_e=10000, B=5, T_i=10000, Z=1, A=2)
     tokamak.print_summary()

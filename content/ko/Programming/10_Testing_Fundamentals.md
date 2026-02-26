@@ -1147,5 +1147,5 @@ def send_order_confirmation(order_id):
 
 ## 내비게이션
 
-**이전 레슨**: [09_Error_Handling.md](09_Error_Handling.md)
-**다음 레슨**: [11_Debugging_and_Profiling.md](11_Debugging_and_Profiling.md)
+**이전 레슨**: [에러 처리 전략(Error Handling Strategies)](09_Error_Handling.md)
+**다음 레슨**: [디버깅 및 프로파일링(Debugging & Profiling)](11_Debugging_and_Profiling.md)

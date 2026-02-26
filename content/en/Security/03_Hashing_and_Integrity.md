@@ -8,14 +8,17 @@ Hash functions are the workhorses of modern security. They appear everywhere: pa
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Understand the properties of cryptographic hash functions
-- Implement hashing with SHA-256, SHA-3, BLAKE2, and BLAKE3
-- Store passwords securely using bcrypt, scrypt, and Argon2
-- Construct and verify HMACs for message authentication
-- Build and understand Merkle trees
-- Implement content-addressable storage
-- Recognize and prevent timing attacks using constant-time comparison
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand the properties of cryptographic hash functions
+2. Implement hashing with SHA-256, SHA-3, BLAKE2, and BLAKE3
+3. Store passwords securely using bcrypt, scrypt, and Argon2
+4. Construct and verify HMACs for message authentication
+5. Build and understand Merkle trees
+6. Implement content-addressable storage
+7. Recognize and prevent timing attacks using constant-time comparison
 
 ---
 

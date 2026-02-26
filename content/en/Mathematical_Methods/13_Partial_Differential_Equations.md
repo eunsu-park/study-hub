@@ -1,4 +1,4 @@
-# 13. Partial Differential Equations (편미분방정식)
+# 13. Partial Differential Equations
 
 ## Learning Objectives
 
@@ -32,27 +32,27 @@ This classification shares the same mathematical structure as the classification
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- PDE 유형별 해의 특성 비교 ---
+# --- Comparison of solution characteristics by PDE type ---
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
-# 타원형: 라플라스 방정식의 조화함수 u = x² - y²
+# Elliptic: harmonic function of Laplace's equation u = x² - y²
 x, y = np.linspace(-2, 2, 100), np.linspace(-2, 2, 100)
 X, Y = np.meshgrid(x, y)
 axes[0].contourf(X, Y, X**2 - Y**2, levels=20, cmap='RdBu_r')
-axes[0].set_title('타원형: $\\nabla^2 u = 0$ (정상 상태)')
+axes[0].set_title('Elliptic: $\\nabla^2 u = 0$ (steady state)')
 
-# 포물형: 열방정식 해의 시간 스냅샷
+# Parabolic: time snapshots of heat equation solution
 x_h = np.linspace(0, np.pi, 100)
 for t in [0.0, 0.05, 0.2, 0.5, 1.0]:
     axes[1].plot(x_h, np.sin(x_h) * np.exp(-t), label=f't={t}')
-axes[1].set_title('포물형: $u_t = \\alpha^2 u_{xx}$ (열 확산)')
+axes[1].set_title('Parabolic: $u_t = \\alpha^2 u_{xx}$ (heat diffusion)')
 axes[1].legend(fontsize=8)
 
-# 쌍곡형: 파동방정식 해의 시간 스냅샷
+# Hyperbolic: time snapshots of wave equation solution
 x_w = np.linspace(0, 2*np.pi, 200)
 for t in [0.0, 0.5, 1.0, 1.5]:
     axes[2].plot(x_w, np.sin(x_w - t) + np.sin(x_w + t), label=f't={t:.1f}')
-axes[2].set_title('쌍곡형: $u_{tt} = c^2 u_{xx}$ (파동 전파)')
+axes[2].set_title('Hyperbolic: $u_{tt} = c^2 u_{xx}$ (wave propagation)')
 axes[2].legend(fontsize=8)
 
 plt.tight_layout()
@@ -101,13 +101,13 @@ $$u(x, t) = \sum_{n=1}^{\infty} b_n \sin\left(\frac{n\pi x}{L}\right) e^{-\alpha
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 변수분리법: 1차원 열방정식 풀이 ---
+# --- Separation of variables: 1D heat equation solution ---
 L, alpha, N_terms = np.pi, 1.0, 50
 
 def initial_condition(x):
     return x * (np.pi - x)
 
-# 푸리에 사인 계수 (수치 적분)
+# Fourier sine coefficients (numerical integration)
 def compute_bn(n):
     x = np.linspace(0, L, 1000)
     return (2/L) * np.trapz(initial_condition(x) * np.sin(n*np.pi*x/L), x)
@@ -125,10 +125,10 @@ plt.figure(figsize=(10, 6))
 for t in [0.0, 0.05, 0.1, 0.3, 0.5, 1.0, 2.0]:
     plt.plot(x, heat_solution(x, t), label=f't = {t}')
 plt.xlabel('x'); plt.ylabel('u(x, t)')
-plt.title('1차원 열방정식의 해 (변수분리법)')
+plt.title('1D heat equation solution (separation of variables)')
 plt.legend(); plt.grid(True, alpha=0.3); plt.show()
 
-print("=== 푸리에 사인 계수 (처음 5개) ===")
+print("=== Fourier sine coefficients (first 5) ===")
 for n in range(1, 6):
     print(f"  b_{n} = {coeffs[n-1]:.6f}")
 ```
@@ -175,13 +175,13 @@ $w$ satisfies homogeneous BC ($w(0,t) = w(L,t) = 0$) and is determined by the in
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 비제차 경계 조건의 열방정식 ---
+# --- Heat equation with nonhomogeneous boundary conditions ---
 L, alpha, T1, T2, N_terms = 1.0, 0.1, 100.0, 50.0, 30
 
 steady = lambda x: T1 + (T2 - T1) * x / L
-w_init = lambda x: -steady(x)  # 초기: 균일 0°C
+w_init = lambda x: -steady(x)  # initial: uniform 0°C
 
-# 과도 해의 푸리에 계수
+# Fourier coefficients of transient solution
 cn = [(2/L) * np.trapz(w_init(np.linspace(0,L,1000)) * np.sin(n*np.pi*np.linspace(0,L,1000)/L),
       np.linspace(0,L,1000)) for n in range(1, N_terms+1)]
 
@@ -195,9 +195,9 @@ x = np.linspace(0, L, 200)
 plt.figure(figsize=(10, 6))
 for t in [0.0, 0.1, 0.3, 0.5, 1.0, 3.0, 10.0]:
     plt.plot(x, full_solution(x, t), label=f't = {t}')
-plt.plot(x, steady(x), 'k--', lw=2, label='정상 상태')
+plt.plot(x, steady(x), 'k--', lw=2, label='steady state')
 plt.xlabel('x'); plt.ylabel('u(x,t) [°C]')
-plt.title('비제차 경계 조건의 열방정식'); plt.legend(); plt.grid(True, alpha=0.3)
+plt.title('Heat equation with nonhomogeneous boundary conditions'); plt.legend(); plt.grid(True, alpha=0.3)
 plt.show()
 ```
 
@@ -225,7 +225,7 @@ $$u(x,t) = \sum_{n=1}^{\infty}\sin\left(\frac{n\pi x}{L}\right)\left[A_n\cos(\om
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 달랑베르 해: 가우시안 펄스의 좌우 전파 ---
+# --- D'Alembert solution: left-right propagation of Gaussian pulse ---
 c = 1.0
 f = lambda x: np.exp(-10 * x**2)
 dalembert = lambda x, t: 0.5 * (f(x - c*t) + f(x + c*t))
@@ -238,7 +238,7 @@ for idx, t in enumerate([0.0, 0.5, 1.0, 1.5, 2.0, 3.0]):
     ax.fill_between(x, dalembert(x, t), alpha=0.2)
     ax.set_xlim(-5, 5); ax.set_ylim(-0.3, 1.1)
     ax.set_title(f't = {t:.1f}'); ax.grid(True, alpha=0.3)
-fig.suptitle("달랑베르 해: 가우시안 펄스의 좌우 전파", fontsize=14)
+fig.suptitle("D'Alembert solution: left-right propagation of Gaussian pulse", fontsize=14)
 plt.tight_layout(); plt.show()
 ```
 
@@ -248,7 +248,7 @@ plt.tight_layout(); plt.show()
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 기타 현의 진동 (변수분리법) ---
+# --- Guitar string vibration (separation of variables) ---
 L, c, N = 1.0, 1.0, 20
 An = lambda n: 8/(n**2 * np.pi**2) * np.sin(n*np.pi/2)
 
@@ -264,11 +264,11 @@ plt.figure(figsize=(10, 6))
 for t in [0, T_period/8, T_period/4, 3*T_period/8, T_period/2]:
     plt.plot(x, string_sol(x, t), label=f't = {t:.3f} ({t/T_period:.0%} T)')
 plt.xlabel('x'); plt.ylabel('u(x,t)')
-plt.title(f'기타 현의 진동 (기본 주기 T = {T_period:.2f})')
+plt.title(f'Guitar string vibration (fundamental period T = {T_period:.2f})')
 plt.legend(); plt.grid(True, alpha=0.3); plt.axhline(0, color='k', lw=0.5)
 plt.show()
 
-print("=== 고유진동수 ===")
+print("=== Natural frequencies ===")
 for n in range(1, 6):
     print(f"  n={n}: f_{n} = {n*c/(2*L):.2f} Hz")
 ```
@@ -282,7 +282,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import jn_zeros, j0
 
-# --- 원형 막 진동의 축대칭 모드 ---
+# --- Axisymmetric modes of circular membrane vibration ---
 a = 1.0
 zeros_J0 = jn_zeros(0, 3)  # [2.4048, 5.5201, 8.6537]
 
@@ -293,9 +293,9 @@ for idx, j0n in enumerate(zeros_J0):
     axes[idx].plot(r, R, 'b-', lw=2)
     axes[idx].fill_between(r, R, alpha=0.2)
     axes[idx].axhline(0, color='k', lw=0.5)
-    axes[idx].set_title(f'모드 (0,{idx+1}): $j_{{0,{idx+1}}}$ = {j0n:.4f}')
+    axes[idx].set_title(f'Mode (0,{idx+1}): $j_{{0,{idx+1}}}$ = {j0n:.4f}')
     axes[idx].set_xlabel('r'); axes[idx].grid(True, alpha=0.3)
-plt.suptitle('원형 막의 축대칭 진동 모드', fontsize=14)
+plt.suptitle('Axisymmetric vibration modes of circular membrane', fontsize=14)
 plt.tight_layout(); plt.show()
 ```
 
@@ -313,7 +313,7 @@ $$u(x,y) = \sum_{n=1}^{\infty} c_n \sin\left(\frac{n\pi x}{a}\right)\sinh\left(\
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 직사각형 영역에서의 라플라스 방정식 ---
+# --- Laplace's equation on rectangular domain ---
 a, b, N = 2.0, 1.0, 30
 f_top = lambda x: np.sin(np.pi * x / a)
 
@@ -333,7 +333,7 @@ fig, ax = plt.subplots(figsize=(10, 5))
 cs = ax.contourf(X, Y, laplace_rect(X, Y), levels=30, cmap='hot')
 plt.colorbar(cs, label='u(x,y)')
 ax.set_xlabel('x'); ax.set_ylabel('y'); ax.set_aspect('equal')
-ax.set_title('직사각형 영역에서의 라플라스 방정식 해')
+ax.set_title('Laplace equation solution on rectangular domain')
 plt.tight_layout(); plt.show()
 ```
 
@@ -348,7 +348,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import legendre
 
-# --- 구면 영역에서의 라플라스 방정식 ---
+# --- Laplace's equation on spherical domain ---
 a, L_max = 1.0, 10
 f_bdy = lambda th: np.cos(th)**2  # u(a,θ) = cos²θ
 
@@ -356,10 +356,10 @@ theta_q = np.linspace(0, np.pi, 1000)
 Al = [(2*l+1)/2 * np.trapz(f_bdy(theta_q)*legendre(l)(np.cos(theta_q))*np.sin(theta_q), theta_q)
       for l in range(L_max+1)]
 
-print("=== 르장드르 계수 ===")
+print("=== Legendre coefficients ===")
 for l in range(5): print(f"  A_{l} = {Al[l]:.6f}")  # A_0≈1/3, A_2≈2/3
 
-# 시각화 (단면)
+# Visualization (cross-section)
 r_v, th_v = np.linspace(0.01, a, 50), np.linspace(0, np.pi, 100)
 R, Th = np.meshgrid(r_v, th_v)
 U = sum(Al[l]*(R/a)**l * legendre(l)(np.cos(Th)) for l in range(L_max+1))
@@ -370,7 +370,7 @@ plt.colorbar(cs, label='u(r,θ)')
 th_c = np.linspace(0, np.pi, 100)
 ax.plot(a*np.sin(th_c), a*np.cos(th_c), 'k-', lw=2)
 ax.set_xlabel('r sin(θ)'); ax.set_ylabel('r cos(θ)'); ax.set_aspect('equal')
-ax.set_title('구 내부의 라플라스 방정식 해: $u(a,\\theta)=\\cos^2\\theta$')
+ax.set_title('Laplace equation solution inside sphere: $u(a,\\theta)=\\cos^2\\theta$')
 plt.tight_layout(); plt.show()
 ```
 
@@ -424,8 +424,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import jv, jn_zeros
 
-# --- 원형 도파관의 헬름홀츠 방정식 모드 ---
-a = 1.0  # 도파관 반지름
+# --- Helmholtz equation modes of circular waveguide ---
+a = 1.0  # waveguide radius
 modes = [(0, 1), (1, 1), (2, 1), (0, 2)]
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 10))
@@ -440,12 +440,12 @@ for idx, (m, n) in enumerate(modes):
 
     Z = jv(m, alpha_mn * R / a) * np.cos(m * Theta)
     ax.contourf(X, Y, Z, levels=20, cmap='RdBu_r')
-    ax.set_title(f'TM$_{{{m}{n}}}$ 모드, $k_c a$ = {alpha_mn:.3f}')
+    ax.set_title(f'TM$_{{{m}{n}}}$ mode, $k_c a$ = {alpha_mn:.3f}')
     ax.set_aspect('equal')
     circle = plt.Circle((0, 0), a, fill=False, color='black', linewidth=2)
     ax.add_patch(circle)
 
-plt.suptitle('원형 도파관 헬름홀츠 모드', fontsize=14)
+plt.suptitle('Circular waveguide Helmholtz modes', fontsize=14)
 plt.tight_layout()
 plt.show()
 ```
@@ -486,13 +486,13 @@ This can be solved using the integrating factor method.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 비제차 열방정식: 정현파 열원 ---
+# --- Nonhomogeneous heat equation: sinusoidal heat source ---
 L, alpha2, N = np.pi, 1.0, 30
 
-# 열원: F(x,t) = sin(x) (공간적으로 불균일한 정상 열원)
+# Heat source: F(x,t) = sin(x) (spatially nonuniform steady heat source)
 # F_n = (2/L) * ∫₀ᴸ sin(x)sin(nx) dx = δ_{n,1}
 # T_1' + T_1 = 1, T_1(0) = 0 → T_1(t) = 1 - e^{-t}
-# 나머지 T_n(0) = 0, F_n = 0 → T_n(t) = 0
+# Remaining T_n(0) = 0, F_n = 0 → T_n(t) = 0
 
 x = np.linspace(0, L, 200)
 plt.figure(figsize=(10, 6))
@@ -501,10 +501,10 @@ for t in [0.0, 0.1, 0.3, 0.5, 1.0, 3.0]:
     u = T1 * np.sin(x)
     plt.plot(x, u, label=f't = {t}')
 
-plt.plot(x, np.sin(x), 'k--', lw=2, label='정상 상태')
+plt.plot(x, np.sin(x), 'k--', lw=2, label='steady state')
 plt.xlabel('x')
 plt.ylabel('u(x,t)')
-plt.title('비제차 열방정식: 정현파 열원')
+plt.title('Nonhomogeneous heat equation: sinusoidal heat source')
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.show()
@@ -560,12 +560,12 @@ Fundamental equation of electrostatics $\nabla^2\phi = -\rho/\epsilon_0$. In the
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 직사각형 도체 상자 내부 전위 ---
+# --- Interior potential of rectangular conductor box ---
 a, b, c_box, V0, N = 1.0, 1.0, 1.0, 100.0, 15
 
 def potential_box(x, y, z_val):
     u = np.zeros_like(x, dtype=float)
-    for m in range(1, N+1, 2):     # 홀수만
+    for m in range(1, N+1, 2):     # odd terms only
         for n in range(1, N+1, 2):
             gamma = np.pi * np.sqrt((m/a)**2 + (n/b)**2)
             Amn = 16*V0 / (m*n*np.pi**2 * np.sinh(gamma*c_box))
@@ -578,7 +578,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 cs = ax.contourf(X, Y, potential_box(X, Y, 0.5), levels=30, cmap='RdYlBu_r')
 plt.colorbar(cs, label='$\\phi$ [V]')
 ax.set_xlabel('x'); ax.set_ylabel('y'); ax.set_aspect('equal')
-ax.set_title('직사각형 도체 상자 내부 전위 (z = 0.5)')
+ax.set_title('Interior potential of rectangular conductor box (z = 0.5)')
 plt.tight_layout(); plt.show()
 ```
 
@@ -596,8 +596,8 @@ $$\psi_n(x) = \sqrt{\frac{2}{L}}\sin\left(\frac{n\pi x}{L}\right), \quad E_n = \
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 2D 무한 퍼텐셜 우물 ---
-a = 1.0  # 자연 단위계: ℏ = m = 1
+# --- 2D infinite potential well ---
+a = 1.0  # natural units: ℏ = m = 1
 psi = lambda x, y, nx, ny: 2/a * np.sin(nx*np.pi*x/a) * np.sin(ny*np.pi*y/a)
 E = lambda nx, ny: np.pi**2/2 * (nx**2 + ny**2) / a**2
 
@@ -612,12 +612,12 @@ for idx, (nx, ny) in enumerate([(1,1),(1,2),(2,1),(2,2),(1,3),(3,1)]):
     plt.colorbar(cs, ax=ax, label='$|\\psi|^2$')
     ax.set_title(f'$(n_x,n_y)=({nx},{ny})$, $E={E(nx,ny)/E(1,1):.1f}\\,E_{{11}}$')
     ax.set_aspect('equal')
-fig.suptitle('2D 무한 퍼텐셜 우물의 확률밀도 분포', fontsize=14)
+fig.suptitle('Probability density distribution of 2D infinite potential well', fontsize=14)
 plt.tight_layout(); plt.show()
 
-# 축퇴 확인
+# Check degeneracy
 print(f"E(1,2) = {E(1,2):.4f}, E(2,1) = {E(2,1):.4f}")
-print(f"축퇴: E(1,2) = E(2,1) → {'Yes' if abs(E(1,2)-E(2,1))<1e-10 else 'No'}")
+print(f"Degenerate: E(1,2) = E(2,1) → {'Yes' if abs(E(1,2)-E(2,1))<1e-10 else 'No'}")
 ```
 
 The **time-dependent Schrödinger equation** is a parabolic PDE. Separation of variables yields $\Psi = \psi(\mathbf{r})e^{-iEt/\hbar}$, and the general solution is a superposition of stationary states: $\Psi(\mathbf{r},t) = \sum_n c_n \psi_n(\mathbf{r})e^{-iE_n t/\hbar}$.

@@ -12,17 +12,20 @@ This lesson covers the spectrum of execution strategies, from simple tree-walkin
 
 **Prerequisites**: [07. Abstract Syntax Trees](./07_Abstract_Syntax_Trees.md), [09. Intermediate Representations](./09_Intermediate_Representations.md), [11. Code Generation](./11_Code_Generation.md)
 
-**Learning Objectives**:
-- Compare interpreters and compilers along multiple axes (speed, portability, development cycle)
-- Implement a tree-walking interpreter for a simple language
-- Design a bytecode instruction set and implement a bytecode compiler
-- Build a stack-based virtual machine from scratch
-- Understand register-based VM design and its advantages
-- Explain instruction dispatch techniques and their performance impact
-- Describe JIT compilation strategies (method JIT, tracing JIT)
-- Explain runtime optimization techniques (inline caching, type specialization)
-- Analyze the design of real VMs (JVM, CPython, V8, BEAM)
-- Understand metacircular interpreters
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare interpreters and compilers along multiple axes (speed, portability, development cycle)
+2. Implement a tree-walking interpreter for a simple language
+3. Design a bytecode instruction set and implement a bytecode compiler
+4. Build a stack-based virtual machine from scratch
+5. Understand register-based VM design and its advantages
+6. Explain instruction dispatch techniques and their performance impact
+7. Describe JIT compilation strategies (method JIT, tracing JIT)
+8. Explain runtime optimization techniques (inline caching, type specialization)
+9. Analyze the design of real VMs (JVM, CPython, V8, BEAM)
+10. Understand metacircular interpreters
 
 ---
 

@@ -1,5 +1,17 @@
 # 단안 깊이 추정 (Monocular Depth Estimation)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 단안 깊이 추정(Monocular Depth Estimation) 문제를 설명하고 스테레오 기반 깊이 추정 방법과 비교할 수 있습니다.
+2. OpenCV의 DNN 모듈을 통해 MiDaS 모델을 사용한 깊이 추론을 구현할 수 있습니다.
+3. 고해상도 깊이 맵 생성을 위해 밀집 예측 트랜스포머(DPT, Dense Prediction Transformer)를 적용할 수 있습니다.
+4. Structure from Motion(SfM) 파이프라인을 기술하고 기본적인 다중 뷰 깊이 추정 워크플로우를 구현할 수 있습니다.
+5. 깊이 맵 출력을 분석하고 장면 이해(Scene Understanding) 및 3D 효과 같은 후속 작업에 적용할 수 있습니다.
+
+---
+
 ## 개요
 
 단안 깊이 추정은 단일 2D 이미지에서 픽셀별 깊이 정보를 추정하는 기술입니다. MiDaS, DPT 같은 딥러닝 모델과 Structure from Motion (SfM)을 통한 기하학적 접근 방법을 다룹니다.
@@ -23,32 +35,34 @@
 
 ## 1. 단안 깊이 추정 개요
 
+깊이(Depth)는 2D 이미지에서 누락된 차원입니다. 모든 픽셀은 색상과 밝기는 담고 있지만, 카메라로부터 얼마나 떨어져 있는지는 담고 있지 않습니다. 픽셀별 깊이를 복원하면 평면 이미지를 장면에 대한 계측적 이해로 전환할 수 있으며, 스테레오 리그(Stereo Rig)나 LiDAR와 같은 하드웨어 없이도 3D 재구성, 장애물 회피, 증강 현실(Augmented Reality) 같은 후속 작업을 가능하게 합니다.
+
 ### 왜 단안 깊이 추정인가?
 
 ```
-스테레오 vs 단안 깊이 추정:
+Stereo vs Monocular Depth Estimation:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  스테레오 비전                                                  │
+│  Stereo Vision                                                  │
 │  ┌───────────┐    ┌───────────┐                                 │
 │  │   📷      │    │     📷    │                                 │
-│  │   Left    │◄──►│   Right   │  두 카메라 필요                 │
+│  │   Left    │◄──►│   Right   │  Two cameras required           │
 │  └───────────┘    └───────────┘                                 │
 │                                                                 │
-│  장점: 기하학적으로 정확, 절대 깊이 측정 가능                   │
-│  단점: 두 카메라 필요, 캘리브레이션 필수                        │
+│  Pros: Geometrically accurate, absolute depth measurement       │
+│  Cons: Two cameras required, calibration mandatory              │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  단안 깊이 추정                                                 │
+│  Monocular Depth Estimation                                     │
 │  ┌───────────┐                                                  │
-│  │    📷     │  단일 카메라로 가능                              │
-│  │  Single   │  스마트폰, 드론, 로봇 등에 적합                  │
+│  │    📷     │  Single camera sufficient                        │
+│  │  Single   │  Suitable for smartphones, drones, robots        │
 │  └───────────┘                                                  │
 │                                                                 │
-│  장점: 단일 카메라, 간단한 설정, 이동 장치에 적합               │
-│  단점: 상대적 깊이, 스케일 모호성, 학습 데이터 의존             │
+│  Pros: Single camera, simple setup, suitable for mobile devices │
+│  Cons: Relative depth, scale ambiguity, depends on training data│
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -56,61 +70,61 @@
 ### 깊이 추정의 어려움
 
 ```
-단안 깊이 추정의 본질적 모호성:
+Inherent Ambiguity in Monocular Depth Estimation:
 
-동일한 2D 이미지를 생성하는 무한히 많은 3D 장면이 존재
+Infinitely many 3D scenes can produce the same 2D image
 
                         │
                         │
-         ●              │         🎾  작은 공, 가까이
+         ●              │         🎾  Small ball, close
         /│\             │
          │              │
                         │
-                        │         🏀  큰 공, 멀리
+                        │         🏀  Large ball, far
     ───────────────────[📷]───────────────────
 
-같은 크기로 보임!
+Appears the same size!
 
-해결 방법:
-1. 학습된 사전 지식 (딥러닝)
-   - 물체의 일반적인 크기
-   - 원근감 규칙
-   - 텍스처 그래디언트
+Solutions:
+1. Learned Prior Knowledge (Deep Learning)
+   - Typical object sizes
+   - Perspective rules
+   - Texture gradients
 
-2. 다중 이미지 (SfM)
-   - 시점 변화를 이용
-   - 기하학적 제약
+2. Multiple Images (SfM)
+   - Using viewpoint changes
+   - Geometric constraints
 
-3. 추가 센서
-   - LiDAR 보조
-   - 구조광 보조
+3. Additional Sensors
+   - LiDAR assistance
+   - Structured light assistance
 ```
 
 ### 깊이 추정 방법론
 
 ```
-깊이 추정 접근법:
+Depth Estimation Approaches:
 
 ┌─────────────────────────────────────────────────────────────────┐
-│ 1. 지도 학습 (Supervised Learning)                              │
-│    - RGB-D 데이터셋으로 학습                                    │
-│    - Ground Truth 깊이 필요                                     │
-│    - 데이터셋: NYU Depth V2, KITTI, ScanNet                    │
+│ 1. Supervised Learning                                          │
+│    - Train with RGB-D datasets                                  │
+│    - Requires ground truth depth                                │
+│    - Datasets: NYU Depth V2, KITTI, ScanNet                    │
 │                                                                 │
-│ 2. 자기지도 학습 (Self-supervised Learning)                     │
-│    - 스테레오 쌍 또는 연속 프레임으로 학습                      │
-│    - Ground Truth 불필요                                        │
+│ 2. Self-supervised Learning                                     │
+│    - Train with stereo pairs or consecutive frames              │
+│    - No ground truth required                                   │
 │    - Monodepth2, PackNet-SfM                                   │
 │                                                                 │
-│ 3. 제로샷 학습 (Zero-shot / Cross-domain)                       │
-│    - 다양한 데이터셋에서 사전 학습                              │
-│    - 새로운 도메인에 일반화                                     │
+│ 3. Zero-shot Learning (Cross-domain)                            │
+│    - Pre-trained on diverse datasets                            │
+│    - Generalize to new domains                                  │
 │    - MiDaS, DPT, ZoeDepth                                      │
 │                                                                 │
-│ 4. 기하학적 방법 (Geometric Methods)                            │
+│ 4. Geometric Methods                                            │
 │    - Structure from Motion                                      │
 │    - Multi-View Stereo                                          │
-│    - 명시적 기하학적 제약 사용                                  │
+│    - Use explicit geometric constraints                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -125,28 +139,28 @@ MiDaS (Mixing Datasets for Monocular Depth Estimation):
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  핵심 아이디어: 다양한 데이터셋을 혼합하여 일반화 능력 향상     │
+│  Key Idea: Improve generalization by mixing diverse datasets    │
 │                                                                 │
-│  학습 데이터:                                                   │
-│  - ReDWeb (인터넷 이미지)                                       │
-│  - DIML (실내)                                                  │
-│  - Movies (영화 장면)                                           │
-│  - MegaDepth (야외)                                             │
-│  - WSVD (비디오)                                                │
+│  Training Data:                                                 │
+│  - ReDWeb (internet images)                                     │
+│  - DIML (indoor)                                                │
+│  - Movies (movie scenes)                                        │
+│  - MegaDepth (outdoor)                                          │
+│  - WSVD (video)                                                 │
 │                                                                 │
-│  특징:                                                          │
-│  - 스케일 불변 (scale-invariant) 손실 함수                      │
-│  - 상대적 깊이 예측                                             │
-│  - 다양한 백본 (EfficientNet, ResNeXt, ViT)                    │
+│  Features:                                                      │
+│  - Scale-invariant loss function                                │
+│  - Relative depth prediction                                    │
+│  - Various backbones (EfficientNet, ResNeXt, ViT)              │
 │                                                                 │
-│  모델 버전:                                                     │
+│  Model Versions:                                                │
 │  ┌──────────────────┬───────────┬─────────────────────────┐     │
-│  │ 모델             │ 입력 크기 │ 특징                    │     │
+│  │ Model            │ Input Size│ Features                │     │
 │  ├──────────────────┼───────────┼─────────────────────────┤     │
-│  │ MiDaS v2.1 Large │ 384x384   │ 고품질, 느림            │     │
-│  │ MiDaS v2.1 Small │ 256x256   │ 경량, 빠름              │     │
-│  │ MiDaS v3 (DPT)   │ 384x384   │ Transformer 기반        │     │
-│  │ MiDaS v3.1 (DPT) │ 다양      │ 최신, 다양한 백본       │     │
+│  │ MiDaS v2.1 Large │ 384x384   │ High quality, slow      │     │
+│  │ MiDaS v2.1 Small │ 256x256   │ Lightweight, fast       │     │
+│  │ MiDaS v3 (DPT)   │ 384x384   │ Transformer-based       │     │
+│  │ MiDaS v3.1 (DPT) │ Various   │ Latest, various backbones│    │
 │  └──────────────────┴───────────┴─────────────────────────┘     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -160,12 +174,12 @@ import numpy as np
 import torch
 
 def load_midas_model(model_type='DPT_Large'):
-    """MiDaS 모델 로드 (PyTorch Hub)"""
+    """Load MiDaS model (PyTorch Hub)"""
 
-    # 모델 타입:
-    # - 'DPT_Large': 가장 정확
-    # - 'DPT_Hybrid': 균형
-    # - 'MiDaS_small': 가장 빠름
+    # Model types:
+    # - 'DPT_Large': Most accurate
+    # - 'DPT_Hybrid': Balanced
+    # - 'MiDaS_small': Fastest
 
     model = torch.hub.load('intel-isl/MiDaS', model_type)
 
@@ -173,7 +187,7 @@ def load_midas_model(model_type='DPT_Large'):
     model.to(device)
     model.eval()
 
-    # 전처리 트랜스폼
+    # Load preprocessing transforms
     midas_transforms = torch.hub.load('intel-isl/MiDaS', 'transforms')
 
     if model_type in ['DPT_Large', 'DPT_Hybrid']:
@@ -184,19 +198,19 @@ def load_midas_model(model_type='DPT_Large'):
     return model, transform, device
 
 def estimate_depth_midas(img, model, transform, device):
-    """MiDaS로 깊이 추정"""
+    """Estimate depth with MiDaS"""
 
     # BGR → RGB
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 전처리
+    # Preprocessing
     input_batch = transform(img_rgb).to(device)
 
-    # 추론
+    # Inference
     with torch.no_grad():
         prediction = model(input_batch)
 
-        # 원본 크기로 리사이즈
+        # Resize to original size
         prediction = torch.nn.functional.interpolate(
             prediction.unsqueeze(1),
             size=img.shape[:2],
@@ -209,38 +223,42 @@ def estimate_depth_midas(img, model, transform, device):
     return depth_map
 
 def normalize_depth(depth_map):
-    """깊이 맵 정규화 (시각화용)"""
+    """Normalize depth map (for visualization)"""
 
     depth_min = depth_map.min()
     depth_max = depth_map.max()
 
+    # MiDaS outputs *relative* inverse depth (larger value = closer object),
+    # not metric meters. Min-max normalization maps the scene-specific range
+    # to [0, 255] so the colormap spans the full visible range regardless of
+    # the actual depth scale — suitable for visualization but not metric use.
     depth_normalized = (depth_map - depth_min) / (depth_max - depth_min)
     depth_normalized = (depth_normalized * 255).astype(np.uint8)
 
     return depth_normalized
 
 def colorize_depth(depth_map, colormap=cv2.COLORMAP_INFERNO):
-    """깊이 맵에 컬러맵 적용"""
+    """Apply colormap to depth map"""
 
     depth_norm = normalize_depth(depth_map)
     depth_colored = cv2.applyColorMap(depth_norm, colormap)
 
     return depth_colored
 
-# 사용 예
+# Usage example
 def main():
-    # 모델 로드
-    print("모델 로딩 중...")
+    # Load model
+    print("Loading model...")
     model, transform, device = load_midas_model('DPT_Large')
 
-    # 이미지 로드
+    # Load image
     img = cv2.imread('sample.jpg')
 
-    # 깊이 추정
-    print("깊이 추정 중...")
+    # Estimate depth
+    print("Estimating depth...")
     depth = estimate_depth_midas(img, model, transform, device)
 
-    # 시각화
+    # Visualization
     depth_colored = colorize_depth(depth)
 
     cv2.imshow('Original', img)
@@ -255,29 +273,29 @@ import cv2
 import numpy as np
 
 class MiDaSDepthEstimator:
-    """OpenCV DNN으로 MiDaS 실행"""
+    """Run MiDaS with OpenCV DNN"""
 
     def __init__(self, model_path):
         """
-        model_path: ONNX 모델 경로
-        다운로드: https://github.com/isl-org/MiDaS/releases
+        model_path: ONNX model path
+        Download: https://github.com/isl-org/MiDaS/releases
         """
         self.net = cv2.dnn.readNetFromONNX(model_path)
 
-        # GPU 사용 (가능한 경우)
+        # Use GPU (if available)
         self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
-        # 입력 크기 (모델에 따라 다름)
+        # Input size (depends on model)
         self.input_size = (384, 384)  # DPT_Large
         # self.input_size = (256, 256)  # MiDaS_small
 
     def estimate(self, img):
-        """깊이 추정"""
+        """Estimate depth"""
 
         h, w = img.shape[:2]
 
-        # 전처리
+        # Preprocessing
         blob = cv2.dnn.blobFromImage(
             img,
             scalefactor=1/255.0,
@@ -287,35 +305,37 @@ class MiDaSDepthEstimator:
             crop=False
         )
 
-        # 표준편차 정규화 (수동)
+        # Standard deviation normalization (manual)
         std = np.array([0.229, 0.224, 0.225]).reshape(1, 3, 1, 1)
         blob = blob / std
 
-        # 추론
+        # Inference
         self.net.setInput(blob)
         output = self.net.forward()
 
-        # 후처리
+        # Post-processing
         depth = output[0, 0]
 
-        # 원본 크기로 리사이즈
+        # Resize to original size
         depth = cv2.resize(depth, (w, h), interpolation=cv2.INTER_CUBIC)
 
         return depth
 
     def visualize(self, depth, colormap=cv2.COLORMAP_MAGMA):
-        """깊이 맵 시각화"""
+        """Visualize depth map"""
 
-        # 정규화
+        # cv2.NORM_MINMAX stretches the full depth range to [0, 255];
+        # this is purely for display — the original float depth values
+        # are what you pass to any downstream 3D computation
         depth_norm = cv2.normalize(depth, None, 0, 255, cv2.NORM_MINMAX)
         depth_norm = depth_norm.astype(np.uint8)
 
-        # 컬러맵 적용
+        # Apply colormap
         depth_colored = cv2.applyColorMap(depth_norm, colormap)
 
         return depth_colored
 
-# 사용 예
+# Usage example
 estimator = MiDaSDepthEstimator('midas_v21_384.onnx')
 
 img = cv2.imread('sample.jpg')
@@ -337,15 +357,15 @@ DPT (Dense Prediction Transformer):
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  Vision Transformer (ViT) 기반 밀집 예측 모델                   │
+│  Vision Transformer (ViT)-based dense prediction model         │
 │                                                                 │
-│  입력: 이미지 (H × W × 3)                                       │
+│  Input: Image (H × W × 3)                                       │
 │         │                                                       │
 │         ▼                                                       │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Patch Embedding                                        │    │
-│  │  이미지를 패치로 분할 후 임베딩                         │    │
-│  │  패치 크기: 16×16                                       │    │
+│  │  Split image into patches and embed                     │    │
+│  │  Patch size: 16×16                                      │    │
 │  └────────────────────────┬────────────────────────────────┘    │
 │                           │                                     │
 │                           ▼                                     │
@@ -357,23 +377,23 @@ DPT (Dense Prediction Transformer):
 │  │     │          │          │          │                  │    │
 │  │     └──────────┼──────────┼──────────┘                  │    │
 │  │                ▼          ▼          ▼                  │    │
-│  │         다중 스케일 특징 추출                           │    │
+│  │         Multi-scale feature extraction                  │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                           │                                     │
 │                           ▼                                     │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Reassemble + Fusion                                    │    │
-│  │  다중 스케일 특징 융합                                  │    │
+│  │  Multi-scale feature fusion                             │    │
 │  └────────────────────────┬────────────────────────────────┘    │
 │                           │                                     │
 │                           ▼                                     │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Head (Conv Layers)                                     │    │
-│  │  최종 깊이 맵 출력                                      │    │
+│  │  Final depth map output                                 │    │
 │  └────────────────────────┬────────────────────────────────┘    │
 │                           │                                     │
 │                           ▼                                     │
-│  출력: 깊이 맵 (H × W)                                          │
+│  Output: Depth Map (H × W)                                      │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -387,7 +407,7 @@ import torch
 from torchvision import transforms
 
 class DPTDepthEstimator:
-    """DPT 깊이 추정기"""
+    """DPT Depth Estimator"""
 
     def __init__(self, model_type='DPT_Large'):
         """
@@ -397,30 +417,30 @@ class DPTDepthEstimator:
             'cuda' if torch.cuda.is_available() else 'cpu'
         )
 
-        # PyTorch Hub에서 모델 로드
+        # Load model from PyTorch Hub
         self.model = torch.hub.load('intel-isl/MiDaS', model_type)
         self.model.to(self.device)
         self.model.eval()
 
-        # 전처리 트랜스폼 로드
+        # Load preprocessing transforms
         midas_transforms = torch.hub.load('intel-isl/MiDaS', 'transforms')
         self.transform = midas_transforms.dpt_transform
 
     def estimate(self, img):
-        """깊이 추정"""
+        """Estimate depth"""
 
         h, w = img.shape[:2]
 
         # BGR → RGB
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # 전처리 및 추론
+        # Preprocessing and inference
         input_batch = self.transform(img_rgb).to(self.device)
 
         with torch.no_grad():
             prediction = self.model(input_batch)
 
-            # 원본 크기로 보간
+            # Interpolate to original size
             prediction = torch.nn.functional.interpolate(
                 prediction.unsqueeze(1),
                 size=(h, w),
@@ -433,28 +453,34 @@ class DPTDepthEstimator:
         return depth
 
     def get_metric_depth(self, depth, scale=10.0):
-        """상대 깊이 → 미터 단위 변환 (근사)"""
+        """Relative depth → Metric depth conversion (approximation)"""
 
-        # MiDaS/DPT는 상대 깊이를 출력
-        # 절대 깊이로 변환하려면 스케일 추정 필요
-
+        # MiDaS/DPT outputs *inverse* relative depth: high values = close objects.
+        # The stereo formula Z = f*b/d shows depth is inversely proportional to
+        # disparity, so dividing a constant by the predicted value converts the
+        # network's output back to a metric-like scale. The +1e-6 prevents
+        # division by zero in far-background regions where predicted depth ≈ 0.
+        # 'scale' is scene-dependent and must be calibrated against known distances
+        # for truly metric output — this is an approximation for relative use.
         depth_metric = scale / (depth + 1e-6)
 
         return depth_metric
 
 def estimate_depth_with_confidence(estimator, img, num_samples=5):
-    """몬테카를로 드롭아웃으로 깊이 불확실성 추정"""
+    """Estimate depth uncertainty with Monte Carlo dropout"""
 
-    # 참고: 실제로는 드롭아웃이 있는 모델이 필요
-    # 여기서는 데이터 증강으로 대체
+    # Note: Actually requires a model with dropout
+    # Here we substitute with data augmentation
 
     depths = []
 
     for _ in range(num_samples):
-        # 약간의 이미지 변형
+        # Slight image variation: perturbing brightness simulates real-world
+        # exposure changes and gives a rough uncertainty estimate across plausible
+        # inputs — a pragmatic substitute when the model lacks explicit dropout layers
         augmented = img.copy()
 
-        # 밝기 변화
+        # Brightness change
         factor = np.random.uniform(0.9, 1.1)
         augmented = np.clip(augmented * factor, 0, 255).astype(np.uint8)
 
@@ -463,7 +489,7 @@ def estimate_depth_with_confidence(estimator, img, num_samples=5):
 
     depths = np.stack(depths, axis=0)
 
-    # 평균과 표준편차
+    # Mean and standard deviation
     mean_depth = np.mean(depths, axis=0)
     std_depth = np.std(depths, axis=0)
 
@@ -473,10 +499,10 @@ def estimate_depth_with_confidence(estimator, img, num_samples=5):
 ### Depth Anything 모델
 
 ```python
-# Depth Anything: 더 최신의 SOTA 모델
+# Depth Anything: More recent SOTA model
 
 class DepthAnythingEstimator:
-    """Depth Anything 모델 (2024)"""
+    """Depth Anything Model (2024)"""
 
     def __init__(self, model_size='small'):
         """
@@ -491,20 +517,20 @@ class DepthAnythingEstimator:
         )
 
     def estimate(self, img):
-        """깊이 추정"""
+        """Estimate depth"""
 
-        # BGR → RGB, PIL 변환
+        # BGR → RGB, PIL conversion
         from PIL import Image
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img_pil = Image.fromarray(img_rgb)
 
-        # 추론
+        # Inference
         result = self.pipe(img_pil)
 
-        # 깊이 맵 추출
+        # Extract depth map
         depth = np.array(result['depth'])
 
-        # 원본 크기로 리사이즈
+        # Resize to original size
         if depth.shape[:2] != img.shape[:2]:
             depth = cv2.resize(depth, (img.shape[1], img.shape[0]))
 
@@ -519,11 +545,11 @@ class DepthAnythingEstimator:
 
 ```
 Structure from Motion (SfM):
-카메라 움직임을 이용해 3D 구조 복원
+Recover 3D structure using camera motion
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│  입력: 연속 이미지 (비디오 또는 다중 뷰 이미지)                 │
+│  Input: Consecutive images (video or multi-view images)        │
 │                                                                 │
 │  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐                   │
 │  │ t=1 │  │ t=2 │  │ t=3 │  │ t=4 │  │ t=5 │                   │
@@ -533,31 +559,32 @@ Structure from Motion (SfM):
 │                      │                                          │
 │                      ▼                                          │
 │          ┌───────────────────────────┐                          │
-│          │  1. 특징점 검출 및 매칭   │                          │
+│          │  1. Feature Detection     │                          │
+│          │     and Matching          │                          │
 │          │     SIFT, ORB, SuperPoint │                          │
 │          └───────────────────────────┘                          │
 │                      │                                          │
 │                      ▼                                          │
 │          ┌───────────────────────────┐                          │
-│          │  2. 카메라 포즈 추정      │                          │
+│          │  2. Camera Pose Estimation│                          │
 │          │     Essential Matrix      │                          │
 │          │     PnP                   │                          │
 │          └───────────────────────────┘                          │
 │                      │                                          │
 │                      ▼                                          │
 │          ┌───────────────────────────┐                          │
-│          │  3. 삼각측량              │                          │
-│          │     3D 점 복원            │                          │
+│          │  3. Triangulation         │                          │
+│          │     3D Point Recovery     │                          │
 │          └───────────────────────────┘                          │
 │                      │                                          │
 │                      ▼                                          │
 │          ┌───────────────────────────┐                          │
-│          │  4. 번들 조정             │                          │
-│          │     전역 최적화           │                          │
+│          │  4. Bundle Adjustment     │                          │
+│          │     Global Optimization   │                          │
 │          └───────────────────────────┘                          │
 │                      │                                          │
 │                      ▼                                          │
-│  출력: 3D 포인트 클라우드 + 카메라 궤적                         │
+│  Output: 3D Point Cloud + Camera Trajectory                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -569,40 +596,40 @@ import cv2
 import numpy as np
 
 class SimpleSfM:
-    """간단한 2-뷰 SfM 구현"""
+    """Simple 2-view SfM implementation"""
 
     def __init__(self, K):
         """
-        K: 카메라 내부 파라미터 행렬
+        K: Camera intrinsic parameter matrix
         """
         self.K = K
         self.sift = cv2.SIFT_create()
         self.bf = cv2.BFMatcher()
 
     def detect_and_match(self, img1, img2):
-        """특징점 검출 및 매칭"""
+        """Feature detection and matching"""
 
-        # 특징점 검출
+        # Feature detection
         kp1, desc1 = self.sift.detectAndCompute(img1, None)
         kp2, desc2 = self.sift.detectAndCompute(img2, None)
 
-        # 매칭
+        # Matching
         matches = self.bf.knnMatch(desc1, desc2, k=2)
 
-        # 비율 테스트
+        # Ratio test
         good_matches = []
         for m, n in matches:
             if m.distance < 0.75 * n.distance:
                 good_matches.append(m)
 
-        # 매칭점 좌표
+        # Match point coordinates
         pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
         pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
 
         return pts1, pts2, good_matches, kp1, kp2
 
     def estimate_pose(self, pts1, pts2):
-        """Essential Matrix로 상대 포즈 추정"""
+        """Estimate pose from Essential Matrix"""
 
         E, mask = cv2.findEssentialMat(
             pts1, pts2, self.K,
@@ -611,33 +638,33 @@ class SimpleSfM:
             threshold=1.0
         )
 
-        # R, t 복구
-        _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K, mask)
+        # Recover R, t
+        _, R, t, mask = cv2.recoverPose(E, pts1, pts2, self.K)
 
         return R, t, mask.ravel().astype(bool)
 
     def triangulate(self, pts1, pts2, R, t):
-        """삼각측량으로 3D 점 복원"""
+        """Triangulate to recover 3D points"""
 
-        # 투영 행렬
+        # Projection matrices
         P1 = self.K @ np.hstack([np.eye(3), np.zeros((3, 1))])
         P2 = self.K @ np.hstack([R, t])
 
-        # 삼각측량
+        # Triangulation
         pts1_h = pts1.T  # (2, N)
         pts2_h = pts2.T
 
         points_4d = cv2.triangulatePoints(P1, P2, pts1_h, pts2_h)
 
-        # 동차 좌표 → 유클리드 좌표
+        # Homogeneous → Euclidean coordinates
         points_3d = points_4d[:3] / points_4d[3]
 
         return points_3d.T  # (N, 3)
 
     def filter_points(self, pts1, pts2, points_3d, R, t):
-        """유효한 3D 점 필터링"""
+        """Filter valid 3D points"""
 
-        # 재투영 오차 계산
+        # Calculate reprojection error
         P2 = self.K @ np.hstack([R, t])
 
         projected = P2 @ np.hstack([points_3d, np.ones((len(points_3d), 1))]).T
@@ -646,15 +673,15 @@ class SimpleSfM:
 
         errors = np.linalg.norm(pts2 - projected, axis=1)
 
-        # 카메라 앞에 있는지 확인
-        # 첫 번째 카메라 기준
+        # Check if in front of camera
+        # First camera reference
         valid_depth1 = points_3d[:, 2] > 0
 
-        # 두 번째 카메라 기준
+        # Second camera reference
         points_cam2 = (R @ points_3d.T + t).T
         valid_depth2 = points_cam2[:, 2] > 0
 
-        # 재투영 오차 임계값
+        # Reprojection error threshold
         valid_reproj = errors < 2.0
 
         valid = valid_depth1 & valid_depth2 & valid_reproj
@@ -662,28 +689,28 @@ class SimpleSfM:
         return points_3d[valid], valid
 
     def run(self, img1, img2):
-        """전체 SfM 파이프라인 실행"""
+        """Run complete SfM pipeline"""
 
-        # 1. 특징점 매칭
+        # 1. Feature matching
         pts1, pts2, matches, kp1, kp2 = self.detect_and_match(img1, img2)
-        print(f"매칭점 수: {len(pts1)}")
+        print(f"Match points: {len(pts1)}")
 
-        # 2. 포즈 추정
+        # 2. Pose estimation
         R, t, inlier_mask = self.estimate_pose(pts1, pts2)
         pts1 = pts1[inlier_mask]
         pts2 = pts2[inlier_mask]
-        print(f"인라이어 수: {len(pts1)}")
+        print(f"Inliers: {len(pts1)}")
 
-        # 3. 삼각측량
+        # 3. Triangulation
         points_3d = self.triangulate(pts1, pts2, R, t)
 
-        # 4. 필터링
+        # 4. Filtering
         points_3d, valid = self.filter_points(pts1, pts2, points_3d, R, t)
-        print(f"유효한 3D 점 수: {len(points_3d)}")
+        print(f"Valid 3D points: {len(points_3d)}")
 
         return points_3d, R, t
 
-# 사용 예
+# Usage example
 K = np.array([
     [800, 0, 320],
     [0, 800, 240],
@@ -700,14 +727,14 @@ points_3d, R, t = sfm.run(img1, img2)
 
 ```python
 class IncrementalSfM:
-    """증분적 SfM"""
+    """Incremental SfM"""
 
     def __init__(self, K):
         self.K = K
         self.sift = cv2.SIFT_create(nfeatures=8000)
         self.bf = cv2.BFMatcher()
 
-        # 전역 데이터
+        # Global data
         self.points_3d = None
         self.point_colors = None
         self.camera_poses = []
@@ -715,7 +742,7 @@ class IncrementalSfM:
         self.descriptors_all = []
 
     def add_image(self, img):
-        """새 이미지 추가"""
+        """Add new image"""
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         kp, desc = self.sift.detectAndCompute(gray, None)
@@ -726,9 +753,9 @@ class IncrementalSfM:
         return len(self.keypoints_all) - 1
 
     def initialize(self, idx1, idx2):
-        """첫 두 이미지로 초기화"""
+        """Initialize with first two images"""
 
-        # 매칭
+        # Matching
         matches = self.bf.knnMatch(
             self.descriptors_all[idx1],
             self.descriptors_all[idx2],
@@ -748,29 +775,29 @@ class IncrementalSfM:
         pts1 = pts1[mask]
         pts2 = pts2[mask]
 
-        # 삼각측량
+        # Triangulation
         P1 = self.K @ np.hstack([np.eye(3), np.zeros((3, 1))])
         P2 = self.K @ np.hstack([R, t])
 
         points_4d = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
         self.points_3d = (points_4d[:3] / points_4d[3]).T
 
-        # 카메라 포즈 저장
+        # Store camera poses
         self.camera_poses = [
             {'R': np.eye(3), 't': np.zeros((3, 1))},
             {'R': R, 't': t}
         ]
 
-        print(f"초기화 완료: {len(self.points_3d)} 3D 점")
+        print(f"Initialization complete: {len(self.points_3d)} 3D points")
 
     def register_image(self, idx):
-        """새 이미지 등록 (PnP)"""
+        """Register new image (PnP)"""
 
         if self.points_3d is None or len(self.points_3d) == 0:
-            print("먼저 초기화가 필요합니다.")
+            print("Initialization required first.")
             return False
 
-        # 마지막으로 추가된 이미지와 매칭
+        # Match with last added image
         last_idx = len(self.camera_poses) - 1
 
         matches = self.bf.knnMatch(
@@ -782,11 +809,11 @@ class IncrementalSfM:
         good = [m for m, n in matches if m.distance < 0.7 * n.distance]
 
         if len(good) < 8:
-            print("매칭점 부족")
+            print("Insufficient matches")
             return False
 
-        # 3D-2D 대응점 (단순화: 이전 이미지의 매칭점 인덱스 사용)
-        # 실제로는 트랙 관리 필요
+        # 3D-2D correspondences (simplified: use previous image match indices)
+        # In practice, track management is needed
         obj_points = []
         img_points = []
 
@@ -798,7 +825,7 @@ class IncrementalSfM:
                 )
 
         if len(obj_points) < 6:
-            print("대응점 부족")
+            print("Insufficient correspondences")
             return False
 
         obj_points = np.array(obj_points, dtype=np.float32)
@@ -810,36 +837,36 @@ class IncrementalSfM:
         )
 
         if not success:
-            print("PnP 실패")
+            print("PnP failed")
             return False
 
         R, _ = cv2.Rodrigues(rvec)
         self.camera_poses.append({'R': R, 't': tvec})
 
-        print(f"이미지 {idx} 등록 완료")
+        print(f"Image {idx} registered")
         return True
 
     def bundle_adjust(self):
-        """번들 조정 (scipy 사용)"""
+        """Bundle adjustment (using scipy)"""
 
         from scipy.optimize import least_squares
 
-        # 간단한 번들 조정 구현
-        # 실제로는 g2o, Ceres 등 사용 권장
+        # Simple bundle adjustment implementation
+        # In practice, recommend using g2o, Ceres, etc.
 
-        print("번들 조정은 별도 라이브러리 권장 (g2o, Ceres)")
+        print("Bundle adjustment: recommend specialized libraries (g2o, Ceres)")
 
     def get_point_cloud(self):
-        """포인트 클라우드 반환"""
+        """Return point cloud"""
         return self.points_3d
 
     def get_camera_trajectory(self):
-        """카메라 궤적 반환"""
+        """Return camera trajectory"""
         positions = []
         for pose in self.camera_poses:
             R = pose['R']
             t = pose['t']
-            # 카메라 위치 = -R^T * t
+            # Camera position = -R^T * t
             pos = -R.T @ t
             positions.append(pos.ravel())
 
@@ -857,19 +884,21 @@ import cv2
 import numpy as np
 
 def apply_bokeh_effect(img, depth, focus_depth=0.5, aperture=0.1):
-    """깊이 기반 보케 효과 (피사계 심도 시뮬레이션)"""
+    """Depth-based bokeh effect (depth of field simulation)"""
 
-    # 깊이 정규화 (0-1)
+    # Normalize depth to [0, 1] so focus_depth and aperture are scene-independent
+    # parameters — 0.5 always means "mid-range" regardless of actual distance units
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
-    # 초점 거리에서의 편차 계산
+    # Calculate deviation from focus distance
     depth_diff = np.abs(depth_norm - focus_depth)
 
-    # 블러 강도 (초점에서 멀수록 강함)
+    # Blur strength proportional to distance from focus plane, capped at 31
+    # so kernel sizes stay odd (2*level+1) and within OpenCV's supported range
     blur_strength = (depth_diff / aperture * 30).astype(int)
     blur_strength = np.clip(blur_strength, 0, 31)
 
-    # 블러 적용 (픽셀별로 다른 강도)
+    # Apply blur (different strength per pixel)
     result = np.zeros_like(img, dtype=np.float32)
 
     for blur_level in range(0, 32, 2):
@@ -886,15 +915,15 @@ def apply_bokeh_effect(img, depth, focus_depth=0.5, aperture=0.1):
     return result.astype(np.uint8)
 
 def create_depth_fog(img, depth, fog_color=(200, 200, 200), max_fog=0.8):
-    """깊이 기반 안개 효과"""
+    """Depth-based fog effect"""
 
-    # 깊이 정규화
+    # Normalize depth
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
-    # 안개 강도 (멀수록 강함)
+    # Fog strength (stronger farther away)
     fog_factor = depth_norm * max_fog
 
-    # 안개 적용
+    # Apply fog
     fog = np.full_like(img, fog_color, dtype=np.float32)
     result = img.astype(np.float32) * (1 - fog_factor[:, :, np.newaxis])
     result += fog * fog_factor[:, :, np.newaxis]
@@ -902,12 +931,12 @@ def create_depth_fog(img, depth, fog_color=(200, 200, 200), max_fog=0.8):
     return result.astype(np.uint8)
 
 def depth_based_segmentation(img, depth, num_layers=5):
-    """깊이 기반 레이어 분할"""
+    """Depth-based layer segmentation"""
 
-    # 깊이 정규화
+    # Normalize depth
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
-    # 깊이 구간으로 분할
+    # Segment by depth intervals
     layers = []
     for i in range(num_layers):
         lower = i / num_layers
@@ -921,15 +950,15 @@ def depth_based_segmentation(img, depth, num_layers=5):
     return layers
 
 def remove_background_with_depth(img, depth, threshold=0.5):
-    """깊이 기반 배경 제거"""
+    """Depth-based background removal"""
 
-    # 깊이 정규화
+    # Normalize depth
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
-    # 전경 마스크 (임계값보다 가까운 부분)
+    # Foreground mask (parts closer than threshold)
     foreground_mask = depth_norm < threshold
 
-    # 마스크 정제
+    # Refine mask
     kernel = np.ones((5, 5), np.uint8)
     foreground_mask = cv2.morphologyEx(
         foreground_mask.astype(np.uint8),
@@ -940,7 +969,7 @@ def remove_background_with_depth(img, depth, threshold=0.5):
         cv2.MORPH_OPEN, kernel
     )
 
-    # 배경 제거
+    # Remove background
     result = np.zeros_like(img)
     result[foreground_mask == 1] = img[foreground_mask == 1]
 
@@ -951,7 +980,7 @@ def remove_background_with_depth(img, depth, threshold=0.5):
 
 ```python
 def create_3d_ken_burns(img, depth, num_frames=60, zoom=0.1):
-    """Ken Burns 효과 (3D 카메라 움직임)"""
+    """Ken Burns effect (3D camera movement)"""
 
     h, w = img.shape[:2]
     frames = []
@@ -959,20 +988,20 @@ def create_3d_ken_burns(img, depth, num_frames=60, zoom=0.1):
     for i in range(num_frames):
         t = i / (num_frames - 1)
 
-        # 줌 팩터
+        # Zoom factor
         scale = 1 + zoom * t
 
-        # 깊이에 따른 시차
+        # Parallax by depth
         parallax = (depth - depth.mean()) * 0.001 * t
 
-        # 새 좌표 계산
+        # Calculate new coordinates
         y_coords, x_coords = np.meshgrid(range(h), range(w), indexing='ij')
 
-        # 중심 기준 스케일링
+        # Center-based scaling
         new_x = (x_coords - w/2) / scale + w/2 + parallax
         new_y = (y_coords - h/2) / scale + h/2
 
-        # 리맵핑
+        # Remapping
         map_x = new_x.astype(np.float32)
         map_y = new_y.astype(np.float32)
 
@@ -982,27 +1011,27 @@ def create_3d_ken_burns(img, depth, num_frames=60, zoom=0.1):
     return frames
 
 def depth_aware_zoom(img, depth, zoom_center, zoom_factor=2.0):
-    """깊이 인식 줌"""
+    """Depth-aware zoom"""
 
     h, w = img.shape[:2]
     cx, cy = zoom_center
 
-    # 깊이 정규화
+    # Normalize depth
     depth_norm = (depth - depth.min()) / (depth.max() - depth.min())
 
-    # 깊이에 따라 다른 줌 적용 (가까운 물체는 더 많이 확대)
+    # Apply different zoom by depth (closer objects zoom more)
     depth_factor = 1 - depth_norm * 0.5  # 0.5 ~ 1.0
 
-    # 좌표 그리드
+    # Coordinate grid
     y_coords, x_coords = np.meshgrid(range(h), range(w), indexing='ij')
 
-    # 줌 변환 (깊이별로 다른 스케일)
+    # Zoom transform (different scale per depth)
     effective_zoom = zoom_factor * depth_factor
 
     new_x = (x_coords - cx) / effective_zoom + cx
     new_y = (y_coords - cy) / effective_zoom + cy
 
-    # 리맵핑
+    # Remapping
     map_x = new_x.astype(np.float32)
     map_y = new_y.astype(np.float32)
 
@@ -1051,19 +1080,19 @@ transform = midas_transforms.dpt_transform
 <summary>힌트</summary>
 
 ```python
-# 깊이 기반 마스크 생성
-threshold = np.percentile(depth, 30)  # 가까운 30%를 전경으로
+# Depth-based mask generation
+threshold = np.percentile(depth, 30)  # Treat closest 30% as foreground
 foreground_mask = depth < threshold
 
-# 마스크 블러링 (경계 부드럽게)
+# Blur mask (smooth boundaries)
 mask_blur = cv2.GaussianBlur(
     foreground_mask.astype(np.float32), (21, 21), 0
 )
 
-# 배경 블러
+# Background blur
 background_blur = cv2.GaussianBlur(img, (25, 25), 0)
 
-# 합성
+# Composite
 result = img * mask_blur[..., None] + background_blur * (1 - mask_blur[..., None])
 ```
 
@@ -1087,11 +1116,11 @@ result = img * mask_blur[..., None] + background_blur * (1 - mask_blur[..., None
 E, mask = cv2.findEssentialMat(pts1, pts2, K)
 _, R, t, _ = cv2.recoverPose(E, pts1, pts2, K)
 
-# 투영 행렬
+# Projection matrices
 P1 = K @ np.hstack([np.eye(3), np.zeros((3, 1))])
 P2 = K @ np.hstack([R, t])
 
-# 삼각측량
+# Triangulation
 points_4d = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
 points_3d = points_4d[:3] / points_4d[3]
 ```
@@ -1111,7 +1140,7 @@ points_3d = points_4d[:3] / points_4d[3]
 <summary>힌트</summary>
 
 ```python
-# 경량 모델
+# Lightweight model
 model = torch.hub.load('intel-isl/MiDaS', 'MiDaS_small')
 
 while True:
@@ -1141,12 +1170,12 @@ while True:
 ```python
 import open3d as o3d
 
-# 포인트 클라우드 생성
+# Create point cloud
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(points_3d)
 pcd.colors = o3d.utility.Vector3dVector(colors / 255.0)
 
-# 시각화
+# Visualization
 o3d.visualization.draw_geometries([pcd])
 ```
 
@@ -1156,7 +1185,7 @@ o3d.visualization.draw_geometries([pcd])
 
 ## 다음 단계
 
-- [23_SLAM_Introduction.md](./23_SLAM_Introduction.md) - Visual SLAM, ORB-SLAM, LiDAR SLAM, Loop Closure
+- [SLAM 입문 (Visual SLAM Introduction)](./23_SLAM_Introduction.md) - Visual SLAM, ORB-SLAM, LiDAR SLAM, Loop Closure
 
 ---
 

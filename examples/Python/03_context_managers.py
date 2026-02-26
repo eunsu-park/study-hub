@@ -49,7 +49,8 @@ class Timer:
         self.elapsed = end_time - self.start_time
         print(f"  [{self.name}] Elapsed: {self.elapsed * 1000:.4f} ms")
 
-        # Return False to propagate exceptions, True to suppress
+        # Why: Returning False (or None) propagates exceptions normally; returning True
+        # would silently swallow them, which is almost never what you want in a timer
         return False
 
 
@@ -112,6 +113,8 @@ print(f"File closed automatically")
 section("contextlib.contextmanager Decorator")
 
 
+# Why: @contextmanager eliminates the boilerplate of writing a full class with __enter__
+# and __exit__, reducing a context manager to a single generator function with yield
 @contextlib.contextmanager
 def simple_timer(name: str):
     """Simpler timer using contextmanager decorator."""
@@ -131,6 +134,8 @@ with simple_timer("generator-based"):
     time.sleep(0.05)
 
 
+# Why: Write-to-temp-then-rename ensures readers never see a half-written file; if the
+# process crashes mid-write, the original file remains intact (atomic on most filesystems)
 @contextlib.contextmanager
 def atomic_write(filename: str):
     """Atomic file write - write to temp, then rename."""
@@ -221,7 +226,8 @@ def resource(name: str):
     print(f"  Releasing {name}")
 
 
-# Dynamically manage multiple context managers
+# Why: ExitStack handles a dynamic number of context managers (unknown at write time),
+# unlike nested 'with' statements which require a fixed count known at compile time
 with contextlib.ExitStack() as stack:
     resources = []
     for i in range(3):
@@ -252,6 +258,8 @@ class Transaction:
         print(f"  BEGIN TRANSACTION '{self.name}'")
         return self
 
+    # Why: Explicit commit() before __exit__ implements the "opt-in success" pattern —
+    # if any exception occurs before commit(), the transaction automatically rolls back
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is None and self.committed:
             print(f"  COMMIT '{self.name}'")

@@ -607,7 +607,13 @@ def troyon_beta_limit(I_p, a, B_0, C_Troyon=2.8):
     beta_N : normalized beta limit (%)
     beta_percent : absolute beta limit (%)
     """
+    # C_Troyon = 2.8은 경험적 Troyon 계수(Empirical Troyon Coefficient)로, 많은 형태에 걸친
+    # MHD 안정성 계산에서 결정됨; 정규화된 임계값 β를 초과할 때 한계 이상 킨크 모드(Marginal
+    # Ideal Kink Mode)가 불안정해진다는 사실을 인코딩 — 기본 상수가 아닌 시뮬레이션에 대한 피트
     beta_N = C_Troyon  # Troyon limit (% T m / MA)
+    # β_N * I_p / (a * B_0)는 정규화 베타를 절대 베타(퍼센트)로 변환:
+    # 더 높은 전류가 더 많은 베타를 허용하는 이유는 더 강한 폴로이달 장이
+    # 킨크 모드에 저항하여 불안정성이 유발되기 전에 더 높은 압력을 허용하기 때문
     beta_percent = beta_N * I_p / (a * B_0)
     return beta_N, beta_percent
 
@@ -659,16 +665,25 @@ def sawtooth_period(a, T_e, n_e, B, S_exp=0.6):
     epsilon_0 = 8.854e-12  # F/m
     mu_0 = 4 * np.pi * 1e-7  # H/m
 
-    # Spitzer resistivity
+    # Spitzer 저항률(Spitzer Resistivity) — T_e^{-3/2} 의존성이 핵심: 더 뜨거운 플라즈마가
+    # 훨씬 더 좋은 도체 (더 빠른 전자가 더 긴 평균 자유 경로를 가짐),
+    # 따라서 더 높은 온도의 토카막 코어가 재결합에 더 오래 저항하여
+    # 톱니 충돌(Sawtooth Crash) 사이의 시간을 연장함
     ln_Lambda = 15.0  # Coulomb logarithm (approximate)
     eta = (e**2 * ln_Lambda * m_e**0.5) / (12 * np.pi**1.5 * epsilon_0**2 * (e * T_e)**1.5)
 
-    # Lundquist number
+    # tau_R은 저항성 확산 시간(Resistive Diffusion Time) — 자기 플럭스가 옴 저항에 대해
+    # 플라즈마를 통해 확산하는 데 걸리는 시간; 재결합이 진행될 수 있는 전체 시간 스케일을 설정
     tau_R = mu_0 * a**2 / eta
+    # tau_A는 Alfvén 횡단 시간(Alfvén Crossing Time) — MHD 파동이 플라즈마를 가로질러
+    # 정보를 전달할 수 있는 가장 빠른 속도; 비율 S = tau_R/tau_A (룬퀴스트 수)는
+    # 이상 MHD에 대해 장이 확산에 얼마나 강하게 저항하는지 측정
     tau_A = a / (B / np.sqrt(mu_0 * n_e * m_e * 1836))  # Alfven time (approximation)
     S = tau_R / tau_A
 
-    # Sawtooth period scaling
+    # S_exp ≈ 0.6은 시뮬레이션에서 나옴: 톱니 주기가 S에 대해 준선형으로 증가
+    # 재결합이 순수 Sweet-Parker (S^{-1/2})가 아닌 부분 재결합과
+    # Kadomtsev 제약을 포함하기 때문; 인수 50은 경험적
     tau_sawtooth = tau_R / S**S_exp * 50  # Empirical factor
 
     return tau_sawtooth, S, eta
@@ -720,13 +735,20 @@ def disruption_forces(I_p, dI_dt, R, a, b_wall):
     """
     mu_0 = 4 * np.pi * 1e-7
 
-    # Mutual inductance (simple model)
+    # 상호 인덕턴스(Mutual Inductance)는 붕괴하는 플라즈마 전류가 용기에 얼마나 강하게 결합되는지
+    # 포착 — log(8R/a) 항은 원형 전류 루프의 정확한 해석적 공식에서 유래하며,
+    # 구조에 링크된 플럭스의 양을 결정함
     M = mu_0 * R * (np.log(8 * R / a) - 2 + 0.5)  # H
 
-    # Vertical force (simplified)
+    # F_z = I * dI/dt * M / (2πR): 힘은 변하는 전류가 용기에 와전류(Eddy Current)를
+    # 유도하고 그것이 붕괴하는 플라즈마 전류와 상호작용하기 때문에 발생 —
+    # 더 빠른 전류 급냉(Current Quench)이 더 큰 힘을 생성하며,
+    # 이것이 ITER가 F_z를 구조적 한계 이하로 유지하기 위해 τ_CQ > 150 ms를 요구하는 이유
     F_z = abs(I_p * 1e6 * dI_dt * 1e6 * M / (2 * np.pi * R)) / 1e6  # MN
 
-    # Loop voltage
+    # V_loop는 런어웨이 전자(Runaway Electrons)를 구동하는 유도 전압:
+    # 전류 급냉 중 붕괴하는 플럭스가 환형 전기장 E = V_loop/(2πR)을 유도;
+    # E가 Dreicer 장을 초과하면 전자가 상대론적 에너지까지 자유롭게 가속됨
     V_loop = abs(M * dI_dt * 1e6)  # V
 
     return F_z, V_loop
@@ -785,7 +807,13 @@ def safety_factor_profile(r, a, R, B_0, I_p, profile='parabolic', nu=1.0):
         # j(r) = j_0 (1 - (r/a)^2)^nu
         # I(r) = 2π ∫ j(r') r' dr'
         # For simplicity, approximate q(r)
+        # q_edge는 전체 전류 I_p에 의해 결정됨; 공식은 전체 단면에 걸쳐 적분된
+        # Ampere 법칙에서 유래하며, 안정성 하한을 설정 —
+        # q_edge < 2이면 외부 킨크 모드(External Kink Mode)가 붕괴를 유발할 수 있음
         q_edge = (a**2 * B_0) / (mu_0 * R * I_p * 1e6) * 2 * np.pi
+        # q_0 = q_edge / (nu+1): 더 뾰족한 전류 (더 큰 nu)는 축에 더 많은 전류를 가져
+        # 축 위의 q를 더 작게 만듦 — q_0 < 1이면 톱니가 발생할 수 있음;
+        # nu+1은 포물선형(Parabolic) 전류 적분의 정규화 인수
         q_0 = q_edge / (nu + 1)
         q = q_0 + (q_edge - q_0) * (r / a)**2
     elif profile == 'flat':
@@ -939,8 +967,10 @@ def ntm_island_evolution(w0, Delta_prime_bs, Delta_prime_class, r_s, tau_R, t_ma
         t_array[i] = t
         w_array[i] = w
 
-        # Modified Rutherford equation: dw/dt = (r_s/τ_R) * (Δ'_class + L_qp/w^2)
-        # Simplified: Δ'_bs ~ L_qp / w^2
+        # 수정 Rutherford 방정식: dw/dt = (r_s/τ_R) * (Δ'_class + L_qp/w^2)
+        # 고전 항 Δ'_class * w는 음수 (안정화): 부트스트랩 구동(Bootstrap Drive)
+        # L_qp/w^2는 양수 (불안정화)이고 작은 w에 대해 발산 — 따라서 고전 감쇠가 이기는
+        # 임계 씨앗 아일랜드(Seed Island) 아래와 NTM이 큰 진폭으로 성장하는 위가 있음
         if w > 1e-6:  # Avoid singularity
             dw_dt = (r_s / tau_R) * (Delta_prime_class * w + Delta_prime_bs / w)
         else:
@@ -953,8 +983,8 @@ def ntm_island_evolution(w0, Delta_prime_bs, Delta_prime_class, r_s, tau_R, t_ma
         if w < 0:
             w = 0
             break
-        if w > 0.5:  # Cap at half minor radius
-            break
+        if w > 0.5:  # 소반경의 절반에서 제한; 이를 넘으면 아일랜드가 대부분의
+            break    # 플라즈마를 포위하여 모델 가정이 무너짐
 
     return t_array[:i+1], w_array[:i+1]
 
@@ -1009,7 +1039,13 @@ def rfp_taylor_state(r, a, mu_a):
     """
     from scipy.special import jv  # Bessel function
 
+    # x = μ * r은 무차원 인수(Dimensionless Argument); μa로 스케일링하면 다른 μa 값을 가진
+    # 모든 RFP를 동일한 Bessel 함수 해로 설명할 수 있음 —
+    # 역전(Reversal)은 J_0(μr) = 0인 곳, 즉 x = 2.405, 5.52, ...에서 발생
     x = mu_a * r / a
+    # ∇×B = μB는 B_z ∝ J_0(μr)이고 B_θ ∝ J_1(μr)을 제공: 이 Bessel 함수들은
+    # 원통 좌표계에서 컬(Curl) 연산자의 고유 모드이며,
+    # RFP는 최저 자기 헬리시티(Magnetic Helicity)를 가진 최소 에너지 상태(Taylor State)를 선택
     B_z = jv(0, x)  # J_0
     B_theta = jv(1, x)  # J_1
 

@@ -24,6 +24,8 @@
 
 ### 1.1 스펙트럼 방법이란?
 
+**왜 스펙트럼 방법인가?** 유한 차분 방법은 $O(h^p)$로 수렴합니다 -- 해상도를 두 배로 늘려도 오차는 고정된 비율로만 줄어듭니다. 스펙트럼 방법은 매끄러운 문제에 대해 $O(e^{-cN})$로 수렴합니다 -- 해상도를 두 배로 늘리면 오차가 수 자릿수만큼 줄어들 수 있습니다. 이는 해가 매끄러울 때 스펙트럼 방법을 훨씬 더 효율적으로 만들며, 난류 시뮬레이션(DNS, Direct Numerical Simulation), 기상 예측, 양자역학에서 선택되는 방법인 이유입니다.
+
 스펙트럼 방법은 전역 기저 함수(예: 푸리에 급수, 체비셰프 다항식)를 사용하여 미분 방정식의 해를 근사합니다. 국소 근사를 사용하는 유한 차분이나 유한 요소 방법과 달리, 스펙트럼 방법은 매끄러운 문제에 대해 **지수 수렴(exponential convergence)**을 달성합니다.
 
 ```
@@ -793,15 +795,13 @@ print("KdV equation solved successfully.")
 
 ---
 
-## 9. 연습 문제
+## 연습 문제
 
-### 문제 1: 지수 수렴
-스펙트럼 방법의 지수 수렴을 시연하는 함수 작성:
-- [0, 2π]에서 N개의 푸리에 모드를 사용하여 u(x) = e^(sin(x)) 근사
-- N = 4, 8, 16, 32, 64에 대해 L∞ 오차 계산
-- 로그 스케일에서 오차 vs N 플롯 및 지수 감소 검증
+### 연습 1: 지수 수렴(Exponential Convergence)
+스펙트럼 방법(Spectral Methods)이 매끄러운 주기 함수에 대해 지수 수렴을 달성함을 보이시오. [0, 2π]에서 N개의 푸리에(Fourier) 모드를 사용하여 u(x) = e^(sin(x))를 근사하시오. N = 4, 8, 16, 32, 64에 대해 L∞ 오차를 계산하고 로그 스케일 플롯에서 지수 감소를 검증하시오.
 
-**해답:**
+<details><summary>정답 보기</summary>
+
 ```python
 def test_exponential_convergence():
     def u_exact(x):
@@ -817,10 +817,10 @@ def test_exponential_convergence():
         x = np.linspace(0, 2*np.pi, N, endpoint=False)
         u = u_exact(x)
 
-        # 스펙트럼 방법을 사용하여 보간
+        # Interpolate using spectral method
         u_hat = fft(u)
 
-        # 세밀한 격자에서 평가
+        # Evaluate on fine grid
         k = fftfreq(N, 2*np.pi/N) * 2 * np.pi
         u_interp = np.zeros(len(x_fine))
         for j, xj in enumerate(x_fine):
@@ -830,7 +830,6 @@ def test_exponential_convergence():
         errors.append(error)
         print(f"N={N:3d}: Error = {error:.2e}")
 
-    # 플롯
     plt.figure(figsize=(8, 5))
     plt.semilogy(N_values, errors, 'o-', linewidth=2, markersize=8)
     plt.xlabel('N (number of modes)')
@@ -844,22 +843,170 @@ def test_exponential_convergence():
 test_exponential_convergence()
 ```
 
-### 문제 2: 체비셰프 보간
-다음을 사용하여 [-1, 1]에서 룬지 함수 f(x) = 1/(1 + 25x²) 보간:
-- 균일 격자 점 (룬지 현상 보이기)
-- 체비셰프-가우스-로바토 점
+오차는 N=4에서 ~1e-1에서 N=64에서 ~1e-14로 급격히 감소하여 지수적(스펙트럼) 수렴을 확인합니다. 다항식 방법은 O(N^{-p})의 대수적 감소를 보일 것입니다.
+</details>
 
-보간 오차 비교.
+### 연습 2: 체비셰프 보간과 룬지 현상(Runge Phenomenon)
+룬지 함수(Runge function) f(x) = 1/(1 + 25x²)를 [-1, 1]에서 (a) N+1개의 균일 간격 점과 (b) 체비셰프-가우스-로바토(Chebyshev-Gauss-Lobatto) 점을 사용하여 N = 10, 20에 대해 보간하시오. 세밀한 격자에서 L∞ 오차를 계산하고, 체비셰프 절점이 룬지 현상을 피하는 이유를 설명하시오.
 
-### 문제 3: 열 방정식
-초기 조건 u(x,0) = sin(x)를 사용하여 푸리에 스펙트럼 방법으로 1D 열 방정식 ∂u/∂t = ∂²u/∂x² 풀기. 정확한 해 u(x,t) = e^(-t) sin(x)와 비교.
+<details><summary>정답 보기</summary>
 
-### 문제 4: 2-솔리톤 충돌
-다른 속도를 가진 두 솔리톤의 충돌을 시뮬레이션하도록 KdV 솔버 수정. 초기 조건:
+```python
+def runge_vs_chebyshev(N=16):
+    f = lambda x: 1.0 / (1 + 25 * x**2)
+    x_fine = np.linspace(-1, 1, 500)
+    f_fine = f(x_fine)
+
+    # Uniform nodes
+    x_uni = np.linspace(-1, 1, N+1)
+    p_uni = np.polyfit(x_uni, f(x_uni), N)
+    err_uni = np.max(np.abs(np.polyval(p_uni, x_fine) - f_fine))
+
+    # Chebyshev-Gauss-Lobatto nodes
+    j = np.arange(N+1)
+    x_cheb = np.cos(np.pi * j / N)
+    # Barycentric interpolation at fine points
+    # (simple approach: use numpy polynomial fit on Chebyshev nodes)
+    p_cheb = np.polyfit(x_cheb, f(x_cheb), N)
+    err_cheb = np.max(np.abs(np.polyval(p_cheb, x_fine) - f_fine))
+
+    print(f"N={N}: Uniform L∞ error = {err_uni:.4e}, Chebyshev L∞ error = {err_cheb:.4e}")
+
+runge_vs_chebyshev(N=10)
+runge_vs_chebyshev(N=20)
 ```
-u(x,0) = -6κ₁² sech²(κ₁(x+5)) - 6κ₂² sech²(κ₂(x-5))
+
+균일 절점은 끝점 근처에서 큰 진동(룬지 현상)을 발생시켜 N이 증가할수록 오차가 커집니다. 체비셰프 절점은 ±1 근처에 집중되어 리베스크 상수(Lebesgue constant)를 최소화하고 진동을 억제합니다. 체비셰프 보간은 진함수로 빠르게 수렴합니다.
+</details>
+
+### 연습 3: 스펙트럼 열 방정식(Spectral Heat Equation)
+주기 경계 조건과 초기 조건 u(x,0) = sin(x)를 사용하여 [0, 2π]에서 1D 열 방정식 ∂u/∂t = ∂²u/∂x²을 풀어보시오. 적분 인수(integrating factor) 방법으로 푸리에 스펙트럼 방법을 사용하여 정확한 시간 적분을 수행하시오. t = 1에서 수치해를 정확한 해 u(x,t) = e^(-t) sin(x)와 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def spectral_heat_equation(T=1.0, N=64, dt=0.01):
+    x = np.linspace(0, 2*np.pi, N, endpoint=False)
+    k = fftfreq(N, 1.0/N)  # integer wavenumbers
+
+    # Initial condition
+    u = np.sin(x)
+    u_hat = fft(u)
+
+    # Exact time integration: u_hat(k, t) = u_hat(k, 0) * exp(-k^2 * t)
+    t_final = T
+    u_hat_final = u_hat * np.exp(-k**2 * t_final)
+    u_spectral = np.real(ifft(u_hat_final))
+
+    u_exact = np.exp(-T) * np.sin(x)
+    error = np.linalg.norm(u_spectral - u_exact, np.inf)
+    print(f"Spectral heat equation error at t={T}: {error:.2e}")
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, u_exact, 'b-', label='Exact', linewidth=2)
+    plt.plot(x, u_spectral, 'r--', label='Spectral', linewidth=2)
+    plt.xlabel('x'); plt.ylabel('u(x,t)')
+    plt.title(f'Heat Equation at t={T}')
+    plt.legend(); plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('spectral_heat.png', dpi=150)
+    plt.close()
+
+spectral_heat_equation(T=1.0)
 ```
-κ₁ = 0.5, κ₂ = 0.3.
+
+적분 인수 방법은 스펙트럼 공간에서 선형 부분을 정확히 풀어냅니다. 오차는 기계 정밀도 수준(~1e-15)에 있어 주기 경계를 가진 매끄러운 문제에 대한 스펙트럼 방법의 강력함을 보여줍니다.
+</details>
+
+### 연습 4: KdV 2-솔리톤 충돌
+KdV 스펙트럼 솔버를 수정하여 두 솔리톤을 초기화하시오. 초기 조건:
+```
+u(x,0) = -6κ₁² sech²(κ₁(x+10)) - 6κ₂² sech²(κ₂(x-10))
+```
+κ₁ = 0.5, κ₂ = 0.8. T = 20까지 시뮬레이션하고, 충돌 후 두 솔리톤이 원래의 형태와 속도로 나오는지 검증하시오(탄성 충돌).
+
+<details><summary>정답 보기</summary>
+
+```python
+def kdv_two_soliton(T=20.0, N=512, dt=0.005):
+    L = 60 * np.pi
+    x = np.linspace(-L/2, L/2, N, endpoint=False)
+    k = fftfreq(N, L/N) * 2 * np.pi
+
+    kappa1, kappa2 = 0.5, 0.8
+    # Two-soliton initial condition (solitons at x=-10 and x=+10)
+    u = (-6 * kappa1**2 / np.cosh(kappa1 * (x + 10))**2
+         - 6 * kappa2**2 / np.cosh(kappa2 * (x - 10))**2)
+
+    def rhs(u):
+        u_hat = fft(u)
+        dispersion = -(1j * k)**3 * u_hat
+        ux = np.real(ifft(1j * k * u_hat))
+        nonlinear = fft(-u * ux)
+        return np.real(ifft(dispersion + nonlinear))
+
+    u_initial = u.copy()
+    nt = int(T / dt)
+    for n in range(nt):
+        k1 = rhs(u); k2 = rhs(u + 0.5*dt*k1)
+        k3 = rhs(u + 0.5*dt*k2); k4 = rhs(u + dt*k3)
+        u = u + (dt/6) * (k1 + 2*k2 + 2*k3 + k4)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, u_initial, 'b-', label='t=0', linewidth=2)
+    plt.plot(x, u, 'r-', label=f't={T}', linewidth=2)
+    plt.xlabel('x'); plt.ylabel('u')
+    plt.title('KdV Two-Soliton Collision')
+    plt.legend(); plt.grid(True); plt.xlim(-L/4, L/4)
+    plt.tight_layout()
+    plt.savefig('kdv_two_soliton.png', dpi=150)
+    plt.close()
+    print(f"Mass conservation: initial={np.sum(u_initial):.6f}, final={np.sum(u):.6f}")
+
+kdv_two_soliton()
+```
+
+충돌 후 두 솔리톤은 원래의 진폭과 속도로 다시 나타나며, 위치만 이동합니다. 이 탄성 충돌(에너지 손실 없음)은 방정식의 적분 가능 구조에서 비롯된 KdV 솔리톤의 특성입니다. 질량(및 기타 보존량)은 높은 정확도로 보존되어야 합니다.
+</details>
+
+### 연습 5: 에일리어싱 오류(Aliasing Error) 시연
+N = 32의 구체적인 예에서 에일리어싱(aliasing)의 효과를 보이시오. u = sin(N/4 · x)와 v = sin(N/4 · x)를 계산하고 디에일리어싱(dealiasing) 없이 u·v를 스펙트럼 공간에서 계산하시오. 결과를 3/2 규칙을 사용한 올바른 디에일리어싱 버전과 비교하시오.
+
+<details><summary>정답 보기</summary>
+
+```python
+def aliasing_demonstration(N=32):
+    x = np.linspace(0, 2*np.pi, N, endpoint=False)
+    k = fftfreq(N, 1.0/N)
+
+    # Two modes that when multiplied produce frequencies beyond N/2
+    u = np.sin(int(N/4) * x)   # mode N/4
+    v = np.sin(int(N/4) * x)   # same mode
+
+    # Naive (aliased) product
+    w_naive = u * v
+    w_naive_hat = np.abs(fft(w_naive))
+
+    # Dealiased product using 3/2 rule
+    w_dealiased = dealias_product_3_2_rule(u, v)
+    w_dealiased_hat = np.abs(fft(w_dealiased))
+
+    # Exact: sin(k0*x)*sin(k0*x) = 0.5*(1 - cos(2*k0*x))
+    # Mode 0 and mode 2*k0 should appear
+    k0 = int(N/4)
+    w_exact_hat = np.zeros(N)
+    w_exact_hat[0] = N/2           # DC component
+    w_exact_hat[min(2*k0, N-1)] = N/4  # frequency 2*k0
+
+    print(f"Mode 0:    naive={w_naive_hat[0]:.2f}, dealiased={w_dealiased_hat[0]:.2f}, exact={N/2:.2f}")
+    print(f"Mode {2*k0}: naive={w_naive_hat[2*k0 % N]:.2f}, dealiased={w_dealiased_hat[2*k0 % N]:.2f}, exact={N/4:.2f}")
+    print("Aliasing causes spurious energy at wrong wavenumbers in the naive case.")
+
+aliasing_demonstration(N=32)
+```
+
+모드 N/4를 제곱하면 곱에 나이퀴스트 주파수(Nyquist frequency)인 모드 N/2가 포함됩니다. 디에일리어싱 없이는 이것이 모드 0으로 에일리어스되어 저주파 내용을 오염시킵니다. 3/2 규칙은 곱셈 전에 스펙트럼을 제로 패딩하여 N/2 모드를 올바르게 캡처하고 정확한 결과를 반환합니다.
+</details>
 
 ---
 

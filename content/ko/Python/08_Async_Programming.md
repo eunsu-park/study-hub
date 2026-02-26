@@ -1,5 +1,24 @@
 # 비동기 프로그래밍 (Async Programming)
 
+**이전**: [디스크립터](./07_Descriptors.md) | **다음**: [함수형 프로그래밍](./09_Functional_Programming.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 동기(synchronous)와 비동기(asynchronous) 실행의 차이를 설명하고, 비동기가 유리한 I/O 바운드(I/O-bound) 시나리오를 식별할 수 있습니다
+2. `async def`로 코루틴(coroutine)을 정의하고, `await`를 사용해 I/O 경계에서 실행을 일시 중단할 수 있습니다
+3. asyncio 이벤트 루프(event loop)의 역할을 설명하고, `asyncio.run()`으로 코루틴을 실행할 수 있습니다
+4. `asyncio.create_task()`를 사용해 동시 태스크(task)를 생성하고 예약할 수 있습니다
+5. 동시 실행 패턴에 `asyncio.gather()`, `asyncio.wait()`, `asyncio.as_completed()`를 적용할 수 있습니다
+6. `asyncio.wait_for()`와 `asyncio.timeout()`으로 타임아웃(timeout)을 구현할 수 있습니다
+7. 비동기 컨텍스트 매니저(async context manager) (`async with`)와 비동기 이터레이터/제너레이터(async iterator/generator) (`async for`)를 작성할 수 있습니다
+8. `run_in_executor()`와 `asyncio.to_thread()`를 사용해 동기 블로킹 코드를 비동기 코드와 통합할 수 있습니다
+
+---
+
+현대 애플리케이션은 대부분의 시간을 기다리는 데 씁니다 — 네트워크 응답, 데이터베이스 쿼리, 파일 읽기, API 호출을 위해서요. 비동기 프로그래밍(Asynchronous Programming)은 블로킹 대신 대기 시간 동안 태스크를 전환함으로써, 단일 스레드가 수천 개의 동시 I/O 작업을 처리할 수 있게 합니다. Python의 `asyncio` 라이브러리와 `async`/`await` 구문을 조합하면, 스레드나 멀티프로세싱의 복잡성 없이 고성능 동시 웹 서버, 스크레이퍼, 마이크로서비스를 작성할 수 있습니다.
+
 ## 1. 동기 vs 비동기
 
 ### 동기 (Synchronous)
@@ -85,7 +104,9 @@ print(result)  # Hello, Async!
 ```python
 async def fetch_data():
     print("데이터 가져오는 중...")
-    await asyncio.sleep(1)  # I/O 시뮬레이션
+    await asyncio.sleep(1)  # 이곳이 I/O 경계(I/O boundary) — 이벤트 루프(event loop)가
+                            # 네트워크/디스크 응답을 기다리는 동안 다른 코루틴을 처리할 수 있도록
+                            # 실행 제어권을 여기서 양보(yield)함
     return {"data": "value"}
 
 async def main():
@@ -218,7 +239,9 @@ async def main():
         might_fail(1),
         might_fail(2),
         might_fail(3),
-        return_exceptions=True
+        return_exceptions=True  # 이 옵션 없이는 첫 번째 예외가 나머지 태스크를 모두 취소함;
+                                # 이 옵션을 사용하면 예외가 값으로 반환되어 부분 실패(partial failure)를
+                                # 처리할 수 있음 — 모든 결과(성공이든 실패든)가 필요한 팬아웃(fan-out) 패턴에 필수
     )
     print(results)  # [1, ValueError('Error!'), 3]
 
@@ -501,7 +524,9 @@ async def limited_task(sem, n):
         print(f"작업 {n} 완료")
 
 async def main():
-    sem = asyncio.Semaphore(3)  # 최대 3개 동시 실행
+    sem = asyncio.Semaphore(3)  # 다운스트림(downstream) 속도 제한이나 커넥션 풀(connection pool) 크기에 맞게 조정;
+                                # 3은 예시용 — 실제 프로덕션(production) API는 보통 스로틀링(throttling)이나
+                                # 연결 거부 전까지 10~100개의 동시 요청을 허용함
 
     tasks = [limited_task(sem, i) for i in range(10)]
     await asyncio.gather(*tasks)
@@ -606,4 +631,4 @@ async def main():
 
 ## 다음 단계
 
-[09_Functional_Programming.md](./09_Functional_Programming.md)에서 함수형 프로그래밍을 배워봅시다!
+[함수형 프로그래밍 (Functional Programming)](./09_Functional_Programming.md)에서 함수형 프로그래밍을 배워봅시다!

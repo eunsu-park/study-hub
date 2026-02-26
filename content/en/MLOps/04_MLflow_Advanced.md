@@ -1,5 +1,17 @@
 # MLflow Advanced
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Create MLflow Projects with MLproject files that define entry points, parameters, and reproducible environments for ML code
+2. Implement custom MLflow models by subclassing `mlflow.pyfunc.PythonModel` to package non-standard inference logic
+3. Build multi-step MLflow pipelines that chain data preprocessing, training, and evaluation as parent-child runs
+4. Configure MLflow with remote artifact stores (S3, GCS) and database-backed tracking servers for production deployments
+5. Integrate MLflow tracking into hyperparameter tuning workflows using Optuna or Ray Tune
+
+---
+
 ## 1. MLflow Projects
 
 MLflow Projects is a packaging format for reproducible ML code.
@@ -34,7 +46,8 @@ conda_env: conda.yaml
 # Option 3: System (use current environment)
 # python_env: python_env.yaml
 
-# Entry points
+# Entry points — separate train/evaluate/search so each can be triggered
+# independently in CI/CD without running the full pipeline
 entry_points:
   main:
     parameters:
@@ -113,9 +126,11 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 def main(args):
-    # MLflow autologging
+    # autolog captures model params, metrics, and artifacts automatically —
+    # reduces boilerplate and prevents forgetting to log important details
     mlflow.sklearn.autolog()
 
+    # Context manager ensures run closure even if training crashes mid-way
     with mlflow.start_run():
         # Load data
         df = pd.read_csv(args.data_path)
@@ -126,7 +141,8 @@ def main(args):
             X, y, test_size=0.2, random_state=42
         )
 
-        # Log additional parameters
+        # Log data provenance — essential for debugging when model quality degrades;
+        # autolog doesn't capture custom metadata like data paths
         mlflow.log_param("data_path", args.data_path)
         mlflow.log_param("train_size", len(X_train))
 
@@ -237,6 +253,8 @@ import pandas as pd
 class CustomModel(mlflow.pyfunc.PythonModel):
     """Custom MLflow Model"""
 
+    # pyfunc wraps preprocessing + model + postprocessing into one artifact —
+    # guarantees the serving environment uses the exact same pipeline as training
     def __init__(self, preprocessor, model, threshold=0.5):
         self.preprocessor = preprocessor
         self.model = model
@@ -244,6 +262,8 @@ class CustomModel(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
         """Load artifacts"""
+        # Called once at model load time (not per-request) — heavy initialization here
+        # avoids repeated I/O overhead during inference
         import joblib
         # Can load additional files from context.artifacts
         pass
@@ -256,7 +276,8 @@ class CustomModel(mlflow.pyfunc.PythonModel):
         # Prediction
         probabilities = self.model.predict_proba(processed)[:, 1]
 
-        # Post-processing (apply threshold)
+        # Return both label and probability — callers can apply their own
+        # business-specific threshold without re-running inference
         predictions = (probabilities >= self.threshold).astype(int)
 
         return pd.DataFrame({
@@ -279,6 +300,8 @@ conda_env = {
     "name": "custom_model_env"
 }
 
+# Bundle external artifacts with the model — ensures preprocessor and config
+# travel together with the model, eliminating "missing artifact" errors at serving time
 with mlflow.start_run():
     mlflow.pyfunc.log_model(
         artifact_path="model",
@@ -403,7 +426,9 @@ client.transition_model_version_stage(
     name="ChurnPredictionModel",
     version=1,
     stage="Production",
-    archive_existing_versions=True  # Auto-archive existing Production versions
+    # Auto-archive prevents multiple Production versions — ensures load_model("Production")
+    # always returns exactly one model
+    archive_existing_versions=True
 )
 
 # Load model (by stage)
@@ -609,7 +634,8 @@ results.to_parquet("s3://bucket/predictions.parquet")
 ### 5.1 Remote Tracking Server
 
 ```bash
-# PostgreSQL backend + S3 artifact store
+# PostgreSQL for metadata (runs, params, metrics) + S3 for large artifacts (models, data)
+# — separating concerns: relational queries on metadata, cheap bulk storage for binaries
 mlflow server \
     --backend-store-uri postgresql://user:password@host:5432/mlflow \
     --default-artifact-root s3://mlflow-artifacts/ \
@@ -700,11 +726,12 @@ client.transition_model_version_stage(
     stage="Staging"
 )
 
-# 5. Test (in Staging)
+# 5. Test in Staging first — validates the model loads correctly and meets thresholds
+# in an environment that mirrors production before affecting real traffic
 staging_model = mlflow.pyfunc.load_model("models:/ChurnPredictionModel/Staging")
 test_results = evaluate_model(staging_model, test_data)
 
-# 6. Promote to Production
+# 6. Gate promotion on metrics — prevents regressions from reaching production
 if test_results["accuracy"] > 0.9:
     client.transition_model_version_stage(
         name="ChurnPredictionModel",

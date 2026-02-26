@@ -706,6 +706,367 @@ Fine-grained (DeepSeek 스타일):
 
 ---
 
+## 8. 전문가 라우팅 메커니즘 (Expert Routing Mechanisms)
+
+라우터(Router)는 MoE 모델의 두뇌입니다 — 어떤 전문가(Expert)가 각 토큰을 처리할지 결정합니다. 라우팅 전략의 선택은 모델 품질, 학습 안정성, 추론 효율성에 지대한 영향을 미칩니다. 이 섹션에서는 라우팅 전략, 로드 밸런싱(Load Balancing), 용량(Capacity) 관리를 심층적으로 다룹니다.
+
+### 8.1 토큰 라우팅 전략
+
+#### Top-K 라우팅 (표준)
+
+가장 일반적인 접근법: 학습된 선형 레이어가 각 전문가에 점수를 매기고, 상위 K개 전문가를 선택합니다.
+
+```
+Input token x → Linear(dim, n_experts) → logits
+                                          ↓
+                               Top-K selection → softmax over K
+                                          ↓
+                               Weighted sum of K expert outputs
+
+Used by: Mixtral (K=2), GLaM (K=2), GShard (K=2)
+```
+
+#### Expert Choice 라우팅 (Zhou et al., 2022)
+
+토큰이 전문가를 선택하는 대신, **전문가가 토큰을 선택**합니다. 각 전문가가 자신이 가장 자신 있는 상위 C개 토큰을 선택합니다.
+
+```
+Standard (token chooses expert):
+  Each token picks its best K experts → load can be uneven
+
+Expert Choice (expert chooses tokens):
+  Each expert picks its best C tokens → perfect load balance
+
+  For E experts, N tokens, capacity factor C:
+  Each expert processes exactly (N × C / E) tokens
+
+Advantages:
+  • Guaranteed load balance (no auxiliary loss needed)
+  • Experts see tokens they are most suited for
+
+Disadvantages:
+  • Some tokens may not be selected by any expert (dropped)
+  • Some tokens may be selected by too many experts (redundant)
+  • Harder to implement efficiently for autoregressive decoding
+
+Used by: Zhou et al. (2022), some Google internal models
+```
+
+#### 해시 라우팅 (Hash Routing, Roller et al., 2021)
+
+해싱 기반의 비학습(Non-learned), 결정적(Deterministic) 라우팅 전략:
+
+```
+expert_id = hash(token_id) % n_experts
+
+Advantages:
+  • No learnable parameters in the router
+  • Perfectly balanced by design
+  • No routing collapse or instability
+
+Disadvantages:
+  • No input-dependent specialization
+  • Cannot adapt routing based on context
+  • Primarily used as a baseline or for analysis
+
+Surprisingly, hash routing performs reasonably well, suggesting
+that much of MoE's benefit comes from increased capacity
+rather than intelligent routing.
+```
+
+### 8.2 라우터 아키텍처 상세
+
+#### Softmax 게이트 (표준)
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SoftmaxRouter(nn.Module):
+    """
+    Standard softmax router.
+
+    Why softmax: We want a probability distribution over experts
+    so that the weighted combination of expert outputs is well-
+    scaled. Softmax ensures non-negative weights that sum to 1
+    (among selected experts after top-k filtering).
+    """
+    def __init__(self, dim, num_experts, top_k=2):
+        super().__init__()
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+        self.top_k = top_k
+
+    def forward(self, x):
+        # x: (batch, seq_len, dim)
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        # Select top-K experts
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+
+        # Softmax over selected experts only
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        return top_k_probs, top_k_indices, logits
+```
+
+#### Noisy Top-K (Shazeer et al., 2017)
+
+Top-K 선택 전에 라우터 로짓(Logit)에 노이즈(Noise)를 추가하면 학습 중 탐색(Exploration)이 개선됩니다:
+
+```python
+class NoisyTopKRouter(nn.Module):
+    """
+    Noisy Top-K Gating from the original MoE paper (Shazeer 2017).
+
+    Why add noise: Without noise, the router tends to converge
+    early to always selecting the same experts (rich-get-richer).
+    Gaussian noise encourages exploration, helping all experts
+    receive training signal.
+    """
+    def __init__(self, dim, num_experts, top_k=2):
+        super().__init__()
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+        self.noise_linear = nn.Linear(dim, num_experts, bias=False)
+        self.top_k = top_k
+
+    def forward(self, x):
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        if self.training:
+            # Learnable noise scale
+            noise_stddev = F.softplus(self.noise_linear(x))
+            noise = torch.randn_like(logits) * noise_stddev
+            logits = logits + noise
+
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        return top_k_probs, top_k_indices, logits
+```
+
+### 8.3 로드 밸런싱 손실(Load Balancing Loss)과 보조 손실(Auxiliary Loss)
+
+명시적인 장려 없이는 라우터가 대부분의 토큰을 소수의 "선호" 전문가에게 라우팅하는 경향이 있습니다 (Winner-take-all 붕괴). 보조 손실(Auxiliary Loss)이 이를 방지합니다.
+
+#### 표준 로드 밸런싱 손실 (Switch Transformer)
+
+```python
+def switch_load_balancing_loss(router_logits, expert_indices, num_experts):
+    """
+    Load balancing loss from Switch Transformer (Fedus et al., 2022).
+
+    Intuition: We want each expert to receive roughly 1/E of all
+    tokens AND roughly 1/E of the total routing probability mass.
+    The loss penalizes deviation from uniform distribution.
+
+    L_balance = E × Σ_e (f_e × p_e)
+
+    f_e = fraction of tokens routed to expert e
+    p_e = mean routing probability for expert e (before top-k)
+    E   = number of experts
+
+    The ideal value of (f_e × p_e) for each expert is 1/E²,
+    so the ideal total loss is E × E × (1/E²) = 1.0.
+    Values > 1.0 indicate imbalance.
+    """
+    batch, seq_len = expert_indices.shape[:2]
+    num_tokens = batch * seq_len
+
+    # f_e: fraction of tokens dispatched to each expert
+    f = torch.zeros(num_experts, device=router_logits.device)
+    for e in range(num_experts):
+        f[e] = (expert_indices == e).float().sum() / num_tokens
+
+    # p_e: mean routing probability for each expert (from full softmax)
+    full_probs = F.softmax(router_logits, dim=-1)  # (batch, seq, n_experts)
+    p = full_probs.mean(dim=[0, 1])  # (n_experts,)
+
+    # Balance loss
+    loss = num_experts * (f * p).sum()
+
+    return loss
+```
+
+#### Z-Loss (ST-MoE, Zoph et al., 2022)
+
+큰 라우터 로짓(Logit) 값을 패널티하여 안정성을 향상시키는 추가 보조 손실:
+
+```python
+def z_loss(router_logits):
+    """
+    Z-loss penalizes large router logit magnitudes.
+
+    Why: Large logits lead to very peaked softmax distributions,
+    which cause training instability. Z-loss acts as a soft
+    regularizer on the router's output scale.
+
+    L_z = (1/N) × Σ (log Σ exp(logits))²
+    """
+    log_z = torch.logsumexp(router_logits, dim=-1)  # (batch, seq)
+    return (log_z ** 2).mean()
+```
+
+### 8.4 용량 인수(Capacity Factor)와 오버플로우(Overflow) 처리
+
+각 전문가는 최대 **용량(Capacity)** — 순전파(Forward Pass)당 처리할 수 있는 토큰 수 — 이 있습니다. 이는 효율적인 배치 연산에 핵심적입니다.
+
+```
+Capacity = (total_tokens / num_experts) × capacity_factor
+
+capacity_factor (CF):
+  CF = 1.0 → each expert processes exactly 1/E of tokens (tight)
+  CF = 1.5 → 50% buffer for uneven routing (typical)
+  CF = 2.0 → generous buffer, wastes some computation
+
+Overflow: When more tokens are routed to an expert than its
+capacity allows, excess tokens are DROPPED (their expert
+output is zero, only the residual connection passes through).
+
+Underflow: When fewer tokens are routed, the expert's buffer
+has padding (wasted computation but no correctness issue).
+```
+
+```python
+def apply_capacity_factor(expert_indices, num_experts, capacity_factor=1.5):
+    """
+    Apply capacity constraints to expert assignments.
+
+    Why capacity factor > 1.0: Even with load balancing loss,
+    routing is never perfectly uniform. A buffer of 1.25-1.5
+    prevents frequent token dropping while keeping memory bounded.
+    """
+    batch, seq_len, top_k = expert_indices.shape
+    total_tokens = batch * seq_len
+    capacity = int((total_tokens / num_experts) * capacity_factor)
+
+    # Track how many tokens each expert has accepted
+    expert_load = torch.zeros(num_experts, dtype=torch.long)
+    overflow_mask = torch.zeros(batch, seq_len, top_k, dtype=torch.bool)
+
+    for b in range(batch):
+        for s in range(seq_len):
+            for k in range(top_k):
+                e = expert_indices[b, s, k].item()
+                if expert_load[e] < capacity:
+                    expert_load[e] += 1
+                else:
+                    overflow_mask[b, s, k] = True  # This assignment is dropped
+
+    return overflow_mask, expert_load
+```
+
+### 8.5 Switch Transformer vs GShard 라우팅 비교
+
+```
+┌──────────────────┬──────────────────────┬──────────────────────┐
+│ 특성             │ Switch Transformer   │ GShard               │
+├──────────────────┼──────────────────────┼──────────────────────┤
+│ Top-K            │ K=1 (단일 전문가)    │ K=2 (두 전문가)      │
+│ 용량 인수        │ 1.0-1.5              │ 2.0                  │
+│ 오버플로우       │ 토큰 드롭            │ 토큰 드롭            │
+│ 보조 손실        │ L_balance            │ L_balance + L_load   │
+│ 노이즈           │ 미사용               │ Noisy top-k          │
+│ 전문가 수        │ 128-2048             │ 64-512               │
+│ 대규모 품질      │ 많은 전문가로 우수   │ 전문가당 품질 우수   │
+│ 통신량           │ 적음 (K=1)           │ 많음 (K=2)           │
+├──────────────────┼──────────────────────┼──────────────────────┤
+│ 핵심 통찰        │ 단순함: 토큰당 1개   │ 견고함: 2개 전문가가 │
+│                  │ 전문가면 대규모에서  │ 중복성과 안정적      │
+│                  │ 충분함               │ 학습 제공            │
+└──────────────────┴──────────────────────┴──────────────────────┘
+
+현대적 관행 (Mixtral, DeepSeek):
+- K=2 (GShard 방식)가 기본이 됨
+- 개선된 로드 밸런싱(Auxiliary Loss + Z-Loss) 병행
+- 용량 인수(Capacity Factor) 1.25-1.5 (경험적 튜닝)
+```
+
+### 8.6 완전한 라우터 예제
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class MoERouter(nn.Module):
+    """
+    Complete MoE Router with load balancing and capacity management.
+
+    This implementation combines the key ideas from Switch Transformer,
+    GShard, and ST-MoE into a single practical router.
+    """
+    def __init__(
+        self,
+        dim: int,
+        num_experts: int,
+        top_k: int = 2,
+        capacity_factor: float = 1.5,
+        balance_loss_weight: float = 0.01,
+        z_loss_weight: float = 0.001,
+    ):
+        super().__init__()
+        self.num_experts = num_experts
+        self.top_k = top_k
+        self.capacity_factor = capacity_factor
+        self.balance_loss_weight = balance_loss_weight
+        self.z_loss_weight = z_loss_weight
+
+        self.gate = nn.Linear(dim, num_experts, bias=False)
+
+    def forward(self, x):
+        """
+        Args:
+            x: (batch, seq_len, dim)
+
+        Returns:
+            expert_probs: (batch, seq_len, top_k)
+            expert_indices: (batch, seq_len, top_k)
+            aux_loss: scalar auxiliary loss for training
+        """
+        batch, seq_len, dim = x.shape
+        logits = self.gate(x)  # (batch, seq_len, num_experts)
+
+        # Top-K selection
+        top_k_logits, top_k_indices = torch.topk(logits, self.top_k, dim=-1)
+        top_k_probs = F.softmax(top_k_logits, dim=-1)
+
+        # Compute auxiliary losses during training
+        aux_loss = torch.tensor(0.0, device=x.device)
+        if self.training:
+            # Load balancing loss
+            full_probs = F.softmax(logits, dim=-1)
+            p = full_probs.mean(dim=[0, 1])  # Mean prob per expert
+
+            num_tokens = batch * seq_len
+            f = torch.zeros(self.num_experts, device=x.device)
+            for e in range(self.num_experts):
+                f[e] = (top_k_indices == e).float().sum() / (num_tokens * self.top_k)
+
+            balance_loss = self.num_experts * (f * p).sum()
+
+            # Z-loss for stability
+            log_z = torch.logsumexp(logits, dim=-1)
+            z_loss_val = (log_z ** 2).mean()
+
+            aux_loss = (self.balance_loss_weight * balance_loss +
+                        self.z_loss_weight * z_loss_val)
+
+        return top_k_probs, top_k_indices, aux_loss
+
+
+# Usage example
+router = MoERouter(dim=4096, num_experts=8, top_k=2)
+x = torch.randn(2, 10, 4096)
+probs, indices, aux_loss = router(x)
+
+print(f"Expert probs: {probs.shape}")      # (2, 10, 2)
+print(f"Expert indices: {indices.shape}")    # (2, 10, 2)
+print(f"Auxiliary loss: {aux_loss.item():.4f}")
+```
+
+---
+
 ## 정리
 
 ### Mistral 핵심
@@ -745,3 +1106,147 @@ Fine-grained (DeepSeek 스타일):
 - [Mistral GitHub](https://github.com/mistralai/mistral-src)
 - [HuggingFace Mistral](https://huggingface.co/mistralai)
 - [vLLM MoE Support](https://docs.vllm.ai/)
+
+---
+
+## 연습 문제
+
+### 연습 문제 1: MoE 유효 파라미터 분석
+
+Mixtral 8x7B는 MoE 레이어당 8개의 전문가를 가지고, 토큰당 2개를 활성화(Top-2 라우팅)하며, 총 46.7B 파라미터에 포워드 패스당 12.9B의 활성 파라미터를 가집니다.
+
+1. Mixtral이 총 46.7B 파라미터를 가짐에도 각 토큰에 대해 12.9B 파라미터만 활성화하는 이유는 무엇인가요?
+2. "계산 효율 비율" (활성 / 전체)은 무엇이며, 밀집(dense) 46.7B 모델과 비교한 추론 비용에 어떤 의미를 가지나요?
+3. K=4 (K=2 대신)였다면 활성 파라미터와 추론 비용이 어떻게 변할까요?
+
+<details>
+<summary>정답 보기</summary>
+
+**1. 12.9B 활성 파라미터만 사용하는 이유:**
+
+각 MoE 레이어에서 라우터는 8개의 전문가 중 2개만 선택하여 각 토큰을 처리합니다. 선택되지 않은 6개의 전문가는 단순히 실행하지 않습니다 — 계산이 완전히 건너뜁니다. 모든 토큰에 공유된 트랜스포머 어텐션 레이어와 MoE FFN 파라미터의 2/8만 활성화됩니다. 대략:
+- 공유 어텐션 파라미터 + MoE FFN 파라미터의 2/8 ≈ 토큰당 12.9B
+
+**2. 계산 효율 비율:**
+
+```
+효율 비율 = 12.9B / 46.7B ≈ 27.6%
+```
+
+각 포워드 패스는 밀집 46.7B 모델 비용의 약 27.6%만 소요됩니다. 하지만 모델은 46.7B 파라미터 가치의 지식 용량을 가집니다. 이것이 핵심 MoE 트레이드오프입니다: ~13B 밀집 모델처럼 추론 비용을 지불하면서 46.7B 파라미터 용량의 혜택을 받습니다.
+
+**3. K=4의 효과:**
+- 활성 파라미터가 대략 두 배로 증가: 포워드 패스당 ~25.8B
+- 추론 비용이 비례적으로 증가 (토큰당 2배 더 많은 전문가 계산)
+- 계산 효율 비율: 25.8 / 46.7 ≈ 55.2%
+- 모델은 계산 측면에서 25.8B 등가 밀집 모델이 되지만 여전히 46.7B 지식 용량을 가짐
+- 품질은 K=4로 향상되지만 효율성 이점을 잃는 비용이 발생
+
+</details>
+
+---
+
+### 연습 문제 2: 슬라이딩 윈도우 어텐션(SWA) 메모리 분석
+
+Mistral 7B는 윈도우 크기 W=4096과 롤링 버퍼(rolling buffer) KV 캐시로 슬라이딩 윈도우 어텐션(SWA, Sliding Window Attention)을 사용합니다.
+
+1. 표준 셀프 어텐션은 n 토큰에 대해 O(n²) 메모리 복잡도를 가집니다. n 토큰에 대한 SWA의 메모리 복잡도는 무엇인가요?
+2. 32,768 토큰(32K) 시퀀스에서 표준 MHA vs SWA의 KV 캐시 메모리를 비교하세요 (32 헤드, head_dim=128, fp16, 32 레이어 가정).
+3. 토큰이 슬라이딩 윈도우에서 "벗어날" 때 어떤 정보가 손실되며, 다층 아키텍처는 어떻게 부분적으로 보상하나요?
+
+<details>
+<summary>정답 보기</summary>
+
+**1. SWA의 메모리 복잡도:**
+SWA는 KV 캐시에 최근 W 토큰만 저장합니다. n이 증가해도 메모리는 제한됩니다:
+- **O(W × d)** = O(d) — W가 고정되어 있으므로 시퀀스 길이에 대해 사실상 상수
+- 더 정확히: O(n) 시간 (각 토큰이 한 번 처리됨)이지만 O(W) KV 캐시 공간
+
+**2. n=32768 토큰에서의 KV 캐시 메모리 비교:**
+
+표준 MHA (모든 n 토큰 저장):
+```
+32768 × 2(K+V) × 32헤드 × 128헤드차원 × 2바이트 × 32레이어 ≈ 16 GB
+```
+
+SWA (마지막 W=4096 토큰만 저장):
+```
+4096 × 2 × 32 × 128 × 2 × 32 ≈ 2 GB
+```
+
+**SWA는 32K 토큰에서 ~14 GB KV 캐시 메모리를 절약** — 8배 감소.
+
+**3. 정보 손실과 보상:**
+
+토큰이 윈도우 밖으로 나가면 (W 위치보다 이전), 해당 토큰에 대한 직접 어텐션이 손실됩니다. 하지만 다층 아키텍처는 **수용 영역 확장(receptive field expansion)** 속성을 통해 부분적으로 보상합니다:
+- 레이어 1: 마지막 W 토큰에 어텐션 가능
+- 레이어 2: 레이어 1이 이미 "요약한" 토큰에 어텐션 — 사실상 W² 토큰의 이력을 봄
+- k 레이어 후: 수용 영역 ≈ W × k
+
+Mistral 7B의 32 레이어와 W=4096의 경우: 유효 수용 영역 ≈ 4096 × 32 = 131,072 토큰 — 윈도우 크기를 훨씬 초과합니다. 초기 컨텍스트는 직접 접근 가능하지 않고 중간 표현에 암묵적으로 "압축"됩니다.
+
+</details>
+
+---
+
+### 연습 문제 3: 로드 밸런싱(Load Balancing) 손실 구현
+
+수업에서 Switch Transformer 로드 밸런싱 손실을 보여줍니다. 이 손실이 **포함되지 않으면** 학습 중 전문가 활용에 어떤 일이 발생하는지 설명하고, 왜 라우터 붕괴(router collapse)가 발생하는지 추적하세요.
+
+<details>
+<summary>정답 보기</summary>
+
+**로드 밸런싱 손실 없이 라우터 붕괴가 발생하는 과정:**
+
+**1단계: 초기 비대칭성**
+초기화 중에 라우터의 선형 레이어는 무작위 가중치를 가집니다. 우연히 일부 전문가가 일반적인 입력 패턴에 대해 약간 더 높은 라우팅 확률을 받습니다. 이 비대칭성은 작지만 존재합니다.
+
+**2단계: 부익부(Rich-get-richer) 역학**
+"선호된" 전문가들이 더 많은 학습 토큰을 받음 → 파라미터가 더 많이 향상됨 → 출력이 더 좋아짐 → 라우팅에 대한 보상 신호(더 낮은 손실)가 높아짐 → 라우터가 더 강하게 그들을 선호하도록 학습됨.
+
+**3단계: 전문가 붕괴**
+충분한 학습 후, 1-2개의 전문가가 거의 모든 토큰을 받습니다. 나머지 6-7개의 전문가는 거의 그래디언트 신호를 받지 못하고 정체됩니다. 학습을 받지 않기 때문에 파라미터가 개선되지 않습니다.
+
+**4단계: 완전한 붕괴**
+모델은 사실상 1-2개의 FFN 행렬만 있는 밀집 모델과 동등해집니다 — 8개의 전문가를 갖는 용량 이점을 모두 잃습니다. 총 파라미터 수는 여전히 8배 더 크지만 (모든 전문가 가중치가 여전히 존재) 1-2개만 유용합니다.
+
+**로드 밸런싱 손실이 하는 일:**
+`f_e` (전문가 e에 대한 토큰 비율)가 균일(1/E)에서 벗어날 때 페널티를 줌으로써, 손실은 라우터가 토큰을 더 균등하게 분배하도록 밀어주는 그래디언트 신호를 생성합니다. 잡음이 있는 top-k (라우터 로짓에 탐색 잡음 추가)와 결합하여 퇴화된 해로의 조기 수렴을 방지합니다.
+
+</details>
+
+---
+
+### 연습 문제 4: MoE vs 밀집(Dense) 트레이드오프 결정
+
+프로덕션 언어 모델을 위해 두 아키텍처 중 하나를 선택하고 있습니다:
+- **모델 A**: 밀집 13B 파라미터 모델
+- **모델 B**: 8개 전문가, top-2 라우팅, 46.7B 총 파라미터, 13B 활성 파라미터의 희소 MoE
+
+두 모델의 추론 계산 비용은 대략 동일합니다. 각 시나리오에서 어느 것을 선택할지 평가하세요:
+
+1. 메모리 제한 엣지 서버 배포 (32GB 총 RAM).
+2. 소규모 도메인별 데이터셋으로 정기적으로 파인튜닝하는 연구 실험실.
+3. 다양한 주제에 걸쳐 최대한 광범위한 지식이 필요한 프로덕션 API.
+4. 동일한 입력에 대해 완전히 재현 가능한 출력이 필요한 시스템.
+
+<details>
+<summary>정답 보기</summary>
+
+**1. 메모리 제한 엣지 서버 (32GB RAM):**
+- **밀집 13B 선택** — 모델 B는 모든 46.7B 파라미터를 로드해야 합니다 (~93GB in fp16). 양자화해도 32GB 한도를 초과합니다. 밀집 13B는 fp16에서 ~26GB가 필요합니다. 타이트한 메모리 예산의 엣지 배포에는 밀집 모델이 강하게 선호됩니다.
+
+**2. 연구 실험실, 소규모 데이터셋 파인튜닝:**
+- **밀집 13B 선택** — MoE 모델은 파인튜닝이 훨씬 어렵습니다:
+  - 라우터가 적절한 전문가 할당을 동시에 학습해야 함
+  - 소규모 데이터셋은 모든 전문가를 적절히 업데이트할 충분한 신호를 제공하지 않음
+  - 파인튜닝 불안정성이 더 흔함 (일부 전문가가 붕괴하거나 과도하게 특화됨)
+  - 밀집 모델은 소규모 데이터셋에서 더 예측 가능하고 효율적으로 파인튜닝됨.
+
+**3. 다양한 주제의 최대 지식 범위:**
+- **MoE 46.7B 선택** — MoE의 전체 동기는 서로 다른 전문가가 다른 도메인(코딩, 추론, 언어 패턴, 사실 지식)에 특화할 수 있다는 것입니다. 46.7B 총 파라미터로 모델 B는 13B 밀집 모델보다 훨씬 더 많은 다양한 지식 용량을 가집니다. 범용 API에서 이 범위 이점은 중요합니다.
+
+**4. 완전히 재현 가능한 출력:**
+- **밀집 13B 선호** (하지만 두 모델 모두 주의사항이 있음) — MoE는 추가적인 비결정성 원인을 도입합니다: 이산적인 top-K 라우팅 결정. 하드웨어 실행 간의 미묘한 부동소수점 차이가 어떤 전문가가 선택되는지를 바꿀 수 있어, temperature=0에서도 출력이 변경됩니다. 밀집 모델은 비결정성의 원인으로 부동소수점 정밀도만 있습니다. 참고: 충분한 정밀도 제어로 두 모델 모두 결정론적으로 만들 수 있습니다.
+
+</details>

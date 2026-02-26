@@ -1,19 +1,26 @@
 # 네트워크 보안 기초
 
-## 개요
+**이전**: [기타 응용 계층 프로토콜](./14_Other_Application_Protocols.md) | **다음**: [보안 위협과 대응](./16_Security_Threats_Response.md)
 
-네트워크 보안은 컴퓨터 네트워크와 데이터를 무단 접근, 오용, 변조로부터 보호하는 것입니다. 이 장에서는 방화벽, NAT, VPN, 암호화 기초 등 네트워크 보안의 핵심 개념을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. CIA 삼원소(CIA Triad: Confidentiality, Integrity, Availability)를 정의하고 심층 방어(Defense-in-Depth) 전략을 설명한다
+2. 패킷 필터링(Packet Filtering), 상태 기반 검사(Stateful Inspection), 애플리케이션 계층(Application Layer), 차세대 방화벽(Next-Generation Firewall)을 비교한다
+3. 포트, 프로토콜, 출발지 주소 기준으로 트래픽을 허용하거나 차단하는 기본 `iptables` 규칙을 작성한다
+4. Static NAT, Dynamic NAT, PAT/NAPT를 구분하고 PAT가 다대일(Many-to-One) 주소 공유를 가능하게 하는 원리를 설명한다
+5. Site-to-Site VPN과 Remote Access VPN 아키텍처를 비교하고, IPsec·OpenVPN·WireGuard 프로토콜을 평가한다
+6. 대칭 암호화(Symmetric Encryption)와 비대칭 암호화(Asymmetric Encryption)를 구분하고, TLS가 하이브리드 방식을 사용하는 이유를 설명한다
+7. 해시 함수(Hash Function)와 디지털 서명(Digital Signature)이 데이터 무결성과 인증을 제공하는 방법을 설명한다
+
+---
 
 **난이도**: ⭐⭐⭐
 
-**학습 목표**:
-- 네트워크 보안의 기본 원칙 이해
-- 방화벽의 종류와 동작 원리 파악
-- NAT의 개념과 보안적 역할 이해
-- VPN의 종류와 활용 방법 학습
-- 암호화 기초 개념 습득
-
----
+네트워크는 끊임없는 위협에 노출되어 있습니다 — 트래픽을 가로채는 도청자, 열린 포트를 악용하는 공격자, 데이터를 유출하는 내부자까지 다양합니다. 보안은 단순히 설치하는 제품이 아니라, 네트워크 스택의 모든 계층에 녹아 있는 다층적인 규율입니다. 이 레슨에서는 견고한 방어 태세를 형성하는 핵심 구성 요소 — 방화벽(Firewall), NAT, VPN, 암호화 기초(Cryptographic Primitives) — 를 소개합니다.
 
 ## 목차
 
@@ -23,8 +30,7 @@
 4. [VPN](#4-vpn)
 5. [암호화 기초](#5-암호화-기초)
 6. [연습 문제](#6-연습-문제)
-7. [다음 단계](#7-다음-단계)
-8. [참고 자료](#8-참고-자료)
+7. [참고 자료](#7-참고-자료)
 
 ---
 
@@ -1033,13 +1039,7 @@ VPN(Virtual Private Network)은 공용 네트워크를 통해 안전한 사설 �
 
 ---
 
-## 7. 다음 단계
-
-[16_Security_Threats_Response.md](./16_Security_Threats_Response.md)에서 스니핑, 스푸핑, DDoS 등 구체적인 보안 위협과 대응 방안을 배워봅시다!
-
----
-
-## 8. 참고 자료
+## 7. 참고 자료
 
 ### 표준 및 RFC
 
@@ -1059,3 +1059,7 @@ VPN(Virtual Private Network)은 공용 네트워크를 통해 안전한 사설 �
 - [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
 - [OWASP](https://owasp.org/)
 - [Cloudflare Learning Center](https://www.cloudflare.com/learning/)
+
+---
+
+**이전**: [기타 응용 계층 프로토콜](./14_Other_Application_Protocols.md) | **다음**: [보안 위협과 대응](./16_Security_Threats_Response.md)

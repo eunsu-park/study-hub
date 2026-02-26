@@ -13,15 +13,18 @@ DevOps has transformed how software teams build and deliver software over the pa
 - [Process Improvement](./12_Process_Improvement.md) — metrics, retrospectives, improvement cycles
 - Basic familiarity with build systems and automated testing concepts
 
-**Learning Objectives**:
-- Explain what DevOps is and distinguish it from traditional operations and SRE
-- Describe the CALMS framework and why culture is the foundation of DevOps
-- Design a CI pipeline with meaningful stages and quality gates
-- Distinguish between Continuous Delivery and Continuous Deployment
-- Compare deployment strategies: rolling, blue-green, canary, and feature flags
-- Explain the three pillars of observability and why they matter
-- Define the four DORA metrics and interpret what they reveal about team health
-- Describe blameless postmortems and why psychological safety enables learning
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what DevOps is and distinguish it from traditional operations and SRE
+2. Describe the CALMS framework and why culture is the foundation of DevOps
+3. Design a CI pipeline with meaningful stages and quality gates
+4. Distinguish between Continuous Delivery and Continuous Deployment
+5. Compare deployment strategies: rolling, blue-green, canary, and feature flags
+6. Explain the three pillars of observability and why they matter
+7. Define the four DORA metrics and interpret what they reveal about team health
+8. Describe blameless postmortems and why psychological safety enables learning
 
 ---
 
@@ -139,6 +142,11 @@ Before CI, it was common for teams to work on separate branches for weeks or mon
 A typical CI pipeline progresses through stages of increasing depth and cost:
 
 ```
+# Why this stage ordering? Stages are arranged by speed and cost: cheapest/fastest
+# checks run first. If compilation fails (30 sec), there is no point running
+# 10 minutes of integration tests. This "fail fast" ordering minimizes wasted
+# compute and gives developers the quickest possible feedback.
+
 [Commit]
    │
    ▼
@@ -159,6 +167,9 @@ A typical CI pipeline progresses through stages of increasing depth and cost:
    ▼
 [Security Scanning]           ~2–5 minutes
    │  Dependency vulnerabilities (SCA), container image scanning
+   │  # Why scan after artifact build? SCA tools scan the actual artifact
+   │  # (e.g., container image layers), not just source code, catching
+   │  # vulnerabilities introduced by base images or transitive dependencies.
    ▼
 [PASS] → Artifact stored in registry
 [FAIL] → Build blocked, developer notified
@@ -284,9 +295,15 @@ Feature flags (also: feature toggles, feature gates) decouple *code deployment* 
 
 ```python
 # Example: server-side feature flag check (pseudocode)
+# Why check server-side, not client-side? Server-side flags take effect immediately
+# on the next request — no app update or cache invalidation needed. This is
+# critical for kill switches where seconds matter during an incident.
 if feature_flags.is_enabled("new_checkout_flow", user=current_user):
     return render_new_checkout()
 else:
+    # Why keep the old path? The else branch IS the kill switch. If the new
+    # checkout causes errors, flipping the flag instantly reverts all users to
+    # the stable path — no deployment, no rollback, no downtime.
     return render_old_checkout()
 ```
 
@@ -396,27 +413,43 @@ When people fear punishment, they hide information. A blameless culture means en
 ```
 Incident Summary
   - Date, duration, severity, affected systems
+  # Why lead with a summary? Busy stakeholders need the key facts in 30 seconds.
+  # The summary also serves as a reference ID for future pattern analysis.
 
 Timeline
   - Chronological sequence of events (UTC timestamps)
   - Include detection, escalation, mitigation, resolution
+  # Why require UTC timestamps? Distributed teams span time zones. A single
+  # reference clock eliminates confusion about event ordering.
 
 Root Cause Analysis
   - What was the triggering cause?
   - What were the contributing factors?
   - Use "5 Whys" or fault tree analysis
+  # Why separate "trigger" from "contributing factors"? The trigger is what
+  # started the incident; contributing factors are systemic weaknesses that
+  # allowed the trigger to cause harm. Fixing only the trigger leaves the
+  # system vulnerable to similar incidents from different triggers.
 
 Impact
   - Users affected, revenue impact, SLO burn
+  # Why quantify impact? Without numbers, all incidents feel equal. Impact
+  # data drives prioritization of action items and justifies investment.
 
 Action Items
   - Each item: description, owner, due date, priority
   - Distingush: immediate mitigations vs. long-term fixes
+  # Why require an owner and due date? Unowned action items never get done.
+  # Postmortems without follow-through are worse than no postmortem — they
+  # erode trust that the organization actually learns from failure.
 
 Lessons Learned
   - What went well? (detection, response)
   - What could be improved?
   - What surprised us?
+  # Why include "what went well"? Reinforcing effective practices is as
+  # important as fixing failures. It also prevents postmortems from becoming
+  # purely negative, which discourages participation.
 ```
 
 Action items from postmortems must be tracked and completed. A postmortem that generates a list of improvements but nothing changes is worse than no postmortem — it signals that the organization does not actually care about improvement.

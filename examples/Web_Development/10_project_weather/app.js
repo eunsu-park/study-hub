@@ -14,6 +14,8 @@
 const API_KEY = 'demo'; // 실제 키로 교체 필요
 const API_BASE = 'https://api.openweathermap.org/data/2.5/weather';
 
+// Why: Demo mode with sample data allows the example to work out of the box without
+// requiring students to sign up for an API key, reducing friction for first-time learners
 // 데모 모드 (API 키가 없을 때 샘플 데이터 사용)
 const DEMO_MODE = API_KEY === 'demo';
 
@@ -144,6 +146,8 @@ async function fetchWeather(city) {
             data = getDemoData(city);
         } else {
             // 실제 API 호출
+            // Why: encodeURIComponent handles city names with spaces or special characters
+            // (e.g., "New York", "São Paulo") that would break the URL without encoding
             const url = `${API_BASE}?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric&lang=kr`;
             const response = await fetch(url);
 
@@ -177,6 +181,8 @@ function getDemoData(city) {
         return sampleWeatherData[city];
     }
 
+    // Why: Case-insensitive fallback handles user input variations ("seoul", "SEOUL")
+    // without requiring exact casing, improving discoverability in the demo
     // 대소문자 무시 매칭
     const cityLower = city.toLowerCase();
     for (const [key, value] of Object.entries(sampleWeatherData)) {
@@ -277,6 +283,8 @@ function getCountryName(code) {
 function updateBackground(weatherMain) {
     const app = document.querySelector('.app');
 
+    // Why: Removing all weather classes first prevents conflicting styles from stacking
+    // when the user searches multiple cities in sequence
     // 기존 클래스 제거
     app.classList.remove('sunny', 'cloudy', 'rainy', 'snowy');
 
@@ -302,6 +310,8 @@ function updateBackground(weatherMain) {
 // ============================================
 // UI 상태 관리
 // ============================================
+// Why: Toggling a CSS class instead of style.display preserves animation/transition
+// capabilities and keeps presentation logic in CSS where it belongs
 function showLoading() {
     loadingEl.classList.remove('hidden');
 }

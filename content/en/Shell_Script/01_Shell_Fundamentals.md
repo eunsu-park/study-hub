@@ -1,10 +1,24 @@
 # Shell Fundamentals and Execution Environment
 
-**Next**: [02_Parameter_Expansion.md](./02_Parameter_Expansion.md)
+**Next**: [Parameter Expansion and Variable Attributes](./02_Parameter_Expansion.md)
 
 ---
 
-This lesson explores the shell execution environment, different shell types, startup mechanisms, and fundamental concepts that affect how your scripts behave in different contexts.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare bash, sh, zsh, and fish shells in terms of features, POSIX compliance, and scripting suitability
+2. Identify POSIX-compliant constructs and avoid common bashisms that break portability
+3. Distinguish between login, interactive, non-interactive, and restricted shell modes
+4. Trace the startup file loading order for different shell invocation modes
+5. Explain exit codes and use them to build robust conditional logic
+6. Configure shell behavior using `set` and `shopt` options
+7. Write portable shebang lines using `/usr/bin/env`
+
+---
+
+Every shell script runs inside an execution environment that determines which features are available, which configuration files are loaded, and how errors are handled. Misunderstanding these fundamentals leads to scripts that work on your machine but fail in cron jobs, Docker containers, or other systems. This lesson gives you the foundational knowledge to write scripts that behave predictably across different environments.
 
 ## 1. Types of Shells
 
@@ -757,4 +771,4 @@ Write a script that:
 
 ---
 
-**Next**: [02_Parameter_Expansion.md](./02_Parameter_Expansion.md)
+**Next**: [Parameter Expansion and Variable Attributes](./02_Parameter_Expansion.md)

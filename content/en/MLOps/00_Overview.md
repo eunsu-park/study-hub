@@ -48,6 +48,8 @@ Practical MLOps Project (E2E Pipeline)
 | [13_CICD_for_ML.md](./13_CICD_for_ML.md) | CI/CD for ML | ⭐⭐⭐ | ML pipeline CI/CD, data/model validation gates, deployment strategies, rollback |
 | [14_DVC_Data_Version_Control.md](./14_DVC_Data_Version_Control.md) | DVC Data Version Control | ⭐⭐⭐ | DVC pipelines, experiment tracking, CML, remote storage |
 | [15_LLMOps.md](./15_LLMOps.md) | LLMOps | ⭐⭐⭐⭐ | Prompt versioning, RAG operations, LLM evaluation, guardrails, cost management |
+| [16_Model_Testing_and_Validation.md](./16_Model_Testing_and_Validation.md) | Model Testing & Validation | ⭐⭐⭐ | Data/model/behavioral/infra tests, fairness, shadow deployment, CI/CD automation |
+| [17_Cloud_MLOps_Platforms.md](./17_Cloud_MLOps_Platforms.md) | Cloud MLOps Platforms | ⭐⭐⭐⭐ | SageMaker, Vertex AI, Azure ML, platform comparison, cost optimization |
 
 ---
 
@@ -137,10 +139,12 @@ print(f"Feast: {feast.__version__}")
 - Build E2E MLOps pipeline
 - Implement automated retraining system
 
-### Stage 7: Advanced Topics (13-15)
+### Stage 7: Advanced Topics (13-17)
 - CI/CD pipelines for ML systems
 - Data version control with DVC
 - LLMOps: operating LLM-based applications
+- Model testing and validation strategies
+- Cloud MLOps platforms (SageMaker, Vertex AI, Azure ML)
 
 ---
 

@@ -2,9 +2,23 @@
 
 [Previous: Bayesian Inference](./19_Bayesian_Inference.md) | [Next: Time Series Models](./21_Time_Series_Models.md)
 
-## Overview
+---
 
-Time series data is data collected in temporal order. In this chapter, we will learn about the components of time series, the concept of stationarity, autocorrelation analysis, and time series decomposition methods.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify and describe the four components of a time series: trend, seasonality, cycle, and residual
+2. Distinguish between stationary and non-stationary series and explain why stationarity matters for modeling
+3. Apply the ADF and KPSS unit root tests and interpret their combined results
+4. Transform non-stationary series into stationary ones using first differencing and seasonal differencing
+5. Compute and interpret the ACF and PACF to identify candidate time series models (AR, MA, ARMA)
+6. Perform additive, multiplicative, and STL decomposition and assess seasonal strength
+7. Conduct a comprehensive exploratory time series analysis combining visualization, stationarity tests, and decomposition
+
+---
+
+Most statistical methods assume that observations are independent, but time series data is inherently ordered and autocorrelated -- today's value depends on yesterday's. Ignoring this temporal structure leads to misleading conclusions and poor forecasts. This lesson introduces the fundamental concepts and diagnostic tools you need before fitting any time series model: understanding the components hidden in a series, testing whether it is stationary, and decomposing it into interpretable parts.
 
 ---
 
@@ -36,6 +50,9 @@ t = np.arange(n_points)
 
 # Components
 trend = 0.05 * t  # Linear trend
+# 2π/365 is the angular frequency for a yearly cycle: one full sine wave = 2π radians,
+# and we want exactly one cycle per 365 days.  Dividing by a different period (e.g., 7)
+# gives a different cycle length — the denominator *is* the period in time units.
 seasonal = 10 * np.sin(2 * np.pi * t / 365)  # Annual seasonality
 weekly = 3 * np.sin(2 * np.pi * t / 7)  # Weekly pattern
 noise = np.random.normal(0, 2, n_points)  # Noise
@@ -52,6 +69,9 @@ ts_data = pd.DataFrame({
     'weekly': weekly,
     'noise': noise
 })
+# Setting 'date' as a DatetimeIndex enables powerful time-based operations that are
+# unavailable on a plain integer index: .resample('W') for resampling, .rolling(7)
+# for moving windows, and intuitive date slicing like ts_data['2022-06':'2022-12'].
 ts_data.set_index('date', inplace=True)
 
 # Visualization
@@ -423,6 +443,10 @@ axes[1].set_title(f'First Difference (ADF p={adfuller(diff1)[1]:.4f})')
 axes[1].grid(True, alpha=0.3)
 
 # Seasonal difference (lag=365)
+# Regular first differencing removes a linear trend but leaves seasonal structure intact,
+# because subtracting yesterday from today doesn't cancel a yearly cycle.
+# Seasonal differencing (lag=s) removes the seasonality by comparing each observation
+# to the same point exactly one season ago — eliminating any pattern with period s.
 seasonal_diff = seasonal_ts[365:] - seasonal_ts[:-365]
 axes[2].plot(seasonal_diff)
 axes[2].set_title(f'Seasonal Difference (lag=365) (ADF p={adfuller(seasonal_diff)[1]:.4f})')

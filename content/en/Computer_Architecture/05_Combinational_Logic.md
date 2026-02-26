@@ -1,12 +1,25 @@
 # Combinational Logic Circuits
 
-## Overview
-
-Combinational logic circuits are digital circuits where outputs are determined solely by current inputs. In this lesson, we will learn about the characteristics of combinational logic circuits and major combinational circuits such as adders, multiplexers, demultiplexers, decoders, and encoders. These circuits are core components of computer hardware such as CPUs and memory.
+**Previous**: [Logic Gates](./04_Logic_Gates.md) | **Next**: [Sequential Logic Circuits](./06_Sequential_Logic.md)
 
 **Difficulty**: ⭐⭐ (Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Design half-adder and full-adder circuits from logic gates
+2. Explain ripple-carry addition and its propagation delay limitation
+3. Implement a multiplexer and explain its role in data selection
+4. Design a decoder and explain its use in memory addressing
+5. Describe how an ALU combines arithmetic and logic operations using control signals
+6. Compare encoders and decoders and identify their applications in computer hardware
+
+---
+
+Individual logic gates can only answer yes/no questions. Combinational circuits combine gates into components that can add numbers, select data paths, and decode addresses -- the building blocks of every processor. The ALU you will design in this lesson is the "calculator" at the heart of every CPU.
 
 ## Table of Contents
 

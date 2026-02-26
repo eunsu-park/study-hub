@@ -2,9 +2,23 @@
 
 [Previous: Multivariate Analysis](./22_Multivariate_Analysis.md) | [Next: Experimental Design](./24_Experimental_Design.md)
 
-## Overview
+---
 
-Nonparametric statistics are methods for analyzing data without assumptions about the population distribution. They are useful when normality is not satisfied or when sample size is small.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify situations where nonparametric tests are more appropriate than their parametric counterparts
+2. Apply the Mann-Whitney U test to compare two independent groups and interpret the rank-biserial effect size
+3. Apply the Wilcoxon signed-rank test for paired samples and one-sample median tests
+4. Compare three or more groups using the Kruskal-Wallis H test and perform Bonferroni-corrected post-hoc comparisons
+5. Distinguish between Spearman and Kendall rank correlations and select the appropriate one for a given data type
+6. Calculate and interpret effect sizes for nonparametric tests (rank-biserial r, eta-squared, Kendall's W)
+7. Implement a comprehensive nonparametric analysis workflow that includes normality testing, test selection, and visualization
+
+---
+
+Not all data plays by the rules of the normal distribution. Skewed distributions, small samples, ordinal scales, and stubborn outliers can all violate the assumptions that parametric tests depend on. Nonparametric methods free you from these distributional constraints by working with ranks rather than raw values, giving you robust and valid inference even when the textbook assumptions break down.
 
 ---
 

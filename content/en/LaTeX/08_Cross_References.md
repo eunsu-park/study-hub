@@ -5,6 +5,17 @@
 > **Prerequisites**: Floats and Figures, Tables, Math Typesetting
 > **Objective**: Master cross-referencing sections, equations, figures, and tables; learn bibliography management with BibTeX and BibLaTeX; create hyperlinks, indexes, and glossaries for professional academic documents.
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply the `\label`/`\ref`/`\eqref` system to cross-reference sections, equations, figures, and tables consistently
+2. Manage bibliography entries with BibTeX `.bib` files and integrate them using `\cite` commands
+3. Distinguish between BibTeX and BibLaTeX workflows and choose the appropriate one for a project
+4. Add clickable hyperlinks and PDF metadata using the `hyperref` package
+5. Build an index for a long document using the `makeidx` package and `\index` commands
+6. Create a glossary or list of acronyms using the `glossaries` package
+
 ---
 
 ## Introduction
@@ -950,6 +961,6 @@ Mastering cross-references and citations is essential for producing professional
 ---
 
 **Navigation**:
-- [Previous: 07_Tables_Advanced.md](07_Tables_Advanced.md)
-- [Next: 09_TikZ_Graphics.md](09_TikZ_Graphics.md)
+- [Previous: Advanced Tables](07_Tables_Advanced.md)
+- [Next: Page Layout & Typography](09_Page_Layout.md)
 - [Back to Overview](00_Overview.md)

@@ -1,12 +1,21 @@
 # Message Systems Comparison
 
+**Previous**: [Message Queue Fundamentals](./11_Message_Queue_Basics.md) | **Next**: [Microservices Basics](./13_Microservices_Basics.md)
+
 Difficulty: ⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Various message systems have their own design philosophies and strengths. In this chapter, you will learn the core concepts and differences between Apache Kafka, RabbitMQ, and AWS SQS/SNS, and understand the criteria for selecting the right system for your use case.
+1. Explain the architecture and core abstractions of Apache Kafka (topics, partitions, consumer groups, log-based storage)
+2. Describe RabbitMQ's AMQP model including exchanges, bindings, queues, and acknowledgment mechanisms
+3. Compare AWS SQS (standard vs FIFO) and SNS for cloud-native messaging scenarios
+4. Evaluate message systems against selection criteria such as throughput, latency, ordering, durability, and operational complexity
+5. Design hybrid messaging architectures that combine multiple systems for different workload characteristics
+6. Select the appropriate message system for a given set of requirements and constraints
 
 ---
+
+Choosing a message system is one of the most consequential infrastructure decisions a team makes -- it affects throughput ceilings, operational burden, and even how you model your data pipelines for years to come. Kafka, RabbitMQ, and cloud-managed services like AWS SQS/SNS each embody fundamentally different design philosophies, and picking the wrong one can mean expensive re-architecture later. This lesson equips you with the mental framework to make that choice confidently.
 
 ## Table of Contents
 
@@ -777,9 +786,7 @@ Design RabbitMQ Exchange/Queue for a log collection system:
 
 ---
 
-## Next Steps
-
-Learn about basic concepts of microservices architecture in [13_Microservices_Basics.md](./13_Microservices_Basics.md)!
+**Previous**: [Message Queue Fundamentals](./11_Message_Queue_Basics.md) | **Next**: [Microservices Basics](./13_Microservices_Basics.md)
 
 ---
 

@@ -1,14 +1,23 @@
 # 컨테이너 네트워킹
 
-## 학습 목표
-- Linux 네트워크 네임스페이스와 가상 네트워킹 이해하기
-- Docker 네트워킹 아키텍처와 네트워크 드라이버 마스터하기
-- Kubernetes 네트워킹 모델과 CNI 플러그인 학습하기
-- 컨테이너의 서비스 디스커버리와 로드 밸런싱 이해하기
-- 보안을 위한 네트워크 정책 구현하기
-- 서비스 메시 개념과 구현 학습하기
-- 인그레스와 외부 로드 밸런싱 구성하기
-- 컨테이너 네트워킹 문제 해결하기
+**이전**: [IPv6](./18_IPv6.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. Linux 네트워크 네임스페이스(network namespace)와 가상 네트워킹(virtual networking)의 동작 원리 이해하기
+2. Docker 네트워킹 아키텍처(networking architecture)와 네트워크 드라이버(network driver) 마스터하기
+3. Kubernetes 네트워킹 모델(networking model)과 CNI 플러그인(CNI plugin) 학습하기
+4. 컨테이너의 서비스 디스커버리(service discovery)와 로드 밸런싱(load balancing) 이해하기
+5. 보안을 위한 네트워크 정책(NetworkPolicy) 구현하기
+6. 서비스 메시(service mesh) 개념과 구현 학습하기
+7. 인그레스(Ingress)와 외부 로드 밸런싱(external load balancing) 구성하기
+8. 컨테이너 네트워킹 문제 해결하기
+
+---
+
+컨테이너(container)는 소프트웨어 배포 방식을 근본적으로 바꿨지만, 동시에 완전히 새로운 네트워킹 복잡성(networking complexity) 계층을 도입했습니다. 각 컨테이너는 자체 네트워크 네임스페이스(network namespace), 가상 인터페이스(virtual interface), 라우팅 테이블(routing table) 뷰를 가지면서도 서로, 그리고 외부 세계와 원활하게 통신해야 합니다. 이 레슨은 기존 네트워킹 지식을 컨테이너 네이티브 세계와 연결하며, Docker 브리지 네트워크(bridge network)부터 Kubernetes 서비스 메시(service mesh)까지 모든 것을 다룹니다.
 
 ## 목차
 1. [컨테이너 네트워킹 기초](#1-컨테이너-네트워킹-기초)
@@ -1692,4 +1701,4 @@ done | sort | uniq -c
 
 ---
 
-[이전: 18_IPv6](./18_IPv6.md) | [다음: 00_Overview](./00_Overview.md)
+**이전**: [IPv6](./18_IPv6.md)

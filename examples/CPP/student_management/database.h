@@ -10,6 +10,8 @@
 /**
  * @brief Custom exception for student not found errors
  */
+// Why: custom exception types enable callers to catch specific error conditions with
+// catch(StudentNotFoundException&) while still being catchable as std::exception
 class StudentNotFoundException : public std::exception {
 private:
     std::string message;
@@ -18,6 +20,8 @@ public:
         : message("Student with ID " + std::to_string(id) + " not found") {}
     explicit StudentNotFoundException(const std::string& name)
         : message("Student with name '" + name + "' not found") {}
+    // Why: noexcept on what() is required by std::exception's interface — throwing from
+    // an exception's what() would cause std::terminate, so the guarantee is essential
     const char* what() const noexcept override { return message.c_str(); }
 };
 
@@ -33,6 +37,8 @@ public:
  */
 class StudentDatabase {
 private:
+    // Why: shared_ptr allows multiple containers/callers to hold references to the same
+    // Student without worrying about ownership — the student is freed when the last reference dies
     std::vector<std::shared_ptr<Student>> students;
 
 public:

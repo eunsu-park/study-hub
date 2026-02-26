@@ -1,11 +1,22 @@
 # 13. 데이터클래스 (Dataclasses)
 
-## 학습 목표
-- dataclasses 모듈의 목적과 장점 이해
-- @dataclass 데코레이터와 옵션 마스터
-- field() 함수를 활용한 고급 필드 설정
-- 상속, 불변성, 슬롯 등 고급 기능 활용
-- Pydantic과의 비교 및 선택 기준 이해
+**이전**: [패키징과 배포](./12_Packaging_and_Distribution.md) | **다음**: [패턴 매칭](./14_Pattern_Matching.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `dataclasses` 모듈의 목적과 일반 클래스 대비 제거되는 보일러플레이트(boilerplate)를 설명할 수 있습니다
+2. `order`, `frozen`, `slots`, `kw_only` 등의 옵션과 함께 `@dataclass` 데코레이터를 사용할 수 있습니다
+3. `field()` 함수로 기본 팩토리(default factory) 설정, repr/compare 제외, 메타데이터 추가를 적용할 수 있습니다
+4. 계산 필드(computed field)와 초기화 전용 매개변수를 위해 `__post_init__`과 `InitVar`를 구현할 수 있습니다
+5. `asdict`, `astuple`, `replace`, `fields` 유틸리티 함수로 데이터클래스 인스턴스를 변환하고 검사할 수 있습니다
+6. 기본값 순서 함정을 피하면서 데이터클래스 상속(inheritance)과 조합(composition) 패턴을 적용할 수 있습니다
+7. `dataclasses`와 Pydantic을 비교하고 사용 사례에 따라 적절한 선택을 할 수 있습니다
+
+---
+
+주로 데이터를 담는 Python 클래스에는 `__init__`, `__repr__`, `__eq__` 등 놀랍도록 많은 반복 코드가 필요합니다. Python 3.7에 도입된 `dataclasses` 모듈은 타입 어노테이션(type annotation)이 달린 필드 선언으로부터 이러한 메서드들을 자동으로 생성하여, 배관 코드(plumbing)가 아닌 데이터 자체에 집중할 수 있게 해줍니다. 데이터클래스를 이해하는 것은 간결하고 정확하며 유지보수하기 쉬운 데이터 중심 코드를 작성하는 데 필수적입니다.
 
 ## 목차
 1. [데이터클래스 기초](#1-데이터클래스-기초)

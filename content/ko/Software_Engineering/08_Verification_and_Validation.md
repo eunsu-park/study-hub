@@ -13,14 +13,17 @@
 - 기본 프로그래밍 및 단위 테스트 경험
 - 소프트웨어 개발 생명주기(SDLC) 이해 (레슨 02)
 
-**학습 목표**:
-- 검증(verification)과 확인(validation)을 구별하고 둘 다 필요한 이유를 설명한다
-- 블랙박스 기법(동등 분할, 경계값 분석, 결정 테이블, 상태 전이)을 사용하여 테스트 케이스를 설계한다
-- 화이트박스 테스팅을 위한 적절한 커버리지(coverage) 기준을 선택한다
-- 단위, 통합, 시스템, 인수 테스팅을 포괄하는 테스트 전략을 계획한다
-- 버그 생명주기를 이해하고 효과적인 결함 보고서를 작성한다
-- 고신뢰성(high-assurance) 소프트웨어에서 형식적 방법(formal methods)의 역할을 평가한다
-- 회귀 테스트 스위트를 구축하고 자동화 파이프라인에 통합한다
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 검증(verification)과 확인(validation)을 구별하고 둘 다 필요한 이유를 설명한다
+2. 블랙박스 기법(동등 분할, 경계값 분석, 결정 테이블, 상태 전이)을 사용하여 테스트 케이스를 설계한다
+3. 화이트박스 테스팅을 위한 적절한 커버리지(coverage) 기준을 선택한다
+4. 단위, 통합, 시스템, 인수 테스팅을 포괄하는 테스트 전략을 계획한다
+5. 버그 생명주기를 이해하고 효과적인 결함 보고서를 작성한다
+6. 고신뢰성(high-assurance) 소프트웨어에서 형식적 방법(formal methods)의 역할을 평가한다
+7. 회귀 테스트 스위트를 구축하고 자동화 파이프라인에 통합한다
 
 ---
 
@@ -965,6 +968,72 @@ v2.0 릴리스 전 모바일 뱅킹 애플리케이션을 테스팅하고 있습
   - Fagan, M. E. (1976). "Design and Code Inspections to Reduce Errors in Program Development." *IBM Systems Journal*.
   - Myers, G. J. (1978). "A Controlled Experiment in Program Testing and Code Walkthroughs/Inspections." *Communications of the ACM*.
   - Boehm, B. (1979). "Guidelines for Verifying and Validating Software Requirements and Design Specifications." *EURO IFIP*.
+
+---
+
+## 연습 문제
+
+### 연습 1: 블랙박스 테스트 케이스 설계
+
+할인 계산 함수의 명세가 다음과 같습니다:
+
+- 입력: `cart_total` (float, > 0이어야 함)과 `coupon_code` (문자열, 선택적)
+- 유효한 쿠폰 코드: `"SAVE10"` (10% 할인), `"SAVE20"` (20% 할인), `"FREESHIP"` (가격 변동 없음, 무료 배송 플래그 설정)
+- `cart_total` < 10.00인 경우, 유효한 쿠폰이 있어도 할인이 적용되지 않음
+- `coupon_code`가 None이거나 비어 있으면 할인이 적용되지 않음
+- 유효하지 않은 쿠폰 코드는 오류를 반환함
+
+동치 분할(Equivalence Partitioning)과 경계값 분석(Boundary Value Analysis)을 사용하여 최소 테스트 집합을 도출하세요. 각 테스트 케이스에 대해 입력, 해당하는 동치 분할, 예상 출력을 명시하세요.
+
+### 연습 2: 분기 커버리지(Branch Coverage) 달성
+
+아래 함수에 대한 제어 흐름 그래프(Control Flow Graph)를 그리고, 100% 분기 커버리지를 달성하는 최소 테스트 집합을 식별하세요. 반드시 테스트해야 할 각 분기를 명시하세요.
+
+```python
+def classify_bmi(weight_kg, height_m):
+    if height_m <= 0 or weight_kg <= 0:
+        raise ValueError("Weight and height must be positive")
+    bmi = weight_kg / (height_m ** 2)
+    if bmi < 18.5:
+        return "underweight"
+    elif bmi < 25.0:
+        return "normal"
+    elif bmi < 30.0:
+        return "overweight"
+    else:
+        return "obese"
+```
+
+(a) 몇 개의 분기가 존재합니까? 모두 나열하세요.
+(b) 100% 분기 커버리지를 위해 필요한 최소 테스트 케이스 수는 얼마입니까?
+(c) 이 테스트 집합이 100% 경로 커버리지(Path Coverage)도 달성합니까? 이유를 설명하세요.
+
+### 연습 3: 통합 테스팅(Integration Testing) 계획 수립
+
+마이크로서비스 주문 시스템에는 다음 서비스가 있습니다: `OrderService`, `InventoryService`, `PaymentService`, `NotificationService`. `OrderService`는 `InventoryService`와 `PaymentService`를 호출하고, `NotificationService`는 결제 성공 후 `OrderService`에 의해 호출됩니다.
+
+(a) 통합 의존성 그래프를 스케치하세요.
+(b) 점진적 상향식(Bottom-Up) 통합 테스트 계획을 설계하세요: 각 단계에서 통합되는 서비스, 필요한 스텁(Stub)/드라이버(Driver), 각 단계가 검증하는 인터페이스 계약을 명시하세요.
+(c) 통합 수준에서만 발견할 수 있는 세 가지 통합 특화 실패 모드(단위 수준 버그가 아닌)를 식별하세요.
+
+### 연습 4: 새로운 기능을 위한 테스트 계획 작성
+
+모바일 뱅킹 앱이 PIN 입력 대안으로 생체 인증(지문 및 Face ID) 로그인을 추가하고 있습니다. 다음을 포함하는 한 페이지 분량의 테스트 계획 개요를 작성하세요:
+
+- 범위(Scope): 이 기능의 테스트 주기에서 포함 및 제외 사항
+- 테스트 수준(Test Levels): 적용되는 수준(단위, 통합, 시스템, 인수)과 각 수준에서 테스트하는 내용
+- 테스팅 유형(Testing Types): 고려해야 할 비기능 유형 최소 네 가지와 각각이 중요한 이유
+- 진입 및 종료 기준(Entry/Exit Criteria): 구체적이고 측정 가능한 조건
+- 테스트 노력에 대한 상위 세 가지 위험과 각각의 완화 전략
+
+### 연습 5: 버그 생명주기(Bug Lifecycle) 분석
+
+테스터가 사용자가 10,000행 보고서를 PDF로 내보내려고 할 때 파일이 생성되는 대신 32초 후 504 게이트웨이 타임아웃(Gateway Timeout)이 반환되는 현상을 발견했습니다.
+
+(a) 11.3절의 템플릿에 따라 완전한 버그 리포트를 작성하세요.
+(b) 심각도(Severity)와 우선순위(Priority) 등급을 지정하고 각각 독립적으로 근거를 제시하세요.
+(c) 근본 원인에 대한 두 가지 가설을 제안하세요 (하나는 애플리케이션 계층, 하나는 인프라 계층).
+(d) 개발자가 버그를 수정됨(Fixed)으로 표시한 후 테스터가 수행해야 할 검증 단계를 설명하세요.
 
 ---
 

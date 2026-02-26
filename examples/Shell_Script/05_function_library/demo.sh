@@ -3,10 +3,12 @@ set -euo pipefail
 
 # Demo script for logging and validation libraries
 
-# Get the directory where this script is located
+# Why: this idiom resolves the script's real directory even when invoked via
+# symlink or relative path — essential for reliably sourcing sibling files.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source the libraries
+# Why: sourcing (vs executing) imports functions into the current shell's
+# namespace, making log_info, validate_email, etc. available as first-class calls.
 source "$SCRIPT_DIR/lib/logging.sh"
 source "$SCRIPT_DIR/lib/validation.sh"
 

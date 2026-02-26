@@ -4,6 +4,19 @@
 
 ---
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the key innovations in BERT — bidirectional context, masked language modeling (MLM), and next sentence prediction (NSP) — and contrast them with unidirectional language models like GPT.
+2. Describe the mathematical formulation of the MLM objective and explain the token masking strategy (80/10/10 split).
+3. Implement the BERT encoder architecture from scratch in PyTorch, including multi-head self-attention, feed-forward layers, and positional embeddings.
+4. Fine-tune a pretrained BERT model for downstream tasks such as text classification, named entity recognition, and question answering.
+5. Interpret BERT's special tokens ([CLS], [SEP], [MASK]) and explain how they are used during pretraining and fine-tuning.
+6. Compare the BERT-base and BERT-large configurations and evaluate the trade-off between model size and task performance.
+
+---
+
 ## Overview
 
 BERT (Bidirectional Encoder Representations from Transformers) is a model released by Google in 2018 that revolutionized NLP. It uses **bidirectional context** to understand word meanings.

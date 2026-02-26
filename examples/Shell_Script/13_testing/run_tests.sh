@@ -99,7 +99,8 @@ run_bats_tests() {
         return
     fi
 
-    # Run bats with TAP output
+    # Why: TAP (Test Anything Protocol) output is machine-parseable, letting us
+    # extract pass/fail counts and integrate with CI systems.
     local bats_output
     local bats_exit_code=0
 
@@ -163,6 +164,8 @@ run_shellcheck() {
 
     local has_errors=false
 
+    # Why: ShellCheck catches common pitfalls (unquoted variables, useless cats,
+    # etc.) that tests won't find — static analysis complements runtime testing.
     while IFS= read -r file; do
         echo -e "${BLUE}Checking: $(basename "$file")${NC}"
 
@@ -235,7 +238,8 @@ main() {
     print_summary
 }
 
-# Run main and exit with appropriate code
+# Why: propagating the exit code lets CI pipelines detect test failures.
+# A non-zero exit causes the build to fail as expected.
 if main; then
     exit 0
 else

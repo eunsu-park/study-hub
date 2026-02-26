@@ -1,14 +1,24 @@
 # Project 3: Address Book Program
 
-## Learning Objectives
-
-What you will learn through this project:
-- Struct definition and usage
-- Struct arrays
-- File I/O (fopen, fwrite, fread, fprintf, fscanf)
-- CRUD functionality implementation (Create, Read, Update, Delete)
+**Previous**: [Project 2: Number Guessing Game](./04_Project_Number_Guessing.md) | **Next**: [Project 4: Dynamic Array](./06_Project_Dynamic_Array.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Design a `typedef struct` to group related fields (name, phone, email) into a single record type
+2. Build a fixed-size array of structs and manage a count variable to track active entries
+3. Implement full CRUD operations (Create, Read, Update, Delete) using struct pointers and array shifting
+4. Apply file I/O functions (`fopen`, `fread`, `fwrite`, `fclose`) to persist binary data across sessions
+5. Distinguish between text-mode (`fprintf`/`fscanf`) and binary-mode (`fread`/`fwrite`) file operations
+6. Use `fgets` with `strcspn` to safely read string input and strip trailing newlines
+7. Search records with `strstr` for substring matching across multiple fields
+
+---
+
+An address book is the classic exercise for learning structs and file I/O because it mirrors real database applications: you create records, list them, search by keyword, edit fields, and delete entries -- the full CRUD cycle. By saving contacts to a binary file you will also experience the difference between volatile in-memory data and durable on-disk storage, a distinction that matters in every real-world program.
 
 ## Program Requirements
 
@@ -759,4 +769,4 @@ ID   | Name            | Phone           | Email
 
 ## Next Step
 
-[06_Project_Dynamic_Array.md](./06_Project_Dynamic_Array.md) -> Let's learn about dynamic memory allocation!
+[Project 4: Dynamic Array](./06_Project_Dynamic_Array.md) -> Let's learn about dynamic memory allocation!

@@ -80,18 +80,18 @@ import gymnasium as gym
 import numpy as np
 
 def basic_usage():
-    # 환경 생성
+    # Create environment
     env = gym.make("CartPole-v1", render_mode="human")
 
-    # 환경 정보
+    # Environment info
     print(f"Observation space: {env.observation_space}")
     print(f"Action space: {env.action_space}")
 
-    # 에피소드 실행
+    # Run episode
     observation, info = env.reset(seed=42)
 
     for _ in range(1000):
-        action = env.action_space.sample()  # 무작위 행동
+        action = env.action_space.sample()  # random action
         observation, reward, terminated, truncated, info = env.step(action)
 
         if terminated or truncated:
@@ -116,16 +116,16 @@ def vectorized_envs():
     n_envs = 4
     env_name = "CartPole-v1"
 
-    # 비동기 환경 (각 환경이 별도 프로세스)
+    # Asynchronous environments (each environment in a separate process)
     envs = AsyncVectorEnv([
         make_env(env_name, seed=i) for i in range(n_envs)
     ])
 
-    # 모든 환경 동시 리셋
+    # Reset all environments simultaneously
     observations, infos = envs.reset()
     print(f"Observations shape: {observations.shape}")
 
-    # 모든 환경 동시 스텝
+    # Step all environments simultaneously
     actions = envs.action_space.sample()
     observations, rewards, terminateds, truncateds, infos = envs.step(actions)
 
@@ -140,13 +140,13 @@ from gymnasium import spaces
 from collections import deque
 
 class FrameStack(gym.Wrapper):
-    """연속 프레임을 스택"""
+    """Stack consecutive frames"""
     def __init__(self, env, n_frames=4):
         super().__init__(env)
         self.n_frames = n_frames
         self.frames = deque(maxlen=n_frames)
 
-        # 관측 공간 수정
+        # Modify observation space
         obs_shape = env.observation_space.shape
         self.observation_space = spaces.Box(
             low=0, high=255,
@@ -167,13 +167,13 @@ class FrameStack(gym.Wrapper):
 
 
 class RewardWrapper(gym.RewardWrapper):
-    """보상 스케일링/클리핑"""
+    """Reward scaling/clipping"""
     def reward(self, reward):
         return np.clip(reward, -1, 1)
 
 
 class NormalizeObservation(gym.ObservationWrapper):
-    """관측값 정규화"""
+    """Observation normalization"""
     def __init__(self, env):
         super().__init__(env)
         self.mean = 0
@@ -213,7 +213,9 @@ class ActorCriticMLP(nn.Module):
     def __init__(self, obs_dim, action_dim, hidden_sizes=(64, 64)):
         super().__init__()
 
-        # 공유 레이어
+        # Why shared layers: actor and critic share a feature extractor —
+        # they both need to understand the environment state, so sharing
+        # lower-level features reduces parameters and speeds up learning
         layers = []
         prev_size = obs_dim
         for size in hidden_sizes:
@@ -225,16 +227,19 @@ class ActorCriticMLP(nn.Module):
 
         self.shared = nn.Sequential(*layers)
 
-        # Actor와 Critic 헤드
+        # Actor and Critic heads
         self.actor = nn.Linear(prev_size, action_dim)
         self.critic = nn.Linear(prev_size, 1)
 
-        # 가중치 초기화
+        # Weight initialization
         self._init_weights()
 
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Linear):
+                # Why orthogonal initialization with sqrt(2): preserves gradient
+                # magnitude through deep networks; empirically more stable for
+                # RL than Xavier/Kaiming because it prevents early policy collapse
                 nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
                 nn.init.constant_(m.bias, 0)
 
@@ -244,6 +249,9 @@ class ActorCriticMLP(nn.Module):
 
     def get_action_and_value(self, obs, action=None):
         logits, value = self.forward(obs)
+        # Why Categorical with logits (not probs): numerically stable — avoids
+        # explicit softmax which can overflow/underflow; logits are passed
+        # directly to the log-sum-exp trick inside the distribution
         probs = Categorical(logits=logits)
 
         if action is None:
@@ -292,7 +300,7 @@ class PPO:
         self.device = device
 
     def collect_rollout(self, n_steps):
-        """경험 수집"""
+        """Collect experience"""
         obs_buf = []
         act_buf = []
         rew_buf = []
@@ -322,7 +330,7 @@ class PPO:
                 obs, _ = self.env.reset()
                 obs = torch.FloatTensor(obs).to(self.device)
 
-        # 마지막 가치 추정
+        # Estimate last value
         with torch.no_grad():
             _, _, _, last_value = self.network.get_action_and_value(obs)
 
@@ -337,7 +345,7 @@ class PPO:
         }
 
     def compute_gae(self, rollout):
-        """GAE 계산"""
+        """Compute GAE"""
         rewards = rollout['rewards']
         values = rollout['values']
         dones = rollout['dones']
@@ -347,34 +355,48 @@ class PPO:
         advantages = np.zeros(n_steps)
         last_gae = 0
 
+        # Why reversed iteration: GAE is defined recursively as
+        # A_t = delta_t + (gamma*lambda) * A_{t+1}, so we must compute
+        # future advantages before current ones — a backward pass is O(n)
         for t in reversed(range(n_steps)):
             if t == n_steps - 1:
                 next_value = last_value
             else:
                 next_value = values[t + 1]
 
+            # Why multiply by next_non_terminal: masks out the TD error at
+            # episode boundaries so that value from a new episode doesn't
+            # "bleed into" the advantage estimate of the previous episode
             next_non_terminal = 1.0 - dones[t]
             delta = rewards[t] + self.gamma * next_value * next_non_terminal - values[t]
+            # Why gae_lambda: controls the bias-variance trade-off; lambda=1
+            # gives unbiased but high-variance MC returns, lambda=0 gives
+            # low-variance but biased 1-step TD; lambda=0.95 is a sweet spot
             advantages[t] = last_gae = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae
 
         returns = advantages + values
         return advantages, returns
 
     def update(self, rollout):
-        """PPO 업데이트"""
+        """PPO update"""
         advantages, returns = self.compute_gae(rollout)
 
-        # 정규화
+        # Why normalize advantages: removes scale dependence so that the same
+        # clip_epsilon works across tasks with very different reward magnitudes;
+        # also improves gradient conditioning and training stability
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        # 텐서 변환
+        # Convert to tensors
         obs = torch.FloatTensor(rollout['obs']).to(self.device)
         actions = torch.LongTensor(rollout['actions']).to(self.device)
         old_log_probs = torch.FloatTensor(rollout['log_probs']).to(self.device)
         advantages = torch.FloatTensor(advantages).to(self.device)
         returns = torch.FloatTensor(returns).to(self.device)
 
-        # 여러 에폭
+        # Why multiple epochs on the same rollout: PPO's clipped objective
+        # bounds how far the new policy can deviate from the old one, making
+        # it safe to reuse each batch of experience for several gradient steps —
+        # this improves sample efficiency without the instability of TRPO
         n_samples = len(obs)
         indices = np.arange(n_samples)
 
@@ -390,10 +412,15 @@ class PPO:
                     obs[batch_idx], actions[batch_idx]
                 )
 
-                # 비율
+                # Why ratio in log space: exp(log_new - log_old) is numerically
+                # identical to new_prob / old_prob but avoids floating-point
+                # underflow when probabilities are very small
                 ratio = torch.exp(new_log_probs - old_log_probs[batch_idx])
 
-                # Clipped loss
+                # Why take min of surr1 and surr2: the clipped surrogate
+                # prevents large policy updates in either direction — surr2
+                # caps the benefit of moving toward high-advantage actions,
+                # making the objective a pessimistic lower bound on true performance
                 surr1 = ratio * advantages[batch_idx]
                 surr2 = torch.clamp(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) * advantages[batch_idx]
                 actor_loss = -torch.min(surr1, surr2).mean()
@@ -401,7 +428,9 @@ class PPO:
                 # Value loss
                 value_loss = nn.functional.mse_loss(values, returns[batch_idx])
 
-                # Entropy loss
+                # Why negative entropy as a loss term: maximizing entropy encourages
+                # the policy to remain stochastic and continue exploring; the small
+                # entropy_coef (0.01) prevents premature convergence to a deterministic policy
                 entropy_loss = -entropy.mean()
 
                 # Total loss
@@ -409,6 +438,9 @@ class PPO:
 
                 self.optimizer.zero_grad()
                 loss.backward()
+                # Why clip gradients: PPO can produce large gradients when the
+                # policy ratio deviates significantly; clipping prevents destructive
+                # parameter updates that would break the rollout collection policy
                 nn.utils.clip_grad_norm_(self.network.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
@@ -442,25 +474,25 @@ from networks.mlp import ActorCriticMLP
 from utils.logger import Logger
 
 def train(config):
-    # 환경 생성
+    # Create environment
     env = gym.make(config['env']['name'])
 
-    # 네트워크 생성
+    # Create network
     obs_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     network = ActorCriticMLP(obs_dim, action_dim)
 
-    # 에이전트 생성
+    # Create agent
     agent = PPO(
         env=env,
         network=network,
         **config['agent']
     )
 
-    # 로거
+    # Logger
     logger = Logger(config['logging'])
 
-    # 학습 루프
+    # Training loop
     total_timesteps = config['training']['total_timesteps']
     n_steps = config['training']['n_steps']
     timesteps = 0
@@ -468,21 +500,21 @@ def train(config):
     current_episode_reward = 0
 
     while timesteps < total_timesteps:
-        # 롤아웃 수집
+        # Collect rollout
         rollout = agent.collect_rollout(n_steps)
         timesteps += n_steps
 
-        # 에피소드 보상 추적
+        # Track episode rewards
         for r, d in zip(rollout['rewards'], rollout['dones']):
             current_episode_reward += r
             if d:
                 episode_rewards.append(current_episode_reward)
                 current_episode_reward = 0
 
-        # 업데이트
+        # Update
         loss = agent.update(rollout)
 
-        # 로깅
+        # Logging
         if len(episode_rewards) > 0:
             logger.log({
                 'timesteps': timesteps,
@@ -491,7 +523,7 @@ def train(config):
                 'episodes': len(episode_rewards)
             })
 
-        # 체크포인트 저장
+        # Save checkpoint
         if timesteps % config['training']['save_freq'] == 0:
             agent.save(f"checkpoints/ppo_{timesteps}.pt")
 
@@ -517,7 +549,7 @@ import torch
 import numpy as np
 
 def evaluate(agent, env_name, n_episodes=10, render=False):
-    """학습된 에이전트 평가"""
+    """Evaluate trained agent"""
     render_mode = "human" if render else None
     env = gym.make(env_name, render_mode=render_mode)
 
@@ -633,7 +665,7 @@ class AtariNetwork(nn.Module):
         )
 
     def forward(self, x):
-        x = x / 255.0  # 정규화
+        x = x / 255.0  # normalize
         features = self.conv(x)
         return self.actor(features), self.critic(features)
 ```
@@ -672,14 +704,14 @@ def make_atari_env(env_name):
 
 ```python
 def debug_training(agent):
-    """학습 디버깅"""
-    # 그래디언트 확인
+    """Debug training"""
+    # Check gradients
     for name, param in agent.network.named_parameters():
         if param.grad is not None:
             grad_norm = param.grad.norm().item()
             print(f"{name}: grad_norm={grad_norm:.6f}")
 
-    # 정책 엔트로피 확인
+    # Check policy entropy
     obs = torch.randn(1, obs_dim)
     logits, _ = agent.network(obs)
     probs = torch.softmax(logits, dim=-1)
@@ -706,6 +738,81 @@ def debug_training(agent):
 - PyTorch: Neural networks
 - Weights & Biases: Experiment tracking
 - NumPy: Numerical operations
+
+---
+
+## Exercises
+
+### Exercise 1: Custom Gymnasium Environment
+
+Build a custom environment following the Gymnasium API.
+
+1. Create a `GridWorldEnv` class that inherits from `gym.Env` and implements a 5×5 grid navigation task:
+   - The agent starts at (0, 0) and must reach the goal at (4, 4).
+   - Actions: 0=Up, 1=Down, 2=Left, 3=Right.
+   - Reward: +10 at goal, −0.1 per step, episode ends at goal or after 100 steps.
+   - Observation: a length-2 vector [row, col] (normalized to [0, 1]).
+2. Implement `__init__`, `reset`, `step`, `render`, and `close` methods with correct type signatures.
+3. Register the environment: `gym.register(id='GridWorld-v0', entry_point='envs.custom_env:GridWorldEnv')`.
+4. Verify with `gymnasium.utils.env_checker.check_env(env)` — fix any reported issues.
+5. Train a REINFORCE agent on the environment for 500 episodes and visualize the learned path.
+
+### Exercise 2: Environment Wrapper Pipeline
+
+Build a pipeline of custom wrappers for an Atari-style task.
+
+1. Using the `FrameStack` and `NormalizeObservation` wrappers from Section 2.3, create a composed wrapper for `CartPole-v1`:
+   ```python
+   env = gym.make('CartPole-v1')
+   env = NormalizeObservation(env)  # normalize observations online
+   env = RecordEpisodeStatistics(env)  # track episode length and reward
+   ```
+2. Implement a new `TimeLimit` wrapper that terminates an episode after `max_steps` steps regardless of the environment's own done signal.
+3. Implement a `ClipReward` wrapper that clips rewards to [−1, 1] (as used in DQN Atari training).
+4. Chain all four wrappers together and confirm that the `observation_space` and `action_space` are preserved correctly.
+5. Verify that the `NormalizeObservation` wrapper produces approximately zero-mean, unit-variance observations after 1000 steps of random play.
+
+### Exercise 3: Experiment Tracking with W&B
+
+Instrument a full PPO training run with Weights & Biases logging.
+
+1. Install wandb: `pip install wandb` and create a free account at wandb.ai.
+2. Initialize a W&B run at the start of `train.py`:
+   ```python
+   wandb.init(project="rl-study", config=config)
+   ```
+3. Log the following metrics every rollout:
+   - `actor_loss`, `critic_loss`, `entropy`
+   - `mean_reward` (average of last 10 episodes)
+   - `policy_ratio_mean` and `policy_ratio_max` (from the PPO update)
+4. Log a histogram of advantages before normalization every 10 rollouts.
+5. Run three seeds (42, 123, 456) on CartPole-v1 and use W&B's grouping feature to visualize mean ± std across seeds. What does the variance across seeds tell you about PPO's stability?
+
+### Exercise 4: Hyperparameter Sweep
+
+Conduct a systematic hyperparameter search using the config file structure.
+
+1. Use the `config/default.yaml` structure from Section 1.2. Define a sweep over:
+   - `lr` ∈ {1e-4, 3e-4, 1e-3}
+   - `clip_epsilon` ∈ {0.1, 0.2, 0.3}
+   - `gae_lambda` ∈ {0.9, 0.95, 1.0}
+2. This gives 27 configurations — run each for 100,000 timesteps on CartPole-v1 (or use W&B sweeps to run them automatically).
+3. Record `mean_reward` of the last 20 episodes for each configuration.
+4. Identify the top 3 configurations and the bottom 3. What patterns do you observe?
+5. Plot a heatmap of `mean_reward` vs. `lr` and `clip_epsilon` (averaging over `gae_lambda`). Which hyperparameter has the largest effect?
+
+### Exercise 5: End-to-End Atari Agent
+
+Build and train a complete PPO agent on a simple Atari game.
+
+1. Set up the Atari environment with the preprocessing wrappers from Section 7.2:
+   ```python
+   env = make_atari_env('ALE/Pong-v5')
+   ```
+2. Instantiate the `AtariNetwork` CNN from Section 7.1 and verify that the output shape of the convolutional layers is 3136 by running a forward pass with a dummy input of shape `(1, 4, 84, 84)`.
+3. Train PPO for 1,000,000 timesteps using the hyperparameters from Section 7 of the PPO lesson (lr=2.5e-4, n_steps=128, clip_epsilon=0.1).
+4. Save a checkpoint every 200,000 timesteps and evaluate each checkpoint for 10 episodes.
+5. Plot the evaluation reward vs. timesteps. At what point does the agent first consistently beat the random baseline (reward > −20 in Pong)?
 
 ---
 

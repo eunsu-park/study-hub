@@ -3,6 +3,8 @@
  * Mobile First 접근법
  */
 
+/* Why: CSS custom properties (variables) defined on :root cascade to all elements and can
+   be overridden in media queries, enabling responsive design changes from a single location */
 /* ============================================
    CSS 변수 (Custom Properties)
    ============================================ */
@@ -43,6 +45,8 @@ body {
 /* ============================================
    네비게이션
    ============================================ */
+/* Why: sticky + z-index keeps the nav visible during scroll without removing it from
+   document flow (unlike fixed), so no padding-top hack is needed on the body */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -221,6 +225,8 @@ h2 {
 /* ============================================
    반응형 타이포그래피
    ============================================ */
+/* Why: clamp() provides fluid typography in a single declaration, eliminating the need for
+   multiple media query breakpoints while guaranteeing minimum/maximum readability bounds */
 .responsive-heading {
     /* clamp(최소값, 선호값, 최대값) */
     font-size: clamp(1.5rem, 5vw, 3rem);
@@ -288,6 +294,9 @@ code {
     background: #f5f5f5;
 }
 
+/* Why: On small screens, the traditional table layout becomes unreadable due to horizontal
+   scrolling. Hiding thead and converting each row to a card-like block with data-label
+   pseudo-elements preserves data context without requiring horizontal scroll */
 /* 모바일 테이블 스타일 */
 @media (max-width: 600px) {
     .responsive-table {
@@ -434,6 +443,8 @@ pre code {
     color: #7f8c8d;
 }
 
+/* Why: Mobile-first breakpoints use min-width so base styles target small screens and
+   larger screens progressively enhance - this reduces CSS overrides and improves performance */
 /* ============================================
    태블릿 (576px 이상)
    ============================================ */
@@ -554,6 +565,8 @@ pre code {
     .viewport-indicator .large { display: block; }
 }
 
+/* Why: Print styles remove chrome (nav, footer) that wastes paper and restore a clean
+   reading experience - often overlooked but essential for content-heavy educational sites */
 /* ============================================
    인쇄 스타일
    ============================================ */

@@ -1,5 +1,18 @@
 # Histogram Analysis
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what an image histogram is and how it represents pixel intensity distributions
+2. Calculate and visualize histograms for grayscale and multi-channel images using OpenCV
+3. Implement histogram equalization and CLAHE to enhance image contrast
+4. Compare histograms using different distance metrics to measure image similarity
+5. Apply histogram backprojection to locate regions of interest based on color distributions
+6. Analyze histogram shape to diagnose image quality issues such as overexposure and low contrast
+
+---
+
 ## Overview
 
 A histogram is a graph representing the brightness distribution of an image. It is used for image analysis, contrast enhancement, color comparison, and more. In this lesson, we will learn about histogram calculation, equalization, CLAHE, comparison, backprojection, and other techniques.
@@ -21,6 +34,8 @@ A histogram is a graph representing the brightness distribution of an image. It 
 ## 1. Histogram Basics
 
 ### What is a Histogram?
+
+A histogram reduces an entire image to a compact statistical summary of its intensity distribution, independent of spatial layout. This makes it a powerful "fingerprint" for an image: two photos of the same scene under the same lighting will share very similar histograms even if they are slightly shifted or rotated, while a drastically different scene will have a distinct histogram shape. This property is what makes histograms useful for rapid image retrieval, exposure diagnosis, and color-based object tracking.
 
 ```
 Histogram:
@@ -93,8 +108,11 @@ def calc_gray_histogram(image_path):
         [img],           # Image (passed as list)
         [0],             # Channel (0 for grayscale)
         None,            # Mask (entire image)
-        [256],           # Number of bins (0-255: 256 bins)
-        [0, 256]         # Value range
+        [256],           # 256 bins — one per possible 8-bit intensity level (0–255).
+                         # This gives maximum precision. Fewer bins (e.g., 64) would
+                         # merge adjacent intensities, speeding up comparison at the
+                         # cost of discriminative power; useful for retrieval at scale.
+        [0, 256]         # Value range (upper bound is exclusive, so this covers 0–255)
     )
 
     # Visualize with Matplotlib
@@ -275,6 +293,8 @@ Transformation Process:
 4. Map pixel values
 ```
 
+The CDF mapping works on a simple geometric principle: if you stretch an image's intensity range so that the cumulative count of pixels is evenly spread across 0–255, the output histogram becomes as flat (uniform) as possible. Mathematically, the mapping is `out = round(CDF(in) × 255)`. A pixel value where many pixels are clustered (a tall histogram spike) gets spread over a wide output range, separating formerly indistinguishable gray levels and revealing hidden detail.
+
 ### cv2.equalizeHist()
 
 ```python
@@ -402,8 +422,17 @@ def clahe_demo(image_path):
 
     # Create and apply CLAHE
     clahe = cv2.createCLAHE(
-        clipLimit=2.0,      # Contrast limit (1.0 ~ 4.0 recommended)
-        tileGridSize=(8, 8) # Tile size
+        clipLimit=2.0,      # Contrast amplification cap per tile. When any histogram
+                            # bin would exceed this limit after equalization, the excess
+                            # votes are redistributed uniformly — this prevents runaway
+                            # noise amplification in flat (low-texture) regions.
+                            # 2.0 is a conservative default; raise to 4–8 for very dark
+                            # medical images, but expect more noise at high values.
+        tileGridSize=(8, 8) # Divides the image into an 8×8 grid of tiles; equalization
+                            # is applied independently within each tile, then boundaries
+                            # are blended with bilinear interpolation. Smaller tiles
+                            # (e.g., 4×4) enhance local detail more aggressively;
+                            # larger tiles (16×16) behave closer to global equalization.
     )
     clahe_result = clahe.apply(img)
 

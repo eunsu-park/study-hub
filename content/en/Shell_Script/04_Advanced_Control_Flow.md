@@ -1,10 +1,24 @@
 # Advanced Control Flow ⭐⭐
 
-**Previous**: [03_Arrays_and_Data.md](./03_Arrays_and_Data.md) | **Next**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md)
+**Previous**: [Arrays and Data Structures](./03_Arrays_and_Data.md) | **Next**: [Functions and Libraries](./05_Functions_and_Libraries.md)
 
 ---
 
-This lesson covers advanced control flow constructs in bash, including different test command variants, arithmetic evaluation, pattern matching, interactive menus, and sophisticated flow control patterns.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish between `[ ]`, `[[ ]]`, and `(( ))` test constructs and select the appropriate one for each use case
+2. Apply `[[ ]]` advanced features including pattern matching, regex matching, and safe variable handling
+3. Perform integer and floating-point arithmetic using `(( ))` and `bc`
+4. Enable and use extended globbing (`extglob`) patterns for advanced filename matching
+5. Build interactive menus with `select` and validate user input
+6. Write advanced `case` patterns using alternation, character classes, and extglob
+7. Implement retry loops, state machines, and signal-driven flow control patterns
+
+---
+
+Basic `if/else` and `for` loops only get you so far. Production scripts need to validate complex conditions, handle numeric comparisons, build interactive menus, and implement retry logic with timeouts. This lesson covers the full range of bash conditional and looping constructs so you can write control flow that is both correct and expressive.
 
 ## 1. Test Commands Comparison
 
@@ -1537,4 +1551,4 @@ retry --strategy exponential --max-attempts 5 --initial-delay 1 --max-delay 30 \
 
 ---
 
-**Previous**: [03_Arrays_and_Data.md](./03_Arrays_and_Data.md) | **Next**: [05_Functions_and_Libraries.md](./05_Functions_and_Libraries.md)
+**Previous**: [Arrays and Data Structures](./03_Arrays_and_Data.md) | **Next**: [Functions and Libraries](./05_Functions_and_Libraries.md)

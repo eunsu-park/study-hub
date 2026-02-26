@@ -45,16 +45,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols, Function, dsolve, Eq, exp
 
-# SymPy로 로지스틱 방정식 풀기
+# Solve logistic equation with SymPy
 t = symbols('t')
 P = Function('P')
 r_val, K_val, P0_val = 0.5, 100, 10
 
 ode = Eq(P(t).diff(t), r_val * P(t) * (1 - P(t) / K_val))
 sol = dsolve(ode, P(t), ics={P(0): P0_val})
-print("해석해:", sol)
+print("Analytical solution:", sol)
 
-# 수치 검증 (SciPy)
+# Numerical verification (SciPy)
 from scipy.integrate import solve_ivp
 
 def logistic(t, y):
@@ -65,11 +65,11 @@ t_eval = np.linspace(0, 20, 200)
 result = solve_ivp(logistic, t_span, [P0_val], t_eval=t_eval)
 
 plt.figure(figsize=(8, 5))
-plt.plot(result.t, result.y[0], 'b-', label='수치해 (solve_ivp)')
-plt.axhline(y=K_val, color='r', linestyle='--', label=f'환경 수용력 K={K_val}')
-plt.xlabel('시간 t')
-plt.ylabel('개체수 P(t)')
-plt.title('로지스틱 성장 모델')
+plt.plot(result.t, result.y[0], 'b-', label='Numerical solution (solve_ivp)')
+plt.axhline(y=K_val, color='r', linestyle='--', label=f'Carrying capacity K={K_val}')
+plt.xlabel('Time t')
+plt.ylabel('Population P(t)')
+plt.title('Logistic Growth Model')
 plt.legend()
 plt.grid(True)
 plt.show()
@@ -109,7 +109,7 @@ T = Function('T')
 
 ode = Eq(T(t).diff(t), -k * (T(t) - T_env))
 sol = dsolve(ode, T(t), ics={T(0): T0})
-print("뉴턴 냉각 법칙 해:", sol)
+print("Newton's law of cooling solution:", sol)
 # T(t) = T_env + (T_0 - T_env)*exp(-k*t)
 ```
 
@@ -167,10 +167,10 @@ from sympy import symbols, Function, dsolve, Eq
 x = symbols('x')
 y = Function('y')
 
-# 베르누이 방정식: y' + y/x = x*y^2
+# Bernoulli equation: y' + y/x = x*y^2
 bernoulli_ode = Eq(y(x).diff(x) + y(x)/x, x * y(x)**2)
 sol = dsolve(bernoulli_ode, y(x))
-print("베르누이 방정식 해:", sol)
+print("Bernoulli equation solution:", sol)
 ```
 
 ---
@@ -221,17 +221,17 @@ from sympy import symbols, Function, dsolve, Eq, cos, sin, exp
 x = symbols('x')
 y = Function('y')
 
-# 경우 1: y'' - 5y' + 6y = 0 → r = 2, 3
+# Case 1: y'' - 5y' + 6y = 0 → r = 2, 3
 sol1 = dsolve(Eq(y(x).diff(x, 2) - 5*y(x).diff(x) + 6*y(x), 0), y(x))
-print("서로 다른 실근:", sol1)
+print("Distinct real roots:", sol1)
 
-# 경우 2: y'' - 4y' + 4y = 0 → r = 2 (중근)
+# Case 2: y'' - 4y' + 4y = 0 → r = 2 (repeated root)
 sol2 = dsolve(Eq(y(x).diff(x, 2) - 4*y(x).diff(x) + 4*y(x), 0), y(x))
-print("중근:", sol2)
+print("Repeated root:", sol2)
 
-# 경우 3: y'' + 2y' + 5y = 0 → r = -1 ± 2i
+# Case 3: y'' + 2y' + 5y = 0 → r = -1 ± 2i
 sol3 = dsolve(Eq(y(x).diff(x, 2) + 2*y(x).diff(x) + 5*y(x), 0), y(x))
-print("복소근:", sol3)
+print("Complex roots:", sol3)
 ```
 
 ### 2.3 Non-homogeneous Equations: Method of Undetermined Coefficients
@@ -270,7 +270,7 @@ y = Function('y')
 # y'' + 4y = 3*sin(2x)
 ode = Eq(y(x).diff(x, 2) + 4*y(x), 3*sin(2*x))
 sol = dsolve(ode, y(x))
-print("미정계수법 해:", sol)
+print("Undetermined coefficients solution:", sol)
 ```
 
 ### 2.4 Non-homogeneous Equations: Variation of Parameters
@@ -307,7 +307,7 @@ y = Function('y')
 # y'' + y = sec(x)
 ode = Eq(y(x).diff(x, 2) + y(x), sec(x))
 sol = dsolve(ode, y(x), hint='variation_of_parameters')
-print("매개변수 변환법 해:", sol)
+print("Variation of parameters solution:", sol)
 ```
 
 ---
@@ -363,24 +363,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-omega0 = 5.0   # 고유 진동수
-x0, v0 = 1.0, 0.0  # 초기 조건: x(0)=1, v(0)=0
+omega0 = 5.0   # natural frequency
+x0, v0 = 1.0, 0.0  # initial conditions: x(0)=1, v(0)=0
 
 fig, ax = plt.subplots(figsize=(10, 6))
 t_eval = np.linspace(0, 5, 500)
 
-for label, beta in [('부족감쇠 (β=1)', 1.0),
-                     ('임계감쇠 (β=5)', 5.0),
-                     ('과감쇠 (β=8)', 8.0)]:
+for label, beta in [('Underdamped (β=1)', 1.0),
+                     ('Critically damped (β=5)', 5.0),
+                     ('Overdamped (β=8)', 8.0)]:
     def damped_osc(t, y, b=beta):
         return [y[1], -2*b*y[1] - omega0**2 * y[0]]
 
     sol = solve_ivp(damped_osc, (0, 5), [x0, v0], t_eval=t_eval)
     ax.plot(sol.t, sol.y[0], label=label)
 
-ax.set_xlabel('시간 t (s)')
-ax.set_ylabel('변위 x(t)')
-ax.set_title('감쇠 조화 진동자: 세 가지 감쇠 영역')
+ax.set_xlabel('Time t (s)')
+ax.set_ylabel('Displacement x(t)')
+ax.set_title('Damped Harmonic Oscillator: Three Damping Regimes')
 ax.legend()
 ax.grid(True)
 ax.axhline(y=0, color='k', linewidth=0.5)
@@ -433,15 +433,15 @@ for beta in [0.2, 0.5, 1.0, 2.0]:
     ax1.plot(omega, A, label=f'β={beta}, Q={Q:.1f}')
     ax2.plot(omega, np.degrees(delta), label=f'β={beta}')
 
-ax1.set_xlabel('구동 진동수 ω')
-ax1.set_ylabel('진폭 A(ω)')
-ax1.set_title('강제 진동: 공명 곡선')
+ax1.set_xlabel('Driving frequency ω')
+ax1.set_ylabel('Amplitude A(ω)')
+ax1.set_title('Forced Oscillation: Resonance Curve')
 ax1.legend()
 ax1.grid(True)
 
-ax2.set_xlabel('구동 진동수 ω')
-ax2.set_ylabel('위상차 δ (°)')
-ax2.set_title('강제 진동: 위상 응답')
+ax2.set_xlabel('Driving frequency ω')
+ax2.set_ylabel('Phase difference δ (°)')
+ax2.set_title('Forced Oscillation: Phase Response')
 ax2.legend()
 ax2.grid(True)
 plt.tight_layout()
@@ -493,17 +493,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-# RLC 회로 파라미터
-L = 0.5      # 인덕턴스 (H)
-R = 10.0     # 저항 (Ω)
-C = 100e-6   # 커패시턴스 (F)
-V0 = 12.0    # 전원 진폭 (V)
-omega_drive = 100.0  # 구동 각진동수 (rad/s)
+# RLC circuit parameters
+L = 0.5      # inductance (H)
+R = 10.0     # resistance (Ω)
+C = 100e-6   # capacitance (F)
+V0 = 12.0    # source amplitude (V)
+omega_drive = 100.0  # driving angular frequency (rad/s)
 
 omega0 = 1 / np.sqrt(L * C)
 beta = R / (2 * L)
-print(f"고유 진동수: ω₀ = {omega0:.1f} rad/s")
-print(f"감쇠 상수: β = {beta:.1f} s⁻¹")
+print(f"Natural frequency: ω₀ = {omega0:.1f} rad/s")
+print(f"Damping constant: β = {beta:.1f} s⁻¹")
 
 # Q'' + (R/L)Q' + (1/LC)Q = V(t)/L
 def rlc_circuit(t, y):
@@ -520,13 +520,13 @@ sol = solve_ivp(rlc_circuit, t_span, [0.0, 0.0], t_eval=t_eval,
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
 ax1.plot(sol.t * 1000, sol.y[0] * 1e6, 'b-')
-ax1.set_ylabel('전하 Q (μC)')
-ax1.set_title('직렬 RLC 회로 응답')
+ax1.set_ylabel('Charge Q (μC)')
+ax1.set_title('Series RLC Circuit Response')
 ax1.grid(True)
 
 ax2.plot(sol.t * 1000, sol.y[1] * 1000, 'r-')
-ax2.set_xlabel('시간 (ms)')
-ax2.set_ylabel('전류 I (mA)')
+ax2.set_xlabel('Time (ms)')
+ax2.set_ylabel('Current I (mA)')
 ax2.grid(True)
 plt.tight_layout()
 plt.show()
@@ -566,7 +566,7 @@ V0 = 12.0
 omega = np.linspace(10, 500, 1000)
 omega0 = 1 / np.sqrt(L * C)
 
-# 복소 임피던스
+# Complex impedance
 Z = R + 1j * (omega * L - 1 / (omega * C))
 I_amp = V0 / np.abs(Z)
 phase = np.angle(Z, deg=True)
@@ -574,17 +574,17 @@ phase = np.angle(Z, deg=True)
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
 ax1.plot(omega, I_amp, 'b-')
-ax1.axvline(x=omega0, color='r', linestyle='--', label=f'공명 ω₀={omega0:.1f}')
-ax1.set_ylabel('전류 진폭 I₀ (A)')
-ax1.set_title('RLC 회로 주파수 응답')
+ax1.axvline(x=omega0, color='r', linestyle='--', label=f'Resonance ω₀={omega0:.1f}')
+ax1.set_ylabel('Current amplitude I₀ (A)')
+ax1.set_title('RLC Circuit Frequency Response')
 ax1.legend()
 ax1.grid(True)
 
 ax2.plot(omega, phase, 'g-')
 ax2.axvline(x=omega0, color='r', linestyle='--')
 ax2.axhline(y=0, color='k', linewidth=0.5)
-ax2.set_xlabel('각진동수 ω (rad/s)')
-ax2.set_ylabel('위상각 φ (°)')
+ax2.set_xlabel('Angular frequency ω (rad/s)')
+ax2.set_ylabel('Phase angle φ (°)')
 ax2.grid(True)
 plt.tight_layout()
 plt.show()
@@ -621,17 +621,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sympy import symbols, Rational, Piecewise, integrate
 
-# 피카르 반복: y' = x + y, y(0) = 1
-# 정확한 해: y = 2e^x - x - 1
+# Picard iteration: y' = x + y, y(0) = 1
+# Exact solution: y = 2e^x - x - 1
 
 x_sym = symbols('x')
 y_exact = 2 * np.e**np.linspace(0, 2, 200) - np.linspace(0, 2, 200) - 1
 
-# 수치적 피카르 반복
+# Numerical Picard iteration
 x_vals = np.linspace(0, 2, 200)
 
 def picard_iteration(f, x0, y0, x_vals, n_iter=6):
-    """피카르 반복법으로 ODE를 근사 해석한다."""
+    """Approximate ODE solution using Picard iteration."""
     from scipy.integrate import cumulative_trapezoid
     y_n = np.full_like(x_vals, y0, dtype=float)
     results = [y_n.copy()]
@@ -649,11 +649,11 @@ iterations = picard_iteration(f, 0, 1, x_vals, n_iter=6)
 plt.figure(figsize=(10, 6))
 for i, y_approx in enumerate(iterations[1:], 1):
     if i in [1, 2, 3, 6]:
-        plt.plot(x_vals, y_approx, '--', label=f'피카르 반복 {i}회')
-plt.plot(x_vals, y_exact, 'k-', linewidth=2, label='정확한 해')
+        plt.plot(x_vals, y_approx, '--', label=f'Picard iteration {i}')
+plt.plot(x_vals, y_exact, 'k-', linewidth=2, label='Exact solution')
 plt.xlabel('x')
 plt.ylabel('y')
-plt.title('피카르 반복법의 수렴')
+plt.title('Convergence of Picard Iteration')
 plt.legend()
 plt.grid(True)
 plt.show()
@@ -693,7 +693,7 @@ from sympy import symbols, exp, Matrix, simplify
 
 x = symbols('x')
 
-# 론스키안 계산
+# Wronskian calculation
 y1 = exp(x)
 y2 = exp(2*x)
 
@@ -704,7 +704,7 @@ W_matrix = Matrix([
 W = simplify(W_matrix.det())
 print(f"W(e^x, e^(2x)) = {W}")  # e^(3x)
 
-# 3개 함수의 론스키안
+# Wronskian of 3 functions
 y3 = exp(3*x)
 W3 = Matrix([
     [y1, y2, y3],
@@ -752,7 +752,7 @@ $(3x^2 y + y^3)\,dx + (x^3 + 3xy^2)\,dy = 0$
 **10.** Apply Picard iteration to $y' = y$, $y(0) = 1$ for the first 5 iterations and compare with Taylor series of $e^x$.
 
 ```python
-# 문제 6 풀이 코드 (뼈대)
+# Problem 6 solution code (skeleton)
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
@@ -762,7 +762,7 @@ omega0 = np.sqrt(k / m)
 beta_val = gamma_val / (2 * m)
 print(f"ω₀ = {omega0:.2f}, β = {beta_val:.2f}")
 print(f"β² - ω₀² = {beta_val**2 - omega0**2:.2f}")
-# β=2, ω₀=4 → β < ω₀ → 부족감쇠
+# β=2, ω₀=4 → β < ω₀ → underdamped
 
 def damped_system(t, y):
     return [y[1], -(gamma_val/m)*y[1] - (k/m)*y[0]]
@@ -771,18 +771,18 @@ t_span = (0, 5)
 t_eval = np.linspace(0, 5, 500)
 sol = solve_ivp(damped_system, t_span, [0.1, 0.0], t_eval=t_eval)
 
-# 해석해: x(t) = A*exp(-β*t)*cos(ωd*t + φ)
+# Analytical solution: x(t) = A*exp(-β*t)*cos(ωd*t + φ)
 omega_d = np.sqrt(omega0**2 - beta_val**2)
-A = 0.1 / np.cos(np.arctan(beta_val / omega_d))  # 초기 조건으로부터
+A = 0.1 / np.cos(np.arctan(beta_val / omega_d))  # from initial conditions
 phi = np.arctan(beta_val / omega_d)
 x_analytic = A * np.exp(-beta_val * t_eval) * np.cos(omega_d * t_eval + phi)
 
 plt.figure(figsize=(10, 5))
-plt.plot(sol.t, sol.y[0], 'b-', label='수치해')
-plt.plot(t_eval, x_analytic, 'r--', label='해석해')
-plt.xlabel('시간 (s)')
-plt.ylabel('변위 x(t) (m)')
-plt.title('부족감쇠 조화 진동자')
+plt.plot(sol.t, sol.y[0], 'b-', label='Numerical solution')
+plt.plot(t_eval, x_analytic, 'r--', label='Analytical solution')
+plt.xlabel('Time (s)')
+plt.ylabel('Displacement x(t) (m)')
+plt.title('Underdamped Harmonic Oscillator')
 plt.legend()
 plt.grid(True)
 plt.show()

@@ -1,5 +1,23 @@
 # User and Group Management
 
+**Previous**: [Permissions and Ownership](./05_Permissions_Ownership.md) | **Next**: [Process Management](./07_Process_Management.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the structure and purpose of /etc/passwd, /etc/shadow, and /etc/group
+2. Create, modify, and delete user accounts with useradd, usermod, and userdel
+3. Manage groups using groupadd, groupmod, groupdel, and gpasswd
+4. Switch between users with su and escalate privileges with sudo
+5. Configure sudo permissions by editing /etc/sudoers safely with visudo
+6. Query user and group information using id, groups, who, w, and last
+7. Apply security best practices for password policies and account management
+
+---
+
+Linux is a multi-user operating system by design. Even a single-user workstation runs dozens of system accounts for services like web servers, databases, and mail. Properly managing users and groups is the foundation of access control -- it determines who can log in, what files they can access, and which commands they can run with elevated privileges.
+
 ## 1. User-Related Files
 
 Linux stores user information in specific files.
@@ -596,6 +614,4 @@ sudo -u www-data whoami
 
 ---
 
-## Next Steps
-
-Let's learn about process management in [07_Process_Management.md](./07_Process_Management.md)!
+**Previous**: [Permissions and Ownership](./05_Permissions_Ownership.md) | **Next**: [Process Management](./07_Process_Management.md)

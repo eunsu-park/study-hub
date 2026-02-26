@@ -1,14 +1,27 @@
 # Reverse Proxy and API Gateway
 
-## Overview
+**Previous**: [Load Balancing](./04_Load_Balancing.md) | **Next**: [Caching Strategies](./06_Caching_Strategies.md)
 
-This document covers the role of reverse proxies and the API Gateway pattern. Learn about core reverse proxy features such as SSL termination, compression, and caching, along with authentication/authorization, routing, and rate limiting algorithms.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what a reverse proxy is and how it differs from a forward proxy
+2. Describe core reverse proxy features including SSL termination, compression, and response caching
+3. Define the API Gateway pattern and explain how it simplifies client-to-microservice communication
+4. Compare rate limiting algorithms (token bucket, leaky bucket, fixed window, sliding window) and choose one for a given use case
+5. Design a reverse proxy configuration that provides SSL offloading, caching, and request routing
+6. Evaluate when to use a standalone reverse proxy versus a full API gateway solution
 
 **Difficulty**: ⭐⭐⭐
 **Estimated Learning Time**: 2-3 hours
 **Prerequisites**: [04_Load_Balancing.md](./04_Load_Balancing.md)
 
 ---
+
+In a microservices world, clients should never talk directly to dozens of backend services -- it would be like asking hotel guests to find the kitchen, laundry, and maintenance rooms themselves. A reverse proxy and API gateway serve as the single front door that handles security, routing, and cross-cutting concerns so that backend teams can focus on business logic. Mastering these patterns is essential for designing clean, secure, and performant architectures.
 
 ## Table of Contents
 
@@ -17,8 +30,7 @@ This document covers the role of reverse proxies and the API Gateway pattern. Le
 3. [API Gateway Pattern](#3-api-gateway-pattern)
 4. [Rate Limiting](#4-rate-limiting)
 5. [Practice Problems](#5-practice-problems)
-6. [Next Steps](#6-next-steps)
-7. [References](#7-references)
+6. [References](#6-references)
 
 ---
 
@@ -881,25 +893,42 @@ else:
 
 ---
 
-## 6. Next Steps
+## Hands-On Exercises
 
-If you've understood reverse proxies and API gateways, learn about caching strategies next.
+### Exercise 1: Rate Limiter Comparison
 
-### Next Lesson
-- [06_Caching_Strategies.md](./06_Caching_Strategies.md)
+Use `examples/System_Design/05_rate_limiter.py` to explore rate limiting behavior.
 
-### Related Lessons
-- [04_Load_Balancing.md](./04_Load_Balancing.md) - Traffic distribution
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - Redis, Memcached
+**Tasks:**
+1. Run all demos and compare token bucket vs. sliding window behavior
+2. Create a new traffic pattern: 5 requests/second steady state with bursts of 20 requests every 10 seconds
+3. Configure both algorithms to allow 10 req/s average. Compare which one handles the bursty pattern better
+4. Implement a **per-client** rate limiter that tracks separate limits for different client IPs
 
-### Recommended Practice
-1. Practice Nginx reverse proxy configuration
-2. Install Kong Gateway and test plugins
-3. Implement rate limiting yourself
+### Exercise 2: API Gateway Router
+
+Build a simple API gateway that routes requests to different backend services.
+
+**Tasks:**
+1. Implement a `Gateway` class with route registration: `gateway.route("/api/users/*", user_service)`
+2. Add path parameter extraction: `/api/users/123` → `service=user_service, params={"id": "123"}`
+3. Add middleware chain support: authentication → rate limiting → logging → forward to service
+4. Implement request/response transformation: strip internal headers, add CORS headers
+5. Add a circuit breaker per backend service (reference `14_circuit_breaker.py`)
+
+### Exercise 3: Reverse Proxy Cache
+
+Implement a caching reverse proxy that sits in front of backend services.
+
+**Tasks:**
+1. Build a `CachingProxy` that caches GET responses with configurable TTL
+2. Implement `Cache-Control` header parsing: respect `max-age`, `no-cache`, `no-store`
+3. Add cache invalidation on POST/PUT/DELETE to the same path
+4. Measure cache hit rate under different workloads: read-heavy (90% GET) vs. write-heavy (50% POST)
 
 ---
 
-## 7. References
+## 6. References
 
 ### Tools
 - [Nginx](https://nginx.org/)
@@ -913,6 +942,10 @@ If you've understood reverse proxies and API gateways, learn about caching strat
 
 ### Algorithms
 - [Token Bucket vs Leaky Bucket](https://www.cloudflare.com/learning/bots/what-is-rate-limiting/)
+
+---
+
+**Previous**: [Load Balancing](./04_Load_Balancing.md) | **Next**: [Caching Strategies](./06_Caching_Strategies.md)
 
 ---
 

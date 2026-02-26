@@ -79,10 +79,13 @@ class QLearning:
         if done:
             target = reward
         else:
-            # Off-policy: 다음 상태에서 최대 Q값 사용
+            # Off-policy(오프-정책)의 핵심: 실제로 선택한 행동이 아닌 다음 상태에서의
+            # 최대(MAX) Q값을 사용 — 이 덕분에 노이즈가 있는 ε-greedy 행동 정책으로
+            # 탐색하면서도 최적 정책을 학습할 수 있음
             target = reward + self.gamma * np.max(self.q_table[next_state])
 
-        # TD 업데이트
+        # 벨만 잔차(Bellman residual): 양수이면 기대보다 좋은 결과이므로 Q를 높이고,
+        # alpha는 과거 추정을 얼마나 빠르게 수정할지를 조절
         td_error = target - self.q_table[state, action]
         self.q_table[state, action] += self.alpha * td_error
 
@@ -107,7 +110,9 @@ def train_qlearning(env, agent, n_episodes=1000):
             # 환경에서 한 스텝 진행
             next_state, reward, done, _ = env.step(action)
 
-            # Q 테이블 업데이트 (다음 행동과 무관)
+            # Q-Learning 업데이트는 다음 행동이 무엇인지 알 필요가 없음 —
+            # 이 독립성 덕분에 오프-정책(off-policy)이 되어 경험 재현(experience replay)
+            # 버퍼의 오래된 전이(transition)도 재활용할 수 있음
             agent.update(state, action, reward, next_state, done)
 
             state = next_state
@@ -115,7 +120,8 @@ def train_qlearning(env, agent, n_episodes=1000):
 
         rewards_history.append(total_reward)
 
-        # Epsilon decay (선택적)
+        # epsilon을 줄여 탐색에서 활용(exploitation)으로 점진적으로 전환;
+        # 0.01 하한선은 드물지만 중요한 상태-행동 쌍을 영구히 약간 탐색하게 유지
         agent.epsilon = max(0.01, agent.epsilon * 0.995)
 
     return rewards_history
@@ -174,6 +180,8 @@ def train_sarsa(env, agent, n_episodes=1000):
 
     for episode in range(n_episodes):
         state = env.reset()
+        # 루프 진입 전에 첫 번째 행동을 선택해 (s, a) 쌍을 미리 준비 —
+        # SARSA가 요구하는 (S, A, R, S, A) 튜플 구조를 매 반복마다 갖출 수 있게 함
         action = agent.choose_action(state)  # 초기 행동 선택
         total_reward = 0
         done = False
@@ -182,13 +190,16 @@ def train_sarsa(env, agent, n_episodes=1000):
             # 환경에서 한 스텝 진행
             next_state, reward, done, _ = env.step(action)
 
-            # 다음 행동 선택 (업데이트 전에)
+            # 업데이트 이전에 next_action을 선택해야 Q 타겟이 실제로 따르는
+            # 정책을 반영할 수 있음 — 가상의 행동이 아닌 실제 행동이 타겟에 포함
             next_action = agent.choose_action(next_state)
 
             # SARSA 업데이트 (다음 행동 필요)
             agent.update(state, action, reward, next_state, next_action, done)
 
             state = next_state
+            # next_action을 재활용 — 두 번 샘플링하면 업데이트에 쓴 행동과
+            # 실제로 실행하는 행동이 달라져 온-정책(on-policy) 보장이 깨짐
             action = next_action
             total_reward += reward
 
@@ -402,6 +413,8 @@ def train_frozen_lake():
         n_actions=env.action_space.n,
         alpha=0.1,
         gamma=0.99,
+        # 순수 탐색(epsilon=1.0)에서 시작 — 정책을 확정하기 전에 모든 셀을 방문하기 위함;
+        # FrozenLake는 희소 보상(sparse reward)이라 광범위한 탐색 없이는 목표를 찾기 어려움
         epsilon=1.0
     )
 
@@ -423,6 +436,9 @@ def train_frozen_lake():
             total_reward += reward
 
         rewards.append(total_reward)
+        # 느린 감쇠(0.9995 vs 0.995)로 탐색 시간을 더 확보 —
+        # FrozenLake의 확률적 전이(stochastic transition)는 신뢰할 만한 Q값 추정을
+        # 위해 각 상태를 여러 번 방문해야 함
         agent.epsilon = max(0.01, agent.epsilon * 0.9995)
 
         if (episode + 1) % 1000 == 0:

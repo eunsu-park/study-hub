@@ -6,11 +6,14 @@
 
 **난이도**: ⭐⭐ (초급-중급)
 
-**학습 목표**:
-- 커널(Kernel)과 컨볼루션(Convolution) 개념 이해
-- 다양한 블러 필터 (`blur`, `GaussianBlur`, `medianBlur`, `bilateralFilter`)
-- 엣지 보존 스무딩
-- 커스텀 필터와 샤프닝 구현
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 커널(Kernel)과 컨볼루션(Convolution) 개념 이해
+2. 다양한 블러 필터 (`blur`, `GaussianBlur`, `medianBlur`, `bilateralFilter`)
+3. 엣지 보존 스무딩
+4. 커스텀 필터와 샤프닝 구현
 
 ---
 
@@ -35,13 +38,13 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        커널 (Kernel)                            │
+│                        Kernel                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   커널(또는 필터, 마스크)은 이미지에 적용할 연산을 정의하는        │
-│   작은 행렬입니다. 일반적으로 3x3, 5x5, 7x7 크기를 사용합니다.    │
+│   A kernel (or filter, mask) is a small matrix that defines    │
+│   the operation to apply to an image. Typically 3x3, 5x5, 7x7. │
 │                                                                 │
-│   예: 3x3 평균 필터 커널                                         │
+│   Example: 3x3 average filter kernel                            │
 │                                                                 │
 │        1/9   1/9   1/9         ┌───┬───┬───┐                   │
 │                                │1/9│1/9│1/9│                   │
@@ -51,10 +54,10 @@
 │                                │1/9│1/9│1/9│                   │
 │                                └───┴───┴───┘                   │
 │                                                                 │
-│   커널 크기의 의미:                                              │
-│   - 크기가 클수록 더 넓은 영역을 고려                            │
-│   - 큰 커널 = 강한 효과, 느린 처리                               │
-│   - 작은 커널 = 약한 효과, 빠른 처리                             │
+│   Kernel size meaning:                                          │
+│   - Larger size considers wider area                            │
+│   - Large kernel = strong effect, slow processing              │
+│   - Small kernel = weak effect, fast processing                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -63,15 +66,15 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      컨볼루션 연산                               │
+│                      Convolution Operation                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   입력 이미지의 각 픽셀에 대해 커널을 적용하여 새 값을 계산         │
+│   Apply kernel to each pixel of input image to calculate new value│
 │                                                                 │
-│   입력 이미지          3x3 커널            출력                  │
+│   Input image          3x3 kernel           Output              │
 │   ┌───┬───┬───┬───┐   ┌───┬───┬───┐                           │
 │   │ 1 │ 2 │ 3 │ 4 │   │1/9│1/9│1/9│                           │
-│   ├───┼───┼───┼───┤   ├───┼───┼───┤      결과 픽셀:            │
+│   ├───┼───┼───┼───┤   ├───┼───┼───┤      Result pixel:         │
 │   │ 5 │ 6 │ 7 │ 8 │   │1/9│1/9│1/9│   (1+2+3+5+6+7+9+10+11)/9 │
 │   ├───┼───┼───┼───┤   ├───┼───┼───┤      = 54/9 = 6            │
 │   │ 9 │10 │11 │12 │   │1/9│1/9│1/9│                           │
@@ -79,16 +82,16 @@
 │   │13 │14 │15 │16 │                                            │
 │   └───┴───┴───┴───┘                                            │
 │                                                                 │
-│   과정:                                                         │
-│   1. 커널을 이미지 위에 놓음                                     │
-│   2. 대응하는 픽셀끼리 곱함                                      │
-│   3. 모든 결과를 더함                                           │
-│   4. 다음 픽셀로 이동하여 반복                                   │
+│   Process:                                                      │
+│   1. Place kernel over image                                    │
+│   2. Multiply corresponding pixels                              │
+│   3. Sum all results                                            │
+│   4. Move to next pixel and repeat                              │
 │                                                                 │
-│   경계 처리:                                                     │
-│   - BORDER_CONSTANT: 상수 값으로 채움 (기본값 0)                 │
-│   - BORDER_REPLICATE: 경계 픽셀 복제                            │
-│   - BORDER_REFLECT: 경계에서 반사                               │
+│   Border handling:                                              │
+│   - BORDER_CONSTANT: Fill with constant value (default 0)       │
+│   - BORDER_REPLICATE: Replicate border pixels                   │
+│   - BORDER_REFLECT: Reflect at border                           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -100,18 +103,18 @@ import cv2
 import numpy as np
 
 def visualize_convolution(img, kernel):
-    """컨볼루션 과정을 시각화 (학습용)"""
+    """Visualize convolution process (for learning)"""
     h, w = img.shape
     kh, kw = kernel.shape
-    pad = kh // 2
+    pad = kh // 2  # Why pad = kh//2: ensures the output has the same size as the input
 
-    # 패딩 추가
+    # Why zero-padding: border pixels need neighbors; padding with 0 is neutral for average kernels
     padded = np.pad(img, pad, mode='constant', constant_values=0)
 
-    # 결과 배열
+    # Why float64: intermediate sums can exceed uint8 range (0-255); promotes before clipping
     result = np.zeros_like(img, dtype=np.float64)
 
-    # 컨볼루션 (느린 버전 - 학습용)
+    # Slow explicit loop — used here to make each step visible; use cv2.filter2D in production
     for y in range(h):
         for x in range(w):
             region = padded[y:y+kh, x:x+kw]
@@ -120,7 +123,7 @@ def visualize_convolution(img, kernel):
     return result
 
 
-# 예제
+# Example
 img = np.array([
     [1, 2, 3, 4],
     [5, 6, 7, 8],
@@ -128,12 +131,14 @@ img = np.array([
     [13, 14, 15, 16]
 ], dtype=np.float64)
 
-kernel = np.ones((3, 3)) / 9  # 평균 필터
+kernel = np.ones((3, 3)) / 9  # Average filter: weights sum to 1 to preserve overall brightness
 
 result = visualize_convolution(img, kernel)
-print("입력:\n", img)
-print("\n결과:\n", result)
+print("Input:\n", img)
+print("\nResult:\n", result)
 ```
+
+**블러링이 작동하는 이유는?** 이미지의 노이즈(noise)는 실제 장면 내용을 반영하지 않으면서 인접 픽셀이 급격히 다른, 빠른 고주파 픽셀 변동으로 나타납니다. 블러 커널이 이웃 픽셀을 평균하면 이러한 급격한 무작위 변동이 상쇄되는 반면, 실제 이미지 특징(여러 픽셀에 걸쳐 점진적으로 변하는)은 보존됩니다. 신호 처리 관점에서 블러 커널은 고주파 성분을 억제하는 **저역 통과 필터(low-pass filter)**입니다. 이것이 가우시안 블러가 엣지 검출 전처리 단계로 선호되는 이유이기도 합니다: 노이즈로 인한 거짓 엣지를 제거하면서 실제 구조적 경계는 보존합니다.
 
 ---
 
@@ -149,7 +154,7 @@ import cv2
 img = cv2.imread('image.jpg')
 
 # blur(src, ksize)
-# ksize: (width, height) 형태의 커널 크기
+# ksize: kernel size in (width, height) format
 
 blur_3x3 = cv2.blur(img, (3, 3))
 blur_5x5 = cv2.blur(img, (5, 5))
@@ -168,10 +173,10 @@ cv2.destroyAllWindows()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      평균 블러 커널                              │
+│                      Average Blur Kernel                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   3x3 평균 커널:                                                │
+│   3x3 average kernel:                                           │
 │   ┌─────┬─────┬─────┐                                          │
 │   │ 1/9 │ 1/9 │ 1/9 │                                          │
 │   ├─────┼─────┼─────┤                                          │
@@ -180,13 +185,13 @@ cv2.destroyAllWindows()
 │   │ 1/9 │ 1/9 │ 1/9 │           [1, 1, 1]]                    │
 │   └─────┴─────┴─────┘                                          │
 │                                                                 │
-│   5x5 평균 커널:                                                │
-│   모든 값이 1/25                                                │
+│   5x5 average kernel:                                           │
+│   All values are 1/25                                           │
 │                                                                 │
-│   특징:                                                         │
-│   - 단순하고 빠름                                               │
-│   - 엣지도 함께 흐려짐                                          │
-│   - 균일한 노이즈 제거에 효과적                                  │
+│   Features:                                                     │
+│   - Simple and fast                                             │
+│   - Edges also get blurred                                      │
+│   - Effective for uniform noise removal                         │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -200,13 +205,13 @@ import cv2
 
 img = cv2.imread('image.jpg')
 
-# normalize=True (기본): 커널 정규화 (평균 필터)
-# normalize=False: 합계 필터
+# normalize=True (default): Normalize kernel (average filter)
+# normalize=False: Sum filter
 blur_normalized = cv2.boxFilter(img, -1, (5, 5), normalize=True)
 sum_filter = cv2.boxFilter(img, -1, (5, 5), normalize=False)
 
-# blur(img, (5, 5))와 동일
-print(f"차이: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}")  # 0
+# Same as blur(img, (5, 5))
+print(f"Difference: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}")  # 0
 ```
 
 ---
@@ -219,10 +224,10 @@ print(f"차이: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}")  # 0
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      가우시안 커널                               │
+│                      Gaussian Kernel                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   가우시안 분포 (정규 분포, 종 모양):                            │
+│   Gaussian distribution (normal distribution, bell shape):      │
 │                                                                 │
 │          ▲                                                      │
 │          │     ████                                             │
@@ -231,9 +236,9 @@ print(f"차이: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}")  # 0
 │          │ ████████████                                         │
 │          │██████████████                                        │
 │          └──────────────────▶                                   │
-│                   중심에서 멀어질수록 가중치 감소                 │
+│                   Weight decreases away from center             │
 │                                                                 │
-│   3x3 가우시안 커널 (근사값):                                    │
+│   3x3 Gaussian kernel (approximate):                            │
 │   ┌─────┬─────┬─────┐                                          │
 │   │ 1   │ 2   │ 1   │                                          │
 │   ├─────┼─────┼─────┤  ×  1/16                                 │
@@ -242,10 +247,10 @@ print(f"차이: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}")  # 0
 │   │ 1   │ 2   │ 1   │                                          │
 │   └─────┴─────┴─────┘                                          │
 │                                                                 │
-│   특징:                                                         │
-│   - 평균 블러보다 자연스러운 결과                                │
-│   - 엣지 검출 전처리에 자주 사용                                 │
-│   - 시그마(σ) 값으로 블러 강도 조절                              │
+│   Features:                                                     │
+│   - More natural result than average blur                       │
+│   - Often used for edge detection preprocessing                │
+│   - Control blur strength with sigma (σ) value                 │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -258,17 +263,20 @@ import cv2
 img = cv2.imread('image.jpg')
 
 # GaussianBlur(src, ksize, sigmaX, sigmaY=0)
-# ksize: 커널 크기 (홀수여야 함)
-# sigmaX: X방향 표준편차 (0이면 커널 크기에서 자동 계산)
-# sigmaY: Y방향 표준편차 (0이면 sigmaX와 같은 값)
+# ksize: Kernel size (must be odd)
+# sigmaX: Standard deviation in X direction (0 = auto-calculate from kernel size)
+# sigmaY: Standard deviation in Y direction (0 = same as sigmaX)
 
-# 커널 크기로 지정 (sigma 자동 계산)
+# Why ksize=(5,5) and sigmaX=0: letting OpenCV derive sigma from kernel size is the
+# recommended default — it ties blur strength to a single intuitive parameter (kernel size)
+# rather than requiring you to keep ksize and sigma in sync manually
 blur1 = cv2.GaussianBlur(img, (5, 5), 0)
 
-# sigma 지정 (커널 크기는 적절히 자동 조정)
+# Why (0,0) with explicit sigma: when you reason in terms of sigma (e.g., "blur ~3 pixels"),
+# letting OpenCV pick the minimal sufficient kernel size avoids unnecessary computation
 blur2 = cv2.GaussianBlur(img, (0, 0), 3)  # sigma=3
 
-# 커널 크기와 sigma 모두 지정
+# Specify both kernel size and sigma
 blur3 = cv2.GaussianBlur(img, (7, 7), 1.5)
 ```
 
@@ -278,21 +286,21 @@ blur3 = cv2.GaussianBlur(img, (7, 7), 1.5)
 import cv2
 import numpy as np
 
-# 가우시안 커널 직접 생성하여 확인
+# Generate Gaussian kernel directly to check
 def show_gaussian_kernel(ksize, sigma):
     kernel = cv2.getGaussianKernel(ksize, sigma)
-    kernel_2d = kernel @ kernel.T  # 1D를 2D로
+    kernel_2d = kernel @ kernel.T  # 1D to 2D
     print(f"Kernel ({ksize}x{ksize}, sigma={sigma}):")
     print(np.round(kernel_2d, 4))
-    print(f"합계: {np.sum(kernel_2d):.4f}\n")
+    print(f"Sum: {np.sum(kernel_2d):.4f}\n")
 
 
-show_gaussian_kernel(3, 0)   # sigma 자동 계산
+show_gaussian_kernel(3, 0)   # sigma auto-calculated
 show_gaussian_kernel(5, 0)
 show_gaussian_kernel(5, 1.0)
 show_gaussian_kernel(5, 2.0)
 
-# 권장: sigma = 0.3 * ((ksize - 1) * 0.5 - 1) + 0.8
+# Recommended: sigma = 0.3 * ((ksize - 1) * 0.5 - 1) + 0.8
 ```
 
 ### 평균 블러 vs 가우시안 블러
@@ -304,7 +312,7 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg')
 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# 동일한 커널 크기로 비교
+# Compare with same kernel size
 ksize = 15
 avg_blur = cv2.blur(img, (ksize, ksize))
 gauss_blur = cv2.GaussianBlur(img, (ksize, ksize), 0)
@@ -337,34 +345,34 @@ plt.show()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     중앙값 필터 동작                             │
+│                     Median Filter Operation                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   입력 영역:                                                     │
+│   Input region:                                                 │
 │   ┌────┬────┬────┐                                             │
 │   │ 10 │ 20 │ 30 │                                             │
 │   ├────┼────┼────┤                                             │
-│   │ 40 │255 │ 60 │   ← 중앙의 255는 노이즈 (salt)               │
+│   │ 40 │255 │ 60 │   ← Center 255 is noise (salt)              │
 │   ├────┼────┼────┤                                             │
 │   │ 70 │ 80 │ 90 │                                             │
 │   └────┴────┴────┘                                             │
 │                                                                 │
-│   값 정렬: 10, 20, 30, 40, 60, 70, 80, 90, 255                  │
-│   중앙값: 60 (5번째 값)                                          │
+│   Sort values: 10, 20, 30, 40, 60, 70, 80, 90, 255             │
+│   Median: 60 (5th value)                                        │
 │                                                                 │
-│   결과:                                                         │
+│   Result:                                                       │
 │   ┌────┬────┬────┐                                             │
 │   │    │    │    │                                             │
 │   ├────┼────┼────┤                                             │
-│   │    │ 60 │    │   ← 노이즈가 제거됨                          │
+│   │    │ 60 │    │   ← Noise removed                           │
 │   ├────┼────┼────┤                                             │
 │   │    │    │    │                                             │
 │   └────┴────┴────┘                                             │
 │                                                                 │
-│   특징:                                                         │
-│   - Salt-and-pepper 노이즈에 매우 효과적                        │
-│   - 엣지를 비교적 잘 보존                                       │
-│   - 평균/가우시안보다 느림                                       │
+│   Features:                                                     │
+│   - Very effective for salt-and-pepper noise                   │
+│   - Preserves edges relatively well                            │
+│   - Slower than average/Gaussian                                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -377,18 +385,18 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# Salt-and-pepper 노이즈 추가 (테스트용)
+# Add salt-and-pepper noise (for testing)
 def add_salt_pepper_noise(img, amount=0.05):
     noisy = img.copy()
     h, w = img.shape[:2]
     num_pixels = int(amount * h * w)
 
-    # Salt (흰색)
+    # Salt (white)
     for _ in range(num_pixels):
         y, x = np.random.randint(0, h), np.random.randint(0, w)
         noisy[y, x] = 255
 
-    # Pepper (검은색)
+    # Pepper (black)
     for _ in range(num_pixels):
         y, x = np.random.randint(0, h), np.random.randint(0, w)
         noisy[y, x] = 0
@@ -399,11 +407,11 @@ def add_salt_pepper_noise(img, amount=0.05):
 noisy_img = add_salt_pepper_noise(img, 0.02)
 
 # medianBlur(src, ksize)
-# ksize: 홀수만 가능 (3, 5, 7, ...)
+# ksize: Only odd numbers allowed (3, 5, 7, ...)
 median_3 = cv2.medianBlur(noisy_img, 3)
 median_5 = cv2.medianBlur(noisy_img, 5)
 
-# 비교: 평균 블러, 가우시안 블러
+# Compare: average blur, Gaussian blur
 avg_blur = cv2.blur(noisy_img, (5, 5))
 gauss_blur = cv2.GaussianBlur(noisy_img, (5, 5), 0)
 
@@ -425,28 +433,28 @@ cv2.destroyAllWindows()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     양방향 필터 원리                             │
+│                     Bilateral Filter Principle                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   일반 가우시안 필터:                                            │
-│   - 거리만 고려 → 엣지도 흐려짐                                  │
+│   Regular Gaussian filter:                                      │
+│   - Only considers distance → edges also blurred                │
 │                                                                 │
-│   양방향 필터:                                                   │
-│   - 거리(공간) + 색상 차이 모두 고려                              │
-│   - 색상이 유사한 픽셀만 평균에 포함                              │
-│   - 엣지(색상 차이가 큰 곳)는 보존                                │
+│   Bilateral filter:                                             │
+│   - Considers both distance (spatial) + color difference        │
+│   - Only includes similar-colored pixels in average             │
+│   - Preserves edges (where color difference is large)           │
 │                                                                 │
-│   예시:                                                         │
+│   Example:                                                      │
 │   ┌─────────────────────────────────────────┐                   │
 │   │ 100  100  100 │ 200  200  200 │          │                   │
-│   │ 100  100  100 │ 200  200  200 │  ← 엣지  │                   │
+│   │ 100  100  100 │ 200  200  200 │  ← Edge  │                   │
 │   │ 100  100  100 │ 200  200  200 │          │                   │
 │   └─────────────────────────────────────────┘                   │
 │                                                                 │
-│   가우시안: 100과 200이 섞여서 150 부근으로                       │
-│   양방향: 100 영역은 100으로, 200 영역은 200으로 유지             │
+│   Gaussian: 100 and 200 mix to around 150                       │
+│   Bilateral: 100 area stays 100, 200 area stays 200             │
 │                                                                 │
-│   가중치 = 공간 가우시안 × 색상 가우시안                          │
+│   Weight = spatial Gaussian × color Gaussian                    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -459,20 +467,20 @@ import cv2
 img = cv2.imread('portrait.jpg')
 
 # bilateralFilter(src, d, sigmaColor, sigmaSpace)
-# d: 필터 크기 (-1이면 sigmaSpace에서 자동 계산)
-# sigmaColor: 색상 공간에서의 시그마 (높을수록 더 넓은 색상 범위 평균)
-# sigmaSpace: 좌표 공간에서의 시그마 (높을수록 더 넓은 영역 고려)
+# d: Filter size (-1 = auto-calculate from sigmaSpace)
+# sigmaColor: Sigma in color space (higher = average wider color range)
+# sigmaSpace: Sigma in coordinate space (higher = consider wider area)
 
-# 약한 효과
+# Weak effect
 bilateral_weak = cv2.bilateralFilter(img, 9, 50, 50)
 
-# 중간 효과
+# Medium effect
 bilateral_medium = cv2.bilateralFilter(img, 9, 75, 75)
 
-# 강한 효과 (그림 같은 효과)
+# Strong effect (painting-like)
 bilateral_strong = cv2.bilateralFilter(img, 15, 100, 100)
 
-# 매우 강한 효과
+# Very strong effect
 bilateral_extreme = cv2.bilateralFilter(img, 15, 150, 150)
 ```
 
@@ -483,7 +491,7 @@ import cv2
 import numpy as np
 
 def skin_smoothing(img, strength='medium'):
-    """피부 스무딩 효과"""
+    """Skin smoothing effect"""
     params = {
         'weak': (5, 30, 30),
         'medium': (9, 75, 75),
@@ -493,11 +501,11 @@ def skin_smoothing(img, strength='medium'):
 
     d, sigmaColor, sigmaSpace = params.get(strength, params['medium'])
 
-    # 양방향 필터 적용
+    # Apply bilateral filter
     smooth = cv2.bilateralFilter(img, d, sigmaColor, sigmaSpace)
 
-    # 원본과 블렌딩 (자연스러운 효과)
-    alpha = 0.7  # 블렌딩 비율
+    # Blend with original (natural effect)
+    alpha = 0.7  # Blending ratio
     result = cv2.addWeighted(smooth, alpha, img, 1 - alpha, 0)
 
     return result
@@ -521,7 +529,7 @@ import matplotlib.pyplot as plt
 
 img = cv2.imread('image.jpg')
 
-# 처리 시간 비교
+# Compare processing time
 filters = []
 
 start = time.time()
@@ -540,7 +548,7 @@ start = time.time()
 bilateral = cv2.bilateralFilter(img, 9, 75, 75)
 filters.append(('Bilateral', bilateral, time.time() - start))
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(2, 2, figsize=(12, 12))
 axes = axes.flatten()
 
@@ -568,16 +576,16 @@ import numpy as np
 img = cv2.imread('image.jpg')
 
 # filter2D(src, ddepth, kernel)
-# ddepth: 출력 이미지의 깊이 (-1 = 입력과 동일)
-# kernel: 사용자 정의 커널
+# ddepth: Output image depth (-1 = same as input)
+# kernel: User-defined kernel
 
-# 평균 필터를 직접 만들어 적용
+# Create and apply average filter manually
 kernel_avg = np.ones((5, 5), np.float32) / 25
 avg_custom = cv2.filter2D(img, -1, kernel_avg)
 
-# blur()와 동일한 결과
+# Same result as blur()
 avg_builtin = cv2.blur(img, (5, 5))
-print(f"차이: {np.sum(np.abs(avg_custom - avg_builtin))}")  # 0
+print(f"Difference: {np.sum(np.abs(avg_custom - avg_builtin))}")  # 0
 ```
 
 ### 다양한 커스텀 커널
@@ -588,7 +596,7 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# 1. 엠보스 (Emboss) 효과
+# 1. Emboss effect
 kernel_emboss = np.array([
     [-2, -1, 0],
     [-1,  1, 1],
@@ -596,7 +604,7 @@ kernel_emboss = np.array([
 ])
 emboss = cv2.filter2D(img, -1, kernel_emboss) + 128
 
-# 2. 윤곽 검출 (라플라시안)
+# 2. Edge detection (Laplacian)
 kernel_laplacian = np.array([
     [0,  1, 0],
     [1, -4, 1],
@@ -604,7 +612,7 @@ kernel_laplacian = np.array([
 ])
 laplacian = cv2.filter2D(img, -1, kernel_laplacian)
 
-# 3. Sobel X (수직 엣지)
+# 3. Sobel X (vertical edges)
 kernel_sobel_x = np.array([
     [-1, 0, 1],
     [-2, 0, 2],
@@ -612,7 +620,7 @@ kernel_sobel_x = np.array([
 ])
 sobel_x = cv2.filter2D(img, -1, kernel_sobel_x)
 
-# 4. Sobel Y (수평 엣지)
+# 4. Sobel Y (horizontal edges)
 kernel_sobel_y = np.array([
     [-1, -2, -1],
     [ 0,  0,  0],
@@ -629,17 +637,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def apply_and_show_kernel(img, kernel, title):
-    """커널 적용 결과와 커널 시각화"""
+    """Visualize kernel application result and kernel"""
     result = cv2.filter2D(img, -1, kernel)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-    # 원본
+    # Original
     axes[0].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     axes[0].set_title('Original')
     axes[0].axis('off')
 
-    # 커널 시각화
+    # Kernel visualization
     im = axes[1].imshow(kernel, cmap='RdBu_r', vmin=-2, vmax=2)
     axes[1].set_title(f'Kernel ({kernel.shape[0]}x{kernel.shape[1]})')
     for i in range(kernel.shape[0]):
@@ -648,7 +656,7 @@ def apply_and_show_kernel(img, kernel, title):
                         ha='center', va='center', fontsize=10)
     plt.colorbar(im, ax=axes[1])
 
-    # 결과
+    # Result
     axes[2].imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
     axes[2].set_title(title)
     axes[2].axis('off')
@@ -659,7 +667,7 @@ def apply_and_show_kernel(img, kernel, title):
 
 img = cv2.imread('image.jpg')
 
-# 예제: 엠보스 커널
+# Example: Emboss kernel
 kernel_emboss = np.array([
     [-2, -1, 0],
     [-1,  1, 1],
@@ -677,31 +685,31 @@ apply_and_show_kernel(img, kernel_emboss, 'Emboss')
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      샤프닝 원리                                 │
+│                      Sharpening Principle                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   샤프닝 = 원본 + (원본 - 블러)                                  │
-│         = 원본 + 고주파 성분                                     │
-│         = 엣지 강조                                             │
+│   Sharpening = Original + (Original - Blur)                     │
+│              = Original + High-frequency component              │
+│              = Edge enhancement                                 │
 │                                                                 │
-│   또는 커널로 직접:                                              │
+│   Or directly with kernel:                                      │
 │                                                                 │
-│   기본 샤프닝 커널:                                              │
+│   Basic sharpening kernel:                                      │
 │   ┌────┬────┬────┐                                             │
 │   │  0 │ -1 │  0 │                                             │
 │   ├────┼────┼────┤                                             │
-│   │ -1 │  5 │ -1 │   중앙 = 5 (원본 가중치)                     │
-│   ├────┼────┼────┤   주변 = -1 (블러 빼기)                     │
-│   │  0 │ -1 │  0 │   합 = 1 (밝기 유지)                         │
+│   │ -1 │  5 │ -1 │   Center = 5 (original weight)              │
+│   ├────┼────┼────┤   Surrounding = -1 (subtract blur)          │
+│   │  0 │ -1 │  0 │   Sum = 1 (preserve brightness)             │
 │   └────┴────┴────┘                                             │
 │                                                                 │
-│   강한 샤프닝 커널:                                              │
+│   Strong sharpening kernel:                                     │
 │   ┌────┬────┬────┐                                             │
 │   │ -1 │ -1 │ -1 │                                             │
 │   ├────┼────┼────┤                                             │
-│   │ -1 │  9 │ -1 │   중앙 = 9                                  │
-│   ├────┼────┼────┤   주변 = -1 × 8 = -8                        │
-│   │ -1 │ -1 │ -1 │   합 = 1                                    │
+│   │ -1 │  9 │ -1 │   Center = 9                                │
+│   ├────┼────┼────┤   Surrounding = -1 × 8 = -8                │
+│   │ -1 │ -1 │ -1 │   Sum = 1                                   │
 │   └────┴────┴────┘                                             │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -715,7 +723,7 @@ import numpy as np
 
 img = cv2.imread('image.jpg')
 
-# 방법 1: 커널 사용
+# Method 1: Using kernel
 kernel_sharpen = np.array([
     [0, -1, 0],
     [-1, 5, -1],
@@ -723,7 +731,7 @@ kernel_sharpen = np.array([
 ])
 sharpened1 = cv2.filter2D(img, -1, kernel_sharpen)
 
-# 방법 2: 강한 샤프닝 커널
+# Method 2: Strong sharpening kernel
 kernel_sharpen_strong = np.array([
     [-1, -1, -1],
     [-1,  9, -1],
@@ -731,23 +739,25 @@ kernel_sharpen_strong = np.array([
 ])
 sharpened2 = cv2.filter2D(img, -1, kernel_sharpen_strong)
 
-# 방법 3: Unsharp Masking (언샤프 마스크)
+# Method 3: Unsharp Masking
 def unsharp_mask(img, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
     """
-    Unsharp masking으로 샤프닝
+    Sharpening with unsharp masking
 
-    amount: 샤프닝 강도 (1.0 = 표준)
-    threshold: 엣지 검출 임계값 (노이즈 방지)
+    amount: Sharpening strength (1.0 = standard)
+    threshold: Edge detection threshold (noise prevention)
     """
-    # 블러 이미지
+    # Why Gaussian blur here: isolates low-frequency content; subtracting it leaves only
+    # high-frequency detail (edges, texture) which we then amplify
     blurred = cv2.GaussianBlur(img, kernel_size, sigma)
 
-    # 원본 - 블러 = 엣지/디테일
-    # sharpened = 원본 + amount × (원본 - 블러)
+    # Original - Blur = Edges/Details
+    # sharpened = Original + amount × (Original - Blur)
     sharpened = cv2.addWeighted(img, 1 + amount, blurred, -amount, 0)
 
     if threshold > 0:
-        # 변화량이 threshold 이하인 픽셀은 원본 유지
+        # Why threshold: prevents amplifying flat-region noise — only sharpen where
+        # there is already a meaningful intensity difference between original and blur
         diff = cv2.absdiff(img, blurred)
         mask = (diff < threshold).astype(np.uint8) * 255
         sharpened = np.where(mask == 255, img, sharpened)
@@ -766,21 +776,24 @@ import numpy as np
 
 def adaptive_sharpening(img, amount=1.0):
     """
-    적응형 샤프닝 - 엣지 영역에만 샤프닝 적용
+    Adaptive sharpening - apply sharpening only to edge regions
     """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 엣지 검출
+    # Edge detection
     edges = cv2.Canny(gray, 50, 150)
+    # Why dilate edges: the 1-pixel Canny edge is too narrow; dilation creates a soft
+    # transition zone so sharpening doesn't produce hard halos at region boundaries
     edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
 
-    # 블러
+    # Why blur before sharpening: we need the low-frequency baseline to subtract from
     blurred = cv2.GaussianBlur(img, (5, 5), 1)
 
-    # 샤프닝
+    # Sharpening
     sharpened = cv2.addWeighted(img, 1 + amount, blurred, -amount, 0)
 
-    # 엣지 영역에만 샤프닝 적용
+    # Why blend instead of hard mask: keeps flat areas completely unchanged while
+    # concentrating sharpening where edges already exist, avoiding noise amplification
     edges_3ch = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR) / 255.0
     result = (sharpened * edges_3ch + img * (1 - edges_3ch)).astype(np.uint8)
 
@@ -800,7 +813,7 @@ result = adaptive_sharpening(img, amount=2.0)
 가우시안 노이즈와 Salt-and-pepper 노이즈를 각각 생성하고, 세 가지 블러 필터(평균, 가우시안, 중앙값)로 제거 효과를 비교하세요. PSNR 값으로 정량적 비교도 수행하세요.
 
 ```python
-# 힌트: 가우시안 노이즈 추가
+# Hint: Add Gaussian noise
 def add_gaussian_noise(img, mean=0, var=100):
     noise = np.random.normal(mean, var**0.5, img.shape)
     noisy = np.clip(img + noise, 0, 255).astype(np.uint8)
@@ -828,10 +841,10 @@ def add_gaussian_noise(img, mean=0, var=100):
 가우시안 블러와 마스크를 사용하여 틸트 시프트(tilt-shift) 미니어처 효과를 구현하세요. 이미지 중앙 부분은 선명하게, 위아래는 점진적으로 블러 처리합니다.
 
 ```python
-# 힌트
+# Hint
 def tilt_shift(img, focus_y, focus_height, blur_amount):
-    # 그라디언트 마스크 생성
-    # 블러 이미지와 원본을 마스크로 블렌딩
+    # Create gradient mask
+    # Blend blurred and original images using mask
     pass
 ```
 
@@ -839,7 +852,7 @@ def tilt_shift(img, focus_y, focus_height, blur_amount):
 
 ## 9. 다음 단계
 
-[06_Morphology.md](./06_Morphology.md)에서 침식, 팽창, 열기/닫기 등 형태학적 연산을 학습합니다!
+[모폴로지 연산](./06_Morphology.md)에서 침식, 팽창, 열기/닫기 등 형태학적 연산을 학습합니다!
 
 **다음에 배울 내용**:
 - 구조 요소 (Structuring Element)
@@ -862,8 +875,8 @@ def tilt_shift(img, focus_y, focus_height, blur_amount):
 
 | 폴더 | 관련 내용 |
 |------|----------|
-| [04_Geometric_Transforms.md](./04_Geometric_Transforms.md) | 이미지 전처리 |
-| [08_Edge_Detection.md](./08_Edge_Detection.md) | 필터링 후 엣지 검출 |
+| [기하학적 변환](./04_Geometric_Transforms.md) | 이미지 전처리 |
+| [엣지 검출 (Edge Detection)](./08_Edge_Detection.md) | 필터링 후 엣지 검출 |
 
 ### 추가 참고
 

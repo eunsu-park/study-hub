@@ -1,14 +1,30 @@
 # DNS
 
-## Overview
+**Previous**: [UDP and Ports](./11_UDP_and_Ports.md) | **Next**: [HTTP and HTTPS](./13_HTTP_and_HTTPS.md)
 
-This document covers the structure and operating principles of DNS (Domain Name System). You will learn about the hierarchical structure of DNS, which translates human-readable domain names into IP addresses, as well as query methods and record types.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of DNS and why it is essential for internet communication
+2. Decompose a fully qualified domain name (FQDN) into its hierarchical components
+3. Distinguish between recursive and iterative DNS queries
+4. Identify the roles of root, TLD, and authoritative name servers
+5. Describe common DNS record types (A, AAAA, CNAME, MX, NS, TXT, PTR, SOA) and their use cases
+6. Explain DNS caching layers and the role of TTL in cache management
+7. Use DNS diagnostic tools (`dig`, `nslookup`, `host`) to query and troubleshoot DNS records
+
+---
 
 **Difficulty**: ⭐⭐
 **Estimated Learning Time**: 2 hours
 **Prerequisites**: [11_UDP_and_Ports.md](./11_UDP_and_Ports.md)
 
----
+> **Analogy -- Your Phone's Contacts App**: DNS is the internet's contacts app. You don't memorize your friend's phone number (192.168.1.100) -- you just tap their name (google.com) and your phone looks up the number. DNS does the same thing: it translates human-friendly domain names into machine-friendly IP addresses. Just like your contacts sync across devices and update when someone changes their number, DNS propagates changes across a global network of servers.
+
+Every time you type a URL, send an email, or stream a video, DNS works behind the scenes to translate names into numbers. Without DNS, the internet would be a sea of forgettable IP addresses. This lesson reveals how that global name-resolution system is organized, how queries flow through its hierarchy, and how to diagnose problems when name lookups fail.
 
 ## Table of Contents
 
@@ -19,8 +35,7 @@ This document covers the structure and operating principles of DNS (Domain Name 
 5. [DNS Caching](#5-dns-caching)
 6. [DNS Tools](#6-dns-tools)
 7. [Practice Problems](#7-practice-problems)
-8. [Next Steps](#8-next-steps)
-9. [References](#9-references)
+8. [References](#8-references)
 
 ---
 
@@ -935,25 +950,7 @@ Results vary by environment, but check:
 
 ---
 
-## 8. Next Steps
-
-After understanding DNS, learn about HTTP and HTTPS.
-
-### Next Lesson
-- [13_HTTP_and_HTTPS.md](./13_HTTP_and_HTTPS.md) - HTTP Protocol, TLS/SSL
-
-### Related Lessons
-- [11_UDP_and_Ports.md](./11_UDP_and_Ports.md) - UDP used by DNS
-- [15_Network_Security_Basics.md](./15_Network_Security_Basics.md) - DNS Security
-
-### Recommended Practice
-1. Trace DNS query process with `dig +trace`
-2. Check your own DNS server settings
-3. Query DNS records for various domains
-
----
-
-## 9. References
+## 8. References
 
 ### RFC Documents
 
@@ -977,7 +974,6 @@ After understanding DNS, learn about HTTP and HTTPS.
 
 ---
 
-**Document Information**
-- Last Modified: 2024
-- Difficulty: ⭐⭐
-- Estimated Learning Time: 2 hours
+---
+
+**Previous**: [UDP and Ports](./11_UDP_and_Ports.md) | **Next**: [HTTP and HTTPS](./13_HTTP_and_HTTPS.md)

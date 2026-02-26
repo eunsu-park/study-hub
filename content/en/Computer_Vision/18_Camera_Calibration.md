@@ -1,5 +1,17 @@
 # Camera Calibration
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the pinhole camera model and define intrinsic parameters (focal length, principal point, skew).
+2. Describe the types of lens distortion (radial and tangential) and their mathematical models.
+3. Implement camera calibration using a checkerboard pattern with `findChessboardCorners()` and `calibrateCamera()`.
+4. Apply `undistort()` to correct lens distortion in images using calibration results.
+5. Evaluate calibration quality by computing and interpreting reprojection error.
+
+---
+
 ## Overview
 
 Camera calibration is the process of measuring a camera's internal parameters and lens distortion. It is an essential step for accurate 3D reconstruction, augmented reality, robot vision, and more.
@@ -54,6 +66,14 @@ v = fy * (Y/Z) + cy
 - (u, v): 2D image coordinates (pixels)
 - fx, fy: Focal length (in pixels)
 - (cx, cy): Principal point
+
+Derivation via similar triangles: Consider a side view where
+a 3D point at position (X, Z) projects through the pinhole
+onto the image plane at distance f. The similar triangles
+formed by (0,0)-(0,f)-(x_img,f) and (0,0)-(0,Z)-(X,Z) give
+x_img/f = X/Z, so x_img = f·X/Z. Converting to pixel
+coordinates with focal length in pixels (fx) and adding the
+principal point offset (cx) yields u = fx·(X/Z) + cx.
 ```
 
 ### Camera Matrix (Intrinsic Matrix)
@@ -164,6 +184,12 @@ Where:
 - r² = x² + y² (distance in normalized image coordinates)
 - k1, k2, k3: Radial distortion coefficients
 
+Intuition: The polynomial in r acts as a radial scaling factor.
+k1 dominates near the image center; k2 and k3 only matter at the edges
+where r is large. A negative k1 produces barrel distortion (center
+expands outward), positive k1 produces pincushion (edges pulled in).
+In practice, k1 alone often captures 95% of radial distortion.
+
 Tangential Distortion:
 
 x_distorted = x + [2*p1*x*y + p2*(r² + 2*x²)]
@@ -171,6 +197,11 @@ y_distorted = y + [p1*(r² + 2*y²) + 2*p2*x*y]
 
 Where:
 - p1, p2: Tangential distortion coefficients
+
+Intuition: Tangential terms are cross-products of x and y, so they
+shift pixels in a direction perpendicular to the radial direction —
+geometrically equivalent to slightly tilting the sensor relative to
+the lens. For most modern cameras p1, p2 are very small (<0.01).
 
 Distortion coefficient vector:
 distCoeffs = [k1, k2, p1, p2, k3]
@@ -209,9 +240,13 @@ Impact of severe distortion:
 ```
 Why use a chessboard pattern:
 
-1. Accurate corner detection
+1. Accurate corner detection — black/white corners are saddle points in
+   intensity, giving a unique sub-pixel localizable feature regardless of
+   viewing angle or distance (unlike circle centers, which shift under perspective)
 2. Easy to create (printable)
-3. Planar pattern facilitates calibration
+3. Planar pattern facilitates calibration — knowing all corners lie on a
+   single flat plane (Z=0) provides strong geometric constraints that allow
+   computing both intrinsic and extrinsic parameters from a single view
 
 Chessboard size definition:
 ┌───┬───┬───┬───┬───┬───┬───┬───┐
@@ -250,18 +285,25 @@ img = cv2.imread('chessboard.jpg')
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
 # Detect chessboard corners
+# ADAPTIVE_THRESH + NORMALIZE_IMAGE improve robustness to uneven lighting —
+# the board is often lit differently across its surface
 ret, corners = cv2.findChessboardCorners(
     gray,
     CHECKERBOARD,
     flags=cv2.CALIB_CB_ADAPTIVE_THRESH +
-          cv2.CALIB_CB_FAST_CHECK +
+          cv2.CALIB_CB_FAST_CHECK +    # Reject images quickly if no checkerboard
+                                        # pattern is even plausible — saves ~80% time
+                                        # on frames without the target
           cv2.CALIB_CB_NORMALIZE_IMAGE
 )
 
 if ret:
     print(f"Corner detection successful: {corners.shape[0]} corners")
 
-    # Refine corner positions to subpixel accuracy
+    # Refine corner positions to subpixel accuracy —
+    # findChessboardCorners returns integer-pixel corners; cornerSubPix
+    # iteratively minimizes gradient direction in a (11,11) window to
+    # achieve ~0.1-pixel precision, which is essential for low reprojection error
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
@@ -306,7 +348,11 @@ import numpy as np
 import glob
 
 def collect_calibration_points(image_paths, checkerboard_size):
-    """Collect calibration points from multiple images"""
+    """Collect calibration points from multiple images.
+    Multiple views are required because a single view only determines
+    the homography — you need diverse angles/distances so that different
+    distortion amounts are observed, making k1..k3 well-constrained.
+    """
 
     # 3D points (world coordinates): z=0 plane
     objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3),
@@ -315,11 +361,13 @@ def collect_calibration_points(image_paths, checkerboard_size):
                            0:checkerboard_size[1]].T.reshape(-1, 2)
 
     # Apply actual size (e.g., each square is 25mm)
+    # Scaling objp by the physical square size makes tvecs (translation vectors)
+    # come out in mm, enabling real-world distance measurement later
     square_size = 25.0  # mm
     objp *= square_size
 
-    obj_points = []  # 3D points
-    img_points = []  # 2D points
+    obj_points = []  # 3D points (same for every image — pattern doesn't change)
+    img_points = []  # 2D points (different per image — perspective changes)
     img_size = None
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
@@ -414,6 +462,9 @@ def calibrate_camera(image_folder, checkerboard_size=(7, 5),
             img_points.append(corners)
             valid_images.append(img_path)
 
+    # Calibration needs enough views to constrain all unknowns:
+    # 5 intrinsic + 5 distortion params = 10 unknowns, so ≥10 images
+    # from diverse angles is the practical minimum for stable results
     if len(obj_points) < 10:
         print(f"Warning: Low number of images ({len(obj_points)})")
 
@@ -424,7 +475,9 @@ def calibrate_camera(image_folder, checkerboard_size=(7, 5),
         img_size,       # Image size
         None,           # Initial camera matrix (None for automatic calculation)
         None,           # Initial distortion coefficients
-        flags=cv2.CALIB_FIX_K3  # Fix k3 (optional)
+        flags=cv2.CALIB_FIX_K3  # k3 models extreme distortion at image corners;
+                                 # fixing it at 0 prevents overfitting when the
+                                 # calibration board doesn't reach the frame edges
     )
 
     print(f"\nCalibration complete")
@@ -549,7 +602,10 @@ def undistort_image(img, camera_matrix, dist_coeffs):
     h, w = img.shape[:2]
 
     # Compute new camera matrix (optimized region)
-    # alpha: 0=remove all distorted pixels, 1=keep all original pixels
+    # alpha controls the trade-off between field-of-view and black border removal:
+    # alpha=0 crops away all black border pixels (smaller FoV, no wasted pixels)
+    # alpha=1 preserves all original pixels (full FoV but black borders remain)
+    # For measurement tasks use alpha=1; for display use alpha=0
     new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(
         camera_matrix, dist_coeffs, (w, h), alpha=1, newImgSize=(w, h)
     )
@@ -597,7 +653,10 @@ class UndistortMapper:
             camera_matrix, dist_coeffs, (w, h), alpha, (w, h)
         )
 
-        # Compute remapping maps (only once)
+        # Compute remapping maps once and reuse every frame —
+        # cv2.undistort() recomputes the map internally each call (O(W×H) work),
+        # so pre-computing with initUndistortRectifyMap saves ~30-40% CPU for
+        # video streams where the camera parameters don't change between frames
         self.mapx, self.mapy = cv2.initUndistortRectifyMap(
             camera_matrix, dist_coeffs, None,
             self.new_camera_matrix, (w, h), cv2.CV_32FC1
@@ -605,6 +664,8 @@ class UndistortMapper:
 
     def undistort(self, img, crop=True):
         """Fast undistortion (using remapping)"""
+        # cv2.remap applies precomputed pixel mappings with bilinear interpolation —
+        # INTER_LINEAR gives smooth results for non-integer remapped coordinates
         undistorted = cv2.remap(img, self.mapx, self.mapy,
                                 cv2.INTER_LINEAR)
 
@@ -712,6 +773,17 @@ Process:
 Good calibration: Reprojection error < 0.5 pixels
 Acceptable: 0.5 ~ 1.0 pixels
 Poor: > 1.0 pixels
+
+Why 0.5 pixels is the threshold: a well-focused camera with sub-pixel
+corner refinement has detection noise of ~0.1–0.2 pixels, so any
+additional reprojection error above 0.5 pixels indicates the calibration
+model itself is introducing errors (too few views, poor coverage, or
+a board that wasn't held flat during capture).
+
+Why analyze per-image errors: a single high-error image (blurred, board
+not fully visible, or wrong pose) can inflate the overall mean. Identifying
+and removing that image often reduces total error significantly without
+recapturing new data.
 ```
 
 ### Detailed Reprojection Error Analysis

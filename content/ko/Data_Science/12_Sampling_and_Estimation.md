@@ -2,9 +2,23 @@
 
 [이전: 확률론 복습](./11_Probability_Review.md) | [다음: 신뢰구간](./13_Confidence_Intervals.md)
 
-## 개요
+---
 
-통계학의 핵심 목표는 **표본(sample)**을 통해 **모집단(population)**의 특성을 추론하는 것입니다. 이 장에서는 표본분포의 개념과 점추정 방법, 특히 최대가능도 추정법(MLE)과 적률추정법(MoM)을 학습합니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 모수(population parameter)와 표본 통계량(sample statistic)을 구분하고, 표본추출(sampling)이 필요한 이유를 설명할 수 있습니다.
+2. 단순무작위추출(simple random sampling), 층화추출(stratified sampling), 계통추출(systematic sampling) 방법을 설명할 수 있습니다.
+3. 표본평균의 표본분포(sampling distribution)를 유도하고 표준오차(standard error)를 계산할 수 있습니다.
+4. 불편성(unbiasedness), 일치성(consistency), 효율성(efficiency) 성질을 이용하여 추정량(estimator)의 품질을 평가할 수 있습니다.
+5. 베르누이(Bernoulli), 정규(normal), 포아송(Poisson), 지수(exponential) 분포에 대해 최대가능도 추정법(Maximum Likelihood Estimation, MLE)을 구현할 수 있습니다.
+6. 감마(gamma) 및 베타(beta) 분포의 파라미터를 적률추정법(Method of Moments, MoM)으로 추정할 수 있습니다.
+7. 시뮬레이션을 통해 편향(bias), 분산(variance), 평균제곱오차(MSE) 측면에서 MLE와 MoM을 비교할 수 있습니다.
+
+---
+
+실제로는 모집단(population) 전체에 접근하는 경우가 거의 없으며, 항상 표본(sample)을 가지고 작업합니다. 통계학의 핵심 과제는 유한한 표본이 말해주는 것과 모집단 전체에 대한 사실 사이의 간극을 메우는 것입니다. 이 레슨에서는 그 간극을 잇는 이론적 도구를 다룹니다. 표본 통계량의 행동 방식을 정량화하는 표본분포(sampling distribution)와, 제한된 데이터로부터 최선의 파라미터 추정값을 추출하는 추정 방법론(estimation methods)이 그것입니다.
 
 ---
 

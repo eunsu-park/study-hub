@@ -1,10 +1,25 @@
 # 실전 설계 예제 2 (Practical Design Examples 2)
 
+**이전**: [실전 설계 예제 1](./17_Design_Example_1.md) | **다음**: [관측 가능성 및 모니터링](./19_Observability_Monitoring.md)
+
 난이도: ⭐⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-이 장에서는 소셜 미디어와 실시간 통신 시스템을 설계합니다: 뉴스 피드/타임라인, 채팅 시스템, 알림 시스템. 이러한 시스템은 대규모 사용자를 다루며, 실시간성과 확장성이 중요한 과제입니다.
+**난이도**: ⭐⭐⭐⭐ (고급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 팬아웃(Fan-out) 전략(Push vs Pull vs 하이브리드)과 랭킹 알고리즘(Ranking Algorithm)을 고려한 뉴스 피드(News Feed)/타임라인(Timeline) 시스템을 설계할 수 있습니다
+2. WebSocket 연결 관리, 메시지 순서 보장(Message Ordering), 전송 확인(Delivery Receipts), 오프라인 저장(Offline Storage)을 처리하는 실시간 채팅(Chat) 시스템을 설계할 수 있습니다
+3. 다중 채널(Push, Email, SMS), 템플릿 관리(Template Management), 사용자 설정(User Preference) 처리를 지원하는 알림 시스템(Notification System)을 설계할 수 있습니다
+4. 소셜 그래프(Social Graph) 워크로드에서 사전 계산(Fan-out on Write)과 요청 시 계산(Fan-out on Read)의 트레이드오프를 분석할 수 있습니다
+5. 지속적인 WebSocket 아키텍처를 위한 연결 관리 기법(하트비트, 재연결, 프레전스 감지)을 적용할 수 있습니다
+6. 다양한 실시간 시스템 유형에서 전송 보장(Delivery Guarantee) 요구사항을 평가하고 적절한 전략을 선택할 수 있습니다
+
+---
+
+이 레슨에서 다루는 시스템 — 뉴스 피드(News Feed), 채팅(Chat), 알림(Notification) — 은 소셜 플랫폼에서 가장 사용자와 밀접하고 지연(Latency)에 민감한 서비스들입니다. Facebook의 뉴스 피드는 20억 명 이상의 사용자에게 개인화된 랭킹 콘텐츠를 제공하고, WhatsApp은 하루 1,000억 건의 메시지를 종단간 암호화(End-to-End Encryption)로 전송하며, 모든 주요 앱은 알림 시스템을 통해 Push, 이메일(Email), SMS 채널로 사용자를 재참여시킵니다. 이 시스템들을 설계하면 대규모 팬아웃(Fan-out at Scale), 실시간 전송(Real-time Delivery), 그리고 신선도(Freshness)와 연산 비용(Compute Cost) 사이의 미묘한 균형을 깊이 이해하게 됩니다.
 
 ---
 
@@ -948,17 +963,6 @@
 
 ---
 
-## 마무리
-
-이 시리즈를 통해 시스템 설계의 핵심 개념과 패턴을 학습했습니다. 실제 면접이나 프로젝트에서는 요구사항을 명확히 하고, 트레이드오프를 고려하며, 확장 가능한 설계를 하는 것이 중요합니다.
-
-다음 단계로는:
-- 실제 오픈소스 시스템 코드 분석
-- 기업 기술 블로그 연구 (Netflix, Uber, Twitter 등)
-- 모의 시스템 설계 면접 연습
-
----
-
 ## 참고 자료
 
 - "System Design Interview" - Alex Xu Vol.1 & Vol.2
@@ -968,3 +972,7 @@
 - WhatsApp Architecture at Scale
 - Discord How Discord Stores Billions of Messages
 - Airbnb Notification System
+
+---
+
+**이전**: [실전 설계 예제 1](./17_Design_Example_1.md) | **다음**: [관측 가능성 및 모니터링](./19_Observability_Monitoring.md)

@@ -1,5 +1,18 @@
 # Shortest Path
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare Dijkstra, Bellman-Ford, Floyd-Warshall, and 0-1 BFS algorithms by time complexity, negative-weight support, and applicable use cases
+2. Implement Dijkstra's algorithm using a priority queue and explain why it requires non-negative weights
+3. Implement the Bellman-Ford algorithm and use it to detect negative-weight cycles in a graph
+4. Implement Floyd-Warshall for all-pairs shortest paths and trace the dynamic programming recurrence
+5. Apply 0-1 BFS with a deque to solve problems where edge weights are restricted to 0 or 1
+6. Select the most appropriate shortest-path algorithm for a given problem based on graph properties
+
+---
+
 ## Overview
 
 Learn algorithms for finding the shortest path between two vertices in weighted graphs. This covers Dijkstra, Bellman-Ford, and Floyd-Warshall algorithms.
@@ -135,6 +148,9 @@ typedef pair<int, int> pii;  // {distance, vertex}
 vector<int> dijkstra(const vector<vector<pii>>& adj, int start) {
     int V = adj.size();
     vector<int> dist(V, INT_MAX);
+    // Min-heap ordered by distance — the greedy choice is always to process
+    // the nearest unfinished node, which guarantees its shortest path is final:
+    // any other path to it would be longer because edge weights are non-negative
     priority_queue<pii, vector<pii>, greater<pii>> pq;
 
     dist[start] = 0;
@@ -144,10 +160,14 @@ vector<int> dijkstra(const vector<vector<pii>>& adj, int start) {
         auto [d, u] = pq.top();
         pq.pop();
 
-        // Skip if already processed
+        // Lazy deletion: when we find a shorter path we push a new entry without
+        // removing the old one; this check discards stale (outdated) entries —
+        // they arise because C++ priority_queue lacks a decrease-key operation
         if (d > dist[u]) continue;
 
         for (auto [v, weight] : adj[u]) {
+            // Relaxation: if going through u improves the known distance to v,
+            // update and push v so it is reconsidered at its better distance
             if (dist[u] + weight < dist[v]) {
                 dist[v] = dist[u] + weight;
                 pq.push({dist[v], v});
@@ -171,16 +191,23 @@ from collections import defaultdict
 def dijkstra(graph, start):
     dist = {node: float('inf') for node in graph}
     dist[start] = 0
-    pq = [(0, start)]  # (distance, vertex)
+    # Priority queue stores (distance, vertex); Python's heapq is a min-heap,
+    # so the vertex with the smallest known distance is always popped first —
+    # this implements the greedy selection that makes Dijkstra correct
+    pq = [(0, start)]
 
     while pq:
         d, u = heapq.heappop(pq)
 
-        # Skip if already processed
+        # Stale entry check: a cheaper path to u was already finalized after
+        # this entry was pushed; skip it to avoid redundant relaxation work
         if d > dist[u]:
             continue
 
         for v, weight in graph[u]:
+            # Edge relaxation: if the path through u is better, record and
+            # enqueue; non-negative weights guarantee we never need to revise
+            # a vertex's distance once it has been popped from the heap
             if dist[u] + weight < dist[v]:
                 dist[v] = dist[u] + weight
                 heapq.heappush(pq, (dist[v], v))
@@ -393,13 +420,16 @@ def bellman_ford(V, edges, start):
     dist = [float('inf')] * V
     dist[start] = 0
 
-    # V-1 iterations
+    # V-1 relaxation rounds: the shortest path in a graph with V vertices can
+    # have at most V-1 edges, so V-1 rounds guarantee all shortest paths are found
+    # (unlike Dijkstra, this works even when negative weights are present)
     for _ in range(V - 1):
         for u, v, w in edges:
             if dist[u] != float('inf') and dist[u] + w < dist[v]:
                 dist[v] = dist[u] + w
 
-    # Check for negative cycle
+    # A Vth relaxation round that still improves a distance signals a negative cycle:
+    # shortest paths would be infinitely short, so no finite answer exists
     for u, v, w in edges:
         if dist[u] != float('inf') and dist[u] + w < dist[v]:
             return None  # Negative cycle
@@ -511,7 +541,8 @@ vector<vector<int>> initDist(int V) {
 def floyd_warshall(V, edges):
     INF = float('inf')
 
-    # Initialization
+    # Initialization: distance from a node to itself is 0;
+    # all other pairs start as INF (no known path yet)
     dist = [[INF] * V for _ in range(V)]
     for i in range(V):
         dist[i][i] = 0
@@ -519,10 +550,15 @@ def floyd_warshall(V, edges):
     for u, v, w in edges:
         dist[u][v] = w
 
-    # Floyd-Warshall
+    # DP recurrence: dist[i][j] via intermediate set {0..k} =
+    # min(path not using k, path going through k as a waypoint).
+    # The outer loop over k must run outermost so that when we update
+    # dist[i][j] the sub-paths dist[i][k] and dist[k][j] are already optimal
+    # for intermediate vertices {0..k-1}
     for k in range(V):
         for i in range(V):
             for j in range(V):
+                # Relax: does routing i→j through k improve the best known path?
                 if dist[i][k] + dist[k][j] < dist[i][j]:
                     dist[i][j] = dist[i][k] + dist[k][j]
 
@@ -640,8 +676,14 @@ def zero_one_bfs(graph, start, n):
                 dist[v] = dist[u] + weight
 
                 if weight == 0:
+                    # Zero-cost edge: v is at the same "distance level" as u;
+                    # push to the front so it is processed before any weight-1 nodes,
+                    # preserving the invariant that the front always holds the minimum
                     dq.appendleft(v)
                 else:
+                    # Weight-1 edge: v is one level farther; push to the back
+                    # like standard BFS — this deque trick replaces a priority queue
+                    # and achieves O(V+E) instead of O(E log V)
                     dq.append(v)
 
     return dist

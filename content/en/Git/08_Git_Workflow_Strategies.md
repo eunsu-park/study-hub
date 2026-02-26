@@ -1,10 +1,24 @@
 # 08. Git Workflow Strategies
 
+**Previous**: [GitHub Actions](./07_GitHub_Actions.md) | **Next**: [Advanced Git Techniques](./09_Advanced_Git_Techniques.md)
+
+---
+
 ## Learning Objectives
-- Understand various Git branching strategies
-- Choose workflows that fit team size and projects
-- Compare Git Flow, GitHub Flow, and Trunk-based Development
-- Establish release management and versioning strategies
+
+After completing this lesson, you will be able to:
+
+1. Explain why a branching strategy is essential for team productivity and code quality
+2. Describe the Git Flow model and identify when it is appropriate (scheduled releases, large teams)
+3. Describe the GitHub Flow model and identify when it is appropriate (continuous deployment, smaller teams)
+4. Describe Trunk-based Development and explain its relationship to CI/CD
+5. Compare Git Flow, GitHub Flow, GitLab Flow, and Trunk-based Development across key dimensions (complexity, release cadence, team size)
+6. Select an appropriate workflow for a given project scenario and justify the choice
+7. Configure branch protection rules and release tagging to support the chosen workflow
+
+---
+
+Choosing the right branching strategy is one of the highest-leverage decisions a development team makes. The wrong choice leads to painful merge conflicts, blocked releases, and frustrated developers. This lesson surveys the most widely adopted workflows, explains the trade-offs of each, and gives you a decision framework so you can match the strategy to your team's size, release cadence, and deployment model.
 
 ## Table of Contents
 1. [Workflow Overview](#1-workflow-overview)
@@ -732,6 +746,36 @@ git push origin v1.2.3
 - [GitHub Flow](https://docs.github.com/en/get-started/quickstart/github-flow)
 - [Trunk Based Development](https://trunkbaseddevelopment.com/)
 - [GitLab Flow](https://docs.gitlab.com/ee/topics/gitlab_flow.html)
+
+---
+
+## Exercises
+
+### Exercise 1: Git Flow Full Cycle
+Using either the `git-flow` CLI tool or manual commands, simulate a complete Git Flow cycle:
+1. Initialize Git Flow on a new repository.
+2. Start a `feature/user-profile` branch, make two commits, and finish the feature (merge into `develop`).
+3. Start a `release/1.0.0` branch from `develop`, add one release-preparation commit, then finish the release (merge into both `main` and `develop`, create the `v1.0.0` tag).
+4. Simulate an urgent bug by starting a `hotfix/1.0.1` from `main`, fixing it, and finishing the hotfix.
+5. Draw or describe the resulting branch history, showing the merge points.
+
+### Exercise 2: GitHub Flow with Branch Protection
+1. Set up a repository with `main` branch protection (require PR + at least one reviewer).
+2. Create a `feature/dark-mode` branch, open a PR, and go through the full review-approve-merge cycle.
+3. After merging, delete the feature branch from the remote with `git push origin --delete feature/dark-mode`.
+4. Create a `.github/pull_request_template.md` file with the PR template from Section 3.4 of this lesson.
+
+### Exercise 3: Feature Flag Implementation
+Implement a simple feature flag system in any language:
+1. Write a function `is_feature_enabled(feature_name, user_id, rollout_percentage)` that returns `True` for a consistent subset of users based on a hash of `user_id + feature_name`.
+2. Wrap a code path with the flag so it behaves differently when enabled vs disabled.
+3. Test that exactly ~25% of 1000 random user IDs get the feature when `rollout_percentage=25`.
+
+### Exercise 4: Workflow Selection Justification
+For each of the following scenarios, select the most appropriate workflow (Git Flow, GitHub Flow, Trunk-based Development, or GitLab Flow) and write a 3–5 sentence justification:
+- A 3-person startup building a web SaaS product with daily deployments.
+- A 50-person enterprise team releasing a mobile app to app stores every 6 weeks.
+- A large tech company running microservices with mature CI/CD and feature flags across 200 engineers.
 
 ---
 

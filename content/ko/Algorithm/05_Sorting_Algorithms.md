@@ -1,5 +1,18 @@
 # 정렬 알고리즘 (Sorting Algorithms)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 버블 정렬(Bubble Sort), 선택 정렬(Selection Sort), 삽입 정렬(Insertion Sort), 병합 정렬(Merge Sort), 퀵 정렬(Quick Sort), 힙 정렬(Heap Sort), 계수 정렬(Counting Sort)의 최선·평균·최악 시간 복잡도와 공간 복잡도를 비교할 수 있다
+2. 안정 정렬(stable sort)과 불안정 정렬(unstable sort)을 구분하고 안정성이 중요한 상황을 설명할 수 있다
+3. 병합 정렬과 퀵 정렬을 직접 구현하며, 각 알고리즘의 분할 정복(divide-and-conquer) 전략을 명확히 설명할 수 있다
+4. 계수 정렬(Counting Sort)이 O(n+k) 시간을 달성하는 이유와 적용 가능한 제약 조건을 설명할 수 있다
+5. 퀵 정렬(Quick Sort)의 최악 케이스 동작을 분석하고 이를 완화하는 피벗(pivot) 선택 전략을 설명할 수 있다
+6. 입력 크기, 값의 범위, 메모리 제약, 안정성 요구 사항을 바탕으로 주어진 문제에 가장 적합한 정렬 알고리즘을 선택할 수 있다
+
+---
+
 ## 개요
 
 정렬은 데이터를 특정 순서로 배열하는 기본적이면서도 중요한 알고리즘입니다. 다양한 정렬 알고리즘의 원리, 구현, 시간/공간 복잡도를 학습합니다.
@@ -82,6 +95,8 @@
 // C
 void bubbleSort(int arr[], int n) {
     for (int i = 0; i < n - 1; i++) {
+        // 내부 루프가 n - i - 1에서 멈춤: i번째 패스 후 마지막 i개 원소는
+        // 이미 최종 정렬 위치에 있으므로 다시 확인할 필요가 없음
         for (int j = 0; j < n - i - 1; j++) {
             if (arr[j] > arr[j + 1]) {
                 int temp = arr[j];
@@ -106,6 +121,8 @@ void bubbleSortOptimized(int arr[], int n) {
             }
         }
 
+        // 교환이 발생하지 않았으면 배열이 이미 정렬된 것 — 거의 정렬된
+        // 입력에 대해 최선 복잡도를 O(n²)에서 O(n)으로 개선
         if (!swapped) break;  // 이미 정렬됨
     }
 }
@@ -363,6 +380,8 @@ void merge(int arr[], int left, int mid, int right) {
     int n1 = mid - left + 1;
     int n2 = right - mid;
 
+    // 임시 배열이 필요함 — arr에 직접 병합하면 반대쪽 비교에 아직 필요한
+    // 원소를 덮어쓰게 됨
     int* L = (int*)malloc(n1 * sizeof(int));
     int* R = (int*)malloc(n2 * sizeof(int));
 
@@ -372,6 +391,8 @@ void merge(int arr[], int left, int mid, int right) {
     int i = 0, j = 0, k = left;
 
     while (i < n1 && j < n2) {
+        // <= (<가 아님)로 안정성(stability)을 보장: 왼쪽 부분 배열의 동일 값 원소가
+        // 먼저 배치되어 원래 상대적 순서가 유지됨
         if (L[i] <= R[j]) {
             arr[k++] = L[i++];
         } else {
@@ -379,6 +400,7 @@ void merge(int arr[], int left, int mid, int right) {
         }
     }
 
+    // 남은 원소를 비움 — 이 두 루프 중 최대 하나만 실행됨
     while (i < n1) arr[k++] = L[i++];
     while (j < n2) arr[k++] = R[j++];
 
@@ -388,6 +410,8 @@ void merge(int arr[], int left, int mid, int right) {
 
 void mergeSort(int arr[], int left, int right) {
     if (left < right) {
+        // 오버플로우(overflow) 안전한 중간점: left + right가 INT_MAX를 초과할 때
+        // 정수 오버플로우를 방지
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);
@@ -511,10 +535,13 @@ j=3: 4 > 2 → 건너뜀
 // C - Lomuto 파티셔닝
 int partition(int arr[], int low, int high) {
     int pivot = arr[high];
+    // i는 부분 배열 시작 바로 이전 위치에서 시작 — "피벗보다 작은 원소" 영역의
+    // 경계를 표시하며, 영역을 확장할 때만 i가 증가
     int i = low - 1;
 
     for (int j = low; j < high; j++) {
         if (arr[j] < pivot) {
+            // 피벗보다 작은 영역을 확장하고 새 원소를 그 안으로 교환
             i++;
             int temp = arr[i];
             arr[i] = arr[j];
@@ -522,6 +549,8 @@ int partition(int arr[], int low, int high) {
         }
     }
 
+    // 피벗을 최종 위치(i + 1)에 배치: 왼쪽은 모두 작고 오른쪽은 모두 큼
+    // — 이것이 O(n) 파티션을 보장
     int temp = arr[i + 1];
     arr[i + 1] = arr[high];
     arr[high] = temp;
@@ -533,6 +562,8 @@ void quickSort(int arr[], int low, int high) {
     if (low < high) {
         int pi = partition(arr, low, high);
 
+        // 피벗은 이미 최종 정렬 위치에 있음 — 양쪽 재귀 호출에서 제외하여
+        // 무한 루프를 방지하고 불필요한 비교를 피함
         quickSort(arr, low, pi - 1);
         quickSort(arr, pi + 1, high);
     }
@@ -640,6 +671,8 @@ def partition_random(arr, low, high):
 // C
 void heapify(int arr[], int n, int i) {
     int largest = i;
+    // 0-인덱스 이진 힙(binary heap)에서 노드 i의 자식은 2*i+1(왼쪽)과
+    // 2*i+2(오른쪽) — 이 산술이 명시적 트리 구조를 대체
     int left = 2 * i + 1;
     int right = 2 * i + 2;
 
@@ -654,17 +687,22 @@ void heapify(int arr[], int n, int i) {
         arr[i] = arr[largest];
         arr[largest] = temp;
 
+        // 교환으로 인해 영향받은 서브트리를 재귀적으로 수정 —
+        // 한 번의 교환이 트리 아래쪽의 힙 속성을 추가로 위반할 수 있음
         heapify(arr, n, largest);
     }
 }
 
 void heapSort(int arr[], int n) {
-    // 최대 힙 구성
+    // 마지막 내부 노드부터 위로 heapify하여 최대 힙 구성 —
+    // 리프 노드는 자명하게 유효한 힙이므로 n/2-1부터 시작하여 건너뛰면
+    // O(n log n)이 아닌 O(n) 빌드 시간을 달성
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    // 하나씩 추출
+    // 힙의 루트(현재 최댓값)를 정렬된 접미사로 반복 이동한 후,
+    // 남은 n-i-1개 원소에 대해 힙 속성을 복원
     for (int i = n - 1; i > 0; i--) {
         int temp = arr[0];
         arr[0] = arr[i];
@@ -847,6 +885,8 @@ def counting_sort(arr):
 
     max_val = max(arr)
     min_val = min(arr)
+    # 값을 이동시켜 min_val이 인덱스 0에 대응 — 음수나 큰 오프셋(offset)의
+    # 정수도 0~max_val까지의 거대한 배열 할당 없이 처리 가능
     range_val = max_val - min_val + 1
 
     count = [0] * range_val
@@ -855,12 +895,17 @@ def counting_sort(arr):
     for x in arr:
         count[x - min_val] += 1
 
+    # 개수를 누적 합으로 변환: count[i]는 이제 값 (min_val + i)의 *마지막*
+    # 등장이 출력에서 위치할 1-기반 위치를 나타냄
     for i in range(1, range_val):
         count[i] += count[i - 1]
 
+    # 입력을 뒤에서부터 순회하여 안정성(stability)을 달성: 동일 값 원소 중
+    # 입력에서 나중에 나온 것이 출력에서도 나중에 배치되어
+    # 원래 상대적 순서가 보존됨 (안정 정렬의 보장)
     for i in range(len(arr) - 1, -1, -1):
         output[count[arr[i] - min_val] - 1] = arr[i]
-        count[arr[i] - min_val] -= 1
+        count[arr[i] - min_val] -= 1  # 다음 동일 원소가 한 칸 앞에 배치되도록 감소
 
     return output
 ```

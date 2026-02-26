@@ -1,5 +1,18 @@
 # 복잡도 분석 (Complexity Analysis)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 하드웨어 독립적인 복잡도 분석(Complexity Analysis)이 알고리즘 비교에 필요한 이유를 설명할 수 있다
+2. 빅오 표기법(Big O notation)을 적용하여 일반적인 알고리즘의 시간 및 공간 복잡도를 표현할 수 있다
+3. 반복문과 재귀 코드를 분석하여 시간 복잡도 클래스를 결정할 수 있다
+4. 최선(best-case), 평균(average-case), 최악(worst-case) 복잡도를 구분할 수 있다
+5. 알고리즘 선택 시 시간 복잡도(time complexity)와 공간 복잡도(space complexity) 간의 실질적인 트레이드오프를 비교할 수 있다
+6. 복잡도 클래스별 성능 차이를 기반으로 알고리즘의 확장성(scalability)을 평가할 수 있다
+
+---
+
 ## 개요
 
 알고리즘의 효율성을 측정하는 방법을 학습합니다. Big O 표기법을 이해하고 코드의 시간/공간 복잡도를 분석하는 능력은 알고리즘 학습의 기초입니다.
@@ -180,14 +193,16 @@ int binarySearch(int arr[], int n, int target) {
     int left = 0, right = n - 1;
 
     while (left <= right) {
+        // (left + right) / 2 대신 left + (right - left) / 2를 사용 —
+        // left + right가 INT_MAX(2^31-1)를 초과하면 오버플로우(overflow)가 발생함
         int mid = left + (right - left) / 2;
 
         if (arr[mid] == target)
             return mid;
         else if (arr[mid] < target)
-            left = mid + 1;
+            left = mid + 1;  // 타겟이 오른쪽 절반에 있으므로 왼쪽 버림
         else
-            right = mid - 1;
+            right = mid - 1; // 타겟이 왼쪽 절반에 있으므로 오른쪽 버림
     }
     return -1;
 }
@@ -282,12 +297,15 @@ def find_max_builtin(arr):
 ```c
 // C - 병합 정렬 (개념)
 void mergeSort(int arr[], int left, int right) {
+    // left != right가 아닌 left < right를 사용 — 길이 1인 부분 배열에 대해
+    // 별도의 기저 조건(base case) 로직 없이 처리 가능 (원소 하나는 이미 정렬된 상태)
     if (left < right) {
+        // 이진 탐색과 같은 이유로 오버플로우 안전한 산술 사용
         int mid = left + (right - left) / 2;
 
         mergeSort(arr, left, mid);      // T(n/2)
         mergeSort(arr, mid + 1, right); // T(n/2)
-        merge(arr, left, mid, right);   // O(n)
+        merge(arr, left, mid, right);   // O(n) — log 인수를 만들어내는 비용
     }
 }
 // T(n) = 2T(n/2) + O(n) = O(n log n)
@@ -367,16 +385,21 @@ int fibonacci(int n) {
 // C++ - 부분집합 생성
 void generateSubsets(vector<int>& arr, int index, vector<int>& current) {
     if (index == arr.size()) {
-        // 현재 부분집합 출력
+        // 기저 조건(base case): 모든 원소에 대해 포함/제외 결정을 마침 —
+        // 'current'는 이제 하나의 완전한 부분집합을 담고 있음
         for (int x : current) cout << x << " ";
         cout << endl;
         return;
     }
 
-    // 포함하지 않는 경우
+    // 제외→포함 순서는 임의적; 각 원소에 정확히 두 가지 선택이 있으므로
+    // 두 분기를 모두 탐색해야 하며, 총 2ⁿ개의 경로가 생김
+
+    // 현재 원소를 제외 — 'current'를 수정하지 않고 재귀
     generateSubsets(arr, index + 1, current);
 
-    // 포함하는 경우
+    // 현재 원소를 포함 — push/pop으로 이 분기 전후에 'current'가
+    // 동일한 상태임을 보장 (백트래킹(backtracking))
     current.push_back(arr[index]);
     generateSubsets(arr, index + 1, current);
     current.pop_back();
@@ -390,9 +413,13 @@ def generate_subsets(arr):
     result = []
     n = len(arr)
 
+    # 1 << n은 2^n과 동일; 각 정수 i는 하나의 부분집합을 나타내며
+    # j번째 비트가 설정되면 arr[j]가 포함됨 — 명시적 재귀를 피할 수 있음
     for i in range(1 << n):  # 2^n 반복
         subset = []
         for j in range(n):
+            # i에서 j번째 비트가 설정되었는지 확인; 각 비트는 해당 원소의
+            # 포함/제외 결정에 대응 — 위의 재귀적 두 분기 방식의 반복문 버전
             if i & (1 << j):
                 subset.append(arr[j])
         result.append(subset)
@@ -460,15 +487,20 @@ int* copyArray(int arr[], int n) {
 ```cpp
 // C++ - 병합 정렬의 병합 과정
 void merge(vector<int>& arr, int left, int mid, int right) {
+    // 임시 버퍼가 필요한 이유: 제자리(in-place) 병합은 비교에 아직 필요한 원소를
+    // 덮어쓰게 됨 — O(n) 공간을 사용하여 정확성을 확보하는 트레이드오프
     vector<int> temp(right - left + 1);  // O(n) 추가 공간
 
     int i = left, j = mid + 1, k = 0;
     while (i <= mid && j <= right) {
+        // < 가 아닌 <= 로 안정성(stability) 보장: 왼쪽 절반의 같은 값 원소가
+        // 오른쪽 절반보다 먼저 배치되어 원래 순서가 유지됨
         if (arr[i] <= arr[j])
             temp[k++] = arr[i++];
         else
             temp[k++] = arr[j++];
     }
+    // 남은 원소를 비움; 이 두 루프 중 최대 하나만 실행됨
     while (i <= mid) temp[k++] = arr[i++];
     while (j <= right) temp[k++] = arr[j++];
 

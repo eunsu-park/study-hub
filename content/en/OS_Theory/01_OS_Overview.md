@@ -1,10 +1,23 @@
 # Operating System Overview
 
-## Overview
-
-An Operating System (OS) is system software that manages computer hardware and provides services to application programs. This lesson covers the definition of operating systems, their roles, development history, and kernel architecture.
+**Next**: [Process Concepts](./02_Process_Concepts.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what an operating system does and why it is necessary
+2. Distinguish between the resource manager and service provider perspectives of an OS
+3. Compare monolithic, microkernel, and hybrid kernel architectures and identify real-world examples of each
+4. Describe the system call mechanism, including the transition from user mode to kernel mode
+5. Explain how interrupt handling works, from signal detection through ISR execution to state restoration
+6. Trace the historical evolution of operating systems from batch processing to modern time-sharing systems
+
+---
+
+Every app you use -- your browser, your IDE, your music player -- relies on the OS to manage memory, schedule CPU time, and talk to hardware. Without an OS, every programmer would need to write their own disk driver and memory allocator from scratch. This lesson covers the definition of operating systems, their roles, development history, and kernel architecture -- the foundational concepts that everything else in OS theory builds upon.
 
 ## Table of Contents
 
@@ -746,6 +759,131 @@ Parent process:
 8. exit() - Terminate process (implicit)
 
 </details>
+
+---
+
+## Hands-On Exercises
+
+### Exercise 1: Explore System Calls
+
+Use the `strace` (Linux) or `dtruss` (macOS) command to trace system calls made by a simple program.
+
+```bash
+# Linux
+strace -c ls /tmp
+
+# macOS
+sudo dtruss ls /tmp 2>&1 | head -30
+```
+
+**Tasks:**
+1. Identify which system call categories (process, file, device, information) appear in the trace
+2. Count how many `open`/`openat` calls are made — why so many for a simple `ls`?
+3. Compare the trace of `ls /tmp` vs `ls /nonexistent` — what differs?
+
+### Exercise 2: Kernel Architecture Comparison
+
+Research and fill in the following table for three real operating systems:
+
+| Feature | Linux | Windows NT | QNX |
+|---------|-------|------------|-----|
+| Kernel type | ? | ? | ? |
+| Scheduler in kernel? | ? | ? | ? |
+| File system in kernel? | ? | ? | ? |
+| Device drivers in kernel? | ? | ? | ? |
+| IPC mechanism | ? | ? | ? |
+
+### Exercise 3: Interrupt Latency Measurement
+
+Write a Python script that measures timer interrupt granularity:
+
+```python
+import time
+
+# Measure the actual resolution of time.sleep()
+intervals = []
+for _ in range(100):
+    start = time.perf_counter()
+    time.sleep(0.001)  # request 1ms sleep
+    elapsed = time.perf_counter() - start
+    intervals.append(elapsed * 1000)  # convert to ms
+
+print(f"Requested: 1.000 ms")
+print(f"Actual avg: {sum(intervals)/len(intervals):.3f} ms")
+print(f"Min: {min(intervals):.3f} ms, Max: {max(intervals):.3f} ms")
+```
+
+**Tasks:**
+1. Run the script and explain why the actual sleep time differs from the requested time
+2. How does the OS timer interrupt frequency affect this result?
+3. Try different sleep values (0.0001, 0.01, 0.1) and plot the error percentage
+
+---
+
+## Exercises
+
+### Exercise 1: OS Role Identification
+
+For each scenario below, identify which OS role (Resource Manager or Service Provider) is primarily at work and name the specific OS subsystem involved.
+
+1. A video player requests 256 MB of RAM to buffer frames
+2. A user types `ls` in the terminal and sees a directory listing
+3. Two processes try to write to the same file simultaneously — one is blocked
+4. A web browser opens a TCP socket to contact a remote server
+5. A running program divides by zero and the OS terminates it
+
+### Exercise 2: Kernel Architecture Trade-offs
+
+The three major kernel designs each make different trade-offs. For each real operating system below, identify its kernel type and explain one concrete consequence of that choice:
+
+| OS | Kernel Type | One Practical Consequence |
+|----|-------------|--------------------------|
+| Linux | ? | ? |
+| macOS (XNU) | ? | ? |
+| QNX | ? | ? |
+| Windows NT | ? | ? |
+
+Then answer: Why do most mainstream desktop OSes use hybrid or monolithic kernels rather than the theoretically cleaner microkernel design?
+
+### Exercise 3: System Call Tracing
+
+Write a minimal C program that performs the following sequence of operations and list every system call it makes, in order:
+
+1. Create a new file named `hello.txt`
+2. Write the string `"Hello, OS!"` to it
+3. Close the file
+4. Fork a child process
+5. In the child: open and read back `hello.txt`, then exit
+6. In the parent: wait for the child, then delete `hello.txt`
+
+For each system call, state which category it belongs to (process control, file management, device management, information maintenance, or communication).
+
+### Exercise 4: Interrupt Handling Deep Dive
+
+Consider the following interrupt priority table:
+
+```
+Priority 1 (highest): Power failure
+Priority 2: Machine check
+Priority 3: Timer interrupt
+Priority 4: Keyboard interrupt
+Priority 5 (lowest): Software interrupt
+```
+
+Answer the following:
+
+1. A keyboard interrupt occurs while the OS is handling a timer interrupt. What happens? Trace the full execution sequence.
+2. Why is it important to save and restore CPU state (registers, PC) during interrupt handling? What would go wrong if the OS skipped the save step?
+3. Describe what the timer interrupt handler does in a time-sharing OS. Why must it run frequently (e.g., every 10 ms)?
+
+### Exercise 5: Design a Minimal OS
+
+You are designing an OS for a single-function embedded device (e.g., a microwave controller). Answer each question with a justification:
+
+1. **Kernel type**: Would you choose monolithic, microkernel, or hybrid? Why?
+2. **Interrupts needed**: List the hardware interrupts this device would need to handle
+3. **System calls needed**: Which categories of system calls are necessary, and which can be omitted entirely?
+4. **Preemption**: Does this OS need preemptive scheduling? Why or why not?
 
 ---
 

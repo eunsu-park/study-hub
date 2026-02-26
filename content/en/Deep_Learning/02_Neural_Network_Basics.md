@@ -14,7 +14,7 @@
 
 ## 1. Perceptron
 
-The most basic unit of a neural network.
+The most basic unit of a neural network. The perceptron is loosely inspired by biological neurons: dendrites receive signals (inputs), the soma performs a weighted sum, the axon hillock applies a threshold (activation function), and the axon transmits the output. While real neurons are far more complex, this analogy captures the core idea — gather information, aggregate it, and fire (or not) based on the result.
 
 ```
 Input(x₁) ──w₁──┐
@@ -52,6 +52,8 @@ z = np.dot(x, w) + b  # 1*0.5 + 2*(-0.3) + 3*0.8 + 0.1 = 2.4
 
 ## 2. Activation Functions
 
+Without non-linear activation functions, stacking N linear layers collapses into a single matrix multiplication: `W_N ... W_2 W_1 x = W x`. No matter how deep the network, it can only learn linear mappings. Non-linear activations break this collapse, letting the network approximate *any* continuous function — a result known as the Universal Approximation Theorem.
+
 Add non-linearity to enable learning of complex patterns.
 
 ### Main Activation Functions
@@ -63,6 +65,10 @@ Add non-linearity to enable learning of complex patterns.
 | ReLU | max(0, x) | Most widely used, simple and effective |
 | Leaky ReLU | max(αx, x) | Small gradient in negative region |
 | GELU | x·Φ(x) | Used in Transformers |
+
+**Why does sigmoid cause vanishing gradients?** The sigmoid derivative is `σ'(x) = σ(x)(1 - σ(x))`, which reaches its maximum at `x = 0` where `σ'(0) = 0.25`. In a deep network, gradients are multiplied across layers. After just 10 layers, the gradient shrinks to at most `0.25^10 ≈ 0.0000009` — essentially zero. Early layers receive almost no learning signal, so training stalls.
+
+**Why ReLU fixes this:** For positive inputs, ReLU's derivative is exactly 1, so the gradient passes through unchanged regardless of depth. This is why ReLU (and its variants) enabled training of much deeper networks.
 
 ### NumPy Implementation
 
@@ -120,6 +126,9 @@ The standard way to define neural networks in PyTorch.
 import torch
 import torch.nn as nn
 
+# Why inherit nn.Module?  It automatically tracks all parameters (for optimizer),
+# handles device transfer (model.to('cuda')), enables save/load (state_dict),
+# and provides training/eval mode switching.
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
@@ -127,6 +136,9 @@ class MLP(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.relu = nn.ReLU()
 
+    # Why define forward()?  This method is called automatically when you do
+    # model(x).  It defines the computation graph — the path data takes through
+    # layers.  PyTorch records each operation here for autograd.
     def forward(self, x):
         x = self.fc1(x)
         x = self.relu(x)

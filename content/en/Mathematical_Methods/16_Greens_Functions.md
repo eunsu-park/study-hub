@@ -58,28 +58,28 @@ x = np.linspace(-3, 3, 1000)
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
-# 가우시안 표현
+# Gaussian representation
 for eps in [1.0, 0.5, 0.2, 0.05]:
     delta_gauss = np.exp(-x**2 / eps**2) / (eps * np.sqrt(np.pi))
     axes[0].plot(x, delta_gauss, label=f'$\\epsilon={eps}$')
-axes[0].set_title('가우시안 표현')
+axes[0].set_title('Gaussian representation')
 axes[0].legend(); axes[0].set_ylim(0, 10); axes[0].grid(True, alpha=0.3)
 
-# 로렌츠 표현
+# Lorentzian representation
 for eps in [1.0, 0.5, 0.2, 0.05]:
     delta_lorentz = (1/np.pi) * eps / (x**2 + eps**2)
     axes[1].plot(x, delta_lorentz, label=f'$\\epsilon={eps}$')
-axes[1].set_title('로렌츠 표현')
+axes[1].set_title('Lorentzian representation')
 axes[1].legend(); axes[1].set_ylim(0, 10); axes[1].grid(True, alpha=0.3)
 
-# sinc 표현
+# sinc representation
 for N in [5, 20, 50, 200]:
     delta_sinc = np.sin(N * x) / (np.pi * x + 1e-30)
     axes[2].plot(x, delta_sinc, label=f'$N={N}$', alpha=0.8)
-axes[2].set_title('sinc 표현 (푸리에)')
+axes[2].set_title('sinc representation (Fourier)')
 axes[2].legend(); axes[2].set_ylim(-5, 70); axes[2].grid(True, alpha=0.3)
 
-plt.suptitle('디랙 델타 함수의 다양한 표현', fontsize=14, fontweight='bold')
+plt.suptitle('Various representations of the Dirac delta function', fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
 
@@ -111,22 +111,22 @@ $$\nabla^2 \left(\frac{1}{|\mathbf{r} - \mathbf{r}'|}\right) = -4\pi \delta^3(\m
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 체(sifting) 성질의 수치 검증
-# f(x) = cos(x), a = 1.0에 대해 integral f(x) delta_eps(x-a) dx ~ f(a)
+# Numerical verification of the sifting property
+# For f(x) = cos(x), a = 1.0: integral f(x) delta_eps(x-a) dx ~ f(a)
 a = 1.0
 f = lambda t: np.cos(t)
 x = np.linspace(-10, 10, 100000)
 
-print("=== 체(sifting) 성질 수치 검증 ===")
+print("=== Numerical verification of the sifting property ===")
 print(f"f(a) = cos({a}) = {f(a):.8f}")
 print()
 
 for eps in [1.0, 0.1, 0.01, 0.001]:
-    # 가우시안 근사 delta 사용
+    # Use Gaussian approximation of delta
     delta_approx = np.exp(-(x - a)**2 / eps**2) / (eps * np.sqrt(np.pi))
     integral = np.trapz(f(x) * delta_approx, x)
     error = abs(integral - f(a))
-    print(f"  eps = {eps:.3f}: integral = {integral:.8f}, 오차 = {error:.2e}")
+    print(f"  eps = {eps:.3f}: integral = {integral:.8f}, error = {error:.2e}")
 ```
 
 ---
@@ -170,38 +170,38 @@ This is the essence of the Green's function method. Once the point source respon
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 개념 시연: 1D 현에 가해진 점하중의 응답
+# Conceptual demo: response of a 1D string to a point load
 # L[u] = u'' = f(x), u(0) = u(1) = 0
-# 그린 함수: G(x, x') = x'(1-x) for x > x', x(1-x') for x < x'
+# Green's function: G(x, x') = x'(1-x) for x > x', x(1-x') for x < x'
 
 def greens_function_string(x, xp):
-    """양 끝 고정 현의 그린 함수"""
+    """Green's function for a string fixed at both ends"""
     return np.where(x < xp, x * (1 - xp), xp * (1 - x))
 
 x = np.linspace(0, 1, 500)
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-# 왼쪽: 다양한 점 소스 위치에서의 그린 함수
+# Left: Green's function for various point source positions
 for xp in [0.2, 0.4, 0.5, 0.6, 0.8]:
     G = greens_function_string(x, xp)
     ax1.plot(x, G, linewidth=2, label=f"$x' = {xp}$")
     ax1.plot(xp, greens_function_string(xp, xp), 'ko', markersize=5)
 
 ax1.set_xlabel('$x$'); ax1.set_ylabel("$G(x, x')$")
-ax1.set_title("점 소스 위치별 그린 함수 $G(x, x')$")
+ax1.set_title("Green's function $G(x, x')$ by point source position")
 ax1.legend(); ax1.grid(True, alpha=0.3)
 
-# 오른쪽: 중첩 원리 - 임의의 소스에 대한 해
-f_source = lambda t: np.sin(2 * np.pi * t)  # 임의의 소스 f(x)
+# Right: superposition principle - solution for arbitrary source
+f_source = lambda t: np.sin(2 * np.pi * t)  # arbitrary source f(x)
 u_solution = np.array([np.trapz(greens_function_string(xi, x) * f_source(x), x)
                         for xi in x])
 
-ax2.plot(x, f_source(x), 'r--', linewidth=1.5, label='소스 $f(x) = \\sin(2\\pi x)$')
-ax2.plot(x, u_solution, 'b-', linewidth=2.5, label='해 $u(x) = \\int G f \\, dx\'$')
-ax2.set_xlabel('$x$'); ax2.set_title('중첩 원리에 의한 해 구성')
+ax2.plot(x, f_source(x), 'r--', linewidth=1.5, label='source $f(x) = \\sin(2\\pi x)$')
+ax2.plot(x, u_solution, 'b-', linewidth=2.5, label='solution $u(x) = \\int G f \\, dx\'$')
+ax2.set_xlabel('$x$'); ax2.set_title('Solution construction by superposition principle')
 ax2.legend(); ax2.grid(True, alpha=0.3)
 
-plt.suptitle('그린 함수의 개념: 점 소스 응답의 중첩', fontsize=14, fontweight='bold')
+plt.suptitle("Green's function concept: superposition of point source responses", fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
 
@@ -258,41 +258,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
 
-# SymPy로 그린 함수 구성 및 검증
+# Construct and verify Green's function using SymPy
 x_sym, xp_sym = sp.symbols('x xp')
 
 # y'' = f(x), y(0) = y(1) = 0
-# 제차해: y1 = x (y1(0)=0), y2 = 1-x (y2(1)=0)
+# Homogeneous solutions: y1 = x (y1(0)=0), y2 = 1-x (y2(1)=0)
 y1 = x_sym
 y2 = 1 - x_sym
 W = y1 * sp.diff(y2, x_sym) - sp.diff(y1, x_sym) * y2
-print(f"론스키안 W = {W}")  # -1
+print(f"Wronskian W = {W}")  # -1
 
-# 그린 함수 (x < x' 영역)
+# Green's function (x < x' region)
 G_left = -y1 * y2.subs(x_sym, xp_sym) / W  # x < x'
 G_right = -y1.subs(x_sym, xp_sym) * y2 / W  # x > x'
 print(f"G(x, x') = {G_left} (x < x')")
 print(f"G(x, x') = {G_right} (x > x')")
 
-# 접합 조건 검증
-print("\n=== 접합 조건 검증 (x = x') ===")
-# 연속성
+# Verify matching conditions
+print("\n=== Matching condition verification (x = x') ===")
+# Continuity
 G_left_at_xp = G_left.subs(x_sym, xp_sym)
 G_right_at_xp = G_right.subs(x_sym, xp_sym)
-print(f"연속성: G(x'^-, x') = {G_left_at_xp}, G(x'^+, x') = {G_right_at_xp}")
-print(f"  차이 = {sp.simplify(G_left_at_xp - G_right_at_xp)}")
+print(f"Continuity: G(x'^-, x') = {G_left_at_xp}, G(x'^+, x') = {G_right_at_xp}")
+print(f"  difference = {sp.simplify(G_left_at_xp - G_right_at_xp)}")
 
-# 도함수 점프
+# Derivative jump
 dG_left = sp.diff(G_left, x_sym).subs(x_sym, xp_sym)
 dG_right = sp.diff(G_right, x_sym).subs(x_sym, xp_sym)
 jump = sp.simplify(dG_right - dG_left)
-print(f"도함수 점프: G'(x'^+) - G'(x'^-) = {jump}")  # 1 (= 1/p(x'))
+print(f"Derivative jump: G'(x'^+) - G'(x'^-) = {jump}")  # 1 (= 1/p(x'))
 
-# 수치 시각화
+# Numerical visualization
 x_num = np.linspace(0, 1, 500)
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-# G(x, x') 등고선 시각화 (대칭성 확인)
+# Contour plot of G(x, x') (checking symmetry)
 xp_vals = np.linspace(0, 1, 500)
 X, XP = np.meshgrid(x_num, xp_vals)
 G_vals = np.where(X < XP, X * (1 - XP), XP * (1 - X))
@@ -300,17 +300,17 @@ G_vals = np.where(X < XP, X * (1 - XP), XP * (1 - X))
 c = ax1.contourf(X, XP, G_vals, levels=30, cmap='viridis')
 plt.colorbar(c, ax=ax1)
 ax1.set_xlabel("$x$"); ax1.set_ylabel("$x'$")
-ax1.set_title("$G(x, x')$ 등고선 — 대칭성 $G(x,x') = G(x',x)$")
+ax1.set_title("$G(x, x')$ contour — symmetry $G(x,x') = G(x',x)$")
 
-# 특정 x'에서의 G(x, x') 단면
+# Cross-sections of G(x, x') at specific x'
 for xp in [0.25, 0.5, 0.75]:
     G_section = np.where(x_num < xp, x_num * (1 - xp), xp * (1 - x_num))
     ax2.plot(x_num, G_section, linewidth=2, label=f"$x' = {xp}$")
-    # 꺾이는 점(도함수 불연속) 표시
+    # Mark kink point (derivative discontinuity)
     ax2.plot(xp, xp * (1 - xp), 'ko', markersize=6)
 
 ax2.set_xlabel('$x$'); ax2.set_ylabel("$G(x, x')$")
-ax2.set_title("그린 함수 단면: 도함수 불연속 확인")
+ax2.set_title("Green's function cross-section: derivative discontinuity")
 ax2.legend(); ax2.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
 ```
@@ -360,14 +360,14 @@ import matplotlib.pyplot as plt
 x = np.linspace(0, np.pi, 500)
 
 def G_eigenfunction(x_val, xp, N_terms):
-    """고유함수 전개로 구한 그린 함수"""
+    """Green's function from eigenfunction expansion"""
     G = np.zeros_like(x_val)
     for n in range(1, N_terms + 1):
         G += (2 / np.pi) * np.sin(n * x_val) * np.sin(n * xp) / n**2
     return G
 
 def G_exact(x_val, xp):
-    """정확한 그린 함수 (닫힌 형태)"""
+    """Exact Green's function (closed form)"""
     return np.where(x_val < xp,
                     x_val * (np.pi - xp) / np.pi,
                     xp * (np.pi - x_val) / np.pi)
@@ -375,14 +375,14 @@ def G_exact(x_val, xp):
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 xp = np.pi / 2  # x' = pi/2
 
-# 왼쪽: 급수 수렴 시각화
-ax1.plot(x, G_exact(x, xp), 'k-', linewidth=3, label='정확한 해')
+# Left: series convergence visualization
+ax1.plot(x, G_exact(x, xp), 'k-', linewidth=3, label='Exact solution')
 for N in [1, 3, 10, 50]:
     ax1.plot(x, G_eigenfunction(x, xp, N), '--', linewidth=1.5, label=f'$N = {N}$')
-ax1.set_title(f"고유함수 전개의 수렴 ($x' = \\pi/2$)")
+ax1.set_title(f"Convergence of eigenfunction expansion ($x' = \\pi/2$)")
 ax1.set_xlabel('$x$'); ax1.legend(); ax1.grid(True, alpha=0.3)
 
-# 오른쪽: 항 수에 따른 오차
+# Right: error vs number of terms
 N_values = np.arange(1, 101)
 errors = []
 for N in N_values:
@@ -391,11 +391,11 @@ for N in N_values:
     errors.append(np.max(np.abs(G_approx - G_true)))
 
 ax2.semilogy(N_values, errors, 'b-', linewidth=2)
-ax2.set_xlabel('항 수 $N$'); ax2.set_ylabel('최대 오차')
-ax2.set_title('고유함수 전개의 수렴 속도')
+ax2.set_xlabel('Number of terms $N$'); ax2.set_ylabel('Maximum error')
+ax2.set_title('Convergence rate of eigenfunction expansion')
 ax2.grid(True, alpha=0.3)
 
-plt.suptitle('고유함수 전개법에 의한 그린 함수', fontsize=14, fontweight='bold')
+plt.suptitle("Green's function by eigenfunction expansion", fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
 
@@ -433,12 +433,12 @@ Solution: $x(t) = \int_0^t G_R(t, t') f(t') \, dt'$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 감쇠 조화 진동자의 그린 함수
+# Green's function of the damped harmonic oscillator
 omega0, gamma = 5.0, 0.5
 omega_d = np.sqrt(omega0**2 - gamma**2)
 
 def G_retarded(t, tp):
-    """지연 그린 함수"""
+    """Retarded Green's function"""
     dt = t - tp
     return np.where(dt > 0,
                     np.exp(-gamma * dt) * np.sin(omega_d * dt) / omega_d,
@@ -446,29 +446,29 @@ def G_retarded(t, tp):
 
 t = np.linspace(0, 10, 2000)
 
-# 다양한 소스 함수에 대한 응답 계산
+# Compute responses to various source functions
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 sources = {
-    '임펄스': lambda tp: np.where(np.abs(tp - 1.0) < 0.05, 1.0/0.1, 0.0),
-    '계단 함수': lambda tp: np.where(tp > 1.0, 1.0, 0.0),
-    '정현파': lambda tp: np.sin(3.0 * tp),
-    '이중 펄스': lambda tp: (np.where(np.abs(tp-1)<0.05, 1/0.1, 0.0) +
+    'Impulse': lambda tp: np.where(np.abs(tp - 1.0) < 0.05, 1.0/0.1, 0.0),
+    'Step function': lambda tp: np.where(tp > 1.0, 1.0, 0.0),
+    'Sinusoid': lambda tp: np.sin(3.0 * tp),
+    'Double pulse': lambda tp: (np.where(np.abs(tp-1)<0.05, 1/0.1, 0.0) +
                              np.where(np.abs(tp-3)<0.05, -1/0.1, 0.0))
 }
 
 for ax, (name, f_source) in zip(axes.flat, sources.items()):
-    # 그린 함수를 이용한 컨볼루션 적분
+    # Convolution integral using Green's function
     f_vals = f_source(t)
     x_response = np.array([np.trapz(G_retarded(ti, t[:i+1]) * f_vals[:i+1], t[:i+1])
                            if i > 0 else 0.0 for i, ti in enumerate(t)])
 
-    ax.plot(t, f_vals * 0.1, 'r--', alpha=0.5, label='소스 $f(t)$ (축소)')
-    ax.plot(t, x_response, 'b-', linewidth=2, label='응답 $x(t)$')
-    ax.set_title(f'소스: {name}'); ax.legend(); ax.grid(True, alpha=0.3)
+    ax.plot(t, f_vals * 0.1, 'r--', alpha=0.5, label='source $f(t)$ (scaled)')
+    ax.plot(t, x_response, 'b-', linewidth=2, label='response $x(t)$')
+    ax.set_title(f'Source: {name}'); ax.legend(); ax.grid(True, alpha=0.3)
     ax.set_xlabel('$t$')
 
-plt.suptitle(f'감쇠 조화 진동자 ($\\omega_0={omega0}, \\gamma={gamma}$)',
+plt.suptitle(f'Damped harmonic oscillator ($\\omega_0={omega0}, \\gamma={gamma}$)',
              fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
@@ -529,40 +529,40 @@ This reflects causality: signals propagate at speed $c$, arriving after time $|\
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- 열방정식 그린 함수 시각화 ---
+# --- Heat equation Green's function visualization ---
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
 alpha2 = 0.01
 x = np.linspace(-2, 2, 1000)
-xp = 0.0  # 소스 위치
+xp = 0.0  # source position
 
 for t_val in [0.01, 0.05, 0.1, 0.5, 1.0, 2.0]:
     G_heat = np.exp(-(x - xp)**2 / (4 * alpha2 * t_val)) / np.sqrt(4 * np.pi * alpha2 * t_val)
     ax1.plot(x, G_heat, linewidth=2, label=f'$t = {t_val}$')
 
 ax1.set_xlabel('$x$'); ax1.set_ylabel("$G(x, t; 0, 0)$")
-ax1.set_title('열방정식 그린 함수 (1D)')
+ax1.set_title('Heat equation Green\'s function (1D)')
 ax1.legend(); ax1.grid(True, alpha=0.3)
 
-# --- 2D 푸아송 방정식 그린 함수 시각화 ---
+# --- 2D Poisson equation Green's function visualization ---
 x2d = np.linspace(-2, 2, 300)
 y2d = np.linspace(-2, 2, 300)
 X, Y = np.meshgrid(x2d, y2d)
 
-# 점 소스 위치
+# Point source position
 xp2, yp2 = 0.5, 0.3
 R = np.sqrt((X - xp2)**2 + (Y - yp2)**2)
-R = np.maximum(R, 0.01)  # 특이점 방지
+R = np.maximum(R, 0.01)  # avoid singularity
 G_2d = np.log(R) / (2 * np.pi)
 
 c = ax2.contourf(X, Y, G_2d, levels=30, cmap='RdBu_r')
-ax2.plot(xp2, yp2, 'k*', markersize=15, label="소스 위치 $(x', y')$")
+ax2.plot(xp2, yp2, 'k*', markersize=15, label="source position $(x', y')$")
 plt.colorbar(c, ax=ax2)
 ax2.set_xlabel('$x$'); ax2.set_ylabel('$y$')
-ax2.set_title("2D 푸아송 그린 함수 $G = \\frac{1}{2\\pi}\\ln r$")
+ax2.set_title("2D Poisson Green's function $G = \\frac{1}{2\\pi}\\ln r$")
 ax2.legend(); ax2.set_aspect('equal')
 
-plt.suptitle('편미분방정식의 그린 함수', fontsize=14, fontweight='bold')
+plt.suptitle("Green's functions for partial differential equations", fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
 
@@ -598,23 +598,23 @@ This is a **spherical wave**.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# === 정전기학 응용: 2D 전하 분포의 전위 ===
+# === Electrostatics application: potential of 2D charge distribution ===
 fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
 x = np.linspace(-3, 3, 300)
 y = np.linspace(-3, 3, 300)
 X, Y = np.meshgrid(x, y)
 
-# (a) 점전하
+# (a) Point charge
 q1, x1, y1 = 1.0, 0.0, 0.0
 R1 = np.sqrt((X - x1)**2 + (Y - y1)**2)
 phi_point = q1 / (2 * np.pi * np.maximum(R1, 0.05))
 
 axes[0].contourf(X, Y, phi_point, levels=30, cmap='hot_r')
 axes[0].plot(x1, y1, 'k+', markersize=15, markeredgewidth=3)
-axes[0].set_title('(a) 점전하 $+q$'); axes[0].set_aspect('equal')
+axes[0].set_title('(a) Point charge $+q$'); axes[0].set_aspect('equal')
 
-# (b) 쌍극자 (dipole)
+# (b) Dipole
 q2, d = 1.0, 0.5
 R_plus = np.sqrt((X - d)**2 + Y**2)
 R_minus = np.sqrt((X + d)**2 + Y**2)
@@ -623,26 +623,26 @@ phi_dipole = q2 / (2*np.pi*np.maximum(R_plus, 0.05)) - q2 / (2*np.pi*np.maximum(
 axes[1].contourf(X, Y, phi_dipole, levels=np.linspace(-3, 3, 31), cmap='RdBu_r')
 axes[1].plot(d, 0, 'r+', markersize=12, markeredgewidth=3)
 axes[1].plot(-d, 0, 'b_', markersize=12, markeredgewidth=3)
-axes[1].set_title('(b) 전기 쌍극자 $+q, -q$'); axes[1].set_aspect('equal')
+axes[1].set_title('(b) Electric dipole $+q, -q$'); axes[1].set_aspect('equal')
 
-# (c) 영상법: 접지면 근처 점전하
+# (c) Method of images: point charge near grounded plane
 q3, d3 = 1.0, 1.0
 R_real = np.sqrt(X**2 + (Y - d3)**2)
-R_image = np.sqrt(X**2 + (Y + d3)**2)  # 허상 전하
+R_image = np.sqrt(X**2 + (Y + d3)**2)  # image charge
 phi_image = q3/(2*np.pi*np.maximum(R_real, 0.05)) - q3/(2*np.pi*np.maximum(R_image, 0.05))
-phi_image[Y < 0] = 0  # 접지면 아래는 0
+phi_image[Y < 0] = 0  # zero below the grounded plane
 
 axes[2].contourf(X, Y, phi_image, levels=30, cmap='hot_r')
-axes[2].axhline(0, color='green', linewidth=3, label='접지면')
+axes[2].axhline(0, color='green', linewidth=3, label='ground plane')
 axes[2].plot(0, d3, 'k+', markersize=12, markeredgewidth=3)
 axes[2].plot(0, -d3, 'kx', markersize=12, markeredgewidth=3, alpha=0.4)
-axes[2].set_title('(c) 영상법: 접지면 위 점전하')
+axes[2].set_title('(c) Method of images: point charge above ground plane')
 axes[2].legend(); axes[2].set_aspect('equal')
 
-plt.suptitle('정전기학에서의 그린 함수 응용 (2D)', fontsize=14, fontweight='bold')
+plt.suptitle("Green's function applications in electrostatics (2D)", fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 
-# 전기장 벡터 (쌍극자)
+# Electric field vectors (dipole)
 fig, ax = plt.subplots(figsize=(8, 6))
 Ex = q2*(X-d)/(2*np.pi*np.maximum(R_plus,0.05)**2) - q2*(X+d)/(2*np.pi*np.maximum(R_minus,0.05)**2)
 Ey = q2*Y/(2*np.pi*np.maximum(R_plus,0.05)**2) - q2*Y/(2*np.pi*np.maximum(R_minus,0.05)**2)
@@ -652,7 +652,7 @@ ax.streamplot(X, Y, Ex, Ey, color=np.log10(E_mag+1e-3), cmap='inferno',
               density=2, linewidth=1)
 ax.plot(d, 0, 'ro', markersize=10, label='$+q$')
 ax.plot(-d, 0, 'bo', markersize=10, label='$-q$')
-ax.set_title('전기 쌍극자의 전기장선 (그린 함수 중첩)')
+ax.set_title("Electric dipole field lines (Green's function superposition)")
 ax.legend(); ax.set_aspect('equal'); ax.set_xlim(-3, 3); ax.set_ylim(-3, 3)
 plt.tight_layout(); plt.show()
 ```
@@ -687,7 +687,7 @@ $$u(\mathbf{r}) = \int_\Omega G f \, dV' - \oint_{\partial\Omega} h \frac{\parti
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 그린 항등식의 수치 검증 (1D 버전)
+# Numerical verification of Green's identities (1D version)
 # integral_0^1 (u v'' + u'v') dx = [u v']_0^1
 # u(x) = sin(pi*x), v(x) = x^2
 
@@ -699,39 +699,39 @@ v = x**2
 v_prime = 2 * x
 v_double_prime = 2 * np.ones_like(x)
 
-# 좌변
+# Left-hand side
 lhs = np.trapz(u * v_double_prime + u_prime * v_prime, x)
 
-# 우변: [u v']_0^1 = u(1)v'(1) - u(0)v'(0)
+# Right-hand side: [u v']_0^1 = u(1)v'(1) - u(0)v'(0)
 rhs = u[-1] * v_prime[-1] - u[0] * v_prime[0]
 
-print("=== 그린 제1 항등식 수치 검증 (1D) ===")
+print("=== Numerical verification of Green's first identity (1D) ===")
 print(f"u(x) = sin(pi*x), v(x) = x^2")
-print(f"좌변: integral(u v'' + u'v') dx = {lhs:.8f}")
-print(f"우변: [u v']_0^1               = {rhs:.8f}")
-print(f"차이: {abs(lhs - rhs):.2e}")
+print(f"LHS: integral(u v'' + u'v') dx = {lhs:.8f}")
+print(f"RHS: [u v']_0^1               = {rhs:.8f}")
+print(f"Difference: {abs(lhs - rhs):.2e}")
 
-# 그린 제2 항등식
+# Green's second identity
 u_dbl_prime = -np.pi**2 * np.sin(np.pi * x)
 
 lhs2 = np.trapz(u * v_double_prime - v * u_dbl_prime, x)
 rhs2 = (u[-1]*v_prime[-1] - v[-1]*u_prime[-1]) - (u[0]*v_prime[0] - v[0]*u_prime[0])
 
-print("\n=== 그린 제2 항등식 수치 검증 (1D) ===")
-print(f"좌변: integral(u v'' - v u'') dx = {lhs2:.8f}")
-print(f"우변: [uv' - vu']_0^1           = {rhs2:.8f}")
-print(f"차이: {abs(lhs2 - rhs2):.2e}")
+print("\n=== Numerical verification of Green's second identity (1D) ===")
+print(f"LHS: integral(u v'' - v u'') dx = {lhs2:.8f}")
+print(f"RHS: [uv' - vu']_0^1           = {rhs2:.8f}")
+print(f"Difference: {abs(lhs2 - rhs2):.2e}")
 
-# 그린 함수를 이용한 적분 표현 검증
-# 문제: u'' = f(x), u(0) = u(1) = 0, f(x) = -pi^2 sin(pi*x)
-# 정확한 해: u(x) = sin(pi*x)
-print("\n=== 적분 표현 검증 ===")
+# Verification of integral representation using Green's function
+# Problem: u'' = f(x), u(0) = u(1) = 0, f(x) = -pi^2 sin(pi*x)
+# Exact solution: u(x) = sin(pi*x)
+print("\n=== Integral representation verification ===")
 f_rhs = -np.pi**2 * np.sin(np.pi * x)
 u_green = np.array([np.trapz(np.where(x < xi, x*(1-xi), xi*(1-x)) * f_rhs, x)
                      for xi in x])
 u_exact = np.sin(np.pi * x)
 
-print(f"최대 오차 |u_Green - u_exact| = {np.max(np.abs(u_green - u_exact)):.6e}")
+print(f"Maximum error |u_Green - u_exact| = {np.max(np.abs(u_green - u_exact)):.6e}")
 ```
 
 ---

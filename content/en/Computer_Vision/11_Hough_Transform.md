@@ -1,5 +1,18 @@
 # Hough Transform
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the Hough Transform principle and how it maps image space points to curves in parameter space
+2. Implement standard and probabilistic Hough line detection using OpenCV's HoughLines() and HoughLinesP()
+3. Apply Hough circle detection with HoughCircles() and tune its accumulator and threshold parameters
+4. Analyze the trade-offs between standard and probabilistic Hough transforms in terms of speed and accuracy
+5. Design a lane detection pipeline that combines edge detection with Hough line filtering
+6. Evaluate parameter sensitivity and optimize Hough Transform settings for specific image domains
+
+---
+
 ## Overview
 The Hough Transform is a classical technique used to detect shapes in images. It is primarily used to find lines and circles but can theoretically detect any parametric shape. It works by transforming the image space into parameter space and finding points where many lines intersect.
 
@@ -32,6 +45,8 @@ y = mx + b  # slope-intercept form
 - ρ: distance from origin to the line
 - θ: angle the perpendicular from the origin makes with the x-axis
 
+Geometrically, every point (x, y) on an edge satisfies this equation for some (ρ, θ) pair. The key insight is that a single image-space point maps to a sinusoidal *curve* of possible (ρ, θ) values, and collinear points produce curves that all intersect at the same (ρ, θ) — that intersection is the detected line. Polar form is preferred over slope-intercept (y = mx + b) because it handles vertical lines (infinite slope) without special cases.
+
 ### 1.2 Algorithm Flow
 
 ```
@@ -60,6 +75,8 @@ y = mx + b  # slope-intercept form
 
 ## 2. Line Detection
 
+Simple line fitting (least-squares regression) breaks down the moment an edge has gaps, occlusions, or noisy outlier pixels — it minimizes total error, so a few bad points can pull the estimated line far off. The Hough Transform sidesteps this by using a *voting* mechanism: each edge pixel independently votes for every line it could belong to, and only lines with many independent votes survive. This makes it inherently robust to gaps and noise without requiring a connected contour.
+
 ### 2.1 Standard Hough Transform (cv2.HoughLines)
 
 Detects all possible lines and returns them in (ρ, θ) format.
@@ -82,7 +99,11 @@ def hough_lines_demo(image_path):
     # HoughLines(image, rho, theta, threshold)
     # rho: distance resolution (pixels)
     # theta: angle resolution (radians)
-    # threshold: minimum number of votes
+    # threshold: minimum number of votes — this is the key quality gate:
+    #   too low → many spurious lines from noise; too high → real lines missed.
+    #   200 works well for images with strong, long edges (e.g., sudoku grids).
+    #   Each edge pixel that lies on a candidate line casts one vote, so threshold
+    #   approximates the minimum pixel length of a line you want to detect.
     lines = cv2.HoughLines(edges, 1, np.pi/180, 200)
 
     # Draw results
@@ -134,8 +155,11 @@ def hough_lines_p_demo(image_path):
 
     # Probabilistic Hough Transform
     # HoughLinesP(image, rho, theta, threshold, minLineLength, maxLineGap)
-    # minLineLength: minimum line length
-    # maxLineGap: maximum gap between line segments
+    # minLineLength: minimum line length — rejects short noise fragments; increase
+    #   for road lanes (want long continuous marks), decrease for short dashes.
+    # maxLineGap: maximum pixel gap allowed inside a single segment — setting this
+    #   higher "bridges" dashed lines into one segment, which is useful for lane
+    #   detection where paint markings have regular gaps.
     lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100,
                             minLineLength=100, maxLineGap=10)
 
@@ -244,10 +268,15 @@ def hough_circles_demo(image_path):
 
     # Circle detection
     # HoughCircles(image, method, dp, minDist, param1, param2, minRadius, maxRadius)
-    # dp: inverse ratio of accumulator resolution
-    # minDist: minimum distance between circle centers
-    # param1: Canny edge detector threshold
-    # param2: accumulator threshold for circle centers
+    # dp: inverse ratio of accumulator resolution — dp=1 means full resolution
+    #   (more memory, more precise); dp=2 halves the accumulator size (faster).
+    # minDist: minimum distance between circle centers — prevents the algorithm
+    #   from returning many overlapping circles for the same coin/object.
+    # param1: upper Canny threshold; the lower is automatically set to half.
+    # param2: accumulator threshold for circle centers — the most sensitive tuning
+    #   knob. Lower values detect more circles (including false positives from noise);
+    #   higher values require a stronger consensus of edge points around the center,
+    #   yielding fewer but more confident detections.
     circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 20,
                                param1=50, param2=30,
                                minRadius=10, maxRadius=100)

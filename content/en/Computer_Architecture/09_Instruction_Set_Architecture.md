@@ -1,14 +1,27 @@
 # Instruction Set Architecture (ISA)
 
-## Overview
-
-Instruction Set Architecture (ISA) defines the interface between software and hardware. The ISA specifies the set of instructions a processor can understand, registers, memory addressing modes, and more. In this lesson, we'll learn about ISA concepts, compare CISC and RISC, examine instruction formats, and explore various addressing modes.
+**Previous**: [08_Control_Unit.md](./08_Control_Unit.md) | **Next**: [10_Assembly_Language_Basics.md](./10_Assembly_Language_Basics.md)
 
 **Difficulty**: ⭐⭐⭐
 
 **Prerequisites**: Basic CPU structure, control unit, binary representation
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define ISA as the contract between hardware and software
+2. Classify instruction types (data transfer, arithmetic, control flow)
+3. Compare RISC and CISC design philosophies with concrete examples
+4. Explain the major addressing modes (immediate, register, direct, indirect, indexed)
+5. Analyze how ISA choices affect compiler design and program performance
+6. Describe the MIPS/ARM instruction format as a RISC example
+
+---
+
+The Instruction Set Architecture is the most important interface in computing -- it is the contract between software and hardware. Every program you write, no matter the language, is ultimately compiled down to ISA instructions. The RISC vs. CISC debate shaped the entire modern processor landscape, from ARM chips in your phone to x86 in your laptop.
 
 ## Table of Contents
 
@@ -20,6 +33,8 @@ Instruction Set Architecture (ISA) defines the interface between software and ha
 6. [Practice Problems](#6-practice-problems)
 
 ---
+
+> Think of the ISA as a contract or API between hardware and software. The hardware promises to implement a specific set of operations (instructions), and the software (compilers, OS) promises to use only those operations. Neither side needs to know how the other works internally -- this abstraction is what lets you run the same program on different CPU implementations.
 
 ## 1. ISA Concepts
 

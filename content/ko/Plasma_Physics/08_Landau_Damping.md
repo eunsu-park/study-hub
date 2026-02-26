@@ -561,9 +561,16 @@ def plasma_dispersion_function(zeta):
     Z(zeta) = i*sqrt(pi) * w(zeta)
     where w(z) is the Faddeeva function
     """
+    # 수치 구적법(quadrature) 대신 scipy의 wofz (Faddeeva / Voigt 함수 w(z) = exp(-z^2)*erfc(-iz))를
+    # 사용합니다. 이유: (1) wofz는 Rybicki의 알고리즘을 사용하여 기계 정밀도로 계산됩니다 —
+    # 실수에 가까운 극점을 가진 Gaussian 피적분함수에 대한 어떤 구적법보다 훨씬 정확합니다;
+    # (2) Im(ζ) < 0인 복소 ζ를 올바르게 처리하여, 수동 윤곽 변형 없이
+    # Landau 처방(prescription)이 요구하는 해석적 연속을 재현합니다.
     return 1j * np.sqrt(np.pi) * wofz(zeta)
 
-# Plot Z(ζ) for real ζ
+# [-5, 5]에서 1000개 점은 ζ=0 근처에서 진동하는 Re[Z]를 앨리어싱 없이 해상합니다;
+# |ζ| > 5에서 함수는 점근(asymptotic) 전개 1/ζ + ...로 잘 근사되므로
+# 더 세밀한 격자가 필요하지 않습니다.
 zeta_real = np.linspace(-5, 5, 1000)
 Z_real = plasma_dispersion_function(zeta_real)
 
@@ -622,17 +629,26 @@ print(f"  ω_pe = {omega_pe:.2e} rad/s")
 print(f"  v_th = {v_th:.2e} m/s")
 print(f"  λ_D = {lambda_D:.2e} m")
 
-# Range of k*lambda_D
+# k*lambda_D 범위: k→0으로 Landau 공식이 (kλ_D)^-3으로 발산하기 때문에 0이 아닌
+# 0.1에서 시작합니다. 물리적으로도 Landau 감쇠는 지수적으로 억제됩니다
+# (exp(-1/(2k²λ_D²)) 인자 → 0). 상한 k_lambda_D = 3은 파동이 너무 강하게 감쇠되어
+# 더 이상 전파 모드가 아닌 지점입니다.
 k_lambda_D = np.linspace(0.1, 3, 100)
 k_array = k_lambda_D / lambda_D
 
-# Dispersion relation (Bohm-Gross)
+# 분산 관계(dispersion relation) (Bohm-Gross): kλ_D << 1에서 유효하며
+# 열 보정이 작습니다. 100개 점은 매끄러운 곡선을 제공합니다;
+# 더 거친 샘플링은 지수적 컷오프 근처에서 로그 척도 감쇠 플롯에 아티팩트를 보여줄 것입니다.
 omega_r = omega_pe * np.sqrt(1 + 3 * k_lambda_D**2)
 
-# Landau damping rate
+# Landau 감쇠율: 공식은 Landau 윤곽 적분으로부터 얻어진 해석적 Maxwellian 결과를 사용합니다.
+# 앞인자(prefactor) sqrt(π/8)는 공명 v = ω_r/k에서 평가된 Gaussian 적분에서 옵니다,
+# 그리고 (kλ_D)^-3이 전체 척도를 설정합니다.
 gamma = -np.sqrt(np.pi / 8) * (omega_pe / k_lambda_D**3) * np.exp(-1 / (2 * k_lambda_D**2))
 
-# Damping decrement
+# 감쇠 감소량(damping decrement) |γ|/ω_r: 물리적으로 의미 있는 양 —
+# 파동이 1/e만큼 감쇠되기 전에 몇 라디안을 진동하는지. ≪ 1이면 잘 전파되는 파동을,
+# ~ 1이면 파동이 과감쇠되어 더 이상 일관성이 없음을 나타냅니다.
 damping_decrement = -gamma / omega_r
 
 # Plotting
@@ -737,33 +753,54 @@ class VlasovPoisson1D:
     def compute_electric_field(self):
         """Solve Poisson equation for E-field (periodic BC)"""
         n = self.compute_density()
-        rho = self.q * (n - self.n0)  # charge density (background neutrality)
+        # n0를 빼서 알짜 전하 밀도를 얻습니다: 평형에서 전자가 배경 이온 밀도를
+        # 중화시키므로 섭동만이 E를 생성합니다. self.q(전자의 경우 음수)를 사용하면
+        # 별도의 이온 밀도 배열 없이 올바른 부호의 ρ를 자동으로 제공합니다.
+        rho = self.q * (n - self.n0)
 
-        # Fourier transform
+        # FFT 기반 Poisson 솔버는 합성곱 정리를 이용합니다:
+        # d²φ/dx²는 Fourier 공간에서 -k²φ_k가 되어 PDE를 단순한
+        # 대수 나눗셈으로 변환합니다. 이는 스펙트럼적으로 정확하고 (무한 차수)
+        # O(N log N) 비용만 듭니다 — 직접 행렬 풀기보다 훨씬 저렴합니다.
         rho_k = np.fft.fft(rho)
         k_modes = 2 * np.pi * np.fft.fftfreq(self.Nx, self.dx)
 
         # Poisson: -ε₀ d²φ/dx² = ρ → φ_k = -rho_k / (ε₀ k²)
         phi_k = np.zeros_like(rho_k, dtype=complex)
-        phi_k[1:] = -rho_k[1:] / (epsilon_0 * k_modes[1:]**2)
-        phi_k[0] = 0  # Set DC component to zero (neutrality)
+        phi_k[1:] = -rho_k[1:] / (epsilon_0 * k_modes[1:]**2)  # 모드 1: 만 나눕니다; k=0은 별도로 처리합니다.
+        # DC (k=0) 모드를 0으로 설정합니다: 공간적으로 균일한 포텐셜은 전기장을
+        # 기여하지 않으며 (E = -∇φ), 준중성(quasi-neutrality)은 주기적 박스에서
+        # 알짜 전하가 0임을 보장하여 φ_0을 물리적으로 무관하게 만듭니다 (gauge 선택).
+        phi_k[0] = 0
 
-        # E = -dφ/dx → E_k = i*k*φ_k
+        # Fourier 공간에서 E = -dφ/dx를 계산합니다: 도함수 → ik 곱하기.
+        # ik 인자는 스펙트럼 공간에서 정확합니다; 유한 차분 스텐실은 기울기에
+        # O(dx^2) 오차를 도입하여 시뮬레이션 시간 동안 Landau 감쇠 측정을 손상시킵니다.
         E_k = 1j * k_modes * phi_k
 
-        # Inverse FFT
+        # 물리 공간으로 역 FFT; 부동 소수점 반올림에서 발생하는 수치적
+        # 허수 부분(~기계 엡실론)을 버리기 위해 .real을 취합니다.
         E = np.fft.ifft(E_k).real
 
         return E
 
     def step(self, dt):
         """Operator splitting: advection in x, then in v"""
-        # Step 1: Advection in x (∂f/∂t + v ∂f/∂x = 0)
+        # Vlasov 방정식은 Lie-Trotter 연산자 분리를 사용하여 두 개의 1D 이류로
+        # 분리됩니다. 각 절반은 일정한 계수를 가진 순수 이류입니다 (x-이류 중 v는 고정,
+        # v-이류 중 a는 고정). 이는 CFL ≤ 1이면 풍상 방식으로 무조건 안정적입니다.
+
+        # Step 1: x 방향 이류 (∂f/∂t + v ∂f/∂x = 0)
         f_new = np.zeros_like(self.f)
         for j in range(self.Nv):
-            # Upwind scheme
+            # 풍상 차분(upwind differencing): v[j] > 0이면 입자가 오른쪽으로 이동하므로
+            # "상류"(정보 소스)는 왼쪽 이웃입니다. 올바른 풍상 방향을 선택하면
+            # 비물리적 모드가 성장하는 것을 방지하고 앨리어싱을 억제하는
+            # 수치적 소산을 제공합니다.
             if self.v[j] > 0:
                 for i in range(self.Nx):
+                    # 주기적 경계 조건: modulo를 사용하여 플라즈마가 공간적으로
+                    # 주기 Lx (하나의 파동)로 주기적이라는 가정과 일치시킵니다.
                     i_up = (i - 1) % self.Nx
                     f_new[i, j] = self.f[i, j] - self.v[j] * dt / self.dx * \
                                  (self.f[i, j] - self.f[i_up, j])
@@ -774,14 +811,21 @@ class VlasovPoisson1D:
                                  (self.f[i_up, j] - self.f[i, j])
         self.f = f_new.copy()
 
-        # Step 2: Acceleration in v (∂f/∂t + a ∂f/∂v = 0)
+        # x-이류 스텝 후 E를 재계산하여 전기장이 업데이트된 밀도와 일치하도록 합니다 —
+        # 이것이 자기 일관적(self-consistent) 파동 역학을 포착하는
+        # Vlasov 방정식과 Poisson 방정식 사이의 명시적 시간 결합입니다.
+
+        # Step 2: v 방향 가속 (∂f/∂t + a ∂f/∂v = 0)
         E = self.compute_electric_field()
         f_new = np.zeros_like(self.f)
         for i in range(self.Nx):
-            a = self.q * E[i] / self.m  # acceleration
+            a = self.q * E[i] / self.m  # 가속도 = Lorentz 힘 / 질량
             for j in range(self.Nv):
                 if a > 0:
                     j_up = max(j - 1, 0)
+                    # 양의 가속도는 f를 더 높은 v로 이동시킵니다; 상류 = 더 낮은 v.
+                    # v_max에 도달한 입자는 사실상 격자를 떠나야 하므로
+                    # (속도는 주기적이지 않음) 감싸지 않고 0에서 클램핑합니다.
                     f_new[i, j] = self.f[i, j] - a * dt / self.dv * \
                                  (self.f[i, j] - self.f[i, j_up])
                 else:
@@ -809,6 +853,10 @@ class VlasovPoisson1D:
         return np.array(times), np.array(E_history)
 
 # Simulation parameters
+# x 방향 Nx=64 셀: 하나의 파장을 잘 해상하기 (파동당 >50 점)하기에 충분하며
+# 순수 Python에서 중첩 루프 (스텝당 Nx*Nv)를 다루기 쉽게 합니다.
+# v 방향 Nv=128 셀: Nx의 두 배. 속도 분포는 공명(resonance) 근처
+# v=v_ph에서 더 날카로운 특징을 가지므로 더 세밀한 해상도가 필요합니다.
 Nx = 64
 Nv = 128
 n0 = 1e18  # m^-3
@@ -818,8 +866,15 @@ q = -e
 
 # Domain
 lambda_D = np.sqrt(epsilon_0 * k_B * (T_eV * e / k_B) / (n0 * e**2))
+# kλ_D = 0.3은 "흥미로운" 감쇠 영역에 있도록 선택됩니다: 몇 플라즈마 주기 내에
+# 감쇠가 측정 가능할 만큼 크지만, 파동이 여전히 일관되게 전파될 만큼 작습니다
+# (과감쇠 아님). 이는 해석적 γ 공식과 직접 비교를 허용합니다.
 k_mode = 0.3 / lambda_D  # kλ_D = 0.3
+# 박스 길이 = 정확히 하나의 파장. 주기적 경계 조건이 자기 일관적이고
+# 도메인 경계에서 인위적인 반사 모드가 도입되지 않습니다.
 Lx = 2 * np.pi / k_mode
+# v_max = 5 v_th는 Maxwellian의 >99.99%를 커버합니다; kλ_D=0.3에 대한
+# 공명 입자 v_ph = ω_r/k ~ 1.05 ω_pe/k는 이 범위 안에 있습니다.
 v_max = 5 * np.sqrt(k_B * (T_eV * e / k_B) / m)
 
 # Initialize solver
@@ -893,9 +948,16 @@ def particle_in_wave(E0, k, m, q, v_ph, num_particles=100, duration=1e-7, dt=1e-
     Simulate particles in a static wave (wave frame)
     """
     # Particle initial conditions
+    # 랜덤 시드(seed)를 고정하여 플롯이 재현 가능합니다 — 매 실행마다 동일한 입자,
+    # "이전"과 "이후" 스냅샷을 정성적으로 쉽게 비교할 수 있습니다.
     np.random.seed(42)
+    # 초기 위치를 하나의 파장에 걸쳐 균일하게 분산하여 초기 위상 공간 분포가
+    # x 방향으로 평평하고 어떤 파동 위상에도 편향되지 않게 합니다.
     x0 = np.random.uniform(0, 2*np.pi/k, num_particles)
-    v0 = np.random.normal(v_ph, 1e4, num_particles)  # spread around v_ph
+    # v_ph 근처에서 작은 퍼짐으로 속도를 초기화합니다: 이것이 공명 입자들입니다.
+    # 좁은 퍼짐 (1e4 << v_th)은 모든 입자가 포획 영역의 바로 안쪽이나 바깥쪽에서
+    # 시작함을 의미하므로 분리면(separatrix)이 명확하게 보입니다.
+    v0 = np.random.normal(v_ph, 1e4, num_particles)
 
     # Storage
     num_steps = int(duration / dt)
@@ -913,10 +975,15 @@ def particle_in_wave(E0, k, m, q, v_ph, num_particles=100, duration=1e-7, dt=1e-
         E = E0 * np.sin(k * x)
         a = q * E / m
 
-        # Velocity Verlet
+        # Velocity Verlet (leapfrog): 포텐셜이 보존적이기 때문에 (소산 없음) RK4 대신 사용합니다.
+        # Verlet은 Hamiltonian 역학의 symplectic 구조를 정확히 보존합니다. 이는 우리가
+        # 시뮬레이션하는 많은 바운스 주기 동안 비물리적 에너지 드리프트를 방지합니다.
+        # RK4 (소산성 적분기)는 절단 오차로 인해 이를 도입할 것입니다.
         v_half = v + 0.5 * a * dt
         x_new = x + v_half * dt
-        x_new = x_new % (2 * np.pi / k)  # periodic
+        # 위치를 [0, λ]로 감쌉니다. 파동이 주기적이기 때문입니다; 이는 입자가
+        # 무한한 주기적 격자를 통해 자유롭게 이동하는 것과 정확히 동등합니다.
+        x_new = x_new % (2 * np.pi / k)
 
         E_new = E0 * np.sin(k * x_new)
         a_new = q * E_new / m
@@ -958,7 +1025,10 @@ ax1.set_xlim(0, 1)
 ax2.scatter(x_traj[:, -1] * k / (2*np.pi), (v_traj[:, -1] - v_ph) / 1e3,
            c='red', s=10, alpha=0.6, label='Particles')
 
-# Separatrix
+# 분리면(separatrix): 파동 프레임에서 포획된 입자와 통과 입자 사이의 경계입니다.
+# 이는 일정 에너지 H = (1/2)m(v')^2 - eΦ(x) = 0의 등고선으로,
+# v_sep(x) = sqrt(2eΦ_0(1 + cos(kx))/m)을 줍니다. 이를 플롯하면 시뮬레이션이
+# 이론으로 예측된 고양이 눈(cat's-eye) 위상 공간 구조를 올바르게 포착하는지 확인합니다.
 phi_0 = E0 / k
 v_sep = np.sqrt(2 * e * phi_0 / m_e)
 x_sep = np.linspace(0, 2*np.pi, 100)

@@ -1,14 +1,23 @@
 # Project 1: Basic Arithmetic Calculator
 
-## Learning Objectives
-
-Through this project, you'll learn:
-- User input (`scanf`)
-- Conditional branching (`switch-case`)
-- Function definition and calling
-- Error handling
+**Previous**: [C Language Basics Quick Review](./02_C_Basics_Review.md) | **Next**: [Project 2: Number Guessing Game](./04_Project_Number_Guessing.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Read user input using `scanf` with proper format specifiers and the address-of operator
+2. Route program flow through multiple branches using `switch-case` statements
+3. Define and call functions that accept pointer parameters and return status codes
+4. Handle runtime errors gracefully using input validation and return codes
+5. Design a program that loops continuously until the user chooses to exit
+6. Separate concerns by extracting input, computation, and output into distinct functions
+
+---
+
+A calculator is the "Hello World" of interactive programs. It forces you to handle every messy real-world detail at once -- reading user input that might be garbage, choosing the right operation, and reporting errors like division by zero. By the end of this project you will have a small but complete command-line tool, and more importantly, a reusable pattern for structuring any interactive C program.
 
 ## Step 1: Basic Calculator
 
@@ -465,4 +474,4 @@ gcc -Wall -Wextra -std=c11 calculator.c -o calculator
 
 ## Next Steps
 
-[04_Project_Number_Guessing.md](./04_Project_Number_Guessing.md) → Let's build a game!
+[Project 2: Number Guessing Game](./04_Project_Number_Guessing.md) → Let's build a game!

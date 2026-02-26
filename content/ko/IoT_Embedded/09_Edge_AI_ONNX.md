@@ -1,12 +1,21 @@
 # 09. Edge AI - ONNX Runtime
 
+**이전**: [Edge AI (TFLite)](./08_Edge_AI_TFLite.md) | **다음**: [홈 자동화 프로젝트](./10_Home_Automation_Project.md)
+
 ## 학습 목표
 
-- ONNX(Open Neural Network Exchange) 개요 이해
-- ONNX Runtime 설치 및 사용법 습득
-- 모델 최적화 기법 학습
-- 라즈베리파이 배포
-- 객체 검출 예제 구현
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. ONNX 오픈 포맷과 크로스 프레임워크 모델 이식성에서의 역할을 설명할 수 있다
+2. 엣지 배포를 위한 ONNX Runtime과 TensorFlow Lite를 비교할 수 있다
+3. PyTorch 및 TensorFlow 모델을 ONNX 포맷으로 변환할 수 있다
+4. 엣지 성능을 위해 ONNX 모델을 검증하고, 단순화하고, 양자화할 수 있다
+5. Raspberry Pi에서 ONNX Runtime으로 추론을 실행할 수 있다
+6. YOLO ONNX 모델로 객체 검출을 구현할 수 있다
+
+---
+
+모든 머신러닝 모델이 TensorFlow로 학습되는 것은 아닙니다. 팀에서 PyTorch, scikit-learn, 또는 다른 프레임워크를 사용한다면, ONNX는 엣지 장치에 모델을 배포할 수 있는 범용 교환 포맷을 제공합니다. ONNX Runtime은 TFLite와 함께 고성능 추론 엔진을 제공하여, IoT AI 워크로드에서 특정 프레임워크에 종속되지 않도록 해줍니다.
 
 ---
 
@@ -762,8 +771,8 @@ if __name__ == "__main__":
 
 ## 다음 단계
 
-- [10_Home_Automation_Project.md](10_Home_Automation_Project.md): AI 기반 스마트홈
-- [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md): 영상 분석 프로젝트
+- [홈 자동화 프로젝트](10_Home_Automation_Project.md): AI 기반 스마트홈
+- [영상 분석 프로젝트](11_Image_Analysis_Project.md): 영상 분석 프로젝트
 
 ---
 

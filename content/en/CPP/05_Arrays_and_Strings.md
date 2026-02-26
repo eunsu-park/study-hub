@@ -1,5 +1,25 @@
 # Arrays and Strings
 
+**Previous**: [Functions](./04_Functions.md) | **Next**: [Pointers and References](./06_Pointers_and_References.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Declare, initialize, and access elements in C-style arrays and multidimensional arrays
+2. Compare C-style arrays with `std::array` and explain the safety advantages of bounds-checked access
+3. Distinguish between C-style strings (`char[]`) and `std::string`, and identify when each is appropriate
+4. Apply core `std::string` operations: concatenation, searching, substring extraction, insertion, and replacement
+5. Implement string-to-number and number-to-string conversions using `std::stoi`, `std::stod`, and `std::to_string`
+6. Design string-splitting logic using `std::stringstream`
+7. Explain how `std::string_view` (C++17) avoids unnecessary copies when reading string data
+
+---
+
+Arrays and strings are the workhorses of data storage. Nearly every real-world program -- from a simple log parser to a high-frequency trading system -- spends much of its time creating, searching, and transforming sequences of values or characters. Knowing which container to reach for (raw array, `std::array`, `std::string`, or `std::string_view`) and understanding the performance trade-offs will pay dividends throughout your C++ career.
+
 ## 1. Array Basics
 
 Arrays store multiple values of the same type in contiguous memory.

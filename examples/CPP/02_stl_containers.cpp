@@ -59,6 +59,8 @@ void demo_vector() {
 void demo_map() {
     std::cout << "\n=== std::map ===\n";
 
+    // Why: std::map keeps keys sorted in a balanced BST (O(log n) lookup), ideal when
+    // you need ordered iteration — use unordered_map for O(1) average lookup instead
     std::map<std::string, int> scores;
     scores["Alice"] = 95;
     scores["Bob"] = 87;
@@ -84,6 +86,8 @@ void demo_map() {
 void demo_unordered_map() {
     std::cout << "\n=== std::unordered_map ===\n";
 
+    // Why: unordered_map uses a hash table for O(1) average lookup — preferred over map
+    // when you don't need sorted keys and want maximum lookup/insert speed
     std::unordered_map<std::string, int> word_count;
     std::vector<std::string> words = {"apple", "banana", "apple", "cherry", "banana", "apple"};
 
@@ -168,6 +172,8 @@ void demo_ranges() {
     std::vector<int> nums = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
     // Filter and transform using views
+    // Why: ranges views are lazy — they compose operations without creating intermediate
+    // containers, so filter+transform runs in a single pass over the data
     auto even_squared = nums
         | std::views::filter([](int x) { return x % 2 == 0; })
         | std::views::transform([](int x) { return x * x; });
@@ -216,7 +222,8 @@ void demo_lambdas() {
     auto add_x = [x](int y) { return x + y; };
     std::cout << "add_x(5) = " << add_x(5) << "\n";
 
-    // Capture by reference
+    // Why: capture by reference ([&count]) lets the lambda modify the outer variable,
+    // while capture by value ([x]) creates a private copy — choose based on intended side effects
     int count = 0;
     auto increment = [&count]() { count++; };
     increment();

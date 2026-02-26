@@ -1,12 +1,26 @@
 # Inter-Process Communication and Signals
 
-## Objectives
+**Previous**: [Network Programming in C](./21_Network_Programming.md) | **Next**: [Testing and Profiling in C](./23_Testing_and_Profiling.md)
 
-- Understand IPC mechanisms: pipes, FIFOs, shared memory, and message queues
-- Master signal handling with sigaction for robust process control
-- Apply IPC patterns for producer-consumer and parent-child coordination
+## Learning Objectives
 
-**Difficulty**: ⭐⭐⭐⭐ (Advanced)
+After completing this lesson, you will be able to:
+
+1. Create anonymous pipes for parent-child communication and redirect standard I/O with `dup2`
+2. Use named pipes (FIFOs) to exchange data between unrelated processes
+3. Map shared memory regions with `shm_open` and `mmap`, and synchronize access with POSIX semaphores
+4. Send and receive structured messages through POSIX message queues with priority ordering
+5. Install signal handlers using `sigaction` and write async-signal-safe code
+6. Block and unblock signals with `sigprocmask` to protect critical sections
+7. Reap child processes automatically using a `SIGCHLD` handler with non-blocking `waitpid`
+
+---
+
+When a single process is not enough -- when you need a pipeline of workers, a watchdog that restarts crashed services, or a shared scoreboard between cooperating daemons -- you need inter-process communication. IPC is the plumbing behind every Unix shell pipeline, every database that coordinates multiple backends, and every container orchestrator that manages worker processes.
+
+> **Analogy -- Texts, Whiteboards, and Mailboxes**: Inter-process communication mechanisms map to everyday communication. A **signal** is like an urgent text notification -- it interrupts whatever you're doing with a brief code (SIGTERM = "please stop"). **Shared memory** is a whiteboard in a shared office -- any process can read or scribble on it instantly, but you need rules (semaphores) so nobody erases someone else's work mid-sentence. A **message queue** is a mailbox: senders drop letters in and receivers pick them up in order, even if they arrive at different times.
+
+**Difficulty**: Advanced
 
 ---
 
@@ -646,4 +660,56 @@ Write a watchdog that:
 
 ---
 
-[Previous: 21_Network_Programming](./21_Network_Programming.md) | [Next: 00_Overview](./00_Overview.md)
+## Exercises
+
+### Exercise 1: Pipe Chain Tracing
+
+Write a program that creates a chain of three processes — P1, P2, P3 — connected by two anonymous pipes:
+
+1. P1 generates numbers 1 through 10, writing each as text (e.g., `"1\n"`) to pipe A.
+2. P2 reads from pipe A, doubles each number, and writes the result to pipe B.
+3. P3 reads from pipe B and prints each result to stdout.
+
+Each process must close the pipe ends it does not use immediately after `fork`. After writing the code, answer: what happens to P2 and P3 if P1 closes its write end without writing anything? Verify your answer experimentally.
+
+### Exercise 2: FIFO-Based Logger
+
+Implement a two-program logging system using a named pipe (FIFO):
+
+1. **Logger daemon**: Creates `/tmp/app_log.fifo` with `mkfifo`, opens it for reading, and continuously reads log lines, prepending a timestamp (`[HH:MM:SS]`) and writing them to a file `app.log`.
+2. **Application**: Opens `/tmp/app_log.fifo` for writing and sends five log messages one second apart, then closes the FIFO.
+3. After the application exits, the logger should detect EOF and print `"Log complete"` before cleaning up with `unlink`.
+
+Run both programs in separate terminals and verify that `app.log` contains all five timestamped messages.
+
+### Exercise 3: Shared Counter with Semaphore Protection
+
+Demonstrate a race condition and then fix it with a POSIX semaphore:
+
+1. Create a shared memory region containing a single `int counter` initialized to 0.
+2. Fork 4 child processes; each increments the counter 10,000 times **without** synchronization. Run and observe that the final value is often less than 40,000 due to the race.
+3. Add a named semaphore initialized to 1. Wrap each increment in `sem_wait` / `sem_post`. Run again and confirm the final value is exactly 40,000.
+4. Clean up all shared resources (`shm_unlink`, `sem_unlink`) in the parent after all children exit.
+
+### Exercise 4: Safe Signal Handler with Pipe Self-Trick
+
+Rewrite the `SIGINT` handler from Section 5.2 using the "self-pipe trick" for signal-safe I/O multiplexing:
+
+1. Create a `pipe(selfpipe)` before entering the main loop.
+2. In the `SIGINT` signal handler (installed with `sigaction`), write a single byte `'S'` to `selfpipe[1]` — this is async-signal-safe.
+3. In the main loop, use `select()` or `poll()` to wait on both `STDIN_FILENO` and `selfpipe[0]`.
+4. When `selfpipe[0]` becomes readable, read the byte, print `"Graceful shutdown initiated"`, and exit.
+
+Explain in a comment block why calling `printf` directly inside a signal handler is unsafe and what problems the self-pipe trick avoids.
+
+### Exercise 5: POSIX Message Queue Priority Scheduler
+
+Build a simple priority-based task scheduler using a POSIX message queue:
+
+1. Define a `task_t` struct containing a `char description[128]` and an `int priority` (1 = low, 5 = medium, 10 = high).
+2. Write a producer that enqueues 6 tasks with varying priorities and descriptions in random order.
+3. Write a consumer that dequeues tasks one at a time (highest priority first, as guaranteed by `mq_receive`) and prints each task's priority and description.
+4. Confirm that the consumer always processes higher-priority tasks before lower-priority ones, regardless of the order the producer sent them.
+5. Clean up with `mq_unlink` after all tasks are processed.
+
+---

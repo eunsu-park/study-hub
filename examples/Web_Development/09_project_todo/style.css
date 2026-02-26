@@ -132,6 +132,8 @@ body {
     color: #999;
 }
 
+/* Why: accent-color styles the native checkbox without replacing it with a custom element,
+   preserving built-in keyboard and accessibility behavior */
 .todo-item input[type="checkbox"] {
     width: 22px;
     height: 22px;
@@ -154,6 +156,8 @@ body {
     margin-right: 10px;
 }
 
+/* Why: Hiding action buttons until hover keeps the UI clean and focused on the task text,
+   reducing visual clutter in long lists - a progressive disclosure pattern */
 .todo-actions {
     display: flex;
     gap: 8px;

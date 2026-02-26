@@ -1,11 +1,21 @@
 # Functional Programming Concepts
 
-> **Topic**: Programming
-> **Lesson**: 6 of 16
-> **Prerequisites**: Understanding of functions, basic data structures, familiarity with at least one programming language
-> **Objective**: Master functional programming concepts (pure functions, immutability, higher-order functions, composition) and apply them to write more predictable, testable code
+**Previous**: [OOP Principles](./05_OOP_Principles.md) | **Next**: [Design Patterns](./07_Design_Patterns.md)
 
-## Introduction
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish pure functions from impure functions and explain why purity enables testability, memoization, and parallelism
+2. Apply immutability patterns to avoid shared mutable state in JavaScript, Python, and C++
+3. Treat functions as first-class values by assigning, passing, and returning them
+4. Use higher-order functions (map, filter, reduce) to express data transformations declaratively
+5. Explain closures and apply them to create factories, counters, and partial application helpers
+6. Compose simple functions into complex pipelines using compose and pipe utilities
+7. Apply currying and partial application to configure reusable function templates
+8. Describe the Maybe/Option monad pattern and use it to handle null values safely
+
+---
 
 Functional Programming (FP) treats computation as the evaluation of mathematical functions, avoiding changing state and mutable data. While languages like Haskell and Lisp are purely functional, FP concepts are increasingly adopted in mainstream languages like JavaScript, Python, Java, and C++. This lesson explores core FP principles and shows how to apply them in multi-paradigm languages.
 
@@ -1090,5 +1100,4 @@ class Maybe<T> {
 
 ---
 
-**Previous**: [05_OOP_Principles.md](05_OOP_Principles.md)
-**Next**: [07_Design_Patterns.md](07_Design_Patterns.md)
+**Previous**: [OOP Principles](./05_OOP_Principles.md) | **Next**: [Design Patterns](./07_Design_Patterns.md)

@@ -2,9 +2,23 @@
 
 [Previous: Bayesian Advanced](./26_Bayesian_Advanced.md) | [Next: Survival Analysis](./28_Survival_Analysis.md)
 
-## Overview
+---
 
-Causal inference answers "what would happen if?" — moving beyond correlation to identify cause-and-effect relationships. This lesson covers causal graphs (DAGs), the potential outcomes framework, propensity score methods, difference-in-differences (DID), regression discontinuity (RDD), instrumental variables, and an introduction to causal ML.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the fundamental problem of causal inference and distinguish correlation from causation using concrete examples
+2. Draw and interpret causal DAGs, identifying chains, forks, and colliders to determine valid adjustment sets via the backdoor criterion
+3. Implement propensity score matching and inverse probability weighting (IPW) to estimate average treatment effects from observational data
+4. Apply difference-in-differences (DID) estimation and assess the parallel trends assumption
+5. Describe regression discontinuity designs (RDD) and estimate local treatment effects near a cutoff
+6. Explain when instrumental variables (IV) are needed and verify instrument validity using first-stage F-statistics
+7. Distinguish between average treatment effects (ATE) and conditional average treatment effects (CATE), and apply T-learners for heterogeneous effect estimation
+
+---
+
+Most of data science concerns prediction -- given what we observe, what do we expect? But the questions that drive real decisions are causal: will changing the button color increase conversions? Does this training program raise wages? Causal inference provides the rigorous tools to answer "what if" questions from both experimental and observational data, bridging the gap between statistical association and actionable knowledge.
 
 ---
 

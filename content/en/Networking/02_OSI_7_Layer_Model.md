@@ -1,12 +1,27 @@
 # OSI 7-Layer Model
 
-## Overview
-
-The OSI (Open Systems Interconnection) 7-layer model is a reference model that standardizes network communication into 7 layers. Published by the ISO (International Organization for Standardization) in 1984, this model provides a framework enabling communication between different systems. In this lesson, we'll learn about the role of each layer, protocols, PDU concepts, and the encapsulation process.
+**Previous**: [Network Fundamentals](./01_Network_Fundamentals.md) | **Next**: [TCP/IP Model](./03_TCP_IP_Model.md)
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of the OSI reference model and why layered architecture matters
+2. Describe the function of each of the seven OSI layers
+3. Identify the PDU (Protocol Data Unit) name at each layer
+4. Trace the encapsulation and decapsulation process as data moves between layers
+5. Map common protocols and network devices to their corresponding OSI layers
+6. Apply the OSI model as a framework for systematic network troubleshooting
+
+---
+
+The OSI model is the "Rosetta Stone" of networking -- it gives engineers, developers, and students a shared vocabulary for describing how data travels from one application to another across a network. Even though the Internet runs on the simpler TCP/IP stack, the OSI model remains the standard mental framework used in every network certification, troubleshooting session, and design discussion.
+
+> **Analogy -- The Postal System**: The OSI model works like a postal system with seven departments. When you send a letter, the Application layer is you writing the letter, the Presentation layer is putting it in an envelope, the Session layer is the conversation thread, the Transport layer is choosing registered vs. regular mail, the Network layer is the postal routing system deciding which sorting centers to use, the Data Link layer is the local mail carrier on your street, and the Physical layer is the actual truck carrying the mailbag. Each layer only talks to the layer directly above and below it -- just as a mail carrier doesn't need to know what's written in the letter.
 
 ## Table of Contents
 
@@ -1089,6 +1104,8 @@ The OSI (Open Systems Interconnection) 7-layer model is a reference model that s
 
 ### Troubleshooting Command Summary
 
+> **Why bottom-up?** Lower layers affect everything above them — a broken cable (L1) makes DNS debugging (L7) pointless. By starting at L1 and working up, you avoid chasing symptoms caused by a lower-layer failure. At each layer, the tool is chosen to test *that layer's responsibility specifically*: `arp -a` tests L2 address resolution (not IP routing), `ping` tests L3 reachability (not port connectivity), and `netstat -an` tests L4 port status (not application logic).
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Troubleshooting Commands                       │
@@ -1224,9 +1241,7 @@ The OSI (Open Systems Interconnection) 7-layer model is a reference model that s
 
 ---
 
-## Next Steps
-
-- [03_TCP_IP_Model.md](./03_TCP_IP_Model.md) - TCP/IP model and Internet protocols
+**Previous**: [Network Fundamentals](./01_Network_Fundamentals.md) | **Next**: [TCP/IP Model](./03_TCP_IP_Model.md)
 
 ---
 

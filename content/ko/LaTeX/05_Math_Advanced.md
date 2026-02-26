@@ -5,6 +5,17 @@
 > **선수지식**: 기본 수학 조판, 패키지 & 문서 클래스
 > **목표**: 다중 행 수식, 행렬, 정리 환경, 물리학 및 컴퓨터 과학을 위한 특수 표기법 등 고급 수학 조판 마스터하기.
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `amsmath` 패키지 환경(`align`, `gather`, `multline`)을 사용하여 정렬이 올바른 다중 행 수식(multi-line equation)을 조판할 수 있다
+2. `pmatrix`, `bmatrix`, `vmatrix` 및 관련 환경을 사용하여 다양한 스타일의 행렬(matrix)과 배열(array)을 구성할 수 있다
+3. `amsthm` 패키지를 사용하여 정리형 환경(`theorem`, `lemma`, `proof`)을 정의하고 활용할 수 있다
+4. 물리학(`physics` 패키지)과 컴퓨터 과학(의사코드(pseudocode), 복잡도 표기법)을 위한 특수 표기법 패키지를 적용할 수 있다
+5. 적절한 LaTeX 패키지를 사용하여 가환 다이어그램(commutative diagram)과 범주론(category theory) 구성을 조판할 수 있다
+6. 환경 불일치(mismatched environment) 및 잘못된 간격 명령(spacing command) 등 일반적인 `amsmath` 오류를 진단하고 해결할 수 있다
+
 ---
 
 ## 소개
@@ -764,6 +775,6 @@ subject to  g_i(x) ≤ 0, i = 1,...,m
 ---
 
 **내비게이션**:
-- [이전: 04_Math_Basics.md](04_Math_Basics.md)
-- [다음: 06_Floats_and_Figures.md](06_Floats_and_Figures.md)
+- [이전: 수학 조판 기초](04_Math_Basics.md)
+- [다음: 부동체, 그림 & 표](06_Floats_and_Figures.md)
 - [개요로 돌아가기](00_Overview.md)

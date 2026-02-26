@@ -1,5 +1,18 @@
 # Searching Algorithms
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare linear search, binary search, and hash search by their time complexity, preconditions, and appropriate use cases
+2. Implement iterative and recursive binary search and explain why it achieves O(log n) time on sorted arrays
+3. Apply binary search variants (lower bound, upper bound) to solve problems involving first/last occurrence of a target value
+4. Design parametric search solutions by formulating an optimization problem as a binary-search-on-answer problem
+5. Explain why hash-based lookup achieves O(1) average time and identify its limitations compared to sorted-array binary search
+6. Select the most efficient search strategy given the data's structure (sorted vs. unsorted, range constraints, duplicates)
+
+---
+
 ## Overview
 
 Searching is a fundamental operation to find desired values in data. In this lesson, we learn various searching techniques including linear search, binary search, parametric search, and hash search.
@@ -130,27 +143,34 @@ int binarySearch(int arr[], int n, int target) {
     int right = n - 1;
 
     while (left <= right) {
+        // left + (right - left) / 2 instead of (left + right) / 2:
+        // (left + right) can overflow a 32-bit int when both are large
+        // (e.g., left = right = 1.5 × 10⁹ → sum exceeds INT_MAX).
+        // This form subtracts first and stays within bounds — essential in C/C++/Java
+        // where integers have fixed width. Python's arbitrary-precision integers
+        // make the naive form safe, but this style is considered best practice.
         int mid = left + (right - left) / 2;  // Prevent overflow
 
         if (arr[mid] == target) {
             return mid;
         } else if (arr[mid] < target) {
-            left = mid + 1;
+            left = mid + 1;   // Target is in the right half
         } else {
-            right = mid - 1;
+            right = mid - 1;  // Target is in the left half
         }
     }
 
-    return -1;
+    return -1;  // Exhausted all candidates — not present
 }
 
 // C - Recursive
 int binarySearchRecursive(int arr[], int left, int right, int target) {
+    // Base case: empty search range — the element does not exist
     if (left > right) {
         return -1;
     }
 
-    int mid = left + (right - left) / 2;
+    int mid = left + (right - left) / 2;  // Same overflow-safe midpoint
 
     if (arr[mid] == target) {
         return mid;
@@ -244,19 +264,25 @@ lower_bound(9) = 7  (not found, end of array)
 // C
 int lowerBound(int arr[], int n, int target) {
     int left = 0;
+    // right = n (one past the last valid index), not n - 1:
+    // the result may be n when target is greater than every element,
+    // meaning "insert at the end" — using n - 1 would miss this case
     int right = n;
 
+    // Loop condition is left < right (not <=): the range [left, right) is
+    // half-open, so left == right means the range is empty and we're done
     while (left < right) {
         int mid = left + (right - left) / 2;
 
         if (arr[mid] < target) {
-            left = mid + 1;
+            left = mid + 1;  // mid is definitely not the answer — exclude it
         } else {
+            // arr[mid] >= target: mid could be the answer, keep it in range
             right = mid;
         }
     }
 
-    return left;
+    return left;  // left == right: the insertion point for target
 }
 ```
 
@@ -314,11 +340,14 @@ Count of 4 = 5 - 2 = 3
 // C
 int upperBound(int arr[], int n, int target) {
     int left = 0;
-    int right = n;
+    int right = n;  // Same half-open [left, right) convention as lowerBound
 
     while (left < right) {
         int mid = left + (right - left) / 2;
 
+        // The only difference from lowerBound: <= instead of <.
+        // This causes equal elements to push left forward, so the result
+        // lands one position *after* all occurrences of target
         if (arr[mid] <= target) {
             left = mid + 1;
         } else {
@@ -384,26 +413,30 @@ int searchRotated(const vector<int>& arr, int target) {
     int right = arr.size() - 1;
 
     while (left <= right) {
-        int mid = left + (right - left) / 2;
+        int mid = left + (right - left) / 2;  // Overflow-safe midpoint
 
         if (arr[mid] == target) {
             return mid;
         }
 
-        // Left side is sorted
+        // Key insight: in a rotated array, at least one of the two halves
+        // is always contiguously sorted. Determine which half is sorted,
+        // then check if target falls within that sorted range.
+
+        // Left side is sorted: arr[left] <= arr[mid] means no rotation point here
         if (arr[left] <= arr[mid]) {
             if (arr[left] <= target && target < arr[mid]) {
-                right = mid - 1;
+                right = mid - 1;  // Target is within the sorted left half
             } else {
-                left = mid + 1;
+                left = mid + 1;   // Target must be in the (possibly rotated) right half
             }
         }
-        // Right side is sorted
+        // Right side is sorted: the rotation point is in the left half
         else {
             if (arr[mid] < target && target <= arr[right]) {
-                left = mid + 1;
+                left = mid + 1;   // Target is within the sorted right half
             } else {
-                right = mid - 1;
+                right = mid - 1;  // Target must be in the (rotated) left half
             }
         }
     }
@@ -475,7 +508,7 @@ Length 201: 3+3+2+2 = 10 pieces < 11 (impossible)
 bool canMake(const vector<int>& cables, int k, long long length) {
     long long count = 0;
     for (int cable : cables) {
-        count += cable / length;
+        count += cable / length;  // Integer division gives how many pieces of this length
     }
     return count >= k;
 }
@@ -483,15 +516,17 @@ bool canMake(const vector<int>& cables, int k, long long length) {
 long long maxCableLength(vector<int>& cables, int k) {
     long long left = 1;
     long long right = *max_element(cables.begin(), cables.end());
-    long long answer = 0;
+    long long answer = 0;  // 0 = "no valid answer found yet"
 
     while (left <= right) {
         long long mid = (left + right) / 2;
 
         if (canMake(cables, k, mid)) {
+            // mid works — record it and search for a larger (better) answer
             answer = mid;
             left = mid + 1;  // Try longer length
         } else {
+            // mid is too large — shrink the search space
             right = mid - 1;
         }
     }
@@ -575,6 +610,9 @@ Distance 4: 1, 8 (only 2 possible, impossible)
 ```cpp
 // C++
 bool canInstall(const vector<int>& houses, int c, int dist) {
+    // Greedy: always install at the first house that is far enough from the last
+    // router — a greedy choice is valid here because installing sooner never
+    // prevents future installations (it only leaves more room to the right)
     int count = 1;
     int lastPos = houses[0];
 
@@ -589,17 +627,19 @@ bool canInstall(const vector<int>& houses, int c, int dist) {
 }
 
 int maxMinDistance(vector<int>& houses, int c) {
+    // Must sort first: canInstall relies on consecutive positions being adjacent,
+    // and the binary search range [1, max_gap] is only meaningful on sorted input
     sort(houses.begin(), houses.end());
 
     int left = 1;
-    int right = houses.back() - houses.front();
+    int right = houses.back() - houses.front();  // Maximum possible minimum distance
     int answer = 0;
 
     while (left <= right) {
         int mid = (left + right) / 2;
 
         if (canInstall(houses, c, mid)) {
-            answer = mid;
+            answer = mid;   // mid is feasible; remember it and try for larger
             left = mid + 1;
         } else {
             right = mid - 1;

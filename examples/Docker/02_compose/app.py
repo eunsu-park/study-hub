@@ -29,6 +29,7 @@ app = Flask(__name__)
 # ============================================================================
 # Configuration
 # ============================================================================
+# Why: Defaults point to localhost so the app still runs outside Docker for local debugging — inside Compose, env vars override these with container hostnames
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/mydb')
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
@@ -160,6 +161,7 @@ def stats():
             'timestamp': datetime.now().isoformat()
         }
 
+        # Why: Short TTL (60s) balances freshness vs. database load — prevents N concurrent requests from all hitting Postgres while still showing near-real-time stats
         # Cache for 60 seconds
         r.setex('stats_cache', 60, json.dumps(stats_data))
 
@@ -206,6 +208,7 @@ def health():
         health_status['status'] = 'unhealthy'
         health_status['checks']['redis'] = f'unhealthy: {str(e)}'
 
+    # Why: Returning 503 (not 500) when unhealthy tells load balancers and K8s readiness probes to stop routing traffic here, while 200 keeps the pod in the service pool
     status_code = 200 if health_status['status'] == 'healthy' else 503
     return jsonify(health_status), status_code
 
@@ -226,6 +229,7 @@ def clear_cache():
 # Application Startup
 # ============================================================================
 if __name__ == '__main__':
+# Why: Tolerating init failure lets the container start even if the DB is momentarily unavailable — the health check will report unhealthy until the DB comes up, and the orchestrator can retry
     # Initialize database on startup
     try:
         init_db()

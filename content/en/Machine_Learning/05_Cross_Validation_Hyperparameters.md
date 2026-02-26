@@ -1,8 +1,24 @@
 # Cross-Validation and Hyperparameter Tuning
 
-## Overview
+**Previous**: [Model Evaluation](./04_Model_Evaluation.md) | **Next**: [Decision Trees](./06_Decision_Trees.md)
 
-Cross-validation is used to evaluate a model's generalization performance more accurately, and hyperparameter tuning is the process of finding optimal model settings.
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why a single train/test split is insufficient for reliable model evaluation
+2. Implement K-Fold, Stratified K-Fold, and Time Series cross-validation strategies
+3. Compare cross_val_score and cross_validate for multi-metric evaluation
+4. Apply Grid Search and Randomized Search to tune hyperparameters systematically
+5. Describe how nested cross-validation separates model selection from model evaluation
+6. Demonstrate hyperparameter tuning within a scikit-learn Pipeline
+7. Evaluate the trade-offs between Grid Search, Randomized Search, and Bayesian optimization
+
+---
+
+A model evaluated on a single train/test split can give misleading results -- you might just be lucky (or unlucky) with how the data was divided. Cross-validation provides a more robust estimate of generalization performance, while hyperparameter tuning ensures you are getting the most out of your chosen algorithm rather than settling for default settings.
 
 ---
 

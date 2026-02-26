@@ -478,14 +478,22 @@ def slowing_down_frequency(v, n, T_e, ln_Lambda=15):
     T_J = T_e * e  # Convert to Joules
     v_th = np.sqrt(2 * T_J / m_e)
 
-    # Coulomb collision frequency
+    # Gamma는 기본적인 Coulomb 산란 단면적을 인코딩합니다:
+    # e^4는 두 전하의 상호작용에서 나오고, ln_Lambda는
+    # 90° 편향 반경과 Debye 길이 사이의 모든 충돌 매개변수 기여를 합산합니다.
     Gamma = n * e**4 * ln_Lambda / (4 * np.pi * epsilon_0**2 * m_e**2)
 
-    # Slowing-down frequency (high-velocity limit)
+    # 1/v^3 의존성은 Coulomb 항력의 특징입니다: 빠른 입자는
+    # 각 장 입자 근처에서 보내는 시간이 적어 유효 단면적이 줄어듭니다.
+    # v > 3*v_th 임계값은 배경이 정지 산란 매체처럼 작용하는 영역
+    # (시험 입자가 열 입자를 훨씬 앞질러 감)을 식별합니다.
     if v > 3 * v_th:
         nu_s = Gamma / v**3
     else:
-        # Include thermal correction (approximate)
+        # Chandrasekhar의 phi 함수는 시험 입자보다 느린 배경 입자의 비율을 반영합니다
+        # — 같은 방향으로 항력에 기여하는 입자만 포함됩니다.
+        # 이 보정은 절반의 배경이 더 빠르게 움직여 항력을 부분적으로 상쇄하는
+        # v ~ v_th 근처에서 필수적입니다.
         x = v / v_th
         phi = (np.erf(x) - 2*x*np.exp(-x**2)/np.sqrt(np.pi)) / (2*x**2)
         nu_s = Gamma * phi / v**3
@@ -519,7 +527,9 @@ def dv_dt(v, t, n, T_e, E_field=0):
 
     nu_s = slowing_down_frequency(v, n, T_e)
 
-    # Slowing down plus electric field acceleration
+    # 항력(-nu_s * v)과 전기장 가속(eE/m_e) 사이의 경쟁이 도주(runaway)를 결정합니다:
+    # E > E_Dreicer(드레이서 전기장)이면 높은 v의 입자에 대해 마찰이 전기장을 이길 수 없습니다.
+    # 왜냐하면 nu_s * v ∝ 1/v^2 → v → ∞이 될수록 0으로 줄어들기 때문입니다.
     dvdt = -nu_s * v + e * E_field / m_e
 
     return dvdt
@@ -609,27 +619,35 @@ def braginskii_coefficients(n, T, B, Z=1, A=1, ln_Lambda=15):
     T_J = T * e
     m_i = A * 1.673e-27  # kg
 
-    # Collision time
+    # Braginskii는 Fokker-Planck 충돌 연산자로부터 tau ~ T^(3/2)/n을 보였습니다;
+    # T^(3/2) 스케일링은 더 빠른 입자일수록 Coulomb 단면적이 작아진다는 것을 반영합니다.
     tau_e = 12 * np.pi**(3/2) * epsilon_0**2 * m_e**(1/2) * T_J**(3/2) / \
             (n * e**4 * ln_Lambda * np.sqrt(2))
+    # 이온 충돌 시간은 sqrt(m_i/m_e)만큼 더 깁니다. 무거운 이온은 더 느리게 움직여
+    # 같은 온도에서 더 적게 상호작용하기 때문입니다.
     tau_i = np.sqrt(m_i / m_e) * tau_e
 
     # Cyclotron frequencies
     omega_ce = e * B / m_e
     omega_ci = Z * e * B / m_i
 
-    # Parallel coefficients
+    # 평행 수송(parallel transport)은 random-walk 평균 자유 경로로 결정됩니다: κ ~ n*T*τ/m ~ v_th^2/ν.
+    # Braginskii 수치 계수(3.16, 3.9)는 분포 함수의 비-Maxwellian 보정을 반영하는
+    # 완전한 Fokker-Planck 풀이에서 나옵니다.
     kappa_par_e = 3.16 * n * T_J * tau_e / m_e
     kappa_par_i = 3.9 * n * T_J * tau_i / m_i
     eta_par = 0.96 * n * T_J * tau_i
     sigma_par = 1.96 * n * e**2 * tau_e / m_e
 
-    # Perpendicular coefficients
+    # 수직 전도도(perpendicular conductivity)는 (ω_c τ)^2에 의해 억제됩니다. 입자가
+    # 장 선을 가로질러 이동하려면 산란(사이클로트론 궤도 파괴)이 필요하고, 각 이동은
+    # Larmor 반경 하나에 불과하여 κ_⊥ ~ nT / (m * ω_c^2 * τ)이 됩니다.
     kappa_perp_e = 4.66 * n * T_J / (m_e * omega_ce**2 * tau_e)
     kappa_perp_i = 2.0 * n * T_J / (m_i * omega_ci**2 * tau_i)
     eta_perp_0 = 0.73 * n * T_J / (omega_ci**2 * tau_i)
 
-    # Anisotropy ratios
+    # 비등방성 비율(anisotropy ratio) κ_∥/κ_⊥ ~ (ω_c τ)^2는 자기장이
+    # 교차장 열 흐름을 얼마나 강하게 억제하는지를 나타냅니다.
     chi_e = kappa_par_e / kappa_perp_e
     chi_i = kappa_par_i / kappa_perp_i
 
@@ -753,23 +771,33 @@ def neoclassical_diffusion(r, R, B_0, n, T, Z=1, A=1):
             (n * Z**4 * e**4 * ln_Lambda * np.sqrt(2))
     nu_ii = 1 / tau_i
 
-    # Bounce frequency
+    # Bounce 주파수(bounce frequency)는 포획된 입자가 바나나 궤도를 순회하는 속도입니다;
+    # v_th / (π R √ε)는 포획된 입자가 poloidal 호 ~π R을
+    # 평행 속도 v_th * √ε (작은 평행 성분만 살아남음)로 이동하는 데서 유래합니다.
     omega_b = v_th / (np.pi * R * np.sqrt(epsilon))
 
-    # Collisionality
+    # ν* < 1이면 입자가 산란 전에 많은 bounce를 완료한다는 뜻 — banana regime입니다.
+    # ν*는 기하학적 효과(bouncing)와 충돌 중 어느 것이 입자 동역학을 지배하는지를 나타냅니다.
     nu_star = nu_ii / omega_b
 
-    # Classical diffusion
+    # 고전적 확산(classical diffusion)은 step 크기 ρ_L과 step 속도 ν_ii의 random walk입니다;
+    # 이것은 토로이달 기하학 보정 이전의 Bohm 자유 경로 추정입니다.
     D_classical = rho_L**2 * nu_ii
 
-    # Neoclassical regimes
+    # banana regime에서 유효 step 크기는 banana 폭 ~ ρ_L / √ε으로 Larmor 반경보다 훨씬 크며,
+    # D_nc ~ D_classical / ε^(3/2)를 줍니다.
     if nu_star < 0.1:  # Banana regime
         D_nc = D_classical / epsilon**(3/2)
         regime = "Banana"
     elif nu_star < 10:  # Plateau regime
+        # plateau regime에서는 궤도 평균화(orbit-averaging)가 고전적 스케일링을 부분적으로 회복합니다;
+        # ε^(-1) 향상은 포획된 입자의 비율 ~ √ε와 넓어진 step 크기의 조합에서 옵니다.
         D_nc = D_classical / epsilon
         regime = "Plateau"
     else:  # Pfirsch-Schlüter
+        # 높은 충돌성의 PS regime에서 q^2 인자는 입자의 poloidal 순환이
+        # 안전 인자(safety factor) q에 의해 유효 교차장 이동을 증폭시키는
+        # 환류 전류를 생성하기 때문에 나타납니다.
         q = r * B_0 / (R * (B_0 * r / R))  # Approximate safety factor
         D_nc = D_classical * q**2
         regime = "Pfirsch-Schlüter"
@@ -844,6 +872,10 @@ epsilon_array = r_array / R
 L_p = 1.0  # Pressure scale length (m)
 beta_p = 0.5  # Poloidal beta
 
+# Bootstrap 전류는 바나나 궤도 드리프트가 비대칭이기 때문에 발생합니다: 외부 구간에서
+# 포획된 입자들은 통과 입자가 보상해야 하는 순 반전류(net counter-current)를 운반하여,
+# 포획된 입자 비율 √ε에 비례하는 자기 구동 전류를 만듭니다.
+# 분모 (1 + ε^2)는 기하학이 포화되는 큰 ε에서 공식을 정규화합니다.
 j_bs_coeff = epsilon_array**(1/2) / (1 + epsilon_array**2)
 
 ax4.plot(r_array, j_bs_coeff, 'b-', linewidth=2)

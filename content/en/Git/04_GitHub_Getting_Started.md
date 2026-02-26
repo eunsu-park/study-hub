@@ -1,5 +1,24 @@
 # Getting Started with GitHub
 
+**Previous**: [Branches](./03_Branches.md) | **Next**: [GitHub Collaboration](./05_GitHub_Collaboration.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain what GitHub is and how it extends Git with collaboration features
+2. Create a GitHub account and configure SSH key authentication
+3. Create a remote repository on GitHub and connect it to a local repository
+4. Push local commits to a remote repository with `git push`
+5. Clone an existing repository with `git clone`
+6. Synchronize changes between local and remote using `git pull` and `git fetch`
+
+---
+
+Git on its own is a powerful local tool, but software development is a team sport. GitHub turns your local repository into a shared, cloud-hosted hub where teammates can review code, track issues, and automate workflows. Setting up GitHub properly -- especially SSH keys and remote connections -- removes friction from every future interaction with your team's codebase.
+
 ## 1. What is GitHub?
 
 GitHub is a web service that hosts Git repositories.
@@ -291,6 +310,36 @@ git push
 | `git push -u origin branch` | Push + set upstream |
 | `git pull` | Remote → local (fetch + merge) |
 | `git fetch` | Download remote changes only |
+
+---
+
+## Exercises
+
+### Exercise 1: SSH Key Setup
+Generate an SSH key pair and register the public key with your GitHub account. Verify the connection using `ssh -T git@github.com`. Write down the exact command sequence you used, including the `ssh-keygen` invocation with flags.
+
+### Exercise 2: Create and Push a Repository
+1. Initialize a new local Git repository called `my-first-remote`.
+2. Create a `README.md` with a brief project description, stage it, and commit it with an appropriate message.
+3. Create an empty repository on GitHub (no README), connect it as the `origin` remote, and push your local `main` branch with the `-u` flag.
+4. Confirm the push succeeded by viewing the repository on GitHub.
+
+### Exercise 3: Fetch vs Pull Exploration
+1. In a repository shared with a teammate (or simulate by making a commit directly on GitHub's web editor), run `git fetch origin` and then `git log origin/main` to inspect the remote changes before merging.
+2. Explain in your own words why you might prefer `git fetch` + inspect + `git merge` over a plain `git pull`.
+
+### Exercise 4: Remote Branch Workflow
+1. On GitHub, create a new branch called `feature/experiment` through the web UI.
+2. On your local machine, run `git fetch origin` and then check out the new remote branch using `git switch -c feature/experiment origin/feature/experiment`.
+3. Make a small change, commit it, and push it back.
+4. Delete the remote branch with `git push origin --delete feature/experiment` and confirm it disappears from `git branch -r`.
+
+### Exercise 5: Resolving a Push Rejection
+Simulate a push rejection by following these steps:
+1. Clone the same repository into two separate directories (`clone-a` and `clone-b`).
+2. In `clone-a`, make a commit and push it.
+3. In `clone-b`, make a different commit on the same branch and attempt to push — observe the rejection.
+4. Resolve the rejection by pulling, handling any conflicts, and completing the push.
 
 ---
 

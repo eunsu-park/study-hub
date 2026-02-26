@@ -1,5 +1,25 @@
 # Smart Pointers and Memory Management
 
+**Previous**: [Exception Handling and File I/O](./13_Exceptions_and_File_IO.md) | **Next**: [Modern C++ (C++11/14/17/20)](./15_Modern_CPP.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Identify common manual memory management pitfalls (leaks, double free, dangling pointers)
+2. Apply the RAII principle to tie resource lifetimes to object scope
+3. Use `unique_ptr` for exclusive ownership and transfer ownership with `std::move`
+4. Use `shared_ptr` for shared ownership and explain how reference counting works
+5. Break circular references with `weak_ptr` and safely promote them using `lock()`
+6. Choose the correct smart pointer type for a given ownership scenario
+7. Pass smart pointers to and from functions following modern C++ best practices
+
+---
+
+Manual `new`/`delete` is the single largest source of bugs in traditional C++ code: memory leaks, double frees, and dangling pointers have caused countless production outages and security vulnerabilities. Smart pointers eliminate these entire classes of bugs by encoding ownership semantics directly in the type system. Once you internalize when to reach for `unique_ptr`, `shared_ptr`, or `weak_ptr`, you can write code that is both safer and easier to reason about than anything raw pointers allow.
+
 ## 1. Challenges of Memory Management
 
 Manual memory management in C++ can cause several problems.
@@ -284,6 +304,8 @@ int main() {
 ## 4. shared_ptr
 
 A smart pointer with shared ownership. Multiple `shared_ptr`s can share the same object.
+
+> **Analogy -- The Shared Library Book**: A `shared_ptr` works like a library book checkout system. Multiple readers (owners) can check out the same book. A hidden counter tracks how many readers still have it. Only when the last reader returns the book (counter drops to zero) does the library put it back on the shelf (free the memory). A `weak_ptr` is like peeking at the catalog to see if the book still exists without actually checking it out.
 
 ### Basic Usage
 
@@ -915,7 +937,322 @@ shared_ptr:
 
 ---
 
-## 12. Exercises
+## 12. Advanced Smart Pointer Patterns
+
+### weak_ptr Use Cases Beyond Cycle Breaking
+
+While `weak_ptr` is most commonly introduced for breaking circular references, it has several other valuable applications:
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <string>
+#include <unordered_map>
+
+/* Use case 1: Observer pattern
+ * Why weak_ptr: Observers should not keep the subject alive. If the subject
+ * is destroyed, observers should gracefully discover this rather than
+ * holding a dangling reference or preventing destruction. */
+class EventEmitter {
+    std::vector<std::weak_ptr<std::function<void(const std::string&)>>> listeners;
+
+public:
+    void subscribe(std::shared_ptr<std::function<void(const std::string&)>> listener) {
+        listeners.push_back(listener);
+    }
+
+    void emit(const std::string& event) {
+        /* Iterate and clean up expired listeners in one pass */
+        auto it = listeners.begin();
+        while (it != listeners.end()) {
+            if (auto sp = it->lock()) {
+                (*sp)(event);     /* Listener still alive: invoke */
+                ++it;
+            } else {
+                it = listeners.erase(it);  /* Listener gone: remove */
+            }
+        }
+    }
+};
+
+/* Use case 2: Cache with automatic expiration
+ * Why weak_ptr: The cache should not prevent objects from being destroyed.
+ * When no one else holds a reference, the cached entry naturally expires. */
+template <typename Key, typename Value>
+class WeakCache {
+    std::unordered_map<Key, std::weak_ptr<Value>> cache_;
+
+public:
+    std::shared_ptr<Value> get(const Key& key) {
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            if (auto sp = it->second.lock()) {
+                return sp;   /* Cache hit: object still alive */
+            }
+            cache_.erase(it);  /* Expired: clean up stale entry */
+        }
+        return nullptr;  /* Cache miss */
+    }
+
+    void put(const Key& key, std::shared_ptr<Value> value) {
+        cache_[key] = value;
+    }
+};
+```
+
+### Custom Deleters for Resource Management
+
+Custom deleters transform `unique_ptr` and `shared_ptr` into RAII wrappers for **any** resource, not just heap memory:
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <cstdio>
+
+/* Pattern 1: FILE* wrapper
+ * Why custom deleter: fopen/fclose follow acquire/release semantics,
+ * which maps perfectly to RAII. A custom deleter calls fclose. */
+auto make_file(const char* path, const char* mode) {
+    /* Lambda deleter: called automatically when unique_ptr goes out of scope */
+    auto deleter = [](FILE* f) {
+        if (f) {
+            std::cout << "  Closing file\n";
+            fclose(f);
+        }
+    };
+    return std::unique_ptr<FILE, decltype(deleter)>(fopen(path, mode), deleter);
+}
+
+/* Pattern 2: C library cleanup (e.g., OpenSSL, SQLite, SDL)
+ * Why: Many C libraries return opaque pointers with matching free functions.
+ * Wrapping them in unique_ptr prevents resource leaks on exceptions. */
+struct SDL_Window;
+void SDL_DestroyWindow(SDL_Window*);  /* Forward declaration for illustration */
+
+// auto window = std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)>(
+//     SDL_CreateWindow(...), SDL_DestroyWindow
+// );
+
+/* Pattern 3: shared_ptr with custom deleter (simpler syntax)
+ * Why shared_ptr is easier: The deleter is type-erased, so it doesn't
+ * affect the shared_ptr type. No need for decltype gymnastics. */
+void demo_shared_deleter() {
+    auto sp = std::shared_ptr<FILE>(
+        fopen("/dev/null", "w"),
+        [](FILE* f) { if (f) fclose(f); }
+    );
+    /* sp is just std::shared_ptr<FILE> -- the deleter is hidden inside */
+    if (sp) {
+        fprintf(sp.get(), "Hello from shared_ptr!\n");
+    }
+}
+
+int main() {
+    {
+        auto f = make_file("/tmp/test_smart.txt", "w");
+        if (f) {
+            fprintf(f.get(), "Written via unique_ptr with custom deleter\n");
+            std::cout << "File is open\n";
+        }
+    }   /* f destroyed here → fclose called automatically */
+    std::cout << "File has been closed\n";
+
+    demo_shared_deleter();
+
+    return 0;
+}
+```
+
+### make_unique/make_shared vs Raw new: Exception Safety
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+
+class Widget {
+public:
+    Widget(int v) : value(v) { std::cout << "Widget(" << v << ")\n"; }
+    ~Widget() { std::cout << "~Widget(" << value << ")\n"; }
+    int value;
+};
+
+void might_throw() {
+    throw std::runtime_error("oops");
+}
+
+/* DANGER: With raw new, this can leak memory!
+ * Pre-C++17, the compiler could evaluate arguments in any order:
+ *   1. new Widget(1)         -- allocates Widget
+ *   2. might_throw()         -- throws! Widget from step 1 is LEAKED
+ *   3. std::shared_ptr(...)  -- never reached
+ * C++17 fixed the interleaving, but make_shared is still preferred. */
+void unsafe_call(std::shared_ptr<Widget> w, int x) {
+    std::cout << "Widget value: " << w->value << ", x: " << x << "\n";
+}
+
+/* SAFE: make_shared performs allocation + construction atomically.
+ * Even if other arguments throw, no memory is leaked. */
+void safe_call(std::shared_ptr<Widget> w, int x) {
+    std::cout << "Widget value: " << w->value << ", x: " << x << "\n";
+}
+
+int main() {
+    /* Prefer this: */
+    auto w = std::make_shared<Widget>(42);
+
+    /* Also preferred for unique_ptr: */
+    auto u = std::make_unique<Widget>(99);
+
+    /* Additional benefit of make_shared:
+     * Single allocation for both the object and the control block.
+     * With new, you get two allocations:
+     *   std::shared_ptr<Widget>(new Widget(42))
+     *     → allocation 1: new Widget
+     *     → allocation 2: control block (ref count, weak count, deleter) */
+    std::cout << "Widget: " << w->value << "\n";
+
+    return 0;
+}
+```
+
+### Pimpl Idiom with unique_ptr (Compilation Firewall)
+
+The Pimpl (Pointer to Implementation) idiom hides implementation details behind a pointer, reducing compile-time dependencies. `unique_ptr` is the natural choice for Pimpl.
+
+**widget.h** (header -- exposed to users):
+```cpp
+#ifndef WIDGET_H
+#define WIDGET_H
+
+#include <memory>
+#include <string>
+
+/* Why Pimpl: Changing the implementation (adding fields, changing types)
+ * only requires recompiling widget.cpp, NOT every file that includes widget.h.
+ * This dramatically speeds up builds in large projects. */
+class Widget {
+public:
+    Widget(const std::string& name, int value);
+    ~Widget();  /* Must be declared in header, defined in .cpp */
+
+    /* Move operations must also be declared here, defined in .cpp
+     * Why: The compiler needs to see ~Impl to generate move operations,
+     * but Impl is only defined in the .cpp file. */
+    Widget(Widget&& other) noexcept;
+    Widget& operator=(Widget&& other) noexcept;
+
+    /* Non-copyable (optional design choice) */
+    Widget(const Widget&) = delete;
+    Widget& operator=(const Widget&) = delete;
+
+    void doWork();
+    std::string getName() const;
+
+private:
+    struct Impl;                      /* Forward declaration only */
+    std::unique_ptr<Impl> pImpl_;     /* The "compilation firewall" */
+};
+
+#endif
+```
+
+**widget.cpp** (implementation -- hidden from users):
+```cpp
+#include "widget.h"
+#include <iostream>
+#include <vector>
+#include <algorithm>
+// Can include heavy headers here without affecting widget.h users
+
+/* The actual implementation struct -- can be changed freely
+ * without recompiling files that include widget.h */
+struct Widget::Impl {
+    std::string name;
+    int value;
+    std::vector<int> history;   /* Adding this field doesn't change the header */
+
+    Impl(const std::string& n, int v) : name(n), value(v) {}
+};
+
+/* Destructor must be defined where Impl is complete.
+ * Why: unique_ptr needs to call delete on Impl, which requires
+ * knowing Impl's size and destructor. */
+Widget::Widget(const std::string& name, int value)
+    : pImpl_(std::make_unique<Impl>(name, value)) {}
+
+Widget::~Widget() = default;  /* Now the compiler can see ~Impl */
+
+Widget::Widget(Widget&& other) noexcept = default;
+Widget& Widget::operator=(Widget&& other) noexcept = default;
+
+void Widget::doWork() {
+    pImpl_->history.push_back(pImpl_->value);
+    std::cout << "Widget '" << pImpl_->name << "' doing work (value="
+              << pImpl_->value << ", history size="
+              << pImpl_->history.size() << ")\n";
+}
+
+std::string Widget::getName() const {
+    return pImpl_->name;
+}
+```
+
+### unique_ptr for C API Wrappers
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <cstdlib>
+#include <cstring>
+
+/* Simulating a C library API */
+typedef struct {
+    char* data;
+    size_t size;
+} CBuffer;
+
+CBuffer* cbuffer_create(size_t size) {
+    CBuffer* buf = (CBuffer*)malloc(sizeof(CBuffer));
+    buf->data = (char*)calloc(size, 1);
+    buf->size = size;
+    return buf;
+}
+
+void cbuffer_destroy(CBuffer* buf) {
+    if (buf) {
+        free(buf->data);
+        free(buf);
+    }
+}
+
+/* C++ RAII wrapper using unique_ptr with custom deleter.
+ * Why: This pattern works for any C API that follows create/destroy pairs.
+ * The unique_ptr ensures cbuffer_destroy is called even on exceptions. */
+using CBufferPtr = std::unique_ptr<CBuffer, decltype(&cbuffer_destroy)>;
+
+CBufferPtr make_cbuffer(size_t size) {
+    return CBufferPtr(cbuffer_create(size), cbuffer_destroy);
+}
+
+int main() {
+    {
+        auto buf = make_cbuffer(256);
+        std::strncpy(buf->data, "Hello from C API wrapper!", buf->size - 1);
+        std::cout << "Buffer: " << buf->data << "\n";
+        std::cout << "Size: " << buf->size << "\n";
+    }   /* cbuffer_destroy called automatically */
+
+    std::cout << "Buffer has been destroyed\n";
+
+    return 0;
+}
+```
+
+---
+
+## 13. Exercises
 
 ### Exercise 1: Resource Manager
 

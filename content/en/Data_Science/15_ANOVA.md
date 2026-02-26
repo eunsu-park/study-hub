@@ -2,9 +2,25 @@
 
 [Previous: Advanced Hypothesis Testing](./14_Hypothesis_Testing_Advanced.md) | [Next: Advanced Regression Analysis](./16_Regression_Analysis_Advanced.md)
 
-## Overview
+---
 
-**Analysis of Variance (ANOVA)** is a statistical technique for simultaneously comparing the means of three or more groups. It is more efficient than repeating multiple t-tests while controlling Type I error.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why ANOVA is preferred over multiple t-tests for comparing three or more group means
+2. Decompose total variation into between-group and within-group components and compute the F-statistic
+3. Verify ANOVA assumptions (normality, homogeneity of variance) and apply Welch's ANOVA when assumptions are violated
+4. Perform post-hoc tests (Tukey HSD, Bonferroni, Dunnett, Games-Howell) to identify which groups differ
+5. Implement two-way ANOVA to analyze main effects and interaction effects between two factors
+6. Apply repeated measures and mixed-design ANOVA for within-subject and combined designs
+7. Identify when to use nonparametric alternatives (Kruskal-Wallis, Friedman) and calculate ANOVA effect sizes
+
+---
+
+> **Signal vs. Noise.** Imagine you're in a noisy room trying to hear three different speakers. ANOVA asks: "Is the difference between what the speakers are saying (between-group variance) louder than the background chatter (within-group variance)?" If the signal-to-noise ratio is high enough, you conclude the speakers are genuinely saying different things -- not just being drowned out by random noise.
+
+When you need to compare more than two groups, running pairwise t-tests quickly inflates your false-positive rate. ANOVA provides an elegant single-test framework that partitions variability into meaningful sources -- the signal you care about versus the noise you cannot control. Mastering ANOVA and its extensions unlocks the ability to design and analyze experiments with multiple factors and repeated measurements.
 
 ---
 

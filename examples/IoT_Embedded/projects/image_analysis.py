@@ -18,6 +18,9 @@ import io
 import random
 
 # numpy는 시뮬레이션 모드에서 선택적
+# Why: Making numpy optional with a fallback to plain lists means this script
+# can demonstrate the full image-analysis pipeline on minimal environments
+# (e.g., a fresh Raspberry Pi OS Lite with no pip packages installed yet).
 try:
     import numpy as np
     HAS_NUMPY = True
@@ -237,6 +240,10 @@ class TFLiteObjectDetector:
 # 모션 감지
 # ==============================================================================
 
+# Why: Frame-differencing is the simplest motion detection algorithm: subtract
+# consecutive grayscale frames and threshold the absolute difference. It runs
+# in O(pixels) with no model weights, making it ideal for edge devices where
+# TFLite inference is reserved for object classification.
 class MotionDetector:
     """모션 감지기"""
 
@@ -378,6 +385,9 @@ class VideoStreamer:
 # 결과 로깅
 # ==============================================================================
 
+# Why: JSONL (one JSON object per line) is chosen over a single JSON array
+# because it is append-safe: a crash mid-write never corrupts earlier entries.
+# This is the same pattern used in sensor_reading.py's logging.
 class ResultLogger:
     """검출 및 모션 결과 로깅"""
 
@@ -596,7 +606,9 @@ class ImageAnalysisSystem:
                 processing_time = time.time() - frame_start
                 self.perf_monitor.record_frame(processing_time)
 
-                # 프레임 레이트 조절
+                # Why: Subtracting the actual processing time from the target frame
+                # interval gives a consistent ~10 FPS regardless of how fast inference
+                # runs. This prevents unnecessary CPU spinning on fast hardware.
                 sleep_time = max(0, 0.1 - processing_time)  # ~10 FPS
                 time.sleep(sleep_time)
 

@@ -544,6 +544,256 @@ docs = vectorstore.similarity_search("query", k=3)
 
 ---
 
+## 연습 문제
+
+### 연습 문제 1: FAISS 인덱스(Index) 유형 선택
+
+벡터 검색 시스템을 구축 중이며 다음과 같은 제약 조건이 있습니다. 각 시나리오에 적합한 FAISS 인덱스 유형을 선택하고 이유를 설명하세요.
+
+| 시나리오 | 데이터 크기 | 제약 조건 | 최적 인덱스 유형? |
+|---------|-----------|-----------|----------------|
+| A. 의료 기록 검색 | 50,000 벡터 | 100% 정확도 필요 | ? |
+| B. 실시간 상품 검색 | 천만 벡터 | 50ms 이하 지연 필요 | ? |
+| C. 모바일 앱 임베딩 검색 | 500,000 벡터 | 메모리 500MB 제한 | ? |
+| D. 야간 배치 추천 | 200만 벡터 | 정확도 95%+, 훈련 시간 허용 | ? |
+
+<details>
+<summary>정답 보기</summary>
+
+| 시나리오 | 최적 인덱스 | 이유 |
+|---------|-----------|------|
+| A. 의료 기록 (50K, 100% 정확도) | **IndexFlatL2** | 근사 없는 정확 검색. 50K × 384차원 × 4바이트 ≈ 73MB — 충분히 관리 가능. 의료 결정에는 정밀도가 필요. |
+| B. 실시간 상품 검색 (1000만, 50ms 이하) | **IndexHNSWFlat** | 밀리초 지연으로 98%+ 정확도. 훈련 불필요. 실시간 서빙에 최적의 재현율/지연 트레이드오프(trade-off). |
+| C. 모바일 앱 (50만, 500MB 제한) | **IndexIVFPQ** | PQ가 벡터를 1536바이트에서 약 64바이트로 압축 (24배). 50만 × 64바이트 ≈ 32MB, 예산 내. |
+| D. 배치 추천 (200만, 95%+) | **IndexIVFFlat** | 빠른 근사 검색으로 좋은 정확도. 훈련은 일회성 비용. `nprobe`로 정확도/속도 조정 가능. |
+
+```python
+import faiss
+import numpy as np
+
+dimension = 384
+vectors = np.random.random((50000, dimension)).astype('float32')
+
+# 시나리오 A: 정확한 플랫(flat) 인덱스
+index_a = faiss.IndexFlatL2(dimension)
+index_a.add(vectors)
+
+# 시나리오 B: HNSW (빠른 그래프 탐색을 위한 높은 연결성)
+index_b = faiss.IndexHNSWFlat(dimension, 32)  # M=32: 높을수록 재현율↑, 메모리↑
+index_b.add(vectors[:50000])  # 훈련 불필요
+
+# 시나리오 C: 메모리 효율을 위한 IVF + PQ
+quantizer = faiss.IndexFlatL2(dimension)
+index_c = faiss.IndexIVFPQ(quantizer, dimension, nlist=1000, m=8, nbits=8)
+# m=8: 8개 서브 양자화기, nbits=8: 각 256개 센트로이드 → 벡터당 8바이트
+index_c.train(vectors)
+index_c.add(vectors)
+print(f"시나리오 C 메모리: ~{50000 * 8 / 1e6:.1f}MB (플랫 대비 {50000 * dimension * 4 / 1e6:.0f}MB)")
+
+# 시나리오 D: 조정 가능한 정확도를 위한 IVF
+quantizer_d = faiss.IndexFlatL2(dimension)
+index_d = faiss.IndexIVFFlat(quantizer_d, dimension, nlist=2000)
+index_d.train(vectors)
+index_d.add(vectors)
+index_d.nprobe = 50  # 2000개 클러스터 중 50개 검색 (~2.5%); 높일수록 재현율 향상
+```
+</details>
+
+---
+
+### 연습 문제 2: Chroma 메타데이터 필터링
+
+문서 컬렉션(collection)에 연구 논문이 다음 메타데이터와 함께 저장되어 있습니다: `year`(int), `category`(str: "ml", "nlp", "cv"), `citations`(int). 아래 요구사항에 대한 Chroma 쿼리(query)를 작성하세요.
+
+1. 2022년 이후 "nlp" 카테고리의 논문 검색
+2. 인용 수 100회 초과인 "ml" 또는 "cv" 카테고리 논문 검색
+3. 최근 3년(2023-2025) 논문 중 "cv" 카테고리가 아닌 논문 검색
+
+<details>
+<summary>정답 보기</summary>
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+client = chromadb.Client()
+embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="all-MiniLM-L6-v2"
+)
+collection = client.create_collection("papers", embedding_function=embedding_fn)
+
+# 샘플 데이터
+collection.add(
+    documents=["Attention is all you need", "BERT pre-training", "ResNet deep residual"],
+    metadatas=[
+        {"year": 2017, "category": "nlp", "citations": 50000},
+        {"year": 2018, "category": "nlp", "citations": 30000},
+        {"year": 2016, "category": "cv", "citations": 80000},
+    ],
+    ids=["p1", "p2", "p3"]
+)
+
+# 쿼리 1: 2022년 이후 NLP 논문
+results_1 = collection.query(
+    query_texts=["트랜스포머 아키텍처"],
+    n_results=5,
+    where={
+        "$and": [
+            {"year": {"$gte": 2022}},
+            {"category": {"$eq": "nlp"}}
+        ]
+    }
+)
+
+# 쿼리 2: 인용 수 100회 초과인 ML 또는 CV 논문
+results_2 = collection.query(
+    query_texts=["신경망"],
+    n_results=5,
+    where={
+        "$and": [
+            {"category": {"$in": ["ml", "cv"]}},
+            {"citations": {"$gt": 100}}
+        ]
+    }
+)
+
+# 쿼리 3: 2023-2025년, CV 제외
+results_3 = collection.query(
+    query_texts=["딥러닝"],
+    n_results=10,
+    where={
+        "$and": [
+            {"year": {"$gte": 2023}},
+            {"year": {"$lte": 2025}},
+            {"category": {"$ne": "cv"}}
+        ]
+    }
+)
+
+# Chroma 필터 연산자 참고:
+# $eq, $ne: 같음, 다름
+# $gt, $gte, $lt, $lte: 숫자 비교
+# $in, $nin: 목록 포함 여부
+# $and, $or: 논리 조합
+```
+
+**흔한 실수:** Chroma의 `$and`/`$or`는 리스트(list)를 받으며, 모든 조건이 동일한 중첩 레벨에 있어야 합니다. 같은 `where` 절에 리스트 레벨과 딕셔너리(dict) 레벨 연산자를 혼용할 수 없습니다.
+</details>
+
+---
+
+### 연습 문제 3: 콘텐츠 해싱으로 중복 제거
+
+`upsert_documents` 함수를 확장하여 문서 업데이트도 처리하세요: 동일한 ID를 가진 문서가 이미 존재하지만 내용이 다른 경우 업데이트하고, 동일한 경우 건너뛰도록 해야 합니다.
+
+```python
+import hashlib
+
+def get_doc_id(text: str) -> str:
+    return hashlib.md5(text.encode()).hexdigest()
+
+# 현재 구현 (추가 전용 중복 제거)
+def upsert_documents(texts, collection):
+    ids = [get_doc_id(t) for t in texts]
+    existing = collection.get(ids=ids)
+    existing_ids = set(existing['ids'])
+
+    new_texts = [t for t, id_ in zip(texts, ids) if id_ not in existing_ids]
+    new_ids = [id_ for id_, t in zip(ids, texts) if id_ not in existing_ids]
+
+    if new_texts:
+        collection.add(documents=new_texts, ids=new_ids)
+    return len(new_texts)
+```
+
+<details>
+<summary>정답 보기</summary>
+
+핵심 통찰: 콘텐츠 기반 ID(MD5 해시)는 동일한 문서에 항상 같은 ID를 생성합니다. 따라서 변경된 문서의 "업데이트"는 이전 내용 ID `old_hash`와 새 내용 ID `new_hash`가 다른 항목임을 의미합니다.
+
+```python
+import hashlib
+from typing import Optional
+
+def get_content_hash(text: str) -> str:
+    """콘텐츠에서 안정적인 ID를 생성합니다."""
+    return hashlib.md5(text.encode()).hexdigest()
+
+def smart_upsert(
+    texts: list[str],
+    doc_keys: list[str],  # 논리적 ID (예: "doc_001", "doc_002")
+    collection,
+    metadatas: Optional[list[dict]] = None
+) -> dict:
+    """
+    변경 감지 기능이 있는 스마트 업서트(upsert).
+
+    전략: 메타데이터에 논리적 키와 콘텐츠 해시를 모두 저장.
+    재인덱싱 시 콘텐츠 해시가 변경되었는지 확인.
+
+    반환: {"added": N, "updated": N, "skipped": N}
+    """
+    stats = {"added": 0, "updated": 0, "skipped": 0}
+
+    for i, (text, key) in enumerate(zip(texts, doc_keys)):
+        new_hash = get_content_hash(text)
+        meta = metadatas[i] if metadatas else {}
+        meta["doc_key"] = key
+        meta["content_hash"] = new_hash
+
+        # 이 논리적 키가 이미 존재하는지 확인 (메타데이터로 조회)
+        existing = collection.get(where={"doc_key": {"$eq": key}})
+
+        if not existing["ids"]:
+            # 새 문서
+            collection.add(
+                documents=[text],
+                ids=[new_hash],
+                metadatas=[meta]
+            )
+            stats["added"] += 1
+
+        elif existing["metadatas"][0]["content_hash"] == new_hash:
+            # 동일한 내용 — 건너뜀
+            stats["skipped"] += 1
+
+        else:
+            # 내용 변경 — 이전 것 삭제, 새 것 추가
+            collection.delete(ids=existing["ids"])
+            collection.add(
+                documents=[text],
+                ids=[new_hash],
+                metadatas=[meta]
+            )
+            stats["updated"] += 1
+
+    return stats
+
+# 테스트
+import chromadb
+client = chromadb.Client()
+coll = client.create_collection("docs")
+
+result = smart_upsert(
+    texts=["문서 A 버전 1", "문서 B 버전 1"],
+    doc_keys=["doc_A", "doc_B"],
+    collection=coll
+)
+print(result)  # {"added": 2, "updated": 0, "skipped": 0}
+
+result = smart_upsert(
+    texts=["문서 A 버전 2", "문서 B 버전 1"],  # A 변경, B 동일
+    doc_keys=["doc_A", "doc_B"],
+    collection=coll
+)
+print(result)  # {"added": 0, "updated": 1, "skipped": 1}
+```
+
+**콘텐츠 해시 ID가 중요한 이유:** 순차적 ID를 사용하면 매번 업서트마다 문서 텍스트를 비교해야 합니다. 콘텐츠 해시를 사용하면 변경되지 않은 문서는 항상 같은 ID를 생성하므로 텍스트 비교가 필요 없습니다.
+</details>
+
+---
+
 ## 다음 단계
 
-[12_Practical_Chatbot.md](./12_Practical_Chatbot.md)에서 대화형 AI 시스템을 구축합니다.
+[실전 챗봇 프로젝트](./12_Practical_Chatbot.md)에서 대화형 AI 시스템을 구축합니다.

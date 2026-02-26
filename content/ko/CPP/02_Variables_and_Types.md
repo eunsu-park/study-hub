@@ -1,5 +1,26 @@
 # 변수와 자료형
 
+**이전**: [환경설정과 첫 프로그램](./01_Environment_Setup.md) | **다음**: [연산자와 제어문](./03_Operators_and_Control_Flow.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 변수가 무엇인지, 그리고 메모리에 어떻게 대응되는지 설명한다
+2. 정수형(integer), 부동소수점형(floating-point), 문자형(character), 불리언형(boolean) 자료형을 구분한다
+3. 복사 초기화(copy initialization), 직접 초기화(direct initialization), 중괄호 초기화(brace initialization, C++11)를 비교한다
+4. 컴파일 타임 및 런타임 상수를 선언하기 위해 `const`와 `constexpr`을 적용한다
+5. `auto` 키워드를 사용하여 자동 타입 추론(automatic type deduction)을 구현한다
+6. 축소 변환(narrowing conversion)을 식별하고 안전한 명시적 캐스팅을 위해 `static_cast`를 사용한다
+7. `sizeof`를 적용하여 자료형의 메모리 크기를 확인한다
+8. `using`으로 타입 별칭(type alias)을 설계하고 적절한 고정 폭 정수형(fixed-width integer types)을 선택한다
+
+---
+
+변수는 모든 프로그램의 기본 구성 요소입니다. 변수는 코드가 다루는 데이터에 이름을 부여합니다. C++가 정수, 부동소수점 수, 문자, 불리언을 하드웨어 수준에서 어떻게 표현하는지 이해하는 것이야말로 단순히 코드를 작성하는 사람과 효율적인 코드를 작성하는 사람을 구분 짓는 핵심입니다. 자료형을 일찍 숙달하면 오버플로(overflow), 정밀도 손실(precision loss), 의도치 않은 변환으로 인한 미묘한 버그를 예방할 수 있습니다.
+
 ## 1. 변수란?
 
 변수는 데이터를 저장하는 메모리 공간에 붙인 이름입니다.
@@ -476,4 +497,4 @@ int main() {
 
 ## 다음 단계
 
-[03_Operators_and_Control_Flow.md](./03_Operators_and_Control_Flow.md)에서 연산자와 제어문을 배워봅시다!
+[연산자와 제어문](./03_Operators_and_Control_Flow.md)에서 연산자와 제어문을 배워봅시다!

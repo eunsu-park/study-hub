@@ -1,14 +1,19 @@
 # Security Best Practices
 
+**Previous**: [Container Networking](./11_Container_Networking.md)
+
 ## Learning Objectives
-- Understand the container security threat model
-- Apply image security best practices and vulnerability scanning
-- Implement runtime security controls and least privilege
-- Manage secrets securely in containerized applications
-- Configure network security and isolation
-- Secure container registries with signing and content trust
-- Apply Kubernetes security contexts and Pod Security Standards
-- Monitor and audit container runtime behavior
+
+After completing this lesson, you will be able to:
+
+1. Describe the container security threat model and identify common attack vectors
+2. Apply image security best practices including minimal base images and vulnerability scanning
+3. Write secure Dockerfiles following the principle of least privilege
+4. Implement runtime security controls with read-only filesystems and capability restrictions
+5. Manage secrets securely using Docker secrets, Kubernetes Secrets, and external vaults
+6. Configure network security with isolation, encryption, and ingress/egress controls
+7. Secure container registries with image signing and Docker Content Trust
+8. Apply Kubernetes SecurityContext and Pod Security Standards to harden workloads
 
 ## Table of Contents
 1. [Container Security Overview](#1-container-security-overview)
@@ -23,6 +28,10 @@
 10. [Practice Exercises](#10-practice-exercises)
 
 **Difficulty**: ⭐⭐⭐⭐
+
+---
+
+Containers share the host kernel, which means a vulnerability in one container can potentially compromise the entire system. Security must be built into every layer of the container lifecycle -- from building minimal, scanned images to running with least privilege, encrypting network traffic, and continuously monitoring runtime behavior. This lesson provides a comprehensive security framework covering Docker and Kubernetes, helping you move from "it works" to "it works safely in production."
 
 ---
 
@@ -137,13 +146,13 @@ FROM node:latest
 # ✅ GOOD: Minimal base image
 FROM alpine:3.19
 
-# ✅ GOOD: Distroless (no shell, package manager)
+# ✅ GOOD: Distroless (no shell, package manager) — eliminates an entire class of attacks since there are no tools to exploit
 FROM gcr.io/distroless/base-debian12
 
-# ✅ GOOD: Specific version tag for reproducibility
+# ✅ GOOD: Specific version tag for reproducibility — ensures every build uses the exact same base
 FROM node:18.19-alpine3.19
 
-# ✅ BEST: Digest pinning for immutability
+# ✅ BEST: Digest pinning for immutability — even if a tag is re-pushed with different content, you get the exact image you audited
 FROM node:18.19-alpine3.19@sha256:abc123...
 ```
 
@@ -164,20 +173,20 @@ COPY . .
 RUN go build -o myapp
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates  # Only install what the binary needs — fewer packages means fewer CVEs
 COPY --from=builder /app/myapp /myapp
-USER 1000
+USER 1000  # Non-root user — limits damage if the container is compromised
 CMD ["/myapp"]
 
 # ✅ BEST: Distroless final image
 FROM golang:1.21 AS builder
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 go build -o myapp
+RUN CGO_ENABLED=0 go build -o myapp  # Static binary — no libc dependency, so it runs on scratch/distroless without shared libraries
 
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian12  # No shell, no package manager — an attacker has no tools to work with
 COPY --from=builder /app/myapp /myapp
-USER nonroot:nonroot
+USER nonroot:nonroot  # Distroless ships with a built-in nonroot user for this purpose
 CMD ["/myapp"]
 ```
 
@@ -209,10 +218,10 @@ trivy image nginx:latest
 # Scan with severity filter
 trivy image --severity CRITICAL,HIGH nginx:latest
 
-# Scan and exit with error if vulnerabilities found
+# Scan and exit with error if vulnerabilities found — use this in CI to block deployment of vulnerable images
 trivy image --exit-code 1 --severity CRITICAL myapp:latest
 
-# Scan for secrets in image
+# Scan for secrets in image — catches accidentally baked-in API keys, passwords, and private keys in any layer
 trivy image --scanners secret nginx:latest
 
 # Generate JSON report
@@ -289,11 +298,11 @@ RUN addgroup -g 1000 appgroup && \
 USER appuser
 COPY app /usr/share/nginx/html
 
-# ✅ GOOD: Use numeric UID (works better in Kubernetes)
+# ✅ GOOD: Use numeric UID (works better in Kubernetes) — K8s runAsUser validates UIDs, not usernames
 FROM node:18-alpine
 RUN addgroup -g 1001 nodegroup && \
     adduser -D -u 1001 -G nodegroup nodeuser
-USER 1001
+USER 1001  # Numeric UID avoids issues if /etc/passwd is missing or different in the runtime image
 COPY --chown=1001:1001 . /app
 WORKDIR /app
 CMD ["node", "server.js"]
@@ -343,7 +352,7 @@ ARG API_KEY
 RUN curl -H "Authorization: Bearer $API_KEY" https://api.example.com
 CMD ["./app"]
 
-# ✅ GOOD: Use Docker BuildKit secrets
+# ✅ GOOD: Use Docker BuildKit secrets — the secret is mounted only during this RUN step and never persisted in any layer
 # syntax=docker/dockerfile:1.4
 FROM alpine
 RUN --mount=type=secret,id=api_key \
@@ -414,7 +423,7 @@ RUN npm prune --production
 # ✅ GOOD: Optimized layer caching
 FROM node:18-alpine AS builder
 WORKDIR /app
-# Cache dependencies separately
+# Cache dependencies separately — this layer is only rebuilt when package.json changes, saving minutes on every build
 COPY package*.json ./
 RUN npm ci
 # Copy source and build
@@ -452,8 +461,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     -a \
     -o app \
     ./cmd/server
+# -w -s strips debug info and symbol tables — smaller binary with less information for reverse engineering
 
-# Production image
+# Production image — scratch has zero OS packages, zero CVEs, and the smallest possible attack surface
 FROM scratch
 
 # Copy necessary files from builder
@@ -462,10 +472,10 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /build/app /app
 
-# Use non-root user (UID 65534 = nobody)
+# Use non-root user (UID 65534 = nobody) — minimal identity with no login shell, home directory, or extra privileges
 USER 65534:65534
 
-# Health check
+# Health check — Docker restarts the container automatically if the app becomes unresponsive
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/app", "healthcheck"]
 
@@ -485,7 +495,7 @@ Linux capabilities provide fine-grained privilege control.
 # ❌ BAD: Running with all capabilities
 docker run --privileged myapp
 
-# ✅ GOOD: Drop all capabilities, add only needed ones
+# ✅ GOOD: Drop all capabilities, add only needed ones — even if the container is exploited, the attacker has no kernel-level powers
 docker run \
   --cap-drop=ALL \
   --cap-add=NET_BIND_SERVICE \
@@ -517,10 +527,10 @@ services:
       - SETUID
       - SETGID
     security_opt:
-      - no-new-privileges:true
-    read_only: true
+      - no-new-privileges:true  # Prevents setuid/setgid binaries from escalating — blocks common privilege-escalation exploits
+    read_only: true  # Immutable filesystem: an attacker cannot install tools or drop malware
     tmpfs:
-      - /var/run
+      - /var/run  # Writable tmpfs for PID files — nginx needs this but the rest of the filesystem stays immutable
       - /var/cache/nginx
       - /tmp
 ```
@@ -547,9 +557,9 @@ docker run \
 services:
   app:
     image: myapp:latest
-    read_only: true
+    read_only: true  # Immutable filesystem: prevents persistent malware even if the container is compromised
     tmpfs:
-      - /tmp:noexec,nosuid,size=64m
+      - /tmp:noexec,nosuid,size=64m  # noexec prevents executing binaries from /tmp — blocks a common attack vector
       - /var/run:noexec,nosuid,size=64m
 ```
 
@@ -560,7 +570,7 @@ Seccomp (Secure Computing Mode) restricts system calls.
 ```json
 // seccomp-profile.json
 {
-  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultAction": "SCMP_ACT_ERRNO",  // Default-deny: any syscall not explicitly allowed returns an error
   "architectures": [
     "SCMP_ARCH_X86_64",
     "SCMP_ARCH_X86",
@@ -644,14 +654,14 @@ services:
 
     # Security options
     security_opt:
-      - no-new-privileges:true
-      - apparmor:docker-default
-      - seccomp:seccomp-profile.json
+      - no-new-privileges:true  # Blocks setuid/setgid escalation — defense-in-depth alongside capability drops
+      - apparmor:docker-default  # Mandatory access control — restricts file/network access even for root
+      - seccomp:seccomp-profile.json  # Drop dangerous syscalls — limits kernel attack surface
 
     # User
-    user: "1000:1000"
+    user: "1000:1000"  # Non-root — even if code has a vulnerability, the attacker cannot modify system files
 
-    # Resource limits
+    # Resource limits — prevent a runaway container from consuming all host resources (CPU/memory bomb)
     deploy:
       resources:
         limits:
@@ -659,10 +669,10 @@ services:
           memory: 512M
         reservations:
           cpus: '0.25'
-          memory: 256M
+          memory: 256M  # Reservations guarantee scheduling — the container always gets at least this much
 
     # Prevent privilege escalation
-    privileged: false
+    privileged: false  # Never use privileged mode — it gives the container full host kernel access
 ```
 
 ---
@@ -747,7 +757,7 @@ ENV API_KEY=sk-1234567890
 # ❌ BAD: Secrets visible in process list
 docker run myapp --api-key=sk-1234567890
 
-# ✅ GOOD: Secrets in files
+# ✅ GOOD: Secrets in files — file-based secrets don't appear in `docker inspect` or process environment
 docker run -v /path/to/secrets:/secrets:ro myapp
 
 # ✅ GOOD: Docker secrets (Swarm)
@@ -888,14 +898,14 @@ services:
     image: postgres
     networks:
       - private
-    # Database not exposed to public network
+    # Database not exposed to public network — even if the frontend is compromised, the DB is unreachable
 
 networks:
   public:
     driver: bridge
   private:
     driver: bridge
-    internal: true  # No external access
+    internal: true  # No external access — containers on this network cannot reach the internet, blocking data exfiltration
 ```
 
 ### TLS Encryption
@@ -935,14 +945,14 @@ server {
     # TLS configuration
     ssl_certificate /etc/nginx/certs/server.crt;
     ssl_certificate_key /etc/nginx/certs/server.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_protocols TLSv1.2 TLSv1.3;  # Disable older TLS versions — TLS 1.0/1.1 have known vulnerabilities
+    ssl_ciphers HIGH:!aNULL:!MD5;  # Exclude weak ciphers — prevents downgrade attacks
     ssl_prefer_server_ciphers on;
 
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
+    # Security headers — each header defends against a specific class of web attacks
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;  # HSTS: forces browsers to use HTTPS for a year
+    add_header X-Frame-Options "SAMEORIGIN" always;  # Prevents clickjacking by disallowing framing from other origins
+    add_header X-Content-Type-Options "nosniff" always;  # Prevents MIME-type sniffing — browser trusts declared Content-Type
     add_header X-XSS-Protection "1; mode=block" always;
 
     location / {
@@ -985,10 +995,10 @@ metadata:
   name: deny-all-ingress
   namespace: production
 spec:
-  podSelector: {}
+  podSelector: {}  # Default-deny + explicit allow — limits blast radius of a compromised pod
   policyTypes:
   - Ingress
-  - Egress
+  - Egress  # Denying both directions forces every service to declare exactly who it talks to
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -1048,7 +1058,7 @@ spec:
 ### Image Signing with Docker Content Trust
 
 ```bash
-# Enable Docker Content Trust
+# Enable Docker Content Trust — ensures only cryptographically signed images can be pulled and run
 export DOCKER_CONTENT_TRUST=1
 
 # Generate root and repository keys
@@ -1182,27 +1192,27 @@ metadata:
 spec:
   securityContext:
     # Pod-level security context
-    runAsNonRoot: true
+    runAsNonRoot: true  # Prevents container from running as UID 0 even if the image defaults to root
     runAsUser: 1000
     runAsGroup: 1000
-    fsGroup: 1000
+    fsGroup: 1000  # Volumes are owned by this GID — ensures the non-root user can read/write mounted data
     seccompProfile:
-      type: RuntimeDefault
+      type: RuntimeDefault  # Drop dangerous syscalls — defense-in-depth even if container runtime has a bug
 
   containers:
   - name: app
     image: myapp:latest
     securityContext:
       # Container-level security context (overrides pod-level)
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false  # Blocks setuid/setgid binaries from gaining elevated privileges
+      readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
       runAsNonRoot: true
       runAsUser: 1000
       capabilities:
         drop:
-        - ALL
+        - ALL  # Drop all Linux capabilities first — start from zero privilege
         add:
-        - NET_BIND_SERVICE
+        - NET_BIND_SERVICE  # Add back only what the app truly needs (binding to ports < 1024)
 
     volumeMounts:
     - name: tmp
@@ -1247,7 +1257,7 @@ metadata:
   name: secure-app
   namespace: production
 spec:
-  replicas: 3
+  replicas: 3  # Multiple replicas for high availability — if one pod crashes, others continue serving
   selector:
     matchLabels:
       app: secure-app
@@ -1278,23 +1288,23 @@ spec:
         resources:
           limits:
             cpu: "1"
-            memory: "512Mi"
+            memory: "512Mi"  # limits prevent one pod from starving others
           requests:
             cpu: "100m"
-            memory: "128Mi"
+            memory: "128Mi"  # requests guarantee scheduling; the scheduler reserves this much
 
         volumeMounts:
         - name: tmp
           mountPath: /tmp
 
-        livenessProbe:
+        livenessProbe:  # liveness restarts the pod; separate from readiness to avoid cascading restarts
           httpGet:
             path: /health
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
 
-        readinessProbe:
+        readinessProbe:  # readiness gates traffic; a failing probe removes the pod from the Service
           httpGet:
             path: /ready
             port: 8080
@@ -1304,7 +1314,7 @@ spec:
       volumes:
       - name: tmp
         emptyDir:
-          sizeLimit: 100Mi
+          sizeLimit: 100Mi  # Prevents a misbehaving process from filling node disk — enforces a hard cap on tmp usage
 ```
 
 ### RBAC for Pods
@@ -1355,8 +1365,8 @@ metadata:
 spec:
   template:
     spec:
-      serviceAccountName: myapp-sa
-      automountServiceAccountToken: false  # Disable if not needed
+      serviceAccountName: myapp-sa  # Dedicated SA per app — avoids sharing the default SA's broad permissions
+      automountServiceAccountToken: false  # Disable if not needed — reduces attack surface if the container is compromised
       containers:
       - name: app
         image: myapp:latest
@@ -1385,13 +1395,13 @@ spec:
         app: falco
     spec:
       serviceAccountName: falco
-      hostNetwork: true
-      hostPID: true
+      hostNetwork: true  # Falco needs host-level visibility to detect anomalous network syscalls
+      hostPID: true  # Required to see all host processes and correlate events to containers
       containers:
       - name: falco
         image: falcosecurity/falco:0.36.0
         securityContext:
-          privileged: true
+          privileged: true  # Falco needs kernel-level access to intercept syscalls — this is the exception that proves the least-privilege rule
         volumeMounts:
         - name: docker-socket
           mountPath: /var/run/docker.sock
@@ -1812,4 +1822,82 @@ In this lesson, you learned:
 
 ---
 
-[Previous: 11_Container_Networking](./11_Container_Networking.md) | [Next: 00_Overview](./00_Overview.md)
+## Exercises
+
+### Exercise 1: Scan an Image for Vulnerabilities
+
+Use Trivy to identify and remediate known CVEs in a container image.
+
+1. Install Trivy: `brew install trivy` (macOS) or follow the [official docs](https://aquasecurity.github.io/trivy/)
+2. Scan an older image with known vulnerabilities: `trivy image python:3.8`
+3. Note the number of CRITICAL and HIGH severity CVEs
+4. Scan a newer version of the same image: `trivy image python:3.12-alpine`
+5. Compare the results — the newer alpine variant should have far fewer vulnerabilities
+6. Write a `Dockerfile` that uses `python:3.12-alpine` as the base, runs as a non-root user, and copies a simple `app.py`
+7. Build and scan your custom image: `trivy image myapp:latest`
+
+### Exercise 2: Write a Secure Dockerfile
+
+Apply Dockerfile security best practices to harden an application image.
+
+1. Start with this insecure `Dockerfile`:
+   ```dockerfile
+   FROM ubuntu:latest
+   RUN apt-get update && apt-get install -y curl wget vim python3
+   COPY . /app
+   RUN chmod 777 /app
+   CMD ["python3", "/app/main.py"]
+   ```
+2. Identify at least 5 security issues in the Dockerfile above
+3. Rewrite it applying: minimal base image, pinned versions, non-root user, least privilege file permissions, multi-stage build if applicable, and removal of unnecessary tools
+4. Build both versions and compare image sizes: `docker images`
+5. Scan both images with Trivy and compare vulnerability counts
+
+### Exercise 3: Run Containers with Least Privilege
+
+Apply runtime security controls when starting containers.
+
+1. Run a container as a non-root user: `docker run --rm --user 1000:1000 alpine whoami`
+2. Run a container with a read-only root filesystem: `docker run --rm --read-only alpine sh -c "echo test > /test.txt"` — observe the failure
+3. Run the same container with a writable `/tmp` tmpfs: `docker run --rm --read-only --tmpfs /tmp alpine sh -c "echo test > /tmp/test.txt && cat /tmp/test.txt"`
+4. Drop all Linux capabilities: `docker run --rm --cap-drop ALL alpine ping -c 1 8.8.8.8` — observe the failure (ping requires `CAP_NET_RAW`)
+5. Add only the required capability back: `docker run --rm --cap-drop ALL --cap-add NET_RAW alpine ping -c 1 8.8.8.8`
+6. Run a container with all three constraints combined: non-root user, read-only filesystem, and all capabilities dropped
+
+### Exercise 4: Manage Secrets Without Embedding Them
+
+Practice secret injection patterns that avoid storing secrets in images or environment variables.
+
+1. Create a secret file: `echo "supersecret_db_password" > /tmp/db_password.txt`
+2. Mount the secret file as a bind mount at runtime: `docker run --rm -v /tmp/db_password.txt:/run/secrets/db_password:ro alpine cat /run/secrets/db_password`
+3. Confirm the secret is not baked into the image by running `docker history` on any image you built
+4. In Docker Compose, define a top-level `secrets` block and reference it from a service:
+   ```yaml
+   secrets:
+     db_password:
+       file: ./db_password.txt
+   services:
+     app:
+       image: alpine
+       secrets:
+         - db_password
+       command: cat /run/secrets/db_password
+   ```
+5. Run `docker compose up` and confirm the secret is accessible inside the container
+6. Verify the secret does not appear in `docker inspect` environment variables
+
+### Exercise 5: Enable Docker Content Trust and Sign an Image
+
+Use Docker Content Trust to sign and verify container images.
+
+1. Enable Content Trust: `export DOCKER_CONTENT_TRUST=1`
+2. Pull a trusted image and observe the signature verification: `docker pull nginx:alpine`
+3. Tag a local image: `docker tag nginx:alpine yourusername/signed-nginx:latest`
+4. Push the signed image to Docker Hub: `docker push yourusername/signed-nginx:latest` (Docker will prompt you to create signing keys)
+5. Pull the signed image with Content Trust enabled: `docker pull yourusername/signed-nginx:latest`
+6. Disable Content Trust and attempt to pull an unsigned image: `DOCKER_CONTENT_TRUST=0 docker pull <some-unsigned-image>`
+7. Explain in writing what Content Trust protects against and its limitations
+
+---
+
+**Previous**: [Container Networking](./11_Container_Networking.md)

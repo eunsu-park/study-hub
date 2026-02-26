@@ -1,14 +1,24 @@
 # Project 4: Dynamic Array
 
-## Learning Objectives
-
-What you will learn through this project:
-- Dynamic memory allocation (`malloc`, `calloc`, `realloc`, `free`)
-- Memory leak prevention
-- Implementing an array that grows automatically
-- Data structure similar to Python's list or JavaScript's array
+**Previous**: [Project 3: Address Book Program](./05_Project_Address_Book.md) | **Next**: [Project 5: Linked List](./07_Project_Linked_List.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why static arrays are insufficient when the number of elements is unknown at compile time
+2. Implement dynamic memory allocation using `malloc`, `calloc`, `realloc`, and `free` with proper NULL checks
+3. Design a growable array struct that tracks `data`, `size`, and `capacity` separately
+4. Apply a doubling growth strategy to achieve amortized O(1) push performance
+5. Build insert and remove operations that shift elements and maintain contiguous storage
+6. Implement a generic dynamic array using `void*` pointers and `memcpy` for type-independent storage
+7. Identify and prevent common memory bugs: leaks, dangling pointers, double frees, and use-after-free
+
+---
+
+Every high-level language gives you resizable arrays for free -- Python's `list`, JavaScript's `Array`, Java's `ArrayList`. In C, you build that machinery yourself. This project teaches you how, and in doing so reveals exactly what those high-level abstractions are doing under the hood: allocating a block of heap memory, copying data when the block is too small, and freeing the old block so the operating system can reuse it.
 
 ## Why Dynamic Memory Is Needed
 
@@ -36,6 +46,8 @@ arr = realloc(arr, m * sizeof(int)); // Size can be changed!
 ## Step 1: Understanding Dynamic Memory Functions
 
 ### malloc - Memory Allocation
+
+> **Analogy -- The Post-it Note with an Address**: A C pointer is like a sticky note that has a street address written on it. The note itself is tiny (8 bytes on a 64-bit system), but following the address takes you to a building that can be any size. `malloc` builds a new building and hands you a sticky note; `free` demolishes the building. If you lose the note (`p = NULL` without freeing), the building still occupies land -- that's a memory leak.
 
 ```c
 #include <stdio.h>
@@ -564,4 +576,4 @@ DynamicArray(size=6, capacity=8): [10, 20, 30, 40, 50, 60]
 
 ## Next Step
 
-[07_Project_Linked_List.md](./07_Project_Linked_List.md) -> Let's learn about linked lists, the pinnacle of pointers!
+[Project 5: Linked List](./07_Project_Linked_List.md) -> Let's learn about linked lists, the pinnacle of pointers!

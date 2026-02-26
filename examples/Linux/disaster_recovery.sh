@@ -20,6 +20,9 @@
 #   - Service dependency mapping
 # =============================================================================
 
+# Why: set -e stops on first error (so partial recovery steps don't mask failures),
+# set -u catches typos in variable names, and set -o pipefail surfaces errors
+# inside pipes. Together they make the script fail-fast and loudly.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -36,6 +39,9 @@ RESET='\033[0m'
 # ---------------------------------------------------------------------------
 # DR Configuration — in a real environment these would be in a config file
 # ---------------------------------------------------------------------------
+# Why: Using ${VAR:-default} lets ops override paths via environment variables
+# without editing the script. This is essential for DR: the same script runs
+# in dev (BACKUP_DIR=/tmp) and prod (BACKUP_DIR=/mnt/nfs/backups).
 BACKUP_DIR="${BACKUP_DIR:-/var/backups}"          # Where backups are stored
 MAX_BACKUP_AGE_HOURS=24                            # RPO threshold in hours
 MIN_BACKUP_SIZE_KB=100                             # Sanity-check minimum size
@@ -107,7 +113,9 @@ check_services() {
     section "Critical Service Health Checks"
 
     for svc in "${CRITICAL_SERVICES[@]}"; do
-        # Use 'pgrep' as a portable fallback when 'systemctl' is unavailable
+        # Why: systemctl is standard on systemd-based distros, but macOS and
+        # older Linux use different init systems. Falling back to pgrep makes
+        # this check portable across environments used for DR drills.
         if command -v systemctl &>/dev/null; then
             systemctl is-active --quiet "$svc" 2>/dev/null \
                 && result OK "Service '$svc' is active" \
@@ -128,7 +136,9 @@ check_services() {
 check_database_backup() {
     section "Database Backup Verification (PostgreSQL simulation)"
 
-    # Simulate creating a pg_dump; real usage: pg_dump -Fc mydb > backup.dump
+    # Why: Writing a recognizable header lets the verify step distinguish a
+    # valid dump from a corrupt or zero-byte file. In production, pg_dump -Fc
+    # produces a binary header that pg_restore --list can validate.
     echo "-- PostgreSQL DR test dump $(date)" > "$DB_BACKUP_PATH"
     echo "-- Tables: users, orders, inventory" >> "$DB_BACKUP_PATH"
 
@@ -186,6 +196,9 @@ check_disk_space() {
         elif [[ $use -ge 75 ]]; then result WARN "Disk $mount at ${use}% — low space, monitor closely"
         else                         result OK   "Disk $mount at ${use}% — sufficient free space"
         fi
+    # Why: Process substitution <(...) feeds df output to the while-read loop
+    # without a subshell pipe, so the PASS/WARN/FAIL counters update correctly
+    # in the parent shell scope.
     done < <(df -h | tail -n +2)
 }
 

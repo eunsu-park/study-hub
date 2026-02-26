@@ -1,12 +1,21 @@
 # Consensus Algorithms
 
+**Previous**: [Distributed Systems Concepts](./15_Distributed_Systems_Concepts.md) | **Next**: [Practical Design Examples 1](./17_Design_Example_1.md)
+
 Difficulty: ⭐⭐⭐⭐
 
-## Overview
+## Learning Objectives
 
-Consensus in distributed systems is about multiple nodes agreeing on a single value. In this chapter, we'll learn about the definition of the consensus problem, Paxos and Raft algorithms, Byzantine Fault Tolerance, and practical applications with ZooKeeper and etcd.
+1. Define the consensus problem and its three correctness properties (agreement, validity, termination)
+2. Explain the roles (proposer, acceptor, learner) and two-phase protocol of Basic Paxos, including how it handles competing proposals
+3. Describe Raft's leader election, log replication, and safety mechanisms, and explain why Raft was designed to be more understandable than Paxos
+4. Distinguish crash fault tolerance (CFT) from Byzantine fault tolerance (BFT) and state the minimum node counts required for each
+5. Compare practical consensus implementations (ZooKeeper ZAB, etcd Raft, Consul) and their use cases for coordination, configuration, and leader election
+6. Trace through consensus protocol execution scenarios including leader failure, split vote, and network partition
 
 ---
+
+Consensus is the beating heart of every reliable distributed system: it is how a database replication cluster agrees on which write committed first, how a Kubernetes control plane elects a leader, and how a blockchain validates transactions. Getting consensus wrong leads to split-brain scenarios, data loss, or silent corruption. This lesson demystifies Paxos and Raft -- algorithms that underpin tools you likely use every day -- so you can reason about their guarantees and limitations in production.
 
 ## Table of Contents
 
@@ -97,7 +106,11 @@ Consensus in distributed systems is about multiple nodes agreeing on a single va
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+> **Intuition behind FLP**: In a fully asynchronous network, there is no upper bound on message delivery time. This means a slow node is indistinguishable from a crashed node — you can never be certain whether the message is still in transit or the sender has failed. Because of this fundamental ambiguity, no algorithm can guarantee it will always terminate (liveness) while also never deciding on conflicting values (safety). Real systems work around FLP by assuming *partial synchrony* — messages are eventually delivered within some unknown but finite bound — which allows practical algorithms like Paxos and Raft to work correctly in practice.
+
 ### Failure Models
+
+Let **f** = the number of faults the system must tolerate.
 
 | Model | Description | Required Nodes |
 |-------|-------------|----------------|
@@ -105,9 +118,15 @@ Consensus in distributed systems is about multiple nodes agreeing on a single va
 | Omission Failure | Messages can be lost | 2f + 1 |
 | Byzantine Failure | Malicious/arbitrary behavior | 3f + 1 |
 
+**Quorum intuition**: With `2f + 1` nodes, even if `f` crash, the remaining `f + 1` still form a strict majority that can make progress. For Byzantine faults, `3f + 1` is needed because malicious nodes can send conflicting messages, so you need enough honest nodes to outvote the adversaries.
+
 ---
 
 ## 2. Paxos Algorithm
+
+> **Analogy -- Meeting Minutes by Majority Vote**
+>
+> Imagine five colleagues in different offices trying to agree on a single meeting time via email (no phone, no chat). One person **proposes** "Tuesday 3 PM" and asks everyone to tentatively accept. If a majority (3 out of 5) reply "OK, I'll pencil that in," the proposer sends a **confirm** message, and the time is final. If two people simultaneously propose different times, the group resolves it by always deferring to the proposal with the higher sequence number -- exactly the mechanism Paxos and Raft use to break ties among competing leaders.
 
 ### Paxos Overview
 
@@ -201,6 +220,52 @@ Consensus in distributed systems is about multiple nodes agreeing on a single va
 │  - Otherwise propose your own value                                    │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Simplified single-decree Paxos pseudocode:**
+
+```python
+class PaxosProposer:
+    def __init__(self, node_id, acceptors):
+        self.node_id = node_id
+        self.acceptors = acceptors
+        self.proposal_number = 0
+
+    def propose(self, value):
+        while True:
+            # Generate a unique, monotonically increasing proposal number.
+            # Higher numbers always win — this is how Paxos breaks ties.
+            self.proposal_number += 1
+            n = self.proposal_number
+
+            # Phase 1 — Prepare: ask acceptors to promise not to accept
+            # any proposal numbered lower than n
+            promises = []
+            for acceptor in self.acceptors:
+                resp = acceptor.prepare(n)
+                if resp.promised:
+                    promises.append(resp)
+
+            # Need a majority to proceed — any two quorums overlap by
+            # at least one node, which prevents conflicting decisions
+            if len(promises) < len(self.acceptors) // 2 + 1:
+                continue  # Retry with higher n
+
+            # If any acceptor already accepted a value, we MUST propose
+            # that value instead of ours. This rule guarantees safety:
+            # once a value is chosen, all future proposals converge on it.
+            prev = [p for p in promises if p.accepted_value is not None]
+            if prev:
+                value = max(prev, key=lambda p: p.accepted_n).accepted_value
+
+            # Phase 2 — Accept: ask acceptors to accept (n, value)
+            accepted = sum(
+                1 for a in self.acceptors if a.accept(n, value)
+            )
+
+            if accepted >= len(self.acceptors) // 2 + 1:
+                return value  # Consensus reached!
+            # Else: a higher-n proposal preempted us; loop and retry
 ```
 
 ### Paxos Conflict Resolution
@@ -757,9 +822,7 @@ Design a distributed configuration management system with the following requirem
 
 ---
 
-## Next Steps
-
-In [17_Design_Example_1.md](./17_Design_Example_1.md), let's practice designing URL shorteners, Pastebin, and Rate Limiters!
+**Previous**: [Distributed Systems Concepts](./15_Distributed_Systems_Concepts.md) | **Next**: [Practical Design Examples 1](./17_Design_Example_1.md)
 
 ---
 

@@ -6,12 +6,15 @@ Geometric transformations are operations that change the spatial position of an 
 
 **Difficulty**: ⭐⭐ (Beginner-Intermediate)
 
-**Learning Objectives**:
-- Understand `cv2.resize()` and interpolation methods
-- Use rotation and flipping functions
-- Apply affine transformation (warpAffine)
-- Apply perspective transformation (warpPerspective)
-- Implement document scanning/correction examples
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Understand `cv2.resize()` and interpolation methods
+2. Use rotation and flipping functions
+3. Apply affine transformation (warpAffine)
+4. Apply perspective transformation (warpPerspective)
+5. Implement document scanning/correction examples
 
 ---
 
@@ -38,13 +41,15 @@ import cv2
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# Method 1: Specify size directly (width, height order!)
+# dsize argument is (width, height) — the reverse of img.shape which is (height, width)
+# This is a common source of bugs: always double-check the axis order
 resized = cv2.resize(img, (640, 480))
 
-# Method 2: Specify by ratio
+# fx/fy are scale factors; passing dsize=None tells resize to compute size from them
 resized = cv2.resize(img, None, fx=0.5, fy=0.5)  # Reduce to 50%
 
-# Method 3: Maintain aspect ratio based on one dimension
+# Computing the height from ratio ensures the aspect ratio is maintained exactly
+# (integer rounding can introduce a 1px error, but this is usually acceptable)
 new_width = 800
 ratio = new_width / w
 new_height = int(h * ratio)
@@ -92,15 +97,16 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg')
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# Shrink first, then enlarge to compare differences
-small = cv2.resize(img, None, fx=0.1, fy=0.1)  # Reduce to 10%
+# Shrink to 10% then scale back up to full size — this stress-tests each
+# interpolation method by forcing it to reconstruct information that was discarded
+small = cv2.resize(img, None, fx=0.1, fy=0.1)
 
 interpolations = [
-    ('NEAREST', cv2.INTER_NEAREST),
-    ('LINEAR', cv2.INTER_LINEAR),
-    ('AREA', cv2.INTER_AREA),
-    ('CUBIC', cv2.INTER_CUBIC),
-    ('LANCZOS4', cv2.INTER_LANCZOS4),
+    ('NEAREST', cv2.INTER_NEAREST),   # Blocky but fast — good for pixel art or masks
+    ('LINEAR', cv2.INTER_LINEAR),     # Default: smooth, fast, good general choice
+    ('AREA', cv2.INTER_AREA),         # Best for downscaling — averages pixel blocks
+    ('CUBIC', cv2.INTER_CUBIC),       # Better upscaling quality; uses 4x4 neighbors
+    ('LANCZOS4', cv2.INTER_LANCZOS4), # Best quality; uses 8x8 neighbors — slowest
 ]
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -286,6 +292,8 @@ rotated_45_full = rotate_image_full(img, 45)  # 45° rotation (fully preserved)
 
 ## 3. Affine Transformation - warpAffine()
 
+Affine transformations are the building block for correcting camera tilt, aligning images before stitching, and normalizing object poses. The key insight is that any combination of rotation, scaling, translation, and shear can be expressed as a single 2×3 matrix multiplication — so composing multiple transforms is just matrix multiplication, with no accuracy loss from applying them one-by-one.
+
 ### What is Affine Transformation?
 
 ```
@@ -315,6 +323,8 @@ rotated_45_full = rotate_image_full(img, 45)  # 45° rotation (fully preserved)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+The `[a, b; c, d]` part of the matrix encodes rotation and scale: for a pure rotation by angle θ, `a=cos θ, b=-sin θ, c=sin θ, d=cos θ`. The `[tx, ty]` column is the translation vector — it shifts the image after the linear part is applied. This is why `getRotationMatrix2D` returns a 2×3 matrix: it bakes both rotation and translation into one step.
+
 ### Translation
 
 ```python
@@ -324,13 +334,16 @@ import numpy as np
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# Translation matrix: move 100 in x, 50 in y
+# Identity (a=d=1, b=c=0) + pure translation: the simplest affine transform
+# tx, ty move the image right/down; negative values move it left/up
 tx, ty = 100, 50
 M = np.float32([
     [1, 0, tx],
     [0, 1, ty]
 ])
 
+# Output size (w, h) must be specified explicitly — pixels shifted outside
+# this canvas are simply discarded (no automatic padding)
 translated = cv2.warpAffine(img, M, (w, h))
 
 cv2.imshow('Original', img)
@@ -347,13 +360,16 @@ import cv2
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 
-# getRotationMatrix2D(center, angle, scale)
 center = (w // 2, h // 2)
-angle = 45  # 45 degrees counter-clockwise
-scale = 0.7  # 70% size
+angle = 45   # Positive = counter-clockwise (OpenCV convention)
+scale = 0.7  # Combining scale here avoids a separate resize call
 
+# getRotationMatrix2D builds the 2x3 matrix automatically, placing center at origin,
+# applying rotation+scale, then translating back — saves manual matrix construction
 M = cv2.getRotationMatrix2D(center, angle, scale)
 
+# Keeping (w, h) as output size means corners may be cropped; use rotate_image_full
+# (below) when you need the entire rotated image to remain visible
 rotated = cv2.warpAffine(img, M, (w, h))
 ```
 
@@ -424,6 +440,8 @@ for pt in dst_pts.astype(int):
 
 ## 4. Perspective Transformation - warpPerspective()
 
+While affine transforms keep parallel lines parallel, perspective transformation can model the full projective geometry of a camera — where parallel lines converge at a vanishing point. This is the tool for "flattening" a tilted document, generating a bird's-eye road view for lane detection, or rectifying any image taken at an angle.
+
 ### What is Perspective Transformation?
 
 ```
@@ -460,6 +478,8 @@ for pt in dst_pts.astype(int):
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+The 3×3 homography matrix H maps any point (x, y) in the source to (x', y') in the destination via homogeneous coordinates: [x', y', w'] = H·[x, y, 1], then divide by w'. The division by w' (the third element) is what enables the converging-line effect impossible in affine transforms. Exactly 4 point correspondences are needed because H has 8 degrees of freedom (9 elements minus 1 for scale).
+
 ### Perspective Transformation Using 4 Points
 
 ```python
@@ -469,7 +489,8 @@ import numpy as np
 img = cv2.imread('tilted_document.jpg')
 h, w = img.shape[:2]
 
-# 4 points from source (document corners)
+# Corners must be ordered consistently (e.g., TL, TR, BR, BL) to match dst_pts
+# A mislabelled point swaps two corners and produces a twisted "butterfly" warp
 src_pts = np.float32([
     [100, 50],    # Top-left
     [500, 80],    # Top-right
@@ -477,7 +498,8 @@ src_pts = np.float32([
     [50, 380]     # Bottom-left
 ])
 
-# 4 points after transformation (front-facing rectangle)
+# dst_pts defines a perfect rectangle — this is what makes the output "front-facing"
+# The output size (500, 400) should match these rectangle dimensions
 dst_pts = np.float32([
     [0, 0],
     [500, 0],
@@ -485,10 +507,11 @@ dst_pts = np.float32([
     [0, 400]
 ])
 
-# Calculate perspective transformation matrix
+# getPerspectiveTransform solves for the 8 degrees of freedom using the 4 point pairs
 M = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
-# Apply transformation
+# warpPerspective applies the homography pixel-by-pixel using inverse mapping
+# (samples source coordinates for each destination pixel to avoid holes)
 result = cv2.warpPerspective(img, M, (500, 400))
 
 # Mark points
@@ -611,12 +634,13 @@ def four_point_transform(img, pts):
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
 
-    # Calculate width of new image
+    # Measure both top and bottom edges: a tilted document will have different
+    # projected widths; taking the max preserves all content without cropping
     width_top = np.linalg.norm(tr - tl)
     width_bottom = np.linalg.norm(br - bl)
     max_width = int(max(width_top, width_bottom))
 
-    # Calculate height of new image
+    # Same logic for height: left and right edges may project to different lengths
     height_left = np.linalg.norm(bl - tl)
     height_right = np.linalg.norm(br - tr)
     max_height = int(max(height_left, height_right))
@@ -638,24 +662,28 @@ def four_point_transform(img, pts):
 
 def find_document(img):
     """Automatically detect document region in image"""
-    # Preprocessing
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Blur before Canny: Gaussian smoothing suppresses pixel-level noise that
+    # would otherwise create spurious edges and fragmented contours
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edged = cv2.Canny(blurred, 75, 200)
 
-    # Contour detection
+    # RETR_EXTERNAL retrieves only outermost contours — sufficient for finding
+    # the document border without getting confused by text/graphics inside it
     contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL,
                                     cv2.CHAIN_APPROX_SIMPLE)
+    # Only examine the 5 largest contours — a document is almost always the
+    # biggest rectangular region in the frame
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
 
     doc_contour = None
     for contour in contours:
-        # Approximate contour
         peri = cv2.arcLength(contour, True)
+        # 0.02 * peri is the epsilon tolerance: 2% of perimeter — small enough
+        # to ignore fine detail, large enough to collapse near-rectangular edges to 4 pts
         approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
 
-        # Consider as document if 4 points
-        if len(approx) == 4:
+        if len(approx) == 4:  # Only a 4-vertex polygon is a candidate document
             doc_contour = approx
             break
 

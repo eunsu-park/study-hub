@@ -1,5 +1,26 @@
 # 함수
 
+**이전**: [연산자와 제어문](./03_Operators_and_Control_Flow.md) | **다음**: [배열과 문자열](./05_Arrays_and_Strings.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 함수의 목적을 설명하고 선언(프로토타입, declaration/prototype)과 정의(definition)의 관계를 기술할 수 있습니다
+2. 값에 의한 전달(pass-by-value), 참조에 의한 전달(pass-by-reference), 포인터에 의한 전달(pass-by-pointer), `const` 참조 매개변수 전달 방식을 비교할 수 있습니다
+3. 기본 매개변수(default parameters)를 갖는 함수를 구현하고 우-좌(right-to-left) 기본값 규칙을 적용할 수 있습니다
+4. 매개변수 타입이나 개수로 구분되는 오버로딩(overloaded) 함수를 설계할 수 있습니다
+5. 재귀(recursion)를 팩토리얼이나 피보나치 같은 문제에 적용하고, 재귀와 반복(iterative) 풀이를 비교할 수 있습니다
+6. 함수 포인터(function pointer)를 사용한 콜백(callback) 패턴을 구현할 수 있습니다
+7. 성능 힌트 목적으로 `inline` 함수를 사용하는 시점을 파악할 수 있습니다
+8. C++17의 구조적 바인딩(structured bindings)을 적용해 함수에서 여러 반환값을 캡처할 수 있습니다
+
+---
+
+함수는 규모 있는 모든 프로그램에서 복잡도를 관리하기 위한 핵심 도구입니다. 함수를 사용하면 로직의 한 부분에 이름을 붙이고, 여러 곳에서 재사용하며, 각 부분을 독립적으로 추론할 수 있습니다. 실제 C++ 코드베이스에서는 올바른 매개변수 전달 방식과 반환 타입을 선택하는 함수 시그니처(function signature) 설계가 유지보수 가능한 코드와 취약한 코드를 구분하는 기준이 되는 경우가 많습니다.
+
 ## 1. 함수란?
 
 함수는 특정 작업을 수행하는 코드 블록입니다.
@@ -576,4 +597,4 @@ int main() {
 
 ## 다음 단계
 
-[05_Arrays_and_Strings.md](./05_Arrays_and_Strings.md)에서 배열과 문자열을 배워봅시다!
+[배열과 문자열](./05_Arrays_and_Strings.md)에서 배열과 문자열을 배워봅시다!

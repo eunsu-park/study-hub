@@ -1,14 +1,27 @@
 # 데이터베이스 확장
 
-## 개요
+**이전**: [분산 캐시 시스템](./07_Distributed_Cache_Systems.md) | **다음**: [데이터베이스 복제](./09_Database_Replication.md)
 
-이 문서에서는 데이터베이스 확장 전략을 다룹니다. 파티셔닝과 샤딩의 차이, 다양한 샤딩 전략(Range, Hash, Directory), 샤딩 키 선택, 핫스팟 방지, 그리고 리밸런싱을 학습합니다.
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 데이터 볼륨과 쿼리 처리량이 단일 노드(Single-node) 용량을 초과하여 성장함에 따라 데이터베이스 확장이 필요한 이유를 설명할 수 있습니다
+2. 파티셔닝(Partitioning, 단일 데이터베이스)과 샤딩(Sharding, 다중 데이터베이스)의 차이를 구분하고 각각 언제 적합한지 설명할 수 있습니다
+3. 범위 기반(Range-based), 해시 기반(Hash-based), 디렉토리 기반(Directory-based) 샤딩 전략을 비교하고 서로 다른 접근 패턴(Access Pattern)에 대한 트레이드오프(Trade-off)를 평가할 수 있습니다
+4. 쿼리 패턴, 데이터 분포, 성장 예측을 분석하여 효과적인 샤딩 키(Shard Key)를 선택할 수 있습니다
+5. 불균등한 데이터 분포 또는 편향된 접근 패턴으로 인한 핫스팟(Hotspot) 문제를 식별하고 방지할 수 있습니다
+6. 최소한의 다운타임(Downtime)으로 샤드 간 데이터를 재분산하는 리밸런싱(Rebalancing) 전략을 설계할 수 있습니다
 
 **난이도**: ⭐⭐⭐
 **예상 학습 시간**: 2-3시간
 **선수 지식**: [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md), [PostgreSQL 폴더](../PostgreSQL/00_Overview.md)
 
 ---
+
+데이터베이스는 상태가 없는(Stateless) 애플리케이션 서버와 달리 일관성과 내구성을 유지해야 하는 상태(State)를 보유하기 때문에 확장하기 가장 어려운 구성 요소인 경우가 많습니다. 저장 용량, 쓰기 처리량 또는 쿼리 지연 시간(Query Latency) 제한으로 인해 단일 데이터베이스가 더 이상 감당하지 못할 때, 여러 머신에 데이터를 분산시켜야 합니다. 샤딩(Sharding)은 강력하지만 라우팅(Routing), 조인(Join), 리밸런싱(Rebalancing)에서 복잡성을 초래하므로, 모든 시니어 엔지니어가 반드시 이해해야 합니다.
 
 ## 목차
 
@@ -19,8 +32,7 @@
 5. [핫스팟 방지](#5-핫스팟-방지)
 6. [리밸런싱](#6-리밸런싱)
 7. [연습 문제](#7-연습-문제)
-8. [다음 단계](#8-다음-단계)
-9. [참고 자료](#9-참고-자료)
+8. [참고 자료](#8-참고-자료)
 
 ---
 
@@ -846,27 +858,43 @@ products: Hash(merchant_id)
    - 기존 샤드에서 이동된 데이터 삭제
 ```
 
+## 실습 과제
+
+### 실습 1: 샤딩 전략 비교
+
+`examples/System_Design/08_sharding_sim.py`를 사용하여 샤딩(Sharding) 동작을 탐구하세요.
+
+**과제:**
+1. 모든 데모를 실행하고 해시(Hash) 기반, 범위(Range) 기반, 디렉토리(Directory) 기반 샤딩을 비교하세요
+2. 현실적인 데이터셋을 생성하세요: ID와 생성 타임스탬프(timestamp)가 있는 사용자 레코드 10,000개
+3. user_id(해시)와 creation_date(범위)로 각각 샤딩하세요. 어느 쪽이 더 균등한 분포를 보이나요?
+4. 크로스 샤드(cross-shard) 쿼리를 구현하세요: "1월에 생성된 모든 사용자 찾기" — 해시 vs 범위 샤딩의 쿼리 복잡도를 비교하세요
+
+### 실습 2: 샤드 리밸런싱(Shard Rebalancing)
+
+새 노드(node) 추가를 위한 샤드 리밸런싱(rebalancing) 알고리즘을 구현하세요.
+
+**과제:**
+1. 해시 기반 샤드 4개와 키(key) 10,000개로 시작하세요
+2. 5번째 샤드를 추가하세요. 이동하는 키의 수를 최소화하는 마이그레이션(migration) 계획을 구현하세요
+3. `07_consistent_hashing.py`의 일관성 해싱(consistent hashing)을 사용하여 새로운 키-샤드 매핑을 결정하세요
+4. "실시간(live)" 시스템을 시뮬레이션하세요: 마이그레이션 중 읽기는 계속 작동하고, 쓰기는 마이그레이션 완료 전까지 기존 샤드와 새 샤드 양쪽에 기록되도록 구현하세요
+5. 보고: 이동된 키의 수, 마이그레이션 소요 시간(시뮬레이션), 데이터 불일치(inconsistency) 발생 구간
+
+### 실습 3: 핫 샤드(Hot Shard) 탐지 및 완화
+
+핫 샤드를 탐지하고 완화하는 모니터링(monitoring) 시스템을 구축하세요.
+
+**과제:**
+1. 시간 윈도우(time window)별 샤드당 요청 수를 추적하는 부하 트래커(load tracker)를 만드세요
+2. 핫스팟(hot-spot)을 시뮬레이션하세요: 하나의 샤드가 다른 샤드보다 5배 많은 트래픽을 받도록 하세요 (예: 바이럴된 사용자의 데이터)
+3. 탐지 기능을 구현하세요: 어떤 샤드라도 평균 부하의 2배를 초과하면 알림을 발생시키세요
+4. 완화 기능을 구현하세요: 핫 샤드를 보조 해시(secondary hash)를 사용하여 2개의 서브 샤드(sub-shard)로 분할하세요
+5. 분할 후 부하가 재균등화되는지 검증하세요
+
 ---
 
-## 8. 다음 단계
-
-데이터베이스 확장을 이해했다면, 데이터베이스 복제를 학습하세요.
-
-### 다음 레슨
-- [09_Database_Replication.md](./09_Database_Replication.md)
-
-### 관련 레슨
-- [07_Distributed_Cache_Systems.md](./07_Distributed_Cache_Systems.md) - 일관성 해싱
-- [PostgreSQL/18_Table_Partitioning.md](../PostgreSQL/18_Table_Partitioning.md)
-
-### 추천 실습
-1. PostgreSQL 파티셔닝 실습
-2. 샤딩 라우터 구현해보기
-3. 일관성 해싱 구현
-
----
-
-## 9. 참고 자료
+## 8. 참고 자료
 
 ### 도서
 - Designing Data-Intensive Applications - Ch. 6
@@ -882,7 +910,4 @@ products: Hash(merchant_id)
 
 ---
 
-**문서 정보**
-- 최종 수정: 2024년
-- 난이도: ⭐⭐⭐
-- 예상 학습 시간: 2-3시간
+**이전**: [분산 캐시 시스템](./07_Distributed_Cache_Systems.md) | **다음**: [데이터베이스 복제](./09_Database_Replication.md)

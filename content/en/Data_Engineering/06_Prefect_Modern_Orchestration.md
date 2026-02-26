@@ -1,5 +1,18 @@
 # Prefect Modern Orchestration
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare Prefect and Airflow across key dimensions such as workflow definition, scheduling model, and dynamic workflow support
+2. Define Prefect flows and tasks using Python decorators and configure their dependencies
+3. Implement caching, retries, and concurrency controls in Prefect flows
+4. Deploy Prefect flows using Work Pools and configure schedules via the Prefect Cloud UI or API
+5. Integrate Prefect with external systems using blocks and build parameterized, reusable flows
+6. Monitor flow run states and set up notifications and automations for production pipelines
+
+---
+
 ## Overview
 
 Prefect is a modern workflow orchestration tool that builds data pipelines in a Python-native way. Compared to Airflow, it offers simpler setup and supports dynamic workflows.
@@ -119,10 +132,14 @@ prefect server start
 from prefect import flow, task
 from prefect.logging import get_run_logger
 
-# Define task
+# @task decorator turns a function into a trackable unit — Prefect records its
+# state (Pending → Running → Completed/Failed), logs, and return values automatically.
+# Unlike Airflow operators, tasks are plain Python functions with no boilerplate.
 @task
 def extract_data(source: str) -> dict:
     """Data extraction task"""
+    # get_run_logger() gives a logger scoped to the current task run, so log messages
+    # automatically include task name/run ID — essential for debugging in parallel flows
     logger = get_run_logger()
     logger.info(f"Extracting from {source}")
 
@@ -154,18 +171,22 @@ def load_data(data: dict, destination: str) -> bool:
     return True
 
 
-# Define flow
+# @flow wraps the orchestration logic. Prefect infers task dependencies from the
+# data flow between function calls — no need for explicit >> operators like Airflow.
+# Default parameters make the flow callable both programmatically and via deployment.
 @flow(name="ETL Pipeline")
 def etl_pipeline(source: str = "database", destination: str = "warehouse"):
     """ETL pipeline flow"""
-    # Execute tasks (automatic dependency management)
+    # Prefect automatically tracks data dependencies: transform waits for extract,
+    # load waits for transform. No explicit dependency wiring required.
     raw_data = extract_data(source)
     transformed = transform_data(raw_data)
     result = load_data(transformed, destination)
     return result
 
 
-# Local execution
+# Flows are regular Python functions — run directly for local testing without
+# needing a scheduler, database, or web server (unlike Airflow's full stack)
 if __name__ == "__main__":
     etl_pipeline()
 ```
@@ -179,20 +200,21 @@ from datetime import timedelta
 @task(
     name="My Task",
     description="Task description",
-    tags=["etl", "production"],
-    retries=3,                          # Number of retries
-    retry_delay_seconds=60,             # Retry delay time
-    timeout_seconds=3600,               # Timeout
-    cache_key_fn=lambda: "static_key",  # Cache key
-    cache_expiration=timedelta(hours=1), # Cache expiration
-    log_prints=True,                    # Capture print statements as logs
+    tags=["etl", "production"],         # Tags enable filtering in Prefect UI and can trigger automations
+    retries=3,                          # Automatic retries handle transient failures (network timeouts, API rate limits)
+    retry_delay_seconds=60,             # Fixed 60s delay gives downstream services time to recover
+    timeout_seconds=3600,               # 1-hour timeout prevents zombie tasks from holding resources indefinitely
+    cache_key_fn=lambda: "static_key",  # Static key means same result for any input — use for idempotent lookups
+    cache_expiration=timedelta(hours=1), # 1-hour expiry balances freshness vs avoiding redundant API calls
+    log_prints=True,                    # Redirects print() to Prefect logs — useful for legacy code that uses print
 )
 def my_task(param: str) -> str:
     print(f"Processing: {param}")
     return f"Result: {param}"
 
 
-# Dynamic retry (exponential backoff)
+# Exponential backoff avoids thundering-herd retries against recovering services —
+# each retry waits exponentially longer (10s, 20s, 40s, 80s, 160s) to reduce load
 from prefect.tasks import exponential_backoff
 
 @task(
@@ -217,18 +239,19 @@ from prefect.task_runners import ConcurrentTaskRunner, SequentialTaskRunner
     name="My Flow",
     description="Flow description",
     version="1.0.0",
-    retries=2,
-    retry_delay_seconds=300,
-    timeout_seconds=7200,
-    task_runner=ConcurrentTaskRunner(),  # Parallel execution
+    retries=2,                           # Flow-level retries re-run the entire flow, not individual tasks
+    retry_delay_seconds=300,             # 5-minute delay gives dependent systems time to stabilize
+    timeout_seconds=7200,                # 2-hour hard limit prevents runaway pipelines from blocking work pools
+    task_runner=ConcurrentTaskRunner(),  # Runs tasks in threads — use for I/O-bound tasks (API calls, DB queries)
     log_prints=True,
-    persist_result=True,                 # Save result
+    persist_result=True,                 # Persists flow return value to storage — required for flow-of-flows patterns
 )
 def my_flow():
     pass
 
 
-# Sequential execution
+# SequentialTaskRunner forces one-at-a-time execution — use when tasks have
+# hidden shared state (e.g., writing to same file) that concurrency would corrupt
 @flow(task_runner=SequentialTaskRunner())
 def sequential_flow():
     pass
@@ -248,11 +271,14 @@ def process_item(item: str) -> str:
     return f"Processed: {item}"
 
 
+# Unlike Airflow DAGs where task count must be defined at parse time, Prefect
+# creates tasks at runtime — the loop body is real Python, not a static graph.
 @flow
 def dynamic_tasks_flow(items: list[str]):
     """Dynamically determine number of tasks"""
     results = []
     for item in items:
+        # Each call creates a separate task run — Prefect tracks them independently
         result = process_item(item)
         results.append(result)
     return results
@@ -262,17 +288,21 @@ def dynamic_tasks_flow(items: list[str]):
 dynamic_tasks_flow(["a", "b", "c", "d"])
 
 
-# Parallel execution (using .submit())
+# .submit() enables concurrent execution via the flow's task_runner.
+# Use this for I/O-bound workloads (API calls, file downloads) where
+# waiting sequentially wastes time.
 @flow
 def parallel_tasks_flow(items: list[str]):
     """Execute tasks in parallel"""
     futures = []
     for item in items:
-        # .submit() returns Future (async)
+        # .submit() returns a PrefectFuture immediately without blocking,
+        # unlike direct calls which wait for the result
         future = process_item.submit(item)
         futures.append(future)
 
-    # Collect results
+    # .result() blocks until the future resolves — gather all results after
+    # submitting everything to maximize parallelism
     results = [f.result() for f in futures]
     return results
 ```
@@ -333,7 +363,8 @@ def load(data: list, target: str):
     print(f"Loading {len(data)} records to {target}")
 
 
-# Define subflow
+# Subflows are flows called from other flows. Each subflow gets its own flow run
+# with independent state tracking, retries, and logs — making them composable and reusable.
 @flow(name="ETL Subflow")
 def etl_subflow(source: str, target: str):
     """Reusable ETL subflow"""
@@ -343,11 +374,13 @@ def etl_subflow(source: str, target: str):
     return len(transformed)
 
 
-# Main flow
+# Parent flow orchestrates subflows like function calls. If a subflow fails,
+# only that subflow retries — other completed subflows are not re-executed.
 @flow(name="Main Pipeline")
 def main_pipeline():
     """Orchestrate multiple subflows"""
-    # Call subflows
+    # Each call creates a nested flow run visible in the UI hierarchy.
+    # For parallel subflow execution, use .submit() with ConcurrentTaskRunner.
     count_a = etl_subflow("source_a", "target_a")
     count_b = etl_subflow("source_b", "target_b")
     count_c = etl_subflow("source_c", "target_c")
@@ -377,18 +410,20 @@ def my_etl_flow(date: str = None):
     print(f"Running ETL for {date}")
 
 
-# Method 1: Create deployment with Python
+# Deployments decouple flow definition from execution scheduling — the same flow
+# can have multiple deployments with different schedules, parameters, and infrastructure.
 deployment = Deployment.build_from_flow(
     flow=my_etl_flow,
     name="daily-etl",
     version="1.0",
-    tags=["production", "etl"],
-    schedule=CronSchedule(cron="0 6 * * *"),  # Daily at 6 AM
-    parameters={"date": None},
-    work_pool_name="default-agent-pool",
+    tags=["production", "etl"],           # Tags enable filtering and RBAC in Prefect Cloud
+    schedule=CronSchedule(cron="0 6 * * *"),  # 6 AM ensures data is ready before business hours
+    parameters={"date": None},            # None triggers datetime.now() fallback for daily runs
+    work_pool_name="default-agent-pool",  # Routes execution to the correct infrastructure
 )
 
-# Apply deployment
+# apply() registers the deployment with the Prefect server/cloud — workers
+# poll for scheduled runs and execute them in the specified work pool
 deployment.apply()
 ```
 
@@ -449,6 +484,9 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
 
+# Airflow tasks communicate via XCom (cross-communication) — an implicit key-value
+# store backed by the metadata DB. This indirection makes data flow harder to trace
+# and limits payload size (default 48KB in the DB, though configurable).
 def extract(**kwargs):
     ti = kwargs['ti']
     data = [1, 2, 3, 4, 5]
@@ -456,6 +494,7 @@ def extract(**kwargs):
 
 def transform(**kwargs):
     ti = kwargs['ti']
+    # Must know the exact task_id string — a source of runtime errors if renamed
     data = ti.xcom_pull(key='data', task_ids='extract')
     result = [x * 2 for x in data]
     ti.xcom_push(key='result', value=result)
@@ -469,25 +508,28 @@ with DAG(
     'etl_airflow',
     start_date=datetime(2024, 1, 1),
     schedule_interval='@daily',
-    catchup=False,
+    catchup=False,  # Without this, Airflow backfills ALL missed runs since start_date
 ) as dag:
     t1 = PythonOperator(task_id='extract', python_callable=extract)
     t2 = PythonOperator(task_id='transform', python_callable=transform)
     t3 = PythonOperator(task_id='load', python_callable=load)
 
+    # Dependencies must be declared explicitly — Airflow cannot infer them from code
     t1 >> t2 >> t3
 ```
 
 ### 6.2 Prefect Version
 
 ```python
-# Prefect Flow - much simpler and more intuitive
+# Prefect Flow — same ETL logic with no boilerplate. Data passes as function
+# return values (not XCom), making the code testable as plain Python.
 from prefect import flow, task
 
 @task
 def extract() -> list:
     return [1, 2, 3, 4, 5]
 
+# Type hints serve double duty: Python type checking + Prefect schema validation
 @task
 def transform(data: list) -> list:
     return [x * 2 for x in data]
@@ -498,11 +540,14 @@ def load(data: list):
 
 @flow
 def etl_prefect():
+    # Dependencies are implicit from data flow — Prefect builds the DAG automatically.
+    # This eliminates the class of bugs where explicit >> ordering disagrees with
+    # actual data dependencies.
     data = extract()
     transformed = transform(data)
     load(transformed)
 
-# Local execution
+# No scheduler/webserver/DB needed — run and debug locally like any Python script
 etl_prefect()
 ```
 
@@ -542,20 +587,26 @@ etl_prefect()
 from prefect import flow, task
 from prefect.states import State, Completed, Failed
 
+# State handlers fire on state transitions — use them for alerting, cleanup, or
+# custom logging without cluttering the main task logic.
 def custom_state_handler(task, task_run, state: State):
     """Called on task state change"""
     if state.is_failed():
-        # Send Slack notification, etc.
+        # In production, integrate with Slack/PagerDuty here. Returning state
+        # (not raising) lets Prefect continue its normal retry/failure handling.
         print(f"Task {task.name} failed!")
     return state
 
 
+# on_failure hooks only fire on failure — more efficient than checking every
+# state transition when you only need error notifications
 @task(on_failure=[custom_state_handler])
 def risky_task():
     raise ValueError("Something went wrong")
 
 
-# Flow-level handler
+# Flow-level handlers catch failures from any task in the flow — useful for
+# sending a single "pipeline failed" alert instead of per-task notifications
 @flow(on_failure=[lambda flow, flow_run, state: print("Flow failed!")])
 def my_flow():
     risky_task()
@@ -568,13 +619,18 @@ from prefect import flow, task
 from prefect.filesystems import S3, LocalFileSystem
 from prefect.serializers import JSONSerializer
 
-# Local file system
+# Result storage persists task outputs beyond the flow run lifetime — enables
+# caching across runs, debugging past results, and flow-of-flows data passing.
+# LocalFileSystem is convenient for development; use S3/GCS in production.
 @task(result_storage=LocalFileSystem(basepath="/tmp/prefect"))
 def save_locally():
     return {"data": [1, 2, 3]}
 
 
-# S3 storage
+# S3 storage with JSON serialization — JSONSerializer produces human-readable
+# results (useful for debugging), unlike the default pickle which is faster but opaque.
+# persist_result=True is required to actually write to storage; without it, results
+# stay in memory and are lost when the process exits.
 @task(
     persist_result=True,
     result_storage=S3(bucket_path="my-bucket/results"),

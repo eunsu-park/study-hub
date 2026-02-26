@@ -1,5 +1,17 @@
 # Topological Sort
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the concept of topological sort and state the conditions under which it is applicable (DAG requirement)
+2. Implement Kahn's Algorithm using BFS and in-degree tracking to produce a topological ordering
+3. Implement DFS-based topological sort using a post-order stack
+4. Detect cycles in a directed graph using both Kahn's algorithm and DFS coloring
+5. Apply topological sort to solve dependency-ordering problems such as course scheduling and build systems
+
+---
+
 ## Overview
 
 Topological sort is an algorithm for linearly ordering vertices of a Directed Acyclic Graph (DAG). For every edge (u, v), u appears before v in the ordering.
@@ -129,9 +141,10 @@ def topological_sort_kahn(n, edges):
 
     for u, v in edges:
         graph[u].append(v)
-        in_degree[v] += 1
+        in_degree[v] += 1  # Count how many prerequisites each node has
 
-    # Start with vertices having in-degree 0
+    # A node with in-degree 0 has no unresolved dependencies —
+    # it is safe to schedule immediately
     queue = deque()
     for i in range(n):
         if in_degree[i] == 0:
@@ -141,14 +154,17 @@ def topological_sort_kahn(n, edges):
 
     while queue:
         node = queue.popleft()
-        result.append(node)
+        result.append(node)  # This node is now "completed"
 
         for neighbor in graph[node]:
+            # Completing 'node' satisfies one prerequisite for each neighbor;
+            # if that brings their count to 0 they become schedulable
             in_degree[neighbor] -= 1
             if in_degree[neighbor] == 0:
                 queue.append(neighbor)
 
-    # Check for cycle
+    # If a cycle exists, some nodes will never reach in-degree 0 and won't
+    # appear in result — the length check detects this without extra bookkeeping
     if len(result) != n:
         return []  # Cycle exists
 
@@ -243,26 +259,31 @@ def topological_sort_dfs(n, edges):
     for u, v in edges:
         graph[u].append(v)
 
-    visited = [0] * n  # 0: unvisited, 1: visiting, 2: done
+    # Three-color marking: unvisited (0) → visiting (1) → done (2)
+    # Using three states instead of two allows cycle detection —
+    # a 'visiting' node reached again means we are still on its DFS path (cycle)
+    visited = [0] * n
     result = []
     has_cycle = False
 
     def dfs(node):
         nonlocal has_cycle
         if has_cycle:
-            return
+            return  # Short-circuit once a cycle is found
 
-        visited[node] = 1  # Visiting
+        visited[node] = 1  # Visiting: this node is on the current DFS path
 
         for neighbor in graph[node]:
             if visited[neighbor] == 1:
-                # Met a visiting node → cycle
+                # Reached a node still on the recursion stack — back-edge = cycle
                 has_cycle = True
                 return
             if visited[neighbor] == 0:
                 dfs(neighbor)
 
-        visited[node] = 2  # Done
+        visited[node] = 2  # Done: all descendants finished — safe to append
+        # Appending after all descendants ensures that if u→v, v is appended before u;
+        # reversing at the end gives the correct topological order
         result.append(node)
 
     for i in range(n):
@@ -272,7 +293,7 @@ def topological_sort_dfs(n, edges):
     if has_cycle:
         return []
 
-    return result[::-1]  # Reverse
+    return result[::-1]  # Reverse: nodes finished last come first in topo order
 
 
 # Example
@@ -297,26 +318,33 @@ def topological_sort_iterative(n, edges):
         if visited[start]:
             continue
 
+        # Each stack entry carries a 'processed' flag to simulate the two phases
+        # of recursive DFS: the first pop triggers exploration of children,
+        # the second pop (after children return) triggers the post-order append
         stack = [(start, False)]  # (node, processed)
 
         while stack:
             node, processed = stack.pop()
 
             if processed:
+                # Post-order: all descendants have been visited — append node
                 result.append(node)
                 continue
 
             if visited[node]:
-                continue
+                continue  # Already handled via another path
 
             visited[node] = True
-            stack.append((node, True))  # Re-insert for completion processing
+            # Re-push with processed=True so we record this node after its subtree
+            stack.append((node, True))
 
+            # Push children with processed=False; they will be explored before
+            # node's post-order marker fires (LIFO order achieves DFS depth-first behavior)
             for neighbor in graph[node]:
                 if not visited[neighbor]:
                     stack.append((neighbor, False))
 
-    return result[::-1]
+    return result[::-1]  # Post-order is reverse topological order
 ```
 
 ---
@@ -506,7 +534,7 @@ def earliest_completion(n, edges, times):
         graph[u].append(v)
         in_degree[v] += 1
 
-    # earliest[i] = earliest start time for task i
+    # earliest[i] = earliest time task i can start (0 for tasks with no prerequisites)
     earliest = [0] * n
 
     queue = deque()
@@ -518,14 +546,16 @@ def earliest_completion(n, edges, times):
         node = queue.popleft()
 
         for neighbor in graph[node]:
-            # Update neighbor's start time
+            # A neighbor can only start after ALL its prerequisites finish;
+            # take the max across all incoming paths to find the true earliest start
             earliest[neighbor] = max(earliest[neighbor],
                                       earliest[node] + times[node])
             in_degree[neighbor] -= 1
             if in_degree[neighbor] == 0:
+                # All predecessors processed — earliest start time is now finalized
                 queue.append(neighbor)
 
-    # Calculate completion times
+    # Completion = start + duration; the overall maximum is the critical path length
     completion = [earliest[i] + times[i] for i in range(n)]
     return completion, max(completion)
 

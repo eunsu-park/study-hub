@@ -1,14 +1,23 @@
 # 프로젝트 2: 숫자 맞추기 게임
 
-## 학습 목표
-
-이 프로젝트를 통해 배우는 내용:
-- 난수 생성 (`rand`, `srand`, `time`)
-- 반복문 (`while`, `do-while`)
-- 조건문 활용
-- 게임 로직 구현
+**이전**: [프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md) | **다음**: [프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md)
 
 ---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. `rand`, `srand`, `time`을 사용하여 설정 가능한 범위 내에서 의사 난수(pseudo-random number)를 생성할 수 있습니다
+2. 승리, 패배, 종료 조건이 충족될 때까지 반복되는 게임 루프(game loop)를 `while`과 `do-while`로 구현할 수 있습니다
+3. 조건문(conditional statement)을 적용하여 방향 힌트(directional hint)와 근접도 피드백(proximity feedback)을 제공할 수 있습니다
+4. `switch-case`를 통해 숫자 범위와 시도 횟수 제한을 조정하는 난이도 시스템(difficulty system)을 설계할 수 있습니다
+5. 범위를 벗어나거나 숫자가 아닌 입력을 프로그램 충돌 없이 거부하는 입력 검증(input validation)을 구현할 수 있습니다
+6. 구조체(struct)를 사용하여 세션 통계를 추적하고, 승률(win rate)과 평균 시도 횟수 같은 파생 지표(derived metric)를 계산할 수 있습니다
+
+---
+
+게임은 루프와 조건 논리를 내면화하기에 탁월한 방법입니다. 내리는 모든 결정에 프로그램이 즉각 반응하는 것을 눈으로 확인할 수 있기 때문입니다. 이 프로젝트에서는 무작위 정답을 생성하고, 플레이어에게 힌트를 제공하며, 점수를 추적하고, 여러 난이도를 지원하는 숫자 맞추기 게임을 만들면서 앞선 레슨에서 배운 C 언어 기초를 다집니다.
 
 ## 게임 규칙
 
@@ -76,22 +85,22 @@ int main(void) {
     int guess;
     int attempts = 0;
 
-    printf("=== 숫자 맞추기 게임 ===\n");
-    printf("1부터 100 사이의 숫자를 맞춰보세요!\n\n");
+    printf("=== Number Guessing Game ===\n");
+    printf("Guess a number between 1 and 100!\n\n");
 
     // 게임 루프
     while (1) {
-        printf("추측: ");
+        printf("Guess: ");
         scanf("%d", &guess);
         attempts++;
 
         if (guess < answer) {
-            printf("UP! (더 높은 숫자입니다)\n\n");
+            printf("UP! (The number is higher)\n\n");
         } else if (guess > answer) {
-            printf("DOWN! (더 낮은 숫자입니다)\n\n");
+            printf("DOWN! (The number is lower)\n\n");
         } else {
-            printf("\n정답입니다!\n");
-            printf("%d번 만에 맞추셨습니다!\n", attempts);
+            printf("\nCorrect!\n");
+            printf("You got it in %d attempts!\n", attempts);
             break;
         }
     }
@@ -103,21 +112,21 @@ int main(void) {
 ### 실행 예시
 
 ```
-=== 숫자 맞추기 게임 ===
-1부터 100 사이의 숫자를 맞춰보세요!
+=== Number Guessing Game ===
+Guess a number between 1 and 100!
 
-추측: 50
-UP! (더 높은 숫자입니다)
+Guess: 50
+UP! (The number is higher)
 
-추측: 75
-DOWN! (더 낮은 숫자입니다)
+Guess: 75
+DOWN! (The number is lower)
 
-추측: 62
-UP! (더 높은 숫자입니다)
+Guess: 62
+UP! (The number is higher)
 
-추측: 68
-정답입니다!
-4번 만에 맞추셨습니다!
+Guess: 68
+Correct!
+You got it in 4 attempts!
 ```
 
 ---
@@ -195,9 +204,9 @@ int main(void) {
 
 void print_title(void) {
     printf("\n");
-    printf("╔════════════════════════════════╗\n");
-    printf("║     숫자 맞추기 게임 v2        ║\n");
-    printf("╚════════════════════════════════╝\n");
+    printf("================================\n");
+    printf("     Number Guessing Game v2    \n");
+    printf("================================\n");
     printf("\n");
 }
 
@@ -246,31 +255,31 @@ int play_game(int max_num, int max_attempts) {
         attempts++;
 
         if (guess < answer) {
-            printf("UP! ↑\n");
+            printf("UP!\n");
             // 추가 힌트
             if (answer - guess > max_num / 4) {
                 printf("(많이 차이납니다)\n");
             }
             printf("\n");
         } else if (guess > answer) {
-            printf("DOWN! ↓\n");
+            printf("DOWN!\n");
             if (guess - answer > max_num / 4) {
                 printf("(많이 차이납니다)\n");
             }
             printf("\n");
         } else {
-            printf("\n🎉 정답입니다!\n");
-            printf("%d번 만에 맞추셨습니다!\n", attempts);
+            printf("\nCorrect!\n");
+            printf("You got it in %d attempts!\n", attempts);
 
             // 점수 계산
             int score = (max_attempts - attempts + 1) * 100;
-            printf("점수: %d점\n", score);
+            printf("Score: %d points\n", score);
             return 1;  // 승리
         }
     }
 
-    printf("\n기회를 모두 사용했습니다.\n");
-    printf("정답은 %d였습니다.\n", answer);
+    printf("\nOut of chances.\n");
+    printf("The answer was %d.\n", answer);
     return 0;  // 패배
 }
 
@@ -327,7 +336,7 @@ int main(void) {
         print_title();
         print_menu();
 
-        printf("선택: ");
+        printf("Choice: ");
         if (scanf("%d", &choice) != 1) {
             clear_input_buffer();
             continue;
@@ -339,20 +348,20 @@ int main(void) {
                 int max_num, max_attempts;
                 get_difficulty(&max_num, &max_attempts);
                 play_game(max_num, max_attempts, &stats);
-                printf("\n계속하려면 Enter를 누르세요...");
+                printf("\nPress Enter to continue...");
                 getchar();
                 break;
             }
             case 2:
                 show_stats(&stats);
-                printf("\n계속하려면 Enter를 누르세요...");
+                printf("\nPress Enter to continue...");
                 getchar();
                 break;
             case 3:
-                printf("\n게임을 종료합니다. 안녕히 가세요!\n\n");
+                printf("\nExiting game. Goodbye!\n\n");
                 return 0;
             default:
-                printf("\n잘못된 선택입니다.\n");
+                printf("\nInvalid choice.\n");
         }
     }
 
@@ -361,20 +370,20 @@ int main(void) {
 
 void print_title(void) {
     printf("\n");
-    printf("  ╔═══════════════════════════════════╗\n");
-    printf("  ║                                   ║\n");
-    printf("  ║      🎯 숫자 맞추기 게임 🎯      ║\n");
-    printf("  ║                                   ║\n");
-    printf("  ╚═══════════════════════════════════╝\n");
+    printf("  =====================================\n");
+    printf("  |                                   |\n");
+    printf("  |      Number Guessing Game         |\n");
+    printf("  |                                   |\n");
+    printf("  =====================================\n");
     printf("\n");
 }
 
 void print_menu(void) {
-    printf("  ┌─────────────────────────────────┐\n");
-    printf("  │  1. 게임 시작                   │\n");
-    printf("  │  2. 통계 보기                   │\n");
-    printf("  │  3. 종료                        │\n");
-    printf("  └─────────────────────────────────┘\n");
+    printf("  ---------------------------------\n");
+    printf("  |  1. Start Game                |\n");
+    printf("  |  2. View Statistics           |\n");
+    printf("  |  3. Exit                      |\n");
+    printf("  ---------------------------------\n");
     printf("\n");
 }
 
@@ -382,10 +391,10 @@ int get_difficulty(int *max_num, int *max_attempts) {
     int choice;
 
     printf("\n  난이도를 선택하세요:\n\n");
-    printf("    1. 쉬움   │ 1~50   │ 10번 기회\n");
-    printf("    2. 보통   │ 1~100  │ 7번 기회\n");
-    printf("    3. 어려움 │ 1~200  │ 8번 기회\n");
-    printf("    4. 극한   │ 1~1000 │ 10번 기회\n");
+    printf("    1. 쉬움   | 1~50   | 10번 기회\n");
+    printf("    2. 보통   | 1~100  | 7번 기회\n");
+    printf("    3. 어려움 | 1~200  | 8번 기회\n");
+    printf("    4. 극한   | 1~1000 | 10번 기회\n");
     printf("\n  선택: ");
     scanf("%d", &choice);
     clear_input_buffer();
@@ -421,10 +430,10 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
     int attempts = 0;
     int low = 1, high = max_num;  // 힌트용 범위
 
-    printf("\n  ──────────────────────────────────\n");
+    printf("\n  ----------------------------------\n");
     printf("  1부터 %d 사이의 숫자를 맞춰보세요!\n", max_num);
     printf("  기회: %d번\n", max_attempts);
-    printf("  ──────────────────────────────────\n\n");
+    printf("  ----------------------------------\n\n");
 
     while (attempts < max_attempts) {
         int remaining = max_attempts - attempts;
@@ -432,13 +441,13 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
         printf("  추측: ");
 
         if (scanf("%d", &guess) != 1) {
-            printf("  → 숫자를 입력해주세요.\n\n");
+            printf("  -> 숫자를 입력해주세요.\n\n");
             clear_input_buffer();
             continue;
         }
 
         if (guess < 1 || guess > max_num) {
-            printf("  → 1~%d 사이의 숫자를 입력해주세요.\n\n", max_num);
+            printf("  -> 1~%d 사이의 숫자를 입력해주세요.\n\n", max_num);
             continue;
         }
 
@@ -446,16 +455,16 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
         stats->total_attempts++;
 
         if (guess < answer) {
-            printf("  → UP! ↑ (더 큰 숫자입니다)\n\n");
+            printf("  -> UP! (더 큰 숫자입니다)\n\n");
             if (guess > low) low = guess + 1;
         } else if (guess > answer) {
-            printf("  → DOWN! ↓ (더 작은 숫자입니다)\n\n");
+            printf("  -> DOWN! (더 작은 숫자입니다)\n\n");
             if (guess < high) high = guess - 1;
         } else {
             // 정답!
             int score = (max_attempts - attempts + 1) * 100 + (max_num / 10);
 
-            printf("\n  ★★★ 정답입니다! ★★★\n\n");
+            printf("\n  *** Correct! ***\n\n");
             printf("  시도 횟수: %d번\n", attempts);
             printf("  점수: %d점\n", score);
 
@@ -464,7 +473,7 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
 
             if (score > stats->best_score) {
                 stats->best_score = score;
-                printf("\n  🏆 새로운 최고 기록입니다!\n");
+                printf("\n  새로운 최고 기록!\n");
                 printf("  이름을 입력하세요: ");
                 scanf("%49s", stats->best_player);
                 clear_input_buffer();
@@ -475,7 +484,7 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
     }
 
     // 패배
-    printf("\n  ✗ 기회를 모두 사용했습니다.\n");
+    printf("\n  X 기회를 모두 사용했습니다.\n");
     printf("  정답은 %d였습니다.\n", answer);
 
     stats->games_played++;
@@ -483,7 +492,7 @@ int play_game(int max_num, int max_attempts, GameStats *stats) {
 }
 
 void show_stats(GameStats *stats) {
-    printf("\n  ══════════ 게임 통계 ══════════\n\n");
+    printf("\n  ========== 게임 통계(Game Statistics) ==========\n\n");
 
     if (stats->games_played == 0) {
         printf("  아직 플레이한 게임이 없습니다.\n");
@@ -501,12 +510,12 @@ void show_stats(GameStats *stats) {
     printf("  평균 시도 횟수: %.1f\n", avg_attempts);
 
     if (stats->best_score > 0) {
-        printf("\n  🏆 최고 기록\n");
+        printf("\n  최고 기록\n");
         printf("     점수: %d점\n", stats->best_score);
         printf("     플레이어: %s\n", stats->best_player);
     }
 
-    printf("\n  ═════════════════════════════════\n");
+    printf("\n  ================================================\n");
 }
 
 void clear_input_buffer(void) {
@@ -530,12 +539,12 @@ gcc -Wall -Wextra -std=c11 guess_game.c -o guess_game
 
 | 개념 | 설명 |
 |------|------|
-| `rand()` | 의사 난수 생성 |
-| `srand(time(NULL))` | 시드 초기화 |
-| `while (1)` | 무한 루프 |
+| `rand()` | 의사 난수(pseudo-random number) 생성 |
+| `srand(time(NULL))` | 시드(seed) 초기화 |
+| `while (1)` | 무한 루프(infinite loop) |
 | `break` | 루프 탈출 |
 | `continue` | 다음 반복으로 |
-| 구조체 | 관련 데이터 묶기 |
+| 구조체(Struct) | 관련 데이터 묶기 |
 
 ---
 
@@ -552,4 +561,8 @@ gcc -Wall -Wextra -std=c11 guess_game.c -o guess_game
 
 ## 다음 단계
 
-[05_Project_Address_Book.md](./05_Project_Address_Book.md) → 구조체와 파일 I/O를 배워봅시다!
+[프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md) → 구조체와 파일 I/O를 배워봅시다!
+
+---
+
+**이전**: [프로젝트 1: 사칙연산 계산기](./03_Project_Calculator.md) | **다음**: [프로젝트 3: 주소록 프로그램](./05_Project_Address_Book.md)

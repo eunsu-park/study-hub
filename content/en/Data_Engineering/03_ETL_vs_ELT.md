@@ -1,6 +1,19 @@
 # ETL vs ELT
 
-## Introduction
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the ETL (Extract, Transform, Load) and ELT (Extract, Load, Transform) patterns and describe their fundamental differences
+2. Implement an ETL pipeline in Python using pandas and SQLAlchemy
+3. Implement an ELT pipeline leveraging SQL-based transformations within a data warehouse
+4. Compare ETL and ELT across dimensions such as performance, scalability, cost, and use cases
+5. Identify when to use ETL versus ELT based on data volume, transformation complexity, and infrastructure constraints
+6. Analyze real-world scenarios and choose the appropriate pattern for a given data engineering problem
+
+---
+
+## Overview
 
 ETL (Extract, Transform, Load) and ELT (Extract, Load, Transform) are two major patterns in data pipelines. Traditional ETL transforms then loads data, while modern ELT loads then transforms data.
 
@@ -38,6 +51,8 @@ class ETLPipeline:
     """Traditional ETL pipeline"""
 
     def __init__(self, source_conn: str, target_conn: str):
+        # Separate engines for source vs target: prevents accidental writes
+        # to the source DB and makes connection pooling independent.
         self.source_engine = create_engine(source_conn)
         self.target_engine = create_engine(target_conn)
 
@@ -57,11 +72,15 @@ class ETLPipeline:
         """
         print(f"[Transform] Starting at {datetime.now()}")
 
-        # 1. Handle missing values
+        # 1. Drop rows missing required fields (customer_id, amount) but
+        # fill optional fields (email) — losing a sale record is worse than
+        # having a placeholder email.
         df = df.dropna(subset=['customer_id', 'amount'])
         df['email'] = df['email'].fillna('unknown@example.com')
 
-        # 2. Data type conversion
+        # 2. Explicit type casting catches source-side schema drift early:
+        # if order_date arrives as an unexpected format, this fails loudly
+        # rather than silently loading corrupt data.
         df['order_date'] = pd.to_datetime(df['order_date'])
         df['amount'] = df['amount'].astype(float)
 
@@ -70,12 +89,15 @@ class ETLPipeline:
         df['month'] = df['order_date'].dt.month
         df['day_of_week'] = df['order_date'].dt.dayofweek
 
-        # 4. Apply business logic
+        # 4. Apply business logic — segmenting here (on the ETL server)
+        # ensures all consumers see the same segment definitions, unlike
+        # ELT where each analyst might apply thresholds differently.
         df['customer_segment'] = df['total_purchases'].apply(
             lambda x: 'Gold' if x > 10000 else ('Silver' if x > 5000 else 'Bronze')
         )
 
-        # 5. Data quality validation
+        # 5. Fail-fast assertion: cheaper to abort the pipeline than to
+        # load negative amounts that corrupt downstream revenue reports.
         assert df['amount'].min() >= 0, "Negative amounts found"
 
         print(f"[Transform] Transformed {len(df)} rows")
@@ -87,7 +109,10 @@ class ETLPipeline:
         """
         print(f"[Load] Starting at {datetime.now()}")
 
-        # Full refresh (table replacement)
+        # Full refresh (if_exists='replace'): simple and idempotent, but
+        # not suitable for large tables — use incremental upserts for those.
+        # chunksize=10000 avoids building a single enormous INSERT statement
+        # that could exceed DB memory limits.
         df.to_sql(
             table_name,
             self.target_engine,
@@ -218,11 +243,16 @@ class ELTPipeline:
 
 
 # dbt model example (SQL-based transformation)
+# Notice how this SQL applies the *same* logic as the Python ETL transform()
+# above — the key difference is WHERE it runs: inside the warehouse engine,
+# leveraging its MPP (massively parallel processing) compute.
 DBT_MODEL_EXAMPLE = """
 -- models/staging/stg_orders.sql
 -- ELT transformation using dbt
 
 WITH source AS (
+    -- {{ source() }} macro provides lineage tracking and freshness checks
+    -- so dbt can alert you if the raw table hasn't been updated.
     SELECT * FROM {{ source('raw', 'orders_raw') }}
 ),
 
@@ -234,7 +264,8 @@ cleaned AS (
         CAST(order_date AS DATE) AS order_date,
         CAST(amount AS DECIMAL(10, 2)) AS amount,
         total_purchases,
-        -- Derived columns
+        -- Derived columns computed at query time — no ETL server needed;
+        -- the warehouse handles this in parallel across its nodes.
         EXTRACT(YEAR FROM order_date) AS order_year,
         EXTRACT(MONTH FROM order_date) AS order_month,
         EXTRACT(DOW FROM order_date) AS day_of_week,
@@ -244,9 +275,12 @@ cleaned AS (
             WHEN total_purchases > 5000 THEN 'Silver'
             ELSE 'Bronze'
         END AS customer_segment,
-        -- Metadata
+        -- loaded_at tracks *when* each row was processed, enabling
+        -- incremental models to pick up only newly arrived data.
         CURRENT_TIMESTAMP AS loaded_at
     FROM source
+    -- Quality filter pushed into SQL: rejects bad rows before they
+    -- enter the staging layer, equivalent to the ETL assertion approach.
     WHERE customer_id IS NOT NULL
       AND amount IS NOT NULL
       AND amount >= 0
@@ -257,6 +291,9 @@ SELECT * FROM cleaned
 
 
 # Actual ELT pipeline (Snowflake/BigQuery style)
+# Three-layer architecture (raw → staging → mart) follows the medallion
+# pattern: each layer increases data quality while preserving the raw copy
+# for debugging and reprocessing.
 class ModernELTWithSQL:
     """SQL-based modern ELT"""
 
@@ -265,6 +302,9 @@ class ModernELTWithSQL:
 
     def extract_load(self, source: str, target_raw: str):
         """Source → Raw layer"""
+        # COPY INTO is a warehouse-native bulk load command — orders of
+        # magnitude faster than row-by-row INSERT because it reads
+        # Parquet files directly from cloud storage in parallel.
         copy_sql = f"""
         COPY INTO {target_raw}
         FROM @{source}
@@ -274,6 +314,9 @@ class ModernELTWithSQL:
 
     def transform_staging(self):
         """Raw → Staging layer"""
+        # PARSE_JSON + explicit casts: raw layer stores semi-structured data
+        # as-is; the staging layer enforces a schema, catching type mismatches
+        # early while still keeping the raw copy untouched for reprocessing.
         staging_sql = """
         CREATE OR REPLACE TABLE staging.orders AS
         SELECT
@@ -288,6 +331,9 @@ class ModernELTWithSQL:
 
     def transform_mart(self):
         """Staging → Mart layer"""
+        # Mart joins staging data with dimension tables and adds analytics
+        # columns. Window functions like cumulative_amount run efficiently
+        # on the warehouse's distributed compute — no external processing needed.
         mart_sql = """
         CREATE OR REPLACE TABLE mart.fact_orders AS
         SELECT
@@ -295,7 +341,8 @@ class ModernELTWithSQL:
             d.date_sk,
             c.customer_sk,
             o.amount,
-            -- Aggregation
+            -- Running total per customer: enables lifetime-value queries
+            -- without rescanning the entire fact table.
             SUM(o.amount) OVER (
                 PARTITION BY o.customer_id
                 ORDER BY o.order_date
@@ -340,24 +387,28 @@ class ModernELTWithSQL:
 def choose_etl_or_elt(requirements: dict) -> str:
     """ETL/ELT selection guide"""
 
-    # ETL preference scenarios
+    # ETL factors: scenarios where transformation MUST happen outside
+    # the warehouse (privacy, non-SQL logic, or legacy format parsing).
     etl_factors = [
-        requirements.get('data_privacy', False),      # Sensitive data masking needed
-        requirements.get('complex_transforms', False), # Complex business logic
-        requirements.get('legacy_systems', False),    # Legacy system integration
-        requirements.get('small_data', False),        # Small-scale data
+        requirements.get('data_privacy', False),      # PII must be masked before loading
+        requirements.get('complex_transforms', False), # Logic too complex for SQL (ML, NLP)
+        requirements.get('legacy_systems', False),    # Fixed-width/mainframe formats
+        requirements.get('small_data', False),        # DW overhead not justified
     ]
 
-    # ELT preference scenarios
+    # ELT factors: scenarios where the warehouse engine should do the work
+    # because it can parallelise and the raw data should be preserved.
     elt_factors = [
-        requirements.get('big_data', False),          # Large-scale data
-        requirements.get('cloud_dw', False),          # Cloud DW usage
-        requirements.get('data_lake', False),         # Data lake construction
-        requirements.get('flexible_schema', False),   # Schema flexibility needed
-        requirements.get('raw_data_access', False),   # Raw data access needed
-        requirements.get('sql_transforms', False),    # SQL transformable
+        requirements.get('big_data', False),          # Warehouse MPP handles scale
+        requirements.get('cloud_dw', False),          # Pay-per-query compute
+        requirements.get('data_lake', False),         # Schema-on-read flexibility
+        requirements.get('flexible_schema', False),   # Sources change often
+        requirements.get('raw_data_access', False),   # Analysts need raw data
+        requirements.get('sql_transforms', False),    # Transformations expressible in SQL
     ]
 
+    # Simple scoring — in practice, weight factors differently (e.g., data_privacy
+    # might be a hard constraint that overrides the score entirely).
     etl_score = sum(etl_factors)
     elt_score = sum(elt_factors)
 
@@ -419,13 +470,18 @@ class HybridPipeline:
         - Basic data type conversion
         - Essential field validation
         """
+        # PII masking MUST happen before data leaves the source system:
+        # once raw PII lands in the warehouse, it's much harder to control
+        # access and comply with GDPR/CCPA data-minimization requirements.
         query = """
         SELECT
             order_id,
-            -- PII masking (performed at source)
+            -- Hash at source so the warehouse never sees raw emails;
+            -- MD5 is sufficient for pseudonymization (not security).
             MD5(customer_email) AS customer_email_hash,
             SUBSTRING(phone, 1, 3) || '****' || SUBSTRING(phone, -4) AS phone_masked,
-            -- Basic transformation
+            -- Basic type casting here catches malformed data early,
+            -- before it consumes warehouse storage and compute.
             CAST(order_date AS DATE) AS order_date,
             CAST(amount AS DECIMAL(10, 2)) AS amount
         FROM orders
@@ -440,9 +496,9 @@ class HybridPipeline:
     def transform_in_warehouse(self):
         """
         Heavy T: Complex transformation in warehouse
-        - Joins
-        - Aggregations
-        - Window functions
+        - Joins, aggregations, and window functions are pushed to the DW
+          because it can parallelise these operations across many nodes —
+          doing this on the ETL server would be a single-machine bottleneck.
         """
         heavy_transform_sql = """
         CREATE TABLE mart.order_analysis AS
@@ -453,7 +509,9 @@ class HybridPipeline:
             COUNT(*) AS order_count,
             SUM(o.amount) AS total_amount,
             AVG(o.amount) AS avg_order_value,
-            -- Window function (efficient in DW)
+            -- 7-day rolling sum by segment: ROWS BETWEEN 6 PRECEDING AND
+            -- CURRENT ROW gives exactly 7 rows (today + 6 prior days).
+            -- This runs efficiently on columnar engines with sort keys.
             SUM(o.amount) OVER (
                 PARTITION BY c.customer_segment
                 ORDER BY o.order_date
@@ -468,13 +526,13 @@ class HybridPipeline:
 
     def run(self):
         """Execute hybrid pipeline"""
-        # Phase 1: ETL (Extract + Light Transform)
+        # Phase 1: ETL — light transforms (PII masking) on the ETL server
         data = self.extract_with_light_transform()
 
-        # Phase 2: Load to staging
+        # Phase 2: Load masked data to staging area
         self.load_to_staging(data)
 
-        # Phase 3: ELT (Heavy Transform in DW)
+        # Phase 3: ELT — heavy transforms in the DW engine
         self.transform_in_warehouse()
 ```
 
@@ -486,16 +544,23 @@ class HybridPipeline:
 
 ```python
 # Case 1: Privacy handling (GDPR compliance)
+# ETL is the right choice here because PII must be masked *before* leaving
+# the source environment — an ELT approach would land raw PII in the warehouse,
+# violating data-minimization principles even if access controls are in place.
 class GDPRCompliantETL:
     """GDPR-compliant ETL - Mask PII before loading"""
 
     def transform(self, df):
-        # Mask sensitive information (before loading)
+        # Mask on the ETL server so the warehouse never stores raw PII.
+        # Partial masking (keeping last 4 digits) balances privacy with
+        # the ability to verify records during support escalations.
         df['email'] = df['email'].apply(self.mask_email)
         df['ssn'] = df['ssn'].apply(lambda x: 'XXX-XX-' + x[-4:])
         df['credit_card'] = df['credit_card'].apply(lambda x: '**** **** **** ' + x[-4:])
 
-        # Transform before transferring data outside EU
+        # Consent filter: only transfer data for users who opted in.
+        # Applying this filter *before* cross-border transfer ensures
+        # compliance with GDPR Article 6 (lawful basis for processing).
         df = df[df['consent_given'] == True]
 
         return df
@@ -508,17 +573,23 @@ class GDPRCompliantETL:
 
 
 # Case 2: Legacy system integration
+# ETL is necessary here because mainframe fixed-width formats can't be
+# loaded directly into modern warehouses — they need structural parsing
+# on an intermediate server first.
 class LegacySystemETL:
     """Legacy mainframe data integration"""
 
     def transform(self, raw_data):
-        # Parse fixed-length records
+        # Fixed-width field offsets are defined by the mainframe COBOL copybook;
+        # even a 1-byte shift corrupts every downstream field.
         records = []
         for line in raw_data.split('\n'):
             record = {
                 'account_no': line[0:10].strip(),
                 'account_type': line[10:12],
-                'balance': int(line[12:24]) / 100,  # Decimal conversion
+                # Mainframes store currency as integers (no decimals),
+                # so divide by 100 to recover the true dollar amount.
+                'balance': int(line[12:24]) / 100,
                 'status': 'A' if line[24:25] == '1' else 'I',
                 'date': self.parse_legacy_date(line[25:33])
             }
@@ -607,6 +678,10 @@ GROUP BY user_id, DATE(timestamp), event_type;
 ### 6.2 Recommendations by Architecture
 
 ```python
+# Match the approach to the target system's strengths:
+# traditional DWs enforce schema on write (ETL fits naturally),
+# cloud DWs offer elastic compute (ELT leverages that),
+# data lakes accept any format (ELT with schema-on-read).
 architecture_recommendations = {
     "traditional_dw": {
         "approach": "ETL",
@@ -616,6 +691,8 @@ architecture_recommendations = {
     "cloud_dw": {
         "approach": "ELT",
         "tools": ["dbt", "Fivetran + dbt", "Airbyte + dbt"],
+        # Cloud DWs charge for compute-seconds — running transforms inside
+        # the DW avoids paying for a separate ETL cluster.
         "reason": "Utilize DW computing power, preserve raw data"
     },
     "data_lake": {
@@ -626,6 +703,8 @@ architecture_recommendations = {
     "hybrid": {
         "approach": "ETLT",
         "tools": ["Airflow + dbt", "Prefect + dbt"],
+        # Orchestrator (Airflow/Prefect) handles light ETL transforms
+        # (masking, validation), then dbt handles heavy SQL transforms in DW.
         "reason": "Sensitive data processing + DW transformation"
     }
 }

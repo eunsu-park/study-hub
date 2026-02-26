@@ -49,6 +49,9 @@ void buffer_put(BoundedBuffer* bb, int item) {
     pthread_mutex_lock(&bb->mutex);
 
     // 버퍼가 가득 찼으면 대기
+    // Why: "while" loop (not "if") protects against spurious wakeups — the POSIX
+    // spec allows cond_wait to return even without a signal, so the condition must
+    // be re-checked after every wakeup
     while (bb->count == BUFFER_SIZE) {
         printf("[생산자] 버퍼 가득 참. 대기...\n");
         pthread_cond_wait(&bb->not_full, &bb->mutex);
@@ -62,7 +65,9 @@ void buffer_put(BoundedBuffer* bb, int item) {
     printf("[생산자] 아이템 %d 생산 (버퍼: %d/%d)\n",
            item, bb->count, BUFFER_SIZE);
 
-    // 소비자에게 알림
+    // Why: signal wakes ONE waiting consumer — if no consumer is waiting, the
+    // signal is lost (not queued), but that's fine because the consumer will
+    // check the count when it next tries to get an item
     pthread_cond_signal(&bb->not_empty);
 
     pthread_mutex_unlock(&bb->mutex);
@@ -101,6 +106,8 @@ int buffer_get(BoundedBuffer* bb, int* item) {
 void buffer_set_done(BoundedBuffer* bb) {
     pthread_mutex_lock(&bb->mutex);
     bb->done = true;
+    // Why: broadcast (not signal) wakes ALL consumers — if only one is woken,
+    // the others remain blocked forever waiting for items that will never come
     pthread_cond_broadcast(&bb->not_empty);  // 모든 소비자 깨움
     pthread_mutex_unlock(&bb->mutex);
 }

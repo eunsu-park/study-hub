@@ -426,8 +426,11 @@ class MHD2D:
         self.y = np.linspace(0.5*self.dy, Ly - 0.5*self.dy, Ny)
         self.X, self.Y = np.meshgrid(self.x, self.y, indexing='ij')
 
-        # Staggered grid for magnetic field (CT)
-        # Bx at (i-1/2, j), By at (i, j-1/2)
+        # 자기장을 위한 엇갈린 그리드(Staggered Grid, CT):
+        # Bx는 x-면(i±1/2, j)에, By는 y-면(i, j±1/2)에 위치하여
+        # 이산 발산 ∂_x Bx + ∂_y By가 같은 셀의 반대 면의 값을 사용하도록 함 —
+        # 이것이 CT의 기하학적 핵심: 이 엇갈린 위치에서 Faraday 법칙을 통한
+        # 업데이트가 ∇·B = 0을 정확히 보존함
         self.x_Bx = np.linspace(0, Lx, Nx+1)
         self.y_By = np.linspace(0, Ly, Ny+1)
 
@@ -438,12 +441,17 @@ class MHD2D:
         self.mz = np.zeros((Nx, Ny))
         self.E = np.ones((Nx, Ny))
 
-        # Magnetic field (staggered)
+        # Bx는 x 방향으로 Nx+1개의 값을 가짐: 셀 중심이 아닌 셀 면에 위치하기 때문;
+        # 각 방향에서 항상 셀보다 면이 하나 더 많음 — 이 추가 인덱스가
+        # CT 업데이트가 각 셀의 양쪽 면을 모두 참조할 수 있게 해줌
         self.Bx = np.zeros((Nx+1, Ny))  # Face-centered in x
         self.By = np.zeros((Nx, Ny+1))  # Face-centered in y
         self.Bz = np.zeros((Nx, Ny))    # Cell-centered (if needed)
 
-        # Electric field (edge-centered)
+        # Ez는 셀 모서리에 위치 (Nx+1, Ny+1): 4개의 인접 모서리에서
+        # Ez의 차분으로 계산되는 이산 컬(curl)이 Faraday 법칙에서
+        # Bx와 By를 업데이트함 — Ez를 모서리에 배치함으로써
+        # 각 면의 플럭스가 일관되게 업데이트됨이 보장됨
         self.Ez = np.zeros((Nx+1, Ny+1))
 
         self.t = 0.0
@@ -468,11 +476,17 @@ class MHD2D:
         """Compute timestep based on CFL condition."""
         rho, vx, vy, vz, p, Bx, By, Bz = self.primitive_variables()
 
-        # Fast magnetosonic speed
+        # 고속 자기음파(Fast Magnetosonic) 속도 cf = √(cs² + vA²)를 사용:
+        # cs나 vA 단독이 아닌 이유는 cf가 MHD에서 가장 빠른 신호 속도이기 때문;
+        # CFL 조건은 어떤 정보도 타임스텝당 한 셀 이상 전파되어서는 안 된다고 요구하며,
+        # 고속 자기음파는 모든 파동 모드의 포락선(Envelope)임
         cs = np.sqrt(self.gamma * p / rho)
         va = np.sqrt((Bx**2 + By**2 + Bz**2) / rho)
         cf = np.sqrt(cs**2 + va**2)
 
+        # dt_x와 dt_y를 분리하여 제약: 2D에서는 두 조건 모두 동시에 만족해야 함 —
+        # min()을 취함으로써 두 방향 중 더 엄격한 조건을 강제하여
+        # 어느 방향의 파동도 업데이트를 앞서가지 못하도록 함
         dt_x = self.dx / np.max(np.abs(vx) + cf)
         dt_y = self.dy / np.max(np.abs(vy) + cf)
 
@@ -496,7 +510,9 @@ def update_magnetic_field_CT(self):
     # Need velocities and B fields at corners
     # Simple averaging (can be improved with Riemann solver values)
 
-    # Average vx to y-edges
+    # vx를 y-경계로 평균: Ez = vx*By - vy*Bx를 계산하기 위해 모서리에서 vx가 필요;
+    # 인접한 셀 값들을 공유 면으로 평균하는 것이 가장 단순하고 일관된
+    # 보간으로, 방향성 편향(Spurious Directional Bias)을 도입하지 않음
     vx_avg_y = 0.5 * (self.mx[:-1, :] / self.rho[:-1, :] + self.mx[1:, :] / self.rho[1:, :])
     vx_avg_y = np.pad(vx_avg_y, ((1,0), (0,0)), mode='wrap')  # Periodic
 
@@ -504,7 +520,10 @@ def update_magnetic_field_CT(self):
     vy_avg_x = 0.5 * (self.my[:, :-1] / self.rho[:, :-1] + self.my[:, 1:] / self.rho[:, 1:])
     vy_avg_x = np.pad(vy_avg_x, ((0,0), (1,0)), mode='wrap')
 
-    # Average Bx to corners (from faces)
+    # Bx는 x-면에 위치하므로 모서리로 평균해야 함; y 방향의 ±1/2 면 이웃이
+    # 모서리 값을 제공 — 이 평균은 단순하지만, 실제 생산 코드에서는
+    # 전류 시트에서의 수치 소산(Numerical Dissipation)을 줄이기 위해
+    # Riemann 솔버 결과로부터의 상류 추정값으로 대체됨
     Bx_corner = 0.5 * (self.Bx[:, :-1] + self.Bx[:, 1:])
     Bx_corner = np.pad(Bx_corner, ((0,0), (0,1)), mode='wrap')
 
@@ -512,17 +531,20 @@ def update_magnetic_field_CT(self):
     By_corner = 0.5 * (self.By[:-1, :] + self.By[1:, :])
     By_corner = np.pad(By_corner, ((0,1), (0,0)), mode='wrap')
 
-    # Compute Ez at corners
-    # This is simplified; production codes use Riemann solver at faces
+    # Ez = vx*By - vy*Bx를 모서리에서 계산: 이것은 이상 MHD에서
+    # Ohm의 법칙 -v×B의 z 성분이며, 모서리에 배치하는 것이 CT의 핵심 —
+    # 각 면의 플럭스가 그 면을 경계 짓는 두 모서리의 Ez 컬(Curl)로 업데이트되어,
+    # 이산 ∇·B = 0이 모서리 Ez 값의 텔레스코핑(Telescoping) 합으로 보존됨
+    # (단순화; 생산 코드는 면에서 Riemann 솔버를 사용)
     self.Ez = vx_avg_y * By_corner - vy_avg_x * Bx_corner
 
-    # Update Bx using Ez (discrete Faraday's law)
-    # ∂Bx/∂t = -∂Ez/∂y
+    # ∂Bx/∂t = -∂Ez/∂y: 인접한 모서리에서 Ez를 차분하면 일관된 이산
+    # Faraday 법칙이 됨 — 부호는 위쪽 모서리의 양의 Ez가 Bx를 감소시키도록 보장
+    # (∂B/∂t = -∇×E의 오른손 법칙과 일치)
     dt = self.compute_dt()
     self.Bx[:, :] -= dt / self.dy * (self.Ez[:, 1:] - self.Ez[:, :-1])
 
-    # Update By
-    # ∂By/∂t = ∂Ez/∂x
+    # ∂By/∂t = +∂Ez/∂x (Bx 업데이트와 반대 부호, 반대칭 컬(Anti-Symmetric Curl)로부터)
     self.By[:, :] += dt / self.dx * (self.Ez[1:, :] - self.Ez[:-1, :])
 ```
 
@@ -587,7 +609,10 @@ def init_orszag_tang(mhd, gamma=5/3):
     """Initialize Orszag-Tang vortex."""
     X, Y = mhd.X, mhd.Y
 
-    # Density and pressure
+    # ρ = γ²이고 p = γ는 Orszag-Tang 정규화에서 유래: 이 값에서
+    # Alfvén 마하 수가 O(1)이 되어, 운동 에너지와 자기 에너지가 비슷한
+    # 흥미로운 체제에 문제를 위치시킴 — 이 β~1 선택은 진화 과정에서
+    # 충격파와 전류 시트가 모두 형성되도록 보장함
     mhd.rho[:, :] = gamma**2
     p = gamma * np.ones_like(mhd.rho)
 
@@ -600,11 +625,19 @@ def init_orszag_tang(mhd, gamma=5/3):
     mhd.my = mhd.rho * vy
     mhd.mz = mhd.rho * vz
 
-    # Magnetic field (staggered grid)
+    # 자기장을 엇갈린 그리드(Staggered Grid)에서 초기화하여 CT가 즉시
+    # 발산이 없는 시작점을 갖도록 함; 셀 중심이 아닌 면 위치
+    # x_{i-1/2}에서 Bx를 평가함으로써 초기 ∇·B가 이산 CT 의미에서
+    # 거의 0이 아니라 정확히 0이 됨
     # Bx at (i-1/2, j)
     X_Bx, Y_Bx = np.meshgrid(mhd.x_Bx, mhd.y, indexing='ij')
+    # 가우시안 단위계의 1/√(4π) 정규화는 기준 밀도에서 Alfvén 속도 vA = 1이 되도록 하여,
+    # 실행 간 비교를 단순화함
     mhd.Bx[:, :] = -np.sin(2 * np.pi * Y_Bx) / np.sqrt(4 * np.pi)
 
+    # By는 sin(4πX)를 사용 (Bx에 비해 두 배의 주파수): x와 y 방향의 대칭을 깨기 위함 —
+    # 순수하게 대칭적인 초기 장은 영원히 대칭을 유지하여 테스트를 흥미롭게 만드는
+    # 축 이탈(Off-Axis) 재결합을 놓치게 됨
     # By at (i, j-1/2)
     X_By, Y_By = np.meshgrid(mhd.x, mhd.y_By, indexing='ij')
     mhd.By[:, :] = np.sin(4 * np.pi * X_By) / np.sqrt(4 * np.pi)
@@ -612,7 +645,9 @@ def init_orszag_tang(mhd, gamma=5/3):
     # Bz (cell-centered, zero)
     mhd.Bz[:, :] = 0.0
 
-    # Total energy
+    # 총 에너지를 계산하기 전에 엇갈린 Bx, By를 셀 중심으로 평균:
+    # 에너지는 엇갈린 B 표현과 일치해야 함; 그렇지 않으면 t=0에서
+    # 비물리적 에너지 불일치가 발생하여 가짜 흐름(Spurious Flows)을 유발할 수 있음
     Bx_cc = 0.5 * (mhd.Bx[:-1, :] + mhd.Bx[1:, :])
     By_cc = 0.5 * (mhd.By[:, :-1] + mhd.By[:, 1:])
     B2 = Bx_cc**2 + By_cc**2
@@ -703,8 +738,13 @@ def init_kelvin_helmholtz(mhd, V0=1.0, a=0.1, dv=0.01, B0=0.0):
     # Pressure (uniform)
     p = 1.0 * np.ones_like(mhd.rho)
 
-    # Velocity shear
+    # tanh 프로파일은 특성 두께 a를 가진 매끄러운 전단을 제공;
+    # a=0.1을 사용하면 큰 k에서 빠른 KH 성장률 γ_KH ~ k*V0/2를 유지하면서
+    # 전단층이 그리드에서 해상도를 갖도록 함
     vx = -V0 * np.tanh(Y / a)
+    # 작은 정현파 섭동이 가장 빠르게 성장하는 KH 모드(k = 2π)를 씨앗으로 제공;
+    # dv << V0로 설정하여 시스템이 선형 체제에서 시작되도록 하여
+    # 비선형 포화(Nonlinear Saturation) 전에 지수 성장을 관찰할 수 있음
     vy = dv * np.sin(2 * np.pi * X)
     vz = np.zeros_like(vx)
 
@@ -712,7 +752,9 @@ def init_kelvin_helmholtz(mhd, V0=1.0, a=0.1, dv=0.01, B0=0.0):
     mhd.my = mhd.rho * vy
     mhd.mz = mhd.rho * vz
 
-    # Magnetic field (uniform in x)
+    # 흐름에 정렬된 균일한 Bx 장: 자기 장력이 KH 롤에 의한 자기력선 휨에 저항 —
+    # vA = B0/√(μ₀ρ) > V0이면 안정화가 일어나므로,
+    # B0를 0에서 2로 변화시키면 불안정에서 안정 체제로의 전환을 포함함
     mhd.Bx[:, :] = B0
     mhd.By[:, :] = 0.0
     mhd.Bz[:, :] = 0.0

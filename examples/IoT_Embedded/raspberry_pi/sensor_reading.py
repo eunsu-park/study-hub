@@ -20,7 +20,8 @@ import time
 import json
 from datetime import datetime
 
-# Try to import DHT library
+# Why: Graceful degradation to simulation mode lets developers test the code
+# on any machine (laptop, CI server) without physical hardware attached.
 try:
     import adafruit_dht
     import board
@@ -75,7 +76,8 @@ class SensorReader:
                 }
 
         except RuntimeError as e:
-            # DHT sensors occasionally fail to read
+            # Why: DHT11/22 sensors use a single-wire protocol that is timing-sensitive.
+            # Occasional read failures are expected behavior, not bugs — retry on next interval.
             return {
                 "status": "error",
                 "message": str(e),
@@ -110,7 +112,9 @@ def main():
             print(f"Time:        {data['timestamp']}")
             print("-" * 40)
 
-            # Save to JSON file (optional)
+            # Why: Append-mode JSONL (one JSON object per line) is ideal for IoT logging:
+            # crash-safe (no partial writes corrupt earlier data), easy to parse line-by-line,
+            # and works well with tools like jq.
             with open("sensor_log.json", "a") as f:
                 f.write(json.dumps(data) + "\n")
 

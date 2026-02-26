@@ -2,9 +2,24 @@
 
 [Previous: Pandas Basics](./03_Pandas_Basics.md) | [Next: Pandas Advanced](./05_Pandas_Advanced.md)
 
-## Overview
+---
 
-This covers core Pandas data manipulation techniques including filtering, sorting, grouping, and merging. These techniques are most commonly used in practical data analysis.
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Apply conditional, string-based, and `query`-method filtering to select rows from a DataFrame
+2. Implement single-column and multi-column sorting with custom ascending/descending orders
+3. Demonstrate GroupBy operations including aggregation, transformation, and group filtering
+4. Apply named aggregations with the `agg` method to compute multiple statistics per group
+5. Implement SQL-style joins (inner, left, right, outer) using `merge` and `concat`
+6. Compare `pivot`, `pivot_table`, `melt`, `stack`, and `unstack` for reshaping data
+7. Identify and remove duplicate rows using `duplicated` and `drop_duplicates`
+8. Apply cross-tabulation to summarize relationships between categorical variables
+
+---
+
+Loading data is only the beginning -- the real analytical power comes from reshaping, combining, and summarizing it. Filtering rows, grouping by categories, joining multiple tables, and pivoting between wide and long formats are the operations you will use every day as a data analyst. Mastering these manipulation techniques lets you answer complex business questions with just a few lines of code.
 
 ---
 
@@ -60,7 +75,7 @@ print(df[df['name'].str.startswith('A')])
 print(df[df['name'].str.endswith('e')])
 
 # Regular expression
-print(df[df['name'].str.match(r'^[A-C]')])  # A, B, C로 시작
+print(df[df['name'].str.match(r'^[A-C]')])  # starts with A, B, or C
 ```
 
 ### 1.4 query Method
@@ -126,8 +141,8 @@ print(df.sort_values(['age', 'score'], ascending=[True, False]))
 # Missing value position
 df_na = df.copy()
 df_na.loc[0, 'age'] = None
-print(df_na.sort_values('age', na_position='first'))  # 결측값 맨 앞
-print(df_na.sort_values('age', na_position='last'))   # 결측값 맨 뒤
+print(df_na.sort_values('age', na_position='first'))  # missing values at the front
+print(df_na.sort_values('age', na_position='last'))   # missing values at the end
 
 # In-place sorting
 df.sort_values('age', inplace=True)
@@ -168,11 +183,11 @@ df['rank'] = df['score'].rank(ascending=False)
 print(df)
 
 # Ranking methods
-# method='average': 평균 순위 (기본값)
-# method='min': 최소 순위
-# method='max': 최대 순위
-# method='first': 먼저 나온 순서대로
-# method='dense': 밀집 순위 (간격 없음)
+# method='average': average rank (default)
+# method='min': minimum rank
+# method='max': maximum rank
+# method='first': by order of appearance
+# method='dense': dense rank (no gaps)
 
 df['rank_min'] = df['score'].rank(ascending=False, method='min')
 df['rank_dense'] = df['score'].rank(ascending=False, method='dense')
@@ -198,7 +213,7 @@ grouped = df.groupby('department')
 
 # Check groups
 print(grouped.groups)
-print(grouped.ngroups)  # 그룹 수
+print(grouped.ngroups)  # number of groups
 
 # Get specific group
 print(grouped.get_group('IT'))
@@ -289,7 +304,7 @@ df = pd.DataFrame({
 })
 
 # Filter groups satisfying condition
-# 평균 급여가 55000 이상인 부서
+# Departments with average salary >= 55000
 result = df.groupby('department').filter(lambda x: x['salary'].mean() >= 55000)
 print(result)
 ```
@@ -366,7 +381,7 @@ bonuses = pd.DataFrame({
 result = pd.merge(employees, bonuses, left_index=True, right_index=True, how='outer')
 print(result)
 
-# join 메서드 (인덱스 기반)
+# join method (index-based)
 result = employees.join(bonuses, how='outer')
 print(result)
 ```
@@ -401,10 +416,10 @@ result = pd.concat([df1, df2], keys=['first', 'second'])
 print(result)
 ```
 
-### 4.5 append (행 추가) - deprecated in pandas 2.0
+### 4.5 append (add rows) - deprecated in pandas 2.0
 
 ```python
-# concat 사용 권장
+# Use concat instead
 new_row = pd.DataFrame({'A': [9], 'B': [10]})
 result = pd.concat([df1, new_row], ignore_index=True)
 ```
@@ -475,7 +490,7 @@ df_wide = pd.DataFrame({
     'science': [85, 90]
 })
 
-# Wide → Long 변환
+# Wide → Long conversion
 df_long = pd.melt(df_wide,
                   id_vars=['name'],
                   value_vars=['math', 'english', 'science'],
@@ -526,7 +541,7 @@ df = pd.DataFrame({
 # Check duplicates
 print(df.duplicated())
 print(df.duplicated(subset=['A', 'B']))
-print(df[df.duplicated(keep=False)])  # 모든 Duplicates 행
+print(df[df.duplicated(keep=False)])  # all duplicate rows
 
 # Count duplicates
 print(df.duplicated().sum())
@@ -534,8 +549,8 @@ print(df.duplicated().sum())
 # Remove duplicates
 print(df.drop_duplicates())
 print(df.drop_duplicates(subset=['A']))
-print(df.drop_duplicates(subset=['A'], keep='last'))  # 마지막 유지
-print(df.drop_duplicates(subset=['A'], keep=False))   # 모든 Duplicates 제거
+print(df.drop_duplicates(subset=['A'], keep='last'))  # keep the last occurrence
+print(df.drop_duplicates(subset=['A'], keep=False))   # remove all duplicates
 ```
 
 ---
@@ -566,6 +581,137 @@ ct = pd.crosstab(df['gender'], df['department'],
                  values=df['salary'], aggfunc='mean')
 print(ct)
 ```
+
+---
+
+## 8. Pandas 2.0+ PyArrow Backend
+
+Pandas 2.0 (released April 2023) introduced first-class support for Apache Arrow as a backend dtype system. This is the biggest internal change since Pandas was created -- it replaces the legacy NumPy-based memory layout with Arrow's columnar format for supported types. Understanding when and how to use the PyArrow backend is essential for working with large datasets efficiently.
+
+### 8.1 Why PyArrow?
+
+The traditional Pandas backend uses NumPy arrays, which have several limitations:
+- **No native nullable integers/floats**: A single `NaN` in an integer column forces the entire column to `float64`, wasting memory and introducing subtle bugs.
+- **Strings stored as Python objects**: Each string is a separate Python object on the heap, causing high memory overhead and slow operations.
+- **No zero-copy reads**: Loading Parquet files requires copying data from Arrow to NumPy format.
+
+PyArrow solves all three problems with a columnar, cache-friendly memory layout.
+
+### 8.2 Enabling the PyArrow Backend
+
+```python
+import pandas as pd
+import numpy as np
+
+# Method 1: Read directly with PyArrow backend
+# Why use engine="pyarrow"? It avoids the Arrow-to-NumPy copy,
+# keeping data in Arrow format throughout the pipeline.
+# df = pd.read_csv("data.csv", dtype_backend="pyarrow")
+# df = pd.read_parquet("data.parquet", dtype_backend="pyarrow")
+
+# Method 2: Create a DataFrame with explicit Arrow types
+df_arrow = pd.DataFrame({
+    'id': pd.array([1, 2, 3, None], dtype="int64[pyarrow]"),
+    'name': pd.array(["Alice", "Bob", None, "Diana"], dtype="string[pyarrow]"),
+    'score': pd.array([95.5, None, 88.0, 92.3], dtype="float64[pyarrow]"),
+})
+
+print(df_arrow.dtypes)
+# id        int64[pyarrow]
+# name     string[pyarrow]
+# score   float64[pyarrow]
+
+print(df_arrow)
+# Note: None values are preserved as NA without type coercion
+```
+
+### 8.3 Nullable Types: No More NaN Coercion
+
+```python
+# --- Traditional NumPy backend: NaN forces float conversion ---
+df_numpy = pd.DataFrame({'values': [1, 2, None, 4]})
+print(f"NumPy dtype: {df_numpy['values'].dtype}")  # float64 (forced!)
+print(df_numpy['values'].tolist())  # [1.0, 2.0, nan, 4.0]
+
+# --- PyArrow backend: integers stay integers ---
+df_pa = pd.DataFrame({'values': pd.array([1, 2, None, 4], dtype="int64[pyarrow]")})
+print(f"PyArrow dtype: {df_pa['values'].dtype}")  # int64[pyarrow]
+print(df_pa['values'].tolist())  # [1, 2, <NA>, 4]
+
+# Why this matters: In data pipelines, integer IDs (user_id, order_id)
+# should never silently become floats. With PyArrow, 1 stays 1, not 1.0.
+# This prevents bugs in joins and groupby operations where 1 != 1.0.
+```
+
+### 8.4 String Performance with PyArrow
+
+```python
+import time
+
+# Create a large string Series
+n = 500_000
+strings_object = pd.Series(["hello_world_" + str(i) for i in range(n)], dtype="object")
+strings_arrow = pd.Series(
+    ["hello_world_" + str(i) for i in range(n)], dtype="string[pyarrow]"
+)
+
+# Memory comparison
+print(f"object dtype memory:       {strings_object.memory_usage(deep=True) / 1e6:.1f} MB")
+print(f"string[pyarrow] memory:    {strings_arrow.memory_usage(deep=True) / 1e6:.1f} MB")
+
+# Speed comparison: str.contains
+start = time.time()
+_ = strings_object.str.contains("999")
+time_object = time.time() - start
+
+start = time.time()
+_ = strings_arrow.str.contains("999")
+time_arrow = time.time() - start
+
+print(f"\nstr.contains speed:")
+print(f"  object dtype:       {time_object:.3f}s")
+print(f"  string[pyarrow]:    {time_arrow:.3f}s")
+print(f"  Speedup:            {time_object / time_arrow:.1f}x")
+
+# Why PyArrow strings are faster: Arrow stores strings in a contiguous
+# buffer with an offset array, enabling SIMD-accelerated operations.
+# Python object strings are scattered across the heap, causing cache misses.
+```
+
+### 8.5 Parquet I/O with PyArrow Engine
+
+```python
+# Parquet is Arrow's native file format -- zero-copy reads are possible
+# when using the PyArrow backend, avoiding expensive serialization.
+
+# Write Parquet
+df_sample = pd.DataFrame({
+    'id': pd.array(range(1000), dtype="int64[pyarrow]"),
+    'category': pd.array(["A", "B", "C"] * 333 + ["A"], dtype="string[pyarrow]"),
+    'value': pd.array(np.random.randn(1000), dtype="float64[pyarrow]"),
+})
+
+df_sample.to_parquet("sample.parquet", engine="pyarrow")
+
+# Read Parquet with PyArrow backend -- near zero-copy
+df_loaded = pd.read_parquet("sample.parquet", dtype_backend="pyarrow")
+print(df_loaded.dtypes)
+print(f"Memory usage: {df_loaded.memory_usage(deep=True).sum() / 1e3:.1f} KB")
+```
+
+### 8.6 When to Use the PyArrow Backend
+
+| Scenario | Recommendation | Why |
+|----------|---------------|-----|
+| Large datasets (>100K rows) | Use PyArrow | Lower memory, faster ops |
+| String-heavy data (logs, text) | Use PyArrow | 2-10x less memory, faster `.str` |
+| Data with missing integers | Use PyArrow | Avoids float coercion |
+| Parquet-based pipelines | Use PyArrow | Zero-copy reads |
+| Small datasets (<10K rows) | Either works | Overhead is negligible |
+| Legacy code with NumPy interop | Stick with NumPy | Some libraries expect NumPy arrays |
+| GPU workflows (cuDF) | Use PyArrow | cuDF uses Arrow format natively |
+
+**Compatibility note**: As of Pandas 2.2+, most operations work seamlessly with PyArrow-backed DataFrames. However, some third-party libraries may require `.to_numpy()` conversion. Always test your full pipeline before migrating.
 
 ---
 

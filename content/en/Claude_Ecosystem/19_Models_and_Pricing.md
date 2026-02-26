@@ -13,14 +13,17 @@ Understanding Claude's model tiers, pricing structure, and cost optimization str
 - Familiarity with token-based pricing concepts
 - Experience making API calls to Claude
 
-**Learning Objectives**:
-- Compare Claude model tiers by intelligence, speed, cost, and capabilities
-- Calculate costs for API usage across different models
-- Implement prompt caching to reduce costs by up to 90%
-- Use the Batch API for 50% savings on non-time-sensitive work
-- Design model selection strategies for multi-tier architectures
-- Estimate costs for common development and production workflows
-- Choose appropriate subscription plans for individual and team use
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Compare Claude model tiers by intelligence, speed, cost, and capabilities
+2. Calculate costs for API usage across different models
+3. Implement prompt caching to reduce costs by up to 90%
+4. Use the Batch API for 50% savings on non-time-sensitive work
+5. Design model selection strategies for multi-tier architectures
+6. Estimate costs for common development and production workflows
+7. Choose appropriate subscription plans for individual and team use
 
 ---
 

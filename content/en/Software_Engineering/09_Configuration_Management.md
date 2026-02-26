@@ -13,15 +13,18 @@ A software system is never finished — it is continuously changed, extended, an
 - Understanding of the software development lifecycle (Lesson 02)
 - General programming experience
 
-**Learning Objectives**:
-- Define Software Configuration Management and explain its role in software engineering
-- Identify and classify configuration items and establish baselines
-- Describe and compare branching strategies for version control
-- Explain build management and the properties of a reproducible build
-- Apply semantic versioning and design a release process
-- Distinguish the steps in a formal change management process
-- Describe environment management and its relationship to infrastructure as code
-- Manage dependencies safely using lockfiles, pinning, and vulnerability scanning
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define Software Configuration Management and explain its role in software engineering
+2. Identify and classify configuration items and establish baselines
+3. Describe and compare branching strategies for version control
+4. Explain build management and the properties of a reproducible build
+5. Apply semantic versioning and design a release process
+6. Distinguish the steps in a formal change management process
+7. Describe environment management and its relationship to infrastructure as code
+8. Manage dependencies safely using lockfiles, pinning, and vulnerability scanning
 
 ---
 
@@ -1005,6 +1008,64 @@ A SaaS product is at version `2.7.3`. Determine the appropriate next version num
   - "Trunk Based Development" — https://trunkbaseddevelopment.com/
   - Reproducible Builds — https://reproducible-builds.org/
   - NTIA Software Bill of Materials — https://www.ntia.gov/sbom
+
+---
+
+## Exercises
+
+### Exercise 1: Identify Configuration Items
+
+You are setting up SCM for a new Python FastAPI service that uses PostgreSQL, is containerized with Docker, deployed to AWS via Terraform, and has API documentation in OpenAPI format.
+
+(a) List at least 12 configuration items, organized by category (source code, build artifacts, documentation, configuration files, infrastructure code).
+(b) For each CI, specify its version control strategy (Git repository, artifact registry, or secrets manager) and justify your choice.
+(c) Identify two artifacts that should NOT be version-controlled and explain why. Describe how each should be managed instead.
+
+### Exercise 2: Design a Branching Strategy
+
+A team of six developers builds a SaaS HR platform. They currently release monthly but want to move to weekly releases within three months.
+
+(a) Design a branching strategy appropriate for their current monthly release cadence. Describe each long-lived branch and its purpose.
+(b) A production security vulnerability is discovered. Walk through the exact Git commands (branch creation, fix, tag, merge) to create and deploy a hotfix without disrupting the next release in progress.
+(c) List three technical prerequisites the team must have in place before safely switching to trunk-based development.
+
+### Exercise 3: Semantic Versioning Decisions
+
+A library is currently at version `3.2.1`. Determine the correct next version number for each change, and explain which SemVer rule applies.
+
+(a) A bug fix corrects an off-by-one error in date range calculation.
+(b) A new `batch_process()` method is added to the public API; existing methods are unchanged.
+(c) The `process()` method's return type changes from `dict` to a typed `Result` dataclass — existing callers that unpack the dict will break.
+(d) A deprecated `legacy_process()` method (deprecated since `3.0.0`) is removed.
+(e) An internal implementation detail changes to use a faster algorithm; public API is identical.
+
+### Exercise 4: Analyze Dependency Risk
+
+A Python web application's `pyproject.toml` declares:
+
+```toml
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = ">=0.100,<1.0"
+sqlalchemy = "^2.0"
+pydantic = "*"
+httpx = "^0.25"
+```
+
+(a) Rank the five dependencies from highest to lowest version-resolution risk. Justify each ranking.
+(b) The `pydantic` specifier `"*"` resolves to version `1.10.14` today. Six months later, `pydantic 2.0` is released with a breaking API. What risk does this create, and how does a lockfile mitigate it?
+(c) Write the three steps needed to safely upgrade `sqlalchemy` from `2.0.x` to `2.1.x` in a team that uses Poetry, Git, and a CI pipeline with automated tests.
+
+### Exercise 5: Write a Change Request
+
+Your production API currently uses HTTP Basic Authentication. The security team has mandated migration to OAuth 2.0 Bearer tokens. This change affects the authentication middleware, all API clients (internal and external), the developer documentation, and three third-party integrations.
+
+Write a complete Change Request document including:
+- Change description and business justification
+- Affected configuration items (list at least six)
+- Impact analysis (schedule, effort, risk)
+- Rollback plan
+- Verification and acceptance criteria
 
 ---
 

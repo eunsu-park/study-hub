@@ -589,39 +589,58 @@ class SolovevEquilibrium:
 
     def compute_psi(self, R, Z):
         """Compute poloidal flux function (Solovev solution)"""
-        # Simplified Solovev: circular, low beta
+        # Solovev solution linearizes the GS equation by choosing p(ψ)=0 and
+        # F²(ψ) = F₀² + cψ (linear in ψ), which makes the GS equation itself
+        # linear and therefore admits an exact polynomial solution in (R,Z).
+        # This is the simplest non-trivial analytic equilibrium: valid when
+        # β ≪ 1 and the cross-section is nearly circular (hence "low beta").
         c = -2 * self.mu0 * self.Ip / (np.pi * self.a**2)
 
-        # Normalized coordinates
+        # Dividing by κ in Z scales the elliptical cross-section back to
+        # circular, so a single radial coordinate r_norm correctly labels
+        # flux surfaces for elongated plasmas under the Solovev assumption.
         r_norm = np.sqrt((R - self.R0)**2 + (Z/self.kappa)**2) / self.a
 
-        # Flux function (normalized)
+        # The quadratic dependence on r_norm reflects that the Solovev ψ is
+        # a second-order polynomial; higher-order terms would require a more
+        # general (non-linear) free-function prescription.
         psi = -c * self.R0**2 * self.a**2 * r_norm**2 / 8
 
         return psi
 
     def compute_B(self, R, Z):
         """Compute magnetic field components"""
-        # Numerical derivatives
+        # Centered finite differences are used for ∂ψ/∂R and ∂ψ/∂Z because
+        # they achieve second-order accuracy with only two function evaluations,
+        # which is sufficient given the smooth Solovev flux function.
         dR = 0.001
         dZ = 0.001
 
         dpsi_dR = (self.compute_psi(R+dR, Z) - self.compute_psi(R-dR, Z)) / (2*dR)
         dpsi_dZ = (self.compute_psi(R, Z+dZ) - self.compute_psi(R, Z-dZ)) / (2*dZ)
 
+        # The 1/R factors arise from the cylindrical definition B_R = -(1/R)∂ψ/∂Z
+        # and B_Z = (1/R)∂ψ/∂R — they ensure ∇·B = 0 in toroidal geometry.
         BR = -1/R * dpsi_dZ
         BZ = 1/R * dpsi_dR
+        # B_φ ∝ 1/R follows from Ampère's law applied to the toroidal current-
+        # free vacuum region; Bt0*R0 is the constant F = R*B_φ on axis.
         Bphi = self.Bt0 * self.R0 / R
 
         return BR, BZ, Bphi
 
     def compute_q(self, psi_vals):
         """Compute safety factor profile"""
-        # Simplified q-profile for circular equilibrium
+        # ψ_edge gives the flux label of the Last Closed Flux Surface (LCFS);
+        # normalizing by it maps ψ onto [0,1] so that ψ_norm = 0 at the axis
+        # and ψ_norm = 1 at the plasma boundary, independent of current level.
         psi_edge = self.compute_psi(self.R0 + self.a, 0)
         psi_norm = psi_vals / psi_edge
 
-        # Parabolic q-profile
+        # A parabolic q(ψ) is the simplest profile consistent with a peaked
+        # current density on axis; in more accurate equilibria q(ψ) is found
+        # self-consistently from the current profile, but this suffices for
+        # illustrating the safety-factor structure without a full GS solve.
         q0 = 1.0  # On-axis q
         qa = 3.0  # Edge q
 
@@ -909,10 +928,16 @@ class GradShafranovSolver:
         nZ = self.nZ
         N = nR * nZ
 
-        # Build operator matrix (constant for linear problem)
+        # The operator matrix A encodes Δ* (the Grad-Shafranov operator) and
+        # does NOT depend on ψ, so it is built once and reused every iteration
+        # — avoiding an expensive rebuild at each Picard step.
         A = self.build_operator_matrix()
 
-        # Picard iteration
+        # Picard (fixed-point) iteration: the GS equation is non-linear because
+        # p(ψ) and F(ψ) depend on the solution itself.  Each step freezes those
+        # free functions at the current ψ^(n), solves the resulting LINEAR system
+        # for ψ^(n+1), and repeats.  Convergence is guaranteed for well-posed
+        # pressure/current profiles but may be slow for strongly non-linear cases.
         for iteration in range(max_iter):
             psi_old = self.psi.copy()
 
@@ -924,16 +949,25 @@ class GradShafranovSolver:
                     R = self.R[j]
                     psi_val = self.psi[i, j]
 
-                    # Numerical derivatives of p and F
+                    # Centered finite difference in ψ-space gives the dp/dψ and
+                    # dF/dψ source terms at the current-iteration flux value;
+                    # the small step dpsi=1e-6 avoids cancellation error while
+                    # remaining within the smooth part of the free functions.
                     dpsi = 1e-6
                     dpdpsi = (self.p_func(psi_val + dpsi) - self.p_func(psi_val - dpsi)) / (2*dpsi)
 
                     F_val = self.F_func(psi_val)
                     dFdpsi = (self.F_func(psi_val + dpsi) - self.F_func(psi_val - dpsi)) / (2*dpsi)
 
+                    # The R² weight in the pressure term comes directly from the
+                    # GS equation: -μ₀R²(dp/dψ) drives the poloidal field
+                    # curvature that balances plasma pressure in the torus.
                     rhs[i, j] = -self.mu0 * R**2 * dpdpsi - F_val * dFdpsi
 
-            # Apply boundary conditions
+            # Dirichlet boundary condition ψ=0 at the domain edges represents
+            # a "vacuum" boundary where no flux crosses; this is the simplest
+            # fixed-boundary assumption used in free-boundary GS codes before
+            # the coil currents are iterated.
             rhs[0, :] = psi_boundary
             rhs[-1, :] = psi_boundary
             rhs[:, 0] = psi_boundary
@@ -944,7 +978,9 @@ class GradShafranovSolver:
             psi_flat = spsolve(A, rhs_flat)
             self.psi = psi_flat.reshape((nZ, nR))
 
-            # Check convergence
+            # L∞ norm of the update is used here because a single large
+            # deviation anywhere (e.g., near the axis) would be missed by an
+            # average norm — max-norm catches the worst-case residual.
             error = np.max(np.abs(self.psi - psi_old))
 
             if iteration % 10 == 0:
@@ -1071,7 +1107,9 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
     r = np.linspace(0, a, nr)
     dr = r[1] - r[0]
 
-    # Volume element in torus: dV = 2π R₀ · 2πr dr
+    # dV = 2πR₀ · 2πr dr is the toroidal volume element in the large-aspect-
+    # ratio limit: the 2πR₀ factor accounts for the full toroidal circuit while
+    # 2πr dr sweeps a thin annular ring in the poloidal cross-section.
     def volume_element(r_val):
         return 4 * np.pi**2 * R0 * r_val * dr
 
@@ -1080,7 +1118,9 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
     Bt_vals = np.array([B_profiles['Bt'](r_val) for r_val in r])
     Bp_vals = np.array([B_profiles['Bp'](r_val) for r_val in r])
 
-    # Volume integrals
+    # Weighted sums approximate the volume integral ∫ f dV / ∫ dV;
+    # using the explicit dV weight makes the code's discretization transparent
+    # and avoids hidden normalization errors when the grid is non-uniform.
     V_total = np.sum([volume_element(r[i]) for i in range(nr)])
 
     p_avg = np.sum([p_vals[i] * volume_element(r[i]) for i in range(nr)]) / V_total
@@ -1090,18 +1130,27 @@ def compute_beta(R0, a, p_profile, B_profiles, nr=100):
 
     mu0 = 4*np.pi*1e-7
 
-    # Poloidal beta
+    # β_p uses <B_p²> rather than B_p(0) because poloidal beta captures how
+    # well the plasma pressure is balanced by its own poloidal field — the
+    # figure of merit for current-driven stability limits.
     beta_p = 2 * mu0 * p_avg / Bp2_avg
 
-    # Toroidal beta
+    # β_t uses <B_t²> ≈ B_t0² because toroidal beta is the engineering limit
+    # for the external vacuum field that the coils must produce; it directly
+    # enters the Troyon empirical beta limit.
     beta_t = 2 * mu0 * p_avg / Bt2_avg
 
     # For beta_N, need plasma current
     # I_p = ∮ J·dl ~ B_p * circumference / μ₀
     Bp_edge = Bp_vals[-1]
+    # Ampère's law on a circle of radius a: I_p = (2πa B_p(a)) / μ₀
+    # This avoids integrating the current density profile directly, relying
+    # instead on the boundary value of the poloidal field.
     Ip = 2 * np.pi * a * Bp_edge / mu0
 
-    # Troyon normalized beta
+    # β_N normalizes β_t by I_p/(aB_t) so that the Troyon limit β_N < 2.8–3.5
+    # is machine-independent: the factor I_p/(aB_t) scales with the plasma's
+    # ability to drive kink-stabilizing current relative to the applied field.
     Bt_axis = Bt_vals[0]
     beta_N = beta_t * 100 / (Ip / (a * Bt_axis))  # percentage
 

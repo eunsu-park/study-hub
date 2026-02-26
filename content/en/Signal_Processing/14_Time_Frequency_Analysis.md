@@ -10,16 +10,19 @@ The Fourier transform reveals what frequencies are present in a signal, but not 
 
 **Prerequisites**: DFT/FFT, windowing, convolution, basic linear algebra
 
-**Learning Objectives**:
-- Explain why the Fourier transform is inadequate for non-stationary signals
-- Derive and compute the STFT and understand the time-frequency resolution tradeoff
-- State and interpret the Heisenberg uncertainty principle for signals
-- Compute and interpret spectrograms
-- Understand the Wigner-Ville distribution and its properties
-- Define and compute the Continuous Wavelet Transform (CWT) using standard mother wavelets
-- Explain multiresolution analysis and implement the Discrete Wavelet Transform (DWT)
-- Apply Mallat's algorithm for wavelet decomposition and reconstruction
-- Compare STFT and wavelet approaches for real-world signal analysis
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why the Fourier transform is inadequate for non-stationary signals
+2. Derive and compute the STFT and understand the time-frequency resolution tradeoff
+3. State and interpret the Heisenberg uncertainty principle for signals
+4. Compute and interpret spectrograms
+5. Understand the Wigner-Ville distribution and its properties
+6. Define and compute the Continuous Wavelet Transform (CWT) using standard mother wavelets
+7. Explain multiresolution analysis and implement the Discrete Wavelet Transform (DWT)
+8. Apply Mallat's algorithm for wavelet decomposition and reconstruction
+9. Compare STFT and wavelet approaches for real-world signal analysis
 
 ---
 

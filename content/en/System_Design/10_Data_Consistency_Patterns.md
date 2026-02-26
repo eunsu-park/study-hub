@@ -1,12 +1,25 @@
 # Data Consistency Patterns
 
-Difficulty: ⭐⭐⭐⭐
-
-## Overview
-
-Data consistency is one of the most challenging problems in distributed systems. This chapter covers the trade-offs between Strong Consistency and Eventual Consistency, read consistency patterns, limitations of distributed transactions, and the Saga pattern.
+**Previous**: [Database Replication](./09_Database_Replication.md) | **Next**: [Message Queue Basics](./11_Message_Queue_Basics.md)
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define the spectrum of consistency models from strong consistency to eventual consistency and explain the trade-offs involved
+2. Compare linearizability, sequential consistency, and causal consistency with concrete examples
+3. Describe read consistency patterns (read-your-writes, monotonic reads, consistent prefix) and explain when each is needed
+4. Explain why distributed transactions using two-phase commit (2PC) are problematic at scale
+5. Design a Saga pattern implementation using both choreography and orchestration approaches, including compensating transactions
+6. Select the appropriate consistency model for a given business requirement, balancing correctness against availability and latency
+
+**Difficulty**: ⭐⭐⭐⭐
+
+---
+
+In a single-database world, consistency is straightforward -- every read sees the latest write. But the moment data lives on multiple nodes, you must make hard choices: do you block writes until all replicas agree, or do you let replicas diverge temporarily for the sake of speed and availability? These trade-offs shape every distributed system, from banking platforms that demand strict correctness to social media feeds where a few seconds of staleness is perfectly acceptable.
 
 ## Table of Contents
 
@@ -741,12 +754,6 @@ Design a client library that guarantees Read-Your-Writes:
 
 ---
 
-## Next Steps
-
-In [11_Message_Queue_Basics.md](./11_Message_Queue_Basics.md), let's learn about message queues, the foundation of asynchronous communication!
-
----
-
 ## References
 
 - "Designing Data-Intensive Applications" - Martin Kleppmann
@@ -754,3 +761,7 @@ In [11_Message_Queue_Basics.md](./11_Message_Queue_Basics.md), let's learn about
 - Google Cloud Spanner: TrueTime and External Consistency
 - AWS: Building Distributed Locks with DynamoDB
 - "Sagas" - Hector Garcia-Molina, Kenneth Salem (1987)
+
+---
+
+**Previous**: [Database Replication](./09_Database_Replication.md) | **Next**: [Message Queue Basics](./11_Message_Queue_Basics.md)

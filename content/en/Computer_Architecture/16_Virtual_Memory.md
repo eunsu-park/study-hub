@@ -1,14 +1,27 @@
 # Virtual Memory
 
-## Overview
-
-Virtual memory is a core technology that provides programs with a contiguous and independent address space, and enables running programs larger than physical memory. In this lesson, we will learn about virtual memory concepts, page tables, TLB, and page fault handling.
+**Previous**: [15_Cache_Memory.md](./15_Cache_Memory.md) | **Next**: [17_IO_Systems.md](./17_IO_Systems.md)
 
 **Difficulty**: ⭐⭐⭐⭐
 
 **Prerequisites**: Memory Hierarchy, Cache Memory
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain virtual memory from the hardware perspective (MMU, page tables, TLB)
+2. Describe how the TLB accelerates address translation
+3. Trace a virtual-to-physical address translation through a multi-level page table
+4. Explain how virtual memory provides memory protection between processes
+5. Compare hardware-managed vs software-managed TLB designs
+6. Analyze the interaction between cache and virtual memory (VIVT, PIPT, VIPT)
+
+---
+
+Virtual memory is where operating systems and hardware meet. The OS defines the page tables, but the hardware (MMU and TLB) performs the actual address translation on every single memory access -- billions of times per second. Understanding the hardware side of virtual memory explains why TLB misses are expensive, why huge pages improve performance, and how memory protection works at the circuit level.
 
 ## Table of Contents
 

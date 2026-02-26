@@ -299,7 +299,12 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        """Random sampling"""
+        """Random sampling — why random?
+        Consecutive experiences are highly correlated (similar states,
+        similar actions).  Training on correlated batches causes the
+        network to overfit to recent experience and forget earlier
+        lessons.  Random sampling breaks these temporal correlations,
+        producing i.i.d.-like mini-batches that stabilize SGD."""
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         return (np.array(states), np.array(actions), np.array(rewards),
@@ -885,6 +890,51 @@ class DuelingNetwork(nn.Module):
 # - Monitor Q value distribution
 # - Visualize learned policy
 ```
+
+---
+
+## Exercises
+
+### Exercise 1: Implement Q-Learning on FrozenLake
+
+Using the `QLearningAgent` and the `FrozenLake-v1` environment from Gymnasium:
+1. The FrozenLake grid has 16 states and 4 actions. Initialize the Q-table as all zeros.
+2. Train for 10,000 episodes with `lr=0.1, gamma=0.99, epsilon=1.0, epsilon_decay=0.995`.
+3. After training, print the learned Q-table (4×16 matrix) and visualize the greedy policy as arrows on the 4×4 grid.
+4. Compute the success rate (fraction of episodes reaching the goal) over the last 1,000 episodes. What does it mean if the success rate is near 0.7? Is Q-learning guaranteed to find the optimal policy for this environment?
+
+### Exercise 2: Train DQN on CartPole-v1 and Measure Convergence
+
+Using the provided `DQNAgent` and `train_dqn`:
+1. Train on `CartPole-v1` for 500 episodes with default hyperparameters.
+2. Plot the episode reward curve with a 50-episode moving average overlay.
+3. CartPole is "solved" when the moving average reaches 475. How many episodes does your DQN need?
+4. Experiment: remove the target network (set `target_update=1`, which copies weights every step). How does training stability change? Explain why the target network is necessary using the concepts of a "moving target" in supervised learning.
+
+### Exercise 3: Ablation Study on Experience Replay
+
+Investigate the importance of the replay buffer:
+1. Train DQN on CartPole with the full replay buffer (capacity=10,000, random sampling).
+2. Train DQN without experience replay: process each transition immediately and discard it (batch_size=1, buffer as a deque of size 1).
+3. Plot both reward curves and compare final performance and convergence speed.
+4. Explain the instability in case (2) using the concept of correlated samples: why does training on consecutive transitions violate the i.i.d. assumption required by SGD?
+
+### Exercise 4: Implement Double DQN
+
+The standard DQN overestimates Q-values because the same network selects and evaluates the best next action. Double DQN decouples these steps:
+1. In the `DQNAgent.learn` method, modify the target computation:
+   - Use `q_network` to select the best next action: `best_action = q_network(next_states).argmax(dim=1)`.
+   - Use `target_network` to evaluate it: `next_q = target_network(next_states).gather(1, best_action.unsqueeze(1)).squeeze(1)`.
+2. Train both standard DQN and Double DQN on CartPole for 500 episodes.
+3. Compare their average Q-value estimates during training (log `current_q.mean().item()` per episode). Does Double DQN produce lower, more accurate Q estimates?
+
+### Exercise 5: Train REINFORCE on CartPole and Compare with DQN
+
+Using the provided `REINFORCEAgent`:
+1. Train on `CartPole-v1` for 1,000 episodes.
+2. Plot the episode reward curve alongside the DQN curve from Exercise 2.
+3. REINFORCE is typically more unstable than DQN. Observe and explain: what causes the high variance in REINFORCE's reward curve? How does the return normalization step (`(returns - returns.mean()) / returns.std()`) act as a baseline to reduce variance?
+4. Implement a simple Actor-Critic by adding a baseline: instead of using the full return `G_t`, subtract the value estimate `V(s_t)` predicted by a small value network. Verify that this reduces the variance of the gradient estimates.
 
 ---
 

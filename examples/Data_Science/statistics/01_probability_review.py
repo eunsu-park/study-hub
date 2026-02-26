@@ -7,6 +7,20 @@ Demonstrates fundamental probability concepts:
 - Central Limit Theorem
 - Law of Large Numbers
 - Random sampling with numpy/scipy
+
+Theory:
+- Probability distributions characterize the likelihood of different outcomes.
+  The choice of distribution depends on the data-generating process: Normal for
+  sums of many small effects (CLT), Binomial for fixed-trial binary outcomes,
+  Poisson for rare-event counts, Exponential for waiting times.
+- The Central Limit Theorem guarantees that sample means become approximately
+  Normal regardless of the population distribution, justifying parametric
+  inference on means even for non-Normal data.
+- The Law of Large Numbers ensures that sample averages converge to the true
+  mean as sample size grows, providing the theoretical foundation for
+  estimation from data.
+
+Adapted from Data_Science Lessons 11-12.
 """
 
 import numpy as np
@@ -32,6 +46,9 @@ def normal_distribution():
     """Demonstrate normal distribution properties."""
     print_section("1. Normal Distribution")
 
+    # Why: The Normal (Gaussian) is the most important distribution in statistics
+    # because of the CLT — sums of independent random variables converge to it.
+    # Many natural measurements (height, IQ) are approximately Normal.
     mu, sigma = 100, 15
     print(f"Normal distribution: μ={mu}, σ={sigma}")
 
@@ -39,6 +56,8 @@ def normal_distribution():
     samples = np.random.normal(mu, sigma, 10000)
     print(f"Generated {len(samples)} samples")
     print(f"Sample mean: {np.mean(samples):.2f}")
+    # Why: ddof=1 gives the unbiased sample standard deviation (Bessel's correction).
+    # Dividing by n-1 instead of n corrects the downward bias in variance estimation.
     print(f"Sample std: {np.std(samples, ddof=1):.2f}")
 
     # PDF and CDF at specific points
@@ -49,7 +68,8 @@ def normal_distribution():
         cdf = stats.norm.cdf(x, mu, sigma)
         print(f"  x={x:3d}: PDF={pdf:.6f}, CDF={cdf:.4f}")
 
-    # Percentiles
+    # Why: The 2.5th and 97.5th percentiles bracket the central 95% of the
+    # distribution — the basis for 95% confidence intervals in Normal models.
     percentiles = [0.025, 0.25, 0.50, 0.75, 0.975]
     print("\nPercentiles:")
     for p in percentiles:
@@ -87,6 +107,9 @@ def binomial_distribution():
     """Demonstrate binomial distribution."""
     print_section("2. Binomial Distribution")
 
+    # Why: Binomial models the number of successes in n independent Bernoulli
+    # trials with fixed probability p. Appropriate when trials are independent
+    # and each has only two outcomes (success/failure).
     n, p = 20, 0.3
     print(f"Binomial distribution: n={n}, p={p}")
 
@@ -134,7 +157,9 @@ def poisson_exponential():
     """Demonstrate Poisson and Exponential distributions."""
     print_section("3. Poisson and Exponential Distributions")
 
-    # Poisson
+    # Why: Poisson is the natural model for counts of rare, independent events in
+    # a fixed interval (arrivals, defects, radioactive decays). Its key property:
+    # mean equals variance. When mean >> variance, consider underdispersion models.
     lambda_poisson = 5
     print(f"Poisson distribution: λ={lambda_poisson}")
 
@@ -147,7 +172,11 @@ def poisson_exponential():
         pmf = stats.poisson.pmf(k, lambda_poisson)
         print(f"  P(X={k:2d}) = {pmf:.6f}")
 
-    # Exponential
+    # Why: Exponential is the continuous counterpart of Poisson — it models the
+    # waiting time between Poisson events. Its "memoryless" property means the
+    # probability of waiting another t units is independent of how long you've
+    # already waited. This makes it the default model for lifetimes under
+    # constant hazard rate.
     lambda_exp = 0.5
     print(f"\nExponential distribution: λ={lambda_exp}")
 
@@ -192,12 +221,18 @@ def central_limit_theorem():
     """Demonstrate Central Limit Theorem."""
     print_section("4. Central Limit Theorem")
 
-    # Use uniform distribution (clearly non-normal)
+    # Why: We deliberately use a Uniform distribution (clearly non-Normal) to
+    # demonstrate that the CLT works regardless of the population shape. The
+    # sampling distribution of the mean becomes approximately Normal for
+    # sufficiently large n, even when the population is flat/skewed/bimodal.
     population = np.random.uniform(0, 10, 100000)
     print(f"Population distribution: Uniform(0, 10)")
     print(f"Population mean: {np.mean(population):.2f}")
     print(f"Population std: {np.std(population):.2f}")
 
+    # Why: n=30 is the classic "rule of thumb" for CLT adequacy with symmetric
+    # distributions. For highly skewed populations, you may need n > 100.
+    # Comparing n=2,5,10,30 shows the progressive Normality of the mean.
     sample_sizes = [2, 5, 10, 30]
     n_samples = 5000
 

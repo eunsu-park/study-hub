@@ -89,6 +89,8 @@ section("unittest Basic Tests")
 class TestCalculator(unittest.TestCase):
     """Test cases for Calculator."""
 
+    # Why: setUp runs before EACH test method, giving every test a fresh Calculator instance
+    # — this prevents test pollution where one test's state affects another
     def setUp(self):
         """Set up test fixtures - runs before each test."""
         self.calc = Calculator()
@@ -158,6 +160,8 @@ class TestAssertions(unittest.TestCase):
         self.assertIsInstance("hello", str)
         self.assertNotIsInstance("hello", int)
 
+    # Why: Floating-point arithmetic has rounding errors (0.1 + 0.2 != 0.3 exactly),
+    # so assertAlmostEqual compares within a tolerance instead of requiring exact equality
     def test_almost_equal(self):
         """Test floating point equality."""
         self.assertAlmostEqual(0.1 + 0.2, 0.3, places=7)
@@ -230,9 +234,10 @@ section("Mocking and Patching")
 class TestUserServiceWithMock(unittest.TestCase):
     """Test UserService using mocks."""
 
+    # Why: Mocking the database isolates the unit under test — we verify UserService logic
+    # without needing a real database connection, making tests fast and deterministic
     def test_get_user_with_mock(self):
         """Test get_user with mocked database."""
-        # Create mock database
         mock_db = Mock()
         mock_db.get.return_value = {"id": 1, "name": "Alice"}
 
@@ -330,6 +335,8 @@ class TestMockBehavior(unittest.TestCase):
 
         self.assertEqual(mock.method.call_count, 3)
 
+    # Why: MagicMock pre-configures all dunder methods (__len__, __getitem__, etc.)
+    # which regular Mock doesn't support — needed when code uses len(obj) or obj[key]
     def test_magic_mock(self):
         """Test MagicMock with magic methods."""
         mock = MagicMock()
@@ -365,6 +372,8 @@ class TestWithSubtests(unittest.TestCase):
             (5, False),
         ]
 
+        # Why: subTest lets all test cases run even if one fails, reporting each failure
+        # separately — without it, the first failure would abort the remaining cases
         for number, expected in test_cases:
             with self.subTest(number=number):
                 result = calc.is_even(number)

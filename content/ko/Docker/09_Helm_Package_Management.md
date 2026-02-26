@@ -1,11 +1,21 @@
 # 09. Helm 패키지 관리
 
+**이전**: [Kubernetes 고급](./08_Kubernetes_Advanced.md) | **다음**: [CI/CD 파이프라인](./10_CI_CD_Pipelines.md)
+
 ## 학습 목표
-- Helm의 개념과 구조 이해
-- Helm 차트 생성 및 관리
-- values.yaml을 통한 설정 커스터마이징
-- 템플릿 함수와 조건문 활용
-- 차트 저장소 관리 및 배포
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. Helm이 무엇인지, 그리고 Kubernetes 애플리케이션 패키징과 배포를 어떻게 단순화하는지 설명할 수 있습니다
+2. 적절한 디렉토리 구조와 메타데이터로 Helm 차트를 생성할 수 있습니다
+3. Go 템플릿 문법, 내장 함수, 조건문을 사용하여 Helm 템플릿을 작성할 수 있습니다
+4. values.yaml과 커맨드라인 오버라이드를 통해 배포를 커스터마이징할 수 있습니다
+5. install, upgrade, rollback, uninstall 작업으로 차트 릴리스를 관리할 수 있습니다
+6. 재사용 가능한 컴포넌트를 위해 차트 저장소와 의존성 관리를 활용할 수 있습니다
+
+---
+
+Kubernetes 애플리케이션을 배포하려면 일반적으로 Deployment, Service, ConfigMap, Secret 등 여러 YAML 매니페스트가 필요합니다. 애플리케이션이 성장함에 따라 이 매니페스트들을 관리하는 것은 복잡하고 오류가 발생하기 쉽습니다. Helm은 Kubernetes의 사실상 표준 패키지 매니저로, 관련 매니페스트를 설정 가능한 템플릿이 있는 재사용 가능하고 버전이 지정된 차트로 패키징합니다. Helm을 익히면 배포 복잡성이 크게 줄어들고 환경 전반에 걸쳐 일관성 있고 반복 가능한 배포가 가능해집니다.
 
 ## 목차
 1. [Helm 개요](#1-helm-개요)
@@ -24,28 +34,28 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Helm 아키텍처                            │
+│                     Helm Architecture                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────────────────────────────────┐              │
 │  │              Helm CLI                     │              │
-│  │  • 차트 설치/업그레이드/삭제              │              │
-│  │  • 릴리스 관리                            │              │
-│  │  • 저장소 관리                            │              │
+│  │  • Install/upgrade/delete charts          │              │
+│  │  • Release management                     │              │
+│  │  • Repository management                  │              │
 │  └──────────────────────┬───────────────────┘              │
 │                         │                                   │
 │          ┌──────────────┼──────────────┐                   │
 │          ▼              ▼              ▼                    │
 │    ┌──────────┐  ┌──────────┐  ┌──────────┐               │
 │    │ Chart    │  │ Values   │  │ K8s API  │               │
-│    │ Repository│ │ (설정)    │  │ Server   │               │
+│    │Repository│  │(Config)  │  │ Server   │               │
 │    └──────────┘  └──────────┘  └──────────┘               │
 │                                                             │
-│  핵심 개념:                                                 │
-│  • Chart: 패키지 (YAML 템플릿 묶음)                        │
-│  • Release: 차트의 인스턴스 (설치된 애플리케이션)          │
-│  • Repository: 차트 저장소                                  │
-│  • Values: 차트 설정값                                      │
+│  Key Concepts:                                              │
+│  • Chart: Package (YAML template bundle)                   │
+│  • Release: Chart instance (deployed application)          │
+│  • Repository: Chart storage                               │
+│  • Values: Chart configuration                             │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -53,7 +63,7 @@
 ### 1.2 Helm의 장점
 
 ```
-기존 방식 (다수의 YAML 파일):
+Traditional Method (Multiple YAML files):
 ├── deployment.yaml
 ├── service.yaml
 ├── configmap.yaml
@@ -62,27 +72,27 @@
 ├── pvc.yaml
 └── ...
 
-문제점:
-• 환경별 설정 관리 어려움
-• 버전 관리 복잡
-• 롤백 어려움
-• 재사용 불가
+Problems:
+• Difficult to manage per-environment configuration
+• Complex version management
+• Difficult rollback
+• Not reusable
 
-Helm 사용:
+Using Helm:
 ├── myapp-chart/
-│   ├── Chart.yaml          # 메타데이터
-│   ├── values.yaml         # 기본 설정
-│   ├── values-prod.yaml    # 프로덕션 설정
-│   └── templates/          # 템플릿
+│   ├── Chart.yaml          # Metadata
+│   ├── values.yaml         # Default configuration
+│   ├── values-prod.yaml    # Production configuration
+│   └── templates/          # Templates
 │       ├── deployment.yaml
 │       ├── service.yaml
 │       └── ...
 
-장점:
-• 단일 명령으로 설치/업그레이드
-• 환경별 values 파일로 설정 분리
-• 릴리스 이력 및 롤백 지원
-• 차트 재사용 및 공유
+Benefits:
+• Single command for install/upgrade
+• Separate configuration per environment with values files
+• Release history and rollback support
+• Chart reuse and sharing
 ```
 
 ---
@@ -95,7 +105,7 @@ Helm 사용:
 # macOS
 brew install helm
 
-# Linux (스크립트)
+# Linux (script)
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Linux (apt)
@@ -104,32 +114,32 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.
 sudo apt-get update
 sudo apt-get install helm
 
-# 버전 확인
+# Check version
 helm version
 ```
 
 ### 2.2 저장소 설정
 
 ```bash
-# 공식 저장소 추가
+# Add official repositories
 helm repo add stable https://charts.helm.sh/stable
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 
-# 저장소 목록
+# List repositories
 helm repo list
 
-# 저장소 업데이트
+# Update repositories
 helm repo update
 
-# 저장소 삭제
+# Remove repository
 helm repo remove stable
 
-# 차트 검색
+# Search charts
 helm search repo nginx
 helm search repo bitnami/postgresql --versions
 
-# 차트 정보 확인
+# Show chart information
 helm show chart bitnami/nginx
 helm show values bitnami/nginx
 helm show readme bitnami/nginx
@@ -138,44 +148,44 @@ helm show readme bitnami/nginx
 ### 2.3 기본 명령어
 
 ```bash
-# 차트 설치
+# Install chart
 helm install my-release bitnami/nginx
 
-# 네임스페이스 지정
+# Specify namespace
 helm install my-release bitnami/nginx -n production --create-namespace
 
-# values 파일 사용
+# Use values file
 helm install my-release bitnami/nginx -f custom-values.yaml
 
-# 인라인 values 설정
+# Set inline values
 helm install my-release bitnami/nginx --set replicaCount=3
 
-# Dry-run (테스트)
+# Dry-run (test)
 helm install my-release bitnami/nginx --dry-run --debug
 
-# 릴리스 목록
+# List releases
 helm list
 helm list -n production
 helm list --all-namespaces
 
-# 릴리스 상태
+# Release status
 helm status my-release
 
-# 업그레이드
+# Upgrade
 helm upgrade my-release bitnami/nginx --set replicaCount=5
 
-# 설치 또는 업그레이드 (없으면 설치, 있으면 업그레이드)
+# Install or upgrade (install if not exists, upgrade if exists)
 helm upgrade --install my-release bitnami/nginx
 
-# 롤백
+# Rollback
 helm rollback my-release 1
 
-# 히스토리
+# History
 helm history my-release
 
-# 삭제
+# Uninstall
 helm uninstall my-release
-helm uninstall my-release --keep-history  # 히스토리 유지
+helm uninstall my-release --keep-history  # Keep history
 ```
 
 ---
@@ -186,27 +196,27 @@ helm uninstall my-release --keep-history  # 히스토리 유지
 
 ```
 myapp/
-├── Chart.yaml              # 차트 메타데이터 (필수)
-├── Chart.lock              # 의존성 버전 잠금
-├── values.yaml             # 기본 설정값 (필수)
-├── values.schema.json      # values 스키마 (선택)
-├── .helmignore             # 패키징 제외 파일
-├── README.md               # 차트 문서
-├── LICENSE                 # 라이선스
-├── charts/                 # 의존성 차트
+├── Chart.yaml              # Chart metadata (required)
+├── Chart.lock              # Dependency version lock
+├── values.yaml             # Default configuration (required)
+├── values.schema.json      # Values schema (optional)
+├── .helmignore             # Files to exclude from packaging
+├── README.md               # Chart documentation
+├── LICENSE                 # License
+├── charts/                 # Dependency charts
 │   └── subchart/
 ├── crds/                   # CustomResourceDefinition
 │   └── myresource.yaml
-└── templates/              # Kubernetes 매니페스트 템플릿
-    ├── NOTES.txt           # 설치 후 메시지
-    ├── _helpers.tpl        # 템플릿 헬퍼 함수
+└── templates/              # Kubernetes manifest templates
+    ├── NOTES.txt           # Post-install message
+    ├── _helpers.tpl        # Template helper functions
     ├── deployment.yaml
     ├── service.yaml
     ├── configmap.yaml
     ├── secret.yaml
     ├── ingress.yaml
     ├── hpa.yaml
-    └── tests/              # 테스트
+    └── tests/              # Tests
         └── test-connection.yaml
 ```
 
@@ -214,12 +224,12 @@ myapp/
 
 ```yaml
 # Chart.yaml
-apiVersion: v2                    # Helm 3용 (v1은 Helm 2)
-name: myapp                       # 차트 이름
-version: 1.2.3                    # 차트 버전 (SemVer)
-appVersion: "2.0.0"               # 애플리케이션 버전
+apiVersion: v2                    # For Helm 3 (v1 for Helm 2)
+name: myapp                       # Chart name
+version: 1.2.3                    # Chart version (SemVer)
+appVersion: "2.0.0"               # Application version
 description: My awesome application
-type: application                 # application 또는 library
+type: application                 # application or library
 keywords:
   - web
   - backend
@@ -231,24 +241,24 @@ maintainers:
     email: john@example.com
     url: https://johndoe.com
 icon: https://example.com/icon.png
-kubeVersion: ">=1.22.0-0"         # 지원 K8s 버전
+kubeVersion: ">=1.22.0-0"         # Supported K8s version
 deprecated: false
 
-# 의존성
+# Dependencies
 dependencies:
   - name: postgresql
     version: "12.x.x"
     repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
+    condition: postgresql.enabled  # Conditionally include — skip the DB in dev if an external service is used
     tags:
       - database
   - name: redis
     version: "17.x.x"
     repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
-    alias: cache  # 별칭
+    alias: cache  # Alias — lets you reference redis values under `.Values.cache` for clarity
 
-# 어노테이션
+# Annotations
 annotations:
   category: Backend
   licenses: Apache-2.0
@@ -257,24 +267,24 @@ annotations:
 ### 3.3 차트 생성
 
 ```bash
-# 새 차트 생성
+# Create new chart
 helm create myapp
 
-# 구조 확인
+# Check structure
 tree myapp/
 
-# 의존성 업데이트
+# Update dependencies
 helm dependency update myapp/
 helm dependency build myapp/
 
-# 차트 검증
+# Validate chart
 helm lint myapp/
 
-# 차트 패키징
+# Package chart
 helm package myapp/
-# 결과: myapp-1.2.3.tgz
+# Result: myapp-1.2.3.tgz
 
-# 템플릿 렌더링 (디버그)
+# Render template (debug)
 helm template my-release myapp/ --debug
 helm template my-release myapp/ -f custom-values.yaml
 ```
@@ -290,10 +300,10 @@ helm template my-release myapp/ -f custom-values.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  # 템플릿 변수 사용
+  # Use template variables
   name: {{ .Release.Name }}-{{ .Chart.Name }}
   labels:
-    # include로 헬퍼 함수 호출
+    # Call helper function with include
     {{- include "myapp.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
@@ -305,7 +315,7 @@ spec:
       labels:
         {{- include "myapp.selectorLabels" . | nindent 8 }}
       annotations:
-        # 설정 변경 시 Pod 재시작 트리거
+        # Trigger Pod restart on config change — without this, ConfigMap updates won't reach running pods
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
@@ -329,33 +339,33 @@ spec:
 ### 4.2 내장 객체
 
 ```yaml
-# 릴리스 정보
-{{ .Release.Name }}       # 릴리스 이름
-{{ .Release.Namespace }}  # 네임스페이스
-{{ .Release.IsUpgrade }}  # 업그레이드 여부
-{{ .Release.IsInstall }}  # 신규 설치 여부
-{{ .Release.Revision }}   # 릴리스 리비전
+# Release information
+{{ .Release.Name }}       # Release name
+{{ .Release.Namespace }}  # Namespace
+{{ .Release.IsUpgrade }}  # Is upgrade?
+{{ .Release.IsInstall }}  # Is new install?
+{{ .Release.Revision }}   # Release revision
 
-# 차트 정보
-{{ .Chart.Name }}         # 차트 이름
-{{ .Chart.Version }}      # 차트 버전
-{{ .Chart.AppVersion }}   # 앱 버전
+# Chart information
+{{ .Chart.Name }}         # Chart name
+{{ .Chart.Version }}      # Chart version
+{{ .Chart.AppVersion }}   # App version
 
 # Values
-{{ .Values.key }}         # values.yaml 값
+{{ .Values.key }}         # values.yaml value
 
-# 파일
-{{ .Files.Get "config.ini" }}           # 파일 내용
-{{ .Files.GetBytes "binary.dat" }}      # 바이너리 파일
-{{ .Files.Glob "files/*" }}             # 패턴 매칭
+# Files
+{{ .Files.Get "config.ini" }}           # File contents
+{{ .Files.GetBytes "binary.dat" }}      # Binary file
+{{ .Files.Glob "files/*" }}             # Pattern matching
 
-# 템플릿
-{{ .Template.Name }}      # 현재 템플릿 경로
-{{ .Template.BasePath }}  # templates 디렉토리 경로
+# Template
+{{ .Template.Name }}      # Current template path
+{{ .Template.BasePath }}  # templates directory path
 
-# Capabilities (클러스터 정보)
-{{ .Capabilities.KubeVersion.Major }}   # K8s 메이저 버전
-{{ .Capabilities.APIVersions.Has "apps/v1" }}  # API 지원 확인
+# Capabilities (cluster information)
+{{ .Capabilities.KubeVersion.Major }}   # K8s major version
+{{ .Capabilities.APIVersions.Has "apps/v1" }}  # Check API support
 ```
 
 ### 4.3 헬퍼 함수 (_helpers.tpl)
@@ -363,15 +373,15 @@ spec:
 ```yaml
 # templates/_helpers.tpl
 {{/*
-차트 이름 (단축)
+Chart name (short)
 */}}
 {{- define "myapp.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-전체 이름 생성
-릴리스 이름이 차트 이름을 포함하면 그대로 사용
+Full name generation
+Use release name as-is if it contains chart name
 */}}
 {{- define "myapp.fullname" -}}
 {{- if .Values.fullnameOverride }}
@@ -387,7 +397,7 @@ spec:
 {{- end }}
 
 {{/*
-공통 레이블
+Common labels
 */}}
 {{- define "myapp.labels" -}}
 helm.sh/chart: {{ include "myapp.chart" . }}
@@ -399,7 +409,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-셀렉터 레이블
+Selector labels
 */}}
 {{- define "myapp.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "myapp.name" . }}
@@ -407,14 +417,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-차트 이름:버전
+Chart name:version
 */}}
 {{- define "myapp.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-ServiceAccount 이름
+ServiceAccount name
 */}}
 {{- define "myapp.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
@@ -428,7 +438,7 @@ ServiceAccount 이름
 ### 4.4 제어문과 함수
 
 ```yaml
-# 조건문
+# Conditionals
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -445,7 +455,7 @@ kind: Ingress
     emptyDir: {}
 {{- end }}
 
-# 조건 연산자
+# Conditional operators
 {{- if and .Values.ingress.enabled .Values.ingress.tls }}
 {{- if or .Values.env.dev .Values.env.staging }}
 {{- if not .Values.disabled }}
@@ -453,7 +463,7 @@ kind: Ingress
 {{- if ne .Values.env "production" }}
 {{- if gt .Values.replicas 1 }}
 
-# 반복문 (range)
+# Loops (range)
 {{- range .Values.hosts }}
 - host: {{ .name }}
   paths:
@@ -463,26 +473,26 @@ kind: Ingress
   {{- end }}
 {{- end }}
 
-# 반복 (인덱스 포함)
+# Loop (with index)
 {{- range $index, $host := .Values.hosts }}
 - name: host-{{ $index }}
   value: {{ $host }}
 {{- end }}
 
-# with (스코프 변경)
+# with (change scope)
 {{- with .Values.nodeSelector }}
 nodeSelector:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 
-# 변수 할당
+# Variable assignment
 {{- $fullName := include "myapp.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
 
-# default (기본값)
+# default (default value)
 {{ .Values.image.tag | default .Chart.AppVersion }}
 
-# 문자열 함수
+# String functions
 {{ .Values.name | upper }}
 {{ .Values.name | lower }}
 {{ .Values.name | title }}
@@ -491,22 +501,22 @@ nodeSelector:
 {{ .Values.name | squote }}         # 'value'
 {{ printf "%s-%s" .Release.Name .Chart.Name }}
 
-# 인덴트
+# Indentation
 {{ toYaml .Values.resources | indent 2 }}
-{{ toYaml .Values.resources | nindent 2 }}  # 줄바꿈 + 인덴트
+{{ toYaml .Values.resources | nindent 2 }}  # Newline + indent
 
-# 리스트/맵 함수
+# List/map functions
 {{ list "a" "b" "c" | join "," }}
 {{ dict "key1" "value1" "key2" "value2" | toYaml }}
 {{ .Values.list | first }}
 {{ .Values.list | last }}
-{{ .Values.list | rest }}           # 첫 번째 제외
-{{ .Values.list | initial }}        # 마지막 제외
+{{ .Values.list | rest }}           # Exclude first
+{{ .Values.list | initial }}        # Exclude last
 
-# lookup (클러스터에서 조회)
+# lookup (query cluster)
 {{- $secret := lookup "v1" "Secret" .Release.Namespace "my-secret" -}}
 {{- if $secret }}
-  # Secret 존재
+  # Secret exists
 {{- end }}
 ```
 
@@ -601,16 +611,17 @@ spec:
 
 ```yaml
 # values.yaml
-# 기본 설정
+# Externalize config so the same chart works across dev/staging/prod
+# Default configuration
 
-# 리플리카 수
+# Replica count
 replicaCount: 1
 
-# 이미지 설정
+# Image configuration
 image:
   repository: myapp/myapp
-  pullPolicy: IfNotPresent
-  tag: ""  # 비어있으면 Chart.AppVersion 사용
+  pullPolicy: IfNotPresent  # Avoids unnecessary pulls in dev; override to Always in production for security
+  tag: ""  # Uses Chart.AppVersion if empty — keeps image version in sync with chart version by default
 
 imagePullSecrets: []
 nameOverride: ""
@@ -622,27 +633,27 @@ serviceAccount:
   annotations: {}
   name: ""
 
-# Pod 보안
+# Pod security
 podAnnotations: {}
 podSecurityContext:
   fsGroup: 1000
 
 securityContext:
-  runAsNonRoot: true
+  runAsNonRoot: true  # Prevents container from running as UID 0 even if the image defaults to root
   runAsUser: 1000
   capabilities:
     drop:
-    - ALL
-  readOnlyRootFilesystem: true
+    - ALL  # Drop all Linux capabilities — add back only what the app truly needs
+  readOnlyRootFilesystem: true  # Immutable filesystem: an attacker cannot install tools or drop malware
 
-# Service 설정
+# Service configuration
 service:
   enabled: true
   type: ClusterIP
   port: 80
   annotations: {}
 
-# Ingress 설정
+# Ingress configuration
 ingress:
   enabled: false
   className: nginx
@@ -658,16 +669,16 @@ ingress:
       hosts:
         - myapp.example.com
 
-# 리소스 제한
+# Resource limits
 resources:
   limits:
     cpu: 500m
-    memory: 512Mi
+    memory: 512Mi  # limits prevent one pod from starving others on the node
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 128Mi  # requests guarantee scheduling — the scheduler reserves this much capacity
 
-# 오토스케일링
+# Autoscaling
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -675,24 +686,24 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
 
-# 노드 선택
+# Node selection
 nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# 환경 변수
+# Environment variables
 env:
   LOG_LEVEL: info
   DATABASE_HOST: localhost
 
-# ConfigMap에서 로드할 환경 변수
+# Environment variables loaded from ConfigMap
 envFrom: []
 
-# 추가 볼륨
+# Additional volumes
 extraVolumes: []
 extraVolumeMounts: []
 
-# 영속성
+# Persistence
 persistence:
   enabled: false
   storageClass: ""
@@ -700,7 +711,7 @@ persistence:
   size: 10Gi
   existingClaim: ""
 
-# 프로브
+# Probes
 livenessProbe:
   httpGet:
     path: /health
@@ -715,7 +726,7 @@ readinessProbe:
   initialDelaySeconds: 5
   periodSeconds: 5
 
-# 의존성 차트 설정
+# Dependency chart configuration
 postgresql:
   enabled: false
   auth:
@@ -785,10 +796,10 @@ ingress:
 
 ---
 # values-prod.yaml
-replicaCount: 3
+replicaCount: 3  # Multiple replicas for high availability — if one pod crashes, others continue serving
 
 image:
-  tag: "1.0.0"  # 고정 버전
+  tag: "1.0.0"  # Fixed version — never use "latest" in production; pinned tags enable deterministic rollbacks
 
 env:
   LOG_LEVEL: warn
@@ -828,28 +839,28 @@ postgresql:
 ### 5.3 values 사용
 
 ```bash
-# 기본 values 사용
+# Use default values
 helm install myapp ./myapp
 
-# values 파일 지정
+# Specify values file
 helm install myapp ./myapp -f values-prod.yaml
 
-# 여러 values 파일 (나중 파일이 우선)
+# Multiple values files (later files take precedence)
 helm install myapp ./myapp -f values.yaml -f values-prod.yaml -f values-secret.yaml
 
-# 인라인 설정
+# Inline configuration
 helm install myapp ./myapp --set replicaCount=3
 
-# 복잡한 값 설정
+# Set complex values
 helm install myapp ./myapp \
   --set image.tag=v1.0.0 \
   --set 'ingress.hosts[0].host=app.example.com' \
   --set 'env.API_KEY=secret123'
 
-# 파일 내용을 값으로
+# File contents as value
 helm install myapp ./myapp --set-file config=./app.conf
 
-# values 병합 확인 (dry-run)
+# Check merged values (dry-run)
 helm install myapp ./myapp -f values-prod.yaml --dry-run --debug
 ```
 
@@ -880,10 +891,10 @@ spec:
 ```
 
 ```bash
-# 테스트 실행
+# Run test
 helm test my-release
 
-# 테스트 결과 확인
+# Check test results
 kubectl logs my-release-myapp-test-connection
 ```
 
@@ -898,11 +909,11 @@ metadata:
   labels:
     {{- include "myapp.labels" . | nindent 4 }}
   annotations:
-    # 훅 타입
+    # Hook type — run DB migration before app starts so the schema is ready when pods boot
     "helm.sh/hook": pre-install,pre-upgrade
-    # 훅 우선순위 (낮은 숫자 먼저)
+    # Hook priority (lower number first) — ensures this runs before other hooks like config seeding
     "helm.sh/hook-weight": "-5"
-    # 삭제 정책
+    # Delete policy — clean up the Job to avoid accumulating completed pods in the namespace
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   template:
@@ -916,27 +927,27 @@ spec:
 ```
 
 ```
-훅 타입:
-• pre-install   : 설치 전
-• post-install  : 설치 후
-• pre-delete    : 삭제 전
-• post-delete   : 삭제 후
-• pre-upgrade   : 업그레이드 전
-• post-upgrade  : 업그레이드 후
-• pre-rollback  : 롤백 전
-• post-rollback : 롤백 후
-• test          : helm test 실행 시
+Hook Types:
+• pre-install   : Before installation
+• post-install  : After installation
+• pre-delete    : Before deletion
+• post-delete   : After deletion
+• pre-upgrade   : Before upgrade
+• post-upgrade  : After upgrade
+• pre-rollback  : Before rollback
+• post-rollback : After rollback
+• test          : On helm test execution
 
-삭제 정책:
-• before-hook-creation : 새 훅 생성 전 이전 훅 삭제
-• hook-succeeded       : 훅 성공 시 삭제
-• hook-failed          : 훅 실패 시 삭제
+Delete Policies:
+• before-hook-creation : Delete previous hook before creating new one
+• hook-succeeded       : Delete on success
+• hook-failed          : Delete on failure
 ```
 
 ### 6.3 차트 저장소 관리
 
 ```bash
-# ChartMuseum 실행 (로컬 저장소)
+# Run ChartMuseum (local repository)
 docker run -d \
   -p 8080:8080 \
   -e DEBUG=1 \
@@ -945,20 +956,20 @@ docker run -d \
   -v $(pwd)/charts:/charts \
   ghcr.io/helm/chartmuseum:v0.16.0
 
-# 저장소 추가
+# Add repository
 helm repo add myrepo http://localhost:8080
 
-# 차트 업로드
+# Upload chart
 curl --data-binary "@myapp-1.0.0.tgz" http://localhost:8080/api/charts
 
-# 또는 Helm 플러그인 사용
+# Or use Helm plugin
 helm plugin install https://github.com/chartmuseum/helm-push
 helm cm-push myapp-1.0.0.tgz myrepo
 
-# OCI 레지스트리 사용 (Helm 3.8+)
+# Use OCI registry (Helm 3.8+) — OCI avoids running a separate chart server; reuses your existing container registry
 helm push myapp-1.0.0.tgz oci://ghcr.io/myorg/charts
 
-# OCI에서 설치
+# Install from OCI
 helm install myapp oci://ghcr.io/myorg/charts/myapp --version 1.0.0
 ```
 
@@ -979,44 +990,44 @@ dependencies:
 ```
 
 ```bash
-# 의존성 다운로드
+# Download dependencies
 helm dependency update ./myapp
 
-# 의존성 확인
+# Check dependencies
 helm dependency list ./myapp
 
-# charts/ 디렉토리에 다운로드됨
+# Downloaded to charts/ directory
 ls ./myapp/charts/
 ```
 
 ### 6.5 릴리스 관리
 
 ```bash
-# 릴리스 목록
+# List releases
 helm list -A
 
-# 릴리스 상태
+# Release status
 helm status myapp
 
-# 릴리스 히스토리
+# Release history
 helm history myapp
 
-# 특정 리비전의 values 확인
+# Check values of specific revision
 helm get values myapp --revision 2
 
-# 매니페스트 확인
+# Check manifest
 helm get manifest myapp
 
-# 롤백
+# Rollback
 helm rollback myapp 2
 
-# 삭제 (히스토리 유지)
+# Uninstall (keep history)
 helm uninstall myapp --keep-history
 
-# 삭제된 릴리스 확인
+# Check uninstalled releases
 helm list --uninstalled
 
-# 완전 삭제
+# Complete deletion
 helm uninstall myapp
 ```
 
@@ -1026,56 +1037,56 @@ helm uninstall myapp
 
 ### 연습 1: 웹 애플리케이션 차트 생성
 ```bash
-# 요구사항:
-# 1. 새 차트 생성 (webapp)
-# 2. Deployment, Service, Ingress 템플릿
-# 3. ConfigMap으로 설정 관리
-# 4. values.yaml에 기본값 설정
-# 5. values-prod.yaml에 프로덕션 설정
+# Requirements:
+# 1. Create new chart (webapp)
+# 2. Deployment, Service, Ingress templates
+# 3. Manage configuration with ConfigMap
+# 4. Set default values in values.yaml
+# 5. Set production configuration in values-prod.yaml
 
-# 실행 명령
+# Execution commands
 helm create webapp
-# 필요한 파일 수정
+# Modify necessary files
 ```
 
 ### 연습 2: 의존성이 있는 차트
 ```yaml
-# 요구사항:
-# 1. PostgreSQL 의존성 추가
-# 2. Redis 의존성 추가 (condition으로 선택적)
-# 3. 의존성 차트 설정을 values.yaml에 추가
+# Requirements:
+# 1. Add PostgreSQL dependency
+# 2. Add Redis dependency (optional with condition)
+# 3. Add dependency chart configuration to values.yaml
 
-# Chart.yaml 작성
+# Write Chart.yaml
 ```
 
 ### 연습 3: Helm Hook 구현
 ```yaml
-# 요구사항:
-# 1. pre-install: 데이터베이스 마이그레이션
-# 2. post-install: 알림 전송
-# 3. pre-upgrade: 백업 생성
+# Requirements:
+# 1. pre-install: Database migration
+# 2. post-install: Send notification
+# 3. pre-upgrade: Create backup
 
-# Hook Job 템플릿 작성
+# Write Hook Job template
 ```
 
 ### 연습 4: 차트 배포 자동화
 ```bash
-# 요구사항:
-# 1. Chart.yaml 버전 업데이트
-# 2. 차트 패키징
-# 3. OCI 레지스트리에 푸시
-# 4. 스테이징/프로덕션 배포
+# Requirements:
+# 1. Update Chart.yaml version
+# 2. Package chart
+# 3. Push to OCI registry
+# 4. Deploy to staging/production
 
-# 스크립트 또는 CI/CD 파이프라인 작성
+# Write script or CI/CD pipeline
 ```
 
 ---
 
 ## 다음 단계
 
-- [10_CI_CD_파이프라인](10_CI_CD_파이프라인.md) - GitHub Actions와 배포 자동화
-- [07_Kubernetes_보안](07_Kubernetes_보안.md) - 보안 복습
-- [08_Kubernetes_심화](08_Kubernetes_심화.md) - 고급 K8s 기능
+- [10_CI_CD_파이프라인](10_CI_CD_Pipelines.md) - GitHub Actions와 배포 자동화
+- [07_Kubernetes_보안](07_Kubernetes_Security.md) - 보안 복습
+- [08_Kubernetes_고급](08_Kubernetes_Advanced.md) - 고급 K8s 기능
 
 ## 참고 자료
 
@@ -1086,4 +1097,89 @@ helm create webapp
 
 ---
 
-[← 이전: Kubernetes 심화](08_Kubernetes_심화.md) | [다음: CI/CD 파이프라인 →](10_CI_CD_파이프라인.md) | [목차](00_Overview.md)
+## 연습 문제
+
+### 연습 1: 첫 번째 Helm 차트(Chart) 생성 및 설치
+
+차트를 스캐폴드(scaffold)하고, 커스터마이징한 후 클러스터에 설치합니다.
+
+1. 새 차트를 생성합니다: `helm create myapp`
+2. 생성된 구조를 탐색합니다 (`Chart.yaml`, `values.yaml`, `templates/`)
+3. `values.yaml`을 열어 `replicaCount`를 2로, `image.tag`를 `alpine`으로 변경합니다
+4. 차트 오류를 검사합니다: `helm lint myapp`
+5. 설치 없이 템플릿을 렌더링합니다: `helm template myapp ./myapp`
+6. 차트를 설치합니다: `helm install myapp-release ./myapp`
+7. 확인합니다: `helm list` 및 `kubectl get pods`
+8. 제거합니다: `helm uninstall myapp-release`
+
+### 연습 2: Values(값)로 배포 커스터마이징
+
+동일한 차트를 다른 환경에 배포하기 위해 값 오버라이드(values override)를 사용합니다.
+
+1. 연습 1의 `myapp` 차트를 사용합니다
+2. `values-dev.yaml` 파일을 생성합니다:
+   ```yaml
+   replicaCount: 1
+   service:
+     type: NodePort
+   ```
+3. `values-prod.yaml` 파일을 생성합니다:
+   ```yaml
+   replicaCount: 3
+   service:
+     type: LoadBalancer
+   ```
+4. `dev` 네임스페이스에 설치합니다: `helm install myapp-dev ./myapp -f values-dev.yaml -n dev --create-namespace`
+5. `prod` 네임스페이스에 설치합니다: `helm install myapp-prod ./myapp -f values-prod.yaml -n prod --create-namespace`
+6. 두 릴리즈를 비교합니다: `helm list -A` 및 `kubectl get svc -A`
+
+### 연습 3: 릴리즈(Release) 업그레이드 및 롤백(Rollback)
+
+업그레이드와 롤백을 통해 Helm 릴리즈 라이프사이클을 실습합니다.
+
+1. 복제본 1개로 차트를 설치합니다: `helm install myapp ./myapp --set replicaCount=1`
+2. 릴리즈 상태를 확인합니다: `helm status myapp`
+3. 복제본 3개로 업그레이드합니다: `helm upgrade myapp ./myapp --set replicaCount=3`
+4. 변경 사항을 확인합니다: `kubectl get pods`
+5. 릴리즈 히스토리(history)를 확인합니다: `helm history myapp`
+6. 리비전(revision) 1로 롤백합니다: `helm rollback myapp 1`
+7. 복제본 수가 1로 돌아갔는지 확인합니다: `kubectl get pods`
+
+### 연습 4: Helm 저장소(Repository) 사용
+
+공개 저장소에서 차트를 설치하고 값을 커스터마이징합니다.
+
+1. Bitnami 저장소를 추가합니다: `helm repo add bitnami https://charts.bitnami.com/bitnami`
+2. 저장소를 업데이트합니다: `helm repo update`
+3. nginx 차트를 검색합니다: `helm search repo bitnami/nginx`
+4. 기본 값을 확인합니다: `helm show values bitnami/nginx`
+5. 사용자 정의 복제본 수로 nginx를 설치합니다:
+   ```bash
+   helm install my-nginx bitnami/nginx \
+     --set replicaCount=2 \
+     --set service.type=NodePort
+   ```
+6. minikube를 통해 서비스에 접근합니다: `minikube service my-nginx --url`
+7. 완료 후 제거합니다: `helm uninstall my-nginx`
+
+### 연습 5: 차트 의존성(Dependency) 추가
+
+차트 의존성을 사용하여 멀티 컴포넌트 애플리케이션을 구성합니다.
+
+1. 새 차트를 생성합니다: `helm create webapp`
+2. `Chart.yaml`에 Redis 의존성을 추가합니다:
+   ```yaml
+   dependencies:
+     - name: redis
+       version: "19.x.x"
+       repository: "https://charts.bitnami.com/bitnami"
+   ```
+3. 의존성을 다운로드합니다: `helm dependency update webapp`
+4. `webapp` 차트 디렉토리 내에 `charts/redis-*.tgz`가 생성되었는지 확인합니다
+5. `values.yaml`에서 앱이 `redis-master`를 호스트로 사용하여 Redis에 연결하도록 설정합니다
+6. 통합 차트를 설치합니다: `helm install webapp-release ./webapp`
+7. webapp과 Redis Pod 모두 실행 중인지 확인합니다: `kubectl get pods`
+
+---
+
+[← 이전: Kubernetes 고급](08_Kubernetes_Advanced.md) | [다음: CI/CD 파이프라인 →](10_CI_CD_Pipelines.md) | [목차](00_Overview.md)

@@ -1,5 +1,24 @@
 # Descriptors
 
+**Previous**: [Metaclasses](./06_Metaclasses.md) | **Next**: [Async Programming](./08_Async_Programming.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the descriptor protocol (`__get__`, `__set__`, `__delete__`) and its role in attribute access
+2. Distinguish between data descriptors and non-data descriptors and describe their priority in the attribute lookup chain
+3. Implement the `__get__` method and handle both class-level and instance-level access
+4. Reimplement `property` from scratch using the descriptor protocol
+5. Write attribute validation descriptors for type checking and range enforcement
+6. Use `__set_name__` to automatically capture the attribute name assigned to a descriptor
+7. Build ORM-style field classes (`StringField`, `IntegerField`) and a `CachedProperty` descriptor
+8. Explain how Python's methods, `staticmethod`, and `classmethod` are implemented as descriptors
+
+---
+
+Descriptors are the hidden mechanism behind some of Python's most familiar features: `property`, `classmethod`, `staticmethod`, and even ordinary method binding. When you write `obj.attr`, Python does not simply look up a dictionary key -- it invokes a sophisticated lookup chain in which descriptors can intercept, validate, or transform the access. Mastering descriptors gives you the power to build reusable attribute-level behaviors (validation, lazy computation, access control) that work cleanly across any class, much like ORM fields in Django or SQLAlchemy.
+
 ## 1. What are Descriptors?
 
 Descriptors are objects that customize attribute access. They implement one or more of `__get__`, `__set__`, and `__delete__`.
@@ -548,6 +567,4 @@ Write a descriptor that stores in base units but displays in different units.
 
 ---
 
-## Next Steps
-
-Check out [08_Async_Programming.md](./08_Async_Programming.md) to learn about async/await!
+**Previous**: [Metaclasses](./06_Metaclasses.md) | **Next**: [Async Programming](./08_Async_Programming.md)

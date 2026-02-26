@@ -9,15 +9,15 @@
 | 01 | [소개 및 설치](01_Introduction_and_Setup.md) | TeX/LaTeX 개요, 설치, 편집기, 첫 문서 |
 | 02 | [문서 구조](02_Document_Structure.md) | 문서 클래스, 전문부(preamble), 섹션 구분, 구성 |
 | 03 | [텍스트 서식](03_Text_Formatting.md) | 글꼴, 크기, 강조, 색상, 간격 |
-| 04 | [목록 및 환경](04_Lists_and_Environments.md) | Itemize, enumerate, description, 사용자 정의 목록 |
-| 05 | [표](05_Tables.md) | Tabular 환경, multirow, multicolumn, booktabs |
-| 06 | [그림 및 그래픽](06_Figures_and_Graphics.md) | Includegraphics, subfigures, 위치 지정, 캡션 |
-| 07 | [수식 조판 I](07_Mathematical_Typesetting_I.md) | 인라인 수식, 디스플레이 수식, 기호, 연산자 |
-| 08 | [수식 조판 II](08_Mathematical_Typesetting_II.md) | 행렬, 정렬, 정리, 고급 방정식 |
-| 09 | [상호 참조](09_Cross_References.md) | Labels, references, hyperref, cleveref |
-| 10 | [참고문헌](10_Bibliography.md) | BibTeX, BibLaTeX, 인용 스타일, 참고문헌 관리 |
-| 11 | [Beamer를 이용한 프레젠테이션](11_Presentations_with_Beamer.md) | 슬라이드, 테마, 오버레이, 유인물 |
-| 12 | [TikZ를 이용한 그래픽](12_Graphics_with_TikZ.md) | 도표, 플롯, 순서도, 과학적 삽화 그리기 |
+| 04 | [수학 조판 기초](04_Math_Basics.md) | 인라인/디스플레이 수식, 그리스 문자, 분수, 구분자, 기본 기호 |
+| 05 | [고급 수학](05_Math_Advanced.md) | 다행 방정식, 행렬, 정리 환경, amsmath |
+| 06 | [부동체, 그림 & 표](06_Floats_and_Figures.md) | 부동체 시스템, graphicx, 부분그림, 캡션, 위치 지정 |
+| 07 | [고급 표](07_Tables_Advanced.md) | Booktabs, multirow/multicolumn, 색상 셀, 긴 표 |
+| 08 | [상호 참조 & 인용](08_Cross_References.md) | 레이블, 참조, BibTeX, BibLaTeX, 인용 스타일 |
+| 09 | [페이지 레이아웃 & 타이포그래피](09_Page_Layout.md) | Geometry, fancyhdr, 줄 간격, 들여쓰기, 글꼴 |
+| 10 | [TikZ 그래픽 기초](10_TikZ_Basics.md) | 좌표계, 기본 도형, 스타일, 노드, 레이블 |
+| 11 | [고급 TikZ & PGFPlots](11_TikZ_Advanced.md) | 반복문, 트리, 그래프, PGFPlots, 과학적 삽화 |
+| 12 | [Beamer 프레젠테이션](12_Beamer_Presentations.md) | 프레임, 테마, 오버레이, 점진적 콘텐츠, 유인물 |
 | 13 | [사용자 정의 명령](13_Custom_Commands.md) | 매크로, 환경, 카운터, 개인 패키지 |
 | 14 | [문서 클래스](14_Document_Classes.md) | Article, report, book, KOMA-Script, 논문 템플릿 |
 | 15 | [자동화 및 빌드](15_Automation_and_Build.md) | latexmk, arara, Makefile, CI/CD, 버전 관리 |
@@ -31,11 +31,12 @@
 
 ## 학습 경로
 
-1. **초보자**: 레슨 01-06으로 시작하여 문서 기초를 학습
-2. **학술 논문 작성**: 수학 논문을 위한 레슨 07-10에 집중
-3. **프레젠테이션**: 기초를 완료한 후 레슨 11로 이동
-4. **고급**: 그래픽, 사용자 정의 및 워크플로우를 위한 레슨 12-15
-5. **통합**: 레슨 16은 모든 것을 실제 프로젝트에서 통합
+1. **초보자**: 레슨 01-03으로 문서 구조와 서식 학습
+2. **학술 논문 작성**: 레슨 04-08에서 수식, 그림, 표, 참조 집중
+3. **페이지 디자인**: 레슨 09에서 레이아웃과 타이포그래피 커스터마이징
+4. **그래픽 & 프레젠테이션**: 레슨 10-12에서 TikZ와 Beamer
+5. **고급**: 레슨 13-15에서 사용자 정의 명령, 문서 클래스, 빌드 자동화
+6. **통합**: 레슨 16은 모든 것을 실제 프로젝트에서 통합
 
 ## 예제 코드
 

@@ -2,9 +2,24 @@
 
 [이전: 데이터 전처리](./06_Data_Preprocessing.md) | [다음: 데이터 시각화 기초](./08_Data_Visualization_Basics.md)
 
-## 개요
+---
 
-기술통계는 데이터의 특성을 요약하고, EDA(Exploratory Data Analysis)는 데이터를 시각화하고 탐색하여 패턴과 인사이트를 발견하는 과정입니다.
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 평균(mean), 중앙값(median), 최빈값(mode), 절사평균(trimmed mean) 등 중심 경향 측도(measures of central tendency)를 계산할 수 있습니다
+2. 분산(variance), 표준편차(standard deviation), IQR, 변동계수(coefficient of variation) 등 산포 측도(measures of dispersion)를 계산할 수 있습니다
+3. 왜도(skewness)와 첨도(kurtosis)를 이용해 분포 형태(distribution shape)를 설명하고 그 값을 해석할 수 있습니다
+4. DataFrame에서 `describe` 메서드를 적용하고 상관행렬(correlation matrix) 및 공분산행렬(covariance matrix)을 계산할 수 있습니다
+5. 단변량(univariate), 이변량(bivariate), 다변량(multivariate) 분석을 포괄하는 체계적인 EDA(탐색적 데이터 분석) 워크플로우를 구현할 수 있습니다
+6. 정규성 검정(normality tests)(Shapiro-Wilk, Kolmogorov-Smirnov, Anderson-Darling)을 적용하고 Q-Q 플롯(Q-Q plot)을 해석할 수 있습니다
+7. 탐색적 맥락에서 t-검정(t-test), 분산분석(ANOVA), 카이제곱 검정(chi-square test)을 이용해 집단을 비교할 수 있습니다
+8. ydata-profiling, sweetviz 등 EDA 자동화 라이브러리를 언제 사용해야 하는지 판단할 수 있습니다
+
+---
+
+데이터를 모델링하거나 결론을 도출하기 전에, 먼저 다루는 데이터를 이해해야 합니다. 기술통계(descriptive statistics)는 수천 개의 데이터 포인트를 몇 가지 해석 가능한 숫자로 압축하고, EDA(탐색적 데이터 분석)는 시각화와 체계적인 탐색을 통해 숨겨진 패턴, 이상값, 관계를 드러냅니다. 두 가지를 함께 활용하면 모든 데이터 사이언스 프로젝트에서 빠뜨릴 수 없는 첫 번째 단계가 완성되며, 이후의 모든 의사결정을 이끄는 나침반이 됩니다.
 
 ---
 
@@ -31,6 +46,9 @@ data_with_mode = [1, 2, 2, 3, 3, 3, 4, 4]
 print(f"최빈값: {pd.Series(data_with_mode).mode().values}")  # [3]
 
 # 절사평균 (Trimmed Mean) - 이상치 영향 감소
+# 언제 절사평균을 선택하나요? 이상치(outlier)가 의심되지만 완전히 제거하고 싶지 않을 때입니다.
+# 일반 평균은 이상치(여기서는 100)에 끌려가지만, 절사평균은 상하위 10%를 제외한 후
+# 평균을 구하므로 데이터를 영구 삭제하지 않고도 더 안정적인 '전형적 값'을 얻을 수 있습니다.
 print(f"절사평균(10%): {stats.trim_mean(data, 0.1):.2f}")
 
 # 가중평균
@@ -62,7 +80,11 @@ Q3 = s.quantile(0.75)
 IQR = Q3 - Q1
 print(f"IQR: {IQR}")
 
-# 변동계수 (CV) - 상대적 산포
+# 변동계수 (CV, Coefficient of Variation) - 상대적 산포
+# CV는 표준편차(std dev) 단독으로는 알 수 없는 것을 알려줍니다: 평균 대비 산포가 얼마나 큰지.
+# 단위나 규모가 다른 데이터셋을 비교할 때 이것이 중요합니다 —
+# 예를 들어 소득(std ≈ 20,000달러)과 키(std ≈ 8cm)는 표준편차로 비교할 수 없지만,
+# CV(std/mean)는 두 값을 단위 없는 비율로 표현해 의미 있는 교차 비교가 가능합니다.
 cv = s.std() / s.mean()
 print(f"변동계수: {cv:.4f}")
 
@@ -466,6 +488,8 @@ print(f"카이제곱 검정: χ²={chi2:.4f}, p-value={p_value:.4f}")
 
 ### 6.1 pandas-profiling (ydata-profiling)
 
+자동화 프로파일링은 낯선 데이터셋을 처음 접할 때 빠르게 전체 현황을 파악하기에 가장 적합합니다 — 결측치 패턴, 분포, 상관관계, 중복값을 한 번에 잡아냅니다. 프로덕션 파이프라인이나 도메인 특화 검사가 필요한 경우에는 수동 EDA가 더 높은 제어력과 재현성을 제공합니다.
+
 ```python
 # pip install ydata-profiling
 
@@ -488,7 +512,8 @@ print(f"카이제곱 검정: χ²={chi2:.4f}, p-value={p_value:.4f}")
 # report = sv.analyze(df)
 # report.show_html("sweetviz_report.html")
 
-# 두 데이터셋 비교
+# 두 데이터셋 비교 — 훈련/테스트 분할 검증에 특히 유용합니다:
+# 두 분포가 크게 다르면 모델이 분포 변화(distribution shift)에 취약할 수 있습니다.
 # report = sv.compare(df1, df2)
 ```
 

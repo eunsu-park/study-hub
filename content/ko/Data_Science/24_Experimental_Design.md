@@ -2,9 +2,22 @@
 
 [이전: 비모수 통계](./23_Nonparametric_Statistics.md) | [다음: 실전 프로젝트](./25_Practical_Projects.md)
 
-## 개요
+## 학습 목표 (Learning Objectives)
 
-실험 설계는 인과관계를 추론하기 위한 체계적인 방법론입니다. 이 장에서는 실험 설계의 기본 원리, A/B 테스트, 검정력 분석을 통한 표본 크기 결정, 그리고 순차적 검정 방법을 학습합니다.
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 실험 설계의 세 가지 핵심 원리인 무작위화(randomization), 반복(replication), 블로킹(blocking)을 설명한다
+2. 참여자 배정을 위한 단순 무작위화(simple randomization)와 층화 무작위화(stratified randomization)를 구현한다
+3. 가설 수립부터 의사결정까지 A/B 테스트 워크플로우를 기술한다
+4. 두 비율 비교에서 검정력 분석(power analysis)을 사용하여 필요한 표본 크기를 계산한다
+5. A/B 테스트 분석에서 빈도주의(frequentist) 접근법과 베이지안(Bayesian) 접근법을 비교한다
+6. 피킹(peeking) 문제를 파악하고, 순차적 검정(sequential testing)을 위한 알파 소진 함수(alpha spending function)(O'Brien-Fleming, Pocock)를 적용한다
+7. 다중 비교 보정(Bonferroni, Holm-Bonferroni)을 적용하고 그 필요성을 설명한다
+8. 신규 효과(novelty effect), 네트워크 효과(network effect), 심슨의 역설(Simpson's paradox)을 포함한 A/B 테스트의 일반적인 함정을 평가한다
+
+---
+
+관찰 데이터는 상관관계를 밝힐 수 있지만, 잘 설계된 실험만이 인과관계를 확립할 수 있습니다. 웹사이트 A/B 테스트, 의학적 처치 평가, 또는 교수법 비교 등 어떤 경우든 실험 설계의 원리가 결론의 신뢰성을 결정합니다. 데이터 수집 전에 설계를 올바르게 하는 것 — 무작위화, 충분한 표본 크기, 적절한 대조군 — 이 사후 분석으로는 수정할 수 없는 잘못된 결론을 막아 줍니다.
 
 ---
 

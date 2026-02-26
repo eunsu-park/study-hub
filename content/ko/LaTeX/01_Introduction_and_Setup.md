@@ -5,6 +5,19 @@
 > **사전 요구 사항**: 기본 컴퓨터 활용 능력, 텍스트 편집기 사용 경험
 > **목표**: LaTeX가 무엇인지 이해하고, TeX 배포판을 설치하거나 Overleaf에 접근하여 첫 번째 문서를 컴파일하기
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. TeX와 LaTeX의 역사(history)와 목적(purpose)을 설명하고, 두 개념의 차이를 구분할 수 있다
+2. LaTeX와 워드 프로세서(word processor) 및 Markdown을 비교하여 주어진 작업에 적합한 도구를 선택할 수 있다
+3. TeX 배포판(TeX Live, MiKTeX, MacTeX)을 설치하거나 Overleaf를 사용한 클라우드 편집 환경을 구성할 수 있다
+4. 최소 LaTeX 문서의 필수 구성 요소(component)를 식별하고 각 요소의 역할을 설명할 수 있다
+5. 명령줄 도구(command-line tool) 또는 온라인 편집기를 사용하여 LaTeX 소스 파일을 PDF로 컴파일할 수 있다
+6. 일반적인 LaTeX 컴파일 오류(compilation error)를 인식하고 기본적인 문제 해결(troubleshooting) 전략을 적용할 수 있다
+
+---
+
 ## TeX와 LaTeX란 무엇인가?
 
 ### TeX의 역사
@@ -456,4 +469,4 @@ a^2 + b^2 = c^2
 ---
 
 **탐색**
-- 다음: [02_Document_Structure.md](02_Document_Structure.md)
+- 다음: [문서 구조](02_Document_Structure.md)

@@ -1,9 +1,25 @@
 # API Design Principles
 
+**Previous**: [Concurrency & Parallelism](./12_Concurrency_and_Parallelism.md) | **Next**: [Version Control and Collaboration](./14_Version_Control_Workflows.md)
+
 > **Topic**: Programming
 > **Lesson**: 13 of 16
 > **Prerequisites**: Object-oriented programming, HTTP basics, JSON/XML formats
-> **Objective**: Learn how to design clear, consistent, and maintainable APIs for libraries, modules, and web services
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Design RESTful APIs with proper resource URIs, HTTP methods, and status codes
+2. Implement pagination, filtering, and sorting for collection endpoints
+3. Compare REST, gRPC, and GraphQL and select the appropriate style for a given use case
+4. Apply core API design principles: consistency, least surprise, idempotency, and backward compatibility
+5. Implement API versioning strategies (URL, header, query parameter) and manage breaking changes
+6. Secure APIs using API keys, OAuth 2.0, and JWT-based authentication
+7. Design internal library APIs with minimal surface area, encapsulation, and fluent interfaces
+8. Document APIs using OpenAPI/Swagger specifications with comprehensive error code references
+
+---
 
 ## Introduction
 
@@ -920,6 +936,6 @@ Good API design is about empathy for your users:
 
 Remember: APIs are products. Treat your API consumers as customers—invest in their experience.
 
-## Navigation
+---
 
-[← Previous: Performance Optimization](12_Performance_Optimization.md) | [Next: Version Control Workflows →](14_Version_Control_Workflows.md)
+**Previous**: [Concurrency & Parallelism](./12_Concurrency_and_Parallelism.md) | **Next**: [Version Control and Collaboration](./14_Version_Control_Workflows.md)

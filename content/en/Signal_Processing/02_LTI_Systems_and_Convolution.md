@@ -8,15 +8,18 @@ In Lesson 01 we established the language of signals and the properties that char
 
 **Difficulty**: ⭐⭐⭐
 
-**Learning Objectives**:
-- Explain why LTI systems are so important in signal processing
-- Derive the convolution integral and convolution sum from the superposition principle
-- Compute convolutions analytically and numerically
-- Apply the properties of convolution (commutativity, associativity, distributivity)
-- Relate step response to impulse response
-- Analyze cascade, parallel, and feedback system interconnections
-- Determine BIBO stability from the impulse response
-- Compute the frequency response of an LTI system
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why LTI systems are so important in signal processing
+2. Derive the convolution integral and convolution sum from the superposition principle
+3. Compute convolutions analytically and numerically
+4. Apply the properties of convolution (commutativity, associativity, distributivity)
+5. Relate step response to impulse response
+6. Analyze cascade, parallel, and feedback system interconnections
+7. Determine BIBO stability from the impulse response
+8. Compute the frequency response of an LTI system
 
 ---
 

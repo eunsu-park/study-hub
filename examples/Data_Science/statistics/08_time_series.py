@@ -8,6 +8,20 @@ Demonstrates time series analysis techniques:
 - Stationarity (ADF test concept)
 - AR/MA/ARMA models
 - Simple forecasting
+
+Theory:
+- Stationarity is the fundamental assumption for most time series models: the
+  joint distribution of (y_t, y_{t+h}) depends only on h, not t. Without it,
+  sample statistics (mean, ACF) are meaningless.
+- AR(p) models capture persistence: current value depends on past values.
+  MA(q) models capture shock propagation: current value depends on past noise.
+  ARMA(p,q) combines both for parsimonious modeling.
+- The ACF and PACF patterns identify model order: AR(p) has exponentially
+  decaying ACF but PACF cuts off after lag p. MA(q) is the reverse.
+- Non-stationary series (random walks, trends) must be differenced before
+  modeling. The number of differences d gives the "I" in ARIMA(p,d,q).
+
+Adapted from Data_Science Lesson 20.
 """
 
 import numpy as np
@@ -44,7 +58,9 @@ def moving_average():
     print(f"Generated time series: n = {n}")
     print(f"Components: trend + seasonal + noise")
 
-    # Different window sizes
+    # Why: Larger windows produce smoother estimates but introduce more lag and
+    # lose edge observations. The choice involves a bias-variance trade-off:
+    # small windows are noisy (high variance), large windows over-smooth (high bias).
     windows = [5, 10, 20]
 
     print(f"\nMoving averages with different windows:")
@@ -119,6 +135,9 @@ def exponential_smoothing():
         smoothed = np.zeros(n)
         smoothed[0] = y[0]
 
+        # Why: Exponential smoothing gives exponentially decreasing weights to
+        # older observations. The weight of observation t-k is alpha*(1-alpha)^k.
+        # Unlike MA, it uses ALL past data, not just a fixed window.
         for i in range(1, n):
             smoothed[i] = alpha * y[i] + (1 - alpha) * smoothed[i-1]
 

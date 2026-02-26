@@ -49,7 +49,8 @@ def display_method(self):
     return f"MyClass(value={self.value})"
 
 
-# type(name, bases, dict)
+# Why: type() with three arguments is the runtime equivalent of the class statement —
+# this reveals that class creation in Python is just a function call to the metaclass
 MyClass = type('MyClass', (object,), {
     '__init__': init_method,
     'display': display_method,
@@ -134,7 +135,8 @@ class RegistryMeta(type):
     def __new__(mcs, name, bases, namespace):
         cls = super().__new__(mcs, name, bases, namespace)
 
-        # Don't register the base class itself
+        # Why: Skipping registration when bases is empty avoids registering the base Plugin
+        # class itself — only concrete subclasses should appear in the plugin registry
         if bases:
             mcs.registry[name] = cls
             print(f"  Registered: {name}")
@@ -186,6 +188,8 @@ for name, cls in RegistryMeta.get_registry().items():
 section("Singleton Pattern with Metaclass")
 
 
+# Why: Overriding __call__ in the metaclass intercepts instance creation (cls()), which is
+# more robust than decorator-based singletons since it works correctly with inheritance
 class SingletonMeta(type):
     """Metaclass that implements singleton pattern."""
 
@@ -270,6 +274,8 @@ except TypeError as e:
 section("__init_subclass__ Hook")
 
 
+# Why: __init_subclass__ (Python 3.6+) provides the same registration pattern as a
+# metaclass but with far less complexity — prefer this for simple subclass hooks
 class PluginBase:
     """Base class using __init_subclass__ instead of metaclass."""
 

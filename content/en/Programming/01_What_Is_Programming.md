@@ -1,11 +1,23 @@
 # What Is Programming
 
-> **Topic**: Programming
-> **Lesson**: 1 of 16
-> **Prerequisites**: None
-> **Objective**: Understand what programming is, the problem-solving process, computational thinking, and how computers execute programs.
+**Next**: [Programming Paradigms](./02_Programming_Paradigms.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define programming and distinguish it from coding
+2. Apply the four components of computational thinking (decomposition, pattern recognition, abstraction, algorithmic thinking) to break down problems
+3. Follow the structured five-step problem-solving process used by professional programmers
+4. Describe the different levels of abstraction in software, from machine code to high-level frameworks
+5. Compare and contrast compilation, interpretation, and JIT compilation as program execution models
+6. Outline the phases of the Software Development Lifecycle (SDLC)
+7. Explain why code readability and communication are essential aspects of programming
+8. Trace the historical evolution of programming languages from the 1840s to the modern era
 
 ---
+
+Programming is one of the most broadly applicable skills in modern technology. Whether you are building a web application, automating a scientific experiment, or training a machine learning model, the underlying discipline is the same: translating human intent into precise instructions a computer can execute. This lesson establishes the foundational vocabulary and mental models you will rely on throughout the rest of the course.
 
 ## What Is Programming?
 
@@ -28,7 +40,7 @@ A programmer doesn't just write code; they:
 - Document their work
 - Refactor and improve existing code
 
-**Analogy**: Coding is to programming what typing is to writing a novel. Typing is a necessary skill, but writing involves creativity, structure, character development, plot, and revision.
+> **📌 Analogy:** Coding is to programming what typing is to writing a novel. Typing is a necessary skill, but writing involves creativity, structure, character development, plot, and revision.
 
 ---
 
@@ -558,6 +570,4 @@ The best programmers are not those who know the most syntax, but those who can *
 
 ---
 
-## Next Steps
-
-[Next Lesson: Programming Paradigms →](02_Programming_Paradigms.md)
+**Next**: [Programming Paradigms](./02_Programming_Paradigms.md)

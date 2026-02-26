@@ -1,10 +1,24 @@
 # 08. Git 워크플로우 전략
 
-## 학습 목표
-- 다양한 Git 브랜치 전략 이해
-- 팀 규모와 프로젝트에 맞는 워크플로우 선택
-- Git Flow, GitHub Flow, Trunk-based Development 비교
-- 릴리스 관리 및 버전 전략 수립
+**이전**: [GitHub Actions](./07_GitHub_Actions.md) | **다음**: [고급 Git 기법](./09_Advanced_Git_Techniques.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 브랜치 전략(branching strategy)이 팀 생산성과 코드 품질에 왜 필수적인지 설명할 수 있습니다
+2. Git Flow 모델을 설명하고, 적합한 상황(정기 릴리스, 대규모 팀)을 파악할 수 있습니다
+3. GitHub Flow 모델을 설명하고, 적합한 상황(지속적 배포, 소규모 팀)을 파악할 수 있습니다
+4. 트렁크 기반 개발(Trunk-based Development)을 설명하고 CI/CD와의 관계를 이해할 수 있습니다
+5. Git Flow, GitHub Flow, GitLab Flow, 트렁크 기반 개발을 복잡도, 릴리스 주기, 팀 규모 등 핵심 차원에서 비교할 수 있습니다
+6. 주어진 프로젝트 시나리오에 적합한 워크플로우를 선택하고 그 이유를 설명할 수 있습니다
+7. 선택한 워크플로우를 지원하기 위해 브랜치 보호 규칙(branch protection rules)과 릴리스 태깅(release tagging)을 설정할 수 있습니다
+
+---
+
+브랜치 전략을 올바르게 선택하는 것은 개발 팀이 내리는 가장 영향력 있는 결정 중 하나입니다. 잘못된 선택은 고통스러운 병합 충돌(merge conflicts), 막힌 릴리스, 그리고 지친 개발자로 이어집니다. 이 레슨에서는 가장 널리 사용되는 워크플로우를 살펴보고, 각각의 트레이드오프(trade-off)를 설명하며, 팀의 규모, 릴리스 주기, 배포 모델에 맞는 전략을 선택할 수 있는 의사결정 프레임워크(decision framework)를 제공합니다.
 
 ## 목차
 1. [워크플로우 개요](#1-워크플로우-개요)
@@ -732,6 +746,36 @@ git push origin v1.2.3
 - [GitHub Flow](https://docs.github.com/en/get-started/quickstart/github-flow)
 - [Trunk Based Development](https://trunkbaseddevelopment.com/)
 - [GitLab Flow](https://docs.gitlab.com/ee/topics/gitlab_flow.html)
+
+---
+
+## 연습 문제
+
+### 연습 1: Git Flow 전체 사이클
+`git-flow` CLI 도구 또는 수동 명령어로 완전한 Git Flow 사이클을 시뮬레이션합니다:
+1. 새 저장소에서 Git Flow를 초기화합니다.
+2. `feature/user-profile` 브랜치를 시작하고, 커밋 2개를 만든 뒤 기능을 완료합니다(`develop`에 병합).
+3. `develop`에서 `release/1.0.0` 브랜치를 시작하고, 릴리스 준비 커밋을 하나 추가한 뒤 릴리스를 완료합니다(`main`과 `develop`에 각각 병합, `v1.0.0` 태그 생성).
+4. `main`에서 `hotfix/1.0.1`을 시작하여 긴급 버그를 수정하고 핫픽스를 완료합니다.
+5. 병합 지점이 표시된 결과 브랜치 이력을 그리거나 설명합니다.
+
+### 연습 2: 브랜치 보호와 함께하는 GitHub Flow
+1. `main` 브랜치 보호(PR 필수 + 리뷰어 최소 1명)가 설정된 저장소를 만듭니다.
+2. `feature/dark-mode` 브랜치를 만들고 PR을 열어 리뷰-승인-머지 전체 사이클을 진행합니다.
+3. 머지 후 `git push origin --delete feature/dark-mode`로 원격 브랜치를 삭제합니다.
+4. 이 레슨 섹션 3.4의 PR 템플릿으로 `.github/pull_request_template.md` 파일을 만듭니다.
+
+### 연습 3: 기능 플래그(Feature Flag) 구현
+임의의 언어로 간단한 기능 플래그 시스템을 구현합니다:
+1. `userId + featureName`의 해시를 기반으로 일관된 사용자 부분 집합에게 `True`를 반환하는 `is_feature_enabled(feature_name, user_id, rollout_percentage)` 함수를 작성합니다.
+2. 플래그로 코드 경로를 감싸서 활성화/비활성화 시 다르게 동작하도록 합니다.
+3. `rollout_percentage=25`일 때 1000개의 랜덤 사용자 ID 중 정확히 ~25%만 기능을 받는지 테스트합니다.
+
+### 연습 4: 워크플로우 선택 근거 작성
+다음 각 시나리오에 대해 가장 적합한 워크플로우(Git Flow, GitHub Flow, Trunk-based Development, GitLab Flow)를 선택하고 3~5문장으로 근거를 작성합니다:
+- 매일 배포하는 웹 SaaS 제품을 만드는 3인 스타트업.
+- 6주마다 앱스토어에 모바일 앱을 릴리스하는 50인 엔터프라이즈 팀.
+- 기능 플래그(Feature Flag)와 성숙한 CI/CD를 갖춘 200명 규모의 마이크로서비스(microservices) 팀.
 
 ---
 

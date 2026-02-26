@@ -100,6 +100,8 @@ is_prime() {
     fi
 
     local i
+    # Why: bash has no floating-point math, so we delegate sqrt to awk.
+    # Only checking up to sqrt(n) reduces trial divisions from O(n) to O(sqrt(n)).
     local sqrt_n=$(awk "BEGIN {print int(sqrt($n))}")
 
     for ((i = 3; i <= sqrt_n; i += 2)); do
@@ -115,9 +117,13 @@ is_prime() {
 # Args: $1 - first number, $2 - second number
 # Returns: GCD of the two numbers
 gcd() {
-    local a=${1#-}  # Remove negative sign if present
+    # Why: ${1#-} strips a leading minus sign, since GCD is defined on
+    # non-negative integers — this avoids negative modulo edge cases in bash.
+    local a=${1#-}
     local b=${2#-}
 
+    # Why: Euclid's algorithm via repeated modulo is O(log n) and avoids
+    # the overhead of factorization — ideal for integer-only bash arithmetic.
     while [[ $b -ne 0 ]]; do
         local temp=$b
         b=$((a % b))
@@ -194,7 +200,8 @@ demo_error_handling() {
     echo
 }
 
-# Main execution (only if script is run directly, not sourced)
+# Why: this guard makes the library testable — Bats can source it to call
+# individual functions without triggering the demo output.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "Math Library Demonstration"
     echo "=========================="

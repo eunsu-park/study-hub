@@ -6,12 +6,15 @@
 
 **난이도**: ⭐⭐ (초급-중급)
 
-**학습 목표**:
-- 구조 요소(Structuring Element) 이해
-- 침식(Erosion)과 팽창(Dilation) 연산
-- 열기(Opening)와 닫기(Closing) 연산
-- 그래디언트, 탑햇, 블랙햇 연산
-- 노이즈 제거 및 객체 분리 응용
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 구조 요소(Structuring Element) 이해
+2. 침식(Erosion)과 팽창(Dilation) 연산
+3. 열기(Opening)와 닫기(Closing) 연산
+4. 그래디언트, 탑햇, 블랙햇 연산
+5. 노이즈 제거 및 객체 분리 응용
 
 ---
 
@@ -32,33 +35,35 @@
 
 ## 1. 모폴로지 연산 개요
 
+가우시안 블러와 같은 픽셀 단위 필터는 모든 픽셀을 동등하게 취급합니다. 하지만 현실에서는 객체 경계를 흐리게 하지 않고 스펙클 노이즈를 제거하거나, 붙어 있는 두 세포를 분리해야 하는 경우처럼 객체의 *형태*를 기반으로 처리해야 하는 경우가 많습니다. 모폴로지 연산은 형태를 가진 마스크로 이미지 구조를 탐색함으로써 이 간극을 채웁니다. 이진 이미지 정리와 형태 분석을 위한 표준 도구입니다.
+
 ### 모폴로지란?
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     모폴로지 연산 개요                           │
+│                  Morphological Operations Overview               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   모폴로지(Morphology) = 형태학                                  │
-│   이미지의 형태(shape)를 기반으로 하는 연산                       │
+│   Morphology = Study of shape                                   │
+│   Operations based on the shape of images                       │
 │                                                                 │
-│   주요 용도:                                                     │
+│   Main Uses:                                                    │
 │   ┌─────────────────────────────────────────────────────────┐   │
-│   │  1. 노이즈 제거     - 작은 점 노이즈 제거                 │   │
-│   │  2. 홀 채우기       - 객체 내부의 구멍 메우기              │   │
-│   │  3. 객체 분리       - 붙어있는 객체들 분리                 │   │
-│   │  4. 객체 연결       - 떨어진 부분들 연결                   │   │
-│   │  5. 엣지 검출       - 모폴로지 그래디언트                  │   │
-│   │  6. 스켈레톤화     - 객체의 뼈대 추출                     │   │
+│   │  1. Noise removal     - Remove small noise dots          │   │
+│   │  2. Hole filling      - Fill holes inside objects        │   │
+│   │  3. Object separation - Separate connected objects       │   │
+│   │  4. Object connection - Connect disconnected parts       │   │
+│   │  5. Edge detection    - Morphological gradient           │   │
+│   │  6. Skeletonization  - Extract object skeleton           │   │
 │   └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
-│   기본 연산:                                                     │
-│   - 침식 (Erosion): 객체 축소                                   │
-│   - 팽창 (Dilation): 객체 확장                                  │
+│   Basic Operations:                                             │
+│   - Erosion: Shrink objects                                     │
+│   - Dilation: Expand objects                                    │
 │                                                                 │
-│   조합 연산:                                                     │
-│   - 열기 (Opening) = 침식 → 팽창                                │
-│   - 닫기 (Closing) = 팽창 → 침식                                │
+│   Combined Operations:                                          │
+│   - Opening = Erosion → Dilation                                │
+│   - Closing = Dilation → Erosion                                │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -75,14 +80,14 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        구조 요소                                 │
+│                        Structuring Element                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   구조 요소 = 커널처럼 연산에 사용되는 작은 이진 행렬              │
+│   Structuring Element = A small binary matrix used in operations│
 │                                                                 │
-│   주요 형태:                                                     │
+│   Main Shapes:                                                  │
 │                                                                 │
-│   MORPH_RECT (직사각형)    MORPH_CROSS (십자)    MORPH_ELLIPSE  │
+│   MORPH_RECT (Rectangle)   MORPH_CROSS (Cross)    MORPH_ELLIPSE │
 │   ┌───┬───┬───┐           ┌───┬───┬───┐        ┌───┬───┬───┐  │
 │   │ 1 │ 1 │ 1 │           │ 0 │ 1 │ 0 │        │ 0 │ 1 │ 0 │  │
 │   ├───┼───┼───┤           ├───┼───┼───┤        ├───┼───┼───┤  │
@@ -90,11 +95,11 @@
 │   ├───┼───┼───┤           ├───┼───┼───┤        ├───┼───┼───┤  │
 │   │ 1 │ 1 │ 1 │           │ 0 │ 1 │ 0 │        │ 0 │ 1 │ 0 │  │
 │   └───┴───┴───┘           └───┴───┴───┘        └───┴───┴───┘  │
-│   모든 방향 영향          수직/수평만 영향      타원형 영향      │
+│   All directions          Vertical/Horizontal   Elliptical      │
 │                                                                 │
-│   크기에 따른 효과:                                              │
-│   - 작은 크기 (3x3): 세밀한 처리                                │
-│   - 큰 크기 (7x7, 9x9): 강한 효과                               │
+│   Effect by Size:                                               │
+│   - Small size (3x3): Fine processing                           │
+│   - Large size (7x7, 9x9): Strong effect                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -106,23 +111,26 @@ import cv2
 import numpy as np
 
 # getStructuringElement(shape, ksize, anchor=(-1,-1))
-# shape: 구조 요소 형태
-# ksize: (width, height) 크기
-# anchor: 기준점 (기본값: 중심)
+# shape: Structuring element shape
+# ksize: (width, height) size
+# anchor: Reference point (default: center)
 
-# 직사각형
+# Why MORPH_RECT: treats all directions equally — use when objects have
+# roughly rectangular or straight edges (text, PCB traces)
 rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 print("RECT (5x5):\n", rect_kernel)
 
-# 십자형
+# Cross
 cross_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (5, 5))
 print("\nCROSS (5x5):\n", cross_kernel)
 
-# 타원형
+# Why MORPH_ELLIPSE: approximates a disk — preferred for circular/rounded
+# objects (cells, coins) because it avoids introducing rectangular artifacts
+# at diagonals that MORPH_RECT would create
 ellipse_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 print("\nELLIPSE (5x5):\n", ellipse_kernel)
 
-# 커스텀 구조 요소
+# Custom structuring element
 custom_kernel = np.array([
     [0, 1, 0],
     [1, 1, 1],
@@ -162,38 +170,41 @@ plt.show()
 
 ## 3. 침식 - erode()
 
+침식(Erosion)은 "전경이 이 커널 형태의 영역을 완전히 덮는가?"라는 질문에 답합니다. 그렇지 않으면 해당 픽셀은 제거됩니다. 이 덕분에 커널을 완전히 덮을 수 없는 고립된 노이즈 점을 제거하고, 접촉된 객체들 사이의 얇은 연결을 끊어 개별 계수가 가능하도록 만드는 데 최적의 도구입니다.
+
 ### 침식 연산 원리
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         침식 (Erosion)                          │
+│                         Erosion                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   원리:                                                         │
-│   - 구조 요소를 이미지 위로 이동                                 │
-│   - 구조 요소 아래의 모든 픽셀이 1일 때만 중심 픽셀을 1로         │
-│   - 하나라도 0이면 중심 픽셀은 0                                 │
+│   Principle:                                                    │
+│   - Move the structuring element across the image               │
+│   - Set center pixel to 1 only if all pixels under the         │
+│     structuring element are 1                                   │
+│   - If any pixel is 0, center pixel becomes 0                   │
 │                                                                 │
-│   효과:                                                         │
-│   - 전경(흰색) 영역 축소                                        │
-│   - 작은 노이즈 제거                                            │
-│   - 연결된 객체 분리                                            │
-│   - 경계 부드럽게                                               │
+│   Effect:                                                       │
+│   - Shrinks foreground (white) area                             │
+│   - Removes small noise                                         │
+│   - Separates connected objects                                 │
+│   - Smooths boundaries                                          │
 │                                                                 │
-│   예시:                                                         │
-│   원본:               침식 후 (3x3):                            │
+│   Example:                                                      │
+│   Original:           After Erosion (3x3):                      │
 │   ┌─────────────┐     ┌─────────────┐                          │
 │   │ ████████████│     │   ████████  │                          │
 │   │ ████████████│ ──▶ │   ████████  │                          │
 │   │ ████████████│     │   ████████  │                          │
 │   │ ████████████│     │             │                          │
 │   └─────────────┘     └─────────────┘                          │
-│   테두리 1픽셀씩 축소                                            │
+│   Borders shrink by 1 pixel                                     │
 │                                                                 │
-│   노이즈 제거:                                                   │
+│   Noise Removal:                                                │
 │   ┌─────────────┐     ┌─────────────┐                          │
 │   │ ██  ■  ████ │     │ ██     ███  │                          │
-│   │ ████  ████  │ ──▶ │  ██    ██   │  작은 점(■) 제거         │
+│   │ ████  ████  │ ──▶ │  ██    ██   │  Small dots (■) removed  │
 │   │    ■  ████  │     │       ███   │                          │
 │   └─────────────┘     └─────────────┘                          │
 │                                                                 │
@@ -206,16 +217,17 @@ plt.show()
 import cv2
 import numpy as np
 
-# 이진 이미지 준비
+# Prepare binary image
 img = cv2.imread('binary_image.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 
-# 구조 요소 생성
+# Why MORPH_RECT (3x3): the smallest kernel that still has a meaningful neighborhood;
+# larger kernels erode more aggressively and may destroy the objects you want to keep
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
 # erode(src, kernel, iterations=1)
-# iterations: 반복 횟수 (기본값 1)
-
+# Why iterations: repeating erosion N times is equivalent to eroding with a larger
+# kernel but cheaper to compute — use iterations to tune removal strength incrementally
 eroded_1 = cv2.erode(binary, kernel, iterations=1)
 eroded_2 = cv2.erode(binary, kernel, iterations=2)
 eroded_3 = cv2.erode(binary, kernel, iterations=3)
@@ -234,22 +246,22 @@ cv2.destroyAllWindows()
 import cv2
 import numpy as np
 
-# 테스트 이미지 생성
+# Create test image
 img = np.zeros((300, 400), dtype=np.uint8)
 
-# 큰 사각형
+# Large rectangle
 cv2.rectangle(img, (50, 50), (150, 150), 255, -1)
 
-# 작은 노이즈 점들
+# Small noise dots
 for _ in range(50):
     x, y = np.random.randint(200, 350), np.random.randint(50, 250)
     cv2.circle(img, (x, y), 2, 255, -1)
 
-# 연결된 원
+# Connected circles
 cv2.circle(img, (280, 150), 40, 255, -1)
 cv2.circle(img, (320, 150), 40, 255, -1)
 
-# 침식 적용
+# Apply erosion
 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 eroded = cv2.erode(img, kernel, iterations=1)
 
@@ -263,37 +275,40 @@ cv2.destroyAllWindows()
 
 ## 4. 팽창 - dilate()
 
+팽창(Dilation)은 침식의 쌍대(Dual) 연산입니다. "전경이 이 커널 영역의 어느 부분이라도 닿는가?"라고 묻습니다. 그렇다면 픽셀이 설정됩니다. 따라서 끊어진 획을 다시 연결하고 작은 틈을 채우는 데 이상적입니다. 전체 객체 크기가 유지되도록 항상 침식과 짝을 이루어 사용합니다(열기 또는 닫기 형태로).
+
 ### 팽창 연산 원리
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         팽창 (Dilation)                         │
+│                         Dilation                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   원리:                                                         │
-│   - 구조 요소를 이미지 위로 이동                                 │
-│   - 구조 요소 아래의 픽셀 중 하나라도 1이면 중심 픽셀을 1로       │
-│   - 침식의 반대 연산                                            │
+│   Principle:                                                    │
+│   - Move the structuring element across the image               │
+│   - Set center pixel to 1 if any pixel under the               │
+│     structuring element is 1                                    │
+│   - Opposite of erosion                                         │
 │                                                                 │
-│   효과:                                                         │
-│   - 전경(흰색) 영역 확장                                        │
-│   - 홀(구멍) 채우기                                             │
-│   - 끊어진 부분 연결                                            │
-│   - 객체 강조                                                   │
+│   Effect:                                                       │
+│   - Expands foreground (white) area                             │
+│   - Fills holes                                                 │
+│   - Connects broken parts                                       │
+│   - Emphasizes objects                                          │
 │                                                                 │
-│   예시:                                                         │
-│   원본:               팽창 후 (3x3):                            │
+│   Example:                                                      │
+│   Original:           After Dilation (3x3):                     │
 │   ┌─────────────┐     ┌─────────────┐                          │
 │   │   ██████    │     │ ████████████│                          │
 │   │   ██████    │ ──▶ │ ████████████│                          │
 │   │   ██████    │     │ ████████████│                          │
 │   └─────────────┘     └─────────────┘                          │
-│   테두리 1픽셀씩 확장                                            │
+│   Borders expand by 1 pixel                                     │
 │                                                                 │
-│   끊어진 부분 연결:                                              │
+│   Connect Broken Parts:                                         │
 │   ┌─────────────┐     ┌─────────────┐                          │
 │   │ ██      ██  │     │ ████    ████│                          │
-│   │ ██  ..  ██  │ ──▶ │ ██████████  │  점선이 연결됨           │
+│   │ ██  ..  ██  │ ──▶ │ ██████████  │  Dotted line connected  │
 │   │ ██      ██  │     │ ████    ████│                          │
 │   └─────────────┘     └─────────────┘                          │
 │                                                                 │
@@ -306,7 +321,7 @@ cv2.destroyAllWindows()
 import cv2
 import numpy as np
 
-# 이진 이미지 준비
+# Prepare binary image
 img = cv2.imread('binary_image.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 
@@ -332,10 +347,10 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 테스트 이미지
+# Test image
 img = np.zeros((200, 200), dtype=np.uint8)
 cv2.rectangle(img, (50, 50), (150, 150), 255, -1)
-cv2.circle(img, (100, 100), 20, 0, -1)  # 내부 구멍
+cv2.circle(img, (100, 100), 20, 0, -1)  # Inner hole
 
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
 
@@ -364,27 +379,29 @@ plt.show()
 
 ## 5. 열기와 닫기 - morphologyEx()
 
+단순 침식은 객체를 영구적으로 축소하고, 단순 팽창은 객체를 팽창시킵니다. 열기(Opening)와 닫기(Closing)는 두 연산을 결합하여 객체 크기를 대략 유지하면서 *특정 유형의 결함*(노이즈 점 또는 홀)만을 대상으로 합니다. 이 대칭성 때문에 실제 처리 파이프라인에서는 단독 침식/팽창보다 열기/닫기가 선호됩니다.
+
 ### 열기 (Opening)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      열기 (Opening)                              │
+│                      Opening                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   열기 = 침식 → 팽창                                            │
+│   Opening = Erosion → Dilation                                  │
 │                                                                 │
-│   효과:                                                         │
-│   - 작은 노이즈(점) 제거                                        │
-│   - 객체의 전체 크기는 대략 유지                                 │
-│   - 가느다란 연결부 끊기                                        │
+│   Effect:                                                       │
+│   - Removes small noise (dots)                                  │
+│   - Maintains overall object size approximately                 │
+│   - Breaks thin connections                                     │
 │                                                                 │
-│   원본        침식         팽창 (열기 결과)                      │
+│   Original    Erosion      Dilation (Opening result)            │
 │   ┌──────┐    ┌──────┐    ┌──────┐                              │
 │   │██ ■ █│    │█     │    │██   █│                              │
 │   │██████│ ─▶ │ ████ │ ─▶ │██████│                              │
 │   │  ■ ██│    │    █ │    │    ██│                              │
 │   └──────┘    └──────┘    └──────┘                              │
-│   작은 점(■) 제거됨                                              │
+│   Small dots (■) removed                                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -393,23 +410,23 @@ plt.show()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      닫기 (Closing)                              │
+│                      Closing                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   닫기 = 팽창 → 침식                                            │
+│   Closing = Dilation → Erosion                                  │
 │                                                                 │
-│   효과:                                                         │
-│   - 작은 구멍(홀) 채우기                                        │
-│   - 객체의 전체 크기는 대략 유지                                 │
-│   - 끊어진 부분 연결                                            │
+│   Effect:                                                       │
+│   - Fills small holes                                           │
+│   - Maintains overall object size approximately                 │
+│   - Connects broken parts                                       │
 │                                                                 │
-│   원본        팽창         침식 (닫기 결과)                      │
+│   Original    Dilation     Erosion (Closing result)             │
 │   ┌──────┐    ┌──────┐    ┌──────┐                              │
 │   │██████│    │██████│    │██████│                              │
 │   │██○ ██│ ─▶ │██████│ ─▶ │██████│                              │
 │   │██████│    │██████│    │██████│                              │
 │   └──────┘    └──────┘    └──────┘                              │
-│   내부 구멍(○) 채워짐                                            │
+│   Inner hole (○) filled                                         │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -423,18 +440,22 @@ import numpy as np
 img = cv2.imread('binary_image.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 
+# Why (5,5): kernel must be larger than the noise/holes you want to remove;
+# a 5x5 kernel removes features smaller than ~5 pixels in diameter
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 
 # morphologyEx(src, op, kernel, iterations=1)
-# op: 연산 종류
+# op: Operation type
 
-# 열기 (Opening): 노이즈 제거
+# Why MORPH_OPEN first: erosion removes small noise dots; the subsequent dilation
+# restores the larger objects to their original size (erode → dilate = opening)
 opening = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
-# 닫기 (Closing): 홀 채우기
+# Closing: Hole filling (dilate → erode; expands to fill holes, then contracts back)
 closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-# 열기 후 닫기 (노이즈 제거 + 홀 채우기)
+# Why open before close: opening on the raw image avoids noise dots being "healed"
+# into the object by the closing step — order matters
 clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 clean = cv2.morphologyEx(clean, cv2.MORPH_CLOSE, kernel)
 
@@ -453,11 +474,11 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 테스트 이미지: 노이즈 + 구멍이 있는 사각형
+# Test image: Rectangle with noise + holes
 img = np.zeros((200, 200), dtype=np.uint8)
 cv2.rectangle(img, (50, 50), (150, 150), 255, -1)
 
-# 노이즈 추가 (작은 점들)
+# Add noise (small dots)
 noise = img.copy()
 for _ in range(30):
     x, y = np.random.randint(10, 45), np.random.randint(10, 190)
@@ -466,7 +487,7 @@ for _ in range(30):
     x, y = np.random.randint(155, 190), np.random.randint(10, 190)
     cv2.circle(noise, (x, y), 2, 255, -1)
 
-# 구멍 추가 (객체 내부)
+# Add holes (inside object)
 holes = noise.copy()
 for _ in range(10):
     x, y = np.random.randint(60, 140), np.random.randint(60, 140)
@@ -507,23 +528,23 @@ plt.show()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   모폴로지 그래디언트                             │
+│                   Morphological Gradient                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   그래디언트 = 팽창 - 침식                                       │
+│   Gradient = Dilation - Erosion                                 │
 │                                                                 │
-│   효과: 객체의 윤곽선(경계) 추출                                 │
+│   Effect: Extract object outline (boundary)                     │
 │                                                                 │
-│   원본              팽창              침식                       │
+│   Original          Dilation           Erosion                  │
 │   ┌──────┐         ┌──────┐         ┌──────┐                   │
 │   │ ████ │         │██████│         │  ██  │                   │
 │   │ ████ │    -    │██████│    =    │  ██  │                   │
 │   │ ████ │         │██████│         │  ██  │                   │
 │   └──────┘         └──────┘         └──────┘                   │
 │                                                                 │
-│   그래디언트 결과:                                               │
+│   Gradient Result:                                              │
 │   ┌──────┐                                                      │
-│   │ ████ │  → 외곽선만 남음                                     │
+│   │ ████ │  → Only outline remains                              │
 │   │ █  █ │                                                      │
 │   │ ████ │                                                      │
 │   └──────┘                                                      │
@@ -535,21 +556,21 @@ plt.show()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    탑햇 / 블랙햇                                 │
+│                    Top-hat / Black-hat                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   탑햇 (Top Hat) = 원본 - 열기                                   │
-│   - 밝은 영역에서 작은 밝은 부분 추출                            │
-│   - 배경보다 밝은 작은 객체 검출                                 │
+│   Top-hat = Original - Opening                                  │
+│   - Extract small bright parts from bright areas                │
+│   - Detect small objects brighter than background               │
 │                                                                 │
-│   블랙햇 (Black Hat) = 닫기 - 원본                               │
-│   - 어두운 영역에서 작은 어두운 부분 추출                        │
-│   - 배경보다 어두운 작은 구멍/객체 검출                          │
+│   Black-hat = Closing - Original                                │
+│   - Extract small dark parts from dark areas                    │
+│   - Detect small holes/objects darker than background           │
 │                                                                 │
-│   활용:                                                         │
-│   - 조명이 불균일한 이미지 보정                                  │
-│   - 문서 이미지의 그림자 제거                                    │
-│   - 작은 결함 검출                                              │
+│   Applications:                                                 │
+│   - Correct images with uneven illumination                     │
+│   - Remove shadows from document images                         │
+│   - Detect small defects                                        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -564,16 +585,16 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg', cv2.IMREAD_GRAYSCALE)
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
 
-# 모폴로지 그래디언트
+# Morphological gradient
 gradient = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)
 
-# 탑햇
+# Top-hat
 tophat = cv2.morphologyEx(img, cv2.MORPH_TOPHAT, kernel)
 
-# 블랙햇
+# Black-hat
 blackhat = cv2.morphologyEx(img, cv2.MORPH_BLACKHAT, kernel)
 
-# 수동 계산 (확인용)
+# Manual calculation (for verification)
 dilated = cv2.dilate(img, kernel)
 eroded = cv2.erode(img, kernel)
 opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
@@ -583,7 +604,7 @@ gradient_manual = dilated - eroded
 tophat_manual = img - opening
 blackhat_manual = closing - img
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 axes[0, 0].imshow(img, cmap='gray')
@@ -598,7 +619,7 @@ axes[0, 2].set_title('Top Hat (Bright spots)')
 axes[1, 0].imshow(blackhat, cmap='gray')
 axes[1, 0].set_title('Black Hat (Dark spots)')
 
-# 탑햇 + 블랙햇으로 대비 향상
+# Enhance contrast using top-hat + black-hat
 enhanced = cv2.add(img, tophat)
 enhanced = cv2.subtract(enhanced, blackhat)
 axes[1, 1].imshow(enhanced, cmap='gray')
@@ -617,16 +638,16 @@ plt.show()
 ```python
 import cv2
 
-# morphologyEx()에서 사용 가능한 연산 목록
+# List of operations available in morphologyEx()
 operations = {
-    cv2.MORPH_ERODE: "침식 (Erode)",
-    cv2.MORPH_DILATE: "팽창 (Dilate)",
-    cv2.MORPH_OPEN: "열기 (Open = Erode + Dilate)",
-    cv2.MORPH_CLOSE: "닫기 (Close = Dilate + Erode)",
-    cv2.MORPH_GRADIENT: "그래디언트 (Dilate - Erode)",
-    cv2.MORPH_TOPHAT: "탑햇 (Src - Open)",
-    cv2.MORPH_BLACKHAT: "블랙햇 (Close - Src)",
-    cv2.MORPH_HITMISS: "히트미스 (패턴 매칭)"
+    cv2.MORPH_ERODE: "Erode",
+    cv2.MORPH_DILATE: "Dilate",
+    cv2.MORPH_OPEN: "Open (Erode + Dilate)",
+    cv2.MORPH_CLOSE: "Close (Dilate + Erode)",
+    cv2.MORPH_GRADIENT: "Gradient (Dilate - Erode)",
+    cv2.MORPH_TOPHAT: "Top Hat (Src - Open)",
+    cv2.MORPH_BLACKHAT: "Black Hat (Close - Src)",
+    cv2.MORPH_HITMISS: "Hit-Miss (Pattern Matching)"
 }
 
 for op, name in operations.items():
@@ -645,28 +666,31 @@ import numpy as np
 
 def remove_noise_morphology(binary_img, noise_size=3):
     """
-    모폴로지 연산으로 노이즈 제거
+    Remove noise using morphological operations
 
     Parameters:
-    - binary_img: 이진 이미지
-    - noise_size: 제거할 노이즈의 최대 크기
+    - binary_img: Binary image
+    - noise_size: Maximum size of noise to remove
     """
-    # 커널 크기 = 노이즈 크기 * 2 + 1
+    # Why noise_size * 2 + 1: the kernel must fully contain the largest noise dot
+    # (radius noise_size → diameter noise_size*2) and be odd for a centered anchor
     kernel_size = noise_size * 2 + 1
+    # Why MORPH_ELLIPSE: circular objects (cells, blobs) are better modeled with a
+    # disk-shaped kernel — avoids introducing rectangular bias at diagonals
     kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (kernel_size, kernel_size)
     )
 
-    # 열기로 작은 점 노이즈 제거
+    # Opening to remove small noise dots (erode kills noise, dilate restores objects)
     cleaned = cv2.morphologyEx(binary_img, cv2.MORPH_OPEN, kernel)
 
-    # 닫기로 작은 구멍 채우기
+    # Closing to fill small holes (dilate bridges gaps, erode restores boundaries)
     cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
 
     return cleaned
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('noisy_document.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
 cleaned = remove_noise_morphology(binary, noise_size=2)
@@ -680,15 +704,20 @@ import numpy as np
 
 def separate_objects(binary_img, erosion_iterations=3):
     """
-    붙어있는 객체들을 분리
+    Separate connected objects
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
-    # 침식으로 객체 축소 (연결부 끊기)
+    # Why multiple erosion iterations instead of a large kernel: iterating with a
+    # small kernel is cheaper and lets you tune separation strength without rebuilding
+    # the structuring element; each pass peels off one layer from every boundary
     eroded = cv2.erode(binary_img, kernel, iterations=erosion_iterations)
 
-    # 거리 변환으로 중심점 찾기 (선택적)
+    # Distance transform to find center points — the peak of the distance map is
+    # the point farthest from any background pixel, i.e., the object center
     dist_transform = cv2.distanceTransform(eroded, cv2.DIST_L2, 5)
+    # Why 0.5 * max: keeps only the top half of distance values, retaining confident
+    # object cores while discarding ambiguous border regions
     _, sure_fg = cv2.threshold(
         dist_transform, 0.5 * dist_transform.max(), 255, 0
     )
@@ -697,7 +726,7 @@ def separate_objects(binary_img, erosion_iterations=3):
     return eroded, sure_fg
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('connected_circles.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 separated, centers = separate_objects(binary)
@@ -711,31 +740,31 @@ import numpy as np
 
 def preprocess_document(img):
     """
-    문서 이미지 전처리 (그림자 제거 + 이진화)
+    Document image preprocessing (shadow removal + binarization)
     """
-    # 그레이스케일 변환
+    # Grayscale conversion
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img
 
-    # 탑햇으로 밝은 배경 추출
+    # Top-hat to extract bright background
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
 
-    # 블랙햇으로 그림자/어두운 부분 보정
+    # Black-hat to correct shadows/dark areas
     blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
 
-    # 원본에서 블랙햇 빼기 (그림자 제거 효과)
+    # Subtract black-hat from original (shadow removal effect)
     no_shadow = cv2.add(gray, blackhat)
 
-    # 적응형 이진화
+    # Adaptive binarization
     binary = cv2.adaptiveThreshold(
         no_shadow, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY, 21, 15
     )
 
-    # 노이즈 제거
+    # Noise removal
     kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_small)
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel_small)
@@ -743,7 +772,7 @@ def preprocess_document(img):
     return binary
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('document_with_shadow.jpg')
 result = preprocess_document(img)
 ```
@@ -756,7 +785,7 @@ import numpy as np
 
 def skeletonize(img):
     """
-    모폴로지 연산으로 스켈레톤(뼈대) 추출
+    Extract skeleton using morphological operations
     """
     skeleton = np.zeros_like(img)
     temp = img.copy()
@@ -764,26 +793,26 @@ def skeletonize(img):
     kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
 
     while True:
-        # 열기 연산
+        # Opening operation
         opened = cv2.morphologyEx(temp, cv2.MORPH_OPEN, kernel)
 
-        # 차이 계산
+        # Calculate difference
         diff = cv2.subtract(temp, opened)
 
-        # 침식
+        # Erosion
         temp = cv2.erode(temp, kernel)
 
-        # 스켈레톤에 추가
+        # Add to skeleton
         skeleton = cv2.bitwise_or(skeleton, diff)
 
-        # 더 이상 흰색 픽셀이 없으면 종료
+        # Stop if no more white pixels
         if cv2.countNonZero(temp) == 0:
             break
 
     return skeleton
 
 
-# 사용 예
+# Usage example
 img = cv2.imread('character.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 skeleton = skeletonize(binary)
@@ -806,8 +835,8 @@ skeleton = skeletonize(binary)
 ```python
 def adjust_stroke_width(img, amount):
     """
-    amount > 0: 두껍게
-    amount < 0: 얇게
+    amount > 0: Thicken
+    amount < 0: Thin
     """
     pass
 ```
@@ -835,7 +864,7 @@ def adjust_stroke_width(img, amount):
 
 ## 9. 다음 단계
 
-[07_Thresholding.md](./07_Thresholding.md)에서 다양한 이진화 방법과 임계처리 기법을 학습합니다!
+[이진화 및 임계처리](./07_Thresholding.md)에서 다양한 이진화 방법과 임계처리 기법을 학습합니다!
 
 **다음에 배울 내용**:
 - 전역 임계처리 (`cv2.threshold`)
@@ -858,8 +887,8 @@ def adjust_stroke_width(img, amount):
 
 | 폴더 | 관련 내용 |
 |------|----------|
-| [05_Image_Filtering.md](./05_Image_Filtering.md) | 필터링 기초 |
-| [09_Contours.md](./09_Contours.md) | 전처리 후 윤곽선 검출 |
+| [이미지 필터링](./05_Image_Filtering.md) | 필터링 기초 |
+| [윤곽선 검출 (Contour Detection)](./09_Contours.md) | 전처리 후 윤곽선 검출 |
 
 ### 추가 참고
 

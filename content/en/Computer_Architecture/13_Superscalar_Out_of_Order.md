@@ -1,14 +1,27 @@
 # Superscalar and Out-of-Order Execution
 
-## Overview
-
-Modern high-performance processors cannot achieve significant performance gains by simply increasing clock speed. Superscalar and Out-of-Order Execution are techniques that exploit Instruction-Level Parallelism (ILP) to execute multiple instructions simultaneously in a single cycle. This lesson covers ILP concepts, superscalar architecture, and the principles and implementation of out-of-order execution.
+**Previous**: [12_Branch_Prediction.md](./12_Branch_Prediction.md) | **Next**: [14_Memory_Hierarchy.md](./14_Memory_Hierarchy.md)
 
 **Difficulty**: ⭐⭐⭐⭐
 
 **Prerequisites**: Pipelining, Branch Prediction, CPU Architecture Basics
 
 ---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain superscalar execution and how it issues multiple instructions per cycle
+2. Describe out-of-order execution and why it improves performance
+3. Explain register renaming and how it eliminates false dependencies (WAR, WAW)
+4. Distinguish true data dependencies (RAW) from false dependencies
+5. Describe Tomasulo's algorithm at a conceptual level
+6. Explain the role of the reorder buffer in maintaining program order
+
+---
+
+Modern CPUs do not execute instructions in the order you wrote them. Out-of-order, superscalar execution lets the processor find and exploit instruction-level parallelism automatically -- executing independent instructions simultaneously even when they appear sequential in your code. This is how a single CPU core achieves performance that would otherwise require explicit parallelization.
 
 ## Table of Contents
 
@@ -19,7 +32,8 @@ Modern high-performance processors cannot achieve significant performance gains 
 5. [Tomasulo Algorithm](#5-tomasulo-algorithm)
 6. [Reorder Buffer (ROB)](#6-reorder-buffer-rob)
 7. [Modern Processor Implementations](#7-modern-processor-implementations)
-8. [Practice Problems](#8-practice-problems)
+8. [Register Renaming: Deep Dive](#8-register-renaming-deep-dive)
+9. [Practice Problems](#9-practice-problems)
 
 ---
 
@@ -73,6 +87,10 @@ I2 can only execute after I1 writes to R1
 ```assembly
 I1: ADD R1, R2, R3    ; Read R2
 I2: SUB R2, R4, R5    ; Write R2 (must write after I1 reads R2)
+# Why this is "false": I2's computation has nothing to do with I1's R2 value.
+# The conflict exists only because the ISA has limited register names —
+# the compiler reused "R2". Register renaming gives I2 a fresh physical
+# register, letting it execute in parallel with I1.
 ```
 
 ```
@@ -85,6 +103,11 @@ I2 must not overwrite R2 before I1 reads it
 ```assembly
 I1: ADD R1, R2, R3    ; Write R1
 I2: SUB R1, R4, R5    ; Write R1 (writing to same register)
+# Why this is "false": I1 and I2 compute completely independent results.
+# The only constraint is that the final value of R1 must be I2's result
+# (since I2 comes later in program order). With renaming, each gets its
+# own physical register — I1 writes P10, I2 writes P11 — and they can
+# execute simultaneously.
 ```
 
 ```
@@ -941,7 +964,320 @@ Actual program ILP:
 
 ---
 
-## 8. Practice Problems
+## 8. Register Renaming: Deep Dive
+
+While Section 4 introduced the concept of register renaming, this section provides a detailed walkthrough with a concrete simulation and explores the hardware mechanisms in depth.
+
+### 8.1 WAR and WAW: The False Dependency Problem
+
+False dependencies arise because the ISA has a limited number of architectural registers (e.g., 16 in x86-64, 32 in ARM/RISC-V). Programmers and compilers reuse the same register names, creating artificial ordering constraints:
+
+```
+Example showing how register scarcity creates false dependencies:
+
+I1: MUL R1, R2, R3      ; R1 = R2 * R3          (produces R1)
+I2: ADD R4, R1, R5      ; R4 = R1 + R5          (RAW: reads R1 from I1 ← TRUE dep)
+I3: SUB R1, R6, R7      ; R1 = R6 - R7          (WAW: writes R1 like I1)
+                                                  (WAR: writes R1 that I2 reads)
+I4: ADD R8, R1, R9      ; R8 = R1 + R9          (RAW: reads R1 from I3 ← TRUE dep)
+I5: MUL R4, R10, R11    ; R4 = R10 * R11        (WAW: writes R4 like I2)
+
+Without renaming:
+- I3 must wait for I2 to read R1 (WAR) — but I3's computation is independent!
+- I5 must wait for I2 to complete (WAW on R4) — but I5 is independent!
+- Only I2→I1 and I4→I3 are true data dependencies
+
+With renaming, I3 and I5 can execute in parallel with I1 and I2.
+```
+
+### 8.2 The Register Alias Table (RAT) in Detail
+
+The RAT is the central bookkeeping structure for register renaming. It maps each architectural register to its current physical register:
+
+```
+Hardware structures for register renaming:
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   Register Renaming Hardware                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │   RAT (Mapping)   │  Arch Reg → Physical Reg                  │
+│  │   R0 → P0         │  Updated on every WRITE (destination)     │
+│  │   R1 → P7         │                                           │
+│  │   R2 → P2         │  Consulted on every READ (source)         │
+│  │   ...             │                                           │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │  Free List (FIFO) │  Pool of unallocated physical registers   │
+│  │  [P14, P15, P16,  │  New physical reg allocated for each      │
+│  │   P17, P18, ...]  │  instruction that writes a result         │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  ┌──────────────────┐                                            │
+│  │  Physical Reg File │  Actual storage (180+ integer regs       │
+│  │  P0: 42            │  in modern x86 processors)               │
+│  │  P1: 17            │                                           │
+│  │  P2: 99            │  Much larger than architectural set       │
+│  │  ...               │  (x86-64 has only 16 arch regs)          │
+│  └──────────────────┘                                            │
+│                                                                  │
+│  Physical regs freed when the old mapping is no longer needed    │
+│  (after the instruction that overwrote it has committed)         │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.3 Detailed Renaming Trace (5 Instructions)
+
+Let us trace the renaming of 5 instructions step by step, showing the RAT state after each instruction:
+
+```
+Initial state:
+  RAT: R1→P1(val=10), R2→P2(val=20), R3→P3(val=30),
+       R4→P4(val=40), R5→P5(val=50), R6→P6(val=60)
+  Free List: [P20, P21, P22, P23, P24, ...]
+
+─── Instruction 1: ADD R1, R2, R3  (R1 = R2 + R3) ───
+
+  Source renaming:
+    R2 → look up RAT → P2 (value 20, ready)
+    R3 → look up RAT → P3 (value 30, ready)
+  Destination renaming:
+    R1 → allocate P20 from Free List
+    Old mapping: R1→P1 (remember P1 for later freeing)
+    Update RAT: R1→P20
+
+  Renamed: ADD P20, P2, P3
+  RAT: R1→P20, R2→P2, R3→P3, R4→P4, R5→P5, R6→P6
+  Free List: [P21, P22, P23, P24, ...]
+
+─── Instruction 2: MUL R4, R1, R5  (R4 = R1 * R5) ───
+
+  Source renaming:
+    R1 → look up RAT → P20 (NOT READY yet — I1 hasn't finished)
+    R5 → look up RAT → P5 (value 50, ready)
+  Destination renaming:
+    R4 → allocate P21
+    Old mapping: R4→P4
+    Update RAT: R4→P21
+
+  Renamed: MUL P21, P20, P5     ← will wait for P20
+  RAT: R1→P20, R2→P2, R3→P3, R4→P21, R5→P5, R6→P6
+  Free List: [P22, P23, P24, ...]
+
+─── Instruction 3: SUB R1, R6, R2  (R1 = R6 - R2) ───
+
+  Source renaming:
+    R6 → look up RAT → P6 (value 60, ready)
+    R2 → look up RAT → P2 (value 20, ready)
+  Destination renaming:
+    R1 → allocate P22 (NEW physical register!)
+    Old mapping: R1→P20
+    Update RAT: R1→P22
+
+  Renamed: SUB P22, P6, P2
+  RAT: R1→P22, R2→P2, R3→P3, R4→P21, R5→P5, R6→P6
+
+  KEY INSIGHT: I3 writes to P22, not P20.
+  → I2 still reads P20 (I1's result) — WAR eliminated!
+  → I1 writes P20, I3 writes P22 — WAW eliminated!
+  → I3 can execute IN PARALLEL with I1!
+
+─── Instruction 4: ADD R5, R1, R4  (R5 = R1 + R4) ───
+
+  Source renaming:
+    R1 → look up RAT → P22 (I3's result, not ready yet)
+    R4 → look up RAT → P21 (I2's result, not ready yet)
+  Destination renaming:
+    R5 → allocate P23
+    Update RAT: R5→P23
+
+  Renamed: ADD P23, P22, P21    ← waits for both P22 and P21
+  RAT: R1→P22, R2→P2, R3→P3, R4→P21, R5→P23, R6→P6
+
+─── Instruction 5: MUL R2, R1, R3  (R2 = R1 * R3) ───
+
+  Source renaming:
+    R1 → P22, R3 → P3
+  Destination renaming:
+    R2 → allocate P24
+    Update RAT: R2→P24
+
+  Renamed: MUL P24, P22, P3
+
+Final RAT: R1→P22, R2→P24, R3→P3, R4→P21, R5→P23, R6→P6
+Free List: [P25, P26, ...]
+
+Summary of renamed program:
+  I1: ADD P20, P2, P3
+  I2: MUL P21, P20, P5     (true dep on I1 via P20)
+  I3: SUB P22, P6, P2      (INDEPENDENT of I1, I2!)
+  I4: ADD P23, P22, P21    (true dep on I2, I3)
+  I5: MUL P24, P22, P3     (true dep on I3 only)
+
+Parallelism exposed:
+  Cycle 1: I1, I3 execute in parallel (no dependency)
+  Cycle 2: I5 can start (depends on I3 only)
+  Cycle 2+: I2 starts after I1 completes
+  Later:   I4 starts after both I2 and I3 complete
+```
+
+### 8.4 Connection to Tomasulo's Algorithm
+
+Register renaming and Tomasulo's algorithm solve the same problem (eliminating false dependencies) but in different ways:
+
+```
+Tomasulo (1967):                    Modern Renaming (post-1990):
+  - Renaming via RS tags              - Explicit RAT + physical registers
+  - Tags = Reservation Station IDs    - Tags = physical register numbers
+  - Implicit renaming                 - Explicit renaming stage in pipeline
+  - Results broadcast on CDB          - Results written to physical reg file
+
+Modern processors combine BOTH ideas:
+  1. RAT performs explicit renaming (front-end)
+  2. Issue Queue (evolved from RS) tracks dependencies
+  3. Physical Register File stores values
+  4. Results forwarded via bypass network (evolved from CDB)
+```
+
+### 8.5 Physical Register Freeing
+
+A critical question: when can a physical register be returned to the Free List?
+
+```
+Rule: Physical register Pold can be freed when:
+  1. The instruction that OVERWROTE the mapping (Pold → Pnew) has COMMITTED
+  2. AND no older in-flight instruction still needs Pold
+
+In practice:
+  I1: ADD R1, R2, R3  → R1 mapped to P20 (old mapping P1)
+      When I1 COMMITS, P1 can be freed
+      (because all instructions before I1 that used P1 have also committed)
+
+This is why ROB + renaming work together:
+  - ROB tracks program order and commit point
+  - On commit: free the OLD physical register from the overwritten mapping
+  - On flush (misprediction): restore the OLD mapping and free the NEW registers
+```
+
+### 8.6 Python Simulation: Register Renaming
+
+```python
+"""
+Register Renaming Simulator
+Demonstrates how the RAT eliminates false dependencies.
+"""
+from collections import deque
+
+class RegisterRenamer:
+    def __init__(self, num_arch_regs=8, num_phys_regs=32):
+        self.num_arch = num_arch_regs
+        self.num_phys = num_phys_regs
+
+        # RAT: maps architectural register name -> physical register number
+        # Initially, Ri -> Pi (identity mapping)
+        self.rat = {f"R{i}": f"P{i}" for i in range(num_arch_regs)}
+
+        # Free list: physical registers available for allocation
+        self.free_list = deque(f"P{i}" for i in range(num_arch_regs, num_phys_regs))
+
+        # Track old mappings for freeing on commit
+        self.old_mappings = []  # (instruction_id, old_phys_reg)
+
+    def rename_instruction(self, inst_id, op, rd, rs1, rs2=None):
+        """Rename one instruction. Returns the renamed instruction."""
+        # Step 1: Rename source registers (look up current mapping)
+        phys_rs1 = self.rat[rs1]
+        phys_rs2 = self.rat[rs2] if rs2 else None
+
+        # Step 2: Allocate new physical register for destination
+        if not self.free_list:
+            raise RuntimeError("Out of physical registers! Pipeline stall.")
+        old_phys = self.rat[rd]
+        new_phys = self.free_list.popleft()
+
+        # Step 3: Update RAT
+        self.rat[rd] = new_phys
+        self.old_mappings.append((inst_id, old_phys))
+
+        # Build renamed instruction string
+        if phys_rs2:
+            renamed = f"{op} {new_phys}, {phys_rs1}, {phys_rs2}"
+        else:
+            renamed = f"{op} {new_phys}, {phys_rs1}"
+
+        return {
+            "id": inst_id,
+            "original": f"{op} {rd}, {rs1}" + (f", {rs2}" if rs2 else ""),
+            "renamed": renamed,
+            "dest_old": old_phys,
+            "dest_new": new_phys,
+        }
+
+    def print_rat(self):
+        """Print current RAT state."""
+        entries = [f"{arch}->{phys}" for arch, phys in sorted(self.rat.items())]
+        print(f"  RAT: {', '.join(entries)}")
+        print(f"  Free: [{', '.join(list(self.free_list)[:6])}{'...' if len(self.free_list) > 6 else ''}]")
+
+
+def main():
+    renamer = RegisterRenamer(num_arch_regs=8, num_phys_regs=20)
+
+    # Program with WAR and WAW hazards
+    instructions = [
+        # (op, dest, src1, src2)
+        ("ADD", "R1", "R2", "R3"),   # I1: R1 = R2 + R3
+        ("MUL", "R4", "R1", "R5"),   # I2: R4 = R1 * R5  (RAW on R1)
+        ("SUB", "R1", "R6", "R7"),   # I3: R1 = R6 - R7  (WAW I1, WAR I2)
+        ("ADD", "R5", "R1", "R4"),   # I4: R5 = R1 + R4  (RAW on R1, R4)
+        ("MUL", "R2", "R1", "R3"),   # I5: R2 = R1 * R3
+    ]
+
+    print("=" * 60)
+    print("Register Renaming Simulation")
+    print("=" * 60)
+    print("\nInitial state:")
+    renamer.print_rat()
+
+    results = []
+    for i, (op, rd, rs1, rs2) in enumerate(instructions):
+        inst_id = f"I{i+1}"
+        print(f"\n--- {inst_id}: {op} {rd}, {rs1}, {rs2} ---")
+        result = renamer.rename_instruction(inst_id, op, rd, rs1, rs2)
+        results.append(result)
+        print(f"  Renamed: {result['renamed']}")
+        print(f"  ({rd}: {result['dest_old']} -> {result['dest_new']})")
+        renamer.print_rat()
+
+    # Analyze dependencies after renaming
+    print("\n" + "=" * 60)
+    print("Dependency Analysis After Renaming")
+    print("=" * 60)
+
+    print("\nRenamed program:")
+    for r in results:
+        print(f"  {r['id']}: {r['renamed']}")
+
+    print("\nTrue dependencies only (RAW):")
+    print("  I2 depends on I1 (reads P8, produced by I1)")
+    print("  I4 depends on I3 (reads P10) and I2 (reads P9)")
+    print("  I5 depends on I3 (reads P10)")
+    print("\nFalse dependencies eliminated:")
+    print("  I1 vs I3: WAW on R1 -> now P8 vs P10 (independent!)")
+    print("  I2 vs I3: WAR on R1 -> I2 reads P8, I3 writes P10 (independent!)")
+    print("\nParallel execution possible: I1 || I3, then I2 || I5")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## 9. Practice Problems
 
 ### Basic Problems
 

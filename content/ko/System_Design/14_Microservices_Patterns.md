@@ -1,10 +1,25 @@
 # 마이크로서비스 패턴 (Microservices Patterns)
 
+**이전**: [마이크로서비스 기초](./13_Microservices_Basics.md) | **다음**: [분산 시스템 개념](./15_Distributed_Systems_Concepts.md)
+
 난이도: ⭐⭐⭐⭐
 
-## 개요
+## 학습 목표(Learning Objectives)
 
-마이크로서비스 아키텍처를 성공적으로 운영하기 위해서는 다양한 패턴과 도구가 필요합니다. 이 장에서는 서비스 디스커버리, 서킷 브레이커, Bulkhead 패턴, 서비스 메시, 그리고 분산 추적에 대해 학습합니다.
+**난이도**: ⭐⭐⭐⭐ (중급)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 클라이언트 사이드(Client-Side)와 서버 사이드(Server-Side) 서비스 디스커버리(Service Discovery) 메커니즘을 설명하고, 레지스트리 기반 방식(Consul, Eureka)과 DNS 기반 방식을 비교할 수 있습니다.
+2. 서킷 브레이커(Circuit Breaker) 패턴을 구현하여 의존 서비스 간 연쇄 장애(cascading failure)를 방지할 수 있습니다.
+3. 격벽(Bulkhead) 패턴을 적용하여 장애를 격리하고 단일 컴포넌트로 인해 핵심 자원이 고갈되는 것을 보호할 수 있습니다.
+4. 서비스 메시(Service Mesh)의 아키텍처(데이터 플레인(Data Plane) vs 컨트롤 플레인(Control Plane))와 사이드카 프록시(Sidecar Proxy)의 역할을 설명할 수 있습니다.
+5. 트레이스 컨텍스트 전파(Trace Context Propagation), 스팬(Span) 계층 구조, 샘플링 정책을 활용한 분산 추적(Distributed Tracing) 전략을 설계할 수 있습니다.
+6. 시스템 성숙도, 운영 복잡도, 장애 유형에 따라 각 패턴의 적용 여부를 평가할 수 있습니다.
+
+---
+
+마이크로서비스를 구축하는 것은 쉬운 부분입니다. 수백 개의 서비스를 프로덕션에서 안정적으로 운영하는 것이야말로 진정한 엔지니어링 과제가 시작되는 곳입니다. 서킷 브레이커가 없으면 느린 다운스트림 서비스 하나가 시스템 전체 장애로 번질 수 있고, 열두 개의 서비스를 거치는 요청을 분산 추적 없이 디버깅하는 것은 거의 불가능합니다. 이 레슨에서 다루는 패턴들은 취약한 마이크로서비스 배포를 회복력 있는 배포로 만들어주는 운영의 근간입니다.
 
 ---
 
@@ -922,9 +937,7 @@
 
 ---
 
-## 다음 단계
-
-[15_Distributed_Systems_Concepts.md](./15_Distributed_Systems_Concepts.md)에서 분산 시스템의 기본 개념과 시간, 리더 선출 알고리즘을 배워봅시다!
+**이전**: [마이크로서비스 기초](./13_Microservices_Basics.md) | **다음**: [분산 시스템 개념](./15_Distributed_Systems_Concepts.md)
 
 ---
 

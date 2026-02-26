@@ -43,32 +43,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def evaluate_functional(F, y_func, x_range, N=1000):
-    """범함수 J[y] = ∫F(x, y, y')dx를 수치적으로 계산"""
+    """Numerically evaluate functional J[y] = ∫F(x, y, y')dx"""
     a, b = x_range
     x = np.linspace(a, b, N)
     h = (b - a) / (N - 1)
 
     y = y_func(x)
-    # 중심 차분으로 y' 계산
+    # Compute y' using central differences
     yp = np.gradient(y, x)
 
-    # 사다리꼴 적분
+    # Trapezoidal integration
     integrand = F(x, y, yp)
     return np.trapz(integrand, x)
 
-# 예: 호의 길이 범함수 J[y] = ∫√(1 + y'²)dx
+# Example: arc length functional J[y] = ∫√(1 + y'²)dx
 F_arclength = lambda x, y, yp: np.sqrt(1 + yp**2)
 
-# 직선 y = x vs 포물선 y = x²  (구간 [0, 1])
+# Straight line y = x vs parabola y = x²  (interval [0, 1])
 y_line = lambda x: x
 y_parabola = lambda x: x**2
 
 J_line = evaluate_functional(F_arclength, y_line, (0, 1))
 J_parab = evaluate_functional(F_arclength, y_parabola, (0, 1))
 
-print(f"직선의 호의 길이: J[y=x]     = {J_line:.6f}")
-print(f"포물선의 호의 길이: J[y=x²]  = {J_parab:.6f}")
-print(f"직선이 더 짧음 (최단 경로): {J_line < J_parab}")
+print(f"Arc length of straight line: J[y=x]     = {J_line:.6f}")
+print(f"Arc length of parabola:      J[y=x²]   = {J_parab:.6f}")
+print(f"Straight line is shorter (shortest path): {J_line < J_parab}")
 ```
 
 ---
@@ -113,7 +113,7 @@ y = sp.Function('y')(x)
 yp = y.diff(x)
 
 def euler_lagrange(F, y_func, x_var):
-    """오일러-라그랑주 방정식을 심볼릭으로 도출"""
+    """Symbolically derive the Euler-Lagrange equation"""
     yp = y_func.diff(x_var)
     # ∂F/∂y
     dF_dy = sp.diff(F, y_func)
@@ -124,19 +124,19 @@ def euler_lagrange(F, y_func, x_var):
     el_eq = sp.simplify(dF_dy - d_dx_dF_dyp)
     return sp.Eq(el_eq, 0)
 
-# 예 1: 최단 거리 — F = √(1 + y'²)
+# Example 1: Shortest distance — F = √(1 + y'²)
 F1 = sp.sqrt(1 + yp**2)
 el1 = euler_lagrange(F1, y, x)
-print("=== 최단 거리 문제 ===")
-print(f"오일러-라그랑주: {el1}")
-print("해: y'' = 0  →  y = ax + b (직선)")
+print("=== Shortest distance problem ===")
+print(f"Euler-Lagrange: {el1}")
+print("Solution: y'' = 0  →  y = ax + b (straight line)")
 
-# 예 2: 최소 곡면 (회전면) — F = y√(1 + y'²)
+# Example 2: Minimal surface of revolution — F = y√(1 + y'²)
 F2 = y * sp.sqrt(1 + yp**2)
 el2 = euler_lagrange(F2, y, x)
-print(f"\n=== 최소 회전면 ===")
-print(f"오일러-라그랑주: {el2}")
-print("해: y = c₁ cosh((x - c₂)/c₁) (현수선)")
+print(f"\n=== Minimal surface of revolution ===")
+print(f"Euler-Lagrange: {el2}")
+print("Solution: y = c₁ cosh((x - c₂)/c₁) (catenary)")
 ```
 
 ---
@@ -165,7 +165,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 
 def brachistochrone(x1, y1, N=500):
-    """최속 강하선 (사이클로이드) 계산"""
+    """Compute the brachistochrone (cycloid)"""
     def equations(params):
         R, theta1 = params
         eq1 = R * (theta1 - np.sin(theta1)) - x1
@@ -179,27 +179,27 @@ def brachistochrone(x1, y1, N=500):
     y_cyc = R * (1 - np.cos(theta))
     return x_cyc, y_cyc, R, theta1
 
-# 사이클로이드 vs 직선 vs 포물선 비교
+# Comparison: cycloid vs straight line vs parabola
 x1, y1 = 1.0, 0.6
 x_cyc, y_cyc, R, th1 = brachistochrone(x1, y1)
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 5))
 
-# 직선
-ax.plot([0, x1], [0, y1], 'b--', label='직선', linewidth=2)
+# Straight line
+ax.plot([0, x1], [0, y1], 'b--', label='Straight line', linewidth=2)
 
-# 포물선 (y = ax²)
+# Parabola (y = ax²)
 x_par = np.linspace(0, x1, 200)
 a_par = y1 / x1**2
 y_par = a_par * x_par**2
-ax.plot(x_par, y_par, 'g-.', label='포물선', linewidth=2)
+ax.plot(x_par, y_par, 'g-.', label='Parabola', linewidth=2)
 
-# 사이클로이드
-ax.plot(x_cyc, y_cyc, 'r-', label='사이클로이드 (최속)', linewidth=2.5)
+# Cycloid
+ax.plot(x_cyc, y_cyc, 'r-', label='Cycloid (fastest)', linewidth=2.5)
 
 ax.set_xlabel('x')
-ax.set_ylabel('y (아래 방향)')
-ax.set_title('최속 강하선 문제 (Brachistochrone)')
+ax.set_ylabel('y (downward direction)')
+ax.set_title('Brachistochrone Problem')
 ax.legend()
 ax.invert_yaxis()
 ax.grid(True, alpha=0.3)
@@ -208,22 +208,22 @@ plt.tight_layout()
 plt.savefig('brachistochrone.png', dpi=150)
 plt.show()
 
-# 각 경로의 이동 시간 비교
+# Comparison of travel times along each path
 g = 9.81
 def travel_time(x_path, y_path):
-    """경로를 따라 이동하는 시간 계산"""
+    """Calculate travel time along a path"""
     ds = np.sqrt(np.diff(x_path)**2 + np.diff(y_path)**2)
     v = np.sqrt(2 * g * (y_path[:-1] + y_path[1:]) / 2)
-    v = np.where(v < 1e-10, 1e-10, v)  # 0 나눗셈 방지
+    v = np.where(v < 1e-10, 1e-10, v)  # avoid division by zero
     return np.sum(ds / v)
 
 t_line = travel_time(np.linspace(0, x1, 500), np.linspace(0, y1, 500))
 t_par = travel_time(x_par, y_par)
 t_cyc = travel_time(x_cyc, y_cyc)
 
-print(f"직선 이동 시간:        {t_line:.4f}초")
-print(f"포물선 이동 시간:      {t_par:.4f}초")
-print(f"사이클로이드 이동 시간: {t_cyc:.4f}초 (최소)")
+print(f"Straight line travel time:  {t_line:.4f} s")
+print(f"Parabola travel time:       {t_par:.4f} s")
+print(f"Cycloid travel time:        {t_cyc:.4f} s (minimum)")
 ```
 
 ### 3.2 Geodesics
@@ -252,30 +252,30 @@ This is the **catenary**.
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 현수선 그리기
+# Draw catenary
 def catenary(x, c1, c2=0):
-    """현수선: y = c₁ cosh((x - c₂)/c₁)"""
+    """Catenary: y = c₁ cosh((x - c₂)/c₁)"""
     return c1 * np.cosh((x - c2) / c1)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-# (a) 다양한 매개변수의 현수선
+# (a) Catenaries with various parameters
 x = np.linspace(-2, 2, 300)
 for c in [0.5, 1.0, 1.5, 2.0]:
     axes[0].plot(x, catenary(x, c), label=f'$c_1 = {c}$')
-axes[0].set_title('다양한 매개변수의 현수선')
+axes[0].set_title('Catenaries with various parameters')
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('y')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# (b) 현수선 vs 포물선 비교
+# (b) Catenary vs parabola comparison
 c1 = 1.0
-y_cat = catenary(x, c1) - c1  # 최저점을 0으로 이동
-y_par = 0.5 * x**2            # 비슷한 모양의 포물선
-axes[1].plot(x, y_cat, 'r-', linewidth=2, label='현수선')
-axes[1].plot(x, y_par, 'b--', linewidth=2, label='포물선')
-axes[1].set_title('현수선 vs 포물선')
+y_cat = catenary(x, c1) - c1  # shift lowest point to 0
+y_par = 0.5 * x**2            # similarly shaped parabola
+axes[1].plot(x, y_cat, 'r-', linewidth=2, label='Catenary')
+axes[1].plot(x, y_par, 'b--', linewidth=2, label='Parabola')
+axes[1].set_title('Catenary vs Parabola')
 axes[1].set_xlabel('x')
 axes[1].set_ylabel('y')
 axes[1].legend()
@@ -347,7 +347,7 @@ x = sp.Symbol('x')
 y1 = sp.Function('y1')(x)
 y2 = sp.Function('y2')(x)
 
-# 2변수 라그랑지안 예: 결합 진동자
+# Two-variable Lagrangian example: coupled oscillator
 # L = ½m(ẏ₁² + ẏ₂²) - ½k(y₁² + y₂²) - ½k'(y₁ - y₂)²
 m, k, kp = sp.symbols('m k k_prime', positive=True)
 y1p, y2p = y1.diff(x), y2.diff(x)
@@ -356,7 +356,7 @@ T = sp.Rational(1, 2) * m * (y1p**2 + y2p**2)
 V = sp.Rational(1, 2) * k * (y1**2 + y2**2) + sp.Rational(1, 2) * kp * (y1 - y2)**2
 L = T - V
 
-# 각 변수에 대한 오일러-라그랑주
+# Euler-Lagrange equation for each variable
 for yi, name in [(y1, 'y₁'), (y2, 'y₂')]:
     yip = yi.diff(x)
     dL_dyi = sp.diff(L, yi)
@@ -402,9 +402,9 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 
 def isoperimetric_circle(a, L):
-    """등주 문제: 길이 L, 구간 [0, a]에서 최대 면적 곡선 (원호)"""
-    # 원호: 반지름 R, 중심 (a/2, y_c)
-    # L = 2R·arcsin(a/(2R))로부터 R 결정
+    """Isoperimetric problem: curve of maximum area on [0, a] with length L (circular arc)"""
+    # Circular arc: radius R, center (a/2, y_c)
+    # Determine R from L = 2R·arcsin(a/(2R))
     def eq(R):
         if R < a / 2:
             return 1e10
@@ -418,15 +418,15 @@ def isoperimetric_circle(a, L):
 
     return x_arc, y_arc, R
 
-# 구간 길이 2, 곡선 길이 π
+# Interval length 2, curve length π
 a, L = 2.0, np.pi
 x_arc, y_arc, R = isoperimetric_circle(a, L)
 
 fig, ax = plt.subplots(figsize=(7, 5))
-ax.plot(x_arc, y_arc, 'r-', linewidth=2, label=f'원호 (R={R:.3f})')
+ax.plot(x_arc, y_arc, 'r-', linewidth=2, label=f'Circular arc (R={R:.3f})')
 ax.fill_between(x_arc, 0, y_arc, alpha=0.2, color='red')
 ax.axhline(y=0, color='k', linewidth=0.5)
-ax.set_title('등주 문제: 주어진 길이에서 최대 면적')
+ax.set_title('Isoperimetric problem: maximum area for given length')
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.legend()
@@ -473,20 +473,20 @@ m, l, g = sp.symbols('m l g', positive=True)
 theta = sp.Function('theta')(t)
 theta_dot = theta.diff(t)
 
-# 라그랑지안
+# Lagrangian
 T = sp.Rational(1, 2) * m * l**2 * theta_dot**2
 V = -m * g * l * sp.cos(theta)
 Lag = T - V
 
-# 오일러-라그랑주 방정식 도출
+# Derive Euler-Lagrange equation
 dL_dtheta = sp.diff(Lag, theta)
 dL_dthetadot = sp.diff(Lag, theta_dot)
 d_dt = sp.diff(dL_dthetadot, t)
 
 eq = sp.simplify(d_dt - dL_dtheta)
-print("=== 단진자 운동방정식 ===")
+print("=== Simple pendulum equation of motion ===")
 print(f"  {eq} = 0")
-# 정리: ml²θ̈ + mgl·sin(θ) = 0
+# Simplified: ml²θ̈ + mgl·sin(θ) = 0
 ```
 
 ### 6.3 Double Pendulum
@@ -503,7 +503,7 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
 def double_pendulum_eom(t, state, m1, m2, l1, l2, g=9.81):
-    """이중 진자의 운동방정식 (라그랑주 역학으로 유도)
+    """Equations of motion for the double pendulum (derived via Lagrangian mechanics)
     state = [theta1, theta2, omega1, omega2]
     """
     th1, th2, w1, w2 = state
@@ -511,7 +511,7 @@ def double_pendulum_eom(t, state, m1, m2, l1, l2, g=9.81):
     cos_d, sin_d = np.cos(dth), np.sin(dth)
     M = m1 + m2
 
-    # 질량 행렬의 역을 이용한 각가속도 계산
+    # Angular accelerations using inverse of mass matrix
     den = M * l1 - m2 * l1 * cos_d**2
 
     alpha1 = (-m2 * l2 * w2**2 * sin_d
@@ -526,16 +526,16 @@ def double_pendulum_eom(t, state, m1, m2, l1, l2, g=9.81):
 
     return [w1, w2, alpha1, alpha2]
 
-# 시뮬레이션
+# Simulation
 m1, m2, l1, l2 = 1.0, 1.0, 1.0, 1.0
-state0 = [np.pi / 2, np.pi / 2, 0, 0]  # 초기 각도 90°, 각속도 0
+state0 = [np.pi / 2, np.pi / 2, 0, 0]  # initial angles 90°, angular velocities 0
 t_span = (0, 20)
 t_eval = np.linspace(*t_span, 2000)
 
 sol = solve_ivp(double_pendulum_eom, t_span, state0, t_eval=t_eval,
                 args=(m1, m2, l1, l2), method='RK45', rtol=1e-10)
 
-# 데카르트 좌표 변환
+# Convert to Cartesian coordinates
 x1 = l1 * np.sin(sol.y[0])
 y1_pos = -l1 * np.cos(sol.y[0])
 x2 = x1 + l2 * np.sin(sol.y[1])
@@ -543,20 +543,20 @@ y2_pos = y1_pos - l2 * np.cos(sol.y[1])
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 끝점 궤적
+# Trajectory of tip
 axes[0].plot(x2, y2_pos, 'b-', linewidth=0.3, alpha=0.7)
-axes[0].set_title('이중 진자: 끝점 궤적')
+axes[0].set_title('Double pendulum: tip trajectory')
 axes[0].set_xlabel('x')
 axes[0].set_ylabel('y')
 axes[0].set_aspect('equal')
 axes[0].grid(True, alpha=0.3)
 
-# 각도 시간 그래프
+# Angle vs time
 axes[1].plot(sol.t, sol.y[0], label=r'$\theta_1$')
 axes[1].plot(sol.t, sol.y[1], label=r'$\theta_2$')
-axes[1].set_title('이중 진자: 각도 vs 시간')
-axes[1].set_xlabel('시간 (s)')
-axes[1].set_ylabel('각도 (rad)')
+axes[1].set_title('Double pendulum: angle vs time')
+axes[1].set_xlabel('Time (s)')
+axes[1].set_ylabel('Angle (rad)')
 axes[1].legend()
 axes[1].grid(True, alpha=0.3)
 
@@ -641,41 +641,41 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# === 심볼릭: 1차원 조화진동자의 해밀턴 역학 ===
+# === Symbolic: Hamiltonian mechanics of 1D harmonic oscillator ===
 t = sp.Symbol('t')
 m_sym, k_sym = sp.symbols('m k', positive=True)
 q_sym = sp.Function('q')(t)
 p_sym = sp.Function('p')(t)
 
-# 해밀토니안: H = p²/(2m) + kq²/2
+# Hamiltonian: H = p²/(2m) + kq²/2
 H = p_sym**2 / (2 * m_sym) + k_sym * q_sym**2 / 2
 
-# 해밀턴의 정준 방정식
+# Hamilton's canonical equations
 q_dot = sp.diff(H, p_sym)      # dq/dt = ∂H/∂p = p/m
 p_dot = -sp.diff(H, q_sym)     # dp/dt = -∂H/∂q = -kq
 
-print("=== 조화진동자 해밀턴 방정식 ===")
+print("=== Harmonic oscillator Hamilton equations ===")
 print(f"  dq/dt = {q_dot}")
 print(f"  dp/dt = {p_dot}")
 
-# === 수치 해: 위상 공간 궤적 ===
+# === Numerical solution: phase space trajectories ===
 def harmonic_hamiltonian(t, state, m=1.0, k=1.0):
     q, p = state
     dqdt = p / m       # ∂H/∂p
     dpdt = -k * q      # -∂H/∂q
     return [dqdt, dpdt]
 
-# 여러 초기 조건으로 위상 공간 궤적
+# Phase space trajectories for various initial conditions
 fig, ax = plt.subplots(figsize=(7, 7))
 for E0 in [0.5, 1.0, 2.0, 4.0]:
-    q0 = np.sqrt(2 * E0)  # p0 = 0일 때 최대 변위
+    q0 = np.sqrt(2 * E0)  # maximum displacement when p0 = 0
     sol = solve_ivp(harmonic_hamiltonian, (0, 10), [q0, 0],
                     t_eval=np.linspace(0, 10, 1000))
     ax.plot(sol.y[0], sol.y[1], label=f'E = {E0}')
 
-ax.set_xlabel('q (위치)')
-ax.set_ylabel('p (운동량)')
-ax.set_title('조화진동자 위상 공간')
+ax.set_xlabel('q (position)')
+ax.set_ylabel('p (momentum)')
+ax.set_title('Harmonic oscillator phase space')
 ax.legend()
 ax.grid(True, alpha=0.3)
 ax.set_aspect('equal')
@@ -703,12 +703,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def snell_law_demo():
-    """페르마 원리와 스넬의 법칙 시각화"""
-    n1, n2 = 1.0, 1.5  # 굴절률 (공기 → 유리)
+    """Visualize Fermat's principle and Snell's law"""
+    n1, n2 = 1.0, 1.5  # refractive indices (air → glass)
     y_source, y_target = 2.0, -2.0
     x_source, x_target = -1.0, 1.5
 
-    # 경계면에서의 입사점 x를 변화시키며 광학 경로 길이 계산
+    # Compute optical path length varying incidence point x on boundary
     x_boundary = np.linspace(-2, 3, 1000)
     optical_path = []
     for xb in x_boundary:
@@ -722,24 +722,24 @@ def snell_law_demo():
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
-    # (a) 광학 경로 길이 vs 입사점
+    # (a) Optical path length vs incidence point
     axes[0].plot(x_boundary, optical_path, 'b-')
-    axes[0].axvline(x_opt, color='r', linestyle='--', label=f'최소점 x={x_opt:.3f}')
-    axes[0].set_xlabel('경계면 입사점 x')
-    axes[0].set_ylabel('광학 경로 길이')
-    axes[0].set_title('페르마 원리: 광학 경로 길이 최소화')
+    axes[0].axvline(x_opt, color='r', linestyle='--', label=f'minimum x={x_opt:.3f}')
+    axes[0].set_xlabel('Incidence point x on boundary')
+    axes[0].set_ylabel('Optical path length')
+    axes[0].set_title("Fermat's principle: minimizing optical path length")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    # (b) 빛의 경로
-    axes[1].fill_between([-3, 4], 0, 3, alpha=0.1, color='blue', label=f'매질 1 (n={n1})')
-    axes[1].fill_between([-3, 4], -3, 0, alpha=0.1, color='orange', label=f'매질 2 (n={n2})')
+    # (b) Light path
+    axes[1].fill_between([-3, 4], 0, 3, alpha=0.1, color='blue', label=f'Medium 1 (n={n1})')
+    axes[1].fill_between([-3, 4], -3, 0, alpha=0.1, color='orange', label=f'Medium 2 (n={n2})')
     axes[1].plot([x_source, x_opt], [y_source, 0], 'r-', linewidth=2)
     axes[1].plot([x_opt, x_target], [0, y_target], 'r-', linewidth=2)
     axes[1].axhline(y=0, color='k', linewidth=1)
     axes[1].plot(x_source, y_source, 'ko', markersize=8)
     axes[1].plot(x_target, y_target, 'ko', markersize=8)
-    axes[1].set_title('스넬의 법칙 (페르마 원리)')
+    axes[1].set_title("Snell's law (Fermat's principle)")
     axes[1].set_xlabel('x')
     axes[1].set_ylabel('y')
     axes[1].legend()
@@ -750,10 +750,10 @@ def snell_law_demo():
     plt.savefig('fermat_snell.png', dpi=150)
     plt.show()
 
-    # 스넬의 법칙 검증
+    # Verify Snell's law
     theta1 = np.arctan2(abs(x_opt - x_source), y_source)
     theta2 = np.arctan2(abs(x_target - x_opt), abs(y_target))
-    print(f"입사각: {np.degrees(theta1):.2f}°, 굴절각: {np.degrees(theta2):.2f}°")
+    print(f"Incidence angle: {np.degrees(theta1):.2f}°, Refraction angle: {np.degrees(theta2):.2f}°")
     print(f"n₁ sin θ₁ = {n1 * np.sin(theta1):.4f}")
     print(f"n₂ sin θ₂ = {n2 * np.sin(theta2):.4f}")
 
@@ -774,25 +774,25 @@ import matplotlib.pyplot as plt
 
 def rayleigh_ritz_beam(N_basis=5, L_beam=1.0, q0=1.0, EI=1.0):
     """
-    레일리-리츠법으로 단순 지지 보의 처짐 계산
-    범함수: J[y] = ∫[EI/2·(y'')² - q₀·y]dx
-    경계조건: y(0) = y(L) = 0, y''(0) = y''(L) = 0
-    기저함수: φₙ(x) = sin(nπx/L)
+    Compute deflection of a simply supported beam using the Rayleigh-Ritz method.
+    Functional: J[y] = ∫[EI/2·(y'')² - q₀·y]dx
+    Boundary conditions: y(0) = y(L) = 0, y''(0) = y''(L) = 0
+    Basis functions: φₙ(x) = sin(nπx/L)
     """
     x = np.linspace(0, L_beam, 500)
 
-    # 정확해: y = q₀/(24EI) · x(L³ - 2Lx² + x³)
+    # Exact solution: y = q₀/(24EI) · x(L³ - 2Lx² + x³)
     y_exact = q0 / (24 * EI) * x * (L_beam**3 - 2 * L_beam * x**2 + x**3)
 
-    # 레일리-리츠 근사
+    # Rayleigh-Ritz approximation
     y_approx = np.zeros_like(x)
     coefficients = []
 
     for n in range(1, N_basis + 1):
         kn = n * np.pi / L_beam
-        # 강성 행렬 대각 성분
+        # Diagonal entry of stiffness matrix
         K_nn = EI * kn**4 * L_beam / 2
-        # 하중 벡터: 홀수 n만 기여
+        # Load vector: only odd n contribute
         if n % 2 == 1:
             f_n = 2 * q0 * L_beam / (n * np.pi)
         else:
@@ -801,19 +801,19 @@ def rayleigh_ritz_beam(N_basis=5, L_beam=1.0, q0=1.0, EI=1.0):
         coefficients.append(c_n)
         y_approx += c_n * np.sin(n * np.pi * x / L_beam)
 
-    # 그래프
+    # Plot
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
-    # 처짐 비교
-    axes[0].plot(x, y_exact, 'r-', linewidth=2, label='정확해')
-    axes[0].plot(x, y_approx, 'b--', linewidth=2, label=f'R-R ({N_basis}항)')
-    axes[0].set_title('레일리-리츠법: 보의 처짐')
+    # Deflection comparison
+    axes[0].plot(x, y_exact, 'r-', linewidth=2, label='Exact solution')
+    axes[0].plot(x, y_approx, 'b--', linewidth=2, label=f'R-R ({N_basis} terms)')
+    axes[0].set_title('Rayleigh-Ritz method: beam deflection')
     axes[0].set_xlabel('x')
     axes[0].set_ylabel('y(x)')
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    # 수렴 분석
+    # Convergence analysis
     errors = []
     N_range = range(1, 20)
     for N in N_range:
@@ -827,9 +827,9 @@ def rayleigh_ritz_beam(N_basis=5, L_beam=1.0, q0=1.0, EI=1.0):
         errors.append(err)
 
     axes[1].semilogy(list(N_range), errors, 'ko-')
-    axes[1].set_title('기저함수 수에 따른 오차 수렴')
-    axes[1].set_xlabel('기저함수 수 N')
-    axes[1].set_ylabel('최대 오차')
+    axes[1].set_title('Error convergence vs number of basis functions')
+    axes[1].set_xlabel('Number of basis functions N')
+    axes[1].set_ylabel('Maximum error')
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -839,7 +839,7 @@ def rayleigh_ritz_beam(N_basis=5, L_beam=1.0, q0=1.0, EI=1.0):
     return coefficients
 
 coeffs = rayleigh_ritz_beam(N_basis=7)
-print("레일리-리츠 계수:", [f"{c:.6e}" for c in coeffs])
+print("Rayleigh-Ritz coefficients:", [f"{c:.6e}" for c in coeffs])
 ```
 
 ### 8.3 Optimal Control Theory (Overview)

@@ -1,5 +1,17 @@
 # MLflow Basics
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the four core components of MLflow — Tracking, Projects, Models, and Model Registry — and explain the role each plays in the ML lifecycle
+2. Implement experiment tracking with MLflow by logging parameters, metrics, and artifacts from a machine learning training run
+3. Package ML models using MLflow's model format and serve them locally with the MLflow model server
+4. Use the MLflow Model Registry to version models and manage stage transitions from staging to production
+5. Set up a centralized MLflow tracking server and integrate it into a team-based ML workflow
+
+---
+
 ## 1. MLflow Overview
 
 MLflow is an open-source platform for managing the machine learning lifecycle. It provides integrated support for experiment tracking, model packaging, and deployment.
@@ -91,9 +103,11 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Set experiment
 mlflow.set_experiment("iris-classification")
 
-# Start run
+# The context manager guarantees mlflow.end_run() is called even if training raises an exception;
+# without it, a crashed run is left in RUNNING state and pollutes experiment comparisons.
 with mlflow.start_run(run_name="random-forest-baseline"):
-    # 1. Log parameters
+    # Log parameters before training so the run is traceable even if training fails;
+    # this allows filtering failed runs by their hyperparameters to identify bad configs.
     params = {
         "n_estimators": 100,
         "max_depth": 5,
@@ -596,6 +610,9 @@ model = mlflow.sklearn.load_model("runs:/RUN_ID/model")
 model = mlflow.sklearn.load_model("file:///path/to/mlruns/0/run_id/artifacts/model")
 
 # Method 3: Load from Model Registry (covered in next lesson)
+# The "Production" stage is a gate in the registry: Staging means "passed automated tests,
+# under review"; promoting to Production is the explicit approval that enables this URI to resolve.
+# Only one version is active in Production at a time, enabling instant rollback by demoting it.
 model = mlflow.sklearn.load_model("models:/MyModel/Production")
 
 # Method 4: Load as pyfunc (framework-agnostic)

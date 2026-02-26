@@ -1,11 +1,23 @@
 # Control Flow Patterns
 
-> **Topic**: Programming
-> **Lesson**: 4 of 16
-> **Prerequisites**: What Is Programming, Programming Paradigms, Data Types & Abstraction
-> **Objective**: Master control flow mechanisms — branching, loops, recursion, iterators, error handling — and learn when to use each pattern.
+**Previous**: [Data Types & Abstraction](./03_Data_Types_and_Abstraction.md) | **Next**: [OOP Principles](./05_OOP_Principles.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain sequential execution as the default control flow and identify when it is insufficient
+2. Apply conditional branching (if/else, switch/match, ternary, guard clauses) to direct program execution
+3. Choose the appropriate loop construct (for, while, do-while) for a given repetition task and use break/continue effectively
+4. State and verify loop invariants to reason about loop correctness
+5. Implement recursive solutions with proper base and recursive cases, and convert between recursive and iterative forms
+6. Use iterators and generators for lazy, memory-efficient data processing
+7. Compare exception-based error handling (try/catch/finally) with Result/Either types for explicit error flow
+8. Explain short-circuit evaluation and structured programming principles
 
 ---
+
+Control flow determines the order in which a program's statements execute. Beyond the default top-to-bottom sequence, every nontrivial program needs decisions, repetition, and mechanisms for handling exceptional situations. Mastering these patterns is essential because they are the connective tissue of every algorithm -- the way you express *when*, *how many times*, and *under what conditions* each piece of logic runs.
 
 ## Sequential Execution
 
@@ -1200,6 +1212,4 @@ Control flow determines the **order of execution**:
 
 ---
 
-## Navigation
-
-[← Previous: Data Types & Abstraction](03_Data_Types_and_Abstraction.md)
+**Previous**: [Data Types & Abstraction](./03_Data_Types_and_Abstraction.md) | **Next**: [OOP Principles](./05_OOP_Principles.md)

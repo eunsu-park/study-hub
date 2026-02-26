@@ -56,29 +56,29 @@ $$\|\mathbf{x}\|_\infty = \max_i |x_i|$$
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 벡터 정의
+# Define vector
 x = np.array([3, 4])
 
-# 다양한 노름 계산
+# Compute various norms
 l1_norm = np.linalg.norm(x, ord=1)
 l2_norm = np.linalg.norm(x, ord=2)
 l_inf_norm = np.linalg.norm(x, ord=np.inf)
 
-# 수동 계산 검증
+# Verify by manual computation
 l1_manual = np.sum(np.abs(x))
 l2_manual = np.sqrt(np.sum(x**2))
 l_inf_manual = np.max(np.abs(x))
 
-print("벡터:", x)
-print(f"\nL1 노름: {l1_norm:.4f} (수동: {l1_manual:.4f})")
-print(f"L2 노름: {l2_norm:.4f} (수동: {l2_manual:.4f})")
-print(f"L∞ 노름: {l_inf_norm:.4f} (수동: {l_inf_manual:.4f})")
+print("Vector:", x)
+print(f"\nL1 norm: {l1_norm:.4f} (manual: {l1_manual:.4f})")
+print(f"L2 norm: {l2_norm:.4f} (manual: {l2_manual:.4f})")
+print(f"L∞ norm: {l_inf_norm:.4f} (manual: {l_inf_manual:.4f})")
 
-# Lp 노름 for p = 0.5, 1, 2, 3, 10
+# Lp norm for p = 0.5, 1, 2, 3, 10
 p_values = [0.5, 1, 2, 3, 10]
 norms = [np.sum(np.abs(x)**p)**(1/p) for p in p_values]
 
-print(f"\nLp 노름 (다양한 p):")
+print(f"\nLp norm (various p):")
 for p, norm in zip(p_values, norms):
     print(f"  L{p} = {norm:.4f}")
 ```
@@ -86,7 +86,7 @@ for p, norm in zip(p_values, norms):
 ### 1.7 Unit Sphere Visualization
 
 ```python
-# 2D에서 ||x||_p = 1인 단위 구 시각화
+# Visualize unit sphere ||x||_p = 1 in 2D
 theta = np.linspace(0, 2*np.pi, 1000)
 
 fig, axes = plt.subplots(1, 4, figsize=(16, 4))
@@ -94,12 +94,12 @@ p_values = [1, 2, 3, np.inf]
 
 for ax, p in zip(axes, p_values):
     if p == np.inf:
-        # L∞: 정사각형
+        # L∞: square
         square = np.array([[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]])
         ax.plot(square[:, 0], square[:, 1], 'b-', linewidth=2)
         title = r'$L_\infty$ norm'
     else:
-        # Lp: 파라메트릭 곡선
+        # Lp: parametric curve
         # x(t) = sign(cos(t)) * |cos(t)|^(2/p)
         # y(t) = sign(sin(t)) * |sin(t)|^(2/p)
         x_coords = np.sign(np.cos(theta)) * np.abs(np.cos(theta))**(2/p)
@@ -117,18 +117,18 @@ for ax, p in zip(axes, p_values):
     ax.set_xlabel('$x_1$')
     ax.set_ylabel('$x_2$')
 
-plt.suptitle('단위 구: $\|x\|_p = 1$', fontsize=14, y=1.02)
+plt.suptitle('Unit sphere: $\|x\|_p = 1$', fontsize=14, y=1.02)
 plt.tight_layout()
 plt.savefig('unit_spheres.png', dpi=150, bbox_inches='tight')
 plt.close()
 
-print("단위 구 시각화 저장: unit_spheres.png")
+print("Unit sphere visualization saved: unit_spheres.png")
 ```
 
 ### 1.8 Verification of Norm Properties
 
 ```python
-# 삼각 부등식 검증
+# Verify triangle inequality
 x = np.array([1, 2, 3])
 y = np.array([4, 5, 6])
 
@@ -137,12 +137,12 @@ for p in [1, 2, np.inf]:
     norm_y = np.linalg.norm(y, ord=p)
     norm_sum = np.linalg.norm(x + y, ord=p)
 
-    print(f"\nL{p} 노름 삼각 부등식:")
+    print(f"\nL{p} norm triangle inequality:")
     print(f"  ||x|| = {norm_x:.4f}")
     print(f"  ||y|| = {norm_y:.4f}")
     print(f"  ||x+y|| = {norm_sum:.4f}")
     print(f"  ||x|| + ||y|| = {norm_x + norm_y:.4f}")
-    print(f"  부등식 성립: {norm_sum <= norm_x + norm_y + 1e-10}")
+    print(f"  Inequality holds: {norm_sum <= norm_x + norm_y + 1e-10}")
 ```
 
 ## 2. Matrix Norms
@@ -175,46 +175,46 @@ $$\|A\|_* = \sum_i \sigma_i(A)$$
 ```python
 import numpy as np
 
-# 랜덤 행렬 생성
+# Generate random matrix
 A = np.random.randn(4, 3)
 
-# 프로베니우스 노름
+# Frobenius norm
 frobenius = np.linalg.norm(A, ord='fro')
 frobenius_manual = np.sqrt(np.sum(A**2))
 
-# 스펙트럼 노름 (최대 특이값)
+# Spectral norm (maximum singular value)
 spectral = np.linalg.norm(A, ord=2)
 U, s, Vt = np.linalg.svd(A)
 spectral_manual = s[0]
 
-# 핵 노름 (특이값의 합)
+# Nuclear norm (sum of singular values)
 nuclear = np.sum(s)
 
-print("행렬 형태:", A.shape)
-print(f"\n프로베니우스 노름: {frobenius:.4f}")
-print(f"  수동 계산:        {frobenius_manual:.4f}")
-print(f"\n스펙트럼 노름:     {spectral:.4f}")
-print(f"  최대 특이값:      {spectral_manual:.4f}")
-print(f"\n핵 노름:           {nuclear:.4f}")
-print(f"  특이값: {s}")
+print("Matrix shape:", A.shape)
+print(f"\nFrobenius norm: {frobenius:.4f}")
+print(f"  manual:         {frobenius_manual:.4f}")
+print(f"\nSpectral norm:  {spectral:.4f}")
+print(f"  max singular:   {spectral_manual:.4f}")
+print(f"\nNuclear norm:   {nuclear:.4f}")
+print(f"  singular values: {s}")
 ```
 
 ### 2.5 Properties of Matrix Norms
 
 ```python
-# 행렬 노름의 부등식
+# Matrix norm inequalities
 A = np.random.randn(5, 5)
 
 frobenius = np.linalg.norm(A, ord='fro')
 spectral = np.linalg.norm(A, ord=2)
 
-# 부등식: ||A||_2 ≤ ||A||_F ≤ sqrt(rank(A)) * ||A||_2
+# Inequality: ||A||_2 ≤ ||A||_F ≤ sqrt(rank(A)) * ||A||_2
 rank_A = np.linalg.matrix_rank(A)
 
-print("행렬 노름 부등식:")
-print(f"스펙트럼 노름:       {spectral:.4f}")
-print(f"프로베니우스 노름:   {frobenius:.4f}")
-print(f"sqrt(rank) * 스펙트럼: {np.sqrt(rank_A) * spectral:.4f}")
+print("Matrix norm inequalities:")
+print(f"Spectral norm:           {spectral:.4f}")
+print(f"Frobenius norm:          {frobenius:.4f}")
+print(f"sqrt(rank) * spectral:   {np.sqrt(rank_A) * spectral:.4f}")
 print(f"\n||A||_2 ≤ ||A||_F: {spectral <= frobenius + 1e-10}")
 print(f"||A||_F ≤ sqrt(r)*||A||_2: {frobenius <= np.sqrt(rank_A) * spectral + 1e-10}")
 ```
@@ -256,27 +256,27 @@ $$d_H(\mathbf{x}, \mathbf{y}) = \sum_{i=1}^n \mathbb{1}[x_i \neq y_i]$$
 ```python
 from scipy.spatial import distance
 
-# 샘플 데이터
+# Sample data
 x = np.array([1, 2, 3, 4])
 y = np.array([2, 3, 4, 5])
 
-# 다양한 거리 계산
+# Compute various distances
 euclidean = distance.euclidean(x, y)
 manhattan = distance.cityblock(x, y)
 chebyshev = distance.chebyshev(x, y)
 cosine_dist = distance.cosine(x, y)
 
-# 수동 계산
+# Manual computation
 euclidean_manual = np.linalg.norm(x - y)
 manhattan_manual = np.sum(np.abs(x - y))
 chebyshev_manual = np.max(np.abs(x - y))
 cosine_manual = 1 - np.dot(x, y) / (np.linalg.norm(x) * np.linalg.norm(y))
 
-print("거리 측도 비교:")
-print(f"유클리드 거리:  {euclidean:.4f} (수동: {euclidean_manual:.4f})")
-print(f"맨해튼 거리:    {manhattan:.4f} (수동: {manhattan_manual:.4f})")
-print(f"체비셰프 거리:  {chebyshev:.4f} (수동: {chebyshev_manual:.4f})")
-print(f"코사인 거리:    {cosine_dist:.4f} (수동: {cosine_manual:.4f})")
+print("Distance metric comparison:")
+print(f"Euclidean distance:  {euclidean:.4f} (manual: {euclidean_manual:.4f})")
+print(f"Manhattan distance:  {manhattan:.4f} (manual: {manhattan_manual:.4f})")
+print(f"Chebyshev distance:  {chebyshev:.4f} (manual: {chebyshev_manual:.4f})")
+print(f"Cosine distance:     {cosine_dist:.4f} (manual: {cosine_manual:.4f})")
 ```
 
 ### 3.6 Mahalanobis Distance Example
@@ -284,49 +284,49 @@ print(f"코사인 거리:    {cosine_dist:.4f} (수동: {cosine_manual:.4f})")
 ```python
 from scipy.spatial.distance import mahalanobis
 
-# 다변량 정규분포에서 샘플링
+# Sample from multivariate normal distribution
 mean = np.array([0, 0])
 cov = np.array([[2, 1], [1, 2]])
 np.random.seed(42)
 samples = np.random.multivariate_normal(mean, cov, 500)
 
-# 원점에서의 유클리드 거리
+# Euclidean distance from origin
 euclidean_dists = np.linalg.norm(samples, axis=1)
 
-# 원점에서의 마할라노비스 거리
+# Mahalanobis distance from origin
 cov_inv = np.linalg.inv(cov)
 mahal_dists = np.array([mahalanobis(s, mean, cov_inv) for s in samples])
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 유클리드 거리
+# Euclidean distance
 scatter1 = axes[0].scatter(samples[:, 0], samples[:, 1], c=euclidean_dists,
                            cmap='viridis', alpha=0.6, edgecolors='k', linewidth=0.5)
-axes[0].set_title('유클리드 거리', fontsize=12)
+axes[0].set_title('Euclidean Distance', fontsize=12)
 axes[0].set_xlabel('$x_1$')
 axes[0].set_ylabel('$x_2$')
 axes[0].axis('equal')
 axes[0].grid(True, alpha=0.3)
-plt.colorbar(scatter1, ax=axes[0], label='거리')
+plt.colorbar(scatter1, ax=axes[0], label='Distance')
 
-# 마할라노비스 거리
+# Mahalanobis distance
 scatter2 = axes[1].scatter(samples[:, 0], samples[:, 1], c=mahal_dists,
                            cmap='viridis', alpha=0.6, edgecolors='k', linewidth=0.5)
-axes[1].set_title('마할라노비스 거리 (공분산 고려)', fontsize=12)
+axes[1].set_title('Mahalanobis Distance (with covariance)', fontsize=12)
 axes[1].set_xlabel('$x_1$')
 axes[1].set_ylabel('$x_2$')
 axes[1].axis('equal')
 axes[1].grid(True, alpha=0.3)
-plt.colorbar(scatter2, ax=axes[1], label='거리')
+plt.colorbar(scatter2, ax=axes[1], label='Distance')
 
 plt.tight_layout()
 plt.savefig('mahalanobis_distance.png', dpi=150)
 plt.close()
 
-print("마할라노비스 거리 시각화 저장: mahalanobis_distance.png")
-print(f"유클리드 거리 평균: {euclidean_dists.mean():.4f}")
-print(f"마할라노비스 거리 평균: {mahal_dists.mean():.4f}")
+print("Mahalanobis distance visualization saved: mahalanobis_distance.png")
+print(f"Mean Euclidean distance: {euclidean_dists.mean():.4f}")
+print(f"Mean Mahalanobis distance: {mahal_dists.mean():.4f}")
 ```
 
 ## 4. Regularization and Norms
@@ -364,21 +364,21 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-# 데이터 생성 (희소한 실제 가중치)
+# Generate data (sparse true weights)
 X, y, true_coef = make_regression(
     n_samples=200, n_features=50, n_informative=10,
     noise=10, coef=True, random_state=42
 )
 
-# 훈련/테스트 분할
+# Train/test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# 스케일링
+# Scaling
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# 모델 훈련
+# Train models
 models = {
     'No regularization': LinearRegression(),
     'L1 (Lasso)': Lasso(alpha=1.0),
@@ -401,29 +401,29 @@ for name, model in models.items():
     }
 
     print(f"\n{name}:")
-    print(f"  훈련 R²: {train_score:.4f}")
-    print(f"  테스트 R²: {test_score:.4f}")
-    print(f"  0이 아닌 계수: {n_nonzero}/50")
-    print(f"  계수 L1 노름: {np.linalg.norm(model.coef_, ord=1):.4f}")
-    print(f"  계수 L2 노름: {np.linalg.norm(model.coef_, ord=2):.4f}")
+    print(f"  Train R²: {train_score:.4f}")
+    print(f"  Test R²: {test_score:.4f}")
+    print(f"  Non-zero coefficients: {n_nonzero}/50")
+    print(f"  Coefficient L1 norm: {np.linalg.norm(model.coef_, ord=1):.4f}")
+    print(f"  Coefficient L2 norm: {np.linalg.norm(model.coef_, ord=2):.4f}")
 
-# 계수 시각화
+# Coefficient visualization
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 axes = axes.ravel()
 
 for idx, (name, result) in enumerate(results.items()):
     axes[idx].stem(range(50), result['coef'], basefmt=' ')
     axes[idx].axhline(y=0, color='k', linewidth=0.5)
-    axes[idx].set_title(f'{name}\n0이 아닌 계수: {result["n_nonzero"]}/50', fontsize=11)
-    axes[idx].set_xlabel('특징 인덱스')
-    axes[idx].set_ylabel('계수 값')
+    axes[idx].set_title(f'{name}\nNon-zero coefficients: {result["n_nonzero"]}/50', fontsize=11)
+    axes[idx].set_xlabel('Feature index')
+    axes[idx].set_ylabel('Coefficient value')
     axes[idx].grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.savefig('regularization_comparison.png', dpi=150)
 plt.close()
 
-print("\n정규화 비교 시각화 저장: regularization_comparison.png")
+print("\nRegularization comparison visualization saved: regularization_comparison.png")
 ```
 
 ## 5. Geometry of Norms
@@ -433,44 +433,44 @@ print("\n정규화 비교 시각화 저장: regularization_comparison.png")
 This can be understood through the geometric relationship between contours and constraints.
 
 ```python
-# L1 vs L2 정규화의 기하학
+# Geometry of L1 vs L2 regularization
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# 격자 생성
+# Create grid
 w1 = np.linspace(-2, 2, 300)
 w2 = np.linspace(-2, 2, 300)
 W1, W2 = np.meshgrid(w1, w2)
 
-# 손실 함수 (이차 형식): L = (w1-1)^2 + (w2-0.5)^2
+# Loss function (quadratic form): L = (w1-1)^2 + (w2-0.5)^2
 w_optimal = np.array([1.0, 0.5])
 L = (W1 - w_optimal[0])**2 + (W2 - w_optimal[1])**2
 
-# L1 제약 조건
+# L1 constraint
 axes[0].contour(W1, W2, L, levels=20, cmap='viridis', alpha=0.6)
 theta = np.linspace(0, 2*np.pi, 1000)
 constraint_size = 1.0
-# L1: 다이아몬드
+# L1: diamond
 l1_x = constraint_size * np.sign(np.cos(theta)) * np.abs(np.cos(theta))
 l1_y = constraint_size * np.sign(np.sin(theta)) * np.abs(np.sin(theta))
 axes[0].plot(l1_x, l1_y, 'r-', linewidth=3, label=r'$\|w\|_1 = 1$')
-axes[0].plot([1, 0], [0, 0], 'ro', markersize=10, label='최적해 (희소)')
-axes[0].set_title('L1 정규화: 희소 해', fontsize=12)
+axes[0].plot([1, 0], [0, 0], 'ro', markersize=10, label='Optimal (sparse)')
+axes[0].set_title('L1 Regularization: Sparse Solution', fontsize=12)
 axes[0].set_xlabel('$w_1$')
 axes[0].set_ylabel('$w_2$')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 axes[0].set_aspect('equal')
 
-# L2 제약 조건
+# L2 constraint
 axes[1].contour(W1, W2, L, levels=20, cmap='viridis', alpha=0.6)
-# L2: 원
+# L2: circle
 l2_x = constraint_size * np.cos(theta)
 l2_y = constraint_size * np.sin(theta)
 axes[1].plot(l2_x, l2_y, 'b-', linewidth=3, label=r'$\|w\|_2 = 1$')
-# 최적해 찾기 (원과 등고선의 접점)
+# Find optimal solution (tangent point between circle and contour)
 opt_w2 = w_optimal / np.linalg.norm(w_optimal) * constraint_size
-axes[1].plot([opt_w2[0]], [opt_w2[1]], 'bo', markersize=10, label='최적해 (밀집)')
-axes[1].set_title('L2 정규화: 밀집 해', fontsize=12)
+axes[1].plot([opt_w2[0]], [opt_w2[1]], 'bo', markersize=10, label='Optimal (dense)')
+axes[1].set_title('L2 Regularization: Dense Solution', fontsize=12)
 axes[1].set_xlabel('$w_1$')
 axes[1].set_ylabel('$w_2$')
 axes[1].legend()
@@ -481,7 +481,7 @@ plt.tight_layout()
 plt.savefig('l1_l2_geometry.png', dpi=150)
 plt.close()
 
-print("L1/L2 정규화 기하학 시각화 저장: l1_l2_geometry.png")
+print("L1/L2 regularization geometry visualization saved: l1_l2_geometry.png")
 ```
 
 ### 5.2 Constraints and Optimization
@@ -501,33 +501,33 @@ Sparsity arises when the corners of L1 meet the axes.
 ```python
 from mpl_toolkits.mplot3d import Axes3D
 
-# 3D에서 L1/L2 제약 조건
+# L1/L2 constraints in 3D
 fig = plt.figure(figsize=(14, 6))
 
-# L1 구
+# L1 ball
 ax1 = fig.add_subplot(121, projection='3d')
 u = np.linspace(0, 2*np.pi, 50)
 v = np.linspace(0, np.pi, 50)
 U, V = np.meshgrid(u, v)
 
-# L1 구는 정팔면체
+# L1 ball is a regular octahedron
 r = 1.0
 vertices = np.array([
     [r, 0, 0], [-r, 0, 0], [0, r, 0],
     [0, -r, 0], [0, 0, r], [0, 0, -r]
 ])
-# 간단히 점만 표시
+# Show vertices only for simplicity
 ax1.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2],
             c='red', s=100, alpha=0.8)
-ax1.set_title('$L_1$ 단위 구 (정팔면체)', fontsize=12)
+ax1.set_title('$L_1$ unit ball (octahedron)', fontsize=12)
 
-# L2 구 (표준 구)
+# L2 ball (standard sphere)
 ax2 = fig.add_subplot(122, projection='3d')
 x = r * np.outer(np.cos(u), np.sin(v))
 y = r * np.outer(np.sin(u), np.sin(v))
 z = r * np.outer(np.ones(np.size(u)), np.cos(v))
 ax2.plot_surface(x, y, z, cmap='viridis', alpha=0.8)
-ax2.set_title('$L_2$ 단위 구 (구)', fontsize=12)
+ax2.set_title('$L_2$ unit ball (sphere)', fontsize=12)
 
 for ax in [ax1, ax2]:
     ax.set_xlabel('$w_1$')
@@ -541,7 +541,7 @@ plt.tight_layout()
 plt.savefig('l1_l2_3d.png', dpi=150)
 plt.close()
 
-print("3D 단위 구 시각화 저장: l1_l2_3d.png")
+print("3D unit ball visualization saved: l1_l2_3d.png")
 ```
 
 ## 6. ML Applications
@@ -553,11 +553,11 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.datasets import make_classification
 from sklearn.model_selection import cross_val_score
 
-# 데이터 생성
+# Generate data
 X, y = make_classification(n_samples=500, n_features=20, n_informative=15,
                            n_redundant=5, random_state=42)
 
-# 다양한 거리 측도로 k-NN 훈련
+# Train k-NN with various distance metrics
 distances = {
     'Euclidean (L2)': 'euclidean',
     'Manhattan (L1)': 'manhattan',
@@ -565,7 +565,7 @@ distances = {
     'Minkowski (p=3)': 'minkowski'
 }
 
-print("k-NN 거리 측도 비교 (5-fold CV):")
+print("k-NN distance metric comparison (5-fold CV):")
 for name, metric in distances.items():
     if metric == 'minkowski':
         knn = KNeighborsClassifier(n_neighbors=5, metric=metric, p=3)
@@ -579,39 +579,39 @@ for name, metric in distances.items():
 ### 6.2 Embedding Similarity (Cosine vs Euclidean)
 
 ```python
-# 텍스트 임베딩 시뮬레이션
+# Simulate text embeddings
 np.random.seed(42)
 n_docs = 100
 embed_dim = 50
 
-# 문서 임베딩 (단위 벡터로 정규화)
+# Document embeddings (normalized to unit vectors)
 embeddings = np.random.randn(n_docs, embed_dim)
 embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
 
-# 쿼리 문서
+# Query document
 query = embeddings[0]
 
-# 유클리드 거리
+# Euclidean distance
 euclidean_dists = np.linalg.norm(embeddings - query, axis=1)
 
-# 코사인 유사도
+# Cosine similarity
 cosine_sims = embeddings @ query
 cosine_dists = 1 - cosine_sims
 
-# 상위 10개 유사 문서
+# Top-10 most similar documents
 top_k = 10
 euclidean_top = np.argsort(euclidean_dists)[1:top_k+1]
 cosine_top = np.argsort(cosine_dists)[1:top_k+1]
 
-print("임베딩 유사도 비교:")
-print(f"유클리드 거리 상위 {top_k}개: {euclidean_top}")
-print(f"코사인 거리 상위 {top_k}개:   {cosine_top}")
-print(f"겹치는 문서 수: {len(set(euclidean_top) & set(cosine_top))}/{top_k}")
+print("Embedding similarity comparison:")
+print(f"Top {top_k} by Euclidean distance: {euclidean_top}")
+print(f"Top {top_k} by cosine distance:    {cosine_top}")
+print(f"Overlapping documents: {len(set(euclidean_top) & set(cosine_top))}/{top_k}")
 
-# 상관관계
+# Correlation
 from scipy.stats import spearmanr
 corr, p_value = spearmanr(euclidean_dists, cosine_dists)
-print(f"\n유클리드-코사인 거리 상관계수: {corr:.4f} (p={p_value:.4e})")
+print(f"\nEuclidean-cosine distance correlation: {corr:.4f} (p={p_value:.4e})")
 ```
 
 ### 6.3 Batch Normalization and Gradient Norm
@@ -620,7 +620,7 @@ print(f"\n유클리드-코사인 거리 상관계수: {corr:.4f} (p={p_value:.4e
 import torch
 import torch.nn as nn
 
-# 간단한 신경망
+# Simple neural network
 class SimpleNet(nn.Module):
     def __init__(self, use_batchnorm=False):
         super().__init__()
@@ -635,29 +635,29 @@ class SimpleNet(nn.Module):
         x = torch.relu(self.bn2(self.fc2(x)))
         return self.fc3(x)
 
-# 데이터 생성
+# Generate data
 X = torch.randn(100, 10)
 y = torch.randn(100, 1)
 
-# 모델 비교
+# Compare models
 models = {
     'Without BatchNorm': SimpleNet(use_batchnorm=False),
     'With BatchNorm': SimpleNet(use_batchnorm=True)
 }
 
-print("배치 정규화의 그래디언트 노름 영향:\n")
+print("Effect of batch normalization on gradient norm:\n")
 for name, model in models.items():
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
 
-    # 순전파
+    # Forward pass
     output = model(X)
     loss = nn.MSELoss()(output, y)
 
-    # 역전파
+    # Backward pass
     optimizer.zero_grad()
     loss.backward()
 
-    # 그래디언트 노름 계산
+    # Compute gradient norm
     total_norm = 0.0
     for p in model.parameters():
         if p.grad is not None:
@@ -666,22 +666,22 @@ for name, model in models.items():
     total_norm = total_norm ** 0.5
 
     print(f"{name}:")
-    print(f"  손실: {loss.item():.4f}")
-    print(f"  그래디언트 L2 노름: {total_norm:.4f}\n")
+    print(f"  Loss: {loss.item():.4f}")
+    print(f"  Gradient L2 norm: {total_norm:.4f}\n")
 ```
 
 ### 6.4 Gradient Clipping
 
 ```python
-# 그래디언트 폭발 방지
+# Prevent gradient explosion
 def train_step_with_clipping(model, X, y, optimizer, max_norm=1.0):
-    """그래디언트 클리핑을 적용한 학습 스텝"""
+    """Training step with gradient clipping"""
     optimizer.zero_grad()
     output = model(X)
     loss = nn.MSELoss()(output, y)
     loss.backward()
 
-    # 그래디언트 노름 계산
+    # Compute gradient norm
     total_norm = 0.0
     for p in model.parameters():
         if p.grad is not None:
@@ -689,7 +689,7 @@ def train_step_with_clipping(model, X, y, optimizer, max_norm=1.0):
             total_norm += param_norm.item() ** 2
     total_norm = total_norm ** 0.5
 
-    # 클리핑
+    # Clipping
     if total_norm > max_norm:
         clip_coef = max_norm / (total_norm + 1e-6)
         for p in model.parameters():
@@ -702,7 +702,7 @@ def train_step_with_clipping(model, X, y, optimizer, max_norm=1.0):
     optimizer.step()
     return loss.item(), total_norm, clipped_norm
 
-# 테스트
+# Test
 model = SimpleNet()
 optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
 
@@ -710,10 +710,10 @@ loss, orig_norm, clipped_norm = train_step_with_clipping(
     model, X, y, optimizer, max_norm=1.0
 )
 
-print("그래디언트 클리핑:")
-print(f"원래 그래디언트 노름: {orig_norm:.4f}")
-print(f"클리핑 후 노름:       {clipped_norm:.4f}")
-print(f"클리핑 발생:          {orig_norm > 1.0}")
+print("Gradient clipping:")
+print(f"Original gradient norm: {orig_norm:.4f}")
+print(f"Norm after clipping:    {clipped_norm:.4f}")
+print(f"Clipping occurred:      {orig_norm > 1.0}")
 ```
 
 ## Practice Problems

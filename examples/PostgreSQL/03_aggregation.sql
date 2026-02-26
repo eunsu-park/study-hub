@@ -111,7 +111,10 @@ GROUP BY d.dept_id, d.dept_name
 HAVING AVG(e.salary) >= 50000
 ORDER BY avg_salary DESC;
 
--- WHERE와 HAVING 함께 사용
+-- Why: WHERE filters individual rows BEFORE grouping (less data to aggregate),
+-- while HAVING filters AFTER grouping (on aggregated results). Putting conditions
+-- in WHERE whenever possible is more efficient because it reduces the input to
+-- the GROUP BY operation.
 SELECT
     d.dept_name,
     COUNT(e.emp_id) AS employee_count,
@@ -160,7 +163,10 @@ GROUP BY d.dept_id, d.dept_name;
 -- 5. ROLLUP, CUBE, GROUPING SETS
 -- =============================================================================
 
--- ROLLUP - 계층적 소계
+-- Why: ROLLUP generates hierarchical subtotals by progressively removing columns
+-- from right to left: (dept, year), (dept), then grand total. This is much
+-- more efficient than running separate GROUP BY queries for each subtotal level
+-- and UNION-ing them together.
 SELECT
     d.dept_name,
     EXTRACT(YEAR FROM e.hire_date) AS hire_year,
@@ -209,7 +215,9 @@ ORDER BY GROUPING(d.dept_name), d.dept_name;
 -- 6. FILTER 절
 -- =============================================================================
 
--- 조건별로 다른 집계
+-- Why: FILTER clause is PostgreSQL's cleaner alternative to CASE-based conditional
+-- aggregation. It reads more naturally and the optimizer can sometimes handle it
+-- more efficiently than SUM(CASE WHEN ... END) because the intent is explicit.
 SELECT
     d.dept_name,
     COUNT(*) AS total_count,
@@ -233,9 +241,14 @@ SELECT
 FROM departments d
 JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name
-HAVING COUNT(*) > 1;  -- 표준편차는 2개 이상 필요
+-- Why: STDDEV of a single value is NULL (undefined), so we filter out
+-- departments with only one employee to avoid meaningless results.
+HAVING COUNT(*) > 1;
 
--- 백분위수
+-- Why: PERCENTILE_CONT interpolates between values for continuous distributions,
+-- making it ideal for salary medians. PERCENTILE_DISC (discrete) would return an
+-- actual row value instead. The WITHIN GROUP syntax is needed because percentile
+-- computation requires a specific sort order.
 SELECT
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY salary) AS median_salary,
     PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary) AS q1_salary,

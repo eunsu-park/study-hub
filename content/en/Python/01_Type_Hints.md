@@ -1,5 +1,24 @@
 # Type Hints
 
+**Next**: [Decorators](./02_Decorators.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain why type hints improve code quality despite Python being dynamically typed
+2. Write basic type annotations for variables, function parameters, and return values
+3. Apply collection types (`list`, `dict`, `set`, `tuple`) with parameterized type arguments
+4. Distinguish between `Optional`, `Union`, `Any`, `Callable`, and `TypeVar` from the `typing` module
+5. Implement generic classes using `Generic[T]` and structural subtyping using `Protocol`
+6. Define complex type aliases and use `TypedDict` for structured dictionary types
+7. Apply static type checking with `mypy` and understand runtime vs. static type enforcement
+8. Write overloaded function signatures using `@overload`
+
+---
+
+Type hints bridge the gap between Python's dynamic flexibility and the safety guarantees found in statically typed languages. In production codebases with dozens of contributors, type annotations serve as machine-checkable documentation that catches entire categories of bugs -- wrong argument types, mismatched return values, forgotten `None` checks -- before the code ever runs. Modern Python tooling (IDEs, linters, CI pipelines) leverages type hints to deliver autocompletion, refactoring support, and automated verification at scale.
+
 ## 1. What are Type Hints?
 
 Type hints are a feature introduced in Python 3.5+ that allow you to explicitly specify the types of variables and functions. While Python remains a dynamically typed language, type hints can improve code readability and stability.
@@ -473,6 +492,4 @@ Define a TypedDict representing a user profile.
 
 ---
 
-## Next Steps
-
-Check out [02_Decorators.md](./02_Decorators.md) to learn about decorators that extend functions and classes!
+**Next**: [Decorators](./02_Decorators.md)

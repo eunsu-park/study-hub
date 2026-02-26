@@ -1,5 +1,18 @@
 # 05. Data Curation
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Trace the evolution of major pre-training datasets (BookCorpus, C4, The Pile, RedPajama, FineWeb) and explain how scale and composition choices have influenced model capabilities.
+2. Implement a data curation pipeline covering web crawl extraction, quality filtering (heuristics and model-based), deduplication (exact and near-duplicate), and domain mixing.
+3. Apply quality signals such as perplexity filtering, language identification, and content safety classifiers to remove low-quality or harmful documents at scale.
+4. Explain the role of data mixing ratios and domain upsampling strategies (e.g., data mixture weights used in LLaMA and Dolma) on downstream task performance.
+5. Evaluate the ethical and legal considerations of using web-scraped data, including copyright, PII removal, and bias mitigation in large-scale corpora.
+6. Design a reproducible data curation workflow with data versioning and documentation practices to enable transparency and reproducibility.
+
+---
+
 ## Overview
 
 The performance of Foundation Models heavily depends on data quality and diversity. "Garbage in, garbage out" is more critical than ever. This lesson covers the construction, refinement, and management of large-scale pre-training datasets.
@@ -951,3 +964,162 @@ if __name__ == "__main__":
 - [trafilatura](https://github.com/adbar/trafilatura): HTML text extraction
 - [datasketch](https://github.com/ekzhu/datasketch): MinHash LSH
 - [fasttext](https://fasttext.cc/): Language detection
+
+---
+
+## Exercises
+
+### Exercise 1: Quality Filter Design
+
+You are building a quality filter for a web-scraped dataset. For each of the following documents, explain which heuristic filter(s) would flag it and why.
+
+**Document A:**
+```
+BUY NOW!!! CLICK HERE!!! LIMITED TIME OFFER!!!
+BEST PRICES GUARANTEED!!! ACT FAST!!!
+BUY BUY BUY!!! DISCOUNT DISCOUNT!!!
+```
+
+**Document B:**
+```
+a a a a a a a a a a a a a a a a a a a a a a
+b b b b b b b b b b b b b b b b b b b b b b
+```
+
+**Document C:**
+```
+def sort_array(arr): return sorted(arr)
+x=1;y=2;z=x+y;print(z);a=[];for i in range(10):a.append(i)
+```
+
+<details>
+<summary>Show Answer</summary>
+
+**Document A: Spam/advertisement**
+- **Uppercase ratio > 0.3**: Most characters are uppercase → `caps_ratio` flag
+- **Punctuation ratio too high**: Excessive `!!!` sequences
+- **Unique lines ratio too low**: Repetitive patterns ("BUY", "DISCOUNT") → low `unique_lines_ratio`
+- **Perplexity**: KenLM would assign very high perplexity because these sequences don't resemble natural language distributions
+
+**Document B: Repetitive/garbage**
+- **Unique lines ratio near 0**: Every line is nearly identical → low `unique_lines_ratio`
+- **Low alphabet-to-meaningful-content ratio**: Only single letters — `words_per_line` ≈ 1
+- **High perplexity**: Highly repetitive text doesn't match natural language
+
+**Document C: Code (context-dependent filter)**
+- **Low alphabet ratio**: High density of punctuation (`;`, `=`, `(`, `)`, `:`)
+- **Low words-per-line**: Code lines are dense and short
+- **Whether to keep or discard** depends on the dataset's purpose: for a general language model this might be filtered, but for a code-focused dataset (The Pile's GitHub subset) it would be kept and assigned to the "code" domain with appropriate upsampling.
+
+</details>
+
+---
+
+### Exercise 2: MinHash Deduplication
+
+Explain the MinHash LSH (Locality-Sensitive Hashing) near-duplicate detection algorithm at a high level. Then answer:
+
+1. What is the difference between exact deduplication and near-duplicate deduplication?
+2. Why is exact hash matching insufficient for web-crawled data?
+3. What is the Jaccard similarity, and how does MinHash estimate it efficiently?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Exact vs Near-duplicate deduplication:**
+
+- **Exact deduplication**: Remove documents with identical content (same MD5/SHA hash). Fast and lossless but misses variants.
+- **Near-duplicate deduplication**: Remove documents that are highly similar but not identical (e.g., the same article reprinted on 50 different sites with minor changes). More comprehensive but computationally harder.
+
+**2. Why exact hashing is insufficient:**
+
+Web-crawled data contains many near-duplicates that are not exact copies:
+- The same news article syndicated with minor edits (headline changes, added local bylines)
+- Scraped content with slight URL or metadata differences
+- Forum posts copied across sites with timestamps changed
+These would all get different hash values but carry nearly identical information, bloating the dataset without adding knowledge diversity.
+
+**3. Jaccard similarity and MinHash:**
+
+**Jaccard similarity** between two documents A and B, when represented as sets of n-grams (shingles), is:
+```
+J(A, B) = |A ∩ B| / |A ∪ B|
+```
+
+Computing this directly for millions of document pairs is O(n²) — infeasible at scale.
+
+**MinHash estimates Jaccard similarity** using the property that for a random hash function h:
+```
+P[min_h(A) = min_h(B)] = J(A, B)
+```
+
+By computing k independent min-hash values (a "signature"), the fraction of matching values approximates J(A, B) with variance that decreases as k increases. LSH then groups documents with similar signatures into buckets so only bucket members need pairwise comparison — reducing O(n²) to near-linear.
+
+</details>
+
+---
+
+### Exercise 3: Data Mixing Strategy
+
+LLaMA 2 uses the following approximate data mixture:
+- English web (CommonCrawl): 67%
+- Code (GitHub): 8%
+- Wikipedia: 4%
+- Books (Gutenberg/Books3): 4%
+- ArXiv papers: 2%
+- StackExchange: 2%
+- Other: 13%
+
+Answer the following:
+
+1. Why is code data included despite the model being primarily a language model?
+2. Why might Wikipedia receive 4% despite being a tiny fraction of the raw web data?
+3. If you wanted to improve the model's mathematical reasoning, which data sources would you upsample and why?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Why include code data:**
+- Code improves **logical and structured reasoning**: programming requires precise step-by-step thinking, which transfers to math and formal reasoning.
+- Code introduces **formal grammars and structure**: docstrings link natural language to formal specifications, helping the model understand instructions precisely.
+- Empirically demonstrated: models trained without code perform worse on reasoning benchmarks even for non-coding tasks.
+
+**2. Why Wikipedia is upsampled relative to its web fraction:**
+- Wikipedia is **high-quality, factually verified, and encyclopedic**: it represents exactly the kind of clean, structured knowledge that benefits general-purpose language models.
+- Raw web data is mostly low-quality ads, spam, and boilerplate. Wikipedia's actual fraction of the raw web is tiny, but its knowledge density is orders of magnitude higher.
+- **Domain upsampling**: deliberately sampling high-quality domains at rates above their natural frequency is a standard curation technique.
+
+**3. Improving mathematical reasoning — sources to upsample:**
+- **ArXiv**: Contains proofs, derivations, and mathematical exposition. Currently only 2% despite containing extremely high-quality mathematical reasoning patterns.
+- **StackExchange** (especially Math SE, Physics SE): Contains step-by-step problem-solving with explanations.
+- **Code** (especially Python/Julia math libraries, Jupyter notebooks): Mathematical code forces precise reasoning.
+- **Synthetic math data**: Generate math problems and solutions (e.g., via WebMath, MATH dataset, GSM8K-style augmentation) to directly target this capability.
+
+</details>
+
+---
+
+### Exercise 4: Ethical Considerations in Data Curation
+
+For each of the following data curation decisions, identify the ethical concern and propose a mitigation strategy.
+
+1. Using all publicly available web text, including text from social media platforms.
+2. Training on GitHub code repositories without filtering for license type.
+3. Using perplexity-based filtering where the reference language model was trained primarily on English text.
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Social media text:**
+- **Concern**: Personal information exposure (PII), privacy violation, amplification of harmful speech (hate speech, misinformation), and data from users who did not consent to AI training use.
+- **Mitigation**: Apply PII removal (regex + NER-based detection for names, emails, phone numbers, locations), content safety classification to remove harmful content, respect robots.txt and platform Terms of Service, consider opt-out mechanisms for user-generated content.
+
+**2. GitHub code without license filtering:**
+- **Concern**: Copyright infringement. Code under GPL, AGPL, or non-commercial licenses may prohibit use in commercially deployed AI systems. The GitHub Copilot lawsuit raised exactly this issue.
+- **Mitigation**: Filter to permissive licenses only (MIT, Apache 2.0, BSD), document license composition of the code subset, consider using a separate legal analysis for ambiguous cases.
+
+**3. English-biased perplexity filtering:**
+- **Concern**: Systematic disadvantage to non-English languages. If the reference model is English-trained, text in other languages will receive artificially high perplexity scores and be disproportionately filtered out, creating a linguistically biased dataset.
+- **Mitigation**: Use per-language perplexity thresholds calibrated to reference models trained on each language, or use language-ID-first filtering followed by per-language quality filtering. The ROOTS/BLOOM approach used separate quality filters for each of 59 languages.
+
+</details>

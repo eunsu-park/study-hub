@@ -1,11 +1,23 @@
 # Programming Paradigms
 
-> **Topic**: Programming
-> **Lesson**: 2 of 16
-> **Prerequisites**: What Is Programming
-> **Objective**: Understand different programming paradigms, their principles, and when to use each approach.
+**Previous**: [What Is Programming](./01_What_Is_Programming.md) | **Next**: [Data Types & Abstraction](./03_Data_Types_and_Abstraction.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Define what a programming paradigm is and explain why different paradigms exist
+2. Describe the imperative and procedural programming styles and identify their distinguishing characteristics
+3. Explain the core concepts of Object-Oriented Programming (encapsulation, inheritance, polymorphism, abstraction)
+4. Contrast functional programming with imperative programming, focusing on pure functions and immutability
+5. Distinguish declarative programming from imperative programming with concrete examples (SQL, HTML)
+6. Recognize logic programming, event-driven programming, and reactive programming as distinct paradigms
+7. Evaluate trade-offs between paradigms and select the most appropriate one for a given problem domain
+8. Demonstrate how modern multi-paradigm languages blend multiple styles in a single program
 
 ---
+
+Every programming language embodies one or more paradigms -- fundamental approaches to organizing and reasoning about code. Choosing the right paradigm for a problem is as important as choosing the right algorithm, because it shapes how you decompose the problem, manage state, and compose your solution. This lesson surveys the major paradigms and equips you to make informed choices.
 
 ## What Is a Programming Paradigm?
 
@@ -16,7 +28,7 @@ A **programming paradigm** is a fundamental style or approach to programming. It
 
 Think of paradigms as different **philosophies** for solving problems with code.
 
-**Analogy**: Just as there are different architectural styles (Gothic, Modernist, Brutalist), there are different programming styles. Each has its strengths, trade-offs, and appropriate use cases.
+> **📌 Analogy:** Just as there are different architectural styles (Gothic, Modernist, Brutalist), there are different programming styles. Each has its strengths, trade-offs, and appropriate use cases.
 
 ---
 
@@ -846,6 +858,4 @@ Programming paradigms are different **ways of thinking** about code:
 
 ---
 
-## Navigation
-
-[← Previous: What Is Programming](01_What_Is_Programming.md) | [Next: Data Types & Abstraction →](03_Data_Types_and_Abstraction.md)
+**Previous**: [What Is Programming](./01_What_Is_Programming.md) | **Next**: [Data Types & Abstraction](./03_Data_Types_and_Abstraction.md)

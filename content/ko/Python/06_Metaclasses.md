@@ -1,5 +1,24 @@
 # 메타클래스 (Metaclasses)
 
+**이전**: [클로저와 스코프](./05_Closures_and_Scope.md) | **다음**: [디스크립터](./07_Descriptors.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 파이썬에서 클래스가 왜 그 자체로 객체인지 설명하고, `type`을 기본 메타클래스(metaclass)로 식별할 수 있습니다
+2. `type(name, bases, dict)`의 세 인자 형식을 사용해 클래스를 동적으로 생성할 수 있습니다
+3. `type`을 서브클래싱(subclassing)하고 `__new__`와 `__init__`을 오버라이드(override)하여 커스텀 메타클래스(custom metaclass)를 구현할 수 있습니다
+4. 메타클래스에서 `__new__`(클래스 생성)와 `__init__`(클래스 초기화)의 차이를 구분할 수 있습니다
+5. 싱글톤(singleton), 클래스 레지스트리(class registry), 속성 검증(attribute validation), 자동 메서드 생성(automatic method generation) 등의 메타클래스 패턴을 적용할 수 있습니다
+6. 서브클래스 훅(subclass hook)을 위한 메타클래스의 더 간단한 대안으로 `__init_subclass__`를 활용할 수 있습니다
+7. 다중 상속(multiple inheritance) 사용 시 메타클래스 충돌을 해결할 수 있습니다
+8. 메타클래스가 적합한 경우와 더 단순한 대안(데코레이터(decorator), 믹스인(mixin), `__init_subclass__`)이 나은 경우를 구분할 수 있습니다
+
+---
+
+대부분의 파이썬 개발자는 메타클래스를 직접 작성할 필요가 없지만, 메타클래스는 생태계에서 가장 널리 사용되는 프레임워크 — Django의 ORM, SQLAlchemy의 선언적 모델(declarative model), 파이썬 자체의 `abc.ABCMeta` — 를 구동하는 핵심 메커니즘입니다. 클래스가 생성되는 방식을 이해하면 파이썬 객체 모델(object model)의 가장 깊은 계층에 대한 통찰을 얻을 수 있으며, 프레임워크 소스 코드를 읽고, 플러그인 아키텍처(plugin architecture)를 구축하고, 런타임이 아닌 클래스 정의 시점에 불변식(invariant)을 적용하는 역량을 갖출 수 있습니다.
+
 ## 1. 클래스도 객체다
 
 파이썬에서 모든 것은 객체입니다. 클래스도 예외가 아닙니다.
@@ -131,7 +150,9 @@ class MyClass(metaclass=MyMeta):
 ```python
 class LoggingMeta(type):
     def __new__(mcs, name, bases, namespace):
-        # 클래스 생성 전에 namespace 수정 가능
+        # 생성 전 네임스페이스(namespace) 수정을 통해 인스턴스가 생기기 전에 기본 속성을 주입하거나
+        # 클래스 구조를 검증할 수 있음 — 여기서 변경한 내용은 클래스 객체 자체의 일부가 되며,
+        # 단순 인스턴스 상태가 아님
         namespace['created_by'] = 'LoggingMeta'
         return super().__new__(mcs, name, bases, namespace)
 
@@ -179,7 +200,9 @@ class PluginMeta(type):
 
     def __new__(mcs, name, bases, namespace):
         cls = super().__new__(mcs, name, bases, namespace)
-        if name != 'Plugin':  # 기본 클래스 제외
+        if name != 'Plugin':  # 기본 클래스(base class) 제외 — 기본 클래스는 인터페이스를 정의하지만
+                              # 레지스트리(registry)에 등록되어서는 안 됨; 플러그인 소비자가
+                              # 발견 가능해야 하는 것은 구체적인 구현체(concrete implementation)뿐
             mcs.plugins[name] = cls
         return cls
 
@@ -266,6 +289,9 @@ class Plugin:
     plugins = {}
 
     def __init_subclass__(cls, **kwargs):
+        # 메타클래스보다 단순함 — type을 서브클래싱(subclassing)할 필요 없음; Python 3.6+부터
+        # 대부분의 서브클래스 훅(subclass hook)에 권장됨. 클래스 객체 생성 자체를 가로채는
+        # __new__ 제어가 필요한 경우에만 메타클래스를 사용할 것
         super().__init_subclass__(**kwargs)
         # 서브클래스가 생성될 때 호출됨
         cls.plugins[cls.__name__] = cls
@@ -453,7 +479,9 @@ Django ORM은 메타클래스를 사용합니다.
 # Django 스타일 (간소화)
 class ModelMeta(type):
     def __new__(mcs, name, bases, namespace):
-        # 필드 수집
+        # __annotations__ 대신 namespace를 순회하여 타입 힌트(type hint) 없이 클래스 수준
+        # 할당으로 정의된 필드도 포착함 — Django 방식과 동일하게 Field 인스턴스가
+        # 타입 어노테이션이 아닌 진실의 원천(source of truth)이 됨
         fields = {}
         for key, value in namespace.items():
             if isinstance(value, Field):
@@ -511,4 +539,4 @@ print(User._fields)
 
 ## 다음 단계
 
-[07_Descriptors.md](./07_Descriptors.md)에서 속성 접근을 제어하는 디스크립터를 배워봅시다!
+[디스크립터 (Descriptors)](./07_Descriptors.md)에서 속성 접근을 제어하는 디스크립터를 배워봅시다!

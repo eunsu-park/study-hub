@@ -13,15 +13,18 @@ Requirements engineering is the foundation on which every software project stand
 - Lesson 02 — Software Development Life Cycles
 - Lesson 03 — Agile and Iterative Development
 
-**Learning Objectives**:
-- Distinguish functional requirements from non-functional requirements and constraints
-- Apply elicitation techniques appropriate to a given stakeholder situation
-- Write requirements that satisfy the SMART and IEEE 830 / ISO 29148 quality criteria
-- Produce a well-structured Software Requirements Specification (SRS) document
-- Write user stories with acceptance criteria in Given/When/Then format
-- Build and use a Requirements Traceability Matrix (RTM)
-- Prioritize requirements using MoSCoW and the Kano model
-- Explain strategies for managing requirements changes throughout a project
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Distinguish functional requirements from non-functional requirements and constraints
+2. Apply elicitation techniques appropriate to a given stakeholder situation
+3. Write requirements that satisfy the SMART and IEEE 830 / ISO 29148 quality criteria
+4. Produce a well-structured Software Requirements Specification (SRS) document
+5. Write user stories with acceptance criteria in Given/When/Then format
+6. Build and use a Requirements Traceability Matrix (RTM)
+7. Prioritize requirements using MoSCoW and the Kano model
+8. Explain strategies for managing requirements changes throughout a project
 
 ---
 
@@ -664,6 +667,58 @@ You have the following candidate features for a ride-sharing app MVP. Use MoSCoW
 - Pohl, K. — *Requirements Engineering: Fundamentals, Principles, and Techniques* (Springer, 2010) — rigorous academic treatment
 - IREB — *Certified Professional for Requirements Engineering (CPRE) Handbook* — certification body and reference glossary
 - OWASP ASVS — *Application Security Verification Standard* — source of security NFRs
+
+---
+
+## Exercises
+
+### Exercise 1: Classify and Repair Requirements
+
+Read each statement below and (a) classify it as Functional (FR), Non-Functional (NFR), or Constraint, (b) identify the defect type from Section 4.2, and (c) rewrite it to be SMART and verifiable.
+
+1. "The system shall be easy to use."
+2. "All passwords must be secure."
+3. "The report module shall display and export and archive data."
+4. "The application shall run on the cloud."
+5. "Users should be able to log in quickly."
+
+### Exercise 2: Write Acceptance Criteria in Gherkin
+
+A ride-sharing app has the following user story:
+
+> As a passenger, I want to view the driver's real-time location on a map, so that I know how far away they are.
+
+Write at least three Gherkin scenarios covering: (a) the happy path when a driver is en route, (b) the case when the driver cancels, and (c) the case when GPS data is unavailable.
+
+### Exercise 3: Build a Requirements Traceability Matrix
+
+You are building a simple task management API with these requirements:
+
+- FR-001: Users can create a task with a title, description, and due date.
+- FR-002: Users can mark a task as complete.
+- NFR-001: The API shall respond within 300 ms at the 95th percentile under normal load.
+- C-001: The system shall be implemented in Python 3.11+.
+
+Construct an RTM with columns: Req ID, Description, Source, Design Ref, Code Module, Test Case ID. Populate each row, inventing plausible test case IDs.
+
+### Exercise 4: Prioritize a Backlog with MoSCoW and Kano
+
+A team is scoping a personal finance app. Classify each feature using both MoSCoW (for the MVP) and the Kano model, then explain any conflicts between the two frameworks:
+
+1. Link a bank account
+2. View account balance
+3. Categorize transactions automatically
+4. Set a monthly budget and receive alerts
+5. Export transactions to CSV
+6. Social sharing of savings goals
+7. AI-powered spending insights
+8. Dark mode
+
+### Exercise 5: Design a Change Control Process
+
+A production e-commerce system has just received a new requirement from the legal team: all purchase receipts must display the customer's registered country and comply with local VAT display rules within 30 days. The requirement affects the checkout, receipt, and invoice modules.
+
+Write a one-page change control plan covering: (a) the change request document fields, (b) who sits on the CCB and what questions they must answer, (c) the impact analysis dimensions, and (d) the baseline and rollout strategy.
 
 ---
 

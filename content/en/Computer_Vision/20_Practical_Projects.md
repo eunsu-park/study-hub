@@ -1,5 +1,17 @@
 # Practical Projects
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Design and implement a document scanner that detects edges, applies perspective transformation, and produces a rectified scan image.
+2. Implement a lane detection system using Canny edge detection, Hough transforms, and region-of-interest masking.
+3. Build an AR marker detection pipeline using ArUco markers for pose estimation and overlay rendering.
+4. Implement a real-time face filter application combining facial landmark detection with image overlay techniques.
+5. Integrate multiple computer vision techniques into complete, end-to-end application projects.
+
+---
+
 ## Overview
 
 We will implement practical application projects by combining all the OpenCV techniques learned so far. Each project provides step-by-step guidance on creating complete applications by combining multiple technologies.
@@ -22,6 +34,8 @@ We will implement practical application projects by combining all the OpenCV tec
 ---
 
 ## Project 1: Document Scanner
+
+A mobile phone photo of a document is almost always skewed and perspective-distorted. The document scanner project addresses this by automatically detecting the document boundary and applying a perspective correction, producing a clean, axis-aligned image suitable for OCR or archiving — replacing a flatbed scanner with a smartphone camera.
 
 ### Project Overview
 
@@ -109,12 +123,14 @@ class DocumentScanner:
         """Find document contour"""
         # Preprocessing
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)  # Blur first to suppress texture noise inside the document
 
-        # Edge detection
+        # Edge detection — thresholds 75/200 chosen for documents: high lower bound avoids texture,
+        # high upper bound ensures only strong edges (document border) are marked as definite
         edged = cv2.Canny(blur, 75, 200)
 
-        # Morphological operations to connect edges
+        # Morphological operations to connect edges — dilate then erode closes small gaps in the border line
+        # caused by shadows or worn edges, making the contour a closed loop
         kernel = np.ones((5, 5), np.uint8)
         edged = cv2.dilate(edged, kernel, iterations=1)
         edged = cv2.erode(edged, kernel, iterations=1)
@@ -123,12 +139,15 @@ class DocumentScanner:
         contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
-        # Find the largest quadrilateral contour
+        # Sort by area descending — the document is almost always the largest object in the frame,
+        # so inspecting only the top 5 avoids processing hundreds of small contours
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
         document_contour = None
         for contour in contours[:5]:  # Check top 5 only
             peri = cv2.arcLength(contour, True)
+            # 2% of perimeter as epsilon — tight enough to reject rounded shapes,
+            # loose enough to handle slightly curved document edges
             approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
 
             if len(approx) == 4:
@@ -142,12 +161,14 @@ class DocumentScanner:
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Adaptive thresholding
+        # Adaptive thresholding — chosen over global Otsu because documents often have uneven lighting
+        # (e.g. a shadow across one corner); adaptive threshold computes a local threshold per 11×11 region,
+        # making text readable even where the background is darker
         binary = cv2.adaptiveThreshold(
             gray, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
-            11, 2
+            11, 2   # blockSize=11 (local window), C=2 (subtract 2 from weighted mean to fine-tune threshold)
         )
 
         # Or OTSU thresholding
@@ -280,6 +301,8 @@ def realtime_document_scanner():
 
 ## Project 2: Lane Detection
 
+Lane detection is one of the core building blocks of ADAS (Advanced Driver Assistance Systems) and autonomous driving. The challenge is that lanes are thin, often faded or partially occluded, and must be detected in real time. This project uses classical CV techniques — color filtering, edge detection, Hough transforms — because they are fast, interpretable, and do not require a labeled training dataset.
+
 ### Project Overview
 
 ```
@@ -344,15 +367,17 @@ class LaneDetector:
 
     def color_filter(self, img):
         """Color filter (white/yellow lanes)"""
-        # HSV conversion
+        # HSV is used instead of BGR/RGB because hue is separable from brightness;
+        # a white lane in shadow has the same hue/saturation but lower value — RGB thresholds fail here
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-        # White mask
+        # White mask: any hue (0-255), very low saturation (near-gray), high brightness
         lower_white = np.array([0, 0, 200])
         upper_white = np.array([255, 30, 255])
         white_mask = cv2.inRange(hsv, lower_white, upper_white)
 
-        # Yellow mask
+        # Yellow mask: hue 15-35° covers yellow, saturation >80 excludes washed-out colors,
+        # value >100 excludes shadows
         lower_yellow = np.array([15, 80, 100])
         upper_yellow = np.array([35, 255, 255])
         yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
@@ -376,11 +401,11 @@ class LaneDetector:
         """Line detection using Hough transform"""
         lines = cv2.HoughLinesP(
             edges,
-            rho=1,              # Distance resolution (pixels)
-            theta=np.pi/180,    # Angle resolution (radians)
-            threshold=50,       # Minimum votes
-            minLineLength=50,   # Minimum line length
-            maxLineGap=150      # Maximum gap
+            rho=1,              # 1-pixel distance resolution — finer is more accurate but slower
+            theta=np.pi/180,    # 1-degree angular resolution — sufficient for lane angles
+            threshold=50,       # Minimum votes: requires 50 edge pixels to agree on a line; filters noise
+            minLineLength=50,   # Reject short segments that are likely noise or road debris
+            maxLineGap=150      # Allow gaps up to 150px — handles dashed lane markings as one line
         )
         return lines
 
@@ -403,11 +428,13 @@ class LaneDetector:
 
             slope = (y2 - y1) / (x2 - x1)
 
-            # Ignore if slope is too small (horizontal line)
+            # Reject near-horizontal lines (|slope| < 0.3): lane lines are always angled;
+            # horizontal segments are typically road cracks, shadows, or distant markings
             if abs(slope) < 0.3:
                 continue
 
-            # Left/right classification
+            # Left lane: negative slope (goes up-left in image coords) AND both endpoints left of center;
+            # the position check prevents misclassifying a right-side diagonal that crosses center
             if slope < 0 and x1 < center and x2 < center:
                 left_lines.append(line[0])
             elif slope > 0 and x1 > center and x2 > center:
@@ -428,7 +455,8 @@ class LaneDetector:
             x_coords.extend([x1, x2])
             y_coords.extend([y1, y2])
 
-        # Linear regression (1st degree polynomial fitting)
+        # Fit x as a function of y (not the usual y=f(x)) because lane lines are nearly vertical
+        # and would cause numerical instability (infinite slope) in standard linear regression
         poly = np.polyfit(y_coords, x_coords, deg=1)
 
         # Set y range
@@ -538,7 +566,10 @@ def video_lane_detection(video_path):
     # Previous frame lanes (for smoothing)
     prev_left = None
     prev_right = None
-    alpha = 0.7  # Smoothing coefficient
+    # Exponential moving average: alpha=0.7 weights the previous frame heavily, so lane lines
+    # move smoothly even when Hough detects a slightly different position each frame
+    # (lower alpha = more smoothing, higher lag; higher alpha = more jitter, faster response)
+    alpha = 0.7
 
     while True:
         ret, frame = cap.read()
@@ -581,6 +612,8 @@ def video_lane_detection(video_path):
 ---
 
 ## Project 3: AR Marker Detection
+
+Augmented reality requires knowing exactly where a known reference point is in 3D space from a single 2D image. AR markers solve this by encoding a unique ID in a high-contrast square pattern that is easy to detect even under varying lighting. Knowing the four corners of a marker whose real-world size is known is enough to compute the camera pose and anchor 3D content precisely.
 
 ### Project Overview
 
@@ -639,33 +672,37 @@ class ARMarkerDetector:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        # Adaptive thresholding
+        # Adaptive thresholding — markers are black-on-white and must be detectable under varying
+        # lighting; local thresholding handles shadows that would make global Otsu miss part of the border
         binary = cv2.adaptiveThreshold(
             blur, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV,
+            cv2.THRESH_BINARY_INV,  # Invert so marker interior (black) becomes white foreground
             11, 2
         )
 
-        # Contour detection
+        # RETR_LIST retrieves all contours without hierarchy — faster than RETR_TREE when we
+        # don't need parent/child relationships (markers can be nested but we check them individually)
         contours, _ = cv2.findContours(binary, cv2.RETR_LIST,
                                         cv2.CHAIN_APPROX_SIMPLE)
 
         markers = []
 
         for contour in contours:
-            # Area filter
+            # Area filter: too small (<1000px²) = noise; too large (>50% of image) = frame border
             area = cv2.contourArea(contour)
             if area < 1000 or area > img.shape[0] * img.shape[1] * 0.5:
                 continue
 
-            # Polygon approximation
+            # 4% epsilon — more lenient than the document scanner (2%) because marker edges may
+            # be blurry or perspective-distorted, making the polygon less regular
             peri = cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
 
             # Only quadrilaterals
             if len(approx) == 4:
-                # Check convex polygon
+                # Convexity check rejects non-square quads (e.g. an L-shape that approximates to 4 points)
+                # Real markers are always convex squares/rectangles
                 if cv2.isContourConvex(approx):
                     markers.append(approx.reshape(4, 2))
 
@@ -874,6 +911,8 @@ def generate_aruco_marker(marker_id=0, size=200):
 
 ## Project 4: Real-time Face Filter
 
+Face filters (popularized by Snapchat and Instagram) work by anchoring virtual objects to specific facial features. The key challenge is robustly tracking landmark positions across frames so that overlays stay stable even when the head moves. This project uses a 68-point facial landmark model because it provides enough precision to anchor accessories like sunglasses and hats to the correct anatomical positions.
+
 ### Project Overview
 
 ```
@@ -909,7 +948,11 @@ class FaceFilter:
     """Real-time Face Filter"""
 
     def __init__(self, predictor_path):
+        # dlib's HOG-based detector is chosen over Haar cascades because it handles
+        # slightly tilted faces better without the high false-positive rate of Haar
         self.detector = dlib.get_frontal_face_detector()
+        # 68-point predictor gives anatomically precise landmarks (eye corners, lip edges, etc.)
+        # needed to position accessories correctly; a 5-point model is faster but lacks the detail
         self.predictor = dlib.shape_predictor(predictor_path)
 
         # Filter images
@@ -966,9 +1009,11 @@ class FaceFilter:
         if w <= 0 or h <= 0:
             return background
 
-        # Alpha blending
+        # Alpha blending: composite = alpha * foreground + (1 - alpha) * background
+        # Using the PNG's alpha channel means partially transparent pixels blend smoothly
+        # rather than showing a harsh edge around the filter image
         overlay_rgb = overlay[:, :, :3]
-        alpha = overlay[:, :, 3] / 255.0
+        alpha = overlay[:, :, 3] / 255.0  # Normalize alpha to [0,1] for the blend formula
 
         roi = background[y:y+h, x:x+w]
 
@@ -992,10 +1037,11 @@ class FaceFilter:
         angle = np.degrees(np.arctan2(right_eye[1] - left_eye[1],
                                       right_eye[0] - left_eye[0]))
 
-        # Resize sunglasses
+        # 2.5× eye width gives sunglasses that extend slightly past the face edges — matching
+        # how real sunglasses are proportioned relative to inter-pupillary distance
         filter_width = int(eye_width * 2.5)
         filter_height = int(filter_width * filter_img.shape[0] /
-                           filter_img.shape[1])
+                           filter_img.shape[1])  # Preserve filter's original aspect ratio
 
         resized_filter = cv2.resize(filter_img, (filter_width, filter_height))
 
@@ -1143,6 +1189,8 @@ def realtime_face_filter():
 
 ## Project 5: Object Tracking System
 
+Running a full object detector on every frame is computationally expensive and produces jittery IDs — the same physical object may get a different bounding box on consecutive frames. This project combines background subtraction (cheap, frame-by-frame motion detection) with Kalman filtering (predicts where each object will be next) and the Hungarian algorithm (globally optimal assignment of detections to tracks), which is the classical SORT (Simple Online and Realtime Tracking) architecture.
+
 ### Project Overview
 
 ```
@@ -1177,7 +1225,8 @@ class KalmanTracker:
         # State vector: [x, y, vx, vy]
         self.kalman = cv2.KalmanFilter(4, 2)
 
-        # Transition matrix (constant velocity model)
+        # Constant velocity model: next_pos = current_pos + velocity
+        # Simple but effective for short prediction horizons (a few frames)
         self.kalman.transitionMatrix = np.array([
             [1, 0, 1, 0],
             [0, 1, 0, 1],
@@ -1185,16 +1234,18 @@ class KalmanTracker:
             [0, 0, 0, 1]
         ], dtype=np.float32)
 
-        # Measurement matrix
+        # We only observe (x, y) position, not velocity directly;
+        # the filter infers velocity from successive position measurements
         self.kalman.measurementMatrix = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0]
         ], dtype=np.float32)
 
-        # Process noise
+        # Low process noise (0.03): we trust the motion model — use higher values for erratic objects
         self.kalman.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03
 
-        # Measurement noise
+        # Measurement noise (1.0): background-subtracted centroids have ~1px localization error;
+        # higher trust in measurements than in prediction when detections are available
         self.kalman.measurementNoiseCov = np.eye(2, dtype=np.float32) * 1
 
         # Initial state
@@ -1239,7 +1290,11 @@ class MultiObjectTracker:
         self.min_hits = min_hits
         self.iou_threshold = iou_threshold
 
-        # Background subtractor
+        # MOG2 is used instead of simple frame differencing because it models each pixel
+        # as a mixture of Gaussians, adapting to gradual lighting changes (clouds, day/night)
+        # history=500: uses ~500 frames to learn the background model
+        # varThreshold=16: pixels deviating more than √16 std-devs are foreground
+        # detectShadows=True: marks shadow pixels separately (gray) rather than treating them as objects
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=500, varThreshold=16, detectShadows=True
         )
@@ -1310,7 +1365,8 @@ class MultiObjectTracker:
                 dist = np.linalg.norm(np.array(det['center']) - pred)
                 cost_matrix[d, t] = dist
 
-        # Optimal matching with Hungarian algorithm
+        # Hungarian algorithm finds the globally optimal assignment in O(n³) — greedy nearest-neighbor
+        # assignment can give wrong IDs when two objects cross paths; Hungarian prevents that
         row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
         matched = []
@@ -1318,6 +1374,8 @@ class MultiObjectTracker:
         unmatched_trackers = list(range(len(self.trackers)))
 
         for row, col in zip(row_indices, col_indices):
+            # Reject matches where distance > 100px — even the "best" assignment may be wrong
+            # if an object disappeared and a new one appeared far away
             if cost_matrix[row, col] < 100:  # Distance threshold
                 matched.append((row, col))
                 unmatched_detections.remove(row)
@@ -1367,6 +1425,8 @@ class MultiObjectTracker:
         # Return results
         results = []
         for tracker in self.trackers:
+            # min_hits guard: only report tracks that have been confirmed by at least min_hits detections;
+            # prevents single-frame false positives from polluting the output with spurious IDs
             if tracker['kalman'].hits >= self.min_hits:
                 results.append({
                     'id': tracker['id'],

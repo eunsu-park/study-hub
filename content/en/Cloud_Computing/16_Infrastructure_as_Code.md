@@ -1,5 +1,27 @@
 # Infrastructure as Code (Terraform)
 
+**Previous**: [CLI and SDK](./15_CLI_and_SDK.md) | **Next**: [Monitoring, Logging, and Cost Management](./17_Monitoring_Logging_Cost.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the principles of Infrastructure as Code and its advantages over manual provisioning
+2. Compare declarative (Terraform, CloudFormation) and procedural (Ansible) IaC approaches
+3. Write Terraform configurations using HCL to define cloud resources
+4. Execute the Terraform workflow: init, plan, apply, and destroy
+5. Manage Terraform state files and configure remote backends for team collaboration
+6. Use variables, modules, and outputs to create reusable, maintainable infrastructure code
+7. Implement a multi-resource deployment with proper dependency management
+
+---
+
+Manually clicking through a console to create resources is slow, error-prone, and impossible to reproduce consistently. Infrastructure as Code treats your cloud environment like software -- version-controlled, peer-reviewed, tested, and deployed through automated pipelines. It is the foundation of reliable, auditable, and scalable cloud operations.
+
+> **Analogy — Blueprints, Not Bricklaying**: Manually configuring cloud resources is like building a house by giving verbal instructions to each worker. Infrastructure as Code is the architect's blueprint — a precise, version-controlled document that anyone can use to reproduce the exact same building. If a fire destroys the house, you don't rely on memory; you hand the blueprint to a new crew and rebuild identically.
+
 ## 1. IaC Overview
 
 ### 1.1 What is Infrastructure as Code?
@@ -762,6 +784,312 @@ jobs:
 
 - [17_Monitoring_Logging_Cost.md](./17_Monitoring_Logging_Cost.md) - Monitoring
 - [Docker/](../Docker/) - Kubernetes IaC
+
+---
+
+## Exercises
+
+### Exercise 1: IaC Tool Selection
+
+Your team is choosing an IaC tool. Evaluate which tool is most appropriate for each scenario.
+
+| Scenario | Best Tool | Reason |
+|---|---|---|
+| Manage resources on both AWS and GCP from one codebase | ? | ? |
+| Your team only uses AWS and wants native JSON/YAML support | ? | ? |
+| You need to configure OS packages and software on existing VMs | ? | ? |
+| You want to write infrastructure in TypeScript instead of HCL | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Scenario | Best Tool | Reason |
+|---|---|---|
+| Manage resources on both AWS and GCP from one codebase | **Terraform** | Multi-cloud support; single HCL codebase with provider plugins for each cloud |
+| Your team only uses AWS and wants native JSON/YAML support | **CloudFormation** | Native AWS service; no extra tooling needed; deep integration with AWS services |
+| You need to configure OS packages and software on existing VMs | **Ansible** | Procedural tool designed for configuration management (SSH-based, agentless); Terraform handles provisioning, Ansible handles configuration |
+| You want to write infrastructure in TypeScript instead of HCL | **Pulumi** | Supports general-purpose languages (Python, TypeScript, Go, C#); full IDE support, type safety |
+
+Note: Terraform and CloudFormation are both declarative — you define the desired state, and the tool figures out how to achieve it. Ansible is procedural — you define the steps to execute in order. In practice, Terraform (provisioning) + Ansible (configuration) is a common combination.
+
+</details>
+
+---
+
+### Exercise 2: Terraform Workflow
+
+You have written a Terraform configuration to create an S3 bucket and an EC2 instance. List the exact commands to run and explain what each does, from starting a new project to applying the configuration for the first time.
+
+<details>
+<summary>Show Answer</summary>
+
+```bash
+# Step 1: Initialize the working directory
+# Downloads provider plugins (hashicorp/aws) and sets up the backend
+terraform init
+
+# Step 2: Validate the configuration syntax
+# Catches HCL syntax errors and type mismatches before touching real infrastructure
+terraform validate
+
+# Step 3: Preview the changes (dry run)
+# Shows what resources will be created/modified/destroyed; does NOT change anything
+terraform plan
+
+# Step 4: Apply the configuration
+# Creates the actual resources; prompts for confirmation unless -auto-approve is used
+terraform apply
+
+# Optional: Destroy all resources managed by this configuration
+terraform destroy
+```
+
+**What happens internally during `terraform apply`:**
+1. Reads the current state (`.tfstate` file or remote backend)
+2. Calls the AWS API to check the current real-world state
+3. Calculates the diff between desired state (`.tf` files) and actual state
+4. Executes API calls to create/update/delete resources in the correct dependency order
+5. Writes the new state to the backend
+
+Important: Never manually edit `.tfstate` files — use `terraform state` commands instead. Corrupting the state file is the most common Terraform disaster.
+
+</details>
+
+---
+
+### Exercise 3: Remote State and Locking
+
+A team of 3 engineers all run `terraform apply` on the same production infrastructure. What problems can arise, and how do you configure a remote backend with state locking to prevent them?
+
+<details>
+<summary>Show Answer</summary>
+
+**Problems with local state in a team environment:**
+- **State conflicts**: Two engineers apply simultaneously → both read the same old state → both think they're making the same change → one overwrites the other's state, causing drift
+- **State loss**: State file exists only on one laptop → engineer leaves or laptop breaks → state is lost → Terraform no longer knows what it manages
+- **No history**: No audit trail of who changed what and when
+
+**Solution: Remote backend with state locking**
+
+```hcl
+# backend.tf
+terraform {
+  backend "s3" {
+    bucket         = "mycompany-terraform-state"
+    key            = "production/terraform.tfstate"
+    region         = "ap-northeast-2"
+    encrypt        = true                        # Encrypt state at rest
+    dynamodb_table = "terraform-state-locks"     # Lock table
+  }
+}
+```
+
+**Create the DynamoDB lock table (one-time setup):**
+```bash
+aws dynamodb create-table \
+    --table-name terraform-state-locks \
+    --attribute-definitions AttributeName=LockID,AttributeType=S \
+    --key-schema AttributeName=LockID,KeyType=HASH \
+    --billing-mode PAY_PER_REQUEST
+```
+
+**How locking works:**
+1. Engineer A runs `terraform apply` → acquires a lock in DynamoDB (writes a LockID entry)
+2. Engineer B runs `terraform apply` simultaneously → tries to acquire lock → lock is held → Terraform exits with an error: "Error acquiring the state lock"
+3. Engineer A finishes → lock is released
+4. Engineer B can now proceed safely
+
+**For GCP, use Cloud Storage backend (locking is built-in via object versioning):**
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "mycompany-terraform-state"
+    prefix = "production/terraform.tfstate"
+  }
+}
+```
+
+</details>
+
+---
+
+### Exercise 4: Variables and Outputs
+
+You have this Terraform resource for an RDS instance. Refactor it to use variables with descriptions and add outputs for the database endpoint and port.
+
+```hcl
+resource "aws_db_instance" "main" {
+  identifier        = "myapp-db"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  username          = "admin"
+  password          = "SuperSecret123!"
+  skip_final_snapshot = true
+}
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```hcl
+# variables.tf
+variable "db_identifier" {
+  description = "The name of the RDS instance"
+  type        = string
+  default     = "myapp-db"
+}
+
+variable "db_instance_class" {
+  description = "The instance type of the RDS instance"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "The allocated storage size in gigabytes"
+  type        = number
+  default     = 20
+}
+
+variable "db_username" {
+  description = "The master username for the database"
+  type        = string
+  default     = "admin"
+}
+
+variable "db_password" {
+  description = "The master password for the database"
+  type        = string
+  sensitive   = true  # Never shown in plan/apply output or state list
+}
+```
+
+```hcl
+# main.tf
+resource "aws_db_instance" "main" {
+  identifier        = var.db_identifier
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = var.db_instance_class
+  allocated_storage = var.db_allocated_storage
+  username          = var.db_username
+  password          = var.db_password
+  skip_final_snapshot = true
+}
+```
+
+```hcl
+# outputs.tf
+output "db_endpoint" {
+  description = "The connection endpoint for the RDS instance"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_port" {
+  description = "The port the database is listening on"
+  value       = aws_db_instance.main.port
+}
+```
+
+```bash
+# Set the sensitive password via environment variable (never in terraform.tfvars)
+export TF_VAR_db_password="SuperSecret123!"
+terraform apply
+```
+
+Key points:
+- Mark passwords as `sensitive = true` so they are redacted in logs and CLI output
+- Never hardcode credentials in `.tf` files that get committed to version control
+- Pass sensitive values via `TF_VAR_` environment variables or a secrets manager integration (e.g., Vault provider)
+
+</details>
+
+---
+
+### Exercise 5: Terraform Module Design
+
+You need to deploy the same three-tier architecture (VPC + web tier + database tier) to both `dev` and `prod` environments. The `dev` environment uses smaller, cheaper instances. Describe the module and directory structure, and show how `prod/main.tf` would call the modules differently from `dev/main.tf`.
+
+<details>
+<summary>Show Answer</summary>
+
+**Directory structure:**
+```
+terraform/
+├── modules/
+│   ├── vpc/
+│   │   ├── main.tf       # VPC, subnets, IGW, route tables
+│   │   ├── variables.tf  # cidr_block, name, etc.
+│   │   └── outputs.tf    # vpc_id, public_subnet_ids, private_subnet_ids
+│   ├── web/
+│   │   ├── main.tf       # EC2 + Auto Scaling Group + ALB
+│   │   ├── variables.tf  # instance_type, subnet_ids, etc.
+│   │   └── outputs.tf    # alb_dns_name
+│   └── database/
+│       ├── main.tf       # RDS instance + subnet group + security group
+│       ├── variables.tf  # db_instance_class, db_name, subnet_ids
+│       └── outputs.tf    # db_endpoint, db_port
+├── environments/
+│   ├── dev/
+│   │   ├── main.tf
+│   │   └── terraform.tfvars
+│   └── prod/
+│       ├── main.tf
+│       └── terraform.tfvars
+```
+
+**environments/dev/main.tf:**
+```hcl
+module "vpc" {
+  source     = "../../modules/vpc"
+  name       = "myapp-dev"
+  cidr_block = "10.0.0.0/16"
+}
+
+module "web" {
+  source        = "../../modules/web"
+  instance_type = "t3.micro"        # Cheap dev instance
+  subnet_ids    = module.vpc.public_subnet_ids
+}
+
+module "database" {
+  source            = "../../modules/database"
+  db_instance_class = "db.t3.micro" # Smallest RDS
+  subnet_ids        = module.vpc.private_subnet_ids
+}
+```
+
+**environments/prod/main.tf:**
+```hcl
+module "vpc" {
+  source     = "../../modules/vpc"
+  name       = "myapp-prod"
+  cidr_block = "10.1.0.0/16"
+}
+
+module "web" {
+  source        = "../../modules/web"
+  instance_type = "t3.large"        # Production-grade instances
+  subnet_ids    = module.vpc.public_subnet_ids
+}
+
+module "database" {
+  source            = "../../modules/database"
+  db_instance_class = "db.r6g.large"  # Production RDS
+  multi_az          = true             # High availability
+  subnet_ids        = module.vpc.private_subnet_ids
+}
+```
+
+Benefits of this structure:
+- Module code is written once and reused across environments — DRY principle
+- Environment-specific parameters are isolated in each environment's `main.tf` and `terraform.tfvars`
+- Different Terraform state files per environment prevent a dev `destroy` from affecting prod
+- Adding a new environment (e.g., `staging`) is just creating a new directory and calling the existing modules
+
+</details>
 
 ---
 

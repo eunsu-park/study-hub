@@ -4,6 +4,19 @@
 
 # 33. 확산 모델(Diffusion Models, DDPM)
 
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 순방향 확산 과정(Forward Diffusion Process)(가우시안 노이즈를 점진적으로 추가하는 마르코프 체인)을 설명하고, 누적 노이즈 스케줄을 사용하여 q(x_t | x_0)의 폐쇄형 표현식을 유도합니다.
+2. 역방향 과정(Reverse Process)을 공식화하고, 각 타임스텝에서 노이즈를 예측하고 제거하도록 신경망을 훈련하는 방법을 설명합니다.
+3. ELBO로부터 단순화된 DDPM 학습 목적함수(노이즈 예측 손실)를 유도하고, 이 파라미터화가 실제로 왜 효과적인지 설명합니다.
+4. PyTorch에서 U-Net 노이즈 예측기를 사용하여 DDPM 학습 루프와 추론(역방향 확산 샘플링)을 처음부터 구현합니다.
+5. 노이즈 스케줄(선형 및 코사인)을 구현하고 비교하며, 스케줄 선택이 생성 품질에 어떤 영향을 미치는지 설명합니다.
+6. 샘플 품질, 학습 안정성, 추론 속도, 우도 추정 측면에서 DDPM과 GAN, VAE를 비교합니다.
+
+---
+
 ## 개요
 
 디노이징 확산 확률 모델(Denoising Diffusion Probabilistic Models, DDPM)은 점진적인 노이즈 추가 과정을 역전시켜 데이터를 생성하는 강력한 생성 모델입니다. "Denoising Diffusion Probabilistic Models" (Ho et al., 2020)
@@ -387,4 +400,4 @@ for t in reversed(range(1, T+1)):
 - Song et al. (2020). "Denoising Diffusion Implicit Models"
 - Nichol & Dhariwal (2021). "Improved Denoising Diffusion Probabilistic Models"
 - Ho & Salimans (2022). "Classifier-Free Diffusion Guidance"
-- [32_Diffusion_Models.md](./32_Diffusion_Models.md)
+- [Diffusion Models](./32_Diffusion_Models.md)

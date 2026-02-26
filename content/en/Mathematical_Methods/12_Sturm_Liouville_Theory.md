@@ -1,4 +1,4 @@
-# 12. Sturm-Liouville Theory (스투름-리우빌 이론)
+# 12. Sturm-Liouville Theory
 
 ## Learning Objectives
 
@@ -37,14 +37,14 @@ $\mathcal{L}$ is called the **Sturm-Liouville operator**, which has the **self-a
 import sympy as sp
 
 x = sp.Symbol('x')
-# 예: 에르미트 방정식 y'' - 2xy' + 2ny = 0을 S-L 형태로 변환
+# Example: Convert Hermite equation y'' - 2xy' + 2ny = 0 to S-L form
 a_x, b_x = sp.Integer(1), -2 * x
 
 integrating_factor = sp.exp(sp.integrate(b_x / a_x, x))
 p_x = integrating_factor * a_x
 print(f"p(x) = {p_x}")   # exp(-x^2)
 print(f"w(x) = {integrating_factor}")  # exp(-x^2)
-# S-L 형태: d/dx[exp(-x^2) y'] + 2n exp(-x^2) y = 0
+# S-L form: d/dx[exp(-x^2) y'] + 2n exp(-x^2) y = 0
 ```
 
 ### 1.2 Boundary Conditions
@@ -89,7 +89,7 @@ for n, ax in zip(range(1, 5), axes.flat):
     ax.set_title(f'$y_{n}(x) = \\sin({n}x)$, $\\lambda_{n} = {n**2}$')
     ax.grid(True, alpha=0.3)
 
-plt.suptitle('디리클레 경계 조건의 고유함수들', fontsize=14, fontweight='bold')
+plt.suptitle('Eigenfunctions with Dirichlet Boundary Conditions', fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.show()
 ```
@@ -120,11 +120,11 @@ import numpy as np
 L = np.pi
 x = np.linspace(0, L, 10000)
 
-print("=== 직교성 검증: int_0^pi sin(mx) sin(nx) dx ===")
+print("=== Orthogonality verification: int_0^pi sin(mx) sin(nx) dx ===")
 for m in range(1, 5):
     for n in range(1, 5):
         inner = np.trapz(np.sin(m*x) * np.sin(n*x), x)
-        status = "= pi/2" if m == n else "= 0"
+        status = "= π/2" if m == n else "= 0"
         print(f"  <y_{m}, y_{n}> = {inner:.6f}  ({status})")
 ```
 
@@ -160,10 +160,10 @@ for N, ax in zip([1, 3, 10, 50], axes.flat):
     approx = sum(compute_cn(n) * np.sin(n*x) for n in range(1, N+1))
     ax.plot(x, f(x), 'k--', linewidth=1.5, label='$f(x) = x$')
     ax.plot(x, approx, 'b-', linewidth=2, label=f'$N = {N}$')
-    ax.set_title(f'일반 푸리에 급수 ($N = {N}$)')
+    ax.set_title(f'Generalized Fourier Series ($N = {N}$)')
     ax.legend(); ax.grid(True, alpha=0.3)
 
-plt.suptitle('$f(x) = x$의 고유함수 전개', fontsize=14, fontweight='bold')
+plt.suptitle('Eigenfunction Expansion of $f(x) = x$', fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.show()
 ```
@@ -192,23 +192,23 @@ L = np.pi
 x = np.linspace(0, L, 1000)
 
 # y'' + λy = 0, y(0) = y(π) = 0  →  p=1, q=0, w=1
-# 정확한 λ₁ = 1
+# Exact λ₁ = 1
 
-# 시행 함수 1: φ₁(x) = x(π - x)
+# Trial function 1: φ₁(x) = x(π - x)
 phi1 = x * (L - x)
 phi1_prime = L - 2*x
 R1 = np.trapz(phi1_prime**2, x) / np.trapz(phi1**2, x)
 
-# 시행 함수 2: φ₂(x) = sin(πx/L) (정확한 고유함수)
+# Trial function 2: φ₂(x) = sin(πx/L) (exact eigenfunction)
 phi2 = np.sin(np.pi * x / L)
 phi2_prime = (np.pi / L) * np.cos(np.pi * x / L)
 R2 = np.trapz(phi2_prime**2, x) / np.trapz(phi2**2, x)
 
-print(f"시행 함수 1: x(π-x)")
-print(f"  R₁ = {R1:.6f}  (정확값 1.0, 오차 {abs(R1-1)*100:.2f}%)")
-print(f"시행 함수 2: sin(πx/π) (정확)")
-print(f"  R₂ = {R2:.6f}  (정확값 1.0)")
-print(f"\nR ≥ λ₁ 확인: {R1:.6f} ≥ {1.0} ✓")
+print(f"Trial function 1: x(π-x)")
+print(f"  R₁ = {R1:.6f}  (exact value 1.0, error {abs(R1-1)*100:.2f}%)")
+print(f"Trial function 2: sin(πx/π) (exact)")
+print(f"  R₂ = {R2:.6f}  (exact value 1.0)")
+print(f"\nR ≥ λ₁ confirmed: {R1:.6f} ≥ {1.0} ✓")
 ```
 
 ---
@@ -253,13 +253,13 @@ for n in range(5):
     ax1.plot(x, jv(nu, zeros[n]*x), linewidth=2,
              label=f'$J_0(\\alpha_{{{n+1}}} x)$, $\\alpha={zeros[n]:.2f}$')
 ax1.axhline(0, color='k', linewidth=0.5)
-ax1.set_title('베셀 함수 고유함수'); ax1.legend(fontsize=9); ax1.grid(True, alpha=0.3)
+ax1.set_title('Bessel Function Eigenfunctions'); ax1.legend(fontsize=9); ax1.grid(True, alpha=0.3)
 
-# 직교성 행렬
+# Orthogonality matrix
 ortho = np.array([[np.trapz(x * jv(nu, zeros[m]*x) * jv(nu, zeros[n]*x), x)
                     for n in range(5)] for m in range(5)])
 ax2.imshow(ortho, cmap='RdBu_r', vmin=-0.1, vmax=0.3)
-ax2.set_title('직교성 행렬 (가중 $w=x$)'); plt.colorbar(ax2.images[0], ax=ax2)
+ax2.set_title('Orthogonality Matrix (weight $w=x$)'); plt.colorbar(ax2.images[0], ax=ax2)
 plt.tight_layout(); plt.show()
 ```
 
@@ -285,13 +285,13 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
 for l in range(6):
     ax1.plot(x, legendre(l)(x), linewidth=2, label=f'$P_{l}(x)$')
-ax1.set_title('르장드르 다항식'); ax1.legend(); ax1.grid(True, alpha=0.3)
+ax1.set_title('Legendre Polynomials'); ax1.legend(); ax1.grid(True, alpha=0.3)
 
 N = 6
 ortho = np.array([[np.trapz(legendre(m)(x)*legendre(n)(x), x)
                     for n in range(N)] for m in range(N)])
 ax2.imshow(ortho, cmap='RdBu_r', vmin=-0.2, vmax=1.0)
-ax2.set_title('직교성 행렬 $\\langle P_m, P_n \\rangle$')
+ax2.set_title('Orthogonality Matrix $\\langle P_m, P_n \\rangle$')
 plt.tight_layout(); plt.show()
 ```
 
@@ -322,7 +322,7 @@ import numpy as np
 from scipy.special import eval_hermite
 import matplotlib.pyplot as plt
 
-# 에르미트 함수: 무한 구간 특이 S-L
+# Hermite functions: infinite-interval singular S-L
 # d/dx[e^{-x²} y'] + 2n e^{-x²} y = 0
 x = np.linspace(-5, 5, 500)
 w = np.exp(-x**2)
@@ -334,19 +334,19 @@ for n in range(5):
     ax1.plot(x, Hn * np.sqrt(w), linewidth=1.5,
              label=f'$H_{n}(x) e^{{-x^2/2}}$')
 
-ax1.set_title('에르미트 함수 (가중된 고유함수)')
+ax1.set_title('Hermite Functions (weighted eigenfunctions)')
 ax1.set_xlabel('x'); ax1.legend(fontsize=9)
 ax1.grid(True, alpha=0.3)
 
-# 제곱적분 가능성: ∫w|H_n|² dx < ∞
+# Square integrability: ∫w|H_n|² dx < ∞
 for n in range(4):
     Hn = eval_hermite(n, x)
     integrand = w * Hn**2
     ax2.fill_between(x, 0, integrand, alpha=0.3, label=f'$w H_{n}^2$')
     area = np.trapz(integrand, x)
-    print(f"||H_{n}||²_w = {area:.4f}  (이론: {np.sqrt(np.pi) * 2**n * np.math.factorial(n):.4f})")
+    print(f"||H_{n}||²_w = {area:.4f}  (theory: {np.sqrt(np.pi) * 2**n * np.math.factorial(n):.4f})")
 
-ax2.set_title('$w(x)|H_n(x)|^2$ (제곱적분 가능)')
+ax2.set_title('$w(x)|H_n(x)|^2$ (square integrable)')
 ax2.set_xlabel('x'); ax2.legend(fontsize=9)
 ax2.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
@@ -374,17 +374,17 @@ import numpy as np
 from scipy.special import eval_hermite
 import math
 
-# 에르미트 다항식의 가중 직교성 검증
+# Weighted orthogonality verification of Hermite polynomials
 x = np.linspace(-5, 5, 5000)
 w = np.exp(-x**2)
 
-print("=== 에르미트 다항식 가중 직교성 ===")
+print("=== Hermite Polynomial Weighted Orthogonality ===")
 for m in range(5):
     for n in range(m, 5):
         inner = np.trapz(w * eval_hermite(m, x) * eval_hermite(n, x), x)
         if m == n:
             theory = math.sqrt(math.pi) * 2**n * math.factorial(n)
-            print(f"  <H_{m}, H_{n}>_w = {inner:.4f}  (이론: {theory:.4f})")
+            print(f"  <H_{m}, H_{n}>_w = {inner:.4f}  (theory: {theory:.4f})")
         elif abs(inner) > 0.01:
             print(f"  <H_{m}, H_{n}>_w = {inner:.4f}  (should be ~0)")
 ```
@@ -415,15 +415,16 @@ x = np.linspace(-1, 1, 2000)
 monomials = [lambda x, k=k: x**k for k in range(5)]
 ortho_polys = gram_schmidt(monomials, x, np.ones_like(x))
 
-# 직교성 검증
+# Orthogonality verification
 N = len(ortho_polys)
 mat = np.array([[np.trapz(ortho_polys[i]*ortho_polys[j], x)
                  for j in range(N)] for i in range(N)])
 
 plt.figure(figsize=(6, 5))
 plt.imshow(np.abs(mat), cmap='viridis', norm=plt.matplotlib.colors.LogNorm(1e-15, 2))
-plt.title('그람-슈미트 직교성 행렬 $|\\langle\\phi_m, \\phi_n\\rangle|$')
+plt.title('Gram-Schmidt Orthogonality Matrix $|\\langle\\phi_m, \\phi_n\\rangle|$')
 plt.colorbar(); plt.show()
+
 ```
 
 ### 4.3 Sturm Comparison Theorem
@@ -447,7 +448,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-# y'' + q(x) y = 0  두 가지 경우 비교
+# y'' + q(x) y = 0 comparison of two cases
 def ode(t, Y, q_func):
     y, yp = Y
     return [yp, -q_func(t) * y]
@@ -456,7 +457,7 @@ x_span = (0, 4*np.pi)
 x_eval = np.linspace(*x_span, 2000)
 y0 = [0, 1]
 
-# q₁ = 4 (빠른 진동), q₂ = 1 (느린 진동)
+# q₁ = 4 (fast oscillation), q₂ = 1 (slow oscillation)
 sol1 = solve_ivp(ode, x_span, y0, args=(lambda x: 4.0,),
                  t_eval=x_eval, rtol=1e-10)
 sol2 = solve_ivp(ode, x_span, y0, args=(lambda x: 1.0,),
@@ -467,15 +468,15 @@ ax.plot(sol1.t, sol1.y[0], 'b-', linewidth=1.5, label='$q_1 = 4$: $\\sin(2x)$')
 ax.plot(sol2.t, sol2.y[0], 'r-', linewidth=1.5, label='$q_2 = 1$: $\\sin(x)$')
 ax.axhline(0, color='k', linewidth=0.5)
 ax.set_xlabel('x'); ax.set_ylabel('y(x)')
-ax.set_title('스투름 비교 정리: $q_1 > q_2$이면 해가 더 빠르게 진동')
+ax.set_title('Sturm Comparison Theorem: larger $q$ leads to faster oscillation')
 ax.legend(); ax.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
 
-# 영점 개수 비교 (0, 4π 구간)
+# Compare number of zeros (interval 0 to 4π)
 zeros1 = np.where(np.diff(np.sign(sol1.y[0])))[0]
 zeros2 = np.where(np.diff(np.sign(sol2.y[0])))[0]
-print(f"q₁=4 해의 영점 수: {len(zeros1)}  (이론: {int(4*np.pi/(np.pi/2))})")
-print(f"q₂=1 해의 영점 수: {len(zeros2)}  (이론: {int(4*np.pi/np.pi)})")
+print(f"Number of zeros for q₁=4 solution: {len(zeros1)}  (theory: {int(4*np.pi/(np.pi/2))})")
+print(f"Number of zeros for q₂=1 solution: {len(zeros2)}  (theory: {int(4*np.pi/np.pi)})")
 ```
 
 ---
@@ -512,7 +513,7 @@ for t_val, c in zip([0, 0.5, 2, 5, 10, 30], plt.cm.coolwarm(np.linspace(0,1,6)))
     ax.plot(x, u(x, t_val), color=c, linewidth=2, label=f'$t={t_val}$')
 
 ax.set_xlabel('$x$'); ax.set_ylabel('$u(x,t)$')
-ax.set_title('열방정식의 고유함수 전개 해', fontweight='bold')
+ax.set_title('Eigenfunction Expansion Solution of the Heat Equation', fontweight='bold')
 ax.legend(); ax.grid(True, alpha=0.3)
 plt.tight_layout(); plt.show()
 ```
@@ -543,7 +544,7 @@ for mode_n, ax in zip([1, 2, 3], axes):
     ax.legend(fontsize=8, ncol=4); ax.grid(True, alpha=0.3)
 
 axes[-1].set_xlabel('$x$')
-plt.suptitle('현의 정규 모드', fontsize=14, fontweight='bold')
+plt.suptitle('Normal Modes of a String', fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 ```
 
@@ -574,20 +575,20 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 for n in range(1, 6):
     E_n = (n*np.pi*hbar)**2 / (2*m*L**2)
     psi = np.sqrt(2/L) * np.sin(n*np.pi*x/L)
-    # 파동함수 (에너지 기준선 위에 표시)
+    # Wavefunction (displayed above energy baseline)
     ax1.axhline(E_n, color='gray', linewidth=0.5, linestyle='--')
     ax1.plot(x, E_n + 3*psi, linewidth=2, label=f'$n={n}, E={E_n:.1f}$')
     ax1.fill_between(x, E_n, E_n + 3*psi, alpha=0.1)
-    # 확률 밀도
+    # Probability density
     ax2.plot(x, psi**2, linewidth=2, label=f'$|\\psi_{n}|^2$')
 
-ax1.set_title('에너지 고유상태'); ax1.legend(fontsize=9); ax1.grid(True, alpha=0.3)
-ax2.set_title('확률 밀도'); ax2.legend(); ax2.grid(True, alpha=0.3)
-plt.suptitle('양자역학: S-L 이론의 응용', fontsize=14, fontweight='bold')
+ax1.set_title('Energy Eigenstates'); ax1.legend(fontsize=9); ax1.grid(True, alpha=0.3)
+ax2.set_title('Probability Density'); ax2.legend(); ax2.grid(True, alpha=0.3)
+plt.suptitle('Quantum Mechanics: Application of S-L Theory', fontsize=14, fontweight='bold')
 plt.tight_layout(); plt.show()
 
-# 직교 정규성 검증
-print("\n=== 양자 고유상태 직교 정규성 ===")
+# Orthonormality verification
+print("\n=== Quantum Eigenstate Orthonormality ===")
 for i in range(1, 4):
     for j in range(i, 4):
         psi_i = np.sqrt(2/L)*np.sin(i*np.pi*x/L)

@@ -1,11 +1,22 @@
 # 12. SEO Basics (Search Engine Optimization)
 
+**Previous**: [Web Accessibility](./11_Web_Accessibility.md) | **Next**: [Build Tools & Development Environment](./13_Build_Tools_Environment.md)
+
 ## Learning Objectives
-- Understand basic principles and importance of SEO
-- Implement technical SEO elements
-- Utilize meta tags and structured data
-- Learn content optimization strategies
-- Master SEO tools
+
+After completing this lesson, you will be able to:
+
+1. Describe how search engines crawl, index, and rank web pages
+2. Write effective title tags, meta descriptions, and canonical URLs for on-page SEO
+3. Implement Open Graph and Twitter Card meta tags for social media sharing
+4. Add JSON-LD structured data for articles, products, FAQs, and breadcrumbs
+5. Configure `robots.txt` and `sitemap.xml` to control crawler behavior
+6. Optimize page speed by applying Core Web Vitals best practices
+7. Evaluate a site's SEO health using Google Search Console and Lighthouse
+
+---
+
+Building a great website means nothing if no one can find it. Search engines are the primary way users discover new content, and SEO is the practice of making your pages visible to those search engines. Understanding SEO is not just a marketing skill -- it directly influences how you structure HTML, write content, and architect your site's technical foundation.
 
 ## Table of Contents
 1. [SEO Overview](#1-seo-overview)
@@ -765,12 +776,12 @@ Sitemap: https://example.com/sitemap.xml
 
 ---
 
-## Next Steps
-- [11. Web Accessibility](./11_Web_Accessibility.md)
-- [13. Build Tools Environment](./13_Build_Tools_Environment.md)
-
 ## References
 - [Google Search Central](https://developers.google.com/search)
 - [Schema.org](https://schema.org/)
 - [Web.dev SEO Guide](https://web.dev/learn/seo/)
 - [Moz Beginner's Guide to SEO](https://moz.com/beginners-guide-to-seo)
+
+---
+
+**Previous**: [Web Accessibility](./11_Web_Accessibility.md) | **Next**: [Build Tools & Development Environment](./13_Build_Tools_Environment.md)

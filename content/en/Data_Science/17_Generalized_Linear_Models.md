@@ -2,9 +2,23 @@
 
 [Previous: Advanced Regression Analysis](./16_Regression_Analysis_Advanced.md) | [Next: Introduction to Bayesian Statistics](./18_Bayesian_Statistics_Basics.md)
 
-## Overview
+---
 
-**Generalized Linear Models (GLM)** extend regression analysis to cases where the dependent variable does not follow a normal distribution. They can handle various types of dependent variables including binary data (logistic regression) and count data (Poisson regression).
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the three components of a GLM (random component, systematic component, link function) and identify the appropriate GLM for a given data type
+2. Fit and interpret binary logistic regression models, including odds ratios and confidence intervals
+3. Evaluate classification models using confusion matrices, ROC curves, and AUC
+4. Implement Poisson regression for count data and use offsets to model rates
+5. Detect overdispersion and apply negative binomial regression as a remedy
+6. Perform GLM diagnostics using Pearson residuals, deviance residuals, and influence measures
+7. Compare nested and non-nested GLMs using deviance tests, AIC, and BIC
+
+---
+
+Standard linear regression assumes a normally distributed response, but real-world outcomes are often binary (purchased or not), counts (number of incidents), or strictly positive (insurance claims). GLMs unify these cases under a single framework by pairing each response type with an appropriate distribution and link function. This lesson gives you the practical tools to model the diverse data types you will encounter beyond the Gaussian world.
 
 ---
 

@@ -1,5 +1,18 @@
 # 06. Pre-training Infrastructure
 
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Describe the four main parallelism strategies (data, tensor, pipeline, sequence) and explain how they are combined in 3D parallelism to train models with hundreds of billions of parameters.
+2. Estimate GPU memory requirements for a given model size and batch configuration, accounting for model parameters, gradients, optimizer states, and activations.
+3. Apply memory optimization techniques including gradient checkpointing, ZeRO optimizer stages, mixed-precision (fp16/bf16) training, and activation offloading.
+4. Explain how training stability techniques such as gradient clipping, loss scaling, and learning rate warm-up prevent common training failures (loss spikes, gradient explosions).
+5. Configure a distributed training setup using frameworks such as Megatron-LM, DeepSpeed, or PyTorch FSDP, and justify parallelism strategy choices for a given model and hardware configuration.
+6. Analyze throughput metrics (MFU, GPU utilization) and identify bottlenecks in large-scale training runs caused by communication overhead, load imbalance, or memory pressure.
+
+---
+
 ## Overview
 
 Training large-scale Foundation Models runs on thousands of GPUs for weeks to months. This lesson covers distributed training strategies, memory optimization, and training stability techniques.
@@ -972,3 +985,151 @@ if __name__ == "__main__":
 ### Related Lessons
 - [../Deep_Learning/11_Model_Deployment.md](../Deep_Learning/11_Model_Deployment.md)
 - [../MLOps/08_Model_Serving_Basics.md](../MLOps/08_Model_Serving_Basics.md)
+
+---
+
+## Exercises
+
+### Exercise 1: Memory Budget Estimation
+
+A transformer model has the following configuration:
+- Parameters: 7B (float16, 2 bytes each)
+- Batch size: 4, sequence length: 2048
+- Hidden dim: 4096, 32 layers
+- Using AdamW optimizer (fp32 optimizer states)
+
+Estimate the approximate GPU memory required for:
+1. Model parameters
+2. Optimizer states (AdamW: parameter copy + 1st moment + 2nd moment, all in fp32)
+3. Gradients (fp32)
+
+Which component dominates memory usage?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. Model parameters (fp16):**
+```
+7B parameters × 2 bytes = 14 GB
+```
+
+**2. Optimizer states (AdamW in fp32):**
+AdamW maintains three fp32 copies per parameter:
+- fp32 parameter master copy: 7B × 4 bytes = 28 GB
+- 1st moment (momentum): 7B × 4 bytes = 28 GB
+- 2nd moment (variance): 7B × 4 bytes = 28 GB
+Total: **84 GB**
+
+**3. Gradients (fp32):**
+```
+7B × 4 bytes = 28 GB
+```
+
+**Total (excluding activations):** 14 + 84 + 28 = **~126 GB**
+
+**Which dominates:** The optimizer states (84 GB) are by far the largest component — 6× larger than the model parameters themselves. This is why ZeRO Stage 1 targets optimizer state sharding first: it immediately cuts the dominant cost.
+
+Note: Activations add additional memory proportional to batch_size × seq_len × hidden_dim × num_layers, which for this config adds roughly 4 × 2048 × 4096 × 32 × 2 bytes ≈ 2 GB — relatively small compared to optimizer states.
+
+</details>
+
+---
+
+### Exercise 2: Parallelism Strategy Selection
+
+For each training scenario, recommend the most appropriate parallelism strategy (or combination) and justify your choice.
+
+1. **Scenario A**: 7B parameter model, 8× A100 80GB GPUs on a single node. The model fits on a single GPU in fp16.
+2. **Scenario B**: 70B parameter model, 64× A100 80GB GPUs across 8 nodes. The model does NOT fit on a single GPU in fp16.
+3. **Scenario C**: 7B model, 1024-token sequences, but training is bottlenecked by attention computation with 8K context length.
+
+<details>
+<summary>Show Answer</summary>
+
+**Scenario A: 7B, 8 GPUs, single node, fits on one GPU**
+- **Recommendation: Data Parallelism (DDP or FSDP)**
+- Since the model fits on a single GPU, no need to split the model itself. Data parallelism simply replicates the model and splits batches across 8 GPUs.
+- FSDP (ZeRO-3) can be used to shard optimizer states even when the model fits, reducing per-GPU memory by ~4× and allowing larger batch sizes.
+- Intra-node NVLink bandwidth makes all-reduce very fast.
+
+**Scenario B: 70B, 64 GPUs, 8 nodes, doesn't fit on one GPU**
+- **Recommendation: 3D Parallelism (TP + PP + DP)**
+- **Tensor Parallelism (TP=4)**: Split each transformer layer across 4 GPUs within a node (leverages fast NVLink).
+- **Pipeline Parallelism (PP=2)**: Split the 32+ layers across 2 pipeline stages across nodes (tolerates slower inter-node bandwidth).
+- **Data Parallelism (DP=8)**: Replicate the resulting TP×PP "model replica" across 8 copies.
+- Total GPUs: 4 × 2 × 8 = 64 ✓
+
+**Scenario C: 7B, 8K context, attention bottleneck**
+- **Recommendation: Sequence Parallelism (SP) + FlashAttention**
+- With 8K context, standard attention is O(8K²) = 64M operations per layer — both slow and memory-hungry.
+- **Sequence Parallelism** splits the sequence dimension across GPUs, dividing attention computation cost.
+- **FlashAttention** reduces attention's memory footprint from O(n²) to O(n) by computing attention in tiles without materializing the full attention matrix.
+- These two techniques can be combined.
+
+</details>
+
+---
+
+### Exercise 3: Gradient Clipping Analysis
+
+The lesson shows gradient clipping: `torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)`.
+
+1. Explain what global gradient norm clipping does mathematically.
+2. Why is gradient clipping important for training stability, particularly in the early phases of large model training?
+3. What would happen if you set `max_norm` too small (e.g., 0.001) vs too large (e.g., 1000)?
+
+<details>
+<summary>Show Answer</summary>
+
+**1. What gradient norm clipping does:**
+
+It computes the global L2 norm of all gradients concatenated into a single vector:
+```
+global_norm = sqrt(sum(g_i² for all parameter gradients g_i))
+```
+If `global_norm > max_norm`, it scales ALL gradients by `max_norm / global_norm`:
+```
+g_i ← g_i × (max_norm / global_norm)
+```
+This preserves the direction of the gradient update while bounding its magnitude.
+
+**2. Why it matters for large model training stability:**
+
+- Large models have many layers, and gradients can compound multiplicatively through layers (exploding gradients).
+- In early training, parameter initialization can produce very large gradient magnitudes before the loss stabilizes.
+- A single large gradient step can "destroy" previously learned representations, requiring many steps to recover.
+- Loss spikes — sudden upward jumps in loss — are often caused by such large updates. Gradient clipping provides a hard ceiling on update magnitude.
+
+**3. max_norm too small vs too large:**
+
+- **max_norm = 0.001 (too small)**: Nearly every gradient update is severely scaled down. Training becomes extremely slow — the model barely moves in parameter space. Eventually the model may converge but requires far more steps. This is equivalent to using an extremely small effective learning rate.
+- **max_norm = 1000 (too large)**: Clipping essentially never activates (most gradient norms are well below 1000). The model trains as if clipping doesn't exist — fine during normal training, but offers no protection against gradient explosions during unstable periods.
+
+In practice, max_norm = 1.0 is a common default for large language models, with the understanding that it should activate rarely (only during instabilities).
+
+</details>
+
+---
+
+### Exercise 4: ZeRO Stage Comparison
+
+DeepSpeed's ZeRO optimizer has three stages. Complete the table below:
+
+| Stage | What is sharded | Memory saving (approx.) | Communication overhead |
+|-------|----------------|------------------------|----------------------|
+| ZeRO-1 | ? | ? | ? |
+| ZeRO-2 | ? | ? | ? |
+| ZeRO-3 | ? | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Stage | What is sharded | Memory saving (approx.) | Communication overhead |
+|-------|----------------|------------------------|----------------------|
+| **ZeRO-1** | Optimizer states (momentum + variance) across N GPUs | ~4× reduction in optimizer state memory | Minimal: only all-reduce after parameter update (same as DDP) |
+| **ZeRO-2** | Optimizer states + gradients across N GPUs | ~8× reduction in optimizer + gradient memory | Moderate: reduce-scatter gradients instead of all-reduce (slightly more efficient than DDP) |
+| **ZeRO-3** | Optimizer states + gradients + model parameters across N GPUs | ~N× reduction (linear with number of GPUs) | Significant: all-gather parameters before each forward/backward pass; adds communication latency per layer |
+
+**Key insight:** ZeRO-3 achieves the best memory efficiency (can train models that are N× larger than a single GPU can hold), but at the cost of 2× more communication operations per training step compared to standard DDP. The communication overhead is usually worth it when model size exceeds single-GPU capacity, but for models that fit in memory, ZeRO-1 or ZeRO-2 is preferred for lower latency.
+
+</details>

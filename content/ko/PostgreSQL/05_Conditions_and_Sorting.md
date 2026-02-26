@@ -1,5 +1,25 @@
 # 조건과 정렬
 
+**이전**: [CRUD 기본](./04_CRUD_Basics.md) | **다음**: [JOIN](./06_JOIN.md)
+
+---
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. 비교 연산자(`=`, `<>`, `<`, `>`, `<=`, `>=`)를 사용하여 WHERE 절을 작성할 수 있습니다
+2. 논리 연산자(AND, OR, NOT)를 조합하고 올바른 연산자 우선순위(precedence)를 적용할 수 있습니다
+3. BETWEEN, IN, LIKE/ILIKE를 사용하여 범위 검사, 집합 멤버십, 패턴 매칭(pattern matching)을 수행할 수 있습니다
+4. IS NULL, IS NOT NULL, COALESCE, NULLIF로 NULL 값을 올바르게 처리할 수 있습니다
+5. 다중 컬럼 및 표현식 기반 정렬을 포함하여 ORDER BY로 쿼리 결과를 정렬할 수 있습니다
+6. LIMIT, OFFSET, SQL 표준 FETCH 구문을 사용하여 페이지네이션(pagination)을 구현할 수 있습니다
+7. DISTINCT와 DISTINCT ON을 적용하여 결과 집합에서 중복 행을 제거할 수 있습니다
+
+---
+
+테이블의 원시 데이터는 효율적으로 필터링하고 정렬하고 페이지를 넘길 수 있을 때 비로소 유용해집니다. 실제로 작성하는 거의 모든 쿼리에는 결과를 좁히는 WHERE 절과 의미 있는 순서로 제시하는 ORDER BY가 포함됩니다. 이러한 필터링과 정렬 기술은 데이터를 저장하는 것과 그로부터 실행 가능한 정보를 추출하는 것 사이의 다리 역할을 합니다.
+
 ## 1. WHERE 절 기본
 
 WHERE 절은 조건에 맞는 행만 선택합니다.
@@ -197,10 +217,11 @@ SELECT * FROM users WHERE city = NULL;  -- 작동 안 함!
 ### COALESCE - NULL 대체값
 
 ```sql
--- NULL이면 '미지정'으로 표시
+-- COALESCE는 첫 번째 non-NULL 인자 반환 — 사용자 화면에서 NULL이
+-- 빈칸으로 표시되거나 애플리케이션 코드에서 하류 오류를 일으키는 것을 방지
 SELECT name, COALESCE(city, '미지정') AS city FROM users;
 
--- 여러 값 중 첫 번째 NULL이 아닌 값
+-- 여러 폴백을 체이닝: 전화번호 시도 후 이메일, 그 후 리터럴 기본값
 SELECT COALESCE(phone, email, '연락처 없음') AS contact FROM users;
 ```
 
@@ -454,7 +475,9 @@ SELECT * FROM products ORDER BY stock NULLS LAST;
 ### 인덱스 활용
 
 ```sql
--- 자주 검색하는 컬럼에 인덱스 생성
+-- 인덱스는 O(n) 순차 스캔을 O(log n) B-tree 검색으로 변환.
+-- WHERE, JOIN, ORDER BY에 나오는 컬럼에만 생성 — 각 인덱스는
+-- INSERT/UPDATE 시 인덱스 유지 비용(쓰기 오버헤드)을 추가
 CREATE INDEX idx_products_category ON products(category);
 CREATE INDEX idx_products_price ON products(price);
 
@@ -465,10 +488,11 @@ CREATE INDEX idx_products_cat_price ON products(category, price);
 ### LIKE 패턴 최적화
 
 ```sql
--- 인덱스 사용 가능 (접두사 검색)
+-- 접두사 패턴은 시작점 고정 — B-tree가 정렬된 값을 이진 검색 가능
 WHERE name LIKE '맥북%'
 
--- 인덱스 사용 불가 (전체 스캔)
+-- 선행 와일드카드는 모든 행 스캔 필요 — 이 패턴이 빈번하면
+-- pg_trgm GIN 인덱스나 전문 검색(Full-Text Search) 고려
 WHERE name LIKE '%맥북%'
 ```
 
@@ -484,6 +508,4 @@ CREATE INDEX idx_products_price_desc ON products(price DESC);
 
 ---
 
-## 다음 단계
-
-[06_JOIN.md](./06_JOIN.md)에서 여러 테이블을 연결하는 JOIN을 배워봅시다!
+**이전**: [CRUD 기본](./04_CRUD_Basics.md) | **다음**: [JOIN](./06_JOIN.md)

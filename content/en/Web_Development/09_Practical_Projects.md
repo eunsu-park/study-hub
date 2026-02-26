@@ -1,5 +1,24 @@
 # Practical Projects
 
+**Previous**: [JavaScript Asynchronous Programming](./08_JS_Async.md) | **Next**: [TypeScript Fundamentals](./10_TypeScript_Basics.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Build a complete Todo application with CRUD operations and local storage persistence
+2. Integrate external REST APIs to fetch and display dynamic data in a Weather app
+3. Implement infinite scroll using the Intersection Observer API
+4. Design responsive layouts that adapt from mobile to desktop viewports
+5. Apply event delegation patterns for efficient DOM event handling
+6. Handle loading states, error conditions, and empty states in user interfaces
+7. Structure front-end projects with clean separation of HTML, CSS, and JavaScript
+8. Implement a lightbox gallery with keyboard navigation support
+
+---
+
+Building real projects is the bridge between learning individual concepts and becoming a productive web developer. While tutorials teach syntax, projects teach you how to combine HTML structure, CSS styling, and JavaScript logic into cohesive applications that solve actual problems. The three projects in this lesson progressively increase in complexity, each introducing new patterns you will encounter in professional work.
+
 ## Overview
 
 In this document, we'll create actual working web applications combining what we've learned about HTML, CSS, and JavaScript.
@@ -13,7 +32,6 @@ In this document, we'll create actual working web applications combining what we
 1. [Project 1: Todo App](#project-1-todo-app)
 2. [Project 2: Weather App](#project-2-weather-app)
 3. [Project 3: Image Gallery](#project-3-image-gallery)
-4. [Next Steps](#next-steps)
 
 ---
 
@@ -1528,35 +1546,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
 ---
 
-## Next Steps
+---
 
-After completing these projects:
+## Exercises
 
-### Additional Learning
+### Exercise 1: Extend the Todo App
 
-1. **Framework Learning**
-   - React, Vue, Svelte, etc.
+Add the following features to the Todo app from Project 1:
 
-2. **Build Tools**
-   - Vite, Webpack, Parcel
+1. **Edit functionality**: Allow users to double-click a todo item to edit its text in-place. Pressing Enter or clicking outside should save the change.
+2. **Due dates**: Add an optional due date field when creating a todo. Display overdue items with a red indicator.
+3. **Priority levels**: Add a priority selector (low / medium / high) and sort the list so high-priority items appear first.
 
-3. **CSS Frameworks**
-   - Tailwind CSS, Bootstrap
+> **Tip**: For edit mode, toggle between a `<span>` and an `<input>` element using `display: none`. Store the `dueDate` and `priority` fields alongside `id`, `text`, and `completed` in each todo object.
 
-4. **TypeScript**
-   - Static type checking
+### Exercise 2: Mock API for the Weather App
 
-5. **Testing**
-   - Jest, Vitest, Cypress
+Rewrite the Weather app from Project 2 to work without a real API key by using a mock data layer:
 
-### Recommended Project Ideas
+1. Create a `mockApi.js` file that exports an `async function fetchWeather(city)`. Have it return a hardcoded weather object after a simulated 800 ms delay using `setTimeout` inside a `Promise`.
+2. In `app.js`, replace the real `fetch` call with an import from `mockApi.js`.
+3. Add a second mock function `fetchWeatherByCoords(lat, lon)` that returns different mock data based on whether latitude is positive (northern hemisphere) or negative.
 
-- Blog/portfolio site
-- Real-time chat app (WebSocket)
-- Kanban board (drag and drop)
-- Music player
-- Markdown editor
-- Expense tracker app
+```javascript
+// mockApi.js skeleton
+export function fetchWeather(city) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            if (city.toLowerCase() === 'unknown') {
+                reject(new Error('City not found.'));
+            } else {
+                resolve({ name: city, main: { temp: 22, feels_like: 20, humidity: 60 }, /* ... */ });
+            }
+        }, 800);
+    });
+}
+```
+
+### Exercise 3: Accessible Gallery with Keyboard Navigation
+
+Improve the Image Gallery from Project 3 to fully support keyboard navigation:
+
+1. Make each gallery item focusable (`tabindex="0"`) and open the lightbox when the user presses **Enter** or **Space** on a focused item.
+2. When the lightbox is open, trap focus inside it: pressing **Tab** and **Shift+Tab** should cycle only through the Close, Previous, and Next buttons.
+3. When the lightbox closes, return focus to the gallery item that was active before the lightbox opened.
+4. Add `aria-label` attributes to the Close (`"Close lightbox"`), Previous (`"Previous image"`), and Next (`"Next image"`) buttons.
+
+### Exercise 4: Responsive Kanban Board (Advanced)
+
+Build a minimal Kanban board as a fourth project:
+
+- Three columns: **To Do**, **In Progress**, **Done**
+- Cards can be dragged between columns using the HTML Drag and Drop API (`dragstart`, `dragover`, `drop` events)
+- Card state (which column each card belongs to) is persisted in `localStorage`
+- Clicking a card opens an inline edit form for the card title
+
+```javascript
+// Drag and drop skeleton
+card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', card.dataset.id);
+});
+
+column.addEventListener('dragover', (e) => e.preventDefault());
+
+column.addEventListener('drop', (e) => {
+    const id = e.dataTransfer.getData('text/plain');
+    const card = document.querySelector(`[data-id="${id}"]`);
+    column.querySelector('.cards').appendChild(card);
+    saveState();
+});
+```
 
 ---
 
@@ -1566,3 +1625,7 @@ After completing these projects:
 - [JavaScript.info](https://javascript.info/)
 - [CSS-Tricks](https://css-tricks.com/)
 - [Web.dev](https://web.dev/)
+
+---
+
+**Previous**: [JavaScript Asynchronous Programming](./08_JS_Async.md) | **Next**: [TypeScript Fundamentals](./10_TypeScript_Basics.md)

@@ -515,18 +515,32 @@ class ParticleTracer:
         """
         q_over_m = self.q / self.m
 
-        # Half electric push
+        # 절반 전기 push: 회전 전에 E 가속을 dt/2 동안 적용한다.
+        # E와 B를 이렇게 분리하면 순수 회전 자기 스텝을 독립적으로 처리할 수 있어,
+        # 나이브 Euler 스텝에서와 달리 강성(stiff) B-장 항을 dt에 대한
+        # 안정성 제약 없이 정확하게 다룰 수 있다.
         v_minus = self.v + 0.5 * q_over_m * E * dt
 
-        # Magnetic rotation
+        # 자기 반 스텝을 위한 회전 벡터 t와 s를 구성한다.
+        # t = (q/m) * B * (dt/2)는 B에 수직인 평면에서의 반-각(half-angle)이다.
+        # Cayley-Klein(탄 반각(tan half-angle)) 매개변수화를 선택하는 이유는
+        # 단위 크기 회전에 정확히 대응하기 때문이다:
+        # |v_plus| == |v_minus|는 |t|의 크기에 관계없이 대수적으로 보장된다.
+        # 나이브 외적 회전(v += v × ω * dt)은 |v|를 (1 ± |t|^2)만큼 수축/팽창시킨다.
         t = 0.5 * q_over_m * B * dt
         t_mag_sq = np.dot(t, t)
+        # s = 2t / (1 + |t|^2)는 Cayley-Klein 사상의 두 번째 절반이다.
+        # v_prime = v + v × t 와 v_plus = v_minus + v_prime × s를 합치면
+        # B 주위로 2*arctan(|t|)만큼 정확한 회전을 구현한다.
         s = 2 * t / (1 + t_mag_sq)
 
         v_prime = v_minus + np.cross(v_minus, t)
         v_plus = v_minus + np.cross(v_prime, s)
 
-        # Half electric push
+        # 두 번째 절반 전기 push: 대칭 반 스텝 구조(E/2 → 회전 → E/2)는
+        # 알고리즘을 시간 가역적으로 만든다(dt → -dt로 치환하고 v를 반전하면
+        # 초기 상태로 정확히 복원된다). 시간 가역성이 바로 단방향 방법(예: 단순 Euler)이
+        # 많은 gyroperiod에 걸쳐 겪는 장기 에너지 드리프트를 막는 이유다.
         self.v = v_plus + 0.5 * q_over_m * E * dt
 
         # Position update
@@ -549,6 +563,10 @@ class ParticleTracer:
         """
         t = 0.0
         while t < t_max:
+            # 매 스텝마다 현재 위치에서 장을 다시 평가해 공간적·시간적으로
+            # 변화하는 장(비균일 B, 진동 E)을 지원한다.
+            # 균일 정적 장에서는 중복이지만, 인터페이스를 범용적으로 유지하면서
+            # 성능 비용은 크지 않다.
             E = E_func(self.x, t)
             B = B_func(self.x, t)
 
@@ -556,9 +574,13 @@ class ParticleTracer:
 
             t += dt
             self.t_history.append(t)
+            # 참조가 아닌 복사본을 저장해서, 이후 self.x와 self.v에 대한
+            # in-place 업데이트가 기록된 이력을 덮어쓰지 않도록 한다.
             self.x_history.append(self.x.copy())
             self.v_history.append(self.v.copy())
 
+        # 루프 내부에서 numpy 배열에 행을 추가하면 O(N^2) 메모리 재할당이
+        # 발생하므로, 마지막에 한 번만 배열로 변환한다.
         self.x_history = np.array(self.x_history)
         self.v_history = np.array(self.v_history)
         self.t_history = np.array(self.t_history)
@@ -568,12 +590,15 @@ class ParticleTracer:
 def example_gyration():
     """Pure gyration in uniform magnetic field."""
 
-    # Magnetic field: 0.1 T in z-direction
+    # E = 0이고 B가 z 방향인 가장 단순한 설정으로, drift 없이 순수한
+    # 원형(gyro) 운동을 만든다. B를 z 방향으로 선택하면 궤적 플롯에서
+    # xy 평면의 gyration을 직접 읽을 수 있다.
     B0 = 0.1  # Tesla
     B_func = lambda x, t: np.array([0, 0, B0])
     E_func = lambda x, t: np.array([0, 0, 0])
 
-    # Electron with perpendicular velocity
+    # 초기 속도를 순수 x 방향으로 설정하면 Larmor 반지름이 r_L = v_x/omega_c가 되어,
+    # 평행·수직 성분 벡터 분해 없이 해석 공식과 바로 대조 확인할 수 있다.
     v_perp = 1e6  # m/s
     x0 = [0, 0, 0]
     v0 = [v_perp, 0, 0]
@@ -777,6 +802,12 @@ def validate_energy_conservation():
     B0 = 1.0
     v0 = 1e6
 
+    # 세 가지 설정은 서로 다른 에너지 보존 시나리오를 검증한다:
+    # "B only" — 총 운동 에너지(KE)가 엄격히 상수여야 함(B는 일을 하지 않음);
+    # "E⊥ + B" — E×B drift는 일을 하지 않으므로 KE가 다시 보존됨;
+    # "E∥ + B" — E가 B 방향으로 가속하므로 KE는 증가하고 PE는 감소함;
+    # 세 경우를 모두 추적하면 Boris 알고리즘의 어느 부분이 어떤 보존 법칙을
+    # 지키는지 드러나고, 나이브 적분기가 실패하는 지점을 보여준다.
     configs = [
         ("B only", lambda x, t: np.array([0, 0, 0]),
                     lambda x, t: np.array([0, 0, B0])),
@@ -792,13 +823,17 @@ def validate_energy_conservation():
         electron = ParticleTracer(q=-e, m=m_e, x0=[0, 0, 0], v0=[v0, 0, 0])
 
         T_gyro = 2 * np.pi * m_e / (e * B0)
+        # dt = T_gyro / 100은 일반적으로 사용되는 경험 법칙이다: gyroperiod당 100 스텝이면
+        # Boris 회전이 충분히 작아져 이산 궤도가 해석 원에 가깝게 추적되면서도,
+        # 명시적 Euler 적분기에서 필요한 것보다 10배 더 거친 스텝을 사용할 수 있다.
         dt = T_gyro / 100
         electron.trace(E_func, B_func, t_max=10*T_gyro, dt=dt)
 
         # Compute kinetic energy
         KE = 0.5 * m_e * np.sum(electron.v_history**2, axis=1)
 
-        # Potential energy (for E∥ case)
+        # E∥ 경우에는 정전 퍼텐셜 에너지를 더해 보존량이 KE + PE(전체 역학 에너지)가
+        # 되도록 한다. PE를 생략하면 증가하는 KE가 보이고 에너지 비보존으로 오해될 수 있다.
         if name == "E∥ + B":
             PE = -(-e) * 1e3 * electron.x_history[:, 2]
             total_E = KE + PE
@@ -814,6 +849,8 @@ def validate_energy_conservation():
         ax.set_ylabel('Normalized Total Energy', fontsize=11)
         ax.set_title(name, fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
+        # y 범위 ±0.001은 Boris 알고리즘의 거의 완벽한 보존과 장기 오차를
+        # 누적하는 방법들 사이의 0.1% 미만 에너지 드리프트를 드러낸다.
         ax.set_ylim(0.999, 1.001)
 
     plt.tight_layout()

@@ -1,13 +1,24 @@
 # C 네트워크 프로그래밍
 
-## 학습 목표
+**이전**: [C 언어 포인터 심화](./20_Advanced_Pointers.md) | **다음**: [프로세스 간 통신과 시그널](./22_IPC_and_Signals.md)
 
-- TCP와 UDP를 위한 소켓 API(Socket API) 기초 이해
-- 클라이언트-서버 통신 패턴(Client-Server Communication Pattern) 구현
-- 동시 연결을 위한 select/poll을 사용한 I/O 다중화(I/O Multiplexing) 학습
-- 네트워크 바이트 순서(Network Byte Order)와 주소 변환 처리
+## 학습 목표(Learning Objectives)
 
-**난이도**: ⭐⭐⭐⭐ (고급)
+이 레슨을 완료하면 다음을 할 수 있습니다:
+
+1. TCP 및 UDP 소켓(socket)을 생성하고 적절한 바이트 순서(byte order) 변환과 함께 주소 구조체(address structure)를 설정할 수 있습니다
+2. 바인드(bind), 리슨(listen), 연결 수락(accept), 데이터 교환 순서로 동작하는 TCP 에코 서버(echo server)를 구현할 수 있습니다
+3. 원격 서버에 연결하고 송수신 루프를 처리하는 TCP 클라이언트(client)를 작성할 수 있습니다
+4. 견고한 `send_all`과 `recv_exact` 헬퍼 함수(helper function)로 부분 읽기/쓰기(partial reads/writes)를 처리할 수 있습니다
+5. `sendto()`와 `recvfrom()`을 사용하여 UDP 송신자와 수신자를 구축할 수 있습니다
+6. `select()` 또는 `poll()`을 사용하여 단일 스레드에서 여러 클라이언트 연결을 다중화(multiplex)할 수 있습니다
+7. 길이 접두사(length-prefix) 메시지 프레이밍(message framing)과 논블로킹 소켓(non-blocking socket) 같은 실용적인 패턴을 적용할 수 있습니다
+
+---
+
+네트워크 프로그래밍은 독립 실행형 프로그램을 연결된 서비스로 변환합니다. 채팅 서버를 구축하든, REST API를 만들든, 분산 시스템을 설계하든, 버클리 소켓 API(Berkeley socket API)는 모든 상위 레벨 네트워킹 라이브러리가 구축되는 기반입니다. C에서 소켓을 배우면 데이터가 실제로 네트워크를 통해 어떻게 이동하는지 그 원리를 직접 확인할 수 있으며, 이 지식은 이후 어떤 언어나 프레임워크를 사용하든 큰 자산이 됩니다.
+
+**난이도**: 고급(Advanced)
 
 ---
 
@@ -282,7 +293,7 @@ int main(int argc, char *argv[]) {
 
 ### 2.4 부분 읽기/쓰기 처리
 
-TCP는 스트림 프로토콜입니다. `send()`와 `recv()`는 요청한 것보다 적은 바이트를 전송할 수 있습니다.
+TCP는 스트림 프로토콜(stream protocol)입니다. `send()`와 `recv()`는 요청한 것보다 적은 바이트를 전송할 수 있습니다.
 
 ```c
 // Robust send: ensure all bytes are sent
@@ -654,9 +665,9 @@ while (1) {
 
 ## 5. 실용적인 패턴
 
-### 5.1 길이 접두사를 사용한 메시지 프레이밍
+### 5.1 길이 접두사를 사용한 메시지 프레이밍(Message Framing)
 
-TCP는 바이트 스트림입니다. 개별 메시지를 전송하려면 길이 접두사(length prefix)를 사용합니다.
+TCP는 바이트 스트림(byte stream)입니다. 개별 메시지를 전송하려면 길이 접두사(length prefix)를 사용합니다.
 
 ```c
 #include <stdint.h>
@@ -684,7 +695,7 @@ int recv_message(int fd, char *buf, uint32_t buf_size, uint32_t *out_len) {
 }
 ```
 
-### 5.2 논블로킹 소켓
+### 5.2 논블로킹 소켓(Non-blocking Socket)
 
 ```c
 #include <fcntl.h>
@@ -708,7 +719,7 @@ if (bytes < 0) {
 }
 ```
 
-### 5.3 우아한 종료
+### 5.3 우아한 종료(Graceful Shutdown)
 
 ```c
 // Graceful shutdown: signal that no more data will be sent
@@ -728,7 +739,7 @@ close(client_fd);
 
 ### 문제 1: 다중 클라이언트 채팅 서버
 
-한 클라이언트의 메시지가 연결된 모든 클라이언트에게 브로드캐스트되는 채팅 서버를 구축하세요. 다중화를 위해 `select()` 또는 `poll()`을 사용하세요.
+한 클라이언트의 메시지가 연결된 모든 클라이언트에게 브로드캐스트(broadcast)되는 채팅 서버를 구축하세요. 다중화를 위해 `select()` 또는 `poll()`을 사용하세요.
 
 **요구사항**:
 - 최소 10개의 동시 클라이언트 지원
@@ -759,4 +770,55 @@ close(client_fd);
 
 ---
 
-[이전: 20_Advanced_Pointers](./20_Advanced_Pointers.md) | [다음: 22_IPC_and_Signals](./22_IPC_and_Signals.md)
+## 연습 문제
+
+### 연습 1: 바이트 순서(Byte Order) 변환 실습
+
+바이트 순서 변환을 보여주는 독립 실행형 프로그램을 작성하세요:
+
+1. `uint16_t` 포트 값 `8080`과 `"192.168.10.1"`에 대한 `uint32_t` IP 주소를 선언하세요.
+2. `htons` / `htonl`로 각각을 네트워크 바이트 순서(network byte order)로 변환하고, 변환 전후의 16진수 값을 출력하세요(`%x` 사용).
+3. `ntohs` / `ntohl`로 다시 변환하여 원래 값을 복원할 수 있는지 확인하세요.
+4. `inet_pton`을 사용하여 문자열 `"192.168.10.1"`을 `struct in_addr` 바이너리로 변환하고, `inet_ntop`으로 다시 문자열로 변환하여 일치하는지 확인하세요.
+
+리틀 엔디안(little-endian) 머신에서 바이트 순서 변환을 생략하면 왜 조용한 버그(silent bug)가 발생하는지 주석 블록으로 설명하세요.
+
+### 연습 2: TCP 시간 서버(Time Server)
+
+연결하는 모든 클라이언트에게 현재 날짜와 시간을 전송하는 최소한의 TCP 서버를 구축하세요:
+
+1. `SO_REUSEADDR`을 설정하여 포트 `7777`에 리스닝 소켓(listening socket)을 생성하세요.
+2. accept 루프에서 `time()`과 `ctime()`을 호출하여 현재 시간을 문자열로 얻으세요.
+3. 부분 쓰기(partial write)를 처리하기 위해 2.4절의 견고한 헬퍼 함수 `send_all`을 사용하여 시간 문자열을 클라이언트에 전송하세요.
+4. 전송 후 즉시 클라이언트 소켓을 닫으세요.
+5. `nc 127.0.0.1 7777` 또는 연결 후 한 줄을 읽어 출력하는 간단한 클라이언트로 테스트하세요.
+
+### 연습 3: 패킷 손실 시뮬레이션이 있는 UDP 핑퐁(Ping-Pong)
+
+3.2절의 UDP 송신자/수신자를 다음과 같이 확장하세요:
+
+1. 수신자에서 20% 패킷 손실을 시뮬레이션하세요: 각 `recvfrom` 시 난수를 생성하고, 20% 확률로 패킷을 버리고(에코하지 않고) stderr에 "DROPPED"를 출력하세요.
+2. 송신자에서 타임아웃 기반 재전송 루프를 구현하세요: `sendto` 후 `setsockopt(SO_RCVTIMEO)`를 사용하여 소켓에 500ms 수신 타임아웃을 설정하고, `recvfrom`이 `EAGAIN`/`EWOULDBLOCK`을 반환하면 최대 5회까지 재전송하세요.
+3. 두 프로그램을 실행하고 출력에서 재전송 동작을 관찰하세요.
+
+### 연습 4: poll() 기반 에코 서버 업그레이드
+
+4.2절의 `select()` 기반 서버를 출발점으로, I/O 다중화 레이어를 `poll()`로 다시 작성하세요:
+
+1. `fd_set` / `FD_SET` / `FD_ISSET`을 `struct pollfd` 배열로 교체하세요.
+2. 클라이언트가 연결을 끊으면, 배열의 마지막 항목과 교체하고 `nfds`를 감소시켜 제거하세요(4.3절에 나온 것과 동일한 기법).
+3. `poll()`에 5초 유휴 타임아웃(idle timeout)을 추가하세요: 5초 동안 활동이 없으면 "Server idle..."을 출력하고 계속 대기하세요.
+4. `telnet` 또는 `nc`로 여러 클라이언트가 연결, 메시지 전송, 연결 해제를 서로 영향 없이 수행할 수 있는지 확인하세요.
+
+### 연습 5: 길이 접두사(Length-Prefix) 메시지 프로토콜
+
+5.1절의 길이 접두사 프레이밍(framing)을 사용하여 완전한 요청-응답 프로토콜을 구현하세요:
+
+1. 간단한 프로토콜을 정의하세요: 클라이언트가 명령(`"UPPER"`, `"LOWER"`, `"REVERSE"`)과 공백, 문자열을 포함하는 길이 접두사 메시지를 전송합니다(예: `"UPPER hello world"`).
+2. 서버는 `recv_message`로 길이 접두사 메시지를 읽고, 명령과 인자를 파싱하여 문자열을 변환한 후, 길이 접두사 응답으로 회신합니다.
+3. 클라이언트는 응답을 수신하고 출력한 후, 미리 정의된 목록에서 다음 명령을 전송합니다.
+4. 부분 읽기/쓰기(partial reads/writes)를 올바르게 처리하기 위해 양쪽 모두 `send_all`과 `recv_exact`를 일관되게 사용하세요.
+
+---
+
+**이전**: [C 언어 포인터 심화](./20_Advanced_Pointers.md) | **다음**: [프로세스 간 통신과 시그널](./22_IPC_and_Signals.md)

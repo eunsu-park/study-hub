@@ -1,5 +1,24 @@
 # Shell Scripting
 
+**Previous**: [Package Management](./08_Package_Management.md) | **Next**: [Network Basics](./10_Network_Basics.md)
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Write and execute shell scripts with proper shebang lines and permissions
+2. Declare and use variables, including special variables ($?, $@, $$) and environment variables
+3. Read user input with read and process command-line arguments
+4. Implement conditional logic using if/elif/else and case statements
+5. Write loops (for, while, until) with break and continue controls
+6. Define and call functions with parameters, return values, and local variables
+7. Write practical automation scripts for backups, health checks, and log analysis
+8. Debug shell scripts using set -x, set -e, set -u, and set -o pipefail
+
+---
+
+Shell scripting is the automation superpower of Linux. Instead of typing the same sequence of commands every day, you write them once in a script and let the computer handle the repetition. From simple backup scripts to full deployment pipelines, shell scripts are the glue that holds Linux system administration together. Even in the age of Python and Go, shell scripting remains the fastest way to automate system-level tasks.
+
 ## 1. Shell Script Basics
 
 A shell script is a program that collects commands in a file for automation.
@@ -782,6 +801,4 @@ done
 
 ---
 
-## Next Steps
-
-Let's learn about network management in [10_Network_Basics.md](./10_Network_Basics.md)!
+**Previous**: [Package Management](./08_Package_Management.md) | **Next**: [Network Basics](./10_Network_Basics.md)

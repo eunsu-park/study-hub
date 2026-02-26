@@ -664,3 +664,161 @@ test_questions = [
 ### Additional Resources
 - [BIG-bench](https://github.com/google/BIG-bench)
 - [Chain-of-Thought Hub](https://github.com/FranxYao/chain-of-thought-hub)
+
+---
+
+## Exercises
+
+### Exercise 1: Metric Choice and the Emergence Mirage
+
+Schaeffer et al. (2023) argue that emergent abilities may be an artifact of metric choice. Consider a model being evaluated on multi-digit addition across increasing compute scales.
+
+1. Explain why using **accuracy** (exact match) as the metric would produce a "phase transition" appearance.
+2. Explain why using **token-level accuracy** (per-digit correctness) would produce a smooth curve instead.
+3. Which metric should researchers prefer, and why might each metric be appropriate in different contexts?
+
+<details>
+<summary>Show Answer</summary>
+
+**Part 1: Accuracy creates phase transitions**
+
+Accuracy (exact match) is a threshold metric: the full answer is either correct (1) or wrong (0). Even if the model improves from getting 2 out of 5 digits right to 4 out of 5, the accuracy score stays 0. Only when the model crosses the threshold of getting all digits correct does accuracy jump to 1. This masking of gradual improvement makes it look like a sudden "emergence."
+
+**Part 2: Token-level accuracy is smooth**
+
+Token-level accuracy credits partial progress: correctly predicting 3 of 5 digits scores 0.6. As the model scales and gets progressively more digits right, this metric rises smoothly, revealing the underlying gradual improvement.
+
+**Part 3: Which to prefer**
+
+- **Accuracy** is appropriate when the end-task requires complete correctness (e.g., a calculator that gives a wrong digit is useless). It correctly reflects whether a capability is practically usable.
+- **Token-level accuracy** is better for understanding the model's internal learning trajectory and predicting when full accuracy will emerge.
+- For **research on emergence mechanisms**, continuous metrics are preferred. For **deployment decisions**, task-level accuracy is more meaningful.
+
+Neither metric is "wrong" — they answer different questions.
+
+</details>
+
+---
+
+### Exercise 2: Implementing Self-Consistency
+
+Complete the `self_consistency` function below. The function should generate `n_samples` responses to a math question using Chain-of-Thought prompting, extract the numeric final answer from each response, and return the most common answer.
+
+```python
+import re
+from collections import Counter
+
+def extract_numeric_answer(response: str) -> str:
+    """Extract the last number mentioned in the response."""
+    numbers = re.findall(r'\b\d+(?:\.\d+)?\b', response)
+    return numbers[-1] if numbers else "unknown"
+
+def self_consistency(question: str, model, n_samples: int = 5, temperature: float = 0.7) -> str:
+    """
+    TODO: Implement self-consistency decoding.
+    1. Build a CoT prompt for the question
+    2. Generate n_samples responses from the model
+    3. Extract the numeric answer from each response
+    4. Return the majority vote answer
+    """
+    # Your implementation here
+    pass
+```
+
+<details>
+<summary>Show Answer</summary>
+
+```python
+import re
+from collections import Counter
+
+def extract_numeric_answer(response: str) -> str:
+    """Extract the last number mentioned in the response."""
+    numbers = re.findall(r'\b\d+(?:\.\d+)?\b', response)
+    return numbers[-1] if numbers else "unknown"
+
+def self_consistency(question: str, model, n_samples: int = 5, temperature: float = 0.7) -> str:
+    """
+    Self-consistency decoding:
+    generate multiple CoT paths and take majority vote.
+    """
+    # Step 1: Build CoT prompt
+    cot_prompt = f"Q: {question}\nA: Let's think step by step."
+
+    # Step 2: Generate multiple responses
+    answers = []
+    for _ in range(n_samples):
+        response = model.generate(cot_prompt, temperature=temperature)
+        answer = extract_numeric_answer(response)
+        answers.append(answer)
+
+    # Step 3: Majority vote
+    counter = Counter(answers)
+    majority_answer = counter.most_common(1)[0][0]
+
+    return majority_answer
+
+# Why this works:
+# - Incorrect reasoning paths tend to produce diverse wrong answers
+# - Correct reasoning paths tend to converge on the same right answer
+# - Majority vote filters out idiosyncratic errors
+```
+
+</details>
+
+---
+
+### Exercise 3: Capability Elicitation Experiment Design
+
+Design an experiment to test whether **role assignment** (persona prompting) improves a model's accuracy on logic puzzles. Specify:
+
+1. The independent variable (what you manipulate)
+2. The dependent variable (what you measure)
+3. A control condition and at least two treatment conditions
+4. A potential confound you need to control for
+
+<details>
+<summary>Show Answer</summary>
+
+**Experimental Design:**
+
+**1. Independent variable:** The role/persona assigned to the model in the system prompt.
+
+**2. Dependent variable:** Accuracy (% correct) on a standardized set of logic puzzles (e.g., 50 problems from a published logic benchmark).
+
+**3. Conditions:**
+- **Control:** No persona — plain prompt: `"Solve the following logic puzzle: {puzzle}"`
+- **Treatment A (Expert):** `"You are a world-class logician with 30 years of experience. Solve the following logic puzzle: {puzzle}"`
+- **Treatment B (Teacher):** `"You are a patient teacher explaining logical reasoning. Solve the following logic puzzle step by step: {puzzle}"`
+
+**4. Potential confound:**
+- **Temperature and sampling:** Different prompts might interact with sampling randomness differently. Control by using `temperature=0` (greedy decoding) for all conditions, or use the same temperature with multiple seeds and average.
+- **Problem ordering effect:** Randomize puzzle order across conditions to prevent position bias.
+- **CoT vs no-CoT:** The "teacher" prompt implicitly encourages step-by-step reasoning. To isolate persona effects from CoT effects, ensure all conditions either include or exclude "step by step" phrasing uniformly.
+
+</details>
+
+---
+
+### Exercise 4: Tree of Thoughts vs Chain-of-Thought
+
+Compare CoT (Chain-of-Thought) and ToT (Tree of Thoughts) on the following dimensions. For each cell, briefly explain the trade-off.
+
+| Dimension | CoT | ToT |
+|-----------|-----|-----|
+| Search strategy | ? | ? |
+| Computational cost | ? | ? |
+| Suitable problem types | ? | ? |
+| Failure mode | ? | ? |
+
+<details>
+<summary>Show Answer</summary>
+
+| Dimension | CoT | ToT |
+|-----------|-----|-----|
+| **Search strategy** | Single linear path — greedy left-to-right generation. Fast but commits early to potentially wrong directions. | Tree-structured BFS/DFS — explores multiple branches and backtracks. More thorough but requires generating and evaluating many partial states. |
+| **Computational cost** | Low — proportional to a single response length. Typically 1× cost. | High — proportional to branching factor × depth × evaluation cost. Can be 10-100× more expensive than CoT. |
+| **Suitable problem types** | Sequential reasoning tasks where each step naturally follows from the last (arithmetic, straightforward QA). | Combinatorial or planning problems where early decisions strongly constrain later options and backtracking is valuable (puzzles, multi-step planning, code debugging). |
+| **Failure mode** | **Cascading error** — one early wrong step propagates through the entire chain, producing a confident wrong answer. | **Evaluation bottleneck** — quality depends on the accuracy of the node evaluation function. A poor evaluator will mis-prune correct branches or over-invest in wrong ones. |
+
+</details>

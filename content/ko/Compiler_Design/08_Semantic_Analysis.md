@@ -2173,4 +2173,4 @@ pair(1, "two")       // T = int, U = string, returns (int, string)
 
 ---
 
-[이전: 07_Abstract_Syntax_Trees.md](./07_Abstract_Syntax_Trees.md) | [다음: 09_Intermediate_Representations.md](./09_Intermediate_Representations.md) | [개요](./00_Overview.md)
+[이전: 추상 구문 트리](./07_Abstract_Syntax_Trees.md) | [다음: 중간 표현](./09_Intermediate_Representations.md) | [개요](./00_Overview.md)

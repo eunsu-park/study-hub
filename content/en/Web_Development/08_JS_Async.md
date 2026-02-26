@@ -1,12 +1,22 @@
 # JavaScript Asynchronous Programming
 
-## Overview
+**Previous**: [JavaScript Events and DOM](./07_JS_Events_DOM.md)
 
-JavaScript operates on a single thread, but through asynchronous programming, it efficiently handles tasks like network requests and file reading. This document covers callbacks, Promise, async/await, and the fetch API.
+## Learning Objectives
 
-**Prerequisites**: [07_JS_Events_DOM.md](./07_JS_Events_DOM.md)
+After completing this lesson, you will be able to:
+
+1. Explain the difference between synchronous and asynchronous execution and describe the JavaScript event loop
+2. Identify callback hell and explain why deeply nested callbacks are problematic
+3. Create and consume Promises using the resolve/reject constructor, then/catch/finally chains, and static methods (Promise.all, Promise.race, Promise.allSettled, Promise.any)
+4. Write asynchronous functions using async/await syntax with proper try/catch error handling
+5. Compare sequential and parallel async execution and choose the appropriate pattern
+6. Implement HTTP requests using the Fetch API with various methods (GET, POST, PUT, DELETE), headers, and request bodies
+7. Apply practical async patterns including retry logic, request cancellation with AbortController, debounce, and throttle
 
 ---
+
+Almost everything interesting a web application does involves waiting: waiting for a server response, waiting for a file to upload, waiting for a database query. If JavaScript blocked execution during every wait, the browser would freeze and the user interface would become unresponsive. Asynchronous programming is the technique that allows JavaScript to start a long-running operation, move on to other work, and come back when the result is ready -- keeping the application snappy and the user happy.
 
 ## Table of Contents
 
@@ -89,6 +99,8 @@ console.log('3');
 ---
 
 ## Callbacks
+
+> **Analogy:** A synchronous waiter would take one table's order, stand at the kitchen window waiting for the food, deliver it, and only then visit the next table. An async waiter takes an order, moves on to the next table while the kitchen cooks, and comes back when the food is ready. Promises are the order tickets the kitchen uses to signal completion.
 
 ### What is a Callback Function?
 
@@ -213,16 +225,16 @@ Promise.resolve('value');
 // Immediately rejected Promise
 Promise.reject('error');
 
-// All must succeed (fails if any fail)
+// Promise.all — use when ALL requests must succeed; fails fast if any one rejects (e.g., loading all required dashboard data)
 Promise.all([promise1, promise2, promise3])
     .then(results => {
         // results = [result1, result2, result3]
     })
     .catch(error => {
-        // First failure
+        // First failure — entire operation fails; good when partial results are useless
     });
 
-// Return all results (success/failure distinguished)
+// Promise.allSettled — use when you need ALL results regardless of success/failure (e.g., batch operations where partial success is acceptable)
 Promise.allSettled([promise1, promise2, promise3])
     .then(results => {
         results.forEach(result => {
@@ -234,19 +246,19 @@ Promise.allSettled([promise1, promise2, promise3])
         });
     });
 
-// First to complete (success or failure)
+// Promise.race — use for timeout patterns: whichever finishes first wins, even if it rejects
 Promise.race([promise1, promise2, promise3])
     .then(result => {
-        // Fastest result
+        // Fastest result — useful for "fetch from nearest server" or implementing custom timeouts
     });
 
-// First to succeed
+// Promise.any — use when you need the first success and don't care about failures (e.g., try multiple CDN mirrors)
 Promise.any([promise1, promise2, promise3])
     .then(result => {
-        // First successful result
+        // First successful result — unlike race, ignores rejections until ALL fail
     })
     .catch(error => {
-        // All failed
+        // AggregateError: all promises rejected
     });
 ```
 
@@ -284,6 +296,8 @@ loadImage('image.jpg')
 async function always returns a Promise. await waits for Promise to resolve.
 
 ```javascript
+// async function always returns a Promise; await unwraps it — syntactic sugar over .then() chains
+// Benefit: error handling with try/catch instead of nested .catch(), and code reads top-to-bottom
 async function fetchData() {
     const response = await fetch('/api/data');
     const data = await response.json();
@@ -374,7 +388,7 @@ export const config = await response.json();
 ```javascript
 // GET request
 fetch('https://api.example.com/data')
-    .then(response => response.json())
+    .then(res => res.json())  // res.json() returns another Promise — the body stream must be fully read before parsing; this is the first async step (header arrival), the next .then gets the parsed data
     .then(data => console.log(data))
     .catch(error => console.error(error));
 
@@ -565,7 +579,7 @@ try {
     }
 }
 
-// Manual cancel
+// Rejects the fetch Promise with an AbortError — useful for cancelling requests when user navigates away or a timeout expires
 controller.abort();
 ```
 
@@ -1043,10 +1057,6 @@ form.addEventListener('submit', async (e) => {
 
 ---
 
-## Next Steps
-
-- [09_Practical_Projects.md](./09_Practical_Projects.md) - Projects combining what you've learned
-
 ---
 
 ## References
@@ -1055,3 +1065,7 @@ form.addEventListener('submit', async (e) => {
 - [MDN async/await](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Asynchronous/Promises)
 - [MDN Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
 - [JavaScript.info Async](https://javascript.info/async)
+
+---
+
+**Previous**: [JavaScript Events and DOM](./07_JS_Events_DOM.md)

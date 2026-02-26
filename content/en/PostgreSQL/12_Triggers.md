@@ -1,5 +1,26 @@
 # Triggers
 
+**Previous**: [Transactions](./11_Transactions.md) | **Next**: [Backup and Operations](./13_Backup_and_Operations.md)
+
+---
+
+## Learning Objectives
+
+After completing this lesson, you will be able to:
+
+1. Explain the purpose of triggers and how they automate responses to data modification events
+2. Create trigger functions that return the TRIGGER type in PL/pgSQL
+3. Distinguish between BEFORE and AFTER triggers and choose the appropriate timing for a given use case
+4. Use the NEW and OLD record variables to access row data within trigger functions
+5. Compare FOR EACH ROW and FOR EACH STATEMENT trigger granularity
+6. Implement conditional triggers using the WHEN clause
+7. Build practical trigger-based solutions such as audit logs, timestamp updates, and inventory management
+8. Manage triggers by listing, enabling, disabling, and dropping them
+
+---
+
+Triggers let you embed business rules directly into the database layer, ensuring that critical logic -- such as maintaining audit trails, validating data, or updating derived columns -- executes automatically whenever data changes. Instead of relying on every application to remember to call the right function, the database itself enforces consistency. This makes triggers an indispensable tool for data integrity in any production PostgreSQL system.
+
 ## 1. Trigger Concept
 
 A trigger is a function that automatically executes when a specific event (INSERT, UPDATE, DELETE) occurs.
@@ -441,6 +462,6 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## Next Steps
+---
 
-Learn about backup and operations in [13_Backup_and_Operations.md](./13_Backup_and_Operations.md)!
+**Previous**: [Transactions](./11_Transactions.md) | **Next**: [Backup and Operations](./13_Backup_and_Operations.md)

@@ -1,5 +1,23 @@
 # 사용자와 그룹 관리
 
+**이전**: [권한과 소유권](./05_Permissions_Ownership.md) | **다음**: [프로세스 관리](./07_Process_Management.md)
+
+## 학습 목표(Learning Objectives)
+
+이 레슨을 마치면 다음을 할 수 있습니다:
+
+1. /etc/passwd, /etc/shadow, /etc/group의 구조와 목적을 설명한다
+2. useradd, usermod, userdel로 사용자 계정을 생성, 수정, 삭제한다
+3. groupadd, groupmod, groupdel, gpasswd를 사용해 그룹을 관리한다
+4. su로 사용자를 전환하고 sudo로 권한을 상승한다
+5. visudo로 /etc/sudoers를 안전하게 편집해 sudo 권한을 설정한다
+6. id, groups, who, w, last를 사용해 사용자 및 그룹 정보를 조회한다
+7. 비밀번호 정책(password policy)과 계정 관리에 보안 모범 사례를 적용한다
+
+---
+
+리눅스는 설계상 다중 사용자(multi-user) 운영체제입니다. 단일 사용자 워크스테이션에서도 웹 서버, 데이터베이스, 메일 등 서비스를 위한 수십 개의 시스템 계정이 실행됩니다. 사용자와 그룹을 올바르게 관리하는 것은 접근 제어(access control)의 기초로, 누가 로그인할 수 있는지, 어떤 파일에 접근할 수 있는지, 어떤 명령어를 상승된 권한으로 실행할 수 있는지를 결정합니다.
+
 ## 1. 사용자 관련 파일
 
 리눅스는 사용자 정보를 특정 파일들에 저장합니다.
@@ -598,4 +616,4 @@ sudo -u www-data whoami
 
 ## 다음 단계
 
-[07_Process_Management.md](./07_Process_Management.md)에서 프로세스 관리를 배워봅시다!
+[프로세스 관리](./07_Process_Management.md)에서 프로세스 관리를 배워봅시다!
