@@ -18,6 +18,9 @@
     {% if has_examples %}
     <a href="{{ url_for('examples_topic', lang=lang, topic_name=topic) }}" class="examples-link">{% if lang == 'ko' %}예제 코드 &rarr;{% else %}Examples &rarr;{% endif %}</a>
     {% endif %}
+    {% if has_exercises %}
+    <a href="{{ url_for('exercises_topic', lang=lang, topic_name=topic) }}" class="examples-link">{% if lang == 'ko' %}연습문제 &rarr;{% else %}Exercises &rarr;{% endif %}</a>
+    {% endif %}
 </div>
 {% endblock %}
 

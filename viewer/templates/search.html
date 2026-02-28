@@ -25,6 +25,7 @@
                 <option value="" {% if not type_filter %}selected{% endif %}>All types</option>
                 <option value="lesson" {% if type_filter == 'lesson' %}selected{% endif %}>Lessons</option>
                 <option value="example" {% if type_filter == 'example' %}selected{% endif %}>Examples</option>
+                <option value="exercise" {% if type_filter == 'exercise' %}selected{% endif %}>Exercises</option>
             </select>
         </div>
     </form>
@@ -38,6 +39,8 @@
             {% for result in results %}
             {% if result.content_type == 'example' %}
             <a href="{{ url_for('example_view', lang=lang, topic_name=result.topic, filepath=result.filename) }}" class="result-item">
+            {% elif result.content_type == 'exercise' %}
+            <a href="{{ url_for('exercise_file_view', lang=lang, topic_name=result.topic, filepath=result.filename) }}" class="result-item">
             {% else %}
             <a href="{{ url_for('lesson', lang=lang, name=result.topic, filename=result.filename) }}" class="result-item">
             {% endif %}

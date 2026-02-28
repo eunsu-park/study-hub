@@ -116,7 +116,7 @@ topics:
       en: "Modal editing, motions, text objects, plugins, and Neovim"
       ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
 
-  # Tier 2 — Intermediate (16 topics)
+  # Tier 2 — Intermediate (17 topics)
   C_Programming:
     tier: intermediate
     description:
@@ -212,6 +212,12 @@ topics:
     description:
       en: "Cryptographic algorithms, protocols, and mathematical foundations"
       ko: "암호화 알고리즘, 프로토콜 및 수학적 기초"
+
+  Calculus_and_Differential_Equations:
+    tier: intermediate
+    description:
+      en: "Calculus fundamentals, multivariable calculus, ODE, PDE, and modeling"
+      ko: "미적분학 기초, 다변수 미적분, 상미분방정식, 편미분방정식 및 모델링"
 
   # Tier 3 — Advanced (18 topics)
   Algorithm:

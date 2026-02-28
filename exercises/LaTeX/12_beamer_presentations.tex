@@ -1,0 +1,329 @@
+% Exercises for Lesson 12: Beamer Presentations
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/12_beamer_presentations.tex
+
+\documentclass{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{beaver}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+
+\setbeamertemplate{navigation symbols}{}
+
+\title{Exercises for Lesson 12: Beamer Presentations}
+\subtitle{LaTeX Study Project}
+\author{Study Project}
+\institute{Self-Study}
+\date{}
+
+\begin{document}
+
+% === Exercise 1: Basic Presentation ===
+% Problem: 5 slides, title, outline, 3 content, theme, list.
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}{What is \LaTeX{}?}
+  \begin{itemize}
+    \item A document preparation system
+    \item Built on \TeX{} by Donald Knuth
+    \item The gold standard for scientific publishing
+    \item Free and open source
+  \end{itemize}
+\end{frame}
+
+\section{Features}
+
+\begin{frame}{Key Features}
+  \begin{enumerate}
+    \item Superior mathematical typesetting
+    \item Automatic numbering and cross-referencing
+    \item Professional bibliography management
+    \item Programmable graphics with TikZ
+  \end{enumerate}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Summary}
+  \begin{block}{Key Takeaway}
+    \LaTeX{} is essential for anyone writing technical or scientific
+    documents.
+  \end{block}
+\end{frame}
+
+% === Exercise 2: Overlays ===
+% Problem: pause, \only, \uncover, <+-> itemize, overlay ranges.
+
+\section{Overlay Demonstrations}
+
+\begin{frame}{Using \texttt{\textbackslash pause}}
+  First point is visible immediately.
+  \pause
+
+  Second point appears after one click.
+  \pause
+
+  Third point appears last.
+\end{frame}
+
+\begin{frame}{Using \texttt{\textbackslash only}}
+  \only<1>{This text appears ONLY on slide 1.}
+  \only<2>{This DIFFERENT text appears ONLY on slide 2.}
+  \only<3>{And this text appears ONLY on slide 3.}
+\end{frame}
+
+\begin{frame}{Using \texttt{\textbackslash uncover}}
+  \uncover<1->{Always visible from the start.}
+
+  \uncover<2->{Appears from slide 2 onward.}
+
+  \uncover<3->{Appears from slide 3 onward.}
+\end{frame}
+
+\begin{frame}{Incremental Itemize}
+  \begin{itemize}[<+->]
+    \item First item appears
+    \item Second item appears
+    \item Third item appears
+    \item Fourth item appears
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Overlay Ranges}
+  \begin{itemize}
+    \item<1-3> Visible on slides 1, 2, and 3
+    \item<2-> Visible from slide 2 onward
+    \item<3> Visible ONLY on slide 3
+    \item<1,3> Visible on slides 1 and 3
+  \end{itemize}
+\end{frame}
+
+% === Exercise 3: Blocks and Themes ===
+% Problem: Regular, alert, example blocks; theorem + proof.
+
+\section{Block Types}
+
+\begin{frame}{Block Types}
+  \begin{block}{Regular Block}
+    This is a standard block with information.
+  \end{block}
+
+  \begin{alertblock}{Alert Block}
+    This is an important warning or alert.
+  \end{alertblock}
+
+  \begin{exampleblock}{Example Block}
+    This is an example or illustration.
+  \end{exampleblock}
+\end{frame}
+
+\begin{frame}{Theorem and Proof}
+  \begin{theorem}[Pythagorean Theorem]
+    For a right triangle with legs $a$, $b$ and hypotenuse $c$:
+    \[ a^2 + b^2 = c^2 \]
+  \end{theorem}
+
+  \begin{proof}
+    Consider a square of side $a+b$ containing four copies of the
+    triangle. The inner square has side $c$, giving area
+    $c^2 = (a+b)^2 - 4 \cdot \frac{ab}{2} = a^2 + b^2$.
+  \end{proof}
+\end{frame}
+
+% === Exercise 4: Columns Layout ===
+% Problem: Equal, unequal (30/70), text+image, three columns.
+
+\section{Column Layouts}
+
+\begin{frame}{Two Equal Columns}
+  \begin{columns}
+    \column{0.5\textwidth}
+    \textbf{Left Column}
+    \begin{itemize}
+      \item Point one
+      \item Point two
+    \end{itemize}
+
+    \column{0.5\textwidth}
+    \textbf{Right Column}
+    \begin{itemize}
+      \item Point three
+      \item Point four
+    \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Unequal Columns (30/70)}
+  \begin{columns}
+    \column{0.3\textwidth}
+    \begin{alertblock}{Key Fact}
+      $E = mc^2$
+    \end{alertblock}
+
+    \column{0.7\textwidth}
+    Einstein's mass-energy equivalence tells us that mass and energy are
+    interchangeable.  A small amount of mass corresponds to a tremendous
+    amount of energy due to the $c^2$ factor.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Text and Image}
+  \begin{columns}
+    \column{0.5\textwidth}
+    The figure on the right shows a placeholder for an image.
+    In a real presentation this would contain a diagram,
+    photograph, or chart.
+
+    \column{0.5\textwidth}
+    \centering
+    \rule{0.9\textwidth}{4cm}\\
+    {\small (Image placeholder)}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Three Columns}
+  \begin{columns}
+    \column{0.33\textwidth}
+    \begin{block}{Model A}
+      Accuracy: 92\%
+    \end{block}
+
+    \column{0.33\textwidth}
+    \begin{block}{Model B}
+      Accuracy: 95\%
+    \end{block}
+
+    \column{0.33\textwidth}
+    \begin{block}{Model C}
+      Accuracy: 97\%
+    \end{block}
+  \end{columns}
+\end{frame}
+
+% === Exercise 5: Figures and Tables ===
+% Problem: Figure slide, table slide, incremental table.
+
+\section{Figures and Tables}
+
+\begin{frame}{Figure Slide}
+  \begin{figure}
+    \centering
+    \rule{0.7\textwidth}{4cm}
+    \caption{Experimental results (placeholder)}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{Table Slide}
+  \begin{table}
+    \centering
+    \caption{Performance metrics}
+    \begin{tabular}{lcc}
+      \toprule
+      Model & Accuracy & F1 \\
+      \midrule
+      Baseline & 0.85 & 0.83 \\
+      Proposed & 0.93 & 0.91 \\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+\end{frame}
+
+\begin{frame}{Incremental Table Reveal}
+  \begin{table}
+    \centering
+    \begin{tabular}{lcc}
+      \toprule
+      Model & Accuracy & Speed \\
+      \midrule
+      \onslide<1->{CNN & 92\% & Fast \\}
+      \onslide<2->{ResNet & 95\% & Medium \\}
+      \onslide<3->{ViT & 97\% & Slow \\}
+      \bottomrule
+    \end{tabular}
+  \end{table}
+\end{frame}
+
+% === Exercise 6: Custom Styling ===
+% Problem: No nav symbols, custom footline, custom colors, custom block.
+
+\section{Custom Styling}
+
+\begin{frame}{Custom Footer Demonstration}
+  This presentation has custom styling:
+  \begin{itemize}
+    \item Navigation symbols removed
+    \item Beaver color theme applied
+    \item Madrid theme with customized appearance
+  \end{itemize}
+
+  \medskip
+
+  The footer configuration in preamble:
+  \begin{verbatim}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{
+  \leavevmode\hbox{
+    \begin{beamercolorbox}[wd=.33]{} Author \end{...}
+    \begin{beamercolorbox}[wd=.34]{} Title \end{...}
+    \begin{beamercolorbox}[wd=.33]{} \thepage \end{...}
+  }
+}
+  \end{verbatim}
+\end{frame}
+
+% === Exercise 7: Academic Presentation (structure shown) ===
+
+\section{Academic Structure}
+
+\begin{frame}{Academic Presentation Structure}
+  A 10-slide academic talk should have:
+  \begin{enumerate}
+    \item Title page
+    \item Table of contents
+    \item Introduction (2 slides)
+    \item Methods (3 slides)
+    \item Results (2 slides)
+    \item Conclusion
+    \item Thank you / Questions (plain frame)
+  \end{enumerate}
+\end{frame}
+
+% === Exercises 8-10: Templates shown as verbatim ===
+
+\begin{frame}[fragile]{Exercises 8--10: Notes}
+  \begin{itemize}
+    \item \textbf{Exercise 8} (Animations): Use
+      \verb|\transfade|, \verb|\transwipe|, etc.
+    \item \textbf{Exercise 9} (Speaker Notes):
+      \verb|\note{Talking points here}|
+    \item \textbf{Exercise 10} (Complete Presentation):
+      Combine all techniques from this lesson
+  \end{itemize}
+\end{frame}
+
+% Final slide
+\begin{frame}[plain]
+  \begin{center}
+    {\Huge Thank You!}
+
+    \bigskip
+
+    {\Large Questions?}
+  \end{center}
+\end{frame}
+
+\end{document}

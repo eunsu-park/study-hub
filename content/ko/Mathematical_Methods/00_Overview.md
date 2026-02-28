@@ -116,9 +116,10 @@ pip install numpy scipy matplotlib sympy
 - **대학 물리**: 역학, 전자기학 기초 (응용 예제 이해에 도움)
 
 ### 연계 과정
+- [Calculus_and_Differential_Equations](../Calculus_and_Differential_Equations/00_Overview.md): 선행 과목 — 미적분학 기초, ODE/PDE 입문
 - [Math_for_AI](../Math_for_AI/00_Overview.md): ML/DL 관점의 수학 (보완적)
 - [Numerical_Simulation](../Numerical_Simulation/00_Overview.md): 수치적 방법 (해석적 방법의 보완)
-- [Statistics](../Statistics/00_Overview.md): 확률과 통계
+- [Data_Science](../Data_Science/00_Overview.md): 확률과 통계
 
 ## 학습 목표
 

@@ -43,6 +43,12 @@
             <span class="icon">{{ icon('list', 16) }}</span>
             <span class="text">Topic list</span>
         </a>
+        {% if exercise %}
+        <a href="{{ url_for('exercise_file_view', lang=lang, topic_name=topic, filepath=exercise.path) }}" class="btn btn-exercise" title="View exercise">
+            <span class="icon">{{ icon('exercise', 16) }}</span>
+            <span class="text">Exercise</span>
+        </a>
+        {% endif %}
     </div>
     <div class="toolbar-nav toolbar-nav--next">
         {% if next_lesson %}

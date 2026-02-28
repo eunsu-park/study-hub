@@ -59,6 +59,10 @@
                     <span class="nav-icon">{{ icon('code', 18) }}</span>
                     <span class="nav-text">Examples</span>
                 </a>
+                <a href="{{ url_for('exercises_index', lang=lang) }}" class="nav-item {% if request.endpoint in ('exercises_index', 'exercises_topic', 'exercise_file_view') %}active{% endif %}">
+                    <span class="nav-icon">{{ icon('exercise', 18) }}</span>
+                    <span class="nav-text">Exercises</span>
+                </a>
             </nav>
 
             <div class="sidebar-search">

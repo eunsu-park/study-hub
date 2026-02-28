@@ -4,8 +4,8 @@
 일부 내용은 제가 직접 작성했으며, 일부는 AI가 검수하거나 AI의 도움을 받아 작성되었습니다.
 This repository is a personal study project. Some content was written by me, some was reviewed by AI, and some was created with the help of AI.
 
-50개 토픽, 4단계 난이도 체계, 한/영 이중언어를 지원하며, ~1,000개의 실행 가능한 예제를 포함합니다.
-50 topics across 4 difficulty tiers, bilingual (EN/KR), with ~1,000 runnable examples.
+51개 토픽, 4단계 난이도 체계, 한/영 이중언어를 지원하며, ~1,060개의 실행 가능한 예제와 ~800개의 연습문제 풀이를 포함합니다.
+51 topics across 4 difficulty tiers, bilingual (EN/KR), with ~1,060 runnable examples and ~800 exercise solutions.
 
 ---
 
@@ -13,12 +13,12 @@ This repository is a personal study project. Some content was written by me, som
 
 ```
 ├── content/          # 학습 자료 Markdown / Study materials
-│   ├── ko/           # 한국어 (50개 토픽) / Korean (50 topics)
-│   └── en/           # 영어 (50개 토픽) / English (50 topics)
+│   ├── ko/           # 한국어 (51개 토픽) / Korean (51 topics)
+│   └── en/           # 영어 (51개 토픽) / English (51 topics)
 │
-├── examples/         # 예제 코드 (50개 토픽, ~1,012개 파일) / Example code
+├── examples/         # 예제 코드 (51개 토픽, ~1,060개 파일) / Example code
 │
-├── site/             # 정적 사이트 생성기 / Static site generator (GitHub Pages)
+├── exercises/        # 연습문제 풀이 (49개 토픽, ~800개 파일) / Exercise solutions
 │
 └── viewer/           # Flask 웹 뷰어 / Flask web viewer
 ```
@@ -74,6 +74,7 @@ flask run --port 5050
 | [Database_Theory](./content/ko/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
 | [Security](./content/ko/Security/00_Overview.md) | CIA Triad, 암호학, TLS, OWASP, 인증/인가, 컨테이너 보안 | 16 |
 | [Formal_Languages](./content/ko/Formal_Languages/00_Overview.md) | DFA, NFA, 정규식, 문맥자유문법, PDA, 튜링머신, P/NP | 14 |
+| [Calculus_and_Differential_Equations](./content/ko/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 21 |
 
 ### Tier 3 — 고급 (Advanced)
 
@@ -132,8 +133,8 @@ Check the `00_Overview.md` file in each folder for learning roadmaps and detaile
 
 - 모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
   All study materials are maintained in both **Korean (ko)** and **English (en)**
-- 50개 토픽 모두 한/영 번역 완료
-  All 50 topics fully translated to Korean/English
+- 51개 토픽 모두 한/영 번역 완료
+  All 51 topics fully translated to Korean/English
 - 신규 자료는 영문 원본 작성 후 한국어 번역
   New materials are authored in English, then translated to Korean
 
@@ -145,7 +146,7 @@ This project uses a dual license:
 | 대상 / Target | 라이센스 / License |
 |---|---|
 | 학습 자료 (`content/`) / Study materials | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
-| 코드 (`examples/`, `viewer/`) / Code | [MIT License](./LICENSE) |
+| 코드 (`examples/`, `exercises/`, `viewer/`) / Code | [MIT License](./LICENSE) |
 
 ### AI 도움 명시 / AI Assistance Disclosure
 

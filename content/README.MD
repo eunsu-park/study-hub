@@ -11,12 +11,12 @@ content/
 ├── ko/                    # 한국어 자료 (번역본) / Korean (translated)
 │   ├── Algorithm/         # 29개 레슨 / 29 lessons
 │   ├── C_Programming/     # 23개 레슨 / 23 lessons
-│   └── ...                # 총 50개 토픽 / 50 topics total
+│   └── ...                # 총 51개 토픽 / 51 topics total
 │
 └── en/                    # 영어 자료 (원본) / English (original)
     ├── Algorithm/
     ├── C_Programming/
-    └── ...                # 총 50개 토픽 / 50 topics total
+    └── ...                # 총 51개 토픽 / 51 topics total
 ```
 
 ## 토픽 목록 / Topic List
@@ -47,6 +47,12 @@ Check the `00_Overview.md` in each topic for learning roadmaps and detailed tabl
 예제 코드 파일은 프로젝트 루트의 [`examples/`](../examples/README.md) 폴더에 위치합니다.
 
 Example code files are located in the [`examples/`](../examples/README.md) folder at the project root.
+
+## 연습문제 풀이 / Exercise Solutions
+
+연습문제 풀이 코드는 프로젝트 루트의 [`exercises/`](../exercises/README.md) 폴더에 위치합니다. 각 레슨의 Exercises 섹션에 대한 풀이 코드를 제공합니다 (49개 토픽, ~800개 파일).
+
+Exercise solution code is located in the [`exercises/`](../exercises/README.md) folder at the project root. It provides solutions to the Exercises section of each lesson (49 topics, ~800 files).
 
 ## 다국어 정책 / Multilingual Policy
 

@@ -11,8 +11,9 @@ from flask import Flask, render_template, request, jsonify, abort, redirect, url
 from models import db, LessonRead, Bookmark
 from config import Config
 from utils.markdown_parser import parse_markdown, parse_markdown_cached, extract_excerpt, estimate_reading_time
-from utils.search import search, build_search_index, build_example_index, create_fts_table
+from utils.search import search, build_search_index, build_example_index, build_exercise_index, create_fts_table
 from utils.examples import get_example_topics, get_example_files, highlight_file
+from utils.exercises import get_exercise_topics, get_exercise_files, find_exercise_for_lesson
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -22,6 +23,7 @@ db.init_app(app)
 
 CONTENT_DIR = Config.CONTENT_DIR
 EXAMPLES_DIR = Config.EXAMPLES_DIR
+EXERCISES_DIR = Config.EXERCISES_DIR
 SUPPORTED_LANGS = set(Config.SUPPORTED_LANGUAGES)
 DEFAULT_LANG = Config.DEFAULT_LANGUAGE
 LANGUAGE_NAMES = Config.LANGUAGE_NAMES
@@ -293,6 +295,7 @@ def topic(lang: str, name: str):
     progress = get_progress(lang, name)
     tier = get_tier_for_topic(name)
     has_examples = (EXAMPLES_DIR / name).is_dir()
+    has_exercises = (EXERCISES_DIR / name).is_dir()
     return render_template(
         "topic.html",
         topic=name,
@@ -303,6 +306,7 @@ def topic(lang: str, name: str):
         languages=get_available_languages(),
         tier=tier,
         has_examples=has_examples,
+        has_exercises=has_exercises,
     )
 
 
@@ -327,6 +331,8 @@ def lesson(lang: str, name: str, filename: str):
         prev_lesson = lessons[current_idx - 1] if current_idx > 0 else None
         next_lesson = lessons[current_idx + 1] if current_idx < len(lessons) - 1 else None
 
+    exercise = find_exercise_for_lesson(EXERCISES_DIR, name, filename)
+
     return render_template(
         "lesson.html",
         topic=name,
@@ -338,6 +344,7 @@ def lesson(lang: str, name: str, filename: str):
         is_bookmarked=is_bookmarked(lang, name, filename),
         prev_lesson=prev_lesson,
         next_lesson=next_lesson,
+        exercise=exercise,
         lang=lang,
         languages=get_available_languages(),
     )
@@ -481,6 +488,86 @@ def example_raw(topic_name: str, filepath: str):
     return send_from_directory(topic_dir, filepath, as_attachment=True)
 
 
+# Exercise Routes
+def _find_related_lesson(lang: str, topic_name: str, exercise_filepath: str) -> dict | None:
+    """Find lesson matching exercise by numeric prefix."""
+    import re
+    prefix_match = re.match(r"^(\d+)_", Path(exercise_filepath).name)
+    if not prefix_match:
+        return None
+    prefix = prefix_match.group(1)
+    lessons = get_lessons(lang, topic_name)
+    for lesson_item in lessons:
+        if lesson_item["filename"].startswith(f"{prefix}_"):
+            return lesson_item
+    return None
+
+
+@app.route("/<lang>/exercises")
+@validate_lang
+def exercises_index(lang: str):
+    """Exercises index - list all exercise topics."""
+    topics = get_exercise_topics(EXERCISES_DIR)
+    total_files = sum(t["file_count"] for t in topics)
+    return render_template(
+        "exercises_index.html",
+        topics=topics,
+        total_files=total_files,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/<lang>/exercises/<topic_name>")
+@validate_lang
+def exercises_topic(lang: str, topic_name: str):
+    """Exercises topic - list files in a topic."""
+    topic_dir = EXERCISES_DIR / topic_name
+    if not topic_dir.exists():
+        abort(404)
+    files = get_exercise_files(topic_dir)
+    return render_template(
+        "exercises_topic.html",
+        topic=topic_name,
+        display_name=topic_name.replace("_", " "),
+        files=files,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/<lang>/exercises/<topic_name>/<path:filepath>")
+@validate_lang
+def exercise_file_view(lang: str, topic_name: str, filepath: str):
+    """Exercise file viewer with syntax highlighting."""
+    full_path = EXERCISES_DIR / topic_name / filepath
+    if not full_path.exists() or not full_path.is_file():
+        abort(404)
+    highlighted = highlight_file(full_path)
+    related_lesson = _find_related_lesson(lang, topic_name, filepath)
+    return render_template(
+        "exercise_file.html",
+        topic=topic_name,
+        display_name=topic_name.replace("_", " "),
+        filepath=filepath,
+        filename=full_path.name,
+        highlighted=highlighted,
+        related_lesson=related_lesson,
+        lang=lang,
+        languages=get_available_languages(),
+    )
+
+
+@app.route("/raw/exercises/<topic_name>/<path:filepath>")
+def exercise_raw(topic_name: str, filepath: str):
+    """Serve raw exercise file for download."""
+    from flask import send_from_directory
+    topic_dir = EXERCISES_DIR / topic_name
+    if not (topic_dir / filepath).exists():
+        abort(404)
+    return send_from_directory(topic_dir, filepath, as_attachment=True)
+
+
 # API Routes
 @app.route("/api/mark-read", methods=["POST"])
 def api_mark_read():
@@ -601,7 +688,11 @@ def build_index():
     if EXAMPLES_DIR.exists():
         print("Building example code index...")
         build_example_index(EXAMPLES_DIR, db_path)
-    print("Search index built for all languages and examples.")
+    # Index exercise files
+    if EXERCISES_DIR.exists():
+        print("Building exercise index...")
+        build_exercise_index(EXERCISES_DIR, db_path)
+    print("Search index built for all languages, examples, and exercises.")
 
 
 if __name__ == "__main__":

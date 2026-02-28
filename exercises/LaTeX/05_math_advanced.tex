@@ -1,0 +1,282 @@
+% Exercises for Lesson 05: Advanced Mathematics
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/05_math_advanced.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{tikz-cd}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\title{Exercises for Lesson 05: Advanced Mathematics}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Maxwell's Equations ===
+% Problem: Typeset Maxwell's equations in differential and integral form.
+
+\section{Exercise 1: Maxwell's Equations}
+
+\textbf{Differential form:}
+\begin{align}
+  \nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0}
+    \label{eq:gauss-E} \\
+  \nabla \cdot \mathbf{B} &= 0
+    \label{eq:gauss-B} \\
+  \nabla \times \mathbf{E} &= -\frac{\partial \mathbf{B}}{\partial t}
+    \label{eq:faraday} \\
+  \nabla \times \mathbf{B} &= \mu_0 \mathbf{J}
+    + \mu_0 \varepsilon_0 \frac{\partial \mathbf{E}}{\partial t}
+    \label{eq:ampere}
+\end{align}
+
+\textbf{Integral form:}
+\begin{align}
+  \oint_{\partial V} \mathbf{E} \cdot d\mathbf{A}
+    &= \frac{Q_{\text{enc}}}{\varepsilon_0}
+    \label{eq:gauss-E-int} \\
+  \oint_{\partial V} \mathbf{B} \cdot d\mathbf{A}
+    &= 0
+    \label{eq:gauss-B-int} \\
+  \oint_{\partial S} \mathbf{E} \cdot d\boldsymbol{\ell}
+    &= -\frac{d}{dt} \int_S \mathbf{B} \cdot d\mathbf{A}
+    \label{eq:faraday-int} \\
+  \oint_{\partial S} \mathbf{B} \cdot d\boldsymbol{\ell}
+    &= \mu_0 I_{\text{enc}}
+    + \mu_0 \varepsilon_0 \frac{d}{dt} \int_S \mathbf{E} \cdot d\mathbf{A}
+    \label{eq:ampere-int}
+\end{align}
+
+Equations~\eqref{eq:gauss-E}--\eqref{eq:ampere} are the differential forms,
+and Equations~\eqref{eq:gauss-E-int}--\eqref{eq:ampere-int} are their integral
+equivalents.
+
+% === Exercise 2: Matrix Proof ===
+% Problem: Theorem: det(AB) = det(A)det(B) with proof.
+
+\section{Exercise 2: Matrix Proof}
+
+\begin{theorem}[Multiplicativity of Determinants]
+  \label{thm:det-mult}
+  If $A$ and $B$ are $n \times n$ matrices, then
+  \begin{equation}
+    \det(AB) = \det(A) \det(B).
+  \end{equation}
+\end{theorem}
+
+\begin{proof}
+  If $\det(A) = 0$, then $A$ is singular, so $AB$ is also singular,
+  and $\det(AB) = 0 = \det(A)\det(B)$.
+
+  If $\det(A) \neq 0$, then $A$ is invertible.  Express $A$ as a product
+  of elementary matrices:
+  \[
+    A = E_1 E_2 \cdots E_k.
+  \]
+  Each elementary matrix $E_i$ satisfies
+  $\det(E_i B) = \det(E_i)\det(B)$ (which can be verified for each of the
+  three types of elementary row operations).  Applying this repeatedly:
+  \begin{align*}
+    \det(AB) &= \det(E_1 E_2 \cdots E_k B) \\
+    &= \det(E_1) \det(E_2 \cdots E_k B) \\
+    &= \det(E_1) \det(E_2) \cdots \det(E_k) \det(B) \\
+    &= \det(A) \det(B). \qedhere
+  \end{align*}
+\end{proof}
+
+% === Exercise 3: Piecewise Function ===
+% Problem: Heaviside step function.
+
+\section*{Exercise 3: Heaviside Step Function}
+
+\begin{equation}
+  H(x) = \begin{cases}
+    0 & \text{if } x < 0 \\
+    1 & \text{if } x \geq 0
+  \end{cases}
+\end{equation}
+
+A smoothed approximation using the logistic function:
+\[
+  H_\epsilon(x) = \frac{1}{1 + e^{-x/\epsilon}}, \quad \epsilon > 0
+\]
+
+% === Exercise 4: Custom Theorem ===
+% Problem: Three theorem styles, proof, numbered definitions,
+% cross-references.
+
+\section{Exercise 4: Custom Theorem Environments}
+
+\begin{definition}[Metric Space]
+  \label{def:metric}
+  A \emph{metric space} is a pair $(X, d)$ where $X$ is a set and
+  $d : X \times X \to [0, \infty)$ satisfies:
+  \begin{enumerate}
+    \item $d(x, y) = 0 \iff x = y$
+    \item $d(x, y) = d(y, x)$ \quad (symmetry)
+    \item $d(x, z) \leq d(x, y) + d(y, z)$ \quad (triangle inequality)
+  \end{enumerate}
+\end{definition}
+
+\begin{definition}[Cauchy Sequence]
+  \label{def:cauchy}
+  A sequence $(x_n)$ in a metric space $(X, d)$ is \emph{Cauchy} if for
+  every $\varepsilon > 0$ there exists $N \in \mathbb{N}$ such that
+  $d(x_m, x_n) < \varepsilon$ for all $m, n \geq N$.
+\end{definition}
+
+\begin{theorem}[Completeness of $\mathbb{R}$]
+  \label{thm:complete}
+  Every Cauchy sequence in $(\mathbb{R}, |\cdot|)$ converges.
+\end{theorem}
+
+\begin{proof}
+  Let $(x_n)$ be a Cauchy sequence in $\mathbb{R}$.  By
+  Definition~\ref{def:cauchy}, the sequence is bounded.  By the
+  Bolzano--Weierstrass theorem, it has a convergent subsequence
+  $x_{n_k} \to L$.  Since $(x_n)$ is Cauchy, the full sequence also
+  converges to $L$.
+\end{proof}
+
+\begin{remark}
+  Not all metric spaces are complete.  For example, $\mathbb{Q}$ with the
+  usual metric is not complete.  See Definition~\ref{def:metric} for the
+  metric space axioms.
+\end{remark}
+
+% === Exercise 5: Optimization Problem ===
+% Problem: Constrained optimization with Lagrangian and KKT conditions.
+
+\section*{Exercise 5: Constrained Optimization}
+
+The constrained optimization problem:
+\begin{equation}
+  \begin{aligned}
+    \min_{x \in \mathbb{R}^n} \quad & f(x) \\
+    \text{subject to} \quad & g_i(x) \leq 0, \quad i = 1, \ldots, m \\
+    & h_j(x) = 0, \quad j = 1, \ldots, p
+  \end{aligned}
+\end{equation}
+
+The Lagrangian is:
+\begin{equation}
+  \mathcal{L}(x, \lambda, \nu) = f(x)
+    + \sum_{i=1}^{m} \lambda_i g_i(x)
+    + \sum_{j=1}^{p} \nu_j h_j(x)
+\end{equation}
+
+The KKT (Karush--Kuhn--Tucker) conditions for optimality:
+\begin{align}
+  \nabla_x \mathcal{L}(x^*, \lambda^*, \nu^*)
+    &= \mathbf{0}
+    && \text{(stationarity)} \\
+  g_i(x^*) &\leq 0, \quad i = 1, \ldots, m
+    && \text{(primal feasibility)} \\
+  h_j(x^*) &= 0, \quad j = 1, \ldots, p
+    && \text{(primal feasibility)} \\
+  \lambda_i^* &\geq 0, \quad i = 1, \ldots, m
+    && \text{(dual feasibility)} \\
+  \lambda_i^* g_i(x^*) &= 0, \quad i = 1, \ldots, m
+    && \text{(complementary slackness)}
+\end{align}
+
+% === Exercise 6: Quantum Mechanics ===
+% Problem: Time-dependent Schrodinger equation and conservation of <H>.
+% Note: We implement bra-ket manually to avoid requiring the physics package.
+
+\section*{Exercise 6: Quantum Mechanics}
+
+The time-dependent Schr\"{o}dinger equation:
+\begin{equation}
+  i\hbar \frac{\partial}{\partial t} |\Psi(t)\rangle
+  = \hat{H} |\Psi(t)\rangle
+  \label{eq:schrodinger}
+\end{equation}
+
+The expectation value of the Hamiltonian is:
+\begin{equation}
+  \langle \hat{H} \rangle
+  = \langle \Psi(t) | \hat{H} | \Psi(t) \rangle
+  = \int_{-\infty}^{\infty} \Psi^*(x,t) \, \hat{H} \, \Psi(x,t) \, dx
+\end{equation}
+
+To show conservation, compute the time derivative:
+\begin{align}
+  \frac{d}{dt} \langle \hat{H} \rangle
+  &= \frac{d}{dt} \langle \Psi | \hat{H} | \Psi \rangle \notag \\
+  &= \left\langle \frac{\partial \Psi}{\partial t} \bigg| \hat{H} \bigg| \Psi \right\rangle
+   + \left\langle \Psi \bigg| \hat{H} \bigg| \frac{\partial \Psi}{\partial t} \right\rangle \notag \\
+  &= \left\langle \frac{\hat{H}\Psi}{i\hbar} \bigg| \hat{H} \bigg| \Psi \right\rangle
+   + \left\langle \Psi \bigg| \hat{H} \bigg| \frac{\hat{H}\Psi}{i\hbar} \right\rangle \notag \\
+  &= \frac{-1}{i\hbar} \langle \hat{H}\Psi | \hat{H}\Psi \rangle
+   + \frac{1}{i\hbar} \langle \Psi | \hat{H}^2 | \Psi \rangle \notag \\
+  &= 0
+\end{align}
+since $\hat{H}$ is Hermitian.  Therefore $\langle \hat{H} \rangle$ is
+conserved in time.
+
+% === Exercise 7: Continued Fractions ===
+% Problem: Golden ratio as a continued fraction.
+
+\section*{Exercise 7: Golden Ratio as Continued Fraction}
+
+\begin{equation}
+  \varphi = 1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \ddots}}}}
+\end{equation}
+
+Solving $\varphi = 1 + 1/\varphi$ gives $\varphi^2 - \varphi - 1 = 0$, so:
+\[
+  \varphi = \frac{1 + \sqrt{5}}{2} \approx 1.618
+\]
+
+% === Exercise 8: Commutative Diagram ===
+% Problem: Pullback diagram in category theory.
+
+\section*{Exercise 8: Pullback Diagram}
+
+The pullback of $f: X \to Z$ and $g: Y \to Z$ is the limit of the diagram:
+
+\[
+\begin{tikzcd}
+  X \times_Z Y \arrow[r, "p_1"] \arrow[d, "p_2"']
+    \arrow[dr, phantom, "\lrcorner", very near start]
+  & X \arrow[d, "f"] \\
+  Y \arrow[r, "g"']
+  & Z
+\end{tikzcd}
+\]
+
+The universal property: for any object $W$ with morphisms $\alpha: W \to X$
+and $\beta: W \to Y$ satisfying $f \circ \alpha = g \circ \beta$, there
+exists a unique morphism $\gamma: W \to X \times_Z Y$:
+
+\[
+\begin{tikzcd}
+  W \arrow[drr, bend left, "\alpha"]
+    \arrow[ddr, bend right, "\beta"']
+    \arrow[dr, dashed, "\exists!\,\gamma" description] & & \\
+  & X \times_Z Y \arrow[r, "p_1"] \arrow[d, "p_2"']
+  & X \arrow[d, "f"] \\
+  & Y \arrow[r, "g"']
+  & Z
+\end{tikzcd}
+\]
+
+\end{document}

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 05: CSS Responsive Design</title>
+    <style>
+        /* ===== Reset ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 2rem;
+        }
+        .page-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .page-title h1 {
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            color: #2c3e50;
+        }
+        .page-title p { color: #666; }
+
+        .exercise-section {
+            max-width: 1000px;
+            margin: 0 auto 3rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .exercise-section h2 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .exercise-section > p {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+        .demo-area {
+            border: 2px dashed #ddd;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        /* ========================================
+           Exercise 1: Responsive Grid with Media Queries
+           1 column on mobile, 2 at 768px+, 3 at 1024px+
+           ======================================== */
+        .ex1-grid {
+            display: grid;
+            gap: 1rem;
+            /* Mobile: 1 column (default) */
+            grid-template-columns: 1fr;
+        }
+
+        @media (min-width: 768px) {
+            .ex1-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .ex1-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .ex1-card {
+            background: #ecf0f1;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .ex1-card h3 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .ex1-card p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Alternative approach using auto-fit */
+        .ex1-grid-auto {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        /* ========================================
+           Exercise 2: Fluid Typography with clamp()
+           Font size smoothly changes 16px to 24px
+           ======================================== */
+        .ex2-demo {
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        .ex2-demo h3 {
+            /* Smoothly scale between 1.5rem (24px) and 2.5rem (40px) */
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            margin-bottom: 1rem;
+        }
+        .ex2-demo p {
+            /* Smoothly scale between 1rem (16px) and 1.5rem (24px) */
+            font-size: clamp(1rem, 2vw, 1.5rem);
+            line-height: 1.6;
+            max-width: 65ch;
+        }
+        .ex2-demo .small-text {
+            /* Smoothly scale between 0.875rem (14px) and 1.125rem (18px) */
+            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            margin-top: 1rem;
+            opacity: 0.8;
+        }
+
+        /* Show current breakpoint indicator (development tool) */
+        .breakpoint-indicator {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            z-index: 9999;
+        }
+        .breakpoint-indicator::after {
+            content: "Mobile (<768px)";
+            background: #e74c3c;
+            padding: 5px 12px;
+            border-radius: 4px;
+        }
+        @media (min-width: 768px) {
+            .breakpoint-indicator::after {
+                content: "Tablet (768-1023px)";
+                background: #f39c12;
+            }
+        }
+        @media (min-width: 1024px) {
+            .breakpoint-indicator::after {
+                content: "Desktop (1024px+)";
+                background: #2ecc71;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-title">
+        <h1>Exercises for Lesson 05: CSS Responsive Design</h1>
+        <p>Resize the browser window to see responsive behavior in action.</p>
+    </div>
+
+    <!-- ===== Exercise 1: Responsive Grid with Media Queries ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 1: Responsive Grid with Media Queries</h2>
+        <p><strong>Problem:</strong> Create a grid with 1 column on mobile,
+        2 columns at 768px+, and 3 columns at 1024px+.</p>
+
+        <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: #666;">Method 1: Explicit media queries</h3>
+        <div class="demo-area">
+            <div class="ex1-grid">
+                <div class="ex1-card">
+                    <h3>Card 1</h3>
+                    <p>This grid uses explicit @media queries to switch between 1, 2, and 3 columns.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Card 2</h3>
+                    <p>At mobile widths, all cards stack in a single column for easy reading.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Card 3</h3>
+                    <p>At tablet widths (768px+), the grid shows 2 columns side by side.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Card 4</h3>
+                    <p>At desktop widths (1024px+), the grid expands to 3 columns.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Card 5</h3>
+                    <p>Each card adapts fluidly to the available space.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Card 6</h3>
+                    <p>Resize the browser window to observe the layout changes.</p>
+                </div>
+            </div>
+        </div>
+
+        <h3 style="margin: 1.5rem 0 0.5rem; font-size: 1rem; color: #666;">Method 2: auto-fit + minmax (no media queries)</h3>
+        <div class="demo-area">
+            <div class="ex1-grid-auto">
+                <div class="ex1-card">
+                    <h3>Auto Card 1</h3>
+                    <p>This approach uses <code>repeat(auto-fit, minmax(280px, 1fr))</code> for automatic responsive columns.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Auto Card 2</h3>
+                    <p>No media queries needed &mdash; CSS Grid handles the responsive behavior automatically.</p>
+                </div>
+                <div class="ex1-card">
+                    <h3>Auto Card 3</h3>
+                    <p>Columns wrap when the container is too narrow for the 280px minimum.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Exercise 2: Fluid Typography with clamp() ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 2: Fluid Typography with clamp()</h2>
+        <p><strong>Problem:</strong> Set body font size that smoothly changes between 16px and 24px.</p>
+
+        <div class="demo-area">
+            <div class="ex2-demo">
+                <h3>Fluid Typography Demo</h3>
+                <p>This text scales smoothly between 16px and 24px using
+                <code>clamp(1rem, 2vw, 1.5rem)</code>. No media queries are needed &mdash;
+                the font size adjusts continuously as the viewport width changes.
+                The clamp() function takes three arguments: a minimum value, a preferred
+                value (usually viewport-relative), and a maximum value.</p>
+                <p class="small-text">This smaller text uses
+                <code>clamp(0.875rem, 1.5vw, 1.125rem)</code> for proportional scaling.</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+            <h4 style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">CSS Used:</h4>
+            <pre style="background: #2c3e50; color: #ecf0f1; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem;">body {
+    /* Smoothly scales between 16px and 24px */
+    font-size: clamp(1rem, 2vw, 1.5rem);
+
+    /* Alternative with calc for finer control: */
+    /* font-size: clamp(16px, 1.5vw + 12px, 24px); */
+}</pre>
+        </div>
+    </section>
+
+    <!-- Breakpoint indicator for debugging -->
+    <div class="breakpoint-indicator"></div>
+
+</body>
+</html>

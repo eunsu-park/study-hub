@@ -1,0 +1,205 @@
+# =============================================================================
+# 07_github_actions_ci.yml — Complete CI Pipeline for Python Projects
+# =============================================================================
+# Demonstrates: test matrix, linting, type checking, coverage, caching,
+#               artifact upload, and conditional job execution.
+#
+# This workflow runs on every push and pull request to main. It uses a matrix
+# strategy to test across Python 3.10, 3.11, and 3.12 simultaneously.
+#
+# Architecture:
+#   lint (fast) ──┐
+#   typecheck ────┤──→ test (matrix: 3 Python versions) ──→ coverage report
+#                 │
+# Why this order: Lint and typecheck are fast (seconds). Tests are slow
+# (minutes). Running cheap checks first gives faster feedback on obvious
+# errors. The test job only runs if lint/typecheck pass (needs: directive).
+# =============================================================================
+
+name: CI Pipeline
+
+# ---------------------------------------------------------------------------
+# Trigger configuration
+# ---------------------------------------------------------------------------
+# Why both push and pull_request: Push triggers catch direct commits to main.
+# Pull_request triggers catch feature branch changes before merging.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'           # Skip CI for documentation-only changes
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+
+# ---------------------------------------------------------------------------
+# Concurrency control
+# ---------------------------------------------------------------------------
+# Why: Prevents multiple CI runs for the same PR. If you push again while
+# CI is running, the old run is cancelled. Saves CI minutes and avoids
+# confusing results from outdated commits.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# Permissions (principle of least privilege)
+# ---------------------------------------------------------------------------
+# Why explicit permissions: Default GITHUB_TOKEN has broad access. Restricting
+# to only what's needed reduces the blast radius if the workflow is compromised.
+permissions:
+  contents: read
+
+# ===========================================================================
+# Job 1: Lint — Code style and quality checks
+# ===========================================================================
+jobs:
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5    # Lint should never take long
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          # Why cache pip: Avoids re-downloading packages on every run.
+          # Speeds up CI by 10-30 seconds.
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      # Why ruff: 10-100x faster than flake8 + isort + pyupgrade combined.
+      # Single tool for linting and formatting checks.
+      - name: Run ruff linter
+        run: ruff check . --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format --check .
+
+  # ===========================================================================
+  # Job 2: Type Check — Static type analysis
+  # ===========================================================================
+  typecheck:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy
+          # Install project dependencies for type stubs
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # Why --ignore-missing-imports: Prevents failures from untyped third-party
+      # libraries. Strict mode can be enabled once all stubs are available.
+      - name: Run mypy
+        run: mypy src/ --ignore-missing-imports --show-error-codes
+
+  # ===========================================================================
+  # Job 3: Test — Run test suite across Python versions
+  # ===========================================================================
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Why needs: Only run tests if lint and typecheck pass. This saves CI
+    # minutes and prevents noisy test failures caused by syntax errors.
+    needs: [lint, typecheck]
+
+    strategy:
+      # Why matrix: Tests run in parallel across all Python versions.
+      # If one version fails, others continue (fail-fast: false).
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # Why --cov with xml: Generates machine-readable coverage data for
+      # the coverage job. --tb=short keeps test output readable.
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --tb=short \
+            -v
+
+      # Why upload artifact: Coverage XML is consumed by the coverage job.
+      # Only upload from one Python version to avoid duplicate reports.
+      - name: Upload coverage data
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  # ===========================================================================
+  # Job 4: Coverage Report — Post results to PR
+  # ===========================================================================
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    # Why if: Only run on PRs — coverage comments don't make sense on pushes.
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: write    # Needed to post PR comments
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Post coverage comment
+        uses: orgoro/coverage@v3.2
+        with:
+          coverageFile: coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          thresholdAll: 80       # Fail if overall coverage drops below 80%
+          thresholdNew: 90       # New code must have 90%+ coverage
+          thresholdModified: 85  # Modified code must maintain 85%+ coverage

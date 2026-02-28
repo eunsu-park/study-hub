@@ -116,9 +116,10 @@ pip install numpy scipy matplotlib sympy
 - **College physics**: Mechanics, electromagnetism fundamentals (helpful for understanding application examples)
 
 ### Related Courses
+- [Calculus_and_Differential_Equations](../Calculus_and_Differential_Equations/00_Overview.md): Prerequisite — foundational calculus, ODE/PDE basics
 - [Math_for_AI](../Math_for_AI/00_Overview.md): ML/DL perspective mathematics (complementary)
 - [Numerical_Simulation](../Numerical_Simulation/00_Overview.md): Numerical methods (complement to analytical methods)
-- [Statistics](../Statistics/00_Overview.md): Probability and statistics
+- [Data_Science](../Data_Science/00_Overview.md): Probability and statistics
 
 ## Learning Objectives
 

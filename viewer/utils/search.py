@@ -115,6 +115,47 @@ def build_example_index(examples_dir: Path, db_path: Path):
     print(f"Example index built: {count} files.")
 
 
+def build_exercise_index(exercises_dir: Path, db_path: Path):
+    """Build or rebuild the search index for exercise files."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM search_fts WHERE content_type = 'exercise'")
+
+    count = 0
+    for topic_dir in exercises_dir.iterdir():
+        if not topic_dir.is_dir() or topic_dir.name.startswith("."):
+            continue
+
+        topic = topic_dir.name
+        for filepath in topic_dir.rglob("*"):
+            if not filepath.is_file():
+                continue
+            if filepath.suffix in SKIP_EXTENSIONS:
+                continue
+            if "__pycache__" in str(filepath) or ".DS_Store" in filepath.name:
+                continue
+
+            try:
+                content = filepath.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, PermissionError):
+                continue
+
+            rel_path = filepath.relative_to(topic_dir)
+            try:
+                cursor.execute(
+                    "INSERT INTO search_fts (language, content_type, topic, filename, title, content) VALUES (?, ?, ?, ?, ?, ?)",
+                    ("exercise", "exercise", topic, str(rel_path), filepath.name, content),
+                )
+                count += 1
+            except Exception as e:
+                print(f"Error indexing {filepath}: {e}")
+
+    conn.commit()
+    conn.close()
+    print(f"Exercise index built: {count} files.")
+
+
 def search(db_path: Path, query: str, lang: str = "ko", topic: str = "",
            content_type: str = "", limit: int = 50) -> list[dict]:
     """
@@ -155,14 +196,16 @@ def search(db_path: Path, query: str, lang: str = "ko", topic: str = "",
     conditions = ["search_fts MATCH ?"]
     params = [fts_query]
 
-    # Language filter: for lessons use lang; for examples use 'example'; for all, OR both
+    # Language filter: for lessons use lang; for examples/exercises use content_type; for all, OR all
     if content_type == "lesson":
         conditions.append("language = ?")
         params.append(lang)
     elif content_type == "example":
         conditions.append("content_type = 'example'")
+    elif content_type == "exercise":
+        conditions.append("content_type = 'exercise'")
     else:
-        conditions.append("(language = ? OR content_type = 'example')")
+        conditions.append("(language = ? OR content_type IN ('example', 'exercise'))")
         params.append(lang)
 
     if topic:

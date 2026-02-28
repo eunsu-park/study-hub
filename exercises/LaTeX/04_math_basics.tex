@@ -1,0 +1,272 @@
+% Exercises for Lesson 04: Mathematical Typesetting Basics
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/04_math_basics.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{array}
+
+\title{Exercises for Lesson 04: Mathematical Typesetting Basics}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Basic Symbols ===
+% Problem: Write alpha^2 + beta^2 = gamma^2, x in R and y in C,
+% A subset B implies A union B = B.
+
+\section*{Exercise 1: Basic Symbols}
+
+\[
+\alpha^2 + \beta^2 = \gamma^2
+\]
+
+\[
+x \in \mathbb{R}, \quad y \in \mathbb{C}
+\]
+
+\[
+A \subseteq B \implies A \cup B = B
+\]
+
+% === Exercise 2: Fractions and Roots ===
+% Problem: (x+1)/(x-1), sqrt(a^2+b^2), cube root of 27, nested fraction.
+
+\section*{Exercise 2: Fractions and Roots}
+
+The fraction $\dfrac{x+1}{x-1}$.
+
+\[
+\frac{x+1}{x-1}
+\]
+
+The square root of $(a^2 + b^2)$:
+\[
+\sqrt{a^2 + b^2}
+\]
+
+The cube root of 27:
+\[
+\sqrt[3]{27} = 3
+\]
+
+A nested fraction:
+\[
+\frac{1}{1 + \dfrac{1}{1 + \dfrac{1}{2}}}
+= \frac{1}{1 + \dfrac{1}{\dfrac{3}{2}}}
+= \frac{1}{1 + \dfrac{2}{3}}
+= \frac{1}{\dfrac{5}{3}}
+= \frac{3}{5}
+\]
+
+% === Exercise 3: Summations and Products ===
+% Problem: sum i^2, product (1+1/k), double sum a_{ij}.
+
+\section*{Exercise 3: Summations and Products}
+
+The sum from $i=1$ to $n$ of $i^2$:
+\[
+\sum_{i=1}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}
+\]
+
+The product from $k=1$ to $n$ of $(1 + 1/k)$:
+\[
+\prod_{k=1}^{n} \left(1 + \frac{1}{k}\right) = n + 1
+\]
+
+The double sum:
+\[
+\sum_{i=1}^{m} \sum_{j=1}^{n} a_{ij}
+\]
+
+% === Exercise 4: Integrals ===
+% Problem: integral 0 to infinity of e^{-x} dx, double integral, contour integral.
+
+\section*{Exercise 4: Integrals}
+
+\[
+\int_{0}^{\infty} e^{-x} \, dx = 1
+\]
+
+\[
+\iint_{D} f(x,y) \, dA
+\]
+
+\[
+\oint_{C} z \, dz
+\]
+
+% === Exercise 5: Delimiters ===
+% Problem: |x|, set {x in R : x^2 < 4}, large fraction in parens,
+% evaluated derivative.
+
+\section*{Exercise 5: Delimiters}
+
+Absolute value:
+\[
+\left| x \right|
+\]
+
+Set notation:
+\[
+\left\{ x \in \mathbb{R} : x^2 < 4 \right\}
+\]
+
+Large fraction in parentheses:
+\[
+\left( \frac{a+b}{c+d} \right)
+\]
+
+Evaluated derivative:
+\[
+\left. \frac{dy}{dx} \right|_{x=0}
+\]
+
+% === Exercise 6: Greek Letters ===
+% Problem: Table of all lowercase and uppercase Greek letters with commands.
+
+\section*{Exercise 6: Greek Letters}
+
+\begin{center}
+\begin{tabular}{lll|lll}
+\hline
+\textbf{Command} & \textbf{Symbol} & \textbf{Name} &
+\textbf{Command} & \textbf{Symbol} & \textbf{Name} \\
+\hline
+\verb|\alpha|    & $\alpha$    & alpha    & \verb|\nu|       & $\nu$       & nu \\
+\verb|\beta|     & $\beta$     & beta     & \verb|\xi|       & $\xi$       & xi \\
+\verb|\gamma|    & $\gamma$    & gamma    & \verb|\pi|       & $\pi$       & pi \\
+\verb|\delta|    & $\delta$    & delta    & \verb|\rho|      & $\rho$      & rho \\
+\verb|\epsilon|  & $\epsilon$  & epsilon  & \verb|\sigma|    & $\sigma$    & sigma \\
+\verb|\zeta|     & $\zeta$     & zeta     & \verb|\tau|      & $\tau$      & tau \\
+\verb|\eta|      & $\eta$      & eta      & \verb|\upsilon|  & $\upsilon$  & upsilon \\
+\verb|\theta|    & $\theta$    & theta    & \verb|\phi|      & $\phi$      & phi \\
+\verb|\iota|     & $\iota$     & iota     & \verb|\chi|      & $\chi$      & chi \\
+\verb|\kappa|    & $\kappa$    & kappa    & \verb|\psi|      & $\psi$      & psi \\
+\verb|\lambda|   & $\lambda$   & lambda   & \verb|\omega|    & $\omega$    & omega \\
+\verb|\mu|       & $\mu$       & mu       & & & \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{lll}
+\hline
+\textbf{Command} & \textbf{Symbol} & \textbf{Name} \\
+\hline
+\verb|\Gamma|    & $\Gamma$    & Gamma \\
+\verb|\Delta|    & $\Delta$    & Delta \\
+\verb|\Theta|    & $\Theta$    & Theta \\
+\verb|\Lambda|   & $\Lambda$   & Lambda \\
+\verb|\Xi|       & $\Xi$       & Xi \\
+\verb|\Pi|       & $\Pi$       & Pi \\
+\verb|\Sigma|    & $\Sigma$    & Sigma \\
+\verb|\Upsilon|  & $\Upsilon$  & Upsilon \\
+\verb|\Phi|      & $\Phi$      & Phi \\
+\verb|\Psi|      & $\Psi$      & Psi \\
+\verb|\Omega|    & $\Omega$    & Omega \\
+\hline
+\end{tabular}
+\end{center}
+
+% === Exercise 7: Arrows and Relations ===
+% Problem: f: A -> B, monotonicity, iff, limit.
+
+\section*{Exercise 7: Arrows and Relations}
+
+Function mapping:
+\[
+f : A \to B
+\]
+
+Monotonicity:
+\[
+x \leq y \implies f(x) \leq f(y)
+\]
+
+Logical equivalence:
+\[
+A \iff B
+\]
+
+Limit:
+\[
+\lim_{x \to \infty} f(x) = L
+\]
+
+% === Exercise 8: Complex Expression ===
+% Problem: Cauchy-Schwarz inequality.
+
+\section*{Exercise 8: Cauchy--Schwarz Inequality}
+
+\[
+\left| \sum_{i=1}^{n} x_i y_i \right|
+\leq
+\sqrt{\sum_{i=1}^{n} x_i^2} \; \sqrt{\sum_{i=1}^{n} y_i^2}
+\]
+
+% === Exercise 9: Piecewise Function ===
+% Problem: Piecewise function using cases.
+
+\section*{Exercise 9: Piecewise Function}
+
+The sign function:
+\[
+\operatorname{sgn}(x) = \begin{cases}
+  +1 & \text{if } x > 0 \\
+   0 & \text{if } x = 0 \\
+  -1 & \text{if } x < 0
+\end{cases}
+\]
+
+The ReLU activation function:
+\[
+\operatorname{ReLU}(x) = \begin{cases}
+  x & \text{if } x \geq 0 \\
+  0 & \text{if } x < 0
+\end{cases}
+= \max(0, x)
+\]
+
+% === Exercise 10: Real Document ===
+% Problem: Short document with 3+ display equations, 5+ inline, Greek,
+% fractions, roots, summation/integral, text in math.
+
+\section*{Exercise 10: The Normal Distribution}
+
+The normal (Gaussian) distribution is one of the most important probability
+distributions in statistics and machine learning.
+
+A random variable $X$ follows a normal distribution with mean $\mu$ and
+standard deviation $\sigma$ if its probability density function is:
+\begin{equation}
+f(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\!\left( -\frac{(x - \mu)^2}{2\sigma^2} \right)
+\end{equation}
+
+The standard normal distribution has $\mu = 0$ and $\sigma = 1$, giving:
+\begin{equation}
+\varphi(z) = \frac{1}{\sqrt{2\pi}} \, e^{-z^2/2}
+\end{equation}
+
+The cumulative distribution function $\Phi(z)$ is defined as:
+\begin{equation}
+\Phi(z) = \int_{-\infty}^{z} \varphi(t) \, dt
+  = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{z} e^{-t^2/2} \, dt
+\end{equation}
+
+The expected value $E[X] = \mu$ and the variance $\text{Var}(X) = \sigma^2$.
+For a sample of $n$ observations, the sample mean $\bar{x}$ converges to
+$\mu$ as $n \to \infty$ by the law of large numbers.
+
+A key result is the Gaussian integral:
+\begin{equation}
+\int_{-\infty}^{\infty} e^{-\alpha x^2} \, dx = \sqrt{\frac{\pi}{\alpha}}
+\quad \text{for } \alpha > 0
+\end{equation}
+
+\end{document}

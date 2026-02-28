@@ -1,0 +1,361 @@
+% Exercises for Lesson 15: Automation and Build
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/15_automation_and_build.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{green!50!black},
+  stringstyle=\color{red},
+  frame=single,
+  breaklines=true,
+  showstringspaces=false
+}
+
+\title{Exercises for Lesson 15: Automation \& Build}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Compare Engines ===
+% Problem: Compile with pdflatex, xelatex, lualatex.
+
+\section*{Exercise 1: Compare Engines}
+
+Create a test document (\texttt{engine\_test.tex}):
+
+\begin{lstlisting}[language=TeX]
+\documentclass{article}
+\usepackage{fontspec}  % requires xelatex or lualatex
+\setmainfont{Times New Roman}  % system font
+
+\begin{document}
+\section{Unicode Test}
+Greek: Alpha Beta Gamma Delta
+
+Chinese: Test text here
+
+Emoji: (note: emoji require special font setup)
+
+\section{Math}
+\[ E = mc^2 \]
+\end{document}
+\end{lstlisting}
+
+\textbf{Compilation commands:}
+\begin{lstlisting}[language=bash]
+# pdflatex -- FAILS on fontspec
+pdflatex engine_test.tex
+
+# xelatex -- works with fontspec + system fonts
+xelatex engine_test.tex
+
+# lualatex -- works with fontspec + system fonts
+lualatex engine_test.tex
+\end{lstlisting}
+
+\textbf{Results:}
+\begin{itemize}
+  \item \texttt{pdflatex}: Cannot use \texttt{fontspec}; remove it or use
+    \texttt{mathptmx} instead for Times-like font
+  \item \texttt{xelatex}: Works.  Typically faster than lualatex
+  \item \texttt{lualatex}: Works.  Slightly slower but supports Lua scripting
+\end{itemize}
+
+% === Exercise 2: Set Up latexmk ===
+% Problem: .latexmkrc with pdflatex, output dir, PDF viewer.
+
+\section*{Exercise 2: latexmk Configuration}
+
+Create \texttt{\textasciitilde/.latexmkrc}:
+
+\begin{lstlisting}[language=Perl]
+# Default to pdflatex
+$pdf_mode = 1;
+$pdflatex = 'pdflatex -interaction=nonstopmode -synctex=1 %O %S';
+
+# Output directory
+$out_dir = 'build';
+$aux_dir = 'build';
+
+# PDF viewer (macOS)
+$pdf_previewer = 'open -a Preview %S';
+
+# For Linux:
+# $pdf_previewer = 'evince %S';
+
+# For Windows:
+# $pdf_previewer = 'start %S';
+
+# Clean extensions
+@generated_exts = qw(aux log toc lof lot out bbl blg synctex.gz fdb_latexmk fls);
+\end{lstlisting}
+
+\textbf{Usage:}
+\begin{lstlisting}[language=bash]
+# Build
+latexmk -pdf document.tex
+
+# Watch for changes (auto-rebuild)
+latexmk -pdf -pvc document.tex
+
+# Clean auxiliary files
+latexmk -c
+
+# Clean everything including PDF
+latexmk -C
+\end{lstlisting}
+
+% === Exercise 3: Create Makefile ===
+% Problem: Makefile for report.tex with chapters and bibliography.
+
+\section*{Exercise 3: Makefile}
+
+\begin{lstlisting}[language=make]
+# Makefile for LaTeX project
+MAIN    = report
+LATEXMK = latexmk
+FLAGS   = -pdf -interaction=nonstopmode
+
+# Source files
+SOURCES = $(MAIN).tex chapters/ch1.tex chapters/ch2.tex \
+          chapters/ch3.tex references.bib
+
+.PHONY: all clean watch view
+
+all: $(MAIN).pdf
+
+$(MAIN).pdf: $(SOURCES)
+	$(LATEXMK) $(FLAGS) $(MAIN).tex
+
+clean:
+	$(LATEXMK) -c $(MAIN).tex
+	rm -f $(MAIN).bbl $(MAIN).run.xml
+
+watch:
+	$(LATEXMK) $(FLAGS) -pvc $(MAIN).tex
+
+view: $(MAIN).pdf
+	open $(MAIN).pdf  # macOS; use xdg-open on Linux
+\end{lstlisting}
+
+% === Exercise 4: Git Workflow ===
+% Problem: Git init, .gitignore, 3 commits, latexdiff.
+
+\section*{Exercise 4: Git Workflow}
+
+\textbf{Step 1: Initialize and create .gitignore:}
+
+\begin{lstlisting}[language=bash]
+mkdir latex-project && cd latex-project
+git init
+
+cat > .gitignore << 'EOF'
+# LaTeX auxiliary files
+*.aux
+*.log
+*.toc
+*.lof
+*.lot
+*.out
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# Output
+*.pdf
+
+# Build directory
+build/
+
+# Editor files
+*.swp
+*~
+.vscode/
+EOF
+
+git add .gitignore
+git commit -m "Initial commit with .gitignore"
+\end{lstlisting}
+
+\textbf{Step 2: Three commits:}
+
+\begin{lstlisting}[language=bash]
+# Create initial document
+cat > paper.tex << 'EOF'
+\documentclass{article}
+\title{My Paper}
+\author{Author}
+\begin{document}
+\maketitle
+\section{Introduction}
+This is the first version.
+\end{document}
+EOF
+git add paper.tex
+git commit -m "Add initial paper with introduction"
+
+# Add methods section
+# (edit paper.tex to add \section{Methods} ...)
+git add paper.tex
+git commit -m "Add methods section"
+
+# Add results section
+# (edit paper.tex to add \section{Results} ...)
+git add paper.tex
+git commit -m "Add results section"
+\end{lstlisting}
+
+\textbf{Step 3: Use latexdiff:}
+
+\begin{lstlisting}[language=bash]
+# Compare first and last commits
+git show HEAD~2:paper.tex > old.tex
+git show HEAD:paper.tex > new.tex
+
+latexdiff old.tex new.tex > diff.tex
+pdflatex diff.tex
+
+# Cleanup
+rm old.tex new.tex
+\end{lstlisting}
+
+% === Exercise 5: GitHub Actions ===
+% Problem: CI to build and upload PDF.
+
+\section*{Exercise 5: GitHub Actions}
+
+Create \texttt{.github/workflows/build.yml}:
+
+\begin{lstlisting}[language=yaml]
+name: Build LaTeX
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: paper.tex
+          latexmk_use_xelatex: false
+
+      - name: Upload PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-pdf
+          path: paper.pdf
+\end{lstlisting}
+
+% === Exercise 6: Docker Build ===
+% Problem: Dockerfile with TeX Live, compare output.
+
+\section*{Exercise 6: Docker Build}
+
+\begin{lstlisting}[language=docker]
+FROM texlive/texlive:latest
+
+WORKDIR /doc
+COPY . .
+
+CMD ["latexmk", "-pdf", "paper.tex"]
+\end{lstlisting}
+
+\textbf{Build and run:}
+\begin{lstlisting}[language=bash]
+# Build image
+docker build -t latex-builder .
+
+# Run container and copy PDF out
+docker run --rm -v $(pwd)/output:/output latex-builder \
+  sh -c "latexmk -pdf paper.tex && cp paper.pdf /output/"
+
+# Compare with local build
+diff <(md5sum paper.pdf) <(md5sum output/paper.pdf)
+# Note: PDFs may differ due to timestamps in metadata
+\end{lstlisting}
+
+% === Exercise 7: Full Workflow ===
+% Problem: Complete project with latexmk + Makefile + Git + CI + spell check.
+
+\section*{Exercise 7: Full Workflow}
+
+\textbf{Project structure:}
+\begin{lstlisting}
+project/
+  paper.tex
+  chapters/
+    ch1.tex
+    ch2.tex
+  references.bib
+  .latexmkrc
+  Makefile
+  .gitignore
+  .github/
+    workflows/
+      build.yml
+  .vscode/
+    settings.json
+\end{lstlisting}
+
+\textbf{VS Code spell checking (\texttt{.vscode/settings.json}):}
+\begin{lstlisting}[language=json]
+{
+  "cSpell.language": "en",
+  "cSpell.enabledLanguageIds": ["latex"],
+  "cSpell.words": [
+    "amsmath", "amssymb", "booktabs",
+    "hyperref", "cleveref", "biblatex"
+  ],
+  "latex-workshop.latex.recipe.default": "latexmk (pdf)"
+}
+\end{lstlisting}
+
+\textbf{End-to-end test:}
+\begin{lstlisting}[language=bash]
+# 1. Clone and setup
+git clone <repo-url> && cd project
+
+# 2. Local build
+make all          # builds paper.pdf
+
+# 3. Watch mode (live rebuild)
+make watch        # rebuilds on file save
+
+# 4. Spell check
+aspell -t -c paper.tex
+
+# 5. Lint
+chktex paper.tex
+
+# 6. Push to trigger CI
+git push origin main
+
+# 7. Verify CI pass on GitHub
+gh run list --limit 1
+\end{lstlisting}
+
+\end{document}

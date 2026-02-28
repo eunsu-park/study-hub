@@ -1,0 +1,276 @@
+% Exercises for Lesson 02: Document Structure
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/02_document_structure.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+
+\title{Exercises for Lesson 02: Document Structure}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% === Exercise 1: Document Classes ===
+% Problem: Create three documents -- article, report, book.
+
+\section*{Exercise 1: Document Classes}
+
+\subsection*{1a. Article}
+
+\begin{verbatim}
+\documentclass{article}
+\title{Article Example}
+\author{Author}
+\date{\today}
+\begin{document}
+\maketitle
+\section{Introduction}
+Some text.
+\subsection{Background}
+Background information.
+\section{Results}
+Results here.
+\end{document}
+\end{verbatim}
+
+\subsection*{1b. Report}
+
+\begin{verbatim}
+\documentclass{report}
+\title{Report Example}
+\author{Author}
+\date{2024}
+\begin{document}
+\maketitle
+\tableofcontents
+\chapter{Introduction}
+\section{Background}
+Text.
+\chapter{Methods}
+\section{Approach}
+Text.
+\end{document}
+\end{verbatim}
+
+\subsection*{1c. Book}
+
+\begin{verbatim}
+\documentclass{book}
+\title{Book Example}
+\author{Author}
+\date{2024}
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+\mainmatter
+\chapter{Foundations}
+\section{Basics}
+Text.
+\chapter{Advanced Topics}
+\section{Deep Dive}
+Text.
+\backmatter
+\chapter{Appendix}
+Supplementary material.
+\end{document}
+\end{verbatim}
+
+% === Exercise 2: Table of Contents ===
+% Problem: Article with 3+ sections, 2+ subsections each, and a TOC.
+
+\section{Exercise 2: Table of Contents}
+
+This document itself demonstrates the solution.  Below is a minimal
+standalone version:
+
+\subsection{Quantum Mechanics}
+\subsubsection{Wave-Particle Duality}
+Light behaves as both a wave and a particle.
+
+\subsection{Statistical Mechanics}
+\subsubsection{Boltzmann Distribution}
+The probability of a state is proportional to $e^{-E/kT}$.
+
+\section{Mathematics}
+
+\subsection{Algebra}
+\subsubsection{Group Theory}
+A group is a set with a binary operation satisfying closure, associativity,
+identity, and invertibility.
+
+\subsection{Analysis}
+\subsubsection{Limits}
+The limit of $f(x)$ as $x \to a$ is $L$ if for every $\epsilon > 0$ there
+exists $\delta > 0$ such that $|f(x) - L| < \epsilon$ whenever
+$0 < |x - a| < \delta$.
+
+\section{Computer Science}
+
+\subsection{Algorithms}
+\subsubsection{Sorting}
+Comparison-based sorting has a lower bound of $\Omega(n \log n)$.
+
+\subsection{Data Structures}
+\subsubsection{Trees}
+Binary search trees allow $O(\log n)$ search on average.
+
+% === Exercise 3: Options Exploration ===
+% Problem: Same document with different option combinations.
+
+\section*{Exercise 3: Options Exploration}
+
+\begin{verbatim}
+% Variant A
+\documentclass[10pt, letterpaper, oneside]{article}
+\begin{document}
+\section{Test Section}
+Sample text.
+\end{document}
+
+% Variant B
+\documentclass[12pt, a4paper, twoside]{article}
+\begin{document}
+\section{Test Section}
+Sample text.
+\end{document}
+
+% Variant C
+\documentclass[11pt, a4paper, twocolumn]{article}
+\begin{document}
+\section{Test Section}
+Sample text.
+\end{document}
+\end{verbatim}
+
+% === Exercise 4: Unnumbered Sections ===
+% Problem: Numbered + unnumbered sections, unnumbered in TOC.
+
+\section*{Exercise 4: Unnumbered Sections}
+
+\begin{verbatim}
+\documentclass{article}
+\begin{document}
+\tableofcontents
+\section{Introduction}
+Content.
+\section{Results}
+Content.
+\section*{Acknowledgments}
+\addcontentsline{toc}{section}{Acknowledgments}
+We thank the reviewers.
+\section*{References}
+\addcontentsline{toc}{section}{References}
+[1] Knuth, D. The TeXbook, 1984.
+\end{document}
+\end{verbatim}
+
+% === Exercise 5: Multi-File Document ===
+% Problem: main.tex + intro.tex + methods.tex + conclusion.tex
+
+\section*{Exercise 5: Multi-File Document}
+
+\begin{verbatim}
+% --- main.tex ---
+\documentclass{article}
+\title{Multi-File Example}
+\author{Author}
+\date{\today}
+\begin{document}
+\maketitle
+\input{intro}
+\input{methods}
+\input{conclusion}
+\end{document}
+
+% --- intro.tex ---
+\section{Introduction}
+This document demonstrates multi-file organization.
+
+% --- methods.tex ---
+\section{Methods}
+We use \LaTeX{} to typeset documents.
+
+% --- conclusion.tex ---
+\section{Conclusion}
+Multi-file projects scale well for large documents.
+\end{verbatim}
+
+% === Exercise 6: Custom Commands ===
+% Problem: Define \R, \dd, \vect commands.
+
+\section*{Exercise 6: Custom Commands}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+Below we demonstrate the custom commands:
+
+The set of real numbers is $\R$.
+The integral $\int f(x)\,\dd x$ uses an upright differential.
+The vector $\vect{v} = (v_1, v_2, v_3) \in \R^3$ is bold.
+
+\begin{verbatim}
+% Preamble definitions:
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+% Usage:
+$\R$, $\int f(x)\,\dd x$, $\vect{v}$
+\end{verbatim}
+
+% === Exercise 7: Complete Report ===
+% Problem: Title page, abstract, TOC, 3 chapters, appendix, bibliography.
+
+\section*{Exercise 7: Complete Report}
+
+\begin{verbatim}
+\documentclass[12pt, a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\title{A Technical Report on LaTeX}
+\author{Jane Smith}
+\date{2024}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This report demonstrates the structure of a complete LaTeX
+report document with chapters, appendices, and a bibliography.
+\end{abstract}
+\tableofcontents
+
+\chapter{Introduction}
+LaTeX is a powerful typesetting system.
+
+\chapter{Methodology}
+We use the report class with 12pt font.
+
+\chapter{Results}
+The output is a well-structured PDF.
+
+\appendix
+\chapter{Supplementary Material}
+Additional tables and derivations.
+
+\begin{thebibliography}{9}
+\bibitem{knuth} D. Knuth. \textit{The TeXbook}, 1984.
+\bibitem{lamport} L. Lamport. \textit{LaTeX: A Document
+  Preparation System}, 1994.
+\end{thebibliography}
+\end{document}
+\end{verbatim}
+
+\end{document}

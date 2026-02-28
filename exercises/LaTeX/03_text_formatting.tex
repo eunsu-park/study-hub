@@ -1,0 +1,369 @@
+% Exercises for Lesson 03: Text Formatting
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/03_text_formatting.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\title{Exercises for Lesson 03: Text Formatting}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Font Styles ===
+% Problem: Demonstrate bold, italic, monospace, combinations, small caps,
+% and at least 5 font sizes.
+
+\section*{Exercise 1: Font Styles}
+
+\textbf{Bold text} demonstrates emphasis for important terms.
+
+\textit{Italic text} is used for titles and foreign words.
+
+\texttt{Monospace text} is used for code and filenames.
+
+\textbf{\textit{Bold italic}} combines two styles.
+
+\texttt{\textbf{Bold monospace}} is useful for code emphasis.
+
+\underline{\textbf{Bold underlined}} draws strong attention.
+
+\textsc{Small Capitals} are often used for acronyms like \textsc{nasa}.
+
+\medskip
+
+Five different font sizes:
+
+{\tiny This is tiny text.}
+
+{\footnotesize This is footnote-size text.}
+
+{\normalsize This is normal-size text.}
+
+{\Large This is Large text.}
+
+{\Huge This is Huge text.}
+
+% === Exercise 2: Colors ===
+% Problem: 3 predefined colors, 3 custom RGB, colored background,
+% colored heading.
+
+\section*{Exercise 2: Colors}
+
+\definecolor{steelblue}{RGB}{70, 130, 180}
+\definecolor{coral}{RGB}{255, 127, 80}
+\definecolor{forestgreen}{RGB}{34, 139, 34}
+
+Predefined colors: \textcolor{red}{Red text}, \textcolor{blue}{Blue text},
+\textcolor{magenta}{Magenta text}.
+
+Custom colors: \textcolor{steelblue}{Steel Blue text},
+\textcolor{coral}{Coral text}, \textcolor{forestgreen}{Forest Green text}.
+
+Text with \colorbox{yellow}{yellow background}.
+
+\textcolor{steelblue}{\Large\bfseries A Colored Section Heading}
+
+This paragraph follows the colored heading.
+
+% === Exercise 3: Lists ===
+% Problem: Bulleted, numbered, description, nested (3 levels), custom labels.
+
+\section*{Exercise 3: Lists}
+
+\textbf{Bulleted list:}
+\begin{itemize}
+    \item First item
+    \item Second item
+    \item Third item
+\end{itemize}
+
+\textbf{Numbered list:}
+\begin{enumerate}
+    \item First step
+    \item Second step
+    \item Third step
+\end{enumerate}
+
+\textbf{Description list:}
+\begin{description}
+    \item[LaTeX] A document preparation system
+    \item[TeX] The underlying typesetting engine
+    \item[PDF] Portable Document Format
+\end{description}
+
+\textbf{Nested list (3 levels):}
+\begin{enumerate}
+    \item First level
+    \begin{itemize}
+        \item Second level -- bullet A
+        \item Second level -- bullet B
+        \begin{enumerate}
+            \item Third level -- numbered
+            \item Third level -- numbered
+        \end{enumerate}
+    \end{itemize}
+    \item First level again
+\end{enumerate}
+
+\textbf{Custom labels:}
+\begin{itemize}[label=$\star$]
+    \item Star bullet
+    \item Another star bullet
+\end{itemize}
+
+\begin{enumerate}[label=\Roman*.]
+    \item Roman numeral I
+    \item Roman numeral II
+    \item Roman numeral III
+\end{enumerate}
+
+% === Exercise 4: Quotations ===
+% Problem: quote, quotation, verse, nested inline quotes.
+
+\section*{Exercise 4: Quotations}
+
+\textbf{Short quote:}
+\begin{quote}
+The only way to do great work is to love what you do.
+\end{quote}
+
+\textbf{Long quotation:}
+\begin{quotation}
+This is the first paragraph of a longer quotation.  It demonstrates that
+the quotation environment indents the first line of each paragraph.
+
+This is the second paragraph.  Notice the indentation at the beginning of
+this paragraph, which distinguishes it from the \texttt{quote} environment.
+\end{quotation}
+
+\textbf{Verse:}
+\begin{verse}
+Roses are red, \\
+Violets are blue, \\
+\LaTeX{} is great, \\
+And so are you.
+\end{verse}
+
+\textbf{Nested inline quotes:}
+``She said, `Hello!' to me.''
+
+% === Exercise 5: Verbatim and Code ===
+% Problem: inline verbatim, multi-line verbatim, listings for Python,
+% special characters verbatim.
+
+\section*{Exercise 5: Verbatim and Code}
+
+\textbf{Inline verbatim:} The command \verb|\LaTeX| produces the \LaTeX{} logo.
+
+\textbf{Multi-line verbatim:}
+\begin{verbatim}
+def hello(name):
+    print(f"Hello, {name}!")
+
+hello("World")
+\end{verbatim}
+
+\textbf{Code listing (Python):}
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true
+}
+
+\begin{lstlisting}
+def fibonacci(n):
+    """Return the nth Fibonacci number."""
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+for i in range(10):
+    print(fibonacci(i))
+\end{lstlisting}
+
+\textbf{Special characters in verbatim:}
+\begin{verbatim}
+Reserved characters: # $ % & _ { } \ ^ ~
+\end{verbatim}
+
+% === Exercise 6: Special Characters ===
+% Problem: All reserved characters, three dash types, accents, symbols.
+
+\section*{Exercise 6: Special Characters}
+
+\textbf{Reserved characters:}
+\textbackslash{} \{ \} \$ \& \% \# \_ \^{} \~{}
+
+\textbf{Dash types:}
+\begin{description}
+    \item[Hyphen (-)] daughter-in-law
+    \item[En-dash (--)] pages 10--20
+    \item[Em-dash (---)] An interruption---like this---in a sentence
+\end{description}
+
+\textbf{Accented characters:}
+Caf\'{e}, na\"{\i}ve, Z\"{u}rich, S\~{a}o Paulo
+
+\textbf{Symbols:}
+\copyright{} 2024, \textregistered{}, \texttrademark{}, \S, \P, \dag, \ddag, \pounds
+
+% === Exercise 7: Spacing and Alignment ===
+% Problem: Custom horizontal/vertical spacing, centered, left-aligned,
+% right-aligned, \hfill title page.
+
+\section*{Exercise 7: Spacing and Alignment}
+
+\textbf{Custom horizontal spacing:}
+Word1\hspace{2cm}Word2\hspace{1cm}Word3
+
+\textbf{Custom vertical spacing:}
+
+Text before vertical skip.
+
+\vspace{1.5cm}
+
+Text after 1.5cm vertical skip.
+
+\textbf{Centered paragraph:}
+\begin{center}
+This paragraph is centered.  Every line is centered regardless of length.
+\end{center}
+
+\textbf{Left-aligned (no justification):}
+\begin{flushleft}
+This paragraph is left-aligned without right justification.
+The right margin is ragged.
+\end{flushleft}
+
+\textbf{Right-aligned:}
+\begin{flushright}
+This paragraph is right-aligned.
+The left margin is ragged.
+\end{flushright}
+
+\textbf{Title page with \texttt{\textbackslash hfill}:}
+
+\begin{center}
+{\LARGE\bfseries My Document Title}
+\end{center}
+\hfill {\itshape Jane Doe}
+
+\hfill \today
+
+% === Exercise 8: Footnotes ===
+% Problem: 3 auto-numbered footnotes, custom number, footnotemark/text.
+
+\section*{Exercise 8: Footnotes}
+
+This sentence has a footnote.\footnote{This is the first footnote.}
+Here is another.\footnote{Second footnote with automatic numbering.}
+And a third.\footnote{Third footnote -- still automatic.}
+
+This footnote has a custom number.\footnote[42]{This is footnote number 42.}
+
+Here is a footnote mark using the two-step approach.\footnotemark
+
+\footnotetext{This footnote text is placed separately using
+\texttt{\textbackslash footnotetext}.}
+
+% === Exercise 9: Complete Styled Document ===
+% Problem: Combine title, sections, lists, colors, code, footnotes, quotation.
+
+\section*{Exercise 9: Complete Styled Document}
+
+{\Large\textcolor{steelblue}{\bfseries A Mini Styled Document}}
+
+\medskip
+
+\textsf{This section uses the sans-serif font family.}
+
+\begin{itemize}
+    \item Bullet point one
+    \item Bullet point two
+\end{itemize}
+
+\begin{enumerate}
+    \item Numbered item one
+    \item Numbered item two
+\end{enumerate}
+
+\begin{description}
+    \item[Term] Definition of the term
+\end{description}
+
+Here is some \textcolor{coral}{coral-colored text} and a
+\colorbox{yellow!30}{lightly highlighted phrase}.
+
+\begin{verbatim}
+print("Hello from verbatim!")
+\end{verbatim}
+
+\begin{quote}
+The best way to predict the future is to create it.\footnote{Attributed to
+Peter Drucker.}
+\end{quote}
+
+And a second footnote for good measure.\footnote{This wraps up the exercise.}
+
+% === Exercise 10: Real-World Application (Resume) ===
+% Problem: Resume using bold headings, italic dates, bullet lists,
+% custom spacing, footnote for contact info.
+
+\section*{Exercise 10: Resume}
+
+\begin{center}
+{\LARGE\bfseries Jane Doe}\footnote{Email: jane.doe@example.com,
+Phone: +1-555-0123}
+\end{center}
+
+\vspace{0.3cm}
+
+{\large\bfseries Education}
+\vspace{0.1cm}
+\hrule
+\vspace{0.3cm}
+\textbf{M.Sc. Computer Science} \hfill \textit{2022--2024} \\
+University of Technology
+
+\textbf{B.Sc. Mathematics} \hfill \textit{2018--2022} \\
+State University
+
+\vspace{0.4cm}
+
+{\large\bfseries Work Experience}
+\vspace{0.1cm}
+\hrule
+\vspace{0.3cm}
+\textbf{Software Engineer} \hfill \textit{Jun 2024 -- Present} \\
+Tech Company, Inc.
+\begin{itemize}[noitemsep]
+    \item Developed backend services using Python and PostgreSQL
+    \item Improved API response times by 40\%
+    \item Led migration to containerized deployments
+\end{itemize}
+
+\textbf{Research Assistant} \hfill \textit{Sep 2022 -- May 2024} \\
+University of Technology
+\begin{itemize}[noitemsep]
+    \item Published two papers on machine learning optimization
+    \item Maintained the lab's GPU cluster infrastructure
+\end{itemize}
+
+\end{document}
