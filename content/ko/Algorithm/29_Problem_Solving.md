@@ -905,3 +905,7 @@ def solve_n_queens(n):
 ## 이전 단계
 
 - [10_Heaps_and_Priority_Queues.md](./10_Heaps_and_Priority_Queues.md) - 힙과 우선순위 큐
+
+## 다음 단계
+
+- [Heavy-Light Decomposition](./30_Heavy_Light_Decomposition.md) - 트리 경로 쿼리 O(log²N)

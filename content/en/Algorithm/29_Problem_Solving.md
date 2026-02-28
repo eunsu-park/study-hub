@@ -905,3 +905,7 @@ Advanced Types (Difficult tests):
 ## Previous Step
 
 - [10_Heaps_and_Priority_Queues.md](./10_Heaps_and_Priority_Queues.md) - Heaps and priority queues
+
+## Next Step
+
+- [Heavy-Light Decomposition](./30_Heavy_Light_Decomposition.md) - Path queries on trees in O(log²N)

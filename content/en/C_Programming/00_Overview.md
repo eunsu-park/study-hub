@@ -66,6 +66,7 @@ Address Book ▶ Hash Table
 | [Network Programming in C](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP sockets, client-server, I/O multiplexing (select/poll) |
 | [Inter-Process Communication and Signals](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | Pipes, shared memory, message queues, signal handling |
 | [Testing and Profiling in C](./23_Testing_and_Profiling.md) | ⭐⭐⭐ | Unit testing (Unity, assert.h), gprof, Valgrind, optimization |
+| [Cross-Platform Development](./24_Cross_Platform_Development.md) | ⭐⭐⭐ | Portability, conditional compilation, CMake, platform abstraction |
 
 ---
 

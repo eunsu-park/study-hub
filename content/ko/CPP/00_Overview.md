@@ -59,6 +59,8 @@
 | [C++ 디자인 패턴](./18_Design_Patterns.md) | ⭐⭐⭐⭐ | Singleton, Factory, Observer, CRTP |
 | [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md) | ⭐⭐⭐ | STL, 파일 I/O, 스마트 포인터, 예외 처리 |
 | [레슨 20: CMake와 빌드 시스템(Build Systems)](./20_CMake_and_Build_Systems.md) | ⭐⭐⭐ | CMakeLists.txt, 타겟, FetchContent, CTest |
+| [C++23 기능](./21_CPP23_Features.md) | ⭐⭐⭐⭐⭐ | C++23 신규 기능 |
+| [외부 라이브러리](./22_External_Libraries.md) | ⭐⭐⭐ | 서드파티 라이브러리, 패키지 매니저 |
 
 ---
 

@@ -1,6 +1,6 @@
 # 12. Cloud IoT Integration
 
-**Previous**: [Image Analysis Project](./11_Image_Analysis_Project.md)
+**Previous**: [Image Analysis Project](./11_Image_Analysis_Project.md) | **Next**: [Zigbee and Z-Wave](./13_Zigbee_ZWave.md)
 
 ## Learning Objectives
 

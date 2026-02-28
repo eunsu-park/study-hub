@@ -1,6 +1,6 @@
 # Lesson 20: CMake and Build Systems
 
-**Previous**: [Project: Student Management System](./19_Project_Student_Management.md)
+**Previous**: [Project: Student Management System](./19_Project_Student_Management.md) | **Next**: [C++23 Features](./21_CPP23_Features.md)
 
 ---
 
@@ -432,4 +432,4 @@ Modify your CMakeLists.txt to:
 
 ## Navigation
 
-**Previous**: [Project: Student Management System](./19_Project_Student_Management.md)
+**Previous**: [Project: Student Management System](./19_Project_Student_Management.md) | **Next**: [C++23 Features](./21_CPP23_Features.md)

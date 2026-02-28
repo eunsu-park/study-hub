@@ -1,6 +1,6 @@
 # 레슨 23: C 테스팅과 프로파일링(Testing and Profiling)
 
-**이전**: [프로세스 간 통신과 시그널](./22_IPC_and_Signals.md)
+**이전**: [프로세스 간 통신과 시그널](./22_IPC_and_Signals.md) | **다음**: [크로스 플랫폼 개발](./24_Cross_Platform_Development.md)
 
 ## 학습 목표(Learning Objectives)
 

@@ -100,6 +100,8 @@ C_Programming은 마이크로컨트롤러의 저수준 하드웨어 제어를 �
 | [홈 자동화 프로젝트](10_Home_Automation_Project.md) | ⭐⭐⭐ | 홈 자동화 | 스마트홈, MQTT 제어 |
 | [영상 분석 프로젝트](11_Image_Analysis_Project.md) | ⭐⭐⭐ | 영상 분석 | Pi Camera, 객체 검출 |
 | [클라우드 IoT 통합](12_Cloud_IoT_Integration.md) | ⭐⭐⭐ | 클라우드 IoT | AWS IoT, GCP Pub/Sub |
+| [Zigbee와 Z-Wave](13_Zigbee_ZWave.md) | ⭐⭐⭐ | Zigbee와 Z-Wave | 메시 네트워킹, 기기 페어링, 스마트홈 프로토콜 |
+| [멀티센서 퓨전(Multi-Sensor Fusion)](14_Multi_Sensor_Fusion.md) | ⭐⭐⭐ | 멀티센서 퓨전 | 칼만 필터(Kalman Filter), 센서 보정, 데이터 융합 알고리즘 |
 
 **난이도 범례**: ⭐ 입문 | ⭐⭐ 초급 | ⭐⭐⭐ 중급
 

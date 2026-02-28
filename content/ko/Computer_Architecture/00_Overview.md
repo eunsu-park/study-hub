@@ -81,6 +81,13 @@
 | [17_IO_Systems.md](./17_IO_Systems.md) | ⭐⭐⭐ | 인터럽트, DMA, 버스 |
 | [18_Parallel_Processing_Multicore.md](./18_Parallel_Processing_Multicore.md) | ⭐⭐⭐⭐ | SIMD/MIMD, 캐시 일관성, Amdahl |
 
+### 최신 주제 (19-20)
+
+| 파일명 | 난이도 | 주요 내용 |
+|--------|--------|----------|
+| [19_RISC_V_Architecture.md](./19_RISC_V_Architecture.md) | ⭐⭐⭐ | RISC-V ISA, 오픈소스 하드웨어, 확장 명령어 |
+| [20_Power_Management.md](./20_Power_Management.md) | ⭐⭐⭐ | 전력 상태, DVFS, 열 관리(Thermal Management), 에너지 효율 |
+
 ---
 
 ## 추천 학습 순서

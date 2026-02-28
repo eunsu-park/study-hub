@@ -66,6 +66,7 @@ pip install numpy scipy sympy matplotlib
 | 17 | `17_Introduction_to_PDE.md` | 편미분방정식 입문 | 분류, 열 방정식, 파동 방정식, 라플라스 방정식 |
 | 18 | `18_Fourier_Series_and_PDE.md` | 푸리에 급수와 PDE | 푸리에 계수, 스튀름-리우빌, 변수분리법 |
 | 19 | `19_Numerical_Methods_for_DE.md` | 미분방정식의 수치적 방법 | 오일러, 룽게-쿠타, 적응 단계, 강성 시스템 |
+| 20 | `20_Applications_and_Modeling.md` | 응용과 모델링 | 인구 역학, 기계 시스템, 전기 회로, 결합 모델 |
 
 ## 학습 경로
 
@@ -86,6 +87,9 @@ pip install numpy scipy sympy matplotlib
        |
 5단계: PDE와 수치적 방법 (레슨 17-19)
   편미분방정식 입문 --> 푸리에 급수 --> 수치적 방법
+       |
+6단계: 응용 (레슨 20)
+  인구 역학, 회로, 기계 시스템, 결합 모델
 ```
 
 **권장 학습 속도**: 주당 1-2개 레슨, 다음으로 넘어가기 전에 연습 문제를 완료할 것. 이후의 모든 내용이 도함수와 적분에 기반하므로 1단계를 완전히 숙달한 후에 진행해야 한다.

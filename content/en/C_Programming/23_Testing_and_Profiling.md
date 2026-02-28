@@ -1,6 +1,6 @@
 # Lesson 23: Testing and Profiling in C
 
-**Previous**: [Inter-Process Communication and Signals](./22_IPC_and_Signals.md)
+**Previous**: [Inter-Process Communication and Signals](./22_IPC_and_Signals.md) | **Next**: [Cross-Platform Development](./24_Cross_Platform_Development.md)
 
 ## Learning Objectives
 

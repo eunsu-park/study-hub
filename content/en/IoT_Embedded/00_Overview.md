@@ -100,6 +100,8 @@ C_Programming covers low-level hardware control of microcontrollers, while IoT_E
 | [10_Home_Automation_Project.md](10_Home_Automation_Project.md) | ⭐⭐⭐ | Home Automation | Smart home, MQTT control |
 | [11_Image_Analysis_Project.md](11_Image_Analysis_Project.md) | ⭐⭐⭐ | Image Analysis | Pi Camera, object detection |
 | [12_Cloud_IoT_Integration.md](12_Cloud_IoT_Integration.md) | ⭐⭐⭐ | Cloud IoT | AWS IoT, GCP Pub/Sub |
+| [13_Zigbee_ZWave.md](13_Zigbee_ZWave.md) | ⭐⭐⭐ | Zigbee and Z-Wave | Mesh networking, device pairing, smart home protocols |
+| [14_Multi_Sensor_Fusion.md](14_Multi_Sensor_Fusion.md) | ⭐⭐⭐ | Multi-Sensor Fusion | Kalman filter, sensor calibration, data fusion algorithms |
 
 **Difficulty Legend**: ⭐ Beginner | ⭐⭐ Elementary | ⭐⭐⭐ Intermediate
 

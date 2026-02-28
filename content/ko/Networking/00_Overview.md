@@ -77,12 +77,15 @@ OSI/TCP-IP ────────▶ TCP/UDP ─────────▶ �
 | [16_Security_Threats_Response.md](./16_Security_Threats_Response.md) | ⭐⭐⭐⭐ | 스니핑, 스푸핑, DDoS |
 | [17_Practical_Network_Tools.md](./17_Practical_Network_Tools.md) | ⭐⭐⭐ | ping, netstat, tcpdump, Wireshark |
 
-### 현대 네트워킹 (18-19)
+### 현대 네트워킹 (18-22)
 
 | 파일명 | 난이도 | 주요 내용 |
 |--------|--------|----------|
 | [18_IPv6.md](./18_IPv6.md) | ⭐⭐⭐ | IPv6 주소 체계, SLAAC, DHCPv6, 전환 메커니즘 |
 | [19_Container_Networking.md](./19_Container_Networking.md) | ⭐⭐⭐⭐ | Docker CNM, K8s 네트워킹, CNI 플러그인, 서비스 메시 |
+| [20_Software_Defined_Networking.md](./20_Software_Defined_Networking.md) | ⭐⭐⭐⭐ | 소프트웨어 정의 네트워킹(SDN) 아키텍처, OpenFlow, 제어/데이터 플레인 분리, 네트워크 가상화 |
+| [21_Quality_of_Service.md](./21_Quality_of_Service.md) | ⭐⭐⭐ | 서비스 품질(QoS) 메커니즘, 트래픽 셰이핑, DiffServ, DSCP, 대역폭 관리 |
+| [22_Multicast.md](./22_Multicast.md) | ⭐⭐⭐ | 멀티캐스트(Multicast) 주소 체계, IGMP, PIM, 멀티캐스트 라우팅 프로토콜 |
 
 ---
 
@@ -120,7 +123,7 @@ OSI/TCP-IP ────────▶ TCP/UDP ─────────▶ �
 
 ### 7단계: 현대 네트워킹 (1~2주)
 ```
-18_IPv6 → 19_Container_Networking
+18_IPv6 → 19_Container_Networking → 20_Software_Defined_Networking → 21_Quality_of_Service → 22_Multicast
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Parallel Processing and Multicore
 
-**Previous**: [17_IO_Systems.md](./17_IO_Systems.md)
+**Previous**: [I/O Systems](./17_IO_Systems.md) | **Next**: [RISC-V Architecture](./19_RISC_V_Architecture.md)
 
 **Difficulty**: ⭐⭐⭐⭐
 

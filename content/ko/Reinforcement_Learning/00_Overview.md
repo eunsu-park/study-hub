@@ -102,6 +102,8 @@
 | 12 | Practical_RL_Project.md | 실전 프로젝트 | ⭐⭐⭐⭐ | Gymnasium 환경, Atari 게임, 종합 프로젝트 |
 | 13 | Model_Based_RL.md | 모델 기반 RL | ⭐⭐⭐⭐ | Dyna 아키텍처, 세계 모델, MBPO, MuZero, Dreamer |
 | 14 | Soft_Actor_Critic.md | SAC | ⭐⭐⭐⭐ | 최대 엔트로피 RL, 자동 온도 조정, 연속 제어 |
+| 15 | Curriculum_Learning.md | 커리큘럼 학습 | ⭐⭐⭐⭐ | 자기 주도 학습, 태스크 순서 지정, 자동 커리큘럼 생성 |
+| 16 | Hierarchical_RL.md | 계층적 강화학습 | ⭐⭐⭐⭐ | 옵션 프레임워크, 봉건 네트워크, 목표 조건부 정책 |
 
 ---
 

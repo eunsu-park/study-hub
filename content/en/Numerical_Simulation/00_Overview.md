@@ -30,6 +30,10 @@ Monte Carlo Simulation (20)
 Spectral Methods (21)
     ↓
 Finite Element Method (22)
+    ↓
+GPU Acceleration (23)
+    ↓
+Physics-Informed Neural Networks PINN (24)
 ```
 
 ---
@@ -60,6 +64,8 @@ Finite Element Method (22)
 | [20_Monte_Carlo_Simulation.md](./20_Monte_Carlo_Simulation.md) | Monte Carlo Simulation | Random number generation, MC integration, Ising model, option pricing, variance reduction |
 | [21_Spectral_Methods.md](./21_Spectral_Methods.md) | Spectral Methods | Fourier spectral, FFT differentiation, Chebyshev collocation, dealiasing |
 | [22_Finite_Element_Method.md](./22_Finite_Element_Method.md) | Finite Element Method | Weak form, basis functions, stiffness matrix assembly, 1D/2D FEM |
+| [23_GPU_Acceleration.md](./23_GPU_Acceleration.md) | GPU Acceleration | CUDA basics, CuPy, GPU-accelerated PDE solvers, performance optimization |
+| [24_Physics_Informed_Neural_Networks.md](./24_Physics_Informed_Neural_Networks.md) | Physics-Informed Neural Networks (PINN) | Neural network solvers, loss functions from PDEs, automatic differentiation, inverse problems |
 
 ---
 
@@ -128,6 +134,10 @@ pip install mayavi
 ### Stage 9: Advanced Methods (2-3 weeks)
 - 21_Spectral_Methods.md
 - 22_Finite_Element_Method.md
+
+### Stage 10: Modern Computational Techniques (2-3 weeks)
+- 23_GPU_Acceleration.md
+- 24_Physics_Informed_Neural_Networks.md
 
 ---
 

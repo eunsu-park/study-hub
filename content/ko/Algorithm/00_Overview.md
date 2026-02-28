@@ -106,6 +106,14 @@
 | [27_Game_Theory.md](./27_Game_Theory.md) | ⭐⭐⭐ | 님 게임, 스프라그-그런디, 미니맥스 |
 | [28_Advanced_DP_Optimization.md](./28_Advanced_DP_Optimization.md) | ⭐⭐⭐⭐ | CHT, D&C 최적화, Knuth 최적화 |
 
+### 고급 자료구조 II (30-32)
+
+| 파일명 | 난이도 | 주요 내용 |
+|--------|--------|----------|
+| [Heavy-Light Decomposition](./30_Heavy_Light_Decomposition.md) | ⭐⭐⭐⭐⭐ | HLD, 트리 경로 쿼리 |
+| [링크-컷 트리](./31_Link_Cut_Tree.md) | ⭐⭐⭐⭐⭐ | 동적 트리 연결성, 접근 보조정리 |
+| [영속적 세그먼트 트리](./32_Persistent_Segment_Tree.md) | ⭐⭐⭐⭐⭐ | 영속적 자료구조, 세그먼트 트리 버전 관리 |
+
 ### 마무리
 
 | 파일명 | 난이도 | 주요 내용 |

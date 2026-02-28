@@ -96,8 +96,10 @@ This merged approach ensures you understand both the "why" and the "how" of deep
 | L40 | `40_Practical_Text_Classification.md` | ⭐⭐⭐⭐ | End-to-end NLP project: tokenization, fine-tuning, inference |
 | L41 | `41_Model_Saving_Deployment.md` | ⭐⭐⭐ | ONNX export, TorchScript, model serving (Flask, TorchServe) |
 | L42 | `42_Reinforcement_Learning_Intro.md` | ⭐⭐⭐ | DQN basics, policy gradients, bridge to RL topic |
+| L43 | `43_Few_Shot_Learning.md` | ⭐⭐⭐⭐ | Meta-learning, prototypical networks, MAML |
+| L44 | `44_Test_Time_Adaptation.md` | ⭐⭐⭐⭐ | BN adaptation, TENT, CoTTA, distribution shift |
 
-**Total: 42 lessons** (28 concept lessons + 14 implementation lessons)
+**Total: 44 lessons** (30 concept lessons + 14 implementation lessons)
 
 ## Implementation Philosophy: The 4-Level Approach
 

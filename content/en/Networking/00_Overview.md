@@ -77,12 +77,15 @@ Physical/Data Link ──▶ Application Layer ──▶ Practical Tools
 | [16_Security_Threats_Response.md](./16_Security_Threats_Response.md) | ⭐⭐⭐⭐ | Sniffing, spoofing, DDoS |
 | [17_Practical_Network_Tools.md](./17_Practical_Network_Tools.md) | ⭐⭐⭐ | ping, netstat, tcpdump, Wireshark |
 
-### Modern Networking (18-19)
+### Modern Networking (18-22)
 
 | File | Difficulty | Key Topics |
 |------|------------|------------|
 | [18_IPv6.md](./18_IPv6.md) | ⭐⭐⭐ | IPv6 addressing, SLAAC, DHCPv6, transition mechanisms |
 | [19_Container_Networking.md](./19_Container_Networking.md) | ⭐⭐⭐⭐ | Docker CNM, K8s networking, CNI plugins, service mesh |
+| [20_Software_Defined_Networking.md](./20_Software_Defined_Networking.md) | ⭐⭐⭐⭐ | SDN architecture, OpenFlow, control/data plane separation, network virtualization |
+| [21_Quality_of_Service.md](./21_Quality_of_Service.md) | ⭐⭐⭐ | QoS mechanisms, traffic shaping, DiffServ, DSCP, bandwidth management |
+| [22_Multicast.md](./22_Multicast.md) | ⭐⭐⭐ | Multicast addressing, IGMP, PIM, multicast routing protocols |
 
 ---
 
@@ -120,7 +123,7 @@ Physical/Data Link ──▶ Application Layer ──▶ Practical Tools
 
 ### Phase 7: Modern Networking (1-2 weeks)
 ```
-18_IPv6 → 19_Container_Networking
+18_IPv6 → 19_Container_Networking → 20_Software_Defined_Networking → 21_Quality_of_Service → 22_Multicast
 ```
 
 ---

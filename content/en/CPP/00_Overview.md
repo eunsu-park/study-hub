@@ -59,6 +59,8 @@ Control Flow ───▶ Pointers/Refs ───▶ Inheritance ─────
 | [18_Design_Patterns.md](./18_Design_Patterns.md) | ⭐⭐⭐⭐ | Singleton, Factory, Observer, CRTP |
 | [19_Project_Student_Management.md](./19_Project_Student_Management.md) | ⭐⭐⭐ | STL, File I/O, Smart Pointers, Exception Handling |
 | [20_CMake_and_Build_Systems.md](./20_CMake_and_Build_Systems.md) | ⭐⭐⭐ | CMakeLists.txt, targets, FetchContent, CTest |
+| [21_CPP23_Features.md](./21_CPP23_Features.md) | ⭐⭐⭐⭐⭐ | C++23 new features |
+| [22_External_Libraries.md](./22_External_Libraries.md) | ⭐⭐⭐ | Third-party libraries, package managers |
 
 ---
 

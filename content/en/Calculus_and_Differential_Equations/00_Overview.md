@@ -66,6 +66,7 @@ pip install numpy scipy sympy matplotlib
 | 17 | `17_Introduction_to_PDE.md` | Introduction to PDEs | Classification, heat equation, wave equation, Laplace equation |
 | 18 | `18_Fourier_Series_and_PDE.md` | Fourier Series and PDE | Fourier coefficients, Sturm-Liouville, separation of variables |
 | 19 | `19_Numerical_Methods_for_DE.md` | Numerical Methods for DE | Euler, Runge-Kutta, adaptive step, stiff systems |
+| 20 | `20_Applications_and_Modeling.md` | Applications and Modeling | Population dynamics, mechanical systems, electrical circuits, coupled models |
 
 ## Study Path
 
@@ -86,6 +87,9 @@ Phase 4: Ordinary Differential Equations (Lessons 12-16)
        |
 Phase 5: PDEs and Numerical Methods (Lessons 17-19)
   Introduction to PDEs --> Fourier series --> Numerical methods
+       |
+Phase 6: Applications (Lesson 20)
+  Population dynamics, circuits, mechanical systems, coupled models
 ```
 
 **Recommended pace**: 1-2 lessons per week, with practice problems completed before moving on. Phase 1 should be mastered before advancing, as all later material builds on derivatives and integrals.

@@ -1,6 +1,6 @@
 # 12. 클라우드 IoT 통합
 
-**이전**: [이미지 분석 프로젝트](./11_Image_Analysis_Project.md)
+**이전**: [이미지 분석 프로젝트](./11_Image_Analysis_Project.md) | **다음**: [Zigbee와 Z-Wave](./13_Zigbee_ZWave.md)
 
 ## 학습 목표
 

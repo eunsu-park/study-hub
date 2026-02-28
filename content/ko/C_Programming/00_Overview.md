@@ -66,6 +66,7 @@
 | [C 네트워크 프로그래밍](./21_Network_Programming.md) | ⭐⭐⭐⭐ | TCP/UDP 소켓, 클라이언트-서버, select/poll 다중화 |
 | [프로세스 간 통신(Inter-Process Communication)과 시그널(Signals)](./22_IPC_and_Signals.md) | ⭐⭐⭐⭐ | 파이프, 공유 메모리, 메시지 큐, 시그널 |
 | [레슨 23: C 테스팅과 프로파일링(Testing and Profiling)](./23_Testing_and_Profiling.md) | ⭐⭐⭐ | 단위 테스트(Unity, assert.h), gprof, Valgrind, 최적화 |
+| [크로스 플랫폼 개발(Cross-Platform Development)](./24_Cross_Platform_Development.md) | ⭐⭐⭐ | 이식성, 조건부 컴파일, CMake, 플랫폼 추상화 |
 
 ---
 

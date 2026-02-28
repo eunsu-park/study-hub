@@ -96,8 +96,10 @@
 | L40 | `40_Practical_Text_Classification.md` | ⭐⭐⭐⭐ | 엔드투엔드 NLP 프로젝트: 토큰화, 파인튜닝, 추론 |
 | L41 | `41_Model_Saving_Deployment.md` | ⭐⭐⭐ | ONNX 내보내기, TorchScript, 모델 서빙(Flask, TorchServe) |
 | L42 | `42_Reinforcement_Learning_Intro.md` | ⭐⭐⭐ | DQN 기초, 정책 그래디언트, RL 주제로의 연결 |
+| L43 | `43_Few_Shot_Learning.md` | ⭐⭐⭐⭐ | 메타 학습, 프로토타입 네트워크, MAML |
+| L44 | `44_Test_Time_Adaptation.md` | ⭐⭐⭐⭐ | 배치 정규화 적응, TENT, CoTTA, 분포 변화 |
 
-**총 42개 레슨** (개념 레슨 28개 + 구현 레슨 14개)
+**총 44개 레슨** (개념 레슨 30개 + 구현 레슨 14개)
 
 ## 구현 철학: 4단계 접근법
 

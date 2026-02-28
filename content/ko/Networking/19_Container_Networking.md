@@ -1,6 +1,6 @@
 # 컨테이너 네트워킹
 
-**이전**: [IPv6](./18_IPv6.md)
+**이전**: [IPv6](./18_IPv6.md) | **다음**: [소프트웨어 정의 네트워킹](./20_Software_Defined_Networking.md)
 
 ## 학습 목표(Learning Objectives)
 
@@ -1701,4 +1701,4 @@ done | sort | uniq -c
 
 ---
 
-**이전**: [IPv6](./18_IPv6.md)
+**이전**: [IPv6](./18_IPv6.md) | **다음**: [소프트웨어 정의 네트워킹](./20_Software_Defined_Networking.md)

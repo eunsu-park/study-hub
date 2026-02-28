@@ -21,7 +21,7 @@ exercises/
 ├── VIM/                  # Vim script/text
 ├── C_Programming/        # C
 ├── CPP/                  # C++
-├── Calculus_and_DE/      # Python
+├── Calculus_and_Differential_Equations/  # Python
 ├── Data_Science/         # Python
 ├── Machine_Learning/     # Python
 ├── PostgreSQL/           # SQL

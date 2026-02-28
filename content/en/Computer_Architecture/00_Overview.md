@@ -81,6 +81,13 @@ Sequential Logic ─────────────────────
 | [17_IO_Systems.md](./17_IO_Systems.md) | ⭐⭐⭐ | Interrupts, DMA, buses |
 | [18_Parallel_Processing_Multicore.md](./18_Parallel_Processing_Multicore.md) | ⭐⭐⭐⭐ | SIMD/MIMD, cache coherence, Amdahl's Law |
 
+### Modern Topics (19-20)
+
+| File | Difficulty | Key Topics |
+|------|-----------|-----------|
+| [19_RISC_V_Architecture.md](./19_RISC_V_Architecture.md) | ⭐⭐⭐ | RISC-V ISA, open-source hardware, extensions |
+| [20_Power_Management.md](./20_Power_Management.md) | ⭐⭐⭐ | Power states, DVFS, thermal management, energy efficiency |
+
 ---
 
 ## Recommended Study Order

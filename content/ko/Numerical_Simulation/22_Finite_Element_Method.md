@@ -1046,5 +1046,5 @@ manufactured_solution_test()
 
 ## 이동
 - 이전: [21. 스펙트럼 방법](21_Spectral_Methods.md)
-- 다음: [개요](00_Overview.md)
+- 다음: [23. GPU 가속](23_GPU_Acceleration.md)
 - [개요로 돌아가기](00_Overview.md)

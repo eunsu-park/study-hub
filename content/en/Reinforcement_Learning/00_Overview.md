@@ -102,6 +102,8 @@ This folder contains materials for systematically learning **Reinforcement Learn
 | 12 | Practical_RL_Project.md | Practical Projects | ⭐⭐⭐⭐ | Gymnasium environments, Atari games, comprehensive projects |
 | 13 | Model_Based_RL.md | Model-Based RL | ⭐⭐⭐⭐ | Dyna architecture, world models, MBPO, MuZero, Dreamer |
 | 14 | Soft_Actor_Critic.md | SAC | ⭐⭐⭐⭐ | Maximum entropy RL, auto temperature, continuous control |
+| 15 | Curriculum_Learning.md | Curriculum Learning for RL | ⭐⭐⭐⭐ | Self-paced learning, task ordering, automatic curriculum generation |
+| 16 | Hierarchical_RL.md | Hierarchical Reinforcement Learning | ⭐⭐⭐⭐ | Options framework, feudal networks, goal-conditioned policies |
 
 ---
 

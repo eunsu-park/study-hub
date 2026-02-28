@@ -1046,5 +1046,5 @@ The method of manufactured solutions is a systematic way to verify a FEM impleme
 
 ## Navigation
 - Previous: [21. Spectral Methods](21_Spectral_Methods.md)
-- Next: [Overview](00_Overview.md)
+- Next: [23. GPU Acceleration](23_GPU_Acceleration.md)
 - [Back to Overview](00_Overview.md)

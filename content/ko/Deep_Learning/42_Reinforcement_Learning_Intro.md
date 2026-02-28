@@ -1,4 +1,4 @@
-[이전: 모델 저장 및 배포](./41_Model_Saving_Deployment.md)
+[이전: 모델 저장 및 배포](./41_Model_Saving_Deployment.md) | [다음: 퓨샷 학습](./43_Few_Shot_Learning.md)
 
 ---
 

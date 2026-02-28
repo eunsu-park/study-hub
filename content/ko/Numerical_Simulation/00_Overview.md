@@ -30,6 +30,10 @@
 스펙트럼 방법 (21)
     ↓
 유한 요소 방법 (22)
+    ↓
+GPU 가속 (23)
+    ↓
+물리 정보 신경망 PINN (24)
 ```
 
 ---
@@ -60,6 +64,8 @@
 | [20_Monte_Carlo_Simulation.md](./20_Monte_Carlo_Simulation.md) | 몬테카를로 시뮬레이션 | 난수 생성, MC 적분, Ising 모델, 옵션 가격, 분산 감소 |
 | [21_Spectral_Methods.md](./21_Spectral_Methods.md) | 스펙트럼 방법 | 푸리에 스펙트럼, FFT 미분, 체비셰프 콜로케이션, 디에일리어싱 |
 | [22_Finite_Element_Method.md](./22_Finite_Element_Method.md) | 유한 요소 방법 | 약형식, 기저 함수, 강성 행렬 조립, 1D/2D FEM |
+| [23_GPU_Acceleration.md](./23_GPU_Acceleration.md) | GPU 가속(GPU Acceleration) | CUDA 기초, CuPy, GPU 가속 PDE 솔버, 성능 최적화 |
+| [24_Physics_Informed_Neural_Networks.md](./24_Physics_Informed_Neural_Networks.md) | 물리 정보 신경망(PINN) | 신경망 솔버, PDE 기반 손실 함수, 자동 미분, 역문제 |
 
 ---
 
@@ -128,6 +134,10 @@ pip install mayavi
 ### 9단계: 고급 방법 (2-3주)
 - 21_Spectral_Methods.md
 - 22_Finite_Element_Method.md
+
+### 10단계: 현대 계산 기법 (2-3주)
+- 23_GPU_Acceleration.md
+- 24_Physics_Informed_Neural_Networks.md
 
 ---
 

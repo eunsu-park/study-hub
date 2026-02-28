@@ -1,6 +1,6 @@
 # 레슨 20: CMake와 빌드 시스템(Build Systems)
 
-**이전**: [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md)
+**이전**: [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md) | **다음**: [C++23 기능](./21_CPP23_Features.md)
 
 ---
 
@@ -432,4 +432,4 @@ CMakeLists.txt를 다음과 같이 수정하세요:
 
 ## 탐색
 
-**이전**: [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md)
+**이전**: [프로젝트: 학생 관리 시스템](./19_Project_Student_Management.md) | **다음**: [C++23 기능](./21_CPP23_Features.md)

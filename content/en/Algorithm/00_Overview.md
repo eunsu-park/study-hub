@@ -106,6 +106,14 @@ Hash Tables ────────▶ Shortest Path/MST ──▶ Advanced DP 
 | [27_Game_Theory.md](./27_Game_Theory.md) | ⭐⭐⭐ | Nim game, Sprague-Grundy, minimax |
 | [28_Advanced_DP_Optimization.md](./28_Advanced_DP_Optimization.md) | ⭐⭐⭐⭐ | CHT, D&C optimization, Knuth optimization |
 
+### Advanced Data Structures II (30-32)
+
+| Filename | Difficulty | Key Topics |
+|----------|-----------|-----------|
+| [30_Heavy_Light_Decomposition.md](./30_Heavy_Light_Decomposition.md) | ⭐⭐⭐⭐⭐ | HLD, path queries on trees |
+| [31_Link_Cut_Tree.md](./31_Link_Cut_Tree.md) | ⭐⭐⭐⭐⭐ | Dynamic tree connectivity, access lemma |
+| [32_Persistent_Segment_Tree.md](./32_Persistent_Segment_Tree.md) | ⭐⭐⭐⭐⭐ | Persistent data structures, version control on segment trees |
+
 ### Wrap-up
 
 | Filename | Difficulty | Key Topics |
