@@ -277,7 +277,7 @@ The Instruction Set Architecture is the most important interface in computing --
 │    ┌─────────────────────────────────────────────────────────────────┐ │
 │    │    - Maintains basic RISC design                                │ │
 │    │    - Added some complex instructions (SIMD, encryption, etc.)   │ │
-│    │    - Entering desktop/server market (Apple M1, AWS Graviton)    │ │
+│    │    - Entering desktop/server market (Apple M4, AWS Graviton4)    │ │
 │    └─────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -796,8 +796,8 @@ The Instruction Set Architecture is the most important interface in computing --
 │    ┌─────────────────────────────────────────────────────────────────┐ │
 │    │  1985: ARM1 (32-bit RISC)                                       │ │
 │    │  2011: ARMv8 (64-bit, AArch64)                                  │ │
-│    │  Today: Smartphones, tablets, IoT, servers (Apple M1/M2,        │ │
-│    │         AWS Graviton)                                           │ │
+│    │  Today: Smartphones, tablets, IoT, servers (Apple M1→M4,        │ │
+│    │         AWS Graviton4)                                          │ │
 │    │  Characteristic: Low power, license-based business              │ │
 │    └─────────────────────────────────────────────────────────────────┘ │
 │                                                                         │

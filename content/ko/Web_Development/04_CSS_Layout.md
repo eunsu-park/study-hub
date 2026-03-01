@@ -11,9 +11,10 @@
 3. Flexbox의 축 모델(주 축(main axis) vs. 교차 축(cross axis))을 설명하고, 방향·줄바꿈·정렬을 설정할 수 있다
 4. CSS Grid를 적용하여 명시적 행과 열로 2차원 레이아웃을 구성할 수 있다
 5. `grid-template-areas`로 명명된 그리드 영역을 구현하여 가독성 높은 페이지 레이아웃을 만들 수 있다
-6. Flexbox와 Grid를 비교하고, 주어진 레이아웃 요구사항에 적합한 시스템을 선택할 수 있다
-7. static, relative, absolute, fixed, sticky 위치 지정 방식을 구별할 수 있다
-8. 고정 푸터(sticky footer), 모달(modal), 사이드바+콘텐츠 레이아웃 등 실전 패턴을 구현할 수 있다
+6. CSS Subgrid를 사용하여 중첩된 그리드가 부모 트랙에 정렬되도록 할 수 있다
+7. Flexbox와 Grid를 비교하고, 주어진 레이아웃 요구사항에 적합한 시스템을 선택할 수 있다
+8. static, relative, absolute, fixed, sticky 위치 지정 방식을 구별할 수 있다
+9. 고정 푸터(sticky footer), 모달(modal), 사이드바+콘텐츠 레이아웃 등 실전 패턴을 구현할 수 있다
 
 ---
 
@@ -24,9 +25,10 @@ CSS 속성을 아는 것은 절반에 불과합니다. 나머지 절반은 요�
 1. [전통적 레이아웃](#전통적-레이아웃)
 2. [Flexbox](#flexbox)
 3. [CSS Grid](#css-grid)
-4. [Flexbox vs Grid](#flexbox-vs-grid)
-5. [Position](#position)
-6. [실전 레이아웃 예제](#실전-레이아웃-예제)
+4. [CSS Subgrid](#css-subgrid)
+5. [Flexbox vs Grid](#flexbox-vs-grid)
+6. [Position](#position)
+7. [실전 레이아웃 예제](#실전-레이아웃-예제)
 
 ---
 
@@ -644,6 +646,128 @@ grid-template-areas:
 ```
 
 ---
+
+## CSS Subgrid
+
+CSS Subgrid(Grid Level 2, 2023년부터 Baseline Widely Available)는 오래된 문제를 해결합니다: 중첩된 그리드는 부모의 트랙 정의에 정렬할 수 없었습니다. 중첩된 각 `display: grid`는 독립적인 좌표 시스템을 생성합니다. Subgrid를 사용하면 자식 그리드가 부모의 열 또는 행 트랙을 상속받아 중첩된 아이템이 완벽하게 정렬됩니다.
+
+### Subgrid 없이 발생하는 문제
+
+```
+부모 그리드 (3열):
+┌──────────┬──────────┬──────────┐
+│  Card 1  │  Card 2  │  Card 3  │
+│  ┌─────┐ │  ┌─────┐ │  ┌─────┐ │
+│  │Title│ │  │Title│ │  │Long │ │  ← 각 카드가 독립적인 그리드를
+│  ├─────┤ │  ├─────┤ │  │Title│ │    가지므로 제목이 카드 간에
+│  │Body │ │  │Long │ │  ├─────┤ │    정렬되지 않음
+│  │     │ │  │Body │ │  │Body │ │
+│  ├─────┤ │  │     │ │  ├─────┤ │
+│  │Btn  │ │  ├─────┤ │  │ Btn  │ │
+│  └─────┘ │  │ Btn  │ │  └─────┘ │
+└──────────┴──┴─────┴─┴──────────┘
+```
+
+### Subgrid 문법
+
+```css
+.parent {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto 1fr auto;  /* title, body, button rows */
+    gap: 1rem;
+}
+
+.card {
+    display: grid;
+    /* Inherit parent's ROW tracks — card internals align across siblings */
+    grid-row: span 3;              /* Card spans 3 parent rows */
+    grid-template-rows: subgrid;   /* Use parent's row definitions instead of its own */
+    gap: 0.5rem;
+}
+```
+
+```
+Subgrid 적용 후:
+┌──────────┬──────────┬──────────┐
+│  Title   │  Title   │  Long    │  ← 행 1: 모든 제목이 정렬됨
+│          │          │  Title   │
+├──────────┼──────────┼──────────┤
+│  Body    │  Long    │  Body    │  ← 행 2: 모든 본문이 정렬됨
+│          │  Body    │          │
+├──────────┼──────────┼──────────┤
+│  Button  │  Button  │  Button  │  ← 행 3: 모든 버튼이 정렬됨
+└──────────┴──────────┴──────────┘
+```
+
+### 실전 예제: 폼 레이아웃
+
+폼에서 레이블과 입력 필드가 하나의 열은 레이블, 다른 열은 입력 필드로 모든 행에 걸쳐 정렬되어야 하는 경우가 많습니다:
+
+```css
+.form {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.75rem 1rem;
+}
+
+.form-group {
+    display: grid;
+    grid-column: 1 / -1;          /* Span full width of parent */
+    grid-template-columns: subgrid; /* Inherit parent's 2-column layout */
+}
+
+.form-group label {
+    /* Automatically in column 1 (max-content width) */
+}
+
+.form-group input {
+    /* Automatically in column 2 (1fr) */
+}
+```
+
+```html
+<form class="form">
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name">
+    </div>
+    <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email">
+    </div>
+    <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone">
+    </div>
+</form>
+```
+
+Subgrid가 없으면 각 `.form-group`이 자체 열 정의를 가져야 하며, 행 간에 레이블 너비가 일관되지 않습니다.
+
+### 열 Subgrid(Column Subgrid)
+
+자식이 여러 부모 열에 걸쳐 있을 때 열에 대해서도 subgrid를 사용할 수 있습니다:
+
+```css
+.parent {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1rem;
+}
+
+.wide-child {
+    grid-column: 1 / -1;             /* Span all 4 columns */
+    display: grid;
+    grid-template-columns: subgrid;   /* Inherit parent's 4-column tracks */
+}
+```
+
+> **핵심 포인트**: `subgrid`는 트랙 목록을 대체하는 것이지, `display` 값을 대체하는 것이 아닙니다. 해당 요소는 여전히 `display: grid`이며 — 자체적으로 트랙 크기를 정의하는 대신 부모의 트랙 크기를 빌려오는 것입니다.
+
+---
+
+> **비유:** Flexbox는 1차원 자(ruler)입니다 — 아이템을 하나의 행이나 열을 따라 배열합니다. Grid는 2차원 체스판입니다 — 행과 열을 동시에 제어합니다. 아이템을 한 줄로 배열할 때는 Flexbox를, 전체 페이지 레이아웃이 필요할 때는 Grid를 사용하세요.
 
 ## Flexbox vs Grid
 

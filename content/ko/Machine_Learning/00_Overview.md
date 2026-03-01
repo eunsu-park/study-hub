@@ -15,7 +15,9 @@ ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차�
                         ↓                                                      ↑
                 특성 공학 → 설명 가능성 → 불균형 데이터             결정트리 → 앙상블(배깅)
                         ↓                                            → 앙상블(부스팅) → SVM ──┘
-                시계열 ML → AutoML → 이상 탐지
+                시계열 ML → AutoML → 이상 탐지 → 고급 앙상블
+                        ↓
+                프로덕션 ML 서빙 → ML을 위한 A/B 테스트
 ```
 
 ---
@@ -45,6 +47,8 @@ ML 개요 → 선형회귀 → 로지스틱 회귀 → 모델 평가 → 교차�
 | [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML과 하이퍼파라미터 최적화 | Optuna, Auto-sklearn, FLAML, H2O AutoML |
 | [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | 이상 탐지 | Isolation Forest, LOF, One-Class SVM, PyOD |
 | [21_Advanced_Ensemble.md](./21_Advanced_Ensemble.md) | 고급 앙상블 | 스태킹, 블렌딩, 메타 학습기, 다양한 기저 학습기, 대회 전략 |
+| [22_Production_ML_Serving.md](./22_Production_ML_Serving.md) | 프로덕션 ML 서빙 | 모델 최적화, 서빙 패턴, 학습-서빙 스큐, 드리프트 감지 |
+| [23_AB_Testing_for_ML.md](./23_AB_Testing_for_ML.md) | ML을 위한 A/B 테스트 | 검정력 분석, 가설 검정, 순차적 검정, 멀티암드 밴딧, 인터리빙 |
 
 ---
 
@@ -111,10 +115,15 @@ print(f"LightGBM: {lightgbm.__version__}")
 - 파이프라인 구축
 - 실전 문제 해결
 
-### 7단계: 심화 주제 (15-20)
+### 7단계: 심화 주제 (15-21)
 - 특성 공학과 모델 설명 가능성
 - 불균형 데이터 처리와 시계열
 - AutoML, 하이퍼파라미터 최적화, 이상 탐지
+- 고급 앙상블 기법 (스태킹, 블렌딩)
+
+### 8단계: 프로덕션 (22-23)
+- 모델 최적화와 서빙 패턴
+- A/B 테스트와 온라인 실험
 
 ---
 

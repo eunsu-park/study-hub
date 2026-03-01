@@ -1,6 +1,6 @@
 # Advanced Ensemble Methods — Stacking and Blending
 
-[← Previous: 20. Anomaly Detection](20_Anomaly_Detection.md) | [Next: Overview →](00_Overview.md)
+[← Previous: 20. Anomaly Detection](20_Anomaly_Detection.md) | [Next: 22. Production ML Serving →](22_Production_ML_Serving.md)
 
 ---
 

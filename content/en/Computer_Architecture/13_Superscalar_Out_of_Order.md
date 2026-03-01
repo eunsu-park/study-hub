@@ -815,59 +815,67 @@ Recovery mechanisms:
 
 ## 7. Modern Processor Implementations
 
-### 7.1 Intel Core Architecture (Skylake)
+### 7.1 Intel Core Architecture (Arrow Lake — Lion Cove P-core)
+
+Arrow Lake (2024) introduces Intel's tile-based architecture, separating P-cores and E-cores into distinct compute tiles. The Lion Cove P-core is the first Intel core to reach 8-wide decode, closing the gap with Apple's wide-issue designs.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                Intel Skylake Microarchitecture                   │
+│          Intel Arrow Lake — Lion Cove P-core (2024)              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Front-end (In-Order)                                           │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  - Branch prediction: 32KB direction predictor, ~4K BTB    │ │
-│  │  - L1 I-Cache: 32KB, 8-way                                 │ │
-│  │  - Decode: 4-wide (complex instr → micro-ops)              │ │
-│  │  - Micro-op Cache: ~1.5K micro-ops                         │ │
-│  │  - Allocation: 4 micro-ops/cycle                           │ │
+│  │  - Branch prediction: improved TAGE-like, ~12K BTB         │ │
+│  │  - L1 I-Cache: 64KB, 8-way                                 │ │
+│  │  - Decode: 8-wide (up from 6-wide in Raptor Cove)          │ │
+│  │  - Micro-op Cache: ~4K micro-ops                           │ │
+│  │  - Allocation: 8 micro-ops/cycle                           │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  Out-of-Order Engine                                            │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  - ROB: 224 entries                                        │ │
-│  │  - Scheduler: 97 entries                                   │ │
-│  │  - Physical Registers: 180 integer + 168 vector            │ │
-│  │  - Load Buffer: 72 entries                                 │ │
-│  │  - Store Buffer: 56 entries                                │ │
+│  │  - ROB: 576 entries (up from 512 in Raptor Cove)           │ │
+│  │  - Scheduler: 192 entries (doubled from Raptor Cove)       │ │
+│  │  - Physical Registers: 280 integer + 332 vector            │ │
+│  │  - Load Buffer: 192 entries                                │ │
+│  │  - Store Buffer: 128 entries                               │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
-│  Execution Units (8 Ports)                                      │
+│  Execution Units (12 Ports)                                     │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  Port 0: ALU, FMA, FP Div/Sqrt, Branch                     │ │
+│  │  Port 0: ALU, FMA, FP Div                                  │ │
 │  │  Port 1: ALU, FMA, AES                                     │ │
-│  │  Port 2: Load AGU                                          │ │
-│  │  Port 3: Load AGU                                          │ │
-│  │  Port 4: Store Data                                        │ │
-│  │  Port 5: ALU, Shuffle, Branch                              │ │
-│  │  Port 6: ALU, Branch                                       │ │
+│  │  Port 2: ALU, Branch                                       │ │
+│  │  Port 3: ALU, Branch                                       │ │
+│  │  Port 4: Load AGU                                          │ │
+│  │  Port 5: Load AGU                                          │ │
+│  │  Port 6: Store AGU                                         │ │
 │  │  Port 7: Store AGU                                         │ │
+│  │  Port 8: Store Data                                        │ │
+│  │  Port 9: Store Data                                        │ │
+│  │  Port 10: ALU                                              │ │
+│  │  Port 11: ALU                                              │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  Memory Subsystem                                               │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  - L1 D-Cache: 32KB, 8-way, 4 cycles                       │ │
-│  │  - L2 Cache: 256KB, 4-way, 12 cycles                       │ │
-│  │  - L3 Cache: 2MB/core, 16-way, ~40 cycles                  │ │
+│  │  - L1 D-Cache: 48KB, 12-way, 5 cycles                      │ │
+│  │  - L2 Cache: 3MB/core, 12-way, ~17 cycles                  │ │
+│  │  - L3 Cache: up to 36MB shared, ~45 cycles                  │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  Performance Metrics                                            │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  - Theoretical max: 6 micro-ops execution/cycle            │ │
-│  │  - Actual IPC: 2-4 depending on workload                   │ │
-│  │  - Pipeline depth: 14-19 stages                            │ │
+│  │  - Theoretical max: 8 micro-ops execution/cycle            │ │
+│  │  - Actual IPC: ~3-5 depending on workload                  │ │
+│  │  - Pipeline depth: ~20 stages                              │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **Note**: Skylake (2015) was the seminal microarchitecture that established the 4-wide decode, 224-entry ROB baseline that Intel iterated upon for nearly a decade. Arrow Lake represents a major architectural leap with tile-based disaggregation and significantly widened front-end/back-end structures.
 
 ### 7.2 ARM Cortex-A77 Architecture
 
@@ -906,26 +914,29 @@ Recovery mechanisms:
 ### 7.3 Performance Comparison
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│         Modern High-Performance Processor Comparison (2024)       │
-├───────────────┬────────────────┬────────────────┬────────────────┤
-│     Feature   │  Intel Golden  │   AMD Zen 4   │  Apple M2 P-core│
-│               │    Cove        │               │               │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  Decode Width │     6-wide     │    4-wide     │     8-wide    │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  ROB Size     │    512 entry   │   320 entry   │   ~600 entry  │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  Issue Width  │    12 ports    │    10 ports   │   ~13 ports   │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  L1 I-Cache   │     32KB       │     32KB      │    192KB      │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  L1 D-Cache   │     48KB       │     32KB      │    128KB      │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│  L2 Cache     │    1.25MB      │     1MB       │     16MB      │
-├───────────────┼────────────────┼────────────────┼────────────────┤
-│ Actual IPC    │     ~3-4       │     ~3-4      │     ~4-5      │
-└───────────────┴────────────────┴────────────────┴────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│       Modern High-Performance Processor Comparison (2025)             │
+├───────────────┬────────────────┬────────────────┬────────────────────┤
+│     Feature   │ Intel Arrow    │  AMD Zen 5     │  Apple M4 P-core   │
+│               │ Lake(Lion Cove)│  (Nirvana)     │                    │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  Decode Width │     8-wide     │  8-wide(2×4)   │     10-wide        │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  ROB Size     │   576 entry    │   448 entry    │    ~650 entry      │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  Issue Width  │    12 ports    │   12 ports     │    ~16 ports       │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  L1 I-Cache   │     64KB       │     32KB       │     192KB          │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  L1 D-Cache   │     48KB       │     48KB       │     128KB          │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  L2 Cache     │     3MB        │     1MB        │     16MB           │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│ Actual IPC    │     ~3-5       │     ~3-5       │      ~5-6          │
+├───────────────┼────────────────┼────────────────┼────────────────────┤
+│  Key Feature  │  Tile-based    │  Native        │  Unified memory    │
+│               │  disaggregation│  AVX-512       │  architecture      │
+└───────────────┴────────────────┴────────────────┴────────────────────┘
 ```
 
 ### 7.4 Limitations of ILP
@@ -1324,7 +1335,7 @@ if __name__ == "__main__":
 
 8. Explain ROB-based recovery process on branch misprediction.
 
-9. Why does Intel Skylake have 224 ROB entries? What are the effects of making it larger or smaller?
+9. Intel Arrow Lake's Lion Cove P-core has 576 ROB entries (up from Skylake's 224). What are the effects of making the ROB larger or smaller, and why has the trend been toward larger ROBs?
 
 <details>
 <summary>Answers</summary>
@@ -1380,9 +1391,9 @@ if __name__ == "__main__":
    - Pipeline flush
 
 9. ROB size tradeoffs:
-   - Larger: More ILP exploitation, tolerates longer memory latency
-   - Smaller: Reduced area/power, faster recovery
-   - 224 is balance point for memory latency (~100 cycles) and 6-wide issue
+   - Larger: More ILP exploitation, tolerates longer memory latency, exploits wider issue
+   - Smaller: Reduced area/power, faster recovery on misprediction
+   - Trend toward larger ROBs: wider decode (8-wide+) requires more in-flight instructions to keep execution units fed; memory latency (~100+ cycles for DRAM) demands a large window to find independent work
 
 </details>
 

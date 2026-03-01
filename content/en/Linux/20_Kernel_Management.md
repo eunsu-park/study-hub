@@ -12,6 +12,7 @@ After completing this lesson, you will be able to:
 4. Download kernel source, configure build options, and compile a custom kernel
 5. Configure the GRUB bootloader including default entries, timeout, and kernel parameters
 6. Manage initramfs images and tune runtime kernel parameters with sysctl
+7. Explain io_uring's architecture and its advantages over traditional async I/O interfaces
 
 ---
 
@@ -24,6 +25,7 @@ After completing this lesson, you will be able to:
 5. [Kernel Compilation](#5-kernel-compilation)
 6. [GRUB Bootloader](#6-grub-bootloader)
 7. [Kernel Parameters](#7-kernel-parameters)
+8. [io_uring: High-Performance Async I/O](#8-io_uring-high-performance-async-io)
 
 ---
 
@@ -76,11 +78,11 @@ The kernel is the heart of every Linux system -- it manages hardware, schedules 
 ```bash
 # Check kernel version
 uname -r
-# Example: 5.15.0-91-generic
+# Example: 6.8.0-51-generic
 
 # Detailed information
 uname -a
-# Linux hostname 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux
+# Linux hostname 6.8.0-51-generic #52-Ubuntu SMP x86_64 GNU/Linux
 
 # Kernel configuration info
 cat /proc/version
@@ -92,10 +94,10 @@ cat /boot/config-$(uname -r) | head -20
 ### Kernel Version Scheme
 
 ```
-5.15.0-91-generic
-│ │  │ │  └──────── Distribution-specific name
-│ │  │ └────────── ABI version (distribution patches)
-│ │  └──────────── Patch level
+6.8.0-51-generic
+│ │ │ │  └──────── Distribution-specific name
+│ │ │ └────────── ABI version (distribution patches)
+│ │ └──────────── Patch level
 │ └─────────────── Minor version
 └───────────────── Major version
 ```
@@ -121,7 +123,7 @@ sudo apt update
 sudo apt upgrade linux-image-generic
 
 # Install specific version
-sudo apt install linux-image-5.15.0-92-generic
+sudo apt install linux-image-6.8.0-52-generic
 
 # RHEL/CentOS
 sudo yum update kernel
@@ -137,7 +139,7 @@ sudo yum install kernel-5.14.0-362.el9
 sudo apt autoremove
 
 # Ubuntu - remove specific version
-sudo apt remove linux-image-5.15.0-88-generic
+sudo apt remove linux-image-6.8.0-49-generic
 
 # Remove old kernels except current
 sudo apt purge $(dpkg --list | grep -E 'linux-(image|headers|modules)' | \
@@ -253,9 +255,9 @@ sudo yum install dkms  # RHEL/CentOS
 dkms status
 
 # Example output:
-# nvidia/535.154.05, 5.15.0-91-generic, x86_64: installed
-# nvidia/535.154.05, 5.15.0-92-generic, x86_64: installed
-# virtualbox/7.0.12_Ubuntu, 5.15.0-91-generic, x86_64: installed
+# nvidia/535.154.05, 6.8.0-51-generic, x86_64: installed
+# nvidia/535.154.05, 6.8.0-52-generic, x86_64: installed
+# virtualbox/7.0.12_Ubuntu, 6.8.0-51-generic, x86_64: installed
 ```
 
 ### DKMS Module Management
@@ -528,10 +530,10 @@ grep -E "^menuentry|^submenu" /boot/grub/grub.cfg
 sudo grub-set-default 2
 
 # Set default (by name)
-sudo grub-set-default "Ubuntu, with Linux 5.15.0-92-generic"
+sudo grub-set-default "Ubuntu, with Linux 6.8.0-52-generic"
 
 # One-time boot selection
-sudo grub-reboot "Ubuntu, with Linux 5.15.0-91-generic"
+sudo grub-reboot "Ubuntu, with Linux 6.8.0-51-generic"
 
 # Set GRUB_DEFAULT in /etc/default/grub
 GRUB_DEFAULT="1>2"  # 3rd item of submenu 1
@@ -616,10 +618,10 @@ kernel.kptr_restrict = 2
 sudo update-initramfs -u
 
 # Specific kernel version
-sudo update-initramfs -u -k 5.15.0-92-generic
+sudo update-initramfs -u -k 6.8.0-52-generic
 
 # Create new
-sudo update-initramfs -c -k 5.15.0-92-generic
+sudo update-initramfs -c -k 6.8.0-52-generic
 
 # RHEL/CentOS (dracut)
 sudo dracut -f
@@ -628,6 +630,150 @@ sudo dracut -f /boot/initramfs-$(uname -r).img $(uname -r)
 # Check contents
 lsinitramfs /boot/initrd.img-$(uname -r) | head -50
 ```
+
+---
+
+## 8. io_uring: High-Performance Async I/O
+
+io_uring (introduced in Linux 5.1) is a high-performance asynchronous I/O interface that uses shared memory ring buffers between user space and the kernel. It dramatically reduces system call overhead compared to traditional interfaces like `epoll`, `select`, or POSIX AIO.
+
+### Why io_uring?
+
+```
+Traditional I/O:                     io_uring:
+  User Space          Kernel           User Space ←──shared memory──→ Kernel
+  ┌────────┐         ┌────────┐        ┌────────┐                    ┌────────┐
+  │ submit  │──syscall→│ process│        │ submit │──write to ring──→ │ poll   │
+  │ wait    │←─syscall─│ complete│       │ reap   │←─read from ring──│ complete│
+  └────────┘         └────────┘        └────────┘                    └────────┘
+
+  2 syscalls per I/O operation         0 syscalls in SQPOLL mode
+```
+
+### Core Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    io_uring Architecture                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  User Space                                                   │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Application                                             │ │
+│  │  1. Write SQE to Submission Queue (SQ)                   │ │
+│  │  2. Advance SQ tail pointer                              │ │
+│  │  3. Read CQE from Completion Queue (CQ)                  │ │
+│  └──────────┬──────────────────────────────────┬────────────┘ │
+│             │                                  │              │
+│  ┌──────────▼──────────┐      ┌────────────────▼────────────┐│
+│  │  Submission Queue    │      │  Completion Queue           ││
+│  │  (SQ Ring Buffer)    │      │  (CQ Ring Buffer)           ││
+│  │  ┌─────┬─────┬─────┐│      │  ┌─────┬─────┬─────┐       ││
+│  │  │SQE 0│SQE 1│SQE 2││      │  │CQE 0│CQE 1│CQE 2│       ││
+│  │  └─────┴─────┴─────┘│      │  └─────┴─────┴─────┘       ││
+│  └──────────┬───────────┘      └────────────────▲────────────┘│
+│             │  shared memory (mmap)             │             │
+├─────────────┼───────────────────────────────────┼─────────────┤
+│  Kernel     │                                   │             │
+│  ┌──────────▼───────────────────────────────────┴───────────┐│
+│  │  io_uring Worker                                          ││
+│  │  - Reads SQEs from SQ                                     ││
+│  │  - Dispatches I/O operations                              ││
+│  │  - Writes CQEs to CQ on completion                        ││
+│  │  - SQPOLL mode: kernel thread polls SQ (zero syscall)     ││
+│  └───────────────────────────────────────────────────────────┘│
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+| Feature | Description | Kernel Version |
+|---------|-------------|----------------|
+| **Basic SQ/CQ** | Submission and completion ring buffers | 5.1 |
+| **Fixed buffers** | Pre-registered I/O buffers avoid repeated mapping | 5.1 |
+| **SQPOLL** | Kernel thread polls SQ — zero syscall submission | 5.1 |
+| **Linked SQEs** | Chain dependent operations (e.g., read then write) | 5.3 |
+| **Multishot accept** | Single SQE handles multiple accept() completions | 5.19 |
+| **io_uring passthrough** | Direct NVMe command submission | 6.0 |
+| **io_uring cmd (NVMe)** | Custom NVMe admin/IO commands | 6.3 |
+| **Zero-copy send** | Network send without kernel buffer copy | 6.6 |
+
+### Minimal Example with liburing
+
+```c
+/* io_uring_read.c — Read a file using io_uring via the liburing wrapper library.
+ * Compile: gcc -o io_uring_read io_uring_read.c -luring
+ * Requires: liburing-dev (apt install liburing-dev)
+ */
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <liburing.h>
+
+#define BUF_SIZE 4096
+
+int main(int argc, char *argv[]) {
+    struct io_uring ring;
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    char buf[BUF_SIZE];
+    int fd, ret;
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        return 1;
+    }
+
+    /* Initialize io_uring with 8 SQ entries */
+    ret = io_uring_queue_init(8, &ring, 0);
+    if (ret < 0) {
+        perror("io_uring_queue_init");
+        return 1;
+    }
+
+    fd = open(argv[1], O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return 1;
+    }
+
+    /* Prepare a read SQE — describes what I/O operation to perform */
+    sqe = io_uring_get_sqe(&ring);
+    io_uring_prep_read(sqe, fd, buf, BUF_SIZE, 0);
+
+    /* Submit the SQE to the kernel */
+    io_uring_submit(&ring);
+
+    /* Wait for completion — blocks until the CQE is available */
+    ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret < 0) {
+        perror("io_uring_wait_cqe");
+        return 1;
+    }
+
+    if (cqe->res < 0) {
+        fprintf(stderr, "Read failed: %s\n", strerror(-cqe->res));
+    } else {
+        printf("Read %d bytes:\n%.*s\n", cqe->res, cqe->res, buf);
+    }
+
+    /* Mark CQE as consumed — advances the CQ head pointer */
+    io_uring_cqe_seen(&ring, cqe);
+
+    close(fd);
+    io_uring_queue_exit(&ring);
+    return 0;
+}
+```
+
+### When to Use io_uring
+
+- **High-throughput storage I/O**: Database engines, log collectors — where per-operation syscall overhead dominates
+- **Network servers**: High-connection-count servers benefit from multishot accept and zero-copy send
+- **NVMe passthrough**: Direct device command submission bypasses the block layer for maximum storage performance
+
+> **Security note**: io_uring has been disabled in some container runtimes and hardened kernels (e.g., Google's production kernels) due to its large attack surface. Check your environment's policy before relying on it in production.
 
 ---
 

@@ -9,10 +9,11 @@
 1. npm, yarn, pnpm 패키지 관리자(package manager)를 사용하여 프로젝트 의존성을 관리할 수 있습니다
 2. `package.json`과 락 파일(lock file)에서 시맨틱 버저닝(semantic versioning) 범위를 해석할 수 있습니다
 3. TypeScript, 경로 별칭(path aliases), 프록시(proxy) 설정을 포함한 Vite 프로젝트를 스캐폴딩하고 구성할 수 있습니다
-4. 엔트리(entry), 아웃풋(output), 로더(loaders), 플러그인(plugins)이라는 webpack의 핵심 개념을 설명할 수 있습니다
-5. 개발 및 프로덕션 빌드를 위한 환경 변수(environment variables)를 설정할 수 있습니다
-6. ESLint, Prettier, Husky를 설정하여 팀 워크플로우에서 코드 품질을 강제할 수 있습니다
-7. 코드 스플리팅(code splitting), 트리 쉐이킹(tree shaking), 압축(minification)으로 프로덕션 빌드를 최적화할 수 있습니다
+4. Turbopack의 아키텍처를 설명하고 Vite 및 webpack과의 트레이드오프를 비교할 수 있다
+5. 엔트리(entry), 아웃풋(output), 로더(loaders), 플러그인(plugins)이라는 webpack의 핵심 개념을 설명할 수 있습니다
+6. 개발 및 프로덕션 빌드를 위한 환경 변수(environment variables)를 설정할 수 있습니다
+7. ESLint, Prettier, Husky를 설정하여 팀 워크플로우에서 코드 품질을 강제할 수 있습니다
+8. 코드 스플리팅(code splitting), 트리 쉐이킹(tree shaking), 압축(minification)으로 프로덕션 빌드를 최적화할 수 있습니다
 
 ---
 
@@ -21,10 +22,11 @@
 ## 목차
 1. [패키지 관리자](#1-패키지-관리자)
 2. [Vite](#2-vite)
-3. [webpack 기초](#3-webpack-기초)
-4. [환경 변수](#4-환경-변수)
-5. [코드 품질 도구](#5-코드-품질-도구)
-6. [연습 문제](#6-연습-문제)
+3. [Turbopack](#3-turbopack)
+4. [webpack 기초](#4-webpack-기초)
+5. [환경 변수](#5-환경-변수)
+6. [코드 품질 도구](#6-코드-품질-도구)
+7. [연습 문제](#7-연습-문제)
 
 ---
 
@@ -358,9 +360,104 @@ const imgUrl = new URL('./img.png', import.meta.url).href;
 
 ---
 
-## 3. webpack 기초
+## 3. Turbopack
 
-### 3.1 webpack 소개
+### 3.1 Turbopack이란?
+
+Turbopack은 Vercel — Next.js를 만든 팀 — 이 개발한 Rust 기반 증분 번들러(incremental bundler)입니다. Next.js 15부터 Turbopack은 **기본 개발 서버 번들러**로, 로컬 개발에서 webpack을 대체합니다. 적극적인 함수 수준 캐싱(function-level caching)을 활용하여 초기 빌드 이후에는 실제로 변경된 코드만 다시 컴파일합니다.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Turbopack 아키텍처                               │
+│                                                                 │
+│   Rust로 작성 (Turbo 엔진 기반)                                   │
+│   ├── 함수 수준 캐싱 (증분 계산)                                   │
+│   ├── 지연 번들링 (브라우저가 요청한 것만 번들)                      │
+│   ├── 네이티브 TypeScript / JSX 지원                               │
+│   └── webpack 로더와 호환 (어댑터 레이어 통해)                       │
+│                                                                 │
+│   Vite와의 핵심 차이:                                              │
+│   Vite  → 개발에서 비번들 ESM, 프로덕션에서 Rollup                  │
+│   Turbo → 개발과 프로덕션 모두 번들 출력 (단일 그래프)               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Turbopack vs Vite vs webpack
+
+| 기능 | **Turbopack** | **Vite** | **webpack** |
+|------|--------------|----------|-------------|
+| 언어 | Rust | JavaScript + Go (esbuild) | JavaScript |
+| 개발 전략 | 증분 번들(incremental bundle) | 비번들 ESM(unbundled ESM) | 전체 번들(full bundle) |
+| HMR 속도 | ~10 ms (대규모 앱) | ~50 ms | ~200 ms+ |
+| 프로덕션 빌드 | Next.js `next build --turbopack` | Rollup | webpack |
+| 설정 | `next.config.ts` (제한적) | `vite.config.ts` | `webpack.config.js` |
+| 생태계 | Next.js 중심 | 프레임워크 무관(framework-agnostic) | 범용(universal) |
+| 성숙도 | 개발용 안정(Next.js 15+) | 안정 | 성숙 (10년 이상) |
+
+### 3.3 Next.js에서 Turbopack 사용하기
+
+```bash
+# Create a Next.js 15 project (Turbopack is the default dev bundler)
+npx create-next-app@latest my-app --typescript
+
+# Start dev server — Turbopack is enabled automatically
+npm run dev
+# Equivalent to: next dev --turbopack
+
+# Production build with Turbopack (stable since Next.js 15.3)
+npx next build --turbopack
+```
+
+```typescript
+// next.config.ts — Turbopack-specific options
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // Turbopack configuration (replaces webpack callback for dev)
+  turbopack: {
+    // Resolve aliases (like webpack resolve.alias)
+    resolveAlias: {
+      '@components': './src/components',
+      '@utils': './src/utils',
+    },
+
+    // Use webpack loaders via the adapter layer
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
+      },
+    },
+  },
+};
+
+export default nextConfig;
+```
+
+### 3.4 어떤 도구를 선택할까
+
+```
+Turbopack을 선택할 때:
+  ✓ Next.js 애플리케이션을 구축하는 경우
+  ✓ 대규모 코드베이스에서 가장 빠른 HMR이 필요한 경우
+  ✓ TypeScript/JSX/CSS Modules의 제로 설정(zero-config)을 원하는 경우
+
+Vite를 선택할 때:
+  ✓ 프레임워크 무관 프로젝트 (React, Vue, Svelte, 바닐라)
+  ✓ 풍부한 플러그인 생태계가 필요한 경우 (1000+ Rollup 플러그인)
+  ✓ Next.js가 아닌 React 프로젝트, 라이브러리 개발
+
+webpack을 선택할 때:
+  ✓ 복잡하고 고도로 커스터마이징된 빌드 파이프라인
+  ✓ 이미 webpack을 사용하는 레거시 프로젝트
+  ✓ 마이크로 프론트엔드를 위한 Module Federation이 필요한 경우
+```
+
+---
+
+## 4. webpack 기초
+
+### 4.1 webpack 소개
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -378,7 +475,7 @@ const imgUrl = new URL('./img.png', import.meta.url).href;
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 기본 설정
+### 4.2 기본 설정
 
 ```javascript
 // webpack.config.js
@@ -463,7 +560,7 @@ module.exports = {
 };
 ```
 
-### 3.3 프로덕션 최적화
+### 4.3 프로덕션 최적화
 
 ```javascript
 // webpack.prod.js
@@ -512,9 +609,9 @@ module.exports = merge(common, {
 
 ---
 
-## 4. 환경 변수
+## 5. 환경 변수
 
-### 4.1 Vite 환경 변수
+### 5.1 Vite 환경 변수
 
 ```bash
 # .env (모든 환경)
@@ -551,7 +648,7 @@ interface ImportMeta {
 }
 ```
 
-### 4.2 webpack 환경 변수
+### 5.2 webpack 환경 변수
 
 ```javascript
 // webpack.config.js
@@ -576,7 +673,7 @@ new webpack.DefinePlugin({
 });
 ```
 
-### 4.3 환경별 설정
+### 5.3 환경별 설정
 
 ```typescript
 // config/index.ts
@@ -610,9 +707,9 @@ export const config = configs[import.meta.env.MODE] || configs.development;
 
 ---
 
-## 5. 코드 품질 도구
+## 6. 코드 품질 도구
 
-### 5.1 ESLint
+### 6.1 ESLint
 
 ```bash
 # 설치
@@ -649,7 +746,7 @@ export default [
 ];
 ```
 
-### 5.2 Prettier
+### 6.2 Prettier
 
 ```bash
 # 설치
@@ -679,7 +776,7 @@ coverage
 *.min.js
 ```
 
-### 5.3 Husky + lint-staged
+### 6.3 Husky + lint-staged
 
 ```bash
 # 설치
@@ -707,7 +804,7 @@ npx husky add .husky/pre-commit "npx lint-staged"
 }
 ```
 
-### 5.4 EditorConfig
+### 6.4 EditorConfig
 
 ```ini
 # .editorconfig
@@ -730,7 +827,7 @@ indent_style = tab
 
 ---
 
-## 6. 연습 문제
+## 7. 연습 문제
 
 ### 연습 1: Vite 프로젝트 설정
 React + TypeScript 프로젝트를 Vite로 설정하세요.
@@ -830,6 +927,7 @@ npx husky add .husky/pre-commit "npx lint-staged"
 
 ## 참고 자료
 - [Vite Documentation](https://vitejs.dev/)
+- [Turbopack 공식 문서](https://turbo.build/pack/docs)
 - [webpack Documentation](https://webpack.js.org/)
 - [npm Documentation](https://docs.npmjs.com/)
 - [ESLint](https://eslint.org/)

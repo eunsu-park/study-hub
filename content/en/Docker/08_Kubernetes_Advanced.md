@@ -7,11 +7,12 @@
 After completing this lesson, you will be able to:
 
 1. Configure Ingress resources to route external HTTP/HTTPS traffic to cluster services
-2. Deploy stateful applications using StatefulSet with stable network identities
-3. Provision persistent storage with PersistentVolume and PersistentVolumeClaim
-4. Apply advanced ConfigMap and Secret patterns including file mounts and dynamic updates
-5. Use DaemonSet for node-level agents and Job/CronJob for batch workloads
-6. Implement advanced scheduling with node affinity, taints, tolerations, and topology spread
+2. Describe the Kubernetes Gateway API resource model (GatewayClass, Gateway, HTTPRoute) and contrast it with Ingress
+3. Deploy stateful applications using StatefulSet with stable network identities
+4. Provision persistent storage with PersistentVolume and PersistentVolumeClaim
+5. Apply advanced ConfigMap and Secret patterns including file mounts and dynamic updates
+6. Use DaemonSet for node-level agents and Job/CronJob for batch workloads
+7. Implement advanced scheduling with node affinity, taints, tolerations, and topology spread
 
 ---
 
@@ -19,12 +20,13 @@ The basic Kubernetes primitives -- Pods, Deployments, and Services -- cover many
 
 ## Table of Contents
 1. [Ingress](#1-ingress)
-2. [StatefulSet](#2-statefulset)
-3. [Persistent Storage](#3-persistent-storage)
-4. [ConfigMap Advanced](#4-configmap-advanced)
-5. [DaemonSet and Job](#5-daemonset-and-job)
-6. [Advanced Scheduling](#6-advanced-scheduling)
-7. [Practice Exercises](#7-practice-exercises)
+2. [Gateway API](#2-gateway-api)
+3. [StatefulSet](#3-statefulset)
+4. [Persistent Storage](#4-persistent-storage)
+5. [ConfigMap Advanced](#5-configmap-advanced)
+6. [DaemonSet and Job](#6-daemonset-and-job)
+7. [Advanced Scheduling](#7-advanced-scheduling)
+8. [Practice Exercises](#8-practice-exercises)
 
 ---
 
@@ -65,7 +67,7 @@ The basic Kubernetes primitives -- Pods, Deployments, and Services -- cover many
 
 ```bash
 # Install NGINX Ingress Controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
 
 # Verify installation
 kubectl get pods -n ingress-nginx
@@ -267,7 +269,168 @@ spec:
 
 ---
 
-## 2. StatefulSet
+## 2. Gateway API
+
+The Gateway API is the official successor to Ingress, GA since Kubernetes 1.31. It addresses Ingress's limitations through a role-oriented resource model that separates infrastructure concerns from application routing.
+
+### 2.1 Ingress vs Gateway API
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Ingress vs Gateway API                          │
+├──────────────────────┬──────────────────────────────────────┤
+│      Ingress         │        Gateway API                   │
+├──────────────────────┼──────────────────────────────────────┤
+│  Single resource     │  3 layered resources:                │
+│                      │  GatewayClass → Gateway → *Route     │
+├──────────────────────┼──────────────────────────────────────┤
+│  L7 HTTP only        │  L4+L7: HTTP, gRPC, TCP, TLS, UDP   │
+├──────────────────────┼──────────────────────────────────────┤
+│  No traffic split    │  Native weight-based traffic split   │
+├──────────────────────┼──────────────────────────────────────┤
+│  Annotations-heavy   │  Typed, structured configuration     │
+├──────────────────────┼──────────────────────────────────────┤
+│  Single-tenant       │  Multi-tenant (role separation)      │
+├──────────────────────┼──────────────────────────────────────┤
+│  Stable since 1.19   │  GA since 1.31                       │
+└──────────────────────┴──────────────────────────────────────┘
+
+Role-oriented design:
+  Infra team   → deploys GatewayClass (cluster-wide)
+  Platform team → creates Gateway    (namespace-scoped)
+  App team      → attaches HTTPRoute (namespace-scoped)
+```
+
+### 2.2 Core Resources
+
+```yaml
+# gateway-api-example.yaml
+
+# 1. GatewayClass — cluster-scoped, defines implementation
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: nginx
+spec:
+  controllerName: gateway.nginx.org/nginx-gateway-controller
+
+---
+# 2. Gateway — namespaced, creates the load balancer
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+  namespace: infra
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All  # Allow routes from any namespace — adjust to "Same" or "Selector" for stricter multi-tenancy
+  - name: https
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: tls-cert
+    allowedRoutes:
+      namespaces:
+        from: All
+
+---
+# 3. HTTPRoute — namespaced, defines routing rules
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-routes
+  namespace: production
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  hostnames:
+  - "app.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    backendRefs:
+    - name: api-service
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: frontend-service
+      port: 80
+```
+
+### 2.3 Traffic Splitting (Canary Deployment)
+
+Gateway API makes canary deployments a first-class feature with weight-based routing — no custom annotations required.
+
+```yaml
+# canary-httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-route
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  hostnames:
+  - "app.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-stable
+      port: 80
+      weight: 90   # 90% of traffic to stable version
+    - name: app-canary
+      port: 80
+      weight: 10   # 10% to canary — gradually increase as confidence grows
+```
+
+### 2.4 Header-Based Routing
+
+```yaml
+# header-routing.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: header-route
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  rules:
+  # Internal users get routed to beta version
+  - matches:
+    - headers:
+      - name: X-User-Group
+        value: internal
+    backendRefs:
+    - name: app-beta
+      port: 80
+  # Everyone else gets stable
+  - backendRefs:
+    - name: app-stable
+      port: 80
+```
+
+---
+
+## 3. StatefulSet
 
 ### 2.1 StatefulSet Concepts
 
@@ -528,7 +691,7 @@ kubectl delete pvc -l app=web  # Delete PVCs
 
 ---
 
-## 3. Persistent Storage
+## 4. Persistent Storage
 
 ### 3.1 Storage Hierarchy
 
@@ -752,7 +915,7 @@ spec:
 
 ---
 
-## 4. ConfigMap Advanced
+## 5. ConfigMap Advanced
 
 ### 4.1 ConfigMap Creation Methods
 
@@ -912,7 +1075,7 @@ spec:
 
 ---
 
-## 5. DaemonSet and Job
+## 6. DaemonSet and Job
 
 ### 5.1 DaemonSet
 
@@ -1093,7 +1256,7 @@ spec:
 
 ---
 
-## 6. Advanced Scheduling
+## 7. Advanced Scheduling
 
 ### 6.1 Node Affinity
 
@@ -1277,7 +1440,7 @@ spec:
 
 ---
 
-## 7. Practice Exercises
+## 8. Practice Exercises
 
 ### Exercise 1: Microservices Ingress
 ```yaml
@@ -1329,6 +1492,7 @@ spec:
 ## References
 
 - [Kubernetes Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/)
+- [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)
 - [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
 - [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
 - [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)

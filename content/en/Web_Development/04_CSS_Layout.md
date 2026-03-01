@@ -11,9 +11,10 @@ After completing this lesson, you will be able to:
 3. Describe the Flexbox axis model (main axis vs. cross axis) and configure direction, wrapping, and alignment
 4. Apply CSS Grid to create two-dimensional layouts with explicit rows and columns
 5. Implement named grid areas using grid-template-areas for readable page layouts
-6. Compare Flexbox and Grid and choose the appropriate system for a given layout requirement
-7. Distinguish between static, relative, absolute, fixed, and sticky positioning
-8. Implement practical layout patterns such as sticky footers, modals, and sidebar-plus-content designs
+6. Use CSS Subgrid to align nested grid items to a parent grid's track definitions
+7. Compare Flexbox and Grid and choose the appropriate system for a given layout requirement
+8. Distinguish between static, relative, absolute, fixed, and sticky positioning
+9. Implement practical layout patterns such as sticky footers, modals, and sidebar-plus-content designs
 
 ---
 
@@ -24,9 +25,10 @@ Knowing CSS properties is only half the battle; the other half is arranging elem
 1. [Traditional Layout](#traditional-layout)
 2. [Flexbox](#flexbox)
 3. [CSS Grid](#css-grid)
-4. [Flexbox vs Grid](#flexbox-vs-grid)
-5. [Position](#position)
-6. [Practical Layout Examples](#practical-layout-examples)
+4. [CSS Subgrid](#css-subgrid)
+5. [Flexbox vs Grid](#flexbox-vs-grid)
+6. [Position](#position)
+7. [Practical Layout Examples](#practical-layout-examples)
 
 ---
 
@@ -642,6 +644,126 @@ Individual item alignment
     grid-row: span 2;
 }
 ```
+
+---
+
+## CSS Subgrid
+
+CSS Subgrid (Grid Level 2, Baseline Widely Available since 2023) solves a long-standing problem: nested grids cannot align to their parent's track definitions. Each nested `display: grid` creates an independent coordinate system. Subgrid lets a child grid inherit its parent's column or row tracks, so nested items align perfectly.
+
+### The Problem Without Subgrid
+
+```
+Parent grid (3 columns):
+┌──────────┬──────────┬──────────┐
+│  Card 1  │  Card 2  │  Card 3  │
+│  ┌─────┐ │  ┌─────┐ │  ┌─────┐ │
+│  │Title│ │  │Title│ │  │Long │ │  ← Titles don't align across cards
+│  ├─────┤ │  ├─────┤ │  │Title│ │    because each card has its own
+│  │Body │ │  │Long │ │  ├─────┤ │    independent grid
+│  │     │ │  │Body │ │  │Body │ │
+│  ├─────┤ │  │     │ │  ├─────┤ │
+│  │Btn  │ │  ├─────┤ │  │ Btn  │ │
+│  └─────┘ │  │ Btn  │ │  └─────┘ │
+└──────────┴──┴─────┴─┴──────────┘
+```
+
+### Subgrid Syntax
+
+```css
+.parent {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto 1fr auto;  /* title, body, button rows */
+    gap: 1rem;
+}
+
+.card {
+    display: grid;
+    /* Inherit parent's ROW tracks — card internals align across siblings */
+    grid-row: span 3;              /* Card spans 3 parent rows */
+    grid-template-rows: subgrid;   /* Use parent's row definitions instead of its own */
+    gap: 0.5rem;
+}
+```
+
+```
+With subgrid:
+┌──────────┬──────────┬──────────┐
+│  Title   │  Title   │  Long    │  ← Row 1: all titles align
+│          │          │  Title   │
+├──────────┼──────────┼──────────┤
+│  Body    │  Long    │  Body    │  ← Row 2: all bodies align
+│          │  Body    │          │
+├──────────┼──────────┼──────────┤
+│  Button  │  Button  │  Button  │  ← Row 3: all buttons align
+└──────────┴──────────┴──────────┘
+```
+
+### Practical Example: Form Layout
+
+Forms with labels and inputs often need the labels in one column and inputs in another, aligned across all rows:
+
+```css
+.form {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.75rem 1rem;
+}
+
+.form-group {
+    display: grid;
+    grid-column: 1 / -1;          /* Span full width of parent */
+    grid-template-columns: subgrid; /* Inherit parent's 2-column layout */
+}
+
+.form-group label {
+    /* Automatically in column 1 (max-content width) */
+}
+
+.form-group input {
+    /* Automatically in column 2 (1fr) */
+}
+```
+
+```html
+<form class="form">
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name">
+    </div>
+    <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email">
+    </div>
+    <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone">
+    </div>
+</form>
+```
+
+Without subgrid, each `.form-group` would need its own column definition, and the label widths would not be consistent across rows.
+
+### Column Subgrid
+
+You can also use subgrid for columns — useful when a child spans multiple parent columns:
+
+```css
+.parent {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1rem;
+}
+
+.wide-child {
+    grid-column: 1 / -1;             /* Span all 4 columns */
+    display: grid;
+    grid-template-columns: subgrid;   /* Inherit parent's 4-column tracks */
+}
+```
+
+> **Key insight**: `subgrid` replaces the track list, not the `display` value. The element is still `display: grid` — it just borrows track sizes from its parent instead of defining its own.
 
 ---
 

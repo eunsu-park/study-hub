@@ -39,7 +39,7 @@ uname -m
 
 Output:
 ```
-Linux server01 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux
+Linux server01 6.8.0-51-generic #52-Ubuntu SMP x86_64 GNU/Linux
 ```
 
 ### hostnamectl
@@ -56,8 +56,8 @@ Output:
       Machine ID: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
          Boot ID: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   Virtualization: kvm
-Operating System: Ubuntu 22.04.3 LTS
-          Kernel: Linux 5.15.0-91-generic
+Operating System: Ubuntu 24.04.1 LTS
+          Kernel: Linux 6.8.0-51-generic
     Architecture: x86-64
 ```
 

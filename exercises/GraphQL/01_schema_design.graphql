@@ -1,0 +1,64 @@
+# Exercise: GraphQL Schema Design
+# Practice with SDL type definitions.
+
+# Exercise 1: E-Commerce Schema
+# Design a schema for an e-commerce platform with:
+# - Product: id, name, price, description, category, inStock, rating
+# - Category: id, name, products (relation)
+# - User: id, username, email, orders
+# - Order: id, user, items (OrderItem), total, status, createdAt
+# - OrderItem: product, quantity, unitPrice
+# - Review: id, product, user, rating (1-5), comment, createdAt
+
+# TODO: Define types below
+
+# type Product { ... }
+# type Category { ... }
+# type User { ... }
+# type Order { ... }
+# type OrderItem { ... }
+# type Review { ... }
+
+
+# Exercise 2: Input Types
+# Create input types for mutations:
+# - CreateProductInput
+# - UpdateProductInput (all fields optional except id)
+# - CreateOrderInput (with items)
+# - CreateReviewInput (with rating validation note)
+
+# TODO: Define input types
+
+
+# Exercise 3: Enums
+# Define enums for:
+# - OrderStatus: PENDING, CONFIRMED, SHIPPED, DELIVERED, CANCELLED
+# - SortOrder: ASC, DESC
+# - ProductSortField: NAME, PRICE, RATING, CREATED_AT
+
+# TODO: Define enums
+
+
+# Exercise 4: Interface and Union
+# Create an interface for:
+# - SearchResult: Product | Category | User (Union)
+# - Node interface with id: ID! (for relay-style pagination)
+# - Timestamped interface with createdAt, updatedAt
+
+# TODO: Define interfaces and unions
+
+
+# Exercise 5: Query and Mutation Types
+# Define the root Query and Mutation types with:
+# Query:
+#   - products(category: ID, minPrice: Float, maxPrice: Float, sort: ProductSortField, order: SortOrder): [Product!]!
+#   - product(id: ID!): Product
+#   - search(query: String!): [SearchResult!]!
+#   - me: User (authenticated user)
+# Mutation:
+#   - createProduct(input: CreateProductInput!): Product!
+#   - createOrder(input: CreateOrderInput!): Order!
+#   - createReview(input: CreateReviewInput!): Review!
+#   - cancelOrder(id: ID!): Order!
+
+# TODO: Define Query and Mutation types

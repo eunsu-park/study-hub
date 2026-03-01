@@ -1,0 +1,77 @@
+# Exercise: Queries and Mutations
+# Practice writing GraphQL operations.
+
+# Given this schema:
+# type User {
+#   id: ID!
+#   name: String!
+#   email: String!
+#   posts: [Post!]!
+#   role: Role!
+# }
+#
+# type Post {
+#   id: ID!
+#   title: String!
+#   content: String!
+#   published: Boolean!
+#   author: User!
+#   tags: [String!]!
+#   comments: [Comment!]!
+#   createdAt: String!
+# }
+#
+# type Comment {
+#   id: ID!
+#   text: String!
+#   author: User!
+#   post: Post!
+# }
+#
+# enum Role { USER ADMIN MODERATOR }
+#
+# input CreatePostInput { title: String!, content: String!, tags: [String!] }
+# input UpdatePostInput { title: String, content: String, published: Boolean }
+
+# Exercise 1: Basic Queries
+# Write a query to get all published posts with their author name and tag list.
+
+# TODO: Write GetPublishedPosts query
+
+
+# Exercise 2: Variables
+# Write a query that takes a user ID variable and returns:
+# - The user's name, email, role
+# - Their posts (title, published status, comment count)
+
+# TODO: Write GetUserProfile query with $userId: ID! variable
+
+
+# Exercise 3: Fragments
+# Define a PostSummary fragment with: id, title, published, createdAt, author { name }
+# Use it in a query that gets both published and draft posts (using aliases).
+
+# TODO: Define PostSummary fragment
+# TODO: Write GetPostsByStatus query using the fragment and aliases
+
+
+# Exercise 4: Mutations
+# Write mutations for:
+# a) Creating a new post
+# b) Updating a post (partial update)
+# c) Deleting a post
+# Each should return the affected post data.
+
+# TODO: Write CreatePost mutation
+# TODO: Write UpdatePost mutation
+# TODO: Write DeletePost mutation
+
+
+# Exercise 5: Directives
+# Write a query that:
+# - Takes $includeComments: Boolean! and $skipDrafts: Boolean! variables
+# - Uses @include to optionally fetch comments
+# - Uses @skip to optionally skip draft posts
+# - Uses inline fragments for the User type to get role-specific data
+
+# TODO: Write FlexiblePostsQuery with directives

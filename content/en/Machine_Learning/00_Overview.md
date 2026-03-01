@@ -15,7 +15,9 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
                         ↓                                                                  ↑
                 Feature Engineering → Explainability → Imbalanced Data        Decision Trees → Ensemble(Bagging)
                         ↓                                                         → Ensemble(Boosting) → SVM ──┘
-                Time Series ML → AutoML → Anomaly Detection
+                Time Series ML → AutoML → Anomaly Detection → Advanced Ensemble
+                        ↓
+                Production ML Serving → A/B Testing for ML
 ```
 
 ---
@@ -45,6 +47,8 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
 | [19_AutoML_Hyperparameter_Optimization.md](./19_AutoML_Hyperparameter_Optimization.md) | AutoML & Hyperparameter Optimization | Optuna, Auto-sklearn, FLAML, H2O AutoML |
 | [20_Anomaly_Detection.md](./20_Anomaly_Detection.md) | Anomaly Detection | Isolation Forest, LOF, One-Class SVM, PyOD |
 | [21_Advanced_Ensemble.md](./21_Advanced_Ensemble.md) | Advanced Ensemble | Stacking, Blending, Meta-Learner, Diverse Base Learners, Competition Strategies |
+| [22_Production_ML_Serving.md](./22_Production_ML_Serving.md) | Production ML Serving | Model Optimization, Serving Patterns, Training-Serving Skew, Drift Detection |
+| [23_AB_Testing_for_ML.md](./23_AB_Testing_for_ML.md) | A/B Testing for ML | Power Analysis, Hypothesis Testing, Sequential Testing, Multi-Armed Bandits, Interleaving |
 
 ---
 
@@ -111,10 +115,15 @@ print(f"LightGBM: {lightgbm.__version__}")
 - Building pipelines
 - Real-world problem solving
 
-### Stage 7: Advanced Topics (15-20)
+### Stage 7: Advanced Topics (15-21)
 - Feature engineering and model explainability
 - Handling imbalanced data and time series
 - AutoML, hyperparameter optimization, anomaly detection
+- Advanced ensemble methods (stacking, blending)
+
+### Stage 8: Production (22-23)
+- Model optimization and serving patterns
+- A/B testing and online experimentation
 
 ---
 

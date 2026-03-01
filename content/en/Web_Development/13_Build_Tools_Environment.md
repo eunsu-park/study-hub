@@ -9,10 +9,11 @@ After completing this lesson, you will be able to:
 1. Manage project dependencies using npm, yarn, and pnpm package managers
 2. Interpret semantic versioning ranges in `package.json` and lock files
 3. Scaffold and configure a Vite project with TypeScript, path aliases, and proxy settings
-4. Describe the core webpack concepts of entry, output, loaders, and plugins
-5. Configure environment variables for development and production builds
-6. Set up ESLint, Prettier, and Husky to enforce code quality in a team workflow
-7. Optimize production builds with code splitting, tree shaking, and minification
+4. Explain Turbopack's architecture and compare its trade-offs with Vite and webpack
+5. Describe the core webpack concepts of entry, output, loaders, and plugins
+6. Configure environment variables for development and production builds
+7. Set up ESLint, Prettier, and Husky to enforce code quality in a team workflow
+8. Optimize production builds with code splitting, tree shaking, and minification
 
 ---
 
@@ -21,10 +22,11 @@ Modern web development involves far more than writing HTML, CSS, and JavaScript 
 ## Table of Contents
 1. [Package Managers](#1-package-managers)
 2. [Vite](#2-vite)
-3. [webpack Basics](#3-webpack-basics)
-4. [Environment Variables](#4-environment-variables)
-5. [Code Quality Tools](#5-code-quality-tools)
-6. [Practice Problems](#6-practice-problems)
+3. [Turbopack](#3-turbopack)
+4. [webpack Basics](#4-webpack-basics)
+5. [Environment Variables](#5-environment-variables)
+6. [Code Quality Tools](#6-code-quality-tools)
+7. [Practice Problems](#7-practice-problems)
 
 ---
 
@@ -358,9 +360,104 @@ const imgUrl = new URL('./img.png', import.meta.url).href;
 
 ---
 
-## 3. webpack Basics
+## 3. Turbopack
 
-### 3.1 Introduction to webpack
+### 3.1 What is Turbopack?
+
+Turbopack is a Rust-based incremental bundler created by Vercel — the same team behind Next.js. Starting with Next.js 15, Turbopack is the **default dev-server bundler**, replacing webpack for local development. It leverages aggressive function-level caching so that after the initial build, only the code that actually changed is recompiled.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   Turbopack Architecture                         │
+│                                                                 │
+│   Written in Rust (via Turbo engine)                            │
+│   ├── Function-level caching (incremental computation)          │
+│   ├── Lazy bundling (only bundle what the browser requests)     │
+│   ├── Native TypeScript / JSX support                           │
+│   └── Compatible with webpack loaders (via adapter layer)       │
+│                                                                 │
+│   Key difference from Vite:                                     │
+│   Vite  → unbundled ESM in dev, Rollup in prod                 │
+│   Turbo → bundled output in dev AND prod (single graph)         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 Turbopack vs Vite vs webpack
+
+| Feature | **Turbopack** | **Vite** | **webpack** |
+|---------|--------------|----------|-------------|
+| Language | Rust | JavaScript + Go (esbuild) | JavaScript |
+| Dev strategy | Incremental bundle | Unbundled ESM | Full bundle |
+| HMR speed | ~10 ms (large apps) | ~50 ms | ~200 ms+ |
+| Prod build | Next.js `next build --turbopack` | Rollup | webpack |
+| Config | `next.config.ts` (limited) | `vite.config.ts` | `webpack.config.js` |
+| Ecosystem | Next.js focused | Framework-agnostic | Universal |
+| Maturity | Stable for dev (Next.js 15+) | Stable | Mature (10+ years) |
+
+### 3.3 Using Turbopack with Next.js
+
+```bash
+# Create a Next.js 15 project (Turbopack is the default dev bundler)
+npx create-next-app@latest my-app --typescript
+
+# Start dev server — Turbopack is enabled automatically
+npm run dev
+# Equivalent to: next dev --turbopack
+
+# Production build with Turbopack (stable since Next.js 15.3)
+npx next build --turbopack
+```
+
+```typescript
+// next.config.ts — Turbopack-specific options
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  // Turbopack configuration (replaces webpack callback for dev)
+  turbopack: {
+    // Resolve aliases (like webpack resolve.alias)
+    resolveAlias: {
+      '@components': './src/components',
+      '@utils': './src/utils',
+    },
+
+    // Use webpack loaders via the adapter layer
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
+      },
+    },
+  },
+};
+
+export default nextConfig;
+```
+
+### 3.4 When to Choose Which Tool
+
+```
+Choose Turbopack when:
+  ✓ Building a Next.js application
+  ✓ You need fastest possible HMR on a large codebase
+  ✓ You want zero-config TypeScript/JSX/CSS Modules
+
+Choose Vite when:
+  ✓ Framework-agnostic project (React, Vue, Svelte, vanilla)
+  ✓ You need rich plugin ecosystem (1000+ Rollup plugins)
+  ✓ Non-Next.js React projects, library development
+
+Choose webpack when:
+  ✓ Complex, highly customized build pipelines
+  ✓ Legacy projects already using webpack
+  ✓ You need Module Federation for micro-frontends
+```
+
+---
+
+## 4. webpack Basics
+
+### 4.1 Introduction to webpack
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -378,7 +475,7 @@ const imgUrl = new URL('./img.png', import.meta.url).href;
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Basic Configuration
+### 4.2 Basic Configuration
 
 ```javascript
 // webpack.config.js
@@ -463,7 +560,7 @@ module.exports = {
 };
 ```
 
-### 3.3 Production Optimization
+### 4.3 Production Optimization
 
 ```javascript
 // webpack.prod.js
@@ -512,9 +609,9 @@ module.exports = merge(common, {
 
 ---
 
-## 4. Environment Variables
+## 5. Environment Variables
 
-### 4.1 Vite Environment Variables
+### 5.1 Vite Environment Variables
 
 ```bash
 # .env (all environments)
@@ -551,7 +648,7 @@ interface ImportMeta {
 }
 ```
 
-### 4.2 webpack Environment Variables
+### 5.2 webpack Environment Variables
 
 ```javascript
 // webpack.config.js
@@ -576,7 +673,7 @@ new webpack.DefinePlugin({
 });
 ```
 
-### 4.3 Environment-specific Configuration
+### 5.3 Environment-specific Configuration
 
 ```typescript
 // config/index.ts
@@ -610,9 +707,9 @@ export const config = configs[import.meta.env.MODE] || configs.development;
 
 ---
 
-## 5. Code Quality Tools
+## 6. Code Quality Tools
 
-### 5.1 ESLint
+### 6.1 ESLint
 
 ```bash
 # Install
@@ -649,7 +746,7 @@ export default [
 ];
 ```
 
-### 5.2 Prettier
+### 6.2 Prettier
 
 ```bash
 # Install
@@ -679,7 +776,7 @@ coverage
 *.min.js
 ```
 
-### 5.3 Husky + lint-staged
+### 6.3 Husky + lint-staged
 
 ```bash
 # Install
@@ -707,7 +804,7 @@ npx husky add .husky/pre-commit "npx lint-staged"
 }
 ```
 
-### 5.4 EditorConfig
+### 6.4 EditorConfig
 
 ```ini
 # .editorconfig
@@ -730,7 +827,7 @@ indent_style = tab
 
 ---
 
-## 6. Practice Problems
+## 7. Practice Problems
 
 ### Exercise 1: Vite Project Setup
 Set up a React + TypeScript project with Vite.
@@ -838,6 +935,7 @@ npx husky add .husky/pre-commit "npx lint-staged"
 
 ## References
 - [Vite Documentation](https://vitejs.dev/)
+- [Turbopack Documentation](https://turbo.build/pack/docs)
 - [webpack Documentation](https://webpack.js.org/)
 - [npm Documentation](https://docs.npmjs.com/)
 - [ESLint](https://eslint.org/)

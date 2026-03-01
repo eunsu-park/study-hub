@@ -12,6 +12,7 @@
 4. 커널 소스를 다운로드하고, 빌드 옵션을 구성하고, 커스텀 커널을 컴파일한다
 5. GRUB 부트로더의 기본 항목, 타임아웃, 커널 파라미터를 구성한다
 6. initramfs 이미지를 관리하고 sysctl로 런타임 커널 파라미터를 튜닝한다
+7. io_uring의 아키텍처와 기존 비동기 I/O 인터페이스 대비 장점을 설명할 수 있다
 
 ---
 
@@ -24,6 +25,7 @@
 5. [커널 컴파일](#5-커널-컴파일)
 6. [GRUB 부트로더](#6-grub-부트로더)
 7. [커널 파라미터](#7-커널-파라미터)
+8. [io_uring: 고성능 비동기 I/O](#8-io_uring-고성능-비동기-io)
 
 ---
 
@@ -76,11 +78,11 @@
 ```bash
 # 커널 버전 확인
 uname -r
-# 예: 5.15.0-91-generic
+# 예: 6.8.0-51-generic
 
 # 상세 정보
 uname -a
-# Linux hostname 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux
+# Linux hostname 6.8.0-51-generic #52-Ubuntu SMP x86_64 GNU/Linux
 
 # 커널 설정 정보
 cat /proc/version
@@ -92,7 +94,7 @@ cat /boot/config-$(uname -r) | head -20
 ### 커널 버전 체계
 
 ```
-5.15.0-91-generic
+6.8.0-51-generic
 │ │  │ │  └──────── 배포판 특정 이름
 │ │  │ └────────── ABI 버전 (배포판 패치)
 │ │  └──────────── 패치 레벨
@@ -121,7 +123,7 @@ sudo apt update
 sudo apt upgrade linux-image-generic
 
 # 특정 버전 설치
-sudo apt install linux-image-5.15.0-92-generic
+sudo apt install linux-image-6.8.0-52-generic
 
 # RHEL/CentOS
 sudo yum update kernel
@@ -137,7 +139,7 @@ sudo yum install kernel-5.14.0-362.el9
 sudo apt autoremove
 
 # Ubuntu - 특정 버전 제거
-sudo apt remove linux-image-5.15.0-88-generic
+sudo apt remove linux-image-6.8.0-49-generic
 
 # 현재 커널 제외하고 이전 커널 제거
 sudo apt purge $(dpkg --list | grep -E 'linux-(image|headers|modules)' | \
@@ -253,9 +255,9 @@ sudo yum install dkms  # RHEL/CentOS
 dkms status
 
 # 예시 출력:
-# nvidia/535.154.05, 5.15.0-91-generic, x86_64: installed
-# nvidia/535.154.05, 5.15.0-92-generic, x86_64: installed
-# virtualbox/7.0.12_Ubuntu, 5.15.0-91-generic, x86_64: installed
+# nvidia/535.154.05, 6.8.0-51-generic, x86_64: installed
+# nvidia/535.154.05, 6.8.0-52-generic, x86_64: installed
+# virtualbox/7.0.12_Ubuntu, 6.8.0-51-generic, x86_64: installed
 ```
 
 ### DKMS 모듈 관리
@@ -528,10 +530,10 @@ grep -E "^menuentry|^submenu" /boot/grub/grub.cfg
 sudo grub-set-default 2
 
 # 기본값 설정 (이름)
-sudo grub-set-default "Ubuntu, with Linux 5.15.0-92-generic"
+sudo grub-set-default "Ubuntu, with Linux 6.8.0-52-generic"
 
 # 일회성 부팅 선택
-sudo grub-reboot "Ubuntu, with Linux 5.15.0-91-generic"
+sudo grub-reboot "Ubuntu, with Linux 6.8.0-51-generic"
 
 # /etc/default/grub에서 GRUB_DEFAULT 설정
 GRUB_DEFAULT="1>2"  # 서브메뉴 1번의 3번째 항목
@@ -616,10 +618,10 @@ kernel.kptr_restrict = 2
 sudo update-initramfs -u
 
 # 특정 커널 버전
-sudo update-initramfs -u -k 5.15.0-92-generic
+sudo update-initramfs -u -k 6.8.0-52-generic
 
 # 새로 생성
-sudo update-initramfs -c -k 5.15.0-92-generic
+sudo update-initramfs -c -k 6.8.0-52-generic
 
 # RHEL/CentOS (dracut)
 sudo dracut -f
@@ -628,6 +630,150 @@ sudo dracut -f /boot/initramfs-$(uname -r).img $(uname -r)
 # 내용 확인
 lsinitramfs /boot/initrd.img-$(uname -r) | head -50
 ```
+
+---
+
+## 8. io_uring: 고성능 비동기 I/O
+
+io_uring(Linux 5.1에서 도입)은 사용자 공간과 커널 사이의 공유 메모리 링 버퍼를 사용하는 고성능 비동기 I/O 인터페이스입니다. `epoll`, `select`, POSIX AIO와 같은 기존 인터페이스에 비해 시스템 콜 오버헤드를 극적으로 줄여줍니다.
+
+### io_uring이 필요한 이유
+
+```
+기존 I/O:                           io_uring:
+  사용자 공간         커널             사용자 공간 ←──공유 메모리──→ 커널
+  ┌────────┐         ┌────────┐        ┌────────┐                  ┌────────┐
+  │ 제출    │──syscall→│ 처리   │        │ 제출   │──링에 기록──→   │ 폴링   │
+  │ 대기    │←─syscall─│ 완료   │        │ 수확   │←─링에서 읽기──  │ 완료   │
+  └────────┘         └────────┘        └────────┘                  └────────┘
+
+  I/O 작업당 2번의 syscall              SQPOLL 모드에서 0번의 syscall
+```
+
+### 핵심 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    io_uring 아키텍처                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  사용자 공간                                                   │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  애플리케이션                                             │ │
+│  │  1. SQE를 제출 큐(SQ)에 기록                              │ │
+│  │  2. SQ tail 포인터 전진                                   │ │
+│  │  3. 완료 큐(CQ)에서 CQE 읽기                             │ │
+│  └──────────┬──────────────────────────────────┬────────────┘ │
+│             │                                  │              │
+│  ┌──────────▼──────────┐      ┌────────────────▼────────────┐│
+│  │  제출 큐             │      │  완료 큐                     ││
+│  │  (SQ Ring Buffer)    │      │  (CQ Ring Buffer)           ││
+│  │  ┌─────┬─────┬─────┐│      │  ┌─────┬─────┬─────┐       ││
+│  │  │SQE 0│SQE 1│SQE 2││      │  │CQE 0│CQE 1│CQE 2│       ││
+│  │  └─────┴─────┴─────┘│      │  └─────┴─────┴─────┘       ││
+│  └──────────┬───────────┘      └────────────────▲────────────┘│
+│             │  공유 메모리 (mmap)                │             │
+├─────────────┼───────────────────────────────────┼─────────────┤
+│  커널       │                                   │             │
+│  ┌──────────▼───────────────────────────────────┴───────────┐│
+│  │  io_uring Worker                                          ││
+│  │  - SQ에서 SQE 읽기                                        ││
+│  │  - I/O 작업 디스패치                                      ││
+│  │  - 완료 시 CQ에 CQE 기록                                  ││
+│  │  - SQPOLL 모드: 커널 스레드가 SQ를 폴링 (시스템 콜 제로)    ││
+│  └───────────────────────────────────────────────────────────┘│
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 주요 기능
+
+| 기능 | 설명 | 커널 버전 |
+|------|------|----------|
+| **기본 SQ/CQ** | 제출 및 완료 링 버퍼 | 5.1 |
+| **고정 버퍼(Fixed buffers)** | 사전 등록 I/O 버퍼로 반복적인 매핑 방지 | 5.1 |
+| **SQPOLL** | 커널 스레드가 SQ를 폴링 — 제출 시 시스템 콜 불필요 | 5.1 |
+| **연결된 SQE** | 종속 작업 연쇄 (예: 읽기 후 쓰기) | 5.3 |
+| **멀티샷 accept** | 단일 SQE로 여러 accept() 완료 처리 | 5.19 |
+| **io_uring 패스스루** | 직접 NVMe 명령 제출 | 6.0 |
+| **io_uring cmd (NVMe)** | 커스텀 NVMe 관리/IO 명령 | 6.3 |
+| **제로 카피 전송** | 커널 버퍼 복사 없는 네트워크 전송 | 6.6 |
+
+### liburing을 사용한 최소 예제
+
+```c
+/* io_uring_read.c — liburing 래퍼 라이브러리를 통해 io_uring으로 파일을 읽는 예제.
+ * 컴파일: gcc -o io_uring_read io_uring_read.c -luring
+ * 필요 패키지: liburing-dev (apt install liburing-dev)
+ */
+#include <stdio.h>
+#include <fcntl.h>
+#include <string.h>
+#include <liburing.h>
+
+#define BUF_SIZE 4096
+
+int main(int argc, char *argv[]) {
+    struct io_uring ring;
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    char buf[BUF_SIZE];
+    int fd, ret;
+
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <file>\n", argv[0]);
+        return 1;
+    }
+
+    /* 8개 SQ 엔트리로 io_uring 초기화 */
+    ret = io_uring_queue_init(8, &ring, 0);
+    if (ret < 0) {
+        perror("io_uring_queue_init");
+        return 1;
+    }
+
+    fd = open(argv[1], O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return 1;
+    }
+
+    /* 읽기 SQE 준비 — 수행할 I/O 작업을 기술 */
+    sqe = io_uring_get_sqe(&ring);
+    io_uring_prep_read(sqe, fd, buf, BUF_SIZE, 0);
+
+    /* SQE를 커널에 제출 */
+    io_uring_submit(&ring);
+
+    /* 완료 대기 — CQE가 사용 가능해질 때까지 블록 */
+    ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret < 0) {
+        perror("io_uring_wait_cqe");
+        return 1;
+    }
+
+    if (cqe->res < 0) {
+        fprintf(stderr, "Read failed: %s\n", strerror(-cqe->res));
+    } else {
+        printf("Read %d bytes:\n%.*s\n", cqe->res, cqe->res, buf);
+    }
+
+    /* CQE를 소비 완료로 표시 — CQ head 포인터를 전진 */
+    io_uring_cqe_seen(&ring, cqe);
+
+    close(fd);
+    io_uring_queue_exit(&ring);
+    return 0;
+}
+```
+
+### io_uring 사용이 적합한 경우
+
+- **고처리량 스토리지 I/O**: 데이터베이스 엔진, 로그 수집기 — 작업당 syscall 오버헤드가 지배적인 경우
+- **네트워크 서버**: 멀티샷 accept와 제로 카피 전송은 대규모 연결 수 서버에 유리
+- **NVMe 패스스루**: 블록 레이어를 우회하는 직접 디바이스 명령 제출로 최대 스토리지 성능 달성
+
+> **보안 참고**: io_uring은 큰 공격 표면으로 인해 일부 컨테이너 런타임과 강화된 커널(예: Google의 프로덕션 커널)에서 비활성화되어 있습니다. 프로덕션에서 사용하기 전에 환경 정책을 확인하세요.
 
 ---
 

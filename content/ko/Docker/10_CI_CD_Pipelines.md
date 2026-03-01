@@ -205,11 +205,11 @@ jobs:
     # 7. Kubernetes setup
     - uses: azure/setup-kubectl@v4
       with:
-        version: 'v1.28.0'
+        version: 'v1.32.0'
 
     - uses: azure/setup-helm@v4
       with:
-        version: 'v3.13.0'
+        version: 'v3.17.0'
 ```
 
 ### 2.3 Job 의존성과 매트릭스

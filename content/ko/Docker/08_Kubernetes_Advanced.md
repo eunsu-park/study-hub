@@ -7,11 +7,12 @@
 이 레슨을 완료하면 다음을 할 수 있습니다:
 
 1. Ingress 리소스를 구성하여 외부 HTTP/HTTPS 트래픽을 클러스터 서비스로 라우팅할 수 있습니다
-2. 안정적인 네트워크 ID를 가진 StatefulSet을 사용하여 상태 있는 애플리케이션을 배포할 수 있습니다
-3. PersistentVolume과 PersistentVolumeClaim으로 영구 스토리지를 프로비저닝할 수 있습니다
-4. 파일 마운트 및 동적 업데이트를 포함한 고급 ConfigMap과 Secret 패턴을 적용할 수 있습니다
-5. 노드 수준 에이전트에 DaemonSet을, 배치 워크로드에 Job/CronJob을 사용할 수 있습니다
-6. 노드 어피니티(node affinity), 테인트(taints), 톨러레이션(tolerations), 토폴로지 스프레드로 고급 스케줄링을 구현할 수 있습니다
+2. Kubernetes Gateway API 리소스 모델(GatewayClass, Gateway, HTTPRoute)을 설명하고 Ingress와 비교할 수 있다
+3. 안정적인 네트워크 ID를 가진 StatefulSet을 사용하여 상태 있는 애플리케이션을 배포할 수 있습니다
+4. PersistentVolume과 PersistentVolumeClaim으로 영구 스토리지를 프로비저닝할 수 있습니다
+5. 파일 마운트 및 동적 업데이트를 포함한 고급 ConfigMap과 Secret 패턴을 적용할 수 있습니다
+6. 노드 수준 에이전트에 DaemonSet을, 배치 워크로드에 Job/CronJob을 사용할 수 있습니다
+7. 노드 어피니티(node affinity), 테인트(taints), 톨러레이션(tolerations), 토폴로지 스프레드로 고급 스케줄링을 구현할 수 있습니다
 
 ---
 
@@ -19,12 +20,13 @@
 
 ## 목차
 1. [Ingress](#1-ingress)
-2. [StatefulSet](#2-statefulset)
-3. [영구 스토리지](#3-영구-스토리지)
-4. [ConfigMap 고급](#4-configmap-고급)
-5. [DaemonSet과 Job](#5-daemonset과-job)
-6. [고급 스케줄링](#6-고급-스케줄링)
-7. [연습 문제](#7-연습-문제)
+2. [Gateway API](#2-gateway-api)
+3. [StatefulSet](#3-statefulset)
+4. [영구 스토리지](#4-영구-스토리지)
+5. [ConfigMap 고급](#5-configmap-고급)
+6. [DaemonSet과 Job](#6-daemonset과-job)
+7. [고급 스케줄링](#7-고급-스케줄링)
+8. [연습 문제](#8-연습-문제)
 
 ---
 
@@ -65,7 +67,7 @@
 
 ```bash
 # Install NGINX Ingress Controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/cloud/deploy.yaml
 
 # Verify installation
 kubectl get pods -n ingress-nginx
@@ -267,7 +269,168 @@ spec:
 
 ---
 
-## 2. StatefulSet
+## 2. Gateway API
+
+Gateway API는 Ingress의 공식 후속 기술로, Kubernetes 1.31부터 GA입니다. 역할 기반 리소스 모델을 통해 인프라 관심사와 애플리케이션 라우팅을 분리하여 Ingress의 한계를 해결합니다.
+
+### 2.1 Ingress vs Gateway API
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Ingress vs Gateway API                          │
+├──────────────────────┬──────────────────────────────────────┤
+│      Ingress         │        Gateway API                   │
+├──────────────────────┼──────────────────────────────────────┤
+│  단일 리소스          │  3개 계층 리소스:                      │
+│                      │  GatewayClass → Gateway → *Route     │
+├──────────────────────┼──────────────────────────────────────┤
+│  L7 HTTP만 지원       │  L4+L7: HTTP, gRPC, TCP, TLS, UDP   │
+├──────────────────────┼──────────────────────────────────────┤
+│  트래픽 분할 불가      │  네이티브 가중치 기반 트래픽 분할       │
+├──────────────────────┼──────────────────────────────────────┤
+│  어노테이션 의존       │  타입화된 구조적 설정                  │
+├──────────────────────┼──────────────────────────────────────┤
+│  단일 테넌트          │  멀티 테넌트 (역할 분리)               │
+├──────────────────────┼──────────────────────────────────────┤
+│  1.19부터 안정        │  1.31부터 GA                         │
+└──────────────────────┴──────────────────────────────────────┘
+
+역할 기반 설계:
+  인프라 팀     → GatewayClass 배포 (클러스터 범위)
+  플랫폼 팀     → Gateway 생성    (네임스페이스 범위)
+  애플리케이션 팀 → HTTPRoute 연결  (네임스페이스 범위)
+```
+
+### 2.2 핵심 리소스
+
+```yaml
+# gateway-api-example.yaml
+
+# 1. GatewayClass — 클러스터 범위, 구현체 정의
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: nginx
+spec:
+  controllerName: gateway.nginx.org/nginx-gateway-controller
+
+---
+# 2. Gateway — 네임스페이스 범위, 로드 밸런서 생성
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+  namespace: infra
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All  # 모든 네임스페이스의 라우트 허용 — 더 엄격한 멀티테넌시를 위해 "Same" 또는 "Selector"로 조정
+  - name: https
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: tls-cert
+    allowedRoutes:
+      namespaces:
+        from: All
+
+---
+# 3. HTTPRoute — 네임스페이스 범위, 라우팅 규칙 정의
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-routes
+  namespace: production
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  hostnames:
+  - "app.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    backendRefs:
+    - name: api-service
+      port: 8080
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: frontend-service
+      port: 80
+```
+
+### 2.3 트래픽 분할 (카나리 배포)
+
+Gateway API는 가중치 기반 라우팅을 통해 카나리 배포를 일급 기능으로 지원합니다 — 별도의 어노테이션이 필요하지 않습니다.
+
+```yaml
+# canary-httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-route
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  hostnames:
+  - "app.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-stable
+      port: 80
+      weight: 90   # 안정 버전에 트래픽 90%
+    - name: app-canary
+      port: 80
+      weight: 10   # 카나리에 10% — 신뢰가 높아지면 점진적으로 증가
+```
+
+### 2.4 헤더 기반 라우팅
+
+```yaml
+# header-routing.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: header-route
+spec:
+  parentRefs:
+  - name: main-gateway
+    namespace: infra
+  rules:
+  # 내부 사용자는 베타 버전으로 라우팅
+  - matches:
+    - headers:
+      - name: X-User-Group
+        value: internal
+    backendRefs:
+    - name: app-beta
+      port: 80
+  # 나머지는 안정 버전으로
+  - backendRefs:
+    - name: app-stable
+      port: 80
+```
+
+---
+
+## 3. StatefulSet
 
 ### 2.1 StatefulSet 개념
 
@@ -528,7 +691,7 @@ kubectl delete pvc -l app=web  # Delete PVCs
 
 ---
 
-## 3. 영구 스토리지
+## 4. 영구 스토리지
 
 ### 3.1 스토리지 계층 구조
 
@@ -752,7 +915,7 @@ spec:
 
 ---
 
-## 4. ConfigMap 고급
+## 5. ConfigMap 고급
 
 ### 4.1 ConfigMap 생성 방법
 
@@ -912,7 +1075,7 @@ spec:
 
 ---
 
-## 5. DaemonSet과 Job
+## 6. DaemonSet과 Job
 
 ### 5.1 DaemonSet
 
@@ -1093,7 +1256,7 @@ spec:
 
 ---
 
-## 6. 고급 스케줄링
+## 7. 고급 스케줄링
 
 ### 6.1 Node Affinity
 
@@ -1277,7 +1440,7 @@ spec:
 
 ---
 
-## 7. 연습 문제
+## 8. 연습 문제
 
 ### 연습 1: 마이크로서비스 Ingress
 ```yaml
@@ -1335,6 +1498,7 @@ spec:
 ## 참고 자료
 
 - [Kubernetes Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/)
+- [Gateway API](https://gateway-api.sigs.k8s.io/)
 - [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
 - [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
 - [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)

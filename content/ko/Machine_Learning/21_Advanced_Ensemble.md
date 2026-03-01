@@ -1,6 +1,6 @@
 # 고급 앙상블 기법 — 스태킹(Stacking)과 블렌딩(Blending)
 
-[← 이전: 20. 이상 탐지](20_Anomaly_Detection.md) | [다음: 개요 →](00_Overview.md)
+[← 이전: 20. 이상 탐지](20_Anomaly_Detection.md) | [다음: 22. 프로덕션 ML 서빙 →](22_Production_ML_Serving.md)
 
 ---
 

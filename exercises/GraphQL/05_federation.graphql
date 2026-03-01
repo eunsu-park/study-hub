@@ -1,0 +1,61 @@
+# Exercise: Apollo Federation
+# Practice designing and implementing federated subgraphs.
+
+# Exercise 1: Design Subgraph Boundaries
+# An e-commerce platform has these entities:
+# - Users, Profiles, Addresses
+# - Products, Categories, Inventory
+# - Orders, OrderItems, Payments
+# - Reviews, Ratings
+#
+# TODO: Decide which entities belong to which subgraph.
+# Draw the boundary (write as comments):
+# Subgraph "users": ...
+# Subgraph "products": ...
+# Subgraph "orders": ...
+# Subgraph "reviews": ...
+
+
+# Exercise 2: Users Subgraph
+# Implement the Users subgraph schema with:
+# - User entity (@key(fields: "id"))
+# - Profile type (embedded in User)
+# - Query: me, user(id: ID!)
+# - Mutation: register, updateProfile
+
+# TODO: Write Users subgraph schema
+# extend schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@key"])
+#
+# type User @key(fields: "id") {
+#   ...
+# }
+
+
+# Exercise 3: Products Subgraph
+# Implement the Products subgraph that:
+# - Defines Product entity
+# - Extends User to add products field
+# - Uses @external, @requires for computed fields
+
+# TODO: Write Products subgraph schema
+
+
+# Exercise 4: Orders Subgraph
+# Implement the Orders subgraph that:
+# - Defines Order entity
+# - References User and Product entities
+# - Uses @key, @external for cross-subgraph references
+# - Implements __resolveReference for Order
+
+# TODO: Write Orders subgraph schema
+
+
+# Exercise 5: Supergraph Query
+# Write queries that span multiple subgraphs:
+# a) Get a user with their products and recent orders
+# b) Get an order with product details and buyer info
+# c) Get a product with reviews from the reviews subgraph
+#
+# For each query, trace which subgraphs the router would call.
+
+# TODO: Write cross-subgraph queries and trace the execution plan

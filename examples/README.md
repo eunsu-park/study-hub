@@ -119,7 +119,7 @@ examples/
 │   └── raspberry_pi/       # GPIO, 센서 / sensors
 │
 ├── LLM_and_NLP/            # NLP/HuggingFace 예제 / examples (15 files)
-├── Machine_Learning/       # sklearn/Jupyter 예제 / examples (21 files)
+├── Machine_Learning/       # sklearn/Jupyter 예제 / examples (25 files)
 ├── Math_for_AI/            # AI 수학 Python 예제 / AI math examples (13 files)
 ├── MLOps/                  # MLflow/CI/CD/DVC/LLMOps 예제 / examples (32 files)
 │   ├── cicd/               # ML CI/CD 파이프라인 / ML CI/CD pipeline
@@ -317,7 +317,7 @@ jupyter notebook
 | LaTeX | 19 | LaTeX | 문서 조판, 수학, TikZ, Beamer, 참고문헌, 빌드 / Document typesetting, Math, TikZ, Beamer, Bibliography, Build |
 | Linux | 3 | Bash | 재해복구, 성능 진단 / Disaster recovery, Performance diagnostics |
 | LLM_and_NLP | 15 | Python | BERT, GPT, RAG, LangChain |
-| Machine_Learning | 21 | Python/Jupyter | sklearn, 분류, 회귀, 앙상블, Feature Engineering, SHAP/LIME, AutoML, 이상탐지 / Classification, Regression, Ensemble, Explainability, AutoML, Anomaly Detection |
+| Machine_Learning | 25 | Python/Jupyter | sklearn, 분류, 회귀, 앙상블, Feature Engineering, SHAP/LIME, AutoML, 이상탐지, Production ML, A/B Testing / Classification, Regression, Ensemble, Explainability, AutoML, Anomaly Detection, Production ML, A/B Testing |
 | Math_for_AI | 13 | Python | 선형대수, SVD/PCA, 최적화, 확률, 정보이론, 텐서, 그래프, 어텐션 / Linear Algebra, Optimization, Probability, Attention |
 | Mathematical_Methods | 13 | Python | 급수, 복소수, 선형대수, 푸리에, ODE/PDE, 특수함수, 텐서 / Series, Complex, Linear Algebra, Fourier, ODE/PDE, Special Functions, Tensors |
 | MHD | 32 | Python | 평형, 안정성, 불안정성, 재결합, 난류, 다이나모, 천체물리, 핵융합 / Equilibria, Stability, Reconnection, Turbulence, Dynamo, Fusion |

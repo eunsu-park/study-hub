@@ -116,7 +116,7 @@ topics:
       en: "Modal editing, motions, text objects, plugins, and Neovim"
       ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
 
-  # Tier 2 — Intermediate (17 topics)
+  # Tier 2 — Intermediate (18 topics)
   C_Programming:
     tier: intermediate
     description:
@@ -219,7 +219,13 @@ topics:
       en: "Calculus fundamentals, multivariable calculus, ODE, PDE, and modeling"
       ko: "미적분학 기초, 다변수 미적분, 상미분방정식, 편미분방정식 및 모델링"
 
-  # Tier 3 — Advanced (18 topics)
+  Rust:
+    tier: intermediate
+    description:
+      en: "Rust systems programming: ownership, lifetimes, concurrency, and async"
+      ko: "Rust 시스템 프로그래밍: 소유권, 라이프타임, 동시성 및 비동기"
+
+  # Tier 3 — Advanced (21 topics)
   Algorithm:
     tier: advanced
     description:
@@ -327,6 +333,24 @@ topics:
     description:
       en: "Robot kinematics, dynamics, control, perception, SLAM, and multi-robot systems"
       ko: "로봇 기구학, 동역학, 제어, 인지, SLAM 및 다중 로봇 시스템"
+
+  Backend_Frameworks:
+    tier: advanced
+    description:
+      en: "Backend web frameworks: FastAPI, Express, Django — API design, auth, deployment"
+      ko: "백엔드 웹 프레임워크: FastAPI, Express, Django — API 설계, 인증, 배포"
+
+  Frontend_Frameworks:
+    tier: advanced
+    description:
+      en: "Frontend frameworks: React, Vue, Svelte — components, state, SSR, testing"
+      ko: "프론트엔드 프레임워크: React, Vue, Svelte — 컴포넌트, 상태, SSR, 테스팅"
+
+  GraphQL:
+    tier: advanced
+    description:
+      en: "GraphQL schema design, resolvers, federation, clients, and performance"
+      ko: "GraphQL 스키마 설계, 리졸버, 연합, 클라이언트 및 성능"
 
   # Tier 4 — Expert (4 topics)
   Plasma_Physics:
