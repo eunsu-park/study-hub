@@ -163,13 +163,6 @@ Electrodynamics → Optics → Signal_Processing → Control_Theory
 
 ---
 
-## Multilingual Support / 다국어 지원
-
-- All study materials are maintained in both **Korean (ko)** and **English (en)**
-  모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
-- All 55 topics fully translated to Korean/English
-  55개 토픽 모두 한/영 번역 완료
-
 ## License / 라이센스
 
 This project uses a dual license:
