@@ -1,9 +1,10 @@
 # Study Hub
 
-이 레포지터리는 제가 스스로 공부하기 위해 만든 자료를 정리한 것입니다.
-일부 내용은 제가 직접 작성했으며, 일부는 AI가 검수하거나 AI의 도움을 받아 작성되었습니다.
+개인 학습 자료를 정리한 레포지토리입니다.
+일부 내용은 직접 작성했으며, 일부는 AI의 도움을 받아 작성되었습니다.
 
-This repository is a personal study project. Some content was written by me, some was reviewed by AI, and some was created with the help of AI.
+A personal study materials repository.
+Some content was written by me, some was created with the help of AI.
 
 55개 토픽, 4단계 난이도 체계, 한/영 이중언어를 지원하며, ~1,085개의 실행 가능한 예제와 ~858개의 연습문제 풀이를 포함합니다.
 
@@ -16,25 +17,12 @@ This repository is a personal study project. Some content was written by me, som
 ```
 ├── content/          # 학습 자료 Markdown / Study materials
 │   ├── ko/           # 한국어 (55개 토픽) / Korean (55 topics)
-│   └── en/           # 영어 (55개 토픽) / English (55 topics)
+│   ├── en/           # 영어 (55개 토픽) / English (55 topics)
+│   └── topic_metadata.yaml  # 4-Tier 난이도 분류
 │
 ├── examples/         # 예제 코드 (55개 토픽, ~1,085개 파일) / Example code
 │
-├── exercises/        # 연습문제 풀이 (53개 토픽, ~858개 파일) / Exercise solutions
-│
-└── viewer/           # Flask 웹 뷰어 / Flask web viewer
-```
-
-## 빠른 시작 / Quick Start
-
-```bash
-# 웹 뷰어 실행 / Run web viewer
-cd viewer
-pip install -r requirements.txt
-flask run --port 5050
-
-# 브라우저에서 접속 / Access in browser
-# http://127.0.0.1:5050
+└── exercises/        # 연습문제 풀이 (53개 토픽, ~858개 파일) / Exercise solutions
 ```
 
 ## 목차 / Table of Contents
@@ -142,22 +130,11 @@ Programming → Python → Git → Linux (01~05) → Shell_Script (01~05)
 C_Programming → CPP → Rust
 ```
 
-6. **C 언어**: C_Programming (01~12) — 포인터, 메모리, 시스템 호출
-7. **C++ 학습**: CPP (01~12) — 클래스, STL, 스마트 포인터, 템플릿
-8. **Rust**: Rust (01~12) — 소유권, 차용, 라이프타임, 트레이트, 동시성
-
 #### 2트랙: 웹 풀스택 / Track 2: Full-Stack Web
 
 ```
 Web_Development → Frontend_Frameworks → Backend_Frameworks → GraphQL → Docker → Cloud_Computing
 ```
-
-9. **웹 기초 / Web Basics**: Web_Development (01~09) — HTML, CSS, JavaScript, TypeScript
-10. **프론트엔드 / Frontend**: Frontend_Frameworks (01~10) — React, Vue, Svelte
-11. **백엔드 / Backend**: Backend_Frameworks (01~12) — FastAPI, Express, Django
-12. **GraphQL**: GraphQL (01~10) — 스키마, 리졸버, Apollo, Strawberry
-13. **컨테이너 / Containers**: Docker (01~08) — Docker, Compose, Kubernetes
-14. **클라우드 / Cloud**: Cloud_Computing (01~10) — AWS/GCP, Terraform
 
 #### 3트랙: 데이터 & 인프라 / Track 3: Data & Infrastructure
 
@@ -165,14 +142,6 @@ Web_Development → Frontend_Frameworks → Backend_Frameworks → GraphQL → D
 PostgreSQL → Data_Science → Data_Engineering
 Linux (심화) → Networking → System_Design → Security
 ```
-
-15. **데이터베이스 / Database**: PostgreSQL (01~10) — SQL, 인덱싱, 트랜잭션
-16. **데이터 과학 / Data Science**: Data_Science (01~15) — NumPy, Pandas, 통계, 시각화
-17. **데이터 엔지니어링 / Data Engineering**: Data_Engineering (01~12) — Airflow, Spark, Kafka
-18. **리눅스 심화 / Linux Advanced**: Linux (06~20) — 시스템 관리, 네트워크, 보안
-19. **네트워킹 / Networking**: Networking (01~12) — TCP/IP, 라우팅, DNS, 방화벽
-20. **시스템 설계 / System Design**: System_Design (01~12) — 확장성, 캐싱, 샤딩
-21. **보안 / Security**: Security (01~10) — TLS, OWASP, 인증/인가
 
 #### 4트랙: CS 이론 / Track 4: CS Theory
 
@@ -182,15 +151,6 @@ OS_Theory → Computer_Architecture → Compiler_Design
 Software_Engineering → Database_Theory → Cryptography_Theory
 ```
 
-22. **알고리즘 / Algorithms**: Algorithm (01~15) — 정렬, 그래프, DP, 세그먼트 트리
-23. **형식 언어 / Formal Languages**: Formal_Languages (01~10) — DFA, NFA, CFG, 튜링 머신
-24. **운영체제 / OS Theory**: OS_Theory (01~10) — 프로세스, 스케줄링, 메모리, 파일시스템
-25. **컴퓨터 구조 / Computer Architecture**: Computer_Architecture (01~12) — CPU, 캐시, 파이프라인
-26. **컴파일러 / Compiler Design**: Compiler_Design (01~10) — 렉서, 파서, IR, 코드 생성
-27. **소프트웨어 공학 / Software Engineering**: Software_Engineering (01~10) — SDLC, 애자일, UML
-28. **데이터베이스 이론 / Database Theory**: Database_Theory (01~10) — 정규화, MVCC, 분산 DB
-29. **암호학 / Cryptography**: Cryptography_Theory (01~10) — AES, RSA, ECC, ZKP
-
 #### 5트랙: AI & 머신러닝 / Track 5: AI & Machine Learning
 
 ```
@@ -199,18 +159,6 @@ Math_for_AI → Machine_Learning → Deep_Learning → LLM_and_NLP → Foundatio
 └─ 수학 심화: Calculus, Mathematical_Methods, Numerical_Simulation
 ```
 
-30. **AI 수학 / Math for AI**: Math_for_AI (01~10) — 선형대수, 최적화, 확률
-31. **머신러닝 / Machine Learning**: Machine_Learning (01~15) — 회귀, 앙상블, SVM, 클러스터링
-32. **딥러닝 / Deep Learning**: Deep_Learning (01~20) — PyTorch, CNN, RNN, Transformer
-33. **LLM & NLP**: LLM_and_NLP (01~10) — BERT, GPT, RAG, LangChain
-34. **파운데이션 모델 / Foundation Models**: Foundation_Models (01~12) — Scaling Laws, PEFT, RAG
-35. **컴퓨터 비전 / Computer Vision**: Computer_Vision (01~12) — OpenCV, 객체 검출, SLAM
-36. **강화학습 / Reinforcement Learning**: Reinforcement_Learning (01~10) — DQN, PPO, SAC
-37. **MLOps**: MLOps (01~10) — MLflow, 모델 서빙, CI/CD for ML
-38. **미적분학 / Calculus**: Calculus_and_Differential_Equations (01~12) — 미분, 적분, ODE, PDE
-39. **물리수학 / Mathematical Methods**: Mathematical_Methods (01~10) — 푸리에, 특수함수, 텐서
-40. **수치 시뮬레이션 / Numerical Simulation**: Numerical_Simulation (01~12) — CFD, FEM, PINN
-
 #### 6트랙: 물리 & 공학 / Track 6: Physics & Engineering
 
 ```
@@ -218,19 +166,6 @@ Electrodynamics → Optics → Signal_Processing → Control_Theory
 ├─ 우주물리: Plasma_Physics → MHD → Solar_Physics → Space_Weather
 └─ 응용공학: Robotics, IoT_Embedded, Quantum_Computing, Computer_Graphics
 ```
-
-41. **전자기학 / Electrodynamics**: Electrodynamics (01~10) — 맥스웰 방정식, 전자기파
-42. **광학 / Optics**: Optics (01~10) — 기하광학, 간섭, 회절, 레이저
-43. **신호처리 / Signal Processing**: Signal_Processing (01~10) — 푸리에, FFT, 디지털 필터
-44. **제어이론 / Control Theory**: Control_Theory (01~10) — PID, 상태공간, LQR, 칼만 필터
-45. **로보틱스 / Robotics**: Robotics (01~10) — 운동학, 경로 계획, SLAM, ROS2
-46. **IoT / IoT_Embedded**: IoT_Embedded (01~08) — Raspberry Pi, MQTT, Edge AI
-47. **양자 컴퓨팅 / Quantum Computing**: Quantum_Computing (01~10) — 큐비트, Grover, Shor, VQE
-48. **컴퓨터 그래픽스 / Computer Graphics**: Computer_Graphics (01~10) — 래스터화, 셰이딩, 레이 트레이싱
-49. **플라즈마 물리 / Plasma Physics**: Plasma_Physics (01~10) — 디바이 차폐, 란다우 감쇠
-50. **MHD**: MHD (01~10) — MHD 평형, 자기재결합, 다이나모
-51. **태양 물리 / Solar Physics**: Solar_Physics (01~10) — 태양 내부, 코로나, 플레어, CME
-52. **우주 기상 / Space Weather**: Space_Weather (01~10) — 자기권, 방사선대, GIC, 예보
 
 ---
 
@@ -249,7 +184,7 @@ This project uses a dual license:
 | 대상 / Target | 라이센스 / License |
 |---|---|
 | 학습 자료 (`content/`) / Study materials | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
-| 코드 (`examples/`, `exercises/`, `viewer/`) / Code | [MIT License](./LICENSE) |
+| 코드 (`examples/`, `exercises/`) / Code | [MIT License](./LICENSE) |
 
 ### AI 도움 명시 / AI Assistance Disclosure
 
