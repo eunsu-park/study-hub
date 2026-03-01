@@ -1,62 +1,62 @@
 # Study Content (학습 자료)
 
-학습 자료 Markdown 파일 모음입니다. 한국어(ko)와 영어(en) 두 언어로 관리됩니다.
-
 A collection of study material Markdown files. Maintained in both Korean (ko) and English (en).
 
-## 디렉토리 구조 / Directory Structure
+학습 자료 Markdown 파일 모음입니다. 한국어(ko)와 영어(en) 두 언어로 관리됩니다.
+
+## Directory Structure / 디렉토리 구조
 
 ```
 content/
-├── ko/                    # 한국어 자료 (번역본) / Korean (translated)
-│   ├── Algorithm/         # 29개 레슨 / 29 lessons
-│   ├── C_Programming/     # 23개 레슨 / 23 lessons
-│   └── ...                # 총 55개 토픽 / 55 topics total
+├── ko/                    # Korean (translated) / 한국어 자료 (번역본)
+│   ├── Algorithm/         # 29 lessons / 29개 레슨
+│   ├── C_Programming/     # 23 lessons / 23개 레슨
+│   └── ...                # 55 topics total / 총 55개 토픽
 │
-└── en/                    # 영어 자료 (원본) / English (original)
+└── en/                    # English (original) / 영어 자료 (원본)
     ├── Algorithm/
     ├── C_Programming/
-    └── ...                # 총 55개 토픽 / 55 topics total
+    └── ...                # 55 topics total / 총 55개 토픽
 ```
 
-## 토픽 목록 / Topic List
+## Topic List / 토픽 목록
 
-전체 토픽 목록과 레슨 수는 프로젝트 루트의 [README.md](../README.md#목차--table-of-contents)를 참조하세요.
+See the project root [README.md](../README.md#table-of-contents--목차) for the full topic list with lesson counts.
 
-See the project root [README.md](../README.md#목차--table-of-contents) for the full topic list with lesson counts.
-
-각 토픽의 `00_Overview.md`에서 학습 로드맵과 상세 목차를 확인할 수 있습니다.
+전체 토픽 목록과 레슨 수는 프로젝트 루트의 [README.md](../README.md#table-of-contents--목차)를 참조하세요.
 
 Check the `00_Overview.md` in each topic for learning roadmaps and detailed table of contents.
 
-## 보기 방법 / How to View
+각 토픽의 `00_Overview.md`에서 학습 로드맵과 상세 목차를 확인할 수 있습니다.
 
-1. **웹 뷰어 / Web Viewer**: `viewer/` 폴더의 Flask 앱 실행 / Run Flask app in `viewer/`
-2. **직접 열기 / Direct Open**: VS Code 등에서 Markdown 파일 열기 / Open Markdown files in VS Code
-3. **GitHub**: GitHub에서 직접 렌더링 / Render directly on GitHub
+## How to View / 보기 방법
 
-## 파일 명명 규칙 / File Naming Convention
+1. **Web Viewer / 웹 뷰어**: Run Flask app in `viewer/` / `viewer/` 폴더의 Flask 앱 실행
+2. **Direct Open / 직접 열기**: Open Markdown files in VS Code / VS Code 등에서 Markdown 파일 열기
+3. **GitHub**: Render directly on GitHub / GitHub에서 직접 렌더링
 
-- `00_Overview.md` - 토픽 개요 및 목차 / Topic overview and table of contents
-- `01_*.md`, `02_*.md`, ... - 순차적 레슨 (숫자 접두사로 순서 지정) / Sequential lessons (numbered prefix)
-- 토픽 폴더명 / Topic folders: `Upper_Snake_Case` (예 / e.g., `C_Programming`, `Deep_Learning`)
-- 레슨 파일명 / Lesson files: 영문, 공백은 언더스코어로 대체 / English, spaces replaced with underscores (예 / e.g., `01_Getting_Started.md`)
+## File Naming Convention / 파일 명명 규칙
 
-## 예제 코드 / Example Code
+- `00_Overview.md` - Topic overview and table of contents / 토픽 개요 및 목차
+- `01_*.md`, `02_*.md`, ... - Sequential lessons (numbered prefix) / 순차적 레슨 (숫자 접두사로 순서 지정)
+- Topic folders / 토픽 폴더명: `Upper_Snake_Case` (e.g., `C_Programming`, `Deep_Learning`)
+- Lesson files / 레슨 파일명: English, spaces replaced with underscores / 영문, 공백은 언더스코어로 대체 (e.g., `01_Getting_Started.md`)
 
-예제 코드 파일은 프로젝트 루트의 [`examples/`](../examples/README.md) 폴더에 위치합니다.
+## Example Code / 예제 코드
 
 Example code files are located in the [`examples/`](../examples/README.md) folder at the project root.
 
-## 연습문제 풀이 / Exercise Solutions
+예제 코드 파일은 프로젝트 루트의 [`examples/`](../examples/README.md) 폴더에 위치합니다.
 
-연습문제 풀이 코드는 프로젝트 루트의 [`exercises/`](../exercises/README.md) 폴더에 위치합니다. 각 레슨의 Exercises 섹션에 대한 풀이 코드를 제공합니다 (49개 토픽, ~800개 파일).
+## Exercise Solutions / 연습문제 풀이
 
-Exercise solution code is located in the [`exercises/`](../exercises/README.md) folder at the project root. It provides solutions to the Exercises section of each lesson (49 topics, ~800 files).
+Exercise solution code is located in the [`exercises/`](../exercises/README.md) folder at the project root. It provides solutions to the Exercises section of each lesson.
 
-## 다국어 정책 / Multilingual Policy
+연습문제 풀이 코드는 프로젝트 루트의 [`exercises/`](../exercises/README.md) 폴더에 위치합니다. 각 레슨의 Exercises 섹션에 대한 풀이 코드를 제공합니다.
 
-- **영어(en)**: 원본 자료 (신규 작성 기준). 모든 토픽에 존재
-  **English (en)**: Original materials (for new content). Present in all topics
-- **한국어(ko)**: 번역본 (신규 작성 기준). 모든 토픽에 존재
-  **Korean (ko)**: Translated (for new content). Present in all topics
+## Multilingual Policy / 다국어 정책
+
+- **English (en)**: Original materials (for new content). Present in all topics
+  **영어(en)**: 원본 자료 (신규 작성 기준). 모든 토픽에 존재
+- **Korean (ko)**: Translated (for new content). Present in all topics
+  **한국어(ko)**: 번역본 (신규 작성 기준). 모든 토픽에 존재
