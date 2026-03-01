@@ -1,0 +1,223 @@
+# .github/workflows/ml_pipeline.yaml
+# Complete ML CI/CD Pipeline with GitHub Actions
+#
+# Stages:
+#   1. Code Quality (lint, type check, unit tests)
+#   2. Data Validation (schema, freshness, distribution)
+#   3. Model Training (with MLflow tracking)
+#   4. Evaluation Gate (accuracy, latency, fairness)
+#   5. Staging Deployment (integration + load tests)
+#   6. Production Deployment (canary rollout)
+
+name: ML Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'configs/**'
+      - 'requirements.txt'
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly retraining (Monday 6am UTC)
+  workflow_dispatch:
+    inputs:
+      skip_training:
+        description: 'Skip training (deploy existing model)'
+        type: boolean
+        default: false
+      model_version:
+        description: 'Model version to deploy (if skip_training=true)'
+        type: string
+        default: ''
+
+env:
+  PYTHON_VERSION: '3.11'
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+  MODEL_NAME: production-model
+
+jobs:
+  # ── Stage 1: Code Quality ───────────────────────────────────────
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Lint with ruff
+        run: ruff check src/ tests/
+      - name: Type check with mypy
+        run: mypy src/ --ignore-missing-imports
+      - name: Unit tests
+        run: pytest tests/unit/ -v --cov=src --cov-report=xml --tb=short
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ── Stage 2: Data Validation ────────────────────────────────────
+  data-validation:
+    runs-on: ubuntu-latest
+    needs: code-quality
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Validate training data
+        run: python scripts/validate_data.py --config configs/data_validation.json
+        env:
+          DATA_PATH: ${{ secrets.TRAINING_DATA_PATH }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Check data freshness
+        run: python scripts/check_data_freshness.py --max-age-days 7
+      - name: Data drift check
+        run: python scripts/check_data_drift.py --reference-path ${{ secrets.REFERENCE_DATA_PATH }}
+
+  # ── Stage 3: Model Training ─────────────────────────────────────
+  train:
+    runs-on: ubuntu-latest
+    needs: data-validation
+    if: ${{ !inputs.skip_training }}
+    timeout-minutes: 120
+    outputs:
+      model_version: ${{ steps.register.outputs.model_version }}
+      run_id: ${{ steps.train.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Download training data
+        run: python scripts/download_data.py
+        env:
+          DATA_PATH: ${{ secrets.TRAINING_DATA_PATH }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Train model
+        id: train
+        run: |
+          RUN_ID=$(python scripts/train.py --config configs/production.yaml 2>&1 | tail -1)
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "Training complete. Run ID: $RUN_ID"
+      - name: Register model
+        id: register
+        run: |
+          VERSION=$(python scripts/register_model.py \
+            --run-id ${{ steps.train.outputs.run_id }} \
+            --model-name ${{ env.MODEL_NAME }})
+          echo "model_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Model registered. Version: $VERSION"
+
+  # ── Stage 4: Evaluation Gate ────────────────────────────────────
+  evaluate:
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Evaluate model performance
+        run: |
+          python scripts/evaluate.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --min-accuracy 0.92 \
+            --max-latency-ms 50 \
+            --min-improvement 0.005
+      - name: Bias and fairness check
+        run: |
+          python scripts/fairness_check.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --min-demographic-parity 0.8
+      - name: Model size check
+        run: |
+          python scripts/check_model_size.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --max-size-mb 500
+
+  # ── Stage 5: Staging Deployment ─────────────────────────────────
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: evaluate
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        run: |
+          python scripts/deploy.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --environment staging
+      - name: Wait for rollout
+        run: sleep 30
+      - name: Smoke tests
+        run: pytest tests/smoke/ -v --timeout=60
+      - name: Integration tests
+        run: pytest tests/integration/ -v --timeout=300
+      - name: Load test
+        run: |
+          python scripts/load_test.py \
+            --target staging \
+            --rps 100 \
+            --duration-seconds 60 \
+            --max-p99-latency-ms 200
+
+  # ── Stage 6: Production Deployment (Canary) ─────────────────────
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Canary deploy (10% traffic)
+        run: |
+          python scripts/deploy.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --environment production \
+            --strategy canary \
+            --traffic-percent 10
+      - name: Monitor canary (15 minutes)
+        run: |
+          python scripts/monitor_canary.py \
+            --duration-minutes 15 \
+            --max-error-rate 0.02 \
+            --max-latency-p99-ms 100
+      - name: Ramp to 50%
+        run: |
+          python scripts/deploy.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --environment production \
+            --strategy canary \
+            --traffic-percent 50
+      - name: Monitor 50% (10 minutes)
+        run: |
+          python scripts/monitor_canary.py \
+            --duration-minutes 10 \
+            --max-error-rate 0.02 \
+            --max-latency-p99-ms 100
+      - name: Full rollout (100%)
+        run: |
+          python scripts/deploy.py \
+            --model-version ${{ needs.train.outputs.model_version }} \
+            --environment production \
+            --strategy canary \
+            --traffic-percent 100
+      - name: Post-deployment verification
+        run: pytest tests/smoke/ -v --timeout=60

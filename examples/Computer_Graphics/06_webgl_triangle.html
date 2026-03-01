@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL Rotating Triangle</title>
+    <style>
+        /*
+         * Why full-viewport canvas?  WebGL apps typically fill the entire
+         * window to maximize the rendering area.  The body margin reset
+         * prevents the default browser margin from creating scrollbars.
+         */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #e0e0e0;
+        }
+        canvas {
+            border: 1px solid #333;
+            border-radius: 4px;
+        }
+        .info {
+            margin-top: 12px;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .controls {
+            margin-top: 8px;
+            font-size: 13px;
+            opacity: 0.6;
+        }
+        h1 {
+            margin-bottom: 12px;
+            font-size: 20px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebGL: Rotating Colored Triangle</h1>
+    <canvas id="glcanvas" width="600" height="600"></canvas>
+    <div class="info" id="info">Rotation speed: 1.0x</div>
+    <div class="controls">
+        Click/drag to change rotation speed &bull; Scroll to zoom &bull; Press R to reset
+    </div>
+
+<script>
+/*
+ * WebGL Rotating Triangle
+ * ========================
+ *
+ * This is a minimal but complete WebGL application demonstrating:
+ * 1. WebGL context initialization
+ * 2. Shader compilation and linking
+ * 3. Vertex buffer creation
+ * 4. Uniform matrix passing (rotation)
+ * 5. Animation loop
+ * 6. Mouse interaction
+ *
+ * Every WebGL application follows this exact pattern:
+ *   init context -> compile shaders -> create buffers -> render loop
+ *
+ * Why a triangle?  It's the GPU's atomic drawing primitive.  Every
+ * polygon, every 3D model, everything you see on screen is made of
+ * triangles.  Understanding how one triangle gets drawn teaches you
+ * the entire pipeline.
+ */
+
+// =========================================================================
+// 1. Shader source code
+// =========================================================================
+
+/*
+ * Why are shaders strings?  They're compiled at runtime by the GPU
+ * driver.  This allows the same JavaScript code to run on any GPU
+ * architecture -- the driver generates device-specific machine code.
+ *
+ * GLSL (OpenGL Shading Language) looks like C but runs on the GPU:
+ * - Vertex shader runs once per vertex
+ * - Fragment shader runs once per pixel (fragment)
+ */
+
+const vertexShaderSource = `
+    // 'attribute' = per-vertex input from the vertex buffer
+    attribute vec2 a_position;
+    attribute vec3 a_color;
+
+    // 'uniform' = constant for all vertices in a draw call
+    // We use this for the rotation matrix, which is the same for every vertex
+    uniform mat3 u_transform;
+
+    // 'varying' = output from vertex shader, interpolated across triangle,
+    // then input to fragment shader.  This is how per-vertex colors become
+    // smooth gradients across the triangle's surface.
+    varying vec3 v_color;
+
+    void main() {
+        // Apply the transformation matrix to the 2D position
+        // We lift to 3D homogeneous (x, y, 1) for the matrix multiply,
+        // then extract xy for the final position.
+        vec3 transformed = u_transform * vec3(a_position, 1.0);
+
+        // gl_Position is the built-in output: clip-space position
+        // Why vec4?  Even for 2D, WebGL uses 4D homogeneous clip space.
+        // z=0 puts us in the middle of the depth range, w=1 means no
+        // perspective division.
+        gl_Position = vec4(transformed.xy, 0.0, 1.0);
+
+        // Pass vertex color to fragment shader for interpolation
+        v_color = a_color;
+    }
+`;
+
+const fragmentShaderSource = `
+    // Why mediump?  WebGL requires explicit precision for floats in
+    // fragment shaders.  mediump is sufficient for colors and saves
+    // power on mobile GPUs.
+    precision mediump float;
+
+    varying vec3 v_color;
+
+    void main() {
+        // gl_FragColor is the built-in output: the pixel's final color
+        gl_FragColor = vec4(v_color, 1.0);
+    }
+`;
+
+// =========================================================================
+// 2. WebGL initialization
+// =========================================================================
+
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl');
+
+if (!gl) {
+    document.body.innerHTML = '<h2>WebGL not supported in this browser</h2>';
+    throw new Error('WebGL not available');
+}
+
+/*
+ * Why set the clear color immediately?  It's a one-time state setup.
+ * WebGL is a state machine -- you configure states, then issue draw
+ * commands that use those states.
+ */
+gl.clearColor(0.05, 0.05, 0.12, 1.0);
+
+// =========================================================================
+// 3. Shader compilation helper
+// =========================================================================
+
+/**
+ * Compile a shader from source and check for errors.
+ *
+ * Why a helper function?  Shader compilation is boilerplate that every
+ * WebGL app needs.  Extracting it keeps the main code readable and
+ * makes error messages actionable (they include the shader type).
+ */
+function compileShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const typeName = type === gl.VERTEX_SHADER ? 'vertex' : 'fragment';
+        console.error(`${typeName} shader compilation failed:`,
+                      gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+    }
+    return shader;
+}
+
+/**
+ * Link vertex and fragment shaders into a program.
+ *
+ * Why a "program"?  The GPU executes vertex and fragment shaders as a
+ * pair.  The program object binds them together and validates that the
+ * vertex shader's varying outputs match the fragment shader's inputs.
+ */
+function createProgram(gl, vertexSource, fragmentSource) {
+    const vs = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
+    const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program linking failed:', gl.getProgramInfoLog(program));
+        return null;
+    }
+    return program;
+}
+
+// =========================================================================
+// 4. Create shader program and look up locations
+// =========================================================================
+
+const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+gl.useProgram(program);
+
+/*
+ * Why look up attribute/uniform locations?  The GLSL compiler can
+ * reorder or optimize away variables.  Looking up locations at init
+ * time ensures we have the correct addresses for setting data later.
+ */
+const a_position = gl.getAttribLocation(program, 'a_position');
+const a_color = gl.getAttribLocation(program, 'a_color');
+const u_transform = gl.getUniformLocation(program, 'u_transform');
+
+// =========================================================================
+// 5. Create vertex buffer
+// =========================================================================
+
+/*
+ * Vertex data: interleaved position (x, y) and color (r, g, b).
+ *
+ * Why interleaved?  It improves cache locality -- when the GPU reads
+ * one vertex's position, the color data is in the same cache line.
+ * For a simple demo the difference is negligible, but it's good practice.
+ *
+ * The triangle vertices are in clip space [-1, 1]:
+ *   Top:          (0, 0.7)    - Red
+ *   Bottom-left:  (-0.6, -0.5) - Green
+ *   Bottom-right: (0.6, -0.5)  - Blue
+ */
+const vertices = new Float32Array([
+    // x,    y,     r,   g,   b
+     0.0,  0.7,   1.0, 0.2, 0.2,   // Top vertex (red)
+    -0.6, -0.5,   0.2, 1.0, 0.2,   // Bottom-left (green)
+     0.6, -0.5,   0.2, 0.2, 1.0,   // Bottom-right (blue)
+]);
+
+const buffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+/*
+ * Attribute pointers tell the GPU how to interpret the vertex buffer.
+ *
+ * stride = 20 bytes (5 floats * 4 bytes each) -- the distance from
+ * one vertex to the next in the buffer.
+ *
+ * offset = 0 for position (starts at beginning), 8 for color (after
+ * 2 position floats * 4 bytes).
+ */
+const FLOAT_SIZE = 4;
+const STRIDE = 5 * FLOAT_SIZE;
+
+gl.enableVertexAttribArray(a_position);
+gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, STRIDE, 0);
+
+gl.enableVertexAttribArray(a_color);
+gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, STRIDE, 2 * FLOAT_SIZE);
+
+// =========================================================================
+// 6. Transformation matrix helpers
+// =========================================================================
+
+/**
+ * Create a 2D rotation matrix in column-major order (WebGL convention).
+ *
+ * Why column-major?  OpenGL/WebGL expect matrices stored column by column.
+ * This is the opposite of how we usually write matrices in math (row-major).
+ * Getting this wrong is a common bug -- the matrix looks correct when
+ * printed but produces wrong transforms.
+ *
+ * The 3x3 homogeneous rotation matrix is:
+ *   [cos  -sin  0]
+ *   [sin   cos  0]
+ *   [0     0    1]
+ *
+ * In column-major storage: [cos, sin, 0, -sin, cos, 0, 0, 0, 1]
+ */
+function makeRotationMatrix(angle) {
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    return new Float32Array([
+        c,  s, 0,     // Column 0
+       -s,  c, 0,     // Column 1
+        0,  0, 1,     // Column 2
+    ]);
+}
+
+/**
+ * Create a 2D scaling matrix (column-major).
+ */
+function makeScaleMatrix(sx, sy) {
+    return new Float32Array([
+        sx,  0, 0,
+         0, sy, 0,
+         0,  0, 1,
+    ]);
+}
+
+/**
+ * Multiply two 3x3 matrices (column-major).
+ *
+ * Why manual multiply instead of a library?  For a learning example,
+ * seeing the actual math is more instructive than hiding it behind
+ * gl-matrix.  In production, always use a library.
+ */
+function multiply3x3(a, b) {
+    const result = new Float32Array(9);
+    for (let col = 0; col < 3; col++) {
+        for (let row = 0; row < 3; row++) {
+            result[col * 3 + row] =
+                a[0 * 3 + row] * b[col * 3 + 0] +
+                a[1 * 3 + row] * b[col * 3 + 1] +
+                a[2 * 3 + row] * b[col * 3 + 2];
+        }
+    }
+    return result;
+}
+
+// =========================================================================
+// 7. Interaction state
+// =========================================================================
+
+let rotationSpeed = 1.0;
+let zoomLevel = 1.0;
+let isDragging = false;
+let lastMouseX = 0;
+
+canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (isDragging) {
+        /*
+         * Why map mouse delta to speed?  Direct mapping gives intuitive
+         * control -- drag right to speed up, left to slow down / reverse.
+         */
+        const dx = e.clientX - lastMouseX;
+        rotationSpeed += dx * 0.01;
+        lastMouseX = e.clientX;
+        document.getElementById('info').textContent =
+            `Rotation speed: ${rotationSpeed.toFixed(2)}x`;
+    }
+});
+
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    /*
+     * Why exponential zoom?  Linear zoom feels unnatural -- zooming from
+     * 1x to 2x should feel the same as 2x to 4x.  Multiplying by a
+     * factor achieves this perceptual uniformity.
+     */
+    zoomLevel *= e.deltaY > 0 ? 0.95 : 1.05;
+    zoomLevel = Math.max(0.1, Math.min(5.0, zoomLevel));
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'r' || e.key === 'R') {
+        rotationSpeed = 1.0;
+        zoomLevel = 1.0;
+        document.getElementById('info').textContent = 'Rotation speed: 1.0x';
+    }
+});
+
+// =========================================================================
+// 8. Render loop
+// =========================================================================
+
+let angle = 0;
+let lastTime = 0;
+
+/**
+ * The main render loop, called every frame by requestAnimationFrame.
+ *
+ * Why requestAnimationFrame instead of setInterval?  It synchronizes
+ * with the display's refresh rate (usually 60Hz), pauses when the tab
+ * is hidden (saving power), and provides a high-resolution timestamp
+ * for smooth delta-time animation.
+ */
+function render(timestamp) {
+    // Delta time for frame-rate independent animation
+    // Why delta time?  Without it, the triangle rotates faster on a
+    // 144Hz monitor than a 60Hz one.  Multiplying by dt ensures
+    // consistent speed regardless of frame rate.
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
+    // Update rotation angle
+    angle += rotationSpeed * dt;
+
+    // Build the transformation matrix: Scale * Rotation
+    const rotMatrix = makeRotationMatrix(angle);
+    const scaleMatrix = makeScaleMatrix(zoomLevel, zoomLevel);
+    const transform = multiply3x3(scaleMatrix, rotMatrix);
+
+    // Clear the framebuffer
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Upload the transformation matrix to the GPU
+    // Why uniformMatrix3fv?  'uniform' because it's constant for all vertices,
+    // 'Matrix3fv' because it's a 3x3 float matrix, and 'false' means we're
+    // already in column-major order (no transpose needed).
+    gl.uniformMatrix3fv(u_transform, false, transform);
+
+    // Draw the triangle
+    // Why TRIANGLES?  It's the fundamental primitive.  3 vertices = 1 triangle.
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // Request next frame
+    requestAnimationFrame(render);
+}
+
+// Start the render loop
+requestAnimationFrame(render);
+
+</script>
+</body>
+</html>
