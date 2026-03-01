@@ -1,4 +1,4 @@
-# 파일 암호화 예제 (File Encryption Examples)
+# File Encryption Examples (파일 암호화 예제)
 
 XOR 기반 파일 암호화 도구 구현 예제
 

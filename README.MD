@@ -1,35 +1,29 @@
 # Study Hub
 
-개인 학습 자료를 정리한 레포지토리입니다.
-일부 내용은 직접 작성했으며, 일부는 AI의 도움을 받아 작성되었습니다.
+A personal study repository covering technical topics — from programming fundamentals to plasma physics — organized in 4 difficulty tiers. Includes runnable code examples and exercise solutions. Some content was written by hand, some with AI assistance.
 
-A personal study materials repository.
-Some content was written by me, some was created with the help of AI.
-
-55개 토픽, 4단계 난이도 체계, 한/영 이중언어를 지원하며, ~1,085개의 실행 가능한 예제와 ~858개의 연습문제 풀이를 포함합니다.
-
-55 topics across 4 difficulty tiers, bilingual (EN/KR), with ~1,085 runnable examples and ~858 exercise solutions.
+개인 학습 자료 레포지토리. 프로그래밍 기초부터 플라즈마 물리학까지 다양한 기술 토픽을 4단계 난이도로 구성했습니다. 실행 가능한 코드 예제와 연습문제 풀이를 포함하며, 일부 내용은 직접 작성, 일부는 AI의 도움을 받아 작성되었습니다.
 
 ---
 
-## 프로젝트 구조 / Project Structure
+## Project Structure / 프로젝트 구조
 
 ```
-├── content/          # 학습 자료 Markdown / Study materials
-│   ├── ko/           # 한국어 (55개 토픽) / Korean (55 topics)
-│   ├── en/           # 영어 (55개 토픽) / English (55 topics)
-│   └── topic_metadata.yaml  # 4-Tier 난이도 분류
+├── content/          # Study materials / 학습 자료 Markdown
+│   ├── ko/           # Korean (55 topics) / 한국어 (55개 토픽)
+│   ├── en/           # English (55 topics) / 영어 (55개 토픽)
+│   └── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
 │
-├── examples/         # 예제 코드 (55개 토픽, ~1,085개 파일) / Example code
+├── examples/         # Example code / 예제 코드
 │
-└── exercises/        # 연습문제 풀이 (53개 토픽, ~858개 파일) / Exercise solutions
+└── exercises/        # Exercise solutions / 연습문제 풀이
 ```
 
-## 목차 / Table of Contents
+## Table of Contents / 목차
 
-### Tier 1 — 입문 (Beginner)
+### Tier 1 — Beginner (입문)
 
-| 토픽 / Topic | 설명 / Description | 레슨 / Lessons |
+| Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [Claude_Ecosystem](./content/ko/Claude_Ecosystem/00_Overview.md) | Claude Code, CLAUDE.md, Hooks, MCP, Agent SDK | 22 |
 | [Cloud_Computing](./content/ko/Cloud_Computing/00_Overview.md) | AWS/GCP, EC2, Lambda, S3, VPC, Terraform | 17 |
@@ -44,9 +38,9 @@ Some content was written by me, some was created with the help of AI.
 | [VIM](./content/ko/VIM/00_Overview.md) | 모달 편집, 모션, 매크로, 플러그인, Neovim/LSP | 14 |
 | [Web_Development](./content/ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO, Flask | 16 |
 
-### Tier 2 — 중급 (Intermediate)
+### Tier 2 — Intermediate (중급)
 
-| 토픽 / Topic | 설명 / Description | 레슨 / Lessons |
+| Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [C_Programming](./content/ko/C_Programming/00_Overview.md) | C 기초 ~ 임베디드, 디버깅, 포인터 심화, 네트워크, IPC, 크로스 플랫폼 | 24 |
 | [Calculus_and_Differential_Equations](./content/ko/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 20 |
@@ -67,9 +61,9 @@ Some content was written by me, some was created with the help of AI.
 | [Software_Engineering](./content/ko/Software_Engineering/00_Overview.md) | SDLC, 애자일, UML, 품질보증, DevOps, 유지보수 | 16 |
 | [System_Design](./content/ko/System_Design/00_Overview.md) | 확장성, 분산시스템, 관측성, 검색 시스템 | 20 |
 
-### Tier 3 — 고급 (Advanced)
+### Tier 3 — Advanced (고급)
 
-| 토픽 / Topic | 설명 / Description | 레슨 / Lessons |
+| Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [Algorithm](./content/ko/Algorithm/00_Overview.md) | 알고리즘/자료구조, 정렬, 그래프, DP, HLD, LCT, PST | 32 |
 | [Backend_Frameworks](./content/ko/Backend_Frameworks/00_Overview.md) | FastAPI, Express, Django, API 설계, 인증, 배포, 관측성 | 18 |
@@ -93,9 +87,9 @@ Some content was written by me, some was created with the help of AI.
 | [Robotics](./content/ko/Robotics/00_Overview.md) | 운동학, 동역학, 경로 계획, SLAM, ROS2 | 16 |
 | [Signal_Processing](./content/ko/Signal_Processing/00_Overview.md) | 푸리에 해석, 샘플링, FFT, Z변환, 디지털 필터, 적응 필터 | 16 |
 
-### Tier 4 — 전문 (Expert)
+### Tier 4 — Expert (전문)
 
-| 토픽 / Topic | 설명 / Description | 레슨 / Lessons |
+| Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [MHD](./content/ko/MHD/00_Overview.md) | MHD 평형, 안정성, 자기재결합, 난류, 다이나모, 핵융합 | 18 |
 | [Plasma_Physics](./content/ko/Plasma_Physics/00_Overview.md) | 디바이 차폐, 블라소프 방정식, 란다우 감쇠, 플라즈마 파동 | 16 |
@@ -104,46 +98,46 @@ Some content was written by me, some was created with the help of AI.
 
 ---
 
-## 시작하기 / Getting Started
-
-각 폴더의 `00_Overview.md` 파일에서 학습 로드맵과 상세 목차를 확인할 수 있습니다.
+## Getting Started / 시작하기
 
 Check the `00_Overview.md` file in each folder for learning roadmaps and detailed table of contents.
 
-### 추천 학습 순서 / Recommended Learning Path
+각 폴더의 `00_Overview.md` 파일에서 학습 로드맵과 상세 목차를 확인할 수 있습니다.
 
-#### 0단계: 기초 (공통 필수) / Stage 0: Foundation (Required for All)
+### Recommended Learning Path / 추천 학습 순서
+
+#### Stage 0: Foundation (Required for All) / 0단계: 기초 (공통 필수)
 
 ```
 Programming → Python → Git → Linux (01~05) → Shell_Script (01~05)
 ```
 
-1. **프로그래밍 입문 / Programming Intro**: Programming (01~08) — 개념, 패러다임, OOP, 함수형
-2. **Python 기초 / Python Basics**: Python (01~08) — 문법, 타입 힌트, 데코레이터
-3. **버전 관리 / Version Control**: Git (01~05) — 브랜치, 머지, GitHub
-4. **리눅스 기초 / Linux Basics**: Linux (01~05) — 명령어, 파일시스템, 권한
-5. **셸 스크립팅 / Shell Scripting**: Shell_Script (01~05) — 변수, 조건문, 반복문, 함수
+1. **Programming Intro / 프로그래밍 입문**: Programming (01~08) — 개념, 패러다임, OOP, 함수형
+2. **Python Basics / Python 기초**: Python (01~08) — 문법, 타입 힌트, 데코레이터
+3. **Version Control / 버전 관리**: Git (01~05) — 브랜치, 머지, GitHub
+4. **Linux Basics / 리눅스 기초**: Linux (01~05) — 명령어, 파일시스템, 권한
+5. **Shell Scripting / 셸 스크립팅**: Shell_Script (01~05) — 변수, 조건문, 반복문, 함수
 
-#### 1트랙: 시스템 프로그래밍 / Track 1: Systems Programming
+#### Track 1: Systems Programming / 1트랙: 시스템 프로그래밍
 
 ```
 C_Programming → CPP → Rust
 ```
 
-#### 2트랙: 웹 풀스택 / Track 2: Full-Stack Web
+#### Track 2: Full-Stack Web / 2트랙: 웹 풀스택
 
 ```
 Web_Development → Frontend_Frameworks → Backend_Frameworks → GraphQL → Docker → Cloud_Computing
 ```
 
-#### 3트랙: 데이터 & 인프라 / Track 3: Data & Infrastructure
+#### Track 3: Data & Infrastructure / 3트랙: 데이터 & 인프라
 
 ```
 PostgreSQL → Data_Science → Data_Engineering
 Linux (심화) → Networking → System_Design → Security
 ```
 
-#### 4트랙: CS 이론 / Track 4: CS Theory
+#### Track 4: CS Theory / 4트랙: CS 이론
 
 ```
 Algorithm → Formal_Languages
@@ -151,7 +145,7 @@ OS_Theory → Computer_Architecture → Compiler_Design
 Software_Engineering → Database_Theory → Cryptography_Theory
 ```
 
-#### 5트랙: AI & 머신러닝 / Track 5: AI & Machine Learning
+#### Track 5: AI & Machine Learning / 5트랙: AI & 머신러닝
 
 ```
 Math_for_AI → Machine_Learning → Deep_Learning → LLM_and_NLP → Foundation_Models
@@ -159,7 +153,7 @@ Math_for_AI → Machine_Learning → Deep_Learning → LLM_and_NLP → Foundatio
 └─ 수학 심화: Calculus, Mathematical_Methods, Numerical_Simulation
 ```
 
-#### 6트랙: 물리 & 공학 / Track 6: Physics & Engineering
+#### Track 6: Physics & Engineering / 6트랙: 물리 & 공학
 
 ```
 Electrodynamics → Optics → Signal_Processing → Control_Theory
@@ -169,32 +163,32 @@ Electrodynamics → Optics → Signal_Processing → Control_Theory
 
 ---
 
-## 다국어 지원 / Multilingual Support
+## Multilingual Support / 다국어 지원
 
-- 모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
-  All study materials are maintained in both **Korean (ko)** and **English (en)**
-- 55개 토픽 모두 한/영 번역 완료
-  All 55 topics fully translated to Korean/English
+- All study materials are maintained in both **Korean (ko)** and **English (en)**
+  모든 학습 자료는 **한국어(ko)**와 **영어(en)** 두 버전으로 관리
+- All 55 topics fully translated to Korean/English
+  55개 토픽 모두 한/영 번역 완료
 
-## 라이센스 / License
+## License / 라이센스
 
-이 프로젝트는 이중 라이센스를 적용합니다:
 This project uses a dual license:
+이 프로젝트는 이중 라이센스를 적용합니다:
 
-| 대상 / Target | 라이센스 / License |
+| Target / 대상 | License / 라이센스 |
 |---|---|
-| 학습 자료 (`content/`) / Study materials | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
-| 코드 (`examples/`, `exercises/`) / Code | [MIT License](./LICENSE) |
+| Study materials (`content/`) / 학습 자료 | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) |
+| Code (`examples/`, `exercises/`) / 코드 | [MIT License](./LICENSE) |
 
-### AI 도움 명시 / AI Assistance Disclosure
+### AI Assistance Disclosure / AI 도움 명시
 
-이 저장소의 콘텐츠는 부분적으로 AI(Claude)의 도움을 받아 작성되었습니다.
 Some content in this repository was created with the assistance of AI (Claude).
+이 저장소의 콘텐츠는 부분적으로 AI(Claude)의 도움을 받아 작성되었습니다.
 
-- 일부 학습 자료는 AI가 생성하고 저자가 검토함
-  Some study materials were generated by AI and reviewed by the author
-- 일부는 저자가 작성하고 AI가 검토함
-  Some were written by the author and reviewed by AI
+- Some study materials were generated by AI and reviewed by the author
+  일부 학습 자료는 AI가 생성하고 저자가 검토함
+- Some were written by the author and reviewed by AI
+  일부는 저자가 작성하고 AI가 검토함
 
 ## Author
 
