@@ -53,10 +53,3 @@ Example code files are located in the [`examples/`](../examples/README.md) folde
 Exercise solution code is located in the [`exercises/`](../exercises/README.md) folder at the project root. It provides solutions to the Exercises section of each lesson.
 
 연습문제 풀이 코드는 프로젝트 루트의 [`exercises/`](../exercises/README.md) 폴더에 위치합니다. 각 레슨의 Exercises 섹션에 대한 풀이 코드를 제공합니다.
-
-## Multilingual Policy / 다국어 정책
-
-- **English (en)**: Original materials (for new content). Present in all topics
-  **영어(en)**: 원본 자료 (신규 작성 기준). 모든 토픽에 존재
-- **Korean (ko)**: Translated (for new content). Present in all topics
-  **한국어(ko)**: 번역본 (신규 작성 기준). 모든 토픽에 존재
