@@ -29,19 +29,6 @@ Check the `00_Overview.md` in each topic for learning roadmaps and detailed tabl
 
 각 토픽의 `00_Overview.md`에서 학습 로드맵과 상세 목차를 확인할 수 있습니다.
 
-## How to View / 보기 방법
-
-1. **Web Viewer / 웹 뷰어**: Run Flask app in `viewer/` / `viewer/` 폴더의 Flask 앱 실행
-2. **Direct Open / 직접 열기**: Open Markdown files in VS Code / VS Code 등에서 Markdown 파일 열기
-3. **GitHub**: Render directly on GitHub / GitHub에서 직접 렌더링
-
-## File Naming Convention / 파일 명명 규칙
-
-- `00_Overview.md` - Topic overview and table of contents / 토픽 개요 및 목차
-- `01_*.md`, `02_*.md`, ... - Sequential lessons (numbered prefix) / 순차적 레슨 (숫자 접두사로 순서 지정)
-- Topic folders / 토픽 폴더명: `Upper_Snake_Case` (e.g., `C_Programming`, `Deep_Learning`)
-- Lesson files / 레슨 파일명: English, spaces replaced with underscores / 영문, 공백은 언더스코어로 대체 (e.g., `01_Getting_Started.md`)
-
 ## Example Code / 예제 코드
 
 Example code files are located in the [`examples/`](../examples/README.md) folder at the project root.
