@@ -1,91 +1,91 @@
 # Algorithm Examples - C++ Makefile
-# 알고리즘 예제 C++ 버전 빌드용
+# Build file for Algorithm example C++ programs
 
 CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++17 -O2
 LDFLAGS =
 
-# 모든 소스 파일
+# All source files
 SOURCES = $(wildcard *.cpp)
 TARGETS = $(SOURCES:.cpp=)
 
-# 기본 타겟
+# Default target
 .PHONY: all clean help test run-all
 
 all: $(TARGETS)
 
-# 개별 빌드 규칙
+# Individual build rule
 %: %.cpp
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 
-# 정리
+# Clean
 clean:
 	rm -f $(TARGETS)
 	rm -f *.o
 
-# 도움말
+# Help
 help:
 	@echo "Algorithm Examples - C++ Makefile"
 	@echo ""
-	@echo "사용법:"
-	@echo "  make          - 모든 예제 컴파일"
-	@echo "  make clean    - 실행 파일 삭제"
-	@echo "  make test     - 모든 예제 실행 및 테스트"
-	@echo "  make run-XX   - 특정 예제 실행 (예: make run-01)"
+	@echo "Usage:"
+	@echo "  make          - Compile all examples"
+	@echo "  make clean    - Remove executables"
+	@echo "  make test     - Run and test all examples"
+	@echo "  make run-XX   - Run specific example (e.g., make run-01)"
 	@echo ""
-	@echo "예제 목록:"
-	@echo "  01_complexity      - 시간 복잡도"
-	@echo "  02_array_string    - 배열과 문자열"
-	@echo "  03_stack_queue     - 스택과 큐"
-	@echo "  04_hash_table      - 해시 테이블"
-	@echo "  05_sorting         - 정렬 알고리즘"
-	@echo "  06_searching       - 탐색 알고리즘"
-	@echo "  07_divide_conquer  - 분할 정복"
-	@echo "  08_backtracking    - 백트래킹"
-	@echo "  09_tree_bst        - 트리와 BST"
-	@echo "  10_heap            - 힙"
-	@echo "  11_trie            - 트라이"
-	@echo "  12_graph_basic     - 그래프 기초"
-	@echo "  13_topological_sort- 위상 정렬"
-	@echo "  14_shortest_path   - 최단 경로"
-	@echo "  15_mst             - 최소 신장 트리"
+	@echo "Example list:"
+	@echo "  01_complexity      - Time Complexity"
+	@echo "  02_array_string    - Arrays and Strings"
+	@echo "  03_stack_queue     - Stacks and Queues"
+	@echo "  04_hash_table      - Hash Tables"
+	@echo "  05_sorting         - Sorting Algorithms"
+	@echo "  06_searching       - Search Algorithms"
+	@echo "  07_divide_conquer  - Divide and Conquer"
+	@echo "  08_backtracking    - Backtracking"
+	@echo "  09_tree_bst        - Trees and BST"
+	@echo "  10_heap            - Heaps"
+	@echo "  11_trie            - Tries"
+	@echo "  12_graph_basic     - Graph Basics"
+	@echo "  13_topological_sort- Topological Sort"
+	@echo "  14_shortest_path   - Shortest Path"
+	@echo "  15_mst             - Minimum Spanning Tree"
 	@echo "  16_lca             - LCA"
 	@echo "  17_scc             - SCC"
-	@echo "  18_dp              - 동적 프로그래밍"
-	@echo "  19_greedy          - 탐욕 알고리즘"
-	@echo "  20_bitmask_dp      - 비트마스크 DP"
-	@echo "  21_number_theory   - 정수론"
-	@echo "  22_string_algorithm- 문자열 알고리즘"
-	@echo "  23_segment_tree    - 세그먼트 트리"
-	@echo "  24_fenwick_tree    - 펜윅 트리"
-	@echo "  25_network_flow    - 네트워크 플로우"
-	@echo "  26_geometry        - 기하 알고리즘"
-	@echo "  27_game_theory     - 게임 이론"
-	@echo "  28_advanced_dp     - 고급 DP 최적화"
-	@echo "  29_practice        - 실전 문제 풀이"
+	@echo "  18_dp              - Dynamic Programming"
+	@echo "  19_greedy          - Greedy Algorithms"
+	@echo "  20_bitmask_dp      - Bitmask DP"
+	@echo "  21_number_theory   - Number Theory"
+	@echo "  22_string_algorithm- String Algorithms"
+	@echo "  23_segment_tree    - Segment Tree"
+	@echo "  24_fenwick_tree    - Fenwick Tree"
+	@echo "  25_network_flow    - Network Flow"
+	@echo "  26_geometry        - Computational Geometry"
+	@echo "  27_game_theory     - Game Theory"
+	@echo "  28_advanced_dp     - Advanced DP Optimization"
+	@echo "  29_practice        - Practice Problems"
 
-# 테스트 (모든 예제 실행)
+# Test (run all examples)
 test: all
 	@echo "=========================================="
-	@echo "모든 예제 테스트 실행"
+	@echo "Running all example tests"
 	@echo "=========================================="
 	@for target in $(TARGETS); do \
 		echo ""; \
-		echo "▶ Running $$target..."; \
-		./$$target || echo "✗ $$target 실패"; \
+		echo ">> Running $$target..."; \
+		./$$target || echo "!! $$target failed"; \
 		echo ""; \
 	done
 	@echo "=========================================="
-	@echo "테스트 완료"
+	@echo "Tests complete"
 	@echo "=========================================="
 
-# 전체 실행
+# Run all
 run-all: all
 	@for target in $(TARGETS); do \
 		./$$target; \
 	done
 
-# 개별 실행 규칙
+# Individual run rules
 run-01: 01_complexity
 	./01_complexity
 

@@ -1,69 +1,69 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSS 기초 예제</title>
+    <title>CSS Basics Example</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>CSS 기초 예제</h1>
+    <h1>CSS Basics Example</h1>
 
-    <!-- 1. 선택자 -->
+    <!-- 1. Selectors -->
     <section class="section">
-        <h2>1. CSS 선택자</h2>
+        <h2>1. CSS Selectors</h2>
 
-        <!-- 요소 선택자 -->
-        <p>이것은 p 태그입니다. (요소 선택자)</p>
+        <!-- Element selector -->
+        <p>This is a p tag. (Element selector)</p>
 
-        <!-- 클래스 선택자 -->
-        <p class="highlight">클래스 선택자로 스타일 적용 (.highlight)</p>
-        <p class="highlight warning">여러 클래스 적용 (.highlight .warning)</p>
+        <!-- Class selector -->
+        <p class="highlight">Styled with class selector (.highlight)</p>
+        <p class="highlight warning">Multiple classes applied (.highlight .warning)</p>
 
-        <!-- ID 선택자 -->
-        <p id="unique">ID 선택자로 스타일 적용 (#unique)</p>
+        <!-- ID selector -->
+        <p id="unique">Styled with ID selector (#unique)</p>
 
-        <!-- 자손 선택자 -->
+        <!-- Descendant selector -->
         <div class="parent">
-            <p>부모 안의 <span>자손 span</span> 요소</p>
+            <p>Parent's <span>descendant span</span> element</p>
             <div>
-                <p>더 깊은 <span>자손 span</span> 요소</p>
+                <p>Deeper <span>descendant span</span> element</p>
             </div>
         </div>
 
-        <!-- 자식 선택자 -->
+        <!-- Child selector -->
         <div class="container-child">
-            <p>직접 자식 p (자식 선택자)</p>
+            <p>Direct child p (child selector)</p>
             <div>
-                <p>손자 p (자식 선택자 미적용)</p>
+                <p>Grandchild p (child selector not applied)</p>
             </div>
         </div>
 
-        <!-- 인접 형제 선택자 -->
-        <h3>제목 다음 단락</h3>
-        <p>인접 형제 선택자로 스타일 적용 (h3 + p)</p>
-        <p>두 번째 단락 (인접 형제 아님)</p>
+        <!-- Adjacent sibling selector -->
+        <h3>Paragraph after heading</h3>
+        <p>Styled with adjacent sibling selector (h3 + p)</p>
+        <p>Second paragraph (not adjacent sibling)</p>
 
-        <!-- 속성 선택자 -->
-        <input type="text" placeholder="텍스트 입력">
-        <input type="email" placeholder="이메일 입력">
-        <a href="https://example.com" target="_blank">외부 링크</a>
-        <a href="/internal">내부 링크</a>
+        <!-- Attribute selector -->
+        <input type="text" placeholder="Text input">
+        <input type="email" placeholder="Email input">
+        <a href="https://example.com" target="_blank">External link</a>
+        <a href="/internal">Internal link</a>
     </section>
 
-    <!-- 2. 가상 클래스 -->
+    <!-- 2. Pseudo-classes -->
     <section class="section">
-        <h2>2. 가상 클래스</h2>
+        <h2>2. Pseudo-classes</h2>
 
-        <button class="btn">호버 효과 버튼</button>
-        <a href="#" class="link">링크 (방문 전/후 색상 다름)</a>
+        <button class="btn">Hover effect button</button>
+        <a href="#" class="link">Link (different colors before/after visit)</a>
 
         <ul class="pseudo-list">
-            <li>첫 번째 항목 (:first-child)</li>
-            <li>두 번째 항목</li>
-            <li>세 번째 항목</li>
-            <li>네 번째 항목</li>
-            <li>다섯 번째 항목 (:last-child)</li>
+            <li>First item (:first-child)</li>
+            <li>Second item</li>
+            <li>Third item</li>
+            <li>Fourth item</li>
+            <li>Fifth item (:last-child)</li>
         </ul>
 
         <ul class="nth-list">
@@ -75,36 +75,36 @@
             <li>6</li>
         </ul>
 
-        <input type="text" class="form-input" placeholder="포커스하면 테두리 변경">
+        <input type="text" class="form-input" placeholder="Border changes on focus">
     </section>
 
-    <!-- 3. 가상 요소 -->
+    <!-- 3. Pseudo-elements -->
     <section class="section">
-        <h2>3. 가상 요소</h2>
+        <h2>3. Pseudo-elements</h2>
 
-        <p class="quote">이것은 인용문입니다.</p>
-        <p class="first-letter-example">첫 글자가 크게 표시됩니다. 나머지 텍스트는 일반 크기입니다.</p>
+        <p class="quote">This is a quotation.</p>
+        <p class="first-letter-example">The first letter is displayed larger. The rest of the text is normal size.</p>
         <p class="first-line-example">
-            첫 번째 줄이 굵게 표시됩니다.
-            두 번째 줄은 일반 스타일입니다.
-            창 크기를 조절해보세요.
+            The first line is displayed in bold.
+            The second line has normal style.
+            Try resizing the window.
         </p>
     </section>
 
-    <!-- 4. 박스 모델 -->
+    <!-- 4. Box model -->
     <section class="section">
-        <h2>4. 박스 모델</h2>
+        <h2>4. Box Model</h2>
 
         <div class="box-demo">
             <div class="box content-box">
                 <strong>content-box</strong><br>
-                width = 콘텐츠만<br>
-                padding, border 별도
+                width = content only<br>
+                padding, border separate
             </div>
             <div class="box border-box">
                 <strong>border-box</strong><br>
-                width = 전체<br>
-                padding, border 포함
+                width = total<br>
+                padding, border included
             </div>
         </div>
 
@@ -122,12 +122,12 @@
         </div>
     </section>
 
-    <!-- 5. 색상 -->
+    <!-- 5. Colors -->
     <section class="section">
-        <h2>5. 색상 표현 방법</h2>
+        <h2>5. Color Representation Methods</h2>
 
         <div class="color-demo">
-            <div class="color-box" style="background-color: red;">red (키워드)</div>
+            <div class="color-box" style="background-color: red;">red (keyword)</div>
             <div class="color-box" style="background-color: #ff6347;">#ff6347 (HEX)</div>
             <div class="color-box" style="background-color: rgb(100, 149, 237);">rgb(100,149,237)</div>
             <div class="color-box" style="background-color: rgba(255, 0, 0, 0.5);">rgba(255,0,0,0.5)</div>
@@ -136,9 +136,9 @@
         </div>
     </section>
 
-    <!-- 6. 텍스트 스타일링 -->
+    <!-- 6. Text styling -->
     <section class="section">
-        <h2>6. 텍스트 스타일링</h2>
+        <h2>6. Text Styling</h2>
 
         <p class="text-font">font-family: 'Georgia', serif</p>
         <p class="text-size">font-size: 1.5em</p>
@@ -148,26 +148,26 @@
         <p class="text-transform-upper">text-transform: uppercase</p>
         <p class="text-transform-capital">text-transform: capitalize this sentence</p>
         <p class="text-spacing">letter-spacing: 2px, word-spacing: 10px</p>
-        <p class="text-shadow">text-shadow 효과</p>
+        <p class="text-shadow">text-shadow effect</p>
         <p class="text-align-center">text-align: center</p>
         <p class="text-line-height">
             line-height: 2<br>
-            줄 간격이 넓습니다.
+            Line spacing is wide.
         </p>
     </section>
 
-    <!-- 7. display 속성 -->
+    <!-- 7. display property -->
     <section class="section">
-        <h2>7. display 속성</h2>
+        <h2>7. display Property</h2>
 
         <div class="display-demo">
-            <span class="display-block">span을 block으로</span>
-            <span class="display-block">span을 block으로</span>
+            <span class="display-block">span as block</span>
+            <span class="display-block">span as block</span>
         </div>
 
         <div class="display-demo">
-            <div class="display-inline">div를 inline으로</div>
-            <div class="display-inline">div를 inline으로</div>
+            <div class="display-inline">div as inline</div>
+            <div class="display-inline">div as inline</div>
         </div>
 
         <div class="display-demo">
@@ -177,64 +177,64 @@
         </div>
 
         <div class="display-demo">
-            <span class="display-none">이 텍스트는 보이지 않습니다 (display: none)</span>
-            <span>보이는 텍스트</span>
+            <span class="display-none">This text is hidden (display: none)</span>
+            <span>Visible text</span>
         </div>
     </section>
 
-    <!-- 8. 위치 지정 -->
+    <!-- 8. Positioning -->
     <section class="section">
-        <h2>8. position 속성</h2>
+        <h2>8. position Property</h2>
 
         <div class="position-demo">
             <div class="pos-relative">relative (top: 20px, left: 20px)</div>
         </div>
 
         <div class="position-demo position-parent">
-            부모 (position: relative)
-            <div class="pos-absolute">absolute 자식</div>
+            Parent (position: relative)
+            <div class="pos-absolute">absolute child</div>
         </div>
 
-        <div class="pos-fixed-demo">fixed (우측 하단 고정)</div>
+        <div class="pos-fixed-demo">fixed (bottom-right corner)</div>
 
         <div class="position-demo sticky-container">
-            <p>스크롤하면 sticky 요소가 고정됩니다.</p>
-            <div class="pos-sticky">sticky 요소</div>
+            <p>The sticky element becomes fixed when scrolling.</p>
+            <div class="pos-sticky">sticky element</div>
             <p>Lorem ipsum dolor sit amet...</p>
-            <p>더 많은 콘텐츠...</p>
+            <p>More content...</p>
         </div>
     </section>
 
     <!-- 9. overflow -->
     <section class="section">
-        <h2>9. overflow 속성</h2>
+        <h2>9. overflow Property</h2>
 
         <div class="overflow-demo">
             <div class="overflow-visible">
                 <strong>overflow: visible</strong><br>
-                내용이 상자 밖으로 넘칩니다.
+                Content overflows outside the box.
                 Lorem ipsum dolor sit amet.
             </div>
             <div class="overflow-hidden">
                 <strong>overflow: hidden</strong><br>
-                넘치는 내용이 잘립니다.
+                Overflowing content is clipped.
                 Lorem ipsum dolor sit amet.
             </div>
             <div class="overflow-scroll">
                 <strong>overflow: scroll</strong><br>
-                스크롤바가 항상 표시됩니다.
+                Scrollbar is always shown.
                 Lorem ipsum dolor sit amet.
             </div>
             <div class="overflow-auto">
                 <strong>overflow: auto</strong><br>
-                필요할 때만 스크롤바 표시.
+                Scrollbar shown only when needed.
                 Lorem ipsum dolor sit amet consectetur adipisicing elit.
             </div>
         </div>
     </section>
 
     <footer>
-        <p>&copy; 2024 CSS 기초 예제</p>
+        <p>&copy; 2024 CSS Basics Example</p>
     </footer>
 </body>
 </html>

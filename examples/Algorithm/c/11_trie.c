@@ -1,8 +1,8 @@
 /*
- * 트라이 (Trie)
+ * Trie (Prefix Tree)
  * Prefix Tree, Autocomplete, XOR Trie
  *
- * 문자열 검색을 위한 트리 자료구조입니다.
+ * A tree data structure for string searching.
  */
 
 #include <stdio.h>
@@ -13,13 +13,13 @@
 #define ALPHABET_SIZE 26
 
 /* =============================================================================
- * 1. 기본 트라이
+ * 1. Basic Trie
  * ============================================================================= */
 
 typedef struct TrieNode {
     struct TrieNode* children[ALPHABET_SIZE];
     bool is_end;
-    int count;  /* 이 접두사로 시작하는 단어 수 */
+    int count;  /* Number of words starting with this prefix */
 } TrieNode;
 
 TrieNode* trie_create_node(void) {
@@ -88,7 +88,7 @@ int trie_count_prefix(TrieNode* root, const char* prefix) {
 }
 
 /* =============================================================================
- * 2. 단어 삭제
+ * 2. Word Deletion
  * ============================================================================= */
 
 bool trie_delete_helper(TrieNode* node, const char* word, int depth) {
@@ -98,7 +98,7 @@ bool trie_delete_helper(TrieNode* node, const char* word, int depth) {
         if (!node->is_end) return false;
         node->is_end = false;
 
-        /* 자식이 없으면 삭제 가능 */
+        /* Can delete if no children */
         for (int i = 0; i < ALPHABET_SIZE; i++) {
             if (node->children[i]) return false;
         }
@@ -110,7 +110,7 @@ bool trie_delete_helper(TrieNode* node, const char* word, int depth) {
         free(node->children[idx]);
         node->children[idx] = NULL;
 
-        /* 현재 노드도 삭제 가능한지 확인 */
+        /* Check if current node can also be deleted */
         if (!node->is_end) {
             for (int i = 0; i < ALPHABET_SIZE; i++) {
                 if (node->children[i]) return false;
@@ -127,7 +127,7 @@ void trie_delete(TrieNode* root, const char* word) {
 }
 
 /* =============================================================================
- * 3. 자동완성
+ * 3. Autocomplete
  * ============================================================================= */
 
 void autocomplete_helper(TrieNode* node, char* prefix, int prefix_len,
@@ -154,7 +154,7 @@ char** autocomplete(TrieNode* root, const char* prefix, int* result_count, int m
     char** results = malloc(max_results * sizeof(char*));
     *result_count = 0;
 
-    /* 접두사 노드 찾기 */
+    /* Find prefix node */
     TrieNode* node = root;
     char* current_prefix = malloc(100);
     strcpy(current_prefix, prefix);
@@ -176,7 +176,7 @@ char** autocomplete(TrieNode* root, const char* prefix, int* result_count, int m
 }
 
 /* =============================================================================
- * 4. 와일드카드 검색
+ * 4. Wildcard Search
  * ============================================================================= */
 
 bool wildcard_search_helper(TrieNode* node, const char* word) {
@@ -202,7 +202,7 @@ bool wildcard_search(TrieNode* root, const char* pattern) {
 }
 
 /* =============================================================================
- * 5. XOR 트라이 (비트 트라이)
+ * 5. XOR Trie (Bit Trie)
  * ============================================================================= */
 
 typedef struct XORTrieNode {
@@ -239,7 +239,7 @@ int xor_trie_max_xor(XORTrieNode* root, int num) {
 
     for (int i = 31; i >= 0; i--) {
         int bit = (num >> i) & 1;
-        int want = 1 - bit;  /* 반대 비트 선호 */
+        int want = 1 - bit;  /* Prefer opposite bit */
 
         if (node->children[want]) {
             result |= (1 << i);
@@ -271,7 +271,7 @@ int find_max_xor_pair(int arr[], int n) {
 }
 
 /* =============================================================================
- * 6. 최장 공통 접두사
+ * 6. Longest Common Prefix
  * ============================================================================= */
 
 char* longest_common_prefix(char* strs[], int n) {
@@ -279,7 +279,7 @@ char* longest_common_prefix(char* strs[], int n) {
 
     TrieNode* root = trie_create_node();
 
-    /* 첫 번째 문자열만 삽입 */
+    /* Insert only the first string */
     trie_insert(root, strs[0]);
 
     char* lcp = malloc(strlen(strs[0]) + 1);
@@ -291,7 +291,7 @@ char* longest_common_prefix(char* strs[], int n) {
     while (*first) {
         int idx = *first - 'a';
 
-        /* 분기가 있거나 단어 끝이면 중단 */
+        /* Stop if there is a branch or end of word */
         int child_count = 0;
         for (int i = 0; i < ALPHABET_SIZE; i++) {
             if (node->children[i]) child_count++;
@@ -300,7 +300,7 @@ char* longest_common_prefix(char* strs[], int n) {
         if (child_count != 1 || node->is_end)
             break;
 
-        /* 다른 문자열에서 이 접두사 확인 */
+        /* Check this prefix in other strings */
         bool all_match = true;
         for (int i = 1; i < n; i++) {
             if (strs[i][lcp_len] != *first) {
@@ -322,20 +322,20 @@ char* longest_common_prefix(char* strs[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("트라이 (Trie) 예제\n");
+    printf("Trie Examples\n");
     printf("============================================================\n");
 
-    /* 1. 기본 트라이 */
-    printf("\n[1] 기본 트라이 연산\n");
+    /* 1. Basic Trie */
+    printf("\n[1] Basic Trie Operations\n");
     TrieNode* trie = trie_create_node();
 
     const char* words[] = {"apple", "app", "apricot", "banana", "band"};
-    printf("    삽입: apple, app, apricot, banana, band\n");
+    printf("    Insert: apple, app, apricot, banana, band\n");
     for (int i = 0; i < 5; i++)
         trie_insert(trie, words[i]);
 
@@ -344,55 +344,55 @@ int main(void) {
     printf("    startsWith('ap'): %s\n", trie_starts_with(trie, "ap") ? "true" : "false");
     printf("    countPrefix('ap'): %d\n", trie_count_prefix(trie, "ap"));
 
-    /* 2. 삭제 */
-    printf("\n[2] 단어 삭제\n");
+    /* 2. Deletion */
+    printf("\n[2] Word Deletion\n");
     printf("    delete('app')\n");
     trie_delete(trie, "app");
     printf("    search('app'): %s\n", trie_search(trie, "app") ? "true" : "false");
     printf("    search('apple'): %s\n", trie_search(trie, "apple") ? "true" : "false");
 
-    /* 3. 자동완성 */
-    printf("\n[3] 자동완성\n");
+    /* 3. Autocomplete */
+    printf("\n[3] Autocomplete\n");
     int result_count;
     char** suggestions = autocomplete(trie, "ap", &result_count, 10);
-    printf("    'ap'로 시작하는 단어:\n");
+    printf("    Words starting with 'ap':\n");
     for (int i = 0; i < result_count; i++) {
         printf("      - %s\n", suggestions[i]);
         free(suggestions[i]);
     }
     free(suggestions);
 
-    /* 4. 와일드카드 */
-    printf("\n[4] 와일드카드 검색\n");
+    /* 4. Wildcard */
+    printf("\n[4] Wildcard Search\n");
     printf("    search('b.nd'): %s\n", wildcard_search(trie, "b.nd") ? "true" : "false");
     printf("    search('b..d'): %s\n", wildcard_search(trie, "b..d") ? "true" : "false");
     printf("    search('.pple'): %s\n", wildcard_search(trie, ".pple") ? "true" : "false");
 
     trie_free(trie);
 
-    /* 5. XOR 트라이 */
-    printf("\n[5] XOR 트라이 - 최대 XOR 쌍\n");
+    /* 5. XOR Trie */
+    printf("\n[5] XOR Trie - Maximum XOR Pair\n");
     int arr[] = {3, 10, 5, 25, 2, 8};
-    printf("    배열: [3, 10, 5, 25, 2, 8]\n");
-    printf("    최대 XOR: %d\n", find_max_xor_pair(arr, 6));
+    printf("    Array: [3, 10, 5, 25, 2, 8]\n");
+    printf("    Maximum XOR: %d\n", find_max_xor_pair(arr, 6));
 
-    /* 6. 최장 공통 접두사 */
-    printf("\n[6] 최장 공통 접두사\n");
+    /* 6. Longest Common Prefix */
+    printf("\n[6] Longest Common Prefix\n");
     char* strs[] = {"flower", "flow", "flight"};
     char* lcp = longest_common_prefix(strs, 3);
     printf("    [\"flower\", \"flow\", \"flight\"]\n");
     printf("    LCP: '%s'\n", lcp);
     free(lcp);
 
-    /* 7. 복잡도 */
-    printf("\n[7] 트라이 복잡도 (m = 문자열 길이)\n");
-    printf("    | 연산         | 시간복잡도 |\n");
-    printf("    |--------------|------------|\n");
-    printf("    | 삽입         | O(m)       |\n");
-    printf("    | 검색         | O(m)       |\n");
-    printf("    | 접두사 검색  | O(m)       |\n");
-    printf("    | 삭제         | O(m)       |\n");
-    printf("    | 공간         | O(n * m)   |\n");
+    /* 7. Complexity */
+    printf("\n[7] Trie Complexity (m = string length)\n");
+    printf("    | Operation      | Time       |\n");
+    printf("    |----------------|------------|\n");
+    printf("    | Insert         | O(m)       |\n");
+    printf("    | Search         | O(m)       |\n");
+    printf("    | Prefix search  | O(m)       |\n");
+    printf("    | Delete         | O(m)       |\n");
+    printf("    | Space          | O(n * m)   |\n");
 
     printf("\n============================================================\n");
 

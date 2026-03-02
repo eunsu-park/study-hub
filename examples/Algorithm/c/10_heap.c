@@ -1,8 +1,8 @@
 /*
- * 힙 (Heap)
+ * Heap
  * Min Heap, Max Heap, Heap Sort, Priority Queue
  *
- * 완전 이진 트리 기반의 우선순위 자료구조입니다.
+ * A priority data structure based on a complete binary tree.
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 /* =============================================================================
- * 1. 최소 힙 (Min Heap)
+ * 1. Min Heap
  * ============================================================================= */
 
 typedef struct {
@@ -87,7 +87,7 @@ int minheap_peek(MinHeap* heap) {
 }
 
 /* =============================================================================
- * 2. 최대 힙 (Max Heap)
+ * 2. Max Heap
  * ============================================================================= */
 
 typedef struct {
@@ -154,7 +154,7 @@ int maxheap_pop(MaxHeap* heap) {
 }
 
 /* =============================================================================
- * 3. 힙 정렬
+ * 3. Heap Sort
  * ============================================================================= */
 
 void heapify(int arr[], int n, int i) {
@@ -174,12 +174,12 @@ void heapify(int arr[], int n, int i) {
 }
 
 void heap_sort(int arr[], int n) {
-    /* 최대 힙 구성 */
+    /* Build max heap */
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    /* 정렬 */
+    /* Sort */
     for (int i = n - 1; i > 0; i--) {
         minheap_swap(&arr[0], &arr[i]);
         heapify(arr, i, 0);
@@ -187,7 +187,7 @@ void heap_sort(int arr[], int n) {
 }
 
 /* =============================================================================
- * 4. K번째 최소/최대 원소
+ * 4. K-th Smallest/Largest Element
  * ============================================================================= */
 
 int kth_smallest(int arr[], int n, int k) {
@@ -225,12 +225,12 @@ int kth_largest(int arr[], int n, int k) {
 }
 
 /* =============================================================================
- * 5. 중앙값 찾기 (두 개의 힙)
+ * 5. Median Finder (Two Heaps)
  * ============================================================================= */
 
 typedef struct {
-    MaxHeap* lower;  /* 하위 절반 (최대 힙) */
-    MinHeap* upper;  /* 상위 절반 (최소 힙) */
+    MaxHeap* lower;  /* Lower half (max heap) */
+    MinHeap* upper;  /* Upper half (min heap) */
 } MedianFinder;
 
 MedianFinder* median_finder_create(int capacity) {
@@ -247,13 +247,13 @@ void median_finder_free(MedianFinder* mf) {
 }
 
 void median_finder_add(MedianFinder* mf, int num) {
-    /* lower에 추가 */
+    /* Add to lower */
     maxheap_push(mf->lower, num);
 
-    /* lower의 최댓값을 upper로 */
+    /* Move max of lower to upper */
     minheap_push(mf->upper, maxheap_pop(mf->lower));
 
-    /* 균형 맞추기 */
+    /* Rebalance */
     if (mf->upper->size > mf->lower->size) {
         maxheap_push(mf->lower, minheap_pop(mf->upper));
     }
@@ -266,7 +266,7 @@ double median_finder_get(MedianFinder* mf) {
 }
 
 /* =============================================================================
- * 6. K개 정렬 리스트 병합
+ * 6. Merge K Sorted Lists
  * ============================================================================= */
 
 typedef struct {
@@ -338,7 +338,7 @@ int* merge_k_sorted(int** lists, int* sizes, int k, int* result_size) {
     int* result = malloc(*result_size * sizeof(int));
     NodeHeap* heap = nodeheap_create(k);
 
-    /* 각 리스트의 첫 원소를 힙에 추가 */
+    /* Add first element of each list to heap */
     for (int i = 0; i < k; i++) {
         if (sizes[i] > 0) {
             nodeheap_push(heap, (HeapNode){lists[i][0], i, 0});
@@ -350,7 +350,7 @@ int* merge_k_sorted(int** lists, int* sizes, int k, int* result_size) {
         HeapNode min_node = nodeheap_pop(heap);
         result[idx++] = min_node.val;
 
-        /* 같은 리스트의 다음 원소 추가 */
+        /* Add next element from the same list */
         if (min_node.elem_idx + 1 < sizes[min_node.list_idx]) {
             int next_val = lists[min_node.list_idx][min_node.elem_idx + 1];
             nodeheap_push(heap, (HeapNode){next_val, min_node.list_idx, min_node.elem_idx + 1});
@@ -363,7 +363,7 @@ int* merge_k_sorted(int** lists, int* sizes, int k, int* result_size) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -377,70 +377,70 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("힙 (Heap) 예제\n");
+    printf("Heap Examples\n");
     printf("============================================================\n");
 
-    /* 1. 최소 힙 */
-    printf("\n[1] 최소 힙\n");
+    /* 1. Min Heap */
+    printf("\n[1] Min Heap\n");
     MinHeap* min_heap = minheap_create(10);
     int vals[] = {5, 3, 8, 1, 2, 9, 4};
-    printf("    삽입: ");
+    printf("    Insert: ");
     print_array(vals, 7);
     printf("\n");
 
     for (int i = 0; i < 7; i++)
         minheap_push(min_heap, vals[i]);
 
-    printf("    추출: ");
+    printf("    Extract: ");
     while (min_heap->size > 0)
         printf("%d ", minheap_pop(min_heap));
     printf("\n");
     minheap_free(min_heap);
 
-    /* 2. 최대 힙 */
-    printf("\n[2] 최대 힙\n");
+    /* 2. Max Heap */
+    printf("\n[2] Max Heap\n");
     MaxHeap* max_heap = maxheap_create(10);
     for (int i = 0; i < 7; i++)
         maxheap_push(max_heap, vals[i]);
 
-    printf("    추출: ");
+    printf("    Extract: ");
     while (max_heap->size > 0)
         printf("%d ", maxheap_pop(max_heap));
     printf("\n");
     maxheap_free(max_heap);
 
-    /* 3. 힙 정렬 */
-    printf("\n[3] 힙 정렬\n");
+    /* 3. Heap Sort */
+    printf("\n[3] Heap Sort\n");
     int arr3[] = {12, 11, 13, 5, 6, 7};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr3, 6);
     printf("\n");
     heap_sort(arr3, 6);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr3, 6);
     printf("\n");
 
-    /* 4. K번째 원소 */
-    printf("\n[4] K번째 원소\n");
+    /* 4. K-th Element */
+    printf("\n[4] K-th Element\n");
     int arr4[] = {7, 10, 4, 3, 20, 15};
-    printf("    배열: ");
+    printf("    Array: ");
     print_array(arr4, 6);
     printf("\n");
-    printf("    3번째 최소: %d\n", kth_smallest(arr4, 6, 3));
-    printf("    2번째 최대: %d\n", kth_largest(arr4, 6, 2));
+    printf("    3rd smallest: %d\n", kth_smallest(arr4, 6, 3));
+    printf("    2nd largest: %d\n", kth_largest(arr4, 6, 2));
 
-    /* 5. 중앙값 찾기 */
-    printf("\n[5] 스트림 중앙값\n");
+    /* 5. Median Finder */
+    printf("\n[5] Stream Median\n");
     MedianFinder* mf = median_finder_create(10);
     int stream[] = {2, 3, 4};
     for (int i = 0; i < 3; i++) {
         median_finder_add(mf, stream[i]);
-        printf("    삽입 %d 후 중앙값: %.1f\n", stream[i], median_finder_get(mf));
+        printf("    After inserting %d, median: %.1f\n", stream[i], median_finder_get(mf));
     }
     median_finder_free(mf);
 
-    /* 6. K개 정렬 리스트 병합 */
-    printf("\n[6] K개 정렬 리스트 병합\n");
+    /* 6. Merge K Sorted Lists */
+    printf("\n[6] Merge K Sorted Lists\n");
     int list1[] = {1, 4, 5};
     int list2[] = {1, 3, 4};
     int list3[] = {2, 6};
@@ -449,20 +449,20 @@ int main(void) {
 
     int result_size;
     int* merged = merge_k_sorted(lists, sizes, 3, &result_size);
-    printf("    병합 결과: ");
+    printf("    Merge result: ");
     print_array(merged, result_size);
     printf("\n");
     free(merged);
 
-    /* 7. 힙 연산 복잡도 */
-    printf("\n[7] 힙 연산 복잡도\n");
-    printf("    | 연산      | 시간복잡도 |\n");
-    printf("    |-----------|------------|\n");
-    printf("    | 삽입      | O(log n)   |\n");
-    printf("    | 삭제(최소)| O(log n)   |\n");
-    printf("    | 조회(최소)| O(1)       |\n");
-    printf("    | 힙 구성   | O(n)       |\n");
-    printf("    | 힙 정렬   | O(n log n) |\n");
+    /* 7. Heap Operation Complexity */
+    printf("\n[7] Heap Operation Complexity\n");
+    printf("    | Operation   | Time       |\n");
+    printf("    |-------------|------------|\n");
+    printf("    | Insert      | O(log n)   |\n");
+    printf("    | Delete(min) | O(log n)   |\n");
+    printf("    | Peek(min)   | O(1)       |\n");
+    printf("    | Build heap  | O(n)       |\n");
+    printf("    | Heap sort   | O(n log n) |\n");
 
     printf("\n============================================================\n");
 

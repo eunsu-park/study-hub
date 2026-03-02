@@ -1,6 +1,6 @@
 // input_demo.c
-// 비동기 키보드 입력 시연 프로그램
-// termios를 사용하여 non-blocking 입력을 구현합니다.
+// Asynchronous keyboard input demonstration program
+// Implements non-blocking input using termios.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,52 +8,52 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-// 원래 터미널 설정 저장
+// Store original terminal settings
 static struct termios original_termios;
 
-// 터미널을 raw 모드로 설정
+// Set terminal to raw mode
 void enable_raw_mode(void) {
-    // 현재 터미널 설정 저장
+    // Save current terminal settings
     tcgetattr(STDIN_FILENO, &original_termios);
 
     struct termios raw = original_termios;
 
-    // 입력 플래그 수정
-    // ECHO: 입력한 문자 화면에 표시 안함
-    // ICANON: 라인 버퍼링 끄기 (엔터 없이 즉시 읽기)
+    // Modify input flags
+    // ECHO: Don't display typed characters on screen
+    // ICANON: Disable line buffering (read immediately without Enter)
     raw.c_lflag &= ~(ECHO | ICANON);
 
-    // 최소 입력 문자 수: 0 (non-blocking 가능)
+    // Minimum input character count: 0 (enables non-blocking)
     raw.c_cc[VMIN] = 0;
-    // 타임아웃: 0 (즉시 반환)
+    // Timeout: 0 (return immediately)
     raw.c_cc[VTIME] = 0;
 
-    // 수정된 설정 적용
+    // Apply modified settings
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-// 터미널 설정 복원
+// Restore terminal settings
 void disable_raw_mode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
 }
 
-// 키 입력 확인 (non-blocking)
-// 반환: 1 = 입력 있음, 0 = 입력 없음
+// Check for key input (non-blocking)
+// Returns: 1 = input available, 0 = no input
 int kbhit(void) {
     int ch = getchar();
     if (ch != EOF) {
-        ungetc(ch, stdin);  // 읽은 문자를 다시 버퍼에 넣음
+        ungetc(ch, stdin);  // Put the read character back into the buffer
         return 1;
     }
     return 0;
 }
 
-// 키 읽기 (non-blocking)
+// Read key (non-blocking)
 int getch(void) {
     return getchar();
 }
 
-// 방향키 및 특수키 코드
+// Arrow key and special key codes
 typedef enum {
     KEY_NONE = 0,
     KEY_UP,
@@ -66,24 +66,24 @@ typedef enum {
     KEY_OTHER
 } KeyCode;
 
-// 키 읽기 및 해석 (escape sequence 처리)
+// Read and interpret key (handles escape sequences)
 KeyCode read_key(void) {
     int ch = getchar();
 
-    // 입력 없음
+    // No input
     if (ch == EOF) return KEY_NONE;
 
-    // 종료 키
+    // Quit key
     if (ch == 'q' || ch == 'Q') return KEY_QUIT;
 
-    // 스페이스바
+    // Spacebar
     if (ch == ' ') return KEY_SPACE;
 
-    // 엔터
+    // Enter
     if (ch == '\n' || ch == '\r') return KEY_ENTER;
 
-    // Escape sequence (방향키 등)
-    // 방향키는 3바이트: ESC(27) + '[' + 문자
+    // Escape sequence (arrow keys, etc.)
+    // Arrow keys are 3 bytes: ESC(27) + '[' + character
     if (ch == '\033') {
         int ch2 = getchar();
         if (ch2 == '[') {
@@ -95,11 +95,11 @@ KeyCode read_key(void) {
                 case 'D': return KEY_LEFT;
             }
         }
-        // ESC만 눌렀을 때
+        // ESC pressed alone
         return KEY_QUIT;
     }
 
-    // WASD 키 지원
+    // WASD key support
     switch (ch) {
         case 'w': case 'W': return KEY_UP;
         case 's': case 'S': return KEY_DOWN;
@@ -110,61 +110,61 @@ KeyCode read_key(void) {
     return KEY_OTHER;
 }
 
-// 키 코드를 문자열로 변환
+// Convert key code to string
 const char* keycode_to_string(KeyCode key) {
     switch (key) {
-        case KEY_UP: return "위쪽";
-        case KEY_DOWN: return "아래쪽";
-        case KEY_LEFT: return "왼쪽";
-        case KEY_RIGHT: return "오른쪽";
-        case KEY_SPACE: return "스페이스";
-        case KEY_ENTER: return "엔터";
-        case KEY_QUIT: return "종료";
-        default: return "기타";
+        case KEY_UP: return "Up";
+        case KEY_DOWN: return "Down";
+        case KEY_LEFT: return "Left";
+        case KEY_RIGHT: return "Right";
+        case KEY_SPACE: return "Space";
+        case KEY_ENTER: return "Enter";
+        case KEY_QUIT: return "Quit";
+        default: return "Other";
     }
 }
 
 int main(void) {
-    // raw 모드 활성화
+    // Enable raw mode
     enable_raw_mode();
-    // 프로그램 종료 시 자동으로 터미널 설정 복원
+    // Automatically restore terminal settings on program exit
     atexit(disable_raw_mode);
 
-    // 화면 초기화
-    printf("\033[2J\033[H");  // 화면 지우기 + 커서 홈
-    printf("\033[?25l");       // 커서 숨기기
+    // Initialize screen
+    printf("\033[2J\033[H");  // Clear screen + cursor home
+    printf("\033[?25l");       // Hide cursor
 
-    printf("=== 비동기 키보드 입력 시연 ===\n\n");
-    printf("조작법:\n");
-    printf("  - 방향키 또는 WASD: 이동\n");
-    printf("  - 스페이스: 점프\n");
-    printf("  - Q 또는 ESC: 종료\n\n");
-    printf("게임 화면:\n");
-    printf("┌────────────────────────────────────────┐\n");
+    printf("=== Asynchronous Keyboard Input Demo ===\n\n");
+    printf("Controls:\n");
+    printf("  - Arrow keys or WASD: Move\n");
+    printf("  - Space: Jump\n");
+    printf("  - Q or ESC: Quit\n\n");
+    printf("Game screen:\n");
+    printf("+----------------------------------------+\n");
     for (int i = 0; i < 15; i++) {
-        printf("│                                        │\n");
+        printf("|                                        |\n");
     }
-    printf("└────────────────────────────────────────┘\n");
+    printf("+----------------------------------------+\n");
 
-    // 플레이어 초기 위치
+    // Player initial position
     int x = 20, y = 12;
     int jump_height = 0;
     int key_count = 0;
 
-    // 상태 표시 위치
+    // Status display position
     int status_row = 23;
 
-    // 메인 루프
+    // Main loop
     while (1) {
-        // 키 입력 읽기 (non-blocking)
+        // Read key input (non-blocking)
         KeyCode key = read_key();
 
         if (key == KEY_QUIT) break;
 
-        // 이전 위치 지우기
+        // Clear previous position
         printf("\033[%d;%dH ", y - jump_height, x);
 
-        // 입력 처리
+        // Process input
         switch (key) {
             case KEY_UP:
                 if (y > 7) y--;
@@ -190,31 +190,31 @@ int main(void) {
                 break;
         }
 
-        // 새 위치에 플레이어 그리기
+        // Draw player at new position
         printf("\033[%d;%dH\033[32m@\033[0m", y - jump_height, x);
 
-        // 상태 정보 업데이트
+        // Update status info
         printf("\033[%d;1H", status_row);
-        printf("위치: (%d, %d)  ", x, y);
-        printf("점프: %s  ", jump_height > 0 ? "ON " : "OFF");
-        printf("입력 횟수: %d  ", key_count);
+        printf("Position: (%d, %d)  ", x, y);
+        printf("Jump: %s  ", jump_height > 0 ? "ON " : "OFF");
+        printf("Inputs: %d  ", key_count);
         if (key != KEY_NONE) {
-            printf("마지막 입력: %s    ", keycode_to_string(key));
+            printf("Last input: %s    ", keycode_to_string(key));
         }
 
-        // 화면 갱신
+        // Refresh screen
         fflush(stdout);
 
-        // 프레임 레이트 제어 (50ms = 20 FPS)
+        // Frame rate control (50ms = 20 FPS)
         usleep(50000);
     }
 
-    // 종료 처리
-    printf("\033[2J\033[H");  // 화면 지우기
-    printf("\033[?25h");       // 커서 보이기
+    // Exit handling
+    printf("\033[2J\033[H");  // Clear screen
+    printf("\033[?25h");       // Show cursor
 
-    printf("프로그램을 종료합니다.\n");
-    printf("총 입력 횟수: %d\n", key_count);
+    printf("Exiting the program.\n");
+    printf("Total inputs: %d\n", key_count);
 
     return 0;
 }

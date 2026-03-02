@@ -1,18 +1,18 @@
 """
-07. 파인튜닝 예제
+07. Fine-tuning Example
 
-HuggingFace Trainer를 사용한 모델 파인튜닝
+Model fine-tuning using HuggingFace Trainer
 """
 
 print("=" * 60)
-print("파인튜닝")
+print("Fine-tuning")
 print("=" * 60)
 
 
 # ============================================
-# 1. 기본 파인튜닝 (코드 예시)
+# 1. Basic Fine-tuning (Code Example)
 # ============================================
-print("\n[1] 기본 파인튜닝")
+print("\n[1] Basic Fine-tuning")
 print("-" * 40)
 
 basic_finetuning = '''
@@ -24,10 +24,10 @@ from transformers import (
 )
 from datasets import load_dataset
 
-# 데이터 로드
+# Load data
 dataset = load_dataset("imdb")
 
-# 토크나이저
+# Tokenizer
 tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 def tokenize(batch):
@@ -35,10 +35,10 @@ def tokenize(batch):
 
 tokenized = dataset.map(tokenize, batched=True)
 
-# 모델
+# Model
 model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
 
-# 학습 설정
+# Training configuration
 args = TrainingArguments(
     output_dir="./results",
     num_train_epochs=3,
@@ -55,40 +55,40 @@ trainer = Trainer(
     eval_dataset=tokenized["test"],
 )
 
-# 학습
+# Train
 trainer.train()
 '''
 print(basic_finetuning)
 
 
 # ============================================
-# 2. LoRA 파인튜닝
+# 2. LoRA Fine-tuning
 # ============================================
-print("\n[2] LoRA 파인튜닝")
+print("\n[2] LoRA Fine-tuning")
 print("-" * 40)
 
 lora_code = '''
 from peft import LoraConfig, get_peft_model, TaskType
 
-# LoRA 설정
+# LoRA configuration
 lora_config = LoraConfig(
-    r=8,                           # 랭크
-    lora_alpha=32,                 # 스케일링
-    target_modules=["query", "value"],  # 적용 모듈
+    r=8,                           # Rank
+    lora_alpha=32,                 # Scaling
+    target_modules=["query", "value"],  # Target modules
     lora_dropout=0.1,
     bias="none",
     task_type=TaskType.SEQ_CLS
 )
 
-# 모델에 LoRA 적용
+# Apply LoRA to model
 model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
 model = get_peft_model(model, lora_config)
 
-# 학습 가능한 파라미터 확인
+# Check trainable parameters
 model.print_trainable_parameters()
-# trainable: 0.27% (약 300K / 110M)
+# trainable: 0.27% (approx. 300K / 110M)
 
-# 일반 Trainer로 학습
+# Train with standard Trainer
 trainer = Trainer(model=model, args=args, ...)
 trainer.train()
 '''
@@ -96,7 +96,7 @@ print(lora_code)
 
 
 # ============================================
-# 3. QLoRA (양자화 + LoRA)
+# 3. QLoRA (Quantization + LoRA)
 # ============================================
 print("\n[3] QLoRA")
 print("-" * 40)
@@ -105,7 +105,7 @@ qlora_code = '''
 from transformers import BitsAndBytesConfig
 import torch
 
-# 4비트 양자화 설정
+# 4-bit quantization configuration
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_use_double_quant=True,
@@ -113,33 +113,33 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_compute_dtype=torch.bfloat16
 )
 
-# 양자화된 모델 로드
+# Load quantized model
 model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
     quantization_config=bnb_config,
     device_map="auto"
 )
 
-# LoRA 적용
+# Apply LoRA
 model = get_peft_model(model, lora_config)
 
-# 학습
+# Train
 trainer = Trainer(model=model, ...)
 '''
 print(qlora_code)
 
 
 # ============================================
-# 4. 커스텀 메트릭
+# 4. Custom Metrics
 # ============================================
-print("\n[4] 커스텀 메트릭")
+print("\n[4] Custom Metrics")
 print("-" * 40)
 
 try:
     import evaluate
     import numpy as np
 
-    # 메트릭 로드
+    # Load metrics
     accuracy = evaluate.load("accuracy")
     f1 = evaluate.load("f1")
 
@@ -151,36 +151,36 @@ try:
             "f1": f1.compute(predictions=predictions, references=labels, average="weighted")["f1"]
         }
 
-    print("커스텀 메트릭 함수 정의 완료")
+    print("Custom metrics function defined")
 
-    # 테스트
+    # Test
     mock_pred = (np.array([[0.9, 0.1], [0.2, 0.8]]), np.array([0, 1]))
     result = compute_metrics(mock_pred)
-    print(f"테스트 결과: {result}")
+    print(f"Test result: {result}")
 
 except ImportError:
-    print("evaluate 미설치 (pip install evaluate)")
+    print("evaluate not installed (pip install evaluate)")
 
 
 # ============================================
-# 5. NER 파인튜닝
+# 5. NER Fine-tuning
 # ============================================
-print("\n[5] NER 파인튜닝")
+print("\n[5] NER Fine-tuning")
 print("-" * 40)
 
 ner_code = '''
 from transformers import AutoModelForTokenClassification
 
-# 레이블
+# Labels
 label_names = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
 
-# 모델
+# Model
 model = AutoModelForTokenClassification.from_pretrained(
     "bert-base-uncased",
     num_labels=len(label_names)
 )
 
-# 토큰 정렬 (서브워드 처리)
+# Token alignment (subword handling)
 def tokenize_and_align_labels(examples):
     tokenized = tokenizer(examples["tokens"], truncation=True, is_split_into_words=True)
 
@@ -190,7 +190,7 @@ def tokenize_and_align_labels(examples):
         label_ids = []
         for word_idx in word_ids:
             if word_idx is None:
-                label_ids.append(-100)  # 특수 토큰
+                label_ids.append(-100)  # Special tokens
             else:
                 label_ids.append(label[word_idx])
         labels.append(label_ids)
@@ -202,18 +202,18 @@ print(ner_code)
 
 
 # ============================================
-# 6. QA 파인튜닝
+# 6. QA Fine-tuning
 # ============================================
-print("\n[6] QA 파인튜닝")
+print("\n[6] QA Fine-tuning")
 print("-" * 40)
 
 qa_code = '''
 from transformers import AutoModelForQuestionAnswering
 
-# 모델
+# Model
 model = AutoModelForQuestionAnswering.from_pretrained("bert-base-uncased")
 
-# 전처리 (시작/끝 위치 찾기)
+# Preprocessing (find start/end positions)
 def prepare_train_features(examples):
     tokenized = tokenizer(
         examples["question"],
@@ -226,12 +226,12 @@ def prepare_train_features(examples):
         padding="max_length",
     )
 
-    # 답변 위치를 토큰 위치로 변환
+    # Convert answer character positions to token positions
     tokenized["start_positions"] = []
     tokenized["end_positions"] = []
 
     for i, offsets in enumerate(tokenized["offset_mapping"]):
-        # 답변 시작/끝 문자 위치 → 토큰 위치
+        # Answer start/end character position -> token position
         ...
 
     return tokenized
@@ -240,28 +240,28 @@ print(qa_code)
 
 
 # ============================================
-# 7. 학습 최적화 팁
+# 7. Training Optimization Tips
 # ============================================
-print("\n[7] 학습 최적화 팁")
+print("\n[7] Training Optimization Tips")
 print("-" * 40)
 
 optimization_tips = '''
-# Gradient Checkpointing (메모리 절약)
+# Gradient Checkpointing (memory savings)
 model.gradient_checkpointing_enable()
 
-# Mixed Precision (속도 향상)
+# Mixed Precision (speed improvement)
 args = TrainingArguments(
     ...,
-    fp16=True,  # 또는 bf16=True
+    fp16=True,  # or bf16=True
 )
 
-# Gradient Accumulation (큰 배치 효과)
+# Gradient Accumulation (effective large batch)
 args = TrainingArguments(
     per_device_train_batch_size=4,
-    gradient_accumulation_steps=8,  # 실효 배치 = 32
+    gradient_accumulation_steps=8,  # Effective batch = 32
 )
 
-# DeepSpeed (분산 학습)
+# DeepSpeed (distributed training)
 args = TrainingArguments(
     ...,
     deepspeed="ds_config.json"
@@ -278,19 +278,19 @@ print(optimization_tips)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("파인튜닝 정리")
+print("Fine-tuning Summary")
 print("=" * 60)
 
 summary = """
-파인튜닝 선택 가이드:
-    - 충분한 GPU: Full Fine-tuning
-    - 제한된 메모리: LoRA / QLoRA
-    - 매우 적은 데이터: Prompt Tuning
+Fine-tuning Selection Guide:
+    - Sufficient GPU: Full Fine-tuning
+    - Limited memory: LoRA / QLoRA
+    - Very little data: Prompt Tuning
 
-핵심 코드:
+Key Code:
     # Trainer
     trainer = Trainer(model=model, args=args, train_dataset=dataset)
     trainer.train()

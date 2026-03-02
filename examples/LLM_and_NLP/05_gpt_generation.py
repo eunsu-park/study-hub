@@ -1,11 +1,11 @@
 """
-05. GPT 텍스트 생성 예제
+05. GPT Text Generation Example
 
-GPT-2를 사용한 텍스트 생성
+Text generation using GPT-2
 """
 
 print("=" * 60)
-print("GPT 텍스트 생성")
+print("GPT Text Generation")
 print("=" * 60)
 
 try:
@@ -14,26 +14,26 @@ try:
     import torch.nn.functional as F
 
     # ============================================
-    # 1. GPT-2 로드
+    # 1. Load GPT-2
     # ============================================
-    print("\n[1] GPT-2 모델 로드")
+    print("\n[1] Load GPT-2 Model")
     print("-" * 40)
 
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     model = GPT2LMHeadModel.from_pretrained('gpt2')
     model.eval()
 
-    # 패딩 토큰 설정
+    # Set padding token
     tokenizer.pad_token = tokenizer.eos_token
 
-    print(f"어휘 크기: {tokenizer.vocab_size}")
-    print(f"모델 파라미터: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"Vocabulary size: {tokenizer.vocab_size}")
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 
     # ============================================
-    # 2. 기본 생성 (Greedy)
+    # 2. Basic Generation (Greedy)
     # ============================================
-    print("\n[2] Greedy 생성")
+    print("\n[2] Greedy Generation")
     print("-" * 40)
 
     prompt = "Once upon a time"
@@ -46,14 +46,14 @@ try:
     )
 
     generated = tokenizer.decode(output[0], skip_special_tokens=True)
-    print(f"프롬프트: {prompt}")
-    print(f"생성: {generated}")
+    print(f"Prompt: {prompt}")
+    print(f"Generated: {generated}")
 
 
     # ============================================
-    # 3. 샘플링 생성
+    # 3. Sampling Generation
     # ============================================
-    print("\n[3] Temperature 샘플링")
+    print("\n[3] Temperature Sampling")
     print("-" * 40)
 
     prompt = "The future of AI is"
@@ -72,9 +72,9 @@ try:
 
 
     # ============================================
-    # 4. Top-k / Top-p 샘플링
+    # 4. Top-k / Top-p Sampling
     # ============================================
-    print("\n[4] Top-k / Top-p 샘플링")
+    print("\n[4] Top-k / Top-p Sampling")
     print("-" * 40)
 
     prompt = "In the year 2050"
@@ -102,9 +102,9 @@ try:
 
 
     # ============================================
-    # 5. 고급 생성 파라미터
+    # 5. Advanced Generation Parameters
     # ============================================
-    print("\n[5] 고급 생성 파라미터")
+    print("\n[5] Advanced Generation Parameters")
     print("-" * 40)
 
     prompt = "Python is a programming language"
@@ -118,22 +118,22 @@ try:
         temperature=0.8,
         top_p=0.92,
         top_k=50,
-        no_repeat_ngram_size=2,    # n-gram 반복 방지
-        repetition_penalty=1.2,     # 반복 패널티
-        num_return_sequences=2,     # 여러 시퀀스 생성
+        no_repeat_ngram_size=2,    # Prevent n-gram repetition
+        repetition_penalty=1.2,     # Repetition penalty
+        num_return_sequences=2,     # Generate multiple sequences
         pad_token_id=tokenizer.eos_token_id
     )
 
-    print(f"프롬프트: {prompt}")
+    print(f"Prompt: {prompt}")
     for i, out in enumerate(output):
         text = tokenizer.decode(out, skip_special_tokens=True)
-        print(f"\n생성 {i+1}: {text}")
+        print(f"\nGenerated {i+1}: {text}")
 
 
     # ============================================
-    # 6. 수동 생성 루프
+    # 6. Manual Generation Loop
     # ============================================
-    print("\n[6] 수동 생성 (Step-by-step)")
+    print("\n[6] Manual Generation (Step-by-step)")
     print("-" * 40)
 
     def generate_manual(prompt, max_tokens=20, temperature=1.0):
@@ -142,15 +142,15 @@ try:
         for _ in range(max_tokens):
             with torch.no_grad():
                 outputs = model(input_ids)
-                logits = outputs.logits[:, -1, :]  # 마지막 토큰
+                logits = outputs.logits[:, -1, :]  # Last token
 
-            # Temperature 적용
+            # Apply temperature
             probs = F.softmax(logits / temperature, dim=-1)
 
-            # 샘플링
+            # Sampling
             next_token = torch.multinomial(probs, num_samples=1)
 
-            # EOS 체크
+            # EOS check
             if next_token.item() == tokenizer.eos_token_id:
                 break
 
@@ -159,19 +159,19 @@ try:
         return tokenizer.decode(input_ids[0], skip_special_tokens=True)
 
     result = generate_manual("The robot said", max_tokens=15, temperature=0.8)
-    print(f"수동 생성: {result}")
+    print(f"Manual generation: {result}")
 
 
     # ============================================
-    # 7. 조건부 생성 (프롬프트 기반)
+    # 7. Conditional Generation (Prompt-based)
     # ============================================
-    print("\n[7] 조건부 생성")
+    print("\n[7] Conditional Generation")
     print("-" * 40)
 
     prompts = [
         "Q: What is machine learning?\nA:",
-        "Translate English to French: Hello, how are you? →",
-        "Summarize: Artificial intelligence is transforming various industries. →"
+        "Translate English to French: Hello, how are you? ->",
+        "Summarize: Artificial intelligence is transforming various industries. ->"
     ]
 
     for prompt in prompts:
@@ -184,26 +184,26 @@ try:
             pad_token_id=tokenizer.eos_token_id
         )
         result = tokenizer.decode(output[0], skip_special_tokens=True)
-        print(f"입력: {prompt[:50]}...")
-        print(f"출력: {result[len(prompt):len(prompt)+60]}...")
+        print(f"Input: {prompt[:50]}...")
+        print(f"Output: {result[len(prompt):len(prompt)+60]}...")
         print()
 
 
     # ============================================
-    # 정리
+    # Summary
     # ============================================
     print("=" * 60)
-    print("GPT 생성 정리")
+    print("GPT Generation Summary")
     print("=" * 60)
 
     summary = """
-생성 전략:
-    - Greedy: do_sample=False, 결정적
-    - Temperature: 낮으면 결정적, 높으면 다양
-    - Top-k: 상위 k개 토큰에서 샘플링
-    - Top-p (Nucleus): 누적 확률 p까지 샘플링
+Generation Strategies:
+    - Greedy: do_sample=False, deterministic
+    - Temperature: Lower = more deterministic, Higher = more diverse
+    - Top-k: Sample from top k tokens
+    - Top-p (Nucleus): Sample up to cumulative probability p
 
-핵심 코드:
+Key Code:
     output = model.generate(
         input_ids,
         max_length=50,
@@ -215,5 +215,5 @@ try:
     print(summary)
 
 except ImportError as e:
-    print(f"필요 패키지 미설치: {e}")
+    print(f"Required packages not installed: {e}")
     print("pip install torch transformers")

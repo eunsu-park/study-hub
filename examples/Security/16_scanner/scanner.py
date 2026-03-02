@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """
-네트워크 보안 스캐너 (교육용)
 Network Security Scanner (Educational)
-
-포트 스캐닝, HTTP 보안 헤더 검사, SSL/TLS 정보 수집, 배너 그래빙,
-리포트 생성을 포함하는 교육용 네트워크 보안 스캐너입니다.
-모든 스캔에 레이트 리미팅이 적용됩니다.
 
 Implements an educational network security scanner with TCP port scanning,
 HTTP security header checking, SSL/TLS info gathering, banner grabbing,
 and report generation. Rate limiting is applied between all connections.
 
 ============================================================================
-ETHICAL USE DISCLAIMER / 윤리적 사용 고지
+ETHICAL USE DISCLAIMER
 ============================================================================
 
 This tool is provided STRICTLY for EDUCATIONAL purposes only.
@@ -21,10 +16,6 @@ This tool is provided STRICTLY for EDUCATIONAL purposes only.
 - Unauthorized port scanning may violate laws (CFAA, Computer Misuse Act, etc.)
 - The authors assume NO LIABILITY for misuse of this tool.
 - When in doubt, scan localhost (127.0.0.1) only.
-
-이 도구는 오직 교육 목적으로만 제공됩니다.
-- 본인이 소유하거나 명시적 서면 허가를 받은 시스템만 스캔하세요.
-- 무단 포트 스캐닝은 법률 위반이 될 수 있습니다.
 ============================================================================
 """
 
@@ -41,7 +32,7 @@ from http.client import HTTPSConnection, HTTPConnection
 
 
 # =============================================================================
-# Configuration (설정)
+# Configuration
 # =============================================================================
 
 DEFAULT_PORTS = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995,
@@ -91,7 +82,7 @@ RECOMMENDED_HEADERS = {
 
 
 # =============================================================================
-# 1. Port Scanner (포트 스캐너)
+# 1. Port Scanner
 # =============================================================================
 
 class PortScanner:
@@ -178,7 +169,7 @@ class PortScanner:
 
 
 # =============================================================================
-# 2. HTTP Security Header Checker (HTTP 보안 헤더 검사)
+# 2. HTTP Security Header Checker
 # =============================================================================
 
 class HeaderChecker:
@@ -286,7 +277,7 @@ class HeaderChecker:
 
 
 # =============================================================================
-# 3. SSL/TLS Info Gatherer (SSL/TLS 정보 수집)
+# 3. SSL/TLS Info Gatherer
 # =============================================================================
 
 class TLSChecker:
@@ -379,7 +370,7 @@ class TLSChecker:
 
 
 # =============================================================================
-# 4. Report Generator (리포트 생성기)
+# 4. Report Generator
 # =============================================================================
 
 class ReportGenerator:
@@ -466,7 +457,7 @@ class ReportGenerator:
 
 
 # =============================================================================
-# 5. CLI Interface (CLI 인터페이스)
+# 5. CLI Interface
 # =============================================================================
 
 def parse_port_range(port_str: str) -> list[int]:
@@ -541,7 +532,6 @@ def run_demo():
     """Run a localhost-only demo when no arguments are provided."""
     print("=" * 60)
     print("  Network Security Scanner - Demo Mode")
-    print("  네트워크 보안 스캐너 - 데모 모드")
     print("=" * 60)
 
     print("""
@@ -711,7 +701,6 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 60)
     print("  Network Security Scanner (Educational)")
-    print("  네트워크 보안 스캐너 (교육용)")
     print("=" * 60)
 
     if args.target is None:

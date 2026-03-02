@@ -1,10 +1,10 @@
-# 전체 예제 빌드 Makefile
+# Full Examples Build Makefile
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
 THREAD_FLAGS = -pthread
 
-# C 프로그램 목록
+# C Program List
 C_PROGRAMS = \
 	02_calculator/calculator \
 	03_number_guess/number_guess \
@@ -12,7 +12,7 @@ C_PROGRAMS = \
 	06_linked_list/linked_list \
 	14_bit_operations/bit_manipulation
 
-# 멀티스레드 프로그램
+# Multithreaded Programs
 THREAD_PROGRAMS = \
 	12_multithread/thread_basic
 
@@ -21,66 +21,66 @@ THREAD_PROGRAMS = \
 all: c-programs thread-programs
 
 c-programs:
-	@echo "=== C 프로그램 컴파일 ==="
+	@echo "=== Compiling C Programs ==="
 	@for prog in $(C_PROGRAMS); do \
 		echo "Compiling $$prog..."; \
 		$(CC) $(CFLAGS) $${prog}.c -o $$prog || exit 1; \
 	done
-	@echo "완료!"
+	@echo "Done!"
 
 thread-programs:
 	@echo ""
-	@echo "=== 멀티스레드 프로그램 컴파일 ==="
+	@echo "=== Compiling Multithreaded Programs ==="
 	@for prog in $(THREAD_PROGRAMS); do \
 		echo "Compiling $$prog..."; \
 		$(CC) $(CFLAGS) $(THREAD_FLAGS) $${prog}.c -o $$prog || exit 1; \
 	done
-	@echo "완료!"
+	@echo "Done!"
 
 clean:
-	@echo "=== 정리 중 ==="
+	@echo "=== Cleaning Up ==="
 	@for prog in $(C_PROGRAMS) $(THREAD_PROGRAMS); do \
 		rm -f $$prog; \
 	done
-	@echo "완료!"
+	@echo "Done!"
 
-# 개별 프로그램 실행
+# Run Individual Programs
 run-calculator:
-	@echo "=== 계산기 실행 ==="
+	@echo "=== Running Calculator ==="
 	@./02_calculator/calculator
 
 run-guess:
-	@echo "=== 숫자 맞추기 실행 ==="
+	@echo "=== Running Number Guessing Game ==="
 	@./03_number_guess/number_guess
 
 run-array:
-	@echo "=== 동적 배열 실행 ==="
+	@echo "=== Running Dynamic Array ==="
 	@./05_dynamic_array/dynamic_array
 
 run-list:
-	@echo "=== 연결 리스트 실행 ==="
+	@echo "=== Running Linked List ==="
 	@./06_linked_list/linked_list
 
 run-bit:
-	@echo "=== 비트 연산 실행 ==="
+	@echo "=== Running Bit Operations ==="
 	@./14_bit_operations/bit_manipulation
 
 run-thread:
-	@echo "=== 스레드 실행 ==="
+	@echo "=== Running Thread ==="
 	@./12_multithread/thread_basic
 
-# 도움말
+# Help
 help:
-	@echo "사용 가능한 명령:"
-	@echo "  make              - 모든 프로그램 컴파일"
-	@echo "  make c-programs   - C 프로그램만 컴파일"
-	@echo "  make thread-programs - 멀티스레드 프로그램 컴파일"
-	@echo "  make clean        - 컴파일된 파일 삭제"
+	@echo "Available commands:"
+	@echo "  make              - Compile all programs"
+	@echo "  make c-programs   - Compile C programs only"
+	@echo "  make thread-programs - Compile multithreaded programs"
+	@echo "  make clean        - Delete compiled files"
 	@echo ""
-	@echo "개별 실행:"
-	@echo "  make run-calculator  - 계산기 실행"
-	@echo "  make run-guess       - 숫자 맞추기 실행"
-	@echo "  make run-array       - 동적 배열 실행"
-	@echo "  make run-list        - 연결 리스트 실행"
-	@echo "  make run-bit         - 비트 연산 실행"
-	@echo "  make run-thread      - 스레드 실행"
+	@echo "Run individually:"
+	@echo "  make run-calculator  - Run calculator"
+	@echo "  make run-guess       - Run number guessing game"
+	@echo "  make run-array       - Run dynamic array"
+	@echo "  make run-list        - Run linked list"
+	@echo "  make run-bit         - Run bit operations"
+	@echo "  make run-thread      - Run thread"

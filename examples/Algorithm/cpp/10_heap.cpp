@@ -1,8 +1,8 @@
 /*
- * 힙 (Heap)
+ * Heap
  * Min/Max Heap, Priority Queue, Heap Sort
  *
- * 우선순위 기반의 효율적인 자료구조입니다.
+ * An efficient priority-based data structure.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 최소 힙 구현
+// 1. Min Heap Implementation
 // =============================================================================
 
 class MinHeap {
@@ -73,7 +73,7 @@ public:
 };
 
 // =============================================================================
-// 2. 힙 정렬
+// 2. Heap Sort
 // =============================================================================
 
 void heapify(vector<int>& arr, int n, int i) {
@@ -95,12 +95,12 @@ void heapify(vector<int>& arr, int n, int i) {
 void heapSort(vector<int>& arr) {
     int n = arr.size();
 
-    // 힙 구성
+    // Build heap
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    // 추출
+    // Extract
     for (int i = n - 1; i > 0; i--) {
         swap(arr[0], arr[i]);
         heapify(arr, i, 0);
@@ -108,10 +108,10 @@ void heapSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 3. K번째 요소
+// 3. Kth Element
 // =============================================================================
 
-// 배열에서 K번째로 큰 원소
+// Kth largest element in array
 int findKthLargest(vector<int>& nums, int k) {
     priority_queue<int, vector<int>, greater<int>> minHeap;
 
@@ -125,7 +125,7 @@ int findKthLargest(vector<int>& nums, int k) {
     return minHeap.top();
 }
 
-// 배열에서 K번째로 작은 원소
+// Kth smallest element in array
 int findKthSmallest(vector<int>& nums, int k) {
     priority_queue<int> maxHeap;
 
@@ -140,13 +140,13 @@ int findKthSmallest(vector<int>& nums, int k) {
 }
 
 // =============================================================================
-// 4. 중앙값 스트림
+// 4. Median Stream
 // =============================================================================
 
 class MedianFinder {
 private:
-    priority_queue<int> maxHeap;  // 작은 절반
-    priority_queue<int, vector<int>, greater<int>> minHeap;  // 큰 절반
+    priority_queue<int> maxHeap;  // Smaller half
+    priority_queue<int, vector<int>, greater<int>> minHeap;  // Larger half
 
 public:
     void addNum(int num) {
@@ -169,7 +169,7 @@ public:
 };
 
 // =============================================================================
-// 5. K개 정렬 리스트 병합
+// 5. Merge K Sorted Lists
 // =============================================================================
 
 struct ListNode {
@@ -201,7 +201,7 @@ ListNode* mergeKLists(vector<ListNode*>& lists) {
 }
 
 // =============================================================================
-// 6. 가장 가까운 K개 점
+// 6. K Closest Points
 // =============================================================================
 
 vector<vector<int>> kClosest(vector<vector<int>>& points, int k) {
@@ -232,7 +232,7 @@ vector<vector<int>> kClosest(vector<vector<int>>& points, int k) {
 }
 
 // =============================================================================
-// 7. Top K 빈도 원소
+// 7. Top K Frequent Elements
 // =============================================================================
 
 vector<int> topKFrequent(vector<int>& nums, int k) {
@@ -261,7 +261,7 @@ vector<int> topKFrequent(vector<int>& nums, int k) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -275,19 +275,19 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "힙 예제" << endl;
+    cout << "Heap Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 최소 힙
-    cout << "\n[1] 최소 힙" << endl;
+    // 1. Min Heap
+    cout << "\n[1] Min Heap" << endl;
     MinHeap minHeap;
     minHeap.push(5);
     minHeap.push(3);
     minHeap.push(7);
     minHeap.push(1);
-    cout << "    삽입: 5, 3, 7, 1" << endl;
-    cout << "    최솟값: " << minHeap.top() << endl;
-    cout << "    pop 순서: ";
+    cout << "    Inserted: 5, 3, 7, 1" << endl;
+    cout << "    Minimum: " << minHeap.top() << endl;
+    cout << "    Pop order: ";
     while (!minHeap.empty()) {
         cout << minHeap.pop() << " ";
     }
@@ -295,61 +295,61 @@ int main() {
 
     // 2. STL priority_queue
     cout << "\n[2] STL priority_queue" << endl;
-    priority_queue<int> maxPQ;  // 최대 힙
-    priority_queue<int, vector<int>, greater<int>> minPQ;  // 최소 힙
+    priority_queue<int> maxPQ;  // Max heap
+    priority_queue<int, vector<int>, greater<int>> minPQ;  // Min heap
 
     for (int x : {3, 1, 4, 1, 5, 9}) {
         maxPQ.push(x);
         minPQ.push(x);
     }
 
-    cout << "    최대 힙 top: " << maxPQ.top() << endl;
-    cout << "    최소 힙 top: " << minPQ.top() << endl;
+    cout << "    Max heap top: " << maxPQ.top() << endl;
+    cout << "    Min heap top: " << minPQ.top() << endl;
 
-    // 3. 힙 정렬
-    cout << "\n[3] 힙 정렬" << endl;
+    // 3. Heap Sort
+    cout << "\n[3] Heap Sort" << endl;
     vector<int> arr = {64, 34, 25, 12, 22, 11, 90};
-    cout << "    정렬 전: ";
+    cout << "    Before sorting: ";
     printVector(arr);
     cout << endl;
     heapSort(arr);
-    cout << "    정렬 후: ";
+    cout << "    After sorting: ";
     printVector(arr);
     cout << endl;
 
-    // 4. K번째 원소
-    cout << "\n[4] K번째 원소" << endl;
+    // 4. Kth Element
+    cout << "\n[4] Kth Element" << endl;
     vector<int> nums = {3, 2, 1, 5, 6, 4};
-    cout << "    배열: [3,2,1,5,6,4]" << endl;
-    cout << "    2번째로 큰 원소: " << findKthLargest(nums, 2) << endl;
-    cout << "    3번째로 작은 원소: " << findKthSmallest(nums, 3) << endl;
+    cout << "    Array: [3,2,1,5,6,4]" << endl;
+    cout << "    2nd largest: " << findKthLargest(nums, 2) << endl;
+    cout << "    3rd smallest: " << findKthSmallest(nums, 3) << endl;
 
-    // 5. 중앙값 스트림
-    cout << "\n[5] 중앙값 스트림" << endl;
+    // 5. Median Stream
+    cout << "\n[5] Median Stream" << endl;
     MedianFinder mf;
     mf.addNum(1);
     mf.addNum(2);
-    cout << "    [1, 2] 중앙값: " << mf.findMedian() << endl;
+    cout << "    [1, 2] median: " << mf.findMedian() << endl;
     mf.addNum(3);
-    cout << "    [1, 2, 3] 중앙값: " << mf.findMedian() << endl;
+    cout << "    [1, 2, 3] median: " << mf.findMedian() << endl;
 
-    // 6. Top K 빈도
-    cout << "\n[6] Top K 빈도 원소" << endl;
+    // 6. Top K Frequency
+    cout << "\n[6] Top K Frequent Elements" << endl;
     vector<int> freqNums = {1, 1, 1, 2, 2, 3};
     auto topK = topKFrequent(freqNums, 2);
     cout << "    [1,1,1,2,2,3], k=2: ";
     printVector(topK);
     cout << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 연산         | 시간복잡도 |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Operation    | Time       |" << endl;
     cout << "    |--------------|------------|" << endl;
-    cout << "    | 삽입         | O(log n)   |" << endl;
-    cout << "    | 삭제 (top)   | O(log n)   |" << endl;
-    cout << "    | 최솟값/최댓값| O(1)       |" << endl;
-    cout << "    | 힙 구성      | O(n)       |" << endl;
-    cout << "    | 힙 정렬      | O(n log n) |" << endl;
+    cout << "    | Insert       | O(log n)   |" << endl;
+    cout << "    | Delete (top) | O(log n)   |" << endl;
+    cout << "    | Min/Max      | O(1)       |" << endl;
+    cout << "    | Build heap   | O(n)       |" << endl;
+    cout << "    | Heap sort    | O(n log n) |" << endl;
 
     cout << "\n============================================================" << endl;
 

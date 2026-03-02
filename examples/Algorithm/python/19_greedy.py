@@ -1,8 +1,8 @@
 """
-탐욕 알고리즘 (Greedy Algorithm)
+Greedy Algorithm
 Greedy Algorithms
 
-매 순간 최적의 선택을 하여 전체 최적해를 구하는 알고리즘입니다.
+An algorithmic technique that makes the locally optimal choice at each step to find the global optimum.
 """
 
 from typing import List, Tuple
@@ -10,17 +10,17 @@ import heapq
 
 
 # =============================================================================
-# 1. 활동 선택 문제 (Activity Selection)
+# 1. Activity Selection Problem
 # =============================================================================
 
 def activity_selection(activities: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
     """
-    겹치지 않는 최대 활동 수 선택
-    activities: [(시작, 종료), ...]
-    탐욕 전략: 종료 시간이 빠른 순서로 선택
-    시간복잡도: O(n log n)
+    Select the maximum number of non-overlapping activities
+    activities: [(start, end), ...]
+    Greedy strategy: select activities with earliest end time first
+    Time Complexity: O(n log n)
     """
-    # 종료 시간으로 정렬
+    # Sort by end time
     sorted_activities = sorted(activities, key=lambda x: x[1])
 
     selected = []
@@ -35,17 +35,17 @@ def activity_selection(activities: List[Tuple[int, int]]) -> List[Tuple[int, int
 
 
 # =============================================================================
-# 2. 분할 가능 배낭 문제 (Fractional Knapsack)
+# 2. Fractional Knapsack Problem
 # =============================================================================
 
 def fractional_knapsack(capacity: int, items: List[Tuple[int, int]]) -> float:
     """
-    분할 가능한 배낭 문제
-    items: [(가치, 무게), ...]
-    탐욕 전략: 단위 무게당 가치가 높은 순서로 선택
-    시간복잡도: O(n log n)
+    Fractional knapsack problem
+    items: [(value, weight), ...]
+    Greedy strategy: select items with highest value-to-weight ratio first
+    Time Complexity: O(n log n)
     """
-    # 단위 무게당 가치로 정렬 (내림차순)
+    # Sort by value-to-weight ratio (descending)
     sorted_items = sorted(items, key=lambda x: x[0] / x[1], reverse=True)
 
     total_value = 0
@@ -56,7 +56,7 @@ def fractional_knapsack(capacity: int, items: List[Tuple[int, int]]) -> float:
             total_value += value
             remaining -= weight
         else:
-            # 분할해서 담기
+            # Take a fraction
             total_value += value * (remaining / weight)
             break
 
@@ -64,22 +64,22 @@ def fractional_knapsack(capacity: int, items: List[Tuple[int, int]]) -> float:
 
 
 # =============================================================================
-# 3. 회의실 배정 (Meeting Rooms)
+# 3. Meeting Rooms
 # =============================================================================
 
 def min_meeting_rooms(intervals: List[Tuple[int, int]]) -> int:
     """
-    필요한 최소 회의실 수
-    시간복잡도: O(n log n)
+    Minimum number of meeting rooms required
+    Time Complexity: O(n log n)
     """
     if not intervals:
         return 0
 
-    # 시작/종료 이벤트로 분리
+    # Separate into start/end events
     events = []
     for start, end in intervals:
-        events.append((start, 1))   # 시작: +1
-        events.append((end, -1))    # 종료: -1
+        events.append((start, 1))   # Start: +1
+        events.append((end, -1))    # End: -1
 
     events.sort()
 
@@ -92,25 +92,25 @@ def min_meeting_rooms(intervals: List[Tuple[int, int]]) -> int:
 
 
 # =============================================================================
-# 4. 작업 스케줄링 (Job Scheduling)
+# 4. Job Scheduling
 # =============================================================================
 
 def job_scheduling(jobs: List[Tuple[int, int, int]]) -> Tuple[int, List[int]]:
     """
-    마감 기한 내 최대 이익 스케줄링
-    jobs: [(작업ID, 마감일, 이익), ...]
-    탐욕 전략: 이익이 높은 순서로, 가능한 늦은 슬롯에 배정
+    Schedule jobs for maximum profit within deadlines
+    jobs: [(job_id, deadline, profit), ...]
+    Greedy strategy: sort by profit descending, assign to latest available slot
     """
-    # 이익 내림차순 정렬
+    # Sort by profit descending
     sorted_jobs = sorted(jobs, key=lambda x: x[2], reverse=True)
 
     max_deadline = max(job[1] for job in jobs)
-    slots = [None] * (max_deadline + 1)  # 각 시간 슬롯
+    slots = [None] * (max_deadline + 1)  # Time slots
     total_profit = 0
     scheduled = []
 
     for job_id, deadline, profit in sorted_jobs:
-        # 마감일부터 역순으로 빈 슬롯 찾기
+        # Find an empty slot from deadline backwards
         for slot in range(deadline, 0, -1):
             if slots[slot] is None:
                 slots[slot] = job_id
@@ -122,7 +122,7 @@ def job_scheduling(jobs: List[Tuple[int, int, int]]) -> Tuple[int, List[int]]:
 
 
 # =============================================================================
-# 5. 허프만 코딩 (Huffman Coding)
+# 5. Huffman Coding
 # =============================================================================
 
 class HuffmanNode:
@@ -138,19 +138,19 @@ class HuffmanNode:
 
 def huffman_encoding(text: str) -> Tuple[dict, str]:
     """
-    허프만 인코딩
-    반환: (문자→코드 딕셔너리, 인코딩된 문자열)
-    시간복잡도: O(n log n)
+    Huffman encoding
+    Returns: (character->code dictionary, encoded string)
+    Time Complexity: O(n log n)
     """
     if not text:
         return {}, ""
 
-    # 빈도 계산
+    # Calculate frequencies
     freq = {}
     for char in text:
         freq[char] = freq.get(char, 0) + 1
 
-    # 우선순위 큐로 트리 구성
+    # Build tree using priority queue
     heap = [HuffmanNode(char, f) for char, f in freq.items()]
     heapq.heapify(heap)
 
@@ -164,7 +164,7 @@ def huffman_encoding(text: str) -> Tuple[dict, str]:
 
         heapq.heappush(heap, merged)
 
-    # 코드 생성
+    # Generate codes
     codes = {}
 
     def generate_codes(node: HuffmanNode, code: str):
@@ -181,14 +181,14 @@ def huffman_encoding(text: str) -> Tuple[dict, str]:
     if heap:
         generate_codes(heap[0], "")
 
-    # 인코딩
+    # Encode
     encoded = ''.join(codes[char] for char in text)
 
     return codes, encoded
 
 
 def huffman_decoding(encoded: str, codes: dict) -> str:
-    """허프만 디코딩"""
+    """Huffman decoding"""
     reverse_codes = {v: k for k, v in codes.items()}
     decoded = []
     current = ""
@@ -203,14 +203,14 @@ def huffman_decoding(encoded: str, codes: dict) -> str:
 
 
 # =============================================================================
-# 6. 동전 거스름돈 (Coin Change - Greedy)
+# 6. Coin Change (Greedy)
 # =============================================================================
 
 def coin_change_greedy(coins: List[int], amount: int) -> List[int]:
     """
-    동전 거스름돈 (탐욕, 특정 동전 집합에서만 최적)
-    coins: 내림차순 정렬된 동전
-    주의: 일반적인 동전 조합에서는 DP 필요
+    Coin change (greedy, optimal only for certain coin sets)
+    coins: coins sorted in descending order
+    Note: DP is required for general coin combinations
     """
     coins = sorted(coins, reverse=True)
     result = []
@@ -224,32 +224,32 @@ def coin_change_greedy(coins: List[int], amount: int) -> List[int]:
 
 
 # =============================================================================
-# 7. 구간 스케줄링 (Interval Scheduling)
+# 7. Interval Scheduling (Partitioning)
 # =============================================================================
 
 def interval_partitioning(intervals: List[Tuple[int, int]]) -> List[List[Tuple[int, int]]]:
     """
-    구간들을 최소 그룹 수로 분할 (각 그룹 내 겹침 없음)
-    시간복잡도: O(n log n)
+    Partition intervals into minimum number of groups (no overlap within each group)
+    Time Complexity: O(n log n)
     """
     if not intervals:
         return []
 
-    # 시작 시간으로 정렬
+    # Sort by start time
     sorted_intervals = sorted(enumerate(intervals), key=lambda x: x[1][0])
 
-    # 각 그룹의 종료 시간을 힙으로 관리
-    groups = []  # [(종료시간, 그룹인덱스)]
+    # Manage end times of each group using a heap
+    groups = []  # [(end_time, group_index)]
     assignment = [[] for _ in range(len(intervals))]
 
     for idx, (start, end) in sorted_intervals:
         if groups and groups[0][0] <= start:
-            # 기존 그룹에 배정
+            # Assign to existing group
             _, group_idx = heapq.heappop(groups)
             assignment[group_idx].append(intervals[idx])
             heapq.heappush(groups, (end, group_idx))
         else:
-            # 새 그룹 생성
+            # Create new group
             new_group = len(groups)
             assignment.append([intervals[idx]])
             heapq.heappush(groups, (end, new_group))
@@ -258,14 +258,14 @@ def interval_partitioning(intervals: List[Tuple[int, int]]) -> List[List[Tuple[i
 
 
 # =============================================================================
-# 8. 점프 게임 (Jump Game)
+# 8. Jump Game
 # =============================================================================
 
 def can_jump(nums: List[int]) -> bool:
     """
-    마지막 인덱스 도달 가능 여부
-    nums[i] = i에서 최대 점프 거리
-    시간복잡도: O(n)
+    Whether the last index is reachable
+    nums[i] = maximum jump distance from i
+    Time Complexity: O(n)
     """
     max_reach = 0
 
@@ -279,8 +279,8 @@ def can_jump(nums: List[int]) -> bool:
 
 def min_jumps(nums: List[int]) -> int:
     """
-    마지막 인덱스까지 최소 점프 횟수
-    시간복잡도: O(n)
+    Minimum number of jumps to reach the last index
+    Time Complexity: O(n)
     """
     if len(nums) <= 1:
         return 0
@@ -303,15 +303,15 @@ def min_jumps(nums: List[int]) -> int:
 
 
 # =============================================================================
-# 9. 주유소 (Gas Station)
+# 9. Gas Station
 # =============================================================================
 
 def can_complete_circuit(gas: List[int], cost: List[int]) -> int:
     """
-    원형 경로 완주 가능한 시작점 찾기
-    gas[i] = i에서 얻는 기름
-    cost[i] = i→i+1 이동 비용
-    시간복잡도: O(n)
+    Find starting station to complete a circular route
+    gas[i] = fuel gained at station i
+    cost[i] = fuel cost to travel from i to i+1
+    Time Complexity: O(n)
     """
     total_tank = 0
     current_tank = 0
@@ -330,19 +330,19 @@ def can_complete_circuit(gas: List[int], cost: List[int]) -> int:
 
 
 # =============================================================================
-# 10. 최소 화살로 풍선 터트리기
+# 10. Minimum Arrows to Burst Balloons
 # =============================================================================
 
 def min_arrows(points: List[List[int]]) -> int:
     """
-    수평선 풍선을 터트리는 최소 화살 수
-    points[i] = [시작, 끝] 범위
-    시간복잡도: O(n log n)
+    Minimum number of arrows to burst all horizontal balloons
+    points[i] = [start, end] range
+    Time Complexity: O(n log n)
     """
     if not points:
         return 0
 
-    # 끝점으로 정렬
+    # Sort by end point
     points.sort(key=lambda x: x[1])
 
     arrows = 1
@@ -357,83 +357,83 @@ def min_arrows(points: List[List[int]]) -> int:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("탐욕 알고리즘 (Greedy) 예제")
+    print("Greedy Algorithm Examples")
     print("=" * 60)
 
-    # 1. 활동 선택
-    print("\n[1] 활동 선택 문제")
+    # 1. Activity Selection
+    print("\n[1] Activity Selection Problem")
     activities = [(1, 4), (3, 5), (0, 6), (5, 7), (3, 9), (5, 9), (6, 10), (8, 11)]
     selected = activity_selection(activities)
-    print(f"    활동: {activities}")
-    print(f"    선택: {selected} ({len(selected)}개)")
+    print(f"    Activities: {activities}")
+    print(f"    Selected: {selected} ({len(selected)} activities)")
 
-    # 2. 분할 가능 배낭
-    print("\n[2] 분할 가능 배낭")
-    items = [(60, 10), (100, 20), (120, 30)]  # (가치, 무게)
+    # 2. Fractional Knapsack
+    print("\n[2] Fractional Knapsack")
+    items = [(60, 10), (100, 20), (120, 30)]  # (value, weight)
     capacity = 50
     value = fractional_knapsack(capacity, items)
-    print(f"    아이템 (가치, 무게): {items}")
-    print(f"    용량: {capacity}, 최대 가치: {value}")
+    print(f"    Items (value, weight): {items}")
+    print(f"    Capacity: {capacity}, Max value: {value}")
 
-    # 3. 회의실 배정
-    print("\n[3] 최소 회의실 수")
+    # 3. Meeting Rooms
+    print("\n[3] Minimum Meeting Rooms")
     meetings = [(0, 30), (5, 10), (15, 20)]
     rooms = min_meeting_rooms(meetings)
-    print(f"    회의: {meetings}")
-    print(f"    필요 회의실: {rooms}개")
+    print(f"    Meetings: {meetings}")
+    print(f"    Rooms needed: {rooms}")
 
-    # 4. 작업 스케줄링
-    print("\n[4] 작업 스케줄링")
-    jobs = [(1, 4, 20), (2, 1, 10), (3, 1, 40), (4, 1, 30)]  # (ID, 마감일, 이익)
+    # 4. Job Scheduling
+    print("\n[4] Job Scheduling")
+    jobs = [(1, 4, 20), (2, 1, 10), (3, 1, 40), (4, 1, 30)]  # (ID, deadline, profit)
     profit, scheduled = job_scheduling(jobs)
-    print(f"    작업 (ID, 마감, 이익): {jobs}")
-    print(f"    스케줄: {scheduled}, 총 이익: {profit}")
+    print(f"    Jobs (ID, deadline, profit): {jobs}")
+    print(f"    Schedule: {scheduled}, Total profit: {profit}")
 
-    # 5. 허프만 코딩
-    print("\n[5] 허프만 코딩")
+    # 5. Huffman Coding
+    print("\n[5] Huffman Coding")
     text = "abracadabra"
     codes, encoded = huffman_encoding(text)
     decoded = huffman_decoding(encoded, codes)
-    print(f"    원본: '{text}'")
-    print(f"    코드: {codes}")
-    print(f"    인코딩: {encoded} ({len(encoded)} bits)")
-    print(f"    원본 크기: {len(text) * 8} bits")
-    print(f"    디코딩: '{decoded}'")
+    print(f"    Original: '{text}'")
+    print(f"    Codes: {codes}")
+    print(f"    Encoded: {encoded} ({len(encoded)} bits)")
+    print(f"    Original size: {len(text) * 8} bits")
+    print(f"    Decoded: '{decoded}'")
 
-    # 6. 동전 거스름돈
-    print("\n[6] 동전 거스름돈")
+    # 6. Coin Change
+    print("\n[6] Coin Change")
     coins = [500, 100, 50, 10]
     amount = 1260
     result = coin_change_greedy(coins, amount)
-    print(f"    동전: {coins}, 금액: {amount}")
-    print(f"    결과: {result} ({len(result)}개)")
+    print(f"    Coins: {coins}, Amount: {amount}")
+    print(f"    Result: {result} ({len(result)} coins)")
 
-    # 7. 점프 게임
-    print("\n[7] 점프 게임")
+    # 7. Jump Game
+    print("\n[7] Jump Game")
     nums1 = [2, 3, 1, 1, 4]
     nums2 = [3, 2, 1, 0, 4]
-    print(f"    {nums1}: 도달 가능 = {can_jump(nums1)}, 최소 점프 = {min_jumps(nums1)}")
-    print(f"    {nums2}: 도달 가능 = {can_jump(nums2)}")
+    print(f"    {nums1}: reachable = {can_jump(nums1)}, min jumps = {min_jumps(nums1)}")
+    print(f"    {nums2}: reachable = {can_jump(nums2)}")
 
-    # 8. 주유소
-    print("\n[8] 주유소 문제")
+    # 8. Gas Station
+    print("\n[8] Gas Station Problem")
     gas = [1, 2, 3, 4, 5]
     cost = [3, 4, 5, 1, 2]
     start = can_complete_circuit(gas, cost)
     print(f"    gas: {gas}, cost: {cost}")
-    print(f"    시작점: {start}")
+    print(f"    Starting station: {start}")
 
-    # 9. 풍선 터트리기
-    print("\n[9] 최소 화살로 풍선 터트리기")
+    # 9. Burst Balloons
+    print("\n[9] Minimum Arrows to Burst Balloons")
     points = [[10, 16], [2, 8], [1, 6], [7, 12]]
     arrows = min_arrows(points)
-    print(f"    풍선: {points}")
-    print(f"    필요 화살: {arrows}개")
+    print(f"    Balloons: {points}")
+    print(f"    Arrows needed: {arrows}")
 
     print("\n" + "=" * 60)
 

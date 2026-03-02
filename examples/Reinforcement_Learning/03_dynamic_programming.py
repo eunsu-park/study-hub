@@ -1,9 +1,9 @@
 """
-동적 프로그래밍 (Dynamic Programming) 구현
-- Policy Evaluation (정책 평가)
-- Policy Improvement (정책 개선)
-- Policy Iteration (정책 반복)
-- Value Iteration (가치 반복)
+Dynamic Programming Implementation
+- Policy Evaluation
+- Policy Improvement
+- Policy Iteration
+- Value Iteration
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,7 +12,7 @@ from collections import defaultdict
 
 
 class GridWorld:
-    """간단한 그리드 월드 환경"""
+    """Simple grid world environment"""
 
     def __init__(self, size=4):
         self.size = size
@@ -20,15 +20,15 @@ class GridWorld:
         self.n_actions = len(self.actions)
 
     def get_states(self):
-        """모든 상태 반환"""
+        """Return all states"""
         return [(i, j) for i in range(self.size) for j in range(self.size)]
 
     def is_terminal(self, state):
-        """종료 상태 확인"""
+        """Check if the state is terminal"""
         return state == (0, 0) or state == (self.size-1, self.size-1)
 
     def get_transitions(self, state, action):
-        """전이 확률 반환: [(prob, next_state, reward, done)]"""
+        """Return transition probabilities: [(prob, next_state, reward, done)]"""
         if self.is_terminal(state):
             return [(1.0, state, 0, True)]
 
@@ -40,12 +40,12 @@ class GridWorld:
         }
         delta = deltas[action]
 
-        # 그리드 경계 처리
+        # Handle grid boundaries
         new_row = max(0, min(self.size-1, state[0] + delta[0]))
         new_col = max(0, min(self.size-1, state[1] + delta[1]))
         next_state = (new_row, new_col)
 
-        # 보상: 각 이동마다 -1
+        # Reward: -1 for each move
         reward = -1
         done = self.is_terminal(next_state)
 
@@ -53,7 +53,7 @@ class GridWorld:
 
 
 def create_uniform_policy(grid):
-    """균등 랜덤 정책 생성"""
+    """Create a uniform random policy"""
     policy = {}
     for s in grid.get_states():
         policy[s] = {a: 1.0/len(grid.actions) for a in grid.actions}
@@ -62,34 +62,34 @@ def create_uniform_policy(grid):
 
 def policy_evaluation(grid, policy: Dict, gamma: float = 0.9, theta: float = 1e-6):
     """
-    정책 평가: 주어진 정책의 가치 함수 계산
+    Policy Evaluation: Compute the value function for a given policy
 
     Args:
-        grid: GridWorld 환경
-        policy: 정책 {state: {action: probability}}
-        gamma: 할인율
-        theta: 수렴 임계값
+        grid: GridWorld environment
+        policy: Policy {state: {action: probability}}
+        gamma: Discount factor
+        theta: Convergence threshold
 
     Returns:
-        V: 상태 가치 함수 {state: value}
+        V: State value function {state: value}
     """
-    # 가치 함수 초기화
+    # Initialize value function
     V = {s: 0.0 for s in grid.get_states()}
 
     iteration = 0
     while True:
-        delta = 0  # 최대 변화량 추적
+        delta = 0  # Track maximum change
         iteration += 1
 
-        # 모든 상태에 대해 업데이트
+        # Update for all states
         for s in grid.get_states():
             if grid.is_terminal(s):
                 continue
 
-            v = V[s]  # 이전 값 저장
+            v = V[s]  # Store previous value
             new_v = 0
 
-            # 벨만 기대 방정식 적용
+            # Apply Bellman expectation equation
             for a in grid.actions:
                 action_prob = policy[s].get(a, 0)
 
@@ -102,9 +102,9 @@ def policy_evaluation(grid, policy: Dict, gamma: float = 0.9, theta: float = 1e-
             V[s] = new_v
             delta = max(delta, abs(v - new_v))
 
-        # 수렴 체크
+        # Convergence check
         if delta < theta:
-            print(f"정책 평가 수렴: {iteration} iterations, delta={delta:.8f}")
+            print(f"Policy evaluation converged: {iteration} iterations, delta={delta:.8f}")
             break
 
     return V
@@ -112,16 +112,16 @@ def policy_evaluation(grid, policy: Dict, gamma: float = 0.9, theta: float = 1e-
 
 def policy_improvement(grid, V: Dict, gamma: float = 0.9):
     """
-    정책 개선: V를 기반으로 탐욕적 정책 생성
+    Policy Improvement: Generate a greedy policy based on V
 
     Args:
-        grid: GridWorld 환경
-        V: 현재 가치 함수
-        gamma: 할인율
+        grid: GridWorld environment
+        V: Current value function
+        gamma: Discount factor
 
     Returns:
-        new_policy: 개선된 정책
-        policy_stable: 정책이 변하지 않았으면 True
+        new_policy: Improved policy
+        policy_stable: True if the policy did not change
     """
     new_policy = {}
     policy_stable = True
@@ -131,7 +131,7 @@ def policy_improvement(grid, V: Dict, gamma: float = 0.9):
             new_policy[s] = {a: 1.0/len(grid.actions) for a in grid.actions}
             continue
 
-        # 각 행동의 Q 값 계산
+        # Compute Q-value for each action
         q_values = {}
         for a in grid.actions:
             q = 0
@@ -142,15 +142,15 @@ def policy_improvement(grid, V: Dict, gamma: float = 0.9):
                     q += prob * (reward + gamma * V[next_s])
             q_values[a] = q
 
-        # 최적 행동 찾기
+        # Find the best action
         best_action = max(q_values, key=q_values.get)
         best_q = q_values[best_action]
 
-        # 동률인 행동들 찾기 (수치 오차 고려)
+        # Find tied actions (considering numerical error)
         best_actions = [a for a, q in q_values.items()
                         if abs(q - best_q) < 1e-8]
 
-        # 결정적 정책 생성
+        # Create deterministic policy
         new_policy[s] = {a: 0.0 for a in grid.actions}
         for a in best_actions:
             new_policy[s][a] = 1.0 / len(best_actions)
@@ -160,28 +160,28 @@ def policy_improvement(grid, V: Dict, gamma: float = 0.9):
 
 def policy_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
     """
-    정책 반복 알고리즘
+    Policy Iteration Algorithm
 
     Returns:
-        V: 최적 가치 함수
-        policy: 최적 정책
+        V: Optimal value function
+        policy: Optimal policy
     """
-    # 균등 랜덤 정책으로 초기화
+    # Initialize with a uniform random policy
     policy = create_uniform_policy(grid)
 
     iteration = 0
     while True:
         iteration += 1
-        print(f"\n=== 정책 반복 {iteration} ===")
+        print(f"\n=== Policy Iteration {iteration} ===")
 
-        # 1. 정책 평가
+        # 1. Policy Evaluation
         V = policy_evaluation(grid, policy, gamma, theta)
 
-        # 2. 정책 개선
+        # 2. Policy Improvement
         old_policy = policy.copy()
         policy, _ = policy_improvement(grid, V, gamma)
 
-        # 3. 정책 안정성 체크
+        # 3. Policy stability check
         policy_stable = True
         for s in grid.get_states():
             if grid.is_terminal(s):
@@ -195,7 +195,7 @@ def policy_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
                 break
 
         if policy_stable:
-            print(f"\n정책 반복 수렴! (총 {iteration} iterations)")
+            print(f"\nPolicy iteration converged! (total {iteration} iterations)")
             break
 
     return V, policy
@@ -203,13 +203,13 @@ def policy_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
 
 def value_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
     """
-    가치 반복 알고리즘
+    Value Iteration Algorithm
 
     Returns:
-        V: 최적 가치 함수
-        policy: 최적 정책
+        V: Optimal value function
+        policy: Optimal policy
     """
-    # 가치 함수 초기화
+    # Initialize value function
     V = {s: 0.0 for s in grid.get_states()}
 
     iteration = 0
@@ -223,7 +223,7 @@ def value_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
 
             v = V[s]
 
-            # 벨만 최적성 방정식: max over actions
+            # Bellman optimality equation: max over actions
             q_values = []
             for a in grid.actions:
                 q = 0
@@ -238,13 +238,13 @@ def value_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
             delta = max(delta, abs(v - V[s]))
 
         if iteration % 10 == 0:
-            print(f"반복 {iteration}: delta = {delta:.8f}")
+            print(f"Iteration {iteration}: delta = {delta:.8f}")
 
         if delta < theta:
-            print(f"\n가치 반복 수렴: {iteration} iterations")
+            print(f"\nValue iteration converged: {iteration} iterations")
             break
 
-    # 최적 정책 추출
+    # Extract optimal policy
     policy = {}
     for s in grid.get_states():
         if grid.is_terminal(s):
@@ -269,16 +269,16 @@ def value_iteration(grid, gamma: float = 0.9, theta: float = 1e-6):
 
 
 def print_value_function(grid, V):
-    """가치 함수 출력"""
-    print("\n가치 함수:")
+    """Print the value function"""
+    print("\nValue Function:")
     for i in range(grid.size):
         row = [f"{V[(i,j)]:7.2f}" for j in range(grid.size)]
         print(" ".join(row))
 
 
 def print_policy(grid, policy):
-    """정책 출력 (화살표로)"""
-    print("\n최적 정책:")
+    """Print the policy (as arrows)"""
+    print("\nOptimal Policy:")
     arrows = {'up': '↑', 'down': '↓', 'left': '←', 'right': '→'}
 
     for i in range(grid.size):
@@ -294,7 +294,7 @@ def print_policy(grid, policy):
 
 
 def visualize_value_function(grid, V, title="Value Function"):
-    """가치 함수 시각화"""
+    """Visualize the value function"""
     value_grid = np.zeros((grid.size, grid.size))
     for i in range(grid.size):
         for j in range(grid.size):
@@ -305,7 +305,7 @@ def visualize_value_function(grid, V, title="Value Function"):
     plt.colorbar(label='Value')
     plt.title(title)
 
-    # 숫자 표시
+    # Display numbers
     for i in range(grid.size):
         for j in range(grid.size):
             plt.text(j, i, f'{value_grid[i, j]:.1f}',
@@ -316,64 +316,64 @@ def visualize_value_function(grid, V, title="Value Function"):
     plt.grid(False)
     plt.tight_layout()
     plt.savefig('value_function.png', dpi=150)
-    print(f"가치 함수 시각화 저장: value_function.png")
+    print(f"Value function visualization saved: value_function.png")
 
 
 def compare_algorithms():
-    """DP 알고리즘 비교"""
+    """Compare DP algorithms"""
     print("=" * 60)
-    print("동적 프로그래밍 알고리즘 비교")
+    print("Dynamic Programming Algorithm Comparison")
     print("=" * 60)
 
     grid = GridWorld(size=4)
     gamma = 0.9
 
-    # 1. 정책 평가 (균등 랜덤 정책)
-    print("\n[1] 정책 평가 - 균등 랜덤 정책")
+    # 1. Policy Evaluation (uniform random policy)
+    print("\n[1] Policy Evaluation - Uniform Random Policy")
     print("-" * 60)
     uniform_policy = create_uniform_policy(grid)
     V_uniform = policy_evaluation(grid, uniform_policy, gamma)
     print_value_function(grid, V_uniform)
 
-    # 2. 정책 반복
-    print("\n[2] 정책 반복 (Policy Iteration)")
+    # 2. Policy Iteration
+    print("\n[2] Policy Iteration")
     print("-" * 60)
     V_pi, policy_pi = policy_iteration(grid, gamma)
     print_value_function(grid, V_pi)
     print_policy(grid, policy_pi)
 
-    # 3. 가치 반복
-    print("\n[3] 가치 반복 (Value Iteration)")
+    # 3. Value Iteration
+    print("\n[3] Value Iteration")
     print("-" * 60)
     V_vi, policy_vi = value_iteration(grid, gamma)
     print_value_function(grid, V_vi)
     print_policy(grid, policy_vi)
 
-    # 4. 결과 비교
-    print("\n[4] 결과 비교")
+    # 4. Result Comparison
+    print("\n[4] Result Comparison")
     print("-" * 60)
-    print("정책 반복과 가치 반복의 가치 함수 차이:")
+    print("Value function difference between Policy Iteration and Value Iteration:")
     max_diff = 0
     for s in grid.get_states():
         diff = abs(V_pi[s] - V_vi[s])
         max_diff = max(max_diff, diff)
-    print(f"최대 차이: {max_diff:.10f}")
+    print(f"Maximum difference: {max_diff:.10f}")
 
-    # 시각화
+    # Visualization
     visualize_value_function(grid, V_pi, "Policy Iteration - Value Function")
 
     return V_pi, policy_pi, V_vi, policy_vi
 
 
 def frozen_lake_example():
-    """Frozen Lake 환경에서 DP 적용"""
+    """Apply DP to the Frozen Lake environment"""
     import gymnasium as gym
 
     print("\n" + "=" * 60)
-    print("Frozen Lake 예제")
+    print("Frozen Lake Example")
     print("=" * 60)
 
-    # 환경 생성 (미끄러지지 않는 버전)
+    # Create environment (non-slippery version)
     env = gym.make('FrozenLake-v1', is_slippery=False)
 
     n_states = env.observation_space.n
@@ -384,11 +384,11 @@ def frozen_lake_example():
     # P[s][a] = [(prob, next_state, reward, done), ...]
     P = env.unwrapped.P
 
-    # 가치 반복
+    # Value Iteration
     V = np.zeros(n_states)
     iteration = 0
 
-    print("\n가치 반복 시작...")
+    print("\nStarting value iteration...")
     while True:
         delta = 0
         iteration += 1
@@ -396,7 +396,7 @@ def frozen_lake_example():
         for s in range(n_states):
             v = V[s]
 
-            # 각 행동의 가치 계산
+            # Compute value of each action
             q_values = []
             for a in range(n_actions):
                 q = sum(prob * (reward + gamma * V[next_s] * (not done))
@@ -407,10 +407,10 @@ def frozen_lake_example():
             delta = max(delta, abs(v - V[s]))
 
         if delta < theta:
-            print(f"수렴: {iteration} iterations")
+            print(f"Converged: {iteration} iterations")
             break
 
-    # 최적 정책 추출
+    # Extract optimal policy
     policy = np.zeros(n_states, dtype=int)
     for s in range(n_states):
         q_values = []
@@ -420,29 +420,29 @@ def frozen_lake_example():
             q_values.append(q)
         policy[s] = np.argmax(q_values)
 
-    # 결과 시각화
+    # Visualize results
     action_names = ['←', '↓', '→', '↑']
-    print("\n최적 정책 (4x4 그리드):")
-    print("S: 시작, H: 구멍, F: 얼음, G: 목표")
+    print("\nOptimal Policy (4x4 grid):")
+    print("S: Start, H: Hole, F: Frozen, G: Goal")
     for i in range(4):
         row = ""
         for j in range(4):
             s = i * 4 + j
             if s == 0:
                 row += "  S  "
-            elif s in [5, 7, 11, 12]:  # 구멍
+            elif s in [5, 7, 11, 12]:  # Holes
                 row += "  H  "
-            elif s == 15:  # 목표
+            elif s == 15:  # Goal
                 row += "  G  "
             else:
                 row += f"  {action_names[policy[s]]}  "
         print(row)
 
-    print("\n가치 함수:")
+    print("\nValue Function:")
     print(V.reshape(4, 4).round(3))
 
-    # 정책 테스트
-    print("\n정책 테스트 중...")
+    # Test the policy
+    print("\nTesting the policy...")
     success = 0
     n_tests = 100
 
@@ -458,23 +458,23 @@ def frozen_lake_example():
         if reward > 0:
             success += 1
 
-    print(f"성공률: {success}/{n_tests} = {success/n_tests*100:.1f}%")
+    print(f"Success rate: {success}/{n_tests} = {success/n_tests*100:.1f}%")
 
     env.close()
     return V, policy
 
 
 if __name__ == "__main__":
-    # 그리드 월드 알고리즘 비교
+    # Grid world algorithm comparison
     V_pi, policy_pi, V_vi, policy_vi = compare_algorithms()
 
-    # Frozen Lake 예제
+    # Frozen Lake example
     try:
         V_fl, policy_fl = frozen_lake_example()
     except Exception as e:
-        print(f"\nFrozen Lake 예제 실행 실패: {e}")
-        print("gymnasium 패키지가 설치되어 있는지 확인하세요: pip install gymnasium")
+        print(f"\nFailed to run Frozen Lake example: {e}")
+        print("Make sure the gymnasium package is installed: pip install gymnasium")
 
     print("\n" + "=" * 60)
-    print("동적 프로그래밍 예제 완료!")
+    print("Dynamic programming examples complete!")
     print("=" * 60)

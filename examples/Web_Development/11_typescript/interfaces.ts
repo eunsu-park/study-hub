@@ -1,37 +1,37 @@
 /**
- * TypeScript 인터페이스와 제네릭
- * - 인터페이스
- * - 클래스와 타입
- * - 제네릭
- * - 유틸리티 타입
+ * TypeScript Interfaces and Generics
+ * - Interfaces
+ * - Classes and types
+ * - Generics
+ * - Utility types
  */
 
 // ============================================
-// 1. 인터페이스 기초
+// 1. Interface Basics
 // ============================================
 
 interface User {
     id: number;
     name: string;
     email: string;
-    age?: number;  // 선택적 속성
-    readonly createdAt: Date;  // 읽기 전용
+    age?: number;  // Optional property
+    readonly createdAt: Date;  // Read-only
 }
 
 const user1: User = {
     id: 1,
-    name: "홍길동",
-    email: "hong@example.com",
+    name: "John",
+    email: "john@example.com",
     createdAt: new Date()
 };
 
-// user1.createdAt = new Date();  // 에러: readonly
+// user1.createdAt = new Date();  // Error: readonly
 
-console.log("=== 인터페이스 기초 ===");
-console.log(`사용자: ${user1.name} (${user1.email})`);
+console.log("=== Interface Basics ===");
+console.log(`User: ${user1.name} (${user1.email})`);
 
 // ============================================
-// 2. 인터페이스 확장
+// 2. Interface Extension
 // ============================================
 
 interface Person {
@@ -50,19 +50,19 @@ interface Manager extends Employee {
 }
 
 const manager: Manager = {
-    name: "김부장",
+    name: "Kim",
     age: 45,
     employeeId: "E001",
-    department: "개발팀",
+    department: "Engineering",
     teamSize: 5,
     reports: []
 };
 
-console.log("\n=== 인터페이스 확장 ===");
-console.log(`매니저: ${manager.name}, ${manager.department}, 팀원 ${manager.teamSize}명`);
+console.log("\n=== Interface Extension ===");
+console.log(`Manager: ${manager.name}, ${manager.department}, ${manager.teamSize} team members`);
 
 // ============================================
-// 3. 인터페이스 병합
+// 3. Interface Merging
 // ============================================
 
 interface Config {
@@ -75,17 +75,17 @@ interface Config {
 
 // Why: Declaration merging lets libraries expose extensible interfaces that consumers can
 // augment without modifying the original source - this is why interfaces are preferred for public APIs
-// 두 선언이 자동으로 병합됨
+// The two declarations are automatically merged
 const config: Config = {
     apiUrl: "https://api.example.com",
     timeout: 5000
 };
 
-console.log("\n=== 인터페이스 병합 ===");
+console.log("\n=== Interface Merging ===");
 console.log(`Config: ${config.apiUrl}, timeout: ${config.timeout}ms`);
 
 // ============================================
-// 4. 함수 인터페이스
+// 4. Function Interface
 // ============================================
 
 interface MathFunc {
@@ -106,12 +106,12 @@ const calculator: Calculator = {
     divide: (x, y) => x / y
 };
 
-console.log("\n=== 함수 인터페이스 ===");
+console.log("\n=== Function Interface ===");
 console.log(`10 + 5 = ${calculator.add(10, 5)}`);
 console.log(`10 - 5 = ${calculator.subtract(10, 5)}`);
 
 // ============================================
-// 5. 인덱스 시그니처
+// 5. Index Signatures
 // ============================================
 
 interface StringDictionary {
@@ -123,19 +123,19 @@ interface NumberArray {
 }
 
 const translations: StringDictionary = {
-    hello: "안녕하세요",
-    goodbye: "안녕히 가세요",
-    thanks: "감사합니다"
+    hello: "Hello",
+    goodbye: "Goodbye",
+    thanks: "Thank you"
 };
 
 const colors: NumberArray = ["red", "green", "blue"];
 
-console.log("\n=== 인덱스 시그니처 ===");
+console.log("\n=== Index Signatures ===");
 console.log(`hello = ${translations["hello"]}`);
 console.log(`colors[0] = ${colors[0]}`);
 
 // ============================================
-// 6. 클래스와 인터페이스
+// 6. Classes and Interfaces
 // ============================================
 
 interface Animal {
@@ -153,50 +153,50 @@ class Dog implements Animal, Movable {
     constructor(public name: string) {}
 
     makeSound(): void {
-        console.log(`${this.name}: 멍멍!`);
+        console.log(`${this.name}: Woof!`);
     }
 
     move(distance: number): void {
-        console.log(`${this.name}이(가) ${distance}m 이동했습니다.`);
+        console.log(`${this.name} moved ${distance}m.`);
     }
 }
 
-console.log("\n=== 클래스와 인터페이스 ===");
-const dog = new Dog("바둑이");
+console.log("\n=== Classes and Interfaces ===");
+const dog = new Dog("Buddy");
 dog.makeSound();
 dog.move(10);
 
 // ============================================
-// 7. 제네릭 기초
+// 7. Generics Basics
 // ============================================
 
-// 제네릭 함수
+// Generic function
 function identity<T>(arg: T): T {
     return arg;
 }
 
-// 제네릭 배열 함수
+// Generic array function
 function firstElement<T>(arr: T[]): T | undefined {
     return arr[0];
 }
 
 // Why: K extends keyof T constrains the key parameter to valid property names of T,
 // turning runtime "property not found" errors into compile-time type errors
-// 제네릭 객체 함수
+// Generic object function
 function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
     return obj[key];
 }
 
-console.log("\n=== 제네릭 기초 ===");
+console.log("\n=== Generics Basics ===");
 console.log(`identity("hello"): ${identity("hello")}`);
 console.log(`identity(42): ${identity(42)}`);
 console.log(`firstElement([1,2,3]): ${firstElement([1, 2, 3])}`);
 
-const person = { name: "홍길동", age: 25 };
+const person = { name: "John", age: 25 };
 console.log(`getProperty: ${getProperty(person, "name")}`);
 
 // ============================================
-// 8. 제네릭 인터페이스
+// 8. Generic Interface
 // ============================================
 
 // Why: Making ApiResponse generic avoids duplicating the wrapper structure for every endpoint
@@ -219,23 +219,23 @@ interface ProductData {
 }
 
 const userResponse: ApiResponse<UserData> = {
-    data: { id: 1, name: "홍길동" },
+    data: { id: 1, name: "John" },
     status: 200,
     message: "Success"
 };
 
 const productResponse: ApiResponse<ProductData> = {
-    data: { id: 1, title: "노트북", price: 1000000 },
+    data: { id: 1, title: "Laptop", price: 1000 },
     status: 200,
     message: "Success"
 };
 
-console.log("\n=== 제네릭 인터페이스 ===");
+console.log("\n=== Generic Interface ===");
 console.log(`User: ${userResponse.data.name}`);
 console.log(`Product: ${productResponse.data.title}`);
 
 // ============================================
-// 9. 제네릭 클래스
+// 9. Generic Class
 // ============================================
 
 class Stack<T> {
@@ -262,7 +262,7 @@ class Stack<T> {
     }
 }
 
-console.log("\n=== 제네릭 클래스 ===");
+console.log("\n=== Generic Class ===");
 const numberStack = new Stack<number>();
 numberStack.push(1);
 numberStack.push(2);
@@ -272,7 +272,7 @@ console.log(`Stack pop: ${numberStack.pop()}`);
 console.log(`Stack size: ${numberStack.size()}`);
 
 // ============================================
-// 10. 제네릭 제약 조건
+// 10. Generic Constraints
 // ============================================
 
 interface HasLength {
@@ -280,17 +280,17 @@ interface HasLength {
 }
 
 function logLength<T extends HasLength>(arg: T): number {
-    console.log(`길이: ${arg.length}`);
+    console.log(`Length: ${arg.length}`);
     return arg.length;
 }
 
-console.log("\n=== 제네릭 제약 조건 ===");
-logLength("Hello");       // string은 length 있음
-logLength([1, 2, 3, 4]);  // array도 length 있음
-logLength({ length: 10 }); // 객체도 가능
+console.log("\n=== Generic Constraints ===");
+logLength("Hello");       // string has length
+logLength([1, 2, 3, 4]);  // array has length too
+logLength({ length: 10 }); // object works too
 
 // ============================================
-// 11. 유틸리티 타입
+// 11. Utility Types
 // ============================================
 
 interface Todo {
@@ -300,38 +300,38 @@ interface Todo {
     createdAt: Date;
 }
 
-// Partial<T>: 모든 속성을 선택적으로
+// Partial<T>: Makes all properties optional
 type PartialTodo = Partial<Todo>;
 
-// Required<T>: 모든 속성을 필수로
+// Required<T>: Makes all properties required
 type RequiredTodo = Required<Todo>;
 
-// Readonly<T>: 모든 속성을 읽기 전용으로
+// Readonly<T>: Makes all properties read-only
 type ReadonlyTodo = Readonly<Todo>;
 
-// Pick<T, K>: 특정 속성만 선택
+// Pick<T, K>: Select specific properties
 type TodoPreview = Pick<Todo, "title" | "completed">;
 
-// Omit<T, K>: 특정 속성 제외
+// Omit<T, K>: Exclude specific properties
 type TodoWithoutDate = Omit<Todo, "createdAt">;
 
-// Record<K, T>: 키-값 타입 정의
+// Record<K, T>: Define key-value types
 type PageInfo = Record<"home" | "about" | "contact", { title: string }>;
 
 const pages: PageInfo = {
-    home: { title: "홈" },
-    about: { title: "소개" },
-    contact: { title: "연락처" }
+    home: { title: "Home" },
+    about: { title: "About" },
+    contact: { title: "Contact" }
 };
 
-console.log("\n=== 유틸리티 타입 ===");
+console.log("\n=== Utility Types ===");
 
 const partialTodo: PartialTodo = {
-    title: "일부만"
+    title: "Partial only"
 };
 
 const todoPreview: TodoPreview = {
-    title: "미리보기",
+    title: "Preview",
     completed: false
 };
 
@@ -340,7 +340,7 @@ console.log(`TodoPreview: ${JSON.stringify(todoPreview)}`);
 console.log(`Pages: ${Object.keys(pages).join(", ")}`);
 
 // ============================================
-// 12. 조건부 타입
+// 12. Conditional Types
 // ============================================
 
 type IsString<T> = T extends string ? "yes" : "no";
@@ -348,7 +348,7 @@ type IsString<T> = T extends string ? "yes" : "no";
 type A = IsString<string>;   // "yes"
 type B = IsString<number>;   // "no"
 
-// infer 키워드
+// infer keyword
 type GetReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
 
 type FuncReturn = GetReturnType<() => number>;  // number
@@ -361,13 +361,13 @@ type T2 = Extract<"a" | "b" | "c", "a" | "f">;  // "a"
 // NonNullable
 type T3 = NonNullable<string | null | undefined>;  // string
 
-console.log("\n=== 조건부 타입 ===");
+console.log("\n=== Conditional Types ===");
 console.log("IsString<string> = 'yes'");
 console.log("IsString<number> = 'no'");
 console.log("Exclude<'a'|'b'|'c', 'a'> = 'b' | 'c'");
 
 // ============================================
-// 13. 매핑된 타입
+// 13. Mapped Types
 // ============================================
 
 type Nullable<T> = {
@@ -392,12 +392,12 @@ interface Point {
 type NullablePoint = Nullable<Point>;  // { x: number | null; y: number | null }
 type PointGetters = Getters<Point>;    // { getX: () => number; getY: () => number }
 
-console.log("\n=== 매핑된 타입 ===");
+console.log("\n=== Mapped Types ===");
 const nullablePoint: NullablePoint = { x: 10, y: null };
 console.log(`NullablePoint: x=${nullablePoint.x}, y=${nullablePoint.y}`);
 
 // ============================================
-// 14. 템플릿 리터럴 타입
+// 14. Template Literal Types
 // ============================================
 
 type EventName = "click" | "scroll" | "mousemove";
@@ -407,13 +407,13 @@ type Greeting = `Hello, ${string}!`;
 
 const greeting: Greeting = "Hello, World!";
 
-console.log("\n=== 템플릿 리터럴 타입 ===");
+console.log("\n=== Template Literal Types ===");
 console.log(`Greeting: ${greeting}`);
-console.log("Handler 타입: 'onClick' | 'onScroll' | 'onMousemove'");
+console.log("Handler type: 'onClick' | 'onScroll' | 'onMousemove'");
 
 // ============================================
-// 실행 예시
+// Execution Example
 // ============================================
-console.log("\n=== TypeScript 인터페이스/제네릭 완료 ===");
-console.log("컴파일: npx tsc interfaces.ts");
-console.log("실행: node interfaces.js");
+console.log("\n=== TypeScript Interfaces/Generics Complete ===");
+console.log("Compile: npx tsc interfaces.ts");
+console.log("Run: node interfaces.js");

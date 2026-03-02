@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
-    <!-- 기본 메타 태그 -->
+    <!-- Basic meta tags -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- SEO 핵심 메타 태그 -->
-    <title>SEO 최적화 예제 | 검색 엔진 최적화 가이드 - WebDev Study</title>
-    <meta name="description" content="웹 개발자를 위한 SEO(검색 엔진 최적화) 완벽 가이드. 메타 태그, 구조화 데이터(JSON-LD), Open Graph, 시맨틱 HTML 예제와 함께 Core Web Vitals 최적화 방법을 배워보세요.">
-    <meta name="keywords" content="SEO, 검색 엔진 최적화, 메타 태그, JSON-LD, 구조화 데이터, Open Graph, Core Web Vitals, 웹 개발">
+    <!-- Core SEO meta tags -->
+    <title>SEO Optimization Example | Search Engine Optimization Guide - WebDev Study</title>
+    <meta name="description" content="A complete SEO (Search Engine Optimization) guide for web developers. Learn meta tags, structured data (JSON-LD), Open Graph, semantic HTML examples, and Core Web Vitals optimization methods.">
+    <meta name="keywords" content="SEO, search engine optimization, meta tags, JSON-LD, structured data, Open Graph, Core Web Vitals, web development">
     <meta name="author" content="WebDev Study">
     <meta name="robots" content="index, follow">
 
-    <!-- Open Graph (Facebook, LinkedIn 등) -->
+    <!-- Open Graph (Facebook, LinkedIn, etc.) -->
     <meta property="og:type" content="article">
-    <meta property="og:title" content="SEO 최적화 예제 | 검색 엔진 최적화 가이드">
-    <meta property="og:description" content="웹 개발자를 위한 SEO 완벽 가이드. 메타 태그, 구조화 데이터, Core Web Vitals 최적화 방법.">
+    <meta property="og:title" content="SEO Optimization Example | Search Engine Optimization Guide">
+    <meta property="og:description" content="A complete SEO guide for web developers. Meta tags, structured data, and Core Web Vitals optimization methods.">
     <meta property="og:image" content="https://example.com/images/seo-guide-thumbnail.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -33,23 +33,23 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@webdevstudy">
     <meta name="twitter:creator" content="@webdevstudy">
-    <meta name="twitter:title" content="SEO 최적화 예제 | 검색 엔진 최적화 가이드">
-    <meta name="twitter:description" content="웹 개발자를 위한 SEO 완벽 가이드. 메타 태그부터 Core Web Vitals까지.">
+    <meta name="twitter:title" content="SEO Optimization Example | Search Engine Optimization Guide">
+    <meta name="twitter:description" content="A complete SEO guide for web developers. From meta tags to Core Web Vitals.">
     <meta name="twitter:image" content="https://example.com/images/seo-guide-twitter.jpg">
-    <meta name="twitter:image:alt" content="SEO 최적화 가이드 썸네일 이미지">
+    <meta name="twitter:image:alt" content="SEO Optimization Guide thumbnail image">
 
     <!-- Why: Canonical URL tells search engines which version of a page is authoritative,
          preventing duplicate content penalties when the same page is reachable via multiple URLs -->
-    <!-- 표준 URL (Canonical) -->
+    <!-- Canonical URL -->
     <link rel="canonical" href="https://example.com/seo-guide">
 
-    <!-- 대체 언어 버전 (다국어 사이트용) -->
+    <!-- Alternate language versions (for multilingual sites) -->
     <link rel="alternate" hreflang="en" href="https://example.com/en/seo-guide">
     <link rel="alternate" hreflang="ja" href="https://example.com/ja/seo-guide">
     <link rel="alternate" hreflang="ko" href="https://example.com/ko/seo-guide">
     <link rel="alternate" hreflang="x-default" href="https://example.com/seo-guide">
 
-    <!-- 파비콘 -->
+    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -57,20 +57,20 @@
 
     <!-- Why: Preload/preconnect/dns-prefetch progressively reduce latency: preload fetches critical
          resources immediately, preconnect opens TCP+TLS early, dns-prefetch just resolves DNS -->
-    <!-- 프리로드 (Core Web Vitals 최적화) -->
+    <!-- Preload (Core Web Vitals optimization) -->
     <link rel="preload" href="/fonts/main-font.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="dns-prefetch" href="https://www.google-analytics.com">
 
     <!-- Why: JSON-LD is Google's preferred structured data format because it decouples metadata
          from HTML, making it easier to maintain and less likely to break the page layout -->
-    <!-- 구조화 데이터 (JSON-LD) -->
+    <!-- Structured data (JSON-LD) -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "Article",
-        "headline": "SEO 최적화 예제 | 검색 엔진 최적화 가이드",
-        "description": "웹 개발자를 위한 SEO 완벽 가이드",
+        "headline": "SEO Optimization Example | Search Engine Optimization Guide",
+        "description": "A complete SEO guide for web developers",
         "image": [
             "https://example.com/images/seo-guide-1x1.jpg",
             "https://example.com/images/seo-guide-4x3.jpg",
@@ -78,7 +78,7 @@
         ],
         "author": {
             "@type": "Person",
-            "name": "홍길동",
+            "name": "Hong Gildong",
             "url": "https://example.com/about/hong"
         },
         "publisher": {
@@ -98,7 +98,7 @@
     }
     </script>
 
-    <!-- 웹사이트 구조화 데이터 -->
+    <!-- Website structured data -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -116,7 +116,7 @@
     }
     </script>
 
-    <!-- 조직 구조화 데이터 -->
+    <!-- Organization structured data -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -139,7 +139,7 @@
     }
     </script>
 
-    <!-- 빵부스러기(Breadcrumb) 구조화 데이터 -->
+    <!-- Breadcrumb structured data -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -148,26 +148,26 @@
             {
                 "@type": "ListItem",
                 "position": 1,
-                "name": "홈",
+                "name": "Home",
                 "item": "https://example.com"
             },
             {
                 "@type": "ListItem",
                 "position": 2,
-                "name": "웹 개발",
+                "name": "Web Development",
                 "item": "https://example.com/web-development"
             },
             {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "SEO 가이드",
+                "name": "SEO Guide",
                 "item": "https://example.com/seo-guide"
             }
         ]
     }
     </script>
 
-    <!-- FAQ 구조화 데이터 -->
+    <!-- FAQ structured data -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -175,18 +175,18 @@
         "mainEntity": [
             {
                 "@type": "Question",
-                "name": "SEO란 무엇인가요?",
+                "name": "What is SEO?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "SEO(Search Engine Optimization)는 검색 엔진 최적화의 약자로, 웹사이트가 검색 결과에서 더 높은 순위를 차지하도록 최적화하는 과정입니다."
+                    "text": "SEO (Search Engine Optimization) is the process of optimizing a website to rank higher in search engine results."
                 }
             },
             {
                 "@type": "Question",
-                "name": "메타 태그가 왜 중요한가요?",
+                "name": "Why are meta tags important?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "메타 태그는 검색 엔진에 페이지의 내용을 알려주고, 검색 결과에 표시될 제목과 설명을 제공합니다. 적절한 메타 태그는 클릭률(CTR)을 높일 수 있습니다."
+                    "text": "Meta tags inform search engines about the page content and provide the title and description displayed in search results. Proper meta tags can increase click-through rate (CTR)."
                 }
             }
         ]
@@ -231,235 +231,235 @@
     </style>
 </head>
 <body>
-    <!-- 빵부스러기 네비게이션 -->
-    <nav aria-label="빵부스러기" class="breadcrumb">
-        <a href="/">홈</a> &gt;
-        <a href="/web-development">웹 개발</a> &gt;
-        <span aria-current="page">SEO 가이드</span>
+    <!-- Breadcrumb navigation -->
+    <nav aria-label="Breadcrumb" class="breadcrumb">
+        <a href="/">Home</a> &gt;
+        <a href="/web-development">Web Development</a> &gt;
+        <span aria-current="page">SEO Guide</span>
     </nav>
 
     <header>
-        <h1>SEO 최적화 예제</h1>
+        <h1>SEO Optimization Example</h1>
         <p class="meta-info">
-            <time datetime="2024-01-15">2024년 1월 15일</time> 작성 |
-            <time datetime="2024-01-20">2024년 1월 20일</time> 수정 |
-            작성자: 홍길동
+            Written on <time datetime="2024-01-15">January 15, 2024</time> |
+            Modified on <time datetime="2024-01-20">January 20, 2024</time> |
+            Author: Hong Gildong
         </p>
     </header>
 
     <main>
         <article>
             <section>
-                <h2>1. 메타 태그 기본</h2>
-                <p>검색 엔진은 메타 태그를 통해 페이지의 내용을 파악합니다. 가장 중요한 메타 태그들입니다:</p>
+                <h2>1. Meta Tag Basics</h2>
+                <p>Search engines understand page content through meta tags. Here are the most important meta tags:</p>
 
-                <h3>필수 메타 태그</h3>
-                <pre><code>&lt;!-- 페이지 제목 (50-60자 권장) --&gt;
-&lt;title&gt;페이지 제목 | 사이트 이름&lt;/title&gt;
+                <h3>Essential Meta Tags</h3>
+                <pre><code>&lt;!-- Page title (50-60 characters recommended) --&gt;
+&lt;title&gt;Page Title | Site Name&lt;/title&gt;
 
-&lt;!-- 페이지 설명 (150-160자 권장) --&gt;
-&lt;meta name="description" content="페이지에 대한 간결하고 매력적인 설명..."&gt;
+&lt;!-- Page description (150-160 characters recommended) --&gt;
+&lt;meta name="description" content="A concise and compelling description of the page..."&gt;
 
-&lt;!-- 뷰포트 (모바일 최적화) --&gt;
+&lt;!-- Viewport (mobile optimization) --&gt;
 &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
 
-&lt;!-- 표준 URL --&gt;
+&lt;!-- Canonical URL --&gt;
 &lt;link rel="canonical" href="https://example.com/page"&gt;</code></pre>
 
                 <div class="tip">
-                    <strong>💡 팁:</strong> title 태그는 검색 결과에서 가장 눈에 띄는 요소입니다.
-                    핵심 키워드를 앞쪽에 배치하고, 브랜드명은 뒤에 붙이세요.
+                    <strong>Tip:</strong> The title tag is the most prominent element in search results.
+                    Place key keywords at the beginning and append the brand name at the end.
                 </div>
             </section>
 
             <section>
                 <h2>2. Open Graph & Twitter Card</h2>
-                <p>소셜 미디어에서 공유될 때 표시되는 정보를 제어합니다.</p>
+                <p>Controls the information displayed when shared on social media.</p>
 
                 <h3>Open Graph (Facebook, LinkedIn)</h3>
                 <pre><code>&lt;meta property="og:type" content="article"&gt;
-&lt;meta property="og:title" content="페이지 제목"&gt;
-&lt;meta property="og:description" content="페이지 설명"&gt;
+&lt;meta property="og:title" content="Page Title"&gt;
+&lt;meta property="og:description" content="Page Description"&gt;
 &lt;meta property="og:image" content="https://example.com/image.jpg"&gt;
 &lt;meta property="og:url" content="https://example.com/page"&gt;</code></pre>
 
                 <h3>Twitter Card</h3>
                 <pre><code>&lt;meta name="twitter:card" content="summary_large_image"&gt;
-&lt;meta name="twitter:title" content="페이지 제목"&gt;
-&lt;meta name="twitter:description" content="페이지 설명"&gt;
+&lt;meta name="twitter:title" content="Page Title"&gt;
+&lt;meta name="twitter:description" content="Page Description"&gt;
 &lt;meta name="twitter:image" content="https://example.com/image.jpg"&gt;</code></pre>
 
                 <div class="warning">
-                    <strong>⚠️ 주의:</strong> og:image는 최소 1200x630 픽셀 크기를 권장합니다.
-                    너무 작은 이미지는 소셜 미디어에서 잘리거나 표시되지 않을 수 있습니다.
+                    <strong>Note:</strong> og:image should be at least 1200x630 pixels.
+                    Images that are too small may be cropped or not displayed on social media.
                 </div>
             </section>
 
             <section>
-                <h2>3. 구조화 데이터 (JSON-LD)</h2>
-                <p>구조화 데이터를 사용하면 검색 결과에 리치 스니펫이 표시될 수 있습니다.</p>
+                <h2>3. Structured Data (JSON-LD)</h2>
+                <p>Using structured data can result in rich snippets appearing in search results.</p>
 
-                <h3>Article 스키마</h3>
+                <h3>Article Schema</h3>
                 <pre><code>&lt;script type="application/ld+json"&gt;
 {
     "@context": "https://schema.org",
     "@type": "Article",
-    "headline": "기사 제목",
+    "headline": "Article Title",
     "author": {
         "@type": "Person",
-        "name": "작성자 이름"
+        "name": "Author Name"
     },
     "datePublished": "2024-01-15T09:00:00+09:00",
     "image": "https://example.com/image.jpg"
 }
 &lt;/script&gt;</code></pre>
 
-                <h3>주요 스키마 타입</h3>
+                <h3>Key Schema Types</h3>
                 <table>
                     <thead>
                         <tr>
-                            <th>타입</th>
-                            <th>용도</th>
-                            <th>리치 스니펫</th>
+                            <th>Type</th>
+                            <th>Use Case</th>
+                            <th>Rich Snippet</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td>Article</td>
-                            <td>뉴스, 블로그 글</td>
-                            <td>제목, 이미지, 날짜</td>
+                            <td>News, blog posts</td>
+                            <td>Title, image, date</td>
                         </tr>
                         <tr>
                             <td>Product</td>
-                            <td>상품 페이지</td>
-                            <td>가격, 평점, 재고</td>
+                            <td>Product pages</td>
+                            <td>Price, rating, availability</td>
                         </tr>
                         <tr>
                             <td>Recipe</td>
-                            <td>요리 레시피</td>
-                            <td>조리시간, 칼로리, 이미지</td>
+                            <td>Cooking recipes</td>
+                            <td>Cook time, calories, image</td>
                         </tr>
                         <tr>
                             <td>FAQPage</td>
-                            <td>자주 묻는 질문</td>
-                            <td>질문/답변 목록</td>
+                            <td>Frequently asked questions</td>
+                            <td>Q&A list</td>
                         </tr>
                         <tr>
                             <td>HowTo</td>
-                            <td>방법 안내</td>
-                            <td>단계별 설명</td>
+                            <td>How-to guides</td>
+                            <td>Step-by-step instructions</td>
                         </tr>
                         <tr>
                             <td>LocalBusiness</td>
-                            <td>지역 업체</td>
-                            <td>주소, 영업시간, 전화</td>
+                            <td>Local businesses</td>
+                            <td>Address, hours, phone</td>
                         </tr>
                     </tbody>
                 </table>
             </section>
 
             <section>
-                <h2>4. 시맨틱 HTML과 SEO</h2>
-                <p>올바른 HTML 구조는 검색 엔진이 콘텐츠를 이해하는 데 도움을 줍니다.</p>
+                <h2>4. Semantic HTML and SEO</h2>
+                <p>Proper HTML structure helps search engines understand the content.</p>
 
-                <pre><code>&lt;!-- 좋은 예시 --&gt;
+                <pre><code>&lt;!-- Good example --&gt;
 &lt;article&gt;
     &lt;header&gt;
-        &lt;h1&gt;기사 제목&lt;/h1&gt;
-        &lt;time datetime="2024-01-15"&gt;2024년 1월 15일&lt;/time&gt;
+        &lt;h1&gt;Article Title&lt;/h1&gt;
+        &lt;time datetime="2024-01-15"&gt;January 15, 2024&lt;/time&gt;
     &lt;/header&gt;
 
     &lt;section&gt;
-        &lt;h2&gt;섹션 제목&lt;/h2&gt;
-        &lt;p&gt;콘텐츠...&lt;/p&gt;
+        &lt;h2&gt;Section Title&lt;/h2&gt;
+        &lt;p&gt;Content...&lt;/p&gt;
     &lt;/section&gt;
 
     &lt;footer&gt;
-        &lt;p&gt;작성자: 홍길동&lt;/p&gt;
+        &lt;p&gt;Author: Hong Gildong&lt;/p&gt;
     &lt;/footer&gt;
 &lt;/article&gt;
 
-&lt;!-- 피해야 할 예시 --&gt;
+&lt;!-- Bad example --&gt;
 &lt;div class="article"&gt;
-    &lt;div class="title"&gt;기사 제목&lt;/div&gt;
-    &lt;div&gt;콘텐츠...&lt;/div&gt;
+    &lt;div class="title"&gt;Article Title&lt;/div&gt;
+    &lt;div&gt;Content...&lt;/div&gt;
 &lt;/div&gt;</code></pre>
             </section>
 
             <section>
                 <h2>5. Core Web Vitals</h2>
-                <p>Google의 핵심 웹 지표는 사용자 경험과 SEO에 직접적인 영향을 미칩니다.</p>
+                <p>Google's Core Web Vitals directly impact user experience and SEO.</p>
 
                 <table>
                     <thead>
                         <tr>
-                            <th>지표</th>
-                            <th>의미</th>
-                            <th>좋음</th>
-                            <th>개선 필요</th>
+                            <th>Metric</th>
+                            <th>Meaning</th>
+                            <th>Good</th>
+                            <th>Needs Improvement</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td>LCP</td>
-                            <td>최대 콘텐츠풀 페인트</td>
-                            <td>≤ 2.5초</td>
-                            <td>&gt; 4.0초</td>
+                            <td>Largest Contentful Paint</td>
+                            <td>&le; 2.5s</td>
+                            <td>&gt; 4.0s</td>
                         </tr>
                         <tr>
                             <td>INP</td>
-                            <td>다음 페인트와의 상호작용</td>
-                            <td>≤ 200ms</td>
+                            <td>Interaction to Next Paint</td>
+                            <td>&le; 200ms</td>
                             <td>&gt; 500ms</td>
                         </tr>
                         <tr>
                             <td>CLS</td>
-                            <td>누적 레이아웃 이동</td>
-                            <td>≤ 0.1</td>
+                            <td>Cumulative Layout Shift</td>
+                            <td>&le; 0.1</td>
                             <td>&gt; 0.25</td>
                         </tr>
                     </tbody>
                 </table>
 
-                <h3>최적화 팁</h3>
-                <pre><code>&lt;!-- LCP 최적화: 중요 리소스 프리로드 --&gt;
+                <h3>Optimization Tips</h3>
+                <pre><code>&lt;!-- LCP optimization: Preload critical resources --&gt;
 &lt;link rel="preload" href="hero-image.jpg" as="image"&gt;
 
-&lt;!-- CLS 방지: 이미지 크기 지정 --&gt;
-&lt;img src="image.jpg" width="800" height="600" alt="설명"&gt;
+&lt;!-- CLS prevention: Specify image dimensions --&gt;
+&lt;img src="image.jpg" width="800" height="600" alt="description"&gt;
 
-&lt;!-- 폰트 최적화 --&gt;
+&lt;!-- Font optimization --&gt;
 &lt;link rel="preload" href="font.woff2" as="font" type="font/woff2" crossorigin&gt;</code></pre>
             </section>
 
             <section>
-                <h2>6. SEO 체크리스트</h2>
+                <h2>6. SEO Checklist</h2>
                 <ul class="checklist">
-                    <li>모든 페이지에 고유한 title과 description 설정</li>
-                    <li>h1 태그는 페이지당 하나만 사용</li>
-                    <li>이미지에 alt 속성 추가</li>
-                    <li>모바일 친화적인 반응형 디자인</li>
-                    <li>HTTPS 사용</li>
-                    <li>사이트맵(sitemap.xml) 생성</li>
-                    <li>robots.txt 설정</li>
-                    <li>구조화 데이터 추가</li>
-                    <li>페이지 로딩 속도 최적화</li>
-                    <li>내부 링크 구조 최적화</li>
+                    <li>Set unique title and description for every page</li>
+                    <li>Use only one h1 tag per page</li>
+                    <li>Add alt attributes to images</li>
+                    <li>Mobile-friendly responsive design</li>
+                    <li>Use HTTPS</li>
+                    <li>Generate sitemap (sitemap.xml)</li>
+                    <li>Configure robots.txt</li>
+                    <li>Add structured data</li>
+                    <li>Optimize page loading speed</li>
+                    <li>Optimize internal link structure</li>
                 </ul>
             </section>
 
-            <!-- FAQ 섹션 (구조화 데이터와 매칭) -->
+            <!-- FAQ section (matching structured data) -->
             <section>
-                <h2>자주 묻는 질문</h2>
+                <h2>Frequently Asked Questions</h2>
 
                 <details>
-                    <summary><strong>SEO란 무엇인가요?</strong></summary>
-                    <p>SEO(Search Engine Optimization)는 검색 엔진 최적화의 약자로, 웹사이트가 검색 결과에서 더 높은 순위를 차지하도록 최적화하는 과정입니다.</p>
+                    <summary><strong>What is SEO?</strong></summary>
+                    <p>SEO (Search Engine Optimization) is the process of optimizing a website to rank higher in search engine results.</p>
                 </details>
 
                 <details>
-                    <summary><strong>메타 태그가 왜 중요한가요?</strong></summary>
-                    <p>메타 태그는 검색 엔진에 페이지의 내용을 알려주고, 검색 결과에 표시될 제목과 설명을 제공합니다. 적절한 메타 태그는 클릭률(CTR)을 높일 수 있습니다.</p>
+                    <summary><strong>Why are meta tags important?</strong></summary>
+                    <p>Meta tags inform search engines about the page content and provide the title and description displayed in search results. Proper meta tags can increase click-through rate (CTR).</p>
                 </details>
             </section>
         </article>
@@ -467,7 +467,7 @@
 
     <footer>
         <p>&copy; 2024 WebDev Study. All rights reserved.</p>
-        <p>SEO에 대해 더 알아보기: <a href="https://developers.google.com/search" target="_blank" rel="noopener">Google Search Central</a></p>
+        <p>Learn more about SEO: <a href="https://developers.google.com/search" target="_blank" rel="noopener">Google Search Central</a></p>
     </footer>
 </body>
 </html>

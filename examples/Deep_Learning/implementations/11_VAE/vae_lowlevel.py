@@ -1,29 +1,30 @@
 """
-PyTorch Low-Level Variational Autoencoder (VAE) 구현
+PyTorch Low-Level Variational Autoencoder (VAE) Implementation
 
-ELBO, Reparameterization Trick 직접 구현
+Directly implements ELBO and the Reparameterization Trick.
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import matplotlib.pyplot as plt
 from typing import Tuple, Optional
 from dataclasses import dataclass
 
 
 @dataclass
 class VAEConfig:
-    """VAE 설정"""
+    """VAE Configuration"""
     image_size: int = 28
     in_channels: int = 1
     latent_dim: int = 20
     hidden_dims: Tuple[int, ...] = (32, 64)
-    beta: float = 1.0  # β-VAE
+    beta: float = 1.0  # beta-VAE
 
 
 class Encoder(nn.Module):
-    """VAE Encoder: x → (μ, log σ²)"""
+    """VAE Encoder: x -> (mu, log sigma^2)"""
 
     def __init__(self, config: VAEConfig):
         super().__init__()
@@ -42,11 +43,11 @@ class Encoder(nn.Module):
 
         self.encoder = nn.Sequential(*modules)
 
-        # 최종 feature map 크기 계산
+        # Compute final feature map size
         self.final_size = config.image_size // (2 ** len(config.hidden_dims))
         self.flatten_dim = config.hidden_dims[-1] * self.final_size * self.final_size
 
-        # FC layers for μ and log σ²
+        # FC layers for mu and log sigma^2
         self.fc_mu = nn.Linear(self.flatten_dim, config.latent_dim)
         self.fc_logvar = nn.Linear(self.flatten_dim, config.latent_dim)
 
@@ -63,7 +64,7 @@ class Encoder(nn.Module):
         h = self.encoder(x)
         h = h.flatten(start_dim=1)
 
-        # μ and log σ²
+        # mu and log sigma^2
         mu = self.fc_mu(h)
         logvar = self.fc_logvar(h)
 
@@ -71,7 +72,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    """VAE Decoder: z → x̂"""
+    """VAE Decoder: z -> x_hat"""
 
     def __init__(self, config: VAEConfig):
         super().__init__()
@@ -85,7 +86,7 @@ class Decoder(nn.Module):
 
         # Transposed convolutions
         modules = []
-        hidden_dims = list(config.hidden_dims)[::-1]  # 역순
+        hidden_dims = list(config.hidden_dims)[::-1]  # Reverse order
 
         for i in range(len(hidden_dims) - 1):
             modules.append(
@@ -103,7 +104,7 @@ class Decoder(nn.Module):
                 kernel_size=3, stride=2, padding=1, output_padding=1
             )
         )
-        modules.append(nn.Sigmoid())  # [0, 1] 범위
+        modules.append(nn.Sigmoid())  # [0, 1] range
 
         self.decoder = nn.Sequential(*modules)
 
@@ -135,17 +136,17 @@ class VAE(nn.Module):
         """
         Reparameterization Trick
 
-        z = μ + σ ⊙ ε, where ε ~ N(0, I)
+        z = mu + sigma * epsilon, where epsilon ~ N(0, I)
 
-        이렇게 하면 z의 그래디언트가 μ, σ를 통해 역전파됨
+        This allows gradients of z to backpropagate through mu and sigma.
         """
-        # σ = exp(log σ² / 2) = exp(logvar / 2)
+        # sigma = exp(log sigma^2 / 2) = exp(logvar / 2)
         std = torch.exp(0.5 * logvar)
 
-        # ε ~ N(0, I)
+        # epsilon ~ N(0, I)
         eps = torch.randn_like(std)
 
-        # z = μ + σ ⊙ ε
+        # z = mu + sigma * epsilon
         z = mu + std * eps
 
         return z
@@ -160,10 +161,10 @@ class VAE(nn.Module):
 
         Args:
             x: (B, C, H, W)
-            return_latent: latent z 반환 여부
+            return_latent: Whether to return latent z
 
         Returns:
-            x_recon: (B, C, H, W) 재구성 이미지
+            x_recon: (B, C, H, W) reconstructed image
             mu: (B, latent_dim)
             logvar: (B, latent_dim)
             z: (optional) (B, latent_dim)
@@ -183,16 +184,16 @@ class VAE(nn.Module):
         return x_recon, mu, logvar
 
     def encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """인코딩만 수행"""
+        """Encode only"""
         return self.encoder(x)
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
-        """디코딩만 수행"""
+        """Decode only"""
         return self.decoder(z)
 
     def sample(self, num_samples: int, device: torch.device) -> torch.Tensor:
-        """잠재 공간에서 샘플링하여 이미지 생성"""
-        # Prior에서 샘플링: z ~ N(0, I)
+        """Sample from latent space to generate images"""
+        # Sample from prior: z ~ N(0, I)
         z = torch.randn(num_samples, self.config.latent_dim, device=device)
         samples = self.decode(z)
         return samples
@@ -207,33 +208,33 @@ def vae_loss(
     reduction: str = "mean"
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    VAE Loss: ELBO의 음수
+    VAE Loss: Negative ELBO
 
-    L = L_recon + β * L_KL
+    L = L_recon + beta * L_KL
 
     Args:
-        x: 원본 이미지 (B, C, H, W)
-        x_recon: 재구성 이미지 (B, C, H, W)
-        mu: 평균 (B, latent_dim)
-        logvar: 로그 분산 (B, latent_dim)
-        beta: KL 가중치 (β-VAE)
+        x: Original image (B, C, H, W)
+        x_recon: Reconstructed image (B, C, H, W)
+        mu: Mean (B, latent_dim)
+        logvar: Log variance (B, latent_dim)
+        beta: KL weight (beta-VAE)
         reduction: "mean" or "sum"
 
     Returns:
-        total_loss: 전체 손실
-        recon_loss: 재구성 손실
+        total_loss: Total loss
+        recon_loss: Reconstruction loss
         kl_loss: KL divergence
     """
     batch_size = x.size(0)
 
     # Reconstruction loss (Binary Cross-Entropy)
-    # BCE는 각 픽셀을 독립적인 Bernoulli로 모델링
+    # BCE models each pixel as an independent Bernoulli
     recon_loss = F.binary_cross_entropy(
         x_recon, x, reduction='sum'
     )
 
-    # KL Divergence: KL(N(μ, σ²) || N(0, 1))
-    # = -0.5 * Σ(1 + log σ² - μ² - σ²)
+    # KL Divergence: KL(N(mu, sigma^2) || N(0, 1))
+    # = -0.5 * sum(1 + log sigma^2 - mu^2 - sigma^2)
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     # Total loss
@@ -248,7 +249,7 @@ def vae_loss(
 
 
 class BetaVAE(VAE):
-    """β-VAE: Disentanglement를 위한 변형"""
+    """beta-VAE: Variant for disentanglement"""
 
     def __init__(self, config: VAEConfig):
         super().__init__(config)
@@ -260,7 +261,7 @@ class BetaVAE(VAE):
         mu: torch.Tensor,
         logvar: torch.Tensor
     ) -> Tuple[torch.Tensor, dict]:
-        """β-VAE 손실 계산"""
+        """beta-VAE loss computation"""
         total_loss, recon_loss, kl_loss = vae_loss(
             x, x_recon, mu, logvar,
             beta=self.config.beta
@@ -274,21 +275,21 @@ class BetaVAE(VAE):
 
 
 class ConditionalVAE(nn.Module):
-    """Conditional VAE: 조건부 생성"""
+    """Conditional VAE: Conditional generation"""
 
     def __init__(self, config: VAEConfig, num_classes: int = 10):
         super().__init__()
         self.config = config
         self.num_classes = num_classes
 
-        # 클래스 임베딩
+        # Class embedding
         self.class_embed = nn.Embedding(num_classes, config.latent_dim)
 
-        # Encoder와 Decoder는 동일
+        # Encoder and Decoder are the same
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
 
-        # Encoder에 조건 추가를 위한 projection
+        # Projection for adding condition to Encoder
         self.cond_proj = nn.Linear(config.latent_dim, config.in_channels * config.image_size * config.image_size)
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
@@ -304,12 +305,12 @@ class ConditionalVAE(nn.Module):
         """
         Args:
             x: (B, C, H, W)
-            labels: (B,) 클래스 레이블
+            labels: (B,) class labels
 
         Returns:
             x_recon, mu, logvar
         """
-        # 클래스 임베딩
+        # Class embedding
         c = self.class_embed(labels)  # (B, latent_dim)
 
         # Encode
@@ -319,7 +320,7 @@ class ConditionalVAE(nn.Module):
         z = self.reparameterize(mu, logvar)
 
         # Decode with condition
-        z_cond = z + c  # 조건 추가
+        z_cond = z + c  # Add condition
         x_recon = self.decoder(z_cond)
 
         return x_recon, mu, logvar
@@ -330,7 +331,7 @@ class ConditionalVAE(nn.Module):
         labels: torch.Tensor,
         device: torch.device
     ) -> torch.Tensor:
-        """조건부 샘플링"""
+        """Conditional sampling"""
         z = torch.randn(num_samples, self.config.latent_dim, device=device)
         c = self.class_embed(labels)
         z_cond = z + c
@@ -338,14 +339,14 @@ class ConditionalVAE(nn.Module):
         return samples
 
 
-# 잠재 공간 시각화
+# Latent space visualization
 def visualize_latent_space(
     model: VAE,
     data_loader,
     device: torch.device,
     num_samples: int = 1000
 ):
-    """잠재 공간 2D 시각화 (latent_dim=2인 경우)"""
+    """Visualize latent space in 2D (for latent_dim=2)"""
     import matplotlib.pyplot as plt
 
     model.eval()
@@ -365,7 +366,7 @@ def visualize_latent_space(
     latents = torch.cat(latents, dim=0)[:num_samples]
     labels = torch.cat(labels_list, dim=0)[:num_samples]
 
-    # 2D 시각화 (처음 2차원만 사용)
+    # 2D visualization (using first 2 dimensions only)
     plt.figure(figsize=(10, 10))
     scatter = plt.scatter(
         latents[:, 0].numpy(),
@@ -388,15 +389,15 @@ def interpolate_latent(
     x2: torch.Tensor,
     num_steps: int = 10
 ) -> torch.Tensor:
-    """두 이미지 간 잠재 공간 보간"""
+    """Interpolate between two images in latent space"""
     model.eval()
 
     with torch.no_grad():
-        # 두 이미지 인코딩
+        # Encode both images
         mu1, _ = model.encode(x1)
         mu2, _ = model.encode(x2)
 
-        # 선형 보간
+        # Linear interpolation
         alphas = torch.linspace(0, 1, num_steps).to(mu1.device)
         interpolated = []
 
@@ -408,11 +409,126 @@ def interpolate_latent(
         return torch.cat(interpolated, dim=0)
 
 
-# 테스트
+def demo_training():
+    """Train a VAE on synthetic toy data and visualize results."""
+    # Expected: total loss decreasing, recon loss < 600 after 30 epochs
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # --- Toy data: random rectangles on 28x28 grayscale images ---
+    num_images = 200
+    images = torch.zeros(num_images, 1, 28, 28)
+    for i in range(num_images):
+        # Random rectangle position and size
+        x1 = torch.randint(0, 14, (1,)).item()
+        y1 = torch.randint(0, 14, (1,)).item()
+        w = torch.randint(5, 15, (1,)).item()
+        h = torch.randint(5, 15, (1,)).item()
+        x2 = min(x1 + w, 28)
+        y2 = min(y1 + h, 28)
+        intensity = 0.5 + 0.5 * torch.rand(1).item()
+        images[i, 0, y1:y2, x1:x2] = intensity
+
+    images = images.to(device)
+
+    # --- Model and optimizer ---
+    config = VAEConfig(
+        image_size=28,
+        in_channels=1,
+        latent_dim=20,
+        hidden_dims=(32, 64),
+        beta=1.0,
+    )
+    model = VAE(config).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+    # --- Training loop (30 epochs) ---
+    num_epochs = 30
+    history_total = []
+    history_recon = []
+    history_kl = []
+
+    model.train()
+    for epoch in range(1, num_epochs + 1):
+        x_recon, mu, logvar = model(images)
+        total_loss, recon_loss, kl_loss = vae_loss(
+            images, x_recon, mu, logvar, beta=config.beta
+        )
+
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+
+        history_total.append(total_loss.item())
+        history_recon.append(recon_loss.item())
+        history_kl.append(kl_loss.item())
+
+        if epoch % 5 == 0 or epoch == 1:
+            print(
+                f"Epoch {epoch:3d}/{num_epochs} | "
+                f"Total: {total_loss.item():.2f} | "
+                f"Recon: {recon_loss.item():.2f} | "
+                f"KL: {kl_loss.item():.2f}"
+            )
+
+    # --- Visualization (3-panel figure) ---
+    model.eval()
+    with torch.no_grad():
+        x_recon_vis, _, _ = model(images)
+        sampled = model.sample(16, device)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Panel 1: Loss curves
+    epochs_range = range(1, num_epochs + 1)
+    axes[0].plot(epochs_range, history_total, label="Total Loss")
+    axes[0].plot(epochs_range, history_recon, label="Recon Loss")
+    axes[0].plot(epochs_range, history_kl, label="KL Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("Loss")
+    axes[0].set_title("Training Loss Curves")
+    axes[0].legend()
+
+    # Panel 2: Reconstruction comparison (top: originals, bottom: reconstructions)
+    n_show = 8
+    originals = images[:n_show].cpu()
+    reconstructions = x_recon_vis[:n_show].cpu()
+
+    comparison = torch.zeros(2, n_show, 1, 28, 28)
+    comparison[0] = originals
+    comparison[1] = reconstructions
+
+    grid_recon = torch.cat(
+        [torch.cat([comparison[row, col] for col in range(n_show)], dim=2)
+         for row in range(2)],
+        dim=1,
+    )  # (1, 56, 224)
+    axes[1].imshow(grid_recon.squeeze(0).numpy(), cmap="gray", vmin=0, vmax=1)
+    axes[1].set_title("Reconstruction (top: original, bottom: reconstructed)")
+    axes[1].axis("off")
+
+    # Panel 3: Sampled images from prior (4x4 grid)
+    sampled_cpu = sampled.cpu()
+    grid_sample = torch.cat(
+        [torch.cat([sampled_cpu[r * 4 + c] for c in range(4)], dim=2)
+         for r in range(4)],
+        dim=1,
+    )  # (1, 112, 112)
+    axes[2].imshow(grid_sample.squeeze(0).numpy(), cmap="gray", vmin=0, vmax=1)
+    axes[2].set_title("Samples from Prior (4x4)")
+    axes[2].axis("off")
+
+    plt.tight_layout()
+    plt.savefig("vae_training_results.png", dpi=150)
+    plt.close()
+    print("\nSaved vae_training_results.png")
+
+
+# Test
 if __name__ == "__main__":
     print("=== VAE Low-Level Implementation ===\n")
 
-    # 설정
+    # Configuration
     config = VAEConfig(
         image_size=28,
         in_channels=1,
@@ -422,14 +538,14 @@ if __name__ == "__main__":
     )
     print(f"Config: {config}\n")
 
-    # 모델 생성
+    # Create model
     model = VAE(config)
 
-    # 파라미터 수
+    # Parameter count
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:,}\n")
 
-    # 테스트 입력
+    # Test input
     batch_size = 8
     x = torch.rand(batch_size, 1, 28, 28)
 
@@ -440,26 +556,26 @@ if __name__ == "__main__":
     print(f"Mu shape: {mu.shape}")
     print(f"Logvar shape: {logvar.shape}")
 
-    # Loss 계산
+    # Loss computation
     total_loss, recon_loss, kl_loss = vae_loss(x, x_recon, mu, logvar)
     print(f"\nTotal Loss: {total_loss.item():.4f}")
     print(f"Recon Loss: {recon_loss.item():.4f}")
     print(f"KL Loss: {kl_loss.item():.4f}")
 
-    # 샘플링 테스트
+    # Sampling test
     samples = model.sample(16, x.device)
     print(f"\nSampled images shape: {samples.shape}")
 
-    # β-VAE 테스트
-    print("\n=== β-VAE Test ===")
-    config_beta = VAEConfig(beta=4.0)  # β > 1 for disentanglement
+    # beta-VAE test
+    print("\n=== beta-VAE Test ===")
+    config_beta = VAEConfig(beta=4.0)  # beta > 1 for disentanglement
     beta_vae = BetaVAE(config_beta)
 
     x_recon, mu, logvar = beta_vae(x)
     loss, metrics = beta_vae.compute_loss(x, x_recon, mu, logvar)
-    print(f"β-VAE Loss: {metrics}")
+    print(f"beta-VAE Loss: {metrics}")
 
-    # Conditional VAE 테스트
+    # Conditional VAE test
     print("\n=== Conditional VAE Test ===")
     cvae = ConditionalVAE(config, num_classes=10)
     labels = torch.randint(0, 10, (batch_size,))
@@ -467,13 +583,17 @@ if __name__ == "__main__":
     x_recon, mu, logvar = cvae(x, labels)
     print(f"CVAE Reconstruction shape: {x_recon.shape}")
 
-    # 조건부 샘플링
+    # Conditional sampling
     cond_samples = cvae.sample(16, torch.arange(10).repeat(2)[:16], x.device)
     print(f"Conditional samples shape: {cond_samples.shape}")
 
-    # 잠재 공간 보간
+    # Latent space interpolation
     print("\n=== Latent Interpolation ===")
     interp = interpolate_latent(model, x[:1], x[1:2], num_steps=5)
     print(f"Interpolated images shape: {interp.shape}")
 
     print("\nAll tests passed!")
+
+    # Demo training with toy data and visualization
+    print("\n=== Demo Training ===")
+    demo_training()

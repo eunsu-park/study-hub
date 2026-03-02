@@ -1,10 +1,5 @@
 """
-보안 API 서버 데모 (stdlib only)
 Secure API Server Demo (stdlib only)
-
-패스워드 해싱(PBKDF2), JWT 인증, RBAC, 입력 검증, 보안 헤더,
-레이트 리미팅, 구조화 로깅을 포함하는 완전한 보안 API 서버를 구현합니다.
-http.server 기반으로 외부 의존성 없이 동작합니다.
 
 Implements a complete secure API server with password hashing (PBKDF2),
 JWT authentication, RBAC, input validation, security headers, rate limiting,
@@ -28,7 +23,7 @@ from functools import wraps
 
 
 # =============================================================================
-# Configuration (설정)
+# Configuration
 # =============================================================================
 
 JWT_SECRET = secrets.token_bytes(32)
@@ -48,7 +43,7 @@ logger = logging.getLogger("secure_api")
 
 
 # =============================================================================
-# 1. Password Hashing (패스워드 해싱 - PBKDF2)
+# 1. Password Hashing (PBKDF2)
 # =============================================================================
 
 class PasswordHasher:
@@ -85,7 +80,7 @@ class PasswordHasher:
 
 
 # =============================================================================
-# 2. JWT Implementation (JWT 구현)
+# 2. JWT Implementation
 # =============================================================================
 
 class JWT:
@@ -148,7 +143,7 @@ class JWT:
 
 
 # =============================================================================
-# 3. RBAC - Role-Based Access Control (역할 기반 접근 제어)
+# 3. RBAC - Role-Based Access Control
 # =============================================================================
 
 class RBAC:
@@ -174,7 +169,7 @@ class RBAC:
 
 
 # =============================================================================
-# 4. Input Validation (입력 검증)
+# 4. Input Validation
 # =============================================================================
 
 class Validator:
@@ -210,7 +205,7 @@ class Validator:
 
 
 # =============================================================================
-# 5. Rate Limiter (레이트 리미터)
+# 5. Rate Limiter
 # =============================================================================
 
 class RateLimiter:
@@ -244,7 +239,7 @@ class RateLimiter:
 
 
 # =============================================================================
-# 6. Security Headers (보안 헤더)
+# 6. Security Headers
 # =============================================================================
 
 SECURITY_HEADERS = {
@@ -260,7 +255,7 @@ SECURITY_HEADERS = {
 
 
 # =============================================================================
-# 7. In-Memory User Store (메모리 기반 사용자 저장소)
+# 7. In-Memory User Store
 # =============================================================================
 
 class UserStore:
@@ -311,7 +306,7 @@ class UserStore:
 
 
 # =============================================================================
-# 8. Structured Logging (구조화 로깅)
+# 8. Structured Logging
 # =============================================================================
 
 class SecurityLogger:
@@ -336,7 +331,7 @@ class SecurityLogger:
 
 
 # =============================================================================
-# 9. API Request Handler (API 요청 핸들러)
+# 9. API Request Handler
 # =============================================================================
 
 # Global state for the handler
@@ -553,14 +548,13 @@ class SecureAPIHandler(BaseHTTPRequestHandler):
 
 
 # =============================================================================
-# 10. Demo: Simulate API Interactions (데모: API 상호작용 시뮬레이션)
+# 10. Demo: Simulate API Interactions
 # =============================================================================
 
 def run_demo():
     """Demonstrate all security features without starting a real server."""
     print("=" * 60)
     print("  Secure API Server Demo (Simulation)")
-    print("  보안 API 서버 데모 (시뮬레이션)")
     print("=" * 60)
 
     # --- Password Hashing ---

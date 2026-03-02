@@ -1,8 +1,8 @@
 """
-실전 문제풀이 (Practice Problems)
+Practice Problems
 Comprehensive Practice Problems
 
-다양한 알고리즘을 조합하여 해결하는 종합 문제들입니다.
+Problems that require combining various algorithms to solve.
 """
 
 from typing import List, Tuple, Dict, Set, Optional
@@ -14,13 +14,13 @@ import sys
 
 
 # =============================================================================
-# 1. 투 포인터 + 이분탐색: 부분 배열 합
+# 1. Two Pointers + Binary Search: Subarray Sum
 # =============================================================================
 
 def subarray_sum_k(arr: List[int], k: int) -> int:
     """
-    합이 k인 부분 배열의 개수
-    시간복잡도: O(n)
+    Count of subarrays with sum equal to k
+    Time Complexity: O(n)
     """
     count = 0
     prefix_sum = 0
@@ -29,7 +29,7 @@ def subarray_sum_k(arr: List[int], k: int) -> int:
 
     for num in arr:
         prefix_sum += num
-        # prefix_sum - k가 이전에 나왔다면
+        # If prefix_sum - k appeared before
         count += sum_count[prefix_sum - k]
         sum_count[prefix_sum] += 1
 
@@ -38,9 +38,9 @@ def subarray_sum_k(arr: List[int], k: int) -> int:
 
 def longest_subarray_sum_at_most_k(arr: List[int], k: int) -> int:
     """
-    합이 k 이하인 가장 긴 부분 배열
-    (양수만 있는 경우)
-    시간복잡도: O(n)
+    Longest subarray with sum at most k
+    (for arrays with positive values only)
+    Time Complexity: O(n)
     """
     n = len(arr)
     max_len = 0
@@ -60,16 +60,16 @@ def longest_subarray_sum_at_most_k(arr: List[int], k: int) -> int:
 
 
 # =============================================================================
-# 2. BFS + DP: 최단 경로 + 비용
+# 2. BFS + DP: Shortest Path with Cost
 # =============================================================================
 
 def shortest_path_with_fuel(n: int, edges: List[Tuple[int, int, int]],
                             start: int, end: int, fuel: int) -> int:
     """
-    연료 제한이 있는 최단 경로
+    Shortest path with fuel constraint
     edges: (u, v, fuel_cost)
-    반환: 최소 거리 (불가능하면 -1)
-    시간복잡도: O(V * F + E)
+    Returns: minimum distance (-1 if impossible)
+    Time Complexity: O(V * F + E)
     """
     graph = defaultdict(list)
     for u, v, cost in edges:
@@ -103,20 +103,20 @@ def shortest_path_with_fuel(n: int, edges: List[Tuple[int, int, int]],
 
 
 # =============================================================================
-# 3. 그리디 + 우선순위 큐: 작업 스케줄링
+# 3. Greedy + Priority Queue: Job Scheduling
 # =============================================================================
 
 def max_profit_scheduling(jobs: List[Tuple[int, int, int]]) -> int:
     """
-    작업 스케줄링: 겹치지 않게 선택하여 최대 이익
-    jobs: (시작, 종료, 이익)
-    시간복잡도: O(n log n)
+    Job scheduling: select non-overlapping jobs for maximum profit
+    jobs: (start, end, profit)
+    Time Complexity: O(n log n)
     """
     n = len(jobs)
     if n == 0:
         return 0
 
-    # 종료 시간으로 정렬
+    # Sort by end time
     jobs = sorted(jobs, key=lambda x: x[1])
     end_times = [job[1] for job in jobs]
 
@@ -125,23 +125,23 @@ def max_profit_scheduling(jobs: List[Tuple[int, int, int]]) -> int:
     for i in range(n):
         start, end, profit = jobs[i]
 
-        # 현재 작업 시작 전에 끝나는 마지막 작업
+        # Last job that ends before current job starts
         j = bisect_right(end_times, start) - 1
 
-        # 선택 vs 비선택
+        # Select vs skip
         dp[i + 1] = max(dp[i], (dp[j + 1] if j >= 0 else 0) + profit)
 
     return dp[n]
 
 
 # =============================================================================
-# 4. 문자열 + DP: 편집 거리 응용
+# 4. String + DP: Edit Distance Application
 # =============================================================================
 
 def min_operations_to_palindrome(s: str) -> int:
     """
-    문자열을 팰린드롬으로 만드는 최소 삽입/삭제
-    = 길이 - LCS(s, reverse(s))
+    Minimum insertions/deletions to make a string a palindrome
+    = length - LCS(s, reverse(s))
     """
     n = len(s)
     t = s[::-1]
@@ -160,7 +160,7 @@ def min_operations_to_palindrome(s: str) -> int:
 
 def longest_palindromic_subsequence(s: str) -> int:
     """
-    가장 긴 팰린드롬 부분 수열
+    Longest palindromic subsequence
     = LCS(s, reverse(s))
     """
     n = len(s)
@@ -178,7 +178,7 @@ def longest_palindromic_subsequence(s: str) -> int:
 
 
 # =============================================================================
-# 5. 그래프 + Union-Find: 연결 요소
+# 5. Graph + Union-Find: Connected Components
 # =============================================================================
 
 class DSU:
@@ -208,7 +208,7 @@ class DSU:
 
 def min_cost_to_connect_all(n: int, edges: List[Tuple[int, int, int]]) -> int:
     """
-    모든 노드를 연결하는 최소 비용 (MST)
+    Minimum cost to connect all nodes (MST)
     edges: (u, v, cost)
     """
     edges = sorted(edges, key=lambda x: x[2])
@@ -228,8 +228,8 @@ def min_cost_to_connect_all(n: int, edges: List[Tuple[int, int, int]]) -> int:
 
 def count_islands(grid: List[List[int]]) -> int:
     """
-    섬의 개수 (Union-Find 버전)
-    grid[i][j] = 1: 땅, 0: 물
+    Number of islands (Union-Find version)
+    grid[i][j] = 1: land, 0: water
     """
     if not grid or not grid[0]:
         return 0
@@ -261,11 +261,11 @@ def count_islands(grid: List[List[int]]) -> int:
 
 
 # =============================================================================
-# 6. 세그먼트 트리 + 좌표 압축: 구간 쿼리
+# 6. Segment Tree + Coordinate Compression: Range Queries
 # =============================================================================
 
 class SegmentTree:
-    """구간 합 세그먼트 트리"""
+    """Range sum segment tree"""
     def __init__(self, n: int):
         self.n = n
         self.tree = [0] * (4 * n)
@@ -293,11 +293,11 @@ class SegmentTree:
 
 def count_smaller_after_self(nums: List[int]) -> List[int]:
     """
-    각 원소 뒤에 있는 더 작은 원소의 개수
-    세그먼트 트리 + 좌표 압축
-    시간복잡도: O(n log n)
+    Count of smaller elements after each element
+    Segment tree + coordinate compression
+    Time Complexity: O(n log n)
     """
-    # 좌표 압축
+    # Coordinate compression
     sorted_nums = sorted(set(nums))
     rank = {v: i for i, v in enumerate(sorted_nums)}
     n = len(sorted_nums)
@@ -305,10 +305,10 @@ def count_smaller_after_self(nums: List[int]) -> List[int]:
     result = []
     st = SegmentTree(n)
 
-    # 역순으로 처리
+    # Process in reverse order
     for num in reversed(nums):
         r = rank[num]
-        # r보다 작은 인덱스의 합 (= 더 작은 원소의 개수)
+        # Sum of indices less than r (= count of smaller elements)
         count = st.query(1, 0, n - 1, 0, r - 1) if r > 0 else 0
         result.append(count)
         st.update(1, 0, n - 1, r, 1)
@@ -317,24 +317,24 @@ def count_smaller_after_self(nums: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 7. 백트래킹: 조합 최적화
+# 7. Backtracking: Combinatorial Optimization
 # =============================================================================
 
 def solve_sudoku(board: List[List[str]]) -> bool:
     """
-    스도쿠 해결
-    board: 9x9, '1'-'9' 또는 '.'
+    Sudoku Solver
+    board: 9x9, '1'-'9' or '.'
     """
 
     def is_valid(row: int, col: int, num: str) -> bool:
-        # 행 검사
+        # Row check
         if num in board[row]:
             return False
-        # 열 검사
+        # Column check
         for r in range(9):
             if board[r][col] == num:
                 return False
-        # 3x3 박스 검사
+        # 3x3 box check
         box_row, box_col = 3 * (row // 3), 3 * (col // 3)
         for r in range(box_row, box_row + 3):
             for c in range(box_col, box_col + 3):
@@ -359,21 +359,21 @@ def solve_sudoku(board: List[List[str]]) -> bool:
 
 
 # =============================================================================
-# 8. 비트마스크 DP: 외판원 문제 (TSP)
+# 8. Bitmask DP: Traveling Salesman Problem (TSP)
 # =============================================================================
 
 def tsp(dist: List[List[int]]) -> int:
     """
-    외판원 문제 (TSP)
-    모든 도시를 방문하고 시작점으로 돌아오는 최소 비용
-    시간복잡도: O(n² * 2^n)
+    Traveling Salesman Problem (TSP)
+    Minimum cost to visit all cities and return to the starting point
+    Time Complexity: O(n^2 * 2^n)
     """
     n = len(dist)
     INF = float('inf')
 
     @lru_cache(maxsize=None)
     def dp(mask: int, last: int) -> int:
-        if mask == (1 << n) - 1:  # 모든 도시 방문
+        if mask == (1 << n) - 1:  # All cities visited
             return dist[last][0] if dist[last][0] > 0 else INF
 
         result = INF
@@ -386,24 +386,24 @@ def tsp(dist: List[List[int]]) -> int:
 
         return result
 
-    return dp(1, 0)  # 0번 도시에서 시작
+    return dp(1, 0)  # Start from city 0
 
 
 # =============================================================================
-# 9. 이분탐색 + 그리디: 파라메트릭 서치
+# 9. Binary Search + Greedy: Parametric Search
 # =============================================================================
 
 def min_max_distance(houses: List[int], k: int) -> int:
     """
-    k개의 우체통을 설치하여 가장 먼 집까지의 거리 최소화
-    파라메트릭 서치: "최대 거리가 d 이하가 되게 할 수 있는가?"
-    시간복잡도: O(n log D)
+    Minimize the maximum distance to the farthest house by placing k post offices
+    Parametric search: "Can the maximum distance be at most d?"
+    Time Complexity: O(n log D)
     """
     houses = sorted(houses)
     n = len(houses)
 
     def can_cover(max_dist: int) -> bool:
-        """최대 거리 max_dist로 모든 집을 커버 가능한지"""
+        """Check if all houses can be covered with maximum distance max_dist"""
         count = 1
         last_post = houses[0]
 
@@ -428,8 +428,8 @@ def min_max_distance(houses: List[int], k: int) -> int:
 
 def min_pages_per_student(pages: List[int], students: int) -> int:
     """
-    책을 학생들에게 나눠줄 때 최대 페이지 수 최소화
-    (연속된 책만 가능)
+    Minimize the maximum pages when distributing books to students
+    (only consecutive books allowed)
     """
     def is_feasible(max_pages: int) -> bool:
         count = 1
@@ -457,25 +457,25 @@ def min_pages_per_student(pages: List[int], students: int) -> int:
 
 
 # =============================================================================
-# 10. 종합: LIS + 이분탐색
+# 10. Comprehensive: LIS + Binary Search
 # =============================================================================
 
 def longest_increasing_subsequence(nums: List[int]) -> Tuple[int, List[int]]:
     """
-    가장 긴 증가하는 부분 수열 (길이 + 실제 수열)
-    시간복잡도: O(n log n)
+    Longest Increasing Subsequence (length + actual sequence)
+    Time Complexity: O(n log n)
     """
     n = len(nums)
     if n == 0:
         return 0, []
 
-    # tails[i] = 길이 i+1 LIS의 마지막 원소 중 최솟값
+    # tails[i] = minimum last element among LIS of length i+1
     tails = []
-    # 각 위치에서의 LIS 길이
+    # LIS length at each position
     lengths = [0] * n
-    # 이전 원소 추적
+    # Previous element tracking
     prev = [-1] * n
-    # tails의 인덱스가 어떤 원래 인덱스에서 왔는지
+    # Which original index each tails entry came from
     tail_idx = []
 
     for i, num in enumerate(nums):
@@ -489,18 +489,18 @@ def longest_increasing_subsequence(nums: List[int]) -> Tuple[int, List[int]]:
 
         lengths[i] = pos + 1
         if pos > 0:
-            # 이전 원소: lengths[j] == pos인 마지막 j
+            # Previous element: last j where lengths[j] == pos
             for j in range(i - 1, -1, -1):
                 if lengths[j] == pos and nums[j] < num:
                     prev[i] = j
                     break
 
-    # LIS 복원
+    # Reconstruct LIS
     max_len = max(lengths)
     result = []
     idx = lengths.index(max_len)
 
-    # 최적 시작점 찾기
+    # Find optimal starting point
     for i in range(n - 1, -1, -1):
         if lengths[i] == max_len:
             idx = i
@@ -508,7 +508,7 @@ def longest_increasing_subsequence(nums: List[int]) -> Tuple[int, List[int]]:
 
     while idx != -1:
         result.append(nums[idx])
-        # 이전 원소 찾기
+        # Find previous element
         target_len = lengths[idx] - 1
         if target_len == 0:
             break
@@ -523,47 +523,47 @@ def longest_increasing_subsequence(nums: List[int]) -> Tuple[int, List[int]]:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("실전 문제풀이 (Practice Problems) 예제")
+    print("Practice Problems Examples")
     print("=" * 60)
 
-    # 1. 부분 배열 합
-    print("\n[1] 부분 배열 합")
+    # 1. Subarray Sum
+    print("\n[1] Subarray Sum")
     arr = [1, 2, 3, -3, 1, 2]
     k = 3
     count = subarray_sum_k(arr, k)
-    print(f"    배열: {arr}, k={k}")
-    print(f"    합이 {k}인 부분 배열 개수: {count}")
+    print(f"    Array: {arr}, k={k}")
+    print(f"    Count of subarrays with sum {k}: {count}")
 
-    # 2. 작업 스케줄링
-    print("\n[2] 작업 스케줄링 (최대 이익)")
+    # 2. Job Scheduling
+    print("\n[2] Job Scheduling (Maximum Profit)")
     jobs = [(1, 3, 50), (2, 5, 20), (4, 6, 70), (6, 7, 60)]
     profit = max_profit_scheduling(jobs)
-    print(f"    작업 (시작, 종료, 이익): {jobs}")
-    print(f"    최대 이익: {profit}")
+    print(f"    Jobs (start, end, profit): {jobs}")
+    print(f"    Maximum profit: {profit}")
 
-    # 3. 팰린드롬
-    print("\n[3] 문자열 → 팰린드롬")
+    # 3. Palindrome
+    print("\n[3] String to Palindrome")
     s = "aebcbda"
     ops = min_operations_to_palindrome(s)
     lps = longest_palindromic_subsequence(s)
-    print(f"    문자열: '{s}'")
-    print(f"    팰린드롬 만드는 최소 연산: {ops}")
-    print(f"    가장 긴 팰린드롬 부분수열 길이: {lps}")
+    print(f"    String: '{s}'")
+    print(f"    Minimum operations to palindrome: {ops}")
+    print(f"    Longest palindromic subsequence length: {lps}")
 
     # 4. MST
-    print("\n[4] 최소 신장 트리")
+    print("\n[4] Minimum Spanning Tree")
     edges = [(0, 1, 4), (0, 2, 3), (1, 2, 1), (1, 3, 2), (2, 3, 4)]
     cost = min_cost_to_connect_all(4, edges)
-    print(f"    간선: {edges}")
-    print(f"    MST 비용: {cost}")
+    print(f"    Edges: {edges}")
+    print(f"    MST cost: {cost}")
 
-    # 5. 섬의 개수
-    print("\n[5] 섬의 개수")
+    # 5. Number of Islands
+    print("\n[5] Number of Islands")
     grid = [
         [1, 1, 0, 0, 0],
         [1, 1, 0, 0, 0],
@@ -571,20 +571,20 @@ def main():
         [0, 0, 0, 1, 1]
     ]
     islands = count_islands([row[:] for row in grid])
-    print(f"    그리드:")
+    print(f"    Grid:")
     for row in grid:
         print(f"      {row}")
-    print(f"    섬의 개수: {islands}")
+    print(f"    Number of islands: {islands}")
 
-    # 6. 뒤에 있는 더 작은 원소
-    print("\n[6] 각 원소 뒤의 더 작은 원소 개수")
+    # 6. Count Smaller After Self
+    print("\n[6] Count Smaller Elements After Self")
     nums = [5, 2, 6, 1]
     result = count_smaller_after_self(nums)
-    print(f"    배열: {nums}")
-    print(f"    결과: {result}")
+    print(f"    Array: {nums}")
+    print(f"    Result: {result}")
 
     # 7. TSP
-    print("\n[7] 외판원 문제 (TSP)")
+    print("\n[7] Traveling Salesman Problem (TSP)")
     dist = [
         [0, 10, 15, 20],
         [10, 0, 35, 25],
@@ -592,39 +592,39 @@ def main():
         [20, 25, 30, 0]
     ]
     min_cost = tsp(dist)
-    print(f"    거리 행렬:")
+    print(f"    Distance matrix:")
     for row in dist:
         print(f"      {row}")
-    print(f"    최소 비용: {min_cost}")
+    print(f"    Minimum cost: {min_cost}")
 
-    # 8. 파라메트릭 서치
-    print("\n[8] 책 배분 문제")
+    # 8. Parametric Search
+    print("\n[8] Book Allocation Problem")
     pages = [12, 34, 67, 90]
     students = 2
     min_pages = min_pages_per_student(pages, students)
-    print(f"    페이지: {pages}, 학생: {students}")
-    print(f"    최대 페이지 최소화: {min_pages}")
+    print(f"    Pages: {pages}, students: {students}")
+    print(f"    Minimize maximum pages: {min_pages}")
 
     # 9. LIS
-    print("\n[9] 최장 증가 부분 수열 (LIS)")
+    print("\n[9] Longest Increasing Subsequence (LIS)")
     nums = [10, 9, 2, 5, 3, 7, 101, 18]
     length, seq = longest_increasing_subsequence(nums)
-    print(f"    배열: {nums}")
-    print(f"    LIS 길이: {length}")
-    print(f"    LIS 예시: {seq}")
+    print(f"    Array: {nums}")
+    print(f"    LIS length: {length}")
+    print(f"    LIS example: {seq}")
 
-    # 10. 알고리즘 선택 가이드
-    print("\n[10] 알고리즘 선택 가이드")
-    print("    | 문제 유형              | 핵심 알고리즘              |")
-    print("    |------------------------|----------------------------|")
-    print("    | 부분 배열 합           | 해시맵 + 프리픽스 합       |")
-    print("    | 구간 스케줄링          | 정렬 + 그리디/DP           |")
-    print("    | 문자열 변환            | DP (LCS, 편집거리)         |")
-    print("    | 그래프 연결            | Union-Find, BFS/DFS        |")
-    print("    | 구간 쿼리              | 세그먼트 트리, BIT         |")
-    print("    | 조합 최적화            | 백트래킹 + 가지치기        |")
-    print("    | 완전 탐색 (작은 n)     | 비트마스크 DP              |")
-    print("    | 최솟값 최대화          | 파라메트릭 서치            |")
+    # 10. Algorithm Selection Guide
+    print("\n[10] Algorithm Selection Guide")
+    print("    | Problem Type           | Key Algorithm                |")
+    print("    |------------------------|------------------------------|")
+    print("    | Subarray sum           | HashMap + prefix sum         |")
+    print("    | Interval scheduling    | Sorting + greedy/DP          |")
+    print("    | String transformation  | DP (LCS, edit distance)      |")
+    print("    | Graph connectivity     | Union-Find, BFS/DFS          |")
+    print("    | Range queries          | Segment tree, BIT            |")
+    print("    | Combinatorial optim.   | Backtracking + pruning       |")
+    print("    | Exhaustive (small n)   | Bitmask DP                   |")
+    print("    | Minimize maximum       | Parametric search            |")
 
     print("\n" + "=" * 60)
 

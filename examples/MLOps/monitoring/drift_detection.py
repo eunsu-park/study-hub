@@ -2,9 +2,9 @@
 Drift Detection Example
 =======================
 
-Evidently AI를 사용한 데이터 드리프트 감지 예제입니다.
+Example of data drift detection using Evidently AI.
 
-실행 방법:
+How to run:
     pip install evidently pandas numpy scikit-learn
     python drift_detection.py
 """
@@ -18,7 +18,7 @@ from typing import Dict, Any, Tuple
 import warnings
 warnings.filterwarnings("ignore")
 
-# Evidently 임포트 (선택적)
+# Evidently import (optional)
 try:
     from evidently import ColumnMapping
     from evidently.report import Report
@@ -29,21 +29,21 @@ try:
     EVIDENTLY_AVAILABLE = True
 except ImportError:
     EVIDENTLY_AVAILABLE = False
-    print("Evidently가 설치되지 않았습니다. 기본 통계 방법을 사용합니다.")
+    print("Evidently is not installed. Using basic statistical methods.")
 
 
 # ============================================================
-# 기본 통계적 드리프트 감지
+# Basic Statistical Drift Detection
 # ============================================================
 
 class StatisticalDriftDetector:
-    """통계적 방법을 사용한 드리프트 감지"""
+    """Drift detection using statistical methods"""
 
     def __init__(self, significance_level: float = 0.05):
         self.significance_level = significance_level
 
     def ks_test(self, reference: np.ndarray, current: np.ndarray) -> Dict[str, Any]:
-        """Kolmogorov-Smirnov 검정"""
+        """Kolmogorov-Smirnov test"""
         statistic, p_value = stats.ks_2samp(reference, current)
         return {
             "test": "ks",
@@ -54,7 +54,7 @@ class StatisticalDriftDetector:
 
     def psi(self, reference: np.ndarray, current: np.ndarray, n_bins: int = 10) -> float:
         """Population Stability Index"""
-        # 히스토그램 생성
+        # Generate histograms
         min_val = min(reference.min(), current.min())
         max_val = max(reference.max(), current.max())
         bins = np.linspace(min_val, max_val, n_bins + 1)
@@ -62,16 +62,16 @@ class StatisticalDriftDetector:
         ref_counts, _ = np.histogram(reference, bins=bins)
         cur_counts, _ = np.histogram(current, bins=bins)
 
-        # 비율로 변환
+        # Convert to proportions
         ref_pct = (ref_counts + 1) / (len(reference) + n_bins)
         cur_pct = (cur_counts + 1) / (len(current) + n_bins)
 
-        # PSI 계산
+        # Calculate PSI
         psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
         return float(psi)
 
     def wasserstein_distance(self, reference: np.ndarray, current: np.ndarray) -> float:
-        """Wasserstein 거리"""
+        """Wasserstein distance"""
         return float(stats.wasserstein_distance(reference, current))
 
     def detect_column_drift(
@@ -80,7 +80,7 @@ class StatisticalDriftDetector:
         current: pd.DataFrame,
         column: str
     ) -> Dict[str, Any]:
-        """단일 컬럼 드리프트 감지"""
+        """Detect drift in a single column"""
         ref_col = reference[column].dropna().values
         cur_col = current[column].dropna().values
 
@@ -88,7 +88,7 @@ class StatisticalDriftDetector:
         psi_value = self.psi(ref_col, cur_col)
         wasserstein = self.wasserstein_distance(ref_col, cur_col)
 
-        # PSI 해석
+        # PSI interpretation
         if psi_value < 0.1:
             psi_status = "no_drift"
         elif psi_value < 0.2:
@@ -113,7 +113,7 @@ class StatisticalDriftDetector:
         current: pd.DataFrame,
         numerical_columns: list
     ) -> Dict[str, Any]:
-        """데이터셋 전체 드리프트 감지"""
+        """Detect drift across the entire dataset"""
         results = {
             "timestamp": datetime.now().isoformat(),
             "columns": {},
@@ -139,11 +139,11 @@ class StatisticalDriftDetector:
 
 
 # ============================================================
-# Evidently 기반 드리프트 감지
+# Evidently-Based Drift Detection
 # ============================================================
 
 class EvidentlyDriftDetector:
-    """Evidently AI를 사용한 드리프트 감지"""
+    """Drift detection using Evidently AI"""
 
     def __init__(self):
         if not EVIDENTLY_AVAILABLE:
@@ -155,7 +155,7 @@ class EvidentlyDriftDetector:
         current: pd.DataFrame,
         column_mapping: ColumnMapping = None
     ) -> Report:
-        """드리프트 리포트 생성"""
+        """Generate drift report"""
         report = Report(metrics=[
             DatasetDriftMetric(),
             DataDriftPreset()
@@ -175,7 +175,7 @@ class EvidentlyDriftDetector:
         current: pd.DataFrame,
         column_mapping: ColumnMapping = None
     ) -> TestSuite:
-        """드리프트 테스트 실행"""
+        """Run drift tests"""
         test_suite = TestSuite(tests=[
             DataDriftTestPreset()
         ])
@@ -189,10 +189,10 @@ class EvidentlyDriftDetector:
         return test_suite
 
     def get_drift_summary(self, report: Report) -> Dict[str, Any]:
-        """리포트에서 드리프트 요약 추출"""
+        """Extract drift summary from report"""
         result = report.as_dict()
 
-        # DatasetDriftMetric 결과 추출
+        # Extract DatasetDriftMetric results
         for metric in result.get("metrics", []):
             if "DatasetDriftMetric" in str(metric.get("metric", "")):
                 drift_result = metric.get("result", {})
@@ -207,11 +207,11 @@ class EvidentlyDriftDetector:
 
 
 # ============================================================
-# 드리프트 모니터링 시스템
+# Drift Monitoring System
 # ============================================================
 
 class DriftMonitor:
-    """드리프트 모니터링 시스템"""
+    """Drift monitoring system"""
 
     def __init__(
         self,
@@ -226,27 +226,27 @@ class DriftMonitor:
         self.history = []
 
     def check(self, current_data: pd.DataFrame) -> Dict[str, Any]:
-        """드리프트 체크"""
+        """Check for drift"""
         result = self.detector.detect_dataset_drift(
             self.reference_data,
             current_data,
             self.numerical_columns
         )
 
-        # 히스토리에 추가
+        # Add to history
         self.history.append({
             "timestamp": result["timestamp"],
             "drift_share": result["summary"]["drift_share"],
             "drift_detected": result["summary"]["drift_detected"]
         })
 
-        # 알림 생성
+        # Generate alerts
         result["alerts"] = self._generate_alerts(result)
 
         return result
 
     def _generate_alerts(self, result: Dict) -> list:
-        """알림 생성"""
+        """Generate alerts"""
         alerts = []
 
         if result["summary"]["drift_detected"]:
@@ -267,7 +267,7 @@ class DriftMonitor:
         return alerts
 
     def get_trend(self, window_size: int = 10) -> Dict[str, Any]:
-        """드리프트 트렌드 분석"""
+        """Analyze drift trend"""
         if len(self.history) < 2:
             return {"message": "Not enough data for trend analysis"}
 
@@ -284,11 +284,11 @@ class DriftMonitor:
 
 
 # ============================================================
-# 예제 실행
+# Example Execution
 # ============================================================
 
 def generate_sample_data(n_samples: int = 1000, drift: bool = False) -> pd.DataFrame:
-    """샘플 데이터 생성"""
+    """Generate sample data"""
     np.random.seed(42 if not drift else 123)
 
     data = {
@@ -299,60 +299,60 @@ def generate_sample_data(n_samples: int = 1000, drift: bool = False) -> pd.DataF
     }
 
     if drift:
-        # 일부 피처에 드리프트 추가
-        data["feature_1"] = np.random.normal(0.5, 1.2, n_samples)  # 평균, 분산 변화
-        data["feature_3"] = np.random.exponential(3, n_samples)    # 분포 변화
+        # Add drift to some features
+        data["feature_1"] = np.random.normal(0.5, 1.2, n_samples)  # Mean and variance shift
+        data["feature_3"] = np.random.exponential(3, n_samples)    # Distribution change
 
     return pd.DataFrame(data)
 
 
 def main():
-    """메인 실행 함수"""
+    """Main execution function"""
     print("="*60)
-    print("드리프트 감지 예제")
+    print("Drift Detection Example")
     print("="*60)
 
-    # 1. 데이터 생성
-    print("\n[1] 데이터 생성...")
+    # 1. Generate data
+    print("\n[1] Generating data...")
     reference_data = generate_sample_data(1000, drift=False)
     current_data_no_drift = generate_sample_data(500, drift=False)
     current_data_with_drift = generate_sample_data(500, drift=True)
 
-    print(f"  참조 데이터: {len(reference_data)} 샘플")
-    print(f"  현재 데이터 (드리프트 없음): {len(current_data_no_drift)} 샘플")
-    print(f"  현재 데이터 (드리프트 있음): {len(current_data_with_drift)} 샘플")
+    print(f"  Reference data: {len(reference_data)} samples")
+    print(f"  Current data (no drift): {len(current_data_no_drift)} samples")
+    print(f"  Current data (with drift): {len(current_data_with_drift)} samples")
 
-    # 2. 기본 통계적 드리프트 감지
-    print("\n[2] 통계적 드리프트 감지...")
+    # 2. Basic statistical drift detection
+    print("\n[2] Statistical drift detection...")
     detector = StatisticalDriftDetector()
     numerical_cols = ["feature_1", "feature_2", "feature_3", "feature_4"]
 
-    # 드리프트 없는 데이터
-    print("\n  --- 드리프트 없는 데이터 ---")
+    # Data without drift
+    print("\n  --- Data without drift ---")
     result_no_drift = detector.detect_dataset_drift(
         reference_data, current_data_no_drift, numerical_cols
     )
-    print(f"  드리프트 감지: {result_no_drift['summary']['drift_detected']}")
-    print(f"  드리프트 비율: {result_no_drift['summary']['drift_share']:.1%}")
+    print(f"  Drift detected: {result_no_drift['summary']['drift_detected']}")
+    print(f"  Drift share: {result_no_drift['summary']['drift_share']:.1%}")
 
-    # 드리프트 있는 데이터
-    print("\n  --- 드리프트 있는 데이터 ---")
+    # Data with drift
+    print("\n  --- Data with drift ---")
     result_with_drift = detector.detect_dataset_drift(
         reference_data, current_data_with_drift, numerical_cols
     )
-    print(f"  드리프트 감지: {result_with_drift['summary']['drift_detected']}")
-    print(f"  드리프트 비율: {result_with_drift['summary']['drift_share']:.1%}")
+    print(f"  Drift detected: {result_with_drift['summary']['drift_detected']}")
+    print(f"  Drift share: {result_with_drift['summary']['drift_share']:.1%}")
 
-    # 컬럼별 상세 결과
-    print("\n  컬럼별 상세:")
+    # Per-column details
+    print("\n  Per-column details:")
     for col, col_result in result_with_drift["columns"].items():
         drift_status = "DRIFT" if col_result["drift_detected"] else "OK"
         psi = col_result["psi"]["value"]
         print(f"    {col}: PSI={psi:.4f} [{drift_status}]")
 
-    # 3. Evidently 기반 감지 (설치된 경우)
+    # 3. Evidently-based detection (if installed)
     if EVIDENTLY_AVAILABLE:
-        print("\n[3] Evidently 드리프트 감지...")
+        print("\n[3] Evidently drift detection...")
         evidently_detector = EvidentlyDriftDetector()
 
         report = evidently_detector.create_report(
@@ -364,44 +364,44 @@ def main():
         print(f"  Drift Share: {summary.get('drift_share', 0):.1%}")
         print(f"  Drifted Columns: {summary.get('number_of_drifted_columns', 0)}/{summary.get('number_of_columns', 0)}")
 
-        # HTML 리포트 저장
+        # Save HTML report
         report.save_html("drift_report.html")
-        print("\n  HTML 리포트 저장: drift_report.html")
+        print("\n  HTML report saved: drift_report.html")
     else:
-        print("\n[3] Evidently 설치 필요 (pip install evidently)")
+        print("\n[3] Evidently installation required (pip install evidently)")
 
-    # 4. 모니터링 시스템 시뮬레이션
-    print("\n[4] 모니터링 시스템 시뮬레이션...")
+    # 4. Monitoring system simulation
+    print("\n[4] Monitoring system simulation...")
     monitor = DriftMonitor(
         reference_data=reference_data,
         numerical_columns=numerical_cols
     )
 
-    # 여러 시점 데이터로 체크
+    # Check with data from multiple time points
     for i in range(5):
-        # 시간이 지남에 따라 점진적 드리프트
+        # Gradual drift over time
         drift_factor = i * 0.1
         test_data = reference_data.copy()
         test_data["feature_1"] = test_data["feature_1"] + drift_factor
         test_data["feature_3"] = test_data["feature_3"] * (1 + drift_factor)
 
         result = monitor.check(test_data.sample(500))
-        print(f"\n  시점 {i+1}:")
-        print(f"    드리프트 감지: {result['summary']['drift_detected']}")
-        print(f"    드리프트 비율: {result['summary']['drift_share']:.1%}")
+        print(f"\n  Time point {i+1}:")
+        print(f"    Drift detected: {result['summary']['drift_detected']}")
+        print(f"    Drift share: {result['summary']['drift_share']:.1%}")
         if result["alerts"]:
             for alert in result["alerts"]:
                 print(f"    [{alert['level'].upper()}] {alert['message']}")
 
-    # 트렌드 분석
+    # Trend analysis
     trend = monitor.get_trend()
-    print(f"\n  트렌드 분석:")
-    print(f"    평균 드리프트 비율: {trend['avg_drift_share']:.1%}")
-    print(f"    드리프트 감지 횟수: {trend['drift_count']}")
-    print(f"    트렌드: {trend['trend']}")
+    print(f"\n  Trend analysis:")
+    print(f"    Average drift share: {trend['avg_drift_share']:.1%}")
+    print(f"    Drift detection count: {trend['drift_count']}")
+    print(f"    Trend: {trend['trend']}")
 
     print("\n" + "="*60)
-    print("예제 완료!")
+    print("Example complete!")
 
 
 if __name__ == "__main__":

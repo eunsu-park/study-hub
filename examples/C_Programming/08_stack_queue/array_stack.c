@@ -1,6 +1,6 @@
 // array_stack.c
-// 배열 기반 스택 구현
-// LIFO (Last In, First Out) 자료구조
+// Array-based stack implementation
+// LIFO (Last In, First Out) data structure
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,22 +13,22 @@ typedef struct {
     int top;
 } Stack;
 
-// 스택 초기화
+// Initialize stack
 void stack_init(Stack *s) {
     s->top = -1;
 }
 
-// 비어있는지 확인
+// Check if empty
 bool stack_isEmpty(Stack *s) {
     return s->top == -1;
 }
 
-// 가득 찼는지 확인
+// Check if full
 bool stack_isFull(Stack *s) {
     return s->top == MAX_SIZE - 1;
 }
 
-// Push - 맨 위에 요소 추가 (O(1))
+// Push - add element to the top (O(1))
 bool stack_push(Stack *s, int value) {
     if (stack_isFull(s)) {
         printf("Stack Overflow!\n");
@@ -38,7 +38,7 @@ bool stack_push(Stack *s, int value) {
     return true;
 }
 
-// Pop - 맨 위 요소 제거 후 반환 (O(1))
+// Pop - remove and return top element (O(1))
 bool stack_pop(Stack *s, int *value) {
     if (stack_isEmpty(s)) {
         printf("Stack Underflow!\n");
@@ -48,7 +48,7 @@ bool stack_pop(Stack *s, int *value) {
     return true;
 }
 
-// Peek - 맨 위 요소 확인 (제거 안함) (O(1))
+// Peek - view top element without removing (O(1))
 bool stack_peek(Stack *s, int *value) {
     if (stack_isEmpty(s)) {
         return false;
@@ -57,7 +57,7 @@ bool stack_peek(Stack *s, int *value) {
     return true;
 }
 
-// 스택 출력 (디버깅용)
+// Print stack (for debugging)
 void stack_print(Stack *s) {
     printf("Stack (top=%d): ", s->top);
     for (int i = 0; i <= s->top; i++) {
@@ -66,55 +66,55 @@ void stack_print(Stack *s) {
     printf("\n");
 }
 
-// 스택 크기 반환
+// Return stack size
 int stack_size(Stack *s) {
     return s->top + 1;
 }
 
-// 테스트 코드
+// Test code
 int main(void) {
     Stack s;
     stack_init(&s);
 
-    printf("=== 배열 기반 스택 테스트 ===\n\n");
+    printf("=== Array-Based Stack Test ===\n\n");
 
-    // Push 테스트
-    printf("[ Push 연산 ]\n");
+    // Push test
+    printf("[ Push Operations ]\n");
     for (int i = 1; i <= 5; i++) {
         printf("Push %d -> ", i * 10);
         stack_push(&s, i * 10);
         stack_print(&s);
     }
 
-    // Peek 테스트
-    printf("\n[ Peek 연산 ]\n");
+    // Peek test
+    printf("\n[ Peek Operation ]\n");
     int top;
     if (stack_peek(&s, &top)) {
-        printf("Top 값: %d (스택은 변경 안됨)\n", top);
+        printf("Top value: %d (stack unchanged)\n", top);
         stack_print(&s);
     }
 
-    // Pop 테스트
-    printf("\n[ Pop 연산 ]\n");
+    // Pop test
+    printf("\n[ Pop Operations ]\n");
     int value;
     while (stack_pop(&s, &value)) {
         printf("Popped: %d, ", value);
         stack_print(&s);
     }
 
-    // Underflow 테스트
-    printf("\n[ Underflow 테스트 ]\n");
-    printf("빈 스택에서 Pop 시도: ");
+    // Underflow test
+    printf("\n[ Underflow Test ]\n");
+    printf("Attempting Pop on empty stack: ");
     stack_pop(&s, &value);
 
-    // Overflow 테스트
-    printf("\n[ Overflow 테스트 ]\n");
+    // Overflow test
+    printf("\n[ Overflow Test ]\n");
     Stack s2;
     stack_init(&s2);
-    printf("MAX_SIZE를 초과하는 Push 시도...\n");
+    printf("Attempting Push beyond MAX_SIZE...\n");
     for (int i = 0; i <= MAX_SIZE; i++) {
         if (!stack_push(&s2, i)) {
-            printf("총 %d개 요소 삽입 후 Overflow 발생\n", i);
+            printf("Overflow occurred after inserting %d elements\n", i);
             break;
         }
     }

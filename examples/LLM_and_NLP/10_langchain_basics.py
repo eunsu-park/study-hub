@@ -1,17 +1,17 @@
 """
-10. LangChain 기초 예제
+10. LangChain Basics Example
 
-LangChain을 사용한 LLM 애플리케이션
+LLM applications using LangChain
 """
 
 print("=" * 60)
-print("LangChain 기초")
+print("LangChain Basics")
 print("=" * 60)
 
 # ============================================
-# 1. LangChain 구조 (코드 예시)
+# 1. LangChain Structure (Code Example)
 # ============================================
-print("\n[1] LangChain 기본 구조")
+print("\n[1] LangChain Basic Structure")
 print("-" * 40)
 
 langchain_basic = '''
@@ -22,16 +22,16 @@ from langchain_core.output_parsers import StrOutputParser
 # LLM
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
 
-# 프롬프트 템플릿
+# Prompt template
 prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
 
-# 출력 파서
+# Output parser
 parser = StrOutputParser()
 
-# 체인 구성 (LCEL)
+# Chain composition (LCEL)
 chain = prompt | llm | parser
 
-# 실행
+# Execute
 result = chain.invoke({"topic": "programming"})
 print(result)
 '''
@@ -39,37 +39,37 @@ print(langchain_basic)
 
 
 # ============================================
-# 2. 프롬프트 템플릿
+# 2. Prompt Templates
 # ============================================
-print("\n[2] 프롬프트 템플릿 예제")
+print("\n[2] Prompt Template Examples")
 print("-" * 40)
 
 try:
     from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 
-    # 기본 템플릿
+    # Basic template
     template = PromptTemplate(
         input_variables=["product"],
         template="Write a marketing slogan for {product}."
     )
-    print(f"기본 템플릿: {template.format(product='smartphone')}")
+    print(f"Basic template: {template.format(product='smartphone')}")
 
-    # Chat 템플릿
+    # Chat template
     chat_template = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant."),
         ("human", "{question}")
     ])
     messages = chat_template.format_messages(question="What is Python?")
-    print(f"\nChat 템플릿: {messages}")
+    print(f"\nChat template: {messages}")
 
 except ImportError:
-    print("langchain 미설치 (pip install langchain langchain-core)")
+    print("langchain not installed (pip install langchain langchain-core)")
 
 
 # ============================================
-# 3. Few-shot 프롬프트
+# 3. Few-shot Prompt
 # ============================================
-print("\n[3] Few-shot 프롬프트")
+print("\n[3] Few-shot Prompt")
 print("-" * 40)
 
 fewshot_code = '''
@@ -99,9 +99,9 @@ print(fewshot_code)
 
 
 # ============================================
-# 4. 출력 파서
+# 4. Output Parser
 # ============================================
-print("\n[4] 출력 파서")
+print("\n[4] Output Parser")
 print("-" * 40)
 
 parser_code = '''
@@ -114,7 +114,7 @@ class Person(BaseModel):
 
 parser = JsonOutputParser(pydantic_object=Person)
 
-# 프롬프트에 형식 지시 추가
+# Add format instructions to prompt
 format_instructions = parser.get_format_instructions()
 
 prompt = ChatPromptTemplate.from_messages([
@@ -130,24 +130,24 @@ print(parser_code)
 
 
 # ============================================
-# 5. 체인 (LCEL)
+# 5. Chain (LCEL)
 # ============================================
-print("\n[5] LCEL 체인")
+print("\n[5] LCEL Chain")
 print("-" * 40)
 
 lcel_code = '''
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 
-# 순차 체인
+# Sequential chain
 chain = prompt | llm | parser
 
-# 병렬 체인
+# Parallel chain
 parallel = RunnableParallel(
     summary=summary_chain,
     keywords=keyword_chain
 )
 
-# 분기 체인
+# Branching chain
 chain = (
     {"context": retriever, "question": RunnablePassthrough()}
     | prompt
@@ -155,16 +155,16 @@ chain = (
     | parser
 )
 
-# 실행
+# Execute
 result = chain.invoke({"question": "What is AI?"})
 '''
 print(lcel_code)
 
 
 # ============================================
-# 6. RAG 체인
+# 6. RAG Chain
 # ============================================
-print("\n[6] RAG 체인")
+print("\n[6] RAG Chain")
 print("-" * 40)
 
 rag_chain_code = '''
@@ -173,23 +173,23 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
-# 벡터 스토어
+# Vector store
 embeddings = OpenAIEmbeddings()
 vectorstore = Chroma.from_texts(texts, embeddings)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-# RAG 프롬프트
+# RAG prompt
 template = """Answer based on context:
 Context: {context}
 Question: {question}
 Answer:"""
 prompt = ChatPromptTemplate.from_template(template)
 
-# 문서 포맷
+# Document formatting
 def format_docs(docs):
     return "\\n\\n".join(doc.page_content for doc in docs)
 
-# RAG 체인
+# RAG chain
 rag_chain = (
     {"context": retriever | format_docs, "question": RunnablePassthrough()}
     | prompt
@@ -197,16 +197,16 @@ rag_chain = (
     | StrOutputParser()
 )
 
-# 실행
+# Execute
 answer = rag_chain.invoke("What is machine learning?")
 '''
 print(rag_chain_code)
 
 
 # ============================================
-# 7. 에이전트
+# 7. Agent
 # ============================================
-print("\n[7] 에이전트")
+print("\n[7] Agent")
 print("-" * 40)
 
 agent_code = '''
@@ -214,7 +214,7 @@ from langchain.agents import create_react_agent, AgentExecutor
 from langchain import hub
 from langchain.tools import tool
 
-# 커스텀 도구
+# Custom tools
 @tool
 def calculate(expression: str) -> str:
     """Calculate a math expression."""
@@ -227,43 +227,43 @@ def search(query: str) -> str:
 
 tools = [calculate, search]
 
-# ReAct 에이전트
+# ReAct agent
 prompt = hub.pull("hwchase17/react")
 agent = create_react_agent(llm, tools, prompt)
 executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-# 실행
+# Execute
 result = executor.invoke({"input": "What is 2 + 2?"})
 '''
 print(agent_code)
 
 
 # ============================================
-# 8. 메모리
+# 8. Conversation Memory
 # ============================================
-print("\n[8] 대화 메모리")
+print("\n[8] Conversation Memory")
 print("-" * 40)
 
 memory_code = '''
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 
-# 메모리
+# Memory
 memory = ConversationBufferMemory()
 
-# 대화 체인
+# Conversation chain
 conversation = ConversationChain(
     llm=llm,
     memory=memory,
     verbose=True
 )
 
-# 대화
+# Conversation
 response1 = conversation.predict(input="Hi, I'm John")
 response2 = conversation.predict(input="What's my name?")
 # "Your name is John"
 
-# LCEL 메모리
+# LCEL Memory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
@@ -285,55 +285,55 @@ print(memory_code)
 
 
 # ============================================
-# 9. 간단한 실행 예제
+# 9. Runnable Example
 # ============================================
-print("\n[9] 실행 가능한 예제")
+print("\n[9] Runnable Example")
 print("-" * 40)
 
 try:
     from langchain_core.prompts import PromptTemplate
 
-    # 프롬프트 템플릿만 테스트
+    # Test prompt template only
     template = PromptTemplate.from_template(
         "Translate '{text}' to {language}."
     )
 
-    # 포맷팅
+    # Formatting
     prompt = template.format(text="Hello", language="Korean")
-    print(f"생성된 프롬프트: {prompt}")
+    print(f"Generated prompt: {prompt}")
 
-    # 입력 변수
-    print(f"입력 변수: {template.input_variables}")
+    # Input variables
+    print(f"Input variables: {template.input_variables}")
 
 except ImportError:
-    print("langchain-core 미설치")
+    print("langchain-core not installed")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("LangChain 정리")
+print("LangChain Summary")
 print("=" * 60)
 
 summary = """
-핵심 패턴:
-    # 기본 체인
+Key Patterns:
+    # Basic chain
     chain = prompt | llm | output_parser
 
-    # RAG 체인
+    # RAG chain
     rag = {"context": retriever, "question": RunnablePassthrough()} | prompt | llm
 
-    # 에이전트
+    # Agent
     agent = create_react_agent(llm, tools, prompt)
     executor = AgentExecutor(agent=agent, tools=tools)
 
-주요 컴포넌트:
-    - PromptTemplate: 프롬프트 구성
-    - ChatOpenAI: LLM 래퍼
-    - OutputParser: 출력 파싱
-    - Retriever: 문서 검색
-    - Memory: 대화 히스토리
-    - Agent: 도구 사용
+Main Components:
+    - PromptTemplate: Prompt composition
+    - ChatOpenAI: LLM wrapper
+    - OutputParser: Output parsing
+    - Retriever: Document retrieval
+    - Memory: Conversation history
+    - Agent: Tool usage
 """
 print(summary)

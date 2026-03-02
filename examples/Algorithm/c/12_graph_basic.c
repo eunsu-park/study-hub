@@ -1,8 +1,8 @@
 /*
- * 그래프 기초 (Graph Basics)
+ * Graph Basics
  * DFS, BFS, Graph Representation, Connected Components
  *
- * 그래프 자료구조와 기본 탐색 알고리즘입니다.
+ * Graph data structures and fundamental traversal algorithms.
  */
 
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #define MAX_VERTICES 100
 
 /* =============================================================================
- * 1. 그래프 표현 - 인접 리스트
+ * 1. Graph Representation - Adjacency List
  * ============================================================================= */
 
 typedef struct AdjNode {
@@ -78,7 +78,7 @@ void graph_print(Graph* g) {
 }
 
 /* =============================================================================
- * 2. 인접 행렬
+ * 2. Adjacency Matrix
  * ============================================================================= */
 
 typedef struct {
@@ -110,7 +110,7 @@ void matrix_free(AdjMatrix* m) {
 }
 
 /* =============================================================================
- * 3. DFS (깊이 우선 탐색)
+ * 3. DFS (Depth-First Search)
  * ============================================================================= */
 
 void dfs_recursive(Graph* g, int v, bool visited[]) {
@@ -131,7 +131,7 @@ void dfs(Graph* g, int start) {
     free(visited);
 }
 
-/* 스택 기반 DFS */
+/* Stack-based DFS */
 void dfs_iterative(Graph* g, int start) {
     bool* visited = calloc(g->vertices, sizeof(bool));
     int* stack = malloc(g->vertices * sizeof(int));
@@ -160,7 +160,7 @@ void dfs_iterative(Graph* g, int start) {
 }
 
 /* =============================================================================
- * 4. BFS (너비 우선 탐색)
+ * 4. BFS (Breadth-First Search)
  * ============================================================================= */
 
 void bfs(Graph* g, int start) {
@@ -189,7 +189,7 @@ void bfs(Graph* g, int start) {
     free(queue);
 }
 
-/* BFS 최단 거리 */
+/* BFS Shortest Distances */
 int* bfs_distances(Graph* g, int start) {
     int* dist = malloc(g->vertices * sizeof(int));
     for (int i = 0; i < g->vertices; i++)
@@ -219,7 +219,7 @@ int* bfs_distances(Graph* g, int start) {
 }
 
 /* =============================================================================
- * 5. 연결 요소
+ * 5. Connected Components
  * ============================================================================= */
 
 int count_connected_components(Graph* g) {
@@ -238,10 +238,10 @@ int count_connected_components(Graph* g) {
 }
 
 /* =============================================================================
- * 6. 사이클 탐지
+ * 6. Cycle Detection
  * ============================================================================= */
 
-/* 무방향 그래프 사이클 탐지 */
+/* Cycle detection in undirected graph */
 bool has_cycle_undirected_util(Graph* g, int v, bool visited[], int parent) {
     visited[v] = true;
 
@@ -275,14 +275,14 @@ bool has_cycle_undirected(Graph* g) {
     return false;
 }
 
-/* 방향 그래프 사이클 탐지 (3색 알고리즘) */
+/* Cycle detection in directed graph (3-color algorithm) */
 bool has_cycle_directed_util(Graph* g, int v, int color[]) {
-    color[v] = 1;  /* 회색: 처리 중 */
+    color[v] = 1;  /* Gray: processing */
 
     AdjNode* node = g->adj[v];
     while (node) {
         if (color[node->vertex] == 1)
-            return true;  /* 회색 노드 발견 = 사이클 */
+            return true;  /* Gray node found = cycle */
         if (color[node->vertex] == 0) {
             if (has_cycle_directed_util(g, node->vertex, color))
                 return true;
@@ -290,7 +290,7 @@ bool has_cycle_directed_util(Graph* g, int v, int color[]) {
         node = node->next;
     }
 
-    color[v] = 2;  /* 검은색: 완료 */
+    color[v] = 2;  /* Black: completed */
     return false;
 }
 
@@ -311,7 +311,7 @@ bool has_cycle_directed(Graph* g) {
 }
 
 /* =============================================================================
- * 7. 이분 그래프 판별
+ * 7. Bipartite Graph Check
  * ============================================================================= */
 
 bool is_bipartite(Graph* g) {
@@ -352,16 +352,16 @@ bool is_bipartite(Graph* g) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("그래프 기초 (Graph Basics) 예제\n");
+    printf("Graph Basics Examples\n");
     printf("============================================================\n");
 
-    /* 1. 그래프 생성 */
-    printf("\n[1] 그래프 생성 (인접 리스트)\n");
+    /* 1. Graph Creation */
+    printf("\n[1] Graph Creation (Adjacency List)\n");
     Graph* g = graph_create(6, false);
     graph_add_edge(g, 0, 1, 1);
     graph_add_edge(g, 0, 2, 1);
@@ -371,89 +371,89 @@ int main(void) {
     graph_add_edge(g, 3, 4, 1);
     graph_add_edge(g, 4, 5, 1);
 
-    printf("    그래프 구조:\n");
+    printf("    Graph structure:\n");
     graph_print(g);
 
     /* 2. DFS */
-    printf("\n[2] DFS (0에서 시작)\n");
-    printf("    재귀: ");
+    printf("\n[2] DFS (starting from 0)\n");
+    printf("    Recursive: ");
     dfs(g, 0);
     printf("\n");
-    printf("    반복: ");
+    printf("    Iterative: ");
     dfs_iterative(g, 0);
     printf("\n");
 
     /* 3. BFS */
-    printf("\n[3] BFS (0에서 시작)\n");
-    printf("    순서: ");
+    printf("\n[3] BFS (starting from 0)\n");
+    printf("    Order: ");
     bfs(g, 0);
     printf("\n");
 
     int* distances = bfs_distances(g, 0);
-    printf("    거리: ");
+    printf("    Distances: ");
     for (int i = 0; i < 6; i++)
         printf("%d->%d ", i, distances[i]);
     printf("\n");
     free(distances);
 
-    /* 4. 연결 요소 */
-    printf("\n[4] 연결 요소\n");
-    printf("    현재 그래프: %d개\n", count_connected_components(g));
+    /* 4. Connected Components */
+    printf("\n[4] Connected Components\n");
+    printf("    Current graph: %d component(s)\n", count_connected_components(g));
 
     Graph* g2 = graph_create(6, false);
     graph_add_edge(g2, 0, 1, 1);
     graph_add_edge(g2, 2, 3, 1);
     graph_add_edge(g2, 4, 5, 1);
-    printf("    분리된 그래프: %d개\n", count_connected_components(g2));
+    printf("    Disconnected graph: %d component(s)\n", count_connected_components(g2));
     graph_free(g2);
 
-    /* 5. 사이클 탐지 */
-    printf("\n[5] 사이클 탐지\n");
-    printf("    무방향 그래프 사이클: %s\n",
-           has_cycle_undirected(g) ? "있음" : "없음");
+    /* 5. Cycle Detection */
+    printf("\n[5] Cycle Detection\n");
+    printf("    Undirected graph cycle: %s\n",
+           has_cycle_undirected(g) ? "exists" : "none");
 
     Graph* dag = graph_create(4, true);
     graph_add_edge(dag, 0, 1, 1);
     graph_add_edge(dag, 1, 2, 1);
     graph_add_edge(dag, 2, 3, 1);
-    printf("    방향 그래프 (DAG) 사이클: %s\n",
-           has_cycle_directed(dag) ? "있음" : "없음");
+    printf("    Directed graph (DAG) cycle: %s\n",
+           has_cycle_directed(dag) ? "exists" : "none");
 
-    graph_add_edge(dag, 3, 1, 1);  /* 사이클 추가 */
-    printf("    방향 그래프 (with cycle) 사이클: %s\n",
-           has_cycle_directed(dag) ? "있음" : "없음");
+    graph_add_edge(dag, 3, 1, 1);  /* Add cycle */
+    printf("    Directed graph (with cycle) cycle: %s\n",
+           has_cycle_directed(dag) ? "exists" : "none");
     graph_free(dag);
 
-    /* 6. 이분 그래프 */
-    printf("\n[6] 이분 그래프 판별\n");
+    /* 6. Bipartite Graph */
+    printf("\n[6] Bipartite Graph Check\n");
     Graph* bipartite = graph_create(4, false);
     graph_add_edge(bipartite, 0, 1, 1);
     graph_add_edge(bipartite, 0, 3, 1);
     graph_add_edge(bipartite, 1, 2, 1);
     graph_add_edge(bipartite, 2, 3, 1);
-    printf("    4각형 그래프: %s\n",
-           is_bipartite(bipartite) ? "이분 그래프" : "이분 그래프 아님");
+    printf("    Square graph: %s\n",
+           is_bipartite(bipartite) ? "bipartite" : "not bipartite");
 
     Graph* non_bipartite = graph_create(3, false);
     graph_add_edge(non_bipartite, 0, 1, 1);
     graph_add_edge(non_bipartite, 1, 2, 1);
     graph_add_edge(non_bipartite, 2, 0, 1);
-    printf("    삼각형 그래프: %s\n",
-           is_bipartite(non_bipartite) ? "이분 그래프" : "이분 그래프 아님");
+    printf("    Triangle graph: %s\n",
+           is_bipartite(non_bipartite) ? "bipartite" : "not bipartite");
     graph_free(bipartite);
     graph_free(non_bipartite);
 
     graph_free(g);
 
-    /* 7. 복잡도 요약 */
-    printf("\n[7] 그래프 알고리즘 복잡도\n");
-    printf("    | 알고리즘     | 시간복잡도  | 공간     |\n");
-    printf("    |--------------|-------------|----------|\n");
-    printf("    | DFS          | O(V + E)    | O(V)     |\n");
-    printf("    | BFS          | O(V + E)    | O(V)     |\n");
-    printf("    | 연결 요소    | O(V + E)    | O(V)     |\n");
-    printf("    | 사이클 탐지  | O(V + E)    | O(V)     |\n");
-    printf("    | 이분 판별    | O(V + E)    | O(V)     |\n");
+    /* 7. Complexity Summary */
+    printf("\n[7] Graph Algorithm Complexity\n");
+    printf("    | Algorithm          | Time        | Space    |\n");
+    printf("    |--------------------|-------------|----------|\n");
+    printf("    | DFS                | O(V + E)    | O(V)     |\n");
+    printf("    | BFS                | O(V + E)    | O(V)     |\n");
+    printf("    | Connected Comp.    | O(V + E)    | O(V)     |\n");
+    printf("    | Cycle Detection    | O(V + E)    | O(V)     |\n");
+    printf("    | Bipartite Check    | O(V + E)    | O(V)     |\n");
 
     printf("\n============================================================\n");
 

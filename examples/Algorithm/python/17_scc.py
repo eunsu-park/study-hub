@@ -1,8 +1,8 @@
 """
-강한 연결 요소 (SCC - Strongly Connected Components)
+Strongly Connected Components (SCC)
 Strongly Connected Components
 
-방향 그래프에서 서로 도달 가능한 정점들의 최대 집합을 찾습니다.
+Finds the maximal sets of vertices in a directed graph where every vertex is reachable from every other.
 """
 
 from typing import List, Tuple, Set
@@ -10,19 +10,19 @@ from collections import defaultdict
 
 
 # =============================================================================
-# 1. Kosaraju 알고리즘
+# 1. Kosaraju's Algorithm
 # =============================================================================
 
 def kosaraju_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
     """
-    Kosaraju 알고리즘으로 SCC 찾기
-    시간복잡도: O(V + E)
-    공간복잡도: O(V + E)
+    Find SCCs using Kosaraju's Algorithm
+    Time Complexity: O(V + E)
+    Space Complexity: O(V + E)
 
-    1. 정방향 DFS로 종료 순서 스택 구성
-    2. 역방향 그래프에서 스택 순서대로 DFS
+    1. Build finish order stack via forward DFS
+    2. DFS on reverse graph in stack order
     """
-    # 정방향/역방향 그래프
+    # Forward/reverse graphs
     graph = defaultdict(list)
     reverse_graph = defaultdict(list)
 
@@ -30,7 +30,7 @@ def kosaraju_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
         graph[u].append(v)
         reverse_graph[v].append(u)
 
-    # 1단계: 정방향 DFS로 종료 순서 기록
+    # Phase 1: Record finish order via forward DFS
     visited = [False] * n
     finish_stack = []
 
@@ -45,7 +45,7 @@ def kosaraju_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
         if not visited[i]:
             dfs1(i)
 
-    # 2단계: 역방향 DFS로 SCC 찾기
+    # Phase 2: Find SCCs via reverse DFS
     visited = [False] * n
     sccs = []
 
@@ -67,27 +67,27 @@ def kosaraju_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
 
 
 # =============================================================================
-# 2. Tarjan 알고리즘
+# 2. Tarjan's Algorithm
 # =============================================================================
 
 def tarjan_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
     """
-    Tarjan 알고리즘으로 SCC 찾기
-    시간복잡도: O(V + E)
-    공간복잡도: O(V)
+    Find SCCs using Tarjan's Algorithm
+    Time Complexity: O(V + E)
+    Space Complexity: O(V)
 
-    low[v] = v에서 도달 가능한 최소 발견 시간
+    low[v] = minimum discovery time reachable from v
     """
     graph = defaultdict(list)
     for u, v in edges:
         graph[u].append(v)
 
-    disc = [-1] * n  # 발견 시간
-    low = [-1] * n   # low-link 값
+    disc = [-1] * n  # Discovery time
+    low = [-1] * n   # Low-link value
     on_stack = [False] * n
     stack = []
     sccs = []
-    time = [0]  # 전역 시간
+    time = [0]  # Global time counter
 
     def dfs(node: int):
         disc[node] = low[node] = time[0]
@@ -96,13 +96,13 @@ def tarjan_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
         on_stack[node] = True
 
         for neighbor in graph[node]:
-            if disc[neighbor] == -1:  # 미방문
+            if disc[neighbor] == -1:  # Unvisited
                 dfs(neighbor)
                 low[node] = min(low[node], low[neighbor])
-            elif on_stack[neighbor]:  # 스택에 있음 (back edge)
+            elif on_stack[neighbor]:  # On stack (back edge)
                 low[node] = min(low[node], disc[neighbor])
 
-        # SCC 루트 발견
+        # SCC root found
         if low[node] == disc[node]:
             component = []
             while True:
@@ -121,23 +121,23 @@ def tarjan_scc(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
 
 
 # =============================================================================
-# 3. SCC 축약 그래프 (DAG)
+# 3. SCC Condensation Graph (DAG)
 # =============================================================================
 
 def build_scc_dag(n: int, edges: List[Tuple[int, int]]) -> Tuple[List[List[int]], List[List[int]], List[int]]:
     """
-    SCC를 찾고 축약 그래프(DAG) 구성
-    반환: (sccs, scc_graph, node_to_scc)
+    Find SCCs and build condensation graph (DAG)
+    Returns: (sccs, scc_graph, node_to_scc)
     """
     sccs = tarjan_scc(n, edges)
 
-    # 각 노드가 속한 SCC 매핑
+    # Map each node to its SCC
     node_to_scc = [-1] * n
     for i, component in enumerate(sccs):
         for node in component:
             node_to_scc[node] = i
 
-    # SCC 간의 간선 (DAG)
+    # Edges between SCCs (DAG)
     scc_edges = set()
     for u, v in edges:
         scc_u = node_to_scc[u]
@@ -153,16 +153,16 @@ def build_scc_dag(n: int, edges: List[Tuple[int, int]]) -> Tuple[List[List[int]]
 
 
 # =============================================================================
-# 4. 2-SAT 문제
+# 4. 2-SAT Problem
 # =============================================================================
 
 class TwoSAT:
     """
-    2-SAT 문제 해결기
-    n개의 불린 변수와 2-CNF 조건식
+    2-SAT Problem Solver
+    n boolean variables with 2-CNF clauses
 
-    변수 x_i: 노드 2*i (true), 노드 2*i+1 (false)
-    조건 (a ∨ b): ¬a → b, ¬b → a
+    Variable x_i: node 2*i (true), node 2*i+1 (false)
+    Clause (a or b): not_a -> b, not_b -> a
     """
 
     def __init__(self, n: int):
@@ -171,39 +171,39 @@ class TwoSAT:
         self.reverse_graph = defaultdict(list)
 
     def _var(self, x: int, negated: bool) -> int:
-        """변수를 그래프 노드로 변환"""
+        """Convert variable to graph node"""
         return 2 * x + (1 if negated else 0)
 
     def _neg(self, node: int) -> int:
-        """노드의 부정"""
+        """Negation of a node"""
         return node ^ 1
 
     def add_clause(self, x: int, neg_x: bool, y: int, neg_y: bool):
         """
-        조건 추가: (x ∨ y)
-        neg_x: x가 부정인지
-        neg_y: y가 부정인지
+        Add clause: (x or y)
+        neg_x: whether x is negated
+        neg_y: whether y is negated
         """
-        # (x ∨ y) ≡ (¬x → y) ∧ (¬y → x)
+        # (x or y) is equivalent to (not_x -> y) and (not_y -> x)
         node_x = self._var(x, neg_x)
         node_y = self._var(y, neg_y)
 
-        # ¬x → y
+        # not_x -> y
         self.graph[self._neg(node_x)].append(node_y)
         self.reverse_graph[node_y].append(self._neg(node_x))
 
-        # ¬y → x
+        # not_y -> x
         self.graph[self._neg(node_y)].append(node_x)
         self.reverse_graph[node_x].append(self._neg(node_y))
 
     def solve(self) -> Tuple[bool, List[bool]]:
         """
-        2-SAT 해결
-        반환: (만족 가능 여부, 각 변수의 값)
+        Solve 2-SAT
+        Returns: (satisfiability, value of each variable)
         """
         total_nodes = 2 * self.n
 
-        # Kosaraju로 SCC 찾기
+        # Find SCCs using Kosaraju's
         visited = [False] * total_nodes
         finish_stack = []
 
@@ -235,29 +235,29 @@ class TwoSAT:
                 dfs2(node)
                 current_scc += 1
 
-        # 만족 가능성 검사
+        # Check satisfiability
         for i in range(self.n):
             if scc_id[2 * i] == scc_id[2 * i + 1]:
                 return False, []
 
-        # 해 구성 (나중에 발견된 SCC = 더 작은 SCC ID = 더 높은 위상 순서)
+        # Construct solution (later discovered SCC = smaller SCC ID = higher topological order)
         assignment = [False] * self.n
         for i in range(self.n):
-            # scc_id가 작으면 위상 순서에서 뒤에 있음 → 그 값이 true
+            # Smaller scc_id means later in topological order -> that value is true
             assignment[i] = scc_id[2 * i] > scc_id[2 * i + 1]
 
         return True, assignment
 
 
 # =============================================================================
-# 5. 실전 문제: 학교 도달 가능성
+# 5. Practical Problem: School Reachability
 # =============================================================================
 
 def min_roads_to_connect(n: int, roads: List[Tuple[int, int]]) -> int:
     """
-    모든 학교가 서로 도달 가능하게 하려면 추가해야 할 최소 도로 수
-    = max(진입 차수 0인 SCC 수, 진출 차수 0인 SCC 수)
-    (SCC가 1개면 0)
+    Minimum number of roads to add so all schools can reach each other
+    = max(number of SCCs with in-degree 0, number of SCCs with out-degree 0)
+    (0 if there is only 1 SCC)
     """
     if not roads:
         return n - 1 if n > 1 else 0
@@ -267,7 +267,7 @@ def min_roads_to_connect(n: int, roads: List[Tuple[int, int]]) -> int:
     if len(sccs) == 1:
         return 0
 
-    # 각 SCC의 진입/진출 차수
+    # In-degree/out-degree of each SCC
     in_degree = [0] * len(sccs)
     out_degree = [0] * len(sccs)
 
@@ -276,7 +276,7 @@ def min_roads_to_connect(n: int, roads: List[Tuple[int, int]]) -> int:
         for scc_v in neighbors:
             in_degree[scc_v] += 1
 
-    # 진입/진출 차수 0인 SCC 개수
+    # Count SCCs with in-degree/out-degree of 0
     sources = sum(1 for d in in_degree if d == 0)
     sinks = sum(1 for d in out_degree if d == 0)
 
@@ -284,22 +284,22 @@ def min_roads_to_connect(n: int, roads: List[Tuple[int, int]]) -> int:
 
 
 # =============================================================================
-# 6. 실전 문제: 중요 노드 (Articulation Points 유사)
+# 6. Practical Problem: Critical Nodes (Similar to Articulation Points)
 # =============================================================================
 
 def find_critical_nodes(n: int, edges: List[Tuple[int, int]]) -> List[int]:
     """
-    제거하면 SCC 개수가 증가하는 노드들 찾기
-    (간단한 brute force 구현)
+    Find nodes whose removal increases the number of SCCs
+    (Simple brute force implementation)
     """
     original_scc_count = len(tarjan_scc(n, edges))
     critical = []
 
     for remove_node in range(n):
-        # 해당 노드 제외한 그래프
+        # Graph excluding the removed node
         new_edges = [(u, v) for u, v in edges if u != remove_node and v != remove_node]
 
-        # 노드 재매핑
+        # Remap nodes
         remaining = [i for i in range(n) if i != remove_node]
         if not remaining:
             continue
@@ -310,27 +310,27 @@ def find_critical_nodes(n: int, edges: List[Tuple[int, int]]) -> List[int]:
 
         new_scc_count = len(tarjan_scc(len(remaining), remapped_edges))
 
-        if new_scc_count > original_scc_count - 1:  # -1은 제거된 노드의 SCC
+        if new_scc_count > original_scc_count - 1:  # -1 accounts for the removed node's SCC
             critical.append(remove_node)
 
     return critical
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("강한 연결 요소 (SCC) 예제")
+    print("Strongly Connected Components (SCC) Examples")
     print("=" * 60)
 
-    # 그래프 구성
-    #   0 → 1 → 2
-    #   ↑   ↓   ↓
-    #   4 ← 3 → 5 → 6
-    #       ↑       ↓
-    #       └───────┘
+    # Graph structure
+    #   0 -> 1 -> 2
+    #   ^    |    |
+    #   4 <- 3 -> 5 -> 6
+    #        ^        |
+    #        +--------+
 
     n = 7
     edges = [
@@ -338,62 +338,62 @@ def main():
         (3, 4), (4, 0), (3, 5), (5, 6), (6, 3)
     ]
 
-    # 1. Kosaraju 알고리즘
-    print("\n[1] Kosaraju 알고리즘")
+    # 1. Kosaraju's Algorithm
+    print("\n[1] Kosaraju's Algorithm")
     sccs = kosaraju_scc(n, edges)
-    print(f"    간선: {edges}")
-    print(f"    SCC: {sccs}")
+    print(f"    Edges: {edges}")
+    print(f"    SCCs: {sccs}")
 
-    # 2. Tarjan 알고리즘
-    print("\n[2] Tarjan 알고리즘")
+    # 2. Tarjan's Algorithm
+    print("\n[2] Tarjan's Algorithm")
     sccs = tarjan_scc(n, edges)
-    print(f"    SCC: {sccs}")
+    print(f"    SCCs: {sccs}")
 
-    # 3. SCC 축약 DAG
-    print("\n[3] SCC 축약 그래프 (DAG)")
+    # 3. SCC Condensation DAG
+    print("\n[3] SCC Condensation Graph (DAG)")
     sccs, scc_graph, node_to_scc = build_scc_dag(n, edges)
-    print(f"    SCC: {sccs}")
-    print(f"    노드→SCC: {node_to_scc}")
-    print(f"    SCC 간선: {dict(scc_graph)}")
+    print(f"    SCCs: {sccs}")
+    print(f"    Node->SCC: {node_to_scc}")
+    print(f"    SCC edges: {dict(scc_graph)}")
 
-    # 4. 2-SAT 문제
-    print("\n[4] 2-SAT 문제")
-    # (x0 ∨ x1) ∧ (¬x0 ∨ x2) ∧ (¬x1 ∨ ¬x2)
+    # 4. 2-SAT Problem
+    print("\n[4] 2-SAT Problem")
+    # (x0 or x1) and (not_x0 or x2) and (not_x1 or not_x2)
     sat = TwoSAT(3)
-    sat.add_clause(0, False, 1, False)  # x0 ∨ x1
-    sat.add_clause(0, True, 2, False)   # ¬x0 ∨ x2
-    sat.add_clause(1, True, 2, True)    # ¬x1 ∨ ¬x2
+    sat.add_clause(0, False, 1, False)  # x0 or x1
+    sat.add_clause(0, True, 2, False)   # not_x0 or x2
+    sat.add_clause(1, True, 2, True)    # not_x1 or not_x2
 
     solvable, assignment = sat.solve()
-    print(f"    조건: (x0 ∨ x1) ∧ (¬x0 ∨ x2) ∧ (¬x1 ∨ ¬x2)")
-    print(f"    해결 가능: {solvable}")
+    print(f"    Clauses: (x0 or x1) and (not_x0 or x2) and (not_x1 or not_x2)")
+    print(f"    Satisfiable: {solvable}")
     if solvable:
-        print(f"    해: x0={assignment[0]}, x1={assignment[1]}, x2={assignment[2]}")
+        print(f"    Solution: x0={assignment[0]}, x1={assignment[1]}, x2={assignment[2]}")
 
-    # 불가능한 2-SAT
-    print("\n    불가능한 경우:")
+    # Unsatisfiable 2-SAT
+    print("\n    Unsatisfiable case:")
     sat2 = TwoSAT(1)
-    sat2.add_clause(0, False, 0, False)  # x0 ∨ x0 = x0
-    sat2.add_clause(0, True, 0, True)    # ¬x0 ∨ ¬x0 = ¬x0
+    sat2.add_clause(0, False, 0, False)  # x0 or x0 = x0
+    sat2.add_clause(0, True, 0, True)    # not_x0 or not_x0 = not_x0
     solvable2, _ = sat2.solve()
-    print(f"    조건: x0 ∧ ¬x0")
-    print(f"    해결 가능: {solvable2}")
+    print(f"    Clauses: x0 and not_x0")
+    print(f"    Satisfiable: {solvable2}")
 
-    # 5. 학교 연결
-    print("\n[5] 학교 연결 문제")
+    # 5. School Connectivity
+    print("\n[5] School Connectivity Problem")
     school_roads = [(0, 1), (1, 2), (2, 0), (3, 4), (4, 3)]
     min_roads = min_roads_to_connect(5, school_roads)
-    print(f"    도로: {school_roads}")
-    print(f"    추가 필요 도로: {min_roads}개")
+    print(f"    Roads: {school_roads}")
+    print(f"    Additional roads needed: {min_roads}")
 
-    # 6. 알고리즘 비교
-    print("\n[6] Kosaraju vs Tarjan 비교")
-    print("    | 특성           | Kosaraju      | Tarjan        |")
-    print("    |----------------|---------------|---------------|")
-    print("    | 시간복잡도     | O(V + E)      | O(V + E)      |")
-    print("    | DFS 횟수       | 2번           | 1번           |")
-    print("    | 역그래프 필요  | 예            | 아니오        |")
-    print("    | 구현 난이도    | 쉬움          | 보통          |")
+    # 6. Algorithm Comparison
+    print("\n[6] Kosaraju vs Tarjan Comparison")
+    print("    | Property        | Kosaraju      | Tarjan        |")
+    print("    |-----------------|---------------|---------------|")
+    print("    | Time Complexity | O(V + E)      | O(V + E)      |")
+    print("    | DFS Passes      | 2             | 1             |")
+    print("    | Reverse Graph   | Required      | Not required  |")
+    print("    | Implementation  | Easy          | Moderate      |")
 
     print("\n" + "=" * 60)
 

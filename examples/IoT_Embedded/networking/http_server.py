@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-IoT Flask REST API 서버
-간단한 센서 데이터 수집 및 장치 제어 API
+IoT Flask REST API Server
+Simple sensor data collection and device control API
 
-참고: content/ko/IoT_Embedded/07_HTTP_REST_for_IoT.md
+Reference: content/ko/IoT_Embedded/07_HTTP_REST_for_IoT.md
 """
 
 from flask import Flask, jsonify, request
@@ -18,19 +18,19 @@ app = Flask(__name__)
 # different origin than the API, and browsers block cross-origin requests by default.
 CORS(app)
 
-# === 데이터베이스 설정 ===
+# === Database Setup ===
 # Why: Supporting both SQLite and in-memory storage lets the same codebase run
 # in production (persistent disk) and in quick demos/tests (volatile memory).
 DB_PATH = "iot_data.db"
-USE_SQLITE = True  # False로 설정하면 메모리 저장소 사용
+USE_SQLITE = True  # Set to False to use in-memory storage
 
 
 def init_db():
-    """SQLite 데이터베이스 초기화"""
+    """Initialize SQLite database"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 센서 테이블
+    # Sensor table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sensors (
             id TEXT PRIMARY KEY,
@@ -42,7 +42,7 @@ def init_db():
         )
     """)
 
-    # 센서 데이터 테이블
+    # Sensor data table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sensor_readings (
             id TEXT PRIMARY KEY,
@@ -53,7 +53,7 @@ def init_db():
         )
     """)
 
-    # 장치 테이블
+    # Device table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS devices (
             id TEXT PRIMARY KEY,
@@ -69,7 +69,7 @@ def init_db():
     conn.close()
 
 
-# 메모리 저장소 (시뮬레이션 모드)
+# In-memory storage (simulation mode)
 memory_store = {
     'sensors': {},
     'sensor_readings': [],
@@ -77,48 +77,48 @@ memory_store = {
 }
 
 
-# === 헬퍼 함수 ===
+# === Helper Functions ===
 def get_db_connection():
-    """데이터베이스 연결 획득"""
+    """Get database connection"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def dict_from_row(row):
-    """sqlite3.Row를 딕셔너리로 변환"""
+    """Convert sqlite3.Row to dictionary"""
     return dict(zip(row.keys(), row))
 
 
-# === API 엔드포인트 ===
+# === API Endpoints ===
 
 @app.route('/')
 def index():
-    """API 정보"""
+    """API information"""
     return jsonify({
         "name": "IoT REST API Server",
         "version": "1.0",
         "storage": "SQLite" if USE_SQLITE else "Memory",
         "endpoints": {
-            "/": "GET - API 정보",
-            "/health": "GET - 헬스 체크",
-            "/api/sensors": "GET, POST - 센서 목록/등록",
-            "/api/sensors/<id>": "GET - 센서 정보 조회",
-            "/api/sensors/<id>/data": "GET, POST - 센서 데이터 조회/등록",
-            "/api/sensors/<id>/latest": "GET - 최신 센서 데이터",
-            "/api/sensors/<id>/stats": "GET - 센서 통계",
-            "/api/devices": "GET, POST - 장치 목록/등록",
-            "/api/devices/<id>": "GET, PUT, DELETE - 장치 조회/수정/삭제",
-            "/api/devices/<id>/command": "POST - 장치 명령 전송"
+            "/": "GET - API information",
+            "/health": "GET - Health check",
+            "/api/sensors": "GET, POST - Sensor list/register",
+            "/api/sensors/<id>": "GET - Sensor info query",
+            "/api/sensors/<id>/data": "GET, POST - Sensor data query/submit",
+            "/api/sensors/<id>/latest": "GET - Latest sensor data",
+            "/api/sensors/<id>/stats": "GET - Sensor statistics",
+            "/api/devices": "GET, POST - Device list/register",
+            "/api/devices/<id>": "GET, PUT, DELETE - Device query/update/delete",
+            "/api/devices/<id>/command": "POST - Send device command"
         }
     })
 
 
 @app.route('/health')
 def health():
-    """헬스 체크"""
+    """Health check"""
     if USE_SQLITE:
-        # DB 연결 확인
+        # Check DB connection
         try:
             conn = get_db_connection()
             conn.close()
@@ -135,11 +135,11 @@ def health():
     })
 
 
-# === 센서 API ===
+# === Sensor API ===
 
 @app.route('/api/sensors', methods=['GET'])
 def list_sensors():
-    """등록된 센서 목록 조회"""
+    """List registered sensors"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -157,7 +157,7 @@ def list_sensors():
 
 @app.route('/api/sensors', methods=['POST'])
 def register_sensor():
-    """새 센서 등록"""
+    """Register new sensor"""
     data = request.get_json()
 
     if not data or 'name' not in data:
@@ -191,7 +191,7 @@ def register_sensor():
 
 @app.route('/api/sensors/<sensor_id>', methods=['GET'])
 def get_sensor(sensor_id):
-    """센서 정보 조회"""
+    """Get sensor information"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -213,7 +213,7 @@ def get_sensor(sensor_id):
 
 @app.route('/api/sensors/<sensor_id>/data', methods=['POST'])
 def post_sensor_data(sensor_id):
-    """센서 데이터 수신"""
+    """Receive sensor data"""
     import json
 
     data = request.get_json()
@@ -243,7 +243,7 @@ def post_sensor_data(sensor_id):
             """, (sensor_id, f"auto_{sensor_id}", "generic",
                   "active", datetime.now().isoformat()))
 
-        # 센서 데이터 저장
+        # Save sensor data
         cursor.execute("""
             INSERT INTO sensor_readings (id, sensor_id, data, timestamp)
             VALUES (?, ?, ?, ?)
@@ -252,7 +252,7 @@ def post_sensor_data(sensor_id):
         conn.commit()
         conn.close()
     else:
-        # 센서 자동 등록
+        # Auto-register sensor
         if sensor_id not in memory_store['sensors']:
             memory_store['sensors'][sensor_id] = {
                 "id": sensor_id,
@@ -275,10 +275,10 @@ def post_sensor_data(sensor_id):
 
 @app.route('/api/sensors/<sensor_id>/data', methods=['GET'])
 def get_sensor_data(sensor_id):
-    """센서 데이터 조회"""
+    """Query sensor data"""
     import json
 
-    # 쿼리 파라미터
+    # Query parameters
     limit = request.args.get('limit', 100, type=int)
     since = request.args.get('since', None)  # ISO timestamp
 
@@ -306,14 +306,14 @@ def get_sensor_data(sensor_id):
             reading_dict['data'] = json.loads(reading_dict['data'])
             readings.append(reading_dict)
     else:
-        # 필터링
+        # Filtering
         readings = [r for r in memory_store['sensor_readings']
                    if r['sensor_id'] == sensor_id]
 
         if since:
             readings = [r for r in readings if r['timestamp'] > since]
 
-        # 최신순 정렬 및 제한
+        # Sort by latest and limit
         readings = sorted(readings, key=lambda x: x['timestamp'],
                          reverse=True)[:limit]
 
@@ -326,7 +326,7 @@ def get_sensor_data(sensor_id):
 
 @app.route('/api/sensors/<sensor_id>/latest', methods=['GET'])
 def get_latest_reading(sensor_id):
-    """최신 센서 데이터 조회"""
+    """Get latest sensor data"""
     import json
 
     if USE_SQLITE:
@@ -360,7 +360,7 @@ def get_latest_reading(sensor_id):
 
 @app.route('/api/sensors/<sensor_id>/stats', methods=['GET'])
 def get_sensor_stats(sensor_id):
-    """센서 데이터 통계 (숫자 필드)"""
+    """Sensor data statistics (numeric fields)"""
     import json
 
     field = request.args.get('field', 'temperature')
@@ -410,12 +410,12 @@ def get_sensor_stats(sensor_id):
     return jsonify(stats)
 
 
-# === 장치 API ===
+# === Device API ===
 
 @app.route('/api/devices', methods=['GET'])
 def list_devices():
-    """장치 목록 조회"""
-    # 필터링
+    """List devices"""
+    # Filtering
     device_type = request.args.get('type')
     status = request.args.get('status')
 
@@ -452,7 +452,7 @@ def list_devices():
 
 @app.route('/api/devices', methods=['POST'])
 def create_device():
-    """장치 등록"""
+    """Register device"""
     data = request.get_json()
 
     required_fields = ['id', 'name', 'type']
@@ -498,7 +498,7 @@ def create_device():
 
 @app.route('/api/devices/<device_id>', methods=['GET'])
 def get_device(device_id):
-    """장치 정보 조회"""
+    """Get device information"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -520,7 +520,7 @@ def get_device(device_id):
 
 @app.route('/api/devices/<device_id>', methods=['PUT'])
 def update_device(device_id):
-    """장치 정보 전체 수정"""
+    """Full device update"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -533,7 +533,7 @@ def update_device(device_id):
             return jsonify({"error": "Device not found"}), 404
 
     data = request.get_json()
-    data['id'] = device_id  # ID 유지
+    data['id'] = device_id  # Preserve ID
     data['updated_at'] = datetime.now().isoformat()
 
     if USE_SQLITE:
@@ -546,7 +546,7 @@ def update_device(device_id):
         conn.commit()
         conn.close()
 
-        # 업데이트된 장치 조회
+        # Get updated device
         return get_device(device_id)
     else:
         memory_store['devices'][device_id] = data
@@ -555,7 +555,7 @@ def update_device(device_id):
 
 @app.route('/api/devices/<device_id>', methods=['DELETE'])
 def delete_device(device_id):
-    """장치 삭제"""
+    """Delete device"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -578,7 +578,7 @@ def delete_device(device_id):
 
 @app.route('/api/devices/<device_id>/command', methods=['POST'])
 def send_device_command(device_id):
-    """장치에 명령 전송 (시뮬레이션)"""
+    """Send command to device (simulation)"""
     if USE_SQLITE:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -606,8 +606,8 @@ def send_device_command(device_id):
         "sent_at": datetime.now().isoformat()
     }
 
-    # 시뮬레이션: 명령 출력
-    print(f"[명령 전송] {device_id}: {command['command']}")
+    # Simulation: print command
+    print(f"[Command sent] {device_id}: {command['command']}")
 
     return jsonify({
         "status": "sent",
@@ -615,20 +615,20 @@ def send_device_command(device_id):
     }), 202
 
 
-# === 메인 실행 ===
+# === Main Execution ===
 
 if __name__ == "__main__":
-    # SQLite 모드인 경우 데이터베이스 초기화
+    # Initialize database if SQLite mode
     if USE_SQLITE:
         init_db()
-        print(f"데이터베이스 초기화: {DB_PATH}")
+        print(f"Database initialized: {DB_PATH}")
     else:
-        print("메모리 저장소 모드 (시뮬레이션)")
+        print("In-memory storage mode (simulation)")
 
-    print("\n=== IoT REST API 서버 시작 ===")
-    print("엔드포인트: http://localhost:5000/")
-    print("API 문서: http://localhost:5000/")
-    print("\n종료: Ctrl+C")
+    print("\n=== IoT REST API Server Starting ===")
+    print("Endpoints: http://localhost:5000/")
+    print("API docs: http://localhost:5000/")
+    print("\nExit: Ctrl+C")
 
-    # Flask 서버 시작
+    # Start Flask server
     app.run(host='0.0.0.0', port=5000, debug=True)

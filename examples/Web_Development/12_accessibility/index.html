@@ -1,91 +1,91 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>웹 접근성 예제 - Web Accessibility Examples</title>
+    <title>Web Accessibility Examples</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <!-- Skip Navigation -->
-    <a href="#main-content" class="skip-link">본문으로 건너뛰기</a>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Header with proper landmarks -->
     <header role="banner">
-        <nav role="navigation" aria-label="메인 네비게이션">
+        <nav role="navigation" aria-label="Main navigation">
             <ul class="nav-list">
-                <li><a href="#semantic" aria-current="page">시맨틱 HTML</a></li>
+                <li><a href="#semantic" aria-current="page">Semantic HTML</a></li>
                 <li><a href="#aria">ARIA</a></li>
-                <li><a href="#forms">폼 접근성</a></li>
-                <li><a href="#keyboard">키보드 내비게이션</a></li>
-                <li><a href="#focus">포커스 관리</a></li>
+                <li><a href="#forms">Form Accessibility</a></li>
+                <li><a href="#keyboard">Keyboard Navigation</a></li>
+                <li><a href="#focus">Focus Management</a></li>
             </ul>
         </nav>
     </header>
 
     <main id="main-content" role="main">
-        <h1>웹 접근성 (Web Accessibility) 예제</h1>
+        <h1>Web Accessibility Examples</h1>
         <p class="intro">
-            WCAG 2.1 가이드라인을 따르는 접근성 있는 웹 컴포넌트 예제입니다.
-            스크린 리더와 키보드 네비게이션을 테스트해 보세요.
+            Examples of accessible web components following WCAG 2.1 guidelines.
+            Test with screen readers and keyboard navigation.
         </p>
 
         <!-- Section 1: Semantic HTML -->
         <section id="semantic" aria-labelledby="semantic-heading">
-            <h2 id="semantic-heading">1. 시맨틱 HTML</h2>
+            <h2 id="semantic-heading">1. Semantic HTML</h2>
 
             <article>
-                <h3>시맨틱 요소 사용</h3>
-                <p>적절한 HTML 요소를 사용하면 접근성이 자동으로 향상됩니다.</p>
+                <h3>Using Semantic Elements</h3>
+                <p>Using appropriate HTML elements automatically improves accessibility.</p>
 
                 <div class="example-box">
-                    <h4>올바른 헤딩 구조</h4>
-                    <pre><code>&lt;h1&gt;페이지 제목&lt;/h1&gt;
-&lt;h2&gt;섹션 제목&lt;/h2&gt;
-&lt;h3&gt;하위 섹션&lt;/h3&gt;</code></pre>
+                    <h4>Proper Heading Structure</h4>
+                    <pre><code>&lt;h1&gt;Page Title&lt;/h1&gt;
+&lt;h2&gt;Section Title&lt;/h2&gt;
+&lt;h3&gt;Subsection&lt;/h3&gt;</code></pre>
                 </div>
 
                 <div class="example-box">
-                    <h4>리스트 구조</h4>
+                    <h4>List Structure</h4>
                     <ul>
-                        <li>항목 1: 순서 없는 리스트 (ul)</li>
-                        <li>항목 2: 스크린 리더가 항목 수를 알려줌</li>
-                        <li>항목 3: 네비게이션에도 활용</li>
+                        <li>Item 1: Unordered list (ul)</li>
+                        <li>Item 2: Screen readers announce the number of items</li>
+                        <li>Item 3: Also useful for navigation</li>
                     </ul>
 
                     <ol>
-                        <li>첫 번째: 순서 있는 리스트 (ol)</li>
-                        <li>두 번째: 순서가 중요할 때 사용</li>
-                        <li>세 번째: 단계별 설명에 적합</li>
+                        <li>First: Ordered list (ol)</li>
+                        <li>Second: Used when order matters</li>
+                        <li>Third: Suitable for step-by-step instructions</li>
                     </ol>
 
                     <dl>
-                        <dt>정의 리스트 (dl)</dt>
-                        <dd>용어와 설명을 짝지을 때 사용합니다.</dd>
-                        <dt>접근성</dt>
-                        <dd>모든 사용자가 웹을 이용할 수 있도록 하는 것</dd>
+                        <dt>Definition list (dl)</dt>
+                        <dd>Used to pair terms with their descriptions.</dd>
+                        <dt>Accessibility</dt>
+                        <dd>Making the web usable for all users</dd>
                     </dl>
                 </div>
             </article>
 
             <article>
-                <h3>이미지 대체 텍스트</h3>
+                <h3>Image Alternative Text</h3>
                 <div class="image-examples">
-                    <!-- 정보를 전달하는 이미지 -->
+                    <!-- Informative image -->
                     <figure>
                         <img src="https://via.placeholder.com/200x150/4CAF50/ffffff?text=Info+Image"
-                             alt="정보를 전달하는 이미지: 초록색 배경에 흰색 텍스트"
+                             alt="Informative image: white text on green background"
                              width="200" height="150">
-                        <figcaption>정보 전달 이미지 - alt 텍스트 필수</figcaption>
+                        <figcaption>Informative image - alt text required</figcaption>
                     </figure>
 
-                    <!-- 장식용 이미지 -->
+                    <!-- Decorative image -->
                     <figure>
                         <img src="https://via.placeholder.com/200x150/cccccc/999999?text=Decorative"
                              alt=""
                              role="presentation"
                              width="200" height="150">
-                        <figcaption>장식용 이미지 - alt="" 사용</figcaption>
+                        <figcaption>Decorative image - use alt=""</figcaption>
                     </figure>
                 </div>
             </article>
@@ -96,30 +96,30 @@
             <h2 id="aria-heading">2. ARIA (Accessible Rich Internet Applications)</h2>
 
             <article>
-                <h3>ARIA 역할 (Roles)</h3>
+                <h3>ARIA Roles</h3>
                 <div class="example-box">
                     <!-- Alert -->
                     <div role="alert" class="alert alert-warning">
-                        <strong>경고:</strong> 이것은 role="alert"를 가진 메시지입니다.
-                        스크린 리더가 즉시 읽어줍니다.
+                        <strong>Warning:</strong> This is a message with role="alert".
+                        Screen readers will announce it immediately.
                     </div>
 
                     <!-- Status -->
                     <div role="status" aria-live="polite" class="status-message">
-                        현재 상태: 정상 (role="status")
+                        Current status: Normal (role="status")
                     </div>
 
                     <!-- Search -->
                     <div role="search">
-                        <label for="search-input">검색:</label>
-                        <input type="search" id="search-input" placeholder="검색어 입력">
-                        <button type="submit">검색</button>
+                        <label for="search-input">Search:</label>
+                        <input type="search" id="search-input" placeholder="Enter search term">
+                        <button type="submit">Search</button>
                     </div>
                 </div>
             </article>
 
             <article>
-                <h3>ARIA 상태와 속성</h3>
+                <h3>ARIA States and Properties</h3>
                 <div class="example-box">
                     <!-- Expandable section -->
                     <button
@@ -127,27 +127,27 @@
                         aria-expanded="false"
                         aria-controls="accordion-content"
                         class="accordion-button">
-                        <span>아코디언 열기/닫기</span>
+                        <span>Open/Close Accordion</span>
                         <span aria-hidden="true" class="icon">▼</span>
                     </button>
                     <div
                         id="accordion-content"
                         class="accordion-content"
                         hidden>
-                        <p>이 내용은 아코디언이 펼쳐졌을 때 표시됩니다.</p>
-                        <p>aria-expanded와 aria-controls로 상태를 전달합니다.</p>
+                        <p>This content is displayed when the accordion is expanded.</p>
+                        <p>State is conveyed using aria-expanded and aria-controls.</p>
                     </div>
 
                     <!-- Progress -->
                     <div class="progress-demo">
-                        <label for="progress-demo">진행률:</label>
+                        <label for="progress-demo">Progress:</label>
                         <div
                             id="progress-demo"
                             role="progressbar"
                             aria-valuenow="60"
                             aria-valuemin="0"
                             aria-valuemax="100"
-                            aria-label="파일 업로드 진행률"
+                            aria-label="File upload progress"
                             class="progress-bar">
                             <div class="progress-fill" style="width: 60%">60%</div>
                         </div>
@@ -155,14 +155,14 @@
 
                     <!-- Tab panel -->
                     <div class="tabs-demo">
-                        <div role="tablist" aria-label="샘플 탭">
+                        <div role="tablist" aria-label="Sample tabs">
                             <button
                                 role="tab"
                                 id="tab1"
                                 aria-selected="true"
                                 aria-controls="panel1"
                                 tabindex="0">
-                                탭 1
+                                Tab 1
                             </button>
                             <button
                                 role="tab"
@@ -170,7 +170,7 @@
                                 aria-selected="false"
                                 aria-controls="panel2"
                                 tabindex="-1">
-                                탭 2
+                                Tab 2
                             </button>
                             <button
                                 role="tab"
@@ -178,7 +178,7 @@
                                 aria-selected="false"
                                 aria-controls="panel3"
                                 tabindex="-1">
-                                탭 3
+                                Tab 3
                             </button>
                         </div>
                         <div
@@ -186,7 +186,7 @@
                             id="panel1"
                             aria-labelledby="tab1"
                             tabindex="0">
-                            <p>탭 1의 내용입니다.</p>
+                            <p>Content of Tab 1.</p>
                         </div>
                         <div
                             role="tabpanel"
@@ -194,7 +194,7 @@
                             aria-labelledby="tab2"
                             tabindex="0"
                             hidden>
-                            <p>탭 2의 내용입니다.</p>
+                            <p>Content of Tab 2.</p>
                         </div>
                         <div
                             role="tabpanel"
@@ -202,7 +202,7 @@
                             aria-labelledby="tab3"
                             tabindex="0"
                             hidden>
-                            <p>탭 3의 내용입니다.</p>
+                            <p>Content of Tab 3.</p>
                         </div>
                     </div>
                 </div>
@@ -211,13 +211,13 @@
             <article>
                 <h3>Live Regions</h3>
                 <div class="example-box">
-                    <button id="update-live-btn">실시간 업데이트</button>
+                    <button id="update-live-btn">Live Update</button>
                     <div
                         id="live-region"
                         aria-live="polite"
                         aria-atomic="true"
                         class="live-region">
-                        여기에 실시간 메시지가 표시됩니다.
+                        Real-time messages will be displayed here.
                     </div>
                 </div>
             </article>
@@ -225,17 +225,17 @@
 
         <!-- Section 3: Accessible Forms -->
         <section id="forms" aria-labelledby="forms-heading">
-            <h2 id="forms-heading">3. 접근성 있는 폼</h2>
+            <h2 id="forms-heading">3. Accessible Forms</h2>
 
             <form id="accessible-form" novalidate>
                 <fieldset>
-                    <legend>개인 정보</legend>
+                    <legend>Personal Information</legend>
 
                     <!-- Required field with label -->
                     <div class="form-group">
                         <label for="name">
-                            이름 <span class="required" aria-hidden="true">*</span>
-                            <span class="sr-only">(필수)</span>
+                            Name <span class="required" aria-hidden="true">*</span>
+                            <span class="sr-only">(required)</span>
                         </label>
                         <input
                             type="text"
@@ -244,14 +244,14 @@
                             required
                             aria-required="true"
                             aria-describedby="name-hint">
-                        <span id="name-hint" class="hint">한글 또는 영문으로 입력</span>
+                        <span id="name-hint" class="hint">Enter in Korean or English</span>
                     </div>
 
                     <!-- Email with validation -->
                     <div class="form-group">
                         <label for="email">
-                            이메일 <span class="required" aria-hidden="true">*</span>
-                            <span class="sr-only">(필수)</span>
+                            Email <span class="required" aria-hidden="true">*</span>
+                            <span class="sr-only">(required)</span>
                         </label>
                         <input
                             type="email"
@@ -266,7 +266,7 @@
 
                     <!-- Phone with input mask hint -->
                     <div class="form-group">
-                        <label for="phone">전화번호</label>
+                        <label for="phone">Phone Number</label>
                         <input
                             type="tel"
                             id="phone"
@@ -274,166 +274,166 @@
                             placeholder="010-1234-5678"
                             pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}"
                             aria-describedby="phone-hint">
-                        <span id="phone-hint" class="hint">형식: 010-1234-5678</span>
+                        <span id="phone-hint" class="hint">Format: 010-1234-5678</span>
                     </div>
                 </fieldset>
 
                 <fieldset>
-                    <legend>연락 선호 방법</legend>
+                    <legend>Preferred Contact Method</legend>
 
                     <div class="radio-group" role="radiogroup" aria-labelledby="contact-method-label">
-                        <span id="contact-method-label" class="sr-only">연락 방법 선택</span>
+                        <span id="contact-method-label" class="sr-only">Select contact method</span>
 
                         <div class="radio-option">
                             <input type="radio" id="contact-email" name="contact" value="email" checked>
-                            <label for="contact-email">이메일</label>
+                            <label for="contact-email">Email</label>
                         </div>
 
                         <div class="radio-option">
                             <input type="radio" id="contact-phone" name="contact" value="phone">
-                            <label for="contact-phone">전화</label>
+                            <label for="contact-phone">Phone</label>
                         </div>
 
                         <div class="radio-option">
                             <input type="radio" id="contact-sms" name="contact" value="sms">
-                            <label for="contact-sms">문자</label>
+                            <label for="contact-sms">Text Message</label>
                         </div>
                     </div>
                 </fieldset>
 
                 <fieldset>
-                    <legend>관심 분야 (복수 선택 가능)</legend>
+                    <legend>Interests (multiple selection allowed)</legend>
 
                     <div class="checkbox-group">
                         <div class="checkbox-option">
                             <input type="checkbox" id="interest-web" name="interests" value="web">
-                            <label for="interest-web">웹 개발</label>
+                            <label for="interest-web">Web Development</label>
                         </div>
 
                         <div class="checkbox-option">
                             <input type="checkbox" id="interest-mobile" name="interests" value="mobile">
-                            <label for="interest-mobile">모바일 앱</label>
+                            <label for="interest-mobile">Mobile Apps</label>
                         </div>
 
                         <div class="checkbox-option">
                             <input type="checkbox" id="interest-ai" name="interests" value="ai">
-                            <label for="interest-ai">인공지능</label>
+                            <label for="interest-ai">Artificial Intelligence</label>
                         </div>
                     </div>
                 </fieldset>
 
                 <fieldset>
-                    <legend>추가 정보</legend>
+                    <legend>Additional Information</legend>
 
                     <div class="form-group">
-                        <label for="country">국가</label>
+                        <label for="country">Country</label>
                         <select id="country" name="country">
-                            <option value="">선택하세요</option>
-                            <option value="kr">대한민국</option>
-                            <option value="us">미국</option>
-                            <option value="jp">일본</option>
-                            <option value="cn">중국</option>
+                            <option value="">Please select</option>
+                            <option value="kr">South Korea</option>
+                            <option value="us">United States</option>
+                            <option value="jp">Japan</option>
+                            <option value="cn">China</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="message">메시지</label>
+                        <label for="message">Message</label>
                         <textarea
                             id="message"
                             name="message"
                             rows="4"
                             aria-describedby="message-hint"></textarea>
-                        <span id="message-hint" class="hint">최대 500자</span>
+                        <span id="message-hint" class="hint">Maximum 500 characters</span>
                     </div>
                 </fieldset>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn-primary">제출</button>
-                    <button type="reset" class="btn-secondary">초기화</button>
+                    <button type="submit" class="btn-primary">Submit</button>
+                    <button type="reset" class="btn-secondary">Reset</button>
                 </div>
             </form>
         </section>
 
         <!-- Section 4: Keyboard Navigation -->
         <section id="keyboard" aria-labelledby="keyboard-heading">
-            <h2 id="keyboard-heading">4. 키보드 내비게이션</h2>
+            <h2 id="keyboard-heading">4. Keyboard Navigation</h2>
 
             <article>
-                <h3>키보드 단축키</h3>
+                <h3>Keyboard Shortcuts</h3>
                 <table class="keyboard-shortcuts">
-                    <caption>주요 키보드 단축키</caption>
+                    <caption>Key Keyboard Shortcuts</caption>
                     <thead>
                         <tr>
-                            <th scope="col">키</th>
-                            <th scope="col">동작</th>
+                            <th scope="col">Key</th>
+                            <th scope="col">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td><kbd>Tab</kbd></td>
-                            <td>다음 포커스 가능한 요소로 이동</td>
+                            <td>Move to next focusable element</td>
                         </tr>
                         <tr>
                             <td><kbd>Shift</kbd> + <kbd>Tab</kbd></td>
-                            <td>이전 포커스 가능한 요소로 이동</td>
+                            <td>Move to previous focusable element</td>
                         </tr>
                         <tr>
                             <td><kbd>Enter</kbd> / <kbd>Space</kbd></td>
-                            <td>버튼 활성화, 링크 클릭</td>
+                            <td>Activate button, click link</td>
                         </tr>
                         <tr>
                             <td><kbd>↑</kbd> <kbd>↓</kbd></td>
-                            <td>라디오 버튼, 드롭다운 선택</td>
+                            <td>Radio button, dropdown selection</td>
                         </tr>
                         <tr>
                             <td><kbd>Esc</kbd></td>
-                            <td>모달 닫기, 동작 취소</td>
+                            <td>Close modal, cancel action</td>
                         </tr>
                     </tbody>
                 </table>
             </article>
 
             <article>
-                <h3>커스텀 키보드 내비게이션</h3>
+                <h3>Custom Keyboard Navigation</h3>
                 <div class="example-box">
-                    <p>화살표 키로 항목을 탐색하고 Enter로 선택하세요.</p>
+                    <p>Navigate items with arrow keys and select with Enter.</p>
                     <ul
                         role="listbox"
                         id="custom-listbox"
-                        aria-label="과일 선택"
+                        aria-label="Select a fruit"
                         tabindex="0"
                         class="custom-listbox">
-                        <li role="option" id="option1" aria-selected="true">🍎 사과</li>
-                        <li role="option" id="option2" aria-selected="false">🍊 오렌지</li>
-                        <li role="option" id="option3" aria-selected="false">🍇 포도</li>
-                        <li role="option" id="option4" aria-selected="false">🍓 딸기</li>
-                        <li role="option" id="option5" aria-selected="false">🍌 바나나</li>
+                        <li role="option" id="option1" aria-selected="true">🍎 Apple</li>
+                        <li role="option" id="option2" aria-selected="false">🍊 Orange</li>
+                        <li role="option" id="option3" aria-selected="false">🍇 Grape</li>
+                        <li role="option" id="option4" aria-selected="false">🍓 Strawberry</li>
+                        <li role="option" id="option5" aria-selected="false">🍌 Banana</li>
                     </ul>
-                    <p id="listbox-output" aria-live="polite">선택된 항목: 사과</p>
+                    <p id="listbox-output" aria-live="polite">Selected item: Apple</p>
                 </div>
             </article>
         </section>
 
         <!-- Section 5: Focus Management -->
         <section id="focus" aria-labelledby="focus-heading">
-            <h2 id="focus-heading">5. 포커스 관리</h2>
+            <h2 id="focus-heading">5. Focus Management</h2>
 
             <article>
-                <h3>모달 다이얼로그</h3>
+                <h3>Modal Dialog</h3>
                 <div class="example-box">
-                    <button id="open-modal-btn" class="btn-primary">모달 열기</button>
+                    <button id="open-modal-btn" class="btn-primary">Open Modal</button>
                 </div>
             </article>
 
             <article>
-                <h3>포커스 트랩 예제</h3>
+                <h3>Focus Trap Example</h3>
                 <div class="example-box">
-                    <p>아래 영역 내에서 Tab 키를 누르면 포커스가 순환합니다.</p>
+                    <p>Pressing Tab within the area below cycles focus within it.</p>
                     <div id="focus-trap-demo" class="focus-trap-area">
-                        <button>버튼 1</button>
-                        <input type="text" placeholder="입력 필드">
-                        <button>버튼 2</button>
-                        <a href="#focus">링크</a>
+                        <button>Button 1</button>
+                        <input type="text" placeholder="Input field">
+                        <button>Button 2</button>
+                        <a href="#focus">Link</a>
                     </div>
                 </div>
             </article>
@@ -441,16 +441,16 @@
 
         <!-- Color Contrast Demo -->
         <section id="contrast" aria-labelledby="contrast-heading">
-            <h2 id="contrast-heading">6. 색상 대비</h2>
+            <h2 id="contrast-heading">6. Color Contrast</h2>
 
             <div class="contrast-examples">
                 <div class="contrast-good">
-                    <h3>좋은 대비 (4.5:1 이상)</h3>
-                    <p>이 텍스트는 읽기 쉽습니다.</p>
+                    <h3>Good Contrast (4.5:1 or above)</h3>
+                    <p>This text is easy to read.</p>
                 </div>
-                <div class="contrast-bad" aria-label="나쁜 대비 예시 - 읽기 어려움">
-                    <h3>나쁜 대비 (피해야 함)</h3>
-                    <p>이 텍스트는 읽기 어렵습니다.</p>
+                <div class="contrast-bad" aria-label="Bad contrast example - hard to read">
+                    <h3>Bad Contrast (should be avoided)</h3>
+                    <p>This text is hard to read.</p>
                 </div>
             </div>
         </section>
@@ -466,23 +466,23 @@
         class="modal"
         hidden>
         <div class="modal-content">
-            <h2 id="modal-title">모달 다이얼로그</h2>
+            <h2 id="modal-title">Modal Dialog</h2>
             <p id="modal-desc">
-                이것은 접근성을 고려한 모달입니다.
-                Esc 키를 누르거나 닫기 버튼을 클릭하여 닫을 수 있습니다.
+                This is an accessibility-aware modal.
+                Press Esc or click the close button to close it.
             </p>
             <div class="modal-actions">
-                <button id="modal-confirm" class="btn-primary">확인</button>
-                <button id="modal-close" class="btn-secondary">닫기</button>
+                <button id="modal-confirm" class="btn-primary">Confirm</button>
+                <button id="modal-close" class="btn-secondary">Close</button>
             </div>
         </div>
     </div>
     <div id="modal-overlay" class="modal-overlay" hidden></div>
 
     <footer role="contentinfo">
-        <p>웹 접근성 예제 | WCAG 2.1 준수</p>
+        <p>Web Accessibility Examples | WCAG 2.1 Compliant</p>
         <p>
-            참고: <a href="https://www.w3.org/WAI/WCAG21/quickref/">WCAG 2.1 Quick Reference</a>
+            Reference: <a href="https://www.w3.org/WAI/WCAG21/quickref/">WCAG 2.1 Quick Reference</a>
         </p>
     </footer>
 

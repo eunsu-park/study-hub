@@ -1,8 +1,8 @@
 """
-분할 정복 (Divide and Conquer)
+Divide and Conquer
 Divide and Conquer Algorithms
 
-문제를 작은 부분 문제로 나누어 해결하는 알고리즘입니다.
+Algorithms that solve problems by breaking them into smaller subproblems.
 """
 
 from typing import List, Tuple, Optional
@@ -10,15 +10,15 @@ import random
 
 
 # =============================================================================
-# 1. 병합 정렬 (Merge Sort)
+# 1. Merge Sort
 # =============================================================================
 
 def merge_sort(arr: List[int]) -> List[int]:
     """
-    병합 정렬
-    시간복잡도: O(n log n)
-    공간복잡도: O(n)
-    안정 정렬
+    Merge Sort
+    Time Complexity: O(n log n)
+    Space Complexity: O(n)
+    Stable Sort
     """
     if len(arr) <= 1:
         return arr
@@ -31,7 +31,7 @@ def merge_sort(arr: List[int]) -> List[int]:
 
 
 def merge(left: List[int], right: List[int]) -> List[int]:
-    """두 정렬된 배열 병합"""
+    """Merge two sorted arrays"""
     result = []
     i = j = 0
 
@@ -49,15 +49,15 @@ def merge(left: List[int], right: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 2. 퀵 정렬 (Quick Sort)
+# 2. Quick Sort
 # =============================================================================
 
 def quick_sort(arr: List[int]) -> List[int]:
     """
-    퀵 정렬 (Lomuto 파티션)
-    시간복잡도: 평균 O(n log n), 최악 O(n²)
-    공간복잡도: O(log n) - 재귀 스택
-    불안정 정렬
+    Quick Sort (Lomuto Partition)
+    Time Complexity: Average O(n log n), Worst O(n^2)
+    Space Complexity: O(log n) - recursion stack
+    Unstable Sort
     """
     if len(arr) <= 1:
         return arr
@@ -75,8 +75,8 @@ def _quick_sort(arr: List[int], low: int, high: int) -> None:
 
 
 def partition(arr: List[int], low: int, high: int) -> int:
-    """Lomuto 파티션"""
-    # 랜덤 피벗으로 최악 케이스 방지
+    """Lomuto Partition"""
+    # Random pivot to prevent worst case
     pivot_idx = random.randint(low, high)
     arr[pivot_idx], arr[high] = arr[high], arr[pivot_idx]
 
@@ -93,13 +93,13 @@ def partition(arr: List[int], low: int, high: int) -> int:
 
 
 # =============================================================================
-# 3. 거듭제곱 (Power / Exponentiation)
+# 3. Fast Exponentiation
 # =============================================================================
 
 def power(base: int, exp: int, mod: int = None) -> int:
     """
-    빠른 거듭제곱
-    시간복잡도: O(log n)
+    Fast Exponentiation
+    Time Complexity: O(log n)
     """
     if exp == 0:
         return 1
@@ -114,7 +114,7 @@ def power(base: int, exp: int, mod: int = None) -> int:
 
 
 def power_iterative(base: int, exp: int, mod: int = None) -> int:
-    """빠른 거듭제곱 (반복)"""
+    """Fast Exponentiation (Iterative)"""
     result = 1
 
     while exp > 0:
@@ -131,11 +131,11 @@ def power_iterative(base: int, exp: int, mod: int = None) -> int:
 
 
 # =============================================================================
-# 4. 행렬 거듭제곱 (Matrix Exponentiation)
+# 4. Matrix Exponentiation
 # =============================================================================
 
 def matrix_multiply(A: List[List[int]], B: List[List[int]], mod: int = None) -> List[List[int]]:
-    """2x2 행렬 곱셈"""
+    """2x2 Matrix Multiplication"""
     n = len(A)
     C = [[0] * n for _ in range(n)]
 
@@ -151,11 +151,11 @@ def matrix_multiply(A: List[List[int]], B: List[List[int]], mod: int = None) -> 
 
 def matrix_power(M: List[List[int]], exp: int, mod: int = None) -> List[List[int]]:
     """
-    행렬 거듭제곱
-    시간복잡도: O(k³ log n), k = 행렬 크기
+    Matrix Exponentiation
+    Time Complexity: O(k^3 log n), k = matrix size
     """
     n = len(M)
-    # 단위 행렬
+    # Identity matrix
     result = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
 
     while exp > 0:
@@ -169,8 +169,8 @@ def matrix_power(M: List[List[int]], exp: int, mod: int = None) -> List[List[int
 
 def fibonacci_matrix(n: int, mod: int = None) -> int:
     """
-    피보나치 수열 (행렬 거듭제곱)
-    시간복잡도: O(log n)
+    Fibonacci Sequence (Matrix Exponentiation)
+    Time Complexity: O(log n)
     """
     if n <= 1:
         return n
@@ -182,14 +182,14 @@ def fibonacci_matrix(n: int, mod: int = None) -> int:
 
 
 # =============================================================================
-# 5. 역순 쌍 개수 (Inversion Count)
+# 5. Inversion Count
 # =============================================================================
 
 def count_inversions(arr: List[int]) -> int:
     """
-    역순 쌍 개수 (i < j이면서 arr[i] > arr[j])
-    병합 정렬 변형
-    시간복잡도: O(n log n)
+    Count inversion pairs (i < j but arr[i] > arr[j])
+    Merge sort variant
+    Time Complexity: O(n log n)
     """
 
     def merge_count(arr: List[int]) -> Tuple[List[int], int]:
@@ -210,7 +210,7 @@ def count_inversions(arr: List[int]) -> int:
                 i += 1
             else:
                 merged.append(right[j])
-                inversions += len(left) - i  # 남은 왼쪽 요소 수만큼 역순
+                inversions += len(left) - i  # Remaining left elements count as inversions
                 j += 1
 
         merged.extend(left[i:])
@@ -223,24 +223,24 @@ def count_inversions(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 6. 가장 가까운 점 쌍 (Closest Pair of Points)
+# 6. Closest Pair of Points
 # =============================================================================
 
 def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
-    """두 점 사이 거리"""
+    """Distance between two points"""
     return ((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2) ** 0.5
 
 
 def closest_pair(points: List[Tuple[float, float]]) -> float:
     """
-    가장 가까운 두 점 사이의 거리
-    시간복잡도: O(n log n)
+    Distance between the closest pair of points
+    Time Complexity: O(n log n)
     """
 
     def closest_recursive(px: List, py: List) -> float:
         n = len(px)
 
-        # 기저 케이스: 브루트 포스
+        # Base case: brute force
         if n <= 3:
             min_dist = float('inf')
             for i in range(n):
@@ -251,7 +251,7 @@ def closest_pair(points: List[Tuple[float, float]]) -> float:
         mid = n // 2
         mid_point = px[mid]
 
-        # x좌표 기준 분할
+        # Split by x-coordinate
         pyl = [p for p in py if p[0] <= mid_point[0]]
         pyr = [p for p in py if p[0] > mid_point[0]]
 
@@ -260,10 +260,10 @@ def closest_pair(points: List[Tuple[float, float]]) -> float:
 
         d = min(dl, dr)
 
-        # 중간 띠에서 확인
+        # Check the middle strip
         strip = [p for p in py if abs(p[0] - mid_point[0]) < d]
 
-        # 띠 내 점들 비교 (최대 7개만 확인)
+        # Compare points within the strip (check at most 7)
         for i in range(len(strip)):
             for j in range(i + 1, min(i + 7, len(strip))):
                 if strip[j][1] - strip[i][1] >= d:
@@ -279,24 +279,24 @@ def closest_pair(points: List[Tuple[float, float]]) -> float:
 
 
 # =============================================================================
-# 7. 최대 부분 배열 합 (Maximum Subarray - D&C)
+# 7. Maximum Subarray Sum (D&C)
 # =============================================================================
 
 def max_subarray_dc(arr: List[int]) -> int:
     """
-    최대 부분 배열 합 (분할 정복)
-    시간복잡도: O(n log n)
+    Maximum Subarray Sum (Divide and Conquer)
+    Time Complexity: O(n log n)
     """
 
     def max_crossing_sum(arr: List[int], low: int, mid: int, high: int) -> int:
-        # 왼쪽 최대
+        # Left maximum
         left_sum = float('-inf')
         total = 0
         for i in range(mid, low - 1, -1):
             total += arr[i]
             left_sum = max(left_sum, total)
 
-        # 오른쪽 최대
+        # Right maximum
         right_sum = float('-inf')
         total = 0
         for i in range(mid + 1, high + 1):
@@ -323,19 +323,19 @@ def max_subarray_dc(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 8. 카라츠바 곱셈 (Karatsuba Multiplication)
+# 8. Karatsuba Multiplication
 # =============================================================================
 
 def karatsuba(x: int, y: int) -> int:
     """
-    카라츠바 큰 수 곱셈
-    시간복잡도: O(n^1.585)
+    Karatsuba Large Number Multiplication
+    Time Complexity: O(n^1.585)
     """
-    # 기저 케이스
+    # Base case
     if x < 10 or y < 10:
         return x * y
 
-    # 자릿수 계산
+    # Calculate number of digits
     n = max(len(str(x)), len(str(y)))
     m = n // 2
 
@@ -345,7 +345,7 @@ def karatsuba(x: int, y: int) -> int:
     a, b = divmod(x, divisor)
     c, d = divmod(y, divisor)
 
-    # 세 번의 곱셈
+    # Three multiplications
     ac = karatsuba(a, c)
     bd = karatsuba(b, d)
     ad_bc = karatsuba(a + b, c + d) - ac - bd
@@ -354,22 +354,22 @@ def karatsuba(x: int, y: int) -> int:
 
 
 # =============================================================================
-# 9. 스트라센 행렬 곱셈 (Strassen's Matrix Multiplication)
+# 9. Strassen's Matrix Multiplication
 # =============================================================================
 
 def strassen(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
     """
-    스트라센 행렬 곱셈
-    시간복잡도: O(n^2.807)
-    (실제로는 작은 행렬에서 오버헤드가 크므로 기준 크기 이하는 일반 곱셈)
+    Strassen's Matrix Multiplication
+    Time Complexity: O(n^2.807)
+    (For small matrices, overhead is large, so naive multiplication is used below a threshold)
     """
     n = len(A)
 
-    # 기저 케이스
-    if n <= 64:  # 임계값
+    # Base case
+    if n <= 64:  # Threshold
         return naive_matrix_multiply(A, B)
 
-    # 행렬 분할
+    # Split matrices
     mid = n // 2
 
     A11 = [row[:mid] for row in A[:mid]]
@@ -382,7 +382,7 @@ def strassen(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
     B21 = [row[:mid] for row in B[mid:]]
     B22 = [row[mid:] for row in B[mid:]]
 
-    # 7개의 곱셈 (스트라센 공식)
+    # 7 multiplications (Strassen's formulas)
     M1 = strassen(matrix_add(A11, A22), matrix_add(B11, B22))
     M2 = strassen(matrix_add(A21, A22), B11)
     M3 = strassen(A11, matrix_sub(B12, B22))
@@ -391,7 +391,7 @@ def strassen(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
     M6 = strassen(matrix_sub(A21, A11), matrix_add(B11, B12))
     M7 = strassen(matrix_sub(A12, A22), matrix_add(B21, B22))
 
-    # 결과 조합
+    # Combine results
     C11 = matrix_add(matrix_sub(matrix_add(M1, M4), M5), M7)
     C12 = matrix_add(M3, M5)
     C21 = matrix_add(M2, M4)
@@ -401,7 +401,7 @@ def strassen(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
 
 
 def naive_matrix_multiply(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
-    """일반 행렬 곱셈"""
+    """Naive matrix multiplication"""
     n = len(A)
     C = [[0] * n for _ in range(n)]
     for i in range(n):
@@ -412,19 +412,19 @@ def naive_matrix_multiply(A: List[List[int]], B: List[List[int]]) -> List[List[i
 
 
 def matrix_add(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
-    """행렬 덧셈"""
+    """Matrix addition"""
     n = len(A)
     return [[A[i][j] + B[i][j] for j in range(n)] for i in range(n)]
 
 
 def matrix_sub(A: List[List[int]], B: List[List[int]]) -> List[List[int]]:
-    """행렬 뺄셈"""
+    """Matrix subtraction"""
     n = len(A)
     return [[A[i][j] - B[i][j] for j in range(n)] for i in range(n)]
 
 
 def combine_matrices(C11, C12, C21, C22) -> List[List[int]]:
-    """4개의 부분 행렬 결합"""
+    """Combine 4 submatrices"""
     n = len(C11)
     result = [[0] * (2 * n) for _ in range(2 * n)]
     for i in range(n):
@@ -437,67 +437,67 @@ def combine_matrices(C11, C12, C21, C22) -> List[List[int]]:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("분할 정복 (Divide and Conquer) 예제")
+    print("Divide and Conquer Examples")
     print("=" * 60)
 
-    # 1. 병합 정렬
-    print("\n[1] 병합 정렬")
+    # 1. Merge Sort
+    print("\n[1] Merge Sort")
     arr = [64, 34, 25, 12, 22, 11, 90]
     sorted_arr = merge_sort(arr)
-    print(f"    원본: {arr}")
-    print(f"    정렬: {sorted_arr}")
+    print(f"    Original: {arr}")
+    print(f"    Sorted: {sorted_arr}")
 
-    # 2. 퀵 정렬
-    print("\n[2] 퀵 정렬")
+    # 2. Quick Sort
+    print("\n[2] Quick Sort")
     arr = [64, 34, 25, 12, 22, 11, 90]
     sorted_arr = quick_sort(arr)
-    print(f"    원본: {arr}")
-    print(f"    정렬: {sorted_arr}")
+    print(f"    Original: {arr}")
+    print(f"    Sorted: {sorted_arr}")
 
-    # 3. 빠른 거듭제곱
-    print("\n[3] 빠른 거듭제곱")
+    # 3. Fast Exponentiation
+    print("\n[3] Fast Exponentiation")
     print(f"    2^10 = {power(2, 10)}")
-    print(f"    2^10 (반복) = {power_iterative(2, 10)}")
+    print(f"    2^10 (iterative) = {power_iterative(2, 10)}")
     print(f"    3^7 mod 1000 = {power(3, 7, 1000)}")
 
-    # 4. 피보나치 (행렬 거듭제곱)
-    print("\n[4] 피보나치 (행렬 거듭제곱)")
+    # 4. Fibonacci (Matrix Exponentiation)
+    print("\n[4] Fibonacci (Matrix Exponentiation)")
     for n in [10, 20, 50]:
         fib = fibonacci_matrix(n)
         print(f"    F({n}) = {fib}")
 
-    # 5. 역순 쌍 개수
-    print("\n[5] 역순 쌍 개수")
+    # 5. Inversion Count
+    print("\n[5] Inversion Count")
     arr = [2, 4, 1, 3, 5]
     inv = count_inversions(arr)
-    print(f"    배열: {arr}")
-    print(f"    역순 쌍: {inv}개")
+    print(f"    Array: {arr}")
+    print(f"    Inversion pairs: {inv}")
 
-    # 6. 가장 가까운 점 쌍
-    print("\n[6] 가장 가까운 점 쌍")
+    # 6. Closest Pair of Points
+    print("\n[6] Closest Pair of Points")
     points = [(2, 3), (12, 30), (40, 50), (5, 1), (12, 10), (3, 4)]
     dist = closest_pair(points)
-    print(f"    점들: {points}")
-    print(f"    최소 거리: {dist:.4f}")
+    print(f"    Points: {points}")
+    print(f"    Minimum distance: {dist:.4f}")
 
-    # 7. 최대 부분 배열 합 (D&C)
-    print("\n[7] 최대 부분 배열 합 (분할 정복)")
+    # 7. Maximum Subarray Sum (D&C)
+    print("\n[7] Maximum Subarray Sum (Divide and Conquer)")
     arr = [-2, 1, -3, 4, -1, 2, 1, -5, 4]
     max_sum = max_subarray_dc(arr)
-    print(f"    배열: {arr}")
-    print(f"    최대 합: {max_sum}")
+    print(f"    Array: {arr}")
+    print(f"    Maximum sum: {max_sum}")
 
-    # 8. 카라츠바 곱셈
-    print("\n[8] 카라츠바 곱셈")
+    # 8. Karatsuba Multiplication
+    print("\n[8] Karatsuba Multiplication")
     x, y = 1234, 5678
     result = karatsuba(x, y)
-    print(f"    {x} × {y} = {result}")
-    print(f"    검증: {x * y}")
+    print(f"    {x} x {y} = {result}")
+    print(f"    Verification: {x * y}")
 
     print("\n" + "=" * 60)
 

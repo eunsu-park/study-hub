@@ -1,9 +1,9 @@
 """
-다익스트라 알고리즘 (Dijkstra's Algorithm)
+Dijkstra's Algorithm
 Dijkstra's Shortest Path Algorithm
 
-가중치가 있는 그래프에서 단일 출발점 최단 경로를 찾는 알고리즘입니다.
-음의 가중치가 없는 그래프에서 사용합니다.
+Finds the single-source shortest path in a weighted graph.
+Used for graphs without negative weights.
 """
 
 import heapq
@@ -12,11 +12,11 @@ from typing import List, Dict, Tuple, Optional
 
 
 # =============================================================================
-# 가중치 그래프 표현
+# Weighted Graph Representation
 # =============================================================================
 def create_weighted_graph(edges: List[Tuple[int, int, int]], directed: bool = False) -> Dict[int, List[Tuple[int, int]]]:
     """
-    간선 리스트 (u, v, weight)로부터 가중치 인접 리스트 생성
+    Create weighted adjacency list from edge list (u, v, weight)
     graph[u] = [(v, weight), ...]
     """
     graph = defaultdict(list)
@@ -28,36 +28,36 @@ def create_weighted_graph(edges: List[Tuple[int, int, int]], directed: bool = Fa
 
 
 # =============================================================================
-# 1. 다익스트라 기본 구현
+# 1. Basic Dijkstra Implementation
 # =============================================================================
 def dijkstra(graph: Dict[int, List[Tuple[int, int]]], start: int, n: int) -> List[int]:
     """
-    다익스트라 알고리즘 (우선순위 큐 사용)
-    시간복잡도: O((V + E) log V)
+    Dijkstra's Algorithm (using priority queue)
+    Time Complexity: O((V + E) log V)
 
     Args:
-        graph: 인접 리스트 (노드 -> [(이웃, 가중치), ...])
-        start: 시작 노드
-        n: 총 노드 수
+        graph: Adjacency list (node -> [(neighbor, weight), ...])
+        start: Starting node
+        n: Total number of nodes
 
     Returns:
-        각 노드까지의 최단 거리 배열 (도달 불가시 무한대)
+        Array of shortest distances to each node (infinity if unreachable)
     """
     INF = float('inf')
     dist = [INF] * n
     dist[start] = 0
 
-    # (거리, 노드) 튜플을 저장하는 최소 힙
+    # Min heap storing (distance, node) tuples
     pq = [(0, start)]
 
     while pq:
         d, u = heapq.heappop(pq)
 
-        # 이미 처리된 거리보다 크면 스킵
+        # Skip if already processed with shorter distance
         if d > dist[u]:
             continue
 
-        # 인접 노드 확인
+        # Check adjacent nodes
         for v, weight in graph[u]:
             new_dist = dist[u] + weight
             if new_dist < dist[v]:
@@ -68,7 +68,7 @@ def dijkstra(graph: Dict[int, List[Tuple[int, int]]], start: int, n: int) -> Lis
 
 
 # =============================================================================
-# 2. 다익스트라 + 경로 추적
+# 2. Dijkstra + Path Tracking
 # =============================================================================
 def dijkstra_with_path(
     graph: Dict[int, List[Tuple[int, int]]],
@@ -77,7 +77,7 @@ def dijkstra_with_path(
     n: int
 ) -> Tuple[int, List[int]]:
     """
-    최단 거리와 함께 실제 경로도 반환
+    Returns shortest distance along with the actual path
     """
     INF = float('inf')
     dist = [INF] * n
@@ -102,7 +102,7 @@ def dijkstra_with_path(
                 parent[v] = u
                 heapq.heappush(pq, (new_dist, v))
 
-    # 경로 복원
+    # Reconstruct path
     if dist[end] == INF:
         return INF, []
 
@@ -117,26 +117,26 @@ def dijkstra_with_path(
 
 
 # =============================================================================
-# 3. 모든 쌍 최단 경로 (플로이드-워셜)
+# 3. All-Pairs Shortest Path (Floyd-Warshall)
 # =============================================================================
 def floyd_warshall(n: int, edges: List[Tuple[int, int, int]]) -> List[List[int]]:
     """
-    플로이드-워셜 알고리즘
-    모든 정점 쌍 사이의 최단 거리 계산
-    시간복잡도: O(V³)
+    Floyd-Warshall Algorithm
+    Computes shortest distances between all pairs of vertices
+    Time Complexity: O(V^3)
     """
     INF = float('inf')
     dist = [[INF] * n for _ in range(n)]
 
-    # 자기 자신으로의 거리는 0
+    # Distance to self is 0
     for i in range(n):
         dist[i][i] = 0
 
-    # 간선 정보 반영
+    # Apply edge information
     for u, v, w in edges:
         dist[u][v] = w
 
-    # k를 경유하는 경로 고려
+    # Consider paths through vertex k
     for k in range(n):
         for i in range(n):
             for j in range(n):
@@ -147,28 +147,28 @@ def floyd_warshall(n: int, edges: List[Tuple[int, int, int]]) -> List[List[int]]
 
 
 # =============================================================================
-# 4. 벨만-포드 알고리즘 (음의 가중치 허용)
+# 4. Bellman-Ford Algorithm (Allows Negative Weights)
 # =============================================================================
 def bellman_ford(n: int, edges: List[Tuple[int, int, int]], start: int) -> Tuple[List[int], bool]:
     """
-    벨만-포드 알고리즘
-    음의 가중치를 허용하며, 음의 사이클 검출 가능
-    시간복잡도: O(VE)
+    Bellman-Ford Algorithm
+    Allows negative weights and detects negative cycles
+    Time Complexity: O(VE)
 
     Returns:
-        (최단 거리 배열, 음의 사이클 존재 여부)
+        (shortest distance array, whether negative cycle exists)
     """
     INF = float('inf')
     dist = [INF] * n
     dist[start] = 0
 
-    # V-1번 반복
+    # Repeat V-1 times
     for _ in range(n - 1):
         for u, v, w in edges:
             if dist[u] != INF and dist[u] + w < dist[v]:
                 dist[v] = dist[u] + w
 
-    # 음의 사이클 검출 (한 번 더 반복해서 갱신되면 음의 사이클)
+    # Detect negative cycle (if update occurs on one more iteration, negative cycle exists)
     has_negative_cycle = False
     for u, v, w in edges:
         if dist[u] != INF and dist[u] + w < dist[v]:
@@ -179,28 +179,28 @@ def bellman_ford(n: int, edges: List[Tuple[int, int, int]], start: int) -> Tuple
 
 
 # =============================================================================
-# 5. 네트워크 지연 시간 문제
+# 5. Network Delay Time Problem
 # =============================================================================
 def network_delay_time(times: List[List[int]], n: int, k: int) -> int:
     """
-    노드 k에서 모든 노드로 신호가 도달하는 최소 시간
+    Minimum time for signal to reach all nodes from node k
     times[i] = [source, target, time]
-    도달 불가능하면 -1 반환
+    Returns -1 if not all nodes are reachable
     """
     graph = defaultdict(list)
     for u, v, w in times:
         graph[u].append((v, w))
 
-    dist = dijkstra(graph, k, n + 1)  # 노드 번호가 1부터 시작
+    dist = dijkstra(graph, k, n + 1)  # Node numbers start from 1
 
-    # 1~n번 노드 중 최대 거리
+    # Maximum distance among nodes 1~n
     max_time = max(dist[1:n + 1])
 
     return max_time if max_time != float('inf') else -1
 
 
 # =============================================================================
-# 6. K번째 최단 경로
+# 6. Kth Shortest Path
 # =============================================================================
 def kth_shortest_path(
     graph: Dict[int, List[Tuple[int, int]]],
@@ -210,11 +210,11 @@ def kth_shortest_path(
     n: int
 ) -> int:
     """
-    K번째로 짧은 경로의 길이 반환
-    찾을 수 없으면 -1 반환
+    Return the length of the kth shortest path
+    Returns -1 if not found
     """
     INF = float('inf')
-    count = [0] * n  # 각 노드에 도착한 횟수
+    count = [0] * n  # Number of arrivals at each node
     pq = [(0, start)]
 
     while pq:
@@ -224,7 +224,7 @@ def kth_shortest_path(
         if u == end and count[u] == k:
             return d
 
-        # k번 이상 방문한 노드는 더 이상 확장하지 않음
+        # Don't expand nodes visited more than k times
         if count[u] > k:
             continue
 
@@ -235,14 +235,14 @@ def kth_shortest_path(
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("다익스트라 & 최단 경로 알고리즘")
+    print("Dijkstra & Shortest Path Algorithms")
     print("=" * 60)
 
-    # 예제 그래프
+    # Example graph
     #       1
     #    0 ---> 1
     #    |      |
@@ -258,77 +258,77 @@ def main():
         (1, 2, 2)
     ]
 
-    print("\n[그래프 구조]")
+    print("\n[Graph Structure]")
     print("    0 --1--> 1")
     print("    |        |")
     print("    4        2")
     print("    v        v")
     print("    2 --3--> 3")
-    print("    (1->2 가중치 2)")
+    print("    (1->2 weight 2)")
 
-    # 1. 다익스트라 기본
-    print("\n[1] 다익스트라 기본")
+    # 1. Basic Dijkstra
+    print("\n[1] Basic Dijkstra")
     graph = create_weighted_graph(edges, directed=True)
     dist = dijkstra(graph, 0, 4)
-    print(f"    시작점: 0")
+    print(f"    Start: 0")
     for i, d in enumerate(dist):
-        print(f"    노드 {i}까지 거리: {d}")
+        print(f"    Distance to node {i}: {d}")
 
-    # 2. 다익스트라 + 경로
-    print("\n[2] 다익스트라 + 경로 추적")
+    # 2. Dijkstra + Path
+    print("\n[2] Dijkstra + Path Tracking")
     distance, path = dijkstra_with_path(graph, 0, 3, 4)
-    print(f"    0 -> 3 최단 거리: {distance}")
-    print(f"    경로: {' -> '.join(map(str, path))}")
+    print(f"    0 -> 3 shortest distance: {distance}")
+    print(f"    Path: {' -> '.join(map(str, path))}")
 
-    # 3. 플로이드-워셜
-    print("\n[3] 플로이드-워셜 (모든 쌍 최단 거리)")
+    # 3. Floyd-Warshall
+    print("\n[3] Floyd-Warshall (All-Pairs Shortest Distance)")
     all_dist = floyd_warshall(4, edges)
-    print("    거리 행렬:")
+    print("    Distance matrix:")
     for i, row in enumerate(all_dist):
-        row_str = [str(d) if d != float('inf') else '∞' for d in row]
+        row_str = [str(d) if d != float('inf') else 'inf' for d in row]
         print(f"    {i}: {row_str}")
 
-    # 4. 벨만-포드
-    print("\n[4] 벨만-포드 (음의 가중치 허용)")
+    # 4. Bellman-Ford
+    print("\n[4] Bellman-Ford (Allows Negative Weights)")
     edges_negative = [(0, 1, 4), (0, 2, 5), (1, 2, -3), (2, 3, 4)]
     dist, has_neg_cycle = bellman_ford(4, edges_negative, 0)
-    print(f"    간선: {edges_negative}")
-    print(f"    최단 거리: {dist}")
-    print(f"    음의 사이클: {has_neg_cycle}")
+    print(f"    Edges: {edges_negative}")
+    print(f"    Shortest distances: {dist}")
+    print(f"    Negative cycle: {has_neg_cycle}")
 
-    # 음의 사이클 예제
+    # Negative cycle example
     edges_neg_cycle = [(0, 1, 1), (1, 2, -1), (2, 0, -1)]
     dist, has_neg_cycle = bellman_ford(3, edges_neg_cycle, 0)
-    print(f"\n    음의 사이클 그래프: {edges_neg_cycle}")
-    print(f"    음의 사이클 존재: {has_neg_cycle}")
+    print(f"\n    Negative cycle graph: {edges_neg_cycle}")
+    print(f"    Negative cycle exists: {has_neg_cycle}")
 
-    # 5. 네트워크 지연 시간
-    print("\n[5] 네트워크 지연 시간")
+    # 5. Network Delay Time
+    print("\n[5] Network Delay Time")
     times = [[2, 1, 1], [2, 3, 1], [3, 4, 1]]
     n, k = 4, 2
     result = network_delay_time(times, n, k)
     print(f"    times={times}, n={n}, k={k}")
-    print(f"    모든 노드 도달 시간: {result}")
+    print(f"    Time to reach all nodes: {result}")
 
-    # 6. K번째 최단 경로
-    print("\n[6] K번째 최단 경로")
+    # 6. Kth Shortest Path
+    print("\n[6] Kth Shortest Path")
     edges_k = [(0, 1, 1), (0, 2, 3), (1, 2, 1), (1, 3, 2), (2, 3, 1)]
     graph_k = create_weighted_graph(edges_k, directed=True)
     for k in range(1, 4):
         dist = kth_shortest_path(graph_k, 0, 3, k, 4)
-        print(f"    0->3 {k}번째 최단 경로: {dist}")
+        print(f"    0->3 {k}th shortest path: {dist}")
 
     print("\n" + "=" * 60)
-    print("주요 알고리즘 비교")
+    print("Algorithm Comparison")
     print("=" * 60)
     print("""
-    | 알고리즘       | 시간복잡도      | 음의 가중치 | 용도                |
-    |---------------|----------------|------------|---------------------|
-    | 다익스트라     | O((V+E)log V) | 불가        | 단일 출발점 최단거리 |
-    | 벨만-포드      | O(VE)         | 가능        | 음의 가중치/사이클   |
-    | 플로이드-워셜  | O(V³)         | 가능*       | 모든 쌍 최단거리     |
+    | Algorithm      | Time Complexity | Neg Weights | Use Case              |
+    |---------------|----------------|-------------|------------------------|
+    | Dijkstra      | O((V+E)log V)  | No          | Single-source shortest |
+    | Bellman-Ford  | O(VE)          | Yes         | Neg weights/cycles     |
+    | Floyd-Warshall| O(V^3)         | Yes*        | All-pairs shortest     |
 
-    * 플로이드-워셜도 음의 사이클이 있으면 올바르지 않음
+    * Floyd-Warshall is also incorrect with negative cycles
     """)
 
 

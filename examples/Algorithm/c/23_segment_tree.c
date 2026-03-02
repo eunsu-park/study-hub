@@ -1,8 +1,8 @@
 /*
- * 세그먼트 트리 (Segment Tree)
- * 구간 합, 구간 최소/최대, Lazy Propagation
+ * Segment Tree
+ * Range Sum, Range Min/Max, Lazy Propagation
  *
- * 구간 쿼리와 업데이트를 O(log n)에 처리합니다.
+ * Processes range queries and updates in O(log n).
  */
 
 #include <stdio.h>
@@ -14,7 +14,7 @@
 #define INF INT_MAX
 
 /* =============================================================================
- * 1. 기본 세그먼트 트리 (구간 합)
+ * 1. Basic Segment Tree (Range Sum)
  * ============================================================================= */
 
 typedef struct {
@@ -45,7 +45,7 @@ void st_build(SegmentTree* st, int arr[], int node, int start, int end) {
     st->tree[node] = st->tree[2 * node] + st->tree[2 * node + 1];
 }
 
-/* 점 업데이트 */
+/* Point update */
 void st_update(SegmentTree* st, int node, int start, int end, int idx, long long val) {
     if (start == end) {
         st->tree[node] = val;
@@ -60,7 +60,7 @@ void st_update(SegmentTree* st, int node, int start, int end, int idx, long long
     st->tree[node] = st->tree[2 * node] + st->tree[2 * node + 1];
 }
 
-/* 구간 합 쿼리 */
+/* Range sum query */
 long long st_query(SegmentTree* st, int node, int start, int end, int l, int r) {
     if (r < start || end < l) return 0;
     if (l <= start && end <= r) return st->tree[node];
@@ -71,7 +71,7 @@ long long st_query(SegmentTree* st, int node, int start, int end, int l, int r) 
 }
 
 /* =============================================================================
- * 2. 구간 최소/최대 세그먼트 트리
+ * 2. Range Min/Max Segment Tree
  * ============================================================================= */
 
 typedef struct {
@@ -134,7 +134,7 @@ void mmt_free(MinMaxTree* mmt) {
 }
 
 /* =============================================================================
- * 3. Lazy Propagation (구간 업데이트)
+ * 3. Lazy Propagation (Range Update)
  * ============================================================================= */
 
 typedef struct {
@@ -179,7 +179,7 @@ void lst_propagate(LazySegTree* lst, int node, int start, int end) {
     }
 }
 
-/* 구간 [l, r]에 val 더하기 */
+/* Add val to range [l, r] */
 void lst_update_range(LazySegTree* lst, int node, int start, int end, int l, int r, long long val) {
     lst_propagate(lst, node, start, end);
 
@@ -209,7 +209,7 @@ long long lst_query(LazySegTree* lst, int node, int start, int end, int l, int r
 }
 
 /* =============================================================================
- * 4. 동적 세그먼트 트리 (좌표 압축 없이)
+ * 4. Dynamic Segment Tree (Without Coordinate Compression)
  * ============================================================================= */
 
 typedef struct DynamicNode {
@@ -260,7 +260,7 @@ void dn_free(DynamicNode* node) {
 }
 
 /* =============================================================================
- * 5. 머지 소트 트리 (Merge Sort Tree)
+ * 5. Merge Sort Tree
  * ============================================================================= */
 
 typedef struct {
@@ -286,12 +286,12 @@ MergeSortTree* mst_create(int arr[], int n) {
     mst->tree = malloc(4 * n * sizeof(int*));
     mst->sizes = calloc(4 * n, sizeof(int));
 
-    /* 배열 복사 및 정렬 */
+    /* Copy and sort array */
     int* temp = malloc(n * sizeof(int));
     int* copy = malloc(n * sizeof(int));
     memcpy(copy, arr, n * sizeof(int));
 
-    /* 빌드 함수 호출 */
+    /* Call build function */
     void build(int node, int start, int end) {
         if (start == end) {
             mst->tree[node] = malloc(sizeof(int));
@@ -303,7 +303,7 @@ MergeSortTree* mst_create(int arr[], int n) {
         build(2 * node, start, mid);
         build(2 * node + 1, mid + 1, end);
 
-        /* 병합 */
+        /* Merge */
         int left_size = mst->sizes[2 * node];
         int right_size = mst->sizes[2 * node + 1];
         mst->sizes[node] = left_size + right_size;
@@ -326,7 +326,7 @@ MergeSortTree* mst_create(int arr[], int n) {
     return mst;
 }
 
-/* 구간 [l, r]에서 k 이하인 원소 개수 */
+/* Count elements <= k in range [l, r] */
 int count_le(int* arr, int size, int k) {
     int lo = 0, hi = size;
     while (lo < hi) {
@@ -348,40 +348,40 @@ int mst_query(MergeSortTree* mst, int node, int start, int end, int l, int r, in
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("세그먼트 트리 예제\n");
+    printf("Segment Tree Examples\n");
     printf("============================================================\n");
 
-    /* 1. 기본 세그먼트 트리 */
-    printf("\n[1] 기본 세그먼트 트리 (구간 합)\n");
+    /* 1. Basic Segment Tree */
+    printf("\n[1] Basic Segment Tree (Range Sum)\n");
     int arr1[] = {1, 3, 5, 7, 9, 11};
     int n1 = 6;
     SegmentTree* st = st_create(n1);
     st_build(st, arr1, 1, 0, n1 - 1);
 
-    printf("    배열: [1, 3, 5, 7, 9, 11]\n");
-    printf("    구간 합 [1, 3]: %lld\n", st_query(st, 1, 0, n1 - 1, 1, 3));
-    printf("    구간 합 [0, 5]: %lld\n", st_query(st, 1, 0, n1 - 1, 0, 5));
+    printf("    Array: [1, 3, 5, 7, 9, 11]\n");
+    printf("    Range sum [1, 3]: %lld\n", st_query(st, 1, 0, n1 - 1, 1, 3));
+    printf("    Range sum [0, 5]: %lld\n", st_query(st, 1, 0, n1 - 1, 0, 5));
 
     st_update(st, 1, 0, n1 - 1, 2, 10);  /* arr[2] = 10 */
-    printf("    arr[2] = 10 후 구간 합 [1, 3]: %lld\n", st_query(st, 1, 0, n1 - 1, 1, 3));
+    printf("    After arr[2] = 10, range sum [1, 3]: %lld\n", st_query(st, 1, 0, n1 - 1, 1, 3));
     st_free(st);
 
-    /* 2. 구간 최소/최대 */
-    printf("\n[2] 구간 최소/최대 세그먼트 트리\n");
+    /* 2. Range Min/Max */
+    printf("\n[2] Range Min/Max Segment Tree\n");
     int arr2[] = {5, 2, 8, 1, 9, 3, 7, 4};
     int n2 = 8;
     MinMaxTree* mmt = mmt_create(n2);
     mmt_build(mmt, arr2, 1, 0, n2 - 1);
 
-    printf("    배열: [5, 2, 8, 1, 9, 3, 7, 4]\n");
-    printf("    구간 [0, 3] 최소: %d\n", mmt_query_min(mmt, 1, 0, n2 - 1, 0, 3));
-    printf("    구간 [0, 3] 최대: %d\n", mmt_query_max(mmt, 1, 0, n2 - 1, 0, 3));
-    printf("    구간 [4, 7] 최소: %d\n", mmt_query_min(mmt, 1, 0, n2 - 1, 4, 7));
+    printf("    Array: [5, 2, 8, 1, 9, 3, 7, 4]\n");
+    printf("    Range [0, 3] min: %d\n", mmt_query_min(mmt, 1, 0, n2 - 1, 0, 3));
+    printf("    Range [0, 3] max: %d\n", mmt_query_max(mmt, 1, 0, n2 - 1, 0, 3));
+    printf("    Range [4, 7] min: %d\n", mmt_query_min(mmt, 1, 0, n2 - 1, 4, 7));
     mmt_free(mmt);
 
     /* 3. Lazy Propagation */
@@ -391,16 +391,16 @@ int main(void) {
     LazySegTree* lst = lst_create(n3);
     lst_build(lst, arr3, 1, 0, n3 - 1);
 
-    printf("    배열: [1, 2, 3, 4, 5]\n");
-    printf("    초기 구간 합 [0, 4]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 0, 4));
+    printf("    Array: [1, 2, 3, 4, 5]\n");
+    printf("    Initial range sum [0, 4]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 0, 4));
 
-    lst_update_range(lst, 1, 0, n3 - 1, 1, 3, 10);  /* [1, 3]에 10 더하기 */
-    printf("    [1, 3]에 10 더한 후 구간 합 [0, 4]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 0, 4));
-    printf("    구간 합 [1, 3]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 1, 3));
+    lst_update_range(lst, 1, 0, n3 - 1, 1, 3, 10);  /* Add 10 to [1, 3] */
+    printf("    After adding 10 to [1, 3], range sum [0, 4]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 0, 4));
+    printf("    Range sum [1, 3]: %lld\n", lst_query(lst, 1, 0, n3 - 1, 1, 3));
     lst_free(lst);
 
-    /* 4. 동적 세그먼트 트리 */
-    printf("\n[4] 동적 세그먼트 트리\n");
+    /* 4. Dynamic Segment Tree */
+    printf("\n[4] Dynamic Segment Tree\n");
     DynamicNode* root = dn_create();
     long long max_range = 1000000000LL;
 
@@ -408,27 +408,27 @@ int main(void) {
     dn_update(root, 0, max_range, 1000000, 3);
     dn_update(root, 0, max_range, 500, 7);
 
-    printf("    인덱스 100에 5, 1000000에 3, 500에 7 추가\n");
-    printf("    구간 [0, 1000] 합: %lld\n", dn_query(root, 0, max_range, 0, 1000));
-    printf("    구간 [0, 1000000] 합: %lld\n", dn_query(root, 0, max_range, 0, 1000000));
+    printf("    Added 5 at index 100, 3 at 1000000, 7 at 500\n");
+    printf("    Range [0, 1000] sum: %lld\n", dn_query(root, 0, max_range, 0, 1000));
+    printf("    Range [0, 1000000] sum: %lld\n", dn_query(root, 0, max_range, 0, 1000000));
     dn_free(root);
 
-    /* 5. 복잡도 */
-    printf("\n[5] 복잡도 분석\n");
-    printf("    | 연산           | 시간복잡도 | 공간복잡도 |\n");
+    /* 5. Complexity */
+    printf("\n[5] Complexity Analysis\n");
+    printf("    | Operation      | Time       | Space      |\n");
     printf("    |----------------|------------|------------|\n");
-    printf("    | 빌드           | O(n)       | O(n)       |\n");
-    printf("    | 점 업데이트    | O(log n)   | -          |\n");
-    printf("    | 구간 쿼리      | O(log n)   | -          |\n");
-    printf("    | 구간 업데이트  | O(log n)   | O(n)       |\n");
-    printf("    | 동적 트리      | O(log M)   | O(Q log M) |\n");
+    printf("    | Build          | O(n)       | O(n)       |\n");
+    printf("    | Point update   | O(log n)   | -          |\n");
+    printf("    | Range query    | O(log n)   | -          |\n");
+    printf("    | Range update   | O(log n)   | O(n)       |\n");
+    printf("    | Dynamic tree   | O(log M)   | O(Q log M) |\n");
 
-    printf("\n[6] 응용\n");
-    printf("    - 구간 합/최소/최대 쿼리\n");
-    printf("    - 구간 GCD 쿼리\n");
-    printf("    - 역순 쌍 개수 (Inversion Count)\n");
-    printf("    - K번째 원소 찾기\n");
-    printf("    - 2D 세그먼트 트리 (평면 쿼리)\n");
+    printf("\n[6] Applications\n");
+    printf("    - Range sum/min/max queries\n");
+    printf("    - Range GCD queries\n");
+    printf("    - Inversion count\n");
+    printf("    - K-th element finding\n");
+    printf("    - 2D Segment Tree (plane queries)\n");
 
     printf("\n============================================================\n");
 

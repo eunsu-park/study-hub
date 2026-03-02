@@ -1,8 +1,8 @@
 /*
- * 해시 테이블 (Hash Table)
- * unordered_map, unordered_set, 충돌 해결
+ * Hash Table
+ * unordered_map, unordered_set, Collision Resolution
  *
- * O(1) 평균 시간의 탐색/삽입/삭제를 제공합니다.
+ * Provides O(1) average time for search/insert/delete.
  */
 
 #include <iostream>
@@ -16,10 +16,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. 기본 해시 함수
+// 1. Basic Hash Function
 // =============================================================================
 
-// 문자열 해시 (다항식 해시)
+// String hash (polynomial hash)
 size_t polynomialHash(const string& s, size_t base = 31, size_t mod = 1e9 + 9) {
     size_t hash = 0;
     size_t power = 1;
@@ -31,7 +31,7 @@ size_t polynomialHash(const string& s, size_t base = 31, size_t mod = 1e9 + 9) {
 }
 
 // =============================================================================
-// 2. 체이닝 해시 테이블 구현
+// 2. Chaining Hash Table Implementation
 // =============================================================================
 
 template<typename K, typename V>
@@ -88,7 +88,7 @@ public:
 };
 
 // =============================================================================
-// 3. 오픈 어드레싱 (선형 탐사)
+// 3. Open Addressing (Linear Probing)
 // =============================================================================
 
 template<typename K, typename V>
@@ -153,7 +153,7 @@ public:
 };
 
 // =============================================================================
-// 4. LRU 캐시 (Least Recently Used)
+// 4. LRU Cache (Least Recently Used)
 // =============================================================================
 
 class LRUCache {
@@ -169,20 +169,20 @@ public:
         if (map.find(key) == map.end()) {
             return -1;
         }
-        // 맨 앞으로 이동
+        // Move to front
         cache.splice(cache.begin(), cache, map[key]);
         return map[key]->second;
     }
 
     void put(int key, int value) {
         if (map.find(key) != map.end()) {
-            // 기존 키 업데이트
+            // Update existing key
             map[key]->second = value;
             cache.splice(cache.begin(), cache, map[key]);
         } else {
-            // 새 키 삽입
+            // Insert new key
             if ((int)cache.size() == capacity) {
-                // LRU 제거
+                // Remove LRU entry
                 int lruKey = cache.back().first;
                 cache.pop_back();
                 map.erase(lruKey);
@@ -194,10 +194,10 @@ public:
 };
 
 // =============================================================================
-// 5. 해시 활용 문제들
+// 5. Hash Application Problems
 // =============================================================================
 
-// 두 수의 합
+// Two Sum
 vector<int> twoSum(const vector<int>& nums, int target) {
     unordered_map<int, int> map;
     for (int i = 0; i < (int)nums.size(); i++) {
@@ -210,7 +210,7 @@ vector<int> twoSum(const vector<int>& nums, int target) {
     return {};
 }
 
-// 애너그램 그룹화
+// Group Anagrams
 vector<vector<string>> groupAnagrams(vector<string>& strs) {
     unordered_map<string, vector<string>> groups;
 
@@ -227,13 +227,13 @@ vector<vector<string>> groupAnagrams(vector<string>& strs) {
     return result;
 }
 
-// 가장 긴 연속 수열
+// Longest Consecutive Sequence
 int longestConsecutive(const vector<int>& nums) {
     unordered_set<int> numSet(nums.begin(), nums.end());
     int maxLen = 0;
 
     for (int num : numSet) {
-        if (!numSet.count(num - 1)) {  // 시작점
+        if (!numSet.count(num - 1)) {  // Starting point
             int currentNum = num;
             int currentLen = 1;
 
@@ -249,7 +249,7 @@ int longestConsecutive(const vector<int>& nums) {
     return maxLen;
 }
 
-// 부분 배열 합 = k
+// Subarray Sum Equals k
 int subarraySum(const vector<int>& nums, int k) {
     unordered_map<int, int> prefixCount;
     prefixCount[0] = 1;
@@ -268,21 +268,21 @@ int subarraySum(const vector<int>& nums, int k) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "해시 테이블 예제" << endl;
+    cout << "Hash Table Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 기본 해시 함수
-    cout << "\n[1] 해시 함수" << endl;
+    // 1. Basic hash function
+    cout << "\n[1] Hash Function" << endl;
     cout << "    hash(\"hello\") = " << polynomialHash("hello") << endl;
     cout << "    hash(\"world\") = " << polynomialHash("world") << endl;
 
-    // 2. 체이닝 해시 테이블
-    cout << "\n[2] 체이닝 해시 테이블" << endl;
+    // 2. Chaining hash table
+    cout << "\n[2] Chaining Hash Table" << endl;
     ChainingHashTable<string, int> cht;
     cht.insert("apple", 100);
     cht.insert("banana", 200);
@@ -290,8 +290,8 @@ int main() {
     cout << "    apple: " << *cht.get("apple") << endl;
     cout << "    banana: " << *cht.get("banana") << endl;
 
-    // 3. 선형 탐사 해시 테이블
-    cout << "\n[3] 선형 탐사 해시 테이블" << endl;
+    // 3. Linear probing hash table
+    cout << "\n[3] Linear Probing Hash Table" << endl;
     LinearProbingHashTable<string, int> lpt;
     lpt.insert("one", 1);
     lpt.insert("two", 2);
@@ -299,34 +299,34 @@ int main() {
     cout << "    one: " << *lpt.get("one") << endl;
     cout << "    size: " << lpt.size() << endl;
 
-    // 4. LRU 캐시
-    cout << "\n[4] LRU 캐시" << endl;
+    // 4. LRU Cache
+    cout << "\n[4] LRU Cache" << endl;
     LRUCache lru(2);
     lru.put(1, 1);
     lru.put(2, 2);
     cout << "    put(1,1), put(2,2)" << endl;
     cout << "    get(1): " << lru.get(1) << endl;
-    lru.put(3, 3);  // 2 제거됨
+    lru.put(3, 3);  // Evicts key 2
     cout << "    put(3,3), get(2): " << lru.get(2) << endl;
 
-    // 5. 두 수의 합
-    cout << "\n[5] 두 수의 합" << endl;
+    // 5. Two Sum
+    cout << "\n[5] Two Sum" << endl;
     vector<int> nums = {2, 7, 11, 15};
     auto result = twoSum(nums, 9);
     cout << "    [2,7,11,15], target=9: [" << result[0] << "," << result[1] << "]" << endl;
 
-    // 6. 가장 긴 연속 수열
-    cout << "\n[6] 가장 긴 연속 수열" << endl;
+    // 6. Longest Consecutive Sequence
+    cout << "\n[6] Longest Consecutive Sequence" << endl;
     vector<int> consecutive = {100, 4, 200, 1, 3, 2};
     cout << "    [100,4,200,1,3,2]: " << longestConsecutive(consecutive) << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 연산       | 평균  | 최악  |" << endl;
-    cout << "    |------------|-------|-------|" << endl;
-    cout << "    | 삽입       | O(1)  | O(n)  |" << endl;
-    cout << "    | 검색       | O(1)  | O(n)  |" << endl;
-    cout << "    | 삭제       | O(1)  | O(n)  |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Operation  | Average | Worst |" << endl;
+    cout << "    |------------|---------|-------|" << endl;
+    cout << "    | Insert     | O(1)    | O(n)  |" << endl;
+    cout << "    | Search     | O(1)    | O(n)  |" << endl;
+    cout << "    | Delete     | O(1)    | O(n)  |" << endl;
 
     cout << "\n============================================================" << endl;
 

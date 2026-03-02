@@ -1,8 +1,8 @@
 /*
- * 그래프 기초 (Graph Basics)
+ * Graph Basics
  * Graph Representation, DFS, BFS, Connected Components
  *
- * 그래프의 기본 표현과 탐색 알고리즘입니다.
+ * Basic graph representation and traversal algorithms.
  */
 
 #include <iostream>
@@ -15,10 +15,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. 그래프 표현
+// 1. Graph Representation
 // =============================================================================
 
-// 인접 리스트
+// Adjacency List
 class AdjacencyList {
 public:
     int V;
@@ -45,7 +45,7 @@ public:
     }
 };
 
-// 인접 행렬
+// Adjacency Matrix
 class AdjacencyMatrix {
 public:
     int V;
@@ -55,7 +55,7 @@ public:
 
     void addEdge(int u, int v, int weight = 1) {
         matrix[u][v] = weight;
-        matrix[v][u] = weight;  // 무방향
+        matrix[v][u] = weight;  // Undirected
     }
 
     void print() {
@@ -69,7 +69,7 @@ public:
 };
 
 // =============================================================================
-// 2. DFS (깊이 우선 탐색)
+// 2. DFS (Depth-First Search)
 // =============================================================================
 
 void dfsRecursive(const vector<vector<int>>& adj, int node, vector<bool>& visited, vector<int>& result) {
@@ -91,7 +91,7 @@ vector<int> dfs(const vector<vector<int>>& adj, int start) {
     return result;
 }
 
-// 반복적 DFS
+// Iterative DFS
 vector<int> dfsIterative(const vector<vector<int>>& adj, int start) {
     int n = adj.size();
     vector<bool> visited(n, false);
@@ -119,7 +119,7 @@ vector<int> dfsIterative(const vector<vector<int>>& adj, int start) {
 }
 
 // =============================================================================
-// 3. BFS (너비 우선 탐색)
+// 3. BFS (Breadth-First Search)
 // =============================================================================
 
 vector<int> bfs(const vector<vector<int>>& adj, int start) {
@@ -147,7 +147,7 @@ vector<int> bfs(const vector<vector<int>>& adj, int start) {
     return result;
 }
 
-// BFS 최단 거리
+// BFS Shortest Distance
 vector<int> bfsDistance(const vector<vector<int>>& adj, int start) {
     int n = adj.size();
     vector<int> dist(n, -1);
@@ -172,7 +172,7 @@ vector<int> bfsDistance(const vector<vector<int>>& adj, int start) {
 }
 
 // =============================================================================
-// 4. 연결 요소
+// 4. Connected Components
 // =============================================================================
 
 int countConnectedComponents(int n, const vector<vector<int>>& adj) {
@@ -203,10 +203,10 @@ int countConnectedComponents(int n, const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 5. 사이클 탐지
+// 5. Cycle Detection
 // =============================================================================
 
-// 무방향 그래프 사이클 탐지 (DFS)
+// Undirected graph cycle detection (DFS)
 bool hasCycleUndirected(const vector<vector<int>>& adj, int node, int parent, vector<bool>& visited) {
     visited[node] = true;
 
@@ -237,12 +237,12 @@ bool detectCycleUndirected(int n, const vector<vector<int>>& adj) {
     return false;
 }
 
-// 방향 그래프 사이클 탐지 (DFS)
+// Directed graph cycle detection (DFS)
 bool hasCycleDirected(const vector<vector<int>>& adj, int node, vector<int>& color) {
-    color[node] = 1;  // 방문 중 (회색)
+    color[node] = 1;  // In progress (gray)
 
     for (int neighbor : adj[node]) {
-        if (color[neighbor] == 1) {  // 현재 DFS 경로에서 발견
+        if (color[neighbor] == 1) {  // Found in current DFS path
             return true;
         }
         if (color[neighbor] == 0 && hasCycleDirected(adj, neighbor, color)) {
@@ -250,12 +250,12 @@ bool hasCycleDirected(const vector<vector<int>>& adj, int node, vector<int>& col
         }
     }
 
-    color[node] = 2;  // 완료 (검은색)
+    color[node] = 2;  // Completed (black)
     return false;
 }
 
 bool detectCycleDirected(int n, const vector<vector<int>>& adj) {
-    vector<int> color(n, 0);  // 0: 미방문, 1: 방문 중, 2: 완료
+    vector<int> color(n, 0);  // 0: unvisited, 1: in progress, 2: completed
 
     for (int i = 0; i < n; i++) {
         if (color[i] == 0 && hasCycleDirected(adj, i, color)) {
@@ -267,7 +267,7 @@ bool detectCycleDirected(int n, const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 6. 이분 그래프 검사
+// 6. Bipartite Graph Check
 // =============================================================================
 
 bool isBipartite(const vector<vector<int>>& adj) {
@@ -300,7 +300,7 @@ bool isBipartite(const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -314,10 +314,10 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "그래프 기초 예제" << endl;
+    cout << "Graph Basics Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 그래프 생성
+    // Create test graph
     //   0 --- 1
     //   |     |
     //   2 --- 3
@@ -332,26 +332,26 @@ int main() {
     adj[4] = {3};
 
     // 1. DFS
-    cout << "\n[1] DFS (깊이 우선 탐색)" << endl;
+    cout << "\n[1] DFS (Depth-First Search)" << endl;
     auto dfsResult = dfs(adj, 0);
-    cout << "    0에서 시작: ";
+    cout << "    From 0: ";
     printVector(dfsResult);
     cout << endl;
 
     // 2. BFS
-    cout << "\n[2] BFS (너비 우선 탐색)" << endl;
+    cout << "\n[2] BFS (Breadth-First Search)" << endl;
     auto bfsResult = bfs(adj, 0);
-    cout << "    0에서 시작: ";
+    cout << "    From 0: ";
     printVector(bfsResult);
     cout << endl;
 
     auto distances = bfsDistance(adj, 0);
-    cout << "    0에서 각 노드까지 거리: ";
+    cout << "    Distance from 0 to each node: ";
     printVector(distances);
     cout << endl;
 
-    // 3. 연결 요소
-    cout << "\n[3] 연결 요소" << endl;
+    // 3. Connected Components
+    cout << "\n[3] Connected Components" << endl;
     vector<vector<int>> disconnected(6);
     disconnected[0] = {1};
     disconnected[1] = {0};
@@ -359,31 +359,31 @@ int main() {
     disconnected[3] = {2};
     disconnected[4] = {5};
     disconnected[5] = {4};
-    cout << "    연결 요소 개수: " << countConnectedComponents(6, disconnected) << endl;
+    cout << "    Number of connected components: " << countConnectedComponents(6, disconnected) << endl;
 
-    // 4. 사이클 탐지
-    cout << "\n[4] 사이클 탐지" << endl;
-    cout << "    무방향 그래프 사이클: " << (detectCycleUndirected(n, adj) ? "있음" : "없음") << endl;
+    // 4. Cycle Detection
+    cout << "\n[4] Cycle Detection" << endl;
+    cout << "    Undirected graph cycle: " << (detectCycleUndirected(n, adj) ? "exists" : "none") << endl;
 
     vector<vector<int>> directedAdj(4);
     directedAdj[0] = {1};
     directedAdj[1] = {2};
     directedAdj[2] = {3};
-    directedAdj[3] = {1};  // 사이클
-    cout << "    방향 그래프 사이클: " << (detectCycleDirected(4, directedAdj) ? "있음" : "없음") << endl;
+    directedAdj[3] = {1};  // Cycle
+    cout << "    Directed graph cycle: " << (detectCycleDirected(4, directedAdj) ? "exists" : "none") << endl;
 
-    // 5. 이분 그래프
-    cout << "\n[5] 이분 그래프" << endl;
-    cout << "    현재 그래프: " << (isBipartite(adj) ? "이분 그래프" : "이분 그래프 아님") << endl;
+    // 5. Bipartite Graph
+    cout << "\n[5] Bipartite Graph" << endl;
+    cout << "    Current graph: " << (isBipartite(adj) ? "bipartite" : "not bipartite") << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘        | 시간복잡도 | 공간복잡도 |" << endl;
-    cout << "    |-----------------|------------|------------|" << endl;
-    cout << "    | DFS             | O(V + E)   | O(V)       |" << endl;
-    cout << "    | BFS             | O(V + E)   | O(V)       |" << endl;
-    cout << "    | 연결 요소       | O(V + E)   | O(V)       |" << endl;
-    cout << "    | 사이클 탐지     | O(V + E)   | O(V)       |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm          | Time       | Space      |" << endl;
+    cout << "    |--------------------|------------|------------|" << endl;
+    cout << "    | DFS                | O(V + E)   | O(V)       |" << endl;
+    cout << "    | BFS                | O(V + E)   | O(V)       |" << endl;
+    cout << "    | Connected Comp.    | O(V + E)   | O(V)       |" << endl;
+    cout << "    | Cycle Detection    | O(V + E)   | O(V)       |" << endl;
 
     cout << "\n============================================================" << endl;
 

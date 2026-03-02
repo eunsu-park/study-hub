@@ -1,7 +1,7 @@
 """
-PyTorch Low-Level CLIP 구현
+PyTorch Low-Level CLIP Implementation
 
-Image Encoder, Text Encoder, Contrastive Loss 직접 구현
+Directly implements Image Encoder, Text Encoder, and Contrastive Loss.
 """
 
 import torch
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 @dataclass
 class CLIPConfig:
-    """CLIP 설정"""
+    """CLIP Configuration"""
     # Image encoder (ViT)
     image_size: int = 224
     patch_size: int = 32
@@ -30,7 +30,7 @@ class CLIPConfig:
     text_heads: int = 8
 
     # Shared
-    embed_dim: int = 512  # 공통 임베딩 차원
+    embed_dim: int = 512  # Shared embedding dimension
 
     # Training
     temperature: float = 0.07  # learnable
@@ -39,7 +39,7 @@ class CLIPConfig:
 # ============== Vision Transformer (Image Encoder) ==============
 
 class PatchEmbedding(nn.Module):
-    """이미지를 패치로 분할하고 임베딩"""
+    """Split image into patches and embed"""
 
     def __init__(
         self,
@@ -51,7 +51,7 @@ class PatchEmbedding(nn.Module):
         super().__init__()
         self.num_patches = (image_size // patch_size) ** 2
 
-        # Conv2d로 패치화 + 임베딩
+        # Patchify + embed via Conv2d
         self.proj = nn.Conv2d(
             in_channels, embed_dim,
             kernel_size=patch_size, stride=patch_size
@@ -294,14 +294,14 @@ class TextTransformer(nn.Module):
         x = self.ln_final(x)
 
         # Use [EOS] token as text representation
-        # CLIP에서는 가장 높은 토큰 위치 사용 (EOT)
-        # 여기서는 간단히 마지막 토큰 사용
+        # CLIP uses the highest token position (EOT)
+        # Here we simply use the last token
         if attention_mask is not None:
-            # 각 시퀀스의 마지막 유효 토큰
+            # Last valid token of each sequence
             seq_lengths = attention_mask.sum(dim=1) - 1
             x = x[torch.arange(B), seq_lengths]
         else:
-            x = x[:, -1]  # 마지막 토큰
+            x = x[:, -1]  # Last token
 
         # Project to shared space
         x = self.text_projection(x)
@@ -326,7 +326,7 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * math.log(1 / config.temperature))
 
     def encode_image(self, image: torch.Tensor) -> torch.Tensor:
-        """이미지 인코딩"""
+        """Encode image"""
         features = self.visual(image)
         # L2 normalize
         features = F.normalize(features, dim=-1)
@@ -337,7 +337,7 @@ class CLIP(nn.Module):
         text: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
-        """텍스트 인코딩"""
+        """Encode text"""
         features = self.text_encoder(text, attention_mask)
         # L2 normalize
         features = F.normalize(features, dim=-1)
@@ -378,11 +378,11 @@ def clip_loss(
     """
     CLIP Contrastive Loss (InfoNCE)
 
-    이미지→텍스트, 텍스트→이미지 양방향 손실
+    Bidirectional loss: image->text and text->image.
     """
     batch_size = logits_per_image.shape[0]
 
-    # Ground truth: 대각선이 positive
+    # Ground truth: diagonal elements are positive pairs
     labels = torch.arange(batch_size, device=logits_per_image.device)
 
     # Image-to-Text loss
@@ -400,7 +400,7 @@ def clip_loss(
 # ============== Zero-shot Classification ==============
 
 class ZeroShotClassifier:
-    """CLIP Zero-shot 분류기"""
+    """CLIP Zero-shot Classifier"""
 
     def __init__(self, model: CLIP, device: torch.device):
         self.model = model
@@ -413,11 +413,11 @@ class ZeroShotClassifier:
         templates: list = None
     ) -> torch.Tensor:
         """
-        클래스별 텍스트 임베딩 생성
+        Create text embeddings per class
 
         Args:
-            class_names: 클래스 이름 리스트
-            templates: 프롬프트 템플릿 리스트
+            class_names: List of class names
+            templates: List of prompt templates
 
         Returns:
             text_features: (num_classes, embed_dim)
@@ -437,15 +437,15 @@ class ZeroShotClassifier:
 
                 for template in templates:
                     text = template.format(class_name)
-                    # 실제로는 tokenizer 사용
-                    # 여기서는 간단히 mock 텐서 사용
+                    # In practice, use a tokenizer
+                    # Here we use mock tensors for simplicity
                     tokens = self._simple_tokenize(text)
                     tokens = tokens.to(self.device)
 
                     embedding = self.model.encode_text(tokens)
                     class_embeddings.append(embedding)
 
-                # 템플릿 평균
+                # Average across templates
                 class_embedding = torch.stack(class_embeddings).mean(dim=0)
                 class_embedding = F.normalize(class_embedding, dim=-1)
                 all_embeddings.append(class_embedding)
@@ -458,7 +458,7 @@ class ZeroShotClassifier:
         text_features: torch.Tensor
     ) -> torch.Tensor:
         """
-        Zero-shot 분류
+        Zero-shot classification
 
         Args:
             images: (B, 3, H, W)
@@ -478,8 +478,8 @@ class ZeroShotClassifier:
         return predictions
 
     def _simple_tokenize(self, text: str, max_length: int = 77) -> torch.Tensor:
-        """간단한 토큰화 (실제로는 BPE 사용)"""
-        # Mock tokenization - 실제 구현에서는 CLIP tokenizer 사용
+        """Simple tokenization (in practice, use BPE)"""
+        # Mock tokenization - use CLIP tokenizer in real implementation
         tokens = [ord(c) % 49408 for c in text[:max_length-2]]
         tokens = [49406] + tokens + [49407]  # SOT, EOT
         tokens = tokens + [0] * (max_length - len(tokens))  # Padding
@@ -489,7 +489,7 @@ class ZeroShotClassifier:
 # ============== Image-Text Retrieval ==============
 
 class ImageTextRetrieval:
-    """이미지-텍스트 검색"""
+    """Image-Text Retrieval"""
 
     def __init__(self, model: CLIP, device: torch.device):
         self.model = model
@@ -500,12 +500,12 @@ class ImageTextRetrieval:
         self.text_embeddings = None
 
     def index_images(self, images: torch.Tensor):
-        """이미지 인덱싱"""
+        """Index images"""
         with torch.no_grad():
             self.image_embeddings = self.model.encode_image(images.to(self.device))
 
     def index_texts(self, texts: torch.Tensor):
-        """텍스트 인덱싱"""
+        """Index texts"""
         with torch.no_grad():
             self.text_embeddings = self.model.encode_text(texts.to(self.device))
 
@@ -514,7 +514,7 @@ class ImageTextRetrieval:
         query_text: torch.Tensor,
         top_k: int = 5
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """텍스트로 이미지 검색"""
+        """Search images by text"""
         with torch.no_grad():
             query_features = self.model.encode_text(query_text.to(self.device))
             similarities = query_features @ self.image_embeddings.t()
@@ -527,7 +527,7 @@ class ImageTextRetrieval:
         query_image: torch.Tensor,
         top_k: int = 5
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """이미지로 텍스트 검색"""
+        """Search texts by image"""
         with torch.no_grad():
             query_features = self.model.encode_image(query_image.to(self.device))
             similarities = query_features @ self.text_embeddings.t()
@@ -536,11 +536,11 @@ class ImageTextRetrieval:
         return indices, scores
 
 
-# 테스트
+# Test
 if __name__ == "__main__":
     print("=== CLIP Low-Level Implementation ===\n")
 
-    # 설정
+    # Configuration
     config = CLIPConfig(
         image_size=224,
         patch_size=32,
@@ -556,10 +556,10 @@ if __name__ == "__main__":
     )
     print(f"Config: embed_dim={config.embed_dim}, vision_layers={config.vision_layers}\n")
 
-    # 모델 생성
+    # Create model
     model = CLIP(config)
 
-    # 파라미터 수
+    # Parameter count
     vision_params = sum(p.numel() for p in model.visual.parameters())
     text_params = sum(p.numel() for p in model.text_encoder.parameters())
     total_params = sum(p.numel() for p in model.parameters())
@@ -568,7 +568,7 @@ if __name__ == "__main__":
     print(f"Text encoder params: {text_params:,}")
     print(f"Total params: {total_params:,}\n")
 
-    # 테스트 입력
+    # Test input
     batch_size = 4
     images = torch.randn(batch_size, 3, 224, 224)
     texts = torch.randint(0, config.vocab_size, (batch_size, 77))
@@ -580,11 +580,11 @@ if __name__ == "__main__":
     print(f"Logits per image shape: {logits_per_image.shape}")
     print(f"Logits per text shape: {logits_per_text.shape}")
 
-    # Loss 계산
+    # Loss computation
     loss = clip_loss(logits_per_image, logits_per_text)
     print(f"\nContrastive Loss: {loss.item():.4f}")
 
-    # 개별 인코딩 테스트
+    # Individual encoding test
     print("\n=== Encoding Test ===")
     image_features = model.encode_image(images)
     text_features = model.encode_text(texts)
@@ -593,25 +593,25 @@ if __name__ == "__main__":
     print(f"Image features norm: {image_features.norm(dim=-1).mean():.4f} (should be ~1.0)")
     print(f"Text features norm: {text_features.norm(dim=-1).mean():.4f} (should be ~1.0)")
 
-    # Similarity 계산
+    # Similarity computation
     similarity = image_features @ text_features.t()
     print(f"\nSimilarity matrix:\n{similarity}")
 
-    # Temperature 효과
+    # Temperature effect
     print(f"\nTemperature (1/exp(logit_scale)): {1/model.logit_scale.exp().item():.4f}")
     print(f"Scaled similarity range: [{(model.logit_scale.exp() * similarity).min().item():.2f}, "
           f"{(model.logit_scale.exp() * similarity).max().item():.2f}]")
 
-    # Zero-shot 분류 테스트
+    # Zero-shot classification test
     print("\n=== Zero-shot Classification Test ===")
     device = torch.device("cpu")
     classifier = ZeroShotClassifier(model, device)
 
-    # Mock 분류
+    # Mock classification
     class_names = ["cat", "dog", "bird", "car", "plane"]
     print(f"Classes: {class_names}")
 
-    # 실제로는 text_features를 생성하고 분류
+    # In practice, generate text_features and classify
     # text_features = classifier.create_text_embeddings(class_names)
     # predictions = classifier.classify(images, text_features)
 

@@ -1,13 +1,13 @@
 """
-PySpark DataFrame 처리 예제
+PySpark DataFrame Processing Example
 
-실제 데이터 처리 시나리오를 보여주는 예제입니다:
-- 데이터 생성 및 로딩
-- 변환 (필터, 집계, 조인)
-- 윈도우 함수
+An example demonstrating real-world data processing scenarios:
+- Data generation and loading
+- Transformations (filter, aggregation, join)
+- Window functions
 - UDF (User Defined Functions)
 
-실행:
+Run:
   spark-submit data_processing.py
 """
 
@@ -28,10 +28,10 @@ import random
 
 
 def create_sample_data(spark):
-    """샘플 데이터 생성"""
+    """Create sample data"""
     print("Creating sample data...")
 
-    # 고객 데이터
+    # Customer data
     customers = [
         (1, "Alice", "Gold", "New York", "2020-01-15"),
         (2, "Bob", "Silver", "Los Angeles", "2020-03-20"),
@@ -51,7 +51,7 @@ def create_sample_data(spark):
     customers_df = spark.createDataFrame(customers, customers_schema)
     customers_df = customers_df.withColumn("join_date", to_date(col("join_date")))
 
-    # 상품 데이터
+    # Product data
     products = [
         (101, "Laptop", "Electronics", 999.99),
         (102, "Phone", "Electronics", 599.99),
@@ -67,13 +67,13 @@ def create_sample_data(spark):
         ["product_id", "name", "category", "price"]
     )
 
-    # 주문 데이터 생성
+    # Generate order data
     random.seed(42)
     orders = []
     order_id = 1
     base_date = datetime(2024, 1, 1)
 
-    for day in range(90):  # 90일치 데이터
+    for day in range(90):  # 90 days of data
         order_date = (base_date + timedelta(days=day)).strftime("%Y-%m-%d")
         num_orders = random.randint(5, 15)
 
@@ -99,16 +99,16 @@ def create_sample_data(spark):
 
 
 def basic_transformations(orders_df):
-    """기본 변환 작업"""
+    """Basic transformation operations"""
     print("\n" + "=" * 60)
     print("Basic Transformations")
     print("=" * 60)
 
-    # 필터링
+    # Filtering
     completed_orders = orders_df.filter(col("status") == "completed")
     print(f"\nCompleted orders: {completed_orders.count()}")
 
-    # 새 컬럼 추가
+    # Add new columns
     enhanced_df = orders_df.withColumn(
         "order_tier",
         when(col("amount") > 300, "high")
@@ -127,12 +127,12 @@ def basic_transformations(orders_df):
 
 
 def aggregations(orders_df, customers_df):
-    """집계 연산"""
+    """Aggregation operations"""
     print("\n" + "=" * 60)
     print("Aggregations")
     print("=" * 60)
 
-    # 전체 통계
+    # Overall statistics
     print("\nOverall Statistics:")
     orders_df.filter(col("status") == "completed").agg(
         count("*").alias("total_orders"),
@@ -141,7 +141,7 @@ def aggregations(orders_df, customers_df):
         countDistinct("customer_id").alias("unique_customers")
     ).show()
 
-    # 월별 통계
+    # Monthly statistics
     print("\nMonthly Statistics:")
     monthly_stats = orders_df \
         .filter(col("status") == "completed") \
@@ -156,7 +156,7 @@ def aggregations(orders_df, customers_df):
 
     monthly_stats.show()
 
-    # 고객 세그먼트별 통계
+    # Statistics by customer segment
     print("\nCustomer Segment Statistics:")
     segment_stats = orders_df \
         .filter(col("status") == "completed") \
@@ -176,17 +176,17 @@ def aggregations(orders_df, customers_df):
 
 
 def window_functions(orders_df, customers_df):
-    """윈도우 함수"""
+    """Window functions"""
     print("\n" + "=" * 60)
     print("Window Functions")
     print("=" * 60)
 
     completed = orders_df.filter(col("status") == "completed")
 
-    # 고객별 윈도우
+    # Per-customer window
     customer_window = Window.partitionBy("customer_id").orderBy("order_date")
 
-    # 고객별 누적 구매액, 주문 순서
+    # Cumulative purchase amount and order rank per customer
     customer_analysis = completed \
         .withColumn("order_rank", row_number().over(customer_window)) \
         .withColumn("cumulative_amount", _sum("amount").over(customer_window)) \
@@ -204,7 +204,7 @@ def window_functions(orders_df, customers_df):
         .orderBy("order_date") \
         .show(10)
 
-    # 일별 매출 순위
+    # Daily revenue ranking
     daily_window = Window.orderBy(col("daily_revenue").desc())
 
     daily_ranking = completed \
@@ -219,12 +219,12 @@ def window_functions(orders_df, customers_df):
 
 
 def join_operations(customers_df, products_df, orders_df):
-    """조인 연산"""
+    """Join operations"""
     print("\n" + "=" * 60)
     print("Join Operations")
     print("=" * 60)
 
-    # 세 테이블 조인
+    # Join three tables
     full_data = orders_df \
         .join(customers_df, "customer_id", "left") \
         .join(products_df, "product_id", "left")
@@ -234,7 +234,7 @@ def join_operations(customers_df, products_df, orders_df):
         "order_id", "name", "segment", "category", "amount", "status"
     ).show(5)
 
-    # 카테고리별, 세그먼트별 매출
+    # Revenue by category and segment
     category_segment = full_data \
         .filter(col("status") == "completed") \
         .groupBy("category", "segment") \
@@ -251,7 +251,7 @@ def join_operations(customers_df, products_df, orders_df):
 
 
 def user_defined_functions(orders_df):
-    """UDF 사용"""
+    """Using UDFs"""
     print("\n" + "=" * 60)
     print("User Defined Functions")
     print("=" * 60)
@@ -268,7 +268,7 @@ def user_defined_functions(orders_df):
         else:
             return "economy"
 
-    # UDF 적용
+    # Apply UDF
     with_category = orders_df.withColumn(
         "amount_category",
         categorize_amount(col("amount"))
@@ -277,7 +277,7 @@ def user_defined_functions(orders_df):
     print("\nWith Amount Category:")
     with_category.select("order_id", "amount", "amount_category").show(5)
 
-    # 카테고리별 통계
+    # Statistics by category
     print("\nStatistics by Amount Category:")
     with_category \
         .filter(col("status") == "completed") \
@@ -293,12 +293,12 @@ def user_defined_functions(orders_df):
 
 
 def save_results(spark, df, output_path):
-    """결과 저장"""
+    """Save results"""
     print("\n" + "=" * 60)
     print("Saving Results")
     print("=" * 60)
 
-    # Parquet 형식으로 저장 (파티션 포함)
+    # Save in Parquet format (with partitioning)
     df.write \
         .mode("overwrite") \
         .partitionBy("status") \
@@ -306,12 +306,12 @@ def save_results(spark, df, output_path):
 
     print(f"Saved to {output_path}/orders_parquet")
 
-    # Delta Lake 형식 (설정된 경우)
+    # Delta Lake format (if configured)
     # df.write.format("delta").mode("overwrite").save(f"{output_path}/orders_delta")
 
 
 def main():
-    # SparkSession 생성
+    # Create SparkSession
     spark = SparkSession.builder \
         .appName("Data Processing Example") \
         .master("local[*]") \
@@ -321,7 +321,7 @@ def main():
 
     spark.sparkContext.setLogLevel("WARN")
 
-    # 샘플 데이터 생성
+    # Create sample data
     customers_df, products_df, orders_df = create_sample_data(spark)
 
     print("=" * 60)
@@ -337,17 +337,17 @@ def main():
     print("\nOrders Sample:")
     orders_df.show(5)
 
-    # 변환 작업 실행
+    # Execute transformation operations
     enhanced_orders = basic_transformations(orders_df)
     monthly_stats = aggregations(orders_df, customers_df)
     customer_analysis = window_functions(orders_df, customers_df)
     full_data = join_operations(customers_df, products_df, orders_df)
     categorized = user_defined_functions(orders_df)
 
-    # 결과 저장
+    # Save results
     save_results(spark, enhanced_orders, "/tmp/spark_output")
 
-    # SparkSession 종료
+    # Stop SparkSession
     spark.stop()
 
 

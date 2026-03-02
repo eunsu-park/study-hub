@@ -1,8 +1,8 @@
 """
-08. 엣지 검출
-- Sobel, Scharr 필터
+08. Edge Detection
+- Sobel, Scharr filters
 - Laplacian
-- Canny 엣지 검출
+- Canny edge detection
 """
 
 import cv2
@@ -10,56 +10,56 @@ import numpy as np
 
 
 def create_test_image():
-    """테스트 이미지 생성"""
+    """Create a test image"""
     img = np.zeros((300, 400), dtype=np.uint8)
     img[:] = 200
 
-    # 사각형
+    # Rectangle
     cv2.rectangle(img, (50, 50), (150, 150), 50, -1)
 
-    # 원
+    # Circle
     cv2.circle(img, (300, 150), 60, 80, -1)
 
-    # 삼각형
+    # Triangle
     pts = np.array([[200, 250], [150, 290], [250, 290]], np.int32)
     cv2.fillPoly(img, [pts], 100)
 
-    # 텍스트
+    # Text
     cv2.putText(img, 'EDGE', (100, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.8, 30, 2)
 
     return img
 
 
 def sobel_demo():
-    """Sobel 필터 데모"""
+    """Sobel filter demo"""
     print("=" * 50)
-    print("Sobel 필터")
+    print("Sobel Filter")
     print("=" * 50)
 
     img = create_test_image()
 
-    # Sobel 필터 (x 방향)
+    # Sobel filter (x direction)
     sobel_x = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
 
-    # Sobel 필터 (y 방향)
+    # Sobel filter (y direction)
     sobel_y = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
 
-    # 절대값 및 8비트 변환
+    # Absolute value and 8-bit conversion
     sobel_x_abs = cv2.convertScaleAbs(sobel_x)
     sobel_y_abs = cv2.convertScaleAbs(sobel_y)
 
-    # x, y 합성
+    # Combine x and y
     sobel_combined = cv2.addWeighted(sobel_x_abs, 0.5, sobel_y_abs, 0.5, 0)
 
-    # 크기 계산 (정확한 방법)
+    # Magnitude calculation (exact method)
     sobel_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
     sobel_magnitude = np.uint8(np.clip(sobel_magnitude, 0, 255))
 
-    print("Sobel 필터:")
-    print("  - 1차 미분 기반 엣지 검출")
-    print("  - x 방향: 수직 엣지 검출")
-    print("  - y 방향: 수평 엣지 검출")
-    print("  - ksize: 커널 크기 (3, 5, 7)")
+    print("Sobel filter:")
+    print("  - First derivative-based edge detection")
+    print("  - x direction: Detects vertical edges")
+    print("  - y direction: Detects horizontal edges")
+    print("  - ksize: Kernel size (3, 5, 7)")
 
     cv2.imwrite('edge_original.jpg', img)
     cv2.imwrite('sobel_x.jpg', sobel_x_abs)
@@ -69,14 +69,14 @@ def sobel_demo():
 
 
 def scharr_demo():
-    """Scharr 필터 데모"""
+    """Scharr filter demo"""
     print("\n" + "=" * 50)
-    print("Scharr 필터")
+    print("Scharr Filter")
     print("=" * 50)
 
     img = create_test_image()
 
-    # Scharr 필터 (Sobel보다 정확)
+    # Scharr filter (more accurate than Sobel)
     scharr_x = cv2.Scharr(img, cv2.CV_64F, 1, 0)
     scharr_y = cv2.Scharr(img, cv2.CV_64F, 0, 1)
 
@@ -85,11 +85,11 @@ def scharr_demo():
 
     scharr_combined = cv2.addWeighted(scharr_x_abs, 0.5, scharr_y_abs, 0.5, 0)
 
-    print("Scharr 필터:")
-    print("  - Sobel의 개선 버전")
-    print("  - 3x3 커널만 지원")
-    print("  - 더 정확한 그래디언트 계산")
-    print("  - Sobel(ksize=-1)과 동일")
+    print("Scharr filter:")
+    print("  - Improved version of Sobel")
+    print("  - Supports only 3x3 kernel")
+    print("  - More accurate gradient computation")
+    print("  - Equivalent to Sobel(ksize=-1)")
 
     cv2.imwrite('scharr_x.jpg', scharr_x_abs)
     cv2.imwrite('scharr_y.jpg', scharr_y_abs)
@@ -97,29 +97,29 @@ def scharr_demo():
 
 
 def laplacian_demo():
-    """Laplacian 필터 데모"""
+    """Laplacian filter demo"""
     print("\n" + "=" * 50)
-    print("Laplacian 필터")
+    print("Laplacian Filter")
     print("=" * 50)
 
     img = create_test_image()
 
-    # 노이즈에 민감하므로 블러 적용
+    # Apply blur since Laplacian is sensitive to noise
     blurred = cv2.GaussianBlur(img, (3, 3), 0)
 
-    # Laplacian 필터
+    # Laplacian filter
     laplacian = cv2.Laplacian(blurred, cv2.CV_64F)
     laplacian_abs = cv2.convertScaleAbs(laplacian)
 
-    # 커널 크기 변화
+    # Varying kernel size
     lap_k1 = cv2.Laplacian(blurred, cv2.CV_64F, ksize=1)
     lap_k3 = cv2.Laplacian(blurred, cv2.CV_64F, ksize=3)
     lap_k5 = cv2.Laplacian(blurred, cv2.CV_64F, ksize=5)
 
-    print("Laplacian 필터:")
-    print("  - 2차 미분 기반 엣지 검출")
-    print("  - 모든 방향의 엣지 한 번에 검출")
-    print("  - 노이즈에 민감 → 블러 필요")
+    print("Laplacian filter:")
+    print("  - Second derivative-based edge detection")
+    print("  - Detects edges in all directions at once")
+    print("  - Sensitive to noise -> blur required")
 
     cv2.imwrite('laplacian.jpg', laplacian_abs)
     cv2.imwrite('laplacian_k1.jpg', cv2.convertScaleAbs(lap_k1))
@@ -128,29 +128,29 @@ def laplacian_demo():
 
 
 def canny_demo():
-    """Canny 엣지 검출 데모"""
+    """Canny edge detection demo"""
     print("\n" + "=" * 50)
-    print("Canny 엣지 검출")
+    print("Canny Edge Detection")
     print("=" * 50)
 
     img = create_test_image()
 
-    # Canny 엣지 검출
-    # threshold1: 낮은 임계값
-    # threshold2: 높은 임계값
+    # Canny edge detection
+    # threshold1: Lower threshold
+    # threshold2: Upper threshold
     canny_50_150 = cv2.Canny(img, 50, 150)
     canny_100_200 = cv2.Canny(img, 100, 200)
     canny_30_100 = cv2.Canny(img, 30, 100)
 
-    print("Canny 엣지 검출 단계:")
-    print("  1. 가우시안 필터로 노이즈 제거")
-    print("  2. Sobel로 그래디언트 계산")
-    print("  3. 비최대 억제 (Non-Maximum Suppression)")
-    print("  4. 이중 임계값으로 엣지 결정")
-    print("     - 강한 엣지: > threshold2")
-    print("     - 약한 엣지: threshold1 ~ threshold2")
-    print("     - 비엣지: < threshold1")
-    print("  5. 히스테리시스 엣지 추적")
+    print("Canny edge detection steps:")
+    print("  1. Noise removal with Gaussian filter")
+    print("  2. Gradient computation with Sobel")
+    print("  3. Non-Maximum Suppression")
+    print("  4. Edge determination with double threshold")
+    print("     - Strong edge: > threshold2")
+    print("     - Weak edge: threshold1 ~ threshold2")
+    print("     - Non-edge: < threshold1")
+    print("  5. Hysteresis edge tracking")
 
     cv2.imwrite('canny_50_150.jpg', canny_50_150)
     cv2.imwrite('canny_100_200.jpg', canny_100_200)
@@ -158,31 +158,31 @@ def canny_demo():
 
 
 def canny_with_blur():
-    """블러와 함께 Canny 사용"""
+    """Canny with blur preprocessing"""
     print("\n" + "=" * 50)
-    print("블러 + Canny")
+    print("Blur + Canny")
     print("=" * 50)
 
     img = create_test_image()
 
-    # 노이즈 추가
+    # Add noise
     noise = np.random.normal(0, 10, img.shape).astype(np.int16)
     noisy = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
 
-    # 블러 없이
+    # Without blur
     canny_no_blur = cv2.Canny(noisy, 50, 150)
 
-    # 가우시안 블러 후
+    # After Gaussian blur
     blurred = cv2.GaussianBlur(noisy, (5, 5), 0)
     canny_with_blur = cv2.Canny(blurred, 50, 150)
 
-    # Canny 내부에서 apertureSize 조정
+    # Adjusting apertureSize within Canny
     canny_aperture3 = cv2.Canny(noisy, 50, 150, apertureSize=3)
     canny_aperture5 = cv2.Canny(noisy, 50, 150, apertureSize=5)
 
-    print("노이즈 제거:")
-    print("  - 블러 전처리 권장")
-    print("  - apertureSize 조정 가능 (3, 5, 7)")
+    print("Noise removal:")
+    print("  - Blur preprocessing recommended")
+    print("  - apertureSize adjustable (3, 5, 7)")
 
     cv2.imwrite('canny_noisy.jpg', noisy)
     cv2.imwrite('canny_no_blur.jpg', canny_no_blur)
@@ -190,14 +190,14 @@ def canny_with_blur():
 
 
 def auto_canny_threshold():
-    """자동 Canny 임계값"""
+    """Automatic Canny threshold"""
     print("\n" + "=" * 50)
-    print("자동 Canny 임계값")
+    print("Automatic Canny Threshold")
     print("=" * 50)
 
     img = create_test_image()
 
-    # 중앙값 기반 자동 임계값
+    # Median-based automatic threshold
     median = np.median(img)
     sigma = 0.33
 
@@ -206,9 +206,9 @@ def auto_canny_threshold():
 
     auto_canny = cv2.Canny(img, lower, upper)
 
-    print(f"이미지 중앙값: {median}")
-    print(f"자동 임계값: lower={lower}, upper={upper}")
-    print(f"공식: lower = (1-sigma)*median, upper = (1+sigma)*median")
+    print(f"Image median: {median}")
+    print(f"Automatic threshold: lower={lower}, upper={upper}")
+    print(f"Formula: lower = (1-sigma)*median, upper = (1+sigma)*median")
 
     cv2.imwrite('canny_auto.jpg', auto_canny)
 
@@ -216,37 +216,37 @@ def auto_canny_threshold():
 
 
 def log_edge_detection():
-    """LoG (Laplacian of Gaussian) 엣지 검출"""
+    """LoG (Laplacian of Gaussian) edge detection"""
     print("\n" + "=" * 50)
-    print("LoG 엣지 검출")
+    print("LoG Edge Detection")
     print("=" * 50)
 
     img = create_test_image()
 
-    # LoG = Gaussian 블러 + Laplacian
+    # LoG = Gaussian blur + Laplacian
     blurred = cv2.GaussianBlur(img, (5, 5), 1.4)
     log = cv2.Laplacian(blurred, cv2.CV_64F)
 
-    # Zero-crossing 찾기 (간단한 방법)
+    # Find zero-crossings (simple method)
     log_abs = cv2.convertScaleAbs(log)
 
     print("LoG (Laplacian of Gaussian):")
-    print("  - Gaussian으로 노이즈 제거")
-    print("  - Laplacian으로 2차 미분")
-    print("  - Zero-crossing이 엣지")
+    print("  - Noise removal with Gaussian")
+    print("  - Second derivative with Laplacian")
+    print("  - Zero-crossings are the edges")
 
     cv2.imwrite('log_edge.jpg', log_abs)
 
 
 def compare_edge_methods():
-    """엣지 검출 방법 비교"""
+    """Edge detection method comparison"""
     print("\n" + "=" * 50)
-    print("엣지 검출 방법 비교")
+    print("Edge Detection Method Comparison")
     print("=" * 50)
 
     img = create_test_image()
 
-    # 각 방법 적용
+    # Apply each method
     sobel_x = cv2.convertScaleAbs(cv2.Sobel(img, cv2.CV_64F, 1, 0))
     sobel_y = cv2.convertScaleAbs(cv2.Sobel(img, cv2.CV_64F, 0, 1))
     sobel = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
@@ -256,15 +256,15 @@ def compare_edge_methods():
     canny = cv2.Canny(img, 50, 150)
 
     print("""
-    | 방법 | 특징 | 사용 상황 |
-    |------|------|----------|
-    | Sobel | 1차 미분, 방향별 | 그래디언트 방향 필요시 |
-    | Scharr | Sobel 개선 | 더 정확한 그래디언트 |
-    | Laplacian | 2차 미분 | 모든 방향 한번에 |
-    | Canny | 다단계 처리 | 가장 많이 사용 |
+    | Method | Features | Use Case |
+    |--------|----------|----------|
+    | Sobel | 1st derivative, directional | When gradient direction needed |
+    | Scharr | Improved Sobel | More accurate gradient |
+    | Laplacian | 2nd derivative | All directions at once |
+    | Canny | Multi-stage processing | Most commonly used |
     """)
 
-    # 비교 이미지 생성
+    # Create comparison image
     compare = np.hstack([
         sobel,
         laplacian,
@@ -274,25 +274,25 @@ def compare_edge_methods():
 
 
 def practical_example():
-    """실용 예제: 윤곽선 추출"""
+    """Practical example: Contour extraction"""
     print("\n" + "=" * 50)
-    print("실용 예제: 윤곽선 추출")
+    print("Practical Example: Contour Extraction")
     print("=" * 50)
 
-    # 컬러 이미지 생성
+    # Create color image
     img = np.zeros((300, 400, 3), dtype=np.uint8)
     img[:] = [200, 200, 200]
 
     cv2.rectangle(img, (50, 50), (150, 150), (0, 0, 200), -1)
     cv2.circle(img, (300, 150), 60, (200, 0, 0), -1)
 
-    # 그레이스케일 변환
+    # Convert to grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Canny 엣지
+    # Canny edge
     edges = cv2.Canny(gray, 50, 150)
 
-    # 윤곽선을 원본에 표시
+    # Draw contours on original
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     result = img.copy()
     cv2.drawContours(result, contours, -1, (0, 255, 0), 2)
@@ -300,11 +300,11 @@ def practical_example():
     cv2.imwrite('practical_input.jpg', img)
     cv2.imwrite('practical_edges.jpg', edges)
     cv2.imwrite('practical_contours.jpg', result)
-    print("윤곽선 추출 이미지 저장 완료")
+    print("Contour extraction images saved successfully")
 
 
 def main():
-    """메인 함수"""
+    """Main function"""
     # Sobel
     sobel_demo()
 
@@ -317,22 +317,22 @@ def main():
     # Canny
     canny_demo()
 
-    # 블러 + Canny
+    # Blur + Canny
     canny_with_blur()
 
-    # 자동 임계값
+    # Automatic threshold
     auto_canny_threshold()
 
     # LoG
     log_edge_detection()
 
-    # 방법 비교
+    # Method comparison
     compare_edge_methods()
 
-    # 실용 예제
+    # Practical example
     practical_example()
 
-    print("\n엣지 검출 데모 완료!")
+    print("\nEdge detection demo complete!")
 
 
 if __name__ == '__main__':

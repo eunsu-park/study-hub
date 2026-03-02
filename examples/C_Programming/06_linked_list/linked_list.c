@@ -1,10 +1,10 @@
 // linked_list.c
-// 단일 연결 리스트 구현
+// Singly linked list implementation
 
 #include <stdio.h>
 #include <stdlib.h>
 
-// 노드 구조체
+// Node struct
 // Why: "struct Node" is used inside the definition (not "Node") because the
 // typedef alias isn't available yet while the struct body is being defined
 typedef struct Node {
@@ -12,13 +12,13 @@ typedef struct Node {
     struct Node* next;
 } Node;
 
-// 연결 리스트 구조체
+// Linked list struct
 typedef struct {
     Node* head;
     int size;
 } LinkedList;
 
-// 리스트 생성
+// Create list
 LinkedList* list_create(void) {
     LinkedList* list = malloc(sizeof(LinkedList));
     if (!list) return NULL;
@@ -28,7 +28,7 @@ LinkedList* list_create(void) {
     return list;
 }
 
-// 맨 앞에 추가
+// Add to front
 void list_push_front(LinkedList* list, int data) {
     Node* new_node = malloc(sizeof(Node));
     if (!new_node) return;
@@ -41,7 +41,7 @@ void list_push_front(LinkedList* list, int data) {
     list->size++;
 }
 
-// 맨 뒤에 추가
+// Add to back
 void list_push_back(LinkedList* list, int data) {
     Node* new_node = malloc(sizeof(Node));
     if (!new_node) return;
@@ -61,7 +61,7 @@ void list_push_back(LinkedList* list, int data) {
     list->size++;
 }
 
-// 맨 앞 제거
+// Remove from front
 int list_pop_front(LinkedList* list, int* data) {
     if (list->head == NULL) return 0;
 
@@ -74,7 +74,7 @@ int list_pop_front(LinkedList* list, int* data) {
     return 1;
 }
 
-// 특정 값 찾기
+// Find a specific value
 Node* list_find(LinkedList* list, int data) {
     Node* current = list->head;
 
@@ -88,11 +88,11 @@ Node* list_find(LinkedList* list, int data) {
     return NULL;
 }
 
-// 특정 값 삭제
+// Remove a specific value
 int list_remove(LinkedList* list, int data) {
     if (list->head == NULL) return 0;
 
-    // 첫 노드가 삭제 대상인 경우
+    // If the first node is the target
     if (list->head->data == data) {
         Node* temp = list->head;
         list->head = list->head->next;
@@ -101,7 +101,7 @@ int list_remove(LinkedList* list, int data) {
         return 1;
     }
 
-    // 중간 또는 끝 노드 삭제
+    // Remove middle or end node
     // Why: checking current->next instead of current lets us relink the previous
     // node — a singly-linked list has no back-pointer, so we must look one step ahead
     Node* current = list->head;
@@ -116,10 +116,10 @@ int list_remove(LinkedList* list, int data) {
         current = current->next;
     }
 
-    return 0;  // 못 찾음
+    return 0;  // Not found
 }
 
-// 리스트 출력
+// Print list
 void list_print(LinkedList* list) {
     Node* current = list->head;
 
@@ -134,7 +134,7 @@ void list_print(LinkedList* list) {
     printf("]\n");
 }
 
-// 리스트 해제
+// Free list
 // Why: saving current->next BEFORE freeing current is essential — after free(),
 // the memory is invalid and accessing current->next would be undefined behavior
 void list_destroy(LinkedList* list) {
@@ -152,47 +152,47 @@ void list_destroy(LinkedList* list) {
 int main(void) {
     LinkedList* list = list_create();
 
-    printf("=== 연결 리스트 테스트 ===\n\n");
+    printf("=== Linked List Test ===\n\n");
 
-    // 데이터 추가
-    printf("맨 뒤에 추가: 10, 20, 30\n");
+    // Add data
+    printf("Push back: 10, 20, 30\n");
     list_push_back(list, 10);
     list_push_back(list, 20);
     list_push_back(list, 30);
     list_print(list);
-    printf("크기: %d\n\n", list->size);
+    printf("Size: %d\n\n", list->size);
 
-    // 맨 앞에 추가
-    printf("맨 앞에 추가: 5\n");
+    // Add to front
+    printf("Push front: 5\n");
     list_push_front(list, 5);
     list_print(list);
     printf("\n");
 
-    // 값 찾기
-    printf("값 20 찾기: ");
+    // Find value
+    printf("Find value 20: ");
     Node* found = list_find(list, 20);
     if (found) {
-        printf("찾음! (주소: %p)\n", (void*)found);
+        printf("Found! (address: %p)\n", (void*)found);
     } else {
-        printf("못 찾음\n");
+        printf("Not found\n");
     }
     printf("\n");
 
-    // 값 삭제
-    printf("값 20 삭제\n");
+    // Remove value
+    printf("Remove value 20\n");
     list_remove(list, 20);
     list_print(list);
     printf("\n");
 
-    // 맨 앞 제거
+    // Remove from front
     int data;
-    printf("맨 앞 제거\n");
+    printf("Pop front\n");
     list_pop_front(list, &data);
-    printf("제거된 값: %d\n", data);
+    printf("Removed value: %d\n", data);
     list_print(list);
     printf("\n");
 
-    // 메모리 해제
+    // Free memory
     list_destroy(list);
 
     return 0;

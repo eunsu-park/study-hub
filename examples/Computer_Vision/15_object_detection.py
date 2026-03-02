@@ -1,8 +1,8 @@
 """
-15. 객체 검출 기초
+15. Object Detection Basics
 - Template Matching
 - Haar Cascade
-- HOG + SVM (개념)
+- HOG + SVM (concept)
 """
 
 import cv2
@@ -10,11 +10,11 @@ import numpy as np
 
 
 def create_scene_with_objects():
-    """객체가 있는 장면 이미지 생성"""
+    """Create a scene image with objects"""
     scene = np.zeros((400, 600, 3), dtype=np.uint8)
     scene[:] = [200, 200, 200]
 
-    # 별 모양 객체 (찾을 대상)
+    # Star-shaped object (target to find)
     def draw_star(img, center, size, color):
         pts = []
         for i in range(5):
@@ -26,16 +26,16 @@ def create_scene_with_objects():
                        int(center[1] + size * 0.4 * np.sin(inner))])
         cv2.fillPoly(img, [np.array(pts, np.int32)], color)
 
-    # 여러 별 배치
+    # Place multiple stars
     draw_star(scene, (100, 100), 30, (0, 0, 150))
     draw_star(scene, (300, 200), 40, (0, 0, 180))
     draw_star(scene, (500, 300), 35, (0, 0, 160))
 
-    # 방해 객체
+    # Distractor objects
     cv2.circle(scene, (200, 300), 40, (150, 0, 0), -1)
     cv2.rectangle(scene, (400, 50), (480, 130), (0, 150, 0), -1)
 
-    # 템플릿 (별 하나)
+    # Template (single star)
     template = np.zeros((80, 80, 3), dtype=np.uint8)
     template[:] = [200, 200, 200]
     draw_star(template, (40, 40), 30, (0, 0, 150))
@@ -44,20 +44,20 @@ def create_scene_with_objects():
 
 
 def template_matching_demo():
-    """템플릿 매칭 데모"""
+    """Template matching demo"""
     print("=" * 50)
-    print("템플릿 매칭 (Template Matching)")
+    print("Template Matching")
     print("=" * 50)
 
     scene, template = create_scene_with_objects()
 
-    # 그레이스케일 변환
+    # Convert to grayscale
     scene_gray = cv2.cvtColor(scene, cv2.COLOR_BGR2GRAY)
     template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
     h, w = template_gray.shape
 
-    # 템플릿 매칭 방법들
+    # Template matching methods
     methods = [
         ('TM_CCOEFF', cv2.TM_CCOEFF),
         ('TM_CCOEFF_NORMED', cv2.TM_CCOEFF_NORMED),
@@ -65,15 +65,15 @@ def template_matching_demo():
         ('TM_SQDIFF_NORMED', cv2.TM_SQDIFF_NORMED),
     ]
 
-    print("\n매칭 방법 결과:")
+    print("\nMatching method results:")
 
     for name, method in methods:
         result = cv2.matchTemplate(scene_gray, template_gray, method)
 
-        # 최소/최대 위치 찾기
+        # Find min/max location
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
-        # SQDIFF는 최소값이 최적
+        # For SQDIFF, minimum value is optimal
         if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
             top_left = min_loc
             score = min_val
@@ -83,26 +83,26 @@ def template_matching_demo():
 
         print(f"  {name}: score={score:.4f}, loc={top_left}")
 
-        # 결과 시각화
+        # Visualize result
         scene_copy = scene.copy()
         bottom_right = (top_left[0] + w, top_left[1] + h)
         cv2.rectangle(scene_copy, top_left, bottom_right, (0, 255, 0), 2)
         cv2.imwrite(f'template_{name}.jpg', scene_copy)
 
-    print("\n매칭 방법 특성:")
-    print("  TM_SQDIFF: 차이 제곱합 (작을수록 좋음)")
-    print("  TM_CCORR: 상관관계 (클수록 좋음)")
-    print("  TM_CCOEFF: 상관계수 (클수록 좋음)")
-    print("  _NORMED: 정규화 버전 (-1~1 또는 0~1)")
+    print("\nMatching method properties:")
+    print("  TM_SQDIFF: Sum of squared differences (lower is better)")
+    print("  TM_CCORR: Cross-correlation (higher is better)")
+    print("  TM_CCOEFF: Correlation coefficient (higher is better)")
+    print("  _NORMED: Normalized version (-1~1 or 0~1)")
 
     cv2.imwrite('template_scene.jpg', scene)
     cv2.imwrite('template_template.jpg', template)
 
 
 def multi_scale_template_demo():
-    """다중 스케일 템플릿 매칭"""
+    """Multi-scale template matching"""
     print("\n" + "=" * 50)
-    print("다중 스케일 템플릿 매칭")
+    print("Multi-scale Template Matching")
     print("=" * 50)
 
     scene, template = create_scene_with_objects()
@@ -114,11 +114,11 @@ def multi_scale_template_demo():
     best_scale = 1.0
     best_loc = (0, 0)
 
-    # 다양한 스케일로 매칭
+    # Match at various scales
     scales = [0.5, 0.75, 1.0, 1.25, 1.5]
 
     for scale in scales:
-        # 템플릿 크기 조정
+        # Resize template
         new_w = int(template_gray.shape[1] * scale)
         new_h = int(template_gray.shape[0] * scale)
 
@@ -127,7 +127,7 @@ def multi_scale_template_demo():
 
         resized = cv2.resize(template_gray, (new_w, new_h))
 
-        # 매칭
+        # Matching
         result = cv2.matchTemplate(scene_gray, resized, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(result)
 
@@ -139,9 +139,9 @@ def multi_scale_template_demo():
             best_loc = max_loc
             best_match = resized.shape
 
-    print(f"\n최적 스케일: {best_scale}, score={best_val:.4f}")
+    print(f"\nBest scale: {best_scale}, score={best_val:.4f}")
 
-    # 결과 그리기
+    # Draw result
     result_img = scene.copy()
     h, w = best_match
     cv2.rectangle(result_img, best_loc, (best_loc[0]+w, best_loc[1]+h), (0, 255, 0), 2)
@@ -149,9 +149,9 @@ def multi_scale_template_demo():
 
 
 def find_all_matches_demo():
-    """모든 매칭 찾기"""
+    """Find all matches"""
     print("\n" + "=" * 50)
-    print("모든 매칭 찾기")
+    print("Find All Matches")
     print("=" * 50)
 
     scene, template = create_scene_with_objects()
@@ -160,25 +160,25 @@ def find_all_matches_demo():
 
     h, w = template_gray.shape
 
-    # 템플릿 매칭
+    # Template matching
     result = cv2.matchTemplate(scene_gray, template_gray, cv2.TM_CCOEFF_NORMED)
 
-    # 임계값 이상인 모든 위치 찾기
+    # Find all locations above threshold
     threshold = 0.6
     locations = np.where(result >= threshold)
 
     scene_copy = scene.copy()
     match_count = 0
 
-    # 중복 제거를 위한 NMS 적용
+    # Apply NMS to remove duplicates
     boxes = []
     for pt in zip(*locations[::-1]):
         boxes.append([pt[0], pt[1], pt[0]+w, pt[1]+h])
 
-    # 간단한 NMS
+    # Simple NMS
     boxes = np.array(boxes)
     if len(boxes) > 0:
-        # 점수순 정렬
+        # Sort by score
         scores = [result[b[1], b[0]] for b in boxes]
         indices = np.argsort(scores)[::-1]
 
@@ -187,22 +187,22 @@ def find_all_matches_demo():
             i = indices[0]
             keep.append(i)
 
-            # 다른 박스와의 겹침 계산
+            # Calculate overlap with other boxes
             remaining = []
             for j in indices[1:]:
-                # IoU 계산 (간단 버전)
+                # IoU calculation (simple version)
                 x_overlap = max(0, min(boxes[i][2], boxes[j][2]) - max(boxes[i][0], boxes[j][0]))
                 y_overlap = max(0, min(boxes[i][3], boxes[j][3]) - max(boxes[i][1], boxes[j][1]))
                 overlap = x_overlap * y_overlap
                 area = w * h
                 iou = overlap / area
 
-                if iou < 0.5:  # 겹침이 50% 미만이면 유지
+                if iou < 0.5:  # Keep if overlap < 50%
                     remaining.append(j)
 
             indices = np.array(remaining)
 
-        # 결과 그리기
+        # Draw results
         for i in keep:
             pt = (boxes[i][0], boxes[i][1])
             cv2.rectangle(scene_copy, pt, (pt[0]+w, pt[1]+h), (0, 255, 0), 2)
@@ -211,38 +211,38 @@ def find_all_matches_demo():
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
             match_count += 1
 
-    print(f"임계값: {threshold}")
-    print(f"검출된 객체 수: {match_count}")
+    print(f"Threshold: {threshold}")
+    print(f"Number of detected objects: {match_count}")
 
     cv2.imwrite('find_all_matches.jpg', scene_copy)
 
 
 def haar_cascade_demo():
-    """Haar Cascade 데모"""
+    """Haar Cascade demo"""
     print("\n" + "=" * 50)
-    print("Haar Cascade 검출기")
+    print("Haar Cascade Detector")
     print("=" * 50)
 
-    # 테스트 이미지 (얼굴 시뮬레이션)
+    # Test image (face simulation)
     img = np.zeros((300, 400, 3), dtype=np.uint8)
     img[:] = [200, 200, 200]
 
-    # 얼굴 형태 시뮬레이션
+    # Face shape simulation
     cv2.ellipse(img, (200, 150), (50, 60), 0, 0, 360, (180, 150, 130), -1)
-    cv2.circle(img, (180, 130), 8, (50, 50, 50), -1)  # 눈
+    cv2.circle(img, (180, 130), 8, (50, 50, 50), -1)  # Eye
     cv2.circle(img, (220, 130), 8, (50, 50, 50), -1)
-    cv2.ellipse(img, (200, 170), (15, 8), 0, 0, 180, (50, 50, 50), 2)  # 입
+    cv2.ellipse(img, (200, 170), (15, 8), 0, 0, 180, (50, 50, 50), 2)  # Mouth
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Haar Cascade 로드
+    # Load Haar Cascade
     cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     face_cascade = cv2.CascadeClassifier(cascade_path)
 
     if face_cascade.empty():
-        print("Haar Cascade 파일을 찾을 수 없습니다.")
+        print("Cannot find Haar Cascade file.")
     else:
-        # 검출
+        # Detection
         faces = face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
@@ -254,18 +254,18 @@ def haar_cascade_demo():
         for (x, y, w, h) in faces:
             cv2.rectangle(result, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-        print(f"검출된 얼굴: {len(faces)}")
+        print(f"Detected faces: {len(faces)}")
 
         cv2.imwrite('haar_input.jpg', img)
         cv2.imwrite('haar_result.jpg', result)
 
-    print("\nHaar Cascade 파라미터:")
-    print("  scaleFactor: 이미지 피라미드 스케일")
-    print("  minNeighbors: 검출 확정 최소 이웃 수")
-    print("  minSize: 최소 객체 크기")
+    print("\nHaar Cascade parameters:")
+    print("  scaleFactor: Image pyramid scale")
+    print("  minNeighbors: Minimum neighbor count for confirmed detection")
+    print("  minSize: Minimum object size")
 
-    print("\n사용 가능한 Haar Cascade:")
-    print(f"  경로: {cv2.data.haarcascades}")
+    print("\nAvailable Haar Cascades:")
+    print(f"  Path: {cv2.data.haarcascades}")
     print("  - haarcascade_frontalface_default.xml")
     print("  - haarcascade_eye.xml")
     print("  - haarcascade_smile.xml")
@@ -273,29 +273,29 @@ def haar_cascade_demo():
 
 
 def hog_concept_demo():
-    """HOG 개념 데모"""
+    """HOG concept demo"""
     print("\n" + "=" * 50)
     print("HOG (Histogram of Oriented Gradients)")
     print("=" * 50)
 
-    # 테스트 이미지
+    # Test image
     img = np.zeros((128, 64, 3), dtype=np.uint8)
     img[:] = [200, 200, 200]
 
-    # 사람 형태 시뮬레이션
-    cv2.ellipse(img, (32, 25), (12, 15), 0, 0, 360, (100, 100, 100), -1)  # 머리
-    cv2.rectangle(img, (20, 40), (44, 90), (100, 100, 100), -1)  # 몸통
-    cv2.rectangle(img, (18, 90), (30, 125), (100, 100, 100), -1)  # 왼쪽 다리
-    cv2.rectangle(img, (34, 90), (46, 125), (100, 100, 100), -1)  # 오른쪽 다리
+    # Human shape simulation
+    cv2.ellipse(img, (32, 25), (12, 15), 0, 0, 360, (100, 100, 100), -1)  # Head
+    cv2.rectangle(img, (20, 40), (44, 90), (100, 100, 100), -1)  # Torso
+    cv2.rectangle(img, (18, 90), (30, 125), (100, 100, 100), -1)  # Left leg
+    cv2.rectangle(img, (34, 90), (46, 125), (100, 100, 100), -1)  # Right leg
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # HOG 디스크립터 계산
-    # winSize: 검출 윈도우 크기
-    # blockSize: 블록 크기
-    # blockStride: 블록 이동 간격
-    # cellSize: 셀 크기
-    # nbins: 히스토그램 빈 수
+    # HOG descriptor computation
+    # winSize: Detection window size
+    # blockSize: Block size
+    # blockStride: Block stride
+    # cellSize: Cell size
+    # nbins: Number of histogram bins
 
     hog = cv2.HOGDescriptor(
         _winSize=(64, 128),
@@ -305,67 +305,67 @@ def hog_concept_demo():
         _nbins=9
     )
 
-    # HOG 특징 계산
+    # Compute HOG features
     features = hog.compute(gray)
 
-    print(f"입력 이미지: {gray.shape}")
-    print(f"HOG 특징 벡터 크기: {features.shape}")
+    print(f"Input image: {gray.shape}")
+    print(f"HOG feature vector size: {features.shape}")
 
-    print("\nHOG 특성:")
-    print("  - 그래디언트 방향 히스토그램")
-    print("  - 조명 변화에 강건")
-    print("  - 보행자 검출에 효과적")
-    print("  - SVM과 함께 사용")
+    print("\nHOG properties:")
+    print("  - Histogram of gradient orientations")
+    print("  - Robust to illumination changes")
+    print("  - Effective for pedestrian detection")
+    print("  - Used together with SVM")
 
-    # 기본 HOG 보행자 검출기
+    # Default HOG pedestrian detector
     hog_detector = cv2.HOGDescriptor()
     hog_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
-    print("\n사전 학습된 HOG+SVM 검출기:")
+    print("\nPre-trained HOG+SVM detector:")
     print("  - cv2.HOGDescriptor_getDefaultPeopleDetector()")
-    print("  - 보행자 검출용 학습된 SVM 가중치")
+    print("  - SVM weights trained for pedestrian detection")
 
     cv2.imwrite('hog_input.jpg', img)
 
 
 def detection_comparison():
-    """검출 방법 비교"""
+    """Detection method comparison"""
     print("\n" + "=" * 50)
-    print("객체 검출 방법 비교")
+    print("Object Detection Method Comparison")
     print("=" * 50)
 
     print("""
-    | 방법 | 장점 | 단점 | 용도 |
-    |------|------|------|------|
-    | Template Matching | 간단, 빠름 | 회전/스케일 불변X | 고정 패턴 |
-    | Haar Cascade | 빠름, 얼굴 특화 | 정확도 제한 | 얼굴 검출 |
-    | HOG+SVM | 정확, 강건 | 느림 | 보행자 검출 |
-    | 특징점 매칭 | 회전/스케일 불변 | 계산량 큼 | 객체 인식 |
-    | 딥러닝 (YOLO 등) | 매우 정확 | GPU 필요 | 범용 검출 |
+    | Method | Advantages | Disadvantages | Use Case |
+    |--------|-----------|---------------|----------|
+    | Template Matching | Simple, fast | Not rotation/scale invariant | Fixed patterns |
+    | Haar Cascade | Fast, face-specialized | Limited accuracy | Face detection |
+    | HOG+SVM | Accurate, robust | Slow | Pedestrian detection |
+    | Feature Matching | Rotation/scale invariant | Computationally heavy | Object recognition |
+    | Deep Learning (YOLO, etc.) | Very accurate | GPU required | General detection |
     """)
 
 
 def main():
-    """메인 함수"""
-    # 템플릿 매칭
+    """Main function"""
+    # Template matching
     template_matching_demo()
 
-    # 다중 스케일
+    # Multi-scale
     multi_scale_template_demo()
 
-    # 모든 매칭 찾기
+    # Find all matches
     find_all_matches_demo()
 
     # Haar Cascade
     haar_cascade_demo()
 
-    # HOG 개념
+    # HOG concept
     hog_concept_demo()
 
-    # 방법 비교
+    # Method comparison
     detection_comparison()
 
-    print("\n객체 검출 기초 데모 완료!")
+    print("\nObject detection basics demo complete!")
 
 
 if __name__ == '__main__':

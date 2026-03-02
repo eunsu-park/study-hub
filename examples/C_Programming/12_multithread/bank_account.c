@@ -1,5 +1,5 @@
 // bank_account.c
-// 뮤텍스를 이용한 스레드 안전 은행 계좌
+// Thread-safe bank account using mutex
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -47,7 +47,7 @@ int account_withdraw(Account* acc, int amount) {
     }
 
     pthread_mutex_unlock(&acc->lock);
-    return -1;  // 잔액 부족
+    return -1;  // Insufficient balance
 }
 
 // Why: even a simple read needs the lock — on some architectures, reading an int
@@ -59,13 +59,13 @@ int account_get_balance(Account* acc) {
     return balance;
 }
 
-// 이체 (두 계좌 간)
+// Transfer (between two accounts)
 // Why: acquiring two locks in arbitrary order causes deadlock — thread A locks
 // account 1 then waits for 2, while thread B locks 2 then waits for 1.
 // Ordering by address guarantees a global lock acquisition order
 int account_transfer(Account* from, Account* to, int amount) {
-    // 데드락 방지: 항상 같은 순서로 잠금
-    // 주소값이 작은 계좌 먼저 잠금
+    // Deadlock prevention: always lock in the same order
+    // Lock the account with the smaller address first
     Account* first = (from < to) ? from : to;
     Account* second = (from < to) ? to : from;
 
@@ -85,7 +85,7 @@ int account_transfer(Account* from, Account* to, int amount) {
     return result;
 }
 
-// 테스트용 스레드 데이터
+// Thread data for testing
 typedef struct {
     Account* acc;
     int thread_id;
@@ -96,7 +96,7 @@ void* depositor(void* arg) {
 
     for (int i = 0; i < 100; i++) {
         int new_balance = account_deposit(ta->acc, 100);
-        printf("[입금자 %d] 입금 100원 -> 잔액: %d\n", ta->thread_id, new_balance);
+        printf("[Depositor %d] Deposited 100 -> Balance: %d\n", ta->thread_id, new_balance);
         usleep(rand() % 10000);
     }
 
@@ -109,9 +109,9 @@ void* withdrawer(void* arg) {
     for (int i = 0; i < 100; i++) {
         int result = account_withdraw(ta->acc, 100);
         if (result >= 0) {
-            printf("[출금자 %d] 출금 100원 -> 잔액: %d\n", ta->thread_id, result);
+            printf("[Withdrawer %d] Withdrew 100 -> Balance: %d\n", ta->thread_id, result);
         } else {
-            printf("[출금자 %d] 잔액 부족\n", ta->thread_id);
+            printf("[Withdrawer %d] Insufficient balance\n", ta->thread_id);
         }
         usleep(rand() % 10000);
     }
@@ -123,34 +123,34 @@ int main(void) {
     srand(time(NULL));
 
     Account* acc = account_create(10000);
-    printf("초기 잔액: %d\n\n", account_get_balance(acc));
+    printf("Initial balance: %d\n\n", account_get_balance(acc));
 
     pthread_t depositors[3];
     pthread_t withdrawers[3];
     ThreadArg args[6];
 
-    // 입금자 3명
+    // 3 depositors
     for (int i = 0; i < 3; i++) {
         args[i].acc = acc;
         args[i].thread_id = i;
         pthread_create(&depositors[i], NULL, depositor, &args[i]);
     }
 
-    // 출금자 3명
+    // 3 withdrawers
     for (int i = 0; i < 3; i++) {
         args[i + 3].acc = acc;
         args[i + 3].thread_id = i;
         pthread_create(&withdrawers[i], NULL, withdrawer, &args[i + 3]);
     }
 
-    // 대기
+    // Wait
     for (int i = 0; i < 3; i++) {
         pthread_join(depositors[i], NULL);
         pthread_join(withdrawers[i], NULL);
     }
 
-    printf("\n최종 잔액: %d\n", account_get_balance(acc));
-    printf("예상 잔액: %d (초기 10000 + 입금 30000 - 출금 최대 30000)\n", 10000);
+    printf("\nFinal balance: %d\n", account_get_balance(acc));
+    printf("Expected balance: %d (initial 10000 + deposits 30000 - withdrawals max 30000)\n", 10000);
 
     account_destroy(acc);
     return 0;

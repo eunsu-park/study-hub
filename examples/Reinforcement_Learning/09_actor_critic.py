@@ -1,6 +1,6 @@
 """
-Actor-Critic (A2C) 구현
-Actor-Critic 아키텍처, Advantage 추정, GAE 포함
+Actor-Critic (A2C) Implementation
+Includes Actor-Critic architecture, Advantage estimation, and GAE
 """
 import torch
 import torch.nn as nn
@@ -11,25 +11,25 @@ import matplotlib.pyplot as plt
 
 
 class ActorCriticNetwork(nn.Module):
-    """Actor-Critic 공유 네트워크"""
+    """Actor-Critic shared network"""
 
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
 
-        # 공유 특징 추출 레이어
+        # Shared feature extraction layer
         self.shared = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             nn.ReLU()
         )
 
-        # Actor (정책 네트워크)
+        # Actor (policy network)
         self.actor = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, action_dim)
         )
 
-        # Critic (가치 네트워크)
+        # Critic (value network)
         self.critic = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -37,14 +37,14 @@ class ActorCriticNetwork(nn.Module):
         )
 
     def forward(self, state):
-        """순전파: 정책과 가치를 동시에 출력"""
+        """Forward pass: outputs policy and value simultaneously"""
         features = self.shared(state)
         policy_logits = self.actor(features)
         value = self.critic(features)
         return policy_logits, value
 
     def get_action(self, state):
-        """행동 샘플링"""
+        """Sample an action"""
         policy_logits, value = self.forward(state)
         policy = F.softmax(policy_logits, dim=-1)
         dist = torch.distributions.Categorical(policy)
@@ -55,7 +55,7 @@ class ActorCriticNetwork(nn.Module):
 
 
 class A2CAgent:
-    """A2C (Advantage Actor-Critic) 에이전트"""
+    """A2C (Advantage Actor-Critic) Agent"""
 
     def __init__(self, state_dim, action_dim, lr=3e-4, gamma=0.99,
                  value_coef=0.5, entropy_coef=0.01):
@@ -63,14 +63,14 @@ class A2CAgent:
         self.optimizer = torch.optim.Adam(self.network.parameters(), lr=lr)
 
         self.gamma = gamma
-        self.value_coef = value_coef  # Critic 손실 가중치
-        self.entropy_coef = entropy_coef  # 엔트로피 보너스 가중치
+        self.value_coef = value_coef  # Critic loss weight
+        self.entropy_coef = entropy_coef  # Entropy bonus weight
 
-        # 에피소드 버퍼
+        # Episode buffer
         self.reset_buffers()
 
     def reset_buffers(self):
-        """버퍼 초기화"""
+        """Reset buffers"""
         self.log_probs = []
         self.values = []
         self.rewards = []
@@ -78,11 +78,11 @@ class A2CAgent:
         self.entropies = []
 
     def choose_action(self, state):
-        """행동 선택"""
+        """Select an action"""
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         action, log_prob, value, entropy = self.network.get_action(state_tensor)
 
-        # 버퍼에 저장
+        # Store in buffer
         self.log_probs.append(log_prob)
         self.values.append(value)
         self.entropies.append(entropy)
@@ -90,12 +90,12 @@ class A2CAgent:
         return action
 
     def store_transition(self, reward, done):
-        """전이 저장"""
+        """Store a transition"""
         self.rewards.append(reward)
         self.dones.append(done)
 
     def compute_returns(self, next_value):
-        """n-step returns 계산 (부트스트래핑)"""
+        """Compute n-step returns (with bootstrapping)"""
         returns = []
         R = next_value
 
@@ -108,62 +108,62 @@ class A2CAgent:
         return torch.tensor(returns, dtype=torch.float32)
 
     def update(self, next_state):
-        """A2C 업데이트"""
+        """A2C update"""
         if len(self.rewards) == 0:
             return 0, 0
 
-        # 다음 상태의 가치 (부트스트래핑용)
+        # Next state value (for bootstrapping)
         with torch.no_grad():
             state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
             _, next_value = self.network(state_tensor)
             next_value = next_value.item()
 
-        # Returns 계산
+        # Compute returns
         returns = self.compute_returns(next_value)
         values = torch.cat(self.values).squeeze()
         log_probs = torch.stack(self.log_probs)
         entropies = torch.stack(self.entropies)
 
-        # Advantage 계산: A(s,a) = Q(s,a) - V(s) ≈ R - V(s)
+        # Compute advantage: A(s,a) = Q(s,a) - V(s) ~ R - V(s)
         advantages = returns - values.detach()
 
-        # 손실 계산
+        # Compute losses
         actor_loss = -(log_probs * advantages).mean()  # Policy gradient
         critic_loss = F.mse_loss(values, returns)  # Value function loss
-        entropy_loss = -entropies.mean()  # 탐색 장려
+        entropy_loss = -entropies.mean()  # Encourage exploration
 
         total_loss = (actor_loss +
                       self.value_coef * critic_loss +
                       self.entropy_coef * entropy_loss)
 
-        # 그래디언트 업데이트
+        # Gradient update
         self.optimizer.zero_grad()
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), max_norm=0.5)
         self.optimizer.step()
 
-        # 버퍼 초기화
+        # Reset buffers
         self.reset_buffers()
 
         return actor_loss.item(), critic_loss.item()
 
 
 class A2CWithGAE(A2CAgent):
-    """GAE (Generalized Advantage Estimation)를 사용하는 A2C"""
+    """A2C with GAE (Generalized Advantage Estimation)"""
 
     def __init__(self, *args, gae_lambda=0.95, **kwargs):
         super().__init__(*args, **kwargs)
         self.gae_lambda = gae_lambda
 
     def compute_gae(self, next_value):
-        """GAE를 사용한 Advantage 계산"""
+        """Compute advantage using GAE"""
         values = torch.cat(self.values).squeeze().tolist()
-        values.append(next_value)  # 마지막에 부트스트랩 가치 추가
+        values.append(next_value)  # Append bootstrap value at the end
 
         advantages = []
         gae = 0
 
-        # 역방향으로 GAE 계산
+        # Compute GAE in reverse order
         for t in reversed(range(len(self.rewards))):
             if self.dones[t]:
                 delta = self.rewards[t] - values[t]
@@ -180,24 +180,24 @@ class A2CWithGAE(A2CAgent):
         return advantages, returns
 
     def update(self, next_state):
-        """GAE를 사용한 업데이트"""
+        """Update using GAE"""
         if len(self.rewards) == 0:
             return 0, 0
 
-        # 다음 상태의 가치
+        # Next state value
         with torch.no_grad():
             state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
             _, next_value = self.network(state_tensor)
             next_value = next_value.item()
 
-        # GAE로 advantage와 returns 계산
+        # Compute advantage and returns using GAE
         advantages, returns = self.compute_gae(next_value)
 
         values = torch.cat(self.values).squeeze()
         log_probs = torch.stack(self.log_probs)
         entropies = torch.stack(self.entropies)
 
-        # 손실 계산
+        # Compute losses
         actor_loss = -(log_probs * advantages.detach()).mean()
         critic_loss = F.mse_loss(values, returns)
         entropy_loss = -entropies.mean()
@@ -206,7 +206,7 @@ class A2CWithGAE(A2CAgent):
                       self.value_coef * critic_loss +
                       self.entropy_coef * entropy_loss)
 
-        # 업데이트
+        # Update
         self.optimizer.zero_grad()
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), max_norm=0.5)
@@ -218,12 +218,12 @@ class A2CWithGAE(A2CAgent):
 
 
 def train_a2c(env_name='CartPole-v1', n_episodes=1000, n_steps=5, use_gae=False):
-    """A2C 학습"""
+    """A2C training"""
     env = gym.make(env_name)
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
-    # 에이전트 생성
+    # Create agent
     if use_gae:
         agent = A2CWithGAE(state_dim, action_dim, lr=3e-4, gamma=0.99,
                           value_coef=0.5, entropy_coef=0.01, gae_lambda=0.95)
@@ -233,7 +233,7 @@ def train_a2c(env_name='CartPole-v1', n_episodes=1000, n_steps=5, use_gae=False)
                         value_coef=0.5, entropy_coef=0.01)
         method_name = "A2C"
 
-    print(f"=== {method_name} 학습 시작 ({env_name}) ===\n")
+    print(f"=== Starting {method_name} training ({env_name}) ===\n")
 
     scores = []
     actor_losses = []
@@ -255,7 +255,7 @@ def train_a2c(env_name='CartPole-v1', n_episodes=1000, n_steps=5, use_gae=False)
             total_reward += reward
             step_count += 1
 
-            # n-step 업데이트 또는 에피소드 종료 시 업데이트
+            # n-step update or update at episode end
             if step_count % n_steps == 0 or done:
                 actor_loss, critic_loss = agent.update(next_state)
                 actor_losses.append(actor_loss)
@@ -272,9 +272,9 @@ def train_a2c(env_name='CartPole-v1', n_episodes=1000, n_steps=5, use_gae=False)
                   f"Actor Loss: {avg_actor_loss:.4f} | "
                   f"Critic Loss: {avg_critic_loss:.4f}")
 
-        # CartPole 해결 조건: 연속 100 에피소드 평균 475 이상
+        # CartPole solved condition: average of 475+ over 100 consecutive episodes
         if len(scores) >= 100 and np.mean(scores[-100:]) >= 475:
-            print(f"\n환경 해결! ({episode + 1} 에피소드)")
+            print(f"\nEnvironment solved! ({episode + 1} episodes)")
             break
 
     env.close()
@@ -282,24 +282,24 @@ def train_a2c(env_name='CartPole-v1', n_episodes=1000, n_steps=5, use_gae=False)
 
 
 def compare_a2c_with_reinforce():
-    """A2C와 REINFORCE 비교"""
-    print("=== A2C vs REINFORCE 비교 ===\n")
+    """Compare A2C and REINFORCE"""
+    print("=== A2C vs REINFORCE Comparison ===\n")
 
-    # A2C 학습
+    # A2C training
     _, a2c_scores, _, _ = train_a2c('CartPole-v1', n_episodes=500, use_gae=False)
 
-    # A2C with GAE 학습
+    # A2C with GAE training
     print("\n" + "="*60 + "\n")
     _, a2c_gae_scores, _, _ = train_a2c('CartPole-v1', n_episodes=500, use_gae=True)
 
-    # 학습 곡선 비교 시각화
+    # Learning curve comparison visualization
     plot_comparison(a2c_scores, a2c_gae_scores)
 
     return a2c_scores, a2c_gae_scores
 
 
 def plot_comparison(a2c_scores, a2c_gae_scores):
-    """학습 곡선 비교 시각화"""
+    """Visualize learning curve comparison"""
     window = 10
 
     def smooth(data, window):
@@ -309,7 +309,7 @@ def plot_comparison(a2c_scores, a2c_gae_scores):
 
     plt.figure(figsize=(14, 5))
 
-    # 원본 데이터
+    # Raw data
     plt.subplot(1, 2, 1)
     plt.plot(a2c_scores, alpha=0.3, label='A2C (raw)', color='blue')
     plt.plot(a2c_gae_scores, alpha=0.3, label='A2C+GAE (raw)', color='green')
@@ -320,7 +320,7 @@ def plot_comparison(a2c_scores, a2c_gae_scores):
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    # 평활화된 데이터
+    # Smoothed data
     plt.subplot(1, 2, 2)
     plt.plot(smooth(a2c_scores, window), label='A2C (smoothed)', linewidth=2, color='blue')
     plt.plot(smooth(a2c_gae_scores, window), label='A2C+GAE (smoothed)', linewidth=2, color='green')
@@ -333,22 +333,22 @@ def plot_comparison(a2c_scores, a2c_gae_scores):
 
     plt.tight_layout()
     plt.savefig('a2c_comparison.png', dpi=150)
-    print("\n학습 곡선이 'a2c_comparison.png'로 저장되었습니다.")
+    print("\nLearning curves saved to 'a2c_comparison.png'.")
 
 
 def train_lunarlander():
-    """LunarLander 환경에서 A2C 학습"""
+    """A2C training on the LunarLander environment"""
     try:
         env = gym.make('LunarLander-v2')
     except:
-        print("LunarLander-v2 환경을 찾을 수 없습니다.")
-        print("설치: pip install gymnasium[box2d]")
+        print("LunarLander-v2 environment not found.")
+        print("Install: pip install gymnasium[box2d]")
         return None, None
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
-    # GAE를 사용하는 A2C
+    # A2C with GAE
     agent = A2CWithGAE(
         state_dim, action_dim,
         lr=7e-4, gamma=0.99,
@@ -356,7 +356,7 @@ def train_lunarlander():
         gae_lambda=0.95
     )
 
-    print("=== LunarLander A2C 학습 시작 ===\n")
+    print("=== Starting LunarLander A2C training ===\n")
 
     scores = []
     n_steps = 5
@@ -377,7 +377,7 @@ def train_lunarlander():
             total_reward += reward
             steps += 1
 
-            # n-step 업데이트 또는 종료 시
+            # n-step update or update at termination
             if steps % n_steps == 0 or done:
                 agent.update(next_state)
 
@@ -390,9 +390,9 @@ def train_lunarlander():
             avg = np.mean(scores[-100:])
             print(f"Episode {episode + 1:4d} | Avg Score: {avg:.2f}")
 
-            # LunarLander 해결 조건: 평균 200 이상
+            # LunarLander solved condition: average 200+
             if avg >= 200:
-                print(f"\n환경 해결! ({episode + 1} 에피소드)")
+                print(f"\nEnvironment solved! ({episode + 1} episodes)")
                 break
 
     env.close()
@@ -400,16 +400,16 @@ def train_lunarlander():
 
 
 if __name__ == "__main__":
-    # 1. CartPole에서 A2C vs A2C+GAE 비교
+    # 1. Compare A2C vs A2C+GAE on CartPole
     a2c_scores, a2c_gae_scores = compare_a2c_with_reinforce()
 
-    # 2. LunarLander 학습 (선택적)
+    # 2. LunarLander training (optional)
     print("\n" + "="*60)
-    print("LunarLander 학습을 시작하려면 주석을 해제하세요:")
+    print("Uncomment to start LunarLander training:")
     print("# agent, scores = train_lunarlander()")
 
-    # 학습 결과 요약
+    # Training results summary
     print("\n" + "="*60)
-    print("학습 완료!")
-    print(f"A2C 최종 100 에피소드 평균: {np.mean(a2c_scores[-100:]):.2f}")
-    print(f"A2C+GAE 최종 100 에피소드 평균: {np.mean(a2c_gae_scores[-100:]):.2f}")
+    print("Training complete!")
+    print(f"A2C last 100 episodes average: {np.mean(a2c_scores[-100:]):.2f}")
+    print(f"A2C+GAE last 100 episodes average: {np.mean(a2c_gae_scores[-100:]):.2f}")

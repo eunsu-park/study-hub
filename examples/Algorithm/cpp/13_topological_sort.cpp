@@ -1,8 +1,8 @@
 /*
- * 위상 정렬 (Topological Sort)
+ * Topological Sort
  * Kahn's Algorithm, DFS-based, Cycle Detection
  *
- * DAG(Directed Acyclic Graph)에서 정점들의 선형 순서를 찾습니다.
+ * Finds a linear ordering of vertices in a DAG (Directed Acyclic Graph).
  */
 
 #include <iostream>
@@ -14,20 +14,20 @@
 using namespace std;
 
 // =============================================================================
-// 1. Kahn's Algorithm (BFS 기반)
+// 1. Kahn's Algorithm (BFS-based)
 // =============================================================================
 
 vector<int> topologicalSortKahn(int n, const vector<vector<int>>& adj) {
     vector<int> indegree(n, 0);
 
-    // 진입 차수 계산
+    // Compute in-degrees
     for (int u = 0; u < n; u++) {
         for (int v : adj[u]) {
             indegree[v]++;
         }
     }
 
-    // 진입 차수가 0인 정점을 큐에 추가
+    // Add vertices with in-degree 0 to queue
     queue<int> q;
     for (int i = 0; i < n; i++) {
         if (indegree[i] == 0) {
@@ -49,16 +49,16 @@ vector<int> topologicalSortKahn(int n, const vector<vector<int>>& adj) {
         }
     }
 
-    // 사이클이 있으면 모든 정점을 방문할 수 없음
+    // If cycle exists, not all vertices can be visited
     if ((int)result.size() != n) {
-        return {};  // 사이클 존재
+        return {};  // Cycle exists
     }
 
     return result;
 }
 
 // =============================================================================
-// 2. DFS 기반 위상 정렬
+// 2. DFS-based Topological Sort
 // =============================================================================
 
 void topoDFS(int node, const vector<vector<int>>& adj,
@@ -94,28 +94,28 @@ vector<int> topologicalSortDFS(int n, const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 3. 사이클 탐지 (DFS)
+// 3. Cycle Detection (DFS)
 // =============================================================================
 
 bool hasCycleDFS(int node, const vector<vector<int>>& adj,
                  vector<int>& color) {
-    color[node] = 1;  // 방문 중 (회색)
+    color[node] = 1;  // In progress (gray)
 
     for (int neighbor : adj[node]) {
         if (color[neighbor] == 1) {
-            return true;  // 백 엣지 발견 (사이클)
+            return true;  // Back edge found (cycle)
         }
         if (color[neighbor] == 0 && hasCycleDFS(neighbor, adj, color)) {
             return true;
         }
     }
 
-    color[node] = 2;  // 방문 완료 (검은색)
+    color[node] = 2;  // Completed (black)
     return false;
 }
 
 bool hasCycle(int n, const vector<vector<int>>& adj) {
-    vector<int> color(n, 0);  // 0: 미방문, 1: 방문 중, 2: 완료
+    vector<int> color(n, 0);  // 0: unvisited, 1: in progress, 2: completed
 
     for (int i = 0; i < n; i++) {
         if (color[i] == 0 && hasCycleDFS(i, adj, color)) {
@@ -127,7 +127,7 @@ bool hasCycle(int n, const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 4. 모든 위상 정렬 순서 찾기
+// 4. Find All Topological Sort Orders
 // =============================================================================
 
 void allTopoSorts(vector<vector<int>>& adj, vector<int>& indegree,
@@ -137,7 +137,7 @@ void allTopoSorts(vector<vector<int>>& adj, vector<int>& indegree,
 
     for (int i = 0; i < n; i++) {
         if (indegree[i] == 0 && !visited[i]) {
-            // 이 정점 선택
+            // Select this vertex
             visited[i] = true;
             result.push_back(i);
 
@@ -147,7 +147,7 @@ void allTopoSorts(vector<vector<int>>& adj, vector<int>& indegree,
 
             allTopoSorts(adj, indegree, result, visited, allResults, n);
 
-            // 백트래킹
+            // Backtrack
             visited[i] = false;
             result.pop_back();
             for (int neighbor : adj[i]) {
@@ -182,7 +182,7 @@ vector<vector<int>> findAllTopologicalSorts(int n, const vector<vector<int>>& ad
 }
 
 // =============================================================================
-// 5. 과목 수강 순서 (Course Schedule)
+// 5. Course Schedule
 // =============================================================================
 
 bool canFinish(int numCourses, vector<pair<int, int>>& prerequisites) {
@@ -256,15 +256,15 @@ vector<int> findOrder(int numCourses, vector<pair<int, int>>& prerequisites) {
 }
 
 // =============================================================================
-// 6. 외계인 사전 (Alien Dictionary)
+// 6. Alien Dictionary
 // =============================================================================
 
 string alienOrder(vector<string>& words) {
-    // 그래프 구성
+    // Build graph
     unordered_map<char, unordered_set<char>> adj;
     unordered_map<char, int> indegree;
 
-    // 모든 문자 초기화
+    // Initialize all characters
     for (const string& word : words) {
         for (char c : word) {
             if (indegree.find(c) == indegree.end()) {
@@ -273,12 +273,12 @@ string alienOrder(vector<string>& words) {
         }
     }
 
-    // 인접한 단어 비교하여 순서 결정
+    // Compare adjacent words to determine order
     for (int i = 0; i < (int)words.size() - 1; i++) {
         string& w1 = words[i];
         string& w2 = words[i + 1];
 
-        // 잘못된 순서 체크 (prefix가 더 뒤에 올 수 없음)
+        // Invalid order check (prefix cannot come after)
         if (w1.length() > w2.length() &&
             w1.substr(0, w2.length()) == w2) {
             return "";
@@ -295,7 +295,7 @@ string alienOrder(vector<string>& words) {
         }
     }
 
-    // 위상 정렬
+    // Topological sort
     queue<char> q;
     for (auto& [c, deg] : indegree) {
         if (deg == 0) {
@@ -318,14 +318,14 @@ string alienOrder(vector<string>& words) {
     }
 
     if (result.length() != indegree.size()) {
-        return "";  // 사이클 존재
+        return "";  // Cycle exists
     }
 
     return result;
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -339,13 +339,14 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "위상 정렬 예제" << endl;
+    cout << "Topological Sort Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 그래프
-    //   5 → 0 ← 4
-    //   ↓       ↓
-    //   2 → 3 → 1
+    // Test graph
+    //   5 -> 0 <- 4
+    //   |         |
+    //   v         v
+    //   2 -> 3 -> 1
     int n = 6;
     vector<vector<int>> adj(n);
     adj[5] = {0, 2};
@@ -356,59 +357,59 @@ int main() {
     // 1. Kahn's Algorithm
     cout << "\n[1] Kahn's Algorithm (BFS)" << endl;
     auto result1 = topologicalSortKahn(n, adj);
-    cout << "    위상 정렬: ";
+    cout << "    Topological order: ";
     printVector(result1);
     cout << endl;
 
-    // 2. DFS 기반
-    cout << "\n[2] DFS 기반 위상 정렬" << endl;
+    // 2. DFS-based
+    cout << "\n[2] DFS-based Topological Sort" << endl;
     auto result2 = topologicalSortDFS(n, adj);
-    cout << "    위상 정렬: ";
+    cout << "    Topological order: ";
     printVector(result2);
     cout << endl;
 
-    // 3. 사이클 탐지
-    cout << "\n[3] 사이클 탐지" << endl;
-    cout << "    현재 그래프: " << (hasCycle(n, adj) ? "사이클 있음" : "DAG") << endl;
+    // 3. Cycle Detection
+    cout << "\n[3] Cycle Detection" << endl;
+    cout << "    Current graph: " << (hasCycle(n, adj) ? "has cycle" : "DAG") << endl;
 
     vector<vector<int>> cycleAdj(3);
     cycleAdj[0] = {1};
     cycleAdj[1] = {2};
     cycleAdj[2] = {0};
-    cout << "    사이클 그래프: " << (hasCycle(3, cycleAdj) ? "사이클 있음" : "DAG") << endl;
+    cout << "    Cycle graph: " << (hasCycle(3, cycleAdj) ? "has cycle" : "DAG") << endl;
 
-    // 4. 모든 위상 정렬
-    cout << "\n[4] 모든 위상 정렬 순서" << endl;
+    // 4. All Topological Sorts
+    cout << "\n[4] All Topological Sort Orders" << endl;
     vector<vector<int>> smallAdj(4);
     smallAdj[0] = {1, 2};
     smallAdj[1] = {3};
     smallAdj[2] = {3};
     auto allSorts = findAllTopologicalSorts(4, smallAdj);
-    cout << "    그래프: 0→1→3, 0→2→3" << endl;
-    cout << "    가능한 순서: " << allSorts.size() << "개" << endl;
+    cout << "    Graph: 0->1->3, 0->2->3" << endl;
+    cout << "    Possible orders: " << allSorts.size() << endl;
     for (auto& order : allSorts) {
         cout << "      ";
         printVector(order);
         cout << endl;
     }
 
-    // 5. 과목 수강 순서
-    cout << "\n[5] 과목 수강 순서" << endl;
+    // 5. Course Schedule
+    cout << "\n[5] Course Schedule" << endl;
     vector<pair<int, int>> prereqs = {{1, 0}, {2, 0}, {3, 1}, {3, 2}};
-    cout << "    과목 수: 4, 선수과목: (1,0), (2,0), (3,1), (3,2)" << endl;
-    cout << "    수강 가능: " << (canFinish(4, prereqs) ? "예" : "아니오") << endl;
+    cout << "    Courses: 4, Prerequisites: (1,0), (2,0), (3,1), (3,2)" << endl;
+    cout << "    Can finish: " << (canFinish(4, prereqs) ? "yes" : "no") << endl;
     auto order = findOrder(4, prereqs);
-    cout << "    수강 순서: ";
+    cout << "    Course order: ";
     printVector(order);
     cout << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘       | 시간복잡도 | 공간복잡도 |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm      | Time       | Space      |" << endl;
     cout << "    |----------------|------------|------------|" << endl;
     cout << "    | Kahn (BFS)     | O(V + E)   | O(V)       |" << endl;
-    cout << "    | DFS 기반       | O(V + E)   | O(V)       |" << endl;
-    cout << "    | 모든 순서      | O(V! × V)  | O(V)       |" << endl;
+    cout << "    | DFS-based      | O(V + E)   | O(V)       |" << endl;
+    cout << "    | All orders     | O(V! x V)  | O(V)       |" << endl;
 
     cout << "\n============================================================" << endl;
 

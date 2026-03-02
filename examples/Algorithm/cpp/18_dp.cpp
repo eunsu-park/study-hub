@@ -1,8 +1,8 @@
 /*
- * 동적 프로그래밍 (Dynamic Programming)
+ * Dynamic Programming (DP)
  * Fibonacci, Knapsack, LCS, LIS, Edit Distance, Matrix Chain
  *
- * 복잡한 문제를 부분 문제로 나누어 해결합니다.
+ * Solves complex problems by breaking them into subproblems.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 피보나치 (Top-down, Bottom-up)
+// 1. Fibonacci (Top-down, Bottom-up)
 // =============================================================================
 
 // Top-down (Memoization)
@@ -41,7 +41,7 @@ long long fibBottomUp(int n) {
     return dp[n];
 }
 
-// 공간 최적화
+// Space-optimized
 long long fibOptimized(int n) {
     if (n <= 1) return n;
 
@@ -56,7 +56,7 @@ long long fibOptimized(int n) {
 }
 
 // =============================================================================
-// 2. 0/1 배낭 문제
+// 2. 0/1 Knapsack Problem
 // =============================================================================
 
 int knapsack01(int W, const vector<int>& weights, const vector<int>& values) {
@@ -65,7 +65,7 @@ int knapsack01(int W, const vector<int>& weights, const vector<int>& values) {
 
     for (int i = 1; i <= n; i++) {
         for (int w = 0; w <= W; w++) {
-            dp[i][w] = dp[i-1][w];  // 안 담음
+            dp[i][w] = dp[i-1][w];  // Don't include
             if (weights[i-1] <= w) {
                 dp[i][w] = max(dp[i][w], dp[i-1][w - weights[i-1]] + values[i-1]);
             }
@@ -75,7 +75,7 @@ int knapsack01(int W, const vector<int>& weights, const vector<int>& values) {
     return dp[n][W];
 }
 
-// 공간 최적화
+// Space-optimized
 int knapsack01Optimized(int W, const vector<int>& weights, const vector<int>& values) {
     int n = weights.size();
     vector<int> dp(W + 1, 0);
@@ -89,7 +89,7 @@ int knapsack01Optimized(int W, const vector<int>& weights, const vector<int>& va
     return dp[W];
 }
 
-// 무한 배낭 (Unbounded)
+// Unbounded Knapsack
 int unboundedKnapsack(int W, const vector<int>& weights, const vector<int>& values) {
     int n = weights.size();
     vector<int> dp(W + 1, 0);
@@ -106,7 +106,7 @@ int unboundedKnapsack(int W, const vector<int>& weights, const vector<int>& valu
 }
 
 // =============================================================================
-// 3. 최장 공통 부분수열 (LCS)
+// 3. Longest Common Subsequence (LCS)
 // =============================================================================
 
 int lcs(const string& s1, const string& s2) {
@@ -126,7 +126,7 @@ int lcs(const string& s1, const string& s2) {
     return dp[m][n];
 }
 
-// LCS 문자열 복원
+// LCS string reconstruction
 string lcsString(const string& s1, const string& s2) {
     int m = s1.length(), n = s2.length();
     vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
@@ -141,7 +141,7 @@ string lcsString(const string& s1, const string& s2) {
         }
     }
 
-    // 역추적
+    // Backtracking
     string result;
     int i = m, j = n;
     while (i > 0 && j > 0) {
@@ -159,10 +159,10 @@ string lcsString(const string& s1, const string& s2) {
 }
 
 // =============================================================================
-// 4. 최장 증가 부분수열 (LIS)
+// 4. Longest Increasing Subsequence (LIS)
 // =============================================================================
 
-// O(n²)
+// O(n^2)
 int lisQuadratic(const vector<int>& arr) {
     int n = arr.size();
     vector<int> dp(n, 1);
@@ -194,7 +194,7 @@ int lisNLogN(const vector<int>& arr) {
     return tails.size();
 }
 
-// LIS 수열 복원
+// LIS sequence reconstruction
 vector<int> lisWithSequence(const vector<int>& arr) {
     int n = arr.size();
     vector<int> tails;
@@ -218,7 +218,7 @@ vector<int> lisWithSequence(const vector<int>& arr) {
         }
     }
 
-    // 역추적
+    // Backtracking
     vector<int> result;
     for (int i = tailIdx.back(); i != -1; i = prev[i]) {
         result.push_back(arr[i]);
@@ -229,7 +229,7 @@ vector<int> lisWithSequence(const vector<int>& arr) {
 }
 
 // =============================================================================
-// 5. 편집 거리 (Edit Distance)
+// 5. Edit Distance
 // =============================================================================
 
 int editDistance(const string& s1, const string& s2) {
@@ -244,9 +244,9 @@ int editDistance(const string& s1, const string& s2) {
             if (s1[i-1] == s2[j-1]) {
                 dp[i][j] = dp[i-1][j-1];
             } else {
-                dp[i][j] = 1 + min({dp[i-1][j],      // 삭제
-                                    dp[i][j-1],      // 삽입
-                                    dp[i-1][j-1]});  // 교체
+                dp[i][j] = 1 + min({dp[i-1][j],      // Delete
+                                    dp[i][j-1],      // Insert
+                                    dp[i-1][j-1]});  // Replace
             }
         }
     }
@@ -255,7 +255,7 @@ int editDistance(const string& s1, const string& s2) {
 }
 
 // =============================================================================
-// 6. 행렬 체인 곱셈
+// 6. Matrix Chain Multiplication
 // =============================================================================
 
 int matrixChainMultiplication(const vector<int>& dims) {
@@ -279,10 +279,10 @@ int matrixChainMultiplication(const vector<int>& dims) {
 }
 
 // =============================================================================
-// 7. 동전 교환 (Coin Change)
+// 7. Coin Change
 // =============================================================================
 
-// 최소 동전 개수
+// Minimum number of coins
 int coinChange(const vector<int>& coins, int amount) {
     vector<int> dp(amount + 1, INT_MAX);
     dp[0] = 0;
@@ -298,7 +298,7 @@ int coinChange(const vector<int>& coins, int amount) {
     return dp[amount] == INT_MAX ? -1 : dp[amount];
 }
 
-// 경우의 수
+// Number of ways
 int coinChangeWays(const vector<int>& coins, int amount) {
     vector<int> dp(amount + 1, 0);
     dp[0] = 1;
@@ -313,7 +313,7 @@ int coinChangeWays(const vector<int>& coins, int amount) {
 }
 
 // =============================================================================
-// 8. 최대 부분 배열 합 (Kadane's Algorithm)
+// 8. Maximum Subarray Sum (Kadane's Algorithm)
 // =============================================================================
 
 int maxSubarraySum(const vector<int>& arr) {
@@ -329,10 +329,10 @@ int maxSubarraySum(const vector<int>& arr) {
 }
 
 // =============================================================================
-// 9. 팰린드롬 부분문자열
+// 9. Palindrome Substrings
 // =============================================================================
 
-// 가장 긴 팰린드롬 부분문자열
+// Longest palindromic substring
 string longestPalindrome(const string& s) {
     int n = s.length();
     if (n == 0) return "";
@@ -340,10 +340,10 @@ string longestPalindrome(const string& s) {
     vector<vector<bool>> dp(n, vector<bool>(n, false));
     int start = 0, maxLen = 1;
 
-    // 길이 1
+    // Length 1
     for (int i = 0; i < n; i++) dp[i][i] = true;
 
-    // 길이 2
+    // Length 2
     for (int i = 0; i < n - 1; i++) {
         if (s[i] == s[i+1]) {
             dp[i][i+1] = true;
@@ -352,7 +352,7 @@ string longestPalindrome(const string& s) {
         }
     }
 
-    // 길이 3 이상
+    // Length 3 and above
     for (int len = 3; len <= n; len++) {
         for (int i = 0; i + len - 1 < n; i++) {
             int j = i + len - 1;
@@ -367,11 +367,11 @@ string longestPalindrome(const string& s) {
     return s.substr(start, maxLen);
 }
 
-// 팰린드롬 분할 최소 횟수
+// Minimum palindrome partition cuts
 int minPalindromeCuts(const string& s) {
     int n = s.length();
 
-    // isPalin[i][j]: s[i..j]가 팰린드롬인지
+    // isPalin[i][j]: whether s[i..j] is a palindrome
     vector<vector<bool>> isPalin(n, vector<bool>(n, false));
     for (int i = n - 1; i >= 0; i--) {
         for (int j = i; j < n; j++) {
@@ -383,7 +383,7 @@ int minPalindromeCuts(const string& s) {
         }
     }
 
-    // dp[i]: s[0..i]의 최소 분할 횟수
+    // dp[i]: minimum number of cuts for s[0..i]
     vector<int> dp(n, 0);
     for (int i = 0; i < n; i++) {
         if (isPalin[0][i]) {
@@ -402,7 +402,7 @@ int minPalindromeCuts(const string& s) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -416,79 +416,79 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "동적 프로그래밍 예제" << endl;
+    cout << "Dynamic Programming Example" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 피보나치
-    cout << "\n[1] 피보나치" << endl;
+    // 1. Fibonacci
+    cout << "\n[1] Fibonacci" << endl;
     memo.assign(50, -1);
     cout << "    fib(10) Top-down: " << fibTopDown(10) << endl;
     cout << "    fib(10) Bottom-up: " << fibBottomUp(10) << endl;
     cout << "    fib(10) Optimized: " << fibOptimized(10) << endl;
 
-    // 2. 0/1 배낭
-    cout << "\n[2] 0/1 배낭" << endl;
+    // 2. 0/1 Knapsack
+    cout << "\n[2] 0/1 Knapsack" << endl;
     vector<int> weights = {2, 3, 4, 5};
     vector<int> values = {3, 4, 5, 6};
     int W = 8;
-    cout << "    무게: [2,3,4,5], 가치: [3,4,5,6], 용량: 8" << endl;
-    cout << "    최대 가치: " << knapsack01(W, weights, values) << endl;
+    cout << "    Weights: [2,3,4,5], Values: [3,4,5,6], Capacity: 8" << endl;
+    cout << "    Max value: " << knapsack01(W, weights, values) << endl;
 
     // 3. LCS
-    cout << "\n[3] 최장 공통 부분수열 (LCS)" << endl;
+    cout << "\n[3] Longest Common Subsequence (LCS)" << endl;
     string s1 = "ABCDGH", s2 = "AEDFHR";
     cout << "    s1: \"ABCDGH\", s2: \"AEDFHR\"" << endl;
-    cout << "    LCS 길이: " << lcs(s1, s2) << endl;
+    cout << "    LCS length: " << lcs(s1, s2) << endl;
     cout << "    LCS: \"" << lcsString(s1, s2) << "\"" << endl;
 
     // 4. LIS
-    cout << "\n[4] 최장 증가 부분수열 (LIS)" << endl;
+    cout << "\n[4] Longest Increasing Subsequence (LIS)" << endl;
     vector<int> arr = {10, 9, 2, 5, 3, 7, 101, 18};
-    cout << "    배열: [10,9,2,5,3,7,101,18]" << endl;
-    cout << "    LIS 길이 O(n²): " << lisQuadratic(arr) << endl;
-    cout << "    LIS 길이 O(n log n): " << lisNLogN(arr) << endl;
+    cout << "    Array: [10,9,2,5,3,7,101,18]" << endl;
+    cout << "    LIS length O(n^2): " << lisQuadratic(arr) << endl;
+    cout << "    LIS length O(n log n): " << lisNLogN(arr) << endl;
     cout << "    LIS: ";
     printVector(lisWithSequence(arr));
     cout << endl;
 
-    // 5. 편집 거리
-    cout << "\n[5] 편집 거리" << endl;
-    cout << "    \"horse\" → \"ros\": " << editDistance("horse", "ros") << endl;
+    // 5. Edit Distance
+    cout << "\n[5] Edit Distance" << endl;
+    cout << "    \"horse\" -> \"ros\": " << editDistance("horse", "ros") << endl;
 
-    // 6. 행렬 체인 곱셈
-    cout << "\n[6] 행렬 체인 곱셈" << endl;
+    // 6. Matrix Chain Multiplication
+    cout << "\n[6] Matrix Chain Multiplication" << endl;
     vector<int> dims = {10, 30, 5, 60};
-    cout << "    행렬 크기: 10×30, 30×5, 5×60" << endl;
-    cout << "    최소 곱셈 횟수: " << matrixChainMultiplication(dims) << endl;
+    cout << "    Matrix sizes: 10x30, 30x5, 5x60" << endl;
+    cout << "    Min multiplications: " << matrixChainMultiplication(dims) << endl;
 
-    // 7. 동전 교환
-    cout << "\n[7] 동전 교환" << endl;
+    // 7. Coin Change
+    cout << "\n[7] Coin Change" << endl;
     vector<int> coins = {1, 2, 5};
-    cout << "    동전: [1,2,5], 금액: 11" << endl;
-    cout << "    최소 개수: " << coinChange(coins, 11) << endl;
-    cout << "    경우의 수: " << coinChangeWays(coins, 11) << endl;
+    cout << "    Coins: [1,2,5], Amount: 11" << endl;
+    cout << "    Min coins: " << coinChange(coins, 11) << endl;
+    cout << "    Number of ways: " << coinChangeWays(coins, 11) << endl;
 
-    // 8. 최대 부분 배열 합
-    cout << "\n[8] 최대 부분 배열 합" << endl;
+    // 8. Maximum Subarray Sum
+    cout << "\n[8] Maximum Subarray Sum" << endl;
     vector<int> subArr = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
-    cout << "    배열: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
-    cout << "    최대 합: " << maxSubarraySum(subArr) << endl;
+    cout << "    Array: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
+    cout << "    Max sum: " << maxSubarraySum(subArr) << endl;
 
-    // 9. 팰린드롬
-    cout << "\n[9] 팰린드롬" << endl;
-    cout << "    \"babad\" 가장 긴 팰린드롬: \"" << longestPalindrome("babad") << "\"" << endl;
-    cout << "    \"aab\" 최소 분할: " << minPalindromeCuts("aab") << endl;
+    // 9. Palindrome
+    cout << "\n[9] Palindrome" << endl;
+    cout << "    \"babad\" longest palindrome: \"" << longestPalindrome("babad") << "\"" << endl;
+    cout << "    \"aab\" min cuts: " << minPalindromeCuts("aab") << endl;
 
-    // 10. 복잡도 요약
-    cout << "\n[10] 복잡도 요약" << endl;
-    cout << "    | 문제              | 시간복잡도    | 공간복잡도 |" << endl;
+    // 10. Complexity Summary
+    cout << "\n[10] Complexity Summary" << endl;
+    cout << "    | Problem           | Time          | Space      |" << endl;
     cout << "    |-------------------|---------------|------------|" << endl;
-    cout << "    | 피보나치          | O(n)          | O(1)       |" << endl;
-    cout << "    | 0/1 배낭          | O(nW)         | O(W)       |" << endl;
+    cout << "    | Fibonacci         | O(n)          | O(1)       |" << endl;
+    cout << "    | 0/1 Knapsack      | O(nW)         | O(W)       |" << endl;
     cout << "    | LCS               | O(mn)         | O(mn)      |" << endl;
     cout << "    | LIS               | O(n log n)    | O(n)       |" << endl;
-    cout << "    | 편집 거리         | O(mn)         | O(n)       |" << endl;
-    cout << "    | 행렬 체인         | O(n³)         | O(n²)      |" << endl;
+    cout << "    | Edit Distance     | O(mn)         | O(n)       |" << endl;
+    cout << "    | Matrix Chain      | O(n^3)        | O(n^2)     |" << endl;
 
     cout << "\n============================================================" << endl;
 

@@ -1,24 +1,24 @@
 """
-09. RAG (Retrieval-Augmented Generation) 예제
+09. RAG (Retrieval-Augmented Generation) Example
 
-문서 검색 + LLM 생성 결합
+Combining document retrieval with LLM generation
 """
 
 import numpy as np
 
 print("=" * 60)
-print("RAG 시스템")
+print("RAG System")
 print("=" * 60)
 
 
 # ============================================
-# 1. 간단한 RAG 구현 (NumPy만 사용)
+# 1. Simple RAG Implementation (NumPy only)
 # ============================================
-print("\n[1] 간단한 RAG (NumPy)")
+print("\n[1] Simple RAG (NumPy)")
 print("-" * 40)
 
 class SimpleVectorStore:
-    """간단한 벡터 저장소"""
+    """Simple vector store"""
     def __init__(self):
         self.documents = []
         self.embeddings = None
@@ -28,20 +28,20 @@ class SimpleVectorStore:
         self.embeddings = np.array(embeddings)
 
     def search(self, query_embedding, top_k=3):
-        """코사인 유사도로 검색"""
+        """Search by cosine similarity"""
         query = np.array(query_embedding)
 
-        # 코사인 유사도
+        # Cosine similarity
         similarities = np.dot(self.embeddings, query) / (
             np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query)
         )
 
-        # 상위 k개
+        # Top k
         top_indices = np.argsort(similarities)[-top_k:][::-1]
         return [(self.documents[i], similarities[i]) for i in top_indices]
 
 
-# 예시 문서
+# Example documents
 documents = [
     "Python is a high-level programming language known for its readability.",
     "Machine learning is a subset of artificial intelligence.",
@@ -50,19 +50,19 @@ documents = [
     "Computer vision enables machines to interpret images."
 ]
 
-# 가상 임베딩 (실제로는 모델 사용)
+# Simulated embeddings (in practice, use a model)
 np.random.seed(42)
 embeddings = np.random.randn(len(documents), 128)
 
-# 벡터 저장소
+# Vector store
 store = SimpleVectorStore()
 store.add_documents(documents, embeddings)
 
-# 검색
+# Search
 query_embedding = np.random.randn(128)
 results = store.search(query_embedding, top_k=2)
 
-print("검색 결과:")
+print("Search results:")
 for doc, score in results:
     print(f"  [{score:.4f}] {doc[:50]}...")
 
@@ -76,39 +76,39 @@ print("-" * 40)
 try:
     from sentence_transformers import SentenceTransformer
 
-    # 임베딩 모델
+    # Embedding model
     model = SentenceTransformer('all-MiniLM-L6-v2')
 
-    # 문서 임베딩
+    # Document embeddings
     doc_embeddings = model.encode(documents)
-    print(f"문서 임베딩 shape: {doc_embeddings.shape}")
+    print(f"Document embeddings shape: {doc_embeddings.shape}")
 
-    # 쿼리
+    # Query
     query = "What is machine learning?"
     query_embedding = model.encode(query)
 
-    # 검색
+    # Search
     store = SimpleVectorStore()
     store.add_documents(documents, doc_embeddings)
     results = store.search(query_embedding, top_k=2)
 
-    print(f"\n쿼리: {query}")
-    print("검색 결과:")
+    print(f"\nQuery: {query}")
+    print("Search results:")
     for doc, score in results:
         print(f"  [{score:.4f}] {doc}")
 
 except ImportError:
-    print("sentence-transformers 미설치")
+    print("sentence-transformers not installed")
 
 
 # ============================================
-# 3. 청킹 (Chunking)
+# 3. Chunking
 # ============================================
-print("\n[3] 텍스트 청킹")
+print("\n[3] Text Chunking")
 print("-" * 40)
 
 def chunk_text(text, chunk_size=100, overlap=20):
-    """오버랩이 있는 청킹"""
+    """Chunking with overlap"""
     chunks = []
     start = 0
     while start < len(text):
@@ -131,20 +131,20 @@ who now describe AI in terms of rationality and acting rationally.
 """
 
 chunks = chunk_text(long_text, chunk_size=150, overlap=30)
-print(f"원본 길이: {len(long_text)} chars")
-print(f"청크 수: {len(chunks)}")
+print(f"Original length: {len(long_text)} chars")
+print(f"Number of chunks: {len(chunks)}")
 for i, chunk in enumerate(chunks[:3]):
-    print(f"  청크 {i+1}: {chunk[:50]}...")
+    print(f"  Chunk {i+1}: {chunk[:50]}...")
 
 
 # ============================================
-# 4. 완전한 RAG 파이프라인
+# 4. Complete RAG Pipeline
 # ============================================
-print("\n[4] 완전한 RAG 파이프라인")
+print("\n[4] Complete RAG Pipeline")
 print("-" * 40)
 
 class RAGPipeline:
-    """RAG 파이프라인"""
+    """RAG Pipeline"""
 
     def __init__(self, embedding_model=None):
         self.documents = []
@@ -153,31 +153,31 @@ class RAGPipeline:
         self.embedding_model = embedding_model
 
     def add_documents(self, documents, chunk_size=200, overlap=50):
-        """문서 추가 및 청킹"""
+        """Add documents and chunk them"""
         self.documents = documents
 
-        # 청킹
+        # Chunking
         for doc in documents:
             doc_chunks = chunk_text(doc, chunk_size, overlap)
             self.chunks.extend(doc_chunks)
 
-        # 임베딩
+        # Embedding
         if self.embedding_model:
             self.embeddings = self.embedding_model.encode(self.chunks)
         else:
-            # 가상 임베딩
+            # Simulated embeddings
             self.embeddings = np.random.randn(len(self.chunks), 128)
 
-        print(f"문서 {len(documents)}개 → 청크 {len(self.chunks)}개")
+        print(f"{len(documents)} documents -> {len(self.chunks)} chunks")
 
     def retrieve(self, query, top_k=3):
-        """관련 청크 검색"""
+        """Retrieve relevant chunks"""
         if self.embedding_model:
             query_emb = self.embedding_model.encode(query)
         else:
             query_emb = np.random.randn(128)
 
-        # 코사인 유사도
+        # Cosine similarity
         similarities = np.dot(self.embeddings, query_emb) / (
             np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query_emb) + 1e-10
         )
@@ -186,7 +186,7 @@ class RAGPipeline:
         return [self.chunks[i] for i in top_indices]
 
     def generate(self, query, context):
-        """프롬프트 구성 (실제로는 LLM 호출)"""
+        """Build prompt (in practice, call LLM)"""
         prompt = f"""Answer based on the context:
 
 Context:
@@ -198,12 +198,12 @@ Answer:"""
         return prompt
 
     def query(self, question, top_k=3):
-        """RAG 쿼리"""
-        # 검색
+        """RAG query"""
+        # Retrieve
         relevant_chunks = self.retrieve(question, top_k)
         context = "\n\n".join(relevant_chunks)
 
-        # 프롬프트 생성
+        # Generate prompt
         prompt = self.generate(question, context)
 
         return {
@@ -213,20 +213,20 @@ Answer:"""
         }
 
 
-# RAG 파이프라인 테스트
+# RAG pipeline test
 rag = RAGPipeline()
 rag.add_documents([long_text])
 
 result = rag.query("What is artificial intelligence?", top_k=2)
-print(f"\n질문: {result['question']}")
-print(f"컨텍스트 길이: {len(result['context'])} chars")
-print(f"프롬프트 미리보기:\n{result['prompt'][:200]}...")
+print(f"\nQuestion: {result['question']}")
+print(f"Context length: {len(result['context'])} chars")
+print(f"Prompt preview:\n{result['prompt'][:200]}...")
 
 
 # ============================================
-# 5. OpenAI RAG (API 필요)
+# 5. OpenAI RAG (API required)
 # ============================================
-print("\n[5] OpenAI RAG 예제 (코드만)")
+print("\n[5] OpenAI RAG Example (code only)")
 print("-" * 40)
 
 openai_rag_code = '''
@@ -251,11 +251,11 @@ class OpenAIRAG:
         return [self.documents[i] for i in top_idx]
 
     def query(self, question, top_k=3):
-        # 검색
+        # Retrieve
         relevant = self.search(question, top_k)
         context = "\\n\\n".join(relevant)
 
-        # LLM 호출
+        # LLM call
         response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -269,27 +269,27 @@ print(openai_rag_code)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("RAG 정리")
+print("RAG Summary")
 print("=" * 60)
 
 summary = """
-RAG 파이프라인:
-    1. 문서 → 청킹 → 임베딩 → 벡터 DB 저장
-    2. 쿼리 → 임베딩 → 유사 문서 검색
-    3. 쿼리 + 문서 → LLM → 답변
+RAG Pipeline:
+    1. Documents -> Chunking -> Embedding -> Store in Vector DB
+    2. Query -> Embedding -> Search similar documents
+    3. Query + Documents -> LLM -> Answer
 
-핵심 코드:
-    # 임베딩
+Key Code:
+    # Embedding
     embeddings = model.encode(documents)
 
-    # 검색
+    # Search
     similarities = cosine_similarity([query_emb], embeddings)
     top_docs = documents[top_indices]
 
-    # 생성
+    # Generate
     prompt = f"Context: {context}\\nQuestion: {query}"
     response = llm.generate(prompt)
 """

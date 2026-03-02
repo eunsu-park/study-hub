@@ -1,30 +1,30 @@
 -- =============================================================================
--- PostgreSQL 집계 함수 예제
+-- PostgreSQL Aggregation Function Examples
 -- Aggregation Functions and GROUP BY
 -- =============================================================================
 
--- 먼저 01_basic_crud.sql과 02_joins.sql을 실행하여 테이블과 데이터를 생성하세요.
+-- First, run 01_basic_crud.sql and 02_joins.sql to create tables and data.
 
 -- =============================================================================
--- 1. 기본 집계 함수
+-- 1. Basic Aggregation Functions
 -- =============================================================================
 
--- COUNT - 행 개수
+-- COUNT - Row count
 SELECT COUNT(*) AS total_employees FROM employees;
 
-SELECT COUNT(email) AS employees_with_email FROM employees;  -- NULL 제외
+SELECT COUNT(email) AS employees_with_email FROM employees;  -- Excludes NULL
 
 SELECT COUNT(DISTINCT dept_id) AS unique_departments FROM employees;
 
--- SUM - 합계
+-- SUM - Total
 SELECT SUM(salary) AS total_salary FROM employees;
 
--- AVG - 평균
+-- AVG - Average
 SELECT AVG(salary) AS average_salary FROM employees;
 
 SELECT ROUND(AVG(salary), 2) AS avg_salary_rounded FROM employees;
 
--- MIN, MAX - 최솟값, 최댓값
+-- MIN, MAX - Minimum, Maximum
 SELECT
     MIN(salary) AS min_salary,
     MAX(salary) AS max_salary
@@ -35,7 +35,7 @@ SELECT
     MAX(hire_date) AS last_hire
 FROM employees;
 
--- 모든 집계 함수 함께 사용
+-- Using all aggregation functions together
 SELECT
     COUNT(*) AS employee_count,
     SUM(salary) AS total_salary,
@@ -49,7 +49,7 @@ FROM employees;
 -- 2. GROUP BY
 -- =============================================================================
 
--- 부서별 집계
+-- Aggregate by department
 SELECT
     dept_id,
     COUNT(*) AS employee_count,
@@ -59,7 +59,7 @@ WHERE dept_id IS NOT NULL
 GROUP BY dept_id
 ORDER BY employee_count DESC;
 
--- JOIN과 함께 사용
+-- Used with JOIN
 SELECT
     d.dept_name,
     COUNT(e.emp_id) AS employee_count,
@@ -70,7 +70,7 @@ LEFT JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name
 ORDER BY total_salary DESC NULLS LAST;
 
--- 여러 컬럼으로 그룹화
+-- Group by multiple columns
 SELECT
     dept_id,
     is_active,
@@ -79,7 +79,7 @@ FROM employees
 GROUP BY dept_id, is_active
 ORDER BY dept_id, is_active;
 
--- 표현식으로 그룹화
+-- Group by expression
 SELECT
     EXTRACT(YEAR FROM hire_date) AS hire_year,
     COUNT(*) AS hire_count
@@ -88,10 +88,10 @@ GROUP BY EXTRACT(YEAR FROM hire_date)
 ORDER BY hire_year;
 
 -- =============================================================================
--- 3. HAVING - 그룹 필터링
+-- 3. HAVING - Group Filtering
 -- =============================================================================
 
--- 직원이 2명 이상인 부서
+-- Departments with 2 or more employees
 SELECT
     d.dept_name,
     COUNT(e.emp_id) AS employee_count
@@ -101,7 +101,7 @@ GROUP BY d.dept_id, d.dept_name
 HAVING COUNT(e.emp_id) >= 2
 ORDER BY employee_count DESC;
 
--- 평균 급여가 50000 이상인 부서
+-- Departments with average salary >= 50000
 SELECT
     d.dept_name,
     ROUND(AVG(e.salary), 2) AS avg_salary
@@ -121,16 +121,16 @@ SELECT
     ROUND(AVG(e.salary), 2) AS avg_salary
 FROM departments d
 JOIN employees e ON d.dept_id = e.dept_id
-WHERE e.is_active = TRUE  -- 행 필터링 (그룹 전)
+WHERE e.is_active = TRUE  -- Row filtering (before grouping)
 GROUP BY d.dept_id, d.dept_name
-HAVING COUNT(e.emp_id) >= 1  -- 그룹 필터링 (그룹 후)
+HAVING COUNT(e.emp_id) >= 1  -- Group filtering (after grouping)
 ORDER BY avg_salary DESC;
 
 -- =============================================================================
--- 4. 고급 집계 함수
+-- 4. Advanced Aggregation Functions
 -- =============================================================================
 
--- STRING_AGG - 문자열 연결
+-- STRING_AGG - String concatenation
 SELECT
     d.dept_name,
     STRING_AGG(e.first_name || ' ' || e.last_name, ', ' ORDER BY e.first_name) AS employee_names
@@ -138,7 +138,7 @@ FROM departments d
 JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name;
 
--- ARRAY_AGG - 배열로 집계
+-- ARRAY_AGG - Aggregate into array
 SELECT
     d.dept_name,
     ARRAY_AGG(e.first_name ORDER BY e.first_name) AS employee_names_array
@@ -146,7 +146,7 @@ FROM departments d
 JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name;
 
--- JSON_AGG - JSON 배열로 집계
+-- JSON_AGG - Aggregate into JSON array
 SELECT
     d.dept_name,
     JSON_AGG(
@@ -177,7 +177,7 @@ JOIN departments d ON e.dept_id = d.dept_id
 GROUP BY ROLLUP(d.dept_name, EXTRACT(YEAR FROM e.hire_date))
 ORDER BY d.dept_name NULLS LAST, hire_year NULLS LAST;
 
--- CUBE - 모든 가능한 조합의 소계
+-- CUBE - Subtotals for all possible combinations
 SELECT
     d.dept_name,
     e.is_active,
@@ -187,7 +187,7 @@ JOIN departments d ON e.dept_id = d.dept_id
 GROUP BY CUBE(d.dept_name, e.is_active)
 ORDER BY d.dept_name NULLS LAST, e.is_active NULLS LAST;
 
--- GROUPING SETS - 특정 조합만 소계
+-- GROUPING SETS - Subtotals for specific combinations only
 SELECT
     d.dept_name,
     EXTRACT(YEAR FROM e.hire_date) AS hire_year,
@@ -201,7 +201,7 @@ GROUP BY GROUPING SETS (
 )
 ORDER BY d.dept_name NULLS LAST, hire_year NULLS LAST;
 
--- GROUPING() 함수로 소계 행 구분
+-- GROUPING() function to identify subtotal rows
 SELECT
     CASE WHEN GROUPING(d.dept_name) = 1 THEN 'All Departments' ELSE d.dept_name END AS dept_name,
     COUNT(*) AS employee_count,
@@ -212,7 +212,7 @@ GROUP BY ROLLUP(d.dept_name)
 ORDER BY GROUPING(d.dept_name), d.dept_name;
 
 -- =============================================================================
--- 6. FILTER 절
+-- 6. FILTER Clause
 -- =============================================================================
 
 -- Why: FILTER clause is PostgreSQL's cleaner alternative to CASE-based conditional
@@ -229,10 +229,10 @@ JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name;
 
 -- =============================================================================
--- 7. 통계 함수
+-- 7. Statistical Functions
 -- =============================================================================
 
--- 표준편차와 분산
+-- Standard deviation and variance
 SELECT
     d.dept_name,
     ROUND(AVG(e.salary), 2) AS avg_salary,
@@ -255,13 +255,13 @@ SELECT
     PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary) AS q3_salary
 FROM employees;
 
--- 최빈값 (MODE)
+-- Mode
 SELECT
     MODE() WITHIN GROUP (ORDER BY dept_id) AS most_common_dept
 FROM employees;
 
 -- =============================================================================
--- 8. 조건부 집계 (CASE와 함께)
+-- 8. Conditional Aggregation (with CASE)
 -- =============================================================================
 
 SELECT
@@ -278,31 +278,31 @@ JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name;
 
 -- =============================================================================
--- 집계 함수 요약
+-- Aggregation Function Summary
 -- =============================================================================
 /*
-기본 집계:
+Basic Aggregation:
 - COUNT(*), COUNT(col), COUNT(DISTINCT col)
 - SUM(col), AVG(col)
 - MIN(col), MAX(col)
 
-문자열/배열 집계:
+String/Array Aggregation:
 - STRING_AGG(col, delimiter)
 - ARRAY_AGG(col)
 - JSON_AGG(value)
 
-그룹화:
-- GROUP BY: 기본 그룹화
-- HAVING: 그룹 필터링 (집계 후)
-- ROLLUP: 계층적 소계
-- CUBE: 모든 조합 소계
-- GROUPING SETS: 특정 조합 소계
+Grouping:
+- GROUP BY: Basic grouping
+- HAVING: Group filtering (after aggregation)
+- ROLLUP: Hierarchical subtotals
+- CUBE: All combination subtotals
+- GROUPING SETS: Specific combination subtotals
 
-고급:
-- FILTER (WHERE ...): 조건부 집계
-- PERCENTILE_CONT(): 백분위수
-- STDDEV(), VARIANCE(): 통계
+Advanced:
+- FILTER (WHERE ...): Conditional aggregation
+- PERCENTILE_CONT(): Percentiles
+- STDDEV(), VARIANCE(): Statistics
 
-순서:
-SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT
+Execution Order:
+SELECT -> FROM -> WHERE -> GROUP BY -> HAVING -> ORDER BY -> LIMIT
 */

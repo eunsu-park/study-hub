@@ -1,14 +1,14 @@
 // builtins.c
-// 쉘 내장 명령어 구현
-// cd, pwd, echo, help, export, env 등
-// 컴파일: gcc -c builtins.c 또는 다른 파일과 함께 링크
+// Shell built-in command implementations
+// cd, pwd, echo, help, export, env, etc.
+// Compile: gcc -c builtins.c or link with other files
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-// 내장 명령어 이름들
+// Built-in command names
 const char* builtin_names[] = {
     "cd",
     "pwd",
@@ -20,22 +20,22 @@ const char* builtin_names[] = {
     NULL
 };
 
-// cd: 디렉토리 변경
+// cd: change directory
 int builtin_cd(char** args) {
     const char* path;
 
     if (args[1] == NULL) {
-        // 인자 없으면 홈 디렉토리
+        // No argument: go to home directory
         path = getenv("HOME");
         if (path == NULL) {
-            fprintf(stderr, "cd: HOME 환경변수가 설정되지 않음\n");
+            fprintf(stderr, "cd: HOME environment variable not set\n");
             return 1;
         }
     } else if (strcmp(args[1], "-") == 0) {
-        // cd - : 이전 디렉토리
+        // cd - : previous directory
         path = getenv("OLDPWD");
         if (path == NULL) {
-            fprintf(stderr, "cd: OLDPWD 환경변수가 설정되지 않음\n");
+            fprintf(stderr, "cd: OLDPWD environment variable not set\n");
             return 1;
         }
         printf("%s\n", path);
@@ -45,7 +45,7 @@ int builtin_cd(char** args) {
         path = args[1];
     }
 
-    // 현재 디렉토리 저장
+    // Save current directory
     char oldpwd[1024];
     getcwd(oldpwd, sizeof(oldpwd));
 
@@ -54,7 +54,7 @@ int builtin_cd(char** args) {
         return 1;
     }
 
-    // OLDPWD, PWD 환경변수 갱신
+    // Update OLDPWD, PWD environment variables
     setenv("OLDPWD", oldpwd, 1);
 
     char newpwd[1024];
@@ -64,9 +64,9 @@ int builtin_cd(char** args) {
     return 0;
 }
 
-// pwd: 현재 디렉토리 출력
+// pwd: print current directory
 int builtin_pwd(char** args) {
-    (void)args;  // 사용하지 않음
+    (void)args;  // Unused
 
     char cwd[1024];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
@@ -77,12 +77,12 @@ int builtin_pwd(char** args) {
     return 1;
 }
 
-// echo: 인자 출력
+// echo: print arguments
 int builtin_echo(char** args) {
     int newline = 1;
     int start = 1;
 
-    // -n 옵션: 줄바꿈 없이 출력
+    // -n option: print without newline
     if (args[1] && strcmp(args[1], "-n") == 0) {
         newline = 0;
         start = 2;
@@ -97,28 +97,28 @@ int builtin_echo(char** args) {
     return 0;
 }
 
-// help: 도움말
+// help: display help
 int builtin_help(char** args) {
     (void)args;
 
-    printf("\n=== Mini Shell 도움말 ===\n\n");
-    printf("내장 명령어:\n");
-    printf("  cd [디렉토리]  - 디렉토리 변경\n");
-    printf("  pwd           - 현재 디렉토리 출력\n");
-    printf("  echo [텍스트]  - 텍스트 출력\n");
-    printf("  export VAR=값  - 환경변수 설정\n");
-    printf("  env           - 환경변수 목록\n");
-    printf("  help          - 이 도움말\n");
-    printf("  exit          - 쉘 종료\n");
-    printf("\n외부 명령어는 PATH에서 검색됩니다.\n\n");
+    printf("\n=== Mini Shell Help ===\n\n");
+    printf("Built-in commands:\n");
+    printf("  cd [directory]  - Change directory\n");
+    printf("  pwd             - Print current directory\n");
+    printf("  echo [text]     - Print text\n");
+    printf("  export VAR=val  - Set environment variable\n");
+    printf("  env             - List environment variables\n");
+    printf("  help            - Show this help\n");
+    printf("  exit            - Exit the shell\n");
+    printf("\nExternal commands are searched in PATH.\n\n");
 
     return 0;
 }
 
-// export: 환경변수 설정
+// export: set environment variable
 int builtin_export(char** args) {
     if (args[1] == NULL) {
-        // 인자 없으면 환경변수 목록 출력
+        // No argument: print environment variables
         extern char** environ;
         for (char** env = environ; *env; env++) {
             printf("export %s\n", *env);
@@ -126,7 +126,7 @@ int builtin_export(char** args) {
         return 0;
     }
 
-    // VAR=value 형식 파싱
+    // Parse VAR=value format
     for (int i = 1; args[i]; i++) {
         char* eq = strchr(args[i], '=');
         if (eq) {
@@ -134,7 +134,7 @@ int builtin_export(char** args) {
             setenv(args[i], eq + 1, 1);
             *eq = '=';
         } else {
-            // = 없으면 빈 값으로 설정
+            // No = sign: set empty value
             setenv(args[i], "", 1);
         }
     }
@@ -142,7 +142,7 @@ int builtin_export(char** args) {
     return 0;
 }
 
-// env: 환경변수 출력
+// env: print environment variables
 int builtin_env(char** args) {
     (void)args;
 
@@ -153,8 +153,8 @@ int builtin_env(char** args) {
     return 0;
 }
 
-// 내장 명령어인지 확인하고 실행
-// 반환: -1 (내장 명령어 아님), 0+ (실행 결과)
+// Check if built-in command and execute
+// Returns: -1 (not a built-in), 0+ (execution result)
 int execute_builtin(char** args) {
     if (args[0] == NULL) return -1;
 
@@ -165,17 +165,17 @@ int execute_builtin(char** args) {
     if (strcmp(args[0], "export") == 0) return builtin_export(args);
     if (strcmp(args[0], "env") == 0) return builtin_env(args);
 
-    return -1;  // 내장 명령어 아님
+    return -1;  // Not a built-in command
 }
 
-// 테스트용 메인 함수 (독립 실행 가능)
+// Test main function (can run standalone)
 #ifdef TEST_BUILTINS
 int main(void) {
     char input[1024];
     char* args[64];
 
-    printf("=== 내장 명령어 테스트 ===\n");
-    printf("테스트 명령어: cd, pwd, echo, help, export, env, exit\n\n");
+    printf("=== Built-in Command Test ===\n");
+    printf("Test commands: cd, pwd, echo, help, export, env, exit\n\n");
 
     while (1) {
         printf("builtin> ");
@@ -185,7 +185,7 @@ int main(void) {
             break;
         }
 
-        // 파싱
+        // Parse
         int argc = 0;
         char* token = strtok(input, " \t\n");
         while (token && argc < 63) {
@@ -196,16 +196,16 @@ int main(void) {
 
         if (argc == 0) continue;
 
-        // exit 체크
+        // Check exit
         if (strcmp(args[0], "exit") == 0) {
-            printf("종료합니다.\n");
+            printf("Exiting.\n");
             break;
         }
 
-        // 내장 명령어 실행
+        // Execute built-in command
         int result = execute_builtin(args);
         if (result == -1) {
-            printf("알 수 없는 명령어: %s\n", args[0]);
+            printf("Unknown command: %s\n", args[0]);
         }
     }
 

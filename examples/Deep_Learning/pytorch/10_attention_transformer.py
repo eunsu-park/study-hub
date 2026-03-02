@@ -1,7 +1,7 @@
 """
-10. Attention과 Transformer
+10. Attention and Transformer
 
-Attention 메커니즘과 Transformer를 PyTorch로 구현합니다.
+Implements Attention mechanism and Transformer in PyTorch.
 """
 
 import torch
@@ -37,22 +37,22 @@ def scaled_dot_product_attention(Q, K, V, mask=None):
     """
     d_k = K.size(-1)
 
-    # 스코어 계산
+    # Compute scores
     scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)
 
-    # 마스킹
+    # Masking
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
 
     # Softmax
     attention_weights = F.softmax(scores, dim=-1)
 
-    # 가중 합
+    # Weighted sum
     output = torch.matmul(attention_weights, V)
 
     return output, attention_weights
 
-# 테스트
+# Test
 batch_size = 2
 seq_len = 5
 d_k = 8
@@ -93,12 +93,12 @@ class MultiHeadAttention(nn.Module):
     def forward(self, Q, K, V, mask=None):
         batch_size = Q.size(0)
 
-        # 선형 변환
+        # Linear transformation
         Q = self.W_Q(Q)
         K = self.W_K(K)
         V = self.W_V(V)
 
-        # 헤드 분할: (batch, seq, d_model) → (batch, heads, seq, d_k)
+        # Split heads: (batch, seq, d_model) -> (batch, heads, seq, d_k)
         Q = Q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
         K = K.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
         V = V.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
@@ -106,21 +106,21 @@ class MultiHeadAttention(nn.Module):
         # Attention
         attn_output, attn_weights = scaled_dot_product_attention(Q, K, V, mask)
 
-        # 헤드 결합
+        # Combine heads
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(batch_size, -1, self.d_model)
 
-        # 출력 변환
+        # Output transformation
         output = self.W_O(attn_output)
 
         return output, attn_weights
 
-# 테스트
+# Test
 mha = MultiHeadAttention(d_model=64, num_heads=8)
 x = torch.randn(2, 10, 64)
 output, weights = mha(x, x, x)
-print(f"입력: {x.shape}")
-print(f"출력: {output.shape}")
+print(f"Input: {x.shape}")
+print(f"Output: {output.shape}")
 print(f"Attention Weights: {weights.shape}")
 
 
@@ -135,7 +135,7 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
 
-        # Positional Encoding 계산
+        # Compute Positional Encoding
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, d_model, 2).float() *
@@ -152,7 +152,7 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
 
-# 시각화
+# Visualization
 pe = PositionalEncoding(d_model=64)
 positions = pe.pe[0, :50, :].numpy()
 
@@ -164,7 +164,7 @@ plt.title('Positional Encoding')
 plt.colorbar()
 plt.savefig('positional_encoding.png', dpi=100)
 plt.close()
-print("그래프 저장: positional_encoding.png")
+print("Plot saved: positional_encoding.png")
 
 
 # ============================================
@@ -186,7 +186,7 @@ class FeedForward(nn.Module):
 ff = FeedForward(d_model=64, d_ff=256)
 x = torch.randn(2, 10, 64)
 output = ff(x)
-print(f"FFN 입력: {x.shape} → 출력: {output.shape}")
+print(f"FFN Input: {x.shape} -> Output: {output.shape}")
 
 
 # ============================================
@@ -218,7 +218,7 @@ class TransformerEncoderLayer(nn.Module):
 encoder_layer = TransformerEncoderLayer(d_model=64, num_heads=8, d_ff=256)
 x = torch.randn(2, 10, 64)
 output = encoder_layer(x)
-print(f"인코더 층 입력: {x.shape} → 출력: {output.shape}")
+print(f"Encoder layer Input: {x.shape} -> Output: {output.shape}")
 
 
 # ============================================
@@ -244,14 +244,14 @@ class TransformerEncoder(nn.Module):
 encoder = TransformerEncoder(num_layers=6, d_model=64, num_heads=8, d_ff=256)
 x = torch.randn(2, 10, 64)
 output = encoder(x)
-print(f"Transformer Encoder 출력: {output.shape}")
-print(f"파라미터 수: {sum(p.numel() for p in encoder.parameters()):,}")
+print(f"Transformer Encoder output: {output.shape}")
+print(f"Parameter count: {sum(p.numel() for p in encoder.parameters()):,}")
 
 
 # ============================================
-# 7. Transformer 분류기
+# 7. Transformer Classifier
 # ============================================
-print("\n[7] Transformer 분류기")
+print("\n[7] Transformer Classifier")
 print("-" * 40)
 
 class TransformerClassifier(nn.Module):
@@ -273,12 +273,12 @@ class TransformerClassifier(nn.Module):
                 nn.init.xavier_uniform_(p)
 
     def forward(self, x, mask=None):
-        # x: (batch, seq) - 토큰 인덱스
+        # x: (batch, seq) - token indices
         x = self.embedding(x) * math.sqrt(self.embedding.embedding_dim)
         x = self.pos_encoding(x)
         x = self.encoder(x, mask)
 
-        # 평균 풀링 또는 [CLS] 토큰
+        # Mean pooling or [CLS] token
         x = x.mean(dim=1)
 
         return self.fc(x)
@@ -293,18 +293,18 @@ model = TransformerClassifier(
 
 x = torch.randint(0, 10000, (4, 32))
 output = model(x)
-print(f"분류기 입력: {x.shape}")
-print(f"분류기 출력: {output.shape}")
-print(f"파라미터 수: {sum(p.numel() for p in model.parameters()):,}")
+print(f"Classifier input: {x.shape}")
+print(f"Classifier output: {output.shape}")
+print(f"Parameter count: {sum(p.numel() for p in model.parameters()):,}")
 
 
 # ============================================
-# 8. PyTorch 내장 Transformer
+# 8. PyTorch Built-in Transformer
 # ============================================
-print("\n[8] PyTorch 내장 Transformer")
+print("\n[8] PyTorch Built-in Transformer")
 print("-" * 40)
 
-# nn.TransformerEncoder 사용
+# Using nn.TransformerEncoder
 pytorch_encoder_layer = nn.TransformerEncoderLayer(
     d_model=64,
     nhead=8,
@@ -317,18 +317,18 @@ pytorch_encoder = nn.TransformerEncoder(pytorch_encoder_layer, num_layers=6)
 
 x = torch.randn(2, 10, 64)
 output = pytorch_encoder(x)
-print(f"PyTorch Transformer 출력: {output.shape}")
+print(f"PyTorch Transformer output: {output.shape}")
 
 
 # ============================================
-# 9. Attention 시각화
+# 9. Attention Visualization
 # ============================================
-print("\n[9] Attention 시각화")
+print("\n[9] Attention Visualization")
 print("-" * 40)
 
 def visualize_attention(attention_weights, tokens=None):
-    """Attention 가중치 시각화"""
-    weights = attention_weights[0, 0].detach().numpy()  # 첫 배치, 첫 헤드
+    """Visualize attention weights"""
+    weights = attention_weights[0, 0].detach().numpy()  # First batch, first head
 
     plt.figure(figsize=(8, 6))
     plt.imshow(weights, cmap='Blues')
@@ -344,9 +344,9 @@ def visualize_attention(attention_weights, tokens=None):
     plt.tight_layout()
     plt.savefig('attention_visualization.png', dpi=100)
     plt.close()
-    print("그래프 저장: attention_visualization.png")
+    print("Plot saved: attention_visualization.png")
 
-# 예시 attention 시각화
+# Example attention visualization
 mha = MultiHeadAttention(d_model=64, num_heads=8)
 x = torch.randn(1, 6, 64)
 _, weights = mha(x, x, x)
@@ -354,25 +354,25 @@ visualize_attention(weights, ['The', 'cat', 'sat', 'on', 'mat', '.'])
 
 
 # ============================================
-# 10. Causal Mask (디코더용)
+# 10. Causal Mask (for Decoder)
 # ============================================
 print("\n[10] Causal Mask")
 print("-" * 40)
 
 def create_causal_mask(size):
-    """미래 토큰을 볼 수 없게 하는 마스크"""
+    """Mask to prevent attending to future tokens"""
     mask = torch.triu(torch.ones(size, size), diagonal=1)
-    return mask == 0  # True: 참조 가능, False: 마스킹
+    return mask == 0  # True: can attend, False: masked
 
 mask = create_causal_mask(5)
 print(f"Causal Mask (5x5):\n{mask.int()}")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("Attention & Transformer 정리")
+print("Attention & Transformer Summary")
 print("=" * 60)
 
 summary = """
@@ -382,23 +382,23 @@ Scaled Dot-Product Attention:
     output = weights @ V
 
 Multi-Head Attention:
-    - 여러 헤드가 다른 관계 학습
-    - 각 헤드: d_k = d_model / num_heads
+    - Multiple heads learn different relationships
+    - Each head: d_k = d_model / num_heads
 
 Transformer Encoder:
     - Self-Attention + FFN
     - Residual + LayerNorm
     - Positional Encoding
 
-PyTorch 내장:
+PyTorch built-in:
     encoder_layer = nn.TransformerEncoderLayer(d_model, nhead)
     encoder = nn.TransformerEncoder(encoder_layer, num_layers)
 
-핵심 하이퍼파라미터:
-    - d_model: 모델 차원 (512)
-    - num_heads: 헤드 수 (8)
-    - d_ff: FFN 차원 (2048)
-    - num_layers: 층 수 (6)
+Key hyperparameters:
+    - d_model: Model dimension (512)
+    - num_heads: Number of heads (8)
+    - d_ff: FFN dimension (2048)
+    - num_layers: Number of layers (6)
 """
 print(summary)
 print("=" * 60)

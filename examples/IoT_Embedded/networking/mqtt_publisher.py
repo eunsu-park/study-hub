@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MQTT Publisher Example
-MQTT 발행자 예제
+MQTT Publisher Example
 
 Publishes simulated sensor data to an MQTT broker.
 

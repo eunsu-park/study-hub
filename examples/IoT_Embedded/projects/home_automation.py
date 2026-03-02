@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-스마트홈 자동화 시스템 (Smart Home Automation System)
+Smart Home Automation System
 
-통합 홈 자동화 시스템으로 조명 제어, 환경 모니터링, MQTT 기반 장치 통신을 제공합니다.
-시뮬레이션 모드를 지원하여 실제 하드웨어 없이도 동작 가능합니다.
+An integrated home automation system providing lighting control, environmental monitoring,
+and MQTT-based device communication.
+Supports simulation mode for operation without actual hardware.
 
-주요 기능:
-- 릴레이를 통한 조명/가전 제어 (시뮬레이션 모드 지원)
-- 온습도 센서 모니터링 (시뮬레이션 데이터 생성)
-- MQTT 기반 장치 통신 및 제어
-- 자동화 규칙 엔진 (온도 기반, 모션 기반)
-- 웹 대시보드 JSON API 제공
-- 상태 관리 및 로깅
+Key Features:
+- Relay-based lighting/appliance control (simulation mode supported)
+- Temperature/humidity sensor monitoring (simulated data generation)
+- MQTT-based device communication and control
+- Automation rule engine (temperature-based, motion-based)
+- Web dashboard JSON API
+- State management and logging
 
-사용법:
-    # 시뮬레이션 모드 (하드웨어 불필요)
+Usage:
+    # Simulation mode (no hardware required)
     python home_automation.py --simulate
 
-    # 실제 하드웨어 모드
+    # Real hardware mode
     python home_automation.py
 
-    # MQTT 브로커 지정
+    # Specify MQTT broker
     python home_automation.py --broker mqtt.example.com --simulate
 """
 
@@ -35,10 +36,10 @@ from typing import Dict, List, Optional, Callable
 from queue import Queue
 import argparse
 
-# 시뮬레이션 모드 플래그
+# Simulation mode flag
 SIMULATION_MODE = True
 
-# 실제 하드웨어 라이브러리 (시뮬레이션 모드에서는 사용 안 함)
+# Real hardware libraries (not used in simulation mode)
 try:
     from gpiozero import OutputDevice
     import adafruit_dht
@@ -46,23 +47,23 @@ try:
     HARDWARE_AVAILABLE = True
 except ImportError:
     HARDWARE_AVAILABLE = False
-    print("하드웨어 라이브러리 없음. 시뮬레이션 모드로 실행됩니다.")
+    print("Hardware libraries not found. Running in simulation mode.")
 
 try:
     import paho.mqtt.client as mqtt
     MQTT_AVAILABLE = True
 except ImportError:
     MQTT_AVAILABLE = False
-    print("paho-mqtt 라이브러리가 없습니다. MQTT 기능이 비활성화됩니다.")
+    print("paho-mqtt library not found. MQTT features will be disabled.")
 
 
 # ============================================================
-# 데이터 모델
+# Data Models
 # ============================================================
 
 @dataclass
 class Light:
-    """조명 장치 데이터 클래스"""
+    """Light device data class"""
     id: str
     name: str
     gpio_pin: int
@@ -70,20 +71,20 @@ class Light:
     is_on: bool = False
 
     def to_dict(self) -> dict:
-        """딕셔너리 변환"""
+        """Convert to dictionary"""
         return asdict(self)
 
 
 @dataclass
 class SensorReading:
-    """센서 데이터 클래스"""
+    """Sensor data class"""
     sensor_id: str
     temperature: float
     humidity: float
     timestamp: datetime
 
     def to_dict(self) -> dict:
-        """딕셔너리 변환"""
+        """Convert to dictionary"""
         return {
             "sensor_id": self.sensor_id,
             "temperature": self.temperature,
@@ -93,35 +94,35 @@ class SensorReading:
 
 
 # ============================================================
-# 조명 제어기 (Light Controller)
+# Light Controller
 # ============================================================
 
 class LightController:
     """
-    조명 제어 클래스
+    Light Control Class
 
-    릴레이를 통해 조명을 제어합니다.
-    시뮬레이션 모드에서는 실제 GPIO 대신 상태만 관리합니다.
+    Controls lights through relays.
+    In simulation mode, manages state only without actual GPIO.
     """
 
     def __init__(self, config: dict, simulate: bool = True):
         """
-        초기화
+        Initialize
 
         Args:
-            config: 조명 설정 (lights 리스트 포함)
-            simulate: 시뮬레이션 모드 여부
+            config: Light configuration (includes lights list)
+            simulate: Whether to use simulation mode
         """
         self.simulate = simulate
         self.lights: Dict[str, Light] = {}
         self.relays: Dict[str, any] = {}
 
-        # 조명 설정
+        # Light configuration
         for light_config in config.get('lights', []):
             light = Light(**light_config)
             self.lights[light.id] = light
 
-            # 릴레이 초기화
+            # Relay initialization
             if not simulate and HARDWARE_AVAILABLE:
                 # Why: Most relay modules are active-low: the relay closes when
                 # GPIO goes LOW. Setting active_high=False inverts the logic so
@@ -133,72 +134,72 @@ class LightController:
                 )
                 self.relays[light.id] = relay
             else:
-                # 시뮬레이션: None 저장
+                # Simulation: store None
                 self.relays[light.id] = None
 
-        logging.info(f"LightController 초기화 완료 (시뮬레이션={simulate}, 조명={len(self.lights)}개)")
+        logging.info(f"LightController initialized (simulation={simulate}, lights={len(self.lights)})")
 
     def turn_on(self, light_id: str) -> bool:
         """
-        조명 켜기
+        Turn on light
 
         Args:
-            light_id: 조명 ID
+            light_id: Light ID
 
         Returns:
-            성공 여부
+            Success status
         """
         if light_id not in self.lights:
-            logging.warning(f"조명 ID '{light_id}' 없음")
+            logging.warning(f"Light ID '{light_id}' not found")
             return False
 
         if self.simulate:
-            # 시뮬레이션: 상태만 변경
+            # Simulation: change state only
             self.lights[light_id].is_on = True
-            logging.info(f"[시뮬] 조명 ON: {self.lights[light_id].name}")
+            logging.info(f"[Sim] Light ON: {self.lights[light_id].name}")
         else:
-            # 실제 하드웨어: 릴레이 제어
+            # Real hardware: control relay
             self.relays[light_id].on()
             self.lights[light_id].is_on = True
-            logging.info(f"조명 ON: {self.lights[light_id].name}")
+            logging.info(f"Light ON: {self.lights[light_id].name}")
 
         return True
 
     def turn_off(self, light_id: str) -> bool:
         """
-        조명 끄기
+        Turn off light
 
         Args:
-            light_id: 조명 ID
+            light_id: Light ID
 
         Returns:
-            성공 여부
+            Success status
         """
         if light_id not in self.lights:
-            logging.warning(f"조명 ID '{light_id}' 없음")
+            logging.warning(f"Light ID '{light_id}' not found")
             return False
 
         if self.simulate:
-            # 시뮬레이션
+            # Simulation
             self.lights[light_id].is_on = False
-            logging.info(f"[시뮬] 조명 OFF: {self.lights[light_id].name}")
+            logging.info(f"[Sim] Light OFF: {self.lights[light_id].name}")
         else:
-            # 실제 하드웨어
+            # Real hardware
             self.relays[light_id].off()
             self.lights[light_id].is_on = False
-            logging.info(f"조명 OFF: {self.lights[light_id].name}")
+            logging.info(f"Light OFF: {self.lights[light_id].name}")
 
         return True
 
     def toggle(self, light_id: str) -> bool:
         """
-        조명 토글
+        Toggle light
 
         Args:
-            light_id: 조명 ID
+            light_id: Light ID
 
         Returns:
-            성공 여부
+            Success status
         """
         if light_id not in self.lights:
             return False
@@ -210,13 +211,13 @@ class LightController:
 
     def get_status(self, light_id: str = None) -> Optional[dict]:
         """
-        조명 상태 조회
+        Get light status
 
         Args:
-            light_id: 조명 ID (None이면 전체)
+            light_id: Light ID (None for all)
 
         Returns:
-            상태 딕셔너리
+            Status dictionary
         """
         if light_id:
             light = self.lights.get(light_id)
@@ -224,91 +225,91 @@ class LightController:
                 return light.to_dict()
             return None
 
-        # 전체 조명 상태
+        # All lights status
         return {
             "lights": [light.to_dict() for light in self.lights.values()]
         }
 
     def all_off(self):
-        """모든 조명 끄기"""
+        """Turn off all lights"""
         for light_id in self.lights:
             self.turn_off(light_id)
-        logging.info("모든 조명 OFF")
+        logging.info("All lights OFF")
 
     def all_on(self):
-        """모든 조명 켜기"""
+        """Turn on all lights"""
         for light_id in self.lights:
             self.turn_on(light_id)
-        logging.info("모든 조명 ON")
+        logging.info("All lights ON")
 
     def cleanup(self):
-        """정리 (프로그램 종료 시 호출)"""
+        """Cleanup (called on program exit)"""
         if not self.simulate:
             for relay in self.relays.values():
                 if relay:
                     relay.close()
-        logging.info("LightController 정리 완료")
+        logging.info("LightController cleanup complete")
 
 
 # ============================================================
-# 환경 센서 모니터 (Environment Monitor)
+# Environment Monitor
 # ============================================================
 
 class EnvironmentMonitor:
     """
-    환경 센서 모니터링 클래스
+    Environmental Sensor Monitoring Class
 
-    DHT11 센서로 온도/습도를 주기적으로 읽고 히스토리를 저장합니다.
-    시뮬레이션 모드에서는 랜덤 데이터를 생성합니다.
+    Periodically reads temperature/humidity from DHT11 sensor and stores history.
+    In simulation mode, generates random data.
     """
 
     def __init__(self, sensor_pin: int = 4, sensor_id: str = "env_01", simulate: bool = True):
         """
-        초기화
+        Initialize
 
         Args:
-            sensor_pin: GPIO 핀 번호
-            sensor_id: 센서 ID
-            simulate: 시뮬레이션 모드 여부
+            sensor_pin: GPIO pin number
+            sensor_id: Sensor ID
+            simulate: Whether to use simulation mode
         """
         self.sensor_id = sensor_id
         self.sensor_pin = sensor_pin
         self.simulate = simulate
 
-        # DHT 센서 초기화
+        # DHT sensor initialization
         self.dht = None
         if not simulate and HARDWARE_AVAILABLE:
             try:
                 self.dht = adafruit_dht.DHT11(getattr(board, f"D{sensor_pin}"))
             except Exception as e:
-                logging.error(f"DHT 센서 초기화 실패: {e}")
+                logging.error(f"DHT sensor initialization failed: {e}")
                 self.simulate = True
 
-        # 데이터 큐 및 히스토리
+        # Data queue and history
         self.data_queue = Queue()
         self.latest_reading: Optional[SensorReading] = None
         self.readings_history: List[SensorReading] = []
         self.max_history = 1000
 
-        # 스레드 제어
+        # Thread control
         self.running = False
         self.thread = None
 
-        # 시뮬레이션용 현재 값
+        # Simulation current values
         self.sim_temperature = 25.0
         self.sim_humidity = 60.0
 
-        logging.info(f"EnvironmentMonitor 초기화 (시뮬레이션={simulate})")
+        logging.info(f"EnvironmentMonitor initialized (simulation={simulate})")
 
     def read_sensor(self) -> Optional[SensorReading]:
         """
-        센서 읽기
+        Read sensor
 
         Returns:
-            센서 데이터 또는 None (실패 시)
+            Sensor data or None (on failure)
         """
         if self.simulate:
-            # 시뮬레이션: 랜덤 변화 생성
+            # Simulation: generate random changes
             self.sim_temperature += random.uniform(-0.5, 0.5)
             self.sim_temperature = max(10, min(40, self.sim_temperature))
 
@@ -324,7 +325,7 @@ class EnvironmentMonitor:
             return reading
 
         else:
-            # 실제 센서
+            # Real sensor
             try:
                 temperature = self.dht.temperature
                 humidity = self.dht.humidity
@@ -339,46 +340,46 @@ class EnvironmentMonitor:
                     return reading
 
             except RuntimeError as e:
-                # DHT 센서는 가끔 읽기 실패 (정상)
-                logging.debug(f"센서 읽기 실패 (정상): {e}")
+                # DHT sensor occasionally fails to read (normal)
+                logging.debug(f"Sensor read failed (normal): {e}")
             except Exception as e:
-                logging.error(f"센서 읽기 오류: {e}")
+                logging.error(f"Sensor read error: {e}")
 
             return None
 
     def _monitor_loop(self, interval: int):
         """
-        모니터링 루프 (백그라운드 스레드)
+        Monitoring loop (background thread)
 
         Args:
-            interval: 읽기 간격 (초)
+            interval: Read interval (seconds)
         """
         while self.running:
             reading = self.read_sensor()
 
             if reading:
-                # 최신 데이터 업데이트
+                # Update latest data
                 self.latest_reading = reading
 
-                # 히스토리 저장
+                # Store history
                 self.readings_history.append(reading)
                 if len(self.readings_history) > self.max_history:
                     self.readings_history.pop(0)
 
-                # 큐에 추가 (외부 구독자용)
+                # Add to queue (for external subscribers)
                 self.data_queue.put(reading)
 
             time.sleep(interval)
 
     def start(self, interval: int = 5):
         """
-        모니터링 시작
+        Start monitoring
 
         Args:
-            interval: 읽기 간격 (초)
+            interval: Read interval (seconds)
         """
         if self.running:
-            logging.warning("이미 모니터링 중입니다")
+            logging.warning("Already monitoring")
             return
 
         self.running = True
@@ -391,10 +392,10 @@ class EnvironmentMonitor:
             daemon=True
         )
         self.thread.start()
-        logging.info(f"환경 모니터링 시작 (간격={interval}초)")
+        logging.info(f"Environment monitoring started (interval={interval}s)")
 
     def stop(self):
-        """모니터링 중지"""
+        """Stop monitoring"""
         if not self.running:
             return
 
@@ -405,20 +406,20 @@ class EnvironmentMonitor:
         if self.dht and not self.simulate:
             self.dht.exit()
 
-        logging.info("환경 모니터링 중지")
+        logging.info("Environment monitoring stopped")
 
     def get_latest(self) -> Optional[dict]:
-        """최신 센서 데이터 반환"""
+        """Return latest sensor data"""
         if self.latest_reading:
             return self.latest_reading.to_dict()
         return None
 
     def get_stats(self) -> dict:
         """
-        통계 데이터 반환
+        Return statistics data
 
         Returns:
-            최소/최대/평균 통계
+            Min/max/average statistics
         """
         if not self.readings_history:
             return {}
@@ -442,14 +443,14 @@ class EnvironmentMonitor:
 
 
 # ============================================================
-# MQTT 핸들러
+# MQTT Handler
 # ============================================================
 
 class SmartHomeMQTT:
     """
-    MQTT 기반 스마트홈 제어 핸들러
+    MQTT-based Smart Home Control Handler
 
-    MQTT 브로커를 통해 장치를 제어하고 센서 데이터를 발행합니다.
+    Controls devices and publishes sensor data through an MQTT broker.
     """
 
     TOPICS = {
@@ -466,13 +467,13 @@ class SmartHomeMQTT:
                  broker: str = "localhost",
                  port: int = 1883):
         """
-        초기화
+        Initialize
 
         Args:
-            light_controller: 조명 제어기
-            env_monitor: 환경 모니터
-            broker: MQTT 브로커 주소
-            port: MQTT 포트
+            light_controller: Light controller
+            env_monitor: Environment monitor
+            broker: MQTT broker address
+            port: MQTT port
         """
         self.light_controller = light_controller
         self.env_monitor = env_monitor
@@ -480,11 +481,11 @@ class SmartHomeMQTT:
         self.port = port
 
         if not MQTT_AVAILABLE:
-            logging.warning("MQTT 라이브러리 없음. MQTT 기능 비활성화")
+            logging.warning("MQTT library not found. MQTT features disabled")
             self.client = None
             return
 
-        # MQTT 클라이언트 생성
+        # Create MQTT client
         self.client = mqtt.Client(client_id="smart_home_gateway")
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
@@ -499,29 +500,29 @@ class SmartHomeMQTT:
             retain=True
         )
 
-        logging.info(f"MQTT 클라이언트 생성 (브로커={broker}:{port})")
+        logging.info(f"MQTT client created (broker={broker}:{port})")
 
     def connect(self):
-        """MQTT 브로커 연결"""
+        """Connect to MQTT broker"""
         if not self.client:
             return
 
         try:
             self.client.connect(self.broker, self.port)
-            logging.info("MQTT 브로커 연결 시도 중...")
+            logging.info("Attempting MQTT broker connection...")
         except Exception as e:
-            logging.error(f"MQTT 연결 실패: {e}")
+            logging.error(f"MQTT connection failed: {e}")
 
     def _on_connect(self, client, userdata, flags, rc):
-        """MQTT 연결 콜백"""
+        """MQTT connection callback"""
         if rc == 0:
-            logging.info("MQTT 브로커 연결 성공")
+            logging.info("MQTT broker connection successful")
 
-            # 토픽 구독
+            # Subscribe to topics
             client.subscribe(self.TOPICS["light_command"])
-            logging.info(f"토픽 구독: {self.TOPICS['light_command']}")
+            logging.info(f"Topic subscribed: {self.TOPICS['light_command']}")
 
-            # 온라인 상태 발행
+            # Publish online status
             client.publish(
                 self.TOPICS["system"],
                 json.dumps({
@@ -532,44 +533,44 @@ class SmartHomeMQTT:
                 retain=True
             )
         else:
-            logging.error(f"MQTT 연결 실패 (코드={rc})")
+            logging.error(f"MQTT connection failed (code={rc})")
 
     def _on_message(self, client, userdata, msg):
-        """MQTT 메시지 수신 콜백"""
+        """MQTT message received callback"""
         try:
             topic = msg.topic
             payload = json.loads(msg.payload.decode())
 
-            logging.debug(f"MQTT 수신: {topic} = {payload}")
+            logging.debug(f"MQTT received: {topic} = {payload}")
 
-            # 조명 명령 처리
+            # Handle light commands
             if "light/command" in topic:
                 self._handle_light_command(topic, payload)
 
         except json.JSONDecodeError:
-            logging.error(f"잘못된 JSON: {msg.payload}")
+            logging.error(f"Invalid JSON: {msg.payload}")
         except Exception as e:
-            logging.error(f"메시지 처리 오류: {e}")
+            logging.error(f"Message processing error: {e}")
 
     def _handle_light_command(self, topic: str, payload: dict):
         """
-        조명 명령 처리
+        Handle light command
 
         Args:
-            topic: MQTT 토픽 (home/{room}/light/command)
-            payload: 명령 데이터 {"command": "on|off|toggle"}
+            topic: MQTT topic (home/{room}/light/command)
+            payload: Command data {"command": "on|off|toggle"}
         """
-        # 토픽에서 방 ID 추출
+        # Extract room ID from topic
         parts = topic.split('/')
         room = parts[1] if len(parts) >= 2 else None
 
         if not room:
-            logging.warning(f"방 ID 없음: {topic}")
+            logging.warning(f"No room ID: {topic}")
             return
 
         command = payload.get("command")
 
-        # 명령 실행
+        # Execute command
         result = False
         if command == "on":
             result = self.light_controller.turn_on(room)
@@ -578,9 +579,9 @@ class SmartHomeMQTT:
         elif command == "toggle":
             result = self.light_controller.toggle(room)
         else:
-            logging.warning(f"알 수 없는 명령: {command}")
+            logging.warning(f"Unknown command: {command}")
 
-        # 상태 발행
+        # Publish status
         if result:
             status = self.light_controller.get_status(room)
             if status:
@@ -588,26 +589,26 @@ class SmartHomeMQTT:
 
     def publish_light_status(self, room: str, status: dict):
         """
-        조명 상태 발행
+        Publish light status
 
         Args:
-            room: 방 ID
-            status: 상태 데이터
+            room: Room ID
+            status: Status data
         """
         if not self.client:
             return
 
         topic = self.TOPICS["light_status"].format(room)
         self.client.publish(topic, json.dumps(status), qos=1, retain=True)
-        logging.debug(f"조명 상태 발행: {topic}")
+        logging.debug(f"Light status published: {topic}")
 
     def publish_sensor_data(self, sensor_id: str, data: dict):
         """
-        센서 데이터 발행
+        Publish sensor data
 
         Args:
-            sensor_id: 센서 ID
-            data: 센서 데이터
+            sensor_id: Sensor ID
+            data: Sensor data
         """
         if not self.client:
             return
@@ -617,11 +618,11 @@ class SmartHomeMQTT:
 
     def publish_motion(self, sensor_id: str, detected: bool):
         """
-        모션 감지 발행
+        Publish motion detection
 
         Args:
-            sensor_id: 센서 ID
-            detected: 감지 여부
+            sensor_id: Sensor ID
+            detected: Whether motion was detected
         """
         if not self.client:
             return
@@ -635,11 +636,11 @@ class SmartHomeMQTT:
 
     def publish_automation_event(self, event_type: str, details: dict):
         """
-        자동화 이벤트 발행
+        Publish automation event
 
         Args:
-            event_type: 이벤트 타입
-            details: 상세 정보
+            event_type: Event type
+            details: Detail information
         """
         if not self.client:
             return
@@ -652,16 +653,16 @@ class SmartHomeMQTT:
         self.client.publish(self.TOPICS["automation"], json.dumps(data), qos=1)
 
     def start(self):
-        """MQTT 루프 시작"""
+        """Start MQTT loop"""
         if self.client:
             self.client.loop_start()
 
     def stop(self):
-        """MQTT 중지"""
+        """Stop MQTT"""
         if not self.client:
             return
 
-        # 오프라인 상태 발행
+        # Publish offline status
         self.client.publish(
             self.TOPICS["system"],
             json.dumps({"status": "offline"}),
@@ -671,45 +672,45 @@ class SmartHomeMQTT:
 
         self.client.loop_stop()
         self.client.disconnect()
-        logging.info("MQTT 연결 종료")
+        logging.info("MQTT connection closed")
 
 
 # ============================================================
-# 자동화 규칙 엔진
+# Automation Rule Engine
 # ============================================================
 
 class AutomationEngine:
     """
-    자동화 규칙 엔진
+    Automation Rule Engine
 
-    센서 데이터 기반으로 조명/가전을 자동 제어합니다.
+    Automatically controls lights/appliances based on sensor data.
     """
 
     def __init__(self, light_controller: LightController, mqtt_handler: SmartHomeMQTT):
         """
-        초기화
+        Initialize
 
         Args:
-            light_controller: 조명 제어기
-            mqtt_handler: MQTT 핸들러
+            light_controller: Light controller
+            mqtt_handler: MQTT handler
         """
         self.light_controller = light_controller
         self.mqtt_handler = mqtt_handler
         self.rules: List[dict] = []
 
-        logging.info("AutomationEngine 초기화")
+        logging.info("AutomationEngine initialized")
 
     # Why: Separating condition and action as callables implements a lightweight
     # rule engine. New automation behaviors can be added at runtime without
     # modifying the engine itself — a plugin architecture for home automation.
     def add_rule(self, name: str, condition: Callable, action: Callable):
         """
-        규칙 추가
+        Add rule
 
         Args:
-            name: 규칙 이름
-            condition: 조건 함수 (True/False 반환)
-            action: 실행 함수
+            name: Rule name
+            condition: Condition function (returns True/False)
+            action: Action function
         """
         self.rules.append({
             "name": name,
@@ -717,34 +718,34 @@ class AutomationEngine:
             "action": action,
             "last_triggered": None
         })
-        logging.info(f"자동화 규칙 추가: {name}")
+        logging.info(f"Automation rule added: {name}")
 
     def check_rules(self, sensor_data: dict):
         """
-        규칙 검사 및 실행
+        Check and execute rules
 
         Args:
-            sensor_data: 센서 데이터
+            sensor_data: Sensor data
         """
         for rule in self.rules:
             try:
                 if rule["condition"](sensor_data):
-                    # 조건 만족 시 액션 실행
-                    logging.info(f"자동화 규칙 트리거: {rule['name']}")
+                    # Execute action when condition is met
+                    logging.info(f"Automation rule triggered: {rule['name']}")
                     rule["action"](sensor_data)
                     rule["last_triggered"] = datetime.now()
 
-                    # MQTT 이벤트 발행
+                    # Publish MQTT event
                     self.mqtt_handler.publish_automation_event(
                         event_type=rule["name"],
                         details=sensor_data
                     )
 
             except Exception as e:
-                logging.error(f"규칙 실행 오류 ({rule['name']}): {e}")
+                logging.error(f"Rule execution error ({rule['name']}): {e}")
 
     def get_rules_status(self) -> List[dict]:
-        """규칙 상태 조회"""
+        """Get rules status"""
         return [
             {
                 "name": rule["name"],
@@ -755,38 +756,38 @@ class AutomationEngine:
 
 
 # ============================================================
-# 스마트홈 게이트웨이 (통합 시스템)
+# Smart Home Gateway (Integrated System)
 # ============================================================
 
 class SmartHomeGateway:
     """
-    스마트홈 통합 게이트웨이
+    Smart Home Integrated Gateway
 
-    모든 컴포넌트를 통합하여 스마트홈 시스템을 운영합니다.
+    Integrates all components to operate the smart home system.
     """
 
     def __init__(self, config: dict, simulate: bool = True):
         """
-        초기화
+        Initialize
 
         Args:
-            config: 설정 딕셔너리
-            simulate: 시뮬레이션 모드 여부
+            config: Configuration dictionary
+            simulate: Whether to use simulation mode
         """
         self.config = config
         self.simulate = simulate
 
-        # 조명 제어기
+        # Light controller
         self.light_controller = LightController(config, simulate=simulate)
 
-        # 환경 모니터
+        # Environment monitor
         self.env_monitor = EnvironmentMonitor(
             sensor_pin=config.get('dht_pin', 4),
             sensor_id="env_01",
             simulate=simulate
         )
 
-        # MQTT 핸들러
+        # MQTT handler
         self.mqtt_handler = SmartHomeMQTT(
             self.light_controller,
             self.env_monitor,
@@ -794,31 +795,31 @@ class SmartHomeGateway:
             port=config.get('mqtt_port', 1883)
         )
 
-        # 자동화 엔진
+        # Automation engine
         self.automation_engine = AutomationEngine(
             self.light_controller,
             self.mqtt_handler
         )
 
-        # 스레드 제어
+        # Thread control
         self.running = False
         self.threads = []
 
-        # 자동화 규칙 설정
+        # Setup automation rules
         self._setup_automation_rules()
 
-        logging.info("SmartHomeGateway 초기화 완료")
+        logging.info("SmartHomeGateway initialization complete")
 
     def _setup_automation_rules(self):
-        """자동화 규칙 설정"""
+        """Setup automation rules"""
 
-        # 규칙 1: 온도가 30도 이상이면 거실 조명 켜기 (예: 에어컨 대신)
+        # Rule 1: Turn on living room light when temperature exceeds 30C (e.g., instead of AC)
         def temp_high_condition(data):
             return data.get("temperature", 0) > 30
 
         def temp_high_action(data):
             self.light_controller.turn_on("living_room")
-            logging.info(f"[자동화] 고온 감지 ({data['temperature']}°C) - 거실 조명 ON")
+            logging.info(f"[Automation] High temperature detected ({data['temperature']}C) - Living room light ON")
 
         self.automation_engine.add_rule(
             "high_temperature_alert",
@@ -826,13 +827,13 @@ class SmartHomeGateway:
             temp_high_action
         )
 
-        # 규칙 2: 온도가 20도 이하이면 모든 조명 끄기
+        # Rule 2: Turn off all lights when temperature drops below 20C
         def temp_low_condition(data):
             return data.get("temperature", 100) < 20
 
         def temp_low_action(data):
             self.light_controller.all_off()
-            logging.info(f"[자동화] 저온 감지 ({data['temperature']}°C) - 모든 조명 OFF")
+            logging.info(f"[Automation] Low temperature detected ({data['temperature']}C) - All lights OFF")
 
         self.automation_engine.add_rule(
             "low_temperature_save",
@@ -840,13 +841,13 @@ class SmartHomeGateway:
             temp_low_action
         )
 
-        # 규칙 3: 습도가 80% 이상이면 욕실 조명 켜기
+        # Rule 3: Turn on bathroom light when humidity exceeds 80%
         def humidity_high_condition(data):
             return data.get("humidity", 0) > 80
 
         def humidity_high_action(data):
             self.light_controller.turn_on("bathroom")
-            logging.info(f"[자동화] 고습도 감지 ({data['humidity']}%) - 욕실 조명 ON")
+            logging.info(f"[Automation] High humidity detected ({data['humidity']}%) - Bathroom light ON")
 
         self.automation_engine.add_rule(
             "high_humidity_ventilation",
@@ -856,40 +857,40 @@ class SmartHomeGateway:
 
     def _sensor_publish_loop(self, interval: int):
         """
-        센서 데이터 발행 루프
+        Sensor data publish loop
 
         Args:
-            interval: 발행 간격 (초)
+            interval: Publish interval (seconds)
         """
         while self.running:
             data = self.env_monitor.get_latest()
             if data:
-                # MQTT 발행
+                # MQTT publish
                 self.mqtt_handler.publish_sensor_data("env_01", data)
 
-                # 자동화 규칙 검사
+                # Check automation rules
                 self.automation_engine.check_rules(data)
 
             time.sleep(interval)
 
     def _status_report_loop(self, interval: int):
         """
-        상태 리포트 루프
+        Status report loop
 
         Args:
-            interval: 리포트 간격 (초)
+            interval: Report interval (seconds)
         """
         while self.running:
-            # 시스템 상태 출력
+            # Print system status
             sensor_data = self.env_monitor.get_latest()
             light_status = self.light_controller.get_status()
 
             logging.info("=" * 60)
-            logging.info("시스템 상태 리포트")
+            logging.info("System Status Report")
             logging.info("-" * 60)
 
             if sensor_data:
-                logging.info(f"온도: {sensor_data['temperature']}°C, 습도: {sensor_data['humidity']}%")
+                logging.info(f"Temperature: {sensor_data['temperature']}C, Humidity: {sensor_data['humidity']}%")
 
             if light_status:
                 for light in light_status["lights"]:
@@ -901,26 +902,26 @@ class SmartHomeGateway:
             time.sleep(interval)
 
     def start(self):
-        """게이트웨이 시작"""
+        """Start gateway"""
         if self.running:
-            logging.warning("이미 실행 중입니다")
+            logging.warning("Already running")
             return
 
         logging.info("=" * 60)
-        logging.info("스마트홈 게이트웨이 시작")
-        logging.info(f"시뮬레이션 모드: {self.simulate}")
+        logging.info("Smart Home Gateway Starting")
+        logging.info(f"Simulation mode: {self.simulate}")
         logging.info("=" * 60)
 
         self.running = True
 
-        # 환경 모니터링 시작
+        # Start environment monitoring
         self.env_monitor.start(interval=5)
 
-        # MQTT 연결 및 시작
+        # MQTT connect and start
         self.mqtt_handler.connect()
         self.mqtt_handler.start()
 
-        # 센서 데이터 발행 스레드
+        # Sensor data publish thread
         sensor_thread = threading.Thread(
             target=self._sensor_publish_loop,
             args=(10,),
@@ -929,7 +930,7 @@ class SmartHomeGateway:
         sensor_thread.start()
         self.threads.append(sensor_thread)
 
-        # 상태 리포트 스레드
+        # Status report thread
         status_thread = threading.Thread(
             target=self._status_report_loop,
             args=(30,),
@@ -938,47 +939,47 @@ class SmartHomeGateway:
         status_thread.start()
         self.threads.append(status_thread)
 
-        logging.info("게이트웨이 실행 중...")
+        logging.info("Gateway running...")
 
     def stop(self):
-        """게이트웨이 중지"""
+        """Stop gateway"""
         if not self.running:
             return
 
-        logging.info("게이트웨이 중지 중...")
+        logging.info("Stopping gateway...")
 
         self.running = False
 
-        # 컴포넌트 정리
+        # Cleanup components
         self.env_monitor.stop()
         self.mqtt_handler.stop()
         self.light_controller.all_off()
         self.light_controller.cleanup()
 
-        # 스레드 종료 대기
+        # Wait for threads to finish
         for thread in self.threads:
             thread.join(timeout=2)
 
-        logging.info("게이트웨이 중지 완료")
+        logging.info("Gateway stopped")
 
     def run(self):
-        """메인 실행 루프"""
+        """Main execution loop"""
         self.start()
 
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            logging.info("\nKeyboardInterrupt 수신")
+            logging.info("\nKeyboardInterrupt received")
         finally:
             self.stop()
 
     def get_dashboard_data(self) -> dict:
         """
-        웹 대시보드용 JSON 데이터 제공
+        Provide JSON data for web dashboard
 
         Returns:
-            시스템 전체 상태
+            Full system status
         """
         return {
             "timestamp": datetime.now().isoformat(),
@@ -998,18 +999,18 @@ class SmartHomeGateway:
 
 
 # ============================================================
-# 메인 실행
+# Main Execution
 # ============================================================
 
 def main():
-    """메인 함수"""
+    """Main function"""
 
-    # 명령행 인자 파싱
+    # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description="스마트홈 자동화 시스템",
+        description="Smart Home Automation System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-예제:
+Examples:
   python home_automation.py --simulate
   python home_automation.py --broker mqtt.example.com --simulate
   python home_automation.py --loglevel DEBUG --simulate
@@ -1019,21 +1020,21 @@ def main():
     parser.add_argument(
         "--simulate",
         action="store_true",
-        help="시뮬레이션 모드 (하드웨어 불필요)"
+        help="Simulation mode (no hardware required)"
     )
 
     parser.add_argument(
         "--broker",
         type=str,
         default="localhost",
-        help="MQTT 브로커 주소 (기본값: localhost)"
+        help="MQTT broker address (default: localhost)"
     )
 
     parser.add_argument(
         "--port",
         type=int,
         default=1883,
-        help="MQTT 포트 (기본값: 1883)"
+        help="MQTT port (default: 1883)"
     )
 
     parser.add_argument(
@@ -1041,52 +1042,52 @@ def main():
         type=str,
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="로그 레벨 (기본값: INFO)"
+        help="Log level (default: INFO)"
     )
 
     args = parser.parse_args()
 
-    # 로깅 설정
+    # Logging configuration
     logging.basicConfig(
         level=getattr(logging, args.loglevel),
         format='%(asctime)s [%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # 시뮬레이션 모드 설정
+    # Simulation mode configuration
     simulate = args.simulate or not HARDWARE_AVAILABLE
 
     if simulate:
-        logging.info("시뮬레이션 모드로 실행합니다 (하드웨어 불필요)")
+        logging.info("Running in simulation mode (no hardware required)")
     else:
-        logging.info("실제 하드웨어 모드로 실행합니다")
+        logging.info("Running in real hardware mode")
 
-    # 설정
+    # Configuration
     config = {
         "lights": [
             {
                 "id": "living_room",
-                "name": "거실 조명",
+                "name": "Living Room Light",
                 "gpio_pin": 17,
-                "location": "거실"
+                "location": "Living Room"
             },
             {
                 "id": "bedroom",
-                "name": "침실 조명",
+                "name": "Bedroom Light",
                 "gpio_pin": 27,
-                "location": "침실"
+                "location": "Bedroom"
             },
             {
                 "id": "kitchen",
-                "name": "주방 조명",
+                "name": "Kitchen Light",
                 "gpio_pin": 22,
-                "location": "주방"
+                "location": "Kitchen"
             },
             {
                 "id": "bathroom",
-                "name": "욕실 조명",
+                "name": "Bathroom Light",
                 "gpio_pin": 23,
-                "location": "욕실"
+                "location": "Bathroom"
             }
         ],
         "dht_pin": 4,
@@ -1094,15 +1095,15 @@ def main():
         "mqtt_port": args.port
     }
 
-    # 게이트웨이 생성 및 실행
+    # Create and run gateway
     gateway = SmartHomeGateway(config, simulate=simulate)
 
-    # 데모: 5초 후 대시보드 데이터 출력
+    # Demo: print dashboard data after 5 seconds
     def print_dashboard():
         time.sleep(5)
         dashboard_data = gateway.get_dashboard_data()
         logging.info("\n" + "=" * 60)
-        logging.info("대시보드 데이터 (JSON API)")
+        logging.info("Dashboard Data (JSON API)")
         logging.info("=" * 60)
         print(json.dumps(dashboard_data, indent=2, ensure_ascii=False))
         logging.info("=" * 60)
@@ -1110,7 +1111,7 @@ def main():
     demo_thread = threading.Thread(target=print_dashboard, daemon=True)
     demo_thread.start()
 
-    # 메인 루프 실행
+    # Run main loop
     gateway.run()
 
 

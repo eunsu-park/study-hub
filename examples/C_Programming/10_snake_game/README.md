@@ -1,81 +1,81 @@
 # Snake Game Examples
 
-터미널 기반 뱀 게임 프로젝트 예제 파일들입니다.
+Terminal-based snake game project example files.
 
-## 파일 구성
+## File Structure
 
 ### 1. `ansi_demo.c`
-ANSI escape codes 시연 프로그램
-- 커서 이동, 색상, 박스 그리기 등을 보여줍니다.
+ANSI escape codes demonstration program
+- Demonstrates cursor movement, colors, box drawing, etc.
 
-**컴파일 및 실행:**
+**Compile and Run:**
 ```bash
 gcc -o ansi_demo ansi_demo.c
 ./ansi_demo
 ```
 
 ### 2. `input_demo.c`
-비동기 키보드 입력 시연 프로그램
-- termios를 사용한 non-blocking 입력 처리
-- 방향키와 WASD 키 지원
+Asynchronous keyboard input demonstration program
+- Non-blocking input handling using termios
+- Arrow keys and WASD keys supported
 
-**컴파일 및 실행:**
+**Compile and Run:**
 ```bash
 gcc -o input_demo input_demo.c
 ./input_demo
 ```
 
-**조작법:**
-- 방향키 또는 WASD: 이동
-- 스페이스: 점프
-- Q: 종료
+**Controls:**
+- Arrow keys or WASD: Move
+- Space: Jump
+- Q: Quit
 
 ### 3. `snake_types.h`
-뱀 게임 데이터 구조 정의
-- 게임에 필요한 모든 타입과 상수 정의
-- 다른 파일에서 include하여 사용
+Snake game data structure definitions
+- All types and constants needed for the game
+- Used by including in other files
 
 ### 4. `snake.c`
-뱀 게임 핵심 로직 구현
-- 뱀 생성/해제, 이동, 충돌 검사 등
-- `snake_types.h`를 사용하는 모듈형 구현
+Snake game core logic implementation
+- Snake creation/destruction, movement, collision detection, etc.
+- Modular implementation using `snake_types.h`
 
-**컴파일 (단독 실행 불가):**
+**Compile (cannot run standalone):**
 ```bash
-# 다른 파일과 함께 링크해야 함
+# Must be linked with other files
 gcc -c snake.c -o snake.o
 ```
 
 ### 5. `snake_game.c`
-완성된 뱀 게임 (ANSI escape codes 사용)
-- 독립적으로 동작하는 완전한 게임
-- 외부 라이브러리 필요 없음
+Complete snake game (using ANSI escape codes)
+- Fully functional standalone game
+- No external libraries required
 
-**컴파일 및 실행:**
+**Compile and Run:**
 ```bash
 gcc -o snake_game snake_game.c
 ./snake_game
 ```
 
-**조작법:**
-- 방향키 또는 WASD: 뱀 이동
-- P: 일시정지
-- Q: 종료
-- R: 재시작 (게임 오버 후)
+**Controls:**
+- Arrow keys or WASD: Move snake
+- P: Pause
+- Q: Quit
+- R: Restart (after game over)
 
-**기능:**
-- 점수 시스템
-- 속도 증가 (음식 먹을수록 빨라짐)
-- 최고 점수 저장 (`.snake_highscore` 파일)
-- 일시정지
-- 색상 표시
+**Features:**
+- Score system
+- Speed increase (gets faster as you eat food)
+- High score saving (`.snake_highscore` file)
+- Pause
+- Color display
 
 ### 6. `snake_ncurses.c`
-NCurses 라이브러리를 사용한 향상된 버전
+Enhanced version using the NCurses library
 
-**⚠️ 이 파일은 ncurses 라이브러리가 필요합니다!**
+**⚠️ This file requires the ncurses library!**
 
-**라이브러리 설치:**
+**Library Installation:**
 ```bash
 # macOS
 brew install ncurses
@@ -87,7 +87,7 @@ sudo apt install libncurses5-dev
 sudo dnf install ncurses-devel
 ```
 
-**컴파일 및 실행:**
+**Compile and Run:**
 ```bash
 # macOS
 gcc -o snake_ncurses snake_ncurses.c -lncurses
@@ -95,57 +95,57 @@ gcc -o snake_ncurses snake_ncurses.c -lncurses
 # Linux
 gcc -o snake_ncurses snake_ncurses.c -lncurses
 
-# 실행
+# Run
 ./snake_ncurses
 ```
 
-**조작법:**
-- 방향키 또는 WASD: 뱀 이동
-- P: 일시정지
-- Q: 종료
-- R: 재시작 (게임 오버 후)
+**Controls:**
+- Arrow keys or WASD: Move snake
+- P: Pause
+- Q: Quit
+- R: Restart (after game over)
 
-**ncurses 버전의 장점:**
-- 더 깔끔한 화면 처리
-- 자동 버퍼링 및 깜빡임 방지
-- 표준 박스 문자 사용
-- 더 나은 색상 관리
+**Advantages of the ncurses version:**
+- Cleaner screen rendering
+- Automatic buffering and flicker prevention
+- Standard box drawing characters
+- Better color management
 
-## 학습 순서
+## Learning Order
 
-1. **`ansi_demo.c`** - ANSI escape codes 이해
-2. **`input_demo.c`** - 비동기 입력 처리 이해
-3. **`snake_types.h`** - 게임 데이터 구조 파악
-4. **`snake.c`** - 게임 로직 구현 학습
-5. **`snake_game.c`** - 완성된 게임 분석
-6. **`snake_ncurses.c`** - ncurses 라이브러리 활용 (선택)
+1. **`ansi_demo.c`** - Understand ANSI escape codes
+2. **`input_demo.c`** - Understand asynchronous input handling
+3. **`snake_types.h`** - Examine game data structures
+4. **`snake.c`** - Learn game logic implementation
+5. **`snake_game.c`** - Analyze the complete game
+6. **`snake_ncurses.c`** - NCurses library usage (optional)
 
-## 개발 환경
+## Development Environment
 
-- C11 표준
-- POSIX 호환 시스템 (Linux, macOS, BSD)
-- 터미널: UTF-8 지원 필요
-- 컴파일러: GCC 또는 Clang
+- C11 standard
+- POSIX-compatible systems (Linux, macOS, BSD)
+- Terminal: UTF-8 support required
+- Compiler: GCC or Clang
 
-## 참고 자료
+## References
 
-이 예제는 다음 학습 자료를 기반으로 합니다:
+This example is based on the following study material:
 - `/content/ko/C_Programming/11_Project_Snake_Game.md`
 
-## 문제 해결
+## Troubleshooting
 
-### 문제: 박스 문자가 깨져 보임
-**해결:** 터미널이 UTF-8을 지원하는지 확인
+### Problem: Box-drawing characters appear broken
+**Solution:** Verify that the terminal supports UTF-8
 ```bash
 echo $LANG
-# 출력 예: en_US.UTF-8 또는 ko_KR.UTF-8
+# Example output: en_US.UTF-8 or ko_KR.UTF-8
 ```
 
-### 문제: 키 입력이 작동하지 않음
-**해결:** 터미널이 ANSI escape sequences를 지원하는지 확인
+### Problem: Key input is not working
+**Solution:** Verify that the terminal supports ANSI escape sequences
 
-### 문제: ncurses 링크 오류
-**해결:** ncurses 개발 패키지 설치 확인
+### Problem: ncurses link error
+**Solution:** Verify that the ncurses development package is installed
 ```bash
 # macOS
 brew list ncurses
@@ -154,6 +154,6 @@ brew list ncurses
 dpkg -l | grep libncurses
 ```
 
-## 라이선스
+## License
 
-교육 목적으로 자유롭게 사용 가능합니다.
+Free to use for educational purposes.

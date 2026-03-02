@@ -1,8 +1,8 @@
 /*
- * 스택과 큐 (Stack and Queue)
+ * Stack and Queue
  * Stack, Queue, Deque, Monotonic Stack
  *
- * 기본 자료구조와 응용 알고리즘입니다.
+ * Fundamental data structures and their applications.
  */
 
 #include <stdio.h>
@@ -11,7 +11,7 @@
 #include <stdbool.h>
 
 /* =============================================================================
- * 1. 스택 구현
+ * 1. Stack Implementation
  * ============================================================================= */
 
 typedef struct {
@@ -62,7 +62,7 @@ int stack_peek(Stack* s) {
 }
 
 /* =============================================================================
- * 2. 큐 구현 (원형 큐)
+ * 2. Queue Implementation (Circular Queue)
  * ============================================================================= */
 
 typedef struct {
@@ -122,7 +122,7 @@ int queue_front(Queue* q) {
 }
 
 /* =============================================================================
- * 3. 덱 구현 (Double-ended Queue)
+ * 3. Deque Implementation (Double-ended Queue)
  * ============================================================================= */
 
 typedef struct {
@@ -202,7 +202,7 @@ int deque_back(Deque* d) {
 }
 
 /* =============================================================================
- * 4. 괄호 검사
+ * 4. Parentheses Validation
  * ============================================================================= */
 
 bool is_valid_parentheses(const char* s) {
@@ -233,7 +233,7 @@ bool is_valid_parentheses(const char* s) {
 }
 
 /* =============================================================================
- * 5. 후위 표기식 계산
+ * 5. Postfix Expression Evaluation
  * ============================================================================= */
 
 int evaluate_postfix(const char* expr) {
@@ -268,7 +268,7 @@ int evaluate_postfix(const char* expr) {
 }
 
 /* =============================================================================
- * 6. 모노토닉 스택 - 다음으로 큰 원소
+ * 6. Monotonic Stack - Next Greater Element
  * ============================================================================= */
 
 int* next_greater_element(int arr[], int n) {
@@ -288,7 +288,7 @@ int* next_greater_element(int arr[], int n) {
 }
 
 /* =============================================================================
- * 7. 슬라이딩 윈도우 최댓값 (덱 활용)
+ * 7. Sliding Window Maximum (Using Deque)
  * ============================================================================= */
 
 int* sliding_window_max(int arr[], int n, int k, int* result_size) {
@@ -297,12 +297,12 @@ int* sliding_window_max(int arr[], int n, int k, int* result_size) {
     Deque* dq = deque_create(n);
 
     for (int i = 0; i < n; i++) {
-        /* 윈도우 범위 밖 제거 */
+        /* Remove elements outside the window */
         while (!deque_is_empty(dq) && deque_front(dq) <= i - k) {
             deque_pop_front(dq);
         }
 
-        /* 현재 값보다 작은 원소 제거 */
+        /* Remove elements smaller than the current value */
         while (!deque_is_empty(dq) && arr[deque_back(dq)] < arr[i]) {
             deque_pop_back(dq);
         }
@@ -319,7 +319,7 @@ int* sliding_window_max(int arr[], int n, int k, int* result_size) {
 }
 
 /* =============================================================================
- * 8. 히스토그램에서 가장 큰 직사각형
+ * 8. Largest Rectangle in Histogram
  * ============================================================================= */
 
 int largest_rectangle_histogram(int heights[], int n) {
@@ -344,7 +344,7 @@ int largest_rectangle_histogram(int heights[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -358,11 +358,11 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("스택과 큐 (Stack and Queue) 예제\n");
+    printf("Stack and Queue Examples\n");
     printf("============================================================\n");
 
-    /* 1. 스택 */
-    printf("\n[1] 스택 기본 연산\n");
+    /* 1. Stack */
+    printf("\n[1] Stack Basic Operations\n");
     Stack* s = stack_create(10);
     stack_push(s, 1);
     stack_push(s, 2);
@@ -373,8 +373,8 @@ int main(void) {
     printf("    Pop: %d\n", stack_pop(s));
     stack_free(s);
 
-    /* 2. 큐 */
-    printf("\n[2] 큐 기본 연산\n");
+    /* 2. Queue */
+    printf("\n[2] Queue Basic Operations\n");
     Queue* q = queue_create(10);
     queue_enqueue(q, 1);
     queue_enqueue(q, 2);
@@ -385,51 +385,51 @@ int main(void) {
     printf("    Dequeue: %d\n", queue_dequeue(q));
     queue_free(q);
 
-    /* 3. 괄호 검사 */
-    printf("\n[3] 괄호 검사\n");
+    /* 3. Parentheses Validation */
+    printf("\n[3] Parentheses Validation\n");
     printf("    '()[]{}': %s\n", is_valid_parentheses("()[]{}") ? "valid" : "invalid");
     printf("    '([)]': %s\n", is_valid_parentheses("([)]") ? "valid" : "invalid");
     printf("    '{[()]}': %s\n", is_valid_parentheses("{[()]}") ? "valid" : "invalid");
 
-    /* 4. 후위 표기식 */
-    printf("\n[4] 후위 표기식 계산\n");
+    /* 4. Postfix Expression */
+    printf("\n[4] Postfix Expression Evaluation\n");
     printf("    '2 3 + 4 *' = %d\n", evaluate_postfix("2 3 + 4 *"));
     printf("    '5 1 2 + 4 * + 3 -' = %d\n", evaluate_postfix("5 1 2 + 4 * + 3 -"));
 
-    /* 5. 다음으로 큰 원소 */
-    printf("\n[5] 다음으로 큰 원소 (모노토닉 스택)\n");
+    /* 5. Next Greater Element */
+    printf("\n[5] Next Greater Element (Monotonic Stack)\n");
     int arr5[] = {4, 5, 2, 25};
     int* nge = next_greater_element(arr5, 4);
-    printf("    배열: [4, 5, 2, 25]\n");
+    printf("    Array: [4, 5, 2, 25]\n");
     printf("    NGE:  ");
     print_array(nge, 4);
     printf("\n");
     free(nge);
 
-    /* 6. 슬라이딩 윈도우 최댓값 */
-    printf("\n[6] 슬라이딩 윈도우 최댓값\n");
+    /* 6. Sliding Window Maximum */
+    printf("\n[6] Sliding Window Maximum\n");
     int arr6[] = {1, 3, -1, -3, 5, 3, 6, 7};
     int result_size;
     int* max_vals = sliding_window_max(arr6, 8, 3, &result_size);
-    printf("    배열: [1,3,-1,-3,5,3,6,7], k=3\n");
-    printf("    최댓값: ");
+    printf("    Array: [1,3,-1,-3,5,3,6,7], k=3\n");
+    printf("    Maximums: ");
     print_array(max_vals, result_size);
     printf("\n");
     free(max_vals);
 
-    /* 7. 히스토그램 */
-    printf("\n[7] 히스토그램 최대 직사각형\n");
+    /* 7. Histogram */
+    printf("\n[7] Largest Rectangle in Histogram\n");
     int heights[] = {2, 1, 5, 6, 2, 3};
-    printf("    높이: [2,1,5,6,2,3]\n");
-    printf("    최대 넓이: %d\n", largest_rectangle_histogram(heights, 6));
+    printf("    Heights: [2,1,5,6,2,3]\n");
+    printf("    Maximum area: %d\n", largest_rectangle_histogram(heights, 6));
 
-    /* 8. 자료구조 비교 */
-    printf("\n[8] 자료구조 비교\n");
-    printf("    | 자료구조 | 삽입    | 삭제    | 특징            |\n");
-    printf("    |----------|---------|---------|------------------|\n");
-    printf("    | 스택     | O(1)    | O(1)    | LIFO            |\n");
-    printf("    | 큐       | O(1)    | O(1)    | FIFO            |\n");
-    printf("    | 덱       | O(1)    | O(1)    | 양쪽 삽입/삭제  |\n");
+    /* 8. Data Structure Comparison */
+    printf("\n[8] Data Structure Comparison\n");
+    printf("    | Structure | Insert  | Delete  | Feature           |\n");
+    printf("    |-----------|---------|---------|-------------------|\n");
+    printf("    | Stack     | O(1)    | O(1)    | LIFO              |\n");
+    printf("    | Queue     | O(1)    | O(1)    | FIFO              |\n");
+    printf("    | Deque     | O(1)    | O(1)    | Both-end ins/del  |\n");
 
     printf("\n============================================================\n");
 

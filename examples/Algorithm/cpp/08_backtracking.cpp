@@ -1,8 +1,8 @@
 /*
- * 백트래킹 (Backtracking)
+ * Backtracking
  * N-Queens, Permutations, Combinations, Sudoku
  *
- * 모든 가능성을 탐색하되 불필요한 경로를 가지치기합니다.
+ * Explores all possibilities while pruning unnecessary paths.
  */
 
 #include <iostream>
@@ -22,17 +22,17 @@ private:
     vector<vector<string>> solutions;
 
     bool isSafe(vector<string>& board, int row, int col) {
-        // 같은 열 검사
+        // Check same column
         for (int i = 0; i < row; i++) {
             if (board[i][col] == 'Q') return false;
         }
 
-        // 왼쪽 위 대각선
+        // Upper-left diagonal
         for (int i = row - 1, j = col - 1; i >= 0 && j >= 0; i--, j--) {
             if (board[i][j] == 'Q') return false;
         }
 
-        // 오른쪽 위 대각선
+        // Upper-right diagonal
         for (int i = row - 1, j = col + 1; i >= 0 && j < n; i--, j++) {
             if (board[i][j] == 'Q') return false;
         }
@@ -66,7 +66,7 @@ public:
 };
 
 // =============================================================================
-// 2. 순열 (Permutations)
+// 2. Permutations
 // =============================================================================
 
 class Permutations {
@@ -94,7 +94,7 @@ public:
     }
 };
 
-// 중복 있는 순열
+// Permutations with duplicates
 class PermutationsUnique {
 private:
     vector<vector<int>> result;
@@ -129,7 +129,7 @@ public:
 };
 
 // =============================================================================
-// 3. 조합 (Combinations)
+// 3. Combinations
 // =============================================================================
 
 class Combinations {
@@ -142,7 +142,7 @@ private:
             return;
         }
 
-        // 가지치기: 남은 원소가 부족하면 중단
+        // Pruning: stop if remaining elements are insufficient
         for (int i = start; i <= n - (k - (int)current.size()) + 1; i++) {
             current.push_back(i);
             backtrack(n, k, i + 1, current);
@@ -159,7 +159,7 @@ public:
     }
 };
 
-// 합이 target인 조합
+// Combination Sum
 class CombinationSum {
 private:
     vector<vector<int>> result;
@@ -172,7 +172,7 @@ private:
 
         for (int i = start; i < (int)candidates.size() && candidates[i] <= target; i++) {
             current.push_back(candidates[i]);
-            backtrack(candidates, target - candidates[i], i, current);  // 같은 원소 재사용 가능
+            backtrack(candidates, target - candidates[i], i, current);  // Same element can be reused
             current.pop_back();
         }
     }
@@ -188,7 +188,7 @@ public:
 };
 
 // =============================================================================
-// 4. 부분집합 (Subsets)
+// 4. Subsets
 // =============================================================================
 
 class Subsets {
@@ -215,7 +215,7 @@ public:
 };
 
 // =============================================================================
-// 5. 스도쿠
+// 5. Sudoku
 // =============================================================================
 
 class Sudoku {
@@ -254,7 +254,7 @@ public:
 };
 
 // =============================================================================
-// 6. 단어 검색 (Word Search)
+// 6. Word Search
 // =============================================================================
 
 class WordSearch {
@@ -269,7 +269,7 @@ private:
         if (board[r][c] != word[idx]) return false;
 
         char temp = board[r][c];
-        board[r][c] = '#';  // 방문 표시
+        board[r][c] = '#';  // Mark as visited
 
         for (int d = 0; d < 4; d++) {
             if (dfs(board, word, idx + 1, r + dx[d], c + dy[d])) {
@@ -297,7 +297,7 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -311,27 +311,27 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "백트래킹 예제" << endl;
+    cout << "Backtracking Examples" << endl;
     cout << "============================================================" << endl;
 
     // 1. N-Queens
     cout << "\n[1] N-Queens" << endl;
     NQueens nq;
     auto queens = nq.solveNQueens(4);
-    cout << "    4-Queens 해의 개수: " << queens.size() << endl;
+    cout << "    4-Queens number of solutions: " << queens.size() << endl;
     if (!queens.empty()) {
-        cout << "    첫 번째 해:" << endl;
+        cout << "    First solution:" << endl;
         for (const auto& row : queens[0]) {
             cout << "      " << row << endl;
         }
     }
 
-    // 2. 순열
-    cout << "\n[2] 순열" << endl;
+    // 2. Permutations
+    cout << "\n[2] Permutations" << endl;
     vector<int> nums = {1, 2, 3};
     Permutations perm;
     auto perms = perm.permute(nums);
-    cout << "    [1,2,3]의 순열 (" << perms.size() << "개):" << endl;
+    cout << "    Permutations of [1,2,3] (" << perms.size() << "):" << endl;
     cout << "    ";
     for (const auto& p : perms) {
         printVector(p);
@@ -339,11 +339,11 @@ int main() {
     }
     cout << endl;
 
-    // 3. 조합
-    cout << "\n[3] 조합" << endl;
+    // 3. Combinations
+    cout << "\n[3] Combinations" << endl;
     Combinations comb;
     auto combs = comb.combine(4, 2);
-    cout << "    C(4,2) (" << combs.size() << "개):" << endl;
+    cout << "    C(4,2) (" << combs.size() << "):" << endl;
     cout << "    ";
     for (const auto& c : combs) {
         printVector(c);
@@ -351,8 +351,8 @@ int main() {
     }
     cout << endl;
 
-    // 4. 조합 합
-    cout << "\n[4] 조합 합" << endl;
+    // 4. Combination Sum
+    cout << "\n[4] Combination Sum" << endl;
     vector<int> candidates = {2, 3, 6, 7};
     CombinationSum cs;
     auto combSums = cs.combinationSum(candidates, 7);
@@ -364,12 +364,12 @@ int main() {
     }
     cout << endl;
 
-    // 5. 부분집합
-    cout << "\n[5] 부분집합" << endl;
+    // 5. Subsets
+    cout << "\n[5] Subsets" << endl;
     vector<int> nums2 = {1, 2, 3};
     Subsets sub;
     auto subs = sub.subsets(nums2);
-    cout << "    [1,2,3]의 부분집합 (" << subs.size() << "개):" << endl;
+    cout << "    Subsets of [1,2,3] (" << subs.size() << "):" << endl;
     cout << "    ";
     for (const auto& s : subs) {
         printVector(s);
@@ -377,27 +377,27 @@ int main() {
     }
     cout << endl;
 
-    // 6. 단어 검색
-    cout << "\n[6] 단어 검색" << endl;
+    // 6. Word Search
+    cout << "\n[6] Word Search" << endl;
     vector<vector<char>> board = {
         {'A', 'B', 'C', 'E'},
         {'S', 'F', 'C', 'S'},
         {'A', 'D', 'E', 'E'}
     };
     WordSearch ws;
-    cout << "    \"ABCCED\": " << (ws.exist(board, "ABCCED") ? "있음" : "없음") << endl;
-    cout << "    \"SEE\": " << (ws.exist(board, "SEE") ? "있음" : "없음") << endl;
-    cout << "    \"ABCB\": " << (ws.exist(board, "ABCB") ? "있음" : "없음") << endl;
+    cout << "    \"ABCCED\": " << (ws.exist(board, "ABCCED") ? "found" : "not found") << endl;
+    cout << "    \"SEE\": " << (ws.exist(board, "SEE") ? "found" : "not found") << endl;
+    cout << "    \"ABCB\": " << (ws.exist(board, "ABCB") ? "found" : "not found") << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 문제           | 시간복잡도    |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Problem        | Time          |" << endl;
     cout << "    |----------------|---------------|" << endl;
     cout << "    | N-Queens       | O(N!)         |" << endl;
-    cout << "    | 순열           | O(N!)         |" << endl;
-    cout << "    | 조합 C(n,k)    | O(C(n,k))     |" << endl;
-    cout << "    | 부분집합       | O(2^N)        |" << endl;
-    cout << "    | 스도쿠         | O(9^(빈칸수)) |" << endl;
+    cout << "    | Permutations   | O(N!)         |" << endl;
+    cout << "    | Combinations   | O(C(n,k))     |" << endl;
+    cout << "    | Subsets        | O(2^N)        |" << endl;
+    cout << "    | Sudoku         | O(9^(blanks)) |" << endl;
 
     cout << "\n============================================================" << endl;
 

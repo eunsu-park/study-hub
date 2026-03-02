@@ -1,112 +1,112 @@
-# Deep_Learning 예제
+# Deep_Learning Examples
 
-Deep_Learning 폴더의 레슨에 해당하는 실행 가능한 예제 코드입니다.
+Runnable example code corresponding to the lessons in the Deep_Learning folder.
 
-## 폴더 구조
+## Folder Structure
 
 ```
 examples/
-├── pytorch/                      # PyTorch 구현
-│   ├── 01_tensor_autograd.py     # 텐서, 자동 미분
-│   ├── 02_neural_network.py      # MLP, XOR 문제
-│   ├── 03_backprop.py            # 역전파 시각화
-│   ├── 04_training.py            # 학습 루프, 옵티마이저
-│   ├── 05_cnn_basic.py           # CNN 기초
+├── pytorch/                      # PyTorch implementations
+│   ├── 01_tensor_autograd.py     # Tensors, automatic differentiation
+│   ├── 02_neural_network.py      # MLP, XOR problem
+│   ├── 03_backprop.py            # Backpropagation visualization
+│   ├── 04_training.py            # Training loop, optimizers
+│   ├── 05_cnn_basic.py           # CNN basics
 │   ├── 06_cnn_advanced.py        # ResNet, VGG
-│   ├── 07_transfer_learning.py   # 전이 학습
+│   ├── 07_transfer_learning.py   # Transfer learning
 │   ├── 08_rnn_basic.py           # RNN
 │   ├── 09_lstm_gru.py            # LSTM, GRU
 │   ├── 10_transformer.py         # Transformer
 │   └── ...
 │
-└── numpy/                        # NumPy 순수 구현
-    ├── 01_tensor_basics.py       # 텐서, 수동 미분
-    ├── 02_neural_network_scratch.py  # MLP 순전파
-    ├── 03_backprop_scratch.py    # 역전파 직접 구현
-    ├── 04_training_scratch.py    # SGD 직접 구현
-    └── 05_conv2d_scratch.py      # 합성곱 직접 구현
+└── numpy/                        # Pure NumPy implementations
+    ├── 01_tensor_basics.py       # Tensors, manual differentiation
+    ├── 02_neural_network_scratch.py  # MLP forward pass
+    ├── 03_backprop_scratch.py    # Backpropagation from scratch
+    ├── 04_training_scratch.py    # SGD from scratch
+    └── 05_conv2d_scratch.py      # Convolution from scratch
 ```
 
-## PyTorch vs NumPy 구현 비교
+## PyTorch vs NumPy Implementation Comparison
 
-| 레슨 | PyTorch | NumPy | 비교 포인트 |
-|------|---------|-------|------------|
-| 01 | 자동 미분 | 수동 미분 | `backward()` vs 직접 계산 |
-| 02 | `nn.Module` | 클래스 직접 | 순전파 구조 |
-| 03 | `loss.backward()` | 체인 룰 구현 | 역전파 원리 |
-| 04 | `optim.Adam` | SGD 직접 구현 | 옵티마이저 원리 |
-| 05 | `nn.Conv2d` | for 루프 | 합성곱 연산 |
-| 06+ | PyTorch only | - | 복잡도로 인해 생략 |
+| Lesson | PyTorch | NumPy | Comparison Point |
+|--------|---------|-------|-----------------|
+| 01 | Automatic diff | Manual diff | `backward()` vs manual computation |
+| 02 | `nn.Module` | Custom class | Forward pass structure |
+| 03 | `loss.backward()` | Chain rule impl | Backpropagation principles |
+| 04 | `optim.Adam` | SGD from scratch | Optimizer principles |
+| 05 | `nn.Conv2d` | for loop | Convolution operation |
+| 06+ | PyTorch only | - | Omitted due to complexity |
 
-## 실행 방법
+## How to Run
 
-### 환경 설정
+### Environment Setup
 
 ```bash
-# 가상환경 생성
+# Create virtual environment
 python -m venv dl-env
 source dl-env/bin/activate
 
-# PyTorch 설치 (CUDA 지원)
+# Install PyTorch (with CUDA support)
 pip install torch torchvision torchaudio
 
-# 기타 패키지
+# Other packages
 pip install numpy matplotlib
 ```
 
-### 실행
+### Execution
 
 ```bash
-# PyTorch 예제
+# PyTorch examples
 cd Deep_Learning/examples/pytorch
 python 01_tensor_autograd.py
 
-# NumPy 예제
+# NumPy examples
 cd Deep_Learning/examples/numpy
 python 01_tensor_basics.py
 ```
 
-## 학습 순서
+## Learning Path
 
-### 1단계: 기초 (PyTorch + NumPy 비교)
+### Stage 1: Fundamentals (PyTorch + NumPy Comparison)
 ```
-pytorch/01 ←→ numpy/01  # 텐서, 미분
-pytorch/02 ←→ numpy/02  # 신경망 순전파
-pytorch/03 ←→ numpy/03  # 역전파
-pytorch/04 ←→ numpy/04  # 학습
-```
-
-### 2단계: CNN (기초만 NumPy)
-```
-pytorch/05 ←→ numpy/05  # CNN 기초 (합성곱 이해)
-pytorch/06              # CNN 심화 (PyTorch only)
-pytorch/07              # 전이 학습 (PyTorch only)
+pytorch/01 <-> numpy/01  # Tensors, differentiation
+pytorch/02 <-> numpy/02  # Neural network forward pass
+pytorch/03 <-> numpy/03  # Backpropagation
+pytorch/04 <-> numpy/04  # Training
 ```
 
-### 3단계: 시퀀스 모델 (PyTorch only)
+### Stage 2: CNN (NumPy for basics only)
+```
+pytorch/05 <-> numpy/05  # CNN basics (understanding convolution)
+pytorch/06              # Advanced CNN (PyTorch only)
+pytorch/07              # Transfer learning (PyTorch only)
+```
+
+### Stage 3: Sequence Models (PyTorch only)
 ```
 pytorch/08  # RNN
 pytorch/09  # LSTM, GRU
 pytorch/10  # Transformer
 ```
 
-## NumPy 구현의 학습 가치
+## Learning Value of NumPy Implementations
 
-1. **01-02**: 텐서 연산과 순전파가 단순 행렬 곱임을 이해
-2. **03**: 역전파가 체인 룰의 반복 적용임을 이해
-3. **04**: 경사 하강법의 가중치 업데이트 원리 이해
-4. **05**: 합성곱이 필터의 슬라이딩 윈도우임을 이해
+1. **01-02**: Understand that tensor operations and forward pass are simple matrix multiplications
+2. **03**: Understand that backpropagation is repeated application of the chain rule
+3. **04**: Understand the weight update principle of gradient descent
+4. **05**: Understand that convolution is a sliding window of filters
 
-## NumPy 구현이 어려운 시점
+## When NumPy Implementation Becomes Difficult
 
-- **CNN 심화**: Skip Connection, Batch Normalization
-- **RNN/LSTM**: 시간 축 역전파(BPTT), 게이트 구조
-- **Transformer**: Multi-Head Attention, 위치 인코딩
+- **Advanced CNN**: Skip Connections, Batch Normalization
+- **RNN/LSTM**: Backpropagation Through Time (BPTT), gate structures
+- **Transformer**: Multi-Head Attention, positional encoding
 
-→ 이 시점부터 PyTorch만 사용하여 실전에 집중
+> From this point on, focus on practical applications using PyTorch only
 
-## 참고 자료
+## References
 
-- [PyTorch 튜토리얼](https://pytorch.org/tutorials/)
+- [PyTorch Tutorials](https://pytorch.org/tutorials/)
 - [CS231n (Stanford CNN)](http://cs231n.stanford.edu/)
 - [3Blue1Brown Neural Networks](https://www.3blue1brown.com/topics/neural-networks)

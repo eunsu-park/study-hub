@@ -1,8 +1,8 @@
 /*
- * 정렬 알고리즘 (Sorting Algorithms)
+ * Sorting Algorithms
  * Bubble, Selection, Insertion, Merge, Quick, Heap, Counting, Radix
  *
- * 다양한 정렬 알고리즘의 구현과 비교입니다.
+ * Implementation and comparison of various sorting algorithms.
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <string.h>
 
 /* =============================================================================
- * 1. 버블 정렬 - O(n²)
+ * 1. Bubble Sort - O(n^2)
  * ============================================================================= */
 
 void bubble_sort(int arr[], int n) {
@@ -24,12 +24,12 @@ void bubble_sort(int arr[], int n) {
                 swapped = 1;
             }
         }
-        if (!swapped) break;  /* 최적화: 이미 정렬됨 */
+        if (!swapped) break;  /* Optimization: already sorted */
     }
 }
 
 /* =============================================================================
- * 2. 선택 정렬 - O(n²)
+ * 2. Selection Sort - O(n^2)
  * ============================================================================= */
 
 void selection_sort(int arr[], int n) {
@@ -49,7 +49,7 @@ void selection_sort(int arr[], int n) {
 }
 
 /* =============================================================================
- * 3. 삽입 정렬 - O(n²)
+ * 3. Insertion Sort - O(n^2)
  * ============================================================================= */
 
 void insertion_sort(int arr[], int n) {
@@ -66,7 +66,7 @@ void insertion_sort(int arr[], int n) {
 }
 
 /* =============================================================================
- * 4. 병합 정렬 - O(n log n)
+ * 4. Merge Sort - O(n log n)
  * ============================================================================= */
 
 void merge(int arr[], int left, int mid, int right) {
@@ -110,7 +110,7 @@ void merge_sort(int arr[], int left, int right) {
 }
 
 /* =============================================================================
- * 5. 퀵 정렬 - O(n log n) 평균
+ * 5. Quick Sort - O(n log n) average
  * ============================================================================= */
 
 int partition(int arr[], int low, int high) {
@@ -141,11 +141,11 @@ void quick_sort(int arr[], int low, int high) {
     }
 }
 
-/* 3중 피벗 퀵소트 */
+/* Median-of-three quick sort */
 int partition_median(int arr[], int low, int high) {
     int mid = low + (high - low) / 2;
 
-    /* 3개 값 정렬 */
+    /* Sort the three values */
     if (arr[low] > arr[mid]) {
         int t = arr[low]; arr[low] = arr[mid]; arr[mid] = t;
     }
@@ -156,14 +156,14 @@ int partition_median(int arr[], int low, int high) {
         int t = arr[low]; arr[low] = arr[mid]; arr[mid] = t;
     }
 
-    /* 중앙값을 high-1 위치로 */
+    /* Move median to high-1 position */
     int t = arr[mid]; arr[mid] = arr[high - 1]; arr[high - 1] = t;
 
     return partition(arr, low, high);
 }
 
 /* =============================================================================
- * 6. 힙 정렬 - O(n log n)
+ * 6. Heap Sort - O(n log n)
  * ============================================================================= */
 
 void heapify(int arr[], int n, int i) {
@@ -186,12 +186,12 @@ void heapify(int arr[], int n, int i) {
 }
 
 void heap_sort(int arr[], int n) {
-    /* 최대 힙 구성 */
+    /* Build max heap */
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    /* 정렬 */
+    /* Sort */
     for (int i = n - 1; i > 0; i--) {
         int temp = arr[0];
         arr[0] = arr[i];
@@ -201,30 +201,30 @@ void heap_sort(int arr[], int n) {
 }
 
 /* =============================================================================
- * 7. 계수 정렬 - O(n + k)
+ * 7. Counting Sort - O(n + k)
  * ============================================================================= */
 
 void counting_sort(int arr[], int n, int max_val) {
     int* count = calloc(max_val + 1, sizeof(int));
     int* output = malloc(n * sizeof(int));
 
-    /* 빈도 계산 */
+    /* Count frequencies */
     for (int i = 0; i < n; i++) {
         count[arr[i]]++;
     }
 
-    /* 누적 합 */
+    /* Cumulative sum */
     for (int i = 1; i <= max_val; i++) {
         count[i] += count[i - 1];
     }
 
-    /* 출력 배열 생성 (안정 정렬) */
+    /* Build output array (stable sort) */
     for (int i = n - 1; i >= 0; i--) {
         output[count[arr[i]] - 1] = arr[i];
         count[arr[i]]--;
     }
 
-    /* 결과 복사 */
+    /* Copy result */
     for (int i = 0; i < n; i++) {
         arr[i] = output[i];
     }
@@ -234,7 +234,7 @@ void counting_sort(int arr[], int n, int max_val) {
 }
 
 /* =============================================================================
- * 8. 기수 정렬 - O(d * (n + k))
+ * 8. Radix Sort - O(d * (n + k))
  * ============================================================================= */
 
 int get_max(int arr[], int n) {
@@ -278,7 +278,7 @@ void radix_sort(int arr[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -298,87 +298,87 @@ void copy_array(int src[], int dst[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("정렬 알고리즘 (Sorting Algorithms) 예제\n");
+    printf("Sorting Algorithms Examples\n");
     printf("============================================================\n");
 
     int original[] = {64, 34, 25, 12, 22, 11, 90, 45};
     int n = 8;
     int arr[8];
 
-    /* 1. 버블 정렬 */
-    printf("\n[1] 버블 정렬 - O(n²)\n");
+    /* 1. Bubble Sort */
+    printf("\n[1] Bubble Sort - O(n^2)\n");
     copy_array(original, arr, n);
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr, n);
     bubble_sort(arr, n);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr, n);
 
-    /* 2. 선택 정렬 */
-    printf("\n[2] 선택 정렬 - O(n²)\n");
+    /* 2. Selection Sort */
+    printf("\n[2] Selection Sort - O(n^2)\n");
     copy_array(original, arr, n);
     selection_sort(arr, n);
-    printf("    결과: ");
+    printf("    Result: ");
     print_array(arr, n);
 
-    /* 3. 삽입 정렬 */
-    printf("\n[3] 삽입 정렬 - O(n²)\n");
+    /* 3. Insertion Sort */
+    printf("\n[3] Insertion Sort - O(n^2)\n");
     copy_array(original, arr, n);
     insertion_sort(arr, n);
-    printf("    결과: ");
+    printf("    Result: ");
     print_array(arr, n);
 
-    /* 4. 병합 정렬 */
-    printf("\n[4] 병합 정렬 - O(n log n)\n");
+    /* 4. Merge Sort */
+    printf("\n[4] Merge Sort - O(n log n)\n");
     copy_array(original, arr, n);
     merge_sort(arr, 0, n - 1);
-    printf("    결과: ");
+    printf("    Result: ");
     print_array(arr, n);
 
-    /* 5. 퀵 정렬 */
-    printf("\n[5] 퀵 정렬 - O(n log n) 평균\n");
+    /* 5. Quick Sort */
+    printf("\n[5] Quick Sort - O(n log n) average\n");
     copy_array(original, arr, n);
     quick_sort(arr, 0, n - 1);
-    printf("    결과: ");
+    printf("    Result: ");
     print_array(arr, n);
 
-    /* 6. 힙 정렬 */
-    printf("\n[6] 힙 정렬 - O(n log n)\n");
+    /* 6. Heap Sort */
+    printf("\n[6] Heap Sort - O(n log n)\n");
     copy_array(original, arr, n);
     heap_sort(arr, n);
-    printf("    결과: ");
+    printf("    Result: ");
     print_array(arr, n);
 
-    /* 7. 계수 정렬 */
-    printf("\n[7] 계수 정렬 - O(n + k)\n");
+    /* 7. Counting Sort */
+    printf("\n[7] Counting Sort - O(n + k)\n");
     int arr7[] = {4, 2, 2, 8, 3, 3, 1};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr7, 7);
     counting_sort(arr7, 7, 8);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr7, 7);
 
-    /* 8. 기수 정렬 */
-    printf("\n[8] 기수 정렬 - O(d * n)\n");
+    /* 8. Radix Sort */
+    printf("\n[8] Radix Sort - O(d * n)\n");
     int arr8[] = {170, 45, 75, 90, 802, 24, 2, 66};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr8, 8);
     radix_sort(arr8, 8);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr8, 8);
 
-    /* 9. 알고리즘 비교 */
-    printf("\n[9] 정렬 알고리즘 비교\n");
-    printf("    | 알고리즘 | 최선     | 평균     | 최악     | 공간  | 안정 |\n");
-    printf("    |----------|----------|----------|----------|-------|------|\n");
-    printf("    | 버블     | O(n)     | O(n²)    | O(n²)    | O(1)  | Yes  |\n");
-    printf("    | 선택     | O(n²)    | O(n²)    | O(n²)    | O(1)  | No   |\n");
-    printf("    | 삽입     | O(n)     | O(n²)    | O(n²)    | O(1)  | Yes  |\n");
-    printf("    | 병합     | O(nlogn) | O(nlogn) | O(nlogn) | O(n)  | Yes  |\n");
-    printf("    | 퀵       | O(nlogn) | O(nlogn) | O(n²)    | O(logn)| No  |\n");
-    printf("    | 힙       | O(nlogn) | O(nlogn) | O(nlogn) | O(1)  | No   |\n");
-    printf("    | 계수     | O(n+k)   | O(n+k)   | O(n+k)   | O(k)  | Yes  |\n");
-    printf("    | 기수     | O(dn)    | O(dn)    | O(dn)    | O(n+k)| Yes  |\n");
+    /* 9. Algorithm Comparison */
+    printf("\n[9] Sorting Algorithm Comparison\n");
+    printf("    | Algorithm  | Best     | Average  | Worst    | Space | Stable |\n");
+    printf("    |------------|----------|----------|----------|-------|--------|\n");
+    printf("    | Bubble     | O(n)     | O(n^2)   | O(n^2)   | O(1)  | Yes    |\n");
+    printf("    | Selection  | O(n^2)   | O(n^2)   | O(n^2)   | O(1)  | No     |\n");
+    printf("    | Insertion  | O(n)     | O(n^2)   | O(n^2)   | O(1)  | Yes    |\n");
+    printf("    | Merge      | O(nlogn) | O(nlogn) | O(nlogn) | O(n)  | Yes    |\n");
+    printf("    | Quick      | O(nlogn) | O(nlogn) | O(n^2)   | O(logn)| No    |\n");
+    printf("    | Heap       | O(nlogn) | O(nlogn) | O(nlogn) | O(1)  | No     |\n");
+    printf("    | Counting   | O(n+k)   | O(n+k)   | O(n+k)   | O(k)  | Yes    |\n");
+    printf("    | Radix      | O(dn)    | O(dn)    | O(dn)    | O(n+k)| Yes    |\n");
 
     printf("\n============================================================\n");
 

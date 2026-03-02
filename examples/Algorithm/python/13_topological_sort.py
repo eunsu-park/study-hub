@@ -1,8 +1,8 @@
 """
-위상 정렬 (Topological Sort)
+Topological Sort
 Topological Sorting
 
-방향 비순환 그래프(DAG)에서 정점을 선형 순서로 나열합니다.
+Arranges vertices of a Directed Acyclic Graph (DAG) in linear order.
 """
 
 from typing import List, Dict, Set, Optional, Tuple
@@ -10,19 +10,19 @@ from collections import deque, defaultdict
 
 
 # =============================================================================
-# 1. Kahn's 알고리즘 (BFS 기반)
+# 1. Kahn's Algorithm (BFS-based)
 # =============================================================================
 
 def topological_sort_kahn(n: int, edges: List[Tuple[int, int]]) -> List[int]:
     """
-    Kahn's 알고리즘 (진입 차수 기반)
-    시간복잡도: O(V + E)
-    공간복잡도: O(V + E)
+    Kahn's Algorithm (in-degree based)
+    Time Complexity: O(V + E)
+    Space Complexity: O(V + E)
 
-    edges: [(from, to), ...] - from → to 의존 관계
-    반환: 위상 정렬된 순서, 사이클 있으면 빈 리스트
+    edges: [(from, to), ...] - from -> to dependency
+    Returns: topologically sorted order, empty list if cycle exists
     """
-    # 그래프 및 진입 차수 구성
+    # Build graph and in-degree array
     graph = defaultdict(list)
     in_degree = [0] * n
 
@@ -30,7 +30,7 @@ def topological_sort_kahn(n: int, edges: List[Tuple[int, int]]) -> List[int]:
         graph[u].append(v)
         in_degree[v] += 1
 
-    # 진입 차수 0인 노드로 시작
+    # Start with nodes having in-degree 0
     queue = deque([i for i in range(n) if in_degree[i] == 0])
     result = []
 
@@ -43,19 +43,19 @@ def topological_sort_kahn(n: int, edges: List[Tuple[int, int]]) -> List[int]:
             if in_degree[neighbor] == 0:
                 queue.append(neighbor)
 
-    # 모든 노드 방문 여부로 사이클 확인
+    # Check for cycle by verifying all nodes were visited
     return result if len(result) == n else []
 
 
 # =============================================================================
-# 2. DFS 기반 위상 정렬
+# 2. DFS-based Topological Sort
 # =============================================================================
 
 def topological_sort_dfs(n: int, edges: List[Tuple[int, int]]) -> List[int]:
     """
-    DFS 기반 위상 정렬
-    시간복잡도: O(V + E)
-    공간복잡도: O(V + E)
+    DFS-based Topological Sort
+    Time Complexity: O(V + E)
+    Space Complexity: O(V + E)
     """
     graph = defaultdict(list)
     for u, v in edges:
@@ -72,16 +72,16 @@ def topological_sort_dfs(n: int, edges: List[Tuple[int, int]]) -> List[int]:
         if has_cycle:
             return
 
-        color[node] = GRAY  # 방문 중
+        color[node] = GRAY  # In progress
 
         for neighbor in graph[node]:
-            if color[neighbor] == GRAY:  # 사이클 발견
+            if color[neighbor] == GRAY:  # Cycle detected
                 has_cycle = True
                 return
             if color[neighbor] == WHITE:
                 dfs(neighbor)
 
-        color[node] = BLACK  # 방문 완료
+        color[node] = BLACK  # Completed
         result.append(node)
 
     for i in range(n):
@@ -92,13 +92,13 @@ def topological_sort_dfs(n: int, edges: List[Tuple[int, int]]) -> List[int]:
 
 
 # =============================================================================
-# 3. 사이클 탐지
+# 3. Cycle Detection
 # =============================================================================
 
 def has_cycle(n: int, edges: List[Tuple[int, int]]) -> bool:
     """
-    방향 그래프에서 사이클 존재 여부
-    시간복잡도: O(V + E)
+    Check for cycle in a directed graph
+    Time Complexity: O(V + E)
     """
     graph = defaultdict(list)
     for u, v in edges:
@@ -112,7 +112,7 @@ def has_cycle(n: int, edges: List[Tuple[int, int]]) -> bool:
 
         for neighbor in graph[node]:
             if color[neighbor] == GRAY:
-                return True  # 사이클
+                return True  # Cycle
             if color[neighbor] == WHITE and dfs(neighbor):
                 return True
 
@@ -127,13 +127,13 @@ def has_cycle(n: int, edges: List[Tuple[int, int]]) -> bool:
 
 
 # =============================================================================
-# 4. 모든 위상 정렬 순서 찾기
+# 4. Find All Topological Sort Orders
 # =============================================================================
 
 def all_topological_sorts(n: int, edges: List[Tuple[int, int]]) -> List[List[int]]:
     """
-    모든 가능한 위상 정렬 순서 찾기
-    시간복잡도: O(V! * (V + E)) - 최악의 경우
+    Find all possible topological sort orders
+    Time Complexity: O(V! * (V + E)) - worst case
     """
     graph = defaultdict(list)
     in_degree = [0] * n
@@ -147,14 +147,14 @@ def all_topological_sorts(n: int, edges: List[Tuple[int, int]]) -> List[List[int
     visited = [False] * n
 
     def backtrack():
-        # 모든 노드 방문 완료
+        # All nodes visited
         if len(path) == n:
             result.append(path.copy())
             return
 
         for i in range(n):
             if not visited[i] and in_degree[i] == 0:
-                # 선택
+                # Choose
                 visited[i] = True
                 path.append(i)
                 for neighbor in graph[i]:
@@ -162,7 +162,7 @@ def all_topological_sorts(n: int, edges: List[Tuple[int, int]]) -> List[List[int
 
                 backtrack()
 
-                # 복원
+                # Restore
                 visited[i] = False
                 path.pop()
                 for neighbor in graph[i]:
@@ -173,13 +173,13 @@ def all_topological_sorts(n: int, edges: List[Tuple[int, int]]) -> List[List[int
 
 
 # =============================================================================
-# 5. 실전 문제: 수강 과목 순서 (Course Schedule)
+# 5. Practical Problem: Course Schedule
 # =============================================================================
 
 def can_finish(num_courses: int, prerequisites: List[List[int]]) -> bool:
     """
-    모든 과목 수강 가능 여부 (사이클 없음 = 가능)
-    prerequisites: [course, prereq] - prereq → course
+    Check if all courses can be completed (no cycle = possible)
+    prerequisites: [course, prereq] - prereq -> course
     """
     edges = [(prereq, course) for course, prereq in prerequisites]
     return not has_cycle(num_courses, edges)
@@ -187,27 +187,27 @@ def can_finish(num_courses: int, prerequisites: List[List[int]]) -> bool:
 
 def find_order(num_courses: int, prerequisites: List[List[int]]) -> List[int]:
     """
-    과목 수강 순서 반환
+    Return the course completion order
     """
     edges = [(prereq, course) for course, prereq in prerequisites]
     return topological_sort_kahn(num_courses, edges)
 
 
 # =============================================================================
-# 6. 실전 문제: 외계인 사전 (Alien Dictionary)
+# 6. Practical Problem: Alien Dictionary
 # =============================================================================
 
 def alien_order(words: List[str]) -> str:
     """
-    외계인 알파벳 순서 결정
-    단어 목록이 사전순으로 정렬되어 있다고 가정
+    Determine alien alphabet order
+    Assumes the word list is sorted in lexicographic order
     """
-    # 모든 문자 수집
+    # Collect all characters
     chars = set()
     for word in words:
         chars.update(word)
 
-    # 그래프 구성
+    # Build graph
     graph = defaultdict(set)
     in_degree = defaultdict(int)
     for char in chars:
@@ -216,11 +216,11 @@ def alien_order(words: List[str]) -> str:
     for i in range(len(words) - 1):
         word1, word2 = words[i], words[i + 1]
 
-        # 유효하지 않은 순서 체크
+        # Check for invalid ordering
         if len(word1) > len(word2) and word1.startswith(word2):
             return ""
 
-        # 첫 번째 다른 문자로 순서 결정
+        # Determine order from first different character
         for c1, c2 in zip(word1, word2):
             if c1 != c2:
                 if c2 not in graph[c1]:
@@ -228,7 +228,7 @@ def alien_order(words: List[str]) -> str:
                     in_degree[c2] += 1
                 break
 
-    # 위상 정렬
+    # Topological sort
     queue = deque([c for c in chars if in_degree[c] == 0])
     result = []
 
@@ -245,13 +245,13 @@ def alien_order(words: List[str]) -> str:
 
 
 # =============================================================================
-# 7. 실전 문제: 작업 병렬 실행 (Parallel Courses)
+# 7. Practical Problem: Parallel Courses
 # =============================================================================
 
 def minimum_semesters(n: int, relations: List[List[int]]) -> int:
     """
-    모든 과목을 수강하는데 필요한 최소 학기 수
-    병렬 수강 가능, relations: [prev, next]
+    Minimum number of semesters to complete all courses
+    Parallel enrollment allowed, relations: [prev, next]
     """
     graph = defaultdict(list)
     in_degree = [0] * (n + 1)
@@ -260,7 +260,7 @@ def minimum_semesters(n: int, relations: List[List[int]]) -> int:
         graph[prev_course].append(next_course)
         in_degree[next_course] += 1
 
-    # 진입 차수 0인 노드로 시작 (1-indexed)
+    # Start with nodes having in-degree 0 (1-indexed)
     queue = deque([i for i in range(1, n + 1) if in_degree[i] == 0])
     semesters = 0
     completed = 0
@@ -284,12 +284,12 @@ def minimum_semesters(n: int, relations: List[List[int]]) -> int:
 
 
 # =============================================================================
-# 8. 실전 문제: 최장 경로 (DAG)
+# 8. Practical Problem: Longest Path in DAG
 # =============================================================================
 
 def longest_path_dag(n: int, edges: List[Tuple[int, int, int]]) -> List[int]:
     """
-    DAG에서 각 노드까지의 최장 경로 (가중치 포함)
+    Longest path to each node in a DAG (with weights)
     edges: [(from, to, weight), ...]
     """
     graph = defaultdict(list)
@@ -299,7 +299,7 @@ def longest_path_dag(n: int, edges: List[Tuple[int, int, int]]) -> List[int]:
         graph[u].append((v, w))
         in_degree[v] += 1
 
-    # 위상 정렬
+    # Topological sort
     topo_order = []
     queue = deque([i for i in range(n) if in_degree[i] == 0])
 
@@ -311,7 +311,7 @@ def longest_path_dag(n: int, edges: List[Tuple[int, int, int]]) -> List[int]:
             if in_degree[neighbor] == 0:
                 queue.append(neighbor)
 
-    # 최장 경로 계산
+    # Calculate longest path
     dist = [0] * n
 
     for node in topo_order:
@@ -322,108 +322,108 @@ def longest_path_dag(n: int, edges: List[Tuple[int, int, int]]) -> List[int]:
 
 
 # =============================================================================
-# 9. 실전 문제: 빌드 순서 결정
+# 9. Practical Problem: Build Order
 # =============================================================================
 
 def build_order(projects: List[str], dependencies: List[Tuple[str, str]]) -> List[str]:
     """
-    빌드 순서 결정
-    dependencies: [(proj, depends_on), ...] - proj가 depends_on에 의존
+    Determine build order
+    dependencies: [(proj, depends_on), ...] - proj depends on depends_on
     """
-    # 프로젝트 인덱스 매핑
+    # Project index mapping
     proj_to_idx = {p: i for i, p in enumerate(projects)}
     n = len(projects)
 
-    # 간선 변환 (depends_on → proj)
+    # Convert edges (depends_on -> proj)
     edges = [(proj_to_idx[dep], proj_to_idx[proj]) for proj, dep in dependencies]
 
-    # 위상 정렬
+    # Topological sort
     order = topological_sort_kahn(n, edges)
 
     if not order:
-        return []  # 사이클 존재
+        return []  # Cycle exists
 
     return [projects[i] for i in order]
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("위상 정렬 (Topological Sort) 예제")
+    print("Topological Sort Examples")
     print("=" * 60)
 
-    # 1. Kahn's 알고리즘
-    print("\n[1] Kahn's 알고리즘 (BFS)")
+    # 1. Kahn's Algorithm
+    print("\n[1] Kahn's Algorithm (BFS)")
     n = 6
     edges = [(5, 2), (5, 0), (4, 0), (4, 1), (2, 3), (3, 1)]
     result = topological_sort_kahn(n, edges)
-    print(f"    노드: 0-5, 간선: {edges}")
-    print(f"    위상 정렬: {result}")
+    print(f"    Nodes: 0-5, Edges: {edges}")
+    print(f"    Topological sort: {result}")
 
-    # 2. DFS 기반
-    print("\n[2] DFS 기반 위상 정렬")
+    # 2. DFS-based
+    print("\n[2] DFS-based Topological Sort")
     result = topological_sort_dfs(n, edges)
-    print(f"    위상 정렬: {result}")
+    print(f"    Topological sort: {result}")
 
-    # 3. 사이클 탐지
-    print("\n[3] 사이클 탐지")
+    # 3. Cycle Detection
+    print("\n[3] Cycle Detection")
     cyclic_edges = [(0, 1), (1, 2), (2, 0)]
     acyclic_edges = [(0, 1), (1, 2), (0, 2)]
-    print(f"    {cyclic_edges}: 사이클 {has_cycle(3, cyclic_edges)}")
-    print(f"    {acyclic_edges}: 사이클 {has_cycle(3, acyclic_edges)}")
+    print(f"    {cyclic_edges}: cycle {has_cycle(3, cyclic_edges)}")
+    print(f"    {acyclic_edges}: cycle {has_cycle(3, acyclic_edges)}")
 
-    # 4. 모든 위상 정렬
-    print("\n[4] 모든 위상 정렬 순서")
+    # 4. All Topological Sorts
+    print("\n[4] All Topological Sort Orders")
     n = 4
     edges = [(0, 1), (0, 2), (1, 3), (2, 3)]
     all_orders = all_topological_sorts(n, edges)
-    print(f"    노드: 0-3, 간선: {edges}")
-    print(f"    모든 순서: {all_orders}")
+    print(f"    Nodes: 0-3, Edges: {edges}")
+    print(f"    All orders: {all_orders}")
 
-    # 5. 과목 수강 순서
-    print("\n[5] 과목 수강 순서")
+    # 5. Course Schedule
+    print("\n[5] Course Schedule")
     num_courses = 4
     prerequisites = [[1, 0], [2, 0], [3, 1], [3, 2]]
     can = can_finish(num_courses, prerequisites)
     order = find_order(num_courses, prerequisites)
-    print(f"    과목 수: {num_courses}, 선수: {prerequisites}")
-    print(f"    수강 가능: {can}")
-    print(f"    순서: {order}")
+    print(f"    Courses: {num_courses}, Prerequisites: {prerequisites}")
+    print(f"    Can finish: {can}")
+    print(f"    Order: {order}")
 
-    # 6. 외계인 사전
-    print("\n[6] 외계인 사전")
+    # 6. Alien Dictionary
+    print("\n[6] Alien Dictionary")
     words = ["wrt", "wrf", "er", "ett", "rftt"]
     order = alien_order(words)
-    print(f"    단어: {words}")
-    print(f"    알파벳 순서: {order}")
+    print(f"    Words: {words}")
+    print(f"    Alphabet order: {order}")
 
-    # 7. 최소 학기 수
-    print("\n[7] 최소 학기 수")
+    # 7. Minimum Semesters
+    print("\n[7] Minimum Semesters")
     n = 3
     relations = [[1, 3], [2, 3]]
     semesters = minimum_semesters(n, relations)
-    print(f"    과목: {n}, 관계: {relations}")
-    print(f"    최소 학기: {semesters}")
+    print(f"    Courses: {n}, Relations: {relations}")
+    print(f"    Minimum semesters: {semesters}")
 
-    # 8. DAG 최장 경로
-    print("\n[8] DAG 최장 경로")
+    # 8. Longest Path in DAG
+    print("\n[8] Longest Path in DAG")
     n = 4
     edges = [(0, 1, 3), (0, 2, 2), (1, 3, 4), (2, 3, 1)]
     dist = longest_path_dag(n, edges)
-    print(f"    간선: {edges}")
-    print(f"    각 노드까지 최장 거리: {dist}")
+    print(f"    Edges: {edges}")
+    print(f"    Longest distance to each node: {dist}")
 
-    # 9. 빌드 순서
-    print("\n[9] 빌드 순서")
+    # 9. Build Order
+    print("\n[9] Build Order")
     projects = ['a', 'b', 'c', 'd', 'e', 'f']
     dependencies = [('d', 'a'), ('b', 'f'), ('d', 'b'), ('a', 'f'), ('c', 'd')]
     order = build_order(projects, dependencies)
-    print(f"    프로젝트: {projects}")
-    print(f"    의존성: {dependencies}")
-    print(f"    빌드 순서: {order}")
+    print(f"    Projects: {projects}")
+    print(f"    Dependencies: {dependencies}")
+    print(f"    Build order: {order}")
 
     print("\n" + "=" * 60)
 

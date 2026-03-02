@@ -4,57 +4,57 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
 TARGET_DIR = .
 
-# 실행 파일
+# Executables
 TARGETS = minishell_v1 builtins redirect pipe minishell
 
-# 기본 타겟
+# Default target
 all: $(TARGETS)
 
-# 1. 기본 쉘
+# 1. Basic shell
 minishell_v1: minishell_v1.c
 	$(CC) $(CFLAGS) -o $(TARGET_DIR)/minishell_v1 minishell_v1.c
 
-# 2. 내장 명령어 테스트
+# 2. Built-in command test
 builtins: builtins.c
 	$(CC) $(CFLAGS) -DTEST_BUILTINS -o $(TARGET_DIR)/builtins builtins.c
 
-# 3. 리다이렉션 테스트
+# 3. Redirection test
 redirect: redirect.c
 	$(CC) $(CFLAGS) -DTEST_REDIRECT -o $(TARGET_DIR)/redirect redirect.c
 
-# 4. 파이프 테스트
+# 4. Pipe test
 pipe: pipe.c
 	$(CC) $(CFLAGS) -DTEST_PIPE -o $(TARGET_DIR)/pipe pipe.c
 
-# 5. 완성된 미니 쉘
+# 5. Complete mini shell
 minishell: minishell.c
 	$(CC) $(CFLAGS) -o $(TARGET_DIR)/minishell minishell.c
 
-# 테스트 (간단한 실행 확인)
+# Test (simple execution check)
 test: all
-	@echo "=== 컴파일 완료 ==="
-	@echo "실행 파일:"
+	@echo "=== Compilation Complete ==="
+	@echo "Executables:"
 	@ls -lh minishell_v1 builtins redirect pipe minishell 2>/dev/null || true
 
-# 정리
+# Clean up
 clean:
 	rm -f $(TARGETS)
 	rm -f *.o
-	@echo "정리 완료"
+	@echo "Cleanup complete"
 
-# 도움말
+# Help
 help:
 	@echo "Mini Shell Makefile"
 	@echo ""
-	@echo "사용법:"
-	@echo "  make all          - 모든 실행 파일 컴파일"
-	@echo "  make minishell_v1 - 기본 쉘만 컴파일"
-	@echo "  make builtins     - 내장 명령어 테스트만 컴파일"
-	@echo "  make redirect     - 리다이렉션 테스트만 컴파일"
-	@echo "  make pipe         - 파이프 테스트만 컴파일"
-	@echo "  make minishell    - 완성된 미니 쉘만 컴파일"
-	@echo "  make test         - 컴파일 후 파일 확인"
-	@echo "  make clean        - 실행 파일 제거"
-	@echo "  make help         - 이 도움말 출력"
+	@echo "Usage:"
+	@echo "  make all          - Compile all executables"
+	@echo "  make minishell_v1 - Compile basic shell only"
+	@echo "  make builtins     - Compile built-in command test only"
+	@echo "  make redirect     - Compile redirection test only"
+	@echo "  make pipe         - Compile pipe test only"
+	@echo "  make minishell    - Compile complete mini shell only"
+	@echo "  make test         - Compile and verify files"
+	@echo "  make clean        - Remove executables"
+	@echo "  make help         - Show this help message"
 
 .PHONY: all test clean help

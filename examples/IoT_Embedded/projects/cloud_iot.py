@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-클라우드 IoT 통합 - 시뮬레이션 모드
-AWS IoT Core 및 GCP Pub/Sub 연동 시뮬레이션
+Cloud IoT Integration - Simulation Mode
+AWS IoT Core and GCP Pub/Sub Integration Simulation
 
-실제 클라우드 계정 및 자격 증명 없이 동작
+Operates without actual cloud accounts or credentials
 """
 
 import json
@@ -19,11 +19,11 @@ import random
 
 
 # ==============================================================================
-# 데이터 모델
+# Data Models
 # ==============================================================================
 
 class CloudProvider(Enum):
-    """클라우드 제공자"""
+    """Cloud Provider"""
     AWS_IOT = "aws_iot"
     GCP_PUBSUB = "gcp_pubsub"
     SIMULATION = "simulation"
@@ -34,7 +34,7 @@ class CloudProvider(Enum):
 # at the cost of possible duplicates; QoS 2 (4-step handshake) ensures
 # exactly-once but doubles round trips. IoT sensors typically use QoS 1.
 class MessageQoS(Enum):
-    """MQTT QoS 레벨"""
+    """MQTT QoS Level"""
     AT_MOST_ONCE = 0
     AT_LEAST_ONCE = 1
     EXACTLY_ONCE = 2
@@ -42,7 +42,7 @@ class MessageQoS(Enum):
 
 @dataclass
 class IoTMessage:
-    """IoT 메시지"""
+    """IoT Message"""
     topic: str
     payload: Dict
     timestamp: datetime
@@ -50,7 +50,7 @@ class IoTMessage:
     qos: MessageQoS = MessageQoS.AT_LEAST_ONCE
 
     def to_json(self) -> str:
-        """JSON 직렬화"""
+        """JSON serialization"""
         data = {
             "topic": self.topic,
             "payload": self.payload,
@@ -63,7 +63,7 @@ class IoTMessage:
 
 @dataclass
 class DeviceInfo:
-    """디바이스 정보"""
+    """Device Information"""
     device_id: str
     device_type: str
     location: str
@@ -73,7 +73,7 @@ class DeviceInfo:
 
 @dataclass
 class TelemetryData:
-    """텔레메트리 데이터"""
+    """Telemetry Data"""
     device_id: str
     temperature: float
     humidity: float
@@ -93,11 +93,11 @@ class TelemetryData:
 
 
 # ==============================================================================
-# AWS IoT Core 시뮬레이션
+# AWS IoT Core Simulation
 # ==============================================================================
 
 class SimulatedAWSIoTClient:
-    """AWS IoT Core 클라이언트 (시뮬레이션)"""
+    """AWS IoT Core Client (Simulation)"""
 
     def __init__(self, endpoint: str, cert_path: str, key_path: str,
                  ca_path: str, client_id: str):
@@ -110,37 +110,37 @@ class SimulatedAWSIoTClient:
         self.subscriptions: Dict[str, Callable] = {}
         self.message_queue = queue.Queue()
 
-        print(f"[AWS IoT 시뮬레이션] 클라이언트 생성")
-        print(f"  - 엔드포인트: {endpoint}")
-        print(f"  - 클라이언트 ID: {client_id}")
-        print(f"  - 인증서: {cert_path}")
+        print(f"[AWS IoT Simulation] Client created")
+        print(f"  - Endpoint: {endpoint}")
+        print(f"  - Client ID: {client_id}")
+        print(f"  - Certificate: {cert_path}")
 
     def connect(self):
-        """연결 (시뮬레이션)"""
-        print(f"\n[AWS IoT 시뮬레이션] 연결 중...")
-        time.sleep(0.5)  # 연결 지연 시뮬레이션
+        """Connect (simulation)"""
+        print(f"\n[AWS IoT Simulation] Connecting...")
+        time.sleep(0.5)  # Simulate connection delay
 
-        # 인증서 검증 시뮬레이션
-        print("  - TLS 핸드셰이크...")
+        # Certificate verification simulation
+        print("  - TLS handshake...")
         time.sleep(0.2)
-        print("  - 인증서 검증...")
+        print("  - Certificate verification...")
         time.sleep(0.2)
-        print("  - MQTT 연결...")
+        print("  - MQTT connecting...")
         time.sleep(0.2)
 
         self.connected = True
-        print("✓ 연결 성공!\n")
+        print("Connection successful!\n")
 
     def disconnect(self):
-        """연결 해제"""
+        """Disconnect"""
         if self.connected:
-            print("[AWS IoT 시뮬레이션] 연결 해제")
+            print("[AWS IoT Simulation] Disconnected")
             self.connected = False
 
     def publish(self, topic: str, payload: Dict, qos: MessageQoS = MessageQoS.AT_LEAST_ONCE):
-        """메시지 발행"""
+        """Publish message"""
         if not self.connected:
-            raise RuntimeError("연결되지 않음")
+            raise RuntimeError("Not connected")
 
         message = IoTMessage(
             topic=topic,
@@ -150,65 +150,65 @@ class SimulatedAWSIoTClient:
             qos=qos
         )
 
-        # 발행 시뮬레이션
-        print(f"[AWS IoT 발행] {topic}")
-        print(f"  메시지 ID: {message.message_id[:8]}...")
+        # Publish simulation
+        print(f"[AWS IoT Publish] {topic}")
+        print(f"  Message ID: {message.message_id[:8]}...")
         print(f"  QoS: {qos.name}")
-        print(f"  페이로드: {json.dumps(payload, indent=2)}")
+        print(f"  Payload: {json.dumps(payload, indent=2)}")
 
-        # 네트워크 지연 시뮬레이션
+        # Network delay simulation
         time.sleep(random.uniform(0.01, 0.05))
 
         return message.message_id
 
     def subscribe(self, topic: str, callback: Callable):
-        """토픽 구독"""
+        """Subscribe to topic"""
         if not self.connected:
-            raise RuntimeError("연결되지 않음")
+            raise RuntimeError("Not connected")
 
         self.subscriptions[topic] = callback
-        print(f"[AWS IoT 구독] {topic}")
+        print(f"[AWS IoT Subscribe] {topic}")
 
     def _simulate_incoming_message(self, topic: str, payload: Dict):
-        """수신 메시지 시뮬레이션 (내부 테스트용)"""
+        """Simulate incoming message (for internal testing)"""
         if topic in self.subscriptions:
             callback = self.subscriptions[topic]
             callback(topic, payload)
 
 
 class AWSIoTDeviceManager:
-    """AWS IoT 디바이스 관리자"""
+    """AWS IoT Device Manager"""
 
     def __init__(self, client: SimulatedAWSIoTClient):
         self.client = client
         self.device_info: Optional[DeviceInfo] = None
 
     def register_device(self, device_info: DeviceInfo):
-        """디바이스 등록"""
+        """Register device"""
         self.device_info = device_info
 
-        print("\n[AWS IoT] 디바이스 등록")
+        print("\n[AWS IoT] Device registration")
         print(f"  - ID: {device_info.device_id}")
-        print(f"  - 타입: {device_info.device_type}")
-        print(f"  - 위치: {device_info.location}")
-        print(f"  - 펌웨어: {device_info.firmware_version}")
+        print(f"  - Type: {device_info.device_type}")
+        print(f"  - Location: {device_info.location}")
+        print(f"  - Firmware: {device_info.firmware_version}")
 
-        # Thing 생성 시뮬레이션
-        print("  - Thing 생성 중...")
+        # Thing creation simulation
+        print("  - Creating Thing...")
         time.sleep(0.3)
 
-        # 인증서 연결 시뮬레이션
-        print("  - 인증서 연결 중...")
+        # Certificate attachment simulation
+        print("  - Attaching certificate...")
         time.sleep(0.3)
 
-        # 정책 연결 시뮬레이션
-        print("  - IoT 정책 연결 중...")
+        # Policy attachment simulation
+        print("  - Attaching IoT policy...")
         time.sleep(0.3)
 
-        print("✓ 디바이스 등록 완료\n")
+        print("Device registration complete\n")
 
     def publish_telemetry(self, data: TelemetryData):
-        """텔레메트리 발행"""
+        """Publish telemetry"""
         topic = f"device/{data.device_id}/telemetry"
         payload = data.to_dict()
 
@@ -218,9 +218,9 @@ class AWSIoTDeviceManager:
     # stores the last-known device state in the cloud. This lets mobile apps
     # read the device's state even when the device is offline or asleep.
     def update_device_shadow(self, state: Dict):
-        """Device Shadow 업데이트"""
+        """Update Device Shadow"""
         if not self.device_info:
-            raise ValueError("디바이스 정보 없음")
+            raise ValueError("No device info")
 
         topic = f"$aws/things/{self.device_info.device_id}/shadow/update"
 
@@ -236,51 +236,51 @@ class AWSIoTDeviceManager:
             }
         }
 
-        print(f"\n[AWS IoT] Device Shadow 업데이트")
-        print(f"  상태: {json.dumps(state, indent=2)}")
+        print(f"\n[AWS IoT] Device Shadow update")
+        print(f"  State: {json.dumps(state, indent=2)}")
 
         self.client.publish(topic, shadow_payload)
 
 
 # ==============================================================================
-# GCP Pub/Sub 시뮬레이션
+# GCP Pub/Sub Simulation
 # ==============================================================================
 
 class SimulatedGCPPubSubPublisher:
-    """GCP Pub/Sub Publisher (시뮬레이션)"""
+    """GCP Pub/Sub Publisher (Simulation)"""
 
     def __init__(self, project_id: str, topic_id: str):
         self.project_id = project_id
         self.topic_id = topic_id
         self.topic_path = f"projects/{project_id}/topics/{topic_id}"
 
-        print(f"[GCP Pub/Sub 시뮬레이션] Publisher 생성")
-        print(f"  - 프로젝트: {project_id}")
-        print(f"  - 토픽: {topic_id}")
-        print(f"  - 경로: {self.topic_path}")
+        print(f"[GCP Pub/Sub Simulation] Publisher created")
+        print(f"  - Project: {project_id}")
+        print(f"  - Topic: {topic_id}")
+        print(f"  - Path: {self.topic_path}")
 
     def publish(self, data: Dict, **attributes) -> str:
-        """메시지 발행"""
+        """Publish message"""
         message_id = str(uuid.uuid4())
 
-        print(f"\n[GCP Pub/Sub 발행]")
-        print(f"  토픽: {self.topic_id}")
-        print(f"  메시지 ID: {message_id[:8]}...")
+        print(f"\n[GCP Pub/Sub Publish]")
+        print(f"  Topic: {self.topic_id}")
+        print(f"  Message ID: {message_id[:8]}...")
 
         if attributes:
-            print(f"  속성: {attributes}")
+            print(f"  Attributes: {attributes}")
 
-        print(f"  데이터: {json.dumps(data, indent=2)}")
+        print(f"  Data: {json.dumps(data, indent=2)}")
 
-        # 네트워크 지연 시뮬레이션
+        # Network delay simulation
         time.sleep(random.uniform(0.01, 0.05))
 
-        print(f"✓ 발행 완료\n")
+        print(f"Publish complete\n")
         return message_id
 
     def publish_batch(self, messages: List[Dict]) -> List[str]:
-        """배치 발행"""
-        print(f"\n[GCP Pub/Sub 배치 발행] {len(messages)}개 메시지")
+        """Batch publish"""
+        print(f"\n[GCP Pub/Sub Batch Publish] {len(messages)} messages")
 
         message_ids = []
         for i, data in enumerate(messages):
@@ -289,13 +289,13 @@ class SimulatedGCPPubSubPublisher:
             print(f"  [{i+1}] {message_id[:8]}...")
 
         time.sleep(random.uniform(0.05, 0.1))
-        print(f"✓ 배치 발행 완료\n")
+        print(f"Batch publish complete\n")
 
         return message_ids
 
 
 class SimulatedGCPPubSubSubscriber:
-    """GCP Pub/Sub Subscriber (시뮬레이션)"""
+    """GCP Pub/Sub Subscriber (Simulation)"""
 
     def __init__(self, project_id: str, subscription_id: str):
         self.project_id = project_id
@@ -303,17 +303,17 @@ class SimulatedGCPPubSubSubscriber:
         self.subscription_path = f"projects/{project_id}/subscriptions/{subscription_id}"
         self.message_queue = queue.Queue()
 
-        print(f"[GCP Pub/Sub 시뮬레이션] Subscriber 생성")
-        print(f"  - 구독: {subscription_id}")
-        print(f"  - 경로: {self.subscription_path}")
+        print(f"[GCP Pub/Sub Simulation] Subscriber created")
+        print(f"  - Subscription: {subscription_id}")
+        print(f"  - Path: {self.subscription_path}")
 
     def pull(self, max_messages: int = 10) -> List[Dict]:
-        """메시지 풀 (동기)"""
-        print(f"\n[GCP Pub/Sub Pull] 최대 {max_messages}개 메시지")
+        """Pull messages (synchronous)"""
+        print(f"\n[GCP Pub/Sub Pull] Max {max_messages} messages")
 
         messages = []
 
-        # 시뮬레이션: 큐에서 메시지 가져오기
+        # Simulation: get messages from queue
         for _ in range(min(max_messages, self.message_queue.qsize())):
             try:
                 msg = self.message_queue.get_nowait()
@@ -321,18 +321,18 @@ class SimulatedGCPPubSubSubscriber:
             except queue.Empty:
                 break
 
-        print(f"  수신: {len(messages)}개 메시지")
+        print(f"  Received: {len(messages)} messages")
 
-        # ACK 시뮬레이션
+        # ACK simulation
         if messages:
-            print(f"  ACK 전송 중...")
+            print(f"  Sending ACK...")
             time.sleep(0.1)
 
         return messages
 
     def subscribe(self, callback: Callable):
-        """스트리밍 구독 (비동기)"""
-        print(f"\n[GCP Pub/Sub] 스트리밍 구독 시작")
+        """Streaming subscription (asynchronous)"""
+        print(f"\n[GCP Pub/Sub] Streaming subscription started")
 
         def streaming_loop():
             while True:
@@ -342,7 +342,7 @@ class SimulatedGCPPubSubSubscriber:
                 except queue.Empty:
                     continue
                 except Exception as e:
-                    print(f"구독 오류: {e}")
+                    print(f"Subscription error: {e}")
                     break
 
         thread = threading.Thread(target=streaming_loop, daemon=True)
@@ -352,18 +352,18 @@ class SimulatedGCPPubSubSubscriber:
 
 
 # ==============================================================================
-# MQTT 메시지 포맷
+# MQTT Message Format
 # ==============================================================================
 
 # Why: Standardizing message formats (telemetry, event, command, response)
 # across all devices ensures that cloud-side rules, analytics, and dashboards
 # can parse any device's messages without per-device customization.
 class MQTTMessageFormat:
-    """MQTT 메시지 포맷 표준"""
+    """MQTT Message Format Standard"""
 
     @staticmethod
     def create_telemetry(device_id: str, sensor_data: Dict) -> Dict:
-        """텔레메트리 메시지 생성"""
+        """Create telemetry message"""
         return {
             "device_id": device_id,
             "message_type": "telemetry",
@@ -374,7 +374,7 @@ class MQTTMessageFormat:
 
     @staticmethod
     def create_event(device_id: str, event_type: str, event_data: Dict) -> Dict:
-        """이벤트 메시지 생성"""
+        """Create event message"""
         return {
             "device_id": device_id,
             "message_type": "event",
@@ -386,7 +386,7 @@ class MQTTMessageFormat:
 
     @staticmethod
     def create_command(device_id: str, command: str, parameters: Dict) -> Dict:
-        """명령 메시지 생성"""
+        """Create command message"""
         return {
             "device_id": device_id,
             "message_type": "command",
@@ -399,7 +399,7 @@ class MQTTMessageFormat:
 
     @staticmethod
     def create_response(device_id: str, command_id: str, status: str, result: Dict) -> Dict:
-        """명령 응답 메시지 생성"""
+        """Create command response message"""
         return {
             "device_id": device_id,
             "message_type": "response",
@@ -412,7 +412,7 @@ class MQTTMessageFormat:
 
 
 # ==============================================================================
-# 디바이스 프로비저닝
+# Device Provisioning
 # ==============================================================================
 
 # Why: Provisioning bundles identity creation (Thing), credential issuance
@@ -420,38 +420,38 @@ class MQTTMessageFormat:
 # Automating this avoids the manual, error-prone process of copying certs
 # onto each device, which doesn't scale beyond a handful of units.
 class DeviceProvisioning:
-    """디바이스 프로비저닝 (시뮬레이션)"""
+    """Device Provisioning (Simulation)"""
 
     def __init__(self, provider: CloudProvider):
         self.provider = provider
         self.provisioned_devices: Dict[str, DeviceInfo] = {}
 
-        print(f"\n[프로비저닝] 초기화 ({provider.value})")
+        print(f"\n[Provisioning] Initialized ({provider.value})")
 
     def provision_device(self, device_id: str, device_type: str, location: str) -> DeviceInfo:
-        """디바이스 프로비저닝"""
-        print(f"\n[프로비저닝] 디바이스 등록 시작")
+        """Provision device"""
+        print(f"\n[Provisioning] Device registration started")
         print(f"  - ID: {device_id}")
-        print(f"  - 타입: {device_type}")
-        print(f"  - 위치: {location}")
+        print(f"  - Type: {device_type}")
+        print(f"  - Location: {location}")
 
-        # 단계 1: 디바이스 생성
-        print("\n  [1/4] 디바이스 생성 중...")
+        # Step 1: Create device
+        print("\n  [1/4] Creating device...")
         time.sleep(0.3)
 
-        # 단계 2: 인증서 생성
-        print("  [2/4] 인증서 생성 중...")
+        # Step 2: Generate certificate
+        print("  [2/4] Generating certificate...")
         cert_arn = f"arn:aws:iot:region:account:cert/{uuid.uuid4()}"
-        print(f"    인증서 ARN: {cert_arn}")
+        print(f"    Certificate ARN: {cert_arn}")
         time.sleep(0.3)
 
-        # 단계 3: 정책 연결
-        print("  [3/4] 정책 연결 중...")
-        print("    정책: IoTDevicePolicy")
+        # Step 3: Attach policy
+        print("  [3/4] Attaching policy...")
+        print("    Policy: IoTDevicePolicy")
         time.sleep(0.3)
 
-        # 단계 4: Thing 생성 및 연결
-        print("  [4/4] Thing 생성 및 연결 중...")
+        # Step 4: Create and attach Thing
+        print("  [4/4] Creating and attaching Thing...")
         time.sleep(0.3)
 
         device_info = DeviceInfo(
@@ -464,44 +464,44 @@ class DeviceProvisioning:
 
         self.provisioned_devices[device_id] = device_info
 
-        print("\n✓ 프로비저닝 완료!")
-        print(f"  인증서가 생성되었습니다: certs/{device_id}.cert.pem")
-        print(f"  개인키가 생성되었습니다: certs/{device_id}.private.key\n")
+        print("\nProvisioning complete!")
+        print(f"  Certificate generated: certs/{device_id}.cert.pem")
+        print(f"  Private key generated: certs/{device_id}.private.key\n")
 
         return device_info
 
     def deprovision_device(self, device_id: str):
-        """디바이스 해제"""
+        """Deprovision device"""
         if device_id not in self.provisioned_devices:
-            raise ValueError(f"디바이스 없음: {device_id}")
+            raise ValueError(f"Device not found: {device_id}")
 
-        print(f"\n[프로비저닝] 디바이스 해제: {device_id}")
+        print(f"\n[Provisioning] Device deprovisioning: {device_id}")
 
-        # 인증서 비활성화
-        print("  - 인증서 비활성화 중...")
+        # Deactivate certificate
+        print("  - Deactivating certificate...")
         time.sleep(0.2)
 
-        # Thing 삭제
-        print("  - Thing 삭제 중...")
+        # Delete Thing
+        print("  - Deleting Thing...")
         time.sleep(0.2)
 
         del self.provisioned_devices[device_id]
-        print("✓ 해제 완료\n")
+        print("Deprovisioning complete\n")
 
 
 # ==============================================================================
-# 통합 IoT 클라이언트
+# Integrated IoT Client
 # ==============================================================================
 
 class CloudIoTClient:
-    """통합 클라우드 IoT 클라이언트"""
+    """Integrated Cloud IoT Client"""
 
     def __init__(self, provider: CloudProvider, config: Dict):
         self.provider = provider
         self.config = config
 
         print("\n" + "="*60)
-        print(f"클라우드 IoT 클라이언트 초기화 ({provider.value})")
+        print(f"Cloud IoT Client Initialized ({provider.value})")
         print("="*60)
 
         if provider == CloudProvider.AWS_IOT:
@@ -530,17 +530,17 @@ class CloudIoTClient:
         }
 
     def connect(self):
-        """연결"""
+        """Connect"""
         if self.provider == CloudProvider.AWS_IOT:
             self.client.connect()
 
     def disconnect(self):
-        """연결 해제"""
+        """Disconnect"""
         if self.provider == CloudProvider.AWS_IOT:
             self.client.disconnect()
 
     def publish_telemetry(self, device_id: str, sensor_data: Dict):
-        """텔레메트리 발행"""
+        """Publish telemetry"""
         message = MQTTMessageFormat.create_telemetry(device_id, sensor_data)
 
         if self.provider == CloudProvider.AWS_IOT:
@@ -552,16 +552,16 @@ class CloudIoTClient:
         self.message_stats["published"] += 1
 
     def subscribe_commands(self, device_id: str, callback: Callable):
-        """명령 구독"""
+        """Subscribe to commands"""
         def command_handler(topic: str, payload: Dict):
-            print(f"\n[명령 수신] {topic}")
-            print(f"  명령: {payload.get('command')}")
-            print(f"  파라미터: {payload.get('parameters')}")
+            print(f"\n[Command received] {topic}")
+            print(f"  Command: {payload.get('command')}")
+            print(f"  Parameters: {payload.get('parameters')}")
 
-            # 콜백 실행
+            # Execute callback
             callback(payload)
 
-            # 응답 전송
+            # Send response
             response = MQTTMessageFormat.create_response(
                 device_id=device_id,
                 command_id=payload.get('command_id'),
@@ -577,16 +577,16 @@ class CloudIoTClient:
             self.client.subscribe(topic, command_handler)
 
     def get_statistics(self) -> Dict:
-        """통계 조회"""
+        """Get statistics"""
         return self.message_stats.copy()
 
 
 # ==============================================================================
-# 센서 데이터 시뮬레이터
+# Sensor Data Simulator
 # ==============================================================================
 
 class SensorSimulator:
-    """센서 데이터 시뮬레이터"""
+    """Sensor Data Simulator"""
 
     def __init__(self, device_id: str):
         self.device_id = device_id
@@ -596,13 +596,13 @@ class SensorSimulator:
         self.battery_level = 100.0
 
     def generate_reading(self) -> TelemetryData:
-        """센서 읽기 생성"""
-        # 랜덤 변동 추가
+        """Generate sensor reading"""
+        # Add random variation
         temp = self.base_temp + random.uniform(-2, 2)
         humidity = self.base_humidity + random.uniform(-5, 5)
         pressure = self.base_pressure + random.uniform(-2, 2)
 
-        # 배터리 소모
+        # Battery drain
         self.battery_level = max(0, self.battery_level - random.uniform(0.01, 0.05))
 
         return TelemetryData(
@@ -616,16 +616,16 @@ class SensorSimulator:
 
 
 # ==============================================================================
-# 데모 시나리오
+# Demo Scenarios
 # ==============================================================================
 
 def demo_aws_iot():
-    """AWS IoT Core 데모"""
+    """AWS IoT Core Demo"""
     print("\n" + "="*60)
-    print("AWS IoT Core 데모")
+    print("AWS IoT Core Demo")
     print("="*60)
 
-    # 프로비저닝
+    # Provisioning
     provisioning = DeviceProvisioning(CloudProvider.AWS_IOT)
     device_info = provisioning.provision_device(
         device_id="raspberry-pi-001",
@@ -633,7 +633,7 @@ def demo_aws_iot():
         location="Seoul, Korea"
     )
 
-    # 클라이언트 생성
+    # Create client
     config = {
         'endpoint': 'a1b2c3d4e5f6g7.iot.ap-northeast-2.amazonaws.com',
         'cert_path': f'certs/{device_info.device_id}.cert.pem',
@@ -645,39 +645,39 @@ def demo_aws_iot():
     client = CloudIoTClient(CloudProvider.AWS_IOT, config)
     client.connect()
 
-    # 디바이스 관리자
+    # Device manager
     device_manager = AWSIoTDeviceManager(client.client)
     device_manager.register_device(device_info)
 
-    # 센서 시뮬레이터
+    # Sensor simulator
     sensor = SensorSimulator(device_info.device_id)
 
-    # 명령 구독
+    # Subscribe to commands
     def on_command(payload: Dict):
         command = payload.get('command')
-        print(f"\n명령 실행: {command}")
+        print(f"\nExecuting command: {command}")
 
     client.subscribe_commands(device_info.device_id, on_command)
 
-    # 텔레메트리 발행
+    # Publish telemetry
     print("\n" + "-"*60)
-    print("텔레메트리 발행 시작")
+    print("Telemetry publishing started")
     print("-"*60)
 
     for i in range(5):
-        print(f"\n[{i+1}/5] 센서 데이터 발행")
+        print(f"\n[{i+1}/5] Publishing sensor data")
 
-        # 센서 읽기
+        # Sensor reading
         data = sensor.generate_reading()
-        print(f"  온도: {data.temperature}°C")
-        print(f"  습도: {data.humidity}%")
-        print(f"  압력: {data.pressure} hPa")
-        print(f"  배터리: {data.battery_level}%")
+        print(f"  Temperature: {data.temperature}C")
+        print(f"  Humidity: {data.humidity}%")
+        print(f"  Pressure: {data.pressure} hPa")
+        print(f"  Battery: {data.battery_level}%")
 
-        # 발행
+        # Publish
         device_manager.publish_telemetry(data)
 
-        # Device Shadow 업데이트
+        # Update Device Shadow
         if i % 2 == 0:
             shadow_state = {
                 "temperature": data.temperature,
@@ -688,23 +688,23 @@ def demo_aws_iot():
 
         time.sleep(2)
 
-    # 통계
+    # Statistics
     print("\n" + "="*60)
-    print("AWS IoT 데모 완료")
+    print("AWS IoT Demo Complete")
     print("="*60)
     stats = client.get_statistics()
-    print(f"발행된 메시지: {stats['published']}개")
+    print(f"Published messages: {stats['published']}")
 
     client.disconnect()
 
 
 def demo_gcp_pubsub():
-    """GCP Pub/Sub 데모"""
+    """GCP Pub/Sub Demo"""
     print("\n" + "="*60)
-    print("GCP Pub/Sub 데모")
+    print("GCP Pub/Sub Demo")
     print("="*60)
 
-    # 클라이언트 생성
+    # Create client
     config = {
         'project_id': 'my-iot-project-123456',
         'topic_id': 'iot-telemetry',
@@ -713,22 +713,22 @@ def demo_gcp_pubsub():
 
     client = CloudIoTClient(CloudProvider.GCP_PUBSUB, config)
 
-    # 센서 시뮬레이터
+    # Sensor simulator
     sensor = SensorSimulator("gcp-device-001")
 
-    # 텔레메트리 발행
+    # Publish telemetry
     print("\n" + "-"*60)
-    print("텔레메트리 발행 시작")
+    print("Telemetry publishing started")
     print("-"*60)
 
     messages = []
     for i in range(5):
         data = sensor.generate_reading()
-        print(f"\n[{i+1}/5] 센서 데이터 생성")
-        print(f"  온도: {data.temperature}°C")
-        print(f"  습도: {data.humidity}%")
+        print(f"\n[{i+1}/5] Sensor data generated")
+        print(f"  Temperature: {data.temperature}C")
+        print(f"  Humidity: {data.humidity}%")
 
-        # 개별 발행
+        # Individual publish
         sensor_data = {
             "temperature": data.temperature,
             "humidity": data.humidity,
@@ -741,60 +741,60 @@ def demo_gcp_pubsub():
 
         time.sleep(1)
 
-    # 배치 발행
+    # Batch publish
     print("\n" + "-"*60)
-    print("배치 발행")
+    print("Batch publish")
     print("-"*60)
     client.publisher.publish_batch(messages)
 
-    # 통계
+    # Statistics
     print("\n" + "="*60)
-    print("GCP Pub/Sub 데모 완료")
+    print("GCP Pub/Sub Demo Complete")
     print("="*60)
     stats = client.get_statistics()
-    print(f"발행된 메시지: {stats['published']}개")
+    print(f"Published messages: {stats['published']}")
 
 
 def demo_command_control():
-    """명령 및 제어 데모"""
+    """Command and Control Demo"""
     print("\n" + "="*60)
-    print("명령 및 제어 데모")
+    print("Command and Control Demo")
     print("="*60)
 
     device_id = "smart-device-001"
 
-    # 명령 생성 예시
-    print("\n[클라우드 → 디바이스] 명령 전송")
+    # Command creation examples
+    print("\n[Cloud -> Device] Sending commands")
 
-    # 1. LED 제어 명령
+    # 1. LED control command
     led_command = MQTTMessageFormat.create_command(
         device_id=device_id,
         command="set_led",
         parameters={"color": "red", "brightness": 80}
     )
-    print(f"\n1. LED 제어 명령:")
+    print(f"\n1. LED control command:")
     print(json.dumps(led_command, indent=2))
 
-    # 2. 설정 변경 명령
+    # 2. Configuration change command
     config_command = MQTTMessageFormat.create_command(
         device_id=device_id,
         command="update_config",
         parameters={"report_interval": 60, "threshold_temp": 30}
     )
-    print(f"\n2. 설정 변경 명령:")
+    print(f"\n2. Configuration change command:")
     print(json.dumps(config_command, indent=2))
 
-    # 3. 펌웨어 업데이트 명령
+    # 3. Firmware update command
     firmware_command = MQTTMessageFormat.create_command(
         device_id=device_id,
         command="update_firmware",
         parameters={"version": "2.0.0", "url": "https://example.com/firmware.bin"}
     )
-    print(f"\n3. 펌웨어 업데이트 명령:")
+    print(f"\n3. Firmware update command:")
     print(json.dumps(firmware_command, indent=2))
 
-    # 응답 예시
-    print("\n[디바이스 → 클라우드] 명령 응답")
+    # Response example
+    print("\n[Device -> Cloud] Command response")
 
     response = MQTTMessageFormat.create_response(
         device_id=device_id,
@@ -806,25 +806,25 @@ def demo_command_control():
 
 
 # ==============================================================================
-# 메인 실행
+# Main Execution
 # ==============================================================================
 
 def main():
-    """메인 함수"""
-    print("클라우드 IoT 통합 - 시뮬레이션 모드")
+    """Main function"""
+    print("Cloud IoT Integration - Simulation Mode")
     print("="*60)
-    print("이 프로그램은 실제 클라우드 계정 없이 시뮬레이션으로 동작합니다.")
+    print("This program operates as a simulation without actual cloud accounts.")
     print()
 
-    # 메뉴
-    print("데모 시나리오:")
+    # Menu
+    print("Demo scenarios:")
     print("  1. AWS IoT Core")
     print("  2. GCP Pub/Sub")
-    print("  3. 명령 및 제어")
-    print("  4. 전체 실행")
+    print("  3. Command and Control")
+    print("  4. Run all")
     print()
 
-    choice = input("선택 (1-4, 기본값=4): ").strip() or "4"
+    choice = input("Select (1-4, default=4): ").strip() or "4"
 
     if choice == "1":
         demo_aws_iot()
@@ -839,7 +839,7 @@ def main():
         time.sleep(2)
         demo_command_control()
     else:
-        print("잘못된 선택")
+        print("Invalid selection")
 
 
 if __name__ == "__main__":

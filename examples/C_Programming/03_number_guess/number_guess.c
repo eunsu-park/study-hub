@@ -1,5 +1,5 @@
 // number_guess.c
-// 숫자 맞추기 게임
+// Number guessing game
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,41 +9,41 @@ int main(void) {
     int secret, guess, attempts;
     int min = 1, max = 100;
 
-    // 난수 시드 초기화
+    // Initialize random seed
     srand(time(NULL));
 
-    printf("=== 숫자 맞추기 게임 ===\n");
-    printf("1부터 100 사이의 숫자를 맞춰보세요!\n\n");
+    printf("=== Number Guessing Game ===\n");
+    printf("Guess a number between 1 and 100!\n\n");
 
-    // 1-100 사이 랜덤 숫자 생성
+    // Generate random number between 1 and 100
     secret = rand() % 100 + 1;
     attempts = 0;
 
     while (1) {
-        printf("숫자를 입력하세요 (%d ~ %d): ", min, max);
+        printf("Enter a number (%d ~ %d): ", min, max);
 
         if (scanf("%d", &guess) != 1) {
-            printf("올바른 숫자를 입력하세요.\n");
-            while (getchar() != '\n');  // 입력 버퍼 비우기
+            printf("Please enter a valid number.\n");
+            while (getchar() != '\n');  // Clear input buffer
             continue;
         }
 
         attempts++;
 
         if (guess < min || guess > max) {
-            printf("범위 내의 숫자를 입력하세요!\n");
+            printf("Please enter a number within the range!\n");
             continue;
         }
 
         if (guess == secret) {
-            printf("\n정답입니다! 🎉\n");
-            printf("%d번 만에 맞추셨습니다.\n", attempts);
+            printf("\nCorrect!\n");
+            printf("You guessed it in %d attempts.\n", attempts);
             break;
         } else if (guess < secret) {
-            printf("더 큰 숫자입니다.\n");
+            printf("The number is higher.\n");
             if (guess > min) min = guess + 1;
         } else {
-            printf("더 작은 숫자입니다.\n");
+            printf("The number is lower.\n");
             if (guess < max) max = guess - 1;
         }
     }

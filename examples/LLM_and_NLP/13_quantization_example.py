@@ -1,65 +1,65 @@
 """
-13. 모델 양자화 (Model Quantization) 예제
+13. Model Quantization Example
 
-INT8/INT4 양자화, bitsandbytes, GPTQ, AWQ 실습
+INT8/INT4 quantization, bitsandbytes, GPTQ, AWQ practice
 """
 
 import numpy as np
 
 print("=" * 60)
-print("모델 양자화 (Model Quantization)")
+print("Model Quantization")
 print("=" * 60)
 
 
 # ============================================
-# 1. 기본 양자화 이해
+# 1. Basic Quantization Concepts
 # ============================================
-print("\n[1] 기본 양자화 개념")
+print("\n[1] Basic Quantization Concepts")
 print("-" * 40)
 
 def quantize_symmetric(tensor, bits=8):
-    """대칭 양자화 (Symmetric Quantization)"""
+    """Symmetric Quantization"""
     qmin = -(2 ** (bits - 1))
     qmax = 2 ** (bits - 1) - 1
 
-    # 스케일 계산
+    # Compute scale
     abs_max = np.abs(tensor).max()
     scale = abs_max / qmax if abs_max != 0 else 1.0
 
-    # 양자화
+    # Quantize
     quantized = np.round(tensor / scale).astype(np.int8)
     quantized = np.clip(quantized, qmin, qmax)
 
     return quantized, scale
 
 def dequantize(quantized, scale):
-    """역양자화"""
+    """Dequantize"""
     return quantized.astype(np.float32) * scale
 
 
-# 테스트
+# Test
 original = np.array([0.5, -1.2, 0.3, 2.1, -0.8, 0.0], dtype=np.float32)
-print(f"원본 텐서: {original}")
+print(f"Original tensor: {original}")
 
 quantized, scale = quantize_symmetric(original, bits=8)
-print(f"양자화됨 (INT8): {quantized}")
-print(f"스케일: {scale:.6f}")
+print(f"Quantized (INT8): {quantized}")
+print(f"Scale: {scale:.6f}")
 
 recovered = dequantize(quantized, scale)
-print(f"복원됨: {recovered}")
+print(f"Recovered: {recovered}")
 
 error = np.abs(original - recovered).mean()
-print(f"평균 양자화 오차: {error:.6f}")
+print(f"Mean quantization error: {error:.6f}")
 
 
 # ============================================
-# 2. 비대칭 양자화
+# 2. Asymmetric Quantization
 # ============================================
-print("\n[2] 비대칭 양자화")
+print("\n[2] Asymmetric Quantization")
 print("-" * 40)
 
 def quantize_asymmetric(tensor, bits=8):
-    """비대칭 양자화 (Asymmetric Quantization)"""
+    """Asymmetric Quantization"""
     qmin = 0
     qmax = 2 ** bits - 1
 
@@ -75,27 +75,27 @@ def quantize_asymmetric(tensor, bits=8):
     return quantized, scale, zero_point
 
 def dequantize_asymmetric(quantized, scale, zero_point):
-    """비대칭 역양자화"""
+    """Asymmetric dequantization"""
     return (quantized.astype(np.float32) - zero_point) * scale
 
 
-# 테스트
+# Test
 asym_quantized, asym_scale, zero_point = quantize_asymmetric(original, bits=8)
-print(f"비대칭 양자화 (UINT8): {asym_quantized}")
-print(f"스케일: {asym_scale:.6f}, Zero Point: {zero_point}")
+print(f"Asymmetric quantized (UINT8): {asym_quantized}")
+print(f"Scale: {asym_scale:.6f}, Zero Point: {zero_point}")
 
 asym_recovered = dequantize_asymmetric(asym_quantized, asym_scale, zero_point)
-print(f"복원됨: {asym_recovered}")
+print(f"Recovered: {asym_recovered}")
 
 
 # ============================================
-# 3. 그룹별 양자화
+# 3. Group Quantization
 # ============================================
-print("\n[3] 그룹별 양자화 (Group Quantization)")
+print("\n[3] Group Quantization")
 print("-" * 40)
 
 def group_quantize(tensor, group_size=4, bits=4):
-    """그룹별 양자화 - 정확도 향상"""
+    """Group quantization - improved accuracy"""
     flat = tensor.flatten()
     pad_size = (group_size - len(flat) % group_size) % group_size
     if pad_size > 0:
@@ -119,34 +119,34 @@ def group_quantize(tensor, group_size=4, bits=4):
     return np.array(quantized_groups), np.array(scales)
 
 def group_dequantize(quantized_groups, scales):
-    """그룹별 역양자화"""
+    """Group dequantization"""
     recovered = []
     for q, s in zip(quantized_groups, scales):
         recovered.append(q.astype(np.float32) * s)
     return np.concatenate(recovered)
 
 
-# 테스트
+# Test
 larger_tensor = np.random.randn(16).astype(np.float32)
-print(f"원본 (16개): {larger_tensor[:8]}...")
+print(f"Original (16 values): {larger_tensor[:8]}...")
 
 g_quantized, g_scales = group_quantize(larger_tensor, group_size=4, bits=4)
-print(f"그룹 수: {len(g_scales)}, 그룹 크기: 4")
-print(f"스케일들: {g_scales}")
+print(f"Number of groups: {len(g_scales)}, group size: 4")
+print(f"Scales: {g_scales}")
 
 g_recovered = group_dequantize(g_quantized, g_scales)
 g_error = np.abs(larger_tensor - g_recovered).mean()
-print(f"그룹 양자화 평균 오차: {g_error:.6f}")
+print(f"Group quantization mean error: {g_error:.6f}")
 
 
 # ============================================
-# 4. 비트 정밀도 비교
+# 4. Bit Precision Comparison
 # ============================================
-print("\n[4] 비트 정밀도 비교")
+print("\n[4] Bit Precision Comparison")
 print("-" * 40)
 
 def compare_bit_precision(tensor):
-    """다양한 비트 정밀도 비교"""
+    """Compare various bit precisions"""
     results = {}
 
     for bits in [8, 4, 2]:
@@ -161,19 +161,19 @@ def compare_bit_precision(tensor):
     return results
 
 comparison = compare_bit_precision(original)
-print("비트별 양자화 비교:")
+print("Quantization comparison by bit width:")
 for name, result in comparison.items():
-    print(f"  {name}: 오차={result['error']:.6f}, 범위={result['range']}")
+    print(f"  {name}: error={result['error']:.6f}, range={result['range']}")
 
 
 # ============================================
-# 5. bitsandbytes 예제 (코드만)
+# 5. bitsandbytes Example (code only)
 # ============================================
-print("\n[5] bitsandbytes 사용법 (코드 예시)")
+print("\n[5] bitsandbytes Usage (code example)")
 print("-" * 40)
 
 bnb_code = '''
-# bitsandbytes 8비트 양자화
+# bitsandbytes 8-bit quantization
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_8bit = AutoModelForCausalLM.from_pretrained(
@@ -182,7 +182,7 @@ model_8bit = AutoModelForCausalLM.from_pretrained(
     device_map="auto"
 )
 
-# bitsandbytes 4비트 양자화 (NF4)
+# bitsandbytes 4-bit quantization (NF4)
 from transformers import BitsAndBytesConfig
 import torch
 
@@ -190,7 +190,7 @@ bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",           # Normal Float 4
     bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True       # 이중 양자화
+    bnb_4bit_use_double_quant=True       # Double quantization
 )
 
 model_4bit = AutoModelForCausalLM.from_pretrained(
@@ -199,21 +199,21 @@ model_4bit = AutoModelForCausalLM.from_pretrained(
     device_map="auto"
 )
 
-print(f"4bit 모델 메모리: {model_4bit.get_memory_footprint() / 1e9:.2f} GB")
+print(f"4bit model memory: {model_4bit.get_memory_footprint() / 1e9:.2f} GB")
 '''
 print(bnb_code)
 
 
 # ============================================
-# 6. GPTQ 예제 (코드만)
+# 6. GPTQ Example (code only)
 # ============================================
-print("\n[6] GPTQ 양자화 (코드 예시)")
+print("\n[6] GPTQ Quantization (code example)")
 print("-" * 40)
 
 gptq_code = '''
 from transformers import AutoModelForCausalLM, AutoTokenizer, GPTQConfig
 
-# GPTQ 설정
+# GPTQ configuration
 gptq_config = GPTQConfig(
     bits=4,
     group_size=128,
@@ -222,7 +222,7 @@ gptq_config = GPTQConfig(
     tokenizer=tokenizer
 )
 
-# 양자화
+# Quantize
 model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
     quantization_config=gptq_config,
@@ -231,7 +231,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 model.save_pretrained("./llama-2-7b-gptq-4bit")
 
-# 사전 양자화 모델 로드
+# Load pre-quantized model
 model = AutoModelForCausalLM.from_pretrained(
     "TheBloke/Llama-2-7B-GPTQ",
     device_map="auto"
@@ -241,20 +241,20 @@ print(gptq_code)
 
 
 # ============================================
-# 7. AWQ 예제 (코드만)
+# 7. AWQ Example (code only)
 # ============================================
-print("\n[7] AWQ 양자화 (코드 예시)")
+print("\n[7] AWQ Quantization (code example)")
 print("-" * 40)
 
 awq_code = '''
 from awq import AutoAWQForCausalLM
 from transformers import AutoTokenizer
 
-# 모델 로드
+# Load model
 model = AutoAWQForCausalLM.from_pretrained("meta-llama/Llama-2-7b-hf")
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
 
-# AWQ 양자화 설정
+# AWQ quantization configuration
 quant_config = {
     "zero_point": True,
     "q_group_size": 128,
@@ -262,23 +262,23 @@ quant_config = {
     "version": "GEMM"
 }
 
-# 양자화
+# Quantize
 model.quantize(tokenizer, quant_config=quant_config)
 model.save_quantized("./llama-2-7b-awq")
 
-# AWQ 모델 추론
+# AWQ model inference
 model = AutoAWQForCausalLM.from_quantized(
     "./llama-2-7b-awq",
-    fuse_layers=True  # 레이어 퓨전으로 속도 향상
+    fuse_layers=True  # Layer fusion for speed improvement
 )
 '''
 print(awq_code)
 
 
 # ============================================
-# 8. QLoRA 예제 (코드만)
+# 8. QLoRA Example (code only)
 # ============================================
-print("\n[8] QLoRA 파인튜닝 (코드 예시)")
+print("\n[8] QLoRA Fine-tuning (code example)")
 print("-" * 40)
 
 qlora_code = '''
@@ -286,7 +286,7 @@ from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 import torch
 
-# 4비트 양자화 설정
+# 4-bit quantization configuration
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
@@ -294,17 +294,17 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True
 )
 
-# 모델 로드
+# Load model
 model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
     quantization_config=bnb_config,
     device_map="auto"
 )
 
-# k-bit 학습 준비
+# Prepare for k-bit training
 model = prepare_model_for_kbit_training(model)
 
-# LoRA 설정
+# LoRA configuration
 lora_config = LoraConfig(
     r=16,
     lora_alpha=32,
@@ -314,22 +314,22 @@ lora_config = LoraConfig(
     task_type="CAUSAL_LM"
 )
 
-# LoRA 적용
+# Apply LoRA
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
-# 출력: trainable params: ~0.1%
+# Output: trainable params: ~0.1%
 '''
 print(qlora_code)
 
 
 # ============================================
-# 9. 양자화 메모리 절약 시뮬레이션
+# 9. Quantization Memory Savings Simulation
 # ============================================
-print("\n[9] 양자화 메모리 절약 시뮬레이션")
+print("\n[9] Quantization Memory Savings Simulation")
 print("-" * 40)
 
 def estimate_model_size(params_billions, bits):
-    """모델 크기 추정 (GB)"""
+    """Estimate model size (GB)"""
     bytes_per_param = bits / 8
     size_gb = params_billions * 1e9 * bytes_per_param / (1024**3)
     return size_gb
@@ -347,7 +347,7 @@ precisions = {
     "INT4": 4,
 }
 
-print("모델 크기 추정 (GB):")
+print("Estimated model size (GB):")
 print("-" * 60)
 header = "Model\t" + "\t".join(precisions.keys())
 print(header)
@@ -359,35 +359,35 @@ for model_name, params in model_sizes.items():
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("양자화 정리")
+print("Quantization Summary")
 print("=" * 60)
 
 summary = """
-양자화 핵심 개념:
+Quantization Key Concepts:
 
-1. 대칭 양자화:
+1. Symmetric Quantization:
    - scale = max(|x|) / (2^(bits-1) - 1)
    - x_q = round(x / scale)
    - x' = x_q * scale
 
-2. 비대칭 양자화:
+2. Asymmetric Quantization:
    - scale = (max - min) / (2^bits - 1)
    - zero_point = round(-min / scale)
    - x_q = round(x / scale + zero_point)
 
-3. 양자화 방법 비교:
-   - bitsandbytes: 빠른 적용, 동적 양자화
-   - GPTQ: 높은 품질, 캘리브레이션 필요
-   - AWQ: 빠른 양자화, 활성화 기반
-   - QLoRA: 양자화 + LoRA 파인튜닝
+3. Quantization Method Comparison:
+   - bitsandbytes: Fast application, dynamic quantization
+   - GPTQ: High quality, calibration required
+   - AWQ: Fast quantization, activation-based
+   - QLoRA: Quantization + LoRA fine-tuning
 
-4. 선택 가이드:
-   - 프로토타이핑: bitsandbytes (load_in_8bit)
-   - 메모리 제한: bitsandbytes (load_in_4bit)
-   - 프로덕션: GPTQ 또는 AWQ
-   - 파인튜닝: QLoRA
+4. Selection Guide:
+   - Prototyping: bitsandbytes (load_in_8bit)
+   - Memory-constrained: bitsandbytes (load_in_4bit)
+   - Production: GPTQ or AWQ
+   - Fine-tuning: QLoRA
 """
 print(summary)

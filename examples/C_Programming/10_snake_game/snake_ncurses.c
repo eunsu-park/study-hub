@@ -1,18 +1,18 @@
 // snake_ncurses.c
-// NCurses 라이브러리를 사용한 뱀 게임
+// Snake game using the NCurses library
 //
-// *** 이 파일은 ncurses 라이브러리가 필요합니다 ***
+// *** This file requires the ncurses library ***
 //
-// 설치 방법:
+// Installation:
 //   macOS:   brew install ncurses
 //   Ubuntu:  sudo apt install libncurses5-dev
 //   Fedora:  sudo dnf install ncurses-devel
 //
-// 컴파일:
+// Compile:
 //   macOS:   gcc -o snake_ncurses snake_ncurses.c -lncurses
 //   Linux:   gcc -o snake_ncurses snake_ncurses.c -lncurses
 //
-// 실행:
+// Run:
 //   ./snake_ncurses
 
 #include <ncurses.h>
@@ -21,13 +21,13 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-// ============ 게임 설정 ============
+// ============ Game Settings ============
 #define WIDTH 40
 #define HEIGHT 20
 #define INITIAL_SPEED 150000  // 150ms
 #define MIN_SPEED 50000       // 50ms
 
-// ============ 색상 정의 ============
+// ============ Color Definitions ============
 enum {
     COLOR_SNAKE = 1,
     COLOR_FOOD,
@@ -35,21 +35,21 @@ enum {
     COLOR_TEXT
 };
 
-// ============ 방향 열거형 ============
+// ============ Direction Enum ============
 typedef enum { UP, DOWN, LEFT, RIGHT } Direction;
 
-// ============ 좌표 구조체 ============
+// ============ Coordinate Struct ============
 typedef struct {
     int x, y;
 } Point;
 
-// ============ 뱀 노드 ============
+// ============ Snake Node ============
 typedef struct Node {
     Point pos;
     struct Node* next;
 } Node;
 
-// ============ 게임 상태 ============
+// ============ Game State ============
 typedef struct {
     Node* head;
     Node* tail;
@@ -63,14 +63,14 @@ typedef struct {
     int high_score;
 } Game;
 
-// ============ 전역 변수 ============
+// ============ Global Variables ============
 WINDOW* game_win;
 WINDOW* info_win;
 
-// ============ 유틸리티 함수 ============
+// ============ Utility Functions ============
 
 /**
- * 특정 위치에 뱀이 있는지 확인
+ * Check if snake occupies a specific position
  */
 bool snake_at(Node* head, int x, int y) {
     for (Node* n = head; n; n = n->next) {
@@ -80,7 +80,7 @@ bool snake_at(Node* head, int x, int y) {
 }
 
 /**
- * 음식 생성
+ * Spawn food
  */
 void spawn_food(Game* g) {
     do {
@@ -89,20 +89,20 @@ void spawn_food(Game* g) {
     } while (snake_at(g->head, g->food.x, g->food.y));
 }
 
-// ============ 게임 초기화 ============
+// ============ Game Initialization ============
 
 /**
- * NCurses 초기화
+ * Initialize NCurses
  */
 void init_ncurses(void) {
-    initscr();              // NCurses 시작
-    cbreak();               // 라인 버퍼링 끄기
-    noecho();               // 입력 문자 표시 안함
-    nodelay(stdscr, TRUE);  // Non-blocking 입력
-    keypad(stdscr, TRUE);   // 방향키 활성화
-    curs_set(0);            // 커서 숨기기
+    initscr();              // Start NCurses
+    cbreak();               // Disable line buffering
+    noecho();               // Don't display typed characters
+    nodelay(stdscr, TRUE);  // Non-blocking input
+    keypad(stdscr, TRUE);   // Enable arrow keys
+    curs_set(0);            // Hide cursor
 
-    // 색상 초기화
+    // Initialize colors
     if (has_colors()) {
         start_color();
         init_pair(COLOR_SNAKE, COLOR_GREEN, COLOR_BLACK);
@@ -111,13 +111,13 @@ void init_ncurses(void) {
         init_pair(COLOR_TEXT, COLOR_YELLOW, COLOR_BLACK);
     }
 
-    // 게임 윈도우 생성
+    // Create game window
     game_win = newwin(HEIGHT, WIDTH, 1, 2);
     info_win = newwin(3, WIDTH, HEIGHT + 2, 2);
 }
 
 /**
- * NCurses 종료
+ * Cleanup NCurses
  */
 void cleanup_ncurses(void) {
     delwin(game_win);
@@ -126,13 +126,13 @@ void cleanup_ncurses(void) {
 }
 
 /**
- * 게임 초기화
+ * Initialize game
  */
 Game* game_init(int high_score) {
     Game* g = malloc(sizeof(Game));
     if (!g) return NULL;
 
-    // 뱀 초기화 (길이 3)
+    // Initialize snake (length 3)
     g->head = NULL;
     g->tail = NULL;
     g->length = 0;
@@ -156,12 +156,12 @@ Game* game_init(int high_score) {
         g->length++;
     }
 
-    // 꼬리 찾기
+    // Find tail
     Node* curr = g->head;
     while (curr->next) curr = curr->next;
     g->tail = curr;
 
-    // 상태 초기화
+    // Initialize state
     g->dir = RIGHT;
     g->score = 0;
     g->game_over = false;
@@ -174,7 +174,7 @@ Game* game_init(int high_score) {
 }
 
 /**
- * 게임 메모리 해제
+ * Free game memory
  */
 void game_free(Game* g) {
     if (!g) return;
@@ -188,18 +188,18 @@ void game_free(Game* g) {
     free(g);
 }
 
-// ============ 입력 처리 ============
+// ============ Input Handling ============
 
 /**
- * 키보드 입력 처리
- * 반환: 0 = 계속, -1 = 종료
+ * Handle keyboard input
+ * Returns: 0 = continue, -1 = quit
  */
 int handle_input(Game* g) {
     int ch = getch();
 
-    if (ch == ERR) return 0;  // 입력 없음
+    if (ch == ERR) return 0;  // No input
 
-    if (ch == 'q' || ch == 'Q') return -1;  // 종료
+    if (ch == 'q' || ch == 'Q') return -1;  // Quit
 
     if (ch == 'p' || ch == 'P') {
         g->paused = !g->paused;
@@ -208,7 +208,7 @@ int handle_input(Game* g) {
 
     if (g->paused || g->game_over) return 0;
 
-    // 방향 변경 (반대 방향 불가)
+    // Change direction (opposite direction not allowed)
     switch (ch) {
         case KEY_UP:
         case 'w':
@@ -235,15 +235,15 @@ int handle_input(Game* g) {
     return 0;
 }
 
-// ============ 게임 업데이트 ============
+// ============ Game Update ============
 
 /**
- * 게임 상태 업데이트
+ * Update game state
  */
 bool game_update(Game* g) {
     if (g->paused || g->game_over) return false;
 
-    // 다음 머리 위치
+    // Next head position
     Point next = g->head->pos;
     switch (g->dir) {
         case UP:    next.y--; break;
@@ -252,20 +252,20 @@ bool game_update(Game* g) {
         case RIGHT: next.x++; break;
     }
 
-    // 벽 충돌
+    // Wall collision
     if (next.x <= 0 || next.x >= WIDTH - 1 ||
         next.y <= 0 || next.y >= HEIGHT - 1) {
         g->game_over = true;
         return false;
     }
 
-    // 자기 몸 충돌
+    // Self collision
     if (snake_at(g->head, next.x, next.y)) {
         g->game_over = true;
         return false;
     }
 
-    // 새 머리 추가
+    // Add new head
     Node* new_head = malloc(sizeof(Node));
     if (!new_head) {
         g->game_over = true;
@@ -277,12 +277,12 @@ bool game_update(Game* g) {
     g->head = new_head;
     g->length++;
 
-    // 음식 확인
+    // Check food
     if (next.x == g->food.x && next.y == g->food.y) {
         g->score += 10;
         spawn_food(g);
 
-        // 속도 증가
+        // Increase speed
         if (g->speed > MIN_SPEED) {
             g->speed -= 5000;
             if (g->speed < MIN_SPEED) g->speed = MIN_SPEED;
@@ -291,7 +291,7 @@ bool game_update(Game* g) {
         return true;
     }
 
-    // 꼬리 제거
+    // Remove tail
     Node* curr = g->head;
     while (curr->next && curr->next->next) {
         curr = curr->next;
@@ -306,26 +306,26 @@ bool game_update(Game* g) {
     return false;
 }
 
-// ============ 화면 그리기 ============
+// ============ Screen Drawing ============
 
 /**
- * 게임 화면 그리기
+ * Draw game screen
  */
 void draw_game(Game* g) {
-    // 게임 윈도우 지우기
+    // Clear game window
     werase(game_win);
 
-    // 테두리 그리기
+    // Draw border
     wattron(game_win, COLOR_PAIR(COLOR_BORDER));
     box(game_win, 0, 0);
     wattroff(game_win, COLOR_PAIR(COLOR_BORDER));
 
-    // 음식 그리기
+    // Draw food
     wattron(game_win, COLOR_PAIR(COLOR_FOOD) | A_BOLD);
     mvwaddch(game_win, g->food.y, g->food.x, 'O');
     wattroff(game_win, COLOR_PAIR(COLOR_FOOD) | A_BOLD);
 
-    // 뱀 그리기
+    // Draw snake
     wattron(game_win, COLOR_PAIR(COLOR_SNAKE));
     bool is_head = true;
     for (Node* n = g->head; n; n = n->next) {
@@ -340,46 +340,46 @@ void draw_game(Game* g) {
     }
     wattroff(game_win, COLOR_PAIR(COLOR_SNAKE));
 
-    // 일시정지 메시지
+    // Pause message
     if (g->paused) {
         wattron(game_win, COLOR_PAIR(COLOR_TEXT) | A_BOLD);
-        mvwprintw(game_win, HEIGHT / 2, WIDTH / 2 - 5, "일시정지");
+        mvwprintw(game_win, HEIGHT / 2, WIDTH / 2 - 3, "PAUSED");
         wattroff(game_win, COLOR_PAIR(COLOR_TEXT) | A_BOLD);
     }
 
-    // 게임 윈도우 갱신
+    // Refresh game window
     wrefresh(game_win);
 
-    // 정보 윈도우 그리기
+    // Draw info window
     werase(info_win);
     wattron(info_win, COLOR_PAIR(COLOR_TEXT));
-    mvwprintw(info_win, 0, 1, "점수: %d  |  길이: %d  |  최고: %d",
+    mvwprintw(info_win, 0, 1, "Score: %d  |  Length: %d  |  High: %d",
               g->score, g->length, g->high_score);
-    mvwprintw(info_win, 1, 1, "조작: ↑↓←→ / WASD  |  P: 일시정지  |  Q: 종료");
+    mvwprintw(info_win, 1, 1, "Controls: Arrows/WASD  |  P: Pause  |  Q: Quit");
     wattroff(info_win, COLOR_PAIR(COLOR_TEXT));
     wrefresh(info_win);
 }
 
 /**
- * 게임 오버 화면
+ * Game over screen
  */
 void draw_game_over(Game* g) {
     wattron(game_win, COLOR_PAIR(COLOR_TEXT) | A_BOLD);
 
     mvwprintw(game_win, HEIGHT / 2 - 1, WIDTH / 2 - 5, "GAME OVER!");
-    mvwprintw(game_win, HEIGHT / 2, WIDTH / 2 - 7, "최종 점수: %d", g->score);
+    mvwprintw(game_win, HEIGHT / 2, WIDTH / 2 - 7, "Final Score: %d", g->score);
 
     if (g->score > g->high_score) {
-        mvwprintw(game_win, HEIGHT / 2 + 1, WIDTH / 2 - 6, "★ 신기록! ★");
+        mvwprintw(game_win, HEIGHT / 2 + 1, WIDTH / 2 - 6, "* New Record! *");
     }
 
-    mvwprintw(game_win, HEIGHT / 2 + 3, WIDTH / 2 - 8, "R: 재시작  |  Q: 종료");
+    mvwprintw(game_win, HEIGHT / 2 + 3, WIDTH / 2 - 8, "R: Restart  |  Q: Quit");
 
     wattroff(game_win, COLOR_PAIR(COLOR_TEXT) | A_BOLD);
     wrefresh(game_win);
 }
 
-// ============ 최고 점수 관리 ============
+// ============ High Score Management ============
 
 #define SCORE_FILE ".snake_ncurses_highscore"
 
@@ -401,7 +401,7 @@ void save_high_score(int score) {
     }
 }
 
-// ============ 메인 함수 ============
+// ============ Main Function ============
 
 int main(void) {
     srand(time(NULL));
@@ -414,33 +414,33 @@ int main(void) {
 
     if (!game) {
         cleanup_ncurses();
-        fprintf(stderr, "게임 초기화 실패\n");
+        fprintf(stderr, "Game initialization failed\n");
         return 1;
     }
 
     draw_game(game);
 
-    // 메인 게임 루프
+    // Main game loop
     while (1) {
-        // 입력 처리
+        // Handle input
         if (handle_input(game) == -1) {
-            break;  // 종료
+            break;  // Quit
         }
 
         if (!game->game_over) {
-            // 게임 업데이트
+            // Update game
             game_update(game);
             draw_game(game);
 
             if (game->game_over) {
-                // 최고 점수 저장
+                // Save high score
                 if (game->score > game->high_score) {
                     save_high_score(game->score);
                 }
                 draw_game_over(game);
             }
         } else {
-            // 게임 오버 상태에서 재시작 처리
+            // Handle restart in game over state
             int ch = getch();
             if (ch == 'r' || ch == 'R') {
                 int final_high = (game->score > game->high_score) ?
@@ -459,9 +459,9 @@ int main(void) {
 
     game_free(game);
 
-    // 종료 메시지
+    // Exit message
     clear();
-    mvprintw(0, 0, "게임을 종료합니다. 플레이해주셔서 감사합니다!");
+    mvprintw(0, 0, "Exiting the game. Thanks for playing!");
     refresh();
     nodelay(stdscr, FALSE);
     getch();

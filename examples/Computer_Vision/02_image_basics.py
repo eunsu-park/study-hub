@@ -1,9 +1,9 @@
 """
-02. 이미지 기초 연산
+02. Image Basic Operations
 - imread, imshow, imwrite
-- 픽셀 접근 및 수정
+- Pixel access and modification
 - ROI (Region of Interest)
-- 이미지 복사 및 채널 조작
+- Image copying and channel manipulation
 """
 
 import cv2
@@ -11,114 +11,114 @@ import numpy as np
 
 
 def create_sample_image():
-    """샘플 이미지 생성"""
+    """Create a sample image"""
     img = np.zeros((300, 400, 3), dtype=np.uint8)
 
-    # 컬러 영역
-    img[0:100, 0:200] = [255, 0, 0]      # 파랑
-    img[0:100, 200:400] = [0, 255, 0]    # 초록
-    img[100:200, 0:200] = [0, 0, 255]    # 빨강
-    img[100:200, 200:400] = [255, 255, 0] # 청록
-    img[200:300, :] = [128, 128, 128]    # 회색
+    # Color regions
+    img[0:100, 0:200] = [255, 0, 0]      # Blue
+    img[0:100, 200:400] = [0, 255, 0]    # Green
+    img[100:200, 0:200] = [0, 0, 255]    # Red
+    img[100:200, 200:400] = [255, 255, 0] # Cyan
+    img[200:300, :] = [128, 128, 128]    # Gray
 
     return img
 
 
 def image_read_write_demo():
-    """이미지 읽기/쓰기 데모"""
+    """Image read/write demo"""
     print("=" * 50)
-    print("이미지 읽기/쓰기")
+    print("Image Read/Write")
     print("=" * 50)
 
-    # 이미지 생성 및 저장
+    # Create and save image
     img = create_sample_image()
     cv2.imwrite('test_image.jpg', img)
-    print("test_image.jpg 저장 완료")
+    print("test_image.jpg saved successfully")
 
-    # 이미지 읽기
-    # cv2.IMREAD_COLOR: 컬러 (기본값)
-    # cv2.IMREAD_GRAYSCALE: 그레이스케일
-    # cv2.IMREAD_UNCHANGED: 원본 그대로 (알파 채널 포함)
+    # Read image
+    # cv2.IMREAD_COLOR: Color (default)
+    # cv2.IMREAD_GRAYSCALE: Grayscale
+    # cv2.IMREAD_UNCHANGED: Original as-is (including alpha channel)
 
     img_color = cv2.imread('test_image.jpg', cv2.IMREAD_COLOR)
     img_gray = cv2.imread('test_image.jpg', cv2.IMREAD_GRAYSCALE)
 
-    print(f"컬러 이미지 shape: {img_color.shape}")
-    print(f"그레이 이미지 shape: {img_gray.shape}")
+    print(f"Color image shape: {img_color.shape}")
+    print(f"Grayscale image shape: {img_gray.shape}")
 
     return img_color
 
 
 def pixel_access_demo(img):
-    """픽셀 접근 데모"""
+    """Pixel access demo"""
     print("\n" + "=" * 50)
-    print("픽셀 접근")
+    print("Pixel Access")
     print("=" * 50)
 
-    # 단일 픽셀 접근 (y, x 순서 주의!)
-    pixel = img[50, 100]  # (y=50, x=100) 위치
-    print(f"픽셀 (50, 100) BGR 값: {pixel}")
+    # Single pixel access (note the y, x order!)
+    pixel = img[50, 100]  # Position (y=50, x=100)
+    print(f"Pixel (50, 100) BGR value: {pixel}")
 
-    # 개별 채널 접근
+    # Individual channel access
     b = img[50, 100, 0]
     g = img[50, 100, 1]
     r = img[50, 100, 2]
     print(f"B={b}, G={g}, R={r}")
 
-    # 픽셀 수정
+    # Pixel modification
     img_copy = img.copy()
-    img_copy[50, 100] = [0, 0, 0]  # 검정으로 변경
+    img_copy[50, 100] = [0, 0, 0]  # Change to black
 
-    # 영역 수정 (더 효율적)
-    img_copy[0:50, 0:50] = [255, 255, 255]  # 흰색 사각형
+    # Region modification (more efficient)
+    img_copy[0:50, 0:50] = [255, 255, 255]  # White rectangle
 
     return img_copy
 
 
 def roi_demo(img):
-    """ROI (Region of Interest) 데모"""
+    """ROI (Region of Interest) demo"""
     print("\n" + "=" * 50)
     print("ROI (Region of Interest)")
     print("=" * 50)
 
-    # ROI 추출 (슬라이싱)
+    # Extract ROI (slicing)
     roi = img[50:150, 100:250]  # y: 50~150, x: 100~250
-    print(f"원본 shape: {img.shape}")
+    print(f"Original shape: {img.shape}")
     print(f"ROI shape: {roi.shape}")
 
-    # ROI 복사 (원본 영향 없음)
+    # Copy ROI (no effect on original)
     roi_copy = img[50:150, 100:250].copy()
 
-    # ROI 붙여넣기
+    # Paste ROI
     img_with_roi = img.copy()
-    img_with_roi[150:250, 200:350] = roi  # 다른 위치에 붙여넣기
+    img_with_roi[150:250, 200:350] = roi  # Paste at a different location
 
     cv2.imwrite('roi_demo.jpg', img_with_roi)
-    print("roi_demo.jpg 저장 완료")
+    print("roi_demo.jpg saved successfully")
 
     return roi
 
 
 def channel_operations_demo(img):
-    """채널 연산 데모"""
+    """Channel operations demo"""
     print("\n" + "=" * 50)
-    print("채널 연산")
+    print("Channel Operations")
     print("=" * 50)
 
-    # 채널 분리
+    # Split channels
     b, g, r = cv2.split(img)
-    print(f"B 채널 shape: {b.shape}")
-    print(f"G 채널 shape: {g.shape}")
-    print(f"R 채널 shape: {r.shape}")
+    print(f"B channel shape: {b.shape}")
+    print(f"G channel shape: {g.shape}")
+    print(f"R channel shape: {r.shape}")
 
-    # 채널 병합
+    # Merge channels
     merged = cv2.merge([b, g, r])
-    print(f"병합 후 shape: {merged.shape}")
+    print(f"After merge shape: {merged.shape}")
 
-    # 채널 순서 변경 (BGR -> RGB)
+    # Change channel order (BGR -> RGB)
     rgb = cv2.merge([r, g, b])
 
-    # 단일 채널만 사용한 이미지 생성
+    # Create images using a single channel only
     zeros = np.zeros_like(b)
     only_blue = cv2.merge([b, zeros, zeros])
     only_green = cv2.merge([zeros, g, zeros])
@@ -127,94 +127,94 @@ def channel_operations_demo(img):
     cv2.imwrite('only_blue.jpg', only_blue)
     cv2.imwrite('only_green.jpg', only_green)
     cv2.imwrite('only_red.jpg', only_red)
-    print("채널 분리 이미지 저장 완료")
+    print("Channel-separated images saved successfully")
 
 
 def image_properties_demo(img):
-    """이미지 속성 데모"""
+    """Image properties demo"""
     print("\n" + "=" * 50)
-    print("이미지 속성")
+    print("Image Properties")
     print("=" * 50)
 
-    # 기본 속성
+    # Basic properties
     print(f"Shape (H, W, C): {img.shape}")
     print(f"Height: {img.shape[0]}")
     print(f"Width: {img.shape[1]}")
     print(f"Channels: {img.shape[2] if len(img.shape) > 2 else 1}")
 
-    # 데이터 타입
+    # Data type
     print(f"Data type: {img.dtype}")
 
-    # 전체 픽셀 수
+    # Total number of pixels
     print(f"Total pixels: {img.size}")
 
-    # 메모리 사용량
+    # Memory usage
     print(f"Memory (bytes): {img.nbytes}")
 
-    # 픽셀 값 범위
+    # Pixel value range
     print(f"Min value: {img.min()}")
     print(f"Max value: {img.max()}")
     print(f"Mean value: {img.mean():.2f}")
 
 
 def image_arithmetic_demo():
-    """이미지 산술 연산 데모"""
+    """Image arithmetic operations demo"""
     print("\n" + "=" * 50)
-    print("이미지 산술 연산")
+    print("Image Arithmetic Operations")
     print("=" * 50)
 
-    # 두 이미지 생성
+    # Create two images
     img1 = np.full((200, 200, 3), 100, dtype=np.uint8)
     img2 = np.full((200, 200, 3), 200, dtype=np.uint8)
 
-    # NumPy 덧셈 (오버플로우 발생)
+    # NumPy addition (overflow occurs)
     result_np = img1 + img2
-    print(f"NumPy 덧셈 결과 (100+200): {result_np[0, 0]}")  # 44 (오버플로우)
+    print(f"NumPy addition result (100+200): {result_np[0, 0]}")  # 44 (overflow)
 
-    # OpenCV 덧셈 (포화 연산, saturate)
+    # OpenCV addition (saturated operation)
     result_cv = cv2.add(img1, img2)
-    print(f"OpenCV 덧셈 결과 (100+200): {result_cv[0, 0]}")  # 255 (포화)
+    print(f"OpenCV addition result (100+200): {result_cv[0, 0]}")  # 255 (saturated)
 
-    # 가중치 합 (블렌딩)
+    # Weighted sum (blending)
     alpha = 0.7
     beta = 0.3
     blended = cv2.addWeighted(img1, alpha, img2, beta, 0)
-    print(f"블렌딩 결과 (0.7*100 + 0.3*200): {blended[0, 0]}")
+    print(f"Blending result (0.7*100 + 0.3*200): {blended[0, 0]}")
 
-    # 뺄셈
+    # Subtraction
     diff = cv2.subtract(img2, img1)
-    print(f"뺄셈 결과 (200-100): {diff[0, 0]}")
+    print(f"Subtraction result (200-100): {diff[0, 0]}")
 
-    # 비트 연산
+    # Bitwise operations
     mask = np.zeros((200, 200), dtype=np.uint8)
     mask[50:150, 50:150] = 255
 
     masked = cv2.bitwise_and(img1, img1, mask=mask)
     cv2.imwrite('masked_result.jpg', masked)
-    print("masked_result.jpg 저장 완료")
+    print("masked_result.jpg saved successfully")
 
 
 def main():
-    """메인 함수"""
-    # 이미지 읽기/쓰기
+    """Main function"""
+    # Image read/write
     img = image_read_write_demo()
 
-    # 픽셀 접근
+    # Pixel access
     modified = pixel_access_demo(img)
 
     # ROI
     roi = roi_demo(img)
 
-    # 채널 연산
+    # Channel operations
     channel_operations_demo(img)
 
-    # 이미지 속성
+    # Image properties
     image_properties_demo(img)
 
-    # 산술 연산
+    # Arithmetic operations
     image_arithmetic_demo()
 
-    print("\n이미지 기초 연산 완료!")
+    print("\nImage basic operations complete!")
 
 
 if __name__ == '__main__':

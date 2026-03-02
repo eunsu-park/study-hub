@@ -1,9 +1,9 @@
 """
-05. 이미지 필터링
+05. Image Filtering
 - blur, GaussianBlur, medianBlur
 - bilateralFilter
-- 커스텀 필터 (filter2D)
-- 샤프닝
+- Custom filters (filter2D)
+- Sharpening
 """
 
 import cv2
@@ -11,16 +11,16 @@ import numpy as np
 
 
 def create_noisy_image():
-    """노이즈가 있는 테스트 이미지 생성"""
+    """Create a test image with noise"""
     img = np.zeros((300, 400, 3), dtype=np.uint8)
     img[:] = [200, 200, 200]
 
-    # 도형 그리기
+    # Draw shapes
     cv2.rectangle(img, (50, 50), (150, 150), (0, 0, 255), -1)
     cv2.circle(img, (300, 150), 50, (255, 0, 0), -1)
     cv2.putText(img, 'Filter', (150, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
 
-    # 가우시안 노이즈 추가
+    # Add Gaussian noise
     noise = np.random.normal(0, 25, img.shape).astype(np.int16)
     noisy = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
 
@@ -28,33 +28,33 @@ def create_noisy_image():
 
 
 def create_salt_pepper_noise(img):
-    """소금-후추 노이즈 추가"""
+    """Add salt-and-pepper noise"""
     noisy = img.copy()
-    # 소금 (흰색)
+    # Salt (white)
     salt = np.random.random(img.shape[:2]) < 0.02
     noisy[salt] = 255
-    # 후추 (검정)
+    # Pepper (black)
     pepper = np.random.random(img.shape[:2]) < 0.02
     noisy[pepper] = 0
     return noisy
 
 
 def blur_demo():
-    """블러 필터 데모"""
+    """Blur filter demo"""
     print("=" * 50)
-    print("블러 필터")
+    print("Blur Filters")
     print("=" * 50)
 
     original, noisy = create_noisy_image()
 
-    # 평균 블러 (Box Filter)
+    # Average blur (Box Filter)
     blur_3x3 = cv2.blur(noisy, (3, 3))
     blur_5x5 = cv2.blur(noisy, (5, 5))
     blur_7x7 = cv2.blur(noisy, (7, 7))
 
-    print("평균 블러 (Box Filter):")
-    print("  - 모든 픽셀에 동일한 가중치")
-    print("  - 커널 크기가 클수록 더 흐려짐")
+    print("Average Blur (Box Filter):")
+    print("  - Equal weight for all pixels")
+    print("  - Larger kernel = more blur")
 
     cv2.imwrite('original.jpg', original)
     cv2.imwrite('noisy.jpg', noisy)
@@ -64,28 +64,28 @@ def blur_demo():
 
 
 def gaussian_blur_demo():
-    """가우시안 블러 데모"""
+    """Gaussian blur demo"""
     print("\n" + "=" * 50)
-    print("가우시안 블러")
+    print("Gaussian Blur")
     print("=" * 50)
 
     _, noisy = create_noisy_image()
 
-    # 가우시안 블러
+    # Gaussian blur
     # GaussianBlur(src, ksize, sigmaX)
     gauss_3x3 = cv2.GaussianBlur(noisy, (3, 3), 0)
     gauss_5x5 = cv2.GaussianBlur(noisy, (5, 5), 0)
     gauss_7x7 = cv2.GaussianBlur(noisy, (7, 7), 0)
 
-    # sigma 값에 따른 차이
+    # Difference depending on sigma value
     gauss_s1 = cv2.GaussianBlur(noisy, (5, 5), 1)
     gauss_s3 = cv2.GaussianBlur(noisy, (5, 5), 3)
     gauss_s5 = cv2.GaussianBlur(noisy, (5, 5), 5)
 
-    print("가우시안 블러:")
-    print("  - 중앙에 높은 가중치, 가장자리에 낮은 가중치")
-    print("  - 자연스러운 블러 효과")
-    print("  - sigma가 클수록 더 흐려짐")
+    print("Gaussian Blur:")
+    print("  - Higher weight at center, lower at edges")
+    print("  - Natural blur effect")
+    print("  - Larger sigma = more blur")
 
     cv2.imwrite('gauss_3x3.jpg', gauss_3x3)
     cv2.imwrite('gauss_5x5.jpg', gauss_5x5)
@@ -94,23 +94,23 @@ def gaussian_blur_demo():
 
 
 def median_blur_demo():
-    """미디언 블러 데모"""
+    """Median blur demo"""
     print("\n" + "=" * 50)
-    print("미디언 블러")
+    print("Median Blur")
     print("=" * 50)
 
     original, _ = create_noisy_image()
     sp_noisy = create_salt_pepper_noise(original)
 
-    # 미디언 블러
+    # Median blur
     median_3 = cv2.medianBlur(sp_noisy, 3)
     median_5 = cv2.medianBlur(sp_noisy, 5)
     median_7 = cv2.medianBlur(sp_noisy, 7)
 
-    print("미디언 블러:")
-    print("  - 커널 내 중앙값 사용")
-    print("  - 소금-후추 노이즈 제거에 효과적")
-    print("  - 엣지 보존 효과")
+    print("Median Blur:")
+    print("  - Uses median value within kernel")
+    print("  - Effective for salt-and-pepper noise removal")
+    print("  - Edge preservation effect")
 
     cv2.imwrite('salt_pepper_noisy.jpg', sp_noisy)
     cv2.imwrite('median_3.jpg', median_3)
@@ -118,46 +118,46 @@ def median_blur_demo():
 
 
 def bilateral_filter_demo():
-    """양방향 필터 데모"""
+    """Bilateral filter demo"""
     print("\n" + "=" * 50)
-    print("양방향 필터 (Bilateral Filter)")
+    print("Bilateral Filter")
     print("=" * 50)
 
     _, noisy = create_noisy_image()
 
-    # 양방향 필터
+    # Bilateral filter
     # bilateralFilter(src, d, sigmaColor, sigmaSpace)
-    # d: 필터 크기 (-1이면 sigmaSpace에서 자동 계산)
-    # sigmaColor: 색상 공간에서의 시그마
-    # sigmaSpace: 좌표 공간에서의 시그마
+    # d: Filter size (-1 for auto-calculation from sigmaSpace)
+    # sigmaColor: Sigma in color space
+    # sigmaSpace: Sigma in coordinate space
 
     bilateral_1 = cv2.bilateralFilter(noisy, 9, 75, 75)
     bilateral_2 = cv2.bilateralFilter(noisy, 9, 150, 150)
     bilateral_3 = cv2.bilateralFilter(noisy, -1, 75, 75)
 
-    print("양방향 필터:")
-    print("  - 엣지를 보존하면서 노이즈 제거")
-    print("  - sigmaColor: 색상 차이 허용 범위")
-    print("  - sigmaSpace: 공간적 영향 범위")
-    print("  - 다른 필터보다 느림")
+    print("Bilateral Filter:")
+    print("  - Removes noise while preserving edges")
+    print("  - sigmaColor: Color difference tolerance range")
+    print("  - sigmaSpace: Spatial influence range")
+    print("  - Slower than other filters")
 
     cv2.imwrite('bilateral_75.jpg', bilateral_1)
     cv2.imwrite('bilateral_150.jpg', bilateral_2)
 
 
 def custom_filter_demo():
-    """커스텀 필터 데모"""
+    """Custom filter demo"""
     print("\n" + "=" * 50)
-    print("커스텀 필터 (filter2D)")
+    print("Custom Filters (filter2D)")
     print("=" * 50)
 
     original, _ = create_noisy_image()
 
-    # 평균 필터 커널
+    # Average filter kernel
     kernel_avg = np.ones((3, 3), dtype=np.float32) / 9
     avg_filtered = cv2.filter2D(original, -1, kernel_avg)
 
-    # 샤프닝 커널
+    # Sharpening kernel
     kernel_sharpen = np.array([
         [0, -1, 0],
         [-1, 5, -1],
@@ -165,7 +165,7 @@ def custom_filter_demo():
     ], dtype=np.float32)
     sharpened = cv2.filter2D(original, -1, kernel_sharpen)
 
-    # 강한 샤프닝
+    # Strong sharpening
     kernel_sharpen_strong = np.array([
         [-1, -1, -1],
         [-1, 9, -1],
@@ -173,7 +173,7 @@ def custom_filter_demo():
     ], dtype=np.float32)
     sharpened_strong = cv2.filter2D(original, -1, kernel_sharpen_strong)
 
-    # 엠보싱 커널
+    # Embossing kernel
     kernel_emboss = np.array([
         [-2, -1, 0],
         [-1, 1, 1],
@@ -181,10 +181,10 @@ def custom_filter_demo():
     ], dtype=np.float32)
     embossed = cv2.filter2D(original, -1, kernel_emboss)
 
-    print("커스텀 커널 예시:")
-    print(f"  평균 필터:\n{kernel_avg}")
-    print(f"\n  샤프닝:\n{kernel_sharpen}")
-    print(f"\n  엠보싱:\n{kernel_emboss}")
+    print("Custom kernel examples:")
+    print(f"  Average filter:\n{kernel_avg}")
+    print(f"\n  Sharpening:\n{kernel_sharpen}")
+    print(f"\n  Embossing:\n{kernel_emboss}")
 
     cv2.imwrite('custom_avg.jpg', avg_filtered)
     cv2.imwrite('custom_sharpen.jpg', sharpened)
@@ -193,71 +193,71 @@ def custom_filter_demo():
 
 
 def unsharp_masking_demo():
-    """언샤프 마스킹 데모"""
+    """Unsharp masking demo"""
     print("\n" + "=" * 50)
-    print("언샤프 마스킹 (Unsharp Masking)")
+    print("Unsharp Masking")
     print("=" * 50)
 
     original, _ = create_noisy_image()
 
-    # 언샤프 마스킹: 원본 + (원본 - 블러) * 강도
+    # Unsharp masking: original + (original - blur) * strength
     blurred = cv2.GaussianBlur(original, (5, 5), 0)
 
-    # 방법 1: 직접 계산
+    # Method 1: Direct calculation
     unsharp = cv2.addWeighted(original, 1.5, blurred, -0.5, 0)
 
-    # 방법 2: 공식 적용
-    alpha = 1.5  # 샤프닝 강도
+    # Method 2: Formula application
+    alpha = 1.5  # Sharpening strength
     unsharp2 = cv2.addWeighted(original, 1 + alpha, blurred, -alpha, 0)
 
-    print("언샤프 마스킹:")
-    print("  결과 = 원본 + alpha * (원본 - 블러)")
-    print("  alpha가 클수록 샤프닝 효과 강함")
+    print("Unsharp Masking:")
+    print("  result = original + alpha * (original - blur)")
+    print("  Larger alpha = stronger sharpening effect")
 
     cv2.imwrite('unsharp_mask.jpg', unsharp)
     cv2.imwrite('unsharp_mask2.jpg', unsharp2)
 
 
 def filter_comparison():
-    """필터 비교"""
+    """Filter comparison"""
     print("\n" + "=" * 50)
-    print("필터 비교 정리")
+    print("Filter Comparison Summary")
     print("=" * 50)
 
     print("""
-    | 필터 | 특징 | 사용 상황 |
-    |------|------|----------|
-    | blur (Box) | 균일한 가중치 | 단순 평균화 |
-    | GaussianBlur | 중앙 가중치 높음 | 자연스러운 블러 |
-    | medianBlur | 중앙값 사용 | 소금-후추 노이즈 |
-    | bilateralFilter | 엣지 보존 | 피부 보정 등 |
+    | Filter | Characteristics | Use Case |
+    |--------|----------------|----------|
+    | blur (Box) | Uniform weights | Simple averaging |
+    | GaussianBlur | Higher center weight | Natural blur |
+    | medianBlur | Uses median value | Salt-and-pepper noise |
+    | bilateralFilter | Edge preserving | Skin smoothing, etc. |
     """)
 
 
 def main():
-    """메인 함수"""
-    # 블러 필터
+    """Main function"""
+    # Blur filter
     blur_demo()
 
-    # 가우시안 블러
+    # Gaussian blur
     gaussian_blur_demo()
 
-    # 미디언 블러
+    # Median blur
     median_blur_demo()
 
-    # 양방향 필터
+    # Bilateral filter
     bilateral_filter_demo()
 
-    # 커스텀 필터
+    # Custom filter
     custom_filter_demo()
 
-    # 언샤프 마스킹
+    # Unsharp masking
     unsharp_masking_demo()
 
-    # 비교
+    # Comparison
     filter_comparison()
 
-    print("\n이미지 필터링 데모 완료!")
+    print("\nImage filtering demo complete!")
 
 
 if __name__ == '__main__':

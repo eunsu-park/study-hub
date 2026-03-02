@@ -1,5 +1,5 @@
 """
-DQN으로 CartPole 학습
+DQN for CartPole Training
 """
 import torch
 import torch.nn as nn

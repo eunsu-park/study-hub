@@ -1,12 +1,12 @@
 /*
- * 반응형 웹 디자인 예제 스타일시트
- * Mobile First 접근법
+ * Responsive Web Design Example Stylesheet
+ * Mobile First Approach
  */
 
 /* Why: CSS custom properties (variables) defined on :root cascade to all elements and can
    be overridden in media queries, enabling responsive design changes from a single location */
 /* ============================================
-   CSS 변수 (Custom Properties)
+   CSS Variables (Custom Properties)
    ============================================ */
 :root {
     --primary-color: #3498db;
@@ -15,14 +15,14 @@
     --light-color: #ecf0f1;
     --text-color: #333;
 
-    /* 반응형 여백 */
+    /* Responsive spacing */
     --spacing-sm: 10px;
     --spacing-md: 20px;
     --spacing-lg: 40px;
 }
 
 /* ============================================
-   기본 스타일 (모바일 우선)
+   Base Styles (Mobile First)
    ============================================ */
 * {
     margin: 0;
@@ -43,7 +43,7 @@ body {
 }
 
 /* ============================================
-   네비게이션
+   Navigation
    ============================================ */
 /* Why: sticky + z-index keeps the nav visible during scroll without removing it from
    document flow (unlike fixed), so no padding-top hack is needed on the body */
@@ -99,7 +99,7 @@ body {
 }
 
 /* ============================================
-   메인 콘텐츠
+   Main Content
    ============================================ */
 h1 {
     font-size: 1.75rem;
@@ -130,7 +130,7 @@ h2 {
 }
 
 /* ============================================
-   뷰포트 인디케이터
+   Viewport Indicator
    ============================================ */
 .viewport-indicator span {
     display: none;
@@ -145,7 +145,7 @@ h2 {
 .viewport-indicator .mobile { display: block; }
 
 /* ============================================
-   반응형 그리드
+   Responsive Grid
    ============================================ */
 .responsive-grid {
     display: grid;
@@ -164,7 +164,7 @@ h2 {
 }
 
 /* ============================================
-   반응형 카드
+   Responsive Cards
    ============================================ */
 .card-grid {
     display: flex;
@@ -223,12 +223,12 @@ h2 {
 }
 
 /* ============================================
-   반응형 타이포그래피
+   Responsive Typography
    ============================================ */
 /* Why: clamp() provides fluid typography in a single declaration, eliminating the need for
    multiple media query breakpoints while guaranteeing minimum/maximum readability bounds */
 .responsive-heading {
-    /* clamp(최소값, 선호값, 최대값) */
+    /* clamp(minimum, preferred, maximum) */
     font-size: clamp(1.5rem, 5vw, 3rem);
     color: var(--dark-color);
     margin-bottom: 15px;
@@ -247,7 +247,7 @@ code {
 }
 
 /* ============================================
-   반응형 이미지
+   Responsive Images
    ============================================ */
 .image-container {
     text-align: center;
@@ -266,7 +266,7 @@ code {
 }
 
 /* ============================================
-   반응형 테이블
+   Responsive Table
    ============================================ */
 .table-container {
     overflow-x: auto;
@@ -297,7 +297,7 @@ code {
 /* Why: On small screens, the traditional table layout becomes unreadable due to horizontal
    scrolling. Hiding thead and converting each row to a card-like block with data-label
    pseudo-elements preserves data context without requiring horizontal scroll */
-/* 모바일 테이블 스타일 */
+/* Mobile table styles */
 @media (max-width: 600px) {
     .responsive-table {
         min-width: auto;
@@ -334,7 +334,7 @@ code {
 }
 
 /* ============================================
-   반응형 폼
+   Responsive Form
    ============================================ */
 .responsive-form {
     max-width: 100%;
@@ -374,7 +374,7 @@ code {
 }
 
 /* ============================================
-   코드 블록
+   Code Blocks
    ============================================ */
 pre {
     background: #2c3e50;
@@ -392,7 +392,7 @@ pre code {
 }
 
 /* ============================================
-   푸터
+   Footer
    ============================================ */
 .footer {
     background: var(--dark-color);
@@ -446,7 +446,7 @@ pre code {
 /* Why: Mobile-first breakpoints use min-width so base styles target small screens and
    larger screens progressively enhance - this reduces CSS overrides and improves performance */
 /* ============================================
-   태블릿 (576px 이상)
+   Tablet (576px and above)
    ============================================ */
 @media (min-width: 576px) {
     :root {
@@ -471,7 +471,7 @@ pre code {
 }
 
 /* ============================================
-   작은 데스크탑 (768px 이상)
+   Small Desktop (768px and above)
    ============================================ */
 @media (min-width: 768px) {
     .container {
@@ -528,7 +528,7 @@ pre code {
 }
 
 /* ============================================
-   데스크탑 (992px 이상)
+   Desktop (992px and above)
    ============================================ */
 @media (min-width: 992px) {
     :root {
@@ -554,7 +554,7 @@ pre code {
 }
 
 /* ============================================
-   큰 화면 (1200px 이상)
+   Large Screen (1200px and above)
    ============================================ */
 @media (min-width: 1200px) {
     .container {
@@ -568,7 +568,7 @@ pre code {
 /* Why: Print styles remove chrome (nav, footer) that wastes paper and restore a clean
    reading experience - often overlooked but essential for content-heavy educational sites */
 /* ============================================
-   인쇄 스타일
+   Print Styles
    ============================================ */
 @media print {
     .navbar,

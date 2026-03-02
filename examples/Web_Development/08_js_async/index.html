@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>비동기 JavaScript 예제</title>
+    <title>Asynchronous JavaScript Example</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, sans-serif;
@@ -84,19 +84,19 @@
     </style>
 </head>
 <body>
-    <h1>비동기 JavaScript 예제</h1>
+    <h1>Asynchronous JavaScript Example</h1>
 
-    <!-- 1. 콜백 함수 -->
+    <!-- 1. Callback functions -->
     <div class="section">
-        <h2>1. 콜백 함수</h2>
-        <button onclick="runCallback()">콜백 실행</button>
-        <button onclick="runCallbackHell()">콜백 지옥 예시</button>
-        <div class="output" id="callbackOutput">결과가 여기에 표시됩니다.</div>
+        <h2>1. Callback Functions</h2>
+        <button onclick="runCallback()">Run Callback</button>
+        <button onclick="runCallbackHell()">Callback Hell Example</button>
+        <div class="output" id="callbackOutput">Results will be displayed here.</div>
         <pre>
-// 콜백 패턴
+// Callback pattern
 function fetchData(callback) {
     setTimeout(() => {
-        callback("데이터 로드 완료");
+        callback("Data loading complete");
     }, 1000);
 }
 
@@ -109,33 +109,33 @@ fetchData((result) => {
     <!-- 2. Promise -->
     <div class="section">
         <h2>2. Promise</h2>
-        <button onclick="runPromise()">Promise 실행</button>
-        <button onclick="runPromiseChain()">Promise 체이닝</button>
-        <button onclick="runPromiseError()">에러 처리</button>
-        <div class="output" id="promiseOutput">결과가 여기에 표시됩니다.</div>
+        <button onclick="runPromise()">Run Promise</button>
+        <button onclick="runPromiseChain()">Promise Chaining</button>
+        <button onclick="runPromiseError()">Error Handling</button>
+        <div class="output" id="promiseOutput">Results will be displayed here.</div>
         <pre>
-// Promise 생성
+// Creating a Promise
 const promise = new Promise((resolve, reject) => {
     setTimeout(() => {
-        resolve("성공!");
-        // reject(new Error("실패!"));
+        resolve("Success!");
+        // reject(new Error("Failure!"));
     }, 1000);
 });
 
-// Promise 사용
+// Using a Promise
 promise
     .then(result => console.log(result))
     .catch(error => console.error(error))
-    .finally(() => console.log("완료"));
+    .finally(() => console.log("Done"));
         </pre>
     </div>
 
     <!-- 3. async/await -->
     <div class="section">
         <h2>3. async/await</h2>
-        <button onclick="runAsyncAwait()">async/await 실행</button>
-        <button onclick="runAsyncError()">에러 처리</button>
-        <div class="output" id="asyncOutput">결과가 여기에 표시됩니다.</div>
+        <button onclick="runAsyncAwait()">Run async/await</button>
+        <button onclick="runAsyncError()">Error Handling</button>
+        <div class="output" id="asyncOutput">Results will be displayed here.</div>
         <pre>
 async function fetchData() {
     try {
@@ -155,50 +155,50 @@ async function fetchData() {
         <button onclick="runPromiseAll()">Promise.all</button>
         <button onclick="runPromiseRace()">Promise.race</button>
         <button onclick="runPromiseAllSettled()">Promise.allSettled</button>
-        <div class="output" id="promiseAllOutput">결과가 여기에 표시됩니다.</div>
+        <div class="output" id="promiseAllOutput">Results will be displayed here.</div>
     </div>
 
     <!-- 5. Fetch API -->
     <div class="section">
         <h2>5. Fetch API</h2>
-        <button onclick="fetchUsers()" id="fetchUsersBtn">사용자 목록 가져오기</button>
-        <button onclick="fetchPost()">게시글 가져오기</button>
+        <button onclick="fetchUsers()" id="fetchUsersBtn">Fetch User List</button>
+        <button onclick="fetchPost()">Fetch Post</button>
         <div id="fetchOutput" class="output" style="min-height: 150px;">
-            API 결과가 여기에 표시됩니다.
+            API results will be displayed here.
         </div>
     </div>
 
-    <!-- 6. POST 요청 -->
+    <!-- 6. POST request -->
     <div class="section">
-        <h2>6. POST 요청</h2>
-        <input type="text" id="postTitle" placeholder="제목">
-        <input type="text" id="postBody" placeholder="내용">
-        <button onclick="createPost()">게시글 생성</button>
-        <div class="output" id="postOutput">결과가 여기에 표시됩니다.</div>
+        <h2>6. POST Request</h2>
+        <input type="text" id="postTitle" placeholder="Title">
+        <input type="text" id="postBody" placeholder="Content">
+        <button onclick="createPost()">Create Post</button>
+        <div class="output" id="postOutput">Results will be displayed here.</div>
     </div>
 
-    <!-- 7. 에러 처리 패턴 -->
+    <!-- 7. Error handling patterns -->
     <div class="section">
-        <h2>7. 에러 처리 패턴</h2>
-        <button onclick="testErrorHandling()">에러 처리 테스트</button>
-        <button onclick="testNetworkError()">네트워크 에러 테스트</button>
-        <div class="output" id="errorOutput">결과가 여기에 표시됩니다.</div>
+        <h2>7. Error Handling Patterns</h2>
+        <button onclick="testErrorHandling()">Test Error Handling</button>
+        <button onclick="testNetworkError()">Test Network Error</button>
+        <div class="output" id="errorOutput">Results will be displayed here.</div>
     </div>
 
-    <!-- 8. 실전 예제: 사용자 카드 -->
+    <!-- 8. Practical example: User cards -->
     <div class="section">
-        <h2>8. 실전 예제: 사용자 카드</h2>
-        <button onclick="loadUserCards()" id="loadCardsBtn">사용자 카드 로드</button>
+        <h2>8. Practical Example: User Cards</h2>
+        <button onclick="loadUserCards()" id="loadCardsBtn">Load User Cards</button>
         <div id="userCards" style="margin-top: 15px;"></div>
     </div>
 
     <!-- 9. setTimeout, setInterval -->
     <div class="section">
         <h2>9. setTimeout, setInterval</h2>
-        <button onclick="startTimer()">타이머 시작</button>
-        <button onclick="stopTimer()">타이머 중지</button>
-        <button onclick="runDebounceDemo()">Debounce 테스트</button>
-        <div class="output" id="timerOutput">타이머: 0</div>
+        <button onclick="startTimer()">Start Timer</button>
+        <button onclick="stopTimer()">Stop Timer</button>
+        <button onclick="runDebounceDemo()">Debounce Test</button>
+        <div class="output" id="timerOutput">Timer: 0</div>
     </div>
 
     <script src="script.js"></script>

@@ -1,5 +1,5 @@
 // mutex_example.c
-// 뮤텍스를 이용한 동기화
+// Synchronization using mutex
 #include <stdio.h>
 #include <pthread.h>
 
@@ -18,9 +18,9 @@ void* increment_safe(void* arg) {
         // Why: lock-increment-unlock ensures only one thread executes counter++
         // at a time — this makes the load-increment-store sequence atomic, fixing
         // the race condition shown in race_condition.c
-        pthread_mutex_lock(&mutex);    // 잠금
-        counter++;                      // 임계 구역
-        pthread_mutex_unlock(&mutex);  // 해제
+        pthread_mutex_lock(&mutex);    // Lock
+        counter++;                      // Critical section
+        pthread_mutex_unlock(&mutex);  // Unlock
     }
 
     return NULL;
@@ -37,8 +37,8 @@ int main(void) {
         pthread_join(threads[i], NULL);
     }
 
-    printf("예상값: %d\n", NUM_THREADS * ITERATIONS);
-    printf("실제값: %d\n", counter);
+    printf("Expected: %d\n", NUM_THREADS * ITERATIONS);
+    printf("Actual:   %d\n", counter);
 
     // Why: destroy releases OS resources held by the mutex — not strictly required
     // before exit, but essential in libraries/long-running programs to avoid leaks

@@ -1,8 +1,8 @@
 """
-PyTorch Low-Level VGG 구현
+PyTorch Low-Level VGG Implementation
 
-nn.Conv2d, nn.Linear 대신 F.conv2d, torch.matmul 사용
-파라미터를 수동으로 관리하며 블록 단위로 구성
+Uses F.conv2d and torch.matmul instead of nn.Conv2d and nn.Linear.
+Parameters are managed manually with block-based organization.
 """
 
 import torch
@@ -11,7 +11,7 @@ import math
 from typing import Tuple, List, Dict, Optional
 
 
-# VGG 설정: 숫자 = 출력 채널, 'M' = MaxPool
+# VGG configuration: numbers = output channels, 'M' = MaxPool
 VGG_CONFIGS = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'VGG13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -22,9 +22,9 @@ VGG_CONFIGS = {
 
 class VGGLowLevel:
     """
-    VGG Low-Level 구현
+    VGG Low-Level Implementation
 
-    nn.Module 미사용, F.conv2d 등 기본 연산만 사용
+    Does not use nn.Module; uses only basic operations like F.conv2d.
     """
 
     def __init__(
@@ -36,21 +36,21 @@ class VGGLowLevel:
     ):
         """
         Args:
-            config_name: VGG 변형 ('VGG11', 'VGG13', 'VGG16', 'VGG19')
-            num_classes: 출력 클래스 수
-            input_channels: 입력 채널 수 (RGB=3)
-            use_bn: Batch Normalization 사용 여부
+            config_name: VGG variant ('VGG11', 'VGG13', 'VGG16', 'VGG19')
+            num_classes: Number of output classes
+            input_channels: Number of input channels (RGB=3)
+            use_bn: Whether to use Batch Normalization
         """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.config = VGG_CONFIGS[config_name]
         self.use_bn = use_bn
 
-        # Feature extractor 파라미터
+        # Feature extractor parameters
         self.conv_params = []
         self.bn_params = [] if use_bn else None
         self._build_features(input_channels)
 
-        # Classifier 파라미터
+        # Classifier parameters
         self._build_classifier(num_classes)
 
     def _init_conv_weight(
@@ -59,7 +59,7 @@ class VGGLowLevel:
         out_channels: int,
         kernel_size: int = 3
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Kaiming 초기화로 Conv 가중치 생성"""
+        """Create Conv weights with Kaiming initialization"""
         fan_in = in_channels * kernel_size * kernel_size
         std = math.sqrt(2.0 / fan_in)
 
@@ -72,7 +72,7 @@ class VGGLowLevel:
         return weight, bias
 
     def _init_bn_params(self, num_features: int) -> Dict[str, torch.Tensor]:
-        """BatchNorm 파라미터 초기화"""
+        """Initialize BatchNorm parameters"""
         return {
             'gamma': torch.ones(num_features, requires_grad=True, device=self.device),
             'beta': torch.zeros(num_features, requires_grad=True, device=self.device),
@@ -85,7 +85,7 @@ class VGGLowLevel:
         in_features: int,
         out_features: int
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Xavier 초기화로 Linear 가중치 생성"""
+        """Create Linear weights with Xavier initialization"""
         std = math.sqrt(2.0 / (in_features + out_features))
 
         weight = torch.randn(
@@ -97,12 +97,12 @@ class VGGLowLevel:
         return weight, bias
 
     def _build_features(self, input_channels: int):
-        """Feature extractor (Conv layers) 구축"""
+        """Build feature extractor (Conv layers)"""
         in_channels = input_channels
 
         for v in self.config:
             if v == 'M':
-                # MaxPool은 파라미터 없음
+                # MaxPool has no parameters
                 self.conv_params.append('M')
                 if self.use_bn:
                     self.bn_params.append(None)
@@ -118,17 +118,17 @@ class VGGLowLevel:
                 in_channels = out_channels
 
     def _build_classifier(self, num_classes: int):
-        """Classifier (FC layers) 구축"""
-        # 7×7×512 = 25088 (224×224 입력 기준)
-        # CIFAR-10 (32×32) 사용시 1×1×512 = 512
+        """Build classifier (FC layers)"""
+        # 7x7x512 = 25088 (for 224x224 input)
+        # For CIFAR-10 (32x32): 1x1x512 = 512
 
-        # FC1: 25088 → 4096
+        # FC1: 25088 -> 4096
         self.fc1_weight, self.fc1_bias = self._init_linear_weight(512 * 7 * 7, 4096)
 
-        # FC2: 4096 → 4096
+        # FC2: 4096 -> 4096
         self.fc2_weight, self.fc2_bias = self._init_linear_weight(4096, 4096)
 
-        # FC3: 4096 → num_classes
+        # FC3: 4096 -> num_classes
         self.fc3_weight, self.fc3_bias = self._init_linear_weight(4096, num_classes)
 
     def _batch_norm(
@@ -139,13 +139,13 @@ class VGGLowLevel:
         momentum: float = 0.1,
         eps: float = 1e-5
     ) -> torch.Tensor:
-        """수동 Batch Normalization"""
+        """Manual Batch Normalization"""
         if training:
-            # 현재 배치의 mean, var 계산
+            # Compute mean and var of current batch
             mean = x.mean(dim=(0, 2, 3), keepdim=True)
             var = x.var(dim=(0, 2, 3), unbiased=False, keepdim=True)
 
-            # Running statistics 업데이트
+            # Update running statistics
             with torch.no_grad():
                 bn_params['running_mean'] = (
                     (1 - momentum) * bn_params['running_mean'] +
@@ -177,8 +177,8 @@ class VGGLowLevel:
         Forward pass
 
         Args:
-            x: (N, C, H, W) 입력 이미지
-            training: 학습 모드 (BN, Dropout에 영향)
+            x: (N, C, H, W) input image
+            training: Training mode (affects BN and Dropout)
 
         Returns:
             logits: (N, num_classes)
@@ -218,21 +218,21 @@ class VGGLowLevel:
         return x
 
     def parameters(self) -> List[torch.Tensor]:
-        """학습 가능한 파라미터 반환"""
+        """Return trainable parameters"""
         params = []
 
-        # Conv 파라미터
+        # Conv parameters
         for p in self.conv_params:
             if p != 'M':
                 params.extend([p['weight'], p['bias']])
 
-        # BN 파라미터
+        # BN parameters
         if self.use_bn:
             for bn in self.bn_params:
                 if bn is not None:
                     params.extend([bn['gamma'], bn['beta']])
 
-        # FC 파라미터
+        # FC parameters
         params.extend([
             self.fc1_weight, self.fc1_bias,
             self.fc2_weight, self.fc2_bias,
@@ -242,29 +242,29 @@ class VGGLowLevel:
         return params
 
     def zero_grad(self):
-        """Gradient 초기화"""
+        """Reset gradients"""
         for param in self.parameters():
             if param.grad is not None:
                 param.grad.zero_()
 
     def to(self, device):
-        """Device 이동"""
+        """Move to device"""
         self.device = device
 
-        # Conv 파라미터
+        # Conv parameters
         for p in self.conv_params:
             if p != 'M':
                 p['weight'] = p['weight'].to(device)
                 p['bias'] = p['bias'].to(device)
 
-        # BN 파라미터
+        # BN parameters
         if self.use_bn:
             for bn in self.bn_params:
                 if bn is not None:
                     for key in bn:
                         bn[key] = bn[key].to(device)
 
-        # FC 파라미터
+        # FC parameters
         for attr in ['fc1_weight', 'fc1_bias', 'fc2_weight',
                      'fc2_bias', 'fc3_weight', 'fc3_bias']:
             tensor = getattr(self, attr)
@@ -273,20 +273,20 @@ class VGGLowLevel:
         return self
 
     def count_parameters(self) -> int:
-        """파라미터 수 계산"""
+        """Count number of parameters"""
         return sum(p.numel() for p in self.parameters())
 
 
 class VGGSmall(VGGLowLevel):
     """
-    CIFAR-10용 작은 VGG
+    Small VGG for CIFAR-10
 
-    입력: 32×32 → 출력 feature map: 1×1×512
+    Input: 32x32 -> Output feature map: 1x1x512
     """
 
     def _build_classifier(self, num_classes: int):
-        """작은 입력에 맞는 Classifier"""
-        # 32×32 입력 → 5번 풀링 → 1×1×512
+        """Classifier adapted for small input"""
+        # 32x32 input -> 5 pooling layers -> 1x1x512
         self.fc1_weight, self.fc1_bias = self._init_linear_weight(512, 512)
         self.fc2_weight, self.fc2_bias = self._init_linear_weight(512, 512)
         self.fc3_weight, self.fc3_bias = self._init_linear_weight(512, num_classes)
@@ -318,8 +318,8 @@ def train_epoch(
     momentum: float = 0.9,
     weight_decay: float = 5e-4
 ) -> Tuple[float, float]:
-    """한 에폭 학습"""
-    # Velocity 초기화 (첫 에폭)
+    """Train for one epoch"""
+    # Initialize velocity (first epoch)
     if not hasattr(train_epoch, 'velocities') or len(train_epoch.velocities) != len(model.parameters()):
         train_epoch.velocities = [torch.zeros_like(p) for p in model.parameters()]
 
@@ -359,7 +359,7 @@ def train_epoch(
 
 @torch.no_grad()
 def evaluate(model: VGGLowLevel, dataloader) -> Tuple[float, float]:
-    """평가"""
+    """Evaluate"""
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
@@ -381,7 +381,7 @@ def evaluate(model: VGGLowLevel, dataloader) -> Tuple[float, float]:
 
 def visualize_features(model: VGGLowLevel, image: torch.Tensor) -> List[torch.Tensor]:
     """
-    각 블록의 feature map 추출
+    Extract feature maps from each block
 
     Returns:
         List of feature maps after each conv block (before pooling)
@@ -391,19 +391,19 @@ def visualize_features(model: VGGLowLevel, image: torch.Tensor) -> List[torch.Te
 
     for i, params in enumerate(model.conv_params):
         if params == 'M':
-            features.append(x.clone())  # Pool 전 저장
+            features.append(x.clone())  # Save before pooling
             x = F.max_pool2d(x, kernel_size=2, stride=2)
         else:
             x = F.conv2d(x, params['weight'], params['bias'],
                         stride=1, padding=1)
             x = F.relu(x)
 
-    features.append(x)  # 마지막 블록
+    features.append(x)  # Last block
     return features
 
 
 def main():
-    """CIFAR-10으로 VGG 학습 데모"""
+    """VGG training demo with CIFAR-10"""
     from torchvision import datasets, transforms
     from torch.utils.data import DataLoader
 
@@ -412,7 +412,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
 
-    # 데이터 전처리
+    # Data preprocessing
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -425,7 +425,7 @@ def main():
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))
     ])
 
-    # CIFAR-10 데이터셋
+    # CIFAR-10 dataset
     train_dataset = datasets.CIFAR10(
         root='./data', train=True, download=True, transform=transform_train
     )
@@ -439,14 +439,14 @@ def main():
     print(f"Train samples: {len(train_dataset)}")
     print(f"Test samples: {len(test_dataset)}\n")
 
-    # 모델 (CIFAR용 작은 VGG)
+    # Model (small VGG for CIFAR)
     model = VGGSmall(config_name='VGG16', num_classes=10, use_bn=True)
     model.to(device)
 
     print(f"VGG16-BN for CIFAR-10")
     print(f"Total parameters: {model.count_parameters():,}\n")
 
-    # 학습
+    # Training
     epochs = 100
     lr = 0.1
 
@@ -454,18 +454,18 @@ def main():
         # Learning rate schedule
         if epoch in [30, 60, 80]:
             lr *= 0.1
-            print(f"LR → {lr}")
+            print(f"LR -> {lr}")
 
         train_loss, train_acc = train_epoch(model, train_loader, lr)
 
-        # 10 에폭마다 평가
+        # Evaluate every 10 epochs
         if (epoch + 1) % 10 == 0:
             test_loss, test_acc = evaluate(model, test_loader)
             print(f"Epoch {epoch+1}/{epochs}")
             print(f"  Train - Loss: {train_loss:.4f}, Acc: {train_acc:.4f}")
             print(f"  Test  - Loss: {test_loss:.4f}, Acc: {test_acc:.4f}\n")
 
-    # 최종 평가
+    # Final evaluation
     final_loss, final_acc = evaluate(model, test_loader)
     print(f"Final Test Accuracy: {final_acc:.4f}")
 

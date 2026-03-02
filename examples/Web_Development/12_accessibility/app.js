@@ -1,14 +1,14 @@
 /**
- * 웹 접근성 예제 JavaScript
- * - 아코디언
- * - 탭 컴포넌트
- * - 모달
- * - 커스텀 리스트박스
- * - 포커스 관리
+ * Web Accessibility Example JavaScript
+ * - Accordion
+ * - Tab component
+ * - Modal
+ * - Custom listbox
+ * - Focus management
  */
 
 // ============================================
-// 아코디언
+// Accordion
 // ============================================
 function initAccordion() {
     const button = document.getElementById('accordion-btn');
@@ -27,7 +27,7 @@ function initAccordion() {
 }
 
 // ============================================
-// 탭 컴포넌트
+// Tab Component
 // ============================================
 function initTabs() {
     const tablist = document.querySelector('[role="tablist"]');
@@ -36,14 +36,14 @@ function initTabs() {
     const tabs = tablist.querySelectorAll('[role="tab"]');
     const panels = document.querySelectorAll('[role="tabpanel"]');
 
-    // 탭 클릭 이벤트
+    // Tab click events
     tabs.forEach(tab => {
         tab.addEventListener('click', () => activateTab(tab, tabs, panels));
     });
 
     // Why: Arrow key navigation follows the WAI-ARIA tabs pattern, where left/right arrows move
     // between tabs and Home/End jump to first/last - matching user expectations from native widgets
-    // 키보드 네비게이션
+    // Keyboard navigation
     tablist.addEventListener('keydown', (e) => {
         const currentTab = document.activeElement;
         const currentIndex = Array.from(tabs).indexOf(currentTab);
@@ -76,22 +76,22 @@ function initTabs() {
 }
 
 function activateTab(selectedTab, tabs, panels) {
-    // 모든 탭 비활성화
+    // Deactivate all tabs
     tabs.forEach(tab => {
         tab.setAttribute('aria-selected', 'false');
         tab.setAttribute('tabindex', '-1');
     });
 
-    // 모든 패널 숨기기
+    // Hide all panels
     panels.forEach(panel => {
         panel.hidden = true;
     });
 
-    // 선택된 탭 활성화
+    // Activate selected tab
     selectedTab.setAttribute('aria-selected', 'true');
     selectedTab.setAttribute('tabindex', '0');
 
-    // 해당 패널 표시
+    // Show corresponding panel
     const panelId = selectedTab.getAttribute('aria-controls');
     const panel = document.getElementById(panelId);
     if (panel) {
@@ -100,7 +100,7 @@ function activateTab(selectedTab, tabs, panels) {
 }
 
 // ============================================
-// Live Region 데모
+// Live Region Demo
 // ============================================
 function initLiveRegion() {
     const button = document.getElementById('update-live-btn');
@@ -109,11 +109,11 @@ function initLiveRegion() {
     if (!button || !liveRegion) return;
 
     const messages = [
-        '새로운 알림이 도착했습니다.',
-        '작업이 완료되었습니다.',
-        '3개의 새 메시지가 있습니다.',
-        '파일이 성공적으로 업로드되었습니다.',
-        '설정이 저장되었습니다.'
+        'A new notification has arrived.',
+        'Task completed successfully.',
+        'You have 3 new messages.',
+        'File uploaded successfully.',
+        'Settings have been saved.'
     ];
 
     let messageIndex = 0;
@@ -125,7 +125,7 @@ function initLiveRegion() {
 }
 
 // ============================================
-// 모달
+// Modal
 // ============================================
 let previousFocusElement = null;
 
@@ -138,20 +138,20 @@ function initModal() {
 
     if (!openBtn || !modal) return;
 
-    // 열기
+    // Open
     openBtn.addEventListener('click', () => openModal(modal, overlay));
 
-    // 닫기 버튼
+    // Close button
     closeBtn?.addEventListener('click', () => closeModal(modal, overlay));
     confirmBtn?.addEventListener('click', () => {
-        alert('확인되었습니다!');
+        alert('Confirmed!');
         closeModal(modal, overlay);
     });
 
-    // 오버레이 클릭
+    // Overlay click
     overlay?.addEventListener('click', () => closeModal(modal, overlay));
 
-    // ESC 키
+    // ESC key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !modal.hidden) {
             closeModal(modal, overlay);
@@ -160,7 +160,7 @@ function initModal() {
 
     // Why: Focus trap keeps keyboard navigation confined within the modal, preventing users
     // from tabbing into obscured background content - a WCAG 2.1 requirement for modal dialogs
-    // 포커스 트랩
+    // Focus trap
     modal.addEventListener('keydown', (e) => {
         if (e.key !== 'Tab') return;
 
@@ -183,17 +183,17 @@ function initModal() {
 // Why: Saving and restoring focus ensures the user returns to their previous position after
 // closing the modal, maintaining context and meeting WCAG focus management guidelines
 function openModal(modal, overlay) {
-    // 현재 포커스 저장
+    // Save current focus
     previousFocusElement = document.activeElement;
 
-    // 모달 표시
+    // Show modal
     modal.hidden = false;
     overlay.hidden = false;
 
-    // 배경 스크롤 방지
+    // Prevent background scrolling
     document.body.style.overflow = 'hidden';
 
-    // 첫 번째 포커스 가능한 요소에 포커스
+    // Focus on first focusable element
     const firstFocusable = modal.querySelector('button, [href], input');
     if (firstFocusable) {
         firstFocusable.focus();
@@ -204,17 +204,17 @@ function closeModal(modal, overlay) {
     modal.hidden = true;
     overlay.hidden = true;
 
-    // 배경 스크롤 복원
+    // Restore background scrolling
     document.body.style.overflow = '';
 
-    // 이전 포커스 복원
+    // Restore previous focus
     if (previousFocusElement) {
         previousFocusElement.focus();
     }
 }
 
 // ============================================
-// 커스텀 리스트박스
+// Custom Listbox
 // ============================================
 function initListbox() {
     const listbox = document.getElementById('custom-listbox');
@@ -225,7 +225,7 @@ function initListbox() {
     const options = listbox.querySelectorAll('[role="option"]');
     let currentIndex = 0;
 
-    // 초기 선택 상태 설정
+    // Set initial selection state
     updateSelection(options, currentIndex);
 
     listbox.addEventListener('keydown', (e) => {
@@ -258,7 +258,7 @@ function initListbox() {
         }
     });
 
-    // 클릭으로 선택
+    // Select with click
     options.forEach((option, index) => {
         option.addEventListener('click', () => {
             currentIndex = index;
@@ -273,7 +273,7 @@ function updateSelection(options, index) {
         option.setAttribute('aria-selected', i === index);
     });
 
-    // listbox의 aria-activedescendant 업데이트
+    // Update aria-activedescendant on listbox
     const listbox = options[0]?.parentElement;
     if (listbox) {
         listbox.setAttribute('aria-activedescendant', options[index].id);
@@ -282,12 +282,12 @@ function updateSelection(options, index) {
 
 function selectOption(option, output) {
     const text = option.textContent.trim();
-    const fruitName = text.replace(/^.+\s/, ''); // 이모지 제거
-    output.textContent = `선택된 항목: ${fruitName}`;
+    const itemName = text.replace(/^.+\s/, ''); // Remove emoji
+    output.textContent = `Selected: ${itemName}`;
 }
 
 // ============================================
-// 폼 유효성 검사
+// Form Validation
 // ============================================
 function initFormValidation() {
     const form = document.getElementById('accessible-form');
@@ -298,7 +298,7 @@ function initFormValidation() {
 
     // Why: Validating on blur (not every keystroke) avoids premature error messages,
     // while re-validating on input only when already invalid gives instant feedback during correction
-    // 실시간 이메일 유효성 검사
+    // Real-time email validation
     emailInput?.addEventListener('blur', () => {
         validateEmail(emailInput, emailError);
     });
@@ -309,18 +309,18 @@ function initFormValidation() {
         }
     });
 
-    // 폼 제출
+    // Form submission
     form.addEventListener('submit', (e) => {
         e.preventDefault();
 
         let isValid = true;
 
-        // 이메일 검증
+        // Email validation
         if (!validateEmail(emailInput, emailError)) {
             isValid = false;
         }
 
-        // 필수 필드 검증
+        // Required field validation
         const requiredFields = form.querySelectorAll('[required]');
         requiredFields.forEach(field => {
             if (!field.value.trim()) {
@@ -332,10 +332,10 @@ function initFormValidation() {
         });
 
         if (isValid) {
-            alert('폼이 성공적으로 제출되었습니다!');
+            alert('Form submitted successfully!');
             form.reset();
         } else {
-            // 첫 번째 오류 필드로 포커스
+            // Focus on first error field
             const firstError = form.querySelector('[aria-invalid="true"]');
             if (firstError) {
                 firstError.focus();
@@ -351,12 +351,12 @@ function validateEmail(input, errorElement) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!email) {
-        showError(input, errorElement, '이메일을 입력해주세요.');
+        showError(input, errorElement, 'Please enter an email address.');
         return false;
     }
 
     if (!emailRegex.test(email)) {
-        showError(input, errorElement, '유효한 이메일 형식이 아닙니다.');
+        showError(input, errorElement, 'Please enter a valid email format.');
         return false;
     }
 
@@ -377,7 +377,7 @@ function hideError(input, errorElement) {
 }
 
 // ============================================
-// 포커스 트랩 데모
+// Focus Trap Demo
 // ============================================
 function initFocusTrap() {
     const trapArea = document.getElementById('focus-trap-demo');
@@ -406,7 +406,7 @@ function initFocusTrap() {
 }
 
 // ============================================
-// 초기화
+// Initialize
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
     initAccordion();
@@ -417,6 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initFormValidation();
     initFocusTrap();
 
-    console.log('웹 접근성 예제가 로드되었습니다.');
-    console.log('스크린 리더나 키보드로 테스트해 보세요!');
+    console.log('Web accessibility examples loaded.');
+    console.log('Try testing with a screen reader or keyboard!');
 });

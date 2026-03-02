@@ -1,8 +1,8 @@
 /*
- * 기하 알고리즘 (Computational Geometry)
+ * Computational Geometry
  * CCW, Convex Hull, Line Intersection, Point in Polygon
  *
- * 점, 선, 다각형 등 기하학적 문제를 해결합니다.
+ * Solves geometric problems involving points, lines, and polygons.
  */
 
 #include <iostream>
@@ -17,7 +17,7 @@ const double EPS = 1e-9;
 const double PI = acos(-1.0);
 
 // =============================================================================
-// 1. 점과 벡터
+// 1. Points and Vectors
 // =============================================================================
 
 struct Point {
@@ -43,17 +43,17 @@ struct Point {
     double norm2() const { return x * x + y * y; }
 };
 
-// 내적
+// Dot product
 double dot(const Point& a, const Point& b) {
     return a.x * b.x + a.y * b.y;
 }
 
-// 외적
+// Cross product
 double cross(const Point& a, const Point& b) {
     return a.x * b.y - a.y * b.x;
 }
 
-// 두 점 사이 거리
+// Distance between two points
 double dist(const Point& a, const Point& b) {
     return (a - b).norm();
 }
@@ -62,20 +62,20 @@ double dist(const Point& a, const Point& b) {
 // 2. CCW (Counter-Clockwise)
 // =============================================================================
 
-// 양수: 반시계, 음수: 시계, 0: 일직선
+// Positive: counter-clockwise, Negative: clockwise, 0: collinear
 double ccw(const Point& a, const Point& b, const Point& c) {
     return cross(b - a, c - a);
 }
 
 int ccwSign(const Point& a, const Point& b, const Point& c) {
     double v = ccw(a, b, c);
-    if (v > EPS) return 1;   // 반시계
-    if (v < -EPS) return -1; // 시계
-    return 0;                 // 일직선
+    if (v > EPS) return 1;   // Counter-clockwise
+    if (v < -EPS) return -1; // Clockwise
+    return 0;                 // Collinear
 }
 
 // =============================================================================
-// 3. 볼록 껍질 (Convex Hull)
+// 3. Convex Hull
 // =============================================================================
 
 vector<Point> convexHull(vector<Point> points) {
@@ -86,7 +86,7 @@ vector<Point> convexHull(vector<Point> points) {
 
     vector<Point> hull;
 
-    // 하단 껍질
+    // Lower hull
     for (int i = 0; i < n; i++) {
         while (hull.size() >= 2 &&
                ccw(hull[hull.size()-2], hull[hull.size()-1], points[i]) <= 0) {
@@ -95,7 +95,7 @@ vector<Point> convexHull(vector<Point> points) {
         hull.push_back(points[i]);
     }
 
-    // 상단 껍질
+    // Upper hull
     int lower = hull.size();
     for (int i = n - 2; i >= 0; i--) {
         while (hull.size() > lower &&
@@ -105,12 +105,12 @@ vector<Point> convexHull(vector<Point> points) {
         hull.push_back(points[i]);
     }
 
-    hull.pop_back();  // 마지막 점(시작점과 동일) 제거
+    hull.pop_back();  // Remove last point (same as start)
     return hull;
 }
 
 // =============================================================================
-// 4. 선분 교차 판정
+// 4. Segment Intersection Test
 // =============================================================================
 
 bool onSegment(const Point& p, const Point& q, const Point& r) {
@@ -139,10 +139,10 @@ bool segmentIntersect(const Point& a, const Point& b,
 }
 
 // =============================================================================
-// 5. 직선 교차점
+// 5. Line Intersection Point
 // =============================================================================
 
-// ax + by + c = 0 형태의 직선
+// Line in the form ax + by + c = 0
 struct Line {
     double a, b, c;
 
@@ -155,7 +155,7 @@ struct Line {
 
 bool lineIntersection(const Line& l1, const Line& l2, Point& intersection) {
     double det = l1.a * l2.b - l2.a * l1.b;
-    if (abs(det) < EPS) return false;  // 평행
+    if (abs(det) < EPS) return false;  // Parallel
 
     intersection.x = (l1.b * l2.c - l2.b * l1.c) / det;
     intersection.y = (l2.a * l1.c - l1.a * l2.c) / det;
@@ -163,10 +163,10 @@ bool lineIntersection(const Line& l1, const Line& l2, Point& intersection) {
 }
 
 // =============================================================================
-// 6. 점과 다각형
+// 6. Point in Polygon
 // =============================================================================
 
-// 점이 다각형 내부에 있는지 (Ray Casting)
+// Check if point is inside polygon (Ray Casting)
 bool pointInPolygon(const Point& p, const vector<Point>& polygon) {
     int n = polygon.size();
     int count = 0;
@@ -185,7 +185,7 @@ bool pointInPolygon(const Point& p, const vector<Point>& polygon) {
 }
 
 // =============================================================================
-// 7. 다각형 넓이
+// 7. Polygon Area
 // =============================================================================
 
 double polygonArea(const vector<Point>& polygon) {
@@ -200,7 +200,7 @@ double polygonArea(const vector<Point>& polygon) {
 }
 
 // =============================================================================
-// 8. 최근접 점 쌍
+// 8. Closest Pair of Points
 // =============================================================================
 
 double closestPair(vector<Point>& points, int lo, int hi) {
@@ -222,7 +222,7 @@ double closestPair(vector<Point>& points, int lo, int hi) {
     double d = min(closestPair(points, lo, mid),
                    closestPair(points, mid, hi));
 
-    // 병합 (y 좌표 기준)
+    // Merge (by y coordinate)
     vector<Point> merged(hi - lo);
     merge(points.begin() + lo, points.begin() + mid,
           points.begin() + mid, points.begin() + hi,
@@ -230,7 +230,7 @@ double closestPair(vector<Point>& points, int lo, int hi) {
           [](const Point& a, const Point& b) { return a.y < b.y; });
     copy(merged.begin(), merged.end(), points.begin() + lo);
 
-    // 스트립 내 점들 확인
+    // Check points in the strip
     vector<Point> strip;
     for (int i = lo; i < hi; i++) {
         if (abs(points[i].x - midX) < d) {
@@ -254,7 +254,7 @@ double closestPairDistance(vector<Point> points) {
 }
 
 // =============================================================================
-// 9. 회전 캘리퍼스
+// 9. Rotating Calipers
 // =============================================================================
 
 double convexDiameter(vector<Point>& hull) {
@@ -284,12 +284,12 @@ double convexDiameter(vector<Point>& hull) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "기하 알고리즘 예제" << endl;
+    cout << "Computational Geometry Example" << endl;
     cout << "============================================================" << endl;
 
     // 1. CCW
@@ -297,54 +297,54 @@ int main() {
     Point a(0, 0), b(1, 1), c(2, 0);
     cout << "    A(0,0), B(1,1), C(2,0)" << endl;
     int ccwResult = ccwSign(a, b, c);
-    cout << "    CCW: " << (ccwResult > 0 ? "반시계" : ccwResult < 0 ? "시계" : "일직선") << endl;
+    cout << "    CCW: " << (ccwResult > 0 ? "Counter-clockwise" : ccwResult < 0 ? "Clockwise" : "Collinear") << endl;
 
-    // 2. 볼록 껍질
-    cout << "\n[2] 볼록 껍질" << endl;
+    // 2. Convex Hull
+    cout << "\n[2] Convex Hull" << endl;
     vector<Point> points = {{0, 0}, {1, 1}, {2, 2}, {0, 2}, {2, 0}, {1, 3}};
     auto hull = convexHull(points);
-    cout << "    입력 점: (0,0), (1,1), (2,2), (0,2), (2,0), (1,3)" << endl;
-    cout << "    볼록 껍질: ";
+    cout << "    Input points: (0,0), (1,1), (2,2), (0,2), (2,0), (1,3)" << endl;
+    cout << "    Convex hull: ";
     for (auto& p : hull) {
         cout << "(" << p.x << "," << p.y << ") ";
     }
     cout << endl;
 
-    // 3. 선분 교차
-    cout << "\n[3] 선분 교차" << endl;
+    // 3. Segment Intersection
+    cout << "\n[3] Segment Intersection" << endl;
     Point p1(0, 0), p2(2, 2), p3(0, 2), p4(2, 0);
-    cout << "    선분1: (0,0)-(2,2), 선분2: (0,2)-(2,0)" << endl;
-    cout << "    교차: " << (segmentIntersect(p1, p2, p3, p4) ? "예" : "아니오") << endl;
+    cout << "    Segment1: (0,0)-(2,2), Segment2: (0,2)-(2,0)" << endl;
+    cout << "    Intersects: " << (segmentIntersect(p1, p2, p3, p4) ? "Yes" : "No") << endl;
 
-    // 4. 다각형 넓이
-    cout << "\n[4] 다각형 넓이" << endl;
+    // 4. Polygon Area
+    cout << "\n[4] Polygon Area" << endl;
     vector<Point> polygon = {{0, 0}, {4, 0}, {4, 3}, {0, 3}};
-    cout << "    사각형 (0,0)-(4,0)-(4,3)-(0,3)" << endl;
-    cout << "    넓이: " << polygonArea(polygon) << endl;
+    cout << "    Rectangle (0,0)-(4,0)-(4,3)-(0,3)" << endl;
+    cout << "    Area: " << polygonArea(polygon) << endl;
 
-    // 5. 점의 포함 판정
-    cout << "\n[5] 점의 다각형 포함 판정" << endl;
+    // 5. Point in Polygon
+    cout << "\n[5] Point in Polygon Test" << endl;
     Point inside(2, 1), outside(5, 5);
-    cout << "    사각형: (0,0)-(4,0)-(4,3)-(0,3)" << endl;
-    cout << "    (2,1) 포함: " << (pointInPolygon(inside, polygon) ? "예" : "아니오") << endl;
-    cout << "    (5,5) 포함: " << (pointInPolygon(outside, polygon) ? "예" : "아니오") << endl;
+    cout << "    Rectangle: (0,0)-(4,0)-(4,3)-(0,3)" << endl;
+    cout << "    (2,1) inside: " << (pointInPolygon(inside, polygon) ? "Yes" : "No") << endl;
+    cout << "    (5,5) inside: " << (pointInPolygon(outside, polygon) ? "Yes" : "No") << endl;
 
-    // 6. 최근접 점 쌍
-    cout << "\n[6] 최근접 점 쌍" << endl;
+    // 6. Closest Pair of Points
+    cout << "\n[6] Closest Pair of Points" << endl;
     vector<Point> pts = {{0, 0}, {3, 4}, {1, 1}, {5, 5}, {2, 1}};
-    cout << "    점: (0,0), (3,4), (1,1), (5,5), (2,1)" << endl;
-    cout << "    최근접 거리: " << closestPairDistance(pts) << endl;
+    cout << "    Points: (0,0), (3,4), (1,1), (5,5), (2,1)" << endl;
+    cout << "    Closest distance: " << closestPairDistance(pts) << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 알고리즘       | 시간복잡도    |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Algorithm      | Time          |" << endl;
     cout << "    |----------------|---------------|" << endl;
     cout << "    | CCW            | O(1)          |" << endl;
-    cout << "    | 볼록 껍질      | O(n log n)    |" << endl;
-    cout << "    | 선분 교차      | O(1)          |" << endl;
-    cout << "    | 다각형 넓이    | O(n)          |" << endl;
-    cout << "    | 최근접 점 쌍   | O(n log n)    |" << endl;
-    cout << "    | 회전 캘리퍼스  | O(n)          |" << endl;
+    cout << "    | Convex Hull    | O(n log n)    |" << endl;
+    cout << "    | Seg. Intersect | O(1)          |" << endl;
+    cout << "    | Polygon Area   | O(n)          |" << endl;
+    cout << "    | Closest Pair   | O(n log n)    |" << endl;
+    cout << "    | Rot. Calipers  | O(n)          |" << endl;
 
     cout << "\n============================================================" << endl;
 

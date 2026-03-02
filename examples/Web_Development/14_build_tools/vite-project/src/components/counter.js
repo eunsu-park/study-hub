@@ -1,5 +1,5 @@
 /**
- * 카운터 컴포넌트
+ * Counter Component
  */
 
 // Why: Encapsulating count in a closure gives each counter instance private state,
@@ -8,7 +8,7 @@ export function setupCounter(element) {
     let count = 0;
 
     const updateButton = () => {
-        element.textContent = `카운터: ${count}`;
+        element.textContent = `Counter: ${count}`;
     };
 
     element.addEventListener('click', () => {

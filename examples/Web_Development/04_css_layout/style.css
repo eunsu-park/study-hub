@@ -1,10 +1,10 @@
 /*
- * CSS Layout 예제 스타일시트
- * Flexbox와 Grid 레이아웃
+ * CSS Layout Example Stylesheet
+ * Flexbox and Grid Layout
  */
 
 /* ============================================
-   기본 스타일
+   Base Styles
    ============================================ */
 
 * {
@@ -56,7 +56,7 @@ code {
 }
 
 /* ============================================
-   Flexbox 스타일
+   Flexbox Styles
    ============================================ */
 
 /* Why: display:flex on a container immediately makes its children flex items, enabling
@@ -106,7 +106,7 @@ code {
 .wrap-reverse { flex-wrap: wrap-reverse; }
 .flex-item.wide { min-width: 150px; }
 
-/* 완전 중앙 정렬 */
+/* Perfect centering */
 .center-perfect {
     justify-content: center;
     align-items: center;
@@ -118,7 +118,7 @@ code {
     font-weight: bold;
 }
 
-/* 네비게이션 바 */
+/* Navigation bar */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -152,7 +152,7 @@ code {
     background-color: #34495e;
 }
 
-/* 카드 레이아웃 */
+/* Card layout */
 .card-container {
     display: flex;
     gap: 20px;
@@ -205,7 +205,7 @@ code {
 }
 
 /* ============================================
-   Grid 스타일
+   Grid Styles
    ============================================ */
 
 .grid-container {
@@ -231,7 +231,7 @@ code {
 
 /* Why: The fr unit distributes remaining space proportionally, adapting to container width
    without fixed pixel calculations - the Grid equivalent of flex-grow */
-/* 기본 Grid */
+/* Basic Grid */
 .basic-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
@@ -289,7 +289,7 @@ code {
     column-gap: 10px;
 }
 
-/* 아이템 배치 */
+/* Item placement */
 .placement-example {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(4, 80px);
@@ -353,7 +353,7 @@ code {
     gap: 10px;
 }
 
-/* 갤러리 */
+/* Gallery */
 .gallery {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -386,7 +386,7 @@ code {
 
 /* Why: The dashboard combines named grid areas for the outer layout with a nested grid inside
    dash-main, demonstrating that Grid layouts can be composed hierarchically */
-/* 대시보드 */
+/* Dashboard */
 .dashboard {
     display: grid;
     grid-template-areas:
@@ -450,14 +450,14 @@ code {
     justify-content: center;
 }
 
-/* 반응형 Grid */
+/* Responsive Grid */
 .responsive-grid {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 15px;
 }
 
 /* ============================================
-   푸터
+   Footer
    ============================================ */
 
 footer {

@@ -1,8 +1,8 @@
 /*
- * 트라이 (Trie)
+ * Trie
  * Prefix Tree, Autocomplete, Word Search
  *
- * 문자열 검색에 특화된 트리 자료구조입니다.
+ * A tree data structure specialized for string searching.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 기본 트라이
+// 1. Basic Trie
 // =============================================================================
 
 class Trie {
@@ -64,7 +64,7 @@ public:
 };
 
 // =============================================================================
-// 2. 자동완성 트라이
+// 2. Autocomplete Trie
 // =============================================================================
 
 class AutocompleteTrie {
@@ -121,7 +121,7 @@ public:
 };
 
 // =============================================================================
-// 3. 와일드카드 검색 트라이
+// 3. Wildcard Search Trie
 // =============================================================================
 
 class WildcardTrie {
@@ -142,7 +142,7 @@ private:
 
         char c = word[idx];
         if (c == '.') {
-            // 와일드카드: 모든 자식 탐색
+            // Wildcard: search all children
             for (int i = 0; i < 26; i++) {
                 if (searchHelper(node->children[i], word, idx + 1)) {
                     return true;
@@ -176,7 +176,7 @@ public:
 };
 
 // =============================================================================
-// 4. 단어 사전 (Word Break)
+// 4. Word Dictionary (Word Break)
 // =============================================================================
 
 class WordDictionary {
@@ -223,7 +223,7 @@ public:
 };
 
 // =============================================================================
-// 5. XOR 트라이 (최대 XOR 찾기)
+// 5. XOR Trie (Find Maximum XOR)
 // =============================================================================
 
 class XORTrie {
@@ -282,28 +282,28 @@ int findMaximumXOR(const vector<int>& nums) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "트라이 예제" << endl;
+    cout << "Trie Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 기본 트라이
-    cout << "\n[1] 기본 트라이" << endl;
+    // 1. Basic Trie
+    cout << "\n[1] Basic Trie" << endl;
     Trie trie;
     trie.insert("apple");
     trie.insert("app");
     trie.insert("application");
-    cout << "    삽입: apple, app, application" << endl;
-    cout << "    search(\"apple\"): " << (trie.search("apple") ? "있음" : "없음") << endl;
-    cout << "    search(\"app\"): " << (trie.search("app") ? "있음" : "없음") << endl;
-    cout << "    search(\"appl\"): " << (trie.search("appl") ? "있음" : "없음") << endl;
-    cout << "    startsWith(\"app\"): " << (trie.startsWith("app") ? "예" : "아니오") << endl;
+    cout << "    Inserted: apple, app, application" << endl;
+    cout << "    search(\"apple\"): " << (trie.search("apple") ? "found" : "not found") << endl;
+    cout << "    search(\"app\"): " << (trie.search("app") ? "found" : "not found") << endl;
+    cout << "    search(\"appl\"): " << (trie.search("appl") ? "found" : "not found") << endl;
+    cout << "    startsWith(\"app\"): " << (trie.startsWith("app") ? "yes" : "no") << endl;
 
-    // 2. 자동완성
-    cout << "\n[2] 자동완성" << endl;
+    // 2. Autocomplete
+    cout << "\n[2] Autocomplete" << endl;
     AutocompleteTrie autoTrie;
     autoTrie.insert("hello");
     autoTrie.insert("help");
@@ -311,45 +311,45 @@ int main() {
     autoTrie.insert("hero");
     autoTrie.insert("world");
 
-    cout << "    단어: hello, help, helicopter, hero, world" << endl;
+    cout << "    Words: hello, help, helicopter, hero, world" << endl;
     auto suggestions = autoTrie.autocomplete("hel");
-    cout << "    \"hel\" 자동완성: ";
+    cout << "    \"hel\" autocomplete: ";
     for (const auto& s : suggestions) cout << s << " ";
     cout << endl;
 
-    // 3. 와일드카드 검색
-    cout << "\n[3] 와일드카드 검색" << endl;
+    // 3. Wildcard Search
+    cout << "\n[3] Wildcard Search" << endl;
     WildcardTrie wcTrie;
     wcTrie.addWord("bad");
     wcTrie.addWord("dad");
     wcTrie.addWord("mad");
-    cout << "    단어: bad, dad, mad" << endl;
-    cout << "    search(\".ad\"): " << (wcTrie.search(".ad") ? "있음" : "없음") << endl;
-    cout << "    search(\"b..\"): " << (wcTrie.search("b..") ? "있음" : "없음") << endl;
+    cout << "    Words: bad, dad, mad" << endl;
+    cout << "    search(\".ad\"): " << (wcTrie.search(".ad") ? "found" : "not found") << endl;
+    cout << "    search(\"b..\"): " << (wcTrie.search("b..") ? "found" : "not found") << endl;
 
-    // 4. 단어 분리
-    cout << "\n[4] 단어 분리 (Word Break)" << endl;
+    // 4. Word Break
+    cout << "\n[4] Word Break" << endl;
     WordDictionary dict;
     dict.addWord("leet");
     dict.addWord("code");
-    cout << "    사전: [leet, code]" << endl;
-    cout << "    \"leetcode\" 분리 가능: " << (dict.wordBreak("leetcode") ? "예" : "아니오") << endl;
+    cout << "    Dictionary: [leet, code]" << endl;
+    cout << "    \"leetcode\" breakable: " << (dict.wordBreak("leetcode") ? "yes" : "no") << endl;
 
-    // 5. 최대 XOR
-    cout << "\n[5] 최대 XOR" << endl;
+    // 5. Maximum XOR
+    cout << "\n[5] Maximum XOR" << endl;
     vector<int> nums = {3, 10, 5, 25, 2, 8};
-    cout << "    배열: [3, 10, 5, 25, 2, 8]" << endl;
-    cout << "    최대 XOR: " << findMaximumXOR(nums) << endl;
+    cout << "    Array: [3, 10, 5, 25, 2, 8]" << endl;
+    cout << "    Maximum XOR: " << findMaximumXOR(nums) << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 연산        | 시간복잡도 | L: 문자열 길이  |" << endl;
-    cout << "    |-------------|------------|-----------------|" << endl;
-    cout << "    | 삽입        | O(L)       |                 |" << endl;
-    cout << "    | 검색        | O(L)       |                 |" << endl;
-    cout << "    | 접두사 검색 | O(L)       |                 |" << endl;
-    cout << "    | 자동완성    | O(L + K)   | K: 결과 수      |" << endl;
-    cout << "    | 공간복잡도  | O(ALPHABET × L × N) |      |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Operation     | Time       | L: string length  |" << endl;
+    cout << "    |---------------|------------|-------------------|" << endl;
+    cout << "    | Insert        | O(L)       |                   |" << endl;
+    cout << "    | Search        | O(L)       |                   |" << endl;
+    cout << "    | Prefix search | O(L)       |                   |" << endl;
+    cout << "    | Autocomplete  | O(L + K)   | K: result count   |" << endl;
+    cout << "    | Space         | O(ALPHABET * L * N) |          |" << endl;
 
     cout << "\n============================================================" << endl;
 

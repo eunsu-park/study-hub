@@ -1,8 +1,8 @@
 """
-시간 복잡도 비교 실험
+Time Complexity Comparison Experiment
 Time Complexity Comparison
 
-다양한 시간 복잡도를 가진 알고리즘들의 실행 시간을 비교합니다.
+Compares the execution times of algorithms with various time complexities.
 """
 
 import time
@@ -10,7 +10,7 @@ import random
 
 
 def measure_time(func, *args):
-    """함수 실행 시간 측정"""
+    """Measure function execution time"""
     start = time.perf_counter()
     result = func(*args)
     end = time.perf_counter()
@@ -18,20 +18,20 @@ def measure_time(func, *args):
 
 
 # =============================================================================
-# O(1) - 상수 시간
+# O(1) - Constant Time
 # =============================================================================
 def constant_time(arr):
-    """배열의 첫 번째 요소 반환 - O(1)"""
+    """Return the first element of an array - O(1)"""
     if arr:
         return arr[0]
     return None
 
 
 # =============================================================================
-# O(log n) - 로그 시간
+# O(log n) - Logarithmic Time
 # =============================================================================
 def binary_search(arr, target):
-    """이분 탐색 - O(log n)"""
+    """Binary Search - O(log n)"""
     left, right = 0, len(arr) - 1
     while left <= right:
         mid = (left + right) // 2
@@ -45,10 +45,10 @@ def binary_search(arr, target):
 
 
 # =============================================================================
-# O(n) - 선형 시간
+# O(n) - Linear Time
 # =============================================================================
 def linear_search(arr, target):
-    """선형 탐색 - O(n)"""
+    """Linear Search - O(n)"""
     for i, val in enumerate(arr):
         if val == target:
             return i
@@ -56,7 +56,7 @@ def linear_search(arr, target):
 
 
 def find_max(arr):
-    """최댓값 찾기 - O(n)"""
+    """Find Maximum Value - O(n)"""
     if not arr:
         return None
     max_val = arr[0]
@@ -67,10 +67,10 @@ def find_max(arr):
 
 
 # =============================================================================
-# O(n log n) - 선형 로그 시간
+# O(n log n) - Linearithmic Time
 # =============================================================================
 def merge_sort(arr):
-    """병합 정렬 - O(n log n)"""
+    """Merge Sort - O(n log n)"""
     if len(arr) <= 1:
         return arr
 
@@ -93,10 +93,10 @@ def merge_sort(arr):
 
 
 # =============================================================================
-# O(n²) - 제곱 시간
+# O(n^2) - Quadratic Time
 # =============================================================================
 def bubble_sort(arr):
-    """버블 정렬 - O(n²)"""
+    """Bubble Sort - O(n^2)"""
     arr = arr.copy()
     n = len(arr)
     for i in range(n):
@@ -107,7 +107,7 @@ def bubble_sort(arr):
 
 
 def has_duplicate_naive(arr):
-    """중복 검사 (naive) - O(n²)"""
+    """Duplicate Check (naive) - O(n^2)"""
     n = len(arr)
     for i in range(n):
         for j in range(i + 1, n):
@@ -117,17 +117,17 @@ def has_duplicate_naive(arr):
 
 
 # =============================================================================
-# O(2^n) - 지수 시간
+# O(2^n) - Exponential Time
 # =============================================================================
 def fibonacci_recursive(n):
-    """피보나치 (재귀) - O(2^n)"""
+    """Fibonacci (Recursive) - O(2^n)"""
     if n <= 1:
         return n
     return fibonacci_recursive(n - 1) + fibonacci_recursive(n - 2)
 
 
 def fibonacci_dp(n):
-    """피보나치 (DP) - O(n)"""
+    """Fibonacci (DP) - O(n)"""
     if n <= 1:
         return n
     dp = [0] * (n + 1)
@@ -138,62 +138,62 @@ def fibonacci_dp(n):
 
 
 # =============================================================================
-# 실험 및 결과 출력
+# Experiment and Results Output
 # =============================================================================
 def run_experiments():
-    """시간 복잡도 실험 실행"""
+    """Run time complexity experiments"""
     print("=" * 60)
-    print("시간 복잡도 비교 실험")
+    print("Time Complexity Comparison Experiment")
     print("=" * 60)
 
-    # 데이터 준비
+    # Prepare data
     sizes = [100, 1000, 10000]
 
     for size in sizes:
-        print(f"\n[ 배열 크기: {size} ]")
+        print(f"\n[ Array Size: {size} ]")
         print("-" * 40)
 
         arr = list(range(size))
         random_arr = random.sample(range(size * 10), size)
-        target = arr[size // 2]  # 중간 값
+        target = arr[size // 2]  # Middle value
 
-        # O(1) 테스트
+        # O(1) test
         t, _ = measure_time(constant_time, arr)
-        print(f"O(1)     상수 시간:      {t * 1000:.6f} ms")
+        print(f"O(1)     Constant Time:   {t * 1000:.6f} ms")
 
-        # O(log n) 테스트
+        # O(log n) test
         t, _ = measure_time(binary_search, arr, target)
-        print(f"O(log n) 이분 탐색:      {t * 1000:.6f} ms")
+        print(f"O(log n) Binary Search:   {t * 1000:.6f} ms")
 
-        # O(n) 테스트
+        # O(n) test
         t, _ = measure_time(linear_search, arr, target)
-        print(f"O(n)     선형 탐색:      {t * 1000:.6f} ms")
+        print(f"O(n)     Linear Search:   {t * 1000:.6f} ms")
 
         t, _ = measure_time(find_max, random_arr)
-        print(f"O(n)     최댓값 찾기:    {t * 1000:.6f} ms")
+        print(f"O(n)     Find Max:        {t * 1000:.6f} ms")
 
-        # O(n log n) 테스트
+        # O(n log n) test
         if size <= 10000:
             t, _ = measure_time(merge_sort, random_arr)
-            print(f"O(n log n) 병합 정렬:  {t * 1000:.6f} ms")
+            print(f"O(n log n) Merge Sort:  {t * 1000:.6f} ms")
 
-        # O(n²) 테스트 (작은 크기만)
+        # O(n^2) test (small sizes only)
         if size <= 1000:
             t, _ = measure_time(bubble_sort, random_arr)
-            print(f"O(n²)    버블 정렬:      {t * 1000:.6f} ms")
+            print(f"O(n^2)   Bubble Sort:     {t * 1000:.6f} ms")
 
-    # O(2^n) vs O(n) 피보나치 비교
-    print("\n[ 피보나치 비교: O(2^n) vs O(n) ]")
+    # O(2^n) vs O(n) Fibonacci comparison
+    print("\n[ Fibonacci Comparison: O(2^n) vs O(n) ]")
     print("-" * 40)
 
     for n in [10, 20, 30]:
         t_recursive, _ = measure_time(fibonacci_recursive, n)
         t_dp, _ = measure_time(fibonacci_dp, n)
-        print(f"n={n}: 재귀 O(2^n) = {t_recursive * 1000:.4f} ms, "
+        print(f"n={n}: Recursive O(2^n) = {t_recursive * 1000:.4f} ms, "
               f"DP O(n) = {t_dp * 1000:.6f} ms")
 
     print("\n" + "=" * 60)
-    print("실험 완료!")
+    print("Experiment Complete!")
     print("=" * 60)
 
 

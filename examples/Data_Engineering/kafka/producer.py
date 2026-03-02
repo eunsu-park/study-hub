@@ -1,16 +1,16 @@
 """
-Kafka Producer 예제
+Kafka Producer Example
 
-Kafka 토픽에 메시지를 발행하는 Producer 예제입니다.
+An example of a Producer that publishes messages to Kafka topics.
 
-필수 패키지: pip install confluent-kafka
+Required package: pip install confluent-kafka
 
-실행 전 Kafka 실행 필요:
+Kafka must be running before execution:
   docker run -d --name kafka -p 9092:9092 \
     -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
     confluentinc/cp-kafka:latest
 
-실행: python producer.py
+Run: python producer.py
 """
 
 from confluent_kafka import Producer
@@ -23,24 +23,24 @@ from typing import Optional
 
 
 class KafkaProducerExample:
-    """Kafka Producer 예제 클래스"""
+    """Kafka Producer example class"""
 
     def __init__(self, bootstrap_servers: str = 'localhost:9092'):
         self.config = {
             'bootstrap.servers': bootstrap_servers,
             'client.id': 'example-producer',
-            'acks': 'all',  # 모든 replica 확인
+            'acks': 'all',  # Wait for all replicas to acknowledge
             'retries': 3,
             'retry.backoff.ms': 100,
-            'linger.ms': 5,  # 배치 대기 시간
-            'batch.size': 16384,  # 배치 크기
+            'linger.ms': 5,  # Batch wait time
+            'batch.size': 16384,  # Batch size
         }
         self.producer = Producer(self.config)
         self.message_count = 0
         self.error_count = 0
 
     def delivery_callback(self, err, msg):
-        """메시지 전송 결과 콜백"""
+        """Message delivery result callback"""
         if err:
             print(f'[ERROR] Message delivery failed: {err}')
             self.error_count += 1
@@ -50,7 +50,7 @@ class KafkaProducerExample:
                 print(f'[INFO] Delivered {self.message_count} messages')
 
     def create_topic(self, topic_name: str, num_partitions: int = 3, replication_factor: int = 1):
-        """토픽 생성"""
+        """Create a topic"""
         admin_client = AdminClient({'bootstrap.servers': self.config['bootstrap.servers']})
 
         topic = NewTopic(
@@ -61,7 +61,7 @@ class KafkaProducerExample:
 
         try:
             futures = admin_client.create_topics([topic])
-            futures[topic_name].result()  # 생성 완료 대기
+            futures[topic_name].result()  # Wait for creation to complete
             print(f'[INFO] Topic "{topic_name}" created')
         except Exception as e:
             if 'already exists' in str(e):
@@ -70,7 +70,7 @@ class KafkaProducerExample:
                 raise e
 
     def send_message(self, topic: str, key: Optional[str], value: dict):
-        """단일 메시지 전송"""
+        """Send a single message"""
         try:
             self.producer.produce(
                 topic=topic,
@@ -78,26 +78,26 @@ class KafkaProducerExample:
                 value=json.dumps(value).encode('utf-8'),
                 callback=self.delivery_callback
             )
-            # 주기적으로 이벤트 처리
+            # Periodically process events
             self.producer.poll(0)
         except BufferError:
-            # 버퍼가 꽉 찬 경우 대기
+            # Wait if buffer is full
             print('[WARN] Buffer full, waiting...')
             self.producer.flush()
             self.send_message(topic, key, value)
 
     def flush(self):
-        """모든 메시지 전송 완료 대기"""
+        """Wait for all messages to be delivered"""
         self.producer.flush()
 
     def close(self):
-        """Producer 종료"""
+        """Close the producer"""
         self.flush()
         print(f'\n[SUMMARY] Total sent: {self.message_count}, Errors: {self.error_count}')
 
 
 def generate_order_event() -> dict:
-    """주문 이벤트 생성"""
+    """Generate an order event"""
     products = ['laptop', 'phone', 'tablet', 'headphones', 'keyboard', 'mouse']
     statuses = ['created', 'confirmed', 'shipped', 'delivered']
 
@@ -114,7 +114,7 @@ def generate_order_event() -> dict:
 
 
 def generate_clickstream_event() -> dict:
-    """클릭스트림 이벤트 생성"""
+    """Generate a clickstream event"""
     pages = ['/home', '/products', '/cart', '/checkout', '/profile', '/search']
     actions = ['view', 'click', 'scroll', 'hover']
 
@@ -130,7 +130,7 @@ def generate_clickstream_event() -> dict:
 
 
 def generate_inventory_event() -> dict:
-    """재고 이벤트 생성"""
+    """Generate an inventory event"""
     products = ['SKU-001', 'SKU-002', 'SKU-003', 'SKU-004', 'SKU-005']
     warehouses = ['WH-EAST', 'WH-WEST', 'WH-CENTRAL']
 
@@ -145,17 +145,17 @@ def generate_inventory_event() -> dict:
 
 
 def demo_simple_producer():
-    """간단한 Producer 데모"""
+    """Simple Producer demo"""
     print("=" * 60)
     print("Simple Producer Demo")
     print("=" * 60)
 
     producer = KafkaProducerExample()
 
-    # 토픽 생성
+    # Create topic
     producer.create_topic('demo-topic')
 
-    # 메시지 전송
+    # Send messages
     for i in range(10):
         message = {
             'id': i,
@@ -164,7 +164,7 @@ def demo_simple_producer():
         }
         producer.send_message(
             topic='demo-topic',
-            key=f'key-{i % 3}',  # 3개 파티션에 분배
+            key=f'key-{i % 3}',  # Distribute across 3 partitions
             value=message
         )
         print(f'Sent: {message}')
@@ -173,14 +173,14 @@ def demo_simple_producer():
 
 
 def demo_event_stream():
-    """이벤트 스트림 데모"""
+    """Event stream demo"""
     print("\n" + "=" * 60)
     print("Event Stream Demo")
     print("=" * 60)
 
     producer = KafkaProducerExample()
 
-    # 토픽 생성
+    # Create topics
     producer.create_topic('orders', num_partitions=3)
     producer.create_topic('clickstream', num_partitions=6)
     producer.create_topic('inventory', num_partitions=3)
@@ -190,17 +190,17 @@ def demo_event_stream():
     try:
         event_count = 0
         while True:
-            # 주문 이벤트 (낮은 빈도)
+            # Order events (low frequency)
             if random.random() < 0.3:
                 event = generate_order_event()
                 producer.send_message('orders', event['customer_id'], event)
 
-            # 클릭스트림 이벤트 (높은 빈도)
+            # Clickstream events (high frequency)
             for _ in range(random.randint(1, 5)):
                 event = generate_clickstream_event()
                 producer.send_message('clickstream', event['user_id'], event)
 
-            # 재고 이벤트 (중간 빈도)
+            # Inventory events (medium frequency)
             if random.random() < 0.5:
                 event = generate_inventory_event()
                 producer.send_message('inventory', event['product_sku'], event)
@@ -209,7 +209,7 @@ def demo_event_stream():
             if event_count % 50 == 0:
                 print(f'Generated {event_count} event batches')
 
-            time.sleep(0.1)  # 100ms 간격
+            time.sleep(0.1)  # 100ms interval
 
     except KeyboardInterrupt:
         print("\nStopping...")
@@ -218,7 +218,7 @@ def demo_event_stream():
 
 
 def demo_batch_producer():
-    """배치 Producer 데모"""
+    """Batch Producer demo"""
     print("\n" + "=" * 60)
     print("Batch Producer Demo")
     print("=" * 60)
@@ -252,7 +252,7 @@ def main():
     print("Make sure Kafka is running on localhost:9092")
     print()
 
-    # 데모 선택
+    # Select demo
     demos = {
         '1': ('Simple Producer', demo_simple_producer),
         '2': ('Event Stream', demo_event_stream),

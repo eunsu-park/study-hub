@@ -1,23 +1,24 @@
 """
-Transformer - PyTorch Low-Level 구현
+Transformer - PyTorch Low-Level Implementation
 
-이 파일은 Transformer를 PyTorch 기본 연산만으로 구현합니다.
-nn.TransformerEncoder, nn.MultiheadAttention 등 고수준 API를 사용하지 않고
-직접 attention과 FFN을 구현합니다.
+This file implements the Transformer using only basic PyTorch operations.
+It does not use high-level APIs such as nn.TransformerEncoder or
+nn.MultiheadAttention, instead implementing attention and FFN directly.
 
-논문: "Attention Is All You Need" (Vaswani et al., 2017)
+Paper: "Attention Is All You Need" (Vaswani et al., 2017)
 
-학습 목표:
-1. Scaled Dot-Product Attention 구현
-2. Multi-Head Attention 구현
-3. Positional Encoding 구현
-4. Encoder/Decoder 블록 구현
+Learning Objectives:
+1. Implement Scaled Dot-Product Attention
+2. Implement Multi-Head Attention
+3. Implement Positional Encoding
+4. Implement Encoder/Decoder blocks
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import matplotlib.pyplot as plt
 
 
 def scaled_dot_product_attention(
@@ -30,7 +31,7 @@ def scaled_dot_product_attention(
     """
     Scaled Dot-Product Attention
 
-    Attention(Q, K, V) = softmax(QK^T / √d_k) V
+    Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V
 
     Args:
         query: (batch, n_heads, seq_len, d_k)
@@ -45,22 +46,22 @@ def scaled_dot_product_attention(
     """
     d_k = query.size(-1)
 
-    # 1. QK^T: Query와 Key의 유사도 계산
-    # (batch, heads, seq, d_k) @ (batch, heads, d_k, seq) → (batch, heads, seq, seq)
+    # 1. QK^T: Compute similarity between Query and Key
+    # (batch, heads, seq, d_k) @ (batch, heads, d_k, seq) -> (batch, heads, seq, seq)
     scores = torch.matmul(query, key.transpose(-2, -1))
 
-    # 2. Scaling: √d_k로 나눔 (softmax 안정성)
+    # 2. Scaling: Divide by sqrt(d_k) (for softmax stability)
     scores = scores / math.sqrt(d_k)
 
     # 3. Masking (optional)
     if mask is not None:
-        # mask가 True인 위치를 -inf로 설정 (softmax 후 0이 됨)
+        # Set masked positions (where mask is True) to -inf (becomes 0 after softmax)
         scores = scores.masked_fill(mask, float('-inf'))
 
-    # 4. Softmax: 확률 분포로 변환
+    # 4. Softmax: Convert to probability distribution
     attention_weights = F.softmax(scores, dim=-1)
 
-    # 5. Dropout (학습 시)
+    # 5. Dropout (during training)
     if dropout is not None:
         attention_weights = dropout(attention_weights)
 
@@ -72,19 +73,19 @@ def scaled_dot_product_attention(
 
 class MultiHeadAttentionLowLevel(nn.Module):
     """
-    Multi-Head Attention (Low-Level 구현)
+    Multi-Head Attention (Low-Level Implementation)
 
     MultiHead(Q, K, V) = Concat(head_1, ..., head_h) W^O
 
-    nn.MultiheadAttention을 사용하지 않고 직접 구현
+    Implemented directly without nn.MultiheadAttention.
     """
 
     def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1):
         """
         Args:
-            d_model: 모델 차원
-            n_heads: attention head 수
-            dropout: dropout 비율
+            d_model: Model dimension
+            n_heads: Number of attention heads
+            dropout: Dropout rate
         """
         super().__init__()
 
@@ -92,10 +93,10 @@ class MultiHeadAttentionLowLevel(nn.Module):
 
         self.d_model = d_model
         self.n_heads = n_heads
-        self.d_k = d_model // n_heads  # 각 head의 차원
+        self.d_k = d_model // n_heads  # Dimension per head
 
-        # Q, K, V projection (합쳐서 한 번에)
-        # nn.Linear 대신 직접 파라미터 관리도 가능
+        # Q, K, V projections (combined for efficiency)
+        # Could also manage parameters directly instead of nn.Linear
         self.W_q = nn.Linear(d_model, d_model, bias=False)
         self.W_k = nn.Linear(d_model, d_model, bias=False)
         self.W_v = nn.Linear(d_model, d_model, bias=False)
@@ -125,31 +126,31 @@ class MultiHeadAttentionLowLevel(nn.Module):
         batch_size = query.size(0)
 
         # 1. Linear projections
-        # (batch, seq, d_model) → (batch, seq, d_model)
+        # (batch, seq, d_model) -> (batch, seq, d_model)
         Q = self.W_q(query)
         K = self.W_k(key)
         V = self.W_v(value)
 
         # 2. Split into multiple heads
-        # (batch, seq, d_model) → (batch, seq, n_heads, d_k) → (batch, n_heads, seq, d_k)
+        # (batch, seq, d_model) -> (batch, seq, n_heads, d_k) -> (batch, n_heads, seq, d_k)
         Q = Q.view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         K = K.view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         V = V.view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
 
-        # 3. Mask 차원 조정 (broadcasting을 위해)
+        # 3. Adjust mask dimensions (for broadcasting)
         if mask is not None:
             if mask.dim() == 2:
-                # (batch, seq) → (batch, 1, 1, seq)
+                # (batch, seq) -> (batch, 1, 1, seq)
                 mask = mask.unsqueeze(1).unsqueeze(2)
             elif mask.dim() == 3:
-                # (batch, seq, seq) → (batch, 1, seq, seq)
+                # (batch, seq, seq) -> (batch, 1, seq, seq)
                 mask = mask.unsqueeze(1)
 
         # 4. Attention
         attn_output, _ = scaled_dot_product_attention(Q, K, V, mask, self.dropout)
 
         # 5. Concat heads
-        # (batch, n_heads, seq, d_k) → (batch, seq, n_heads, d_k) → (batch, seq, d_model)
+        # (batch, n_heads, seq, d_k) -> (batch, seq, n_heads, d_k) -> (batch, seq, d_model)
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.view(batch_size, -1, self.d_model)
 
@@ -171,7 +172,7 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
 
-        # 위치 인코딩 미리 계산
+        # Precompute positional encodings
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
 
@@ -180,12 +181,12 @@ class PositionalEncoding(nn.Module):
             torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
         )
 
-        pe[:, 0::2] = torch.sin(position * div_term)  # 짝수 인덱스
-        pe[:, 1::2] = torch.cos(position * div_term)  # 홀수 인덱스
+        pe[:, 0::2] = torch.sin(position * div_term)  # Even indices
+        pe[:, 1::2] = torch.cos(position * div_term)  # Odd indices
 
         pe = pe.unsqueeze(0)  # (1, max_len, d_model)
 
-        # 학습되지 않는 버퍼로 등록
+        # Register as non-learnable buffer
         self.register_buffer('pe', pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -207,7 +208,7 @@ class FeedForwardLowLevel(nn.Module):
 
     FFN(x) = GELU(xW_1 + b_1)W_2 + b_2
 
-    보통 d_ff = 4 * d_model (expansion)
+    Typically d_ff = 4 * d_model (expansion)
     """
 
     def __init__(self, d_model: int, d_ff: int = None, dropout: float = 0.1):
@@ -228,7 +229,7 @@ class FeedForwardLowLevel(nn.Module):
         Returns:
             output: (batch, seq_len, d_model)
         """
-        # GELU activation (원래 논문은 ReLU지만 현대는 GELU 선호)
+        # GELU activation (original paper uses ReLU, but modern practice prefers GELU)
         x = self.linear1(x)
         x = F.gelu(x)
         x = self.dropout(x)
@@ -240,9 +241,9 @@ class TransformerEncoderBlock(nn.Module):
     """
     Transformer Encoder Block
 
-    구조:
-    x → LayerNorm → MultiHeadAttention → Dropout → Add(x) →
-      → LayerNorm → FeedForward → Dropout → Add(x) → output
+    Structure:
+    x -> LayerNorm -> MultiHeadAttention -> Dropout -> Add(x) ->
+      -> LayerNorm -> FeedForward -> Dropout -> Add(x) -> output
     """
 
     def __init__(self, d_model: int, n_heads: int, d_ff: int = None, dropout: float = 0.1):
@@ -265,7 +266,7 @@ class TransformerEncoderBlock(nn.Module):
         Returns:
             output: (batch, seq_len, d_model)
         """
-        # Pre-norm (현대적 방식, 원래 논문은 Post-norm)
+        # Pre-norm (modern approach; original paper uses Post-norm)
         # Self-Attention + Residual
         normed = self.norm1(x)
         attn_out = self.attention(normed, normed, normed, mask)
@@ -283,10 +284,10 @@ class TransformerDecoderBlock(nn.Module):
     """
     Transformer Decoder Block
 
-    구조:
-    x → LayerNorm → MaskedSelfAttention → Add(x) →
-      → LayerNorm → CrossAttention(encoder_output) → Add(x) →
-      → LayerNorm → FeedForward → Add(x) → output
+    Structure:
+    x -> LayerNorm -> MaskedSelfAttention -> Add(x) ->
+      -> LayerNorm -> CrossAttention(encoder_output) -> Add(x) ->
+      -> LayerNorm -> FeedForward -> Add(x) -> output
     """
 
     def __init__(self, d_model: int, n_heads: int, d_ff: int = None, dropout: float = 0.1):
@@ -339,9 +340,9 @@ class TransformerDecoderBlock(nn.Module):
 
 class TransformerLowLevel(nn.Module):
     """
-    전체 Transformer 모델 (Encoder-Decoder)
+    Full Transformer Model (Encoder-Decoder)
 
-    번역, 요약 등 seq2seq 태스크용
+    For seq2seq tasks like translation, summarization, etc.
     """
 
     def __init__(
@@ -387,13 +388,13 @@ class TransformerLowLevel(nn.Module):
 
     def create_causal_mask(self, seq_len: int, device: torch.device) -> torch.Tensor:
         """
-        Causal mask: 미래 토큰을 못 보게 하는 마스크
+        Causal mask: prevents attending to future tokens
 
         Returns:
-            mask: (seq_len, seq_len) - True = 마스킹
+            mask: (1, seq_len, seq_len) - True = masked
         """
         mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1)
-        return mask.bool()
+        return mask.bool().unsqueeze(0)
 
     def encode(self, src: torch.Tensor, src_mask: torch.Tensor = None) -> torch.Tensor:
         """
@@ -459,7 +460,7 @@ class TransformerLowLevel(nn.Module):
         tgt_mask: torch.Tensor = None,
     ) -> torch.Tensor:
         """
-        전체 forward pass
+        Full forward pass
 
         Args:
             src: source tokens (batch, src_len)
@@ -474,13 +475,132 @@ class TransformerLowLevel(nn.Module):
         return logits
 
 
-def main():
-    """테스트 실행"""
-    print("=" * 60)
-    print("Transformer - PyTorch Low-Level 구현")
+def demo_copy_task():
+    """
+    Copy-task training demo.
+
+    The model learns to copy input tokens to output. Source and target are
+    identical random token sequences. This is a standard sanity check for
+    sequence-to-sequence architectures.
+    """
+    print("\n" + "=" * 60)
+    print("Copy-Task Training Demo")
     print("=" * 60)
 
-    # 설정
+    # ------------------------------------------------------------------
+    # Config (small values for fast training)
+    # ------------------------------------------------------------------
+    vocab_size = 20
+    d_model = 64
+    n_heads = 4
+    n_encoder_layers = 2
+    n_decoder_layers = 2
+    d_ff = 128
+    dropout = 0.0
+    batch_size = 32
+    seq_len = 10
+    num_epochs = 200
+    lr = 1e-3
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # ------------------------------------------------------------------
+    # Model
+    # ------------------------------------------------------------------
+    model = TransformerLowLevel(
+        src_vocab_size=vocab_size,
+        tgt_vocab_size=vocab_size,
+        d_model=d_model,
+        n_heads=n_heads,
+        n_encoder_layers=n_encoder_layers,
+        n_decoder_layers=n_decoder_layers,
+        d_ff=d_ff,
+        dropout=dropout,
+    ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Model parameters: {total_params:,}")
+
+    # ------------------------------------------------------------------
+    # Fixed training set (model memorizes the copy mapping)
+    # ------------------------------------------------------------------
+    n_train = 64
+    train_src = torch.randint(1, vocab_size, (n_train, seq_len), device=device)
+
+    # ------------------------------------------------------------------
+    # Training loop
+    # ------------------------------------------------------------------
+    loss_history = []
+    model.train()
+
+    for epoch in range(1, num_epochs + 1):
+        # Sample a mini-batch from the fixed training set
+        idx = torch.randint(0, n_train, (batch_size,))
+        src = train_src[idx]
+        tgt = src.clone()
+
+        # Decoder input: shifted right (teacher forcing)
+        # Use token 0 as start-of-sequence, feed tgt[:, :-1] as input
+        tgt_input = torch.cat(
+            [torch.zeros(batch_size, 1, dtype=torch.long, device=device), tgt[:, :-1]],
+            dim=1,
+        )
+
+        # Forward pass
+        logits = model(src, tgt_input)  # (batch, seq_len, vocab_size)
+
+        # Loss: compare logits against full target sequence
+        loss = criterion(logits.reshape(-1, vocab_size), tgt.reshape(-1))
+
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        loss_history.append(loss.item())
+
+        if epoch % 40 == 0 or epoch == 1:
+            print(f"  Epoch {epoch:3d}/{num_epochs}  loss={loss.item():.4f}")
+
+    # Expected: loss < 0.5 after 200 epochs on copy task
+    final_loss = loss_history[-1]
+    print(f"\nFinal loss: {final_loss:.4f}")
+
+    # ------------------------------------------------------------------
+    # Visualization: training loss curve
+    # ------------------------------------------------------------------
+    # The model does not expose attention weights directly
+    # (MultiHeadAttentionLowLevel discards them), so we only plot the
+    # loss curve.
+    fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+
+    ax.plot(range(1, num_epochs + 1), loss_history, linewidth=1.5, color="#2563eb")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Cross-Entropy Loss")
+    ax.set_title("Transformer Copy-Task Training Loss")
+    ax.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+
+    save_path = (
+        "/opt/projects/01_Personal/02_Study_Hub/study_hub/examples/"
+        "Deep_Learning/implementations/07_Transformer/transformer_copy_task.png"
+    )
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+    print(f"Loss curve saved to {save_path}")
+
+
+def main():
+    """Test run"""
+    print("=" * 60)
+    print("Transformer - PyTorch Low-Level Implementation")
+    print("=" * 60)
+
+    # Configuration
     src_vocab_size = 10000
     tgt_vocab_size = 10000
     d_model = 256
@@ -490,7 +610,7 @@ def main():
     src_len = 10
     tgt_len = 8
 
-    # 모델 생성
+    # Create model
     model = TransformerLowLevel(
         src_vocab_size=src_vocab_size,
         tgt_vocab_size=tgt_vocab_size,
@@ -500,11 +620,11 @@ def main():
         n_decoder_layers=n_layers,
     )
 
-    # 파라미터 수
+    # Parameter count
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"\n모델 파라미터 수: {total_params:,}")
+    print(f"\nModel parameters: {total_params:,}")
 
-    # 더미 데이터
+    # Dummy data
     src = torch.randint(0, src_vocab_size, (batch_size, src_len))
     tgt = torch.randint(0, tgt_vocab_size, (batch_size, tgt_len))
 
@@ -520,8 +640,11 @@ def main():
     print(f"\nOutput shape: {logits.shape}")
     print(f"  Expected: (batch={batch_size}, tgt_len={tgt_len}, vocab={tgt_vocab_size})")
 
-    # Attention 패턴 시각화 (optional)
-    print("\n테스트 완료!")
+    # Attention pattern visualization (optional)
+    print("\nTest complete!")
+
+    # Copy-task training demo
+    demo_copy_task()
 
 
 if __name__ == "__main__":

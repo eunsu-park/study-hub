@@ -1,8 +1,8 @@
 """
-02. 신경망 기초 - PyTorch 버전
+02. Neural Network Basics - PyTorch Version
 
-nn.Module을 사용한 MLP 구현과 XOR 문제 해결.
-NumPy 버전(examples/numpy/02_neural_network_scratch.py)과 비교해 보세요.
+MLP implementation using nn.Module and solving the XOR problem.
+Compare with the NumPy version (examples/numpy/02_neural_network_scratch.py).
 """
 
 import torch
@@ -12,25 +12,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 print("=" * 60)
-print("PyTorch 신경망 기초")
+print("PyTorch Neural Network Basics")
 print("=" * 60)
 
 
 # ============================================
-# 1. 활성화 함수
+# 1. Activation Functions
 # ============================================
-print("\n[1] 활성화 함수")
+print("\n[1] Activation Functions")
 print("-" * 40)
 
 x = torch.linspace(-5, 5, 100)
 
-# 활성화 함수 적용
+# Apply activation functions
 sigmoid_out = torch.sigmoid(x)
 tanh_out = torch.tanh(x)
 relu_out = F.relu(x)
 leaky_relu_out = F.leaky_relu(x, 0.1)
 
-# 시각화
+# Visualization
 fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
 axes[0, 0].plot(x.numpy(), sigmoid_out.numpy())
@@ -60,11 +60,11 @@ axes[1, 1].axvline(x=0, color='k', linewidth=0.5)
 plt.tight_layout()
 plt.savefig('activation_functions.png', dpi=100)
 plt.close()
-print("활성화 함수 그래프 저장: activation_functions.png")
+print("Activation function plot saved: activation_functions.png")
 
 
 # ============================================
-# 2. nn.Module로 MLP 정의
+# 2. Defining an MLP with nn.Module
 # ============================================
 print("\n[2] nn.Module MLP")
 print("-" * 40)
@@ -83,7 +83,7 @@ class MLP(nn.Module):
 model = MLP(input_dim=10, hidden_dim=32, output_dim=3)
 print(model)
 
-# 파라미터 확인
+# Check parameters
 total_params = sum(p.numel() for p in model.parameters())
 print(f"Total parameters: {total_params}")
 
@@ -92,7 +92,7 @@ for name, param in model.named_parameters():
 
 
 # ============================================
-# 3. nn.Sequential로 간단히 정의
+# 3. Simple Definition with nn.Sequential
 # ============================================
 print("\n[3] nn.Sequential")
 print("-" * 40)
@@ -108,22 +108,22 @@ print(model_seq)
 
 
 # ============================================
-# 4. XOR 문제 해결
+# 4. Solving the XOR Problem
 # ============================================
-print("\n[4] XOR 문제 해결")
+print("\n[4] Solving the XOR Problem")
 print("-" * 40)
 
-# 데이터
+# Data
 X = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=torch.float32)
 y = torch.tensor([[0], [1], [1], [0]], dtype=torch.float32)
 
-print("XOR 데이터:")
-print("  (0,0) → 0")
-print("  (0,1) → 1")
-print("  (1,0) → 1")
-print("  (1,1) → 0")
+print("XOR data:")
+print("  (0,0) -> 0")
+print("  (0,1) -> 1")
+print("  (1,0) -> 1")
+print("  (1,1) -> 0")
 
-# 모델 정의
+# Model definition
 class XORNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -137,18 +137,18 @@ class XORNet(nn.Module):
 
 xor_model = XORNet()
 
-# 손실 함수와 옵티마이저
+# Loss function and optimizer
 criterion = nn.BCELoss()
 optimizer = torch.optim.Adam(xor_model.parameters(), lr=0.1)
 
-# 학습
+# Training
 losses = []
 for epoch in range(1000):
-    # 순전파
+    # Forward pass
     pred = xor_model(X)
     loss = criterion(pred, y)
 
-    # 역전파
+    # Backward pass
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -158,15 +158,15 @@ for epoch in range(1000):
     if (epoch + 1) % 200 == 0:
         print(f"Epoch {epoch+1}: Loss = {loss.item():.6f}")
 
-# 결과 확인
-print("\n학습 결과:")
+# Check results
+print("\nTraining results:")
 xor_model.eval()
 with torch.no_grad():
     predictions = xor_model(X)
     for i in range(4):
-        print(f"  {X[i].numpy()} → {predictions[i].item():.4f} (정답: {y[i].item()})")
+        print(f"  {X[i].numpy()} -> {predictions[i].item():.4f} (target: {y[i].item()})")
 
-# 손실 그래프
+# Loss plot
 plt.figure(figsize=(10, 5))
 plt.plot(losses)
 plt.xlabel('Epoch')
@@ -175,13 +175,13 @@ plt.title('XOR Training Loss')
 plt.grid(True, alpha=0.3)
 plt.savefig('xor_loss.png', dpi=100)
 plt.close()
-print("손실 그래프 저장: xor_loss.png")
+print("Loss plot saved: xor_loss.png")
 
 
 # ============================================
-# 5. 가중치 초기화
+# 5. Weight Initialization
 # ============================================
-print("\n[5] 가중치 초기화")
+print("\n[5] Weight Initialization")
 print("-" * 40)
 
 def init_weights(m):
@@ -196,20 +196,20 @@ model_init = nn.Sequential(
     nn.Linear(32, 10)
 )
 
-print("가중치 초기화 전:")
+print("Before weight initialization:")
 print(f"  fc1 weight mean: {model_init[0].weight.mean().item():.6f}")
 
-print("\n초기화 적용:")
+print("\nApplying initialization:")
 model_init.apply(init_weights)
 
-print("\n가중치 초기화 후:")
+print("\nAfter weight initialization:")
 print(f"  fc1 weight mean: {model_init[0].weight.mean().item():.6f}")
 
 
 # ============================================
-# 6. 순전파 단계별 확인
+# 6. Step-by-Step Forward Pass
 # ============================================
-print("\n[6] 순전파 단계별 확인")
+print("\n[6] Step-by-Step Forward Pass")
 print("-" * 40)
 
 class VerboseMLP(nn.Module):
@@ -219,50 +219,50 @@ class VerboseMLP(nn.Module):
         self.fc2 = nn.Linear(4, 2)
 
     def forward(self, x):
-        print(f"  입력: {x.shape}")
+        print(f"  Input: {x.shape}")
 
         z1 = self.fc1(x)
-        print(f"  fc1 후: {z1.shape}")
+        print(f"  After fc1: {z1.shape}")
 
         a1 = F.relu(z1)
-        print(f"  ReLU 후: {a1.shape}")
+        print(f"  After ReLU: {a1.shape}")
 
         z2 = self.fc2(a1)
-        print(f"  fc2 후 (출력): {z2.shape}")
+        print(f"  After fc2 (output): {z2.shape}")
 
         return z2
 
 verbose_model = VerboseMLP()
-sample_input = torch.randn(2, 3)  # 배치 크기 2, 입력 차원 3
-print("순전파 과정:")
+sample_input = torch.randn(2, 3)  # batch size 2, input dim 3
+print("Forward pass:")
 output = verbose_model(sample_input)
 
 
 # ============================================
-# 7. 모델 저장 및 로드
+# 7. Model Save and Load
 # ============================================
-print("\n[7] 모델 저장/로드")
+print("\n[7] Model Save/Load")
 print("-" * 40)
 
-# 저장
+# Save
 torch.save(xor_model.state_dict(), 'xor_model.pth')
-print("모델 저장: xor_model.pth")
+print("Model saved: xor_model.pth")
 
-# 새 모델에 로드
+# Load into new model
 new_model = XORNet()
 new_model.load_state_dict(torch.load('xor_model.pth', weights_only=True))
 new_model.eval()
-print("모델 로드 완료")
+print("Model loaded")
 
-# 검증
+# Verify
 with torch.no_grad():
     new_pred = new_model(X)
-    print("로드된 모델 예측:")
+    print("Loaded model predictions:")
     for i in range(4):
-        print(f"  {X[i].numpy()} → {new_pred[i].item():.4f}")
+        print(f"  {X[i].numpy()} -> {new_pred[i].item():.4f}")
 
 
 print("\n" + "=" * 60)
-print("PyTorch 신경망 기초 완료!")
-print("NumPy 버전과 비교: examples/numpy/02_neural_network_scratch.py")
+print("PyTorch Neural Network Basics complete!")
+print("Compare with NumPy version: examples/numpy/02_neural_network_scratch.py")
 print("=" * 60)

@@ -1,8 +1,8 @@
 /*
- * 스택과 큐 (Stack and Queue)
+ * Stack and Queue
  * Stack, Queue, Deque, Monotonic Stack/Queue
  *
- * 선형 자료구조의 활용입니다.
+ * Applications of linear data structures.
  */
 
 #include <iostream>
@@ -16,10 +16,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. 스택 기본 활용
+// 1. Basic Stack Applications
 // =============================================================================
 
-// 괄호 유효성 검사
+// Valid parentheses check
 bool isValidParentheses(const string& s) {
     stack<char> st;
     unordered_map<char, char> pairs = {{')', '('}, {']', '['}, {'}', '{'}};
@@ -37,7 +37,7 @@ bool isValidParentheses(const string& s) {
     return st.empty();
 }
 
-// 후위 표기법 계산
+// Reverse Polish Notation evaluation
 int evalRPN(const vector<string>& tokens) {
     stack<int> st;
 
@@ -58,7 +58,7 @@ int evalRPN(const vector<string>& tokens) {
     return st.top();
 }
 
-// 중위 → 후위 변환
+// Infix to Postfix conversion
 string infixToPostfix(const string& infix) {
     stack<char> st;
     string postfix;
@@ -74,7 +74,7 @@ string infixToPostfix(const string& infix) {
                 postfix += st.top();
                 st.pop();
             }
-            st.pop();  // '(' 제거
+            st.pop();  // Remove '('
         } else {
             while (!st.empty() && st.top() != '(' &&
                    precedence[st.top()] >= precedence[c]) {
@@ -94,14 +94,14 @@ string infixToPostfix(const string& infix) {
 }
 
 // =============================================================================
-// 2. 모노토닉 스택 (Monotonic Stack)
+// 2. Monotonic Stack
 // =============================================================================
 
-// 다음 큰 원소 (Next Greater Element)
+// Next Greater Element
 vector<int> nextGreaterElement(const vector<int>& nums) {
     int n = nums.size();
     vector<int> result(n, -1);
-    stack<int> st;  // 인덱스 저장
+    stack<int> st;  // Store indices
 
     for (int i = 0; i < n; i++) {
         while (!st.empty() && nums[st.top()] < nums[i]) {
@@ -114,7 +114,7 @@ vector<int> nextGreaterElement(const vector<int>& nums) {
     return result;
 }
 
-// 히스토그램에서 가장 큰 직사각형
+// Largest Rectangle in Histogram
 int largestRectangleArea(const vector<int>& heights) {
     stack<int> st;
     int maxArea = 0;
@@ -135,7 +135,7 @@ int largestRectangleArea(const vector<int>& heights) {
     return maxArea;
 }
 
-// 일일 온도 (Daily Temperatures)
+// Daily Temperatures
 vector<int> dailyTemperatures(const vector<int>& temperatures) {
     int n = temperatures.size();
     vector<int> result(n, 0);
@@ -153,10 +153,10 @@ vector<int> dailyTemperatures(const vector<int>& temperatures) {
 }
 
 // =============================================================================
-// 3. 큐 활용
+// 3. Queue Applications
 // =============================================================================
 
-// BFS용 큐 (간단 예시)
+// Queue for BFS (simple example)
 vector<int> bfsOrder(const vector<vector<int>>& graph, int start) {
     vector<int> result;
     vector<bool> visited(graph.size(), false);
@@ -182,21 +182,21 @@ vector<int> bfsOrder(const vector<vector<int>>& graph, int start) {
 }
 
 // =============================================================================
-// 4. 덱 (Deque) 활용
+// 4. Deque Applications
 // =============================================================================
 
-// 슬라이딩 윈도우 최댓값
+// Sliding Window Maximum
 vector<int> maxSlidingWindow(const vector<int>& nums, int k) {
-    deque<int> dq;  // 인덱스 저장
+    deque<int> dq;  // Store indices
     vector<int> result;
 
     for (int i = 0; i < (int)nums.size(); i++) {
-        // 윈도우 벗어난 원소 제거
+        // Remove elements outside the window
         while (!dq.empty() && dq.front() <= i - k) {
             dq.pop_front();
         }
 
-        // 현재 원소보다 작은 원소 제거
+        // Remove elements smaller than current
         while (!dq.empty() && nums[dq.back()] < nums[i]) {
             dq.pop_back();
         }
@@ -212,7 +212,7 @@ vector<int> maxSlidingWindow(const vector<int>& nums, int k) {
 }
 
 // =============================================================================
-// 5. 두 스택으로 큐 구현
+// 5. Queue Implementation Using Two Stacks
 // =============================================================================
 
 class MyQueue {
@@ -251,7 +251,7 @@ public:
 };
 
 // =============================================================================
-// 6. 최소 스택 (Min Stack)
+// 6. Min Stack
 // =============================================================================
 
 class MinStack {
@@ -284,7 +284,7 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -298,47 +298,47 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "스택과 큐 예제" << endl;
+    cout << "Stack and Queue Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 괄호 검사
-    cout << "\n[1] 괄호 유효성 검사" << endl;
-    cout << "    \"()[]{}\" : " << (isValidParentheses("()[]{}") ? "유효" : "무효") << endl;
-    cout << "    \"([)]\"   : " << (isValidParentheses("([)]") ? "유효" : "무효") << endl;
+    // 1. Parentheses validation
+    cout << "\n[1] Valid Parentheses" << endl;
+    cout << "    \"()[]{}\" : " << (isValidParentheses("()[]{}") ? "valid" : "invalid") << endl;
+    cout << "    \"([)]\"   : " << (isValidParentheses("([)]") ? "valid" : "invalid") << endl;
 
-    // 2. 후위 표기법
-    cout << "\n[2] 후위 표기법" << endl;
+    // 2. Reverse Polish Notation
+    cout << "\n[2] Reverse Polish Notation" << endl;
     vector<string> rpn = {"2", "1", "+", "3", "*"};
     cout << "    [\"2\",\"1\",\"+\",\"3\",\"*\"] = " << evalRPN(rpn) << endl;
 
-    cout << "    \"a+b*c\" → \"" << infixToPostfix("a+b*c") << "\"" << endl;
+    cout << "    \"a+b*c\" -> \"" << infixToPostfix("a+b*c") << "\"" << endl;
 
-    // 3. 모노토닉 스택
-    cout << "\n[3] 모노토닉 스택" << endl;
+    // 3. Monotonic Stack
+    cout << "\n[3] Monotonic Stack" << endl;
     vector<int> nums = {2, 1, 2, 4, 3};
-    cout << "    배열: [2,1,2,4,3]" << endl;
-    cout << "    다음 큰 원소: ";
+    cout << "    Array: [2,1,2,4,3]" << endl;
+    cout << "    Next greater element: ";
     printVector(nextGreaterElement(nums));
     cout << endl;
 
     vector<int> heights = {2, 1, 5, 6, 2, 3};
-    cout << "    히스토그램 [2,1,5,6,2,3] 최대 직사각형: " << largestRectangleArea(heights) << endl;
+    cout << "    Histogram [2,1,5,6,2,3] largest rectangle: " << largestRectangleArea(heights) << endl;
 
     vector<int> temps = {73, 74, 75, 71, 69, 72, 76, 73};
-    cout << "    일일 온도 [73,74,75,71,69,72,76,73]: ";
+    cout << "    Daily temperatures [73,74,75,71,69,72,76,73]: ";
     printVector(dailyTemperatures(temps));
     cout << endl;
 
-    // 4. 슬라이딩 윈도우 최댓값
-    cout << "\n[4] 슬라이딩 윈도우 최댓값" << endl;
+    // 4. Sliding Window Maximum
+    cout << "\n[4] Sliding Window Maximum" << endl;
     vector<int> window = {1, 3, -1, -3, 5, 3, 6, 7};
-    cout << "    배열: [1,3,-1,-3,5,3,6,7], k=3" << endl;
-    cout << "    최댓값: ";
+    cout << "    Array: [1,3,-1,-3,5,3,6,7], k=3" << endl;
+    cout << "    Maximum values: ";
     printVector(maxSlidingWindow(window, 3));
     cout << endl;
 
-    // 5. 두 스택으로 큐
-    cout << "\n[5] 두 스택으로 큐 구현" << endl;
+    // 5. Queue using two stacks
+    cout << "\n[5] Queue Using Two Stacks" << endl;
     MyQueue q;
     q.push(1);
     q.push(2);
@@ -347,8 +347,8 @@ int main() {
     cout << "    pop(): " << q.pop() << endl;
     cout << "    empty(): " << (q.empty() ? "true" : "false") << endl;
 
-    // 6. 최소 스택
-    cout << "\n[6] 최소 스택" << endl;
+    // 6. Min Stack
+    cout << "\n[6] Min Stack" << endl;
     MinStack ms;
     ms.push(-2);
     ms.push(0);
@@ -356,11 +356,11 @@ int main() {
     cout << "    push(-2), push(0), push(-3)" << endl;
     cout << "    getMin(): " << ms.getMin() << endl;
     ms.pop();
-    cout << "    pop() 후 getMin(): " << ms.getMin() << endl;
+    cout << "    After pop() getMin(): " << ms.getMin() << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 연산         | 스택  | 큐    | 덱    |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Operation    | Stack | Queue | Deque |" << endl;
     cout << "    |--------------|-------|-------|-------|" << endl;
     cout << "    | push/enqueue | O(1)  | O(1)  | O(1)  |" << endl;
     cout << "    | pop/dequeue  | O(1)  | O(1)  | O(1)  |" << endl;

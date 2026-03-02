@@ -1,41 +1,41 @@
 """
-12. 실전 챗봇 예제
+12. Practical Chatbot Example
 
-RAG 기반 대화형 AI 시스템
+RAG-based conversational AI system
 """
 
 print("=" * 60)
-print("실전 챗봇")
+print("Practical Chatbot")
 print("=" * 60)
 
 
 # ============================================
-# 1. 간단한 대화 챗봇 (메모리)
+# 1. Simple Conversation Chatbot (Memory)
 # ============================================
-print("\n[1] 간단한 대화 챗봇")
+print("\n[1] Simple Conversation Chatbot")
 print("-" * 40)
 
 class SimpleChatbot:
-    """히스토리를 유지하는 간단한 챗봇"""
+    """Simple chatbot that maintains history"""
 
     def __init__(self, system_prompt="You are a helpful assistant."):
         self.system_prompt = system_prompt
         self.history = []
 
     def chat(self, user_message):
-        """사용자 메시지 처리 (LLM 호출 시뮬레이션)"""
-        # 히스토리에 추가
+        """Process user message (LLM call simulation)"""
+        # Add to history
         self.history.append({"role": "user", "content": user_message})
 
-        # 실제로는 LLM 호출
+        # In practice, call LLM
         # response = llm.invoke(messages)
-        response = f"[응답] {user_message}에 대한 답변입니다."
+        response = f"[Response] This is the answer to: {user_message}"
 
         self.history.append({"role": "assistant", "content": response})
         return response
 
     def get_messages(self):
-        """전체 메시지 구성"""
+        """Build full message list"""
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(self.history)
         return messages
@@ -43,32 +43,32 @@ class SimpleChatbot:
     def clear_history(self):
         self.history = []
 
-# 테스트
+# Test
 bot = SimpleChatbot()
-print(bot.chat("안녕하세요"))
-print(bot.chat("오늘 날씨 어때요?"))
-print(f"히스토리 길이: {len(bot.history)}")
+print(bot.chat("Hello"))
+print(bot.chat("How's the weather today?"))
+print(f"History length: {len(bot.history)}")
 
 
 # ============================================
-# 2. RAG 챗봇
+# 2. RAG Chatbot
 # ============================================
-print("\n[2] RAG 챗봇")
+print("\n[2] RAG Chatbot")
 print("-" * 40)
 
 import numpy as np
 
 class RAGChatbot:
-    """문서 기반 RAG 챗봇"""
+    """Document-based RAG chatbot"""
 
     def __init__(self, documents):
         self.documents = documents
         self.history = []
-        # 가상 임베딩 (실제로는 모델 사용)
+        # Simulated embeddings (in practice, use a model)
         self.embeddings = np.random.randn(len(documents), 128)
 
     def retrieve(self, query, top_k=2):
-        """관련 문서 검색"""
+        """Retrieve relevant documents"""
         query_emb = np.random.randn(128)
         similarities = np.dot(self.embeddings, query_emb) / (
             np.linalg.norm(self.embeddings, axis=1) * np.linalg.norm(query_emb)
@@ -77,12 +77,12 @@ class RAGChatbot:
         return [self.documents[i] for i in top_indices]
 
     def chat(self, question):
-        """RAG 기반 답변 생성"""
-        # 검색
+        """Generate RAG-based answer"""
+        # Retrieve
         relevant_docs = self.retrieve(question)
         context = "\n".join(relevant_docs)
 
-        # 프롬프트 구성
+        # Build prompt
         prompt = f"""Context:
 {context}
 
@@ -93,10 +93,10 @@ Question: {question}
 
 Answer:"""
 
-        # 실제로는 LLM 호출
-        response = f"[컨텍스트 기반 응답] {relevant_docs[0][:50]}..."
+        # In practice, call LLM
+        response = f"[Context-based response] {relevant_docs[0][:50]}..."
 
-        # 히스토리 업데이트
+        # Update history
         self.history.append({"role": "user", "content": question})
         self.history.append({"role": "assistant", "content": response})
 
@@ -106,7 +106,7 @@ Answer:"""
         recent = self.history[-max_turns*2:]
         return "\n".join([f"{m['role']}: {m['content']}" for m in recent])
 
-# 테스트
+# Test
 documents = [
     "Python is a programming language created by Guido van Rossum.",
     "Machine learning is a type of artificial intelligence.",
@@ -119,20 +119,20 @@ print(rag_bot.chat("Tell me more about it"))
 
 
 # ============================================
-# 3. 의도 분류
+# 3. Intent Classification
 # ============================================
-print("\n[3] 의도 분류")
+print("\n[3] Intent Classification")
 print("-" * 40)
 
 class IntentClassifier:
-    """규칙 기반 의도 분류 (실제로는 LLM 사용)"""
+    """Rule-based intent classification (in practice, use LLM)"""
 
     def __init__(self):
         self.intents = {
-            "greeting": ["hello", "hi", "hey", "안녕"],
-            "goodbye": ["bye", "goodbye", "잘가"],
-            "help": ["help", "도움", "how do i"],
-            "question": ["what", "why", "how", "when", "무엇", "왜"]
+            "greeting": ["hello", "hi", "hey"],
+            "goodbye": ["bye", "goodbye"],
+            "help": ["help", "how do i"],
+            "question": ["what", "why", "how", "when"]
         }
 
     def classify(self, text):
@@ -150,9 +150,9 @@ for text in test_texts:
 
 
 # ============================================
-# 4. 대화 상태 관리
+# 4. Conversation State Management
 # ============================================
-print("\n[4] 대화 상태 관리")
+print("\n[4] Conversation State Management")
 print("-" * 40)
 
 from enum import Enum
@@ -178,40 +178,40 @@ class StatefulBot:
     def process(self, message):
         if self.context.state == State.GREETING:
             self.context.state = State.COLLECTING
-            return "안녕하세요! 이름을 알려주세요."
+            return "Hello! Please tell me your name."
 
         elif self.context.state == State.COLLECTING:
-            # 슬롯 추출 (간단한 예시)
+            # Slot extraction (simple example)
             if "name" not in self.context.slots:
                 self.context.slots["name"] = message
-                return "이메일 주소를 알려주세요."
+                return "Please provide your email address."
             elif "email" not in self.context.slots:
                 self.context.slots["email"] = message
                 self.context.state = State.CONFIRMING
-                return f"확인: {self.context.slots}. 맞습니까? (예/아니오)"
+                return f"Confirm: {self.context.slots}. Is this correct? (yes/no)"
 
         elif self.context.state == State.CONFIRMING:
-            if "예" in message.lower() or "yes" in message.lower():
+            if "yes" in message.lower():
                 self.context.state = State.DONE
-                return "감사합니다! 처리 완료되었습니다."
+                return "Thank you! Processing complete."
             else:
                 self.context = ConversationState()
-                return "처음부터 다시 시작합니다. 이름을 알려주세요."
+                return "Starting over. Please tell me your name."
 
-        return "무엇을 도와드릴까요?"
+        return "How can I help you?"
 
-# 테스트
+# Test
 stateful_bot = StatefulBot()
-print(stateful_bot.process("시작"))
-print(stateful_bot.process("홍길동"))
-print(stateful_bot.process("hong@example.com"))
-print(stateful_bot.process("예"))
+print(stateful_bot.process("start"))
+print(stateful_bot.process("John Doe"))
+print(stateful_bot.process("john@example.com"))
+print(stateful_bot.process("yes"))
 
 
 # ============================================
-# 5. OpenAI 챗봇 (코드 예시)
+# 5. OpenAI Chatbot (Code Example)
 # ============================================
-print("\n[5] OpenAI 챗봇 (코드)")
+print("\n[5] OpenAI Chatbot (code)")
 print("-" * 40)
 
 openai_bot_code = '''
@@ -224,12 +224,12 @@ class OpenAIChatbot:
         self.history = []
 
     def chat(self, message):
-        # 메시지 구성
+        # Build messages
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(self.history)
         messages.append({"role": "user", "content": message})
 
-        # API 호출
+        # API call
         response = self.client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
@@ -238,14 +238,14 @@ class OpenAIChatbot:
 
         assistant_msg = response.choices[0].message.content
 
-        # 히스토리 업데이트
+        # Update history
         self.history.append({"role": "user", "content": message})
         self.history.append({"role": "assistant", "content": assistant_msg})
 
         return assistant_msg
 
     def chat_stream(self, message):
-        """스트리밍 응답"""
+        """Streaming response"""
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(self.history)
         messages.append({"role": "user", "content": message})
@@ -270,9 +270,9 @@ print(openai_bot_code)
 
 
 # ============================================
-# 6. FastAPI 서버 (코드)
+# 6. FastAPI Server (Code)
 # ============================================
-print("\n[6] FastAPI 서버 (코드)")
+print("\n[6] FastAPI Server (code)")
 print("-" * 40)
 
 fastapi_code = '''
@@ -302,22 +302,22 @@ async def clear_session(session_id: str):
         del sessions[session_id]
     return {"status": "cleared"}
 
-# 실행: uvicorn main:app --reload
+# Run: uvicorn main:app --reload
 '''
 print(fastapi_code)
 
 
 # ============================================
-# 7. Gradio UI (코드)
+# 7. Gradio UI (Code)
 # ============================================
-print("\n[7] Gradio UI (코드)")
+print("\n[7] Gradio UI (code)")
 print("-" * 40)
 
 gradio_code = '''
 import gradio as gr
 
 def respond(message, history):
-    # 챗봇 응답 생성
+    # Generate chatbot response
     response = bot.chat(message)
     return response
 
@@ -335,23 +335,23 @@ print(gradio_code)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("챗봇 정리")
+print("Chatbot Summary")
 print("=" * 60)
 
 summary = """
-챗봇 구성요소:
-    1. 대화 히스토리 관리
-    2. 의도 분류
-    3. 슬롯 추출
-    4. 상태 관리
-    5. RAG (문서 기반)
-    6. LLM 호출
+Chatbot Components:
+    1. Conversation history management
+    2. Intent classification
+    3. Slot extraction
+    4. State management
+    5. RAG (document-based)
+    6. LLM invocation
 
-핵심 패턴:
-    # 기본 대화
+Key Patterns:
+    # Basic conversation
     messages = [system] + history + [user_message]
     response = llm.invoke(messages)
 
@@ -359,13 +359,13 @@ summary = """
     context = retrieve(query)
     response = llm.invoke(context + query)
 
-    # 스트리밍
+    # Streaming
     for chunk in llm.stream(messages):
         yield chunk
 
-배포:
-    - FastAPI: REST API 서버
-    - Gradio: 빠른 UI 프로토타입
-    - Streamlit: 대시보드 스타일
+Deployment:
+    - FastAPI: REST API server
+    - Gradio: Quick UI prototype
+    - Streamlit: Dashboard style
 """
 print(summary)

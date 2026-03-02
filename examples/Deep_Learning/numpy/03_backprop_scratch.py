@@ -1,25 +1,25 @@
 """
-03. 역전파 (Backpropagation) - NumPy 버전
+03. Backpropagation - NumPy Version
 
-NumPy로 역전파를 직접 구현하여 원리를 이해합니다.
-이 파일이 딥러닝 이해의 핵심입니다!
+Implements backpropagation from scratch with NumPy to understand the principles.
+This file is the core of understanding deep learning!
 
-PyTorch에서는 loss.backward() 한 줄이지만,
-여기서는 체인 룰을 직접 적용합니다.
+In PyTorch, loss.backward() does it in one line,
+but here we apply the chain rule manually.
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 print("=" * 60)
-print("NumPy 역전파 (Backpropagation) from scratch")
+print("NumPy Backpropagation from scratch")
 print("=" * 60)
 
 
 # ============================================
-# 1. 활성화 함수와 그 미분
+# 1. Activation Functions and Their Derivatives
 # ============================================
-print("\n[1] 활성화 함수와 미분")
+print("\n[1] Activation Functions and Derivatives")
 print("-" * 40)
 
 def sigmoid(x):
@@ -37,7 +37,7 @@ def relu_derivative(x):
     """relu'(x) = 1 if x > 0 else 0"""
     return (x > 0).astype(float)
 
-# 테스트
+# Test
 x = np.array([-2, -1, 0, 1, 2])
 print(f"x: {x}")
 print(f"sigmoid(x): {sigmoid(x).round(4)}")
@@ -47,97 +47,97 @@ print(f"relu'(x): {relu_derivative(x)}")
 
 
 # ============================================
-# 2. 단일 뉴런 역전파 (이해용)
+# 2. Single Neuron Backpropagation (for understanding)
 # ============================================
-print("\n[2] 단일 뉴런 역전파")
+print("\n[2] Single Neuron Backpropagation")
 print("-" * 40)
 
 class SingleNeuron:
     """
-    단일 뉴런: y = sigmoid(w*x + b)
-    손실: L = (y - target)^2
+    Single neuron: y = sigmoid(w*x + b)
+    Loss: L = (y - target)^2
     """
     def __init__(self):
         self.w = np.random.randn()
         self.b = np.random.randn()
 
     def forward(self, x, target):
-        """순전파"""
+        """Forward pass"""
         self.x = x
         self.target = target
 
-        # 단계별 계산 (캐시에 저장)
-        self.z = self.w * x + self.b      # 선형 변환
-        self.a = sigmoid(self.z)           # 활성화
+        # Step-by-step computation (saved to cache)
+        self.z = self.w * x + self.b      # Linear transform
+        self.a = sigmoid(self.z)           # Activation
         self.loss = (self.a - target) ** 2 # MSE
 
         return self.a, self.loss
 
     def backward(self):
         """
-        역전파: 체인 룰 적용
+        Backpropagation: Apply chain rule
 
         dL/dw = (dL/da) * (da/dz) * (dz/dw)
         dL/db = (dL/da) * (da/dz) * (dz/db)
         """
-        # 1. 손실 → 활성화
+        # 1. Loss -> Activation
         dL_da = 2 * (self.a - self.target)
 
-        # 2. 활성화 → 선형 (시그모이드 미분)
+        # 2. Activation -> Linear (sigmoid derivative)
         da_dz = sigmoid_derivative(self.z)
 
-        # 3. 선형 → 가중치/편향
+        # 3. Linear -> Weights/Bias
         dz_dw = self.x
         dz_db = 1
 
-        # 체인 룰 적용
+        # Apply chain rule
         dL_dw = dL_da * da_dz * dz_dw
         dL_db = dL_da * da_dz * dz_db
 
         return dL_dw, dL_db
 
-# 테스트
+# Test
 neuron = SingleNeuron()
 x, target = 2.0, 1.0
 
-print(f"입력: x={x}, target={target}")
-print(f"초기 가중치: w={neuron.w:.4f}, b={neuron.b:.4f}")
+print(f"Input: x={x}, target={target}")
+print(f"Initial weights: w={neuron.w:.4f}, b={neuron.b:.4f}")
 
 pred, loss = neuron.forward(x, target)
-print(f"예측: {pred:.4f}, 손실: {loss:.4f}")
+print(f"Prediction: {pred:.4f}, Loss: {loss:.4f}")
 
 dw, db = neuron.backward()
-print(f"기울기: dL/dw={dw:.4f}, dL/db={db:.4f}")
+print(f"Gradients: dL/dw={dw:.4f}, dL/db={db:.4f}")
 
 
 # ============================================
-# 3. 2층 MLP 역전파 (핵심!)
+# 3. 2-Layer MLP Backpropagation (Core!)
 # ============================================
-print("\n[3] 2층 MLP 역전파")
+print("\n[3] 2-Layer MLP Backpropagation")
 print("-" * 40)
 
 class MLPFromScratch:
     """
-    2층 MLP with 역전파
+    2-layer MLP with Backpropagation
 
-    구조: 입력 → [W1, b1] → ReLU → [W2, b2] → Sigmoid → 출력
+    Architecture: Input -> [W1, b1] -> ReLU -> [W2, b2] -> Sigmoid -> Output
     """
     def __init__(self, input_dim, hidden_dim, output_dim):
-        # Xavier 초기화
+        # Xavier initialization
         self.W1 = np.random.randn(input_dim, hidden_dim) * np.sqrt(2.0 / input_dim)
         self.b1 = np.zeros(hidden_dim)
         self.W2 = np.random.randn(hidden_dim, output_dim) * np.sqrt(2.0 / hidden_dim)
         self.b2 = np.zeros(output_dim)
 
-        print(f"MLP 생성: {input_dim} → {hidden_dim} → {output_dim}")
+        print(f"MLP created: {input_dim} -> {hidden_dim} -> {output_dim}")
 
     def forward(self, X):
-        """순전파 (중간값 캐시)"""
-        # 첫 번째 층
+        """Forward pass (cache intermediate values)"""
+        # First layer
         self.z1 = X @ self.W1 + self.b1
         self.a1 = relu(self.z1)
 
-        # 두 번째 층
+        # Second layer
         self.z2 = self.a1 @ self.W2 + self.b2
         self.a2 = sigmoid(self.z2)
 
@@ -145,15 +145,15 @@ class MLPFromScratch:
 
     def backward(self, X, y_true):
         """
-        역전파: 체인 룰로 모든 기울기 계산
+        Backpropagation: Compute all gradients via chain rule
 
-        핵심 공식:
+        Key formulas:
         dL/dW2 = a1.T @ (dL/dz2)
         dL/dW1 = X.T @ (dL/dz1)
         """
-        m = X.shape[0]  # 배치 크기
+        m = X.shape[0]  # Batch size
 
-        # ===== 출력층 역전파 =====
+        # ===== Output layer backpropagation =====
         # dL/da2 = 2(a2 - y) for MSE
         dL_da2 = 2 * (self.a2 - y_true) / m
 
@@ -164,8 +164,8 @@ class MLPFromScratch:
         dW2 = self.a1.T @ dL_dz2
         db2 = np.sum(dL_dz2, axis=0)
 
-        # ===== 은닉층 역전파 =====
-        # dL/da1 = dL/dz2 @ W2.T (기울기 역전파)
+        # ===== Hidden layer backpropagation =====
+        # dL/da1 = dL/dz2 @ W2.T (gradient backpropagation)
         dL_da1 = dL_dz2 @ self.W2.T
 
         # dL/dz1 = dL/da1 * relu'(z1)
@@ -178,58 +178,58 @@ class MLPFromScratch:
         return {'W1': dW1, 'b1': db1, 'W2': dW2, 'b2': db2}
 
     def update(self, grads, lr):
-        """경사 하강법으로 가중치 업데이트"""
+        """Update weights with gradient descent"""
         self.W1 -= lr * grads['W1']
         self.b1 -= lr * grads['b1']
         self.W2 -= lr * grads['W2']
         self.b2 -= lr * grads['b2']
 
     def loss(self, y_pred, y_true):
-        """MSE 손실"""
+        """MSE loss"""
         return np.mean((y_pred - y_true) ** 2)
 
 
 # ============================================
-# 4. XOR 문제로 테스트
+# 4. Test with XOR Problem
 # ============================================
-print("\n[4] XOR 문제 학습")
+print("\n[4] XOR Problem Training")
 print("-" * 40)
 
-# 데이터
+# Data
 X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=np.float64)
 y = np.array([[0], [1], [1], [0]], dtype=np.float64)
 
-# 모델 생성
+# Create model
 np.random.seed(42)
 mlp = MLPFromScratch(input_dim=2, hidden_dim=8, output_dim=1)
 
-# 학습
+# Training
 learning_rate = 1.0
 epochs = 2000
 losses = []
 
 for epoch in range(epochs):
-    # 순전파
+    # Forward pass
     y_pred = mlp.forward(X)
     loss = mlp.loss(y_pred, y)
     losses.append(loss)
 
-    # 역전파
+    # Backpropagation
     grads = mlp.backward(X, y)
 
-    # 가중치 업데이트
+    # Weight update
     mlp.update(grads, learning_rate)
 
     if (epoch + 1) % 400 == 0:
         print(f"Epoch {epoch+1}: Loss = {loss:.6f}")
 
-# 결과 확인
-print("\n학습 결과:")
+# Check results
+print("\nTraining results:")
 y_final = mlp.forward(X)
 for i in range(4):
-    print(f"  {X[i]} → {y_final[i, 0]:.4f} (정답: {y[i, 0]})")
+    print(f"  {X[i]} -> {y_final[i, 0]:.4f} (target: {y[i, 0]})")
 
-# 손실 그래프
+# Loss graph
 plt.figure(figsize=(10, 5))
 plt.plot(losses)
 plt.xlabel('Epoch')
@@ -239,17 +239,17 @@ plt.yscale('log')
 plt.grid(True, alpha=0.3)
 plt.savefig('numpy_xor_loss.png', dpi=100)
 plt.close()
-print("\n손실 그래프 저장: numpy_xor_loss.png")
+print("\nLoss graph saved: numpy_xor_loss.png")
 
 
 # ============================================
-# 5. 기울기 검증 (Gradient Checking)
+# 5. Gradient Checking
 # ============================================
-print("\n[5] 기울기 검증")
+print("\n[5] Gradient Checking")
 print("-" * 40)
 
 def numerical_gradient(model, X, y, param_name, h=1e-5):
-    """수치 미분으로 기울기 계산"""
+    """Compute gradients using numerical differentiation"""
     param = getattr(model, param_name)
     grad = np.zeros_like(param)
 
@@ -266,7 +266,7 @@ def numerical_gradient(model, X, y, param_name, h=1e-5):
         param[idx] = original - h
         loss_minus = model.loss(model.forward(X), y)
 
-        # 수치 미분
+        # Numerical derivative
         grad[idx] = (loss_plus - loss_minus) / (2 * h)
 
         param[idx] = original
@@ -274,81 +274,81 @@ def numerical_gradient(model, X, y, param_name, h=1e-5):
 
     return grad
 
-# 작은 모델로 테스트
+# Test with small model
 np.random.seed(0)
 small_mlp = MLPFromScratch(2, 4, 1)
 
-# 순전파
+# Forward pass
 y_pred = small_mlp.forward(X)
 
-# 해석적 기울기 (역전파)
+# Analytical gradients (backpropagation)
 analytical_grads = small_mlp.backward(X, y)
 
-# 수치적 기울기
+# Numerical gradients
 numerical_W1 = numerical_gradient(small_mlp, X, y, 'W1')
 numerical_W2 = numerical_gradient(small_mlp, X, y, 'W2')
 
-# 비교
+# Comparison
 diff_W1 = np.linalg.norm(analytical_grads['W1'] - numerical_W1)
 diff_W2 = np.linalg.norm(analytical_grads['W2'] - numerical_W2)
 
-print(f"W1 기울기 차이: {diff_W1:.2e}")
-print(f"W2 기울기 차이: {diff_W2:.2e}")
+print(f"W1 gradient difference: {diff_W1:.2e}")
+print(f"W2 gradient difference: {diff_W2:.2e}")
 
 if diff_W1 < 1e-5 and diff_W2 < 1e-5:
-    print("✓ 기울기 검증 통과!")
+    print("Gradient checking passed!")
 else:
-    print("✗ 기울기 검증 실패")
+    print("Gradient checking failed")
 
 
 # ============================================
-# 6. 체인 룰 시각화
+# 6. Chain Rule Visualization
 # ============================================
-print("\n[6] 체인 룰 흐름")
+print("\n[6] Chain Rule Flow")
 print("-" * 40)
 
 chain_rule_diagram = """
-순전파 (Forward):
-    x ──▶ z1=xW1+b1 ──▶ a1=relu(z1) ──▶ z2=a1W2+b2 ──▶ a2=σ(z2) ──▶ L=MSE
+Forward Pass:
+    x --> z1=xW1+b1 --> a1=relu(z1) --> z2=a1W2+b2 --> a2=sig(z2) --> L=MSE
 
-역전파 (Backward):
-    dL/dW1 ◀── dL/dz1 ◀── dL/da1 ◀── dL/dz2 ◀── dL/da2 ◀── dL/dL=1
+Backward Pass:
+    dL/dW1 <-- dL/dz1 <-- dL/da1 <-- dL/dz2 <-- dL/da2 <-- dL/dL=1
 
-체인 룰 적용:
-    dL/dW2 = (dL/da2) × (da2/dz2) × (dz2/dW2)
-           = 2(a2-y) × σ'(z2) × a1.T
+Chain Rule Application:
+    dL/dW2 = (dL/da2) x (da2/dz2) x (dz2/dW2)
+           = 2(a2-y) x sig'(z2) x a1.T
 
-    dL/dW1 = (dL/da2) × (da2/dz2) × (dz2/da1) × (da1/dz1) × (dz1/dW1)
-           = 2(a2-y) × σ'(z2) × W2.T × relu'(z1) × x.T
+    dL/dW1 = (dL/da2) x (da2/dz2) x (dz2/da1) x (da1/dz1) x (dz1/dW1)
+           = 2(a2-y) x sig'(z2) x W2.T x relu'(z1) x x.T
 """
 print(chain_rule_diagram)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("역전파 핵심 정리")
+print("Backpropagation Key Summary")
 print("=" * 60)
 
 summary = """
-1. 순전파: 입력 → 출력 방향으로 값 계산
-2. 손실 계산: 예측과 정답의 차이
-3. 역전파: 출력 → 입력 방향으로 기울기 계산 (체인 룰)
-4. 업데이트: W = W - lr × (dL/dW)
+1. Forward pass: Compute values from input to output
+2. Loss computation: Difference between prediction and target
+3. Backward pass: Compute gradients from output to input (chain rule)
+4. Update: W = W - lr x (dL/dW)
 
-핵심 공식:
-- 출력층: dL/dz2 = dL/da2 × σ'(z2)
-- 은닉층: dL/dz1 = (dL/dz2 @ W2.T) × relu'(z1)
-- 가중치: dL/dW = 이전층출력.T @ 현재층기울기
+Key Formulas:
+- Output layer: dL/dz2 = dL/da2 x sig'(z2)
+- Hidden layer: dL/dz1 = (dL/dz2 @ W2.T) x relu'(z1)
+- Weights: dL/dW = prev_layer_output.T @ current_layer_gradient
 
-PyTorch에서는:
-    loss.backward()  # 이 한 줄이 위의 모든 과정을 자동 수행!
+In PyTorch:
+    loss.backward()  # This single line performs all the above automatically!
 
-NumPy 구현의 가치:
-1. 행렬 곱셈의 전치 방향 이해
-2. 활성화 함수 미분의 역할 이해
-3. 배치 처리에서 합산이 필요한 이유 이해
+Value of NumPy implementation:
+1. Understand the transpose direction of matrix multiplication
+2. Understand the role of activation function derivatives
+3. Understand why summation is needed in batch processing
 """
 print(summary)
 print("=" * 60)

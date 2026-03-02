@@ -1,22 +1,23 @@
 """
-Multi-Layer Perceptron - NumPy From-Scratch 구현
+Multi-Layer Perceptron - NumPy From-Scratch Implementation
 
-이 파일은 MLP를 순수 NumPy로 구현합니다.
-Backpropagation 알고리즘을 직접 구현하여
-딥러닝의 핵심 원리를 이해합니다.
+This file implements MLP using pure NumPy.
+Directly implements the Backpropagation algorithm
+to understand the core principles of deep learning.
 
-학습 목표:
-1. Forward pass: 다층 신경망의 순전파
-2. Backward pass: Chain rule을 이용한 역전파
+Learning Objectives:
+1. Forward pass: Multi-layer neural network forward propagation
+2. Backward pass: Backpropagation using chain rule
 3. Activation functions: ReLU, Sigmoid, Tanh
-4. Weight initialization: Xavier, He 초기화
+4. Weight initialization: Xavier, He initialization
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class ActivationFunctions:
-    """활성화 함수와 그 미분"""
+    """Activation functions and their derivatives"""
 
     @staticmethod
     def relu(z):
@@ -28,7 +29,7 @@ class ActivationFunctions:
 
     @staticmethod
     def sigmoid(z):
-        # 수치 안정성을 위해 클리핑
+        # Clipping for numerical stability
         z = np.clip(z, -500, 500)
         return 1 / (1 + np.exp(-z))
 
@@ -47,31 +48,31 @@ class ActivationFunctions:
 
     @staticmethod
     def softmax(z):
-        # 수치 안정성: 최대값을 빼줌
+        # Numerical stability: subtract max
         exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
         return exp_z / np.sum(exp_z, axis=1, keepdims=True)
 
 
 class Layer:
     """
-    단일 Fully Connected Layer
+    Single Fully Connected Layer
 
-    z = Wx + b (선형 변환)
-    a = σ(z)   (활성화)
+    z = Wx + b (linear transform)
+    a = sigma(z) (activation)
     """
 
     def __init__(self, input_dim: int, output_dim: int, activation: str = 'relu'):
         """
         Args:
-            input_dim: 입력 차원
-            output_dim: 출력 차원
+            input_dim: Input dimension
+            output_dim: Output dimension
             activation: 'relu', 'sigmoid', 'tanh', 'none'
         """
-        # He 초기화 (ReLU용)
+        # He initialization (for ReLU)
         if activation == 'relu':
             self.W = np.random.randn(input_dim, output_dim) * np.sqrt(2.0 / input_dim)
         else:
-            # Xavier 초기화
+            # Xavier initialization
             self.W = np.random.randn(input_dim, output_dim) * np.sqrt(1.0 / input_dim)
 
         self.b = np.zeros((1, output_dim))
@@ -87,7 +88,7 @@ class Layer:
         self.cache = {}
 
     def _get_activation_fn(self):
-        """활성화 함수 설정"""
+        """Set activation function"""
         activations = {
             'relu': (ActivationFunctions.relu, ActivationFunctions.relu_derivative),
             'sigmoid': (ActivationFunctions.sigmoid, ActivationFunctions.sigmoid_derivative),
@@ -101,19 +102,19 @@ class Layer:
         Forward pass
 
         Args:
-            x: 입력 (batch_size, input_dim)
+            x: Input (batch_size, input_dim)
 
         Returns:
-            a: 활성화 출력 (batch_size, output_dim)
+            a: Activation output (batch_size, output_dim)
         """
-        # 캐시 저장 (backward에서 사용)
+        # Save to cache (used in backward)
         self.cache['x'] = x
 
-        # 선형 변환: z = Wx + b
+        # Linear transform: z = Wx + b
         z = np.dot(x, self.W) + self.b
         self.cache['z'] = z
 
-        # 활성화: a = σ(z)
+        # Activation: a = sigma(z)
         a = self.act_fn(z)
         self.cache['a'] = a
 
@@ -124,25 +125,25 @@ class Layer:
         Backward pass
 
         Args:
-            da: 출력의 gradient (batch_size, output_dim)
+            da: Gradient of output (batch_size, output_dim)
 
         Returns:
-            dx: 입력의 gradient (batch_size, input_dim)
+            dx: Gradient of input (batch_size, input_dim)
         """
         x = self.cache['x']
         z = self.cache['z']
         batch_size = x.shape[0]
 
-        # ∂L/∂z = ∂L/∂a × ∂a/∂z = da × σ'(z)
+        # dL/dz = dL/da x da/dz = da x sigma'(z)
         dz = da * self.act_derivative(z)
 
-        # ∂L/∂W = x^T × ∂L/∂z
+        # dL/dW = x^T x dL/dz
         self.dW = np.dot(x.T, dz) / batch_size
 
-        # ∂L/∂b = sum(∂L/∂z)
+        # dL/db = sum(dL/dz)
         self.db = np.sum(dz, axis=0, keepdims=True) / batch_size
 
-        # ∂L/∂x = ∂L/∂z × W^T (다음 레이어로 전파)
+        # dL/dx = dL/dz x W^T (propagate to next layer)
         dx = np.dot(dz, self.W.T)
 
         return dx
@@ -150,9 +151,9 @@ class Layer:
 
 class MLPNumpy:
     """
-    Multi-Layer Perceptron (NumPy 구현)
+    Multi-Layer Perceptron (NumPy implementation)
 
-    사용 예:
+    Usage:
         model = MLPNumpy([784, 256, 128, 10], activations=['relu', 'relu', 'none'])
         model.fit(X_train, y_train)
         predictions = model.predict(X_test)
@@ -161,8 +162,8 @@ class MLPNumpy:
     def __init__(self, layer_dims: list, activations: list = None):
         """
         Args:
-            layer_dims: 각 레이어의 차원 [input, hidden1, hidden2, ..., output]
-            activations: 각 레이어의 활성화 함수 (마지막 레이어 제외)
+            layer_dims: Dimensions for each layer [input, hidden1, hidden2, ..., output]
+            activations: Activation function for each layer (excluding last layer)
         """
         self.layers = []
         n_layers = len(layer_dims) - 1
@@ -175,28 +176,28 @@ class MLPNumpy:
             self.layers.append(layer)
 
     def forward(self, x: np.ndarray) -> np.ndarray:
-        """전체 네트워크 forward pass"""
+        """Full network forward pass"""
         for layer in self.layers:
             x = layer.forward(x)
         return x
 
     def backward(self, loss_grad: np.ndarray) -> None:
-        """전체 네트워크 backward pass"""
+        """Full network backward pass"""
         grad = loss_grad
         for layer in reversed(self.layers):
             grad = layer.backward(grad)
 
     def compute_loss(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
         """
-        Cross-entropy loss (분류용)
+        Cross-entropy loss (for classification)
 
-        L = -1/n × Σ y_true × log(y_pred)
+        L = -1/n x sum( y_true x log(y_pred) )
         """
-        eps = 1e-15  # 수치 안정성
+        eps = 1e-15  # Numerical stability
         y_pred = np.clip(y_pred, eps, 1 - eps)
 
         if y_true.ndim == 1:
-            # Sparse labels → one-hot
+            # Sparse labels -> one-hot
             n_classes = y_pred.shape[1]
             y_true_onehot = np.zeros((len(y_true), n_classes))
             y_true_onehot[np.arange(len(y_true)), y_true] = 1
@@ -207,9 +208,9 @@ class MLPNumpy:
 
     def compute_loss_gradient(self, y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
         """
-        Cross-entropy gradient (softmax 출력 가정)
+        Cross-entropy gradient (assuming softmax output)
 
-        ∂L/∂z = y_pred - y_true (softmax + CE의 경우 간단해짐)
+        dL/dz = y_pred - y_true (simplified for softmax + CE)
         """
         if y_true.ndim == 1:
             n_classes = y_pred.shape[1]
@@ -220,7 +221,7 @@ class MLPNumpy:
         return y_pred - y_true
 
     def update_weights(self, lr: float) -> None:
-        """SGD 가중치 업데이트"""
+        """SGD weight update"""
         for layer in self.layers:
             layer.W -= lr * layer.dW
             layer.b -= lr * layer.db
@@ -235,31 +236,31 @@ class MLPNumpy:
         verbose: bool = True
     ) -> list:
         """
-        모델 학습
+        Train the model
 
         Args:
-            X: 학습 데이터 (n_samples, n_features)
-            y: 레이블 (n_samples,) 또는 (n_samples, n_classes)
-            epochs: 에폭 수
+            X: Training data (n_samples, n_features)
+            y: Labels (n_samples,) or (n_samples, n_classes)
+            epochs: Number of epochs
             lr: learning rate
-            batch_size: 배치 크기
-            verbose: 진행 상황 출력
+            batch_size: Batch size
+            verbose: Whether to print progress
 
         Returns:
-            losses: 에폭별 손실 리스트
+            losses: List of losses per epoch
         """
         n_samples = X.shape[0]
         losses = []
 
         for epoch in range(epochs):
-            # 셔플
+            # Shuffle
             indices = np.random.permutation(n_samples)
             X_shuffled = X[indices]
             y_shuffled = y[indices] if y.ndim == 1 else y[indices]
 
             epoch_loss = 0
 
-            # 미니배치 학습
+            # Mini-batch training
             for i in range(0, n_samples, batch_size):
                 X_batch = X_shuffled[i:i + batch_size]
                 y_batch = y_shuffled[i:i + batch_size]
@@ -267,7 +268,7 @@ class MLPNumpy:
                 # Forward
                 y_pred = self.forward(X_batch)
 
-                # Softmax (마지막 레이어가 none일 경우)
+                # Softmax (if last layer is none)
                 y_pred = ActivationFunctions.softmax(y_pred)
 
                 # Loss
@@ -291,13 +292,13 @@ class MLPNumpy:
         return losses
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """예측"""
+        """Prediction"""
         logits = self.forward(X)
         probs = ActivationFunctions.softmax(logits)
         return np.argmax(probs, axis=1)
 
     def evaluate(self, X: np.ndarray, y: np.ndarray) -> float:
-        """정확도 평가"""
+        """Accuracy evaluation"""
         predictions = self.predict(X)
         if y.ndim > 1:
             y = np.argmax(y, axis=1)
@@ -305,17 +306,17 @@ class MLPNumpy:
 
 
 def load_mnist_sample(n_samples=1000):
-    """MNIST 샘플 데이터 생성 (테스트용)"""
+    """Generate MNIST sample data (for testing)"""
     np.random.seed(42)
 
-    # 간단한 가상 데이터 (실제로는 MNIST 로드)
+    # Simple synthetic data (in practice, load actual MNIST)
     n_classes = 10
     n_features = 784  # 28x28
 
     X = np.random.randn(n_samples, n_features) * 0.5
     y = np.random.randint(0, n_classes, n_samples)
 
-    # 클래스별로 약간의 패턴 추가
+    # Add some per-class patterns
     for i in range(n_classes):
         mask = y == i
         X[mask, i * 78:(i + 1) * 78] += 1.0
@@ -324,27 +325,28 @@ def load_mnist_sample(n_samples=1000):
 
 
 def main():
-    """메인 실행 함수"""
+    """Main execution function"""
     print("=" * 60)
-    print("Multi-Layer Perceptron - NumPy From-Scratch 구현")
+    print("Multi-Layer Perceptron - NumPy From-Scratch Implementation")
     print("=" * 60)
 
-    # 1. 데이터 생성
-    print("\n1. 샘플 데이터 생성")
+    # 1. Generate data
+    print("\n1. Generate sample data")
     X_train, y_train = load_mnist_sample(n_samples=1000)
     X_test, y_test = load_mnist_sample(n_samples=200)
     print(f"   Train: {X_train.shape}, Test: {X_test.shape}")
 
-    # 2. 모델 생성
-    print("\n2. MLP 모델 초기화")
+    # 2. Create model
+    print("\n2. MLP model initialization")
     model = MLPNumpy(
         layer_dims=[784, 128, 64, 10],
         activations=['relu', 'relu', 'none']
     )
     print(f"   Layers: {[l.W.shape for l in model.layers]}")
 
-    # 3. 학습
-    print("\n3. 학습 시작")
+    # 3. Train
+    # Expected: train accuracy ~0.90+, test accuracy ~0.85+ after 50 epochs
+    print("\n3. Start training")
     losses = model.fit(
         X_train, y_train,
         epochs=50,
@@ -353,40 +355,34 @@ def main():
         verbose=True
     )
 
-    # 4. 평가
-    print("\n4. 평가 결과")
+    # 4. Evaluate
+    print("\n4. Evaluation results")
     train_acc = model.evaluate(X_train, y_train)
     test_acc = model.evaluate(X_test, y_test)
     print(f"   Train Accuracy: {train_acc:.4f}")
     print(f"   Test Accuracy: {test_acc:.4f}")
 
-    # 5. 시각화
-    try:
-        import matplotlib.pyplot as plt
+    # 5. Visualization
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    # Loss curve
+    axes[0].plot(losses)
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Loss')
+    axes[0].set_title('Training Loss')
+    axes[0].grid(True)
 
-        # Loss 곡선
-        axes[0].plot(losses)
-        axes[0].set_xlabel('Epoch')
-        axes[0].set_ylabel('Loss')
-        axes[0].set_title('Training Loss')
-        axes[0].grid(True)
+    # Weight distribution (first layer)
+    axes[1].hist(model.layers[0].W.flatten(), bins=50, alpha=0.7)
+    axes[1].set_xlabel('Weight Value')
+    axes[1].set_ylabel('Frequency')
+    axes[1].set_title('First Layer Weight Distribution')
+    axes[1].grid(True)
 
-        # 가중치 분포 (첫 번째 레이어)
-        axes[1].hist(model.layers[0].W.flatten(), bins=50, alpha=0.7)
-        axes[1].set_xlabel('Weight Value')
-        axes[1].set_ylabel('Frequency')
-        axes[1].set_title('First Layer Weight Distribution')
-        axes[1].grid(True)
-
-        plt.tight_layout()
-        plt.savefig('mlp_result.png', dpi=150)
-        plt.show()
-        print("\n결과 이미지 저장: mlp_result.png")
-
-    except ImportError:
-        print("\n(matplotlib 없음, 시각화 생략)")
+    plt.tight_layout()
+    plt.savefig('mlp_result.png', dpi=150)
+    plt.close()
+    print("\nResult image saved: mlp_result.png")
 
 
 if __name__ == "__main__":

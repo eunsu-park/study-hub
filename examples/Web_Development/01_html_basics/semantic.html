@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>시맨틱 HTML 예제</title>
+    <title>Semantic HTML Example</title>
     <style>
-        /* 시맨틱 태그 시각화를 위한 간단한 스타일 */
+        /* Simple styles for visualizing semantic tags */
         header, nav, main, article, section, aside, footer {
             border: 2px solid #333;
             margin: 10px;
@@ -30,162 +30,162 @@
 </head>
 <body>
     <!-- ============================================
-         시맨틱 HTML 예제
-         의미를 가진 HTML5 태그들을 학습합니다.
+         Semantic HTML Example
+         Learn HTML5 tags that carry meaning.
     ============================================= -->
 
     <!-- Why: Semantic elements like <header>, <nav>, <main> replace generic <div>s so screen readers
          can build a document outline and let users jump between landmark regions -->
-    <!-- header: 페이지 또는 섹션의 헤더 -->
+    <!-- header: Page or section header -->
     <header>
-        <h1>시맨틱 HTML5</h1>
-        <p>의미 있는 태그로 웹 페이지 구조를 만듭니다.</p>
+        <h1>Semantic HTML5</h1>
+        <p>Build web page structure with meaningful tags.</p>
     </header>
 
-    <!-- nav: 네비게이션 링크 -->
+    <!-- nav: Navigation links -->
     <nav>
-        <h2>네비게이션 (nav)</h2>
+        <h2>Navigation (nav)</h2>
         <ul>
-            <li><a href="#article1">기사 1</a></li>
-            <li><a href="#article2">기사 2</a></li>
-            <li><a href="#about">소개</a></li>
-            <li><a href="#contact">연락처</a></li>
+            <li><a href="#article1">Article 1</a></li>
+            <li><a href="#article2">Article 2</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
         </ul>
     </nav>
 
     <div class="container">
-        <!-- main: 페이지의 주요 콘텐츠 -->
+        <!-- main: Primary content of the page -->
         <main>
-            <h2>메인 콘텐츠 (main)</h2>
-            <p>main 태그는 페이지당 하나만 사용하며, 고유한 콘텐츠를 담습니다.</p>
+            <h2>Main Content (main)</h2>
+            <p>The main tag is used only once per page and contains unique content.</p>
 
             <!-- Why: <article> signals content that is self-contained and redistributable (e.g., via RSS),
                  whereas <section> groups related content within a larger context -->
-            <!-- article: 독립적인 콘텐츠 -->
+            <!-- article: Self-contained content -->
             <article id="article1">
-                <h3>기사 (article)</h3>
+                <h3>Article (article)</h3>
                 <header>
-                    <h4>시맨틱 태그의 중요성</h4>
-                    <p><time datetime="2024-01-15">2024년 1월 15일</time> 작성</p>
+                    <h4>The Importance of Semantic Tags</h4>
+                    <p>Written on <time datetime="2024-01-15">January 15, 2024</time></p>
                 </header>
                 <p>
-                    시맨틱 태그는 콘텐츠의 의미를 명확하게 전달합니다.
-                    검색 엔진과 스크린 리더가 페이지 구조를 더 잘 이해할 수 있습니다.
+                    Semantic tags clearly convey the meaning of content.
+                    Search engines and screen readers can better understand the page structure.
                 </p>
                 <footer>
-                    <p>작성자: 웹 개발자</p>
+                    <p>Author: Web Developer</p>
                 </footer>
             </article>
 
-            <!-- section: 문서의 섹션 -->
+            <!-- section: Section of a document -->
             <section id="about">
-                <h3>섹션 (section)</h3>
-                <p>section은 관련된 콘텐츠를 그룹화합니다.</p>
+                <h3>Section (section)</h3>
+                <p>section groups related content together.</p>
 
                 <section>
-                    <h4>하위 섹션 1</h4>
-                    <p>섹션 안에 섹션을 중첩할 수 있습니다.</p>
+                    <h4>Sub-section 1</h4>
+                    <p>Sections can be nested within sections.</p>
                 </section>
 
                 <section>
-                    <h4>하위 섹션 2</h4>
-                    <p>각 섹션은 일반적으로 제목을 가집니다.</p>
+                    <h4>Sub-section 2</h4>
+                    <p>Each section typically has a heading.</p>
                 </section>
             </section>
 
-            <!-- figure와 figcaption -->
+            <!-- figure and figcaption -->
             <article id="article2">
-                <h3>figure와 figcaption</h3>
+                <h3>figure and figcaption</h3>
                 <figure>
-                    <img src="https://via.placeholder.com/300x200" alt="예제 이미지">
+                    <img src="https://via.placeholder.com/300x200" alt="Example image">
                     <figcaption>
-                        그림 1: figure 태그로 이미지와 캡션을 그룹화합니다.
+                        Figure 1: The figure tag groups an image with its caption.
                     </figcaption>
                 </figure>
             </article>
         </main>
 
-        <!-- aside: 부가적인 콘텐츠 -->
+        <!-- aside: Supplementary content -->
         <aside>
-            <h2>사이드바 (aside)</h2>
-            <p>메인 콘텐츠와 관련있지만 분리된 콘텐츠입니다.</p>
+            <h2>Sidebar (aside)</h2>
+            <p>Content related to but separate from the main content.</p>
 
             <section>
-                <h3>관련 링크</h3>
+                <h3>Related Links</h3>
                 <ul>
-                    <li><a href="#">HTML 가이드</a></li>
-                    <li><a href="#">CSS 가이드</a></li>
-                    <li><a href="#">JS 가이드</a></li>
+                    <li><a href="#">HTML Guide</a></li>
+                    <li><a href="#">CSS Guide</a></li>
+                    <li><a href="#">JS Guide</a></li>
                 </ul>
             </section>
 
             <section>
-                <h3>광고</h3>
-                <p>광고나 프로모션 콘텐츠</p>
+                <h3>Advertisements</h3>
+                <p>Ads or promotional content</p>
             </section>
         </aside>
     </div>
 
     <!-- Why: <details>/<summary> provides native disclosure widgets without JavaScript,
          ensuring the expand/collapse behavior works even when JS is disabled -->
-    <!-- details와 summary -->
+    <!-- details and summary -->
     <section>
-        <h2>details와 summary</h2>
+        <h2>details and summary</h2>
         <details>
-            <summary>클릭하여 더 보기</summary>
-            <p>숨겨진 콘텐츠가 여기에 표시됩니다.</p>
-            <p>details와 summary로 접이식 콘텐츠를 만들 수 있습니다.</p>
+            <summary>Click to see more</summary>
+            <p>Hidden content is displayed here.</p>
+            <p>You can create collapsible content with details and summary.</p>
         </details>
 
         <details open>
-            <summary>기본으로 열린 상태</summary>
-            <p>open 속성을 사용하면 기본으로 열려있습니다.</p>
+            <summary>Open by default</summary>
+            <p>Using the open attribute makes it expanded by default.</p>
         </details>
     </section>
 
     <!-- address -->
     <section id="contact">
-        <h2>address 태그</h2>
+        <h2>address tag</h2>
         <address>
-            <p>연락처 정보:</p>
+            <p>Contact Information:</p>
             <p>
-                이름: 홍길동<br>
-                이메일: <a href="mailto:hong@example.com">hong@example.com</a><br>
-                전화: <a href="tel:+821012345678">010-1234-5678</a>
+                Name: Hong Gildong<br>
+                Email: <a href="mailto:hong@example.com">hong@example.com</a><br>
+                Phone: <a href="tel:+821012345678">010-1234-5678</a>
             </p>
         </address>
     </section>
 
-    <!-- time 태그 -->
+    <!-- time tag -->
     <section>
-        <h2>time 태그</h2>
+        <h2>time tag</h2>
         <p>
-            회의 일정: <time datetime="2024-02-20T14:00">2024년 2월 20일 오후 2시</time>
+            Meeting schedule: <time datetime="2024-02-20T14:00">February 20, 2024 at 2:00 PM</time>
         </p>
         <p>
-            마감일: <time datetime="2024-03-01">3월 1일</time>
+            Deadline: <time datetime="2024-03-01">March 1</time>
         </p>
         <p>
-            기간: <time datetime="P3D">3일</time>
+            Duration: <time datetime="P3D">3 days</time>
         </p>
     </section>
 
-    <!-- footer: 페이지 또는 섹션의 푸터 -->
+    <!-- footer: Page or section footer -->
     <footer>
-        <h2>푸터 (footer)</h2>
-        <p>&copy; 2024 시맨틱 HTML 예제</p>
+        <h2>Footer (footer)</h2>
+        <p>&copy; 2024 Semantic HTML Example</p>
         <nav>
-            <a href="#">개인정보처리방침</a> |
-            <a href="#">이용약관</a> |
-            <a href="#">사이트맵</a>
+            <a href="#">Privacy Policy</a> |
+            <a href="#">Terms of Service</a> |
+            <a href="#">Sitemap</a>
         </nav>
     </footer>
 
-    <!-- 시맨틱 vs 비시맨틱 비교 -->
+    <!-- Semantic vs Non-semantic comparison -->
     <section style="margin-top: 20px; padding: 20px; background: #fff;">
-        <h2>시맨틱 vs 비시맨틱 비교</h2>
+        <h2>Semantic vs Non-semantic Comparison</h2>
 
-        <h3>비시맨틱 (나쁜 예)</h3>
+        <h3>Non-semantic (bad example)</h3>
         <pre><code>&lt;div id="header"&gt;...&lt;/div&gt;
 &lt;div id="nav"&gt;...&lt;/div&gt;
 &lt;div id="main"&gt;
@@ -193,7 +193,7 @@
 &lt;/div&gt;
 &lt;div id="footer"&gt;...&lt;/div&gt;</code></pre>
 
-        <h3>시맨틱 (좋은 예)</h3>
+        <h3>Semantic (good example)</h3>
         <pre><code>&lt;header&gt;...&lt;/header&gt;
 &lt;nav&gt;...&lt;/nav&gt;
 &lt;main&gt;

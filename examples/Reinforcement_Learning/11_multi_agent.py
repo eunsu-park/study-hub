@@ -1,6 +1,6 @@
 """
-Multi-Agent RL: IQL과 간단한 협력/경쟁 환경
-다중 에이전트 강화학습의 기본 개념 구현
+Multi-Agent RL: IQL and Simple Cooperative/Competitive Environments
+Basic concepts of multi-agent reinforcement learning implementation
 """
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 class IQLAgent:
-    """Independent Q-Learning 에이전트"""
+    """Independent Q-Learning Agent"""
 
     def __init__(self, obs_dim, action_dim, lr=1e-3, gamma=0.99, epsilon=0.1):
         self.q_network = nn.Sequential(
@@ -26,7 +26,7 @@ class IQLAgent:
         self.action_dim = action_dim
 
     def choose_action(self, obs):
-        """Epsilon-greedy 행동 선택"""
+        """Epsilon-greedy action selection"""
         if np.random.random() < self.epsilon:
             return np.random.randint(self.action_dim)
         with torch.no_grad():
@@ -34,7 +34,7 @@ class IQLAgent:
             return q_values.argmax().item()
 
     def update(self, obs, action, reward, next_obs, done):
-        """Q-learning 업데이트"""
+        """Q-learning update"""
         obs_tensor = torch.FloatTensor(obs)
         next_obs_tensor = torch.FloatTensor(next_obs)
 
@@ -57,41 +57,41 @@ class IQLAgent:
 
 class SimpleGridWorld:
     """
-    간단한 2-에이전트 그리드 환경
-    - 그리드: 5x5
-    - 목표: 두 에이전트가 각자의 목표 지점에 도달
-    - 협력 요소: 같은 셀에 있으면 보너스 보상
+    Simple 2-agent grid environment
+    - Grid: 5x5
+    - Goal: Both agents reach their respective goal positions
+    - Cooperative element: Bonus reward if agents share the same cell
     """
 
     def __init__(self, grid_size=5):
         self.grid_size = grid_size
         self.n_agents = 2
 
-        # 행동: 상, 하, 좌, 우, 대기
+        # Actions: up, down, left, right, stay
         self.action_dim = 5
         self.obs_dim = 4  # (x, y, goal_x, goal_y)
 
         self.reset()
 
     def reset(self):
-        """환경 초기화"""
-        # 에이전트 초기 위치 (무작위)
+        """Reset the environment"""
+        # Random initial agent positions
         self.agent_pos = [
             [np.random.randint(self.grid_size), np.random.randint(self.grid_size)]
             for _ in range(self.n_agents)
         ]
 
-        # 목표 위치 (고정)
+        # Fixed goal positions
         self.goals = [
-            [0, self.grid_size - 1],  # 에이전트 0의 목표
-            [self.grid_size - 1, 0]   # 에이전트 1의 목표
+            [0, self.grid_size - 1],  # Agent 0's goal
+            [self.grid_size - 1, 0]   # Agent 1's goal
         ]
 
         self.steps = 0
         return self.get_observations()
 
     def get_observations(self):
-        """각 에이전트의 관측 반환"""
+        """Return each agent's observation"""
         observations = []
         for i in range(self.n_agents):
             obs = [
@@ -104,40 +104,40 @@ class SimpleGridWorld:
         return observations
 
     def step(self, actions):
-        """환경 스텝"""
+        """Environment step"""
         self.steps += 1
         rewards = [0.0, 0.0]
 
-        # 각 에이전트 이동
+        # Move each agent
         for i, action in enumerate(actions):
             x, y = self.agent_pos[i]
 
-            # 행동 적용: 상(0), 하(1), 좌(2), 우(3), 대기(4)
-            if action == 0:  # 상
+            # Apply action: up(0), down(1), left(2), right(3), stay(4)
+            if action == 0:  # up
                 x = max(0, x - 1)
-            elif action == 1:  # 하
+            elif action == 1:  # down
                 x = min(self.grid_size - 1, x + 1)
-            elif action == 2:  # 좌
+            elif action == 2:  # left
                 y = max(0, y - 1)
-            elif action == 3:  # 우
+            elif action == 3:  # right
                 y = min(self.grid_size - 1, y + 1)
-            # action == 4: 대기
+            # action == 4: stay
 
             self.agent_pos[i] = [x, y]
 
-            # 목표 도달 보상
+            # Goal reached reward
             if self.agent_pos[i] == self.goals[i]:
                 rewards[i] += 10.0
 
-            # 매 스텝마다 작은 페널티
+            # Small penalty per step
             rewards[i] -= 0.01
 
-        # 협력 보너스: 같은 셀에 있으면
+        # Cooperation bonus: agents in the same cell
         if self.agent_pos[0] == self.agent_pos[1]:
             rewards[0] += 1.0
             rewards[1] += 1.0
 
-        # 종료 조건: 둘 다 목표 도달 또는 최대 스텝 도달
+        # Termination condition: both reached their goals or max steps
         done = (
             (self.agent_pos[0] == self.goals[0] and self.agent_pos[1] == self.goals[1])
             or self.steps >= 50
@@ -149,8 +149,8 @@ class SimpleGridWorld:
 
 class CompetitiveGridWorld:
     """
-    경쟁 환경: 두 에이전트가 하나의 보상을 두고 경쟁
-    먼저 도달한 에이전트가 보상을 가져감
+    Competitive environment: Two agents compete for a single reward
+    The first agent to reach the goal takes the reward
     """
 
     def __init__(self, grid_size=5):
@@ -162,14 +162,14 @@ class CompetitiveGridWorld:
         self.reset()
 
     def reset(self):
-        """환경 초기화"""
-        # 에이전트 초기 위치
+        """Reset the environment"""
+        # Agent initial positions
         self.agent_pos = [
             [0, 0],
             [self.grid_size - 1, self.grid_size - 1]
         ]
 
-        # 공통 목표 위치 (중앙)
+        # Shared goal position (center)
         self.goal = [self.grid_size // 2, self.grid_size // 2]
         self.goal_taken = False
         self.steps = 0
@@ -177,7 +177,7 @@ class CompetitiveGridWorld:
         return self.get_observations()
 
     def get_observations(self):
-        """각 에이전트의 관측 반환"""
+        """Return each agent's observation"""
         observations = []
         for i in range(self.n_agents):
             obs = [
@@ -190,34 +190,34 @@ class CompetitiveGridWorld:
         return observations
 
     def step(self, actions):
-        """환경 스텝"""
+        """Environment step"""
         self.steps += 1
         rewards = [0.0, 0.0]
 
-        # 각 에이전트 이동
+        # Move each agent
         for i, action in enumerate(actions):
             x, y = self.agent_pos[i]
 
-            if action == 0:  # 상
+            if action == 0:  # up
                 x = max(0, x - 1)
-            elif action == 1:  # 하
+            elif action == 1:  # down
                 x = min(self.grid_size - 1, x + 1)
-            elif action == 2:  # 좌
+            elif action == 2:  # left
                 y = max(0, y - 1)
-            elif action == 3:  # 우
+            elif action == 3:  # right
                 y = min(self.grid_size - 1, y + 1)
 
             self.agent_pos[i] = [x, y]
 
-            # 목표 도달 체크 (먼저 도달한 에이전트만 보상)
+            # Goal reached check (only the first agent gets the reward)
             if not self.goal_taken and self.agent_pos[i] == self.goal:
                 rewards[i] += 10.0
                 self.goal_taken = True
 
-            # 매 스텝마다 작은 페널티
+            # Small penalty per step
             rewards[i] -= 0.01
 
-        # 종료 조건
+        # Termination condition
         done = self.goal_taken or self.steps >= 50
 
         observations = self.get_observations()
@@ -225,7 +225,7 @@ class CompetitiveGridWorld:
 
 
 class IQLSystem:
-    """다중 에이전트 IQL 시스템"""
+    """Multi-agent IQL system"""
 
     def __init__(self, n_agents, obs_dim, action_dim):
         self.agents = [
@@ -235,14 +235,14 @@ class IQLSystem:
         self.n_agents = n_agents
 
     def choose_actions(self, observations):
-        """모든 에이전트의 행동 선택"""
+        """Select actions for all agents"""
         return [
             agent.choose_action(obs)
             for agent, obs in zip(self.agents, observations)
         ]
 
     def update(self, observations, actions, rewards, next_observations, done):
-        """모든 에이전트 업데이트"""
+        """Update all agents"""
         losses = []
         for i, agent in enumerate(self.agents):
             loss = agent.update(
@@ -254,8 +254,8 @@ class IQLSystem:
 
 
 def train_cooperative():
-    """협력 환경에서 IQL 학습"""
-    print("=== 협력 환경 학습 ===\n")
+    """IQL training in cooperative environment"""
+    print("=== Cooperative Environment Training ===\n")
 
     env = SimpleGridWorld(grid_size=5)
     system = IQLSystem(
@@ -284,7 +284,7 @@ def train_cooperative():
 
         episode_rewards.append(sum(total_rewards) / 2)
 
-        # Epsilon 감소
+        # Decay epsilon
         for agent in system.agents:
             agent.epsilon = max(0.01, agent.epsilon * 0.995)
 
@@ -296,8 +296,8 @@ def train_cooperative():
 
 
 def train_competitive():
-    """경쟁 환경에서 IQL 학습"""
-    print("\n=== 경쟁 환경 학습 ===\n")
+    """IQL training in competitive environment"""
+    print("\n=== Competitive Environment Training ===\n")
 
     env = CompetitiveGridWorld(grid_size=5)
     system = IQLSystem(
@@ -325,11 +325,11 @@ def train_competitive():
             episode_rewards[0] += rewards[0]
             episode_rewards[1] += rewards[1]
 
-        # 승자 기록
+        # Record winner
         agent0_wins.append(1 if episode_rewards[0] > episode_rewards[1] else 0)
         agent1_wins.append(1 if episode_rewards[1] > episode_rewards[0] else 0)
 
-        # Epsilon 감소
+        # Decay epsilon
         for agent in system.agents:
             agent.epsilon = max(0.01, agent.epsilon * 0.995)
 
@@ -342,20 +342,20 @@ def train_competitive():
 
 
 def visualize_results(coop_rewards, comp_wins):
-    """학습 결과 시각화"""
+    """Visualize training results"""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    # 협력 환경 보상
+    # Cooperative environment rewards
     axes[0].plot(coop_rewards, alpha=0.3, color='blue')
     window = 50
     smoothed = np.convolve(coop_rewards, np.ones(window)/window, mode='valid')
     axes[0].plot(smoothed, color='blue', linewidth=2)
-    axes[0].set_title('협력 환경: 평균 보상')
+    axes[0].set_title('Cooperative Environment: Average Reward')
     axes[0].set_xlabel('Episode')
     axes[0].set_ylabel('Average Reward')
     axes[0].grid(True, alpha=0.3)
 
-    # 경쟁 환경 승률
+    # Competitive environment win rates
     agent0_wins, agent1_wins = comp_wins
     window = 50
     win_rate_0 = np.convolve(agent0_wins, np.ones(window)/window, mode='valid') * 100
@@ -363,8 +363,8 @@ def visualize_results(coop_rewards, comp_wins):
 
     axes[1].plot(win_rate_0, label='Agent 0', linewidth=2)
     axes[1].plot(win_rate_1, label='Agent 1', linewidth=2)
-    axes[1].axhline(y=50, color='r', linestyle='--', alpha=0.3, label='균형점')
-    axes[1].set_title('경쟁 환경: 승률')
+    axes[1].axhline(y=50, color='r', linestyle='--', alpha=0.3, label='Equilibrium')
+    axes[1].set_title('Competitive Environment: Win Rate')
     axes[1].set_xlabel('Episode')
     axes[1].set_ylabel('Win Rate (%)')
     axes[1].legend()
@@ -372,45 +372,45 @@ def visualize_results(coop_rewards, comp_wins):
 
     plt.tight_layout()
     plt.savefig('multi_agent_results.png', dpi=100, bbox_inches='tight')
-    print("\n그래프 저장: multi_agent_results.png")
+    print("\nGraph saved: multi_agent_results.png")
 
 
 def demonstrate_ctde_concept():
     """
-    CTDE (Centralized Training, Decentralized Execution) 개념 설명
-    훈련 시에는 글로벌 정보를 사용하지만, 실행 시에는 로컬 관측만 사용
+    CTDE (Centralized Training, Decentralized Execution) concept explanation
+    Uses global information during training but only local observations during execution
     """
-    print("\n=== CTDE 패러다임 개념 ===\n")
-    print("훈련 단계:")
-    print("  - Critic: 모든 에이전트의 관측 + 행동에 접근 가능")
-    print("  - 글로벌 상태로 가치 함수 학습")
-    print("\n실행 단계:")
-    print("  - Actor: 로컬 관측만 사용")
-    print("  - 분산 실행으로 통신 불필요")
-    print("\n장점:")
-    print("  - 학습 시 협력 패턴 발견 용이")
-    print("  - 실행 시 확장성 좋음")
-    print("  - 부분 관측 환경에서도 작동")
+    print("\n=== CTDE Paradigm Concept ===\n")
+    print("Training phase:")
+    print("  - Critic: Has access to all agents' observations + actions")
+    print("  - Learns value function with global state")
+    print("\nExecution phase:")
+    print("  - Actor: Uses only local observations")
+    print("  - Decentralized execution, no communication needed")
+    print("\nAdvantages:")
+    print("  - Easier to discover cooperative patterns during training")
+    print("  - Good scalability during execution")
+    print("  - Works in partially observable environments")
 
 
 if __name__ == "__main__":
-    print("다중 에이전트 강화학습 예제\n")
+    print("Multi-Agent Reinforcement Learning Examples\n")
 
-    # 협력 환경 학습
+    # Cooperative environment training
     coop_rewards = train_cooperative()
 
-    # 경쟁 환경 학습
+    # Competitive environment training
     agent0_wins, agent1_wins = train_competitive()
 
-    # CTDE 개념 설명
+    # CTDE concept explanation
     demonstrate_ctde_concept()
 
-    # 결과 시각화
+    # Visualize results
     visualize_results(coop_rewards, (agent0_wins, agent1_wins))
 
-    print("\n학습 완료!")
-    print("\n주요 개념:")
-    print("1. IQL: 각 에이전트가 독립적으로 Q-learning")
-    print("2. 비정상성: 다른 에이전트의 정책 변화로 환경이 동적")
-    print("3. 협력 vs 경쟁: 보상 구조에 따른 학습 양상 차이")
-    print("4. CTDE: 중앙집중 학습, 분산 실행 패러다임")
+    print("\nTraining complete!")
+    print("\nKey concepts:")
+    print("1. IQL: Each agent independently performs Q-learning")
+    print("2. Non-stationarity: Environment is dynamic due to other agents' changing policies")
+    print("3. Cooperation vs Competition: Different learning dynamics depending on reward structure")
+    print("4. CTDE: Centralized Training, Decentralized Execution paradigm")

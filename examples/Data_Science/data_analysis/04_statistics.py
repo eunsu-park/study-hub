@@ -236,70 +236,70 @@ def anova_test():
 
 
 # =============================================================================
-# 6. 정규성 검정
+# 6. Normality Test
 # =============================================================================
 def normality_test():
-    """정규성 검정"""
-    print("\n[6] 정규성 검정")
+    """Normality test"""
+    print("\n[6] Normality Test")
     print("=" * 50)
 
     np.random.seed(42)
 
-    # 정규 분포 데이터
+    # Normally distributed data
     normal_data = np.random.normal(0, 1, 100)
 
-    # 비정규 분포 데이터 (지수 분포)
+    # Non-normally distributed data (exponential distribution)
     skewed_data = np.random.exponential(2, 100)
 
-    print("[정규 분포 데이터]")
-    print(f"왜도: {stats.skew(normal_data):.4f}")
-    print(f"첨도: {stats.kurtosis(normal_data):.4f}")
+    print("[Normally distributed data]")
+    print(f"Skewness: {stats.skew(normal_data):.4f}")
+    print(f"Kurtosis: {stats.kurtosis(normal_data):.4f}")
 
-    # Shapiro-Wilk 검정
+    # Shapiro-Wilk test
     stat, p = stats.shapiro(normal_data)
     print(f"Shapiro-Wilk: W={stat:.4f}, p={p:.4f}")
 
-    # Kolmogorov-Smirnov 검정
+    # Kolmogorov-Smirnov test
     stat, p = stats.kstest(normal_data, 'norm')
-    print(f"K-S 검정: D={stat:.4f}, p={p:.4f}")
+    print(f"K-S test: D={stat:.4f}, p={p:.4f}")
 
-    print(f"\n결론: {'정규 분포' if p > 0.05 else '정규 분포 아님'}")
+    print(f"\nConclusion: {'Normal distribution' if p > 0.05 else 'Not a normal distribution'}")
 
-    print("\n[비정규 분포 데이터 (지수 분포)]")
-    print(f"왜도: {stats.skew(skewed_data):.4f}")
-    print(f"첨도: {stats.kurtosis(skewed_data):.4f}")
+    print("\n[Non-normally distributed data (exponential distribution)]")
+    print(f"Skewness: {stats.skew(skewed_data):.4f}")
+    print(f"Kurtosis: {stats.kurtosis(skewed_data):.4f}")
 
     stat, p = stats.shapiro(skewed_data)
     print(f"Shapiro-Wilk: W={stat:.4f}, p={p:.4f}")
-    print(f"결론: {'정규 분포' if p > 0.05 else '정규 분포 아님'}")
+    print(f"Conclusion: {'Normal distribution' if p > 0.05 else 'Not a normal distribution'}")
 
 
 # =============================================================================
-# 7. 신뢰 구간
+# 7. Confidence Intervals
 # =============================================================================
 def confidence_interval():
-    """신뢰 구간"""
-    print("\n[7] 신뢰 구간")
+    """Confidence intervals"""
+    print("\n[7] Confidence Intervals")
     print("=" * 50)
 
     np.random.seed(42)
     sample = np.random.normal(100, 15, 50)
 
     mean = np.mean(sample)
-    sem = stats.sem(sample)  # 표준 오차
+    sem = stats.sem(sample)  # Standard error of the mean
 
-    # 95% 신뢰 구간
+    # 95% confidence interval
     ci_95 = stats.t.interval(0.95, len(sample)-1, loc=mean, scale=sem)
     ci_99 = stats.t.interval(0.99, len(sample)-1, loc=mean, scale=sem)
 
-    print(f"표본 크기: {len(sample)}")
-    print(f"표본 평균: {mean:.2f}")
-    print(f"표준 오차: {sem:.2f}")
-    print(f"\n95% 신뢰 구간: ({ci_95[0]:.2f}, {ci_95[1]:.2f})")
-    print(f"99% 신뢰 구간: ({ci_99[0]:.2f}, {ci_99[1]:.2f})")
+    print(f"Sample size: {len(sample)}")
+    print(f"Sample mean: {mean:.2f}")
+    print(f"Standard error: {sem:.2f}")
+    print(f"\n95% confidence interval: ({ci_95[0]:.2f}, {ci_95[1]:.2f})")
+    print(f"99% confidence interval: ({ci_99[0]:.2f}, {ci_99[1]:.2f})")
 
-    # 비율의 신뢰 구간
-    print("\n[비율의 신뢰 구간]")
+    # Confidence interval for a proportion
+    print("\n[Confidence interval for a proportion]")
     n_success = 70
     n_total = 100
     p_hat = n_success / n_total
@@ -309,16 +309,16 @@ def confidence_interval():
     ci_low = p_hat - z_95 * se_p
     ci_high = p_hat + z_95 * se_p
 
-    print(f"성공: {n_success}/{n_total} = {p_hat:.2f}")
-    print(f"95% 신뢰 구간: ({ci_low:.4f}, {ci_high:.4f})")
+    print(f"Successes: {n_success}/{n_total} = {p_hat:.2f}")
+    print(f"95% confidence interval: ({ci_low:.4f}, {ci_high:.4f})")
 
 
 # =============================================================================
-# 8. 효과 크기
+# 8. Effect Size
 # =============================================================================
 def effect_size():
-    """효과 크기 계산"""
-    print("\n[8] 효과 크기")
+    """Effect size calculation"""
+    print("\n[8] Effect Size")
     print("=" * 50)
 
     np.random.seed(42)
@@ -335,39 +335,39 @@ def effect_size():
 
     d = cohens_d(group2, group1)
 
-    print(f"그룹1 평균: {np.mean(group1):.2f}")
-    print(f"그룹2 평균: {np.mean(group2):.2f}")
+    print(f"Group 1 mean: {np.mean(group1):.2f}")
+    print(f"Group 2 mean: {np.mean(group2):.2f}")
     print(f"\nCohen's d: {d:.4f}")
 
-    # 효과 크기 해석
+    # Effect size interpretation
     if abs(d) < 0.2:
-        interpretation = "효과 없음"
+        interpretation = "No effect"
     elif abs(d) < 0.5:
-        interpretation = "작은 효과"
+        interpretation = "Small effect"
     elif abs(d) < 0.8:
-        interpretation = "중간 효과"
+        interpretation = "Medium effect"
     else:
-        interpretation = "큰 효과"
+        interpretation = "Large effect"
 
-    print(f"해석: {interpretation}")
+    print(f"Interpretation: {interpretation}")
 
-    # 상관계수를 효과 크기로
+    # Correlation coefficient as effect size
     x = np.random.randn(100)
     y = 0.5 * x + np.random.randn(100) * 0.5
     r, _ = stats.pearsonr(x, y)
     r_squared = r ** 2
 
-    print(f"\n상관계수 r: {r:.4f}")
-    print(f"결정계수 r²: {r_squared:.4f}")
-    print(f"(설명 분산 비율: {r_squared*100:.1f}%)")
+    print(f"\nCorrelation coefficient r: {r:.4f}")
+    print(f"Coefficient of determination r-squared: {r_squared:.4f}")
+    print(f"(Proportion of variance explained: {r_squared*100:.1f}%)")
 
 
 # =============================================================================
-# 메인
+# Main
 # =============================================================================
 def main():
     print("=" * 60)
-    print("통계 분석 예제")
+    print("Statistical Analysis Example")
     print("=" * 60)
 
     descriptive_stats()
@@ -380,35 +380,35 @@ def main():
     effect_size()
 
     print("\n" + "=" * 60)
-    print("통계 분석 핵심 정리")
+    print("Statistical Analysis Key Summary")
     print("=" * 60)
     print("""
-    기술 통계:
-    - 중심: 평균, 중앙값, 최빈값
-    - 산포: 분산, 표준편차, IQR
-    - 형태: 왜도, 첨도
+    Descriptive Statistics:
+    - Central tendency: mean, median, mode
+    - Spread: variance, standard deviation, IQR
+    - Shape: skewness, kurtosis
 
-    추론 통계:
-    - t-검정: 평균 비교 (1표본, 독립, 대응)
-    - ANOVA: 3개 이상 그룹 평균 비교
-    - 카이제곱: 범주형 변수 관계
-    - 상관분석: 연속형 변수 관계
+    Inferential Statistics:
+    - t-test: comparing means (one-sample, independent, paired)
+    - ANOVA: comparing means across 3+ groups
+    - Chi-square: relationships between categorical variables
+    - Correlation analysis: relationships between continuous variables
 
-    가설 검정 절차:
-    1. 귀무가설(H0)과 대립가설(H1) 설정
-    2. 유의수준 결정 (보통 α=0.05)
-    3. 검정 통계량 계산
-    4. p-value와 유의수준 비교
-    5. 결론 도출
+    Hypothesis Testing Procedure:
+    1. Set null hypothesis (H0) and alternative hypothesis (H1)
+    2. Determine significance level (typically alpha=0.05)
+    3. Compute test statistic
+    4. Compare p-value with significance level
+    5. Draw conclusion
 
-    p-value 해석:
-    - p < 0.05: 통계적으로 유의함
-    - p ≥ 0.05: 통계적으로 유의하지 않음
+    p-value Interpretation:
+    - p < 0.05: statistically significant
+    - p >= 0.05: not statistically significant
 
-    주의:
-    - 통계적 유의성 ≠ 실질적 중요성
-    - 효과 크기도 함께 보고
-    - 다중 비교 시 보정 필요 (Bonferroni 등)
+    Important Notes:
+    - Statistical significance != practical importance
+    - Always report effect size alongside p-values
+    - Apply corrections for multiple comparisons (e.g., Bonferroni)
     """)
 
 

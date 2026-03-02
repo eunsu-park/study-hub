@@ -1,8 +1,8 @@
 /*
- * 네트워크 플로우 (Network Flow)
- * Ford-Fulkerson, Edmonds-Karp, 이분 매칭, 최소 컷
+ * Network Flow
+ * Ford-Fulkerson, Edmonds-Karp, Bipartite Matching, Min Cut
  *
- * 그래프에서 최대 유량을 찾는 알고리즘입니다.
+ * Algorithms for finding maximum flow in a graph.
  */
 
 #include <stdio.h>
@@ -15,7 +15,7 @@
 #define INF INT_MAX
 
 /* =============================================================================
- * 1. Ford-Fulkerson (DFS 기반)
+ * 1. Ford-Fulkerson (DFS-based)
  * ============================================================================= */
 
 int capacity_ff[MAX_V][MAX_V];
@@ -54,7 +54,7 @@ int ford_fulkerson(int source, int sink, int n) {
 }
 
 /* =============================================================================
- * 2. Edmonds-Karp (BFS 기반, O(VE²))
+ * 2. Edmonds-Karp (BFS-based, O(VE^2))
  * ============================================================================= */
 
 typedef struct {
@@ -115,7 +115,7 @@ int edmonds_karp(FlowNetwork* fn, int source, int sink) {
 
         if (parent[sink] == -1) break;
 
-        /* 경로 상 최소 용량 찾기 */
+        /* Find minimum capacity along the path */
         int path_flow = INF;
         for (int v = sink; v != source; v = parent[v]) {
             int u = parent[v];
@@ -123,7 +123,7 @@ int edmonds_karp(FlowNetwork* fn, int source, int sink) {
             if (residual < path_flow) path_flow = residual;
         }
 
-        /* 유량 업데이트 */
+        /* Update flow */
         for (int v = sink; v != source; v = parent[v]) {
             int u = parent[v];
             fn->flow[u][v] += path_flow;
@@ -139,7 +139,7 @@ int edmonds_karp(FlowNetwork* fn, int source, int sink) {
 }
 
 /* =============================================================================
- * 3. 이분 매칭 (Bipartite Matching)
+ * 3. Bipartite Matching
  * ============================================================================= */
 
 typedef struct {
@@ -214,7 +214,7 @@ int bipartite_matching(BipartiteGraph* bg) {
 }
 
 /* =============================================================================
- * 4. 호프크로프트-카프 (Hopcroft-Karp, O(E√V))
+ * 4. Hopcroft-Karp (O(E*sqrt(V)))
  * ============================================================================= */
 
 int* dist_hk;
@@ -299,7 +299,7 @@ int hopcroft_karp(int left_n, int right_n, int** adj, int* adj_size) {
 }
 
 /* =============================================================================
- * 5. 최소 컷 (Min Cut)
+ * 5. Min Cut
  * ============================================================================= */
 
 void find_min_cut(FlowNetwork* fn, int source, int* reachable, int* cut_size) {
@@ -328,16 +328,16 @@ void find_min_cut(FlowNetwork* fn, int source, int* reachable, int* cut_size) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("네트워크 플로우 예제\n");
+    printf("Network Flow Examples\n");
     printf("============================================================\n");
 
     /* 1. Edmonds-Karp */
-    printf("\n[1] Edmonds-Karp 알고리즘\n");
+    printf("\n[1] Edmonds-Karp Algorithm\n");
     FlowNetwork* fn = fn_create(6);
     fn_add_edge(fn, 0, 1, 16);
     fn_add_edge(fn, 0, 2, 13);
@@ -350,19 +350,19 @@ int main(void) {
     fn_add_edge(fn, 4, 3, 7);
     fn_add_edge(fn, 4, 5, 4);
 
-    printf("    그래프:\n");
-    printf("      0 → 1 (16), 0 → 2 (13)\n");
-    printf("      1 → 2 (10), 1 → 3 (12)\n");
-    printf("      2 → 1 (4),  2 → 4 (14)\n");
-    printf("      3 → 2 (9),  3 → 5 (20)\n");
-    printf("      4 → 3 (7),  4 → 5 (4)\n");
-    printf("    최대 유량 (0→5): %d\n", edmonds_karp(fn, 0, 5));
+    printf("    Graph:\n");
+    printf("      0 -> 1 (16), 0 -> 2 (13)\n");
+    printf("      1 -> 2 (10), 1 -> 3 (12)\n");
+    printf("      2 -> 1 (4),  2 -> 4 (14)\n");
+    printf("      3 -> 2 (9),  3 -> 5 (20)\n");
+    printf("      4 -> 3 (7),  4 -> 5 (4)\n");
+    printf("    Max flow (0->5): %d\n", edmonds_karp(fn, 0, 5));
     fn_free(fn);
 
-    /* 2. 이분 매칭 */
-    printf("\n[2] 이분 매칭\n");
+    /* 2. Bipartite Matching */
+    printf("\n[2] Bipartite Matching\n");
     BipartiteGraph* bg = bg_create(4, 4);
-    /* 작업자(0-3)와 작업(0-3) 매칭 */
+    /* Worker(0-3) to Task(0-3) matching */
     bg_add_edge(bg, 0, 0);
     bg_add_edge(bg, 0, 1);
     bg_add_edge(bg, 1, 0);
@@ -372,28 +372,28 @@ int main(void) {
     bg_add_edge(bg, 3, 2);
     bg_add_edge(bg, 3, 3);
 
-    printf("    작업자-작업 연결:\n");
-    printf("      작업자0: 작업0, 작업1\n");
-    printf("      작업자1: 작업0, 작업2\n");
-    printf("      작업자2: 작업1, 작업2\n");
-    printf("      작업자3: 작업2, 작업3\n");
-    printf("    최대 매칭: %d\n", bipartite_matching(bg));
+    printf("    Worker-Task connections:\n");
+    printf("      Worker0: Task0, Task1\n");
+    printf("      Worker1: Task0, Task2\n");
+    printf("      Worker2: Task1, Task2\n");
+    printf("      Worker3: Task2, Task3\n");
+    printf("    Maximum matching: %d\n", bipartite_matching(bg));
 
-    printf("    매칭 결과:\n");
+    printf("    Matching result:\n");
     for (int i = 0; i < bg->left_n; i++) {
         if (bg->match_left[i] != -1) {
-            printf("      작업자%d → 작업%d\n", i, bg->match_left[i]);
+            printf("      Worker%d -> Task%d\n", i, bg->match_left[i]);
         }
     }
     bg_free(bg);
 
-    /* 3. 최소 버텍스 커버 */
-    printf("\n[3] 최소 버텍스 커버 (이분 그래프)\n");
-    printf("    Konig's theorem: 최대 매칭 = 최소 버텍스 커버\n");
-    printf("    위 예제의 최소 버텍스 커버: 4\n");
+    /* 3. Minimum Vertex Cover */
+    printf("\n[3] Minimum Vertex Cover (Bipartite Graph)\n");
+    printf("    Konig's theorem: Max matching = Min vertex cover\n");
+    printf("    Min vertex cover of above example: 4\n");
 
     /* 4. Ford-Fulkerson */
-    printf("\n[4] Ford-Fulkerson (간단 예제)\n");
+    printf("\n[4] Ford-Fulkerson (Simple Example)\n");
     memset(capacity_ff, 0, sizeof(capacity_ff));
     capacity_ff[0][1] = 10;
     capacity_ff[0][2] = 10;
@@ -405,26 +405,26 @@ int main(void) {
     capacity_ff[4][3] = 6;
     capacity_ff[4][5] = 10;
 
-    printf("    최대 유량 (0→5): %d\n", ford_fulkerson(0, 5, 6));
+    printf("    Max flow (0->5): %d\n", ford_fulkerson(0, 5, 6));
 
-    /* 5. 응용 */
-    printf("\n[5] 네트워크 플로우 응용\n");
-    printf("    - 이분 매칭: 작업 할당, 결혼 문제\n");
-    printf("    - 최소 컷: 네트워크 분할\n");
-    printf("    - 최대 독립 집합 (이분 그래프)\n");
-    printf("    - 프로젝트 선택 문제\n");
-    printf("    - 순환 흐름\n");
+    /* 5. Applications */
+    printf("\n[5] Network Flow Applications\n");
+    printf("    - Bipartite matching: task assignment, marriage problem\n");
+    printf("    - Min cut: network partitioning\n");
+    printf("    - Maximum independent set (bipartite graph)\n");
+    printf("    - Project selection problem\n");
+    printf("    - Circulation flow\n");
 
-    /* 6. 복잡도 */
-    printf("\n[6] 복잡도\n");
-    printf("    | 알고리즘         | 시간복잡도    |\n");
+    /* 6. Complexity */
+    printf("\n[6] Complexity\n");
+    printf("    | Algorithm        | Time          |\n");
     printf("    |------------------|---------------|\n");
-    printf("    | Ford-Fulkerson   | O(E × f)      |\n");
-    printf("    | Edmonds-Karp     | O(VE²)        |\n");
-    printf("    | Dinic            | O(V²E)        |\n");
-    printf("    | 이분 매칭 (DFS)  | O(VE)         |\n");
-    printf("    | Hopcroft-Karp    | O(E√V)        |\n");
-    printf("    f: 최대 유량\n");
+    printf("    | Ford-Fulkerson   | O(E x f)      |\n");
+    printf("    | Edmonds-Karp     | O(VE^2)       |\n");
+    printf("    | Dinic            | O(V^2E)       |\n");
+    printf("    | Bipartite (DFS)  | O(VE)         |\n");
+    printf("    | Hopcroft-Karp    | O(E*sqrt(V))  |\n");
+    printf("    f: maximum flow\n");
 
     printf("\n============================================================\n");
 

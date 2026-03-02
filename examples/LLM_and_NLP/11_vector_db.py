@@ -1,29 +1,29 @@
 """
-11. 벡터 데이터베이스 예제
+11. Vector Database Example
 
-Chroma, FAISS를 사용한 벡터 검색
+Vector search using Chroma and FAISS
 """
 
 import numpy as np
 
 print("=" * 60)
-print("벡터 데이터베이스")
+print("Vector Database")
 print("=" * 60)
 
 
 # ============================================
-# 1. 기본 벡터 검색 (NumPy)
+# 1. Basic Vector Search (NumPy)
 # ============================================
-print("\n[1] NumPy 벡터 검색")
+print("\n[1] NumPy Vector Search")
 print("-" * 40)
 
 def cosine_similarity(query, vectors):
-    """코사인 유사도 계산"""
+    """Compute cosine similarity"""
     query_norm = query / np.linalg.norm(query)
     vectors_norm = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
     return np.dot(vectors_norm, query_norm)
 
-# 샘플 데이터
+# Sample data
 documents = [
     "Python is a programming language",
     "Machine learning uses algorithms",
@@ -32,19 +32,19 @@ documents = [
     "Data science involves statistics"
 ]
 
-# 가상 임베딩
+# Simulated embeddings
 np.random.seed(42)
 embeddings = np.random.randn(len(documents), 128)
 
-# 검색
+# Search
 query_embedding = np.random.randn(128)
 similarities = cosine_similarity(query_embedding, embeddings)
 
-# 상위 결과
+# Top results
 top_k = 3
 top_indices = np.argsort(similarities)[-top_k:][::-1]
 
-print("검색 결과:")
+print("Search results:")
 for idx in top_indices:
     print(f"  [{similarities[idx]:.4f}] {documents[idx]}")
 
@@ -58,45 +58,45 @@ print("-" * 40)
 try:
     import chromadb
 
-    # 클라이언트 (메모리)
+    # Client (in-memory)
     client = chromadb.Client()
 
-    # 컬렉션 생성
+    # Create collection
     collection = client.create_collection(
         name="demo_collection",
         metadata={"description": "Demo collection"}
     )
 
-    # 문서 추가
+    # Add documents
     collection.add(
         documents=documents,
         ids=[f"doc_{i}" for i in range(len(documents))],
         metadatas=[{"source": "demo"} for _ in documents]
     )
 
-    print(f"컬렉션 생성: {collection.name}")
-    print(f"문서 수: {collection.count()}")
+    print(f"Collection created: {collection.name}")
+    print(f"Number of documents: {collection.count()}")
 
-    # 검색
+    # Search
     results = collection.query(
         query_texts=["What is Python?"],
         n_results=3
     )
 
-    print("\nChroma 검색 결과:")
+    print("\nChroma search results:")
     for doc, dist in zip(results['documents'][0], results['distances'][0]):
         print(f"  [{dist:.4f}] {doc}")
 
-    # 메타데이터 필터링
+    # Metadata filtering
     filtered = collection.query(
         query_texts=["programming"],
         n_results=2,
         where={"source": "demo"}
     )
-    print(f"\n필터링 결과: {len(filtered['documents'][0])}개")
+    print(f"\nFiltered results: {len(filtered['documents'][0])} items")
 
 except ImportError:
-    print("chromadb 미설치 (pip install chromadb)")
+    print("chromadb not installed (pip install chromadb)")
 
 
 # ============================================
@@ -108,46 +108,46 @@ print("-" * 40)
 try:
     import faiss
 
-    # 인덱스 생성
+    # Create index
     dimension = 128
-    index = faiss.IndexFlatL2(dimension)  # L2 거리
+    index = faiss.IndexFlatL2(dimension)  # L2 distance
 
-    # 벡터 추가
+    # Add vectors
     vectors = np.random.randn(1000, dimension).astype('float32')
     index.add(vectors)
 
-    print(f"인덱스 생성: {index.ntotal} 벡터")
+    print(f"Index created: {index.ntotal} vectors")
 
-    # 검색
+    # Search
     query = np.random.randn(1, dimension).astype('float32')
     distances, indices = index.search(query, k=5)
 
-    print(f"검색 결과 (상위 5개):")
-    print(f"  인덱스: {indices[0]}")
-    print(f"  거리: {distances[0]}")
+    print(f"Search results (top 5):")
+    print(f"  Indices: {indices[0]}")
+    print(f"  Distances: {distances[0]}")
 
-    # IVF 인덱스 (대규모용)
-    nlist = 10  # 클러스터 수
+    # IVF index (for large-scale)
+    nlist = 10  # Number of clusters
     quantizer = faiss.IndexFlatL2(dimension)
     ivf_index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
 
-    # 학습 및 추가
+    # Train and add
     ivf_index.train(vectors)
     ivf_index.add(vectors)
-    ivf_index.nprobe = 3  # 검색할 클러스터 수
+    ivf_index.nprobe = 3  # Number of clusters to search
 
-    print(f"\nIVF 인덱스: {ivf_index.ntotal} 벡터, {nlist} 클러스터")
+    print(f"\nIVF index: {ivf_index.ntotal} vectors, {nlist} clusters")
 
-    # 저장/로드
+    # Save/Load
     faiss.write_index(index, "demo_index.faiss")
     loaded_index = faiss.read_index("demo_index.faiss")
-    print(f"인덱스 저장/로드 완료")
+    print(f"Index save/load complete")
 
     import os
     os.remove("demo_index.faiss")
 
 except ImportError:
-    print("faiss 미설치 (pip install faiss-cpu)")
+    print("faiss not installed (pip install faiss-cpu)")
 
 
 # ============================================
@@ -160,68 +160,68 @@ try:
     import chromadb
     from chromadb.utils import embedding_functions
 
-    # Sentence Transformer 임베딩 함수
+    # Sentence Transformer embedding function
     embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name="all-MiniLM-L6-v2"
     )
 
-    # 클라이언트
+    # Client
     client = chromadb.Client()
 
-    # 컬렉션 (임베딩 함수 지정)
+    # Collection (with embedding function)
     collection = client.create_collection(
         name="semantic_search",
         embedding_function=embedding_fn
     )
 
-    # 문서 추가 (임베딩 자동 생성)
+    # Add documents (embeddings auto-generated)
     collection.add(
         documents=documents,
         ids=[f"doc_{i}" for i in range(len(documents))]
     )
 
-    # 시맨틱 검색
+    # Semantic search
     results = collection.query(
         query_texts=["How to learn programming?"],
         n_results=3
     )
 
-    print("시맨틱 검색 결과:")
+    print("Semantic search results:")
     for doc, dist in zip(results['documents'][0], results['distances'][0]):
         print(f"  [{dist:.4f}] {doc}")
 
 except ImportError as e:
-    print(f"필요 패키지 미설치: {e}")
+    print(f"Required packages not installed: {e}")
 
 
 # ============================================
 # 5. LangChain + Chroma
 # ============================================
-print("\n[5] LangChain + Chroma (코드)")
+print("\n[5] LangChain + Chroma (code)")
 print("-" * 40)
 
 langchain_chroma = '''
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 
-# 임베딩
+# Embeddings
 embeddings = OpenAIEmbeddings()
 
-# 벡터 스토어 생성
+# Create vector store
 vectorstore = Chroma.from_texts(
     texts=documents,
     embedding=embeddings,
     persist_directory="./chroma_db"
 )
 
-# 검색
+# Search
 docs = vectorstore.similarity_search("What is Python?", k=3)
 
-# Retriever로 변환
+# Convert to retriever
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 results = retriever.invoke("programming languages")
 
-# 메타데이터와 함께 생성
+# Create with metadata
 from langchain.schema import Document
 
 docs_with_meta = [
@@ -238,36 +238,36 @@ print(langchain_chroma)
 
 
 # ============================================
-# 6. 인덱스 타입 비교
+# 6. Index Type Comparison
 # ============================================
-print("\n[6] FAISS 인덱스 타입 비교")
+print("\n[6] FAISS Index Type Comparison")
 print("-" * 40)
 
 index_comparison = """
-| 인덱스 타입 | 정확도 | 속도 | 메모리 | 사용 시점 |
-|------------|--------|------|--------|----------|
-| IndexFlatL2| 100%   | 느림 | 높음   | 소규모 (<100K) |
-| IndexIVF   | 95%+   | 빠름 | 중간   | 중규모 |
-| IndexHNSW  | 98%+   | 매우빠름| 높음 | 대규모, 실시간 |
-| IndexPQ    | 90%+   | 빠름 | 낮음   | 메모리 제한 |
+| Index Type  | Accuracy | Speed    | Memory | Use Case           |
+|-------------|----------|----------|--------|--------------------|
+| IndexFlatL2 | 100%     | Slow     | High   | Small (<100K)      |
+| IndexIVF    | 95%+     | Fast     | Medium | Medium-scale       |
+| IndexHNSW   | 98%+     | Very fast| High   | Large, real-time   |
+| IndexPQ     | 90%+     | Fast     | Low    | Memory-constrained |
 """
 print(index_comparison)
 
 faiss_indexes = '''
 import faiss
 
-# Flat (정확)
+# Flat (exact)
 index = faiss.IndexFlatL2(dim)
 
-# IVF (클러스터링)
+# IVF (clustering)
 quantizer = faiss.IndexFlatL2(dim)
 index = faiss.IndexIVFFlat(quantizer, dim, nlist=100)
 index.train(vectors)
 
-# HNSW (그래프 기반)
+# HNSW (graph-based)
 index = faiss.IndexHNSWFlat(dim, 32)
 
-# PQ (압축)
+# PQ (compression)
 index = faiss.IndexPQ(dim, m=8, nbits=8)
 index.train(vectors)
 '''
@@ -275,19 +275,19 @@ print(faiss_indexes)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("벡터 DB 정리")
+print("Vector DB Summary")
 print("=" * 60)
 
 summary = """
-선택 가이드:
-    - 개발/프로토타입: Chroma
-    - 대규모 로컬: FAISS
-    - 프로덕션 관리형: Pinecone
+Selection Guide:
+    - Development/Prototype: Chroma
+    - Large-scale local: FAISS
+    - Production managed: Pinecone
 
-핵심 코드:
+Key Code:
     # Chroma
     collection = client.create_collection("name")
     collection.add(documents=texts, ids=ids)

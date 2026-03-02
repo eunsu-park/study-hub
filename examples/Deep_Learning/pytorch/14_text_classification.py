@@ -1,7 +1,7 @@
 """
-14. 실전 텍스트 분류 프로젝트
+14. Practical Text Classification Project
 
-감성 분석을 위한 텍스트 분류 파이프라인 구현
+Text classification pipeline for sentiment analysis.
 """
 
 import torch
@@ -15,7 +15,7 @@ import re
 import math
 
 print("=" * 60)
-print("실전 텍스트 분류 프로젝트")
+print("Practical Text Classification Project")
 print("=" * 60)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -23,32 +23,32 @@ print(f"Device: {device}")
 
 
 # ============================================
-# 1. 텍스트 전처리
+# 1. Text Preprocessing
 # ============================================
-print("\n[1] 텍스트 전처리")
+print("\n[1] Text Preprocessing")
 print("-" * 40)
 
 def simple_tokenizer(text):
-    """간단한 토크나이저"""
+    """Simple tokenizer"""
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text)
     return text.split()
 
-# 테스트
+# Test
 sample = "This is a SAMPLE sentence! With punctuation."
 tokens = simple_tokenizer(sample)
-print(f"원문: {sample}")
-print(f"토큰: {tokens}")
+print(f"Original: {sample}")
+print(f"Tokens: {tokens}")
 
 
 # ============================================
-# 2. 어휘 구축
+# 2. Vocabulary Building
 # ============================================
-print("\n[2] 어휘 구축")
+print("\n[2] Vocabulary Building")
 print("-" * 40)
 
 class Vocabulary:
-    """텍스트 어휘 사전"""
+    """Text vocabulary dictionary"""
     def __init__(self, min_freq=2):
         self.word2idx = {'<pad>': 0, '<unk>': 1}
         self.idx2word = {0: '<pad>', 1: '<unk>'}
@@ -56,7 +56,7 @@ class Vocabulary:
         self.min_freq = min_freq
 
     def build(self, texts, tokenizer):
-        """어휘 구축"""
+        """Build vocabulary"""
         for text in texts:
             tokens = tokenizer(text)
             self.word_freq.update(tokens)
@@ -68,11 +68,11 @@ class Vocabulary:
                 self.idx2word[idx] = word
                 idx += 1
 
-        print(f"총 단어 수: {len(self.word_freq)}")
-        print(f"어휘 크기 (min_freq={self.min_freq}): {len(self.word2idx)}")
+        print(f"Total word count: {len(self.word_freq)}")
+        print(f"Vocabulary size (min_freq={self.min_freq}): {len(self.word2idx)}")
 
     def encode(self, text, tokenizer, max_len=None):
-        """텍스트를 인덱스로 변환"""
+        """Convert text to indices"""
         tokens = tokenizer(text)
         indices = [self.word2idx.get(t, self.word2idx['<unk>']) for t in tokens]
         if max_len:
@@ -87,12 +87,12 @@ class Vocabulary:
 
 
 # ============================================
-# 3. 샘플 데이터셋
+# 3. Sample Dataset
 # ============================================
-print("\n[3] 샘플 데이터셋 생성")
+print("\n[3] Sample Dataset Creation")
 print("-" * 40)
 
-# 감성 분석용 샘플 데이터
+# Sample data for sentiment analysis
 positive_samples = [
     "This movie is absolutely amazing and wonderful",
     "I love this product it is fantastic",
@@ -132,15 +132,15 @@ negative_samples = [
 texts = positive_samples + negative_samples
 labels = [1] * len(positive_samples) + [0] * len(negative_samples)
 
-# 셔플
+# Shuffle
 indices = np.random.permutation(len(texts))
 texts = [texts[i] for i in indices]
 labels = [labels[i] for i in indices]
 
-print(f"총 샘플 수: {len(texts)}")
-print(f"긍정: {sum(labels)}, 부정: {len(labels) - sum(labels)}")
+print(f"Total samples: {len(texts)}")
+print(f"Positive: {sum(labels)}, Negative: {len(labels) - sum(labels)}")
 
-# 어휘 구축
+# Build vocabulary
 vocab = Vocabulary(min_freq=2)
 vocab.build(texts, simple_tokenizer)
 
@@ -168,7 +168,7 @@ class TextDataset(Dataset):
         encoded = self.vocab.encode(text, self.tokenizer, self.max_len)
         return torch.tensor(encoded, dtype=torch.long), torch.tensor(label, dtype=torch.long)
 
-# 데이터 분할
+# Data split
 train_size = int(0.8 * len(texts))
 train_texts, test_texts = texts[:train_size], texts[train_size:]
 train_labels, test_labels = labels[:train_size], labels[train_size:]
@@ -181,20 +181,20 @@ test_loader = DataLoader(test_dataset, batch_size=32)
 
 print(f"Train: {len(train_dataset)}, Test: {len(test_dataset)}")
 
-# 샘플 확인
+# Sample check
 sample_x, sample_y = train_dataset[0]
-print(f"샘플 입력 shape: {sample_x.shape}")
-print(f"샘플 라벨: {sample_y.item()}")
+print(f"Sample input shape: {sample_x.shape}")
+print(f"Sample label: {sample_y.item()}")
 
 
 # ============================================
-# 5. 기본 텍스트 분류기 (임베딩 + 평균)
+# 5. Basic Text Classifier (Embedding + Mean)
 # ============================================
-print("\n[5] 기본 텍스트 분류기")
+print("\n[5] Basic Text Classifier")
 print("-" * 40)
 
 class SimpleClassifier(nn.Module):
-    """임베딩 평균 기반 분류기"""
+    """Embedding mean-based classifier"""
     def __init__(self, vocab_size, embed_dim, num_classes):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
@@ -203,23 +203,23 @@ class SimpleClassifier(nn.Module):
     def forward(self, x):
         # x: (batch, seq_len)
         embedded = self.embedding(x)  # (batch, seq, embed)
-        # 평균 풀링 (패딩 제외)
+        # Mean pooling (excluding padding)
         mask = (x != 0).unsqueeze(-1).float()
         pooled = (embedded * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
         return self.fc(pooled)
 
 simple_model = SimpleClassifier(len(vocab), embed_dim=64, num_classes=2)
-print(f"SimpleClassifier 파라미터: {sum(p.numel() for p in simple_model.parameters()):,}")
+print(f"SimpleClassifier parameters: {sum(p.numel() for p in simple_model.parameters()):,}")
 
 
 # ============================================
-# 6. LSTM 분류기
+# 6. LSTM Classifier
 # ============================================
-print("\n[6] LSTM 분류기")
+print("\n[6] LSTM Classifier")
 print("-" * 40)
 
 class LSTMClassifier(nn.Module):
-    """양방향 LSTM 분류기"""
+    """Bidirectional LSTM classifier"""
     def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes,
                  num_layers=2, dropout=0.5):
         super().__init__()
@@ -245,7 +245,7 @@ class LSTMClassifier(nn.Module):
         embedded = self.embedding(x)
         output, (h_n, c_n) = self.lstm(embedded)
 
-        # 양방향 마지막 은닉 상태 결합
+        # Combine bidirectional last hidden states
         forward_last = h_n[-2]
         backward_last = h_n[-1]
         combined = torch.cat([forward_last, backward_last], dim=1)
@@ -253,13 +253,13 @@ class LSTMClassifier(nn.Module):
         return self.fc(combined)
 
 lstm_model = LSTMClassifier(len(vocab), embed_dim=64, hidden_dim=128, num_classes=2)
-print(f"LSTMClassifier 파라미터: {sum(p.numel() for p in lstm_model.parameters()):,}")
+print(f"LSTMClassifier parameters: {sum(p.numel() for p in lstm_model.parameters()):,}")
 
 
 # ============================================
-# 7. Transformer 분류기
+# 7. Transformer Classifier
 # ============================================
-print("\n[7] Transformer 분류기")
+print("\n[7] Transformer Classifier")
 print("-" * 40)
 
 class PositionalEncoding(nn.Module):
@@ -283,7 +283,7 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerClassifier(nn.Module):
-    """Transformer 인코더 기반 분류기"""
+    """Transformer encoder-based classifier"""
     def __init__(self, vocab_size, embed_dim, num_heads, num_layers,
                  num_classes, max_len=512, dropout=0.1):
         super().__init__()
@@ -306,17 +306,17 @@ class TransformerClassifier(nn.Module):
         )
 
     def forward(self, x):
-        # 패딩 마스크 생성
+        # Create padding mask
         padding_mask = (x == 0)
 
-        # 임베딩 + 스케일링 + 위치 인코딩
+        # Embedding + scaling + positional encoding
         embedded = self.embedding(x) * math.sqrt(self.embed_dim)
         embedded = self.pos_encoder(embedded)
 
-        # Transformer 인코더
+        # Transformer encoder
         output = self.transformer(embedded, src_key_padding_mask=padding_mask)
 
-        # 평균 풀링 (패딩 제외)
+        # Mean pooling (excluding padding)
         mask = (~padding_mask).unsqueeze(-1).float()
         pooled = (output * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
 
@@ -325,13 +325,13 @@ class TransformerClassifier(nn.Module):
 transformer_model = TransformerClassifier(
     len(vocab), embed_dim=64, num_heads=4, num_layers=2, num_classes=2
 )
-print(f"TransformerClassifier 파라미터: {sum(p.numel() for p in transformer_model.parameters()):,}")
+print(f"TransformerClassifier parameters: {sum(p.numel() for p in transformer_model.parameters()):,}")
 
 
 # ============================================
-# 8. 학습 함수
+# 8. Training Functions
 # ============================================
-print("\n[8] 학습 파이프라인")
+print("\n[8] Training Pipeline")
 print("-" * 40)
 
 def train_epoch(model, loader, criterion, optimizer, device):
@@ -348,7 +348,7 @@ def train_epoch(model, loader, criterion, optimizer, device):
         loss = criterion(outputs, labels)
         loss.backward()
 
-        # 기울기 클리핑 (RNN에 중요)
+        # Gradient clipping (important for RNNs)
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
         optimizer.step()
@@ -405,12 +405,12 @@ def train_model(model, train_loader, test_loader, epochs=10, lr=1e-3):
 
 
 # ============================================
-# 9. 모델 비교 학습
+# 9. Model Comparison Training
 # ============================================
-print("\n[9] 모델 비교 학습")
+print("\n[9] Model Comparison Training")
 print("-" * 40)
 
-# 모델 재생성 (학습 전 상태)
+# Recreate models (untrained state)
 models = {
     'Simple': SimpleClassifier(len(vocab), embed_dim=64, num_classes=2),
     'LSTM': LSTMClassifier(len(vocab), embed_dim=64, hidden_dim=128, num_classes=2),
@@ -420,21 +420,21 @@ models = {
 
 results = {}
 for name, model in models.items():
-    print(f"\n--- {name} 학습 ---")
+    print(f"\n--- Training {name} ---")
     history = train_model(model, train_loader, test_loader, epochs=15)
     results[name] = history
-    print(f"{name} 최종 테스트 정확도: {history['test_acc'][-1]:.1f}%")
+    print(f"{name} final test accuracy: {history['test_acc'][-1]:.1f}%")
 
 
 # ============================================
-# 10. 결과 시각화
+# 10. Result Visualization
 # ============================================
-print("\n[10] 결과 시각화")
+print("\n[10] Result Visualization")
 print("-" * 40)
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# 정확도
+# Accuracy
 for name, history in results.items():
     axes[0].plot(history['test_acc'], label=f"{name} (final={history['test_acc'][-1]:.1f}%)")
 axes[0].set_xlabel('Epoch')
@@ -443,7 +443,7 @@ axes[0].set_title('Model Comparison - Accuracy')
 axes[0].legend()
 axes[0].grid(True, alpha=0.3)
 
-# 손실
+# Loss
 for name, history in results.items():
     axes[1].plot(history['test_loss'], label=name)
 axes[1].set_xlabel('Epoch')
@@ -455,17 +455,17 @@ axes[1].grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig('text_classification_comparison.png', dpi=100)
 plt.close()
-print("그래프 저장: text_classification_comparison.png")
+print("Plot saved: text_classification_comparison.png")
 
 
 # ============================================
-# 11. 추론 함수
+# 11. Inference Function
 # ============================================
-print("\n[11] 추론 테스트")
+print("\n[11] Inference Test")
 print("-" * 40)
 
 def predict_sentiment(model, text, vocab, tokenizer, device):
-    """텍스트 감성 예측"""
+    """Predict text sentiment"""
     model.eval()
     encoded = vocab.encode(text, tokenizer, max_len=50)
     tensor = torch.tensor(encoded).unsqueeze(0).to(device)
@@ -480,7 +480,7 @@ def predict_sentiment(model, text, vocab, tokenizer, device):
 
     return sentiment, confidence
 
-# 테스트 문장
+# Test sentences
 test_sentences = [
     "This product is amazing and I love it",
     "Terrible quality waste of money",
@@ -489,22 +489,22 @@ test_sentences = [
     "Very disappointed will not buy again",
 ]
 
-# LSTM 모델로 예측
+# Predict with LSTM model
 lstm_model = models['LSTM']
-print("\nLSTM 모델 예측:")
+print("\nLSTM model predictions:")
 for sentence in test_sentences:
     sentiment, conf = predict_sentiment(lstm_model, sentence, vocab, simple_tokenizer, device)
     print(f"  [{sentiment:8s}] ({conf*100:5.1f}%) {sentence}")
 
 
 # ============================================
-# 12. Attention 시각화
+# 12. Attention Visualization
 # ============================================
-print("\n[12] Attention 가중치 분석")
+print("\n[12] Attention Weight Analysis")
 print("-" * 40)
 
 class AttentionLSTM(nn.Module):
-    """Attention이 있는 LSTM"""
+    """LSTM with Attention"""
     def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
@@ -527,15 +527,15 @@ class AttentionLSTM(nn.Module):
         return logits
 
 attn_model = AttentionLSTM(len(vocab), embed_dim=64, hidden_dim=128, num_classes=2)
-print(f"AttentionLSTM 파라미터: {sum(p.numel() for p in attn_model.parameters()):,}")
+print(f"AttentionLSTM parameters: {sum(p.numel() for p in attn_model.parameters()):,}")
 
-# 학습
-print("\nAttentionLSTM 학습:")
+# Training
+print("\nTraining AttentionLSTM:")
 attn_model = attn_model.to(device)
 history = train_model(attn_model, train_loader, test_loader, epochs=10)
 
 
-# Attention 시각화
+# Attention visualization
 def visualize_attention(model, text, vocab, tokenizer, device):
     model.eval()
     tokens = tokenizer(text)
@@ -552,60 +552,60 @@ def visualize_attention(model, text, vocab, tokenizer, device):
 
     return tokens, attn, sentiment, prob
 
-# 시각화
+# Visualization
 sample_text = "This movie is absolutely amazing and wonderful"
 tokens, attn, sentiment, prob = visualize_attention(attn_model, sample_text, vocab, simple_tokenizer, device)
 
-print(f"\n문장: {sample_text}")
-print(f"예측: {sentiment} ({prob*100:.1f}%)")
-print("\nAttention 가중치:")
+print(f"\nSentence: {sample_text}")
+print(f"Prediction: {sentiment} ({prob*100:.1f}%)")
+print("\nAttention weights:")
 for token, weight in zip(tokens, attn):
     bar = '█' * int(weight * 50)
     print(f"  {token:12s} {weight:.3f} {bar}")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("텍스트 분류 정리")
+print("Text Classification Summary")
 print("=" * 60)
 
 summary = """
-텍스트 분류 파이프라인:
-    1. 토큰화: 텍스트 → 단어 리스트
-    2. 어휘 구축: 단어 → 인덱스 매핑
-    3. 인코딩: 텍스트 → 텐서
-    4. 모델: 임베딩 → 인코더 → 분류
+Text classification pipeline:
+    1. Tokenization: Text -> word list
+    2. Vocabulary building: Word -> index mapping
+    3. Encoding: Text -> tensor
+    4. Model: Embedding -> Encoder -> Classification
 
-모델 비교:
-    - Simple (임베딩 평균): 빠름, 간단
-    - LSTM: 순서 정보 활용, 안정적
-    - Transformer: 병렬화, 긴 시퀀스
+Model comparison:
+    - Simple (embedding mean): Fast, simple
+    - LSTM: Uses sequential information, stable
+    - Transformer: Parallelizable, long sequences
 
-핵심 코드:
-    # 어휘 구축
+Key code:
+    # Vocabulary building
     vocab = Vocabulary(min_freq=2)
     vocab.build(texts, tokenizer)
 
-    # LSTM 분류기
+    # LSTM classifier
     lstm = nn.LSTM(embed_dim, hidden_dim, bidirectional=True)
     _, (h_n, _) = lstm(embedded)
     combined = torch.cat([h_n[-2], h_n[-1]], dim=1)
 
-    # Transformer 분류기
+    # Transformer classifier
     encoder = nn.TransformerEncoder(encoder_layer, num_layers)
     output = encoder(embedded, src_key_padding_mask=padding_mask)
 
-학습 팁:
-    - 기울기 클리핑 (RNN에 필수)
-    - Dropout (과적합 방지)
-    - 적절한 패딩 처리
+Training tips:
+    - Gradient clipping (essential for RNNs)
+    - Dropout (prevents overfitting)
+    - Proper padding handling
 
-다음 단계:
+Next steps:
     - HuggingFace Transformers
-    - BERT/GPT 파인튜닝
-    - 대규모 데이터셋 (IMDb)
+    - BERT/GPT fine-tuning
+    - Large-scale datasets (IMDb)
 """
 print(summary)
 print("=" * 60)

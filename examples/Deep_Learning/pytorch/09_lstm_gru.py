@@ -1,7 +1,7 @@
 """
-09. LSTM과 GRU
+09. LSTM and GRU
 
-LSTM과 GRU의 구현과 활용을 학습합니다.
+Learn the implementation and usage of LSTM and GRU.
 """
 
 import torch
@@ -18,9 +18,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # ============================================
-# 1. LSTM 기본
+# 1. LSTM Basics
 # ============================================
-print("\n[1] LSTM 기본")
+print("\n[1] LSTM Basics")
 print("-" * 40)
 
 lstm = nn.LSTM(
@@ -31,28 +31,28 @@ lstm = nn.LSTM(
     dropout=0.1
 )
 
-# 입력
+# Input
 x = torch.randn(4, 8, 10)  # (batch, seq, features)
 
-# 순전파
+# Forward pass
 output, (h_n, c_n) = lstm(x)
 
-print(f"입력: {x.shape}")
+print(f"Input: {x.shape}")
 print(f"output: {output.shape}")  # (4, 8, 20)
-print(f"h_n (은닉): {h_n.shape}")  # (2, 4, 20)
-print(f"c_n (셀): {c_n.shape}")    # (2, 4, 20)
+print(f"h_n (hidden): {h_n.shape}")  # (2, 4, 20)
+print(f"c_n (cell): {c_n.shape}")    # (2, 4, 20)
 
-# 초기 상태 지정
+# Specify initial state
 h0 = torch.zeros(2, 4, 20)
 c0 = torch.zeros(2, 4, 20)
 output, (h_n, c_n) = lstm(x, (h0, c0))
-print(f"\n초기 상태 지정: h0={h0.shape}, c0={c0.shape}")
+print(f"\nWith initial state: h0={h0.shape}, c0={c0.shape}")
 
 
 # ============================================
-# 2. GRU 기본
+# 2. GRU Basics
 # ============================================
-print("\n[2] GRU 기본")
+print("\n[2] GRU Basics")
 print("-" * 40)
 
 gru = nn.GRU(
@@ -65,13 +65,13 @@ gru = nn.GRU(
 output, h_n = gru(x)
 
 print(f"GRU output: {output.shape}")
-print(f"GRU h_n: {h_n.shape}")  # 셀 상태 없음
+print(f"GRU h_n: {h_n.shape}")  # No cell state
 
 
 # ============================================
-# 3. 양방향 LSTM
+# 3. Bidirectional LSTM
 # ============================================
-print("\n[3] 양방향 LSTM")
+print("\n[3] Bidirectional LSTM")
 print("-" * 40)
 
 lstm_bi = nn.LSTM(
@@ -84,21 +84,21 @@ lstm_bi = nn.LSTM(
 
 output_bi, (h_n_bi, c_n_bi) = lstm_bi(x)
 
-print(f"양방향 LSTM:")
+print(f"Bidirectional LSTM:")
 print(f"  output: {output_bi.shape}")  # (4, 8, 40)
 print(f"  h_n: {h_n_bi.shape}")        # (4, 4, 20)
 
-# 정방향/역방향 분리
+# Separate forward/backward
 forward_out = output_bi[:, :, :20]
 backward_out = output_bi[:, :, 20:]
-print(f"  정방향: {forward_out.shape}")
-print(f"  역방향: {backward_out.shape}")
+print(f"  Forward: {forward_out.shape}")
+print(f"  Backward: {backward_out.shape}")
 
 
 # ============================================
-# 4. LSTM 분류기
+# 4. LSTM Classifier
 # ============================================
-print("\n[4] LSTM 분류기")
+print("\n[4] LSTM Classifier")
 print("-" * 40)
 
 class LSTMClassifier(nn.Module):
@@ -125,9 +125,9 @@ class LSTMClassifier(nn.Module):
         # x: (batch, seq, features)
         output, (h_n, c_n) = self.lstm(x)
 
-        # 마지막 층의 은닉 상태 결합
+        # Combine hidden states from last layer
         if self.bidirectional:
-            # 정방향 마지막 + 역방향 마지막
+            # Forward last + Backward last
             forward_last = h_n[-2]
             backward_last = h_n[-1]
             combined = torch.cat([forward_last, backward_last], dim=1)
@@ -139,21 +139,21 @@ class LSTMClassifier(nn.Module):
 
 model = LSTMClassifier(input_size=10, hidden_size=32, num_classes=5)
 out = model(x)
-print(f"분류기 출력: {out.shape}")
+print(f"Classifier output: {out.shape}")
 
 
 # ============================================
-# 5. 시계열 예측 비교 (RNN vs LSTM vs GRU)
+# 5. Time Series Prediction Comparison (RNN vs LSTM vs GRU)
 # ============================================
-print("\n[5] RNN vs LSTM vs GRU 비교")
+print("\n[5] RNN vs LSTM vs GRU Comparison")
 print("-" * 40)
 
-# 더 복잡한 시계열 데이터 생성
+# Generate more complex time series data
 def generate_complex_series(seq_len=100, n_samples=1000):
     X, y = [], []
     for _ in range(n_samples):
         t = np.linspace(0, 10*np.pi, seq_len + 1)
-        # 복합 패턴: sin + 노이즈 + 추세
+        # Complex pattern: sin + noise + trend
         signal = np.sin(t) + 0.5*np.sin(3*t) + 0.1*t + np.random.randn(seq_len+1)*0.1
         X.append(signal[:-1].reshape(-1, 1))
         y.append(signal[-1])
@@ -212,7 +212,7 @@ def train_model(model_type, epochs=30):
             epoch_loss += loss.item()
         losses.append(epoch_loss / len(train_loader))
 
-    # 테스트
+    # Test
     model.eval()
     with torch.no_grad():
         test_pred = model(X_test.to(device))
@@ -220,15 +220,15 @@ def train_model(model_type, epochs=30):
 
     return losses, test_loss
 
-# 비교 실행
-print("모델 학습 중...")
+# Run comparison
+print("Training models...")
 results = {}
 for model_type in ['rnn', 'lstm', 'gru']:
     losses, test_loss = train_model(model_type)
     results[model_type] = {'losses': losses, 'test_loss': test_loss}
     print(f"  {model_type.upper()}: Test MSE = {test_loss:.6f}")
 
-# 시각화
+# Visualization
 plt.figure(figsize=(10, 5))
 for name, data in results.items():
     plt.plot(data['losses'], label=f"{name.upper()} (test={data['test_loss']:.4f})")
@@ -239,13 +239,13 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.savefig('rnn_lstm_gru_comparison.png', dpi=100)
 plt.close()
-print("그래프 저장: rnn_lstm_gru_comparison.png")
+print("Plot saved: rnn_lstm_gru_comparison.png")
 
 
 # ============================================
-# 6. 텍스트 분류 예제
+# 6. Text Classification Example
 # ============================================
-print("\n[6] 텍스트 분류 예제")
+print("\n[6] Text Classification Example")
 print("-" * 40)
 
 class TextClassifier(nn.Module):
@@ -260,7 +260,7 @@ class TextClassifier(nn.Module):
         )
 
     def forward(self, x):
-        # x: (batch, seq) - 토큰 인덱스
+        # x: (batch, seq) - token indices
         embedded = self.embedding(x)
         _, (h_n, _) = self.lstm(embedded)
         combined = torch.cat([h_n[-2], h_n[-1]], dim=1)
@@ -268,22 +268,22 @@ class TextClassifier(nn.Module):
 
 model = TextClassifier(vocab_size=10000, embed_dim=128,
                        hidden_dim=256, num_classes=5)
-print(f"TextClassifier 파라미터: {sum(p.numel() for p in model.parameters()):,}")
+print(f"TextClassifier parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-# 더미 입력
-x = torch.randint(0, 10000, (8, 50))  # 8 문장, 50 토큰
+# Dummy input
+x = torch.randint(0, 10000, (8, 50))  # 8 sentences, 50 tokens
 out = model(x)
-print(f"입력: {x.shape} → 출력: {out.shape}")
+print(f"Input: {x.shape} -> Output: {out.shape}")
 
 
 # ============================================
-# 7. 언어 모델 (텍스트 생성)
+# 7. Language Model (Text Generation)
 # ============================================
-print("\n[7] 언어 모델")
+print("\n[7] Language Model")
 print("-" * 40)
 
 class CharLSTM(nn.Module):
-    """문자 수준 언어 모델"""
+    """Character-level language model"""
     def __init__(self, vocab_size, embed_dim, hidden_dim):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
@@ -314,21 +314,21 @@ class CharLSTM(nn.Module):
         return tokens
 
 char_lm = CharLSTM(vocab_size=128, embed_dim=64, hidden_dim=256)
-print(f"CharLSTM 파라미터: {sum(p.numel() for p in char_lm.parameters()):,}")
+print(f"CharLSTM parameters: {sum(p.numel() for p in char_lm.parameters()):,}")
 
-# 생성 테스트
+# Generation test
 generated = char_lm.generate([65, 66, 67], max_len=20)  # ABC...
-print(f"생성된 토큰: {generated[:10]}...")
+print(f"Generated tokens: {generated[:10]}...")
 
 
 # ============================================
-# 8. LSTM 내부 시각화
+# 8. LSTM Gate Analysis
 # ============================================
-print("\n[8] LSTM 게이트 분석")
+print("\n[8] LSTM Gate Analysis")
 print("-" * 40)
 
 class LSTMWithGates(nn.Module):
-    """게이트 값을 반환하는 LSTM"""
+    """LSTM that returns gate values"""
     def __init__(self, input_size, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
@@ -348,47 +348,47 @@ class LSTMWithGates(nn.Module):
 
         return torch.stack(outputs, dim=1)
 
-# 테스트
+# Test
 lstm_gates = LSTMWithGates(10, 20)
 x = torch.randn(1, 30, 10)
 out = lstm_gates(x)
-print(f"게이트 분석용 LSTM 출력: {out.shape}")
+print(f"Gate analysis LSTM output: {out.shape}")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("LSTM/GRU 정리")
+print("LSTM/GRU Summary")
 print("=" * 60)
 
 summary = """
 LSTM:
     output, (h_n, c_n) = lstm(x)
-    - 셀 상태(c)로 장기 기억 유지
-    - Forget, Input, Output 게이트
+    - Cell state (c) maintains long-term memory
+    - Forget, Input, Output gates
 
 GRU:
     output, h_n = gru(x)
-    - 셀 상태 없음, 더 단순
-    - Reset, Update 게이트
+    - No cell state, simpler
+    - Reset, Update gates
 
-분류 패턴:
-    # 양방향 LSTM
+Classification pattern:
+    # Bidirectional LSTM
     forward_last = h_n[-2]
     backward_last = h_n[-1]
     combined = torch.cat([forward_last, backward_last], dim=1)
     output = fc(combined)
 
-텍스트 분류:
-    embedded = embedding(x)  # 토큰 → 벡터
+Text classification:
+    embedded = embedding(x)  # tokens -> vectors
     _, (h_n, _) = lstm(embedded)
     output = fc(h_n[-1])
 
-선택 기준:
-    - 긴 시퀀스, 복잡한 의존성 → LSTM
-    - 빠른 학습, 제한된 자원 → GRU
-    - 단순한 패턴 → RNN도 가능
+Selection criteria:
+    - Long sequences, complex dependencies -> LSTM
+    - Fast training, limited resources -> GRU
+    - Simple patterns -> RNN can work
 """
 print(summary)
 print("=" * 60)

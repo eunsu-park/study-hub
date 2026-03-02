@@ -1,20 +1,20 @@
 """
-투 포인터 (Two Pointer) 기법
+Two Pointer Technique
 Two Pointer Technique
 
-두 개의 포인터를 사용하여 배열/리스트 문제를 효율적으로 해결합니다.
+Efficiently solves array/list problems using two pointers.
 """
 
 from typing import List, Tuple, Optional
 
 
 # =============================================================================
-# 1. 두 수의 합 (정렬된 배열)
+# 1. Two Sum (Sorted Array)
 # =============================================================================
 def two_sum_sorted(arr: List[int], target: int) -> Optional[Tuple[int, int]]:
     """
-    정렬된 배열에서 합이 target인 두 수의 인덱스 찾기
-    시간복잡도: O(n), 공간복잡도: O(1)
+    Find indices of two numbers in a sorted array that sum to target
+    Time Complexity: O(n), Space Complexity: O(1)
     """
     left, right = 0, len(arr) - 1
 
@@ -24,27 +24,27 @@ def two_sum_sorted(arr: List[int], target: int) -> Optional[Tuple[int, int]]:
         if current_sum == target:
             return (left, right)
         elif current_sum < target:
-            left += 1  # 합이 작으면 왼쪽 포인터를 오른쪽으로
+            left += 1  # If sum is too small, move left pointer right
         else:
-            right -= 1  # 합이 크면 오른쪽 포인터를 왼쪽으로
+            right -= 1  # If sum is too large, move right pointer left
 
     return None
 
 
 # =============================================================================
-# 2. 세 수의 합 (3Sum)
+# 2. Three Sum (3Sum)
 # =============================================================================
 def three_sum(arr: List[int]) -> List[List[int]]:
     """
-    합이 0인 세 수의 조합 모두 찾기 (중복 제거)
-    시간복잡도: O(n²), 공간복잡도: O(1)
+    Find all triplets that sum to 0 (remove duplicates)
+    Time Complexity: O(n^2), Space Complexity: O(1)
     """
     arr.sort()
     result = []
     n = len(arr)
 
     for i in range(n - 2):
-        # 중복 건너뛰기
+        # Skip duplicates
         if i > 0 and arr[i] == arr[i - 1]:
             continue
 
@@ -55,7 +55,7 @@ def three_sum(arr: List[int]) -> List[List[int]]:
 
             if total == 0:
                 result.append([arr[i], arr[left], arr[right]])
-                # 중복 건너뛰기
+                # Skip duplicates
                 while left < right and arr[left] == arr[left + 1]:
                     left += 1
                 while left < right and arr[right] == arr[right - 1]:
@@ -71,24 +71,24 @@ def three_sum(arr: List[int]) -> List[List[int]]:
 
 
 # =============================================================================
-# 3. 물 담기 (Container With Most Water)
+# 3. Container With Most Water
 # =============================================================================
 def max_water(heights: List[int]) -> int:
     """
-    두 벽 사이에 담을 수 있는 최대 물의 양
-    시간복잡도: O(n), 공간복잡도: O(1)
+    Maximum amount of water that can be held between two walls
+    Time Complexity: O(n), Space Complexity: O(1)
     """
     left, right = 0, len(heights) - 1
     max_area = 0
 
     while left < right:
-        # 현재 면적 계산
+        # Calculate current area
         width = right - left
         height = min(heights[left], heights[right])
         area = width * height
         max_area = max(max_area, area)
 
-        # 더 낮은 쪽의 포인터 이동
+        # Move the pointer on the shorter side
         if heights[left] < heights[right]:
             left += 1
         else:
@@ -98,12 +98,12 @@ def max_water(heights: List[int]) -> int:
 
 
 # =============================================================================
-# 4. 정렬된 두 배열 합병
+# 4. Merge Two Sorted Arrays
 # =============================================================================
 def merge_sorted_arrays(arr1: List[int], arr2: List[int]) -> List[int]:
     """
-    정렬된 두 배열을 하나의 정렬된 배열로 합병
-    시간복잡도: O(n + m), 공간복잡도: O(n + m)
+    Merge two sorted arrays into one sorted array
+    Time Complexity: O(n + m), Space Complexity: O(n + m)
     """
     result = []
     i, j = 0, 0
@@ -116,7 +116,7 @@ def merge_sorted_arrays(arr1: List[int], arr2: List[int]) -> List[int]:
             result.append(arr2[j])
             j += 1
 
-    # 남은 요소 추가
+    # Append remaining elements
     result.extend(arr1[i:])
     result.extend(arr2[j:])
 
@@ -124,18 +124,18 @@ def merge_sorted_arrays(arr1: List[int], arr2: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 5. 중복 제거 (정렬된 배열)
+# 5. Remove Duplicates (Sorted Array)
 # =============================================================================
 def remove_duplicates(arr: List[int]) -> int:
     """
-    정렬된 배열에서 중복 제거 (in-place)
-    반환값: 고유한 요소의 개수
-    시간복잡도: O(n), 공간복잡도: O(1)
+    Remove duplicates from a sorted array (in-place)
+    Returns: number of unique elements
+    Time Complexity: O(n), Space Complexity: O(1)
     """
     if not arr:
         return 0
 
-    write_idx = 1  # 다음 고유 값을 쓸 위치
+    write_idx = 1  # Position to write the next unique value
 
     for read_idx in range(1, len(arr)):
         if arr[read_idx] != arr[write_idx - 1]:
@@ -146,17 +146,17 @@ def remove_duplicates(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 6. 회문 검사 (Palindrome)
+# 6. Palindrome Check
 # =============================================================================
 def is_palindrome(s: str) -> bool:
     """
-    문자열이 회문인지 검사 (알파벳/숫자만 비교)
-    시간복잡도: O(n), 공간복잡도: O(1)
+    Check if a string is a palindrome (comparing only alphanumeric characters)
+    Time Complexity: O(n), Space Complexity: O(1)
     """
     left, right = 0, len(s) - 1
 
     while left < right:
-        # 알파벳/숫자가 아니면 건너뛰기
+        # Skip non-alphanumeric characters
         while left < right and not s[left].isalnum():
             left += 1
         while left < right and not s[right].isalnum():
@@ -172,21 +172,21 @@ def is_palindrome(s: str) -> bool:
 
 
 # =============================================================================
-# 7. 슬라이딩 윈도우 (최대 합)
+# 7. Sliding Window (Maximum Sum)
 # =============================================================================
 def max_sum_subarray(arr: List[int], k: int) -> int:
     """
-    크기 k인 연속 부분 배열의 최대 합
-    시간복잡도: O(n), 공간복잡도: O(1)
+    Maximum sum of a contiguous subarray of size k
+    Time Complexity: O(n), Space Complexity: O(1)
     """
     if len(arr) < k:
         return 0
 
-    # 초기 윈도우 합
+    # Initial window sum
     window_sum = sum(arr[:k])
     max_sum = window_sum
 
-    # 윈도우 슬라이딩
+    # Slide the window
     for i in range(k, len(arr)):
         window_sum = window_sum - arr[i - k] + arr[i]
         max_sum = max(max_sum, window_sum)
@@ -195,67 +195,67 @@ def max_sum_subarray(arr: List[int], k: int) -> int:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("투 포인터 (Two Pointer) 기법 예제")
+    print("Two Pointer Technique Examples")
     print("=" * 60)
 
-    # 1. 두 수의 합
-    print("\n[1] 두 수의 합 (정렬된 배열)")
+    # 1. Two Sum
+    print("\n[1] Two Sum (Sorted Array)")
     arr = [1, 2, 3, 4, 5, 6, 7, 8, 9]
     target = 10
     result = two_sum_sorted(arr, target)
-    print(f"    배열: {arr}")
-    print(f"    타겟: {target}")
-    print(f"    결과: 인덱스 {result} -> {arr[result[0]]} + {arr[result[1]]} = {target}")
+    print(f"    Array: {arr}")
+    print(f"    Target: {target}")
+    print(f"    Result: indices {result} -> {arr[result[0]]} + {arr[result[1]]} = {target}")
 
-    # 2. 세 수의 합
-    print("\n[2] 세 수의 합 (3Sum)")
+    # 2. Three Sum
+    print("\n[2] Three Sum (3Sum)")
     arr = [-1, 0, 1, 2, -1, -4]
     result = three_sum(arr)
-    print(f"    배열: {arr}")
-    print(f"    합이 0인 조합: {result}")
+    print(f"    Array: {arr}")
+    print(f"    Triplets summing to 0: {result}")
 
-    # 3. 물 담기
-    print("\n[3] 물 담기 (Container With Most Water)")
+    # 3. Container With Most Water
+    print("\n[3] Container With Most Water")
     heights = [1, 8, 6, 2, 5, 4, 8, 3, 7]
     result = max_water(heights)
-    print(f"    높이: {heights}")
-    print(f"    최대 물의 양: {result}")
+    print(f"    Heights: {heights}")
+    print(f"    Maximum water volume: {result}")
 
-    # 4. 정렬된 배열 합병
-    print("\n[4] 정렬된 두 배열 합병")
+    # 4. Merge Sorted Arrays
+    print("\n[4] Merge Two Sorted Arrays")
     arr1 = [1, 3, 5, 7]
     arr2 = [2, 4, 6, 8, 10]
     result = merge_sorted_arrays(arr1, arr2)
-    print(f"    배열1: {arr1}")
-    print(f"    배열2: {arr2}")
-    print(f"    합병 결과: {result}")
+    print(f"    Array1: {arr1}")
+    print(f"    Array2: {arr2}")
+    print(f"    Merged result: {result}")
 
-    # 5. 중복 제거
-    print("\n[5] 중복 제거 (in-place)")
+    # 5. Remove Duplicates
+    print("\n[5] Remove Duplicates (in-place)")
     arr = [1, 1, 2, 2, 2, 3, 4, 4, 5]
     count = remove_duplicates(arr)
-    print(f"    원본: [1, 1, 2, 2, 2, 3, 4, 4, 5]")
-    print(f"    고유 요소 개수: {count}")
-    print(f"    결과 배열 (앞 {count}개): {arr[:count]}")
+    print(f"    Original: [1, 1, 2, 2, 2, 3, 4, 4, 5]")
+    print(f"    Unique element count: {count}")
+    print(f"    Result array (first {count}): {arr[:count]}")
 
-    # 6. 회문 검사
-    print("\n[6] 회문 검사")
+    # 6. Palindrome Check
+    print("\n[6] Palindrome Check")
     test_strings = ["A man, a plan, a canal: Panama", "race a car", "Was it a car or a cat I saw?"]
     for s in test_strings:
         result = is_palindrome(s)
         print(f"    '{s}' -> {result}")
 
-    # 7. 슬라이딩 윈도우
-    print("\n[7] 슬라이딩 윈도우 (크기 k 최대 합)")
+    # 7. Sliding Window
+    print("\n[7] Sliding Window (Max Sum of Size k)")
     arr = [2, 1, 5, 1, 3, 2]
     k = 3
     result = max_sum_subarray(arr, k)
-    print(f"    배열: {arr}, k={k}")
-    print(f"    최대 합: {result}")
+    print(f"    Array: {arr}, k={k}")
+    print(f"    Maximum sum: {result}")
 
     print("\n" + "=" * 60)
 

@@ -1,8 +1,8 @@
 /*
- * 강한 연결 요소 (SCC - Strongly Connected Components)
+ * Strongly Connected Components (SCC)
  * Kosaraju, Tarjan Algorithm
  *
- * 방향 그래프에서 서로 도달 가능한 정점 집합을 찾습니다.
+ * Finds groups of mutually reachable vertices in a directed graph.
  */
 
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #define MAXN 1005
 
 /* =============================================================================
- * 1. 그래프 구조
+ * 1. Graph Structure
  * ============================================================================= */
 
 typedef struct Node {
@@ -33,7 +33,7 @@ void add_edge(Node** g, int u, int v) {
 }
 
 /* =============================================================================
- * 2. Kosaraju 알고리즘
+ * 2. Kosaraju's Algorithm
  * ============================================================================= */
 
 bool visited[MAXN];
@@ -65,7 +65,7 @@ void dfs2(int v, int scc_num) {
 }
 
 int kosaraju(void) {
-    /* 1단계: 정방향 DFS */
+    /* Phase 1: Forward DFS */
     memset(visited, false, sizeof(visited));
     stack_top = 0;
     for (int i = 0; i < n; i++) {
@@ -73,7 +73,7 @@ int kosaraju(void) {
             dfs1(i);
     }
 
-    /* 2단계: 역방향 DFS */
+    /* Phase 2: Reverse DFS */
     memset(visited, false, sizeof(visited));
     scc_count = 0;
     for (int i = stack_top - 1; i >= 0; i--) {
@@ -88,7 +88,7 @@ int kosaraju(void) {
 }
 
 /* =============================================================================
- * 3. Tarjan 알고리즘
+ * 3. Tarjan's Algorithm
  * ============================================================================= */
 
 int disc[MAXN];
@@ -117,7 +117,7 @@ void tarjan_dfs(int v) {
         node = node->next;
     }
 
-    /* SCC 발견 */
+    /* SCC found */
     if (low[v] == disc[v]) {
         while (true) {
             int u = tarjan_stack[--tarjan_top];
@@ -146,7 +146,7 @@ int tarjan(void) {
 }
 
 /* =============================================================================
- * 4. SCC DAG 구성
+ * 4. SCC DAG Construction
  * ============================================================================= */
 
 typedef struct {
@@ -188,7 +188,7 @@ void build_scc_dag(void) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void cleanup(void) {
@@ -213,14 +213,15 @@ void cleanup(void) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("강한 연결 요소 (SCC) 예제\n");
+    printf("Strongly Connected Components (SCC) Examples\n");
     printf("============================================================\n");
 
     /*
-     * 그래프:
-     *   0 → 1 → 2 → 0 (SCC: {0,1,2})
-     *   ↓       ↓
-     *   3 ← 4 ← 5 (SCC: {3,4,5})
+     * Graph:
+     *   0 -> 1 -> 2 -> 0 (SCC: {0,1,2})
+     *   |         |
+     *   v         v
+     *   3 <- 4 <- 5 (SCC: {3,4,5})
      */
     n = 6;
     add_edge(graph, 0, 1);
@@ -230,9 +231,9 @@ int main(void) {
     add_edge(graph, 2, 5);
     add_edge(graph, 5, 4);
     add_edge(graph, 4, 3);
-    add_edge(graph, 3, 4);  /* 3,4,5 사이클 */
+    add_edge(graph, 3, 4);  /* 3,4,5 cycle */
 
-    /* 역그래프 구성 */
+    /* Build reverse graph */
     add_edge(reverse_graph, 1, 0);
     add_edge(reverse_graph, 2, 1);
     add_edge(reverse_graph, 0, 2);
@@ -243,41 +244,41 @@ int main(void) {
     add_edge(reverse_graph, 4, 3);
 
     /* 1. Kosaraju */
-    printf("\n[1] Kosaraju 알고리즘\n");
+    printf("\n[1] Kosaraju's Algorithm\n");
     int num_scc = kosaraju();
-    printf("    SCC 개수: %d\n", num_scc);
-    printf("    노드별 SCC ID:\n    ");
+    printf("    SCC count: %d\n", num_scc);
+    printf("    Node SCC IDs:\n    ");
     for (int i = 0; i < n; i++)
-        printf("%d→SCC%d  ", i, scc_id[i]);
+        printf("%d->SCC%d  ", i, scc_id[i]);
     printf("\n");
 
     /* 2. Tarjan */
-    printf("\n[2] Tarjan 알고리즘\n");
+    printf("\n[2] Tarjan's Algorithm\n");
     int num_scc2 = tarjan();
-    printf("    SCC 개수: %d\n", num_scc2);
-    printf("    노드별 SCC ID:\n    ");
+    printf("    SCC count: %d\n", num_scc2);
+    printf("    Node SCC IDs:\n    ");
     for (int i = 0; i < n; i++)
-        printf("%d→SCC%d  ", i, tarjan_scc_id[i]);
+        printf("%d->SCC%d  ", i, tarjan_scc_id[i]);
     printf("\n");
 
     /* 3. SCC DAG */
-    printf("\n[3] SCC 축약 그래프 (DAG)\n");
+    printf("\n[3] SCC Condensation Graph (DAG)\n");
     build_scc_dag();
-    printf("    SCC 간 간선:\n");
+    printf("    Edges between SCCs:\n");
     for (int i = 0; i < scc_count; i++) {
-        printf("      SCC%d → ", i);
+        printf("      SCC%d -> ", i);
         for (int j = 0; j < scc_graph[i].size; j++)
             printf("SCC%d ", scc_graph[i].edges[j]);
         printf("\n");
         free(scc_graph[i].edges);
     }
 
-    /* 4. 알고리즘 비교 */
-    printf("\n[4] 알고리즘 비교\n");
-    printf("    | 알고리즘  | 시간복잡도 | DFS 횟수 | 특징          |\n");
-    printf("    |-----------|------------|----------|---------------|\n");
-    printf("    | Kosaraju  | O(V + E)   | 2번      | 역그래프 필요 |\n");
-    printf("    | Tarjan    | O(V + E)   | 1번      | low-link 사용 |\n");
+    /* 4. Algorithm Comparison */
+    printf("\n[4] Algorithm Comparison\n");
+    printf("    | Algorithm | Time       | DFS Count | Features              |\n");
+    printf("    |-----------|------------|-----------|------------------------|\n");
+    printf("    | Kosaraju  | O(V + E)   | 2 times   | Requires reverse graph |\n");
+    printf("    | Tarjan    | O(V + E)   | 1 time    | Uses low-link values   |\n");
 
     cleanup();
 

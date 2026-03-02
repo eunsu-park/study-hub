@@ -1,9 +1,5 @@
 """
-API 보안 기법 데모
 API Security Techniques Demo
-
-토큰 버킷 레이트 리미터, 입력 검증, CORS 헤더, API 키 해싱,
-HMAC 기반 요청 서명 등 API 보안 핵심 기법을 구현합니다.
 
 Demonstrates token bucket rate limiting, input validation, CORS headers,
 API key hashing/verification, and HMAC-based request signing.
@@ -20,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 
 # =============================================================================
-# 1. Token Bucket Rate Limiter (토큰 버킷 레이트 리미터)
+# 1. Token Bucket Rate Limiter
 # =============================================================================
 
 class TokenBucketRateLimiter:
@@ -93,7 +89,7 @@ def demo_rate_limiter():
 
 
 # =============================================================================
-# 2. Input Validation Functions (입력 검증 함수)
+# 2. Input Validation Functions
 # =============================================================================
 
 class InputValidator:
@@ -195,7 +191,7 @@ def demo_input_validation():
 
 
 # =============================================================================
-# 3. CORS Header Generation (CORS 헤더 생성)
+# 3. CORS Header Generation
 # =============================================================================
 
 class CORSPolicy:
@@ -249,7 +245,7 @@ def demo_cors():
 
 
 # =============================================================================
-# 4. API Key Hashing and Verification (API 키 해싱 및 검증)
+# 4. API Key Hashing and Verification
 # =============================================================================
 
 class APIKeyManager:
@@ -314,7 +310,7 @@ def demo_api_key():
 
 
 # =============================================================================
-# 5. HMAC-Based Request Signing (HMAC 기반 요청 서명)
+# 5. HMAC-Based Request Signing
 # =============================================================================
 
 class RequestSigner:
@@ -419,7 +415,6 @@ def demo_request_signing():
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  API Security Techniques Demo")
-    print("  API 보안 기법 데모")
     print("=" * 60 + "\n")
 
     demo_rate_limiter()

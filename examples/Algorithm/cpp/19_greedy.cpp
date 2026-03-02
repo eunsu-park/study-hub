@@ -1,8 +1,8 @@
 /*
- * 탐욕 알고리즘 (Greedy Algorithm)
+ * Greedy Algorithm
  * Activity Selection, Huffman, Interval Scheduling, Fractional Knapsack
  *
- * 매 순간 최선의 선택을 하여 최적해를 구합니다.
+ * Finds optimal solutions by making the best choice at each step.
  */
 
 #include <iostream>
@@ -15,7 +15,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 활동 선택 문제
+// 1. Activity Selection Problem
 // =============================================================================
 
 struct Activity {
@@ -23,7 +23,7 @@ struct Activity {
 };
 
 vector<int> activitySelection(vector<Activity>& activities) {
-    // 종료 시간 기준 정렬
+    // Sort by end time
     sort(activities.begin(), activities.end(),
          [](const Activity& a, const Activity& b) {
              return a.end < b.end;
@@ -43,15 +43,15 @@ vector<int> activitySelection(vector<Activity>& activities) {
 }
 
 // =============================================================================
-// 2. 회의실 배정 (최소 회의실 수)
+// 2. Meeting Room Assignment (Minimum Meeting Rooms)
 // =============================================================================
 
 int minMeetingRooms(vector<pair<int, int>>& intervals) {
     vector<pair<int, int>> events;
 
     for (const auto& [start, end] : intervals) {
-        events.push_back({start, 1});   // 시작
-        events.push_back({end, -1});    // 종료
+        events.push_back({start, 1});   // Start
+        events.push_back({end, -1});    // End
     }
 
     sort(events.begin(), events.end());
@@ -66,7 +66,7 @@ int minMeetingRooms(vector<pair<int, int>>& intervals) {
 }
 
 // =============================================================================
-// 3. 분할 가능 배낭 (Fractional Knapsack)
+// 3. Fractional Knapsack
 // =============================================================================
 
 struct Item {
@@ -75,7 +75,7 @@ struct Item {
 };
 
 double fractionalKnapsack(int W, vector<Item>& items) {
-    // 가치/무게 비율로 정렬
+    // Sort by value/weight ratio
     sort(items.begin(), items.end(),
          [](const Item& a, const Item& b) {
              return a.ratio() > b.ratio();
@@ -98,7 +98,7 @@ double fractionalKnapsack(int W, vector<Item>& items) {
 }
 
 // =============================================================================
-// 4. 허프만 코딩
+// 4. Huffman Coding
 // =============================================================================
 
 struct HuffmanNode {
@@ -129,17 +129,17 @@ void generateCodes(HuffmanNode* root, string code,
 }
 
 unordered_map<char, string> huffmanCoding(const string& text) {
-    // 빈도 계산
+    // Frequency count
     unordered_map<char, int> freq;
     for (char c : text) freq[c]++;
 
-    // 우선순위 큐 (최소 힙)
+    // Priority queue (min heap)
     priority_queue<HuffmanNode*, vector<HuffmanNode*>, Compare> pq;
     for (auto& [c, f] : freq) {
         pq.push(new HuffmanNode(c, f));
     }
 
-    // 트리 구축
+    // Build tree
     while (pq.size() > 1) {
         HuffmanNode* left = pq.top(); pq.pop();
         HuffmanNode* right = pq.top(); pq.pop();
@@ -150,7 +150,7 @@ unordered_map<char, string> huffmanCoding(const string& text) {
         pq.push(parent);
     }
 
-    // 코드 생성
+    // Generate codes
     unordered_map<char, string> codes;
     if (!pq.empty()) {
         generateCodes(pq.top(), "", codes);
@@ -160,7 +160,7 @@ unordered_map<char, string> huffmanCoding(const string& text) {
 }
 
 // =============================================================================
-// 5. 작업 스케줄링 (Job Scheduling with Deadlines)
+// 5. Job Scheduling with Deadlines
 // =============================================================================
 
 struct Job {
@@ -168,7 +168,7 @@ struct Job {
 };
 
 int jobScheduling(vector<Job>& jobs) {
-    // 이익 기준 내림차순
+    // Sort by profit in descending order
     sort(jobs.begin(), jobs.end(),
          [](const Job& a, const Job& b) {
              return a.profit > b.profit;
@@ -179,11 +179,11 @@ int jobScheduling(vector<Job>& jobs) {
         maxDeadline = max(maxDeadline, job.deadline);
     }
 
-    vector<int> slots(maxDeadline + 1, -1);  // 각 시간대 사용 여부
+    vector<int> slots(maxDeadline + 1, -1);  // Time slot availability
     int totalProfit = 0;
 
     for (const auto& job : jobs) {
-        // 마감 직전부터 빈 슬롯 찾기
+        // Find empty slot starting from deadline
         for (int t = job.deadline; t >= 1; t--) {
             if (slots[t] == -1) {
                 slots[t] = job.id;
@@ -197,11 +197,11 @@ int jobScheduling(vector<Job>& jobs) {
 }
 
 // =============================================================================
-// 6. 최소 동전 거스름돈
+// 6. Minimum Coin Change
 // =============================================================================
 
 int minCoins(vector<int>& coins, int amount) {
-    // 큰 동전부터 사용 (탐욕적 접근 - 특정 화폐에서만 최적)
+    // Use largest coins first (greedy approach - optimal only for certain denominations)
     sort(coins.rbegin(), coins.rend());
 
     int count = 0;
@@ -214,11 +214,11 @@ int minCoins(vector<int>& coins, int amount) {
 }
 
 // =============================================================================
-// 7. 구간 커버 문제
+// 7. Interval Cover Problem
 // =============================================================================
 
 int intervalCover(vector<pair<int, int>>& intervals, int target) {
-    // 시작점 기준 정렬
+    // Sort by start point
     sort(intervals.begin(), intervals.end());
 
     int count = 0;
@@ -229,14 +229,14 @@ int intervalCover(vector<pair<int, int>>& intervals, int target) {
     while (current < target) {
         int maxEnd = current;
 
-        // 현재 위치를 포함하는 구간 중 가장 멀리 가는 것 선택
+        // Among intervals covering the current position, select the one reaching farthest
         while (i < n && intervals[i].first <= current) {
             maxEnd = max(maxEnd, intervals[i].second);
             i++;
         }
 
         if (maxEnd == current) {
-            return -1;  // 커버 불가
+            return -1;  // Cannot cover
         }
 
         current = maxEnd;
@@ -247,7 +247,7 @@ int intervalCover(vector<pair<int, int>>& intervals, int target) {
 }
 
 // =============================================================================
-// 8. 점프 게임
+// 8. Jump Game
 // =============================================================================
 
 bool canJump(const vector<int>& nums) {
@@ -284,7 +284,7 @@ int minJumps(const vector<int>& nums) {
 }
 
 // =============================================================================
-// 9. 주유소 (Gas Station)
+// 9. Gas Station
 // =============================================================================
 
 int canCompleteCircuit(const vector<int>& gas, const vector<int>& cost) {
@@ -308,11 +308,11 @@ int canCompleteCircuit(const vector<int>& gas, const vector<int>& cost) {
 }
 
 // =============================================================================
-// 10. 문자열 분할
+// 10. String Partitioning
 // =============================================================================
 
 vector<int> partitionLabels(const string& s) {
-    // 각 문자의 마지막 등장 위치
+    // Last occurrence position of each character
     vector<int> last(26, 0);
     for (int i = 0; i < (int)s.length(); i++) {
         last[s[i] - 'a'] = i;
@@ -334,7 +334,7 @@ vector<int> partitionLabels(const string& s) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -348,80 +348,80 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "탐욕 알고리즘 예제" << endl;
+    cout << "Greedy Algorithm Example" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 활동 선택
-    cout << "\n[1] 활동 선택" << endl;
+    // 1. Activity Selection
+    cout << "\n[1] Activity Selection" << endl;
     vector<Activity> activities = {
         {1, 4, 0}, {3, 5, 1}, {0, 6, 2}, {5, 7, 3},
         {3, 9, 4}, {5, 9, 5}, {6, 10, 6}, {8, 11, 7}
     };
     auto selected = activitySelection(activities);
-    cout << "    선택된 활동: ";
+    cout << "    Selected activities: ";
     printVector(selected);
     cout << endl;
 
-    // 2. 최소 회의실
-    cout << "\n[2] 최소 회의실" << endl;
+    // 2. Minimum Meeting Rooms
+    cout << "\n[2] Minimum Meeting Rooms" << endl;
     vector<pair<int, int>> meetings = {{0, 30}, {5, 10}, {15, 20}};
-    cout << "    회의: [(0,30), (5,10), (15,20)]" << endl;
-    cout << "    최소 회의실: " << minMeetingRooms(meetings) << endl;
+    cout << "    Meetings: [(0,30), (5,10), (15,20)]" << endl;
+    cout << "    Min rooms: " << minMeetingRooms(meetings) << endl;
 
-    // 3. 분할 가능 배낭
-    cout << "\n[3] 분할 가능 배낭" << endl;
+    // 3. Fractional Knapsack
+    cout << "\n[3] Fractional Knapsack" << endl;
     vector<Item> items = {{10, 60}, {20, 100}, {30, 120}};
-    cout << "    물건: (무게, 가치) = (10,60), (20,100), (30,120)" << endl;
-    cout << "    용량 50, 최대 가치: " << fractionalKnapsack(50, items) << endl;
+    cout << "    Items: (weight, value) = (10,60), (20,100), (30,120)" << endl;
+    cout << "    Capacity 50, Max value: " << fractionalKnapsack(50, items) << endl;
 
-    // 4. 허프만 코딩
-    cout << "\n[4] 허프만 코딩" << endl;
+    // 4. Huffman Coding
+    cout << "\n[4] Huffman Coding" << endl;
     string text = "aabbbcccc";
     auto codes = huffmanCoding(text);
-    cout << "    텍스트: \"" << text << "\"" << endl;
-    cout << "    코드:" << endl;
+    cout << "    Text: \"" << text << "\"" << endl;
+    cout << "    Codes:" << endl;
     for (auto& [ch, code] : codes) {
         cout << "      '" << ch << "': " << code << endl;
     }
 
-    // 5. 작업 스케줄링
-    cout << "\n[5] 작업 스케줄링" << endl;
+    // 5. Job Scheduling
+    cout << "\n[5] Job Scheduling" << endl;
     vector<Job> jobs = {{1, 4, 20}, {2, 1, 10}, {3, 1, 40}, {4, 1, 30}};
-    cout << "    작업: (id, 마감, 이익)" << endl;
-    cout << "    최대 이익: " << jobScheduling(jobs) << endl;
+    cout << "    Jobs: (id, deadline, profit)" << endl;
+    cout << "    Max profit: " << jobScheduling(jobs) << endl;
 
-    // 6. 점프 게임
-    cout << "\n[6] 점프 게임" << endl;
+    // 6. Jump Game
+    cout << "\n[6] Jump Game" << endl;
     vector<int> nums1 = {2, 3, 1, 1, 4};
     vector<int> nums2 = {3, 2, 1, 0, 4};
-    cout << "    [2,3,1,1,4] 도달 가능: " << (canJump(nums1) ? "예" : "아니오") << endl;
-    cout << "    [2,3,1,1,4] 최소 점프: " << minJumps(nums1) << endl;
-    cout << "    [3,2,1,0,4] 도달 가능: " << (canJump(nums2) ? "예" : "아니오") << endl;
+    cout << "    [2,3,1,1,4] reachable: " << (canJump(nums1) ? "Yes" : "No") << endl;
+    cout << "    [2,3,1,1,4] min jumps: " << minJumps(nums1) << endl;
+    cout << "    [3,2,1,0,4] reachable: " << (canJump(nums2) ? "Yes" : "No") << endl;
 
-    // 7. 주유소
-    cout << "\n[7] 주유소" << endl;
+    // 7. Gas Station
+    cout << "\n[7] Gas Station" << endl;
     vector<int> gas = {1, 2, 3, 4, 5};
     vector<int> cost = {3, 4, 5, 1, 2};
     cout << "    gas: [1,2,3,4,5], cost: [3,4,5,1,2]" << endl;
-    cout << "    시작 위치: " << canCompleteCircuit(gas, cost) << endl;
+    cout << "    Start position: " << canCompleteCircuit(gas, cost) << endl;
 
-    // 8. 문자열 분할
-    cout << "\n[8] 문자열 분할" << endl;
+    // 8. String Partitioning
+    cout << "\n[8] String Partitioning" << endl;
     string s = "ababcbacadefegdehijhklij";
     auto parts = partitionLabels(s);
-    cout << "    문자열: \"" << s << "\"" << endl;
-    cout << "    분할 크기: ";
+    cout << "    String: \"" << s << "\"" << endl;
+    cout << "    Partition sizes: ";
     printVector(parts);
     cout << endl;
 
-    // 9. 탐욕 vs DP
-    cout << "\n[9] 탐욕 vs DP" << endl;
-    cout << "    | 기준           | 탐욕          | DP              |" << endl;
+    // 9. Greedy vs DP
+    cout << "\n[9] Greedy vs DP" << endl;
+    cout << "    | Criterion      | Greedy        | DP              |" << endl;
     cout << "    |----------------|---------------|-----------------|" << endl;
-    cout << "    | 접근 방식      | 지역 최적     | 전역 최적       |" << endl;
-    cout << "    | 결정 변경      | X             | O               |" << endl;
-    cout << "    | 시간 복잡도    | 보통 낮음     | 보통 높음       |" << endl;
-    cout << "    | 최적 보장      | 특정 문제만   | 항상 보장       |" << endl;
+    cout << "    | Approach       | Local optimal | Global optimal  |" << endl;
+    cout << "    | Decision change| X             | O               |" << endl;
+    cout << "    | Time complexity| Usually low   | Usually high    |" << endl;
+    cout << "    | Optimality     | Specific only | Always guaranteed|" << endl;
 
     cout << "\n============================================================" << endl;
 

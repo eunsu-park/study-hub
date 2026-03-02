@@ -1,7 +1,7 @@
 {
   "name": "vite-project-example",
   "version": "1.0.0",
-  "description": "Vite 빌드 도구 예제 프로젝트",
+  "description": "Vite build tool example project",
   "type": "module",
   "scripts": {
     "dev": "vite",

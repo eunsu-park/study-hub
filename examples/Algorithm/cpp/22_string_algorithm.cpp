@@ -1,8 +1,8 @@
 /*
- * 문자열 알고리즘 (String Algorithms)
+ * String Algorithms
  * KMP, Rabin-Karp, Z-Algorithm, Suffix Array
  *
- * 문자열 검색과 처리를 위한 알고리즘입니다.
+ * Algorithms for string searching and processing.
  */
 
 #include <iostream>
@@ -14,10 +14,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. KMP 알고리즘
+// 1. KMP Algorithm
 // =============================================================================
 
-// 실패 함수 (부분 일치 테이블)
+// Failure function (partial match table)
 vector<int> computeFailure(const string& pattern) {
     int m = pattern.length();
     vector<int> failure(m, 0);
@@ -36,7 +36,7 @@ vector<int> computeFailure(const string& pattern) {
     return failure;
 }
 
-// KMP 검색
+// KMP search
 vector<int> kmpSearch(const string& text, const string& pattern) {
     vector<int> result;
     if (pattern.empty()) return result;
@@ -62,7 +62,7 @@ vector<int> kmpSearch(const string& text, const string& pattern) {
 }
 
 // =============================================================================
-// 2. Rabin-Karp 알고리즘
+// 2. Rabin-Karp Algorithm
 // =============================================================================
 
 class RabinKarp {
@@ -76,7 +76,7 @@ public:
         int n = text.length(), m = pattern.length();
         if (m > n) return result;
 
-        // 패턴 해시
+        // Pattern hash
         long long patternHash = 0;
         long long textHash = 0;
         long long power = 1;
@@ -91,7 +91,7 @@ public:
 
         for (int i = 0; i <= n - m; i++) {
             if (patternHash == textHash) {
-                // 해시 충돌 확인
+                // Verify hash collision
                 if (text.substr(i, m) == pattern) {
                     result.push_back(i);
                 }
@@ -106,7 +106,7 @@ public:
         return result;
     }
 
-    // 롤링 해시로 부분 문자열 비교
+    // Rolling hash for substring comparison
     long long hash(const string& s) {
         long long h = 0;
         for (char c : s) {
@@ -117,7 +117,7 @@ public:
 };
 
 // =============================================================================
-// 3. Z-알고리즘
+// 3. Z-Algorithm
 // =============================================================================
 
 vector<int> zFunction(const string& s) {
@@ -157,7 +157,7 @@ vector<int> zSearch(const string& text, const string& pattern) {
 }
 
 // =============================================================================
-// 4. 접미사 배열 (Suffix Array)
+// 4. Suffix Array
 // =============================================================================
 
 vector<int> buildSuffixArray(const string& s) {
@@ -189,7 +189,7 @@ vector<int> buildSuffixArray(const string& s) {
     return sa;
 }
 
-// LCP 배열 (Kasai's Algorithm)
+// LCP Array (Kasai's Algorithm)
 vector<int> buildLCPArray(const string& s, const vector<int>& sa) {
     int n = s.length();
     vector<int> rank_(n), lcp(n);
@@ -217,11 +217,11 @@ vector<int> buildLCPArray(const string& s, const vector<int>& sa) {
 }
 
 // =============================================================================
-// 5. Manacher 알고리즘 (가장 긴 팰린드롬)
+// 5. Manacher's Algorithm (Longest Palindrome)
 // =============================================================================
 
 string manacher(const string& s) {
-    // 문자 사이에 # 삽입
+    // Insert # between characters
     string t = "#";
     for (char c : s) {
         t += c;
@@ -246,7 +246,7 @@ string manacher(const string& s) {
         }
     }
 
-    // 가장 긴 팰린드롬 찾기
+    // Find the longest palindrome
     int maxLen = 0, maxCenter = 0;
     for (int i = 0; i < n; i++) {
         if (p[i] > maxLen) {
@@ -260,7 +260,7 @@ string manacher(const string& s) {
 }
 
 // =============================================================================
-// 6. Trie (간단 버전)
+// 6. Trie (Simple Version)
 // =============================================================================
 
 class SimpleTrie {
@@ -305,7 +305,7 @@ public:
 };
 
 // =============================================================================
-// 7. 문자열 해싱
+// 7. String Hashing
 // =============================================================================
 
 class StringHash {
@@ -326,14 +326,14 @@ public:
         }
     }
 
-    // [l, r) 구간 해시
+    // Hash of range [l, r)
     long long getHash(int l, int r) {
         return (hash_[r] - hash_[l] * power_[r - l] % MOD + MOD) % MOD;
     }
 };
 
 // =============================================================================
-// 8. 아호-코라식 (Aho-Corasick)
+// 8. Aho-Corasick
 // =============================================================================
 
 class AhoCorasick {
@@ -342,7 +342,7 @@ private:
     struct Node {
         int children[ALPHABET];
         int fail;
-        vector<int> output;  // 매칭되는 패턴 인덱스
+        vector<int> output;  // Matched pattern indices
 
         Node() : fail(0) {
             fill(children, children + ALPHABET, -1);
@@ -355,7 +355,7 @@ private:
 
 public:
     AhoCorasick() {
-        trie.emplace_back();  // 루트
+        trie.emplace_back();  // Root
     }
 
     void addPattern(const string& pattern, int idx) {
@@ -395,7 +395,7 @@ public:
                     trie[next].fail = (trie[fail].children[i] != -1 && trie[fail].children[i] != next)
                                       ? trie[fail].children[i] : 0;
 
-                    // output 병합
+                    // Merge output
                     for (int idx : trie[trie[next].fail].output) {
                         trie[next].output.push_back(idx);
                     }
@@ -406,7 +406,7 @@ public:
     }
 
     vector<pair<int, int>> search(const string& text) {
-        vector<pair<int, int>> result;  // {위치, 패턴 인덱스}
+        vector<pair<int, int>> result;  // {position, pattern index}
         int curr = 0;
 
         for (int i = 0; i < (int)text.length(); i++) {
@@ -427,7 +427,7 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 #include <queue>
@@ -443,38 +443,38 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "문자열 알고리즘 예제" << endl;
+    cout << "String Algorithms Example" << endl;
     cout << "============================================================" << endl;
 
     string text = "ABABDABACDABABCABAB";
     string pattern = "ABAB";
 
     // 1. KMP
-    cout << "\n[1] KMP 알고리즘" << endl;
-    cout << "    텍스트: \"" << text << "\"" << endl;
-    cout << "    패턴: \"" << pattern << "\"" << endl;
+    cout << "\n[1] KMP Algorithm" << endl;
+    cout << "    Text: \"" << text << "\"" << endl;
+    cout << "    Pattern: \"" << pattern << "\"" << endl;
     auto kmpResult = kmpSearch(text, pattern);
-    cout << "    발견 위치: ";
+    cout << "    Found at: ";
     printVector(kmpResult);
     cout << endl;
 
     auto failure = computeFailure(pattern);
-    cout << "    실패 함수: ";
+    cout << "    Failure function: ";
     printVector(failure);
     cout << endl;
 
     // 2. Rabin-Karp
-    cout << "\n[2] Rabin-Karp 알고리즘" << endl;
+    cout << "\n[2] Rabin-Karp Algorithm" << endl;
     RabinKarp rk;
     auto rkResult = rk.search(text, pattern);
-    cout << "    발견 위치: ";
+    cout << "    Found at: ";
     printVector(rkResult);
     cout << endl;
 
     // 3. Z-Algorithm
-    cout << "\n[3] Z-알고리즘" << endl;
+    cout << "\n[3] Z-Algorithm" << endl;
     auto zResult = zSearch(text, pattern);
-    cout << "    발견 위치: ";
+    cout << "    Found at: ";
     printVector(zResult);
     cout << endl;
 
@@ -484,8 +484,8 @@ int main() {
     printVector(z);
     cout << endl;
 
-    // 4. 접미사 배열
-    cout << "\n[4] 접미사 배열" << endl;
+    // 4. Suffix Array
+    cout << "\n[4] Suffix Array" << endl;
     string s = "banana";
     auto sa = buildSuffixArray(s);
     cout << "    \"banana\" SA: ";
@@ -497,9 +497,9 @@ int main() {
     cout << endl;
 
     // 5. Manacher
-    cout << "\n[5] Manacher 알고리즘" << endl;
-    cout << "    \"babad\" 가장 긴 팰린드롬: \"" << manacher("babad") << "\"" << endl;
-    cout << "    \"cbbd\" 가장 긴 팰린드롬: \"" << manacher("cbbd") << "\"" << endl;
+    cout << "\n[5] Manacher's Algorithm" << endl;
+    cout << "    \"babad\" longest palindrome: \"" << manacher("babad") << "\"" << endl;
+    cout << "    \"cbbd\" longest palindrome: \"" << manacher("cbbd") << "\"" << endl;
 
     // 6. Trie
     cout << "\n[6] Trie" << endl;
@@ -511,23 +511,23 @@ int main() {
     cout << "    search(app): " << (trie.search("app") ? "true" : "false") << endl;
     cout << "    startsWith(ap): " << (trie.startsWith("ap") ? "true" : "false") << endl;
 
-    // 7. 문자열 해싱
-    cout << "\n[7] 문자열 해싱" << endl;
+    // 7. String Hashing
+    cout << "\n[7] String Hashing" << endl;
     StringHash sh("abcabc");
-    cout << "    \"abcabc\" 해시" << endl;
+    cout << "    \"abcabc\" hash" << endl;
     cout << "    hash[0,3) = hash[3,6): " <<
          (sh.getHash(0, 3) == sh.getHash(3, 6) ? "true" : "false") << endl;
 
-    // 8. 복잡도 요약
-    cout << "\n[8] 복잡도 요약" << endl;
-    cout << "    | 알고리즘       | 전처리     | 검색        |" << endl;
+    // 8. Complexity Summary
+    cout << "\n[8] Complexity Summary" << endl;
+    cout << "    | Algorithm      | Preprocess | Search      |" << endl;
     cout << "    |----------------|------------|-------------|" << endl;
     cout << "    | KMP            | O(m)       | O(n)        |" << endl;
-    cout << "    | Rabin-Karp     | O(m)       | O(n) 평균   |" << endl;
+    cout << "    | Rabin-Karp     | O(m)       | O(n) avg    |" << endl;
     cout << "    | Z-Algorithm    | O(n)       | O(n)        |" << endl;
     cout << "    | Suffix Array   | O(n log n) | O(m log n)  |" << endl;
     cout << "    | Manacher       | -          | O(n)        |" << endl;
-    cout << "    | Aho-Corasick   | O(Σm)      | O(n + 결과) |" << endl;
+    cout << "    | Aho-Corasick   | O(Sum(m))  | O(n + hits) |" << endl;
 
     cout << "\n============================================================" << endl;
 

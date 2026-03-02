@@ -1,5 +1,5 @@
 """
-PPO (Proximal Policy Optimization) 구현
+PPO (Proximal Policy Optimization) Implementation
 """
 import torch
 import torch.nn as nn

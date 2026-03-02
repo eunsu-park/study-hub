@@ -9,19 +9,19 @@ TARGETS = simple_xor file_encrypt file_encrypt_v2
 
 all: $(TARGETS)
 
-# 기본 XOR 데모
+# Basic XOR demo
 simple_xor: simple_xor.c
 	$(CC) $(CFLAGS) $< -o $@
 
-# 파일 암호화 도구 (기본)
+# File encryption tool (basic)
 file_encrypt: file_encrypt.c
 	$(CC) $(CFLAGS) $< -o $@
 
-# 파일 암호화 도구 v2 (헤더 + 검증)
+# File encryption tool v2 (header + validation)
 file_encrypt_v2: file_encrypt_v2.c
 	$(CC) $(CFLAGS) $< -o $@
 
-# 테스트 실행
+# Run tests
 test: all
 	@echo "=== Testing simple_xor ==="
 	./simple_xor

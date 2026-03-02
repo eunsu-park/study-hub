@@ -1,11 +1,11 @@
 /*
  * hash_chaining.c
- * 체이닝(Separate Chaining)을 이용한 해시 테이블 구현
+ * Hash table implementation using separate chaining
  *
- * 체이닝 방식:
- * - 충돌 발생 시 같은 버킷에 연결 리스트로 저장
- * - 장점: 삽입/삭제 간단, 테이블 크기 제한 없음
- * - 단점: 포인터 추가 메모리, 캐시 효율 낮음
+ * Chaining method:
+ * - On collision, store entries in a linked list within the same bucket
+ * - Pros: Simple insertion/deletion, no table size limitation
+ * - Cons: Extra memory for pointers, lower cache efficiency
  */
 
 #include <stdio.h>
@@ -17,21 +17,21 @@
 #define KEY_SIZE 50
 #define VALUE_SIZE 100
 
-// 노드 구조체 (키-값 쌍을 저장)
+// Node struct (stores key-value pairs)
 typedef struct Node {
     char key[KEY_SIZE];
     char value[VALUE_SIZE];
-    struct Node *next;  // 다음 노드 (체이닝)
+    struct Node *next;  // Next node (chaining)
 } Node;
 
-// 해시 테이블 구조체
+// Hash table struct
 typedef struct {
-    Node *buckets[TABLE_SIZE];  // 버킷 배열
-    int count;                   // 저장된 항목 개수
-    int collisions;              // 충돌 횟수
+    Node *buckets[TABLE_SIZE];  // Bucket array
+    int count;                   // Number of stored items
+    int collisions;              // Number of collisions
 } HashTable;
 
-// 통계 정보
+// Statistics info
 typedef struct {
     int total_inserts;
     int total_searches;
@@ -39,7 +39,7 @@ typedef struct {
     int chain_lengths[TABLE_SIZE];
 } Statistics;
 
-// djb2 해시 함수
+// djb2 hash function
 // Why: unsigned int prevents undefined behavior from signed overflow during
 // repeated multiply-and-add — signed overflow is UB in C, unsigned wraps safely
 unsigned int hash(const char *key) {
@@ -51,15 +51,15 @@ unsigned int hash(const char *key) {
     return hash % TABLE_SIZE;
 }
 
-// 해시 테이블 생성
+// Create hash table
 HashTable* ht_create(void) {
     HashTable *ht = malloc(sizeof(HashTable));
     if (!ht) {
-        fprintf(stderr, "메모리 할당 실패\n");
+        fprintf(stderr, "Memory allocation failed\n");
         return NULL;
     }
 
-    // 모든 버킷 초기화
+    // Initialize all buckets
     for (int i = 0; i < TABLE_SIZE; i++) {
         ht->buckets[i] = NULL;
     }
@@ -69,11 +69,11 @@ HashTable* ht_create(void) {
     return ht;
 }
 
-// 해시 테이블 해제
+// Destroy hash table
 void ht_destroy(HashTable *ht) {
     if (!ht) return;
 
-    // 각 버킷의 체인 해제
+    // Free each bucket's chain
     for (int i = 0; i < TABLE_SIZE; i++) {
         Node *current = ht->buckets[i];
         while (current) {
@@ -85,17 +85,17 @@ void ht_destroy(HashTable *ht) {
     free(ht);
 }
 
-// 삽입 또는 수정
+// Insert or update
 bool ht_set(HashTable *ht, const char *key, const char *value) {
     if (!ht || !key || !value) return false;
 
     unsigned int index = hash(key);
 
-    // 기존 키가 있는지 확인
+    // Check if key already exists
     Node *current = ht->buckets[index];
     while (current) {
         if (strcmp(current->key, key) == 0) {
-            // 기존 키 발견 → 값만 업데이트
+            // Existing key found -> update value only
             strncpy(current->value, value, VALUE_SIZE - 1);
             current->value[VALUE_SIZE - 1] = '\0';
             return true;
@@ -103,10 +103,10 @@ bool ht_set(HashTable *ht, const char *key, const char *value) {
         current = current->next;
     }
 
-    // 새 노드 생성
+    // Create new node
     Node *node = malloc(sizeof(Node));
     if (!node) {
-        fprintf(stderr, "메모리 할당 실패\n");
+        fprintf(stderr, "Memory allocation failed\n");
         return false;
     }
 
@@ -117,12 +117,12 @@ bool ht_set(HashTable *ht, const char *key, const char *value) {
     strncpy(node->value, value, VALUE_SIZE - 1);
     node->value[VALUE_SIZE - 1] = '\0';
 
-    // 버킷 맨 앞에 삽입 (O(1))
+    // Insert at the head of the bucket (O(1))
     // Why: inserting at the head of the chain is O(1) — appending at the tail
     // would require traversing the entire chain, making insertion O(n)
     node->next = ht->buckets[index];
 
-    // 충돌 확인 (버킷에 이미 노드가 있으면 충돌)
+    // Check for collision (bucket already has a node)
     if (ht->buckets[index] != NULL) {
         ht->collisions++;
     }
@@ -133,25 +133,25 @@ bool ht_set(HashTable *ht, const char *key, const char *value) {
     return true;
 }
 
-// 검색
+// Search
 char* ht_get(HashTable *ht, const char *key) {
     if (!ht || !key) return NULL;
 
     unsigned int index = hash(key);
 
-    // 체인 탐색
+    // Traverse the chain
     Node *current = ht->buckets[index];
     while (current) {
         if (strcmp(current->key, key) == 0) {
-            return current->value;  // 찾음!
+            return current->value;  // Found!
         }
         current = current->next;
     }
 
-    return NULL;  // 찾지 못함
+    return NULL;  // Not found
 }
 
-// 삭제
+// Delete
 bool ht_delete(HashTable *ht, const char *key) {
     if (!ht || !key) return false;
 
@@ -162,14 +162,14 @@ bool ht_delete(HashTable *ht, const char *key) {
     // look backward — without prev, we cannot relink after removing a node
     Node *prev = NULL;
 
-    // 체인에서 노드 찾기
+    // Find node in chain
     while (current) {
         if (strcmp(current->key, key) == 0) {
-            // 노드 제거
+            // Remove node
             if (prev) {
-                prev->next = current->next;  // 중간 또는 끝
+                prev->next = current->next;  // Middle or end
             } else {
-                ht->buckets[index] = current->next;  // 맨 앞
+                ht->buckets[index] = current->next;  // Head
             }
             free(current);
             ht->count--;
@@ -179,44 +179,44 @@ bool ht_delete(HashTable *ht, const char *key) {
         current = current->next;
     }
 
-    return false;  // 찾지 못함
+    return false;  // Not found
 }
 
-// 해시 테이블 출력
+// Print hash table
 void ht_print(HashTable *ht) {
     if (!ht) return;
 
-    printf("\n╔════════════════════════════════════════════╗\n");
-    printf("║         해시 테이블 상태 (체이닝)         ║\n");
-    printf("╠════════════════════════════════════════════╣\n");
-    printf("║  항목 개수: %-5d                          ║\n", ht->count);
-    printf("║  충돌 횟수: %-5d                          ║\n", ht->collisions);
-    printf("║  로드 팩터: %.2f                           ║\n",
+    printf("\n+============================================+\n");
+    printf("|      Hash Table State (Chaining)           |\n");
+    printf("+============================================+\n");
+    printf("|  Item count: %-5d                         |\n", ht->count);
+    printf("|  Collisions: %-5d                         |\n", ht->collisions);
+    printf("|  Load factor: %.2f                         |\n",
            (double)ht->count / TABLE_SIZE);
-    printf("╚════════════════════════════════════════════╝\n\n");
+    printf("+============================================+\n\n");
 
     for (int i = 0; i < TABLE_SIZE; i++) {
         printf("[%d]: ", i);
 
         Node *current = ht->buckets[i];
         if (!current) {
-            printf("(비어있음)\n");
+            printf("(empty)\n");
             continue;
         }
 
-        // 체인 출력
+        // Print chain
         int chain_length = 0;
         while (current) {
             printf("[\"%s\":\"%s\"]", current->key, current->value);
-            if (current->next) printf(" → ");
+            if (current->next) printf(" -> ");
             current = current->next;
             chain_length++;
         }
-        printf(" (길이: %d)\n", chain_length);
+        printf(" (length: %d)\n", chain_length);
     }
 }
 
-// 통계 수집
+// Collect statistics
 void ht_get_statistics(HashTable *ht, Statistics *stats) {
     if (!ht || !stats) return;
 
@@ -224,7 +224,7 @@ void ht_get_statistics(HashTable *ht, Statistics *stats) {
 
     stats->total_inserts = ht->count;
 
-    // 각 버킷의 체인 길이 계산
+    // Calculate chain length for each bucket
     for (int i = 0; i < TABLE_SIZE; i++) {
         int length = 0;
         Node *current = ht->buckets[i];
@@ -236,14 +236,14 @@ void ht_get_statistics(HashTable *ht, Statistics *stats) {
     }
 }
 
-// 통계 출력
+// Print statistics
 void print_statistics(HashTable *ht) {
     Statistics stats;
     ht_get_statistics(ht, &stats);
 
-    printf("\n=== 성능 통계 ===\n\n");
+    printf("\n=== Performance Statistics ===\n\n");
 
-    // 최대 체인 길이
+    // Maximum chain length
     int max_length = 0;
     int empty_buckets = 0;
     for (int i = 0; i < TABLE_SIZE; i++) {
@@ -257,36 +257,36 @@ void print_statistics(HashTable *ht) {
 
     double avg_chain_length = (double)ht->count / (TABLE_SIZE - empty_buckets);
 
-    printf("저장된 항목:     %d\n", ht->count);
-    printf("충돌 횟수:       %d\n", ht->collisions);
-    printf("비어있는 버킷:   %d / %d\n", empty_buckets, TABLE_SIZE);
-    printf("최대 체인 길이:  %d\n", max_length);
-    printf("평균 체인 길이:  %.2f\n", avg_chain_length);
-    printf("로드 팩터:       %.2f\n", (double)ht->count / TABLE_SIZE);
+    printf("Stored items:      %d\n", ht->count);
+    printf("Collisions:        %d\n", ht->collisions);
+    printf("Empty buckets:     %d / %d\n", empty_buckets, TABLE_SIZE);
+    printf("Max chain length:  %d\n", max_length);
+    printf("Avg chain length:  %.2f\n", avg_chain_length);
+    printf("Load factor:       %.2f\n", (double)ht->count / TABLE_SIZE);
 
-    // 체인 길이 분포
-    printf("\n체인 길이 분포:\n");
+    // Chain length distribution
+    printf("\nChain length distribution:\n");
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (stats.chain_lengths[i] > 0) {
-            printf("  버킷 %d: ", i);
+            printf("  Bucket %d: ", i);
             for (int j = 0; j < stats.chain_lengths[i]; j++) {
-                printf("█");
+                printf("#");
             }
             printf(" (%d)\n", stats.chain_lengths[i]);
         }
     }
 }
 
-// 키 존재 여부 확인
+// Check if key exists
 bool ht_contains(HashTable *ht, const char *key) {
     return ht_get(ht, key) != NULL;
 }
 
-// 모든 키 출력
+// Print all keys
 void ht_print_keys(HashTable *ht) {
     if (!ht) return;
 
-    printf("\n=== 저장된 키 목록 ===\n");
+    printf("\n=== Stored Keys ===\n");
     int count = 0;
     for (int i = 0; i < TABLE_SIZE; i++) {
         Node *current = ht->buckets[i];
@@ -295,81 +295,81 @@ void ht_print_keys(HashTable *ht) {
             current = current->next;
         }
     }
-    printf("총 %d개\n", count);
+    printf("Total: %d\n", count);
 }
 
-// 테스트 함수
+// Test function
 int main(void) {
-    printf("╔════════════════════════════════════════════╗\n");
-    printf("║      체이닝 해시 테이블 구현 및 테스트    ║\n");
-    printf("╚════════════════════════════════════════════╝\n");
+    printf("+============================================+\n");
+    printf("|  Chaining Hash Table Implementation & Test |\n");
+    printf("+============================================+\n");
 
     HashTable *ht = ht_create();
     if (!ht) return 1;
 
-    // 1. 삽입 테스트
-    printf("\n[ 1단계: 삽입 테스트 ]\n");
-    printf("여러 과일 이름과 한글명을 삽입합니다...\n");
+    // 1. Insertion test
+    printf("\n[ Step 1: Insertion Test ]\n");
+    printf("Inserting fruit names with descriptions...\n");
 
-    ht_set(ht, "apple", "사과");
-    ht_set(ht, "banana", "바나나");
-    ht_set(ht, "cherry", "체리");
-    ht_set(ht, "date", "대추야자");
-    ht_set(ht, "elderberry", "엘더베리");
-    ht_set(ht, "fig", "무화과");
-    ht_set(ht, "grape", "포도");
-    ht_set(ht, "honeydew", "허니듀 멜론");
+    ht_set(ht, "apple", "a round fruit");
+    ht_set(ht, "banana", "a yellow fruit");
+    ht_set(ht, "cherry", "a small red fruit");
+    ht_set(ht, "date", "a sweet fruit");
+    ht_set(ht, "elderberry", "a dark berry");
+    ht_set(ht, "fig", "a soft fruit");
+    ht_set(ht, "grape", "a vine fruit");
+    ht_set(ht, "honeydew", "a melon variety");
 
     ht_print(ht);
 
-    // 2. 검색 테스트
-    printf("\n[ 2단계: 검색 테스트 ]\n");
+    // 2. Search test
+    printf("\n[ Step 2: Search Test ]\n");
     const char *search_keys[] = {"apple", "grape", "kiwi", "banana"};
     for (int i = 0; i < 4; i++) {
         char *value = ht_get(ht, search_keys[i]);
         if (value) {
-            printf("✓ '%s' → '%s'\n", search_keys[i], value);
+            printf("Found: '%s' -> '%s'\n", search_keys[i], value);
         } else {
-            printf("✗ '%s' → (찾을 수 없음)\n", search_keys[i]);
+            printf("Not found: '%s'\n", search_keys[i]);
         }
     }
 
-    // 3. 수정 테스트
-    printf("\n[ 3단계: 수정 테스트 ]\n");
-    printf("'apple'의 값을 수정합니다...\n");
-    ht_set(ht, "apple", "맛있는 사과 🍎");
-    printf("수정 후: apple → %s\n", ht_get(ht, "apple"));
+    // 3. Update test
+    printf("\n[ Step 3: Update Test ]\n");
+    printf("Updating 'apple' value...\n");
+    ht_set(ht, "apple", "a delicious fruit");
+    printf("After update: apple -> %s\n", ht_get(ht, "apple"));
 
-    // 4. 삭제 테스트
-    printf("\n[ 4단계: 삭제 테스트 ]\n");
-    printf("'banana'를 삭제합니다...\n");
+    // 4. Delete test
+    printf("\n[ Step 4: Delete Test ]\n");
+    printf("Deleting 'banana'...\n");
     if (ht_delete(ht, "banana")) {
-        printf("✓ 삭제 성공\n");
+        printf("Delete successful\n");
     }
-    printf("삭제 확인: banana → %s\n",
-           ht_get(ht, "banana") ?: "(찾을 수 없음)");
+    printf("Verify deletion: banana -> %s\n",
+           ht_get(ht, "banana") ?: "(not found)");
 
     ht_print(ht);
 
-    // 5. 충돌 테스트 (같은 해시값을 가지도록)
-    printf("\n[ 5단계: 충돌 발생 테스트 ]\n");
-    printf("추가 데이터를 삽입하여 충돌을 유발합니다...\n");
+    // 5. Collision test (force same hash values)
+    printf("\n[ Step 5: Collision Test ]\n");
+    printf("Inserting additional data to cause collisions...\n");
 
-    ht_set(ht, "kiwi", "키위");
-    ht_set(ht, "lemon", "레몬");
-    ht_set(ht, "mango", "망고");
+    ht_set(ht, "kiwi", "a fuzzy fruit");
+    ht_set(ht, "lemon", "a sour citrus fruit");
+    ht_set(ht, "mango", "a tropical fruit");
 
     ht_print(ht);
 
-    // 6. 성능 통계
+    // 6. Performance statistics
     print_statistics(ht);
 
-    // 7. 키 목록
+    // 7. Key list
     ht_print_keys(ht);
 
-    // 정리
+    // Cleanup
     ht_destroy(ht);
 
-    printf("\n프로그램을 종료합니다.\n");
+    printf("\nExiting the program.\n");
     return 0;
 }

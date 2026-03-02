@@ -1,8 +1,8 @@
 /*
- * 세그먼트 트리 (Segment Tree)
+ * Segment Tree
  * Range Sum/Min/Max Query, Lazy Propagation
  *
- * 구간 쿼리와 업데이트를 효율적으로 처리합니다.
+ * Efficiently handles range queries and updates.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 기본 세그먼트 트리 (구간 합)
+// 1. Basic Segment Tree (Range Sum)
 // =============================================================================
 
 class SegmentTree {
@@ -78,7 +78,7 @@ public:
 };
 
 // =============================================================================
-// 2. 구간 최솟값 세그먼트 트리
+// 2. Range Minimum Segment Tree
 // =============================================================================
 
 class MinSegmentTree {
@@ -143,7 +143,7 @@ public:
 };
 
 // =============================================================================
-// 3. Lazy Propagation (구간 업데이트)
+// 3. Lazy Propagation (Range Update)
 // =============================================================================
 
 class LazySegmentTree {
@@ -222,7 +222,7 @@ public:
 };
 
 // =============================================================================
-// 4. 동적 세그먼트 트리
+// 4. Dynamic Segment Tree
 // =============================================================================
 
 class DynamicSegmentTree {
@@ -276,7 +276,7 @@ public:
 };
 
 // =============================================================================
-// 5. 머지 소트 트리 (구간 K번째 원소)
+// 5. Merge Sort Tree (K-th Element in Range)
 // =============================================================================
 
 class MergeSortTree {
@@ -299,7 +299,7 @@ private:
               back_inserter(tree[node]));
     }
 
-    // [l, r] 구간에서 x 이하인 원소 개수
+    // Count elements <= x in range [l, r]
     int countLessEqual(int node, int start, int end, int l, int r, int x) {
         if (r < start || end < l) return 0;
         if (l <= start && end <= r) {
@@ -318,7 +318,7 @@ public:
         build(arr, 1, 0, n - 1);
     }
 
-    // [l, r] 구간에서 k번째 작은 원소
+    // K-th smallest element in range [l, r]
     int kthSmallest(int l, int r, int k) {
         int lo = INT_MIN, hi = INT_MAX;
 
@@ -336,7 +336,7 @@ public:
 };
 
 // =============================================================================
-// 6. 2D 세그먼트 트리
+// 6. 2D Segment Tree
 // =============================================================================
 
 class SegmentTree2D {
@@ -401,27 +401,27 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "세그먼트 트리 예제" << endl;
+    cout << "Segment Tree Example" << endl;
     cout << "============================================================" << endl;
 
     vector<int> arr = {1, 3, 5, 7, 9, 11};
 
-    // 1. 기본 세그먼트 트리
-    cout << "\n[1] 구간 합 세그먼트 트리" << endl;
-    cout << "    배열: [1, 3, 5, 7, 9, 11]" << endl;
+    // 1. Basic Segment Tree
+    cout << "\n[1] Range Sum Segment Tree" << endl;
+    cout << "    Array: [1, 3, 5, 7, 9, 11]" << endl;
     SegmentTree st(arr);
     cout << "    sum[1, 3] = " << st.query(1, 3) << endl;
     st.update(2, 10);
-    cout << "    arr[2] = 10 업데이트 후" << endl;
+    cout << "    After arr[2] = 10 update" << endl;
     cout << "    sum[1, 3] = " << st.query(1, 3) << endl;
 
-    // 2. 구간 최솟값
-    cout << "\n[2] 구간 최솟값 세그먼트 트리" << endl;
+    // 2. Range Minimum
+    cout << "\n[2] Range Minimum Segment Tree" << endl;
     MinSegmentTree minSt(arr);
     cout << "    min[0, 5] = " << minSt.query(0, 5) << endl;
     cout << "    min[2, 4] = " << minSt.query(2, 4) << endl;
@@ -430,42 +430,42 @@ int main() {
     cout << "\n[3] Lazy Propagation" << endl;
     vector<int> arr2 = {1, 2, 3, 4, 5};
     LazySegmentTree lazySt(arr2);
-    cout << "    배열: [1, 2, 3, 4, 5]" << endl;
+    cout << "    Array: [1, 2, 3, 4, 5]" << endl;
     cout << "    sum[0, 4] = " << lazySt.query(0, 4) << endl;
-    lazySt.updateRange(1, 3, 10);  // [1, 3] 구간에 10 더하기
-    cout << "    [1, 3] += 10 후" << endl;
+    lazySt.updateRange(1, 3, 10);  // Add 10 to range [1, 3]
+    cout << "    After [1, 3] += 10" << endl;
     cout << "    sum[0, 4] = " << lazySt.query(0, 4) << endl;
 
-    // 4. 동적 세그먼트 트리
-    cout << "\n[4] 동적 세그먼트 트리" << endl;
+    // 4. Dynamic Segment Tree
+    cout << "\n[4] Dynamic Segment Tree" << endl;
     DynamicSegmentTree dynSt(0, 1000000000);
     dynSt.update(100, 5);
     dynSt.update(500000000, 10);
-    cout << "    범위: [0, 10^9]" << endl;
-    cout << "    update(100, 5), update(5×10^8, 10)" << endl;
+    cout << "    Range: [0, 10^9]" << endl;
+    cout << "    update(100, 5), update(5*10^8, 10)" << endl;
     cout << "    sum[0, 10^9] = " << dynSt.query(0, 1000000000) << endl;
 
-    // 5. 2D 세그먼트 트리
-    cout << "\n[5] 2D 세그먼트 트리" << endl;
+    // 5. 2D Segment Tree
+    cout << "\n[5] 2D Segment Tree" << endl;
     vector<vector<int>> arr2d = {
         {1, 2, 3},
         {4, 5, 6},
         {7, 8, 9}
     };
     SegmentTree2D st2d(arr2d);
-    cout << "    3x3 행렬" << endl;
+    cout << "    3x3 matrix" << endl;
     cout << "    sum[(0,0) to (2,2)] = " << st2d.query(0, 0, 2, 2) << endl;
     cout << "    sum[(0,0) to (1,1)] = " << st2d.query(0, 0, 1, 1) << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 연산            | 시간복잡도 | 공간복잡도 |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Operation       | Time       | Space      |" << endl;
     cout << "    |-----------------|------------|------------|" << endl;
-    cout << "    | 빌드            | O(n)       | O(n)       |" << endl;
-    cout << "    | 점 업데이트     | O(log n)   | O(1)       |" << endl;
-    cout << "    | 구간 쿼리       | O(log n)   | O(1)       |" << endl;
-    cout << "    | 구간 업데이트   | O(log n)   | O(n) lazy  |" << endl;
-    cout << "    | 2D 쿼리         | O(log² n)  | O(n²)      |" << endl;
+    cout << "    | Build           | O(n)       | O(n)       |" << endl;
+    cout << "    | Point update    | O(log n)   | O(1)       |" << endl;
+    cout << "    | Range query     | O(log n)   | O(1)       |" << endl;
+    cout << "    | Range update    | O(log n)   | O(n) lazy  |" << endl;
+    cout << "    | 2D query        | O(log^2 n) | O(n^2)     |" << endl;
 
     cout << "\n============================================================" << endl;
 

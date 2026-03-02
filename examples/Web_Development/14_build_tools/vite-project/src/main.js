@@ -1,27 +1,27 @@
 /**
- * Vite 프로젝트 메인 진입점
+ * Vite Project Main Entry Point
  *
- * Vite 특징:
- * - 네이티브 ES 모듈 사용 (빠른 개발 서버)
- * - HMR (Hot Module Replacement) 지원
- * - 최적화된 프로덕션 빌드
+ * Vite features:
+ * - Native ES modules (fast dev server)
+ * - HMR (Hot Module Replacement) support
+ * - Optimized production builds
  */
 
 // Why: Importing CSS directly in JS lets Vite track it as a dependency, enabling
 // HMR for styles and automatic code-splitting without a separate CSS pipeline
-// CSS 임포트 (Vite가 자동으로 처리)
+// CSS import (Vite handles this automatically)
 import './styles/main.css';
 
-// 모듈 임포트
+// Module imports
 import { setupCounter } from './components/counter.js';
 import { formatDate } from './utils/helpers.js';
 
-// 앱 초기화
+// App initialization
 function initApp() {
-    console.log('🚀 Vite 앱이 시작되었습니다!');
-    console.log(`📅 현재 시간: ${formatDate(new Date())}`);
+    console.log('Vite app started!');
+    console.log(`Current time: ${formatDate(new Date())}`);
 
-    // 카운터 설정
+    // Set up counter
     const counterButton = document.getElementById('counter');
     if (counterButton) {
         setupCounter(counterButton);
@@ -29,27 +29,27 @@ function initApp() {
 
     // Why: import.meta.env.DEV is statically replaced at build time, so the entire block
     // is dead-code-eliminated in production builds - zero runtime cost for dev-only logic
-    // 개발 모드에서만 실행되는 코드
+    // Code that runs only in development mode
     if (import.meta.env.DEV) {
-        console.log('🔧 개발 모드로 실행 중');
-        console.log('환경 변수:', import.meta.env);
+        console.log('Running in development mode');
+        console.log('Environment variables:', import.meta.env);
     }
 
-    // 프로덕션 모드에서만 실행되는 코드
+    // Code that runs only in production mode
     if (import.meta.env.PROD) {
-        console.log('🚀 프로덕션 모드로 실행 중');
+        console.log('Running in production mode');
     }
 }
 
-// DOM 로드 후 초기화
+// Initialize after DOM load
 document.addEventListener('DOMContentLoaded', initApp);
 
 // Why: HMR replaces changed modules without a full page reload, preserving UI state
 // (scroll position, form input) during development for a much faster feedback loop
-// HMR (Hot Module Replacement) 예제
+// HMR (Hot Module Replacement) example
 if (import.meta.hot) {
     import.meta.hot.accept('./components/counter.js', (newModule) => {
-        console.log('🔄 counter 모듈이 업데이트되었습니다!');
-        // 필요한 경우 상태 복원 로직 추가
+        console.log('counter module has been updated!');
+        // Add state restoration logic if needed
     });
 }

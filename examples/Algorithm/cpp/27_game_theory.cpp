@@ -1,8 +1,8 @@
 /*
- * 게임 이론 (Game Theory)
+ * Game Theory
  * Nim, Sprague-Grundy, Minimax, Alpha-Beta Pruning
  *
- * 게임에서 최적 전략을 찾는 알고리즘입니다.
+ * Algorithms for finding optimal strategies in games.
  */
 
 #include <iostream>
@@ -18,7 +18,7 @@ using namespace std;
 // 1. Nim Game
 // =============================================================================
 
-// 모든 더미의 XOR이 0이면 후공 승리, 아니면 선공 승리
+// XOR of all piles is 0 -> second player wins, otherwise first player wins
 bool canWinNim(const vector<int>& piles) {
     int xorSum = 0;
     for (int pile : piles) {
@@ -27,7 +27,7 @@ bool canWinNim(const vector<int>& piles) {
     return xorSum != 0;
 }
 
-// 승리를 위한 첫 수 찾기
+// Find the winning first move
 pair<int, int> findNimMove(const vector<int>& piles) {
     int xorSum = 0;
     for (int pile : piles) {
@@ -35,13 +35,13 @@ pair<int, int> findNimMove(const vector<int>& piles) {
     }
 
     if (xorSum == 0) {
-        return {-1, -1};  // 이길 수 없음
+        return {-1, -1};  // Cannot win
     }
 
     for (int i = 0; i < (int)piles.size(); i++) {
         int target = piles[i] ^ xorSum;
         if (target < piles[i]) {
-            return {i, piles[i] - target};  // i번 더미에서 이만큼 제거
+            return {i, piles[i] - target};  // Remove this many from pile i
         }
     }
 
@@ -49,10 +49,10 @@ pair<int, int> findNimMove(const vector<int>& piles) {
 }
 
 // =============================================================================
-// 2. Sprague-Grundy 정리
+// 2. Sprague-Grundy Theorem
 // =============================================================================
 
-// 그런디 수 계산
+// Compute Grundy number
 int grundyNumber(int n, function<vector<int>(int)> getMoves, vector<int>& memo) {
     if (memo[n] != -1) return memo[n];
 
@@ -61,14 +61,14 @@ int grundyNumber(int n, function<vector<int>(int)> getMoves, vector<int>& memo) 
         reachable.insert(grundyNumber(next, getMoves, memo));
     }
 
-    // MEX (Minimum Excludant) 계산
+    // MEX (Minimum Excludant) computation
     int mex = 0;
     while (reachable.count(mex)) mex++;
 
     return memo[n] = mex;
 }
 
-// 여러 게임의 그런디 수는 XOR
+// Grundy number of multiple games is XOR
 int multiGameGrundy(const vector<int>& grundyNumbers) {
     int result = 0;
     for (int g : grundyNumbers) {
@@ -83,25 +83,25 @@ int multiGameGrundy(const vector<int>& grundyNumbers) {
 
 class TicTacToe {
 private:
-    vector<vector<int>> board;  // 0: 빈칸, 1: X, 2: O
+    vector<vector<int>> board;  // 0: empty, 1: X, 2: O
     const int EMPTY = 0, X = 1, O = 2;
 
     int checkWin() {
-        // 가로
+        // Rows
         for (int i = 0; i < 3; i++) {
             if (board[i][0] != EMPTY &&
                 board[i][0] == board[i][1] && board[i][1] == board[i][2]) {
                 return board[i][0];
             }
         }
-        // 세로
+        // Columns
         for (int j = 0; j < 3; j++) {
             if (board[0][j] != EMPTY &&
                 board[0][j] == board[1][j] && board[1][j] == board[2][j]) {
                 return board[0][j];
             }
         }
-        // 대각선
+        // Diagonals
         if (board[0][0] != EMPTY &&
             board[0][0] == board[1][1] && board[1][1] == board[2][2]) {
             return board[0][0];
@@ -125,7 +125,7 @@ private:
 public:
     TicTacToe() : board(3, vector<int>(3, 0)) {}
 
-    // Minimax: 최적 수 찾기
+    // Minimax: find optimal move
     int minimax(bool isMaximizing) {
         int winner = checkWin();
         if (winner == X) return 1;
@@ -227,7 +227,7 @@ int alphabeta(vector<vector<int>>& board, int depth, int alpha, int beta,
             board[r][c] = 0;
             maxEval = max(maxEval, eval);
             alpha = max(alpha, eval);
-            if (beta <= alpha) break;  // 가지치기
+            if (beta <= alpha) break;  // Pruning
         }
         return maxEval;
     } else {
@@ -239,23 +239,23 @@ int alphabeta(vector<vector<int>>& board, int depth, int alpha, int beta,
             board[r][c] = 0;
             minEval = min(minEval, eval);
             beta = min(beta, eval);
-            if (beta <= alpha) break;  // 가지치기
+            if (beta <= alpha) break;  // Pruning
         }
         return minEval;
     }
 }
 
 // =============================================================================
-// 5. 돌 게임 변형
+// 5. Stone Game Variants
 // =============================================================================
 
-// 1, 2, 3개씩 가져갈 수 있는 돌 게임
+// Stone game where you can take 1, 2, or 3 stones
 bool stoneGame123(int n) {
-    // n이 4의 배수이면 후공 승리
+    // If n is a multiple of 4, second player wins
     return n % 4 != 0;
 }
 
-// 2의 거듭제곱 개씩 가져갈 수 있는 돌 게임
+// Stone game where you can take powers of 2
 bool stoneGamePowerOf2(int n) {
     vector<int> grundy(n + 1, 0);
 
@@ -276,7 +276,7 @@ bool stoneGamePowerOf2(int n) {
 // 6. Bash Game
 // =============================================================================
 
-// 최대 k개씩 가져갈 수 있는 돌 게임
+// Stone game where you can take at most k stones
 bool bashGame(int n, int k) {
     return n % (k + 1) != 0;
 }
@@ -285,7 +285,7 @@ bool bashGame(int n, int k) {
 // 7. Wythoff's Game
 // =============================================================================
 
-// 두 더미, 한 더미에서 가져가거나 양쪽에서 같은 수 가져가기
+// Two piles, can take from one pile or equal amount from both
 bool wythoffGame(int a, int b) {
     if (a > b) swap(a, b);
 
@@ -296,29 +296,29 @@ bool wythoffGame(int a, int b) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "게임 이론 예제" << endl;
+    cout << "Game Theory Example" << endl;
     cout << "============================================================" << endl;
 
     // 1. Nim Game
     cout << "\n[1] Nim Game" << endl;
     vector<int> piles = {3, 4, 5};
-    cout << "    더미: [3, 4, 5]" << endl;
+    cout << "    Piles: [3, 4, 5]" << endl;
     cout << "    XOR: " << (3 ^ 4 ^ 5) << endl;
-    cout << "    선공 승리: " << (canWinNim(piles) ? "예" : "아니오") << endl;
+    cout << "    First player wins: " << (canWinNim(piles) ? "Yes" : "No") << endl;
 
     auto [pileIdx, removeCount] = findNimMove(piles);
     if (pileIdx != -1) {
-        cout << "    최적 수: 더미 " << pileIdx << "에서 " << removeCount << "개 제거" << endl;
+        cout << "    Optimal move: remove " << removeCount << " from pile " << pileIdx << endl;
     }
 
     // 2. Sprague-Grundy
     cout << "\n[2] Sprague-Grundy" << endl;
-    // 1, 2, 3개씩 가져갈 수 있는 게임의 그런디 수
+    // Grundy numbers for a game where you can take 1, 2, or 3
     auto moves123 = [](int n) -> vector<int> {
         vector<int> result;
         if (n >= 1) result.push_back(n - 1);
@@ -329,7 +329,7 @@ int main() {
 
     vector<int> memo(20, -1);
     memo[0] = 0;
-    cout << "    돌 게임 (1,2,3개) 그런디 수:" << endl;
+    cout << "    Stone game (1,2,3) Grundy numbers:" << endl;
     cout << "    ";
     for (int i = 0; i < 10; i++) {
         cout << "G(" << i << ")=" << grundyNumber(i, moves123, memo) << " ";
@@ -341,36 +341,36 @@ int main() {
     TicTacToe game;
     game.makeMove(0, 0, 1);  // X
     game.makeMove(1, 1, 2);  // O
-    cout << "    현재 상태:" << endl;
+    cout << "    Current state:" << endl;
     game.print();
 
-    auto [bestRow, bestCol] = game.findBestMove(1);  // X의 최적 수
-    cout << "    X의 최적 수: (" << bestRow << ", " << bestCol << ")" << endl;
+    auto [bestRow, bestCol] = game.findBestMove(1);  // X's optimal move
+    cout << "    X's optimal move: (" << bestRow << ", " << bestCol << ")" << endl;
 
-    // 4. 돌 게임 변형
-    cout << "\n[4] 돌 게임 변형" << endl;
-    cout << "    돌 10개 (1,2,3개 가능): " << (stoneGame123(10) ? "선공 승" : "후공 승") << endl;
-    cout << "    돌 12개 (1,2,3개 가능): " << (stoneGame123(12) ? "선공 승" : "후공 승") << endl;
+    // 4. Stone Game Variants
+    cout << "\n[4] Stone Game Variants" << endl;
+    cout << "    10 stones (take 1,2,3): " << (stoneGame123(10) ? "First wins" : "Second wins") << endl;
+    cout << "    12 stones (take 1,2,3): " << (stoneGame123(12) ? "First wins" : "Second wins") << endl;
 
     // 5. Bash Game
     cout << "\n[5] Bash Game" << endl;
-    cout << "    돌 10개, 최대 3개: " << (bashGame(10, 3) ? "선공 승" : "후공 승") << endl;
-    cout << "    돌 12개, 최대 3개: " << (bashGame(12, 3) ? "선공 승" : "후공 승") << endl;
+    cout << "    10 stones, max 3: " << (bashGame(10, 3) ? "First wins" : "Second wins") << endl;
+    cout << "    12 stones, max 3: " << (bashGame(12, 3) ? "First wins" : "Second wins") << endl;
 
     // 6. Wythoff's Game
     cout << "\n[6] Wythoff's Game" << endl;
-    cout << "    더미 (3, 5): " << (wythoffGame(3, 5) ? "선공 승" : "후공 승") << endl;
-    cout << "    더미 (1, 2): " << (wythoffGame(1, 2) ? "선공 승" : "후공 승") << endl;
+    cout << "    Piles (3, 5): " << (wythoffGame(3, 5) ? "First wins" : "Second wins") << endl;
+    cout << "    Piles (1, 2): " << (wythoffGame(1, 2) ? "First wins" : "Second wins") << endl;
 
-    // 7. 게임 이론 요약
-    cout << "\n[7] 게임 이론 요약" << endl;
-    cout << "    | 게임          | 승리 조건              |" << endl;
+    // 7. Game Theory Summary
+    cout << "\n[7] Game Theory Summary" << endl;
+    cout << "    | Game          | Win Condition          |" << endl;
     cout << "    |---------------|------------------------|" << endl;
     cout << "    | Nim           | XOR != 0               |" << endl;
     cout << "    | Bash (k)      | n % (k+1) != 0         |" << endl;
-    cout << "    | 1,2,3 돌      | n % 4 != 0             |" << endl;
+    cout << "    | 1,2,3 stones  | n % 4 != 0             |" << endl;
     cout << "    | Wythoff       | a != floor(phi*(b-a))  |" << endl;
-    cout << "    | 일반 게임     | Grundy != 0            |" << endl;
+    cout << "    | General game  | Grundy != 0            |" << endl;
 
     cout << "\n============================================================" << endl;
 

@@ -1,8 +1,8 @@
 """
-동적 프로그래밍 (Dynamic Programming) 기초
+Dynamic Programming (DP) Basics
 Basic Dynamic Programming
 
-복잡한 문제를 작은 하위 문제로 나누어 해결하는 알고리즘 기법입니다.
+An algorithmic technique that solves complex problems by breaking them into smaller subproblems.
 """
 
 from typing import List
@@ -10,20 +10,20 @@ from functools import lru_cache
 
 
 # =============================================================================
-# 1. 피보나치 수열 (세 가지 방법)
+# 1. Fibonacci Sequence (Three Methods)
 # =============================================================================
 
-# 방법 1: 재귀 (비효율적 - O(2^n))
+# Method 1: Recursion (inefficient - O(2^n))
 def fibonacci_recursive(n: int) -> int:
-    """재귀: 지수 시간 복잡도"""
+    """Recursion: exponential time complexity"""
     if n <= 1:
         return n
     return fibonacci_recursive(n - 1) + fibonacci_recursive(n - 2)
 
 
-# 방법 2: 메모이제이션 (Top-down DP)
+# Method 2: Memoization (Top-down DP)
 def fibonacci_memo(n: int, memo: dict = None) -> int:
-    """메모이제이션: O(n)"""
+    """Memoization: O(n)"""
     if memo is None:
         memo = {}
     if n in memo:
@@ -34,18 +34,18 @@ def fibonacci_memo(n: int, memo: dict = None) -> int:
     return memo[n]
 
 
-# 방법 2b: lru_cache 데코레이터 사용
+# Method 2b: Using lru_cache decorator
 @lru_cache(maxsize=None)
 def fibonacci_cached(n: int) -> int:
-    """lru_cache 사용: O(n)"""
+    """Using lru_cache: O(n)"""
     if n <= 1:
         return n
     return fibonacci_cached(n - 1) + fibonacci_cached(n - 2)
 
 
-# 방법 3: 테뷸레이션 (Bottom-up DP)
+# Method 3: Tabulation (Bottom-up DP)
 def fibonacci_tabulation(n: int) -> int:
-    """테뷸레이션: O(n) 시간, O(n) 공간"""
+    """Tabulation: O(n) time, O(n) space"""
     if n <= 1:
         return n
     dp = [0] * (n + 1)
@@ -55,9 +55,9 @@ def fibonacci_tabulation(n: int) -> int:
     return dp[n]
 
 
-# 방법 4: 공간 최적화
+# Method 4: Space Optimization
 def fibonacci_optimized(n: int) -> int:
-    """공간 최적화: O(n) 시간, O(1) 공간"""
+    """Space optimized: O(n) time, O(1) space"""
     if n <= 1:
         return n
     prev2, prev1 = 0, 1
@@ -68,12 +68,12 @@ def fibonacci_optimized(n: int) -> int:
 
 
 # =============================================================================
-# 2. 계단 오르기 (Climbing Stairs)
+# 2. Climbing Stairs
 # =============================================================================
 def climb_stairs(n: int) -> int:
     """
-    한 번에 1칸 또는 2칸 오를 수 있을 때
-    n개의 계단을 오르는 경우의 수
+    Number of ways to climb n stairs
+    when you can take 1 or 2 steps at a time
     """
     if n <= 2:
         return n
@@ -85,12 +85,12 @@ def climb_stairs(n: int) -> int:
 
 
 # =============================================================================
-# 3. 동전 교환 (Coin Change)
+# 3. Coin Change
 # =============================================================================
 def coin_change(coins: List[int], amount: int) -> int:
     """
-    주어진 동전으로 금액을 만드는 최소 동전 개수
-    불가능하면 -1 반환
+    Minimum number of coins to make the given amount
+    Returns -1 if impossible
     """
     dp = [float('inf')] * (amount + 1)
     dp[0] = 0
@@ -105,7 +105,7 @@ def coin_change(coins: List[int], amount: int) -> int:
 
 def coin_change_ways(coins: List[int], amount: int) -> int:
     """
-    주어진 동전으로 금액을 만드는 경우의 수
+    Number of ways to make the given amount using the given coins
     """
     dp = [0] * (amount + 1)
     dp[0] = 1
@@ -118,21 +118,21 @@ def coin_change_ways(coins: List[int], amount: int) -> int:
 
 
 # =============================================================================
-# 4. 0/1 배낭 문제 (Knapsack)
+# 4. 0/1 Knapsack Problem
 # =============================================================================
 def knapsack_01(weights: List[int], values: List[int], capacity: int) -> int:
     """
-    0/1 배낭 문제: 각 아이템을 넣거나 안 넣거나
-    최대 가치 반환
+    0/1 Knapsack: each item is either included or excluded
+    Returns maximum value
     """
     n = len(weights)
     dp = [[0] * (capacity + 1) for _ in range(n + 1)]
 
     for i in range(1, n + 1):
         for w in range(capacity + 1):
-            # 현재 아이템을 넣지 않는 경우
+            # Case: don't include current item
             dp[i][w] = dp[i - 1][w]
-            # 현재 아이템을 넣을 수 있으면
+            # Case: include current item if it fits
             if weights[i - 1] <= w:
                 dp[i][w] = max(dp[i][w], dp[i - 1][w - weights[i - 1]] + values[i - 1])
 
@@ -140,11 +140,11 @@ def knapsack_01(weights: List[int], values: List[int], capacity: int) -> int:
 
 
 def knapsack_01_optimized(weights: List[int], values: List[int], capacity: int) -> int:
-    """0/1 배낭 (공간 최적화 - 1D 배열)"""
+    """0/1 Knapsack (space optimized - 1D array)"""
     dp = [0] * (capacity + 1)
 
     for i in range(len(weights)):
-        # 역순으로 순회 (같은 아이템 중복 사용 방지)
+        # Iterate in reverse to prevent reusing the same item
         for w in range(capacity, weights[i] - 1, -1):
             dp[w] = max(dp[w], dp[w - weights[i]] + values[i])
 
@@ -152,11 +152,11 @@ def knapsack_01_optimized(weights: List[int], values: List[int], capacity: int) 
 
 
 # =============================================================================
-# 5. 최장 공통 부분 수열 (LCS)
+# 5. Longest Common Subsequence (LCS)
 # =============================================================================
 def longest_common_subsequence(text1: str, text2: str) -> int:
     """
-    두 문자열의 최장 공통 부분 수열 길이
+    Length of the longest common subsequence of two strings
     """
     m, n = len(text1), len(text2)
     dp = [[0] * (n + 1) for _ in range(m + 1)]
@@ -172,7 +172,7 @@ def longest_common_subsequence(text1: str, text2: str) -> int:
 
 
 def get_lcs_string(text1: str, text2: str) -> str:
-    """LCS 문자열 복원"""
+    """Reconstruct the LCS string"""
     m, n = len(text1), len(text2)
     dp = [[0] * (n + 1) for _ in range(m + 1)]
 
@@ -183,7 +183,7 @@ def get_lcs_string(text1: str, text2: str) -> str:
             else:
                 dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
 
-    # 역추적
+    # Backtrack
     lcs = []
     i, j = m, n
     while i > 0 and j > 0:
@@ -200,17 +200,17 @@ def get_lcs_string(text1: str, text2: str) -> str:
 
 
 # =============================================================================
-# 6. 최장 증가 부분 수열 (LIS)
+# 6. Longest Increasing Subsequence (LIS)
 # =============================================================================
 def longest_increasing_subsequence(nums: List[int]) -> int:
     """
-    최장 증가 부분 수열 길이 (O(n²))
+    Length of the longest increasing subsequence (O(n^2))
     """
     if not nums:
         return 0
 
     n = len(nums)
-    dp = [1] * n  # dp[i] = nums[i]로 끝나는 LIS 길이
+    dp = [1] * n  # dp[i] = LIS length ending at nums[i]
 
     for i in range(1, n):
         for j in range(i):
@@ -222,15 +222,15 @@ def longest_increasing_subsequence(nums: List[int]) -> int:
 
 def lis_binary_search(nums: List[int]) -> int:
     """
-    최장 증가 부분 수열 길이 (O(n log n))
-    이분 탐색 활용
+    Length of the longest increasing subsequence (O(n log n))
+    Using binary search
     """
     from bisect import bisect_left
 
     if not nums:
         return 0
 
-    tails = []  # tails[i] = 길이 i+1인 LIS의 마지막 원소 최솟값
+    tails = []  # tails[i] = smallest tail element for LIS of length i+1
 
     for num in nums:
         pos = bisect_left(tails, num)
@@ -243,12 +243,12 @@ def lis_binary_search(nums: List[int]) -> int:
 
 
 # =============================================================================
-# 7. 최대 부분 배열 합 (Kadane's Algorithm)
+# 7. Maximum Subarray Sum (Kadane's Algorithm)
 # =============================================================================
 def max_subarray_sum(nums: List[int]) -> int:
     """
-    연속 부분 배열의 최대 합 (카데인 알고리즘)
-    O(n) 시간, O(1) 공간
+    Maximum sum of a contiguous subarray (Kadane's Algorithm)
+    O(n) time, O(1) space
     """
     if not nums:
         return 0
@@ -267,7 +267,7 @@ def max_subarray_sum(nums: List[int]) -> int:
 # =============================================================================
 def rob(nums: List[int]) -> int:
     """
-    인접한 집을 털 수 없을 때 최대 금액
+    Maximum amount when adjacent houses cannot be robbed
     """
     if not nums:
         return 0
@@ -284,90 +284,90 @@ def rob(nums: List[int]) -> int:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("동적 프로그래밍 (DP) 기초 예제")
+    print("Dynamic Programming (DP) Basic Examples")
     print("=" * 60)
 
-    # 1. 피보나치
-    print("\n[1] 피보나치 수열")
+    # 1. Fibonacci
+    print("\n[1] Fibonacci Sequence")
     n = 10
     print(f"    fib({n}) = {fibonacci_tabulation(n)}")
-    print(f"    처음 10개: {[fibonacci_optimized(i) for i in range(10)]}")
+    print(f"    First 10: {[fibonacci_optimized(i) for i in range(10)]}")
 
-    # 2. 계단 오르기
-    print("\n[2] 계단 오르기")
+    # 2. Climbing Stairs
+    print("\n[2] Climbing Stairs")
     for n in [2, 3, 5]:
         ways = climb_stairs(n)
-        print(f"    {n}개 계단: {ways}가지")
+        print(f"    {n} stairs: {ways} ways")
 
-    # 3. 동전 교환
-    print("\n[3] 동전 교환")
+    # 3. Coin Change
+    print("\n[3] Coin Change")
     coins = [1, 2, 5]
     amount = 11
     min_coins = coin_change(coins, amount)
     ways = coin_change_ways(coins, amount)
-    print(f"    동전: {coins}, 금액: {amount}")
-    print(f"    최소 동전 수: {min_coins}")
-    print(f"    경우의 수: {ways}")
+    print(f"    Coins: {coins}, Amount: {amount}")
+    print(f"    Minimum coins: {min_coins}")
+    print(f"    Number of ways: {ways}")
 
-    # 4. 0/1 배낭
-    print("\n[4] 0/1 배낭 문제")
+    # 4. 0/1 Knapsack
+    print("\n[4] 0/1 Knapsack Problem")
     weights = [2, 3, 4, 5]
     values = [3, 4, 5, 6]
     capacity = 5
     max_value = knapsack_01(weights, values, capacity)
-    print(f"    무게: {weights}, 가치: {values}")
-    print(f"    용량: {capacity}, 최대 가치: {max_value}")
+    print(f"    Weights: {weights}, Values: {values}")
+    print(f"    Capacity: {capacity}, Max value: {max_value}")
 
     # 5. LCS
-    print("\n[5] 최장 공통 부분 수열 (LCS)")
+    print("\n[5] Longest Common Subsequence (LCS)")
     text1, text2 = "ABCDGH", "AEDFHR"
     length = longest_common_subsequence(text1, text2)
     lcs_str = get_lcs_string(text1, text2)
-    print(f"    문자열1: {text1}")
-    print(f"    문자열2: {text2}")
-    print(f"    LCS 길이: {length}, LCS: '{lcs_str}'")
+    print(f"    String 1: {text1}")
+    print(f"    String 2: {text2}")
+    print(f"    LCS length: {length}, LCS: '{lcs_str}'")
 
     # 6. LIS
-    print("\n[6] 최장 증가 부분 수열 (LIS)")
+    print("\n[6] Longest Increasing Subsequence (LIS)")
     nums = [10, 9, 2, 5, 3, 7, 101, 18]
     length = longest_increasing_subsequence(nums)
     length_fast = lis_binary_search(nums)
-    print(f"    배열: {nums}")
-    print(f"    LIS 길이: {length} (O(n²)), {length_fast} (O(n log n))")
+    print(f"    Array: {nums}")
+    print(f"    LIS length: {length} (O(n^2)), {length_fast} (O(n log n))")
 
-    # 7. 최대 부분 배열 합
-    print("\n[7] 최대 부분 배열 합 (Kadane)")
+    # 7. Maximum Subarray Sum
+    print("\n[7] Maximum Subarray Sum (Kadane)")
     nums = [-2, 1, -3, 4, -1, 2, 1, -5, 4]
     max_sum = max_subarray_sum(nums)
-    print(f"    배열: {nums}")
-    print(f"    최대 합: {max_sum}")
+    print(f"    Array: {nums}")
+    print(f"    Maximum sum: {max_sum}")
 
     # 8. House Robber
     print("\n[8] House Robber")
     houses = [2, 7, 9, 3, 1]
     max_money = rob(houses)
-    print(f"    집별 금액: {houses}")
-    print(f"    최대 금액: {max_money}")
+    print(f"    House values: {houses}")
+    print(f"    Maximum amount: {max_money}")
 
     print("\n" + "=" * 60)
-    print("DP 접근 방식 비교")
+    print("DP Approach Comparison")
     print("=" * 60)
     print("""
-    | 방식           | 방향      | 구현          | 장점                    |
-    |---------------|----------|---------------|------------------------|
-    | 메모이제이션   | Top-down | 재귀 + 캐시   | 필요한 부분만 계산       |
-    | 테뷸레이션     | Bottom-up| 반복문 + 배열 | 스택 오버플로우 없음     |
+    | Approach       | Direction | Implementation | Advantage                 |
+    |----------------|-----------|----------------|---------------------------|
+    | Memoization    | Top-down  | Recursion+Cache| Only computes needed parts|
+    | Tabulation     | Bottom-up | Loop + Array   | No stack overflow         |
 
-    DP 문제 해결 단계:
-    1. 상태 정의: dp[i]가 무엇을 의미하는지
-    2. 점화식 도출: dp[i]를 이전 상태로 표현
-    3. 초기값 설정: base case
-    4. 계산 순서 결정: 의존성에 따라
-    5. 정답 도출: dp 테이블에서 답 추출
+    DP Problem-Solving Steps:
+    1. Define state: what dp[i] represents
+    2. Derive recurrence: express dp[i] in terms of previous states
+    3. Set base cases: initial values
+    4. Determine computation order: based on dependencies
+    5. Extract answer: from the dp table
     """)
 
 

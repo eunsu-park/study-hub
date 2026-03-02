@@ -1,86 +1,86 @@
 // calculator.c
-// 기본 계산기 프로그램
+// Basic calculator program
 
 #include <stdio.h>
 #include <stdlib.h>
 
-// 덧셈
+// Addition
 double add(double a, double b) {
     return a + b;
 }
 
-// 뺄셈
+// Subtraction
 double subtract(double a, double b) {
     return a - b;
 }
 
-// 곱셈
+// Multiplication
 double multiply(double a, double b) {
     return a * b;
 }
 
-// 나눗셈
+// Division
 double divide(double a, double b) {
     if (b == 0) {
-        printf("오류: 0으로 나눌 수 없습니다.\n");
+        printf("Error: Cannot divide by zero.\n");
         return 0;
     }
     return a / b;
 }
 
-// 메뉴 출력
+// Print menu
 void print_menu(void) {
-    printf("\n=== 계산기 ===\n");
-    printf("1. 덧셈 (+)\n");
-    printf("2. 뺄셈 (-)\n");
-    printf("3. 곱셈 (*)\n");
-    printf("4. 나눗셈 (/)\n");
-    printf("5. 종료\n");
-    printf("선택: ");
+    printf("\n=== Calculator ===\n");
+    printf("1. Addition (+)\n");
+    printf("2. Subtraction (-)\n");
+    printf("3. Multiplication (*)\n");
+    printf("4. Division (/)\n");
+    printf("5. Quit\n");
+    printf("Choice: ");
 }
 
 int main(void) {
     int choice;
     double num1, num2, result;
 
-    printf("간단한 계산기 프로그램\n");
+    printf("Simple Calculator Program\n");
 
     while (1) {
         print_menu();
 
         if (scanf("%d", &choice) != 1) {
-            printf("잘못된 입력입니다.\n");
-            // 입력 버퍼 비우기
+            printf("Invalid input.\n");
+            // Clear input buffer
             while (getchar() != '\n');
             continue;
         }
 
         if (choice == 5) {
-            printf("프로그램을 종료합니다.\n");
+            printf("Exiting the program.\n");
             break;
         }
 
         if (choice < 1 || choice > 5) {
-            printf("1-5 사이의 숫자를 입력하세요.\n");
+            printf("Please enter a number between 1 and 5.\n");
             continue;
         }
 
-        // 두 숫자 입력
-        printf("첫 번째 숫자: ");
+        // Enter two numbers
+        printf("First number: ");
         if (scanf("%lf", &num1) != 1) {
-            printf("잘못된 입력입니다.\n");
+            printf("Invalid input.\n");
             while (getchar() != '\n');
             continue;
         }
 
-        printf("두 번째 숫자: ");
+        printf("Second number: ");
         if (scanf("%lf", &num2) != 1) {
-            printf("잘못된 입력입니다.\n");
+            printf("Invalid input.\n");
             while (getchar() != '\n');
             continue;
         }
 
-        // 계산 수행
+        // Perform calculation
         switch (choice) {
             case 1:
                 result = add(num1, num2);

@@ -1,8 +1,8 @@
 """
-PyTorch Low-Level BERT 구현
+PyTorch Low-Level BERT Implementation
 
-nn.TransformerEncoder 미사용
-F.linear, F.layer_norm 등 기본 연산만 사용
+Does not use nn.TransformerEncoder.
+Uses only basic operations like F.linear and F.layer_norm.
 """
 
 import torch
@@ -10,15 +10,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Optional, Tuple
+import matplotlib.pyplot as plt
 
 
 class BertEmbeddings(nn.Module):
     """
     BERT Embeddings = Token + Segment + Position
 
-    Token: 단어 의미
-    Segment: 문장 A/B 구분
-    Position: 위치 정보 (학습 가능)
+    Token: Word meaning
+    Segment: Sentence A/B distinction
+    Position: Position information (learnable)
     """
 
     def __init__(
@@ -26,13 +27,13 @@ class BertEmbeddings(nn.Module):
         vocab_size: int,
         hidden_size: int,
         max_position: int = 512,
-        type_vocab_size: int = 2,  # 문장 A, B
+        type_vocab_size: int = 2,  # Sentence A, B
         dropout: float = 0.1
     ):
         super().__init__()
         self.hidden_size = hidden_size
 
-        # Embedding tables (nn.Embedding 사용하지만 개념적으로 lookup)
+        # Embedding tables (using nn.Embedding, conceptually a lookup)
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
         self.position_embeddings = nn.Embedding(max_position, hidden_size)
         self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
@@ -49,16 +50,16 @@ class BertEmbeddings(nn.Module):
     ) -> torch.Tensor:
         """
         Args:
-            input_ids: (batch, seq_len) 토큰 ID
-            token_type_ids: (batch, seq_len) 세그먼트 ID (0 or 1)
-            position_ids: (batch, seq_len) 위치 ID
+            input_ids: (batch, seq_len) token IDs
+            token_type_ids: (batch, seq_len) segment IDs (0 or 1)
+            position_ids: (batch, seq_len) position IDs
 
         Returns:
             embeddings: (batch, seq_len, hidden_size)
         """
         batch_size, seq_len = input_ids.shape
 
-        # 기본값 설정
+        # Set defaults
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids)
 
@@ -66,7 +67,7 @@ class BertEmbeddings(nn.Module):
             position_ids = torch.arange(seq_len, device=input_ids.device)
             position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
 
-        # 세 가지 임베딩 합산
+        # Sum three embeddings
         word_emb = self.word_embeddings(input_ids)
         position_emb = self.position_embeddings(position_ids)
         token_type_emb = self.token_type_embeddings(token_type_ids)
@@ -96,7 +97,7 @@ class BertSelfAttention(nn.Module):
         self.head_dim = hidden_size // num_heads
         self.scale = math.sqrt(self.head_dim)
 
-        # Q, K, V projections (nn.Linear 대신 파라미터 직접 관리 가능)
+        # Q, K, V projections (could manage parameters directly instead of nn.Linear)
         self.query = nn.Linear(hidden_size, hidden_size)
         self.key = nn.Linear(hidden_size, hidden_size)
         self.value = nn.Linear(hidden_size, hidden_size)
@@ -111,7 +112,7 @@ class BertSelfAttention(nn.Module):
         """
         Args:
             hidden_states: (batch, seq_len, hidden_size)
-            attention_mask: (batch, 1, 1, seq_len) 또는 (batch, seq_len)
+            attention_mask: (batch, 1, 1, seq_len) or (batch, seq_len)
 
         Returns:
             context: (batch, seq_len, hidden_size)
@@ -119,12 +120,12 @@ class BertSelfAttention(nn.Module):
         """
         batch_size, seq_len, _ = hidden_states.shape
 
-        # Q, K, V 계산
+        # Compute Q, K, V
         Q = self.query(hidden_states)
         K = self.key(hidden_states)
         V = self.value(hidden_states)
 
-        # Multi-head reshape: (batch, seq, hidden) → (batch, heads, seq, head_dim)
+        # Multi-head reshape: (batch, seq, hidden) -> (batch, heads, seq, head_dim)
         Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -132,12 +133,12 @@ class BertSelfAttention(nn.Module):
         # Attention scores: (batch, heads, seq, seq)
         scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
 
-        # Attention mask 적용
+        # Apply attention mask
         if attention_mask is not None:
-            # (batch, seq) → (batch, 1, 1, seq)
+            # (batch, seq) -> (batch, 1, 1, seq)
             if attention_mask.dim() == 2:
                 attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-            # 0 → -inf, 1 → 0
+            # 0 -> -inf, 1 -> 0
             attention_mask = (1.0 - attention_mask) * -10000.0
             scores = scores + attention_mask
 
@@ -171,8 +172,8 @@ class BertSelfOutput(nn.Module):
     ) -> torch.Tensor:
         """
         Args:
-            hidden_states: attention 출력
-            input_tensor: residual connection용 원본 입력
+            hidden_states: Attention output
+            input_tensor: Original input for residual connection
         """
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
@@ -182,12 +183,12 @@ class BertSelfOutput(nn.Module):
 
 
 class BertIntermediate(nn.Module):
-    """Feed-Forward 첫 번째 층 (확장)"""
+    """Feed-Forward first layer (expansion)"""
 
     def __init__(self, hidden_size: int, intermediate_size: int):
         super().__init__()
         self.dense = nn.Linear(hidden_size, intermediate_size)
-        # BERT는 GELU 사용
+        # BERT uses GELU
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
@@ -196,7 +197,7 @@ class BertIntermediate(nn.Module):
 
 
 class BertOutput(nn.Module):
-    """Feed-Forward 두 번째 층 (축소) + Residual"""
+    """Feed-Forward second layer (reduction) + Residual"""
 
     def __init__(
         self,
@@ -291,7 +292,7 @@ class BertEncoder(nn.Module):
 
 
 class BertPooler(nn.Module):
-    """[CLS] 토큰 풀링"""
+    """[CLS] token pooling"""
 
     def __init__(self, hidden_size: int):
         super().__init__()
@@ -303,9 +304,9 @@ class BertPooler(nn.Module):
             hidden_states: (batch, seq_len, hidden_size)
 
         Returns:
-            pooled: (batch, hidden_size) - [CLS] 토큰의 표현
+            pooled: (batch, hidden_size) - representation of [CLS] token
         """
-        # [CLS] 토큰 (첫 번째 토큰)
+        # [CLS] token (first token)
         cls_token = hidden_states[:, 0]
         pooled = self.dense(cls_token)
         pooled = torch.tanh(pooled)
@@ -450,11 +451,104 @@ class BertForSequenceClassification(nn.Module):
         }
 
 
-# 테스트
+def demo_mlm_training():
+    """Demonstrate MLM training on synthetic patterned sequences."""
+    import os
+
+    print("\n=== MLM Training Demo ===\n")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Small config for fast training
+    config = {
+        'vocab_size': 1000,
+        'hidden_size': 128,
+        'num_layers': 2,
+        'num_heads': 2,
+        'intermediate_size': 512,
+        'max_position': 512,
+        'dropout': 0.1,
+    }
+
+    model = BertForMaskedLM(config).to(device)
+    model.train()
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+    # Training parameters
+    batch_size = 16
+    seq_len = 20
+    mask_prob = 0.15
+    num_steps = 50
+    mask_token_id = 0  # Use token 0 as the [MASK] token
+    pattern_len = 5    # Repeating pattern length
+
+    # Expected: MLM loss decreasing from ~6.9 (log(1000)) over 50 steps
+    loss_history = []
+
+    for step in range(1, num_steps + 1):
+        # Generate toy data with predictable repeating patterns
+        # Each sequence repeats a pattern like [1, 2, 3, 4, 5, 1, 2, 3, 4, 5, ...]
+        # Patterns use tokens in range [1, vocab_size) to avoid collision with mask_token_id=0
+        patterns = torch.randint(1, config['vocab_size'], (batch_size, pattern_len), device=device)
+        repeats = seq_len // pattern_len + 1
+        input_ids = patterns.repeat(1, repeats)[:, :seq_len]
+
+        # Store original tokens as labels (will set non-masked positions to -100)
+        labels = input_ids.clone()
+
+        # Randomly mask 15% of tokens
+        mask = torch.rand(batch_size, seq_len, device=device) < mask_prob
+        # Ensure at least one token is masked per sequence
+        first_mask = torch.zeros(batch_size, seq_len, dtype=torch.bool, device=device)
+        first_mask[:, 0] = True
+        mask = mask | first_mask
+
+        # Replace masked positions with mask_token_id
+        masked_input = input_ids.clone()
+        masked_input[mask] = mask_token_id
+
+        # Set non-masked positions to -100 (ignore in loss)
+        labels[~mask] = -100
+
+        # Forward pass
+        outputs = model(masked_input, labels=labels)
+        loss = outputs['loss']
+
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        loss_val = loss.item()
+        loss_history.append(loss_val)
+
+        if step % 10 == 0 or step == 1:
+            print(f"Step {step:3d}/{num_steps}  Loss: {loss_val:.4f}")
+
+    # Visualization: plot MLM training loss
+    save_dir = os.path.dirname(os.path.abspath(__file__))
+    save_path = os.path.join(save_dir, "bert_mlm_training.png")
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(range(1, num_steps + 1), loss_history, linewidth=2, color='#2196F3')
+    plt.xlabel("Training Step")
+    plt.ylabel("MLM Loss")
+    plt.title("BERT Masked Language Model Training Loss")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+
+    print(f"\nTraining complete. Final loss: {loss_history[-1]:.4f}")
+    print(f"Loss plot saved to: {save_path}")
+
+
+# Test
 if __name__ == "__main__":
     print("=== BERT Low-Level Implementation Test ===\n")
 
-    # 설정
+    # Configuration
     config = {
         'vocab_size': 30522,
         'hidden_size': 768,
@@ -465,15 +559,15 @@ if __name__ == "__main__":
         'dropout': 0.1
     }
 
-    # 모델 생성
+    # Create model
     model = BertModel(**config)
 
-    # 파라미터 수
+    # Parameter count
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:,}")
     print(f"Expected ~110M for BERT-Base\n")
 
-    # 테스트 입력
+    # Test input
     batch_size, seq_len = 2, 128
     input_ids = torch.randint(0, config['vocab_size'], (batch_size, seq_len))
     attention_mask = torch.ones(batch_size, seq_len)
@@ -493,12 +587,12 @@ if __name__ == "__main__":
     print(f"  attentions: {len(outputs['attentions'])} layers")
     print(f"  attention shape: {outputs['attentions'][0].shape}")
 
-    # MLM 테스트
+    # MLM test
     print("\n=== MLM Test ===")
     mlm_model = BertForMaskedLM(config)
 
     labels = torch.randint(0, config['vocab_size'], (batch_size, seq_len))
-    labels[labels != 103] = -100  # [MASK] token만 예측
+    labels[labels != 103] = -100  # Only predict [MASK] tokens
 
     mlm_outputs = mlm_model(
         input_ids,
@@ -509,7 +603,7 @@ if __name__ == "__main__":
     print(f"MLM Loss: {mlm_outputs['loss'].item():.4f}")
     print(f"Logits shape: {mlm_outputs['logits'].shape}")
 
-    # Classification 테스트
+    # Classification test
     print("\n=== Classification Test ===")
     clf_model = BertForSequenceClassification(config, num_labels=2)
 
@@ -524,3 +618,5 @@ if __name__ == "__main__":
     print(f"Logits shape: {clf_outputs['logits'].shape}")
 
     print("\nAll tests passed!")
+
+    demo_mlm_training()

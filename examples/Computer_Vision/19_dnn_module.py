@@ -1,9 +1,9 @@
 """
-19. OpenCV DNN 모듈
-- 딥러닝 모델 로드
-- 이미지 분류
-- 객체 검출 (YOLO, SSD)
-- 시맨틱 세그멘테이션
+19. OpenCV DNN Module
+- Loading deep learning models
+- Image classification
+- Object detection (YOLO, SSD)
+- Semantic segmentation
 """
 
 import cv2
@@ -11,12 +11,12 @@ import numpy as np
 
 
 def dnn_module_overview():
-    """DNN 모듈 개요"""
+    """DNN module overview"""
     print("=" * 50)
-    print("OpenCV DNN 모듈 개요")
+    print("OpenCV DNN Module Overview")
     print("=" * 50)
 
-    print("\n1. 지원 프레임워크:")
+    print("\n1. Supported frameworks:")
     frameworks = [
         ('Caffe', '.caffemodel, .prototxt'),
         ('TensorFlow', '.pb, .pbtxt'),
@@ -28,35 +28,35 @@ def dnn_module_overview():
     for name, files in frameworks:
         print(f"   {name}: {files}")
 
-    print("\n2. 모델 로드 함수:")
+    print("\n2. Model loading functions:")
     print("   cv2.dnn.readNet(model, config)")
     print("   cv2.dnn.readNetFromCaffe(prototxt, caffemodel)")
     print("   cv2.dnn.readNetFromTensorflow(model, config)")
     print("   cv2.dnn.readNetFromDarknet(cfg, weights)")
     print("   cv2.dnn.readNetFromONNX(onnx)")
 
-    print("\n3. 백엔드 및 타겟:")
-    print("   백엔드: DNN_BACKEND_OPENCV, DNN_BACKEND_CUDA")
-    print("   타겟: DNN_TARGET_CPU, DNN_TARGET_CUDA")
+    print("\n3. Backends and targets:")
+    print("   Backend: DNN_BACKEND_OPENCV, DNN_BACKEND_CUDA")
+    print("   Target: DNN_TARGET_CPU, DNN_TARGET_CUDA")
 
 
 def blob_creation_demo():
-    """Blob 생성 데모"""
+    """Blob creation demo"""
     print("\n" + "=" * 50)
-    print("Blob 생성")
+    print("Blob Creation")
     print("=" * 50)
 
-    # 테스트 이미지
+    # Test image
     img = np.zeros((480, 640, 3), dtype=np.uint8)
     img[:] = [150, 150, 150]
     cv2.circle(img, (320, 240), 100, (0, 200, 0), -1)
 
-    # Blob 생성
-    # scalefactor: 픽셀 값 스케일링 (보통 1/255)
-    # size: 네트워크 입력 크기
-    # mean: 평균 값 빼기 (BGR 순서)
-    # swapRB: BGR -> RGB 변환
-    # crop: 크기 조정 시 크롭 여부
+    # Blob creation
+    # scalefactor: Pixel value scaling (usually 1/255)
+    # size: Network input size
+    # mean: Mean subtraction values (BGR order)
+    # swapRB: BGR -> RGB conversion
+    # crop: Whether to crop when resizing
 
     blob = cv2.dnn.blobFromImage(
         img,
@@ -67,18 +67,18 @@ def blob_creation_demo():
         crop=False
     )
 
-    print(f"원본 이미지: {img.shape}")
+    print(f"Original image: {img.shape}")
     print(f"Blob shape: {blob.shape}")
     print(f"Blob dtype: {blob.dtype}")
 
-    print("\nblobFromImage 파라미터:")
-    print("  scalefactor: 보통 1/255.0 (0-1 정규화)")
-    print("  size: 네트워크 입력 크기 (224x224, 416x416 등)")
-    print("  mean: ImageNet 평균 (104.0, 117.0, 123.0)")
-    print("  swapRB: OpenCV BGR -> 모델 RGB")
-    print("  crop: True면 크롭, False면 리사이즈만")
+    print("\nblobFromImage parameters:")
+    print("  scalefactor: Usually 1/255.0 (0-1 normalization)")
+    print("  size: Network input size (224x224, 416x416, etc.)")
+    print("  mean: ImageNet mean (104.0, 117.0, 123.0)")
+    print("  swapRB: OpenCV BGR -> Model RGB")
+    print("  crop: True for cropping, False for resize only")
 
-    # 여러 이미지 처리
+    # Multiple image processing
     images = [img, img.copy()]
     blob_batch = cv2.dnn.blobFromImages(
         images,
@@ -93,89 +93,89 @@ def blob_creation_demo():
 
 
 def image_classification_demo():
-    """이미지 분류 데모 (개념)"""
+    """Image classification demo (concept)"""
     print("\n" + "=" * 50)
-    print("이미지 분류 (Image Classification)")
+    print("Image Classification")
     print("=" * 50)
 
-    print("\n모델 예시:")
+    print("\nModel examples:")
     models = [
-        ('ResNet', 'Residual Networks, 깊은 네트워크'),
-        ('VGG', 'Visual Geometry Group, 단순 구조'),
-        ('MobileNet', '경량화, 모바일용'),
-        ('EfficientNet', '효율적 스케일링'),
-        ('GoogLeNet', 'Inception 모듈'),
+        ('ResNet', 'Residual Networks, deep networks'),
+        ('VGG', 'Visual Geometry Group, simple structure'),
+        ('MobileNet', 'Lightweight, for mobile devices'),
+        ('EfficientNet', 'Efficient scaling'),
+        ('GoogLeNet', 'Inception module'),
     ]
 
     for name, desc in models:
         print(f"   {name}: {desc}")
 
     code = '''
-# 이미지 분류 코드 템플릿
+# Image classification code template
 import cv2
 
-# 모델 로드 (예: MobileNet)
+# Load model (e.g., MobileNet)
 net = cv2.dnn.readNetFromCaffe(
     'deploy.prototxt',
     'mobilenet.caffemodel'
 )
 
-# 이미지 전처리
+# Image preprocessing
 img = cv2.imread('image.jpg')
 blob = cv2.dnn.blobFromImage(
     img, 1/255.0, (224, 224), (104, 117, 123), swapRB=True
 )
 
-# 추론
+# Inference
 net.setInput(blob)
 output = net.forward()
 
-# 결과 해석
+# Interpret results
 class_id = np.argmax(output)
 confidence = output[0][class_id]
 print(f"Class: {class_id}, Confidence: {confidence:.2f}")
 '''
     print(code)
 
-    print("\n참고: 실제 실행에는 모델 파일이 필요합니다.")
+    print("\nNote: Model files are required for actual execution.")
     print("  MobileNet: https://github.com/shicai/MobileNet-Caffe")
     print("  ONNX Models: https://github.com/onnx/models")
 
 
 def object_detection_yolo_demo():
-    """YOLO 객체 검출 데모 (개념)"""
+    """YOLO object detection demo (concept)"""
     print("\n" + "=" * 50)
-    print("객체 검출 - YOLO")
+    print("Object Detection - YOLO")
     print("=" * 50)
 
     print("\nYOLO (You Only Look Once):")
-    print("  - 실시간 객체 검출")
-    print("  - 단일 네트워크로 검출 + 분류")
-    print("  - 버전: YOLOv3, YOLOv4, YOLOv5, YOLOv8")
+    print("  - Real-time object detection")
+    print("  - Single network for detection + classification")
+    print("  - Versions: YOLOv3, YOLOv4, YOLOv5, YOLOv8")
 
     code = '''
-# YOLO 객체 검출 코드
+# YOLO object detection code
 import cv2
 import numpy as np
 
-# 모델 로드 (Darknet)
+# Load model (Darknet)
 net = cv2.dnn.readNetFromDarknet('yolov3.cfg', 'yolov3.weights')
 
-# 출력 레이어 이름
+# Output layer names
 layer_names = net.getLayerNames()
 output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
-# 이미지 전처리
+# Image preprocessing
 img = cv2.imread('image.jpg')
 blob = cv2.dnn.blobFromImage(
     img, 1/255.0, (416, 416), (0, 0, 0), swapRB=True, crop=False
 )
 
-# 추론
+# Inference
 net.setInput(blob)
 outputs = net.forward(output_layers)
 
-# 결과 처리
+# Process results
 boxes = []
 confidences = []
 class_ids = []
@@ -187,7 +187,7 @@ for output in outputs:
         confidence = scores[class_id]
 
         if confidence > 0.5:
-            # 바운딩 박스 좌표
+            # Bounding box coordinates
             center_x = int(detection[0] * img.shape[1])
             center_y = int(detection[1] * img.shape[0])
             w = int(detection[2] * img.shape[1])
@@ -203,7 +203,7 @@ for output in outputs:
 # NMS (Non-Maximum Suppression)
 indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
-# 결과 시각화
+# Visualize results
 for i in indices.flatten():
     x, y, w, h = boxes[i]
     cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
@@ -212,44 +212,44 @@ for i in indices.flatten():
 '''
     print(code)
 
-    print("\n모델 다운로드:")
+    print("\nModel download:")
     print("  YOLOv3: https://pjreddie.com/darknet/yolo/")
     print("  YOLOv4: https://github.com/AlexeyAB/darknet")
 
 
 def object_detection_ssd_demo():
-    """SSD 객체 검출 데모 (개념)"""
+    """SSD object detection demo (concept)"""
     print("\n" + "=" * 50)
-    print("객체 검출 - SSD")
+    print("Object Detection - SSD")
     print("=" * 50)
 
     print("\nSSD (Single Shot Detector):")
-    print("  - 다중 스케일 특징 맵 사용")
-    print("  - 빠른 속도")
-    print("  - MobileNet + SSD 조합 인기")
+    print("  - Uses multi-scale feature maps")
+    print("  - Fast speed")
+    print("  - MobileNet + SSD combination is popular")
 
     code = '''
-# SSD 객체 검출 코드
+# SSD object detection code
 import cv2
 
-# 모델 로드 (TensorFlow)
+# Load model (TensorFlow)
 net = cv2.dnn.readNetFromTensorflow(
     'frozen_inference_graph.pb',
     'ssd_mobilenet_v2_coco.pbtxt'
 )
 
-# 이미지 전처리
+# Image preprocessing
 img = cv2.imread('image.jpg')
 blob = cv2.dnn.blobFromImage(
     img, size=(300, 300), mean=(127.5, 127.5, 127.5),
     scalefactor=1/127.5, swapRB=True
 )
 
-# 추론
+# Inference
 net.setInput(blob)
 detections = net.forward()
 
-# 결과 처리
+# Process results
 for i in range(detections.shape[2]):
     confidence = detections[0, 0, i, 2]
 
@@ -264,43 +264,43 @@ for i in range(detections.shape[2]):
 '''
     print(code)
 
-    print("\n모델 다운로드:")
+    print("\nModel download:")
     print("  TensorFlow Model Zoo:")
     print("  https://github.com/tensorflow/models/blob/master/research/object_detection/")
 
 
 def face_detection_dnn_demo():
-    """DNN 얼굴 검출 데모"""
+    """DNN face detection demo"""
     print("\n" + "=" * 50)
-    print("DNN 얼굴 검출")
+    print("DNN Face Detection")
     print("=" * 50)
 
-    print("\nOpenCV DNN 얼굴 검출기:")
-    print("  - Caffe 기반 SSD")
-    print("  - 300x300 입력")
-    print("  - Haar Cascade보다 정확")
+    print("\nOpenCV DNN face detector:")
+    print("  - Caffe-based SSD")
+    print("  - 300x300 input")
+    print("  - More accurate than Haar Cascade")
 
     code = '''
-# DNN 얼굴 검출
+# DNN face detection
 import cv2
 
-# 모델 로드
+# Load model
 model_file = "res10_300x300_ssd_iter_140000.caffemodel"
 config_file = "deploy.prototxt"
 net = cv2.dnn.readNetFromCaffe(config_file, model_file)
 
-# 이미지 전처리
+# Image preprocessing
 img = cv2.imread('image.jpg')
 h, w = img.shape[:2]
 blob = cv2.dnn.blobFromImage(
     img, 1.0, (300, 300), (104.0, 177.0, 123.0)
 )
 
-# 추론
+# Inference
 net.setInput(blob)
 detections = net.forward()
 
-# 결과 처리
+# Process results
 for i in range(detections.shape[2]):
     confidence = detections[0, 0, i, 2]
 
@@ -314,27 +314,27 @@ for i in range(detections.shape[2]):
 '''
     print(code)
 
-    print("\n모델 다운로드:")
+    print("\nModel download:")
     print("  https://github.com/opencv/opencv/tree/master/samples/dnn/face_detector")
 
 
 def semantic_segmentation_demo():
-    """시맨틱 세그멘테이션 데모 (개념)"""
+    """Semantic segmentation demo (concept)"""
     print("\n" + "=" * 50)
-    print("시맨틱 세그멘테이션")
+    print("Semantic Segmentation")
     print("=" * 50)
 
-    print("\n세그멘테이션 유형:")
-    print("  - Semantic: 픽셀 단위 클래스 분류")
-    print("  - Instance: 개별 객체 구분")
+    print("\nSegmentation types:")
+    print("  - Semantic: Pixel-level class classification")
+    print("  - Instance: Individual object distinction")
     print("  - Panoptic: Semantic + Instance")
 
-    print("\n주요 모델:")
+    print("\nKey models:")
     models = [
         ('FCN', 'Fully Convolutional Network'),
-        ('U-Net', '의료 이미지용'),
+        ('U-Net', 'For medical images'),
         ('DeepLab', 'Atrous convolution'),
-        ('SegNet', '인코더-디코더 구조'),
+        ('SegNet', 'Encoder-decoder architecture'),
         ('PSPNet', 'Pyramid Pooling'),
     ]
 
@@ -342,27 +342,27 @@ def semantic_segmentation_demo():
         print(f"   {name}: {desc}")
 
     code = '''
-# 시맨틱 세그멘테이션 코드
+# Semantic segmentation code
 import cv2
 import numpy as np
 
-# 모델 로드 (예: ENet)
+# Load model (e.g., ENet)
 net = cv2.dnn.readNet('enet-model.net')
 
-# 이미지 전처리
+# Image preprocessing
 img = cv2.imread('image.jpg')
 blob = cv2.dnn.blobFromImage(
     img, 1/255.0, (1024, 512), (0, 0, 0), swapRB=True
 )
 
-# 추론
+# Inference
 net.setInput(blob)
 output = net.forward()
 
-# 결과 처리 (클래스 맵)
+# Process results (class map)
 class_map = np.argmax(output[0], axis=0)
 
-# 컬러 맵 적용
+# Apply color map
 colors = np.random.randint(0, 255, (num_classes, 3))
 segmentation = colors[class_map]
 '''
@@ -370,27 +370,27 @@ segmentation = colors[class_map]
 
 
 def pose_estimation_dnn_demo():
-    """포즈 추정 DNN 데모 (개념)"""
+    """Pose estimation DNN demo (concept)"""
     print("\n" + "=" * 50)
-    print("포즈 추정 (Pose Estimation)")
+    print("Pose Estimation")
     print("=" * 50)
 
-    print("\n포즈 추정 유형:")
-    print("  - 2D: 이미지상의 관절 위치")
-    print("  - 3D: 3차원 공간의 관절 위치")
+    print("\nPose estimation types:")
+    print("  - 2D: Joint positions in the image")
+    print("  - 3D: Joint positions in 3D space")
 
-    print("\n주요 모델:")
+    print("\nKey models:")
     models = [
-        ('OpenPose', 'Bottom-up 방식, 다중 인원'),
-        ('PoseNet', '경량화, 실시간'),
-        ('HRNet', '고해상도, 정확'),
-        ('MediaPipe', 'Google, 모바일 최적화'),
+        ('OpenPose', 'Bottom-up approach, multi-person'),
+        ('PoseNet', 'Lightweight, real-time'),
+        ('HRNet', 'High resolution, accurate'),
+        ('MediaPipe', 'Google, mobile-optimized'),
     ]
 
     for name, desc in models:
         print(f"   {name}: {desc}")
 
-    print("\n관절 포인트 (COCO 데이터셋):")
+    print("\nJoint keypoints (COCO dataset):")
     keypoints = [
         "0: nose", "1: neck",
         "2: right_shoulder", "3: right_elbow", "4: right_wrist",
@@ -405,71 +405,71 @@ def pose_estimation_dnn_demo():
 
 
 def dnn_performance_tips():
-    """DNN 성능 최적화"""
+    """DNN performance optimization"""
     print("\n" + "=" * 50)
-    print("DNN 성능 최적화")
+    print("DNN Performance Optimization")
     print("=" * 50)
 
     print("""
-1. GPU 가속 사용
+1. Use GPU acceleration
    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-2. 입력 크기 조정
-   - 작은 입력 = 빠른 추론
-   - 정확도와 속도 트레이드오프
+2. Adjust input size
+   - Smaller input = faster inference
+   - Accuracy vs speed tradeoff
 
-3. 모델 최적화
-   - INT8 양자화
-   - 모델 프루닝
-   - 지식 증류
+3. Model optimization
+   - INT8 quantization
+   - Model pruning
+   - Knowledge distillation
 
-4. 배치 처리
-   - 여러 이미지 동시 처리
-   - blobFromImages() 사용
+4. Batch processing
+   - Process multiple images simultaneously
+   - Use blobFromImages()
 
-5. 비동기 추론
+5. Asynchronous inference
    - net.forwardAsync()
-   - 추론 중 다른 작업 수행
+   - Perform other tasks during inference
 
-6. 모델 선택
-   - 속도 중시: MobileNet, EfficientNet-Lite
-   - 정확도 중시: ResNet, EfficientNet
+6. Model selection
+   - Speed-focused: MobileNet, EfficientNet-Lite
+   - Accuracy-focused: ResNet, EfficientNet
 
-7. 추론 시간 측정
+7. Inference time measurement
 """)
 
-    # 시간 측정 예시
-    print("추론 시간 측정:")
+    # Time measurement example
+    print("Inference time measurement:")
     code = '''
 import time
 
-# 워밍업
+# Warm-up
 for _ in range(10):
     net.forward()
 
-# 측정
+# Measurement
 times = []
 for _ in range(100):
     start = time.time()
     net.forward()
     times.append(time.time() - start)
 
-print(f"평균: {np.mean(times)*1000:.2f}ms")
+print(f"Average: {np.mean(times)*1000:.2f}ms")
 print(f"FPS: {1/np.mean(times):.2f}")
 '''
     print(code)
 
 
 def model_download_guide():
-    """모델 다운로드 가이드"""
+    """Model download guide"""
     print("\n" + "=" * 50)
-    print("모델 다운로드 가이드")
+    print("Model Download Guide")
     print("=" * 50)
 
     print("""
 1. YOLO
-   - 공식: https://pjreddie.com/darknet/yolo/
+   - Official: https://pjreddie.com/darknet/yolo/
    - v4: https://github.com/AlexeyAB/darknet
    - v5+: https://github.com/ultralytics/yolov5
 
@@ -477,61 +477,61 @@ def model_download_guide():
    - TensorFlow Model Zoo
    - https://github.com/tensorflow/models/
 
-3. 얼굴 검출
+3. Face detection
    - OpenCV DNN Face Detector
    - https://github.com/opencv/opencv/tree/master/samples/dnn/face_detector
 
-4. 포즈 추정
+4. Pose estimation
    - OpenPose: https://github.com/CMU-Perceptual-Computing-Lab/openpose
-   - 경량 버전: https://github.com/Daniil-Osokin/lightweight-human-pose-estimation.pytorch
+   - Lightweight version: https://github.com/Daniil-Osokin/lightweight-human-pose-estimation.pytorch
 
-5. 세그멘테이션
+5. Segmentation
    - ENet: https://github.com/e-lab/ENet-training
    - DeepLab: https://github.com/tensorflow/models/tree/master/research/deeplab
 
 6. ONNX Model Zoo
    - https://github.com/onnx/models
-   - 다양한 사전 학습 모델
+   - Various pre-trained models
 
 7. OpenVINO Model Zoo
    - https://github.com/openvinotoolkit/open_model_zoo
-   - Intel 최적화 모델
+   - Intel-optimized models
 """)
 
 
 def main():
-    """메인 함수"""
-    # DNN 모듈 개요
+    """Main function"""
+    # DNN module overview
     dnn_module_overview()
 
-    # Blob 생성
+    # Blob creation
     blob_creation_demo()
 
-    # 이미지 분류
+    # Image classification
     image_classification_demo()
 
-    # YOLO 객체 검출
+    # YOLO object detection
     object_detection_yolo_demo()
 
-    # SSD 객체 검출
+    # SSD object detection
     object_detection_ssd_demo()
 
-    # DNN 얼굴 검출
+    # DNN face detection
     face_detection_dnn_demo()
 
-    # 시맨틱 세그멘테이션
+    # Semantic segmentation
     semantic_segmentation_demo()
 
-    # 포즈 추정
+    # Pose estimation
     pose_estimation_dnn_demo()
 
-    # 성능 최적화
+    # Performance optimization
     dnn_performance_tips()
 
-    # 모델 다운로드 가이드
+    # Model download guide
     model_download_guide()
 
-    print("\nDNN 모듈 데모 완료!")
+    print("\nDNN module demo complete!")
 
 
 if __name__ == '__main__':

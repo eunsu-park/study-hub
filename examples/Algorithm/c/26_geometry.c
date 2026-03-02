@@ -1,8 +1,8 @@
 /*
- * 기하 알고리즘 (Computational Geometry)
- * CCW, 볼록 껍질, 선분 교차, 다각형
+ * Computational Geometry
+ * CCW, Convex Hull, Segment Intersection, Polygons
  *
- * 2D 평면에서의 기하학적 연산입니다.
+ * Geometric operations on the 2D plane.
  */
 
 #include <stdio.h>
@@ -14,7 +14,7 @@
 #define PI 3.14159265358979323846
 
 /* =============================================================================
- * 1. 점과 벡터
+ * 1. Points and Vectors
  * ============================================================================= */
 
 typedef struct {
@@ -58,7 +58,7 @@ double point_dist(Point a, Point b) {
  * 2. CCW (Counter-Clockwise)
  * ============================================================================= */
 
-/* 반시계 방향: 1, 시계 방향: -1, 일직선: 0 */
+/* Counter-clockwise: 1, Clockwise: -1, Collinear: 0 */
 int ccw(Point a, Point b, Point c) {
     double cross = point_cross(point_sub(b, a), point_sub(c, a));
     if (cross > EPS) return 1;
@@ -67,7 +67,7 @@ int ccw(Point a, Point b, Point c) {
 }
 
 /* =============================================================================
- * 3. 선분 교차 판정
+ * 3. Segment Intersection Test
  * ============================================================================= */
 
 bool on_segment(Point p, Point a, Point b) {
@@ -91,7 +91,7 @@ bool segments_intersect(Point a, Point b, Point c, Point d) {
         return true;
     }
 
-    /* 일직선 상의 교차 */
+    /* Collinear intersection */
     if (d1 == 0 && on_segment(c, a, b)) return true;
     if (d2 == 0 && on_segment(d, a, b)) return true;
     if (d3 == 0 && on_segment(a, c, d)) return true;
@@ -100,7 +100,7 @@ bool segments_intersect(Point a, Point b, Point c, Point d) {
     return false;
 }
 
-/* 선분 교차점 계산 */
+/* Compute segment intersection point */
 bool line_intersection(Point a, Point b, Point c, Point d, Point* result) {
     double a1 = b.y - a.y;
     double b1 = a.x - b.x;
@@ -111,7 +111,7 @@ bool line_intersection(Point a, Point b, Point c, Point d, Point* result) {
     double c2 = a2 * c.x + b2 * c.y;
 
     double det = a1 * b2 - a2 * b1;
-    if (fabs(det) < EPS) return false;  /* 평행 */
+    if (fabs(det) < EPS) return false;  /* Parallel */
 
     result->x = (b2 * c1 - b1 * c2) / det;
     result->y = (a1 * c2 - a2 * c1) / det;
@@ -119,7 +119,7 @@ bool line_intersection(Point a, Point b, Point c, Point d, Point* result) {
 }
 
 /* =============================================================================
- * 4. 볼록 껍질 (Convex Hull)
+ * 4. Convex Hull
  * ============================================================================= */
 
 int compare_points(const void* a, const void* b) {
@@ -134,7 +134,7 @@ int compare_points(const void* a, const void* b) {
 int convex_hull_graham(Point points[], int n, Point hull[]) {
     if (n < 3) return 0;
 
-    /* 가장 아래, 왼쪽 점 찾기 */
+    /* Find the lowest, leftmost point */
     int min_idx = 0;
     for (int i = 1; i < n; i++) {
         if (points[i].y < points[min_idx].y ||
@@ -148,7 +148,7 @@ int convex_hull_graham(Point points[], int n, Point hull[]) {
     points[min_idx] = points[0];
     points[0] = pivot;
 
-    /* 각도 기준 정렬 */
+    /* Sort by angle */
     for (int i = 1; i < n - 1; i++) {
         for (int j = i + 1; j < n; j++) {
             int c = ccw(pivot, points[i], points[j]);
@@ -161,7 +161,7 @@ int convex_hull_graham(Point points[], int n, Point hull[]) {
         }
     }
 
-    /* 스택 사용 */
+    /* Use stack */
     int hull_size = 0;
     for (int i = 0; i < n; i++) {
         while (hull_size >= 2 &&
@@ -182,7 +182,7 @@ int convex_hull_monotone(Point points[], int n, Point hull[]) {
 
     int hull_size = 0;
 
-    /* 아래 껍질 */
+    /* Lower hull */
     for (int i = 0; i < n; i++) {
         while (hull_size >= 2 &&
                ccw(hull[hull_size - 2], hull[hull_size - 1], points[i]) <= 0) {
@@ -191,7 +191,7 @@ int convex_hull_monotone(Point points[], int n, Point hull[]) {
         hull[hull_size++] = points[i];
     }
 
-    /* 위 껍질 */
+    /* Upper hull */
     int lower_size = hull_size;
     for (int i = n - 2; i >= 0; i--) {
         while (hull_size > lower_size &&
@@ -201,14 +201,14 @@ int convex_hull_monotone(Point points[], int n, Point hull[]) {
         hull[hull_size++] = points[i];
     }
 
-    return hull_size - 1;  /* 마지막 점은 첫 점과 동일 */
+    return hull_size - 1;  /* Last point is same as first */
 }
 
 /* =============================================================================
- * 5. 다각형 연산
+ * 5. Polygon Operations
  * ============================================================================= */
 
-/* 다각형 넓이 (신발끈 공식) */
+/* Polygon area (Shoelace formula) */
 double polygon_area(Point poly[], int n) {
     double area = 0;
     for (int i = 0; i < n; i++) {
@@ -218,7 +218,7 @@ double polygon_area(Point poly[], int n) {
     return fabs(area) / 2.0;
 }
 
-/* 점이 다각형 내부에 있는지 (Ray Casting) */
+/* Check if point is inside polygon (Ray Casting) */
 bool point_in_polygon(Point p, Point poly[], int n) {
     int crossings = 0;
     for (int i = 0; i < n; i++) {
@@ -233,7 +233,7 @@ bool point_in_polygon(Point p, Point poly[], int n) {
     return (crossings % 2) == 1;
 }
 
-/* 다각형 무게중심 */
+/* Polygon centroid */
 Point polygon_centroid(Point poly[], int n) {
     double cx = 0, cy = 0, area = 0;
     for (int i = 0; i < n; i++) {
@@ -248,7 +248,7 @@ Point polygon_centroid(Point poly[], int n) {
 }
 
 /* =============================================================================
- * 6. 가장 가까운 점 쌍 (Closest Pair)
+ * 6. Closest Pair of Points
  * ============================================================================= */
 
 double min_double(double a, double b) {
@@ -294,7 +294,7 @@ double closest_pair_recursive(Point px[], Point py[], int n) {
     free(pyl);
     free(pyr);
 
-    /* 스트립 내 점들 */
+    /* Points within the strip */
     Point* strip = malloc(n * sizeof(Point));
     int strip_n = 0;
     for (int i = 0; i < n; i++) {
@@ -332,10 +332,10 @@ double closest_pair(Point points[], int n) {
 }
 
 /* =============================================================================
- * 7. 회전 캘리퍼스 (Rotating Calipers)
+ * 7. Rotating Calipers
  * ============================================================================= */
 
-/* 볼록 다각형의 지름 (가장 먼 두 점 사이 거리) */
+/* Diameter of a convex polygon (farthest pair distance) */
 double rotating_calipers(Point hull[], int n) {
     if (n < 2) return 0;
     if (n == 2) return point_dist(hull[0], hull[1]);
@@ -363,86 +363,86 @@ double rotating_calipers(Point hull[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("기하 알고리즘 예제\n");
+    printf("Computational Geometry Examples\n");
     printf("============================================================\n");
 
     /* 1. CCW */
-    printf("\n[1] CCW (반시계 방향 판정)\n");
+    printf("\n[1] CCW (Counter-Clockwise Test)\n");
     Point a = {0, 0}, b = {4, 0}, c = {2, 2};
     printf("    A(0,0), B(4,0), C(2,2)\n");
     int result = ccw(a, b, c);
     printf("    CCW: %d (%s)\n", result,
-           result > 0 ? "반시계" : (result < 0 ? "시계" : "일직선"));
+           result > 0 ? "counter-clockwise" : (result < 0 ? "clockwise" : "collinear"));
 
-    /* 2. 선분 교차 */
-    printf("\n[2] 선분 교차 판정\n");
+    /* 2. Segment Intersection */
+    printf("\n[2] Segment Intersection Test\n");
     Point p1 = {0, 0}, p2 = {4, 4}, p3 = {0, 4}, p4 = {4, 0};
-    printf("    선분1: (0,0)-(4,4), 선분2: (0,4)-(4,0)\n");
-    printf("    교차: %s\n", segments_intersect(p1, p2, p3, p4) ? "예" : "아니오");
+    printf("    Segment1: (0,0)-(4,4), Segment2: (0,4)-(4,0)\n");
+    printf("    Intersect: %s\n", segments_intersect(p1, p2, p3, p4) ? "yes" : "no");
 
     Point intersection;
     if (line_intersection(p1, p2, p3, p4, &intersection)) {
-        printf("    교차점: (%.1f, %.1f)\n", intersection.x, intersection.y);
+        printf("    Intersection point: (%.1f, %.1f)\n", intersection.x, intersection.y);
     }
 
-    /* 3. 볼록 껍질 */
-    printf("\n[3] 볼록 껍질\n");
+    /* 3. Convex Hull */
+    printf("\n[3] Convex Hull\n");
     Point points[] = {{0, 0}, {1, 1}, {2, 2}, {4, 4}, {0, 4}, {4, 0}, {2, 1}, {1, 2}};
     int n = 8;
     Point hull[10];
 
-    printf("    점들: ");
+    printf("    Points: ");
     for (int i = 0; i < n; i++) {
         printf("(%.0f,%.0f) ", points[i].x, points[i].y);
     }
     printf("\n");
 
     int hull_size = convex_hull_monotone(points, n, hull);
-    printf("    볼록 껍질 (%d개): ", hull_size);
+    printf("    Convex hull (%d points): ", hull_size);
     for (int i = 0; i < hull_size; i++) {
         printf("(%.0f,%.0f) ", hull[i].x, hull[i].y);
     }
     printf("\n");
 
-    /* 4. 다각형 넓이 */
-    printf("\n[4] 다각형 넓이\n");
+    /* 4. Polygon Area */
+    printf("\n[4] Polygon Area\n");
     Point triangle[] = {{0, 0}, {4, 0}, {2, 3}};
-    printf("    삼각형: (0,0), (4,0), (2,3)\n");
-    printf("    넓이: %.1f\n", polygon_area(triangle, 3));
+    printf("    Triangle: (0,0), (4,0), (2,3)\n");
+    printf("    Area: %.1f\n", polygon_area(triangle, 3));
 
     Point square[] = {{0, 0}, {4, 0}, {4, 4}, {0, 4}};
-    printf("    정사각형: (0,0), (4,0), (4,4), (0,4)\n");
-    printf("    넓이: %.1f\n", polygon_area(square, 4));
+    printf("    Square: (0,0), (4,0), (4,4), (0,4)\n");
+    printf("    Area: %.1f\n", polygon_area(square, 4));
 
-    /* 5. 점의 다각형 내부 판정 */
-    printf("\n[5] 점의 다각형 내부 판정\n");
+    /* 5. Point in Polygon Test */
+    printf("\n[5] Point in Polygon Test\n");
     Point test1 = {2, 2}, test2 = {5, 5};
-    printf("    정사각형: (0,0), (4,0), (4,4), (0,4)\n");
-    printf("    점 (2,2): %s\n", point_in_polygon(test1, square, 4) ? "내부" : "외부");
-    printf("    점 (5,5): %s\n", point_in_polygon(test2, square, 4) ? "내부" : "외부");
+    printf("    Square: (0,0), (4,0), (4,4), (0,4)\n");
+    printf("    Point (2,2): %s\n", point_in_polygon(test1, square, 4) ? "inside" : "outside");
+    printf("    Point (5,5): %s\n", point_in_polygon(test2, square, 4) ? "inside" : "outside");
 
-    /* 6. 가장 가까운 점 쌍 */
-    printf("\n[6] 가장 가까운 점 쌍\n");
+    /* 6. Closest Pair of Points */
+    printf("\n[6] Closest Pair of Points\n");
     Point closest_points[] = {{2, 3}, {12, 30}, {40, 50}, {5, 1}, {12, 10}, {3, 4}};
-    printf("    점들: (2,3), (12,30), (40,50), (5,1), (12,10), (3,4)\n");
-    printf("    최소 거리: %.4f\n", closest_pair(closest_points, 6));
+    printf("    Points: (2,3), (12,30), (40,50), (5,1), (12,10), (3,4)\n");
+    printf("    Minimum distance: %.4f\n", closest_pair(closest_points, 6));
 
-    /* 7. 복잡도 */
-    printf("\n[7] 복잡도\n");
-    printf("    | 알고리즘        | 시간복잡도    |\n");
-    printf("    |-----------------|---------------|\n");
-    printf("    | CCW             | O(1)          |\n");
-    printf("    | 선분 교차       | O(1)          |\n");
-    printf("    | 볼록 껍질       | O(n log n)    |\n");
-    printf("    | 다각형 넓이     | O(n)          |\n");
-    printf("    | 점 내부 판정    | O(n)          |\n");
-    printf("    | 가장 가까운 쌍  | O(n log n)    |\n");
-    printf("    | 회전 캘리퍼스   | O(n)          |\n");
+    /* 7. Complexity */
+    printf("\n[7] Complexity\n");
+    printf("    | Algorithm            | Time          |\n");
+    printf("    |----------------------|---------------|\n");
+    printf("    | CCW                  | O(1)          |\n");
+    printf("    | Segment intersection | O(1)          |\n");
+    printf("    | Convex hull          | O(n log n)    |\n");
+    printf("    | Polygon area         | O(n)          |\n");
+    printf("    | Point in polygon     | O(n)          |\n");
+    printf("    | Closest pair         | O(n log n)    |\n");
+    printf("    | Rotating calipers    | O(n)          |\n");
 
     printf("\n============================================================\n");
 

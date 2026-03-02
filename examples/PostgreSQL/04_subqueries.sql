@@ -1,15 +1,15 @@
 -- =============================================================================
--- PostgreSQL 서브쿼리와 CTE 예제
+-- PostgreSQL Subquery and CTE Examples
 -- Subqueries and Common Table Expressions (CTE)
 -- =============================================================================
 
--- 먼저 이전 예제 파일들을 실행하여 테이블과 데이터를 생성하세요.
+-- First, run the previous example files to create tables and data.
 
 -- =============================================================================
--- 1. 스칼라 서브쿼리 (단일 값 반환)
+-- 1. Scalar Subquery (Returns a Single Value)
 -- =============================================================================
 
--- SELECT 절에서 사용
+-- Used in SELECT clause
 SELECT
     first_name,
     last_name,
@@ -18,12 +18,12 @@ SELECT
     salary - (SELECT AVG(salary) FROM employees) AS diff_from_avg
 FROM employees;
 
--- WHERE 절에서 사용
+-- Used in WHERE clause
 SELECT first_name, last_name, salary
 FROM employees
 WHERE salary > (SELECT AVG(salary) FROM employees);
 
--- 부서별 평균보다 높은 급여를 받는 직원
+-- Employees earning more than their department average
 SELECT e.first_name, e.last_name, e.salary, d.dept_name
 FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
@@ -34,10 +34,10 @@ WHERE e.salary > (
 );
 
 -- =============================================================================
--- 2. 인라인 뷰 (FROM 절 서브쿼리)
+-- 2. Inline View (FROM Clause Subquery)
 -- =============================================================================
 
--- 부서별 통계를 서브쿼리로 구한 후 조인
+-- Get department statistics via subquery, then join
 SELECT
     d.dept_name,
     ds.employee_count,
@@ -55,7 +55,7 @@ JOIN (
     GROUP BY dept_id
 ) ds ON d.dept_id = ds.dept_id;
 
--- 급여 순위와 함께 조회
+-- Query with salary ranking
 SELECT *
 FROM (
     SELECT
@@ -83,7 +83,7 @@ WHERE EXISTS (
     WHERE ep.emp_id = e.emp_id
 );
 
--- 프로젝트에 참여하지 않는 직원
+-- Employees not participating in any project
 SELECT e.first_name, e.last_name
 FROM employees e
 WHERE NOT EXISTS (
@@ -92,7 +92,7 @@ WHERE NOT EXISTS (
     WHERE ep.emp_id = e.emp_id
 );
 
--- 직원이 있는 부서
+-- Departments that have employees
 SELECT d.dept_name
 FROM departments d
 WHERE EXISTS (
@@ -105,7 +105,7 @@ WHERE EXISTS (
 -- 4. IN / NOT IN
 -- =============================================================================
 
--- Engineering 부서 직원
+-- Engineering department employees
 SELECT first_name, last_name
 FROM employees
 WHERE dept_id IN (
@@ -127,7 +127,7 @@ WHERE emp_id NOT IN (
 -- 5. ANY / ALL
 -- =============================================================================
 
--- Engineering 부서의 어떤 직원보다 급여가 높은 직원
+-- Employees earning more than any employee in the Engineering department
 SELECT first_name, last_name, salary
 FROM employees
 WHERE salary > ANY (
@@ -137,7 +137,7 @@ WHERE salary > ANY (
     WHERE d.dept_name = 'Engineering'
 );
 
--- Engineering 부서의 모든 직원보다 급여가 높은 직원
+-- Employees earning more than all employees in the Engineering department
 SELECT first_name, last_name, salary
 FROM employees
 WHERE salary > ALL (
@@ -148,10 +148,10 @@ WHERE salary > ALL (
 );
 
 -- =============================================================================
--- 6. 상관 서브쿼리 (Correlated Subquery)
+-- 6. Correlated Subquery
 -- =============================================================================
 
--- 각 직원의 부서 평균과 비교
+-- Compare each employee's salary with their department average
 SELECT
     e.first_name,
     e.last_name,
@@ -164,7 +164,7 @@ SELECT
 FROM employees e
 WHERE e.dept_id IS NOT NULL;
 
--- 부서 내에서 가장 높은 급여를 받는 직원
+-- Highest paid employee in each department
 SELECT e.first_name, e.last_name, e.salary, d.dept_name
 FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
@@ -175,10 +175,10 @@ WHERE e.salary = (
 );
 
 -- =============================================================================
--- 7. CTE (Common Table Expression) - WITH 절
+-- 7. CTE (Common Table Expression) - WITH Clause
 -- =============================================================================
 
--- 기본 CTE
+-- Basic CTE
 WITH dept_stats AS (
     SELECT
         dept_id,
@@ -198,7 +198,7 @@ FROM departments d
 JOIN dept_stats ds ON d.dept_id = ds.dept_id
 ORDER BY ds.total_salary DESC;
 
--- 여러 CTE 사용
+-- Multiple CTEs
 WITH
 high_earners AS (
     SELECT emp_id, first_name, last_name, salary
@@ -245,10 +245,10 @@ SELECT
 FROM emp_summary;
 
 -- =============================================================================
--- 8. 재귀 CTE (Recursive CTE)
+-- 8. Recursive CTE
 -- =============================================================================
 
--- 숫자 시퀀스 생성
+-- Generate number sequence
 WITH RECURSIVE numbers AS (
     -- Base case
     SELECT 1 AS n
@@ -264,7 +264,7 @@ SELECT n FROM numbers;
 -- (trees/graphs) without knowing the depth upfront. The ARRAY path column
 -- prevents infinite loops and enables proper ordering of the hierarchy.
 WITH RECURSIVE org_chart AS (
-    -- Base case: 최상위 관리자 (manager_id가 NULL)
+    -- Base case: Top-level managers (manager_id is NULL)
     SELECT
         emp_id,
         first_name || ' ' || last_name AS name,
@@ -276,7 +276,7 @@ WITH RECURSIVE org_chart AS (
 
     UNION ALL
 
-    -- Recursive case: 부하 직원
+    -- Recursive case: Subordinate employees
     SELECT
         e.emp_id,
         e.first_name || ' ' || e.last_name,
@@ -292,7 +292,7 @@ SELECT
 FROM org_chart
 ORDER BY path;
 
--- 날짜 시리즈 생성
+-- Generate date series
 WITH RECURSIVE date_series AS (
     SELECT DATE '2024-01-01' AS date
     UNION ALL
@@ -303,7 +303,7 @@ WITH RECURSIVE date_series AS (
 SELECT date FROM date_series;
 
 -- =============================================================================
--- 9. LATERAL JOIN (상관 서브쿼리의 대안)
+-- 9. LATERAL JOIN (Alternative to Correlated Subqueries)
 -- =============================================================================
 
 -- Why: LATERAL is the key enabler for "top-N per group" queries. Unlike a regular
@@ -321,10 +321,10 @@ CROSS JOIN LATERAL (
 ) AS top_employees;
 
 -- =============================================================================
--- 10. 서브쿼리 vs CTE vs LATERAL 비교
+-- 10. Subquery vs CTE vs LATERAL Comparison
 -- =============================================================================
 
--- 방법 1: 서브쿼리 (인라인 뷰)
+-- Method 1: Subquery (inline view)
 SELECT *
 FROM (
     SELECT dept_id, AVG(salary) AS avg_sal
@@ -333,7 +333,7 @@ FROM (
 ) sub
 WHERE avg_sal > 50000;
 
--- 방법 2: CTE (더 읽기 쉬움)
+-- Method 2: CTE (more readable)
 WITH dept_avg AS (
     SELECT dept_id, AVG(salary) AS avg_sal
     FROM employees
@@ -341,7 +341,7 @@ WITH dept_avg AS (
 )
 SELECT * FROM dept_avg WHERE avg_sal > 50000;
 
--- 방법 3: LATERAL (행별로 서브쿼리 필요할 때)
+-- Method 3: LATERAL (when per-row subquery is needed)
 SELECT d.dept_name, stats.avg_salary
 FROM departments d
 CROSS JOIN LATERAL (
@@ -352,27 +352,27 @@ CROSS JOIN LATERAL (
 WHERE stats.avg_salary > 50000;
 
 -- =============================================================================
--- 서브쿼리와 CTE 요약
+-- Subquery and CTE Summary
 -- =============================================================================
 /*
-서브쿼리 위치:
-- SELECT: 스칼라 서브쿼리 (단일 값)
-- FROM: 인라인 뷰 (테이블처럼 사용)
-- WHERE: 조건에서 사용
+Subquery Placement:
+- SELECT: Scalar subquery (single value)
+- FROM: Inline view (used as a table)
+- WHERE: Used in conditions
 
-서브쿼리 연산자:
-- =, <, >: 스칼라 비교
-- IN, NOT IN: 목록 포함 여부
-- EXISTS, NOT EXISTS: 존재 여부
-- ANY, ALL: 조건 비교
+Subquery Operators:
+- =, <, >: Scalar comparison
+- IN, NOT IN: List membership
+- EXISTS, NOT EXISTS: Existence check
+- ANY, ALL: Conditional comparison
 
-CTE 장점:
-- 가독성 향상
-- 재사용 가능
-- 재귀 쿼리 지원
-- 실행 계획 최적화 힌트 (MATERIALIZED)
+CTE Advantages:
+- Improved readability
+- Reusable within the query
+- Supports recursive queries
+- Execution plan optimization hint (MATERIALIZED)
 
 LATERAL:
-- 행별로 상관 서브쿼리 실행
-- TOP-N 문제에 유용
+- Executes correlated subquery per row
+- Useful for TOP-N per group problems
 */

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 TensorFlow Lite Inference Example
-TFLite 추론 예제
+TFLite Inference Example
 
 Performs image classification using a TFLite model.
 

@@ -1,38 +1,38 @@
 /**
- * Webpack 프로젝트 메인 진입점
+ * Webpack Project Main Entry Point
  *
- * Webpack 특징:
- * - 모듈 번들링
- * - 코드 분할 (Code Splitting)
- * - 트리 쉐이킹 (Tree Shaking)
- * - 로더와 플러그인 시스템
+ * Webpack features:
+ * - Module bundling
+ * - Code Splitting
+ * - Tree Shaking
+ * - Loader and plugin system
  */
 
-// CSS 임포트
+// CSS import
 import './styles/main.css';
 
-// 컴포넌트 임포트
+// Component import
 import { greeting } from './components/greeting';
 import { formatDate } from './utils/helpers';
 
-// 앱 초기화
+// App initialization
 function initApp() {
-    console.log('📦 Webpack 앱이 시작되었습니다!');
+    console.log('Webpack app started!');
 
     const content = document.getElementById('content');
     if (content) {
-        content.innerHTML = greeting('Webpack 사용자');
+        content.innerHTML = greeting('Webpack User');
     }
 
-    console.log(`📅 현재 시간: ${formatDate(new Date())}`);
+    console.log(`Current time: ${formatDate(new Date())}`);
 
     // Why: Dynamic import() splits the extra content into a separate chunk, so users only
     // download it when they click the button - reducing initial bundle size
-    // 동적 임포트 (Code Splitting) 예제
+    // Dynamic import (Code Splitting) example
     const loadMoreBtn = document.getElementById('loadMore');
     if (loadMoreBtn) {
         loadMoreBtn.addEventListener('click', async () => {
-            // 동적 임포트 - 별도 청크로 분리됨
+            // Dynamic import - separated into a separate chunk
             const { loadExtraContent } = await import(
                 /* webpackChunkName: "extra" */
                 './components/extra'
@@ -42,7 +42,7 @@ function initApp() {
     }
 }
 
-// DOM 로드 후 초기화
+// Initialize after DOM load
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initApp);
 } else {
@@ -54,11 +54,11 @@ if (document.readyState === 'loading') {
 // HMR (Hot Module Replacement)
 if (module.hot) {
     module.hot.accept('./components/greeting', () => {
-        console.log('🔄 greeting 모듈이 업데이트되었습니다!');
+        console.log('greeting module has been updated!');
         const content = document.getElementById('content');
         if (content) {
             const { greeting } = require('./components/greeting');
-            content.innerHTML = greeting('Webpack 사용자');
+            content.innerHTML = greeting('Webpack User');
         }
     });
 }

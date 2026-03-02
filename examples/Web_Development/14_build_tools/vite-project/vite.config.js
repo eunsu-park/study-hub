@@ -1,5 +1,5 @@
 /**
- * Vite 설정 파일
+ * Vite Configuration File
  * https://vitejs.dev/config/
  */
 
@@ -7,13 +7,13 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-    // 개발 서버 설정
+    // Dev server configuration
     server: {
-        port: 3000,           // 포트 번호
-        open: true,           // 브라우저 자동 열기
-        cors: true,           // CORS 허용
-        host: true,           // 네트워크에서 접근 허용
-        // 프록시 설정 (API 서버 연동 시)
+        port: 3000,           // Port number
+        open: true,           // Auto-open browser
+        cors: true,           // Allow CORS
+        host: true,           // Allow network access
+        // Proxy configuration (for API server integration)
         // proxy: {
         //     '/api': {
         //         target: 'http://localhost:8080',
@@ -25,40 +25,40 @@ export default defineConfig({
 
     // Why: Separating build options from dev server config keeps concerns isolated and
     // lets CI pipelines override build settings without touching dev defaults
-    // 빌드 설정
+    // Build configuration
     build: {
-        outDir: 'dist',       // 출력 디렉토리
-        sourcemap: true,      // 소스맵 생성
-        minify: 'terser',     // 압축 방식 (terser 또는 esbuild)
-        target: 'es2020',     // 타겟 브라우저
+        outDir: 'dist',       // Output directory
+        sourcemap: true,      // Generate source maps
+        minify: 'terser',     // Minification method (terser or esbuild)
+        target: 'es2020',     // Target browser
 
-        // 번들 분할 설정
+        // Bundle splitting configuration
         rollupOptions: {
             input: {
                 main: resolve(__dirname, 'index.html'),
-                // 다중 페이지 앱의 경우
+                // For multi-page apps
                 // about: resolve(__dirname, 'about.html'),
             },
             output: {
-                // 청크 파일 이름 패턴
+                // Chunk filename pattern
                 chunkFileNames: 'assets/js/[name]-[hash].js',
                 entryFileNames: 'assets/js/[name]-[hash].js',
                 assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
 
-                // 벤더 번들 분리
+                // Vendor bundle separation
                 manualChunks: {
                     // vendor: ['lodash', 'axios'],
                 }
             }
         },
 
-        // 청크 크기 경고 임계값 (KB)
+        // Chunk size warning threshold (KB)
         chunkSizeWarningLimit: 500,
     },
 
     // Why: Path aliases eliminate fragile relative imports (../../components/foo) and let you
     // reorganize directory structure without updating import paths across the entire codebase
-    // 경로 별칭 설정
+    // Path alias configuration
     resolve: {
         alias: {
             '@': resolve(__dirname, 'src'),
@@ -68,22 +68,22 @@ export default defineConfig({
         }
     },
 
-    // CSS 설정
+    // CSS configuration
     css: {
-        // CSS 모듈 설정
+        // CSS modules configuration
         modules: {
             localsConvention: 'camelCase',
         },
-        // PostCSS 설정
+        // PostCSS configuration
         postcss: {
             plugins: [
-                // autoprefixer 등 플러그인 추가
+                // Add plugins like autoprefixer
             ]
         },
-        // 전처리기 옵션
+        // Preprocessor options
         preprocessorOptions: {
             scss: {
-                // 전역 변수 파일 자동 import
+                // Auto-import global variables file
                 // additionalData: `@import "@/styles/variables.scss";`
             }
         }
@@ -91,25 +91,25 @@ export default defineConfig({
 
     // Why: The VITE_ prefix acts as a safeguard - only prefixed env vars are exposed to client
     // code, preventing accidental leakage of server-side secrets (DB passwords, API keys) into bundles
-    // 환경 변수 접두사
+    // Environment variable prefix
     envPrefix: 'VITE_',
 
-    // 플러그인
+    // Plugins
     plugins: [
         // @vitejs/plugin-react
         // @vitejs/plugin-vue
-        // @vitejs/plugin-legacy (구형 브라우저 지원)
+        // @vitejs/plugin-legacy (legacy browser support)
     ],
 
-    // 최적화 설정
+    // Optimization configuration
     optimizeDeps: {
-        // 사전 번들링할 의존성
+        // Dependencies to pre-bundle
         include: [],
-        // 사전 번들링에서 제외할 의존성
+        // Dependencies to exclude from pre-bundling
         exclude: []
     },
 
-    // 미리보기 서버 설정
+    // Preview server configuration
     preview: {
         port: 4173,
         open: true,

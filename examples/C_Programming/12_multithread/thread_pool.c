@@ -1,5 +1,5 @@
 // thread_pool.c
-// 스레드 풀 (Thread Pool) 구현
+// Thread Pool implementation
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -10,7 +10,7 @@
 #define POOL_SIZE 4
 #define QUEUE_SIZE 100
 
-// 작업 정의
+// Task definition
 // Why: function pointer + void* arg is the standard C callback pattern — void*
 // erases the type so any data can be passed, making the pool generic
 typedef struct Task {
@@ -18,7 +18,7 @@ typedef struct Task {
     void* arg;
 } Task;
 
-// 작업 큐
+// Task queue
 typedef struct {
     Task tasks[QUEUE_SIZE];
     int front;
@@ -32,14 +32,14 @@ typedef struct {
     bool shutdown;
 } TaskQueue;
 
-// 스레드 풀
+// Thread pool
 typedef struct {
     pthread_t threads[POOL_SIZE];
     TaskQueue queue;
     int thread_count;
 } ThreadPool;
 
-// 작업 큐 초기화
+// Initialize task queue
 void queue_init(TaskQueue* q) {
     q->front = 0;
     q->rear = 0;
@@ -51,14 +51,14 @@ void queue_init(TaskQueue* q) {
     pthread_cond_init(&q->not_full, NULL);
 }
 
-// 작업 큐 정리
+// Destroy task queue
 void queue_destroy(TaskQueue* q) {
     pthread_mutex_destroy(&q->mutex);
     pthread_cond_destroy(&q->not_empty);
     pthread_cond_destroy(&q->not_full);
 }
 
-// 작업 추가
+// Add task
 bool queue_push(TaskQueue* q, Task task) {
     pthread_mutex_lock(&q->mutex);
 
@@ -81,7 +81,7 @@ bool queue_push(TaskQueue* q, Task task) {
     return true;
 }
 
-// 작업 가져오기
+// Get task
 bool queue_pop(TaskQueue* q, Task* task) {
     pthread_mutex_lock(&q->mutex);
 
@@ -104,23 +104,23 @@ bool queue_pop(TaskQueue* q, Task* task) {
     return true;
 }
 
-// 워커 스레드 함수
+// Worker thread function
 void* worker_thread(void* arg) {
     ThreadPool* pool = (ThreadPool*)arg;
     Task task;
 
-    printf("[워커] 스레드 시작 (TID: %lu)\n", pthread_self());
+    printf("[Worker] Thread started (TID: %lu)\n", pthread_self());
 
     while (queue_pop(&pool->queue, &task)) {
-        printf("[워커 %lu] 작업 실행\n", pthread_self());
+        printf("[Worker %lu] Executing task\n", pthread_self());
         task.function(task.arg);
     }
 
-    printf("[워커 %lu] 스레드 종료\n", pthread_self());
+    printf("[Worker %lu] Thread exiting\n", pthread_self());
     return NULL;
 }
 
-// 스레드 풀 생성
+// Create thread pool
 ThreadPool* pool_create(int size) {
     ThreadPool* pool = malloc(sizeof(ThreadPool));
     pool->thread_count = size;
@@ -134,13 +134,13 @@ ThreadPool* pool_create(int size) {
     return pool;
 }
 
-// 작업 제출
+// Submit task
 bool pool_submit(ThreadPool* pool, void (*function)(void*), void* arg) {
     Task task = { .function = function, .arg = arg };
     return queue_push(&pool->queue, task);
 }
 
-// 스레드 풀 종료
+// Shutdown thread pool
 // Why: broadcast wakes ALL workers blocked in queue_pop — setting shutdown=true
 // under the lock ensures workers see the flag consistently and exit their loops
 void pool_shutdown(ThreadPool* pool) {
@@ -157,7 +157,7 @@ void pool_shutdown(ThreadPool* pool) {
     free(pool);
 }
 
-// ============ 테스트 ============
+// ============ Test ============
 
 typedef struct {
     int id;
@@ -167,9 +167,9 @@ typedef struct {
 void process_work(void* arg) {
     WorkItem* item = (WorkItem*)arg;
 
-    printf("작업 %d 처리 중 (값: %d)...\n", item->id, item->value);
-    usleep((rand() % 500 + 100) * 1000);  // 100~600ms 처리
-    printf("작업 %d 완료!\n", item->id);
+    printf("Processing task %d (value: %d)...\n", item->id, item->value);
+    usleep((rand() % 500 + 100) * 1000);  // 100~600ms processing
+    printf("Task %d complete!\n", item->id);
 
     // Why: the worker (not the submitter) frees the work item — ownership
     // transfers through the queue, so freeing before processing would be UAF
@@ -179,26 +179,26 @@ void process_work(void* arg) {
 int main(void) {
     srand(time(NULL));
 
-    printf("스레드 풀 생성 (크기: %d)\n\n", POOL_SIZE);
+    printf("Creating thread pool (size: %d)\n\n", POOL_SIZE);
     ThreadPool* pool = pool_create(POOL_SIZE);
 
-    // 작업 제출
+    // Submit tasks
     for (int i = 0; i < 10; i++) {
         WorkItem* item = malloc(sizeof(WorkItem));
         item->id = i;
         item->value = rand() % 100;
 
-        printf("작업 %d 제출 (값: %d)\n", i, item->value);
+        printf("Submitting task %d (value: %d)\n", i, item->value);
         pool_submit(pool, process_work, item);
 
-        usleep(100000);  // 100ms 간격
+        usleep(100000);  // 100ms interval
     }
 
-    printf("\n모든 작업 제출 완료. 풀 종료 대기...\n\n");
-    sleep(2);  // 작업 처리 대기
+    printf("\nAll tasks submitted. Waiting for pool shutdown...\n\n");
+    sleep(2);  // Wait for task processing
 
     pool_shutdown(pool);
-    printf("\n프로그램 종료\n");
+    printf("\nProgram terminated\n");
 
     return 0;
 }

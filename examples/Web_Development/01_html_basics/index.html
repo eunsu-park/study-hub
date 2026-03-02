@@ -1,152 +1,152 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTML 기초 예제</title>
+    <title>HTML Basics Example</title>
 </head>
 <body>
     <!-- ============================================
-         HTML 기초 예제
-         기본적인 HTML 태그와 구조를 학습합니다.
+         HTML Basics Example
+         Learn the basic HTML tags and structure.
     ============================================= -->
 
-    <!-- 1. 제목 태그 (h1 ~ h6) -->
-    <h1>제목 1 - 가장 큰 제목</h1>
-    <h2>제목 2</h2>
-    <h3>제목 3</h3>
-    <h4>제목 4</h4>
-    <h5>제목 5</h5>
-    <h6>제목 6 - 가장 작은 제목</h6>
+    <!-- 1. Heading tags (h1 ~ h6) -->
+    <h1>Heading 1 - Largest heading</h1>
+    <h2>Heading 2</h2>
+    <h3>Heading 3</h3>
+    <h4>Heading 4</h4>
+    <h5>Heading 5</h5>
+    <h6>Heading 6 - Smallest heading</h6>
 
     <hr>
 
-    <!-- 2. 단락과 텍스트 서식 -->
-    <h2>단락과 텍스트 서식</h2>
-    <p>이것은 <strong>단락(paragraph)</strong>입니다. HTML에서 텍스트를 그룹화합니다.</p>
-    <p>텍스트 서식 태그들:</p>
+    <!-- 2. Paragraphs and text formatting -->
+    <h2>Paragraphs and Text Formatting</h2>
+    <p>This is a <strong>paragraph</strong>. It groups text in HTML.</p>
+    <p>Text formatting tags:</p>
     <ul>
-        <li><strong>strong</strong> - 중요한 텍스트 (굵게)</li>
-        <li><em>em</em> - 강조 텍스트 (기울임)</li>
-        <li><mark>mark</mark> - 하이라이트</li>
-        <li><del>del</del> - 삭제된 텍스트</li>
-        <li><ins>ins</ins> - 추가된 텍스트</li>
-        <li><code>code</code> - 코드</li>
-        <li>H<sub>2</sub>O - 아래 첨자</li>
-        <li>x<sup>2</sup> - 위 첨자</li>
+        <li><strong>strong</strong> - Important text (bold)</li>
+        <li><em>em</em> - Emphasized text (italic)</li>
+        <li><mark>mark</mark> - Highlight</li>
+        <li><del>del</del> - Deleted text</li>
+        <li><ins>ins</ins> - Inserted text</li>
+        <li><code>code</code> - Code</li>
+        <li>H<sub>2</sub>O - Subscript</li>
+        <li>x<sup>2</sup> - Superscript</li>
     </ul>
 
     <hr>
 
-    <!-- 3. 목록 -->
-    <h2>목록</h2>
+    <!-- 3. Lists -->
+    <h2>Lists</h2>
 
-    <h3>순서 없는 목록 (ul)</h3>
+    <h3>Unordered list (ul)</h3>
     <ul>
-        <li>사과</li>
-        <li>바나나</li>
-        <li>오렌지</li>
+        <li>Apple</li>
+        <li>Banana</li>
+        <li>Orange</li>
     </ul>
 
-    <h3>순서 있는 목록 (ol)</h3>
+    <h3>Ordered list (ol)</h3>
     <ol>
-        <li>첫 번째 단계</li>
-        <li>두 번째 단계</li>
-        <li>세 번째 단계</li>
+        <li>First step</li>
+        <li>Second step</li>
+        <li>Third step</li>
     </ol>
 
-    <h3>설명 목록 (dl)</h3>
+    <h3>Description list (dl)</h3>
     <dl>
         <dt>HTML</dt>
-        <dd>HyperText Markup Language - 웹 페이지 구조를 정의</dd>
+        <dd>HyperText Markup Language - Defines web page structure</dd>
         <dt>CSS</dt>
-        <dd>Cascading Style Sheets - 웹 페이지 스타일을 정의</dd>
+        <dd>Cascading Style Sheets - Defines web page styling</dd>
         <dt>JavaScript</dt>
-        <dd>웹 페이지에 동적 기능을 추가하는 프로그래밍 언어</dd>
+        <dd>A programming language that adds dynamic functionality to web pages</dd>
     </dl>
 
     <hr>
 
-    <!-- 4. 링크와 이미지 -->
-    <h2>링크와 이미지</h2>
+    <!-- 4. Links and images -->
+    <h2>Links and Images</h2>
 
-    <h3>링크 (a 태그)</h3>
+    <h3>Links (a tag)</h3>
     <p>
         <a href="https://developer.mozilla.org/ko/" target="_blank">MDN Web Docs</a> -
-        새 탭에서 열림 (target="_blank")
+        Opens in a new tab (target="_blank")
     </p>
     <p>
-        <a href="semantic.html">시맨틱 HTML 예제</a> - 같은 폴더의 다른 파일로 이동
+        <a href="semantic.html">Semantic HTML Example</a> - Navigate to another file in the same folder
     </p>
     <p>
-        <a href="#section-div">페이지 내 이동</a> - 같은 페이지의 특정 위치로 이동
+        <a href="#section-div">In-page navigation</a> - Navigate to a specific location on the same page
     </p>
 
-    <h3>이미지 (img 태그)</h3>
+    <h3>Images (img tag)</h3>
     <p>
-        <!-- 이미지가 없을 때 대체 텍스트(alt)가 표시됩니다 -->
-        <img src="example.jpg" alt="예제 이미지 설명" width="200" height="150">
+        <!-- Alt text is displayed when the image is not available -->
+        <img src="example.jpg" alt="Example image description" width="200" height="150">
     </p>
     <p>
-        <!-- 외부 이미지 (placeholder) -->
-        <img src="https://via.placeholder.com/200x150" alt="플레이스홀더 이미지">
+        <!-- External image (placeholder) -->
+        <img src="https://via.placeholder.com/200x150" alt="Placeholder image">
     </p>
 
     <hr>
 
-    <!-- 5. 인용 -->
-    <h2>인용</h2>
+    <!-- 5. Quotations -->
+    <h2>Quotations</h2>
 
-    <h3>블록 인용 (blockquote)</h3>
+    <h3>Block quote (blockquote)</h3>
     <blockquote cite="https://example.com">
-        <p>프로그래밍은 생각하는 것을 배우는 것이다.</p>
+        <p>Programming is learning to think.</p>
         <footer>- Steve Jobs</footer>
     </blockquote>
 
-    <h3>인라인 인용 (q)</h3>
-    <p>Steve Jobs는 <q>Stay hungry, stay foolish</q>라고 말했습니다.</p>
+    <h3>Inline quote (q)</h3>
+    <p>Steve Jobs said <q>Stay hungry, stay foolish</q>.</p>
 
     <hr>
 
-    <!-- 6. div와 span -->
-    <h2 id="section-div">div와 span</h2>
+    <!-- 6. div and span -->
+    <h2 id="section-div">div and span</h2>
 
     <div style="background-color: #f0f0f0; padding: 10px; margin: 10px 0;">
-        <p>div는 <strong>블록 레벨</strong> 컨테이너입니다.</p>
-        <p>여러 요소를 그룹화할 때 사용합니다.</p>
+        <p>div is a <strong>block-level</strong> container.</p>
+        <p>It is used to group multiple elements together.</p>
     </div>
 
     <p>
-        span은 <span style="color: red;">인라인</span> 컨테이너입니다.
-        텍스트 일부에 <span style="background-color: yellow;">스타일</span>을 적용할 때 사용합니다.
+        span is an <span style="color: red;">inline</span> container.
+        It is used to apply <span style="background-color: yellow;">styles</span> to parts of text.
     </p>
 
     <hr>
 
-    <!-- 7. 특수 문자 -->
-    <h2>HTML 엔티티 (특수 문자)</h2>
+    <!-- 7. Special characters -->
+    <h2>HTML Entities (Special Characters)</h2>
     <ul>
-        <li>&lt; - 보다 작음 (&amp;lt;)</li>
-        <li>&gt; - 보다 큼 (&amp;gt;)</li>
-        <li>&amp; - 앰퍼샌드 (&amp;amp;)</li>
-        <li>&nbsp; - 공백 (&amp;nbsp;)</li>
-        <li>&copy; - 저작권 (&amp;copy;)</li>
-        <li>&reg; - 등록상표 (&amp;reg;)</li>
-        <li>&euro; - 유로 (&amp;euro;)</li>
+        <li>&lt; - Less than (&amp;lt;)</li>
+        <li>&gt; - Greater than (&amp;gt;)</li>
+        <li>&amp; - Ampersand (&amp;amp;)</li>
+        <li>&nbsp; - Non-breaking space (&amp;nbsp;)</li>
+        <li>&copy; - Copyright (&amp;copy;)</li>
+        <li>&reg; - Registered trademark (&amp;reg;)</li>
+        <li>&euro; - Euro (&amp;euro;)</li>
     </ul>
 
     <hr>
 
-    <!-- 8. 주석 -->
-    <h2>HTML 주석</h2>
-    <p>주석은 브라우저에 표시되지 않습니다.</p>
-    <!-- 이것은 HTML 주석입니다. 개발자만 볼 수 있습니다. -->
-    <p>소스 코드를 확인하면 주석을 볼 수 있습니다.</p>
+    <!-- 8. Comments -->
+    <h2>HTML Comments</h2>
+    <p>Comments are not displayed in the browser.</p>
+    <!-- This is an HTML comment. Only developers can see it. -->
+    <p>You can see comments by viewing the source code.</p>
 
     <hr>
 
-    <!-- 9. pre와 code -->
-    <h2>코드 표시</h2>
+    <!-- 9. pre and code -->
+    <h2>Code Display</h2>
     <pre><code>function hello() {
     console.log("Hello, World!");
 }
@@ -156,7 +156,7 @@ hello();</code></pre>
     <hr>
 
     <footer>
-        <p>&copy; 2024 HTML 기초 예제. 학습 목적으로 제작됨.</p>
+        <p>&copy; 2024 HTML Basics Example. Created for learning purposes.</p>
     </footer>
 </body>
 </html>

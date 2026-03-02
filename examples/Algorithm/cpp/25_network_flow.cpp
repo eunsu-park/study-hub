@@ -1,8 +1,8 @@
 /*
- * 네트워크 플로우 (Network Flow)
+ * Network Flow
  * Ford-Fulkerson, Edmonds-Karp, Dinic, Bipartite Matching
  *
- * 그래프에서 최대 유량을 구하는 알고리즘입니다.
+ * Algorithms for finding maximum flow in a graph.
  */
 
 #include <iostream>
@@ -110,13 +110,13 @@ public:
 
             if (parent[t] == -1) break;
 
-            // 경로상 최소 용량
+            // Minimum capacity along the path
             int pushed = INF;
             for (int v = t; v != s; v = parent[v]) {
                 pushed = min(pushed, capacity[parent[v]][v]);
             }
 
-            // 용량 업데이트
+            // Update capacities
             for (int v = t; v != s; v = parent[v]) {
                 capacity[parent[v]][v] -= pushed;
                 capacity[v][parent[v]] += pushed;
@@ -206,7 +206,7 @@ public:
 };
 
 // =============================================================================
-// 4. 이분 매칭 (Hungarian / Hopcroft-Karp)
+// 4. Bipartite Matching (Hungarian / Hopcroft-Karp)
 // =============================================================================
 
 class BipartiteMatching {
@@ -260,7 +260,7 @@ public:
 };
 
 // =============================================================================
-// 5. 최소 비용 최대 유량 (MCMF)
+// 5. Min Cost Max Flow (MCMF)
 // =============================================================================
 
 class MCMF {
@@ -314,13 +314,13 @@ public:
 
             if (dist[t] == INF) break;
 
-            // 경로상 최소 용량
+            // Minimum capacity along the path
             int flow = INF;
             for (int v = t; v != s; v = prevV[v]) {
                 flow = min(flow, graph[prevV[v]][prevE[v]].cap);
             }
 
-            // 용량 업데이트
+            // Update capacities
             for (int v = t; v != s; v = prevV[v]) {
                 Edge& e = graph[prevV[v]][prevE[v]];
                 e.cap -= flow;
@@ -336,11 +336,11 @@ public:
 };
 
 // =============================================================================
-// 6. 최소 컷
+// 6. Min Cut
 // =============================================================================
 
 vector<pair<int, int>> minCut(int n, vector<vector<int>>& capacity, int s, int t) {
-    // Edmonds-Karp 실행 후 잔여 그래프에서 s에서 도달 가능한 정점 찾기
+    // After running Edmonds-Karp, find vertices reachable from s in the residual graph
     vector<vector<int>> residual = capacity;
     vector<vector<int>> adj(n);
 
@@ -385,7 +385,7 @@ vector<pair<int, int>> minCut(int n, vector<vector<int>>& capacity, int s, int t
         }
     }
 
-    // BFS로 s에서 도달 가능한 정점
+    // BFS to find vertices reachable from s
     vector<bool> reachable(n, false);
     queue<int> q;
     q.push(s);
@@ -403,7 +403,7 @@ vector<pair<int, int>> minCut(int n, vector<vector<int>>& capacity, int s, int t
         }
     }
 
-    // 최소 컷 간선
+    // Min cut edges
     vector<pair<int, int>> cut;
     for (int u = 0; u < n; u++) {
         if (reachable[u]) {
@@ -419,12 +419,12 @@ vector<pair<int, int>> minCut(int n, vector<vector<int>>& capacity, int s, int t
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "네트워크 플로우 예제" << endl;
+    cout << "Network Flow Example" << endl;
     cout << "============================================================" << endl;
 
     // 1. Ford-Fulkerson
@@ -440,7 +440,7 @@ int main() {
     ff.addEdge(3, 5, 20);
     ff.addEdge(4, 3, 7);
     ff.addEdge(4, 5, 4);
-    cout << "    최대 유량 (0 → 5): " << ff.maxFlow(0, 5) << endl;
+    cout << "    Max flow (0 -> 5): " << ff.maxFlow(0, 5) << endl;
 
     // 2. Edmonds-Karp
     cout << "\n[2] Edmonds-Karp (BFS)" << endl;
@@ -455,7 +455,7 @@ int main() {
     ek.addEdge(3, 5, 20);
     ek.addEdge(4, 3, 7);
     ek.addEdge(4, 5, 4);
-    cout << "    최대 유량 (0 → 5): " << ek.maxFlow(0, 5) << endl;
+    cout << "    Max flow (0 -> 5): " << ek.maxFlow(0, 5) << endl;
 
     // 3. Dinic
     cout << "\n[3] Dinic's Algorithm" << endl;
@@ -470,10 +470,10 @@ int main() {
     dinic.addEdge(3, 5, 20);
     dinic.addEdge(4, 3, 7);
     dinic.addEdge(4, 5, 4);
-    cout << "    최대 유량 (0 → 5): " << dinic.maxFlow(0, 5) << endl;
+    cout << "    Max flow (0 -> 5): " << dinic.maxFlow(0, 5) << endl;
 
-    // 4. 이분 매칭
-    cout << "\n[4] 이분 매칭" << endl;
+    // 4. Bipartite Matching
+    cout << "\n[4] Bipartite Matching" << endl;
     BipartiteMatching bm(4, 4);
     bm.addEdge(0, 0);
     bm.addEdge(0, 1);
@@ -483,15 +483,15 @@ int main() {
     bm.addEdge(2, 2);
     bm.addEdge(3, 2);
     bm.addEdge(3, 3);
-    cout << "    최대 매칭: " << bm.maxMatching() << endl;
-    cout << "    매칭: ";
+    cout << "    Max matching: " << bm.maxMatching() << endl;
+    cout << "    Matching: ";
     for (auto [l, r] : bm.getMatching()) {
         cout << "(" << l << "," << r << ") ";
     }
     cout << endl;
 
     // 5. MCMF
-    cout << "\n[5] 최소 비용 최대 유량" << endl;
+    cout << "\n[5] Min Cost Max Flow" << endl;
     MCMF mcmf(4);
     mcmf.addEdge(0, 1, 2, 1);
     mcmf.addEdge(0, 2, 1, 2);
@@ -499,17 +499,17 @@ int main() {
     mcmf.addEdge(1, 3, 1, 3);
     mcmf.addEdge(2, 3, 2, 1);
     auto [flow, cost] = mcmf.minCostMaxFlow(0, 3);
-    cout << "    최대 유량: " << flow << ", 최소 비용: " << cost << endl;
+    cout << "    Max flow: " << flow << ", Min cost: " << cost << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘       | 시간복잡도      | 특징              |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm      | Time            | Notes             |" << endl;
     cout << "    |----------------|-----------------|-------------------|" << endl;
-    cout << "    | Ford-Fulkerson | O(Ef)           | DFS, 무한루프 가능|" << endl;
-    cout << "    | Edmonds-Karp   | O(VE²)          | BFS, 안정적       |" << endl;
-    cout << "    | Dinic          | O(V²E)          | 레벨 그래프       |" << endl;
-    cout << "    | 이분 매칭      | O(VE)           | 헝가리안          |" << endl;
-    cout << "    | MCMF           | O(VEf) or O(V³E)| SPFA/Bellman-Ford |" << endl;
+    cout << "    | Ford-Fulkerson | O(Ef)           | DFS, may loop     |" << endl;
+    cout << "    | Edmonds-Karp   | O(VE^2)         | BFS, stable       |" << endl;
+    cout << "    | Dinic          | O(V^2 E)        | Level graph       |" << endl;
+    cout << "    | Bipartite      | O(VE)           | Hungarian         |" << endl;
+    cout << "    | MCMF           | O(VEf) or O(V^3E)| SPFA/Bellman-Ford|" << endl;
 
     cout << "\n============================================================" << endl;
 

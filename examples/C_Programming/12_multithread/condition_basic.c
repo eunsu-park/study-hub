@@ -1,5 +1,5 @@
 // condition_basic.c
-// 조건 변수 (Condition Variable) 기본 사용법
+// Condition Variable basics
 #include <stdio.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -16,16 +16,16 @@ void* waiter(void* arg) {
 
     // Why: "while (!ready)" instead of "if (!ready)" guards against spurious
     // wakeups and lost signals — the condition must be re-verified after each return
-    while (!ready) {  // 조건이 false인 동안 대기
-        printf("[대기자 %d] 조건 대기 중...\n", id);
+    while (!ready) {  // Wait while condition is false
+        printf("[Waiter %d] Waiting on condition...\n", id);
         // Why: cond_wait atomically releases the mutex and puts the thread to sleep —
         // this prevents the "missed signal" bug where the signal fires between
         // unlocking and sleeping
-        pthread_cond_wait(&cond, &mutex);  // 대기 (뮤텍스 해제됨)
+        pthread_cond_wait(&cond, &mutex);  // Wait (mutex is released)
     }
-    // pthread_cond_wait에서 깨어나면 뮤텍스 다시 획득됨
+    // After waking from pthread_cond_wait, the mutex is re-acquired
 
-    printf("[대기자 %d] 조건 만족! 작업 시작\n", id);
+    printf("[Waiter %d] Condition met! Starting work\n", id);
 
     pthread_mutex_unlock(&mutex);
     return NULL;
@@ -34,15 +34,15 @@ void* waiter(void* arg) {
 void* signaler(void* arg) {
     (void)arg;
 
-    sleep(2);  // 2초 대기
+    sleep(2);  // Wait 2 seconds
 
     // Why: modifying the shared flag (ready) and signaling must both happen under
     // the same mutex — otherwise a waiter might check ready between the set and
     // the signal, see false, and sleep forever
     pthread_mutex_lock(&mutex);
     ready = true;
-    printf("[신호자] 조건 설정 완료. 신호 전송!\n");
-    pthread_cond_broadcast(&cond);  // 모든 대기자에게 신호
+    printf("[Signaler] Condition set. Sending signal!\n");
+    pthread_cond_broadcast(&cond);  // Signal all waiters
     pthread_mutex_unlock(&mutex);
 
     return NULL;
@@ -53,15 +53,15 @@ int main(void) {
     pthread_t sig;
     int ids[] = {1, 2, 3};
 
-    // 대기 스레드 생성
+    // Create waiter threads
     for (int i = 0; i < 3; i++) {
         pthread_create(&waiters[i], NULL, waiter, &ids[i]);
     }
 
-    // 신호 스레드 생성
+    // Create signaler thread
     pthread_create(&sig, NULL, signaler, NULL);
 
-    // 대기
+    // Wait
     for (int i = 0; i < 3; i++) {
         pthread_join(waiters[i], NULL);
     }

@@ -1,6 +1,6 @@
 // bracket_check.c
-// 스택을 이용한 괄호 검사 프로그램
-// 여는 괄호와 닫는 괄호의 쌍이 올바른지 확인
+// Bracket validation program using a stack
+// Checks whether opening and closing brackets are properly paired
 
 #include <stdio.h>
 #include <string.h>
@@ -8,23 +8,23 @@
 
 #define MAX_SIZE 100
 
-// 문자를 저장하는 스택
+// Stack that stores characters
 typedef struct {
     char data[MAX_SIZE];
     int top;
 } CharStack;
 
-// 스택 초기화
+// Initialize stack
 void stack_init(CharStack *s) {
     s->top = -1;
 }
 
-// 비어있는지 확인
+// Check if empty
 bool stack_isEmpty(CharStack *s) {
     return s->top == -1;
 }
 
-// 가득 찼는지 확인
+// Check if full
 bool stack_isFull(CharStack *s) {
     return s->top == MAX_SIZE - 1;
 }
@@ -52,24 +52,24 @@ char stack_peek(CharStack *s) {
     return '\0';
 }
 
-// 여는 괄호인지 확인
+// Check if character is an opening bracket
 bool isOpeningBracket(char c) {
     return c == '(' || c == '{' || c == '[';
 }
 
-// 닫는 괄호인지 확인
+// Check if character is a closing bracket
 bool isClosingBracket(char c) {
     return c == ')' || c == '}' || c == ']';
 }
 
-// 괄호 쌍이 맞는지 확인
+// Check if brackets form a matching pair
 bool isMatchingPair(char open, char close) {
     return (open == '(' && close == ')') ||
            (open == '{' && close == '}') ||
            (open == '[' && close == ']');
 }
 
-// 괄호 검사 함수
+// Bracket validation function
 bool checkBrackets(const char *expr) {
     CharStack s;
     stack_init(&s);
@@ -77,37 +77,37 @@ bool checkBrackets(const char *expr) {
     for (int i = 0; expr[i]; i++) {
         char c = expr[i];
 
-        // 여는 괄호: 스택에 push
+        // Opening bracket: push onto stack
         if (isOpeningBracket(c)) {
             stack_push(&s, c);
-            printf("  [위치 %d] '%c' 여는 괄호 → 스택에 push\n", i, c);
+            printf("  [Position %d] '%c' opening bracket -> push to stack\n", i, c);
         }
-        // 닫는 괄호: 스택에서 pop하여 짝 확인
+        // Closing bracket: pop from stack and check pair
         else if (isClosingBracket(c)) {
             if (stack_isEmpty(&s)) {
-                printf("  [위치 %d] '%c' 오류 - 짝이 없는 닫는 괄호\n", i, c);
+                printf("  [Position %d] '%c' error - unmatched closing bracket\n", i, c);
                 return false;
             }
 
             char open = stack_pop(&s);
             if (!isMatchingPair(open, c)) {
-                printf("  [위치 %d] 오류 - '%c'와 '%c' 불일치\n", i, open, c);
+                printf("  [Position %d] error - '%c' and '%c' mismatch\n", i, open, c);
                 return false;
             }
-            printf("  [위치 %d] '%c' 닫는 괄호 → '%c'와 매칭 OK\n", i, c, open);
+            printf("  [Position %d] '%c' closing bracket -> matched with '%c' OK\n", i, c, open);
         }
     }
 
-    // 스택이 비어있지 않으면 짝이 맞지 않는 여는 괄호가 남아있음
+    // If stack is not empty, there are unmatched opening brackets remaining
     if (!stack_isEmpty(&s)) {
-        printf("  오류 - 닫히지 않은 여는 괄호가 %d개 남아있음\n", s.top + 1);
+        printf("  Error - %d unclosed opening bracket(s) remaining\n", s.top + 1);
         return false;
     }
 
     return true;
 }
 
-// 간단한 괄호 검사 (디버그 출력 없음)
+// Simple bracket check (no debug output)
 bool checkBracketsQuiet(const char *expr) {
     CharStack s;
     stack_init(&s);
@@ -131,43 +131,43 @@ bool checkBracketsQuiet(const char *expr) {
     return stack_isEmpty(&s);
 }
 
-// 테스트 코드
+// Test code
 int main(void) {
-    printf("=== 괄호 검사 프로그램 ===\n\n");
+    printf("=== Bracket Validation Program ===\n\n");
 
     const char *tests[] = {
-        "(a + b) * (c - d)",     // 올바른 괄호
-        "((a + b) * c",          // 닫히지 않은 괄호
-        "{[()]}",                // 올바른 중첩
-        "{[(])}",                // 잘못된 중첩
-        "((()))",                // 올바른 괄호
-        ")(",                    // 잘못된 순서
-        "{[a + (b * c)] - d}",   // 올바른 복잡한 표현식
-        "((a + b)",              // 하나 부족
-        "a + b)",                // 여는 괄호 없음
-        "[]{}()"                 // 올바른 연속
+        "(a + b) * (c - d)",     // Valid brackets
+        "((a + b) * c",          // Unclosed bracket
+        "{[()]}",                // Valid nesting
+        "{[(])}",                // Invalid nesting
+        "((()))",                // Valid brackets
+        ")(",                    // Invalid order
+        "{[a + (b * c)] - d}",   // Valid complex expression
+        "((a + b)",              // One short
+        "a + b)",                // No opening bracket
+        "[]{}()"                 // Valid consecutive
     };
 
     int n = sizeof(tests) / sizeof(tests[0]);
 
     for (int i = 0; i < n; i++) {
-        printf("테스트 %d: \"%s\"\n", i + 1, tests[i]);
+        printf("Test %d: \"%s\"\n", i + 1, tests[i]);
 
         if (checkBrackets(tests[i])) {
-            printf("✓ 결과: 올바른 괄호\n");
+            printf("Result: Valid brackets\n");
         } else {
-            printf("✗ 결과: 잘못된 괄호\n");
+            printf("Result: Invalid brackets\n");
         }
         printf("\n");
     }
 
-    // 추가 테스트: 사용자 입력
-    printf("\n=== 직접 테스트해보기 ===\n");
+    // Additional test: user input
+    printf("\n=== Try It Yourself ===\n");
     char input[MAX_SIZE];
-    printf("괄호를 포함한 식을 입력하세요 (종료: q): ");
+    printf("Enter an expression with brackets (quit: q): ");
 
     while (fgets(input, MAX_SIZE, stdin)) {
-        // 개행 문자 제거
+        // Remove newline character
         input[strcspn(input, "\n")] = 0;
 
         if (strcmp(input, "q") == 0) {
@@ -175,14 +175,14 @@ int main(void) {
         }
 
         if (checkBracketsQuiet(input)) {
-            printf("✓ 올바른 괄호입니다!\n");
+            printf("Valid brackets!\n");
         } else {
-            printf("✗ 잘못된 괄호입니다!\n");
+            printf("Invalid brackets!\n");
         }
 
-        printf("\n다른 식을 입력하세요 (종료: q): ");
+        printf("\nEnter another expression (quit: q): ");
     }
 
-    printf("\n프로그램을 종료합니다.\n");
+    printf("\nExiting the program.\n");
     return 0;
 }

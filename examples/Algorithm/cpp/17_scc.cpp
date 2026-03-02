@@ -1,8 +1,8 @@
 /*
- * 강한 연결 요소 (Strongly Connected Components)
+ * Strongly Connected Components (SCC)
  * Tarjan, Kosaraju, 2-SAT
  *
- * 방향 그래프에서 서로 도달 가능한 정점들의 집합을 찾습니다.
+ * Finds sets of mutually reachable vertices in a directed graph.
  */
 
 #include <iostream>
@@ -42,7 +42,7 @@ private:
             }
         }
 
-        // SCC의 루트인 경우
+        // If this is the root of an SCC
         if (ids[v] == low[v]) {
             vector<int> scc;
             while (true) {
@@ -75,7 +75,7 @@ public:
     int getSCCCount() const { return sccCount; }
     const vector<vector<int>>& getSCCs() const { return sccs; }
 
-    // SCC 축약 그래프 (DAG)
+    // SCC condensation graph (DAG)
     vector<vector<int>> getCondensedGraph() {
         vector<int> sccId(n);
         for (int i = 0; i < (int)sccs.size(); i++) {
@@ -110,9 +110,9 @@ class KosarajuSCC {
 private:
     int n;
     vector<vector<int>> adj;
-    vector<vector<int>> radj;  // 역방향 그래프
+    vector<vector<int>> radj;  // Reverse graph
     vector<bool> visited;
-    vector<int> order;         // 첫 번째 DFS 순서
+    vector<int> order;         // First DFS order
     vector<vector<int>> sccs;
 
     void dfs1(int v) {
@@ -137,14 +137,14 @@ private:
 
 public:
     KosarajuSCC(int n, const vector<vector<int>>& adj) : n(n), adj(adj), radj(n) {
-        // 역방향 그래프 생성
+        // Build reverse graph
         for (int v = 0; v < n; v++) {
             for (int u : adj[v]) {
                 radj[u].push_back(v);
             }
         }
 
-        // 첫 번째 DFS: 종료 순서
+        // First DFS: finish order
         visited.assign(n, false);
         for (int i = 0; i < n; i++) {
             if (!visited[i]) {
@@ -152,7 +152,7 @@ public:
             }
         }
 
-        // 두 번째 DFS: SCC 찾기
+        // Second DFS: find SCCs
         visited.assign(n, false);
         for (int i = n - 1; i >= 0; i--) {
             int v = order[i];
@@ -185,24 +185,23 @@ private:
 public:
     TwoSAT(int n) : n(n), adj(2 * n), sccId(2 * n), assignment(n) {}
 
-    // x ∨ y 추가 (둘 중 하나는 참)
+    // Add clause x OR y (at least one must be true)
     void addClause(int x, int y) {
-        // ¬x → y, ¬y → x
         adj[notVar(x)].push_back(var(y));
         adj[notVar(y)].push_back(var(x));
     }
 
-    // x를 참으로 강제
+    // Force x to be true
     void setTrue(int x) {
         adj[notVar(x)].push_back(var(x));
     }
 
-    // x를 거짓으로 강제
+    // Force x to be false
     void setFalse(int x) {
         adj[var(x)].push_back(notVar(x));
     }
 
-    // x ⊕ y (정확히 하나만 참)
+    // x XOR y (exactly one must be true)
     void addXor(int x, int y) {
         addClause(x, y);
         addClause(-x - 1, -y - 1);
@@ -212,19 +211,19 @@ public:
         TarjanSCC scc(2 * n, adj);
         auto sccs = scc.getSCCs();
 
-        // SCC ID 할당
+        // Assign SCC IDs
         for (int i = 0; i < (int)sccs.size(); i++) {
             for (int v : sccs[i]) {
                 sccId[v] = i;
             }
         }
 
-        // 충족 가능성 검사
+        // Check satisfiability
         for (int i = 0; i < n; i++) {
             if (sccId[2 * i] == sccId[2 * i + 1]) {
-                return false;  // x와 ¬x가 같은 SCC
+                return false;  // x and NOT x are in the same SCC
             }
-            // SCC 순서가 역방향이므로 비교
+            // SCC order is reversed, so compare accordingly
             assignment[i] = sccId[2 * i] > sccId[2 * i + 1];
         }
 
@@ -235,7 +234,7 @@ public:
 };
 
 // =============================================================================
-// 4. 절단점 (Articulation Points)
+// 4. Articulation Points
 // =============================================================================
 
 class ArticulationPoints {
@@ -264,7 +263,7 @@ private:
             }
         }
 
-        // 루트가 2개 이상의 자식을 가지면 절단점
+        // Root with 2+ children is an articulation point
         if (parent == -1 && children > 1) {
             isAP[v] = true;
         }
@@ -294,7 +293,7 @@ public:
 };
 
 // =============================================================================
-// 5. 브릿지 (Bridges)
+// 5. Bridges
 // =============================================================================
 
 class Bridges {
@@ -339,22 +338,22 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 #include <set>
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "강한 연결 요소 예제" << endl;
+    cout << "Strongly Connected Components Example" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 그래프
-    //  0 → 1 → 2 → 3
-    //  ↑   ↓       ↓
-    //  4 ← 5   6 ← 7
-    //      ↓
-    //      6
+    // Test graph
+    //  0 -> 1 -> 2 -> 3
+    //  ^    |         |
+    //  4 <- 5    6 <- 7
+    //       |
+    //       6
 
     int n = 8;
     vector<vector<int>> adj(n);
@@ -370,7 +369,7 @@ int main() {
     // 1. Tarjan's Algorithm
     cout << "\n[1] Tarjan's Algorithm" << endl;
     TarjanSCC tarjan(n, adj);
-    cout << "    SCC 개수: " << tarjan.getSCCCount() << endl;
+    cout << "    SCC count: " << tarjan.getSCCCount() << endl;
     cout << "    SCCs:" << endl;
     for (const auto& scc : tarjan.getSCCs()) {
         cout << "      { ";
@@ -381,30 +380,30 @@ int main() {
     // 2. Kosaraju's Algorithm
     cout << "\n[2] Kosaraju's Algorithm" << endl;
     KosarajuSCC kosaraju(n, adj);
-    cout << "    SCC 개수: " << kosaraju.getSCCCount() << endl;
+    cout << "    SCC count: " << kosaraju.getSCCCount() << endl;
 
     // 3. 2-SAT
     cout << "\n[3] 2-SAT" << endl;
-    // (x0 ∨ x1) ∧ (¬x0 ∨ x2) ∧ (¬x1 ∨ ¬x2)
+    // (x0 | x1) & (!x0 | x2) & (!x1 | !x2)
     TwoSAT sat(3);
-    sat.addClause(0, 1);         // x0 ∨ x1
-    sat.addClause(-1, 2);        // ¬x0 ∨ x2
-    sat.addClause(-2, -3);       // ¬x1 ∨ ¬x2
+    sat.addClause(0, 1);         // x0 | x1
+    sat.addClause(-1, 2);        // !x0 | x2
+    sat.addClause(-2, -3);       // !x1 | !x2
 
     if (sat.solve()) {
-        cout << "    충족 가능" << endl;
+        cout << "    Satisfiable" << endl;
         auto assignment = sat.getAssignment();
-        cout << "    할당: ";
+        cout << "    Assignment: ";
         for (int i = 0; i < 3; i++) {
             cout << "x" << i << "=" << assignment[i] << " ";
         }
         cout << endl;
     } else {
-        cout << "    충족 불가능" << endl;
+        cout << "    Unsatisfiable" << endl;
     }
 
-    // 4. 절단점
-    cout << "\n[4] 절단점 (무방향 그래프)" << endl;
+    // 4. Articulation Points
+    cout << "\n[4] Articulation Points (Undirected Graph)" << endl;
     vector<vector<int>> undirected(5);
     undirected[0] = {1};
     undirected[1] = {0, 2, 3};
@@ -414,29 +413,29 @@ int main() {
 
     ArticulationPoints ap(5, undirected);
     auto points = ap.getArticulationPoints();
-    cout << "    절단점: ";
+    cout << "    Articulation points: ";
     for (int v : points) cout << v << " ";
     cout << endl;
 
-    // 5. 브릿지
-    cout << "\n[5] 브릿지 (무방향 그래프)" << endl;
+    // 5. Bridges
+    cout << "\n[5] Bridges (Undirected Graph)" << endl;
     Bridges br(5, undirected);
     auto bridgeList = br.getBridges();
-    cout << "    브릿지: ";
+    cout << "    Bridges: ";
     for (auto [u, v] : bridgeList) {
         cout << "(" << u << "-" << v << ") ";
     }
     cout << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘    | 시간복잡도 | 용도               |" << endl;
-    cout << "    |-------------|------------|---------------------|" << endl;
-    cout << "    | Tarjan      | O(V + E)   | SCC, 단일 DFS       |" << endl;
-    cout << "    | Kosaraju    | O(V + E)   | SCC, 2번 DFS        |" << endl;
-    cout << "    | 2-SAT       | O(V + E)   | 논리식 충족 가능성  |" << endl;
-    cout << "    | 절단점      | O(V + E)   | 그래프 취약점       |" << endl;
-    cout << "    | 브릿지      | O(V + E)   | 그래프 취약점       |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm     | Time       | Purpose              |" << endl;
+    cout << "    |---------------|------------|----------------------|" << endl;
+    cout << "    | Tarjan        | O(V + E)   | SCC, single DFS      |" << endl;
+    cout << "    | Kosaraju      | O(V + E)   | SCC, two-pass DFS    |" << endl;
+    cout << "    | 2-SAT         | O(V + E)   | Boolean satisfiability|" << endl;
+    cout << "    | Articulation  | O(V + E)   | Graph vulnerabilities|" << endl;
+    cout << "    | Bridges       | O(V + E)   | Graph vulnerabilities|" << endl;
 
     cout << "\n============================================================" << endl;
 

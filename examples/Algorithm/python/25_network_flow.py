@@ -1,8 +1,8 @@
 """
-네트워크 플로우 (Network Flow)
+Network Flow
 Maximum Flow and Bipartite Matching
 
-그래프에서 최대 유량을 구하는 알고리즘입니다.
+Algorithms for computing maximum flow in graphs.
 """
 
 from typing import List, Tuple, Dict
@@ -10,13 +10,13 @@ from collections import defaultdict, deque
 
 
 # =============================================================================
-# 1. Ford-Fulkerson (DFS 기반)
+# 1. Ford-Fulkerson (DFS-Based)
 # =============================================================================
 
 def ford_fulkerson(capacity: List[List[int]], source: int, sink: int) -> int:
     """
-    Ford-Fulkerson 알고리즘 (DFS)
-    시간복잡도: O(E * max_flow)
+    Ford-Fulkerson Algorithm (DFS)
+    Time Complexity: O(E * max_flow)
     """
     n = len(capacity)
     residual = [row[:] for row in capacity]
@@ -51,19 +51,19 @@ def ford_fulkerson(capacity: List[List[int]], source: int, sink: int) -> int:
 
 
 # =============================================================================
-# 2. Edmonds-Karp (BFS 기반)
+# 2. Edmonds-Karp (BFS-Based)
 # =============================================================================
 
 def edmonds_karp(capacity: List[List[int]], source: int, sink: int) -> int:
     """
-    Edmonds-Karp 알고리즘 (BFS)
-    시간복잡도: O(V * E²)
+    Edmonds-Karp Algorithm (BFS)
+    Time Complexity: O(V * E^2)
     """
     n = len(capacity)
     residual = [row[:] for row in capacity]
 
     def bfs() -> List[int]:
-        """BFS로 증가 경로 찾기"""
+        """Find augmenting path via BFS"""
         parent = [-1] * n
         visited = [False] * n
         visited[source] = True
@@ -91,7 +91,7 @@ def edmonds_karp(capacity: List[List[int]], source: int, sink: int) -> int:
         if parent[sink] == -1:
             break
 
-        # 경로의 최소 용량 찾기
+        # Find minimum capacity along the path
         path_flow = float('inf')
         node = sink
         while node != source:
@@ -99,7 +99,7 @@ def edmonds_karp(capacity: List[List[int]], source: int, sink: int) -> int:
             path_flow = min(path_flow, residual[prev][node])
             node = prev
 
-        # 잔여 그래프 업데이트
+        # Update residual graph
         node = sink
         while node != source:
             prev = parent[node]
@@ -113,14 +113,14 @@ def edmonds_karp(capacity: List[List[int]], source: int, sink: int) -> int:
 
 
 # =============================================================================
-# 3. Dinic 알고리즘
+# 3. Dinic's Algorithm
 # =============================================================================
 
 class Dinic:
     """
-    Dinic 알고리즘
-    시간복잡도: O(V² * E)
-    이분 그래프에서: O(E * √V)
+    Dinic's Algorithm
+    Time Complexity: O(V^2 * E)
+    For bipartite graphs: O(E * sqrt(V))
     """
 
     def __init__(self, n: int):
@@ -128,13 +128,13 @@ class Dinic:
         self.graph = defaultdict(list)
 
     def add_edge(self, u: int, v: int, cap: int):
-        """간선 추가 (u → v, 용량 cap)"""
-        # (인접 노드, 잔여 용량, 역방향 간선 인덱스)
+        """Add edge (u -> v, capacity cap)"""
+        # (adjacent node, residual capacity, reverse edge index)
         self.graph[u].append([v, cap, len(self.graph[v])])
         self.graph[v].append([u, 0, len(self.graph[u]) - 1])
 
     def bfs(self, source: int, sink: int) -> bool:
-        """레벨 그래프 구성"""
+        """Build level graph"""
         self.level = [-1] * self.n
         self.level[source] = 0
         queue = deque([source])
@@ -149,7 +149,7 @@ class Dinic:
         return self.level[sink] >= 0
 
     def dfs(self, node: int, sink: int, flow: int) -> int:
-        """blocking flow 찾기"""
+        """Find blocking flow"""
         if node == sink:
             return flow
 
@@ -168,7 +168,7 @@ class Dinic:
         return 0
 
     def max_flow(self, source: int, sink: int) -> int:
-        """최대 유량 계산"""
+        """Compute maximum flow"""
         flow = 0
 
         while self.bfs(source, sink):
@@ -184,23 +184,23 @@ class Dinic:
 
 
 # =============================================================================
-# 4. 이분 매칭 (Bipartite Matching)
+# 4. Bipartite Matching
 # =============================================================================
 
 def bipartite_matching(n: int, m: int, edges: List[Tuple[int, int]]) -> int:
     """
-    이분 그래프 최대 매칭 (Hopcroft-Karp 간소화)
-    n: 왼쪽 정점 수, m: 오른쪽 정점 수
-    edges: [(왼쪽, 오른쪽), ...]
-    시간복잡도: O(E * √V)
+    Maximum bipartite matching (simplified Hopcroft-Karp)
+    n: number of left vertices, m: number of right vertices
+    edges: [(left, right), ...]
+    Time Complexity: O(E * sqrt(V))
     """
-    # 그래프 구성
+    # Build graph
     adj = defaultdict(list)
     for u, v in edges:
         adj[u].append(v)
 
-    match_left = [-1] * n   # 왼쪽 정점의 매칭
-    match_right = [-1] * m  # 오른쪽 정점의 매칭
+    match_left = [-1] * n   # Left vertex matching
+    match_right = [-1] * m  # Right vertex matching
 
     def dfs(u: int, visited: List[bool]) -> bool:
         for v in adj[u]:
@@ -208,7 +208,7 @@ def bipartite_matching(n: int, m: int, edges: List[Tuple[int, int]]) -> int:
                 continue
             visited[v] = True
 
-            # 매칭 안됨 또는 재매칭 가능
+            # Unmatched or can be rematched
             if match_right[v] == -1 or dfs(match_right[v], visited):
                 match_left[u] = v
                 match_right[v] = u
@@ -226,18 +226,18 @@ def bipartite_matching(n: int, m: int, edges: List[Tuple[int, int]]) -> int:
 
 
 # =============================================================================
-# 5. 최소 컷 (Minimum Cut)
+# 5. Minimum Cut
 # =============================================================================
 
 def min_cut(capacity: List[List[int]], source: int, sink: int) -> Tuple[int, List[int]]:
     """
-    최소 컷 = 최대 유량
-    반환: (컷 용량, source 측 정점 집합)
+    Minimum cut = Maximum flow
+    Returns: (cut capacity, source-side vertex set)
     """
     n = len(capacity)
     residual = [row[:] for row in capacity]
 
-    # Edmonds-Karp로 최대 유량 계산
+    # Compute max flow using Edmonds-Karp
     def bfs_flow() -> bool:
         parent = [-1] * n
         visited = [False] * n
@@ -274,7 +274,7 @@ def min_cut(capacity: List[List[int]], source: int, sink: int) -> Tuple[int, Lis
     while bfs_flow():
         pass
 
-    # 잔여 그래프에서 source에서 도달 가능한 정점 찾기
+    # Find vertices reachable from source in residual graph
     visited = [False] * n
     queue = deque([source])
     visited[source] = True
@@ -286,7 +286,7 @@ def min_cut(capacity: List[List[int]], source: int, sink: int) -> Tuple[int, Lis
                 visited[next_node] = True
                 queue.append(next_node)
 
-    # 컷 용량 계산
+    # Compute cut capacity
     cut_capacity = 0
     source_side = []
     for i in range(n):
@@ -300,21 +300,21 @@ def min_cut(capacity: List[List[int]], source: int, sink: int) -> Tuple[int, Lis
 
 
 # =============================================================================
-# 6. 실전 문제: 작업 할당
+# 6. Practical Problem: Task Assignment
 # =============================================================================
 
 def assign_tasks(workers: int, tasks: int, can_do: List[List[int]]) -> List[int]:
     """
-    작업자에게 작업 할당 (이분 매칭)
-    can_do[i] = worker i가 수행 가능한 작업 목록
-    반환: assignment[worker] = 할당된 작업 (-1이면 미할당)
+    Assign tasks to workers (bipartite matching)
+    can_do[i] = list of tasks worker i can perform
+    Returns: assignment[worker] = assigned task (-1 if unassigned)
     """
     edges = []
     for worker, tasks_list in enumerate(can_do):
         for task in tasks_list:
             edges.append((worker, task))
 
-    # 이분 매칭 수행
+    # Perform bipartite matching
     adj = defaultdict(list)
     for u, v in edges:
         adj[u].append(v)
@@ -343,39 +343,39 @@ def assign_tasks(workers: int, tasks: int, can_do: List[List[int]]) -> List[int]
 
 
 # =============================================================================
-# 7. 실전 문제: 최대 간선 분리 경로
+# 7. Practical Problem: Maximum Edge-Disjoint Paths
 # =============================================================================
 
 def max_edge_disjoint_paths(n: int, edges: List[Tuple[int, int]], source: int, sink: int) -> int:
     """
-    간선 분리 경로의 최대 개수
-    각 간선 용량 = 1로 설정한 최대 유량
+    Maximum number of edge-disjoint paths
+    Set each edge capacity = 1 and compute max flow
     """
     capacity = [[0] * n for _ in range(n)]
 
     for u, v in edges:
         capacity[u][v] = 1
-        capacity[v][u] = 1  # 무방향 그래프인 경우
+        capacity[v][u] = 1  # For undirected graphs
 
     return edmonds_karp(capacity, source, sink)
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("네트워크 플로우 (Network Flow) 예제")
+    print("Network Flow Examples")
     print("=" * 60)
 
-    # 그래프 예시:
+    # Graph example:
     #     10      10
-    #  0 ───→ 1 ───→ 3
-    #  │      │      ↑
-    #  │10    │2     │10
-    #  ↓      ↓      │
-    #  2 ───→ 4 ───→ 5
+    #  0 ---> 1 ---> 3
+    #  |      |      ^
+    #  |10    |2     |10
+    #  v      v      |
+    #  2 ---> 4 ---> 5
     #     10      10
 
     # 1. Ford-Fulkerson
@@ -390,15 +390,15 @@ def main():
     ]
     flow = ford_fulkerson(capacity, 0, 5)
     print(f"    source=0, sink=5")
-    print(f"    최대 유량: {flow}")
+    print(f"    Maximum flow: {flow}")
 
     # 2. Edmonds-Karp
     print("\n[2] Edmonds-Karp")
     flow = edmonds_karp(capacity, 0, 5)
-    print(f"    최대 유량: {flow}")
+    print(f"    Maximum flow: {flow}")
 
     # 3. Dinic
-    print("\n[3] Dinic 알고리즘")
+    print("\n[3] Dinic's Algorithm")
     dinic = Dinic(6)
     dinic.add_edge(0, 1, 10)
     dinic.add_edge(0, 2, 10)
@@ -408,42 +408,42 @@ def main():
     dinic.add_edge(3, 5, 10)
     dinic.add_edge(4, 5, 10)
     flow = dinic.max_flow(0, 5)
-    print(f"    최대 유량: {flow}")
+    print(f"    Maximum flow: {flow}")
 
-    # 4. 이분 매칭
-    print("\n[4] 이분 매칭")
-    # 왼쪽: 0, 1, 2 (작업자)
-    # 오른쪽: 0, 1, 2 (작업)
+    # 4. Bipartite Matching
+    print("\n[4] Bipartite Matching")
+    # Left: 0, 1, 2 (workers)
+    # Right: 0, 1, 2 (tasks)
     edges = [(0, 0), (0, 1), (1, 0), (1, 2), (2, 1)]
     matching = bipartite_matching(3, 3, edges)
-    print(f"    간선: {edges}")
-    print(f"    최대 매칭: {matching}")
+    print(f"    Edges: {edges}")
+    print(f"    Maximum matching: {matching}")
 
-    # 5. 최소 컷
-    print("\n[5] 최소 컷")
+    # 5. Minimum Cut
+    print("\n[5] Minimum Cut")
     cut_cap, source_side = min_cut(capacity, 0, 5)
-    print(f"    최소 컷 용량: {cut_cap}")
-    print(f"    source 측 정점: {source_side}")
+    print(f"    Minimum cut capacity: {cut_cap}")
+    print(f"    Source-side vertices: {source_side}")
 
-    # 6. 작업 할당
-    print("\n[6] 작업 할당")
+    # 6. Task Assignment
+    print("\n[6] Task Assignment")
     can_do = [
-        [0, 1],     # 작업자 0: 작업 0, 1 가능
-        [1, 2],     # 작업자 1: 작업 1, 2 가능
-        [0, 2]      # 작업자 2: 작업 0, 2 가능
+        [0, 1],     # Worker 0: can do tasks 0, 1
+        [1, 2],     # Worker 1: can do tasks 1, 2
+        [0, 2]      # Worker 2: can do tasks 0, 2
     ]
     assignment = assign_tasks(3, 3, can_do)
-    print(f"    수행 가능: {can_do}")
-    print(f"    할당 결과: {assignment}")
+    print(f"    Capabilities: {can_do}")
+    print(f"    Assignment: {assignment}")
 
-    # 7. 알고리즘 비교
-    print("\n[7] 알고리즘 복잡도 비교")
-    print("    | 알고리즘      | 시간 복잡도       | 특징               |")
-    print("    |---------------|-------------------|-------------------|")
-    print("    | Ford-Fulkerson| O(E * max_flow)   | DFS, 정수 용량     |")
-    print("    | Edmonds-Karp  | O(V * E²)         | BFS, 안정적        |")
-    print("    | Dinic         | O(V² * E)         | 레벨 그래프        |")
-    print("    | 이분 매칭     | O(E * √V)         | Dinic 특수 케이스  |")
+    # 7. Algorithm Comparison
+    print("\n[7] Algorithm Complexity Comparison")
+    print("    | Algorithm      | Time Complexity    | Notes              |")
+    print("    |----------------|--------------------|--------------------|")
+    print("    | Ford-Fulkerson | O(E * max_flow)    | DFS, integer cap   |")
+    print("    | Edmonds-Karp   | O(V * E^2)         | BFS, stable        |")
+    print("    | Dinic          | O(V^2 * E)         | Level graph        |")
+    print("    | Bipartite      | O(E * sqrt(V))     | Dinic special case |")
 
     print("\n" + "=" * 60)
 

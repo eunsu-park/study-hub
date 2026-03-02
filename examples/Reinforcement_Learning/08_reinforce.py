@@ -1,5 +1,5 @@
 """
-REINFORCE (Policy Gradient) 구현
+REINFORCE (Policy Gradient) Implementation
 """
 import torch
 import torch.nn as nn

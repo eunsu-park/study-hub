@@ -1,8 +1,8 @@
 /*
- * 비트마스크 DP (Bitmask DP)
+ * Bitmask DP
  * TSP, Subset Enumeration, Assignment Problem
  *
- * 집합의 상태를 비트로 표현하여 DP를 수행합니다.
+ * Represents set states as bits to perform DP.
  */
 
 #include <iostream>
@@ -14,56 +14,56 @@
 using namespace std;
 
 // =============================================================================
-// 1. 비트 연산 기초
+// 1. Bit Operation Basics
 // =============================================================================
 
 void bitOperations() {
-    int n = 4;  // 집합 크기
+    int n = 4;  // Set size
     int fullSet = (1 << n) - 1;  // {0, 1, 2, 3}
 
-    cout << "[1] 비트 연산 기초" << endl;
+    cout << "[1] Bit Operation Basics" << endl;
 
-    // 원소 i 포함 여부
+    // Check if element i is in the set
     int set = 0b1010;  // {1, 3}
-    cout << "    집합 1010 (10진수: " << set << ")" << endl;
-    cout << "    원소 1 포함: " << ((set & (1 << 1)) ? "예" : "아니오") << endl;
-    cout << "    원소 2 포함: " << ((set & (1 << 2)) ? "예" : "아니오") << endl;
+    cout << "    Set 1010 (decimal: " << set << ")" << endl;
+    cout << "    Contains 1: " << ((set & (1 << 1)) ? "Yes" : "No") << endl;
+    cout << "    Contains 2: " << ((set & (1 << 2)) ? "Yes" : "No") << endl;
 
-    // 원소 추가/제거
-    set |= (1 << 2);   // 2 추가
-    cout << "    2 추가 후: " << bitset<4>(set) << endl;
-    set &= ~(1 << 1);  // 1 제거
-    cout << "    1 제거 후: " << bitset<4>(set) << endl;
+    // Add/remove elements
+    set |= (1 << 2);   // Add 2
+    cout << "    After adding 2: " << bitset<4>(set) << endl;
+    set &= ~(1 << 1);  // Remove 1
+    cout << "    After removing 1: " << bitset<4>(set) << endl;
 
-    // 원소 토글
-    set ^= (1 << 3);  // 3 토글
-    cout << "    3 토글 후: " << bitset<4>(set) << endl;
+    // Toggle element
+    set ^= (1 << 3);  // Toggle 3
+    cout << "    After toggling 3: " << bitset<4>(set) << endl;
 
-    // 집합 크기 (1의 개수)
-    cout << "    집합 크기: " << __builtin_popcount(set) << endl;
+    // Set size (number of 1s)
+    cout << "    Set size: " << __builtin_popcount(set) << endl;
 
-    // 최하위 비트
-    cout << "    최하위 1비트: " << (set & -set) << endl;
+    // Lowest set bit
+    cout << "    Lowest set bit: " << (set & -set) << endl;
 }
 
 // =============================================================================
-// 2. 부분집합 순회
+// 2. Subset Enumeration
 // =============================================================================
 
 void enumerateSubsets(int n) {
-    cout << "\n[2] 부분집합 순회" << endl;
-    cout << "    n = " << n << "인 집합의 모든 부분집합:" << endl;
+    cout << "\n[2] Subset Enumeration" << endl;
+    cout << "    All subsets of set with n = " << n << ":" << endl;
 
-    // 모든 부분집합
-    cout << "    전체: ";
+    // All subsets
+    cout << "    All: ";
     for (int mask = 0; mask < (1 << n); mask++) {
         cout << bitset<3>(mask) << " ";
     }
     cout << endl;
 
-    // 특정 집합의 부분집합
+    // Subsets of a specific set
     int set = 0b101;  // {0, 2}
-    cout << "    " << bitset<3>(set) << "의 부분집합: ";
+    cout << "    Subsets of " << bitset<3>(set) << ": ";
     for (int sub = set; ; sub = (sub - 1) & set) {
         cout << bitset<3>(sub) << " ";
         if (sub == 0) break;
@@ -72,16 +72,16 @@ void enumerateSubsets(int n) {
 }
 
 // =============================================================================
-// 3. 외판원 문제 (TSP)
+// 3. Traveling Salesman Problem (TSP)
 // =============================================================================
 
 const int INF = INT_MAX / 2;
 
 int tsp(int n, const vector<vector<int>>& dist) {
-    // dp[mask][i]: mask 집합을 방문하고 현재 i에 있을 때 최소 비용
+    // dp[mask][i]: min cost when visiting set mask and currently at i
     vector<vector<int>> dp(1 << n, vector<int>(n, INF));
 
-    dp[1][0] = 0;  // 시작점 0에서 출발
+    dp[1][0] = 0;  // Start from city 0
 
     for (int mask = 1; mask < (1 << n); mask++) {
         for (int u = 0; u < n; u++) {
@@ -89,7 +89,7 @@ int tsp(int n, const vector<vector<int>>& dist) {
             if (dp[mask][u] == INF) continue;
 
             for (int v = 0; v < n; v++) {
-                if (mask & (1 << v)) continue;  // 이미 방문
+                if (mask & (1 << v)) continue;  // Already visited
                 if (dist[u][v] == INF) continue;
 
                 int newMask = mask | (1 << v);
@@ -98,7 +98,7 @@ int tsp(int n, const vector<vector<int>>& dist) {
         }
     }
 
-    // 모든 도시 방문 후 시작점으로 복귀
+    // Return to start after visiting all cities
     int fullMask = (1 << n) - 1;
     int result = INF;
     for (int i = 0; i < n; i++) {
@@ -110,7 +110,7 @@ int tsp(int n, const vector<vector<int>>& dist) {
     return result;
 }
 
-// TSP 경로 복원
+// TSP with path reconstruction
 pair<int, vector<int>> tspWithPath(int n, const vector<vector<int>>& dist) {
     vector<vector<int>> dp(1 << n, vector<int>(n, INF));
     vector<vector<int>> parent(1 << n, vector<int>(n, -1));
@@ -135,7 +135,7 @@ pair<int, vector<int>> tspWithPath(int n, const vector<vector<int>>& dist) {
         }
     }
 
-    // 최종 결과
+    // Final result
     int fullMask = (1 << n) - 1;
     int result = INF;
     int lastCity = -1;
@@ -149,7 +149,7 @@ pair<int, vector<int>> tspWithPath(int n, const vector<vector<int>>& dist) {
         }
     }
 
-    // 경로 복원
+    // Path reconstruction
     vector<int> path;
     int mask = fullMask;
     int curr = lastCity;
@@ -162,26 +162,26 @@ pair<int, vector<int>> tspWithPath(int n, const vector<vector<int>>& dist) {
     }
 
     reverse(path.begin(), path.end());
-    path.push_back(0);  // 시작점으로 복귀
+    path.push_back(0);  // Return to start
 
     return {result, path};
 }
 
 // =============================================================================
-// 4. 작업 할당 문제 (Assignment Problem)
+// 4. Assignment Problem
 // =============================================================================
 
 int minCostAssignment(int n, const vector<vector<int>>& cost) {
-    // dp[mask]: mask에 해당하는 작업들이 할당되었을 때 최소 비용
+    // dp[mask]: min cost when jobs in mask have been assigned
     vector<int> dp(1 << n, INF);
     dp[0] = 0;
 
     for (int mask = 0; mask < (1 << n); mask++) {
-        int person = __builtin_popcount(mask);  // 현재 할당할 사람
+        int person = __builtin_popcount(mask);  // Current person to assign
         if (person >= n) continue;
 
         for (int job = 0; job < n; job++) {
-            if (mask & (1 << job)) continue;  // 이미 할당된 작업
+            if (mask & (1 << job)) continue;  // Job already assigned
 
             int newMask = mask | (1 << job);
             dp[newMask] = min(dp[newMask], dp[mask] + cost[person][job]);
@@ -192,7 +192,7 @@ int minCostAssignment(int n, const vector<vector<int>>& cost) {
 }
 
 // =============================================================================
-// 5. 부분집합 합 (Subset Sum)
+// 5. Subset Sum
 // =============================================================================
 
 bool subsetSum(const vector<int>& nums, int target) {
@@ -211,12 +211,12 @@ bool subsetSum(const vector<int>& nums, int target) {
     return false;
 }
 
-// 최적화: Meet in the Middle
+// Optimization: Meet in the Middle
 bool subsetSumMITM(const vector<int>& nums, int target) {
     int n = nums.size();
     int half = n / 2;
 
-    // 앞쪽 절반의 모든 부분집합 합
+    // All subset sums of the first half
     vector<int> leftSums;
     for (int mask = 0; mask < (1 << half); mask++) {
         int sum = 0;
@@ -227,7 +227,7 @@ bool subsetSumMITM(const vector<int>& nums, int target) {
     }
     sort(leftSums.begin(), leftSums.end());
 
-    // 뒤쪽 절반 확인
+    // Check the second half
     int rightHalf = n - half;
     for (int mask = 0; mask < (1 << rightHalf); mask++) {
         int sum = 0;
@@ -235,7 +235,7 @@ bool subsetSumMITM(const vector<int>& nums, int target) {
             if (mask & (1 << i)) sum += nums[half + i];
         }
 
-        // target - sum이 leftSums에 있는지 확인
+        // Check if target - sum exists in leftSums
         if (binary_search(leftSums.begin(), leftSums.end(), target - sum)) {
             return true;
         }
@@ -245,14 +245,14 @@ bool subsetSumMITM(const vector<int>& nums, int target) {
 }
 
 // =============================================================================
-// 6. 해밀턴 경로
+// 6. Hamiltonian Path
 // =============================================================================
 
 int countHamiltonianPaths(int n, const vector<vector<int>>& adj) {
-    // dp[mask][i]: mask 집합을 방문하고 i에서 끝나는 경로 수
+    // dp[mask][i]: number of paths visiting set mask and ending at i
     vector<vector<int>> dp(1 << n, vector<int>(n, 0));
 
-    // 시작점 초기화
+    // Initialize starting points
     for (int i = 0; i < n; i++) {
         dp[1 << i][i] = 1;
     }
@@ -271,7 +271,7 @@ int countHamiltonianPaths(int n, const vector<vector<int>>& adj) {
         }
     }
 
-    // 모든 정점 방문한 경로 수
+    // Total paths visiting all vertices
     int fullMask = (1 << n) - 1;
     int total = 0;
     for (int i = 0; i < n; i++) {
@@ -286,7 +286,7 @@ int countHamiltonianPaths(int n, const vector<vector<int>>& adj) {
 // =============================================================================
 
 void sosDP(vector<int>& dp, int n) {
-    // dp[mask]에 mask의 모든 부분집합의 합 저장
+    // Store the sum of all subsets of mask in dp[mask]
     for (int i = 0; i < n; i++) {
         for (int mask = 0; mask < (1 << n); mask++) {
             if (mask & (1 << i)) {
@@ -297,7 +297,7 @@ void sosDP(vector<int>& dp, int n) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -311,53 +311,53 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "비트마스크 DP 예제" << endl;
+    cout << "Bitmask DP Example" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 비트 연산 기초
+    // 1. Bit Operation Basics
     bitOperations();
 
-    // 2. 부분집합 순회
+    // 2. Subset Enumeration
     enumerateSubsets(3);
 
     // 3. TSP
-    cout << "\n[3] 외판원 문제 (TSP)" << endl;
+    cout << "\n[3] Traveling Salesman Problem (TSP)" << endl;
     vector<vector<int>> dist = {
         {0, 10, 15, 20},
         {10, 0, 35, 25},
         {15, 35, 0, 30},
         {20, 25, 30, 0}
     };
-    cout << "    거리 행렬: 4x4" << endl;
-    cout << "    최소 비용: " << tsp(4, dist) << endl;
+    cout << "    Distance matrix: 4x4" << endl;
+    cout << "    Min cost: " << tsp(4, dist) << endl;
 
     auto [cost, path] = tspWithPath(4, dist);
-    cout << "    경로: ";
+    cout << "    Path: ";
     printVector(path);
     cout << endl;
 
-    // 4. 작업 할당
-    cout << "\n[4] 작업 할당 문제" << endl;
+    // 4. Assignment Problem
+    cout << "\n[4] Assignment Problem" << endl;
     vector<vector<int>> costMatrix = {
         {9, 2, 7, 8},
         {6, 4, 3, 7},
         {5, 8, 1, 8},
         {7, 6, 9, 4}
     };
-    cout << "    비용 행렬: 4x4" << endl;
-    cout << "    최소 비용: " << minCostAssignment(4, costMatrix) << endl;
+    cout << "    Cost matrix: 4x4" << endl;
+    cout << "    Min cost: " << minCostAssignment(4, costMatrix) << endl;
 
-    // 5. 부분집합 합
-    cout << "\n[5] 부분집합 합" << endl;
+    // 5. Subset Sum
+    cout << "\n[5] Subset Sum" << endl;
     vector<int> nums = {3, 34, 4, 12, 5, 2};
-    cout << "    배열: [3, 34, 4, 12, 5, 2]" << endl;
-    cout << "    합 9 존재: " << (subsetSum(nums, 9) ? "예" : "아니오") << endl;
-    cout << "    합 30 존재: " << (subsetSum(nums, 30) ? "예" : "아니오") << endl;
+    cout << "    Array: [3, 34, 4, 12, 5, 2]" << endl;
+    cout << "    Sum 9 exists: " << (subsetSum(nums, 9) ? "Yes" : "No") << endl;
+    cout << "    Sum 30 exists: " << (subsetSum(nums, 30) ? "Yes" : "No") << endl;
 
     // 6. SOS DP
     cout << "\n[6] SOS DP" << endl;
     vector<int> sos = {1, 2, 3, 4, 5, 6, 7, 8};  // 2^3 = 8
-    cout << "    초기: ";
+    cout << "    Initial: ";
     printVector(sos);
     cout << endl;
     sosDP(sos, 3);
@@ -365,23 +365,23 @@ int main() {
     printVector(sos);
     cout << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 문제               | 시간복잡도    | 공간복잡도 |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Problem            | Time          | Space      |" << endl;
     cout << "    |--------------------|---------------|------------|" << endl;
-    cout << "    | TSP                | O(n² × 2^n)   | O(n × 2^n) |" << endl;
-    cout << "    | 작업 할당          | O(n × 2^n)    | O(2^n)     |" << endl;
-    cout << "    | 부분집합 합        | O(2^n)        | O(1)       |" << endl;
-    cout << "    | Meet in the Middle | O(n × 2^(n/2))| O(2^(n/2)) |" << endl;
-    cout << "    | SOS DP             | O(n × 2^n)    | O(2^n)     |" << endl;
+    cout << "    | TSP                | O(n^2 * 2^n)  | O(n * 2^n) |" << endl;
+    cout << "    | Assignment         | O(n * 2^n)    | O(2^n)     |" << endl;
+    cout << "    | Subset Sum         | O(2^n)        | O(1)       |" << endl;
+    cout << "    | Meet in the Middle | O(n * 2^(n/2))| O(2^(n/2)) |" << endl;
+    cout << "    | SOS DP             | O(n * 2^n)    | O(2^n)     |" << endl;
 
-    // 8. 비트마스크 팁
-    cout << "\n[8] 비트마스크 팁" << endl;
-    cout << "    - n ≤ 20: 비트마스크 DP 고려" << endl;
-    cout << "    - n ≤ 25: Meet in the Middle 고려" << endl;
-    cout << "    - __builtin_popcount(x): 1의 개수 (GCC)" << endl;
-    cout << "    - x & -x: 최하위 1비트" << endl;
-    cout << "    - x & (x-1): 최하위 1비트 제거" << endl;
+    // 8. Bitmask Tips
+    cout << "\n[8] Bitmask Tips" << endl;
+    cout << "    - n <= 20: Consider bitmask DP" << endl;
+    cout << "    - n <= 25: Consider Meet in the Middle" << endl;
+    cout << "    - __builtin_popcount(x): Count of 1-bits (GCC)" << endl;
+    cout << "    - x & -x: Lowest set bit" << endl;
+    cout << "    - x & (x-1): Remove lowest set bit" << endl;
 
     cout << "\n============================================================" << endl;
 

@@ -1,98 +1,98 @@
-# 작성된 예제 코드 목록
+# Written Example Code List
 
-## C 프로그램 (데스크톱/콘솔)
+## C Programs (Desktop/Console)
 
-### ✅ 02. 계산기
-- **파일**: `02_calculator/calculator.c`
-- **컴파일**: `gcc calculator.c -o calculator`
-- **실행**: `./calculator`
-- **내용**: 기본 사칙연산 계산기, 함수와 switch-case 사용
+### ✅ 02. Calculator
+- **File**: `02_calculator/calculator.c`
+- **Compile**: `gcc calculator.c -o calculator`
+- **Run**: `./calculator`
+- **Description**: Basic arithmetic calculator using functions and switch-case
 
-### ✅ 03. 숫자 맞추기 게임
-- **파일**: `03_number_guess/number_guess.c`
-- **컴파일**: `gcc number_guess.c -o number_guess`
-- **실행**: `./number_guess`
-- **내용**: 1-100 사이 숫자 맞추기, rand() 사용
+### ✅ 03. Number Guessing Game
+- **File**: `03_number_guess/number_guess.c`
+- **Compile**: `gcc number_guess.c -o number_guess`
+- **Run**: `./number_guess`
+- **Description**: Guess a number between 1-100 using rand()
 
-### ✅ 05. 동적 배열
-- **파일**: `05_dynamic_array/dynamic_array.c`
-- **컴파일**: `gcc dynamic_array.c -o dynamic_array`
-- **실행**: `./dynamic_array`
-- **내용**: malloc/realloc을 이용한 동적 배열 구현
+### ✅ 05. Dynamic Array
+- **File**: `05_dynamic_array/dynamic_array.c`
+- **Compile**: `gcc dynamic_array.c -o dynamic_array`
+- **Run**: `./dynamic_array`
+- **Description**: Dynamic array implementation using malloc/realloc
 
-**실행 결과 예시:**
+**Sample Output:**
 ```
-=== 동적 배열 테스트 ===
+=== Dynamic Array Test ===
 
-요소 추가: 10, 20, 30, 40, 50
-용량 확장: 2 -> 4
-용량 확장: 4 -> 8
-배열: [10, 20, 30, 40, 50]
-크기: 5, 용량: 8
+Adding elements: 10, 20, 30, 40, 50
+Capacity expanded: 2 -> 4
+Capacity expanded: 4 -> 8
+Array: [10, 20, 30, 40, 50]
+Size: 5, Capacity: 8
 ```
 
-### ✅ 06. 연결 리스트
-- **파일**: `06_linked_list/linked_list.c`
-- **컴파일**: `gcc linked_list.c -o linked_list`
-- **실행**: `./linked_list`
-- **내용**: 단일 연결 리스트 구현, 추가/삭제/검색
+### ✅ 06. Linked List
+- **File**: `06_linked_list/linked_list.c`
+- **Compile**: `gcc linked_list.c -o linked_list`
+- **Run**: `./linked_list`
+- **Description**: Singly linked list implementation with add/delete/search
 
-### ✅ 12. 멀티스레드
-- **파일**: `12_multithread/thread_basic.c`
-- **컴파일**: `gcc thread_basic.c -o thread_basic -pthread`
-- **실행**: `./thread_basic`
-- **내용**: pthread를 이용한 기본 멀티스레딩
+### ✅ 12. Multithreading
+- **File**: `12_multithread/thread_basic.c`
+- **Compile**: `gcc thread_basic.c -o thread_basic -pthread`
+- **Run**: `./thread_basic`
+- **Description**: Basic multithreading with pthread
 
-### ✅ 14. 비트 연산
-- **파일**: `14_bit_operations/bit_manipulation.c`
-- **컴파일**: `gcc bit_manipulation.c -o bit_manipulation`
-- **실행**: `./bit_manipulation`
-- **내용**: 비트 마스킹, SET/CLEAR/TOGGLE/GET
+### ✅ 14. Bit Operations
+- **File**: `14_bit_operations/bit_manipulation.c`
+- **Compile**: `gcc bit_manipulation.c -o bit_manipulation`
+- **Run**: `./bit_manipulation`
+- **Description**: Bit masking, SET/CLEAR/TOGGLE/GET
 
-**실행 결과 예시:**
+**Sample Output:**
 ```
-=== 비트 조작 예제 ===
+=== Bit Manipulation Examples ===
 
-초기값: 1011 0010 (0xB2, 178)
+Initial value: 1011 0010 (0xB2, 178)
 
-비트 3 설정 (SET_BIT):
-  결과: 1011 1010 (0xBA)
+Bit 3 SET (SET_BIT):
+  Result: 1011 1010 (0xBA)
 
-비트 5 해제 (CLEAR_BIT):
-  결과: 1001 1010 (0x9A)
+Bit 5 CLEAR (CLEAR_BIT):
+  Result: 1001 1010 (0x9A)
 ```
 
 ---
 
-## Arduino 프로그램 (.ino)
+## Arduino Programs (.ino)
 
-### ✅ 13. LED 깜빡이기 (Blink)
-- **파일**: `13_embedded_basic/blink.ino`
-- **플랫폼**: Arduino Uno
-- **시뮬레이터**: https://wokwi.com
-- **내용**: 가장 기본적인 Arduino 프로그램, LED 1초 간격 깜빡임
+### ✅ 13. LED Blink
+- **File**: `13_embedded_basic/blink.ino`
+- **Platform**: Arduino Uno
+- **Simulator**: https://wokwi.com
+- **Description**: The most basic Arduino program, LED blinking at 1-second intervals
 
-**Wokwi 실행 방법:**
-1. https://wokwi.com 접속
-2. New Project → Arduino Uno
-3. 코드 복사/붙여넣기
+**How to Run on Wokwi:**
+1. Visit https://wokwi.com
+2. New Project -> Arduino Uno
+3. Copy/paste the code
 4. Start Simulation
 
-### ✅ 15. 버튼으로 LED 제어
-- **파일**: `15_gpio_control/button_led.ino`
-- **플랫폼**: Arduino Uno
-- **내용**: 버튼 누를 때마다 LED 토글, 디바운싱 포함
+### ✅ 15. Button-Controlled LED
+- **File**: `15_gpio_control/button_led.ino`
+- **Platform**: Arduino Uno
+- **Description**: Toggle LED on each button press, with debouncing
 
-**회로 구성 (Wokwi):**
-- 버튼: 핀 2 ↔ GND
-- LED: 핀 13 (내장 LED)
+**Circuit Setup (Wokwi):**
+- Button: Pin 2 <-> GND
+- LED: Pin 13 (built-in LED)
 
-### ✅ 16. 시리얼 계산기
-- **파일**: `16_serial_comm/serial_calculator.ino`
-- **플랫폼**: Arduino Uno
-- **내용**: 시리얼 모니터로 수식 입력받아 계산
+### ✅ 16. Serial Calculator
+- **File**: `16_serial_comm/serial_calculator.ino`
+- **Platform**: Arduino Uno
+- **Description**: Calculate expressions entered via Serial Monitor
 
-**사용 예시:**
+**Usage Example:**
 ```
 Simple Serial Calculator
 Enter expression (e.g., 10 + 5)
@@ -106,71 +106,71 @@ Enter expression (e.g., 10 + 5)
 
 ---
 
-## 일괄 컴파일
+## Batch Compilation
 
-### 모든 C 프로그램 컴파일
+### Compile All C Programs
 ```bash
 cd examples
 make c-programs
 ```
 
-### 멀티스레드 프로그램만 컴파일
+### Compile Only Multithreaded Programs
 ```bash
 make thread-programs
 ```
 
-### 모두 컴파일
+### Compile Everything
 ```bash
 make
 ```
 
-### 정리
+### Clean Up
 ```bash
 make clean
 ```
 
-### 개별 실행
+### Run Individually
 ```bash
-make run-calculator   # 계산기 실행
-make run-guess        # 숫자 맞추기 실행
-make run-array        # 동적 배열 실행
-make run-list         # 연결 리스트 실행
-make run-bit          # 비트 연산 실행
-make run-thread       # 스레드 실행
+make run-calculator   # Run calculator
+make run-guess        # Run number guessing game
+make run-array        # Run dynamic array
+make run-list         # Run linked list
+make run-bit          # Run bit operations
+make run-thread       # Run thread
 ```
 
 ---
 
-## 추가 예정 예제
+## Upcoming Examples
 
-다음 예제들은 학습 문서에 있지만 아직 코드 파일로 작성되지 않았습니다:
+The following examples are in the study materials but have not yet been written as code files:
 
-### 예정 목록
-- [ ] 04. 주소록 (address_book.c)
-- [ ] 07. 파일 암호화 (file_crypto.c)
-- [ ] 08. 스택과 큐 (stack_queue.c)
-- [ ] 09. 해시 테이블 (hash_table.c)
-- [ ] 10. 뱀 게임 (snake_game.c)
-- [ ] 11. 미니 쉘 (minishell.c)
+### Planned List
+- [ ] 04. Address Book (address_book.c)
+- [ ] 07. File Encryption (file_crypto.c)
+- [ ] 08. Stack and Queue (stack_queue.c)
+- [ ] 09. Hash Table (hash_table.c)
+- [ ] 10. Snake Game (snake_game.c)
+- [ ] 11. Mini Shell (minishell.c)
 
-이 예제들은 학습 문서의 전체 코드를 참고하여 작성할 수 있습니다.
+These examples can be written by referring to the complete code in the study materials.
 
 ---
 
-## 테스트 완료 상태
+## Test Status
 
-| 예제 | 컴파일 | 실행 | 상태 |
-|------|--------|------|------|
-| calculator | ✅ | ✅ | 정상 동작 |
-| number_guess | ✅ | ⏸️ | 인터랙티브 |
-| dynamic_array | ✅ | ✅ | 정상 동작 |
-| linked_list | ✅ | ✅ | 정상 동작 |
-| thread_basic | ✅ | ⏸️ | pthread 필요 |
-| bit_manipulation | ✅ | ✅ | 정상 동작 |
-| blink.ino | - | 🌐 | Wokwi 시뮬레이터 |
-| button_led.ino | - | 🌐 | Wokwi 시뮬레이터 |
-| serial_calculator.ino | - | 🌐 | Wokwi 시뮬레이터 |
+| Example | Compile | Run | Status |
+|---------|---------|-----|--------|
+| calculator | ✅ | ✅ | Working correctly |
+| number_guess | ✅ | ⏸️ | Interactive |
+| dynamic_array | ✅ | ✅ | Working correctly |
+| linked_list | ✅ | ✅ | Working correctly |
+| thread_basic | ✅ | ⏸️ | Requires pthread |
+| bit_manipulation | ✅ | ✅ | Working correctly |
+| blink.ino | - | 🌐 | Wokwi simulator |
+| button_led.ino | - | 🌐 | Wokwi simulator |
+| serial_calculator.ino | - | 🌐 | Wokwi simulator |
 
-✅ = 테스트 완료
-⏸️ = 인터랙티브/특수 환경 필요
-🌐 = 웹 시뮬레이터
+✅ = Test completed
+⏸️ = Interactive/requires special environment
+🌐 = Web simulator

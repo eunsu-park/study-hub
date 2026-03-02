@@ -1,12 +1,12 @@
 """
-Airflow 기본 DAG 예제
+Airflow Basic DAG Example
 
-이 DAG는 기본적인 Airflow 워크플로우를 보여줍니다:
-- PythonOperator로 Python 함수 실행
-- BashOperator로 쉘 명령 실행
-- Task 의존성 정의
+This DAG demonstrates a basic Airflow workflow:
+- Execute Python functions with PythonOperator
+- Execute shell commands with BashOperator
+- Define task dependencies
 
-실행: airflow dags test simple_dag 2024-01-01
+Run: airflow dags test simple_dag 2024-01-01
 """
 
 from datetime import datetime, timedelta
@@ -16,7 +16,7 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.empty import EmptyOperator
 
 
-# 기본 인자 설정
+# Default arguments
 default_args = {
     'owner': 'data_team',
     'depends_on_past': False,
@@ -28,35 +28,35 @@ default_args = {
 }
 
 
-# Python 함수 정의
+# Python function definitions
 def print_hello():
-    """인사 메시지 출력"""
+    """Print a greeting message"""
     print("Hello from Airflow!")
     return "hello_returned"
 
 
 def print_date(**context):
-    """실행 날짜 출력"""
+    """Print the execution date"""
     execution_date = context['ds']
     print(f"Execution date: {execution_date}")
     return execution_date
 
 
 def process_data(value: int, multiplier: int = 2, **context):
-    """데이터 처리 예시"""
+    """Data processing example"""
     result = value * multiplier
     print(f"Processing: {value} * {multiplier} = {result}")
 
-    # XCom으로 결과 저장
+    # Store result via XCom
     context['ti'].xcom_push(key='processed_value', value=result)
     return result
 
 
 def summarize(**context):
-    """이전 Task 결과 요약"""
+    """Summarize results from previous tasks"""
     ti = context['ti']
 
-    # XCom에서 값 가져오기
+    # Retrieve values from XCom
     hello_result = ti.xcom_pull(task_ids='hello_task')
     processed_value = ti.xcom_pull(task_ids='process_task', key='processed_value')
 
@@ -66,18 +66,18 @@ def summarize(**context):
     print(f"  - Execution date: {context['ds']}")
 
 
-# DAG 정의
+# DAG definition
 with DAG(
     dag_id='simple_dag',
     default_args=default_args,
-    description='간단한 Airflow DAG 예제',
-    schedule_interval='@daily',  # 매일 실행
+    description='Simple Airflow DAG Example',
+    schedule_interval='@daily',  # Run daily
     start_date=datetime(2024, 1, 1),
-    catchup=False,  # 과거 실행 건너뛰기
+    catchup=False,  # Skip past runs
     tags=['example', 'tutorial'],
 ) as dag:
 
-    # Task 정의
+    # Task definitions
     start = EmptyOperator(task_id='start')
 
     hello_task = PythonOperator(
@@ -108,11 +108,11 @@ with DAG(
 
     end = EmptyOperator(task_id='end')
 
-    # Task 의존성 정의
-    #     ┌─ hello_task ─┐
-    # start ─┤             ├─ process_task ─ summary_task ─ end
-    #     └─ date_task ──┘
-    #             └─ bash_task ──┘
+    # Task dependency definitions
+    #     +- hello_task -+
+    # start -+             +- process_task - summary_task - end
+    #     +- date_task --+
+    #             +- bash_task --+
 
     start >> [hello_task, date_task]
     hello_task >> process_task
@@ -121,5 +121,5 @@ with DAG(
 
 
 if __name__ == "__main__":
-    # 로컬 테스트
+    # Local testing
     dag.test()

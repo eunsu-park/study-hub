@@ -1,5 +1,5 @@
 /**
- * Webpack 설정 파일
+ * Webpack Configuration File
  * https://webpack.js.org/configuration/
  */
 
@@ -11,37 +11,37 @@ module.exports = (env, argv) => {
     const isProduction = argv.mode === 'production';
 
     return {
-        // 진입점
+        // Entry point
         entry: {
             main: './src/index.js',
-            // 다중 진입점 예시
+            // Multiple entry point example
             // vendor: './src/vendor.js',
         },
 
-        // 출력 설정
+        // Output configuration
         // Why: contenthash in production filenames enables aggressive browser caching - when code changes,
         // the hash changes, busting the cache; in dev, plain names enable easier debugging
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: isProduction ? '[name].[contenthash].js' : '[name].js',
             chunkFilename: isProduction ? '[name].[contenthash].chunk.js' : '[name].chunk.js',
-            clean: true,  // 빌드 전 dist 폴더 정리
+            clean: true,  // Clean dist folder before build
             publicPath: '/',
         },
 
-        // 개발 서버 설정
+        // Dev server configuration
         devServer: {
             static: {
                 directory: path.join(__dirname, 'public'),
             },
             port: 3000,
             open: true,
-            hot: true,  // HMR 활성화
+            hot: true,  // Enable HMR
             // Why: historyApiFallback redirects all 404s to index.html, enabling client-side
             // routing in SPAs where the server doesn't know about frontend routes
-            historyApiFallback: true,  // SPA 라우팅 지원
+            historyApiFallback: true,  // SPA routing support
             compress: true,
-            // 프록시 설정
+            // Proxy configuration
             // proxy: {
             //     '/api': {
             //         target: 'http://localhost:8080',
@@ -50,10 +50,10 @@ module.exports = (env, argv) => {
             // }
         },
 
-        // 모듈 로더 설정
+        // Module loader configuration
         module: {
             rules: [
-                // JavaScript/JSX 처리
+                // JavaScript/JSX processing
                 {
                     test: /\.js$/,
                     exclude: /node_modules/,
@@ -66,7 +66,7 @@ module.exports = (env, argv) => {
                     }
                 },
 
-                // CSS 처리
+                // CSS processing
                 {
                     test: /\.css$/,
                     use: [
@@ -82,13 +82,13 @@ module.exports = (env, argv) => {
 
                 // Why: 'asset' type auto-decides between inline (data URL) and file based on size -
                 // small images inline to save HTTP requests, large ones stay as files to avoid bloating JS bundles
-                // 이미지 처리 (asset modules)
+                // Image processing (asset modules)
                 {
                     test: /\.(png|jpe?g|gif|svg|webp)$/i,
                     type: 'asset',
                     parser: {
                         dataUrlCondition: {
-                            maxSize: 8 * 1024, // 8KB 이하는 인라인
+                            maxSize: 8 * 1024, // Inline if 8KB or less
                         }
                     },
                     generator: {
@@ -96,7 +96,7 @@ module.exports = (env, argv) => {
                     }
                 },
 
-                // 폰트 처리
+                // Font processing
                 {
                     test: /\.(woff|woff2|eot|ttf|otf)$/i,
                     type: 'asset/resource',
@@ -107,9 +107,9 @@ module.exports = (env, argv) => {
             ]
         },
 
-        // 플러그인
+        // Plugins
         plugins: [
-            // HTML 템플릿 처리
+            // HTML template processing
             new HtmlWebpackPlugin({
                 template: './src/index.html',
                 filename: 'index.html',
@@ -121,7 +121,7 @@ module.exports = (env, argv) => {
                 } : false,
             }),
 
-            // CSS 추출 (프로덕션)
+            // CSS extraction (production)
             ...(isProduction ? [
                 new MiniCssExtractPlugin({
                     filename: 'css/[name].[contenthash].css',
@@ -130,7 +130,7 @@ module.exports = (env, argv) => {
             ] : []),
         ],
 
-        // 경로 별칭
+        // Path aliases
         resolve: {
             extensions: ['.js', '.json'],
             alias: {
@@ -141,19 +141,19 @@ module.exports = (env, argv) => {
             }
         },
 
-        // 최적화
+        // Optimization
         optimization: {
-            // 코드 분할
+            // Code splitting
             splitChunks: {
                 chunks: 'all',
                 cacheGroups: {
-                    // 벤더 번들 분리
+                    // Vendor bundle separation
                     vendors: {
                         test: /[\\/]node_modules[\\/]/,
                         name: 'vendors',
                         priority: -10,
                     },
-                    // 공통 모듈 분리
+                    // Common module separation
                     common: {
                         minChunks: 2,
                         priority: -20,
@@ -163,14 +163,14 @@ module.exports = (env, argv) => {
             },
             // Why: Extracting the runtime into a separate chunk prevents its hash from changing
             // in all entry bundles when only one module changes, preserving cache validity
-            // 런타임 청크 분리
+            // Runtime chunk separation
             runtimeChunk: 'single',
         },
 
-        // 소스맵
+        // Source maps
         devtool: isProduction ? 'source-map' : 'eval-source-map',
 
-        // 성능 힌트
+        // Performance hints
         performance: {
             hints: isProduction ? 'warning' : false,
             maxEntrypointSize: 250000,  // 250KB
@@ -179,7 +179,7 @@ module.exports = (env, argv) => {
 
         // Why: Filesystem caching persists build results to disk between runs, cutting
         // rebuild times dramatically for large projects (often from minutes to seconds)
-        // 캐시 설정
+        // Cache configuration
         cache: {
             type: 'filesystem',
             buildDependencies: {
@@ -187,7 +187,7 @@ module.exports = (env, argv) => {
             }
         },
 
-        // 통계 출력 설정
+        // Stats output configuration
         stats: {
             colors: true,
             modules: false,

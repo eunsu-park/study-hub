@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ONNX Runtime 기반 Edge AI 추론
-이미지 분류 및 객체 검출 예제
+ONNX Runtime-based Edge AI Inference
+Image classification and object detection examples
 
-참고: content/ko/IoT_Embedded/09_Edge_AI_ONNX.md
+Reference: content/ko/IoT_Embedded/09_Edge_AI_ONNX.md
 """
 
 import numpy as np
@@ -11,45 +11,45 @@ import time
 from typing import Optional, Tuple, List, Dict
 import os
 
-# ONNX Runtime 설치 확인
+# Check ONNX Runtime installation
 try:
     import onnxruntime as ort
     HAS_ONNX = True
 except ImportError:
     HAS_ONNX = False
-    print("경고: onnxruntime이 설치되지 않았습니다.")
-    print("설치: pip install onnxruntime")
+    print("Warning: onnxruntime is not installed.")
+    print("Install: pip install onnxruntime")
 
-# OpenCV 설치 확인
+# Check OpenCV installation
 try:
     import cv2
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
-    print("경고: opencv-python이 설치되지 않았습니다.")
-    print("설치: pip install opencv-python")
+    print("Warning: opencv-python is not installed.")
+    print("Install: pip install opencv-python")
 
-# PIL 설치 확인
+# Check PIL installation
 try:
     from PIL import Image
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
-    print("경고: Pillow가 설치되지 않았습니다.")
-    print("설치: pip install Pillow")
+    print("Warning: Pillow is not installed.")
+    print("Install: pip install Pillow")
 
 
-# === ONNX 모델 래퍼 ===
+# === ONNX Model Wrapper ===
 
 class ONNXModel:
-    """ONNX 모델 기본 래퍼"""
+    """ONNX Model Base Wrapper"""
 
     def __init__(self, model_path: str, providers: Optional[List[str]] = None):
         if not HAS_ONNX:
-            raise ImportError("onnxruntime이 필요합니다")
+            raise ImportError("onnxruntime is required")
 
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {model_path}")
+            raise FileNotFoundError(f"Model file not found: {model_path}")
 
         # Why: ONNX Runtime selects the execution provider (CPU, CUDA, TensorRT)
         # at session creation time. Auto-detecting available providers lets the
@@ -68,30 +68,30 @@ class ONNXModel:
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.intra_op_num_threads = 4
 
-        # 세션 생성
+        # Create session
         self.session = ort.InferenceSession(
             model_path,
             sess_options=sess_options,
             providers=providers
         )
 
-        # 입출력 정보
+        # Input/output information
         self.input_name = self.session.get_inputs()[0].name
         self.input_shape = self.session.get_inputs()[0].shape
         self.input_type = self.session.get_inputs()[0].type
         self.output_name = self.session.get_outputs()[0].name
 
-        print(f"모델 로드 완료: {model_path}")
-        print(f"  프로바이더: {self.session.get_providers()}")
-        print(f"  입력: {self.input_name} {self.input_shape}")
-        print(f"  출력: {self.output_name}")
+        print(f"Model loaded: {model_path}")
+        print(f"  Provider: {self.session.get_providers()}")
+        print(f"  Input: {self.input_name} {self.input_shape}")
+        print(f"  Output: {self.output_name}")
 
     def get_input_shape(self) -> list:
-        """입력 형태 반환"""
+        """Return input shape"""
         return self.input_shape
 
     def predict(self, input_data: np.ndarray) -> np.ndarray:
-        """추론 수행"""
+        """Perform inference"""
         outputs = self.session.run(
             [self.output_name],
             {self.input_name: input_data}
@@ -99,17 +99,17 @@ class ONNXModel:
         return outputs[0]
 
     def benchmark(self, num_iterations: int = 100) -> Dict[str, float]:
-        """성능 벤치마크"""
-        # 더미 입력 생성
+        """Performance benchmark"""
+        # Create dummy input
         dummy_shape = [1 if x == 'batch' or x == 'N' or x is None else x
                       for x in self.input_shape]
         dummy_input = np.random.randn(*dummy_shape).astype(np.float32)
 
-        # 워밍업
+        # Warmup
         for _ in range(10):
             self.predict(dummy_input)
 
-        # 측정
+        # Measurement
         times = []
         for _ in range(num_iterations):
             start = time.perf_counter()
@@ -130,44 +130,44 @@ class ONNXModel:
         return results
 
 
-# === 이미지 분류 모델 ===
+# === Image Classification Model ===
 
 class ImageClassifier(ONNXModel):
-    """ONNX 이미지 분류 모델"""
+    """ONNX Image Classification Model"""
 
-    # ImageNet 클래스 (상위 10개만 예시)
+    # ImageNet classes (top 10 only as example)
     IMAGENET_CLASSES = [
         'tench', 'goldfish', 'great_white_shark', 'tiger_shark',
         'hammerhead', 'electric_ray', 'stingray', 'cock', 'hen', 'ostrich'
-        # ... 실제로는 1000개 클래스
+        # ... actually 1000 classes
     ]
 
     def __init__(self, model_path: str, labels_path: Optional[str] = None):
         super().__init__(model_path)
 
-        # 레이블 로드 (있는 경우)
+        # Load labels (if available)
         if labels_path and os.path.exists(labels_path):
             with open(labels_path, 'r') as f:
                 self.labels = [line.strip() for line in f]
         else:
             self.labels = self.IMAGENET_CLASSES
 
-        # 입력 크기 추출
+        # Extract input size
         self.input_height = self.input_shape[2] if len(self.input_shape) > 2 else 224
         self.input_width = self.input_shape[3] if len(self.input_shape) > 3 else 224
 
     def preprocess_image(self, image_path: str) -> np.ndarray:
-        """이미지 전처리 (PIL 사용)"""
+        """Image preprocessing (using PIL)"""
         if not HAS_PIL:
-            raise ImportError("Pillow가 필요합니다")
+            raise ImportError("Pillow is required")
 
-        # 이미지 로드
+        # Load image
         image = Image.open(image_path).convert('RGB')
 
-        # 리사이즈
+        # Resize
         image = image.resize((self.input_width, self.input_height))
 
-        # NumPy 배열로 변환
+        # Convert to NumPy array
         img_array = np.array(image).astype(np.float32)
 
         # Why: ImageNet-trained models (ResNet, EfficientNet, etc.) were trained
@@ -181,17 +181,17 @@ class ImageClassifier(ONNXModel):
         # Width), but PIL loads images as HWC. This transpose is a silent requirement.
         img_array = img_array.transpose(2, 0, 1)
 
-        # 배치 차원 추가
+        # Add batch dimension
         img_array = np.expand_dims(img_array, axis=0)
 
         return img_array
 
     def classify(self, image_path: str, top_k: int = 5) -> List[Tuple[str, float]]:
-        """이미지 분류"""
-        # 전처리
+        """Image classification"""
+        # Preprocessing
         input_data = self.preprocess_image(image_path)
 
-        # 추론
+        # Inference
         start = time.perf_counter()
         output = self.predict(input_data)
         inference_time = (time.perf_counter() - start) * 1000
@@ -199,7 +199,7 @@ class ImageClassifier(ONNXModel):
         # Softmax
         probs = self._softmax(output[0])
 
-        # Top-K 결과
+        # Top-K results
         top_indices = np.argsort(probs)[-top_k:][::-1]
 
         results = []
@@ -207,23 +207,23 @@ class ImageClassifier(ONNXModel):
             label = self.labels[idx] if idx < len(self.labels) else f"class_{idx}"
             results.append((label, float(probs[idx])))
 
-        print(f"추론 시간: {inference_time:.2f}ms")
+        print(f"Inference time: {inference_time:.2f}ms")
 
         return results
 
     @staticmethod
     def _softmax(x: np.ndarray) -> np.ndarray:
-        """Softmax 함수"""
+        """Softmax function"""
         exp_x = np.exp(x - np.max(x))
         return exp_x / exp_x.sum()
 
 
-# === 객체 검출 모델 (YOLO) ===
+# === Object Detection Model (YOLO) ===
 
 class YOLODetector:
-    """YOLO ONNX 객체 검출기"""
+    """YOLO ONNX Object Detector"""
 
-    # COCO 데이터셋 80개 클래스
+    # COCO dataset 80 classes
     COCO_CLASSES = [
         'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
         'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign',
@@ -243,12 +243,12 @@ class YOLODetector:
     def __init__(self, model_path: str, conf_threshold: float = 0.5,
                  iou_threshold: float = 0.45):
         if not HAS_ONNX:
-            raise ImportError("onnxruntime이 필요합니다")
+            raise ImportError("onnxruntime is required")
 
         if not os.path.exists(model_path):
-            # 모델이 없는 경우 시뮬레이션 모드
-            print(f"경고: 모델 파일을 찾을 수 없습니다: {model_path}")
-            print("시뮬레이션 모드로 실행합니다.")
+            # If model not found, run in simulation mode
+            print(f"Warning: Model file not found: {model_path}")
+            print("Running in simulation mode.")
             self.simulation_mode = True
             self.input_height = 640
             self.input_width = 640
@@ -256,7 +256,7 @@ class YOLODetector:
 
         self.simulation_mode = False
 
-        # ONNX 세션 생성
+        # Create ONNX session
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
@@ -269,65 +269,65 @@ class YOLODetector:
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
 
-        # 입력 정보
+        # Input information
         input_info = self.session.get_inputs()[0]
         self.input_name = input_info.name
         self.input_shape = input_info.shape
         self.input_height = self.input_shape[2]
         self.input_width = self.input_shape[3]
 
-        print(f"YOLO 모델 로드 완료")
-        print(f"  입력 크기: {self.input_width}x{self.input_height}")
+        print(f"YOLO model loaded")
+        print(f"  Input size: {self.input_width}x{self.input_height}")
 
     def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Tuple[float, float]]:
-        """이미지 전처리"""
+        """Image preprocessing"""
         orig_height, orig_width = image.shape[:2]
 
-        # 리사이즈
+        # Resize
         resized = cv2.resize(image, (self.input_width, self.input_height))
 
         # BGR to RGB, HWC to CHW
         input_data = resized[:, :, ::-1].transpose(2, 0, 1)
 
-        # 정규화 (0-1)
+        # Normalize (0-1)
         input_data = input_data.astype(np.float32) / 255.0
 
-        # 배치 차원 추가
+        # Add batch dimension
         input_data = np.expand_dims(input_data, axis=0)
 
-        # 스케일 비율 저장
+        # Save scale ratio
         scale = (orig_width / self.input_width, orig_height / self.input_height)
 
         return input_data, scale
 
     def detect(self, image: np.ndarray) -> List[Dict]:
-        """객체 검출"""
+        """Object detection"""
         if self.simulation_mode:
-            # 시뮬레이션: 랜덤 검출 결과 반환
-            print("시뮬레이션 모드: 랜덤 검출 결과를 생성합니다.")
+            # Simulation: return random detection results
+            print("Simulation mode: generating random detection results.")
             return self._simulate_detection(image)
 
         if not HAS_CV2:
-            raise ImportError("opencv-python이 필요합니다")
+            raise ImportError("opencv-python is required")
 
-        # 전처리
+        # Preprocessing
         input_data, scale = self.preprocess(image)
 
-        # 추론
+        # Inference
         start = time.perf_counter()
         outputs = self.session.run(None, {self.input_name: input_data})
         inference_time = (time.perf_counter() - start) * 1000
 
-        # 후처리
+        # Post-processing
         detections = self.postprocess(outputs[0], scale)
 
-        print(f"추론 시간: {inference_time:.2f}ms")
-        print(f"검출된 객체: {len(detections)}개")
+        print(f"Inference time: {inference_time:.2f}ms")
+        print(f"Detected objects: {len(detections)}")
 
         return detections
 
     def postprocess(self, output: np.ndarray, scale: Tuple[float, float]) -> List[Dict]:
-        """출력 후처리"""
+        """Output post-processing"""
         if not HAS_CV2:
             return []
 
@@ -346,10 +346,10 @@ class YOLODetector:
                 class_score = class_probs[class_id]
 
                 if class_score > self.conf_threshold:
-                    # 박스 좌표 (center_x, center_y, width, height)
+                    # Box coordinates (center_x, center_y, width, height)
                     cx, cy, w, h = pred[:4]
 
-                    # 원본 스케일로 변환
+                    # Convert to original scale
                     x1 = int((cx - w / 2) * scale[0])
                     y1 = int((cy - h / 2) * scale[1])
                     x2 = int((cx + w / 2) * scale[0])
@@ -382,7 +382,7 @@ class YOLODetector:
         return []
 
     def _simulate_detection(self, image: np.ndarray) -> List[Dict]:
-        """시뮬레이션: 랜덤 검출 결과"""
+        """Simulation: random detection results"""
         height, width = image.shape[:2]
 
         num_detections = np.random.randint(1, 5)
@@ -406,9 +406,9 @@ class YOLODetector:
         return detections
 
     def draw_detections(self, image: np.ndarray, detections: List[Dict]) -> np.ndarray:
-        """검출 결과 시각화"""
+        """Visualize detection results"""
         if not HAS_CV2:
-            print("경고: opencv-python이 없어 시각화를 건너뜁니다.")
+            print("Warning: opencv-python is not available, skipping visualization.")
             return image
 
         result = image.copy()
@@ -417,34 +417,34 @@ class YOLODetector:
             x1, y1, x2, y2 = det['box']
             label = f"{det['class_name']}: {det['score']:.2f}"
 
-            # 박스 그리기
+            # Draw box
             cv2.rectangle(result, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-            # 라벨 배경
+            # Label background
             (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             cv2.rectangle(result, (x1, y1 - 20), (x1 + w, y1), (0, 255, 0), -1)
 
-            # 라벨 텍스트
+            # Label text
             cv2.putText(result, label, (x1, y1 - 5),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
         return result
 
 
-# === 사용 예제 ===
+# === Usage Examples ===
 
 def example_basic_inference():
-    """기본 ONNX 추론 예제"""
-    print("\n=== 기본 ONNX 추론 예제 ===")
+    """Basic ONNX inference example"""
+    print("\n=== Basic ONNX Inference Example ===")
 
     if not HAS_ONNX:
-        print("onnxruntime이 설치되지 않아 예제를 실행할 수 없습니다.")
+        print("Cannot run example: onnxruntime is not installed.")
         return
 
-    # 시뮬레이션: 더미 모델 생성
-    print("시뮬레이션 모드: 더미 입력으로 테스트합니다.")
+    # Simulation: create dummy model
+    print("Simulation mode: testing with dummy input.")
 
-    # 더미 데이터
+    # Dummy data
     batch_size = 1
     channels = 3
     height = 224
@@ -452,74 +452,74 @@ def example_basic_inference():
 
     dummy_input = np.random.randn(batch_size, channels, height, width).astype(np.float32)
 
-    print(f"입력 형태: {dummy_input.shape}")
-    print(f"입력 데이터 범위: [{dummy_input.min():.2f}, {dummy_input.max():.2f}]")
+    print(f"Input shape: {dummy_input.shape}")
+    print(f"Input data range: [{dummy_input.min():.2f}, {dummy_input.max():.2f}]")
 
 
 def example_image_classification():
-    """이미지 분류 예제"""
-    print("\n=== 이미지 분류 예제 ===")
+    """Image classification example"""
+    print("\n=== Image Classification Example ===")
 
     if not HAS_ONNX:
-        print("onnxruntime이 설치되지 않아 예제를 실행할 수 없습니다.")
+        print("Cannot run example: onnxruntime is not installed.")
         return
 
-    # 모델 경로 (예시)
+    # Model path (example)
     model_path = "resnet18.onnx"
 
     if not os.path.exists(model_path):
-        print(f"모델 파일을 찾을 수 없습니다: {model_path}")
-        print("PyTorch에서 변환 예시:")
+        print(f"Model file not found: {model_path}")
+        print("Conversion example from PyTorch:")
         print("  import torch")
         print("  model = torch.hub.load('pytorch/vision', 'resnet18', pretrained=True)")
         print("  dummy_input = torch.randn(1, 3, 224, 224)")
         print("  torch.onnx.export(model, dummy_input, 'resnet18.onnx')")
         return
 
-    # 분류기 생성
+    # Create classifier
     classifier = ImageClassifier(model_path)
 
-    # 벤치마크
-    print("\n성능 벤치마크:")
+    # Benchmark
+    print("\nPerformance benchmark:")
     results = classifier.benchmark(num_iterations=50)
-    print(f"  평균: {results['mean_ms']:.2f}ms")
+    print(f"  Average: {results['mean_ms']:.2f}ms")
     print(f"  FPS: {results['fps']:.1f}")
 
 
 def example_object_detection():
-    """객체 검출 예제"""
-    print("\n=== 객체 검출 예제 (시뮬레이션) ===")
+    """Object detection example"""
+    print("\n=== Object Detection Example (Simulation) ===")
 
-    # 시뮬레이션 모드로 실행
-    detector = YOLODetector("yolov5s.onnx")  # 파일이 없어도 시뮬레이션 가능
+    # Run in simulation mode
+    detector = YOLODetector("yolov5s.onnx")  # Works even without the file
 
-    # 더미 이미지 생성
+    # Create dummy image
     dummy_image = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
 
-    # 검출
+    # Detection
     detections = detector.detect(dummy_image)
 
-    # 결과 출력
-    print("\n검출 결과:")
+    # Print results
+    print("\nDetection results:")
     for i, det in enumerate(detections):
         print(f"  {i+1}. {det['class_name']}: {det['score']:.2f}")
-        print(f"     박스: {det['box']}")
+        print(f"     Box: {det['box']}")
 
-    # 시각화 (OpenCV가 있는 경우)
+    # Visualization (if OpenCV is available)
     if HAS_CV2:
         result_image = detector.draw_detections(dummy_image, detections)
-        print("\n결과 이미지 생성 완료")
+        print("\nResult image generated")
 
 
 def example_performance_comparison():
-    """성능 비교 예제"""
-    print("\n=== 성능 비교 예제 ===")
+    """Performance comparison example"""
+    print("\n=== Performance Comparison Example ===")
 
     if not HAS_ONNX:
-        print("onnxruntime이 설치되지 않아 예제를 실행할 수 없습니다.")
+        print("Cannot run example: onnxruntime is not installed.")
         return
 
-    print("배치 크기별 성능 비교 (시뮬레이션)")
+    print("Performance comparison by batch size (simulation)")
 
     input_shape = (1, 3, 224, 224)
 
@@ -527,35 +527,35 @@ def example_performance_comparison():
         data = np.random.randn(batch_size, *input_shape[1:]).astype(np.float32)
 
         start = time.perf_counter()
-        # 시뮬레이션: 간단한 연산
+        # Simulation: simple computation
         _ = np.mean(data, axis=(2, 3))
         elapsed = time.perf_counter() - start
 
         throughput = batch_size / elapsed
-        print(f"배치 크기 {batch_size:2d}: {throughput:.1f} samples/sec")
+        print(f"Batch size {batch_size:2d}: {throughput:.1f} samples/sec")
 
 
-# === 메인 실행 ===
+# === Main Execution ===
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("ONNX Runtime Edge AI 추론 예제")
+    print("ONNX Runtime Edge AI Inference Example")
     print("=" * 60)
 
-    # ONNX Runtime 설치 확인
+    # Check ONNX Runtime installation
     if HAS_ONNX:
-        print(f"\nONNX Runtime 버전: {ort.__version__}")
-        print(f"사용 가능한 프로바이더: {ort.get_available_providers()}")
+        print(f"\nONNX Runtime version: {ort.__version__}")
+        print(f"Available providers: {ort.get_available_providers()}")
     else:
-        print("\n경고: ONNX Runtime이 설치되지 않았습니다.")
-        print("설치: pip install onnxruntime")
+        print("\nWarning: ONNX Runtime is not installed.")
+        print("Install: pip install onnxruntime")
 
-    # 예제 실행
+    # Run examples
     example_basic_inference()
     example_image_classification()
     example_object_detection()
     example_performance_comparison()
 
     print("\n" + "=" * 60)
-    print("모든 예제 완료")
+    print("All examples completed")
     print("=" * 60)

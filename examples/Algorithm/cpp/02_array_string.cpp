@@ -1,8 +1,8 @@
 /*
- * 배열과 문자열 (Array and String)
+ * Array and String
  * Two Pointers, Sliding Window, Prefix Sum
  *
- * 배열과 문자열 처리의 핵심 기법들입니다.
+ * Core techniques for array and string processing.
  */
 
 #include <iostream>
@@ -16,10 +16,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. 투 포인터 (Two Pointers)
+// 1. Two Pointers
 // =============================================================================
 
-// 정렬된 배열에서 두 수의 합
+// Two sum in a sorted array
 pair<int, int> twoSumSorted(const vector<int>& arr, int target) {
     int left = 0, right = arr.size() - 1;
 
@@ -36,7 +36,7 @@ pair<int, int> twoSumSorted(const vector<int>& arr, int target) {
     return {-1, -1};
 }
 
-// 물 담기 (Container With Most Water)
+// Container With Most Water
 int maxArea(const vector<int>& height) {
     int left = 0, right = height.size() - 1;
     int maxWater = 0;
@@ -55,7 +55,7 @@ int maxArea(const vector<int>& height) {
     return maxWater;
 }
 
-// 세 수의 합
+// Three Sum
 vector<vector<int>> threeSum(vector<int>& nums) {
     vector<vector<int>> result;
     sort(nums.begin(), nums.end());
@@ -85,10 +85,10 @@ vector<vector<int>> threeSum(vector<int>& nums) {
 }
 
 // =============================================================================
-// 2. 슬라이딩 윈도우 (Sliding Window)
+// 2. Sliding Window
 // =============================================================================
 
-// 고정 크기 윈도우 최대 합
+// Maximum sum of a fixed-size window
 int maxSumWindow(const vector<int>& arr, int k) {
     int n = arr.size();
     if (n < k) return -1;
@@ -107,7 +107,7 @@ int maxSumWindow(const vector<int>& arr, int k) {
     return maxSum;
 }
 
-// 중복 없는 최장 부분 문자열
+// Longest substring without repeating characters
 int lengthOfLongestSubstring(const string& s) {
     unordered_set<char> charSet;
     int maxLen = 0;
@@ -125,7 +125,7 @@ int lengthOfLongestSubstring(const string& s) {
     return maxLen;
 }
 
-// 합이 target 이상인 최소 길이 부분 배열
+// Minimum length subarray with sum >= target
 int minSubArrayLen(int target, const vector<int>& nums) {
     int n = nums.size();
     int minLen = INT_MAX;
@@ -145,7 +145,7 @@ int minSubArrayLen(int target, const vector<int>& nums) {
 }
 
 // =============================================================================
-// 3. 프리픽스 합 (Prefix Sum)
+// 3. Prefix Sum
 // =============================================================================
 
 class PrefixSum {
@@ -161,13 +161,13 @@ public:
         }
     }
 
-    // [left, right] 구간 합
+    // Range sum for [left, right]
     long long rangeSum(int left, int right) {
         return prefix[right + 1] - prefix[left];
     }
 };
 
-// 합이 k인 부분 배열 개수
+// Count subarrays with sum equal to k
 int subarraySum(const vector<int>& nums, int k) {
     unordered_map<int, int> prefixCount;
     prefixCount[0] = 1;
@@ -186,7 +186,7 @@ int subarraySum(const vector<int>& nums, int k) {
 }
 
 // =============================================================================
-// 4. 카데인 알고리즘 (Kadane's Algorithm)
+// 4. Kadane's Algorithm
 // =============================================================================
 
 int maxSubArray(const vector<int>& nums) {
@@ -201,7 +201,7 @@ int maxSubArray(const vector<int>& nums) {
     return maxSum;
 }
 
-// 최대 부분 배열의 인덱스도 반환
+// Also return indices of the maximum subarray
 tuple<int, int, int> maxSubArrayWithIndices(const vector<int>& nums) {
     int maxSum = nums[0];
     int currentSum = nums[0];
@@ -226,10 +226,10 @@ tuple<int, int, int> maxSubArrayWithIndices(const vector<int>& nums) {
 }
 
 // =============================================================================
-// 5. 문자열 처리
+// 5. String Processing
 // =============================================================================
 
-// 팰린드롬 체크
+// Palindrome check
 bool isPalindrome(const string& s) {
     int left = 0, right = s.length() - 1;
     while (left < right) {
@@ -240,7 +240,7 @@ bool isPalindrome(const string& s) {
     return true;
 }
 
-// 애너그램 체크
+// Anagram check
 bool isAnagram(const string& s, const string& t) {
     if (s.length() != t.length()) return false;
 
@@ -256,7 +256,7 @@ bool isAnagram(const string& s, const string& t) {
     return true;
 }
 
-// 문자열 압축
+// String compression
 string compress(const string& s) {
     if (s.empty()) return s;
 
@@ -279,64 +279,64 @@ string compress(const string& s) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "배열과 문자열 예제" << endl;
+    cout << "Array and String Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 투 포인터
-    cout << "\n[1] 투 포인터" << endl;
+    // 1. Two Pointers
+    cout << "\n[1] Two Pointers" << endl;
     vector<int> sorted = {1, 2, 3, 4, 6};
     auto [idx1, idx2] = twoSumSorted(sorted, 6);
-    cout << "    배열: [1,2,3,4,6], 타겟: 6" << endl;
-    cout << "    인덱스: (" << idx1 << ", " << idx2 << ")" << endl;
+    cout << "    Array: [1,2,3,4,6], target: 6" << endl;
+    cout << "    Indices: (" << idx1 << ", " << idx2 << ")" << endl;
 
     vector<int> heights = {1, 8, 6, 2, 5, 4, 8, 3, 7};
-    cout << "    물 담기: " << maxArea(heights) << endl;
+    cout << "    Container with most water: " << maxArea(heights) << endl;
 
-    // 2. 슬라이딩 윈도우
-    cout << "\n[2] 슬라이딩 윈도우" << endl;
+    // 2. Sliding Window
+    cout << "\n[2] Sliding Window" << endl;
     vector<int> arr = {1, 4, 2, 10, 23, 3, 1, 0, 20};
-    cout << "    크기 4 윈도우 최대 합: " << maxSumWindow(arr, 4) << endl;
+    cout << "    Max sum of window size 4: " << maxSumWindow(arr, 4) << endl;
 
-    cout << "    \"abcabcbb\" 최장 부분 문자열: " << lengthOfLongestSubstring("abcabcbb") << endl;
+    cout << "    \"abcabcbb\" longest substring: " << lengthOfLongestSubstring("abcabcbb") << endl;
 
     vector<int> nums = {2, 3, 1, 2, 4, 3};
-    cout << "    합 >= 7 최소 길이: " << minSubArrayLen(7, nums) << endl;
+    cout << "    Min length with sum >= 7: " << minSubArrayLen(7, nums) << endl;
 
-    // 3. 프리픽스 합
-    cout << "\n[3] 프리픽스 합" << endl;
+    // 3. Prefix Sum
+    cout << "\n[3] Prefix Sum" << endl;
     vector<int> prefixArr = {1, 2, 3, 4, 5};
     PrefixSum ps(prefixArr);
-    cout << "    배열: [1,2,3,4,5]" << endl;
-    cout << "    [1,3] 구간 합: " << ps.rangeSum(1, 3) << endl;
+    cout << "    Array: [1,2,3,4,5]" << endl;
+    cout << "    Range sum [1,3]: " << ps.rangeSum(1, 3) << endl;
 
     vector<int> subarr = {1, 1, 1};
-    cout << "    합이 2인 부분 배열 개수: " << subarraySum(subarr, 2) << endl;
+    cout << "    Subarrays with sum 2: " << subarraySum(subarr, 2) << endl;
 
-    // 4. 카데인 알고리즘
-    cout << "\n[4] 카데인 알고리즘" << endl;
+    // 4. Kadane's Algorithm
+    cout << "\n[4] Kadane's Algorithm" << endl;
     vector<int> kadane = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
-    cout << "    배열: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
-    cout << "    최대 부분 배열 합: " << maxSubArray(kadane) << endl;
+    cout << "    Array: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
+    cout << "    Maximum subarray sum: " << maxSubArray(kadane) << endl;
 
-    // 5. 문자열 처리
-    cout << "\n[5] 문자열 처리" << endl;
-    cout << "    \"racecar\" 팰린드롬: " << (isPalindrome("racecar") ? "예" : "아니오") << endl;
-    cout << "    \"anagram\"/\"nagaram\" 애너그램: " << (isAnagram("anagram", "nagaram") ? "예" : "아니오") << endl;
-    cout << "    \"aabcccccaaa\" 압축: " << compress("aabcccccaaa") << endl;
+    // 5. String Processing
+    cout << "\n[5] String Processing" << endl;
+    cout << "    \"racecar\" palindrome: " << (isPalindrome("racecar") ? "yes" : "no") << endl;
+    cout << "    \"anagram\"/\"nagaram\" anagram: " << (isAnagram("anagram", "nagaram") ? "yes" : "no") << endl;
+    cout << "    \"aabcccccaaa\" compressed: " << compress("aabcccccaaa") << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘        | 시간복잡도 |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm       | Time       |" << endl;
     cout << "    |-----------------|------------|" << endl;
-    cout << "    | 투 포인터       | O(n)       |" << endl;
-    cout << "    | 슬라이딩 윈도우 | O(n)       |" << endl;
-    cout << "    | 프리픽스 합     | O(1) 쿼리  |" << endl;
-    cout << "    | 카데인          | O(n)       |" << endl;
+    cout << "    | Two Pointers    | O(n)       |" << endl;
+    cout << "    | Sliding Window  | O(n)       |" << endl;
+    cout << "    | Prefix Sum      | O(1) query |" << endl;
+    cout << "    | Kadane's        | O(n)       |" << endl;
 
     cout << "\n============================================================" << endl;
 

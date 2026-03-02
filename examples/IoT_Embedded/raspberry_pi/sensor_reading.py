@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 DHT11 Temperature and Humidity Sensor Reading
-DHT11 온습도 센서 읽기 예제
 
 Hardware:
 - DHT11 VCC  -> 3.3V (pin 1)
@@ -103,7 +102,7 @@ def main():
             data = sensor.read()
 
             if data.get("status") == "ok" or data.get("status") == "simulated":
-                print(f"Temperature: {data['temperature']:.1f}°C")
+                print(f"Temperature: {data['temperature']:.1f}C")
                 print(f"Humidity:    {data['humidity']:.1f}%")
                 print(f"Status:      {data['status']}")
             else:

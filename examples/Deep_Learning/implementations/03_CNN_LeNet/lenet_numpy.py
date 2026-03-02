@@ -1,11 +1,12 @@
 """
-NumPy로 구현한 LeNet-5
+LeNet-5 implemented with NumPy
 
-원본 논문: LeCun et al. (1998)
+Original paper: LeCun et al. (1998)
 "Gradient-Based Learning Applied to Document Recognition"
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import Tuple, List
 from conv_numpy import Conv2dNumpy, im2col, col2im
 
@@ -27,15 +28,15 @@ class AvgPool2dNumpy:
         H_out = (H - K) // S + 1
         W_out = (W - K) // S + 1
 
-        # im2col 변환
+        # im2col transform
         col = im2col(input, (K, K), S, padding=0)
         col = col.reshape(N, C, K * K, H_out * W_out)
 
-        # 평균
+        # Average
         output = np.mean(col, axis=2)
         output = output.reshape(N, C, H_out, W_out)
 
-        # 캐시
+        # Cache
         self.cache['input_shape'] = input.shape
 
         return output
@@ -46,7 +47,7 @@ class AvgPool2dNumpy:
         input_shape = self.cache['input_shape']
         K = self.kernel_size
 
-        # 각 원소에 1/(K*K) 만큼 분배
+        # Distribute 1/(K*K) to each element
         grad_output_expanded = grad_output.reshape(N, C, 1, H_out * W_out)
         grad_col = np.repeat(grad_output_expanded, K * K, axis=2) / (K * K)
         grad_col = grad_col.reshape(N, C * K * K, H_out * W_out)
@@ -85,7 +86,7 @@ class MaxPool2dNumpy:
         output = np.max(col, axis=2)
         output = output.reshape(N, C, H_out, W_out)
 
-        # 캐시
+        # Cache
         self.cache['input_shape'] = input.shape
         self.cache['max_idx'] = max_idx
         self.cache['col_shape'] = (N, C, K * K, H_out * W_out)
@@ -99,7 +100,7 @@ class MaxPool2dNumpy:
         max_idx = self.cache['max_idx']
         K = self.kernel_size
 
-        # Max 위치에만 gradient 전달
+        # Pass gradient only to max positions
         grad_col = np.zeros((N, C, K * K, H_out * W_out))
 
         for n in range(N):
@@ -137,7 +138,7 @@ class LinearNumpy:
     """Fully Connected Layer"""
 
     def __init__(self, in_features: int, out_features: int):
-        # Xavier 초기화
+        # Xavier initialization
         scale = np.sqrt(2.0 / in_features)
         self.weight = np.random.randn(out_features, in_features) * scale
         self.bias = np.zeros(out_features)
@@ -210,14 +211,14 @@ class SoftmaxCrossEntropyNumpy:
         """
         Args:
             logits: (N, num_classes)
-            labels: (N,) - 클래스 인덱스
+            labels: (N,) - class indices
 
         Returns:
             loss: scalar
         """
         N = logits.shape[0]
 
-        # Softmax (수치 안정성)
+        # Softmax (numerical stability)
         shifted = logits - np.max(logits, axis=1, keepdims=True)
         exp_scores = np.exp(shifted)
         probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
@@ -226,7 +227,7 @@ class SoftmaxCrossEntropyNumpy:
         correct_probs = probs[np.arange(N), labels]
         loss = -np.mean(np.log(correct_probs + 1e-10))
 
-        # 캐시
+        # Cache
         self.cache['probs'] = probs
         self.cache['labels'] = labels
 
@@ -247,22 +248,22 @@ class SoftmaxCrossEntropyNumpy:
 
 class LeNet5Numpy:
     """
-    LeNet-5 NumPy 구현
+    LeNet-5 NumPy Implementation
 
-    아키텍처:
+    Architecture:
     Input (1, 32, 32)
-    → Conv1 (6, 5, 5) → Tanh → AvgPool
-    → Conv2 (16, 5, 5) → Tanh → AvgPool
-    → Conv3 (120, 5, 5) → Tanh
-    → FC1 (120 → 84) → Tanh
-    → FC2 (84 → 10)
+    -> Conv1 (6, 5, 5) -> Tanh -> AvgPool
+    -> Conv2 (16, 5, 5) -> Tanh -> AvgPool
+    -> Conv3 (120, 5, 5) -> Tanh
+    -> FC1 (120 -> 84) -> Tanh
+    -> FC2 (84 -> 10)
     """
 
     def __init__(self, num_classes: int = 10, use_relu: bool = False):
         """
         Args:
-            num_classes: 출력 클래스 수
-            use_relu: True면 ReLU, False면 Tanh (원본)
+            num_classes: Number of output classes
+            use_relu: If True use ReLU, if False use Tanh (original)
         """
         Activation = ReLUNumpy if use_relu else TanhNumpy
 
@@ -276,7 +277,7 @@ class LeNet5Numpy:
         self.act2 = Activation()
         self.pool2 = AvgPool2dNumpy(kernel_size=2, stride=2)
 
-        # Layer 3: Conv (→ 1x1)
+        # Layer 3: Conv (-> 1x1)
         self.conv3 = Conv2dNumpy(16, 120, kernel_size=5, stride=1, padding=0)
         self.act3 = Activation()
 
@@ -291,7 +292,7 @@ class LeNet5Numpy:
         # Loss
         self.criterion = SoftmaxCrossEntropyNumpy()
 
-        # Layer 리스트 (update용)
+        # Layer list (for update)
         self.layers = [
             self.conv1, self.conv2, self.conv3,
             self.fc1, self.fc2
@@ -323,7 +324,7 @@ class LeNet5Numpy:
 
     def backward(self, grad: np.ndarray) -> np.ndarray:
         """Backward pass"""
-        # FC layers (역순)
+        # FC layers (reverse order)
         grad = self.fc2.backward(grad)
         grad = self.act4.backward(grad)
         grad = self.fc1.backward(grad)
@@ -331,7 +332,7 @@ class LeNet5Numpy:
         # Unflatten
         grad = self.flatten.backward(grad)
 
-        # Conv layers (역순)
+        # Conv layers (reverse order)
         grad = self.act3.backward(grad)
         grad = self.conv3.backward(grad)
 
@@ -352,7 +353,7 @@ class LeNet5Numpy:
         lr: float = 0.01
     ) -> Tuple[float, float]:
         """
-        단일 학습 스텝
+        Single training step
 
         Returns:
             (loss, accuracy)
@@ -378,49 +379,80 @@ class LeNet5Numpy:
         return loss, accuracy
 
     def predict(self, images: np.ndarray) -> np.ndarray:
-        """예측"""
+        """Prediction"""
         logits = self.forward(images)
         return np.argmax(logits, axis=1)
 
 
 def load_mnist_subset() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    MNIST 데이터셋 로드 (간단한 버전)
+    Load structured synthetic data (MNIST substitute)
 
-    실제로는 torchvision이나 keras를 사용
-    여기서는 예시용으로 랜덤 데이터 생성
+    Each class (0-9) has a distinct visual pattern: a bright horizontal
+    band at a different vertical position. This creates learnable structure
+    so the network can achieve meaningful accuracy during training.
+
+    In practice, use torchvision or keras for real MNIST data.
     """
-    print("Note: 실제 MNIST 대신 랜덤 데이터 사용")
+    print("Note: Using structured synthetic data instead of actual MNIST")
 
-    # 학습 데이터
-    X_train = np.random.randn(1000, 1, 32, 32).astype(np.float32)
-    y_train = np.random.randint(0, 10, 1000)
+    n_train = 1000
+    n_test = 200
+    num_classes = 10
+    img_size = 32
+    band_height = 3  # height of the bright horizontal band
 
-    # 테스트 데이터
-    X_test = np.random.randn(200, 1, 32, 32).astype(np.float32)
-    y_test = np.random.randint(0, 10, 200)
+    def generate_samples(n_samples: int) -> Tuple[np.ndarray, np.ndarray]:
+        images = np.zeros((n_samples, 1, img_size, img_size), dtype=np.float32)
+        labels = np.random.randint(0, num_classes, n_samples)
+
+        for i in range(n_samples):
+            cls = labels[i]
+            # Each class gets a horizontal band at a unique vertical position
+            # Spread bands evenly across the 32-pixel height
+            band_start = int(cls * (img_size - band_height) / (num_classes - 1))
+            band_end = band_start + band_height
+
+            # Background: low-level noise
+            images[i, 0] = np.random.randn(img_size, img_size) * 0.1
+
+            # Bright band: strong signal with slight noise for variation
+            images[i, 0, band_start:band_end, :] = 1.0 + np.random.randn(
+                band_end - band_start, img_size
+            ) * 0.15
+
+        return images, labels
+
+    X_train, y_train = generate_samples(n_train)
+    X_test, y_test = generate_samples(n_test)
 
     return X_train, y_train, X_test, y_test
 
 
 def train_lenet():
-    """LeNet-5 학습"""
+    """Train LeNet-5"""
     print("=== LeNet-5 NumPy Training ===\n")
 
-    # 데이터
+    # Data
     X_train, y_train, X_test, y_test = load_mnist_subset()
     print(f"Train: {X_train.shape}, Test: {X_test.shape}")
 
-    # 모델
+    # Model
     model = LeNet5Numpy(num_classes=10, use_relu=True)
 
-    # 하이퍼파라미터
+    # Hyperparameters
     epochs = 5
     batch_size = 32
     lr = 0.01
     num_batches = len(X_train) // batch_size
 
-    # 학습
+    # Expected: train accuracy ~0.70+ after 5 epochs on structured synthetic data
+
+    # History tracking
+    loss_history = []
+    acc_history = []
+
+    # Training
     for epoch in range(epochs):
         # Shuffle
         indices = np.random.permutation(len(X_train))
@@ -449,16 +481,42 @@ def train_lenet():
         avg_loss = epoch_loss / num_batches
         avg_acc = epoch_acc / num_batches
 
+        loss_history.append(avg_loss)
+        acc_history.append(avg_acc)
+
         print(f"\nEpoch {epoch+1}/{epochs}")
         print(f"  Train Loss: {avg_loss:.4f}, Acc: {avg_acc:.4f}")
 
-        # 검증
+        # Validation
         predictions = model.predict(X_test)
         test_acc = np.mean(predictions == y_test)
         print(f"  Test Acc: {test_acc:.4f}")
         print()
 
     print("Training complete!")
+
+    # Visualization
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Left panel: Training loss curve
+    ax1.plot(range(1, epochs + 1), loss_history, 'b-o', linewidth=2, markersize=6)
+    ax1.set_title('Training Loss per Epoch', fontsize=14)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.grid(True, alpha=0.3)
+
+    # Right panel: Training accuracy curve
+    ax2.plot(range(1, epochs + 1), acc_history, 'r-o', linewidth=2, markersize=6)
+    ax2.set_title('Training Accuracy per Epoch', fontsize=14)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.grid(True, alpha=0.3)
+
+    fig.suptitle('LeNet-5 NumPy Training Progress', fontsize=16, fontweight='bold')
+    fig.tight_layout()
+    plt.savefig('lenet_numpy_training.png', dpi=150)
+    plt.close()
+    print("Result image saved: lenet_numpy_training.png")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 /*
- * 탐욕 알고리즘 (Greedy Algorithm)
+ * Greedy Algorithm
  * Activity Selection, Huffman Coding, Fractional Knapsack
  *
- * 매 순간 최적의 선택을 통해 전체 최적해를 구합니다.
+ * Finds the global optimum by making the locally optimal choice at each step.
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <string.h>
 
 /* =============================================================================
- * 1. 활동 선택 문제
+ * 1. Activity Selection Problem
  * ============================================================================= */
 
 typedef struct {
@@ -39,7 +39,7 @@ int activity_selection(Activity activities[], int n) {
 }
 
 /* =============================================================================
- * 2. 분할 가능 배낭 문제
+ * 2. Fractional Knapsack Problem
  * ============================================================================= */
 
 typedef struct {
@@ -51,7 +51,7 @@ typedef struct {
 int compare_items(const void* a, const void* b) {
     double r1 = ((Item*)a)->ratio;
     double r2 = ((Item*)b)->ratio;
-    return (r2 > r1) - (r2 < r1);  /* 내림차순 */
+    return (r2 > r1) - (r2 < r1);  /* Descending order */
 }
 
 double fractional_knapsack(Item items[], int n, double capacity) {
@@ -74,7 +74,7 @@ double fractional_knapsack(Item items[], int n, double capacity) {
 }
 
 /* =============================================================================
- * 3. 허프만 코딩
+ * 3. Huffman Coding
  * ============================================================================= */
 
 typedef struct HuffmanNode {
@@ -92,7 +92,7 @@ HuffmanNode* create_huffman_node(char ch, int freq) {
     return node;
 }
 
-/* 간단한 우선순위 큐 (배열 기반) */
+/* Simple priority queue (array-based) */
 typedef struct {
     HuffmanNode** data;
     int size;
@@ -177,7 +177,7 @@ void free_huffman_tree(HuffmanNode* root) {
 }
 
 /* =============================================================================
- * 4. 동전 거스름돈
+ * 4. Coin Change (Greedy)
  * ============================================================================= */
 
 int coin_change_greedy(int coins[], int n, int amount) {
@@ -190,19 +190,19 @@ int coin_change_greedy(int coins[], int n, int amount) {
 }
 
 /* =============================================================================
- * 5. 회의실 배정 (최소 회의실 수)
+ * 5. Meeting Room Assignment (Minimum Rooms)
  * ============================================================================= */
 
 typedef struct {
     int time;
-    int type;  /* 1: 시작, -1: 종료 */
+    int type;  /* 1: start, -1: end */
 } Event;
 
 int compare_events(const void* a, const void* b) {
     Event* e1 = (Event*)a;
     Event* e2 = (Event*)b;
     if (e1->time != e2->time) return e1->time - e2->time;
-    return e1->type - e2->type;  /* 종료 먼저 */
+    return e1->type - e2->type;  /* End events first */
 }
 
 int min_meeting_rooms(int starts[], int ends[], int n) {
@@ -223,7 +223,7 @@ int min_meeting_rooms(int starts[], int ends[], int n) {
 }
 
 /* =============================================================================
- * 6. 점프 게임
+ * 6. Jump Game
  * ============================================================================= */
 
 int can_jump(int nums[], int n) {
@@ -250,54 +250,54 @@ int min_jumps(int nums[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("탐욕 알고리즘 (Greedy) 예제\n");
+    printf("Greedy Algorithm Examples\n");
     printf("============================================================\n");
 
-    /* 1. 활동 선택 */
-    printf("\n[1] 활동 선택 문제\n");
+    /* 1. Activity Selection */
+    printf("\n[1] Activity Selection Problem\n");
     Activity activities[] = {{1, 4}, {3, 5}, {0, 6}, {5, 7}, {3, 9}, {5, 9}};
-    printf("    최대 활동 수: %d\n", activity_selection(activities, 6));
+    printf("    Max activities: %d\n", activity_selection(activities, 6));
 
-    /* 2. 분할 배낭 */
-    printf("\n[2] 분할 가능 배낭\n");
+    /* 2. Fractional Knapsack */
+    printf("\n[2] Fractional Knapsack\n");
     Item items[] = {{60, 10, 6}, {100, 20, 5}, {120, 30, 4}};
-    printf("    용량 50의 최대 가치: %.2f\n", fractional_knapsack(items, 3, 50));
+    printf("    Max value for capacity 50: %.2f\n", fractional_knapsack(items, 3, 50));
 
-    /* 3. 허프만 코딩 */
-    printf("\n[3] 허프만 코딩\n");
+    /* 3. Huffman Coding */
+    printf("\n[3] Huffman Coding\n");
     char chars[] = {'a', 'b', 'c', 'd', 'e'};
     int freqs[] = {5, 9, 12, 13, 16};
     HuffmanNode* root = build_huffman_tree(chars, freqs, 5);
-    printf("    코드:\n");
+    printf("    Codes:\n");
     char code[100];
     print_huffman_codes(root, code, 0);
     free_huffman_tree(root);
 
-    /* 4. 동전 거스름돈 */
-    printf("\n[4] 동전 거스름돈\n");
+    /* 4. Coin Change */
+    printf("\n[4] Coin Change\n");
     int coins[] = {1, 5, 10, 50, 100, 500};
-    printf("    동전 [1,5,10,50,100,500], 금액 730\n");
-    printf("    최소 동전 수: %d\n", coin_change_greedy(coins, 6, 730));
+    printf("    Coins: [1,5,10,50,100,500], Amount: 730\n");
+    printf("    Minimum coins: %d\n", coin_change_greedy(coins, 6, 730));
 
-    /* 5. 회의실 배정 */
-    printf("\n[5] 최소 회의실 수\n");
+    /* 5. Meeting Rooms */
+    printf("\n[5] Minimum Meeting Rooms\n");
     int starts[] = {0, 5, 15};
     int ends[] = {30, 10, 20};
-    printf("    회의: (0-30), (5-10), (15-20)\n");
-    printf("    필요 회의실: %d개\n", min_meeting_rooms(starts, ends, 3));
+    printf("    Meetings: (0-30), (5-10), (15-20)\n");
+    printf("    Rooms needed: %d\n", min_meeting_rooms(starts, ends, 3));
 
-    /* 6. 점프 게임 */
-    printf("\n[6] 점프 게임\n");
+    /* 6. Jump Game */
+    printf("\n[6] Jump Game\n");
     int nums1[] = {2, 3, 1, 1, 4};
     int nums2[] = {3, 2, 1, 0, 4};
-    printf("    [2,3,1,1,4]: 도달=%s, 최소점프=%d\n",
-           can_jump(nums1, 5) ? "가능" : "불가", min_jumps(nums1, 5));
-    printf("    [3,2,1,0,4]: 도달=%s\n", can_jump(nums2, 5) ? "가능" : "불가");
+    printf("    [2,3,1,1,4]: reachable=%s, min_jumps=%d\n",
+           can_jump(nums1, 5) ? "yes" : "no", min_jumps(nums1, 5));
+    printf("    [3,2,1,0,4]: reachable=%s\n", can_jump(nums2, 5) ? "yes" : "no");
 
     printf("\n============================================================\n");
 

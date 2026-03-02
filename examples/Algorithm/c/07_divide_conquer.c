@@ -1,8 +1,8 @@
 /*
- * 분할 정복 (Divide and Conquer)
+ * Divide and Conquer
  * Merge Sort, Quick Sort, Fast Exponentiation, Closest Pair
  *
- * 문제를 작은 부분으로 나누어 해결하는 기법입니다.
+ * A technique for solving problems by dividing them into smaller subproblems.
  */
 
 #include <stdio.h>
@@ -11,7 +11,7 @@
 #include <float.h>
 
 /* =============================================================================
- * 1. 병합 정렬
+ * 1. Merge Sort
  * ============================================================================= */
 
 void merge(int arr[], int left, int mid, int right) {
@@ -51,7 +51,7 @@ void merge_sort(int arr[], int left, int right) {
 }
 
 /* =============================================================================
- * 2. 퀵 정렬
+ * 2. Quick Sort
  * ============================================================================= */
 
 void swap(int* a, int* b) {
@@ -83,7 +83,7 @@ void quick_sort(int arr[], int low, int high) {
 }
 
 /* =============================================================================
- * 3. 빠른 거듭제곱
+ * 3. Fast Exponentiation
  * ============================================================================= */
 
 long long power(long long base, long long exp, long long mod) {
@@ -100,7 +100,7 @@ long long power(long long base, long long exp, long long mod) {
     return result;
 }
 
-/* 행렬 거듭제곱 */
+/* Matrix exponentiation */
 typedef struct {
     long long a[2][2];
 } Matrix;
@@ -120,7 +120,7 @@ Matrix matrix_multiply(Matrix A, Matrix B, long long mod) {
 }
 
 Matrix matrix_power(Matrix M, long long n, long long mod) {
-    Matrix result = {{{1, 0}, {0, 1}}};  /* 단위 행렬 */
+    Matrix result = {{{1, 0}, {0, 1}}};  /* Identity matrix */
 
     while (n > 0) {
         if (n & 1)
@@ -132,7 +132,7 @@ Matrix matrix_power(Matrix M, long long n, long long mod) {
     return result;
 }
 
-/* 피보나치 O(log n) */
+/* Fibonacci O(log n) */
 long long fibonacci_matrix(long long n, long long mod) {
     if (n <= 1) return n;
 
@@ -143,7 +143,7 @@ long long fibonacci_matrix(long long n, long long mod) {
 }
 
 /* =============================================================================
- * 4. 가장 가까운 점 쌍
+ * 4. Closest Pair of Points
  * ============================================================================= */
 
 typedef struct {
@@ -227,7 +227,7 @@ double closest_pair(Point points[], int n) {
 }
 
 /* =============================================================================
- * 5. 역순 쌍 개수 (Inversion Count)
+ * 5. Inversion Count
  * ============================================================================= */
 
 long long merge_count(int arr[], int temp[], int left, int mid, int right) {
@@ -273,7 +273,7 @@ long long count_inversions(int arr[], int n) {
 }
 
 /* =============================================================================
- * 6. 카라츠바 곱셈
+ * 6. Karatsuba Multiplication
  * ============================================================================= */
 
 long long karatsuba(long long x, long long y) {
@@ -304,7 +304,7 @@ long long karatsuba(long long x, long long y) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -318,63 +318,63 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("분할 정복 (Divide and Conquer) 예제\n");
+    printf("Divide and Conquer Examples\n");
     printf("============================================================\n");
 
-    /* 1. 병합 정렬 */
-    printf("\n[1] 병합 정렬\n");
+    /* 1. Merge Sort */
+    printf("\n[1] Merge Sort\n");
     int arr1[] = {38, 27, 43, 3, 9, 82, 10};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr1, 7);
     merge_sort(arr1, 0, 6);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr1, 7);
 
-    /* 2. 퀵 정렬 */
-    printf("\n[2] 퀵 정렬\n");
+    /* 2. Quick Sort */
+    printf("\n[2] Quick Sort\n");
     int arr2[] = {10, 7, 8, 9, 1, 5};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr2, 6);
     quick_sort(arr2, 0, 5);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr2, 6);
 
-    /* 3. 빠른 거듭제곱 */
-    printf("\n[3] 빠른 거듭제곱\n");
+    /* 3. Fast Exponentiation */
+    printf("\n[3] Fast Exponentiation\n");
     printf("    2^10 mod 1000 = %lld\n", power(2, 10, 1000));
     printf("    3^20 mod 1000000007 = %lld\n", power(3, 20, 1000000007));
 
-    /* 4. 행렬 거듭제곱 - 피보나치 */
-    printf("\n[4] 행렬 거듭제곱 - 피보나치\n");
+    /* 4. Matrix Exponentiation - Fibonacci */
+    printf("\n[4] Matrix Exponentiation - Fibonacci\n");
     printf("    fib(10) = %lld\n", fibonacci_matrix(10, 1000000007));
     printf("    fib(50) = %lld\n", fibonacci_matrix(50, 1000000007));
 
-    /* 5. 가장 가까운 점 쌍 */
-    printf("\n[5] 가장 가까운 점 쌍\n");
+    /* 5. Closest Pair of Points */
+    printf("\n[5] Closest Pair of Points\n");
     Point points[] = {{2, 3}, {12, 30}, {40, 50}, {5, 1}, {12, 10}, {3, 4}};
-    printf("    점들: (2,3), (12,30), (40,50), (5,1), (12,10), (3,4)\n");
-    printf("    최소 거리: %.4f\n", closest_pair(points, 6));
+    printf("    Points: (2,3), (12,30), (40,50), (5,1), (12,10), (3,4)\n");
+    printf("    Minimum distance: %.4f\n", closest_pair(points, 6));
 
-    /* 6. 역순 쌍 개수 */
-    printf("\n[6] 역순 쌍 개수\n");
+    /* 6. Inversion Count */
+    printf("\n[6] Inversion Count\n");
     int arr6[] = {8, 4, 2, 1};
-    printf("    배열: [8, 4, 2, 1]\n");
-    printf("    역순 쌍: %lld\n", count_inversions(arr6, 4));
+    printf("    Array: [8, 4, 2, 1]\n");
+    printf("    Inversions: %lld\n", count_inversions(arr6, 4));
 
-    /* 7. 카라츠바 곱셈 */
-    printf("\n[7] 카라츠바 곱셈\n");
-    printf("    1234 × 5678 = %lld\n", karatsuba(1234, 5678));
-    printf("    검증: %lld\n", (long long)1234 * 5678);
+    /* 7. Karatsuba Multiplication */
+    printf("\n[7] Karatsuba Multiplication\n");
+    printf("    1234 x 5678 = %lld\n", karatsuba(1234, 5678));
+    printf("    Verification: %lld\n", (long long)1234 * 5678);
 
-    /* 8. 알고리즘 요약 */
-    printf("\n[8] 분할 정복 요약\n");
-    printf("    | 알고리즘      | 시간 복잡도   | 분할 방식        |\n");
-    printf("    |---------------|---------------|------------------|\n");
-    printf("    | 병합 정렬     | O(n log n)    | 반씩 분할        |\n");
-    printf("    | 퀵 정렬       | O(n log n)    | 피벗 기준 분할   |\n");
-    printf("    | 거듭제곱      | O(log n)      | 지수 반감        |\n");
-    printf("    | 가장 가까운 쌍| O(n log n)    | 좌표 기준 분할   |\n");
-    printf("    | 역순 쌍 개수  | O(n log n)    | 병합 시 계산     |\n");
+    /* 8. Algorithm Summary */
+    printf("\n[8] Divide and Conquer Summary\n");
+    printf("    | Algorithm       | Time Complexity | Division Method    |\n");
+    printf("    |-----------------|-----------------|--------------------|\n");
+    printf("    | Merge Sort      | O(n log n)      | Split in half      |\n");
+    printf("    | Quick Sort      | O(n log n)      | Pivot-based split  |\n");
+    printf("    | Exponentiation  | O(log n)        | Halve exponent     |\n");
+    printf("    | Closest Pair    | O(n log n)      | Coordinate split   |\n");
+    printf("    | Inversion Count | O(n log n)      | Count during merge |\n");
 
     printf("\n============================================================\n");
 

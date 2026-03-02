@@ -1,107 +1,107 @@
 # Makefile for Hash Table Project
-# 해시 테이블 프로젝트 빌드 파일
+# Hash Table Project Build File
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -O2
 DEBUG_FLAGS = -g -DDEBUG
 
-# 타겟 실행 파일
+# Target executables
 TARGETS = hash_functions hash_chaining hash_linear_probing dictionary
 
-# 기본 타겟: 모든 프로그램 컴파일
+# Default target: compile all programs
 all: $(TARGETS)
 
-# 개별 프로그램 컴파일
+# Individual program compilation
 hash_functions: hash_functions.c
 	$(CC) $(CFLAGS) -o $@ $<
-	@echo "✓ hash_functions 컴파일 완료"
+	@echo "✓ hash_functions compilation complete"
 
 hash_chaining: hash_chaining.c
 	$(CC) $(CFLAGS) -o $@ $<
-	@echo "✓ hash_chaining 컴파일 완료"
+	@echo "✓ hash_chaining compilation complete"
 
 hash_linear_probing: hash_linear_probing.c
 	$(CC) $(CFLAGS) -o $@ $<
-	@echo "✓ hash_linear_probing 컴파일 완료"
+	@echo "✓ hash_linear_probing compilation complete"
 
 dictionary: dictionary.c
 	$(CC) $(CFLAGS) -o $@ $<
-	@echo "✓ dictionary 컴파일 완료"
+	@echo "✓ dictionary compilation complete"
 
-# 디버그 버전 컴파일
+# Compile debug version
 debug: CFLAGS += $(DEBUG_FLAGS)
 debug: clean all
-	@echo "✓ 디버그 버전으로 컴파일 완료"
+	@echo "✓ Compiled in debug mode"
 
-# 실행 타겟
+# Run targets
 run_functions: hash_functions
-	@echo "=== 해시 함수 비교 실행 ==="
+	@echo "=== Running Hash Function Comparison ==="
 	./hash_functions
 
 run_chaining: hash_chaining
-	@echo "=== 체이닝 해시 테이블 실행 ==="
+	@echo "=== Running Chaining Hash Table ==="
 	./hash_chaining
 
 run_probing: hash_linear_probing
-	@echo "=== 선형 탐사 해시 테이블 실행 ==="
+	@echo "=== Running Linear Probing Hash Table ==="
 	./hash_linear_probing
 
 run_dict: dictionary
-	@echo "=== 사전 프로그램 실행 ==="
+	@echo "=== Running Dictionary Program ==="
 	./dictionary
 
-# 모든 프로그램 순차 실행 (테스트용)
+# Run all programs sequentially (for testing)
 test: all
-	@echo "\n[1/4] 해시 함수 비교 테스트"
+	@echo "\n[1/4] Hash Function Comparison Test"
 	@./hash_functions | head -50
-	@echo "\n[2/4] 체이닝 테스트"
+	@echo "\n[2/4] Chaining Test"
 	@./hash_chaining | head -30
-	@echo "\n[3/4] 선형 탐사 테스트"
+	@echo "\n[3/4] Linear Probing Test"
 	@./hash_linear_probing | head -30
-	@echo "\n[4/4] 모든 테스트 완료"
+	@echo "\n[4/4] All Tests Complete"
 
-# 정리
+# Clean up
 clean:
 	rm -f $(TARGETS)
 	rm -f *.o
 	rm -f dictionary.txt
-	@echo "✓ 생성된 파일 삭제 완료"
+	@echo "✓ Generated files deleted"
 
-# 코드 품질 검사 (정적 분석)
+# Code quality check (static analysis)
 check:
-	@echo "=== 코드 품질 검사 ==="
+	@echo "=== Code Quality Check ==="
 	@for file in *.c; do \
 		echo "Checking $$file..."; \
 		$(CC) $(CFLAGS) -fsyntax-only $$file; \
 	done
-	@echo "✓ 모든 파일 문법 검사 완료"
+	@echo "✓ All files syntax check complete"
 
-# 메모리 누수 검사 (valgrind 필요)
+# Memory leak check (requires valgrind)
 memcheck: all
-	@echo "=== 메모리 누수 검사 (valgrind) ==="
+	@echo "=== Memory Leak Check (valgrind) ==="
 	@if command -v valgrind >/dev/null 2>&1; then \
 		valgrind --leak-check=full --show-leak-kinds=all ./hash_chaining; \
 		valgrind --leak-check=full --show-leak-kinds=all ./hash_linear_probing; \
 	else \
-		echo "valgrind가 설치되지 않았습니다"; \
+		echo "valgrind is not installed"; \
 	fi
 
-# 도움말
+# Help
 help:
-	@echo "해시 테이블 프로젝트 Makefile"
+	@echo "Hash Table Project Makefile"
 	@echo ""
-	@echo "사용 가능한 타겟:"
-	@echo "  make              - 모든 프로그램 컴파일"
-	@echo "  make debug        - 디버그 모드로 컴파일"
-	@echo "  make clean        - 생성된 파일 삭제"
-	@echo "  make test         - 모든 프로그램 테스트 실행"
-	@echo "  make check        - 코드 품질 검사"
-	@echo "  make memcheck     - 메모리 누수 검사 (valgrind)"
+	@echo "Available targets:"
+	@echo "  make              - Compile all programs"
+	@echo "  make debug        - Compile in debug mode"
+	@echo "  make clean        - Delete generated files"
+	@echo "  make test         - Run all program tests"
+	@echo "  make check        - Code quality check"
+	@echo "  make memcheck     - Memory leak check (valgrind)"
 	@echo ""
-	@echo "개별 실행:"
-	@echo "  make run_functions  - 해시 함수 비교 실행"
-	@echo "  make run_chaining   - 체이닝 해시 테이블 실행"
-	@echo "  make run_probing    - 선형 탐사 해시 테이블 실행"
-	@echo "  make run_dict       - 사전 프로그램 실행"
+	@echo "Run individually:"
+	@echo "  make run_functions  - Run hash function comparison"
+	@echo "  make run_chaining   - Run chaining hash table"
+	@echo "  make run_probing    - Run linear probing hash table"
+	@echo "  make run_dict       - Run dictionary program"
 
 .PHONY: all debug clean test check memcheck help run_functions run_chaining run_probing run_dict

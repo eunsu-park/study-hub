@@ -1,8 +1,8 @@
 /*
- * 정수론 (Number Theory)
- * GCD/LCM, 소수, 모듈러 연산, 조합론
+ * Number Theory
+ * GCD/LCM, Primes, Modular Arithmetic, Combinatorics
  *
- * 수학적 알고리즘의 기초입니다.
+ * Foundations of mathematical algorithms.
  */
 
 #include <stdio.h>
@@ -36,7 +36,7 @@ long long lcm(long long a, long long b) {
     return a / gcd(a, b) * b;
 }
 
-/* 확장 유클리드 알고리즘: ax + by = gcd(a, b) */
+/* Extended Euclidean Algorithm: ax + by = gcd(a, b) */
 long long extended_gcd(long long a, long long b, long long* x, long long* y) {
     if (b == 0) {
         *x = 1;
@@ -51,7 +51,7 @@ long long extended_gcd(long long a, long long b, long long* x, long long* y) {
 }
 
 /* =============================================================================
- * 2. 소수 판별 및 체
+ * 2. Primality Test and Sieves
  * ============================================================================= */
 
 bool is_prime(long long n) {
@@ -64,7 +64,7 @@ bool is_prime(long long n) {
     return true;
 }
 
-/* 에라토스테네스의 체 */
+/* Sieve of Eratosthenes */
 bool* sieve_of_eratosthenes(int n) {
     bool* is_prime_arr = malloc((n + 1) * sizeof(bool));
     memset(is_prime_arr, true, n + 1);
@@ -80,7 +80,7 @@ bool* sieve_of_eratosthenes(int n) {
     return is_prime_arr;
 }
 
-/* 선형 체 (소수 목록 생성) */
+/* Linear Sieve (generates prime list) */
 int* linear_sieve(int n, int* prime_count) {
     int* spf = calloc(n + 1, sizeof(int));  /* smallest prime factor */
     int* primes = malloc((n + 1) * sizeof(int));
@@ -100,7 +100,7 @@ int* linear_sieve(int n, int* prime_count) {
     return primes;
 }
 
-/* 소인수분해 */
+/* Prime Factorization */
 typedef struct {
     int prime;
     int count;
@@ -128,7 +128,7 @@ int factorize(long long n, PrimeFactor factors[]) {
 }
 
 /* =============================================================================
- * 3. 모듈러 연산
+ * 3. Modular Arithmetic
  * ============================================================================= */
 
 long long mod_add(long long a, long long b, long long mod) {
@@ -143,7 +143,7 @@ long long mod_mul(long long a, long long b, long long mod) {
     return ((a % mod) * (b % mod)) % mod;
 }
 
-/* 빠른 거듭제곱 */
+/* Fast Exponentiation */
 long long mod_pow(long long base, long long exp, long long mod) {
     long long result = 1;
     base %= mod;
@@ -157,26 +157,26 @@ long long mod_pow(long long base, long long exp, long long mod) {
     return result;
 }
 
-/* 모듈러 역원 (페르마의 소정리, mod가 소수일 때) */
+/* Modular Inverse (Fermat's Little Theorem, mod must be prime) */
 long long mod_inverse(long long a, long long mod) {
     return mod_pow(a, mod - 2, mod);
 }
 
-/* 모듈러 역원 (확장 유클리드) */
+/* Modular Inverse (Extended Euclidean) */
 long long mod_inverse_ext(long long a, long long mod) {
     long long x, y;
     long long g = extended_gcd(a, mod, &x, &y);
-    if (g != 1) return -1;  /* 역원 없음 */
+    if (g != 1) return -1;  /* No inverse */
     return (x % mod + mod) % mod;
 }
 
-/* 모듈러 나눗셈 */
+/* Modular Division */
 long long mod_div(long long a, long long b, long long mod) {
     return mod_mul(a, mod_inverse(b, mod), mod);
 }
 
 /* =============================================================================
- * 4. 조합론 (Combinatorics)
+ * 4. Combinatorics
  * ============================================================================= */
 
 long long factorial[MAX_N];
@@ -205,7 +205,7 @@ long long nPr(int n, int r, long long mod) {
     return mod_mul(factorial[n], inv_factorial[n - r], mod);
 }
 
-/* 파스칼의 삼각형 (작은 n용) */
+/* Pascal's Triangle (for small n) */
 long long** pascal_triangle(int n) {
     long long** C = malloc((n + 1) * sizeof(long long*));
     for (int i = 0; i <= n; i++) {
@@ -219,7 +219,7 @@ long long** pascal_triangle(int n) {
 }
 
 /* =============================================================================
- * 5. 오일러 피 함수
+ * 5. Euler's Totient Function
  * ============================================================================= */
 
 long long euler_phi(long long n) {
@@ -234,7 +234,7 @@ long long euler_phi(long long n) {
     return result;
 }
 
-/* 오일러 피 체 */
+/* Euler Totient Sieve */
 int* euler_phi_sieve(int n) {
     int* phi = malloc((n + 1) * sizeof(int));
     for (int i = 0; i <= n; i++) phi[i] = i;
@@ -250,15 +250,15 @@ int* euler_phi_sieve(int n) {
 }
 
 /* =============================================================================
- * 6. 중국인의 나머지 정리 (CRT)
+ * 6. Chinese Remainder Theorem (CRT)
  * ============================================================================= */
 
-/* x ≡ a1 (mod m1), x ≡ a2 (mod m2) */
+/* x = a1 (mod m1), x = a2 (mod m2) */
 long long crt_two(long long a1, long long m1, long long a2, long long m2) {
     long long x, y;
     long long g = extended_gcd(m1, m2, &x, &y);
 
-    if ((a2 - a1) % g != 0) return -1;  /* 해 없음 */
+    if ((a2 - a1) % g != 0) return -1;  /* No solution */
 
     long long lcm_val = m1 / g * m2;
     long long result = a1 + m1 * ((a2 - a1) / g % (m2 / g) * x % (m2 / g));
@@ -266,7 +266,7 @@ long long crt_two(long long a1, long long m1, long long a2, long long m2) {
 }
 
 /* =============================================================================
- * 7. 약수 관련
+ * 7. Divisors
  * ============================================================================= */
 
 int count_divisors(long long n) {
@@ -304,7 +304,7 @@ int* get_divisors(long long n, int* count) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int compare_int(const void* a, const void* b) {
@@ -313,7 +313,7 @@ int compare_int(const void* a, const void* b) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("정수론 (Number Theory) 예제\n");
+    printf("Number Theory Examples\n");
     printf("============================================================\n");
 
     /* 1. GCD / LCM */
@@ -325,69 +325,69 @@ int main(void) {
     long long g = extended_gcd(35, 15, &x, &y);
     printf("    35*%lld + 15*%lld = %lld (gcd)\n", x, y, g);
 
-    /* 2. 소수 */
-    printf("\n[2] 소수 판별 및 체\n");
+    /* 2. Primes */
+    printf("\n[2] Primality Test and Sieves\n");
     printf("    is_prime(17) = %s\n", is_prime(17) ? "true" : "false");
     printf("    is_prime(18) = %s\n", is_prime(18) ? "true" : "false");
 
     int prime_count;
     int* primes = linear_sieve(50, &prime_count);
-    printf("    50 이하 소수 (%d개): ", prime_count);
+    printf("    Primes up to 50 (%d total): ", prime_count);
     for (int i = 0; i < prime_count; i++) printf("%d ", primes[i]);
     printf("\n");
     free(primes);
 
-    /* 3. 소인수분해 */
-    printf("\n[3] 소인수분해\n");
+    /* 3. Prime Factorization */
+    printf("\n[3] Prime Factorization\n");
     PrimeFactor factors[20];
     int factor_count = factorize(360, factors);
     printf("    360 = ");
     for (int i = 0; i < factor_count; i++) {
         printf("%d^%d", factors[i].prime, factors[i].count);
-        if (i < factor_count - 1) printf(" × ");
+        if (i < factor_count - 1) printf(" * ");
     }
     printf("\n");
 
-    /* 4. 모듈러 연산 */
-    printf("\n[4] 모듈러 연산\n");
+    /* 4. Modular Arithmetic */
+    printf("\n[4] Modular Arithmetic\n");
     printf("    2^10 mod 1000 = %lld\n", mod_pow(2, 10, 1000));
     printf("    3^(-1) mod 7 = %lld\n", mod_inverse(3, 7));
-    printf("    검증: 3 × %lld mod 7 = %lld\n", mod_inverse(3, 7),
+    printf("    Verify: 3 * %lld mod 7 = %lld\n", mod_inverse(3, 7),
            mod_mul(3, mod_inverse(3, 7), 7));
 
-    /* 5. 조합론 */
-    printf("\n[5] 조합론\n");
+    /* 5. Combinatorics */
+    printf("\n[5] Combinatorics\n");
     precompute_factorials(1000, MOD);
     printf("    10! = %lld\n", factorial[10]);
     printf("    C(10, 3) = %lld\n", nCr(10, 3, MOD));
     printf("    P(10, 3) = %lld\n", nPr(10, 3, MOD));
 
-    /* 6. 오일러 피 */
-    printf("\n[6] 오일러 피 함수\n");
-    printf("    φ(12) = %lld\n", euler_phi(12));
-    printf("    φ(13) = %lld (소수)\n", euler_phi(13));
+    /* 6. Euler's Totient */
+    printf("\n[6] Euler's Totient Function\n");
+    printf("    phi(12) = %lld\n", euler_phi(12));
+    printf("    phi(13) = %lld (prime)\n", euler_phi(13));
 
-    /* 7. 약수 */
-    printf("\n[7] 약수\n");
-    printf("    28의 약수 개수: %d\n", count_divisors(28));
-    printf("    28의 약수 합: %lld\n", sum_divisors(28));
+    /* 7. Divisors */
+    printf("\n[7] Divisors\n");
+    printf("    Divisor count of 28: %d\n", count_divisors(28));
+    printf("    Divisor sum of 28: %lld\n", sum_divisors(28));
     int div_count;
     int* divisors = get_divisors(28, &div_count);
     qsort(divisors, div_count, sizeof(int), compare_int);
-    printf("    28의 약수: ");
+    printf("    Divisors of 28: ");
     for (int i = 0; i < div_count; i++) printf("%d ", divisors[i]);
     printf("\n");
     free(divisors);
 
-    /* 8. 복잡도 */
-    printf("\n[8] 복잡도\n");
-    printf("    | 알고리즘        | 시간복잡도    |\n");
-    printf("    |-----------------|---------------|\n");
-    printf("    | GCD (유클리드)  | O(log min)    |\n");
-    printf("    | 소수 판별       | O(√n)         |\n");
-    printf("    | 에라토스테네스  | O(n log log n)|\n");
-    printf("    | 소인수분해      | O(√n)         |\n");
-    printf("    | 거듭제곱        | O(log exp)    |\n");
+    /* 8. Complexity */
+    printf("\n[8] Complexity\n");
+    printf("    | Algorithm        | Time          |\n");
+    printf("    |------------------|---------------|\n");
+    printf("    | GCD (Euclidean)  | O(log min)    |\n");
+    printf("    | Primality test   | O(sqrt(n))    |\n");
+    printf("    | Eratosthenes     | O(n log log n)|\n");
+    printf("    | Factorization    | O(sqrt(n))    |\n");
+    printf("    | Exponentiation   | O(log exp)    |\n");
 
     printf("\n============================================================\n");
 

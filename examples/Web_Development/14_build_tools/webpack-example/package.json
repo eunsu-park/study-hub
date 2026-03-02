@@ -1,7 +1,7 @@
 {
   "name": "webpack-example",
   "version": "1.0.0",
-  "description": "Webpack 빌드 도구 예제 프로젝트",
+  "description": "Webpack build tool example project",
   "main": "src/index.js",
   "scripts": {
     "start": "webpack serve --mode development",

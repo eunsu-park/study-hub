@@ -1,8 +1,8 @@
 /*
- * 펜윅 트리 (Fenwick Tree / Binary Indexed Tree)
+ * Fenwick Tree (Binary Indexed Tree)
  * Point Update, Range Sum Query, 2D BIT
  *
- * 세그먼트 트리보다 간단하고 빠른 구간 합 자료구조입니다.
+ * A simpler and faster range sum data structure than segment tree.
  */
 
 #include <iostream>
@@ -12,7 +12,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 기본 펜윅 트리 (1-indexed)
+// 1. Basic Fenwick Tree (1-indexed)
 // =============================================================================
 
 class FenwickTree {
@@ -33,7 +33,7 @@ public:
     void update(int idx, long long delta) {
         while (idx <= n) {
             tree[idx] += delta;
-            idx += idx & (-idx);  // 다음 노드
+            idx += idx & (-idx);  // Next node
         }
     }
 
@@ -42,7 +42,7 @@ public:
         long long sum = 0;
         while (idx > 0) {
             sum += tree[idx];
-            idx -= idx & (-idx);  // 부모 노드
+            idx -= idx & (-idx);  // Parent node
         }
         return sum;
     }
@@ -54,7 +54,7 @@ public:
 };
 
 // =============================================================================
-// 2. 0-indexed 펜윅 트리
+// 2. 0-indexed Fenwick Tree
 // =============================================================================
 
 class FenwickTree0 {
@@ -87,7 +87,7 @@ public:
 };
 
 // =============================================================================
-// 3. 구간 업데이트, 점 쿼리
+// 3. Range Update, Point Query
 // =============================================================================
 
 class FenwickTreeRangeUpdate {
@@ -120,14 +120,14 @@ public:
         update(r + 1, -delta);
     }
 
-    // arr[idx]의 현재 값
+    // Current value of arr[idx]
     long long get(int idx) {
         return query(idx);
     }
 };
 
 // =============================================================================
-// 4. 구간 업데이트, 구간 쿼리
+// 4. Range Update, Range Query
 // =============================================================================
 
 class FenwickTreeRangeRange {
@@ -174,7 +174,7 @@ public:
 };
 
 // =============================================================================
-// 5. 2D 펜윅 트리
+// 5. 2D Fenwick Tree
 // =============================================================================
 
 class FenwickTree2D {
@@ -214,13 +214,13 @@ public:
 };
 
 // =============================================================================
-// 6. 역순 쌍 개수 (Inversion Count)
+// 6. Inversion Count
 // =============================================================================
 
 long long countInversions(vector<int>& arr) {
     int n = arr.size();
 
-    // 좌표 압축
+    // Coordinate compression
     vector<int> sorted = arr;
     sort(sorted.begin(), sorted.end());
     sorted.erase(unique(sorted.begin(), sorted.end()), sorted.end());
@@ -229,7 +229,7 @@ long long countInversions(vector<int>& arr) {
         x = lower_bound(sorted.begin(), sorted.end(), x) - sorted.begin() + 1;
     }
 
-    // BIT로 역순 쌍 개수
+    // Count inversions using BIT
     FenwickTree bit(sorted.size());
     long long inversions = 0;
 
@@ -242,7 +242,7 @@ long long countInversions(vector<int>& arr) {
 }
 
 // =============================================================================
-// 7. K번째 원소 찾기
+// 7. K-th Element Query
 // =============================================================================
 
 class FenwickTreeKth {
@@ -260,7 +260,7 @@ public:
         }
     }
 
-    // k번째 원소의 인덱스 (1-indexed)
+    // Index of k-th element (1-indexed)
     int kthElement(long long k) {
         int idx = 0;
         int bitMask = 1;
@@ -279,7 +279,7 @@ public:
 };
 
 // =============================================================================
-// 8. 최솟값 펜윅 트리
+// 8. Minimum Fenwick Tree
 // =============================================================================
 
 class FenwickTreeMin {
@@ -292,7 +292,7 @@ private:
 public:
     FenwickTreeMin(int n) : n(n), tree(n + 1, INF), arr(n + 1, INF) {}
 
-    // arr[idx] = val (val < 기존 값일 때만 유효)
+    // arr[idx] = val (only effective when val < current value)
     void update(int idx, int val) {
         arr[idx] = val;
         while (idx <= n) {
@@ -313,26 +313,26 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "펜윅 트리 예제" << endl;
+    cout << "Fenwick Tree Example" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 기본 펜윅 트리
-    cout << "\n[1] 기본 펜윅 트리" << endl;
+    // 1. Basic Fenwick Tree
+    cout << "\n[1] Basic Fenwick Tree" << endl;
     vector<int> arr = {1, 3, 5, 7, 9, 11};
     FenwickTree ft(arr);
-    cout << "    배열: [1, 3, 5, 7, 9, 11] (1-indexed)" << endl;
+    cout << "    Array: [1, 3, 5, 7, 9, 11] (1-indexed)" << endl;
     cout << "    sum[1, 3] = " << ft.rangeSum(1, 3) << endl;
     cout << "    sum[2, 5] = " << ft.rangeSum(2, 5) << endl;
     ft.update(3, 5);  // arr[3] += 5
-    cout << "    arr[3] += 5 후 sum[1, 3] = " << ft.rangeSum(1, 3) << endl;
+    cout << "    After arr[3] += 5, sum[1, 3] = " << ft.rangeSum(1, 3) << endl;
 
-    // 2. 구간 업데이트
-    cout << "\n[2] 구간 업데이트, 점 쿼리" << endl;
+    // 2. Range Update
+    cout << "\n[2] Range Update, Point Query" << endl;
     FenwickTreeRangeUpdate ftru(6);
     ftru.updateRange(2, 4, 10);  // arr[2..4] += 10
     cout << "    arr[2..4] += 10" << endl;
@@ -340,60 +340,60 @@ int main() {
     cout << "    arr[3] = " << ftru.get(3) << endl;
     cout << "    arr[5] = " << ftru.get(5) << endl;
 
-    // 3. 구간 업데이트, 구간 쿼리
-    cout << "\n[3] 구간 업데이트, 구간 쿼리" << endl;
+    // 3. Range Update, Range Query
+    cout << "\n[3] Range Update, Range Query" << endl;
     FenwickTreeRangeRange ftrr(6);
     ftrr.updateRange(1, 3, 5);   // arr[1..3] += 5
     ftrr.updateRange(2, 5, 10);  // arr[2..5] += 10
     cout << "    arr[1..3] += 5, arr[2..5] += 10" << endl;
     cout << "    sum[1, 6] = " << ftrr.rangeSum(1, 6) << endl;
 
-    // 4. 2D 펜윅 트리
-    cout << "\n[4] 2D 펜윅 트리" << endl;
+    // 4. 2D Fenwick Tree
+    cout << "\n[4] 2D Fenwick Tree" << endl;
     FenwickTree2D ft2d(3, 3);
     ft2d.update(1, 1, 1);
     ft2d.update(1, 2, 2);
     ft2d.update(2, 1, 3);
     ft2d.update(2, 2, 4);
-    cout << "    3x3 행렬, (1,1)=1, (1,2)=2, (2,1)=3, (2,2)=4" << endl;
+    cout << "    3x3 matrix, (1,1)=1, (1,2)=2, (2,1)=3, (2,2)=4" << endl;
     cout << "    sum[(1,1) to (2,2)] = " << ft2d.rangeSum(1, 1, 2, 2) << endl;
 
-    // 5. 역순 쌍 개수
-    cout << "\n[5] 역순 쌍 개수" << endl;
+    // 5. Inversion Count
+    cout << "\n[5] Inversion Count" << endl;
     vector<int> invArr = {8, 4, 2, 1};
-    cout << "    배열: [8, 4, 2, 1]" << endl;
-    cout << "    역순 쌍: " << countInversions(invArr) << endl;
+    cout << "    Array: [8, 4, 2, 1]" << endl;
+    cout << "    Inversions: " << countInversions(invArr) << endl;
 
-    // 6. K번째 원소
-    cout << "\n[6] K번째 원소" << endl;
+    // 6. K-th Element
+    cout << "\n[6] K-th Element" << endl;
     FenwickTreeKth ftkth(10);
-    ftkth.update(2, 1);  // 2 추가
-    ftkth.update(5, 1);  // 5 추가
-    ftkth.update(7, 1);  // 7 추가
-    cout << "    집합: {2, 5, 7}" << endl;
-    cout << "    1번째 원소: " << ftkth.kthElement(1) << endl;
-    cout << "    2번째 원소: " << ftkth.kthElement(2) << endl;
-    cout << "    3번째 원소: " << ftkth.kthElement(3) << endl;
+    ftkth.update(2, 1);  // Add 2
+    ftkth.update(5, 1);  // Add 5
+    ftkth.update(7, 1);  // Add 7
+    cout << "    Set: {2, 5, 7}" << endl;
+    cout << "    1st element: " << ftkth.kthElement(1) << endl;
+    cout << "    2nd element: " << ftkth.kthElement(2) << endl;
+    cout << "    3rd element: " << ftkth.kthElement(3) << endl;
 
-    // 7. 세그먼트 트리 vs 펜윅 트리
-    cout << "\n[7] 세그먼트 트리 vs 펜윅 트리" << endl;
-    cout << "    | 기준           | 세그먼트 트리    | 펜윅 트리       |" << endl;
+    // 7. Segment Tree vs Fenwick Tree
+    cout << "\n[7] Segment Tree vs Fenwick Tree" << endl;
+    cout << "    | Criterion      | Segment Tree     | Fenwick Tree    |" << endl;
     cout << "    |----------------|------------------|-----------------|" << endl;
-    cout << "    | 구현 복잡도    | 중간             | 낮음            |" << endl;
-    cout << "    | 메모리         | 4N               | N               |" << endl;
-    cout << "    | 상수 계수      | 크다             | 작다            |" << endl;
-    cout << "    | 지원 연산      | 다양             | 제한적          |" << endl;
-    cout << "    | Lazy 지원      | O                | 복잡            |" << endl;
+    cout << "    | Implementation | Medium           | Simple          |" << endl;
+    cout << "    | Memory         | 4N               | N               |" << endl;
+    cout << "    | Constant factor| Large            | Small           |" << endl;
+    cout << "    | Operations     | Versatile        | Limited         |" << endl;
+    cout << "    | Lazy support   | Yes              | Complex         |" << endl;
 
-    // 8. 복잡도 요약
-    cout << "\n[8] 복잡도 요약" << endl;
-    cout << "    | 연산           | 시간복잡도 | 공간복잡도 |" << endl;
+    // 8. Complexity Summary
+    cout << "\n[8] Complexity Summary" << endl;
+    cout << "    | Operation      | Time       | Space      |" << endl;
     cout << "    |----------------|------------|------------|" << endl;
-    cout << "    | 점 업데이트    | O(log n)   | O(1)       |" << endl;
-    cout << "    | 구간 합        | O(log n)   | O(1)       |" << endl;
-    cout << "    | 구간 업데이트  | O(log n)   | O(n)       |" << endl;
-    cout << "    | 2D 쿼리        | O(log² n)  | O(nm)      |" << endl;
-    cout << "    | K번째 원소     | O(log n)   | O(1)       |" << endl;
+    cout << "    | Point update   | O(log n)   | O(1)       |" << endl;
+    cout << "    | Range sum      | O(log n)   | O(1)       |" << endl;
+    cout << "    | Range update   | O(log n)   | O(n)       |" << endl;
+    cout << "    | 2D query       | O(log^2 n) | O(nm)      |" << endl;
+    cout << "    | K-th element   | O(log n)   | O(1)       |" << endl;
 
     cout << "\n============================================================" << endl;
 

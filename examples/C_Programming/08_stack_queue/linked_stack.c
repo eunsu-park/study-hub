@@ -1,24 +1,24 @@
 // linked_stack.c
-// 연결 리스트 기반 스택 구현
-// 동적 메모리 할당으로 크기 제한 없음
+// Linked list-based stack implementation
+// No size limit thanks to dynamic memory allocation
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
-// 노드 구조체
+// Node struct
 typedef struct Node {
     int data;
     struct Node *next;
 } Node;
 
-// 스택 구조체
+// Stack struct
 typedef struct {
     Node *top;
     int size;
 } LinkedStack;
 
-// 스택 생성
+// Create stack
 LinkedStack* lstack_create(void) {
     LinkedStack *s = malloc(sizeof(LinkedStack));
     if (s) {
@@ -28,7 +28,7 @@ LinkedStack* lstack_create(void) {
     return s;
 }
 
-// 스택 해제 (모든 메모리 해제)
+// Destroy stack (free all memory)
 // Why: every malloc must have a matching free — without this traversal-and-free,
 // every remaining node would be a memory leak (N nodes = N leaks)
 void lstack_destroy(LinkedStack *s) {
@@ -41,29 +41,29 @@ void lstack_destroy(LinkedStack *s) {
     free(s);
 }
 
-// 비어있는지 확인
+// Check if empty
 bool lstack_isEmpty(LinkedStack *s) {
     return s->top == NULL;
 }
 
-// Push - 맨 위에 요소 추가 (O(1))
+// Push - add element to the top (O(1))
 // Why: linked-list stack has no capacity limit unlike array-based stacks — each
 // push is a single malloc, so the only limit is available heap memory
 bool lstack_push(LinkedStack *s, int value) {
     Node *node = malloc(sizeof(Node));
     if (!node) {
-        printf("메모리 할당 실패!\n");
+        printf("Memory allocation failed!\n");
         return false;
     }
 
     node->data = value;
-    node->next = s->top;  // 새 노드가 현재 top을 가리킴
-    s->top = node;        // top을 새 노드로 갱신
+    node->next = s->top;  // New node points to current top
+    s->top = node;        // Update top to new node
     s->size++;
     return true;
 }
 
-// Pop - 맨 위 요소 제거 후 반환 (O(1))
+// Pop - remove and return top element (O(1))
 bool lstack_pop(LinkedStack *s, int *value) {
     if (lstack_isEmpty(s)) {
         printf("Stack Underflow!\n");
@@ -74,13 +74,13 @@ bool lstack_pop(LinkedStack *s, int *value) {
     // accessing node->data or node->next after free() is undefined behavior
     Node *node = s->top;
     *value = node->data;
-    s->top = node->next;  // top을 다음 노드로 이동
-    free(node);           // 제거된 노드 메모리 해제
+    s->top = node->next;  // Move top to the next node
+    free(node);           // Free the removed node's memory
     s->size--;
     return true;
 }
 
-// Peek - 맨 위 요소 확인 (제거 안함) (O(1))
+// Peek - view top element without removing (O(1))
 bool lstack_peek(LinkedStack *s, int *value) {
     if (lstack_isEmpty(s)) {
         return false;
@@ -89,7 +89,7 @@ bool lstack_peek(LinkedStack *s, int *value) {
     return true;
 }
 
-// 스택 출력 (top부터 bottom까지)
+// Print stack (from top to bottom)
 void lstack_print(LinkedStack *s) {
     printf("Stack (size=%d): ", s->size);
     Node *current = s->top;
@@ -97,65 +97,65 @@ void lstack_print(LinkedStack *s) {
         printf("%d ", current->data);
         current = current->next;
     }
-    printf("(top → bottom)\n");
+    printf("(top -> bottom)\n");
 }
 
-// 스택 크기 반환
+// Return stack size
 int lstack_size(LinkedStack *s) {
     return s->size;
 }
 
-// 테스트 코드
+// Test code
 int main(void) {
     LinkedStack *s = lstack_create();
     if (!s) {
-        printf("스택 생성 실패!\n");
+        printf("Failed to create stack!\n");
         return 1;
     }
 
-    printf("=== 연결 리스트 기반 스택 테스트 ===\n\n");
+    printf("=== Linked List-Based Stack Test ===\n\n");
 
-    // Push 테스트
-    printf("[ Push 연산 ]\n");
+    // Push test
+    printf("[ Push Operations ]\n");
     for (int i = 1; i <= 5; i++) {
         printf("Push %d -> ", i * 10);
         lstack_push(s, i * 10);
         lstack_print(s);
     }
 
-    // Peek 테스트
-    printf("\n[ Peek 연산 ]\n");
+    // Peek test
+    printf("\n[ Peek Operation ]\n");
     int top;
     if (lstack_peek(s, &top)) {
-        printf("Top 값: %d (스택은 변경 안됨)\n", top);
+        printf("Top value: %d (stack unchanged)\n", top);
         lstack_print(s);
     }
 
-    // Pop 테스트
-    printf("\n[ Pop 연산 ]\n");
+    // Pop test
+    printf("\n[ Pop Operations ]\n");
     int value;
     while (lstack_pop(s, &value)) {
         printf("Popped: %d, ", value);
         lstack_print(s);
     }
 
-    // Underflow 테스트
-    printf("\n[ Underflow 테스트 ]\n");
-    printf("빈 스택에서 Pop 시도: ");
+    // Underflow test
+    printf("\n[ Underflow Test ]\n");
+    printf("Attempting Pop on empty stack: ");
     lstack_pop(s, &value);
 
-    // 대량 삽입 테스트 (동적 할당의 장점)
-    printf("\n[ 대량 삽입 테스트 ]\n");
-    printf("10000개 요소 삽입 중...\n");
+    // Bulk insertion test (advantage of dynamic allocation)
+    printf("\n[ Bulk Insertion Test ]\n");
+    printf("Inserting 10000 elements...\n");
     for (int i = 0; i < 10000; i++) {
         lstack_push(s, i);
     }
-    printf("삽입 완료! 현재 크기: %d\n", lstack_size(s));
+    printf("Insertion complete! Current size: %d\n", lstack_size(s));
 
-    // 메모리 정리
-    printf("\n메모리 해제 중...\n");
+    // Memory cleanup
+    printf("\nFreeing memory...\n");
     lstack_destroy(s);
-    printf("스택 해제 완료!\n");
+    printf("Stack destroyed!\n");
 
     return 0;
 }

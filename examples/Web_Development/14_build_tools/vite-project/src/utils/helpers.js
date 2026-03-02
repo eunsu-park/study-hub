@@ -1,11 +1,11 @@
 /**
- * 유틸리티 함수
+ * Utility Functions
  */
 
 // Why: Intl.DateTimeFormat handles locale-aware formatting (month names, ordering) without
 // manual string manipulation, and is natively supported in all modern browsers
 export function formatDate(date) {
-    return new Intl.DateTimeFormat('ko-KR', {
+    return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',

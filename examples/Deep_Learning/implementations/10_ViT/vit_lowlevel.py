@@ -1,8 +1,8 @@
 """
-PyTorch Low-Level Vision Transformer (ViT) 구현
+PyTorch Low-Level Vision Transformer (ViT) Implementation
 
-nn.TransformerEncoder 미사용
-패치 임베딩부터 직접 구현
+Does not use nn.TransformerEncoder.
+Implements patch embedding from scratch.
 """
 
 import torch
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ViTConfig:
-    """ViT 설정"""
+    """ViT Configuration"""
     image_size: int = 224
     patch_size: int = 16
     in_channels: int = 3
@@ -30,9 +30,9 @@ class ViTConfig:
 
 class PatchEmbedding(nn.Module):
     """
-    이미지 → 패치 → 임베딩
+    Image -> Patches -> Embeddings
 
-    (B, C, H, W) → (B, N, D)
+    (B, C, H, W) -> (B, N, D)
     """
 
     def __init__(
@@ -47,8 +47,8 @@ class PatchEmbedding(nn.Module):
         self.patch_size = patch_size
         self.num_patches = (image_size // patch_size) ** 2
 
-        # Linear projection (Conv2d로 효율적 구현)
-        # kernel_size = stride = patch_size → 겹치지 않는 패치
+        # Linear projection (efficient implementation via Conv2d)
+        # kernel_size = stride = patch_size -> non-overlapping patches
         self.projection = nn.Conv2d(
             in_channels, hidden_size,
             kernel_size=patch_size, stride=patch_size
@@ -62,10 +62,10 @@ class PatchEmbedding(nn.Module):
         Returns:
             patches: (B, N, D) where N = num_patches
         """
-        # (B, C, H, W) → (B, D, H/P, W/P)
+        # (B, C, H, W) -> (B, D, H/P, W/P)
         x = self.projection(x)
 
-        # (B, D, H', W') → (B, D, N) → (B, N, D)
+        # (B, D, H', W') -> (B, D, N) -> (B, N, D)
         x = x.flatten(2).transpose(1, 2)
 
         return x
@@ -87,7 +87,7 @@ class MultiHeadAttention(nn.Module):
         self.head_dim = hidden_size // num_heads
         self.scale = self.head_dim ** -0.5
 
-        # QKV를 하나의 projection으로
+        # QKV in a single projection
         self.qkv = nn.Linear(hidden_size, hidden_size * 3)
         self.attn_dropout = nn.Dropout(dropout)
         self.proj = nn.Linear(hidden_size, hidden_size)
@@ -104,7 +104,7 @@ class MultiHeadAttention(nn.Module):
         """
         B, N, D = x.shape
 
-        # QKV 계산: (B, N, 3D)
+        # QKV computation: (B, N, 3D)
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, head_dim)
         q, k, v = qkv[0], qkv[1], qkv[2]
@@ -246,13 +246,13 @@ class VisionTransformer(nn.Module):
         return_all_tokens: bool = False,
         return_attention: bool = False
     ):
-        """특징 추출 (분류 헤드 전)"""
+        """Feature extraction (before classification head)"""
         B = x.shape[0]
 
         # Patch embedding: (B, N, D)
         x = self.patch_embed(x)
 
-        # [CLS] token 추가: (B, N+1, D)
+        # Add [CLS] token: (B, N+1, D)
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
 
@@ -273,11 +273,11 @@ class VisionTransformer(nn.Module):
         if return_all_tokens:
             return x, attentions
 
-        # [CLS] token만 반환
+        # Return only [CLS] token
         return x[:, 0], attentions
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """분류"""
+        """Classification"""
         features, _ = self.forward_features(x)
         return self.head(features)
 
@@ -306,35 +306,35 @@ class ViTForImageClassification(nn.Module):
         }
 
 
-# Attention 시각화
+# Attention visualization
 def visualize_attention(
     model: VisionTransformer,
     image: torch.Tensor,
     layer_idx: int = -1,
     head_idx: int = 0
 ):
-    """Attention map 시각화"""
+    """Visualize attention maps"""
     import matplotlib.pyplot as plt
 
     model.eval()
     with torch.no_grad():
         _, attentions = model.forward_features(image, return_attention=True)
 
-    # 특정 레이어의 attention
+    # Attention from specific layer
     attn = attentions[layer_idx]  # (B, H, N, N)
     attn = attn[0, head_idx]      # (N, N)
 
-    # [CLS] token의 attention (다른 패치에 대한)
+    # [CLS] token's attention (to other patches)
     cls_attn = attn[0, 1:]  # (N-1,)
 
-    # 2D로 reshape
+    # Reshape to 2D
     num_patches = int(cls_attn.shape[0] ** 0.5)
     cls_attn = cls_attn.reshape(num_patches, num_patches)
 
-    # 시각화
+    # Visualization
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
-    # 원본 이미지
+    # Original image
     img = image[0].permute(1, 2, 0).cpu()
     img = (img - img.min()) / (img.max() - img.min())
     axes[0].imshow(img)
@@ -347,11 +347,12 @@ def visualize_attention(
     axes[1].axis('off')
 
     plt.tight_layout()
-    plt.savefig('vit_attention.png')
+    plt.savefig('vit_attention.png', dpi=150)
+    plt.close()
     print("Saved vit_attention.png")
 
 
-# 다양한 크기의 ViT 설정
+# Various ViT size configurations
 def vit_tiny():
     return ViTConfig(hidden_size=192, num_layers=12, num_heads=3)
 
@@ -365,23 +366,23 @@ def vit_large():
     return ViTConfig(hidden_size=1024, num_layers=24, num_heads=16)
 
 
-# 테스트
+# Test
 if __name__ == "__main__":
     print("=== Vision Transformer Low-Level Implementation ===\n")
 
-    # ViT-Base 설정
+    # ViT-Base configuration
     config = vit_base()
     print(f"Config: {config}\n")
 
-    # 모델 생성
+    # Create model
     model = VisionTransformer(config)
 
-    # 파라미터 수
+    # Parameter count
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:,}")
     print(f"Expected ~86M for ViT-Base/16\n")
 
-    # 테스트 입력
+    # Test input
     batch_size = 2
     x = torch.randn(batch_size, 3, 224, 224)
 
@@ -396,16 +397,16 @@ if __name__ == "__main__":
     print(f"Number of attention maps: {len(attentions)}")
     print(f"Attention shape: {attentions[0].shape}")
 
-    # Patch embedding 테스트
+    # Patch embedding test
     print("\n=== Patch Embedding Test ===")
     patch_embed = PatchEmbedding(224, 16, 3, 768)
     patches = patch_embed(x)
     print(f"Image: {x.shape}")
     print(f"Patches: {patches.shape}")
     print(f"Number of patches: {patches.shape[1]}")
-    print(f"Expected: (224/16)² = {(224//16)**2}")
+    print(f"Expected: (224/16)^2 = {(224//16)**2}")
 
-    # 다양한 크기 테스트
+    # Different sizes test
     print("\n=== Different ViT Sizes ===")
     for name, config_fn in [('Tiny', vit_tiny), ('Small', vit_small),
                              ('Base', vit_base), ('Large', vit_large)]:
@@ -413,5 +414,12 @@ if __name__ == "__main__":
         model = VisionTransformer(cfg)
         params = sum(p.numel() for p in model.parameters())
         print(f"ViT-{name}: {params/1e6:.1f}M params")
+
+    # Visualize attention map (CLS token attention over patches)
+    tiny_cfg = vit_tiny()
+    tiny_model = VisionTransformer(tiny_cfg)
+    tiny_model.eval()
+    test_img = torch.randn(1, 3, 224, 224)
+    visualize_attention(tiny_model, test_img, layer_idx=-1, head_idx=0)
 
     print("\nAll tests passed!")

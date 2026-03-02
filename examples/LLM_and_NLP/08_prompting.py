@@ -1,38 +1,38 @@
 """
-08. 프롬프트 엔지니어링 예제
+08. Prompt Engineering Example
 
-다양한 프롬프팅 기법과 최적화 전략
+Various prompting techniques and optimization strategies
 """
 
 print("=" * 60)
-print("프롬프트 엔지니어링")
+print("Prompt Engineering")
 print("=" * 60)
 
 
 # ============================================
-# 1. 프롬프트 템플릿 클래스
+# 1. Prompt Template Class
 # ============================================
-print("\n[1] 프롬프트 템플릿")
+print("\n[1] Prompt Template")
 print("-" * 40)
 
 class PromptTemplate:
-    """재사용 가능한 프롬프트 템플릿"""
+    """Reusable prompt template"""
 
     def __init__(self, template: str, input_variables: list = None):
         self.template = template
         self.input_variables = input_variables or []
 
     def format(self, **kwargs) -> str:
-        """변수를 채워 프롬프트 생성"""
+        """Fill variables to generate a prompt"""
         return self.template.format(**kwargs)
 
     @classmethod
     def from_file(cls, path: str):
-        """파일에서 템플릿 로드"""
+        """Load template from file"""
         with open(path, 'r', encoding='utf-8') as f:
             return cls(f.read())
 
-# 기본 템플릿
+# Basic template
 basic_template = PromptTemplate(
     template="""You are a {role}.
 Task: {task}
@@ -46,7 +46,7 @@ prompt = basic_template.format(
     task="translate to Korean",
     input="Hello, world!"
 )
-print("기본 템플릿 예시:")
+print("Basic template example:")
 print(prompt)
 
 
@@ -56,41 +56,41 @@ print(prompt)
 print("\n[2] Zero-shot vs Few-shot")
 print("-" * 40)
 
-# Zero-shot 프롬프트
-zero_shot = """다음 리뷰의 감성을 분석해주세요.
-리뷰: "이 영화는 정말 지루했어요."
-감성:"""
+# Zero-shot prompt
+zero_shot = """Analyze the sentiment of the following review.
+Review: "This movie was really boring."
+Sentiment:"""
 
 print("Zero-shot:")
 print(zero_shot)
 
-# Few-shot 프롬프트
-few_shot = """다음 리뷰의 감성을 분석해주세요.
+# Few-shot prompt
+few_shot = """Analyze the sentiment of the following review.
 
-리뷰: "정말 재미있는 영화였어요!"
-감성: 긍정
+Review: "What a really fun movie!"
+Sentiment: Positive
 
-리뷰: "최악의 영화, 시간 낭비"
-감성: 부정
+Review: "Worst movie ever, a waste of time"
+Sentiment: Negative
 
-리뷰: "그냥 그랬어요"
-감성: 중립
+Review: "It was just okay"
+Sentiment: Neutral
 
-리뷰: "이 영화는 정말 지루했어요."
-감성:"""
+Review: "This movie was really boring."
+Sentiment:"""
 
 print("\nFew-shot:")
 print(few_shot)
 
 
 # ============================================
-# 3. Few-shot 프롬프트 빌더
+# 3. Few-shot Prompt Builder
 # ============================================
-print("\n[3] Few-shot 프롬프트 빌더")
+print("\n[3] Few-shot Prompt Builder")
 print("-" * 40)
 
 class FewShotPromptTemplate:
-    """Few-shot 프롬프트 생성기"""
+    """Few-shot prompt generator"""
 
     def __init__(
         self,
@@ -107,13 +107,13 @@ class FewShotPromptTemplate:
         self.separator = separator
 
     def format(self, **kwargs) -> str:
-        # 예시들 포맷팅
+        # Format examples
         formatted_examples = [
             self.example_template.format(**ex)
             for ex in self.examples
         ]
 
-        # 조합
+        # Combine
         parts = []
         if self.prefix:
             parts.append(self.prefix)
@@ -123,22 +123,22 @@ class FewShotPromptTemplate:
 
         return self.separator.join(parts)
 
-# 감성 분석 Few-shot
+# Sentiment analysis Few-shot
 sentiment_examples = [
-    {"text": "정말 좋아요!", "sentiment": "긍정"},
-    {"text": "별로예요", "sentiment": "부정"},
-    {"text": "그냥 보통이에요", "sentiment": "중립"},
+    {"text": "I really love it!", "sentiment": "Positive"},
+    {"text": "Not great", "sentiment": "Negative"},
+    {"text": "It's just average", "sentiment": "Neutral"},
 ]
 
 sentiment_prompt = FewShotPromptTemplate(
     examples=sentiment_examples,
-    example_template="텍스트: {text}\n감성: {sentiment}",
-    prefix="다음 텍스트의 감성을 분석하세요.",
-    suffix="텍스트: {text}\n감성:"
+    example_template="Text: {text}\nSentiment: {sentiment}",
+    prefix="Analyze the sentiment of the following text.",
+    suffix="Text: {text}\nSentiment:"
 )
 
-result = sentiment_prompt.format(text="오늘 기분이 좋네요")
-print("Few-shot 감성 분석 프롬프트:")
+result = sentiment_prompt.format(text="I'm feeling great today")
+print("Few-shot sentiment analysis prompt:")
 print(result)
 
 
@@ -186,13 +186,13 @@ print(few_shot_cot)
 
 
 # ============================================
-# 5. 역할 기반 프롬프팅
+# 5. Role-based Prompting
 # ============================================
-print("\n[5] 역할 기반 프롬프팅")
+print("\n[5] Role-based Prompting")
 print("-" * 40)
 
 class RolePrompt:
-    """역할 기반 프롬프트 생성"""
+    """Role-based prompt generation"""
 
     ROLES = {
         "developer": """You are a senior software developer with 10 years of experience.
@@ -230,65 +230,65 @@ You provide notes for idiomatic expressions."""
             "user": task
         }
 
-# 역할 프롬프트 예시
+# Role prompt example
 prompt = RolePrompt.create_prompt(
     role="reviewer",
-    task="""다음 코드를 리뷰해주세요:
+    task="""Please review the following code:
 
 def get_user(id):
     return db.execute(f"SELECT * FROM users WHERE id = {id}")
 """
 )
-print("코드 리뷰어 역할:")
+print("Code reviewer role:")
 print(f"System: {prompt['system'][:100]}...")
 print(f"User: {prompt['user']}")
 
 
 # ============================================
-# 6. 구조화된 출력 프롬프트
+# 6. Structured Output Prompts
 # ============================================
-print("\n[6] 구조화된 출력")
+print("\n[6] Structured Output")
 print("-" * 40)
 
-# JSON 출력 프롬프트
-json_prompt = """다음 텍스트에서 인물과 장소를 추출해주세요.
+# JSON output prompt
+json_prompt = """Extract persons and locations from the following text.
 
-텍스트: "철수는 서울에서 영희를 만나 부산으로 여행을 떠났다."
+Text: "Alice met Bob in Seoul and they traveled to Busan."
 
-다음 JSON 형식으로 응답해주세요:
+Respond in the following JSON format:
 {
-  "persons": ["인물1", "인물2"],
-  "locations": ["장소1", "장소2"]
+  "persons": ["person1", "person2"],
+  "locations": ["location1", "location2"]
 }"""
 
-print("JSON 출력 프롬프트:")
+print("JSON output prompt:")
 print(json_prompt)
 
-# 마크다운 구조화 출력
-markdown_prompt = """다음 기사를 분석해주세요.
+# Markdown structured output
+markdown_prompt = """Analyze the following article.
 
-## 요약
-(2-3문장으로 요약)
+## Summary
+(Summarize in 2-3 sentences)
 
-## 핵심 포인트
-- 포인트 1
-- 포인트 2
-- 포인트 3
+## Key Points
+- Point 1
+- Point 2
+- Point 3
 
-## 감성
-(긍정/부정/중립 중 선택)
+## Sentiment
+(Choose from Positive/Negative/Neutral)
 
-## 신뢰도
-(높음/중간/낮음 중 선택, 이유 설명)"""
+## Confidence
+(Choose from High/Medium/Low, explain the reason)"""
 
-print("\n마크다운 구조화 출력:")
+print("\nMarkdown structured output:")
 print(markdown_prompt)
 
 
 # ============================================
-# 7. 출력 파서
+# 7. Output Parser
 # ============================================
-print("\n[7] 출력 파서")
+print("\n[7] Output Parser")
 print("-" * 40)
 
 import json
@@ -296,19 +296,19 @@ import re
 from typing import Any, Optional
 
 class OutputParser:
-    """LLM 출력 파싱"""
+    """LLM output parsing"""
 
     @staticmethod
     def parse_json(text: str) -> Optional[dict]:
-        """JSON 추출 및 파싱"""
-        # JSON 블록 찾기
+        """Extract and parse JSON"""
+        # Find JSON block
         json_pattern = r'```json\s*(.*?)\s*```'
         match = re.search(json_pattern, text, re.DOTALL)
 
         if match:
             json_str = match.group(1)
         else:
-            # JSON 객체 직접 찾기
+            # Find JSON object directly
             json_pattern = r'\{[^{}]*\}'
             match = re.search(json_pattern, text, re.DOTALL)
             if match:
@@ -323,36 +323,36 @@ class OutputParser:
 
     @staticmethod
     def parse_list(text: str) -> list:
-        """리스트 항목 추출"""
-        # 번호 매긴 항목
+        """Extract list items"""
+        # Numbered items
         numbered = re.findall(r'^\d+\.\s*(.+)$', text, re.MULTILINE)
         if numbered:
             return numbered
 
-        # 불릿 항목
+        # Bulleted items
         bulleted = re.findall(r'^[-*]\s*(.+)$', text, re.MULTILINE)
         return bulleted
 
     @staticmethod
     def parse_key_value(text: str) -> dict:
-        """키-값 쌍 추출"""
+        """Extract key-value pairs"""
         pattern = r'^([^:]+):\s*(.+)$'
         matches = re.findall(pattern, text, re.MULTILINE)
         return {k.strip(): v.strip() for k, v in matches}
 
-# 테스트
-sample_output = """분석 결과:
-- 주제: 인공지능
-- 감성: 긍정
-- 신뢰도: 높음
+# Test
+sample_output = """Analysis results:
+- Topic: Artificial Intelligence
+- Sentiment: Positive
+- Confidence: High
 
-1. 첫 번째 포인트
-2. 두 번째 포인트
-3. 세 번째 포인트"""
+1. First point
+2. Second point
+3. Third point"""
 
 parser = OutputParser()
-print("리스트 파싱:", parser.parse_list(sample_output))
-print("키-값 파싱:", parser.parse_key_value(sample_output))
+print("List parsing:", parser.parse_list(sample_output))
+print("Key-value parsing:", parser.parse_key_value(sample_output))
 
 
 # ============================================
@@ -364,53 +364,53 @@ print("-" * 40)
 from collections import Counter
 
 class SelfConsistency:
-    """Self-Consistency: 여러 추론 경로의 다수결"""
+    """Self-Consistency: Majority vote across multiple reasoning paths"""
 
     def __init__(self, model_fn, n_samples: int = 5):
         self.model_fn = model_fn
         self.n_samples = n_samples
 
     def generate_with_consistency(self, prompt: str) -> tuple:
-        """여러 샘플 생성 후 다수결"""
+        """Generate multiple samples and take majority vote"""
         responses = []
 
         for _ in range(self.n_samples):
-            # temperature > 0 으로 다양한 응답 생성
+            # Generate diverse responses with temperature > 0
             response = self.model_fn(prompt, temperature=0.7)
             answer = self._extract_answer(response)
             responses.append(answer)
 
-        # 다수결
+        # Majority vote
         counter = Counter(responses)
         most_common = counter.most_common(1)[0]
 
         return most_common[0], most_common[1] / self.n_samples
 
     def _extract_answer(self, response: str) -> str:
-        """응답에서 최종 답 추출"""
-        # "The answer is X" 패턴
+        """Extract final answer from response"""
+        # "The answer is X" pattern
         match = re.search(r'answer is[:\s]*(\d+)', response, re.IGNORECASE)
         if match:
             return match.group(1)
 
-        # 마지막 숫자
+        # Last number
         numbers = re.findall(r'\d+', response)
         return numbers[-1] if numbers else response
 
-# 모의 함수
+# Mock function
 def mock_model(prompt, temperature=0.7):
     import random
-    # 실제로는 LLM 호출
+    # In practice, call LLM
     answers = ["42", "42", "42", "41", "42"]
     return f"The answer is {random.choice(answers)}"
 
 sc = SelfConsistency(mock_model, n_samples=5)
-print("Self-Consistency 예시 (모의):")
-print("여러 추론 경로 생성 후 다수결로 최종 답 선택")
+print("Self-Consistency example (mock):")
+print("Generate multiple reasoning paths and select final answer by majority vote")
 
 
 # ============================================
-# 9. ReAct 패턴
+# 9. ReAct Pattern
 # ============================================
 print("\n[9] ReAct (Reasoning + Acting)")
 print("-" * 40)
@@ -443,7 +443,7 @@ Now answer:
 Question: {question}
 """
 
-print("ReAct 프롬프트 패턴:")
+print("ReAct prompt pattern:")
 print(react_prompt.format(question="What year was Python created?"))
 
 
@@ -454,28 +454,28 @@ print("\n[10] Tree of Thoughts")
 print("-" * 40)
 
 class TreeOfThoughts:
-    """Tree of Thoughts: 여러 사고 경로 탐색"""
+    """Tree of Thoughts: Explore multiple reasoning paths"""
 
     def __init__(self, model_fn, evaluator_fn):
         self.model_fn = model_fn
         self.evaluator_fn = evaluator_fn
 
     def solve(self, problem: str, depth: int = 3, branches: int = 3) -> str:
-        """트리 탐색으로 문제 해결"""
+        """Solve problem via tree search"""
         thoughts = self._generate_thoughts(problem, branches)
 
-        # 각 생각 평가
+        # Evaluate each thought
         scored_thoughts = [
             (thought, self.evaluator_fn(problem, thought))
             for thought in thoughts
         ]
 
-        # 상위 생각 선택
+        # Select top thoughts
         scored_thoughts.sort(key=lambda x: x[1], reverse=True)
         best_thoughts = scored_thoughts[:2]
 
         if depth > 1:
-            # 재귀적으로 확장
+            # Recursively expand
             for thought, _ in best_thoughts:
                 extended = self.solve(
                     f"{problem}\n\nPartial solution: {thought}",
@@ -484,11 +484,11 @@ class TreeOfThoughts:
                 )
                 thoughts.append(extended)
 
-        # 최종 선택
+        # Final selection
         return scored_thoughts[0][0]
 
     def _generate_thoughts(self, problem: str, n: int) -> list:
-        """n개의 서로 다른 접근법 생성"""
+        """Generate n different approaches"""
         prompt = f"""Problem: {problem}
 
 Generate {n} different approaches to solve this problem.
@@ -496,60 +496,60 @@ Each approach should be a distinct strategy.
 
 Approach 1:"""
 
-        # 실제로는 LLM 호출
+        # In practice, call LLM
         return [f"Approach {i+1}: ..." for i in range(n)]
 
-print("Tree of Thoughts 패턴:")
-print("- 여러 사고 경로를 트리 형태로 탐색")
-print("- 각 노드(생각)를 평가하고 유망한 경로 확장")
-print("- 복잡한 추론 문제에 효과적")
+print("Tree of Thoughts pattern:")
+print("- Explore multiple reasoning paths in a tree structure")
+print("- Evaluate each node (thought) and expand promising paths")
+print("- Effective for complex reasoning problems")
 
 
 # ============================================
-# 11. 프롬프트 최적화 전략
+# 11. Prompt Optimization Strategies
 # ============================================
-print("\n[11] 프롬프트 최적화")
+print("\n[11] Prompt Optimization")
 print("-" * 40)
 
 optimization_strategies = """
-프롬프트 최적화 전략:
+Prompt Optimization Strategies:
 
-1. 명확성 (Clarity)
-   Bad:  "텍스트를 정리해줘"
-   Good: "다음 텍스트를 3문장으로 요약하고, 핵심 키워드 5개를 추출해주세요."
+1. Clarity
+   Bad:  "Clean up the text"
+   Good: "Summarize the following text in 3 sentences and extract 5 key keywords."
 
-2. 구체성 (Specificity)
-   Bad:  "좋은 코드를 작성해줘"
-   Good: "Python 3.10+, 타입 힌트 사용, PEP 8 준수, 에러 처리 포함"
+2. Specificity
+   Bad:  "Write good code"
+   Good: "Python 3.10+, use type hints, PEP 8 compliant, include error handling"
 
-3. 제약 조건 (Constraints)
-   - 출력 길이: "100단어 이내로"
-   - 출력 형식: "JSON 형식으로"
-   - 스타일: "공식적인 어조로"
+3. Constraints
+   - Output length: "Within 100 words"
+   - Output format: "In JSON format"
+   - Style: "In a formal tone"
 
-4. 예시 제공 (Examples)
-   - 원하는 출력의 예시 1-3개 제공
-   - 형식과 스타일 명확히 전달
+4. Provide Examples
+   - Provide 1-3 examples of desired output
+   - Clearly convey format and style
 
-5. 단계별 분해 (Decomposition)
-   - 복잡한 태스크를 작은 단계로 분해
-   - 각 단계별로 명확한 지시
+5. Step-by-step Decomposition
+   - Break complex tasks into smaller steps
+   - Clear instructions for each step
 
-6. 네거티브 프롬프팅 (Negative Prompting)
-   - "~하지 마세요" 지시 추가
-   - 원치 않는 출력 방지
+6. Negative Prompting
+   - Add "Do not..." instructions
+   - Prevent unwanted output
 """
 print(optimization_strategies)
 
 
 # ============================================
-# 12. 프롬프트 A/B 테스트
+# 12. Prompt A/B Testing
 # ============================================
-print("\n[12] 프롬프트 A/B 테스트")
+print("\n[12] Prompt A/B Testing")
 print("-" * 40)
 
 class PromptABTest:
-    """프롬프트 A/B 테스트 프레임워크"""
+    """Prompt A/B testing framework"""
 
     def __init__(self, model_fn, evaluator_fn):
         self.model_fn = model_fn
@@ -562,7 +562,7 @@ class PromptABTest:
         test_cases: list,
         n_trials: int = 1
     ) -> dict:
-        """A/B 테스트 실행"""
+        """Run A/B test"""
         results = {"A": 0, "B": 0, "tie": 0}
         details = []
 
@@ -571,12 +571,12 @@ class PromptABTest:
             scores_b = []
 
             for _ in range(n_trials):
-                # 프롬프트 A
+                # Prompt A
                 response_a = self.model_fn(prompt_a.format(**case))
                 score_a = self.evaluator_fn(response_a, case.get("expected"))
                 scores_a.append(score_a)
 
-                # 프롬프트 B
+                # Prompt B
                 response_b = self.model_fn(prompt_b.format(**case))
                 score_b = self.evaluator_fn(response_b, case.get("expected"))
                 scores_b.append(score_b)
@@ -607,16 +607,16 @@ class PromptABTest:
             "winner": "A" if results["A"] > results["B"] else "B"
         }
 
-print("프롬프트 A/B 테스트 프레임워크")
-print("- 두 프롬프트의 성능 비교")
-print("- 다양한 테스트 케이스에서 평가")
-print("- 통계적으로 유의미한 결과 도출")
+print("Prompt A/B testing framework")
+print("- Compare performance of two prompts")
+print("- Evaluate across various test cases")
+print("- Derive statistically significant results")
 
 
 # ============================================
-# 13. 도메인별 프롬프트 템플릿
+# 13. Domain-specific Prompt Templates
 # ============================================
-print("\n[13] 도메인별 프롬프트 템플릿")
+print("\n[13] Domain-specific Prompt Templates")
 print("-" * 40)
 
 PROMPT_TEMPLATES = {
@@ -686,30 +686,30 @@ Output as JSON:
 }}"""
 }
 
-# 사용 예시
+# Usage example
 classification_prompt = PROMPT_TEMPLATES["classification"].format(
-    categories="긍정, 부정, 중립",
-    text="오늘 날씨가 정말 좋네요!"
+    categories="Positive, Negative, Neutral",
+    text="The weather is really nice today!"
 )
-print("분류 프롬프트:")
+print("Classification prompt:")
 print(classification_prompt[:200] + "...")
 
 
 # ============================================
-# 14. 프롬프트 체이닝
+# 14. Prompt Chaining
 # ============================================
-print("\n[14] 프롬프트 체이닝")
+print("\n[14] Prompt Chaining")
 print("-" * 40)
 
 class PromptChain:
-    """프롬프트를 연결하여 복잡한 태스크 수행"""
+    """Chain prompts to perform complex tasks"""
 
     def __init__(self, model_fn):
         self.model_fn = model_fn
         self.steps = []
 
     def add_step(self, name: str, prompt_template: str, parser=None):
-        """체인에 단계 추가"""
+        """Add a step to the chain"""
         self.steps.append({
             "name": name,
             "template": prompt_template,
@@ -718,28 +718,28 @@ class PromptChain:
         return self
 
     def run(self, initial_input: dict) -> dict:
-        """체인 실행"""
+        """Run the chain"""
         context = initial_input.copy()
         results = {}
 
         for step in self.steps:
-            # 프롬프트 생성
+            # Generate prompt
             prompt = step["template"].format(**context)
 
-            # LLM 호출
+            # Call LLM
             response = self.model_fn(prompt)
 
-            # 파싱 (선택적)
+            # Parse (optional)
             if step["parser"]:
                 response = step["parser"](response)
 
-            # 결과 저장
+            # Save result
             results[step["name"]] = response
             context[step["name"]] = response
 
         return results
 
-# 체인 예시
+# Chain example
 chain = PromptChain(lambda x: "Mock response")
 chain.add_step(
     "summary",
@@ -752,40 +752,40 @@ chain.add_step(
     "Create a title based on keywords: {keywords}"
 )
 
-print("프롬프트 체이닝 예시:")
-print("1. 텍스트 요약")
-print("2. 키워드 추출")
-print("3. 제목 생성")
-print("→ 각 단계의 출력이 다음 단계의 입력으로 사용")
+print("Prompt chaining example:")
+print("1. Text summarization")
+print("2. Keyword extraction")
+print("3. Title generation")
+print("-> Each step's output is used as the next step's input")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("프롬프트 엔지니어링 정리")
+print("Prompt Engineering Summary")
 print("=" * 60)
 
 summary = """
-프롬프팅 기법 선택 가이드:
+Prompting Technique Selection Guide:
 
-| 상황                | 추천 기법           |
-|---------------------|---------------------|
-| 간단한 태스크       | Zero-shot           |
-| 특정 형식 필요      | Few-shot + 형식지정 |
-| 복잡한 추론         | Chain-of-Thought    |
-| 신뢰성 필요         | Self-Consistency    |
-| 도구 사용 필요      | ReAct               |
-| 매우 복잡한 문제    | Tree of Thoughts    |
+| Situation                | Recommended Technique  |
+|--------------------------|------------------------|
+| Simple task              | Zero-shot              |
+| Specific format needed   | Few-shot + format spec |
+| Complex reasoning        | Chain-of-Thought       |
+| Reliability needed       | Self-Consistency       |
+| Tool usage needed        | ReAct                  |
+| Very complex problem     | Tree of Thoughts       |
 
-핵심 원칙:
-1. 명확하고 구체적인 지시
-2. 적절한 예시 제공
-3. 출력 형식 명시
-4. 단계별 사고 유도
-5. 반복적인 개선과 테스트
+Core Principles:
+1. Clear and specific instructions
+2. Provide appropriate examples
+3. Specify output format
+4. Encourage step-by-step thinking
+5. Iterative improvement and testing
 
-프롬프트 구조:
-    [시스템 지시] + [컨텍스트] + [태스크] + [출력 형식]
+Prompt Structure:
+    [System instruction] + [Context] + [Task] + [Output format]
 """
 print(summary)

@@ -1,7 +1,7 @@
 """
-NumPy로 구현한 Convolution 연산
+Convolution Operations implemented with NumPy
 
-이 파일에서는 Convolution의 forward/backward를 순수 NumPy로 구현합니다.
+This file implements Convolution forward/backward using pure NumPy.
 """
 
 import numpy as np
@@ -19,11 +19,11 @@ def conv2d_naive(
     2D Convolution (naive implementation with loops)
 
     Args:
-        input: (N, C_in, H, W) - 배치 입력
-        kernel: (C_out, C_in, K_h, K_w) - 필터
-        bias: (C_out,) - 편향
-        stride: 스트라이드
-        padding: 패딩
+        input: (N, C_in, H, W) - batch input
+        kernel: (C_out, C_in, K_h, K_w) - filters
+        bias: (C_out,) - bias
+        stride: Stride
+        padding: Padding
 
     Returns:
         output: (N, C_out, H_out, W_out)
@@ -31,7 +31,7 @@ def conv2d_naive(
     N, C_in, H, W = input.shape
     C_out, _, K_h, K_w = kernel.shape
 
-    # 패딩 적용
+    # Apply padding
     if padding > 0:
         input_padded = np.pad(
             input,
@@ -41,28 +41,28 @@ def conv2d_naive(
     else:
         input_padded = input
 
-    # 출력 크기 계산
+    # Compute output size
     H_out = (H + 2 * padding - K_h) // stride + 1
     W_out = (W + 2 * padding - K_w) // stride + 1
 
     output = np.zeros((N, C_out, H_out, W_out))
 
-    # Convolution 연산 (6중 루프 - 매우 느림)
-    for n in range(N):                          # 배치
-        for c_out in range(C_out):              # 출력 채널
-            for h in range(H_out):              # 출력 높이
-                for w in range(W_out):          # 출력 너비
-                    # 수용 영역
+    # Convolution operation (6-nested loop - very slow)
+    for n in range(N):                          # Batch
+        for c_out in range(C_out):              # Output channel
+            for h in range(H_out):              # Output height
+                for w in range(W_out):          # Output width
+                    # Receptive field
                     h_start = h * stride
                     h_end = h_start + K_h
                     w_start = w * stride
                     w_end = w_start + K_w
 
-                    # 수용 영역과 커널의 element-wise 곱의 합
+                    # Element-wise product sum of receptive field and kernel
                     receptive_field = input_padded[n, :, h_start:h_end, w_start:w_end]
                     output[n, c_out, h, w] = np.sum(receptive_field * kernel[c_out])
 
-    # 편향 추가
+    # Add bias
     if bias is not None:
         output += bias.reshape(1, -1, 1, 1)
 
@@ -76,18 +76,18 @@ def im2col(
     padding: int = 0
 ) -> np.ndarray:
     """
-    im2col: 이미지를 행렬로 변환 (효율적인 convolution을 위해)
+    im2col: Transform image to matrix (for efficient convolution)
 
-    Convolution을 행렬 곱셈으로 변환:
-    - 각 수용 영역을 열 벡터로 변환
-    - 커널을 행 벡터로 변환
-    - 행렬 곱셈으로 convolution 수행
+    Converts convolution to matrix multiplication:
+    - Transform each receptive field into a column vector
+    - Transform kernel into a row vector
+    - Perform convolution via matrix multiplication
 
     Args:
         input: (N, C, H, W)
         kernel_size: (K_h, K_w)
-        stride: 스트라이드
-        padding: 패딩
+        stride: Stride
+        padding: Padding
 
     Returns:
         col: (N, C * K_h * K_w, H_out * W_out)
@@ -95,7 +95,7 @@ def im2col(
     N, C, H, W = input.shape
     K_h, K_w = kernel_size
 
-    # 패딩
+    # Padding
     if padding > 0:
         input_padded = np.pad(
             input,
@@ -107,11 +107,11 @@ def im2col(
 
     H_padded, W_padded = input_padded.shape[2], input_padded.shape[3]
 
-    # 출력 크기
+    # Output size
     H_out = (H_padded - K_h) // stride + 1
     W_out = (W_padded - K_w) // stride + 1
 
-    # im2col 행렬
+    # im2col matrix
     col = np.zeros((N, C, K_h, K_w, H_out, W_out))
 
     for h in range(K_h):
@@ -120,7 +120,7 @@ def im2col(
             w_max = w + stride * W_out
             col[:, :, h, w, :, :] = input_padded[:, :, h:h_max:stride, w:w_max:stride]
 
-    # (N, C, K_h, K_w, H_out, W_out) → (N, C*K_h*K_w, H_out*W_out)
+    # (N, C, K_h, K_w, H_out, W_out) -> (N, C*K_h*K_w, H_out*W_out)
     col = col.transpose(0, 1, 2, 3, 4, 5).reshape(N, C * K_h * K_w, H_out * W_out)
 
     return col
@@ -134,16 +134,16 @@ def col2im(
     padding: int = 0
 ) -> np.ndarray:
     """
-    col2im: im2col의 역연산
+    col2im: Inverse of im2col
 
-    Backward pass에서 gradient를 원래 이미지 형태로 복원
+    Restores gradients to original image shape in backward pass
 
     Args:
         col: (N, C * K_h * K_w, H_out * W_out)
-        input_shape: (N, C, H, W) 원본 입력 shape
+        input_shape: (N, C, H, W) original input shape
         kernel_size: (K_h, K_w)
-        stride: 스트라이드
-        padding: 패딩
+        stride: Stride
+        padding: Padding
 
     Returns:
         input_grad: (N, C, H, W)
@@ -156,20 +156,20 @@ def col2im(
     H_out = (H_padded - K_h) // stride + 1
     W_out = (W_padded - K_w) // stride + 1
 
-    # col reshape: (N, C*K_h*K_w, H_out*W_out) → (N, C, K_h, K_w, H_out, W_out)
+    # col reshape: (N, C*K_h*K_w, H_out*W_out) -> (N, C, K_h, K_w, H_out, W_out)
     col = col.reshape(N, C, K_h, K_w, H_out, W_out)
 
-    # 출력 배열 (패딩 포함)
+    # Output array (including padding)
     input_padded = np.zeros((N, C, H_padded, W_padded))
 
-    # 누적 (stride 위치에 값 더하기)
+    # Accumulate (add values at stride positions)
     for h in range(K_h):
         h_max = h + stride * H_out
         for w in range(K_w):
             w_max = w + stride * W_out
             input_padded[:, :, h:h_max:stride, w:w_max:stride] += col[:, :, h, w, :, :]
 
-    # 패딩 제거
+    # Remove padding
     if padding > 0:
         return input_padded[:, :, padding:-padding, padding:-padding]
     return input_padded
@@ -183,25 +183,25 @@ def conv2d_im2col(
     padding: int = 0
 ) -> np.ndarray:
     """
-    im2col을 사용한 효율적인 Convolution
+    Efficient Convolution using im2col
 
-    연산: Y = W · col(X) + b
+    Operation: Y = W . col(X) + b
     """
     N, C_in, H, W = input.shape
     C_out, _, K_h, K_w = kernel.shape
 
-    # im2col 변환
+    # im2col transform
     col = im2col(input, (K_h, K_w), stride, padding)  # (N, C_in*K_h*K_w, H_out*W_out)
 
-    # 커널을 행렬로 변환
+    # Transform kernel to matrix
     kernel_mat = kernel.reshape(C_out, -1)  # (C_out, C_in*K_h*K_w)
 
-    # 행렬 곱셈
+    # Matrix multiplication
     H_out = (H + 2 * padding - K_h) // stride + 1
     W_out = (W + 2 * padding - K_w) // stride + 1
 
     # (C_out, C_in*K_h*K_w) @ (N, C_in*K_h*K_w, H_out*W_out)
-    # → (N, C_out, H_out*W_out)
+    # -> (N, C_out, H_out*W_out)
     output = np.zeros((N, C_out, H_out * W_out))
     for n in range(N):
         output[n] = kernel_mat @ col[n]
@@ -209,7 +209,7 @@ def conv2d_im2col(
     # Reshape
     output = output.reshape(N, C_out, H_out, W_out)
 
-    # 편향
+    # Bias
     if bias is not None:
         output += bias.reshape(1, -1, 1, 1)
 
@@ -218,9 +218,9 @@ def conv2d_im2col(
 
 class Conv2dNumpy:
     """
-    NumPy Convolution 레이어 (학습 가능)
+    NumPy Convolution Layer (trainable)
 
-    forward/backward 모두 구현
+    Both forward/backward implemented
     """
 
     def __init__(
@@ -237,18 +237,18 @@ class Conv2dNumpy:
         self.stride = stride
         self.padding = padding
 
-        # Kaiming (He) 초기화
+        # Kaiming (He) initialization
         scale = np.sqrt(2.0 / (in_channels * kernel_size * kernel_size))
         self.weight = np.random.randn(
             out_channels, in_channels, kernel_size, kernel_size
         ) * scale
         self.bias = np.zeros(out_channels)
 
-        # Gradient 저장
+        # Gradient storage
         self.weight_grad = None
         self.bias_grad = None
 
-        # Backward를 위한 캐시
+        # Cache for backward
         self.cache = {}
 
     def forward(self, input: np.ndarray) -> np.ndarray:
@@ -259,11 +259,11 @@ class Conv2dNumpy:
         col = im2col(input, (self.kernel_size, self.kernel_size),
                      self.stride, self.padding)
 
-        # 캐시 저장
+        # Save to cache
         self.cache['input_shape'] = input.shape
         self.cache['col'] = col
 
-        # 행렬 곱셈
+        # Matrix multiplication
         kernel_mat = self.weight.reshape(self.out_channels, -1)
 
         H_out = (H + 2 * self.padding - self.kernel_size) // self.stride + 1
@@ -283,22 +283,22 @@ class Conv2dNumpy:
         Backward pass
 
         Args:
-            grad_output: ∂L/∂Y (N, C_out, H_out, W_out)
+            grad_output: dL/dY (N, C_out, H_out, W_out)
 
         Returns:
-            grad_input: ∂L/∂X (N, C_in, H, W)
+            grad_input: dL/dX (N, C_in, H, W)
         """
         N, C_out, H_out, W_out = grad_output.shape
         input_shape = self.cache['input_shape']
         col = self.cache['col']
 
-        # Bias gradient: ∂L/∂b = Σ ∂L/∂Y
+        # Bias gradient: dL/db = sum(dL/dY)
         self.bias_grad = np.sum(grad_output, axis=(0, 2, 3))
 
-        # grad_output을 행렬로 변환
+        # Transform grad_output to matrix
         grad_output_mat = grad_output.reshape(N, C_out, -1)  # (N, C_out, H_out*W_out)
 
-        # Weight gradient: ∂L/∂W = ∂L/∂Y · col(X)^T
+        # Weight gradient: dL/dW = dL/dY . col(X)^T
         kernel_mat = self.weight.reshape(self.out_channels, -1)
         self.weight_grad = np.zeros_like(kernel_mat)
 
@@ -307,7 +307,7 @@ class Conv2dNumpy:
 
         self.weight_grad = self.weight_grad.reshape(self.weight.shape)
 
-        # Input gradient: ∂L/∂X = col2im(W^T · ∂L/∂Y)
+        # Input gradient: dL/dX = col2im(W^T . dL/dY)
         grad_col = np.zeros_like(col)
         for n in range(N):
             grad_col[n] = kernel_mat.T @ grad_output_mat[n]
@@ -321,16 +321,16 @@ class Conv2dNumpy:
         return grad_input
 
     def update(self, lr: float):
-        """가중치 업데이트"""
+        """Weight update"""
         self.weight -= lr * self.weight_grad
         self.bias -= lr * self.bias_grad
 
 
-# 테스트
+# Test
 if __name__ == "__main__":
     np.random.seed(42)
 
-    # 테스트 입력
+    # Test input
     N, C_in, H, W = 2, 3, 8, 8
     C_out, K = 4, 3
 
@@ -338,19 +338,20 @@ if __name__ == "__main__":
     kernel = np.random.randn(C_out, C_in, K, K)
     bias = np.random.randn(C_out)
 
-    # Naive vs im2col 비교
+    # Naive vs im2col comparison
+    # Expected: naive vs im2col diff < 1e-10
     output_naive = conv2d_naive(input, kernel, bias, stride=1, padding=1)
     output_im2col = conv2d_im2col(input, kernel, bias, stride=1, padding=1)
 
     print("Output shape:", output_naive.shape)
-    print("Naive vs im2col 차이:", np.max(np.abs(output_naive - output_im2col)))
+    print("Naive vs im2col difference:", np.max(np.abs(output_naive - output_im2col)))
 
-    # Conv2dNumpy 테스트
+    # Conv2dNumpy test
     conv = Conv2dNumpy(C_in, C_out, K, stride=1, padding=1)
     output = conv.forward(input)
     print("\nConv2dNumpy output shape:", output.shape)
 
-    # Backward 테스트
+    # Backward test
     grad_output = np.random.randn(*output.shape)
     grad_input = conv.backward(grad_output)
     print("Grad input shape:", grad_input.shape)
@@ -358,7 +359,7 @@ if __name__ == "__main__":
 
     # Gradient check
     def numerical_gradient(f, x, h=1e-5):
-        """수치 미분으로 gradient 검증"""
+        """Verify gradient using numerical differentiation"""
         grad = np.zeros_like(x)
         it = np.nditer(x, flags=['multi_index'], op_flags=['readwrite'])
 
@@ -379,9 +380,10 @@ if __name__ == "__main__":
 
         return grad
 
+    # Expected: input gradient diff < 1e-5, weight gradient diff < 1e-5
     print("\n=== Gradient Check ===")
 
-    # 작은 입력으로 gradient check
+    # Gradient check with small input
     small_input = np.random.randn(1, 2, 4, 4)
     small_conv = Conv2dNumpy(2, 2, 3, stride=1, padding=1)
 
@@ -394,7 +396,7 @@ if __name__ == "__main__":
     grad_output = 2 * output  # d(sum(x^2))/dx = 2x
     grad_input = small_conv.backward(grad_output)
 
-    # Numerical gradient (입력에 대해)
+    # Numerical gradient (with respect to input)
     num_grad = numerical_gradient(loss_fn, small_input)
 
     print("Input gradient check:")
@@ -407,7 +409,7 @@ if __name__ == "__main__":
 
     num_grad_weight = numerical_gradient(loss_fn_weight, small_conv.weight)
 
-    # Backward로 계산
+    # Compute via backward
     output = small_conv.forward(small_input)
     small_conv.backward(2 * output)
 

@@ -1,13 +1,13 @@
 """
-Airflow ETL 파이프라인 DAG 예제
+Airflow ETL Pipeline DAG Example
 
-이 DAG는 실제 ETL 파이프라인의 구조를 보여줍니다:
-- Extract: 데이터 소스에서 추출
-- Transform: 데이터 정제 및 변환
-- Load: 목적지에 적재
-- Quality Check: 데이터 품질 검증
+This DAG demonstrates the structure of a real ETL pipeline:
+- Extract: Pull data from sources
+- Transform: Cleanse and transform data
+- Load: Load into destination
+- Quality Check: Data quality validation
 
-실행: airflow dags test etl_pipeline 2024-01-01
+Run: airflow dags test etl_pipeline 2024-01-01
 """
 
 from datetime import datetime, timedelta
@@ -29,14 +29,14 @@ default_args = {
 
 
 # ============================================
-# Extract 함수들
+# Extract Functions
 # ============================================
 def extract_orders(**context):
-    """주문 데이터 추출"""
+    """Extract order data"""
     ds = context['ds']
     print(f"Extracting orders for {ds}")
 
-    # 시뮬레이션: 실제로는 DB 쿼리
+    # Simulation: in practice, this would be a DB query
     orders = [
         {'order_id': 1, 'customer_id': 101, 'amount': 150.00, 'status': 'completed'},
         {'order_id': 2, 'customer_id': 102, 'amount': 250.50, 'status': 'completed'},
@@ -45,14 +45,14 @@ def extract_orders(**context):
         {'order_id': 5, 'customer_id': 102, 'amount': 99.99, 'status': 'cancelled'},
     ]
 
-    # XCom으로 데이터 전달
+    # Pass data via XCom
     context['ti'].xcom_push(key='raw_orders', value=orders)
     print(f"Extracted {len(orders)} orders")
     return len(orders)
 
 
 def extract_customers(**context):
-    """고객 데이터 추출"""
+    """Extract customer data"""
     customers = [
         {'customer_id': 101, 'name': 'Alice', 'segment': 'Gold'},
         {'customer_id': 102, 'name': 'Bob', 'segment': 'Silver'},
@@ -65,17 +65,17 @@ def extract_customers(**context):
 
 
 # ============================================
-# Transform 함수들
+# Transform Functions
 # ============================================
 def transform_orders(**context):
-    """주문 데이터 변환"""
+    """Transform order data"""
     ti = context['ti']
     orders = ti.xcom_pull(task_ids='extract.extract_orders', key='raw_orders')
 
-    # 변환 로직
+    # Transformation logic
     transformed = []
     for order in orders:
-        # completed 주문만 포함
+        # Include only completed orders
         if order['status'] == 'completed':
             transformed.append({
                 'order_id': order['order_id'],
@@ -90,12 +90,12 @@ def transform_orders(**context):
 
 
 def enrich_orders(**context):
-    """주문 데이터에 고객 정보 추가"""
+    """Enrich order data with customer information"""
     ti = context['ti']
     orders = ti.xcom_pull(task_ids='transform.transform_orders', key='transformed_orders')
     customers = ti.xcom_pull(task_ids='extract.extract_customers', key='raw_customers')
 
-    # 고객 정보 매핑
+    # Customer information mapping
     customer_map = {c['customer_id']: c for c in customers}
 
     enriched = []
@@ -113,14 +113,14 @@ def enrich_orders(**context):
 
 
 # ============================================
-# Load 함수들
+# Load Functions
 # ============================================
 def load_to_warehouse(**context):
-    """데이터 웨어하우스에 적재"""
+    """Load into data warehouse"""
     ti = context['ti']
     enriched_orders = ti.xcom_pull(task_ids='transform.enrich_orders', key='enriched_orders')
 
-    # 시뮬레이션: 실제로는 DB INSERT
+    # Simulation: in practice, this would be a DB INSERT
     print(f"Loading {len(enriched_orders)} records to warehouse")
     for order in enriched_orders:
         print(f"  INSERT: {order}")
@@ -129,10 +129,10 @@ def load_to_warehouse(**context):
 
 
 # ============================================
-# Quality Check 함수들
+# Quality Check Functions
 # ============================================
 def check_row_count(**context):
-    """행 수 검증"""
+    """Validate row count"""
     ti = context['ti']
     enriched_orders = ti.xcom_pull(task_ids='transform.enrich_orders', key='enriched_orders')
 
@@ -147,18 +147,18 @@ def check_row_count(**context):
 
 
 def check_data_quality(**context):
-    """데이터 품질 검증"""
+    """Validate data quality"""
     ti = context['ti']
     enriched_orders = ti.xcom_pull(task_ids='transform.enrich_orders', key='enriched_orders')
 
     errors = []
 
     for order in enriched_orders:
-        # NULL 체크
+        # NULL check
         if order.get('order_id') is None:
             errors.append(f"Missing order_id")
 
-        # 값 범위 체크
+        # Value range check
         if order.get('amount', 0) < 0:
             errors.append(f"Negative amount: {order['order_id']}")
 
@@ -172,7 +172,7 @@ def check_data_quality(**context):
 
 
 def decide_next_step(**context):
-    """품질 결과에 따른 분기"""
+    """Branch based on quality results"""
     ti = context['ti']
     quality_result = ti.xcom_pull(task_ids='quality.check_data_quality')
 
@@ -183,18 +183,18 @@ def decide_next_step(**context):
 
 
 def handle_quality_issues(**context):
-    """품질 이슈 처리"""
+    """Handle quality issues"""
     ti = context['ti']
     issues = ti.xcom_pull(task_ids='quality.check_data_quality', key='quality_issues')
     print(f"Handling quality issues: {issues}")
-    # 실제로는 알림 발송, 로그 기록 등
+    # In practice, this would send alerts, log records, etc.
 
 
 # ============================================
-# Notification 함수
+# Notification Function
 # ============================================
 def send_success_notification(**context):
-    """성공 알림"""
+    """Send success notification"""
     ti = context['ti']
     row_count = ti.xcom_pull(task_ids='quality.check_row_count', key='row_count')
 
@@ -204,15 +204,15 @@ def send_success_notification(**context):
     Records Loaded: {row_count}
     """
     print(message)
-    # 실제로는 Slack, Email 등으로 알림
+    # In practice, this would send notifications via Slack, Email, etc.
 
 
-# DAG 정의
+# DAG definition
 with DAG(
     dag_id='etl_pipeline',
     default_args=default_args,
-    description='ETL 파이프라인 예제',
-    schedule_interval='0 6 * * *',  # 매일 오전 6시
+    description='ETL Pipeline Example',
+    schedule_interval='0 6 * * *',  # Daily at 6 AM
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=['etl', 'production'],
@@ -284,7 +284,7 @@ with DAG(
         trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
     )
 
-    # Task 의존성
+    # Task dependencies
     start >> extract_group >> transform_group >> quality_group >> branch_task
     branch_task >> [load_task, handle_issues_task]
     [load_task, handle_issues_task] >> notify_task >> end

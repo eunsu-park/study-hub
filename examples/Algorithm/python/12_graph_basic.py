@@ -1,8 +1,8 @@
 """
-DFS (깊이 우선 탐색) & BFS (너비 우선 탐색)
+DFS (Depth-First Search) & BFS (Breadth-First Search)
 Depth-First Search & Breadth-First Search
 
-그래프 탐색의 두 가지 기본 알고리즘입니다.
+Two fundamental graph traversal algorithms.
 """
 
 from collections import deque, defaultdict
@@ -10,10 +10,10 @@ from typing import List, Dict, Set, Optional
 
 
 # =============================================================================
-# 그래프 표현
+# Graph Representation
 # =============================================================================
 def create_adjacency_list(edges: List[List[int]], directed: bool = False) -> Dict[int, List[int]]:
-    """간선 리스트로부터 인접 리스트 생성"""
+    """Create adjacency list from edge list"""
     graph = defaultdict(list)
     for u, v in edges:
         graph[u].append(v)
@@ -23,12 +23,12 @@ def create_adjacency_list(edges: List[List[int]], directed: bool = False) -> Dic
 
 
 # =============================================================================
-# 1. DFS (재귀)
+# 1. DFS (Recursive)
 # =============================================================================
 def dfs_recursive(graph: Dict[int, List[int]], start: int, visited: Set[int] = None) -> List[int]:
     """
-    DFS 재귀 구현
-    시간복잡도: O(V + E), 공간복잡도: O(V)
+    DFS recursive implementation
+    Time Complexity: O(V + E), Space Complexity: O(V)
     """
     if visited is None:
         visited = set()
@@ -45,12 +45,12 @@ def dfs_recursive(graph: Dict[int, List[int]], start: int, visited: Set[int] = N
 
 
 # =============================================================================
-# 2. DFS (스택)
+# 2. DFS (Stack)
 # =============================================================================
 def dfs_iterative(graph: Dict[int, List[int]], start: int) -> List[int]:
     """
-    DFS 반복문 구현 (스택 사용)
-    시간복잡도: O(V + E), 공간복잡도: O(V)
+    DFS iterative implementation (using stack)
+    Time Complexity: O(V + E), Space Complexity: O(V)
     """
     visited = set()
     stack = [start]
@@ -61,7 +61,7 @@ def dfs_iterative(graph: Dict[int, List[int]], start: int) -> List[int]:
         if node not in visited:
             visited.add(node)
             result.append(node)
-            # 역순으로 추가하여 작은 번호 먼저 방문
+            # Add in reverse order to visit smaller numbers first
             for neighbor in reversed(graph[node]):
                 if neighbor not in visited:
                     stack.append(neighbor)
@@ -74,8 +74,8 @@ def dfs_iterative(graph: Dict[int, List[int]], start: int) -> List[int]:
 # =============================================================================
 def bfs(graph: Dict[int, List[int]], start: int) -> List[int]:
     """
-    BFS 구현 (큐 사용)
-    시간복잡도: O(V + E), 공간복잡도: O(V)
+    BFS implementation (using queue)
+    Time Complexity: O(V + E), Space Complexity: O(V)
     """
     visited = set([start])
     queue = deque([start])
@@ -94,11 +94,11 @@ def bfs(graph: Dict[int, List[int]], start: int) -> List[int]:
 
 
 # =============================================================================
-# 4. 연결 요소 찾기
+# 4. Find Connected Components
 # =============================================================================
 def count_connected_components(n: int, edges: List[List[int]]) -> int:
     """
-    무방향 그래프의 연결 요소 개수
+    Count connected components in an undirected graph
     """
     graph = create_adjacency_list(edges, directed=False)
     visited = set()
@@ -106,7 +106,7 @@ def count_connected_components(n: int, edges: List[List[int]]) -> int:
 
     for node in range(n):
         if node not in visited:
-            # DFS로 연결된 모든 노드 방문
+            # Visit all connected nodes via DFS
             stack = [node]
             while stack:
                 curr = stack.pop()
@@ -119,11 +119,11 @@ def count_connected_components(n: int, edges: List[List[int]]) -> int:
 
 
 # =============================================================================
-# 5. 최단 거리 (BFS) - 가중치 없는 그래프
+# 5. Shortest Path (BFS) - Unweighted Graph
 # =============================================================================
 def shortest_path_bfs(graph: Dict[int, List[int]], start: int, end: int) -> Optional[List[int]]:
     """
-    가중치 없는 그래프에서 최단 경로 찾기
+    Find shortest path in an unweighted graph
     """
     if start == end:
         return [start]
@@ -141,16 +141,16 @@ def shortest_path_bfs(graph: Dict[int, List[int]], start: int, end: int) -> Opti
                 visited.add(neighbor)
                 queue.append((neighbor, path + [neighbor]))
 
-    return None  # 경로 없음
+    return None  # No path found
 
 
 # =============================================================================
-# 6. 2D 격자 탐색
+# 6. 2D Grid Traversal
 # =============================================================================
 def num_islands(grid: List[List[str]]) -> int:
     """
-    섬의 개수 세기 (DFS)
-    '1' = 땅, '0' = 물
+    Count the number of islands (DFS)
+    '1' = land, '0' = water
     """
     if not grid:
         return 0
@@ -161,7 +161,7 @@ def num_islands(grid: List[List[str]]) -> int:
     def dfs(r, c):
         if r < 0 or r >= rows or c < 0 or c >= cols or grid[r][c] == '0':
             return
-        grid[r][c] = '0'  # 방문 표시
+        grid[r][c] = '0'  # Mark as visited
         dfs(r + 1, c)
         dfs(r - 1, c)
         dfs(r, c + 1)
@@ -177,11 +177,11 @@ def num_islands(grid: List[List[str]]) -> int:
 
 
 # =============================================================================
-# 7. 레벨별 BFS 탐색
+# 7. BFS by Level
 # =============================================================================
 def bfs_by_level(graph: Dict[int, List[int]], start: int) -> List[List[int]]:
     """
-    BFS 레벨(깊이)별로 노드 그룹화
+    BFS grouping nodes by level (depth)
     """
     visited = set([start])
     queue = deque([start])
@@ -206,11 +206,11 @@ def bfs_by_level(graph: Dict[int, List[int]], start: int) -> List[List[int]]:
 
 
 # =============================================================================
-# 8. 사이클 검출 (무방향 그래프)
+# 8. Cycle Detection (Undirected Graph)
 # =============================================================================
 def has_cycle_undirected(n: int, edges: List[List[int]]) -> bool:
     """
-    무방향 그래프에서 사이클 존재 여부
+    Check for cycle in an undirected graph
     """
     graph = create_adjacency_list(edges, directed=False)
     visited = set()
@@ -234,29 +234,29 @@ def has_cycle_undirected(n: int, edges: List[List[int]]) -> bool:
 
 
 # =============================================================================
-# 9. 사이클 검출 (방향 그래프)
+# 9. Cycle Detection (Directed Graph)
 # =============================================================================
 def has_cycle_directed(n: int, edges: List[List[int]]) -> bool:
     """
-    방향 그래프에서 사이클 존재 여부
-    상태: 0=미방문, 1=방문중(현재 경로), 2=완료
+    Check for cycle in a directed graph
+    States: 0=unvisited, 1=in progress (current path), 2=completed
     """
     graph = create_adjacency_list(edges, directed=True)
-    state = [0] * n  # 0: 미방문, 1: 방문중, 2: 완료
+    state = [0] * n  # 0: unvisited, 1: in progress, 2: completed
 
     def dfs(node):
-        if state[node] == 1:  # 방문 중인 노드 재방문 = 사이클
+        if state[node] == 1:  # Revisiting a node in progress = cycle
             return True
-        if state[node] == 2:  # 이미 완료된 노드
+        if state[node] == 2:  # Already completed node
             return False
 
-        state[node] = 1  # 방문 시작
+        state[node] = 1  # Start visiting
 
         for neighbor in graph[node]:
             if dfs(neighbor):
                 return True
 
-        state[node] = 2  # 방문 완료
+        state[node] = 2  # Complete visiting
         return False
 
     for node in range(n):
@@ -268,86 +268,86 @@ def has_cycle_directed(n: int, edges: List[List[int]]) -> bool:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("DFS & BFS 예제")
+    print("DFS & BFS Examples")
     print("=" * 60)
 
-    # 그래프 생성
+    # Create graph
     edges = [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5], [2, 6]]
     graph = create_adjacency_list(edges)
 
-    print("\n[그래프 구조]")
+    print("\n[Graph Structure]")
     print("       0")
     print("      / \\")
     print("     1   2")
     print("    /|   |\\")
     print("   3 4   5 6")
 
-    # 1. DFS (재귀)
-    print("\n[1] DFS (재귀)")
+    # 1. DFS (Recursive)
+    print("\n[1] DFS (Recursive)")
     result = dfs_recursive(graph, 0)
-    print(f"    시작: 0, 탐색 순서: {result}")
+    print(f"    Start: 0, Traversal order: {result}")
 
-    # 2. DFS (반복)
-    print("\n[2] DFS (반복/스택)")
+    # 2. DFS (Iterative)
+    print("\n[2] DFS (Iterative/Stack)")
     result = dfs_iterative(graph, 0)
-    print(f"    시작: 0, 탐색 순서: {result}")
+    print(f"    Start: 0, Traversal order: {result}")
 
     # 3. BFS
     print("\n[3] BFS")
     result = bfs(graph, 0)
-    print(f"    시작: 0, 탐색 순서: {result}")
+    print(f"    Start: 0, Traversal order: {result}")
 
-    # 4. 연결 요소
-    print("\n[4] 연결 요소 개수")
+    # 4. Connected Components
+    print("\n[4] Connected Components Count")
     edges2 = [[0, 1], [1, 2], [3, 4]]
     count = count_connected_components(5, edges2)
-    print(f"    노드 5개, 간선: {edges2}")
-    print(f"    연결 요소 개수: {count}")
+    print(f"    5 nodes, edges: {edges2}")
+    print(f"    Connected components: {count}")
 
-    # 5. 최단 경로
-    print("\n[5] 최단 경로 (BFS)")
+    # 5. Shortest Path
+    print("\n[5] Shortest Path (BFS)")
     path = shortest_path_bfs(graph, 0, 6)
-    print(f"    0 -> 6 최단 경로: {path}")
+    print(f"    0 -> 6 shortest path: {path}")
 
-    # 6. 섬 개수 세기
-    print("\n[6] 섬의 개수")
+    # 6. Number of Islands
+    print("\n[6] Number of Islands")
     grid = [
         ['1', '1', '0', '0', '0'],
         ['1', '1', '0', '0', '0'],
         ['0', '0', '1', '0', '0'],
         ['0', '0', '0', '1', '1']
     ]
-    # 복사본 사용 (원본 변경됨)
+    # Use copy (original gets modified)
     grid_copy = [row[:] for row in grid]
     count = num_islands(grid_copy)
-    print(f"    격자:")
+    print(f"    Grid:")
     for row in grid:
         print(f"    {row}")
-    print(f"    섬의 개수: {count}")
+    print(f"    Number of islands: {count}")
 
-    # 7. 레벨별 BFS
-    print("\n[7] 레벨별 BFS 탐색")
+    # 7. BFS by Level
+    print("\n[7] BFS by Level")
     levels = bfs_by_level(graph, 0)
     for i, level in enumerate(levels):
-        print(f"    레벨 {i}: {level}")
+        print(f"    Level {i}: {level}")
 
-    # 8. 사이클 검출 (무방향)
-    print("\n[8] 사이클 검출 (무방향 그래프)")
+    # 8. Cycle Detection (Undirected)
+    print("\n[8] Cycle Detection (Undirected Graph)")
     edges_no_cycle = [[0, 1], [1, 2], [2, 3]]
     edges_with_cycle = [[0, 1], [1, 2], [2, 0]]
-    print(f"    간선 {edges_no_cycle}: 사이클 = {has_cycle_undirected(4, edges_no_cycle)}")
-    print(f"    간선 {edges_with_cycle}: 사이클 = {has_cycle_undirected(3, edges_with_cycle)}")
+    print(f"    Edges {edges_no_cycle}: cycle = {has_cycle_undirected(4, edges_no_cycle)}")
+    print(f"    Edges {edges_with_cycle}: cycle = {has_cycle_undirected(3, edges_with_cycle)}")
 
-    # 9. 사이클 검출 (방향)
-    print("\n[9] 사이클 검출 (방향 그래프)")
+    # 9. Cycle Detection (Directed)
+    print("\n[9] Cycle Detection (Directed Graph)")
     edges_dag = [[0, 1], [1, 2], [0, 2]]
     edges_cycle = [[0, 1], [1, 2], [2, 0]]
-    print(f"    DAG {edges_dag}: 사이클 = {has_cycle_directed(3, edges_dag)}")
-    print(f"    간선 {edges_cycle}: 사이클 = {has_cycle_directed(3, edges_cycle)}")
+    print(f"    DAG {edges_dag}: cycle = {has_cycle_directed(3, edges_dag)}")
+    print(f"    Edges {edges_cycle}: cycle = {has_cycle_directed(3, edges_cycle)}")
 
     print("\n" + "=" * 60)
 

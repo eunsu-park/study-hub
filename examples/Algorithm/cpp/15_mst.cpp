@@ -1,8 +1,8 @@
 /*
- * 최소 신장 트리 (Minimum Spanning Tree)
+ * Minimum Spanning Tree
  * Kruskal, Prim, Union-Find
  *
- * 그래프의 모든 정점을 최소 비용으로 연결합니다.
+ * Connects all vertices of a graph with minimum total cost.
  */
 
 #include <iostream>
@@ -28,7 +28,7 @@ public:
 
     int find(int x) {
         if (parent[x] != x) {
-            parent[x] = find(parent[x]);  // 경로 압축
+            parent[x] = find(parent[x]);  // Path compression
         }
         return parent[x];
     }
@@ -37,7 +37,7 @@ public:
         int px = find(x), py = find(y);
         if (px == py) return false;
 
-        // 랭크 기반 합치기
+        // Union by rank
         if (rank_[px] < rank_[py]) swap(px, py);
         parent[py] = px;
         if (rank_[px] == rank_[py]) rank_[px]++;
@@ -51,7 +51,7 @@ public:
 };
 
 // =============================================================================
-// 2. Kruskal 알고리즘
+// 2. Kruskal's Algorithm
 // =============================================================================
 
 struct Edge {
@@ -81,12 +81,12 @@ pair<int, vector<Edge>> kruskal(int n, vector<Edge>& edges) {
 }
 
 // =============================================================================
-// 3. Prim 알고리즘
+// 3. Prim's Algorithm
 // =============================================================================
 
 pair<int, vector<pair<int, int>>> prim(int n, const vector<vector<pair<int, int>>>& adj) {
     vector<bool> visited(n, false);
-    vector<pair<int, int>> mst;  // {u, v} 간선
+    vector<pair<int, int>> mst;  // {u, v} edges
     int totalWeight = 0;
 
     // {weight, vertex, parent}
@@ -116,16 +116,16 @@ pair<int, vector<pair<int, int>>> prim(int n, const vector<vector<pair<int, int>
 }
 
 // =============================================================================
-// 4. 2차 최소 신장 트리
+// 4. Second Minimum Spanning Tree
 // =============================================================================
 
 int secondMST(int n, vector<Edge>& edges) {
-    // 먼저 MST 구하기
+    // First compute MST
     auto [mstWeight, mst] = kruskal(n, edges);
 
     int secondBest = INT_MAX;
 
-    // MST의 각 간선을 제거하고 다시 MST 구하기
+    // Remove each MST edge and recompute MST
     for (int i = 0; i < (int)mst.size(); i++) {
         vector<Edge> filtered;
         for (const auto& e : edges) {
@@ -145,18 +145,18 @@ int secondMST(int n, vector<Edge>& edges) {
 }
 
 // =============================================================================
-// 5. 최대 신장 트리
+// 5. Maximum Spanning Tree
 // =============================================================================
 
 pair<int, vector<Edge>> maxSpanningTree(int n, vector<Edge>& edges) {
-    // 가중치를 음수로 바꿔서 Kruskal 적용
+    // Negate weights and apply Kruskal
     for (auto& e : edges) {
         e.weight = -e.weight;
     }
 
     auto [weight, mst] = kruskal(n, edges);
 
-    // 원래 가중치로 복원
+    // Restore original weights
     for (auto& e : edges) {
         e.weight = -e.weight;
     }
@@ -168,7 +168,7 @@ pair<int, vector<Edge>> maxSpanningTree(int n, vector<Edge>& edges) {
 }
 
 // =============================================================================
-// 6. 크러스컬 응용: 연결 비용 최소화
+// 6. Kruskal Application: Minimum Connection Cost
 // =============================================================================
 
 int minCostToConnect(int n, vector<vector<int>>& connections) {
@@ -180,14 +180,14 @@ int minCostToConnect(int n, vector<vector<int>>& connections) {
     auto [cost, mst] = kruskal(n, edges);
 
     if ((int)mst.size() != n - 1) {
-        return -1;  // 연결 불가
+        return -1;  // Cannot connect
     }
 
     return cost;
 }
 
 // =============================================================================
-// 7. Union-Find 응용: 친구 네트워크
+// 7. Union-Find Application: Friend Network
 // =============================================================================
 
 class FriendNetwork {
@@ -223,7 +223,7 @@ public:
 };
 
 // =============================================================================
-// 8. Union-Find 응용: 중복 연결 찾기
+// 8. Union-Find Application: Find Redundant Connection
 // =============================================================================
 
 vector<int> findRedundantConnection(vector<vector<int>>& edges) {
@@ -232,7 +232,7 @@ vector<int> findRedundantConnection(vector<vector<int>>& edges) {
 
     for (const auto& e : edges) {
         if (!uf.unite(e[0], e[1])) {
-            return e;  // 중복 연결
+            return e;  // Redundant connection
         }
     }
 
@@ -240,15 +240,15 @@ vector<int> findRedundantConnection(vector<vector<int>>& edges) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "최소 신장 트리 예제" << endl;
+    cout << "Minimum Spanning Tree Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 그래프
+    // Test graph
     //     1 --(4)-- 2
     //    /|        /|
     //  (1)|      (3)|
@@ -266,25 +266,25 @@ int main() {
     };
 
     // 1. Kruskal
-    cout << "\n[1] Kruskal 알고리즘" << endl;
+    cout << "\n[1] Kruskal's Algorithm" << endl;
     auto [kWeight, kMst] = kruskal(n, edges);
-    cout << "    MST 가중치: " << kWeight << endl;
-    cout << "    MST 간선: ";
+    cout << "    MST weight: " << kWeight << endl;
+    cout << "    MST edges: ";
     for (const auto& e : kMst) {
         cout << "(" << e.u << "-" << e.v << ":" << e.weight << ") ";
     }
     cout << endl;
 
     // 2. Prim
-    cout << "\n[2] Prim 알고리즘" << endl;
+    cout << "\n[2] Prim's Algorithm" << endl;
     vector<vector<pair<int, int>>> adj(n);
     for (const auto& e : edges) {
         adj[e.u].push_back({e.v, e.weight});
         adj[e.v].push_back({e.u, e.weight});
     }
     auto [pWeight, pMst] = prim(n, adj);
-    cout << "    MST 가중치: " << pWeight << endl;
-    cout << "    MST 간선: ";
+    cout << "    MST weight: " << pWeight << endl;
+    cout << "    MST edges: ";
     for (const auto& [u, v] : pMst) {
         cout << "(" << u << "-" << v << ") ";
     }
@@ -296,36 +296,36 @@ int main() {
     uf.unite(0, 1);
     uf.unite(2, 3);
     uf.unite(1, 2);
-    cout << "    합친 후: 0-1, 2-3, 1-2" << endl;
-    cout << "    0과 3 연결됨: " << (uf.connected(0, 3) ? "예" : "아니오") << endl;
-    cout << "    0과 4 연결됨: " << (uf.connected(0, 4) ? "예" : "아니오") << endl;
+    cout << "    After union: 0-1, 2-3, 1-2" << endl;
+    cout << "    0 and 3 connected: " << (uf.connected(0, 3) ? "yes" : "no") << endl;
+    cout << "    0 and 4 connected: " << (uf.connected(0, 4) ? "yes" : "no") << endl;
 
-    // 4. 2차 MST
-    cout << "\n[4] 2차 최소 신장 트리" << endl;
-    vector<Edge> edges2 = edges;  // 복사
+    // 4. Second MST
+    cout << "\n[4] Second Minimum Spanning Tree" << endl;
+    vector<Edge> edges2 = edges;  // Copy
     int secondWeight = secondMST(n, edges2);
-    cout << "    2차 MST 가중치: " << secondWeight << endl;
+    cout << "    Second MST weight: " << secondWeight << endl;
 
-    // 5. 최대 신장 트리
-    cout << "\n[5] 최대 신장 트리" << endl;
-    vector<Edge> edges3 = edges;  // 복사
+    // 5. Maximum Spanning Tree
+    cout << "\n[5] Maximum Spanning Tree" << endl;
+    vector<Edge> edges3 = edges;  // Copy
     auto [maxWeight, maxMst] = maxSpanningTree(n, edges3);
-    cout << "    Max ST 가중치: " << maxWeight << endl;
+    cout << "    Max ST weight: " << maxWeight << endl;
 
-    // 6. 중복 연결
-    cout << "\n[6] 중복 연결 찾기" << endl;
+    // 6. Redundant Connection
+    cout << "\n[6] Find Redundant Connection" << endl;
     vector<vector<int>> redEdges = {{1, 2}, {1, 3}, {2, 3}};
     auto redundant = findRedundantConnection(redEdges);
-    cout << "    간선: (1,2), (1,3), (2,3)" << endl;
-    cout << "    중복: (" << redundant[0] << ", " << redundant[1] << ")" << endl;
+    cout << "    Edges: (1,2), (1,3), (2,3)" << endl;
+    cout << "    Redundant: (" << redundant[0] << ", " << redundant[1] << ")" << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 알고리즘    | 시간복잡도       | 특징              |" << endl;
-    cout << "    |-------------|------------------|-------------------|" << endl;
-    cout << "    | Kruskal     | O(E log E)       | 간선 기반, 희소   |" << endl;
-    cout << "    | Prim        | O((V+E) log V)   | 정점 기반, 밀집   |" << endl;
-    cout << "    | Union-Find  | O(α(n)) ≈ O(1)   | 거의 상수 시간    |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Algorithm   | Time             | Notes              |" << endl;
+    cout << "    |-------------|------------------|--------------------|" << endl;
+    cout << "    | Kruskal     | O(E log E)       | Edge-based, sparse |" << endl;
+    cout << "    | Prim        | O((V+E) log V)   | Vertex-based, dense|" << endl;
+    cout << "    | Union-Find  | O(a(n)) ~ O(1)   | Nearly constant    |" << endl;
 
     cout << "\n============================================================" << endl;
 

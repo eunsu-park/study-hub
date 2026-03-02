@@ -1,10 +1,10 @@
 /*
- * CSS 기초 예제 스타일시트
- * 선택자, 박스 모델, 텍스트 스타일링, 위치 지정 등
+ * CSS Basics Example Stylesheet
+ * Selectors, box model, text styling, positioning, etc.
  */
 
 /* ============================================
-   기본 스타일
+   Base Styles
    ============================================ */
 
 /* Why: Universal reset with border-box ensures padding/border are included in element width,
@@ -46,15 +46,15 @@ h2 {
 }
 
 /* ============================================
-   1. 선택자
+   1. Selectors
    ============================================ */
 
-/* 요소 선택자 */
+/* Element selector */
 p {
     margin: 10px 0;
 }
 
-/* 클래스 선택자 */
+/* Class selector */
 .highlight {
     background-color: #ffeb3b;
     padding: 5px 10px;
@@ -65,7 +65,7 @@ p {
     font-weight: bold;
 }
 
-/* ID 선택자 */
+/* ID selector */
 #unique {
     background-color: #3498db;
     color: white;
@@ -73,26 +73,26 @@ p {
     border-radius: 4px;
 }
 
-/* 자손 선택자 (모든 자손) */
+/* Descendant selector (all descendants) */
 .parent span {
     color: #e74c3c;
     font-weight: bold;
 }
 
-/* 자식 선택자 (직접 자식만) */
+/* Child selector (direct children only) */
 .container-child > p {
     background-color: #e8f6f3;
     padding: 10px;
     border-left: 4px solid #1abc9c;
 }
 
-/* 인접 형제 선택자 */
+/* Adjacent sibling selector */
 h3 + p {
     color: #9b59b6;
     font-style: italic;
 }
 
-/* 속성 선택자 */
+/* Attribute selector */
 input[type="text"] {
     border: 2px solid #3498db;
     padding: 8px;
@@ -116,10 +116,10 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   2. 가상 클래스
+   2. Pseudo-classes
    ============================================ */
 
-/* 호버 효과 */
+/* Hover effect */
 /* Why: Combining transition with :hover transform creates a tactile "lift" effect that
    signals interactivity without JavaScript, improving perceived responsiveness */
 .btn {
@@ -143,7 +143,7 @@ a[target="_blank"]::after {
     transform: translateY(0);
 }
 
-/* 링크 상태 */
+/* Link states */
 .link {
     display: inline-block;
     margin: 10px;
@@ -225,7 +225,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   3. 가상 요소
+   3. Pseudo-elements
    ============================================ */
 
 /* ::before, ::after */
@@ -274,7 +274,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   4. 박스 모델
+   4. Box Model
    ============================================ */
 
 .box-demo {
@@ -295,15 +295,15 @@ a[target="_blank"]::after {
    overflow; border-box includes them, which is why the universal reset uses border-box */
 .content-box {
     box-sizing: content-box;
-    /* 실제 너비 = 200 + 40 + 10 = 250px */
+    /* Actual width = 200 + 40 + 10 = 250px */
 }
 
 .border-box {
     box-sizing: border-box;
-    /* 실제 너비 = 200px (패딩, 보더 포함) */
+    /* Actual width = 200px (includes padding, border) */
 }
 
-/* 박스 모델 시각화 */
+/* Box model visualization */
 .box-model-visual {
     margin: 20px auto;
     width: fit-content;
@@ -334,7 +334,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   5. 색상
+   5. Colors
    ============================================ */
 
 .color-demo {
@@ -353,7 +353,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   6. 텍스트 스타일링
+   6. Text Styling
    ============================================ */
 
 .text-font {
@@ -408,7 +408,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   7. display 속성
+   7. display Property
    ============================================ */
 
 .display-demo {
@@ -430,7 +430,7 @@ a[target="_blank"]::after {
     background-color: #27ae60;
     color: white;
     padding: 10px;
-    /* width, height 적용 안됨 */
+    /* width, height not applied */
 }
 
 .display-inline-block {
@@ -449,7 +449,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   8. position 속성
+   8. position Property
    ============================================ */
 
 .position-demo {
@@ -510,7 +510,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   9. overflow 속성
+   9. overflow Property
    ============================================ */
 
 .overflow-demo {
@@ -544,7 +544,7 @@ a[target="_blank"]::after {
 }
 
 /* ============================================
-   푸터
+   Footer
    ============================================ */
 
 footer {

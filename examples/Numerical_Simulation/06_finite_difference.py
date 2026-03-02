@@ -1,8 +1,8 @@
 """
-유한 차분법 (Finite Difference Method)
+Finite Difference Method
 Finite Difference Methods for PDEs
 
-편미분방정식(PDE)을 수치적으로 푸는 방법입니다.
+Numerical methods for solving partial differential equations (PDEs).
 """
 
 import numpy as np
@@ -11,7 +11,7 @@ from typing import Callable, Tuple
 
 
 # =============================================================================
-# 1. 1D 열 방정식 (Heat Equation)
+# 1. 1D Heat Equation
 # =============================================================================
 def heat_equation_explicit(
     L: float,
@@ -24,27 +24,27 @@ def heat_equation_explicit(
     boundary_right: float = 0
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    1D 열 방정식 (명시적 방법)
+    1D Heat Equation (explicit method)
 
-    ∂u/∂t = α ∂²u/∂x²
+    du/dt = alpha * d^2u/dx^2
 
     FTCS (Forward Time, Central Space):
     u(i,n+1) = u(i,n) + r[u(i+1,n) - 2u(i,n) + u(i-1,n)]
-    여기서 r = α*dt/dx²
+    where r = alpha*dt/dx^2
 
-    안정성 조건: r ≤ 0.5
+    Stability condition: r <= 0.5
 
     Args:
-        L: 공간 영역 [0, L]
-        T: 시간 영역 [0, T]
-        nx: 공간 격자 수
-        nt: 시간 스텝 수
-        alpha: 열확산 계수
-        initial_condition: 초기 조건 함수 u(x, 0)
-        boundary_left, boundary_right: 경계 조건
+        L: Spatial domain [0, L]
+        T: Time domain [0, T]
+        nx: Number of spatial grid points
+        nt: Number of time steps
+        alpha: Thermal diffusivity
+        initial_condition: Initial condition function u(x, 0)
+        boundary_left, boundary_right: Boundary conditions
 
     Returns:
-        (x 배열, t 배열, u 배열)
+        (x array, t array, u array)
     """
     dx = L / (nx - 1)
     dt = T / nt
@@ -52,20 +52,20 @@ def heat_equation_explicit(
 
     print(f"dx={dx:.4f}, dt={dt:.6f}, r={r:.4f}")
     if r > 0.5:
-        print(f"경고: 안정성 조건 위반 (r={r:.4f} > 0.5)")
+        print(f"Warning: stability condition violated (r={r:.4f} > 0.5)")
 
     x = np.linspace(0, L, nx)
     t = np.linspace(0, T, nt + 1)
     u = np.zeros((nt + 1, nx))
 
-    # 초기 조건
+    # Initial condition
     u[0, :] = initial_condition(x)
 
-    # 경계 조건
+    # Boundary conditions
     u[:, 0] = boundary_left
     u[:, -1] = boundary_right
 
-    # 시간 전진
+    # Time stepping
     for n in range(nt):
         for i in range(1, nx - 1):
             u[n + 1, i] = u[n, i] + r * (u[n, i + 1] - 2 * u[n, i] + u[n, i - 1])
@@ -84,9 +84,9 @@ def heat_equation_implicit(
     boundary_right: float = 0
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    1D 열 방정식 (암시적 방법 - Crank-Nicolson)
+    1D Heat Equation (implicit method - Crank-Nicolson)
 
-    무조건 안정, O(dt², dx²) 정확도
+    Unconditionally stable, O(dt^2, dx^2) accuracy
     """
     dx = L / (nx - 1)
     dt = T / nt
@@ -96,12 +96,12 @@ def heat_equation_implicit(
     t = np.linspace(0, T, nt + 1)
     u = np.zeros((nt + 1, nx))
 
-    # 초기 조건
+    # Initial condition
     u[0, :] = initial_condition(x)
     u[:, 0] = boundary_left
     u[:, -1] = boundary_right
 
-    # 삼대각 행렬 설정
+    # Tridiagonal matrix setup
     n_inner = nx - 2
     A = np.zeros((n_inner, n_inner))
     B = np.zeros((n_inner, n_inner))
@@ -116,21 +116,21 @@ def heat_equation_implicit(
             A[i, i + 1] = -r
             B[i, i + 1] = r
 
-    # 시간 전진
+    # Time stepping
     for n in range(nt):
-        # 우변 계산
+        # Compute right-hand side
         b = B @ u[n, 1:-1]
         b[0] += r * (u[n + 1, 0] + u[n, 0])
         b[-1] += r * (u[n + 1, -1] + u[n, -1])
 
-        # 선형 시스템 풀기
+        # Solve linear system
         u[n + 1, 1:-1] = np.linalg.solve(A, b)
 
     return x, t, u
 
 
 # =============================================================================
-# 2. 1D 파동 방정식 (Wave Equation)
+# 2. 1D Wave Equation
 # =============================================================================
 def wave_equation(
     L: float,
@@ -142,15 +142,15 @@ def wave_equation(
     initial_velocity: Callable[[np.ndarray], np.ndarray] = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    1D 파동 방정식
+    1D Wave Equation
 
-    ∂²u/∂t² = c² ∂²u/∂x²
+    d^2u/dt^2 = c^2 * d^2u/dx^2
 
-    유한 차분:
-    u(i,n+1) = 2u(i,n) - u(i,n-1) + s²[u(i+1,n) - 2u(i,n) + u(i-1,n)]
-    여기서 s = c*dt/dx (Courant number)
+    Finite difference:
+    u(i,n+1) = 2u(i,n) - u(i,n-1) + s^2[u(i+1,n) - 2u(i,n) + u(i-1,n)]
+    where s = c*dt/dx (Courant number)
 
-    안정성 조건: s ≤ 1 (CFL 조건)
+    Stability condition: s <= 1 (CFL condition)
     """
     dx = L / (nx - 1)
     dt = T / nt
@@ -158,16 +158,16 @@ def wave_equation(
 
     print(f"Courant number s={s:.4f}")
     if s > 1:
-        print(f"경고: CFL 조건 위반 (s={s:.4f} > 1)")
+        print(f"Warning: CFL condition violated (s={s:.4f} > 1)")
 
     x = np.linspace(0, L, nx)
     t = np.linspace(0, T, nt + 1)
     u = np.zeros((nt + 1, nx))
 
-    # 초기 조건
+    # Initial condition
     u[0, :] = initial_displacement(x)
 
-    # 첫 번째 시간 스텝 (초기 속도 사용)
+    # First time step (using initial velocity)
     if initial_velocity is None:
         initial_velocity = lambda x: np.zeros_like(x)
 
@@ -176,11 +176,11 @@ def wave_equation(
         u[1, i] = (u[0, i] + dt * v0[i] +
                    0.5 * s**2 * (u[0, i + 1] - 2 * u[0, i] + u[0, i - 1]))
 
-    # 경계 조건 (고정)
+    # Boundary conditions (fixed)
     u[:, 0] = 0
     u[:, -1] = 0
 
-    # 시간 전진
+    # Time stepping
     for n in range(1, nt):
         for i in range(1, nx - 1):
             u[n + 1, i] = (2 * u[n, i] - u[n - 1, i] +
@@ -190,7 +190,7 @@ def wave_equation(
 
 
 # =============================================================================
-# 3. 2D 라플라스/포아송 방정식
+# 3. 2D Laplace/Poisson Equation
 # =============================================================================
 def laplace_2d(
     Lx: float,
@@ -202,11 +202,11 @@ def laplace_2d(
     tol: float = 1e-6
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    2D 라플라스 방정식 (Jacobi 반복법)
+    2D Laplace Equation (Jacobi iteration)
 
-    ∇²u = 0  또는  ∂²u/∂x² + ∂²u/∂y² = 0
+    nabla^2 u = 0  or  d^2u/dx^2 + d^2u/dy^2 = 0
 
-    Jacobi 반복:
+    Jacobi iteration:
     u(i,j)_new = 0.25 * [u(i+1,j) + u(i-1,j) + u(i,j+1) + u(i,j-1)]
 
     Args:
@@ -220,7 +220,7 @@ def laplace_2d(
 
     u = np.zeros((ny, nx))
 
-    # 경계 조건 설정
+    # Set boundary conditions
     bc = boundary_conditions
     if callable(bc.get('top')):
         u[-1, :] = bc['top'](x)
@@ -242,7 +242,7 @@ def laplace_2d(
     else:
         u[:, -1] = bc.get('right', 0)
 
-    # Jacobi 반복
+    # Jacobi iteration
     for iteration in range(max_iter):
         u_old = u.copy()
 
@@ -251,10 +251,10 @@ def laplace_2d(
                 u[i, j] = 0.25 * (u_old[i + 1, j] + u_old[i - 1, j] +
                                   u_old[i, j + 1] + u_old[i, j - 1])
 
-        # 수렴 체크
+        # Convergence check
         error = np.max(np.abs(u - u_old))
         if error < tol:
-            print(f"수렴: {iteration + 1}회 반복, 오차={error:.2e}")
+            print(f"Converged: {iteration + 1} iterations, error={error:.2e}")
             break
 
     return x, y, u
@@ -271,12 +271,12 @@ def laplace_2d_sor(
     tol: float = 1e-6
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    2D 라플라스 방정식 (SOR - Successive Over-Relaxation)
+    2D Laplace Equation (SOR - Successive Over-Relaxation)
 
-    Jacobi보다 빠른 수렴
+    Faster convergence than Jacobi
 
     Args:
-        omega: 이완 인자 (1 < ω < 2 for 가속)
+        omega: Relaxation factor (1 < omega < 2 for acceleration)
     """
     x = np.linspace(0, Lx, nx)
     y = np.linspace(0, Ly, ny)
@@ -300,18 +300,18 @@ def laplace_2d_sor(
                 max_diff = max(max_diff, abs(u[i, j] - u_old))
 
         if max_diff < tol:
-            print(f"SOR 수렴: {iteration + 1}회 반복")
+            print(f"SOR converged: {iteration + 1} iterations")
             break
 
     return x, y, u
 
 
 # =============================================================================
-# 시각화
+# Visualization
 # =============================================================================
 def plot_heat_equation():
-    """열 방정식 시각화"""
-    # 초기 조건: 가운데 뜨거운 부분
+    """Heat equation visualization"""
+    # Initial condition: hot region in the center
     initial = lambda x: np.sin(np.pi * x)
 
     x, t, u = heat_equation_explicit(
@@ -321,35 +321,35 @@ def plot_heat_equation():
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    # 시공간 등고선
+    # Spatiotemporal contour
     ax = axes[0]
     X, T_mesh = np.meshgrid(x, t)
     contour = ax.contourf(X, T_mesh, u, levels=20, cmap='hot')
-    plt.colorbar(contour, ax=ax, label='온도')
-    ax.set_xlabel('위치 x')
-    ax.set_ylabel('시간 t')
-    ax.set_title('열 방정식 해')
+    plt.colorbar(contour, ax=ax, label='Temperature')
+    ax.set_xlabel('Position x')
+    ax.set_ylabel('Time t')
+    ax.set_title('Heat Equation Solution')
 
-    # 시간별 프로파일
+    # Temporal profiles
     ax = axes[1]
     times_to_plot = [0, len(t)//4, len(t)//2, 3*len(t)//4, -1]
     for idx in times_to_plot:
         ax.plot(x, u[idx, :], label=f't={t[idx]:.3f}')
-    ax.set_xlabel('위치 x')
-    ax.set_ylabel('온도 u')
-    ax.set_title('시간별 온도 분포')
+    ax.set_xlabel('Position x')
+    ax.set_ylabel('Temperature u')
+    ax.set_title('Temperature Distribution Over Time')
     ax.legend()
     ax.grid(True)
 
     plt.tight_layout()
     plt.savefig('/opt/projects/01_Personal/03_Study/Numerical_Simulation/examples/heat_equation.png', dpi=150)
     plt.close()
-    print("그래프 저장: heat_equation.png")
+    print("Graph saved: heat_equation.png")
 
 
 def plot_wave_equation():
-    """파동 방정식 시각화"""
-    # 초기 변위: 가우시안 펄스
+    """Wave equation visualization"""
+    # Initial displacement: Gaussian pulse
     initial = lambda x: np.exp(-100 * (x - 0.5)**2)
 
     x, t, u = wave_equation(
@@ -359,33 +359,33 @@ def plot_wave_equation():
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    # 시공간 등고선
+    # Spatiotemporal contour
     ax = axes[0]
     X, T_mesh = np.meshgrid(x, t)
     contour = ax.contourf(X, T_mesh, u, levels=20, cmap='RdBu')
-    plt.colorbar(contour, ax=ax, label='변위')
-    ax.set_xlabel('위치 x')
-    ax.set_ylabel('시간 t')
-    ax.set_title('파동 방정식 해')
+    plt.colorbar(contour, ax=ax, label='Displacement')
+    ax.set_xlabel('Position x')
+    ax.set_ylabel('Time t')
+    ax.set_title('Wave Equation Solution')
 
-    # 스냅샷
+    # Snapshots
     ax = axes[1]
     for idx in [0, 50, 100, 150, 200]:
         ax.plot(x, u[idx, :], label=f't={t[idx]:.2f}')
-    ax.set_xlabel('위치 x')
-    ax.set_ylabel('변위 u')
-    ax.set_title('시간별 파동 형태')
+    ax.set_xlabel('Position x')
+    ax.set_ylabel('Displacement u')
+    ax.set_title('Wave Shape Over Time')
     ax.legend()
     ax.grid(True)
 
     plt.tight_layout()
     plt.savefig('/opt/projects/01_Personal/03_Study/Numerical_Simulation/examples/wave_equation.png', dpi=150)
     plt.close()
-    print("그래프 저장: wave_equation.png")
+    print("Graph saved: wave_equation.png")
 
 
 def plot_laplace_2d():
-    """2D 라플라스 방정식 시각화"""
+    """2D Laplace equation visualization"""
     bc = {
         'top': lambda x: np.sin(np.pi * x),
         'bottom': 0,
@@ -403,64 +403,64 @@ def plot_laplace_2d():
 
     X, Y = np.meshgrid(x, y)
 
-    # 등고선
+    # Contour
     ax = axes[0]
     contour = ax.contourf(X, Y, u, levels=20, cmap='viridis')
     plt.colorbar(contour, ax=ax)
     ax.set_xlabel('x')
     ax.set_ylabel('y')
-    ax.set_title('라플라스 방정식 해')
+    ax.set_title('Laplace Equation Solution')
     ax.set_aspect('equal')
 
-    # 3D 표면
+    # 3D surface
     ax = axes[1]
     ax = fig.add_subplot(1, 2, 2, projection='3d')
     ax.plot_surface(X, Y, u, cmap='viridis', alpha=0.8)
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('u')
-    ax.set_title('3D 표면')
+    ax.set_title('3D Surface')
 
     plt.tight_layout()
     plt.savefig('/opt/projects/01_Personal/03_Study/Numerical_Simulation/examples/laplace_2d.png', dpi=150)
     plt.close()
-    print("그래프 저장: laplace_2d.png")
+    print("Graph saved: laplace_2d.png")
 
 
 # =============================================================================
-# 테스트
+# Test
 # =============================================================================
 def main():
     print("=" * 60)
-    print("유한 차분법 (Finite Difference Method)")
+    print("Finite Difference Method")
     print("=" * 60)
 
-    # 1. 열 방정식
-    print("\n[1] 1D 열 방정식")
+    # 1. Heat equation
+    print("\n[1] 1D Heat Equation")
     print("-" * 40)
 
     initial = lambda x: np.sin(np.pi * x)
 
-    print("명시적 방법 (FTCS):")
+    print("Explicit method (FTCS):")
     x, t, u_explicit = heat_equation_explicit(
         L=1.0, T=0.1, nx=21, nt=100, alpha=0.1,
         initial_condition=initial
     )
-    print(f"  t=0.1에서 중앙 온도: {u_explicit[-1, 10]:.6f}")
+    print(f"  Center temperature at t=0.1: {u_explicit[-1, 10]:.6f}")
 
-    print("\n암시적 방법 (Crank-Nicolson):")
+    print("\nImplicit method (Crank-Nicolson):")
     x, t, u_implicit = heat_equation_implicit(
         L=1.0, T=0.1, nx=21, nt=100, alpha=0.1,
         initial_condition=initial
     )
-    print(f"  t=0.1에서 중앙 온도: {u_implicit[-1, 10]:.6f}")
+    print(f"  Center temperature at t=0.1: {u_implicit[-1, 10]:.6f}")
 
-    # 해석해: u = exp(-π²αt) sin(πx)
+    # Analytical solution: u = exp(-pi^2*alpha*t) sin(pi*x)
     exact = np.exp(-np.pi**2 * 0.1 * 0.1) * np.sin(np.pi * 0.5)
-    print(f"  해석해: {exact:.6f}")
+    print(f"  Analytical solution: {exact:.6f}")
 
-    # 2. 파동 방정식
-    print("\n[2] 1D 파동 방정식")
+    # 2. Wave equation
+    print("\n[2] 1D Wave Equation")
     print("-" * 40)
 
     initial_wave = lambda x: np.sin(np.pi * x)
@@ -469,57 +469,57 @@ def main():
         L=1.0, T=2.0, nx=51, nt=200, c=1.0,
         initial_displacement=initial_wave
     )
-    print(f"주기 T = 2L/c = 2.0")
-    print(f"t=2.0에서 중앙 변위: {u_wave[-1, 25]:.6f}")
-    print(f"(초기값과 같아야 함: {initial_wave(0.5):.6f})")
+    print(f"Period T = 2L/c = 2.0")
+    print(f"Center displacement at t=2.0: {u_wave[-1, 25]:.6f}")
+    print(f"(Should equal initial value: {initial_wave(0.5):.6f})")
 
-    # 3. 2D 라플라스 방정식
-    print("\n[3] 2D 라플라스 방정식")
+    # 3. 2D Laplace equation
+    print("\n[3] 2D Laplace Equation")
     print("-" * 40)
 
     bc = {'top': 100, 'bottom': 0, 'left': 0, 'right': 0}
 
-    print("Jacobi 반복:")
+    print("Jacobi iteration:")
     x, y, u_jacobi = laplace_2d(1.0, 1.0, 31, 31, bc, tol=1e-4)
 
-    print("\nSOR (ω=1.5):")
+    print("\nSOR (omega=1.5):")
     x, y, u_sor = laplace_2d_sor(1.0, 1.0, 31, 31, bc, omega=1.5, tol=1e-4)
 
-    print(f"\n중심점 온도: {u_jacobi[15, 15]:.4f}")
+    print(f"\nCenter temperature: {u_jacobi[15, 15]:.4f}")
 
-    # 시각화
+    # Visualization
     try:
         plot_heat_equation()
         plot_wave_equation()
         plot_laplace_2d()
     except Exception as e:
-        print(f"그래프 생성 실패: {e}")
+        print(f"Graph generation failed: {e}")
 
     print("\n" + "=" * 60)
-    print("유한 차분법 정리")
+    print("Finite Difference Method Summary")
     print("=" * 60)
     print("""
-    PDE 유형과 방법:
+    PDE types and methods:
 
-    | PDE 유형    | 대표 예      | 권장 방법              |
-    |------------|-------------|----------------------|
-    | 포물선형    | 열 방정식    | FTCS, Crank-Nicolson |
-    | 쌍곡선형    | 파동 방정식  | 중심차분, Lax-Wendroff|
-    | 타원형      | 라플라스     | Jacobi, GS, SOR      |
+    | PDE Type    | Example         | Recommended Method         |
+    |-------------|-----------------|----------------------------|
+    | Parabolic   | Heat equation   | FTCS, Crank-Nicolson       |
+    | Hyperbolic  | Wave equation   | Central difference, Lax-Wendroff|
+    | Elliptic    | Laplace         | Jacobi, GS, SOR            |
 
-    안정성 조건:
-    - 열 방정식 (명시적): r = αΔt/Δx² ≤ 0.5
-    - 파동 방정식: CFL = cΔt/Δx ≤ 1
+    Stability conditions:
+    - Heat equation (explicit): r = alpha*dt/dx^2 <= 0.5
+    - Wave equation: CFL = c*dt/dx <= 1
 
-    차분 근사:
-    - 전진 차분: ∂u/∂t ≈ [u(t+Δt) - u(t)] / Δt
-    - 후진 차분: ∂u/∂t ≈ [u(t) - u(t-Δt)] / Δt
-    - 중심 차분: ∂²u/∂x² ≈ [u(x+Δx) - 2u(x) + u(x-Δx)] / Δx²
+    Finite difference approximations:
+    - Forward difference: du/dt ~ [u(t+dt) - u(t)] / dt
+    - Backward difference: du/dt ~ [u(t) - u(t-dt)] / dt
+    - Central difference: d^2u/dx^2 ~ [u(x+dx) - 2u(x) + u(x-dx)] / dx^2
 
-    실무:
-    - scipy.ndimage: 간단한 필터링
-    - FEniCS, FiPy: Python PDE 프레임워크
-    - OpenFOAM: CFD (유한 체적법)
+    Production use:
+    - scipy.ndimage: Simple filtering
+    - FEniCS, FiPy: Python PDE frameworks
+    - OpenFOAM: CFD (finite volume method)
     """)
 
 

@@ -1,12 +1,12 @@
 """
-Q-Learning과 SARSA 구현
+Q-Learning and SARSA Implementation
 """
 import numpy as np
 import gymnasium as gym
 
 
 class QLearning:
-    """Q-Learning 에이전트"""
+    """Q-Learning Agent"""
 
     def __init__(self, n_states, n_actions, alpha=0.1, gamma=0.99, epsilon=0.1):
         self.q_table = np.zeros((n_states, n_actions))
@@ -32,7 +32,7 @@ class QLearning:
 
 
 class SARSA:
-    """SARSA 에이전트"""
+    """SARSA Agent"""
 
     def __init__(self, n_states, n_actions, alpha=0.1, gamma=0.99, epsilon=0.1):
         self.q_table = np.zeros((n_states, n_actions))
@@ -58,7 +58,7 @@ class SARSA:
 
 
 def train_qlearning():
-    """Q-Learning으로 FrozenLake 학습"""
+    """Train FrozenLake with Q-Learning"""
     env = gym.make('FrozenLake-v1', is_slippery=True)
     agent = QLearning(
         n_states=env.observation_space.n,
@@ -98,5 +98,5 @@ def train_qlearning():
 
 if __name__ == "__main__":
     agent = train_qlearning()
-    print("\n학습 완료!")
-    print(f"최종 Q 테이블 shape: {agent.q_table.shape}")
+    print("\nTraining complete!")
+    print(f"Final Q-table shape: {agent.q_table.shape}")

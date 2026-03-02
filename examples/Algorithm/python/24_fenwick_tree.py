@@ -1,37 +1,37 @@
 """
-펜윅 트리 (Fenwick Tree / Binary Indexed Tree)
+Fenwick Tree (Binary Indexed Tree)
 Fenwick Tree (BIT)
 
-구간 합과 점 업데이트를 효율적으로 처리하는 자료구조입니다.
+A data structure for efficiently processing range sums and point updates.
 """
 
 from typing import List
 
 
 # =============================================================================
-# 1. 기본 펜윅 트리 (구간 합)
+# 1. Basic Fenwick Tree (Range Sum)
 # =============================================================================
 
 class FenwickTree:
     """
-    펜윅 트리 (Binary Indexed Tree)
-    - 점 업데이트: O(log n)
-    - 접두사 합: O(log n)
-    - 구간 합: O(log n)
-    - 공간: O(n)
+    Fenwick Tree (Binary Indexed Tree)
+    - Point update: O(log n)
+    - Prefix sum: O(log n)
+    - Range sum: O(log n)
+    - Space: O(n)
     """
 
     def __init__(self, n: int):
-        """크기 n의 빈 펜윅 트리 생성"""
+        """Create an empty Fenwick tree of size n"""
         self.n = n
         self.tree = [0] * (n + 1)  # 1-indexed
 
     @classmethod
     def from_array(cls, arr: List[int]) -> 'FenwickTree':
-        """배열로부터 펜윅 트리 생성 - O(n)"""
+        """Build Fenwick tree from array - O(n)"""
         ft = cls(len(arr))
 
-        # 효율적인 구성 (O(n))
+        # Efficient construction (O(n))
         for i, val in enumerate(arr):
             ft.tree[i + 1] += val
             parent = i + 1 + (ft._lowbit(i + 1))
@@ -41,19 +41,19 @@ class FenwickTree:
         return ft
 
     def _lowbit(self, x: int) -> int:
-        """최하위 비트 (x & -x)"""
+        """Lowest set bit (x & -x)"""
         return x & (-x)
 
     def update(self, idx: int, delta: int):
-        """idx 위치에 delta 더하기 (0-indexed) - O(log n)"""
-        idx += 1  # 1-indexed로 변환
+        """Add delta at position idx (0-indexed) - O(log n)"""
+        idx += 1  # Convert to 1-indexed
 
         while idx <= self.n:
             self.tree[idx] += delta
             idx += self._lowbit(idx)
 
     def prefix_sum(self, idx: int) -> int:
-        """[0, idx] 구간 합 (0-indexed) - O(log n)"""
+        """Sum of [0, idx] (0-indexed) - O(log n)"""
         idx += 1
         result = 0
 
@@ -64,29 +64,29 @@ class FenwickTree:
         return result
 
     def range_sum(self, left: int, right: int) -> int:
-        """[left, right] 구간 합 (0-indexed) - O(log n)"""
+        """Sum of [left, right] (0-indexed) - O(log n)"""
         if left == 0:
             return self.prefix_sum(right)
         return self.prefix_sum(right) - self.prefix_sum(left - 1)
 
     def get(self, idx: int) -> int:
-        """idx 위치의 값 (0-indexed)"""
+        """Value at position idx (0-indexed)"""
         return self.range_sum(idx, idx)
 
     def set(self, idx: int, val: int):
-        """idx 위치의 값을 val로 설정"""
+        """Set value at position idx to val"""
         current = self.get(idx)
         self.update(idx, val - current)
 
 
 # =============================================================================
-# 2. 구간 업데이트 + 점 쿼리 펜윅 트리
+# 2. Range Update + Point Query Fenwick Tree
 # =============================================================================
 
 class FenwickTreeRangeUpdate:
     """
-    구간 업데이트 + 점 쿼리
-    차분 배열 기법 활용
+    Range Update + Point Query
+    Uses difference array technique
     """
 
     def __init__(self, n: int):
@@ -103,13 +103,13 @@ class FenwickTreeRangeUpdate:
             idx += self._lowbit(idx)
 
     def update_range(self, left: int, right: int, delta: int):
-        """[left, right] 구간에 delta 더하기"""
+        """Add delta to range [left, right]"""
         self._update(left, delta)
         if right + 1 < self.n:
             self._update(right + 1, -delta)
 
     def query(self, idx: int) -> int:
-        """idx 위치의 값"""
+        """Value at position idx"""
         idx += 1
         result = 0
         while idx > 0:
@@ -119,13 +119,13 @@ class FenwickTreeRangeUpdate:
 
 
 # =============================================================================
-# 3. 구간 업데이트 + 구간 쿼리 펜윅 트리
+# 3. Range Update + Range Query Fenwick Tree
 # =============================================================================
 
 class FenwickTreeRangeUpdateRangeQuery:
     """
-    구간 업데이트 + 구간 쿼리
-    두 개의 BIT 사용
+    Range Update + Range Query
+    Uses two BITs
     """
 
     def __init__(self, n: int):
@@ -149,30 +149,30 @@ class FenwickTreeRangeUpdateRangeQuery:
         return result
 
     def update_range(self, left: int, right: int, delta: int):
-        """[left, right] 구간에 delta 더하기 (1-indexed)"""
+        """Add delta to range [left, right] (1-indexed)"""
         self._update(self.tree1, left, delta)
         self._update(self.tree1, right + 1, -delta)
         self._update(self.tree2, left, delta * (left - 1))
         self._update(self.tree2, right + 1, -delta * right)
 
     def prefix_sum(self, idx: int) -> int:
-        """[1, idx] 구간 합 (1-indexed)"""
+        """Sum of [1, idx] (1-indexed)"""
         return self._prefix_sum(self.tree1, idx) * idx - self._prefix_sum(self.tree2, idx)
 
     def range_sum(self, left: int, right: int) -> int:
-        """[left, right] 구간 합 (1-indexed)"""
+        """Sum of [left, right] (1-indexed)"""
         return self.prefix_sum(right) - self.prefix_sum(left - 1)
 
 
 # =============================================================================
-# 4. 2D 펜윅 트리
+# 4. 2D Fenwick Tree
 # =============================================================================
 
 class FenwickTree2D:
     """
-    2D 펜윅 트리
-    - 점 업데이트: O(log n * log m)
-    - 직사각형 합: O(log n * log m)
+    2D Fenwick Tree
+    - Point update: O(log n * log m)
+    - Rectangle sum: O(log n * log m)
     """
 
     def __init__(self, n: int, m: int):
@@ -184,7 +184,7 @@ class FenwickTree2D:
         return x & (-x)
 
     def update(self, x: int, y: int, delta: int):
-        """(x, y)에 delta 더하기 (0-indexed)"""
+        """Add delta at (x, y) (0-indexed)"""
         x += 1
         while x <= self.n:
             y_idx = y + 1
@@ -194,7 +194,7 @@ class FenwickTree2D:
             x += self._lowbit(x)
 
     def prefix_sum(self, x: int, y: int) -> int:
-        """(0,0) ~ (x,y) 합 (0-indexed)"""
+        """Sum of (0,0) to (x,y) (0-indexed)"""
         x += 1
         result = 0
         while x > 0:
@@ -206,7 +206,7 @@ class FenwickTree2D:
         return result
 
     def range_sum(self, x1: int, y1: int, x2: int, y2: int) -> int:
-        """(x1,y1) ~ (x2,y2) 직사각형 합 (0-indexed)"""
+        """Rectangle sum from (x1,y1) to (x2,y2) (0-indexed)"""
         result = self.prefix_sum(x2, y2)
         if x1 > 0:
             result -= self.prefix_sum(x1 - 1, y2)
@@ -218,18 +218,18 @@ class FenwickTree2D:
 
 
 # =============================================================================
-# 5. 역순 쌍 개수 (Inversion Count)
+# 5. Inversion Count
 # =============================================================================
 
 def count_inversions(arr: List[int]) -> int:
     """
-    역순 쌍 개수 (펜윅 트리 활용)
-    시간복잡도: O(n log n)
+    Inversion count using Fenwick tree
+    Time Complexity: O(n log n)
     """
     if not arr:
         return 0
 
-    # 좌표 압축
+    # Coordinate compression
     sorted_arr = sorted(set(arr))
     rank = {v: i for i, v in enumerate(sorted_arr)}
     n = len(sorted_arr)
@@ -239,7 +239,7 @@ def count_inversions(arr: List[int]) -> int:
 
     for val in arr:
         r = rank[val]
-        # r보다 큰 인덱스의 개수 (이미 삽입된 것 중)
+        # Count of indices greater than r (among already inserted)
         inversions += ft.prefix_sum(n - 1) - ft.prefix_sum(r)
         ft.update(r, 1)
 
@@ -247,11 +247,11 @@ def count_inversions(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 6. K번째 원소 찾기
+# 6. Finding the K-th Element
 # =============================================================================
 
 class FenwickTreeKth:
-    """K번째 원소 찾기를 지원하는 펜윅 트리"""
+    """Fenwick tree supporting k-th element queries"""
 
     def __init__(self, n: int):
         self.n = n
@@ -261,13 +261,13 @@ class FenwickTreeKth:
         return x & (-x)
 
     def update(self, idx: int, delta: int):
-        """idx에 delta 더하기 (1-indexed)"""
+        """Add delta at idx (1-indexed)"""
         while idx <= self.n:
             self.tree[idx] += delta
             idx += self._lowbit(idx)
 
     def prefix_sum(self, idx: int) -> int:
-        """[1, idx] 합"""
+        """Sum of [1, idx]"""
         result = 0
         while idx > 0:
             result += self.tree[idx]
@@ -276,9 +276,9 @@ class FenwickTreeKth:
 
     def find_kth(self, k: int) -> int:
         """
-        k번째 원소의 인덱스 찾기 (1-indexed)
-        prefix_sum(idx) >= k인 최소 idx
-        시간복잡도: O(log n)
+        Find index of k-th element (1-indexed)
+        Smallest idx such that prefix_sum(idx) >= k
+        Time Complexity: O(log n)
         """
         idx = 0
         bit_mask = 1
@@ -298,24 +298,24 @@ class FenwickTreeKth:
 
 
 # =============================================================================
-# 7. 응용: 구간에서 K보다 작은 원소 개수
+# 7. Application: Count Elements Smaller Than K in Range
 # =============================================================================
 
 def count_smaller_in_range(arr: List[int], queries: List[tuple]) -> List[int]:
     """
-    쿼리: (left, right, k) - arr[left:right+1]에서 k보다 작은 원소 개수
-    오프라인 쿼리 + 펜윅 트리
-    시간복잡도: O((n + q) log n)
+    Query: (left, right, k) - count of elements < k in arr[left:right+1]
+    Offline queries + Fenwick tree
+    Time Complexity: O((n + q) log n)
     """
     n = len(arr)
     q = len(queries)
 
-    # 좌표 압축
+    # Coordinate compression
     all_vals = sorted(set(arr) | set(k for _, _, k in queries))
     val_to_idx = {v: i + 1 for i, v in enumerate(all_vals)}
     m = len(all_vals)
 
-    # (값, 인덱스, 타입) 이벤트 생성
+    # Generate (value, index, type) events
     events = []
     for i, val in enumerate(arr):
         events.append((val_to_idx[val], i, 'arr', None))
@@ -326,7 +326,7 @@ def count_smaller_in_range(arr: List[int], queries: List[tuple]) -> List[int]:
 
     events.sort()
 
-    # 결과
+    # Results
     results = [0] * q
     ft = FenwickTree(n)
 
@@ -341,71 +341,71 @@ def count_smaller_in_range(arr: List[int], queries: List[tuple]) -> List[int]:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("펜윅 트리 (Fenwick Tree / BIT) 예제")
+    print("Fenwick Tree (BIT) Examples")
     print("=" * 60)
 
-    # 1. 기본 펜윅 트리
-    print("\n[1] 기본 펜윅 트리")
+    # 1. Basic Fenwick Tree
+    print("\n[1] Basic Fenwick Tree")
     arr = [1, 3, 5, 7, 9, 11]
     ft = FenwickTree.from_array(arr)
-    print(f"    배열: {arr}")
+    print(f"    Array: {arr}")
     print(f"    prefix_sum(3): {ft.prefix_sum(3)}")  # 1+3+5+7=16
     print(f"    range_sum(1, 4): {ft.range_sum(1, 4)}")  # 3+5+7+9=24
-    ft.update(2, 5)  # 5 → 10
-    print(f"    update(2, +5) 후 range_sum(1, 4): {ft.range_sum(1, 4)}")  # 3+10+7+9=29
+    ft.update(2, 5)  # 5 -> 10
+    print(f"    After update(2, +5) range_sum(1, 4): {ft.range_sum(1, 4)}")  # 3+10+7+9=29
 
-    # 2. 구간 업데이트 + 점 쿼리
-    print("\n[2] 구간 업데이트 + 점 쿼리")
+    # 2. Range Update + Point Query
+    print("\n[2] Range Update + Point Query")
     ft_ru = FenwickTreeRangeUpdate(6)
-    ft_ru.update_range(1, 3, 5)  # [1,3]에 5 더하기
-    ft_ru.update_range(2, 4, 3)  # [2,4]에 3 더하기
+    ft_ru.update_range(1, 3, 5)  # Add 5 to [1,3]
+    ft_ru.update_range(2, 4, 3)  # Add 3 to [2,4]
     print(f"    update_range(1, 3, +5), update_range(2, 4, +3)")
     for i in range(6):
         print(f"    query({i}): {ft_ru.query(i)}")
 
-    # 3. 2D 펜윅 트리
-    print("\n[3] 2D 펜윅 트리")
+    # 3. 2D Fenwick Tree
+    print("\n[3] 2D Fenwick Tree")
     ft2d = FenwickTree2D(3, 3)
-    # 행렬 채우기
+    # Fill matrix
     matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     for i in range(3):
         for j in range(3):
             ft2d.update(i, j, matrix[i][j])
-    print(f"    행렬: {matrix}")
+    print(f"    Matrix: {matrix}")
     print(f"    range_sum(0,0,1,1): {ft2d.range_sum(0, 0, 1, 1)}")  # 1+2+4+5=12
     print(f"    range_sum(1,1,2,2): {ft2d.range_sum(1, 1, 2, 2)}")  # 5+6+8+9=28
 
-    # 4. 역순 쌍 개수
-    print("\n[4] 역순 쌍 개수")
+    # 4. Inversion Count
+    print("\n[4] Inversion Count")
     arr = [2, 4, 1, 3, 5]
     inv = count_inversions(arr)
-    print(f"    배열: {arr}")
-    print(f"    역순 쌍: {inv}")  # (2,1), (4,1), (4,3) = 3
+    print(f"    Array: {arr}")
+    print(f"    Inversions: {inv}")  # (2,1), (4,1), (4,3) = 3
 
-    # 5. K번째 원소
-    print("\n[5] K번째 원소")
+    # 5. K-th Element
+    print("\n[5] K-th Element")
     ft_kth = FenwickTreeKth(10)
     for val in [3, 5, 7, 1, 9]:
         ft_kth.update(val, 1)
-    print(f"    삽입된 원소: [3, 5, 7, 1, 9]")
+    print(f"    Inserted elements: [3, 5, 7, 1, 9]")
     for k in [1, 2, 3, 4, 5]:
-        print(f"    {k}번째 원소: {ft_kth.find_kth(k)}")
+        print(f"    {k}-th element: {ft_kth.find_kth(k)}")
 
-    # 6. 펜윅 트리 vs 세그먼트 트리 비교
-    print("\n[6] 펜윅 트리 vs 세그먼트 트리")
-    print("    | 특성         | 펜윅 트리 | 세그먼트 트리 |")
-    print("    |--------------|-----------|---------------|")
-    print("    | 공간         | O(n)      | O(4n)         |")
-    print("    | 구현 난이도  | 쉬움      | 보통          |")
-    print("    | 점 업데이트  | O(log n)  | O(log n)      |")
-    print("    | 구간 쿼리    | O(log n)  | O(log n)      |")
-    print("    | 구간 업데이트| 2개 BIT   | Lazy          |")
-    print("    | 지원 연산    | 가역만    | 임의          |")
+    # 6. Fenwick Tree vs Segment Tree Comparison
+    print("\n[6] Fenwick Tree vs Segment Tree")
+    print("    | Property      | Fenwick Tree | Segment Tree  |")
+    print("    |---------------|-------------|---------------|")
+    print("    | Space         | O(n)        | O(4n)         |")
+    print("    | Implementation| Easy        | Moderate      |")
+    print("    | Point update  | O(log n)    | O(log n)      |")
+    print("    | Range query   | O(log n)    | O(log n)      |")
+    print("    | Range update  | 2 BITs      | Lazy          |")
+    print("    | Operations    | Invertible  | Arbitrary     |")
 
     print("\n" + "=" * 60)
 

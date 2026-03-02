@@ -1,8 +1,8 @@
 /*
- * 시간 복잡도 (Time Complexity)
+ * Time Complexity
  * Big O Notation and Complexity Analysis
  *
- * 알고리즘의 효율성을 분석하는 방법입니다.
+ * A method for analyzing the efficiency of algorithms.
  */
 
 #include <stdio.h>
@@ -10,16 +10,16 @@
 #include <time.h>
 
 /* =============================================================================
- * 1. O(1) - 상수 시간
+ * 1. O(1) - Constant Time
  * ============================================================================= */
 
 int constant_time(int arr[], int n) {
-    /* 배열 크기와 무관하게 항상 일정한 시간 */
+    /* Takes the same amount of time regardless of array size */
     return arr[0];
 }
 
 /* =============================================================================
- * 2. O(log n) - 로그 시간
+ * 2. O(log n) - Logarithmic Time
  * ============================================================================= */
 
 int binary_search(int arr[], int n, int target) {
@@ -40,7 +40,7 @@ int binary_search(int arr[], int n, int target) {
 }
 
 /* =============================================================================
- * 3. O(n) - 선형 시간
+ * 3. O(n) - Linear Time
  * ============================================================================= */
 
 int linear_search(int arr[], int n, int target) {
@@ -60,7 +60,7 @@ int sum_array(int arr[], int n) {
 }
 
 /* =============================================================================
- * 4. O(n log n) - 선형 로그 시간
+ * 4. O(n log n) - Linearithmic Time
  * ============================================================================= */
 
 void merge(int arr[], int left, int mid, int right) {
@@ -102,7 +102,7 @@ void merge_sort(int arr[], int left, int right) {
 }
 
 /* =============================================================================
- * 5. O(n²) - 이차 시간
+ * 5. O(n^2) - Quadratic Time
  * ============================================================================= */
 
 void bubble_sort(int arr[], int n) {
@@ -128,7 +128,7 @@ int count_pairs(int arr[], int n) {
 }
 
 /* =============================================================================
- * 6. O(2^n) - 지수 시간
+ * 6. O(2^n) - Exponential Time
  * ============================================================================= */
 
 int fibonacci_recursive(int n) {
@@ -137,7 +137,7 @@ int fibonacci_recursive(int n) {
     return fibonacci_recursive(n - 1) + fibonacci_recursive(n - 2);
 }
 
-/* O(n) 최적화 버전 */
+/* O(n) optimized version */
 int fibonacci_iterative(int n) {
     if (n <= 1)
         return n;
@@ -152,7 +152,7 @@ int fibonacci_iterative(int n) {
 }
 
 /* =============================================================================
- * 7. 시간 측정 유틸리티
+ * 7. Time Measurement Utility
  * ============================================================================= */
 
 double measure_time(void (*func)(int*, int), int arr[], int n) {
@@ -163,10 +163,10 @@ double measure_time(void (*func)(int*, int), int arr[], int n) {
 }
 
 /* =============================================================================
- * 8. 공간 복잡도 예제
+ * 8. Space Complexity Examples
  * ============================================================================= */
 
-/* O(1) 공간 */
+/* O(1) space */
 void reverse_in_place(int arr[], int n) {
     for (int i = 0; i < n / 2; i++) {
         int temp = arr[i];
@@ -175,7 +175,7 @@ void reverse_in_place(int arr[], int n) {
     }
 }
 
-/* O(n) 공간 */
+/* O(n) space */
 int* reverse_with_copy(int arr[], int n) {
     int *result = malloc(n * sizeof(int));
     for (int i = 0; i < n; i++) {
@@ -185,7 +185,7 @@ int* reverse_with_copy(int arr[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -200,68 +200,68 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("시간 복잡도 (Time Complexity) 예제\n");
+    printf("Time Complexity Examples\n");
     printf("============================================================\n");
 
     /* 1. O(1) */
-    printf("\n[1] O(1) - 상수 시간\n");
+    printf("\n[1] O(1) - Constant Time\n");
     int arr1[] = {5, 2, 8, 1, 9};
-    printf("    첫 번째 원소: %d\n", constant_time(arr1, 5));
+    printf("    First element: %d\n", constant_time(arr1, 5));
 
     /* 2. O(log n) */
-    printf("\n[2] O(log n) - 이분 탐색\n");
+    printf("\n[2] O(log n) - Binary Search\n");
     int arr2[] = {1, 3, 5, 7, 9, 11, 13, 15};
     int idx = binary_search(arr2, 8, 7);
-    printf("    배열: [1,3,5,7,9,11,13,15]\n");
-    printf("    7의 위치: %d\n", idx);
+    printf("    Array: [1,3,5,7,9,11,13,15]\n");
+    printf("    Position of 7: %d\n", idx);
 
     /* 3. O(n) */
-    printf("\n[3] O(n) - 선형 탐색\n");
+    printf("\n[3] O(n) - Linear Search\n");
     int arr3[] = {4, 2, 7, 1, 9, 3};
-    printf("    배열 합: %d\n", sum_array(arr3, 6));
+    printf("    Array sum: %d\n", sum_array(arr3, 6));
 
     /* 4. O(n log n) */
-    printf("\n[4] O(n log n) - 병합 정렬\n");
+    printf("\n[4] O(n log n) - Merge Sort\n");
     int arr4[] = {64, 34, 25, 12, 22, 11, 90};
-    printf("    정렬 전: ");
+    printf("    Before sort: ");
     print_array(arr4, 7);
     merge_sort(arr4, 0, 6);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr4, 7);
 
-    /* 5. O(n²) */
-    printf("\n[5] O(n²) - 버블 정렬\n");
+    /* 5. O(n^2) */
+    printf("\n[5] O(n^2) - Bubble Sort\n");
     int arr5[] = {64, 34, 25, 12, 22, 11, 90};
     bubble_sort(arr5, 7);
-    printf("    정렬 후: ");
+    printf("    After sort: ");
     print_array(arr5, 7);
-    printf("    5개 원소의 쌍 개수: %d\n", count_pairs(arr5, 5));
+    printf("    Number of pairs from 5 elements: %d\n", count_pairs(arr5, 5));
 
     /* 6. O(2^n) vs O(n) */
-    printf("\n[6] O(2^n) vs O(n) - 피보나치\n");
-    printf("    피보나치(20) 재귀: %d\n", fibonacci_recursive(20));
-    printf("    피보나치(20) 반복: %d\n", fibonacci_iterative(20));
-    printf("    피보나치(40) 반복: %d\n", fibonacci_iterative(40));
+    printf("\n[6] O(2^n) vs O(n) - Fibonacci\n");
+    printf("    Fibonacci(20) recursive: %d\n", fibonacci_recursive(20));
+    printf("    Fibonacci(20) iterative: %d\n", fibonacci_iterative(20));
+    printf("    Fibonacci(40) iterative: %d\n", fibonacci_iterative(40));
 
-    /* 7. 공간 복잡도 */
-    printf("\n[7] 공간 복잡도\n");
+    /* 7. Space Complexity */
+    printf("\n[7] Space Complexity\n");
     int arr7[] = {1, 2, 3, 4, 5};
-    printf("    원본: ");
+    printf("    Original: ");
     print_array(arr7, 5);
     reverse_in_place(arr7, 5);
-    printf("    O(1) 공간 뒤집기: ");
+    printf("    O(1) space reverse: ");
     print_array(arr7, 5);
 
-    /* 8. 복잡도 요약 */
-    printf("\n[8] 복잡도 요약\n");
-    printf("    | 복잡도    | 1000개 연산 | 예시              |\n");
-    printf("    |-----------|-------------|-------------------|\n");
-    printf("    | O(1)      | 1           | 배열 인덱싱       |\n");
-    printf("    | O(log n)  | 10          | 이분 탐색         |\n");
-    printf("    | O(n)      | 1000        | 선형 탐색         |\n");
-    printf("    | O(n log n)| 10000       | 병합 정렬         |\n");
-    printf("    | O(n²)     | 1000000     | 버블 정렬         |\n");
-    printf("    | O(2^n)    | 매우 큼     | 모든 부분집합     |\n");
+    /* 8. Complexity Summary */
+    printf("\n[8] Complexity Summary\n");
+    printf("    | Complexity | 1000 ops    | Example           |\n");
+    printf("    |------------|-------------|-------------------|\n");
+    printf("    | O(1)       | 1           | Array indexing    |\n");
+    printf("    | O(log n)   | 10          | Binary search     |\n");
+    printf("    | O(n)       | 1000        | Linear search     |\n");
+    printf("    | O(n log n) | 10000       | Merge sort        |\n");
+    printf("    | O(n^2)     | 1000000     | Bubble sort       |\n");
+    printf("    | O(2^n)     | Very large  | All subsets       |\n");
 
     printf("\n============================================================\n");
 

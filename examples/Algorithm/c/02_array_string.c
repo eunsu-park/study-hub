@@ -1,8 +1,8 @@
 /*
- * 배열과 문자열 (Array and String)
+ * Array and String
  * Two Pointer, Sliding Window, Prefix Sum
  *
- * 배열과 문자열을 효율적으로 다루는 기법들입니다.
+ * Techniques for efficiently handling arrays and strings.
  */
 
 #include <stdio.h>
@@ -11,10 +11,10 @@
 #include <stdbool.h>
 
 /* =============================================================================
- * 1. 투 포인터 (Two Pointers)
+ * 1. Two Pointers
  * ============================================================================= */
 
-/* 정렬된 배열에서 두 수의 합이 target인 쌍 찾기 */
+/* Find a pair in a sorted array whose sum equals target */
 bool two_sum_sorted(int arr[], int n, int target, int* i, int* j) {
     int left = 0, right = n - 1;
 
@@ -33,7 +33,7 @@ bool two_sum_sorted(int arr[], int n, int target, int* i, int* j) {
     return false;
 }
 
-/* 배열 뒤집기 */
+/* Reverse an array */
 void reverse_array(int arr[], int left, int right) {
     while (left < right) {
         int temp = arr[left];
@@ -44,7 +44,7 @@ void reverse_array(int arr[], int left, int right) {
     }
 }
 
-/* 중복 제거 (정렬된 배열) */
+/* Remove duplicates (sorted array) */
 int remove_duplicates(int arr[], int n) {
     if (n == 0) return 0;
 
@@ -58,10 +58,10 @@ int remove_duplicates(int arr[], int n) {
 }
 
 /* =============================================================================
- * 2. 슬라이딩 윈도우 (Sliding Window)
+ * 2. Sliding Window
  * ============================================================================= */
 
-/* 고정 크기 윈도우의 최대 합 */
+/* Maximum sum of a fixed-size window */
 int max_sum_subarray(int arr[], int n, int k) {
     if (n < k) return -1;
 
@@ -81,7 +81,7 @@ int max_sum_subarray(int arr[], int n, int k) {
     return max_sum;
 }
 
-/* 합이 target 이상인 최소 길이 부분 배열 */
+/* Minimum length subarray with sum >= target */
 int min_subarray_len(int arr[], int n, int target) {
     int left = 0;
     int sum = 0;
@@ -100,7 +100,7 @@ int min_subarray_len(int arr[], int n, int target) {
     return (min_len == n + 1) ? 0 : min_len;
 }
 
-/* 최대 k개 0을 1로 바꿨을 때 연속 1의 최대 길이 */
+/* Maximum length of consecutive 1s after flipping at most k zeros to 1 */
 int longest_ones(int arr[], int n, int k) {
     int left = 0;
     int zeros = 0;
@@ -122,10 +122,10 @@ int longest_ones(int arr[], int n, int k) {
 }
 
 /* =============================================================================
- * 3. 프리픽스 합 (Prefix Sum)
+ * 3. Prefix Sum
  * ============================================================================= */
 
-/* 프리픽스 합 배열 생성 */
+/* Build prefix sum array */
 int* build_prefix_sum(int arr[], int n) {
     int* prefix = malloc((n + 1) * sizeof(int));
     prefix[0] = 0;
@@ -135,12 +135,12 @@ int* build_prefix_sum(int arr[], int n) {
     return prefix;
 }
 
-/* 구간 합 쿼리 [left, right] */
+/* Range sum query [left, right] */
 int range_sum(int prefix[], int left, int right) {
     return prefix[right + 1] - prefix[left];
 }
 
-/* 2D 프리픽스 합 */
+/* 2D Prefix Sum */
 typedef struct {
     int** prefix;
     int rows;
@@ -185,10 +185,10 @@ void free_prefix_sum_2d(PrefixSum2D* ps) {
 }
 
 /* =============================================================================
- * 4. 문자열 처리
+ * 4. String Processing
  * ============================================================================= */
 
-/* 팰린드롬 검사 */
+/* Palindrome check */
 bool is_palindrome(const char* s) {
     int left = 0;
     int right = strlen(s) - 1;
@@ -201,7 +201,7 @@ bool is_palindrome(const char* s) {
     return true;
 }
 
-/* 애너그램 검사 */
+/* Anagram check */
 bool is_anagram(const char* s1, const char* s2) {
     if (strlen(s1) != strlen(s2)) return false;
 
@@ -218,7 +218,7 @@ bool is_anagram(const char* s1, const char* s2) {
     return true;
 }
 
-/* 가장 긴 공통 접두사 */
+/* Longest common prefix */
 char* longest_common_prefix(char* strs[], int n) {
     if (n == 0) return "";
 
@@ -237,7 +237,7 @@ char* longest_common_prefix(char* strs[], int n) {
 }
 
 /* =============================================================================
- * 5. Kadane 알고리즘 (최대 부분 배열 합)
+ * 5. Kadane's Algorithm (Maximum Subarray Sum)
  * ============================================================================= */
 
 int max_subarray_sum(int arr[], int n) {
@@ -256,7 +256,7 @@ int max_subarray_sum(int arr[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -270,74 +270,74 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("배열과 문자열 (Array and String) 예제\n");
+    printf("Array and String Examples\n");
     printf("============================================================\n");
 
-    /* 1. 투 포인터 */
-    printf("\n[1] 투 포인터 - Two Sum\n");
+    /* 1. Two Pointers */
+    printf("\n[1] Two Pointers - Two Sum\n");
     int arr1[] = {2, 7, 11, 15};
     int i, j;
     if (two_sum_sorted(arr1, 4, 9, &i, &j)) {
-        printf("    배열: [2,7,11,15], target=9\n");
-        printf("    인덱스: (%d, %d)\n", i, j);
+        printf("    Array: [2,7,11,15], target=9\n");
+        printf("    Indices: (%d, %d)\n", i, j);
     }
 
-    printf("\n[2] 중복 제거\n");
+    printf("\n[2] Remove Duplicates\n");
     int arr2[] = {1, 1, 2, 2, 3, 4, 4};
-    printf("    원본: ");
+    printf("    Original: ");
     print_array(arr2, 7);
     int new_len = remove_duplicates(arr2, 7);
-    printf("\n    결과: ");
+    printf("\n    Result: ");
     print_array(arr2, new_len);
-    printf(" (길이: %d)\n", new_len);
+    printf(" (length: %d)\n", new_len);
 
-    /* 2. 슬라이딩 윈도우 */
-    printf("\n[3] 슬라이딩 윈도우 - 최대 합\n");
+    /* 2. Sliding Window */
+    printf("\n[3] Sliding Window - Maximum Sum\n");
     int arr3[] = {2, 1, 5, 1, 3, 2};
-    printf("    배열: [2,1,5,1,3,2], k=3\n");
-    printf("    최대 합: %d\n", max_sum_subarray(arr3, 6, 3));
+    printf("    Array: [2,1,5,1,3,2], k=3\n");
+    printf("    Maximum sum: %d\n", max_sum_subarray(arr3, 6, 3));
 
-    printf("\n[4] 합이 target 이상인 최소 길이\n");
+    printf("\n[4] Minimum Length with Sum >= Target\n");
     int arr4[] = {2, 3, 1, 2, 4, 3};
-    printf("    배열: [2,3,1,2,4,3], target=7\n");
-    printf("    최소 길이: %d\n", min_subarray_len(arr4, 6, 7));
+    printf("    Array: [2,3,1,2,4,3], target=7\n");
+    printf("    Minimum length: %d\n", min_subarray_len(arr4, 6, 7));
 
-    printf("\n[5] 최대 k개 0→1 변환 후 연속 1\n");
+    printf("\n[5] Max Consecutive 1s After Flipping k Zeros\n");
     int arr5[] = {1, 1, 0, 0, 1, 1, 1, 0, 1};
-    printf("    배열: [1,1,0,0,1,1,1,0,1], k=2\n");
-    printf("    최대 길이: %d\n", longest_ones(arr5, 9, 2));
+    printf("    Array: [1,1,0,0,1,1,1,0,1], k=2\n");
+    printf("    Maximum length: %d\n", longest_ones(arr5, 9, 2));
 
-    /* 3. 프리픽스 합 */
-    printf("\n[6] 프리픽스 합\n");
+    /* 3. Prefix Sum */
+    printf("\n[6] Prefix Sum\n");
     int arr6[] = {1, 2, 3, 4, 5};
     int* prefix = build_prefix_sum(arr6, 5);
-    printf("    배열: [1,2,3,4,5]\n");
-    printf("    구간 합 [1,3]: %d\n", range_sum(prefix, 1, 3));
+    printf("    Array: [1,2,3,4,5]\n");
+    printf("    Range sum [1,3]: %d\n", range_sum(prefix, 1, 3));
     free(prefix);
 
-    /* 4. 문자열 */
-    printf("\n[7] 팰린드롬 검사\n");
+    /* 4. String */
+    printf("\n[7] Palindrome Check\n");
     printf("    'racecar': %s\n", is_palindrome("racecar") ? "true" : "false");
     printf("    'hello': %s\n", is_palindrome("hello") ? "true" : "false");
 
-    printf("\n[8] 애너그램 검사\n");
+    printf("\n[8] Anagram Check\n");
     printf("    'listen', 'silent': %s\n",
            is_anagram("listen", "silent") ? "true" : "false");
 
     /* 5. Kadane */
-    printf("\n[9] Kadane - 최대 부분 배열 합\n");
+    printf("\n[9] Kadane's Algorithm - Maximum Subarray Sum\n");
     int arr9[] = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
-    printf("    배열: [-2,1,-3,4,-1,2,1,-5,4]\n");
-    printf("    최대 합: %d\n", max_subarray_sum(arr9, 9));
+    printf("    Array: [-2,1,-3,4,-1,2,1,-5,4]\n");
+    printf("    Maximum sum: %d\n", max_subarray_sum(arr9, 9));
 
-    /* 10. 알고리즘 요약 */
-    printf("\n[10] 기법 요약\n");
-    printf("    | 기법           | 시간복잡도 | 용도                    |\n");
+    /* 10. Algorithm Summary */
+    printf("\n[10] Technique Summary\n");
+    printf("    | Technique      | Time       | Use Case                |\n");
     printf("    |----------------|------------|-------------------------|\n");
-    printf("    | 투 포인터      | O(n)       | 정렬 배열, 양끝 탐색    |\n");
-    printf("    | 슬라이딩 윈도우| O(n)       | 연속 부분 배열          |\n");
-    printf("    | 프리픽스 합    | O(n)/O(1)  | 구간 합 쿼리            |\n");
-    printf("    | Kadane         | O(n)       | 최대 부분 배열 합       |\n");
+    printf("    | Two Pointers   | O(n)       | Sorted array, both ends |\n");
+    printf("    | Sliding Window | O(n)       | Contiguous subarray     |\n");
+    printf("    | Prefix Sum     | O(n)/O(1)  | Range sum queries       |\n");
+    printf("    | Kadane         | O(n)       | Maximum subarray sum    |\n");
 
     printf("\n============================================================\n");
 

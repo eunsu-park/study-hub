@@ -1,5 +1,5 @@
 // serial_calculator.ino
-// 시리얼 모니터 계산기
+// Serial Monitor Calculator
 
 void setup() {
     Serial.begin(9600);
@@ -37,7 +37,7 @@ void processExpression(char* expr) {
     float num1, num2;
     char op;
 
-    // 수식 파싱: "num1 op num2"
+    // Parse expression: "num1 op num2"
     int parsed = sscanf(expr, "%f %c %f", &num1, &op, &num2);
 
     if (parsed == 3) {
@@ -66,10 +66,10 @@ void loop() {
             if (inputIndex > 0) {
                 inputBuffer[inputIndex] = '\0';
 
-                // 종료 명령 확인
+                // Check for quit command
                 if (strcmp(inputBuffer, "quit") == 0) {
                     Serial.println("Goodbye!");
-                    while (1);  // 정지
+                    while (1);  // Halt
                 }
 
                 processExpression(inputBuffer);
@@ -84,13 +84,13 @@ void loop() {
 }
 
 /*
- * 사용 방법:
- * 1. 시리얼 모니터 열기 (Tools → Serial Monitor)
- * 2. Baud rate를 9600으로 설정
- * 3. 수식 입력: "10 + 5" 엔터
- * 4. 결과 확인: "10 + 5 = 15.00"
+ * How to Use:
+ * 1. Open Serial Monitor (Tools -> Serial Monitor)
+ * 2. Set Baud rate to 9600
+ * 3. Enter expression: "10 + 5" and press Enter
+ * 4. Check result: "10 + 5 = 15.00"
  *
- * Wokwi에서:
- * - Serial Monitor 탭 클릭
- * - 수식 입력 후 엔터
+ * On Wokwi:
+ * - Click the Serial Monitor tab
+ * - Enter expression and press Enter
  */

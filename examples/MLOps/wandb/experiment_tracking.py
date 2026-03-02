@@ -2,13 +2,13 @@
 Weights & Biases Experiment Tracking Example
 ============================================
 
-W&B를 사용한 실험 추적 예제입니다.
+Example of experiment tracking using W&B.
 
-실행 방법:
-    # W&B 로그인
+How to run:
+    # Log in to W&B
     wandb login
 
-    # 스크립트 실행
+    # Run the script
     python experiment_tracking.py
 """
 
@@ -30,13 +30,13 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# W&B 프로젝트 설정
+# W&B project settings
 PROJECT_NAME = "breast-cancer-classification"
-ENTITY = None  # 팀 이름 (개인이면 None)
+ENTITY = None  # Team name (None for personal)
 
 
 def load_data():
-    """데이터 로드 및 분할"""
+    """Load and split data"""
     data = load_breast_cancer()
     X_train, X_test, y_train, y_test = train_test_split(
         data.data, data.target,
@@ -48,7 +48,7 @@ def load_data():
 
 
 def calculate_metrics(y_true, y_pred, y_proba=None):
-    """메트릭 계산"""
+    """Calculate metrics"""
     metrics = {
         "accuracy": accuracy_score(y_true, y_pred),
         "precision": precision_score(y_true, y_pred),
@@ -63,9 +63,9 @@ def calculate_metrics(y_true, y_pred, y_proba=None):
 
 
 def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test, feature_names):
-    """W&B로 실험 추적하며 모델 학습"""
+    """Train model with W&B experiment tracking"""
 
-    # W&B 초기화
+    # Initialize W&B
     run = wandb.init(
         project=PROJECT_NAME,
         entity=ENTITY,
@@ -75,26 +75,26 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
         notes=f"Training {model_name} on breast cancer dataset"
     )
 
-    # 추가 설정 로깅
+    # Log additional config
     wandb.config.update({
         "train_size": len(X_train),
         "test_size": len(X_test),
         "n_features": X_train.shape[1]
     })
 
-    # 모델 학습
+    # Train model
     model.fit(X_train, y_train)
 
-    # 교차 검증
+    # Cross-validation
     cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring="accuracy")
     wandb.log({
         "cv_mean": cv_scores.mean(),
         "cv_std": cv_scores.std()
     })
 
-    # 학습 곡선 시뮬레이션 (일부 모델에서)
+    # Learning curve simulation (for some models)
     if hasattr(model, "n_estimators"):
-        # 단계별 성능 기록
+        # Record step-wise performance
         for i in range(1, params.get("n_estimators", 100) + 1, 10):
             partial_model = type(model)(**{**params, "n_estimators": i})
             partial_model.fit(X_train, y_train)
@@ -106,11 +106,11 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
                 "n_estimators": i
             })
 
-    # 최종 예측
+    # Final predictions
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
 
-    # 메트릭 로깅
+    # Log metrics
     metrics = calculate_metrics(y_test, y_pred, y_proba)
     wandb.log(metrics)
 
@@ -124,10 +124,10 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
     wandb.log({"confusion_matrix": wandb.Image(plt)})
     plt.close()
 
-    # Feature Importance (해당하는 경우)
+    # Feature importance (if applicable)
     if hasattr(model, "feature_importances_"):
         importance = model.feature_importances_
-        indices = np.argsort(importance)[::-1][:15]  # 상위 15개
+        indices = np.argsort(importance)[::-1][:15]  # Top 15
 
         plt.figure(figsize=(12, 6))
         plt.bar(range(len(indices)), importance[indices])
@@ -137,7 +137,7 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
         wandb.log({"feature_importance": wandb.Image(plt)})
         plt.close()
 
-        # 테이블로도 로깅
+        # Also log as table
         importance_data = [
             [feature_names[i], importance[i]]
             for i in indices
@@ -145,7 +145,7 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
         table = wandb.Table(columns=["feature", "importance"], data=importance_data)
         wandb.log({"feature_importance_table": table})
 
-    # ROC Curve (확률 예측 가능한 경우)
+    # ROC Curve (if probability prediction is available)
     if y_proba is not None:
         wandb.log({
             "roc_curve": wandb.plot.roc_curve(y_test, np.column_stack([1-y_proba, y_proba]))
@@ -157,33 +157,33 @@ def train_with_wandb(model_name, model, params, X_train, X_test, y_train, y_test
         "classification_report": report
     })
 
-    # 모델 아티팩트 저장
+    # Save model artifact
     artifact = wandb.Artifact(
         name=f"{model_name.lower()}-model",
         type="model",
         description=f"{model_name} trained on breast cancer dataset"
     )
-    # 실제 프로덕션에서는 모델 파일 저장
+    # In production, save actual model file
     # artifact.add_file("model.pkl")
     wandb.log_artifact(artifact)
 
-    # 결과 출력
-    print(f"\n{model_name} 결과:")
+    # Print results
+    print(f"\n{model_name} results:")
     print(f"  Accuracy: {metrics['accuracy']:.4f}")
     print(f"  F1 Score: {metrics['f1_score']:.4f}")
     print(f"  ROC AUC: {metrics.get('roc_auc', 'N/A')}")
     print(f"  CV Mean: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
 
-    # 실행 종료
+    # End run
     wandb.finish()
 
     return metrics
 
 
 def hyperparameter_sweep():
-    """하이퍼파라미터 스윕 예제"""
+    """Hyperparameter sweep example"""
 
-    # 스윕 설정
+    # Sweep configuration
     sweep_config = {
         "name": "rf-hyperparameter-sweep",
         "method": "bayes",  # random, grid, bayes
@@ -212,7 +212,7 @@ def hyperparameter_sweep():
     }
 
     def train_sweep():
-        """스윕에서 실행될 학습 함수"""
+        """Training function to run in sweep"""
         wandb.init()
         config = wandb.config
 
@@ -232,30 +232,30 @@ def hyperparameter_sweep():
         wandb.log({"val_accuracy": val_accuracy})
         wandb.finish()
 
-    # 스윕 생성 및 실행
+    # Create and run sweep
     sweep_id = wandb.sweep(sweep_config, project=PROJECT_NAME)
-    print(f"\n스윕 ID: {sweep_id}")
-    print("스윕을 실행하려면:")
+    print(f"\nSweep ID: {sweep_id}")
+    print("To run the sweep:")
     print(f"  wandb agent {sweep_id}")
 
-    # 로컬에서 실행 (선택적)
+    # Run locally (optional)
     # wandb.agent(sweep_id, function=train_sweep, count=20)
 
 
 def main():
-    """메인 실행 함수"""
+    """Main execution function"""
     print("="*60)
-    print("Weights & Biases 실험 추적 예제")
+    print("Weights & Biases Experiment Tracking Example")
     print("="*60)
 
-    # 데이터 로드
+    # Load data
     X_train, X_test, y_train, y_test, feature_names, target_names = load_data()
-    print(f"\n데이터셋:")
-    print(f"  학습 데이터: {len(X_train)} 샘플")
-    print(f"  테스트 데이터: {len(X_test)} 샘플")
-    print(f"  피처 수: {len(feature_names)}")
+    print(f"\nDataset:")
+    print(f"  Training data: {len(X_train)} samples")
+    print(f"  Test data: {len(X_test)} samples")
+    print(f"  Number of features: {len(feature_names)}")
 
-    # 모델 정의
+    # Define models
     models = [
         (
             "RandomForest",
@@ -274,11 +274,11 @@ def main():
         )
     ]
 
-    # 모델 학습
+    # Train models
     results = {}
     for model_name, model, params in models:
         print(f"\n{'='*40}")
-        print(f"{model_name} 학습 중...")
+        print(f"Training {model_name}...")
         metrics = train_with_wandb(
             model_name, model, params,
             X_train, X_test, y_train, y_test,
@@ -286,16 +286,16 @@ def main():
         )
         results[model_name] = metrics
 
-    # 결과 요약
+    # Results summary
     print("\n" + "="*60)
-    print("결과 요약")
+    print("Results Summary")
     print("="*60)
     print(f"\n{'Model':<20} {'Accuracy':<12} {'F1 Score':<12} {'ROC AUC':<12}")
     print("-"*60)
     for name, metrics in results.items():
         print(f"{name:<20} {metrics['accuracy']:<12.4f} {metrics['f1_score']:<12.4f} {metrics.get('roc_auc', 0):<12.4f}")
 
-    print(f"\nW&B 대시보드에서 자세한 결과를 확인하세요:")
+    print(f"\nView detailed results on the W&B dashboard:")
     print(f"  https://wandb.ai/{ENTITY or 'your-username'}/{PROJECT_NAME}")
 
 

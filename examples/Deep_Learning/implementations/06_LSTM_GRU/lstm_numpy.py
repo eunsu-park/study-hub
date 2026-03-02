@@ -1,61 +1,62 @@
 """
-NumPy LSTM From-Scratch 구현
+NumPy LSTM From-Scratch Implementation
 
-모든 게이트 연산과 BPTT를 직접 구현
+Directly implements all gate operations and BPTT.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import Tuple, Dict, List
 
 
 def sigmoid(x: np.ndarray) -> np.ndarray:
-    """Sigmoid 활성화 (수치 안정성 고려)"""
+    """Sigmoid activation (with numerical stability)"""
     return np.where(x >= 0,
                     1 / (1 + np.exp(-x)),
                     np.exp(x) / (1 + np.exp(x)))
 
 
 def sigmoid_derivative(s: np.ndarray) -> np.ndarray:
-    """Sigmoid의 derivative: s * (1 - s)"""
+    """Sigmoid derivative: s * (1 - s)"""
     return s * (1 - s)
 
 
 def tanh_derivative(t: np.ndarray) -> np.ndarray:
-    """Tanh의 derivative: 1 - t^2"""
+    """Tanh derivative: 1 - t^2"""
     return 1 - t ** 2
 
 
 class LSTMCellNumPy:
     """
-    단일 LSTM Cell (NumPy 구현)
+    Single LSTM Cell (NumPy implementation)
 
-    수식:
-        f_t = σ(W_f · [h_{t-1}, x_t] + b_f)
-        i_t = σ(W_i · [h_{t-1}, x_t] + b_i)
-        c̃_t = tanh(W_c · [h_{t-1}, x_t] + b_c)
-        c_t = f_t ⊙ c_{t-1} + i_t ⊙ c̃_t
-        o_t = σ(W_o · [h_{t-1}, x_t] + b_o)
-        h_t = o_t ⊙ tanh(c_t)
+    Equations:
+        f_t = sigma(W_f . [h_{t-1}, x_t] + b_f)
+        i_t = sigma(W_i . [h_{t-1}, x_t] + b_i)
+        c_tilde_t = tanh(W_c . [h_{t-1}, x_t] + b_c)
+        c_t = f_t * c_{t-1} + i_t * c_tilde_t
+        o_t = sigma(W_o . [h_{t-1}, x_t] + b_o)
+        h_t = o_t * tanh(c_t)
     """
 
     def __init__(self, input_size: int, hidden_size: int):
         self.input_size = input_size
         self.hidden_size = hidden_size
 
-        # Xavier 초기화
+        # Xavier initialization
         concat_size = input_size + hidden_size
         scale = np.sqrt(2.0 / (concat_size + hidden_size))
 
-        # 4개 게이트를 하나의 가중치로 관리 (효율성)
-        # 순서: forget, input, candidate, output
+        # All 4 gates managed in a single weight matrix (for efficiency)
+        # Order: forget, input, candidate, output
         self.W = np.random.randn(4 * hidden_size, concat_size) * scale
         self.b = np.zeros(4 * hidden_size)
 
-        # Gradient 저장
+        # Gradient storage
         self.dW = np.zeros_like(self.W)
         self.db = np.zeros_like(self.b)
 
-        # Forward pass 캐시
+        # Forward pass cache
         self.cache = {}
 
     def forward(
@@ -68,13 +69,13 @@ class LSTMCellNumPy:
         Forward pass
 
         Args:
-            x: (batch_size, input_size) 현재 입력
-            h_prev: (batch_size, hidden_size) 이전 hidden
-            c_prev: (batch_size, hidden_size) 이전 cell
+            x: (batch_size, input_size) current input
+            h_prev: (batch_size, hidden_size) previous hidden state
+            c_prev: (batch_size, hidden_size) previous cell state
 
         Returns:
-            h_t: (batch_size, hidden_size) 현재 hidden
-            c_t: (batch_size, hidden_size) 현재 cell
+            h_t: (batch_size, hidden_size) current hidden state
+            c_t: (batch_size, hidden_size) current cell state
         """
         batch_size = x.shape[0]
         H = self.hidden_size
@@ -82,22 +83,22 @@ class LSTMCellNumPy:
         # Concatenate [h_prev, x]
         concat = np.concatenate([h_prev, x], axis=1)  # (batch, hidden+input)
 
-        # 모든 게이트 한번에 계산
+        # Compute all gates at once
         gates = concat @ self.W.T + self.b  # (batch, 4*hidden)
 
-        # 분리
+        # Split gates
         f_gate = sigmoid(gates[:, 0:H])           # Forget gate
         i_gate = sigmoid(gates[:, H:2*H])         # Input gate
         c_tilde = np.tanh(gates[:, 2*H:3*H])      # Candidate
         o_gate = sigmoid(gates[:, 3*H:4*H])       # Output gate
 
-        # Cell state 업데이트
+        # Cell state update
         c_t = f_gate * c_prev + i_gate * c_tilde
 
         # Hidden state
         h_t = o_gate * np.tanh(c_t)
 
-        # Backward를 위한 캐시
+        # Cache for backward pass
         self.cache = {
             'x': x,
             'h_prev': h_prev,
@@ -120,49 +121,49 @@ class LSTMCellNumPy:
         dc_next: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Backward pass (BPTT 한 스텝)
+        Backward pass (one BPTT step)
 
         Args:
-            dh_next: (batch_size, hidden_size) 다음 시점에서 온 h gradient
-            dc_next: (batch_size, hidden_size) 다음 시점에서 온 c gradient
+            dh_next: (batch_size, hidden_size) h gradient from next time step
+            dc_next: (batch_size, hidden_size) c gradient from next time step
 
         Returns:
-            dx: (batch_size, input_size) 입력에 대한 gradient
-            dh_prev: (batch_size, hidden_size) 이전 hidden gradient
-            dc_prev: (batch_size, hidden_size) 이전 cell gradient
+            dx: (batch_size, input_size) gradient w.r.t. input
+            dh_prev: (batch_size, hidden_size) gradient w.r.t. previous hidden
+            dc_prev: (batch_size, hidden_size) gradient w.r.t. previous cell
         """
         cache = self.cache
         H = self.hidden_size
 
-        # Cell state gradient (두 경로에서 옴)
-        # 1. dh_next → o_gate → tanh(c_t) → c_t
-        # 2. dc_next (다음 시점에서 직접)
+        # Cell state gradient (arrives from two paths)
+        # 1. dh_next -> o_gate -> tanh(c_t) -> c_t
+        # 2. dc_next (directly from next time step)
         do = dh_next * cache['tanh_c_t']
         dc = dh_next * cache['o_gate'] * tanh_derivative(cache['tanh_c_t'])
-        dc = dc + dc_next  # 두 경로 합침
+        dc = dc + dc_next  # Combine both paths
 
-        # 각 게이트 gradient
+        # Gate gradients
         df = dc * cache['c_prev']
         di = dc * cache['c_tilde']
         dc_tilde = dc * cache['i_gate']
 
-        # 이전 cell state gradient (핵심: forget gate를 통해 직접 전파)
+        # Previous cell state gradient (key: propagates directly through forget gate)
         dc_prev = dc * cache['f_gate']
 
-        # 활성화 함수 derivative
+        # Activation function derivatives
         df_gate = df * sigmoid_derivative(cache['f_gate'])
         di_gate = di * sigmoid_derivative(cache['i_gate'])
         dc_tilde_gate = dc_tilde * tanh_derivative(cache['c_tilde'])
         do_gate = do * sigmoid_derivative(cache['o_gate'])
 
-        # 모든 게이트 gradient 합치기
+        # Concatenate all gate gradients
         dgates = np.concatenate([df_gate, di_gate, dc_tilde_gate, do_gate], axis=1)
 
-        # 가중치 gradient
+        # Weight gradients
         self.dW += dgates.T @ cache['concat']
         self.db += dgates.sum(axis=0)
 
-        # Concat gradient → h_prev, x gradient
+        # Concat gradient -> h_prev and x gradients
         dconcat = dgates @ self.W
         dh_prev = dconcat[:, :H]
         dx = dconcat[:, H:]
@@ -170,14 +171,14 @@ class LSTMCellNumPy:
         return dx, dh_prev, dc_prev
 
     def zero_grad(self):
-        """Gradient 초기화"""
+        """Reset gradients"""
         self.dW.fill(0)
         self.db.fill(0)
 
 
 class LSTMNumPy:
     """
-    전체 LSTM (여러 시점)
+    Full LSTM (multiple time steps)
     """
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1):
@@ -185,7 +186,7 @@ class LSTMNumPy:
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
-        # 레이어별 LSTM Cell
+        # LSTM Cell per layer
         self.cells = []
         for i in range(num_layers):
             in_size = input_size if i == 0 else hidden_size
@@ -198,31 +199,31 @@ class LSTMNumPy:
         c_0: np.ndarray = None
     ) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """
-        Forward pass (전체 시퀀스)
+        Forward pass (full sequence)
 
         Args:
             x: (seq_len, batch_size, input_size)
-            h_0: (num_layers, batch_size, hidden_size) 초기 hidden
-            c_0: (num_layers, batch_size, hidden_size) 초기 cell
+            h_0: (num_layers, batch_size, hidden_size) initial hidden state
+            c_0: (num_layers, batch_size, hidden_size) initial cell state
 
         Returns:
-            output: (seq_len, batch_size, hidden_size) 모든 시점의 hidden
-            (h_n, c_n): 마지막 hidden/cell
+            output: (seq_len, batch_size, hidden_size) hidden states at all time steps
+            (h_n, c_n): final hidden/cell states
         """
         seq_len, batch_size, _ = x.shape
 
-        # 초기 상태
+        # Initial states
         if h_0 is None:
             h_0 = np.zeros((self.num_layers, batch_size, self.hidden_size))
         if c_0 is None:
             c_0 = np.zeros((self.num_layers, batch_size, self.hidden_size))
 
-        # 출력 저장
+        # Output storage
         outputs = []
         h_states = [h_0[i] for i in range(self.num_layers)]
         c_states = [c_0[i] for i in range(self.num_layers)]
 
-        # 시간에 따른 캐시 (backward용)
+        # Time-step cache (for backward)
         self.time_cache = []
 
         for t in range(seq_len):
@@ -248,31 +249,31 @@ class LSTMNumPy:
         Backward pass (BPTT)
 
         Args:
-            doutput: (seq_len, batch_size, hidden_size) 출력에 대한 gradient
+            doutput: (seq_len, batch_size, hidden_size) gradient w.r.t. output
 
         Returns:
-            dx: (seq_len, batch_size, input_size) 입력에 대한 gradient
+            dx: (seq_len, batch_size, input_size) gradient w.r.t. input
         """
         seq_len, batch_size, _ = doutput.shape
 
-        # Gradient 초기화
+        # Reset gradients
         for cell in self.cells:
             cell.zero_grad()
 
         dx = np.zeros((seq_len, batch_size, self.input_size))
 
-        # 레이어별 gradient 전파
+        # Per-layer gradient propagation
         dh_next = [np.zeros((batch_size, self.hidden_size))
                    for _ in range(self.num_layers)]
         dc_next = [np.zeros((batch_size, self.hidden_size))
                    for _ in range(self.num_layers)]
 
-        # 시간 역순
+        # Reverse time order
         for t in reversed(range(seq_len)):
-            # 마지막 레이어에 출력 gradient 더함
+            # Add output gradient to last layer
             dh_next[-1] += doutput[t]
 
-            # 레이어 역순 (깊은 레이어 → 얕은 레이어)
+            # Reverse layer order (deep layer -> shallow layer)
             for layer_idx in reversed(range(self.num_layers)):
                 cell = self.cells[layer_idx]
                 cell.cache = self.time_cache[t][layer_idx]
@@ -281,11 +282,11 @@ class LSTMNumPy:
                     dh_next[layer_idx], dc_next[layer_idx]
                 )
 
-                # 다음 시점으로 전파
+                # Propagate to next time step
                 dh_next[layer_idx] = dh_prev
                 dc_next[layer_idx] = dc_prev
 
-                # 이전 레이어로 전파
+                # Propagate to previous layer
                 if layer_idx > 0:
                     dh_next[layer_idx - 1] += dx_layer
                 else:
@@ -294,14 +295,14 @@ class LSTMNumPy:
         return dx
 
     def parameters(self) -> List[np.ndarray]:
-        """모든 파라미터 반환"""
+        """Return all parameters"""
         params = []
         for cell in self.cells:
             params.extend([cell.W, cell.b])
         return params
 
     def gradients(self) -> List[np.ndarray]:
-        """모든 gradient 반환"""
+        """Return all gradients"""
         grads = []
         for cell in self.cells:
             grads.extend([cell.dW, cell.db])
@@ -309,13 +310,13 @@ class LSTMNumPy:
 
 
 def sgd_update(params: List[np.ndarray], grads: List[np.ndarray], lr: float):
-    """SGD 업데이트"""
+    """SGD update"""
     for param, grad in zip(params, grads):
         param -= lr * grad
 
 
 def clip_gradients(grads: List[np.ndarray], max_norm: float = 5.0):
-    """Gradient clipping (exploding gradient 방지)"""
+    """Gradient clipping (prevents exploding gradients)"""
     total_norm = np.sqrt(sum(np.sum(g ** 2) for g in grads))
     if total_norm > max_norm:
         scale = max_norm / (total_norm + 1e-6)
@@ -323,21 +324,21 @@ def clip_gradients(grads: List[np.ndarray], max_norm: float = 5.0):
             g *= scale
 
 
-# 간단한 테스트
+# Simple test
 def test_lstm():
     print("=== LSTM NumPy Test ===\n")
 
-    # 하이퍼파라미터
+    # Hyperparameters
     batch_size = 2
     seq_len = 5
     input_size = 10
     hidden_size = 20
     num_layers = 2
 
-    # 모델
+    # Model
     lstm = LSTMNumPy(input_size, hidden_size, num_layers)
 
-    # 더미 입력
+    # Dummy input
     x = np.random.randn(seq_len, batch_size, input_size)
 
     # Forward
@@ -348,8 +349,8 @@ def test_lstm():
     print(f"h_n shape: {h_n.shape}")
     print(f"c_n shape: {c_n.shape}")
 
-    # Backward (마지막 출력에 대한 loss 가정)
-    loss = np.sum(output[-1] ** 2)  # 더미 loss
+    # Backward (assume loss on last output)
+    loss = np.sum(output[-1] ** 2)  # Dummy loss
     doutput = np.zeros_like(output)
     doutput[-1] = 2 * output[-1]
 
@@ -364,12 +365,12 @@ def test_lstm():
 
 
 def train_sequence_classification():
-    """간단한 시퀀스 분류 예제"""
+    """Simple sequence classification example"""
     print("\n=== Sequence Classification ===\n")
 
     np.random.seed(42)
 
-    # 데이터: 시퀀스의 평균이 양수면 1, 음수면 0
+    # Data: label 1 if sequence mean is positive, 0 otherwise
     def generate_data(n_samples, seq_len, input_size):
         X = np.random.randn(n_samples, seq_len, input_size)
         y = (X.mean(axis=(1, 2)) > 0).astype(int)
@@ -378,15 +379,18 @@ def train_sequence_classification():
     X_train, y_train = generate_data(100, 10, 5)
     X_test, y_test = generate_data(20, 10, 5)
 
-    # 모델
+    # Model
     lstm = LSTMNumPy(input_size=5, hidden_size=16, num_layers=1)
 
-    # 출력 레이어
+    # Output layer
     W_out = np.random.randn(2, 16) * 0.1
     b_out = np.zeros(2)
 
+    # Expected: train accuracy ~0.90+, test accuracy ~0.80+ after 50 epochs
     lr = 0.01
     epochs = 50
+    loss_history = []
+    acc_history = []
 
     for epoch in range(epochs):
         total_loss = 0
@@ -400,7 +404,7 @@ def train_sequence_classification():
             output, _ = lstm.forward(x)
             last_hidden = output[-1]  # (1, hidden)
 
-            # 분류
+            # Classification
             logits = last_hidden @ W_out.T + b_out
             probs = np.exp(logits - logits.max()) / np.exp(logits - logits.max()).sum()
 
@@ -433,11 +437,15 @@ def train_sequence_classification():
             W_out -= lr * dW_out
             b_out -= lr * db_out
 
-        if (epoch + 1) % 10 == 0:
-            acc = correct / len(X_train)
-            print(f"Epoch {epoch+1}: Loss={total_loss/len(X_train):.4f}, Acc={acc:.2f}")
+        avg_loss = total_loss / len(X_train)
+        acc = correct / len(X_train)
+        loss_history.append(avg_loss)
+        acc_history.append(acc)
 
-    # 테스트
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch+1}: Loss={avg_loss:.4f}, Acc={acc:.2f}")
+
+    # Test
     test_correct = 0
     for i in range(len(X_test)):
         x = X_test[i:i+1].transpose(1, 0, 2)
@@ -449,6 +457,26 @@ def train_sequence_classification():
         test_correct += (pred == target)
 
     print(f"\nTest Accuracy: {test_correct/len(X_test):.2f}")
+
+    # Visualization
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    axes[0].plot(loss_history, 'b-')
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Loss')
+    axes[0].set_title('LSTM Training Loss')
+    axes[0].grid(True)
+
+    axes[1].plot(acc_history, 'r-')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('Accuracy')
+    axes[1].set_title('LSTM Training Accuracy')
+    axes[1].grid(True)
+
+    plt.tight_layout()
+    plt.savefig('lstm_numpy_training.png', dpi=150)
+    plt.close()
+    print("Result image saved: lstm_numpy_training.png")
 
 
 if __name__ == "__main__":

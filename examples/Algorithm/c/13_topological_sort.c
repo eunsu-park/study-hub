@@ -1,8 +1,8 @@
 /*
- * 위상 정렬 (Topological Sort)
+ * Topological Sort
  * Kahn's Algorithm, DFS-based, Cycle Detection
  *
- * 방향 비순환 그래프(DAG)의 선형 순서를 찾습니다.
+ * Finds a linear ordering of vertices in a Directed Acyclic Graph (DAG).
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 /* =============================================================================
- * 1. 그래프 구조
+ * 1. Graph Structure
  * ============================================================================= */
 
 typedef struct AdjNode {
@@ -51,7 +51,7 @@ void graph_free(Graph* g) {
 }
 
 /* =============================================================================
- * 2. Kahn 알고리즘 (BFS 기반)
+ * 2. Kahn's Algorithm (BFS-based)
  * ============================================================================= */
 
 int* kahn_topological_sort(Graph* g, bool* has_cycle) {
@@ -59,7 +59,7 @@ int* kahn_topological_sort(Graph* g, bool* has_cycle) {
     int* result = malloc(g->vertices * sizeof(int));
     int result_idx = 0;
 
-    /* 진입 차수 계산 */
+    /* Calculate in-degrees */
     for (int v = 0; v < g->vertices; v++) {
         AdjNode* node = g->adj[v];
         while (node) {
@@ -68,7 +68,7 @@ int* kahn_topological_sort(Graph* g, bool* has_cycle) {
         }
     }
 
-    /* 진입 차수 0인 정점 큐에 추가 */
+    /* Add vertices with in-degree 0 to queue */
     int* queue = malloc(g->vertices * sizeof(int));
     int front = 0, rear = 0;
 
@@ -99,7 +99,7 @@ int* kahn_topological_sort(Graph* g, bool* has_cycle) {
 }
 
 /* =============================================================================
- * 3. DFS 기반 위상 정렬
+ * 3. DFS-based Topological Sort
  * ============================================================================= */
 
 void dfs_topological_util(Graph* g, int v, bool visited[], int stack[], int* stack_top) {
@@ -125,7 +125,7 @@ int* dfs_topological_sort(Graph* g) {
             dfs_topological_util(g, i, visited, stack, &stack_top);
     }
 
-    /* 스택 역순으로 결과 생성 */
+    /* Generate result in reverse stack order */
     int* result = malloc(g->vertices * sizeof(int));
     for (int i = 0; i < g->vertices; i++)
         result[i] = stack[g->vertices - 1 - i];
@@ -136,7 +136,7 @@ int* dfs_topological_sort(Graph* g) {
 }
 
 /* =============================================================================
- * 4. 사이클 탐지를 포함한 DFS 위상 정렬
+ * 4. DFS Topological Sort with Cycle Detection
  * ============================================================================= */
 
 typedef enum { WHITE, GRAY, BLACK } Color;
@@ -147,7 +147,7 @@ bool dfs_topological_cycle_util(Graph* g, int v, Color color[], int stack[], int
     AdjNode* node = g->adj[v];
     while (node) {
         if (color[node->vertex] == GRAY)
-            return true;  /* 사이클 발견 */
+            return true;  /* Cycle detected */
         if (color[node->vertex] == WHITE) {
             if (dfs_topological_cycle_util(g, node->vertex, color, stack, stack_top))
                 return true;
@@ -187,7 +187,7 @@ int* dfs_topological_with_cycle(Graph* g, bool* has_cycle) {
 }
 
 /* =============================================================================
- * 5. 모든 위상 정렬 찾기
+ * 5. Find All Topological Sorts
  * ============================================================================= */
 
 void all_topological_sorts_util(Graph* g, bool visited[], int in_degree[],
@@ -199,7 +199,7 @@ void all_topological_sorts_util(Graph* g, bool visited[], int in_degree[],
             visited[v] = true;
             result[idx] = v;
 
-            /* 인접 정점의 진입 차수 감소 */
+            /* Decrease in-degree of adjacent vertices */
             AdjNode* node = g->adj[v];
             while (node) {
                 in_degree[node->vertex]--;
@@ -208,7 +208,7 @@ void all_topological_sorts_util(Graph* g, bool visited[], int in_degree[],
 
             all_topological_sorts_util(g, visited, in_degree, result, idx + 1, count);
 
-            /* 복원 */
+            /* Restore */
             visited[v] = false;
             node = g->adj[v];
             while (node) {
@@ -235,7 +235,7 @@ int all_topological_sorts(Graph* g) {
     int* result = malloc(g->vertices * sizeof(int));
     int count = 0;
 
-    /* 진입 차수 계산 */
+    /* Calculate in-degrees */
     for (int v = 0; v < g->vertices; v++) {
         AdjNode* node = g->adj[v];
         while (node) {
@@ -253,7 +253,7 @@ int all_topological_sorts(Graph* g) {
 }
 
 /* =============================================================================
- * 6. 실전: 과목 이수 순서
+ * 6. Practical: Course Schedule
  * ============================================================================= */
 
 bool can_finish_courses(int num_courses, int prerequisites[][2], int num_prereqs) {
@@ -296,7 +296,7 @@ int* find_course_order(int num_courses, int prerequisites[][2], int num_prereqs,
 }
 
 /* =============================================================================
- * 7. 실전: 작업 스케줄링
+ * 7. Practical: Task Scheduling
  * ============================================================================= */
 
 int* task_scheduling(int num_tasks, int dependencies[][2], int num_deps,
@@ -316,7 +316,7 @@ int* task_scheduling(int num_tasks, int dependencies[][2], int num_deps,
         return NULL;
     }
 
-    /* 최단 완료 시간 계산 */
+    /* Calculate earliest completion times */
     for (int i = 0; i < num_tasks; i++)
         completion_times[i] = task_times[i];
 
@@ -336,7 +336,7 @@ int* task_scheduling(int num_tasks, int dependencies[][2], int num_deps,
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void print_array(int arr[], int n) {
@@ -346,11 +346,11 @@ void print_array(int arr[], int n) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("위상 정렬 (Topological Sort) 예제\n");
+    printf("Topological Sort Examples\n");
     printf("============================================================\n");
 
-    /* 1. Kahn 알고리즘 */
-    printf("\n[1] Kahn 알고리즘 (BFS)\n");
+    /* 1. Kahn's Algorithm */
+    printf("\n[1] Kahn's Algorithm (BFS)\n");
     Graph* g1 = graph_create(6);
     graph_add_edge(g1, 5, 2);
     graph_add_edge(g1, 5, 0);
@@ -361,73 +361,73 @@ int main(void) {
 
     bool has_cycle;
     int* result = kahn_topological_sort(g1, &has_cycle);
-    printf("    그래프: 5→2, 5→0, 4→0, 4→1, 2→3, 3→1\n");
-    printf("    위상 정렬: ");
+    printf("    Graph: 5->2, 5->0, 4->0, 4->1, 2->3, 3->1\n");
+    printf("    Topological sort: ");
     if (!has_cycle) print_array(result, 6);
     printf("\n");
     free(result);
 
-    /* 2. DFS 기반 */
-    printf("\n[2] DFS 기반 위상 정렬\n");
+    /* 2. DFS-based */
+    printf("\n[2] DFS-based Topological Sort\n");
     result = dfs_topological_sort(g1);
-    printf("    위상 정렬: ");
+    printf("    Topological sort: ");
     print_array(result, 6);
     printf("\n");
     free(result);
 
-    /* 3. 사이클 탐지 */
-    printf("\n[3] 사이클 탐지\n");
+    /* 3. Cycle Detection */
+    printf("\n[3] Cycle Detection\n");
     Graph* g2 = graph_create(3);
     graph_add_edge(g2, 0, 1);
     graph_add_edge(g2, 1, 2);
-    graph_add_edge(g2, 2, 0);  /* 사이클 */
+    graph_add_edge(g2, 2, 0);  /* Cycle */
 
     result = dfs_topological_with_cycle(g2, &has_cycle);
-    printf("    그래프 0→1→2→0 (사이클): %s\n",
-           has_cycle ? "사이클 발견" : "DAG");
+    printf("    Graph 0->1->2->0 (cycle): %s\n",
+           has_cycle ? "cycle detected" : "DAG");
     if (result) free(result);
     graph_free(g2);
 
-    /* 4. 모든 위상 정렬 */
-    printf("\n[4] 모든 위상 정렬\n");
+    /* 4. All Topological Sorts */
+    printf("\n[4] All Topological Sorts\n");
     Graph* g3 = graph_create(4);
     graph_add_edge(g3, 0, 1);
     graph_add_edge(g3, 0, 2);
     graph_add_edge(g3, 1, 3);
     graph_add_edge(g3, 2, 3);
 
-    printf("    그래프: 0→1, 0→2, 1→3, 2→3\n");
-    printf("    모든 순서:\n");
+    printf("    Graph: 0->1, 0->2, 1->3, 2->3\n");
+    printf("    All orderings:\n");
     int count = all_topological_sorts(g3);
-    printf("    총 %d개\n", count);
+    printf("    Total: %d\n", count);
     graph_free(g3);
 
-    /* 5. 과목 이수 */
-    printf("\n[5] 과목 이수 순서\n");
+    /* 5. Course Schedule */
+    printf("\n[5] Course Schedule\n");
     int prereqs[][2] = {{1, 0}, {2, 0}, {3, 1}, {3, 2}};
     int order_size;
     int* course_order = find_course_order(4, prereqs, 4, &order_size);
 
-    printf("    과목: 0, 1, 2, 3\n");
-    printf("    선수: 1←0, 2←0, 3←1, 3←2\n");
+    printf("    Courses: 0, 1, 2, 3\n");
+    printf("    Prerequisites: 1<-0, 2<-0, 3<-1, 3<-2\n");
     if (course_order) {
-        printf("    이수 순서: ");
+        printf("    Course order: ");
         print_array(course_order, order_size);
         printf("\n");
         free(course_order);
     }
 
-    /* 6. 작업 스케줄링 */
-    printf("\n[6] 작업 스케줄링\n");
+    /* 6. Task Scheduling */
+    printf("\n[6] Task Scheduling\n");
     int deps[][2] = {{0, 1}, {0, 2}, {1, 3}, {2, 3}};
-    int times[] = {2, 3, 4, 1};  /* 각 작업 소요 시간 */
+    int times[] = {2, 3, 4, 1};  /* Time required for each task */
     int completion[4];
 
     int* task_order = task_scheduling(4, deps, 4, times, completion);
-    printf("    작업 시간: [2, 3, 4, 1]\n");
-    printf("    의존성: 0→1, 0→2, 1→3, 2→3\n");
+    printf("    Task times: [2, 3, 4, 1]\n");
+    printf("    Dependencies: 0->1, 0->2, 1->3, 2->3\n");
     if (task_order) {
-        printf("    완료 시간: ");
+        printf("    Completion times: ");
         for (int i = 0; i < 4; i++)
             printf("%d ", completion[i]);
         printf("\n");
@@ -436,13 +436,13 @@ int main(void) {
 
     graph_free(g1);
 
-    /* 7. 알고리즘 비교 */
-    printf("\n[7] 알고리즘 비교\n");
-    printf("    | 방법      | 시간복잡도 | 특징                  |\n");
-    printf("    |-----------|------------|------------------------|\n");
-    printf("    | Kahn(BFS) | O(V + E)   | 사이클 탐지 용이      |\n");
-    printf("    | DFS       | O(V + E)   | 구현 간단             |\n");
-    printf("    | 모든 정렬 | O(V! * E)  | 모든 경우 열거        |\n");
+    /* 7. Algorithm Comparison */
+    printf("\n[7] Algorithm Comparison\n");
+    printf("    | Method    | Time       | Features                 |\n");
+    printf("    |-----------|------------|--------------------------|\n");
+    printf("    | Kahn(BFS) | O(V + E)   | Easy cycle detection     |\n");
+    printf("    | DFS       | O(V + E)   | Simple implementation    |\n");
+    printf("    | All sorts | O(V! * E)  | Enumerates all cases     |\n");
 
     printf("\n============================================================\n");
 

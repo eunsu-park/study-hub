@@ -1,8 +1,8 @@
 /*
- * 실전 문제 풀이 (Practice Problems)
- * 종합 문제 (다양한 알고리즘 조합)
+ * Practice Problems
+ * Combined Problems (Various Algorithm Combinations)
  *
- * 코딩 테스트에서 자주 나오는 유형들입니다.
+ * Common problem types frequently seen in coding tests.
  */
 
 #include <iostream>
@@ -18,10 +18,10 @@
 using namespace std;
 
 // =============================================================================
-// 1. 부분 배열 합 (투 포인터)
+// 1. Subarray Sum (Two Pointers)
 // =============================================================================
 
-// 합이 target 이상인 최소 길이 부분 배열
+// Minimum length subarray with sum >= target
 int minSubarrayLen(int target, const vector<int>& nums) {
     int n = nums.size();
     int left = 0, sum = 0;
@@ -40,7 +40,7 @@ int minSubarrayLen(int target, const vector<int>& nums) {
 }
 
 // =============================================================================
-// 2. 작업 스케줄링 (Greedy)
+// 2. Job Scheduling (Greedy)
 // =============================================================================
 
 struct Job {
@@ -74,7 +74,7 @@ int jobScheduling(vector<Job>& jobs) {
 }
 
 // =============================================================================
-// 3. 최소 회의실 수 (이벤트 정렬)
+// 3. Minimum Meeting Rooms (Event Sorting)
 // =============================================================================
 
 int minMeetingRooms(vector<pair<int, int>>& intervals) {
@@ -97,7 +97,7 @@ int minMeetingRooms(vector<pair<int, int>>& intervals) {
 }
 
 // =============================================================================
-// 4. 팰린드롬 변환 (DP)
+// 4. Palindrome Conversion (DP)
 // =============================================================================
 
 int minPalindromeInsertions(const string& s) {
@@ -119,7 +119,7 @@ int minPalindromeInsertions(const string& s) {
 }
 
 // =============================================================================
-// 5. 섬의 개수 (DFS/BFS)
+// 5. Number of Islands (DFS/BFS)
 // =============================================================================
 
 void dfsIsland(vector<vector<int>>& grid, int i, int j,
@@ -157,7 +157,7 @@ int numIslands(vector<vector<int>>& grid) {
 }
 
 // =============================================================================
-// 6. Union-Find 응용
+// 6. Union-Find Application
 // =============================================================================
 
 class UnionFind {
@@ -188,7 +188,7 @@ public:
     }
 };
 
-// 중복 연결 찾기
+// Find redundant connection
 vector<int> findRedundantConnection(vector<vector<int>>& edges) {
     int n = edges.size();
     UnionFind uf(n + 1);
@@ -222,7 +222,7 @@ int lengthOfLIS(const vector<int>& nums) {
 }
 
 // =============================================================================
-// 8. 이분 탐색 응용 (파라메트릭 서치)
+// 8. Binary Search Application (Parametric Search)
 // =============================================================================
 
 bool canShip(const vector<int>& weights, int capacity, int days) {
@@ -259,7 +259,7 @@ int shipWithinDays(const vector<int>& weights, int days) {
 }
 
 // =============================================================================
-// 9. 단어 사다리 (BFS)
+// 9. Word Ladder (BFS)
 // =============================================================================
 
 int ladderLength(string beginWord, string endWord, vector<string>& wordList) {
@@ -292,24 +292,24 @@ int ladderLength(string beginWord, string endWord, vector<string>& wordList) {
 }
 
 // =============================================================================
-// 10. 문제 풀이 전략
+// 10. Problem Solving Strategy
 // =============================================================================
 
 void printStrategy() {
-    cout << "\n[10] 문제 풀이 전략" << endl;
-    cout << "    1. 문제 이해: 입력/출력, 제약 조건 확인" << endl;
-    cout << "    2. 예제 분석: 손으로 풀어보기" << endl;
-    cout << "    3. 알고리즘 선택:" << endl;
-    cout << "       - N <= 20: 완전 탐색, 비트마스크" << endl;
-    cout << "       - N <= 10^3: O(N^2) DP, 브루트포스" << endl;
-    cout << "       - N <= 10^5: O(N log N) 정렬, 이분탐색" << endl;
-    cout << "       - N <= 10^7: O(N) 투 포인터, 해시" << endl;
-    cout << "    4. 구현 및 테스트" << endl;
-    cout << "    5. 엣지 케이스 확인" << endl;
+    cout << "\n[10] Problem Solving Strategy" << endl;
+    cout << "    1. Understand the problem: Check input/output, constraints" << endl;
+    cout << "    2. Analyze examples: Solve by hand" << endl;
+    cout << "    3. Choose algorithm:" << endl;
+    cout << "       - N <= 20: Brute force, bitmask" << endl;
+    cout << "       - N <= 10^3: O(N^2) DP, brute force" << endl;
+    cout << "       - N <= 10^5: O(N log N) sorting, binary search" << endl;
+    cout << "       - N <= 10^7: O(N) two pointers, hashing" << endl;
+    cout << "    4. Implement and test" << endl;
+    cout << "    5. Check edge cases" << endl;
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -323,69 +323,69 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "실전 문제 풀이 예제" << endl;
+    cout << "Practice Problems Example" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 부분 배열 합
-    cout << "\n[1] 부분 배열 합 (투 포인터)" << endl;
+    // 1. Subarray Sum
+    cout << "\n[1] Subarray Sum (Two Pointers)" << endl;
     vector<int> arr1 = {2, 3, 1, 2, 4, 3};
-    cout << "    배열: [2, 3, 1, 2, 4, 3], target = 7" << endl;
-    cout << "    최소 길이: " << minSubarrayLen(7, arr1) << endl;
+    cout << "    Array: [2, 3, 1, 2, 4, 3], target = 7" << endl;
+    cout << "    Min length: " << minSubarrayLen(7, arr1) << endl;
 
-    // 2. 작업 스케줄링
-    cout << "\n[2] 작업 스케줄링 (Greedy)" << endl;
+    // 2. Job Scheduling
+    cout << "\n[2] Job Scheduling (Greedy)" << endl;
     vector<Job> jobs = {{4, 20}, {1, 10}, {1, 40}, {1, 30}};
-    cout << "    작업: {마감:4,이익:20}, {1,10}, {1,40}, {1,30}" << endl;
-    cout << "    최대 이익: " << jobScheduling(jobs) << endl;
+    cout << "    Jobs: {deadline:4,profit:20}, {1,10}, {1,40}, {1,30}" << endl;
+    cout << "    Max profit: " << jobScheduling(jobs) << endl;
 
-    // 3. 최소 회의실
-    cout << "\n[3] 최소 회의실 수" << endl;
+    // 3. Minimum Meeting Rooms
+    cout << "\n[3] Minimum Meeting Rooms" << endl;
     vector<pair<int, int>> meetings = {{0, 30}, {5, 10}, {15, 20}};
-    cout << "    회의: [0-30], [5-10], [15-20]" << endl;
-    cout << "    최소 회의실: " << minMeetingRooms(meetings) << endl;
+    cout << "    Meetings: [0-30], [5-10], [15-20]" << endl;
+    cout << "    Min rooms: " << minMeetingRooms(meetings) << endl;
 
-    // 4. 팰린드롬 변환
-    cout << "\n[4] 팰린드롬 변환" << endl;
-    cout << "    문자열: \"abcde\"" << endl;
-    cout << "    최소 삽입: " << minPalindromeInsertions("abcde") << endl;
+    // 4. Palindrome Conversion
+    cout << "\n[4] Palindrome Conversion" << endl;
+    cout << "    String: \"abcde\"" << endl;
+    cout << "    Min insertions: " << minPalindromeInsertions("abcde") << endl;
 
-    // 5. 섬의 개수
-    cout << "\n[5] 섬의 개수" << endl;
+    // 5. Number of Islands
+    cout << "\n[5] Number of Islands" << endl;
     vector<vector<int>> grid = {
         {1, 1, 0, 0},
         {1, 0, 0, 0},
         {0, 0, 1, 0},
         {0, 0, 0, 1}
     };
-    cout << "    그리드: 4x4" << endl;
-    cout << "    섬의 개수: " << numIslands(grid) << endl;
+    cout << "    Grid: 4x4" << endl;
+    cout << "    Number of islands: " << numIslands(grid) << endl;
 
-    // 6. 중복 연결
-    cout << "\n[6] 중복 연결 찾기 (Union-Find)" << endl;
+    // 6. Redundant Connection
+    cout << "\n[6] Find Redundant Connection (Union-Find)" << endl;
     vector<vector<int>> edges = {{1, 2}, {1, 3}, {2, 3}};
     auto redundant = findRedundantConnection(edges);
-    cout << "    간선: (1,2), (1,3), (2,3)" << endl;
-    cout << "    중복: (" << redundant[0] << ", " << redundant[1] << ")" << endl;
+    cout << "    Edges: (1,2), (1,3), (2,3)" << endl;
+    cout << "    Redundant: (" << redundant[0] << ", " << redundant[1] << ")" << endl;
 
     // 7. LIS
-    cout << "\n[7] 최장 증가 부분수열 (LIS)" << endl;
+    cout << "\n[7] Longest Increasing Subsequence (LIS)" << endl;
     vector<int> arr2 = {10, 9, 2, 5, 3, 7, 101, 18};
-    cout << "    배열: [10, 9, 2, 5, 3, 7, 101, 18]" << endl;
-    cout << "    LIS 길이: " << lengthOfLIS(arr2) << endl;
+    cout << "    Array: [10, 9, 2, 5, 3, 7, 101, 18]" << endl;
+    cout << "    LIS length: " << lengthOfLIS(arr2) << endl;
 
-    // 8. 이분 탐색 응용
-    cout << "\n[8] 이분 탐색 응용 (배송)" << endl;
+    // 8. Binary Search Application
+    cout << "\n[8] Binary Search Application (Shipping)" << endl;
     vector<int> weights = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    cout << "    물건 무게: [1-10]" << endl;
-    cout << "    5일 내 배송 최소 용량: " << shipWithinDays(weights, 5) << endl;
+    cout << "    Package weights: [1-10]" << endl;
+    cout << "    Min capacity for 5 days: " << shipWithinDays(weights, 5) << endl;
 
-    // 9. 단어 사다리
-    cout << "\n[9] 단어 사다리 (BFS)" << endl;
+    // 9. Word Ladder
+    cout << "\n[9] Word Ladder (BFS)" << endl;
     vector<string> wordList = {"hot", "dot", "dog", "lot", "log", "cog"};
     cout << "    hit -> cog" << endl;
-    cout << "    최소 변환: " << ladderLength("hit", "cog", wordList) << endl;
+    cout << "    Min transformations: " << ladderLength("hit", "cog", wordList) << endl;
 
-    // 10. 문제 풀이 전략
+    // 10. Problem Solving Strategy
     printStrategy();
 
     cout << "\n============================================================" << endl;

@@ -1,8 +1,8 @@
 """
-04. 학습 기법 - PyTorch 버전
+04. Training Techniques - PyTorch Version
 
-다양한 최적화 기법과 정규화를 PyTorch로 구현합니다.
-NumPy 버전(examples/numpy/04_training_techniques.py)과 비교해 보세요.
+Implements various optimization techniques and regularization in PyTorch.
+Compare with the NumPy version (examples/numpy/04_training_techniques.py).
 """
 
 import torch
@@ -13,17 +13,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 print("=" * 60)
-print("PyTorch 학습 기법")
+print("PyTorch Training Techniques")
 print("=" * 60)
 
 
 # ============================================
-# 1. 옵티마이저 비교
+# 1. Optimizer Comparison
 # ============================================
-print("\n[1] 옵티마이저 비교")
+print("\n[1] Optimizer Comparison")
 print("-" * 40)
 
-# 간단한 모델 정의
+# Simple model definition
 class SimpleNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -35,12 +35,12 @@ class SimpleNet(nn.Module):
         x = torch.sigmoid(self.fc2(x))
         return x
 
-# XOR 데이터
+# XOR data
 X = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], dtype=torch.float32)
 y = torch.tensor([[0], [1], [1], [0]], dtype=torch.float32)
 
 def train_with_optimizer(optimizer_class, **kwargs):
-    """주어진 옵티마이저로 학습"""
+    """Train with a given optimizer"""
     torch.manual_seed(42)
     model = SimpleNet()
     optimizer = optimizer_class(model.parameters(), **kwargs)
@@ -58,7 +58,7 @@ def train_with_optimizer(optimizer_class, **kwargs):
 
     return losses
 
-# 다양한 옵티마이저 테스트
+# Test various optimizers
 optimizers = {
     'SGD (lr=0.5)': (torch.optim.SGD, {'lr': 0.5}),
     'SGD+Momentum': (torch.optim.SGD, {'lr': 0.5, 'momentum': 0.9}),
@@ -70,9 +70,9 @@ results = {}
 for name, (opt_class, params) in optimizers.items():
     losses = train_with_optimizer(opt_class, **params)
     results[name] = losses
-    print(f"{name}: 최종 손실 = {losses[-1]:.6f}")
+    print(f"{name}: Final loss = {losses[-1]:.6f}")
 
-# 시각화
+# Visualization
 plt.figure(figsize=(10, 5))
 for name, losses in results.items():
     plt.plot(losses, label=name)
@@ -84,16 +84,16 @@ plt.yscale('log')
 plt.grid(True, alpha=0.3)
 plt.savefig('optimizer_comparison.png', dpi=100)
 plt.close()
-print("그래프 저장: optimizer_comparison.png")
+print("Plot saved: optimizer_comparison.png")
 
 
 # ============================================
-# 2. 학습률 스케줄러
+# 2. Learning Rate Schedulers
 # ============================================
-print("\n[2] 학습률 스케줄러")
+print("\n[2] Learning Rate Schedulers")
 print("-" * 40)
 
-# 스케줄러 테스트
+# Scheduler test
 def test_scheduler(scheduler_class, **kwargs):
     torch.manual_seed(42)
     model = SimpleNet()
@@ -117,7 +117,7 @@ plt.figure(figsize=(10, 5))
 for name, (sched_class, params) in schedulers.items():
     lrs = test_scheduler(sched_class, **params)
     plt.plot(lrs, label=name)
-    print(f"{name}: 시작 {lrs[0]:.4f} → 끝 {lrs[-1]:.4f}")
+    print(f"{name}: Start {lrs[0]:.4f} -> End {lrs[-1]:.4f}")
 
 plt.xlabel('Epoch')
 plt.ylabel('Learning Rate')
@@ -126,7 +126,7 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.savefig('lr_schedulers.png', dpi=100)
 plt.close()
-print("그래프 저장: lr_schedulers.png")
+print("Plot saved: lr_schedulers.png")
 
 
 # ============================================
@@ -148,24 +148,24 @@ class NetWithDropout(nn.Module):
         x = torch.sigmoid(self.fc2(x))
         return x
 
-# Dropout 효과 확인
+# Check Dropout effect
 model = NetWithDropout(dropout_p=0.5)
 x_test = torch.randn(1, 2)
 
 model.train()
-print("훈련 모드 (Dropout 활성):")
+print("Train mode (Dropout active):")
 for i in range(3):
     out = model.fc1(x_test)
     out = F.relu(out)
     out = model.dropout(out)
-    print(f"  시도 {i+1}: 활성 뉴런 = {(out != 0).sum().item()}/32")
+    print(f"  Attempt {i+1}: Active neurons = {(out != 0).sum().item()}/32")
 
 model.eval()
-print("\n평가 모드 (Dropout 비활성):")
+print("\nEval mode (Dropout inactive):")
 out = model.fc1(x_test)
 out = F.relu(out)
-out = model.dropout(out)  # eval 모드에서는 전체 통과
-print(f"  활성 뉴런 = {(out != 0).sum().item()}/32")
+out = model.dropout(out)  # Passes through in eval mode
+print(f"  Active neurons = {(out != 0).sum().item()}/32")
 
 
 # ============================================
@@ -189,31 +189,31 @@ class NetWithBatchNorm(nn.Module):
         return x
 
 bn_model = NetWithBatchNorm()
-print(f"BatchNorm1d 파라미터:")
-print(f"  weight (γ): {bn_model.bn1.weight.shape}")
-print(f"  bias (β): {bn_model.bn1.bias.shape}")
+print(f"BatchNorm1d parameters:")
+print(f"  weight (gamma): {bn_model.bn1.weight.shape}")
+print(f"  bias (beta): {bn_model.bn1.bias.shape}")
 print(f"  running_mean: {bn_model.bn1.running_mean.shape}")
 print(f"  running_var: {bn_model.bn1.running_var.shape}")
 
-# 훈련 vs 평가 모드
+# Train vs eval mode
 x_batch = torch.randn(32, 2)
 
 bn_model.train()
 out_train = bn_model.fc1(x_batch)
 out_train = bn_model.bn1(out_train)
-print(f"\n훈련 모드 - 출력 통계:")
+print(f"\nTrain mode - output statistics:")
 print(f"  mean: {out_train.mean(dim=0)[:3].tolist()}")
 print(f"  std: {out_train.std(dim=0)[:3].tolist()}")
 
 bn_model.eval()
 out_eval = bn_model.fc1(x_batch)
 out_eval = bn_model.bn1(out_eval)
-print(f"평가 모드 - 출력 통계:")
+print(f"Eval mode - output statistics:")
 print(f"  mean: {out_eval.mean(dim=0)[:3].tolist()}")
 
 
 # ============================================
-# 5. Weight Decay (L2 정규화)
+# 5. Weight Decay (L2 Regularization)
 # ============================================
 print("\n[5] Weight Decay")
 print("-" * 40)
@@ -231,19 +231,19 @@ def train_with_weight_decay(weight_decay):
         loss.backward()
         optimizer.step()
 
-    # 가중치 크기 확인
+    # Check weight magnitude
     weight_norm = sum(p.norm().item() for p in model.parameters())
     return loss.item(), weight_norm
 
 for wd in [0, 0.01, 0.1]:
     loss, w_norm = train_with_weight_decay(wd)
-    print(f"Weight Decay={wd}: 손실={loss:.4f}, 가중치 norm={w_norm:.4f}")
+    print(f"Weight Decay={wd}: Loss={loss:.4f}, Weight norm={w_norm:.4f}")
 
 
 # ============================================
-# 6. 조기 종료 (Early Stopping)
+# 6. Early Stopping
 # ============================================
-print("\n[6] 조기 종료")
+print("\n[6] Early Stopping")
 print("-" * 40)
 
 class EarlyStopping:
@@ -268,7 +268,7 @@ class EarlyStopping:
             self.best_model = model.state_dict().copy()
             self.counter = 0
 
-# 데모 (시뮬레이션된 검증 손실)
+# Demo (simulated validation loss)
 early_stopping = EarlyStopping(patience=5)
 val_losses = [1.0, 0.9, 0.85, 0.8, 0.82, 0.83, 0.84, 0.85, 0.86, 0.87]
 
@@ -282,16 +282,16 @@ for epoch, val_loss in enumerate(val_losses):
 
 
 # ============================================
-# 7. 전체 학습 예제
+# 7. Full Training Example
 # ============================================
-print("\n[7] 전체 학습 예제")
+print("\n[7] Full Training Example")
 print("-" * 40)
 
-# 더 큰 데이터셋 생성
+# Generate a larger dataset
 np.random.seed(42)
 n_samples = 200
 
-# 원형 데이터 (비선형 문제)
+# Circular data (nonlinear problem)
 theta = np.random.uniform(0, 2*np.pi, n_samples)
 r = np.random.uniform(0, 1, n_samples)
 X_train = np.column_stack([r * np.cos(theta), r * np.sin(theta)])
@@ -300,7 +300,7 @@ y_train = (r > 0.5).astype(np.float32)
 X_train = torch.tensor(X_train, dtype=torch.float32)
 y_train = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
 
-# 검증 데이터
+# Validation data
 X_val = X_train[:40]
 y_val = y_train[:40]
 X_train = X_train[40:]
@@ -329,7 +329,7 @@ class FullModel(nn.Module):
         x = torch.sigmoid(self.fc3(x))
         return x
 
-# 모델 초기화
+# Model initialization
 torch.manual_seed(42)
 model = FullModel()
 criterion = nn.BCELoss()
@@ -337,12 +337,12 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5)
 early_stopping = EarlyStopping(patience=20)
 
-# 학습
+# Training
 train_losses = []
 val_losses = []
 
 for epoch in range(200):
-    # 훈련
+    # Train
     model.train()
     epoch_loss = 0
     for X_batch, y_batch in train_loader:
@@ -356,17 +356,17 @@ for epoch in range(200):
 
     train_losses.append(epoch_loss / len(train_loader))
 
-    # 검증
+    # Validate
     model.eval()
     with torch.no_grad():
         val_pred = model(X_val)
         val_loss = criterion(val_pred, y_val).item()
         val_losses.append(val_loss)
 
-    # 스케줄러 업데이트
+    # Update scheduler
     scheduler.step(val_loss)
 
-    # 조기 종료 체크
+    # Check early stopping
     early_stopping(val_loss, model)
 
     if (epoch + 1) % 40 == 0:
@@ -374,14 +374,14 @@ for epoch in range(200):
         print(f"Epoch {epoch+1}: train={train_losses[-1]:.4f}, val={val_loss:.4f}, lr={lr:.6f}")
 
     if early_stopping.early_stop:
-        print(f"조기 종료 at epoch {epoch+1}")
+        print(f"Early stopping at epoch {epoch+1}")
         break
 
-# 최고 모델 복원
+# Restore best model
 if early_stopping.best_model:
     model.load_state_dict(early_stopping.best_model)
 
-# 결과 시각화
+# Visualization
 plt.figure(figsize=(10, 5))
 plt.plot(train_losses, label='Train Loss')
 plt.plot(val_losses, label='Val Loss')
@@ -392,34 +392,34 @@ plt.legend()
 plt.grid(True, alpha=0.3)
 plt.savefig('full_training.png', dpi=100)
 plt.close()
-print("그래프 저장: full_training.png")
+print("Plot saved: full_training.png")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("학습 기법 정리")
+print("Training Techniques Summary")
 print("=" * 60)
 
 summary = """
-권장 기본 설정:
+Recommended defaults:
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
     EarlyStopping(patience=10)
 
-정규화 조합:
-    - Dropout (0.2~0.5): 과적합 방지
-    - BatchNorm: 학습 안정화
-    - Weight Decay (1e-4~1e-2): 가중치 크기 제한
+Regularization combinations:
+    - Dropout (0.2~0.5): Prevents overfitting
+    - BatchNorm: Stabilizes training
+    - Weight Decay (1e-4~1e-2): Limits weight magnitude
 
-학습 루프 체크리스트:
-    1. model.train() / model.eval() 모드 전환
-    2. optimizer.zero_grad() 호출
+Training loop checklist:
+    1. model.train() / model.eval() mode switching
+    2. optimizer.zero_grad() call
     3. loss.backward()
     4. optimizer.step()
-    5. scheduler.step() (에폭 끝)
-    6. EarlyStopping 체크
+    5. scheduler.step() (at end of epoch)
+    6. EarlyStopping check
 """
 print(summary)
 print("=" * 60)

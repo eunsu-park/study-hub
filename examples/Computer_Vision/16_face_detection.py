@@ -1,9 +1,9 @@
 """
-16. 얼굴 검출 및 인식
-- Haar Cascade 얼굴 검출
-- 눈, 미소 검출
+16. Face Detection and Recognition
+- Haar Cascade face detection
+- Eye, smile detection
 - LBP (Local Binary Patterns)
-- 얼굴 인식 기초
+- Face recognition basics
 """
 
 import cv2
@@ -11,46 +11,46 @@ import numpy as np
 
 
 def create_face_image():
-    """얼굴 형태 시뮬레이션 이미지"""
+    """Simulated face image"""
     img = np.zeros((400, 500, 3), dtype=np.uint8)
     img[:] = [220, 220, 220]
 
-    # 얼굴 1 (왼쪽)
+    # Face 1 (left)
     cv2.ellipse(img, (150, 180), (60, 75), 0, 0, 360, (180, 160, 140), -1)
-    cv2.circle(img, (130, 160), 10, (50, 50, 50), -1)  # 왼쪽 눈
-    cv2.circle(img, (170, 160), 10, (50, 50, 50), -1)  # 오른쪽 눈
-    cv2.ellipse(img, (150, 210), (20, 10), 0, 0, 180, (100, 80, 80), 2)  # 입
+    cv2.circle(img, (130, 160), 10, (50, 50, 50), -1)  # Left eye
+    cv2.circle(img, (170, 160), 10, (50, 50, 50), -1)  # Right eye
+    cv2.ellipse(img, (150, 210), (20, 10), 0, 0, 180, (100, 80, 80), 2)  # Mouth
 
-    # 얼굴 2 (오른쪽)
+    # Face 2 (right)
     cv2.ellipse(img, (350, 200), (55, 70), 0, 0, 360, (175, 155, 135), -1)
-    cv2.circle(img, (332, 180), 9, (45, 45, 45), -1)  # 왼쪽 눈
-    cv2.circle(img, (368, 180), 9, (45, 45, 45), -1)  # 오른쪽 눈
-    cv2.ellipse(img, (350, 225), (18, 8), 0, 0, 180, (90, 70, 70), 2)  # 입
+    cv2.circle(img, (332, 180), 9, (45, 45, 45), -1)  # Left eye
+    cv2.circle(img, (368, 180), 9, (45, 45, 45), -1)  # Right eye
+    cv2.ellipse(img, (350, 225), (18, 8), 0, 0, 180, (90, 70, 70), 2)  # Mouth
 
     return img
 
 
 def haar_cascade_face_detection():
-    """Haar Cascade 얼굴 검출 데모"""
+    """Haar Cascade face detection demo"""
     print("=" * 50)
-    print("Haar Cascade 얼굴 검출")
+    print("Haar Cascade Face Detection")
     print("=" * 50)
 
     img = create_face_image()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Haar Cascade 분류기 로드
+    # Load Haar Cascade classifier
     face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     face_cascade = cv2.CascadeClassifier(face_cascade_path)
 
     if face_cascade.empty():
-        print("얼굴 검출기를 로드할 수 없습니다.")
+        print("Cannot load face detector.")
         return
 
-    # 얼굴 검출
-    # scaleFactor: 각 이미지 스케일에서 이미지 크기를 줄이는 비율
-    # minNeighbors: 각 후보 사각형이 유지되기 위해 필요한 이웃 수
-    # minSize: 최소 객체 크기
+    # Face detection
+    # scaleFactor: Ratio by which image size is reduced at each scale
+    # minNeighbors: Number of neighbors required for each candidate rectangle
+    # minSize: Minimum object size
     faces = face_cascade.detectMultiScale(
         gray,
         scaleFactor=1.1,
@@ -60,34 +60,34 @@ def haar_cascade_face_detection():
     )
 
     result = img.copy()
-    print(f"검출된 얼굴 수: {len(faces)}")
+    print(f"Number of faces detected: {len(faces)}")
 
     for i, (x, y, w, h) in enumerate(faces):
-        # 얼굴 영역 표시
+        # Mark face region
         cv2.rectangle(result, (x, y), (x+w, y+h), (0, 255, 0), 2)
         cv2.putText(result, f'Face {i+1}', (x, y-10),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         print(f"  Face {i+1}: x={x}, y={y}, w={w}, h={h}")
 
-    print("\nHaar Cascade 파라미터:")
-    print("  scaleFactor: 1.1~1.3 (작을수록 정밀, 느림)")
-    print("  minNeighbors: 3~6 (클수록 엄격)")
-    print("  minSize: 최소 검출 크기")
+    print("\nHaar Cascade parameters:")
+    print("  scaleFactor: 1.1~1.3 (smaller = more precise, slower)")
+    print("  minNeighbors: 3~6 (larger = stricter)")
+    print("  minSize: Minimum detection size")
 
     cv2.imwrite('face_haar_input.jpg', img)
     cv2.imwrite('face_haar_result.jpg', result)
 
 
 def cascade_eye_detection():
-    """눈 검출 데모"""
+    """Eye detection demo"""
     print("\n" + "=" * 50)
-    print("눈 검출 (Haar Cascade)")
+    print("Eye Detection (Haar Cascade)")
     print("=" * 50)
 
     img = create_face_image()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 분류기 로드
+    # Load classifiers
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     )
@@ -96,10 +96,10 @@ def cascade_eye_detection():
     )
 
     if face_cascade.empty() or eye_cascade.empty():
-        print("분류기를 로드할 수 없습니다.")
+        print("Cannot load classifiers.")
         return
 
-    # 얼굴 검출
+    # Face detection
     faces = face_cascade.detectMultiScale(gray, 1.1, 5)
 
     result = img.copy()
@@ -107,7 +107,7 @@ def cascade_eye_detection():
     for (x, y, w, h) in faces:
         cv2.rectangle(result, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-        # 얼굴 영역 내에서 눈 검출
+        # Detect eyes within face region
         roi_gray = gray[y:y+h, x:x+w]
         roi_color = result[y:y+h, x:x+w]
 
@@ -121,36 +121,36 @@ def cascade_eye_detection():
         for (ex, ey, ew, eh) in eyes:
             cv2.rectangle(roi_color, (ex, ey), (ex+ew, ey+eh), (255, 0, 0), 2)
 
-        print(f"얼굴 ({x}, {y})에서 검출된 눈: {len(eyes)}")
+        print(f"Eyes detected in face ({x}, {y}): {len(eyes)}")
 
-    print("\n눈 검출 팁:")
-    print("  - 얼굴 영역 내에서만 검출 (ROI)")
-    print("  - minNeighbors를 높게 설정")
-    print("  - 상반부에서만 검출하면 정확도 향상")
+    print("\nEye detection tips:")
+    print("  - Detect only within face region (ROI)")
+    print("  - Set minNeighbors high")
+    print("  - Searching only upper half improves accuracy")
 
     cv2.imwrite('face_eye_result.jpg', result)
 
 
 def available_cascades():
-    """사용 가능한 Haar Cascade 목록"""
+    """Available Haar Cascade list"""
     print("\n" + "=" * 50)
-    print("사용 가능한 Haar Cascade 분류기")
+    print("Available Haar Cascade Classifiers")
     print("=" * 50)
 
     cascades = [
-        ('haarcascade_frontalface_default.xml', '정면 얼굴'),
-        ('haarcascade_frontalface_alt.xml', '정면 얼굴 (대체)'),
-        ('haarcascade_frontalface_alt2.xml', '정면 얼굴 (대체 2)'),
-        ('haarcascade_profileface.xml', '측면 얼굴'),
-        ('haarcascade_eye.xml', '눈'),
-        ('haarcascade_eye_tree_eyeglasses.xml', '눈 (안경 포함)'),
-        ('haarcascade_smile.xml', '미소'),
-        ('haarcascade_upperbody.xml', '상체'),
-        ('haarcascade_lowerbody.xml', '하체'),
-        ('haarcascade_fullbody.xml', '전신'),
+        ('haarcascade_frontalface_default.xml', 'Frontal face'),
+        ('haarcascade_frontalface_alt.xml', 'Frontal face (alternative)'),
+        ('haarcascade_frontalface_alt2.xml', 'Frontal face (alternative 2)'),
+        ('haarcascade_profileface.xml', 'Profile face'),
+        ('haarcascade_eye.xml', 'Eye'),
+        ('haarcascade_eye_tree_eyeglasses.xml', 'Eye (with glasses)'),
+        ('haarcascade_smile.xml', 'Smile'),
+        ('haarcascade_upperbody.xml', 'Upper body'),
+        ('haarcascade_lowerbody.xml', 'Lower body'),
+        ('haarcascade_fullbody.xml', 'Full body'),
     ]
 
-    print(f"\n경로: {cv2.data.haarcascades}\n")
+    print(f"\nPath: {cv2.data.haarcascades}\n")
 
     for filename, description in cascades:
         cascade = cv2.CascadeClassifier(cv2.data.haarcascades + filename)
@@ -160,15 +160,15 @@ def available_cascades():
 
 
 def lbp_face_detection():
-    """LBP 기반 얼굴 검출 데모"""
+    """LBP-based face detection demo"""
     print("\n" + "=" * 50)
-    print("LBP 얼굴 검출")
+    print("LBP Face Detection")
     print("=" * 50)
 
     img = create_face_image()
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # LBP Cascade 로드 (있는 경우)
+    # Load LBP Cascade (if available)
     lbp_cascade_path = cv2.data.haarcascades + '../lbpcascades/lbpcascade_frontalface_improved.xml'
 
     try:
@@ -183,64 +183,64 @@ def lbp_face_detection():
         for (x, y, w, h) in faces:
             cv2.rectangle(result, (x, y), (x+w, y+h), (0, 0, 255), 2)
 
-        print(f"LBP로 검출된 얼굴: {len(faces)}")
+        print(f"Faces detected with LBP: {len(faces)}")
         cv2.imwrite('face_lbp_result.jpg', result)
 
     except (FileNotFoundError, cv2.error):
-        print("LBP Cascade를 찾을 수 없습니다.")
-        print("대부분의 경우 Haar Cascade 사용을 권장합니다.")
+        print("LBP Cascade not found.")
+        print("Haar Cascade is recommended in most cases.")
 
-    print("\nHaar vs LBP 비교:")
-    print("  Haar: 더 정확, 느림, 조명 변화에 민감")
-    print("  LBP: 더 빠름, 조명 변화에 강건, 정확도 낮음")
+    print("\nHaar vs LBP comparison:")
+    print("  Haar: More accurate, slower, sensitive to lighting changes")
+    print("  LBP: Faster, robust to lighting changes, lower accuracy")
 
 
 def face_recognition_concept():
-    """얼굴 인식 개념 설명"""
+    """Face recognition concept explanation"""
     print("\n" + "=" * 50)
-    print("얼굴 인식 개념")
+    print("Face Recognition Concepts")
     print("=" * 50)
 
-    # 테스트 이미지 생성
+    # Create test images
     img1 = np.zeros((100, 100), dtype=np.uint8)
     cv2.ellipse(img1, (50, 50), (30, 40), 0, 0, 360, 150, -1)
     cv2.circle(img1, (40, 45), 5, 50, -1)
     cv2.circle(img1, (60, 45), 5, 50, -1)
 
-    img2 = img1.copy()  # 동일인
-    img3 = np.zeros((100, 100), dtype=np.uint8)  # 다른 사람
+    img2 = img1.copy()  # Same person
+    img3 = np.zeros((100, 100), dtype=np.uint8)  # Different person
     cv2.ellipse(img3, (50, 50), (35, 35), 0, 0, 360, 160, -1)
     cv2.circle(img3, (35, 45), 6, 60, -1)
     cv2.circle(img3, (65, 45), 6, 60, -1)
 
-    print("얼굴 인식 파이프라인:")
-    print("  1. 얼굴 검출 (Detection)")
-    print("  2. 얼굴 정렬 (Alignment)")
-    print("  3. 특징 추출 (Feature Extraction)")
-    print("  4. 특징 비교 (Matching)")
+    print("Face recognition pipeline:")
+    print("  1. Face Detection")
+    print("  2. Face Alignment")
+    print("  3. Feature Extraction")
+    print("  4. Feature Matching")
 
-    print("\nOpenCV 얼굴 인식기 (opencv-contrib 필요):")
-    print("  - EigenFaces: PCA 기반")
-    print("  - FisherFaces: LDA 기반")
+    print("\nOpenCV face recognizers (opencv-contrib required):")
+    print("  - EigenFaces: PCA-based")
+    print("  - FisherFaces: LDA-based")
     print("  - LBPH: Local Binary Pattern Histogram")
 
-    # LBPH 얼굴 인식기 예시 (opencv-contrib 필요)
+    # LBPH face recognizer example (opencv-contrib required)
     try:
         recognizer = cv2.face.LBPHFaceRecognizer_create()
 
-        # 학습 데이터
+        # Training data
         faces = [img1, img2, img3]
-        labels = np.array([0, 0, 1])  # 0: 첫 번째 사람, 1: 두 번째 사람
+        labels = np.array([0, 0, 1])  # 0: first person, 1: second person
 
         recognizer.train(faces, labels)
 
-        # 예측
+        # Prediction
         label, confidence = recognizer.predict(img1)
-        print(f"\n테스트: label={label}, confidence={confidence:.2f}")
-        print("  confidence가 낮을수록 유사")
+        print(f"\nTest: label={label}, confidence={confidence:.2f}")
+        print("  Lower confidence = more similar")
 
     except AttributeError:
-        print("\n참고: LBPH 인식기를 사용하려면")
+        print("\nNote: To use the LBPH recognizer:")
         print("  pip install opencv-contrib-python")
 
     cv2.imwrite('face_sample1.jpg', img1)
@@ -248,36 +248,36 @@ def face_recognition_concept():
 
 
 def face_detection_comparison():
-    """얼굴 검출 방법 비교"""
+    """Face detection method comparison"""
     print("\n" + "=" * 50)
-    print("얼굴 검출/인식 방법 비교")
+    print("Face Detection/Recognition Method Comparison")
     print("=" * 50)
 
     print("""
-    | 방법 | 장점 | 단점 | 용도 |
-    |------|------|------|------|
-    | Haar Cascade | 빠름, 간단 | 측면/기울기 약함 | 실시간 검출 |
-    | LBP | 매우 빠름 | 정확도 낮음 | 임베디드 |
-    | HOG + SVM | 정확 | 느림 | 검출 |
-    | DNN (SSD) | 매우 정확 | GPU 권장 | 고정밀 검출 |
-    | DNN (Face) | 특징 추출 | 모델 필요 | 인식 |
+    | Method | Advantages | Disadvantages | Use Case |
+    |--------|-----------|---------------|----------|
+    | Haar Cascade | Fast, simple | Weak on profile/tilted | Real-time detection |
+    | LBP | Very fast | Low accuracy | Embedded |
+    | HOG + SVM | Accurate | Slow | Detection |
+    | DNN (SSD) | Very accurate | GPU recommended | High-precision detection |
+    | DNN (Face) | Feature extraction | Model required | Recognition |
     """)
 
-    print("최신 트렌드:")
-    print("  - MTCNN: 다단계 CNN (검출+정렬)")
-    print("  - RetinaFace: 고정밀 검출")
-    print("  - ArcFace, FaceNet: 임베딩 기반 인식")
-    print("  - InsightFace: 종합 프레임워크")
+    print("Recent trends:")
+    print("  - MTCNN: Multi-stage CNN (detection + alignment)")
+    print("  - RetinaFace: High-precision detection")
+    print("  - ArcFace, FaceNet: Embedding-based recognition")
+    print("  - InsightFace: Comprehensive framework")
 
 
 def real_time_detection_template():
-    """실시간 검출 템플릿"""
+    """Real-time detection template"""
     print("\n" + "=" * 50)
-    print("실시간 얼굴 검출 템플릿")
+    print("Real-time Face Detection Template")
     print("=" * 50)
 
     code = '''
-# 실시간 얼굴 검출 코드
+# Real-time face detection code
 import cv2
 
 face_cascade = cv2.CascadeClassifier(
@@ -308,37 +308,37 @@ cv2.destroyAllWindows()
 
     print(code)
 
-    print("성능 최적화 팁:")
-    print("  1. 프레임 스킵 (매 프레임 검출 불필요)")
-    print("  2. 이미지 축소 후 검출")
-    print("  3. 이전 검출 영역 주변만 탐색")
-    print("  4. 멀티스레딩 활용")
+    print("Performance optimization tips:")
+    print("  1. Frame skipping (not every frame needs detection)")
+    print("  2. Downscale image before detection")
+    print("  3. Search only around previous detection area")
+    print("  4. Use multithreading")
 
 
 def main():
-    """메인 함수"""
-    # Haar Cascade 얼굴 검출
+    """Main function"""
+    # Haar Cascade face detection
     haar_cascade_face_detection()
 
-    # 눈 검출
+    # Eye detection
     cascade_eye_detection()
 
-    # 사용 가능한 Cascade 목록
+    # Available cascade list
     available_cascades()
 
-    # LBP 검출
+    # LBP detection
     lbp_face_detection()
 
-    # 얼굴 인식 개념
+    # Face recognition concept
     face_recognition_concept()
 
-    # 방법 비교
+    # Method comparison
     face_detection_comparison()
 
-    # 실시간 템플릿
+    # Real-time template
     real_time_detection_template()
 
-    print("\n얼굴 검출 및 인식 데모 완료!")
+    print("\nFace detection and recognition demo complete!")
 
 
 if __name__ == '__main__':

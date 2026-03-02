@@ -1,211 +1,211 @@
-# File Encryption Examples (파일 암호화 예제)
+# File Encryption Examples
 
-XOR 기반 파일 암호화 도구 구현 예제
+XOR-based file encryption tool implementation examples
 
-## 파일 목록
+## File List
 
 ### 1. `simple_xor.c`
-XOR 암호화의 기본 원리를 보여주는 간단한 데모
+A simple demo showing the basic principles of XOR encryption
 
-**학습 내용:**
-- XOR 연산의 가역성 (A ^ B ^ B = A)
-- 비트 연산 기초
-- 16진수 출력
-- 바이너리 패턴 출력
+**Learning Content:**
+- Reversibility of XOR operations (A ^ B ^ B = A)
+- Bit operation basics
+- Hexadecimal output
+- Binary pattern output
 
-**컴파일 및 실행:**
+**Compile and Run:**
 ```bash
 gcc -Wall -Wextra -std=c11 simple_xor.c -o simple_xor
 ./simple_xor
 ```
 
-**출력 예시:**
+**Sample Output:**
 ```
-=== XOR 암호화 데모 ===
+=== XOR Encryption Demo ===
 
-원본 메시지: Hello, World!
-원본 (hex):  48 65 6C 6C 6F 2C 20 57 6F 72 6C 64 21
+Original message: Hello, World!
+Original (hex):   48 65 6C 6C 6F 2C 20 57 6F 72 6C 64 21
 
-첫 글자 'H' XOR 'K' 연산 과정:
+XOR operation for first character 'H' ^ 'K':
   'H' = 72 (0b01001000)
   'K' = 75 (0b01001011)
   XOR = 3 (0b00000011)
 
-암호화 완료!
-복호화 결과: Hello, World!
+Encryption complete!
+Decrypted result: Hello, World!
 ```
 
 ---
 
 ### 2. `file_encrypt.c`
-실용적인 파일 암호화 도구 (기본 버전)
+A practical file encryption tool (basic version)
 
-**학습 내용:**
-- 바이트 단위 파일 I/O (`fread`, `fwrite`)
-- 명령줄 인자 파싱 (`argc`, `argv`)
-- 버퍼링된 파일 처리 (4KB 버퍼)
-- 에러 처리 (`perror`)
-- 키 순환 적용 (modulo 연산)
+**Learning Content:**
+- Byte-level file I/O (`fread`, `fwrite`)
+- Command-line argument parsing (`argc`, `argv`)
+- Buffered file processing (4KB buffer)
+- Error handling (`perror`)
+- Key cycling (modulo operation)
 
-**컴파일:**
+**Compile:**
 ```bash
 gcc -Wall -Wextra -std=c11 file_encrypt.c -o file_encrypt
 ```
 
-**사용법:**
+**Usage:**
 ```bash
-# 암호화
+# Encrypt
 ./file_encrypt -e input.txt output.enc mypassword
 
-# 복호화
+# Decrypt
 ./file_encrypt -d output.enc decrypted.txt mypassword
 ```
 
-**특징:**
-- 간단하고 직관적인 인터페이스
-- XOR 특성상 암호화/복호화 동일 연산
-- 모든 파일 타입 지원 (텍스트, 바이너리)
+**Features:**
+- Simple and intuitive interface
+- Encryption/decryption use the same operation due to XOR properties
+- Supports all file types (text, binary)
 
 ---
 
 ### 3. `file_encrypt_v2.c`
-향상된 파일 암호화 도구 (헤더 + 검증)
+Enhanced file encryption tool (header + validation)
 
-**학습 내용:**
-- 구조체 활용 (`FileHeader`)
-- 파일 매직 넘버 검증
-- 해시 함수 구현 (djb2 알고리즘)
-- 키 검증 (비밀번호 확인)
-- 파일 메타데이터 저장
-- 진행률 표시
-- 고정 크기 정수 타입 (`uint8_t`, `uint32_t`, `uint64_t`)
+**Learning Content:**
+- Struct usage (`FileHeader`)
+- File magic number validation
+- Hash function implementation (djb2 algorithm)
+- Key validation (password verification)
+- File metadata storage
+- Progress display
+- Fixed-width integer types (`uint8_t`, `uint32_t`, `uint64_t`)
 
-**컴파일:**
+**Compile:**
 ```bash
 gcc -Wall -Wextra -std=c11 file_encrypt_v2.c -o file_encrypt_v2
 ```
 
-**사용법:**
+**Usage:**
 ```bash
-# 암호화
+# Encrypt
 ./file_encrypt_v2 encrypt secret.txt secret.enc mypassword
 
-# 파일 정보 확인
+# Check file info
 ./file_encrypt_v2 info secret.enc
 
-# 복호화
+# Decrypt
 ./file_encrypt_v2 decrypt secret.enc decrypted.txt mypassword
 ```
 
-**파일 헤더 구조:**
+**File Header Structure:**
 ```
 ┌─────────────────────────────────────────┐
 │  Magic Number (4 bytes): "XENC"         │
 │  Version (1 byte): 1                    │
-│  Key Hash (4 bytes): 검증용             │
-│  Original Size (8 bytes): 원본 크기     │
+│  Key Hash (4 bytes): for validation     │
+│  Original Size (8 bytes): original size │
 ├─────────────────────────────────────────┤
-│         암호화된 데이터                 │
+│         Encrypted Data                  │
 └─────────────────────────────────────────┘
 ```
 
-**출력 예시:**
+**Sample Output:**
 ```bash
 $ ./file_encrypt_v2 encrypt test.txt test.enc mypass
-암호화 중...
+Encrypting...
 .
-암호화 완료: test.txt -> test.enc
-원본 크기: 38 바이트
-키 해시: 0x6CBFD0D9
+Encryption complete: test.txt -> test.enc
+Original size: 38 bytes
+Key hash: 0x6CBFD0D9
 
 $ ./file_encrypt_v2 info test.enc
-=== 암호화 파일 정보 ===
-매직 넘버: XENC
-버전: 1
-키 해시: 0x6CBFD0D9
-원본 크기: 38 바이트
-파일 크기: 62 바이트
-헤더 크기: 24 바이트
-암호화 데이터: 38 바이트
+=== Encrypted File Info ===
+Magic number: XENC
+Version: 1
+Key hash: 0x6CBFD0D9
+Original size: 38 bytes
+File size: 62 bytes
+Header size: 24 bytes
+Encrypted data: 38 bytes
 
 $ ./file_encrypt_v2 decrypt test.enc out.txt wrongpass
-오류: 잘못된 비밀번호
-기대 해시: 0x6CBFD0D9, 입력 해시: 0x289A5245
+Error: Wrong password
+Expected hash: 0x6CBFD0D9, Input hash: 0x289A5245
 ```
 
 ---
 
-## 핵심 개념
+## Core Concepts
 
-### XOR 암호화 원리
+### XOR Encryption Principle
 ```
-원리: A ^ K = C, C ^ K = A
+Principle: A ^ K = C, C ^ K = A
 
-예시:
-  원본: 'H' (72) = 0b01001000
-  키:   'K' (75) = 0b01001011
-  암호: XOR     = 0b00000011 (3)
-  복호: 3 ^ 75  = 0b01001000 (72 = 'H')
+Example:
+  Original: 'H' (72) = 0b01001000
+  Key:      'K' (75) = 0b01001011
+  Cipher:   XOR      = 0b00000011 (3)
+  Decrypt:  3 ^ 75   = 0b01001000 (72 = 'H')
 ```
 
-### djb2 해시 알고리즘
+### djb2 Hash Algorithm
 ```c
 uint32_t hash = 5381;
 while ((c = *str++)) {
     hash = hash * 33 + c;
 }
 ```
-- 빠르고 효과적인 문자열 해시
-- 충돌 확률 낮음
-- 키 검증용으로 적합
+- Fast and effective string hash
+- Low collision probability
+- Suitable for key validation
 
 ---
 
-## 보안 주의사항
+## Security Notice
 
-⚠️ **교육 목적 전용**
+⚠️ **For Educational Purposes Only**
 
-이 예제는 학습 목적으로 제작되었습니다. 실제 보안이 필요한 경우:
+These examples are created for learning purposes. For actual security needs:
 
-1. **XOR 암호화의 취약점:**
-   - 키 반복 사용 시 패턴 노출
-   - 알려진 평문 공격(Known-plaintext attack)에 취약
-   - 키 길이가 짧으면 브루트포스 공격 가능
+1. **XOR Encryption Weaknesses:**
+   - Repeated key usage exposes patterns
+   - Vulnerable to known-plaintext attacks
+   - Short keys are susceptible to brute-force attacks
 
-2. **실제 사용 권장사항:**
-   - AES-256 (대칭 암호화)
-   - RSA (비대칭 암호화)
-   - OpenSSL 라이브러리 사용
-   - 키 스트레칭 (PBKDF2, bcrypt)
-   - 솔트(Salt) 추가
+2. **Recommendations for Real-World Use:**
+   - AES-256 (symmetric encryption)
+   - RSA (asymmetric encryption)
+   - Use OpenSSL library
+   - Key stretching (PBKDF2, bcrypt)
+   - Add salt
 
-3. **이 구현의 한계:**
-   - 키 스트레칭 없음
-   - 솔트 미사용
-   - 무결성 검증(MAC) 없음
-   - 재생 공격 방지 없음
+3. **Limitations of This Implementation:**
+   - No key stretching
+   - No salt used
+   - No integrity verification (MAC)
+   - No replay attack prevention
 
 ---
 
-## 테스트 예제
+## Test Examples
 
 ```bash
-# 1. 기본 테스트
+# 1. Basic test
 echo "Hello, World!" > test.txt
 ./file_encrypt -e test.txt test.enc mykey
 ./file_encrypt -d test.enc out.txt mykey
-diff test.txt out.txt  # 동일해야 함
+diff test.txt out.txt  # Should be identical
 
-# 2. 바이너리 파일 테스트
+# 2. Binary file test
 ./file_encrypt_v2 encrypt /bin/ls ls.enc strongpass
 ./file_encrypt_v2 decrypt ls.enc ls.dec strongpass
-diff /bin/ls ls.dec  # 동일해야 함
+diff /bin/ls ls.dec  # Should be identical
 
-# 3. 잘못된 키 테스트
+# 3. Wrong key test
 ./file_encrypt_v2 decrypt test.enc wrong.txt wrongkey
-# 출력: 오류: 잘못된 비밀번호
+# Output: Error: Wrong password
 
-# 4. 대용량 파일 테스트 (10MB)
+# 4. Large file test (10MB)
 dd if=/dev/urandom of=large.bin bs=1M count=10
 time ./file_encrypt_v2 encrypt large.bin large.enc mypass
 ./file_encrypt_v2 info large.enc
@@ -213,33 +213,33 @@ time ./file_encrypt_v2 encrypt large.bin large.enc mypass
 
 ---
 
-## 컴파일 옵션 설명
+## Compiler Options Explained
 
 ```bash
 gcc -Wall -Wextra -std=c11 file.c -o program
 ```
 
-- `-Wall`: 기본 경고 활성화
-- `-Wextra`: 추가 경고 활성화
-- `-std=c11`: C11 표준 사용
-- `-o program`: 출력 파일명 지정
+- `-Wall`: Enable basic warnings
+- `-Wextra`: Enable additional warnings
+- `-std=c11`: Use C11 standard
+- `-o program`: Specify output file name
 
 ---
 
-## 학습 체크리스트
+## Learning Checklist
 
-- [ ] XOR 연산의 가역성 이해
-- [ ] 비트 연산자 사용법 (`^`, `&`, `|`, `~`, `<<`, `>>`)
-- [ ] 바이트 단위 파일 I/O (`fread`, `fwrite`)
-- [ ] 명령줄 인자 파싱 (`argc`, `argv`)
-- [ ] 구조체를 활용한 파일 헤더 설계
-- [ ] 해시 함수 구현 (djb2)
-- [ ] 에러 처리 및 검증 로직
-- [ ] 버퍼링을 통한 효율적인 파일 처리
+- [ ] Understand reversibility of XOR operations
+- [ ] Bit operator usage (`^`, `&`, `|`, `~`, `<<`, `>>`)
+- [ ] Byte-level file I/O (`fread`, `fwrite`)
+- [ ] Command-line argument parsing (`argc`, `argv`)
+- [ ] File header design using structs
+- [ ] Hash function implementation (djb2)
+- [ ] Error handling and validation logic
+- [ ] Efficient file processing through buffering
 
 ---
 
-## 참고 자료
+## References
 
 - [C11 Standard](https://en.cppreference.com/w/c/11)
 - [XOR Cipher - Wikipedia](https://en.wikipedia.org/wiki/XOR_cipher)
@@ -248,7 +248,7 @@ gcc -Wall -Wextra -std=c11 file.c -o program
 
 ---
 
-## 관련 학습 자료
+## Related Study Materials
 
 - `/opt/projects/01_Personal/03_Study/content/ko/C_Programming/08_Project_File_Encryption.md`
 - `/opt/projects/01_Personal/03_Study/content/ko/C_Programming/14_Bit_Operations.md`

@@ -1,8 +1,8 @@
 """
-PyTorch Low-Level ResNet 구현
+PyTorch Low-Level ResNet Implementation
 
-nn.Conv2d, nn.BatchNorm2d 대신 F.conv2d, 수동 BN 사용
-BasicBlock과 Bottleneck 모두 구현
+Uses F.conv2d and manual BN instead of nn.Conv2d and nn.BatchNorm2d.
+Implements both BasicBlock and Bottleneck.
 """
 
 import torch
@@ -12,7 +12,7 @@ from typing import Tuple, List, Dict, Optional, Literal
 
 
 class BatchNorm2dManual:
-    """수동 Batch Normalization"""
+    """Manual Batch Normalization"""
 
     def __init__(self, num_features: int, device: torch.device):
         self.gamma = torch.ones(num_features, requires_grad=True, device=device)
@@ -51,7 +51,7 @@ class BatchNorm2dManual:
 
 
 class ConvBN:
-    """Conv + BatchNorm 조합"""
+    """Conv + BatchNorm combination"""
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class ConvBN:
         self.stride = stride
         self.padding = padding
 
-        # Kaiming 초기화
+        # Kaiming initialization
         fan_in = in_channels * kernel_size * kernel_size
         std = math.sqrt(2.0 / fan_in)
 
@@ -74,7 +74,7 @@ class ConvBN:
             requires_grad=True, device=device
         ) * std
 
-        # Conv에 bias 없음 (BN이 있으므로)
+        # No bias in Conv (BN handles the shift)
         self.bn = BatchNorm2dManual(out_channels, device)
 
     def __call__(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
@@ -88,9 +88,9 @@ class ConvBN:
 
 class BasicBlock:
     """
-    ResNet BasicBlock (ResNet-18, 34용)
+    ResNet BasicBlock (for ResNet-18, 34)
 
-    구조: Conv3×3 → BN → ReLU → Conv3×3 → BN → (+shortcut) → ReLU
+    Structure: Conv3x3 -> BN -> ReLU -> Conv3x3 -> BN -> (+shortcut) -> ReLU
     """
     expansion = 1
 
@@ -104,7 +104,7 @@ class BasicBlock:
         self.conv1 = ConvBN(in_channels, out_channels, 3, stride, 1, device)
         self.conv2 = ConvBN(out_channels, out_channels, 3, 1, 1, device)
 
-        # Shortcut (차원이 다를 때만)
+        # Shortcut (only when dimensions differ)
         self.shortcut = None
         if stride != 1 or in_channels != out_channels:
             self.shortcut = ConvBN(in_channels, out_channels, 1, stride, 0, device)
@@ -133,9 +133,9 @@ class BasicBlock:
 
 class Bottleneck:
     """
-    ResNet Bottleneck (ResNet-50, 101, 152용)
+    ResNet Bottleneck (for ResNet-50, 101, 152)
 
-    구조: Conv1×1 → BN → ReLU → Conv3×3 → BN → ReLU → Conv1×1 → BN → (+shortcut) → ReLU
+    Structure: Conv1x1 -> BN -> ReLU -> Conv3x3 -> BN -> ReLU -> Conv1x1 -> BN -> (+shortcut) -> ReLU
     """
     expansion = 4
 
@@ -146,10 +146,10 @@ class Bottleneck:
         stride: int = 1,
         device: torch.device = None
     ):
-        # Bottleneck: 채널 축소 → 3×3 → 채널 복원
-        self.conv1 = ConvBN(in_channels, out_channels, 1, 1, 0, device)  # 축소
-        self.conv2 = ConvBN(out_channels, out_channels, 3, stride, 1, device)  # 주요 연산
-        self.conv3 = ConvBN(out_channels, out_channels * self.expansion, 1, 1, 0, device)  # 복원
+        # Bottleneck: channel reduction -> 3x3 -> channel restoration
+        self.conv1 = ConvBN(in_channels, out_channels, 1, 1, 0, device)  # Reduction
+        self.conv2 = ConvBN(out_channels, out_channels, 3, stride, 1, device)  # Main operation
+        self.conv3 = ConvBN(out_channels, out_channels * self.expansion, 1, 1, 0, device)  # Restoration
 
         # Shortcut
         self.shortcut = None
@@ -186,9 +186,9 @@ class Bottleneck:
 
 class ResNetLowLevel:
     """
-    ResNet Low-Level 구현
+    ResNet Low-Level Implementation
 
-    nn.Module 미사용, 수동 파라미터 관리
+    Does not use nn.Module; parameters are managed manually.
     """
 
     CONFIGS = {
@@ -210,7 +210,7 @@ class ResNetLowLevel:
         block_class, num_blocks = self.CONFIGS[config_name]
         self.expansion = block_class.expansion
 
-        # Stem: Conv7×7 + BN + ReLU + MaxPool
+        # Stem: Conv7x7 + BN + ReLU + MaxPool
         fan_in = input_channels * 7 * 7
         std = math.sqrt(2.0 / fan_in)
         self.conv1_weight = torch.randn(
@@ -242,16 +242,16 @@ class ResNetLowLevel:
         num_blocks: int,
         stride: int
     ) -> List:
-        """레이어 (여러 블록) 생성"""
+        """Create a layer (multiple blocks)"""
         blocks = []
 
-        # 첫 번째 블록: stride 적용, 차원 변경
+        # First block: apply stride, change dimensions
         blocks.append(block_class(
             self.in_channels, out_channels, stride, self.device
         ))
         self.in_channels = out_channels * self.expansion
 
-        # 나머지 블록: stride=1
+        # Remaining blocks: stride=1
         for _ in range(1, num_blocks):
             blocks.append(block_class(
                 self.in_channels, out_channels, 1, self.device
@@ -264,8 +264,8 @@ class ResNetLowLevel:
         Forward pass
 
         Args:
-            x: (N, C, H, W) 입력 이미지
-            training: 학습 모드
+            x: (N, C, H, W) input image
+            training: Training mode
 
         Returns:
             logits: (N, num_classes)
@@ -296,7 +296,7 @@ class ResNetLowLevel:
         return x
 
     def parameters(self) -> List[torch.Tensor]:
-        """학습 가능한 파라미터 반환"""
+        """Return trainable parameters"""
         params = [self.conv1_weight] + self.bn1.parameters()
 
         for layer in [self.layer1, self.layer2, self.layer3, self.layer4]:
@@ -307,13 +307,13 @@ class ResNetLowLevel:
         return params
 
     def zero_grad(self):
-        """Gradient 초기화"""
+        """Reset gradients"""
         for param in self.parameters():
             if param.grad is not None:
                 param.grad.zero_()
 
     def to(self, device):
-        """Device 이동"""
+        """Move to device"""
         self.device = device
 
         # Stem
@@ -330,12 +330,12 @@ class ResNetLowLevel:
         return self
 
     def count_parameters(self) -> int:
-        """파라미터 수 계산"""
+        """Count number of parameters"""
         return sum(p.numel() for p in self.parameters())
 
 
 class ResNetSmall(ResNetLowLevel):
-    """CIFAR-10용 작은 ResNet"""
+    """Small ResNet for CIFAR-10"""
 
     def __init__(
         self,
@@ -343,13 +343,13 @@ class ResNetSmall(ResNetLowLevel):
         num_classes: int = 10,
         input_channels: int = 3
     ):
-        # 부모 초기화 건너뛰고 직접 구성
+        # Skip parent init and configure directly
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         block_class, num_blocks = self.CONFIGS[config_name]
         self.expansion = block_class.expansion
 
-        # Stem: 3×3 Conv (7×7 대신)
+        # Stem: 3x3 Conv (instead of 7x7)
         fan_in = input_channels * 3 * 3
         std = math.sqrt(2.0 / fan_in)
         self.conv1_weight = torch.randn(
@@ -358,7 +358,7 @@ class ResNetSmall(ResNetLowLevel):
         ) * std
         self.bn1 = BatchNorm2dManual(64, self.device)
 
-        # MaxPool 없음 (32×32 입력이므로)
+        # No MaxPool (since input is 32x32)
 
         # Residual Layers
         self.in_channels = 64
@@ -377,7 +377,7 @@ class ResNetSmall(ResNetLowLevel):
         self.fc_bias = torch.zeros(num_classes, requires_grad=True, device=self.device)
 
     def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
-        # Stem (MaxPool 없음)
+        # Stem (no MaxPool)
         x = F.conv2d(x, self.conv1_weight, None, stride=1, padding=1)
         x = self.bn1(x, training)
         x = F.relu(x)
@@ -424,7 +424,7 @@ def train_epoch(
     lr: float,
     velocities: List[torch.Tensor]
 ) -> Tuple[float, float]:
-    """한 에폭 학습"""
+    """Train for one epoch"""
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
@@ -451,7 +451,7 @@ def train_epoch(
 
 @torch.no_grad()
 def evaluate(model: ResNetLowLevel, dataloader) -> Tuple[float, float]:
-    """평가"""
+    """Evaluate"""
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
@@ -472,7 +472,7 @@ def evaluate(model: ResNetLowLevel, dataloader) -> Tuple[float, float]:
 
 
 def visualize_gradient_flow(model: ResNetLowLevel):
-    """각 레이어의 gradient 크기 시각화"""
+    """Visualize gradient magnitude for each layer"""
     import matplotlib.pyplot as plt
 
     gradients = []
@@ -495,7 +495,7 @@ def visualize_gradient_flow(model: ResNetLowLevel):
 
 
 def main():
-    """CIFAR-10으로 ResNet 학습 데모"""
+    """ResNet training demo with CIFAR-10"""
     from torchvision import datasets, transforms
     from torch.utils.data import DataLoader
 
@@ -504,7 +504,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
 
-    # 데이터 전처리
+    # Data preprocessing
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -530,17 +530,17 @@ def main():
     print(f"Train samples: {len(train_dataset)}")
     print(f"Test samples: {len(test_dataset)}\n")
 
-    # 모델
+    # Model
     model = ResNetSmall(config_name='resnet18', num_classes=10)
     model.to(device)
 
     print(f"ResNet-18 for CIFAR-10")
     print(f"Total parameters: {model.count_parameters():,}\n")
 
-    # Velocity 초기화
+    # Initialize velocity
     velocities = [torch.zeros_like(p) for p in model.parameters()]
 
-    # 학습
+    # Training
     epochs = 100
     lr = 0.1
 
@@ -548,7 +548,7 @@ def main():
         # Learning rate schedule
         if epoch in [30, 60, 80]:
             lr *= 0.1
-            print(f"LR → {lr}")
+            print(f"LR -> {lr}")
 
         train_loss, train_acc = train_epoch(model, train_loader, lr, velocities)
 

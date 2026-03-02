@@ -1,8 +1,8 @@
 """
-PyTorch Low-Level LeNet-5 구현
+PyTorch Low-Level LeNet-5 Implementation
 
-nn.Conv2d, nn.Linear 대신 F.conv2d, torch.matmul 사용
-파라미터를 수동으로 관리
+Uses F.conv2d and torch.matmul instead of nn.Conv2d and nn.Linear.
+Parameters are managed manually.
 """
 
 import torch
@@ -13,32 +13,32 @@ from typing import Tuple, List
 
 class LeNetLowLevel:
     """
-    LeNet-5 Low-Level 구현
+    LeNet-5 Low-Level Implementation
 
-    nn.Module 미사용, F.conv2d 등 기본 연산만 사용
+    Does not use nn.Module; uses only basic operations like F.conv2d.
     """
 
     def __init__(self, num_classes: int = 10):
         # Device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Conv1: 1 → 6 channels, 5x5 kernel
+        # Conv1: 1 -> 6 channels, 5x5 kernel
         self.conv1_weight = self._init_conv_weight(1, 6, 5)
         self.conv1_bias = torch.zeros(6, requires_grad=True, device=self.device)
 
-        # Conv2: 6 → 16 channels, 5x5 kernel
+        # Conv2: 6 -> 16 channels, 5x5 kernel
         self.conv2_weight = self._init_conv_weight(6, 16, 5)
         self.conv2_bias = torch.zeros(16, requires_grad=True, device=self.device)
 
-        # Conv3: 16 → 120 channels, 5x5 kernel
+        # Conv3: 16 -> 120 channels, 5x5 kernel
         self.conv3_weight = self._init_conv_weight(16, 120, 5)
         self.conv3_bias = torch.zeros(120, requires_grad=True, device=self.device)
 
-        # FC1: 120 → 84
+        # FC1: 120 -> 84
         self.fc1_weight = self._init_linear_weight(120, 84)
         self.fc1_bias = torch.zeros(84, requires_grad=True, device=self.device)
 
-        # FC2: 84 → num_classes
+        # FC2: 84 -> num_classes
         self.fc2_weight = self._init_linear_weight(84, num_classes)
         self.fc2_bias = torch.zeros(num_classes, requires_grad=True, device=self.device)
 
@@ -48,7 +48,7 @@ class LeNetLowLevel:
         out_channels: int,
         kernel_size: int
     ) -> torch.Tensor:
-        """Kaiming 초기화"""
+        """Kaiming initialization"""
         fan_in = in_channels * kernel_size * kernel_size
         std = math.sqrt(2.0 / fan_in)
         weight = torch.randn(
@@ -62,7 +62,7 @@ class LeNetLowLevel:
         in_features: int,
         out_features: int
     ) -> torch.Tensor:
-        """Xavier 초기화"""
+        """Xavier initialization"""
         std = math.sqrt(2.0 / (in_features + out_features))
         weight = torch.randn(
             out_features, in_features,
@@ -75,42 +75,42 @@ class LeNetLowLevel:
         Forward pass
 
         Args:
-            x: (N, 1, 32, 32) 입력 이미지
+            x: (N, 1, 32, 32) input image
 
         Returns:
             logits: (N, num_classes)
         """
-        # Layer 1: Conv → ReLU → AvgPool
-        # (N, 1, 32, 32) → (N, 6, 28, 28) → (N, 6, 14, 14)
+        # Layer 1: Conv -> ReLU -> AvgPool
+        # (N, 1, 32, 32) -> (N, 6, 28, 28) -> (N, 6, 14, 14)
         x = F.conv2d(x, self.conv1_weight, self.conv1_bias, stride=1, padding=0)
         x = F.relu(x)
         x = F.avg_pool2d(x, kernel_size=2, stride=2)
 
-        # Layer 2: Conv → ReLU → AvgPool
-        # (N, 6, 14, 14) → (N, 16, 10, 10) → (N, 16, 5, 5)
+        # Layer 2: Conv -> ReLU -> AvgPool
+        # (N, 6, 14, 14) -> (N, 16, 10, 10) -> (N, 16, 5, 5)
         x = F.conv2d(x, self.conv2_weight, self.conv2_bias, stride=1, padding=0)
         x = F.relu(x)
         x = F.avg_pool2d(x, kernel_size=2, stride=2)
 
-        # Layer 3: Conv → ReLU
-        # (N, 16, 5, 5) → (N, 120, 1, 1)
+        # Layer 3: Conv -> ReLU
+        # (N, 16, 5, 5) -> (N, 120, 1, 1)
         x = F.conv2d(x, self.conv3_weight, self.conv3_bias, stride=1, padding=0)
         x = F.relu(x)
 
-        # Flatten: (N, 120, 1, 1) → (N, 120)
+        # Flatten: (N, 120, 1, 1) -> (N, 120)
         x = x.view(x.size(0), -1)
 
-        # FC1: (N, 120) → (N, 84)
+        # FC1: (N, 120) -> (N, 84)
         x = torch.matmul(x, self.fc1_weight.t()) + self.fc1_bias
         x = F.relu(x)
 
-        # FC2: (N, 84) → (N, num_classes)
+        # FC2: (N, 84) -> (N, num_classes)
         x = torch.matmul(x, self.fc2_weight.t()) + self.fc2_bias
 
         return x
 
     def parameters(self) -> List[torch.Tensor]:
-        """학습 가능한 파라미터 반환"""
+        """Return trainable parameters"""
         return [
             self.conv1_weight, self.conv1_bias,
             self.conv2_weight, self.conv2_bias,
@@ -120,13 +120,13 @@ class LeNetLowLevel:
         ]
 
     def zero_grad(self):
-        """Gradient 초기화"""
+        """Reset gradients"""
         for param in self.parameters():
             if param.grad is not None:
                 param.grad.zero_()
 
     def to(self, device):
-        """Device 이동"""
+        """Move to device"""
         self.device = device
         for param in self.parameters():
             param.data = param.data.to(device)
@@ -136,7 +136,7 @@ class LeNetLowLevel:
 
 
 def sgd_step(params: List[torch.Tensor], lr: float):
-    """수동 SGD 업데이트"""
+    """Manual SGD update"""
     with torch.no_grad():
         for param in params:
             if param.grad is not None:
@@ -162,7 +162,7 @@ def train_epoch(
     dataloader,
     lr: float = 0.01
 ) -> Tuple[float, float]:
-    """한 에폭 학습"""
+    """Train for one epoch"""
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
@@ -174,7 +174,7 @@ def train_epoch(
         # Forward
         logits = model.forward(images)
 
-        # Loss (Cross Entropy를 직접 계산)
+        # Loss (compute Cross Entropy directly)
         # log_softmax + nll_loss = cross_entropy
         log_probs = F.log_softmax(logits, dim=1)
         loss = F.nll_loss(log_probs, labels)
@@ -203,7 +203,7 @@ def evaluate(
     model: LeNetLowLevel,
     dataloader
 ) -> Tuple[float, float]:
-    """평가"""
+    """Evaluate"""
     total_loss = 0.0
     total_correct = 0
     total_samples = 0
@@ -231,7 +231,7 @@ def evaluate(
 
 
 def main():
-    """학습 스크립트"""
+    """Training script"""
     from torchvision import datasets, transforms
     from torch.utils.data import DataLoader
 
@@ -241,7 +241,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
 
-    # 데이터셋 (MNIST → 32x32로 리사이즈)
+    # Dataset (MNIST resized to 32x32)
     transform = transforms.Compose([
         transforms.Resize((32, 32)),
         transforms.ToTensor(),
@@ -261,15 +261,15 @@ def main():
     print(f"Train samples: {len(train_dataset)}")
     print(f"Test samples: {len(test_dataset)}\n")
 
-    # 모델
+    # Model
     model = LeNetLowLevel(num_classes=10)
     model.to(device)
 
-    # 파라미터 수 계산
+    # Parameter count
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params:,}\n")
 
-    # 학습
+    # Training
     epochs = 10
     lr = 0.01
 
@@ -284,27 +284,27 @@ def main():
         # Learning rate decay
         if (epoch + 1) % 5 == 0:
             lr *= 0.5
-            print(f"  LR → {lr}")
+            print(f"  LR -> {lr}")
 
         print()
 
     print("Training complete!")
 
-    # 최종 결과
+    # Final results
     final_loss, final_acc = evaluate(model, test_loader)
     print(f"\nFinal Test Accuracy: {final_acc:.4f}")
 
 
-# Convolution 연산 시각화
+# Convolution operation visualization
 def visualize_conv_operation():
-    """Convolution 연산 과정 시각화"""
+    """Visualize the convolution operation process"""
     import matplotlib.pyplot as plt
 
-    # 간단한 입력
+    # Simple input
     input_img = torch.zeros(1, 1, 5, 5)
-    input_img[0, 0, 1:4, 1:4] = 1.0  # 중앙에 3x3 사각형
+    input_img[0, 0, 1:4, 1:4] = 1.0  # 3x3 square in the center
 
-    # 엣지 검출 필터
+    # Edge detection filters
     filters = {
         'Horizontal': torch.tensor([
             [-1, -1, -1],
@@ -327,23 +327,23 @@ def visualize_conv_operation():
 
     fig, axes = plt.subplots(2, len(filters) + 1, figsize=(12, 6))
 
-    # 입력 이미지
+    # Input image
     axes[0, 0].imshow(input_img[0, 0], cmap='gray')
     axes[0, 0].set_title('Input')
     axes[0, 0].axis('off')
 
     axes[1, 0].axis('off')
 
-    # 각 필터 적용
+    # Apply each filter
     for i, (name, kernel) in enumerate(filters.items()):
         output = F.conv2d(input_img, kernel, padding=1)
 
-        # 필터
+        # Filter
         axes[0, i+1].imshow(kernel[0, 0], cmap='RdBu', vmin=-1, vmax=1)
         axes[0, i+1].set_title(f'{name} Filter')
         axes[0, i+1].axis('off')
 
-        # 출력
+        # Output
         axes[1, i+1].imshow(output[0, 0].detach(), cmap='gray')
         axes[1, i+1].set_title(f'Output')
         axes[1, i+1].axis('off')

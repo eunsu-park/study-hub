@@ -1,5 +1,5 @@
 // thread_return.c
-// 스레드 반환값 받기
+// Receiving thread return values
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -7,7 +7,7 @@
 void* calculate_sum(void* arg) {
     int n = *(int*)arg;
 
-    // 동적 할당하여 결과 반환
+    // Dynamically allocate to return result
     long* result = malloc(sizeof(long));
     *result = 0;
 
@@ -15,7 +15,7 @@ void* calculate_sum(void* arg) {
         *result += i;
     }
 
-    printf("스레드: 1부터 %d까지 합 계산 완료\n", n);
+    printf("Thread: sum from 1 to %d calculated\n", n);
     return result;
 }
 
@@ -25,13 +25,13 @@ int main(void) {
 
     pthread_create(&thread, NULL, calculate_sum, &n);
 
-    // 반환값 받기
+    // Receive return value
     void* ret_val;
     pthread_join(thread, &ret_val);
 
     long* result = (long*)ret_val;
-    printf("결과: %ld\n", *result);
+    printf("Result: %ld\n", *result);
 
-    free(result);  // 동적 할당된 메모리 해제
+    free(result);  // Free dynamically allocated memory
     return 0;
 }

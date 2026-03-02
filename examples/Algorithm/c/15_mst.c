@@ -1,8 +1,8 @@
 /*
- * 최소 신장 트리 (Minimum Spanning Tree)
+ * Minimum Spanning Tree (MST)
  * Kruskal, Prim, Union-Find
  *
- * 그래프의 모든 정점을 연결하는 최소 가중치 트리입니다.
+ * A minimum-weight tree that connects all vertices of a graph.
  */
 
 #include <stdio.h>
@@ -42,7 +42,7 @@ void uf_free(UnionFind* uf) {
 
 int uf_find(UnionFind* uf, int x) {
     if (uf->parent[x] != x)
-        uf->parent[x] = uf_find(uf, uf->parent[x]);  /* 경로 압축 */
+        uf->parent[x] = uf_find(uf, uf->parent[x]);  /* Path compression */
     return uf->parent[x];
 }
 
@@ -52,7 +52,7 @@ bool uf_union(UnionFind* uf, int x, int y) {
 
     if (px == py) return false;
 
-    /* 랭크 기반 합치기 */
+    /* Union by rank */
     if (uf->rank[px] < uf->rank[py]) {
         uf->parent[px] = py;
     } else if (uf->rank[px] > uf->rank[py]) {
@@ -70,7 +70,7 @@ bool uf_connected(UnionFind* uf, int x, int y) {
 }
 
 /* =============================================================================
- * 2. 간선 구조체
+ * 2. Edge Structure
  * ============================================================================= */
 
 typedef struct {
@@ -84,7 +84,7 @@ int compare_edges(const void* a, const void* b) {
 }
 
 /* =============================================================================
- * 3. 크루스칼 알고리즘
+ * 3. Kruskal's Algorithm
  * ============================================================================= */
 
 typedef struct {
@@ -94,7 +94,7 @@ typedef struct {
 } MST;
 
 MST kruskal(int vertices, Edge edges[], int num_edges) {
-    /* 간선을 가중치 순으로 정렬 */
+    /* Sort edges by weight */
     qsort(edges, num_edges, sizeof(Edge), compare_edges);
 
     UnionFind* uf = uf_create(vertices);
@@ -118,12 +118,12 @@ MST kruskal(int vertices, Edge edges[], int num_edges) {
 }
 
 /* =============================================================================
- * 4. 프림 알고리즘 (배열 기반)
+ * 4. Prim's Algorithm (Array-based)
  * ============================================================================= */
 
 MST prim_array(int** graph, int vertices) {
-    int* key = malloc(vertices * sizeof(int));      /* 최소 가중치 */
-    int* parent = malloc(vertices * sizeof(int));   /* MST에서의 부모 */
+    int* key = malloc(vertices * sizeof(int));      /* Minimum weight */
+    int* parent = malloc(vertices * sizeof(int));   /* Parent in MST */
     bool* in_mst = calloc(vertices, sizeof(bool));
 
     for (int i = 0; i < vertices; i++) {
@@ -134,7 +134,7 @@ MST prim_array(int** graph, int vertices) {
     key[0] = 0;
 
     for (int count = 0; count < vertices - 1; count++) {
-        /* 최소 key 정점 찾기 */
+        /* Find vertex with minimum key */
         int min_key = INF, u = -1;
         for (int v = 0; v < vertices; v++) {
             if (!in_mst[v] && key[v] < min_key) {
@@ -146,7 +146,7 @@ MST prim_array(int** graph, int vertices) {
         if (u == -1) break;
         in_mst[u] = true;
 
-        /* 인접 정점 갱신 */
+        /* Update adjacent vertices */
         for (int v = 0; v < vertices; v++) {
             if (graph[u][v] && !in_mst[v] && graph[u][v] < key[v]) {
                 parent[v] = u;
@@ -155,7 +155,7 @@ MST prim_array(int** graph, int vertices) {
         }
     }
 
-    /* MST 구성 */
+    /* Build MST */
     MST mst;
     mst.edges = malloc((vertices - 1) * sizeof(Edge));
     mst.num_edges = 0;
@@ -178,7 +178,7 @@ MST prim_array(int** graph, int vertices) {
 }
 
 /* =============================================================================
- * 5. 프림 알고리즘 (우선순위 큐)
+ * 5. Prim's Algorithm (Priority Queue)
  * ============================================================================= */
 
 typedef struct {
@@ -241,7 +241,7 @@ PQNode pq_pop(PriorityQueue* pq) {
     return min;
 }
 
-/* 인접 리스트용 구조체 */
+/* Adjacency list structure */
 typedef struct AdjNode {
     int dest;
     int weight;
@@ -307,7 +307,7 @@ MST prim_heap(AdjNode** adj, int vertices) {
 }
 
 /* =============================================================================
- * 6. Union-Find 응용: 연결 요소
+ * 6. Union-Find Application: Connected Components
  * ============================================================================= */
 
 int count_components(int n, int edges[][2], int num_edges) {
@@ -327,26 +327,26 @@ int count_components(int n, int edges[][2], int num_edges) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("최소 신장 트리 (MST) 예제\n");
+    printf("Minimum Spanning Tree (MST) Examples\n");
     printf("============================================================\n");
 
     /* 1. Union-Find */
-    printf("\n[1] Union-Find 기본\n");
+    printf("\n[1] Union-Find Basics\n");
     UnionFind* uf = uf_create(6);
-    printf("    union(0, 1): %s\n", uf_union(uf, 0, 1) ? "합침" : "이미 연결됨");
-    printf("    union(2, 3): %s\n", uf_union(uf, 2, 3) ? "합침" : "이미 연결됨");
-    printf("    union(1, 2): %s\n", uf_union(uf, 1, 2) ? "합침" : "이미 연결됨");
-    printf("    connected(0, 3): %s\n", uf_connected(uf, 0, 3) ? "예" : "아니오");
-    printf("    connected(0, 5): %s\n", uf_connected(uf, 0, 5) ? "예" : "아니오");
+    printf("    union(0, 1): %s\n", uf_union(uf, 0, 1) ? "merged" : "already connected");
+    printf("    union(2, 3): %s\n", uf_union(uf, 2, 3) ? "merged" : "already connected");
+    printf("    union(1, 2): %s\n", uf_union(uf, 1, 2) ? "merged" : "already connected");
+    printf("    connected(0, 3): %s\n", uf_connected(uf, 0, 3) ? "yes" : "no");
+    printf("    connected(0, 5): %s\n", uf_connected(uf, 0, 5) ? "yes" : "no");
     uf_free(uf);
 
-    /* 2. 크루스칼 */
-    printf("\n[2] 크루스칼 알고리즘\n");
+    /* 2. Kruskal */
+    printf("\n[2] Kruskal's Algorithm\n");
     Edge edges[] = {
         {0, 1, 4}, {0, 7, 8}, {1, 2, 8}, {1, 7, 11},
         {2, 3, 7}, {2, 8, 2}, {2, 5, 4}, {3, 4, 9},
@@ -354,18 +354,18 @@ int main(void) {
         {6, 8, 6}, {7, 8, 7}
     };
 
-    printf("    간선 수: 14, 정점 수: 9\n");
+    printf("    Edges: 14, Vertices: 9\n");
     MST mst1 = kruskal(9, edges, 14);
-    printf("    MST 간선:\n");
+    printf("    MST edges:\n");
     for (int i = 0; i < mst1.num_edges; i++) {
-        printf("      %d - %d (가중치 %d)\n",
+        printf("      %d - %d (weight %d)\n",
                mst1.edges[i].src, mst1.edges[i].dest, mst1.edges[i].weight);
     }
-    printf("    총 가중치: %d\n", mst1.total_weight);
+    printf("    Total weight: %d\n", mst1.total_weight);
     free(mst1.edges);
 
-    /* 3. 프림 (배열) */
-    printf("\n[3] 프림 알고리즘 (배열)\n");
+    /* 3. Prim (Array) */
+    printf("\n[3] Prim's Algorithm (Array)\n");
     int** graph = malloc(5 * sizeof(int*));
     for (int i = 0; i < 5; i++) {
         graph[i] = calloc(5, sizeof(int));
@@ -379,38 +379,38 @@ int main(void) {
     graph[3][4] = graph[4][3] = 9;
 
     MST mst2 = prim_array(graph, 5);
-    printf("    MST 간선:\n");
+    printf("    MST edges:\n");
     for (int i = 0; i < mst2.num_edges; i++) {
-        printf("      %d - %d (가중치 %d)\n",
+        printf("      %d - %d (weight %d)\n",
                mst2.edges[i].src, mst2.edges[i].dest, mst2.edges[i].weight);
     }
-    printf("    총 가중치: %d\n", mst2.total_weight);
+    printf("    Total weight: %d\n", mst2.total_weight);
     free(mst2.edges);
 
     for (int i = 0; i < 5; i++) free(graph[i]);
     free(graph);
 
-    /* 4. 연결 요소 개수 */
-    printf("\n[4] 연결 요소 개수\n");
+    /* 4. Connected Components Count */
+    printf("\n[4] Connected Components Count\n");
     int comp_edges[][2] = {{0, 1}, {1, 2}, {3, 4}};
-    printf("    정점: 0-4, 간선: (0,1), (1,2), (3,4)\n");
-    printf("    연결 요소 개수: %d\n", count_components(5, comp_edges, 3));
+    printf("    Vertices: 0-4, Edges: (0,1), (1,2), (3,4)\n");
+    printf("    Connected components: %d\n", count_components(5, comp_edges, 3));
 
-    /* 5. 알고리즘 비교 */
-    printf("\n[5] 알고리즘 비교\n");
-    printf("    | 알고리즘      | 시간복잡도    | 적합한 그래프 |\n");
-    printf("    |---------------|---------------|---------------|\n");
-    printf("    | 크루스칼      | O(E log E)    | 희소 그래프   |\n");
-    printf("    | 프림(배열)    | O(V²)         | 밀집 그래프   |\n");
-    printf("    | 프림(힙)      | O(E log V)    | 희소 그래프   |\n");
+    /* 5. Algorithm Comparison */
+    printf("\n[5] Algorithm Comparison\n");
+    printf("    | Algorithm      | Time          | Best for       |\n");
+    printf("    |----------------|---------------|----------------|\n");
+    printf("    | Kruskal        | O(E log E)    | Sparse graph   |\n");
+    printf("    | Prim (Array)   | O(V^2)        | Dense graph    |\n");
+    printf("    | Prim (Heap)    | O(E log V)    | Sparse graph   |\n");
 
-    /* 6. Union-Find 복잡도 */
-    printf("\n[6] Union-Find 복잡도\n");
-    printf("    | 연산     | 시간복잡도      |\n");
-    printf("    |----------|----------------|\n");
-    printf("    | find     | O(α(n)) ≈ O(1) |\n");
-    printf("    | union    | O(α(n)) ≈ O(1) |\n");
-    printf("    | α(n): 역아커만 함수 (매우 느리게 증가)\n");
+    /* 6. Union-Find Complexity */
+    printf("\n[6] Union-Find Complexity\n");
+    printf("    | Operation | Time            |\n");
+    printf("    |-----------|----------------|\n");
+    printf("    | find      | O(a(n)) ~ O(1) |\n");
+    printf("    | union     | O(a(n)) ~ O(1) |\n");
+    printf("    | a(n): inverse Ackermann function (grows extremely slowly)\n");
 
     printf("\n============================================================\n");
 

@@ -1,8 +1,8 @@
 /*
- * 최단 경로 (Shortest Path)
+ * Shortest Path
  * Dijkstra, Bellman-Ford, Floyd-Warshall
  *
- * 그래프에서 최단 경로를 찾는 알고리즘입니다.
+ * Algorithms for finding shortest paths in graphs.
  */
 
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #define INF INT_MAX
 
 /* =============================================================================
- * 1. 그래프 구조
+ * 1. Graph Structure
  * ============================================================================= */
 
 typedef struct Edge {
@@ -56,7 +56,7 @@ void graph_free(Graph* g) {
 }
 
 /* =============================================================================
- * 2. 다익스트라 알고리즘 (배열 기반)
+ * 2. Dijkstra's Algorithm (Array-based)
  * ============================================================================= */
 
 int* dijkstra_array(Graph* g, int src) {
@@ -68,7 +68,7 @@ int* dijkstra_array(Graph* g, int src) {
     dist[src] = 0;
 
     for (int count = 0; count < g->vertices - 1; count++) {
-        /* 최소 거리 정점 찾기 */
+        /* Find vertex with minimum distance */
         int min_dist = INF, u = -1;
         for (int v = 0; v < g->vertices; v++) {
             if (!visited[v] && dist[v] < min_dist) {
@@ -80,7 +80,7 @@ int* dijkstra_array(Graph* g, int src) {
         if (u == -1) break;
         visited[u] = true;
 
-        /* 인접 정점 갱신 */
+        /* Update adjacent vertices */
         Edge* e = g->adj[u];
         while (e) {
             if (!visited[e->dest] && dist[u] != INF &&
@@ -96,7 +96,7 @@ int* dijkstra_array(Graph* g, int src) {
 }
 
 /* =============================================================================
- * 3. 다익스트라 (우선순위 큐)
+ * 3. Dijkstra's Algorithm (Priority Queue)
  * ============================================================================= */
 
 typedef struct {
@@ -191,7 +191,7 @@ int* dijkstra_heap(Graph* g, int src) {
 }
 
 /* =============================================================================
- * 4. 벨만-포드 알고리즘
+ * 4. Bellman-Ford Algorithm
  * ============================================================================= */
 
 typedef struct {
@@ -206,7 +206,7 @@ int* bellman_ford(int vertices, EdgeList edges[], int num_edges, int src, bool* 
         dist[i] = INF;
     dist[src] = 0;
 
-    /* V-1번 반복 */
+    /* Iterate V-1 times */
     for (int i = 0; i < vertices - 1; i++) {
         for (int j = 0; j < num_edges; j++) {
             int u = edges[j].src;
@@ -218,7 +218,7 @@ int* bellman_ford(int vertices, EdgeList edges[], int num_edges, int src, bool* 
         }
     }
 
-    /* 음수 사이클 검사 */
+    /* Check for negative cycles */
     *has_negative_cycle = false;
     for (int j = 0; j < num_edges; j++) {
         int u = edges[j].src;
@@ -235,7 +235,7 @@ int* bellman_ford(int vertices, EdgeList edges[], int num_edges, int src, bool* 
 }
 
 /* =============================================================================
- * 5. 플로이드-워셜 알고리즘
+ * 5. Floyd-Warshall Algorithm
  * ============================================================================= */
 
 int** floyd_warshall(int** graph, int vertices) {
@@ -261,7 +261,7 @@ int** floyd_warshall(int** graph, int vertices) {
 }
 
 /* =============================================================================
- * 6. 경로 복원
+ * 6. Path Reconstruction
  * ============================================================================= */
 
 int* dijkstra_with_path(Graph* g, int src, int** parent) {
@@ -312,16 +312,16 @@ void print_path(int parent[], int dest) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("최단 경로 (Shortest Path) 예제\n");
+    printf("Shortest Path Examples\n");
     printf("============================================================\n");
 
-    /* 1. 다익스트라 (배열) */
-    printf("\n[1] 다익스트라 알고리즘 (배열)\n");
+    /* 1. Dijkstra (Array) */
+    printf("\n[1] Dijkstra's Algorithm (Array)\n");
     Graph* g1 = graph_create(5);
     graph_add_edge(g1, 0, 1, 4);
     graph_add_edge(g1, 0, 2, 1);
@@ -331,25 +331,25 @@ int main(void) {
     graph_add_edge(g1, 3, 4, 3);
 
     int* dist1 = dijkstra_array(g1, 0);
-    printf("    0에서 각 정점까지 거리:\n");
+    printf("    Distances from 0 to each vertex:\n");
     for (int i = 0; i < 5; i++)
         printf("      0 -> %d: %d\n", i, dist1[i]);
     free(dist1);
 
-    /* 2. 다익스트라 (힙) */
-    printf("\n[2] 다익스트라 알고리즘 (힙)\n");
+    /* 2. Dijkstra (Heap) */
+    printf("\n[2] Dijkstra's Algorithm (Heap)\n");
     int* dist2 = dijkstra_heap(g1, 0);
-    printf("    0에서 각 정점까지 거리:\n");
+    printf("    Distances from 0 to each vertex:\n");
     for (int i = 0; i < 5; i++)
         printf("      0 -> %d: %d\n", i, dist2[i]);
     free(dist2);
 
-    /* 3. 경로 복원 */
-    printf("\n[3] 경로 복원\n");
+    /* 3. Path Reconstruction */
+    printf("\n[3] Path Reconstruction\n");
     int* parent;
     int* dist3 = dijkstra_with_path(g1, 0, &parent);
     for (int i = 1; i < 5; i++) {
-        printf("    0 -> %d (거리 %d): ", i, dist3[i]);
+        printf("    0 -> %d (distance %d): ", i, dist3[i]);
         print_path(parent, i);
         printf("\n");
     }
@@ -357,32 +357,32 @@ int main(void) {
     free(parent);
     graph_free(g1);
 
-    /* 4. 벨만-포드 */
-    printf("\n[4] 벨만-포드 알고리즘\n");
+    /* 4. Bellman-Ford */
+    printf("\n[4] Bellman-Ford Algorithm\n");
     EdgeList edges[] = {
         {0, 1, 4}, {0, 2, 1}, {2, 1, 2},
         {1, 3, 1}, {2, 3, 5}, {3, 4, 3}
     };
     bool has_neg_cycle;
     int* dist4 = bellman_ford(5, edges, 6, 0, &has_neg_cycle);
-    printf("    음수 사이클: %s\n", has_neg_cycle ? "있음" : "없음");
-    printf("    거리: ");
+    printf("    Negative cycle: %s\n", has_neg_cycle ? "exists" : "none");
+    printf("    Distances: ");
     for (int i = 0; i < 5; i++)
         printf("%d ", dist4[i]);
     printf("\n");
     free(dist4);
 
-    /* 음수 사이클 테스트 */
-    printf("\n    음수 간선 테스트:\n");
+    /* Negative cycle test */
+    printf("\n    Negative edge test:\n");
     EdgeList edges_neg[] = {
         {0, 1, 1}, {1, 2, -1}, {2, 0, -1}
     };
     int* dist_neg = bellman_ford(3, edges_neg, 3, 0, &has_neg_cycle);
-    printf("    음수 사이클: %s\n", has_neg_cycle ? "있음" : "없음");
+    printf("    Negative cycle: %s\n", has_neg_cycle ? "exists" : "none");
     free(dist_neg);
 
-    /* 5. 플로이드-워셜 */
-    printf("\n[5] 플로이드-워셜 알고리즘\n");
+    /* 5. Floyd-Warshall */
+    printf("\n[5] Floyd-Warshall Algorithm\n");
     int** matrix = malloc(4 * sizeof(int*));
     for (int i = 0; i < 4; i++) {
         matrix[i] = malloc(4 * sizeof(int));
@@ -398,7 +398,7 @@ int main(void) {
     matrix[3][0] = 2;
 
     int** dist5 = floyd_warshall(matrix, 4);
-    printf("    모든 쌍 최단 거리:\n");
+    printf("    All-pairs shortest distances:\n");
     printf("       ");
     for (int i = 0; i < 4; i++) printf("%4d ", i);
     printf("\n");
@@ -420,14 +420,14 @@ int main(void) {
     free(matrix);
     free(dist5);
 
-    /* 6. 알고리즘 비교 */
-    printf("\n[6] 알고리즘 비교\n");
-    printf("    | 알고리즘      | 시간복잡도    | 특징              |\n");
-    printf("    |---------------|---------------|-------------------|\n");
-    printf("    | 다익스트라(배열)| O(V²)       | 양수 가중치만     |\n");
-    printf("    | 다익스트라(힙) | O(E log V)   | 희소 그래프 최적  |\n");
-    printf("    | 벨만-포드     | O(V * E)      | 음수 가중치 허용  |\n");
-    printf("    | 플로이드-워셜 | O(V³)         | 모든 쌍 최단경로  |\n");
+    /* 6. Algorithm Comparison */
+    printf("\n[6] Algorithm Comparison\n");
+    printf("    | Algorithm         | Time          | Features              |\n");
+    printf("    |-------------------|---------------|-----------------------|\n");
+    printf("    | Dijkstra (Array)  | O(V^2)        | Positive weights only |\n");
+    printf("    | Dijkstra (Heap)   | O(E log V)    | Best for sparse graph |\n");
+    printf("    | Bellman-Ford      | O(V * E)      | Allows neg. weights   |\n");
+    printf("    | Floyd-Warshall    | O(V^3)        | All-pairs shortest    |\n");
 
     printf("\n============================================================\n");
 

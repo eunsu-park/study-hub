@@ -1,8 +1,8 @@
 """
-최소 공통 조상 (LCA - Lowest Common Ancestor)
+Lowest Common Ancestor (LCA)
 LCA and Tree Queries
 
-트리에서 두 노드의 최소 공통 조상을 찾는 알고리즘입니다.
+Algorithms for finding the lowest common ancestor of two nodes in a tree.
 """
 
 from typing import List, Tuple, Optional
@@ -11,22 +11,22 @@ import math
 
 
 # =============================================================================
-# 1. 기본 LCA (Naive)
+# 1. Naive LCA
 # =============================================================================
 
 def lca_naive(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> int:
     """
-    기본 LCA (높이 맞추기)
-    시간복잡도: O(n) per query
-    전처리: O(n)
+    Naive LCA (level alignment)
+    Time Complexity: O(n) per query
+    Preprocessing: O(n)
     """
-    # 트리 구성
+    # Build tree
     adj = defaultdict(list)
     for a, b in edges:
         adj[a].append(b)
         adj[b].append(a)
 
-    # 부모와 깊이 계산
+    # Compute parent and depth
     parent = [-1] * n
     depth = [0] * n
 
@@ -39,13 +39,13 @@ def lca_naive(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> int:
 
     dfs(0, -1, 0)
 
-    # 높이 맞추기
+    # Align depths
     while depth[u] > depth[v]:
         u = parent[u]
     while depth[v] > depth[u]:
         v = parent[v]
 
-    # 동시에 올라가기
+    # Move up simultaneously
     while u != v:
         u = parent[u]
         v = parent[v]
@@ -54,34 +54,34 @@ def lca_naive(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> int:
 
 
 # =============================================================================
-# 2. Binary Lifting (희소 테이블)
+# 2. Binary Lifting (Sparse Table)
 # =============================================================================
 
 class LCABinaryLifting:
     """
-    Binary Lifting을 이용한 LCA
-    전처리: O(n log n)
-    쿼리: O(log n)
+    LCA using Binary Lifting
+    Preprocessing: O(n log n)
+    Query: O(log n)
     """
 
     def __init__(self, n: int, edges: List[Tuple[int, int]], root: int = 0):
         self.n = n
         self.LOG = max(1, int(math.log2(n)) + 1)
 
-        # 그래프 구성
+        # Build graph
         self.adj = defaultdict(list)
         for a, b in edges:
             self.adj[a].append(b)
             self.adj[b].append(a)
 
-        # 전처리
+        # Preprocessing
         self.parent = [[-1] * n for _ in range(self.LOG)]
         self.depth = [0] * n
 
         self._preprocess(root)
 
     def _preprocess(self, root: int):
-        """DFS로 부모/깊이 계산 + 희소 테이블 구성"""
+        """Compute parent/depth via DFS + build sparse table"""
         stack = [(root, -1, 0)]
 
         while stack:
@@ -93,29 +93,29 @@ class LCABinaryLifting:
                 if child != par:
                     stack.append((child, node, d + 1))
 
-        # 희소 테이블 구성: parent[i][v] = v의 2^i번째 조상
+        # Build sparse table: parent[i][v] = 2^i-th ancestor of v
         for i in range(1, self.LOG):
             for v in range(self.n):
                 if self.parent[i - 1][v] != -1:
                     self.parent[i][v] = self.parent[i - 1][self.parent[i - 1][v]]
 
     def query(self, u: int, v: int) -> int:
-        """LCA 쿼리 - O(log n)"""
-        # u가 더 깊도록 조정
+        """LCA query - O(log n)"""
+        # Ensure u is deeper
         if self.depth[u] < self.depth[v]:
             u, v = v, u
 
-        # 높이 맞추기
+        # Align depths
         diff = self.depth[u] - self.depth[v]
         for i in range(self.LOG):
             if (diff >> i) & 1:
                 u = self.parent[i][u]
 
-        # 같으면 완료
+        # If equal, done
         if u == v:
             return u
 
-        # 동시에 올라가기
+        # Move up simultaneously
         for i in range(self.LOG - 1, -1, -1):
             if self.parent[i][u] != self.parent[i][v]:
                 u = self.parent[i][u]
@@ -124,7 +124,7 @@ class LCABinaryLifting:
         return self.parent[0][u]
 
     def kth_ancestor(self, node: int, k: int) -> int:
-        """k번째 조상 찾기 - O(log n)"""
+        """Find k-th ancestor - O(log n)"""
         for i in range(self.LOG):
             if node == -1:
                 break
@@ -133,7 +133,7 @@ class LCABinaryLifting:
         return node
 
     def distance(self, u: int, v: int) -> int:
-        """두 노드 사이 거리 - O(log n)"""
+        """Distance between two nodes - O(log n)"""
         lca = self.query(u, v)
         return self.depth[u] + self.depth[v] - 2 * self.depth[lca]
 
@@ -144,9 +144,9 @@ class LCABinaryLifting:
 
 class LCAEulerTour:
     """
-    오일러 경로 + RMQ를 이용한 LCA
-    전처리: O(n log n)
-    쿼리: O(1)
+    LCA using Euler Tour + RMQ
+    Preprocessing: O(n log n)
+    Query: O(1)
     """
 
     def __init__(self, n: int, edges: List[Tuple[int, int]], root: int = 0):
@@ -156,15 +156,15 @@ class LCAEulerTour:
             self.adj[a].append(b)
             self.adj[b].append(a)
 
-        # 오일러 경로 및 첫 등장 위치
-        self.euler = []  # (깊이, 노드) 쌍
-        self.first = [-1] * n  # 각 노드의 첫 등장 인덱스
+        # Euler tour and first occurrence positions
+        self.euler = []  # (depth, node) pairs
+        self.first = [-1] * n  # First occurrence index for each node
 
         self._build_euler_tour(root)
         self._build_sparse_table()
 
     def _build_euler_tour(self, root: int):
-        """오일러 경로 구성 - O(n)"""
+        """Build Euler tour - O(n)"""
         stack = [(root, -1, 0, False)]
 
         while stack:
@@ -183,11 +183,11 @@ class LCAEulerTour:
                     stack.append((child, node, depth + 1, False))
 
     def _build_sparse_table(self):
-        """희소 테이블 구성 - O(n log n)"""
+        """Build sparse table - O(n log n)"""
         m = len(self.euler)
         self.LOG = max(1, int(math.log2(m)) + 1)
 
-        # sparse[i][j] = euler[j..j+2^i) 구간의 최솟값 인덱스
+        # sparse[i][j] = index of minimum in euler[j..j+2^i)
         self.sparse = [[0] * m for _ in range(self.LOG)]
 
         for j in range(m):
@@ -204,7 +204,7 @@ class LCAEulerTour:
                     self.sparse[i][j] = right
 
     def _rmq(self, left: int, right: int) -> int:
-        """범위 최소 쿼리 - O(1)"""
+        """Range Minimum Query - O(1)"""
         length = right - left + 1
         k = int(math.log2(length))
         left_idx = self.sparse[k][left]
@@ -214,7 +214,7 @@ class LCAEulerTour:
         return right_idx
 
     def query(self, u: int, v: int) -> int:
-        """LCA 쿼리 - O(1)"""
+        """LCA query - O(1)"""
         left = self.first[u]
         right = self.first[v]
         if left > right:
@@ -224,11 +224,11 @@ class LCAEulerTour:
 
 
 # =============================================================================
-# 4. 트리에서 경로 합/최대/최소
+# 4. Tree Path Sum/Max/Min
 # =============================================================================
 
 class TreePathQuery:
-    """트리 경로 쿼리 (LCA + 가중치)"""
+    """Tree path queries (LCA + weights)"""
 
     def __init__(self, n: int, edges: List[Tuple[int, int, int]], root: int = 0):
         """edges: [(u, v, weight), ...]"""
@@ -242,8 +242,8 @@ class TreePathQuery:
 
         self.parent = [[-1] * n for _ in range(self.LOG)]
         self.depth = [0] * n
-        self.dist_from_root = [0] * n  # 루트로부터의 거리
-        self.max_edge = [[0] * n for _ in range(self.LOG)]  # 경로상 최대 간선
+        self.dist_from_root = [0] * n  # Distance from root
+        self.max_edge = [[0] * n for _ in range(self.LOG)]  # Maximum edge on path
 
         self._preprocess(root)
 
@@ -261,7 +261,7 @@ class TreePathQuery:
                     self.max_edge[0][child] = weight
                     stack.append((child, node, d + 1, dist + weight))
 
-        # 희소 테이블
+        # Sparse table
         for i in range(1, self.LOG):
             for v in range(self.n):
                 if self.parent[i - 1][v] != -1:
@@ -272,7 +272,7 @@ class TreePathQuery:
                     )
 
     def lca(self, u: int, v: int) -> int:
-        """LCA 쿼리"""
+        """LCA query"""
         if self.depth[u] < self.depth[v]:
             u, v = v, u
 
@@ -292,16 +292,16 @@ class TreePathQuery:
         return self.parent[0][u]
 
     def path_distance(self, u: int, v: int) -> int:
-        """경로 거리 합"""
+        """Sum of distances on path"""
         ancestor = self.lca(u, v)
         return self.dist_from_root[u] + self.dist_from_root[v] - 2 * self.dist_from_root[ancestor]
 
     def path_max_edge(self, u: int, v: int) -> int:
-        """경로상 최대 간선 가중치"""
+        """Maximum edge weight on path"""
         ancestor = self.lca(u, v)
         result = 0
 
-        # u → lca
+        # u -> lca
         curr = u
         diff = self.depth[u] - self.depth[ancestor]
         for i in range(self.LOG):
@@ -309,7 +309,7 @@ class TreePathQuery:
                 result = max(result, self.max_edge[i][curr])
                 curr = self.parent[i][curr]
 
-        # v → lca
+        # v -> lca
         curr = v
         diff = self.depth[v] - self.depth[ancestor]
         for i in range(self.LOG):
@@ -321,15 +321,15 @@ class TreePathQuery:
 
 
 # =============================================================================
-# 5. 실전 문제: 트리에서 두 노드 사이 경로
+# 5. Practical Problem: Path Between Two Nodes in a Tree
 # =============================================================================
 
 def find_path(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> List[int]:
-    """두 노드 사이의 경로 찾기"""
+    """Find the path between two nodes"""
     lca_solver = LCABinaryLifting(n, edges)
     ancestor = lca_solver.query(u, v)
 
-    # u → lca
+    # u -> lca
     path_u = []
     curr = u
     while curr != ancestor:
@@ -337,7 +337,7 @@ def find_path(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> List[int]
         curr = lca_solver.parent[0][curr]
     path_u.append(ancestor)
 
-    # v → lca (역순)
+    # v -> lca (reversed)
     path_v = []
     curr = v
     while curr != ancestor:
@@ -348,15 +348,15 @@ def find_path(n: int, edges: List[Tuple[int, int]], u: int, v: int) -> List[int]
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("최소 공통 조상 (LCA) 예제")
+    print("Lowest Common Ancestor (LCA) Examples")
     print("=" * 60)
 
-    # 트리 구성
+    # Tree structure
     #        0
     #      / | \
     #     1  2  3
@@ -368,8 +368,8 @@ def main():
     n = 8
     edges = [(0, 1), (0, 2), (0, 3), (1, 4), (1, 5), (3, 6), (4, 7)]
 
-    # 1. 기본 LCA
-    print("\n[1] 기본 LCA (Naive)")
+    # 1. Naive LCA
+    print("\n[1] Naive LCA")
     lca = lca_naive(n, edges, 7, 5)
     print(f"    LCA(7, 5) = {lca}")
     lca = lca_naive(n, edges, 7, 6)
@@ -381,40 +381,40 @@ def main():
     print(f"    LCA(7, 5) = {lca_bl.query(7, 5)}")
     print(f"    LCA(7, 6) = {lca_bl.query(7, 6)}")
     print(f"    LCA(4, 6) = {lca_bl.query(4, 6)}")
-    print(f"    거리(7, 5) = {lca_bl.distance(7, 5)}")
-    print(f"    7의 2번째 조상 = {lca_bl.kth_ancestor(7, 2)}")
+    print(f"    Distance(7, 5) = {lca_bl.distance(7, 5)}")
+    print(f"    2nd ancestor of 7 = {lca_bl.kth_ancestor(7, 2)}")
 
     # 3. Euler Tour + RMQ
-    print("\n[3] Euler Tour + RMQ (O(1) 쿼리)")
+    print("\n[3] Euler Tour + RMQ (O(1) query)")
     lca_euler = LCAEulerTour(n, edges)
     print(f"    LCA(7, 5) = {lca_euler.query(7, 5)}")
     print(f"    LCA(7, 6) = {lca_euler.query(7, 6)}")
 
-    # 4. 가중치 트리 경로 쿼리
-    print("\n[4] 가중치 트리 경로 쿼리")
+    # 4. Weighted Tree Path Queries
+    print("\n[4] Weighted Tree Path Queries")
     weighted_edges = [
         (0, 1, 3), (0, 2, 5), (0, 3, 4),
         (1, 4, 2), (1, 5, 6), (3, 6, 1), (4, 7, 8)
     ]
     path_query = TreePathQuery(n, weighted_edges)
-    print(f"    경로 거리(7, 5) = {path_query.path_distance(7, 5)}")
-    print(f"    경로 최대 간선(7, 5) = {path_query.path_max_edge(7, 5)}")
-    print(f"    경로 거리(7, 6) = {path_query.path_distance(7, 6)}")
+    print(f"    Path distance(7, 5) = {path_query.path_distance(7, 5)}")
+    print(f"    Path max edge(7, 5) = {path_query.path_max_edge(7, 5)}")
+    print(f"    Path distance(7, 6) = {path_query.path_distance(7, 6)}")
 
-    # 5. 경로 찾기
-    print("\n[5] 두 노드 사이 경로")
+    # 5. Path Finding
+    print("\n[5] Path Between Two Nodes")
     path = find_path(n, edges, 7, 6)
-    print(f"    경로(7, 6) = {path}")
+    print(f"    Path(7, 6) = {path}")
     path = find_path(n, edges, 5, 2)
-    print(f"    경로(5, 2) = {path}")
+    print(f"    Path(5, 2) = {path}")
 
-    # 6. 성능 비교
-    print("\n[6] 복잡도 비교")
-    print("    | 방법           | 전처리     | 쿼리    |")
-    print("    |----------------|------------|---------|")
-    print("    | Naive          | O(n)       | O(n)    |")
-    print("    | Binary Lifting | O(n log n) | O(log n)|")
-    print("    | Euler + RMQ    | O(n log n) | O(1)    |")
+    # 6. Complexity Comparison
+    print("\n[6] Complexity Comparison")
+    print("    | Method         | Preprocessing | Query   |")
+    print("    |----------------|---------------|---------|")
+    print("    | Naive          | O(n)          | O(n)    |")
+    print("    | Binary Lifting | O(n log n)    | O(log n)|")
+    print("    | Euler + RMQ    | O(n log n)    | O(1)    |")
 
     print("\n" + "=" * 60)
 

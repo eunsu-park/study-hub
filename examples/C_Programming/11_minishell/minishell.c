@@ -1,8 +1,8 @@
 // minishell.c
-// 완성된 미니 쉘
-// 기능: 내장 명령어, 리다이렉션, 파이프, 시그널 처리
-// 컴파일: gcc -o minishell minishell.c -Wall -Wextra
-// 실행: ./minishell
+// Complete mini shell
+// Features: built-in commands, redirection, pipes, signal handling
+// Compile: gcc -o minishell minishell.c -Wall -Wextra
+// Run: ./minishell
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,19 +17,19 @@
 #define MAX_ARGS 64
 #define MAX_PIPES 10
 
-// ============ 전역 변수 ============
+// ============ Global Variables ============
 static int last_exit_status = 0;
 
-// ============ 시그널 핸들러 ============
+// ============ Signal Handler ============
 void sigint_handler(int sig) {
     (void)sig;
     printf("\n");
-    // 프롬프트 다시 출력하지 않음 (메인 루프에서 처리)
+    // Don't reprint prompt here (handled in main loop)
 }
 
-// ============ 유틸리티 ============
+// ============ Utility ============
 
-// 문자열 양쪽 공백 제거
+// Trim leading and trailing whitespace
 char* trim(char* str) {
     while (*str == ' ' || *str == '\t') str++;
 
@@ -43,7 +43,7 @@ char* trim(char* str) {
     return str;
 }
 
-// ============ 파싱 ============
+// ============ Parsing ============
 
 int parse_args(char* input, char** args) {
     int argc = 0;
@@ -58,7 +58,7 @@ int parse_args(char* input, char** args) {
     return argc;
 }
 
-// ============ 리다이렉션 ============
+// ============ Redirection ============
 
 typedef struct {
     char* infile;
@@ -110,13 +110,13 @@ int setup_redirect(Redirect* r) {
     return 0;
 }
 
-// ============ 내장 명령어 ============
+// ============ Built-in Commands ============
 
 int builtin_cd(char** args) {
     const char* path = args[1] ? args[1] : getenv("HOME");
 
     if (path == NULL) {
-        fprintf(stderr, "cd: HOME 환경변수가 설정되지 않음\n");
+        fprintf(stderr, "cd: HOME environment variable not set\n");
         return 1;
     }
 
@@ -165,7 +165,7 @@ int builtin_echo(char** args) {
     }
 
     for (int i = start; args[i]; i++) {
-        // 환경변수 확장 ($VAR)
+        // Environment variable expansion ($VAR)
         if (args[i][0] == '$') {
             char* val = getenv(args[i] + 1);
             printf("%s", val ? val : "");
@@ -207,31 +207,31 @@ int builtin_unset(char** args) {
 
 int builtin_help(void) {
     printf("\n");
-    printf("╔═══════════════════════════════════════╗\n");
-    printf("║        Mini Shell 도움말              ║\n");
-    printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 내장 명령어:                          ║\n");
-    printf("║   cd [dir]    디렉토리 변경           ║\n");
-    printf("║   pwd         현재 디렉토리           ║\n");
-    printf("║   echo [...]  텍스트 출력             ║\n");
-    printf("║   export V=X  환경변수 설정           ║\n");
-    printf("║   unset VAR   환경변수 삭제           ║\n");
-    printf("║   help        이 도움말               ║\n");
-    printf("║   exit [N]    쉘 종료                 ║\n");
-    printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 리다이렉션:                           ║\n");
-    printf("║   cmd > file  출력을 파일로           ║\n");
-    printf("║   cmd >> file 출력을 파일에 추가      ║\n");
-    printf("║   cmd < file  파일에서 입력           ║\n");
-    printf("╠═══════════════════════════════════════╣\n");
-    printf("║ 파이프:                               ║\n");
-    printf("║   cmd1 | cmd2 출력을 다음 명령 입력으로 ║\n");
-    printf("╚═══════════════════════════════════════╝\n");
+    printf("+=======================================+\n");
+    printf("|          Mini Shell Help              |\n");
+    printf("+=======================================+\n");
+    printf("| Built-in commands:                    |\n");
+    printf("|   cd [dir]    Change directory         |\n");
+    printf("|   pwd         Current directory        |\n");
+    printf("|   echo [...]  Print text               |\n");
+    printf("|   export V=X  Set env variable         |\n");
+    printf("|   unset VAR   Unset env variable       |\n");
+    printf("|   help        Show this help           |\n");
+    printf("|   exit [N]    Exit the shell           |\n");
+    printf("+=======================================+\n");
+    printf("| Redirection:                          |\n");
+    printf("|   cmd > file  Output to file           |\n");
+    printf("|   cmd >> file Append to file           |\n");
+    printf("|   cmd < file  Input from file          |\n");
+    printf("+=======================================+\n");
+    printf("| Pipe:                                 |\n");
+    printf("|   cmd1 | cmd2 Pipe output to input     |\n");
+    printf("+=======================================+\n");
     printf("\n");
     return 0;
 }
 
-// 내장 명령어 실행 (-1: 내장 아님)
+// Execute built-in command (-1: not a built-in)
 int run_builtin(char** args) {
     if (!args[0]) return -1;
 
@@ -245,7 +245,7 @@ int run_builtin(char** args) {
     return -1;
 }
 
-// ============ 파이프 실행 ============
+// ============ Pipe Execution ============
 
 int split_pipe(char** args, char*** cmds) {
     int n = 0;
@@ -266,21 +266,21 @@ void run_pipeline(char** args) {
     char** cmds[MAX_PIPES + 1];
     int n = split_pipe(args, cmds);
 
-    // 파이프 없으면 단일 명령 실행
+    // No pipe: single command execution
     if (n == 1) {
         Redirect r;
         parse_redirect(cmds[0], &r);
 
         if (!cmds[0][0]) return;
 
-        // 내장 명령어 체크
+        // Check built-in command
         int builtin_result = run_builtin(cmds[0]);
         if (builtin_result != -1) {
             last_exit_status = builtin_result;
             return;
         }
 
-        // 외부 명령어
+        // External command
         // Why: fork+exec is the Unix process creation model — fork duplicates the
         // process, exec replaces it with a new program, so the shell itself survives
         pid_t pid = fork();
@@ -299,7 +299,7 @@ void run_pipeline(char** args) {
         return;
     }
 
-    // 파이프가 있는 경우
+    // Pipe execution
     int pipes[MAX_PIPES][2];
     for (int i = 0; i < n - 1; i++) {
         pipe(pipes[i]);
@@ -309,11 +309,11 @@ void run_pipeline(char** args) {
         pid_t pid = fork();
 
         if (pid == 0) {
-            // 입력 연결
+            // Connect input
             if (i > 0) {
                 dup2(pipes[i-1][0], STDIN_FILENO);
             }
-            // 출력 연결
+            // Connect output
             if (i < n - 1) {
                 dup2(pipes[i][1], STDOUT_FILENO);
             }
@@ -325,7 +325,7 @@ void run_pipeline(char** args) {
                 close(pipes[j][1]);
             }
 
-            // 리다이렉션 처리 (첫/마지막 명령에만 적용)
+            // Handle redirection (only for first/last commands)
             Redirect r;
             parse_redirect(cmds[i], &r);
             if (i == 0 && r.infile) {
@@ -344,7 +344,7 @@ void run_pipeline(char** args) {
         }
     }
 
-    // 부모: 파이프 닫고 대기
+    // Parent: close pipes and wait
     for (int i = 0; i < n - 1; i++) {
         close(pipes[i][0]);
         close(pipes[i][1]);
@@ -357,13 +357,13 @@ void run_pipeline(char** args) {
     last_exit_status = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }
 
-// ============ 프롬프트 ============
+// ============ Prompt ============
 
 void print_prompt(void) {
     char cwd[256];
     char* dir = getcwd(cwd, sizeof(cwd));
 
-    // 홈 디렉토리를 ~로 표시
+    // Display home directory as ~
     char* home = getenv("HOME");
     if (home && dir && strncmp(dir, home, strlen(home)) == 0) {
         printf("\033[1;34m~%s\033[0m", dir + strlen(home));
@@ -371,17 +371,17 @@ void print_prompt(void) {
         printf("\033[1;34m%s\033[0m", dir ? dir : "?");
     }
 
-    // 종료 코드에 따라 색상 변경
+    // Change color based on exit code
     if (last_exit_status == 0) {
-        printf(" \033[1;32m❯\033[0m ");
+        printf(" \033[1;32m>\033[0m ");
     } else {
-        printf(" \033[1;31m❯\033[0m ");
+        printf(" \033[1;31m>\033[0m ");
     }
 
     fflush(stdout);
 }
 
-// ============ 메인 ============
+// ============ Main ============
 
 int main(void) {
     char input[MAX_INPUT];
@@ -392,7 +392,7 @@ int main(void) {
     signal(SIGINT, sigint_handler);
 
     printf("\n\033[1;36m=== Mini Shell ===\033[0m\n");
-    printf("'help' 입력하여 도움말 보기\n\n");
+    printf("Type 'help' for help\n\n");
 
     while (1) {
         print_prompt();
@@ -405,25 +405,25 @@ int main(void) {
         char* trimmed = trim(input);
         if (*trimmed == '\0') continue;
 
-        // 주석 무시
+        // Ignore comments
         if (trimmed[0] == '#') continue;
 
-        // 입력 복사 (strtok이 원본 수정)
+        // Copy input (strtok modifies the original)
         char input_copy[MAX_INPUT];
         strncpy(input_copy, trimmed, sizeof(input_copy));
 
-        // 파싱
+        // Parse
         int argc = parse_args(input_copy, args);
         if (argc == 0) continue;
 
-        // exit 명령어
+        // exit command
         if (strcmp(args[0], "exit") == 0) {
             int code = args[1] ? atoi(args[1]) : last_exit_status;
             printf("exit\n");
             exit(code);
         }
 
-        // 실행
+        // Execute
         run_pipeline(args);
     }
 

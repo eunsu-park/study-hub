@@ -1,9 +1,9 @@
 /*
- * DOM 조작과 이벤트 예제
+ * DOM Manipulation and Events Examples
  */
 
 // ============================================
-// 1. 요소 선택
+// 1. Element Selection
 // ============================================
 function demoSelection() {
     const output = document.getElementById('selectOutput');
@@ -15,31 +15,31 @@ function demoSelection() {
 
     // getElementsByClassName
     const byClass = document.getElementsByClassName('myClass');
-    result += `getElementsByClassName: ${byClass.length}개 요소\n`;
+    result += `getElementsByClassName: ${byClass.length} elements\n`;
 
     // Why: querySelector/All accept any CSS selector, making them far more flexible than
     // getElementById/ClassName; they're the modern go-to for DOM queries
-    // querySelector (첫 번째 일치)
+    // querySelector (first match)
     const byQuery = document.querySelector('.myClass');
     result += `querySelector('.myClass'): "${byQuery.textContent}"\n`;
 
-    // querySelectorAll (모든 일치)
+    // querySelectorAll (all matches)
     const byQueryAll = document.querySelectorAll('.myClass');
-    result += `querySelectorAll('.myClass'): ${byQueryAll.length}개 요소\n`;
+    result += `querySelectorAll('.myClass'): ${byQueryAll.length} elements\n`;
 
-    // 속성 선택자
+    // Attribute selector
     const byData = document.querySelector('[data-info="test"]');
     result += `[data-info="test"]: "${byData.textContent}"\n`;
 
-    // 복합 선택자
+    // Complex selector
     const complex = document.querySelector('#selectDemo .container span');
-    result += `복합 선택자: "${complex.textContent}"`;
+    result += `Complex selector: "${complex.textContent}"`;
 
     output.textContent = result;
 }
 
 // ============================================
-// 2. 요소 생성 및 추가
+// 2. Creating and Adding Elements
 // ============================================
 function addItem() {
     const input = document.getElementById('newItemInput');
@@ -48,18 +48,18 @@ function addItem() {
 
     if (!text) return;
 
-    // 요소 생성
+    // Create element
     const li = document.createElement('li');
     li.textContent = text;
 
-    // 삭제 버튼 추가
+    // Add delete button
     const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '×';
+    deleteBtn.textContent = '\u00d7';
     deleteBtn.style.cssText = 'margin-left: 10px; padding: 2px 8px; background: #e74c3c;';
     deleteBtn.onclick = () => li.remove();
 
     li.appendChild(deleteBtn);
-    list.appendChild(li);  // 끝에 추가
+    list.appendChild(li);  // Add to end
 
     input.value = '';
     input.focus();
@@ -76,13 +76,13 @@ function addItemBefore() {
     li.textContent = text;
 
     const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '×';
+    deleteBtn.textContent = '\u00d7';
     deleteBtn.style.cssText = 'margin-left: 10px; padding: 2px 8px; background: #e74c3c;';
     deleteBtn.onclick = () => li.remove();
 
     li.appendChild(deleteBtn);
 
-    // 맨 앞에 추가
+    // Add to beginning
     list.insertBefore(li, list.firstChild);
 
     input.value = '';
@@ -90,18 +90,18 @@ function addItemBefore() {
 
 function clearItems() {
     const list = document.getElementById('itemList');
-    // 모든 자식 제거
+    // Remove all children
     list.innerHTML = '';
-    // 또는: while (list.firstChild) list.removeChild(list.firstChild);
+    // Or: while (list.firstChild) list.removeChild(list.firstChild);
 }
 
-// Enter 키로 추가
+// Add with Enter key
 document.getElementById('newItemInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') addItem();
 });
 
 // ============================================
-// 3. 스타일 및 클래스 조작
+// 3. Style and Class Manipulation
 // ============================================
 function changeColor() {
     const box = document.getElementById('styleBox');
@@ -131,12 +131,12 @@ function resetStyle() {
 }
 
 // ============================================
-// 4. 속성 조작
+// 4. Attribute Manipulation
 // ============================================
 function changeImage(num) {
     const img = document.getElementById('demoImage');
     img.src = `https://via.placeholder.com/200x100?text=Image+${num}`;
-    img.alt = `데모 이미지 ${num}`;
+    img.alt = `Demo image ${num}`;
     updateAltDisplay();
 }
 
@@ -153,11 +153,11 @@ function updateAltDisplay() {
     document.getElementById('currentAlt').textContent = img.getAttribute('alt');
 }
 
-// 초기 alt 표시
+// Initial alt display
 updateAltDisplay();
 
 // ============================================
-// 5. 이벤트 리스너
+// 5. Event Listeners
 // ============================================
 const eventBox = document.getElementById('eventBox');
 const eventLog = document.getElementById('eventLog');
@@ -171,49 +171,49 @@ function clearEventLog() {
     eventLog.innerHTML = '';
 }
 
-// 클릭 이벤트
+// Click event
 eventBox.addEventListener('click', (e) => {
-    logEvent(`클릭! 좌표: (${e.offsetX}, ${e.offsetY})`);
+    logEvent(`Click! Coordinates: (${e.offsetX}, ${e.offsetY})`);
 });
 
-// 더블클릭
+// Double click
 eventBox.addEventListener('dblclick', () => {
-    logEvent('더블클릭!');
+    logEvent('Double click!');
 });
 
-// 마우스 진입/이탈
+// Mouse enter/leave
 eventBox.addEventListener('mouseenter', () => {
-    logEvent('마우스 진입');
+    logEvent('Mouse enter');
     eventBox.style.backgroundColor = '#ecf0f1';
 });
 
 eventBox.addEventListener('mouseleave', () => {
-    logEvent('마우스 이탈');
+    logEvent('Mouse leave');
     eventBox.style.backgroundColor = '';
 });
 
 // Why: Manual throttle prevents mousemove from flooding the log (fires 60+ times/sec),
 // keeping the demo readable while still demonstrating the event
-// 마우스 이동 (throttle 적용)
+// Mouse move (throttled)
 let lastMoveLog = 0;
 eventBox.addEventListener('mousemove', (e) => {
     const now = Date.now();
-    if (now - lastMoveLog > 500) {  // 500ms마다 로깅
-        logEvent(`마우스 이동: (${e.offsetX}, ${e.offsetY})`);
+    if (now - lastMoveLog > 500) {  // Log every 500ms
+        logEvent(`Mouse move: (${e.offsetX}, ${e.offsetY})`);
         lastMoveLog = now;
     }
 });
 
-// 컨텍스트 메뉴 (우클릭)
+// Context menu (right click)
 eventBox.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    logEvent('우클릭 (기본 동작 방지됨)');
+    logEvent('Right click (default action prevented)');
 });
 
 // Why: Event delegation attaches a single listener to the parent instead of one per card,
 // reducing memory usage and automatically handling dynamically added cards
 // ============================================
-// 6. 이벤트 위임
+// 6. Event Delegation
 // ============================================
 const cardContainer = document.getElementById('cardContainer');
 let cardCount = 5;
@@ -222,13 +222,13 @@ cardContainer.addEventListener('click', (e) => {
     const card = e.target.closest('.card');
     if (!card) return;
 
-    // 모든 카드에서 selected 제거
+    // Remove selected from all cards
     cardContainer.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
 
-    // 클릭된 카드에 selected 추가
+    // Add selected to clicked card
     card.classList.add('selected');
 
-    document.getElementById('selectedCard').textContent = `카드 ${card.dataset.id}`;
+    document.getElementById('selectedCard').textContent = `Card ${card.dataset.id}`;
 });
 
 function addCard() {
@@ -241,22 +241,22 @@ function addCard() {
 }
 
 // ============================================
-// 7. 폼 이벤트
+// 7. Form Events
 // ============================================
 const demoForm = document.getElementById('demoForm');
 const formOutput = document.getElementById('formOutput');
 
-// input 이벤트 (실시간)
+// input event (real-time)
 document.getElementById('nameInput').addEventListener('input', (e) => {
-    console.log('입력 중:', e.target.value);
+    console.log('Typing:', e.target.value);
 });
 
-// change 이벤트 (포커스 이탈 시)
+// change event (on blur)
 document.getElementById('countrySelect').addEventListener('change', (e) => {
-    formOutput.textContent = `국가 변경: ${e.target.value || '선택 안함'}`;
+    formOutput.textContent = `Country changed: ${e.target.value || 'Not selected'}`;
 });
 
-// focus/blur 이벤트
+// focus/blur events
 document.getElementById('emailInput').addEventListener('focus', (e) => {
     e.target.style.borderColor = '#3498db';
 });
@@ -267,9 +267,9 @@ document.getElementById('emailInput').addEventListener('blur', (e) => {
 
 // Why: preventDefault on submit stops the browser from reloading the page, letting JS
 // handle validation and async submission for a smoother user experience
-// submit 이벤트
+// submit event
 demoForm.addEventListener('submit', (e) => {
-    e.preventDefault();  // 기본 동작 방지
+    e.preventDefault();  // Prevent default action
 
     const formData = new FormData(demoForm);
     const name = document.getElementById('nameInput').value;
@@ -277,15 +277,15 @@ demoForm.addEventListener('submit', (e) => {
     const country = document.getElementById('countrySelect').value;
 
     formOutput.innerHTML = `
-        <strong>제출된 데이터:</strong><br>
-        이름: ${name}<br>
-        이메일: ${email}<br>
-        국가: ${country || '미선택'}
+        <strong>Submitted data:</strong><br>
+        Name: ${name}<br>
+        Email: ${email}<br>
+        Country: ${country || 'Not selected'}
     `;
 });
 
 // ============================================
-// 8. 키보드 이벤트
+// 8. Keyboard Events
 // ============================================
 const keyInput = document.getElementById('keyInput');
 const keyOutput = document.getElementById('keyOutput');
@@ -299,23 +299,23 @@ keyInput.addEventListener('keydown', (e) => {
         ctrlKey: ${e.ctrlKey}, shiftKey: ${e.shiftKey}, altKey: ${e.altKey}
     `;
 
-    // 특수 키 처리
+    // Special key handling
     if (e.key === 'Escape') {
         keyInput.value = '';
-        keyOutput.innerHTML += '<br><em>Escape로 입력 초기화</em>';
+        keyOutput.innerHTML += '<br><em>Input cleared with Escape</em>';
     }
 
     if (e.ctrlKey && e.key === 'Enter') {
-        keyOutput.innerHTML += '<br><em>Ctrl+Enter 감지!</em>';
+        keyOutput.innerHTML += '<br><em>Ctrl+Enter detected!</em>';
     }
 });
 
 // ============================================
-// 9. 드래그 앤 드롭
+// 9. Drag and Drop
 // ============================================
 let draggedElement = null;
 
-// 드래그 가능한 요소들
+// Draggable elements
 document.querySelectorAll('.draggable').forEach(elem => {
     elem.addEventListener('dragstart', (e) => {
         draggedElement = e.target;
@@ -330,10 +330,10 @@ document.querySelectorAll('.draggable').forEach(elem => {
 
 // Why: The browser's default behavior for dragover is to reject drops, so
 // preventDefault() is required to make an element a valid drop target
-// 드롭 존
+// Drop zones
 document.querySelectorAll('.drop-zone').forEach(zone => {
     zone.addEventListener('dragover', (e) => {
-        e.preventDefault();  // 드롭 허용
+        e.preventDefault();  // Allow drop
         zone.classList.add('drag-over');
     });
 
@@ -352,7 +352,7 @@ document.querySelectorAll('.drop-zone').forEach(zone => {
 });
 
 // ============================================
-// 10. 스크롤 이벤트
+// 10. Scroll Events
 // ============================================
 const scrollBox = document.getElementById('scrollBox');
 const scrollPosition = document.getElementById('scrollPosition');
@@ -361,22 +361,22 @@ scrollBox.addEventListener('scroll', () => {
     scrollPosition.textContent = Math.round(scrollBox.scrollTop);
 });
 
-// 스크롤 방향 감지 (보너스)
+// Scroll direction detection (bonus)
 let lastScrollTop = 0;
 scrollBox.addEventListener('scroll', () => {
     const st = scrollBox.scrollTop;
-    const direction = st > lastScrollTop ? '아래' : '위';
-    // console.log(`스크롤 방향: ${direction}`);
+    const direction = st > lastScrollTop ? 'down' : 'up';
+    // console.log(`Scroll direction: ${direction}`);
     lastScrollTop = st;
 });
 
 // ============================================
-// 페이지 로드 완료
+// Page Load Complete
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM 로드 완료!');
+    console.log('DOM loaded!');
 });
 
 window.addEventListener('load', () => {
-    console.log('모든 리소스 로드 완료!');
+    console.log('All resources loaded!');
 });

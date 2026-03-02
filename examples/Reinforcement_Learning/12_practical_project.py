@@ -1,6 +1,6 @@
 """
-실전 RL 프로젝트: 완전한 구조의 트레이딩 환경 구현
-프로젝트 구조, 학습 파이프라인, 모델 저장/로드, 평가 및 시각화 포함
+Practical RL Project: Complete Trading Environment Implementation
+Includes project structure, training pipeline, model save/load, evaluation, and visualization
 """
 import torch
 import torch.nn as nn
@@ -13,15 +13,15 @@ import os
 
 
 # =============================================================================
-# 1. 사용자 정의 환경: 간단한 트레이딩 환경
+# 1. Custom Environment: Simple Trading Environment
 # =============================================================================
 
 class SimpleTradingEnv:
     """
-    간단한 주식 트레이딩 환경
-    - 관측: 현재 가격, 이동평균, 보유 주식 수
-    - 행동: 0(매도), 1(보유), 2(매수)
-    - 보상: 포트폴리오 가치 변화
+    Simple stock trading environment
+    - Observation: Current price, moving averages, shares held
+    - Actions: 0(sell), 1(hold), 2(buy)
+    - Reward: Portfolio value change
     """
 
     def __init__(self, initial_balance=10000, stock_dim=1, max_steps=100):
@@ -29,28 +29,28 @@ class SimpleTradingEnv:
         self.stock_dim = stock_dim
         self.max_steps = max_steps
 
-        # 관측 공간: [가격, 5일 평균, 20일 평균, 보유 주식 수, 현금 비율]
+        # Observation space: [price, 5-day MA, 20-day MA, shares held, cash ratio]
         self.obs_dim = 5
-        # 행동 공간: 매도(0), 보유(1), 매수(2)
+        # Action space: sell(0), hold(1), buy(2)
         self.action_dim = 3
 
         self.reset()
 
     def _generate_price_series(self):
-        """가격 시계열 생성 (랜덤 워크 + 트렌드)"""
-        trend = np.random.choice([-1, 0, 1])  # 하락, 횡보, 상승
+        """Generate price time series (random walk + trend)"""
+        trend = np.random.choice([-1, 0, 1])  # down, sideways, up
         prices = [100.0]
 
         for _ in range(self.max_steps):
-            # 랜덤 워크 + 트렌드
+            # Random walk + trend
             change = np.random.randn() * 2 + trend * 0.5
-            new_price = max(50.0, prices[-1] + change)  # 최소 가격 제한
+            new_price = max(50.0, prices[-1] + change)  # Minimum price limit
             prices.append(new_price)
 
         return np.array(prices)
 
     def reset(self):
-        """환경 초기화"""
+        """Reset the environment"""
         self.prices = self._generate_price_series()
         self.current_step = 0
 
@@ -62,22 +62,22 @@ class SimpleTradingEnv:
         return self._get_observation()
 
     def _get_observation(self):
-        """현재 관측 반환"""
-        # 가격 정보
+        """Return current observation"""
+        # Price information
         current_price = self.prices[self.current_step]
 
-        # 이동평균 계산
+        # Moving average calculation
         start_5 = max(0, self.current_step - 5)
         start_20 = max(0, self.current_step - 20)
         ma5 = np.mean(self.prices[start_5:self.current_step + 1])
         ma20 = np.mean(self.prices[start_20:self.current_step + 1])
 
-        # 포트폴리오 정보
+        # Portfolio information
         total_value = self.balance + self.shares_held * current_price
         cash_ratio = self.balance / total_value if total_value > 0 else 0
 
         obs = np.array([
-            current_price / 100.0,  # 정규화
+            current_price / 100.0,  # Normalized
             ma5 / 100.0,
             ma20 / 100.0,
             self.shares_held / 100.0,
@@ -87,40 +87,40 @@ class SimpleTradingEnv:
         return obs
 
     def step(self, action):
-        """환경 스텝"""
+        """Environment step"""
         current_price = self.prices[self.current_step]
         prev_value = self.balance + self.shares_held * current_price
 
-        # 행동 실행
-        if action == 0:  # 매도
+        # Execute action
+        if action == 0:  # Sell
             if self.shares_held > 0:
-                self.balance += self.shares_held * current_price * 0.99  # 수수료 1%
+                self.balance += self.shares_held * current_price * 0.99  # 1% commission
                 self.total_shares_sold += self.shares_held
                 self.shares_held = 0
 
-        elif action == 2:  # 매수
+        elif action == 2:  # Buy
             shares_to_buy = self.balance // current_price
             if shares_to_buy > 0:
-                cost = shares_to_buy * current_price * 1.01  # 수수료 1%
+                cost = shares_to_buy * current_price * 1.01  # 1% commission
                 if cost <= self.balance:
                     self.shares_held += shares_to_buy
                     self.balance -= cost
                     self.total_shares_bought += shares_to_buy
 
-        # 다음 스텝으로
+        # Advance to next step
         self.current_step += 1
 
-        # 보상 계산: 포트폴리오 가치 변화
+        # Compute reward: portfolio value change
         next_price = self.prices[self.current_step]
         current_value = self.balance + self.shares_held * next_price
         reward = (current_value - prev_value) / prev_value
 
-        # 종료 조건
+        # Termination condition
         done = self.current_step >= self.max_steps - 1
 
-        # 최종 보상 가산
+        # Final reward bonus
         if done:
-            # 최종 수익률에 따른 보너스/페널티
+            # Bonus/penalty based on final return
             total_return = (current_value - self.initial_balance) / self.initial_balance
             reward += total_return * 10
 
@@ -128,11 +128,11 @@ class SimpleTradingEnv:
 
 
 # =============================================================================
-# 2. 네트워크 아키텍처
+# 2. Network Architecture
 # =============================================================================
 
 class TradingPolicyNetwork(nn.Module):
-    """트레이딩 정책 네트워크"""
+    """Trading policy network"""
 
     def __init__(self, obs_dim, action_dim, hidden_dim=128):
         super().__init__()
@@ -147,7 +147,7 @@ class TradingPolicyNetwork(nn.Module):
         self.actor = nn.Linear(hidden_dim, action_dim)
         self.critic = nn.Linear(hidden_dim, 1)
 
-        # 가중치 초기화
+        # Weight initialization
         self._init_weights()
 
     def _init_weights(self):
@@ -171,16 +171,16 @@ class TradingPolicyNetwork(nn.Module):
 
 
 # =============================================================================
-# 3. PPO 에이전트 (프로젝트용)
+# 3. PPO Agent (for project)
 # =============================================================================
 
 class PPOAgent:
-    """프로젝트용 PPO 에이전트"""
+    """PPO Agent for project"""
 
     def __init__(self, config):
         self.config = config
 
-        # 네트워크 생성
+        # Create network
         self.network = TradingPolicyNetwork(
             obs_dim=config['obs_dim'],
             action_dim=config['action_dim'],
@@ -192,7 +192,7 @@ class PPOAgent:
             lr=config.get('lr', 3e-4)
         )
 
-        # 하이퍼파라미터
+        # Hyperparameters
         self.gamma = config.get('gamma', 0.99)
         self.gae_lambda = config.get('gae_lambda', 0.95)
         self.clip_epsilon = config.get('clip_epsilon', 0.2)
@@ -203,7 +203,7 @@ class PPOAgent:
         self.batch_size = config.get('batch_size', 64)
 
     def collect_rollout(self, env, n_steps):
-        """경험 수집"""
+        """Collect experience"""
         rollout = {
             'obs': [], 'actions': [], 'rewards': [], 'dones': [],
             'values': [], 'log_probs': []
@@ -228,21 +228,21 @@ class PPOAgent:
 
             obs = next_obs if not done else env.reset()
 
-        # 마지막 가치 추정
+        # Estimate last value
         with torch.no_grad():
             _, _, _, last_value = self.network.get_action_and_value(
                 torch.FloatTensor(obs).unsqueeze(0)
             )
             rollout['last_value'] = last_value.item()
 
-        # NumPy 배열로 변환
+        # Convert to NumPy arrays
         for key in ['obs', 'actions', 'rewards', 'dones', 'values', 'log_probs']:
             rollout[key] = np.array(rollout[key])
 
         return rollout
 
     def compute_gae(self, rollout):
-        """GAE 계산"""
+        """Compute GAE"""
         rewards = rollout['rewards']
         values = rollout['values']
         dones = rollout['dones']
@@ -260,18 +260,18 @@ class PPOAgent:
         return advantages, returns
 
     def update(self, rollout):
-        """PPO 업데이트"""
+        """PPO update"""
         advantages, returns = self.compute_gae(rollout)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        # 텐서 변환
+        # Convert to tensors
         obs = torch.FloatTensor(rollout['obs'])
         actions = torch.LongTensor(rollout['actions'])
         old_log_probs = torch.FloatTensor(rollout['log_probs'])
         advantages_tensor = torch.FloatTensor(advantages)
         returns_tensor = torch.FloatTensor(returns)
 
-        # 여러 에폭 학습
+        # Train for multiple epochs
         total_loss = 0
         n_updates = 0
 
@@ -307,7 +307,7 @@ class PPOAgent:
         return total_loss / n_updates if n_updates > 0 else 0
 
     def save(self, filepath):
-        """모델 저장"""
+        """Save model"""
         torch.save({
             'network_state_dict': self.network.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
@@ -315,18 +315,18 @@ class PPOAgent:
         }, filepath)
 
     def load(self, filepath):
-        """모델 로드"""
+        """Load model"""
         checkpoint = torch.load(filepath)
         self.network.load_state_dict(checkpoint['network_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 
 # =============================================================================
-# 4. 학습 파이프라인
+# 4. Training Pipeline
 # =============================================================================
 
 class TrainingLogger:
-    """학습 로거"""
+    """Training logger"""
 
     def __init__(self, log_dir='logs'):
         self.log_dir = log_dir
@@ -340,74 +340,74 @@ class TrainingLogger:
         }
 
     def log(self, episode, reward, loss, portfolio_return):
-        """메트릭 기록"""
+        """Record metrics"""
         self.metrics['episodes'].append(episode)
         self.metrics['rewards'].append(reward)
         self.metrics['losses'].append(loss)
         self.metrics['returns'].append(portfolio_return)
 
     def save(self):
-        """로그 저장"""
+        """Save logs"""
         filepath = os.path.join(self.log_dir, 'training_log.json')
         with open(filepath, 'w') as f:
             json.dump(self.metrics, f, indent=2)
 
     def plot(self):
-        """학습 진행 시각화"""
+        """Visualize training progress"""
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-        # 에피소드 보상
+        # Episode rewards
         axes[0, 0].plot(self.metrics['episodes'], self.metrics['rewards'], alpha=0.3)
         if len(self.metrics['rewards']) > 10:
             window = min(50, len(self.metrics['rewards']) // 10)
             smoothed = np.convolve(self.metrics['rewards'], np.ones(window)/window, mode='valid')
             axes[0, 0].plot(range(window-1, len(self.metrics['rewards'])), smoothed, linewidth=2)
-        axes[0, 0].set_title('에피소드 보상')
+        axes[0, 0].set_title('Episode Reward')
         axes[0, 0].set_xlabel('Episode')
         axes[0, 0].set_ylabel('Reward')
         axes[0, 0].grid(True, alpha=0.3)
 
-        # 손실
+        # Loss
         axes[0, 1].plot(self.metrics['episodes'], self.metrics['losses'])
-        axes[0, 1].set_title('학습 손실')
+        axes[0, 1].set_title('Training Loss')
         axes[0, 1].set_xlabel('Episode')
         axes[0, 1].set_ylabel('Loss')
         axes[0, 1].grid(True, alpha=0.3)
 
-        # 수익률
+        # Portfolio return
         axes[1, 0].plot(self.metrics['episodes'], self.metrics['returns'], alpha=0.3)
         if len(self.metrics['returns']) > 10:
             window = min(50, len(self.metrics['returns']) // 10)
             smoothed = np.convolve(self.metrics['returns'], np.ones(window)/window, mode='valid')
             axes[1, 0].plot(range(window-1, len(self.metrics['returns'])), smoothed, linewidth=2)
         axes[1, 0].axhline(y=0, color='r', linestyle='--', alpha=0.3)
-        axes[1, 0].set_title('포트폴리오 수익률')
+        axes[1, 0].set_title('Portfolio Return')
         axes[1, 0].set_xlabel('Episode')
         axes[1, 0].set_ylabel('Return (%)')
         axes[1, 0].grid(True, alpha=0.3)
 
-        # 수익률 분포
+        # Return distribution
         axes[1, 1].hist(self.metrics['returns'], bins=30, alpha=0.7, edgecolor='black')
         axes[1, 1].axvline(x=0, color='r', linestyle='--', linewidth=2)
-        axes[1, 1].set_title('수익률 분포')
+        axes[1, 1].set_title('Return Distribution')
         axes[1, 1].set_xlabel('Return (%)')
         axes[1, 1].set_ylabel('Frequency')
         axes[1, 1].grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.log_dir, 'training_progress.png'), dpi=100, bbox_inches='tight')
-        print(f"학습 그래프 저장: {self.log_dir}/training_progress.png")
+        print(f"Training graph saved: {self.log_dir}/training_progress.png")
 
 
 def train_agent(config):
-    """에이전트 학습"""
-    # 환경 생성
+    """Train agent"""
+    # Create environment
     env = SimpleTradingEnv(
         initial_balance=config['initial_balance'],
         max_steps=config['max_steps']
     )
 
-    # 에이전트 생성
+    # Create agent
     agent_config = {
         'obs_dim': env.obs_dim,
         'action_dim': env.action_dim,
@@ -421,28 +421,28 @@ def train_agent(config):
     }
     agent = PPOAgent(agent_config)
 
-    # 로거
+    # Logger
     logger = TrainingLogger(log_dir=config['log_dir'])
 
-    # 학습 루프
+    # Training loop
     n_episodes = config['n_episodes']
     n_steps = config['n_steps']
 
-    print("학습 시작...\n")
+    print("Starting training...\n")
 
     for episode in range(n_episodes):
-        # 롤아웃 수집
+        # Collect rollout
         rollout = agent.collect_rollout(env, n_steps)
 
-        # 에피소드 통계
+        # Episode statistics
         episode_reward = rollout['rewards'].sum()
         final_obs = rollout['obs'][-1]
         portfolio_return = (final_obs[3] * 100 + final_obs[4] * config['initial_balance'] - config['initial_balance']) / config['initial_balance'] * 100
 
-        # 업데이트
+        # Update
         loss = agent.update(rollout)
 
-        # 로깅
+        # Logging
         logger.log(episode, episode_reward, loss, portfolio_return)
 
         if (episode + 1) % config['log_interval'] == 0:
@@ -453,34 +453,34 @@ def train_agent(config):
                   f"Avg Return: {avg_return:.2f}% | "
                   f"Loss: {loss:.4f}")
 
-        # 체크포인트 저장
+        # Save checkpoint
         if (episode + 1) % config['save_interval'] == 0:
             save_path = os.path.join(config['checkpoint_dir'], f'agent_ep{episode + 1}.pt')
             agent.save(save_path)
-            print(f"  체크포인트 저장: {save_path}")
+            print(f"  Checkpoint saved: {save_path}")
 
-    # 최종 모델 저장
+    # Save final model
     final_path = os.path.join(config['checkpoint_dir'], 'agent_final.pt')
     agent.save(final_path)
 
-    # 로그 저장 및 시각화
+    # Save logs and visualize
     logger.save()
     logger.plot()
 
-    print("\n학습 완료!")
+    print("\nTraining complete!")
     return agent, logger
 
 
 # =============================================================================
-# 5. 평가
+# 5. Evaluation
 # =============================================================================
 
 def evaluate_agent(agent, n_episodes=10, render=False):
-    """학습된 에이전트 평가"""
+    """Evaluate the trained agent"""
     env = SimpleTradingEnv()
     episode_returns = []
 
-    print("\n=== 에이전트 평가 ===\n")
+    print("\n=== Agent Evaluation ===\n")
 
     for episode in range(n_episodes):
         obs = env.reset()
@@ -496,7 +496,7 @@ def evaluate_agent(agent, n_episodes=10, render=False):
             obs, reward, done, _ = env.step(action.item())
             total_reward += reward
 
-        # 최종 수익률
+        # Final return
         final_value = env.balance + env.shares_held * env.prices[env.current_step]
         portfolio_return = (final_value - env.initial_balance) / env.initial_balance * 100
 
@@ -506,26 +506,26 @@ def evaluate_agent(agent, n_episodes=10, render=False):
     mean_return = np.mean(episode_returns)
     std_return = np.std(episode_returns)
 
-    print(f"\n평균 수익률: {mean_return:.2f}% ± {std_return:.2f}%")
+    print(f"\nAverage return: {mean_return:.2f}% +/- {std_return:.2f}%")
 
     return episode_returns
 
 
 # =============================================================================
-# 6. 메인
+# 6. Main
 # =============================================================================
 
 if __name__ == "__main__":
-    # 프로젝트 설정
+    # Project configuration
     config = {
-        # 환경
+        # Environment
         'initial_balance': 10000,
         'max_steps': 100,
 
-        # 네트워크
+        # Network
         'hidden_dim': 128,
 
-        # 학습
+        # Training
         'lr': 3e-4,
         'gamma': 0.99,
         'gae_lambda': 0.95,
@@ -533,46 +533,46 @@ if __name__ == "__main__":
         'n_epochs': 10,
         'batch_size': 64,
 
-        # 학습 파라미터
+        # Training parameters
         'n_episodes': 500,
         'n_steps': 100,
         'log_interval': 50,
         'save_interval': 100,
 
-        # 디렉토리
+        # Directories
         'log_dir': 'logs',
         'checkpoint_dir': 'checkpoints'
     }
 
-    # 디렉토리 생성
+    # Create directories
     os.makedirs(config['log_dir'], exist_ok=True)
     os.makedirs(config['checkpoint_dir'], exist_ok=True)
 
     print("=" * 60)
-    print("실전 RL 프로젝트: 트레이딩 에이전트")
+    print("Practical RL Project: Trading Agent")
     print("=" * 60)
 
-    # 설정 출력
-    print("\n설정:")
+    # Print configuration
+    print("\nConfiguration:")
     for key, value in config.items():
         print(f"  {key}: {value}")
 
-    # 학습
+    # Training
     agent, logger = train_agent(config)
 
-    # 평가
+    # Evaluation
     returns = evaluate_agent(agent, n_episodes=20)
 
-    print("\n프로젝트 완료!")
-    print("\n생성된 파일:")
+    print("\nProject complete!")
+    print("\nGenerated files:")
     print(f"  - {config['log_dir']}/training_log.json")
     print(f"  - {config['log_dir']}/training_progress.png")
     print(f"  - {config['checkpoint_dir']}/agent_final.pt")
 
-    print("\n주요 학습 내용:")
-    print("  1. 사용자 정의 환경 구현 (Gymnasium 스타일)")
-    print("  2. 모듈화된 PPO 에이전트")
-    print("  3. 학습 파이프라인 (수집-업데이트-로깅)")
-    print("  4. 모델 저장/로드")
-    print("  5. 평가 및 시각화")
-    print("  6. 프로젝트 구조 모범 사례")
+    print("\nKey takeaways:")
+    print("  1. Custom environment implementation (Gymnasium-style)")
+    print("  2. Modular PPO agent")
+    print("  3. Training pipeline (collect-update-log)")
+    print("  4. Model save/load")
+    print("  5. Evaluation and visualization")
+    print("  6. Project structure best practices")

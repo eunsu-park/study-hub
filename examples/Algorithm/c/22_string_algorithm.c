@@ -1,8 +1,8 @@
 /*
- * 문자열 알고리즘 (String Algorithms)
- * KMP, Rabin-Karp, Z-알고리즘, 매나커
+ * String Algorithms
+ * KMP, Rabin-Karp, Z-Algorithm, Manacher
  *
- * 패턴 매칭과 문자열 처리 알고리즘입니다.
+ * Pattern matching and string processing algorithms.
  */
 
 #include <stdio.h>
@@ -17,7 +17,7 @@
  * 1. KMP (Knuth-Morris-Pratt)
  * ============================================================================= */
 
-/* 실패 함수 (부분 일치 테이블) 계산 */
+/* Failure function (partial match table) computation */
 int* compute_failure(const char* pattern) {
     int m = strlen(pattern);
     int* fail = calloc(m, sizeof(int));
@@ -35,7 +35,7 @@ int* compute_failure(const char* pattern) {
     return fail;
 }
 
-/* KMP 검색 - 모든 매칭 위치 반환 */
+/* KMP search - returns all match positions */
 int* kmp_search(const char* text, const char* pattern, int* match_count) {
     int n = strlen(text);
     int m = strlen(pattern);
@@ -75,6 +75,18 @@ long long compute_hash(const char* s, int len) {
     return hash;
 }
 
+/* Modular inverse (simple version) */
+long long mod_inv(long long a, long long mod) {
+    long long result = 1;
+    long long exp = mod - 2;
+    while (exp > 0) {
+        if (exp & 1) result = (result * a) % mod;
+        a = (a * a) % mod;
+        exp >>= 1;
+    }
+    return result;
+}
+
 int* rabin_karp(const char* text, const char* pattern, int* match_count) {
     int n = strlen(text);
     int m = strlen(pattern);
@@ -93,7 +105,7 @@ int* rabin_karp(const char* text, const char* pattern, int* match_count) {
 
     for (int i = 0; i <= n - m; i++) {
         if (text_hash == pattern_hash) {
-            /* 해시 충돌 확인 */
+            /* Verify hash collision */
             int match = 1;
             for (int j = 0; j < m; j++) {
                 if (text[i + j] != pattern[j]) {
@@ -105,7 +117,7 @@ int* rabin_karp(const char* text, const char* pattern, int* match_count) {
         }
 
         if (i < n - m) {
-            /* 롤링 해시 */
+            /* Rolling hash */
             text_hash = (text_hash - (text[i] - 'a' + 1) + MOD) % MOD;
             text_hash = (text_hash * mod_inv(BASE, MOD)) % MOD;
             text_hash = (text_hash + (text[i + m] - 'a' + 1) * power) % MOD;
@@ -115,19 +127,7 @@ int* rabin_karp(const char* text, const char* pattern, int* match_count) {
     return matches;
 }
 
-/* 모듈러 역원 (간단 버전) */
-long long mod_inv(long long a, long long mod) {
-    long long result = 1;
-    long long exp = mod - 2;
-    while (exp > 0) {
-        if (exp & 1) result = (result * a) % mod;
-        a = (a * a) % mod;
-        exp >>= 1;
-    }
-    return result;
-}
-
-/* 간단한 Rabin-Karp (롤링 해시 개선) */
+/* Simple Rabin-Karp (improved rolling hash) */
 int* rabin_karp_simple(const char* text, const char* pattern, int* match_count) {
     int n = strlen(text);
     int m = strlen(pattern);
@@ -140,7 +140,7 @@ int* rabin_karp_simple(const char* text, const char* pattern, int* match_count) 
     long long text_hash = 0;
     long long power = 1;
 
-    /* 초기 해시 계산 */
+    /* Compute initial hashes */
     for (int i = 0; i < m; i++) {
         pattern_hash = (pattern_hash * BASE + pattern[i]) % MOD;
         text_hash = (text_hash * BASE + text[i]) % MOD;
@@ -162,7 +162,7 @@ int* rabin_karp_simple(const char* text, const char* pattern, int* match_count) 
 }
 
 /* =============================================================================
- * 3. Z-알고리즘
+ * 3. Z-Algorithm
  * ============================================================================= */
 
 int* z_function(const char* s) {
@@ -186,12 +186,12 @@ int* z_function(const char* s) {
     return z;
 }
 
-/* Z-알고리즘으로 패턴 매칭 */
+/* Pattern matching using Z-Algorithm */
 int* z_search(const char* text, const char* pattern, int* match_count) {
     int n = strlen(text);
     int m = strlen(pattern);
 
-    /* pattern + "$" + text 연결 */
+    /* Concatenate pattern + "$" + text */
     char* combined = malloc(n + m + 2);
     sprintf(combined, "%s$%s", pattern, text);
 
@@ -211,15 +211,15 @@ int* z_search(const char* text, const char* pattern, int* match_count) {
 }
 
 /* =============================================================================
- * 4. 매나커 알고리즘 (Manacher)
+ * 4. Manacher's Algorithm
  * ============================================================================= */
 
-/* 가장 긴 팰린드롬 부분문자열 */
+/* Longest palindromic substring */
 char* manacher(const char* s) {
     int n = strlen(s);
     if (n == 0) return strdup("");
 
-    /* 문자 사이에 # 삽입 */
+    /* Insert '#' between characters */
     int len = 2 * n + 1;
     char* t = malloc(len + 1);
     for (int i = 0; i < n; i++) {
@@ -255,7 +255,7 @@ char* manacher(const char* s) {
         }
     }
 
-    /* 원본 문자열에서 추출 */
+    /* Extract from original string */
     int start = (max_center - max_len) / 2;
     char* result = malloc(max_len + 1);
     strncpy(result, s + start, max_len);
@@ -267,7 +267,7 @@ char* manacher(const char* s) {
 }
 
 /* =============================================================================
- * 5. 문자열 해싱
+ * 5. String Hashing
  * ============================================================================= */
 
 typedef struct {
@@ -307,16 +307,16 @@ void free_string_hash(StringHash* sh) {
 }
 
 /* =============================================================================
- * 6. 유용한 문자열 함수들
+ * 6. Useful String Functions
  * ============================================================================= */
 
-/* 접미사 배열 (간단 버전, O(n² log n)) */
+/* Suffix Array (simple version, O(n^2 log n)) */
 int* suffix_array_simple(const char* s) {
     int n = strlen(s);
     int* sa = malloc(n * sizeof(int));
     for (int i = 0; i < n; i++) sa[i] = i;
 
-    /* 정렬 */
+    /* Sort */
     for (int i = 0; i < n - 1; i++) {
         for (int j = i + 1; j < n; j++) {
             if (strcmp(s + sa[i], s + sa[j]) > 0) {
@@ -330,7 +330,7 @@ int* suffix_array_simple(const char* s) {
     return sa;
 }
 
-/* LCP 배열 (Kasai 알고리즘) */
+/* LCP Array (Kasai's Algorithm) */
 int* lcp_array(const char* s, int* sa) {
     int n = strlen(s);
     int* rank = malloc(n * sizeof(int));
@@ -355,47 +355,47 @@ int* lcp_array(const char* s, int* sa) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("문자열 알고리즘 예제\n");
+    printf("String Algorithm Examples\n");
     printf("============================================================\n");
 
     /* 1. KMP */
-    printf("\n[1] KMP 알고리즘\n");
+    printf("\n[1] KMP Algorithm\n");
     const char* text1 = "ABABDABACDABABCABAB";
     const char* pattern1 = "ABABCABAB";
     int match_count;
     int* matches = kmp_search(text1, pattern1, &match_count);
-    printf("    텍스트: %s\n", text1);
-    printf("    패턴: %s\n", pattern1);
-    printf("    매칭 위치 (%d개): ", match_count);
+    printf("    Text: %s\n", text1);
+    printf("    Pattern: %s\n", pattern1);
+    printf("    Match positions (%d total): ", match_count);
     for (int i = 0; i < match_count; i++) printf("%d ", matches[i]);
     printf("\n");
     free(matches);
 
-    /* 실패 함수 시각화 */
+    /* Failure function visualization */
     const char* pattern2 = "ABAABAB";
     int* fail = compute_failure(pattern2);
-    printf("    패턴 \"%s\"의 실패 함수: ", pattern2);
+    printf("    Failure function of \"%s\": ", pattern2);
     for (int i = 0; i < (int)strlen(pattern2); i++) printf("%d ", fail[i]);
     printf("\n");
     free(fail);
 
-    /* 2. Z-알고리즘 */
-    printf("\n[2] Z-알고리즘\n");
+    /* 2. Z-Algorithm */
+    printf("\n[2] Z-Algorithm\n");
     const char* str = "aabxaabxcaabxaabxay";
     int* z = z_function(str);
-    printf("    문자열: %s\n", str);
-    printf("    Z-배열: ");
+    printf("    String: %s\n", str);
+    printf("    Z-array: ");
     for (int i = 0; i < (int)strlen(str); i++) printf("%d ", z[i]);
     printf("\n");
     free(z);
 
     matches = z_search(text1, pattern1, &match_count);
-    printf("    Z-알고리즘 매칭 위치: ");
+    printf("    Z-algorithm match positions: ");
     for (int i = 0; i < match_count; i++) printf("%d ", matches[i]);
     printf("\n");
     free(matches);
@@ -405,61 +405,61 @@ int main(void) {
     const char* text2 = "abracadabra";
     const char* pattern3 = "abra";
     matches = rabin_karp_simple(text2, pattern3, &match_count);
-    printf("    텍스트: %s\n", text2);
-    printf("    패턴: %s\n", pattern3);
-    printf("    매칭 위치: ");
+    printf("    Text: %s\n", text2);
+    printf("    Pattern: %s\n", pattern3);
+    printf("    Match positions: ");
     for (int i = 0; i < match_count; i++) printf("%d ", matches[i]);
     printf("\n");
     free(matches);
 
-    /* 4. 매나커 */
-    printf("\n[4] 매나커 알고리즘\n");
+    /* 4. Manacher */
+    printf("\n[4] Manacher's Algorithm\n");
     const char* str2 = "babad";
     char* palindrome = manacher(str2);
-    printf("    문자열: %s\n", str2);
-    printf("    가장 긴 팰린드롬: %s\n", palindrome);
+    printf("    String: %s\n", str2);
+    printf("    Longest palindrome: %s\n", palindrome);
     free(palindrome);
 
     const char* str3 = "forgeeksskeegfor";
     palindrome = manacher(str3);
-    printf("    문자열: %s\n", str3);
-    printf("    가장 긴 팰린드롬: %s\n", palindrome);
+    printf("    String: %s\n", str3);
+    printf("    Longest palindrome: %s\n", palindrome);
     free(palindrome);
 
-    /* 5. 문자열 해싱 */
-    printf("\n[5] 문자열 해싱\n");
+    /* 5. String Hashing */
+    printf("\n[5] String Hashing\n");
     const char* str4 = "abcabc";
     StringHash* sh = create_string_hash(str4);
-    printf("    문자열: %s\n", str4);
+    printf("    String: %s\n", str4);
     printf("    hash[0:2] = %lld\n", get_hash(sh, 0, 2));
     printf("    hash[3:5] = %lld\n", get_hash(sh, 3, 5));
-    printf("    동일 여부: %s\n",
-           get_hash(sh, 0, 2) == get_hash(sh, 3, 5) ? "예" : "아니오");
+    printf("    Equal: %s\n",
+           get_hash(sh, 0, 2) == get_hash(sh, 3, 5) ? "yes" : "no");
     free_string_hash(sh);
 
-    /* 6. 접미사 배열 */
-    printf("\n[6] 접미사 배열\n");
+    /* 6. Suffix Array */
+    printf("\n[6] Suffix Array\n");
     const char* str5 = "banana";
     int* sa = suffix_array_simple(str5);
-    printf("    문자열: %s\n", str5);
-    printf("    접미사 배열: ");
+    printf("    String: %s\n", str5);
+    printf("    Suffix array: ");
     for (int i = 0; i < (int)strlen(str5); i++) printf("%d ", sa[i]);
     printf("\n");
-    printf("    정렬된 접미사:\n");
+    printf("    Sorted suffixes:\n");
     for (int i = 0; i < (int)strlen(str5); i++) {
         printf("      %d: %s\n", sa[i], str5 + sa[i]);
     }
     free(sa);
 
-    /* 7. 복잡도 */
-    printf("\n[7] 복잡도\n");
-    printf("    | 알고리즘        | 전처리    | 검색      |\n");
-    printf("    |-----------------|-----------|----------|\n");
-    printf("    | KMP             | O(m)      | O(n)     |\n");
-    printf("    | Rabin-Karp      | O(m)      | O(n+m)*  |\n");
-    printf("    | Z-알고리즘      | O(n+m)    | -        |\n");
-    printf("    | 매나커          | -         | O(n)     |\n");
-    printf("    * 평균, 최악 O(nm)\n");
+    /* 7. Complexity */
+    printf("\n[7] Complexity\n");
+    printf("    | Algorithm       | Preprocess | Search   |\n");
+    printf("    |-----------------|------------|----------|\n");
+    printf("    | KMP             | O(m)       | O(n)     |\n");
+    printf("    | Rabin-Karp      | O(m)       | O(n+m)*  |\n");
+    printf("    | Z-Algorithm     | O(n+m)     | -        |\n");
+    printf("    | Manacher        | -          | O(n)     |\n");
+    printf("    * Average, worst case O(nm)\n");
 
     printf("\n============================================================\n");
 

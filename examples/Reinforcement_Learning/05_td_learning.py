@@ -1,6 +1,6 @@
 """
-TD Learning (Temporal Difference Learning) 구현
-TD(0), SARSA, Q-Learning, Expected SARSA 포함
+TD Learning (Temporal Difference Learning) Implementation
+Includes TD(0), SARSA, Q-Learning, Expected SARSA
 """
 import numpy as np
 import gymnasium as gym
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 
 class TD0Prediction:
-    """TD(0) 정책 평가 알고리즘"""
+    """TD(0) Policy Evaluation Algorithm"""
 
     def __init__(self, alpha=0.1, gamma=0.99):
         self.V = defaultdict(float)
@@ -17,7 +17,7 @@ class TD0Prediction:
         self.gamma = gamma
 
     def update(self, state, reward, next_state, done):
-        """TD(0) 가치 함수 업데이트"""
+        """TD(0) value function update"""
         if done:
             td_target = reward
         else:
@@ -42,13 +42,13 @@ class SARSA:
         self.n_actions = n_actions
 
     def choose_action(self, state):
-        """ε-greedy 정책"""
+        """Epsilon-greedy policy"""
         if np.random.random() < self.epsilon:
             return np.random.randint(self.n_actions)
         return np.argmax(self.Q[state])
 
     def update(self, state, action, reward, next_state, next_action, done):
-        """SARSA 업데이트: Q(s,a) ← Q(s,a) + α[r + γQ(s',a') - Q(s,a)]"""
+        """SARSA update: Q(s,a) <- Q(s,a) + alpha[r + gamma*Q(s',a') - Q(s,a)]"""
         if done:
             td_target = reward
         else:
@@ -70,13 +70,13 @@ class QLearning:
         self.n_actions = n_actions
 
     def choose_action(self, state):
-        """ε-greedy 정책"""
+        """Epsilon-greedy policy"""
         if np.random.random() < self.epsilon:
             return np.random.randint(self.n_actions)
         return np.argmax(self.Q[state])
 
     def update(self, state, action, reward, next_state, done):
-        """Q-Learning 업데이트: Q(s,a) ← Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]"""
+        """Q-Learning update: Q(s,a) <- Q(s,a) + alpha[r + gamma * max Q(s',a') - Q(s,a)]"""
         if done:
             td_target = reward
         else:
@@ -98,17 +98,17 @@ class ExpectedSARSA:
         self.n_actions = n_actions
 
     def choose_action(self, state):
-        """ε-greedy 정책"""
+        """Epsilon-greedy policy"""
         if np.random.random() < self.epsilon:
             return np.random.randint(self.n_actions)
         return np.argmax(self.Q[state])
 
     def update(self, state, action, reward, next_state, done):
-        """Expected SARSA 업데이트: 다음 상태에서 정책의 기댓값 사용"""
+        """Expected SARSA update: uses the expected value under the policy for the next state"""
         if done:
             td_target = reward
         else:
-            # ε-greedy 정책 하에서 기댓값 계산
+            # Compute expected value under epsilon-greedy policy
             best_action = np.argmax(self.Q[next_state])
             expected_q = 0.0
             for a in range(self.n_actions):
@@ -126,7 +126,7 @@ class ExpectedSARSA:
 
 
 def train_sarsa(env_name='CliffWalking-v0', n_episodes=500, alpha=0.5, gamma=1.0, epsilon=0.1):
-    """SARSA 학습"""
+    """SARSA training"""
     env = gym.make(env_name)
     agent = SARSA(env.action_space.n, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
@@ -160,7 +160,7 @@ def train_sarsa(env_name='CliffWalking-v0', n_episodes=500, alpha=0.5, gamma=1.0
 
 
 def train_qlearning(env_name='CliffWalking-v0', n_episodes=500, alpha=0.5, gamma=1.0, epsilon=0.1):
-    """Q-Learning 학습"""
+    """Q-Learning training"""
     env = gym.make(env_name)
     agent = QLearning(env.action_space.n, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
@@ -192,19 +192,19 @@ def train_qlearning(env_name='CliffWalking-v0', n_episodes=500, alpha=0.5, gamma
 
 
 def compare_td_methods():
-    """TD 방법들 비교: SARSA vs Q-Learning vs Expected SARSA"""
-    print("=== CliffWalking 환경에서 TD 방법 비교 ===\n")
+    """Compare TD methods: SARSA vs Q-Learning vs Expected SARSA"""
+    print("=== Comparing TD Methods on CliffWalking ===\n")
 
-    # SARSA (안전한 경로 선호)
-    print("SARSA 학습 중...")
+    # SARSA (prefers the safe path)
+    print("Training SARSA...")
     _, sarsa_rewards = train_sarsa(n_episodes=500)
 
-    # Q-Learning (최적 경로 학습, 더 위험)
-    print("\nQ-Learning 학습 중...")
+    # Q-Learning (learns the optimal path, more risky)
+    print("\nTraining Q-Learning...")
     _, qlearning_rewards = train_qlearning(n_episodes=500)
 
     # Expected SARSA
-    print("\nExpected SARSA 학습 중...")
+    print("\nTraining Expected SARSA...")
     env = gym.make('CliffWalking-v0')
     expected_sarsa = ExpectedSARSA(env.action_space.n, alpha=0.5, gamma=1.0, epsilon=0.1)
     expected_rewards = []
@@ -232,14 +232,14 @@ def compare_td_methods():
 
     env.close()
 
-    # 학습 곡선 시각화
+    # Learning curve visualization
     plot_comparison(sarsa_rewards, qlearning_rewards, expected_rewards)
 
     return sarsa_rewards, qlearning_rewards, expected_rewards
 
 
 def plot_comparison(sarsa_rewards, qlearning_rewards, expected_rewards):
-    """학습 곡선 비교 시각화"""
+    """Visualize learning curve comparison"""
     window = 10
 
     def smooth(data, window):
@@ -247,7 +247,7 @@ def plot_comparison(sarsa_rewards, qlearning_rewards, expected_rewards):
 
     plt.figure(figsize=(12, 5))
 
-    # 원본 데이터
+    # Raw data
     plt.subplot(1, 2, 1)
     plt.plot(sarsa_rewards, alpha=0.3, label='SARSA (raw)')
     plt.plot(qlearning_rewards, alpha=0.3, label='Q-Learning (raw)')
@@ -258,7 +258,7 @@ def plot_comparison(sarsa_rewards, qlearning_rewards, expected_rewards):
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    # 평활화된 데이터
+    # Smoothed data
     plt.subplot(1, 2, 2)
     plt.plot(smooth(sarsa_rewards, window), label='SARSA (smoothed)', linewidth=2)
     plt.plot(smooth(qlearning_rewards, window), label='Q-Learning (smoothed)', linewidth=2)
@@ -271,46 +271,46 @@ def plot_comparison(sarsa_rewards, qlearning_rewards, expected_rewards):
 
     plt.tight_layout()
     plt.savefig('td_methods_comparison.png', dpi=150)
-    print("\n학습 곡선이 'td_methods_comparison.png'로 저장되었습니다.")
+    print("\nLearning curves saved to 'td_methods_comparison.png'.")
 
 
 def visualize_policy(agent, env_name='CliffWalking-v0'):
-    """학습된 정책 시각화 (CliffWalking 전용)"""
+    """Visualize the learned policy (CliffWalking only)"""
     if env_name != 'CliffWalking-v0':
-        print("정책 시각화는 CliffWalking 환경만 지원합니다.")
+        print("Policy visualization is only supported for the CliffWalking environment.")
         return
 
-    print("\n=== 학습된 정책 (4x12 그리드) ===")
+    print("\n=== Learned Policy (4x12 grid) ===")
     arrows = {0: '^', 1: '>', 2: 'v', 3: '<'}
 
     for row in range(4):
         line = ""
         for col in range(12):
             state = row * 12 + col
-            if state == 36:  # 시작점
+            if state == 36:  # Start
                 line += " S "
-            elif state == 47:  # 목표
+            elif state == 47:  # Goal
                 line += " G "
-            elif 37 <= state <= 46:  # 절벽
+            elif 37 <= state <= 46:  # Cliff
                 line += " C "
             else:
                 action = np.argmax(agent.Q[state])
                 line += f" {arrows[action]} "
         print(line)
 
-    print("\n(S: 시작, G: 목표, C: 절벽, ^>v<: 행동 방향)")
+    print("\n(S: Start, G: Goal, C: Cliff, ^>v<: action direction)")
 
 
 if __name__ == "__main__":
-    # TD 방법 비교
+    # Compare TD methods
     sarsa_rewards, qlearning_rewards, expected_rewards = compare_td_methods()
 
-    # SARSA 정책 시각화
+    # SARSA policy visualization
     print("\n" + "="*50)
     env = gym.make('CliffWalking-v0')
     sarsa_agent = SARSA(env.action_space.n)
 
-    # 다시 학습 (시각화용)
+    # Retrain (for visualization)
     for episode in range(500):
         state, _ = env.reset()
         action = sarsa_agent.choose_action(state)
@@ -324,7 +324,7 @@ if __name__ == "__main__":
             state = next_state
             action = next_action
 
-    print("\nSARSA 학습 완료 - 안전한 경로 선호")
+    print("\nSARSA training complete - prefers the safe path")
     visualize_policy(sarsa_agent)
 
     env.close()

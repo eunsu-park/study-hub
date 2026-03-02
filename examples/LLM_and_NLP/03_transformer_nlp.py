@@ -1,7 +1,7 @@
 """
-03. Transformer NLP 예제
+03. Transformer NLP Example
 
-Transformer 아키텍처 복습 및 NLP 적용
+Transformer architecture review and NLP application
 """
 
 print("=" * 60)
@@ -32,15 +32,15 @@ try:
         output = torch.matmul(attention_weights, V)
         return output, attention_weights
 
-    # 테스트
+    # Test
     batch, seq_len, d_model = 2, 5, 64
     Q = torch.randn(batch, seq_len, d_model)
     K = torch.randn(batch, seq_len, d_model)
     V = torch.randn(batch, seq_len, d_model)
 
     output, weights = scaled_dot_product_attention(Q, K, V)
-    print(f"입력 shape: Q={Q.shape}, K={K.shape}, V={V.shape}")
-    print(f"출력 shape: {output.shape}")
+    print(f"Input shape: Q={Q.shape}, K={K.shape}, V={V.shape}")
+    print(f"Output shape: {output.shape}")
     print(f"Attention weights shape: {weights.shape}")
 
 
@@ -77,17 +77,17 @@ try:
     mha = MultiHeadAttention(d_model=64, num_heads=8)
     x = torch.randn(2, 10, 64)
     output = mha(x)
-    print(f"Multi-Head Attention: {x.shape} → {output.shape}")
+    print(f"Multi-Head Attention: {x.shape} -> {output.shape}")
 
 
     # ============================================
-    # 3. Causal Mask (GPT 스타일)
+    # 3. Causal Mask (GPT-style)
     # ============================================
     print("\n[3] Causal Mask")
     print("-" * 40)
 
     def create_causal_mask(seq_len):
-        """미래 토큰 마스킹"""
+        """Mask future tokens"""
         mask = torch.tril(torch.ones(seq_len, seq_len))
         return mask
 
@@ -119,7 +119,7 @@ try:
     pe = PositionalEncoding(d_model=64)
     x = torch.randn(2, 10, 64)
     output = pe(x)
-    print(f"Positional Encoding: {x.shape} → {output.shape}")
+    print(f"Positional Encoding: {x.shape} -> {output.shape}")
 
 
     # ============================================
@@ -155,13 +155,13 @@ try:
     block = TransformerBlock(d_model=64, num_heads=8, d_ff=256)
     x = torch.randn(2, 10, 64)
     output = block(x)
-    print(f"Transformer Block: {x.shape} → {output.shape}")
+    print(f"Transformer Block: {x.shape} -> {output.shape}")
 
 
     # ============================================
-    # 6. 텍스트 분류 Transformer
+    # 6. Text Classification Transformer
     # ============================================
-    print("\n[6] 텍스트 분류 Transformer")
+    print("\n[6] Text Classification Transformer")
     print("-" * 40)
 
     class TransformerClassifier(nn.Module):
@@ -180,7 +180,7 @@ try:
             x = self.pos_encoding(x)
             for block in self.blocks:
                 x = block(x)
-            x = x.mean(dim=1)  # 평균 풀링
+            x = x.mean(dim=1)  # Average pooling
             return self.fc(x)
 
     model = TransformerClassifier(
@@ -188,15 +188,15 @@ try:
     )
     x = torch.randint(0, 10000, (4, 32))  # (batch, seq)
     output = model(x)
-    print(f"입력: {x.shape}")
-    print(f"출력: {output.shape}")
-    print(f"파라미터 수: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"Input: {x.shape}")
+    print(f"Output: {output.shape}")
+    print(f"Number of parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 
     # ============================================
-    # 7. PyTorch 내장 Transformer
+    # 7. PyTorch Built-in Transformer
     # ============================================
-    print("\n[7] PyTorch 내장 Transformer")
+    print("\n[7] PyTorch Built-in Transformer")
     print("-" * 40)
 
     encoder_layer = nn.TransformerEncoderLayer(d_model=512, nhead=8, batch_first=True)
@@ -204,29 +204,29 @@ try:
 
     x = torch.randn(32, 100, 512)  # (batch, seq, d_model)
     output = encoder(x)
-    print(f"PyTorch Transformer: {x.shape} → {output.shape}")
+    print(f"PyTorch Transformer: {x.shape} -> {output.shape}")
 
 
     # ============================================
-    # 정리
+    # Summary
     # ============================================
     print("\n" + "=" * 60)
-    print("Transformer 정리")
+    print("Transformer Summary")
     print("=" * 60)
 
     summary = """
-핵심 구성요소:
-    1. Self-Attention: Q @ K.T / sqrt(d_k) → softmax → @ V
-    2. Multi-Head: 여러 헤드로 분할 후 결합
-    3. Positional Encoding: 위치 정보 추가
-    4. FFN: Linear → GELU → Linear
+Key Components:
+    1. Self-Attention: Q @ K.T / sqrt(d_k) -> softmax -> @ V
+    2. Multi-Head: Split into multiple heads then combine
+    3. Positional Encoding: Add positional information
+    4. FFN: Linear -> GELU -> Linear
     5. Residual + LayerNorm
 
 BERT vs GPT:
-    - BERT: 양방향 (인코더), 마스크 없음
-    - GPT: 단방향 (디코더), Causal Mask
+    - BERT: Bidirectional (encoder), no mask
+    - GPT: Unidirectional (decoder), Causal Mask
 """
     print(summary)
 
 except ImportError as e:
-    print(f"PyTorch 미설치: {e}")
+    print(f"PyTorch not installed: {e}")

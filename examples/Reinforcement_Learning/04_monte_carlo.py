@@ -1,9 +1,9 @@
 """
-몬테카를로 방법 (Monte Carlo Methods) 구현
+Monte Carlo Methods Implementation
 - First-visit MC Prediction
 - Every-visit MC Prediction
 - MC Control (Exploring Starts)
-- On-policy MC Control (ε-greedy)
+- On-policy MC Control (epsilon-greedy)
 - Off-policy MC (Importance Sampling)
 """
 import numpy as np
@@ -14,22 +14,22 @@ import gymnasium as gym
 
 def calculate_returns(episode, gamma=0.99):
     """
-    에피소드에서 각 시점의 리턴 계산
+    Compute returns at each time step from an episode
 
     Args:
-        episode: [(state, action, reward), ...] 형태의 리스트
-        gamma: 할인율
+        episode: List of [(state, action, reward), ...]
+        gamma: Discount factor
 
     Returns:
-        returns: [(state, G), ...] 각 시점의 리턴
+        returns: [(state, G), ...] returns at each time step
     """
-    G = 0  # 리턴 초기화
+    G = 0  # Initialize return
     returns = []
 
-    # 역순으로 계산 (효율적인 계산)
+    # Compute in reverse order (efficient computation)
     for t in range(len(episode) - 1, -1, -1):
         state, action, reward = episode[t]
-        G = reward + gamma * G  # 할인된 리턴
+        G = reward + gamma * G  # Discounted return
         returns.insert(0, (state, G))
 
     return returns
@@ -37,24 +37,24 @@ def calculate_returns(episode, gamma=0.99):
 
 def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
     """
-    First-visit MC 정책 평가
+    First-visit MC Policy Evaluation
 
     Args:
-        env: Gymnasium 환경
-        policy: 정책 함수 policy(state) -> action
-        n_episodes: 에피소드 수
-        gamma: 할인율
+        env: Gymnasium environment
+        policy: Policy function policy(state) -> action
+        n_episodes: Number of episodes
+        gamma: Discount factor
 
     Returns:
-        V: 상태 가치 함수
+        V: State value function
     """
-    # 각 상태의 리턴 합과 방문 횟수
+    # Sum of returns and visit counts for each state
     returns_sum = defaultdict(float)
     returns_count = defaultdict(int)
     V = defaultdict(float)
 
     for episode_num in range(n_episodes):
-        # 에피소드 생성
+        # Generate an episode
         episode = []
         state, _ = env.reset()
         done = False
@@ -66,17 +66,17 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
             state = next_state
             done = terminated or truncated
 
-        # First-visit: 각 상태의 첫 방문 인덱스 찾기
+        # First-visit: find the first visit index for each state
         visited = set()
         G = 0
 
-        # 역순으로 리턴 계산
+        # Compute returns in reverse order
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # First-visit 체크
+            # First-visit check
             if state_t not in visited:
                 visited.add(state_t)
                 returns_sum[state_t] += G
@@ -91,9 +91,9 @@ def first_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
 
 def every_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
     """
-    Every-visit MC 정책 평가
+    Every-visit MC Policy Evaluation
 
-    모든 방문을 카운트
+    Counts all visits
     """
     returns_sum = defaultdict(float)
     returns_count = defaultdict(int)
@@ -113,13 +113,13 @@ def every_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
 
         G = 0
 
-        # Every-visit: 모든 방문에서 업데이트
+        # Every-visit: update at every visit
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
 
             G = gamma * G + reward_t
 
-            # 모든 방문 카운트
+            # Count all visits
             returns_sum[state_t] += G
             returns_count[state_t] += 1
             V[state_t] = returns_sum[state_t] / returns_count[state_t]
@@ -132,41 +132,41 @@ def every_visit_mc_prediction(env, policy, n_episodes=10000, gamma=0.99):
 
 def epsilon_greedy_policy(Q, state, n_actions, epsilon=0.1):
     """
-    ε-탐욕 행동 선택
+    Epsilon-greedy action selection
 
     Args:
-        Q: 행동 가치 함수
-        state: 현재 상태
-        n_actions: 행동 수
-        epsilon: 탐험 확률
+        Q: Action value function
+        state: Current state
+        n_actions: Number of actions
+        epsilon: Exploration probability
 
     Returns:
-        action: 선택된 행동
+        action: Selected action
     """
     if np.random.random() < epsilon:
-        # 탐험: 랜덤 행동
+        # Exploration: random action
         return np.random.randint(n_actions)
     else:
-        # 활용: 최선의 행동
+        # Exploitation: best action
         return np.argmax(Q[state])
 
 
 def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
                          epsilon=0.1, epsilon_decay=0.9999):
     """
-    On-policy MC 제어 (ε-greedy)
+    On-policy MC Control (epsilon-greedy)
 
     Args:
-        env: Gymnasium 환경
-        n_episodes: 에피소드 수
-        gamma: 할인율
-        epsilon: 탐험율
-        epsilon_decay: epsilon 감소율
+        env: Gymnasium environment
+        n_episodes: Number of episodes
+        gamma: Discount factor
+        epsilon: Exploration rate
+        epsilon_decay: Epsilon decay rate
 
     Returns:
-        Q: 행동 가치 함수
-        policy: 학습된 정책
-        episode_rewards: 에피소드별 보상
+        Q: Action value function
+        policy: Learned policy
+        episode_rewards: Rewards per episode
     """
     n_actions = env.action_space.n
 
@@ -176,14 +176,14 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
 
     episode_rewards = []
 
-    print("MC On-Policy Control 학습 시작...")
+    print("Starting MC On-Policy Control training...")
     for episode_num in range(n_episodes):
         episode = []
         state, _ = env.reset()
         done = False
         total_reward = 0
 
-        # ε-greedy 정책으로 에피소드 생성
+        # Generate episode with epsilon-greedy policy
         while not done:
             action = epsilon_greedy_policy(Q, state, n_actions, epsilon)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -196,7 +196,7 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
 
         episode_rewards.append(total_reward)
 
-        # Q 업데이트 (First-visit)
+        # Q update (First-visit)
         G = 0
         visited = set()
 
@@ -211,7 +211,7 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
                 Q[state_t][action_t] = (returns_sum[state_t][action_t] /
                                         returns_count[state_t][action_t])
 
-        # epsilon 감소
+        # Decay epsilon
         epsilon = max(0.01, epsilon * epsilon_decay)
 
         if (episode_num + 1) % 10000 == 0:
@@ -219,7 +219,7 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
             print(f"Episode {episode_num + 1}: avg_reward = {avg_reward:.3f}, "
                   f"epsilon = {epsilon:.4f}")
 
-    # 최종 탐욕적 정책
+    # Final greedy policy
     policy = {}
     for state in Q:
         policy[state] = np.argmax(Q[state])
@@ -229,27 +229,27 @@ def mc_on_policy_control(env, n_episodes=100000, gamma=0.99,
 
 def mc_off_policy_control(env, n_episodes=100000, gamma=0.99):
     """
-    Off-policy MC 제어 (Weighted Importance Sampling)
+    Off-policy MC Control (Weighted Importance Sampling)
 
-    행동 정책: ε-greedy (탐험)
-    목표 정책: greedy (활용)
+    Behavior policy: epsilon-greedy (exploration)
+    Target policy: greedy (exploitation)
 
     Returns:
-        Q: 행동 가치 함수
-        target_policy: 목표 정책
-        episode_rewards: 에피소드별 보상
+        Q: Action value function
+        target_policy: Target policy
+        episode_rewards: Rewards per episode
     """
     n_actions = env.action_space.n
 
     Q = defaultdict(lambda: np.zeros(n_actions))
-    C = defaultdict(lambda: np.zeros(n_actions))  # 가중치 합
+    C = defaultdict(lambda: np.zeros(n_actions))  # Cumulative weights
 
     episode_rewards = []
-    epsilon = 0.1  # 행동 정책의 epsilon
+    epsilon = 0.1  # Behavior policy epsilon
 
-    print("MC Off-Policy Control 학습 시작...")
+    print("Starting MC Off-Policy Control training...")
     for episode_num in range(n_episodes):
-        # 행동 정책 (ε-greedy)으로 에피소드 생성
+        # Generate episode with behavior policy (epsilon-greedy)
         episode = []
         state, _ = env.reset()
         done = False
@@ -266,27 +266,27 @@ def mc_off_policy_control(env, n_episodes=100000, gamma=0.99):
         episode_rewards.append(total_reward)
 
         G = 0
-        W = 1.0  # 중요도 샘플링 가중치
+        W = 1.0  # Importance sampling weight
 
-        # 역순 처리
+        # Process in reverse order
         for t in range(len(episode) - 1, -1, -1):
             state_t, action_t, reward_t = episode[t]
             G = gamma * G + reward_t
 
-            # 가중 중요도 샘플링 업데이트
+            # Weighted importance sampling update
             C[state_t][action_t] += W
             Q[state_t][action_t] += (W / C[state_t][action_t] *
                                      (G - Q[state_t][action_t]))
 
-            # 목표 정책에서의 행동 (greedy)
+            # Action under target policy (greedy)
             target_action = np.argmax(Q[state_t])
 
-            # 행동이 목표 정책과 다르면 중단
+            # Break if action differs from target policy
             if action_t != target_action:
                 break
 
-            # 중요도 비율 업데이트
-            # π(a|s) = 1 (결정적), b(a|s) = (1-ε) + ε/|A| or ε/|A|
+            # Update importance ratio
+            # pi(a|s) = 1 (deterministic), b(a|s) = (1-epsilon) + epsilon/|A| or epsilon/|A|
             if action_t == target_action:
                 b_prob = (1 - epsilon) + epsilon / n_actions
             else:
@@ -298,7 +298,7 @@ def mc_off_policy_control(env, n_episodes=100000, gamma=0.99):
             avg_reward = np.mean(episode_rewards[-1000:])
             print(f"Episode {episode_num + 1}: avg_reward = {avg_reward:.3f}")
 
-    # 최종 탐욕적 정책
+    # Final greedy policy
     target_policy = {}
     for state in Q:
         target_policy[state] = np.argmax(Q[state])
@@ -307,9 +307,9 @@ def mc_off_policy_control(env, n_episodes=100000, gamma=0.99):
 
 
 def blackjack_example():
-    """블랙잭 환경에서 MC 학습"""
+    """MC learning in the Blackjack environment"""
     print("\n" + "=" * 60)
-    print("블랙잭 예제 - MC On-Policy Control")
+    print("Blackjack Example - MC On-Policy Control")
     print("=" * 60)
 
     env = gym.make('Blackjack-v1', sab=True)
@@ -327,13 +327,13 @@ def blackjack_example():
     losses = 0
     draws = 0
 
-    print(f"\n{n_episodes} 에피소드 학습 중...")
+    print(f"\nTraining for {n_episodes} episodes...")
     for ep in range(n_episodes):
         episode = []
         state, _ = env.reset()
         done = False
 
-        # 에피소드 생성
+        # Generate episode
         while not done:
             action = epsilon_greedy_policy(Q, state, n_actions, epsilon)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -341,7 +341,7 @@ def blackjack_example():
             state = next_state
             done = terminated or truncated
 
-        # 결과 기록
+        # Record result
         final_reward = episode[-1][2]
         if final_reward == 1:
             wins += 1
@@ -350,7 +350,7 @@ def blackjack_example():
         else:
             draws += 1
 
-        # Q 업데이트
+        # Q update
         G = 0
         visited = set()
 
@@ -367,34 +367,34 @@ def blackjack_example():
 
         if (ep + 1) % 100000 == 0:
             win_rate = wins / (ep + 1)
-            print(f"Episode {ep + 1}: 승률 = {win_rate:.3f}")
+            print(f"Episode {ep + 1}: win rate = {win_rate:.3f}")
 
     env.close()
 
-    # 최종 통계
-    print("\n학습 완료!")
-    print(f"총 에피소드: {n_episodes}")
-    print(f"승리: {wins} ({wins/n_episodes*100:.1f}%)")
-    print(f"패배: {losses} ({losses/n_episodes*100:.1f}%)")
-    print(f"무승부: {draws} ({draws/n_episodes*100:.1f}%)")
-    print(f"학습된 상태-행동 쌍 수: {len(Q)}")
+    # Final statistics
+    print("\nTraining complete!")
+    print(f"Total episodes: {n_episodes}")
+    print(f"Wins: {wins} ({wins/n_episodes*100:.1f}%)")
+    print(f"Losses: {losses} ({losses/n_episodes*100:.1f}%)")
+    print(f"Draws: {draws} ({draws/n_episodes*100:.1f}%)")
+    print(f"Number of learned state-action pairs: {len(Q)}")
 
-    # 정책 시각화
+    # Policy visualization
     visualize_blackjack_policy(Q)
 
     return Q
 
 
 def visualize_blackjack_policy(Q):
-    """블랙잭 정책 시각화"""
+    """Visualize the Blackjack policy"""
     print("\n" + "=" * 60)
-    print("학습된 블랙잭 정책")
+    print("Learned Blackjack Policy")
     print("=" * 60)
-    print("H: Hit (카드 추가), S: Stick (패 유지)")
+    print("H: Hit (draw a card), S: Stick (hold)")
 
-    print("\n=== 사용 가능한 에이스가 없을 때 ===")
-    print("       딜러 카드")
-    print("합계   A  2  3  4  5  6  7  8  9  10")
+    print("\n=== Without a usable ace ===")
+    print("       Dealer's Card")
+    print("Sum    A  2  3  4  5  6  7  8  9  10")
     print("-" * 50)
 
     for player_sum in range(21, 11, -1):
@@ -408,9 +408,9 @@ def visualize_blackjack_policy(Q):
                 row += "?  "
         print(row)
 
-    print("\n=== 사용 가능한 에이스가 있을 때 ===")
-    print("       딜러 카드")
-    print("합계   A  2  3  4  5  6  7  8  9  10")
+    print("\n=== With a usable ace ===")
+    print("       Dealer's Card")
+    print("Sum    A  2  3  4  5  6  7  8  9  10")
     print("-" * 50)
 
     for player_sum in range(21, 11, -1):
@@ -426,8 +426,8 @@ def visualize_blackjack_policy(Q):
 
 
 def plot_learning_curve(episode_rewards, window=1000):
-    """학습 곡선 시각화"""
-    # 이동 평균 계산
+    """Visualize the learning curve"""
+    # Compute moving average
     moving_avg = []
     for i in range(len(episode_rewards)):
         start = max(0, i - window + 1)
@@ -442,42 +442,42 @@ def plot_learning_curve(episode_rewards, window=1000):
     plt.grid(True)
     plt.tight_layout()
     plt.savefig('mc_learning_curve.png', dpi=150)
-    print("학습 곡선 저장: mc_learning_curve.png")
+    print("Learning curve saved: mc_learning_curve.png")
 
 
 def compare_mc_methods():
-    """MC 방법 비교"""
+    """Compare MC methods"""
     print("=" * 60)
-    print("몬테카를로 방법 비교")
+    print("Monte Carlo Methods Comparison")
     print("=" * 60)
 
     env = gym.make('Blackjack-v1', sab=True)
 
     # 1. First-visit MC Prediction
-    print("\n[1] First-visit MC Prediction (랜덤 정책)")
+    print("\n[1] First-visit MC Prediction (random policy)")
     print("-" * 60)
 
     def random_policy(state):
         return env.action_space.sample()
 
     V_first = first_visit_mc_prediction(env, random_policy, n_episodes=10000)
-    print(f"추정된 상태 수: {len(V_first)}")
-    print(f"샘플 상태 가치: {list(V_first.items())[:5]}")
+    print(f"Number of estimated states: {len(V_first)}")
+    print(f"Sample state values: {list(V_first.items())[:5]}")
 
     # 2. Every-visit MC Prediction
-    print("\n[2] Every-visit MC Prediction (랜덤 정책)")
+    print("\n[2] Every-visit MC Prediction (random policy)")
     print("-" * 60)
     V_every = every_visit_mc_prediction(env, random_policy, n_episodes=10000)
-    print(f"추정된 상태 수: {len(V_every)}")
+    print(f"Number of estimated states: {len(V_every)}")
 
     # 3. On-policy MC Control
-    print("\n[3] On-policy MC Control (ε-greedy)")
+    print("\n[3] On-policy MC Control (epsilon-greedy)")
     print("-" * 60)
     Q_on, policy_on, rewards_on = mc_on_policy_control(
         env, n_episodes=50000, gamma=1.0, epsilon=0.1
     )
-    print(f"학습된 상태-행동 쌍 수: {len(Q_on)}")
-    print(f"최종 평균 보상: {np.mean(rewards_on[-1000:]):.3f}")
+    print(f"Number of learned state-action pairs: {len(Q_on)}")
+    print(f"Final average reward: {np.mean(rewards_on[-1000:]):.3f}")
 
     # 4. Off-policy MC Control
     print("\n[4] Off-policy MC Control (Importance Sampling)")
@@ -485,12 +485,12 @@ def compare_mc_methods():
     Q_off, policy_off, rewards_off = mc_off_policy_control(
         env, n_episodes=50000, gamma=1.0
     )
-    print(f"학습된 상태-행동 쌍 수: {len(Q_off)}")
-    print(f"최종 평균 보상: {np.mean(rewards_off[-1000:]):.3f}")
+    print(f"Number of learned state-action pairs: {len(Q_off)}")
+    print(f"Final average reward: {np.mean(rewards_off[-1000:]):.3f}")
 
     env.close()
 
-    # 학습 곡선 비교
+    # Learning curve comparison
     plt.figure(figsize=(12, 6))
 
     window = 1000
@@ -508,23 +508,23 @@ def compare_mc_methods():
     plt.grid(True)
     plt.tight_layout()
     plt.savefig('mc_comparison.png', dpi=150)
-    print("\n비교 그래프 저장: mc_comparison.png")
+    print("\nComparison graph saved: mc_comparison.png")
 
     return Q_on, policy_on, Q_off, policy_off
 
 
 if __name__ == "__main__":
-    # MC 방법 비교
+    # MC methods comparison
     try:
         Q_on, policy_on, Q_off, policy_off = compare_mc_methods()
 
-        # 블랙잭 예제
+        # Blackjack example
         Q_blackjack = blackjack_example()
 
     except Exception as e:
-        print(f"\n실행 실패: {e}")
-        print("gymnasium 패키지가 설치되어 있는지 확인하세요: pip install gymnasium")
+        print(f"\nExecution failed: {e}")
+        print("Make sure the gymnasium package is installed: pip install gymnasium")
 
     print("\n" + "=" * 60)
-    print("몬테카를로 방법 예제 완료!")
+    print("Monte Carlo methods examples complete!")
     print("=" * 60)

@@ -1,8 +1,8 @@
 /*
- * 시간 복잡도 (Time Complexity)
+ * Time Complexity
  * Big O Notation and Complexity Analysis
  *
- * 알고리즘의 효율성을 분석하는 방법입니다.
+ * A method for analyzing algorithm efficiency.
  */
 
 #include <iostream>
@@ -14,16 +14,16 @@
 using namespace std;
 
 // =============================================================================
-// 1. O(1) - 상수 시간
+// 1. O(1) - Constant Time
 // =============================================================================
 
 int constantTime(const vector<int>& arr) {
-    // 배열 크기와 무관하게 항상 일정한 시간
+    // Always takes the same time regardless of array size
     return arr[0];
 }
 
 // =============================================================================
-// 2. O(log n) - 로그 시간
+// 2. O(log n) - Logarithmic Time
 // =============================================================================
 
 int binarySearch(const vector<int>& arr, int target) {
@@ -44,7 +44,7 @@ int binarySearch(const vector<int>& arr, int target) {
 }
 
 // =============================================================================
-// 3. O(n) - 선형 시간
+// 3. O(n) - Linear Time
 // =============================================================================
 
 int linearSearch(const vector<int>& arr, int target) {
@@ -64,7 +64,7 @@ int sumArray(const vector<int>& arr) {
 }
 
 // =============================================================================
-// 4. O(n log n) - 선형 로그 시간
+// 4. O(n log n) - Linearithmic Time
 // =============================================================================
 
 void merge(vector<int>& arr, int left, int mid, int right) {
@@ -95,7 +95,7 @@ void mergeSort(vector<int>& arr, int left, int right) {
 }
 
 // =============================================================================
-// 5. O(n²) - 이차 시간
+// 5. O(n^2) - Quadratic Time
 // =============================================================================
 
 void bubbleSort(vector<int>& arr) {
@@ -121,7 +121,7 @@ int countPairs(const vector<int>& arr) {
 }
 
 // =============================================================================
-// 6. O(2^n) - 지수 시간
+// 6. O(2^n) - Exponential Time
 // =============================================================================
 
 int fibonacciRecursive(int n) {
@@ -129,7 +129,7 @@ int fibonacciRecursive(int n) {
     return fibonacciRecursive(n - 1) + fibonacciRecursive(n - 2);
 }
 
-// O(n) 최적화 버전
+// O(n) optimized version
 int fibonacciIterative(int n) {
     if (n <= 1) return n;
 
@@ -143,7 +143,7 @@ int fibonacciIterative(int n) {
 }
 
 // =============================================================================
-// 7. 시간 측정 유틸리티
+// 7. Time Measurement Utility
 // =============================================================================
 
 template<typename Func, typename... Args>
@@ -156,10 +156,10 @@ double measureTime(Func func, Args&&... args) {
 }
 
 // =============================================================================
-// 8. 공간 복잡도 예제
+// 8. Space Complexity Examples
 // =============================================================================
 
-// O(1) 공간
+// O(1) space
 void reverseInPlace(vector<int>& arr) {
     int n = arr.size();
     for (int i = 0; i < n / 2; i++) {
@@ -167,14 +167,14 @@ void reverseInPlace(vector<int>& arr) {
     }
 }
 
-// O(n) 공간
+// O(n) space
 vector<int> reverseWithCopy(const vector<int>& arr) {
     vector<int> result(arr.rbegin(), arr.rend());
     return result;
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printArray(const vector<int>& arr, int limit = 10) {
@@ -189,68 +189,68 @@ void printArray(const vector<int>& arr, int limit = 10) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "시간 복잡도 (Time Complexity) 예제" << endl;
+    cout << "Time Complexity Examples" << endl;
     cout << "============================================================" << endl;
 
     // 1. O(1)
-    cout << "\n[1] O(1) - 상수 시간" << endl;
+    cout << "\n[1] O(1) - Constant Time" << endl;
     vector<int> arr1 = {5, 2, 8, 1, 9};
-    cout << "    첫 번째 원소: " << constantTime(arr1) << endl;
+    cout << "    First element: " << constantTime(arr1) << endl;
 
     // 2. O(log n)
-    cout << "\n[2] O(log n) - 이분 탐색" << endl;
+    cout << "\n[2] O(log n) - Binary Search" << endl;
     vector<int> arr2 = {1, 3, 5, 7, 9, 11, 13, 15};
     int idx = binarySearch(arr2, 7);
-    cout << "    배열: [1,3,5,7,9,11,13,15]" << endl;
-    cout << "    7의 위치: " << idx << endl;
+    cout << "    Array: [1,3,5,7,9,11,13,15]" << endl;
+    cout << "    Position of 7: " << idx << endl;
 
     // 3. O(n)
-    cout << "\n[3] O(n) - 선형 탐색" << endl;
+    cout << "\n[3] O(n) - Linear Search" << endl;
     vector<int> arr3 = {4, 2, 7, 1, 9, 3};
-    cout << "    배열 합: " << sumArray(arr3) << endl;
+    cout << "    Array sum: " << sumArray(arr3) << endl;
 
     // 4. O(n log n)
-    cout << "\n[4] O(n log n) - 병합 정렬" << endl;
+    cout << "\n[4] O(n log n) - Merge Sort" << endl;
     vector<int> arr4 = {64, 34, 25, 12, 22, 11, 90};
-    cout << "    정렬 전: ";
+    cout << "    Before sorting: ";
     printArray(arr4);
     mergeSort(arr4, 0, arr4.size() - 1);
-    cout << "    정렬 후: ";
+    cout << "    After sorting: ";
     printArray(arr4);
 
-    // 5. O(n²)
-    cout << "\n[5] O(n²) - 버블 정렬" << endl;
+    // 5. O(n^2)
+    cout << "\n[5] O(n^2) - Bubble Sort" << endl;
     vector<int> arr5 = {64, 34, 25, 12, 22, 11, 90};
     bubbleSort(arr5);
-    cout << "    정렬 후: ";
+    cout << "    After sorting: ";
     printArray(arr5);
-    cout << "    5개 원소의 쌍 개수: " << countPairs(vector<int>(5)) << endl;
+    cout << "    Number of pairs from 5 elements: " << countPairs(vector<int>(5)) << endl;
 
     // 6. O(2^n) vs O(n)
-    cout << "\n[6] O(2^n) vs O(n) - 피보나치" << endl;
-    cout << "    피보나치(20) 재귀: " << fibonacciRecursive(20) << endl;
-    cout << "    피보나치(20) 반복: " << fibonacciIterative(20) << endl;
-    cout << "    피보나치(40) 반복: " << fibonacciIterative(40) << endl;
+    cout << "\n[6] O(2^n) vs O(n) - Fibonacci" << endl;
+    cout << "    Fibonacci(20) recursive: " << fibonacciRecursive(20) << endl;
+    cout << "    Fibonacci(20) iterative: " << fibonacciIterative(20) << endl;
+    cout << "    Fibonacci(40) iterative: " << fibonacciIterative(40) << endl;
 
-    // 7. 공간 복잡도
-    cout << "\n[7] 공간 복잡도" << endl;
+    // 7. Space Complexity
+    cout << "\n[7] Space Complexity" << endl;
     vector<int> arr7 = {1, 2, 3, 4, 5};
-    cout << "    원본: ";
+    cout << "    Original: ";
     printArray(arr7);
     reverseInPlace(arr7);
-    cout << "    O(1) 공간 뒤집기: ";
+    cout << "    O(1) space reverse: ";
     printArray(arr7);
 
-    // 8. 복잡도 요약
-    cout << "\n[8] 복잡도 요약" << endl;
-    cout << "    | 복잡도    | 1000개 연산 | 예시              |" << endl;
-    cout << "    |-----------|-------------|-------------------|" << endl;
-    cout << "    | O(1)      | 1           | 배열 인덱싱       |" << endl;
-    cout << "    | O(log n)  | 10          | 이분 탐색         |" << endl;
-    cout << "    | O(n)      | 1000        | 선형 탐색         |" << endl;
-    cout << "    | O(n log n)| 10000       | 병합 정렬         |" << endl;
-    cout << "    | O(n²)     | 1000000     | 버블 정렬         |" << endl;
-    cout << "    | O(2^n)    | 매우 큼     | 모든 부분집합     |" << endl;
+    // 8. Complexity Summary
+    cout << "\n[8] Complexity Summary" << endl;
+    cout << "    | Complexity | 1000 ops    | Example           |" << endl;
+    cout << "    |------------|-------------|-------------------|" << endl;
+    cout << "    | O(1)       | 1           | Array indexing    |" << endl;
+    cout << "    | O(log n)   | 10          | Binary search     |" << endl;
+    cout << "    | O(n)       | 1000        | Linear search     |" << endl;
+    cout << "    | O(n log n) | 10000       | Merge sort        |" << endl;
+    cout << "    | O(n^2)     | 1000000     | Bubble sort       |" << endl;
+    cout << "    | O(2^n)     | Very large  | All subsets       |" << endl;
 
     cout << "\n============================================================" << endl;
 

@@ -1,9 +1,5 @@
 """
-시크릿 관리 데모
 Secrets Management Demo
-
-환경 변수 로딩, 시크릿 강도 검증, Git secrets 패턴 스캐너,
-설정 파일 암호화, .env 파일 파서 등 시크릿 관리 기법을 구현합니다.
 
 Demonstrates environment variable loading, secret strength validation,
 git secrets pattern scanning, config file encryption, and .env file parsing.
@@ -22,7 +18,7 @@ from pathlib import Path
 
 
 # =============================================================================
-# 1. Environment Variable Loading Simulation (환경 변수 로딩 시뮬레이션)
+# 1. Environment Variable Loading Simulation
 # =============================================================================
 
 class EnvLoader:
@@ -80,7 +76,7 @@ def demo_env_loading():
 
 
 # =============================================================================
-# 2. Secret Strength Validation (시크릿 강도 검증)
+# 2. Secret Strength Validation
 # =============================================================================
 
 def calculate_entropy(secret: str) -> float:
@@ -150,7 +146,7 @@ def demo_secret_strength():
 
 
 # =============================================================================
-# 3. Git Secrets Pattern Scanner (Git 시크릿 패턴 스캐너)
+# 3. Git Secrets Pattern Scanner
 # =============================================================================
 
 # Patterns that indicate leaked secrets in code
@@ -227,7 +223,7 @@ MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF...
 
 
 # =============================================================================
-# 4. Config File Encryption (설정 파일 암호화)
+# 4. Config File Encryption
 # =============================================================================
 # Uses a simple XOR-based approach as a stdlib-only fallback.
 # In production, use the 'cryptography' library with Fernet.
@@ -313,7 +309,7 @@ def demo_config_encryption():
 
 
 # =============================================================================
-# 5. .env File Parser (.env 파일 파서)
+# 5. .env File Parser
 # =============================================================================
 
 def parse_env_file(content: str) -> dict[str, str]:
@@ -402,7 +398,6 @@ not a valid line
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  Secrets Management Demo")
-    print("  시크릿 관리 데모")
     print("=" * 60 + "\n")
 
     demo_env_loading()

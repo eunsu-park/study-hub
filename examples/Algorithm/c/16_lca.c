@@ -2,7 +2,7 @@
  * LCA (Lowest Common Ancestor)
  * Binary Lifting, Euler Tour, Tree Path Queries
  *
- * 트리에서 두 노드의 최소 공통 조상을 찾습니다.
+ * Finds the lowest common ancestor of two nodes in a tree.
  */
 
 #include <stdio.h>
@@ -14,7 +14,7 @@
 #define LOG 17
 
 /* =============================================================================
- * 1. 트리 구조
+ * 1. Tree Structure
  * ============================================================================= */
 
 typedef struct AdjNode {
@@ -25,8 +25,8 @@ typedef struct AdjNode {
 
 AdjNode* adj[MAXN];
 int depth[MAXN];
-int parent[MAXN][LOG];  /* Binary Lifting 테이블 */
-int dist[MAXN];         /* 루트로부터의 거리 */
+int parent[MAXN][LOG];  /* Binary Lifting table */
+int dist[MAXN];         /* Distance from root */
 int n;
 
 void add_edge(int u, int v, int w) {
@@ -44,7 +44,7 @@ void add_edge(int u, int v, int w) {
 }
 
 /* =============================================================================
- * 2. Binary Lifting 전처리
+ * 2. Binary Lifting Preprocessing
  * ============================================================================= */
 
 void dfs_preprocess(int v, int p, int d, int distance) {
@@ -74,11 +74,11 @@ void preprocess(int root) {
 }
 
 /* =============================================================================
- * 3. LCA 쿼리
+ * 3. LCA Query
  * ============================================================================= */
 
 int lca(int u, int v) {
-    /* 깊이 맞추기 */
+    /* Match depths */
     if (depth[u] < depth[v]) {
         int temp = u; u = v; v = temp;
     }
@@ -92,7 +92,7 @@ int lca(int u, int v) {
 
     if (u == v) return u;
 
-    /* 동시에 올라가기 */
+    /* Climb up simultaneously */
     for (int i = LOG - 1; i >= 0; i--) {
         if (parent[u][i] != parent[v][i]) {
             u = parent[u][i];
@@ -104,7 +104,7 @@ int lca(int u, int v) {
 }
 
 /* =============================================================================
- * 4. K번째 조상
+ * 4. K-th Ancestor
  * ============================================================================= */
 
 int kth_ancestor(int v, int k) {
@@ -117,7 +117,7 @@ int kth_ancestor(int v, int k) {
 }
 
 /* =============================================================================
- * 5. 두 노드 사이 거리
+ * 5. Distance Between Two Nodes
  * ============================================================================= */
 
 int distance_between(int u, int v) {
@@ -126,7 +126,7 @@ int distance_between(int u, int v) {
 }
 
 /* =============================================================================
- * 6. 경로 위 K번째 노드
+ * 6. K-th Node on Path
  * ============================================================================= */
 
 int kth_node_on_path(int u, int v, int k) {
@@ -142,7 +142,7 @@ int kth_node_on_path(int u, int v, int k) {
 }
 
 /* =============================================================================
- * 7. Euler Tour + RMQ 방식
+ * 7. Euler Tour + RMQ Method
  * ============================================================================= */
 
 int euler_tour[2 * MAXN];
@@ -173,13 +173,13 @@ void euler_dfs(int v, int p, int d) {
 }
 
 void build_sparse_table(int len) {
-    /* log 테이블 전처리 */
+    /* Preprocess log table */
     log_table[1] = 0;
     for (int i = 2; i <= len; i++) {
         log_table[i] = log_table[i / 2] + 1;
     }
 
-    /* Sparse Table 초기화 */
+    /* Initialize Sparse Table */
     for (int i = 0; i < len; i++) {
         sparse_table[i][0] = i;
     }
@@ -216,7 +216,7 @@ void preprocess_euler(int root) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 void cleanup(void) {
@@ -233,11 +233,11 @@ void cleanup(void) {
 
 int main(void) {
     printf("============================================================\n");
-    printf("LCA (Lowest Common Ancestor) 예제\n");
+    printf("LCA (Lowest Common Ancestor) Examples\n");
     printf("============================================================\n");
 
     /*
-     * 트리 구조:
+     * Tree structure:
      *        0
      *       /|\
      *      1 2 3
@@ -255,33 +255,33 @@ int main(void) {
     add_edge(3, 6, 2);
     add_edge(4, 7, 1);
 
-    /* 1. Binary Lifting 전처리 */
+    /* 1. Binary Lifting Preprocessing */
     printf("\n[1] Binary Lifting LCA\n");
     preprocess(0);
 
-    printf("    트리: 0-1-4-7, 0-1-5, 0-2, 0-3-6\n");
+    printf("    Tree: 0-1-4-7, 0-1-5, 0-2, 0-3-6\n");
     printf("    LCA(4, 5) = %d\n", lca(4, 5));
     printf("    LCA(4, 6) = %d\n", lca(4, 6));
     printf("    LCA(7, 2) = %d\n", lca(7, 2));
     printf("    LCA(5, 7) = %d\n", lca(5, 7));
 
-    /* 2. K번째 조상 */
-    printf("\n[2] K번째 조상\n");
-    printf("    7의 1번째 조상: %d\n", kth_ancestor(7, 1));
-    printf("    7의 2번째 조상: %d\n", kth_ancestor(7, 2));
-    printf("    7의 3번째 조상: %d\n", kth_ancestor(7, 3));
+    /* 2. K-th Ancestor */
+    printf("\n[2] K-th Ancestor\n");
+    printf("    1st ancestor of 7: %d\n", kth_ancestor(7, 1));
+    printf("    2nd ancestor of 7: %d\n", kth_ancestor(7, 2));
+    printf("    3rd ancestor of 7: %d\n", kth_ancestor(7, 3));
 
-    /* 3. 거리 */
-    printf("\n[3] 두 노드 사이 거리\n");
+    /* 3. Distance */
+    printf("\n[3] Distance Between Two Nodes\n");
     printf("    dist(4, 5) = %d\n", distance_between(4, 5));
     printf("    dist(7, 6) = %d\n", distance_between(7, 6));
     printf("    dist(7, 2) = %d\n", distance_between(7, 2));
 
-    /* 4. 경로 위 K번째 노드 */
-    printf("\n[4] 경로 위 K번째 노드\n");
-    printf("    7→6 경로의 0번째 노드: %d\n", kth_node_on_path(7, 6, 0));
-    printf("    7→6 경로의 2번째 노드: %d\n", kth_node_on_path(7, 6, 2));
-    printf("    7→6 경로의 4번째 노드: %d\n", kth_node_on_path(7, 6, 4));
+    /* 4. K-th Node on Path */
+    printf("\n[4] K-th Node on Path\n");
+    printf("    0th node on path 7->6: %d\n", kth_node_on_path(7, 6, 0));
+    printf("    2nd node on path 7->6: %d\n", kth_node_on_path(7, 6, 2));
+    printf("    4th node on path 7->6: %d\n", kth_node_on_path(7, 6, 4));
 
     /* 5. Euler Tour + RMQ */
     printf("\n[5] Euler Tour + RMQ LCA\n");
@@ -289,13 +289,13 @@ int main(void) {
     printf("    LCA_RMQ(4, 5) = %d\n", lca_rmq(4, 5));
     printf("    LCA_RMQ(7, 6) = %d\n", lca_rmq(7, 6));
 
-    /* 6. 복잡도 비교 */
-    printf("\n[6] LCA 알고리즘 비교\n");
-    printf("    | 방법           | 전처리    | 쿼리      | 공간      |\n");
-    printf("    |----------------|-----------|-----------|------------|\n");
-    printf("    | Binary Lifting | O(n log n)| O(log n)  | O(n log n) |\n");
-    printf("    | Euler + RMQ    | O(n log n)| O(1)      | O(n log n) |\n");
-    printf("    | Tarjan (오프라인)| O(n + q) | O(α(n))   | O(n)       |\n");
+    /* 6. Complexity Comparison */
+    printf("\n[6] LCA Algorithm Comparison\n");
+    printf("    | Method           | Preprocess | Query     | Space      |\n");
+    printf("    |------------------|-----------|-----------|------------|\n");
+    printf("    | Binary Lifting   | O(n log n)| O(log n)  | O(n log n) |\n");
+    printf("    | Euler + RMQ      | O(n log n)| O(1)      | O(n log n) |\n");
+    printf("    | Tarjan (offline) | O(n + q)  | O(a(n))   | O(n)       |\n");
 
     cleanup();
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 LED Blink Example for Raspberry Pi
-LED 깜빡이기 예제
 
 Hardware:
 - LED connected to GPIO17 (pin 11)

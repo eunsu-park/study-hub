@@ -1,8 +1,8 @@
 /*
- * 트리와 이진 탐색 트리 (Tree and BST)
+ * Tree and Binary Search Tree (BST)
  * Tree Traversal, BST Operations, LCA
  *
- * 계층적 자료구조의 구현과 활용입니다.
+ * Implementation and applications of hierarchical data structures.
  */
 
 #include <iostream>
@@ -15,7 +15,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 이진 트리 노드
+// 1. Binary Tree Node
 // =============================================================================
 
 struct TreeNode {
@@ -26,10 +26,10 @@ struct TreeNode {
 };
 
 // =============================================================================
-// 2. 트리 순회
+// 2. Tree Traversal
 // =============================================================================
 
-// 전위 순회 (Preorder)
+// Preorder Traversal
 void preorder(TreeNode* root, vector<int>& result) {
     if (!root) return;
     result.push_back(root->val);
@@ -37,7 +37,7 @@ void preorder(TreeNode* root, vector<int>& result) {
     preorder(root->right, result);
 }
 
-// 중위 순회 (Inorder)
+// Inorder Traversal
 void inorder(TreeNode* root, vector<int>& result) {
     if (!root) return;
     inorder(root->left, result);
@@ -45,7 +45,7 @@ void inorder(TreeNode* root, vector<int>& result) {
     inorder(root->right, result);
 }
 
-// 후위 순회 (Postorder)
+// Postorder Traversal
 void postorder(TreeNode* root, vector<int>& result) {
     if (!root) return;
     postorder(root->left, result);
@@ -53,7 +53,7 @@ void postorder(TreeNode* root, vector<int>& result) {
     result.push_back(root->val);
 }
 
-// 레벨 순회 (Level Order)
+// Level Order Traversal
 vector<vector<int>> levelOrder(TreeNode* root) {
     vector<vector<int>> result;
     if (!root) return result;
@@ -77,7 +77,7 @@ vector<vector<int>> levelOrder(TreeNode* root) {
     return result;
 }
 
-// 반복적 중위 순회
+// Iterative Inorder Traversal
 vector<int> inorderIterative(TreeNode* root) {
     vector<int> result;
     stack<TreeNode*> st;
@@ -98,7 +98,7 @@ vector<int> inorderIterative(TreeNode* root) {
 }
 
 // =============================================================================
-// 3. BST 연산
+// 3. BST Operations
 // =============================================================================
 
 class BST {
@@ -107,7 +107,7 @@ public:
 
     BST() : root(nullptr) {}
 
-    // 삽입
+    // Insert
     TreeNode* insert(TreeNode* node, int val) {
         if (!node) return new TreeNode(val);
 
@@ -123,7 +123,7 @@ public:
         root = insert(root, val);
     }
 
-    // 검색
+    // Search
     TreeNode* search(TreeNode* node, int val) {
         if (!node || node->val == val) return node;
 
@@ -136,14 +136,14 @@ public:
         return search(root, val) != nullptr;
     }
 
-    // 최솟값
+    // Find minimum
     TreeNode* findMin(TreeNode* node) {
         while (node && node->left)
             node = node->left;
         return node;
     }
 
-    // 삭제
+    // Delete
     TreeNode* remove(TreeNode* node, int val) {
         if (!node) return nullptr;
 
@@ -152,7 +152,7 @@ public:
         } else if (val > node->val) {
             node->right = remove(node->right, val);
         } else {
-            // 자식이 없거나 하나
+            // No child or one child
             if (!node->left) {
                 TreeNode* temp = node->right;
                 delete node;
@@ -164,7 +164,7 @@ public:
                 return temp;
             }
 
-            // 자식이 둘
+            // Two children
             TreeNode* successor = findMin(node->right);
             node->val = successor->val;
             node->right = remove(node->right, successor->val);
@@ -178,22 +178,22 @@ public:
 };
 
 // =============================================================================
-// 4. 트리 속성
+// 4. Tree Properties
 // =============================================================================
 
-// 높이
+// Height
 int height(TreeNode* root) {
     if (!root) return 0;
     return 1 + max(height(root->left), height(root->right));
 }
 
-// 노드 개수
+// Node count
 int countNodes(TreeNode* root) {
     if (!root) return 0;
     return 1 + countNodes(root->left) + countNodes(root->right);
 }
 
-// 균형 검사
+// Balance check
 bool isBalanced(TreeNode* root) {
     if (!root) return true;
 
@@ -205,7 +205,7 @@ bool isBalanced(TreeNode* root) {
            isBalanced(root->right);
 }
 
-// BST 유효성 검사
+// BST validity check
 bool isValidBST(TreeNode* root, long long minVal = LLONG_MIN, long long maxVal = LLONG_MAX) {
     if (!root) return true;
 
@@ -220,7 +220,7 @@ bool isValidBST(TreeNode* root, long long minVal = LLONG_MIN, long long maxVal =
 // 5. LCA (Lowest Common Ancestor)
 // =============================================================================
 
-// 일반 이진 트리의 LCA
+// LCA for general binary tree
 TreeNode* lowestCommonAncestor(TreeNode* root, TreeNode* p, TreeNode* q) {
     if (!root || root == p || root == q) return root;
 
@@ -231,7 +231,7 @@ TreeNode* lowestCommonAncestor(TreeNode* root, TreeNode* p, TreeNode* q) {
     return left ? left : right;
 }
 
-// BST의 LCA
+// LCA for BST
 TreeNode* lcaBST(TreeNode* root, TreeNode* p, TreeNode* q) {
     while (root) {
         if (p->val < root->val && q->val < root->val)
@@ -245,10 +245,10 @@ TreeNode* lcaBST(TreeNode* root, TreeNode* p, TreeNode* q) {
 }
 
 // =============================================================================
-// 6. 경로 합
+// 6. Path Sum
 // =============================================================================
 
-// 루트에서 리프까지 합이 target인 경로 존재 여부
+// Check if a root-to-leaf path with given target sum exists
 bool hasPathSum(TreeNode* root, int targetSum) {
     if (!root) return false;
 
@@ -259,7 +259,7 @@ bool hasPathSum(TreeNode* root, int targetSum) {
            hasPathSum(root->right, targetSum - root->val);
 }
 
-// 모든 경로 찾기
+// Find all paths
 void pathSumHelper(TreeNode* root, int sum, vector<int>& path, vector<vector<int>>& result) {
     if (!root) return;
 
@@ -283,7 +283,7 @@ vector<vector<int>> pathSum(TreeNode* root, int targetSum) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -297,10 +297,10 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "트리와 BST 예제" << endl;
+    cout << "Tree and BST Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 트리 생성
+    // Create test tree
     //       4
     //      / \
     //     2   6
@@ -314,34 +314,34 @@ int main() {
     root->right->left = new TreeNode(5);
     root->right->right = new TreeNode(7);
 
-    // 1. 트리 순회
-    cout << "\n[1] 트리 순회" << endl;
+    // 1. Tree Traversal
+    cout << "\n[1] Tree Traversal" << endl;
     vector<int> pre, in, post;
     preorder(root, pre);
     inorder(root, in);
     postorder(root, post);
 
-    cout << "    전위: ";
+    cout << "    Preorder: ";
     printVector(pre);
     cout << endl;
-    cout << "    중위: ";
+    cout << "    Inorder: ";
     printVector(in);
     cout << endl;
-    cout << "    후위: ";
+    cout << "    Postorder: ";
     printVector(post);
     cout << endl;
 
-    // 2. 레벨 순회
-    cout << "\n[2] 레벨 순회" << endl;
+    // 2. Level Order Traversal
+    cout << "\n[2] Level Order Traversal" << endl;
     auto levels = levelOrder(root);
     for (size_t i = 0; i < levels.size(); i++) {
-        cout << "    레벨 " << i << ": ";
+        cout << "    Level " << i << ": ";
         printVector(levels[i]);
         cout << endl;
     }
 
-    // 3. BST 연산
-    cout << "\n[3] BST 연산" << endl;
+    // 3. BST Operations
+    cout << "\n[3] BST Operations" << endl;
     BST bst;
     bst.insert(50);
     bst.insert(30);
@@ -349,37 +349,37 @@ int main() {
     bst.insert(20);
     bst.insert(40);
 
-    cout << "    삽입: 50, 30, 70, 20, 40" << endl;
-    cout << "    검색 30: " << (bst.search(30) ? "있음" : "없음") << endl;
-    cout << "    검색 60: " << (bst.search(60) ? "있음" : "없음") << endl;
+    cout << "    Inserted: 50, 30, 70, 20, 40" << endl;
+    cout << "    Search 30: " << (bst.search(30) ? "found" : "not found") << endl;
+    cout << "    Search 60: " << (bst.search(60) ? "found" : "not found") << endl;
 
-    // 4. 트리 속성
-    cout << "\n[4] 트리 속성" << endl;
-    cout << "    높이: " << height(root) << endl;
-    cout << "    노드 수: " << countNodes(root) << endl;
-    cout << "    균형 여부: " << (isBalanced(root) ? "예" : "아니오") << endl;
-    cout << "    유효한 BST: " << (isValidBST(root) ? "예" : "아니오") << endl;
+    // 4. Tree Properties
+    cout << "\n[4] Tree Properties" << endl;
+    cout << "    Height: " << height(root) << endl;
+    cout << "    Node count: " << countNodes(root) << endl;
+    cout << "    Balanced: " << (isBalanced(root) ? "yes" : "no") << endl;
+    cout << "    Valid BST: " << (isValidBST(root) ? "yes" : "no") << endl;
 
     // 5. LCA
-    cout << "\n[5] 최소 공통 조상 (LCA)" << endl;
+    cout << "\n[5] Lowest Common Ancestor (LCA)" << endl;
     TreeNode* lca = lowestCommonAncestor(root, root->left->left, root->left->right);
     cout << "    LCA(1, 3) = " << lca->val << endl;
     lca = lowestCommonAncestor(root, root->left, root->right);
     cout << "    LCA(2, 6) = " << lca->val << endl;
 
-    // 6. 경로 합
-    cout << "\n[6] 경로 합" << endl;
-    cout << "    합 7 경로 존재: " << (hasPathSum(root, 7) ? "예" : "아니오") << endl;
-    cout << "    합 15 경로 존재: " << (hasPathSum(root, 15) ? "예" : "아니오") << endl;
+    // 6. Path Sum
+    cout << "\n[6] Path Sum" << endl;
+    cout << "    Path with sum 7 exists: " << (hasPathSum(root, 7) ? "yes" : "no") << endl;
+    cout << "    Path with sum 15 exists: " << (hasPathSum(root, 15) ? "yes" : "no") << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 연산       | 평균      | 최악      |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Operation  | Average   | Worst     |" << endl;
     cout << "    |------------|-----------|-----------|" << endl;
-    cout << "    | 검색       | O(log n)  | O(n)      |" << endl;
-    cout << "    | 삽입       | O(log n)  | O(n)      |" << endl;
-    cout << "    | 삭제       | O(log n)  | O(n)      |" << endl;
-    cout << "    | 순회       | O(n)      | O(n)      |" << endl;
+    cout << "    | Search     | O(log n)  | O(n)      |" << endl;
+    cout << "    | Insert     | O(log n)  | O(n)      |" << endl;
+    cout << "    | Delete     | O(log n)  | O(n)      |" << endl;
+    cout << "    | Traversal  | O(n)      | O(n)      |" << endl;
 
     cout << "\n============================================================" << endl;
 

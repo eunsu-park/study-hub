@@ -1,7 +1,7 @@
 """
-13. 실전 이미지 분류 프로젝트 (CIFAR-10)
+13. Practical Image Classification Project (CIFAR-10)
 
-CIFAR-10 분류를 위한 전체 학습 파이프라인을 구현합니다.
+Implements a full training pipeline for CIFAR-10 classification.
 """
 
 import torch
@@ -13,27 +13,27 @@ import matplotlib.pyplot as plt
 import time
 
 print("=" * 60)
-print("CIFAR-10 이미지 분류 프로젝트")
+print("CIFAR-10 Image Classification Project")
 print("=" * 60)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"사용 장치: {device}")
+print(f"Device: {device}")
 
 
 # ============================================
-# 1. 데이터 준비
+# 1. Data Preparation
 # ============================================
-print("\n[1] 데이터 준비")
+print("\n[1] Data Preparation")
 print("-" * 40)
 
 try:
     from torchvision import datasets, transforms
 
-    # CIFAR-10 정규화 값
+    # CIFAR-10 normalization values
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2470, 0.2435, 0.2616)
 
-    # 훈련 변환 (데이터 증강)
+    # Training transforms (data augmentation)
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -42,13 +42,13 @@ try:
         transforms.Normalize(mean, std)
     ])
 
-    # 테스트 변환
+    # Test transforms
     test_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
 
-    # 데이터셋 로드
+    # Load datasets
     train_data = datasets.CIFAR10('data', train=True, download=True,
                                    transform=train_transform)
     test_data = datasets.CIFAR10('data', train=False,
@@ -61,30 +61,30 @@ try:
     classes = ('airplane', 'automobile', 'bird', 'cat', 'deer',
                'dog', 'frog', 'horse', 'ship', 'truck')
 
-    print(f"훈련 데이터: {len(train_data)}")
-    print(f"테스트 데이터: {len(test_data)}")
-    print(f"클래스: {classes}")
+    print(f"Training data: {len(train_data)}")
+    print(f"Test data: {len(test_data)}")
+    print(f"Classes: {classes}")
 
     DATA_AVAILABLE = True
 
 except Exception as e:
-    print(f"데이터 로드 실패: {e}")
-    print("더미 데이터로 진행합니다.")
+    print(f"Data loading failed: {e}")
+    print("Proceeding with dummy data.")
     DATA_AVAILABLE = False
 
 
 # ============================================
-# 2. 모델 정의
+# 2. Model Definition
 # ============================================
-print("\n[2] 모델 정의")
+print("\n[2] Model Definition")
 print("-" * 40)
 
 class CIFAR10CNN(nn.Module):
-    """CIFAR-10용 CNN"""
+    """CNN for CIFAR-10"""
     def __init__(self, num_classes=10):
         super().__init__()
         self.features = nn.Sequential(
-            # Block 1: 32 → 16
+            # Block 1: 32 -> 16
             nn.Conv2d(3, 64, 3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
@@ -94,7 +94,7 @@ class CIFAR10CNN(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Dropout2d(0.25),
 
-            # Block 2: 16 → 8
+            # Block 2: 16 -> 8
             nn.Conv2d(64, 128, 3, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
@@ -104,7 +104,7 @@ class CIFAR10CNN(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Dropout2d(0.25),
 
-            # Block 3: 8 → 4
+            # Block 3: 8 -> 4
             nn.Conv2d(128, 256, 3, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
@@ -151,7 +151,7 @@ class ResBlock(nn.Module):
         return F.relu(out)
 
 class ResNetCIFAR(nn.Module):
-    """CIFAR용 ResNet"""
+    """ResNet for CIFAR"""
     def __init__(self, num_classes=10):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
@@ -180,22 +180,22 @@ class ResNetCIFAR(nn.Module):
         x = self.fc(x)
         return x
 
-# 모델 생성
+# Create models
 model = CIFAR10CNN().to(device)
-print(f"CIFAR10CNN 파라미터: {sum(p.numel() for p in model.parameters()):,}")
+print(f"CIFAR10CNN parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 resnet = ResNetCIFAR().to(device)
-print(f"ResNetCIFAR 파라미터: {sum(p.numel() for p in resnet.parameters()):,}")
+print(f"ResNetCIFAR parameters: {sum(p.numel() for p in resnet.parameters()):,}")
 
 
 # ============================================
-# 3. Mixup 데이터 증강
+# 3. Mixup Data Augmentation
 # ============================================
-print("\n[3] Mixup 데이터 증강")
+print("\n[3] Mixup Data Augmentation")
 print("-" * 40)
 
 def mixup_data(x, y, alpha=0.2):
-    """Mixup 데이터 증강"""
+    """Mixup data augmentation"""
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
     else:
@@ -209,10 +209,10 @@ def mixup_data(x, y, alpha=0.2):
     return mixed_x, y_a, y_b, lam
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    """Mixup 손실"""
+    """Mixup loss"""
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
-# 테스트
+# Test
 x = torch.randn(4, 3, 32, 32)
 y = torch.tensor([0, 1, 2, 3])
 mixed_x, y_a, y_b, lam = mixup_data(x, y, alpha=0.2)
@@ -220,9 +220,9 @@ print(f"Mixup lambda: {lam:.4f}")
 
 
 # ============================================
-# 4. 학습 함수
+# 4. Training Functions
 # ============================================
-print("\n[4] 학습 함수")
+print("\n[4] Training Functions")
 print("-" * 40)
 
 def train_epoch(model, loader, optimizer, criterion, use_mixup=False):
@@ -282,9 +282,9 @@ def evaluate(model, loader, criterion):
 
 
 # ============================================
-# 5. 전체 학습 파이프라인
+# 5. Full Training Pipeline
 # ============================================
-print("\n[5] 학습 실행")
+print("\n[5] Training Run")
 print("-" * 40)
 
 def train_model(model, train_loader, test_loader, epochs=10, use_mixup=False):
@@ -323,22 +323,22 @@ def train_model(model, train_loader, test_loader, epochs=10, use_mixup=False):
         print(f"Epoch {epoch+1:3d}: Train Acc={train_acc:5.2f}%, "
               f"Test Acc={test_acc:5.2f}%, Time={elapsed:.1f}s")
 
-    print(f"\n최고 테스트 정확도: {best_acc:.2f}%")
+    print(f"\nBest test accuracy: {best_acc:.2f}%")
     return history
 
 if DATA_AVAILABLE:
-    # 짧은 학습 (데모)
+    # Short training (demo)
     model = CIFAR10CNN().to(device)
     history = train_model(model, train_loader, test_loader, epochs=5)
 else:
-    print("데이터 없음 - 학습 스킵")
+    print("No data available - skipping training")
     history = None
 
 
 # ============================================
-# 6. 결과 시각화
+# 6. Result Visualization
 # ============================================
-print("\n[6] 결과 시각화")
+print("\n[6] Result Visualization")
 print("-" * 40)
 
 if history:
@@ -363,13 +363,13 @@ if history:
     plt.tight_layout()
     plt.savefig('cifar10_training.png', dpi=100)
     plt.close()
-    print("그래프 저장: cifar10_training.png")
+    print("Plot saved: cifar10_training.png")
 
 
 # ============================================
-# 7. 클래스별 정확도
+# 7. Per-Class Accuracy
 # ============================================
-print("\n[7] 클래스별 분석")
+print("\n[7] Per-Class Analysis")
 print("-" * 40)
 
 if DATA_AVAILABLE:
@@ -390,7 +390,7 @@ if DATA_AVAILABLE:
                     if pred[i] == label:
                         class_correct[label] += 1
 
-        print("클래스별 정확도:")
+        print("Per-class accuracy:")
         for i, cls in enumerate(classes):
             if class_total[i] > 0:
                 acc = 100 * class_correct[i] / class_total[i]
@@ -400,9 +400,9 @@ if DATA_AVAILABLE:
 
 
 # ============================================
-# 8. 예측 시각화
+# 8. Prediction Visualization
 # ============================================
-print("\n[8] 예측 시각화")
+print("\n[8] Prediction Visualization")
 print("-" * 40)
 
 if DATA_AVAILABLE:
@@ -419,7 +419,7 @@ if DATA_AVAILABLE:
         for i, ax in enumerate(axes.flat):
             if i < n:
                 img = data[i].cpu().numpy().transpose(1, 2, 0)
-                # 역정규화
+                # Inverse normalization
                 img = img * np.array(std) + np.array(mean)
                 img = np.clip(img, 0, 1)
 
@@ -432,44 +432,44 @@ if DATA_AVAILABLE:
         plt.tight_layout()
         plt.savefig('cifar10_predictions.png', dpi=100)
         plt.close()
-        print("예측 시각화 저장: cifar10_predictions.png")
+        print("Prediction visualization saved: cifar10_predictions.png")
 
     visualize_predictions(model, test_loader, classes)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("CIFAR-10 프로젝트 정리")
+print("CIFAR-10 Project Summary")
 print("=" * 60)
 
 summary = """
-주요 기법:
+Key techniques:
 
-1. 데이터 증강
+1. Data Augmentation
    - RandomCrop, HorizontalFlip
    - ColorJitter
    - Mixup/CutMix
 
-2. 모델 구조
-   - Conv-BN-ReLU 블록
+2. Model Architecture
+   - Conv-BN-ReLU blocks
    - Dropout2d, Dropout
-   - ResNet 블록 (Skip Connection)
+   - ResNet blocks (Skip Connection)
 
-3. 학습 설정
+3. Training Settings
    - SGD + Momentum + Weight Decay
    - Cosine Annealing LR
    - Label Smoothing
 
-예상 정확도:
-   - 기본 CNN: 75-80%
-   - + 데이터 증강: 80-85%
+Expected accuracy:
+   - Basic CNN: 75-80%
+   - + Data augmentation: 80-85%
    - + Mixup: 85-88%
-   - ResNet + 전이학습: 90%+
+   - ResNet + Transfer learning: 90%+
 
-다음 단계:
-   - 더 깊은 모델 (ResNet-50)
+Next steps:
+   - Deeper models (ResNet-50)
    - AutoAugment
    - Knowledge Distillation
 """

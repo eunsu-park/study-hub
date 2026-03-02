@@ -1,8 +1,8 @@
 """
-이분 탐색 (Binary Search)
+Binary Search
 Binary Search Algorithms
 
-정렬된 데이터에서 O(log n) 시간에 검색하는 알고리즘입니다.
+Algorithms that search in sorted data in O(log n) time.
 """
 
 from typing import List, Optional
@@ -10,18 +10,18 @@ import bisect
 
 
 # =============================================================================
-# 1. 기본 이분 탐색
+# 1. Basic Binary Search
 # =============================================================================
 def binary_search(arr: List[int], target: int) -> int:
     """
-    정렬된 배열에서 target의 인덱스 찾기
-    없으면 -1 반환
-    시간복잡도: O(log n)
+    Find the index of target in a sorted array
+    Returns -1 if not found
+    Time Complexity: O(log n)
     """
     left, right = 0, len(arr) - 1
 
     while left <= right:
-        mid = left + (right - left) // 2  # 오버플로우 방지
+        mid = left + (right - left) // 2  # Prevent overflow
 
         if arr[mid] == target:
             return mid
@@ -34,7 +34,7 @@ def binary_search(arr: List[int], target: int) -> int:
 
 
 def binary_search_recursive(arr: List[int], target: int, left: int, right: int) -> int:
-    """이분 탐색 (재귀 버전)"""
+    """Binary Search (Recursive version)"""
     if left > right:
         return -1
 
@@ -53,8 +53,8 @@ def binary_search_recursive(arr: List[int], target: int, left: int, right: int) 
 # =============================================================================
 def lower_bound(arr: List[int], target: int) -> int:
     """
-    target 이상인 첫 번째 요소의 인덱스
-    모든 요소가 target보다 작으면 len(arr) 반환
+    Index of the first element greater than or equal to target
+    Returns len(arr) if all elements are less than target
     """
     left, right = 0, len(arr)
 
@@ -70,8 +70,8 @@ def lower_bound(arr: List[int], target: int) -> int:
 
 def upper_bound(arr: List[int], target: int) -> int:
     """
-    target 초과인 첫 번째 요소의 인덱스
-    모든 요소가 target 이하이면 len(arr) 반환
+    Index of the first element strictly greater than target
+    Returns len(arr) if all elements are less than or equal to target
     """
     left, right = 0, len(arr)
 
@@ -86,15 +86,15 @@ def upper_bound(arr: List[int], target: int) -> int:
 
 
 def count_occurrences(arr: List[int], target: int) -> int:
-    """특정 값의 등장 횟수"""
+    """Count occurrences of a specific value"""
     return upper_bound(arr, target) - lower_bound(arr, target)
 
 
 # =============================================================================
-# 3. 첫 번째/마지막 위치 찾기
+# 3. Find First/Last Position
 # =============================================================================
 def find_first_position(arr: List[int], target: int) -> int:
-    """target이 처음 등장하는 인덱스 (없으면 -1)"""
+    """Index where target first appears (returns -1 if not found)"""
     idx = lower_bound(arr, target)
     if idx < len(arr) and arr[idx] == target:
         return idx
@@ -102,7 +102,7 @@ def find_first_position(arr: List[int], target: int) -> int:
 
 
 def find_last_position(arr: List[int], target: int) -> int:
-    """target이 마지막으로 등장하는 인덱스 (없으면 -1)"""
+    """Index where target last appears (returns -1 if not found)"""
     idx = upper_bound(arr, target) - 1
     if idx >= 0 and arr[idx] == target:
         return idx
@@ -110,13 +110,13 @@ def find_last_position(arr: List[int], target: int) -> int:
 
 
 # =============================================================================
-# 4. 회전 정렬 배열 검색
+# 4. Search in Rotated Sorted Array
 # =============================================================================
 def search_rotated(arr: List[int], target: int) -> int:
     """
-    회전된 정렬 배열에서 검색
-    예: [4, 5, 6, 7, 0, 1, 2] - 원래 [0,1,2,4,5,6,7]을 회전
-    시간복잡도: O(log n)
+    Search in a rotated sorted array
+    Example: [4, 5, 6, 7, 0, 1, 2] - rotated from [0,1,2,4,5,6,7]
+    Time Complexity: O(log n)
     """
     if not arr:
         return -1
@@ -129,13 +129,13 @@ def search_rotated(arr: List[int], target: int) -> int:
         if arr[mid] == target:
             return mid
 
-        # 왼쪽 절반이 정렬되어 있는 경우
+        # If the left half is sorted
         if arr[left] <= arr[mid]:
             if arr[left] <= target < arr[mid]:
                 right = mid - 1
             else:
                 left = mid + 1
-        # 오른쪽 절반이 정렬되어 있는 경우
+        # If the right half is sorted
         else:
             if arr[mid] < target <= arr[right]:
                 left = mid + 1
@@ -146,10 +146,10 @@ def search_rotated(arr: List[int], target: int) -> int:
 
 
 # =============================================================================
-# 5. 최솟값 찾기 (회전 배열)
+# 5. Find Minimum in Rotated Array
 # =============================================================================
 def find_minimum_rotated(arr: List[int]) -> int:
-    """회전 정렬 배열의 최솟값 찾기"""
+    """Find the minimum value in a rotated sorted array"""
     left, right = 0, len(arr) - 1
 
     while left < right:
@@ -164,15 +164,15 @@ def find_minimum_rotated(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 6. 제곱근 구하기 (정수)
+# 6. Integer Square Root
 # =============================================================================
 def integer_sqrt(n: int) -> int:
     """
-    n의 정수 제곱근 (버림)
-    예: sqrt(8) = 2
+    Integer square root of n (floor)
+    Example: sqrt(8) = 2
     """
     if n < 0:
-        raise ValueError("음수의 제곱근은 정의되지 않습니다")
+        raise ValueError("Square root of a negative number is undefined")
     if n == 0:
         return 0
 
@@ -193,12 +193,12 @@ def integer_sqrt(n: int) -> int:
 
 
 # =============================================================================
-# 7. 매개변수 탐색 (Parametric Search)
+# 7. Parametric Search
 # =============================================================================
 def can_split(arr: List[int], m: int, max_sum: int) -> bool:
     """
-    배열을 m개 이하의 그룹으로 나눌 때
-    각 그룹 합이 max_sum 이하인지 확인
+    Check if the array can be split into m or fewer groups
+    where each group sum is at most max_sum
     """
     count = 1
     current_sum = 0
@@ -217,12 +217,12 @@ def can_split(arr: List[int], m: int, max_sum: int) -> bool:
 
 def split_array_min_largest_sum(arr: List[int], m: int) -> int:
     """
-    배열을 m개의 연속 부분 배열로 나눌 때
-    각 부분 배열 합의 최댓값을 최소화
-    시간복잡도: O(n log(sum))
+    Split array into m contiguous subarrays
+    minimizing the maximum subarray sum
+    Time Complexity: O(n log(sum))
     """
-    left = max(arr)      # 최소 가능한 값: 가장 큰 요소
-    right = sum(arr)     # 최대 가능한 값: 전체 합
+    left = max(arr)      # Minimum possible value: largest element
+    right = sum(arr)     # Maximum possible value: total sum
 
     while left < right:
         mid = left + (right - left) // 2
@@ -235,13 +235,13 @@ def split_array_min_largest_sum(arr: List[int], m: int) -> int:
 
 
 # =============================================================================
-# 8. Peak Element 찾기
+# 8. Find Peak Element
 # =============================================================================
 def find_peak_element(arr: List[int]) -> int:
     """
-    배열에서 peak element의 인덱스 찾기
+    Find the index of a peak element in the array
     peak: arr[i] > arr[i-1] and arr[i] > arr[i+1]
-    시간복잡도: O(log n)
+    Time Complexity: O(log n)
     """
     left, right = 0, len(arr) - 1
 
@@ -257,20 +257,20 @@ def find_peak_element(arr: List[int]) -> int:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("이분 탐색 (Binary Search) 예제")
+    print("Binary Search Examples")
     print("=" * 60)
 
-    # 1. 기본 이분 탐색
-    print("\n[1] 기본 이분 탐색")
+    # 1. Basic Binary Search
+    print("\n[1] Basic Binary Search")
     arr = [1, 3, 5, 7, 9, 11, 13, 15]
     target = 7
     result = binary_search(arr, target)
-    print(f"    배열: {arr}")
-    print(f"    {target} 찾기 -> 인덱스: {result}")
+    print(f"    Array: {arr}")
+    print(f"    Find {target} -> index: {result}")
 
     # 2. Lower/Upper Bound
     print("\n[2] Lower Bound / Upper Bound")
@@ -279,59 +279,59 @@ def main():
     lb = lower_bound(arr, target)
     ub = upper_bound(arr, target)
     count = count_occurrences(arr, target)
-    print(f"    배열: {arr}")
+    print(f"    Array: {arr}")
     print(f"    target={target}")
     print(f"    lower_bound: {lb}, upper_bound: {ub}")
-    print(f"    등장 횟수: {count}")
+    print(f"    Occurrence count: {count}")
 
-    # bisect 모듈과 비교
+    # Compare with bisect module
     print(f"    (bisect_left: {bisect.bisect_left(arr, target)}, "
           f"bisect_right: {bisect.bisect_right(arr, target)})")
 
-    # 3. 첫 번째/마지막 위치
-    print("\n[3] 첫 번째/마지막 위치")
+    # 3. First/Last Position
+    print("\n[3] First/Last Position")
     arr = [5, 7, 7, 8, 8, 8, 10]
     target = 8
     first = find_first_position(arr, target)
     last = find_last_position(arr, target)
-    print(f"    배열: {arr}")
-    print(f"    {target}의 첫 위치: {first}, 마지막 위치: {last}")
+    print(f"    Array: {arr}")
+    print(f"    First position of {target}: {first}, Last position: {last}")
 
-    # 4. 회전 배열 검색
-    print("\n[4] 회전 정렬 배열 검색")
+    # 4. Rotated Array Search
+    print("\n[4] Search in Rotated Sorted Array")
     arr = [4, 5, 6, 7, 0, 1, 2]
     target = 0
     result = search_rotated(arr, target)
-    print(f"    회전 배열: {arr}")
-    print(f"    {target} 찾기 -> 인덱스: {result}")
+    print(f"    Rotated array: {arr}")
+    print(f"    Find {target} -> index: {result}")
 
-    # 5. 회전 배열 최솟값
-    print("\n[5] 회전 배열 최솟값")
+    # 5. Rotated Array Minimum
+    print("\n[5] Minimum in Rotated Array")
     arr = [4, 5, 6, 7, 0, 1, 2]
     result = find_minimum_rotated(arr)
-    print(f"    회전 배열: {arr}")
-    print(f"    최솟값: {result}")
+    print(f"    Rotated array: {arr}")
+    print(f"    Minimum: {result}")
 
-    # 6. 제곱근
-    print("\n[6] 정수 제곱근")
+    # 6. Square Root
+    print("\n[6] Integer Square Root")
     for n in [4, 8, 16, 17, 100]:
         result = integer_sqrt(n)
         print(f"    sqrt({n}) = {result}")
 
-    # 7. 매개변수 탐색
-    print("\n[7] 매개변수 탐색 (배열 분할)")
+    # 7. Parametric Search
+    print("\n[7] Parametric Search (Array Split)")
     arr = [7, 2, 5, 10, 8]
     m = 2
     result = split_array_min_largest_sum(arr, m)
-    print(f"    배열: {arr}, 분할 수: {m}")
-    print(f"    최소 최대합: {result}")
+    print(f"    Array: {arr}, Splits: {m}")
+    print(f"    Minimum largest sum: {result}")
 
     # 8. Peak Element
-    print("\n[8] Peak Element 찾기")
+    print("\n[8] Find Peak Element")
     arr = [1, 2, 1, 3, 5, 6, 4]
     result = find_peak_element(arr)
-    print(f"    배열: {arr}")
-    print(f"    peak 인덱스: {result} (값: {arr[result]})")
+    print(f"    Array: {arr}")
+    print(f"    Peak index: {result} (value: {arr[result]})")
 
     print("\n" + "=" * 60)
 

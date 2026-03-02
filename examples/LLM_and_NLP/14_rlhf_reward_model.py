@@ -1,120 +1,122 @@
 """
-14. RLHF와 LLM 정렬 (Alignment) 예제
+14. RLHF and LLM Alignment Example
 
-Reward Model, PPO, DPO, Constitutional AI 실습
+Reward Model, PPO, DPO, Constitutional AI practice
 """
 
 import numpy as np
 import random
 
 print("=" * 60)
-print("RLHF와 LLM 정렬 (Alignment)")
+print("RLHF and LLM Alignment")
 print("=" * 60)
 
 
 # ============================================
-# 1. 선호도 데이터 이해
+# 1. Understanding Preference Data
 # ============================================
-print("\n[1] 선호도 데이터 형식")
+print("\n[1] Preference Data Format")
 print("-" * 40)
 
-# 선호도 데이터 예시
+# Preference data examples
 preference_data = [
     {
-        "prompt": "인공지능이란 무엇인가요?",
-        "chosen": "인공지능(AI)은 컴퓨터 시스템이 인간의 지능을 모방하여 학습, 추론, "
-                  "문제 해결 등의 작업을 수행하는 기술입니다. 머신러닝, 딥러닝, "
-                  "자연어 처리 등 다양한 분야를 포함합니다.",
-        "rejected": "AI는 컴퓨터가 똑똑해지는 것입니다."
+        "prompt": "What is artificial intelligence?",
+        "chosen": "Artificial intelligence (AI) is a technology where computer systems mimic "
+                  "human intelligence to perform tasks such as learning, reasoning, and "
+                  "problem-solving. It encompasses various fields including machine learning, "
+                  "deep learning, and natural language processing.",
+        "rejected": "AI is when computers become smart."
     },
     {
-        "prompt": "파이썬의 장점은?",
-        "chosen": "파이썬의 주요 장점은 1) 읽기 쉬운 문법, 2) 풍부한 라이브러리, "
-                  "3) 다양한 분야 적용 가능, 4) 활발한 커뮤니티입니다.",
-        "rejected": "파이썬은 좋은 언어입니다."
+        "prompt": "What are the advantages of Python?",
+        "chosen": "The main advantages of Python are: 1) Readable syntax, 2) Rich libraries, "
+                  "3) Applicable to various domains, 4) Active community.",
+        "rejected": "Python is a good language."
     },
     {
-        "prompt": "운동의 효과는?",
-        "chosen": "규칙적인 운동은 심혈관 건강 개선, 체중 관리, 근력 강화, "
-                  "정신 건강 향상, 수면 질 개선 등 다양한 효과가 있습니다.",
-        "rejected": "운동하면 건강해집니다."
+        "prompt": "What are the effects of exercise?",
+        "chosen": "Regular exercise has various effects including cardiovascular health improvement, "
+                  "weight management, muscle strengthening, mental health enhancement, "
+                  "and sleep quality improvement.",
+        "rejected": "Exercise makes you healthy."
     }
 ]
 
-print("선호도 데이터 예시:")
+print("Preference data examples:")
 for i, data in enumerate(preference_data):
-    print(f"\n{i+1}. 프롬프트: {data['prompt']}")
-    print(f"   선호 응답: {data['chosen'][:50]}...")
-    print(f"   비선호 응답: {data['rejected']}")
+    print(f"\n{i+1}. Prompt: {data['prompt']}")
+    print(f"   Chosen response: {data['chosen'][:50]}...")
+    print(f"   Rejected response: {data['rejected']}")
 
 
 # ============================================
-# 2. 간단한 Reward Model 시뮬레이션
+# 2. Simple Reward Model Simulation
 # ============================================
-print("\n[2] 간단한 Reward Model")
+print("\n[2] Simple Reward Model")
 print("-" * 40)
 
 class SimpleRewardModel:
-    """간단한 규칙 기반 Reward Model (시뮬레이션용)"""
+    """Simple rule-based Reward Model (for simulation)"""
 
     def __init__(self):
         self.positive_factors = {
-            "length": 0.3,        # 적절한 길이
-            "detail": 0.3,        # 상세함
-            "structure": 0.2,     # 구조화
-            "politeness": 0.2     # 정중함
+            "length": 0.3,        # Appropriate length
+            "detail": 0.3,        # Level of detail
+            "structure": 0.2,     # Structure
+            "politeness": 0.2     # Politeness
         }
 
     def compute_reward(self, prompt, response):
-        """응답에 대한 보상 점수 계산"""
+        """Compute reward score for a response"""
         score = 0.0
 
-        # 1. 길이 점수 (50-300자 최적)
+        # 1. Length score (50-300 chars optimal)
         length = len(response)
         if 50 <= length <= 300:
             score += self.positive_factors["length"]
         elif length > 300:
             score += self.positive_factors["length"] * 0.5
 
-        # 2. 상세함 (숫자, 예시 포함)
+        # 2. Detail (includes numbers, examples)
         if any(c.isdigit() for c in response):
             score += self.positive_factors["detail"] * 0.5
-        if "예를 들어" in response or "예시" in response:
+        if "for example" in response.lower() or "example" in response.lower():
             score += self.positive_factors["detail"] * 0.5
 
-        # 3. 구조화 (쉼표, 마침표 사용)
+        # 3. Structure (use of commas, periods)
         if response.count(',') >= 2:
             score += self.positive_factors["structure"]
 
-        # 4. 정중함
-        polite_words = ["입니다", "습니다", "됩니다"]
-        if any(word in response for word in polite_words):
+        # 4. Politeness
+        polite_patterns = [".", "improvement", "various", "including"]
+        if any(word in response.lower() for word in polite_patterns):
             score += self.positive_factors["politeness"]
 
         return score
 
-# 테스트
+# Test
 reward_model = SimpleRewardModel()
 
-print("Reward Model 테스트:")
+print("Reward Model test:")
 for data in preference_data:
     chosen_reward = reward_model.compute_reward(data["prompt"], data["chosen"])
     rejected_reward = reward_model.compute_reward(data["prompt"], data["rejected"])
-    print(f"\n프롬프트: {data['prompt']}")
-    print(f"  선호 응답 점수: {chosen_reward:.2f}")
-    print(f"  비선호 응답 점수: {rejected_reward:.2f}")
-    print(f"  정렬 여부: {'OK' if chosen_reward > rejected_reward else 'FAIL'}")
+    print(f"\nPrompt: {data['prompt']}")
+    print(f"  Chosen response score: {chosen_reward:.2f}")
+    print(f"  Rejected response score: {rejected_reward:.2f}")
+    print(f"  Alignment check: {'OK' if chosen_reward > rejected_reward else 'FAIL'}")
 
 
 # ============================================
-# 3. Bradley-Terry 모델 (DPO 기반)
+# 3. Bradley-Terry Model (DPO-based)
 # ============================================
-print("\n[3] Bradley-Terry 모델 (선호도 확률)")
+print("\n[3] Bradley-Terry Model (Preference Probability)")
 print("-" * 40)
 
 def bradley_terry_probability(reward_chosen, reward_rejected, beta=1.0):
     """
-    Bradley-Terry 모델로 선호 확률 계산
+    Compute preference probability using Bradley-Terry model
 
     P(chosen > rejected) = sigmoid(beta * (r_chosen - r_rejected))
     """
@@ -124,7 +126,7 @@ def bradley_terry_probability(reward_chosen, reward_rejected, beta=1.0):
 
 def dpo_loss(reward_chosen, reward_rejected, beta=0.1):
     """
-    DPO 손실 함수 (간단한 버전)
+    DPO loss function (simplified version)
 
     L = -log(sigmoid(beta * (r_chosen - r_rejected)))
     """
@@ -132,8 +134,8 @@ def dpo_loss(reward_chosen, reward_rejected, beta=0.1):
     loss = -np.log(prob + 1e-10)
     return loss
 
-# 테스트
-print("Bradley-Terry 선호 확률:")
+# Test
+print("Bradley-Terry preference probability:")
 for r_c, r_r in [(0.8, 0.3), (0.5, 0.5), (0.3, 0.7)]:
     prob = bradley_terry_probability(r_c, r_r, beta=2.0)
     loss = dpo_loss(r_c, r_r, beta=2.0)
@@ -141,13 +143,13 @@ for r_c, r_r in [(0.8, 0.3), (0.5, 0.5), (0.3, 0.7)]:
 
 
 # ============================================
-# 4. PPO 개념 시뮬레이션
+# 4. PPO Concept Simulation
 # ============================================
-print("\n[4] PPO 개념 시뮬레이션")
+print("\n[4] PPO Concept Simulation")
 print("-" * 40)
 
 class SimplePPOSimulator:
-    """PPO 개념 시뮬레이션"""
+    """PPO concept simulation"""
 
     def __init__(self, clip_epsilon=0.2, kl_coef=0.1):
         self.clip_epsilon = clip_epsilon
@@ -155,33 +157,33 @@ class SimplePPOSimulator:
         self.policy_history = []
 
     def compute_ratio(self, new_prob, old_prob):
-        """확률 비율 계산"""
+        """Compute probability ratio"""
         return new_prob / (old_prob + 1e-10)
 
     def clip_ratio(self, ratio):
-        """PPO 클리핑"""
+        """PPO clipping"""
         return np.clip(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon)
 
     def compute_ppo_objective(self, ratio, advantage):
-        """PPO 목적 함수"""
+        """PPO objective function"""
         clipped_ratio = self.clip_ratio(ratio)
         obj1 = ratio * advantage
         obj2 = clipped_ratio * advantage
-        return min(obj1, obj2)  # 보수적 업데이트
+        return min(obj1, obj2)  # Conservative update
 
     def compute_kl_penalty(self, new_prob, old_prob):
-        """KL 페널티"""
+        """KL penalty"""
         kl = new_prob * np.log(new_prob / (old_prob + 1e-10) + 1e-10)
         return self.kl_coef * kl
 
-# 테스트
+# Test
 ppo = SimplePPOSimulator()
-print("PPO 클리핑 예시:")
+print("PPO clipping example:")
 
 test_cases = [
-    (0.8, 0.5, 1.0),   # 확률 증가, 양의 어드밴티지
-    (0.3, 0.5, 1.0),   # 확률 감소, 양의 어드밴티지
-    (0.8, 0.5, -1.0),  # 확률 증가, 음의 어드밴티지
+    (0.8, 0.5, 1.0),   # Probability increase, positive advantage
+    (0.3, 0.5, 1.0),   # Probability decrease, positive advantage
+    (0.8, 0.5, -1.0),  # Probability increase, negative advantage
 ]
 
 for new_p, old_p, adv in test_cases:
@@ -193,124 +195,126 @@ for new_p, old_p, adv in test_cases:
 
 
 # ============================================
-# 5. SFT 데이터 형식
+# 5. SFT Data Format
 # ============================================
-print("\n[5] SFT (Supervised Fine-Tuning) 데이터")
+print("\n[5] SFT (Supervised Fine-Tuning) Data")
 print("-" * 40)
 
-# Alpaca 형식
+# Alpaca format
 alpaca_data = [
     {
-        "instruction": "다음 텍스트를 요약하세요.",
-        "input": "인공지능은 컴퓨터 과학의 한 분야로, 인간의 학습능력, 추론능력, "
-                 "지각능력, 자연언어 이해능력 등을 컴퓨터 프로그램으로 실현한 기술이다.",
-        "output": "인공지능은 인간의 지적 능력을 컴퓨터로 구현한 기술입니다."
+        "instruction": "Summarize the following text.",
+        "input": "Artificial intelligence is a branch of computer science that implements "
+                 "human capabilities such as learning, reasoning, perception, and natural "
+                 "language understanding through computer programs.",
+        "output": "Artificial intelligence is a technology that implements human intellectual "
+                  "capabilities through computers."
     },
     {
-        "instruction": "다음 문장을 영어로 번역하세요.",
-        "input": "안녕하세요, 오늘 날씨가 좋네요.",
-        "output": "Hello, the weather is nice today."
+        "instruction": "Translate the following sentence to French.",
+        "input": "Hello, the weather is nice today.",
+        "output": "Bonjour, il fait beau aujourd'hui."
     }
 ]
 
-print("Alpaca 형식 예시:")
+print("Alpaca format example:")
 for item in alpaca_data:
     print(f"\n  Instruction: {item['instruction']}")
     print(f"  Input: {item['input'][:40]}...")
     print(f"  Output: {item['output']}")
 
-# ChatML 형식
+# ChatML format
 chatml_example = """
 <|system|>
 You are a helpful assistant.
 <|user|>
-What is the capital of Korea?
+What is the capital of South Korea?
 <|assistant|>
 The capital of South Korea is Seoul.
 """
 
-print(f"\nChatML 형식 예시:{chatml_example}")
+print(f"\nChatML format example:{chatml_example}")
 
 
 # ============================================
-# 6. Constitutional AI 시뮬레이션
+# 6. Constitutional AI Simulation
 # ============================================
-print("\n[6] Constitutional AI 시뮬레이션")
+print("\n[6] Constitutional AI Simulation")
 print("-" * 40)
 
 class ConstitutionalAI:
-    """Constitutional AI 시뮬레이션"""
+    """Constitutional AI simulation"""
 
     def __init__(self):
         self.constitution = [
-            "응답은 도움이 되어야 합니다.",
-            "응답은 해로운 내용을 포함하지 않아야 합니다.",
-            "응답은 정직하고 사실에 기반해야 합니다.",
-            "차별적이거나 편견 있는 내용을 포함하지 않아야 합니다."
+            "Responses should be helpful.",
+            "Responses should not contain harmful content.",
+            "Responses should be honest and fact-based.",
+            "Responses should not contain discriminatory or biased content."
         ]
 
     def check_principles(self, response):
-        """원칙 위반 확인 (간단한 규칙 기반)"""
+        """Check for principle violations (simple rule-based)"""
         violations = []
 
-        # 해로운 키워드 체크
-        harmful_words = ["폭력", "위험한", "불법"]
-        if any(word in response for word in harmful_words):
-            violations.append("해로운 내용 포함 가능")
+        # Harmful keyword check
+        harmful_words = ["violence", "dangerous", "illegal"]
+        if any(word in response.lower() for word in harmful_words):
+            violations.append("Potentially harmful content")
 
-        # 너무 짧은 응답
+        # Too short response
         if len(response) < 20:
-            violations.append("충분히 도움이 되지 않음")
+            violations.append("Not sufficiently helpful")
 
         return violations
 
     def critique(self, prompt, response):
-        """응답 비평"""
+        """Critique the response"""
         violations = self.check_principles(response)
 
-        critique = f"프롬프트: {prompt}\n응답: {response}\n\n원칙 검토:\n"
+        critique = f"Prompt: {prompt}\nResponse: {response}\n\nPrinciple review:\n"
         for i, principle in enumerate(self.constitution, 1):
             critique += f"  {i}. {principle}\n"
 
         if violations:
-            critique += f"\n위반 사항:\n"
+            critique += f"\nViolations:\n"
             for v in violations:
                 critique += f"  - {v}\n"
         else:
-            critique += "\n모든 원칙 준수"
+            critique += "\nAll principles satisfied"
 
         return critique, violations
 
     def revise(self, response, violations):
-        """응답 수정 (시뮬레이션)"""
+        """Revise response (simulation)"""
         revised = response
-        if "충분히 도움이 되지 않음" in violations:
-            revised = response + " 추가적인 설명이 필요하시면 말씀해 주세요."
+        if "Not sufficiently helpful" in violations:
+            revised = response + " Please let me know if you need additional explanation."
         return revised
 
 
-# 테스트
+# Test
 cai = ConstitutionalAI()
 
 test_responses = [
-    ("파이썬 배우는 방법?", "책을 읽으세요."),
-    ("운동의 효과?", "운동은 건강에 매우 좋습니다. 심혈관 기능 개선, 체중 관리, 정신 건강 향상 등 다양한 이점이 있습니다."),
+    ("How to learn Python?", "Read a book."),
+    ("Effects of exercise?", "Exercise is very good for health. It has various benefits including cardiovascular function improvement, weight management, and mental health enhancement."),
 ]
 
-print("Constitutional AI 검토:")
+print("Constitutional AI review:")
 for prompt, response in test_responses:
     critique, violations = cai.critique(prompt, response)
     print(f"\n{'-'*30}")
     print(critique)
     if violations:
         revised = cai.revise(response, violations)
-        print(f"수정된 응답: {revised}")
+        print(f"Revised response: {revised}")
 
 
 # ============================================
-# 7. TRL 라이브러리 사용법 (코드만)
+# 7. TRL Library Usage (code only)
 # ============================================
-print("\n[7] TRL 라이브러리 코드 예시")
+print("\n[7] TRL Library Code Examples")
 print("-" * 40)
 
 trl_code = '''
@@ -336,7 +340,7 @@ trainer.train()
 from trl import DPOTrainer, DPOConfig
 
 dpo_config = DPOConfig(
-    beta=0.1,  # 온도 파라미터
+    beta=0.1,  # Temperature parameter
     loss_type="sigmoid",
     max_length=512,
 )
@@ -369,7 +373,7 @@ ppo_trainer = PPOTrainer(
     tokenizer=tokenizer,
 )
 
-# 학습 루프
+# Training loop
 for batch in dataloader:
     query_tensors = tokenize(batch["prompt"])
     response_tensors = ppo_trainer.generate(query_tensors)
@@ -380,22 +384,22 @@ print(trl_code)
 
 
 # ============================================
-# 8. Reward Model 학습 (코드만)
+# 8. Reward Model Training (code only)
 # ============================================
-print("\n[8] Reward Model 학습 코드")
+print("\n[8] Reward Model Training Code")
 print("-" * 40)
 
 reward_code = '''
 from transformers import AutoModelForSequenceClassification, TrainingArguments
 from trl import RewardTrainer
 
-# Reward Model (분류 헤드 추가)
+# Reward Model (with classification head)
 reward_model = AutoModelForSequenceClassification.from_pretrained(
     "meta-llama/Llama-2-7b-hf",
-    num_labels=1  # 스칼라 출력
+    num_labels=1  # Scalar output
 )
 
-# 학습
+# Training
 training_args = TrainingArguments(
     output_dir="./reward_model",
     num_train_epochs=1,
@@ -411,7 +415,7 @@ trainer = RewardTrainer(
 )
 trainer.train()
 
-# 보상 점수 계산
+# Compute reward score
 def get_reward(prompt, response):
     text = f"### Prompt: {prompt}\\n### Response: {response}"
     inputs = tokenizer(text, return_tensors="pt")
@@ -423,38 +427,38 @@ print(reward_code)
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("RLHF 정리")
+print("RLHF Summary")
 print("=" * 60)
 
 summary = """
-RLHF 파이프라인:
+RLHF Pipeline:
 
 1. SFT (Supervised Fine-Tuning)
-   - 고품질 데이터로 기본 능력 학습
-   - 형식: instruction, input, output
+   - Learn basic capabilities from high-quality data
+   - Format: instruction, input, output
 
-2. Reward Model 학습
-   - 선호도 데이터로 보상 함수 학습
-   - 형식: prompt, chosen, rejected
+2. Reward Model Training
+   - Learn reward function from preference data
+   - Format: prompt, chosen, rejected
 
-3. PPO (강화학습)
-   - Reward Model로 정책 최적화
-   - KL 페널티로 기준 모델과의 거리 제한
+3. PPO (Reinforcement Learning)
+   - Optimize policy using Reward Model
+   - KL penalty limits distance from reference model
 
 4. DPO (Direct Preference Optimization)
-   - Reward Model 없이 직접 선호도 학습
-   - L = -log(sigmoid(β * (log π(y_w) - log π(y_l))))
+   - Direct preference learning without Reward Model
+   - L = -log(sigmoid(beta * (log pi(y_w) - log pi(y_l))))
 
 5. Constitutional AI
-   - 원칙 기반 자기 비평 및 수정
-   - 안전성 향상
+   - Principle-based self-critique and revision
+   - Safety improvement
 
-정렬 방법 선택:
-- 간단한 정렬: DPO (추천)
-- 복잡한 정렬: RLHF (PPO)
-- 안전성 중요: Constitutional AI
+Alignment Method Selection:
+- Simple alignment: DPO (recommended)
+- Complex alignment: RLHF (PPO)
+- Safety-critical: Constitutional AI
 """
 print(summary)

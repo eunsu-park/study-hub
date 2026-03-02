@@ -1,8 +1,8 @@
 """
-룽게-쿠타 방법 (Runge-Kutta Methods)
+Runge-Kutta Methods
 Runge-Kutta Methods for ODEs
 
-고차 정확도를 가진 ODE 수치 해법입니다.
+Higher-order accurate numerical methods for solving ODEs.
 """
 
 import numpy as np
@@ -11,7 +11,7 @@ from typing import Callable, Tuple, List, Union
 
 
 # =============================================================================
-# 1. RK2 (2차 룽게-쿠타)
+# 1. RK2 (2nd-order Runge-Kutta)
 # =============================================================================
 def rk2_midpoint(
     f: Callable[[float, float], float],
@@ -20,13 +20,13 @@ def rk2_midpoint(
     h: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    RK2 중점 방법 (Midpoint Method)
+    RK2 Midpoint Method
 
     k1 = f(t_n, y_n)
     k2 = f(t_n + h/2, y_n + h*k1/2)
     y_{n+1} = y_n + h*k2
 
-    오차: O(h²)
+    Error: O(h^2)
     """
     t0, tf = t_span
     n_steps = int((tf - t0) / h)
@@ -50,13 +50,13 @@ def rk2_heun(
     h: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    RK2 Heun 방법 (수정 오일러와 동일)
+    RK2 Heun's Method (same as modified Euler)
 
     k1 = f(t_n, y_n)
     k2 = f(t_n + h, y_n + h*k1)
     y_{n+1} = y_n + h*(k1 + k2)/2
 
-    오차: O(h²)
+    Error: O(h^2)
     """
     t0, tf = t_span
     n_steps = int((tf - t0) / h)
@@ -74,7 +74,7 @@ def rk2_heun(
 
 
 # =============================================================================
-# 2. RK4 (4차 룽게-쿠타) - 가장 널리 사용됨
+# 2. RK4 (4th-order Runge-Kutta) - Most widely used
 # =============================================================================
 def rk4(
     f: Callable[[float, float], float],
@@ -83,7 +83,7 @@ def rk4(
     h: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    고전적 RK4 (Classical 4th-order Runge-Kutta)
+    Classical RK4 (Classical 4th-order Runge-Kutta)
 
     k1 = f(t_n, y_n)
     k2 = f(t_n + h/2, y_n + h*k1/2)
@@ -91,8 +91,8 @@ def rk4(
     k4 = f(t_n + h, y_n + h*k3)
     y_{n+1} = y_n + h*(k1 + 2*k2 + 2*k3 + k4)/6
 
-    오차: O(h⁴)
-    가장 널리 사용되는 방법
+    Error: O(h^4)
+    The most widely used method
     """
     t0, tf = t_span
     n_steps = int((tf - t0) / h)
@@ -112,7 +112,7 @@ def rk4(
 
 
 # =============================================================================
-# 3. 벡터 RK4 (연립 ODE)
+# 3. Vector RK4 (System of ODEs)
 # =============================================================================
 def rk4_system(
     f: Callable[[float, np.ndarray], np.ndarray],
@@ -121,7 +121,7 @@ def rk4_system(
     h: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    연립 ODE를 위한 RK4
+    RK4 for systems of ODEs
 
     dy/dt = f(t, y), y = [y1, y2, ..., yn]
     """
@@ -144,7 +144,7 @@ def rk4_system(
 
 
 # =============================================================================
-# 4. 적응적 RK45 (Runge-Kutta-Fehlberg)
+# 4. Adaptive RK45 (Runge-Kutta-Fehlberg)
 # =============================================================================
 def rkf45(
     f: Callable[[float, float], float],
@@ -156,12 +156,12 @@ def rkf45(
     h_max: float = 1.0
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    적응적 RK4(5) (Runge-Kutta-Fehlberg)
+    Adaptive RK4(5) (Runge-Kutta-Fehlberg)
 
-    4차와 5차 근사를 동시에 계산하여 오차 추정
-    오차에 따라 스텝 크기 자동 조절
+    Simultaneously computes 4th and 5th order approximations for error estimation
+    Automatically adjusts step size based on error
     """
-    # RK45 계수 (Fehlberg)
+    # RK45 coefficients (Fehlberg)
     c = [0, 1/4, 3/8, 12/13, 1, 1/2]
     a = [
         [],
@@ -186,54 +186,54 @@ def rkf45(
         if t + h > tf:
             h = tf - t
 
-        # 6개의 k 계산
+        # Compute 6 k values
         k = [0] * 6
         k[0] = f(t, y)
         for j in range(1, 6):
             y_temp = y + h * sum(a[j][m] * k[m] for m in range(j))
             k[j] = f(t + c[j] * h, y_temp)
 
-        # 4차와 5차 근사
+        # 4th and 5th order approximations
         y4 = y + h * sum(b4[j] * k[j] for j in range(6))
         y5 = y + h * sum(b5[j] * k[j] for j in range(6))
 
-        # 오차 추정
+        # Error estimate
         error = abs(y5 - y4)
 
         if error < 1e-15:
             error = 1e-15
 
-        # 스텝 크기 조절
+        # Step size adjustment
         h_new = 0.9 * h * (tol / error) ** 0.2
 
         if error <= tol:
-            # 스텝 성공
+            # Step accepted
             t = t + h
             y = y5
             t_list.append(t)
             y_list.append(y)
             h = min(h_max, max(h_min, h_new))
         else:
-            # 스텝 실패, 재시도
+            # Step rejected, retry
             h = max(h_min, h_new)
 
     return np.array(t_list), np.array(y_list)
 
 
 # =============================================================================
-# 5. RK4 vs Euler 비교
+# 5. RK4 vs Euler Comparison
 # =============================================================================
 def compare_methods():
-    """다양한 방법 비교"""
-    # dy/dt = y, y(0) = 1  →  y = e^t
+    """Compare various methods"""
+    # dy/dt = y, y(0) = 1  ->  y = e^t
     f = lambda t, y: y
     y0 = 1
     t_span = (0, 2)
     exact = lambda t: np.exp(t)
 
-    print("\nRK 방법 비교 (dy/dt = y, t ∈ [0, 2])")
+    print("\nRK Method Comparison (dy/dt = y, t in [0, 2])")
     print("-" * 70)
-    print(f"{'h':>10} | {'오일러':>12} | {'RK2':>12} | {'RK4':>12}")
+    print(f"{'h':>10} | {'Euler':>12} | {'RK2':>12} | {'RK4':>12}")
     print("-" * 70)
 
     from os.path import dirname, abspath
@@ -241,7 +241,7 @@ def compare_methods():
     sys.path.insert(0, dirname(abspath(__file__)))
 
     try:
-        # 03_ode_euler.py는 숫자로 시작하여 직접 import 불가
+        # 03_ode_euler.py starts with a digit so it cannot be imported directly
         from importlib import import_module
         euler_module = import_module("03_ode_euler")
         euler_forward = euler_module.euler_forward
@@ -271,19 +271,19 @@ def compare_methods():
 
 
 # =============================================================================
-# 시각화
+# Visualization
 # =============================================================================
 def plot_rk_comparison():
-    """RK 방법 비교 시각화"""
+    """RK method comparison visualization"""
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    # 예제 1: 지수 성장
+    # Example 1: Exponential growth
     f = lambda t, y: y
     exact = lambda t: np.exp(t)
     t_exact = np.linspace(0, 2, 200)
 
     ax = axes[0, 0]
-    ax.plot(t_exact, exact(t_exact), 'k-', linewidth=2, label='정확해')
+    ax.plot(t_exact, exact(t_exact), 'k-', linewidth=2, label='Exact')
     for h in [0.5, 0.25, 0.1]:
         t, y = rk4(f, 1, (0, 2), h)
         ax.plot(t, y, 'o-', markersize=4, label=f'RK4 h={h}')
@@ -291,14 +291,14 @@ def plot_rk_comparison():
     ax.legend()
     ax.grid(True)
 
-    # 예제 2: 조화 진동자 (에너지 보존)
+    # Example 2: Harmonic oscillator (energy conservation)
     def harmonic(t, state):
         y, v = state
         return np.array([v, -y])
 
     ax = axes[0, 1]
     t_exact = np.linspace(0, 20, 500)
-    ax.plot(t_exact, np.cos(t_exact), 'k-', linewidth=2, label='정확해')
+    ax.plot(t_exact, np.cos(t_exact), 'k-', linewidth=2, label='Exact')
 
     t, sol = rk4_system(harmonic, np.array([1, 0]), (0, 20), 0.1)
     ax.plot(t, sol[:, 0], 'r-', label='RK4 h=0.1')
@@ -306,28 +306,28 @@ def plot_rk_comparison():
     t, sol = rk4_system(harmonic, np.array([1, 0]), (0, 20), 0.01)
     ax.plot(t, sol[:, 0], 'b--', label='RK4 h=0.01')
 
-    ax.set_title("조화 진동자: y'' = -y")
+    ax.set_title("Harmonic Oscillator: y'' = -y")
     ax.legend()
     ax.grid(True)
 
-    # 예제 3: 적응적 vs 고정 스텝
+    # Example 3: Adaptive vs fixed step
     f_stiff = lambda t, y: -50 * (y - np.cos(t))
 
     ax = axes[1, 0]
     t_ex = np.linspace(0, 1, 500)
-    y_ex = np.cos(t_ex) + (0 - 1) * np.exp(-50 * t_ex)  # 근사 해석해
+    y_ex = np.cos(t_ex) + (0 - 1) * np.exp(-50 * t_ex)  # Approximate analytical solution
 
     t1, y1 = rk4(f_stiff, 0, (0, 1), 0.01)
     t2, y2 = rkf45(f_stiff, 0, (0, 1), tol=1e-6)
 
-    ax.plot(t_ex, y_ex, 'k-', linewidth=2, label='참조')
-    ax.plot(t1, y1, 'r-', label=f'RK4 고정 ({len(t1)} pts)')
-    ax.plot(t2, y2, 'b.', label=f'RKF45 적응 ({len(t2)} pts)')
-    ax.set_title("적응적 스텝 크기")
+    ax.plot(t_ex, y_ex, 'k-', linewidth=2, label='Reference')
+    ax.plot(t1, y1, 'r-', label=f'RK4 fixed ({len(t1)} pts)')
+    ax.plot(t2, y2, 'b.', label=f'RKF45 adaptive ({len(t2)} pts)')
+    ax.set_title("Adaptive Step Size")
     ax.legend()
     ax.grid(True)
 
-    # 예제 4: Lotka-Volterra
+    # Example 4: Lotka-Volterra
     alpha, beta, gamma, delta = 1.5, 1.0, 3.0, 1.0
 
     def lotka_volterra(t, state):
@@ -339,30 +339,30 @@ def plot_rk_comparison():
     ax = axes[1, 1]
     t, sol = rk4_system(lotka_volterra, np.array([10, 5]), (0, 15), 0.01)
 
-    ax.plot(t, sol[:, 0], 'b-', label='피식자')
-    ax.plot(t, sol[:, 1], 'r-', label='포식자')
-    ax.set_title("Lotka-Volterra 모델")
-    ax.set_xlabel('시간')
-    ax.set_ylabel('개체수')
+    ax.plot(t, sol[:, 0], 'b-', label='Prey')
+    ax.plot(t, sol[:, 1], 'r-', label='Predator')
+    ax.set_title("Lotka-Volterra Model")
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Population')
     ax.legend()
     ax.grid(True)
 
     plt.tight_layout()
     plt.savefig('/opt/projects/01_Personal/03_Study/Numerical_Simulation/examples/runge_kutta.png', dpi=150)
     plt.close()
-    print("그래프 저장: runge_kutta.png")
+    print("Graph saved: runge_kutta.png")
 
 
 # =============================================================================
-# 테스트
+# Test
 # =============================================================================
 def main():
     print("=" * 60)
-    print("룽게-쿠타 방법 (Runge-Kutta Methods)")
+    print("Runge-Kutta Methods")
     print("=" * 60)
 
-    # 예제 1: 기본 테스트
-    print("\n[예제 1] dy/dt = y, y(0) = 1, t ∈ [0, 1]")
+    # Example 1: Basic test
+    print("\n[Example 1] dy/dt = y, y(0) = 1, t in [0, 1]")
     print("-" * 40)
 
     f = lambda t, y: y
@@ -370,11 +370,11 @@ def main():
 
     t, y = rk4(f, 1, (0, 1), 0.1)
     print(f"RK4 (h=0.1): y(1) = {y[-1]:.10f}")
-    print(f"정확값:       e   = {exact(1):.10f}")
-    print(f"오차:             = {abs(y[-1] - exact(1)):.2e}")
+    print(f"Exact value: e   = {exact(1):.10f}")
+    print(f"Error:           = {abs(y[-1] - exact(1)):.2e}")
 
-    # 예제 2: Van der Pol 진동자
-    print("\n[예제 2] Van der Pol 진동자")
+    # Example 2: Van der Pol oscillator
+    print("\n[Example 2] Van der Pol Oscillator")
     print("-" * 40)
 
     mu = 1.0
@@ -384,11 +384,11 @@ def main():
         return np.array([v, mu * (1 - x**2) * v - x])
 
     t, sol = rk4_system(van_der_pol, np.array([2, 0]), (0, 20), 0.01)
-    print(f"초기: x=2, v=0")
+    print(f"Initial: x=2, v=0")
     print(f"t=20: x={sol[-1, 0]:.4f}, v={sol[-1, 1]:.4f}")
 
-    # 예제 3: Lorenz 시스템 (카오스)
-    print("\n[예제 3] Lorenz 시스템 (카오스)")
+    # Example 3: Lorenz system (chaos)
+    print("\n[Example 3] Lorenz System (Chaos)")
     print("-" * 40)
 
     sigma, rho, beta = 10, 28, 8/3
@@ -402,12 +402,12 @@ def main():
         ])
 
     t, sol = rk4_system(lorenz, np.array([1, 1, 1]), (0, 50), 0.01)
-    print(f"초기: (1, 1, 1)")
+    print(f"Initial: (1, 1, 1)")
     print(f"t=50: ({sol[-1, 0]:.4f}, {sol[-1, 1]:.4f}, {sol[-1, 2]:.4f})")
-    print("(카오스 시스템 - 초기값 민감성)")
+    print("(Chaotic system - sensitive to initial conditions)")
 
-    # 예제 4: 적응적 RK45
-    print("\n[예제 4] 적응적 RK45")
+    # Example 4: Adaptive RK45
+    print("\n[Example 4] Adaptive RK45")
     print("-" * 40)
 
     f_test = lambda t, y: -2 * t * y
@@ -415,44 +415,44 @@ def main():
 
     t, y = rkf45(f_test, 1, (0, 3), tol=1e-8)
     print(f"dy/dt = -2ty, y(0) = 1")
-    print(f"스텝 수: {len(t)}")
+    print(f"Number of steps: {len(t)}")
     print(f"y(3) = {y[-1]:.10f}")
-    print(f"정확: {exact_test(3):.10f}")
-    print(f"오차: {abs(y[-1] - exact_test(3)):.2e}")
+    print(f"Exact: {exact_test(3):.10f}")
+    print(f"Error: {abs(y[-1] - exact_test(3)):.2e}")
 
-    # 방법 비교
+    # Method comparison
     compare_methods()
 
-    # 시각화
+    # Visualization
     try:
         plot_rk_comparison()
     except Exception as e:
-        print(f"그래프 생성 실패: {e}")
+        print(f"Graph generation failed: {e}")
 
     print("\n" + "=" * 60)
-    print("룽게-쿠타 방법 정리")
+    print("Runge-Kutta Methods Summary")
     print("=" * 60)
     print("""
-    | 방법      | 차수 | 함수 호출/스텝 | 특징                    |
-    |----------|------|---------------|-------------------------|
-    | RK2      | 2    | 2             | 수정 오일러와 동일        |
-    | RK4      | 4    | 4             | 가장 널리 사용, 정확/효율적|
-    | RK45     | 4(5) | 6             | 적응적, 오차 추정         |
-    | RK8      | 8    | 13            | 매우 높은 정확도          |
+    | Method   | Order | Fn calls/step | Characteristics                |
+    |----------|-------|---------------|--------------------------------|
+    | RK2      | 2     | 2             | Same as modified Euler         |
+    | RK4      | 4     | 4             | Most widely used, accurate/efficient|
+    | RK45     | 4(5)  | 6             | Adaptive, error estimation     |
+    | RK8      | 8     | 13            | Very high accuracy             |
 
-    RK4 부틀러 테이블:
-    ┌─────┬─────┬─────┬─────┬─────┐
-    │  0  │     │     │     │     │
-    │ 1/2 │ 1/2 │     │     │     │
-    │ 1/2 │  0  │ 1/2 │     │     │
-    │  1  │  0  │  0  │  1  │     │
-    ├─────┼─────┼─────┼─────┼─────┤
-    │     │ 1/6 │ 1/3 │ 1/3 │ 1/6 │
-    └─────┴─────┴─────┴─────┴─────┘
+    RK4 Butcher Tableau:
+    +-----+-----+-----+-----+-----+
+    |  0  |     |     |     |     |
+    | 1/2 | 1/2 |     |     |     |
+    | 1/2 |  0  | 1/2 |     |     |
+    |  1  |  0  |  0  |  1  |     |
+    +-----+-----+-----+-----+-----+
+    |     | 1/6 | 1/3 | 1/3 | 1/6 |
+    +-----+-----+-----+-----+-----+
 
-    실무:
-    - scipy.integrate.solve_ivp: 다양한 RK 방법 지원
-    - scipy.integrate.odeint: LSODA (적응적 다단계)
+    Production use:
+    - scipy.integrate.solve_ivp: Various RK methods supported
+    - scipy.integrate.odeint: LSODA (adaptive multistep)
     """)
 
 

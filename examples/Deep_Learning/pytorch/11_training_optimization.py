@@ -1,7 +1,7 @@
 """
-11. 학습 최적화
+11. Training Optimization
 
-하이퍼파라미터 튜닝, Mixed Precision, Gradient Accumulation 등을 구현합니다.
+Implements hyperparameter tuning, Mixed Precision, Gradient Accumulation, and more.
 """
 
 import torch
@@ -13,21 +13,21 @@ import math
 import time
 
 print("=" * 60)
-print("PyTorch 학습 최적화")
+print("PyTorch Training Optimization")
 print("=" * 60)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"사용 장치: {device}")
+print(f"Device: {device}")
 
 
 # ============================================
-# 1. 재현성 설정
+# 1. Reproducibility Settings
 # ============================================
-print("\n[1] 재현성 설정")
+print("\n[1] Reproducibility Settings")
 print("-" * 40)
 
 def set_seed(seed=42):
-    """재현성을 위한 시드 설정"""
+    """Set seed for reproducibility"""
     import random
     random.seed(seed)
     np.random.seed(seed)
@@ -38,13 +38,13 @@ def set_seed(seed=42):
         torch.backends.cudnn.benchmark = False
 
 set_seed(42)
-print("시드 설정 완료: 42")
+print("Seed set: 42")
 
 
 # ============================================
-# 2. 샘플 모델 및 데이터
+# 2. Sample Model and Data
 # ============================================
-print("\n[2] 샘플 모델 및 데이터")
+print("\n[2] Sample Model and Data")
 print("-" * 40)
 
 class SimpleNet(nn.Module):
@@ -62,7 +62,7 @@ class SimpleNet(nn.Module):
         x = self.fc2(x)
         return x
 
-# 더미 데이터
+# Dummy data
 X_train = torch.randn(1000, 1, 28, 28)
 y_train = torch.randint(0, 10, (1000,))
 X_val = torch.randn(200, 1, 28, 28)
@@ -71,18 +71,18 @@ y_val = torch.randint(0, 10, (200,))
 train_dataset = TensorDataset(X_train, y_train)
 val_dataset = TensorDataset(X_val, y_val)
 
-print(f"훈련 데이터: {len(train_dataset)}")
-print(f"검증 데이터: {len(val_dataset)}")
+print(f"Training data: {len(train_dataset)}")
+print(f"Validation data: {len(val_dataset)}")
 
 
 # ============================================
-# 3. 학습률 스케줄러
+# 3. Learning Rate Scheduler
 # ============================================
-print("\n[3] 학습률 스케줄러")
+print("\n[3] Learning Rate Scheduler")
 print("-" * 40)
 
 def get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps):
-    """Warmup + Cosine Decay 스케줄러"""
+    """Warmup + Cosine Decay scheduler"""
     def lr_lambda(current_step):
         if current_step < warmup_steps:
             return float(current_step) / float(max(1, warmup_steps))
@@ -90,7 +90,7 @@ def get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps):
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
-# 테스트
+# Test
 model = SimpleNet()
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps=100, total_steps=1000)
@@ -100,14 +100,14 @@ for step in range(1000):
     lrs.append(optimizer.param_groups[0]['lr'])
     scheduler.step()
 
-print(f"Warmup 구간 (0-100): {lrs[0]:.6f} → {lrs[99]:.6f}")
-print(f"Decay 구간 (100-1000): {lrs[100]:.6f} → {lrs[-1]:.6f}")
+print(f"Warmup phase (0-100): {lrs[0]:.6f} -> {lrs[99]:.6f}")
+print(f"Decay phase (100-1000): {lrs[100]:.6f} -> {lrs[-1]:.6f}")
 
 
 # ============================================
-# 4. 조기 종료
+# 4. Early Stopping
 # ============================================
-print("\n[4] 조기 종료")
+print("\n[4] Early Stopping")
 print("-" * 40)
 
 class EarlyStopping:
@@ -138,11 +138,11 @@ class EarlyStopping:
     def _save_checkpoint(self, model):
         self.best_weights = {k: v.cpu().clone() for k, v in model.state_dict().items()}
 
-# 테스트
+# Test
 early_stopping = EarlyStopping(patience=3)
 losses = [1.0, 0.9, 0.8, 0.85, 0.86, 0.87, 0.88]
 
-print("조기 종료 시뮬레이션:")
+print("Early stopping simulation:")
 for epoch, loss in enumerate(losses):
     early_stopping(loss, model)
     status = "STOP" if early_stopping.early_stop else f"counter={early_stopping.counter}"
@@ -158,7 +158,7 @@ print("\n[5] Gradient Accumulation")
 print("-" * 40)
 
 def train_with_accumulation(model, train_loader, optimizer, accumulation_steps=4):
-    """Gradient Accumulation으로 학습"""
+    """Train with Gradient Accumulation"""
     model.train()
     optimizer.zero_grad()
     total_loss = 0
@@ -168,7 +168,7 @@ def train_with_accumulation(model, train_loader, optimizer, accumulation_steps=4
 
         output = model(data)
         loss = F.cross_entropy(output, target)
-        loss = loss / accumulation_steps  # 스케일링
+        loss = loss / accumulation_steps  # Scaling
         loss.backward()
 
         if (i + 1) % accumulation_steps == 0:
@@ -179,14 +179,14 @@ def train_with_accumulation(model, train_loader, optimizer, accumulation_steps=4
 
     return total_loss / len(train_loader)
 
-# 테스트
+# Test
 model = SimpleNet().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
 loss = train_with_accumulation(model, train_loader, optimizer, accumulation_steps=4)
-print(f"Accumulation 학습 손실: {loss:.4f}")
-print(f"효과적 배치 크기: 32 × 4 = 128")
+print(f"Accumulation training loss: {loss:.4f}")
+print(f"Effective batch size: 32 x 4 = 128")
 
 
 # ============================================
@@ -199,7 +199,7 @@ if torch.cuda.is_available():
     from torch.cuda.amp import autocast, GradScaler
 
     def train_with_amp(model, train_loader, optimizer, scaler):
-        """Mixed Precision 학습"""
+        """Mixed Precision training"""
         model.train()
         total_loss = 0
 
@@ -224,9 +224,9 @@ if torch.cuda.is_available():
     scaler = GradScaler()
 
     loss = train_with_amp(model, train_loader, optimizer, scaler)
-    print(f"AMP 학습 손실: {loss:.4f}")
+    print(f"AMP training loss: {loss:.4f}")
 else:
-    print("CUDA 미사용 - AMP 스킵")
+    print("CUDA not available - skipping AMP")
 
 
 # ============================================
@@ -236,7 +236,7 @@ print("\n[7] Gradient Clipping")
 print("-" * 40)
 
 def train_with_clipping(model, train_loader, optimizer, max_norm=1.0):
-    """Gradient Clipping으로 학습"""
+    """Train with Gradient Clipping"""
     model.train()
     total_loss = 0
     grad_norms = []
@@ -249,7 +249,7 @@ def train_with_clipping(model, train_loader, optimizer, max_norm=1.0):
         loss = F.cross_entropy(output, target)
         loss.backward()
 
-        # Gradient norm 기록 (클리핑 전)
+        # Record gradient norm (before clipping)
         total_norm = 0
         for p in model.parameters():
             if p.grad is not None:
@@ -268,15 +268,15 @@ model = SimpleNet().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 loss, norms = train_with_clipping(model, train_loader, optimizer, max_norm=1.0)
-print(f"Clipping 학습 손실: {loss:.4f}")
-print(f"평균 기울기 norm: {np.mean(norms):.4f}")
-print(f"최대 기울기 norm: {np.max(norms):.4f}")
+print(f"Clipping training loss: {loss:.4f}")
+print(f"Mean gradient norm: {np.mean(norms):.4f}")
+print(f"Max gradient norm: {np.max(norms):.4f}")
 
 
 # ============================================
-# 8. 하이퍼파라미터 탐색 (Random Search)
+# 8. Hyperparameter Search (Random Search)
 # ============================================
-print("\n[8] 하이퍼파라미터 탐색")
+print("\n[8] Hyperparameter Search")
 print("-" * 40)
 
 def evaluate(model, val_loader):
@@ -293,7 +293,7 @@ def evaluate(model, val_loader):
     return correct / total
 
 def train_with_config(lr, batch_size, dropout, epochs=5):
-    """설정으로 학습"""
+    """Train with given configuration"""
     set_seed(42)
 
     model = SimpleNet(dropout=dropout).to(device)
@@ -315,7 +315,7 @@ def train_with_config(lr, batch_size, dropout, epochs=5):
 
 # Random Search
 import random
-print("Random Search 실행 중...")
+print("Running Random Search...")
 
 best_acc = 0
 best_config = None
@@ -333,53 +333,53 @@ for trial in range(5):
         best_acc = acc
         best_config = (lr, batch_size, dropout)
 
-    print(f"  Trial {trial+1}: lr={lr:.6f}, bs={batch_size}, dropout={dropout:.2f} → acc={acc:.4f}")
+    print(f"  Trial {trial+1}: lr={lr:.6f}, bs={batch_size}, dropout={dropout:.2f} -> acc={acc:.4f}")
 
-print(f"\n최적 설정: lr={best_config[0]:.6f}, bs={best_config[1]}, dropout={best_config[2]:.2f}")
-print(f"최고 정확도: {best_acc:.4f}")
+print(f"\nBest config: lr={best_config[0]:.6f}, bs={best_config[1]}, dropout={best_config[2]:.2f}")
+print(f"Best accuracy: {best_acc:.4f}")
 
 
 # ============================================
-# 9. 전체 학습 파이프라인
+# 9. Full Training Pipeline
 # ============================================
-print("\n[9] 전체 학습 파이프라인")
+print("\n[9] Full Training Pipeline")
 print("-" * 40)
 
 def full_training_pipeline(config):
-    """최적화 기법이 적용된 전체 학습 파이프라인"""
+    """Full training pipeline with optimization techniques"""
     set_seed(config['seed'])
 
-    # 모델
+    # Model
     model = SimpleNet(dropout=config['dropout']).to(device)
 
-    # 옵티마이저
+    # Optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config['lr'],
         weight_decay=config['weight_decay']
     )
 
-    # 데이터 로더
+    # Data loaders
     train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=config['batch_size'])
 
-    # 스케줄러
+    # Scheduler
     total_steps = len(train_loader) * config['epochs']
     warmup_steps = int(total_steps * config['warmup_ratio'])
     scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
 
-    # 조기 종료
+    # Early stopping
     early_stopping = EarlyStopping(patience=config['patience'])
 
-    # AMP (CUDA인 경우)
+    # AMP (if CUDA)
     use_amp = torch.cuda.is_available()
     scaler = torch.cuda.amp.GradScaler() if use_amp else None
 
-    # 학습
+    # Training
     history = {'train_loss': [], 'val_loss': [], 'val_acc': [], 'lr': []}
 
     for epoch in range(config['epochs']):
-        # 훈련
+        # Train
         model.train()
         train_loss = 0
         for data, target in train_loader:
@@ -407,7 +407,7 @@ def full_training_pipeline(config):
 
         train_loss /= len(train_loader)
 
-        # 검증
+        # Validate
         model.eval()
         val_loss = 0
         correct = 0
@@ -424,16 +424,16 @@ def full_training_pipeline(config):
         val_loss /= len(val_loader)
         val_acc = correct / total
 
-        # 기록
+        # Record
         history['train_loss'].append(train_loss)
         history['val_loss'].append(val_loss)
         history['val_acc'].append(val_acc)
         history['lr'].append(optimizer.param_groups[0]['lr'])
 
-        # 조기 종료 체크
+        # Early stopping check
         early_stopping(val_loss, model)
         if early_stopping.early_stop:
-            print(f"  조기 종료 at epoch {epoch+1}")
+            print(f"  Early stopping at epoch {epoch+1}")
             break
 
         if (epoch + 1) % 5 == 0:
@@ -441,7 +441,7 @@ def full_training_pipeline(config):
 
     return model, history
 
-# 설정
+# Configuration
 config = {
     'seed': 42,
     'lr': 1e-3,
@@ -454,43 +454,43 @@ config = {
     'max_grad_norm': 1.0
 }
 
-print("전체 파이프라인 실행 중...")
+print("Running full pipeline...")
 model, history = full_training_pipeline(config)
-print(f"\n최종 검증 정확도: {history['val_acc'][-1]:.4f}")
+print(f"\nFinal validation accuracy: {history['val_acc'][-1]:.4f}")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("학습 최적화 정리")
+print("Training Optimization Summary")
 print("=" * 60)
 
 summary = """
-핵심 기법:
+Key Techniques:
 
-1. 학습률 스케줄링
-   - Warmup: 초기 안정화
-   - Cosine Decay: 점진적 감소
-   - OneCycleLR: 배치마다 조정
+1. Learning Rate Scheduling
+   - Warmup: Initial stabilization
+   - Cosine Decay: Gradual reduction
+   - OneCycleLR: Per-batch adjustment
 
 2. Mixed Precision (AMP)
-   - 메모리 절약, 속도 향상
+   - Saves memory, improves speed
    - autocast() + GradScaler()
 
 3. Gradient Accumulation
-   - 작은 배치 → 큰 배치 효과
+   - Small batch -> large batch effect
    - loss /= accumulation_steps
 
 4. Gradient Clipping
-   - 기울기 폭발 방지
+   - Prevents gradient explosion
    - clip_grad_norm_(params, max_norm)
 
-5. 조기 종료
-   - 과적합 방지
-   - 최적 가중치 복원
+5. Early Stopping
+   - Prevents overfitting
+   - Restores best weights
 
-권장 설정:
+Recommended settings:
     optimizer = AdamW(lr=1e-4, weight_decay=0.01)
     scheduler = OneCycleLR(max_lr=1e-3)
     scaler = GradScaler()

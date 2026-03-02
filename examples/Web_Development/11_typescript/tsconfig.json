@@ -1,44 +1,44 @@
 {
   "compilerOptions": {
-    /* 기본 옵션 */
-    "target": "ES2020",                    /* 출력 JavaScript 버전 */
-    "module": "commonjs",                  /* 모듈 시스템 */
-    "lib": ["ES2020", "DOM"],             /* 포함할 라이브러리 */
-    "outDir": "./dist",                    /* 출력 디렉토리 */
-    "rootDir": "./",                       /* 소스 루트 디렉토리 */
+    /* Basic Options */
+    "target": "ES2020",                    /* Output JavaScript version */
+    "module": "commonjs",                  /* Module system */
+    "lib": ["ES2020", "DOM"],             /* Libraries to include */
+    "outDir": "./dist",                    /* Output directory */
+    "rootDir": "./",                       /* Source root directory */
 
-    /* 엄격한 타입 체크 */
-    "strict": true,                        /* 모든 엄격한 타입 체크 옵션 활성화 */
-    "strictNullChecks": true,              /* null/undefined 엄격 체크 */
-    "strictFunctionTypes": true,           /* 함수 타입 엄격 체크 */
-    "strictBindCallApply": true,           /* bind, call, apply 엄격 체크 */
-    "strictPropertyInitialization": true,  /* 클래스 속성 초기화 체크 */
-    "noImplicitAny": true,                 /* 암시적 any 금지 */
-    "noImplicitThis": true,                /* 암시적 this 금지 */
-    "alwaysStrict": true,                  /* "use strict" 추가 */
+    /* Strict Type Checking */
+    "strict": true,                        /* Enable all strict type checking options */
+    "strictNullChecks": true,              /* Strict null/undefined checking */
+    "strictFunctionTypes": true,           /* Strict function type checking */
+    "strictBindCallApply": true,           /* Strict bind, call, apply checking */
+    "strictPropertyInitialization": true,  /* Class property initialization checking */
+    "noImplicitAny": true,                 /* Disallow implicit any */
+    "noImplicitThis": true,                /* Disallow implicit this */
+    "alwaysStrict": true,                  /* Add "use strict" */
 
-    /* 추가 체크 */
-    "noUnusedLocals": true,                /* 사용하지 않는 지역 변수 에러 */
-    "noUnusedParameters": true,            /* 사용하지 않는 매개변수 에러 */
-    "noImplicitReturns": true,             /* 암시적 반환 금지 */
-    "noFallthroughCasesInSwitch": true,    /* switch fall-through 금지 */
-    "noUncheckedIndexedAccess": true,      /* 인덱스 접근 시 undefined 포함 */
+    /* Additional Checks */
+    "noUnusedLocals": true,                /* Error on unused local variables */
+    "noUnusedParameters": true,            /* Error on unused parameters */
+    "noImplicitReturns": true,             /* Disallow implicit returns */
+    "noFallthroughCasesInSwitch": true,    /* Disallow switch fall-through */
+    "noUncheckedIndexedAccess": true,      /* Include undefined in index access */
 
-    /* 모듈 해결 */
-    "moduleResolution": "node",            /* 모듈 해결 방식 */
-    "esModuleInterop": true,               /* ES 모듈 상호 운용 */
-    "allowSyntheticDefaultImports": true,  /* default import 허용 */
-    "resolveJsonModule": true,             /* JSON import 허용 */
+    /* Module Resolution */
+    "moduleResolution": "node",            /* Module resolution strategy */
+    "esModuleInterop": true,               /* ES module interoperability */
+    "allowSyntheticDefaultImports": true,  /* Allow default imports */
+    "resolveJsonModule": true,             /* Allow JSON imports */
 
-    /* 소스맵 */
-    "sourceMap": true,                     /* .map 파일 생성 */
-    "declaration": true,                   /* .d.ts 파일 생성 */
-    "declarationMap": true,                /* .d.ts.map 파일 생성 */
+    /* Source Maps */
+    "sourceMap": true,                     /* Generate .map files */
+    "declaration": true,                   /* Generate .d.ts files */
+    "declarationMap": true,                /* Generate .d.ts.map files */
 
-    /* 기타 */
-    "forceConsistentCasingInFileNames": true, /* 파일명 대소문자 일관성 */
-    "skipLibCheck": true,                  /* 라이브러리 타입 체크 스킵 */
-    "removeComments": false                /* 주석 유지 */
+    /* Miscellaneous */
+    "forceConsistentCasingInFileNames": true, /* Enforce filename casing consistency */
+    "skipLibCheck": true,                  /* Skip library type checking */
+    "removeComments": false                /* Keep comments */
   },
   "include": [
     "*.ts"

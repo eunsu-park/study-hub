@@ -1,15 +1,15 @@
 -- =============================================================================
--- PostgreSQL 윈도우 함수 예제
+-- PostgreSQL Window Function Examples
 -- Window Functions (Analytic Functions)
 -- =============================================================================
 
--- 먼저 이전 예제 파일들을 실행하여 테이블과 데이터를 생성하세요.
+-- First, run the previous example files to create tables and data.
 
 -- =============================================================================
--- 1. 기본 윈도우 함수 구조
+-- 1. Basic Window Function Structure
 -- =============================================================================
 
--- OVER() - 전체 테이블을 하나의 윈도우로
+-- OVER() - Treats the entire table as one window
 SELECT
     first_name,
     last_name,
@@ -20,10 +20,10 @@ SELECT
 FROM employees;
 
 -- =============================================================================
--- 2. PARTITION BY - 그룹별 윈도우
+-- 2. PARTITION BY - Window per Group
 -- =============================================================================
 
--- 부서별로 파티션 나누기
+-- Partition by department
 SELECT
     e.first_name,
     e.last_name,
@@ -36,7 +36,7 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, e.salary DESC;
 
--- 부서별 급여 비율
+-- Salary ratio by department
 SELECT
     e.first_name,
     e.last_name,
@@ -49,12 +49,12 @@ JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, salary_pct DESC;
 
 -- =============================================================================
--- 3. 순위 함수 (Ranking Functions)
+-- 3. Ranking Functions
 -- =============================================================================
 
--- ROW_NUMBER: 연속 번호 (동점자도 다른 번호)
--- RANK: 동점자는 같은 순위, 다음 순위 건너뜀
--- DENSE_RANK: 동점자는 같은 순위, 다음 순위 연속
+-- ROW_NUMBER: Sequential number (different numbers even for ties)
+-- RANK: Same rank for ties, skips next rank
+-- DENSE_RANK: Same rank for ties, consecutive next rank
 
 SELECT
     first_name,
@@ -65,7 +65,7 @@ SELECT
     DENSE_RANK() OVER(ORDER BY salary DESC) AS dense_rank
 FROM employees;
 
--- 부서별 급여 순위
+-- Salary rank within department
 SELECT
     e.first_name,
     e.last_name,
@@ -92,7 +92,7 @@ SELECT * FROM (
 ) ranked
 WHERE rn <= 2;
 
--- NTILE: N개의 버킷으로 분할
+-- NTILE: Divide into N buckets
 SELECT
     first_name,
     last_name,
@@ -101,11 +101,11 @@ SELECT
 FROM employees;
 
 -- =============================================================================
--- 4. 오프셋 함수 (LAG, LEAD, FIRST_VALUE, LAST_VALUE)
+-- 4. Offset Functions (LAG, LEAD, FIRST_VALUE, LAST_VALUE)
 -- =============================================================================
 
--- LAG: 이전 행 값
--- LEAD: 다음 행 값
+-- LAG: Previous row value
+-- LEAD: Next row value
 SELECT
     first_name,
     hire_date,
@@ -114,7 +114,7 @@ SELECT
 FROM employees
 ORDER BY hire_date;
 
--- 급여 변화 분석
+-- Salary change analysis
 SELECT
     first_name,
     salary,
@@ -122,7 +122,7 @@ SELECT
     salary - LAG(salary) OVER(ORDER BY emp_id) AS salary_diff
 FROM employees;
 
--- 부서 내 이전/다음 직원
+-- Previous/next employee within department
 SELECT
     e.first_name,
     d.dept_name,
@@ -153,10 +153,10 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id;
 
 -- =============================================================================
--- 5. 집계 윈도우 함수
+-- 5. Aggregate Window Functions
 -- =============================================================================
 
--- 누적 합계 (Running Total)
+-- Running Total
 SELECT
     first_name,
     hire_date,
@@ -165,7 +165,7 @@ SELECT
 FROM employees
 ORDER BY hire_date;
 
--- 부서별 누적 합계
+-- Running total by department
 SELECT
     e.first_name,
     d.dept_name,
@@ -192,13 +192,13 @@ SELECT
 FROM employees;
 
 -- =============================================================================
--- 6. 프레임 절 (Frame Specification)
+-- 6. Frame Specification
 -- =============================================================================
 
--- ROWS: 물리적 행 기준
--- RANGE: 논리적 값 기준
+-- ROWS: Based on physical rows
+-- RANGE: Based on logical values
 
--- 현재 행 기준 앞뒤 1행
+-- 1 row before and after the current row
 SELECT
     first_name,
     salary,
@@ -208,7 +208,7 @@ SELECT
     ) AS avg_neighbors
 FROM employees;
 
--- 처음부터 현재 행까지
+-- From the beginning to the current row
 SELECT
     first_name,
     salary,
@@ -218,7 +218,7 @@ SELECT
     ) AS max_so_far
 FROM employees;
 
--- 현재 행부터 끝까지
+-- From the current row to the end
 SELECT
     first_name,
     salary,
@@ -229,11 +229,11 @@ SELECT
 FROM employees;
 
 -- =============================================================================
--- 7. 백분위수와 분포 함수
+-- 7. Percentile and Distribution Functions
 -- =============================================================================
 
--- PERCENT_RANK: 0~1 사이의 상대적 순위
--- CUME_DIST: 누적 분포
+-- PERCENT_RANK: Relative rank between 0 and 1
+-- CUME_DIST: Cumulative distribution
 
 SELECT
     first_name,
@@ -242,7 +242,7 @@ SELECT
     ROUND(CUME_DIST() OVER(ORDER BY salary)::numeric, 4) AS cumulative_dist
 FROM employees;
 
--- 부서 내 백분위
+-- Percentile within department
 SELECT
     e.first_name,
     d.dept_name,
@@ -254,31 +254,31 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id;
 
 -- =============================================================================
--- 8. 실전 예제
+-- 8. Practical Examples
 -- =============================================================================
 
--- 급여 통계 종합
+-- Comprehensive salary statistics
 SELECT
     e.first_name,
     e.last_name,
     d.dept_name,
     e.salary,
-    -- 부서 통계
+    -- Department statistics
     ROUND(AVG(e.salary) OVER(PARTITION BY e.dept_id), 2) AS dept_avg,
     MIN(e.salary) OVER(PARTITION BY e.dept_id) AS dept_min,
     MAX(e.salary) OVER(PARTITION BY e.dept_id) AS dept_max,
-    -- 전사 통계
+    -- Company-wide statistics
     ROUND(AVG(e.salary) OVER(), 2) AS company_avg,
-    -- 순위
+    -- Ranking
     RANK() OVER(PARTITION BY e.dept_id ORDER BY e.salary DESC) AS dept_rank,
     RANK() OVER(ORDER BY e.salary DESC) AS company_rank,
-    -- 전사 대비 비율
+    -- Percentage of company total
     ROUND(100.0 * e.salary / SUM(e.salary) OVER(), 2) AS company_pct
 FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id
 ORDER BY d.dept_name, e.salary DESC;
 
--- 연속 고용 분석 (입사일 기준 간격)
+-- Consecutive hiring analysis (interval between hire dates)
 SELECT
     first_name,
     hire_date,
@@ -287,7 +287,7 @@ SELECT
 FROM employees
 ORDER BY hire_date;
 
--- 급여 대역 분류
+-- Salary band classification
 SELECT
     first_name,
     salary,
@@ -299,7 +299,7 @@ SELECT
 FROM employees;
 
 -- =============================================================================
--- 9. 윈도우 함수 별칭 (WINDOW 절)
+-- 9. Window Function Alias (WINDOW Clause)
 -- =============================================================================
 
 -- Why: The WINDOW clause avoids repeating the same window definition multiple
@@ -316,37 +316,37 @@ WINDOW w AS (ORDER BY emp_id)
 ORDER BY emp_id;
 
 -- =============================================================================
--- 윈도우 함수 요약
+-- Window Function Summary
 -- =============================================================================
 /*
-순위 함수:
-- ROW_NUMBER(): 연속 번호
-- RANK(): 동점 시 같은 순위, 건너뜀
-- DENSE_RANK(): 동점 시 같은 순위, 연속
-- NTILE(n): n개 버킷으로 분할
+Ranking Functions:
+- ROW_NUMBER(): Sequential number
+- RANK(): Same rank for ties, skips next
+- DENSE_RANK(): Same rank for ties, consecutive
+- NTILE(n): Divide into n buckets
 
-오프셋 함수:
-- LAG(col, n, default): n행 이전 값
-- LEAD(col, n, default): n행 이후 값
-- FIRST_VALUE(col): 프레임의 첫 값
-- LAST_VALUE(col): 프레임의 마지막 값
-- NTH_VALUE(col, n): 프레임의 n번째 값
+Offset Functions:
+- LAG(col, n, default): Value n rows before
+- LEAD(col, n, default): Value n rows after
+- FIRST_VALUE(col): First value in the frame
+- LAST_VALUE(col): Last value in the frame
+- NTH_VALUE(col, n): Nth value in the frame
 
-집계 함수:
-- SUM(), AVG(), COUNT(), MIN(), MAX() - OVER()와 함께
+Aggregate Functions:
+- SUM(), AVG(), COUNT(), MIN(), MAX() - with OVER()
 
-분포 함수:
-- PERCENT_RANK(): 백분율 순위 (0~1)
-- CUME_DIST(): 누적 분포
+Distribution Functions:
+- PERCENT_RANK(): Percentile rank (0~1)
+- CUME_DIST(): Cumulative distribution
 
-프레임 절:
+Frame Clause:
 - ROWS BETWEEN ... AND ...
 - RANGE BETWEEN ... AND ...
 - UNBOUNDED PRECEDING / FOLLOWING
 - CURRENT ROW
 - n PRECEDING / FOLLOWING
 
-구문:
+Syntax:
 window_function() OVER(
     [PARTITION BY col, ...]
     [ORDER BY col [ASC|DESC], ...]

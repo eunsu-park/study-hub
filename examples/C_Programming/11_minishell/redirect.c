@@ -1,7 +1,7 @@
 // redirect.c
-// 입출력 리다이렉션 구현
-// > (출력), >> (추가), < (입력) 연산자 처리
-// 컴파일: gcc -c redirect.c 또는 다른 파일과 함께 링크
+// I/O redirection implementation
+// Handles > (output), >> (append), < (input) operators
+// Compile: gcc -c redirect.c or link with other files
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,13 +11,13 @@
 #include <sys/wait.h>
 
 typedef struct {
-    char* input_file;   // < 파일
-    char* output_file;  // > 또는 >> 파일
-    int append;         // >> 인 경우 1
+    char* input_file;   // < file
+    char* output_file;  // > or >> file
+    int append;         // 1 if >>
 } Redirect;
 
-// 리다이렉션 파싱
-// args에서 리다이렉션 제거하고 Redirect 구조체에 저장
+// Parse redirection
+// Remove redirection tokens from args and store in Redirect struct
 void parse_redirect(char** args, Redirect* redir) {
     redir->input_file = NULL;
     redir->output_file = NULL;
@@ -28,14 +28,14 @@ void parse_redirect(char** args, Redirect* redir) {
 
     while (args[i] != NULL) {
         if (strcmp(args[i], "<") == 0) {
-            // 입력 리다이렉션
+            // Input redirection
             if (args[i + 1]) {
                 redir->input_file = args[i + 1];
                 i += 2;
                 continue;
             }
         } else if (strcmp(args[i], ">") == 0) {
-            // 출력 리다이렉션 (덮어쓰기)
+            // Output redirection (overwrite)
             if (args[i + 1]) {
                 redir->output_file = args[i + 1];
                 redir->append = 0;
@@ -43,7 +43,7 @@ void parse_redirect(char** args, Redirect* redir) {
                 continue;
             }
         } else if (strcmp(args[i], ">>") == 0) {
-            // 출력 리다이렉션 (추가)
+            // Output redirection (append)
             if (args[i + 1]) {
                 redir->output_file = args[i + 1];
                 redir->append = 1;
@@ -59,9 +59,9 @@ void parse_redirect(char** args, Redirect* redir) {
     args[j] = NULL;
 }
 
-// 리다이렉션 적용 (자식 프로세스에서 호출)
+// Apply redirection (called in child process)
 int apply_redirect(Redirect* redir) {
-    // 입력 리다이렉션
+    // Input redirection
     if (redir->input_file) {
         int fd = open(redir->input_file, O_RDONLY);
         if (fd < 0) {
@@ -72,7 +72,7 @@ int apply_redirect(Redirect* redir) {
         close(fd);
     }
 
-    // 출력 리다이렉션
+    // Output redirection
     // Why: O_TRUNC vs O_APPEND implements > vs >> — truncate discards existing
     // content, append preserves it; O_CREAT ensures the file is created if missing
     if (redir->output_file) {
@@ -91,7 +91,7 @@ int apply_redirect(Redirect* redir) {
     return 0;
 }
 
-// 리다이렉션을 포함한 명령어 실행
+// Execute command with redirection
 // Why: redirections are applied in the child AFTER fork — this preserves the
 // parent's original stdin/stdout so the shell can keep reading user input
 void execute_with_redirect(char** args) {
@@ -103,7 +103,7 @@ void execute_with_redirect(char** args) {
     pid_t pid = fork();
 
     if (pid == 0) {
-        // 자식: 리다이렉션 적용 후 실행
+        // Child: apply redirection then execute
         if (apply_redirect(&redir) < 0) {
             exit(EXIT_FAILURE);
         }
@@ -118,7 +118,7 @@ void execute_with_redirect(char** args) {
     }
 }
 
-// 테스트용 메인 함수
+// Test main function
 #ifdef TEST_REDIRECT
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
@@ -138,13 +138,13 @@ int main(void) {
     char input[MAX_INPUT];
     char* args[MAX_ARGS];
 
-    printf("=== 리다이렉션 테스트 ===\n");
-    printf("예제 명령어:\n");
+    printf("=== Redirection Test ===\n");
+    printf("Example commands:\n");
     printf("  ls -l > output.txt\n");
     printf("  cat < input.txt\n");
     printf("  echo \"Hello\" >> output.txt\n");
     printf("  wc -l < /etc/passwd\n");
-    printf("\n종료: exit 또는 Ctrl+D\n\n");
+    printf("\nQuit: exit or Ctrl+D\n\n");
 
     while (1) {
         printf("redirect> ");
@@ -157,7 +157,7 @@ int main(void) {
 
         if (input[0] == '\n') continue;
 
-        // 입력 복사 (strtok이 원본 수정)
+        // Copy input (strtok modifies the original)
         char input_copy[MAX_INPUT];
         strncpy(input_copy, input, sizeof(input_copy));
 
@@ -165,11 +165,11 @@ int main(void) {
         if (argc == 0) continue;
 
         if (strcmp(args[0], "exit") == 0) {
-            printf("종료합니다.\n");
+            printf("Exiting.\n");
             break;
         }
 
-        // 리다이렉션 포함 실행
+        // Execute with redirection
         execute_with_redirect(args);
     }
 

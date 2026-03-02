@@ -1,6 +1,6 @@
 /*
  * Todo App
- * 기능: 추가, 삭제, 수정, 완료, 필터링, 로컬스토리지 저장
+ * Features: Add, delete, edit, complete, filter, local storage save
  */
 
 // ============================================
@@ -24,16 +24,16 @@ const currentDateEl = document.getElementById('currentDate');
 // Initialize
 // ============================================
 function init() {
-    // 날짜 표시
+    // Display date
     displayCurrentDate();
 
-    // 로컬 스토리지에서 데이터 로드
+    // Load data from local storage
     loadTodos();
 
-    // 이벤트 리스너 등록
+    // Register event listeners
     addEventListeners();
 
-    // 초기 렌더링
+    // Initial render
     render();
 }
 
@@ -45,27 +45,27 @@ function displayCurrentDate() {
         day: 'numeric',
         weekday: 'long'
     };
-    currentDateEl.textContent = now.toLocaleDateString('ko-KR', options);
+    currentDateEl.textContent = now.toLocaleDateString('en-US', options);
 }
 
 // ============================================
 // Event Listeners
 // ============================================
 function addEventListeners() {
-    // 추가 버튼 클릭
+    // Add button click
     addBtn.addEventListener('click', addTodo);
 
-    // Enter 키로 추가
+    // Add with Enter key
     todoInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             addTodo();
         }
     });
 
-    // 완료 항목 삭제
+    // Clear completed items
     clearCompletedBtn.addEventListener('click', clearCompleted);
 
-    // 필터 버튼
+    // Filter buttons
     filterBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             setFilter(btn.dataset.filter);
@@ -74,7 +74,7 @@ function addEventListeners() {
 
     // Why: Event delegation on the list container avoids re-attaching listeners after every
     // re-render and handles clicks on dynamically created todo items automatically
-    // Todo 리스트 이벤트 위임
+    // Todo list event delegation
     todoList.addEventListener('click', handleTodoClick);
     todoList.addEventListener('change', handleTodoChange);
 }
@@ -129,13 +129,13 @@ function editTodo(id) {
 
     if (!todoItem || !todo) return;
 
-    // 편집 모드로 변경
+    // Switch to edit mode
     todoItem.innerHTML = `
         <input type="checkbox" ${todo.completed ? 'checked' : ''} disabled>
         <input type="text" class="edit-input" value="${escapeHtml(todo.text)}">
         <div class="todo-actions" style="opacity: 1;">
-            <button class="save-btn" data-action="save">저장</button>
-            <button class="cancel-btn" data-action="cancel">취소</button>
+            <button class="save-btn" data-action="save">Save</button>
+            <button class="cancel-btn" data-action="cancel">Cancel</button>
         </div>
     `;
 
@@ -143,14 +143,14 @@ function editTodo(id) {
     editInput.focus();
     editInput.select();
 
-    // Enter 키로 저장
+    // Save with Enter key
     editInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             saveTodoEdit(id, editInput.value);
         }
     });
 
-    // Escape 키로 취소
+    // Cancel with Escape key
     editInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             render();
@@ -224,7 +224,7 @@ function handleTodoChange(e) {
 function setFilter(filter) {
     currentFilter = filter;
 
-    // 버튼 활성화 상태 업데이트
+    // Update button active state
     filterBtns.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.filter === filter);
     });
@@ -261,8 +261,8 @@ function render() {
                 <input type="checkbox" ${todo.completed ? 'checked' : ''}>
                 <span class="todo-text">${escapeHtml(todo.text)}</span>
                 <div class="todo-actions">
-                    <button class="edit-btn" data-action="edit">편집</button>
-                    <button class="delete-btn" data-action="delete">삭제</button>
+                    <button class="edit-btn" data-action="edit">Edit</button>
+                    <button class="delete-btn" data-action="delete">Delete</button>
                 </div>
             </li>
         `).join('');
@@ -274,18 +274,18 @@ function render() {
 function getEmptyMessage() {
     switch (currentFilter) {
         case 'active':
-            return '진행중인 할 일이 없습니다! 🎉';
+            return 'No active todos! Well done!';
         case 'completed':
-            return '완료된 할 일이 없습니다.';
+            return 'No completed todos yet.';
         default:
-            return '할 일을 추가해보세요! ✏️';
+            return 'Add a new todo!';
     }
 }
 
 function updateCounter() {
     const activeCount = todos.filter(todo => !todo.completed).length;
     const totalCount = todos.length;
-    todoCount.textContent = `${activeCount}개 항목 남음 (전체 ${totalCount}개)`;
+    todoCount.textContent = `${activeCount} items remaining (${totalCount} total)`;
 }
 
 // ============================================

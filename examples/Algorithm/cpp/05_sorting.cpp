@@ -1,8 +1,8 @@
 /*
- * 정렬 알고리즘 (Sorting Algorithms)
+ * Sorting Algorithms
  * Bubble, Selection, Insertion, Merge, Quick, Heap, Counting, Radix
  *
- * 다양한 정렬 알고리즘의 구현과 비교입니다.
+ * Implementation and comparison of various sorting algorithms.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 버블 정렬 - O(n²)
+// 1. Bubble Sort - O(n^2)
 // =============================================================================
 
 void bubbleSort(vector<int>& arr) {
@@ -27,12 +27,12 @@ void bubbleSort(vector<int>& arr) {
                 swapped = true;
             }
         }
-        if (!swapped) break;  // 최적화
+        if (!swapped) break;  // Optimization
     }
 }
 
 // =============================================================================
-// 2. 선택 정렬 - O(n²)
+// 2. Selection Sort - O(n^2)
 // =============================================================================
 
 void selectionSort(vector<int>& arr) {
@@ -49,7 +49,7 @@ void selectionSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 3. 삽입 정렬 - O(n²)
+// 3. Insertion Sort - O(n^2)
 // =============================================================================
 
 void insertionSort(vector<int>& arr) {
@@ -66,7 +66,7 @@ void insertionSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 4. 병합 정렬 - O(n log n)
+// 4. Merge Sort - O(n log n)
 // =============================================================================
 
 void merge(vector<int>& arr, int left, int mid, int right) {
@@ -97,7 +97,7 @@ void mergeSort(vector<int>& arr, int left, int right) {
 }
 
 // =============================================================================
-// 5. 퀵 정렬 - O(n log n) 평균
+// 5. Quick Sort - O(n log n) average
 // =============================================================================
 
 int partition(vector<int>& arr, int low, int high) {
@@ -122,7 +122,7 @@ void quickSort(vector<int>& arr, int low, int high) {
     }
 }
 
-// 3-way 퀵소트 (중복 원소에 효율적)
+// 3-way Quick Sort (efficient for duplicate elements)
 void quickSort3Way(vector<int>& arr, int low, int high) {
     if (low >= high) return;
 
@@ -145,7 +145,7 @@ void quickSort3Way(vector<int>& arr, int low, int high) {
 }
 
 // =============================================================================
-// 6. 힙 정렬 - O(n log n)
+// 6. Heap Sort - O(n log n)
 // =============================================================================
 
 void heapify(vector<int>& arr, int n, int i) {
@@ -167,12 +167,12 @@ void heapify(vector<int>& arr, int n, int i) {
 void heapSort(vector<int>& arr) {
     int n = arr.size();
 
-    // 힙 구성
+    // Build heap
     for (int i = n / 2 - 1; i >= 0; i--) {
         heapify(arr, n, i);
     }
 
-    // 하나씩 추출
+    // Extract one by one
     for (int i = n - 1; i > 0; i--) {
         swap(arr[0], arr[i]);
         heapify(arr, i, 0);
@@ -180,7 +180,7 @@ void heapSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 7. 계수 정렬 - O(n + k)
+// 7. Counting Sort - O(n + k)
 // =============================================================================
 
 void countingSort(vector<int>& arr) {
@@ -210,7 +210,7 @@ void countingSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 8. 기수 정렬 - O(d × (n + k))
+// 8. Radix Sort - O(d * (n + k))
 // =============================================================================
 
 void countingSortForRadix(vector<int>& arr, int exp) {
@@ -245,7 +245,7 @@ void radixSort(vector<int>& arr) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 void printVector(const vector<int>& v) {
@@ -259,90 +259,90 @@ void printVector(const vector<int>& v) {
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "정렬 알고리즘 예제" << endl;
+    cout << "Sorting Algorithm Examples" << endl;
     cout << "============================================================" << endl;
 
     vector<int> original = {64, 34, 25, 12, 22, 11, 90};
 
-    // 1. 버블 정렬
-    cout << "\n[1] 버블 정렬" << endl;
+    // 1. Bubble Sort
+    cout << "\n[1] Bubble Sort" << endl;
     vector<int> arr1 = original;
     bubbleSort(arr1);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr1);
     cout << endl;
 
-    // 2. 선택 정렬
-    cout << "\n[2] 선택 정렬" << endl;
+    // 2. Selection Sort
+    cout << "\n[2] Selection Sort" << endl;
     vector<int> arr2 = original;
     selectionSort(arr2);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr2);
     cout << endl;
 
-    // 3. 삽입 정렬
-    cout << "\n[3] 삽입 정렬" << endl;
+    // 3. Insertion Sort
+    cout << "\n[3] Insertion Sort" << endl;
     vector<int> arr3 = original;
     insertionSort(arr3);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr3);
     cout << endl;
 
-    // 4. 병합 정렬
-    cout << "\n[4] 병합 정렬" << endl;
+    // 4. Merge Sort
+    cout << "\n[4] Merge Sort" << endl;
     vector<int> arr4 = original;
     mergeSort(arr4, 0, arr4.size() - 1);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr4);
     cout << endl;
 
-    // 5. 퀵 정렬
-    cout << "\n[5] 퀵 정렬" << endl;
+    // 5. Quick Sort
+    cout << "\n[5] Quick Sort" << endl;
     vector<int> arr5 = original;
     quickSort(arr5, 0, arr5.size() - 1);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr5);
     cout << endl;
 
-    // 6. 힙 정렬
-    cout << "\n[6] 힙 정렬" << endl;
+    // 6. Heap Sort
+    cout << "\n[6] Heap Sort" << endl;
     vector<int> arr6 = original;
     heapSort(arr6);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr6);
     cout << endl;
 
-    // 7. 계수 정렬
-    cout << "\n[7] 계수 정렬" << endl;
+    // 7. Counting Sort
+    cout << "\n[7] Counting Sort" << endl;
     vector<int> arr7 = original;
     countingSort(arr7);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr7);
     cout << endl;
 
-    // 8. 기수 정렬
-    cout << "\n[8] 기수 정렬" << endl;
+    // 8. Radix Sort
+    cout << "\n[8] Radix Sort" << endl;
     vector<int> arr8 = {170, 45, 75, 90, 802, 24, 2, 66};
-    cout << "    원본: ";
+    cout << "    Original: ";
     printVector(arr8);
     cout << endl;
     radixSort(arr8);
-    cout << "    결과: ";
+    cout << "    Result: ";
     printVector(arr8);
     cout << endl;
 
-    // 9. 복잡도 비교
-    cout << "\n[9] 정렬 알고리즘 복잡도 비교" << endl;
-    cout << "    | 알고리즘   | 최선      | 평균      | 최악      | 공간  | 안정 |" << endl;
-    cout << "    |------------|-----------|-----------|-----------|-------|------|" << endl;
-    cout << "    | 버블       | O(n)      | O(n²)     | O(n²)     | O(1)  | O    |" << endl;
-    cout << "    | 선택       | O(n²)     | O(n²)     | O(n²)     | O(1)  | X    |" << endl;
-    cout << "    | 삽입       | O(n)      | O(n²)     | O(n²)     | O(1)  | O    |" << endl;
-    cout << "    | 병합       | O(n log n)| O(n log n)| O(n log n)| O(n)  | O    |" << endl;
-    cout << "    | 퀵         | O(n log n)| O(n log n)| O(n²)     | O(log)| X    |" << endl;
-    cout << "    | 힙         | O(n log n)| O(n log n)| O(n log n)| O(1)  | X    |" << endl;
-    cout << "    | 계수       | O(n+k)    | O(n+k)    | O(n+k)    | O(k)  | O    |" << endl;
-    cout << "    | 기수       | O(d(n+k)) | O(d(n+k)) | O(d(n+k)) | O(n+k)| O    |" << endl;
+    // 9. Complexity Comparison
+    cout << "\n[9] Sorting Algorithm Complexity Comparison" << endl;
+    cout << "    | Algorithm  | Best      | Average   | Worst     | Space | Stable |" << endl;
+    cout << "    |------------|-----------|-----------|-----------|-------|--------|" << endl;
+    cout << "    | Bubble     | O(n)      | O(n^2)    | O(n^2)    | O(1)  | Yes    |" << endl;
+    cout << "    | Selection  | O(n^2)    | O(n^2)    | O(n^2)    | O(1)  | No     |" << endl;
+    cout << "    | Insertion  | O(n)      | O(n^2)    | O(n^2)    | O(1)  | Yes    |" << endl;
+    cout << "    | Merge      | O(n log n)| O(n log n)| O(n log n)| O(n)  | Yes    |" << endl;
+    cout << "    | Quick      | O(n log n)| O(n log n)| O(n^2)    | O(log)| No     |" << endl;
+    cout << "    | Heap       | O(n log n)| O(n log n)| O(n log n)| O(1)  | No     |" << endl;
+    cout << "    | Counting   | O(n+k)    | O(n+k)    | O(n+k)    | O(k)  | Yes    |" << endl;
+    cout << "    | Radix      | O(d(n+k)) | O(d(n+k)) | O(d(n+k)) | O(n+k)| Yes    |" << endl;
 
     cout << "\n============================================================" << endl;
 

@@ -1,8 +1,8 @@
 """
-트리와 이진 탐색 트리 (Tree & BST)
+Tree and Binary Search Tree (Tree & BST)
 Tree and Binary Search Tree
 
-트리 구조와 BST 연산을 구현합니다.
+Implements tree structures and BST operations.
 """
 
 from typing import List, Optional, Generator
@@ -10,11 +10,11 @@ from collections import deque
 
 
 # =============================================================================
-# 1. 이진 트리 노드
+# 1. Binary Tree Node
 # =============================================================================
 
 class TreeNode:
-    """이진 트리 노드"""
+    """Binary tree node"""
 
     def __init__(self, val: int, left: 'TreeNode' = None, right: 'TreeNode' = None):
         self.val = val
@@ -26,11 +26,11 @@ class TreeNode:
 
 
 # =============================================================================
-# 2. 트리 순회 (Tree Traversal)
+# 2. Tree Traversal
 # =============================================================================
 
 def preorder_recursive(root: TreeNode) -> List[int]:
-    """전위 순회 (재귀) - O(n)"""
+    """Preorder traversal (recursive) - O(n)"""
     result = []
 
     def traverse(node):
@@ -45,7 +45,7 @@ def preorder_recursive(root: TreeNode) -> List[int]:
 
 
 def preorder_iterative(root: TreeNode) -> List[int]:
-    """전위 순회 (반복) - O(n)"""
+    """Preorder traversal (iterative) - O(n)"""
     if not root:
         return []
 
@@ -56,7 +56,7 @@ def preorder_iterative(root: TreeNode) -> List[int]:
         node = stack.pop()
         result.append(node.val)
 
-        # 오른쪽 먼저 push (왼쪽이 먼저 처리되도록)
+        # Push right first (so left is processed first)
         if node.right:
             stack.append(node.right)
         if node.left:
@@ -66,7 +66,7 @@ def preorder_iterative(root: TreeNode) -> List[int]:
 
 
 def inorder_recursive(root: TreeNode) -> List[int]:
-    """중위 순회 (재귀) - O(n)"""
+    """Inorder traversal (recursive) - O(n)"""
     result = []
 
     def traverse(node):
@@ -81,13 +81,13 @@ def inorder_recursive(root: TreeNode) -> List[int]:
 
 
 def inorder_iterative(root: TreeNode) -> List[int]:
-    """중위 순회 (반복) - O(n)"""
+    """Inorder traversal (iterative) - O(n)"""
     result = []
     stack = []
     current = root
 
     while stack or current:
-        # 왼쪽 끝까지 이동
+        # Go to the leftmost node
         while current:
             stack.append(current)
             current = current.left
@@ -100,7 +100,7 @@ def inorder_iterative(root: TreeNode) -> List[int]:
 
 
 def postorder_recursive(root: TreeNode) -> List[int]:
-    """후위 순회 (재귀) - O(n)"""
+    """Postorder traversal (recursive) - O(n)"""
     result = []
 
     def traverse(node):
@@ -115,7 +115,7 @@ def postorder_recursive(root: TreeNode) -> List[int]:
 
 
 def postorder_iterative(root: TreeNode) -> List[int]:
-    """후위 순회 (반복) - O(n)"""
+    """Postorder traversal (iterative) - O(n)"""
     if not root:
         return []
 
@@ -131,11 +131,11 @@ def postorder_iterative(root: TreeNode) -> List[int]:
         if node.right:
             stack.append(node.right)
 
-    return result[::-1]  # 역순
+    return result[::-1]  # Reverse
 
 
 def level_order(root: TreeNode) -> List[List[int]]:
-    """레벨 순회 (BFS) - O(n)"""
+    """Level-order traversal (BFS) - O(n)"""
     if not root:
         return []
 
@@ -161,17 +161,17 @@ def level_order(root: TreeNode) -> List[List[int]]:
 
 
 # =============================================================================
-# 3. 이진 탐색 트리 (BST)
+# 3. Binary Search Tree (BST)
 # =============================================================================
 
 class BST:
-    """이진 탐색 트리"""
+    """Binary Search Tree"""
 
     def __init__(self):
         self.root: Optional[TreeNode] = None
 
     def insert(self, val: int) -> None:
-        """노드 삽입 - 평균 O(log n), 최악 O(n)"""
+        """Insert node - Average O(log n), Worst O(n)"""
         if not self.root:
             self.root = TreeNode(val)
             return
@@ -190,7 +190,7 @@ class BST:
                 current = current.right
 
     def search(self, val: int) -> Optional[TreeNode]:
-        """노드 검색 - 평균 O(log n), 최악 O(n)"""
+        """Search node - Average O(log n), Worst O(n)"""
         current = self.root
 
         while current:
@@ -204,7 +204,7 @@ class BST:
         return None
 
     def delete(self, val: int) -> bool:
-        """노드 삭제 - 평균 O(log n), 최악 O(n)"""
+        """Delete node - Average O(log n), Worst O(n)"""
 
         def find_min(node: TreeNode) -> TreeNode:
             while node.left:
@@ -220,19 +220,19 @@ class BST:
             elif val > node.val:
                 node.right = delete_recursive(node.right, val)
             else:
-                # 삭제할 노드 발견
+                # Found the node to delete
 
-                # Case 1: 리프 노드
+                # Case 1: Leaf node
                 if not node.left and not node.right:
                     return None
 
-                # Case 2: 자식이 하나
+                # Case 2: One child
                 if not node.left:
                     return node.right
                 if not node.right:
                     return node.left
 
-                # Case 3: 자식이 둘 - 후계자(오른쪽 서브트리의 최소값)로 대체
+                # Case 3: Two children - replace with successor (min of right subtree)
                 successor = find_min(node.right)
                 node.val = successor.val
                 node.right = delete_recursive(node.right, successor.val)
@@ -244,11 +244,11 @@ class BST:
         return old_root != self.root or (self.root and old_root.val != val if old_root else False)
 
     def inorder(self) -> List[int]:
-        """중위 순회 (정렬된 순서)"""
+        """Inorder traversal (sorted order)"""
         return inorder_recursive(self.root)
 
     def find_min(self) -> Optional[int]:
-        """최솟값 찾기 - O(h)"""
+        """Find minimum value - O(h)"""
         if not self.root:
             return None
 
@@ -258,7 +258,7 @@ class BST:
         return current.val
 
     def find_max(self) -> Optional[int]:
-        """최댓값 찾기 - O(h)"""
+        """Find maximum value - O(h)"""
         if not self.root:
             return None
 
@@ -269,19 +269,19 @@ class BST:
 
 
 # =============================================================================
-# 4. 트리 속성 검사
+# 4. Tree Property Checks
 # =============================================================================
 
 def tree_height(root: TreeNode) -> int:
-    """트리 높이 계산 - O(n)"""
+    """Calculate tree height - O(n)"""
     if not root:
-        return -1  # 빈 트리는 높이 -1, 노드 1개는 높이 0
+        return -1  # Empty tree has height -1, single node has height 0
 
     return 1 + max(tree_height(root.left), tree_height(root.right))
 
 
 def is_balanced(root: TreeNode) -> bool:
-    """균형 트리 검사 - O(n)"""
+    """Check if tree is balanced - O(n)"""
 
     def check(node: TreeNode) -> int:
         if not node:
@@ -304,7 +304,7 @@ def is_balanced(root: TreeNode) -> bool:
 
 
 def is_valid_bst(root: TreeNode) -> bool:
-    """유효한 BST 검사 - O(n)"""
+    """Check if tree is a valid BST - O(n)"""
 
     def validate(node: TreeNode, min_val: float, max_val: float) -> bool:
         if not node:
@@ -320,18 +320,18 @@ def is_valid_bst(root: TreeNode) -> bool:
 
 
 def count_nodes(root: TreeNode) -> int:
-    """노드 개수 - O(n)"""
+    """Count nodes - O(n)"""
     if not root:
         return 0
     return 1 + count_nodes(root.left) + count_nodes(root.right)
 
 
 # =============================================================================
-# 5. 트리 변환/구성
+# 5. Tree Transformation/Construction
 # =============================================================================
 
 def build_tree_from_list(values: List[Optional[int]]) -> Optional[TreeNode]:
-    """레벨 순서 리스트로 트리 구성 - O(n)"""
+    """Build tree from level-order list - O(n)"""
     if not values or values[0] is None:
         return None
 
@@ -356,7 +356,7 @@ def build_tree_from_list(values: List[Optional[int]]) -> Optional[TreeNode]:
 
 
 def sorted_array_to_bst(nums: List[int]) -> Optional[TreeNode]:
-    """정렬된 배열로 균형 BST 구성 - O(n)"""
+    """Build balanced BST from sorted array - O(n)"""
     if not nums:
         return None
 
@@ -374,7 +374,7 @@ def sorted_array_to_bst(nums: List[int]) -> Optional[TreeNode]:
 
 
 def invert_tree(root: TreeNode) -> TreeNode:
-    """트리 좌우 반전 - O(n)"""
+    """Invert tree (mirror) - O(n)"""
     if not root:
         return None
 
@@ -383,11 +383,11 @@ def invert_tree(root: TreeNode) -> TreeNode:
 
 
 # =============================================================================
-# 6. 실전 문제
+# 6. Practical Problems
 # =============================================================================
 
 def lowest_common_ancestor(root: TreeNode, p: int, q: int) -> Optional[TreeNode]:
-    """BST에서 최소 공통 조상 (LCA) - O(h)"""
+    """Lowest Common Ancestor (LCA) in BST - O(h)"""
     current = root
 
     while current:
@@ -402,7 +402,7 @@ def lowest_common_ancestor(root: TreeNode, p: int, q: int) -> Optional[TreeNode]
 
 
 def kth_smallest(root: TreeNode, k: int) -> int:
-    """BST에서 k번째 작은 값 - O(h + k)"""
+    """Kth smallest value in BST - O(h + k)"""
     stack = []
     current = root
     count = 0
@@ -424,7 +424,7 @@ def kth_smallest(root: TreeNode, k: int) -> int:
 
 
 def path_sum(root: TreeNode, target: int) -> bool:
-    """루트~리프 경로 합 확인 - O(n)"""
+    """Check root-to-leaf path sum - O(n)"""
     if not root:
         return False
 
@@ -436,7 +436,7 @@ def path_sum(root: TreeNode, target: int) -> bool:
 
 
 def serialize(root: TreeNode) -> str:
-    """트리 직렬화 - O(n)"""
+    """Serialize tree - O(n)"""
     if not root:
         return "[]"
 
@@ -452,7 +452,7 @@ def serialize(root: TreeNode) -> str:
         else:
             result.append("null")
 
-    # 끝의 null 제거
+    # Remove trailing nulls
     while result and result[-1] == "null":
         result.pop()
 
@@ -460,11 +460,11 @@ def serialize(root: TreeNode) -> str:
 
 
 # =============================================================================
-# 유틸리티: 트리 시각화
+# Utility: Tree Visualization
 # =============================================================================
 
 def print_tree(root: TreeNode, prefix: str = "", is_left: bool = True) -> None:
-    """트리 ASCII 출력"""
+    """Print tree in ASCII"""
     if not root:
         return
 
@@ -482,79 +482,79 @@ def print_tree(root: TreeNode, prefix: str = "", is_left: bool = True) -> None:
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("트리와 이진 탐색 트리 (Tree & BST) 예제")
+    print("Tree and Binary Search Tree (Tree & BST) Examples")
     print("=" * 60)
 
-    # 1. 트리 구성
-    print("\n[1] 트리 구성")
+    # 1. Tree Construction
+    print("\n[1] Tree Construction")
     #       4
     #      / \
     #     2   6
     #    / \ / \
     #   1  3 5  7
     root = build_tree_from_list([4, 2, 6, 1, 3, 5, 7])
-    print("    레벨 순서: [4, 2, 6, 1, 3, 5, 7]")
-    print("    트리 구조:")
+    print("    Level order: [4, 2, 6, 1, 3, 5, 7]")
+    print("    Tree structure:")
     print_tree(root, "    ")
 
-    # 2. 트리 순회
-    print("\n[2] 트리 순회")
-    print(f"    전위 (Preorder):  {preorder_recursive(root)}")
-    print(f"    중위 (Inorder):   {inorder_recursive(root)}")
-    print(f"    후위 (Postorder): {postorder_recursive(root)}")
-    print(f"    레벨 (Level):     {level_order(root)}")
+    # 2. Tree Traversal
+    print("\n[2] Tree Traversal")
+    print(f"    Preorder:  {preorder_recursive(root)}")
+    print(f"    Inorder:   {inorder_recursive(root)}")
+    print(f"    Postorder: {postorder_recursive(root)}")
+    print(f"    Level:     {level_order(root)}")
 
-    # 3. 트리 속성
-    print("\n[3] 트리 속성")
-    print(f"    높이: {tree_height(root)}")
-    print(f"    노드 수: {count_nodes(root)}")
-    print(f"    균형 트리: {is_balanced(root)}")
-    print(f"    유효한 BST: {is_valid_bst(root)}")
+    # 3. Tree Properties
+    print("\n[3] Tree Properties")
+    print(f"    Height: {tree_height(root)}")
+    print(f"    Node count: {count_nodes(root)}")
+    print(f"    Balanced: {is_balanced(root)}")
+    print(f"    Valid BST: {is_valid_bst(root)}")
 
-    # 4. BST 연산
-    print("\n[4] BST 연산")
+    # 4. BST Operations
+    print("\n[4] BST Operations")
     bst = BST()
     for val in [5, 3, 7, 1, 4, 6, 8]:
         bst.insert(val)
-    print(f"    삽입: [5, 3, 7, 1, 4, 6, 8]")
-    print(f"    중위 순회: {bst.inorder()}")
-    print(f"    검색 4: {bst.search(4)}")
-    print(f"    최솟값: {bst.find_min()}, 최댓값: {bst.find_max()}")
+    print(f"    Insert: [5, 3, 7, 1, 4, 6, 8]")
+    print(f"    Inorder traversal: {bst.inorder()}")
+    print(f"    Search 4: {bst.search(4)}")
+    print(f"    Min: {bst.find_min()}, Max: {bst.find_max()}")
 
     bst.delete(3)
-    print(f"    삭제 3 후: {bst.inorder()}")
+    print(f"    After delete 3: {bst.inorder()}")
 
-    # 5. 정렬 배열 → 균형 BST
-    print("\n[5] 정렬 배열 → 균형 BST")
+    # 5. Sorted Array -> Balanced BST
+    print("\n[5] Sorted Array -> Balanced BST")
     arr = [1, 2, 3, 4, 5, 6, 7]
     balanced_bst = sorted_array_to_bst(arr)
-    print(f"    입력: {arr}")
-    print(f"    레벨 순회: {level_order(balanced_bst)}")
+    print(f"    Input: {arr}")
+    print(f"    Level order: {level_order(balanced_bst)}")
 
     # 6. LCA
-    print("\n[6] 최소 공통 조상 (LCA)")
+    print("\n[6] Lowest Common Ancestor (LCA)")
     lca = lowest_common_ancestor(root, 1, 3)
-    print(f"    노드 1, 3의 LCA: {lca.val if lca else None}")
+    print(f"    LCA of nodes 1, 3: {lca.val if lca else None}")
     lca = lowest_common_ancestor(root, 1, 6)
-    print(f"    노드 1, 6의 LCA: {lca.val if lca else None}")
+    print(f"    LCA of nodes 1, 6: {lca.val if lca else None}")
 
-    # 7. k번째 작은 값
-    print("\n[7] k번째 작은 값")
+    # 7. Kth Smallest Value
+    print("\n[7] Kth Smallest Value")
     for k in [1, 3, 5]:
-        print(f"    {k}번째 작은 값: {kth_smallest(root, k)}")
+        print(f"    {k}th smallest: {kth_smallest(root, k)}")
 
-    # 8. 경로 합
-    print("\n[8] 루트~리프 경로 합")
-    print(f"    합 7 (4→2→1): {path_sum(root, 7)}")
-    print(f"    합 10 (4→6): {path_sum(root, 10)}")
+    # 8. Path Sum
+    print("\n[8] Root-to-Leaf Path Sum")
+    print(f"    Sum 7 (4->2->1): {path_sum(root, 7)}")
+    print(f"    Sum 10 (4->6): {path_sum(root, 10)}")
 
-    # 9. 직렬화
-    print("\n[9] 트리 직렬화")
+    # 9. Serialization
+    print("\n[9] Tree Serialization")
     print(f"    {serialize(root)}")
 
     print("\n" + "=" * 60)

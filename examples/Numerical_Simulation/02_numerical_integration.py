@@ -1,8 +1,8 @@
 """
-수치 적분 (Numerical Integration)
+Numerical Integration
 Numerical Integration Methods
 
-정적분 ∫[a,b] f(x)dx 를 수치적으로 계산하는 방법들입니다.
+Methods for numerically computing the definite integral integral[a,b] f(x)dx.
 """
 
 import numpy as np
@@ -11,12 +11,12 @@ from typing import Callable, Tuple
 
 
 # =============================================================================
-# 1. 직사각형 법 (Rectangular Rule)
+# 1. Rectangular Rule
 # =============================================================================
 def rectangular_left(f: Callable, a: float, b: float, n: int) -> float:
     """
-    왼쪽 직사각형 법
-    각 구간의 왼쪽 끝점에서 함수값으로 직사각형 높이 결정
+    Left rectangular rule
+    Uses the function value at the left endpoint of each subinterval as the rectangle height
     """
     h = (b - a) / n
     result = 0
@@ -27,7 +27,7 @@ def rectangular_left(f: Callable, a: float, b: float, n: int) -> float:
 
 
 def rectangular_right(f: Callable, a: float, b: float, n: int) -> float:
-    """오른쪽 직사각형 법"""
+    """Right rectangular rule"""
     h = (b - a) / n
     result = 0
     for i in range(1, n + 1):
@@ -38,8 +38,8 @@ def rectangular_right(f: Callable, a: float, b: float, n: int) -> float:
 
 def rectangular_midpoint(f: Callable, a: float, b: float, n: int) -> float:
     """
-    중점 직사각형 법 (Midpoint Rule)
-    오차: O(h²)
+    Midpoint rectangular rule (Midpoint Rule)
+    Error: O(h^2)
     """
     h = (b - a) / n
     result = 0
@@ -50,15 +50,15 @@ def rectangular_midpoint(f: Callable, a: float, b: float, n: int) -> float:
 
 
 # =============================================================================
-# 2. 사다리꼴 법 (Trapezoidal Rule)
+# 2. Trapezoidal Rule
 # =============================================================================
 def trapezoidal(f: Callable, a: float, b: float, n: int) -> float:
     """
-    사다리꼴 법
-    각 구간을 사다리꼴로 근사
-    오차: O(h²)
+    Trapezoidal rule
+    Approximates each subinterval as a trapezoid
+    Error: O(h^2)
 
-    공식: h/2 * [f(x₀) + 2*Σf(xᵢ) + f(xₙ)]
+    Formula: h/2 * [f(x_0) + 2*sum(f(x_i)) + f(x_n)]
     """
     h = (b - a) / n
     result = f(a) + f(b)
@@ -71,26 +71,26 @@ def trapezoidal(f: Callable, a: float, b: float, n: int) -> float:
 
 
 def trapezoidal_vectorized(f: Callable, a: float, b: float, n: int) -> float:
-    """사다리꼴 법 (NumPy 벡터화)"""
+    """Trapezoidal rule (NumPy vectorized)"""
     x = np.linspace(a, b, n + 1)
     y = f(x)
     return np.trapz(y, x)
 
 
 # =============================================================================
-# 3. 심프슨 법 (Simpson's Rule)
+# 3. Simpson's Rule
 # =============================================================================
 def simpsons_rule(f: Callable, a: float, b: float, n: int) -> float:
     """
-    심프슨 1/3 법칙
-    각 구간을 2차 다항식으로 근사
-    오차: O(h⁴) - 매우 정확
+    Simpson's 1/3 rule
+    Approximates each subinterval with a quadratic polynomial
+    Error: O(h^4) - very accurate
 
-    조건: n은 짝수여야 함
-    공식: h/3 * [f(x₀) + 4*Σf(홀수) + 2*Σf(짝수) + f(xₙ)]
+    Condition: n must be even
+    Formula: h/3 * [f(x_0) + 4*sum(f(odd)) + 2*sum(f(even)) + f(x_n)]
     """
     if n % 2 != 0:
-        n += 1  # 짝수로 조정
+        n += 1  # Adjust to even
 
     h = (b - a) / n
     result = f(a) + f(b)
@@ -107,9 +107,9 @@ def simpsons_rule(f: Callable, a: float, b: float, n: int) -> float:
 
 def simpsons_38(f: Callable, a: float, b: float, n: int) -> float:
     """
-    심프슨 3/8 법칙
-    3차 다항식 근사
-    조건: n은 3의 배수여야 함
+    Simpson's 3/8 rule
+    Cubic polynomial approximation
+    Condition: n must be a multiple of 3
     """
     if n % 3 != 0:
         n = (n // 3 + 1) * 3
@@ -128,27 +128,27 @@ def simpsons_38(f: Callable, a: float, b: float, n: int) -> float:
 
 
 # =============================================================================
-# 4. 롬베르그 적분 (Romberg Integration)
+# 4. Romberg Integration
 # =============================================================================
 def romberg(f: Callable, a: float, b: float, max_order: int = 5) -> float:
     """
-    롬베르그 적분
-    사다리꼴 법에 Richardson 외삽을 반복 적용
-    매우 높은 정확도 달성 가능
+    Romberg integration
+    Repeatedly applies Richardson extrapolation to the trapezoidal rule
+    Can achieve very high accuracy
     """
     R = np.zeros((max_order, max_order))
 
-    # 첫 번째 열: 사다리꼴 법
+    # First column: trapezoidal rule
     h = b - a
     R[0, 0] = h * (f(a) + f(b)) / 2
 
     for i in range(1, max_order):
         h = h / 2
-        # 새로운 점들의 합
+        # Sum of new points
         sum_new = sum(f(a + (2*k - 1) * h) for k in range(1, 2**(i-1) + 1))
         R[i, 0] = R[i-1, 0] / 2 + h * sum_new
 
-        # Richardson 외삽
+        # Richardson extrapolation
         for j in range(1, i + 1):
             R[i, j] = R[i, j-1] + (R[i, j-1] - R[i-1, j-1]) / (4**j - 1)
 
@@ -156,20 +156,20 @@ def romberg(f: Callable, a: float, b: float, max_order: int = 5) -> float:
 
 
 # =============================================================================
-# 5. 가우스 구적법 (Gaussian Quadrature)
+# 5. Gaussian Quadrature
 # =============================================================================
 def gauss_legendre(f: Callable, a: float, b: float, n: int = 5) -> float:
     """
-    가우스-르장드르 구적법
-    n개의 점으로 (2n-1)차 다항식까지 정확히 적분
-    매우 효율적
+    Gauss-Legendre quadrature
+    Exactly integrates polynomials up to degree (2n-1) with n points
+    Very efficient
 
-    [-1, 1]에서 [a, b]로 변환 적용
+    Applies transformation from [-1, 1] to [a, b]
     """
-    # n개 노드와 가중치 (사전 계산된 값)
+    # n nodes and weights (precomputed values)
     nodes, weights = np.polynomial.legendre.leggauss(n)
 
-    # 구간 변환: [-1, 1] → [a, b]
+    # Interval transformation: [-1, 1] -> [a, b]
     # x = (b-a)/2 * t + (a+b)/2
     # dx = (b-a)/2 * dt
 
@@ -180,7 +180,7 @@ def gauss_legendre(f: Callable, a: float, b: float, n: int = 5) -> float:
 
 
 # =============================================================================
-# 6. 적응적 적분 (Adaptive Quadrature)
+# 6. Adaptive Quadrature
 # =============================================================================
 def adaptive_simpsons(
     f: Callable,
@@ -190,8 +190,8 @@ def adaptive_simpsons(
     max_depth: int = 50
 ) -> Tuple[float, int]:
     """
-    적응적 심프슨 적분
-    오차가 큰 구간을 재귀적으로 세분화
+    Adaptive Simpson's integration
+    Recursively subdivides intervals where the error is large
     """
     call_count = [0]
 
@@ -208,11 +208,11 @@ def adaptive_simpsons(
         S_right = (b - c) / 6 * (fc + 4*fe + fb)
         S_new = S_left + S_right
 
-        # 오차 추정
+        # Error estimate
         error = (S_new - S) / 15
 
         if depth >= max_depth or abs(error) <= tol:
-            return S_new + error  # Richardson 외삽
+            return S_new + error  # Richardson extrapolation
         else:
             left = _adaptive(a, c, fa, fc, fd, S_left, tol/2, depth+1)
             right = _adaptive(c, b, fc, fb, fe, S_right, tol/2, depth+1)
@@ -227,10 +227,10 @@ def adaptive_simpsons(
 
 
 # =============================================================================
-# 오차 분석 및 시각화
+# Error Analysis and Visualization
 # =============================================================================
 def analyze_convergence(f: Callable, a: float, b: float, exact: float):
-    """수렴 속도 분석"""
+    """Convergence rate analysis"""
     ns = [4, 8, 16, 32, 64, 128, 256, 512]
     methods = {
         'Midpoint': rectangular_midpoint,
@@ -238,7 +238,7 @@ def analyze_convergence(f: Callable, a: float, b: float, exact: float):
         'Simpson': simpsons_rule,
     }
 
-    print("\n수렴 분석:")
+    print("\nConvergence Analysis:")
     print("-" * 70)
     print(f"{'n':>6} | {'Midpoint':>14} | {'Trapezoidal':>14} | {'Simpson':>14}")
     print("-" * 70)
@@ -258,19 +258,19 @@ def analyze_convergence(f: Callable, a: float, b: float, exact: float):
 
 
 def plot_methods_comparison(f, a, b, n=10):
-    """적분 방법 시각화"""
+    """Integration method visualization"""
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     x_dense = np.linspace(a, b, 500)
     y_dense = f(x_dense)
 
     methods = [
-        ('직사각형 (중점)', rectangular_midpoint),
-        ('사다리꼴', trapezoidal),
-        ('심프슨', simpsons_rule),
+        ('Midpoint', rectangular_midpoint),
+        ('Trapezoidal', trapezoidal),
+        ('Simpson', simpsons_rule),
     ]
 
-    # 함수와 적분 영역
+    # Function and integration area
     for ax, (name, method) in zip(axes.flat[:3], methods):
         ax.plot(x_dense, y_dense, 'b-', linewidth=2, label='f(x)')
         ax.fill_between(x_dense, y_dense, alpha=0.3)
@@ -279,11 +279,11 @@ def plot_methods_comparison(f, a, b, n=10):
         h = (b - a) / n
         x_pts = np.linspace(a, b, n + 1)
 
-        if 'mid' in name:
+        if 'mid' in name.lower():
             for i in range(n):
                 xm = a + (i + 0.5) * h
                 ax.bar(xm, f(xm), width=h, alpha=0.5, edgecolor='r', fill=False)
-        elif 'trap' in name.lower() or '사다리꼴' in name:
+        elif 'trap' in name.lower():
             for i in range(n):
                 x0, x1 = x_pts[i], x_pts[i+1]
                 ax.fill([x0, x1, x1, x0], [0, 0, f(x1), f(x0)], alpha=0.5, edgecolor='r', fill=False)
@@ -294,10 +294,10 @@ def plot_methods_comparison(f, a, b, n=10):
         ax.set_ylabel('y')
         ax.grid(True, alpha=0.3)
 
-    # 수렴 그래프
+    # Convergence graph
     ax = axes[1, 1]
     ns, errors = [4, 8, 16, 32, 64, 128], {name: [] for name, _ in methods}
-    exact = 2.0  # ∫[0,π] sin(x)dx = 2
+    exact = 2.0  # integral[0,pi] sin(x)dx = 2
 
     for n in ns:
         for name, method in methods:
@@ -306,28 +306,28 @@ def plot_methods_comparison(f, a, b, n=10):
     for name, errs in errors.items():
         ax.loglog(ns, errs, 'o-', label=name)
 
-    ax.set_xlabel('n (구간 수)')
-    ax.set_ylabel('오차')
-    ax.set_title('수렴 속도')
+    ax.set_xlabel('n (number of subintervals)')
+    ax.set_ylabel('Error')
+    ax.set_title('Convergence Rate')
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig('/opt/projects/01_Personal/03_Study/Numerical_Simulation/examples/numerical_integration.png', dpi=150)
     plt.close()
-    print("그래프 저장: numerical_integration.png")
+    print("Graph saved: numerical_integration.png")
 
 
 # =============================================================================
-# 테스트
+# Test
 # =============================================================================
 def main():
     print("=" * 60)
-    print("수치 적분 (Numerical Integration) 예제")
+    print("Numerical Integration Examples")
     print("=" * 60)
 
-    # 예제 1: ∫[0,π] sin(x)dx = 2
-    print("\n[예제 1] ∫[0,π] sin(x)dx = 2")
+    # Example 1: integral[0,pi] sin(x)dx = 2
+    print("\n[Example 1] integral[0,pi] sin(x)dx = 2")
     print("-" * 50)
 
     f = np.sin
@@ -336,79 +336,79 @@ def main():
 
     n = 100
     results = {
-        '중점 직사각형': rectangular_midpoint(f, a, b, n),
-        '사다리꼴': trapezoidal(f, a, b, n),
-        '심프슨 1/3': simpsons_rule(f, a, b, n),
-        '롬베르그': romberg(f, a, b, 6),
-        '가우스-르장드르 (5점)': gauss_legendre(f, a, b, 5),
+        'Midpoint': rectangular_midpoint(f, a, b, n),
+        'Trapezoidal': trapezoidal(f, a, b, n),
+        'Simpson 1/3': simpsons_rule(f, a, b, n),
+        'Romberg': romberg(f, a, b, 6),
+        'Gauss-Legendre (5pt)': gauss_legendre(f, a, b, 5),
     }
 
-    print(f"정확값: {exact}")
-    print(f"{'방법':<20} {'결과':<15} {'오차':<15}")
+    print(f"Exact value: {exact}")
+    print(f"{'Method':<20} {'Result':<15} {'Error':<15}")
     print("-" * 50)
     for name, result in results.items():
         error = abs(result - exact)
         print(f"{name:<20} {result:<15.10f} {error:<15.2e}")
 
-    # 예제 2: ∫[0,1] e^(-x²)dx ≈ 0.7468...
-    print("\n[예제 2] ∫[0,1] e^(-x²)dx (가우스 적분)")
+    # Example 2: integral[0,1] e^(-x^2)dx ~ 0.7468...
+    print("\n[Example 2] integral[0,1] e^(-x^2)dx (Gaussian integral)")
     print("-" * 50)
 
     f2 = lambda x: np.exp(-x**2)
-    exact2 = 0.746824132812427  # 참값 (erf 사용)
+    exact2 = 0.746824132812427  # True value (using erf)
 
     for n in [10, 50, 100]:
         trap = trapezoidal(f2, 0, 1, n)
         simp = simpsons_rule(f2, 0, 1, n)
-        print(f"n={n:3d}: 사다리꼴={trap:.10f}, 심프슨={simp:.10f}")
+        print(f"n={n:3d}: Trapezoidal={trap:.10f}, Simpson={simp:.10f}")
 
     gauss = gauss_legendre(f2, 0, 1, 10)
-    print(f"가우스-르장드르 (10점): {gauss:.10f}")
-    print(f"정확값: {exact2:.10f}")
+    print(f"Gauss-Legendre (10pt): {gauss:.10f}")
+    print(f"Exact value: {exact2:.10f}")
 
-    # 예제 3: 적응적 적분
-    print("\n[예제 3] 적응적 적분 (급변하는 함수)")
+    # Example 3: Adaptive integration
+    print("\n[Example 3] Adaptive integration (rapidly varying function)")
     print("-" * 50)
 
-    f3 = lambda x: 1 / (1 + 100 * (x - 0.5)**2)  # 좁은 피크
-    exact3 = 0.3141277802329  # ≈ π/10
+    f3 = lambda x: 1 / (1 + 100 * (x - 0.5)**2)  # Narrow peak
+    exact3 = 0.3141277802329  # ~ pi/10
 
     trap = trapezoidal(f3, 0, 1, 100)
     result, calls = adaptive_simpsons(f3, 0, 1, tol=1e-8)
 
-    print(f"사다리꼴 (n=100): {trap:.10f}, 오차: {abs(trap - exact3):.2e}")
-    print(f"적응적 심프슨:    {result:.10f}, 오차: {abs(result - exact3):.2e}, 호출: {calls}")
+    print(f"Trapezoidal (n=100):  {trap:.10f}, error: {abs(trap - exact3):.2e}")
+    print(f"Adaptive Simpson:     {result:.10f}, error: {abs(result - exact3):.2e}, calls: {calls}")
 
-    # 시각화
+    # Visualization
     try:
         plot_methods_comparison(np.sin, 0, np.pi, 10)
     except Exception as e:
-        print(f"그래프 생성 실패: {e}")
+        print(f"Graph generation failed: {e}")
 
-    # 수렴 분석
+    # Convergence analysis
     print("\n" + "=" * 60)
-    print("수렴 속도 분석 (∫[0,π] sin(x)dx)")
+    print("Convergence Rate Analysis (integral[0,pi] sin(x)dx)")
     analyze_convergence(np.sin, 0, np.pi, 2.0)
 
     print("\n" + "=" * 60)
-    print("수치 적분 방법 비교")
+    print("Numerical Integration Methods Comparison")
     print("=" * 60)
     print("""
-    | 방법          | 오차 차수 | 특징                          |
-    |--------------|----------|-------------------------------|
-    | 직사각형 (좌/우)| O(h)     | 가장 단순, 부정확             |
-    | 중점 직사각형  | O(h²)    | 직사각형 중 가장 정확          |
-    | 사다리꼴      | O(h²)    | 단순하고 효율적                |
-    | 심프슨 1/3    | O(h⁴)    | 매우 정확, 부드러운 함수에 적합 |
-    | 롬베르그      | ~O(h^2k) | Richardson 외삽, 고정확도      |
-    | 가우스 구적   | ~O(h^2n) | 최소 점으로 최대 정확도         |
-    | 적응적 적분   | 가변     | 급변 구간 자동 세분화          |
+    | Method              | Error Order | Characteristics                    |
+    |---------------------|-------------|-------------------------------------|
+    | Rectangular (L/R)   | O(h)        | Simplest, inaccurate               |
+    | Midpoint            | O(h^2)      | Most accurate among rectangular    |
+    | Trapezoidal         | O(h^2)      | Simple and efficient               |
+    | Simpson 1/3         | O(h^4)      | Very accurate, good for smooth fns |
+    | Romberg             | ~O(h^2k)    | Richardson extrapolation, high acc.|
+    | Gaussian quadrature | ~O(h^2n)    | Maximum accuracy with minimum pts  |
+    | Adaptive            | Variable    | Auto-subdivides rapidly varying    |
 
-    실무 권장:
-    - scipy.integrate.quad: 적응적 가우스 구적 (가장 일반적)
-    - scipy.integrate.romberg: 롬베르그 적분
-    - scipy.integrate.simps: 심프슨 법칙 (등간격 데이터)
-    - scipy.integrate.trapz: 사다리꼴 (등간격 데이터)
+    Practical recommendations:
+    - scipy.integrate.quad: Adaptive Gaussian quadrature (most general)
+    - scipy.integrate.romberg: Romberg integration
+    - scipy.integrate.simps: Simpson's rule (evenly spaced data)
+    - scipy.integrate.trapz: Trapezoidal (evenly spaced data)
     """)
 
 

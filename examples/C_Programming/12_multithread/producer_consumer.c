@@ -1,5 +1,5 @@
 // producer_consumer.c
-// 생산자-소비자 패턴 (경계 버퍼)
+// Producer-Consumer pattern (bounded buffer)
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -10,18 +10,18 @@
 #define BUFFER_SIZE 5
 #define NUM_ITEMS 20
 
-// 경계 버퍼
+// Bounded buffer
 typedef struct {
     int buffer[BUFFER_SIZE];
-    int count;      // 현재 아이템 수
-    int in;         // 다음 삽입 위치
-    int out;        // 다음 추출 위치
+    int count;      // Current item count
+    int in;         // Next insert position
+    int out;        // Next extract position
 
     pthread_mutex_t mutex;
-    pthread_cond_t not_full;   // 버퍼가 가득 차지 않음
-    pthread_cond_t not_empty;  // 버퍼가 비어있지 않음
+    pthread_cond_t not_full;   // Buffer is not full
+    pthread_cond_t not_empty;  // Buffer is not empty
 
-    bool done;      // 생산 완료 플래그
+    bool done;      // Production complete flag
 } BoundedBuffer;
 
 BoundedBuffer* buffer_create(void) {
@@ -48,21 +48,21 @@ void buffer_destroy(BoundedBuffer* bb) {
 void buffer_put(BoundedBuffer* bb, int item) {
     pthread_mutex_lock(&bb->mutex);
 
-    // 버퍼가 가득 찼으면 대기
+    // Wait if buffer is full
     // Why: "while" loop (not "if") protects against spurious wakeups — the POSIX
     // spec allows cond_wait to return even without a signal, so the condition must
     // be re-checked after every wakeup
     while (bb->count == BUFFER_SIZE) {
-        printf("[생산자] 버퍼 가득 참. 대기...\n");
+        printf("[Producer] Buffer full. Waiting...\n");
         pthread_cond_wait(&bb->not_full, &bb->mutex);
     }
 
-    // 아이템 삽입
+    // Insert item
     bb->buffer[bb->in] = item;
     bb->in = (bb->in + 1) % BUFFER_SIZE;
     bb->count++;
 
-    printf("[생산자] 아이템 %d 생산 (버퍼: %d/%d)\n",
+    printf("[Producer] Produced item %d (buffer: %d/%d)\n",
            item, bb->count, BUFFER_SIZE);
 
     // Why: signal wakes ONE waiting consumer — if no consumer is waiting, the
@@ -76,31 +76,31 @@ void buffer_put(BoundedBuffer* bb, int item) {
 int buffer_get(BoundedBuffer* bb, int* item) {
     pthread_mutex_lock(&bb->mutex);
 
-    // 버퍼가 비어있고 생산 완료 아니면 대기
+    // Wait if buffer is empty and production not done
     while (bb->count == 0 && !bb->done) {
-        printf("[소비자] 버퍼 비어있음. 대기...\n");
+        printf("[Consumer] Buffer empty. Waiting...\n");
         pthread_cond_wait(&bb->not_empty, &bb->mutex);
     }
 
-    // 버퍼가 비어있고 생산 완료면 종료
+    // If buffer is empty and production is done, exit
     if (bb->count == 0 && bb->done) {
         pthread_mutex_unlock(&bb->mutex);
-        return 0;  // 더 이상 아이템 없음
+        return 0;  // No more items
     }
 
-    // 아이템 추출
+    // Extract item
     *item = bb->buffer[bb->out];
     bb->out = (bb->out + 1) % BUFFER_SIZE;
     bb->count--;
 
-    printf("[소비자] 아이템 %d 소비 (버퍼: %d/%d)\n",
+    printf("[Consumer] Consumed item %d (buffer: %d/%d)\n",
            *item, bb->count, BUFFER_SIZE);
 
-    // 생산자에게 알림
+    // Notify producer
     pthread_cond_signal(&bb->not_full);
 
     pthread_mutex_unlock(&bb->mutex);
-    return 1;  // 성공
+    return 1;  // Success
 }
 
 void buffer_set_done(BoundedBuffer* bb) {
@@ -108,35 +108,35 @@ void buffer_set_done(BoundedBuffer* bb) {
     bb->done = true;
     // Why: broadcast (not signal) wakes ALL consumers — if only one is woken,
     // the others remain blocked forever waiting for items that will never come
-    pthread_cond_broadcast(&bb->not_empty);  // 모든 소비자 깨움
+    pthread_cond_broadcast(&bb->not_empty);  // Wake all consumers
     pthread_mutex_unlock(&bb->mutex);
 }
 
-// 생산자 스레드
+// Producer thread
 void* producer(void* arg) {
     BoundedBuffer* bb = (BoundedBuffer*)arg;
 
     for (int i = 1; i <= NUM_ITEMS; i++) {
-        usleep((rand() % 500) * 1000);  // 0~500ms 대기
+        usleep((rand() % 500) * 1000);  // Wait 0~500ms
         buffer_put(bb, i);
     }
 
-    printf("[생산자] 생산 완료\n");
+    printf("[Producer] Production complete\n");
     buffer_set_done(bb);
 
     return NULL;
 }
 
-// 소비자 스레드
+// Consumer thread
 void* consumer(void* arg) {
     BoundedBuffer* bb = (BoundedBuffer*)arg;
     int item;
 
     while (buffer_get(bb, &item)) {
-        usleep((rand() % 800) * 1000);  // 0~800ms 처리 시간
+        usleep((rand() % 800) * 1000);  // 0~800ms processing time
     }
 
-    printf("[소비자] 소비 완료\n");
+    printf("[Consumer] Consumption complete\n");
     return NULL;
 }
 
@@ -148,20 +148,20 @@ int main(void) {
     pthread_t prod;
     pthread_t cons[2];
 
-    // 생산자 1명
+    // 1 producer
     pthread_create(&prod, NULL, producer, bb);
 
-    // 소비자 2명
+    // 2 consumers
     pthread_create(&cons[0], NULL, consumer, bb);
     pthread_create(&cons[1], NULL, consumer, bb);
 
-    // 대기
+    // Wait
     pthread_join(prod, NULL);
     pthread_join(cons[0], NULL);
     pthread_join(cons[1], NULL);
 
     buffer_destroy(bb);
-    printf("\n프로그램 종료\n");
+    printf("\nProgram terminated\n");
 
     return 0;
 }

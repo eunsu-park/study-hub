@@ -1,8 +1,8 @@
 /*
- * 실전 문제 풀이 (Practice Problems)
- * 종합 문제 (다양한 알고리즘 조합)
+ * Practice Problems
+ * Combined Problems (Various Algorithm Combinations)
  *
- * 코딩 테스트에서 자주 나오는 유형들입니다.
+ * Common problem types frequently seen in coding tests.
  */
 
 #include <stdio.h>
@@ -17,10 +17,10 @@
 typedef long long ll;
 
 /* =============================================================================
- * 1. 부분 배열 합 (투 포인터)
+ * 1. Subarray Sum (Two Pointers)
  * ============================================================================= */
 
-/* 합이 target 이상인 최소 길이 부분 배열 */
+/* Minimum length subarray with sum >= target */
 int min_subarray_sum(int arr[], int n, int target) {
     int left = 0;
     int sum = 0;
@@ -40,7 +40,7 @@ int min_subarray_sum(int arr[], int n, int target) {
 }
 
 /* =============================================================================
- * 2. 작업 스케줄링 (Greedy + Heap)
+ * 2. Job Scheduling (Greedy + Heap)
  * ============================================================================= */
 
 typedef struct {
@@ -83,12 +83,12 @@ int job_scheduling(Job jobs[], int n) {
 }
 
 /* =============================================================================
- * 3. 최소 회의실 수 (이벤트 정렬)
+ * 3. Minimum Meeting Rooms (Event Sorting)
  * ============================================================================= */
 
 typedef struct {
     int time;
-    int type;  /* 1: 시작, -1: 종료 */
+    int type;  /* 1: start, -1: end */
 } Event;
 
 int compare_events(const void* a, const void* b) {
@@ -96,7 +96,7 @@ int compare_events(const void* a, const void* b) {
     Event* e2 = (Event*)b;
     if (e1->time != e2->time)
         return e1->time - e2->time;
-    return e1->type - e2->type;  /* 종료가 먼저 */
+    return e1->type - e2->type;  /* End events first */
 }
 
 int min_meeting_rooms(int start[], int end[], int n) {
@@ -120,7 +120,7 @@ int min_meeting_rooms(int start[], int end[], int n) {
 }
 
 /* =============================================================================
- * 4. 팰린드롬 변환 (DP)
+ * 4. Palindrome Conversion (DP)
  * ============================================================================= */
 
 int min_palindrome_insertions(char* s) {
@@ -150,7 +150,7 @@ int min_palindrome_insertions(char* s) {
 }
 
 /* =============================================================================
- * 5. 섬의 개수 (DFS/BFS)
+ * 5. Number of Islands (DFS/BFS)
  * ============================================================================= */
 
 int dx[] = {-1, 1, 0, 0};
@@ -188,7 +188,7 @@ int count_islands(int** grid, int rows, int cols) {
 }
 
 /* =============================================================================
- * 6. Union-Find 응용 (중복 연결)
+ * 6. Union-Find Application (Redundant Connection)
  * ============================================================================= */
 
 int uf_parent[MAX_N];
@@ -223,7 +223,7 @@ bool uf_union(int x, int y) {
     return true;
 }
 
-/* 중복 연결 찾기 */
+/* Find redundant connection */
 int* find_redundant_connection(int edges[][2], int n) {
     uf_init(n + 1);
     static int result[2];
@@ -270,21 +270,21 @@ int lis_length(int arr[], int n) {
 }
 
 /* =============================================================================
- * 8. 스도쿠 (백트래킹)
+ * 8. Sudoku (Backtracking)
  * ============================================================================= */
 
 bool is_valid_sudoku(int board[9][9], int row, int col, int num) {
-    /* 행 검사 */
+    /* Check row */
     for (int j = 0; j < 9; j++) {
         if (board[row][j] == num) return false;
     }
 
-    /* 열 검사 */
+    /* Check column */
     for (int i = 0; i < 9; i++) {
         if (board[i][col] == num) return false;
     }
 
-    /* 3x3 박스 검사 */
+    /* Check 3x3 box */
     int box_row = (row / 3) * 3;
     int box_col = (col / 3) * 3;
     for (int i = 0; i < 3; i++) {
@@ -315,10 +315,10 @@ bool solve_sudoku(int board[9][9]) {
 }
 
 /* =============================================================================
- * 9. 이분 탐색 응용 (파라메트릭 서치)
+ * 9. Binary Search Application (Parametric Search)
  * ============================================================================= */
 
-/* 최대 운반 횟수가 days 이하가 되도록 하는 최소 용량 */
+/* Find minimum capacity to ship within given days */
 bool can_ship(int weights[], int n, int capacity, int days) {
     int current = 0;
     int day_count = 1;
@@ -357,40 +357,40 @@ int ship_within_days(int weights[], int n, int days) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("실전 문제 풀이 예제\n");
+    printf("Practice Problem Examples\n");
     printf("============================================================\n");
 
-    /* 1. 부분 배열 합 */
-    printf("\n[1] 부분 배열 합 (투 포인터)\n");
+    /* 1. Subarray Sum */
+    printf("\n[1] Subarray Sum (Two Pointers)\n");
     int arr1[] = {2, 3, 1, 2, 4, 3};
-    printf("    배열: [2, 3, 1, 2, 4, 3], target = 7\n");
-    printf("    최소 길이: %d\n", min_subarray_sum(arr1, 6, 7));
+    printf("    Array: [2, 3, 1, 2, 4, 3], target = 7\n");
+    printf("    Minimum length: %d\n", min_subarray_sum(arr1, 6, 7));
 
-    /* 2. 작업 스케줄링 */
-    printf("\n[2] 작업 스케줄링 (Greedy)\n");
+    /* 2. Job Scheduling */
+    printf("\n[2] Job Scheduling (Greedy)\n");
     Job jobs[] = {{4, 20}, {1, 10}, {1, 40}, {1, 30}};
-    printf("    작업: {마감:4,이익:20}, {1,10}, {1,40}, {1,30}\n");
-    printf("    최대 이익: %d\n", job_scheduling(jobs, 4));
+    printf("    Jobs: {deadline:4,profit:20}, {1,10}, {1,40}, {1,30}\n");
+    printf("    Maximum profit: %d\n", job_scheduling(jobs, 4));
 
-    /* 3. 최소 회의실 */
-    printf("\n[3] 최소 회의실 수\n");
+    /* 3. Minimum Meeting Rooms */
+    printf("\n[3] Minimum Meeting Rooms\n");
     int start[] = {0, 5, 15};
     int end[] = {30, 10, 20};
-    printf("    회의: [0-30], [5-10], [15-20]\n");
-    printf("    최소 회의실: %d\n", min_meeting_rooms(start, end, 3));
+    printf("    Meetings: [0-30], [5-10], [15-20]\n");
+    printf("    Minimum rooms: %d\n", min_meeting_rooms(start, end, 3));
 
-    /* 4. 팰린드롬 변환 */
-    printf("\n[4] 팰린드롬 변환\n");
-    printf("    문자열: \"abcde\"\n");
-    printf("    최소 삽입: %d\n", min_palindrome_insertions("abcde"));
+    /* 4. Palindrome Conversion */
+    printf("\n[4] Palindrome Conversion\n");
+    printf("    String: \"abcde\"\n");
+    printf("    Minimum insertions: %d\n", min_palindrome_insertions("abcde"));
 
-    /* 5. 섬의 개수 */
-    printf("\n[5] 섬의 개수\n");
+    /* 5. Number of Islands */
+    printf("\n[5] Number of Islands\n");
     int grid_data[4][4] = {
         {1, 1, 0, 0},
         {1, 0, 0, 0},
@@ -402,46 +402,46 @@ int main(void) {
         grid[i] = malloc(4 * sizeof(int));
         for (int j = 0; j < 4; j++) grid[i][j] = grid_data[i][j];
     }
-    printf("    그리드:\n");
+    printf("    Grid:\n");
     for (int i = 0; i < 4; i++) {
         printf("      ");
         for (int j = 0; j < 4; j++) printf("%d ", grid[i][j]);
         printf("\n");
     }
-    printf("    섬의 개수: %d\n", count_islands(grid, 4, 4));
+    printf("    Number of islands: %d\n", count_islands(grid, 4, 4));
     for (int i = 0; i < 4; i++) free(grid[i]);
     free(grid);
 
-    /* 6. 중복 연결 */
-    printf("\n[6] 중복 연결 찾기 (Union-Find)\n");
+    /* 6. Redundant Connection */
+    printf("\n[6] Find Redundant Connection (Union-Find)\n");
     int edges[][2] = {{1, 2}, {1, 3}, {2, 3}};
     int* redundant = find_redundant_connection(edges, 3);
-    printf("    간선: (1,2), (1,3), (2,3)\n");
-    printf("    중복 연결: (%d, %d)\n", redundant[0], redundant[1]);
+    printf("    Edges: (1,2), (1,3), (2,3)\n");
+    printf("    Redundant connection: (%d, %d)\n", redundant[0], redundant[1]);
 
     /* 7. LIS */
-    printf("\n[7] 최장 증가 부분수열 (LIS)\n");
+    printf("\n[7] Longest Increasing Subsequence (LIS)\n");
     int arr2[] = {10, 9, 2, 5, 3, 7, 101, 18};
-    printf("    배열: [10, 9, 2, 5, 3, 7, 101, 18]\n");
-    printf("    LIS 길이: %d\n", lis_length(arr2, 8));
+    printf("    Array: [10, 9, 2, 5, 3, 7, 101, 18]\n");
+    printf("    LIS length: %d\n", lis_length(arr2, 8));
 
-    /* 8. 이분 탐색 응용 */
-    printf("\n[8] 이분 탐색 응용 (배송)\n");
+    /* 8. Binary Search Application */
+    printf("\n[8] Binary Search Application (Shipping)\n");
     int weights[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    printf("    물건 무게: [1-10]\n");
-    printf("    5일 내 배송 최소 용량: %d\n", ship_within_days(weights, 10, 5));
+    printf("    Item weights: [1-10]\n");
+    printf("    Min capacity for 5-day shipping: %d\n", ship_within_days(weights, 10, 5));
 
-    /* 9. 문제 풀이 전략 */
-    printf("\n[9] 문제 풀이 전략\n");
-    printf("    1. 문제 이해: 입력/출력, 제약 조건 확인\n");
-    printf("    2. 예제 분석: 손으로 풀어보기\n");
-    printf("    3. 알고리즘 선택:\n");
-    printf("       - N ≤ 20: 완전 탐색, 비트마스크\n");
-    printf("       - N ≤ 10^3: O(N²) DP, 브루트포스\n");
-    printf("       - N ≤ 10^5: O(N log N) 정렬, 이분탐색\n");
-    printf("       - N ≤ 10^7: O(N) 투 포인터, 해시\n");
-    printf("    4. 구현 및 테스트\n");
-    printf("    5. 엣지 케이스 확인\n");
+    /* 9. Problem-Solving Strategy */
+    printf("\n[9] Problem-Solving Strategy\n");
+    printf("    1. Understand the problem: check input/output, constraints\n");
+    printf("    2. Analyze examples: work through by hand\n");
+    printf("    3. Choose algorithm:\n");
+    printf("       - N <= 20: brute force, bitmask\n");
+    printf("       - N <= 10^3: O(N^2) DP, brute force\n");
+    printf("       - N <= 10^5: O(N log N) sorting, binary search\n");
+    printf("       - N <= 10^7: O(N) two pointers, hash\n");
+    printf("    4. Implement and test\n");
+    printf("    5. Check edge cases\n");
 
     printf("\n============================================================\n");
 

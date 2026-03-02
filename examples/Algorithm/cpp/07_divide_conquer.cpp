@@ -1,8 +1,8 @@
 /*
- * 분할 정복 (Divide and Conquer)
+ * Divide and Conquer
  * Merge Sort, Quick Sort, Binary Search, Power
  *
- * 문제를 작은 부분으로 나누어 해결합니다.
+ * Solving problems by dividing them into smaller subproblems.
  */
 
 #include <iostream>
@@ -14,7 +14,7 @@
 using namespace std;
 
 // =============================================================================
-// 1. 빠른 거듭제곱
+// 1. Fast Exponentiation
 // =============================================================================
 
 long long power(long long base, long long exp, long long mod = LLONG_MAX) {
@@ -33,7 +33,7 @@ long long power(long long base, long long exp, long long mod = LLONG_MAX) {
 }
 
 // =============================================================================
-// 2. 행렬 거듭제곱
+// 2. Matrix Exponentiation
 // =============================================================================
 
 using Matrix = vector<vector<long long>>;
@@ -57,7 +57,7 @@ Matrix matrixPower(Matrix A, long long exp, long long mod) {
     int n = A.size();
     Matrix result(n, vector<long long>(n, 0));
 
-    // 단위 행렬
+    // Identity matrix
     for (int i = 0; i < n; i++) result[i][i] = 1;
 
     while (exp > 0) {
@@ -71,7 +71,7 @@ Matrix matrixPower(Matrix A, long long exp, long long mod) {
     return result;
 }
 
-// 피보나치 (행렬 거듭제곱)
+// Fibonacci (matrix exponentiation)
 long long fibonacciMatrix(long long n, long long mod = 1e9 + 7) {
     if (n <= 1) return n;
 
@@ -81,7 +81,7 @@ long long fibonacciMatrix(long long n, long long mod = 1e9 + 7) {
 }
 
 // =============================================================================
-// 3. 가장 가까운 점 쌍 (Closest Pair)
+// 3. Closest Pair of Points
 // =============================================================================
 
 struct Point {
@@ -147,7 +147,7 @@ double closestPair(vector<Point>& points) {
 }
 
 // =============================================================================
-// 4. 역순 쌍 개수 (Inversion Count)
+// 4. Inversion Count
 // =============================================================================
 
 long long mergeAndCount(vector<int>& arr, int left, int mid, int right) {
@@ -163,7 +163,7 @@ long long mergeAndCount(vector<int>& arr, int left, int mid, int right) {
             arr[k++] = L[i++];
         } else {
             arr[k++] = R[j++];
-            inversions += (L.size() - i);  // 역순 쌍
+            inversions += (L.size() - i);  // Inversion pair
         }
     }
 
@@ -185,7 +185,7 @@ long long countInversions(vector<int>& arr, int left, int right) {
 }
 
 // =============================================================================
-// 5. 카라츠바 곱셈 (Karatsuba Multiplication)
+// 5. Karatsuba Multiplication
 // =============================================================================
 
 string addStrings(const string& a, const string& b) {
@@ -205,7 +205,7 @@ string addStrings(const string& a, const string& b) {
 }
 
 // =============================================================================
-// 6. 최대 부분 배열 합 (분할정복)
+// 6. Maximum Subarray Sum (Divide and Conquer)
 // =============================================================================
 
 int maxCrossingSum(const vector<int>& arr, int left, int mid, int right) {
@@ -238,51 +238,51 @@ int maxSubArrayDC(const vector<int>& arr, int left, int right) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "분할 정복 예제" << endl;
+    cout << "Divide and Conquer Examples" << endl;
     cout << "============================================================" << endl;
 
-    // 1. 빠른 거듭제곱
-    cout << "\n[1] 빠른 거듭제곱" << endl;
+    // 1. Fast Exponentiation
+    cout << "\n[1] Fast Exponentiation" << endl;
     cout << "    2^10 = " << power(2, 10) << endl;
     cout << "    3^20 mod 1000 = " << power(3, 20, 1000) << endl;
 
-    // 2. 피보나치 (행렬 거듭제곱)
-    cout << "\n[2] 피보나치 (행렬 거듭제곱)" << endl;
+    // 2. Fibonacci (Matrix Exponentiation)
+    cout << "\n[2] Fibonacci (Matrix Exponentiation)" << endl;
     cout << "    F(10) = " << fibonacciMatrix(10) << endl;
     cout << "    F(50) mod 10^9+7 = " << fibonacciMatrix(50) << endl;
 
-    // 3. 가장 가까운 점 쌍
-    cout << "\n[3] 가장 가까운 점 쌍" << endl;
+    // 3. Closest Pair of Points
+    cout << "\n[3] Closest Pair of Points" << endl;
     vector<Point> points = {{2, 3}, {12, 30}, {40, 50}, {5, 1}, {12, 10}, {3, 4}};
-    cout << "    점 6개" << endl;
-    cout << "    최소 거리: " << closestPair(points) << endl;
+    cout << "    6 points" << endl;
+    cout << "    Minimum distance: " << closestPair(points) << endl;
 
-    // 4. 역순 쌍 개수
-    cout << "\n[4] 역순 쌍 개수" << endl;
+    // 4. Inversion Count
+    cout << "\n[4] Inversion Count" << endl;
     vector<int> inv = {8, 4, 2, 1};
-    cout << "    배열: [8, 4, 2, 1]" << endl;
-    cout << "    역순 쌍: " << countInversions(inv, 0, inv.size() - 1) << endl;
+    cout << "    Array: [8, 4, 2, 1]" << endl;
+    cout << "    Inversions: " << countInversions(inv, 0, inv.size() - 1) << endl;
 
-    // 5. 최대 부분 배열 합
-    cout << "\n[5] 최대 부분 배열 합 (분할정복)" << endl;
+    // 5. Maximum Subarray Sum
+    cout << "\n[5] Maximum Subarray Sum (Divide and Conquer)" << endl;
     vector<int> arr = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
-    cout << "    배열: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
-    cout << "    최대 합: " << maxSubArrayDC(arr, 0, arr.size() - 1) << endl;
+    cout << "    Array: [-2,1,-3,4,-1,2,1,-5,4]" << endl;
+    cout << "    Maximum sum: " << maxSubArrayDC(arr, 0, arr.size() - 1) << endl;
 
-    // 6. 복잡도 요약
-    cout << "\n[6] 복잡도 요약" << endl;
-    cout << "    | 알고리즘           | 시간복잡도     |" << endl;
+    // 6. Complexity Summary
+    cout << "\n[6] Complexity Summary" << endl;
+    cout << "    | Algorithm          | Time           |" << endl;
     cout << "    |--------------------|----------------|" << endl;
-    cout << "    | 빠른 거듭제곱      | O(log n)       |" << endl;
-    cout << "    | 행렬 거듭제곱      | O(k³ log n)    |" << endl;
-    cout << "    | 가장 가까운 점 쌍  | O(n log n)     |" << endl;
-    cout << "    | 역순 쌍 개수       | O(n log n)     |" << endl;
-    cout << "    | 병합/퀵 정렬       | O(n log n)     |" << endl;
+    cout << "    | Fast Exponentiation| O(log n)       |" << endl;
+    cout << "    | Matrix Exponent.   | O(k^3 log n)   |" << endl;
+    cout << "    | Closest Pair       | O(n log n)     |" << endl;
+    cout << "    | Inversion Count    | O(n log n)     |" << endl;
+    cout << "    | Merge/Quick Sort   | O(n log n)     |" << endl;
 
     cout << "\n============================================================" << endl;
 

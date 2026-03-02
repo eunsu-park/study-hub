@@ -1,9 +1,5 @@
 """
-보안 테스트 도구 데모
 Security Testing Tools Demo
-
-정적 분석(위험 함수 탐지), 의존성 검사, 코드 패턴 스캐너(하드코딩 패스워드,
-SQL 인젝션 패턴), 보안 체크리스트 검증 등을 구현합니다.
 
 Demonstrates simple static analysis for dangerous function calls,
 dependency checking, regex-based code pattern scanning (hardcoded passwords,
@@ -19,7 +15,7 @@ from dataclasses import dataclass, field
 
 
 # =============================================================================
-# 1. Static Analysis: Dangerous Function Detector (위험 함수 탐지)
+# 1. Static Analysis: Dangerous Function Detector
 # =============================================================================
 
 @dataclass
@@ -164,7 +160,7 @@ subprocess.run(["ls", "-la"], shell=False)
 
 
 # =============================================================================
-# 2. Dependency Checker (의존성 검사)
+# 2. Dependency Checker
 # =============================================================================
 
 # Simulated known vulnerability database (pattern-based)
@@ -258,7 +254,7 @@ pandas>=1.5.0
 
 
 # =============================================================================
-# 3. Code Pattern Scanner (코드 패턴 스캐너)
+# 3. Code Pattern Scanner
 # =============================================================================
 
 SECURITY_PATTERNS = {
@@ -364,7 +360,7 @@ cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 
 
 # =============================================================================
-# 4. Security Checklist Validator (보안 체크리스트 검증)
+# 4. Security Checklist Validator
 # =============================================================================
 
 @dataclass
@@ -503,7 +499,6 @@ user_input = sanitize(request.form["name"])
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  Security Testing Tools Demo")
-    print("  보안 테스트 도구 데모")
     print("=" * 60 + "\n")
 
     demo_static_analysis()

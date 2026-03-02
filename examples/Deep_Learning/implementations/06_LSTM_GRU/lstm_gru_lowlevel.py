@@ -1,21 +1,22 @@
 """
-PyTorch Low-Level LSTM/GRU 구현
+PyTorch Low-Level LSTM/GRU Implementation
 
-nn.LSTM, nn.GRU 대신 F.linear, torch.sigmoid, torch.tanh 사용
-파라미터를 수동으로 관리
+Uses F.linear, torch.sigmoid, torch.tanh instead of nn.LSTM and nn.GRU.
+Parameters are managed manually.
 """
 
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 import math
 from typing import Tuple, List, Optional
 
 
 class LSTMCellLowLevel:
     """
-    단일 LSTM Cell (Low-Level PyTorch)
+    Single LSTM Cell (Low-Level PyTorch)
 
-    nn.LSTMCell 미사용
+    Does not use nn.LSTMCell.
     """
 
     def __init__(self, input_size: int, hidden_size: int, device: torch.device = None):
@@ -23,11 +24,11 @@ class LSTMCellLowLevel:
         self.hidden_size = hidden_size
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Xavier 초기화
+        # Xavier initialization
         concat_size = input_size + hidden_size
         std = math.sqrt(2.0 / (concat_size + hidden_size))
 
-        # 4개 게이트를 하나로: [forget, input, candidate, output]
+        # 4 gates combined into one: [forget, input, candidate, output]
         self.W_ih = torch.randn(
             4 * hidden_size, input_size,
             requires_grad=True, device=self.device
@@ -51,18 +52,18 @@ class LSTMCellLowLevel:
 
         Args:
             x: (batch_size, input_size)
-            hx: (h_prev, c_prev) 각각 (batch_size, hidden_size)
+            hx: (h_prev, c_prev) each (batch_size, hidden_size)
 
         Returns:
-            h_t, c_t: 각각 (batch_size, hidden_size)
+            h_t, c_t: each (batch_size, hidden_size)
         """
         h_prev, c_prev = hx
         H = self.hidden_size
 
-        # 게이트 계산
+        # Gate computation
         gates = (x @ self.W_ih.t() + h_prev @ self.W_hh.t() + self.bias)
 
-        # 분리
+        # Split gates
         f = torch.sigmoid(gates[:, 0:H])           # Forget
         i = torch.sigmoid(gates[:, H:2*H])         # Input
         g = torch.tanh(gates[:, 2*H:3*H])          # Candidate
@@ -80,9 +81,9 @@ class LSTMCellLowLevel:
 
 class GRUCellLowLevel:
     """
-    단일 GRU Cell (Low-Level PyTorch)
+    Single GRU Cell (Low-Level PyTorch)
 
-    nn.GRUCell 미사용
+    Does not use nn.GRUCell.
     """
 
     def __init__(self, input_size: int, hidden_size: int, device: torch.device = None):
@@ -93,7 +94,7 @@ class GRUCellLowLevel:
         concat_size = input_size + hidden_size
         std = math.sqrt(2.0 / (concat_size + hidden_size))
 
-        # 3개 게이트: [reset, update, candidate]
+        # 3 gates: [reset, update, candidate]
         self.W_ih = torch.randn(
             3 * hidden_size, input_size,
             requires_grad=True, device=self.device
@@ -124,14 +125,14 @@ class GRUCellLowLevel:
         """
         H = self.hidden_size
 
-        # Reset, Update 게이트
+        # Reset and Update gates
         ih = x @ self.W_ih.t()
         hh = h_prev @ self.W_hh.t()
 
         r = torch.sigmoid(ih[:, 0:H] + hh[:, 0:H] + self.bias[0:H])
         z = torch.sigmoid(ih[:, H:2*H] + hh[:, H:2*H] + self.bias[H:2*H])
 
-        # Candidate (reset 적용)
+        # Candidate (with reset applied)
         n = torch.tanh(ih[:, 2*H:3*H] + r * hh[:, 2*H:3*H] + self.bias[2*H:3*H])
 
         # Hidden
@@ -145,7 +146,7 @@ class GRUCellLowLevel:
 
 class LSTMLowLevel:
     """
-    다층 LSTM (Low-Level PyTorch)
+    Multi-layer LSTM (Low-Level PyTorch)
     """
 
     def __init__(
@@ -166,7 +167,7 @@ class LSTMLowLevel:
 
         self.num_directions = 2 if bidirectional else 1
 
-        # 레이어별 Cell 생성
+        # Create cells per layer
         self.cells = []
         for layer in range(num_layers):
             for direction in range(self.num_directions):
@@ -184,15 +185,15 @@ class LSTMLowLevel:
 
         Args:
             x: (seq_len, batch_size, input_size)
-            hx: (h_0, c_0) 각각 (num_layers * num_directions, batch, hidden)
+            hx: (h_0, c_0) each (num_layers * num_directions, batch, hidden)
 
         Returns:
             output: (seq_len, batch, hidden * num_directions)
-            (h_n, c_n): 마지막 상태
+            (h_n, c_n): final states
         """
         seq_len, batch_size, _ = x.shape
 
-        # 초기 상태
+        # Initial states
         if hx is None:
             h_0 = torch.zeros(
                 self.num_layers * self.num_directions, batch_size, self.hidden_size,
@@ -245,7 +246,7 @@ class LSTMLowLevel:
             else:
                 output = torch.stack(forward_outputs)
 
-            # Dropout (마지막 레이어 제외)
+            # Dropout (except last layer)
             if self.dropout > 0 and layer < self.num_layers - 1:
                 output = F.dropout(output, p=self.dropout, training=True)
 
@@ -268,7 +269,7 @@ class LSTMLowLevel:
 
 class GRULowLevel:
     """
-    다층 GRU (Low-Level PyTorch)
+    Multi-layer GRU (Low-Level PyTorch)
     """
 
     def __init__(
@@ -310,7 +311,7 @@ class GRULowLevel:
 
         Returns:
             output: (seq_len, batch, hidden * num_directions)
-            h_n: 마지막 hidden
+            h_n: final hidden state
         """
         seq_len, batch_size, _ = x.shape
 
@@ -376,7 +377,7 @@ class GRULowLevel:
 
 class SequenceClassifier:
     """
-    LSTM/GRU 기반 시퀀스 분류기
+    LSTM/GRU-based Sequence Classifier
     """
 
     def __init__(
@@ -422,7 +423,7 @@ class SequenceClassifier:
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: (batch_size, seq_len) 토큰 인덱스
+            x: (batch_size, seq_len) token indices
 
         Returns:
             logits: (batch_size, num_classes)
@@ -437,9 +438,9 @@ class SequenceClassifier:
         else:
             output, h_n = self.rnn.forward(embedded)
 
-        # 마지막 hidden (bidirectional이면 concat)
+        # Last hidden (concat if bidirectional)
         if self.rnn.bidirectional:
-            # Forward의 마지막 + Backward의 첫 번째
+            # Forward's last + Backward's first
             last_hidden = torch.cat([h_n[-2], h_n[-1]], dim=-1)
         else:
             last_hidden = h_n[-1]
@@ -462,23 +463,23 @@ class SequenceClassifier:
 
 
 def train_imdb_sentiment():
-    """IMDB 감성 분석 (간소화 버전)"""
+    """IMDB sentiment analysis (simplified version)"""
     print("=== LSTM/GRU Sentiment Analysis ===\n")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
 
-    # 더미 데이터 (실제로는 torchtext 사용)
+    # Dummy data (in practice, use torchtext)
     vocab_size = 10000
     seq_len = 100
     batch_size = 32
     num_samples = 1000
 
-    # 가상의 학습 데이터
+    # Synthetic training data
     X_train = torch.randint(0, vocab_size, (num_samples, seq_len), device=device)
     y_train = torch.randint(0, 2, (num_samples,), device=device)
 
-    # 모델
+    # Model
     model = SequenceClassifier(
         vocab_size=vocab_size,
         embed_size=128,
@@ -493,9 +494,11 @@ def train_imdb_sentiment():
     param_count = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {param_count:,}")
 
-    # 학습
+    # Expected: loss decreasing over 5 epochs, accuracy ~0.50-0.55 (random data baseline)
     lr = 0.001
     epochs = 5
+    loss_history = []
+    acc_history = []
 
     for epoch in range(epochs):
         total_loss = 0
@@ -527,16 +530,38 @@ def train_imdb_sentiment():
 
         avg_loss = total_loss / num_samples
         accuracy = total_correct / num_samples
+        loss_history.append(avg_loss)
+        acc_history.append(accuracy)
         print(f"Epoch {epoch+1}/{epochs}: Loss={avg_loss:.4f}, Acc={accuracy:.4f}")
+
+    # Visualization
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    axes[0].plot(range(1, epochs + 1), loss_history, 'b-o')
+    axes[0].set_xlabel('Epoch')
+    axes[0].set_ylabel('Loss')
+    axes[0].set_title('LSTM/GRU Training Loss')
+    axes[0].grid(True)
+
+    axes[1].plot(range(1, epochs + 1), acc_history, 'r-o')
+    axes[1].set_xlabel('Epoch')
+    axes[1].set_ylabel('Accuracy')
+    axes[1].set_title('LSTM/GRU Training Accuracy')
+    axes[1].grid(True)
+
+    plt.tight_layout()
+    plt.savefig('lstm_gru_lowlevel_training.png', dpi=150)
+    plt.close()
+    print("Result image saved: lstm_gru_lowlevel_training.png")
 
 
 def main():
-    """테스트"""
+    """Test"""
     print("=== LSTM/GRU Low-Level Test ===\n")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # LSTM 테스트
+    # LSTM test
     print("Testing LSTM...")
     lstm = LSTMLowLevel(
         input_size=10, hidden_size=20,
@@ -550,7 +575,7 @@ def main():
     print(f"  Output: {output.shape}")  # (5, 3, 40) bidirectional
     print(f"  h_n: {h_n.shape}")  # (4, 3, 20) 2 layers * 2 directions
 
-    # GRU 테스트
+    # GRU test
     print("\nTesting GRU...")
     gru = GRULowLevel(
         input_size=10, hidden_size=20,
@@ -561,7 +586,7 @@ def main():
     print(f"  Output: {output.shape}")  # (5, 3, 20)
     print(f"  h_n: {h_n.shape}")  # (2, 3, 20)
 
-    # 감성 분석 학습
+    # Sentiment analysis training
     print()
     train_imdb_sentiment()
 

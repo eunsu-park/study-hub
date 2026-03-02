@@ -1,5 +1,5 @@
 // rwlock_example.c
-// 읽기-쓰기 잠금 (Read-Write Lock) 예제
+// Read-Write Lock example
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -9,7 +9,7 @@
 #define NUM_READERS 5
 #define NUM_WRITERS 2
 
-// 공유 데이터
+// Shared data
 // Why: rwlock is ideal when reads vastly outnumber writes (5 readers vs 2 writers
 // here) — a plain mutex would serialize all 7 threads, but rwlock lets 5 readers
 // proceed in parallel
@@ -26,10 +26,10 @@ void* reader(void* arg) {
     for (int i = 0; i < 5; i++) {
         // Why: rdlock allows multiple readers simultaneously — unlike mutex, readers
         // don't block each other, giving much better throughput for read-heavy workloads
-        pthread_rwlock_rdlock(&shared.lock);  // 읽기 잠금
+        pthread_rwlock_rdlock(&shared.lock);  // Read lock
 
-        printf("[독자 %d] 데이터 읽음: %d\n", id, shared.data);
-        usleep(100000);  // 읽기 중...
+        printf("[Reader %d] Read data: %d\n", id, shared.data);
+        usleep(100000);  // Reading...
 
         pthread_rwlock_unlock(&shared.lock);
 
@@ -45,11 +45,11 @@ void* writer(void* arg) {
     for (int i = 0; i < 3; i++) {
         // Why: wrlock is exclusive — it blocks ALL readers and other writers,
         // ensuring the write is seen atomically (no partial updates observed)
-        pthread_rwlock_wrlock(&shared.lock);  // 쓰기 잠금 (배타적)
+        pthread_rwlock_wrlock(&shared.lock);  // Write lock (exclusive)
 
         shared.data = rand() % 1000;
-        printf("[작가 %d] 데이터 씀: %d\n", id, shared.data);
-        usleep(200000);  // 쓰기 중...
+        printf("[Writer %d] Wrote data: %d\n", id, shared.data);
+        usleep(200000);  // Writing...
 
         pthread_rwlock_unlock(&shared.lock);
 
@@ -69,19 +69,19 @@ int main(void) {
     int reader_ids[NUM_READERS];
     int writer_ids[NUM_WRITERS];
 
-    // 독자 생성
+    // Create readers
     for (int i = 0; i < NUM_READERS; i++) {
         reader_ids[i] = i;
         pthread_create(&readers[i], NULL, reader, &reader_ids[i]);
     }
 
-    // 작가 생성
+    // Create writers
     for (int i = 0; i < NUM_WRITERS; i++) {
         writer_ids[i] = i;
         pthread_create(&writers[i], NULL, writer, &writer_ids[i]);
     }
 
-    // 대기
+    // Wait
     for (int i = 0; i < NUM_READERS; i++) {
         pthread_join(readers[i], NULL);
     }
@@ -90,7 +90,7 @@ int main(void) {
     }
 
     pthread_rwlock_destroy(&shared.lock);
-    printf("완료\n");
+    printf("Done\n");
 
     return 0;
 }

@@ -1,8 +1,8 @@
 /*
- * 동적 프로그래밍 (Dynamic Programming)
+ * Dynamic Programming (DP)
  * Fibonacci, Knapsack, LCS, LIS, Edit Distance
  *
- * 부분 문제의 최적 해를 이용한 문제 해결 기법입니다.
+ * A problem-solving technique using optimal solutions of subproblems.
  */
 
 #include <stdio.h>
@@ -13,7 +13,7 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /* =============================================================================
- * 1. 피보나치 (Memoization & Tabulation)
+ * 1. Fibonacci (Memoization & Tabulation)
  * ============================================================================= */
 
 long long fib_memo[100];
@@ -39,7 +39,7 @@ long long fibonacci_tab(int n) {
 }
 
 /* =============================================================================
- * 2. 0/1 배낭 문제
+ * 2. 0/1 Knapsack Problem
  * ============================================================================= */
 
 int knapsack_01(int W, int weights[], int values[], int n) {
@@ -63,7 +63,7 @@ int knapsack_01(int W, int weights[], int values[], int n) {
     return result;
 }
 
-/* 공간 최적화 */
+/* Space-optimized */
 int knapsack_01_optimized(int W, int weights[], int values[], int n) {
     int* dp = calloc(W + 1, sizeof(int));
 
@@ -79,7 +79,7 @@ int knapsack_01_optimized(int W, int weights[], int values[], int n) {
 }
 
 /* =============================================================================
- * 3. 최장 공통 부분 수열 (LCS)
+ * 3. Longest Common Subsequence (LCS)
  * ============================================================================= */
 
 int lcs(const char* s1, const char* s2) {
@@ -106,10 +106,10 @@ int lcs(const char* s1, const char* s2) {
 }
 
 /* =============================================================================
- * 4. 최장 증가 부분 수열 (LIS)
+ * 4. Longest Increasing Subsequence (LIS)
  * ============================================================================= */
 
-/* O(n²) */
+/* O(n^2) */
 int lis_n2(int arr[], int n) {
     int* dp = malloc(n * sizeof(int));
     for (int i = 0; i < n; i++) dp[i] = 1;
@@ -153,7 +153,7 @@ int lis_nlogn(int arr[], int n) {
 }
 
 /* =============================================================================
- * 5. 편집 거리
+ * 5. Edit Distance
  * ============================================================================= */
 
 int edit_distance(const char* s1, const char* s2) {
@@ -185,7 +185,7 @@ int edit_distance(const char* s1, const char* s2) {
 }
 
 /* =============================================================================
- * 6. 동전 교환
+ * 6. Coin Change
  * ============================================================================= */
 
 int coin_change(int coins[], int n, int amount) {
@@ -207,7 +207,7 @@ int coin_change(int coins[], int n, int amount) {
 }
 
 /* =============================================================================
- * 7. 행렬 체인 곱셈
+ * 7. Matrix Chain Multiplication
  * ============================================================================= */
 
 int matrix_chain(int dims[], int n) {
@@ -234,62 +234,62 @@ int matrix_chain(int dims[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("동적 프로그래밍 (DP) 예제\n");
+    printf("Dynamic Programming (DP) Examples\n");
     printf("============================================================\n");
 
-    /* 1. 피보나치 */
-    printf("\n[1] 피보나치\n");
+    /* 1. Fibonacci */
+    printf("\n[1] Fibonacci\n");
     printf("    fib(10) = %lld\n", fibonacci_tab(10));
     printf("    fib(45) = %lld\n", fibonacci_tab(45));
 
-    /* 2. 0/1 배낭 */
-    printf("\n[2] 0/1 배낭 문제\n");
+    /* 2. 0/1 Knapsack */
+    printf("\n[2] 0/1 Knapsack Problem\n");
     int weights[] = {1, 2, 3, 4, 5};
     int values[] = {1, 6, 10, 16, 20};
-    printf("    무게: [1,2,3,4,5], 가치: [1,6,10,16,20]\n");
-    printf("    용량 8의 최대 가치: %d\n", knapsack_01(8, weights, values, 5));
+    printf("    Weights: [1,2,3,4,5], Values: [1,6,10,16,20]\n");
+    printf("    Max value for capacity 8: %d\n", knapsack_01(8, weights, values, 5));
 
     /* 3. LCS */
-    printf("\n[3] 최장 공통 부분 수열 (LCS)\n");
+    printf("\n[3] Longest Common Subsequence (LCS)\n");
     printf("    'ABCDGH' vs 'AEDFHR': %d\n", lcs("ABCDGH", "AEDFHR"));
     printf("    'AGGTAB' vs 'GXTXAYB': %d\n", lcs("AGGTAB", "GXTXAYB"));
 
     /* 4. LIS */
-    printf("\n[4] 최장 증가 부분 수열 (LIS)\n");
+    printf("\n[4] Longest Increasing Subsequence (LIS)\n");
     int arr[] = {10, 22, 9, 33, 21, 50, 41, 60, 80};
     printf("    [10,22,9,33,21,50,41,60,80]\n");
-    printf("    O(n²): %d\n", lis_n2(arr, 9));
+    printf("    O(n^2): %d\n", lis_n2(arr, 9));
     printf("    O(n log n): %d\n", lis_nlogn(arr, 9));
 
-    /* 5. 편집 거리 */
-    printf("\n[5] 편집 거리\n");
-    printf("    'kitten' → 'sitting': %d\n", edit_distance("kitten", "sitting"));
-    printf("    'sunday' → 'saturday': %d\n", edit_distance("sunday", "saturday"));
+    /* 5. Edit Distance */
+    printf("\n[5] Edit Distance\n");
+    printf("    'kitten' -> 'sitting': %d\n", edit_distance("kitten", "sitting"));
+    printf("    'sunday' -> 'saturday': %d\n", edit_distance("sunday", "saturday"));
 
-    /* 6. 동전 교환 */
-    printf("\n[6] 동전 교환\n");
+    /* 6. Coin Change */
+    printf("\n[6] Coin Change\n");
     int coins[] = {1, 5, 10, 25};
-    printf("    동전: [1,5,10,25], 금액 30\n");
-    printf("    최소 동전 수: %d\n", coin_change(coins, 4, 30));
+    printf("    Coins: [1,5,10,25], Amount: 30\n");
+    printf("    Minimum coins: %d\n", coin_change(coins, 4, 30));
 
-    /* 7. 행렬 체인 */
-    printf("\n[7] 행렬 체인 곱셈\n");
+    /* 7. Matrix Chain */
+    printf("\n[7] Matrix Chain Multiplication\n");
     int dims[] = {10, 30, 5, 60};
-    printf("    차원: 10x30, 30x5, 5x60\n");
-    printf("    최소 곱셈 횟수: %d\n", matrix_chain(dims, 4));
+    printf("    Dimensions: 10x30, 30x5, 5x60\n");
+    printf("    Minimum multiplications: %d\n", matrix_chain(dims, 4));
 
-    /* 8. DP 문제 분류 */
-    printf("\n[8] DP 문제 유형\n");
-    printf("    | 유형          | 예시                    | 복잡도      |\n");
-    printf("    |---------------|-------------------------|-------------|\n");
-    printf("    | 1차원 DP      | 피보나치, 계단 오르기   | O(n)        |\n");
-    printf("    | 2차원 DP      | 배낭, LCS, 편집거리     | O(n²) or O(nm)|\n");
-    printf("    | 구간 DP       | 행렬 체인, 팰린드롬     | O(n³)       |\n");
+    /* 8. DP Problem Categories */
+    printf("\n[8] DP Problem Categories\n");
+    printf("    | Category      | Examples                     | Complexity     |\n");
+    printf("    |---------------|------------------------------|----------------|\n");
+    printf("    | 1D DP         | Fibonacci, Stair climbing    | O(n)           |\n");
+    printf("    | 2D DP         | Knapsack, LCS, Edit dist.    | O(n^2) or O(nm)|\n");
+    printf("    | Interval DP   | Matrix chain, Palindrome     | O(n^3)         |\n");
 
     printf("\n============================================================\n");
 

@@ -1,103 +1,103 @@
-# Web_Development 예제
+# Web_Development Examples
 
-Web_Development 폴더의 14개 레슨에 해당하는 실행 가능한 예제 코드입니다.
+Runnable example code for the 14 lessons in the Web_Development folder.
 
-## 폴더 구조
+## Folder Structure
 
 ```
 examples/
-├── 01_html_basics/       # HTML 기초
-│   ├── index.html        # 기본 태그
-│   └── semantic.html     # 시맨틱 HTML
+├── 01_html_basics/       # HTML Basics
+│   ├── index.html        # Basic Tags
+│   └── semantic.html     # Semantic HTML
 │
-├── 02_html_forms/        # 폼과 테이블
-│   ├── form_example.html # 폼 요소
-│   └── table_example.html # 테이블
+├── 02_html_forms/        # Forms and Tables
+│   ├── form_example.html # Form Elements
+│   └── table_example.html # Tables
 │
-├── 03_css_basics/        # CSS 기초
-│   ├── index.html        # 선택자, 박스모델
+├── 03_css_basics/        # CSS Basics
+│   ├── index.html        # Selectors, Box Model
 │   └── style.css
 │
-├── 04_css_layout/        # CSS 레이아웃
+├── 04_css_layout/        # CSS Layout
 │   ├── flexbox.html      # Flexbox
 │   ├── grid.html         # Grid
 │   └── style.css
 │
-├── 05_css_responsive/    # 반응형 디자인
-│   ├── index.html        # 미디어쿼리
+├── 05_css_responsive/    # Responsive Design
+│   ├── index.html        # Media Queries
 │   └── style.css
 │
-├── 06_js_basics/         # JavaScript 기초
-│   ├── index.html        # 변수, 함수, 배열, 객체
+├── 06_js_basics/         # JavaScript Basics
+│   ├── index.html        # Variables, Functions, Arrays, Objects
 │   └── script.js
 │
-├── 07_js_dom/            # DOM 조작
-│   ├── index.html        # DOM API, 이벤트
+├── 07_js_dom/            # DOM Manipulation
+│   ├── index.html        # DOM API, Events
 │   └── script.js
 │
-├── 08_js_async/          # 비동기 프로그래밍
+├── 08_js_async/          # Asynchronous Programming
 │   ├── index.html        # Promise, async/await
 │   └── script.js
 │
-├── 09_project_todo/      # Todo 앱 프로젝트
+├── 09_project_todo/      # Todo App Project
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
 │
-├── 10_project_weather/   # 날씨 앱 프로젝트
+├── 10_project_weather/   # Weather App Project
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
 │
 ├── 11_typescript/        # TypeScript
-│   ├── basics.ts         # 타입 기초
-│   ├── interfaces.ts     # 인터페이스
+│   ├── basics.ts         # Type Basics
+│   ├── interfaces.ts     # Interfaces
 │   └── tsconfig.json
 │
-├── 12_accessibility/     # 웹 접근성
-│   ├── index.html        # ARIA, 키보드
+├── 12_accessibility/     # Web Accessibility
+│   ├── index.html        # ARIA, Keyboard
 │   └── style.css
 │
 ├── 13_seo/               # SEO
-│   └── index.html        # 메타태그, 구조화데이터
+│   └── index.html        # Meta Tags, Structured Data
 │
-└── 14_build_tools/       # 빌드 도구
+└── 14_build_tools/       # Build Tools
     ├── vite-project/
     └── webpack-example/
 ```
 
-## 실행 방법
+## How to Run
 
-### HTML/CSS/JS 예제
+### HTML/CSS/JS Examples
 
 ```bash
-# 방법 1: 브라우저에서 직접 열기
+# Method 1: Open directly in browser
 open examples/01_html_basics/index.html
 
-# 방법 2: VS Code Live Server
-# VS Code에서 Live Server 확장 설치 후 Go Live 클릭
+# Method 2: VS Code Live Server
+# Install the Live Server extension in VS Code, then click Go Live
 
-# 방법 3: Python 간이 서버
+# Method 3: Python simple server
 cd examples
 python -m http.server 8000
-# 브라우저에서 http://localhost:8000 접속
+# Open http://localhost:8000 in browser
 ```
 
-### TypeScript 예제
+### TypeScript Examples
 
 ```bash
-# TypeScript 설치
+# Install TypeScript
 npm install -g typescript
 
-# 컴파일
+# Compile
 cd examples/11_typescript
 tsc basics.ts
 
-# 또는 ts-node로 직접 실행
+# Or run directly with ts-node
 npx ts-node basics.ts
 ```
 
-### 빌드 도구 예제
+### Build Tools Examples
 
 ```bash
 # Vite
@@ -112,40 +112,40 @@ npm run build
 npm run dev
 ```
 
-## 레슨별 예제 목록
+## Examples by Lesson
 
-| 레슨 | 주제 | 예제 파일 |
-|------|------|-----------|
-| 01 | HTML 기초 | index.html, semantic.html |
-| 02 | HTML 폼/테이블 | form_example.html, table_example.html |
-| 03 | CSS 기초 | 선택자, 박스모델, 텍스트 |
-| 04 | CSS 레이아웃 | Flexbox, Grid |
-| 05 | 반응형 디자인 | 미디어쿼리, 모바일 퍼스트 |
-| 06 | JS 기초 | 변수, 함수, 배열, 객체, 클래스 |
-| 07 | DOM/이벤트 | DOM 조작, 이벤트 처리 |
-| 08 | 비동기 JS | Promise, async/await, fetch |
-| 09 | Todo 앱 | CRUD, 로컬스토리지, 필터 |
-| 10 | 날씨 앱 | API 연동, 비동기 처리 |
-| 11 | TypeScript | 타입, 인터페이스, 제네릭 |
-| 12 | 웹 접근성 | ARIA, 키보드, 스크린리더 |
-| 13 | SEO | 메타태그, 구조화 데이터 |
-| 14 | 빌드 도구 | Vite, Webpack |
+| Lesson | Topic | Example Files |
+|--------|-------|---------------|
+| 01 | HTML Basics | index.html, semantic.html |
+| 02 | HTML Forms/Tables | form_example.html, table_example.html |
+| 03 | CSS Basics | Selectors, Box Model, Text |
+| 04 | CSS Layout | Flexbox, Grid |
+| 05 | Responsive Design | Media Queries, Mobile First |
+| 06 | JS Basics | Variables, Functions, Arrays, Objects, Classes |
+| 07 | DOM/Events | DOM Manipulation, Event Handling |
+| 08 | Async JS | Promise, async/await, fetch |
+| 09 | Todo App | CRUD, LocalStorage, Filters |
+| 10 | Weather App | API Integration, Async Handling |
+| 11 | TypeScript | Types, Interfaces, Generics |
+| 12 | Web Accessibility | ARIA, Keyboard, Screen Reader |
+| 13 | SEO | Meta Tags, Structured Data |
+| 14 | Build Tools | Vite, Webpack |
 
-## 학습 순서
+## Learning Order
 
-1. **기초**: 01 → 02 → 03 → 04 → 05
+1. **Basics**: 01 → 02 → 03 → 04 → 05
 2. **JavaScript**: 06 → 07 → 08
-3. **프로젝트**: 09 → 10
-4. **고급**: 11 → 12 → 13 → 14
+3. **Projects**: 09 → 10
+4. **Advanced**: 11 → 12 → 13 → 14
 
-## 브라우저 호환성
+## Browser Compatibility
 
 - Chrome 80+
 - Firefox 75+
 - Safari 13+
 - Edge 80+
 
-## 참고 자료
+## References
 
 - [MDN Web Docs](https://developer.mozilla.org/ko/)
 - [CSS-Tricks](https://css-tricks.com/)

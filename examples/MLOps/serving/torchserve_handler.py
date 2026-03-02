@@ -2,20 +2,20 @@
 TorchServe Custom Handler Example
 =================================
 
-TorchServe에서 사용할 커스텀 핸들러 예제입니다.
+Custom handler example for TorchServe.
 
-사용 방법:
-    1. 모델 아카이브 생성:
+Usage:
+    1. Create model archive:
        torch-model-archiver --model-name mymodel \\
            --version 1.0 \\
            --serialized-file model.pt \\
            --handler torchserve_handler.py \\
            --export-path model_store
 
-    2. TorchServe 시작:
+    2. Start TorchServe:
        torchserve --start --model-store model_store --models mymodel=mymodel.mar
 
-    3. 예측 요청:
+    3. Send prediction request:
        curl -X POST http://localhost:8080/predictions/mymodel \\
            -H "Content-Type: application/json" \\
            -d '{"data": [1.0, 2.0, 3.0, 4.0]}'
@@ -34,13 +34,13 @@ logger = logging.getLogger(__name__)
 
 class ChurnPredictionHandler(BaseHandler):
     """
-    고객 이탈 예측 모델 핸들러
+    Customer churn prediction model handler
 
-    이 핸들러는 다음을 수행합니다:
-    1. 모델 초기화 및 로드
-    2. 입력 데이터 전처리
-    3. 추론 수행
-    4. 결과 후처리
+    This handler performs the following:
+    1. Model initialization and loading
+    2. Input data preprocessing
+    3. Inference execution
+    4. Result postprocessing
     """
 
     def __init__(self):
@@ -53,19 +53,19 @@ class ChurnPredictionHandler(BaseHandler):
 
     def initialize(self, context):
         """
-        모델 초기화
+        Initialize model
 
         Args:
-            context: TorchServe 컨텍스트 객체
+            context: TorchServe context object
         """
         logger.info("Initializing model...")
 
-        # 컨텍스트에서 정보 추출
+        # Extract info from context
         self.manifest = context.manifest
         properties = context.system_properties
         model_dir = properties.get("model_dir")
 
-        # 디바이스 설정
+        # Device setup
         if torch.cuda.is_available() and properties.get("gpu_id") is not None:
             self.device = torch.device(f"cuda:{properties.get('gpu_id')}")
             logger.info(f"Using GPU: {properties.get('gpu_id')}")
@@ -73,7 +73,7 @@ class ChurnPredictionHandler(BaseHandler):
             self.device = torch.device("cpu")
             logger.info("Using CPU")
 
-        # 모델 로드
+        # Load model
         serialized_file = self.manifest["model"]["serializedFile"]
         model_path = os.path.join(model_dir, serialized_file)
 
@@ -85,15 +85,15 @@ class ChurnPredictionHandler(BaseHandler):
             logger.error(f"Failed to load model: {e}")
             raise
 
-        # 추가 설정 파일 로드
+        # Load additional config files
         self._load_config(model_dir)
 
         self.initialized = True
         logger.info("Model initialization complete")
 
     def _load_config(self, model_dir):
-        """설정 파일 로드"""
-        # 클래스 이름
+        """Load configuration files"""
+        # Class names
         class_file = os.path.join(model_dir, "index_to_name.json")
         if os.path.exists(class_file):
             with open(class_file) as f:
@@ -102,7 +102,7 @@ class ChurnPredictionHandler(BaseHandler):
         else:
             self.class_names = {"0": "not_churned", "1": "churned"}
 
-        # 피처 이름
+        # Feature names
         feature_file = os.path.join(model_dir, "feature_names.json")
         if os.path.exists(feature_file):
             with open(feature_file) as f:
@@ -111,44 +111,44 @@ class ChurnPredictionHandler(BaseHandler):
 
     def preprocess(self, data):
         """
-        입력 데이터 전처리
+        Preprocess input data
 
         Args:
-            data: 요청 데이터 리스트
+            data: List of request data
 
         Returns:
-            torch.Tensor: 전처리된 입력 텐서
+            torch.Tensor: Preprocessed input tensor
         """
         logger.info(f"Preprocessing {len(data)} samples")
         inputs = []
 
         for row in data:
-            # 요청 데이터 파싱
+            # Parse request data
             if isinstance(row, dict):
                 features = row.get("data") or row.get("body")
             else:
                 features = row.get("body")
 
-            # 바이트 데이터 처리
+            # Handle byte data
             if isinstance(features, (bytes, bytearray)):
                 features = json.loads(features.decode("utf-8"))
 
-            # JSON 문자열 처리
+            # Handle JSON string
             if isinstance(features, str):
                 features = json.loads(features)
 
-            # dict인 경우 값만 추출
+            # Extract values if dict
             if isinstance(features, dict):
                 if "data" in features:
                     features = features["data"]
                 else:
                     features = list(features.values())
 
-            # 텐서로 변환
+            # Convert to tensor
             tensor = torch.tensor(features, dtype=torch.float32)
             inputs.append(tensor)
 
-        # 배치로 묶기
+        # Stack into batch
         batch = torch.stack(inputs).to(self.device)
         logger.info(f"Input batch shape: {batch.shape}")
 
@@ -156,13 +156,13 @@ class ChurnPredictionHandler(BaseHandler):
 
     def inference(self, data):
         """
-        모델 추론
+        Run model inference
 
         Args:
-            data: 전처리된 입력 텐서
+            data: Preprocessed input tensor
 
         Returns:
-            torch.Tensor: 모델 출력
+            torch.Tensor: Model output
         """
         logger.info("Running inference...")
         start_time = time.time()
@@ -170,7 +170,7 @@ class ChurnPredictionHandler(BaseHandler):
         with torch.no_grad():
             outputs = self.model(data)
 
-            # 확률로 변환 (분류 모델인 경우)
+            # Convert to probabilities (for classification models)
             if outputs.dim() > 1 and outputs.shape[1] > 1:
                 probabilities = F.softmax(outputs, dim=1)
             else:
@@ -183,13 +183,13 @@ class ChurnPredictionHandler(BaseHandler):
 
     def postprocess(self, data):
         """
-        출력 후처리
+        Postprocess output
 
         Args:
-            data: 모델 출력 텐서
+            data: Model output tensor
 
         Returns:
-            list: JSON 직렬화 가능한 결과 리스트
+            list: JSON-serializable result list
         """
         logger.info("Postprocessing results...")
         results = []
@@ -197,11 +197,11 @@ class ChurnPredictionHandler(BaseHandler):
         for prob in data:
             prob_list = prob.cpu().numpy().tolist()
 
-            # 이진 분류
+            # Binary classification
             if len(prob_list) == 1:
                 prediction = 1 if prob_list[0] > 0.5 else 0
                 probabilities = [1 - prob_list[0], prob_list[0]]
-            # 다중 클래스
+            # Multi-class
             else:
                 prediction = int(torch.argmax(prob).item())
                 probabilities = prob_list
@@ -212,7 +212,7 @@ class ChurnPredictionHandler(BaseHandler):
                 "confidence": max(probabilities)
             }
 
-            # 클래스 이름 추가
+            # Add class name
             if self.class_names:
                 result["class_name"] = self.class_names.get(
                     str(prediction),
@@ -226,9 +226,9 @@ class ChurnPredictionHandler(BaseHandler):
 
     def handle(self, data, context):
         """
-        전체 요청 처리 (preprocess -> inference -> postprocess)
+        Full request processing (preprocess -> inference -> postprocess)
 
-        TorchServe가 호출하는 메인 메서드
+        Main method called by TorchServe
         """
         if not self.initialized:
             self.initialize(context)
@@ -236,33 +236,33 @@ class ChurnPredictionHandler(BaseHandler):
         if data is None:
             return None
 
-        # 전처리
+        # Preprocess
         model_input = self.preprocess(data)
 
-        # 추론
+        # Inference
         model_output = self.inference(model_input)
 
-        # 후처리
+        # Postprocess
         return self.postprocess(model_output)
 
 
-# 핸들러 인스턴스 (TorchServe가 로드)
+# Handler instance (loaded by TorchServe)
 _service = ChurnPredictionHandler()
 
 
 def handle(data, context):
-    """TorchServe 엔트리 포인트"""
+    """TorchServe entry point"""
     return _service.handle(data, context)
 
 
 # ============================================================
-# 로컬 테스트용 코드
+# Local Testing Code
 # ============================================================
 
 if __name__ == "__main__":
     import torch.nn as nn
 
-    # 간단한 테스트 모델
+    # Simple test model
     class SimpleModel(nn.Module):
         def __init__(self, input_size, hidden_size, num_classes):
             super().__init__()
@@ -275,20 +275,20 @@ if __name__ == "__main__":
             x = self.fc2(x)
             return x
 
-    # 모델 생성 및 저장
-    print("테스트 모델 생성...")
+    # Create and save model
+    print("Creating test model...")
     model = SimpleModel(4, 10, 2)
     model.eval()
 
-    # TorchScript로 저장
+    # Save as TorchScript
     scripted = torch.jit.script(model)
     scripted.save("test_model.pt")
-    print("모델 저장: test_model.pt")
+    print("Model saved: test_model.pt")
 
-    # 핸들러 테스트
-    print("\n핸들러 테스트...")
+    # Test handler
+    print("\nTesting handler...")
 
-    # Mock 컨텍스트
+    # Mock context
     class MockContext:
         manifest = {"model": {"serializedFile": "test_model.pt"}}
         system_properties = {"model_dir": ".", "gpu_id": None}
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     handler = ChurnPredictionHandler()
     handler.initialize(MockContext())
 
-    # 테스트 요청
+    # Test request
     test_data = [
         {"data": [1.0, 2.0, 3.0, 4.0]},
         {"data": [5.0, 6.0, 7.0, 8.0]}
@@ -304,14 +304,14 @@ if __name__ == "__main__":
 
     results = handler.handle(test_data, MockContext())
 
-    print("\n결과:")
+    print("\nResults:")
     for i, result in enumerate(results):
-        print(f"  샘플 {i+1}:")
-        print(f"    예측: {result['prediction']}")
-        print(f"    확률: {result['probabilities']}")
-        print(f"    신뢰도: {result['confidence']:.4f}")
+        print(f"  Sample {i+1}:")
+        print(f"    Prediction: {result['prediction']}")
+        print(f"    Probabilities: {result['probabilities']}")
+        print(f"    Confidence: {result['confidence']:.4f}")
 
-    # 정리
+    # Cleanup
     import os
     os.remove("test_model.pt")
-    print("\n테스트 완료!")
+    print("\nTest complete!")

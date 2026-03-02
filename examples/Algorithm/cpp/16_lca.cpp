@@ -1,8 +1,8 @@
 /*
- * LCA와 트리 쿼리 (LCA and Tree Queries)
- * Binary Lifting, Sparse Table, Euler Tour, HLD 기초
+ * LCA and Tree Queries
+ * Binary Lifting, Sparse Table, Euler Tour, HLD Basics
  *
- * 트리에서 최소 공통 조상을 찾는 알고리즘입니다.
+ * Algorithms for finding the Lowest Common Ancestor in a tree.
  */
 
 #include <iostream>
@@ -20,7 +20,7 @@ class LCABinaryLifting {
 private:
     int n, LOG;
     vector<vector<int>> adj;
-    vector<vector<int>> up;  // up[v][j] = 2^j번째 조상
+    vector<vector<int>> up;  // up[v][j] = 2^j-th ancestor
     vector<int> depth;
 
     void dfs(int v, int p, int d) {
@@ -65,12 +65,12 @@ public:
     int lca(int u, int v) {
         if (depth[u] < depth[v]) swap(u, v);
 
-        // 같은 깊이로 맞추기
+        // Adjust to the same depth
         u = kthAncestor(u, depth[u] - depth[v]);
 
         if (u == v) return u;
 
-        // 함께 올라가기
+        // Climb up together
         for (int j = LOG - 1; j >= 0; j--) {
             if (up[u][j] != up[v][j]) {
                 u = up[u][j];
@@ -95,7 +95,7 @@ private:
     int n;
     vector<vector<int>> adj;
     vector<int> euler;       // Euler tour
-    vector<int> first;       // 첫 등장 위치
+    vector<int> first;       // First occurrence position
     vector<int> depth;
     vector<vector<int>> sparse;  // Sparse table
 
@@ -152,13 +152,13 @@ public:
 };
 
 // =============================================================================
-// 3. 트리에서 경로 쿼리
+// 3. Path Queries on Trees
 // =============================================================================
 
 class TreePathQuery {
 private:
     LCABinaryLifting lca;
-    vector<long long> prefixSum;  // 루트에서 각 노드까지의 합
+    vector<long long> prefixSum;  // Sum from root to each node
     vector<int> value;
 
 public:
@@ -166,7 +166,7 @@ public:
                   const vector<int>& values, int root = 0)
         : lca(n, adj, root), prefixSum(n, 0), value(values) {
 
-        // DFS로 prefix sum 계산
+        // Compute prefix sum via DFS
         function<void(int, int, long long)> dfs = [&](int v, int p, long long sum) {
             sum += value[v];
             prefixSum[v] = sum;
@@ -188,13 +188,13 @@ public:
 };
 
 // =============================================================================
-// 4. 트리 직경
+// 4. Tree Diameter
 // =============================================================================
 
 pair<int, pair<int, int>> treeDiameter(int n, const vector<vector<int>>& adj) {
     vector<int> dist(n, -1);
 
-    // 첫 번째 BFS
+    // First BFS
     auto bfs = [&](int start) -> int {
         fill(dist.begin(), dist.end(), -1);
         queue<int> q;
@@ -220,14 +220,14 @@ pair<int, pair<int, int>> treeDiameter(int n, const vector<vector<int>>& adj) {
         return farthest;
     };
 
-    int u = bfs(0);      // 가장 먼 점 찾기
-    int v = bfs(u);      // u에서 가장 먼 점 찾기
+    int u = bfs(0);      // Find the farthest point
+    int v = bfs(u);      // Find the farthest point from u
 
     return {dist[v], {u, v}};
 }
 
 // =============================================================================
-// 5. 트리의 중심 (Centroid)
+// 5. Tree Centroid
 // =============================================================================
 
 int treeCentroid(int n, const vector<vector<int>>& adj) {
@@ -258,7 +258,7 @@ int treeCentroid(int n, const vector<vector<int>>& adj) {
 }
 
 // =============================================================================
-// 6. 가중치 LCA
+// 6. Weighted LCA
 // =============================================================================
 
 class WeightedLCA {
@@ -266,7 +266,7 @@ private:
     int n, LOG;
     vector<vector<pair<int, int>>> adj;  // {neighbor, weight}
     vector<vector<int>> up;
-    vector<vector<int>> maxWeight;  // 조상 경로의 최대 가중치
+    vector<vector<int>> maxWeight;  // Maximum weight on the path to ancestor
     vector<int> depth;
 
     void dfs(int v, int p, int d, int w) {
@@ -328,17 +328,17 @@ public:
 };
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 #include <queue>
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "LCA와 트리 쿼리 예제" << endl;
+    cout << "LCA and Tree Queries Example" << endl;
     cout << "============================================================" << endl;
 
-    // 테스트 트리
+    // Test tree
     //        0
     //       /|\
     //      1 2 3
@@ -364,13 +364,13 @@ int main() {
     cout << "    LCA(4, 5) = " << lcaBL.lca(4, 5) << endl;
     cout << "    LCA(7, 6) = " << lcaBL.lca(7, 6) << endl;
     cout << "    LCA(7, 5) = " << lcaBL.lca(7, 5) << endl;
-    cout << "    거리(7, 6) = " << lcaBL.distance(7, 6) << endl;
+    cout << "    Distance(7, 6) = " << lcaBL.distance(7, 6) << endl;
 
-    // 2. K번째 조상
-    cout << "\n[2] K번째 조상" << endl;
-    cout << "    7의 1번째 조상: " << lcaBL.kthAncestor(7, 1) << endl;
-    cout << "    7의 2번째 조상: " << lcaBL.kthAncestor(7, 2) << endl;
-    cout << "    7의 3번째 조상: " << lcaBL.kthAncestor(7, 3) << endl;
+    // 2. K-th Ancestor
+    cout << "\n[2] K-th Ancestor" << endl;
+    cout << "    1st ancestor of 7: " << lcaBL.kthAncestor(7, 1) << endl;
+    cout << "    2nd ancestor of 7: " << lcaBL.kthAncestor(7, 2) << endl;
+    cout << "    3rd ancestor of 7: " << lcaBL.kthAncestor(7, 3) << endl;
 
     // 3. Euler Tour LCA
     cout << "\n[3] Euler Tour LCA" << endl;
@@ -378,32 +378,32 @@ int main() {
     cout << "    LCA(4, 5) = " << lcaET.lca(4, 5) << endl;
     cout << "    LCA(7, 6) = " << lcaET.lca(7, 6) << endl;
 
-    // 4. 트리 직경
-    cout << "\n[4] 트리 직경" << endl;
+    // 4. Tree Diameter
+    cout << "\n[4] Tree Diameter" << endl;
     auto [diameter, endpoints] = treeDiameter(n, adj);
-    cout << "    직경: " << diameter << endl;
-    cout << "    끝점: (" << endpoints.first << ", " << endpoints.second << ")" << endl;
+    cout << "    Diameter: " << diameter << endl;
+    cout << "    Endpoints: (" << endpoints.first << ", " << endpoints.second << ")" << endl;
 
-    // 5. 트리 중심
-    cout << "\n[5] 트리 중심" << endl;
+    // 5. Tree Centroid
+    cout << "\n[5] Tree Centroid" << endl;
     int centroid = treeCentroid(n, adj);
-    cout << "    중심: " << centroid << endl;
+    cout << "    Centroid: " << centroid << endl;
 
-    // 6. 경로 쿼리
-    cout << "\n[6] 경로 쿼리" << endl;
+    // 6. Path Queries
+    cout << "\n[6] Path Queries" << endl;
     vector<int> values = {1, 2, 3, 4, 5, 6, 7, 8};
     TreePathQuery tpq(n, adj, values, 0);
-    cout << "    노드 값: [1, 2, 3, 4, 5, 6, 7, 8]" << endl;
-    cout << "    경로 합(7, 6): " << tpq.pathSum(7, 6) << endl;
-    cout << "    경로 길이(7, 6): " << tpq.pathLength(7, 6) << endl;
+    cout << "    Node values: [1, 2, 3, 4, 5, 6, 7, 8]" << endl;
+    cout << "    Path sum(7, 6): " << tpq.pathSum(7, 6) << endl;
+    cout << "    Path length(7, 6): " << tpq.pathLength(7, 6) << endl;
 
-    // 7. 복잡도 요약
-    cout << "\n[7] 복잡도 요약" << endl;
-    cout << "    | 알고리즘        | 전처리      | 쿼리      |" << endl;
-    cout << "    |-----------------|-------------|-----------|" << endl;
-    cout << "    | Binary Lifting  | O(N log N)  | O(log N)  |" << endl;
-    cout << "    | Euler Tour+RMQ  | O(N log N)  | O(1)      |" << endl;
-    cout << "    | Tarjan's Offline| O(N + Q)    | O(1)      |" << endl;
+    // 7. Complexity Summary
+    cout << "\n[7] Complexity Summary" << endl;
+    cout << "    | Algorithm       | Preprocessing | Query     |" << endl;
+    cout << "    |-----------------|---------------|-----------|" << endl;
+    cout << "    | Binary Lifting  | O(N log N)    | O(log N)  |" << endl;
+    cout << "    | Euler Tour+RMQ  | O(N log N)    | O(1)      |" << endl;
+    cout << "    | Tarjan's Offline| O(N + Q)      | O(1)      |" << endl;
 
     cout << "\n============================================================" << endl;
 

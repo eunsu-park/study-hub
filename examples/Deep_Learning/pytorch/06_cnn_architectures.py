@@ -1,7 +1,7 @@
 """
-06. CNN 심화 - 유명 아키텍처
+06. CNN Advanced - Famous Architectures
 
-VGG, ResNet, EfficientNet 등 유명 아키텍처를 PyTorch로 구현합니다.
+Implements famous architectures like VGG, ResNet, and EfficientNet in PyTorch.
 """
 
 import torch
@@ -9,18 +9,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 print("=" * 60)
-print("PyTorch CNN 심화 - 유명 아키텍처")
+print("PyTorch CNN Advanced - Famous Architectures")
 print("=" * 60)
 
 
 # ============================================
-# 1. VGG 블록 및 모델
+# 1. VGG Block and Model
 # ============================================
-print("\n[1] VGG16 구현")
+print("\n[1] VGG16 Implementation")
 print("-" * 40)
 
 def make_vgg_block(in_channels, out_channels, num_convs):
-    """VGG 블록 생성"""
+    """Create a VGG block"""
     layers = []
     for i in range(num_convs):
         layers.append(nn.Conv2d(
@@ -33,19 +33,19 @@ def make_vgg_block(in_channels, out_channels, num_convs):
 
 
 class VGG16(nn.Module):
-    """VGG16 구현"""
+    """VGG16 Implementation"""
     def __init__(self, num_classes=1000):
         super().__init__()
-        # 특징 추출부
+        # Feature extractor
         self.features = nn.Sequential(
-            make_vgg_block(3, 64, 2),    # 224→112
-            make_vgg_block(64, 128, 2),  # 112→56
-            make_vgg_block(128, 256, 3), # 56→28
-            make_vgg_block(256, 512, 3), # 28→14
-            make_vgg_block(512, 512, 3), # 14→7
+            make_vgg_block(3, 64, 2),    # 224->112
+            make_vgg_block(64, 128, 2),  # 112->56
+            make_vgg_block(128, 256, 3), # 56->28
+            make_vgg_block(256, 512, 3), # 28->14
+            make_vgg_block(512, 512, 3), # 14->7
         )
 
-        # 분류기
+        # Classifier
         self.classifier = nn.Sequential(
             nn.Linear(512 * 7 * 7, 4096),
             nn.ReLU(inplace=True),
@@ -63,22 +63,22 @@ class VGG16(nn.Module):
         return x
 
 vgg = VGG16(num_classes=10)
-print(f"VGG16 파라미터: {sum(p.numel() for p in vgg.parameters()):,}")
+print(f"VGG16 parameters: {sum(p.numel() for p in vgg.parameters()):,}")
 
-# 테스트
+# Test
 x = torch.randn(1, 3, 224, 224)
 out = vgg(x)
-print(f"입력: {x.shape} → 출력: {out.shape}")
+print(f"Input: {x.shape} -> Output: {out.shape}")
 
 
 # ============================================
 # 2. ResNet Basic Block
 # ============================================
-print("\n[2] ResNet 구현")
+print("\n[2] ResNet Implementation")
 print("-" * 40)
 
 class BasicBlock(nn.Module):
-    """ResNet Basic Block (ResNet-18, 34용)"""
+    """ResNet Basic Block (for ResNet-18, 34)"""
     expansion = 1
 
     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
@@ -106,7 +106,7 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
-    """ResNet Bottleneck Block (ResNet-50, 101, 152용)"""
+    """ResNet Bottleneck Block (for ResNet-50, 101, 152)"""
     expansion = 4
 
     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
@@ -136,23 +136,23 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    """ResNet 구현"""
+    """ResNet Implementation"""
     def __init__(self, block, layers, num_classes=1000):
         super().__init__()
         self.in_channels = 64
 
-        # 초기 층
+        # Initial layers
         self.conv1 = nn.Conv2d(3, 64, 7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
-        # ResNet 층
+        # ResNet layers
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        # 분류기
+        # Classifier
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -197,13 +197,13 @@ def resnet34(num_classes=1000):
 def resnet50(num_classes=1000):
     return ResNet(Bottleneck, [3, 4, 6, 3], num_classes)
 
-# 테스트
+# Test
 resnet = resnet18(num_classes=10)
-print(f"ResNet-18 파라미터: {sum(p.numel() for p in resnet.parameters()):,}")
+print(f"ResNet-18 parameters: {sum(p.numel() for p in resnet.parameters()):,}")
 
 x = torch.randn(1, 3, 224, 224)
 out = resnet(x)
-print(f"입력: {x.shape} → 출력: {out.shape}")
+print(f"Input: {x.shape} -> Output: {out.shape}")
 
 
 # ============================================
@@ -233,15 +233,15 @@ class SEBlock(nn.Module):
         # Scale
         return x * y.expand_as(x)
 
-# 테스트
+# Test
 se = SEBlock(64)
 x = torch.randn(2, 64, 32, 32)
 out = se(x)
-print(f"SE Block: {x.shape} → {out.shape}")
+print(f"SE Block: {x.shape} -> {out.shape}")
 
 
 # ============================================
-# 4. MBConv (EfficientNet 블록)
+# 4. MBConv (EfficientNet Block)
 # ============================================
 print("\n[4] MBConv Block (EfficientNet)")
 print("-" * 40)
@@ -300,47 +300,47 @@ class MBConv(nn.Module):
             out = out + identity
         return out
 
-# 테스트
+# Test
 mbconv = MBConv(32, 32, expand_ratio=6)
 x = torch.randn(2, 32, 28, 28)
 out = mbconv(x)
-print(f"MBConv: {x.shape} → {out.shape}")
+print(f"MBConv: {x.shape} -> {out.shape}")
 
 
 # ============================================
-# 5. 사전 학습 모델 사용
+# 5. Pretrained Models
 # ============================================
-print("\n[5] torchvision 사전 학습 모델")
+print("\n[5] torchvision Pretrained Models")
 print("-" * 40)
 
 try:
     import torchvision.models as models
 
-    # 다양한 사전 학습 모델
+    # Various pretrained models
     model_names = ['resnet18', 'resnet50', 'vgg16', 'mobilenet_v2']
 
     for name in model_names:
-        model = getattr(models, name)(weights=None)  # 가중치 없이 구조만
+        model = getattr(models, name)(weights=None)  # Structure only, no weights
         params = sum(p.numel() for p in model.parameters())
-        print(f"{name}: {params:,} 파라미터")
+        print(f"{name}: {params:,} parameters")
 
-    # 사전 학습된 ResNet50 로드
-    print("\n사전 학습된 ResNet50 로드:")
+    # Load pretrained ResNet50
+    print("\nLoading pretrained ResNet50:")
     resnet50_pretrained = models.resnet50(weights='IMAGENET1K_V2')
-    print(f"  마지막 층: {resnet50_pretrained.fc}")
+    print(f"  Last layer: {resnet50_pretrained.fc}")
 
-    # 전이 학습을 위한 수정
-    resnet50_pretrained.fc = nn.Linear(2048, 10)  # 10 클래스로 변경
-    print(f"  수정된 마지막 층: {resnet50_pretrained.fc}")
+    # Modify for transfer learning
+    resnet50_pretrained.fc = nn.Linear(2048, 10)  # Change to 10 classes
+    print(f"  Modified last layer: {resnet50_pretrained.fc}")
 
 except ImportError:
-    print("torchvision이 설치되지 않았습니다.")
+    print("torchvision is not installed.")
 
 
 # ============================================
-# 6. 모델 비교
+# 6. Model Comparison
 # ============================================
-print("\n[6] 모델 비교")
+print("\n[6] Model Comparison")
 print("-" * 40)
 
 def count_parameters(model):
@@ -351,17 +351,17 @@ def measure_forward_time(model, input_shape, iterations=100):
     model.eval()
     x = torch.randn(*input_shape)
     with torch.no_grad():
-        # 워밍업
+        # Warmup
         for _ in range(10):
             _ = model(x)
-        # 측정
+        # Measure
         start = time.time()
         for _ in range(iterations):
             _ = model(x)
         end = time.time()
     return (end - start) / iterations * 1000  # ms
 
-# 간단한 모델들 비교
+# Compare simple models
 models_to_compare = {
     'VGG16 (simple)': VGG16(num_classes=10),
     'ResNet-18': resnet18(num_classes=10),
@@ -381,13 +381,13 @@ for name, model in models_to_compare.items():
 
 
 # ============================================
-# 7. 간단한 ResNet 실험
+# 7. Skip Connection Effect Experiment
 # ============================================
-print("\n[7] Skip Connection 효과 실험")
+print("\n[7] Skip Connection Effect Experiment")
 print("-" * 40)
 
 class ResBlockWithoutSkip(nn.Module):
-    """Skip Connection 없는 블록"""
+    """Block without Skip Connection"""
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
@@ -398,10 +398,10 @@ class ResBlockWithoutSkip(nn.Module):
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
-        return F.relu(out)  # Skip 없음!
+        return F.relu(out)  # No skip!
 
 class ResBlockWithSkip(nn.Module):
-    """Skip Connection 있는 블록"""
+    """Block with Skip Connection"""
     def __init__(self, channels):
         super().__init__()
         self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
@@ -413,9 +413,9 @@ class ResBlockWithSkip(nn.Module):
         identity = x
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
-        return F.relu(out + identity)  # Skip 있음!
+        return F.relu(out + identity)  # With skip!
 
-# 깊은 네트워크 비교
+# Compare deep networks
 def make_deep_net(block_class, num_blocks, channels=64):
     layers = [nn.Conv2d(3, channels, 3, padding=1), nn.ReLU()]
     for _ in range(num_blocks):
@@ -425,7 +425,7 @@ def make_deep_net(block_class, num_blocks, channels=64):
     layers.append(nn.Linear(channels, 10))
     return nn.Sequential(*layers)
 
-# 기울기 확인
+# Check gradients
 def check_gradient_flow(model, depth):
     model.train()
     x = torch.randn(1, 3, 32, 32, requires_grad=True)
@@ -433,7 +433,7 @@ def check_gradient_flow(model, depth):
     loss = out.sum()
     loss.backward()
 
-    # 첫 번째 Conv 기울기 확인
+    # Check first Conv layer gradient
     first_conv_grad = None
     for module in model.modules():
         if isinstance(module, nn.Conv2d):
@@ -443,7 +443,7 @@ def check_gradient_flow(model, depth):
 
     return first_conv_grad
 
-print("기울기 흐름 비교 (깊은 네트워크):")
+print("Gradient flow comparison (deep networks):")
 for depth in [5, 10, 20]:
     net_no_skip = make_deep_net(ResBlockWithoutSkip, depth)
     net_with_skip = make_deep_net(ResBlockWithSkip, depth)
@@ -451,43 +451,43 @@ for depth in [5, 10, 20]:
     grad_no_skip = check_gradient_flow(net_no_skip, depth)
     grad_with_skip = check_gradient_flow(net_with_skip, depth)
 
-    print(f"  깊이 {depth:2d}: Skip 없음 = {grad_no_skip:.6f}, Skip 있음 = {grad_with_skip:.6f}")
+    print(f"  Depth {depth:2d}: No skip = {grad_no_skip:.6f}, With skip = {grad_with_skip:.6f}")
 
 
 # ============================================
-# 정리
+# Summary
 # ============================================
 print("\n" + "=" * 60)
-print("CNN 아키텍처 정리")
+print("CNN Architecture Summary")
 print("=" * 60)
 
 summary = """
-주요 아키텍처:
+Key Architectures:
 
 1. VGG (2014)
-   - 3×3 Conv만 사용
-   - 깊이 = 성능 (단순하지만 파라미터 많음)
+   - Uses only 3x3 Conv
+   - Depth = Performance (simple but many parameters)
 
 2. ResNet (2015)
-   - Skip Connection으로 기울기 소실 해결
-   - 100+ 층도 학습 가능
-   - 가장 널리 사용됨
+   - Skip Connection solves vanishing gradient
+   - Can train 100+ layers
+   - Most widely used
 
 3. EfficientNet (2019)
    - Compound Scaling
    - MBConv (Depthwise Separable + SE)
-   - 효율적인 파라미터 사용
+   - Efficient parameter usage
 
-핵심 기법:
+Key Techniques:
 - Batch Normalization
 - Skip Connection (Residual)
 - Depthwise Separable Conv
 - Squeeze-and-Excitation
 
-실전 선택:
-- 빠른 추론: MobileNet, EfficientNet-B0
-- 높은 정확도: EfficientNet-B4~B7
-- 균형: ResNet-50
+Practical Selection:
+- Fast inference: MobileNet, EfficientNet-B0
+- High accuracy: EfficientNet-B4~B7
+- Balanced: ResNet-50
 """
 print(summary)
 print("=" * 60)

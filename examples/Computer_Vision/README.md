@@ -1,130 +1,130 @@
-# Computer_Vision 예제
+# Computer_Vision Examples
 
-Computer_Vision 폴더의 20개 레슨에 해당하는 실행 가능한 예제 코드입니다.
+Executable example code for all 20 lessons in the Computer_Vision folder.
 
-## 폴더 구조
+## Folder Structure
 
 ```
 examples/
-├── 01_environment_basics.py     # 환경 설정 및 기초
-├── 02_image_basics.py           # 이미지 기초 연산
-├── 03_color_spaces.py           # 색상 공간
-├── 04_geometric_transforms.py   # 기하학적 변환
-├── 05_filtering.py              # 이미지 필터링
-├── 06_morphology.py             # 모폴로지 연산
-├── 07_thresholding.py           # 이진화 및 임계처리
-├── 08_edge_detection.py         # 엣지 검출
-├── 09_contours.py               # 윤곽선 검출
-├── 10_shape_analysis.py         # 도형 분석
-├── 11_hough_transform.py        # 허프 변환
-├── 12_histogram.py              # 히스토그램 분석
-├── 13_feature_detection.py      # 특징점 검출
-├── 14_feature_matching.py       # 특징점 매칭
-├── 15_object_detection.py       # 객체 검출 기초
-├── 16_face_detection.py         # 얼굴 검출 및 인식
-├── 17_video_processing.py       # 비디오 처리
-├── 18_camera_calibration.py     # 카메라 캘리브레이션
-├── 19_dnn_module.py             # 딥러닝 DNN 모듈
-└── 20_practical_project.py      # 실전 프로젝트
+├── 01_environment_basics.py     # Environment setup and basics
+├── 02_image_basics.py           # Image basic operations
+├── 03_color_spaces.py           # Color spaces
+├── 04_geometric_transforms.py   # Geometric transformations
+├── 05_filtering.py              # Image filtering
+├── 06_morphology.py             # Morphological operations
+├── 07_thresholding.py           # Binarization and thresholding
+├── 08_edge_detection.py         # Edge detection
+├── 09_contours.py               # Contour detection
+├── 10_shape_analysis.py         # Shape analysis
+├── 11_hough_transform.py        # Hough transform
+├── 12_histogram.py              # Histogram analysis
+├── 13_feature_detection.py      # Feature point detection
+├── 14_feature_matching.py       # Feature matching
+├── 15_object_detection.py       # Object detection basics
+├── 16_face_detection.py         # Face detection and recognition
+├── 17_video_processing.py       # Video processing
+├── 18_camera_calibration.py     # Camera calibration
+├── 19_dnn_module.py             # Deep learning DNN module
+└── 20_practical_project.py      # Practical projects
 ```
 
-## 환경 설정
+## Environment Setup
 
 ```bash
-# 가상환경 생성
+# Create virtual environment
 python -m venv cv-env
 source cv-env/bin/activate  # Windows: cv-env\Scripts\activate
 
-# 필수 패키지 설치
+# Install required packages
 pip install opencv-python numpy matplotlib
 
-# 확장 패키지 (SIFT, SURF 등)
+# Extended packages (SIFT, SURF, etc.)
 pip install opencv-contrib-python
 
-# 얼굴 인식용 (선택)
+# For face recognition (optional)
 pip install dlib face_recognition
 ```
 
-## 실행 방법
+## How to Run
 
 ```bash
-# 개별 예제 실행
+# Run individual examples
 cd Computer_Vision/examples
 python 01_environment_basics.py
 
-# 테스트 이미지 준비 (필요 시)
-# 예제 실행 전에 sample.jpg 등의 테스트 이미지가 필요합니다
-# 웹캠 예제는 카메라가 연결되어 있어야 합니다
+# Prepare test images (if needed)
+# Test images such as sample.jpg are required before running examples
+# Webcam examples require a connected camera
 ```
 
-## 레슨별 예제 개요
+## Lesson-by-Lesson Example Overview
 
-| 레슨 | 주제 | 핵심 함수/개념 |
-|------|------|---------------|
-| 01 | 환경 설정 | `cv2.__version__`, 설치 확인 |
-| 02 | 이미지 기초 | `imread`, `imshow`, `imwrite`, ROI |
-| 03 | 색상 공간 | `cvtColor`, BGR/HSV/LAB, `split`/`merge` |
-| 04 | 기하 변환 | `resize`, `rotate`, `warpAffine`, `warpPerspective` |
-| 05 | 필터링 | `GaussianBlur`, `medianBlur`, `bilateralFilter` |
-| 06 | 모폴로지 | `erode`, `dilate`, `morphologyEx` |
-| 07 | 이진화 | `threshold`, OTSU, `adaptiveThreshold` |
-| 08 | 엣지 검출 | `Sobel`, `Laplacian`, `Canny` |
-| 09 | 윤곽선 | `findContours`, `drawContours`, `approxPolyDP` |
-| 10 | 도형 분석 | `moments`, `boundingRect`, `convexHull` |
-| 11 | 허프 변환 | `HoughLines`, `HoughLinesP`, `HoughCircles` |
-| 12 | 히스토그램 | `calcHist`, `equalizeHist`, CLAHE |
-| 13 | 특징점 검출 | Harris, SIFT, ORB |
-| 14 | 특징점 매칭 | BFMatcher, FLANN, homography |
-| 15 | 객체 검출 | template matching, Haar cascade |
-| 16 | 얼굴 검출 | Haar face, dlib landmarks |
-| 17 | 비디오 처리 | `VideoCapture`, 배경 차분, 옵티컬플로우 |
-| 18 | 캘리브레이션 | 체스보드, 왜곡 보정 |
-| 19 | DNN 모듈 | `readNet`, `blobFromImage` |
-| 20 | 실전 프로젝트 | 문서 스캐너, 차선 검출 |
+| Lesson | Topic | Key Functions/Concepts |
+|--------|-------|----------------------|
+| 01 | Environment setup | `cv2.__version__`, installation check |
+| 02 | Image basics | `imread`, `imshow`, `imwrite`, ROI |
+| 03 | Color spaces | `cvtColor`, BGR/HSV/LAB, `split`/`merge` |
+| 04 | Geometric transforms | `resize`, `rotate`, `warpAffine`, `warpPerspective` |
+| 05 | Filtering | `GaussianBlur`, `medianBlur`, `bilateralFilter` |
+| 06 | Morphology | `erode`, `dilate`, `morphologyEx` |
+| 07 | Thresholding | `threshold`, OTSU, `adaptiveThreshold` |
+| 08 | Edge detection | `Sobel`, `Laplacian`, `Canny` |
+| 09 | Contours | `findContours`, `drawContours`, `approxPolyDP` |
+| 10 | Shape analysis | `moments`, `boundingRect`, `convexHull` |
+| 11 | Hough transform | `HoughLines`, `HoughLinesP`, `HoughCircles` |
+| 12 | Histogram | `calcHist`, `equalizeHist`, CLAHE |
+| 13 | Feature detection | Harris, SIFT, ORB |
+| 14 | Feature matching | BFMatcher, FLANN, homography |
+| 15 | Object detection | template matching, Haar cascade |
+| 16 | Face detection | Haar face, dlib landmarks |
+| 17 | Video processing | `VideoCapture`, background subtraction, optical flow |
+| 18 | Calibration | chessboard, distortion correction |
+| 19 | DNN module | `readNet`, `blobFromImage` |
+| 20 | Practical projects | document scanner, lane detection |
 
-## 테스트 이미지 준비
+## Preparing Test Images
 
-예제 실행을 위해 다음 테스트 이미지가 필요합니다:
+The following test images are needed to run the examples:
 
 ```bash
-# 간단한 테스트 이미지 생성 (예제 01에 포함)
-python 01_environment_basics.py  # 테스트 이미지 자동 생성
+# Generate simple test images (included in example 01)
+python 01_environment_basics.py  # Auto-generates test images
 
-# 또는 직접 이미지 준비
-# - sample.jpg: 일반 컬러 이미지
-# - face.jpg: 얼굴이 포함된 이미지 (16번 예제용)
-# - checkerboard.jpg: 체스보드 이미지 (18번 예제용)
-```
-
-## 학습 순서
-
-### 1단계: 기초 (01-04)
-```
-01 → 02 → 03 → 04
+# Or prepare images manually
+# - sample.jpg: A general color image
+# - face.jpg: An image containing a face (for example 16)
+# - checkerboard.jpg: A chessboard image (for example 18)
 ```
 
-### 2단계: 이미지 처리 (05-08)
+## Learning Path
+
+### Stage 1: Basics (01-04)
 ```
-05 → 06 → 07 → 08
+01 -> 02 -> 03 -> 04
 ```
 
-### 3단계: 객체 분석 (09-12)
+### Stage 2: Image Processing (05-08)
 ```
-09 → 10 → 11 → 12
-```
-
-### 4단계: 특징/검출 (13-16)
-```
-13 → 14 → 15 → 16
+05 -> 06 -> 07 -> 08
 ```
 
-### 5단계: 고급 (17-20)
+### Stage 3: Object Analysis (09-12)
 ```
-17 → 18 → 19 → 20
+09 -> 10 -> 11 -> 12
 ```
 
-## 참고 자료
+### Stage 4: Features/Detection (13-16)
+```
+13 -> 14 -> 15 -> 16
+```
 
-- [OpenCV 공식 문서](https://docs.opencv.org/)
-- [OpenCV-Python 튜토리얼](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html)
+### Stage 5: Advanced (17-20)
+```
+17 -> 18 -> 19 -> 20
+```
+
+## References
+
+- [OpenCV Official Documentation](https://docs.opencv.org/)
+- [OpenCV-Python Tutorials](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html)
 - [PyImageSearch](https://pyimagesearch.com/)

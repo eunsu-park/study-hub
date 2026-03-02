@@ -1,8 +1,8 @@
 /*
- * 고급 DP 최적화 (Advanced DP Optimization)
+ * Advanced DP Optimization
  * CHT, D&C Optimization, Knuth Optimization, Monotonic Queue
  *
- * DP의 시간 복잡도를 줄이는 고급 기법들입니다.
+ * Advanced techniques for reducing DP time complexity.
  */
 
 #include <iostream>
@@ -31,12 +31,12 @@ private:
     deque<Line> hull;
 
     bool bad(const Line& l1, const Line& l2, const Line& l3) {
-        // l2가 불필요한지 확인
+        // Check if l2 is unnecessary
         return (l3.b - l1.b) * (l1.m - l2.m) <= (l2.b - l1.b) * (l1.m - l3.m);
     }
 
 public:
-    // 기울기 단조 감소일 때 추가
+    // Add line when slopes are monotonically decreasing
     void addLine(ll m, ll b) {
         Line line = {m, b};
         while (hull.size() >= 2 && bad(hull[hull.size()-2], hull[hull.size()-1], line)) {
@@ -45,7 +45,7 @@ public:
         hull.push_back(line);
     }
 
-    // x가 단조 증가할 때 최솟값 쿼리
+    // Min query when x is monotonically increasing
     ll query(ll x) {
         while (hull.size() >= 2 && hull[0].eval(x) >= hull[1].eval(x)) {
             hull.pop_front();
@@ -53,7 +53,7 @@ public:
         return hull[0].eval(x);
     }
 
-    // 이분 탐색으로 쿼리 (x가 단조 증가가 아닐 때)
+    // Binary search query (when x is not monotonically increasing)
     ll queryBinarySearch(ll x) {
         int lo = 0, hi = hull.size() - 1;
         while (lo < hi) {
@@ -138,7 +138,7 @@ public:
 // =============================================================================
 
 // dp[i][j] = min(dp[i-1][k] + cost[k][j]) for k < j
-// 조건: opt[i][j] <= opt[i][j+1]
+// Condition: opt[i][j] <= opt[i][j+1]
 
 class DivideConquerDP {
 private:
@@ -174,7 +174,7 @@ public:
         dp.assign(k + 1, vector<ll>(n + 1, INF));
         dp[0][0] = 0;
 
-        // 첫 번째 그룹
+        // First group
         for (int j = 1; j <= n; j++) {
             dp[1][j] = cost[1][j];
         }
@@ -192,18 +192,18 @@ public:
 // =============================================================================
 
 // dp[i][j] = min(dp[i][k] + dp[k+1][j]) + cost[i][j] for i <= k < j
-// 조건: opt[i][j-1] <= opt[i][j] <= opt[i+1][j]
+// Condition: opt[i][j-1] <= opt[i][j] <= opt[i+1][j]
 
 ll knuthOptimization(int n, const vector<vector<ll>>& cost) {
     vector<vector<ll>> dp(n + 2, vector<ll>(n + 2, 0));
     vector<vector<int>> opt(n + 2, vector<int>(n + 2));
 
-    // 기저 조건
+    // Base case
     for (int i = 1; i <= n; i++) {
         opt[i][i] = i;
     }
 
-    // 길이 순으로 계산
+    // Compute by length
     for (int len = 2; len <= n; len++) {
         for (int i = 1; i + len - 1 <= n; i++) {
             int j = i + len - 1;
@@ -241,15 +241,15 @@ vector<ll> monotonicQueueDP(int n, int k, const vector<ll>& cost) {
     dq.push_back(0);
 
     for (int i = 1; i <= n; i++) {
-        // 윈도우 벗어난 원소 제거
+        // Remove elements outside the window
         while (!dq.empty() && dq.front() < i - k) {
             dq.pop_front();
         }
 
-        // 최솟값 사용
+        // Use the minimum
         dp[i] = dp[dq.front()] + cost[i];
 
-        // 새 원소 추가 (모노토닉 유지)
+        // Add new element (maintain monotonicity)
         while (!dq.empty() && dp[dq.back()] >= dp[i]) {
             dq.pop_back();
         }
@@ -264,7 +264,7 @@ vector<ll> monotonicQueueDP(int n, int k, const vector<ll>& cost) {
 // =============================================================================
 
 void sosDP(vector<ll>& dp, int n) {
-    // dp[mask]에 mask의 모든 부분집합의 합 저장
+    // Store the sum of all subsets of mask in dp[mask]
     for (int i = 0; i < n; i++) {
         for (int mask = 0; mask < (1 << n); mask++) {
             if (mask & (1 << i)) {
@@ -278,11 +278,11 @@ void sosDP(vector<ll>& dp, int n) {
 // 7. Aliens Trick (WQS Binary Search)
 // =============================================================================
 
-// 정확히 k개 선택 문제를 페널티 λ로 변환
-// dp[i] = max(value[i] - λ)의 형태로 변환 후 이분 탐색
+// Transform "select exactly k items" problem using penalty lambda
+// dp[i] = max(value[i] - lambda), then binary search on lambda
 
 pair<ll, int> alienDP(int n, const vector<ll>& values, ll penalty) {
-    // 페널티 λ를 적용했을 때의 최대값과 선택 개수 반환
+    // Return max value and selection count with penalty lambda applied
     ll maxVal = 0;
     int count = 0;
 
@@ -317,12 +317,12 @@ ll aliensOptimization(int n, int k, const vector<ll>& values) {
 }
 
 // =============================================================================
-// 테스트
+// Test
 // =============================================================================
 
 int main() {
     cout << "============================================================" << endl;
-    cout << "고급 DP 최적화 예제" << endl;
+    cout << "Advanced DP Optimization Example" << endl;
     cout << "============================================================" << endl;
 
     // 1. Convex Hull Trick
@@ -332,10 +332,10 @@ int main() {
     cht.addLine(-1, 3);   // y = -x + 3
     cht.addLine(0, 2);    // y = 2
 
-    cout << "    직선: y=-2x+4, y=-x+3, y=2" << endl;
-    cout << "    x=0 최솟값: " << cht.queryBinarySearch(0) << endl;
-    cout << "    x=1 최솟값: " << cht.queryBinarySearch(1) << endl;
-    cout << "    x=2 최솟값: " << cht.queryBinarySearch(2) << endl;
+    cout << "    Lines: y=-2x+4, y=-x+3, y=2" << endl;
+    cout << "    x=0 min: " << cht.queryBinarySearch(0) << endl;
+    cout << "    x=1 min: " << cht.queryBinarySearch(1) << endl;
+    cout << "    x=2 min: " << cht.queryBinarySearch(2) << endl;
 
     // 2. Li Chao Tree
     cout << "\n[2] Li Chao Tree" << endl;
@@ -344,16 +344,16 @@ int main() {
     lct.addLine(1, 0);
     lct.addLine(-1, 8);
 
-    cout << "    직선: y=-2x+10, y=x, y=-x+8" << endl;
-    cout << "    x=0 최솟값: " << lct.query(0) << endl;
-    cout << "    x=3 최솟값: " << lct.query(3) << endl;
-    cout << "    x=5 최솟값: " << lct.query(5) << endl;
+    cout << "    Lines: y=-2x+10, y=x, y=-x+8" << endl;
+    cout << "    x=0 min: " << lct.query(0) << endl;
+    cout << "    x=3 min: " << lct.query(3) << endl;
+    cout << "    x=5 min: " << lct.query(5) << endl;
 
-    // 3. 모노토닉 큐 DP
-    cout << "\n[3] 모노토닉 큐 DP" << endl;
+    // 3. Monotonic Queue DP
+    cout << "\n[3] Monotonic Queue DP" << endl;
     vector<ll> cost = {0, 1, 3, 2, 4, 1, 5};
     auto dp = monotonicQueueDP(6, 3, cost);
-    cout << "    비용: [1, 3, 2, 4, 1, 5], k=3" << endl;
+    cout << "    Cost: [1, 3, 2, 4, 1, 5], k=3" << endl;
     cout << "    DP: [";
     for (int i = 1; i <= 6; i++) {
         cout << dp[i];
@@ -364,7 +364,7 @@ int main() {
     // 4. SOS DP
     cout << "\n[4] SOS DP" << endl;
     vector<ll> sos = {1, 2, 3, 4, 5, 6, 7, 8};  // 2^3 = 8
-    cout << "    초기: [1, 2, 3, 4, 5, 6, 7, 8]" << endl;
+    cout << "    Initial: [1, 2, 3, 4, 5, 6, 7, 8]" << endl;
     sosDP(sos, 3);
     cout << "    SOS: [";
     for (int i = 0; i < 8; i++) {
@@ -373,29 +373,29 @@ int main() {
     }
     cout << "]" << endl;
 
-    // 5. 복잡도 비교
-    cout << "\n[5] 복잡도 비교" << endl;
-    cout << "    | 기법              | 원래 복잡도 | 최적화 후    |" << endl;
+    // 5. Complexity Comparison
+    cout << "\n[5] Complexity Comparison" << endl;
+    cout << "    | Technique         | Original    | Optimized    |" << endl;
     cout << "    |-------------------|-------------|--------------|" << endl;
-    cout << "    | CHT               | O(n²)       | O(n log n)   |" << endl;
-    cout << "    | Li Chao Tree      | O(n²)       | O(n log C)   |" << endl;
-    cout << "    | D&C 최적화        | O(kn²)      | O(kn log n)  |" << endl;
-    cout << "    | Knuth 최적화      | O(n³)       | O(n²)        |" << endl;
-    cout << "    | 모노토닉 큐       | O(nk)       | O(n)         |" << endl;
-    cout << "    | SOS DP            | O(3^n)      | O(n × 2^n)   |" << endl;
-    cout << "    | Aliens Trick      | O(n²)       | O(n log C)   |" << endl;
+    cout << "    | CHT               | O(n^2)      | O(n log n)   |" << endl;
+    cout << "    | Li Chao Tree      | O(n^2)      | O(n log C)   |" << endl;
+    cout << "    | D&C Optimization  | O(kn^2)     | O(kn log n)  |" << endl;
+    cout << "    | Knuth Optimization| O(n^3)      | O(n^2)       |" << endl;
+    cout << "    | Monotonic Queue   | O(nk)       | O(n)         |" << endl;
+    cout << "    | SOS DP            | O(3^n)      | O(n * 2^n)   |" << endl;
+    cout << "    | Aliens Trick      | O(n^2)      | O(n log C)   |" << endl;
 
-    // 6. 적용 조건
-    cout << "\n[6] 적용 조건" << endl;
+    // 6. Application Conditions
+    cout << "\n[6] Application Conditions" << endl;
     cout << "    CHT:" << endl;
-    cout << "      - dp[i] = min(dp[j] + a[j] × b[i]) 형태" << endl;
-    cout << "      - a[j] 또는 b[i]가 단조" << endl;
-    cout << "    D&C 최적화:" << endl;
+    cout << "      - dp[i] = min(dp[j] + a[j] * b[i]) form" << endl;
+    cout << "      - a[j] or b[i] is monotonic" << endl;
+    cout << "    D&C Optimization:" << endl;
     cout << "      - opt[i][j] <= opt[i][j+1]" << endl;
     cout << "      - Quadrangle Inequality" << endl;
-    cout << "    Knuth 최적화:" << endl;
+    cout << "    Knuth Optimization:" << endl;
     cout << "      - opt[i][j-1] <= opt[i][j] <= opt[i+1][j]" << endl;
-    cout << "      - 구간 DP에서 주로 사용" << endl;
+    cout << "      - Mainly used in interval DP" << endl;
 
     cout << "\n============================================================" << endl;
 

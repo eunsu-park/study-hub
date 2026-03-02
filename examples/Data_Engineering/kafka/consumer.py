@@ -1,15 +1,15 @@
 """
-Kafka Consumer 예제
+Kafka Consumer Example
 
-Kafka 토픽에서 메시지를 소비하는 Consumer 예제입니다.
+An example of a Consumer that consumes messages from Kafka topics.
 
-필수 패키지: pip install confluent-kafka
+Required package: pip install confluent-kafka
 
-실행 전:
-  1. Kafka 실행 필요
-  2. producer.py로 메시지 발행
+Before running:
+  1. Kafka must be running
+  2. Publish messages with producer.py
 
-실행: python consumer.py
+Run: python consumer.py
 """
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
@@ -22,7 +22,7 @@ from collections import defaultdict
 
 
 class KafkaConsumerExample:
-    """Kafka Consumer 예제 클래스"""
+    """Kafka Consumer example class"""
 
     def __init__(
         self,
@@ -33,7 +33,7 @@ class KafkaConsumerExample:
         self.config = {
             'bootstrap.servers': bootstrap_servers,
             'group.id': group_id,
-            'auto.offset.reset': 'earliest',  # 처음부터 읽기
+            'auto.offset.reset': 'earliest',  # Read from the beginning
             'enable.auto.commit': auto_commit,
             'auto.commit.interval.ms': 5000,
             'session.timeout.ms': 45000,
@@ -44,17 +44,17 @@ class KafkaConsumerExample:
         self.message_count = 0
         self.error_count = 0
 
-        # Graceful shutdown 설정
+        # Graceful shutdown setup
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
-        """종료 시그널 핸들러"""
+        """Shutdown signal handler"""
         print("\n[INFO] Shutdown signal received")
         self.running = False
 
     def subscribe(self, topics: List[str]):
-        """토픽 구독"""
+        """Subscribe to topics"""
         def on_assign(consumer, partitions):
             print(f'[INFO] Partitions assigned: {[p.partition for p in partitions]}')
 
@@ -65,7 +65,7 @@ class KafkaConsumerExample:
         print(f'[INFO] Subscribed to topics: {topics}')
 
     def consume(self, handler: Callable[[dict, dict], None], timeout: float = 1.0):
-        """메시지 소비 루프"""
+        """Message consumption loop"""
         print('[INFO] Starting consumer loop...')
 
         while self.running:
@@ -77,14 +77,14 @@ class KafkaConsumerExample:
 
                 if msg.error():
                     if msg.error().code() == KafkaError._PARTITION_EOF:
-                        # 파티션 끝에 도달
+                        # Reached end of partition
                         continue
                     else:
                         print(f'[ERROR] Consumer error: {msg.error()}')
                         self.error_count += 1
                         continue
 
-                # 메시지 파싱
+                # Parse message
                 try:
                     key = msg.key().decode('utf-8') if msg.key() else None
                     value = json.loads(msg.value().decode('utf-8'))
@@ -97,7 +97,7 @@ class KafkaConsumerExample:
                         'key': key,
                     }
 
-                    # 핸들러 호출
+                    # Call handler
                     handler(value, metadata)
                     self.message_count += 1
 
@@ -112,18 +112,18 @@ class KafkaConsumerExample:
         self.close()
 
     def commit(self):
-        """수동 커밋"""
+        """Manual commit"""
         self.consumer.commit()
 
     def close(self):
-        """Consumer 종료"""
+        """Close consumer"""
         print('\n[INFO] Closing consumer...')
         self.consumer.close()
         print(f'[SUMMARY] Total consumed: {self.message_count}, Errors: {self.error_count}')
 
 
 class MessageAggregator:
-    """메시지 집계 클래스"""
+    """Message aggregation class"""
 
     def __init__(self, window_seconds: int = 60):
         self.window_seconds = window_seconds
@@ -132,17 +132,17 @@ class MessageAggregator:
         self.last_report = datetime.now()
 
     def add(self, event_type: str, amount: float = 0):
-        """이벤트 추가"""
+        """Add an event"""
         self.counts[event_type] += 1
         self.amounts[event_type] += amount
 
     def should_report(self) -> bool:
-        """보고 시간 확인"""
+        """Check if it is time to report"""
         elapsed = (datetime.now() - self.last_report).seconds
         return elapsed >= self.window_seconds
 
     def report_and_reset(self) -> dict:
-        """보고 및 리셋"""
+        """Report and reset"""
         report = {
             'window_end': datetime.now().isoformat(),
             'counts': dict(self.counts),
@@ -155,7 +155,7 @@ class MessageAggregator:
 
 
 def demo_simple_consumer():
-    """간단한 Consumer 데모"""
+    """Simple Consumer demo"""
     print("=" * 60)
     print("Simple Consumer Demo")
     print("=" * 60)
@@ -175,7 +175,7 @@ def demo_simple_consumer():
 
 
 def demo_order_consumer():
-    """주문 이벤트 Consumer 데모"""
+    """Order event Consumer demo"""
     print("\n" + "=" * 60)
     print("Order Consumer Demo")
     print("=" * 60)
@@ -186,17 +186,17 @@ def demo_order_consumer():
     aggregator = MessageAggregator(window_seconds=10)
 
     def order_handler(value: dict, metadata: dict):
-        # 이벤트 집계
+        # Aggregate events
         aggregator.add(value.get('status', 'unknown'), value.get('amount', 0))
 
-        # 주기적 보고
+        # Periodic reporting
         if aggregator.should_report():
             report = aggregator.report_and_reset()
             print(f"\n[REPORT] {report['window_end']}")
             print(f"  Order counts: {report['counts']}")
             print(f"  Total amounts: {report['amounts']}")
 
-        # 특정 조건 처리 (예: 고액 주문)
+        # Handle specific conditions (e.g., high-value orders)
         if value.get('amount', 0) > 500:
             print(f"[ALERT] High-value order: {value['order_id']} - ${value['amount']}")
 
@@ -205,7 +205,7 @@ def demo_order_consumer():
 
 
 def demo_multi_topic_consumer():
-    """멀티 토픽 Consumer 데모"""
+    """Multi-topic Consumer demo"""
     print("\n" + "=" * 60)
     print("Multi-Topic Consumer Demo")
     print("=" * 60)
@@ -219,11 +219,11 @@ def demo_multi_topic_consumer():
         topic = metadata['topic']
         topic_counts[topic] += 1
 
-        # 토픽별 처리
+        # Topic-specific processing
         if topic == 'orders':
             print(f"[ORDER] {value.get('order_id')}: ${value.get('amount')}")
         elif topic == 'clickstream':
-            if topic_counts[topic] % 10 == 0:  # 10개마다 출력
+            if topic_counts[topic] % 10 == 0:  # Print every 10 events
                 print(f"[CLICK] Processed {topic_counts[topic]} events")
         elif topic == 'inventory':
             if value.get('current_stock', 100) < 10:
@@ -234,14 +234,14 @@ def demo_multi_topic_consumer():
 
 
 def demo_manual_commit_consumer():
-    """수동 커밋 Consumer 데모"""
+    """Manual commit Consumer demo"""
     print("\n" + "=" * 60)
     print("Manual Commit Consumer Demo")
     print("=" * 60)
 
     consumer = KafkaConsumerExample(
         group_id='manual-commit-group',
-        auto_commit=False  # 자동 커밋 비활성화
+        auto_commit=False  # Disable auto commit
     )
     consumer.subscribe(['batch-orders'])
 
@@ -251,15 +251,15 @@ def demo_manual_commit_consumer():
     def batch_handler(value: dict, metadata: dict):
         batch.append(value)
 
-        # 배치 처리
+        # Batch processing
         if len(batch) >= batch_size:
             print(f"\n[BATCH] Processing {len(batch)} messages...")
 
-            # 배치 처리 로직
+            # Batch processing logic
             total_amount = sum(msg.get('amount', 0) for msg in batch)
             print(f"  Total amount: ${total_amount:.2f}")
 
-            # 처리 성공 후 커밋
+            # Commit after successful processing
             consumer.commit()
             print(f"  Committed offset")
 
@@ -270,7 +270,7 @@ def demo_manual_commit_consumer():
 
 
 def demo_stateful_consumer():
-    """상태 유지 Consumer 데모"""
+    """Stateful Consumer demo"""
     print("\n" + "=" * 60)
     print("Stateful Consumer Demo")
     print("=" * 60)
@@ -278,7 +278,7 @@ def demo_stateful_consumer():
     consumer = KafkaConsumerExample(group_id='stateful-group')
     consumer.subscribe(['orders'])
 
-    # 고객별 상태 유지
+    # Maintain per-customer state
     customer_state = defaultdict(lambda: {
         'order_count': 0,
         'total_spent': 0.0,
@@ -295,7 +295,7 @@ def demo_stateful_consumer():
         state['total_spent'] += value.get('amount', 0)
         state['last_order'] = value.get('timestamp')
 
-        # VIP 고객 감지
+        # Detect VIP customers
         if state['total_spent'] > 2000:
             print(f"[VIP] Customer {customer_id}: "
                   f"{state['order_count']} orders, ${state['total_spent']:.2f} total")

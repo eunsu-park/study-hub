@@ -1,7 +1,7 @@
 """
-06. HuggingFace Pipeline 예제
+06. HuggingFace Pipeline Example
 
-다양한 NLP 태스크를 Pipeline으로 수행
+Performing various NLP tasks with Pipeline
 """
 
 print("=" * 60)
@@ -12,9 +12,9 @@ try:
     from transformers import pipeline
 
     # ============================================
-    # 1. 감성 분석
+    # 1. Sentiment Analysis
     # ============================================
-    print("\n[1] 감성 분석 (Sentiment Analysis)")
+    print("\n[1] Sentiment Analysis")
     print("-" * 40)
 
     classifier = pipeline("sentiment-analysis")
@@ -31,23 +31,23 @@ try:
 
 
     # ============================================
-    # 2. 텍스트 생성
+    # 2. Text Generation
     # ============================================
-    print("\n[2] 텍스트 생성 (Text Generation)")
+    print("\n[2] Text Generation")
     print("-" * 40)
 
     generator = pipeline("text-generation", model="gpt2")
 
     prompt = "Artificial intelligence will"
     result = generator(prompt, max_length=50, num_return_sequences=1)
-    print(f"프롬프트: {prompt}")
-    print(f"생성: {result[0]['generated_text']}")
+    print(f"Prompt: {prompt}")
+    print(f"Generated: {result[0]['generated_text']}")
 
 
     # ============================================
-    # 3. 질의응답 (QA)
+    # 3. Question Answering (QA)
     # ============================================
-    print("\n[3] 질의응답 (Question Answering)")
+    print("\n[3] Question Answering (QA)")
     print("-" * 40)
 
     qa = pipeline("question-answering")
@@ -72,9 +72,9 @@ try:
 
 
     # ============================================
-    # 4. 개체명 인식 (NER)
+    # 4. Named Entity Recognition (NER)
     # ============================================
-    print("\n[4] 개체명 인식 (NER)")
+    print("\n[4] Named Entity Recognition (NER)")
     print("-" * 40)
 
     ner = pipeline("ner", grouped_entities=True)
@@ -82,16 +82,16 @@ try:
     text = "Apple Inc. was founded by Steve Jobs in Cupertino, California in 1976."
     entities = ner(text)
 
-    print(f"텍스트: {text}")
-    print("개체:")
+    print(f"Text: {text}")
+    print("Entities:")
     for entity in entities:
         print(f"  [{entity['entity_group']}] {entity['word']} ({entity['score']:.2%})")
 
 
     # ============================================
-    # 5. 텍스트 요약
+    # 5. Text Summarization
     # ============================================
-    print("\n[5] 텍스트 요약 (Summarization)")
+    print("\n[5] Text Summarization")
     print("-" * 40)
 
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -106,14 +106,14 @@ try:
     """
 
     summary = summarizer(article, max_length=50, min_length=20)
-    print(f"원문 길이: {len(article)} chars")
-    print(f"요약: {summary[0]['summary_text']}")
+    print(f"Original length: {len(article)} chars")
+    print(f"Summary: {summary[0]['summary_text']}")
 
 
     # ============================================
-    # 6. Zero-shot 분류
+    # 6. Zero-shot Classification
     # ============================================
-    print("\n[6] Zero-shot 분류")
+    print("\n[6] Zero-shot Classification")
     print("-" * 40)
 
     classifier = pipeline("zero-shot-classification")
@@ -143,16 +143,16 @@ try:
     text = "Python is a [MASK] programming language."
     results = fill_mask(text)
 
-    print(f"입력: {text}")
-    print("예측:")
+    print(f"Input: {text}")
+    print("Predictions:")
     for r in results[:3]:
         print(f"  {r['token_str']}: {r['score']:.2%}")
 
 
     # ============================================
-    # 8. 번역
+    # 8. Translation
     # ============================================
-    print("\n[8] 번역 (Translation)")
+    print("\n[8] Translation")
     print("-" * 40)
 
     translator = pipeline("translation_en_to_fr", model="Helsinki-NLP/opus-mt-en-fr")
@@ -170,24 +170,24 @@ try:
 
 
     # ============================================
-    # 정리
+    # Summary
     # ============================================
     print("=" * 60)
-    print("Pipeline 정리")
+    print("Pipeline Summary")
     print("=" * 60)
 
     summary = """
-주요 Pipeline:
-    - sentiment-analysis: 감성 분석
-    - text-generation: 텍스트 생성
-    - question-answering: 질의응답
-    - ner: 개체명 인식
-    - summarization: 요약
-    - zero-shot-classification: 레이블 없는 분류
-    - fill-mask: 마스크 예측
-    - translation: 번역
+Main Pipelines:
+    - sentiment-analysis: Sentiment analysis
+    - text-generation: Text generation
+    - question-answering: Question answering
+    - ner: Named entity recognition
+    - summarization: Summarization
+    - zero-shot-classification: Label-free classification
+    - fill-mask: Mask prediction
+    - translation: Translation
 
-사용법:
+Usage:
     from transformers import pipeline
     classifier = pipeline("sentiment-analysis")
     result = classifier("I love this!")
@@ -195,5 +195,5 @@ try:
     print(summary)
 
 except ImportError as e:
-    print(f"필요 패키지 미설치: {e}")
+    print(f"Required packages not installed: {e}")
     print("pip install transformers torch")

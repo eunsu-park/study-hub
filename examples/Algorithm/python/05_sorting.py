@@ -1,8 +1,8 @@
 """
-정렬 알고리즘 (Sorting Algorithms)
+Sorting Algorithms
 Sorting Algorithms Comparison
 
-다양한 정렬 알고리즘의 구현과 비교입니다.
+Implementation and comparison of various sorting algorithms.
 """
 
 import random
@@ -11,12 +11,12 @@ from typing import List
 
 
 # =============================================================================
-# 1. 버블 정렬 (Bubble Sort)
+# 1. Bubble Sort
 # =============================================================================
 def bubble_sort(arr: List[int]) -> List[int]:
     """
-    버블 정렬
-    시간: O(n²), 공간: O(1), 안정 정렬
+    Bubble Sort
+    Time: O(n^2), Space: O(1), Stable
     """
     arr = arr.copy()
     n = len(arr)
@@ -34,12 +34,12 @@ def bubble_sort(arr: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 2. 선택 정렬 (Selection Sort)
+# 2. Selection Sort
 # =============================================================================
 def selection_sort(arr: List[int]) -> List[int]:
     """
-    선택 정렬
-    시간: O(n²), 공간: O(1), 불안정 정렬
+    Selection Sort
+    Time: O(n^2), Space: O(1), Unstable
     """
     arr = arr.copy()
     n = len(arr)
@@ -55,13 +55,13 @@ def selection_sort(arr: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 3. 삽입 정렬 (Insertion Sort)
+# 3. Insertion Sort
 # =============================================================================
 def insertion_sort(arr: List[int]) -> List[int]:
     """
-    삽입 정렬
-    시간: O(n²), 최선 O(n), 공간: O(1), 안정 정렬
-    거의 정렬된 데이터에 효율적
+    Insertion Sort
+    Time: O(n^2), Best O(n), Space: O(1), Stable
+    Efficient for nearly sorted data
     """
     arr = arr.copy()
     n = len(arr)
@@ -78,12 +78,12 @@ def insertion_sort(arr: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 4. 병합 정렬 (Merge Sort)
+# 4. Merge Sort
 # =============================================================================
 def merge_sort(arr: List[int]) -> List[int]:
     """
-    병합 정렬
-    시간: O(n log n), 공간: O(n), 안정 정렬
+    Merge Sort
+    Time: O(n log n), Space: O(n), Stable
     """
     if len(arr) <= 1:
         return arr
@@ -96,7 +96,7 @@ def merge_sort(arr: List[int]) -> List[int]:
 
 
 def merge(left: List[int], right: List[int]) -> List[int]:
-    """두 정렬된 배열 병합"""
+    """Merge two sorted arrays"""
     result = []
     i = j = 0
 
@@ -114,12 +114,12 @@ def merge(left: List[int], right: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 5. 퀵 정렬 (Quick Sort)
+# 5. Quick Sort
 # =============================================================================
 def quick_sort(arr: List[int]) -> List[int]:
     """
-    퀵 정렬
-    시간: 평균 O(n log n), 최악 O(n²), 공간: O(log n), 불안정 정렬
+    Quick Sort
+    Time: Average O(n log n), Worst O(n^2), Space: O(log n), Unstable
     """
     if len(arr) <= 1:
         return arr
@@ -133,7 +133,7 @@ def quick_sort(arr: List[int]) -> List[int]:
 
 
 def quick_sort_inplace(arr: List[int], low: int = 0, high: int = None) -> List[int]:
-    """퀵 정렬 (in-place)"""
+    """Quick Sort (in-place)"""
     if high is None:
         arr = arr.copy()
         high = len(arr) - 1
@@ -147,7 +147,7 @@ def quick_sort_inplace(arr: List[int], low: int = 0, high: int = None) -> List[i
 
 
 def partition(arr: List[int], low: int, high: int) -> int:
-    """파티션 (Lomuto scheme)"""
+    """Partition (Lomuto scheme)"""
     pivot = arr[high]
     i = low - 1
 
@@ -161,21 +161,21 @@ def partition(arr: List[int], low: int, high: int) -> int:
 
 
 # =============================================================================
-# 6. 힙 정렬 (Heap Sort)
+# 6. Heap Sort
 # =============================================================================
 def heap_sort(arr: List[int]) -> List[int]:
     """
-    힙 정렬
-    시간: O(n log n), 공간: O(1), 불안정 정렬
+    Heap Sort
+    Time: O(n log n), Space: O(1), Unstable
     """
     arr = arr.copy()
     n = len(arr)
 
-    # 최대 힙 구성
+    # Build max heap
     for i in range(n // 2 - 1, -1, -1):
         heapify(arr, n, i)
 
-    # 하나씩 추출
+    # Extract one by one
     for i in range(n - 1, 0, -1):
         arr[0], arr[i] = arr[i], arr[0]
         heapify(arr, i, 0)
@@ -184,7 +184,7 @@ def heap_sort(arr: List[int]) -> List[int]:
 
 
 def heapify(arr: List[int], n: int, i: int):
-    """최대 힙 속성 유지"""
+    """Maintain max heap property"""
     largest = i
     left = 2 * i + 1
     right = 2 * i + 2
@@ -200,14 +200,14 @@ def heapify(arr: List[int], n: int, i: int):
 
 
 # =============================================================================
-# 7. 계수 정렬 (Counting Sort)
+# 7. Counting Sort
 # =============================================================================
 def counting_sort(arr: List[int]) -> List[int]:
     """
-    계수 정렬
-    시간: O(n + k), 공간: O(k), 안정 정렬
-    k = 최댓값 - 최솟값 + 1
-    정수 범위가 작을 때 효율적
+    Counting Sort
+    Time: O(n + k), Space: O(k), Stable
+    k = max_value - min_value + 1
+    Efficient when the integer range is small
     """
     if not arr:
         return []
@@ -218,15 +218,15 @@ def counting_sort(arr: List[int]) -> List[int]:
     count = [0] * range_val
     output = [0] * len(arr)
 
-    # 카운트
+    # Count
     for num in arr:
         count[num - min_val] += 1
 
-    # 누적
+    # Accumulate
     for i in range(1, range_val):
         count[i] += count[i - 1]
 
-    # 역순으로 배치 (안정성 유지)
+    # Place in reverse order (to maintain stability)
     for i in range(len(arr) - 1, -1, -1):
         num = arr[i]
         count[num - min_val] -= 1
@@ -236,17 +236,17 @@ def counting_sort(arr: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 8. 기수 정렬 (Radix Sort)
+# 8. Radix Sort
 # =============================================================================
 def radix_sort(arr: List[int]) -> List[int]:
     """
-    기수 정렬 (LSD)
-    시간: O(d * (n + k)), 공간: O(n + k)
-    d = 자릿수, k = 기수 (보통 10)
-    음수 미지원 버전
+    Radix Sort (LSD)
+    Time: O(d * (n + k)), Space: O(n + k)
+    d = number of digits, k = radix (usually 10)
+    Version without negative number support
     """
     if not arr or min(arr) < 0:
-        return sorted(arr)  # 음수 포함 시 기본 정렬
+        return sorted(arr)  # Fall back to default sort for negative numbers
 
     max_val = max(arr)
 
@@ -259,7 +259,7 @@ def radix_sort(arr: List[int]) -> List[int]:
 
 
 def counting_sort_by_digit(arr: List[int], exp: int) -> List[int]:
-    """특정 자릿수 기준 계수 정렬"""
+    """Counting sort by a specific digit"""
     n = len(arr)
     output = [0] * n
     count = [0] * 10
@@ -280,10 +280,10 @@ def counting_sort_by_digit(arr: List[int], exp: int) -> List[int]:
 
 
 # =============================================================================
-# 성능 비교
+# Performance Comparison
 # =============================================================================
 def benchmark_sorts(size: int = 1000):
-    """정렬 알고리즘 성능 비교"""
+    """Sorting algorithm performance comparison"""
     arr = [random.randint(0, 10000) for _ in range(size)]
 
     algorithms = [
@@ -298,7 +298,7 @@ def benchmark_sorts(size: int = 1000):
         ("Python sorted()", sorted, True),
     ]
 
-    print(f"\n배열 크기: {size}")
+    print(f"\nArray Size: {size}")
     print("-" * 50)
 
     for name, func, should_run in algorithms:
@@ -309,68 +309,68 @@ def benchmark_sorts(size: int = 1000):
             elapsed = time.perf_counter() - start
             print(f"{name:20s}: {elapsed * 1000:8.3f} ms")
         else:
-            print(f"{name:20s}: (크기 초과로 스킵)")
+            print(f"{name:20s}: (skipped due to size)")
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 def main():
     print("=" * 60)
-    print("정렬 알고리즘 (Sorting Algorithms)")
+    print("Sorting Algorithms")
     print("=" * 60)
 
-    # 테스트 배열
+    # Test array
     arr = [64, 34, 25, 12, 22, 11, 90]
-    print(f"\n원본 배열: {arr}")
+    print(f"\nOriginal array: {arr}")
     print("-" * 40)
 
-    # 각 알고리즘 테스트
+    # Test each algorithm
     algorithms = [
-        ("버블 정렬", bubble_sort),
-        ("선택 정렬", selection_sort),
-        ("삽입 정렬", insertion_sort),
-        ("병합 정렬", merge_sort),
-        ("퀵 정렬", quick_sort),
-        ("힙 정렬", heap_sort),
-        ("계수 정렬", counting_sort),
-        ("기수 정렬", radix_sort),
+        ("Bubble Sort", bubble_sort),
+        ("Selection Sort", selection_sort),
+        ("Insertion Sort", insertion_sort),
+        ("Merge Sort", merge_sort),
+        ("Quick Sort", quick_sort),
+        ("Heap Sort", heap_sort),
+        ("Counting Sort", counting_sort),
+        ("Radix Sort", radix_sort),
     ]
 
     for name, func in algorithms:
         result = func(arr.copy())
         print(f"{name}: {result}")
 
-    # 성능 비교
+    # Performance Comparison
     print("\n" + "=" * 60)
-    print("성능 비교 (Performance Benchmark)")
+    print("Performance Benchmark")
     print("=" * 60)
 
     for size in [100, 1000, 5000]:
         benchmark_sorts(size)
 
-    # 정렬 알고리즘 비교표
+    # Sorting Algorithm Comparison Table
     print("\n" + "=" * 60)
-    print("정렬 알고리즘 비교")
+    print("Sorting Algorithm Comparison")
     print("=" * 60)
     print("""
-    | 알고리즘     | 평균      | 최악      | 공간   | 안정성 | 특징                |
-    |-------------|----------|----------|--------|-------|---------------------|
-    | 버블 정렬    | O(n²)    | O(n²)    | O(1)   | 안정  | 단순, 교육용         |
-    | 선택 정렬    | O(n²)    | O(n²)    | O(1)   | 불안정| 단순, 교환 횟수 적음  |
-    | 삽입 정렬    | O(n²)    | O(n²)    | O(1)   | 안정  | 거의 정렬된 데이터에 좋음|
-    | 병합 정렬    | O(nlogn) | O(nlogn) | O(n)   | 안정  | 일정한 성능          |
-    | 퀵 정렬      | O(nlogn) | O(n²)    | O(logn)| 불안정| 평균적으로 가장 빠름  |
-    | 힙 정렬      | O(nlogn) | O(nlogn) | O(1)   | 불안정| in-place, 일정한 성능|
-    | 계수 정렬    | O(n+k)   | O(n+k)   | O(k)   | 안정  | 정수, 범위 작을 때    |
-    | 기수 정렬    | O(d(n+k))| O(d(n+k))| O(n+k) | 안정  | 자릿수 기반           |
+    | Algorithm       | Average  | Worst    | Space  | Stable | Notes                        |
+    |----------------|----------|----------|--------|--------|------------------------------|
+    | Bubble Sort    | O(n^2)   | O(n^2)   | O(1)   | Yes    | Simple, educational          |
+    | Selection Sort | O(n^2)   | O(n^2)   | O(1)   | No     | Simple, fewer swaps          |
+    | Insertion Sort | O(n^2)   | O(n^2)   | O(1)   | Yes    | Good for nearly sorted data  |
+    | Merge Sort     | O(nlogn) | O(nlogn) | O(n)   | Yes    | Consistent performance       |
+    | Quick Sort     | O(nlogn) | O(n^2)   | O(logn)| No     | Fastest on average           |
+    | Heap Sort      | O(nlogn) | O(nlogn) | O(1)   | No     | In-place, consistent perf    |
+    | Counting Sort  | O(n+k)   | O(n+k)   | O(k)   | Yes    | Integers, small range        |
+    | Radix Sort     | O(d(n+k))| O(d(n+k))| O(n+k) | Yes    | Digit-based                  |
 
-    실무 선택 가이드:
-    - 일반적인 경우: 퀵 정렬 또는 언어 내장 정렬
-    - 안정성 필요: 병합 정렬
-    - 메모리 제한: 힙 정렬
-    - 거의 정렬됨: 삽입 정렬
-    - 정수 + 범위 작음: 계수/기수 정렬
+    Practical Selection Guide:
+    - General case: Quick Sort or built-in language sort
+    - Stability needed: Merge Sort
+    - Memory constrained: Heap Sort
+    - Nearly sorted: Insertion Sort
+    - Integers + small range: Counting/Radix Sort
     """)
 
 

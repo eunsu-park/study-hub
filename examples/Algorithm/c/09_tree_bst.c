@@ -1,8 +1,8 @@
 /*
- * 트리와 이진 탐색 트리 (Tree and BST)
+ * Tree and BST (Binary Search Tree)
  * Tree Traversal, BST Operations, Tree Properties
  *
- * 트리 자료구조의 기본 연산들입니다.
+ * Fundamental operations on tree data structures.
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 /* =============================================================================
- * 1. 이진 트리 노드
+ * 1. Binary Tree Node
  * ============================================================================= */
 
 typedef struct TreeNode {
@@ -35,7 +35,7 @@ void free_tree(TreeNode* root) {
 }
 
 /* =============================================================================
- * 2. 트리 순회
+ * 2. Tree Traversal
  * ============================================================================= */
 
 void preorder(TreeNode* root) {
@@ -59,7 +59,7 @@ void postorder(TreeNode* root) {
     printf("%d ", root->val);
 }
 
-/* 레벨 순회 (BFS) */
+/* Level-order traversal (BFS) */
 void level_order(TreeNode* root) {
     if (root == NULL) return;
 
@@ -79,7 +79,7 @@ void level_order(TreeNode* root) {
 }
 
 /* =============================================================================
- * 3. BST 연산
+ * 3. BST Operations
  * ============================================================================= */
 
 TreeNode* bst_insert(TreeNode* root, int val) {
@@ -122,7 +122,7 @@ TreeNode* bst_delete(TreeNode* root, int val) {
     } else if (val > root->val) {
         root->right = bst_delete(root->right, val);
     } else {
-        /* 노드 찾음 */
+        /* Node found */
         if (root->left == NULL) {
             TreeNode* temp = root->right;
             free(root);
@@ -133,7 +133,7 @@ TreeNode* bst_delete(TreeNode* root, int val) {
             return temp;
         }
 
-        /* 두 자식 있음: 오른쪽 서브트리의 최솟값으로 대체 */
+        /* Two children: replace with minimum of right subtree */
         TreeNode* successor = find_min(root->right);
         root->val = successor->val;
         root->right = bst_delete(root->right, successor->val);
@@ -143,7 +143,7 @@ TreeNode* bst_delete(TreeNode* root, int val) {
 }
 
 /* =============================================================================
- * 4. 트리 속성
+ * 4. Tree Properties
  * ============================================================================= */
 
 int tree_height(TreeNode* root) {
@@ -177,7 +177,7 @@ bool is_balanced(TreeNode* root) {
     return is_balanced(root->left) && is_balanced(root->right);
 }
 
-/* BST 검증 */
+/* BST validation */
 bool is_bst_util(TreeNode* root, TreeNode* min_node, TreeNode* max_node) {
     if (root == NULL) return true;
 
@@ -193,10 +193,10 @@ bool is_bst(TreeNode* root) {
 }
 
 /* =============================================================================
- * 5. 경로 문제
+ * 5. Path Problems
  * ============================================================================= */
 
-/* 루트에서 리프까지의 경로 합 */
+/* Root-to-leaf path sum */
 bool has_path_sum(TreeNode* root, int target_sum) {
     if (root == NULL) return false;
 
@@ -207,7 +207,7 @@ bool has_path_sum(TreeNode* root, int target_sum) {
            has_path_sum(root->right, target_sum - root->val);
 }
 
-/* 최대 경로 합 */
+/* Maximum path sum */
 int max_path_sum_util(TreeNode* root, int* max_sum) {
     if (root == NULL) return 0;
 
@@ -233,7 +233,7 @@ int max_path_sum(TreeNode* root) {
  * 6. LCA (Lowest Common Ancestor)
  * ============================================================================= */
 
-/* 일반 트리 LCA */
+/* General tree LCA */
 TreeNode* lca(TreeNode* root, int p, int q) {
     if (root == NULL) return NULL;
     if (root->val == p || root->val == q) return root;
@@ -258,10 +258,10 @@ TreeNode* lca_bst(TreeNode* root, int p, int q) {
 }
 
 /* =============================================================================
- * 7. 트리 변환
+ * 7. Tree Transformations
  * ============================================================================= */
 
-/* 좌우 반전 */
+/* Mirror/Invert tree */
 TreeNode* invert_tree(TreeNode* root) {
     if (root == NULL) return NULL;
 
@@ -272,10 +272,10 @@ TreeNode* invert_tree(TreeNode* root) {
     return root;
 }
 
-/* 트리 직렬화 (전위 순회) */
+/* Tree serialization (preorder traversal) */
 void serialize(TreeNode* root, int* arr, int* idx) {
     if (root == NULL) {
-        arr[(*idx)++] = -1;  /* NULL 표시 */
+        arr[(*idx)++] = -1;  /* NULL marker */
         return;
     }
     arr[(*idx)++] = root->val;
@@ -296,15 +296,15 @@ TreeNode* deserialize(int* arr, int* idx, int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("트리와 BST (Tree and BST) 예제\n");
+    printf("Tree and BST Examples\n");
     printf("============================================================\n");
 
-    /* BST 생성 */
+    /* Build BST */
     /*
      *        50
      *       /  \
@@ -318,64 +318,64 @@ int main(void) {
         root = bst_insert(root, values[i]);
     }
 
-    /* 1. 순회 */
-    printf("\n[1] 트리 순회\n");
-    printf("    전위: ");
+    /* 1. Traversal */
+    printf("\n[1] Tree Traversal\n");
+    printf("    Preorder: ");
     preorder(root);
     printf("\n");
-    printf("    중위: ");
+    printf("    Inorder: ");
     inorder(root);
     printf("\n");
-    printf("    후위: ");
+    printf("    Postorder: ");
     postorder(root);
     printf("\n");
-    printf("    레벨: ");
+    printf("    Level-order: ");
     level_order(root);
     printf("\n");
 
-    /* 2. BST 연산 */
-    printf("\n[2] BST 연산\n");
-    printf("    검색 40: %s\n", bst_search(root, 40) ? "found" : "not found");
-    printf("    검색 45: %s\n", bst_search(root, 45) ? "found" : "not found");
-    printf("    최솟값: %d\n", find_min(root)->val);
-    printf("    최댓값: %d\n", find_max(root)->val);
+    /* 2. BST Operations */
+    printf("\n[2] BST Operations\n");
+    printf("    Search 40: %s\n", bst_search(root, 40) ? "found" : "not found");
+    printf("    Search 45: %s\n", bst_search(root, 45) ? "found" : "not found");
+    printf("    Minimum: %d\n", find_min(root)->val);
+    printf("    Maximum: %d\n", find_max(root)->val);
 
-    /* 3. 트리 속성 */
-    printf("\n[3] 트리 속성\n");
-    printf("    높이: %d\n", tree_height(root));
-    printf("    노드 수: %d\n", count_nodes(root));
-    printf("    리프 수: %d\n", count_leaves(root));
-    printf("    균형: %s\n", is_balanced(root) ? "yes" : "no");
+    /* 3. Tree Properties */
+    printf("\n[3] Tree Properties\n");
+    printf("    Height: %d\n", tree_height(root));
+    printf("    Node count: %d\n", count_nodes(root));
+    printf("    Leaf count: %d\n", count_leaves(root));
+    printf("    Balanced: %s\n", is_balanced(root) ? "yes" : "no");
     printf("    BST: %s\n", is_bst(root) ? "yes" : "no");
 
-    /* 4. 경로 */
-    printf("\n[4] 경로 문제\n");
-    printf("    경로 합 100 존재: %s\n", has_path_sum(root, 100) ? "yes" : "no");
-    printf("    최대 경로 합: %d\n", max_path_sum(root));
+    /* 4. Path */
+    printf("\n[4] Path Problems\n");
+    printf("    Path sum 100 exists: %s\n", has_path_sum(root, 100) ? "yes" : "no");
+    printf("    Maximum path sum: %d\n", max_path_sum(root));
 
     /* 5. LCA */
-    printf("\n[5] LCA (최소 공통 조상)\n");
+    printf("\n[5] LCA (Lowest Common Ancestor)\n");
     TreeNode* ancestor = lca_bst(root, 20, 40);
     printf("    LCA(20, 40): %d\n", ancestor ? ancestor->val : -1);
     ancestor = lca_bst(root, 20, 80);
     printf("    LCA(20, 80): %d\n", ancestor ? ancestor->val : -1);
 
-    /* 6. 삭제 */
-    printf("\n[6] BST 삭제\n");
-    printf("    삭제 전 중위: ");
+    /* 6. Deletion */
+    printf("\n[6] BST Deletion\n");
+    printf("    Inorder before deletion: ");
     inorder(root);
     printf("\n");
     root = bst_delete(root, 30);
-    printf("    30 삭제 후 중위: ");
+    printf("    Inorder after deleting 30: ");
     inorder(root);
     printf("\n");
 
-    /* 7. 직렬화 */
-    printf("\n[7] 트리 직렬화/역직렬화\n");
+    /* 7. Serialization */
+    printf("\n[7] Tree Serialization/Deserialization\n");
     int serialized[100];
     int idx = 0;
     serialize(root, serialized, &idx);
-    printf("    직렬화: ");
+    printf("    Serialized: ");
     for (int i = 0; i < idx; i++) {
         printf("%d ", serialized[i]);
     }
@@ -383,11 +383,11 @@ int main(void) {
 
     int deserialize_idx = 0;
     TreeNode* restored = deserialize(serialized, &deserialize_idx, idx);
-    printf("    복원 후 중위: ");
+    printf("    Inorder after restore: ");
     inorder(restored);
     printf("\n");
 
-    /* 정리 */
+    /* Cleanup */
     free_tree(root);
     free_tree(restored);
 

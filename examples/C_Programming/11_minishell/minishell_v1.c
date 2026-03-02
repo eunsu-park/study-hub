@@ -1,7 +1,7 @@
 // minishell_v1.c
-// 기본 쉘 구조: 읽기 → 파싱 → 실행 → 반복
-// 컴파일: gcc -o minishell_v1 minishell_v1.c -Wall
-// 실행: ./minishell_v1
+// Basic shell structure: read -> parse -> execute -> repeat
+// Compile: gcc -o minishell_v1 minishell_v1.c -Wall
+// Run: ./minishell_v1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +12,7 @@
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
 
-// 입력을 공백으로 분리
+// Split input by whitespace
 int parse_input(char* input, char** args) {
     int argc = 0;
     char* token = strtok(input, " \t\n");
@@ -26,23 +26,23 @@ int parse_input(char* input, char** args) {
     return argc;
 }
 
-// 명령어 실행
+// Execute command
 void execute(char** args) {
     pid_t pid = fork();
 
     if (pid < 0) {
-        perror("fork 실패");
+        perror("fork failed");
         return;
     }
 
     if (pid == 0) {
-        // 자식 프로세스: 명령어 실행
+        // Child process: execute command
         execvp(args[0], args);
-        // execvp 실패시
+        // If execvp fails
         perror(args[0]);
         exit(EXIT_FAILURE);
     } else {
-        // 부모 프로세스: 자식 종료 대기
+        // Parent process: wait for child to finish
         int status;
         waitpid(pid, &status, 0);
     }
@@ -53,34 +53,34 @@ int main(void) {
     char* args[MAX_ARGS];
 
     printf("\n=== Mini Shell v1 ===\n");
-    printf("기본 명령어 실행 쉘\n");
-    printf("종료: exit 명령어 또는 Ctrl+D\n\n");
+    printf("Basic command execution shell\n");
+    printf("Quit: exit command or Ctrl+D\n\n");
 
     while (1) {
-        // 프롬프트 출력
+        // Print prompt
         printf("minish> ");
         fflush(stdout);
 
-        // 입력 읽기
+        // Read input
         if (fgets(input, sizeof(input), stdin) == NULL) {
             printf("\n");
             break;  // EOF (Ctrl+D)
         }
 
-        // 빈 입력 무시
+        // Ignore empty input
         if (input[0] == '\n') continue;
 
-        // 파싱
+        // Parse
         int argc = parse_input(input, args);
         if (argc == 0) continue;
 
-        // exit 명령어
+        // exit command
         if (strcmp(args[0], "exit") == 0) {
-            printf("쉘을 종료합니다.\n");
+            printf("Exiting the shell.\n");
             break;
         }
 
-        // 실행
+        // Execute
         execute(args);
     }
 

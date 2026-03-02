@@ -1,9 +1,9 @@
 """
-18. 카메라 캘리브레이션
-- 카메라 내부 파라미터
-- 왜곡 보정
-- 체스보드 검출
-- 스테레오 비전 기초
+18. Camera Calibration
+- Camera intrinsic parameters
+- Distortion correction
+- Chessboard detection
+- Stereo vision basics
 """
 
 import cv2
@@ -11,43 +11,43 @@ import numpy as np
 
 
 def camera_model_concept():
-    """카메라 모델 개념"""
+    """Camera model concept"""
     print("=" * 50)
-    print("카메라 모델 개념")
+    print("Camera Model Concept")
     print("=" * 50)
 
-    print("\n1. 핀홀 카메라 모델")
-    print("   - 3D 점 → 2D 이미지 투영")
-    print("   - 원근 투영 (Perspective Projection)")
+    print("\n1. Pinhole Camera Model")
+    print("   - 3D point -> 2D image projection")
+    print("   - Perspective Projection")
 
-    print("\n2. 카메라 내부 파라미터 (Intrinsic)")
+    print("\n2. Camera Intrinsic Parameters")
     print("""
    K = | fx  0  cx |
        |  0 fy  cy |
        |  0  0   1 |
 
-   fx, fy: 초점 거리 (픽셀 단위)
-   cx, cy: 주점 (principal point, 이미지 중심)
+   fx, fy: Focal length (in pixels)
+   cx, cy: Principal point (image center)
 """)
 
-    print("3. 카메라 외부 파라미터 (Extrinsic)")
-    print("   - R: 회전 행렬 (3x3)")
-    print("   - t: 평행 이동 벡터 (3x1)")
-    print("   - 월드 좌표 → 카메라 좌표 변환")
+    print("3. Camera Extrinsic Parameters")
+    print("   - R: Rotation matrix (3x3)")
+    print("   - t: Translation vector (3x1)")
+    print("   - World coordinates -> Camera coordinates transform")
 
-    print("\n4. 투영 행렬")
+    print("\n4. Projection Matrix")
     print("   P = K[R|t]")
-    print("   p = P * X  (동차 좌표계)")
+    print("   p = P * X  (homogeneous coordinates)")
 
-    print("\n5. 왜곡 계수 (Distortion Coefficients)")
-    print("   - k1, k2, k3: 방사 왜곡 (radial)")
-    print("   - p1, p2: 접선 왜곡 (tangential)")
+    print("\n5. Distortion Coefficients")
+    print("   - k1, k2, k3: Radial distortion")
+    print("   - p1, p2: Tangential distortion")
     print("   - dist_coeffs = [k1, k2, p1, p2, k3]")
 
 
 def create_chessboard_image():
-    """체스보드 이미지 생성"""
-    # 체스보드 패턴
+    """Create chessboard image"""
+    # Chessboard pattern
     rows, cols = 7, 9
     square_size = 40
 
@@ -65,82 +65,82 @@ def create_chessboard_image():
 
 
 def chessboard_detection_demo():
-    """체스보드 코너 검출 데모"""
+    """Chessboard corner detection demo"""
     print("\n" + "=" * 50)
-    print("체스보드 코너 검출")
+    print("Chessboard Corner Detection")
     print("=" * 50)
 
-    # 체스보드 이미지 생성
+    # Generate chessboard image
     chessboard = create_chessboard_image()
 
-    # 약간의 원근 변환 적용 (실제 촬영 시뮬레이션)
+    # Apply slight perspective transform (simulating real capture)
     h, w = chessboard.shape[:2]
     src_pts = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
     dst_pts = np.float32([[20, 30], [w-30, 20], [w-20, h-10], [10, h-30]])
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
     warped = cv2.warpPerspective(chessboard, M, (w, h), borderValue=(200, 200, 200))
 
-    # 그레이스케일 변환
+    # Convert to grayscale
     gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
 
-    # 코너 검출 파라미터
-    # 내부 코너 수 (검은색-흰색 교차점)
-    pattern_size = (8, 6)  # 가로 8, 세로 6 코너
+    # Corner detection parameters
+    # Number of internal corners (black-white intersections)
+    pattern_size = (8, 6)  # 8 horizontal, 6 vertical corners
 
-    # 코너 검출
+    # Corner detection
     found, corners = cv2.findChessboardCorners(
         gray, pattern_size,
         flags=cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
     )
 
-    print(f"패턴 크기: {pattern_size}")
-    print(f"코너 검출 성공: {found}")
+    print(f"Pattern size: {pattern_size}")
+    print(f"Corner detection success: {found}")
 
     if found:
-        # 서브픽셀 정밀도로 개선
+        # Refine to sub-pixel accuracy
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
-        print(f"검출된 코너 수: {len(corners)}")
+        print(f"Number of corners detected: {len(corners)}")
 
-        # 결과 시각화
+        # Visualize result
         result = warped.copy()
         cv2.drawChessboardCorners(result, pattern_size, corners, found)
 
         cv2.imwrite('chessboard_input.jpg', warped)
         cv2.imwrite('chessboard_corners.jpg', result)
-        print("이미지 저장 완료")
+        print("Images saved")
 
-    print("\n검출 플래그:")
-    print("  CALIB_CB_ADAPTIVE_THRESH: 적응적 이진화")
-    print("  CALIB_CB_NORMALIZE_IMAGE: 이미지 정규화")
-    print("  CALIB_CB_FAST_CHECK: 빠른 체크 (실패 시 조기 종료)")
+    print("\nDetection flags:")
+    print("  CALIB_CB_ADAPTIVE_THRESH: Adaptive binarization")
+    print("  CALIB_CB_NORMALIZE_IMAGE: Image normalization")
+    print("  CALIB_CB_FAST_CHECK: Fast check (early exit on failure)")
 
 
 def camera_calibration_simulation():
-    """카메라 캘리브레이션 시뮬레이션"""
+    """Camera calibration simulation"""
     print("\n" + "=" * 50)
-    print("카메라 캘리브레이션 시뮬레이션")
+    print("Camera Calibration Simulation")
     print("=" * 50)
 
-    # 체스보드 파라미터
+    # Chessboard parameters
     pattern_size = (8, 6)
-    square_size = 1.0  # 실제 사각형 크기 (단위: cm, mm 등)
+    square_size = 1.0  # Actual square size (units: cm, mm, etc.)
 
-    # 3D 객체 점 (체스보드 평면, z=0)
+    # 3D object points (chessboard plane, z=0)
     objp = np.zeros((pattern_size[0] * pattern_size[1], 3), np.float32)
     objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2)
     objp *= square_size
 
-    print(f"객체 점 (3D): {objp.shape}")
-    print(f"첫 번째 점: {objp[0]}")
-    print(f"마지막 점: {objp[-1]}")
+    print(f"Object points (3D): {objp.shape}")
+    print(f"First point: {objp[0]}")
+    print(f"Last point: {objp[-1]}")
 
-    # 시뮬레이션용 여러 이미지에서 검출된 점들
-    objpoints = []  # 3D 점들
-    imgpoints = []  # 2D 점들
+    # Points detected from multiple images for simulation
+    objpoints = []  # 3D points
+    imgpoints = []  # 2D points
 
-    # 시뮬레이션 (실제로는 여러 각도에서 촬영한 이미지 사용)
+    # Simulation (in practice, use images captured from multiple angles)
     chessboard = create_chessboard_image()
     gray = cv2.cvtColor(chessboard, cv2.COLOR_BGR2GRAY)
 
@@ -150,14 +150,14 @@ def camera_calibration_simulation():
         objpoints.append(objp)
         imgpoints.append(corners)
 
-        print(f"\n사용된 이미지 수: {len(objpoints)}")
+        print(f"\nNumber of images used: {len(objpoints)}")
 
-        # 캘리브레이션 (최소 3-5개 이미지 필요)
-        # 여기서는 시뮬레이션이므로 실제 결과와 다를 수 있음
+        # Calibration (minimum 3-5 images required)
+        # This is a simulation so results may differ from actual
         h, w = gray.shape
 
-        # 초기 카메라 행렬 추정
-        fx = fy = w  # 대략적 초점 거리
+        # Initial camera matrix estimate
+        fx = fy = w  # Approximate focal length
         cx, cy = w/2, h/2
 
         camera_matrix = np.array([
@@ -168,20 +168,20 @@ def camera_calibration_simulation():
 
         dist_coeffs = np.zeros(5)
 
-        print("\n추정된 카메라 행렬:")
+        print("\nEstimated camera matrix:")
         print(camera_matrix)
 
-        print("\n캘리브레이션 프로세스:")
-        print("  1. 여러 각도에서 체스보드 촬영 (10-20장)")
-        print("  2. 각 이미지에서 코너 검출")
-        print("  3. cv2.calibrateCamera() 호출")
-        print("  4. 카메라 행렬, 왜곡 계수 획득")
+        print("\nCalibration process:")
+        print("  1. Capture chessboard from multiple angles (10-20 images)")
+        print("  2. Detect corners in each image")
+        print("  3. Call cv2.calibrateCamera()")
+        print("  4. Obtain camera matrix and distortion coefficients")
 
 
 def calibration_workflow():
-    """캘리브레이션 워크플로우"""
+    """Calibration workflow"""
     print("\n" + "=" * 50)
-    print("실제 캘리브레이션 워크플로우")
+    print("Actual Calibration Workflow")
     print("=" * 50)
 
     code = '''
@@ -189,11 +189,11 @@ import cv2
 import numpy as np
 import glob
 
-# 체스보드 설정
-pattern_size = (9, 6)  # 내부 코너 수
-square_size = 25.0     # mm 단위
+# Chessboard setup
+pattern_size = (9, 6)  # Number of internal corners
+square_size = 25.0     # In mm
 
-# 객체 점 생성
+# Generate object points
 objp = np.zeros((pattern_size[0] * pattern_size[1], 3), np.float32)
 objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2)
 objp *= square_size
@@ -201,7 +201,7 @@ objp *= square_size
 objpoints = []  # 3D
 imgpoints = []  # 2D
 
-# 이미지 로드 및 코너 검출
+# Load images and detect corners
 images = glob.glob('calibration_images/*.jpg')
 
 for fname in images:
@@ -216,7 +216,7 @@ for fname in images:
                                     (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
         imgpoints.append(corners2)
 
-# 캘리브레이션 수행
+# Perform calibration
 ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
     objpoints, imgpoints, gray.shape[::-1], None, None
 )
@@ -225,7 +225,7 @@ print(f"RMS error: {ret}")
 print(f"Camera matrix:\\n{camera_matrix}")
 print(f"Distortion coefficients:\\n{dist_coeffs}")
 
-# 결과 저장
+# Save results
 np.savez('calibration.npz',
          camera_matrix=camera_matrix,
          dist_coeffs=dist_coeffs)
@@ -233,31 +233,31 @@ np.savez('calibration.npz',
 
     print(code)
 
-    print("\n캘리브레이션 팁:")
-    print("  1. 최소 10-20장의 이미지 사용")
-    print("  2. 다양한 각도와 위치에서 촬영")
-    print("  3. 체스보드가 이미지 전체에 분포하도록")
-    print("  4. 조명이 균일해야 함")
-    print("  5. 블러 없이 선명한 이미지")
+    print("\nCalibration tips:")
+    print("  1. Use at least 10-20 images")
+    print("  2. Capture from various angles and positions")
+    print("  3. Ensure the chessboard is distributed across the entire image")
+    print("  4. Lighting should be uniform")
+    print("  5. Sharp images without blur")
 
 
 def undistort_demo():
-    """왜곡 보정 데모"""
+    """Undistortion demo"""
     print("\n" + "=" * 50)
-    print("왜곡 보정 (Undistortion)")
+    print("Undistortion")
     print("=" * 50)
 
-    # 시뮬레이션용 왜곡 이미지 생성
+    # Create distorted image for simulation
     img = np.zeros((400, 600, 3), dtype=np.uint8)
     img[:] = [200, 200, 200]
 
-    # 격자 패턴
+    # Grid pattern
     for i in range(0, 600, 50):
         cv2.line(img, (i, 0), (i, 400), (0, 0, 0), 1)
     for j in range(0, 400, 50):
         cv2.line(img, (0, j), (600, j), (0, 0, 0), 1)
 
-    # 가상의 왜곡 적용 (barrel distortion 시뮬레이션)
+    # Apply virtual distortion (barrel distortion simulation)
     h, w = img.shape[:2]
     camera_matrix = np.array([
         [w, 0, w/2],
@@ -265,59 +265,59 @@ def undistort_demo():
         [0, 0, 1]
     ], dtype=np.float64)
 
-    # 왜곡 계수 (k1이 음수면 barrel, 양수면 pincushion)
+    # Distortion coefficients (negative k1 = barrel, positive k1 = pincushion)
     dist_coeffs = np.array([-0.3, 0.1, 0, 0, 0])
 
-    # 왜곡 적용 (역으로 undistort 사용)
+    # Apply distortion (using undistort in reverse)
     distorted = cv2.undistort(img, camera_matrix, -dist_coeffs)
 
-    # 왜곡 보정
+    # Correct distortion
     undistorted = cv2.undistort(distorted, camera_matrix, dist_coeffs)
 
     cv2.imwrite('undistort_original.jpg', img)
     cv2.imwrite('undistort_distorted.jpg', distorted)
     cv2.imwrite('undistort_corrected.jpg', undistorted)
 
-    print("왜곡 보정 방법:")
+    print("Undistortion methods:")
     print("  1. cv2.undistort()")
-    print("     - 간단하게 사용")
-    print("     - 매번 계산")
+    print("     - Simple to use")
+    print("     - Computes every time")
 
     print("\n  2. cv2.initUndistortRectifyMap() + cv2.remap()")
-    print("     - 맵을 미리 계산")
-    print("     - 비디오에서 효율적")
+    print("     - Pre-computes the map")
+    print("     - Efficient for video")
 
     code = '''
-# 효율적인 방법 (비디오용)
+# Efficient method (for video)
 map1, map2 = cv2.initUndistortRectifyMap(
     camera_matrix, dist_coeffs, None,
     camera_matrix, (w, h), cv2.CV_32FC1
 )
 
-# 프레임마다 적용
+# Apply per frame
 undistorted = cv2.remap(distorted, map1, map2, cv2.INTER_LINEAR)
 '''
     print(code)
 
 
 def stereo_vision_concept():
-    """스테레오 비전 개념"""
+    """Stereo vision concept"""
     print("\n" + "=" * 50)
-    print("스테레오 비전 기초")
+    print("Stereo Vision Basics")
     print("=" * 50)
 
-    print("\n1. 스테레오 비전 원리")
-    print("   - 두 카메라로 동일 장면 촬영")
-    print("   - 시차(disparity)로 깊이 계산")
+    print("\n1. Stereo Vision Principle")
+    print("   - Capture the same scene with two cameras")
+    print("   - Compute depth from disparity")
     print("   - depth = (baseline * focal_length) / disparity")
 
-    print("\n2. 스테레오 캘리브레이션")
-    print("   - 각 카메라 개별 캘리브레이션")
-    print("   - 스테레오 쌍 캘리브레이션")
-    print("   - 에피폴라 기하학 계산")
+    print("\n2. Stereo Calibration")
+    print("   - Calibrate each camera individually")
+    print("   - Calibrate the stereo pair")
+    print("   - Compute epipolar geometry")
 
     code = '''
-# 스테레오 캘리브레이션
+# Stereo calibration
 ret, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(
     objpoints, imgpoints_left, imgpoints_right,
     K1, D1, K2, D2, image_size,
@@ -326,32 +326,32 @@ ret, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(
 '''
     print(code)
 
-    print("\n3. 스테레오 정합 (Stereo Rectification)")
-    print("   - 두 이미지를 같은 평면으로 정렬")
-    print("   - 수평선상에서만 매칭 탐색")
+    print("\n3. Stereo Rectification")
+    print("   - Align both images to the same plane")
+    print("   - Search for matches only along horizontal lines")
 
-    print("\n4. 시차 맵 계산")
-    print("   - StereoBM: Block Matching (빠름)")
-    print("   - StereoSGBM: Semi-Global BM (정확)")
+    print("\n4. Disparity Map Computation")
+    print("   - StereoBM: Block Matching (fast)")
+    print("   - StereoSGBM: Semi-Global BM (accurate)")
 
 
 def stereo_matching_demo():
-    """스테레오 매칭 시뮬레이션"""
+    """Stereo matching simulation"""
     print("\n" + "=" * 50)
-    print("스테레오 매칭 시뮬레이션")
+    print("Stereo Matching Simulation")
     print("=" * 50)
 
-    # 시뮬레이션용 스테레오 이미지 쌍 생성
+    # Create stereo image pair for simulation
     left = np.zeros((300, 400), dtype=np.uint8)
     left[:] = 150
-    cv2.rectangle(left, (100, 100), (200, 200), 80, -1)  # 가까운 객체
-    cv2.rectangle(left, (250, 120), (350, 180), 100, -1)  # 먼 객체
+    cv2.rectangle(left, (100, 100), (200, 200), 80, -1)  # Close object
+    cv2.rectangle(left, (250, 120), (350, 180), 100, -1)  # Far object
 
-    # 오른쪽 이미지 (시차 적용)
+    # Right image (with disparity applied)
     right = np.zeros((300, 400), dtype=np.uint8)
     right[:] = 150
-    cv2.rectangle(right, (80, 100), (180, 200), 80, -1)   # 시차 20 (가까움)
-    cv2.rectangle(right, (240, 120), (340, 180), 100, -1)  # 시차 10 (멀음)
+    cv2.rectangle(right, (80, 100), (180, 200), 80, -1)   # Disparity 20 (close)
+    cv2.rectangle(right, (240, 120), (340, 180), 100, -1)  # Disparity 10 (far)
 
     # StereoBM
     stereo_bm = cv2.StereoBM_create(numDisparities=64, blockSize=15)
@@ -371,7 +371,7 @@ def stereo_matching_demo():
     )
     disparity_sgbm = stereo_sgbm.compute(left, right)
 
-    # 정규화
+    # Normalize
     disparity_bm_norm = cv2.normalize(disparity_bm, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     disparity_sgbm_norm = cv2.normalize(disparity_sgbm, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
@@ -380,29 +380,29 @@ def stereo_matching_demo():
     cv2.imwrite('stereo_disparity_bm.jpg', disparity_bm_norm)
     cv2.imwrite('stereo_disparity_sgbm.jpg', disparity_sgbm_norm)
 
-    print("시차 맵 생성 완료")
-    print("\nStereoBM 파라미터:")
-    print("  numDisparities: 시차 범위 (16의 배수)")
-    print("  blockSize: 매칭 블록 크기 (홀수, 5~21)")
+    print("Disparity map generation complete")
+    print("\nStereoBM parameters:")
+    print("  numDisparities: Disparity range (multiple of 16)")
+    print("  blockSize: Matching block size (odd, 5~21)")
 
-    print("\nStereoSGBM 파라미터:")
-    print("  P1, P2: 부드러움 제어")
-    print("  uniquenessRatio: 매칭 고유성")
-    print("  speckleWindowSize: 스페클 필터 크기")
+    print("\nStereoSGBM parameters:")
+    print("  P1, P2: Smoothness control")
+    print("  uniquenessRatio: Matching uniqueness")
+    print("  speckleWindowSize: Speckle filter size")
 
 
 def pose_estimation_concept():
-    """포즈 추정 개념"""
+    """Pose estimation concept"""
     print("\n" + "=" * 50)
-    print("포즈 추정 (Pose Estimation)")
+    print("Pose Estimation")
     print("=" * 50)
 
-    print("\n카메라 포즈 추정:")
-    print("  - 3D-2D 대응점으로 카메라 위치/방향 추정")
+    print("\nCamera pose estimation:")
+    print("  - Estimate camera position/orientation from 3D-2D correspondences")
     print("  - cv2.solvePnP()")
 
     code = '''
-# 3D 객체 점 (알려진 월드 좌표)
+# 3D object points (known world coordinates)
 object_points = np.array([
     [0, 0, 0],
     [1, 0, 0],
@@ -410,19 +410,19 @@ object_points = np.array([
     [1, 1, 0]
 ], dtype=np.float32)
 
-# 2D 이미지 점 (검출된 좌표)
+# 2D image points (detected coordinates)
 image_points = np.array([...], dtype=np.float32)
 
-# 포즈 추정
+# Pose estimation
 success, rvec, tvec = cv2.solvePnP(
     object_points, image_points,
     camera_matrix, dist_coeffs
 )
 
-# 회전 벡터 → 회전 행렬
+# Rotation vector -> Rotation matrix
 rotation_matrix, _ = cv2.Rodrigues(rvec)
 
-# 3D 축 그리기
+# Draw 3D axes
 axis_points = np.float32([
     [3, 0, 0], [0, 3, 0], [0, 0, -3]
 ]).reshape(-1, 3)
@@ -432,39 +432,39 @@ imgpts, _ = cv2.projectPoints(
 '''
     print(code)
 
-    print("\n활용:")
+    print("\nApplications:")
     print("  - AR (Augmented Reality)")
-    print("  - 로봇 비전")
-    print("  - 3D 재구성")
+    print("  - Robot vision")
+    print("  - 3D reconstruction")
 
 
 def main():
-    """메인 함수"""
-    # 카메라 모델 개념
+    """Main function"""
+    # Camera model concept
     camera_model_concept()
 
-    # 체스보드 검출
+    # Chessboard detection
     chessboard_detection_demo()
 
-    # 캘리브레이션 시뮬레이션
+    # Calibration simulation
     camera_calibration_simulation()
 
-    # 캘리브레이션 워크플로우
+    # Calibration workflow
     calibration_workflow()
 
-    # 왜곡 보정
+    # Undistortion
     undistort_demo()
 
-    # 스테레오 비전
+    # Stereo vision
     stereo_vision_concept()
 
-    # 스테레오 매칭
+    # Stereo matching
     stereo_matching_demo()
 
-    # 포즈 추정
+    # Pose estimation
     pose_estimation_concept()
 
-    print("\n카메라 캘리브레이션 데모 완료!")
+    print("\nCamera calibration demo complete!")
 
 
 if __name__ == '__main__':

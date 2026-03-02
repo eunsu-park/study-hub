@@ -1,8 +1,8 @@
 /*
- * 해시 테이블 (Hash Table)
+ * Hash Table
  * Hash Functions, Chaining, Open Addressing
  *
- * 빠른 검색, 삽입, 삭제를 위한 자료구조입니다.
+ * A data structure for fast search, insertion, and deletion.
  */
 
 #include <stdio.h>
@@ -14,15 +14,15 @@
 #define DELETED ((void*)-1)
 
 /* =============================================================================
- * 1. 해시 함수들
+ * 1. Hash Functions
  * ============================================================================= */
 
-/* 나머지 연산 해시 */
+/* Modular hash */
 unsigned int hash_mod(int key, int size) {
     return ((key % size) + size) % size;
 }
 
-/* 문자열 해시 (djb2) */
+/* String hash (djb2) */
 unsigned int hash_string(const char* str, int size) {
     unsigned long hash = 5381;
     int c;
@@ -32,7 +32,7 @@ unsigned int hash_string(const char* str, int size) {
     return hash % size;
 }
 
-/* 다항식 해시 */
+/* Polynomial hash */
 unsigned int hash_polynomial(const char* str, int size) {
     unsigned long hash = 0;
     unsigned long p_pow = 1;
@@ -46,7 +46,7 @@ unsigned int hash_polynomial(const char* str, int size) {
 }
 
 /* =============================================================================
- * 2. 체이닝 해시 테이블
+ * 2. Chaining Hash Table
  * ============================================================================= */
 
 typedef struct ChainNode {
@@ -72,7 +72,7 @@ ChainHashTable* chain_create(int size) {
 void chain_insert(ChainHashTable* ht, const char* key, int value) {
     unsigned int idx = hash_string(key, ht->size);
 
-    /* 기존 키 검색 */
+    /* Search for existing key */
     ChainNode* node = ht->buckets[idx];
     while (node) {
         if (strcmp(node->key, key) == 0) {
@@ -82,7 +82,7 @@ void chain_insert(ChainHashTable* ht, const char* key, int value) {
         node = node->next;
     }
 
-    /* 새 노드 삽입 */
+    /* Insert new node */
     ChainNode* new_node = malloc(sizeof(ChainNode));
     new_node->key = strdup(key);
     new_node->value = value;
@@ -144,7 +144,7 @@ void chain_free(ChainHashTable* ht) {
 }
 
 /* =============================================================================
- * 3. 오픈 어드레싱 (선형 탐사)
+ * 3. Open Addressing (Linear Probing)
  * ============================================================================= */
 
 typedef struct {
@@ -230,7 +230,7 @@ void linear_free(LinearHashTable* ht) {
 }
 
 /* =============================================================================
- * 4. 이중 해싱
+ * 4. Double Hashing
  * ============================================================================= */
 
 typedef struct {
@@ -243,7 +243,7 @@ typedef struct {
 } DoubleHashTable;
 
 unsigned int hash2(int key, int size) {
-    return 7 - (key % 7);  /* 0이 아닌 값 보장 */
+    return 7 - (key % 7);  /* Ensures non-zero value */
 }
 
 DoubleHashTable* double_create(int size) {
@@ -302,7 +302,7 @@ void double_free(DoubleHashTable* ht) {
 }
 
 /* =============================================================================
- * 5. 실전: Two Sum
+ * 5. Practical: Two Sum
  * ============================================================================= */
 
 int* two_sum(int nums[], int n, int target, int* result_size) {
@@ -323,7 +323,7 @@ int* two_sum(int nums[], int n, int target, int* result_size) {
             return result;
         }
 
-        /* 간단한 키 변환 (실제로는 int를 문자열로 변환해야 함) */
+        /* Simple key conversion (in practice, int should be converted to string) */
         char key[20];
         sprintf(key, "%d", nums[i]);
         chain_insert(ht, key, i);
@@ -335,7 +335,7 @@ int* two_sum(int nums[], int n, int target, int* result_size) {
 }
 
 /* =============================================================================
- * 6. 실전: 빈도 카운트
+ * 6. Practical: Frequency Count
  * ============================================================================= */
 
 void count_frequency(int arr[], int n) {
@@ -347,7 +347,7 @@ void count_frequency(int arr[], int n) {
         linear_insert(ht, arr[i], found ? count + 1 : 1);
     }
 
-    printf("    빈도:\n");
+    printf("    Frequency:\n");
     for (int i = 0; i < ht->size; i++) {
         if (ht->occupied[i] && !ht->deleted[i]) {
             printf("      %d: %d\n", ht->keys[i], ht->values[i]);
@@ -358,22 +358,22 @@ void count_frequency(int arr[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("해시 테이블 (Hash Table) 예제\n");
+    printf("Hash Table Examples\n");
     printf("============================================================\n");
 
-    /* 1. 해시 함수 */
-    printf("\n[1] 해시 함수\n");
+    /* 1. Hash Functions */
+    printf("\n[1] Hash Functions\n");
     printf("    hash_mod(42, 101) = %u\n", hash_mod(42, TABLE_SIZE));
     printf("    hash_string(\"hello\", 101) = %u\n", hash_string("hello", TABLE_SIZE));
     printf("    hash_string(\"world\", 101) = %u\n", hash_string("world", TABLE_SIZE));
 
-    /* 2. 체이닝 해시 테이블 */
-    printf("\n[2] 체이닝 해시 테이블\n");
+    /* 2. Chaining Hash Table */
+    printf("\n[2] Chaining Hash Table\n");
     ChainHashTable* chain_ht = chain_create(TABLE_SIZE);
     chain_insert(chain_ht, "apple", 100);
     chain_insert(chain_ht, "banana", 200);
@@ -385,14 +385,14 @@ int main(void) {
 
     chain_delete(chain_ht, "banana");
     chain_get(chain_ht, "banana", &found);
-    printf("    banana 삭제 후: %s\n", found ? "found" : "not found");
+    printf("    After deleting banana: %s\n", found ? "found" : "not found");
     chain_free(chain_ht);
 
-    /* 3. 선형 탐사 */
-    printf("\n[3] 선형 탐사 (Linear Probing)\n");
+    /* 3. Linear Probing */
+    printf("\n[3] Linear Probing\n");
     LinearHashTable* linear_ht = linear_create(TABLE_SIZE);
     linear_insert(linear_ht, 10, 100);
-    linear_insert(linear_ht, 111, 200);  /* 충돌: 10 % 101 = 10, 111 % 101 = 10 */
+    linear_insert(linear_ht, 111, 200);  /* Collision: 10 % 101 = 10, 111 % 101 = 10 */
     linear_insert(linear_ht, 212, 300);
 
     printf("    10: %d\n", linear_get(linear_ht, 10, &found));
@@ -400,8 +400,8 @@ int main(void) {
     printf("    212: %d\n", linear_get(linear_ht, 212, &found));
     linear_free(linear_ht);
 
-    /* 4. 이중 해싱 */
-    printf("\n[4] 이중 해싱 (Double Hashing)\n");
+    /* 4. Double Hashing */
+    printf("\n[4] Double Hashing\n");
     DoubleHashTable* double_ht = double_create(TABLE_SIZE);
     double_insert(double_ht, 10, 100);
     double_insert(double_ht, 111, 200);
@@ -411,19 +411,19 @@ int main(void) {
     printf("    111: %d\n", double_get(double_ht, 111, &found));
     double_free(double_ht);
 
-    /* 5. 빈도 카운트 */
-    printf("\n[5] 빈도 카운트\n");
+    /* 5. Frequency Count */
+    printf("\n[5] Frequency Count\n");
     int arr[] = {1, 2, 3, 1, 2, 1, 4, 2};
-    printf("    배열: [1,2,3,1,2,1,4,2]\n");
+    printf("    Array: [1,2,3,1,2,1,4,2]\n");
     count_frequency(arr, 8);
 
-    /* 6. 해시 테이블 비교 */
-    printf("\n[6] 충돌 해결 방법 비교\n");
-    printf("    | 방법       | 장점              | 단점              |\n");
-    printf("    |------------|-------------------|-------------------|\n");
-    printf("    | 체이닝     | 삭제 용이         | 메모리 오버헤드   |\n");
-    printf("    | 선형 탐사  | 캐시 친화적       | 클러스터링        |\n");
-    printf("    | 이중 해싱  | 클러스터링 감소   | 해시 계산 비용    |\n");
+    /* 6. Hash Table Comparison */
+    printf("\n[6] Collision Resolution Comparison\n");
+    printf("    | Method       | Pros              | Cons              |\n");
+    printf("    |--------------|-------------------|-------------------|\n");
+    printf("    | Chaining     | Easy deletion     | Memory overhead   |\n");
+    printf("    | Linear Probe | Cache-friendly    | Clustering        |\n");
+    printf("    | Double Hash  | Less clustering   | Hash calc cost    |\n");
 
     printf("\n============================================================\n");
 

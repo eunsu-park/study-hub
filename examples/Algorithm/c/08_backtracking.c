@@ -1,8 +1,8 @@
 /*
- * 백트래킹 (Backtracking)
+ * Backtracking
  * N-Queens, Permutations, Combinations, Sudoku
  *
- * 모든 가능성을 탐색하되 불필요한 경로는 가지치기합니다.
+ * Explores all possibilities while pruning unpromising paths.
  */
 
 #include <stdio.h>
@@ -11,15 +11,15 @@
 #include <string.h>
 
 /* =============================================================================
- * 1. N-Queens 문제
+ * 1. N-Queens Problem
  * ============================================================================= */
 
 bool is_safe(int board[], int row, int col, int n) {
     for (int i = 0; i < row; i++) {
-        /* 같은 열 */
+        /* Same column */
         if (board[i] == col)
             return false;
-        /* 대각선 */
+        /* Diagonal */
         if (abs(board[i] - col) == abs(i - row))
             return false;
     }
@@ -39,7 +39,7 @@ void print_queens_board(int board[], int n) {
 int solve_queens(int board[], int row, int n, int print_solutions) {
     if (row == n) {
         if (print_solutions) {
-            printf("    해:\n");
+            printf("    Solution:\n");
             print_queens_board(board, n);
         }
         return 1;
@@ -50,7 +50,7 @@ int solve_queens(int board[], int row, int n, int print_solutions) {
         if (is_safe(board, row, col, n)) {
             board[row] = col;
             count += solve_queens(board, row + 1, n, print_solutions);
-            board[row] = -1;  /* 백트래킹 */
+            board[row] = -1;  /* Backtrack */
         }
     }
 
@@ -67,7 +67,7 @@ int n_queens(int n, int print_solutions) {
 }
 
 /* =============================================================================
- * 2. 순열 (Permutations)
+ * 2. Permutations
  * ============================================================================= */
 
 void swap(int* a, int* b) {
@@ -91,7 +91,7 @@ void permute_impl(int arr[], int start, int end, int* count) {
     for (int i = start; i <= end; i++) {
         swap(&arr[start], &arr[i]);
         permute_impl(arr, start + 1, end, count);
-        swap(&arr[start], &arr[i]);  /* 백트래킹 */
+        swap(&arr[start], &arr[i]);  /* Backtrack */
     }
 }
 
@@ -102,7 +102,7 @@ int permutations(int arr[], int n) {
 }
 
 /* =============================================================================
- * 3. 조합 (Combinations)
+ * 3. Combinations
  * ============================================================================= */
 
 void combine_impl(int n, int k, int start, int* current, int idx, int* count) {
@@ -132,11 +132,11 @@ int combinations(int n, int k) {
 }
 
 /* =============================================================================
- * 4. 부분집합 (Subsets)
+ * 4. Subsets
  * ============================================================================= */
 
 void subsets_impl(int arr[], int n, int* current, int current_size, int index) {
-    /* 현재 부분집합 출력 */
+    /* Print current subset */
     printf("      {");
     for (int i = 0; i < current_size; i++) {
         printf("%d", current[i]);
@@ -157,23 +157,23 @@ void subsets(int arr[], int n) {
 }
 
 /* =============================================================================
- * 5. 스도쿠 해결
+ * 5. Sudoku Solver
  * ============================================================================= */
 
 #define SUDOKU_SIZE 9
 
 bool is_valid_sudoku(int board[9][9], int row, int col, int num) {
-    /* 행 검사 */
+    /* Row check */
     for (int x = 0; x < 9; x++) {
         if (board[row][x] == num) return false;
     }
 
-    /* 열 검사 */
+    /* Column check */
     for (int x = 0; x < 9; x++) {
         if (board[x][col] == num) return false;
     }
 
-    /* 3x3 박스 검사 */
+    /* 3x3 box check */
     int start_row = row - row % 3;
     int start_col = col - col % 3;
     for (int i = 0; i < 3; i++) {
@@ -195,14 +195,14 @@ bool solve_sudoku(int board[9][9]) {
                         board[row][col] = num;
                         if (solve_sudoku(board))
                             return true;
-                        board[row][col] = 0;  /* 백트래킹 */
+                        board[row][col] = 0;  /* Backtrack */
                     }
                 }
-                return false;  /* 가능한 숫자 없음 */
+                return false;  /* No valid number found */
             }
         }
     }
-    return true;  /* 모든 칸 채움 */
+    return true;  /* All cells filled */
 }
 
 void print_sudoku(int board[9][9]) {
@@ -219,7 +219,7 @@ void print_sudoku(int board[9][9]) {
 }
 
 /* =============================================================================
- * 6. 문자열 순열
+ * 6. String Permutations
  * ============================================================================= */
 
 void string_permute(char str[], int start, int end) {
@@ -242,7 +242,7 @@ void string_permute(char str[], int start, int end) {
 }
 
 /* =============================================================================
- * 7. 합이 target인 조합
+ * 7. Combination Sum
  * ============================================================================= */
 
 void combination_sum_impl(int candidates[], int n, int target, int start,
@@ -276,42 +276,42 @@ int combination_sum(int candidates[], int n, int target) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("백트래킹 (Backtracking) 예제\n");
+    printf("Backtracking Examples\n");
     printf("============================================================\n");
 
     /* 1. N-Queens */
-    printf("\n[1] N-Queens 문제\n");
-    printf("    4-Queens 해:\n");
+    printf("\n[1] N-Queens Problem\n");
+    printf("    4-Queens solutions:\n");
     int solutions_4 = n_queens(4, 1);
-    printf("    4-Queens 해 개수: %d\n", solutions_4);
-    printf("    8-Queens 해 개수: %d\n", n_queens(8, 0));
+    printf("    4-Queens solution count: %d\n", solutions_4);
+    printf("    8-Queens solution count: %d\n", n_queens(8, 0));
 
-    /* 2. 순열 */
-    printf("\n[2] 순열\n");
+    /* 2. Permutations */
+    printf("\n[2] Permutations\n");
     int arr2[] = {1, 2, 3};
-    printf("    [1, 2, 3]의 순열:\n");
+    printf("    Permutations of [1, 2, 3]:\n");
     int perm_count = permutations(arr2, 3);
-    printf("    총 %d개\n", perm_count);
+    printf("    Total: %d\n", perm_count);
 
-    /* 3. 조합 */
-    printf("\n[3] 조합\n");
+    /* 3. Combinations */
+    printf("\n[3] Combinations\n");
     printf("    C(4, 2):\n");
     int comb_count = combinations(4, 2);
-    printf("    총 %d개\n", comb_count);
+    printf("    Total: %d\n", comb_count);
 
-    /* 4. 부분집합 */
-    printf("\n[4] 부분집합\n");
+    /* 4. Subsets */
+    printf("\n[4] Subsets\n");
     int arr4[] = {1, 2, 3};
-    printf("    {1, 2, 3}의 부분집합:\n");
+    printf("    Subsets of {1, 2, 3}:\n");
     subsets(arr4, 3);
 
-    /* 5. 스도쿠 */
-    printf("\n[5] 스도쿠 해결\n");
+    /* 5. Sudoku */
+    printf("\n[5] Sudoku Solver\n");
     int sudoku[9][9] = {
         {5, 3, 0, 0, 7, 0, 0, 0, 0},
         {6, 0, 0, 1, 9, 5, 0, 0, 0},
@@ -324,33 +324,33 @@ int main(void) {
         {0, 0, 0, 0, 8, 0, 0, 7, 9}
     };
 
-    printf("    초기 상태:\n");
+    printf("    Initial state:\n");
     print_sudoku(sudoku);
 
     if (solve_sudoku(sudoku)) {
-        printf("\n    해결:\n");
+        printf("\n    Solved:\n");
         print_sudoku(sudoku);
     }
 
-    /* 6. 문자열 순열 */
-    printf("\n[6] 문자열 순열\n");
+    /* 6. String Permutations */
+    printf("\n[6] String Permutations\n");
     char str[] = "ABC";
-    printf("    'ABC'의 순열:\n");
+    printf("    Permutations of 'ABC':\n");
     string_permute(str, 0, 2);
 
-    /* 7. 합이 target인 조합 */
-    printf("\n[7] 합이 target인 조합\n");
+    /* 7. Combination Sum */
+    printf("\n[7] Combination Sum\n");
     int candidates[] = {2, 3, 6, 7};
     printf("    [2,3,6,7], target=7:\n");
     combination_sum(candidates, 4, 7);
 
-    /* 8. 백트래킹 요약 */
-    printf("\n[8] 백트래킹 패턴\n");
-    printf("    1. 해답 검사 (base case)\n");
-    printf("    2. 후보 생성\n");
-    printf("    3. 유망성 검사 (가지치기)\n");
-    printf("    4. 재귀 호출\n");
-    printf("    5. 상태 복원 (백트래킹)\n");
+    /* 8. Backtracking Summary */
+    printf("\n[8] Backtracking Pattern\n");
+    printf("    1. Check solution (base case)\n");
+    printf("    2. Generate candidates\n");
+    printf("    3. Feasibility check (pruning)\n");
+    printf("    4. Recursive call\n");
+    printf("    5. Restore state (backtrack)\n");
 
     printf("\n============================================================\n");
 

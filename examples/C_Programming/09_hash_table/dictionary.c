@@ -1,13 +1,13 @@
 /*
  * dictionary.c
- * 해시 테이블을 활용한 실용적인 사전(Dictionary) 프로그램
+ * Practical dictionary program using a hash table
  *
- * 기능:
- * - 단어 추가/검색/삭제
- * - 전체 목록 출력
- * - 파일 저장/불러오기
- * - 단어 통계 및 검색 제안
- * - 대소문자 구분 없는 검색
+ * Features:
+ * - Add/search/delete words
+ * - Display full word list
+ * - Save/load from file
+ * - Word statistics and search suggestions
+ * - Case-insensitive search
  */
 
 #include <stdio.h>
@@ -21,28 +21,28 @@
 #define VALUE_SIZE 500
 #define FILENAME "dictionary.txt"
 
-// 노드 구조체 (체이닝 방식)
+// Node struct (chaining method)
 typedef struct Node {
     char word[KEY_SIZE];
     char meaning[VALUE_SIZE];
-    int search_count;       // 검색 횟수
+    int search_count;       // Number of times searched
     struct Node *next;
 } Node;
 
-// 사전 구조체
+// Dictionary struct
 typedef struct {
     Node *buckets[TABLE_SIZE];
     int count;
     int total_searches;
 } Dictionary;
 
-// 통계 구조체
+// Statistics struct
 typedef struct {
     char word[KEY_SIZE];
     int count;
 } WordStat;
 
-// 대소문자 구분 없는 djb2 해시 함수
+// Case-insensitive djb2 hash function
 unsigned int hash(const char *key) {
     unsigned int hash = 5381;
     while (*key) {
@@ -51,16 +51,16 @@ unsigned int hash(const char *key) {
     return hash % TABLE_SIZE;
 }
 
-// 사전 생성
+// Create dictionary
 Dictionary* dict_create(void) {
     Dictionary *dict = calloc(1, sizeof(Dictionary));
     if (!dict) {
-        fprintf(stderr, "메모리 할당 실패\n");
+        fprintf(stderr, "Memory allocation failed\n");
     }
     return dict;
 }
 
-// 사전 해제
+// Destroy dictionary
 void dict_destroy(Dictionary *dict) {
     if (!dict) return;
 
@@ -75,29 +75,29 @@ void dict_destroy(Dictionary *dict) {
     free(dict);
 }
 
-// 단어 추가 또는 수정
+// Add or update a word
 void dict_add(Dictionary *dict, const char *word, const char *meaning) {
     if (!dict || !word || !meaning) return;
 
     unsigned int index = hash(word);
 
-    // 기존 단어 확인
+    // Check for existing word
     Node *current = dict->buckets[index];
     while (current) {
         if (strcasecmp(current->word, word) == 0) {
-            // 기존 단어 수정
+            // Update existing word
             strncpy(current->meaning, meaning, VALUE_SIZE - 1);
             current->meaning[VALUE_SIZE - 1] = '\0';
-            printf("✓ '%s' 업데이트됨\n", word);
+            printf("'%s' updated\n", word);
             return;
         }
         current = current->next;
     }
 
-    // 새 단어 추가
+    // Add new word
     Node *node = malloc(sizeof(Node));
     if (!node) {
-        fprintf(stderr, "메모리 할당 실패\n");
+        fprintf(stderr, "Memory allocation failed\n");
         return;
     }
 
@@ -111,10 +111,10 @@ void dict_add(Dictionary *dict, const char *word, const char *meaning) {
     dict->buckets[index] = node;
     dict->count++;
 
-    printf("✓ '%s' 추가됨\n", word);
+    printf("'%s' added\n", word);
 }
 
-// 단어 검색
+// Search for a word
 char* dict_search(Dictionary *dict, const char *word) {
     if (!dict || !word) return NULL;
 
@@ -133,7 +133,7 @@ char* dict_search(Dictionary *dict, const char *word) {
     return NULL;
 }
 
-// 단어 삭제
+// Delete a word
 bool dict_delete(Dictionary *dict, const char *word) {
     if (!dict || !word) return false;
 
@@ -151,27 +151,27 @@ bool dict_delete(Dictionary *dict, const char *word) {
             }
             free(current);
             dict->count--;
-            printf("✓ '%s' 삭제됨\n", word);
+            printf("'%s' deleted\n", word);
             return true;
         }
         prev = current;
         current = current->next;
     }
 
-    printf("✗ '%s'을(를) 찾을 수 없습니다\n", word);
+    printf("'%s' not found\n", word);
     return false;
 }
 
-// 전체 단어 목록 출력
+// Display all words
 void dict_list(Dictionary *dict) {
     if (!dict) return;
 
-    printf("\n╔════════════════════════════════════════════╗\n");
-    printf("║           사전 목록 (총 %d개)            ║\n", dict->count);
-    printf("╚════════════════════════════════════════════╝\n\n");
+    printf("\n+============================================+\n");
+    printf("|       Dictionary List (%d total)            |\n", dict->count);
+    printf("+============================================+\n\n");
 
     if (dict->count == 0) {
-        printf("  (비어있음)\n");
+        printf("  (empty)\n");
         return;
     }
 
@@ -186,21 +186,21 @@ void dict_list(Dictionary *dict) {
     }
 }
 
-// 파일에 저장
+// Save to file
 bool dict_save(Dictionary *dict, const char *filename) {
     if (!dict || !filename) return false;
 
     FILE *fp = fopen(filename, "w");
     if (!fp) {
-        fprintf(stderr, "파일 열기 실패: %s\n", filename);
+        fprintf(stderr, "Failed to open file: %s\n", filename);
         return false;
     }
 
-    // 헤더 작성
+    // Write header
     fprintf(fp, "# Dictionary File\n");
     fprintf(fp, "# Count: %d\n\n", dict->count);
 
-    // 모든 단어 저장
+    // Save all words
     for (int i = 0; i < TABLE_SIZE; i++) {
         Node *current = dict->buckets[i];
         while (current) {
@@ -211,17 +211,17 @@ bool dict_save(Dictionary *dict, const char *filename) {
     }
 
     fclose(fp);
-    printf("✓ %d개 단어를 '%s'에 저장했습니다\n", dict->count, filename);
+    printf("Saved %d words to '%s'\n", dict->count, filename);
     return true;
 }
 
-// 파일에서 불러오기
+// Load from file
 bool dict_load(Dictionary *dict, const char *filename) {
     if (!dict || !filename) return false;
 
     FILE *fp = fopen(filename, "r");
     if (!fp) {
-        fprintf(stderr, "파일 열기 실패: %s\n", filename);
+        fprintf(stderr, "Failed to open file: %s\n", filename);
         return false;
     }
 
@@ -229,13 +229,13 @@ bool dict_load(Dictionary *dict, const char *filename) {
     int loaded = 0;
 
     while (fgets(line, sizeof(line), fp)) {
-        // 주석 및 빈 줄 건너뛰기
+        // Skip comments and empty lines
         if (line[0] == '#' || line[0] == '\n') continue;
 
-        // 줄바꿈 제거
+        // Remove newline
         line[strcspn(line, "\n")] = '\0';
 
-        // 파싱: word|meaning|search_count
+        // Parse: word|meaning|search_count
         char word[KEY_SIZE], meaning[VALUE_SIZE];
         int search_count = 0;
 
@@ -248,7 +248,7 @@ bool dict_load(Dictionary *dict, const char *filename) {
         token = strtok(NULL, "|");
         if (token) search_count = atoi(token);
 
-        // 사전에 추가 (출력 없이)
+        // Add to dictionary (without output)
         unsigned int index = hash(word);
         Node *node = malloc(sizeof(Node));
         if (!node) continue;
@@ -266,15 +266,15 @@ bool dict_load(Dictionary *dict, const char *filename) {
     }
 
     fclose(fp);
-    printf("✓ %d개 단어를 '%s'에서 불러왔습니다\n", loaded, filename);
+    printf("Loaded %d words from '%s'\n", loaded, filename);
     return true;
 }
 
-// 검색 제안 (부분 일치)
+// Search suggestions (partial match)
 void dict_suggest(Dictionary *dict, const char *prefix) {
     if (!dict || !prefix) return;
 
-    printf("\n'%s'로 시작하는 단어:\n", prefix);
+    printf("\nWords starting with '%s':\n", prefix);
 
     int found = 0;
     int len = strlen(prefix);
@@ -291,24 +291,24 @@ void dict_suggest(Dictionary *dict, const char *prefix) {
     }
 
     if (found == 0) {
-        printf("  (없음)\n");
+        printf("  (none)\n");
     } else {
-        printf("총 %d개 발견\n", found);
+        printf("%d found\n", found);
     }
 }
 
-// 인기 단어 통계
+// Popular word statistics
 void dict_statistics(Dictionary *dict) {
     if (!dict) return;
 
-    printf("\n╔════════════════════════════════════════════╗\n");
-    printf("║              사전 통계 정보                ║\n");
-    printf("╚════════════════════════════════════════════╝\n\n");
+    printf("\n+============================================+\n");
+    printf("|          Dictionary Statistics              |\n");
+    printf("+============================================+\n\n");
 
-    printf("총 단어 개수:     %d\n", dict->count);
-    printf("총 검색 횟수:     %d\n", dict->total_searches);
+    printf("Total words:      %d\n", dict->count);
+    printf("Total searches:   %d\n", dict->total_searches);
 
-    // 검색 횟수 순으로 정렬 (Top 10)
+    // Sort by search count (Top 10)
     WordStat *stats = malloc(sizeof(WordStat) * dict->count);
     if (!stats) return;
 
@@ -323,7 +323,7 @@ void dict_statistics(Dictionary *dict) {
         }
     }
 
-    // 버블 정렬 (간단하게)
+    // Bubble sort (simple)
     for (int i = 0; i < dict->count - 1; i++) {
         for (int j = 0; j < dict->count - i - 1; j++) {
             if (stats[j].count < stats[j + 1].count) {
@@ -334,12 +334,12 @@ void dict_statistics(Dictionary *dict) {
         }
     }
 
-    // Top 10 출력
-    printf("\n인기 단어 Top 10:\n");
+    // Print Top 10
+    printf("\nTop 10 Most Searched Words:\n");
     int limit = dict->count < 10 ? dict->count : 10;
     for (int i = 0; i < limit; i++) {
         if (stats[i].count > 0) {
-            printf("  %2d. %-20s (%d회)\n",
+            printf("  %2d. %-20s (%d times)\n",
                    i + 1, stats[i].word, stats[i].count);
         }
     }
@@ -347,64 +347,64 @@ void dict_statistics(Dictionary *dict) {
     free(stats);
 }
 
-// 메뉴 출력
+// Print menu
 void print_menu(void) {
-    printf("\n╔════════════════════════════════════════════╗\n");
-    printf("║           📖 간단한 사전 프로그램          ║\n");
-    printf("╠════════════════════════════════════════════╣\n");
-    printf("║  1. 단어 추가                              ║\n");
-    printf("║  2. 단어 검색                              ║\n");
-    printf("║  3. 단어 삭제                              ║\n");
-    printf("║  4. 전체 목록                              ║\n");
-    printf("║  5. 검색 제안                              ║\n");
-    printf("║  6. 통계 보기                              ║\n");
-    printf("║  7. 파일 저장                              ║\n");
-    printf("║  8. 파일 불러오기                          ║\n");
-    printf("║  0. 종료                                   ║\n");
-    printf("╚════════════════════════════════════════════╝\n");
+    printf("\n+============================================+\n");
+    printf("|        Simple Dictionary Program           |\n");
+    printf("+============================================+\n");
+    printf("|  1. Add word                               |\n");
+    printf("|  2. Search word                            |\n");
+    printf("|  3. Delete word                            |\n");
+    printf("|  4. List all                               |\n");
+    printf("|  5. Search suggestions                     |\n");
+    printf("|  6. View statistics                        |\n");
+    printf("|  7. Save to file                           |\n");
+    printf("|  8. Load from file                         |\n");
+    printf("|  0. Quit                                   |\n");
+    printf("+============================================+\n");
 }
 
-// 입력 버퍼 비우기
+// Clear input buffer
 void clear_input(void) {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// 샘플 데이터 로드
+// Load sample data
 void load_sample_data(Dictionary *dict) {
-    dict_add(dict, "apple", "사과; 장미과의 낙엽교목");
-    dict_add(dict, "book", "책; 인쇄물을 제본한 것");
-    dict_add(dict, "computer", "컴퓨터; 전자 계산기");
-    dict_add(dict, "dictionary", "사전; 단어를 모아 일정한 순서로 배열하여 설명한 책");
-    dict_add(dict, "education", "교육; 지식과 기술을 가르침");
-    dict_add(dict, "friend", "친구; 가까이 사귀어 친하게 지내는 사람");
-    dict_add(dict, "galaxy", "은하; 우주 공간에 있는 천체 집단");
-    dict_add(dict, "happiness", "행복; 복된 좋은 운수");
-    dict_add(dict, "internet", "인터넷; 전 세계의 컴퓨터가 서로 연결된 네트워크");
-    dict_add(dict, "javascript", "자바스크립트; 웹 프로그래밍 언어");
+    dict_add(dict, "apple", "A round fruit with red or green skin");
+    dict_add(dict, "book", "A written or printed work consisting of pages");
+    dict_add(dict, "computer", "An electronic device for processing data");
+    dict_add(dict, "dictionary", "A reference book listing words with their definitions");
+    dict_add(dict, "education", "The process of teaching and learning knowledge and skills");
+    dict_add(dict, "friend", "A person with whom one has a close relationship");
+    dict_add(dict, "galaxy", "A system of millions or billions of stars");
+    dict_add(dict, "happiness", "A state of well-being and contentment");
+    dict_add(dict, "internet", "A global network connecting computers worldwide");
+    dict_add(dict, "javascript", "A programming language for web development");
 }
 
-// 메인 함수
+// Main function
 int main(void) {
     Dictionary *dict = dict_create();
     if (!dict) return 1;
 
-    // 샘플 데이터 로드
-    printf("샘플 데이터를 불러오는 중...\n");
+    // Load sample data
+    printf("Loading sample data...\n");
     load_sample_data(dict);
 
-    // 기존 파일이 있으면 불러오기
+    // Load existing file if present
     FILE *test = fopen(FILENAME, "r");
     if (test) {
         fclose(test);
-        printf("\n기존 사전 파일을 발견했습니다.\n");
-        printf("불러오시겠습니까? (y/n): ");
+        printf("\nExisting dictionary file found.\n");
+        printf("Would you like to load it? (y/n): ");
         char choice;
         scanf(" %c", &choice);
         clear_input();
 
         if (choice == 'y' || choice == 'Y') {
-            // 기존 데이터 삭제 후 로드
+            // Delete existing data then load
             dict_destroy(dict);
             dict = dict_create();
             dict_load(dict, FILENAME);
@@ -417,86 +417,86 @@ int main(void) {
 
     while (1) {
         print_menu();
-        printf("선택: ");
+        printf("Choice: ");
 
         if (scanf("%d", &choice) != 1) {
             clear_input();
-            printf("✗ 잘못된 입력입니다\n");
+            printf("Invalid input\n");
             continue;
         }
         clear_input();
 
         switch (choice) {
-            case 1:  // 추가
-                printf("\n단어: ");
+            case 1:  // Add
+                printf("\nWord: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
                 if (strlen(word) == 0) {
-                    printf("✗ 단어를 입력하세요\n");
+                    printf("Please enter a word\n");
                     break;
                 }
 
-                printf("뜻: ");
+                printf("Definition: ");
                 fgets(meaning, VALUE_SIZE, stdin);
                 meaning[strcspn(meaning, "\n")] = '\0';
 
                 if (strlen(meaning) == 0) {
-                    printf("✗ 뜻을 입력하세요\n");
+                    printf("Please enter a definition\n");
                     break;
                 }
 
                 dict_add(dict, word, meaning);
                 break;
 
-            case 2:  // 검색
-                printf("\n검색할 단어: ");
+            case 2:  // Search
+                printf("\nWord to search: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
                 char *result = dict_search(dict, word);
                 if (result) {
-                    printf("\n┌────────────────────────────────────────┐\n");
-                    printf("│ %s\n", word);
-                    printf("├────────────────────────────────────────┤\n");
-                    printf("│ %s\n", result);
-                    printf("└────────────────────────────────────────┘\n");
+                    printf("\n+----------------------------------------+\n");
+                    printf("| %s\n", word);
+                    printf("+----------------------------------------+\n");
+                    printf("| %s\n", result);
+                    printf("+----------------------------------------+\n");
                 } else {
-                    printf("\n✗ '%s'을(를) 찾을 수 없습니다\n", word);
+                    printf("\n'%s' not found\n", word);
                     dict_suggest(dict, word);
                 }
                 break;
 
-            case 3:  // 삭제
-                printf("\n삭제할 단어: ");
+            case 3:  // Delete
+                printf("\nWord to delete: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
                 dict_delete(dict, word);
                 break;
 
-            case 4:  // 목록
+            case 4:  // List
                 dict_list(dict);
                 break;
 
-            case 5:  // 제안
-                printf("\n검색할 접두사: ");
+            case 5:  // Suggestions
+                printf("\nPrefix to search: ");
                 fgets(word, KEY_SIZE, stdin);
                 word[strcspn(word, "\n")] = '\0';
 
                 dict_suggest(dict, word);
                 break;
 
-            case 6:  // 통계
+            case 6:  // Statistics
                 dict_statistics(dict);
                 break;
 
-            case 7:  // 저장
+            case 7:  // Save
                 dict_save(dict, FILENAME);
                 break;
 
-            case 8:  // 불러오기
-                printf("\n현재 데이터가 삭제됩니다. 계속하시겠습니까? (y/n): ");
+            case 8:  // Load
+                printf("\nCurrent data will be deleted. Continue? (y/n): ");
                 char confirm;
                 scanf(" %c", &confirm);
                 clear_input();
@@ -508,8 +508,8 @@ int main(void) {
                 }
                 break;
 
-            case 0:  // 종료
-                printf("\n저장하시겠습니까? (y/n): ");
+            case 0:  // Quit
+                printf("\nWould you like to save? (y/n): ");
                 char save_choice;
                 scanf(" %c", &save_choice);
                 clear_input();
@@ -518,12 +518,12 @@ int main(void) {
                     dict_save(dict, FILENAME);
                 }
 
-                printf("사전을 종료합니다.\n");
+                printf("Exiting the dictionary.\n");
                 dict_destroy(dict);
                 return 0;
 
             default:
-                printf("✗ 잘못된 선택입니다\n");
+                printf("Invalid choice\n");
         }
     }
 

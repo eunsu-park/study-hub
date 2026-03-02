@@ -1,32 +1,32 @@
 /*
  * addressbook_v1.c
  *
- * 주소록 프로그램 - 완전한 CRUD 기능 구현
+ * Address Book Program - Full CRUD functionality
  *
- * 기능:
- *   1. 연락처 추가 (Create)
- *   2. 연락처 목록 보기 (Read)
- *   3. 연락처 검색 (Read)
- *   4. 연락처 수정 (Update)
- *   5. 연락처 삭제 (Delete)
- *   6. 파일 저장/불러오기 (Persistence)
+ * Features:
+ *   1. Add contact (Create)
+ *   2. List contacts (Read)
+ *   3. Search contacts (Read)
+ *   4. Edit contact (Update)
+ *   5. Delete contact (Delete)
+ *   6. File save/load (Persistence)
  *
- * 컴파일: gcc -Wall -Wextra -std=c11 addressbook_v1.c -o addressbook
- * 실행: ./addressbook
+ * Compile: gcc -Wall -Wextra -std=c11 addressbook_v1.c -o addressbook
+ * Run: ./addressbook
  */
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-/* 상수 정의 */
+/* Constants */
 #define MAX_CONTACTS 100
 #define NAME_LEN 50
 #define PHONE_LEN 20
 #define EMAIL_LEN 50
 #define FILENAME "contacts.dat"
 
-/* 연락처 구조체 */
+/* Contact struct */
 typedef struct {
     int id;
     char name[NAME_LEN];
@@ -34,14 +34,14 @@ typedef struct {
     char email[EMAIL_LEN];
 } Contact;
 
-/* 주소록 구조체 */
+/* Address book struct */
 typedef struct {
     Contact contacts[MAX_CONTACTS];
-    int count;      // 현재 저장된 연락처 수
-    int next_id;    // 다음에 할당할 ID
+    int count;      // Number of currently stored contacts
+    int next_id;    // Next ID to assign
 } AddressBook;
 
-/* 함수 선언 */
+/* Function declarations */
 void init_addressbook(AddressBook *ab);
 void print_menu(void);
 void add_contact(AddressBook *ab);
@@ -54,38 +54,38 @@ int load_from_file(AddressBook *ab);
 void clear_input_buffer(void);
 int find_by_id(AddressBook *ab, int id);
 
-/* 메인 함수 */
+/* Main function */
 int main(void) {
     AddressBook ab;
     int choice;
 
-    /* 주소록 초기화 */
+    /* Initialize address book */
     init_addressbook(&ab);
 
-    /* 파일에서 기존 데이터 불러오기 */
+    /* Load existing data from file */
     if (load_from_file(&ab) == 0) {
-        printf("기존 데이터를 불러왔습니다. (%d명)\n", ab.count);
+        printf("Loaded existing data. (%d contacts)\n", ab.count);
     }
 
-    /* 프로그램 시작 메시지 */
+    /* Program start message */
     printf("\n╔═══════════════════════════════╗\n");
-    printf("║      📒 주소록 프로그램       ║\n");
+    printf("║      Address Book Program     ║\n");
     printf("╚═══════════════════════════════╝\n");
 
-    /* 메인 루프 */
+    /* Main loop */
     while (1) {
         print_menu();
-        printf("선택: ");
+        printf("Choice: ");
 
-        /* 메뉴 선택 입력 */
+        /* Menu choice input */
         if (scanf("%d", &choice) != 1) {
             clear_input_buffer();
-            printf("숫자를 입력해주세요.\n");
+            printf("Please enter a number.\n");
             continue;
         }
         clear_input_buffer();
 
-        /* 메뉴 처리 */
+        /* Handle menu */
         switch (choice) {
             case 1:
                 add_contact(&ab);
@@ -104,22 +104,22 @@ int main(void) {
                 break;
             case 6:
                 if (save_to_file(&ab) == 0) {
-                    printf("✓ 파일에 저장되었습니다.\n");
+                    printf("Saved to file.\n");
                 }
                 break;
             case 0:
-                /* 종료 전 저장 확인 */
-                printf("변경 사항을 저장하시겠습니까? (y/n): ");
+                /* Confirm save before exit */
+                printf("Save changes? (y/n): ");
                 char save_confirm;
                 scanf(" %c", &save_confirm);
                 if (save_confirm == 'y' || save_confirm == 'Y') {
                     save_to_file(&ab);
-                    printf("저장 완료.\n");
+                    printf("Save complete.\n");
                 }
-                printf("프로그램을 종료합니다.\n");
+                printf("Exiting the program.\n");
                 return 0;
             default:
-                printf("잘못된 선택입니다.\n");
+                printf("Invalid choice.\n");
         }
         printf("\n");
     }
@@ -127,267 +127,267 @@ int main(void) {
     return 0;
 }
 
-/* 주소록 초기화 */
+/* Initialize address book */
 void init_addressbook(AddressBook *ab) {
     ab->count = 0;
     ab->next_id = 1;
     memset(ab->contacts, 0, sizeof(ab->contacts));
 }
 
-/* 메뉴 출력 */
+/* Print menu */
 void print_menu(void) {
     printf("\n┌─────────────────────────┐\n");
-    printf("│  1. 연락처 추가         │\n");
-    printf("│  2. 목록 보기           │\n");
-    printf("│  3. 검색                │\n");
-    printf("│  4. 수정                │\n");
-    printf("│  5. 삭제                │\n");
-    printf("│  6. 파일 저장           │\n");
-    printf("│  0. 종료                │\n");
+    printf("│  1. Add contact         │\n");
+    printf("│  2. List contacts       │\n");
+    printf("│  3. Search              │\n");
+    printf("│  4. Edit                │\n");
+    printf("│  5. Delete              │\n");
+    printf("│  6. Save to file        │\n");
+    printf("│  0. Quit                │\n");
     printf("└─────────────────────────┘\n");
 }
 
-/* 연락처 추가 */
+/* Add contact */
 void add_contact(AddressBook *ab) {
-    /* 주소록이 가득 찼는지 확인 */
+    /* Check if address book is full */
     if (ab->count >= MAX_CONTACTS) {
-        printf("주소록이 가득 찼습니다. (최대 %d명)\n", MAX_CONTACTS);
+        printf("Address book is full. (max %d contacts)\n", MAX_CONTACTS);
         return;
     }
 
-    /* 새 연락처를 위한 포인터 */
+    /* Pointer for new contact */
     Contact *c = &ab->contacts[ab->count];
     c->id = ab->next_id++;
 
-    printf("\n═══ 새 연락처 추가 ═══\n\n");
+    printf("\n=== Add New Contact ===\n\n");
 
-    /* 이름 입력 (필수) */
-    printf("이름: ");
+    /* Name input (required) */
+    printf("Name: ");
     fgets(c->name, NAME_LEN, stdin);
-    c->name[strcspn(c->name, "\n")] = '\0';  // 개행 문자 제거
+    c->name[strcspn(c->name, "\n")] = '\0';  // Remove newline character
 
     if (strlen(c->name) == 0) {
-        printf("이름은 필수입니다. 추가가 취소되었습니다.\n");
+        printf("Name is required. Addition cancelled.\n");
         return;
     }
 
-    /* 전화번호 입력 */
-    printf("전화번호: ");
+    /* Phone number input */
+    printf("Phone: ");
     fgets(c->phone, PHONE_LEN, stdin);
     c->phone[strcspn(c->phone, "\n")] = '\0';
 
-    /* 이메일 입력 */
-    printf("이메일: ");
+    /* Email input */
+    printf("Email: ");
     fgets(c->email, EMAIL_LEN, stdin);
     c->email[strcspn(c->email, "\n")] = '\0';
 
-    /* 연락처 수 증가 */
+    /* Increment contact count */
     ab->count++;
-    printf("\n✓ '%s' 연락처가 추가되었습니다. (ID: %d)\n", c->name, c->id);
+    printf("\nContact '%s' added. (ID: %d)\n", c->name, c->id);
 }
 
-/* 연락처 목록 보기 */
+/* List contacts */
 void list_contacts(AddressBook *ab) {
-    printf("\n═══ 연락처 목록 ═══ (총 %d명)\n", ab->count);
+    printf("\n=== Contact List === (%d total)\n", ab->count);
 
     if (ab->count == 0) {
-        printf("\n저장된 연락처가 없습니다.\n");
+        printf("\nNo contacts stored.\n");
         return;
     }
 
-    /* 테이블 헤더 */
-    printf("\n%-4s │ %-15s │ %-15s │ %-20s\n", "ID", "이름", "전화번호", "이메일");
+    /* Table header */
+    printf("\n%-4s | %-15s | %-15s | %-20s\n", "ID", "Name", "Phone", "Email");
     printf("─────┼─────────────────┼─────────────────┼─────────────────────\n");
 
-    /* 모든 연락처 출력 */
+    /* Print all contacts */
     for (int i = 0; i < ab->count; i++) {
         Contact *c = &ab->contacts[i];
-        printf("%-4d │ %-15s │ %-15s │ %-20s\n",
+        printf("%-4d | %-15s | %-15s | %-20s\n",
                c->id, c->name, c->phone, c->email);
     }
 }
 
-/* 연락처 검색 */
+/* Search contacts */
 void search_contact(AddressBook *ab) {
     char keyword[NAME_LEN];
     int found = 0;
 
-    printf("\n═══ 연락처 검색 ═══\n\n");
-    printf("검색어: ");
+    printf("\n=== Search Contacts ===\n\n");
+    printf("Keyword: ");
     fgets(keyword, NAME_LEN, stdin);
     keyword[strcspn(keyword, "\n")] = '\0';
 
     if (strlen(keyword) == 0) {
-        printf("검색어를 입력해주세요.\n");
+        printf("Please enter a keyword.\n");
         return;
     }
 
-    printf("\n검색 결과:\n");
+    printf("\nSearch results:\n");
     printf("─────────────────────────────────────────────────────\n");
 
-    /* 모든 연락처에서 검색 */
+    /* Search all contacts */
     for (int i = 0; i < ab->count; i++) {
         Contact *c = &ab->contacts[i];
-        /* 이름, 전화번호, 이메일에서 부분 문자열 검색 */
+        /* Substring search in name, phone, and email */
         if (strstr(c->name, keyword) != NULL ||
             strstr(c->phone, keyword) != NULL ||
             strstr(c->email, keyword) != NULL) {
 
             printf("ID: %d\n", c->id);
-            printf("  이름: %s\n", c->name);
-            printf("  전화: %s\n", c->phone);
-            printf("  이메일: %s\n", c->email);
+            printf("  Name:  %s\n", c->name);
+            printf("  Phone: %s\n", c->phone);
+            printf("  Email: %s\n", c->email);
             printf("─────────────────────────────────────────────────────\n");
             found++;
         }
     }
 
     if (found == 0) {
-        printf("'%s'에 대한 검색 결과가 없습니다.\n", keyword);
+        printf("No results found for '%s'.\n", keyword);
     } else {
-        printf("총 %d건 검색됨\n", found);
+        printf("%d result(s) found\n", found);
     }
 }
 
-/* 연락처 수정 */
+/* Edit contact */
 void edit_contact(AddressBook *ab) {
     int id;
     char input[EMAIL_LEN];
 
-    printf("\n═══ 연락처 수정 ═══\n\n");
-    printf("수정할 연락처 ID: ");
+    printf("\n=== Edit Contact ===\n\n");
+    printf("Contact ID to edit: ");
     scanf("%d", &id);
     clear_input_buffer();
 
-    /* ID로 연락처 찾기 */
+    /* Find contact by ID */
     int idx = find_by_id(ab, id);
     if (idx == -1) {
-        printf("해당 ID의 연락처를 찾을 수 없습니다.\n");
+        printf("Contact with that ID not found.\n");
         return;
     }
 
     Contact *c = &ab->contacts[idx];
 
-    /* 현재 정보 표시 */
-    printf("\n현재 정보:\n");
-    printf("  이름: %s\n", c->name);
-    printf("  전화: %s\n", c->phone);
-    printf("  이메일: %s\n", c->email);
+    /* Display current info */
+    printf("\nCurrent info:\n");
+    printf("  Name:  %s\n", c->name);
+    printf("  Phone: %s\n", c->phone);
+    printf("  Email: %s\n", c->email);
 
-    printf("\n새 정보를 입력하세요 (빈 칸: 유지):\n");
+    printf("\nEnter new info (leave blank to keep current):\n");
 
-    /* 이름 수정 */
-    printf("이름 [%s]: ", c->name);
+    /* Edit name */
+    printf("Name [%s]: ", c->name);
     fgets(input, NAME_LEN, stdin);
     input[strcspn(input, "\n")] = '\0';
     if (strlen(input) > 0) {
         strcpy(c->name, input);
     }
 
-    /* 전화번호 수정 */
-    printf("전화번호 [%s]: ", c->phone);
+    /* Edit phone number */
+    printf("Phone [%s]: ", c->phone);
     fgets(input, PHONE_LEN, stdin);
     input[strcspn(input, "\n")] = '\0';
     if (strlen(input) > 0) {
         strcpy(c->phone, input);
     }
 
-    /* 이메일 수정 */
-    printf("이메일 [%s]: ", c->email);
+    /* Edit email */
+    printf("Email [%s]: ", c->email);
     fgets(input, EMAIL_LEN, stdin);
     input[strcspn(input, "\n")] = '\0';
     if (strlen(input) > 0) {
         strcpy(c->email, input);
     }
 
-    printf("\n✓ 연락처가 수정되었습니다.\n");
+    printf("\nContact updated.\n");
 }
 
-/* 연락처 삭제 */
+/* Delete contact */
 void delete_contact(AddressBook *ab) {
     int id;
 
-    printf("\n═══ 연락처 삭제 ═══\n\n");
-    printf("삭제할 연락처 ID: ");
+    printf("\n=== Delete Contact ===\n\n");
+    printf("Contact ID to delete: ");
     scanf("%d", &id);
     clear_input_buffer();
 
-    /* ID로 연락처 찾기 */
+    /* Find contact by ID */
     int idx = find_by_id(ab, id);
     if (idx == -1) {
-        printf("해당 ID의 연락처를 찾을 수 없습니다.\n");
+        printf("Contact with that ID not found.\n");
         return;
     }
 
-    /* 삭제 확인 */
-    printf("'%s' 연락처를 삭제하시겠습니까? (y/n): ", ab->contacts[idx].name);
+    /* Confirm deletion */
+    printf("Delete contact '%s'? (y/n): ", ab->contacts[idx].name);
     char confirm;
     scanf(" %c", &confirm);
     clear_input_buffer();
 
     if (confirm != 'y' && confirm != 'Y') {
-        printf("삭제가 취소되었습니다.\n");
+        printf("Deletion cancelled.\n");
         return;
     }
 
-    /* 삭제: 뒤의 요소들을 앞으로 이동 */
+    /* Delete: shift elements forward */
     for (int i = idx; i < ab->count - 1; i++) {
         ab->contacts[i] = ab->contacts[i + 1];
     }
     ab->count--;
 
-    printf("✓ 연락처가 삭제되었습니다.\n");
+    printf("Contact deleted.\n");
 }
 
-/* 파일에 저장 (바이너리 모드) */
+/* Save to file (binary mode) */
 int save_to_file(AddressBook *ab) {
     FILE *fp = fopen(FILENAME, "wb");
     if (fp == NULL) {
-        printf("파일 저장 실패: 파일을 열 수 없습니다.\n");
+        printf("Failed to save: Cannot open file.\n");
         return -1;
     }
 
-    /* 메타데이터 저장 (count, next_id) */
+    /* Save metadata (count, next_id) */
     fwrite(&ab->count, sizeof(int), 1, fp);
     fwrite(&ab->next_id, sizeof(int), 1, fp);
 
-    /* 연락처 배열 저장 */
+    /* Save contacts array */
     fwrite(ab->contacts, sizeof(Contact), ab->count, fp);
 
     fclose(fp);
     return 0;
 }
 
-/* 파일에서 불러오기 (바이너리 모드) */
+/* Load from file (binary mode) */
 int load_from_file(AddressBook *ab) {
     FILE *fp = fopen(FILENAME, "rb");
     if (fp == NULL) {
-        /* 파일이 없으면 새로 시작 */
+        /* If file doesn't exist, start fresh */
         return -1;
     }
 
-    /* 메타데이터 읽기 */
+    /* Read metadata */
     fread(&ab->count, sizeof(int), 1, fp);
     fread(&ab->next_id, sizeof(int), 1, fp);
 
-    /* 연락처 배열 읽기 */
+    /* Read contacts array */
     fread(ab->contacts, sizeof(Contact), ab->count, fp);
 
     fclose(fp);
     return 0;
 }
 
-/* ID로 연락처 찾기 (인덱스 반환) */
+/* Find contact by ID (returns index) */
 int find_by_id(AddressBook *ab, int id) {
     for (int i = 0; i < ab->count; i++) {
         if (ab->contacts[i].id == id) {
             return i;
         }
     }
-    return -1;  /* 찾지 못함 */
+    return -1;  /* Not found */
 }
 
-/* 입력 버퍼 비우기 */
+/* Clear input buffer */
 void clear_input_buffer(void) {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);

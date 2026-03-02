@@ -1,80 +1,80 @@
 # Quick Start Guide - File Encryption Examples
 
-## Build & Run (빠른 시작)
+## Build & Run (Quick Start)
 
 ```bash
-# 모든 프로그램 컴파일
+# Compile all programs
 make
 
-# 모든 테스트 실행
+# Run all tests
 make test
 
-# 정리
+# Clean up
 make clean
 ```
 
-## 개별 실행 예제
+## Individual Execution Examples
 
-### 1. XOR 데모 보기
+### 1. View XOR Demo
 ```bash
 gcc -Wall -Wextra -std=c11 simple_xor.c -o simple_xor
 ./simple_xor
 ```
 
-### 2. 파일 암호화 (기본 버전)
+### 2. File Encryption (Basic Version)
 ```bash
 gcc -Wall -Wextra -std=c11 file_encrypt.c -o file_encrypt
 
-# 사용법
-./file_encrypt -e <입력> <출력> <키>    # 암호화
-./file_encrypt -d <입력> <출력> <키>    # 복호화
+# Usage
+./file_encrypt -e <input> <output> <key>    # Encrypt
+./file_encrypt -d <input> <output> <key>    # Decrypt
 
-# 예제
+# Example
 echo "Secret data" > secret.txt
 ./file_encrypt -e secret.txt secret.enc mypassword
 ./file_encrypt -d secret.enc decrypted.txt mypassword
 cat decrypted.txt
 ```
 
-### 3. 파일 암호화 v2 (헤더 + 검증)
+### 3. File Encryption v2 (Header + Validation)
 ```bash
 gcc -Wall -Wextra -std=c11 file_encrypt_v2.c -o file_encrypt_v2
 
-# 사용법
-./file_encrypt_v2 encrypt <입력> <출력> <비밀번호>
-./file_encrypt_v2 decrypt <입력> <출력> <비밀번호>
-./file_encrypt_v2 info <암호화파일>
+# Usage
+./file_encrypt_v2 encrypt <input> <output> <password>
+./file_encrypt_v2 decrypt <input> <output> <password>
+./file_encrypt_v2 info <encrypted_file>
 
-# 예제
+# Example
 echo "Top secret!" > data.txt
 ./file_encrypt_v2 encrypt data.txt data.enc strongpass
 ./file_encrypt_v2 info data.enc
 ./file_encrypt_v2 decrypt data.enc restored.txt strongpass
-diff data.txt restored.txt  # 동일해야 함
+diff data.txt restored.txt  # Should be identical
 ```
 
-## 주요 차이점
+## Key Differences
 
-| 기능 | file_encrypt | file_encrypt_v2 |
-|------|--------------|-----------------|
-| 인터페이스 | `-e` / `-d` 옵션 | `encrypt` / `decrypt` 명령 |
-| 파일 헤더 | ✗ | ✓ (XENC 매직 넘버) |
-| 키 검증 | ✗ | ✓ (해시 비교) |
-| 메타데이터 | ✗ | ✓ (원본 크기, 버전) |
-| 파일 정보 | ✗ | ✓ (`info` 명령) |
-| 진행률 표시 | ✗ | ✓ |
+| Feature | file_encrypt | file_encrypt_v2 |
+|---------|--------------|-----------------|
+| Interface | `-e` / `-d` options | `encrypt` / `decrypt` commands |
+| File Header | ✗ | ✓ (XENC magic number) |
+| Key Validation | ✗ | ✓ (hash comparison) |
+| Metadata | ✗ | ✓ (original size, version) |
+| File Info | ✗ | ✓ (`info` command) |
+| Progress Display | ✗ | ✓ |
 
-## 학습 순서 추천
+## Recommended Learning Order
 
-1. `simple_xor.c` - XOR 기본 원리 이해
-2. `file_encrypt.c` - 파일 I/O 및 기본 구조
-3. `file_encrypt_v2.c` - 헤더, 검증, 고급 기능
+1. `simple_xor.c` - Understand basic XOR principles
+2. `file_encrypt.c` - File I/O and basic structure
+3. `file_encrypt_v2.c` - Headers, validation, and advanced features
 
-## 보안 경고
+## Security Warning
 
-⚠️ **학습 전용 - 실제 보안 용도로 사용 금지**
+⚠️ **For Learning Only - Do Not Use for Actual Security**
 
-실제 암호화가 필요한 경우:
+For real encryption needs:
 - `openssl enc -aes-256-cbc -in file -out file.enc`
 - GPG (GNU Privacy Guard)
-- libsodium 라이브러리
+- libsodium library

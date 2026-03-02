@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MQTT Subscriber Example
-MQTT 구독자 예제
+MQTT Subscriber Example
 
 Subscribes to MQTT topics and receives sensor data.
 

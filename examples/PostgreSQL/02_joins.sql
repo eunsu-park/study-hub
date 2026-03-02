@@ -1,26 +1,26 @@
 -- =============================================================================
--- PostgreSQL JOIN 예제
+-- PostgreSQL JOIN Examples
 -- Various Types of JOINs in PostgreSQL
 -- =============================================================================
 
--- 먼저 01_basic_crud.sql을 실행하여 테이블과 데이터를 생성하세요.
+-- First, run 01_basic_crud.sql to create tables and data.
 
 -- =============================================================================
--- 테스트 데이터 추가
+-- Additional Test Data
 -- =============================================================================
 
--- 부서가 없는 직원 추가 (NULL dept_id)
+-- Add an employee without a department (NULL dept_id)
 INSERT INTO employees (first_name, last_name, email, salary, dept_id)
-VALUES ('무소속', '직원', 'nodept@company.com', 40000, NULL);
+VALUES ('Unassigned', 'Employee', 'nodept@company.com', 40000, NULL);
 
--- 직원이 없는 부서 추가
+-- Add a department with no employees
 INSERT INTO departments (dept_name, location)
 VALUES ('Finance', 'Seoul');
 
 -- =============================================================================
 -- 1. INNER JOIN
 -- =============================================================================
--- 양쪽 테이블에서 매칭되는 행만 반환
+-- Returns only matching rows from both tables
 
 SELECT
     e.emp_id,
@@ -32,7 +32,7 @@ SELECT
 FROM employees e
 INNER JOIN departments d ON e.dept_id = d.dept_id;
 
--- 테이블 별칭 없이
+-- Without table aliases
 SELECT
     employees.first_name,
     employees.last_name,
@@ -43,7 +43,7 @@ INNER JOIN departments ON employees.dept_id = departments.dept_id;
 -- =============================================================================
 -- 2. LEFT JOIN (LEFT OUTER JOIN)
 -- =============================================================================
--- 왼쪽 테이블의 모든 행 + 매칭되는 오른쪽 테이블 행
+-- All rows from the left table + matching rows from the right table
 
 SELECT
     e.emp_id,
@@ -68,7 +68,7 @@ WHERE d.dept_id IS NULL;
 -- =============================================================================
 -- 3. RIGHT JOIN (RIGHT OUTER JOIN)
 -- =============================================================================
--- 오른쪽 테이블의 모든 행 + 매칭되는 왼쪽 테이블 행
+-- All rows from the right table + matching rows from the left table
 
 SELECT
     e.emp_id,
@@ -79,7 +79,7 @@ SELECT
 FROM employees e
 RIGHT JOIN departments d ON e.dept_id = d.dept_id;
 
--- 직원이 없는 부서만
+-- Only departments with no employees
 SELECT
     d.dept_name,
     d.location
@@ -90,7 +90,7 @@ WHERE e.emp_id IS NULL;
 -- =============================================================================
 -- 4. FULL OUTER JOIN
 -- =============================================================================
--- 양쪽 테이블의 모든 행 (매칭되지 않으면 NULL)
+-- All rows from both tables (NULL where no match)
 
 SELECT
     e.emp_id,
@@ -101,7 +101,7 @@ SELECT
 FROM employees e
 FULL OUTER JOIN departments d ON e.dept_id = d.dept_id;
 
--- 매칭되지 않는 행만
+-- Only unmatched rows
 SELECT
     e.emp_id,
     e.first_name,
@@ -111,9 +111,9 @@ FULL OUTER JOIN departments d ON e.dept_id = d.dept_id
 WHERE e.emp_id IS NULL OR d.dept_id IS NULL;
 
 -- =============================================================================
--- 5. CROSS JOIN (카테시안 곱)
+-- 5. CROSS JOIN (Cartesian Product)
 -- =============================================================================
--- 모든 가능한 조합
+-- All possible combinations
 
 SELECT
     e.first_name,
@@ -122,7 +122,7 @@ FROM employees e
 CROSS JOIN departments d
 LIMIT 20;
 
--- CROSS JOIN은 ON 절 없이 콤마로도 표현 가능
+-- CROSS JOIN can also be expressed with a comma (no ON clause)
 SELECT
     e.first_name,
     d.dept_name
@@ -133,12 +133,12 @@ LIMIT 20;
 -- =============================================================================
 -- 6. SELF JOIN
 -- =============================================================================
--- 같은 테이블을 자기 자신과 조인
+-- Joining a table with itself
 
--- 예제를 위한 관리자 컬럼 추가
+-- Add a manager column for the example
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES employees(emp_id);
 
--- 일부 직원에게 관리자 지정
+-- Assign managers to some employees
 UPDATE employees SET manager_id = 4 WHERE emp_id IN (1, 2);
 UPDATE employees SET manager_id = 1 WHERE emp_id IN (5, 6);
 
@@ -153,10 +153,10 @@ FROM employees e
 LEFT JOIN employees m ON e.manager_id = m.emp_id;
 
 -- =============================================================================
--- 7. 다중 테이블 JOIN
+-- 7. Multi-Table JOIN
 -- =============================================================================
 
--- 프로젝트 테이블 생성
+-- Create projects table
 DROP TABLE IF EXISTS projects CASCADE;
 DROP TABLE IF EXISTS employee_projects CASCADE;
 
@@ -179,12 +179,12 @@ CREATE TABLE employee_projects (
     PRIMARY KEY (emp_id, project_id)
 );
 
--- 데이터 삽입
+-- Insert data
 INSERT INTO projects (project_name, start_date, end_date, budget)
 VALUES
-    ('웹사이트 리뉴얼', '2024-01-01', '2024-06-30', 100000),
-    ('모바일 앱 개발', '2024-03-01', '2024-12-31', 200000),
-    ('데이터 분석 플랫폼', '2024-02-01', '2024-08-31', 150000);
+    ('Website Redesign', '2024-01-01', '2024-06-30', 100000),
+    ('Mobile App Development', '2024-03-01', '2024-12-31', 200000),
+    ('Data Analytics Platform', '2024-02-01', '2024-08-31', 150000);
 
 INSERT INTO employee_projects (emp_id, project_id, role)
 VALUES
@@ -195,7 +195,7 @@ VALUES
     (4, 3, 'Lead'),
     (2, 3, 'Analyst');
 
--- 3개 테이블 조인: 직원 + 부서 + 프로젝트
+-- Join 3 tables: employees + departments + projects
 SELECT
     e.first_name || ' ' || e.last_name AS employee_name,
     d.dept_name,
@@ -210,15 +210,15 @@ ORDER BY e.first_name, p.project_name;
 -- =============================================================================
 -- 8. NATURAL JOIN
 -- =============================================================================
--- 같은 이름의 컬럼으로 자동 조인 (사용 비권장 - 명시적 ON 절 권장)
+-- Automatically joins on columns with the same name (not recommended - use explicit ON clause)
 
--- dept_id가 같은 이름이므로 자동 매칭
+-- dept_id has the same name, so it auto-matches
 -- SELECT * FROM employees NATURAL JOIN departments;
 
 -- =============================================================================
--- 9. USING 절
+-- 9. USING Clause
 -- =============================================================================
--- 같은 이름의 컬럼이 있을 때 ON 대신 사용
+-- Used instead of ON when columns have the same name
 
 SELECT
     e.first_name,
@@ -228,7 +228,7 @@ FROM employees e
 JOIN departments d USING (dept_id);
 
 -- =============================================================================
--- 10. 조인 + 집계
+-- 10. JOIN + Aggregation
 -- =============================================================================
 
 -- Why: LEFT JOIN from departments ensures departments with zero employees still
@@ -245,7 +245,7 @@ LEFT JOIN employees e ON d.dept_id = e.dept_id
 GROUP BY d.dept_id, d.dept_name
 ORDER BY employee_count DESC;
 
--- 프로젝트별 참여 직원 수
+-- Number of employees per project
 SELECT
     p.project_name,
     COUNT(ep.emp_id) AS member_count,
@@ -256,10 +256,10 @@ GROUP BY p.project_id, p.project_name, p.budget
 ORDER BY member_count DESC;
 
 -- =============================================================================
--- 11. 조인 성능 팁
+-- 11. JOIN Performance Tips
 -- =============================================================================
 
--- 조인에 사용되는 컬럼에 인덱스가 있는지 확인
+-- Ensure indexes exist on columns used in joins
 -- CREATE INDEX idx_employees_dept ON employees(dept_id);
 -- CREATE INDEX idx_employee_projects_emp ON employee_projects(emp_id);
 -- CREATE INDEX idx_employee_projects_proj ON employee_projects(project_id);
@@ -275,21 +275,21 @@ FROM employees e
 JOIN departments d ON e.dept_id = d.dept_id;
 
 -- =============================================================================
--- JOIN 유형 요약
+-- JOIN Type Summary
 -- =============================================================================
 /*
-| JOIN 유형        | 설명                                      |
-|-----------------|-------------------------------------------|
-| INNER JOIN      | 양쪽 모두 매칭되는 행만                      |
-| LEFT JOIN       | 왼쪽 테이블 전체 + 매칭되는 오른쪽           |
-| RIGHT JOIN      | 오른쪽 테이블 전체 + 매칭되는 왼쪽           |
-| FULL OUTER JOIN | 양쪽 테이블 전체                            |
-| CROSS JOIN      | 모든 가능한 조합 (카테시안 곱)               |
-| SELF JOIN       | 같은 테이블끼리 조인                         |
+| JOIN Type       | Description                                       |
+|-----------------|---------------------------------------------------|
+| INNER JOIN      | Only matching rows from both tables                |
+| LEFT JOIN       | All rows from left table + matching from right     |
+| RIGHT JOIN      | All rows from right table + matching from left     |
+| FULL OUTER JOIN | All rows from both tables                          |
+| CROSS JOIN      | All possible combinations (Cartesian product)      |
+| SELF JOIN       | Join a table with itself                           |
 
-팁:
-- 항상 ON 절을 명시적으로 작성
-- 조인 컬럼에 인덱스 생성
-- EXPLAIN으로 실행 계획 확인
-- 불필요한 CROSS JOIN 피하기
+Tips:
+- Always write ON clauses explicitly
+- Create indexes on join columns
+- Check execution plans with EXPLAIN
+- Avoid unnecessary CROSS JOINs
 */

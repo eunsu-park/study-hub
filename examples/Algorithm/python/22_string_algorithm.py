@@ -1,25 +1,25 @@
 """
-문자열 알고리즘 (String Algorithms)
+String Algorithms
 String Matching and Processing
 
-문자열 검색 및 처리 알고리즘을 구현합니다.
+Implements string search and processing algorithms.
 """
 
 from typing import List, Tuple
 
 
 # =============================================================================
-# 1. KMP 알고리즘 (Knuth-Morris-Pratt)
+# 1. KMP Algorithm (Knuth-Morris-Pratt)
 # =============================================================================
 
 def kmp_failure(pattern: str) -> List[int]:
     """
-    KMP 실패 함수 (부분 일치 테이블) 계산
-    시간복잡도: O(m), m = 패턴 길이
+    KMP failure function (partial match table) computation
+    Time Complexity: O(m), m = pattern length
     """
     m = len(pattern)
     failure = [0] * m
-    j = 0  # 이전 최대 접두사 길이
+    j = 0  # Length of previous longest prefix
 
     for i in range(1, m):
         while j > 0 and pattern[i] != pattern[j]:
@@ -34,9 +34,9 @@ def kmp_failure(pattern: str) -> List[int]:
 
 def kmp_search(text: str, pattern: str) -> List[int]:
     """
-    KMP 문자열 검색
-    시간복잡도: O(n + m)
-    반환: 패턴이 발견된 시작 인덱스 리스트
+    KMP string search
+    Time Complexity: O(n + m)
+    Returns: list of starting indices where pattern is found
     """
     if not pattern:
         return []
@@ -44,7 +44,7 @@ def kmp_search(text: str, pattern: str) -> List[int]:
     n, m = len(text), len(pattern)
     failure = kmp_failure(pattern)
     matches = []
-    j = 0  # 패턴 인덱스
+    j = 0  # Pattern index
 
     for i in range(n):
         while j > 0 and text[i] != pattern[j]:
@@ -61,13 +61,13 @@ def kmp_search(text: str, pattern: str) -> List[int]:
 
 
 # =============================================================================
-# 2. Rabin-Karp 알고리즘
+# 2. Rabin-Karp Algorithm
 # =============================================================================
 
 def rabin_karp_search(text: str, pattern: str, mod: int = 10**9 + 7) -> List[int]:
     """
-    Rabin-Karp 문자열 검색 (롤링 해시)
-    시간복잡도: 평균 O(n + m), 최악 O(nm)
+    Rabin-Karp string search (rolling hash)
+    Time Complexity: average O(n + m), worst O(nm)
     """
     if not pattern or len(pattern) > len(text):
         return []
@@ -76,7 +76,7 @@ def rabin_karp_search(text: str, pattern: str, mod: int = 10**9 + 7) -> List[int
     base = 256
     matches = []
 
-    # 패턴 해시 계산
+    # Compute pattern hash
     pattern_hash = 0
     text_hash = 0
     h = pow(base, m - 1, mod)
@@ -87,11 +87,11 @@ def rabin_karp_search(text: str, pattern: str, mod: int = 10**9 + 7) -> List[int
 
     for i in range(n - m + 1):
         if pattern_hash == text_hash:
-            # 해시 충돌 확인
+            # Verify to handle hash collision
             if text[i:i + m] == pattern:
                 matches.append(i)
 
-        # 다음 윈도우 해시 계산
+        # Compute next window hash
         if i < n - m:
             text_hash = ((text_hash - ord(text[i]) * h) * base + ord(text[i + m])) % mod
 
@@ -99,14 +99,14 @@ def rabin_karp_search(text: str, pattern: str, mod: int = 10**9 + 7) -> List[int
 
 
 # =============================================================================
-# 3. Z 알고리즘
+# 3. Z Algorithm
 # =============================================================================
 
 def z_function(s: str) -> List[int]:
     """
-    Z 함수 계산
-    z[i] = s와 s[i:]의 최장 공통 접두사 길이
-    시간복잡도: O(n)
+    Z function computation
+    z[i] = length of longest common prefix of s and s[i:]
+    Time Complexity: O(n)
     """
     n = len(s)
     z = [0] * n
@@ -128,7 +128,7 @@ def z_function(s: str) -> List[int]:
 
 
 def z_search(text: str, pattern: str) -> List[int]:
-    """Z 알고리즘을 이용한 문자열 검색"""
+    """String search using Z algorithm"""
     if not pattern:
         return []
 
@@ -140,42 +140,42 @@ def z_search(text: str, pattern: str) -> List[int]:
 
 
 # =============================================================================
-# 4. Manacher 알고리즘 (최장 회문 부분문자열)
+# 4. Manacher's Algorithm (Longest Palindrome Substring)
 # =============================================================================
 
 def manacher(s: str) -> Tuple[int, int]:
     """
-    최장 회문 부분문자열 찾기
-    시간복잡도: O(n)
-    반환: (시작 인덱스, 길이)
+    Find the longest palindrome substring
+    Time Complexity: O(n)
+    Returns: (start index, length)
     """
     if not s:
         return 0, 0
 
-    # 전처리: 문자 사이에 # 삽입
+    # Preprocessing: insert '#' between characters
     t = '#' + '#'.join(s) + '#'
     n = len(t)
-    p = [0] * n  # p[i] = i 중심 회문 반지름
+    p = [0] * n  # p[i] = palindrome radius centered at i
 
-    c, r = 0, 0  # 현재 회문 중심, 오른쪽 경계
+    c, r = 0, 0  # Current palindrome center, right boundary
 
     for i in range(n):
         if i < r:
             p[i] = min(r - i, p[2 * c - i])
 
-        # 확장 시도
+        # Attempt expansion
         while i - p[i] - 1 >= 0 and i + p[i] + 1 < n and t[i - p[i] - 1] == t[i + p[i] + 1]:
             p[i] += 1
 
-        # 경계 업데이트
+        # Update boundary
         if i + p[i] > r:
             c, r = i, i + p[i]
 
-    # 최장 회문 찾기
+    # Find longest palindrome
     max_len = max(p)
     center = p.index(max_len)
 
-    # 원본 문자열에서의 위치
+    # Position in original string
     start = (center - max_len) // 2
     length = max_len
 
@@ -183,19 +183,19 @@ def manacher(s: str) -> Tuple[int, int]:
 
 
 def longest_palindrome(s: str) -> str:
-    """최장 회문 부분문자열 반환"""
+    """Return the longest palindrome substring"""
     start, length = manacher(s)
     return s[start:start + length]
 
 
 # =============================================================================
-# 5. 접미사 배열 (Suffix Array) - 간단 구현
+# 5. Suffix Array (Simple Implementation)
 # =============================================================================
 
 def suffix_array(s: str) -> List[int]:
     """
-    접미사 배열 생성 (간단한 O(n log² n) 구현)
-    반환: 사전순 정렬된 접미사의 시작 인덱스
+    Suffix array construction (simple O(n log^2 n) implementation)
+    Returns: starting indices of suffixes in lexicographic order
     """
     n = len(s)
     sa = list(range(n))
@@ -204,13 +204,13 @@ def suffix_array(s: str) -> List[int]:
 
     k = 1
     while k < n:
-        # (rank[i], rank[i+k]) 기준 정렬
+        # Sort by (rank[i], rank[i+k])
         def key(i):
             return (rank[i], rank[i + k] if i + k < n else -1)
 
         sa.sort(key=key)
 
-        # 새 rank 계산
+        # Compute new ranks
         tmp[sa[0]] = 0
         for i in range(1, n):
             tmp[sa[i]] = tmp[sa[i - 1]]
@@ -225,9 +225,9 @@ def suffix_array(s: str) -> List[int]:
 
 def lcp_array(s: str, sa: List[int]) -> List[int]:
     """
-    LCP 배열 (Longest Common Prefix)
-    lcp[i] = s[sa[i]:]와 s[sa[i+1]:]의 최장 공통 접두사 길이
-    시간복잡도: O(n)
+    LCP array (Longest Common Prefix)
+    lcp[i] = length of longest common prefix of s[sa[i]:] and s[sa[i+1]:]
+    Time Complexity: O(n)
     """
     n = len(s)
     rank = [0] * n
@@ -250,21 +250,21 @@ def lcp_array(s: str, sa: List[int]) -> List[int]:
 
 
 # =============================================================================
-# 6. 트라이 기반 문자열 검색
+# 6. Trie-Based String Search
 # =============================================================================
 
 class TrieNode:
     def __init__(self):
         self.children = {}
         self.is_end = False
-        self.output = []  # Aho-Corasick용
+        self.output = []  # For Aho-Corasick
 
 
 class AhoCorasick:
     """
-    Aho-Corasick 알고리즘 (다중 패턴 검색)
-    전처리: O(Σ|patterns|)
-    검색: O(n + m), m = 매칭 수
+    Aho-Corasick Algorithm (multi-pattern search)
+    Preprocessing: O(sum(|patterns|))
+    Search: O(n + m), m = number of matches
     """
 
     def __init__(self, patterns: List[str]):
@@ -310,8 +310,8 @@ class AhoCorasick:
 
     def search(self, text: str) -> List[Tuple[int, int]]:
         """
-        텍스트에서 모든 패턴 검색
-        반환: [(위치, 패턴 인덱스), ...]
+        Search for all patterns in text
+        Returns: [(position, pattern_index), ...]
         """
         results = []
         node = self.root
@@ -330,18 +330,18 @@ class AhoCorasick:
 
 
 # =============================================================================
-# 7. 편집 거리 (Edit Distance)
+# 7. Edit Distance
 # =============================================================================
 
 def edit_distance(s1: str, s2: str) -> int:
     """
-    레벤슈타인 거리 (편집 거리)
-    시간복잡도: O(mn)
-    공간복잡도: O(min(m, n)) 최적화 가능
+    Levenshtein distance (edit distance)
+    Time Complexity: O(mn)
+    Space Complexity: O(min(m, n)) optimized
     """
     m, n = len(s1), len(s2)
 
-    # 공간 최적화: 두 행만 사용
+    # Space optimization: use only two rows
     prev = list(range(n + 1))
     curr = [0] * (n + 1)
 
@@ -360,13 +360,13 @@ def edit_distance(s1: str, s2: str) -> int:
 
 
 # =============================================================================
-# 8. 문자열 해싱
+# 8. String Hashing
 # =============================================================================
 
 class StringHash:
     """
-    다항식 롤링 해시
-    충돌을 줄이기 위해 두 개의 해시 사용 (double hashing)
+    Polynomial rolling hash
+    Uses double hashing to reduce collisions
     """
 
     def __init__(self, s: str):
@@ -389,100 +389,100 @@ class StringHash:
             self.pow2[i + 1] = self.pow2[i] * self.BASE2 % self.MOD2
 
     def get_hash(self, l: int, r: int) -> Tuple[int, int]:
-        """s[l:r]의 해시 값 (0-indexed, 반열린 구간)"""
+        """Hash value of s[l:r] (0-indexed, half-open interval)"""
         h1 = (self.hash1[r] - self.hash1[l] * self.pow1[r - l]) % self.MOD1
         h2 = (self.hash2[r] - self.hash2[l] * self.pow2[r - l]) % self.MOD2
         return (h1, h2)
 
     def is_equal(self, l1: int, r1: int, l2: int, r2: int) -> bool:
-        """두 부분문자열이 같은지 확인"""
+        """Check if two substrings are equal"""
         if r1 - l1 != r2 - l2:
             return False
         return self.get_hash(l1, r1) == self.get_hash(l2, r2)
 
 
 # =============================================================================
-# 테스트
+# Tests
 # =============================================================================
 
 def main():
     print("=" * 60)
-    print("문자열 알고리즘 (String Algorithms) 예제")
+    print("String Algorithm Examples")
     print("=" * 60)
 
     # 1. KMP
-    print("\n[1] KMP 알고리즘")
+    print("\n[1] KMP Algorithm")
     text = "ABABDABACDABABCABAB"
     pattern = "ABABCABAB"
     failure = kmp_failure(pattern)
     matches = kmp_search(text, pattern)
-    print(f"    텍스트: {text}")
-    print(f"    패턴: {pattern}")
-    print(f"    실패 함수: {failure}")
-    print(f"    매칭 위치: {matches}")
+    print(f"    Text: {text}")
+    print(f"    Pattern: {pattern}")
+    print(f"    Failure function: {failure}")
+    print(f"    Match positions: {matches}")
 
     # 2. Rabin-Karp
-    print("\n[2] Rabin-Karp 알고리즘")
+    print("\n[2] Rabin-Karp Algorithm")
     matches = rabin_karp_search(text, pattern)
-    print(f"    매칭 위치: {matches}")
+    print(f"    Match positions: {matches}")
 
-    # 3. Z 알고리즘
-    print("\n[3] Z 알고리즘")
+    # 3. Z Algorithm
+    print("\n[3] Z Algorithm")
     s = "aabxaab"
     z = z_function(s)
-    print(f"    문자열: {s}")
-    print(f"    Z 배열: {z}")
+    print(f"    String: {s}")
+    print(f"    Z array: {z}")
     matches = z_search(text, pattern)
-    print(f"    검색 결과: {matches}")
+    print(f"    Search result: {matches}")
 
     # 4. Manacher
-    print("\n[4] Manacher 알고리즘 (최장 회문)")
+    print("\n[4] Manacher's Algorithm (Longest Palindrome)")
     s = "babad"
     palindrome = longest_palindrome(s)
-    print(f"    문자열: {s}")
-    print(f"    최장 회문: {palindrome}")
+    print(f"    String: {s}")
+    print(f"    Longest palindrome: {palindrome}")
 
     s2 = "abacdfgdcaba"
     palindrome2 = longest_palindrome(s2)
-    print(f"    문자열: {s2}")
-    print(f"    최장 회문: {palindrome2}")
+    print(f"    String: {s2}")
+    print(f"    Longest palindrome: {palindrome2}")
 
-    # 5. 접미사 배열
-    print("\n[5] 접미사 배열")
+    # 5. Suffix Array
+    print("\n[5] Suffix Array")
     s = "banana"
     sa = suffix_array(s)
     lcp = lcp_array(s, sa)
-    print(f"    문자열: {s}")
-    print(f"    접미사 배열: {sa}")
-    print("    접미사들:")
+    print(f"    String: {s}")
+    print(f"    Suffix array: {sa}")
+    print("    Suffixes:")
     for i in sa:
         print(f"      {i}: {s[i:]}")
-    print(f"    LCP 배열: {lcp}")
+    print(f"    LCP array: {lcp}")
 
     # 6. Aho-Corasick
-    print("\n[6] Aho-Corasick (다중 패턴)")
+    print("\n[6] Aho-Corasick (Multi-Pattern)")
     patterns = ["he", "she", "his", "hers"]
     text = "ahishers"
     ac = AhoCorasick(patterns)
     results = ac.search(text)
-    print(f"    패턴: {patterns}")
-    print(f"    텍스트: {text}")
-    print("    매칭:")
+    print(f"    Patterns: {patterns}")
+    print(f"    Text: {text}")
+    print("    Matches:")
     for pos, idx in results:
-        print(f"      위치 {pos}: '{patterns[idx]}'")
+        print(f"      Position {pos}: '{patterns[idx]}'")
 
-    # 7. 편집 거리
-    print("\n[7] 편집 거리")
+    # 7. Edit Distance
+    print("\n[7] Edit Distance")
     s1, s2 = "kitten", "sitting"
     dist = edit_distance(s1, s2)
-    print(f"    '{s1}' → '{s2}'")
-    print(f"    편집 거리: {dist}")
+    print(f"    '{s1}' -> '{s2}'")
+    print(f"    Edit distance: {dist}")
 
-    # 8. 문자열 해싱
-    print("\n[8] 문자열 해싱")
+    # 8. String Hashing
+    print("\n[8] String Hashing")
     s = "abcabc"
     sh = StringHash(s)
-    print(f"    문자열: {s}")
+    print(f"    String: {s}")
     print(f"    hash(0:3) = {sh.get_hash(0, 3)}")
     print(f"    hash(3:6) = {sh.get_hash(3, 6)}")
     print(f"    s[0:3] == s[3:6]: {sh.is_equal(0, 3, 3, 6)}")

@@ -1,8 +1,7 @@
 """
-데이터 전처리 (Data Cleaning/Preprocessing)
 Data Cleaning and Preprocessing Techniques
 
-실제 데이터 분석에서 가장 중요한 전처리 기법을 다룹니다.
+Covers the most important preprocessing techniques used in real-world data analysis.
 """
 
 import numpy as np
@@ -11,14 +10,14 @@ from typing import List, Tuple
 
 
 # =============================================================================
-# 1. 결측치 처리
+# 1. Handling Missing Values
 # =============================================================================
 def handle_missing_values():
-    """결측치 탐지 및 처리"""
-    print("\n[1] 결측치 처리")
+    """Detect and handle missing values"""
+    print("\n[1] Handling Missing Values")
     print("=" * 50)
 
-    # 결측치가 있는 데이터 생성
+    # Create data with missing values
     df = pd.DataFrame({
         'A': [1, 2, np.nan, 4, 5],
         'B': [np.nan, 2, 3, np.nan, 5],
@@ -26,54 +25,54 @@ def handle_missing_values():
         'D': ['a', None, 'c', 'd', np.nan]
     })
 
-    print("원본 데이터:")
+    print("Original data:")
     print(df)
     print()
 
-    # 결측치 탐지
-    print("결측치 개수:")
+    # Detect missing values
+    print("Missing value counts:")
     print(df.isnull().sum())
-    print(f"\n결측치 비율:\n{df.isnull().mean() * 100}")
+    print(f"\nMissing value ratios:\n{df.isnull().mean() * 100}")
 
-    # 처리 방법들
-    print("\n--- 결측치 처리 방법 ---")
+    # Treatment methods
+    print("\n--- Missing Value Treatment Methods ---")
 
-    # 1. 행 삭제
+    # 1. Drop rows
     df_dropna = df.dropna()
-    print(f"\n1. 행 삭제 (dropna):\n{df_dropna}")
+    print(f"\n1. Drop rows (dropna):\n{df_dropna}")
 
-    # 2. 특정 열에서만 삭제
+    # 2. Drop based on specific columns only
     df_drop_subset = df.dropna(subset=['A', 'C'])
-    print(f"\n2. A, C 열 기준 삭제:\n{df_drop_subset}")
+    print(f"\n2. Drop based on columns A, C:\n{df_drop_subset}")
 
-    # 3. 값으로 채우기
+    # 3. Fill with values
     df_fillna = df.copy()
     df_fillna['A'] = df_fillna['A'].fillna(df_fillna['A'].mean())
     df_fillna['B'] = df_fillna['B'].fillna(df_fillna['B'].median())
-    print(f"\n3. 평균/중앙값으로 채우기:\n{df_fillna}")
+    print(f"\n3. Fill with mean/median:\n{df_fillna}")
 
-    # 4. 전방/후방 채우기
+    # 4. Forward/backward fill
     df_ffill = df.fillna(method='ffill')
-    print(f"\n4. 전방 채우기 (ffill):\n{df_ffill}")
+    print(f"\n4. Forward fill (ffill):\n{df_ffill}")
 
-    # 5. 보간법
+    # 5. Interpolation
     df_interpolate = df.copy()
     df_interpolate['A'] = df_interpolate['A'].interpolate()
     df_interpolate['B'] = df_interpolate['B'].interpolate()
-    print(f"\n5. 보간법 (interpolate):\n{df_interpolate}")
+    print(f"\n5. Interpolation:\n{df_interpolate}")
 
 
 # =============================================================================
-# 2. 이상치 탐지 및 처리
+# 2. Outlier Detection and Treatment
 # =============================================================================
 def handle_outliers():
-    """이상치 탐지 및 처리"""
-    print("\n[2] 이상치 탐지 및 처리")
+    """Detect and handle outliers"""
+    print("\n[2] Outlier Detection and Treatment")
     print("=" * 50)
 
     np.random.seed(42)
 
-    # 이상치가 포함된 데이터
+    # Data with outliers
     normal_data = np.random.normal(100, 10, 100)
     outliers = np.array([200, -50, 250])
     data = np.concatenate([normal_data, outliers])
@@ -81,12 +80,12 @@ def handle_outliers():
 
     df = pd.DataFrame({'value': data})
 
-    print(f"데이터 크기: {len(df)}")
-    print(f"평균: {df['value'].mean():.2f}")
-    print(f"표준편차: {df['value'].std():.2f}")
+    print(f"Data size: {len(df)}")
+    print(f"Mean: {df['value'].mean():.2f}")
+    print(f"Std dev: {df['value'].std():.2f}")
 
-    # 방법 1: IQR 방법
-    print("\n--- IQR 방법 ---")
+    # Method 1: IQR method
+    print("\n--- IQR Method ---")
     Q1 = df['value'].quantile(0.25)
     Q3 = df['value'].quantile(0.75)
     IQR = Q3 - Q1
@@ -94,43 +93,43 @@ def handle_outliers():
     upper_bound = Q3 + 1.5 * IQR
 
     print(f"Q1: {Q1:.2f}, Q3: {Q3:.2f}, IQR: {IQR:.2f}")
-    print(f"정상 범위: [{lower_bound:.2f}, {upper_bound:.2f}]")
+    print(f"Normal range: [{lower_bound:.2f}, {upper_bound:.2f}]")
 
     outliers_iqr = df[(df['value'] < lower_bound) | (df['value'] > upper_bound)]
-    print(f"이상치 개수: {len(outliers_iqr)}")
-    print(f"이상치 값: {outliers_iqr['value'].values}")
+    print(f"Number of outliers: {len(outliers_iqr)}")
+    print(f"Outlier values: {outliers_iqr['value'].values}")
 
-    # 방법 2: Z-score 방법
-    print("\n--- Z-score 방법 ---")
+    # Method 2: Z-score method
+    print("\n--- Z-score Method ---")
     z_scores = np.abs((df['value'] - df['value'].mean()) / df['value'].std())
     outliers_z = df[z_scores > 3]
-    print(f"이상치 개수 (|z| > 3): {len(outliers_z)}")
+    print(f"Number of outliers (|z| > 3): {len(outliers_z)}")
 
-    # 이상치 처리
-    print("\n--- 이상치 처리 ---")
+    # Outlier treatment
+    print("\n--- Outlier Treatment ---")
 
-    # 1. 제거
+    # 1. Removal
     df_no_outliers = df[(df['value'] >= lower_bound) & (df['value'] <= upper_bound)]
-    print(f"1. 제거 후 크기: {len(df_no_outliers)}")
+    print(f"1. Size after removal: {len(df_no_outliers)}")
 
-    # 2. 경계값으로 대체 (Winsorizing)
+    # 2. Replace with boundary values (Winsorizing)
     df_winsorized = df.copy()
     df_winsorized['value'] = df_winsorized['value'].clip(lower_bound, upper_bound)
-    print(f"2. Winsorizing 후 최대값: {df_winsorized['value'].max():.2f}")
+    print(f"2. Max value after winsorizing: {df_winsorized['value'].max():.2f}")
 
-    # 3. 중앙값으로 대체
+    # 3. Replace with median
     df_median = df.copy()
     median_val = df['value'].median()
     df_median.loc[(df['value'] < lower_bound) | (df['value'] > upper_bound), 'value'] = median_val
-    print(f"3. 중앙값 대체 후 평균: {df_median['value'].mean():.2f}")
+    print(f"3. Mean after median replacement: {df_median['value'].mean():.2f}")
 
 
 # =============================================================================
-# 3. 데이터 타입 변환
+# 3. Data Type Conversion
 # =============================================================================
 def data_type_conversion():
-    """데이터 타입 변환"""
-    print("\n[3] 데이터 타입 변환")
+    """Data type conversion"""
+    print("\n[3] Data Type Conversion")
     print("=" * 50)
 
     df = pd.DataFrame({
@@ -141,36 +140,36 @@ def data_type_conversion():
         'cat_col': ['A', 'B', 'A', 'C', 'B']
     })
 
-    print("원본 데이터 타입:")
+    print("Original data types:")
     print(df.dtypes)
     print()
 
-    # 타입 변환
+    # Type conversion
     df['int_col'] = df['int_col'].astype(int)
     df['float_col'] = df['float_col'].astype(float)
     df['date_col'] = pd.to_datetime(df['date_col'])
     df['bool_col'] = df['bool_col'].map({'True': True, 'False': False})
     df['cat_col'] = df['cat_col'].astype('category')
 
-    print("변환 후 데이터 타입:")
+    print("Data types after conversion:")
     print(df.dtypes)
     print()
 
-    print("변환된 데이터:")
+    print("Converted data:")
     print(df)
 
-    # 메모리 사용량 비교
-    print(f"\n카테고리 타입 메모리 절약:")
-    print(f"  object 타입: {df['cat_col'].astype('object').memory_usage()} bytes")
-    print(f"  category 타입: {df['cat_col'].memory_usage()} bytes")
+    # Memory usage comparison
+    print(f"\nCategory type memory savings:")
+    print(f"  object type: {df['cat_col'].astype('object').memory_usage()} bytes")
+    print(f"  category type: {df['cat_col'].memory_usage()} bytes")
 
 
 # =============================================================================
-# 4. 중복 데이터 처리
+# 4. Handling Duplicate Data
 # =============================================================================
 def handle_duplicates():
-    """중복 데이터 처리"""
-    print("\n[4] 중복 데이터 처리")
+    """Handle duplicate data"""
+    print("\n[4] Handling Duplicate Data")
     print("=" * 50)
 
     df = pd.DataFrame({
@@ -179,31 +178,31 @@ def handle_duplicates():
         'city': ['Seoul', 'Busan', 'Seoul', 'Daegu', 'Busan', 'Seoul']
     })
 
-    print("원본 데이터:")
+    print("Original data:")
     print(df)
 
-    # 중복 확인
-    print(f"\n중복 행 수: {df.duplicated().sum()}")
-    print("중복된 행:")
+    # Check duplicates
+    print(f"\nNumber of duplicate rows: {df.duplicated().sum()}")
+    print("Duplicated rows:")
     print(df[df.duplicated()])
 
-    # 특정 열 기준 중복
-    print(f"\n'name' 기준 중복 수: {df.duplicated(subset=['name']).sum()}")
+    # Duplicates based on specific column
+    print(f"\nDuplicates based on 'name': {df.duplicated(subset=['name']).sum()}")
 
-    # 중복 제거
+    # Remove duplicates
     df_unique = df.drop_duplicates()
-    print(f"\n중복 제거 후:\n{df_unique}")
+    print(f"\nAfter removing duplicates:\n{df_unique}")
 
     df_unique_name = df.drop_duplicates(subset=['name'], keep='first')
-    print(f"\n'name' 기준 중복 제거 (첫 번째 유지):\n{df_unique_name}")
+    print(f"\nRemove duplicates by 'name' (keep first):\n{df_unique_name}")
 
 
 # =============================================================================
-# 5. 정규화와 표준화
+# 5. Normalization and Standardization
 # =============================================================================
 def normalization_standardization():
-    """정규화와 표준화"""
-    print("\n[5] 정규화와 표준화")
+    """Normalization and standardization"""
+    print("\n[5] Normalization and Standardization")
     print("=" * 50)
 
     np.random.seed(42)
@@ -214,46 +213,46 @@ def normalization_standardization():
         'feature3': np.random.exponential(10, 10)
     })
 
-    print("원본 데이터 통계:")
+    print("Original data statistics:")
     print(df.describe().round(2))
 
-    # 1. Min-Max 정규화 (0-1 스케일링)
+    # 1. Min-Max normalization (0-1 scaling)
     df_minmax = df.copy()
     for col in df.columns:
         min_val = df[col].min()
         max_val = df[col].max()
         df_minmax[col] = (df[col] - min_val) / (max_val - min_val)
 
-    print("\n1. Min-Max 정규화 (0-1):")
+    print("\n1. Min-Max normalization (0-1):")
     print(df_minmax.describe().round(4))
 
-    # 2. Z-score 표준화
+    # 2. Z-score standardization
     df_zscore = df.copy()
     for col in df.columns:
         mean_val = df[col].mean()
         std_val = df[col].std()
         df_zscore[col] = (df[col] - mean_val) / std_val
 
-    print("\n2. Z-score 표준화:")
+    print("\n2. Z-score standardization:")
     print(df_zscore.describe().round(4))
 
-    # 3. Robust 스케일링 (이상치에 강건)
+    # 3. Robust scaling (robust to outliers)
     df_robust = df.copy()
     for col in df.columns:
         median_val = df[col].median()
         iqr = df[col].quantile(0.75) - df[col].quantile(0.25)
         df_robust[col] = (df[col] - median_val) / iqr
 
-    print("\n3. Robust 스케일링 (IQR 기반):")
+    print("\n3. Robust scaling (IQR-based):")
     print(df_robust.describe().round(4))
 
 
 # =============================================================================
-# 6. 범주형 변수 인코딩
+# 6. Categorical Variable Encoding
 # =============================================================================
 def categorical_encoding():
-    """범주형 변수 인코딩"""
-    print("\n[6] 범주형 변수 인코딩")
+    """Categorical variable encoding"""
+    print("\n[6] Categorical Variable Encoding")
     print("=" * 50)
 
     df = pd.DataFrame({
@@ -262,23 +261,23 @@ def categorical_encoding():
         'price': [100, 150, 200, 150, 100]
     })
 
-    print("원본 데이터:")
+    print("Original data:")
     print(df)
 
-    # 1. 라벨 인코딩
-    print("\n1. 라벨 인코딩:")
+    # 1. Label encoding
+    print("\n1. Label encoding:")
     df_label = df.copy()
     df_label['color_encoded'] = df_label['color'].astype('category').cat.codes
     df_label['size_encoded'] = df_label['size'].map({'S': 0, 'M': 1, 'L': 2})
     print(df_label)
 
-    # 2. 원-핫 인코딩
-    print("\n2. 원-핫 인코딩:")
+    # 2. One-hot encoding
+    print("\n2. One-hot encoding:")
     df_onehot = pd.get_dummies(df, columns=['color', 'size'])
     print(df_onehot)
 
-    # 3. 빈도 인코딩
-    print("\n3. 빈도 인코딩:")
+    # 3. Frequency encoding
+    print("\n3. Frequency encoding:")
     df_freq = df.copy()
     freq_map = df['color'].value_counts() / len(df)
     df_freq['color_freq'] = df_freq['color'].map(freq_map)
@@ -286,11 +285,11 @@ def categorical_encoding():
 
 
 # =============================================================================
-# 7. 문자열 처리
+# 7. String Processing
 # =============================================================================
 def string_processing():
-    """문자열 처리"""
-    print("\n[7] 문자열 처리")
+    """String processing"""
+    print("\n[7] String Processing")
     print("=" * 50)
 
     df = pd.DataFrame({
@@ -299,36 +298,36 @@ def string_processing():
         'phone': ['010-1234-5678', '01098765432', '010 1111 2222', '010.3333.4444']
     })
 
-    print("원본 데이터:")
+    print("Original data:")
     print(df)
 
-    # 문자열 처리
+    # String processing
     df_clean = df.copy()
 
-    # 공백 제거 및 대소문자 정리
+    # Strip whitespace and normalize case
     df_clean['name'] = df_clean['name'].str.strip().str.title()
 
-    # 소문자 변환
+    # Convert to lowercase
     df_clean['email'] = df_clean['email'].str.lower()
 
-    # 전화번호 정규화
+    # Normalize phone numbers
     df_clean['phone'] = df_clean['phone'].str.replace(r'[^0-9]', '', regex=True)
 
-    print("\n정리된 데이터:")
+    print("\nCleaned data:")
     print(df_clean)
 
-    # 문자열 추출
-    print("\n문자열 분리:")
+    # String extraction
+    print("\nString splitting:")
     df_clean[['first_name', 'last_name']] = df_clean['name'].str.split(' ', n=1, expand=True)
     print(df_clean[['name', 'first_name', 'last_name']])
 
 
 # =============================================================================
-# 8. 날짜/시간 처리
+# 8. Date/Time Processing
 # =============================================================================
 def datetime_processing():
-    """날짜/시간 처리"""
-    print("\n[8] 날짜/시간 처리")
+    """Date/time processing"""
+    print("\n[8] Date/Time Processing")
     print("=" * 50)
 
     df = pd.DataFrame({
@@ -337,35 +336,35 @@ def datetime_processing():
         'value': [100, 150, 120, 180]
     })
 
-    print("원본 데이터:")
+    print("Original data:")
     print(df)
 
-    # 날짜 파싱
+    # Date parsing
     df['date_parsed'] = pd.to_datetime(df['date_str'])
 
-    # 날짜 요소 추출
+    # Extract date components
     df['year'] = df['timestamp'].dt.year
     df['month'] = df['timestamp'].dt.month
     df['day'] = df['timestamp'].dt.day
     df['weekday'] = df['timestamp'].dt.day_name()
     df['quarter'] = df['timestamp'].dt.quarter
 
-    print("\n날짜 요소 추출:")
+    print("\nExtracted date components:")
     print(df[['timestamp', 'year', 'month', 'day', 'weekday', 'quarter']])
 
-    # 날짜 연산
+    # Date arithmetic
     df['days_since'] = (pd.Timestamp('2024-12-31') - df['timestamp']).dt.days
 
-    print("\n날짜 연산 (2024-12-31까지 남은 일수):")
+    print("\nDate arithmetic (days until 2024-12-31):")
     print(df[['timestamp', 'days_since']])
 
 
 # =============================================================================
-# 메인
+# Main
 # =============================================================================
 def main():
     print("=" * 60)
-    print("데이터 전처리 예제")
+    print("Data Preprocessing Example")
     print("=" * 60)
 
     handle_missing_values()
@@ -378,41 +377,41 @@ def main():
     datetime_processing()
 
     print("\n" + "=" * 60)
-    print("데이터 전처리 체크리스트")
+    print("Data Preprocessing Checklist")
     print("=" * 60)
     print("""
-    1. 데이터 로드 및 확인
+    1. Load and Inspect Data
        - head(), info(), describe()
        - shape, dtypes
 
-    2. 결측치 처리
-       - isnull().sum() 으로 확인
-       - 삭제 또는 대체 (평균, 중앙값, 최빈값, 보간)
+    2. Handle Missing Values
+       - Check with isnull().sum()
+       - Drop or impute (mean, median, mode, interpolation)
 
-    3. 이상치 처리
-       - IQR 또는 Z-score로 탐지
-       - 제거, 경계값 대체, 또는 변환
+    3. Handle Outliers
+       - Detect with IQR or Z-score
+       - Remove, clip to boundaries, or transform
 
-    4. 데이터 타입 변환
-       - 숫자, 날짜, 범주형으로 적절히 변환
-       - category 타입으로 메모리 절약
+    4. Data Type Conversion
+       - Convert to numeric, datetime, categorical as appropriate
+       - Use category type for memory savings
 
-    5. 중복 제거
-       - duplicated() 확인
+    5. Remove Duplicates
+       - Check with duplicated()
        - drop_duplicates()
 
-    6. 스케일링/정규화
-       - Min-Max: 범위가 중요할 때
-       - Z-score: 분포가 중요할 때
-       - Robust: 이상치가 있을 때
+    6. Scaling/Normalization
+       - Min-Max: when range matters
+       - Z-score: when distribution matters
+       - Robust: when outliers are present
 
-    7. 범주형 인코딩
-       - 라벨 인코딩: 순서가 있는 변수
-       - 원-핫 인코딩: 순서가 없는 변수
+    7. Categorical Encoding
+       - Label encoding: ordinal variables
+       - One-hot encoding: nominal variables
 
-    8. 문자열/날짜 정리
-       - 공백 제거, 대소문자 통일
-       - 날짜 파싱 및 요소 추출
+    8. String/Date Cleaning
+       - Strip whitespace, normalize case
+       - Parse dates and extract components
     """)
 
 

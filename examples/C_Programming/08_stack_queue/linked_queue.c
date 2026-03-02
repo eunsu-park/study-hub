@@ -1,25 +1,25 @@
 // linked_queue.c
-// 연결 리스트 기반 큐 구현
-// 동적 메모리 할당으로 크기 제한 없음
+// Linked list-based queue implementation
+// No size limit thanks to dynamic memory allocation
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
-// 노드 구조체
+// Node struct
 typedef struct Node {
     int data;
     struct Node *next;
 } Node;
 
-// 큐 구조체
+// Queue struct
 typedef struct {
-    Node *front;  // 첫 번째 노드 (제거 위치)
-    Node *rear;   // 마지막 노드 (삽입 위치)
+    Node *front;  // First node (removal position)
+    Node *rear;   // Last node (insertion position)
     int size;
 } LinkedQueue;
 
-// 큐 생성
+// Create queue
 LinkedQueue* lqueue_create(void) {
     LinkedQueue *q = malloc(sizeof(LinkedQueue));
     if (q) {
@@ -30,7 +30,7 @@ LinkedQueue* lqueue_create(void) {
     return q;
 }
 
-// 큐 해제 (모든 메모리 해제)
+// Destroy queue (free all memory)
 void lqueue_destroy(LinkedQueue *q) {
     Node *current = q->front;
     while (current) {
@@ -41,27 +41,27 @@ void lqueue_destroy(LinkedQueue *q) {
     free(q);
 }
 
-// 비어있는지 확인
+// Check if empty
 bool lqueue_isEmpty(LinkedQueue *q) {
     return q->front == NULL;
 }
 
-// Enqueue - 뒤에 요소 추가 (O(1))
+// Enqueue - add element to the rear (O(1))
 bool lqueue_enqueue(LinkedQueue *q, int value) {
     Node *node = malloc(sizeof(Node));
     if (!node) {
-        printf("메모리 할당 실패!\n");
+        printf("Memory allocation failed!\n");
         return false;
     }
 
     node->data = value;
     node->next = NULL;
 
-    // 큐가 비어있으면 front와 rear 모두 새 노드를 가리킴
+    // If queue is empty, both front and rear point to the new node
     if (q->rear == NULL) {
         q->front = q->rear = node;
     } else {
-        // 기존 rear 뒤에 새 노드 추가
+        // Append new node after the existing rear
         q->rear->next = node;
         q->rear = node;
     }
@@ -69,7 +69,7 @@ bool lqueue_enqueue(LinkedQueue *q, int value) {
     return true;
 }
 
-// Dequeue - 앞에서 요소 제거 (O(1))
+// Dequeue - remove element from the front (O(1))
 bool lqueue_dequeue(LinkedQueue *q, int *value) {
     if (lqueue_isEmpty(q)) {
         printf("Queue is empty!\n");
@@ -80,7 +80,7 @@ bool lqueue_dequeue(LinkedQueue *q, int *value) {
     *value = node->data;
     q->front = node->next;
 
-    // 마지막 노드를 제거한 경우 rear도 NULL로 설정
+    // If the last node was removed, set rear to NULL as well
     if (q->front == NULL) {
         q->rear = NULL;
     }
@@ -90,7 +90,7 @@ bool lqueue_dequeue(LinkedQueue *q, int *value) {
     return true;
 }
 
-// Front - 앞의 값 확인 (제거 안함)
+// Front - view front value without removing
 bool lqueue_front(LinkedQueue *q, int *value) {
     if (lqueue_isEmpty(q)) {
         return false;
@@ -99,7 +99,7 @@ bool lqueue_front(LinkedQueue *q, int *value) {
     return true;
 }
 
-// Rear - 뒤의 값 확인
+// Rear - view rear value
 bool lqueue_rear(LinkedQueue *q, int *value) {
     if (lqueue_isEmpty(q)) {
         return false;
@@ -108,7 +108,7 @@ bool lqueue_rear(LinkedQueue *q, int *value) {
     return true;
 }
 
-// 큐 출력 (front부터 rear까지)
+// Print queue (from front to rear)
 void lqueue_print(LinkedQueue *q) {
     printf("Queue (size=%d): front -> ", q->size);
     Node *current = q->front;
@@ -119,48 +119,48 @@ void lqueue_print(LinkedQueue *q) {
     printf("<- rear\n");
 }
 
-// 큐 크기 반환
+// Return queue size
 int lqueue_size(LinkedQueue *q) {
     return q->size;
 }
 
-// 모든 요소 출력 후 큐 초기화
+// Print all elements and clear the queue
 void lqueue_clear(LinkedQueue *q) {
     int value;
     while (lqueue_dequeue(q, &value)) {
-        // 단순히 모든 요소 제거
+        // Simply remove all elements
     }
 }
 
-// 테스트 코드
+// Test code
 int main(void) {
     LinkedQueue *q = lqueue_create();
     if (!q) {
-        printf("큐 생성 실패!\n");
+        printf("Failed to create queue!\n");
         return 1;
     }
 
-    printf("=== 연결 리스트 기반 큐 테스트 ===\n\n");
+    printf("=== Linked List-Based Queue Test ===\n\n");
 
-    // Enqueue 테스트
-    printf("[ 1단계: Enqueue 5개 ]\n");
+    // Enqueue test
+    printf("[ Step 1: Enqueue 5 items ]\n");
     for (int i = 1; i <= 5; i++) {
         printf("Enqueue %d -> ", i * 10);
         lqueue_enqueue(q, i * 10);
         lqueue_print(q);
     }
 
-    // Front/Rear 확인
-    printf("\n[ 2단계: Front/Rear 확인 ]\n");
+    // Check Front/Rear
+    printf("\n[ Step 2: Check Front/Rear ]\n");
     int front_val, rear_val;
     if (lqueue_front(q, &front_val) && lqueue_rear(q, &rear_val)) {
-        printf("Front 값: %d (먼저 들어온 값)\n", front_val);
-        printf("Rear 값: %d (나중에 들어온 값)\n", rear_val);
+        printf("Front value: %d (first in)\n", front_val);
+        printf("Rear value: %d (last in)\n", rear_val);
         lqueue_print(q);
     }
 
-    // Dequeue 테스트
-    printf("\n[ 3단계: Dequeue 2개 ]\n");
+    // Dequeue test
+    printf("\n[ Step 3: Dequeue 2 items ]\n");
     int value;
     for (int i = 0; i < 2; i++) {
         if (lqueue_dequeue(q, &value)) {
@@ -169,45 +169,45 @@ int main(void) {
         }
     }
 
-    // 추가 Enqueue
-    printf("\n[ 4단계: Enqueue 2개 더 ]\n");
+    // Additional Enqueue
+    printf("\n[ Step 4: Enqueue 2 more ]\n");
     for (int i = 6; i <= 7; i++) {
         printf("Enqueue %d -> ", i * 10);
         lqueue_enqueue(q, i * 10);
         lqueue_print(q);
     }
 
-    // 모든 요소 Dequeue
-    printf("\n[ 5단계: 모든 요소 Dequeue ]\n");
+    // Dequeue all elements
+    printf("\n[ Step 5: Dequeue all elements ]\n");
     while (lqueue_dequeue(q, &value)) {
         printf("Dequeued: %d -> ", value);
         lqueue_print(q);
     }
 
-    // Empty 상태에서 제거 시도
-    printf("\n[ 6단계: Empty 상태에서 Dequeue 시도 ]\n");
+    // Attempt dequeue when empty
+    printf("\n[ Step 6: Attempt Dequeue when empty ]\n");
     printf("Dequeue -> ");
     lqueue_dequeue(q, &value);
 
-    // 대량 삽입 테스트
-    printf("\n[ 7단계: 대량 삽입 테스트 ]\n");
-    printf("10000개 요소 삽입 중...\n");
+    // Bulk insertion test
+    printf("\n[ Step 7: Bulk Insertion Test ]\n");
+    printf("Inserting 10000 elements...\n");
     for (int i = 0; i < 10000; i++) {
         lqueue_enqueue(q, i);
     }
-    printf("삽입 완료! 현재 크기: %d\n", lqueue_size(q));
+    printf("Insertion complete! Current size: %d\n", lqueue_size(q));
 
-    // 대량 제거 테스트
-    printf("\n처음 5개 요소 확인:\n");
+    // Bulk removal test
+    printf("\nChecking first 5 elements:\n");
     for (int i = 0; i < 5; i++) {
         lqueue_dequeue(q, &value);
         printf("  Dequeued: %d\n", value);
     }
 
-    // 메모리 정리
-    printf("\n메모리 해제 중...\n");
+    // Memory cleanup
+    printf("\nFreeing memory...\n");
     lqueue_destroy(q);
-    printf("큐 해제 완료!\n");
+    printf("Queue destroyed!\n");
 
     return 0;
 }

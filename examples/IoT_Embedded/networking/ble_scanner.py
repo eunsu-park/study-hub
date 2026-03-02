@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-BLE (Bluetooth Low Energy) 장치 스캐너 및 GATT 클라이언트 예제
+BLE (Bluetooth Low Energy) Device Scanner and GATT Client Example
 
-이 스크립트는 다음 기능을 제공합니다:
-1. BLE 장치 스캔 (시뮬레이션 모드 지원)
-2. GATT 서비스 및 특성 탐색
-3. BLE 특성 값 읽기
-4. BLE 알림(Notification) 수신
-5. 센서 데이터 수신 예제
+This script provides the following features:
+1. BLE device scanning (simulation mode supported)
+2. GATT service and characteristic discovery
+3. BLE characteristic value reading
+4. BLE notification reception
+5. Sensor data reception example
 
-참고: content/ko/IoT_Embedded/05_BLE_Connectivity.md
+Reference: content/ko/IoT_Embedded/05_BLE_Connectivity.md
 
-주의: 실제 BLE 기능을 사용하려면 bleak 라이브러리가 필요합니다.
+Note: The bleak library is required for actual BLE functionality.
       pip install bleak
 """
 
@@ -25,7 +25,7 @@ from datetime import datetime
 
 
 # ============================================================================
-# BLE 라이브러리 임포트 (선택적)
+# BLE Library Import (Optional)
 # ============================================================================
 
 # Why: Graceful import fallback lets this script run as a teaching tool on any
@@ -36,19 +36,19 @@ try:
     BLEAK_AVAILABLE = True
 except ImportError:
     BLEAK_AVAILABLE = False
-    print("⚠️  bleak 라이브러리를 찾을 수 없습니다.")
-    print("   시뮬레이션 모드로 실행됩니다.")
-    print("   실제 BLE 기능을 사용하려면 'pip install bleak'를 실행하세요.\n")
+    print("Warning: bleak library not found.")
+    print("   Running in simulation mode.")
+    print("   To use actual BLE features, run 'pip install bleak'.\n")
 
 
 # ============================================================================
-# 표준 BLE UUID
+# Standard BLE UUIDs
 # ============================================================================
 
 class BLE_UUID:
-    """표준 BLE 서비스 및 특성 UUID"""
+    """Standard BLE Service and Characteristic UUIDs"""
 
-    # 표준 서비스 UUID (16-bit)
+    # Standard service UUIDs (16-bit)
     GENERIC_ACCESS = "00001800-0000-1000-8000-00805f9b34fb"
     GENERIC_ATTRIBUTE = "00001801-0000-1000-8000-00805f9b34fb"
     DEVICE_INFORMATION = "0000180a-0000-1000-8000-00805f9b34fb"
@@ -56,7 +56,7 @@ class BLE_UUID:
     ENVIRONMENTAL_SENSING = "0000181a-0000-1000-8000-00805f9b34fb"
     HEART_RATE = "0000180d-0000-1000-8000-00805f9b34fb"
 
-    # 표준 특성 UUID
+    # Standard characteristic UUIDs
     DEVICE_NAME = "00002a00-0000-1000-8000-00805f9b34fb"
     BATTERY_LEVEL = "00002a19-0000-1000-8000-00805f9b34fb"
     TEMPERATURE = "00002a6e-0000-1000-8000-00805f9b34fb"
@@ -69,10 +69,10 @@ class BLE_UUID:
     @staticmethod
     def uuid_16_to_128(uuid_16: str) -> str:
         """
-        16-bit UUID를 128-bit BLE 기본 UUID로 변환
+        Convert 16-bit UUID to 128-bit BLE Base UUID
 
         Args:
-            uuid_16: 16-bit UUID (예: "0x180F")
+            uuid_16: 16-bit UUID (e.g., "0x180F")
 
         Returns:
             str: 128-bit UUID
@@ -83,11 +83,11 @@ class BLE_UUID:
 
 
 # ============================================================================
-# 시뮬레이션 모드
+# Simulation Mode
 # ============================================================================
 
 class SimulatedBLEDevice:
-    """시뮬레이션용 BLE 장치"""
+    """Simulated BLE Device"""
 
     def __init__(self, name: str, address: str, rssi: int):
         self.name = name
@@ -100,16 +100,16 @@ class SimulatedBLEDevice:
 
 def simulate_ble_scan(timeout: float = 10.0) -> List[SimulatedBLEDevice]:
     """
-    BLE 스캔 시뮬레이션
+    BLE Scan Simulation
 
     Args:
-        timeout: 스캔 시간 (초)
+        timeout: Scan duration (seconds)
 
     Returns:
-        list: 시뮬레이션된 BLE 장치 리스트
+        list: List of simulated BLE devices
     """
-    print(f"[시뮬레이션] BLE 장치 스캔 중... ({timeout}초)")
-    time.sleep(2)  # 스캔 시뮬레이션
+    print(f"[Simulation] Scanning for BLE devices... ({timeout} seconds)")
+    time.sleep(2)  # Simulate scan
 
     devices = [
         SimulatedBLEDevice("TempSensor-01", "AA:BB:CC:DD:EE:01", -45),
@@ -117,7 +117,7 @@ def simulate_ble_scan(timeout: float = 10.0) -> List[SimulatedBLEDevice]:
         SimulatedBLEDevice("Battery-Monitor", "AA:BB:CC:DD:EE:03", -38),
         SimulatedBLEDevice("EnvSensor", "AA:BB:CC:DD:EE:04", -61),
         SimulatedBLEDevice("Smart-Watch", "AA:BB:CC:DD:EE:05", -55),
-        SimulatedBLEDevice(None, "AA:BB:CC:DD:EE:06", -72),  # 이름 없는 장치
+        SimulatedBLEDevice(None, "AA:BB:CC:DD:EE:06", -72),  # Unnamed device
     ]
 
     return devices
@@ -128,74 +128,74 @@ def simulate_ble_scan(timeout: float = 10.0) -> List[SimulatedBLEDevice]:
 # Bluetooth SIG. This teaches students to use struct.unpack for BLE payloads.
 def simulate_read_characteristic(char_uuid: str) -> bytes:
     """
-    BLE 특성 읽기 시뮬레이션
+    BLE Characteristic Read Simulation
 
     Args:
-        char_uuid: 특성 UUID
+        char_uuid: Characteristic UUID
 
     Returns:
-        bytes: 시뮬레이션 데이터
+        bytes: Simulated data
     """
     if BLE_UUID.BATTERY_LEVEL in char_uuid:
-        # 배터리 레벨 (0-100%)
+        # Battery level (0-100%)
         return bytes([random.randint(50, 100)])
 
     elif BLE_UUID.TEMPERATURE in char_uuid:
-        # 온도 (0.01도 단위, 16-bit 정수)
+        # Temperature (0.01 degree units, 16-bit integer)
         temp = random.uniform(20.0, 30.0)
         temp_raw = int(temp * 100)
         return struct.pack('<h', temp_raw)
 
     elif BLE_UUID.HUMIDITY in char_uuid:
-        # 습도 (0.01% 단위, 16-bit 정수)
+        # Humidity (0.01% units, 16-bit unsigned integer)
         humidity = random.uniform(40.0, 70.0)
         humidity_raw = int(humidity * 100)
         return struct.pack('<H', humidity_raw)
 
     else:
-        # 기본값
+        # Default value
         return b'\x00\x00'
 
 
 # ============================================================================
-# BLE 스캔 함수
+# BLE Scan Functions
 # ============================================================================
 
 async def scan_ble_devices(timeout: float = 10.0, use_simulation: bool = False) -> List:
     """
-    BLE 장치 스캔
+    BLE Device Scan
 
     Args:
-        timeout: 스캔 시간 (초)
-        use_simulation: 강제로 시뮬레이션 모드 사용
+        timeout: Scan duration (seconds)
+        use_simulation: Force simulation mode
 
     Returns:
-        list: 발견된 BLE 장치 리스트
+        list: List of discovered BLE devices
     """
     if not BLEAK_AVAILABLE or use_simulation:
         return simulate_ble_scan(timeout)
 
-    print(f"BLE 장치 스캔 중... ({timeout}초)")
+    print(f"Scanning for BLE devices... ({timeout} seconds)")
 
     try:
         devices = await BleakScanner.discover(timeout=timeout)
         return devices
     except Exception as e:
-        print(f"스캔 오류: {e}")
-        print("시뮬레이션 모드로 전환합니다...")
+        print(f"Scan error: {e}")
+        print("Switching to simulation mode...")
         return simulate_ble_scan(timeout)
 
 
 async def scan_with_filter(name_filter: Optional[str] = None, timeout: float = 10.0) -> List:
     """
-    필터링된 BLE 스캔
+    Filtered BLE Scan
 
     Args:
-        name_filter: 장치 이름 필터 (부분 일치)
-        timeout: 스캔 시간
+        name_filter: Device name filter (partial match)
+        timeout: Scan duration
 
     Returns:
-        list: 필터링된 장치 리스트
+        list: Filtered device list
     """
     devices = await scan_ble_devices(timeout)
 
@@ -207,118 +207,118 @@ async def scan_with_filter(name_filter: Optional[str] = None, timeout: float = 1
 
 async def continuous_scan(duration: float = 30.0, callback: Optional[Callable] = None):
     """
-    연속 BLE 스캔
+    Continuous BLE Scan
 
     Args:
-        duration: 스캔 기간 (초)
-        callback: 장치 발견 시 호출할 콜백 함수
+        duration: Scan duration (seconds)
+        callback: Callback function when device is discovered
     """
     if not BLEAK_AVAILABLE:
-        print("[시뮬레이션] 연속 스캔은 시뮬레이션 모드에서 지원되지 않습니다.")
+        print("[Simulation] Continuous scan is not supported in simulation mode.")
         devices = simulate_ble_scan(duration)
         for device in devices:
-            print(f"발견: {device.name} ({device.address}) - RSSI: {device.rssi} dBm")
+            print(f"Discovered: {device.name} ({device.address}) - RSSI: {device.rssi} dBm")
         return
 
     def detection_callback(device, advertisement_data):
-        print(f"발견: {device.name or 'Unknown'} ({device.address}) - RSSI: {device.rssi} dBm")
+        print(f"Discovered: {device.name or 'Unknown'} ({device.address}) - RSSI: {device.rssi} dBm")
         if callback:
             callback(device, advertisement_data)
 
     scanner = BleakScanner(detection_callback=detection_callback)
 
-    print(f"연속 스캔 시작 ({duration}초)")
+    print(f"Starting continuous scan ({duration} seconds)")
     await scanner.start()
     await asyncio.sleep(duration)
     await scanner.stop()
-    print("스캔 종료")
+    print("Scan finished")
 
 
 # ============================================================================
-# BLE 연결 및 탐색
+# BLE Connection and Discovery
 # ============================================================================
 
 async def connect_and_explore(address: str, use_simulation: bool = False):
     """
-    BLE 장치 연결 및 서비스/특성 탐색
+    BLE Device Connection and Service/Characteristic Discovery
 
     Args:
-        address: BLE 장치 MAC 주소
-        use_simulation: 시뮬레이션 모드 사용
+        address: BLE device MAC address
+        use_simulation: Use simulation mode
     """
     if not BLEAK_AVAILABLE or use_simulation:
-        print(f"[시뮬레이션] 연결 중: {address}")
-        print(f"[시뮬레이션] 연결됨!")
-        print(f"\n서비스: {BLE_UUID.ENVIRONMENTAL_SENSING}")
-        print(f"  설명: Environmental Sensing")
-        print(f"    특성: {BLE_UUID.TEMPERATURE}")
-        print(f"      속성: ['read', 'notify']")
-        print(f"      값: {simulate_read_characteristic(BLE_UUID.TEMPERATURE).hex()}")
-        print(f"    특성: {BLE_UUID.HUMIDITY}")
-        print(f"      속성: ['read', 'notify']")
-        print(f"      값: {simulate_read_characteristic(BLE_UUID.HUMIDITY).hex()}")
+        print(f"[Simulation] Connecting: {address}")
+        print(f"[Simulation] Connected!")
+        print(f"\nService: {BLE_UUID.ENVIRONMENTAL_SENSING}")
+        print(f"  Description: Environmental Sensing")
+        print(f"    Characteristic: {BLE_UUID.TEMPERATURE}")
+        print(f"      Properties: ['read', 'notify']")
+        print(f"      Value: {simulate_read_characteristic(BLE_UUID.TEMPERATURE).hex()}")
+        print(f"    Characteristic: {BLE_UUID.HUMIDITY}")
+        print(f"      Properties: ['read', 'notify']")
+        print(f"      Value: {simulate_read_characteristic(BLE_UUID.HUMIDITY).hex()}")
         return
 
-    print(f"연결 중: {address}")
+    print(f"Connecting: {address}")
 
     try:
         async with BleakClient(address) as client:
-            print(f"연결됨! MTU: {client.mtu_size}")
+            print(f"Connected! MTU: {client.mtu_size}")
 
-            # 서비스 탐색
+            # Service discovery
             for service in client.services:
-                print(f"\n서비스: {service.uuid}")
-                print(f"  설명: {service.description}")
+                print(f"\nService: {service.uuid}")
+                print(f"  Description: {service.description}")
 
-                # 특성 탐색
+                # Characteristic discovery
                 for char in service.characteristics:
-                    print(f"    특성: {char.uuid}")
-                    print(f"      속성: {char.properties}")
+                    print(f"    Characteristic: {char.uuid}")
+                    print(f"      Properties: {char.properties}")
 
-                    # 읽기 가능하면 값 읽기
+                    # Read value if readable
                     if "read" in char.properties:
                         try:
                             value = await client.read_gatt_char(char.uuid)
-                            print(f"      값: {value.hex()}")
+                            print(f"      Value: {value.hex()}")
                         except Exception as e:
-                            print(f"      읽기 실패: {e}")
+                            print(f"      Read failed: {e}")
 
     except Exception as e:
-        print(f"연결 오류: {e}")
-        print("시뮬레이션 모드로 재시도...")
+        print(f"Connection error: {e}")
+        print("Retrying in simulation mode...")
         await connect_and_explore(address, use_simulation=True)
 
 
 # ============================================================================
-# BLE 센서 데이터 읽기
+# BLE Sensor Data Reading
 # ============================================================================
 
 async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
     """
-    BLE 센서 데이터 읽기
+    BLE Sensor Data Reading
 
     Args:
-        address: BLE 장치 주소
-        use_simulation: 시뮬레이션 모드
+        address: BLE device address
+        use_simulation: Simulation mode
 
     Returns:
-        dict: 센서 데이터
+        dict: Sensor data
     """
     result = {}
 
     if not BLEAK_AVAILABLE or use_simulation:
-        print(f"[시뮬레이션] 센서 데이터 읽기: {address}")
+        print(f"[Simulation] Reading sensor data: {address}")
 
-        # 배터리
+        # Battery
         battery_data = simulate_read_characteristic(BLE_UUID.BATTERY_LEVEL)
         result['battery'] = battery_data[0]
 
-        # 온도
+        # Temperature
         temp_data = simulate_read_characteristic(BLE_UUID.TEMPERATURE)
         temp_raw = struct.unpack('<h', temp_data)[0]
         result['temperature'] = temp_raw * 0.01
 
-        # 습도
+        # Humidity
         humidity_data = simulate_read_characteristic(BLE_UUID.HUMIDITY)
         humidity_raw = struct.unpack('<H', humidity_data)[0]
         result['humidity'] = humidity_raw * 0.01
@@ -327,14 +327,14 @@ async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
 
     try:
         async with BleakClient(address) as client:
-            # 배터리 레벨
+            # Battery level
             try:
                 data = await client.read_gatt_char(BLE_UUID.BATTERY_LEVEL)
                 result['battery'] = data[0]
             except Exception:
                 pass
 
-            # 온도
+            # Temperature
             try:
                 data = await client.read_gatt_char(BLE_UUID.TEMPERATURE)
                 temp_raw = struct.unpack('<h', data[:2])[0]
@@ -342,7 +342,7 @@ async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
             except Exception:
                 pass
 
-            # 습도
+            # Humidity
             try:
                 data = await client.read_gatt_char(BLE_UUID.HUMIDITY)
                 humidity_raw = struct.unpack('<H', data[:2])[0]
@@ -351,15 +351,15 @@ async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
                 pass
 
     except Exception as e:
-        print(f"읽기 오류: {e}")
-        print("시뮬레이션 모드로 재시도...")
+        print(f"Read error: {e}")
+        print("Retrying in simulation mode...")
         return await read_sensor_data(address, use_simulation=True)
 
     return result
 
 
 # ============================================================================
-# BLE 알림 수신
+# BLE Notification Reception
 # ============================================================================
 
 # Why: A factory function is used because bleak's start_notify() expects a
@@ -367,31 +367,31 @@ async def read_sensor_data(address: str, use_simulation: bool = False) -> Dict:
 # sensor_type, letting one factory produce type-specific decoders.
 def create_notification_handler(sensor_type: str):
     """
-    알림 핸들러 생성
+    Create Notification Handler
 
     Args:
-        sensor_type: 센서 타입 ('temperature', 'humidity', etc.)
+        sensor_type: Sensor type ('temperature', 'humidity', etc.)
 
     Returns:
-        function: 알림 핸들러 함수
+        function: Notification handler function
     """
     def handler(sender, data):
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] 수신 ({sensor_type}): {data.hex()}")
+        print(f"[{timestamp}] Received ({sensor_type}): {data.hex()}")
 
         if sensor_type == 'temperature':
             temp_raw = struct.unpack('<h', data[:2])[0]
             temp = temp_raw * 0.01
-            print(f"  온도: {temp:.2f}°C")
+            print(f"  Temperature: {temp:.2f}C")
 
         elif sensor_type == 'humidity':
             humidity_raw = struct.unpack('<H', data[:2])[0]
             humidity = humidity_raw * 0.01
-            print(f"  습도: {humidity:.2f}%")
+            print(f"  Humidity: {humidity:.2f}%")
 
         elif sensor_type == 'battery':
             battery = data[0]
-            print(f"  배터리: {battery}%")
+            print(f"  Battery: {battery}%")
 
         elif sensor_type == 'heart_rate':
             flags = data[0]
@@ -399,7 +399,7 @@ def create_notification_handler(sensor_type: str):
                 hr = int.from_bytes(data[1:3], 'little')
             else:  # 8-bit heart rate
                 hr = data[1]
-            print(f"  심박수: {hr} bpm")
+            print(f"  Heart rate: {hr} bpm")
 
     return handler
 
@@ -412,63 +412,63 @@ async def subscribe_notifications(
     use_simulation: bool = False
 ):
     """
-    BLE 알림 구독
+    BLE Notification Subscription
 
     Args:
-        address: BLE 장치 주소
-        char_uuid: 특성 UUID
-        sensor_type: 센서 타입
-        duration: 구독 기간 (초)
-        use_simulation: 시뮬레이션 모드
+        address: BLE device address
+        char_uuid: Characteristic UUID
+        sensor_type: Sensor type
+        duration: Subscription duration (seconds)
+        use_simulation: Simulation mode
     """
     if not BLEAK_AVAILABLE or use_simulation:
-        print(f"[시뮬레이션] 알림 구독: {address}")
-        print(f"[시뮬레이션] 특성: {char_uuid}")
-        print(f"\n{duration}초 동안 시뮬레이션 데이터 수신...\n")
+        print(f"[Simulation] Notification subscription: {address}")
+        print(f"[Simulation] Characteristic: {char_uuid}")
+        print(f"\nReceiving simulation data for {duration} seconds...\n")
 
         handler = create_notification_handler(sensor_type)
 
         for i in range(int(duration / 2)):
-            # 시뮬레이션 데이터 생성
+            # Generate simulation data
             data = simulate_read_characteristic(char_uuid)
             handler(char_uuid, data)
             await asyncio.sleep(2)
 
-        print("\n구독 종료")
+        print("\nSubscription ended")
         return
 
-    print(f"연결 중: {address}")
+    print(f"Connecting: {address}")
 
     try:
         async with BleakClient(address) as client:
-            print(f"연결됨!")
+            print(f"Connected!")
 
             handler = create_notification_handler(sensor_type)
 
-            # 알림 시작
+            # Start notifications
             await client.start_notify(char_uuid, handler)
-            print(f"알림 구독 시작: {char_uuid}")
-            print(f"{duration}초 동안 수신 중...\n")
+            print(f"Notification subscription started: {char_uuid}")
+            print(f"Receiving for {duration} seconds...\n")
 
-            # 지정된 시간 동안 수신
+            # Receive for specified duration
             await asyncio.sleep(duration)
 
-            # 알림 중지
+            # Stop notifications
             await client.stop_notify(char_uuid)
-            print("\n알림 구독 종료")
+            print("\nNotification subscription ended")
 
     except Exception as e:
-        print(f"구독 오류: {e}")
-        print("시뮬레이션 모드로 재시도...")
+        print(f"Subscription error: {e}")
+        print("Retrying in simulation mode...")
         await subscribe_notifications(address, char_uuid, sensor_type, duration, use_simulation=True)
 
 
 # ============================================================================
-# BLE 센서 모니터 클래스
+# BLE Sensor Monitor Class
 # ============================================================================
 
 class BLESensorMonitor:
-    """BLE 환경 센서 모니터링 클래스"""
+    """BLE Environmental Sensor Monitoring Class"""
 
     def __init__(self, device_address: Optional[str] = None, use_simulation: bool = False):
         self.device_address = device_address
@@ -477,27 +477,27 @@ class BLESensorMonitor:
 
     async def start_monitoring(self, duration: float = 60):
         """
-        모니터링 시작
+        Start Monitoring
 
         Args:
-            duration: 모니터링 기간 (초)
+            duration: Monitoring duration (seconds)
         """
         if not self.device_address:
-            print("오류: 장치 주소가 지정되지 않았습니다.")
+            print("Error: Device address not specified.")
             return
 
-        print(f"=== BLE 센서 모니터링 시작 ===")
-        print(f"장치: {self.device_address}")
-        print(f"기간: {duration}초")
-        print(f"모드: {'시뮬레이션' if self.use_simulation else '실제'}\n")
+        print(f"=== BLE Sensor Monitoring Started ===")
+        print(f"Device: {self.device_address}")
+        print(f"Duration: {duration} seconds")
+        print(f"Mode: {'Simulation' if self.use_simulation else 'Real'}\n")
 
         if self.use_simulation:
-            # 시뮬레이션 모니터링
+            # Simulation monitoring
             for i in range(int(duration / 5)):
                 data = await read_sensor_data(self.device_address, use_simulation=True)
                 timestamp = datetime.now()
 
-                print(f"[{timestamp.strftime('%H:%M:%S')}] 수신:")
+                print(f"[{timestamp.strftime('%H:%M:%S')}] Received:")
                 for key, value in data.items():
                     print(f"  {key}: {value}")
                     self.data_buffer.append({
@@ -508,7 +508,7 @@ class BLESensorMonitor:
 
                 await asyncio.sleep(5)
         else:
-            # 실제 BLE 모니터링
+            # Real BLE monitoring
             await subscribe_notifications(
                 self.device_address,
                 BLE_UUID.TEMPERATURE,
@@ -516,11 +516,11 @@ class BLESensorMonitor:
                 duration / 2
             )
 
-        print("\n=== 모니터링 종료 ===")
-        print(f"수집된 데이터: {len(self.data_buffer)}개")
+        print("\n=== Monitoring Ended ===")
+        print(f"Collected data points: {len(self.data_buffer)}")
 
     def get_summary(self) -> Dict:
-        """수집된 데이터 요약"""
+        """Collected data summary"""
         if not self.data_buffer:
             return {}
 
@@ -540,12 +540,12 @@ class BLESensorMonitor:
 
 
 # ============================================================================
-# 메인 함수
+# Main Function
 # ============================================================================
 
 def print_devices(devices: List):
-    """장치 리스트 출력"""
-    print(f"\n발견된 장치: {len(devices)}개\n")
+    """Print device list"""
+    print(f"\nDiscovered devices: {len(devices)}\n")
 
     for i, device in enumerate(devices, 1):
         name = device.name or 'Unknown'
@@ -555,21 +555,21 @@ def print_devices(devices: List):
 
 
 async def main_async():
-    """비동기 메인 함수"""
+    """Async main function"""
     if len(sys.argv) < 2:
-        print("BLE 장치 스캐너 및 GATT 클라이언트 예제")
-        print("\n사용법:")
-        print("  python ble_scanner.py scan              - BLE 장치 스캔")
-        print("  python ble_scanner.py scan <필터>       - 이름 필터로 스캔")
-        print("  python ble_scanner.py explore <주소>    - 장치 탐색")
-        print("  python ble_scanner.py read <주소>       - 센서 데이터 읽기")
-        print("  python ble_scanner.py notify <주소>     - 알림 수신")
-        print("  python ble_scanner.py monitor <주소>    - 센서 모니터링")
-        print("\n예제:")
+        print("BLE Device Scanner and GATT Client Example")
+        print("\nUsage:")
+        print("  python ble_scanner.py scan              - Scan for BLE devices")
+        print("  python ble_scanner.py scan <filter>      - Scan with name filter")
+        print("  python ble_scanner.py explore <address>   - Explore device")
+        print("  python ble_scanner.py read <address>      - Read sensor data")
+        print("  python ble_scanner.py notify <address>    - Receive notifications")
+        print("  python ble_scanner.py monitor <address>   - Monitor sensors")
+        print("\nExamples:")
         print("  python ble_scanner.py scan")
         print("  python ble_scanner.py scan temp")
         print("  python ble_scanner.py explore AA:BB:CC:DD:EE:FF")
-        print("\n주의: bleak 라이브러리가 없으면 시뮬레이션 모드로 실행됩니다.")
+        print("\nNote: Runs in simulation mode if bleak library is not installed.")
         return
 
     command = sys.argv[1].lower()
@@ -584,25 +584,25 @@ async def main_async():
 
     elif command == 'explore':
         if len(sys.argv) < 3:
-            print("오류: 장치 주소를 입력하세요")
-            print("예제: python ble_scanner.py explore AA:BB:CC:DD:EE:FF")
+            print("Error: Please enter a device address")
+            print("Example: python ble_scanner.py explore AA:BB:CC:DD:EE:FF")
             return
         address = sys.argv[2]
         await connect_and_explore(address)
 
     elif command == 'read':
         if len(sys.argv) < 3:
-            print("오류: 장치 주소를 입력하세요")
+            print("Error: Please enter a device address")
             return
         address = sys.argv[2]
         data = await read_sensor_data(address)
-        print("\n=== 센서 데이터 ===")
+        print("\n=== Sensor Data ===")
         for key, value in data.items():
             print(f"  {key}: {value}")
 
     elif command == 'notify':
         if len(sys.argv) < 3:
-            print("오류: 장치 주소를 입력하세요")
+            print("Error: Please enter a device address")
             return
         address = sys.argv[2]
         await subscribe_notifications(
@@ -614,34 +614,34 @@ async def main_async():
 
     elif command == 'monitor':
         if len(sys.argv) < 3:
-            print("오류: 장치 주소를 입력하세요")
+            print("Error: Please enter a device address")
             return
         address = sys.argv[2]
         monitor = BLESensorMonitor(address)
         await monitor.start_monitoring(duration=30)
 
-        # 요약 출력
+        # Print summary
         summary = monitor.get_summary()
         if summary:
-            print("\n=== 데이터 요약 ===")
+            print("\n=== Data Summary ===")
             for sensor, stats in summary.items():
                 print(f"{sensor}:")
-                print(f"  최소: {stats['min']:.2f}")
-                print(f"  최대: {stats['max']:.2f}")
-                print(f"  평균: {stats['avg']:.2f}")
-                print(f"  개수: {stats['count']}")
+                print(f"  Min: {stats['min']:.2f}")
+                print(f"  Max: {stats['max']:.2f}")
+                print(f"  Avg: {stats['avg']:.2f}")
+                print(f"  Count: {stats['count']}")
 
     else:
-        print(f"알 수 없는 명령: {command}")
-        print("'python ble_scanner.py'를 실행하여 도움말을 확인하세요")
+        print(f"Unknown command: {command}")
+        print("Run 'python ble_scanner.py' for help")
 
 
 def main():
-    """메인 함수"""
+    """Main function"""
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:
-        print("\n\n사용자 중단")
+        print("\n\nInterrupted by user")
 
 
 if __name__ == "__main__":

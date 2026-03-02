@@ -1,8 +1,8 @@
 /*
- * 고급 DP 최적화 (Advanced DP Optimization)
- * CHT, D&C 최적화, Knuth 최적화, 모노토닉 큐
+ * Advanced DP Optimization
+ * CHT, D&C Optimization, Knuth Optimization, Monotonic Queue
  *
- * DP의 시간 복잡도를 줄이는 고급 기법들입니다.
+ * Advanced techniques for reducing DP time complexity.
  */
 
 #include <stdio.h>
@@ -20,13 +20,13 @@ typedef long long ll;
  * 1. Convex Hull Trick (CHT)
  * ============================================================================= */
 
-/* 직선 구조체 */
+/* Line structure */
 typedef struct {
-    ll m;  /* 기울기 */
-    ll b;  /* y절편 */
+    ll m;  /* Slope */
+    ll b;  /* Y-intercept */
 } Line;
 
-/* CHT 구조체 (기울기 단조 감소 버전) */
+/* CHT structure (monotonically decreasing slope version) */
 typedef struct {
     Line* lines;
     int size;
@@ -46,14 +46,14 @@ void cht_free(CHT* cht) {
     free(cht);
 }
 
-/* 교차점 x좌표 비교 */
+/* Intersection x-coordinate comparison */
 bool cht_bad(Line l1, Line l2, Line l3) {
-    /* l2가 불필요한지 확인 */
+    /* Check if l2 is unnecessary */
     /* (l3.b - l1.b) / (l1.m - l3.m) <= (l2.b - l1.b) / (l1.m - l2.m) */
     return (l3.b - l1.b) * (l1.m - l2.m) <= (l2.b - l1.b) * (l1.m - l3.m);
 }
 
-/* 직선 추가 (기울기 단조 감소) */
+/* Add line (monotonically decreasing slope) */
 void cht_add(CHT* cht, ll m, ll b) {
     Line new_line = {m, b};
 
@@ -65,7 +65,7 @@ void cht_add(CHT* cht, ll m, ll b) {
     cht->lines[cht->size++] = new_line;
 }
 
-/* 최솟값 쿼리 */
+/* Minimum value query */
 ll cht_query(CHT* cht, ll x) {
     int lo = 0, hi = cht->size - 1;
     while (lo < hi) {
@@ -147,13 +147,13 @@ ll lc_query(LCNode* node, ll lo, ll hi, ll x) {
 }
 
 /* =============================================================================
- * 3. D&C 최적화
+ * 3. D&C Optimization
  * ============================================================================= */
 
-/* 조건: opt[i][j] <= opt[i][j+1]
- * 시간복잡도: O(kn log n) */
+/* Condition: opt[i][j] <= opt[i][j+1]
+ * Time complexity: O(kn log n) */
 
-ll** cost;  /* cost[i][j]: i부터 j까지의 비용 */
+ll** cost;  /* cost[i][j]: cost from i to j */
 ll** dp_dc;
 int n_dc;
 
@@ -190,7 +190,7 @@ ll divide_conquer_opt(int n, int k, ll** cost_matrix) {
 
     dp_dc[0][0] = 0;
 
-    /* 첫 번째 그룹 */
+    /* First group */
     for (int j = 1; j <= n; j++) {
         dp_dc[1][j] = cost[1][j];
     }
@@ -208,11 +208,11 @@ ll divide_conquer_opt(int n, int k, ll** cost_matrix) {
 }
 
 /* =============================================================================
- * 4. Knuth 최적화
+ * 4. Knuth Optimization
  * ============================================================================= */
 
-/* 조건: opt[i][j-1] <= opt[i][j] <= opt[i+1][j]
- * 시간복잡도: O(n²) */
+/* Condition: opt[i][j-1] <= opt[i][j] <= opt[i+1][j]
+ * Time complexity: O(n^2) */
 
 ll knuth_opt(int n, ll** cost_matrix) {
     ll** dp = malloc((n + 2) * sizeof(ll*));
@@ -223,12 +223,12 @@ ll knuth_opt(int n, ll** cost_matrix) {
         opt[i] = calloc(n + 2, sizeof(int));
     }
 
-    /* 기저 조건 */
+    /* Base case */
     for (int i = 1; i <= n; i++) {
         opt[i][i] = i;
     }
 
-    /* 길이 순으로 계산 */
+    /* Compute by length */
     for (int len = 2; len <= n; len++) {
         for (int i = 1; i + len - 1 <= n; i++) {
             int j = i + len - 1;
@@ -262,11 +262,11 @@ ll knuth_opt(int n, ll** cost_matrix) {
 }
 
 /* =============================================================================
- * 5. 모노토닉 큐 최적화
+ * 5. Monotonic Queue Optimization
  * ============================================================================= */
 
 /* dp[i] = min(dp[j] + C[j]) for j in [i-k, i-1]
- * 슬라이딩 윈도우 최솟값 활용 */
+ * Uses sliding window minimum */
 
 ll monotonic_queue_dp(int n, int k, ll arr[]) {
     ll* dp = malloc((n + 1) * sizeof(ll));
@@ -277,15 +277,15 @@ ll monotonic_queue_dp(int n, int k, ll arr[]) {
     deque[rear++] = 0;
 
     for (int i = 1; i <= n; i++) {
-        /* 윈도우 벗어난 원소 제거 */
+        /* Remove elements outside the window */
         while (front < rear && deque[front] < i - k) {
             front++;
         }
 
-        /* 최솟값 사용 */
+        /* Use minimum value */
         dp[i] = dp[deque[front]] + arr[i];
 
-        /* 새 원소 추가 (모노토닉 유지) */
+        /* Add new element (maintain monotonicity) */
         while (front < rear && dp[deque[rear - 1]] >= dp[i]) {
             rear--;
         }
@@ -316,28 +316,28 @@ void sos_dp(ll a[], int n) {
 }
 
 /* =============================================================================
- * 테스트
+ * Test
  * ============================================================================= */
 
 int main(void) {
     printf("============================================================\n");
-    printf("고급 DP 최적화 예제\n");
+    printf("Advanced DP Optimization Examples\n");
     printf("============================================================\n");
 
     /* 1. Convex Hull Trick */
     printf("\n[1] Convex Hull Trick\n");
     CHT* cht = cht_create(100);
 
-    /* 직선들: y = -2x + 4, y = -1x + 3, y = -0.5x + 2 */
+    /* Lines: y = -2x + 4, y = -1x + 3, y = -0.5x + 2 */
     cht_add(cht, -2, 4);
     cht_add(cht, -1, 3);
     cht_add(cht, 0, 2);
 
-    printf("    직선: y = -2x + 4, y = -x + 3, y = 2\n");
-    printf("    x=0에서 최솟값: %lld\n", cht_query(cht, 0));
-    printf("    x=1에서 최솟값: %lld\n", cht_query(cht, 1));
-    printf("    x=2에서 최솟값: %lld\n", cht_query(cht, 2));
-    printf("    x=3에서 최솟값: %lld\n", cht_query(cht, 3));
+    printf("    Lines: y = -2x + 4, y = -x + 3, y = 2\n");
+    printf("    Min at x=0: %lld\n", cht_query(cht, 0));
+    printf("    Min at x=1: %lld\n", cht_query(cht, 1));
+    printf("    Min at x=2: %lld\n", cht_query(cht, 2));
+    printf("    Min at x=3: %lld\n", cht_query(cht, 3));
     cht_free(cht);
 
     /* 2. Li Chao Tree */
@@ -349,52 +349,52 @@ int main(void) {
     lc_insert(root, lo, hi, 1, 0);
     lc_insert(root, lo, hi, -1, 8);
 
-    printf("    직선: y = -2x + 10, y = x, y = -x + 8\n");
-    printf("    x=0에서 최솟값: %lld\n", lc_query(root, lo, hi, 0));
-    printf("    x=3에서 최솟값: %lld\n", lc_query(root, lo, hi, 3));
-    printf("    x=5에서 최솟값: %lld\n", lc_query(root, lo, hi, 5));
+    printf("    Lines: y = -2x + 10, y = x, y = -x + 8\n");
+    printf("    Min at x=0: %lld\n", lc_query(root, lo, hi, 0));
+    printf("    Min at x=3: %lld\n", lc_query(root, lo, hi, 3));
+    printf("    Min at x=5: %lld\n", lc_query(root, lo, hi, 5));
 
-    /* 3. 모노토닉 큐 DP */
-    printf("\n[3] 모노토닉 큐 DP\n");
+    /* 3. Monotonic Queue DP */
+    printf("\n[3] Monotonic Queue DP\n");
     ll arr[] = {0, 1, 3, 2, 4, 1, 5};
     int n = 6, k = 3;
-    printf("    배열: [1, 3, 2, 4, 1, 5]\n");
-    printf("    윈도우 크기 k = 3\n");
-    printf("    최소 비용: %lld\n", monotonic_queue_dp(n, k, arr));
+    printf("    Array: [1, 3, 2, 4, 1, 5]\n");
+    printf("    Window size k = 3\n");
+    printf("    Minimum cost: %lld\n", monotonic_queue_dp(n, k, arr));
 
     /* 4. SOS DP */
     printf("\n[4] SOS DP (Sum over Subsets)\n");
     ll sos_arr[] = {1, 2, 3, 4, 5, 6, 7, 8};  /* 2^3 = 8 */
-    printf("    초기 배열: [1, 2, 3, 4, 5, 6, 7, 8]\n");
+    printf("    Initial array: [1, 2, 3, 4, 5, 6, 7, 8]\n");
     sos_dp(sos_arr, 3);
-    printf("    SOS 결과:\n");
+    printf("    SOS result:\n");
     for (int mask = 0; mask < 8; mask++) {
         printf("      f[%d%d%d] = %lld\n",
                (mask >> 2) & 1, (mask >> 1) & 1, mask & 1, sos_arr[mask]);
     }
 
-    /* 5. 복잡도 비교 */
-    printf("\n[5] 복잡도 비교\n");
-    printf("    | 기법              | 원래 복잡도 | 최적화 후    |\n");
+    /* 5. Complexity Comparison */
+    printf("\n[5] Complexity Comparison\n");
+    printf("    | Technique         | Original    | Optimized   |\n");
     printf("    |-------------------|-------------|-------------|\n");
-    printf("    | CHT               | O(n²)       | O(n log n)  |\n");
-    printf("    | Li Chao Tree      | O(n²)       | O(n log C)  |\n");
-    printf("    | D&C 최적화        | O(kn²)      | O(kn log n) |\n");
-    printf("    | Knuth 최적화      | O(n³)       | O(n²)       |\n");
-    printf("    | 모노토닉 큐       | O(nk)       | O(n)        |\n");
-    printf("    | SOS DP            | O(3^n)      | O(n × 2^n)  |\n");
+    printf("    | CHT               | O(n^2)      | O(n log n)  |\n");
+    printf("    | Li Chao Tree      | O(n^2)      | O(n log C)  |\n");
+    printf("    | D&C Optimization  | O(kn^2)     | O(kn log n) |\n");
+    printf("    | Knuth Opt.        | O(n^3)      | O(n^2)      |\n");
+    printf("    | Monotonic Queue   | O(nk)       | O(n)        |\n");
+    printf("    | SOS DP            | O(3^n)      | O(n x 2^n)  |\n");
 
-    /* 6. 적용 조건 */
-    printf("\n[6] 적용 조건\n");
+    /* 6. Application Conditions */
+    printf("\n[6] Application Conditions\n");
     printf("    CHT:\n");
-    printf("      - dp[i] = min(dp[j] + a[j] × b[i]) 형태\n");
-    printf("      - a[j] 또는 b[i]가 단조\n");
-    printf("    D&C 최적화:\n");
+    printf("      - Form: dp[i] = min(dp[j] + a[j] * b[i])\n");
+    printf("      - a[j] or b[i] is monotonic\n");
+    printf("    D&C Optimization:\n");
     printf("      - opt[i][j] <= opt[i][j+1]\n");
-    printf("      - 비용 함수가 Quadrangle Inequality 만족\n");
-    printf("    Knuth 최적화:\n");
+    printf("      - Cost function satisfies Quadrangle Inequality\n");
+    printf("    Knuth Optimization:\n");
     printf("      - opt[i][j-1] <= opt[i][j] <= opt[i+1][j]\n");
-    printf("      - 구간 DP에서 주로 사용\n");
+    printf("      - Mainly used in interval DP\n");
 
     printf("\n============================================================\n");
 
