@@ -1,0 +1,106 @@
+# Learning Paths — Cross-Topic Curricula
+# Defines ordered sequences of topics forming structured study paths.
+
+paths:
+  full_stack_developer:
+    label:
+      en: "Full Stack Developer"
+      ko: "풀스택 개발자"
+    description:
+      en: "Build modern web applications from frontend to backend, including databases, APIs, and deployment."
+      ko: "프론트엔드부터 백엔드까지 데이터베이스, API, 배포를 포함한 현대 웹 애플리케이션 구축."
+    icon: "code"
+    color: "#0d6efd"
+    topics:
+      - Programming
+      - Python
+      - Web_Development
+      - Git
+      - Docker
+      - PostgreSQL
+      - Backend_Frameworks
+      - Frontend_Frameworks
+      - GraphQL
+      - System_Design
+
+  ml_engineer:
+    label:
+      en: "Machine Learning Engineer"
+      ko: "머신러닝 엔지니어"
+    description:
+      en: "From data fundamentals to production ML systems, covering classical ML, deep learning, and MLOps."
+      ko: "데이터 기초부터 프로덕션 ML 시스템까지, 고전 ML, 딥러닝, MLOps를 포함."
+    icon: "dashboard"
+    color: "#198754"
+    topics:
+      - Programming
+      - Python
+      - Data_Science
+      - Machine_Learning
+      - Math_for_AI
+      - Deep_Learning
+      - LLM_and_NLP
+      - Foundation_Models
+      - Reinforcement_Learning
+      - MLOps
+
+  systems_programmer:
+    label:
+      en: "Systems Programmer"
+      ko: "시스템 프로그래머"
+    description:
+      en: "Master low-level programming, operating systems, compilers, and performance-critical code."
+      ko: "저수준 프로그래밍, 운영체제, 컴파일러, 성능 핵심 코드 마스터."
+    icon: "code"
+    color: "#fd7e14"
+    topics:
+      - Programming
+      - C_Programming
+      - CPP
+      - Rust
+      - Linux
+      - Shell_Script
+      - OS_Theory
+      - Computer_Architecture
+      - Compiler_Design
+      - Algorithm
+
+  space_physics:
+    label:
+      en: "Space Physics Specialist"
+      ko: "우주물리학 전문가"
+    description:
+      en: "From mathematical foundations through plasma physics to space weather forecasting."
+      ko: "수학적 기초부터 플라즈마 물리학, 우주기상 예보까지."
+    icon: "circle"
+    color: "#dc3545"
+    topics:
+      - Calculus_and_Differential_Equations
+      - Mathematical_Methods
+      - Electrodynamics
+      - Numerical_Simulation
+      - Plasma_Physics
+      - MHD
+      - Solar_Physics
+      - Space_Weather
+
+  cs_foundations:
+    label:
+      en: "Computer Science Foundations"
+      ko: "컴퓨터 과학 기초"
+    description:
+      en: "Core CS theory covering algorithms, formal languages, operating systems, networking, and security."
+      ko: "알고리즘, 형식 언어, 운영체제, 네트워킹, 보안을 포함하는 핵심 CS 이론."
+    icon: "list"
+    color: "#6f42c1"
+    topics:
+      - Programming
+      - Python
+      - Algorithm
+      - Formal_Languages
+      - Database_Theory
+      - OS_Theory
+      - Networking
+      - Computer_Architecture
+      - Software_Engineering
+      - Security
