@@ -92,7 +92,7 @@ examples/
 │
 ├── Electrodynamics/       # Electrodynamics Python examples (12 files)
 │
-├── flagship/              # Flagship projects — self-contained single-file implementations (5 files)
+├── Flagship/              # Flagship projects — self-contained single-file implementations (5 files)
 │   ├── micro_autograd.py  # Autograd engine from scratch (numpy)
 │   ├── tiny_gan.py        # GAN on 2D distributions (torch)
 │   ├── nano_rl.py         # REINFORCE policy gradient gridworld (numpy)
