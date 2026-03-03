@@ -8,7 +8,7 @@ This project uses a dual license structure.
 ## Code: MIT License
 ## 코드: MIT 라이센스
 
-**Applies to / 적용 대상**: `examples/`, `viewer/`
+**Applies to / 적용 대상**: `examples/`, `exercises/`
 
 MIT License
 
@@ -51,7 +51,10 @@ https://creativecommons.org/licenses/by-nc/4.0/
 
 ---
 
-## AI Assistance Disclosure / AI 도움 명시
+## Tools & Acknowledgments / 도구 및 감사
 
-Some content in this repository was created with the assistance of AI (Claude).
-이 저장소의 일부 콘텐츠는 AI(Claude)의 도움을 받아 작성되었습니다.
+AI language models were used as a development tool during the creation of this
+repository. All content was reviewed and curated by the author.
+
+이 저장소의 제작 과정에서 AI 언어 모델을 개발 도구로 활용했습니다.
+모든 콘텐츠는 저자가 검토하고 큐레이션했습니다.
