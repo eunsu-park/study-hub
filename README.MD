@@ -14,7 +14,8 @@ From programming fundamentals to plasma physics — a working notebook of what I
 ├── content/          # Study materials / 학습 자료 Markdown
 │   ├── ko/           # Korean (55 topics) / 한국어 (55개 토픽)
 │   ├── en/           # English (55 topics) / 영어 (55개 토픽)
-│   └── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
+│   ├── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
+│   └── learning_paths.yaml  # Cross-topic curricula / 학습 경로 정의
 │
 ├── examples/         # Example code / 예제 코드
 │
@@ -97,6 +98,16 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Plasma_Physics](./content/ko/Plasma_Physics/00_Overview.md) | 디바이 차폐, 블라소프 방정식, 란다우 감쇠, 플라즈마 파동 | 16 |
 | [Solar_Physics](./content/ko/Solar_Physics/00_Overview.md) | 태양 내부, 핵에너지, 코로나, 자기장, 플레어, CME | 16 |
 | [Space_Weather](./content/ko/Space_Weather/00_Overview.md) | 자기권, 지자기 폭풍, 방사선대, 전리층, GIC, 예보 모델 | 16 |
+
+## Learning Paths / 학습 경로
+
+| Path / 경로 | Topics / 토픽 |
+|---|---|
+| Full Stack Developer / 풀스택 개발자 | Programming → Python → Web_Development → Git → Docker → PostgreSQL → Backend_Frameworks → Frontend_Frameworks → GraphQL → System_Design |
+| Machine Learning Engineer / 머신러닝 엔지니어 | Programming → Python → Data_Science → Machine_Learning → Math_for_AI → Deep_Learning → LLM_and_NLP → Foundation_Models → Reinforcement_Learning → MLOps |
+| Systems Programmer / 시스템 프로그래머 | Programming → C_Programming → CPP → Rust → Linux → Shell_Script → OS_Theory → Computer_Architecture → Compiler_Design → Algorithm |
+| Space Physics Specialist / 우주물리학 전문가 | Calculus_and_Differential_Equations → Mathematical_Methods → Electrodynamics → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
+| Computer Science Foundations / 컴퓨터 과학 기초 | Programming → Python → Algorithm → Formal_Languages → Database_Theory → OS_Theory → Networking → Computer_Architecture → Software_Engineering → Security |
 
 ---
 
