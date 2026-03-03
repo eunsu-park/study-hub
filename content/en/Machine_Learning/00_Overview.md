@@ -17,7 +17,7 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
                         ↓                                                         → Ensemble(Boosting) → SVM ──┘
                 Time Series ML → AutoML → Anomaly Detection → Advanced Ensemble
                         ↓
-                Production ML Serving → A/B Testing for ML
+                Production ML Serving → A/B Testing for ML → Symbolic Regression
 ```
 
 ---
@@ -49,6 +49,7 @@ ML Overview → Linear Regression → Logistic Regression → Model Evaluation �
 | [21_Advanced_Ensemble.md](./21_Advanced_Ensemble.md) | Advanced Ensemble | Stacking, Blending, Meta-Learner, Diverse Base Learners, Competition Strategies |
 | [22_Production_ML_Serving.md](./22_Production_ML_Serving.md) | Production ML Serving | Model Optimization, Serving Patterns, Training-Serving Skew, Drift Detection |
 | [23_AB_Testing_for_ML.md](./23_AB_Testing_for_ML.md) | A/B Testing for ML | Power Analysis, Hypothesis Testing, Sequential Testing, Multi-Armed Bandits, Interleaving |
+| [24_Symbolic_Regression.md](./24_Symbolic_Regression.md) | Symbolic Regression | Expression Trees, Genetic Programming, Pareto Front, PySR, gplearn, SINDy |
 
 ---
 
@@ -124,6 +125,9 @@ print(f"LightGBM: {lightgbm.__version__}")
 ### Stage 8: Production (22-23)
 - Model optimization and serving patterns
 - A/B testing and online experimentation
+
+### Stage 9: Interpretable Discovery (24)
+- Symbolic regression: discovering equations from data
 
 ---
 

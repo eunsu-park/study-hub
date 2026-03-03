@@ -70,6 +70,7 @@ jupyter lab
 | 14 | Kaggle Project | Titanic, Feature Engineering |
 | 22 | Production ML Serving | Model Optimization, Serving Patterns, Drift Detection |
 | 23 | A/B Testing | Power Analysis, Sequential Testing, Multi-Armed Bandit |
+| 24 | Symbolic Regression | Expression Trees, Genetic Programming, Pareto Front |
 
 ## Learning Order
 

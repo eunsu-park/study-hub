@@ -1,6 +1,6 @@
 # ML 모델을 위한 A/B 테스팅
 
-[← 이전: 22. 프로덕션 ML 서빙](22_Production_ML_Serving.md) | [다음: 개요 →](00_Overview.md)
+[← 이전: 22. 프로덕션 ML 서빙](22_Production_ML_Serving.md) | [다음: 24. 기호 회귀 →](24_Symbolic_Regression.md)
 
 ---
 

@@ -126,7 +126,7 @@ examples/
 │   └── raspberry_pi/       # GPIO, sensors
 │
 ├── LLM_and_NLP/            # NLP/HuggingFace examples (15 files)
-├── Machine_Learning/       # sklearn/Jupyter examples (25 files)
+├── Machine_Learning/       # sklearn/Jupyter examples (26 files)
 ├── Math_for_AI/            # AI math Python examples (13 files)
 ├── MLOps/                  # MLflow/CI/CD/DVC/LLMOps examples (32 files)
 │   ├── cicd/               # ML CI/CD pipeline
@@ -324,7 +324,7 @@ jupyter notebook
 | LaTeX | 19 | LaTeX | Document typesetting, Math, TikZ, Beamer, Bibliography, Build |
 | Linux | 3 | Bash | Disaster recovery, Performance diagnostics |
 | LLM_and_NLP | 15 | Python | BERT, GPT, RAG, LangChain |
-| Machine_Learning | 25 | Python/Jupyter | sklearn, Classification, Regression, Ensemble, Feature Engineering, SHAP/LIME, AutoML, Anomaly Detection, Production ML, A/B Testing |
+| Machine_Learning | 26 | Python/Jupyter | sklearn, Classification, Regression, Ensemble, Feature Engineering, SHAP/LIME, AutoML, Anomaly Detection, Symbolic Regression |
 | Math_for_AI | 13 | Python | Linear Algebra, SVD/PCA, Optimization, Probability, Information Theory, Tensors, Graphs, Attention |
 | Mathematical_Methods | 13 | Python | Series, Complex numbers, Linear Algebra, Fourier, ODE/PDE, Special Functions, Tensors |
 | MHD | 32 | Python | Equilibria, Stability, Reconnection, Turbulence, Dynamo, Fusion |

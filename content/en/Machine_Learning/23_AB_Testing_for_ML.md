@@ -1,6 +1,6 @@
 # A/B Testing for ML Models
 
-[← Previous: 22. Production ML Serving](22_Production_ML_Serving.md) | [Next: Overview →](00_Overview.md)
+[← Previous: 22. Production ML Serving](22_Production_ML_Serving.md) | [Next: 24. Symbolic Regression →](24_Symbolic_Regression.md)
 
 ---
 

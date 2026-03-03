@@ -29,14 +29,13 @@ class LSTMCellLowLevel:
         std = math.sqrt(2.0 / (concat_size + hidden_size))
 
         # 4 gates combined into one: [forget, input, candidate, output]
-        self.W_ih = torch.randn(
-            4 * hidden_size, input_size,
-            requires_grad=True, device=self.device
-        ) * std
-        self.W_hh = torch.randn(
-            4 * hidden_size, hidden_size,
-            requires_grad=True, device=self.device
-        ) * std
+        # Note: multiply BEFORE enabling requires_grad to keep tensors as leaves
+        self.W_ih = (torch.randn(
+            4 * hidden_size, input_size, device=self.device
+        ) * std).requires_grad_(True)
+        self.W_hh = (torch.randn(
+            4 * hidden_size, hidden_size, device=self.device
+        ) * std).requires_grad_(True)
         self.bias = torch.zeros(
             4 * hidden_size,
             requires_grad=True, device=self.device
@@ -95,14 +94,13 @@ class GRUCellLowLevel:
         std = math.sqrt(2.0 / (concat_size + hidden_size))
 
         # 3 gates: [reset, update, candidate]
-        self.W_ih = torch.randn(
-            3 * hidden_size, input_size,
-            requires_grad=True, device=self.device
-        ) * std
-        self.W_hh = torch.randn(
-            3 * hidden_size, hidden_size,
-            requires_grad=True, device=self.device
-        ) * std
+        # Note: multiply BEFORE enabling requires_grad to keep tensors as leaves
+        self.W_ih = (torch.randn(
+            3 * hidden_size, input_size, device=self.device
+        ) * std).requires_grad_(True)
+        self.W_hh = (torch.randn(
+            3 * hidden_size, hidden_size, device=self.device
+        ) * std).requires_grad_(True)
         self.bias = torch.zeros(
             3 * hidden_size,
             requires_grad=True, device=self.device
@@ -238,11 +236,10 @@ class LSTMLowLevel:
                 new_h_states.append(h)
                 new_c_states.append(c)
 
-                # Forward + Backward concat
-                output = torch.stack([
-                    torch.cat([f, b], dim=-1)
-                    for f, b in zip(forward_outputs, backward_outputs)
-                ])
+                output = torch.cat([
+                    torch.stack(forward_outputs),
+                    torch.stack(backward_outputs)
+                ], dim=-1)
             else:
                 output = torch.stack(forward_outputs)
 
@@ -349,13 +346,14 @@ class GRULowLevel:
 
                 new_h_states.append(h)
 
-                output = torch.stack([
-                    torch.cat([f, b], dim=-1)
-                    for f, b in zip(forward_outputs, backward_outputs)
-                ])
+                output = torch.cat([
+                    torch.stack(forward_outputs),
+                    torch.stack(backward_outputs)
+                ], dim=-1)
             else:
                 output = torch.stack(forward_outputs)
 
+            # Dropout (except last layer)
             if self.dropout > 0 and layer < self.num_layers - 1:
                 output = F.dropout(output, p=self.dropout, training=True)
 
@@ -393,11 +391,10 @@ class SequenceClassifier:
     ):
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Embedding
-        self.embedding = torch.randn(
-            vocab_size, embed_size,
-            requires_grad=True, device=self.device
-        ) * 0.1
+        # Embedding (multiply before requires_grad to keep as leaf)
+        self.embedding = (torch.randn(
+            vocab_size, embed_size, device=self.device
+        ) * 0.1).requires_grad_(True)
 
         # RNN
         if rnn_type == 'lstm':
@@ -414,10 +411,9 @@ class SequenceClassifier:
         # Classifier
         fc_in = hidden_size * (2 if bidirectional else 1)
         std = math.sqrt(2.0 / (fc_in + num_classes))
-        self.fc_weight = torch.randn(
-            num_classes, fc_in,
-            requires_grad=True, device=self.device
-        ) * std
+        self.fc_weight = (torch.randn(
+            num_classes, fc_in, device=self.device
+        ) * std).requires_grad_(True)
         self.fc_bias = torch.zeros(num_classes, requires_grad=True, device=self.device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -519,11 +515,11 @@ def train_imdb_sentiment():
             # Gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
-            # SGD update
+            # SGD update (use .data to keep leaf tensor status)
             with torch.no_grad():
                 for param in model.parameters():
                     if param.grad is not None:
-                        param -= lr * param.grad
+                        param.data -= lr * param.grad
 
             total_loss += loss.item() * len(batch_y)
             total_correct += (logits.argmax(dim=1) == batch_y).sum().item()

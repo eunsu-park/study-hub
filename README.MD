@@ -54,7 +54,7 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Database_Theory](./content/ko/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
 | [Formal_Languages](./content/ko/Formal_Languages/00_Overview.md) | DFA, NFA, 정규식, 문맥자유문법, PDA, 튜링머신, P/NP | 14 |
 | [IoT_Embedded](./content/ko/IoT_Embedded/00_Overview.md) | Raspberry Pi, MQTT, Edge AI, Zigbee/Z-Wave, 센서 퓨전 | 14 |
-| [Machine_Learning](./content/ko/Machine_Learning/00_Overview.md) | 회귀, 앙상블, SVM, 클러스터링, SHAP/LIME, AutoML, Production ML, A/B Testing | 23 |
+| [Machine_Learning](./content/ko/Machine_Learning/00_Overview.md) | 회귀, 앙상블, SVM, 클러스터링, SHAP/LIME, AutoML, Symbolic Regression | 24 |
 | [Networking](./content/ko/Networking/00_Overview.md) | OSI/TCP-IP, 라우팅, 보안, IPv6, SDN, QoS, 멀티캐스트 | 22 |
 | [OS_Theory](./content/ko/OS_Theory/00_Overview.md) | 프로세스, 스케줄링, 메모리, 파일시스템 | 18 |
 | [PostgreSQL](./content/ko/PostgreSQL/00_Overview.md) | SQL, JSON, 복제, 파티셔닝, FTS, 보안/RLS | 20 |
