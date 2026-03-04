@@ -12,8 +12,8 @@ From programming fundamentals to plasma physics — a working notebook of what I
 
 ```
 ├── content/          # Study materials / 학습 자료 Markdown
-│   ├── ko/           # Korean (55 topics) / 한국어 (55개 토픽)
-│   ├── en/           # English (55 topics) / 영어 (55개 토픽)
+│   ├── ko/           # Korean (56 topics) / 한국어 (56개 토픽)
+│   ├── en/           # English (56 topics) / 영어 (56개 토픽)
 │   ├── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
 │   └── learning_paths.yaml  # Cross-topic curricula / 학습 경로 정의
 │
@@ -59,6 +59,7 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Networking](./content/ko/Networking/00_Overview.md) | OSI/TCP-IP, 라우팅, 보안, IPv6, SDN, QoS, 멀티캐스트 | 22 |
 | [OS_Theory](./content/ko/OS_Theory/00_Overview.md) | 프로세스, 스케줄링, 메모리, 파일시스템 | 18 |
 | [PostgreSQL](./content/ko/PostgreSQL/00_Overview.md) | SQL, JSON, 복제, 파티셔닝, FTS, 보안/RLS | 20 |
+| [Probability_and_Statistics](./content/ko/Probability_and_Statistics/00_Overview.md) | 확률론, 통계적 추론, 이산/연속 분포, 베이지안, 확률 과정 | 18 |
 | [Rust](./content/ko/Rust/00_Overview.md) | 소유권, 차용, 라이프타임, 트레이트, 동시성, async/await | 18 |
 | [Security](./content/ko/Security/00_Overview.md) | CIA Triad, 암호학, TLS, OWASP, 인증/인가, 컨테이너 보안 | 16 |
 | [Software_Engineering](./content/ko/Software_Engineering/00_Overview.md) | SDLC, 애자일, UML, 품질보증, DevOps, 유지보수 | 16 |
@@ -103,11 +104,15 @@ From programming fundamentals to plasma physics — a working notebook of what I
 
 | Path / 경로 | Topics / 토픽 |
 |---|---|
-| Full Stack Developer / 풀스택 개발자 | Programming → Python → Web_Development → Git → Docker → PostgreSQL → Backend_Frameworks → Frontend_Frameworks → GraphQL → System_Design |
-| Machine Learning Engineer / 머신러닝 엔지니어 | Programming → Python → Data_Science → Machine_Learning → Math_for_AI → Deep_Learning → LLM_and_NLP → Foundation_Models → Reinforcement_Learning → MLOps |
+| Full Stack Developer / 풀스택 개발자 | Programming → Python → Web_Development → Git → Docker → PostgreSQL → Backend_Frameworks → Frontend_Frameworks → GraphQL → Cloud_Computing → System_Design |
+| Machine Learning Engineer / 머신러닝 엔지니어 | Programming → Python → Data_Science → Machine_Learning → Math_for_AI → Deep_Learning → Computer_Vision → LLM_and_NLP → Foundation_Models → Reinforcement_Learning → MLOps |
 | Systems Programmer / 시스템 프로그래머 | Programming → C_Programming → CPP → Rust → Linux → Shell_Script → OS_Theory → Computer_Architecture → Compiler_Design → Algorithm |
 | Space Physics Specialist / 우주물리학 전문가 | Calculus_and_Differential_Equations → Mathematical_Methods → Electrodynamics → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
 | Computer Science Foundations / 컴퓨터 과학 기초 | Programming → Python → Algorithm → Formal_Languages → Database_Theory → OS_Theory → Networking → Computer_Architecture → Software_Engineering → Security |
+| Cybersecurity Engineer / 사이버보안 엔지니어 | Linux → Networking → Security → Cryptography_Theory → Shell_Script → Docker → Cloud_Computing |
+| Embedded & IoT Engineer / 임베디드 & IoT 엔지니어 | C_Programming → Computer_Architecture → OS_Theory → IoT_Embedded → Networking → Control_Theory → Signal_Processing |
+| Data Infrastructure Engineer / 데이터 인프라 엔지니어 | Python → PostgreSQL → Database_Theory → Data_Engineering → Docker → Cloud_Computing → System_Design |
+| Scientific Computing Specialist / 과학 계산 전문가 | Python → Calculus_and_Differential_Equations → Probability_and_Statistics → Mathematical_Methods → Numerical_Simulation → Signal_Processing → Data_Science |
 
 ---
 

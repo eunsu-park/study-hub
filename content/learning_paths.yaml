@@ -21,6 +21,7 @@ paths:
       - Backend_Frameworks
       - Frontend_Frameworks
       - GraphQL
+      - Cloud_Computing
       - System_Design
 
   ml_engineer:
@@ -39,6 +40,7 @@ paths:
       - Machine_Learning
       - Math_for_AI
       - Deep_Learning
+      - Computer_Vision
       - LLM_and_NLP
       - Foundation_Models
       - Reinforcement_Learning
@@ -104,3 +106,75 @@ paths:
       - Computer_Architecture
       - Software_Engineering
       - Security
+
+  cybersecurity:
+    label:
+      en: "Cybersecurity Engineer"
+      ko: "사이버보안 엔지니어"
+    description:
+      en: "Security fundamentals to advanced penetration testing and defense"
+      ko: "보안 기초부터 고급 침투 테스트 및 방어까지"
+    icon: "link"
+    color: "#20c997"
+    topics:
+      - Linux
+      - Networking
+      - Security
+      - Cryptography_Theory
+      - Shell_Script
+      - Docker
+      - Cloud_Computing
+
+  embedded_iot:
+    label:
+      en: "Embedded & IoT Engineer"
+      ko: "임베디드 & IoT 엔지니어"
+    description:
+      en: "From C programming to embedded systems and IoT"
+      ko: "C 프로그래밍부터 임베디드 시스템과 IoT까지"
+    icon: "graph"
+    color: "#e83e8c"
+    topics:
+      - C_Programming
+      - Computer_Architecture
+      - OS_Theory
+      - IoT_Embedded
+      - Networking
+      - Control_Theory
+      - Signal_Processing
+
+  data_infrastructure:
+    label:
+      en: "Data Infrastructure Engineer"
+      ko: "데이터 인프라 엔지니어"
+    description:
+      en: "Build scalable data platforms from databases to pipelines"
+      ko: "데이터베이스에서 파이프라인까지 확장 가능한 데이터 플랫폼 구축"
+    icon: "dashboard"
+    color: "#0dcaf0"
+    topics:
+      - Python
+      - PostgreSQL
+      - Database_Theory
+      - Data_Engineering
+      - Docker
+      - Cloud_Computing
+      - System_Design
+
+  scientific_computing:
+    label:
+      en: "Scientific Computing Specialist"
+      ko: "과학 계산 전문가"
+    description:
+      en: "Mathematical foundations to numerical simulation and HPC"
+      ko: "수학 기초부터 수치 시뮬레이션과 고성능 컴퓨팅까지"
+    icon: "path"
+    color: "#6610f2"
+    topics:
+      - Python
+      - Calculus_and_Differential_Equations
+      - Probability_and_Statistics
+      - Mathematical_Methods
+      - Numerical_Simulation
+      - Signal_Processing
+      - Data_Science

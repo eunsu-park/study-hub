@@ -1,8 +1,8 @@
 # Exercises (연습문제 풀이)
 
-Practice problem solutions for all study topics. Each file corresponds to a lesson and contains working solutions to the exercises in that lesson.
+Practice problem solutions for study topics (55 topics, ~913 files). Each file corresponds to a lesson and contains working solutions to the exercises in that lesson.
 
-각 토픽의 레슨별 연습문제 풀이 코드입니다. 레슨의 Exercises / Practice Problems 섹션에 대한 풀이를 제공합니다.
+각 토픽의 레슨별 연습문제 풀이 코드입니다 (55개 토픽, ~913개 파일). 레슨의 Exercises / Practice Problems 섹션에 대한 풀이를 제공합니다.
 
 ## Directory Structure
 

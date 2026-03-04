@@ -244,6 +244,13 @@ topics:
       en: "Calculus fundamentals, multivariable calculus, ODE, PDE, and modeling"
       ko: "미적분학 기초, 다변수 미적분, 상미분방정식, 편미분방정식 및 모델링"
 
+  Probability_and_Statistics:
+    tier: intermediate
+    prerequisites: [Python]
+    description:
+      en: "Probability theory, statistical inference, and stochastic processes"
+      ko: "확률론, 통계적 추론, 확률 과정"
+
   Rust:
     tier: intermediate
     prerequisites: [Programming]

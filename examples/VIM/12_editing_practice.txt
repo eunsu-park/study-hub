@@ -1,0 +1,167 @@
+================================================================================
+  VIM ESSENTIAL EDITING — Practice File
+================================================================================
+
+  Instructions: Open this file in Vim and practice the editing commands.
+  Each exercise focuses on a core editing operation.
+
+================================================================================
+  EXERCISE 1: Delete Commands (d, x, dd, D)
+================================================================================
+
+  x   — delete character under cursor
+  X   — delete character before cursor
+  dw  — delete word
+  db  — delete word backward
+  dd  — delete entire line
+  D   — delete from cursor to end of line
+  d$  — same as D
+  d0  — delete from cursor to start of line
+
+  Practice deleting characters with x:
+  Heeello Wooorld Viiiim
+
+  Practice deleting words with dw (place cursor on first letter):
+  DELETE this DELETE word DELETE and DELETE this
+  Expected result: "this word and this"
+
+  Practice dd — delete these 3 lines (put cursor on first, type 3dd):
+  --- delete me ---
+  --- delete me ---
+  --- delete me ---
+
+  Practice D — delete from cursor to end:
+  Keep this REMOVE EVERYTHING AFTER THIS
+
+================================================================================
+  EXERCISE 2: Change Commands (c, C, cc, s, S)
+================================================================================
+
+  cw  — change word (delete word + enter Insert mode)
+  cb  — change word backward
+  cc  — change entire line
+  C   — change from cursor to end of line
+  s   — substitute character (delete char + Insert mode)
+  S   — substitute entire line (same as cc)
+
+  Practice cw — change the WRONG words to correct ones:
+  The WRONG fox jumped over the WRONG dog
+  Expected: "The quick fox jumped over the lazy dog"
+
+  Practice cc — change the entire line below:
+  This line needs to be completely rewritten.
+  (Use cc, then type: "Vim editing is powerful and efficient.")
+
+  Practice C — change from cursor to end:
+  Keep this part but CHANGE EVERYTHING AFTER HERE
+  (Place cursor on "CHANGE", press C, type: "this is new text.")
+
+================================================================================
+  EXERCISE 3: Yank (Copy) and Put (Paste)
+================================================================================
+
+  yy  — yank (copy) entire line
+  yw  — yank word
+  y$  — yank to end of line
+  p   — put (paste) after cursor
+  P   — put before cursor
+  xp  — transpose two characters (delete + put)
+
+  Practice yy and p:
+  1. Yank this line with yy.
+  2. Move down and press p to paste it below.
+
+  (Put the duplicate here)
+
+  Practice yw and p:
+  Copy the word COPY and paste it at the X:
+  The word X should appear here.
+
+  Practice xp to fix transposition:
+  teh → the
+  recieve → receive
+  (Place cursor on first wrong character, press xp)
+
+================================================================================
+  EXERCISE 4: Undo, Redo, and Repeat
+================================================================================
+
+  u       — undo last change
+  Ctrl-r  — redo (undo the undo)
+  .       — repeat last change
+  U       — undo all changes on current line
+
+  Practice undo chain:
+  1. Delete the first word on this line (dw): ONE TWO THREE FOUR FIVE
+  2. Press u to undo → "ONE" reappears
+  3. Press Ctrl-r to redo → "ONE" gone again
+  4. Press u three times → all words restored
+
+  Practice dot repeat:
+  1. On the first line below, delete the first word (dw)
+  2. Move to the next line, press . (dot) to repeat
+  3. Continue with . on each line
+  REMOVE keep this text
+  REMOVE keep this text too
+  REMOVE and this as well
+  REMOVE last one here
+
+  Expected: The word "REMOVE" is deleted from each line.
+
+================================================================================
+  EXERCISE 5: Join, Indent, and Format
+================================================================================
+
+  J       — join current line with next (add space)
+  gJ      — join without adding space
+  >>      — indent line right
+  <<      — indent line left
+  ==      — auto-indent line
+  gq{m}   — format text to textwidth
+
+  Practice J — join these lines into one:
+  This sentence
+  is split across
+  multiple lines
+  and should be one.
+  (Place cursor on first line, press 3J)
+
+  Practice >> and << — fix the indentation:
+  function greet(name) {
+  console.log("Hello, " + name);
+  if (name === "Vim") {
+  console.log("Great choice!");
+  }
+  }
+  (Select inner lines with jj, then >> to indent, or use = for auto-indent)
+
+================================================================================
+  EXERCISE 6: Combining Operators with Counts
+================================================================================
+
+  Counts multiply any command. [count][operator][motion] or [operator][count][motion]
+
+  3dw   — delete 3 words
+  5dd   — delete 5 lines
+  2yy   — yank 2 lines
+  4>>   — indent 4 lines
+  3x    — delete 3 characters
+
+  Practice 3dw on this line:
+  delete delete delete keep these words
+
+  Practice 5dd — delete these 5 lines:
+  line 1 to delete
+  line 2 to delete
+  line 3 to delete
+  line 4 to delete
+  line 5 to delete
+
+  Practice 2yy and p — copy 2 lines:
+  Copy me first
+  Copy me second
+  (Yank both lines with 2yy, move down, paste with p)
+
+  Challenge: Using only counts and operators, transform this:
+  aaabbbccc → ccc
+  (Answer: 6x or d6l or 2d3l)
