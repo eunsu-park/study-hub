@@ -586,7 +586,7 @@ def demo_copy_task():
     fig.tight_layout()
 
     save_path = (
-        "/opt/projects/01_Personal/02_Study_Hub/study_hub/examples/"
+        "/opt/projects/01_Personal/02_Study_Hub/study-hub/examples/"
         "Deep_Learning/implementations/07_Transformer/transformer_copy_task.png"
     )
     plt.savefig(save_path, dpi=150)

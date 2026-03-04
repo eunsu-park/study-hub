@@ -12,8 +12,8 @@ From programming fundamentals to plasma physics — a working notebook of what I
 
 ```
 ├── content/          # Study materials / 학습 자료 Markdown
-│   ├── ko/           # Korean (56 topics) / 한국어 (56개 토픽)
-│   ├── en/           # English (56 topics) / 영어 (56개 토픽)
+│   ├── ko/           # Korean (55 topics) / 한국어 (55개 토픽)
+│   ├── en/           # English (55 topics) / 영어 (55개 토픽)
 │   ├── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
 │   └── learning_paths.yaml  # Cross-topic curricula / 학습 경로 정의
 │
@@ -37,7 +37,6 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Programming](./content/ko/Programming/00_Overview.md) | 프로그래밍 개념, 패러다임, 디자인 패턴, 클린 코드, 테스팅 | 16 |
 | [Python](./content/ko/Python/00_Overview.md) | 파이썬 고급 문법, 테스트, 패키징 | 16 |
 | [Shell_Script](./content/ko/Shell_Script/00_Overview.md) | Bash 심화, 매개변수 확장, 프로세스 관리, 배포 자동화 | 16 |
-| [Spanish](./content/ko/Spanish/00_Overview.md) | 스페인어 문법/어휘, 접속법, DELE/SIELE | 25 |
 | [VIM](./content/ko/VIM/00_Overview.md) | 모달 편집, 모션, 매크로, 플러그인, Neovim/LSP | 14 |
 | [Web_Development](./content/ko/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, SEO, Flask | 16 |
 

@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (12 topics)
+  # Tier 1 — Beginner (11 topics)
   Programming:
     tier: beginner
     description:
@@ -119,13 +119,7 @@ topics:
       en: "Modal editing, motions, text objects, plugins, and Neovim"
       ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
 
-  Spanish:
-    tier: beginner
-    description:
-      en: "25-lesson progressive Spanish course: pronunciation, grammar, vocabulary, culture, and exam prep (A1-C2)"
-      ko: "25개 레슨 단계별 스페인어 과정: 발음, 문법, 어휘, 문화, 시험 준비 (A1-C2)"
-
-  # Tier 2 — Intermediate (18 topics)
+  # Tier 2 — Intermediate (19 topics)
   C_Programming:
     tier: intermediate
     prerequisites: [Programming]
