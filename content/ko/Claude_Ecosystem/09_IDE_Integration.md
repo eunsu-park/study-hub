@@ -147,7 +147,7 @@ Claude Code 패널을 여는 방법은 여러 가지입니다:
 │─────────────────────────────────────│
 │                                     │
 │  Session: my-project (active)       │
-│  Model: claude-sonnet-4-20250514    │
+│  Model: claude-sonnet-4-6    │
 │  Mode: normal                       │
 │                                     │
 │  You: Refactor the UserService      │
