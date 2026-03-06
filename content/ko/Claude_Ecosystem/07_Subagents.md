@@ -276,6 +276,7 @@ Task(
 | 속도 | 가장 빠름 | 빠름 | 보통 |
 | 토큰 비용 | 최저 | 중간 | 최고 |
 | 기본 모델 | sonnet | sonnet | sonnet |
+| Worktree 격리 | 아니오 | 아니오 | 예 |
 
 ---
 
@@ -292,6 +293,7 @@ Task(
     model: str,               # "opus" | "sonnet" | "haiku" (기본값: "sonnet")
     max_turns: int,           # 최대 대화 턴 수 (기본값은 유형에 따라 다름)
     run_in_background: bool,  # 비동기 실행 (기본값: false)
+    isolation: str,           # "none" | "worktree" (기본값: "none")
 )
 ```
 
@@ -334,9 +336,9 @@ Task(
 
 서브에이전트를 실행하는 모델을 선택합니다:
 
-- **`sonnet`** (기본값): 속도, 비용, 능력의 좋은 균형. 대부분의 작업에 사용.
-- **`opus`**: 가장 능력 있는 모델. 복잡한 추론, 아키텍처 결정 또는 탁월한 품질이 필요한 작업에 사용.
-- **`haiku`**: 가장 빠르고 저렴. 포맷팅이나 간단한 검색-교체 같은 단순하고 잘 정의된 작업에 사용.
+- **`sonnet`** (기본값): 속도, 비용, 능력의 좋은 균형. 대부분의 작업에 사용. (현재 `claude-sonnet-4-6`)
+- **`opus`**: 가장 능력 있는 모델. 복잡한 추론, 아키텍처 결정 또는 탁월한 품질이 필요한 작업에 사용. (현재 `claude-opus-4-6`)
+- **`haiku`**: 가장 빠르고 저렴. 포맷팅이나 간단한 검색-교체 같은 단순하고 잘 정의된 작업에 사용. (현재 `claude-haiku-4-5`)
 
 ```python
 # 복잡한 아키텍처 분석에 opus 사용
@@ -381,6 +383,55 @@ Task(
 #### `run_in_background`
 
 `true`로 설정하면, 서브에이전트가 비동기적으로 실행됩니다. 서브에이전트가 백그라운드에서 처리하는 동안 메인 세션은 계속 작업합니다. 자세한 내용은 6장을 참조하세요.
+
+#### `isolation`
+
+서브에이전트의 파일시스템 격리를 제어합니다. 기본값은 `"none"`이며 (서브에이전트가 메인 세션과 동일한 작업 디렉토리에서 동작), `"worktree"`로 설정하면 **격리된 git worktree**에서 서브에이전트가 실행됩니다 — `git worktree add`를 통해 생성된 저장소의 임시 복사본입니다. 이를 통해 진정한 파일시스템 격리가 이루어져, 서브에이전트가 메인 작업 트리나 다른 병렬 서브에이전트에 영향을 주지 않고 자유롭게 파일을 수정할 수 있습니다.
+
+**Worktree 격리 동작 방식:**
+
+1. Claude Code가 새 git worktree를 생성합니다 (자체 작업 디렉토리와 브랜치를 가진 저장소의 경량 복제)
+2. 서브에이전트가 해당 worktree 내에서 전적으로 실행됩니다
+3. 서브에이전트가 **변경을 하지 않은 경우**, worktree가 자동으로 정리됩니다
+4. 서브에이전트가 **변경을 한 경우**, worktree 경로와 브랜치 이름이 메인 세션에 반환되어 검토, 병합 또는 폐기할 수 있습니다
+
+```python
+# 격리된 서브에이전트: 안전한 병렬 리팩토링
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="""src/api/users.py를 전체적으로 async/await를 사용하도록 리팩토링해줘.
+    모든 데이터베이스 호출을 async SQLAlchemy를 사용하도록 업데이트해줘.
+    리팩토링 검증을 위해 테스트를 실행해줘."""
+)
+# 반환: {"worktree_path": "/repo/.claude/worktrees/abc123",
+#         "branch": "worktree/abc123"}
+```
+
+**Worktree 격리를 사용해야 하는 경우:**
+
+- **병렬 코드 수정**: 여러 서브에이전트가 겹치는 파일을 편집할 때 병합 충돌 없이 작업
+- **실험적 변경**: 메인 작업 트리를 건드리지 않고 위험한 리팩토링 시도
+- **A/B 구현**: 두 서브에이전트에게 각기 다른 접근 방식을 실행시키고, 결과를 비교한 뒤 더 나은 것을 병합
+
+```python
+# A/B 비교: 동일한 문제에 대한 두 가지 접근 방식
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="src/api/에 Redis를 사용한 캐싱 구현..."
+)
+
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="src/api/에 인메모리 LRU 캐시를 사용한 캐싱 구현..."
+)
+
+# 메인 세션이 두 worktree 브랜치를 비교하고 더 나은 것을 병합
+```
+
+**요구사항**: 프로젝트가 git 저장소여야 합니다. git이 아닌 프로젝트에서는 worktree 격리를 사용할 수 없습니다.
 
 ---
 
