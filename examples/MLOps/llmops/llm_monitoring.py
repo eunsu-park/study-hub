@@ -171,9 +171,9 @@ class CostTracker:
     """Track LLM API usage and costs."""
 
     PRICING = {
-        "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
-        "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
-        "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
+        "claude-opus-4-6": {"input": 5.0, "output": 25.0},
+        "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+        "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
     }
 
     def __init__(self, daily_budget=50.0):
@@ -239,11 +239,11 @@ def demo_cost():
 
     # Simulate API calls
     calls = [
-        ("claude-haiku-4-5-20251001", 150, 200),
-        ("claude-haiku-4-5-20251001", 100, 150),
-        ("claude-sonnet-4-20250514", 500, 800),
-        ("claude-sonnet-4-20250514", 300, 600),
-        ("claude-opus-4-20250514", 1000, 2000),
+        ("claude-haiku-4-5", 150, 200),
+        ("claude-haiku-4-5", 100, 150),
+        ("claude-sonnet-4-6", 500, 800),
+        ("claude-sonnet-4-6", 300, 600),
+        ("claude-opus-4-6", 1000, 2000),
     ]
 
     print("\nRecording API calls:")
