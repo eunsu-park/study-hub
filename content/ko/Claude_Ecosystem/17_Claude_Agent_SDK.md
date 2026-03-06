@@ -4,7 +4,7 @@
 
 ---
 
-Claude Agent SDK(`claude-code-sdk`)는 Claude Code CLI를 구동하는 것과 동일한 에이전트 기능에 프로그래밍 방식으로 접근할 수 있게 해줍니다. 레슨 16에서 수동으로 구축한 저수준 도구 사용 루프 대신, Agent SDK는 고수준 인터페이스를 제공합니다: 작업을 정의하고, 에이전트의 도구와 권한을 구성하고, 에이전트 루프가 나머지를 처리하도록 합니다 -- 생각하고, 행동하고, 관찰하고, 작업이 완료될 때까지 반복합니다. 이 레슨에서는 SDK의 아키텍처, 핵심 개념, 구성, 그리고 실용적인 사용 패턴을 다룹니다.
+Claude Agent SDK는 Claude Code CLI를 구동하는 것과 동일한 에이전트 기능에 프로그래밍 방식으로 접근할 수 있게 해줍니다. Agent SDK는 **Python**(`claude-code-sdk`)과 **TypeScript**(`@anthropic-ai/claude-code-sdk`) 모두를 지원합니다. 레슨 16에서 수동으로 구축한 저수준 도구 사용 루프 대신, Agent SDK는 고수준 인터페이스를 제공합니다: 작업을 정의하고, 에이전트의 도구와 권한을 구성하고, 에이전트 루프가 나머지를 처리하도록 합니다 -- 생각하고, 행동하고, 관찰하고, 작업이 완료될 때까지 반복합니다. 이 레슨에서는 SDK의 아키텍처, 핵심 개념, 구성, 그리고 실용적인 사용 패턴을 다룹니다.
 
 **난이도**: ⭐⭐⭐
 
@@ -479,7 +479,7 @@ from claude_code_sdk import ClaudeCodeOptions
 
 options = ClaudeCodeOptions(
     # 모델 선택
-    model="claude-sonnet-4-20250514",        # 사용할 모델
+    model="claude-sonnet-4-6",        # 사용할 모델
 
     # 턴 제한
     max_turns=25,                             # 최대 에이전트 루프 반복 횟수
@@ -513,13 +513,13 @@ options = ClaudeCodeOptions(
 
 ```python
 # 복잡한 작업에는 가장 유능한 모델 사용
-options = ClaudeCodeOptions(model="claude-opus-4-20250514")
+options = ClaudeCodeOptions(model="claude-opus-4-6")
 
 # 균형 잡힌 성능/비용에는 Sonnet 사용
-options = ClaudeCodeOptions(model="claude-sonnet-4-20250514")
+options = ClaudeCodeOptions(model="claude-sonnet-4-6")
 
 # 간단하고 빠른 작업에는 Haiku 사용
-options = ClaudeCodeOptions(model="claude-haiku-3-5-20241022")
+options = ClaudeCodeOptions(model="claude-haiku-4-5")
 ```
 
 ### 7.3 권한 모드
@@ -939,9 +939,9 @@ MCP 서버의 stdio 및 HTTP 전송 모두로 테스트하십시오.
 
 ## 13. 참고 자료
 
-- Claude Code SDK 문서 - https://docs.anthropic.com/en/docs/claude-code/sdk
-- Claude Code SDK Python 패키지 - https://pypi.org/project/claude-code-sdk/
-- Claude Code SDK TypeScript 패키지 - https://www.npmjs.com/package/@anthropic-ai/claude-code-sdk
+- Claude Agent SDK 문서 - https://docs.anthropic.com/en/docs/claude-code/sdk
+- Claude Agent SDK Python 패키지 - https://pypi.org/project/claude-code-sdk/
+- Claude Agent SDK TypeScript 패키지 - https://www.npmjs.com/package/@anthropic-ai/claude-code-sdk
 - Claude Code 아키텍처 - https://docs.anthropic.com/en/docs/claude-code/overview
 - 에이전트 루프 문서 - https://docs.anthropic.com/en/docs/claude-code/sdk#the-agent-loop
 - MCP 통합 - https://docs.anthropic.com/en/docs/claude-code/mcp
