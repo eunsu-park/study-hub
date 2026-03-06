@@ -52,18 +52,19 @@ Claude is available in three model tiers, each optimized for different use cases
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  ┌───────────────────────────────────────────────┐                 │
-│  │  Claude Opus 4                                 │                 │
+│  │  Claude Opus 4.6                               │                 │
 │  │  "The Thinker"                                │                 │
 │  │                                               │                 │
 │  │  • Most capable model in the Claude family    │                 │
 │  │  • Best for complex reasoning, math, coding   │                 │
 │  │  • Excels at multi-step analysis              │                 │
+│  │  • 1M token context window                    │                 │
 │  │  • Ideal for: research, architecture design,  │                 │
 │  │    difficult debugging, nuanced writing       │                 │
 │  └───────────────────────────────────────────────┘                 │
 │                                                                     │
 │  ┌───────────────────────────────────────────────┐                 │
-│  │  Claude Sonnet 4                               │                 │
+│  │  Claude Sonnet 4.6                             │                 │
 │  │  "The Workhorse"                              │                 │
 │  │                                               │                 │
 │  │  • Balanced intelligence and speed            │                 │
@@ -74,7 +75,7 @@ Claude is available in three model tiers, each optimized for different use cases
 │  └───────────────────────────────────────────────┘                 │
 │                                                                     │
 │  ┌───────────────────────────────────────────────┐                 │
-│  │  Claude Haiku                                  │                 │
+│  │  Claude Haiku 4.5                              │                 │
 │  │  "The Speedster"                              │                 │
 │  │                                               │                 │
 │  │  • Fastest and most cost-efficient            │                 │
@@ -93,21 +94,21 @@ Claude is available in three model tiers, each optimized for different use cases
 
 ### 1.1 When to Use Each Model
 
-**Claude Opus 4** -- use when the task demands the highest reasoning capability:
+**Claude Opus 4.6** -- use when the task demands the highest reasoning capability:
 - Complex multi-step mathematical proofs
 - Architectural decisions involving many trade-offs
 - Debugging subtle concurrency or memory issues
 - Long-form technical writing requiring deep domain expertise
 - Tasks where getting it right matters more than speed
 
-**Claude Sonnet 4** -- the default choice for most development work:
+**Claude Sonnet 4.6** -- the default choice for most development work:
 - Code generation and refactoring
 - Code review and bug identification
 - Document summarization and translation
 - API integration and boilerplate generation
 - Interactive coding sessions in Claude Code
 
-**Claude Haiku** -- use for high-volume, latency-sensitive tasks:
+**Claude Haiku 4.5** -- use for high-volume, latency-sensitive tasks:
 - Classifying support tickets or user intent
 - Extracting structured data from text
 - Simple question answering over known content
@@ -120,13 +121,13 @@ Claude is available in three model tiers, each optimized for different use cases
 
 ```
 ┌──────────────────────┬──────────────┬──────────────┬──────────────┐
-│ Capability           │ Claude Opus 4│Claude Sonnet4│ Claude Haiku │
+│ Capability           │Claude Opus4.6│ClaudeSonnet46│Claude Haiku45│
 ├──────────────────────┼──────────────┼──────────────┼──────────────┤
 │ Intelligence Level   │ Highest      │ High         │ Good         │
 │ Reasoning Depth      │ ★★★★★       │ ★★★★☆       │ ★★★☆☆       │
 │ Coding Ability       │ ★★★★★       │ ★★★★☆       │ ★★★☆☆       │
 │ Speed (tokens/sec)   │ Moderate     │ Fast         │ Fastest      │
-│ Context Window       │ 200K tokens  │ 200K tokens  │ 200K tokens  │
+│ Context Window       │ 1M tokens    │ 200K tokens  │ 200K tokens  │
 │ Max Output Tokens    │ 32,000       │ 16,000       │ 8,192        │
 │ Vision (images)      │ Yes          │ Yes          │ Yes          │
 │ Extended Thinking    │ Yes          │ Yes          │ No           │
@@ -142,7 +143,7 @@ Claude is available in three model tiers, each optimized for different use cases
 
 ### 2.1 Context Window Deep Dive
 
-All Claude models share a 200K token context window (approximately 150,000 words or 500 pages of text). Understanding how to use this effectively is critical for cost management.
+Claude Sonnet 4.6 and Haiku 4.5 have a 200K token context window (approximately 150,000 words or 500 pages of text), while Claude Opus 4.6 has a 1M token context window (approximately 750,000 words or 2,500 pages). Understanding how to use this effectively is critical for cost management.
 
 ```python
 import anthropic
@@ -151,8 +152,8 @@ client = anthropic.Anthropic()
 
 # Check model capabilities programmatically
 # The context window applies to the sum of input + output tokens
-# For a 200K context window:
-#   - Input tokens + Output tokens <= 200,000 (approximate)
+# For Sonnet/Haiku (200K) or Opus (1M):
+#   - Input tokens + Output tokens <= context window size
 #   - Practical input limit depends on desired output length
 
 # Example: estimating token count before sending
@@ -160,7 +161,7 @@ def estimate_tokens(text: str) -> int:
     """Rough estimate: ~4 characters per token for English text."""
     return len(text) // 4
 
-# A 200K context window means you can fit approximately:
+# A 200K context window (Sonnet/Haiku) means you can fit approximately:
 examples = {
     "A short prompt": 50,
     "A typical code file (500 lines)": 2_000,
@@ -170,7 +171,7 @@ examples = {
     "Maximum practical input": 180_000,  # Leave room for output
 }
 
-print("Token budget for 200K context window:")
+print("Token budget for 200K context window (Sonnet/Haiku; Opus has 1M):")
 print(f"{'Content':<40} {'Tokens':>10} {'% of Budget':>12}")
 print("-" * 65)
 for desc, tokens in examples.items():
@@ -189,7 +190,7 @@ client = anthropic.Anthropic()
 
 # Using extended thinking for a complex reasoning task
 response = client.messages.create(
-    model="claude-opus-4-20250514",
+    model="claude-opus-4-6",
     max_tokens=16000,
     thinking={
         "type": "enabled",
@@ -230,18 +231,18 @@ Claude API pricing is based on tokens -- the units of text that models process. 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Claude API Pricing (per million tokens)           │
 ├──────────────────┬──────────────┬──────────────┬───────────────────┤
-│                  │ Claude Opus 4│Claude Sonnet4│ Claude Haiku      │
+│                  │Claude Opus4.6│ClaudeSonnet46│ Claude Haiku 4.5  │
 ├──────────────────┼──────────────┼──────────────┼───────────────────┤
-│ Input tokens     │   $15.00     │    $3.00     │     $0.80         │
-│ Output tokens    │   $75.00     │   $15.00     │     $4.00         │
+│ Input tokens     │    $5.00     │    $3.00     │     $1.00         │
+│ Output tokens    │   $25.00     │   $15.00     │     $5.00         │
 ├──────────────────┼──────────────┼──────────────┼───────────────────┤
 │ Prompt Caching:  │              │              │                   │
-│  Cache write     │   $18.75     │    $3.75     │     $1.00         │
-│  Cache read      │    $1.50     │    $0.30     │     $0.08         │
+│  Cache write     │    $6.25     │    $3.75     │     $1.25         │
+│  Cache read      │    $0.50     │    $0.30     │     $0.10         │
 ├──────────────────┼──────────────┼──────────────┼───────────────────┤
 │ Batch API:       │              │              │                   │
-│  Input tokens    │    $7.50     │    $1.50     │     $0.40         │
-│  Output tokens   │   $37.50     │    $7.50     │     $2.00         │
+│  Input tokens    │    $2.50     │    $1.50     │     $0.50         │
+│  Output tokens   │   $12.50     │    $7.50     │     $2.50         │
 └──────────────────┴──────────────┴──────────────┴───────────────────┘
 
 Notes:
@@ -271,16 +272,16 @@ class ModelPricing:
 # Define pricing for each model
 PRICING = {
     "opus": ModelPricing(
-        name="Claude Opus 4",
-        input_per_mtok=15.00,
-        output_per_mtok=75.00,
-        cache_write_per_mtok=18.75,
-        cache_read_per_mtok=1.50,
-        batch_input_per_mtok=7.50,
-        batch_output_per_mtok=37.50,
+        name="Claude Opus 4.6",
+        input_per_mtok=5.00,
+        output_per_mtok=25.00,
+        cache_write_per_mtok=6.25,
+        cache_read_per_mtok=0.50,
+        batch_input_per_mtok=2.50,
+        batch_output_per_mtok=12.50,
     ),
     "sonnet": ModelPricing(
-        name="Claude Sonnet 4",
+        name="Claude Sonnet 4.6",
         input_per_mtok=3.00,
         output_per_mtok=15.00,
         cache_write_per_mtok=3.75,
@@ -289,13 +290,13 @@ PRICING = {
         batch_output_per_mtok=7.50,
     ),
     "haiku": ModelPricing(
-        name="Claude Haiku",
-        input_per_mtok=0.80,
-        output_per_mtok=4.00,
-        cache_write_per_mtok=1.00,
-        cache_read_per_mtok=0.08,
-        batch_input_per_mtok=0.40,
-        batch_output_per_mtok=2.00,
+        name="Claude Haiku 4.5",
+        input_per_mtok=1.00,
+        output_per_mtok=5.00,
+        cache_write_per_mtok=1.25,
+        cache_read_per_mtok=0.10,
+        batch_input_per_mtok=0.50,
+        batch_output_per_mtok=2.50,
     ),
 }
 
@@ -388,12 +389,12 @@ To put the pricing in perspective:
 Relative cost for the same task:
 
   Opus    ████████████████████████████████████████  $1.00 (baseline)
-  Sonnet  ████████                                  $0.20 (5x cheaper)
-  Haiku   ██                                        $0.05 (20x cheaper)
+  Sonnet  ██████████████████████████████            $0.60 (1.7x cheaper)
+  Haiku   ████████                                  $0.20 (5x cheaper)
 
 For the cost of ONE Opus call, you can make:
-  - 5 Sonnet calls, or
-  - 20 Haiku calls
+  - ~1.7 Sonnet calls, or
+  - 5 Haiku calls
 
 This makes model selection one of the most impactful cost levers.
 ```
@@ -464,7 +465,7 @@ OpenAPI 3.0 Specification for our REST API:
 def query_with_caching(user_message: str) -> str:
     """Send a query using prompt caching for the system prompt and API spec."""
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=4096,
         system=[
             {
@@ -532,7 +533,7 @@ ${/* Imagine 10,000+ tokens of code */ ""}`;
 
 async function queryWithCache(userMessage: string): Promise<string> {
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: [
       {
@@ -662,7 +663,7 @@ for product in product_descriptions:
     batch_requests.append({
         "custom_id": product["id"],
         "params": {
-            "model": "claude-haiku-3-5-20241022",
+            "model": "claude-haiku-4-5",
             "max_tokens": 1024,
             "messages": [
                 {
@@ -796,15 +797,15 @@ class ModelConfig:
 # Model configurations
 MODEL_TIERS = {
     TaskComplexity.SIMPLE: ModelConfig(
-        model_id="claude-haiku-3-5-20241022",
+        model_id="claude-haiku-4-5",
         max_tokens=1024,
     ),
     TaskComplexity.MODERATE: ModelConfig(
-        model_id="claude-sonnet-4-20250514",
+        model_id="claude-sonnet-4-6",
         max_tokens=4096,
     ),
     TaskComplexity.COMPLEX: ModelConfig(
-        model_id="claude-opus-4-20250514",
+        model_id="claude-opus-4-6",
         max_tokens=8192,
     ),
 }
@@ -893,9 +894,9 @@ def cascade_query(
                        Returns True if the response is acceptable.
     """
     models = [
-        ("claude-haiku-3-5-20241022", 1024),    # Try cheapest first
-        ("claude-sonnet-4-20250514", 4096),      # Escalate to mid-tier
-        ("claude-opus-4-20250514", 8192),        # Final escalation
+        ("claude-haiku-4-5", 1024),    # Try cheapest first
+        ("claude-sonnet-4-6", 4096),      # Escalate to mid-tier
+        ("claude-opus-4-6", 8192),        # Final escalation
     ]
 
     for model_id, max_tokens in models:
@@ -1013,7 +1014,7 @@ good_prompt = """Review this code. Respond in this exact JSON format:
 
 # GOOD: Using prefilled assistant response to constrain output
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=2048,
     messages=[
         {"role": "user", "content": good_prompt + "\n\n```python\ndef add(a, b): return a + b\n```"},
