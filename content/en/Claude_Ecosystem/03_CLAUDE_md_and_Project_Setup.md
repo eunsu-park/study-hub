@@ -421,7 +421,7 @@ Personal overrides that should not be committed:
       "Bash(docker compose up)"
     ]
   },
-  "model": "claude-opus-4-20250514"
+  "model": "claude-opus-4-6"
 }
 ```
 
@@ -458,7 +458,7 @@ Settings that apply across all your projects:
       "Bash(sudo *)"
     ]
   },
-  "model": "claude-sonnet-4-20250514"
+  "model": "claude-sonnet-4-6"
 }
 ```
 
