@@ -576,9 +576,9 @@ Claude Desktop은 Claude Code CLI와 동일한 프로젝트 수준 설정을 따
 ┌──────────────────────────────────────────┐
 │  Model Selection                         │
 │                                          │
-│  ○ Claude Opus 4     (Most capable)      │
-│  ● Claude Sonnet 4   (Balanced)          │
-│  ○ Claude Haiku 3.5  (Fastest)           │
+│  ○ Claude Opus 4.6     (Most capable)      │
+│  ● Claude Sonnet 4.6   (Balanced)          │
+│  ○ Claude Haiku 4.5  (Fastest)           │
 │                                          │
 │  Extended thinking: [Off ▼]              │
 │  ├── Off                                 │
