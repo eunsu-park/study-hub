@@ -40,8 +40,9 @@ After completing this lesson, you will be able to:
 9. [Practical Walkthrough: Fixing a Bug](#9-practical-walkthrough-fixing-a-bug)
 10. [Working Directory and Project Scope](#10-working-directory-and-project-scope)
 11. [Tips for Effective Use](#11-tips-for-effective-use)
-12. [Exercises](#12-exercises)
-13. [Next Steps](#13-next-steps)
+12. [Recent Features](#12-recent-features)
+13. [Exercises](#13-exercises)
+14. [Next Steps](#14-next-steps)
 
 ---
 
@@ -441,7 +442,7 @@ claude -p "How many TODO comments are in this project?"
 cat error.log | claude -p "Explain this error and suggest a fix"
 
 # Use a specific model
-claude -p "Explain this code" --model claude-opus-4-20250514
+claude -p "Explain this code" --model claude-opus-4-6
 ```
 
 ### Context Management
@@ -494,7 +495,7 @@ Session cost:
   Output tokens: 12,847  ($0.19)
   Total cost:    $0.33
 
-  Model: claude-sonnet-4-20250514
+  Model: claude-sonnet-4-6
   Session duration: 23 minutes
 ```
 
@@ -507,7 +508,7 @@ When things are not working correctly, `/doctor` runs diagnostics:
 
 Checking configuration...
   ✓ Authentication: Valid API key
-  ✓ Model access: claude-sonnet-4-20250514
+  ✓ Model access: claude-sonnet-4-6
   ✓ CLAUDE.md: Found at /Users/you/projects/my-app/CLAUDE.md
   ✓ Settings: Valid JSON
   ✓ Hooks: 2 hooks configured, all valid
@@ -739,7 +740,96 @@ cd ~/projects/backend && claude
 
 ---
 
-## 12. Exercises
+## 12. Recent Features
+
+Claude Code is actively developed with frequent feature additions. Here are notable recent capabilities you should be aware of.
+
+### 12.1 Auto Memory
+
+Claude Code now **automatically saves memories** to the `.claude/` directory within your project. Memories persist across sessions and include project patterns, conventions, and user preferences that Claude Code has learned.
+
+- **Project memories** are stored at `~/.claude/projects/<project-path>/memory/`
+- Memories are loaded at the start of each session, giving Claude Code institutional knowledge about your codebase
+- No manual configuration needed — Claude Code observes and remembers patterns automatically
+
+```
+# Example: Claude Code remembers your testing preference
+Session 1: "Always run pytest with -v flag"
+Session 2: Claude Code automatically uses `pytest -v` without being told
+```
+
+### 12.2 Fast Mode
+
+Toggle with the `/fast` command during a session. Fast mode uses the **same Claude model** but with faster output generation. This is useful for straightforward tasks where maximum output speed is preferred over deliberative reasoning.
+
+```
+> /fast
+
+Fast mode enabled. Output generation is now optimized for speed.
+Model: claude-sonnet-4-6 (fast output)
+```
+
+Fast mode does NOT switch to a different model — it adjusts how the current model generates output.
+
+### 12.3 Voice Input (STT)
+
+Claude Code supports **voice-to-text input** in 20 languages. Instead of typing instructions, you can speak them. This is particularly useful for:
+
+- Describing complex tasks conversationally
+- Dictating long requirements
+- Accessibility (hands-free interaction)
+
+Voice input is processed locally and converted to text before being sent to Claude.
+
+### 12.4 PDF Reading
+
+The Read tool can now **read PDF files** directly. For large PDFs (more than 10 pages), use the `pages` parameter to specify page ranges:
+
+```
+> Read the architecture diagram in docs/system-design.pdf
+
+Claude:
+  Tool: Read("docs/system-design.pdf", pages="1-5")
+
+  "The system design document describes a microservices
+   architecture with 4 main services: ..."
+```
+
+- Maximum **20 pages** per request
+- For PDFs with 10 or fewer pages, the entire file is read automatically
+- Supports text extraction and visual layout interpretation
+
+### 12.5 Jupyter Notebook Support
+
+Claude Code has enhanced support for **Jupyter notebooks** (`.ipynb` files):
+
+- The **Read** tool can read `.ipynb` files and display all cells with their outputs, combining code, text, and visualizations
+- The **NotebookEdit** tool allows editing specific cells by index, inserting new cells, or deleting cells
+
+```
+> Read the analysis in notebooks/data_exploration.ipynb
+
+Claude:
+  Tool: Read("notebooks/data_exploration.ipynb")
+
+  Cell 1 [markdown]: "# Data Exploration"
+  Cell 2 [code]: import pandas as pd; df = pd.read_csv(...)
+  Cell 3 [output]: DataFrame with 1000 rows × 15 columns
+  ...
+```
+
+```
+> Fix the import error in cell 3
+
+Claude:
+  Tool: NotebookEdit("notebooks/data_exploration.ipynb",
+                      cell_number=3,
+                      new_source="import numpy as np\nimport pandas as pd")
+```
+
+---
+
+## 13. Exercises
 
 ### Exercise 1: Installation Verification
 
@@ -774,7 +864,7 @@ Create a deliberate bug in one of your projects (or use a test project):
 
 ---
 
-## 13. Next Steps
+## 14. Next Steps
 
 You now have Claude Code installed and understand its core workflow. The next lesson covers **CLAUDE.md** — the project configuration file that teaches Claude Code about your project's conventions, coding standards, and testing procedures. A well-crafted CLAUDE.md dramatically improves Claude Code's effectiveness by giving it the context it needs to follow your team's practices.
 
