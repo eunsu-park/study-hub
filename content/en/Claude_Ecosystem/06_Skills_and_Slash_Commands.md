@@ -435,9 +435,9 @@ Authentication:
   ✓ Account: Active, Claude for Work plan
 
 Model Access:
-  ✓ claude-opus-4-20250514: Available
-  ✓ claude-sonnet-4-20250514: Available
-  ✓ claude-haiku-3-20241022: Available
+  ✓ claude-opus-4-6: Available
+  ✓ claude-sonnet-4-6: Available
+  ✓ claude-haiku-4-5: Available
 
 Configuration:
   ✓ Global settings: ~/.claude/settings.json (valid)
