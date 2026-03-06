@@ -33,12 +33,15 @@ After completing this lesson, you will be able to:
 2. [Getting Started](#2-getting-started)
 3. [Client SDKs](#3-client-sdks)
 4. [Messages API](#4-messages-api)
-5. [Streaming Responses](#5-streaming-responses)
-6. [Token Counting and Management](#6-token-counting-and-management)
-7. [Error Handling](#7-error-handling)
-8. [Complete Working Examples](#8-complete-working-examples)
-9. [Exercises](#9-exercises)
-10. [References](#10-references)
+5. [Citations API](#5-citations-api)
+6. [Web Search API](#6-web-search-api)
+7. [Data Residency](#7-data-residency)
+8. [Streaming Responses](#8-streaming-responses)
+9. [Token Counting and Management](#9-token-counting-and-management)
+10. [Error Handling](#10-error-handling)
+11. [Complete Working Examples](#11-complete-working-examples)
+12. [Exercises](#12-exercises)
+13. [References](#13-references)
 
 ---
 
@@ -69,9 +72,9 @@ The Claude API is a REST API hosted at `https://api.anthropic.com`. The primary 
 │  └─────────────────────────────────────────┘                   │
 │                                                                 │
 │  Models Available:                                              │
-│  ├── claude-opus-4-20250514     (most capable)                 │
-│  ├── claude-sonnet-4-20250514   (balanced)                     │
-│  └── claude-haiku-3-5-20241022  (fastest)                      │
+│  ├── claude-opus-4-6     (most capable)                 │
+│  ├── claude-sonnet-4-6   (balanced)                     │
+│  └── claude-haiku-4-5  (fastest)                      │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -105,7 +108,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-sonnet-4-20250514",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 1024,
     "messages": [
       {"role": "user", "content": "Hello, Claude!"}
@@ -201,7 +204,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",     # Required: which model to use
+    model="claude-sonnet-4-6",     # Required: which model to use
     max_tokens=1024,                       # Required: max output tokens
     system="You are a helpful assistant.",  # Optional: system prompt
     messages=[                             # Required: conversation messages
@@ -245,7 +248,7 @@ The system prompt sets Claude's behavior for the entire conversation. It is sepa
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     system=[
         {
@@ -269,7 +272,7 @@ The system prompt can also be a simple string: `system="You are a Python expert.
 print(message.id)              # "msg_01XFDUDYJgAACzvnptvVoYEL"
 print(message.type)            # "message"
 print(message.role)            # "assistant"
-print(message.model)           # "claude-sonnet-4-20250514"
+print(message.model)           # "claude-sonnet-4-6"
 print(message.stop_reason)     # "end_turn" | "max_tokens" | "stop_sequence" | "tool_use"
 print(message.stop_sequence)   # The matched stop sequence, if any
 
@@ -290,7 +293,7 @@ A typical response:
   "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
   "type": "message",
   "role": "assistant",
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-sonnet-4-6",
   "content": [
     {
       "type": "text",
@@ -323,7 +326,7 @@ def chat(user_message: str) -> str:
     conversation.append({"role": "user", "content": user_message})
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2048,
         system="You are a knowledgeable coding tutor.",
         messages=conversation,
@@ -357,7 +360,7 @@ image_data = base64.standard_b64encode(
 ).decode("utf-8")
 
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {
@@ -382,7 +385,7 @@ message = client.messages.create(
 
 # Method 2: URL-referenced image
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {
@@ -407,11 +410,129 @@ message = client.messages.create(
 
 ---
 
-## 5. Streaming Responses
+## 5. Citations API
+
+When using Claude with documents or other source materials, you can request **citations** in responses. Citations enable Claude to reference specific passages from provided source documents, improving traceability and trust in the output.
+
+### 5.1 How Citations Work
+
+When you include documents in your request and enable citations, Claude will annotate its response with references to specific passages in the source material. Each citation points back to the exact location in the source document that supports a particular claim or statement.
+
+### 5.2 Enabling Citations
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=2048,
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "text",
+                        "media_type": "text/plain",
+                        "data": "The Eiffel Tower was built in 1889 for the World's Fair. "
+                                "It stands 330 meters tall and is located in Paris, France.",
+                    },
+                    "title": "Eiffel Tower Facts",
+                    "citations": {"enabled": True},
+                },
+                {
+                    "type": "text",
+                    "text": "When was the Eiffel Tower built and how tall is it?",
+                },
+            ],
+        }
+    ],
+)
+
+# The response content blocks may include citation references
+for block in message.content:
+    if block.type == "text":
+        print(block.text)
+    elif block.type == "cite":
+        print(f"  [Citation: document '{block.document_title}', "
+              f"text: '{block.cited_text}']")
+```
+
+Citations are especially useful for:
+- **RAG applications**: Verify that generated answers are grounded in retrieved documents.
+- **Research assistants**: Let users trace claims back to their sources.
+- **Compliance workflows**: Ensure outputs are backed by authoritative documents.
+
+---
+
+## 6. Web Search API
+
+Claude can perform **web searches** to retrieve up-to-date information during conversations. Web Search is available as a generally available (GA) feature through the API's tool use mechanism.
+
+### 6.1 Using Web Search
+
+Web Search is provided as a built-in tool of type `web_search`. You include it in the `tools` array of your API request, and Claude will invoke it when it needs current information:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=2048,
+    tools=[
+        {
+            "type": "web_search",
+            "name": "web_search",
+        }
+    ],
+    messages=[
+        {
+            "role": "user",
+            "content": "What are the latest developments in fusion energy research?",
+        }
+    ],
+)
+
+# Process the response -- it may contain text blocks and tool_use/tool_result blocks
+for block in message.content:
+    if block.type == "text":
+        print(block.text)
+    elif block.type == "web_search_tool_result":
+        print(f"  [Web search performed: {len(block.search_results)} results]")
+```
+
+### 6.2 Key Characteristics
+
+- **Automatic invocation**: Claude decides when to search based on the query. If the information is within its training data and likely current, it may not search.
+- **Source attribution**: Search results include source URLs, allowing you to cite or verify the information.
+- **Cost**: Web search usage incurs additional token costs for the search results that are injected into the context.
+- **Domain filtering**: You can configure allowed or blocked domains to control which sources Claude searches.
+
+Web Search is particularly useful for:
+- Retrieving real-time data (stock prices, weather, news).
+- Answering questions about events after Claude's training cutoff.
+- Fact-checking and verification workflows.
+
+---
+
+## 7. Data Residency
+
+Anthropic offers **data residency** options for enterprise customers. Data residency allows organizations to specify the geographic region where their API data is stored and processed. This is important for compliance with data sovereignty regulations such as GDPR (EU), LGPD (Brazil), and other regional data protection laws.
+
+Enterprise customers can configure data residency through the Anthropic console or by working with the Anthropic sales team. Supported regions continue to expand. Consult the [Anthropic documentation](https://docs.anthropic.com) for current availability.
+
+---
+
+## 8. Streaming Responses
 
 Streaming delivers Claude's response token by token as it is generated, rather than waiting for the complete response. This dramatically improves perceived latency for long responses.
 
-### 5.1 Why Streaming?
+### 8.1 Why Streaming?
 
 ```
 Non-streaming:
@@ -423,7 +544,7 @@ Streaming:
   User sees the first token within milliseconds.
 ```
 
-### 5.2 Python Streaming
+### 8.2 Python Streaming
 
 ```python
 import anthropic
@@ -432,7 +553,7 @@ client = anthropic.Anthropic()
 
 # Basic streaming
 with client.messages.stream(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {"role": "user", "content": "Write a short story about a robot learning to paint."}
@@ -457,7 +578,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 with client.messages.stream(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {"role": "user", "content": "Explain quantum computing in simple terms."}
@@ -476,7 +597,7 @@ with client.messages.stream(
             print("[MESSAGE COMPLETE]")
 ```
 
-### 5.3 TypeScript Streaming
+### 8.3 TypeScript Streaming
 
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
@@ -486,7 +607,7 @@ const client = new Anthropic();
 async function streamResponse() {
   // Basic streaming
   const stream = client.messages.stream({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 1024,
     messages: [
       { role: "user", content: "Write a haiku about programming." },
@@ -516,7 +637,7 @@ const client = new Anthropic();
 
 async function streamWithAsyncIterator() {
   const stream = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 1024,
     stream: true,  // Enable streaming at the request level
     messages: [
@@ -538,13 +659,13 @@ async function streamWithAsyncIterator() {
 streamWithAsyncIterator();
 ```
 
-### 5.4 Server-Sent Events Format
+### 8.4 Server-Sent Events Format
 
 Under the hood, streaming uses Server-Sent Events (SSE). The raw format looks like:
 
 ```
 event: message_start
-data: {"type": "message_start", "message": {"id": "msg_...", "model": "claude-sonnet-4-20250514", ...}}
+data: {"type": "message_start", "message": {"id": "msg_...", "model": "claude-sonnet-4-6", ...}}
 
 event: content_block_start
 data: {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
@@ -569,9 +690,9 @@ The SDKs parse this format automatically, but understanding it helps when debugg
 
 ---
 
-## 6. Token Counting and Management
+## 9. Token Counting and Management
 
-### 6.1 What Are Tokens?
+### 9.1 What Are Tokens?
 
 Tokens are the units Claude uses to process text. One token is roughly 3-4 English characters or about 0.75 words. Some examples:
 
@@ -584,7 +705,7 @@ Tokens are the units Claude uses to process text. One token is roughly 3-4 Engli
 "こんにちは"         → 3 tokens (non-English may use more tokens)
 ```
 
-### 6.2 Token Counting Before Sending
+### 9.2 Token Counting Before Sending
 
 Use the count tokens endpoint to estimate cost before sending a request:
 
@@ -595,7 +716,7 @@ client = anthropic.Anthropic()
 
 # Count tokens without making a generation request
 token_count = client.messages.count_tokens(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     messages=[
         {"role": "user", "content": "Write a comprehensive guide to Python decorators."}
     ],
@@ -606,21 +727,21 @@ print(f"Input tokens: {token_count.input_tokens}")
 # Use this to estimate cost before sending the actual request
 ```
 
-### 6.3 Managing max_tokens
+### 9.3 Managing max_tokens
 
 The `max_tokens` parameter controls the maximum number of tokens Claude will generate:
 
 ```python
 # Short response (quick answers)
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=100,
     messages=[{"role": "user", "content": "What is 2+2?"}],
 )
 
 # Long response (detailed explanations, code)
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=4096,
     messages=[{"role": "user", "content": "Write a full REST API in FastAPI."}],
 )
@@ -633,19 +754,19 @@ if message.stop_reason == "max_tokens":
     print("Warning: Response was truncated. Consider increasing max_tokens.")
 ```
 
-### 6.4 Token Budget Strategy
+### 9.4 Token Budget Strategy
 
 ```python
 def estimate_cost(input_tokens: int, output_tokens: int, model: str) -> float:
     """Estimate the cost of an API call in USD."""
     # Pricing as of early 2026 (check docs for current prices)
     pricing = {
-        "claude-opus-4-20250514":   {"input": 15.00, "output": 75.00},
-        "claude-sonnet-4-20250514": {"input": 3.00,  "output": 15.00},
-        "claude-haiku-3-5-20241022": {"input": 0.80,  "output": 4.00},
+        "claude-opus-4-6":   {"input": 5.00,  "output": 25.00},
+        "claude-sonnet-4-6": {"input": 3.00,  "output": 15.00},
+        "claude-haiku-4-5":  {"input": 1.00,  "output": 5.00},
     }
 
-    rates = pricing.get(model, pricing["claude-sonnet-4-20250514"])
+    rates = pricing.get(model, pricing["claude-sonnet-4-6"])
     cost = (
         (input_tokens / 1_000_000) * rates["input"] +
         (output_tokens / 1_000_000) * rates["output"]
@@ -656,16 +777,16 @@ def estimate_cost(input_tokens: int, output_tokens: int, model: str) -> float:
 cost = estimate_cost(
     input_tokens=1500,
     output_tokens=800,
-    model="claude-sonnet-4-20250514"
+    model="claude-sonnet-4-6"
 )
 print(f"Estimated cost: ${cost:.4f}")
 ```
 
 ---
 
-## 7. Error Handling
+## 10. Error Handling
 
-### 7.1 Common Error Codes
+### 10.1 Common Error Codes
 
 ```
 ┌──────────┬───────────────────────┬──────────────────────────────┐
@@ -681,7 +802,7 @@ print(f"Estimated cost: ${cost:.4f}")
 └──────────┴───────────────────────┴──────────────────────────────┘
 ```
 
-### 7.2 Python Error Handling
+### 10.2 Python Error Handling
 
 ```python
 import anthropic
@@ -690,7 +811,7 @@ client = anthropic.Anthropic()
 
 try:
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{"role": "user", "content": "Hello!"}],
     )
@@ -715,7 +836,7 @@ except anthropic.APIConnectionError:
     print("Could not connect to the API. Check your network.")
 ```
 
-### 7.3 TypeScript Error Handling
+### 10.3 TypeScript Error Handling
 
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
@@ -725,7 +846,7 @@ const client = new Anthropic();
 async function callClaude() {
   try {
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content: "Hello!" }],
     });
@@ -751,7 +872,7 @@ async function callClaude() {
 callClaude();
 ```
 
-### 7.4 Retry with Exponential Backoff
+### 10.4 Retry with Exponential Backoff
 
 ```python
 import time
@@ -770,7 +891,7 @@ def call_with_retry(
     for attempt in range(max_retries):
         try:
             return client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 messages=messages,
             )
@@ -812,9 +933,9 @@ client = anthropic.Anthropic(
 
 ---
 
-## 8. Complete Working Examples
+## 11. Complete Working Examples
 
-### 8.1 Python: Interactive Chat Application
+### 11.1 Python: Interactive Chat Application
 
 ```python
 #!/usr/bin/env python3
@@ -858,7 +979,7 @@ def main():
             full_response = ""
 
             with client.messages.stream(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=2048,
                 system=system_prompt,
                 messages=conversation,
@@ -885,7 +1006,7 @@ if __name__ == "__main__":
     main()
 ```
 
-### 8.2 TypeScript: Code Review Assistant
+### 11.2 TypeScript: Code Review Assistant
 
 ```typescript
 // code-review.ts — Automated code review using Claude API
@@ -912,7 +1033,7 @@ async function reviewCode(
   const code = readFileSync(filePath, "utf-8");
 
   const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: `You are an expert code reviewer. Analyze the provided ${language} code
 and respond with a JSON object containing:
@@ -976,7 +1097,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-### 8.3 Python: Document Summarizer with Token Management
+### 11.3 Python: Document Summarizer with Token Management
 
 ```python
 #!/usr/bin/env python3
@@ -989,12 +1110,12 @@ client = anthropic.Anthropic()
 
 # Model context limits (approximate input token budgets)
 MODEL_LIMITS = {
-    "claude-opus-4-20250514": 190_000,
-    "claude-sonnet-4-20250514": 190_000,
-    "claude-haiku-3-5-20241022": 190_000,
+    "claude-opus-4-6": 190_000,
+    "claude-sonnet-4-6": 190_000,
+    "claude-haiku-4-5": 190_000,
 }
 
-def count_tokens(text: str, model: str = "claude-sonnet-4-20250514") -> int:
+def count_tokens(text: str, model: str = "claude-sonnet-4-6") -> int:
     """Count tokens in a text string."""
     result = client.messages.count_tokens(
         model=model,
@@ -1004,7 +1125,7 @@ def count_tokens(text: str, model: str = "claude-sonnet-4-20250514") -> int:
 
 def summarize_text(
     text: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
     max_output_tokens: int = 2048,
 ) -> str:
     """Summarize a text, chunking if necessary."""
@@ -1099,7 +1220,7 @@ if __name__ == "__main__":
 
 ---
 
-## 9. Exercises
+## 12. Exercises
 
 ### Exercise 1: First API Call (Beginner)
 
@@ -1128,7 +1249,7 @@ Create a small wrapper library around the Anthropic SDK that provides:
 
 ---
 
-## 10. References
+## 13. References
 
 - Anthropic API Reference - https://docs.anthropic.com/en/api/messages
 - Anthropic Python SDK - https://github.com/anthropics/anthropic-sdk-python
