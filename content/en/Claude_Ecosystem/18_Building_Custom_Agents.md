@@ -1168,9 +1168,9 @@ class CostTracker:
         """Record token usage and check budget."""
         # Approximate cost calculation
         pricing = {
-            "claude-opus-4-20250514": (15.00, 75.00),      # (input, output) per MTok
-            "claude-sonnet-4-20250514": (3.00, 15.00),
-            "claude-haiku-3-5-20241022": (0.80, 4.00),
+            "claude-opus-4-6": (5.00, 25.00),               # (input, output) per MTok
+            "claude-sonnet-4-6": (3.00, 15.00),
+            "claude-haiku-4-5": (1.00, 5.00),
         }
 
         rates = pricing.get(model, (3.00, 15.00))
