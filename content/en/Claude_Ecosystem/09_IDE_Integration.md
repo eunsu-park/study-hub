@@ -147,7 +147,7 @@ The panel provides a conversational interface similar to the CLI:
 │─────────────────────────────────────│
 │                                     │
 │  Session: my-project (active)       │
-│  Model: claude-sonnet-4-20250514    │
+│  Model: claude-sonnet-4-6           │
 │  Mode: normal                       │
 │                                     │
 │  You: Refactor the UserService      │
