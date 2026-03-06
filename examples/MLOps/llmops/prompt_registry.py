@@ -137,7 +137,7 @@ def demo_registry():
     registry.register(
         "summarizer",
         template="Summarize the following text in {num_sentences} sentences:\n\n{text}",
-        metadata={"model": "claude-sonnet-4-20250514", "author": "team-a"},
+        metadata={"model": "claude-sonnet-4-6", "author": "team-a"},
     )
     registry.register(
         "summarizer",
@@ -147,7 +147,7 @@ def demo_registry():
             "Text: {text}\n\n"
             "Summary:"
         ),
-        metadata={"model": "claude-sonnet-4-20250514", "author": "team-a", "note": "added role + format"},
+        metadata={"model": "claude-sonnet-4-6", "author": "team-a", "note": "added role + format"},
     )
     registry.register(
         "summarizer",
@@ -161,7 +161,7 @@ def demo_registry():
             "Text: {text}\n\n"
             "Summary:"
         ),
-        metadata={"model": "claude-sonnet-4-20250514", "author": "team-a", "note": "added rules"},
+        metadata={"model": "claude-sonnet-4-6", "author": "team-a", "note": "added rules"},
     )
 
     # List versions
@@ -318,16 +318,16 @@ class ModelRouter:
     """
 
     PRICING = {
-        "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
-        "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
-        "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
+        "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
+        "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+        "claude-opus-4-6": {"input": 5.0, "output": 25.0},
     }
 
     def __init__(self):
         self.model_map = {
-            "simple": "claude-haiku-4-5-20251001",
-            "medium": "claude-sonnet-4-20250514",
-            "complex": "claude-opus-4-20250514",
+            "simple": "claude-haiku-4-5",
+            "medium": "claude-sonnet-4-6",
+            "complex": "claude-opus-4-6",
         }
         self.stats = defaultdict(int)
 
