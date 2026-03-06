@@ -277,7 +277,7 @@ def chat_with_tools(user_message: str) -> str:
 
     # Initial API call with tools
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         tools=tools,
         messages=messages,
@@ -309,7 +309,7 @@ def chat_with_tools(user_message: str) -> str:
 
         # Call the API again with the tool results
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             tools=tools,
             messages=messages,
@@ -429,7 +429,7 @@ async function chatWithTools(userMessage: string): Promise<string> {
   ];
 
   let response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     tools,
     messages,
@@ -458,7 +458,7 @@ async function chatWithTools(userMessage: string): Promise<string> {
     messages.push({ role: "user", content: toolResults });
 
     response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 2048,
       tools,
       messages,
@@ -611,7 +611,7 @@ The `tool_choice` parameter controls how Claude uses tools:
 ```python
 # auto (default): Claude decides whether to use tools
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "auto"},     # Claude decides
@@ -620,7 +620,7 @@ response = client.messages.create(
 
 # any: Force Claude to use at least one tool
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "any"},      # Must use a tool
@@ -629,7 +629,7 @@ response = client.messages.create(
 
 # specific tool: Force Claude to use a particular tool
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "tool", "name": "calculate"},  # Must use 'calculate'
@@ -670,7 +670,7 @@ tools = [
 ]
 
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "tool", "name": "extract_contact_info"},
@@ -816,7 +816,7 @@ def stream_with_tools(user_message: str, tools: list):
     while True:
         # Use stream for the API call
         with client.messages.stream(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             tools=tools,
             messages=messages,
@@ -883,7 +883,7 @@ sentiment_tool = {
 
 # Force Claude to use this tool
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=[sentiment_tool],
     tool_choice={"type": "tool", "name": "classify_sentiment"},
