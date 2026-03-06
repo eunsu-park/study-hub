@@ -278,6 +278,7 @@ Task(
 | Speed | Fastest | Fast | Normal |
 | Token cost | Lowest | Medium | Highest |
 | Model default | sonnet | sonnet | sonnet |
+| Worktree isolation | No | No | Yes |
 
 ---
 
@@ -294,6 +295,7 @@ Task(
     model: str,               # "opus" | "sonnet" | "haiku" (default: "sonnet")
     max_turns: int,           # Maximum conversation turns (default varies)
     run_in_background: bool,  # Run asynchronously (default: false)
+    isolation: str,           # "none" | "worktree" (default: "none")
 )
 ```
 
@@ -335,9 +337,9 @@ Determines the tool set available to the subagent (see Section 3). Choose the mo
 
 Select the model that runs the subagent:
 
-- **`sonnet`** (default): Good balance of speed, cost, and capability. Use for most tasks.
-- **`opus`**: Most capable model. Use for complex reasoning, architectural decisions, or tasks requiring exceptional quality.
-- **`haiku`**: Fastest and cheapest. Use for simple, well-defined tasks like formatting or straightforward search-and-replace.
+- **`sonnet`** (default): Good balance of speed, cost, and capability. Use for most tasks. (Currently `claude-sonnet-4-6`)
+- **`opus`**: Most capable model. Use for complex reasoning, architectural decisions, or tasks requiring exceptional quality. (Currently `claude-opus-4-6`)
+- **`haiku`**: Fastest and cheapest. Use for simple, well-defined tasks like formatting or straightforward search-and-replace. (Currently `claude-haiku-4-5`)
 
 ```python
 # Use opus for complex architectural analysis
@@ -382,6 +384,57 @@ Task(
 #### `run_in_background`
 
 When set to `true`, the subagent runs asynchronously. The main session continues working while the subagent processes in the background. See Section 6 for details.
+
+#### `isolation`
+
+Controls filesystem isolation for the subagent. Default is `"none"` (subagent works in the same working directory as the main session).
+
+When set to `"worktree"`, the subagent runs in an **isolated git worktree** — a temporary copy of the repository created via `git worktree add`. This provides true filesystem isolation so the subagent can freely modify files without affecting the main working tree or other parallel subagents.
+
+**How worktree isolation works:**
+
+1. Claude Code creates a new git worktree (a lightweight clone of the repo with its own working directory and branch)
+2. The subagent executes entirely within that worktree
+3. If the subagent makes **no changes**, the worktree is automatically cleaned up
+4. If the subagent makes **changes**, the worktree path and branch name are returned to the main session, so you can review, merge, or discard
+
+```python
+# Isolated subagent: safe parallel refactoring
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="""Refactor src/api/users.py to use async/await throughout.
+    Update all database calls to use async SQLAlchemy.
+    Run tests to verify the refactoring."""
+)
+# Returns: {"worktree_path": "/repo/.claude/worktrees/abc123",
+#           "branch": "worktree/abc123"}
+```
+
+**When to use worktree isolation:**
+
+- **Parallel code modifications**: Multiple subagents editing overlapping files without merge conflicts
+- **Speculative changes**: Try a risky refactoring without touching the main working tree
+- **A/B implementations**: Launch two subagents with different approaches, compare results, merge the better one
+
+```python
+# A/B comparison: two approaches to the same problem
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="Implement caching using Redis in src/api/..."
+)
+
+Task(
+    subagent_type="general-purpose",
+    isolation="worktree",
+    prompt="Implement caching using in-memory LRU cache in src/api/..."
+)
+
+# Main session compares both worktree branches and merges the winner
+```
+
+**Requirements**: The project must be a git repository. Worktree isolation is not available for non-git projects.
 
 ---
 
