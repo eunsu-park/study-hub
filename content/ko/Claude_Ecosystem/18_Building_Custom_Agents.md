@@ -1168,9 +1168,9 @@ class CostTracker:
         """토큰 사용량 기록 및 예산 확인."""
         # 근사 비용 계산
         pricing = {
-            "claude-opus-4-20250514": (15.00, 75.00),      # (입력, 출력) MTok당
-            "claude-sonnet-4-20250514": (3.00, 15.00),
-            "claude-haiku-3-5-20241022": (0.80, 4.00),
+            "claude-opus-4-6": (5.00, 25.00),       # (입력, 출력) MTok당
+            "claude-sonnet-4-6": (3.00, 15.00),
+            "claude-haiku-4-5": (1.00, 5.00),
         }
 
         rates = pricing.get(model, (3.00, 15.00))
