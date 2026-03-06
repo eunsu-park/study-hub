@@ -277,7 +277,7 @@ def chat_with_tools(user_message: str) -> str:
 
     # 도구와 함께 초기 API 호출
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         tools=tools,
         messages=messages,
@@ -309,7 +309,7 @@ def chat_with_tools(user_message: str) -> str:
 
         # 도구 결과와 함께 API를 다시 호출
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             tools=tools,
             messages=messages,
@@ -429,7 +429,7 @@ async function chatWithTools(userMessage: string): Promise<string> {
   ];
 
   let response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2048,
     tools,
     messages,
@@ -458,7 +458,7 @@ async function chatWithTools(userMessage: string): Promise<string> {
     messages.push({ role: "user", content: toolResults });
 
     response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 2048,
       tools,
       messages,
@@ -611,7 +611,7 @@ async def execute_tools_parallel(tool_calls: list) -> list:
 ```python
 # auto (기본값): Claude가 도구 사용 여부를 결정
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "auto"},     # Claude가 결정
@@ -620,7 +620,7 @@ response = client.messages.create(
 
 # any: Claude가 최소 하나의 도구를 사용하도록 강제
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "any"},      # 도구를 사용해야 함
@@ -629,7 +629,7 @@ response = client.messages.create(
 
 # 특정 도구: Claude가 특정 도구를 사용하도록 강제
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "tool", "name": "calculate"},  # 'calculate'를 사용해야 함
@@ -670,7 +670,7 @@ tools = [
 ]
 
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=tools,
     tool_choice={"type": "tool", "name": "extract_contact_info"},
@@ -816,7 +816,7 @@ def stream_with_tools(user_message: str, tools: list):
     while True:
         # API 호출에 스트림을 사용합니다
         with client.messages.stream(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             tools=tools,
             messages=messages,
@@ -883,7 +883,7 @@ sentiment_tool = {
 
 # Claude가 이 도구를 사용하도록 강제합니다
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=[sentiment_tool],
     tool_choice={"type": "tool", "name": "classify_sentiment"},
