@@ -161,13 +161,13 @@ registry = PromptRegistry()
 registry.register(
     "summarizer",
     template="Summarize the following text in {num_sentences} sentences:\n\n{text}",
-    metadata={"model": "claude-sonnet-4-20250514", "author": "team-a"},
+    metadata={"model": "claude-sonnet-4-6", "author": "team-a"},
 )
 registry.register(
     "summarizer",
     template="You are a concise summarizer. Given the text below, "
              "produce exactly {num_sentences} sentences:\n\n{text}",
-    metadata={"model": "claude-sonnet-4-20250514", "author": "team-a", "note": "improved clarity"},
+    metadata={"model": "claude-sonnet-4-6", "author": "team-a", "note": "improved clarity"},
 )
 registry.list_versions("summarizer")
 ```
@@ -522,7 +522,7 @@ RAG_CONFIG = {
         "reranker": None,
     },
     "generation": {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "temperature": 0.1,        # Low temperature for factual Q&A — reduces hallucination
         "max_tokens": 1000,
         "prompt_template": (
@@ -607,9 +607,9 @@ class CostTracker:
     # Approximate pricing per 1M tokens — update when provider changes pricing
     # Output tokens cost 3-5x input because autoregressive generation is compute-intensive
     PRICING = {
-        "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
-        "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
-        "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.0},
+        "claude-opus-4-6": {"input": 5.0, "output": 25.0},
+        "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+        "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
     }
 
     def __init__(self):
@@ -671,9 +671,9 @@ class ModelRouter:
     def __init__(self, classifier_fn=None):
         self.classifier_fn = classifier_fn or self._default_classifier
         self.model_map = {
-            "simple": "claude-haiku-4-5-20251001",
-            "medium": "claude-sonnet-4-20250514",
-            "complex": "claude-opus-4-20250514",
+            "simple": "claude-haiku-4-5",
+            "medium": "claude-sonnet-4-6",
+            "complex": "claude-opus-4-6",
         }
 
     def _default_classifier(self, query):
@@ -698,7 +698,7 @@ class ModelRouter:
 router = ModelRouter()
 model, complexity = router.route("What is the capital of France?")
 print(f"Query → {complexity} → {model}")
-# Query → simple → claude-haiku-4-5-20251001
+# Query → simple → claude-haiku-4-5
 ```
 
 ---
