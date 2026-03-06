@@ -1,10 +1,12 @@
-# Cowork: AI Digital Colleague
+# Claude Cowork: AI Digital Colleague
 
 **Previous**: [10. Claude Desktop Application](./10_Claude_Desktop.md) | **Next**: [12. Model Context Protocol (MCP)](./12_Model_Context_Protocol.md)
 
 ---
 
-Cowork is Anthropic's product for deploying Claude as an autonomous **digital colleague** that works alongside you on broader tasks beyond coding. While Claude Code focuses on coding within a terminal or IDE, Cowork operates more independently — handling multi-step workflows like document creation, research synthesis, project management tasks, and cross-service integrations through its plugin ecosystem and MCP connectors. This lesson covers what Cowork is, how it works, and when to use it.
+Claude Cowork (often referred to simply as "Cowork") is Anthropic's GUI-based product for deploying Claude as an autonomous **digital colleague** that works alongside you on broader tasks beyond coding. Designed for non-technical users who do not need command-line tools, Cowork provides a visual interface for delegating multi-step tasks to Claude — handling workflows like document creation, research synthesis, project management tasks, and cross-service integrations through its plugin ecosystem and MCP connectors. While Claude Code focuses on coding within a terminal or IDE, Cowork operates more independently through its point-and-click interface. This lesson covers what Cowork is, how it works, and when to use it.
+
+> **Status (as of January 2026):** Claude Cowork is available as a **Research Preview**. Features and capabilities may evolve as the product matures.
 
 **Difficulty**: ⭐⭐
 
@@ -29,7 +31,7 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-1. [What Is Cowork?](#1-what-is-cowork)
+1. [What Is Claude Cowork?](#1-what-is-claude-cowork)
 2. [Cowork vs. Claude Code](#2-cowork-vs-claude-code)
 3. [Getting Started](#3-getting-started)
 4. [Multi-Step Task Execution](#4-multi-step-task-execution)
@@ -44,9 +46,9 @@ After completing this lesson, you will be able to:
 
 ---
 
-## 1. What Is Cowork?
+## 1. What Is Claude Cowork?
 
-Cowork positions Claude as a **digital colleague** — an AI that operates more autonomously than a chatbot but within well-defined boundaries. Instead of responding to one prompt at a time, Cowork can take a high-level goal and break it into steps, execute those steps using available tools and integrations, and produce a comprehensive result.
+Claude Cowork positions Claude as a **digital colleague** — an AI that operates more autonomously than a chatbot but within well-defined boundaries. It is a GUI-based tool designed for non-technical users, allowing them to delegate multi-step tasks to Claude through a visual interface without needing the command line. Instead of responding to one prompt at a time, Cowork can take a high-level goal and break it into steps, execute those steps using available tools and integrations, and produce a comprehensive result.
 
 ```
 Traditional chatbot:
@@ -115,10 +117,11 @@ In practice, a software engineer might use both:
 
 ### Access
 
-Cowork is available through:
+Claude Cowork is currently a **Research Preview** (since January 2026). Access is available through:
 1. Claude Desktop application (as an integrated mode)
 2. Claude.ai web interface (Team and Enterprise plans)
-3. API access for programmatic integration
+
+As a Research Preview, some features may be limited or subject to change. Check [Anthropic's documentation](https://docs.anthropic.com/) for the latest availability details.
 
 ### Initial Setup
 
@@ -773,8 +776,8 @@ Perform the same task at two different autonomy levels:
 
 ## 12. References
 
-- [Cowork Documentation](https://docs.anthropic.com/en/docs/cowork)
-- [Anthropic Blog: Introducing Cowork](https://www.anthropic.com/news)
+- [Claude Cowork Documentation](https://docs.anthropic.com/en/docs/cowork)
+- [Anthropic Blog: Introducing Claude Cowork](https://www.anthropic.com/news)
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
 - [Claude Enterprise Features](https://www.anthropic.com/enterprise)
 - [Anthropic Privacy Policy](https://www.anthropic.com/privacy)
