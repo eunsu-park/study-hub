@@ -45,17 +45,17 @@ Anthropic offers three model tiers, each optimized for different trade-offs betw
 
 ### Model Comparison Table
 
-| Property | Claude Opus 4 | Claude Sonnet 4 | Claude Haiku |
-|----------|--------------|-----------------|--------------|
+| Property | Claude Opus 4.6 | Claude Sonnet 4.6 | Claude Haiku 4.5 |
+|----------|----------------|-------------------|------------------|
 | **Intelligence** | Highest | High | Good |
 | **Speed** | Slower | Fast | Fastest |
 | **Cost** | Highest | Moderate | Lowest |
-| **Context Window** | 200K tokens | 200K tokens | 200K tokens |
+| **Context Window** | 1M tokens | 200K tokens | 200K tokens |
 | **Max Output** | 32K tokens | 16K tokens | 8K tokens |
 | **Best For** | Complex reasoning, research, architecture | Daily coding, analysis, balanced tasks | Quick queries, classification, high-volume |
 | **Extended Thinking** | Yes | Yes | No |
 
-### Claude Opus 4
+### Claude Opus 4.6
 
 Opus is Anthropic's most capable model. It excels at tasks requiring deep reasoning, nuanced understanding, and multi-step problem solving. Use Opus when accuracy and depth matter more than speed.
 
@@ -73,7 +73,7 @@ Opus is Anthropic's most capable model. It excels at tasks requiring deep reason
 - Analyzing research papers
 - Multi-file refactoring across large codebases
 
-### Claude Sonnet 4
+### Claude Sonnet 4.6
 
 Sonnet is the balanced workhorse — fast enough for interactive use, capable enough for most professional tasks. It is the default model for Claude Code and the most commonly used model in production.
 
@@ -91,7 +91,7 @@ Sonnet is the balanced workhorse — fast enough for interactive use, capable en
 - Data analysis and visualization
 - API integration work
 
-### Claude Haiku
+### Claude Haiku 4.5
 
 Haiku is optimized for speed and cost. It handles straightforward tasks reliably and is ideal for high-volume applications where latency and cost are primary concerns.
 
@@ -112,13 +112,13 @@ Haiku is optimized for speed and cost. It handles straightforward tasks reliably
 
 ```
 Is the task complex, ambiguous, or safety-critical?
-├── Yes → Claude Opus 4
+├── Yes → Claude Opus 4.6
 │         (deep reasoning, architecture, complex analysis)
 │
-├── Moderate → Claude Sonnet 4
+├── Moderate → Claude Sonnet 4.6
 │              (daily coding, analysis, content generation)
 │
-└── Simple/High-volume → Claude Haiku
+└── Simple/High-volume → Claude Haiku 4.5
                           (classification, extraction, routing)
 ```
 
@@ -222,7 +222,7 @@ with open("architecture_diagram.png", "rb") as f:
     image_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {
@@ -250,7 +250,7 @@ print(message.content[0].text)
 
 ### Long Context Processing
 
-With a 200K token context window, Claude can process entire codebases, long documents, and extensive conversation histories. This is roughly equivalent to 500 pages of text or a medium-sized codebase.
+With context windows of up to 1M tokens (Opus 4.6) and 200K tokens (Sonnet 4.6 and Haiku 4.5), Claude can process entire codebases, long documents, and extensive conversation histories. A 200K context window is roughly equivalent to 500 pages of text, while the 1M token window in Opus 4.6 can hold approximately 2,500 pages.
 
 ---
 
@@ -290,7 +290,7 @@ Claude Opus and Sonnet support **extended thinking** — an explicit reasoning p
 
 ```json
 {
-  "model": "claude-opus-4-20250514",
+  "model": "claude-opus-4-6",
   "max_tokens": 16000,
   "thinking": {
     "type": "enabled",
@@ -339,7 +339,7 @@ The **context window** is the total number of tokens Claude can consider at once
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                 200K Token Context Window                │
+│      Context Window (200K–1M tokens, varies by model)   │
 │                                                         │
 │  ┌─────────────────────────┐  ┌──────────────────────┐  │
 │  │     Input Tokens        │  │   Output Tokens      │  │
@@ -461,7 +461,7 @@ claude
 claude -p "Explain the authentication flow in this project"
 
 # Use a specific model
-claude --model claude-opus-4-20250514
+claude --model claude-opus-4-6
 ```
 
 **Best for**: Software development, debugging, code review, refactoring, writing tests.
@@ -476,7 +476,7 @@ import anthropic
 client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
 
 message = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
         {"role": "user", "content": "Write a haiku about programming."}
@@ -501,13 +501,13 @@ Enterprise offerings include:
 
 Claude uses a **pay-per-token** pricing model. You pay for the tokens you send (input) and the tokens Claude generates (output). Output tokens are more expensive because they require more computation.
 
-### Pricing Table (as of early 2025)
+### Pricing Table (as of early 2026)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
-| Claude Opus 4 | $15.00 | $75.00 |
-| Claude Sonnet 4 | $3.00 | $15.00 |
-| Claude Haiku | $0.25 | $1.25 |
+| Claude Opus 4.6 | $5.00 | $25.00 |
+| Claude Sonnet 4.6 | $3.00 | $15.00 |
+| Claude Haiku 4.5 | $1.00 | $5.00 |
 
 > **Note**: Pricing is subject to change. Check [anthropic.com/pricing](https://anthropic.com/pricing) for current rates.
 
@@ -518,9 +518,9 @@ Claude uses a **pay-per-token** pricing model. You pay for the tokens you send (
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Estimate the cost of an API call in USD."""
     pricing = {
-        "opus":   {"input": 15.00, "output": 75.00},
+        "opus":   {"input":  5.00, "output": 25.00},
         "sonnet": {"input":  3.00, "output": 15.00},
-        "haiku":  {"input":  0.25, "output":  1.25},
+        "haiku":  {"input":  1.00, "output":  5.00},
     }
 
     rates = pricing[model]
@@ -536,10 +536,10 @@ print(f"Architecture (Opus):       ${estimate_cost('opus', 50000, 5000):.4f}")
 print(f"Full codebase scan (Opus): ${estimate_cost('opus', 150000, 10000):.4f}")
 
 # Output:
-# Quick question (Haiku):    $0.0004
+# Quick question (Haiku):    $0.0015
 # Code review (Sonnet):      $0.0600
-# Architecture (Opus):       $1.1250
-# Full codebase scan (Opus): $2.9500
+# Architecture (Opus):       $0.3750
+# Full codebase scan (Opus): $1.0000
 ```
 
 ### Cost Optimization Strategies
