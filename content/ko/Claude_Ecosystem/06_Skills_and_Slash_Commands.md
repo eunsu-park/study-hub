@@ -435,8 +435,8 @@ Claude가 프로젝트를 분석하고 CLAUDE.md를 생성합니다:
   ✓ 계정: 활성, Claude for Work 플랜
 
 모델 접근:
-  ✓ claude-opus-4-20250514: 사용 가능
-  ✓ claude-sonnet-4-20250514: 사용 가능
+  ✓ claude-opus-4-6: 사용 가능
+  ✓ claude-sonnet-4-6: 사용 가능
   ✓ claude-haiku-3-20241022: 사용 가능
 
 설정:
