@@ -694,7 +694,7 @@ import base64
 client = anthropic.Anthropic()
 
 
-def claude_vision(image_path: str, prompt: str, model: str = "claude-sonnet-4-20250514") -> str:
+def claude_vision(image_path: str, prompt: str, model: str = "claude-sonnet-4-6") -> str:
     """Claude 비전 분석"""
 
     # 이미지 인코딩
@@ -761,7 +761,7 @@ def claude_multi_image(image_paths: list, prompt: str) -> str:
     content.append({"type": "text", "text": prompt})
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2048,
         messages=[{"role": "user", "content": content}],
     )
@@ -804,7 +804,7 @@ def claude_with_tools(prompt: str, image_path: str = None) -> dict:
         })
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         tools=tools,
         messages=[{"role": "user", "content": content}],
@@ -829,7 +829,7 @@ class ClaudeApplications:
         """긴 문서 분석 (200K 토큰)"""
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             messages=[
                 {
@@ -851,7 +851,7 @@ class ClaudeApplications:
         """코드 리뷰"""
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             messages=[
                 {
@@ -882,7 +882,7 @@ class ClaudeApplications:
             image_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             messages=[
                 {
@@ -963,10 +963,10 @@ def select_model(use_case: str) -> str:
         "multimodal_app": "gemini-1.5-pro",
 
         # Claude가 좋은 경우
-        "complex_reasoning": "claude-sonnet-4-20250514",
-        "code_review": "claude-sonnet-4-20250514",
-        "long_document": "claude-sonnet-4-20250514",  # 200K 컨텍스트
-        "safety_critical": "claude-sonnet-4-20250514",
+        "complex_reasoning": "claude-sonnet-4-6",
+        "code_review": "claude-sonnet-4-6",
+        "long_document": "claude-sonnet-4-6",  # 200K 컨텍스트
+        "safety_critical": "claude-sonnet-4-6",
 
         # 비용 최적화
         "high_volume": "gemini-1.5-flash",
@@ -1022,7 +1022,7 @@ class CostEstimator:
             "input": 15.0,   # per 1M tokens
             "output": 75.0,
         },
-        "claude-sonnet-4-20250514": {
+        "claude-sonnet-4-6": {
             "input": 3.0,    # per 1M tokens
             "output": 15.0,
         },
@@ -1148,7 +1148,7 @@ print(f"Gemini Pro cost: ${gemini_cost:.2f}")
 | A) 손으로 쓴 의료 기록 전사 | `gpt-4o-mini` 또는 `claude-3-haiku` | 높은 볼륨 + 비용 민감 → 가장 저렴하고 유능한 모델. 두 모델 모두 강력한 OCR 성능. GPT-4o-mini는 $0.15/1M 토큰으로, 페이지당 약 1K 토큰의 1만 페이지 = 하루 $1.50. 의료 맥락은 높은 정확도 필요, 배포 전 샘플링으로 검증 필요. |
 | B) 2시간 보안 영상 분석 | `gemini-1.5-pro` | 네이티브 비디오 지원과 충분한 컨텍스트(2M 토큰)를 가진 **유일한 옵션**. 2시간 × 263 토큰/초 ≈ 190만 토큰 — Gemini 1.5 Pro의 2M 컨텍스트 내에 맞음. GPT-4o와 Claude 모두 비디오 입력을 네이티브로 지원하지 않음. |
 | C) 실시간 음성 도우미 | `gpt-4o-audio-preview` | 네이티브 실시간 오디오 입출력과 평균 320ms 응답 시간을 가진 **유일한 옵션**. "omni" 모델은 별도의 음성-텍스트 변환 단계 없이 음성을 네이티브로 처리. |
-| D) 법적 계약 검토 + 복잡한 추론 | `claude-sonnet-4-20250514` 또는 `claude-3-opus` | Claude가 추론과 코딩에서 최고 순위; Constitutional AI 훈련이 고위험 결정에 더 잘 보정됨. 200K 컨텍스트로 긴 계약서 처리 가능. 안전 중요 → Claude의 신중하고 미묘한 응답이 환각(hallucination) 위험 감소. |
+| D) 법적 계약 검토 + 복잡한 추론 | `claude-sonnet-4-6` 또는 `claude-3-opus` | Claude가 추론과 코딩에서 최고 순위; Constitutional AI 훈련이 고위험 결정에 더 잘 보정됨. 200K 컨텍스트로 긴 계약서 처리 가능. 안전 중요 → Claude의 신중하고 미묘한 응답이 환각(hallucination) 위험 감소. |
 | E) 전자상거래 설명 (하루 10만 이미지) | `gemini-1.5-flash` 또는 `gpt-4o-mini` | 가장 높은 볼륨 → 가장 저렴한 모델. Gemini 1.5 Flash($0.075/1M 입력 토큰)가 가장 저렴. 단순 설명 태스크는 최대 성능이 필요 없음 — 소규모로 먼저 품질 테스트. |
 
 </details>
@@ -1290,7 +1290,7 @@ def extract_product_data(image_path: str) -> dict:
 4. 치수는 보이는 경우 단위 포함 (예: "30cm × 20cm × 10cm")"""
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[
             {
