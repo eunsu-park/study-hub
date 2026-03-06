@@ -20,7 +20,7 @@ def basic_message():
     client = anthropic.Anthropic()
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         system="You are a helpful assistant. Be concise.",
         messages=[
@@ -49,7 +49,7 @@ def multi_turn():
     ]
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=256,
         messages=messages,
     )
@@ -67,7 +67,7 @@ def streaming():
 
     print("Streaming: ", end="", flush=True)
     with client.messages.stream(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=256,
         messages=[{"role": "user", "content": "Count from 1 to 5."}],
     ) as stream:
@@ -85,7 +85,7 @@ def with_parameters():
     client = anthropic.Anthropic()
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=512,
         temperature=0.0,  # deterministic output
         stop_sequences=["END"],
