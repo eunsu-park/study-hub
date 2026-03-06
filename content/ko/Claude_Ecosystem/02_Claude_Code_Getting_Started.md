@@ -40,8 +40,9 @@ Claude Code는 터미널에서 직접 실행되는 커맨드라인 AI 코딩 어
 9. [실용 연습: 버그 수정](#9-실용-연습-버그-수정)
 10. [작업 디렉토리와 프로젝트 범위](#10-작업-디렉토리와-프로젝트-범위)
 11. [효과적인 사용을 위한 팁](#11-효과적인-사용을-위한-팁)
-12. [연습 문제](#12-연습-문제)
-13. [다음 단계](#13-다음-단계)
+12. [최근 기능](#12-최근-기능)
+13. [연습 문제](#13-연습-문제)
+14. [다음 단계](#14-다음-단계)
 
 ---
 
@@ -441,7 +442,7 @@ claude -p "How many TODO comments are in this project?"
 cat error.log | claude -p "Explain this error and suggest a fix"
 
 # 특정 모델 사용
-claude -p "Explain this code" --model claude-opus-4-20250514
+claude -p "Explain this code" --model claude-opus-4-6
 ```
 
 ### 컨텍스트 관리
@@ -494,7 +495,7 @@ Session cost:
   Output tokens: 12,847  ($0.19)
   Total cost:    $0.33
 
-  Model: claude-sonnet-4-20250514
+  Model: claude-sonnet-4-6
   Session duration: 23 minutes
 ```
 
@@ -507,7 +508,7 @@ Session cost:
 
 Checking configuration...
   ✓ Authentication: Valid API key
-  ✓ Model access: claude-sonnet-4-20250514
+  ✓ Model access: claude-sonnet-4-6
   ✓ CLAUDE.md: Found at /Users/you/projects/my-app/CLAUDE.md
   ✓ Settings: Valid JSON
   ✓ Hooks: 2 hooks configured, all valid
@@ -739,7 +740,96 @@ cd ~/projects/backend && claude
 
 ---
 
-## 12. 연습 문제
+## 12. 최근 기능
+
+Claude Code는 활발히 개발되며 새로운 기능이 자주 추가됩니다. 다음은 알아두어야 할 주목할 만한 최신 기능들입니다.
+
+### 12.1 자동 메모리(Auto Memory)
+
+Claude Code는 이제 프로젝트 내 `.claude/` 디렉토리에 **자동으로 메모리를 저장**합니다. 메모리는 세션 간에 유지되며, Claude Code가 학습한 프로젝트 패턴, 관례, 사용자 선호도를 포함합니다.
+
+- **프로젝트 메모리**는 `~/.claude/projects/<project-path>/memory/`에 저장됩니다
+- 각 세션 시작 시 메모리가 로드되어 Claude Code가 코드베이스에 대한 축적된 지식을 활용할 수 있습니다
+- 별도의 설정이 필요 없습니다 — Claude Code가 자동으로 패턴을 관찰하고 기억합니다
+
+```
+# 예시: Claude Code가 테스트 선호도를 기억
+세션 1: "항상 pytest를 -v 플래그와 함께 실행해줘"
+세션 2: Claude Code가 별도 지시 없이 자동으로 `pytest -v` 사용
+```
+
+### 12.2 고속 모드(Fast Mode)
+
+세션 중 `/fast` 명령어로 전환할 수 있습니다. 고속 모드는 **동일한 Claude 모델**을 사용하면서 더 빠른 출력 생성을 제공합니다. 심층적인 사고보다 최대 출력 속도가 선호되는 간단한 작업에 유용합니다.
+
+```
+> /fast
+
+Fast mode enabled. Output generation is now optimized for speed.
+Model: claude-sonnet-4-6 (fast output)
+```
+
+고속 모드는 다른 모델로 전환하는 것이 아닙니다 — 현재 모델이 출력을 생성하는 방식을 조정합니다.
+
+### 12.3 음성 입력(Voice Input, STT)
+
+Claude Code는 20개 언어의 **음성-텍스트 입력(Speech-to-Text)**을 지원합니다. 명령을 직접 타이핑하는 대신 음성으로 전달할 수 있습니다. 특히 다음과 같은 경우에 유용합니다:
+
+- 복잡한 작업을 대화 형태로 설명
+- 긴 요구사항 받아쓰기
+- 접근성 향상 (핸즈프리 상호작용)
+
+음성 입력은 로컬에서 처리되어 텍스트로 변환된 후 Claude에 전송됩니다.
+
+### 12.4 PDF 읽기
+
+Read 도구가 이제 **PDF 파일을 직접 읽을** 수 있습니다. 10페이지가 넘는 대용량 PDF의 경우 `pages` 파라미터를 사용하여 페이지 범위를 지정합니다:
+
+```
+> Read the architecture diagram in docs/system-design.pdf
+
+Claude:
+  Tool: Read("docs/system-design.pdf", pages="1-5")
+
+  "The system design document describes a microservices
+   architecture with 4 main services: ..."
+```
+
+- 요청당 최대 **20페이지**
+- 10페이지 이하의 PDF는 전체 파일이 자동으로 읽힙니다
+- 텍스트 추출 및 시각적 레이아웃 해석 지원
+
+### 12.5 Jupyter Notebook 지원
+
+Claude Code가 **Jupyter 노트북**(`.ipynb` 파일)에 대한 향상된 지원을 제공합니다:
+
+- **Read** 도구로 `.ipynb` 파일을 읽으면 코드, 텍스트, 시각화를 결합한 모든 셀과 출력을 표시합니다
+- **NotebookEdit** 도구로 인덱스별 셀 편집, 새 셀 삽입, 셀 삭제가 가능합니다
+
+```
+> Read the analysis in notebooks/data_exploration.ipynb
+
+Claude:
+  Tool: Read("notebooks/data_exploration.ipynb")
+
+  Cell 1 [markdown]: "# Data Exploration"
+  Cell 2 [code]: import pandas as pd; df = pd.read_csv(...)
+  Cell 3 [output]: DataFrame with 1000 rows × 15 columns
+  ...
+```
+
+```
+> Fix the import error in cell 3
+
+Claude:
+  Tool: NotebookEdit("notebooks/data_exploration.ipynb",
+                      cell_number=3,
+                      new_source="import numpy as np\nimport pandas as pd")
+```
+
+---
+
+## 13. 연습 문제
 
 ### 연습 문제 1: 설치 확인
 
@@ -774,7 +864,7 @@ Claude Code를 설치하고 작동을 확인하세요:
 
 ---
 
-## 13. 다음 단계
+## 14. 다음 단계
 
 이제 Claude Code가 설치되었고 핵심 워크플로우를 이해했습니다. 다음 레슨은 **CLAUDE.md** — 프로젝트의 관례, 코딩 표준, 테스트 절차에 대해 Claude Code를 가르치는 프로젝트 설정 파일 — 를 다룹니다. 잘 작성된 CLAUDE.md는 팀의 관행을 따르는 데 필요한 컨텍스트를 제공하여 Claude Code의 효과를 크게 향상시킵니다.
 
