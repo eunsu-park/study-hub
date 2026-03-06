@@ -666,7 +666,7 @@ curl -s https://api.anthropic.com/v1/messages \
   -H "content-type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-sonnet-4-20250514",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 10,
     "messages": [{"role": "user", "content": "Hi"}]
   }' | python3 -m json.tool
@@ -740,7 +740,7 @@ def call_with_backoff(client, max_retries=5, **kwargs):
 client = anthropic.Anthropic()
 response = call_with_backoff(
     client,
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}]
 )
@@ -806,7 +806,7 @@ client = anthropic.Anthropic(
 
 # Or per-request timeout
 response = client.messages.create(
-    model="claude-opus-4-20250514",
+    model="claude-opus-4-6",
     max_tokens=8192,
     messages=[{"role": "user", "content": very_long_prompt}],
     timeout=180.0  # 3 minutes for this specific request
