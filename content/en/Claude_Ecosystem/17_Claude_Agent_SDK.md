@@ -4,7 +4,7 @@
 
 ---
 
-The Claude Agent SDK (`claude-code-sdk`) provides programmatic access to the same agent capabilities that power the Claude Code CLI. Instead of the low-level tool use loop you built manually in Lesson 16, the Agent SDK gives you a high-level interface: define a task, configure the agent's tools and permissions, and let the agent loop handle the rest -- thinking, acting, observing, and iterating until the task is complete. This lesson covers the SDK's architecture, core concepts, configuration, and practical usage patterns.
+The Claude Agent SDK provides programmatic access to the same agent capabilities that power the Claude Code CLI. The Agent SDK supports both **Python** (`claude-code-sdk`) and **TypeScript** (`@anthropic-ai/claude-code-sdk`). Instead of the low-level tool use loop you built manually in Lesson 16, the Agent SDK gives you a high-level interface: define a task, configure the agent's tools and permissions, and let the agent loop handle the rest -- thinking, acting, observing, and iterating until the task is complete. This lesson covers the SDK's architecture, core concepts, configuration, and practical usage patterns.
 
 **Difficulty**: ⭐⭐⭐
 
@@ -476,7 +476,7 @@ from claude_code_sdk import ClaudeCodeOptions
 
 options = ClaudeCodeOptions(
     # Model selection
-    model="claude-sonnet-4-20250514",        # Which model to use
+    model="claude-sonnet-4-6",        # Which model to use
 
     # Turn limits
     max_turns=25,                             # Max agent loop iterations
@@ -510,13 +510,13 @@ options = ClaudeCodeOptions(
 
 ```python
 # Use the most capable model for complex tasks
-options = ClaudeCodeOptions(model="claude-opus-4-20250514")
+options = ClaudeCodeOptions(model="claude-opus-4-6")
 
 # Use Sonnet for balanced performance/cost
-options = ClaudeCodeOptions(model="claude-sonnet-4-20250514")
+options = ClaudeCodeOptions(model="claude-sonnet-4-6")
 
 # Use Haiku for simple, fast tasks
-options = ClaudeCodeOptions(model="claude-haiku-3-5-20241022")
+options = ClaudeCodeOptions(model="claude-haiku-4-5")
 ```
 
 ### 7.3 Permission Modes
@@ -938,9 +938,9 @@ Test with both stdio and HTTP transport for the MCP server.
 
 ## 13. References
 
-- Claude Code SDK Documentation - https://docs.anthropic.com/en/docs/claude-code/sdk
-- Claude Code SDK Python Package - https://pypi.org/project/claude-code-sdk/
-- Claude Code SDK TypeScript Package - https://www.npmjs.com/package/@anthropic-ai/claude-code-sdk
+- Claude Agent SDK Documentation - https://docs.anthropic.com/en/docs/claude-code/sdk
+- Claude Agent SDK Python Package - https://pypi.org/project/claude-code-sdk/
+- Claude Agent SDK TypeScript Package - https://www.npmjs.com/package/@anthropic-ai/claude-code-sdk
 - Claude Code Architecture - https://docs.anthropic.com/en/docs/claude-code/overview
 - Agent Loop Documentation - https://docs.anthropic.com/en/docs/claude-code/sdk#the-agent-loop
 - MCP Integration - https://docs.anthropic.com/en/docs/claude-code/mcp
