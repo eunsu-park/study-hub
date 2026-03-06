@@ -55,8 +55,8 @@ class MessagesRequest:
     def validate(self) -> list[str]:
         errors: list[str] = []
         valid_models = [
-            "claude-opus-4-20250514", "claude-sonnet-4-20250514",
-            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6", "claude-sonnet-4-6",
+            "claude-haiku-4-5",
         ]
         if self.model not in valid_models:
             errors.append(f"Unknown model: {self.model}")
@@ -78,7 +78,7 @@ def exercise_1():
     """Demonstrate API request construction and validation."""
     # Valid multi-turn request
     req = MessagesRequest(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         messages=[
             APIMessage("user", "What is the capital of France?"),
             APIMessage("assistant", "The capital of France is Paris."),
@@ -135,7 +135,7 @@ def simulate_stream(text: str, chunk_size: int = 5) -> Generator[StreamEvent, No
             "id": "msg_sim_001",
             "type": "message",
             "role": "assistant",
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-6",
         },
     })
     yield StreamEvent("content_block_start", {
