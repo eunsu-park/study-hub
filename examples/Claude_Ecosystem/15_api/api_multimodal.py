@@ -24,7 +24,7 @@ def image_from_url():
     client = anthropic.Anthropic()
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{
             "role": "user",
@@ -65,7 +65,7 @@ def image_from_base64(image_path: str):
     media_type = media_types.get(ext, "image/png")
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{
             "role": "user",
@@ -100,7 +100,7 @@ def pdf_document(pdf_path: str):
     base64_pdf = base64.standard_b64encode(pdf_data).decode("utf-8")
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2048,
         messages=[{
             "role": "user",
