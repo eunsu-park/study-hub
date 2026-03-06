@@ -694,7 +694,7 @@ import base64
 client = anthropic.Anthropic()
 
 
-def claude_vision(image_path: str, prompt: str, model: str = "claude-sonnet-4-20250514") -> str:
+def claude_vision(image_path: str, prompt: str, model: str = "claude-sonnet-4-6") -> str:
     """Claude vision analysis"""
 
     # Encode image
@@ -761,7 +761,7 @@ def claude_multi_image(image_paths: list, prompt: str) -> str:
     content.append({"type": "text", "text": prompt})
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2048,
         messages=[{"role": "user", "content": content}],
     )
@@ -804,7 +804,7 @@ def claude_with_tools(prompt: str, image_path: str = None) -> dict:
         })
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         tools=tools,
         messages=[{"role": "user", "content": content}],
@@ -829,7 +829,7 @@ class ClaudeApplications:
         """Long document analysis (200K tokens)"""
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             messages=[
                 {
@@ -851,7 +851,7 @@ Question: {query}
         """Code review"""
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             messages=[
                 {
@@ -882,7 +882,7 @@ Include:
             image_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
         message = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             messages=[
                 {
@@ -963,10 +963,10 @@ def select_model(use_case: str) -> str:
         "multimodal_app": "gemini-1.5-pro",
 
         # Claude is better for
-        "complex_reasoning": "claude-sonnet-4-20250514",
-        "code_review": "claude-sonnet-4-20250514",
-        "long_document": "claude-sonnet-4-20250514",  # 200K context
-        "safety_critical": "claude-sonnet-4-20250514",
+        "complex_reasoning": "claude-sonnet-4-6",
+        "code_review": "claude-sonnet-4-6",
+        "long_document": "claude-sonnet-4-6",  # 200K context
+        "safety_critical": "claude-sonnet-4-6",
 
         # Cost optimization
         "high_volume": "gemini-1.5-flash",
@@ -1022,7 +1022,7 @@ class CostEstimator:
             "input": 15.0,   # per 1M tokens
             "output": 75.0,
         },
-        "claude-sonnet-4-20250514": {
+        "claude-sonnet-4-6": {
             "input": 3.0,    # per 1M tokens
             "output": 15.0,
         },
@@ -1148,7 +1148,7 @@ Using the comparison table from the lesson, select the most appropriate model fo
 | A) Transcribe handwritten medical records | `gpt-4o-mini` or `claude-3-haiku` | High volume + cost sensitivity → cheapest capable model. Both have strong OCR. At $0.15/1M tokens (GPT-4o-mini), 10K pages at ~1K tokens/page = $1.50/day. Medical context requires high accuracy, so verify with sampling before deployment. |
 | B) 2-hour security footage analysis | `gemini-1.5-pro` | **Only option** with native video support and sufficient context (2M tokens). 2 hours × 263 tokens/second ≈ 1.9M tokens — fits within Gemini 1.5 Pro's 2M context. Neither GPT-4o nor Claude supports video input natively. |
 | C) Real-time voice assistant | `gpt-4o-audio-preview` | **Only option** with native real-time audio input/output and 320ms average response time. The "omni" model handles voice natively without a separate speech-to-text step. |
-| D) Legal contract review + complex reasoning | `claude-sonnet-4-20250514` or `claude-3-opus` | Claude ranks highest in reasoning and coding; Constitutional AI training makes it better calibrated for high-stakes decisions. 200K context handles long contracts. Safety-critical → Claude's careful, nuanced responses reduce hallucination risk. |
+| D) Legal contract review + complex reasoning | `claude-sonnet-4-6` or `claude-3-opus` | Claude ranks highest in reasoning and coding; Constitutional AI training makes it better calibrated for high-stakes decisions. 200K context handles long contracts. Safety-critical → Claude's careful, nuanced responses reduce hallucination risk. |
 | E) E-commerce descriptions (100K images/day) | `gemini-1.5-flash` or `gpt-4o-mini` | Highest volume → lowest cost model. Gemini 1.5 Flash ($0.075/1M input tokens) is the cheapest. Simple descriptive task doesn't require maximum capability — test quality at small scale first. |
 
 </details>
@@ -1290,7 +1290,7 @@ Rules:
 4. Dimensions should include units if visible (e.g., "30cm × 20cm × 10cm")"""
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[
             {
