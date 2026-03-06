@@ -416,7 +416,7 @@ messages = [{"role": "user", "content": "What's the weather in Tokyo? Also, what
 
 while True:
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         tools=tools,
         messages=messages
@@ -1257,7 +1257,7 @@ def run_agent(user_message: str, max_turns: int = 10) -> str:
 
     for turn in range(max_turns):
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             tools=TOOL_SCHEMAS,
             messages=messages
