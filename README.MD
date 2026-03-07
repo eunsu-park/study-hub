@@ -12,8 +12,8 @@ From programming fundamentals to plasma physics — a working notebook of what I
 
 ```
 ├── content/          # Study materials / 학습 자료 Markdown
-│   ├── ko/           # Korean (55 topics) / 한국어 (55개 토픽)
-│   ├── en/           # English (55 topics) / 영어 (55개 토픽)
+│   ├── ko/           # Korean (60 topics) / 한국어 (60개 토픽)
+│   ├── en/           # English (60 topics) / 영어 (60개 토픽)
 │   ├── topic_metadata.yaml  # 4-Tier difficulty classification / 난이도 분류
 │   └── learning_paths.yaml  # Cross-topic curricula / 학습 경로 정의
 │
@@ -63,6 +63,10 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Security](./content/ko/Security/00_Overview.md) | CIA Triad, 암호학, TLS, OWASP, 인증/인가, 컨테이너 보안 | 16 |
 | [Software_Engineering](./content/ko/Software_Engineering/00_Overview.md) | SDLC, 애자일, UML, 품질보증, DevOps, 유지보수 | 16 |
 | [System_Design](./content/ko/System_Design/00_Overview.md) | 확장성, 분산시스템, 관측성, 검색 시스템 | 20 |
+| [Testing_and_QA](./content/ko/Testing_and_QA/00_Overview.md) | 테스트 피라미드, pytest, TDD, 통합/E2E/속성 기반 테스팅, CI/CD | 18 |
+| [Linear_Algebra](./content/ko/Linear_Algebra/00_Overview.md) | 벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용 | 20 |
+| [API_Design](./content/ko/API_Design/00_Overview.md) | REST 설계, 버저닝, 인증, OpenAPI, gRPC, 웹훅, API 보안 | 16 |
+| [DevOps](./content/ko/DevOps/00_Overview.md) | IaC (Terraform), CI/CD, 모니터링, GitOps, SRE, 카오스 엔지니어링 | 18 |
 
 ### Tier 3 — Advanced (고급)
 
@@ -89,6 +93,7 @@ From programming fundamentals to plasma physics — a working notebook of what I
 | [Reinforcement_Learning](./content/ko/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, SAC, 커리큘럼, 계층적 RL | 16 |
 | [Robotics](./content/ko/Robotics/00_Overview.md) | 운동학, 동역학, 경로 계획, SLAM, ROS2 | 16 |
 | [Signal_Processing](./content/ko/Signal_Processing/00_Overview.md) | 푸리에 해석, 샘플링, FFT, Z변환, 디지털 필터, 적응 필터 | 16 |
+| [Edge_AI](./content/ko/Edge_AI/00_Overview.md) | 모델 압축, 양자화, 프루닝, 디스틸레이션, TFLite, ONNX, 엣지 배포 | 16 |
 
 ### Tier 4 — Expert (전문)
 
@@ -103,15 +108,15 @@ From programming fundamentals to plasma physics — a working notebook of what I
 
 | Path / 경로 | Topics / 토픽 |
 |---|---|
-| Full Stack Developer / 풀스택 개발자 | Programming → Python → Web_Development → Git → Docker → PostgreSQL → Backend_Frameworks → Frontend_Frameworks → GraphQL → Cloud_Computing → System_Design |
-| Machine Learning Engineer / 머신러닝 엔지니어 | Programming → Python → Data_Science → Machine_Learning → Math_for_AI → Deep_Learning → Computer_Vision → LLM_and_NLP → Foundation_Models → Reinforcement_Learning → MLOps |
+| Full Stack Developer / 풀스택 개발자 | Programming → Python → Web_Development → Git → Docker → PostgreSQL → Backend_Frameworks → Frontend_Frameworks → GraphQL → API_Design → Testing_and_QA → DevOps → Cloud_Computing → System_Design |
+| Machine Learning Engineer / 머신러닝 엔지니어 | Programming → Python → Data_Science → Machine_Learning → Math_for_AI → Deep_Learning → Computer_Vision → LLM_and_NLP → Foundation_Models → Reinforcement_Learning → MLOps → Linear_Algebra → Edge_AI |
 | Systems Programmer / 시스템 프로그래머 | Programming → C_Programming → CPP → Rust → Linux → Shell_Script → OS_Theory → Computer_Architecture → Compiler_Design → Algorithm |
 | Space Physics Specialist / 우주물리학 전문가 | Calculus_and_Differential_Equations → Mathematical_Methods → Electrodynamics → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
-| Computer Science Foundations / 컴퓨터 과학 기초 | Programming → Python → Algorithm → Formal_Languages → Database_Theory → OS_Theory → Networking → Computer_Architecture → Software_Engineering → Security |
+| Computer Science Foundations / 컴퓨터 과학 기초 | Programming → Python → Algorithm → Formal_Languages → Database_Theory → OS_Theory → Networking → Computer_Architecture → Software_Engineering → Testing_and_QA → Security |
 | Cybersecurity Engineer / 사이버보안 엔지니어 | Linux → Networking → Security → Cryptography_Theory → Shell_Script → Docker → Cloud_Computing |
-| Embedded & IoT Engineer / 임베디드 & IoT 엔지니어 | C_Programming → Computer_Architecture → OS_Theory → IoT_Embedded → Networking → Control_Theory → Signal_Processing |
+| Embedded & IoT Engineer / 임베디드 & IoT 엔지니어 | C_Programming → Computer_Architecture → OS_Theory → IoT_Embedded → Networking → Control_Theory → Signal_Processing → Edge_AI |
 | Data Infrastructure Engineer / 데이터 인프라 엔지니어 | Python → PostgreSQL → Database_Theory → Data_Engineering → Docker → Cloud_Computing → System_Design |
-| Scientific Computing Specialist / 과학 계산 전문가 | Python → Calculus_and_Differential_Equations → Probability_and_Statistics → Mathematical_Methods → Numerical_Simulation → Signal_Processing → Data_Science |
+| Scientific Computing Specialist / 과학 계산 전문가 | Python → Calculus_and_Differential_Equations → Probability_and_Statistics → Mathematical_Methods → Linear_Algebra → Numerical_Simulation → Signal_Processing → Data_Science |
 
 ---
 
@@ -144,14 +149,15 @@ C_Programming → CPP → Rust
 #### Track 2: Full-Stack Web / 2트랙: 웹 풀스택
 
 ```
-Web_Development → Frontend_Frameworks → Backend_Frameworks → GraphQL → Docker → Cloud_Computing
+Web_Development → Frontend_Frameworks → Backend_Frameworks → GraphQL → API_Design → Docker → DevOps → Cloud_Computing
 ```
 
 #### Track 3: Data & Infrastructure / 3트랙: 데이터 & 인프라
 
 ```
 PostgreSQL → Data_Science → Data_Engineering
-Linux (심화) → Networking → System_Design → Security
+Linear_Algebra → Math_for_AI
+Linux (심화) → Networking → System_Design → Testing_and_QA → Security
 ```
 
 #### Track 4: CS Theory / 4트랙: CS 이론
@@ -165,8 +171,8 @@ Software_Engineering → Database_Theory → Cryptography_Theory
 #### Track 5: AI & Machine Learning / 5트랙: AI & 머신러닝
 
 ```
-Math_for_AI → Machine_Learning → Deep_Learning → LLM_and_NLP → Foundation_Models
-├─ 응용: Computer_Vision, Reinforcement_Learning, MLOps
+Linear_Algebra → Math_for_AI → Machine_Learning → Deep_Learning → LLM_and_NLP → Foundation_Models
+├─ 응용: Computer_Vision, Reinforcement_Learning, MLOps, Edge_AI
 └─ 수학 심화: Calculus, Mathematical_Methods, Numerical_Simulation
 ```
 

@@ -21,6 +21,9 @@ paths:
       - Backend_Frameworks
       - Frontend_Frameworks
       - GraphQL
+      - API_Design
+      - Testing_and_QA
+      - DevOps
       - Cloud_Computing
       - System_Design
 
@@ -45,6 +48,8 @@ paths:
       - Foundation_Models
       - Reinforcement_Learning
       - MLOps
+      - Linear_Algebra
+      - Edge_AI
 
   systems_programmer:
     label:
@@ -105,6 +110,7 @@ paths:
       - Networking
       - Computer_Architecture
       - Software_Engineering
+      - Testing_and_QA
       - Security
 
   cybersecurity:
@@ -142,6 +148,7 @@ paths:
       - Networking
       - Control_Theory
       - Signal_Processing
+      - Edge_AI
 
   data_infrastructure:
     label:
@@ -175,6 +182,7 @@ paths:
       - Calculus_and_Differential_Equations
       - Probability_and_Statistics
       - Mathematical_Methods
+      - Linear_Algebra
       - Numerical_Simulation
       - Signal_Processing
       - Data_Science
