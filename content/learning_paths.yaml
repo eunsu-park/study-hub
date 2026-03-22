@@ -13,18 +13,22 @@ paths:
     icon: "code"
     color: "#0d6efd"
     topics:
+      - Programming
       - Python_Basics
       - Python_Advanced
 
-  c_programmer:
+  systems_programmer:
     label:
-      en: "C Programmer"
-      ko: "C 프로그래머"
+      en: "Systems Programmer"
+      ko: "시스템 프로그래머"
     description:
-      en: "From C fundamentals to systems programming, data structures, and embedded development."
-      ko: "C 기초부터 시스템 프로그래밍, 자료구조, 임베디드 개발까지."
+      en: "From C/C++ fundamentals to advanced systems programming, templates, and concurrency."
+      ko: "C/C++ 기초부터 고급 시스템 프로그래밍, 템플릿, 동시성까지."
     icon: "code"
     color: "#fd7e14"
     topics:
+      - Programming
       - C_Basics
       - C_Advanced
+      - CPP_Basics
+      - CPP_Advanced
