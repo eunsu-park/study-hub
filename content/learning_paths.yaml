@@ -32,3 +32,34 @@ paths:
       - C_Advanced
       - CPP_Basics
       - CPP_Advanced
+
+  ml_engineer:
+    label:
+      en: "Machine Learning Engineer"
+      ko: "머신러닝 엔지니어"
+    description:
+      en: "From Python to classical ML and deep learning with PyTorch."
+      ko: "Python부터 고전 ML, PyTorch 딥러닝까지."
+    icon: "dashboard"
+    color: "#198754"
+    topics:
+      - Programming
+      - Python_Basics
+      - Python_Advanced
+      - Machine_Learning
+      - Deep_Learning
+
+  linux_devops:
+    label:
+      en: "Linux & DevOps"
+      ko: "Linux & DevOps"
+    description:
+      en: "Linux system administration, shell scripting, and containerization."
+      ko: "Linux 시스템 관리, 셸 스크립팅, 컨테이너화."
+    icon: "list"
+    color: "#6f42c1"
+    topics:
+      - Linux
+      - Shell_Script
+      - Git
+      - Docker
