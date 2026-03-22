@@ -21,6 +21,7 @@ From programming fundamentals to plasma physics — curated study materials that
 | Exercises | Exercises exist and are high quality / 연습문제가 존재하고 양질인지 |
 | Examples | Example code exists and is high quality / 예제 코드가 존재하고 양질인지 |
 | KO Translation | Korean translation is correct / 한글 번역이 올바른지 |
+| EN/KO File Parity | EN and KO file counts match / EN/KO 파일 수 동일 |
 
 ---
 
