@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (6 topics)
+  # Tier 1 — Beginner (9 topics)
   Programming:
     tier: beginner
     description:
@@ -90,7 +90,26 @@ topics:
       en: "Modal editing, motions, text objects, plugins, and Neovim"
       ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
 
-  # Tier 2 — Intermediate (3 topics)
+  Shell_Script:
+    tier: beginner
+    description:
+      en: "Bash scripting and CLI fundamentals"
+      ko: "Bash 스크립팅 및 CLI 기초"
+
+  Linux:
+    tier: beginner
+    description:
+      en: "Linux system administration and usage"
+      ko: "Linux 시스템 관리 및 사용법"
+
+  Docker:
+    tier: beginner
+    prerequisites: [Linux]
+    description:
+      en: "Containerization with Docker and Kubernetes"
+      ko: "Docker와 Kubernetes를 활용한 컨테이너화"
+
+  # Tier 2 — Intermediate (4 topics)
   Python_Advanced:
     tier: intermediate
     prerequisites: [Python_Basics]
@@ -111,6 +130,13 @@ topics:
     description:
       en: "Advanced C++ templates, modern standards, concurrency, and design patterns"
       ko: "고급 C++ 템플릿, 모던 표준, 동시성 및 디자인 패턴"
+
+  Machine_Learning:
+    tier: intermediate
+    prerequisites: [Python_Basics, Data_Science]
+    description:
+      en: "Classical machine learning algorithms"
+      ko: "고전 머신러닝 알고리즘"
 
   # Tier 3 — Advanced (1 topic)
   Deep_Learning:
