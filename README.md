@@ -31,8 +31,12 @@ From programming fundamentals to plasma physics — curated study materials that
 
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
+| [Programming](./content/en/Programming/00_Overview.md) | 프로그래밍 개념, 패러다임, 디자인 패턴, 클린 코드, 테스팅 | 16 |
 | [Python_Basics](./content/en/Python_Basics/00_Overview.md) | Python 언어 기초: 변수, 제어문, 함수, 자료구조, OOP, 모듈, 표준 라이브러리 | 14 |
 | [C_Basics](./content/en/C_Basics/00_Overview.md) | C 언어 기초: 변수, 포인터, 구조체, 동적 메모리, 파일 I/O, 전처리기 | 15 |
+| [CPP_Basics](./content/en/CPP_Basics/00_Overview.md) | C++ 기초: OOP, STL 컨테이너/알고리즘, 예외 처리, 파일 I/O, CMake | 15 |
+| [Git](./content/en/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 14 |
+| [VIM](./content/en/VIM/00_Overview.md) | 모달 편집, 모션, 매크로, 플러그인, Neovim/LSP | 14 |
 
 ### Tier 2 — Intermediate (중급)
 
@@ -40,12 +44,13 @@ From programming fundamentals to plasma physics — curated study materials that
 |---|---|---|
 | [Python_Advanced](./content/en/Python_Advanced/00_Overview.md) | Python 고급: 데코레이터, 메타클래스, async, 디스크립터, 함수형, 성능 최적화 | 14 |
 | [C_Advanced](./content/en/C_Advanced/00_Overview.md) | 고급 C: 시스템 프로그래밍, 자료구조, 네트워크, 동시성, 임베디드, 크로스 플랫폼 | 17 |
+| [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
 
 ### Tier 3 — Advanced (고급)
 
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
-| *(no content published yet / 아직 게시된 콘텐츠 없음)* | | |
+| [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
 
 ### Tier 4 — Expert (전문)
 
@@ -57,8 +62,8 @@ From programming fundamentals to plasma physics — curated study materials that
 
 | Path / 경로 | Topics / 토픽 |
 |---|---|
-| Python Developer / Python 개발자 | Python_Basics → Python_Advanced |
-| C Programmer / C 프로그래머 | C_Basics → C_Advanced |
+| Python Developer / Python 개발자 | Programming → Python_Basics → Python_Advanced |
+| Systems Programmer / 시스템 프로그래머 | Programming → C_Basics → C_Advanced → CPP_Basics → CPP_Advanced |
 
 ---
 
