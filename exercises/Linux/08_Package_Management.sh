@@ -1,0 +1,255 @@
+#!/bin/bash
+# Exercises for Lesson 08: Package Management
+# Topic: Linux
+# Solutions to practice problems from the lesson.
+
+# === Exercise 1: apt/dnf Package Operations ===
+# Problem: Install, update, remove, and query packages on Debian and RHEL systems.
+exercise_1() {
+    echo "=== Exercise 1: apt/dnf Package Operations ==="
+    echo ""
+    echo "Scenario: You manage both Ubuntu and CentOS servers and need to perform"
+    echo "common package operations on each platform."
+    echo ""
+
+    echo "--- Part A: Search and install packages ---"
+    echo "Solution:"
+    echo "  # Debian/Ubuntu (apt)"
+    echo "  sudo apt update                        # Refresh package index"
+    echo "  apt search nginx                       # Search available packages"
+    echo "  apt show nginx                         # Show package details"
+    echo "  sudo apt install nginx                 # Install package"
+    echo "  sudo apt install nginx=1.24.0-1        # Install specific version"
+    echo ""
+    echo "  # RHEL/Fedora (dnf)"
+    echo "  sudo dnf check-update                  # Check for available updates"
+    echo "  dnf search nginx                       # Search packages"
+    echo "  dnf info nginx                         # Show package details"
+    echo "  sudo dnf install nginx                 # Install package"
+    echo "  sudo dnf install nginx-1.24.0          # Install specific version"
+    echo ""
+    echo "  Explanation:"
+    echo "    apt update refreshes the local package index from configured repos."
+    echo "    Always run 'apt update' before 'apt install' to get latest versions."
+    echo "    dnf check-update is the equivalent (but optional — dnf auto-refreshes)."
+    echo "    'apt show' / 'dnf info' displays version, dependencies, description."
+    echo ""
+
+    echo "--- Part B: Update and upgrade ---"
+    echo "Solution:"
+    echo "  # Debian/Ubuntu"
+    echo "  sudo apt update && sudo apt upgrade       # Update all packages"
+    echo "  sudo apt full-upgrade                     # Upgrade with dependency changes"
+    echo "  sudo apt dist-upgrade                     # Handle distribution upgrades"
+    echo ""
+    echo "  # RHEL/Fedora"
+    echo "  sudo dnf upgrade                          # Update all packages"
+    echo "  sudo dnf upgrade --security               # Security updates only"
+    echo ""
+    echo "  Explanation:"
+    echo "    'apt upgrade' never removes packages or installs new dependencies."
+    echo "    'apt full-upgrade' will remove packages if needed to resolve deps."
+    echo "    'dnf upgrade --security' is ideal for production (minimal changes)."
+    echo ""
+
+    echo "--- Part C: Remove and clean up ---"
+    echo "Solution:"
+    echo "  # Debian/Ubuntu"
+    echo "  sudo apt remove nginx                  # Remove package, keep config files"
+    echo "  sudo apt purge nginx                   # Remove package AND config files"
+    echo "  sudo apt autoremove                    # Remove orphaned dependencies"
+    echo "  sudo apt clean                         # Delete cached .deb files"
+    echo ""
+    echo "  # RHEL/Fedora"
+    echo "  sudo dnf remove nginx                  # Remove package and unused deps"
+    echo "  sudo dnf autoremove                    # Remove orphaned dependencies"
+    echo "  sudo dnf clean all                     # Clear all cached data"
+    echo ""
+    echo "  Explanation:"
+    echo "    remove keeps config files (useful if reinstalling later)."
+    echo "    purge deletes everything including /etc configs."
+    echo "    autoremove removes packages that were installed as dependencies"
+    echo "    but are no longer required by any installed package."
+    echo ""
+
+    echo "--- Part D: Query installed packages ---"
+    echo "Solution:"
+    echo "  # Debian/Ubuntu"
+    echo "  dpkg -l | grep nginx                   # List installed, filter by name"
+    echo "  dpkg -L nginx                          # List files installed by package"
+    echo "  dpkg -S /usr/sbin/nginx                # Which package owns this file?"
+    echo "  apt list --installed                    # All installed packages"
+    echo ""
+    echo "  # RHEL/Fedora"
+    echo "  rpm -qa | grep nginx                   # List installed, filter by name"
+    echo "  rpm -ql nginx                          # List files in package"
+    echo "  rpm -qf /usr/sbin/nginx                # Which package owns this file?"
+    echo "  dnf list installed                     # All installed packages"
+    echo ""
+    echo "  Explanation:"
+    echo "    dpkg/rpm are low-level tools (work offline, no dependency resolution)."
+    echo "    apt/dnf are high-level (resolve deps, download from repos)."
+    echo "    'dpkg -S' / 'rpm -qf' answers 'what package provides this file?'"
+    echo "    — essential for debugging missing file issues."
+}
+
+# === Exercise 2: Repository Management and GPG Keys ===
+# Problem: Add third-party repositories and manage GPG signing keys.
+exercise_2() {
+    echo "=== Exercise 2: Repository Management and GPG Keys ==="
+    echo ""
+    echo "Scenario: You need to install Docker from the official Docker repository"
+    echo "instead of the distribution's (potentially outdated) version."
+    echo ""
+
+    echo "--- Part A: Add a third-party APT repository ---"
+    echo "Solution:"
+    echo "  # Step 1: Add the GPG signing key"
+    echo "  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \\"
+    echo "    sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+    echo ""
+    echo "  # Step 2: Add the repository"
+    echo "  echo \"deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \\"
+    echo "    https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable\" | \\"
+    echo "    sudo tee /etc/apt/sources.list.d/docker.list"
+    echo ""
+    echo "  # Step 3: Update and install"
+    echo "  sudo apt update"
+    echo "  sudo apt install docker-ce docker-ce-cli containerd.io"
+    echo ""
+    echo "  Explanation:"
+    echo "    GPG keys verify that packages are authentic (not tampered with)."
+    echo "    signed-by= links the repo to its specific key (modern best practice)."
+    echo "    /usr/share/keyrings/ is the standard location for repo keys."
+    echo "    \$(lsb_release -cs) inserts the codename (e.g., 'jammy' for 22.04)."
+    echo "    Each repo goes in a separate file under /etc/apt/sources.list.d/."
+    echo ""
+
+    echo "--- Part B: Add a third-party DNF repository ---"
+    echo "Solution:"
+    echo "  sudo dnf config-manager --add-repo \\"
+    echo "    https://download.docker.com/linux/centos/docker-ce.repo"
+    echo ""
+    echo "  # Or manually create a repo file:"
+    cat << 'REPO'
+# /etc/yum.repos.d/custom-app.repo
+[custom-app]
+name=Custom Application Repository
+baseurl=https://repo.example.com/centos/$releasever/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.example.com/RPM-GPG-KEY-custom
+REPO
+    echo ""
+    echo "  Explanation:"
+    echo "    dnf config-manager automates .repo file creation."
+    echo "    \$releasever and \$basearch are dnf variables (e.g., 9, x86_64)."
+    echo "    gpgcheck=1 enforces signature verification (never set to 0 in production)."
+    echo "    gpgkey= tells dnf where to fetch the signing key automatically."
+    echo ""
+
+    echo "--- Part C: Manage and verify GPG keys ---"
+    echo "Solution:"
+    echo "  # APT: List trusted keys"
+    echo "  apt-key list                           # (deprecated, but still works)"
+    echo "  ls /usr/share/keyrings/                # Modern key location"
+    echo "  gpg --show-keys /usr/share/keyrings/docker-archive-keyring.gpg"
+    echo ""
+    echo "  # DNF: List imported keys"
+    echo "  rpm -qa gpg-pubkey*                    # List all imported GPG keys"
+    echo "  rpm -qi gpg-pubkey-XXXXXXXX            # Show key details"
+    echo ""
+    echo "  Explanation:"
+    echo "    apt-key is deprecated since Ubuntu 22.04 — use signed-by= instead."
+    echo "    RPM stores keys as pseudo-packages (gpg-pubkey-*)."
+    echo "    Periodically audit imported keys to remove untrusted repos."
+}
+
+# === Exercise 3: Dependency Resolution and Package Pinning ===
+# Problem: Resolve dependency issues and pin packages to specific versions.
+exercise_3() {
+    echo "=== Exercise 3: Dependency Resolution and Package Pinning ==="
+    echo ""
+    echo "Scenario: You need to hold a critical package at a known-good version"
+    echo "to prevent automatic upgrades from breaking your application."
+    echo ""
+
+    echo "--- Part A: APT package pinning ---"
+    echo "Solution:"
+    echo "  # Hold a package (prevent upgrades)"
+    echo "  sudo apt-mark hold nginx"
+    echo "  apt-mark showhold                      # List held packages"
+    echo "  sudo apt-mark unhold nginx             # Release the hold"
+    echo ""
+    echo "  # Advanced: Pin to specific version with preferences"
+    cat << 'PIN'
+# /etc/apt/preferences.d/nginx
+Package: nginx
+Pin: version 1.24.0*
+Pin-Priority: 1001
+PIN
+    echo ""
+    echo "  Explanation:"
+    echo "    apt-mark hold is the simplest approach — blocks all version changes."
+    echo "    Pin-Priority > 1000 forces a specific version even during dist-upgrade."
+    echo "    Priority 500 = default. 100 = installed version. 1001 = locked."
+    echo "    Pinning is granular: you can pin per-repo, per-version, or per-release."
+    echo ""
+
+    echo "--- Part B: DNF version locking ---"
+    echo "Solution:"
+    echo "  sudo dnf install dnf-plugin-versionlock   # Install the plugin"
+    echo "  sudo dnf versionlock add nginx             # Lock nginx at current version"
+    echo "  sudo dnf versionlock list                  # List locked packages"
+    echo "  sudo dnf versionlock delete nginx          # Remove the lock"
+    echo ""
+    echo "  Explanation:"
+    echo "    versionlock records the exact installed version (name-version-release.arch)."
+    echo "    dnf will skip updates for locked packages."
+    echo "    Lock file: /etc/dnf/plugins/versionlock.list"
+    echo "    Alternative: 'exclude=nginx*' in /etc/dnf/dnf.conf (excludes entirely)."
+    echo ""
+
+    echo "--- Part C: Resolve broken dependencies ---"
+    echo "Solution:"
+    echo "  # APT: Fix broken dependencies"
+    echo "  sudo apt --fix-broken install              # Resolve broken state"
+    echo "  sudo dpkg --configure -a                   # Complete interrupted installs"
+    echo "  sudo apt install -f                        # Fix dependency issues"
+    echo ""
+    echo "  # DNF: Troubleshoot dependency issues"
+    echo "  sudo dnf check                             # Verify package database"
+    echo "  sudo dnf distro-sync                       # Sync all packages to repo versions"
+    echo "  sudo dnf history list                      # View transaction history"
+    echo "  sudo dnf history undo 42                   # Undo transaction #42"
+    echo ""
+    echo "  Explanation:"
+    echo "    apt --fix-broken install attempts to resolve incomplete installations"
+    echo "    by downloading missing dependencies."
+    echo "    dpkg --configure -a completes any partially configured packages."
+    echo "    dnf history undo is powerful — it can roll back a problematic update"
+    echo "    by reversing installs, removes, and upgrades from that transaction."
+    echo ""
+
+    echo "--- Part D: Simulate before applying ---"
+    echo "Solution:"
+    echo "  apt install -s nginx                 # Simulate (dry-run) installation"
+    echo "  apt upgrade -s                       # Simulate system upgrade"
+    echo "  dnf install --assumeno nginx         # Show what would happen"
+    echo "  dnf upgrade --assumeno               # Preview upgrade changes"
+    echo ""
+    echo "  Explanation:"
+    echo "    -s (simulate) shows what apt WOULD do without making changes."
+    echo "    --assumeno answers 'no' to all prompts (safe for scripted previews)."
+    echo "    ALWAYS simulate before major upgrades in production."
+    echo "    Check the output for unexpected removals or version changes."
+}
+
+# Run all exercises
+exercise_1
+echo ""
+exercise_2
+echo ""
+exercise_3
+echo ""
+echo "All exercises completed!"
