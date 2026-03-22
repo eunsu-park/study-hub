@@ -1,0 +1,30 @@
+# Learning Paths — Cross-Topic Curricula
+# Defines ordered sequences of topics forming structured study paths.
+# Only includes paths that can be followed with currently published topics.
+
+paths:
+  python_developer:
+    label:
+      en: "Python Developer"
+      ko: "Python 개발자"
+    description:
+      en: "From Python fundamentals to advanced patterns including decorators, metaclasses, and async."
+      ko: "Python 기초부터 데코레이터, 메타클래스, 비동기를 포함한 고급 패턴까지."
+    icon: "code"
+    color: "#0d6efd"
+    topics:
+      - Python_Basics
+      - Python_Advanced
+
+  c_programmer:
+    label:
+      en: "C Programmer"
+      ko: "C 프로그래머"
+    description:
+      en: "From C fundamentals to systems programming, data structures, and embedded development."
+      ko: "C 기초부터 시스템 프로그래밍, 자료구조, 임베디드 개발까지."
+    icon: "code"
+    color: "#fd7e14"
+    topics:
+      - C_Basics
+      - C_Advanced
