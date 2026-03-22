@@ -1,0 +1,218 @@
+================================================================================
+  VIM COMMAND-LINE AND ADVANCED FEATURES — Practice Guide
+================================================================================
+
+  The command-line mode (:, /, ?) is where Vim's power truly shines.
+  This file covers Ex commands, ranges, global commands, and external filters.
+
+================================================================================
+  EXERCISE 1: Ranges and Addresses
+================================================================================
+
+  Every Ex command can take a range: :{range}{command}
+
+  Range syntax:
+    :5          — line 5 only
+    :5,10       — lines 5 through 10
+    :.          — current line
+    :$          — last line
+    :%          — entire file (same as :1,$)
+    :'<,'>      — visual selection (auto-filled when you press : in Visual)
+    :.,+5       — current line to 5 lines below
+    :-3,.       — 3 lines above to current line
+    :/pattern/  — next line matching pattern
+    :?pattern?  — previous line matching pattern
+
+  Practice on these numbered lines:
+
+  LINE-01 alpha
+  LINE-02 bravo
+  LINE-03 charlie
+  LINE-04 delta
+  LINE-05 echo
+  LINE-06 foxtrot
+  LINE-07 golf
+  LINE-08 hotel
+  LINE-09 india
+  LINE-10 juliet
+
+  Try these commands:
+    :5,7d         → delete lines LINE-05 through LINE-07 (undo with u)
+    :3,6y         → yank lines 3-6, then p to paste
+    :8,10s/LINE/ROW/  → substitute on lines 8-10 only
+    :/charlie/,/golf/d  → delete from charlie to golf (undo with u)
+
+================================================================================
+  EXERCISE 2: The Global Command (:g)
+================================================================================
+
+  :g/{pattern}/{command}  — execute {command} on lines matching {pattern}
+  :v/{pattern}/{command}  — execute on lines NOT matching {pattern}
+
+  Practice data:
+
+  TODO: Fix login bug
+  DONE: Update README
+  TODO: Add unit tests
+  DONE: Refactor database module
+  TODO: Implement search feature
+  DONE: Fix CSS layout
+  TODO: Write API documentation
+  DONE: Deploy to staging
+
+  Try these:
+    :g/TODO/d           → delete all TODO lines
+    (undo with u)
+
+    :g/DONE/d           → delete all DONE lines
+    (undo with u)
+
+    :v/TODO/d           → delete all NON-TODO lines (keep only TODOs)
+    (undo with u)
+
+    :g/TODO/s/TODO/WIP/ → change TODO to WIP on matching lines
+    (undo with u)
+
+    :g/DONE/t$          → copy all DONE lines to end of file
+    (undo with u)
+
+    :g/TODO/m0          → move all TODO lines to top of file
+    (undo with u)
+
+  Power patterns:
+    :g/^$/d             → delete all blank lines
+    :g/^\s*$/d          → delete all blank/whitespace-only lines
+    :g/console.log/d    → remove all debug logging
+    :g/^/m0             → reverse all lines in file
+
+================================================================================
+  EXERCISE 3: External Filters and Shell Commands
+================================================================================
+
+  :!{cmd}           — run shell command and show output
+  :{range}!{cmd}    — filter range through external command
+  :r !{cmd}         — read command output into buffer
+  :w !{cmd}         — write buffer as stdin to command
+
+  Practice:
+
+  1. Run a shell command:
+     :!date                  → shows current date
+     :!ls -la                → shows directory listing
+
+  2. Read command output into file:
+     :r !echo "inserted by shell"
+     :r !seq 5               → inserts numbers 1-5
+
+  3. Sort these lines using external sort:
+     (Select the lines with V, then type :!sort)
+
+  Zebra
+  Apple
+  Mango
+  Banana
+  Cherry
+
+  4. Filter through column alignment:
+     (Select below with V, then :!column -t)
+
+  Name Age City
+  Alice 30 Seoul
+  Bob 25 Tokyo
+  Charlie 35 London
+
+  5. Format JSON (if jq/python available):
+     (Select and filter: :!python3 -m json.tool)
+
+  {"name":"Alice","age":30,"hobbies":["vim","coding"]}
+
+================================================================================
+  EXERCISE 4: Registers in Command-Line
+================================================================================
+
+  Ctrl-r {reg}  — insert register contents in command-line
+
+  Useful registers:
+    "   — default (last yank/delete)
+    0   — last yank
+    /   — last search pattern
+    :   — last command
+    %   — current filename
+    #   — alternate filename
+    .   — last inserted text
+    =   — expression register (calculator)
+
+  Practice:
+    1. Yank a word: yiw on any word
+    2. Type :%s/Ctrl-r"/replacement/g
+       (Ctrl-r" pastes the yanked word into the command)
+
+    3. Calculator: In Insert mode, Ctrl-r= then type 6*7 Enter
+       → inserts "42"
+
+    4. Type :echo @%    → shows current filename
+       Type :echo @:    → shows last Ex command
+
+================================================================================
+  EXERCISE 5: Quickfix and Location List
+================================================================================
+
+  :make              — run makeprogram, populate quickfix
+  :grep {pattern}    — search files, populate quickfix
+  :vimgrep /pat/ **  — Vim's built-in grep
+
+  :copen             — open quickfix window
+  :cn / :cp          — next/previous quickfix entry
+  :cfirst / :clast   — first/last entry
+
+  :lopen             — open location list (window-local)
+  :ln / :lp          — next/previous location entry
+
+  Practice:
+    :vimgrep /EXERCISE/ %
+    :copen
+    (You'll see a list of all EXERCISE lines in this file)
+    (Press Enter on any line to jump to it)
+    :cn  → jump to next match
+    :cp  → jump to previous match
+
+  Workflow for code: "find all occurrences, fix one by one"
+    :vimgrep /TODO/ **/*.py
+    :copen
+    :cn  (fix each, then :cn for next)
+
+================================================================================
+  EXERCISE 6: Advanced Substitution
+================================================================================
+
+  :%s/pattern/replacement/flags
+
+  Flags:
+    g   — all occurrences per line (not just first)
+    c   — confirm each substitution
+    i   — case-insensitive
+    I   — case-sensitive
+    n   — count matches without replacing
+    e   — suppress "not found" errors
+
+  Replacement special characters:
+    &    — entire match
+    \1   — first capture group
+    \U   — uppercase following
+    \L   — lowercase following
+    \=   — expression evaluation
+
+  Practice data:
+
+  firstName: John, lastName: Doe
+  firstName: Jane, lastName: Smith
+  firstName: Bob, lastName: Jones
+
+  Try these:
+    :%s/firstName/first_name/g        → rename field
+    :%s/\v(\w+): (\w+)/\2: \1/g      → swap key: value
+    :%s/\vfirst_name: (\w+)/name: \U\1/g → uppercase names
+    :%s/\v^(.*)$/  - \1/             → add prefix "  - " to each line
+
+  Count matches without replacing:
+    :%s/name//gn                      → "N matches on M lines"

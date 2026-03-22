@@ -1,0 +1,171 @@
+================================================================================
+  VIM BUFFERS, WINDOWS, AND TABS — Practice Guide
+================================================================================
+
+  Vim's container hierarchy:
+    Buffer  = a file loaded into memory (may not be visible)
+    Window  = a viewport showing a buffer
+    Tab     = a collection of windows (a layout)
+
+  A buffer can be shown in 0 or more windows.
+  A window always shows exactly 1 buffer.
+  A tab page can hold 1 or more windows.
+
+================================================================================
+  EXERCISE 1: Buffer Management
+================================================================================
+
+  :ls / :buffers      — list all buffers
+  :b {N}              — switch to buffer N
+  :b {name}           — switch to buffer by partial name
+  :bn                 — next buffer
+  :bp                 — previous buffer
+  :bd                 — delete (close) current buffer
+  :e {file}           — open file in new buffer
+
+  Practice workflow:
+    1. Open this file:        vim 10_buffers_windows_tabs.txt
+    2. Open another file:     :e 01_basic_motions.txt
+    3. List buffers:          :ls
+       You should see:
+         1  #  "10_buffers_windows_tabs.txt"    line 1
+         2  %a "01_basic_motions.txt"           line 1
+       # = alternate buffer, %a = active buffer
+    4. Switch to first:       :b1  (or :bp)
+    5. Switch back:           :b2  (or :bn)
+    6. Switch by name:        :b motions  (partial match)
+    7. Alternate buffer:      Ctrl-^  (toggle between last two)
+
+  Buffer states:
+    a   active   — loaded and displayed in a window
+    h   hidden   — loaded but not displayed
+    +            — modified (unsaved changes)
+    -            — read-only
+
+================================================================================
+  EXERCISE 2: Window Splits
+================================================================================
+
+  :sp [file]      — horizontal split (or Ctrl-w s)
+  :vsp [file]     — vertical split   (or Ctrl-w v)
+  Ctrl-w w        — cycle through windows
+  Ctrl-w h/j/k/l — move to window left/down/up/right
+  Ctrl-w H/J/K/L — move window to far left/bottom/top/right
+  Ctrl-w =        — equalize window sizes
+  Ctrl-w _        — maximize height of current window
+  Ctrl-w |        — maximize width of current window
+  Ctrl-w +/-      — increase/decrease height
+  Ctrl-w >/<      — increase/decrease width
+  :q / Ctrl-w c   — close current window
+  :only / Ctrl-w o — close all other windows
+
+  Practice workflow:
+    1. Open file:             vim 10_buffers_windows_tabs.txt
+    2. Horizontal split:      :sp
+       (Same buffer in both windows)
+    3. Open different file:   :e 01_basic_motions.txt
+       (Top window shows motions, bottom shows this file)
+    4. Vertical split:        :vsp 05_macro_examples.txt
+       (Now 3 windows visible)
+    5. Navigate:              Ctrl-w l  (right), Ctrl-w h (left)
+    6. Equalize:              Ctrl-w =
+    7. Close others:          :only
+
+  Layout example (after :sp then :vsp):
+    ┌──────────────────┬──────────────────┐
+    │  buffer 1        │  buffer 3        │
+    │  (this file)     │  (macros)        │
+    ├──────────────────┴──────────────────┤
+    │  buffer 2                           │
+    │  (motions)                          │
+    └─────────────────────────────────────┘
+
+================================================================================
+  EXERCISE 3: Tab Pages
+================================================================================
+
+  :tabnew [file]   — open new tab
+  :tabn / gt       — next tab
+  :tabp / gT       — previous tab
+  :tabclose        — close current tab
+  :tabonly         — close all other tabs
+  {N}gt            — go to tab N
+
+  Practice workflow:
+    1. Open file:           vim 10_buffers_windows_tabs.txt
+    2. New tab:             :tabnew 01_basic_motions.txt
+    3. Another tab:         :tabnew 05_macro_examples.txt
+    4. Switch tabs:         gt (forward), gT (backward)
+    5. Go to tab 1:         1gt
+    6. Close current tab:   :tabclose
+    7. List tabs:           :tabs
+
+  Tab bar at top shows: [tab1] [tab2] [tab3]
+  Current tab is highlighted.
+
+  When to use tabs vs windows:
+    Windows: comparing/referencing files side-by-side
+    Tabs:    separate workspaces (e.g., "source" tab, "test" tab)
+
+================================================================================
+  EXERCISE 4: Practical Workflows
+================================================================================
+
+  Workflow 1: Code + Test side by side
+    :e src/app.py
+    :vsp tests/test_app.py
+    (Edit code on left, tests on right)
+    Ctrl-w w to switch between them
+
+  Workflow 2: Comparing files
+    vim -d file1.txt file2.txt
+    (Opens in diff mode — differences highlighted)
+    ]c    — jump to next change
+    [c    — jump to previous change
+    do    — obtain change from other window
+    dp    — put change to other window
+
+  Workflow 3: Multi-file editing
+    vim *.py                (open all Python files)
+    :args                   (list argument files)
+    :next / :prev           (navigate argument list)
+    :argdo %s/old/new/g     (substitute across all files)
+    :wall                   (save all files)
+
+  Workflow 4: Quick reference lookup
+    :sp                     (split current file)
+    Ctrl-w w                (move to new window)
+    :e notes.md             (open reference file)
+    (Read notes, then Ctrl-w w back to code)
+    :q                      (close reference window)
+
+================================================================================
+  EXERCISE 5: Window Resize and Layout
+================================================================================
+
+  Try building this layout step by step:
+
+  Target layout:
+    ┌─────────────┬─────────────────────┐
+    │  Terminal    │                     │
+    │  (small)     │  Main Editor        │
+    ├─────────────┤  (large)            │
+    │  File List   │                     │
+    │  (small)     │                     │
+    └─────────────┴─────────────────────┘
+
+  Steps:
+    1. :vsp                    (vertical split)
+    2. Ctrl-w H                (move left window to far left)
+    3. :sp                     (horizontal split in left window)
+    4. Ctrl-w l                (go to right window)
+    5. Ctrl-w |                (maximize width of right window)
+    6. Ctrl-w h                (go back to left)
+    7. 30 Ctrl-w |             (set left column to 30 chars)
+    8. Ctrl-w k                (go to top-left)
+    9. 10 Ctrl-w _             (set height to 10 rows)
+
+  Save/restore layout:
+    :mksession layout.vim      (save current layout)
+    :source layout.vim         (restore layout)
+    vim -S layout.vim          (start Vim with saved layout)

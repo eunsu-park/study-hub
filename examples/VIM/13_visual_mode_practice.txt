@@ -1,0 +1,178 @@
+================================================================================
+  VIM VISUAL MODE — Practice File
+================================================================================
+
+  Visual mode lets you select text, then apply an operator to the selection.
+  Three sub-modes: Character (v), Line (V), Block (Ctrl-v).
+
+================================================================================
+  EXERCISE 1: Character-wise Visual (v)
+================================================================================
+
+  Press v to start character selection, move cursor to extend, then act.
+
+  1. Select "quick brown" and delete it (v → move → d):
+     The quick brown fox jumps over the lazy dog.
+     Expected: "The fox jumps over the lazy dog."
+
+  2. Select "is powerful" and yank it (v → move → y), then paste (p):
+     Vim is powerful and efficient.
+     Paste here:
+
+  3. Select "lower" and make it uppercase (v → move → U):
+     This word should be lower but IS ACTUALLY upper.
+     And this UPPER word should stay.
+
+  Useful visual operators:
+    d   — delete selection
+    y   — yank selection
+    c   — change selection (delete + Insert mode)
+    U   — uppercase selection
+    u   — lowercase selection
+    ~   — toggle case of selection
+    >   — indent selection
+    <   — dedent selection
+
+================================================================================
+  EXERCISE 2: Line-wise Visual (V)
+================================================================================
+
+  Press V (shift-v) to select entire lines.
+
+  1. Select lines 2-4 and delete them (V → jj → d):
+     Line 1: Keep me
+     Line 2: Delete me
+     Line 3: Delete me
+     Line 4: Delete me
+     Line 5: Keep me
+
+  2. Select these lines and indent them (V → jj → >):
+  function example() {
+  let x = 1;
+  let y = 2;
+  return x + y;
+  }
+
+  3. Select and sort these lines (V → select all → :sort):
+     Banana
+     Apple
+     Date
+     Cherry
+     Elderberry
+     (Select all 5 lines with V4j, then type :sort and press Enter)
+
+================================================================================
+  EXERCISE 3: Block Visual (Ctrl-v)
+================================================================================
+
+  Block (column) selection is Vim's superpower for columnar editing.
+
+  1. Select the numbers column and delete it (Ctrl-v → move → d):
+     01. First item
+     02. Second item
+     03. Third item
+     04. Fourth item
+     05. Fifth item
+     Expected: ". First item" etc. (numbers removed)
+
+  2. Add "- " prefix to each line (Ctrl-v → select column → I → "- " → Esc):
+     Buy groceries
+     Walk the dog
+     Write code
+     Read a book
+     Cook dinner
+     (Place cursor on "B", Ctrl-v, 4j, I, type "- ", Esc)
+     Expected: "- Buy groceries" etc.
+
+  3. Append " // done" to lines of varying length:
+     short
+     medium text
+     a longer line here
+     tiny
+     (Ctrl-v, 3j, $, A, type " // done", Esc)
+     Note: $ in block mode extends to end of each line.
+
+  4. Replace a column (Ctrl-v → select → r):
+     |x| data1 | value1 |
+     |x| data2 | value2 |
+     |x| data3 | value3 |
+     (Select the "x" column with Ctrl-v, 2j, then r✓ to replace with ✓)
+
+================================================================================
+  EXERCISE 4: Visual Mode with Text Objects
+================================================================================
+
+  In Visual mode, you can expand selection with text objects.
+
+  1. Place cursor inside quotes, press vi" to select inner quotes:
+     The message says "hello world" to everyone.
+     (Then press U to uppercase: "HELLO WORLD")
+
+  2. Place cursor inside parentheses, press vi( to select:
+     function calculate(price, quantity, discount)
+     (Then press d to delete arguments)
+
+  3. Place cursor inside tag, press vit to select inner tag:
+     <div class="container">This content should be selected</div>
+     (Then press c to change the content)
+
+  4. Expand selection incrementally:
+     if (x > 0 && (y < 10 || z == 5)) {
+     (Place cursor on "y", press vi( → selects "y < 10 || z == 5")
+     (Press a( to expand to include outer parens)
+
+================================================================================
+  EXERCISE 5: Reselect and Visual Shortcuts
+================================================================================
+
+  gv    — reselect the last visual selection
+  o     — go to other end of selection (in Visual mode)
+  O     — go to other corner (in block Visual)
+
+  1. Select a word with viw, make it uppercase (U), then use gv to
+     reselect and try lowercase (u) instead:
+     transform THIS word back and forth
+
+  2. Start selecting with v from "start", press o to jump to the
+     other end of selection, extend further:
+     beginning start ---- the middle ---- end finish
+
+  Practice the full workflow:
+  1. V to select a line
+  2. jjj to extend selection down
+  3. > to indent all selected lines
+  4. gv to reselect
+  5. > again for double indent
+
+  Indent these lines twice:
+  line one
+  line two
+  line three
+  line four
+
+================================================================================
+  EXERCISE 6: Visual Mode Commands Summary
+================================================================================
+
+  Enter Visual:
+    v       character-wise
+    V       line-wise
+    Ctrl-v  block-wise
+
+  During Visual:
+    o       toggle cursor to other end
+    O       toggle to other corner (block)
+    gv      reselect previous selection
+    Esc     cancel selection
+
+  Common actions on selection:
+    d / x   delete
+    c       change (delete + Insert)
+    y       yank
+    > / <   indent / dedent
+    = / gq  format
+    U / u   upper / lower case
+    ~       toggle case
+    :       filter through command (e.g., :sort, :!column -t)
+    J       join selected lines
+    r{ch}   replace every character with {ch}

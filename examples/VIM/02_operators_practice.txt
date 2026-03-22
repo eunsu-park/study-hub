@@ -1,0 +1,191 @@
+================================================================================
+  VIM OPERATORS PRACTICE — Operator + Motion Combinations
+================================================================================
+
+  Key concept: operator + motion = action
+  d = delete, c = change, y = yank, > = indent, gU = uppercase, gu = lowercase
+
+================================================================================
+  EXERCISE 1: Delete (d) Combinations
+================================================================================
+
+  Practice each delete command on the COPY lines (keep originals for reference):
+
+  Original: The quick brown fox jumps over the lazy dog
+  Copy:     The quick brown fox jumps over the lazy dog
+  Tasks:
+    - Place cursor on 'q' of "quick", type dw  (delete word)
+    - Place cursor on 'b' of "brown", type de  (delete to end of word)
+    - Place cursor on 'o' of "over", type d$   (delete to end of line)
+    - Place cursor anywhere, type dd            (delete entire line)
+
+  Original: function calculateTotal(items, taxRate, discount) {
+  Copy:     function calculateTotal(items, taxRate, discount) {
+  Tasks:
+    - Cursor on 'c' in "calculate", type d/\(   (delete to parenthesis)
+    - Cursor on 'i' in "items", type dt,         (delete till comma)
+    - Cursor on 'T' in "Total", type dfe         (delete through 'e')
+
+  Practice with counts:
+  one two three four five six seven eight nine ten
+  one two three four five six seven eight nine ten
+  Tasks:
+    - From "one": type 3dw  (delete 3 words)
+    - From "four": type d3w (same effect, delete 3 words)
+    - Type 2dd              (delete 2 lines)
+
+================================================================================
+  EXERCISE 2: Change (c) Combinations
+================================================================================
+
+  Change = delete + enter Insert mode. Type replacement, then Esc.
+
+  Original: Hello World
+  Copy:     Hello World
+  Tasks:
+    - Cursor on 'W', type cw, type "Everyone", press Esc
+    - Expected result: Hello Everyone
+
+  Original: let name = "John Doe";
+  Copy:     let name = "John Doe";
+  Tasks:
+    - Cursor inside quotes, type ci" (change inner quotes)
+    - Type "Jane Smith", press Esc
+    - Expected: let name = "Jane Smith";
+
+  Original: function oldName(param1, param2) {
+  Copy:     function oldName(param1, param2) {
+  Tasks:
+    - Cursor on 'o' in "oldName", type cw
+    - Type "newName", press Esc
+    - Expected: function newName(param1, param2) {
+
+================================================================================
+  EXERCISE 3: Yank (y) and Put (p)
+================================================================================
+
+  Practice yank and put (copy and paste):
+
+  Line A: This line should be duplicated
+  Line B: This line should stay here
+  Line C: This line should also stay
+
+  Tasks:
+    1. On Line A: yy (yank line), move to Line C, p (paste below)
+    2. On "duplicated": yiw (yank inner word), move elsewhere, p
+
+  Practice moving lines (dd then p = cut and paste):
+  Item 1: Apple
+  Item 2: Banana
+  Item 3: Cherry
+  Item 4: Date
+
+  Task: Move "Cherry" to be after "Apple" using dd, k, p
+
+================================================================================
+  EXERCISE 4: Indent (>) and Unindent (<)
+================================================================================
+
+  Fix the indentation of this Python code:
+
+def greet(name):
+message = f"Hello, {name}!"
+print(message)
+if name == "World":
+print("Welcome!")
+return message
+
+  Steps:
+    1. Go to "message", type >> (indent one level)
+    2. Go to "print(message)", type >> (indent one level)
+    3. Select the if block (V2j), type > (indent selection)
+    4. Go to "return", type >> (indent)
+
+  Expected result:
+  def greet(name):
+      message = f"Hello, {name}!"
+      print(message)
+      if name == "World":
+          print("Welcome!")
+      return message
+
+================================================================================
+  EXERCISE 5: Case Operators (gU, gu, g~)
+================================================================================
+
+  Original: hello world
+  Copy:     hello world
+  Tasks:
+    - gUw  → HELLO world       (uppercase one word)
+    - gU$  → HELLO WORLD       (uppercase to end of line)
+    - guu  → hello world       (lowercase entire line)
+    - g~~  → HELLO WORLD       (toggle case of line)
+
+  Transform these:
+  MAKE THIS lowercase         → gu$ or guu
+  make this UPPERCASE         → gU$ or gUU
+  swap THE case OF each WORD  → g~w on each word
+
+================================================================================
+  EXERCISE 6: The Dot Command (.)
+================================================================================
+
+  The . key repeats the last change. Plan your edits around it!
+
+  Task 1: Add semicolons to each line
+  let x = 1
+  let y = 2
+  let z = 3
+  let w = 4
+
+  Steps: On first line, type A;<Esc> (append semicolon)
+         Then j.j.j. (move down + repeat for each line)
+
+  Task 2: Delete the first word of each line
+  REMOVE The quick brown fox
+  REMOVE jumped over
+  REMOVE the lazy dog
+  REMOVE and fell asleep
+
+  Steps: On first line, type dw (delete "REMOVE ")
+         Then j0.j0.j0. (next line, start, repeat)
+
+  Task 3: Surround each word in quotes (using . effectively)
+  apple
+  banana
+  cherry
+
+  Steps: On "apple": I"<Esc>A"<Esc> → "apple"
+         j0. → adds " at start... but . only repeats last change (A")
+  Better: cwi"apple"<Esc> → but this doesn't generalize
+  Best approach: use a macro (qa I"<Esc>A"<Esc>j q then @a@@)
+
+================================================================================
+  EXERCISE 7: Combined Challenge
+================================================================================
+
+  Transform this JavaScript code:
+
+  var name = "John"
+  var age = 30
+  var city = "NYC"
+  var email = "john@example.com"
+
+  Into this (use operators + dot command):
+
+  const name = "John";
+  const age = 30;
+  const city = "NYC";
+  const email = "john@example.com";
+
+  Strategy:
+    1. First line: cw const<Esc> (change "var" to "const")
+    2. A;<Esc> (add semicolon)
+    3. j0 (next line, start)
+    4. But . only repeats the last change (A;)...
+
+  Better strategy:
+    1. :%s/var/const/g (substitute all "var" with "const")
+    2. Then: A;<Esc> j. j. j.  (add semicolons with dot)
+
+================================================================================

@@ -1,0 +1,158 @@
+================================================================================
+  VIM MODES — Practice File
+================================================================================
+
+  Instructions: Open this file in Vim and practice switching between modes.
+  Pay attention to the mode indicator (-- INSERT --, -- VISUAL --, etc.)
+  at the bottom of your screen.
+
+================================================================================
+  EXERCISE 1: Normal Mode → Insert Mode (7 ways to enter Insert)
+================================================================================
+
+  Each command below enters Insert mode differently.
+  Try each one on the practice lines, then press Esc to return to Normal.
+
+  i  — insert before cursor
+  a  — append after cursor
+  I  — insert at beginning of line
+  A  — append at end of line
+  o  — open new line below
+  O  — open new line above
+  s  — substitute character (delete char, enter Insert)
+
+  Practice: Place your cursor on the X and try each command.
+
+  This is a teXt line for practicing insert commands.
+  Another liXe to practice with.
+  Yet aXother example line here.
+
+  Expected results:
+  - i on X: type before X
+  - a on X: type after X
+  - I on X: cursor jumps to "T" (start of line)
+  - A on X: cursor jumps after "." (end of line)
+  - o on X: new empty line appears below
+  - O on X: new empty line appears above
+  - s on X: X is deleted, you're in Insert mode
+
+================================================================================
+  EXERCISE 2: Normal Mode Essentials
+================================================================================
+
+  In Normal mode, keys are commands, not characters.
+  Practice these common Normal mode actions:
+
+  1. Use x to delete characters:
+     Deletee  theee  extraaa  letterss  heree
+
+  2. Use r to replace a single character:
+     Th1s l1ne h4s numb3rs wh3re l3tters should b3
+
+  3. Use u to undo and Ctrl-r to redo:
+     Make some changes, then undo them all, then redo one.
+
+  4. Use . (dot) to repeat the last change:
+     Delete the first word on each line with dw, then j. on next lines:
+     REMOVE this line has extra words at the start
+     REMOVE another line to clean up
+     REMOVE and one more line here
+
+================================================================================
+  EXERCISE 3: Command-Line Mode
+================================================================================
+
+  Press : to enter Command-line mode from Normal mode.
+  Try these commands (press Enter to execute):
+
+  :w                → save file
+  :q                → quit (fails if unsaved changes)
+  :wq               → save and quit
+  :q!               → quit without saving
+  :e filename       → open another file
+  :!ls              → run shell command
+  :set number       → show line numbers
+  :set nonumber     → hide line numbers
+  :help             → open help (use :q to close)
+
+  Practice: Type :set number to show line numbers, then :set nonumber.
+
+================================================================================
+  EXERCISE 4: Insert Mode Sub-Modes
+================================================================================
+
+  While in Insert mode, these key combos are useful:
+
+  Ctrl-h  → delete character before cursor (same as Backspace)
+  Ctrl-w  → delete word before cursor
+  Ctrl-u  → delete to start of line
+  Ctrl-o  → execute one Normal command, return to Insert
+  Ctrl-r" → paste from default register while in Insert
+
+  Practice:
+  1. Enter Insert mode (i) on the line below
+  2. Type "hello world " then press Ctrl-w (deletes "world ")
+  3. Type "vim " then press Ctrl-u (deletes everything you typed)
+  4. Press Esc
+
+  Type here:
+
+================================================================================
+  EXERCISE 5: Mode Transitions Map
+================================================================================
+
+  Study the mode transition diagram:
+
+                    i/a/o/s
+  Normal ─────────────────────→ Insert
+    ↑                              │
+    │  Esc                    Esc  │
+    │                              │
+    ↓  v/V/Ctrl-v                  ↓
+  Visual ←─────────────────── (not direct)
+    │
+    │  :
+    ↓
+  Command-line
+
+  Quick reference:
+    Normal → Insert:     i, a, o, O, I, A, s, S, C, c{motion}
+    Normal → Visual:     v (char), V (line), Ctrl-v (block)
+    Normal → Command:    :, /, ?
+    Any → Normal:        Esc (or Ctrl-[ or Ctrl-c)
+    Insert → Normal:     Esc
+    Visual → Normal:     Esc or execute an operator
+
+  Challenge: Starting in Normal mode, perform this sequence:
+  1. Enter Visual mode (v)
+  2. Select 3 characters
+  3. Press Esc (back to Normal)
+  4. Enter Insert mode (i)
+  5. Type "vim"
+  6. Press Esc (back to Normal)
+  7. Enter Command-line mode (:)
+  8. Type "set ruler" and press Enter
+
+================================================================================
+  EXERCISE 6: Replace Mode
+================================================================================
+
+  Press R in Normal mode to enter Replace mode.
+  Characters you type overwrite existing text (like overtype/OVR mode).
+
+  Replace the X's with the correct words:
+
+  Vim has XXXX main modes: Normal, Insert, XXXXXX, and Command-line.
+  (Answer: four, Visual)
+
+  The most XXXXXXXXX mode in Vim is Normal mode.
+  (Answer: important)
+
+  Steps:
+    1. Move cursor to first X
+    2. Press R to enter Replace mode
+    3. Type the correct word
+    4. Press Esc when done
+
+  Note: Replace mode replaces character-by-character.
+  If your replacement is longer or shorter, use c (change) instead.
