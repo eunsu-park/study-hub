@@ -50,7 +50,13 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (2 topics)
+  # Tier 1 — Beginner (6 topics)
+  Programming:
+    tier: beginner
+    description:
+      en: "Core programming concepts and paradigms"
+      ko: "핵심 프로그래밍 개념과 패러다임"
+
   Python_Basics:
     tier: beginner
     prerequisites: [Programming]
@@ -65,7 +71,26 @@ topics:
       en: "C language fundamentals and basic programming"
       ko: "C 언어 기초 및 기본 프로그래밍"
 
-  # Tier 2 — Intermediate (2 topics)
+  CPP_Basics:
+    tier: beginner
+    prerequisites: [C_Basics]
+    description:
+      en: "C++ language fundamentals, OOP, and basic STL"
+      ko: "C++ 언어 기초, 객체지향 프로그래밍 및 기본 STL"
+
+  Git:
+    tier: beginner
+    description:
+      en: "Version control with Git"
+      ko: "Git을 활용한 버전 관리"
+
+  VIM:
+    tier: beginner
+    description:
+      en: "Modal editing, motions, text objects, plugins, and Neovim"
+      ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
+
+  # Tier 2 — Intermediate (3 topics)
   Python_Advanced:
     tier: intermediate
     prerequisites: [Python_Basics]
@@ -79,3 +104,18 @@ topics:
     description:
       en: "Advanced C programming and systems programming"
       ko: "고급 C 프로그래밍 및 시스템 프로그래밍"
+
+  CPP_Advanced:
+    tier: intermediate
+    prerequisites: [CPP_Basics]
+    description:
+      en: "Advanced C++ templates, modern standards, concurrency, and design patterns"
+      ko: "고급 C++ 템플릿, 모던 표준, 동시성 및 디자인 패턴"
+
+  # Tier 3 — Advanced (1 topic)
+  Deep_Learning:
+    tier: advanced
+    prerequisites: [Machine_Learning]
+    description:
+      en: "Deep learning with PyTorch and model implementations"
+      ko: "PyTorch 딥러닝 및 모델 구현"
