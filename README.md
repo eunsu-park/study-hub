@@ -11,20 +11,6 @@ From programming fundamentals to plasma physics — curated study materials that
 
 ---
 
-## Quality Criteria / 품질 기준
-
-콘텐츠가 이 레포지토리에 게시되려면 다음 검사를 모두 통과해야 합니다:
-
-| Check / 검사 항목 | Description / 설명 |
-|---|---|
-| EN Content | English content exists and is high quality / 영문 콘텐츠가 존재하고 양질인지 |
-| Exercises | Exercises exist and are high quality / 연습문제가 존재하고 양질인지 |
-| Examples | Example code exists and is high quality / 예제 코드가 존재하고 양질인지 |
-| KO Translation | Korean translation is correct / 한글 번역이 올바른지 |
-| EN/KO File Parity | EN and KO file counts match / EN/KO 파일 수 동일 |
-
----
-
 ## Project Structure / 프로젝트 구조
 
 ```
