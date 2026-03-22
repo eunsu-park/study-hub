@@ -1,0 +1,81 @@
+# Topic Metadata — Tier Classification & Dependencies
+# Single source of truth for difficulty tiers and topic prerequisites.
+# Both viewer/ and site/ read this file.
+#
+# Tier IDs: beginner, intermediate, advanced, expert
+# When adding a new topic, add an entry here with the appropriate tier.
+# prerequisites: list of topic names that should be studied before this topic.
+
+tiers:
+  - id: beginner
+    label:
+      en: "Beginner"
+      ko: "입문"
+    color: "#198754"
+    order: 1
+    description:
+      en: "Foundational tools and languages. No prior CS knowledge required."
+      ko: "기초 도구 및 언어. 사전 CS 지식 불필요."
+
+  - id: intermediate
+    label:
+      en: "Intermediate"
+      ko: "중급"
+    color: "#0d6efd"
+    order: 2
+    description:
+      en: "Requires programming proficiency. Deeper CS and data skills."
+      ko: "프로그래밍 능숙도 필요. 심화 CS 및 데이터 기술."
+
+  - id: advanced
+    label:
+      en: "Advanced"
+      ko: "고급"
+    color: "#fd7e14"
+    order: 3
+    description:
+      en: "Requires strong math/CS background. Specialized domains."
+      ko: "강한 수학/CS 배경 필요. 전문 분야."
+
+  - id: expert
+    label:
+      en: "Expert"
+      ko: "전문"
+    color: "#dc3545"
+    order: 4
+    description:
+      en: "Domain-specific expert content. Graduate-level knowledge."
+      ko: "도메인 전문 콘텐츠. 대학원 수준 지식."
+
+# ── Topic assignments ────────────────────────────────────────────────────
+
+topics:
+  # Tier 1 — Beginner (2 topics)
+  Python_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "Python language fundamentals and OOP"
+      ko: "Python 언어 기초 및 객체지향 프로그래밍"
+
+  C_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "C language fundamentals and basic programming"
+      ko: "C 언어 기초 및 기본 프로그래밍"
+
+  # Tier 2 — Intermediate (2 topics)
+  Python_Advanced:
+    tier: intermediate
+    prerequisites: [Python_Basics]
+    description:
+      en: "Advanced Python syntax and patterns"
+      ko: "고급 Python 문법 및 패턴"
+
+  C_Advanced:
+    tier: intermediate
+    prerequisites: [C_Basics]
+    description:
+      en: "Advanced C programming and systems programming"
+      ko: "고급 C 프로그래밍 및 시스템 프로그래밍"
