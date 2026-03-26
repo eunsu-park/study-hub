@@ -46,8 +46,11 @@ From programming fundamentals to plasma physics — curated study materials that
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [C_Advanced](./content/en/C_Advanced/00_Overview.md) | 고급 C: 시스템 프로그래밍, 자료구조, 네트워크, 동시성, 임베디드, 크로스 플랫폼 | 17 |
+| [Calculus_and_Differential_Equations](./content/en/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 20 |
 | [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
+| [Linear_Algebra](./content/en/Linear_Algebra/00_Overview.md) | 벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용 | 20 |
 | [Machine_Learning](./content/en/Machine_Learning/00_Overview.md) | 회귀, 앙상블, SVM, 클러스터링, SHAP/LIME, AutoML, Symbolic Regression | 24 |
+| [Probability_and_Statistics](./content/en/Probability_and_Statistics/00_Overview.md) | 확률론, 통계적 추론, 이산/연속 분포, 베이지안, 확률 과정 | 18 |
 | [Python_Advanced](./content/en/Python_Advanced/00_Overview.md) | Python 고급: 데코레이터, 메타클래스, async, 디스크립터, 함수형, 성능 최적화 | 14 |
 
 ### Tier 3 — Advanced (고급)
@@ -57,6 +60,9 @@ From programming fundamentals to plasma physics — curated study materials that
 | [Algorithm](./content/en/Algorithm/00_Overview.md) | 알고리즘/자료구조, 정렬, 그래프, DP, HLD, LCT, PST | 32 |
 | [Computer_Vision](./content/en/Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 세그멘테이션, 3D비전, NeRF, SLAM | 31 |
 | [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
+| [Electrodynamics](./content/en/Electrodynamics/00_Overview.md) | 정전기학, 자기정역학, 맥스웰 방정식, 전자기파, FDTD | 18 |
+| [Math_for_AI](./content/en/Math_for_AI/00_Overview.md) | 선형대수, 최적화, 확률, 정보이론, Transformer 수학 | 18 |
+| [Mathematical_Methods](./content/en/Mathematical_Methods/00_Overview.md) | 푸리에, ODE/PDE, 특수함수, 텐서, 그린함수, 변분법 | 18 |
 
 ### Tier 4 — Expert (전문)
 
@@ -73,6 +79,7 @@ From programming fundamentals to plasma physics — curated study materials that
 | CV Engineer / 컴퓨터 비전 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning → Computer_Vision |
 | ML Engineer / 머신러닝 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning |
 | Linux & DevOps | Linux → Shell_Script → Git → Docker |
+| Scientific Computing / 과학 계산 | Calculus → Linear_Algebra → Probability_and_Statistics → Mathematical_Methods → Math_for_AI → Electrodynamics |
 
 ---
 
