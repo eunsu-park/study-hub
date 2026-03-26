@@ -80,3 +80,20 @@ paths:
       - Shell_Script
       - Git
       - Docker
+
+  scientific_computing:
+    label:
+      en: "Scientific Computing"
+      ko: "과학 계산"
+    description:
+      en: "From calculus and linear algebra to mathematical methods and numerical physics."
+      ko: "미적분학과 선형대수부터 수리물리학, 전자기학까지."
+    icon: "list"
+    color: "#20c997"
+    topics:
+      - Calculus_and_Differential_Equations
+      - Linear_Algebra
+      - Probability_and_Statistics
+      - Mathematical_Methods
+      - Math_for_AI
+      - Electrodynamics
