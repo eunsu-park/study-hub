@@ -138,7 +138,21 @@ topics:
       en: "Classical machine learning algorithms"
       ko: "고전 머신러닝 알고리즘"
 
-  # Tier 3 — Advanced (1 topic)
+  # Tier 3 — Advanced (3 topics)
+  Algorithm:
+    tier: advanced
+    prerequisites: [Programming]
+    description:
+      en: "Advanced algorithms and data structures"
+      ko: "고급 알고리즘 및 자료구조"
+
+  Computer_Vision:
+    tier: advanced
+    prerequisites: [Deep_Learning]
+    description:
+      en: "Computer vision and image processing"
+      ko: "컴퓨터 비전 및 영상 처리"
+
   Deep_Learning:
     tier: advanced
     prerequisites: [Machine_Learning]
