@@ -33,6 +33,23 @@ paths:
       - CPP_Basics
       - CPP_Advanced
 
+  cv_engineer:
+    label:
+      en: "Computer Vision Engineer"
+      ko: "컴퓨터 비전 엔지니어"
+    description:
+      en: "From Python and ML to deep learning and computer vision."
+      ko: "Python과 ML부터 딥러닝, 컴퓨터 비전까지."
+    icon: "dashboard"
+    color: "#dc3545"
+    topics:
+      - Programming
+      - Python_Basics
+      - Python_Advanced
+      - Machine_Learning
+      - Deep_Learning
+      - Computer_Vision
+
   ml_engineer:
     label:
       en: "Machine Learning Engineer"
