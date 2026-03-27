@@ -1,0 +1,140 @@
+version: '3.8'
+
+# PostgreSQL Primary-Standby Replication Setup
+# This Docker Compose file creates a PostgreSQL streaming replication cluster
+# with one primary and one standby instance.
+
+services:
+  # Primary PostgreSQL Instance
+  postgres-primary:
+    image: postgres:16-alpine
+    container_name: postgres-primary
+    hostname: postgres-primary
+    environment:
+      # Basic PostgreSQL configuration
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_pass
+      POSTGRES_DB: production
+
+      # Replication user credentials
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: repl_password
+
+    volumes:
+      # Data persistence
+      - primary-data:/var/lib/postgresql/data
+
+      # Shared WAL archive directory
+      - wal-archive:/var/lib/postgresql/wal_archive
+
+      # Custom initialization script
+      - ./init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh:ro
+
+    ports:
+      - "5432:5432"
+
+    networks:
+      - postgres-cluster
+
+    # Why: wal_level=replica (not minimal) is required for streaming replication
+    # because it includes enough information for standby replay. max_wal_senders=10
+    # allows up to 10 concurrent replication connections (standbys + pg_basebackup).
+    # archive_command copies WAL segments to a shared volume as a fallback in case
+    # streaming falls behind and the primary recycles a WAL segment before the
+    # standby has received it.
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - hot_standby=on
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f
+      - -c
+      - archive_timeout=60
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Standby PostgreSQL Instance (Replica)
+  postgres-standby:
+    image: postgres:16-alpine
+    container_name: postgres-standby
+    hostname: postgres-standby
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_pass
+
+      # Replication connection settings
+      PRIMARY_HOST: postgres-primary
+      PRIMARY_PORT: 5432
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: repl_password
+
+    volumes:
+      # Separate data volume for standby
+      - standby-data:/var/lib/postgresql/data
+
+      # Why: The standby mounts the WAL archive as read-only (:ro) because it
+      # only needs to read archived segments that streaming missed — the primary
+      # is the sole writer. This prevents accidental corruption of the archive.
+      - wal-archive:/var/lib/postgresql/wal_archive:ro
+
+      # Initialization script for standby setup
+      - ./init-standby.sh:/docker-entrypoint-initdb.d/init-standby.sh:ro
+
+    ports:
+      - "5433:5432"
+
+    networks:
+      - postgres-cluster
+
+    # Why: The standby must wait for the primary to be fully healthy before starting,
+    # because pg_basebackup (run during initialization) needs an active primary
+    # to connect to. Without this, the standby would fail on first boot.
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+
+    # Why: max_standby_streaming_delay=30s allows read queries on the standby to
+    # delay WAL replay by up to 30 seconds before being cancelled. This balances
+    # read query availability against replication lag. wal_receiver_status_interval
+    # controls how often the standby reports its position to the primary for
+    # lag monitoring.
+    command:
+      - postgres
+      - -c
+      - hot_standby=on
+      - -c
+      - max_standby_streaming_delay=30s
+      - -c
+      - wal_receiver_status_interval=10s
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Named volumes for data persistence
+volumes:
+  primary-data:
+    driver: local
+  standby-data:
+    driver: local
+  wal-archive:
+    driver: local
+
+# Network for cluster communication
+networks:
+  postgres-cluster:
+    driver: bridge
