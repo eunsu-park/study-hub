@@ -300,6 +300,13 @@ topics:
       en: "Solar interior, atmosphere, magnetic activity, flares, CMEs"
       ko: "태양 내부, 대기, 자기 활동, 플레어, CME"
 
+  DL_Scratch_C:
+    tier: expert
+    prerequisites: [C_Advanced, CPP_Advanced, Linear_Algebra, Deep_Learning, Computer_Architecture]
+    description:
+      en: "Build deep learning from scratch in C/C++: tensor engine, autograd, CNN (ResNet/EfficientNet/ViT), Transformer (GPT-2/Llama), training, quantization, and inference engine"
+      ko: "C/C++로 딥러닝 밑바닥 구현: 텐서 엔진, 자동미분, CNN(ResNet/EfficientNet/ViT), Transformer(GPT-2/Llama), 학습, 양자화, 추론 엔진"
+
   Space_Weather:
     tier: expert
     prerequisites: [Solar_Physics, MHD]
