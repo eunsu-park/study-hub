@@ -48,8 +48,13 @@ From programming fundamentals to plasma physics — curated study materials that
 | [C_Advanced](./content/en/C_Advanced/00_Overview.md) | 고급 C: 시스템 프로그래밍, 자료구조, 네트워크, 동시성, 임베디드, 크로스 플랫폼 | 17 |
 | [Calculus_and_Differential_Equations](./content/en/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 20 |
 | [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
+| [Data_Science](./content/en/Data_Science/00_Overview.md) | NumPy, Pandas, 시각화, EDA, 확률, 추론, 베이지안, 시계열 | 29 |
+| [Database_Theory](./content/en/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
 | [Linear_Algebra](./content/en/Linear_Algebra/00_Overview.md) | 벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용 | 20 |
 | [Machine_Learning](./content/en/Machine_Learning/00_Overview.md) | 회귀, 앙상블, SVM, 클러스터링, SHAP/LIME, AutoML, Symbolic Regression | 24 |
+| [Networking](./content/en/Networking/00_Overview.md) | OSI/TCP-IP, 라우팅, 보안, IPv6, SDN, QoS, 멀티캐스트 | 22 |
+| [OS_Theory](./content/en/OS_Theory/00_Overview.md) | 프로세스, 스케줄링, 메모리, 파일시스템, 컨테이너 내부, eBPF | 27 |
+| [PostgreSQL](./content/en/PostgreSQL/00_Overview.md) | SQL, JSON, 복제, 파티셔닝, FTS, 보안/RLS | 20 |
 | [Probability_and_Statistics](./content/en/Probability_and_Statistics/00_Overview.md) | 확률론, 통계적 추론, 이산/연속 분포, 베이지안, 확률 과정 | 18 |
 | [Python_Advanced](./content/en/Python_Advanced/00_Overview.md) | Python 고급: 데코레이터, 메타클래스, async, 디스크립터, 함수형, 성능 최적화 | 14 |
 
@@ -59,16 +64,25 @@ From programming fundamentals to plasma physics — curated study materials that
 |---|---|---|
 | [Algorithm](./content/en/Algorithm/00_Overview.md) | 알고리즘/자료구조, 정렬, 그래프, DP, HLD, LCT, PST | 32 |
 | [Computer_Vision](./content/en/Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 세그멘테이션, 3D비전, NeRF, SLAM | 31 |
+| [Data_Engineering](./content/en/Data_Engineering/00_Overview.md) | Airflow, Spark, Kafka, dbt, CDC, Lakehouse, 벡터 검색 | 23 |
 | [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
 | [Electrodynamics](./content/en/Electrodynamics/00_Overview.md) | 정전기학, 자기정역학, 맥스웰 방정식, 전자기파, FDTD | 18 |
+| [Foundation_Models](./content/en/Foundation_Models/00_Overview.md) | FM 패러다임, Scaling Laws, LLaMA, DINOv2, SAM, 멀티모달 | 22 |
 | [Math_for_AI](./content/en/Math_for_AI/00_Overview.md) | 선형대수, 최적화, 확률, 정보이론, Transformer 수학 | 18 |
 | [Mathematical_Methods](./content/en/Mathematical_Methods/00_Overview.md) | 푸리에, ODE/PDE, 특수함수, 텐서, 그린함수, 변분법 | 18 |
+| [NLP_and_LLM](./content/en/NLP_and_LLM/00_Overview.md) | NLP, BERT, GPT, HuggingFace, PEFT, RAG, LangChain, 에이전트 | 27 |
+| [Numerical_Simulation](./content/en/Numerical_Simulation/00_Overview.md) | ODE/PDE, CFD, FDTD, MHD, FEM, GPU 가속, PINN | 24 |
+| [Optics](./content/en/Optics/00_Overview.md) | 기하광학, 간섭, 회절, 편광, 레이저, 홀로그래피, 적응광학 | 17 |
+| [Reinforcement_Learning](./content/en/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, SAC, Offline RL, RLHF, World Models | 27 |
 
 ### Tier 4 — Expert (전문)
 
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
-| *(no content published yet / 아직 게시된 콘텐츠 없음)* | | |
+| [MHD](./content/en/MHD/00_Overview.md) | MHD 평형, 안정성, 자기재결합, 난류, 다이나모, 핵융합 | 18 |
+| [Plasma_Physics](./content/en/Plasma_Physics/00_Overview.md) | 디바이 차폐, 블라소프 방정식, 란다우 감쇠, 플라즈마 파동 | 16 |
+| [Solar_Physics](./content/en/Solar_Physics/00_Overview.md) | 태양 내부, 핵에너지, 코로나, 자기장, 플레어, CME | 16 |
+| [Space_Weather](./content/en/Space_Weather/00_Overview.md) | 자기권, 지자기 폭풍, 방사선대, 전리층, GIC, 예보 모델 | 16 |
 
 ## Learning Paths / 학습 경로
 
@@ -80,6 +94,8 @@ From programming fundamentals to plasma physics — curated study materials that
 | ML Engineer / 머신러닝 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning |
 | Linux & DevOps | Linux → Shell_Script → Git → Docker |
 | Scientific Computing / 과학 계산 | Calculus → Linear_Algebra → Probability_and_Statistics → Mathematical_Methods → Math_for_AI → Electrodynamics |
+| Space Physics / 우주물리학 | Calculus → Mathematical_Methods → Electrodynamics → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
+| Data & AI / 데이터 & AI | Data_Science → Machine_Learning → Deep_Learning → NLP_and_LLM → Foundation_Models → Reinforcement_Learning |
 
 ---
 
