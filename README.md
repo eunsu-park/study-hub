@@ -79,6 +79,7 @@ From programming fundamentals to plasma physics — curated study materials that
 
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
+| [DL_Scratch_C](./content/en/DL_Scratch_C/00_Overview.md) | C/C++로 딥러닝 밑바닥 구현: 텐서 엔진, 자동미분, CNN, Transformer, 학습, 양자화, 추론 엔진 | 46 |
 | [MHD](./content/en/MHD/00_Overview.md) | MHD 평형, 안정성, 자기재결합, 난류, 다이나모, 핵융합 | 18 |
 | [Plasma_Physics](./content/en/Plasma_Physics/00_Overview.md) | 디바이 차폐, 블라소프 방정식, 란다우 감쇠, 플라즈마 파동 | 16 |
 | [Solar_Physics](./content/en/Solar_Physics/00_Overview.md) | 태양 내부, 핵에너지, 코로나, 자기장, 플레어, CME | 16 |
