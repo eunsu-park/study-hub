@@ -97,3 +97,39 @@ paths:
       - Mathematical_Methods
       - Math_for_AI
       - Electrodynamics
+
+  space_physics:
+    label:
+      en: "Space Physics"
+      ko: "우주물리학"
+    description:
+      en: "From calculus to plasma physics, MHD, solar physics, and space weather."
+      ko: "미적분학부터 플라즈마 물리학, MHD, 태양물리학, 우주기상까지."
+    icon: "list"
+    color: "#e83e8c"
+    topics:
+      - Calculus_and_Differential_Equations
+      - Mathematical_Methods
+      - Electrodynamics
+      - Numerical_Simulation
+      - Plasma_Physics
+      - MHD
+      - Solar_Physics
+      - Space_Weather
+
+  data_and_ai:
+    label:
+      en: "Data & AI"
+      ko: "데이터 & AI"
+    description:
+      en: "From data science to deep learning, NLP/LLM, and reinforcement learning."
+      ko: "데이터 과학부터 딥러닝, NLP/LLM, 강화학습까지."
+    icon: "dashboard"
+    color: "#0dcaf0"
+    topics:
+      - Data_Science
+      - Machine_Learning
+      - Deep_Learning
+      - NLP_and_LLM
+      - Foundation_Models
+      - Reinforcement_Learning
