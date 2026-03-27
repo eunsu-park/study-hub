@@ -151,6 +151,20 @@ topics:
       en: "Advanced C++ templates, modern standards, concurrency, and design patterns"
       ko: "고급 C++ 템플릿, 모던 표준, 동시성 및 디자인 패턴"
 
+  Data_Science:
+    tier: intermediate
+    prerequisites: [Python_Basics]
+    description:
+      en: "Statistics, data analysis, and visualization"
+      ko: "통계, 데이터 분석 및 시각화"
+
+  Database_Theory:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Database theory and implementation"
+      ko: "데이터베이스 이론 및 구현"
+
   Machine_Learning:
     tier: intermediate
     prerequisites: [Python_Basics, Data_Science]
@@ -158,7 +172,28 @@ topics:
       en: "Classical machine learning algorithms"
       ko: "고전 머신러닝 알고리즘"
 
-  # Tier 3 — Advanced (6 topics)
+  Networking:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Network protocols and architecture"
+      ko: "네트워크 프로토콜 및 아키텍처"
+
+  OS_Theory:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Operating system concepts and theory"
+      ko: "운영체제 개념 및 이론"
+
+  PostgreSQL:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "PostgreSQL database management"
+      ko: "PostgreSQL 데이터베이스 관리"
+
+  # Tier 3 — Advanced (12 topics)
   Algorithm:
     tier: advanced
     prerequisites: [Programming]
@@ -200,3 +235,74 @@ topics:
     description:
       en: "Mathematical methods for physics"
       ko: "물리학을 위한 수학적 방법"
+
+  Data_Engineering:
+    tier: advanced
+    prerequisites: [Data_Science]
+    description:
+      en: "Data pipeline architecture and tools"
+      ko: "데이터 파이프라인 아키텍처 및 도구"
+
+  Foundation_Models:
+    tier: advanced
+    prerequisites: [Deep_Learning, NLP_and_LLM]
+    description:
+      en: "FM paradigm, scaling laws, multimodal architectures"
+      ko: "FM 패러다임, 스케일링 법칙, 멀티모달 아키텍처"
+
+  NLP_and_LLM:
+    tier: advanced
+    prerequisites: [Deep_Learning]
+    description:
+      en: "NLP fundamentals, LLM applications, RAG, agents"
+      ko: "NLP 기초, LLM 활용, RAG, 에이전트"
+
+  Numerical_Simulation:
+    tier: advanced
+    prerequisites: [Calculus_and_Differential_Equations]
+    description:
+      en: "Numerical methods and computational simulation"
+      ko: "수치 해석 및 전산 시뮬레이션"
+
+  Optics:
+    tier: advanced
+    prerequisites: [Electrodynamics]
+    description:
+      en: "Geometric and wave optics, lasers, adaptive optics"
+      ko: "기하광학, 파동광학, 레이저, 적응광학"
+
+  Reinforcement_Learning:
+    tier: advanced
+    prerequisites: [Machine_Learning]
+    description:
+      en: "Reinforcement learning algorithms"
+      ko: "강화학습 알고리즘"
+
+  # Tier 4 — Expert (4 topics)
+  MHD:
+    tier: expert
+    prerequisites: [Plasma_Physics]
+    description:
+      en: "Magnetohydrodynamics theory and simulation"
+      ko: "자기유체역학 이론 및 시뮬레이션"
+
+  Plasma_Physics:
+    tier: expert
+    prerequisites: [Electrodynamics]
+    description:
+      en: "Plasma physics fundamentals and applications"
+      ko: "플라즈마 물리학 기초 및 응용"
+
+  Solar_Physics:
+    tier: expert
+    prerequisites: [Plasma_Physics]
+    description:
+      en: "Solar interior, atmosphere, magnetic activity, flares, CMEs"
+      ko: "태양 내부, 대기, 자기 활동, 플레어, CME"
+
+  Space_Weather:
+    tier: expert
+    prerequisites: [Solar_Physics, MHD]
+    description:
+      en: "Sun-Earth interactions, magnetosphere, GIC, forecasting"
+      ko: "태양-지구 상호작용, 자기권, GIC, 우주기상 예보"
