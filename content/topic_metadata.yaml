@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (9 topics)
+  # Tier 1 — Beginner (11 topics)
   Programming:
     tier: beginner
     description:
@@ -109,7 +109,21 @@ topics:
       en: "Containerization with Docker and Kubernetes"
       ko: "Docker와 Kubernetes를 활용한 컨테이너화"
 
-  # Tier 2 — Intermediate (7 topics)
+  CSharp_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "C# fundamentals: syntax, types, OOP basics, collections, exception handling, and file I/O"
+      ko: "C# 기초: 문법, 타입, OOP 기초, 컬렉션, 예외 처리 및 파일 I/O"
+
+  # Tier 2 — Intermediate (8 topics)
+  CSharp_Advanced:
+    tier: intermediate
+    prerequisites: [CSharp_Basics]
+    description:
+      en: "Advanced C#: LINQ, async/await, pattern matching, records, Span<T>, DI, and .NET ecosystem"
+      ko: "C# 고급: LINQ, async/await, 패턴 매칭, 레코드, Span<T>, DI 및 .NET 생태계"
+
   Calculus_and_Differential_Equations:
     tier: intermediate
     description:
