@@ -33,6 +33,7 @@ From programming fundamentals to plasma physics — curated study materials that
 |---|---|---|
 | [C_Basics](./content/en/C_Basics/00_Overview.md) | C 언어 기초: 변수, 포인터, 구조체, 동적 메모리, 파일 I/O, 전처리기 | 15 |
 | [CPP_Basics](./content/en/CPP_Basics/00_Overview.md) | C++ 기초: OOP, STL 컨테이너/알고리즘, 예외 처리, 파일 I/O, CMake | 15 |
+| [CSharp_Basics](./content/en/CSharp_Basics/00_Overview.md) | C# 기초: 문법, 타입, OOP, 컬렉션, 제네릭, 예외 처리, 파일 I/O | 15 |
 | [Docker](./content/en/Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD, 컨테이너 네트워킹 | 16 |
 | [Git](./content/en/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 14 |
 | [Linux](./content/en/Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 26 |
@@ -48,6 +49,7 @@ From programming fundamentals to plasma physics — curated study materials that
 | [C_Advanced](./content/en/C_Advanced/00_Overview.md) | 고급 C: 시스템 프로그래밍, 자료구조, 네트워크, 동시성, 임베디드, 크로스 플랫폼 | 17 |
 | [Calculus_and_Differential_Equations](./content/en/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 20 |
 | [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
+| [CSharp_Advanced](./content/en/CSharp_Advanced/00_Overview.md) | 고급 C#: LINQ, async/await, 패턴 매칭, 레코드, Span, DI, .NET 생태계 | 17 |
 | [Data_Science](./content/en/Data_Science/00_Overview.md) | NumPy, Pandas, 시각화, EDA, 확률, 추론, 베이지안, 시계열 | 29 |
 | [Database_Theory](./content/en/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
 | [Linear_Algebra](./content/en/Linear_Algebra/00_Overview.md) | 벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용 | 20 |
@@ -91,6 +93,7 @@ From programming fundamentals to plasma physics — curated study materials that
 |---|---|
 | Python Developer / Python 개발자 | Programming → Python_Basics → Python_Advanced |
 | Systems Programmer / 시스템 프로그래머 | Programming → C_Basics → C_Advanced → CPP_Basics → CPP_Advanced |
+| .NET Developer / .NET 개발자 | Programming → CSharp_Basics → CSharp_Advanced |
 | CV Engineer / 컴퓨터 비전 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning → Computer_Vision |
 | ML Engineer / 머신러닝 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning |
 | Linux & DevOps | Linux → Shell_Script → Git → Docker |
