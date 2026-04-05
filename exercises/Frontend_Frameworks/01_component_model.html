@@ -1,0 +1,86 @@
+<!--
+  Exercise: Component Model
+  Practice component architecture concepts.
+  Open this file in a browser to test.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Component Model Exercise</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    .exercise { border: 1px solid #e2e8f0; padding: 16px; margin: 16px 0; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Component Model Exercises</h1>
+
+  <div class="exercise">
+    <h2>Exercise 1: Counter Component</h2>
+    <p>Create a reusable counter component with:</p>
+    <ul>
+      <li>Props: initial value, step size, min/max bounds</li>
+      <li>State: current count</li>
+      <li>Events: increment, decrement, reset</li>
+      <li>Display: current value, whether at min/max</li>
+    </ul>
+    <div id="counter-root"></div>
+  </div>
+
+  <div class="exercise">
+    <h2>Exercise 2: Data Flow</h2>
+    <p>Build a temperature converter with two inputs (Celsius and Fahrenheit).</p>
+    <ul>
+      <li>Changing one input should update the other</li>
+      <li>State should be lifted to a parent component</li>
+      <li>Each input is a child component receiving value via props</li>
+    </ul>
+    <div id="temp-root"></div>
+  </div>
+
+  <div class="exercise">
+    <h2>Exercise 3: Component Composition</h2>
+    <p>Build a Card component that accepts:</p>
+    <ul>
+      <li>title (string prop)</li>
+      <li>children (slot/content area)</li>
+      <li>footer (optional slot)</li>
+      <li>variant: "default" | "highlighted" | "danger"</li>
+    </ul>
+    <p>Use the Card to build a user profile card and a notification card.</p>
+    <div id="card-root"></div>
+  </div>
+
+  <div class="exercise">
+    <h2>Exercise 4: Props vs State</h2>
+    <p>For each scenario, decide whether data should be a prop or state:</p>
+    <ol>
+      <li>A button's label text — <input placeholder="prop or state?" /></li>
+      <li>Whether a dropdown is open — <input placeholder="prop or state?" /></li>
+      <li>The currently selected tab — <input placeholder="prop or state?" /></li>
+      <li>A user's name from the database — <input placeholder="prop or state?" /></li>
+      <li>A form input's current value — <input placeholder="prop or state?" /></li>
+    </ol>
+  </div>
+
+  <div class="exercise">
+    <h2>Exercise 5: Lifecycle</h2>
+    <p>Describe what should happen at each lifecycle stage for a "LiveChat" component:</p>
+    <ul>
+      <li><strong>Mount</strong>: <input style="width:100%" placeholder="What happens on mount?" /></li>
+      <li><strong>Update</strong>: <input style="width:100%" placeholder="What happens on update?" /></li>
+      <li><strong>Unmount</strong>: <input style="width:100%" placeholder="What happens on unmount?" /></li>
+    </ul>
+  </div>
+
+  <script>
+    // TODO: Implement exercises using vanilla JS to practice concepts
+    // (These same exercises can be implemented in React, Vue, or Svelte)
+
+    console.log('Implement the exercises above!');
+    console.log('Try building Exercise 1 (Counter) with vanilla JS first,');
+    console.log('then implement in your framework of choice.');
+  </script>
+</body>
+</html>
