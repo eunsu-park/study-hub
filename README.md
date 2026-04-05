@@ -1,13 +1,8 @@
 # Study Hub
 
-직접 만들어보지 않으면 안다고 할 수 없다는 믿음으로 시작한 프로젝트입니다.
-프로그래밍 기초부터 플라즈마 물리학까지, 품질 검사를 통과한 학습 자료를 공개합니다.
+프로그래밍 기초부터 플라즈마 물리학까지, 영한 이중언어 기술 학습 자료를 공개하는 레포.
 
-This project started from a simple belief: you don't truly understand something until you can build it from scratch.
-From programming fundamentals to plasma physics — curated study materials that have passed quality review.
-
-> This repository contains curated content selected from a private working repository after passing quality checks.
-> It starts empty and grows as content passes quality review.
+A public repository of bilingual (EN/KO) technical study materials, from programming fundamentals to plasma physics.
 
 ---
 
