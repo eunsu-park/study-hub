@@ -22,8 +22,8 @@ paths:
       en: "Systems Programmer"
       ko: "시스템 프로그래머"
     description:
-      en: "From C/C++ fundamentals to advanced systems programming, templates, and concurrency."
-      ko: "C/C++ 기초부터 고급 시스템 프로그래밍, 템플릿, 동시성까지."
+      en: "From C/C++ fundamentals to advanced systems programming, Rust, and concurrency."
+      ko: "C/C++ 기초부터 고급 시스템 프로그래밍, Rust, 동시성까지."
     icon: "code"
     color: "#fd7e14"
     topics:
@@ -32,6 +32,8 @@ paths:
       - C_Advanced
       - CPP_Basics
       - CPP_Advanced
+      - Rust_Basics
+      - Rust_Advanced
 
   cv_engineer:
     label:
@@ -111,6 +113,8 @@ paths:
       - Calculus_and_Differential_Equations
       - Mathematical_Methods
       - Electrodynamics
+      - IDL_Basics
+      - IDL_Advanced
       - Numerical_Simulation
       - Plasma_Physics
       - MHD
