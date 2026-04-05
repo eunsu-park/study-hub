@@ -364,7 +364,7 @@ topics:
       en: "IoT and embedded systems"
       ko: "IoT 및 임베디드 시스템"
 
-  # Tier 3 — Advanced (24 topics)
+  # Tier 3 — Advanced (28 topics)
   Control_Theory:
     tier: advanced
     prerequisites: [Calculus_and_Differential_Equations]
@@ -441,6 +441,34 @@ topics:
     description:
       en: "Quantum computing fundamentals, algorithms, and applications"
       ko: "양자 컴퓨팅 기초, 알고리즘 및 응용"
+
+  Edge_AI:
+    tier: advanced
+    prerequisites: [Deep_Learning, Computer_Architecture, IoT_Embedded]
+    description:
+      en: "Model compression, quantization, pruning, distillation, TFLite, ONNX, edge deployment"
+      ko: "모델 압축, 양자화, 프루닝, 디스틸레이션, TFLite, ONNX, 엣지 배포"
+
+  Cybersecurity_Offensive:
+    tier: advanced
+    prerequisites: [Security, Networking]
+    description:
+      en: "Penetration testing, binary exploitation, web hacking, reverse engineering, and CTF"
+      ko: "침투 테스트, 바이너리 익스플로잇, 웹 해킹, 리버스 엔지니어링 및 CTF"
+
+  AI_Safety_and_Alignment:
+    tier: advanced
+    prerequisites: [NLP_and_LLM, Reinforcement_Learning, Interpretable_AI]
+    description:
+      en: "AI alignment, safety evaluation, red-teaming, and governance"
+      ko: "AI 정렬, 안전성 평가, 레드팀, 거버넌스"
+
+  Robotics:
+    tier: advanced
+    prerequisites: [Control_Theory]
+    description:
+      en: "Robot kinematics, dynamics, control, perception, SLAM, and multi-robot systems"
+      ko: "로봇 기구학, 동역학, 제어, 인지, SLAM 및 다중 로봇 시스템"
 
   Algorithm:
     tier: advanced
