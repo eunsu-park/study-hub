@@ -161,7 +161,7 @@ topics:
       en: "Claude Code, MCP, Agent SDK, and AI tools"
       ko: "Claude Code, MCP, Agent SDK 및 AI 도구"
 
-  # Tier 2 — Intermediate (15 topics)
+  # Tier 2 — Intermediate (19 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
@@ -300,6 +300,34 @@ topics:
     description:
       en: "Automata theory, formal languages, and computability"
       ko: "오토마타 이론, 형식 언어 및 계산 가능성"
+
+  Backend_Frameworks:
+    tier: intermediate
+    prerequisites: [Python_Basics, Web_Development]
+    description:
+      en: "Backend web frameworks: FastAPI, Express, Django — API design, auth, deployment"
+      ko: "백엔드 웹 프레임워크: FastAPI, Express, Django — API 설계, 인증, 배포"
+
+  Frontend_Frameworks:
+    tier: intermediate
+    prerequisites: [Web_Development]
+    description:
+      en: "Frontend frameworks: React, Vue, Svelte — components, state, SSR, testing"
+      ko: "프론트엔드 프레임워크: React, Vue, Svelte — 컴포넌트, 상태, SSR, ���스팅"
+
+  API_Design:
+    tier: intermediate
+    prerequisites: [Programming, Web_Development, Python_Basics]
+    description:
+      en: "REST, GraphQL, gRPC — API design, versioning, authentication, federation, and security"
+      ko: "REST, GraphQL, gRPC — API 설계, 버저닝, 인증, 연합 및 보안"
+
+  Testing_and_QA:
+    tier: intermediate
+    prerequisites: [Programming, Python_Basics, Software_Engineering]
+    description:
+      en: "Test pyramid, pytest, TDD, integration/E2E/property-based testing, CI/CD integration"
+      ko: "테스트 피라미드, pytest, TDD, 통합/E2E/속성 기반 테스팅, CI/CD 통합"
 
   # Tier 3 — Advanced (12 topics)
   Algorithm:
