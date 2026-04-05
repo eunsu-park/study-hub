@@ -109,6 +109,7 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Numerical_Simulation](./content/en/Numerical_Simulation/00_Overview.md) | ODE/PDE, CFD, FDTD, MHD, FEM, GPU 가속, PINN | 24 |
 | [Optics](./content/en/Optics/00_Overview.md) | 기하광학, 간섭, 회절, 편광, 레이저, 홀로그래피, 적응광학 | 17 |
 | [Reinforcement_Learning](./content/en/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, SAC, Offline RL, RLHF, World Models | 27 |
+| [Flagship](./content/en/Flagship/00_Overview.md) | 밑바닥 단일 파일 구현: 오토그래드, GAN, RL, 디퓨전, VAE | 5 |
 
 ### Tier 4 — Expert (전문)
 
