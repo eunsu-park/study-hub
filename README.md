@@ -72,6 +72,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Backend_Frameworks](./content/en/Backend_Frameworks/00_Overview.md) | FastAPI, Express, Django — 백엔드 API, 인증, 배포 | 21 |
 | [Frontend_Frameworks](./content/en/Frontend_Frameworks/00_Overview.md) | React, Vue, Svelte — 컴포넌트, 상태 관리, SSR, 테스팅 | 18 |
 | [Testing_and_QA](./content/en/Testing_and_QA/00_Overview.md) | pytest, TDD, 통합/E2E/속성 기반 테스팅, CI/CD | 18 |
+| [Computer_Architecture](./content/en/Computer_Architecture/00_Overview.md) | ��리 ������트, CPU, 파이프라인, 캐시, 가상 메모리, RISC-V | 20 |
+| [DevOps](./content/en/DevOps/00_Overview.md) | IaC, CI/CD, Terraform, 모니터링, SRE, GitOps, 플랫폼 엔지니어링 | 28 |
+| [Kubernetes](./content/en/Kubernetes/00_Overview.md) | 아키텍처, 워크로드, 네트워킹, CRD, 오퍼레이터, 프로덕션 운영 | 19 |
+| [System_Design](./content/en/System_Design/00_Overview.md) | 확장성, 캐싱, DB 스케일링, 메시지 큐, 마이크로서비스, 합의 알고리즘 | 20 |
 
 ### Tier 3 — Advanced (고급)
 
