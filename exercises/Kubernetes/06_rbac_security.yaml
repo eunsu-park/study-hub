@@ -1,0 +1,153 @@
+# Exercise: Lesson 06 — RBAC and Pod Security
+# Complete the TODO items below.
+
+# === Exercise 1: Role and RoleBinding ===
+# Grant read-only access to Pods in the "dev" namespace.
+# Hint: Role is namespace-scoped; ClusterRole is cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: dev
+rules:
+- apiGroups: [""]
+  # TODO: Set resources to ["pods", "pods/log"]
+  # TODO: Set verbs to ["get", "list", "watch"]
+  # Hint: "" apiGroup = core API (Pods, Services, ConfigMaps)
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-pod-reader
+  namespace: dev
+subjects:
+- kind: User
+  # TODO: Set the user name to "developer@example.com"
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  # TODO: Set the role name to "pod-reader"
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# === Exercise 2: ClusterRole for Cluster-Wide Access ===
+# Create a ClusterRole that allows listing nodes and namespaces.
+# Hint: Nodes and namespaces are cluster-scoped — requires ClusterRole.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer
+rules:
+# TODO: Add a rule for nodes: verbs ["get", "list", "watch"]
+# TODO: Add a rule for namespaces: verbs ["get", "list"]
+# TODO: Add a rule for persistentvolumes: verbs ["get", "list"]
+# Hint: All three use apiGroup "" (core API)
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-cluster-viewer
+subjects:
+- kind: Group
+  # TODO: Set the group name to "ops-team"
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  # TODO: Set the role name to "cluster-viewer"
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# === Exercise 3: ServiceAccount with Limited Permissions ===
+# Create a ServiceAccount for an application that needs to read ConfigMaps.
+# Hint: Always prefer ServiceAccounts over user accounts for in-cluster apps.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: config-reader-sa
+  namespace: default
+  # TODO: Add annotation "description" with value "SA for reading ConfigMaps"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: configmap-reader
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  # TODO: Set verbs to ["get", "list", "watch"]
+  # TODO: Optionally restrict to specific ConfigMaps using resourceNames
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: config-reader-binding
+  namespace: default
+subjects:
+# TODO: Add a ServiceAccount subject referencing "config-reader-sa"
+# Hint:
+#   - kind: ServiceAccount
+#     name: config-reader-sa
+#     namespace: default
+roleRef:
+  kind: Role
+  name: configmap-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# === Exercise 4: Pod Security — Restricted Container ===
+# Run a Pod with least-privilege security settings.
+# Hint: securityContext can be set at Pod level and container level.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-app
+spec:
+  serviceAccountName: config-reader-sa
+  securityContext:
+    # TODO: Set runAsNonRoot to true
+    # TODO: Set runAsUser to 1000
+    # TODO: Set runAsGroup to 1000
+    # TODO: Set fsGroup to 2000 (for volume permissions)
+  containers:
+  - name: app
+    image: python:3.12-slim
+    command: ["python", "-m", "http.server", "8080"]
+    securityContext:
+      # TODO: Set allowPrivilegeEscalation to false
+      # TODO: Set readOnlyRootFilesystem to true
+      # TODO: Drop ALL capabilities using:
+      #   capabilities:
+      #     drop: ["ALL"]
+    resources:
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+    volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+  volumes:
+  - name: tmp
+    emptyDir: {}
+
+---
+# === Exercise 5: Pod Security Standards (PSS) ===
+# Enforce restricted Pod security at namespace level.
+# Hint: PSS replaces PodSecurityPolicy (removed in K8s 1.25).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: restricted-ns
+  labels:
+    # TODO: Add label to enforce the "restricted" Pod Security Standard
+    # Hint: pod-security.kubernetes.io/enforce: restricted
+    # TODO: Add label to warn on "restricted" violations
+    # Hint: pod-security.kubernetes.io/warn: restricted
+    # TODO: Add label to audit "restricted" violations
+    # Hint: pod-security.kubernetes.io/audit: restricted
+    # Optional: pin to a specific K8s version
+    # pod-security.kubernetes.io/enforce-version: v1.28

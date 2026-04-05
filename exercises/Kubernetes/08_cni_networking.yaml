@@ -1,0 +1,140 @@
+# Exercise: Lesson 08 — CNI and Advanced Networking
+# Complete the TODO items below.
+
+# === Exercise 1: Egress NetworkPolicy ===
+# Restrict outbound traffic from application Pods.
+# Hint: Egress policies control which external endpoints a Pod can reach.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-egress
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Egress
+  egress:
+  # TODO: Allow DNS resolution (port 53 UDP/TCP to kube-dns)
+  # Hint:
+  #   - to:
+  #     - namespaceSelector:
+  #         matchLabels:
+  #           kubernetes.io/metadata.name: kube-system
+  #       podSelector:
+  #         matchLabels:
+  #           k8s-app: kube-dns
+  #     ports:
+  #     - port: 53
+  #       protocol: UDP
+  #     - port: 53
+  #       protocol: TCP
+  # TODO: Allow HTTPS traffic to external APIs (port 443)
+  # TODO: Allow traffic to the database Service on port 5432
+
+---
+# === Exercise 2: IP Block Rules ===
+# Allow/deny traffic based on CIDR blocks.
+# Hint: ipBlock is useful for allowing access to external services by IP range.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cidr-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - ipBlock:
+        # TODO: Allow ingress from the corporate network 10.0.0.0/8
+        # TODO: Exclude the management subnet 10.0.1.0/24 using 'except'
+    ports:
+    - port: 443
+      protocol: TCP
+  egress:
+  - to:
+    - ipBlock:
+        # TODO: Allow egress to a specific external API at 203.0.113.0/24
+    ports:
+    - port: 443
+
+---
+# === Exercise 3: Multi-Port and Named Port Policy ===
+# Create a policy allowing traffic on multiple specific ports.
+# Hint: Named ports reference the containerPort name from the Pod spec.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: multi-port-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: web-server
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: load-balancer
+    ports:
+    # TODO: Allow TCP port 80 (HTTP)
+    # TODO: Allow TCP port 443 (HTTPS)
+    # TODO: Allow TCP on named port "metrics" (port 9090 in Pod spec)
+    # Hint: Use 'port: metrics' to reference a named port
+
+---
+# === Exercise 4: Default Allow All Egress + Deny Specific ===
+# Start with open egress, then deny traffic to metadata service.
+# Hint: Cloud metadata services (169.254.169.254) are a security risk.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-metadata-service
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  # TODO: Allow all egress EXCEPT to the cloud metadata endpoint
+  # Strategy: Allow 0.0.0.0/0 but exclude 169.254.169.254/32
+  # Hint:
+  #   - to:
+  #     - ipBlock:
+  #         cidr: 0.0.0.0/0
+  #         except:
+  #         - 169.254.169.254/32
+
+---
+# === Exercise 5: Calico-Specific GlobalNetworkPolicy ===
+# Use Calico CRDs for cluster-wide network policies.
+# Hint: GlobalNetworkPolicy applies across all namespaces (Calico CNI only).
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-external-egress
+spec:
+  # TODO: Set selector to match all pods: "all()"
+  # TODO: Set order to 100 (lower number = higher priority)
+  types:
+  - Egress
+  egress:
+  # TODO: Allow egress to cluster-internal CIDR (e.g., 10.0.0.0/8)
+  # TODO: Allow DNS on port 53
+  # TODO: Deny everything else (implicit deny when no other rule matches)
+  # Hint:
+  #   - action: Allow
+  #     destination:
+  #       nets: ["10.0.0.0/8"]
+  #   - action: Allow
+  #     protocol: UDP
+  #     destination:
+  #       ports: [53]

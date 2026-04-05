@@ -1,0 +1,158 @@
+# Exercise: Lesson 07 — Ingress and API Gateway
+# Complete the TODO items below.
+
+# === Exercise 1: Basic Ingress with Path Routing ===
+# Route traffic to different Services based on URL path.
+# Hint: Requires an Ingress controller (e.g., nginx-ingress) installed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    # TODO: Set nginx.ingress.kubernetes.io/rewrite-target to /
+    # This strips the matched path prefix before forwarding
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      # TODO: Add a path "/api" routing to Service "api-svc" on port 8080
+      #       with pathType: Prefix
+      # TODO: Add a path "/" routing to Service "frontend-svc" on port 80
+      #       with pathType: Prefix
+      # Hint:
+      #   - path: /api
+      #     pathType: Prefix
+      #     backend:
+      #       service:
+      #         name: api-svc
+      #         port:
+      #           number: 8080
+
+---
+# === Exercise 2: Host-Based Routing ===
+# Route traffic based on the hostname in the request.
+# Hint: Each host gets its own set of path rules.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-host-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  # TODO: Add a rule for host "api.example.com" routing to "api-svc" port 8080
+  # TODO: Add a rule for host "app.example.com" routing to "frontend-svc" port 80
+  # TODO: Add a rule for host "admin.example.com" routing to "admin-svc" port 3000
+
+---
+# === Exercise 3: TLS Termination ===
+# Enable HTTPS on the Ingress with a TLS certificate.
+# Hint: The TLS Secret must contain tls.crt and tls.key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-secret
+type: kubernetes.io/tls
+data:
+  # TODO: Add base64-encoded tls.crt and tls.key
+  # Generate test cert: openssl req -x509 -nodes -days 365 \
+  #   -newkey rsa:2048 -keyout tls.key -out tls.crt \
+  #   -subj "/CN=myapp.example.com"
+  # Then: cat tls.crt | base64 -w0
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-ingress
+  annotations:
+    # TODO: Add annotation to redirect HTTP to HTTPS
+    # Hint: nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  # TODO: Configure TLS for host "myapp.example.com" using Secret "tls-secret"
+  # Hint:
+  #   - hosts:
+  #     - myapp.example.com
+  #     secretName: tls-secret
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-svc
+            port:
+              number: 80
+
+---
+# === Exercise 4: Rate Limiting and Custom Headers ===
+# Apply rate limiting and security headers via Ingress annotations.
+# Hint: These annotations are specific to nginx-ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rate-limited-ingress
+  annotations:
+    # TODO: Set rate limit to 10 requests per second per IP
+    # Hint: nginx.ingress.kubernetes.io/limit-rps: "10"
+    # TODO: Set burst limit to 20
+    # Hint: nginx.ingress.kubernetes.io/limit-burst-multiplier: "2"
+    # TODO: Add CORS headers allowing origin "https://app.example.com"
+    # Hint: nginx.ingress.kubernetes.io/enable-cors: "true"
+    # Hint: nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.example.com"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 8080
+
+---
+# === Exercise 5: Gateway API (Modern Alternative to Ingress) ===
+# Define routing using the newer Gateway API resources.
+# Hint: Gateway API is more expressive and portable than Ingress.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: main-gateway
+spec:
+  gatewayClassName: istio
+  listeners:
+  # TODO: Add a listener named "http" on port 80, protocol HTTP
+  #       accepting routes from the "default" namespace
+  # TODO: Add a listener named "https" on port 443, protocol HTTPS
+  #       with TLS certificateRef pointing to Secret "tls-secret"
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-route
+spec:
+  parentRefs:
+  - name: main-gateway
+  hostnames:
+  - "api.example.com"
+  rules:
+  # TODO: Add a rule matching path "/v1" with a backendRef to "api-svc" port 8080
+  # TODO: Add a request header modifier to add "X-API-Version: v1"
+  # Hint:
+  #   - matches:
+  #     - path:
+  #         type: PathPrefix
+  #         value: /v1
+  #     backendRefs:
+  #     - name: api-svc
+  #       port: 8080

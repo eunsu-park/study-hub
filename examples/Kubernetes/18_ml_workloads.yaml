@@ -1,0 +1,153 @@
+# 18_ml_workloads — GPU pod, KServe InferenceService
+# Requires: NVIDIA GPU operator, KServe installed
+# Apply: kubectl apply -f 18_ml_workloads.yaml
+
+---
+# GPU Training Pod: PyTorch training job with NVIDIA GPU
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pytorch-training
+  labels:
+    workload: ml-training
+spec:
+  restartPolicy: Never
+  containers:
+    - name: trainer
+      image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+      command: ["python", "-c"]
+      args:
+        - |
+          import torch
+          print(f"CUDA available: {torch.cuda.is_available()}")
+          print(f"GPU count: {torch.cuda.device_count()}")
+          if torch.cuda.is_available():
+              print(f"GPU name: {torch.cuda.get_device_name(0)}")
+              x = torch.randn(1000, 1000, device='cuda')
+              y = torch.matmul(x, x.T)
+              print(f"Matrix multiply result shape: {y.shape}")
+          print("Training simulation complete")
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+          cpu: "4"
+          memory: 16Gi
+        requests:
+          cpu: "2"
+          memory: 8Gi
+      volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+  volumes:
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 4Gi
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  nodeSelector:
+    accelerator: nvidia-gpu
+
+---
+# Multi-GPU distributed training Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: distributed-training
+spec:
+  parallelism: 2
+  completions: 2
+  template:
+    metadata:
+      labels:
+        workload: distributed-training
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+          command: ["torchrun"]
+          args:
+            - "--nproc_per_node=1"
+            - "--nnodes=2"
+            - "train.py"
+          env:
+            - name: NCCL_DEBUG
+              value: INFO
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: 32Gi
+            requests:
+              memory: 16Gi
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+
+---
+# KServe InferenceService: serve a scikit-learn model
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sklearn-iris
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: sklearn
+      storageUri: gs://kfserving-examples/models/sklearn/1.0/model
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+
+---
+# KServe InferenceService: GPU-accelerated transformer model
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: llm-serving
+  annotations:
+    serving.kserve.io/autoscalerClass: hpa
+    serving.kserve.io/targetUtilizationPercentage: "70"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 4
+    model:
+      modelFormat:
+        name: huggingface
+      storageUri: pvc://model-store/llama-7b
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+          memory: 24Gi
+        requests:
+          memory: 16Gi
+      env:
+        - name: TRANSFORMERS_CACHE
+          value: /mnt/models/.cache
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+---
+# PVC for model storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-store
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-local

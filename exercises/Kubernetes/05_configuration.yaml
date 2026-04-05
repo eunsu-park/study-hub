@@ -1,0 +1,115 @@
+# Exercise: Lesson 05 — Configuration Management
+# Complete the TODO items below.
+
+# === Exercise 1: ConfigMap from Literal Values ===
+# Create a ConfigMap to hold application settings.
+# Hint: ConfigMaps store non-sensitive key-value configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-settings
+data:
+  # TODO: Add key "DATABASE_HOST" with value "postgres.default.svc.cluster.local"
+  # TODO: Add key "LOG_LEVEL" with value "info"
+  # TODO: Add key "MAX_CONNECTIONS" with value "100"
+
+---
+# === Exercise 2: ConfigMap from a File ===
+# Embed an entire config file inside a ConfigMap.
+# Hint: Use the key as the filename and the value as the file content.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  # TODO: Add a key "nginx.conf" containing an nginx configuration block:
+  #   server {
+  #       listen 80;
+  #       server_name localhost;
+  #       location / {
+  #           root /usr/share/nginx/html;
+  #           index index.html;
+  #       }
+  #   }
+  # Hint: Use the YAML literal block scalar '|' for multi-line values
+
+---
+# === Exercise 3: Secret with Opaque Data ===
+# Store database credentials as a Kubernetes Secret.
+# Hint: Values must be base64-encoded when using 'data', or plain text with 'stringData'.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+type: Opaque
+# TODO: Use 'stringData' (plain text, auto-encoded) to define:
+#   username: admin
+#   password: S3cur3P@ssw0rd
+#   connection_string: postgresql://admin:S3cur3P@ssw0rd@postgres:5432/mydb
+# Hint: stringData is more readable than base64-encoded 'data'
+
+---
+# === Exercise 4: Pod Consuming ConfigMap and Secret ===
+# Mount ConfigMap as environment variables and Secret as volume files.
+# Hint: envFrom injects ALL keys; env[].valueFrom injects a single key.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configured-app
+spec:
+  containers:
+  - name: app
+    image: python:3.12-slim
+    command: ["python", "-c", "import os; [print(f'{k}={v}') for k,v in sorted(os.environ.items())]"]
+    # TODO: Use envFrom to inject ALL keys from ConfigMap "app-settings"
+    #       as environment variables
+    # Hint:
+    #   envFrom:
+    #   - configMapRef:
+    #       name: app-settings
+    env:
+    # TODO: Add a single env var "DB_PASSWORD" from Secret "db-credentials" key "password"
+    # Hint:
+    #   - name: DB_PASSWORD
+    #     valueFrom:
+    #       secretKeyRef:
+    #         name: db-credentials
+    #         key: password
+    volumeMounts:
+    # TODO: Mount the "nginx-config" ConfigMap at /etc/nginx/conf.d
+    # TODO: Mount the "db-credentials" Secret at /secrets with readOnly: true
+  volumes:
+  # TODO: Define a volume "config-vol" from ConfigMap "nginx-config"
+  # TODO: Define a volume "secret-vol" from Secret "db-credentials"
+
+---
+# === Exercise 5: Immutable ConfigMap and Secret ===
+# Mark configuration as immutable for performance and safety.
+# Hint: Immutable ConfigMaps/Secrets cannot be updated — only deleted and recreated.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags
+# TODO: Set 'immutable: true'
+# Benefits:
+#   - kubelet stops watching for changes (reduces API server load)
+#   - Prevents accidental modification in production
+data:
+  ENABLE_NEW_UI: "true"
+  ENABLE_DARK_MODE: "false"
+  # TODO: Add a feature flag "ENABLE_BETA_API" set to "false"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-cert
+type: kubernetes.io/tls
+# TODO: Set 'immutable: true'
+# TLS certs rarely change, so immutability is a good fit
+data:
+  # TODO: Add base64-encoded tls.crt and tls.key fields
+  # For testing, generate with:
+  #   echo "PLACEHOLDER_CERT" | base64
+  #   echo "PLACEHOLDER_KEY" | base64
+  # In production, use cert-manager to automate TLS certificates

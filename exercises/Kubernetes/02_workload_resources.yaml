@@ -1,0 +1,156 @@
+# Exercise: Lesson 02 — Workload Resources
+# Complete the TODO items below.
+
+# === Exercise 1: Deployment with Rolling Update ===
+# Create a Deployment that uses a rolling update strategy.
+# Hint: maxSurge and maxUnavailable control the update pace.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  labels:
+    app: web-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # TODO: Set maxSurge to 1 (allow 1 extra Pod during update)
+      # TODO: Set maxUnavailable to 0 (never reduce below desired count)
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web
+        # TODO: Set the image to nginx:1.24-alpine
+        ports:
+        - containerPort: 80
+        # TODO: Add a readiness probe on HTTP GET / port 80
+        #       with initialDelaySeconds: 5 and periodSeconds: 10
+
+---
+# === Exercise 2: StatefulSet with Persistent Storage ===
+# Deploy a StatefulSet for a database workload.
+# Hint: StatefulSets provide stable network identities and ordered startup.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-db
+spec:
+  serviceName: "postgres"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "changeme"
+        volumeMounts:
+        # TODO: Mount a volume named "pgdata" at /var/lib/postgresql/data
+  # TODO: Add a volumeClaimTemplates section that requests:
+  #   - 10Gi of storage
+  #   - ReadWriteOnce access mode
+  #   - storageClassName: standard
+  # Hint: Each replica gets its own PVC (e.g., pgdata-postgres-db-0)
+
+---
+# === Exercise 3: DaemonSet for Node-Level Agent ===
+# Deploy a log collector on every node.
+# Hint: DaemonSets ensure one Pod per node (or per matching node).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+    spec:
+      containers:
+      - name: fluentd
+        # TODO: Set the image to fluentd:v1.16-1
+        resources:
+          limits:
+            # TODO: Set memory limit to 200Mi
+          requests:
+            # TODO: Set CPU request to 100m and memory request to 100Mi
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+      # TODO: Add a volume named "varlog" using hostPath /var/log
+      # TODO: Add a toleration so this runs on control-plane nodes too
+      #   Hint: key: "node-role.kubernetes.io/control-plane", effect: NoSchedule
+
+---
+# === Exercise 4: Job and CronJob ===
+# Create a one-shot Job and a recurring CronJob.
+# Hint: Jobs run to completion; CronJobs schedule Jobs on a cron expression.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-migration
+spec:
+  # TODO: Set backoffLimit to 3 (retry up to 3 times on failure)
+  # TODO: Set activeDeadlineSeconds to 600 (timeout after 10 minutes)
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: alpine:latest
+        command: ["sh", "-c", "echo 'Running migration...' && sleep 10 && echo 'Done'"]
+      restartPolicy: Never
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-backup
+spec:
+  # TODO: Set schedule to run at 2:00 AM every day
+  # Hint: Cron format is "minute hour day month weekday"
+  # TODO: Set concurrencyPolicy to Forbid (skip if previous run still active)
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: alpine:latest
+            command: ["sh", "-c", "echo 'Backup started at $(date)' && sleep 5"]
+          restartPolicy: OnFailure
+
+---
+# === Exercise 5: Pod Disruption Budget ===
+# Protect the web-app Deployment during voluntary disruptions.
+# Hint: PDBs limit how many Pods can be down during node drains or upgrades.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+spec:
+  # TODO: Set minAvailable to 2 (at least 2 Pods must be running)
+  # Alternative: you could use maxUnavailable instead
+  selector:
+    matchLabels:
+      # TODO: Match the web-app Deployment labels

@@ -1,0 +1,205 @@
+# Exercise: Lesson 18 — ML Workloads on Kubernetes
+# Complete the TODO items below.
+
+# === Exercise 1: GPU-Enabled Pod for Model Inference ===
+# Deploy a Pod with GPU resources for ML model serving.
+# Hint: GPU scheduling requires the NVIDIA device plugin DaemonSet.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ml-inference
+  labels:
+    app: ml-inference
+spec:
+  containers:
+  - name: model-server
+    image: tensorflow/serving:2.14.0-gpu
+    ports:
+    - containerPort: 8501
+      name: rest
+    - containerPort: 8500
+      name: grpc
+    resources:
+      limits:
+        # TODO: Request 1 GPU using nvidia.com/gpu: 1
+        cpu: "4"
+        memory: "8Gi"
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+    env:
+    - name: MODEL_NAME
+      value: "my_model"
+    volumeMounts:
+    # TODO: Mount the model files from a PVC at /models/my_model
+    # Hint: The model directory structure should be:
+    #   /models/my_model/1/saved_model.pb
+  # TODO: Add a nodeSelector to target GPU nodes
+  # Hint: nodeSelector:
+  #         accelerator: nvidia-tesla-v100
+  # TODO: Add a toleration for the GPU taint
+  # Hint: tolerations:
+  #       - key: nvidia.com/gpu
+  #         operator: Exists
+  #         effect: NoSchedule
+  volumes:
+  # TODO: Define a PVC volume for model storage
+
+---
+# === Exercise 2: Training Job with Multiple GPUs ===
+# Run a distributed training job across multiple GPUs.
+# Hint: Use a Job with resource requests for multiple GPUs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-training
+spec:
+  backoffLimit: 3
+  completions: 1
+  template:
+    metadata:
+      labels:
+        app: training
+    spec:
+      containers:
+      - name: trainer
+        image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+        command: ["python", "train.py"]
+        args:
+        - "--epochs=100"
+        - "--batch-size=64"
+        - "--learning-rate=0.001"
+        resources:
+          limits:
+            # TODO: Request 4 GPUs for data-parallel training
+            # Hint: nvidia.com/gpu: 4
+            cpu: "16"
+            memory: "64Gi"
+        env:
+        # TODO: Set NCCL_DEBUG to INFO for distributed training diagnostics
+        # TODO: Set CUDA_VISIBLE_DEVICES to "0,1,2,3"
+        volumeMounts:
+        - name: dataset
+          mountPath: /data
+          readOnly: true
+        - name: output
+          mountPath: /output
+      restartPolicy: Never
+      volumes:
+      # TODO: Add a PVC volume "dataset" for training data (ReadOnlyMany)
+      # TODO: Add a PVC volume "output" for model checkpoints (ReadWriteOnce)
+
+---
+# === Exercise 3: Model Serving with Seldon Core ===
+# Deploy a model using Seldon Core's SeldonDeployment CRD.
+# Hint: Seldon Core provides inference graphs, A/B testing, and canary rollouts.
+#
+# Note: This exercise uses Seldon Core deliberately, even though the example
+# file uses KServe. The ML serving ecosystem includes multiple production-grade
+# frameworks (KServe, Seldon Core, BentoML, Ray Serve, Triton, etc.), and
+# exposure to different CRD schemas broadens awareness of real-world tooling
+# choices learners will encounter in the field.
+apiVersion: machinelearning.seldon.io/v1
+kind: SeldonDeployment
+metadata:
+  name: sentiment-classifier
+spec:
+  predictors:
+  - name: default
+    replicas: 3
+    graph:
+      # TODO: Set name to "classifier"
+      # TODO: Set implementation to "SKLEARN_SERVER"
+      # TODO: Set modelUri to "gs://my-models/sentiment/v1"
+      children: []
+    componentSpecs:
+    - spec:
+        containers:
+        - name: classifier
+          resources:
+            requests:
+              # TODO: Set CPU to 500m and memory to 1Gi
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+  # TODO: Add a canary predictor with 10% traffic weight
+  # Hint:
+  #   - name: canary
+  #     replicas: 1
+  #     traffic: 10
+  #     graph:
+  #       name: classifier
+  #       implementation: SKLEARN_SERVER
+  #       modelUri: "gs://my-models/sentiment/v2"
+
+---
+# === Exercise 4: Kubeflow Pipeline Step ===
+# Define a training pipeline step as a Kubernetes resource.
+# Hint: Kubeflow Pipelines orchestrate ML workflows as DAGs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-config
+data:
+  pipeline.yaml: |
+    # TODO: Define a 3-step pipeline:
+    # Step 1: Data preprocessing
+    #   image: python:3.12-slim
+    #   command: ["python", "preprocess.py"]
+    #   inputs: raw data PVC
+    #   outputs: processed data PVC
+    #
+    # Step 2: Model training
+    #   image: pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+    #   command: ["python", "train.py"]
+    #   inputs: processed data from step 1
+    #   outputs: trained model artifact
+    #   resources: 2 GPUs
+    #
+    # Step 3: Model evaluation
+    #   image: python:3.12-slim
+    #   command: ["python", "evaluate.py"]
+    #   inputs: model from step 2, test dataset
+    #   outputs: metrics (accuracy, F1 score)
+    #   condition: only run if training succeeded
+
+---
+# === Exercise 5: Model Serving Autoscaling with KNative ===
+# Deploy a serverless inference endpoint that scales to zero.
+# Hint: KNative Serving provides request-based autoscaling.
+#
+# Note: This exercise uses KNative Serving rather than KServe (used in the
+# example file) to expose learners to serverless inference patterns and
+# request-based autoscaling. Both are valid production approaches; understanding
+# both frameworks reflects the diversity of serving infrastructure found across
+# ML platform teams.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ml-predictor
+spec:
+  template:
+    metadata:
+      annotations:
+        # TODO: Set autoscaling target to 10 concurrent requests per pod
+        # Hint: autoscaling.knative.dev/target: "10"
+        # TODO: Set scale-to-zero grace period to 5 minutes
+        # Hint: autoscaling.knative.dev/scale-to-zero-grace-period: "5m"
+        # TODO: Set minimum scale to 0 and maximum to 20
+        # Hint: autoscaling.knative.dev/min-scale: "0"
+        #       autoscaling.knative.dev/max-scale: "20"
+    spec:
+      containers:
+      - image: my-registry/ml-predictor:v1
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            # TODO: Set resource limits for inference
+            cpu: "2"
+            memory: "4Gi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          # TODO: Set initialDelaySeconds to 30 (model loading time)

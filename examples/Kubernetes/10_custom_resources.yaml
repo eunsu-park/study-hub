@@ -1,0 +1,137 @@
+# 10_custom_resources — CRD definition with validation
+# Apply: kubectl apply -f 10_custom_resources.yaml
+
+---
+# CustomResourceDefinition: WebApplication CRD with schema validation
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: webapplications.apps.example.com
+spec:
+  group: apps.example.com
+  names:
+    kind: WebApplication
+    listKind: WebApplicationList
+    plural: webapplications
+    singular: webapplication
+    shortNames:
+      - webapp
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["image", "replicas"]
+              properties:
+                image:
+                  type: string
+                  pattern: '^[a-z0-9./:-]+$'
+                  description: Container image reference
+                replicas:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                  default: 1
+                  description: Number of desired replicas
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  default: 8080
+                env:
+                  type: array
+                  items:
+                    type: object
+                    required: ["name", "value"]
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                ingress:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: false
+                    host:
+                      type: string
+                    tls:
+                      type: boolean
+                      default: false
+            status:
+              type: object
+              properties:
+                readyReplicas:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+      subresources:
+        status: {}
+        scale:
+          specReplicasPath: .spec.replicas
+          statusReplicasPath: .status.readyReplicas
+      additionalPrinterColumns:
+        - name: Image
+          type: string
+          jsonPath: .spec.image
+        - name: Replicas
+          type: integer
+          jsonPath: .spec.replicas
+        - name: Ready
+          type: integer
+          jsonPath: .status.readyReplicas
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+
+---
+# Example CR instance using the CRD above
+apiVersion: apps.example.com/v1
+kind: WebApplication
+metadata:
+  name: demo-app
+spec:
+  image: nginx:1.25-alpine
+  replicas: 3
+  port: 80
+  env:
+    - name: APP_ENV
+      value: staging
+    - name: LOG_LEVEL
+      value: debug
+  ingress:
+    enabled: true
+    host: demo.example.com
+    tls: true
+
+---
+# Another CR instance: minimal spec
+apiVersion: apps.example.com/v1
+kind: WebApplication
+metadata:
+  name: api-service
+spec:
+  image: python:3.12-slim
+  replicas: 2
+  port: 8000
+  env:
+    - name: WORKERS
+      value: "4"

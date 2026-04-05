@@ -1,0 +1,117 @@
+# 04_storage — PV, PVC, StorageClass examples
+# Apply: kubectl apply -f 04_storage.yaml
+
+---
+# StorageClass: local-path provisioner (minikube default)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-local
+provisioner: k8s.io/minikube-hostpath
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  type: pd-ssd
+
+---
+# PersistentVolume: manually provisioned hostPath volume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: manual-pv
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/manual-pv
+    type: DirectoryOrCreate
+
+---
+# PVC: claim the manually provisioned PV
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: manual-pvc
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  selector:
+    matchLabels:
+      type: local
+
+---
+# PVC: dynamically provisioned via StorageClass
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamic-pvc
+spec:
+  storageClassName: fast-local
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+# Pod using the dynamic PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: storage-demo
+spec:
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "Writing data at $(date)" >> /data/log.txt
+          cat /data/log.txt
+          sleep 3600
+      volumeMounts:
+        - name: persistent-data
+          mountPath: /data
+  volumes:
+    - name: persistent-data
+      persistentVolumeClaim:
+        claimName: dynamic-pvc
+
+---
+# Pod with emptyDir (ephemeral shared volume between containers)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-logging
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c"]
+      args:
+        - while true; do echo "$(date) app log" >> /var/log/app.log; sleep 5; done
+      volumeMounts:
+        - name: log-volume
+          mountPath: /var/log
+    - name: log-shipper
+      image: busybox:1.36
+      command: ["sh", "-c"]
+      args:
+        - tail -f /var/log/app.log
+      volumeMounts:
+        - name: log-volume
+          mountPath: /var/log
+  volumes:
+    - name: log-volume
+      emptyDir:
+        sizeLimit: 100Mi

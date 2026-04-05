@@ -1,0 +1,130 @@
+# 14_observability — Prometheus ServiceMonitor, alerting rules
+# Requires: kube-prometheus-stack (Helm chart) installed
+# Apply: kubectl apply -f 14_observability.yaml
+
+---
+# Namespace for monitoring resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    purpose: monitoring
+
+---
+# ServiceMonitor: tell Prometheus to scrape the application
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: web-app-monitor
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: web-app
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scrapeTimeout: 10s
+
+---
+# PodMonitor: scrape pods directly (no Service required)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: batch-jobs-monitor
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      type: batch-job
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+
+---
+# PrometheusRule: alerting rules for SLOs
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+spec:
+  groups:
+    - name: app.rules
+      interval: 30s
+      rules:
+        # High error rate alert
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+            > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High HTTP error rate (>5%)"
+            description: "Error rate is {{ $value | humanizePercentage }}"
+
+        # Pod restart alert
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash-looping"
+
+        # High memory usage
+        - alert: HighMemoryUsage
+          expr: |
+            container_memory_working_set_bytes{container!=""}
+            /
+            container_spec_memory_limit_bytes{container!=""}
+            > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Container {{ $labels.container }} memory >90%"
+
+    - name: slo.rules
+      rules:
+        # Recording rule for request latency SLI
+        - record: http_request_duration_seconds:p99
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+            )
+
+        # SLO burn rate alert (multi-window)
+        - alert: SLOBurnRateHigh
+          expr: |
+            (
+              sum(rate(http_requests_total{status=~"5.."}[1h]))
+              / sum(rate(http_requests_total[1h]))
+            ) > 14.4 * 0.001
+            and
+            (
+              sum(rate(http_requests_total{status=~"5.."}[5m]))
+              / sum(rate(http_requests_total[5m]))
+            ) > 14.4 * 0.001
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SLO burn rate exceeds budget"

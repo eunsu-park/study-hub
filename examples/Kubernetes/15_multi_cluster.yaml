@@ -1,0 +1,155 @@
+# 15_multi_cluster — KubeFed and ArgoCD ApplicationSet
+# Requires: KubeFed or ArgoCD installed on management cluster
+
+---
+# KubeFed: FederatedDeployment across clusters
+apiVersion: types.kubefed.io/v1beta1
+kind: FederatedDeployment
+metadata:
+  name: web-app
+  namespace: federation
+spec:
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: web-app
+      template:
+        metadata:
+          labels:
+            app: web-app
+        spec:
+          containers:
+            - name: web
+              image: nginx:1.25-alpine
+              ports:
+                - containerPort: 80
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+  placement:
+    clusters:
+      - name: us-east-1
+      - name: eu-west-1
+      - name: ap-northeast-1
+  overrides:
+    - clusterName: us-east-1
+      clusterOverrides:
+        - path: "/spec/replicas"
+          value: 5
+    - clusterName: eu-west-1
+      clusterOverrides:
+        - path: "/spec/replicas"
+          value: 3
+
+---
+# ArgoCD Application: single cluster deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: web-app-staging
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/org/k8s-manifests.git
+    targetRevision: main
+    path: overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+---
+# ArgoCD ApplicationSet: deploy to multiple clusters via generator
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: web-app-multicluster
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: us-east
+            url: https://us-east.k8s.example.com
+            region: us-east-1
+            replicas: "5"
+          - cluster: eu-west
+            url: https://eu-west.k8s.example.com
+            region: eu-west-1
+            replicas: "3"
+          - cluster: ap-northeast
+            url: https://ap-ne.k8s.example.com
+            region: ap-northeast-1
+            replicas: "3"
+  template:
+    metadata:
+      name: "web-app-{{cluster}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/org/k8s-manifests.git
+        targetRevision: main
+        path: overlays/production
+        helm:
+          parameters:
+            - name: replicas
+              value: "{{replicas}}"
+            - name: region
+              value: "{{region}}"
+      destination:
+        server: "{{url}}"
+        namespace: production
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+
+---
+# ArgoCD ApplicationSet: Git directory generator for monorepo
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: microservices
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/org/microservices.git
+        revision: main
+        directories:
+          - path: services/*
+  template:
+    metadata:
+      name: "{{path.basename}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/org/microservices.git
+        targetRevision: main
+        path: "{{path}}/k8s"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{path.basename}}"
+      syncPolicy:
+        automated:
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

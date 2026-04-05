@@ -1,0 +1,145 @@
+# 13_autoscaling — HPA, VPA, KEDA configuration
+# Prerequisites: metrics-server installed (minikube addons enable metrics-server)
+# Apply: kubectl apply -f 13_autoscaling.yaml
+
+---
+# Target Deployment for autoscaling
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autoscale-target
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: autoscale-target
+  template:
+    metadata:
+      labels:
+        app: autoscale-target
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# HPA v2: scale based on CPU and memory
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-memory-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autoscale-target
+  minReplicas: 2
+  maxReplicas: 10
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: AverageValue
+          averageValue: 200Mi
+
+---
+# HPA with custom metrics (requires custom metrics adapter)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: custom-metric-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autoscale-target
+  minReplicas: 1
+  maxReplicas: 20
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "100"
+
+---
+# VPA: Vertical Pod Autoscaler recommendation mode
+# Requires: VPA controller installed
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: autoscale-target-vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autoscale-target
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: app
+        minAllowed:
+          cpu: 50m
+          memory: 64Mi
+        maxAllowed:
+          cpu: 2
+          memory: 2Gi
+
+---
+# KEDA ScaledObject: scale based on external event source
+# Requires: KEDA operator installed
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: rabbitmq-scaler
+spec:
+  scaleTargetRef:
+    name: autoscale-target
+  pollingInterval: 15
+  cooldownPeriod: 120
+  minReplicaCount: 1
+  maxReplicaCount: 30
+  triggers:
+    - type: rabbitmq
+      metadata:
+        queueName: task-queue
+        host: amqp://guest:guest@rabbitmq.default.svc.cluster.local:5672/
+        queueLength: "50"
+    - type: cron
+      metadata:
+        timezone: UTC
+        start: "0 8 * * 1-5"
+        end: "0 18 * * 1-5"
+        desiredReplicas: "5"

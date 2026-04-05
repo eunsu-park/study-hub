@@ -1,0 +1,127 @@
+# Exercise: Lesson 04 — Kubernetes Storage
+# Complete the TODO items below.
+
+# === Exercise 1: PersistentVolumeClaim (PVC) ===
+# Request persistent storage for a database Pod.
+# Hint: PVCs are namespace-scoped; PVs are cluster-scoped.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-storage
+  namespace: default
+spec:
+  # TODO: Set accessModes to ReadWriteOnce
+  # Hint: RWO = single node read-write; RWX = multi-node read-write
+  resources:
+    requests:
+      # TODO: Request 20Gi of storage
+  # TODO: Set storageClassName to "standard"
+  # Hint: Omit storageClassName to use the cluster default
+
+---
+# === Exercise 2: Pod with PVC Volume Mount ===
+# Attach the PVC to a Pod running PostgreSQL.
+# Hint: volumeMounts connect a named volume to a container path.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres-pod
+spec:
+  containers:
+  - name: postgres
+    image: postgres:16-alpine
+    env:
+    - name: POSTGRES_PASSWORD
+      value: "changeme"
+    - name: PGDATA
+      value: /var/lib/postgresql/data/pgdata
+    volumeMounts:
+    # TODO: Mount volume "db-vol" at path /var/lib/postgresql/data
+    ports:
+    - containerPort: 5432
+  volumes:
+  # TODO: Define volume "db-vol" backed by PVC "db-storage"
+  # Hint:
+  #   - name: db-vol
+  #     persistentVolumeClaim:
+  #       claimName: <pvc-name>
+
+---
+# === Exercise 3: StorageClass for Dynamic Provisioning ===
+# Create a StorageClass that provisions SSD-backed volumes.
+# Hint: The provisioner depends on your cloud (e.g., pd-ssd for GKE).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+# TODO: Set provisioner to "kubernetes.io/gce-pd" (GKE example)
+#       For AWS EKS use "ebs.csi.aws.com"
+#       For local testing use "k8s.io/minikube-hostpath"
+parameters:
+  # TODO: Set type to "pd-ssd" (GKE) or "gp3" (AWS)
+# TODO: Set reclaimPolicy to Retain (keep data after PVC deletion)
+#       Alternatives: Delete (default), Recycle (deprecated)
+# TODO: Set volumeBindingMode to WaitForFirstConsumer
+#       This delays PV creation until a Pod needs it (better scheduling)
+
+---
+# === Exercise 4: Multi-Volume Pod with emptyDir and PVC ===
+# Use emptyDir for scratch space and PVC for persistent data.
+# Hint: emptyDir is ephemeral — data is lost when the Pod is removed.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-volume-pod
+spec:
+  containers:
+  - name: app
+    image: alpine:latest
+    command: ["sh", "-c", "while true; do date >> /data/persistent/log.txt; sleep 60; done"]
+    volumeMounts:
+    - name: persistent-data
+      mountPath: /data/persistent
+    # TODO: Add a volumeMount for "scratch-space" at /tmp/scratch
+  - name: sidecar
+    image: alpine:latest
+    command: ["sh", "-c", "tail -f /shared/log.txt"]
+    volumeMounts:
+    # TODO: Mount "persistent-data" at /shared (same volume, different path)
+    # This allows the sidecar to read data written by the main container
+  volumes:
+  - name: persistent-data
+    persistentVolumeClaim:
+      claimName: db-storage
+  # TODO: Add an emptyDir volume named "scratch-space"
+  # Hint: emptyDir: {} creates a temporary directory backed by node disk
+  # Optional: Use emptyDir: { medium: Memory } for a tmpfs mount
+
+---
+# === Exercise 5: Volume Snapshots ===
+# Create a VolumeSnapshot from an existing PVC.
+# Hint: Requires a CSI driver that supports snapshots.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: db-snapshot
+spec:
+  # TODO: Set volumeSnapshotClassName to "csi-snapclass"
+  source:
+    # TODO: Set persistentVolumeClaimName to "db-storage"
+
+---
+# Restore from snapshot: create a new PVC from the snapshot
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-storage-restored
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: fast-ssd
+  dataSource:
+    # TODO: Set name to "db-snapshot"
+    # TODO: Set kind to "VolumeSnapshot"
+    # TODO: Set apiGroup to "snapshot.storage.k8s.io"

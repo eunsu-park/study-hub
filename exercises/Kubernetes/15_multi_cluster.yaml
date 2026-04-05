@@ -1,0 +1,172 @@
+# Exercise: Lesson 15 — Multi-Cluster Management
+# Complete the TODO items below.
+
+# === Exercise 1: Kubefed Federated Deployment ===
+# Deploy a workload across multiple clusters using KubeFed.
+# Hint: KubeFed propagates resources from a host cluster to member clusters.
+apiVersion: types.kubefed.io/v1beta1
+kind: FederatedDeployment
+metadata:
+  name: global-web-app
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        app: global-web
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: global-web
+      template:
+        metadata:
+          labels:
+            app: global-web
+        spec:
+          containers:
+          - name: web
+            image: nginx:1.25-alpine
+            ports:
+            - containerPort: 80
+  placement:
+    # TODO: List the target clusters for this deployment
+    # Hint:
+    #   clusters:
+    #   - name: cluster-us-east
+    #   - name: cluster-eu-west
+    #   - name: cluster-ap-southeast
+  overrides:
+  # TODO: Override replicas per cluster (more in primary, fewer in secondary)
+  # Hint:
+  #   - clusterName: cluster-us-east
+  #     clusterOverrides:
+  #     - path: "/spec/replicas"
+  #       value: 5
+  #   - clusterName: cluster-eu-west
+  #     clusterOverrides:
+  #     - path: "/spec/replicas"
+  #       value: 3
+
+---
+# === Exercise 2: Multi-Cluster Service Discovery ===
+# Export a Service so it is discoverable from other clusters.
+# Hint: MCS API (KEP-1645) enables cross-cluster service discovery.
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceExport
+metadata:
+  name: api-server
+  namespace: production
+  # This marks the "api-server" Service for export to other clusters.
+  # Other clusters can then import it.
+
+---
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: api-server
+  namespace: production
+spec:
+  type: ClusterSetIP
+  ports:
+  # TODO: Define the imported service port
+  # Hint:
+  #   - port: 8080
+  #     protocol: TCP
+  # TODO: Add ips field for the virtual IP if using ClusterSetIP type
+
+---
+# === Exercise 3: Cluster API — Declarative Cluster Management ===
+# Define a Kubernetes cluster as a Kubernetes resource.
+# Hint: Cluster API manages cluster lifecycle (create, upgrade, delete).
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: workload-cluster
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      # TODO: Set CIDR blocks for Pod networking
+      # Hint: cidrBlocks: ["192.168.0.0/16"]
+    services:
+      # TODO: Set CIDR blocks for Service networking
+      # Hint: cidrBlocks: ["10.128.0.0/12"]
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    # TODO: Set name to "workload-cluster-cp"
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    # TODO: Set kind to the appropriate provider (e.g., AWSCluster, GCPCluster)
+    # TODO: Set name to "workload-cluster-infra"
+
+---
+# === Exercise 4: Argo CD ApplicationSet for Multi-Cluster ===
+# Deploy applications to multiple clusters using Argo CD.
+# Hint: ApplicationSet generates Application resources from templates.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: global-app
+  namespace: argocd
+spec:
+  generators:
+  # TODO: Use a cluster generator to target all registered clusters
+  # Hint:
+  #   - clusters:
+  #       selector:
+  #         matchLabels:
+  #           env: production
+  template:
+    metadata:
+      # TODO: Set name using template: "app-{{name}}"
+      # {{name}} is replaced with each cluster's name
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/org/k8s-manifests.git
+        targetRevision: HEAD
+        # TODO: Set path to "overlays/{{metadata.labels.region}}"
+        # Each cluster's region label selects the correct Kustomize overlay
+      destination:
+        # TODO: Set server to "{{server}}" (auto-populated from cluster generator)
+        namespace: production
+      syncPolicy:
+        automated:
+          # TODO: Enable prune (remove resources not in git)
+          # TODO: Enable selfHeal (revert manual changes)
+
+---
+# === Exercise 5: Multi-Cluster Network Policy ===
+# Configure cross-cluster communication policies.
+# Hint: Submariner or Cilium ClusterMesh enable cross-cluster networking.
+apiVersion: submariner.io/v1
+kind: ServiceDiscovery
+metadata:
+  name: service-discovery
+  namespace: submariner-operator
+spec:
+  # TODO: Set clusterID to "cluster-us-east"
+  # TODO: Set namespace to "submariner-operator"
+  # TODO: Set globalnetEnabled to true (for overlapping CIDRs)
+  # Hint: GlobalNet assigns unique global IPs to avoid CIDR conflicts
+
+---
+# Cilium ClusterMesh alternative:
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: cross-cluster-allow
+spec:
+  endpointSelector:
+    matchLabels:
+      app: api-server
+  ingress:
+  - fromEntities:
+    # TODO: Allow traffic from "remote-node" entity (other clusters)
+    # TODO: Allow traffic from "cluster" entity (same cluster)
+  - fromEndpoints:
+    - matchLabels:
+        # TODO: Allow from pods labeled "role: gateway" in remote clusters
+        io.cilium.k8s.policy.cluster: "cluster-eu-west"

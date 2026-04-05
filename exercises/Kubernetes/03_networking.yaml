@@ -1,0 +1,121 @@
+# Exercise: Lesson 03 — Kubernetes Networking
+# Complete the TODO items below.
+
+# === Exercise 1: ClusterIP and NodePort Services ===
+# Create Services to expose a Deployment internally and externally.
+# Hint: ClusterIP is internal-only; NodePort exposes on each node's IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-internal
+spec:
+  # TODO: Set the type to ClusterIP
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    # TODO: Set targetPort to 8080 (the container's listening port)
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-external
+spec:
+  # TODO: Set the type to NodePort
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 8080
+    # TODO: Set nodePort to 30080 (must be in range 30000-32767)
+
+---
+# === Exercise 2: Headless Service for StatefulSet ===
+# Create a headless Service for direct Pod DNS resolution.
+# Hint: Set clusterIP to None for a headless Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-headless
+spec:
+  # TODO: Set clusterIP to None (makes it headless)
+  selector:
+    app: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+  # With a headless Service, DNS returns individual Pod IPs:
+  #   database-0.database-headless.default.svc.cluster.local
+  #   database-1.database-headless.default.svc.cluster.local
+
+---
+# === Exercise 3: NetworkPolicy — Default Deny ===
+# Block all ingress traffic to a namespace, then allow specific traffic.
+# Hint: An empty podSelector {} matches ALL pods in the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  # TODO: The ingress field should be EMPTY (no rules = deny all)
+  # This blocks all incoming traffic to every Pod in the namespace.
+
+---
+# === Exercise 4: NetworkPolicy — Allow Specific Traffic ===
+# Allow frontend Pods to talk to backend Pods on port 8080.
+# Hint: Use podSelector in the 'from' field to specify allowed sources.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      # TODO: Select pods with label role: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          # TODO: Allow traffic only from pods with label role: frontend
+    ports:
+    - protocol: TCP
+      # TODO: Allow only port 8080
+
+---
+# === Exercise 5: NetworkPolicy — Namespace Isolation ===
+# Allow traffic from a specific namespace only.
+# Hint: Use namespaceSelector to match namespaces by label.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-access
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: api-server
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          # TODO: Allow ingress from namespaces labeled purpose: monitoring
+    - podSelector:
+        matchLabels:
+          # TODO: Further restrict to pods labeled role: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+    # Note: The two 'from' entries are ORed (either condition allows traffic).
+    # TODO: Combine them into a single rule with AND logic.
+    # Hint: Place both selectors inside the SAME '- from' entry.

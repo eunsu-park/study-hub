@@ -1,0 +1,201 @@
+# Exercise: Lesson 10 — Custom Resource Definitions (CRDs)
+# Complete the TODO items below.
+
+# === Exercise 1: Define a CRD with Validation ===
+# Create a CRD for a "WebApplication" custom resource.
+# Hint: CRDs extend the Kubernetes API with your own resource types.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: webapplications.apps.example.com
+spec:
+  group: apps.example.com
+  names:
+    # TODO: Set kind to "WebApplication"
+    # TODO: Set plural to "webapplications"
+    # TODO: Set singular to "webapplication"
+    # TODO: Set shortNames to ["webapp", "wa"]
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required: ["image", "replicas"]
+            properties:
+              image:
+                type: string
+                # TODO: Add a pattern validation for image format
+                # Hint: pattern: "^[a-z0-9-]+(/[a-z0-9-]+)*(:[a-zA-Z0-9._-]+)?$"
+              replicas:
+                type: integer
+                # TODO: Set minimum to 1 and maximum to 10
+              port:
+                type: integer
+                # TODO: Set default to 8080
+                # TODO: Set minimum to 1 and maximum to 65535
+              environment:
+                type: string
+                # TODO: Add enum validation: ["dev", "staging", "prod"]
+          status:
+            type: object
+            properties:
+              # TODO: Add "availableReplicas" field of type integer
+              # TODO: Add "conditions" as an array of objects with
+              #       fields: type (string), status (string), lastTransitionTime (string)
+    # TODO: Add additionalPrinterColumns for kubectl output:
+    #   - name: Replicas, jsonPath: .spec.replicas, type: integer
+    #   - name: Image, jsonPath: .spec.image, type: string
+    #   - name: Environment, jsonPath: .spec.environment, type: string
+    #   - name: Age, jsonPath: .metadata.creationTimestamp, type: date
+    subresources:
+      status: {}
+
+---
+# === Exercise 2: Create a Custom Resource Instance ===
+# Instantiate the WebApplication CRD defined above.
+# Hint: apiVersion must match the CRD group/version.
+apiVersion: apps.example.com/v1
+kind: WebApplication
+metadata:
+  name: my-webapp
+  namespace: default
+spec:
+  # TODO: Set image to "nginx:1.25-alpine"
+  # TODO: Set replicas to 3
+  # TODO: Set port to 8080
+  # TODO: Set environment to "prod"
+
+---
+# === Exercise 3: CRD with Multiple Versions ===
+# Add a v2 version with schema changes and conversion.
+# Hint: Only one version can be the storage version.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: databases.data.example.com
+spec:
+  group: data.example.com
+  names:
+    kind: Database
+    plural: databases
+    singular: database
+    shortNames: ["db"]
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    # TODO: Set storage to false (v2 is the storage version now)
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              engine:
+                type: string
+              size:
+                type: string
+  - name: v2
+    served: true
+    # TODO: Set storage to true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required: ["engine", "storage"]
+            properties:
+              engine:
+                type: string
+                enum: ["postgres", "mysql", "mongodb"]
+              storage:
+                type: object
+                properties:
+                  # TODO: Add "size" field of type string (e.g., "10Gi")
+                  # TODO: Add "class" field of type string (storage class name)
+                  # TODO: Add "backup" field of type boolean, default false
+    subresources:
+      status: {}
+
+---
+# === Exercise 4: Validation with CEL Expressions ===
+# Use CEL (Common Expression Language) for advanced validation.
+# Hint: CEL validation runs server-side (K8s 1.25+).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: deploymentconfigs.apps.example.com
+spec:
+  group: apps.example.com
+  names:
+    kind: DeploymentConfig
+    plural: deploymentconfigs
+    singular: deploymentconfig
+    shortNames: ["dc"]
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              minReplicas:
+                type: integer
+              maxReplicas:
+                type: integer
+              environment:
+                type: string
+            # TODO: Add x-kubernetes-validations with CEL rules:
+            #   - rule: "self.maxReplicas >= self.minReplicas"
+            #     message: "maxReplicas must be >= minReplicas"
+            #   - rule: "self.environment == 'prod' ? self.minReplicas >= 3 : true"
+            #     message: "production must have at least 3 replicas"
+
+---
+# === Exercise 5: CRD Categories and Labels ===
+# Organize CRDs so they appear in 'kubectl get all'.
+# Hint: Add "all" to categories so your CR shows in 'kubectl get all'.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: caches.data.example.com
+spec:
+  group: data.example.com
+  names:
+    kind: Cache
+    plural: caches
+    singular: cache
+    shortNames: ["ca"]
+    # TODO: Add categories: ["all", "data"]
+    # This makes the CR appear in 'kubectl get all' and 'kubectl get data'
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              engine:
+                type: string
+                # TODO: Add enum: ["redis", "memcached"]
+              maxMemory:
+                type: string
+                # TODO: Add pattern to validate memory format: "^[0-9]+(Mi|Gi)$"

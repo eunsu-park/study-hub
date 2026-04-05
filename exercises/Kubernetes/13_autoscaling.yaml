@@ -1,0 +1,165 @@
+# Exercise: Lesson 13 — Autoscaling
+# Complete the TODO items below.
+
+# === Exercise 1: Horizontal Pod Autoscaler (HPA) with CPU ===
+# Scale a Deployment based on CPU utilization.
+# Hint: HPA requires metrics-server to be installed in the cluster.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-intensive-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cpu-app
+  template:
+    metadata:
+      labels:
+        app: cpu-app
+    spec:
+      containers:
+      - name: app
+        image: python:3.12-slim
+        command: ["python", "-c", "import http.server; http.server.HTTPServer(('',8080), http.server.SimpleHTTPRequestHandler).serve_forever()"]
+        resources:
+          requests:
+            # TODO: Set CPU request to 200m (required for HPA to calculate utilization)
+            # TODO: Set memory request to 128Mi
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    # TODO: Set name to "cpu-intensive-app"
+  # TODO: Set minReplicas to 2
+  # TODO: Set maxReplicas to 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        # TODO: Set averageUtilization to 70
+        # When average CPU across all pods > 70%, HPA adds more replicas
+
+---
+# === Exercise 2: HPA with Multiple Metrics ===
+# Scale based on both CPU and memory.
+# Hint: When multiple metrics are defined, HPA uses the one requiring the most replicas.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: multi-metric-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-server
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  # TODO: Add a CPU metric with averageUtilization target of 60%
+  # TODO: Add a memory metric with averageUtilization target of 75%
+  # TODO: Add an external metric for requests-per-second:
+  #   - type: Pods
+  #     pods:
+  #       metric:
+  #         name: http_requests_per_second
+  #       target:
+  #         type: AverageValue
+  #         averageValue: "100"
+  behavior:
+    scaleDown:
+      # TODO: Set stabilizationWindowSeconds to 300 (wait 5 min before scaling down)
+      # This prevents flapping when load fluctuates
+      policies:
+      - type: Percent
+        value: 10
+        # TODO: Set periodSeconds to 60 (scale down max 10% per minute)
+    scaleUp:
+      # TODO: Set stabilizationWindowSeconds to 0 (scale up immediately)
+      policies:
+      - type: Percent
+        value: 100
+        # TODO: Set periodSeconds to 15 (allow doubling every 15 seconds)
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      # TODO: Set selectPolicy to "Max" (use whichever policy allows more scaling)
+
+---
+# === Exercise 3: Vertical Pod Autoscaler (VPA) ===
+# Automatically adjust CPU and memory requests.
+# Hint: VPA requires the VPA controller to be installed.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: app-vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    # TODO: Set name to "web-server"
+  updatePolicy:
+    # TODO: Set updateMode to "Auto"
+    # Options: "Off" (recommendations only), "Initial" (set at creation),
+    #          "Auto" (evict and recreate Pods with new resource values)
+  resourcePolicy:
+    containerPolicies:
+    - containerName: "*"
+      # TODO: Set minAllowed: cpu: 100m, memory: 128Mi
+      # TODO: Set maxAllowed: cpu: 2, memory: 2Gi
+      # These bounds prevent VPA from setting extreme values
+
+---
+# === Exercise 4: Cluster Autoscaler Configuration ===
+# Configure node-level autoscaling (cloud provider specific).
+# Hint: Cluster Autoscaler adds/removes nodes based on pending Pods.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-autoscaler-config
+  namespace: kube-system
+data:
+  # TODO: Configure the following parameters:
+  # scan-interval: "10s"
+  # scale-down-delay-after-add: "10m"
+  # scale-down-unneeded-time: "10m"
+  # max-graceful-termination-sec: "600"
+  # balance-similar-node-groups: "true"
+  # expander: "least-waste"
+  # Hint: "least-waste" expander picks the node group that wastes
+  #       the least resources after the pending Pod is scheduled
+
+---
+# === Exercise 5: KEDA — Event-Driven Autoscaling ===
+# Scale based on external event sources (e.g., message queue depth).
+# Hint: KEDA extends HPA with custom scalers for 60+ event sources.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: queue-processor-scaler
+spec:
+  scaleTargetRef:
+    name: queue-processor
+  # TODO: Set minReplicaCount to 0 (scale to zero when queue is empty)
+  # TODO: Set maxReplicaCount to 50
+  # TODO: Set pollingInterval to 15 (check every 15 seconds)
+  # TODO: Set cooldownPeriod to 300 (wait 5 minutes before scaling to zero)
+  triggers:
+  # TODO: Add a trigger for RabbitMQ queue:
+  #   - type: rabbitmq
+  #     metadata:
+  #       host: "amqp://guest:guest@rabbitmq.default:5672/"
+  #       queueName: tasks
+  #       queueLength: "10"
+  # This means: 1 replica per 10 messages in the queue
