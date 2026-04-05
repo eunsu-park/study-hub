@@ -68,6 +68,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Rust_Advanced](./content/en/Rust_Advanced/00_Overview.md) | Rust 고급: unsafe, 매크로, FFI, WebAssembly, 임베디드, 네트워킹, 성능 | 14 |
 | [Security](./content/en/Security/00_Overview.md) | 사이버보안: CIA, TLS, 인증/인가, OWASP, 컨테이너 보안, 취약점 스캐너 | 16 |
 | [Software_Engineering](./content/en/Software_Engineering/00_Overview.md) | 소프트웨어 공학: SDLC, 애자일, UML, QA, CI/CD, 기술 문서 | 16 |
+| [API_Design](./content/en/API_Design/00_Overview.md) | REST, GraphQL, gRPC — API 설계, 버저닝, 인증, 게이트웨이 | 25 |
+| [Backend_Frameworks](./content/en/Backend_Frameworks/00_Overview.md) | FastAPI, Express, Django — 백엔드 API, 인증, 배포 | 21 |
+| [Frontend_Frameworks](./content/en/Frontend_Frameworks/00_Overview.md) | React, Vue, Svelte — 컴포넌트, 상태 관리, SSR, 테스팅 | 18 |
+| [Testing_and_QA](./content/en/Testing_and_QA/00_Overview.md) | pytest, TDD, 통합/E2E/속성 기반 테스팅, CI/CD | 18 |
 
 ### Tier 3 — Advanced (고급)
 
