@@ -76,12 +76,16 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [DevOps](./content/en/DevOps/00_Overview.md) | IaC, CI/CD, Terraform, 모니터링, SRE, GitOps, 플랫폼 엔지니어링 | 28 |
 | [Kubernetes](./content/en/Kubernetes/00_Overview.md) | 아키텍처, 워크로드, 네트워킹, CRD, 오퍼레이터, 프로덕션 운영 | 19 |
 | [System_Design](./content/en/System_Design/00_Overview.md) | 확장성, 캐싱, DB 스케일링, 메시지 큐, 마이크로서비스, 합의 알고리즘 | 20 |
+| [IoT_Embedded](./content/en/IoT_Embedded/00_Overview.md) | IoT, 라즈베리파이, MQTT, BLE, 엣지 AI, 센서 퓨전 | 14 |
 
 ### Tier 3 — Advanced (고급)
 
 | Topic / 토픽 | Description / 설명 | Lessons / 레슨 |
 |---|---|---|
 | [Algorithm](./content/en/Algorithm/00_Overview.md) | 알고리즘/자료구조, 정렬, 그래프, DP, HLD, LCT, PST | 32 |
+| [Computer_Graphics](./content/en/Computer_Graphics/00_Overview.md) | 렌더링 파이프라인, 셰이딩, 레이 트레이싱, WebGL, GPU 컴퓨팅 | 16 |
+| [Control_Theory](./content/en/Control_Theory/00_Overview.md) | 피드백 제어, PID, 근궤적, 보드/나이퀴스트, 상태공간, 디지털 제어 | 16 |
+| [Signal_Processing](./content/en/Signal_Processing/00_Overview.md) | 신호/시스템, 푸리에, DFT/FFT, 디지털 필터, 적응 필터, 스펙트로그램 | 16 |
 | [Computer_Vision](./content/en/Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 세그멘테이션, 3D비전, NeRF, SLAM | 31 |
 | [Data_Engineering](./content/en/Data_Engineering/00_Overview.md) | Airflow, Spark, Kafka, dbt, CDC, Lakehouse, 벡터 검색 | 23 |
 | [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
