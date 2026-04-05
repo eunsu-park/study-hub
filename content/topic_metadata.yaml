@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (11 topics)
+  # Tier 1 — Beginner (14 topics)
   Programming:
     tier: beginner
     description:
@@ -116,7 +116,28 @@ topics:
       en: "C# fundamentals: syntax, types, OOP basics, collections, exception handling, and file I/O"
       ko: "C# 기초: 문법, 타입, OOP 기초, 컬렉션, 예외 처리 및 파일 I/O"
 
-  # Tier 2 — Intermediate (8 topics)
+  Go_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "Go language fundamentals: types, functions, interfaces, concurrency, and testing"
+      ko: "Go 언어 기초: 타입, 함수, 인터페이스, 동시성 및 테스팅"
+
+  Rust_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "Rust fundamentals: ownership, borrowing, traits, concurrency, async, and Cargo"
+      ko: "Rust 기초: 소유권, 빌림, 트레이트, 동시성, 비동기 및 Cargo"
+
+  IDL_Basics:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "IDL fundamentals: arrays, plotting, FITS files, structures, and basic solar data handling"
+      ko: "IDL 기초: 배열, 플로팅, FITS 파일, 구조체 및 기본 태양 데이터 처리"
+
+  # Tier 2 — Intermediate (11 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
@@ -206,6 +227,27 @@ topics:
     description:
       en: "PostgreSQL database management"
       ko: "PostgreSQL 데이터베이스 관리"
+
+  Go_Advanced:
+    tier: intermediate
+    prerequisites: [Go_Basics]
+    description:
+      en: "Advanced Go: HTTP servers, REST APIs, databases, generics, reflection, cloud-native patterns, and microservices"
+      ko: "Go 고급: HTTP 서버, REST API, 데이터베이스, 제네릭, 리플렉션, 클라우드 네이티브 패턴 및 마이크로서비스"
+
+  Rust_Advanced:
+    tier: intermediate
+    prerequisites: [Rust_Basics]
+    description:
+      en: "Advanced Rust: unsafe, macros, FFI, WebAssembly, embedded, networking, and performance"
+      ko: "Rust 고급: unsafe, 매크로, FFI, WebAssembly, 임베디드, 네트워킹 및 성능"
+
+  IDL_Advanced:
+    tier: intermediate
+    prerequisites: [IDL_Basics]
+    description:
+      en: "Advanced IDL: SolarSoft, SDO/AIA/HMI analysis, spectral methods, image processing, and IDL-Python bridge"
+      ko: "IDL 고급: SolarSoft, SDO/AIA/HMI 분석, 스펙트럴 방법, 영상 처리 및 IDL-Python 브리지"
 
   # Tier 3 — Advanced (12 topics)
   Algorithm:
