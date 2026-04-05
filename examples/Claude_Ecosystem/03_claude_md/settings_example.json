@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Read(*)",
+      "Edit(*)",
+      "Write(*.py)",
+      "Write(*.md)",
+      "Glob(*)",
+      "Grep(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(docker rm*)",
+      "Write(.env*)",
+      "Write(*secret*)",
+      "Write(*credential*)"
+    ]
+  },
+  "env": {
+    "FLASK_ENV": "development",
+    "DATABASE_URL": "sqlite:///dev.db"
+  }
+}

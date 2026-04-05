@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "echo '=== Project Status ===' && git status --short && echo '' && echo '=== Recent Commits ===' && git log --oneline -5 && echo '' && echo '=== TODO Items ===' && grep -r 'TODO\\|FIXME\\|HACK' src/ --include='*.py' -n 2>/dev/null | head -10 || true",
+        "description": "Show project status summary at session start"
+      }
+    ]
+  }
+}

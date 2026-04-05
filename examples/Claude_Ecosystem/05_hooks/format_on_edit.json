@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "FileEditTool": [
+      {
+        "matcher": "*.py",
+        "command": "ruff format --quiet \"$CLAUDE_FILE_PATH\"",
+        "description": "Auto-format Python files after editing"
+      },
+      {
+        "matcher": "*.ts",
+        "command": "npx prettier --write \"$CLAUDE_FILE_PATH\"",
+        "description": "Auto-format TypeScript files after editing"
+      },
+      {
+        "matcher": "*.js",
+        "command": "npx prettier --write \"$CLAUDE_FILE_PATH\"",
+        "description": "Auto-format JavaScript files after editing"
+      }
+    ]
+  }
+}

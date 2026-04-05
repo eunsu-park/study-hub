@@ -1,0 +1,38 @@
+{
+  "// Claude Code VS Code Extension Settings": "",
+  "// Add these to your .vscode/settings.json or user settings": "",
+
+  "claude-code.enable": true,
+
+  "// Terminal integration — auto-detect Claude Code sessions": "",
+  "claude-code.terminal.autoDetect": true,
+
+  "// Inline diff review — show proposed changes as inline diffs": "",
+  "claude-code.diffView": "inline",
+
+  "// Context mentions — files to always include in context": "",
+  "// Use @filename in the chat panel to reference specific files": "",
+
+  "// Keybindings (add to keybindings.json)": "",
+  "// Open Claude Code panel": "",
+  "keybindings_example": [
+    {
+      "key": "cmd+shift+l",
+      "command": "claude-code.openPanel",
+      "when": "editorTextFocus"
+    },
+    {
+      "key": "cmd+shift+k",
+      "command": "claude-code.sendSelection",
+      "when": "editorHasSelection"
+    }
+  ],
+
+  "// Recommended companion extensions": "",
+  "recommendations": [
+    "anthropic.claude-code",
+    "GitHub.copilot",
+    "eamodio.gitlens",
+    "dbaeumer.vscode-eslint"
+  ]
+}
