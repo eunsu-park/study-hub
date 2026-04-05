@@ -161,7 +161,7 @@ topics:
       en: "Claude Code, MCP, Agent SDK, and AI tools"
       ko: "Claude Code, MCP, Agent SDK 및 AI 도구"
 
-  # Tier 2 — Intermediate (23 topics)
+  # Tier 2 — Intermediate (24 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
@@ -357,7 +357,34 @@ topics:
       en: "System design and distributed architecture"
       ko: "시스템 설계 및 분산 아키텍처"
 
-  # Tier 3 — Advanced (12 topics)
+  IoT_Embedded:
+    tier: intermediate
+    prerequisites: [C_Basics]
+    description:
+      en: "IoT and embedded systems"
+      ko: "IoT 및 임베디드 시스템"
+
+  # Tier 3 — Advanced (16 topics)
+  Control_Theory:
+    tier: advanced
+    prerequisites: [Calculus_and_Differential_Equations]
+    description:
+      en: "Feedback control systems analysis and design"
+      ko: "피드백 제어 시스템 해석 및 설계"
+
+  Signal_Processing:
+    tier: advanced
+    prerequisites: [Calculus_and_Differential_Equations]
+    description:
+      en: "Digital signal processing theory"
+      ko: "디지털 신호 처리 이론"
+
+  Computer_Graphics:
+    tier: advanced
+    prerequisites: [Programming]
+    description:
+      en: "Rendering pipeline, shading, ray tracing, WebGL, and modern graphics APIs"
+      ko: "렌더링 파이프라인, 셰이딩, 레이 트레이싱, WebGL 및 현대 그래픽스 API"
   Algorithm:
     tier: advanced
     prerequisites: [Programming]
