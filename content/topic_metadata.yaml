@@ -364,7 +364,7 @@ topics:
       en: "IoT and embedded systems"
       ko: "IoT 및 임베디드 시스템"
 
-  # Tier 3 — Advanced (20 topics)
+  # Tier 3 — Advanced (24 topics)
   Control_Theory:
     tier: advanced
     prerequisites: [Calculus_and_Differential_Equations]
@@ -413,6 +413,34 @@ topics:
     description:
       en: "Bayesian modeling, MCMC, variational inference, Gaussian processes with PyMC/Stan/Pyro"
       ko: "베이지안 모델링, MCMC, 변분 추론, 가우시안 프로세스 (PyMC/Stan/Pyro)"
+
+  Compiler_Design:
+    tier: advanced
+    prerequisites: [Formal_Languages]
+    description:
+      en: "Compiler construction and language processing"
+      ko: "컴파일러 구성 및 언어 처리"
+
+  CUDA:
+    tier: advanced
+    prerequisites: [C_Advanced, CPP_Advanced, Computer_Architecture]
+    description:
+      en: "GPU programming with CUDA: thread model, memory hierarchy, parallel algorithms, and scientific simulation"
+      ko: "CUDA GPU 프로그래밍: 스레드 모델, 메모리 계층, 병렬 알고리즘 및 과학 시뮬레이션"
+
+  Distributed_Systems:
+    tier: advanced
+    prerequisites: [Networking, System_Design, Algorithm]
+    description:
+      en: "Consensus protocols, distributed transactions, CRDTs, formal verification, and production distributed system design"
+      ko: "합의 프로토콜, 분산 트랜잭션, CRDT, 형식 검증 및 프로덕션 분산 시스템 설계"
+
+  Quantum_Computing:
+    tier: advanced
+    prerequisites: [Calculus_and_Differential_Equations]
+    description:
+      en: "Quantum computing fundamentals, algorithms, and applications"
+      ko: "양자 컴퓨팅 기초, 알고리즘 및 응용"
 
   Algorithm:
     tier: advanced
