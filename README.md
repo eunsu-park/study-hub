@@ -94,6 +94,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [CUDA](./content/en/CUDA/00_Overview.md) | GPU 프로그래밍, 스레드 모델, 메모리 계층, 병렬 알고리즘, 과학 시뮬레이션 | 38 |
 | [Distributed_Systems](./content/en/Distributed_Systems/00_Overview.md) | 합의 프로토콜, Raft/Paxos, CRDT, 분산 트랜잭션, 형식 검증 | 27 |
 | [Quantum_Computing](./content/en/Quantum_Computing/00_Overview.md) | 큐비트, 양자 게이트, Shor/Grover, VQE, QAOA, 양자 네트워킹 | 24 |
+| [AI_Safety_and_Alignment](./content/en/AI_Safety_and_Alignment/00_Overview.md) | AI 정렬, RLHF, DPO, 레드팀, 안전성 평가, 거버넌스 | 17 |
+| [Cybersecurity_Offensive](./content/en/Cybersecurity_Offensive/00_Overview.md) | 침투 테스트, 바이너리, 웹 해킹, 리버스 엔지니어링, CTF | 20 |
+| [Edge_AI](./content/en/Edge_AI/00_Overview.md) | 모델 압축, 양자화, 프루닝, TFLite, ONNX, 엣지 배포 | 16 |
+| [Robotics](./content/en/Robotics/00_Overview.md) | 기구학, 동역학, 모션 플래닝, SLAM, ROS2, 다중 로봇 | 16 |
 | [Computer_Vision](./content/en/Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 세그멘테이션, 3D비전, NeRF, SLAM | 31 |
 | [Data_Engineering](./content/en/Data_Engineering/00_Overview.md) | Airflow, Spark, Kafka, dbt, CDC, Lakehouse, 벡터 검색 | 23 |
 | [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
