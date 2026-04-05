@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 14: CSS Animations</title>
+    <style>
+        /* ===== Reset ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 2rem;
+        }
+        .page-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .page-title h1 { font-size: 1.8rem; color: #2c3e50; }
+        .page-title p { color: #666; }
+
+        .exercise-section {
+            max-width: 900px;
+            margin: 0 auto 3rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .exercise-section h2 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .exercise-section > p {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+
+        /* ========================================
+           Exercise 1: Animated Navigation Menu
+           ======================================== */
+        .anim-nav {
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 0 1rem;
+        }
+        .anim-nav ul {
+            display: flex;
+            list-style: none;
+            gap: 0;
+        }
+        .anim-nav li {
+            position: relative;
+        }
+        .anim-nav a {
+            display: block;
+            color: #ecf0f1;
+            text-decoration: none;
+            padding: 1rem 1.5rem;
+            font-size: 0.95rem;
+            /* Color transition on hover */
+            transition: color 0.25s ease;
+        }
+        .anim-nav a:hover {
+            color: #3498db;
+        }
+        /* Animated underline: grows from center on hover */
+        .anim-nav a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 3px;
+            background: #3498db;
+            transition: width 0.3s ease, left 0.3s ease;
+        }
+        .anim-nav a:hover::after {
+            width: 100%;
+            left: 0;
+        }
+
+        /* Dropdown sub-menu */
+        .anim-nav .has-dropdown {
+            position: relative;
+        }
+        .anim-nav .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #34495e;
+            min-width: 180px;
+            border-radius: 0 0 8px 8px;
+            /*
+             * Animating max-height is acceptable here because:
+             * 1. The dropdown has few items, so reflow cost is minimal
+             * 2. There's no GPU-accelerated alternative for height animation
+             * 3. It only triggers on hover, not during scroll or continuous animation
+             */
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .anim-nav .has-dropdown:hover .dropdown {
+            max-height: 300px;
+        }
+        .anim-nav .dropdown a {
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .anim-nav .dropdown a:last-child {
+            border-bottom: none;
+        }
+
+        /* ========================================
+           Exercise 2: Loading Skeleton Screen
+           ======================================== */
+        @keyframes shimmer {
+            0%   { background-position: -400px 0; }
+            100% { background-position:  400px 0; }
+        }
+
+        .skeleton-card {
+            max-width: 350px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .skeleton-block {
+            background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+            background-size: 800px 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        .skeleton-image {
+            width: 100%;
+            height: 180px;
+        }
+
+        .skeleton-content {
+            padding: 1rem;
+        }
+
+        .skeleton-title {
+            height: 20px;
+            width: 70%;
+            margin-bottom: 0.75rem;
+        }
+
+        .skeleton-line {
+            height: 14px;
+            margin-bottom: 0.5rem;
+        }
+
+        .skeleton-line:last-child {
+            width: 85%;
+        }
+
+        /* Real content (hidden until loaded) */
+        .real-card {
+            max-width: 350px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            display: none;
+        }
+
+        .real-card.loaded {
+            display: block;
+            opacity: 1;
+        }
+
+        .real-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+        }
+
+        .real-card .card-body {
+            padding: 1rem;
+        }
+
+        .real-card h3 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .real-card p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .skeleton-card.hidden {
+            display: none;
+        }
+
+        .load-btn {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.5rem 1.25rem;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .load-btn:hover { background: #2980b9; }
+
+        /* ========================================
+           Exercise 3: Scroll-Triggered Section Reveal
+           ======================================== */
+        @media (prefers-reduced-motion: no-preference) {
+            .reveal-section {
+                opacity: 0;
+                transform: translateX(-60px);
+                transition: opacity 0.6s ease, transform 0.6s ease;
+            }
+            .reveal-section:nth-child(even) {
+                transform: translateX(60px);
+            }
+            .reveal-section.visible {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .reveal-section {
+            padding: 3rem 2rem;
+            margin: 1rem 0;
+            border-radius: 12px;
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+        .reveal-section:nth-child(1) { background: #e74c3c; }
+        .reveal-section:nth-child(2) { background: #3498db; }
+        .reveal-section:nth-child(3) { background: #2ecc71; }
+        .reveal-section:nth-child(4) { background: #9b59b6; }
+        .reveal-section:nth-child(5) { background: #f39c12; }
+        .reveal-section h3 { margin-bottom: 0.5rem; font-size: 1.5rem; }
+
+        /* ========================================
+           Exercise 4: CSS-Only Accordion
+           ======================================== */
+        .css-accordion {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .css-accordion-item {
+            border-bottom: 1px solid #ddd;
+        }
+        .css-accordion-item:last-child {
+            border-bottom: none;
+        }
+        .css-accordion-item input[type="checkbox"] {
+            display: none;
+        }
+        .css-accordion-item label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: #f9f9f9;
+            cursor: pointer;
+            font-weight: 600;
+            color: #2c3e50;
+            transition: background-color 0.2s;
+        }
+        .css-accordion-item label:hover {
+            background: #ecf0f1;
+        }
+        .css-accordion-icon {
+            font-size: 1.2rem;
+            transition: transform 0.4s ease;
+            display: inline-block;
+        }
+        .css-accordion-panel {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+        .css-accordion-panel-body {
+            padding: 1rem 1.5rem;
+            color: #555;
+            line-height: 1.7;
+        }
+        /*
+         * When the hidden checkbox is checked, expand the panel and rotate the icon.
+         *
+         * CSS limitation note: Pure CSS cannot enforce "only one panel open at a time"
+         * because CSS has no way to detect the state of a sibling checkbox and conditionally
+         * uncheck it. The workaround would be to use radio buttons with the same name
+         * instead of checkboxes, but radio buttons cannot be unchecked by clicking again.
+         * For true single-open behavior, JavaScript is required.
+         */
+        .css-accordion-item input:checked ~ .css-accordion-panel {
+            max-height: 500px;
+        }
+        .css-accordion-item input:checked ~ label .css-accordion-icon {
+            transform: rotate(45deg);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-title">
+        <h1>Exercises for Lesson 14: CSS Animations</h1>
+        <p>Solutions to practice problems from the lesson.</p>
+    </div>
+
+    <!-- ===== Exercise 1: Animated Navigation Menu ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 1: Animated Navigation Menu</h2>
+        <p><strong>Problem:</strong> Build a navigation bar with animated underline, color
+        transition, and a dropdown sub-menu that slides down on hover.</p>
+
+        <nav class="anim-nav">
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">About</a></li>
+                <li class="has-dropdown">
+                    <a href="#">Services</a>
+                    <div class="dropdown">
+                        <a href="#">Web Design</a>
+                        <a href="#">Development</a>
+                        <a href="#">SEO</a>
+                        <a href="#">Consulting</a>
+                    </div>
+                </li>
+                <li><a href="#">Portfolio</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+    </section>
+
+    <!-- ===== Exercise 2: Loading Skeleton Screen ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 2: Loading Skeleton Screen</h2>
+        <p><strong>Problem:</strong> Implement a skeleton loading screen with shimmer effect
+        that fades out when content loads in.</p>
+
+        <div id="skeletonContainer">
+            <div class="skeleton-card" id="skeleton">
+                <div class="skeleton-block skeleton-image"></div>
+                <div class="skeleton-content">
+                    <div class="skeleton-block skeleton-title"></div>
+                    <div class="skeleton-block skeleton-line"></div>
+                    <div class="skeleton-block skeleton-line"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="real-card" id="realCard">
+            <img src="https://via.placeholder.com/350x180/3498db/fff?text=Loaded+Content" alt="Card image">
+            <div class="card-body">
+                <h3>Content Loaded!</h3>
+                <p>This card replaced the skeleton loading screen after a simulated
+                2-second delay. The skeleton fades out and this content fades in.</p>
+            </div>
+        </div>
+
+        <button class="load-btn" id="loadBtn">Simulate Loading (2s)</button>
+    </section>
+
+    <!-- ===== Exercise 3: Scroll-Triggered Section Reveal ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 3: Scroll-Triggered Section Reveal</h2>
+        <p><strong>Problem:</strong> Animate sections into view when scrolled into viewport.
+        Odd sections slide from left, even from right. Respects prefers-reduced-motion.</p>
+
+        <div id="revealContainer">
+            <div class="reveal-section">
+                <h3>Section 1</h3>
+                <p>Slides in from the left</p>
+            </div>
+            <div class="reveal-section">
+                <h3>Section 2</h3>
+                <p>Slides in from the right</p>
+            </div>
+            <div class="reveal-section">
+                <h3>Section 3</h3>
+                <p>Slides in from the left</p>
+            </div>
+            <div class="reveal-section">
+                <h3>Section 4</h3>
+                <p>Slides in from the right</p>
+            </div>
+            <div class="reveal-section">
+                <h3>Section 5</h3>
+                <p>Slides in from the left</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Exercise 4: CSS-Only Accordion ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 4: CSS-Only Accordion (Advanced)</h2>
+        <p><strong>Problem:</strong> Build a FAQ accordion using only CSS (hidden checkbox trick).
+        The + icon rotates to become x when open.</p>
+
+        <div class="css-accordion">
+            <div class="css-accordion-item">
+                <input type="checkbox" id="faq1">
+                <label for="faq1">
+                    What is responsive web design?
+                    <span class="css-accordion-icon">+</span>
+                </label>
+                <div class="css-accordion-panel">
+                    <div class="css-accordion-panel-body">
+                        Responsive web design is an approach that makes web pages render
+                        well on a variety of devices and screen sizes. It uses fluid grids,
+                        flexible images, and CSS media queries to adapt the layout.
+                    </div>
+                </div>
+            </div>
+
+            <div class="css-accordion-item">
+                <input type="checkbox" id="faq2">
+                <label for="faq2">
+                    What is the CSS box model?
+                    <span class="css-accordion-icon">+</span>
+                </label>
+                <div class="css-accordion-panel">
+                    <div class="css-accordion-panel-body">
+                        The CSS box model describes the rectangular boxes generated for
+                        elements. It consists of content, padding, border, and margin.
+                        The box-sizing property controls whether padding and border are
+                        included in the element's total width and height.
+                    </div>
+                </div>
+            </div>
+
+            <div class="css-accordion-item">
+                <input type="checkbox" id="faq3">
+                <label for="faq3">
+                    What is Flexbox vs Grid?
+                    <span class="css-accordion-icon">+</span>
+                </label>
+                <div class="css-accordion-panel">
+                    <div class="css-accordion-panel-body">
+                        Flexbox is a one-dimensional layout system (row or column), ideal
+                        for navigation bars, centering, and distributing space among items.
+                        Grid is a two-dimensional layout system (rows and columns), perfect
+                        for full page layouts, card grids, and complex arrangements.
+                    </div>
+                </div>
+            </div>
+
+            <div class="css-accordion-item">
+                <input type="checkbox" id="faq4">
+                <label for="faq4">
+                    How do CSS animations work?
+                    <span class="css-accordion-icon">+</span>
+                </label>
+                <div class="css-accordion-panel">
+                    <div class="css-accordion-panel-body">
+                        CSS animations use @keyframes to define animation steps and the
+                        animation property to apply them. Transitions handle simple
+                        state changes (hover, focus), while @keyframes animations handle
+                        complex multi-step sequences. For best performance, animate
+                        transform and opacity properties that can be GPU-accelerated.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+    // ===== Exercise 2: Skeleton loading simulation =====
+    (function() {
+        const loadBtn = document.getElementById('loadBtn');
+        const skeleton = document.getElementById('skeleton');
+        const realCard = document.getElementById('realCard');
+
+        loadBtn.addEventListener('click', function() {
+            // Reset state
+            skeleton.classList.remove('hidden');
+            realCard.classList.remove('loaded');
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+
+            // Simulate 2-second data loading
+            setTimeout(function() {
+                skeleton.classList.add('hidden');
+                realCard.classList.add('loaded');
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'Simulate Loading (2s)';
+            }, 2000);
+        });
+    })();
+
+    // ===== Exercise 3: Scroll-triggered reveal with IntersectionObserver =====
+    (function() {
+        const sections = document.querySelectorAll('.reveal-section');
+
+        // Check if user prefers reduced motion
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (prefersReducedMotion) {
+            // If reduced motion is preferred, make all sections visible immediately
+            sections.forEach(function(section) {
+                section.classList.add('visible');
+            });
+            return;
+        }
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    // Unobserve so the animation only plays once
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, {
+            threshold: 0.15
+        });
+
+        sections.forEach(function(section) {
+            observer.observe(section);
+        });
+    })();
+    </script>
+
+</body>
+</html>

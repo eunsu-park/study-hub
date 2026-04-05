@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Manipulation and Events Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { text-align: center; color: #333; }
+        h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2980b9; }
+        .demo-box {
+            padding: 20px;
+            margin: 10px 0;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            min-height: 100px;
+        }
+        .highlight { background: #f1c40f; }
+        .output {
+            background: #2c3e50;
+            color: #2ecc71;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        input, select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .event-log {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.9em;
+        }
+        .card {
+            display: inline-block;
+            width: 100px;
+            height: 100px;
+            margin: 10px;
+            background: #3498db;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.3s, background 0.3s;
+        }
+        .card:hover { transform: scale(1.1); }
+        .card.selected { background: #e74c3c; }
+        #dragContainer {
+            display: flex;
+            gap: 20px;
+            min-height: 150px;
+        }
+        .drop-zone {
+            flex: 1;
+            min-height: 120px;
+            border: 3px dashed #bdc3c7;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+        }
+        .drop-zone.drag-over {
+            border-color: #3498db;
+            background: #ecf0f1;
+        }
+        .draggable {
+            width: 60px;
+            height: 60px;
+            background: #9b59b6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            cursor: move;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DOM Manipulation and Events Example</h1>
+
+    <!-- 1. Element selection -->
+    <div class="section">
+        <h2>1. Element Selection</h2>
+        <div id="selectDemo">
+            <p id="uniqueId">Element selected by ID</p>
+            <p class="myClass">Selected by class 1</p>
+            <p class="myClass">Selected by class 2</p>
+            <div class="container">
+                <span data-info="test">Selected by data attribute</span>
+            </div>
+        </div>
+        <button onclick="demoSelection()">Test Selection</button>
+        <div class="output" id="selectOutput"></div>
+    </div>
+
+    <!-- 2. Creating and adding elements -->
+    <div class="section">
+        <h2>2. Creating and Adding Elements</h2>
+        <input type="text" id="newItemInput" placeholder="Enter new item">
+        <button onclick="addItem()">Add Item</button>
+        <button onclick="addItemBefore()">Add to Front</button>
+        <button onclick="clearItems()">Delete All</button>
+        <ul id="itemList" class="demo-box">
+            <li>Existing Item 1</li>
+            <li>Existing Item 2</li>
+        </ul>
+    </div>
+
+    <!-- 3. Style and class manipulation -->
+    <div class="section">
+        <h2>3. Style and Class Manipulation</h2>
+        <div id="styleBox" class="demo-box" style="transition: all 0.3s;">
+            Style manipulation target
+        </div>
+        <button onclick="changeColor()">Change Color</button>
+        <button onclick="toggleHighlight()">Toggle Highlight</button>
+        <button onclick="addBorder()">Add Border</button>
+        <button onclick="resetStyle()">Reset</button>
+    </div>
+
+    <!-- 4. Attribute manipulation -->
+    <div class="section">
+        <h2>4. Attribute Manipulation</h2>
+        <img id="demoImage" src="https://via.placeholder.com/200x100?text=Image+1" alt="Demo image" style="border-radius: 8px;">
+        <br><br>
+        <button onclick="changeImage(1)">Image 1</button>
+        <button onclick="changeImage(2)">Image 2</button>
+        <button onclick="changeImage(3)">Image 3</button>
+        <br>
+        <input type="text" id="altInput" placeholder="Enter alt text">
+        <button onclick="changeAlt()">Change alt</button>
+        <p>Current alt: <span id="currentAlt"></span></p>
+    </div>
+
+    <!-- 5. Event listeners -->
+    <div class="section">
+        <h2>5. Event Listeners</h2>
+        <div id="eventBox" class="demo-box" style="cursor: pointer; user-select: none;">
+            Test various events in this area.
+            <br>Click, double-click, mouse move, keyboard input, etc.
+        </div>
+        <div class="output event-log" id="eventLog"></div>
+        <button onclick="clearEventLog()">Clear Log</button>
+    </div>
+
+    <!-- 6. Event delegation -->
+    <div class="section">
+        <h2>6. Event Delegation</h2>
+        <p>Instead of registering events on individual elements, handle them at the parent.</p>
+        <div id="cardContainer" class="demo-box">
+            <div class="card" data-id="1">1</div>
+            <div class="card" data-id="2">2</div>
+            <div class="card" data-id="3">3</div>
+            <div class="card" data-id="4">4</div>
+            <div class="card" data-id="5">5</div>
+        </div>
+        <p>Selected card: <span id="selectedCard">None</span></p>
+        <button onclick="addCard()">Add Card</button>
+    </div>
+
+    <!-- 7. Form events -->
+    <div class="section">
+        <h2>7. Form Events</h2>
+        <form id="demoForm">
+            <input type="text" id="nameInput" placeholder="Name" required>
+            <input type="email" id="emailInput" placeholder="Email" required>
+            <select id="countrySelect">
+                <option value="">Select Country</option>
+                <option value="kr">South Korea</option>
+                <option value="us">United States</option>
+                <option value="jp">Japan</option>
+            </select>
+            <button type="submit">Submit</button>
+        </form>
+        <div class="output" id="formOutput">Form data will be displayed here.</div>
+    </div>
+
+    <!-- 8. Keyboard events -->
+    <div class="section">
+        <h2>8. Keyboard Events</h2>
+        <input type="text" id="keyInput" placeholder="Type here" style="width: 300px;">
+        <div class="output" id="keyOutput">Key information will be displayed here.</div>
+    </div>
+
+    <!-- 9. Drag and drop -->
+    <div class="section">
+        <h2>9. Drag and Drop</h2>
+        <div id="dragContainer">
+            <div class="drop-zone" id="zone1">
+                <div class="draggable" draggable="true" id="drag1">1</div>
+                <div class="draggable" draggable="true" id="drag2">2</div>
+                <div class="draggable" draggable="true" id="drag3">3</div>
+            </div>
+            <div class="drop-zone" id="zone2"></div>
+        </div>
+    </div>
+
+    <!-- 10. Scroll events -->
+    <div class="section">
+        <h2>10. Scroll Events</h2>
+        <div id="scrollBox" style="height: 200px; overflow-y: scroll; border: 1px solid #ddd; padding: 10px;">
+            <div style="height: 600px;">
+                <p>Scroll down!</p>
+                <p style="position: sticky; top: 0; background: #3498db; color: white; padding: 10px;">
+                    Scroll position: <span id="scrollPosition">0</span>px
+                </p>
+                <p>Lorem ipsum dolor sit amet...</p>
+                <p>More content...</p>
+                <p>Keep scrolling...</p>
+                <p>Almost there...</p>
+                <p style="margin-top: 400px;">End!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

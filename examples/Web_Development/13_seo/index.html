@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Basic meta tags -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Core SEO meta tags -->
+    <title>SEO Optimization Example | Search Engine Optimization Guide - WebDev Study</title>
+    <meta name="description" content="A complete SEO (Search Engine Optimization) guide for web developers. Learn meta tags, structured data (JSON-LD), Open Graph, semantic HTML examples, and Core Web Vitals optimization methods.">
+    <meta name="keywords" content="SEO, search engine optimization, meta tags, JSON-LD, structured data, Open Graph, Core Web Vitals, web development">
+    <meta name="author" content="WebDev Study">
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph (Facebook, LinkedIn, etc.) -->
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="SEO Optimization Example | Search Engine Optimization Guide">
+    <meta property="og:description" content="A complete SEO guide for web developers. Meta tags, structured data, and Core Web Vitals optimization methods.">
+    <meta property="og:image" content="https://example.com/images/seo-guide-thumbnail.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="https://example.com/seo-guide">
+    <meta property="og:site_name" content="WebDev Study">
+    <meta property="og:locale" content="ko_KR">
+    <meta property="article:published_time" content="2024-01-15T09:00:00+09:00">
+    <meta property="article:modified_time" content="2024-01-20T14:30:00+09:00">
+    <meta property="article:author" content="https://example.com/about">
+    <meta property="article:section" content="Web Development">
+    <meta property="article:tag" content="SEO">
+    <meta property="article:tag" content="Web Development">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@webdevstudy">
+    <meta name="twitter:creator" content="@webdevstudy">
+    <meta name="twitter:title" content="SEO Optimization Example | Search Engine Optimization Guide">
+    <meta name="twitter:description" content="A complete SEO guide for web developers. From meta tags to Core Web Vitals.">
+    <meta name="twitter:image" content="https://example.com/images/seo-guide-twitter.jpg">
+    <meta name="twitter:image:alt" content="SEO Optimization Guide thumbnail image">
+
+    <!-- Why: Canonical URL tells search engines which version of a page is authoritative,
+         preventing duplicate content penalties when the same page is reachable via multiple URLs -->
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://example.com/seo-guide">
+
+    <!-- Alternate language versions (for multilingual sites) -->
+    <link rel="alternate" hreflang="en" href="https://example.com/en/seo-guide">
+    <link rel="alternate" hreflang="ja" href="https://example.com/ja/seo-guide">
+    <link rel="alternate" hreflang="ko" href="https://example.com/ko/seo-guide">
+    <link rel="alternate" hreflang="x-default" href="https://example.com/seo-guide">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+    <!-- Why: Preload/preconnect/dns-prefetch progressively reduce latency: preload fetches critical
+         resources immediately, preconnect opens TCP+TLS early, dns-prefetch just resolves DNS -->
+    <!-- Preload (Core Web Vitals optimization) -->
+    <link rel="preload" href="/fonts/main-font.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://www.google-analytics.com">
+
+    <!-- Why: JSON-LD is Google's preferred structured data format because it decouples metadata
+         from HTML, making it easier to maintain and less likely to break the page layout -->
+    <!-- Structured data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "SEO Optimization Example | Search Engine Optimization Guide",
+        "description": "A complete SEO guide for web developers",
+        "image": [
+            "https://example.com/images/seo-guide-1x1.jpg",
+            "https://example.com/images/seo-guide-4x3.jpg",
+            "https://example.com/images/seo-guide-16x9.jpg"
+        ],
+        "author": {
+            "@type": "Person",
+            "name": "Hong Gildong",
+            "url": "https://example.com/about/hong"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WebDev Study",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://example.com/logo.png"
+            }
+        },
+        "datePublished": "2024-01-15T09:00:00+09:00",
+        "dateModified": "2024-01-20T14:30:00+09:00",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://example.com/seo-guide"
+        }
+    }
+    </script>
+
+    <!-- Website structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "WebDev Study",
+        "url": "https://example.com",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": "https://example.com/search?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
+
+    <!-- Organization structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "WebDev Study",
+        "url": "https://example.com",
+        "logo": "https://example.com/logo.png",
+        "sameAs": [
+            "https://twitter.com/webdevstudy",
+            "https://www.facebook.com/webdevstudy",
+            "https://www.linkedin.com/company/webdevstudy",
+            "https://github.com/webdevstudy"
+        ],
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+82-2-1234-5678",
+            "contactType": "customer service",
+            "availableLanguage": ["Korean", "English"]
+        }
+    }
+    </script>
+
+    <!-- Breadcrumb structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://example.com"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Web Development",
+                "item": "https://example.com/web-development"
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "SEO Guide",
+                "item": "https://example.com/seo-guide"
+            }
+        ]
+    }
+    </script>
+
+    <!-- FAQ structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is SEO?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "SEO (Search Engine Optimization) is the process of optimizing a website to rank higher in search engine results."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Why are meta tags important?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Meta tags inform search engines about the page content and provide the title and description displayed in search results. Proper meta tags can increase click-through rate (CTR)."
+                }
+            }
+        ]
+    }
+    </script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header { margin-bottom: 30px; }
+        h1 { font-size: 2rem; color: #1a73e8; margin-bottom: 10px; }
+        h2 { font-size: 1.5rem; color: #202124; margin: 30px 0 15px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px; }
+        h3 { font-size: 1.2rem; margin: 20px 0 10px; color: #5f6368; }
+        p { margin-bottom: 15px; }
+        .breadcrumb { font-size: 0.9rem; color: #5f6368; margin-bottom: 20px; }
+        .breadcrumb a { color: #1a73e8; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .meta-info { font-size: 0.9rem; color: #5f6368; margin-bottom: 20px; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; }
+        code { font-family: 'Fira Code', monospace; }
+        .tip { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        .warning { background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #1a73e8; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .checklist { list-style: none; }
+        .checklist li { padding: 8px 0; padding-left: 30px; position: relative; }
+        .checklist li::before { content: "✅"; position: absolute; left: 0; }
+        footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #5f6368; }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            pre { font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Breadcrumb navigation -->
+    <nav aria-label="Breadcrumb" class="breadcrumb">
+        <a href="/">Home</a> &gt;
+        <a href="/web-development">Web Development</a> &gt;
+        <span aria-current="page">SEO Guide</span>
+    </nav>
+
+    <header>
+        <h1>SEO Optimization Example</h1>
+        <p class="meta-info">
+            Written on <time datetime="2024-01-15">January 15, 2024</time> |
+            Modified on <time datetime="2024-01-20">January 20, 2024</time> |
+            Author: Hong Gildong
+        </p>
+    </header>
+
+    <main>
+        <article>
+            <section>
+                <h2>1. Meta Tag Basics</h2>
+                <p>Search engines understand page content through meta tags. Here are the most important meta tags:</p>
+
+                <h3>Essential Meta Tags</h3>
+                <pre><code>&lt;!-- Page title (50-60 characters recommended) --&gt;
+&lt;title&gt;Page Title | Site Name&lt;/title&gt;
+
+&lt;!-- Page description (150-160 characters recommended) --&gt;
+&lt;meta name="description" content="A concise and compelling description of the page..."&gt;
+
+&lt;!-- Viewport (mobile optimization) --&gt;
+&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+
+&lt;!-- Canonical URL --&gt;
+&lt;link rel="canonical" href="https://example.com/page"&gt;</code></pre>
+
+                <div class="tip">
+                    <strong>Tip:</strong> The title tag is the most prominent element in search results.
+                    Place key keywords at the beginning and append the brand name at the end.
+                </div>
+            </section>
+
+            <section>
+                <h2>2. Open Graph & Twitter Card</h2>
+                <p>Controls the information displayed when shared on social media.</p>
+
+                <h3>Open Graph (Facebook, LinkedIn)</h3>
+                <pre><code>&lt;meta property="og:type" content="article"&gt;
+&lt;meta property="og:title" content="Page Title"&gt;
+&lt;meta property="og:description" content="Page Description"&gt;
+&lt;meta property="og:image" content="https://example.com/image.jpg"&gt;
+&lt;meta property="og:url" content="https://example.com/page"&gt;</code></pre>
+
+                <h3>Twitter Card</h3>
+                <pre><code>&lt;meta name="twitter:card" content="summary_large_image"&gt;
+&lt;meta name="twitter:title" content="Page Title"&gt;
+&lt;meta name="twitter:description" content="Page Description"&gt;
+&lt;meta name="twitter:image" content="https://example.com/image.jpg"&gt;</code></pre>
+
+                <div class="warning">
+                    <strong>Note:</strong> og:image should be at least 1200x630 pixels.
+                    Images that are too small may be cropped or not displayed on social media.
+                </div>
+            </section>
+
+            <section>
+                <h2>3. Structured Data (JSON-LD)</h2>
+                <p>Using structured data can result in rich snippets appearing in search results.</p>
+
+                <h3>Article Schema</h3>
+                <pre><code>&lt;script type="application/ld+json"&gt;
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Article Title",
+    "author": {
+        "@type": "Person",
+        "name": "Author Name"
+    },
+    "datePublished": "2024-01-15T09:00:00+09:00",
+    "image": "https://example.com/image.jpg"
+}
+&lt;/script&gt;</code></pre>
+
+                <h3>Key Schema Types</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Use Case</th>
+                            <th>Rich Snippet</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Article</td>
+                            <td>News, blog posts</td>
+                            <td>Title, image, date</td>
+                        </tr>
+                        <tr>
+                            <td>Product</td>
+                            <td>Product pages</td>
+                            <td>Price, rating, availability</td>
+                        </tr>
+                        <tr>
+                            <td>Recipe</td>
+                            <td>Cooking recipes</td>
+                            <td>Cook time, calories, image</td>
+                        </tr>
+                        <tr>
+                            <td>FAQPage</td>
+                            <td>Frequently asked questions</td>
+                            <td>Q&A list</td>
+                        </tr>
+                        <tr>
+                            <td>HowTo</td>
+                            <td>How-to guides</td>
+                            <td>Step-by-step instructions</td>
+                        </tr>
+                        <tr>
+                            <td>LocalBusiness</td>
+                            <td>Local businesses</td>
+                            <td>Address, hours, phone</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section>
+                <h2>4. Semantic HTML and SEO</h2>
+                <p>Proper HTML structure helps search engines understand the content.</p>
+
+                <pre><code>&lt;!-- Good example --&gt;
+&lt;article&gt;
+    &lt;header&gt;
+        &lt;h1&gt;Article Title&lt;/h1&gt;
+        &lt;time datetime="2024-01-15"&gt;January 15, 2024&lt;/time&gt;
+    &lt;/header&gt;
+
+    &lt;section&gt;
+        &lt;h2&gt;Section Title&lt;/h2&gt;
+        &lt;p&gt;Content...&lt;/p&gt;
+    &lt;/section&gt;
+
+    &lt;footer&gt;
+        &lt;p&gt;Author: Hong Gildong&lt;/p&gt;
+    &lt;/footer&gt;
+&lt;/article&gt;
+
+&lt;!-- Bad example --&gt;
+&lt;div class="article"&gt;
+    &lt;div class="title"&gt;Article Title&lt;/div&gt;
+    &lt;div&gt;Content...&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+            </section>
+
+            <section>
+                <h2>5. Core Web Vitals</h2>
+                <p>Google's Core Web Vitals directly impact user experience and SEO.</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Meaning</th>
+                            <th>Good</th>
+                            <th>Needs Improvement</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>LCP</td>
+                            <td>Largest Contentful Paint</td>
+                            <td>&le; 2.5s</td>
+                            <td>&gt; 4.0s</td>
+                        </tr>
+                        <tr>
+                            <td>INP</td>
+                            <td>Interaction to Next Paint</td>
+                            <td>&le; 200ms</td>
+                            <td>&gt; 500ms</td>
+                        </tr>
+                        <tr>
+                            <td>CLS</td>
+                            <td>Cumulative Layout Shift</td>
+                            <td>&le; 0.1</td>
+                            <td>&gt; 0.25</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Optimization Tips</h3>
+                <pre><code>&lt;!-- LCP optimization: Preload critical resources --&gt;
+&lt;link rel="preload" href="hero-image.jpg" as="image"&gt;
+
+&lt;!-- CLS prevention: Specify image dimensions --&gt;
+&lt;img src="image.jpg" width="800" height="600" alt="description"&gt;
+
+&lt;!-- Font optimization --&gt;
+&lt;link rel="preload" href="font.woff2" as="font" type="font/woff2" crossorigin&gt;</code></pre>
+            </section>
+
+            <section>
+                <h2>6. SEO Checklist</h2>
+                <ul class="checklist">
+                    <li>Set unique title and description for every page</li>
+                    <li>Use only one h1 tag per page</li>
+                    <li>Add alt attributes to images</li>
+                    <li>Mobile-friendly responsive design</li>
+                    <li>Use HTTPS</li>
+                    <li>Generate sitemap (sitemap.xml)</li>
+                    <li>Configure robots.txt</li>
+                    <li>Add structured data</li>
+                    <li>Optimize page loading speed</li>
+                    <li>Optimize internal link structure</li>
+                </ul>
+            </section>
+
+            <!-- FAQ section (matching structured data) -->
+            <section>
+                <h2>Frequently Asked Questions</h2>
+
+                <details>
+                    <summary><strong>What is SEO?</strong></summary>
+                    <p>SEO (Search Engine Optimization) is the process of optimizing a website to rank higher in search engine results.</p>
+                </details>
+
+                <details>
+                    <summary><strong>Why are meta tags important?</strong></summary>
+                    <p>Meta tags inform search engines about the page content and provide the title and description displayed in search results. Proper meta tags can increase click-through rate (CTR).</p>
+                </details>
+            </section>
+        </article>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 WebDev Study. All rights reserved.</p>
+        <p>Learn more about SEO: <a href="https://developers.google.com/search" target="_blank" rel="noopener">Google Search Central</a></p>
+    </footer>
+</body>
+</html>

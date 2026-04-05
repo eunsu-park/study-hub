@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 01: HTML Basics</title>
+    <style>
+        /* Minimal styling for readability */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+        }
+        h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+        .exercise { margin: 2rem 0; padding: 1.5rem; border: 1px solid #ddd; border-radius: 8px; }
+        .exercise h2 { color: #2c3e50; margin-top: 0; }
+        hr { margin: 2rem 0; }
+
+        /* Exercise 3: Blog post styling */
+        .blog-post { max-width: 700px; }
+        .blog-meta { color: #666; font-size: 0.9rem; margin-bottom: 1rem; }
+        .blog-author { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .blog-author img { border-radius: 50%; }
+        .related-posts { background: #f9f9f9; padding: 1rem; border-radius: 8px; }
+        .comment { border-left: 3px solid #3498db; padding-left: 1rem; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <h1>Exercises for Lesson 01: HTML Basics</h1>
+    <p>Solutions to practice problems from the lesson.</p>
+
+    <!-- ===== Exercise 1: Create a Simple Profile Page ===== -->
+    <section class="exercise">
+        <h2>Exercise 1: Simple Profile Page</h2>
+        <p><strong>Problem:</strong> Create a simple profile page with photo, name,
+        introduction, hobby list, and contact section.</p>
+
+        <hr>
+
+        <!-- Solution -->
+        <header>
+            <h3>My Profile</h3>
+        </header>
+
+        <main>
+            <section>
+                <img src="https://via.placeholder.com/150" alt="Profile photo of John Doe">
+                <h4>John Doe</h4>
+                <p>Hello! I'm a web developer passionate about building accessible
+                and performant web applications. I enjoy learning new technologies
+                and sharing knowledge with the community.</p>
+            </section>
+
+            <section>
+                <h4>Hobbies</h4>
+                <ul>
+                    <li>Reading technical books</li>
+                    <li>Coding side projects</li>
+                    <li>Photography</li>
+                    <li>Hiking in the mountains</li>
+                    <li>Playing guitar</li>
+                </ul>
+            </section>
+
+            <section>
+                <h4>Contact</h4>
+                <p>
+                    Email: <a href="mailto:john@example.com">john@example.com</a><br>
+                    Phone: <a href="tel:+1234567890">+1 (234) 567-890</a><br>
+                    Website: <a href="https://www.example.com" target="_blank" rel="noopener noreferrer">www.example.com</a>
+                </p>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 John Doe. All rights reserved.</p>
+        </footer>
+    </section>
+
+    <!-- ===== Exercise 2: Create a Recipe Page ===== -->
+    <section class="exercise">
+        <h2>Exercise 2: Recipe Page</h2>
+        <p><strong>Problem:</strong> Create a recipe page with title, ingredient list,
+        cooking instructions, photo, and cooking details.</p>
+
+        <hr>
+
+        <!-- Solution -->
+        <article>
+            <header>
+                <h3>Classic Margherita Pizza</h3>
+                <p>A simple and delicious Italian classic with fresh ingredients.</p>
+            </header>
+
+            <figure>
+                <img src="https://via.placeholder.com/400x250" alt="Freshly baked Margherita pizza on a wooden board" style="max-width: 100%; height: auto;">
+                <figcaption>Freshly baked Margherita pizza</figcaption>
+            </figure>
+
+            <dl>
+                <dt>Cooking Time</dt>
+                <dd>25 minutes (15 min prep + 10 min bake)</dd>
+
+                <dt>Servings</dt>
+                <dd>4 people</dd>
+
+                <dt>Difficulty</dt>
+                <dd>Easy</dd>
+            </dl>
+
+            <section>
+                <h4>Ingredients</h4>
+                <ul>
+                    <li>1 pizza dough (store-bought or homemade)</li>
+                    <li>200g San Marzano tomatoes, crushed</li>
+                    <li>200g fresh mozzarella, sliced</li>
+                    <li>Fresh basil leaves</li>
+                    <li>2 tablespoons extra virgin olive oil</li>
+                    <li>Salt and pepper to taste</li>
+                    <li>1 clove garlic, minced (optional)</li>
+                </ul>
+            </section>
+
+            <section>
+                <h4>Cooking Instructions</h4>
+                <ol>
+                    <li>Preheat your oven to 250&deg;C (480&deg;F) with a pizza stone or inverted baking sheet inside.</li>
+                    <li>Roll out the pizza dough on a floured surface into a 12-inch circle.</li>
+                    <li>Spread the crushed tomatoes evenly over the dough, leaving a 1-inch border for the crust.</li>
+                    <li>Add the optional minced garlic on top of the sauce.</li>
+                    <li>Distribute the mozzarella slices evenly across the pizza.</li>
+                    <li>Drizzle with 1 tablespoon of olive oil and season with salt and pepper.</li>
+                    <li>Transfer the pizza to the preheated oven and bake for 8&ndash;10 minutes until the crust is golden and the cheese is bubbly.</li>
+                    <li>Remove from the oven and top with fresh basil leaves.</li>
+                    <li>Drizzle with the remaining olive oil, slice, and serve immediately.</li>
+                </ol>
+            </section>
+        </article>
+    </section>
+
+    <!-- ===== Exercise 3: Create a Blog Post Page ===== -->
+    <section class="exercise">
+        <h2>Exercise 3: Blog Post Page</h2>
+        <p><strong>Problem:</strong> Create a blog post page with title, date, author info,
+        main content, related posts, and comments section.</p>
+
+        <hr>
+
+        <!-- Solution -->
+        <article class="blog-post">
+            <header>
+                <h3>Understanding Semantic HTML: Why It Matters</h3>
+                <p class="blog-meta">
+                    Published: <time datetime="2024-11-15">November 15, 2024</time>
+                    &bull; 5 min read
+                </p>
+                <div class="blog-author">
+                    <img src="https://via.placeholder.com/40" alt="Author avatar">
+                    <div>
+                        <strong>Jane Smith</strong><br>
+                        <small>Senior Frontend Developer</small>
+                    </div>
+                </div>
+            </header>
+
+            <section>
+                <h4>Introduction</h4>
+                <p>Semantic HTML is more than just a best practice &mdash; it is the foundation
+                of accessible and maintainable web development. In this article, we explore
+                why semantic tags matter and how to use them effectively.</p>
+
+                <h4>What is Semantic HTML?</h4>
+                <p>Semantic HTML uses elements that clearly describe their meaning to both
+                the browser and the developer. Instead of using generic <code>&lt;div&gt;</code>
+                containers for everything, semantic elements like <code>&lt;article&gt;</code>,
+                <code>&lt;nav&gt;</code>, and <code>&lt;aside&gt;</code> communicate the
+                purpose of each section.</p>
+
+                <h4>Benefits of Semantic Markup</h4>
+                <p>There are three primary benefits to using semantic HTML:</p>
+                <ol>
+                    <li><strong>Accessibility</strong> &mdash; Screen readers can navigate
+                    the page structure more effectively when landmarks are present.</li>
+                    <li><strong>SEO</strong> &mdash; Search engines better understand content
+                    hierarchy and relevance.</li>
+                    <li><strong>Maintainability</strong> &mdash; Future developers (including
+                    yourself) can read and understand the codebase faster.</li>
+                </ol>
+
+                <h4>Conclusion</h4>
+                <p>Start using semantic HTML today. Replace your generic
+                <code>&lt;div&gt;</code> wrappers with meaningful elements and see the
+                difference it makes for accessibility and code clarity.</p>
+            </section>
+
+            <aside class="related-posts">
+                <h4>Related Posts</h4>
+                <ul>
+                    <li><a href="#">CSS Basics: Getting Started with Styling</a></li>
+                    <li><a href="#">HTML Forms: Building Interactive Pages</a></li>
+                    <li><a href="#">Web Accessibility 101: A Beginner's Guide</a></li>
+                </ul>
+            </aside>
+
+            <section>
+                <h4>Comments (2)</h4>
+
+                <div class="comment">
+                    <p><strong>Alex K.</strong> &mdash; <time datetime="2024-11-16">November 16, 2024</time></p>
+                    <p>Great article! I switched all my div-based layouts to semantic HTML
+                    last month and the accessibility audit results improved significantly.</p>
+                </div>
+
+                <div class="comment">
+                    <p><strong>Maria L.</strong> &mdash; <time datetime="2024-11-17">November 17, 2024</time></p>
+                    <p>This is exactly what I needed. The comparison between non-semantic
+                    and semantic markup is very clear. Thanks for sharing!</p>
+                </div>
+            </section>
+        </article>
+    </section>
+
+</body>
+</html>

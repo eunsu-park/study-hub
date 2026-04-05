@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 02: HTML Forms and Tables</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #333;
+        }
+        h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; margin-bottom: 2rem; }
+        .exercise {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .exercise h2 { color: #2c3e50; margin-bottom: 0.5rem; }
+        .exercise > p { color: #666; margin-bottom: 1.5rem; }
+        hr { margin: 1rem 0; border: none; border-top: 1px solid #eee; }
+
+        /* Form styling shared */
+        form { max-width: 500px; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        .form-group input:invalid:not(:placeholder-shown) {
+            border-color: #e74c3c;
+        }
+        .form-group input:valid:not(:placeholder-shown) {
+            border-color: #2ecc71;
+        }
+        button[type="submit"] {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button[type="submit"]:hover { background: #2980b9; }
+        .error-msg {
+            color: #e74c3c;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Table styling for Exercise 3 */
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .product-table th,
+        .product-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .product-table thead th {
+            background-color: #2c3e50;
+            color: white;
+            font-weight: 600;
+        }
+        .product-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        .product-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .product-table tfoot {
+            font-weight: bold;
+            background-color: #ecf0f1;
+        }
+        .product-table .price { text-align: right; }
+    </style>
+</head>
+<body>
+    <h1>Exercises for Lesson 02: HTML Forms and Tables</h1>
+    <p>Solutions to practice problems from the lesson.</p>
+
+    <!-- ===== Exercise 1: Contact Form ===== -->
+    <section class="exercise">
+        <h2>Exercise 1: Contact Form</h2>
+        <p><strong>Problem:</strong> Create a contact form with name, email, subject dropdown,
+        message textarea, and submit button. All fields use proper validation.</p>
+
+        <hr>
+
+        <form id="contactForm" novalidate>
+            <fieldset>
+                <legend>Contact Us</legend>
+
+                <div class="form-group">
+                    <label for="contact-name">Name <span style="color: red;">*</span></label>
+                    <input type="text" id="contact-name" name="name" placeholder="Your full name" required minlength="2">
+                    <div class="error-msg" id="nameError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="contact-email">Email <span style="color: red;">*</span></label>
+                    <input type="email" id="contact-email" name="email" placeholder="you@example.com" required>
+                    <div class="error-msg" id="emailError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="contact-subject">Subject</label>
+                    <select id="contact-subject" name="subject">
+                        <option value="">-- Select a subject --</option>
+                        <option value="general">General Inquiry</option>
+                        <option value="support">Technical Support</option>
+                        <option value="feedback">Feedback</option>
+                        <option value="bug">Bug Report</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="contact-message">Message <span style="color: red;">*</span></label>
+                    <textarea id="contact-message" name="message" rows="5" placeholder="Write your message here..." required minlength="10"></textarea>
+                    <div class="error-msg" id="messageError"></div>
+                </div>
+
+                <button type="submit">Send Message</button>
+            </fieldset>
+        </form>
+
+        <script>
+        (function() {
+            const form = document.getElementById('contactForm');
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Clear previous errors
+                document.querySelectorAll('#contactForm .error-msg').forEach(el => el.textContent = '');
+
+                let isValid = true;
+
+                const name = document.getElementById('contact-name');
+                if (name.value.trim().length < 2) {
+                    document.getElementById('nameError').textContent = 'Name must be at least 2 characters.';
+                    isValid = false;
+                }
+
+                const email = document.getElementById('contact-email');
+                if (!email.value.includes('@') || !email.value.includes('.')) {
+                    document.getElementById('emailError').textContent = 'Please enter a valid email address.';
+                    isValid = false;
+                }
+
+                const message = document.getElementById('contact-message');
+                if (message.value.trim().length < 10) {
+                    document.getElementById('messageError').textContent = 'Message must be at least 10 characters.';
+                    isValid = false;
+                }
+
+                if (isValid) {
+                    const formData = new FormData(form);
+                    const data = Object.fromEntries(formData);
+                    alert('Message sent successfully!\n\n' + JSON.stringify(data, null, 2));
+                    form.reset();
+                }
+            });
+        })();
+        </script>
+    </section>
+
+    <!-- ===== Exercise 2: Registration Form ===== -->
+    <section class="exercise">
+        <h2>Exercise 2: Registration Form</h2>
+        <p><strong>Problem:</strong> Create a registration form with username, email, password,
+        password confirmation, gender, terms checkbox, and JavaScript validation.</p>
+
+        <hr>
+
+        <form id="registrationForm" novalidate>
+            <fieldset>
+                <legend>User Registration</legend>
+
+                <div class="form-group">
+                    <label for="reg-username">Username <span style="color: red;">*</span></label>
+                    <input type="text" id="reg-username" name="username"
+                           placeholder="3-20 characters" minlength="3" maxlength="20" required>
+                    <div class="error-msg" id="regUsernameError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reg-email">Email <span style="color: red;">*</span></label>
+                    <input type="email" id="reg-email" name="email"
+                           placeholder="you@example.com" required>
+                    <div class="error-msg" id="regEmailError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reg-password">Password <span style="color: red;">*</span></label>
+                    <input type="password" id="reg-password" name="password"
+                           placeholder="At least 8 characters" minlength="8" required>
+                    <div class="error-msg" id="regPasswordError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="reg-confirm">Confirm Password <span style="color: red;">*</span></label>
+                    <input type="password" id="reg-confirm" name="confirmPassword"
+                           placeholder="Re-enter your password" required>
+                    <div class="error-msg" id="regConfirmError"></div>
+                </div>
+
+                <fieldset style="border: 1px solid #ddd; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px;">
+                    <legend style="font-weight: 600;">Gender</legend>
+                    <label style="display: inline; font-weight: normal; margin-right: 1rem;">
+                        <input type="radio" name="gender" value="male"> Male
+                    </label>
+                    <label style="display: inline; font-weight: normal; margin-right: 1rem;">
+                        <input type="radio" name="gender" value="female"> Female
+                    </label>
+                    <label style="display: inline; font-weight: normal;">
+                        <input type="radio" name="gender" value="other"> Other
+                    </label>
+                </fieldset>
+
+                <div class="form-group">
+                    <label style="display: inline; font-weight: normal;">
+                        <input type="checkbox" id="reg-terms" name="terms" required>
+                        I agree to the <a href="#">Terms and Conditions</a>
+                    </label>
+                    <div class="error-msg" id="regTermsError"></div>
+                </div>
+
+                <button type="submit">Register</button>
+            </fieldset>
+        </form>
+
+        <script>
+        (function() {
+            const form = document.getElementById('registrationForm');
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Clear previous errors
+                document.querySelectorAll('#registrationForm .error-msg').forEach(el => el.textContent = '');
+
+                let isValid = true;
+
+                const username = document.getElementById('reg-username');
+                if (username.value.length < 3 || username.value.length > 20) {
+                    document.getElementById('regUsernameError').textContent = 'Username must be 3-20 characters.';
+                    isValid = false;
+                }
+
+                const email = document.getElementById('reg-email');
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(email.value)) {
+                    document.getElementById('regEmailError').textContent = 'Please enter a valid email address.';
+                    isValid = false;
+                }
+
+                const password = document.getElementById('reg-password');
+                if (password.value.length < 8) {
+                    document.getElementById('regPasswordError').textContent = 'Password must be at least 8 characters.';
+                    isValid = false;
+                }
+
+                const confirm = document.getElementById('reg-confirm');
+                if (confirm.value !== password.value) {
+                    document.getElementById('regConfirmError').textContent = 'Passwords do not match.';
+                    isValid = false;
+                }
+
+                const terms = document.getElementById('reg-terms');
+                if (!terms.checked) {
+                    document.getElementById('regTermsError').textContent = 'You must agree to the terms and conditions.';
+                    isValid = false;
+                }
+
+                if (isValid) {
+                    const formData = new FormData(form);
+                    formData.delete('confirmPassword');
+                    const data = Object.fromEntries(formData);
+                    alert('Registration successful!\n\n' + JSON.stringify(data, null, 2));
+                    form.reset();
+                }
+            });
+        })();
+        </script>
+    </section>
+
+    <!-- ===== Exercise 3: Product Table ===== -->
+    <section class="exercise">
+        <h2>Exercise 3: Product Table</h2>
+        <p><strong>Problem:</strong> Create a styled product table with name, price,
+        quantity, total columns, at least 5 products, and a grand total footer.</p>
+
+        <hr>
+
+        <table class="product-table">
+            <caption>Product Order Summary</caption>
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th class="price">Unit Price</th>
+                    <th class="price">Quantity</th>
+                    <th class="price">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Wireless Keyboard</td>
+                    <td class="price">$49.99</td>
+                    <td class="price">2</td>
+                    <td class="price">$99.98</td>
+                </tr>
+                <tr>
+                    <td>USB-C Hub (7-port)</td>
+                    <td class="price">$35.00</td>
+                    <td class="price">1</td>
+                    <td class="price">$35.00</td>
+                </tr>
+                <tr>
+                    <td>Mechanical Mouse</td>
+                    <td class="price">$29.99</td>
+                    <td class="price">3</td>
+                    <td class="price">$89.97</td>
+                </tr>
+                <tr>
+                    <td>27" Monitor</td>
+                    <td class="price">$299.00</td>
+                    <td class="price">1</td>
+                    <td class="price">$299.00</td>
+                </tr>
+                <tr>
+                    <td>Webcam 1080p</td>
+                    <td class="price">$59.99</td>
+                    <td class="price">2</td>
+                    <td class="price">$119.98</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3">Grand Total</th>
+                    <td class="price">$643.93</td>
+                </tr>
+            </tfoot>
+        </table>
+    </section>
+
+</body>
+</html>

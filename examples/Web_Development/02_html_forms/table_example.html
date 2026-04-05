@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Table Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h2 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        /* Basic table style */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #ddd;
+        }
+
+        /* Caption style */
+        caption {
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+
+        /* Responsive table */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        /* Striped table */
+        .striped tbody tr:nth-child(odd) {
+            background-color: #fff;
+        }
+        .striped tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        /* Table footer style */
+        tfoot {
+            font-weight: bold;
+            background-color: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <h1>HTML Table Example</h1>
+
+    <!-- 1. Basic table -->
+    <h2>1. Basic Table</h2>
+    <table>
+        <tr>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Occupation</th>
+        </tr>
+        <tr>
+            <td>Hong Gildong</td>
+            <td>25</td>
+            <td>Developer</td>
+        </tr>
+        <tr>
+            <td>Kim Cheolsu</td>
+            <td>30</td>
+            <td>Designer</td>
+        </tr>
+        <tr>
+            <td>Lee Younghee</td>
+            <td>28</td>
+            <td>Planner</td>
+        </tr>
+    </table>
+
+    <!-- 2. Semantic table (thead, tbody, tfoot) -->
+    <h2>2. Semantic Table (thead, tbody, tfoot)</h2>
+    <table class="striped">
+        <caption>2024 Q1 Sales Summary</caption>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>January</th>
+                <th>February</th>
+                <th>March</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Product A</td>
+                <td>100</td>
+                <td>120</td>
+                <td>150</td>
+                <td>370</td>
+            </tr>
+            <tr>
+                <td>Product B</td>
+                <td>80</td>
+                <td>90</td>
+                <td>110</td>
+                <td>280</td>
+            </tr>
+            <tr>
+                <td>Product C</td>
+                <td>200</td>
+                <td>180</td>
+                <td>220</td>
+                <td>600</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Grand Total</td>
+                <td>380</td>
+                <td>390</td>
+                <td>480</td>
+                <td>1,250</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- 3. Cell merging (colspan, rowspan) -->
+    <h2>3. Cell Merging (colspan, rowspan)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Subcategory</th>
+                <th>Item</th>
+                <th>Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td rowspan="4">Electronics</td>
+                <td rowspan="2">Computers</td>
+                <td>Laptop</td>
+                <td>1,500,000 KRW</td>
+            </tr>
+            <tr>
+                <td>Desktop</td>
+                <td>1,200,000 KRW</td>
+            </tr>
+            <tr>
+                <td rowspan="2">Mobile</td>
+                <td>Smartphone</td>
+                <td>1,000,000 KRW</td>
+            </tr>
+            <tr>
+                <td>Tablet</td>
+                <td>800,000 KRW</td>
+            </tr>
+            <tr>
+                <td colspan="3" style="text-align: right; font-weight: bold;">Total</td>
+                <td style="font-weight: bold;">4,500,000 KRW</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- 4. Column styling with colgroup -->
+    <h2>4. Column Styling with colgroup</h2>
+    <table>
+        <colgroup>
+            <col style="background-color: #f8f9fa;">
+            <col style="background-color: #e9ecef;">
+            <col style="background-color: #dee2e6;">
+            <col style="background-color: #ced4da;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Team Name</th>
+                <th>Wins</th>
+                <th>Losses</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>Team A</td>
+                <td>10</td>
+                <td>2</td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td>Team B</td>
+                <td>8</td>
+                <td>4</td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td>Team C</td>
+                <td>6</td>
+                <td>6</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- 5. Responsive table -->
+    <h2>5. Responsive Table</h2>
+    <p>A horizontal scrollbar appears when the screen is narrow.</p>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Join Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>Hong Gildong</td>
+                    <td>hong@example.com</td>
+                    <td>010-1234-5678</td>
+                    <td>Gangnam-gu, Seoul</td>
+                    <td>2024-01-15</td>
+                    <td>Active</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Kim Cheolsu</td>
+                    <td>kim@example.com</td>
+                    <td>010-2345-6789</td>
+                    <td>Seocho-gu, Seoul</td>
+                    <td>2024-01-20</td>
+                    <td>Active</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 6. scope attribute (accessibility) -->
+    <h2>6. scope Attribute (Accessibility)</h2>
+    <p>The scope attribute helps screen readers understand the table.</p>
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Weather</th>
+                <th scope="col">Temperature</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row">Monday</th>
+                <td>Sunny</td>
+                <td>25°C</td>
+            </tr>
+            <tr>
+                <th scope="row">Tuesday</th>
+                <td>Cloudy</td>
+                <td>22°C</td>
+            </tr>
+            <tr>
+                <th scope="row">Wednesday</th>
+                <td>Rainy</td>
+                <td>18°C</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- 7. Complex table example -->
+    <h2>7. Timetable (Complex Structure)</h2>
+    <table>
+        <caption>Weekly Timetable</caption>
+        <thead>
+            <tr>
+                <th></th>
+                <th scope="col">Mon</th>
+                <th scope="col">Tue</th>
+                <th scope="col">Wed</th>
+                <th scope="col">Thu</th>
+                <th scope="col">Fri</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th scope="row">09:00</th>
+                <td rowspan="2" style="background-color: #ffcdd2;">Korean</td>
+                <td style="background-color: #c8e6c9;">English</td>
+                <td style="background-color: #bbdefb;">Math</td>
+                <td style="background-color: #c8e6c9;">English</td>
+                <td style="background-color: #fff9c4;">Science</td>
+            </tr>
+            <tr>
+                <th scope="row">10:00</th>
+                <td style="background-color: #bbdefb;">Math</td>
+                <td style="background-color: #ffcdd2;">Korean</td>
+                <td style="background-color: #fff9c4;">Science</td>
+                <td rowspan="2" style="background-color: #e1bee7;">PE</td>
+            </tr>
+            <tr>
+                <th scope="row">11:00</th>
+                <td colspan="4" style="background-color: #f5f5f5; text-align: center;">Lunch Break</td>
+            </tr>
+            <tr>
+                <th scope="row">13:00</th>
+                <td style="background-color: #fff9c4;">Science</td>
+                <td style="background-color: #e1bee7;">PE</td>
+                <td style="background-color: #c8e6c9;">English</td>
+                <td style="background-color: #bbdefb;">Math</td>
+                <td style="background-color: #ffcdd2;">Korean</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <footer style="margin-top: 40px; text-align: center; color: #666;">
+        <p>&copy; 2024 HTML Table Example</p>
+    </footer>
+</body>
+</html>

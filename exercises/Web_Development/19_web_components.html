@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 19: Web Components</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; color: #333; background: #f5f5f5; padding: 2rem;
+        }
+        .exercise-section {
+            max-width: 800px; margin: 0 auto 2rem; background: white;
+            padding: 2rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; margin-bottom: 2rem; color: #2c3e50; }
+        h2 { color: #2c3e50; margin-bottom: 0.5rem; }
+        p.desc { color: #666; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Lesson 19: Web Components</h1>
+
+    <!-- Exercise 1: Custom Counter Element -->
+    <div class="exercise-section">
+        <h2>Exercise 1: Counter Component</h2>
+        <p class="desc">A custom element with Shadow DOM, attributes, and event dispatching.</p>
+        <my-counter value="5" step="2"></my-counter>
+        <my-counter value="0" step="1"></my-counter>
+    </div>
+
+    <!-- Exercise 2: Expandable Card -->
+    <div class="exercise-section">
+        <h2>Exercise 2: Expandable Card with Slots</h2>
+        <p class="desc">Uses <code>&lt;slot&gt;</code> for content projection and CSS custom properties for theming.</p>
+        <expandable-card>
+            <span slot="title">What is Shadow DOM?</span>
+            <p slot="content">Shadow DOM provides encapsulation for DOM and CSS.
+               Styles inside a shadow tree don't leak out, and external styles don't leak in.
+               This makes components truly self-contained.</p>
+        </expandable-card>
+        <expandable-card open>
+            <span slot="title">Why Web Components?</span>
+            <p slot="content">Web Components are framework-agnostic, natively supported by browsers,
+               and interoperate with any JavaScript framework. They use standard APIs:
+               Custom Elements, Shadow DOM, HTML Templates, and CSS Custom Properties.</p>
+        </expandable-card>
+    </div>
+
+    <!-- Exercise 3: Toast Notification System -->
+    <div class="exercise-section">
+        <h2>Exercise 3: Toast Notification</h2>
+        <p class="desc">A toast container that manages stacked notifications with auto-dismiss.</p>
+        <button onclick="showToast('success', 'File saved successfully!')">Success Toast</button>
+        <button onclick="showToast('error', 'Failed to connect.')">Error Toast</button>
+        <button onclick="showToast('info', 'New update available.')">Info Toast</button>
+        <toast-container></toast-container>
+    </div>
+
+    <script>
+    // === Exercise 1: Counter Component ===
+    class MyCounter extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' });
+            this._count = 0;
+            this._step = 1;
+        }
+
+        static get observedAttributes() { return ['value', 'step']; }
+
+        attributeChangedCallback(name, _, newVal) {
+            if (name === 'value') this._count = parseInt(newVal) || 0;
+            if (name === 'step') this._step = parseInt(newVal) || 1;
+            this.render();
+        }
+
+        connectedCallback() { this.render(); }
+
+        render() {
+            this.shadowRoot.innerHTML = `
+                <style>
+                    :host { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.5rem; }
+                    button { width: 36px; height: 36px; border: none; border-radius: 50%;
+                             font-size: 1.2rem; cursor: pointer; background: #3498db; color: white; }
+                    button:hover { background: #2980b9; }
+                    .value { font-size: 1.5rem; min-width: 3rem; text-align: center; font-weight: 700; }
+                </style>
+                <button id="dec">−</button>
+                <span class="value">${this._count}</span>
+                <button id="inc">+</button>
+                <span style="color:#999; font-size:0.8rem;">(step: ${this._step})</span>
+            `;
+            this.shadowRoot.getElementById('inc').onclick = () => this.update(this._step);
+            this.shadowRoot.getElementById('dec').onclick = () => this.update(-this._step);
+        }
+
+        update(delta) {
+            this._count += delta;
+            this.setAttribute('value', this._count);
+            this.dispatchEvent(new CustomEvent('change', { detail: { value: this._count } }));
+        }
+    }
+    customElements.define('my-counter', MyCounter);
+
+    // === Exercise 2: Expandable Card ===
+    class ExpandableCard extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' });
+            this._open = false;
+        }
+
+        static get observedAttributes() { return ['open']; }
+
+        attributeChangedCallback() {
+            this._open = this.hasAttribute('open');
+            this.render();
+        }
+
+        connectedCallback() {
+            this._open = this.hasAttribute('open');
+            this.render();
+        }
+
+        toggle() {
+            this._open = !this._open;
+            if (this._open) this.setAttribute('open', '');
+            else this.removeAttribute('open');
+        }
+
+        render() {
+            this.shadowRoot.innerHTML = `
+                <style>
+                    :host {
+                        display: block; margin: 0.75rem 0; border: 1px solid var(--card-border, #ddd);
+                        border-radius: 8px; overflow: hidden;
+                    }
+                    .header {
+                        display: flex; justify-content: space-between; align-items: center;
+                        padding: 1rem; cursor: pointer; background: var(--card-header-bg, #f8f9fa);
+                        user-select: none;
+                    }
+                    .header:hover { background: #eef; }
+                    .arrow { transition: transform 0.2s; }
+                    .arrow.open { transform: rotate(90deg); }
+                    .body { padding: 0 1rem; max-height: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s; }
+                    .body.open { max-height: 500px; padding: 1rem; }
+                </style>
+                <div class="header" tabindex="0" role="button" aria-expanded="${this._open}">
+                    <slot name="title"><span>Card Title</span></slot>
+                    <span class="arrow ${this._open ? 'open' : ''}">▶</span>
+                </div>
+                <div class="body ${this._open ? 'open' : ''}">
+                    <slot name="content"><p>Card content</p></slot>
+                </div>
+            `;
+            const header = this.shadowRoot.querySelector('.header');
+            header.onclick = () => this.toggle();
+            header.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggle(); } };
+        }
+    }
+    customElements.define('expandable-card', ExpandableCard);
+
+    // === Exercise 3: Toast Notification ===
+    class ToastContainer extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' });
+            this.shadowRoot.innerHTML = `
+                <style>
+                    :host { position: fixed; top: 1rem; right: 1rem; z-index: 9999;
+                            display: flex; flex-direction: column; gap: 0.5rem; }
+                    .toast {
+                        padding: 0.75rem 1.25rem; border-radius: 8px; color: white;
+                        font-family: sans-serif; font-size: 0.95rem; min-width: 250px;
+                        animation: slideIn 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        display: flex; justify-content: space-between; align-items: center;
+                    }
+                    .toast.success { background: #27ae60; }
+                    .toast.error { background: #e74c3c; }
+                    .toast.info { background: #3498db; }
+                    .toast .close { background: none; border: none; color: white; cursor: pointer;
+                                    font-size: 1.2rem; padding: 0 0.25rem; }
+                    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                    @keyframes fadeOut { to { opacity: 0; transform: translateX(50%); } }
+                </style>
+            `;
+        }
+
+        show(type, message, duration = 3000) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${message}</span><button class="close" aria-label="Close">×</button>`;
+            toast.querySelector('.close').onclick = () => this.dismiss(toast);
+            this.shadowRoot.appendChild(toast);
+            setTimeout(() => this.dismiss(toast), duration);
+        }
+
+        dismiss(toast) {
+            if (!toast.parentNode) return;
+            toast.style.animation = 'fadeOut 0.3s ease forwards';
+            toast.addEventListener('animationend', () => toast.remove());
+        }
+    }
+    customElements.define('toast-container', ToastContainer);
+
+    function showToast(type, message) {
+        document.querySelector('toast-container').show(type, message);
+    }
+    </script>
+</body>
+</html>

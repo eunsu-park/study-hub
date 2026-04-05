@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Web Design Example</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">ResponsiveDemo</div>
+        <button class="menu-toggle" id="menuToggle">☰</button>
+        <ul class="nav-links" id="navLinks">
+            <li><a href="#">Home</a></li>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Services</a></li>
+            <li><a href="#">Portfolio</a></li>
+            <li><a href="#">Contact</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <h1>Responsive Web Design Example</h1>
+        <p class="lead">Resize the window to see the layout changes.</p>
+
+        <!-- 1. Media query breakpoint display -->
+        <section class="section">
+            <h2>1. Current Viewport Size</h2>
+            <div class="viewport-indicator">
+                <span class="mobile">📱 Mobile (&lt; 576px)</span>
+                <span class="tablet">📱 Tablet (576px - 768px)</span>
+                <span class="small-desktop">💻 Small Desktop (768px - 992px)</span>
+                <span class="desktop">🖥️ Desktop (992px - 1200px)</span>
+                <span class="large">🖥️ Large (&gt; 1200px)</span>
+            </div>
+        </section>
+
+        <!-- 2. Responsive grid -->
+        <section class="section">
+            <h2>2. Responsive Grid</h2>
+            <div class="responsive-grid">
+                <div class="grid-item">1</div>
+                <div class="grid-item">2</div>
+                <div class="grid-item">3</div>
+                <div class="grid-item">4</div>
+                <div class="grid-item">5</div>
+                <div class="grid-item">6</div>
+            </div>
+        </section>
+
+        <!-- 3. Responsive cards -->
+        <section class="section">
+            <h2>3. Responsive Card Layout</h2>
+            <div class="card-grid">
+                <article class="card">
+                    <div class="card-image">Image</div>
+                    <div class="card-content">
+                        <h3>Card Title 1</h3>
+                        <p>Card content goes here. The layout changes responsively.</p>
+                        <a href="#" class="btn">Details</a>
+                    </div>
+                </article>
+                <article class="card">
+                    <div class="card-image">Image</div>
+                    <div class="card-content">
+                        <h3>Card Title 2</h3>
+                        <p>Test on various screen sizes.</p>
+                        <a href="#" class="btn">Details</a>
+                    </div>
+                </article>
+                <article class="card">
+                    <div class="card-image">Image</div>
+                    <div class="card-content">
+                        <h3>Card Title 3</h3>
+                        <p>Stacked vertically on mobile, arranged horizontally on desktop.</p>
+                        <a href="#" class="btn">Details</a>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- 4. Responsive typography -->
+        <section class="section">
+            <h2>4. Responsive Typography</h2>
+            <h1 class="responsive-heading">Responsive Heading</h1>
+            <p class="responsive-text">
+                The size of this text adjusts automatically based on the viewport width.
+                Using the <code>clamp()</code> function, you can set minimum, preferred, and maximum values.
+            </p>
+        </section>
+
+        <!-- 5. Responsive images -->
+        <section class="section">
+            <h2>5. Responsive Images</h2>
+            <div class="image-container">
+                <img src="https://via.placeholder.com/1200x600"
+                     alt="Responsive image"
+                     class="responsive-image">
+                <p class="caption">Adjusts to the container with max-width: 100%.</p>
+            </div>
+        </section>
+
+        <!-- 6. Responsive table -->
+        <section class="section">
+            <h2>6. Responsive Table</h2>
+            <div class="table-container">
+                <table class="responsive-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Address</th>
+                            <th>Join Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td data-label="Name">Hong Gildong</td>
+                            <td data-label="Email">hong@example.com</td>
+                            <td data-label="Phone">010-1234-5678</td>
+                            <td data-label="Address">Gangnam-gu, Seoul</td>
+                            <td data-label="Join Date">2024-01-15</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Name">Kim Cheolsu</td>
+                            <td data-label="Email">kim@example.com</td>
+                            <td data-label="Phone">010-2345-6789</td>
+                            <td data-label="Address">Seocho-gu, Seoul</td>
+                            <td data-label="Join Date">2024-01-20</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Name">Lee Younghee</td>
+                            <td data-label="Email">lee@example.com</td>
+                            <td data-label="Phone">010-3456-7890</td>
+                            <td data-label="Address">Songpa-gu, Seoul</td>
+                            <td data-label="Join Date">2024-02-01</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 7. Responsive form -->
+        <section class="section">
+            <h2>7. Responsive Form</h2>
+            <form class="responsive-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firstName">First Name</label>
+                        <input type="text" id="firstName" placeholder="First name">
+                    </div>
+                    <div class="form-group">
+                        <label for="lastName">Last Name</label>
+                        <input type="text" id="lastName" placeholder="Last name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="example@domain.com">
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" rows="4" placeholder="Enter your message"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Send</button>
+            </form>
+        </section>
+
+        <!-- 8. Media query example code -->
+        <section class="section">
+            <h2>8. Media Query Example Code</h2>
+            <pre><code>/* Mobile First approach */
+
+/* Base (mobile) styles */
+.container {
+    padding: 10px;
+}
+
+/* Tablet (576px and above) */
+@media (min-width: 576px) {
+    .container {
+        padding: 20px;
+    }
+}
+
+/* Small desktop (768px and above) */
+@media (min-width: 768px) {
+    .container {
+        max-width: 720px;
+        margin: 0 auto;
+    }
+}
+
+/* Desktop (992px and above) */
+@media (min-width: 992px) {
+    .container {
+        max-width: 960px;
+    }
+}
+
+/* Large screen (1200px and above) */
+@media (min-width: 1200px) {
+    .container {
+        max-width: 1140px;
+    }
+}</code></pre>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>About</h3>
+                <p>A responsive web design learning example.</p>
+            </div>
+            <div class="footer-section">
+                <h3>Links</h3>
+                <ul>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Follow Us</h3>
+                <div class="social-links">
+                    <a href="#">📘</a>
+                    <a href="#">🐦</a>
+                    <a href="#">📷</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Responsive Web Design Example</p>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        document.getElementById('menuToggle').addEventListener('click', function() {
+            document.getElementById('navLinks').classList.toggle('active');
+        });
+    </script>
+</body>
+</html>

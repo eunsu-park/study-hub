@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 07: JavaScript Events and DOM</title>
+    <style>
+        /* ===== Reset ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 2rem;
+        }
+        .page-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .page-title h1 { font-size: 1.8rem; color: #2c3e50; }
+        .page-title p { color: #666; }
+
+        .exercise-section {
+            max-width: 800px;
+            margin: 0 auto 3rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .exercise-section h2 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .exercise-section > p {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+
+        /* ========================================
+           Exercise 1: Accordion Menu
+           ======================================== */
+        .accordion {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .accordion-item {
+            border-bottom: 1px solid #ddd;
+        }
+        .accordion-item:last-child {
+            border-bottom: none;
+        }
+        .accordion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: #f9f9f9;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        .accordion-header:hover {
+            background: #ecf0f1;
+        }
+        .accordion-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .accordion-icon {
+            font-size: 1.2rem;
+            transition: transform 0.3s;
+            color: #666;
+        }
+        .accordion-item.open .accordion-icon {
+            transform: rotate(180deg);
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .accordion-item.open .accordion-content {
+            max-height: 300px;
+        }
+        .accordion-body {
+            padding: 1rem 1.5rem;
+            color: #555;
+            line-height: 1.7;
+        }
+
+        /* ========================================
+           Exercise 2: Character Counter
+           ======================================== */
+        .char-counter-wrapper {
+            position: relative;
+        }
+        .char-counter-wrapper textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        .char-counter-wrapper textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .char-counter-wrapper textarea.over-limit {
+            border-color: #e74c3c;
+        }
+        .counter-display {
+            text-align: right;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+            transition: color 0.3s;
+        }
+        .counter-display.error {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+        .counter-display.warning {
+            color: #f39c12;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #ecf0f1;
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: #3498db;
+            border-radius: 2px;
+            transition: width 0.2s, background-color 0.3s;
+        }
+        .progress-bar-fill.warning {
+            background: #f39c12;
+        }
+        .progress-bar-fill.error {
+            background: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-title">
+        <h1>Exercises for Lesson 07: JS Events and DOM</h1>
+        <p>Solutions to practice problems from the lesson.</p>
+    </div>
+
+    <!-- ===== Exercise 1: Accordion Menu ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 1: Accordion Menu</h2>
+        <p><strong>Problem:</strong> Implement an accordion that opens and closes content
+        on click. Only one panel should be open at a time.</p>
+
+        <div class="accordion" id="accordion">
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3>What is HTML?</h3>
+                    <span class="accordion-icon">&#9660;</span>
+                </div>
+                <div class="accordion-content">
+                    <div class="accordion-body">
+                        HTML (HyperText Markup Language) is the standard markup language
+                        for creating web pages. It defines the structure and content of a
+                        web document using a system of tags and attributes. HTML5 is the
+                        latest version and includes support for multimedia, semantic elements,
+                        and new APIs.
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3>What is CSS?</h3>
+                    <span class="accordion-icon">&#9660;</span>
+                </div>
+                <div class="accordion-content">
+                    <div class="accordion-body">
+                        CSS (Cascading Style Sheets) is a stylesheet language used to describe
+                        the presentation of HTML documents. It controls layout, colors, fonts,
+                        spacing, animations, and responsive behavior. CSS separates content
+                        from presentation, making websites easier to maintain.
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3>What is JavaScript?</h3>
+                    <span class="accordion-icon">&#9660;</span>
+                </div>
+                <div class="accordion-content">
+                    <div class="accordion-body">
+                        JavaScript is a dynamic programming language used to add interactivity
+                        to web pages. It can manipulate the DOM, handle events, make HTTP
+                        requests, and much more. Modern JavaScript (ES6+) includes features
+                        like arrow functions, promises, classes, and modules.
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3>What is the DOM?</h3>
+                    <span class="accordion-icon">&#9660;</span>
+                </div>
+                <div class="accordion-content">
+                    <div class="accordion-body">
+                        The DOM (Document Object Model) is a programming interface for web
+                        documents. It represents the page as a tree of nodes that JavaScript
+                        can read and manipulate. When the browser parses HTML, it builds the
+                        DOM tree, which JavaScript uses to dynamically update content, styles,
+                        and structure.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Exercise 2: Character Counter ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 2: Character Counter</h2>
+        <p><strong>Problem:</strong> Display character count in real-time as user types
+        in textarea. Show visual feedback when approaching or exceeding the limit.</p>
+
+        <div class="char-counter-wrapper">
+            <textarea
+                id="charInput"
+                placeholder="Start typing here... (200 character limit)"
+                aria-describedby="charCounter"
+            ></textarea>
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="counter-display" id="charCounter">0 / 200</div>
+        </div>
+    </section>
+
+    <script>
+    // ===== Exercise 1: Accordion using event delegation =====
+    (function() {
+        const accordion = document.getElementById('accordion');
+
+        accordion.addEventListener('click', function(e) {
+            // Find the clicked header (even if user clicks on a child element)
+            const header = e.target.closest('.accordion-header');
+            if (!header) return;
+
+            const item = header.parentElement;
+
+            // Close all other items (single-open behavior)
+            const allItems = accordion.querySelectorAll('.accordion-item');
+            allItems.forEach(function(otherItem) {
+                if (otherItem !== item) {
+                    otherItem.classList.remove('open');
+                }
+            });
+
+            // Toggle the clicked item
+            item.classList.toggle('open');
+        });
+    })();
+
+    // ===== Exercise 2: Character counter with visual feedback =====
+    (function() {
+        const textarea = document.getElementById('charInput');
+        const counter = document.getElementById('charCounter');
+        const progressBar = document.getElementById('progressBar');
+        const MAX_LENGTH = 200;
+        const WARNING_THRESHOLD = 0.8; // 80% of max
+
+        textarea.addEventListener('input', function(e) {
+            const length = e.target.value.length;
+            const ratio = length / MAX_LENGTH;
+
+            // Update counter text
+            counter.textContent = length + ' / ' + MAX_LENGTH;
+
+            // Update progress bar width
+            const widthPercent = Math.min(ratio * 100, 100);
+            progressBar.style.width = widthPercent + '%';
+
+            // Remove all state classes first
+            counter.classList.remove('error', 'warning');
+            progressBar.classList.remove('error', 'warning');
+            textarea.classList.remove('over-limit');
+
+            // Apply appropriate state
+            if (length > MAX_LENGTH) {
+                // Over limit
+                counter.classList.add('error');
+                progressBar.classList.add('error');
+                textarea.classList.add('over-limit');
+                counter.textContent = length + ' / ' + MAX_LENGTH + ' (over limit!)';
+            } else if (ratio >= WARNING_THRESHOLD) {
+                // Warning zone (80%+)
+                counter.classList.add('warning');
+                progressBar.classList.add('warning');
+            }
+        });
+    })();
+    </script>
+
+</body>
+</html>

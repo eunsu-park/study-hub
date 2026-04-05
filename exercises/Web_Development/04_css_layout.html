@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 04: CSS Layout</title>
+    <style>
+        /* ===== Reset ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        .page-header {
+            text-align: center;
+            padding: 2rem;
+            background: white;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .page-header h1 { font-size: 1.8rem; color: #2c3e50; }
+        .page-header p { color: #666; }
+
+        .exercise-section {
+            max-width: 1000px;
+            margin: 0 auto 3rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .exercise-section h2 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .exercise-section > p {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+        .demo-area {
+            border: 2px dashed #ddd;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        /* ========================================
+           Exercise 1: Navigation with Flexbox
+           Logo left, menu center, button right
+           ======================================== */
+        .ex1-navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2c3e50;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+        }
+        .ex1-logo {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: white;
+        }
+        .ex1-menu {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+        .ex1-menu a {
+            color: #ecf0f1;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+        .ex1-menu a:hover {
+            color: #3498db;
+        }
+        .ex1-login-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .ex1-login-btn:hover {
+            background: #2980b9;
+        }
+
+        /* ========================================
+           Exercise 2: Photo Gallery with Grid
+           First image is 2x2 in a 4-column grid
+           ======================================== */
+        .ex2-gallery {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-auto-rows: 150px;
+            gap: 10px;
+        }
+        .ex2-gallery-item {
+            background: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .ex2-gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.3s;
+        }
+        .ex2-gallery-item:hover img {
+            transform: scale(1.05);
+        }
+        /* First image spans 2 columns and 2 rows */
+        .ex2-gallery-item:first-child {
+            grid-column: span 2;
+            grid-row: span 2;
+        }
+        .ex2-gallery-label {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        /* ========================================
+           Exercise 3: Perfect Centering (3 methods)
+           ======================================== */
+        .centering-demos {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+        .center-demo-box {
+            height: 250px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            position: relative;
+        }
+        .center-demo-box h4 {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 0.75rem;
+            color: #999;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .center-target {
+            width: 100px;
+            height: 60px;
+            background: #3498db;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        /* Method 1: Flexbox centering */
+        .method-flex {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Method 2: Grid centering */
+        .method-grid {
+            display: grid;
+            place-items: center;
+        }
+
+        /* Method 3: Position + Transform centering */
+        .method-position {
+            /* parent is already position: relative from .center-demo-box */
+        }
+        .method-position .center-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <h1>Exercises for Lesson 04: CSS Layout</h1>
+        <p>Solutions to practice problems from the lesson.</p>
+    </div>
+
+    <!-- ===== Exercise 1: Navigation with Flexbox ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 1: Create Navigation with Flexbox</h2>
+        <p><strong>Problem:</strong> Place logo on left, menu in center, and button on right.
+        <code>[Logo]&nbsp;&nbsp;[Menu1] [Menu2] [Menu3]&nbsp;&nbsp;[Login]</code></p>
+
+        <div class="demo-area">
+            <nav class="ex1-navbar">
+                <div class="ex1-logo">Logo</div>
+                <ul class="ex1-menu">
+                    <li><a href="#">Home</a></li>
+                    <li><a href="#">About</a></li>
+                    <li><a href="#">Services</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+                <button class="ex1-login-btn">Login</button>
+            </nav>
+        </div>
+    </section>
+
+    <!-- ===== Exercise 2: Photo Gallery with Grid ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 2: Create Photo Gallery with Grid</h2>
+        <p><strong>Problem:</strong> Make first image 2x2 size in a 4-column grid.</p>
+
+        <div class="demo-area">
+            <div class="ex2-gallery">
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/400x300/e74c3c/fff?text=Featured" alt="Featured photo">
+                    <span class="ex2-gallery-label">Featured (2x2)</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/3498db/fff?text=Photo+2" alt="Photo 2">
+                    <span class="ex2-gallery-label">Photo 2</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/2ecc71/fff?text=Photo+3" alt="Photo 3">
+                    <span class="ex2-gallery-label">Photo 3</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/9b59b6/fff?text=Photo+4" alt="Photo 4">
+                    <span class="ex2-gallery-label">Photo 4</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/f39c12/fff?text=Photo+5" alt="Photo 5">
+                    <span class="ex2-gallery-label">Photo 5</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/1abc9c/fff?text=Photo+6" alt="Photo 6">
+                    <span class="ex2-gallery-label">Photo 6</span>
+                </div>
+                <div class="ex2-gallery-item">
+                    <img src="https://via.placeholder.com/200x150/e67e22/fff?text=Photo+7" alt="Photo 7">
+                    <span class="ex2-gallery-label">Photo 7</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Exercise 3: Perfect Centering ===== -->
+    <section class="exercise-section">
+        <h2>Exercise 3: Perfect Centering (3 Methods)</h2>
+        <p><strong>Problem:</strong> Center a div in the middle of the screen using 3 different methods.</p>
+
+        <div class="demo-area">
+            <div class="centering-demos">
+                <!-- Method 1: Flexbox -->
+                <div class="center-demo-box method-flex">
+                    <h4>Flexbox</h4>
+                    <div class="center-target">Flexbox</div>
+                </div>
+
+                <!-- Method 2: Grid -->
+                <div class="center-demo-box method-grid">
+                    <h4>Grid</h4>
+                    <div class="center-target">Grid</div>
+                </div>
+
+                <!-- Method 3: Position + Transform -->
+                <div class="center-demo-box method-position">
+                    <h4>Pos + Transform</h4>
+                    <div class="center-target">Position</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</body>
+</html>

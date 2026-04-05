@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    /* Basic Options */
+    "target": "ES2020",                    /* Output JavaScript version */
+    "module": "commonjs",                  /* Module system */
+    "lib": ["ES2020", "DOM"],             /* Libraries to include */
+    "outDir": "./dist",                    /* Output directory */
+    "rootDir": "./",                       /* Source root directory */
+
+    /* Strict Type Checking */
+    "strict": true,                        /* Enable all strict type checking options */
+    "strictNullChecks": true,              /* Strict null/undefined checking */
+    "strictFunctionTypes": true,           /* Strict function type checking */
+    "strictBindCallApply": true,           /* Strict bind, call, apply checking */
+    "strictPropertyInitialization": true,  /* Class property initialization checking */
+    "noImplicitAny": true,                 /* Disallow implicit any */
+    "noImplicitThis": true,                /* Disallow implicit this */
+    "alwaysStrict": true,                  /* Add "use strict" */
+
+    /* Additional Checks */
+    "noUnusedLocals": true,                /* Error on unused local variables */
+    "noUnusedParameters": true,            /* Error on unused parameters */
+    "noImplicitReturns": true,             /* Disallow implicit returns */
+    "noFallthroughCasesInSwitch": true,    /* Disallow switch fall-through */
+    "noUncheckedIndexedAccess": true,      /* Include undefined in index access */
+
+    /* Module Resolution */
+    "moduleResolution": "node",            /* Module resolution strategy */
+    "esModuleInterop": true,               /* ES module interoperability */
+    "allowSyntheticDefaultImports": true,  /* Allow default imports */
+    "resolveJsonModule": true,             /* Allow JSON imports */
+
+    /* Source Maps */
+    "sourceMap": true,                     /* Generate .map files */
+    "declaration": true,                   /* Generate .d.ts files */
+    "declarationMap": true,                /* Generate .d.ts.map files */
+
+    /* Miscellaneous */
+    "forceConsistentCasingInFileNames": true, /* Enforce filename casing consistency */
+    "skipLibCheck": true,                  /* Skip library type checking */
+    "removeComments": false                /* Keep comments */
+  },
+  "include": [
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

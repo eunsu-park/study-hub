@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Basics Example</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>CSS Basics Example</h1>
+
+    <!-- 1. Selectors -->
+    <section class="section">
+        <h2>1. CSS Selectors</h2>
+
+        <!-- Element selector -->
+        <p>This is a p tag. (Element selector)</p>
+
+        <!-- Class selector -->
+        <p class="highlight">Styled with class selector (.highlight)</p>
+        <p class="highlight warning">Multiple classes applied (.highlight .warning)</p>
+
+        <!-- ID selector -->
+        <p id="unique">Styled with ID selector (#unique)</p>
+
+        <!-- Descendant selector -->
+        <div class="parent">
+            <p>Parent's <span>descendant span</span> element</p>
+            <div>
+                <p>Deeper <span>descendant span</span> element</p>
+            </div>
+        </div>
+
+        <!-- Child selector -->
+        <div class="container-child">
+            <p>Direct child p (child selector)</p>
+            <div>
+                <p>Grandchild p (child selector not applied)</p>
+            </div>
+        </div>
+
+        <!-- Adjacent sibling selector -->
+        <h3>Paragraph after heading</h3>
+        <p>Styled with adjacent sibling selector (h3 + p)</p>
+        <p>Second paragraph (not adjacent sibling)</p>
+
+        <!-- Attribute selector -->
+        <input type="text" placeholder="Text input">
+        <input type="email" placeholder="Email input">
+        <a href="https://example.com" target="_blank">External link</a>
+        <a href="/internal">Internal link</a>
+    </section>
+
+    <!-- 2. Pseudo-classes -->
+    <section class="section">
+        <h2>2. Pseudo-classes</h2>
+
+        <button class="btn">Hover effect button</button>
+        <a href="#" class="link">Link (different colors before/after visit)</a>
+
+        <ul class="pseudo-list">
+            <li>First item (:first-child)</li>
+            <li>Second item</li>
+            <li>Third item</li>
+            <li>Fourth item</li>
+            <li>Fifth item (:last-child)</li>
+        </ul>
+
+        <ul class="nth-list">
+            <li>1 (:nth-child(odd))</li>
+            <li>2 (:nth-child(even))</li>
+            <li>3</li>
+            <li>4</li>
+            <li>5</li>
+            <li>6</li>
+        </ul>
+
+        <input type="text" class="form-input" placeholder="Border changes on focus">
+    </section>
+
+    <!-- 3. Pseudo-elements -->
+    <section class="section">
+        <h2>3. Pseudo-elements</h2>
+
+        <p class="quote">This is a quotation.</p>
+        <p class="first-letter-example">The first letter is displayed larger. The rest of the text is normal size.</p>
+        <p class="first-line-example">
+            The first line is displayed in bold.
+            The second line has normal style.
+            Try resizing the window.
+        </p>
+    </section>
+
+    <!-- 4. Box model -->
+    <section class="section">
+        <h2>4. Box Model</h2>
+
+        <div class="box-demo">
+            <div class="box content-box">
+                <strong>content-box</strong><br>
+                width = content only<br>
+                padding, border separate
+            </div>
+            <div class="box border-box">
+                <strong>border-box</strong><br>
+                width = total<br>
+                padding, border included
+            </div>
+        </div>
+
+        <div class="box-model-visual">
+            <div class="margin-area">
+                margin
+                <div class="border-area">
+                    border
+                    <div class="padding-area">
+                        padding
+                        <div class="content-area">content</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. Colors -->
+    <section class="section">
+        <h2>5. Color Representation Methods</h2>
+
+        <div class="color-demo">
+            <div class="color-box" style="background-color: red;">red (keyword)</div>
+            <div class="color-box" style="background-color: #ff6347;">#ff6347 (HEX)</div>
+            <div class="color-box" style="background-color: rgb(100, 149, 237);">rgb(100,149,237)</div>
+            <div class="color-box" style="background-color: rgba(255, 0, 0, 0.5);">rgba(255,0,0,0.5)</div>
+            <div class="color-box" style="background-color: hsl(120, 100%, 40%);">hsl(120,100%,40%)</div>
+            <div class="color-box" style="background-color: hsla(240, 100%, 50%, 0.7);">hsla(240,100%,50%,0.7)</div>
+        </div>
+    </section>
+
+    <!-- 6. Text styling -->
+    <section class="section">
+        <h2>6. Text Styling</h2>
+
+        <p class="text-font">font-family: 'Georgia', serif</p>
+        <p class="text-size">font-size: 1.5em</p>
+        <p class="text-weight">font-weight: bold</p>
+        <p class="text-style">font-style: italic</p>
+        <p class="text-decoration">text-decoration: underline</p>
+        <p class="text-transform-upper">text-transform: uppercase</p>
+        <p class="text-transform-capital">text-transform: capitalize this sentence</p>
+        <p class="text-spacing">letter-spacing: 2px, word-spacing: 10px</p>
+        <p class="text-shadow">text-shadow effect</p>
+        <p class="text-align-center">text-align: center</p>
+        <p class="text-line-height">
+            line-height: 2<br>
+            Line spacing is wide.
+        </p>
+    </section>
+
+    <!-- 7. display property -->
+    <section class="section">
+        <h2>7. display Property</h2>
+
+        <div class="display-demo">
+            <span class="display-block">span as block</span>
+            <span class="display-block">span as block</span>
+        </div>
+
+        <div class="display-demo">
+            <div class="display-inline">div as inline</div>
+            <div class="display-inline">div as inline</div>
+        </div>
+
+        <div class="display-demo">
+            <div class="display-inline-block">inline-block 1</div>
+            <div class="display-inline-block">inline-block 2</div>
+            <div class="display-inline-block">inline-block 3</div>
+        </div>
+
+        <div class="display-demo">
+            <span class="display-none">This text is hidden (display: none)</span>
+            <span>Visible text</span>
+        </div>
+    </section>
+
+    <!-- 8. Positioning -->
+    <section class="section">
+        <h2>8. position Property</h2>
+
+        <div class="position-demo">
+            <div class="pos-relative">relative (top: 20px, left: 20px)</div>
+        </div>
+
+        <div class="position-demo position-parent">
+            Parent (position: relative)
+            <div class="pos-absolute">absolute child</div>
+        </div>
+
+        <div class="pos-fixed-demo">fixed (bottom-right corner)</div>
+
+        <div class="position-demo sticky-container">
+            <p>The sticky element becomes fixed when scrolling.</p>
+            <div class="pos-sticky">sticky element</div>
+            <p>Lorem ipsum dolor sit amet...</p>
+            <p>More content...</p>
+        </div>
+    </section>
+
+    <!-- 9. overflow -->
+    <section class="section">
+        <h2>9. overflow Property</h2>
+
+        <div class="overflow-demo">
+            <div class="overflow-visible">
+                <strong>overflow: visible</strong><br>
+                Content overflows outside the box.
+                Lorem ipsum dolor sit amet.
+            </div>
+            <div class="overflow-hidden">
+                <strong>overflow: hidden</strong><br>
+                Overflowing content is clipped.
+                Lorem ipsum dolor sit amet.
+            </div>
+            <div class="overflow-scroll">
+                <strong>overflow: scroll</strong><br>
+                Scrollbar is always shown.
+                Lorem ipsum dolor sit amet.
+            </div>
+            <div class="overflow-auto">
+                <strong>overflow: auto</strong><br>
+                Scrollbar shown only when needed.
+                Lorem ipsum dolor sit amet consectetur adipisicing elit.
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2024 CSS Basics Example</p>
+    </footer>
+</body>
+</html>

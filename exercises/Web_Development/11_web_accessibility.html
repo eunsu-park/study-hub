@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 11: Web Accessibility</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; color: #333; background: #f5f5f5; padding: 2rem;
+        }
+        .exercise-section {
+            max-width: 800px; margin: 0 auto 2rem; background: white;
+            padding: 2rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; margin-bottom: 2rem; color: #2c3e50; }
+        h2 { color: #2c3e50; margin-bottom: 0.5rem; }
+        p.desc { color: #666; margin-bottom: 1rem; }
+
+        /* Accessible form styles */
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 0.5rem; border: 2px solid #ccc; border-radius: 6px; font-size: 1rem;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.3);
+        }
+        .error-msg { color: #e74c3c; font-size: 0.875rem; margin-top: 0.25rem; display: none; }
+        .form-group.error input { border-color: #e74c3c; }
+        .form-group.error .error-msg { display: block; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+        button[type="submit"] {
+            padding: 0.75rem 2rem; background: #3498db; color: white; border: none;
+            border-radius: 6px; font-size: 1rem; cursor: pointer;
+        }
+        button[type="submit"]:hover { background: #2980b9; }
+        button[type="submit"]:focus { outline: 3px solid #2980b9; outline-offset: 2px; }
+
+        /* Skip link */
+        .skip-link { position: absolute; top: -40px; left: 0; background: #2c3e50; color: white;
+            padding: 0.5rem 1rem; z-index: 100; transition: top 0.2s; }
+        .skip-link:focus { top: 0; }
+
+        /* Keyboard-navigable tabs */
+        .tabs { display: flex; border-bottom: 2px solid #ddd; margin-bottom: 1rem; }
+        .tab-btn { padding: 0.75rem 1.5rem; border: none; background: none; cursor: pointer;
+            font-size: 1rem; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .tab-btn:hover { background: #f0f0f0; }
+        .tab-btn[aria-selected="true"] { border-bottom-color: #3498db; font-weight: 600; }
+        .tab-btn:focus { outline: 2px solid #3498db; outline-offset: -2px; }
+        .tab-panel { padding: 1rem 0; }
+        .tab-panel[hidden] { display: none; }
+    </style>
+</head>
+<body>
+    <a href="#main" class="skip-link">Skip to main content</a>
+
+    <main id="main">
+        <h1>Lesson 11: Web Accessibility</h1>
+
+        <!-- Exercise 1: Accessible Form -->
+        <div class="exercise-section">
+            <h2>Exercise 1: Accessible Registration Form</h2>
+            <p class="desc">Form with proper labels, error messages, ARIA attributes, and keyboard support.</p>
+            <form id="reg-form" novalidate aria-label="Registration form">
+                <div class="form-group" id="name-group">
+                    <label for="name">Full Name <span aria-hidden="true">*</span></label>
+                    <input type="text" id="name" required aria-required="true" aria-describedby="name-error" autocomplete="name">
+                    <p class="error-msg" id="name-error" role="alert">Please enter your name.</p>
+                </div>
+                <div class="form-group" id="email-group">
+                    <label for="email">Email <span aria-hidden="true">*</span></label>
+                    <input type="email" id="email" required aria-required="true" aria-describedby="email-error" autocomplete="email">
+                    <p class="error-msg" id="email-error" role="alert">Please enter a valid email.</p>
+                </div>
+                <div class="form-group" id="role-group">
+                    <label for="role">Role</label>
+                    <select id="role">
+                        <option value="">Select a role</option>
+                        <option value="developer">Developer</option>
+                        <option value="designer">Designer</option>
+                        <option value="manager">Manager</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bio">Bio</label>
+                    <textarea id="bio" rows="3" aria-describedby="bio-hint"></textarea>
+                    <p id="bio-hint" style="color:#999; font-size:0.875rem;">Optional. Max 200 characters.</p>
+                </div>
+                <button type="submit">Register</button>
+                <div id="form-status" aria-live="polite" class="sr-only"></div>
+            </form>
+        </div>
+
+        <!-- Exercise 2: Keyboard-Navigable Tabs -->
+        <div class="exercise-section">
+            <h2>Exercise 2: Accessible Tab Component</h2>
+            <p class="desc">Navigate with Arrow keys, activate with Enter/Space. Follows WAI-ARIA Tabs pattern.</p>
+            <div role="tablist" class="tabs" aria-label="Course information">
+                <button role="tab" class="tab-btn" id="tab-1" aria-selected="true" aria-controls="panel-1" tabindex="0">Overview</button>
+                <button role="tab" class="tab-btn" id="tab-2" aria-selected="false" aria-controls="panel-2" tabindex="-1">Curriculum</button>
+                <button role="tab" class="tab-btn" id="tab-3" aria-selected="false" aria-controls="panel-3" tabindex="-1">Reviews</button>
+            </div>
+            <div role="tabpanel" class="tab-panel" id="panel-1" aria-labelledby="tab-1">
+                <p>This course covers web accessibility from WCAG guidelines to practical implementation.</p>
+            </div>
+            <div role="tabpanel" class="tab-panel" id="panel-2" aria-labelledby="tab-2" hidden>
+                <p>12 lessons covering semantic HTML, ARIA, keyboard navigation, forms, and testing.</p>
+            </div>
+            <div role="tabpanel" class="tab-panel" id="panel-3" aria-labelledby="tab-3" hidden>
+                <p>"Excellent course! Changed how I think about building web interfaces." — Student</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    // === Form validation ===
+    document.getElementById('reg-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        let valid = true;
+        const name = document.getElementById('name');
+        const email = document.getElementById('email');
+        const status = document.getElementById('form-status');
+
+        document.querySelectorAll('.form-group').forEach(g => g.classList.remove('error'));
+
+        if (!name.value.trim()) {
+            document.getElementById('name-group').classList.add('error');
+            valid = false;
+        }
+        if (!email.value.trim() || !email.value.includes('@')) {
+            document.getElementById('email-group').classList.add('error');
+            valid = false;
+        }
+
+        if (valid) {
+            status.textContent = 'Registration successful!';
+        } else {
+            status.textContent = 'Please fix the errors above.';
+            document.querySelector('.form-group.error input').focus();
+        }
+    });
+
+    // === Accessible tabs with keyboard navigation ===
+    const tabs = document.querySelectorAll('[role="tab"]');
+    const panels = document.querySelectorAll('[role="tabpanel"]');
+
+    function activateTab(tab) {
+        tabs.forEach(t => { t.setAttribute('aria-selected', 'false'); t.tabIndex = -1; });
+        panels.forEach(p => p.hidden = true);
+        tab.setAttribute('aria-selected', 'true');
+        tab.tabIndex = 0;
+        tab.focus();
+        document.getElementById(tab.getAttribute('aria-controls')).hidden = false;
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => activateTab(tab));
+        tab.addEventListener('keydown', e => {
+            const tabArray = Array.from(tabs);
+            const index = tabArray.indexOf(tab);
+            let newIndex;
+            if (e.key === 'ArrowRight') newIndex = (index + 1) % tabArray.length;
+            else if (e.key === 'ArrowLeft') newIndex = (index - 1 + tabArray.length) % tabArray.length;
+            else if (e.key === 'Home') newIndex = 0;
+            else if (e.key === 'End') newIndex = tabArray.length - 1;
+            else return;
+            e.preventDefault();
+            activateTab(tabArray[newIndex]);
+        });
+    });
+    </script>
+</body>
+</html>

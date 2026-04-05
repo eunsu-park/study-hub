@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercises for Lesson 12: SEO Basics</title>
+
+    <!-- Exercise 1: Proper meta tags -->
+    <meta name="description" content="Learn SEO fundamentals including meta tags, structured data, and technical SEO practices.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://example.com/lessons/seo-basics">
+
+    <!-- Exercise 2: Open Graph -->
+    <meta property="og:title" content="SEO Basics - Web Development Course">
+    <meta property="og:description" content="Learn search engine optimization fundamentals.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://example.com/lessons/seo-basics">
+    <meta property="og:image" content="https://example.com/images/seo-lesson.png">
+
+    <!-- Exercise 2: Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SEO Basics - Web Development Course">
+    <meta name="twitter:description" content="Learn search engine optimization fundamentals.">
+
+    <!-- Exercise 3: JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Course",
+        "name": "SEO Basics",
+        "description": "Learn search engine optimization fundamentals for web developers.",
+        "provider": {
+            "@type": "Organization",
+            "name": "Study Hub"
+        },
+        "hasCourseInstance": {
+            "@type": "CourseInstance",
+            "courseMode": "online",
+            "inLanguage": ["en", "ko"]
+        }
+    }
+    </script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6; color: #333; background: #f5f5f5; padding: 2rem;
+        }
+        .exercise-section {
+            max-width: 800px; margin: 0 auto 2rem; background: white;
+            padding: 2rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; margin-bottom: 2rem; color: #2c3e50; }
+        h2 { color: #2c3e50; margin-bottom: 0.5rem; }
+        p.desc { color: #666; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { padding: 0.5rem; border: 1px solid #ddd; text-align: left; }
+        th { background: #f8f9fa; }
+        code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
+        pre { background: #2c3e50; color: #ecf0f1; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0; }
+        .check { color: #27ae60; } .cross { color: #e74c3c; }
+        button { padding: 0.5rem 1rem; background: #3498db; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        #audit-results { margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Lesson 12: SEO Basics</h1>
+
+    <!-- Exercise 1: Meta Tags Audit -->
+    <div class="exercise-section">
+        <h2>Exercise 1: Meta Tags Audit</h2>
+        <p class="desc">This page includes proper meta tags. Click to audit them.</p>
+        <button onclick="auditMeta()">Run Meta Audit</button>
+        <div id="audit-results"></div>
+    </div>
+
+    <!-- Exercise 2: Semantic HTML for SEO -->
+    <article class="exercise-section">
+        <h2>Exercise 2: Semantic Structure</h2>
+        <p class="desc">This section uses semantic HTML that search engines understand.</p>
+        <header>
+            <p><time datetime="2025-01-15">January 15, 2025</time> · 5 min read</p>
+        </header>
+        <section>
+            <h3>Why Semantic HTML Matters for SEO</h3>
+            <p>Search engines use HTML structure to understand content hierarchy. Using <code>&lt;article&gt;</code>,
+               <code>&lt;section&gt;</code>, <code>&lt;nav&gt;</code>, and <code>&lt;header&gt;</code> provides
+               meaningful signals about your content organization.</p>
+        </section>
+        <section>
+            <h3>Heading Hierarchy Checklist</h3>
+            <table>
+                <thead><tr><th>Element</th><th>Usage</th><th>SEO Impact</th></tr></thead>
+                <tbody>
+                    <tr><td><code>&lt;h1&gt;</code></td><td>Page title (one per page)</td><td>High</td></tr>
+                    <tr><td><code>&lt;h2&gt;</code></td><td>Major sections</td><td>Medium</td></tr>
+                    <tr><td><code>&lt;h3&gt;</code></td><td>Subsections</td><td>Low-Medium</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </article>
+
+    <!-- Exercise 3: robots.txt and sitemap -->
+    <div class="exercise-section">
+        <h2>Exercise 3: robots.txt and Sitemap</h2>
+        <p class="desc">Example configuration files for search engine crawlers.</p>
+        <h3>robots.txt</h3>
+        <pre>User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Sitemap: https://example.com/sitemap.xml</pre>
+        <h3>sitemap.xml</h3>
+        <pre>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://example.com/&lt;/loc&gt;
+    &lt;lastmod&gt;2025-01-15&lt;/lastmod&gt;
+    &lt;changefreq&gt;weekly&lt;/changefreq&gt;
+    &lt;priority&gt;1.0&lt;/priority&gt;
+  &lt;/url&gt;
+  &lt;url&gt;
+    &lt;loc&gt;https://example.com/lessons/seo-basics&lt;/loc&gt;
+    &lt;lastmod&gt;2025-01-15&lt;/lastmod&gt;
+    &lt;changefreq&gt;monthly&lt;/changefreq&gt;
+    &lt;priority&gt;0.8&lt;/priority&gt;
+  &lt;/url&gt;
+&lt;/urlset&gt;</pre>
+    </div>
+
+    <script>
+    function auditMeta() {
+        const results = document.getElementById('audit-results');
+        const checks = [
+            { name: 'Title tag', pass: document.title.length > 0 && document.title.length <= 60 },
+            { name: 'Meta description', pass: !!document.querySelector('meta[name="description"]') },
+            { name: 'Canonical URL', pass: !!document.querySelector('link[rel="canonical"]') },
+            { name: 'OG title', pass: !!document.querySelector('meta[property="og:title"]') },
+            { name: 'OG description', pass: !!document.querySelector('meta[property="og:description"]') },
+            { name: 'OG image', pass: !!document.querySelector('meta[property="og:image"]') },
+            { name: 'Twitter card', pass: !!document.querySelector('meta[name="twitter:card"]') },
+            { name: 'JSON-LD', pass: !!document.querySelector('script[type="application/ld+json"]') },
+            { name: 'Viewport meta', pass: !!document.querySelector('meta[name="viewport"]') },
+            { name: 'Lang attribute', pass: document.documentElement.lang === 'en' },
+        ];
+        const html = checks.map(c =>
+            `<p><span class="${c.pass ? 'check' : 'cross'}">${c.pass ? '✓' : '✗'}</span> ${c.name}</p>`
+        ).join('');
+        const passed = checks.filter(c => c.pass).length;
+        results.innerHTML = `<p><strong>${passed}/${checks.length} checks passed</strong></p>${html}`;
+    }
+    </script>
+</body>
+</html>

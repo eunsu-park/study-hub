@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Basics Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 { text-align: center; color: #333; }
+        h2 { color: #2c3e50; border-bottom: 2px solid #f39c12; padding-bottom: 10px; }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .output {
+            background: #2c3e50;
+            color: #2ecc71;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2980b9; }
+        code {
+            background: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        pre {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>JavaScript Basics Example</h1>
+    <p style="text-align: center;">Press F12 to check the developer tools console.</p>
+
+    <!-- Output area -->
+    <div class="section">
+        <h2>Output Results</h2>
+        <div class="output" id="output">Results will be displayed here.</div>
+        <button onclick="clearOutput()">Clear</button>
+    </div>
+
+    <!-- 1. Variables -->
+    <div class="section">
+        <h2>1. Variables (var, let, const)</h2>
+        <button onclick="runVariables()">Run</button>
+        <pre>
+// var - function scope (not recommended)
+var oldVar = "I'm var";
+
+// let - block scope, reassignable
+let count = 0;
+count = 1;
+
+// const - block scope, not reassignable
+const PI = 3.14159;
+const person = { name: "Hong Gildong" };
+person.name = "Kim Cheolsu"; // Object properties can be changed
+        </pre>
+    </div>
+
+    <!-- 2. Data types -->
+    <div class="section">
+        <h2>2. Data Types</h2>
+        <button onclick="runDataTypes()">Run</button>
+        <pre>
+// Primitive types
+let str = "string";          // String
+let num = 42;                // Number
+let float = 3.14;            // Number (no distinction from integers)
+let bool = true;             // Boolean
+let empty = null;            // Null
+let notDefined;              // Undefined
+let sym = Symbol("id");      // Symbol
+let big = 9007199254740991n; // BigInt
+
+// Reference types
+let obj = { key: "value" };  // Object
+let arr = [1, 2, 3];         // Array
+let func = function() {};    // Function
+        </pre>
+    </div>
+
+    <!-- 3. Operators -->
+    <div class="section">
+        <h2>3. Operators</h2>
+        <button onclick="runOperators()">Run</button>
+        <pre>
+// Arithmetic operators
+let a = 10, b = 3;
+// +, -, *, /, %, **
+
+// Comparison operators
+// ==, ===, !=, !==, <, >, <=, >=
+// == vs === (type comparison difference)
+
+// Logical operators
+// && (AND), || (OR), ! (NOT)
+
+// Ternary operator
+let result = a > b ? "greater" : "less";
+
+// Nullish coalescing (??)
+let value = null ?? "default value";
+
+// Optional chaining (?.)
+let obj = { nested: { value: 42 } };
+let safe = obj?.nested?.value;
+        </pre>
+    </div>
+
+    <!-- 4. Conditionals -->
+    <div class="section">
+        <h2>4. Conditionals</h2>
+        <button onclick="runConditions()">Run</button>
+        <pre>
+// if-else
+if (condition1) {
+    // execute
+} else if (condition2) {
+    // execute
+} else {
+    // execute
+}
+
+// switch
+switch (value) {
+    case 'A':
+        break;
+    case 'B':
+        break;
+    default:
+        break;
+}
+        </pre>
+    </div>
+
+    <!-- 5. Loops -->
+    <div class="section">
+        <h2>5. Loops</h2>
+        <button onclick="runLoops()">Run</button>
+        <pre>
+// for
+for (let i = 0; i < 5; i++) { }
+
+// while
+while (condition) { }
+
+// do-while
+do { } while (condition);
+
+// for...of (array iteration)
+for (const item of array) { }
+
+// for...in (object key iteration)
+for (const key in object) { }
+
+// forEach, map, filter, reduce
+        </pre>
+    </div>
+
+    <!-- 6. Functions -->
+    <div class="section">
+        <h2>6. Functions</h2>
+        <button onclick="runFunctions()">Run</button>
+        <pre>
+// Function declaration
+function greet(name) {
+    return `Hello, ${name}!`;
+}
+
+// Function expression
+const greet = function(name) {
+    return `Hello, ${name}!`;
+};
+
+// Arrow function
+const greet = (name) => `Hello, ${name}!`;
+
+// Default parameters
+const greet = (name = "Guest") => `Hello, ${name}!`;
+
+// Rest parameters
+const sum = (...numbers) => numbers.reduce((a, b) => a + b, 0);
+
+// Callback function
+setTimeout(() => console.log("After 1 second"), 1000);
+        </pre>
+    </div>
+
+    <!-- 7. Arrays -->
+    <div class="section">
+        <h2>7. Arrays</h2>
+        <button onclick="runArrays()">Run</button>
+        <pre>
+const fruits = ["Apple", "Banana", "Orange"];
+
+// Basic methods
+fruits.push("Grape");       // Add to end
+fruits.pop();               // Remove from end
+fruits.unshift("Strawberry"); // Add to beginning
+fruits.shift();             // Remove from beginning
+
+// Higher-order functions
+const numbers = [1, 2, 3, 4, 5];
+numbers.map(n => n * 2);           // [2, 4, 6, 8, 10]
+numbers.filter(n => n > 2);        // [3, 4, 5]
+numbers.find(n => n > 2);          // 3
+numbers.reduce((acc, n) => acc + n, 0); // 15
+numbers.every(n => n > 0);         // true
+numbers.some(n => n > 4);          // true
+        </pre>
+    </div>
+
+    <!-- 8. Objects -->
+    <div class="section">
+        <h2>8. Objects</h2>
+        <button onclick="runObjects()">Run</button>
+        <pre>
+// Object literal
+const person = {
+    name: "Hong Gildong",
+    age: 25,
+    greet() {
+        return `Hello, I'm ${this.name}.`;
+    }
+};
+
+// Property access
+person.name;      // Dot notation
+person["age"];    // Bracket notation
+
+// Destructuring assignment
+const { name, age } = person;
+
+// Spread operator
+const newPerson = { ...person, city: "Seoul" };
+
+// Object methods
+Object.keys(person);    // ["name", "age", "greet"]
+Object.values(person);  // ["Hong Gildong", 25, ...]
+Object.entries(person); // [["name", "Hong Gildong"], ...]
+        </pre>
+    </div>
+
+    <!-- 9. Classes -->
+    <div class="section">
+        <h2>9. Classes (ES6)</h2>
+        <button onclick="runClasses()">Run</button>
+        <pre>
+class Animal {
+    constructor(name) {
+        this.name = name;
+    }
+
+    speak() {
+        return `${this.name} makes a sound.`;
+    }
+}
+
+class Dog extends Animal {
+    constructor(name, breed) {
+        super(name);
+        this.breed = breed;
+    }
+
+    speak() {
+        return `${this.name} barks!`;
+    }
+}
+
+const dog = new Dog("Buddy", "Jindo");
+        </pre>
+    </div>
+
+    <!-- 10. Modules -->
+    <div class="section">
+        <h2>10. Modules (ES6)</h2>
+        <pre>
+// math.js
+export const PI = 3.14159;
+export function add(a, b) { return a + b; }
+export default class Calculator { }
+
+// main.js
+import Calculator, { PI, add } from './math.js';
+import * as math from './math.js';
+        </pre>
+        <p><em>Modules only work in a server environment.</em></p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
