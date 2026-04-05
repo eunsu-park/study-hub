@@ -589,3 +589,12 @@ topics:
     description:
       en: "Sun-Earth interactions, magnetosphere, GIC, forecasting"
       ko: "태양-지구 상호작용, 자기권, GIC, 우주기상 예보"
+
+  # ── Cross-topic showcase ──────────────────────────────────────────────────
+
+  Flagship:
+    tier: advanced
+    prerequisites: [Deep_Learning, Reinforcement_Learning]
+    description:
+      en: "From-scratch single-file implementations: autograd, GAN, RL, diffusion, VAE"
+      ko: "밑바닥 단일 파일 구현: 오토그래드, GAN, RL, 디퓨전, VAE"
