@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (14 topics)
+  # Tier 1 — Beginner (18 topics)
   Programming:
     tier: beginner
     description:
@@ -137,7 +137,31 @@ topics:
       en: "IDL fundamentals: arrays, plotting, FITS files, structures, and basic solar data handling"
       ko: "IDL 기초: 배열, 플로팅, FITS 파일, 구조체 및 기본 태양 데이터 처리"
 
-  # Tier 2 — Intermediate (11 topics)
+  Web_Development:
+    tier: beginner
+    description:
+      en: "HTML, CSS, JavaScript, TypeScript, accessibility, SEO, and web components"
+      ko: "HTML, CSS, JavaScript, TypeScript, 접근성, SEO 및 웹 컴포넌트"
+
+  Cloud_Computing:
+    tier: beginner
+    description:
+      en: "Cloud services and infrastructure (AWS, GCP)"
+      ko: "클라우드 서비스 및 인프라 (AWS, GCP)"
+
+  LaTeX:
+    tier: beginner
+    description:
+      en: "Document typesetting with LaTeX"
+      ko: "LaTeX을 활용한 문서 조판"
+
+  Claude_Ecosystem:
+    tier: beginner
+    description:
+      en: "Claude Code, MCP, Agent SDK, and AI tools"
+      ko: "Claude Code, MCP, Agent SDK 및 AI 도구"
+
+  # Tier 2 ��� Intermediate (11 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
