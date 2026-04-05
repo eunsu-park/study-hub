@@ -1,0 +1,37 @@
+# Training configuration for the churn prediction model.
+# Adapted from MLOps Lesson 12 §2.2.
+
+project:
+  name: churn-prediction
+  version: "1.0.0"
+
+data:
+  source: data/churn.parquet
+  validation_split: 0.2
+
+features:
+  store_path: ./features
+  entity: user_id
+  features:
+    - user_features:total_purchases
+    - user_features:avg_purchase_amount
+    - user_features:tenure_months
+    - user_features:days_since_last_purchase
+    - user_features:support_tickets
+    - user_features:age
+
+model:
+  type: random_forest
+  params:
+    n_estimators: 200
+    max_depth: 10
+    random_state: 42
+
+training:
+  experiment_name: churn-prediction
+  tracking_uri: http://localhost:5000
+
+quality_gates:
+  accuracy: 0.80
+  precision: 0.75
+  recall: 0.70

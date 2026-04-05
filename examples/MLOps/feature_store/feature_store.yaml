@@ -1,0 +1,16 @@
+# Feast Feature Store configuration.
+# Same schema as practical_project/ but standalone for L11 exercises.
+# Adapted from MLOps Lesson 11 §2.3.
+
+project: churn_prediction
+registry: data/registry.db
+provider: local
+
+offline_store:
+  type: file
+
+online_store:
+  type: redis
+  connection_string: localhost:6379
+
+entity_key_serialization_version: 2
