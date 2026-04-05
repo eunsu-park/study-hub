@@ -364,7 +364,7 @@ topics:
       en: "IoT and embedded systems"
       ko: "IoT 및 임베디드 시스템"
 
-  # Tier 3 — Advanced (16 topics)
+  # Tier 3 — Advanced (20 topics)
   Control_Theory:
     tier: advanced
     prerequisites: [Calculus_and_Differential_Equations]
@@ -385,6 +385,35 @@ topics:
     description:
       en: "Rendering pipeline, shading, ray tracing, WebGL, and modern graphics APIs"
       ko: "렌더링 파이프라인, 셰이딩, 레이 트레이싱, WebGL 및 현대 그래픽스 API"
+
+  MLOps:
+    tier: advanced
+    prerequisites: [Machine_Learning]
+    description:
+      en: "ML operations and model lifecycle"
+      ko: "ML 운영 및 모델 생명주기"
+
+  Prompt_Engineering:
+    tier: intermediate
+    prerequisites: [NLP_and_LLM]
+    description:
+      en: "Systematic prompt design, optimization, and evaluation for LLMs"
+      ko: "LLM을 위한 체계적 프롬프트 설계, 최적화 및 평가"
+
+  Interpretable_AI:
+    tier: advanced
+    prerequisites: [Machine_Learning, Deep_Learning]
+    description:
+      en: "Advanced model interpretability, gradient attribution, fairness, and AI governance"
+      ko: "고급 모델 해석 가능성, 그래디언트 어트리뷰션, 공정성 및 AI 거버넌스"
+
+  Probabilistic_Programming:
+    tier: advanced
+    prerequisites: [Probability_and_Statistics, Machine_Learning]
+    description:
+      en: "Bayesian modeling, MCMC, variational inference, Gaussian processes with PyMC/Stan/Pyro"
+      ko: "베이지안 모델링, MCMC, 변분 추론, 가우시안 프로세스 (PyMC/Stan/Pyro)"
+
   Algorithm:
     tier: advanced
     prerequisites: [Programming]
