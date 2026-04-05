@@ -62,8 +62,12 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [OS_Theory](./content/en/OS_Theory/00_Overview.md) | 프로세스, 스케줄링, 메모리, 파일시스템, 컨테이너 내부, eBPF | 27 |
 | [PostgreSQL](./content/en/PostgreSQL/00_Overview.md) | SQL, JSON, 복제, 파티셔닝, FTS, 보안/RLS | 20 |
 | [Probability_and_Statistics](./content/en/Probability_and_Statistics/00_Overview.md) | 확률론, 통계적 추론, 이산/연속 분포, 베이지안, 확률 과정 | 18 |
+| [Cryptography_Theory](./content/en/Cryptography_Theory/00_Overview.md) | 암호화 알고리즘: 대칭/비��칭, RSA, ECC, 격자, 포스트양자, ZKP | 14 |
+| [Formal_Languages](./content/en/Formal_Languages/00_Overview.md) | 오토마타 이론, 형식 언어, 튜링 머신, 계산 가능성 | 14 |
 | [Python_Advanced](./content/en/Python_Advanced/00_Overview.md) | Python 고급: 데코레이터, 메타클래스, async, 디스크립터, 함수형, 성능 최적화 | 14 |
 | [Rust_Advanced](./content/en/Rust_Advanced/00_Overview.md) | Rust 고급: unsafe, 매크로, FFI, WebAssembly, 임베디드, 네트워킹, 성능 | 14 |
+| [Security](./content/en/Security/00_Overview.md) | 사이버보안: CIA, TLS, 인증/인가, OWASP, 컨테이너 보안, 취약점 스캐너 | 16 |
+| [Software_Engineering](./content/en/Software_Engineering/00_Overview.md) | 소프트웨어 공학: SDLC, 애자일, UML, QA, CI/CD, 기술 문서 | 16 |
 
 ### Tier 3 — Advanced (고급)
 
