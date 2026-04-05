@@ -1,0 +1,580 @@
+% ============================================================================
+% thesis_template.tex - Minimal Thesis Template (book class)
+% ============================================================================
+% A minimal but complete thesis template demonstrating:
+%   - book document class with frontmatter / mainmatter / backmatter
+%   - Chapter-level organisation
+%   - Appendix
+%   - Bibliography with BibTeX
+%
+% Compilation:
+%   pdflatex thesis_template.tex
+%   bibtex   thesis_template
+%   pdflatex thesis_template.tex
+%   pdflatex thesis_template.tex
+%
+% (Or: latexmk -pdf thesis_template.tex)
+% ============================================================================
+
+\documentclass[
+    12pt,
+    a4paper,
+    twoside,           % mirror margins for binding
+    openright          % chapters start on right-hand (odd) pages
+]{book}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+
+% Layout
+\usepackage[
+    top=2.5cm,
+    bottom=2.5cm,
+    inner=3.5cm,       % extra space for binding
+    outer=2.5cm,
+    headheight=14pt
+]{geometry}
+
+% Headers and footers
+\usepackage{fancyhdr}
+
+% Typography
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing        % 1.5× line spacing throughout
+
+% Mathematics
+\usepackage{amsmath, amssymb, amsthm}
+
+% Figures and graphics
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% Tables
+\usepackage{booktabs}
+
+% Colors
+\usepackage{xcolor}
+\definecolor{thesisblue}{RGB}{0, 56, 101}   % Institutional dark blue
+
+% Cross-references
+\usepackage[
+    hidelinks,
+    pdftitle={On the Convergence of Iterative Methods for Sparse Linear Systems},
+    pdfauthor={Jane Doe},
+    pdfsubject={Mathematics Thesis},
+    pdfkeywords={numerical methods, sparse matrices, convergence, LaTeX}
+]{hyperref}
+\usepackage{cleveref}   % \cref, \Cref for smart cross-references
+
+% ============================================================================
+% THEOREM ENVIRONMENTS
+% ============================================================================
+
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
+
+% ============================================================================
+% CUSTOM COMMANDS
+% ============================================================================
+
+\newcommand{\R}{\mathbb{R}}           % Real numbers
+\newcommand{\N}{\mathbb{N}}           % Natural numbers
+\newcommand{\norm}[1]{\lVert #1 \rVert}  % Vector norm
+\newcommand{\abs}[1]{\lvert #1 \rvert}   % Absolute value
+
+% ============================================================================
+% PAGE STYLES
+% ============================================================================
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\small\textit{\nouppercase{\leftmark}}}   % chapter on even
+\fancyhead[RO]{\small\textit{\nouppercase{\rightmark}}}  % section on odd
+\fancyfoot[LE,RO]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyfoot[C]{\small\thepage}
+    \renewcommand{\headrulewidth}{0pt}
+}
+
+% ============================================================================
+% DOCUMENT
+% ============================================================================
+
+\begin{document}
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FRONT MATTER
+% Pages numbered with roman numerals (i, ii, iii, ...)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\frontmatter
+
+% --------------------------------------------------------------------------
+% Title Page
+% --------------------------------------------------------------------------
+\begin{titlepage}
+\centering
+
+\vspace*{2cm}
+
+{\color{thesisblue}\rule{\textwidth}{1pt}}
+
+\vspace{1.5cm}
+
+{\LARGE\bfseries On the Convergence of Iterative Methods\\[0.4em]
+for Sparse Linear Systems}
+
+\vspace{1.5cm}
+
+{\color{thesisblue}\rule{\textwidth}{1pt}}
+
+\vspace{2cm}
+
+{\large A thesis submitted in partial fulfilment of the requirements for\\[0.3em]
+the degree of \textbf{Doctor of Philosophy}}
+
+\vspace{2cm}
+
+{\Large Jane Doe}
+
+\vspace{1cm}
+
+{\large Department of Mathematics\\[0.2em]
+Example University\\[0.2em]
+\today}
+
+\vfill
+
+{\small Supervisor: Prof.\ John Smith \quad Co-supervisor: Dr.\ Alice Brown}
+
+\end{titlepage}
+
+% --------------------------------------------------------------------------
+% Declaration
+% --------------------------------------------------------------------------
+\chapter*{Declaration}
+\addcontentsline{toc}{chapter}{Declaration}
+
+I declare that this thesis is my own work and has not been submitted for any
+other degree or professional qualification. All sources are acknowledged in
+the bibliography.
+
+\vspace{2cm}
+\noindent
+\rule{6cm}{0.4pt}\\
+Jane Doe\\
+\today
+
+% --------------------------------------------------------------------------
+% Abstract
+% --------------------------------------------------------------------------
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This thesis investigates the convergence properties of preconditioned
+Krylov-subspace methods applied to large sparse linear systems arising from
+the discretisation of elliptic partial differential equations.  We derive
+tight convergence bounds for the Conjugate Gradient method under a class of
+incomplete Cholesky preconditioners, and propose a hierarchical coarsening
+strategy that reduces the number of iterations by up to 40\% on a benchmark
+set of 50 test matrices.
+
+\medskip
+\noindent\textbf{Keywords:} sparse linear systems, Krylov-subspace methods,
+preconditioning, convergence analysis, incomplete Cholesky
+
+% --------------------------------------------------------------------------
+% Acknowledgements
+% --------------------------------------------------------------------------
+\chapter*{Acknowledgements}
+\addcontentsline{toc}{chapter}{Acknowledgements}
+
+I am deeply grateful to my supervisor Prof.\ John Smith for his guidance,
+patience, and sharp mathematical insight throughout this project.  I thank
+Dr.\ Alice Brown for many stimulating discussions, and the Numerical Analysis
+Group for creating a wonderfully collaborative environment.
+
+Financial support from the Example Science Foundation (grant ES-12345) is
+gratefully acknowledged.
+
+% --------------------------------------------------------------------------
+% Table of contents, figures, tables
+% --------------------------------------------------------------------------
+\tableofcontents
+\listoffigures
+\listoftables
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% MAIN MATTER
+% Pages numbered with arabic numerals (1, 2, 3, ...)
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\mainmatter
+
+% --------------------------------------------------------------------------
+% Chapter 1 — Introduction
+% --------------------------------------------------------------------------
+
+\chapter{Introduction}
+\label{chap:intro}
+
+Large sparse linear systems of the form
+\begin{equation}
+    \label{eq:linear_system}
+    A\mathbf{x} = \mathbf{b}, \quad A \in \R^{n \times n}, \quad
+    \mathbf{b} \in \R^{n},
+\end{equation}
+arise ubiquitously in the numerical solution of partial differential
+equations (PDEs), circuit simulation, and structural mechanics.  Direct
+methods based on Gaussian elimination are prohibitively expensive when $n$
+exceeds~$10^6$; iterative methods that exploit sparsity are then the only
+viable approach \cite{saad2003iterative}.
+
+\section{Motivation}
+\label{sec:intro_motivation}
+
+The central challenge is to accelerate convergence by constructing a
+preconditioner $M \approx A$ such that the preconditioned system
+$M^{-1}A\mathbf{x} = M^{-1}\mathbf{b}$ has a favourable eigenvalue
+distribution.  \Cref{chap:methods} reviews classical preconditioners;
+\cref{chap:results} presents the new hierarchical approach.
+
+\section{Contributions}
+\label{sec:intro_contributions}
+
+The main contributions of this thesis are:
+\begin{enumerate}
+    \item A unified convergence framework for the class of $\ell$-level
+          incomplete Cholesky preconditioners (\cref{thm:convergence_bound}).
+    \item A hierarchical coarsening algorithm (HC-IC) that adaptively selects
+          the fill-in level based on local spectral estimates.
+    \item A systematic numerical comparison on the SuiteSparse Matrix
+          Collection, demonstrating up to 40\% iteration reduction.
+\end{enumerate}
+
+\section{Outline}
+\label{sec:intro_outline}
+
+The remainder of this thesis is organised as follows.
+\Cref{chap:background} reviews the mathematical background.
+\Cref{chap:methods} develops the new preconditioner.
+\Cref{chap:results} reports numerical experiments.
+\Cref{chap:conclusion} concludes and suggests future directions.
+
+% --------------------------------------------------------------------------
+% Chapter 2 — Background
+% --------------------------------------------------------------------------
+
+\chapter{Background}
+\label{chap:background}
+
+\section{Sparse Matrix Storage}
+\label{sec:storage}
+
+A matrix $A$ is \emph{sparse} if the number of non-zero entries
+$\mathrm{nnz}(A) \ll n^2$.  Common storage formats include:
+
+\begin{description}
+    \item[CSR (Compressed Sparse Row)] Three arrays store values, column
+        indices, and row pointers. Row operations are cache-efficient.
+    \item[CSC (Compressed Sparse Column)] The column-oriented analogue of CSR.
+        Preferred for column operations (e.g., in Fortran-ordered solvers).
+    \item[COO (Coordinate)] Explicit $(i, j, v)$ triples; simple but slower
+        for arithmetic.
+\end{description}
+
+\section{Krylov-Subspace Methods}
+\label{sec:krylov}
+
+Given an initial guess $\mathbf{x}_0$, the residual is
+$\mathbf{r}_0 = \mathbf{b} - A\mathbf{x}_0$.  The $k$-th Krylov subspace is
+\[
+    \mathcal{K}_k(A, \mathbf{r}_0)
+    = \mathrm{span}\{\mathbf{r}_0,\, A\mathbf{r}_0,\, \ldots,\,
+                     A^{k-1}\mathbf{r}_0\}.
+\]
+The Conjugate Gradient (CG) method is applicable when $A$ is
+symmetric positive definite (SPD); GMRES is used for non-symmetric systems.
+
+\begin{theorem}[CG Convergence Bound]
+    \label{thm:convergence_bound}
+    Let $A$ be SPD with condition number $\kappa(A)$.  After $k$ CG
+    iterations,
+    \[
+        \frac{\norm{\mathbf{e}_k}_A}{\norm{\mathbf{e}_0}_A}
+        \leq 2\left(\frac{\sqrt{\kappa(A)}-1}{\sqrt{\kappa(A)}+1}\right)^k,
+    \]
+    where $\norm{\mathbf{v}}_A = \sqrt{\mathbf{v}^\top A\mathbf{v}}$ denotes
+    the $A$-norm.
+\end{theorem}
+
+\section{Preconditioning}
+\label{sec:preconditioning}
+
+A preconditioner $M$ approximates $A$ while being cheap to apply.  The
+\emph{incomplete LU (ILU)} factorisation \cite{meijerink1977iterative}
+computes $A \approx LU$ by ignoring fill-in outside a prescribed sparsity
+pattern.  The \emph{incomplete Cholesky (IC)} factorisation is the SPD
+analogue.
+
+% --------------------------------------------------------------------------
+% Chapter 3 — Methods
+% --------------------------------------------------------------------------
+
+\chapter{Methods}
+\label{chap:methods}
+
+\section{Hierarchical Coarsening Algorithm}
+\label{sec:hc_algorithm}
+
+The proposed HC-IC algorithm proceeds in two phases:
+
+\begin{enumerate}
+    \item \textbf{Coarsening.}  Construct a sequence of coarser graphs
+          $G_0 \supset G_1 \supset \cdots \supset G_L$ using a maximal
+          independent set (MIS) criterion.
+    \item \textbf{Factorisation.}  Apply IC(0) on $G_L$ and transfer the
+          factorisation upward, adding fill-in guided by spectral estimates
+          at each level.
+\end{enumerate}
+
+\cref{alg:hcic} gives the pseudocode.
+
+\begin{figure}[h]
+\centering
+% Placeholder box for an algorithm/diagram:
+\fbox{\parbox{0.8\textwidth}{\centering\vspace{1cm}
+\textit{[Algorithm pseudocode or diagram would appear here.]}
+\vspace{1cm}}}
+\caption{Pseudocode for the HC-IC preconditioner construction.}
+\label{alg:hcic}
+\end{figure}
+
+\section{Convergence Analysis}
+\label{sec:convergence_analysis}
+
+\begin{lemma}
+    \label{lem:eigenvalue_clustering}
+    For a matrix $A$ with hierarchically coarsened IC preconditioner $M$,
+    the eigenvalues of $M^{-1}A$ cluster in the interval $[1-\epsilon, 1+\epsilon]$
+    for a constant $\epsilon < 1$ that depends on the coarsening ratio.
+\end{lemma}
+
+\begin{proof}
+    By induction on the coarsening level.  At level 0, $M = A$ and
+    $\epsilon = 0$.  At each subsequent level, the additional fill-in
+    reduces the residual factorisation error by a factor bounded by the
+    spectral gap of the coarse grid operator.  The full proof follows
+    the argument of \cite{vassilevski2008multilevel}.
+\end{proof}
+
+% --------------------------------------------------------------------------
+% Chapter 4 — Numerical Results
+% --------------------------------------------------------------------------
+
+\chapter{Numerical Results}
+\label{chap:results}
+
+\section{Test Problems}
+\label{sec:test_problems}
+
+We selected 50 SPD matrices from the SuiteSparse Matrix Collection, spanning
+dimensions from $10^4$ to $10^7$ and condition numbers from $10^2$ to $10^9$.
+\Cref{tab:test_matrices} summarises three representative cases.
+
+\begin{table}[h]
+\centering
+\caption{Representative test matrices from SuiteSparse.}
+\label{tab:test_matrices}
+\begin{tabular}{lrrrc}
+\toprule
+\textbf{Matrix} & \boldmath$n$ & \boldmath$\mathrm{nnz}(A)$ & \boldmath$\kappa(A)$ & \textbf{Origin} \\
+\midrule
+\texttt{thermal2}   & 1\,228\,045 & 8\,580\,313  & $1.2 \times 10^4$ & Heat transfer FEM \\
+\texttt{ecology2}   & 999\,999    & 4\,995\,991  & $6.7 \times 10^5$ & Ecological diffusion \\
+\texttt{G3\_circuit} & 1\,585\,478 & 7\,660\,826 & $3.8 \times 10^8$ & Circuit simulation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Performance Comparison}
+\label{sec:performance}
+
+\Cref{tab:iterations} compares iteration counts for IC(0), IC(1), and the
+proposed HC-IC preconditioner with CG on the three test problems.
+
+\begin{table}[h]
+\centering
+\caption{CG iteration counts with different preconditioners.
+         Convergence tolerance: $\norm{\mathbf{r}_k}/\norm{\mathbf{r}_0} \leq 10^{-8}$.}
+\label{tab:iterations}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Matrix} & \textbf{IC(0)} & \textbf{IC(1)} & \textbf{HC-IC (ours)} \\
+\midrule
+\texttt{thermal2}    & 312 & 187 & \textbf{134} \\
+\texttt{ecology2}    & 841 & 503 & \textbf{298} \\
+\texttt{G3\_circuit} & --- & --- & \textbf{712} \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize --- = did not converge within 2000 iterations.}
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+\label{sec:discussion}
+
+HC-IC consistently reduces iteration counts compared with flat IC(0) and
+IC(1), with the largest gains for ill-conditioned problems such as
+\texttt{G3\_circuit}.  The overhead per iteration is approximately 15\%
+higher than IC(0), but total solve time is still reduced because the
+iteration count reduction dominates.
+
+% --------------------------------------------------------------------------
+% Chapter 5 — Conclusion
+% --------------------------------------------------------------------------
+
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+\section{Summary}
+\label{sec:summary}
+
+This thesis has presented a hierarchical coarsening strategy for incomplete
+Cholesky preconditioning of large sparse SPD systems.  The key results are:
+
+\begin{itemize}
+    \item A rigorous convergence framework (\cref{thm:convergence_bound,lem:eigenvalue_clustering})
+    \item The HC-IC algorithm (\cref{sec:hc_algorithm}) that reduces CG
+          iterations by 20--40\% on benchmark problems
+    \item Open-source implementation available at
+          \url{https://github.com/example/hcic}
+\end{itemize}
+
+\section{Future Work}
+\label{sec:future}
+
+Promising directions for future investigation include:
+\begin{enumerate}
+    \item Extension to non-symmetric systems using HC-ILU
+    \item GPU acceleration of the coarsening and solve phases
+    \item Adaptive tolerance selection based on online condition number
+          estimates
+\end{enumerate}
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% BACK MATTER
+% Page numbers continue from main matter
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\backmatter
+
+% --------------------------------------------------------------------------
+% Appendices
+% --------------------------------------------------------------------------
+
+\appendix
+
+\chapter{Proof of Lemma~\ref{lem:eigenvalue_clustering}}
+\label{app:proof}
+
+This appendix gives the full inductive proof of
+\cref{lem:eigenvalue_clustering} omitted from the main text.
+
+\section{Base Case}
+
+At level $L$ (coarsest grid), IC is applied with zero fill-in.  The
+eigenvalues of $M_L^{-1}A_L$ satisfy the claimed bound with
+$\epsilon_L = \sqrt{1 - \lambda_{\min}(M_L^{-1}A_L)}$.
+
+\section{Inductive Step}
+
+Assume the bound holds at level $\ell+1$.  The level-$\ell$ preconditioner
+is constructed by injecting fill-in based on spectral estimates from
+level~$\ell+1$.  By the Weyl perturbation theorem, the eigenvalue
+perturbation at level~$\ell$ satisfies $\delta\lambda \leq \rho \cdot
+\epsilon_{\ell+1}$ for a contraction factor $\rho < 1$ that depends only
+on the coarsening ratio.  Setting $\epsilon_\ell = \rho^{L-\ell}\epsilon_L$
+completes the induction. \hfill$\square$
+
+\chapter{Notation}
+\label{app:notation}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$A \in \R^{n \times n}$     & Square real coefficient matrix \\
+$\mathbf{x}, \mathbf{b} \in \R^n$ & Solution and right-hand side vectors \\
+$\kappa(A) = \sigma_{\max}/\sigma_{\min}$ & Spectral condition number \\
+$\norm{\cdot}$              & Euclidean ($\ell_2$) norm unless noted \\
+$\norm{\cdot}_A$            & $A$-energy norm: $\norm{\mathbf{v}}_A = \sqrt{\mathbf{v}^\top A \mathbf{v}}$ \\
+$\mathrm{nnz}(A)$           & Number of non-zero entries in $A$ \\
+$\mathcal{K}_k(A,\mathbf{r})$ & Krylov subspace of degree $k$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% --------------------------------------------------------------------------
+% Bibliography
+% --------------------------------------------------------------------------
+
+\bibliographystyle{plain}
+\bibliography{thesis_refs}
+
+% If you do not have a .bib file, replace the two lines above with:
+%
+% \begin{thebibliography}{9}
+%
+% \bibitem{saad2003iterative}
+% Yousef Saad.
+% \textit{Iterative Methods for Sparse Linear Systems}.
+% SIAM, 2nd edition, 2003.
+%
+% \bibitem{meijerink1977iterative}
+% J.~A. Meijerink and H.~A. van~der Vorst.
+% An iterative solution method for linear equation systems of which the
+% coefficient matrix is a symmetric M-matrix.
+% \textit{Mathematics of Computation}, 31(137):148--162, 1977.
+%
+% \bibitem{vassilevski2008multilevel}
+% Panayot~S. Vassilevski.
+% \textit{Multilevel Block Factorisation Preconditioners}.
+% Springer, 2008.
+%
+% \end{thebibliography}
+
+\end{document}
+
+% ============================================================================
+% COMPILATION NOTES
+% ============================================================================
+% Full sequence (with BibTeX):
+%   pdflatex thesis_template.tex
+%   bibtex   thesis_template
+%   pdflatex thesis_template.tex
+%   pdflatex thesis_template.tex
+%
+% With latexmk (recommended):
+%   latexmk -pdf thesis_template.tex
+%
+% If thesis_refs.bib does not exist, use the inline thebibliography block
+% in the bibliography section above instead.
+% ============================================================================

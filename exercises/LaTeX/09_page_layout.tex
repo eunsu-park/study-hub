@@ -1,0 +1,372 @@
+% Exercises for Lesson 09: Page Layout & Typography
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/09_page_layout.tex
+
+\documentclass[12pt, a4paper, twoside]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage[
+  top=2.5cm,
+  bottom=3cm,
+  left=3.5cm,
+  right=2cm
+]{geometry}
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{lipsum}
+
+\title{Exercises for Lesson 09: Page Layout \& Typography}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Custom Margins ===
+% Problem: A4, top 2.5cm, bottom 3cm, left 3.5cm, right 2cm,
+% title page, section with text.
+
+\section*{Exercise 1: Custom Margins}
+
+This document uses the custom margins specified in the exercise:
+\begin{verbatim}
+\usepackage[
+  top=2.5cm,
+  bottom=3cm,
+  left=3.5cm,  % extra for binding
+  right=2cm
+]{geometry}
+\end{verbatim}
+
+The title page has already been printed above.  The margins apply to all
+pages.  Below is some sample text to demonstrate the layout:
+
+\lipsum[1]
+
+% === Exercise 2: Headers and Footers ===
+% Problem: Two-sided, page numbers on outer corners, section in inner header,
+% title in outer header, author in footer center, date on outer corners,
+% plain first page.
+
+\section*{Exercise 2: Headers and Footers}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{Page Layout Exercises}     % Even left = outer header
+\fancyhead[RO]{Page Layout Exercises}     % Odd right = outer header
+\fancyhead[RE]{\leftmark}                 % Even right = inner header (section)
+\fancyhead[LO]{\leftmark}                 % Odd left = inner header (section)
+\fancyfoot[C]{Study Project}              % Center footer: author
+\fancyfoot[LE,RO]{\thepage}              % Outer corners: page number
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+The headers and footers are now configured.  On even (left) pages the title
+appears on the left, and on odd (right) pages it appears on the right.
+The section name appears on the inner side.
+
+\begin{verbatim}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{Document Title}
+\fancyhead[RO]{Document Title}
+\fancyhead[RE]{\leftmark}
+\fancyhead[LO]{\leftmark}
+\fancyfoot[C]{Author Name}
+\fancyfoot[LE,RO]{\thepage}
+\end{verbatim}
+
+\lipsum[2]
+
+% === Exercise 3: Multi-Column Newsletter ===
+% Problem: Two-column layout, header spanning both, section headers spanning,
+% column breaks, vertical line.
+
+\section*{Exercise 3: Multi-Column Newsletter}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage{multicol}
+\setlength{\columnseprule}{0.4pt}  % vertical line
+
+\begin{document}
+\begin{center}
+  {\LARGE\bfseries The LaTeX Times}\\[0.3cm]
+  {\large Volume 1, Issue 1}
+\end{center}
+
+\begin{multicols}{2}
+\section*{Breaking News}
+Lorem ipsum dolor sit amet ...
+
+\columnbreak
+
+\section*{Featured Article}
+More text here ...
+\end{multicols}
+\end{document}
+\end{verbatim}
+
+\setlength{\columnseprule}{0.4pt}
+
+\begin{center}
+  {\LARGE\bfseries The \LaTeX{} Times}\\[0.3cm]
+  {\large Volume 1, Issue 1 --- \today}
+\end{center}
+
+\begin{multicols}{2}
+\subsection*{Breaking News}
+\lipsum[3]
+
+\columnbreak
+
+\subsection*{Featured Article}
+\lipsum[4]
+\end{multicols}
+
+\setlength{\columnseprule}{0pt}
+
+% === Exercise 4: Academic Thesis Layout ===
+% Problem: Roman numerals for front matter, arabic for main, custom chapter
+% style, different odd/even headers, 1.5 spacing, widow/orphan prevention.
+
+\section*{Exercise 4: Academic Thesis Layout}
+
+\begin{verbatim}
+\documentclass[12pt, a4paper, twoside]{report}
+\usepackage[top=2.5cm,bottom=2.5cm,left=3cm,right=2.5cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{microtype}
+
+% Widow/orphan prevention
+\widowpenalty=10000
+\clubpenalty=10000
+
+\onehalfspacing
+
+\begin{document}
+
+% Front matter: roman numerals
+\pagenumbering{roman}
+\begin{abstract} ... \end{abstract}
+\tableofcontents
+\listoffigures
+\listoftables
+
+% Main matter: arabic numerals
+\pagenumbering{arabic}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\leftmark}   % chapter on even
+\fancyhead[RO]{\rightmark}  % section on odd
+\fancyfoot[LE,RO]{\thepage}
+
+\chapter{Introduction}
+Text with 1.5 line spacing ...
+
+\chapter{Methods}
+More text ...
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 5: Technical Manual ===
+% Problem: Custom paper 7x9 in, narrow margins, headers/footers,
+% mixed column layouts, landscape page, parskip.
+
+\section*{Exercise 5: Technical Manual}
+
+\begin{verbatim}
+\documentclass[11pt]{article}
+\usepackage[
+  paperwidth=7in,
+  paperheight=9in,
+  margin=0.75in
+]{geometry}
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage{pdflscape}
+
+% No indent, space between paragraphs
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.8em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Technical Manual}
+\fancyhead[C]{\rightmark}
+\fancyhead[R]{\thepage}
+\fancyfoot[L]{v2.1}
+\fancyfoot[R]{\copyright\ 2024 ACME Corp.}
+
+\begin{document}
+\section{Overview}
+Single-column text ...
+
+\section{API Reference}
+\begin{multicols}{2}
+Two-column reference entries ...
+\end{multicols}
+
+\begin{landscape}
+\section{System Diagram}
+Wide diagram on landscape page ...
+\end{landscape}
+\end{document}
+\end{verbatim}
+
+% === Exercise 6: Professional Report ===
+% Problem: Letter paper, fancy headers, different styles for title/TOC/content,
+% roman/arabic paging, double/single spacing, multi-column refs.
+
+\section*{Exercise 6: Professional Report}
+
+\begin{verbatim}
+\documentclass[12pt]{report}
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{multicol}
+\usepackage{graphicx}
+
+\begin{document}
+
+% Title page: no page number
+\thispagestyle{empty}
+\begin{center}
+  \vspace*{3cm}
+  % \includegraphics[width=3cm]{logo.png}
+  \rule{3cm}{3cm} % placeholder
+  \\[2cm]
+  {\LARGE\bfseries Annual Report 2024}\\[1cm]
+  {\large ACME Corporation}\\[3cm]
+\end{center}
+\clearpage
+
+% TOC: roman numerals
+\pagenumbering{roman}
+\singlespacing
+\tableofcontents
+\clearpage
+
+% Content: arabic, double-spaced
+\pagenumbering{arabic}
+\doublespacing
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\rule{1cm}{1cm}} % logo placeholder
+\fancyhead[C]{ACME Corporation}
+\fancyhead[R]{Annual Report}
+\fancyfoot[C]{\thepage}
+
+\chapter{Executive Summary}
+Content here ...
+
+\chapter{Financial Results}
+More content ...
+
+% References: single-spaced, two-column
+\singlespacing
+\begin{multicols}{2}
+\begin{thebibliography}{9}
+\bibitem{ref1} Reference 1.
+\bibitem{ref2} Reference 2.
+\end{thebibliography}
+\end{multicols}
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 7: Page Style Switching ===
+% Problem: Three custom page styles, switching between them.
+
+\section*{Exercise 7: Page Style Switching}
+
+\begin{verbatim}
+\documentclass{report}
+\usepackage{fancyhdr}
+
+% Style 1: Minimal
+\fancypagestyle{minimal}{
+  \fancyhf{}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
+
+% Style 2: Standard
+\fancypagestyle{standard}{
+  \fancyhf{}
+  \fancyhead[L]{\leftmark}
+  \fancyhead[R]{\thepage}
+  \renewcommand{\headrulewidth}{0.4pt}
+}
+
+% Style 3: Detailed
+\fancypagestyle{detailed}{
+  \fancyhf{}
+  \fancyhead[L]{Report Title}
+  \fancyhead[C]{\leftmark}
+  \fancyhead[R]{\rightmark}
+  \fancyfoot[L]{Draft v1.0}
+  \fancyfoot[C]{\thepage}
+  \fancyfoot[R]{\today}
+  \renewcommand{\headrulewidth}{0.4pt}
+  \renewcommand{\footrulewidth}{0.4pt}
+}
+
+\begin{document}
+\pagestyle{minimal}
+\chapter{Preface}
+Minimal style here ...
+
+\pagestyle{standard}
+\chapter{Introduction}
+Standard style here ...
+
+\pagestyle{detailed}
+\chapter{Methods}
+Detailed style here ...
+\end{document}
+\end{verbatim}
+
+% === Exercise 8: Layout Troubleshooting ===
+% Problem: Identify and fix issues in the given code.
+
+\section*{Exercise 8: Layout Troubleshooting}
+
+\textbf{Issues in the original code:}
+\begin{enumerate}
+  \item \verb|margin=0.5in| -- too narrow for readability
+  \item Missing \verb|\fancyhf{}| -- old headers/footers not cleared
+  \item Header text too long -- will overflow
+  \item \verb|\parindent{2in}| -- excessive indentation
+  \item \verb|\linespread{3}| -- excessive line spacing
+\end{enumerate}
+
+\textbf{Fixed version:}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage[margin=1in]{geometry}       % Fix: reasonable margins
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}                              % Fix: clear defaults
+\fancyhead[L]{Report Title}            % Fix: shorter header
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\parindent}{1.5em}          % Fix: standard indent
+\linespread{1.2}                        % Fix: reasonable spacing
+
+\begin{document}
+\section{Introduction}
+This is a properly formatted document with reasonable margins,
+clear headers, standard indentation, and comfortable line spacing.
+\end{document}
+\end{verbatim}
+
+\end{document}

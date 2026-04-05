@@ -1,0 +1,446 @@
+% ============================================================================
+% cross_references_demo.tex - Cross-Referencing in LaTeX
+% ============================================================================
+% Demonstrates the full range of cross-reference commands:
+%   \label / \ref         — basic references
+%   \autoref              — type-aware references (hyperref)
+%   \cref / \Cref         — smart references (cleveref)
+%   \nameref              — reference by name/title
+%   \pageref              — reference by page number
+%
+% Targets: sections, equations, figures, tables, theorems, listings
+%
+% Compilation:
+%   pdflatex cross_references_demo.tex
+%   pdflatex cross_references_demo.tex   (second pass resolves labels)
+% ============================================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+
+% Mathematics
+\usepackage{amsmath, amssymb, amsthm}
+
+% Figures and tables
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+
+% Code listings (used as a reference target)
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small, frame=single, numbers=left,
+        numberstyle=\tiny\color{gray}, breaklines=true}
+
+% Colors
+\usepackage{xcolor}
+
+% --- hyperref must be loaded BEFORE cleveref ---
+\usepackage[
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=teal,
+    urlcolor=cyan,
+    pdftitle={Cross-Referencing in LaTeX},
+    pdfauthor={LaTeX Student}
+]{hyperref}
+
+% --- cleveref: context-aware cross-references ---
+% Must be loaded AFTER hyperref.
+\usepackage{cleveref}
+% Customise cleveref labels (optional):
+\crefname{table}{Table}{Tables}
+\crefname{figure}{Figure}{Figures}
+\crefname{equation}{Equation}{Equations}
+\crefname{section}{Section}{Sections}
+\crefname{listing}{Listing}{Listings}
+
+% ============================================================================
+% THEOREM ENVIRONMENTS (needed so cleveref knows their type)
+% ============================================================================
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+
+\title{\textbf{Cross-Referencing in \LaTeX}\\[0.4em]
+       \large \texttt{\textbackslash ref}, \texttt{\textbackslash autoref},
+       \texttt{\textbackslash cref}, \texttt{\textbackslash nameref},
+       \texttt{\textbackslash pageref}}
+\author{LaTeX Student}
+\date{\today}
+
+% ============================================================================
+% DOCUMENT
+% ============================================================================
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================================
+% SECTION 1: INTRODUCTION
+% ============================================================================
+
+\section{Introduction}
+\label{sec:intro}
+
+Cross-referencing ties different parts of a document together.  \LaTeX's
+\verb|\label| / \verb|\ref| pair provides the foundation; the
+\texttt{hyperref} package turns every reference into a clickable hyperlink
+and adds \verb|\autoref|; the \texttt{cleveref} package adds \verb|\cref|
+and \verb|\Cref| which automatically prepend the correct type word (Section,
+Figure, Table, \ldots).
+
+\medskip
+\noindent This document defines one label in each of the following
+categories and then demonstrates every reference command against each label:
+\begin{enumerate}
+    \item A section (\cref{sec:targets})
+    \item A numbered equation (\cref{eq:euler})
+    \item A figure (\cref{fig:parabola})
+    \item A table (\cref{tab:data})
+    \item A theorem (\cref{thm:pythagoras})
+    \item A code listing (\cref{lst:fibonacci})
+\end{enumerate}
+
+% ============================================================================
+% SECTION 2: LABEL TARGETS
+% ============================================================================
+
+\section{Label Targets}
+\label{sec:targets}
+
+This section defines all the \verb|\label| anchors that the later sections
+will reference.
+
+\subsection{An Equation}
+\label{subsec:eq}
+
+Euler's identity is arguably the most beautiful equation in mathematics:
+\begin{equation}
+    \label{eq:euler}
+    e^{i\pi} + 1 = 0.
+\end{equation}
+
+The quadratic formula,
+\begin{equation}
+    \label{eq:quadratic}
+    x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a},
+\end{equation}
+solves any polynomial $ax^2 + bx + c = 0$.
+
+An aligned multi-line equation:
+\begin{align}
+    (a+b)^2 &= a^2 + 2ab + b^2,  \label{eq:expand_sq} \\
+    (a-b)^2 &= a^2 - 2ab + b^2.  \label{eq:expand_diff}
+\end{align}
+
+\subsection{A Figure}
+\label{subsec:fig}
+
+\begin{figure}[h]
+\centering
+% Inline TikZ parabola (no external file needed)
+\begin{minipage}{0.5\textwidth}
+\centering
+\setlength{\unitlength}{1cm}
+\begin{picture}(6,5)
+    % Axes
+    \put(0,2.5){\vector(1,0){6}}
+    \put(3,0){\vector(0,1){5}}
+    % Curve: y = (x-3)^2 / 2 + 0.5, x from 0.5 to 5.5
+    % Approximated with a Bezier via multiple line segments:
+    \multiput(0.6,4.5)(0.3,-0.3){4}{\line(3,-2){0.3}}
+    \multiput(1.8,3.3)(0.3,-0.15){3}{\line(2,-1){0.3}}
+    \put(2.7,2.85){\line(1,0){0.6}}
+    \multiput(3.3,2.85)(0.3,0.15){3}{\line(2,1){0.3}}
+    \multiput(4.2,3.3)(0.3,0.3){4}{\line(3,2){0.3}}
+    % Labels
+    \put(5.8,2.3){\small$x$}
+    \put(3.1,4.8){\small$y$}
+    \put(3.3,2.7){\small$V$}
+\end{picture}
+\end{minipage}
+\caption{Parabola $y = (x-x_0)^2/(2p) + y_0$ with vertex $V$.}
+\label{fig:parabola}
+\end{figure}
+
+\subsection{A Table}
+\label{subsec:tab}
+
+\begin{table}[h]
+\centering
+\caption{Summary of cross-reference commands and their packages.}
+\label{tab:data}
+\begin{tabular}{lll}
+\toprule
+\textbf{Command} & \textbf{Package} & \textbf{Output example} \\
+\midrule
+\verb|\ref{label}|        & \textit{kernel}      & 2 \\
+\verb|\autoref{label}|    & \texttt{hyperref}    & Section~2 \\
+\verb|\cref{label}|       & \texttt{cleveref}    & section~2 \\
+\verb|\Cref{label}|       & \texttt{cleveref}    & Section~2 \\
+\verb|\nameref{label}|    & \texttt{hyperref}    & Label Targets \\
+\verb|\pageref{label}|    & \textit{kernel}      & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{A Theorem}
+\label{subsec:thm}
+
+\begin{theorem}[Pythagorean Theorem]
+\label{thm:pythagoras}
+In any right triangle with legs $a$, $b$ and hypotenuse $c$:
+\[
+    a^2 + b^2 = c^2.
+\]
+\end{theorem}
+
+\begin{lemma}
+\label{lem:square_sum}
+For positive integers $a < b < c$ with $a^2 + b^2 = c^2$, both $a$ and $b$
+cannot be odd simultaneously.
+\end{lemma}
+
+\subsection{A Code Listing}
+\label{subsec:lst}
+
+\begin{lstlisting}[language=Python, caption={Iterative Fibonacci sequence generator.}, label=lst:fibonacci]
+def fibonacci(n):
+    """Yield the first n Fibonacci numbers."""
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+
+print(list(fibonacci(10)))
+# Output: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+\end{lstlisting}
+
+% ============================================================================
+% SECTION 3: REFERENCE COMMANDS
+% ============================================================================
+
+\section{Reference Commands}
+\label{sec:refcmds}
+
+\subsection{\texttt{\textbackslash ref} — Basic Reference}
+\label{subsec:ref}
+
+\verb|\ref{label}| produces only the number of the referenced item, with no
+type word.  You must write the type word yourself.
+
+\begin{itemize}
+    \item Section~\ref{sec:targets} contains all label targets.
+    \item Equation~(\ref{eq:euler}) is Euler's identity.
+    \item Figure~\ref{fig:parabola} shows a parabola.
+    \item Table~\ref{tab:data} lists the reference commands.
+    \item Theorem~\ref{thm:pythagoras} is the Pythagorean theorem.
+    \item Listing~\ref{lst:fibonacci} shows a Fibonacci generator.
+\end{itemize}
+
+\noindent\textbf{Best practice:} use a non-breaking space \verb|~| between
+the type word and \verb|\ref| to prevent line breaks inside a reference.
+
+\subsection{\texttt{\textbackslash autoref} — Hyperref's Type-Aware Reference}
+\label{subsec:autoref}
+
+\verb|\autoref{label}| automatically prepends the type word by inspecting
+the context in which \verb|\label| was used.  It uses hyperref's internal
+mapping of label prefixes to type strings.
+
+\begin{itemize}
+    \item \autoref{sec:targets} (section — uses \texttt{sec:} prefix)
+    \item \autoref{eq:euler} (equation — uses \texttt{eq:} prefix)
+    \item \autoref{fig:parabola} (figure — uses \texttt{fig:} prefix)
+    \item \autoref{tab:data} (table — uses \texttt{tab:} prefix)
+    \item \autoref{thm:pythagoras} (theorem — uses \texttt{thm:} prefix)
+    \item \autoref{lst:fibonacci} (listing — uses \texttt{lst:} prefix)
+\end{itemize}
+
+\noindent\textbf{Limitation:} \verb|\autoref| deduces the type from the
+label prefix, so you must use consistent prefixes (\texttt{sec:},
+\texttt{eq:}, \texttt{fig:}, \texttt{tab:}, \ldots).  It also cannot
+produce \textit{plural} forms automatically.
+
+\subsection{\texttt{\textbackslash cref} and \texttt{\textbackslash Cref} — cleveref}
+\label{subsec:cref}
+
+\texttt{cleveref}'s \verb|\cref| is the most powerful option.  It:
+\begin{itemize}
+    \item Automatically prepends the correct type word (\verb|\cref| in
+          lowercase, \verb|\Cref| with a capital first letter)
+    \item Handles \textbf{multiple references} in one command, with smart
+          range compression
+    \item Works regardless of label prefixes
+\end{itemize}
+
+\subsubsection{Single References}
+
+\begin{itemize}
+    \item \cref{sec:targets} \quad (lowercase, mid-sentence)
+    \item \Cref{sec:targets} \quad (capitalised, sentence-initial)
+    \item \cref{eq:euler}
+    \item \cref{fig:parabola}
+    \item \cref{tab:data}
+    \item \cref{thm:pythagoras}
+    \item \cref{lst:fibonacci}
+\end{itemize}
+
+\subsubsection{Multiple References}
+
+\begin{itemize}
+    \item Two equations: \cref{eq:euler,eq:quadratic}
+    \item Three equations: \cref{eq:euler,eq:quadratic,eq:expand_sq}
+    \item A range: \cref{eq:expand_sq,eq:expand_diff}
+          (cleveref prints ``equations~\ref{eq:expand_sq}
+           and~\ref{eq:expand_diff}'' or a range if consecutive)
+    \item Mixed types: \cref{sec:targets,fig:parabola,tab:data}
+          (cleveref groups by type automatically)
+\end{itemize}
+
+\subsection{\texttt{\textbackslash nameref} — Reference by Title}
+\label{subsec:nameref}
+
+\verb|\nameref{label}| (provided by \texttt{hyperref}) prints the
+\emph{name} — the section heading, caption, theorem name, etc. — rather
+than its number.
+
+\begin{itemize}
+    \item \nameref{sec:intro} (section title)
+    \item \nameref{sec:targets} (section title)
+    \item \nameref{fig:parabola} (figure caption)
+    \item \nameref{tab:data} (table caption)
+    \item \nameref{thm:pythagoras} (theorem heading)
+\end{itemize}
+
+\noindent\verb|\nameref| is particularly useful in introductions when you
+want to refer to a section by its full descriptive title.
+
+\subsection{\texttt{\textbackslash pageref} — Reference by Page Number}
+\label{subsec:pageref}
+
+\verb|\pageref{label}| prints the page number of the referenced item.
+Combine it with \verb|\ref| for ``Number on page N'' style references:
+
+\begin{itemize}
+    \item \cref{sec:targets} is on page~\pageref{sec:targets}.
+    \item \cref{eq:euler} appears on page~\pageref{eq:euler}.
+    \item \cref{fig:parabola} is on page~\pageref{fig:parabola}.
+    \item \cref{tab:data} is on page~\pageref{tab:data}.
+    \item \cref{thm:pythagoras} is on page~\pageref{thm:pythagoras}.
+    \item \cref{lst:fibonacci} begins on page~\pageref{lst:fibonacci}.
+\end{itemize}
+
+% ============================================================================
+% SECTION 4: BEST PRACTICES
+% ============================================================================
+
+\section{Best Practices}
+\label{sec:best_practices}
+
+\subsection{Label Naming Conventions}
+
+Consistent prefixes make it easy to see at a glance what kind of object a
+label refers to, and they are required for \verb|\autoref| to work correctly:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Object type}  & \textbf{Recommended prefix} \\
+\midrule
+Part          & \texttt{part:} \\
+Chapter       & \texttt{chap:} \\
+Section       & \texttt{sec:} \\
+Subsection    & \texttt{subsec:} \\
+Equation      & \texttt{eq:} \\
+Figure        & \texttt{fig:} \\
+Table         & \texttt{tab:} \\
+Theorem/Lemma & \texttt{thm:} / \texttt{lem:} \\
+Algorithm     & \texttt{alg:} \\
+Listing       & \texttt{lst:} \\
+Appendix      & \texttt{app:} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Where to Place \texttt{\textbackslash label}}
+
+\begin{itemize}
+    \item \textbf{Sections:} immediately after the \verb|\section| command.
+    \item \textbf{Equations:} inside the equation environment, before
+          \verb|\end{equation}|.
+    \item \textbf{Figures/Tables:} immediately after \verb|\caption{}|
+          (not before—this is a common source of ``wrong page'' bugs).
+    \item \textbf{Theorems:} immediately after the
+          \verb|\begin{theorem}[...]| line.
+    \item \textbf{Listings:} in the optional argument of \verb|\lstlisting|:
+          \verb|[..., label=lst:name]|.
+\end{itemize}
+
+\subsection{Choosing the Right Command}
+
+\begin{description}
+    \item[\texttt{\textbackslash cref} (cleveref)] Recommended for all new
+        documents. Handles singular/plural, ranges, and mixed types
+        automatically.
+    \item[\texttt{\textbackslash autoref} (hyperref)] Good fallback if
+        \texttt{cleveref} is not available.  Requires consistent label
+        prefixes.
+    \item[\texttt{\textbackslash ref}] Use only when you need the bare number
+        and full explicit control (e.g., inside a macro).
+    \item[\texttt{\textbackslash nameref}] Use in prose when the full section
+        title provides more context than a number.
+    \item[\texttt{\textbackslash pageref}] Use in documents where readers
+        may print the PDF and need physical page guidance.
+\end{description}
+
+% ============================================================================
+% SUMMARY
+% ============================================================================
+
+\section*{Summary}
+
+This document has demonstrated six cross-reference mechanisms:
+
+\begin{enumerate}
+    \item \verb|\label| / \verb|\ref| — kernel commands, bare number output
+    \item \verb|\autoref| — hyperref, type-aware, single reference
+    \item \verb|\cref| / \verb|\Cref| — cleveref, type-aware, plural and range-smart
+    \item \verb|\nameref| — hyperref, prints section/caption title
+    \item \verb|\pageref| — kernel, prints page number
+\end{enumerate}
+
+All labels were placed on: a section (\cref{sec:targets}), three equations
+(\cref{eq:euler,eq:quadratic,eq:expand_sq,eq:expand_diff}), a figure
+(\cref{fig:parabola}), a table (\cref{tab:data}), a theorem
+(\cref{thm:pythagoras}), and a code listing (\cref{lst:fibonacci}).
+
+\end{document}
+
+% ============================================================================
+% COMPILATION NOTES
+% ============================================================================
+% Two pdflatex passes resolve all cross-references:
+%   pdflatex cross_references_demo.tex
+%   pdflatex cross_references_demo.tex
+%
+% latexmk handles this automatically:
+%   latexmk -pdf cross_references_demo.tex
+% ============================================================================

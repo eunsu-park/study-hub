@@ -1,0 +1,330 @@
+% Exercises for Lesson 14: Document Classes & Templates
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/14_document_classes.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+
+\title{Exercises for Lesson 14: Document Classes \& Templates}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Compare Classes ===
+% Problem: Same document in article, scrartcl, memoir.
+
+\section*{Exercise 1: Compare Classes}
+
+\textbf{Version A -- article:}
+\begin{verbatim}
+\documentclass{article}
+\usepackage{amsmath}
+\title{Comparison Document}
+\author{Jane Doe}
+\date{\today}
+\begin{document}
+\maketitle
+\section{Introduction}
+This is an introduction.
+\section{Theory}
+The equation $E = mc^2$ is famous:
+\[ E = mc^2 \]
+\end{document}
+\end{verbatim}
+
+\textbf{Version B -- scrartcl (KOMA-Script):}
+\begin{verbatim}
+\documentclass{scrartcl}
+\usepackage{amsmath}
+\title{Comparison Document}
+\author{Jane Doe}
+\date{\today}
+\begin{document}
+\maketitle
+\section{Introduction}
+This is an introduction.
+\section{Theory}
+The equation $E = mc^2$ is famous:
+\[ E = mc^2 \]
+\end{document}
+\end{verbatim}
+
+\textbf{Version C -- memoir:}
+\begin{verbatim}
+\documentclass{memoir}
+\usepackage{amsmath}
+\title{Comparison Document}
+\author{Jane Doe}
+\date{\today}
+\begin{document}
+\maketitle
+\chapter{Introduction}
+This is an introduction.
+\chapter{Theory}
+The equation $E = mc^2$ is famous:
+\[ E = mc^2 \]
+\end{document}
+\end{verbatim}
+
+\textbf{Key differences:}
+\begin{itemize}
+  \item \texttt{scrartcl}: Larger default section headings, European typography
+    defaults, auto-calculated type area
+  \item \texttt{memoir}: Uses \verb|\chapter| as top-level division,
+    more built-in customization hooks
+  \item \texttt{article}: Standard defaults, most widely compatible
+\end{itemize}
+
+% === Exercise 2: KOMA Options ===
+% Problem: scrartcl with 11pt, A4, parskip=half, headings=big,
+% auto type area, 3+ sections.
+
+\section*{Exercise 2: KOMA-Script Options}
+
+\begin{verbatim}
+\documentclass[
+  11pt,
+  a4paper,
+  parskip=half,
+  headings=big
+]{scrartcl}
+\usepackage{typearea}
+\KOMAoptions{DIV=calc}  % auto-calculate type area
+
+\title{KOMA-Script Document}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{First Section}
+This document uses KOMA-Script options for modern European
+typography. Notice the lack of paragraph indentation ---
+parskip=half adds half a line of space between paragraphs.
+
+This is a second paragraph demonstrating the spacing.
+
+\section{Second Section}
+The headings=big option makes section titles larger and more
+prominent than the article class defaults.
+
+\section{Third Section}
+The type area is auto-calculated with DIV=calc, which
+optimizes the text width for the chosen font size and paper.
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 3: Create a CV ===
+% Problem: moderncv with personal info, education, experience, skills.
+
+\section*{Exercise 3: CV with moderncv}
+
+\begin{verbatim}
+\documentclass[11pt,a4paper]{moderncv}
+\moderncvstyle{classic}
+\moderncvcolor{blue}
+\usepackage[margin=2cm]{geometry}
+
+\name{Jane}{Doe}
+\email{jane.doe@example.com}
+\phone[mobile]{+1-555-0123}
+\social[linkedin]{janedoe}
+
+\begin{document}
+\makecvtitle
+
+\section{Education}
+\cventry{2022--2024}{M.Sc. Computer Science}
+  {MIT}{Cambridge, MA}{\textit{GPA: 3.9/4.0}}
+  {Thesis: Deep Learning for Climate Modeling}
+\cventry{2018--2022}{B.Sc. Mathematics}
+  {Stanford}{Stanford, CA}{\textit{GPA: 3.8/4.0}}
+  {Minor in Physics}
+
+\section{Experience}
+\cventry{Jun 2024--Present}{Machine Learning Engineer}
+  {DeepMind}{London, UK}{}
+  {Developing large language models for scientific research.}
+\cventry{May--Aug 2023}{Research Intern}
+  {Google Brain}{Mountain View, CA}{}
+  {Implemented efficient attention mechanisms for long-context
+   models.}
+
+\section{Skills}
+\cvitem{Languages}{Python, C++, Julia, Rust}
+\cvitem{Frameworks}{PyTorch, JAX, TensorFlow}
+\cvitem{Tools}{Git, Docker, Kubernetes, LaTeX}
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 4: Thesis Title Page ===
+% Problem: Custom title page with logo placeholder, title, author,
+% degree, department, date.
+
+\section*{Exercise 4: Thesis Title Page}
+
+\begin{verbatim}
+\documentclass[12pt]{report}
+\usepackage{graphicx}
+\begin{document}
+\begin{titlepage}
+  \centering
+  \vspace*{1cm}
+
+  % University logo placeholder
+  \rule{3cm}{3cm}
+
+  \vspace{1.5cm}
+
+  {\LARGE\bfseries
+    Deep Learning Approaches for\\
+    Climate Prediction
+  }
+
+  \vspace{1cm}
+
+  {\large\itshape Jane Doe}
+
+  \vfill
+
+  A thesis submitted for the degree of\\
+  \textbf{Master of Science}
+
+  \vspace{1cm}
+
+  Department of Computer Science\\
+  Massachusetts Institute of Technology
+
+  \vspace{1cm}
+
+  \today
+
+\end{titlepage}
+
+\tableofcontents
+
+\chapter{Introduction}
+Content begins here ...
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 5: Conference Template ===
+% Problem: IEEE/ACM template, 2-page mock paper.
+
+\section*{Exercise 5: Conference Template}
+
+\begin{verbatim}
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath, graphicx, booktabs}
+\usepackage[backend=biber,style=ieee]{biblatex}
+\addbibresource{references.bib}
+
+\title{A Novel Approach to Image Classification}
+\author{
+  \IEEEauthorblockN{Jane Doe}
+  \IEEEauthorblockA{Department of CS, MIT\\
+    Cambridge, MA 02139\\
+    jane.doe@mit.edu}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a novel deep learning approach for image
+classification that achieves state-of-the-art results
+on benchmark datasets.
+\end{abstract}
+
+\section{Introduction}
+Image classification is a fundamental task in computer
+vision \parencite{lecun1998}.
+
+\section{Methods}
+Our model uses a modified ResNet architecture.
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.8\columnwidth}{3cm}
+  \caption{Model architecture overview.}
+\end{figure}
+
+\section{Results}
+Table~I shows results on CIFAR-10.
+
+\begin{table}[htbp]
+  \centering
+  \caption{CIFAR-10 Results}
+  \begin{tabular}{lc}
+    \toprule
+    Model & Accuracy \\
+    \midrule
+    Baseline & 92.3\% \\
+    Ours & 96.1\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\printbibliography
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 6: Letter ===
+% Problem: Formal letter using scrlttr2.
+
+\section*{Exercise 6: Formal Letter with scrlttr2}
+
+\begin{verbatim}
+\documentclass[
+  fromalign=right,
+  fromphone,
+  fromemail,
+  parskip=half
+]{scrlttr2}
+
+\setkomavar{fromname}{Jane Doe}
+\setkomavar{fromaddress}{123 Main Street\\
+  Cambridge, MA 02139}
+\setkomavar{fromphone}{+1-555-0123}
+\setkomavar{fromemail}{jane.doe@example.com}
+\setkomavar{subject}{Application for Research Position}
+
+\begin{document}
+
+\begin{letter}{%
+  Prof.\ John Smith\\
+  Department of Computer Science\\
+  Stanford University\\
+  Stanford, CA 94305}
+
+\opening{Dear Professor Smith,}
+
+I am writing to express my interest in the research
+assistant position in your computational physics group.
+I recently completed my Master's degree at MIT, where
+my thesis focused on deep learning for climate modeling.
+
+During my studies I developed strong skills in both
+theoretical machine learning and scientific computing.
+I believe my background would be a valuable addition
+to your team's work on physics-informed neural networks.
+
+\closing{Sincerely,}
+
+\end{letter}
+
+\end{document}
+\end{verbatim}
+
+\end{document}

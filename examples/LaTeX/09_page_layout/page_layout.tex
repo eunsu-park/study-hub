@@ -1,0 +1,413 @@
+% ============================================================================
+% page_layout.tex - Page Layout and Typography
+% ============================================================================
+% Demonstrates geometry, fancyhdr, multicol, setspace, and microtype
+% for professional document layout.
+%
+% Compilation:
+%   pdflatex page_layout.tex
+% ============================================================================
+
+\documentclass[12pt,a4paper,twoside]{article}
+
+% ============================================================================
+% PACKAGE IMPORTS
+% ============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+
+% --- geometry: precise control over page dimensions and margins ---
+% For a twoside document the "inner" margin (binding side) is wider.
+\usepackage[
+    top=2.5cm,
+    bottom=3cm,
+    inner=3cm,       % left on odd pages, right on even pages
+    outer=2cm,       % right on odd pages, left on even pages
+    headheight=15pt, % must be tall enough for the header font
+    includeheadfoot  % account for header/footer in total height
+]{geometry}
+
+% --- fancyhdr: custom headers and footers ---
+\usepackage{fancyhdr}
+
+% --- multicol: multi-column layout ---
+\usepackage{multicol}
+
+% --- setspace: control line spacing ---
+\usepackage{setspace}
+
+% --- microtype: subliminal refinements for better typography ---
+% Enables character protrusion and font expansion for tighter, more even
+% text with fewer hyphenations and overfull boxes.
+\usepackage{microtype}
+
+% --- Additional packages used in this document ---
+\usepackage{lipsum}      % Filler text (lorem ipsum)
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    pdftitle={Page Layout and Typography},
+    pdfauthor={LaTeX Student}
+}
+
+% ============================================================================
+% FANCYHDR: DEFINE PAGE STYLES
+% ============================================================================
+
+% Clear all header/footer fields before customizing
+\pagestyle{fancy}
+\fancyhf{}
+
+% Twoside layout: headers mirror on even/odd pages
+%   LE = Left on Even pages,  RO = Right on Odd pages  (outer positions)
+%   RE = Right on Even pages, LO = Left on Odd pages   (inner positions)
+
+\fancyhead[LE,RO]{\textbf{Page Layout \& Typography}}  % Document title on outer
+\fancyhead[RE,LO]{\textit{\nouppercase{\leftmark}}}    % Section name on inner
+\fancyfoot[LE,RO]{\thepage}                            % Page number on outer
+\fancyfoot[C]{\footnotesize LaTeX Student}             % Author name at center
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% plain style (used on \maketitle and \tableofcontents pages)
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+}
+
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+
+\title{\textbf{Page Layout and Typography}\\[0.4em]
+       \large Using \texttt{geometry}, \texttt{fancyhdr},
+              \texttt{multicol}, \texttt{setspace}, and \texttt{microtype}}
+\author{LaTeX Student}
+\date{\today}
+
+% ============================================================================
+% DOCUMENT BODY
+% ============================================================================
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\clearpage
+
+% ============================================================================
+% SECTION 1: THE geometry PACKAGE
+% ============================================================================
+
+\section{Page Dimensions with \texttt{geometry}}
+\label{sec:geometry}
+
+The \texttt{geometry} package replaces \LaTeX's manual dimension settings
+(\verb|\oddsidemargin|, \verb|\textheight|, etc.) with a single, readable
+declaration. The current document uses:
+
+\begin{verbatim}
+\usepackage[
+    top=2.5cm, bottom=3cm,
+    inner=3cm, outer=2cm,
+    headheight=15pt,
+    includeheadfoot
+]{geometry}
+\end{verbatim}
+
+\subsection{Common Presets}
+
+\begin{description}
+    \item[\texttt{margin=1in}]       All four margins equal to one inch
+    \item[\texttt{a4paper}]          Set paper size to ISO A4 (210\,mm \texttimes{} 297\,mm)
+    \item[\texttt{letterpaper}]      US Letter size (8.5\,in \texttimes{} 11\,in)
+    \item[\texttt{twoside}]          Enable mirrored left/right margins for binding
+    \item[\texttt{landscape}]        Swap width and height for landscape orientation
+    \item[\texttt{includeheadfoot}]  Count header and footer within the total page height
+\end{description}
+
+\subsection{Useful Geometry Commands}
+
+\begin{description}
+    \item[\texttt{\textbackslash newgeometry\{...\}}]
+        Change geometry mid-document (useful for landscape pages)
+    \item[\texttt{\textbackslash restoregeometry}]
+        Restore the geometry declared in the preamble
+\end{description}
+
+\lipsum[1]
+
+% ============================================================================
+% SECTION 2: THE fancyhdr PACKAGE
+% ============================================================================
+
+\section{Custom Headers and Footers with \texttt{fancyhdr}}
+\label{sec:fancyhdr}
+
+The \texttt{fancyhdr} package defines six header and footer slots:
+\texttt{L}, \texttt{C}, \texttt{R} for left, center, right, combined with
+\texttt{O}/\texttt{E} for odd/even pages in twoside documents.
+
+\subsection{Basic Setup}
+
+\begin{verbatim}
+\pagestyle{fancy}
+\fancyhf{}                               % clear defaults
+
+\fancyhead[LE,RO]{Document Title}        % outer header
+\fancyhead[RE,LO]{\leftmark}            % inner header (section name)
+\fancyfoot[LE,RO]{\thepage}             % outer footer (page number)
+\fancyfoot[C]{Author Name}              % center footer
+
+\renewcommand{\headrulewidth}{0.4pt}    % horizontal rule below header
+\renewcommand{\footrulewidth}{0.4pt}    % horizontal rule above footer
+\end{verbatim}
+
+\subsection{Available Marks}
+
+\begin{description}
+    \item[\texttt{\textbackslash leftmark}]  Current chapter name (in \texttt{book}/\texttt{report})
+                                              or section name (in \texttt{article})
+    \item[\texttt{\textbackslash rightmark}] Current section name (in \texttt{book}/\texttt{report})
+                                              or subsection name (in \texttt{article})
+    \item[\texttt{\textbackslash thepage}]   Current page number as a string
+    \item[\texttt{\textbackslash today}]     Current date
+\end{description}
+
+\subsection{Custom Page Style for a Chapter}
+
+\begin{verbatim}
+\fancypagestyle{chapterstyle}{
+    \fancyhf{}
+    \fancyhead[C]{\textsc{Chapter \thechapter}}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\headrulewidth}{0.6pt}
+}
+
+% Apply at the start of a chapter:
+\chapter{Introduction}
+\thispagestyle{chapterstyle}
+\end{verbatim}
+
+\lipsum[2]
+
+% ============================================================================
+% SECTION 3: THE multicol PACKAGE
+% ============================================================================
+
+\section{Multi-Column Layout with \texttt{multicol}}
+\label{sec:multicol}
+
+The \texttt{multicol} package balances text across multiple columns on the
+same page, unlike \LaTeX's native \texttt{twocolumn} mode which divides the
+entire document. Columns can start and stop anywhere in the text flow.
+
+\subsection{Two-Column Example}
+
+The \verb|multicols| environment (note the \emph{s}) takes the number of
+columns as its mandatory argument:
+
+\begin{verbatim}
+\begin{multicols}{2}
+  \section*{First Story}
+  Text for the left column ...
+
+  \columnbreak           % Force a column break here
+
+  \section*{Second Story}
+  Text for the right column ...
+\end{multicols}
+\end{verbatim}
+
+\medskip
+\noindent Live demonstration with two balanced columns and a separator rule:
+
+\setlength{\columnseprule}{0.4pt}   % rule between columns
+\setlength{\columnsep}{20pt}        % space between columns
+\begin{multicols}{2}
+
+\subsection*{Column One: Getting Started}
+\lipsum[3]
+
+\columnbreak
+
+\subsection*{Column Two: Going Further}
+\lipsum[4]
+\end{multicols}
+\setlength{\columnseprule}{0pt}     % remove rule for rest of document
+
+\subsection{Three-Column Layout}
+
+Three columns are common in newsletters and reference cards:
+
+\begin{multicols}{3}
+\lipsum[5]
+\end{multicols}
+
+% ============================================================================
+% SECTION 4: THE setspace PACKAGE
+% ============================================================================
+
+\section{Line Spacing with \texttt{setspace}}
+\label{sec:setspace}
+
+Many institutions require 1.5\texttimes{} or double line spacing for
+submission. The \texttt{setspace} package provides convenient commands:
+
+\subsection{Document-Wide Spacing}
+
+\begin{verbatim}
+\usepackage{setspace}
+
+% In preamble — applies to whole document:
+\singlespacing        % 1× (default)
+\onehalfspacing       % 1.5×
+\doublespacing        % 2×
+\setstretch{1.3}      % arbitrary multiplier
+\end{verbatim}
+
+\subsection{Local Spacing}
+
+The \texttt{spacing} environment (lowercase) applies spacing locally:
+
+\begin{verbatim}
+\begin{spacing}{1.5}
+This paragraph has 1.5× line spacing only.
+\end{spacing}
+
+\begin{singlespace}
+Footnotes and bibliography often revert to single spacing.
+\end{singlespace}
+\end{verbatim}
+
+\noindent Live demonstration:
+
+\begin{spacing}{1.8}
+\lipsum[6]
+\end{spacing}
+
+Back to normal (single) spacing after the environment closes.
+
+\lipsum[7]
+
+% ============================================================================
+% SECTION 5: THE microtype PACKAGE
+% ============================================================================
+
+\section{Improved Typography with \texttt{microtype}}
+\label{sec:microtype}
+
+The \texttt{microtype} package exploits micro-typographic extensions in
+\texttt{pdflatex} (and partially in \texttt{lualatex}) to produce
+noticeably better output with minimal configuration.
+
+\subsection{What microtype Does}
+
+\begin{description}
+    \item[Character protrusion]
+        Punctuation and certain letters (commas, periods, hyphens) are allowed
+        to extend slightly into the margin, creating a visually straighter edge
+        without altering the nominal column width.
+
+    \item[Font expansion]
+        Letters are stretched or shrunk by a tiny amount (default $\pm 2\%$)
+        so that lines fit more evenly, reducing hyphenation and overfull
+        \verb|\hbox| warnings.
+
+    \item[Tracking]
+        Uniform letter-spacing adjustments for small-caps or special headings.
+
+    \item[Kerning]
+        Fine-grained control over space between specific letter pairs.
+\end{description}
+
+\subsection{Usage}
+
+Simply loading the package in the preamble activates all features
+automatically for \texttt{pdflatex}:
+
+\begin{verbatim}
+\usepackage{microtype}
+\end{verbatim}
+
+No further configuration is needed for most documents. For advanced tuning:
+
+\begin{verbatim}
+\usepackage[
+    protrusion=true,
+    expansion=true,
+    tracking=true,
+    kerning=true,
+    spacing=true
+]{microtype}
+\end{verbatim}
+
+\medskip
+The following two paragraphs illustrate the difference.
+The first uses default settings (\texttt{microtype} already active);
+the second is a verbatim note since disabling microtype mid-document
+requires \texttt{\textbackslash microtypesetup} which is load-time only.
+
+\lipsum[8]
+
+\noindent\colorbox{yellow!30}{\parbox{0.97\linewidth}{\small
+\textbf{Note:} With \texttt{microtype} loaded you rarely see overfull
+\verb|\hbox| warnings.  Compare the output by commenting out
+\verb|\usepackage{microtype}| in the preamble.}}
+
+% ============================================================================
+% SECTION 6: COMBINING LAYOUT PACKAGES
+% ============================================================================
+
+\section{Putting It All Together}
+\label{sec:combined}
+
+A typical professional document combines all five packages:
+
+\begin{verbatim}
+% 1. Margins (geometry)
+\usepackage[a4paper, top=2.5cm, bottom=3cm,
+            inner=3cm, outer=2cm]{geometry}
+
+% 2. Headers and footers (fancyhdr)
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{My Document}
+\fancyhead[RE,LO]{\leftmark}
+\fancyfoot[LE,RO]{\thepage}
+
+% 3. Line spacing (setspace)
+\usepackage{setspace}
+\onehalfspacing
+
+% 4. Multi-column (multicol) — used locally as needed
+\usepackage{multicol}
+
+% 5. Improved typography (microtype)
+\usepackage{microtype}
+\end{verbatim}
+
+This combination produces a well-proportioned document that meets most
+institutional submission requirements, improves readability, and presents
+a professional appearance.
+
+\end{document}
+
+% ============================================================================
+% COMPILATION NOTES
+% ============================================================================
+% pdflatex page_layout.tex
+%
+% Note: fancyhdr's \leftmark is populated from \section on the PREVIOUS page,
+% so you may see blank headers on the first page of each section — this is
+% normal behaviour with the fancy page style. Use \thispagestyle{plain} on
+% section-start pages if needed.
+% ============================================================================

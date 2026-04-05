@@ -1,0 +1,350 @@
+% Exercises for Lesson 08: Cross-References & Citations
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/08_cross_references.tex
+%          (run twice for cross-references to resolve)
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=green,urlcolor=red]{hyperref}
+
+\title{Exercises for Lesson 08: Cross-References \& Citations}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% === Exercise 1: Cross-References ===
+% Problem: 3 sections, 2 figures, 2 tables, 3 equations, with \autoref.
+
+\section{Introduction}
+\label{sec:intro}
+
+This document demonstrates cross-referencing.
+\autoref{sec:methods} describes the methodology.
+\autoref{sec:results} presents the results.
+
+\section{Methods}
+\label{sec:methods}
+
+The governing equation is:
+\begin{equation}
+  E = mc^2
+  \label{eq:einstein}
+\end{equation}
+
+The wave equation is:
+\begin{equation}
+  \frac{\partial^2 u}{\partial t^2} = c^2 \nabla^2 u
+  \label{eq:wave}
+\end{equation}
+
+The heat equation is:
+\begin{equation}
+  \frac{\partial u}{\partial t} = \alpha \nabla^2 u
+  \label{eq:heat}
+\end{equation}
+
+See \autoref{eq:einstein}, \autoref{eq:wave}, and \autoref{eq:heat}.
+
+\autoref{fig:method} shows the experimental setup.
+\autoref{tab:params} lists the parameters.
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.6\textwidth}{3cm}
+  \caption{Experimental setup}
+  \label{fig:method}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Model parameters}
+  \label{tab:params}
+  \begin{tabular}{lc}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Learning rate & 0.001 \\
+    Batch size & 32 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Results}
+\label{sec:results}
+
+\autoref{fig:results} presents the accuracy curve.
+\autoref{tab:results} summarizes the final metrics.
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.6\textwidth}{3cm}
+  \caption{Accuracy over training epochs}
+  \label{fig:results}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Final performance metrics}
+  \label{tab:results}
+  \begin{tabular}{lc}
+    \toprule
+    Metric & Value \\
+    \midrule
+    Accuracy & 95.7\% \\
+    F1 Score & 0.953 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+As discussed in \autoref{sec:intro}, the energy--mass relation
+(\autoref{eq:einstein}) is fundamental.
+
+% === Exercise 2: Bibliography ===
+% Problem: .bib file with 5 entries, cite all.
+% Since this must be self-contained, we use thebibliography.
+
+\section*{Exercise 2: Bibliography}
+
+The solution requires a \texttt{.bib} file and \texttt{natbib}.
+Below we show the structure using \texttt{thebibliography} so the
+file compiles standalone.
+
+Einstein's theory~\cite{einstein} is foundational.
+The TeXbook~\cite{knuth} introduced modern typesetting.
+CNNs~\cite{lecun} and Transformers~\cite{vaswani} changed deep learning.
+Reinforcement learning~\cite{sutton} provides a framework for
+sequential decision-making.
+
+\begin{verbatim}
+% references.bib (use this with natbib/biblatex):
+@article{einstein1905, author={Einstein, A.},
+  title={On the Electrodynamics of Moving Bodies},
+  journal={Annalen der Physik}, year={1905}}
+@book{knuth1984, author={Knuth, D.},
+  title={The TeXbook}, publisher={Addison-Wesley}, year={1984}}
+@inproceedings{lecun1998, author={LeCun, Y. and others},
+  title={Gradient-based learning ...},
+  booktitle={Proc. IEEE}, year={1998}}
+@misc{vaswani2017, author={Vaswani, A. and others},
+  title={Attention is All You Need}, year={2017}}
+@book{sutton2018, author={Sutton, R. and Barto, A.},
+  title={Reinforcement Learning}, publisher={MIT Press},
+  year={2018}}
+\end{verbatim}
+
+\begin{thebibliography}{9}
+\bibitem{einstein} A. Einstein. ``On the Electrodynamics of Moving Bodies.'' \textit{Annalen der Physik}, 1905.
+\bibitem{knuth} D. Knuth. \textit{The TeXbook}. Addison-Wesley, 1984.
+\bibitem{lecun} Y. LeCun et al. ``Gradient-based learning applied to document recognition.'' \textit{Proc. IEEE}, 1998.
+\bibitem{vaswani} A. Vaswani et al. ``Attention is All You Need.'' arXiv:1706.03762, 2017.
+\bibitem{sutton} R. Sutton and A. Barto. \textit{Reinforcement Learning: An Introduction}. MIT Press, 2018.
+\end{thebibliography}
+
+% === Exercise 3: BibLaTeX ===
+% Problem: Convert to BibLaTeX with IEEE style (shown as verbatim).
+
+\section*{Exercise 3: BibLaTeX Conversion}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage[backend=biber,style=ieee]{biblatex}
+\addbibresource{references.bib}
+
+\begin{document}
+Einstein \parencite{einstein1905} ...
+Knuth \parencite{knuth1984} ...
+\printbibliography
+\end{document}
+
+% Compile:
+% pdflatex document.tex
+% biber document
+% pdflatex document.tex
+\end{verbatim}
+
+% === Exercise 4: Multiple Reference Types ===
+% Problem: Section by number/name, page ref, equation range, multiple figs.
+
+\section*{Exercise 4: Multiple Reference Types}
+
+Reference by number: \autoref{sec:intro}.
+
+Reference by name: ``\nameref{sec:intro}''.
+
+Page reference: \autoref{fig:method} appears on page~\pageref{fig:method}.
+
+Equation range: Equations~\eqref{eq:einstein}--\eqref{eq:heat}.
+
+Multiple figures: Figures~\ref{fig:method} and~\ref{fig:results}.
+
+% === Exercise 5: Hyperref Customization ===
+% Problem: Colored links, PDF metadata, bookmarks.
+
+\section*{Exercise 5: Hyperref Customization}
+
+This document already loads \texttt{hyperref} with custom settings.
+The configuration used is:
+
+\begin{verbatim}
+\usepackage[
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=green,
+  urlcolor=red,
+  bookmarks=true,
+  pdfauthor={Study Project},
+  pdftitle={Cross-References Exercises},
+  pdfsubject={LaTeX Exercises},
+  pdfkeywords={LaTeX, cross-references, citations}
+]{hyperref}
+\end{verbatim}
+
+Visit the \LaTeX{} Project: \url{https://www.latex-project.org/}
+
+Or with custom text: \href{https://www.latex-project.org/}{\LaTeX{} Project}.
+
+% === Exercise 6: Index ===
+% Problem: Document with 20+ index entries, subentries, cross-refs, bold.
+
+\section*{Exercise 6: Index}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage{makeidx}
+\makeindex
+\begin{document}
+
+LaTeX\index{LaTeX} is built on TeX\index{TeX}.
+The article\index{document classes!article} class
+is for short documents.
+The report\index{document classes!report} class
+adds chapters.
+The book\index{document classes!book} class
+supports front matter.
+Mathematics\index{mathematics} is a key strength.
+Equations\index{mathematics!equations} are numbered.
+Fractions\index{mathematics!fractions} use \verb|\frac|.
+Integrals\index{mathematics!integrals} use \verb|\int|.
+Figures\index{floats!figures} float by default.
+Tables\index{floats!tables} also float.
+Bibliography\index{bibliography|textbf} management is essential.
+BibTeX\index{bibliography!BibTeX} is traditional.
+BibLaTeX\index{bibliography!BibLaTeX} is modern.
+Hyperlinks\index{hyperlinks} make PDFs interactive.
+Cross-references\index{cross-references|textbf} connect elements.
+Packages\index{packages} extend functionality.
+amsmath\index{packages!amsmath} improves math.
+graphicx\index{packages!graphicx} includes images.
+booktabs\index{packages!booktabs} formats tables.
+Compilation\index{compilation} produces PDFs.
+pdflatex\index{compilation!pdflatex} is standard.
+See also fonts\index{fonts|see{typography}}.
+
+\printindex
+\end{document}
+% Compile: pdflatex doc.tex && makeindex doc.idx && pdflatex doc.tex
+\end{verbatim}
+
+% === Exercise 7: Glossary ===
+% Problem: 5 terms, 3 acronyms, usage throughout.
+
+\section*{Exercise 7: Glossary}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage[acronym]{glossaries}
+\makeglossaries
+
+\newglossaryentry{latex}{
+  name=LaTeX,
+  description={A document preparation system built on TeX}}
+\newglossaryentry{float}{
+  name=float,
+  description={A container for figures or tables that LaTeX
+    positions automatically}}
+\newglossaryentry{preamble}{
+  name=preamble,
+  description={The part of a LaTeX document before
+    \texttt{\textbackslash begin\{document\}}}}
+\newglossaryentry{macro}{
+  name=macro,
+  description={A custom command defined with \texttt{\textbackslash
+    newcommand}}}
+\newglossaryentry{compilation}{
+  name=compilation,
+  description={The process of converting a .tex file into a PDF}}
+
+\newacronym{pdf}{PDF}{Portable Document Format}
+\newacronym{toc}{TOC}{Table of Contents}
+\newacronym{ctan}{CTAN}{Comprehensive TeX Archive Network}
+
+\begin{document}
+\Gls{latex} produces \gls{pdf} files through \gls{compilation}.
+The \gls{preamble} configures packages and \glspl{macro}.
+\Glspl{float} position figures and tables automatically.
+The \gls{toc} provides navigation.
+Packages are available from \gls{ctan}.
+
+\printglossaries
+\end{document}
+% Compile: pdflatex doc && makeglossaries doc && pdflatex doc
+\end{verbatim}
+
+% === Exercise 8: Complete Academic Paper ===
+% Problem: Full paper 3+ pages.  Shown as verbatim template.
+
+\section*{Exercise 8: Complete Academic Paper}
+
+This exercise combines all techniques from the lesson.  The complete
+solution requires external files (\texttt{.bib}, images).  The structure
+is outlined below:
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage{amsmath,graphicx,booktabs}
+\usepackage[backend=biber,style=ieee]{biblatex}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\addbibresource{refs.bib}
+
+\title{Deep Learning for Image Classification}
+\author{Jane Doe}
+\date{\today}
+
+\begin{document}
+\maketitle
+\begin{abstract} ... \end{abstract}
+\tableofcontents
+
+\section{Introduction}\label{sec:intro}
+We study ... \parencite{lecun1998,vaswani2017}.
+
+\section{Methods}\label{sec:methods}
+\begin{equation} y = \sigma(Wx + b) \label{eq:model} \end{equation}
+See \cref{fig:arch,tab:data,eq:model}.
+
+% 3 figures (one with subfigures), 2 tables
+\begin{figure}[htbp] ... \caption{...}\label{fig:arch} \end{figure}
+\begin{figure}[htbp] ... \caption{...}\label{fig:curve} \end{figure}
+\begin{figure}[htbp] ... \caption{...}\label{fig:loss} \end{figure}
+\begin{table}[htbp]  ... \caption{...}\label{tab:data} \end{table}
+\begin{table}[htbp]  ... \caption{...}\label{tab:results} \end{table}
+
+\section{Results}\label{sec:results}
+\Cref{tab:results} shows ...
+
+\section{Conclusion}
+We demonstrated ... \parencite{sutton2018,goodfellow2016,bishop2006}.
+
+\printbibliography
+\end{document}
+\end{verbatim}
+
+\end{document}

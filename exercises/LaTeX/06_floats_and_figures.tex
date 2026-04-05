@@ -1,0 +1,349 @@
+% Exercises for Lesson 06: Floats, Figures & Tables
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/06_floats_and_figures.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{lipsum}  % for dummy text
+
+\title{Exercises for Lesson 06: Floats, Figures \& Tables}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% Note: Since we do not have actual image files, we use \rule{}{} as
+% placeholder rectangles to produce compilable, self-contained solutions.
+
+% === Exercise 1: Basic Figure ===
+% Problem: Three figures with different widths, captions, labels, and refs.
+
+\section*{Exercise 1: Basic Figure}
+
+Figure~\ref{fig:half} is half the text width.
+Figure~\ref{fig:three-quarter} is 75\% wide.
+Figure~\ref{fig:full} spans the full text width.
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.5\textwidth}{3cm}
+  \caption{A figure at 0.5\textbackslash textwidth}
+  \label{fig:half}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.75\textwidth}{3cm}
+  \caption{A figure at 0.75\textbackslash textwidth}
+  \label{fig:three-quarter}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{\textwidth}{3cm}
+  \caption{A figure at full text width}
+  \label{fig:full}
+\end{figure}
+
+% === Exercise 2: Subfigures ===
+% Problem: Four subfigures in a 2x2 grid with subcaptions and main caption.
+
+\section*{Exercise 2: Subfigures}
+
+Figure~\ref{fig:grid} shows four subfigures.
+Specifically, Figure~\ref{fig:sub-a} is the top-left panel.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Panel A}
+    \label{fig:sub-a}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Panel B}
+    \label{fig:sub-b}
+  \end{subfigure}
+
+  \medskip
+
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Panel C}
+    \label{fig:sub-c}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Panel D}
+    \label{fig:sub-d}
+  \end{subfigure}
+  \caption{Four subfigures arranged in a $2 \times 2$ grid}
+  \label{fig:grid}
+\end{figure}
+
+% === Exercise 3: Mixed Floats ===
+% Problem: 2 figures, 2 tables, cross-references, list of figures/tables.
+
+\section*{Exercise 3: Mixed Floats}
+
+See Figure~\ref{fig:mixed-a}, Figure~\ref{fig:mixed-b},
+Table~\ref{tab:mixed-a}, and Table~\ref{tab:mixed-b}.
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.6\textwidth}{3cm}
+  \caption{First figure in mixed floats exercise}
+  \label{fig:mixed-a}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.6\textwidth}{3cm}
+  \caption{Second figure in mixed floats exercise}
+  \label{fig:mixed-b}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{First table in mixed floats exercise}
+  \label{tab:mixed-a}
+  \begin{tabular}{lcc}
+    \toprule
+    Item & Value 1 & Value 2 \\
+    \midrule
+    A & 10 & 20 \\
+    B & 30 & 40 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Second table in mixed floats exercise}
+  \label{tab:mixed-b}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Accuracy & Speed \\
+    \midrule
+    X & 95\% & 12 ms \\
+    Y & 97\% & 18 ms \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\listoffigures
+\listoftables
+
+% === Exercise 4: Figure Sizing ===
+% Problem: Same figure at different sizes.
+
+\section*{Exercise 4: Figure Sizing}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{0.8\textwidth}{4cm}
+  \caption{Width-based: 0.8\textbackslash textwidth}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{8cm}{6cm}
+  \caption{Height-based: 6cm tall (and 8cm wide as placeholder)}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{6cm}{3.6cm}
+  \caption{Scale-based: simulated 0.6 scale (60\% of 10cm $\times$ 6cm)}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \rule{10cm}{8cm}
+  \caption{Fixed size: width=10cm, height=8cm, keepaspectratio}
+\end{figure}
+
+% === Exercise 5: Float Placement ===
+% Problem: Experiment with placement specifiers h, t, b, p, H.
+
+\section*{Exercise 5: Float Placement}
+
+\begin{verbatim}
+\begin{figure}[h]   % here
+  \centering
+  \includegraphics[width=0.5\textwidth]{image}
+  \caption{Placed with [h]}
+\end{figure}
+
+\begin{figure}[t]   % top of page
+  \centering
+  \includegraphics[width=0.5\textwidth]{image}
+  \caption{Placed with [t]}
+\end{figure}
+
+\begin{figure}[b]   % bottom of page
+  \centering
+  \includegraphics[width=0.5\textwidth]{image}
+  \caption{Placed with [b]}
+\end{figure}
+
+\begin{figure}[p]   % float page
+  \centering
+  \includegraphics[width=0.5\textwidth]{image}
+  \caption{Placed with [p]}
+\end{figure}
+
+\begin{figure}[H]   % exactly here (float package)
+  \centering
+  \includegraphics[width=0.5\textwidth]{image}
+  \caption{Placed with [H]}
+\end{figure}
+\end{verbatim}
+
+% === Exercise 6: Wrapped Figure ===
+% Problem: wrapfig with text wrapping.
+
+\section*{Exercise 6: Wrapped Figure}
+
+\begin{wrapfigure}{r}{0.4\textwidth}
+  \centering
+  \rule{0.38\textwidth}{4cm}
+  \caption{Wrapped figure}
+\end{wrapfigure}
+
+\lipsum[1]
+
+% === Exercise 7: Side-by-Side Comparison ===
+% Problem: subfigure vs minipage approaches.
+
+\section*{Exercise 7: Side-by-Side Comparison}
+
+\textbf{Approach A -- subfigure (shared number):}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Left subfigure}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Right subfigure}
+  \end{subfigure}
+  \caption{Two subfigures sharing one figure number}
+\end{figure}
+
+\textbf{Approach B -- minipage (separate numbers):}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Left minipage figure}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+    \centering
+    \rule{\textwidth}{3cm}
+    \caption{Right minipage figure}
+  \end{minipage}
+\end{figure}
+
+% === Exercise 8: Research Document ===
+% Problem: Mini research paper with title, lists, 3 sections, 3 figures
+% (1 with subfigures), 2 tables, cross-references.
+
+\section*{Exercise 8: Mini Research Paper}
+
+\begin{verbatim}
+\documentclass{article}
+\usepackage{graphicx, subcaption, booktabs, hyperref}
+
+\title{A Mini Research Paper}
+\author{Jane Doe}
+\date{\today}
+
+\begin{document}
+\maketitle
+\listoffigures
+\listoftables
+
+\section{Introduction}
+We study three methods (Figure~\ref{fig:overview}).
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{0.3\textwidth}
+    \centering\rule{\textwidth}{2cm}
+    \caption{Method A}\label{fig:a}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.3\textwidth}
+    \centering\rule{\textwidth}{2cm}
+    \caption{Method B}\label{fig:b}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.3\textwidth}
+    \centering\rule{\textwidth}{2cm}
+    \caption{Method C}\label{fig:c}
+  \end{subfigure}
+  \caption{Overview of methods}\label{fig:overview}
+\end{figure}
+
+\section{Results}
+Table~\ref{tab:acc} and Table~\ref{tab:speed} show results.
+Figure~\ref{fig:curve} shows the learning curve.
+
+\begin{table}[htbp]
+  \centering\caption{Accuracy}\label{tab:acc}
+  \begin{tabular}{lc}\toprule
+    Method & Accuracy \\\midrule
+    A & 92\% \\ B & 95\% \\ C & 97\% \\\bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering\caption{Speed}\label{tab:speed}
+  \begin{tabular}{lc}\toprule
+    Method & Time (ms) \\\midrule
+    A & 5 \\ B & 12 \\ C & 25 \\\bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering\rule{0.6\textwidth}{4cm}
+  \caption{Learning curve}\label{fig:curve}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering\rule{0.6\textwidth}{4cm}
+  \caption{Error analysis}\label{fig:error}
+\end{figure}
+
+\section{Conclusion}
+Method C (Figure~\ref{fig:c}) achieves the best accuracy
+(Table~\ref{tab:acc}) despite being slowest (Table~\ref{tab:speed}).
+
+\end{document}
+\end{verbatim}
+
+\end{document}

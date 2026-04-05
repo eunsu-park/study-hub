@@ -1,0 +1,319 @@
+% ============================================================================
+% article_vs_koma.tex - KOMA-Script Document Class (scrartcl)
+% ============================================================================
+% Demonstrates the KOMA-Script replacement for the standard article class,
+% focusing on parskip, heading styles, and the DIV option for typearea.
+%
+% Compilation:
+%   pdflatex article_vs_koma.tex
+%
+% Requires: KOMA-Script (koma-script package in TeX Live / MiKTeX)
+% ============================================================================
+
+% --- scrartcl replaces article; compatible but with KOMA-Script extensions ---
+\documentclass[
+    12pt,               % base font size
+    a4paper,            % paper size
+    parskip=half,       % paragraph separation: half-line space, no indent
+    headings=small,     % smaller heading fonts (options: big, normal, small)
+    DIV=12              % typearea calculation: higher = narrower margins
+]{scrartcl}
+
+% ============================================================================
+% PACKAGE IMPORTS
+% ============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage{microtype}
+
+\usepackage{xcolor}
+\usepackage{booktabs}   % Professional tables
+\usepackage{enumitem}   % List customisation
+
+\usepackage[
+    backend=biber,
+    style=numeric
+]{biblatex}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=teal,
+    urlcolor=cyan,
+    pdftitle={KOMA-Script scrartcl Demo},
+    pdfauthor={LaTeX Student}
+}
+
+% ============================================================================
+% KOMA-SCRIPT SPECIFIC SETTINGS
+% ============================================================================
+
+% Subject line (KOMA-Script only) — appears between title and author
+\subject{KOMA-Script Class Demonstration}
+
+% Subtitle (KOMA-Script only)
+\subtitle{A comparison with the standard \texttt{article} class}
+
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+
+\title{KOMA-Script: \texttt{scrartcl} in Practice}
+\author{LaTeX Student}
+\date{\today}
+
+% ============================================================================
+% DOCUMENT BODY
+% ============================================================================
+
+\begin{document}
+
+\maketitle
+
+% ============================================================================
+% ABSTRACT — KOMA-Script uses the abstract environment too,
+% but styles it differently from the standard class.
+% ============================================================================
+
+\begin{abstract}
+KOMA-Script is a mature, European-oriented replacement for the standard
+\LaTeX{} document classes. This document demonstrates the \texttt{scrartcl}
+class, which replaces \texttt{article}, and highlights the three most
+practically significant options: \texttt{parskip} for paragraph spacing,
+\texttt{headings} for heading size, and \texttt{DIV} for the typearea
+(text block) calculation.
+\end{abstract}
+
+\tableofcontents
+
+% ============================================================================
+% SECTION 1: MOTIVATION
+% ============================================================================
+
+\section{Why KOMA-Script?}
+\label{sec:motivation}
+
+The standard \LaTeX{} document classes (\texttt{article}, \texttt{report},
+\texttt{book}) were designed in the 1980s, primarily for American typographic
+conventions. KOMA-Script re-implements all three classes—as \texttt{scrartcl},
+\texttt{scrreprt}, and \texttt{scrbook}—with the following improvements:
+
+\begin{itemize}
+    \item Automatic typearea calculation based on classical typographic ratios
+          (the \texttt{DIV} option or the \texttt{typearea} package)
+    \item Configurable paragraph spacing (\texttt{parskip} option)
+    \item Flexible heading styles without rewriting \verb|\@makechapterhead|
+    \item Built-in support for scrpage headers, KOMA options for captions,
+          and an extensive scripting interface via \texttt{KOMA-Options}
+    \item Better defaults for European paper sizes (A4, A5, B5)
+\end{itemize}
+
+\subsection{Drop-In Replacement}
+
+For most documents, switching from \texttt{article} to \texttt{scrartcl}
+requires only changing the \verb|\documentclass| line. Existing commands
+such as \verb|\section|, \verb|\subsection|, \verb|\begin{abstract}|, and
+\verb|\maketitle| work unchanged.
+
+% ============================================================================
+% SECTION 2: THE parskip OPTION
+% ============================================================================
+
+\section{Paragraph Separation: the \texttt{parskip} Option}
+\label{sec:parskip}
+
+By default, standard \LaTeX{} separates paragraphs with an indent and no
+vertical space. KOMA-Script's \texttt{parskip} option switches to the
+European convention of a blank half-line between paragraphs.
+
+\subsection{Available Values}
+
+\begin{description}
+    \item[\texttt{parskip=false}]
+        Default \LaTeX{} behaviour: first-line indent, no extra vertical space.
+    \item[\texttt{parskip=true} or \texttt{full}]
+        One full line of space between paragraphs; no indent on any paragraph.
+    \item[\texttt{parskip=half}]
+        Half a line of space between paragraphs; no indent. (\emph{Used in
+        this document.})
+    \item[\texttt{parskip=full*} / \texttt{half*}]
+        Same as above, but the last line of a paragraph may be short without
+        triggering an overfull box warning.
+\end{description}
+
+In this document the option \texttt{parskip=half} is active. Notice that
+paragraphs are separated by a small gap rather than an indentation.
+
+This is the second paragraph. It follows the first without any first-line
+indent, but with a half-line vertical gap. This style is common in German
+and other European academic and commercial typesetting traditions.
+
+% ============================================================================
+% SECTION 3: THE headings OPTION
+% ============================================================================
+
+\section{Heading Sizes: the \texttt{headings} Option}
+\label{sec:headings}
+
+Standard \LaTeX{} heading sizes can feel oversized, especially when combined
+with large base fonts. KOMA-Script's \texttt{headings} option scales all
+section-level headings uniformly.
+
+\subsection{Available Values}
+
+\begin{description}
+    \item[\texttt{headings=big}]
+        Large headings, similar to the standard \LaTeX{} defaults.
+    \item[\texttt{headings=normal}]
+        Moderate headings; a good balance between prominence and text density.
+    \item[\texttt{headings=small}]
+        Smaller headings that do not dominate the page. (\emph{Used in this
+        document.})
+\end{description}
+
+With \texttt{headings=small}, the section headings above (``KOMA-Script:
+\texttt{scrartcl} in Practice'', ``Why KOMA-Script?'', etc.) are noticeably
+less imposing than the \texttt{big} setting would produce.
+
+\subsection{Heading Fonts}
+
+KOMA-Script also separates \emph{heading font} from \emph{body font}.
+You can change all headings to sans-serif in the preamble:
+
+\begin{verbatim}
+\setkomafont{sectioning}{\normalfont\sffamily\bfseries}
+\end{verbatim}
+
+Or change only specific levels:
+
+\begin{verbatim}
+\setkomafont{section}{\normalfont\Large\bfseries}
+\setkomafont{subsection}{\normalfont\large\itshape}
+\end{verbatim}
+
+% ============================================================================
+% SECTION 4: THE DIV OPTION AND TYPEAREA
+% ============================================================================
+
+\section{Typearea: the \texttt{DIV} Option}
+\label{sec:div}
+
+The most conceptually distinctive KOMA-Script feature is its typearea
+algorithm, which derives margins from the paper dimensions rather than
+requiring the user to specify them manually.
+
+\subsection{What DIV Does}
+
+The \texttt{DIV} value $n$ divides the page height and width each into $n$
+equal strips. The text block height occupies $n-2$ strips; the text block
+width occupies $n-2$ strips. Margins are distributed 1 strip on the binding
+side and 2 on the outer side (classical golden-ratio rule).
+
+\begin{center}
+\begin{tabular}{rll}
+\toprule
+\textbf{DIV} & \textbf{Text area (A4)} & \textbf{Typical use} \\
+\midrule
+ 9  & 149\,mm \texttimes{} 213\,mm & Comfortable reading; wide margins \\
+10  & 161\,mm \texttimes{} 228\,mm & Standard academic documents \\
+11  & 170\,mm \texttimes{} 238\,mm & Slightly tighter \\
+12  & 177\,mm \texttimes{} 247\,mm & Used in this document \\
+14  & 188\,mm \texttimes{} 260\,mm & Dense; minimal margins \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Specifying DIV}
+
+In the \verb|\documentclass| options:
+
+\begin{verbatim}
+\documentclass[DIV=12]{scrartcl}
+\end{verbatim}
+
+Or dynamically after setting the font:
+
+\begin{verbatim}
+\usepackage{lmodern}
+\KOMAoption{DIV}{calc}   % recalculate after font change
+\end{verbatim}
+
+Setting \texttt{DIV=calc} instructs KOMA-Script to choose an optimal value
+automatically based on the current font and paper size.
+
+% ============================================================================
+% SECTION 5: KOMA vs. STANDARD CLASS COMPARISON
+% ============================================================================
+
+\section{Side-by-Side Comparison}
+\label{sec:comparison}
+
+\begin{center}
+\begin{tabular}{p{4.5cm}p{4.5cm}p{4.5cm}}
+\toprule
+\textbf{Feature} & \textbf{Standard \texttt{article}} & \textbf{KOMA \texttt{scrartcl}} \\
+\midrule
+Margins & Manual via \texttt{geometry} & Auto via \texttt{DIV} (or \texttt{geometry}) \\
+Paragraph spacing & First-line indent & Configurable (\texttt{parskip=}) \\
+Heading sizes & Fixed large sizes & Configurable (\texttt{headings=}) \\
+Subject/Subtitle & Not built in & \verb|\subject{}|, \verb|\subtitle{}| \\
+Heading fonts & Hard to change & \verb|\setkomafont{}| \\
+Caption formatting & \texttt{caption} package & Built in \\
+KOMA-Options interface & No & Yes (\verb|\KOMAoption{}|) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================================
+% SECTION 6: QUICK REFERENCE
+% ============================================================================
+
+\section{Quick Reference}
+\label{sec:reference}
+
+\subsection{Class Options Summary}
+
+\begin{verbatim}
+\documentclass[
+    12pt,             % base font: 10pt, 11pt, 12pt
+    a4paper,          % paper: a4paper, letterpaper, a5paper ...
+    parskip=half,     % paragraph spacing: false, half, full
+    headings=small,   % heading size: big, normal, small
+    DIV=12,           % typearea divisor: integer or calc
+    twoside,          % twoside / oneside
+    open=right        % new chapters: right, left, any
+]{scrartcl}
+\end{verbatim}
+
+\subsection{Useful KOMA-Script Commands}
+
+\begin{description}
+    \item[\texttt{\textbackslash KOMAoption\{option\}\{value\}}]
+        Change a KOMA option inside the document body.
+    \item[\texttt{\textbackslash setkomafont\{element\}\{font decl\}}]
+        Set the font for a named KOMA element.
+    \item[\texttt{\textbackslash addtokomafont\{element\}\{font decl\}}]
+        Append to an existing KOMA font setting.
+    \item[\texttt{\textbackslash subject\{...\}}]
+        Short descriptive line above the title.
+    \item[\texttt{\textbackslash subtitle\{...\}}]
+        Subtitle below the main title.
+    \item[\texttt{\textbackslash publishers\{...\}}]
+        Publisher information on the title page.
+\end{description}
+
+\end{document}
+
+% ============================================================================
+% COMPILATION NOTES
+% ============================================================================
+% pdflatex article_vs_koma.tex
+%
+% If you use \addbibresource + \printbibliography, also run:
+%   biber article_vs_koma
+% then pdflatex twice more.
+% ============================================================================

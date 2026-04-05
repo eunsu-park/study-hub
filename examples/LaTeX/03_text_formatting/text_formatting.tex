@@ -1,0 +1,547 @@
+% ============================================================================
+% text_formatting.tex - Text Formatting in LaTeX
+% ============================================================================
+% Demonstrates font families, styles, sizes, colors, lists, verbatim,
+% special characters, text alignment, and footnotes.
+%
+% Compilation:
+%   pdflatex text_formatting.tex
+% ============================================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% ============================================================================
+% PACKAGE IMPORTS
+% ============================================================================
+
+\usepackage[utf8]{inputenc}      % UTF-8 input encoding
+\usepackage[T1]{fontenc}         % Font encoding for European characters
+\usepackage{lmodern}             % Latin Modern font (scalable CM replacement)
+
+\usepackage[margin=1in]{geometry}
+\usepackage[english]{babel}
+
+\usepackage{xcolor}              % Extended color support
+\usepackage{listings}            % Source code formatting
+\usepackage{verbatim}            % Verbatim text environments
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=cyan,
+    pdftitle={Text Formatting in LaTeX},
+    pdfauthor={LaTeX Student}
+}
+
+% ============================================================================
+% CUSTOM COLORS
+% ============================================================================
+
+\definecolor{myblue}{RGB}{0, 70, 140}        % Custom deep blue
+\definecolor{mygold}{RGB}{200, 150, 0}       % Custom gold
+\definecolor{mygreen}{RGB}{20, 120, 50}      % Custom forest green
+\definecolor{highlight}{RGB}{255, 245, 150}  % Pale yellow for highlighting
+
+% ============================================================================
+% LISTINGS CONFIGURATION
+% ============================================================================
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{myblue}\bfseries,
+    commentstyle=\color{mygreen}\itshape,
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    frame=single,
+    framecolor=gray!40,
+    rulecolor=\color{gray!40},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4
+}
+
+% ============================================================================
+% DOCUMENT METADATA
+% ============================================================================
+
+\title{\textbf{Text Formatting in \LaTeX}\\[0.5em]
+       \large A Practical Reference}
+\author{LaTeX Student}
+\date{\today}
+
+% ============================================================================
+% DOCUMENT BODY
+% ============================================================================
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================================
+% SECTION 1: FONT FAMILIES
+% ============================================================================
+
+\section{Font Families}
+\label{sec:families}
+
+\LaTeX{} provides three fundamental font families, each suited to different
+contexts in a document.
+
+\subsection{Serif (Roman) — \texttt{\textbackslash textrm}}
+
+The default family. Serifs are the small strokes at the ends of letterforms,
+which aid readability in body text.
+
+\textrm{This text uses the Roman (serif) font family. Serifs guide the eye
+along horizontal lines, making long passages comfortable to read.}
+
+\subsection{Sans Serif — \texttt{\textbackslash textsf}}
+
+Sans-serif text omits serifs, giving a clean, modern appearance well-suited
+to headings, captions, and on-screen display.
+
+\textsf{This text uses the sans-serif font family. It looks clean and
+contemporary, often used in slide presentations and user interfaces.}
+
+\subsection{Monospace (Typewriter) — \texttt{\textbackslash texttt}}
+
+Every character occupies the same horizontal width, making monospace fonts
+ideal for source code, file paths, and terminal output.
+
+\texttt{This text uses the monospace (typewriter) font family. Each character
+takes equal horizontal space: i m w l all line up precisely.}
+
+% ============================================================================
+% SECTION 2: FONT STYLES AND EMPHASIS
+% ============================================================================
+
+\section{Font Styles and Emphasis}
+\label{sec:styles}
+
+\subsection{Basic Styles}
+
+\begin{center}
+\begin{tabular}{lll}
+\hline
+\textbf{Command} & \textbf{Example} & \textbf{Use case} \\
+\hline
+\verb|\textbf{...}| & \textbf{Bold text} & Key terms, strong emphasis \\
+\verb|\textit{...}| & \textit{Italic text} & Titles, foreign words \\
+\verb|\textsl{...}| & \textsl{Slanted text} & Lighter emphasis than italic \\
+\verb|\textsc{...}| & \textsc{Small Capitals} & Acronyms, proper names \\
+\verb|\underline{...}| & \underline{Underlined} & Use sparingly \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Combining Styles}
+
+Styles can be nested, though excessive combinations harm readability:
+
+\medskip
+\textbf{Bold} combined with \textbf{\textit{italic}} produces bold italic.
+
+\texttt{\textbf{Bold monospace}} is useful for highlighting code keywords.
+
+\textit{\textsc{Italic small caps}} works for special terminology.
+
+\medskip
+\noindent
+The semantic commands \verb|\emph{...}| toggle between roman and italic
+depending on context: in normal text \emph{this is italic}, but inside
+italic text \textit{this word \emph{reverts} to roman}.
+
+% ============================================================================
+% SECTION 3: FONT SIZES
+% ============================================================================
+
+\section{Font Sizes}
+\label{sec:sizes}
+
+\LaTeX{} provides ten relative size commands, scaled relative to the
+base font size declared in \verb|\documentclass|:
+
+\medskip
+{\tiny        \texttt{tiny}        — 5pt at 10pt base}
+
+{\scriptsize  \texttt{scriptsize}  — 7pt at 10pt base}
+
+{\footnotesize\texttt{footnotesize}— 8pt at 10pt base}
+
+{\small       \texttt{small}       — 9pt at 10pt base}
+
+{\normalsize  \texttt{normalsize}  — 10pt at 10pt base (default)}
+
+{\large       \texttt{large}       — 12pt at 10pt base}
+
+{\Large       \texttt{Large}       — 14pt at 10pt base}
+
+{\LARGE       \texttt{LARGE}       — 17pt at 10pt base}
+
+{\huge        \texttt{huge}        — 20pt at 10pt base}
+
+{\Huge        \texttt{Huge}        — 25pt at 10pt base}
+
+\medskip
+\noindent
+Note: braces \verb|{ }| limit the scope of a size declaration, preventing
+it from affecting the rest of the document.
+
+% ============================================================================
+% SECTION 4: COLORS WITH xcolor
+% ============================================================================
+
+\section{Colors with \texttt{xcolor}}
+\label{sec:colors}
+
+\subsection{Predefined Colors}
+
+The \texttt{xcolor} package provides 68 predefined color names from the
+\texttt{dvipsnames} option (loaded by default in many setups):
+
+\medskip
+\textcolor{red}{Red text} \quad
+\textcolor{blue}{Blue text} \quad
+\textcolor{green}{Green text} \quad
+\textcolor{cyan}{Cyan text} \quad
+\textcolor{magenta}{Magenta text} \quad
+\textcolor{orange}{Orange text} \quad
+\textcolor{violet}{Violet text} \quad
+\textcolor{brown}{Brown text}
+
+\subsection{Custom Colors with \texttt{\textbackslash definecolor}}
+
+\begin{verbatim}
+\definecolor{myblue}{RGB}{0, 70, 140}     % RGB model (0-255 each)
+\definecolor{mygold}{RGB}{200, 150, 0}
+\definecolor{mygreen}{RGB}{20, 120, 50}
+\end{verbatim}
+
+Result:
+\textcolor{myblue}{This is custom deep blue.} \quad
+\textcolor{mygold}{This is custom gold.} \quad
+\textcolor{mygreen}{This is custom forest green.}
+
+\medskip
+Colors can also be defined with other models:
+
+\definecolor{warm}{HTML}{CC4400}      % Hex notation
+\definecolor{pale}{gray}{0.75}        % Grayscale (0=black, 1=white)
+
+\textcolor{warm}{HTML color \#CC4400} \quad
+\textcolor{pale}{Gray (0.75)}
+
+\subsection{Colored Backgrounds with \texttt{\textbackslash colorbox}}
+
+\colorbox{highlight}{Highlighted text on a pale yellow background.}
+
+\medskip
+\colorbox{myblue}{\textcolor{white}{\textbf{White text on dark blue.}}}
+
+\medskip
+For boxes with a colored frame \emph{and} background, use
+\verb|\fcolorbox{frame}{bg}{text}|:
+
+\fcolorbox{myblue}{highlight}{Framed and highlighted text.}
+
+\subsection{Color Mixing}
+
+\texttt{xcolor} supports inline color expressions:
+
+\textcolor{red!50!blue}{50\% red + 50\% blue = purple}
+
+\textcolor{green!70!black}{70\% green + 30\% black = dark green}
+
+\textcolor{blue!30}{30\% blue + 70\% white = light blue}
+
+% ============================================================================
+% SECTION 5: LIST ENVIRONMENTS
+% ============================================================================
+
+\section{List Environments}
+\label{sec:lists}
+
+\subsection{Unordered Lists (\texttt{itemize})}
+
+Use \texttt{itemize} for collections where order does not matter:
+
+\begin{itemize}
+    \item The \LaTeX{} kernel provides core functionality
+    \item Packages extend \LaTeX{} for specialized tasks
+    \item Document classes define the overall layout
+    \item The \texttt{CTAN} archive hosts thousands of packages
+\end{itemize}
+
+\subsection{Ordered Lists (\texttt{enumerate})}
+
+Use \texttt{enumerate} for sequences, steps, or ranked items:
+
+\begin{enumerate}
+    \item Install a \TeX{} distribution (TeX Live or MiKTeX)
+    \item Choose an editor (TeXstudio, VS Code, Overleaf)
+    \item Create a \texttt{.tex} source file
+    \item Run \texttt{pdflatex} to compile
+    \item View the resulting PDF
+\end{enumerate}
+
+\subsection{Description Lists (\texttt{description})}
+
+Use \texttt{description} for glossaries, symbol tables, or labeled items:
+
+\begin{description}
+    \item[\texttt{pdflatex}] The most common \LaTeX{} engine; produces PDF directly
+    \item[\texttt{xelatex}] Supports Unicode input and OpenType fonts natively
+    \item[\texttt{lualatex}] Embeds Lua scripting in \LaTeX; highly extensible
+    \item[\texttt{biber}]    Bibliography processor for BibLaTeX (replaces BibTeX)
+    \item[\texttt{latexmk}]  Automates multi-pass compilation for cross-references
+\end{description}
+
+\subsection{Nested Lists}
+
+Lists can nest up to four levels deep (default labels change automatically):
+
+\begin{enumerate}
+    \item Programming paradigms
+        \begin{itemize}
+            \item Imperative
+                \begin{enumerate}
+                    \item Procedural (C, Pascal)
+                    \item Object-oriented (Java, Python)
+                \end{enumerate}
+            \item Declarative
+                \begin{itemize}
+                    \item Functional (Haskell, Lisp)
+                    \item Logic (Prolog)
+                \end{itemize}
+        \end{itemize}
+    \item Type systems
+        \begin{itemize}
+            \item Static typing (C, Rust, Haskell)
+            \item Dynamic typing (Python, JavaScript, Ruby)
+        \end{itemize}
+\end{enumerate}
+
+% ============================================================================
+% SECTION 6: VERBATIM AND CODE LISTINGS
+% ============================================================================
+
+\section{Verbatim and Code Listings}
+\label{sec:verbatim}
+
+\subsection{Inline Verbatim}
+
+Use \verb|\verb| for short inline code: the command \verb|\textbf{}| makes
+text bold. File paths such as \verb|/usr/local/bin/pdflatex| stay literal.
+
+\subsection{The \texttt{verbatim} Environment}
+
+The \texttt{verbatim} environment preserves whitespace and suppresses
+all \LaTeX{} interpretation:
+
+\begin{verbatim}
+$ pdflatex --interaction=nonstopmode document.tex
+$ biber document
+$ pdflatex document.tex
+$ pdflatex document.tex
+\end{verbatim}
+
+\subsection{Syntax-Highlighted Listings}
+
+The \texttt{listings} package adds syntax highlighting with line numbers:
+
+\begin{lstlisting}[language=Python, caption={Sieve of Eratosthenes}]
+def sieve(limit):
+    """Return all prime numbers up to limit."""
+    is_prime = [True] * (limit + 1)
+    is_prime[0] = is_prime[1] = False
+
+    for i in range(2, int(limit**0.5) + 1):
+        if is_prime[i]:
+            # Mark all multiples as composite
+            for j in range(i * i, limit + 1, i):
+                is_prime[j] = False
+
+    return [n for n, prime in enumerate(is_prime) if prime]
+
+primes = sieve(50)
+print(f"Primes up to 50: {primes}")
+\end{lstlisting}
+
+% ============================================================================
+% SECTION 7: SPECIAL CHARACTERS AND DASHES
+% ============================================================================
+
+\section{Special Characters and Dashes}
+\label{sec:special}
+
+\subsection{Reserved Characters}
+
+These ten characters have special meaning in \LaTeX{} and must be escaped:
+
+\medskip
+\begin{center}
+\begin{tabular}{clc}
+\hline
+\textbf{Character} & \textbf{Command} & \textbf{Usage} \\
+\hline
+\#  & \verb|\#|  & Parameter marker in macros \\
+\$  & \verb|\$|  & Math mode delimiter \\
+\%  & \verb|\%|  & Comment character \\
+\&  & \verb|\&|  & Column separator in tables \\
+\_  & \verb|\_|  & Subscript in math mode \\
+\{  & \verb|\{|  & Begin group \\
+\}  & \verb|\}|  & End group \\
+\~{} & \verb|\~{}| & Non-breaking space (tilde) \\
+\^{} & \verb|\^{}| & Superscript in math mode \\
+\textbackslash & \verb|\textbackslash| & Macro prefix \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Dash Types}
+
+\LaTeX{} uses different numbers of hyphens for three distinct purposes:
+
+\begin{description}
+    \item[Hyphen \texttt{-}] Used in compound words: daughter-in-law, twenty-one
+    \item[En dash \texttt{--}] Used for ranges and connections: pages 10--25, London--Paris route
+    \item[Em dash \texttt{---}] Used for parenthetical remarks---like this---in prose
+\end{description}
+
+\subsection{Quotation Marks}
+
+\LaTeX{} uses backticks for opening quotes, straight quotes for closing:
+
+\begin{description}
+    \item[Single quotes] \verb|`text'| produces `text'
+    \item[Double quotes] \verb|``text''| produces ``text''
+    \item[Nested] \verb|``She said `hello' to me.''| produces ``She said `hello' to me.''
+\end{description}
+
+\subsection{Other Typographic Symbols}
+
+\copyright{} 2024 LaTeX Foundation \quad
+\textregistered{} Registered Trademark \quad
+\texttrademark{} Trademark \quad
+\pounds 42 \quad
+\S\,3.1 (section sign) \quad
+\P{} (pilcrow) \quad
+\dag{} (dagger) \quad
+\ddag{} (double dagger)
+
+\medskip
+\noindent Ellipsis: use \verb|\ldots| to get proper spacing\ldots{} not three dots...
+
+% ============================================================================
+% SECTION 8: TEXT ALIGNMENT
+% ============================================================================
+
+\section{Text Alignment}
+\label{sec:alignment}
+
+By default, \LaTeX{} fully justifies text, stretching spaces to align both
+left and right margins. Three environments override this:
+
+\subsection{Centered Text}
+
+\begin{center}
+    \textbf{Centered Heading}\\
+    This paragraph is centered on the page.\\
+    Each line is independently centered regardless of its length.
+\end{center}
+
+\subsection{Left-Aligned (Ragged Right)}
+
+\begin{flushleft}
+    This paragraph is left-aligned with a ragged right margin.
+    No interword spacing adjustments are made to justify lines.
+    This style is common in letters and informal documents.
+\end{flushleft}
+
+\subsection{Right-Aligned (Ragged Left)}
+
+\begin{flushright}
+    This paragraph is right-aligned with a ragged left margin.\\
+    Often used for dates, addresses, and captions in some styles.\\
+    \textit{—Anonymous}
+\end{flushright}
+
+\subsection{The \texttt{\textbackslash hfill} and \texttt{\textbackslash vfill} Commands}
+
+\texttt{\textbackslash hfill} inserts a flexible horizontal space that
+fills all available width:
+
+\noindent Author Name \hfill \today
+
+\medskip
+\noindent Left \hfill Center \hfill Right
+
+% ============================================================================
+% SECTION 9: FOOTNOTES
+% ============================================================================
+
+\section{Footnotes}
+\label{sec:footnotes}
+
+Footnotes\footnote{A footnote appears at the bottom of the page, numbered
+automatically. Keep them concise and non-essential to the main argument.}
+are placed with \verb|\footnote{text}| immediately after the word or phrase
+they annotate.
+
+Multiple footnotes on a page are numbered sequentially.\footnote{This is the
+second footnote on this page. Notice the automatic numbering.} The numbering
+resets at the start of each new chapter in \texttt{book} and \texttt{report}
+class documents.
+
+For tables and other environments where \verb|\footnote| cannot be used
+directly, use the two-step approach: place \verb|\footnotemark| in the table
+cell, then \verb|\footnotetext{...}| after the table.\footnotemark
+
+\footnotetext{This footnote was placed using \texttt{\textbackslash footnotemark}
+inside the paragraph and \texttt{\textbackslash footnotetext} outside, because
+some environments do not support \texttt{\textbackslash footnote} directly.}
+
+Custom footnote numbers are possible with \verb|\footnote[n]{text}|: see
+footnote~\ref{fn:custom}.\footnote[99]{This is footnote number 99, set
+with \texttt{\textbackslash footnote[99]\{...\}}.\label{fn:custom}}
+
+% ============================================================================
+% SUMMARY
+% ============================================================================
+
+\section*{Summary}
+
+This document has demonstrated:
+\begin{itemize}
+    \item The three font families: roman (\verb|\textrm|), sans-serif (\verb|\textsf|),
+          and monospace (\verb|\texttt|)
+    \item Font styles: bold, italic, slanted, small caps, and combinations
+    \item Ten relative font sizes from \verb|\tiny| to \verb|\Huge|
+    \item Color commands from the \texttt{xcolor} package: predefined colors,
+          custom \verb|\definecolor|, \verb|\colorbox|, and color mixing
+    \item Three list environments: \texttt{itemize}, \texttt{enumerate},
+          \texttt{description}, and nested combinations
+    \item Verbatim text with \verb|\verb| and the \texttt{verbatim} environment,
+          plus syntax-highlighted listings with the \texttt{listings} package
+    \item Special characters, dash types, and quotation marks
+    \item Alignment environments: \texttt{center}, \texttt{flushleft},
+          \texttt{flushright}
+    \item Footnotes with automatic and manual numbering
+\end{itemize}
+
+\end{document}
+
+% ============================================================================
+% COMPILATION NOTES
+% ============================================================================
+% Single pass is sufficient for this document:
+%   pdflatex text_formatting.tex
+%
+% For documents that also include cross-references or bibliography:
+%   latexmk -pdf text_formatting.tex
+% ============================================================================

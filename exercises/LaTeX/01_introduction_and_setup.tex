@@ -1,0 +1,108 @@
+% Exercises for Lesson 01: Introduction and Setup
+% Topic: LaTeX
+% Solutions to practice problems from the lesson.
+% Compile: pdflatex exercises/LaTeX/01_introduction_and_setup.tex
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+
+\title{Exercises for Lesson 01: Introduction and Setup}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+% Exercises 1, 2, and 6 are procedural (install software, compile a
+% provided snippet, inspect files). They require no typesetting solution.
+
+% === Exercise 3: Personalized Document ===
+% Problem: Create a document with your name as the author, a title of your
+% choice, at least two sections, a bulleted list with three items, and today's
+% date.
+
+\section*{Exercise 3: Personalized Document}
+
+% The solution is the very structure of this file.  Below is a standalone
+% example one could compile separately.
+
+\begin{verbatim}
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+\title{A Journey Through \LaTeX{}}
+\author{Jane Doe}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{What I Will Learn}
+In this course I plan to master:
+\begin{itemize}
+    \item Mathematical typesetting
+    \item Professional document layout
+    \item Figure and table management
+\end{itemize}
+
+\section{Why \LaTeX{} Matters}
+\LaTeX{} produces beautiful, publication-quality documents and
+is the standard tool in science and engineering.
+
+\end{document}
+\end{verbatim}
+
+% === Exercise 4: Experiment ===
+% Problem: Try changing document class, font size, and date.
+
+\section*{Exercise 4: Experiment}
+
+\begin{verbatim}
+% --- Variant A: report class, 12pt ---
+\documentclass[12pt]{report}
+\begin{document}
+\title{Experiment}
+\author{Jane Doe}
+\date{January 1, 2024}
+\maketitle
+\chapter{Introduction}
+Content here.
+\end{document}
+
+% --- Variant B: article, 12pt (explicit) ---
+\documentclass[12pt]{article}
+\begin{document}
+\title{Experiment}
+\author{Jane Doe}
+\date{January 1, 2024}
+\maketitle
+\section{Introduction}
+Content here.
+\section{Details}
+More content.
+\section{Conclusion}
+Final remarks.
+\end{document}
+\end{verbatim}
+
+% === Exercise 5: Error Recovery ===
+% Problem: Remove \end{document}, observe the error, then fix it.
+
+\section*{Exercise 5: Error Recovery}
+
+Removing \verb|\end{document}| produces the error:
+
+\begin{verbatim}
+! Emergency stop.
+<*> document.tex
+*** (job aborted, no legal \end found)
+\end{verbatim}
+
+The fix is simply to restore the missing \verb|\end{document}| at the end of
+the file.  \LaTeX{} requires every \verb|\begin{...}| to have a matching
+\verb|\end{...}|.
+
+\end{document}

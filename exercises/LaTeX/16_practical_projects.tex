@@ -1,0 +1,768 @@
+% ============================================================================
+% Exercises for Lesson 16: Practical Projects
+% Topic: LaTeX
+% Solutions to capstone practice problems integrating techniques from
+% all previous lessons.
+% Compile: pdflatex exercises/LaTeX/16_practical_projects.tex
+% ============================================================================
+
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+
+% Mathematics
+\usepackage{amsmath, amssymb, amsthm}
+
+% Figures and tables
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% Lists and code
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Cross-references
+\usepackage{cleveref}
+
+% hyperref last (before cleveref)
+\usepackage[
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=teal,
+    urlcolor=cyan
+]{hyperref}
+
+% ============================================================================
+% Custom color definitions
+\definecolor{codeblue}{RGB}{0,70,140}
+\definecolor{codegreen}{RGB}{20,120,50}
+\definecolor{codegray}{RGB}{100,100,100}
+
+% Listings style
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{codeblue}\bfseries,
+    commentstyle=\color{codegreen}\itshape,
+    stringstyle=\color{red!70!black},
+    numbers=left,
+    numberstyle=\tiny\color{codegray},
+    numbersep=8pt,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4
+}
+
+% Theorem environment
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+
+% ============================================================================
+
+\title{Exercises for Lesson 16: Practical Projects}
+\author{Study Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+\bigskip
+
+\noindent
+This exercise file integrates skills from all previous lessons into four
+complete project tasks.  Each task asks you to build a realistic, compilable
+\LaTeX{} document that combines multiple packages and techniques.
+
+% ============================================================================
+% PROJECT 1: ACADEMIC PAPER
+% Problem: A complete academic paper with math, figures, tables, bibliography,
+%          and cross-references.
+% ============================================================================
+
+\section*{Project 1: Complete Academic Paper}
+\addcontentsline{toc}{section}{Project 1: Complete Academic Paper}
+
+\textbf{Goal:} Produce a 4--6 page conference-style paper that contains at
+least one section with numbered equations and cross-references, one
+floating figure with a meaningful caption, one booktabs table, and a
+bibliography with at least three citations (BibLaTeX or BibTeX).
+
+\subsection*{Solution}
+
+The solution demonstrates a condensed version.  Study each region before
+building your own full version.
+
+\begin{verbatim}
+% ============================================================
+% academic_paper.tex
+% Compile: pdflatex -> biber -> pdflatex -> pdflatex
+% ============================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[backend=biber,style=authoryear]{biblatex}
+\addbibresource{paper_refs.bib}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+% Theorem environments
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+
+% Custom commands
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\lVert#1\rVert}
+
+\title{Gradient Descent Convergence in Strongly Convex Landscapes}
+\author{Jane Doe \and John Smith}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study the convergence rate of gradient descent (GD) applied to
+strongly convex, smooth objective functions.  We derive a tight
+exponential decay bound and verify it empirically on a least-squares
+regression benchmark.  Our results confirm the $O(\rho^k)$ convergence
+with $\rho = 1 - \mu/L$, where $\mu$ and $L$ are the strong convexity
+and Lipschitz constants, respectively.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Gradient descent is the workhorse of modern machine learning
+\parencite{goodfellow2016}.  For a differentiable function
+$f: \R^n \to \R$, the GD update at iteration $k$ is
+\begin{equation}
+    \label{eq:gd_update}
+    \mathbf{x}_{k+1} = \mathbf{x}_k - \alpha \nabla f(\mathbf{x}_k),
+\end{equation}
+where $\alpha > 0$ is the step size.  \Cref{sec:theory} establishes our
+convergence theorem; \cref{sec:experiments} confirms it numerically.
+
+\section{Theoretical Analysis}
+\label{sec:theory}
+
+\begin{theorem}[Convergence of GD on Strongly Convex Functions]
+\label{thm:gd_conv}
+Let $f: \R^n \to \R$ be $\mu$-strongly convex and $L$-smooth with
+minimiser $\mathbf{x}^*$.  With step size $\alpha = 1/L$, the GD iterates
+satisfy
+\begin{equation}
+    \label{eq:conv_bound}
+    \norm{\mathbf{x}_k - \mathbf{x}^*}^2
+    \leq \left(1 - \frac{\mu}{L}\right)^k
+         \norm{\mathbf{x}_0 - \mathbf{x}^*}^2.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By $L$-smoothness and the update rule \eqref{eq:gd_update},
+\[
+    f(\mathbf{x}_{k+1}) \leq f(\mathbf{x}_k)
+    - \frac{1}{2L}\norm{\nabla f(\mathbf{x}_k)}^2.
+\]
+Combining with the $\mu$-strong convexity inequality
+$f(\mathbf{x}_k) - f(\mathbf{x}^*) \geq (\mu/2)\norm{\mathbf{x}_k - \mathbf{x}^*}^2$
+and iterating completes the proof \parencite[Ch.\,3]{boyd2004}.
+\end{proof}
+
+\section{Numerical Experiments}
+\label{sec:experiments}
+
+We verify \cref{thm:gd_conv} on least-squares regression with a random
+SPD system.  \cref{fig:convergence} shows the convergence curve; the
+dashed line is the theoretical bound from \cref{eq:conv_bound}.
+
+\begin{figure}[h]
+\centering
+% A placeholder box; replace with \includegraphics{convergence.pdf}
+\fbox{\parbox{0.55\textwidth}{\centering\vspace{2cm}
+      \textit{[Convergence curve figure]}\vspace{2cm}}}
+\caption{GD convergence on a $500 \times 500$ random SPD system.
+         Solid = empirical; dashed = bound from \cref{eq:conv_bound}.}
+\label{fig:convergence}
+\end{figure}
+
+\cref{tab:results} summarises results for three problem sizes.
+
+\begin{table}[h]
+\centering
+\caption{Iterations to convergence ($\norm{\mathbf{x}_k - \mathbf{x}^*}
+         / \norm{\mathbf{x}_0 - \mathbf{x}^*} \leq 10^{-6}$).}
+\label{tab:results}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Size} & \boldmath$\mu$ & \boldmath$L$ & \boldmath$\kappa = L/\mu$
+    & \textbf{Iterations} \\
+\midrule
+$n = 100$  & 0.52 & 12.3 & 23.7  & 312  \\
+$n = 500$  & 0.11 & 18.7 & 170.0 & 1840 \\
+$n = 1000$ & 0.04 & 21.5 & 537.5 & 5819 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have verified the classical $O(\rho^k)$ convergence of gradient descent
+on strongly convex functions (\cref{thm:gd_conv}).  Future work will
+extend the analysis to stochastic and momentum-based variants
+\parencite{ruder2016}.
+
+\printbibliography
+
+\end{document}
+\end{verbatim}
+
+\medskip
+\noindent
+\textbf{Key techniques demonstrated:}
+\begin{itemize}[noitemsep]
+    \item BibLaTeX (\texttt{authoryear}) with \verb|\parencite| and
+          \verb|\printbibliography|
+    \item Numbered equation (\texttt{equation}) with \verb|\label|/\verb|\eqref|
+    \item Theorem environment with a complete proof
+    \item Floating figure and booktabs table, both cross-referenced with
+          \verb|\cref|
+    \item Custom commands (\verb|\R|, \verb|\norm|)
+    \item \texttt{cleveref} \verb|\Cref| / \verb|\cref| for all references
+\end{itemize}
+
+% ============================================================================
+% PROJECT 2: BEAMER PRESENTATION WITH TIKZ AND OVERLAYS
+% Problem: A Beamer slide deck with TikZ diagrams and overlays.
+% ============================================================================
+
+\section*{Project 2: Beamer Presentation with TikZ and Overlays}
+\addcontentsline{toc}{section}{Project 2: Beamer Presentation}
+
+\textbf{Goal:} Produce a 6--8 slide presentation on a technical topic that
+includes: a title slide, a table of contents slide, at least two slides with
+\textit{overlay specifications} (\verb|\pause|, \verb|\only|,
+\verb|\uncover|), at least one slide with a TikZ diagram, and a summary slide.
+
+\subsection*{Solution}
+
+\begin{verbatim}
+% ============================================================
+% presentation.tex
+% Compile: pdflatex presentation.tex (twice)
+% ============================================================
+\documentclass[12pt]{beamer}
+
+% Theme and colour
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, shapes.geometric, positioning}
+
+% Metadata
+\title{Gradient Descent for Machine Learning}
+\subtitle{Theory, Variants, and Practice}
+\author{Jane Doe}
+\institute{Department of Computer Science\\Example University}
+\date{\today}
+
+\begin{document}
+
+% ----- Slide 1: Title -----
+\begin{frame}
+\titlepage
+\end{frame}
+
+% ----- Slide 2: Table of Contents -----
+\begin{frame}{Outline}
+\tableofcontents
+\end{frame}
+
+% ----- Section 1 -----
+\section{Background}
+
+% ----- Slide 3: Background with overlays -----
+\begin{frame}{Optimisation Background}
+We want to minimise $f: \mathbb{R}^n \to \mathbb{R}$.
+
+\medskip
+\begin{itemize}
+    \item<1-> \textbf{Objective:} find $\mathbf{x}^* = \arg\min f(\mathbf{x})$
+    \item<2-> \textbf{Gradient:} $\nabla f(\mathbf{x})$ points uphill
+    \item<3-> \textbf{Insight:} move in direction $-\nabla f(\mathbf{x})$
+    \item<4-> \textbf{Update rule:}
+        $\mathbf{x}_{k+1} = \mathbf{x}_k - \alpha \nabla f(\mathbf{x}_k)$
+\end{itemize}
+
+\onslide<5->{
+\begin{block}{Key parameter}
+Step size $\alpha$ controls the trade-off between speed and stability.
+\end{block}
+}
+\end{frame}
+
+% ----- Section 2 -----
+\section{TikZ Diagram}
+
+% ----- Slide 4: TikZ gradient descent illustration -----
+\begin{frame}{Visualising Gradient Descent}
+\begin{center}
+\begin{tikzpicture}[scale=1.1,
+    point/.style={circle, fill, inner sep=2pt},
+    arrow/.style={-{Stealth}, thick, blue!70}
+]
+    % Contour ellipses representing a bowl-shaped function
+    \draw[gray!40, thick] (0,0) ellipse (2.5cm and 1.5cm);
+    \draw[gray!60, thick] (0,0) ellipse (1.8cm and 1.0cm);
+    \draw[gray!80, thick] (0,0) ellipse (1.0cm and 0.6cm);
+
+    % Optimum
+    \node[point, red, label=below right:{\small $\mathbf{x}^*$}] at (0,0) {};
+
+    % Gradient descent path
+    \node[point, blue, label=above:{\small $\mathbf{x}_0$}] (x0) at (2.2,1.2) {};
+    \node[point, blue, label=above:{\small $\mathbf{x}_1$}] (x1) at (1.4,0.6) {};
+    \node[point, blue, label=right:{\small $\mathbf{x}_2$}] (x2) at (0.8,0.2) {};
+    \node[point, blue] (x3) at (0.3,0.05) {};
+
+    \draw[arrow] (x0) -- (x1);
+    \draw[arrow] (x1) -- (x2);
+    \draw[arrow] (x2) -- (x3);
+    \draw[arrow] (x3) -- (0.05,0.01);
+\end{tikzpicture}
+\end{center}
+\vspace{-0.5em}
+Each arrow $\mathbf{x}_k \to \mathbf{x}_{k+1}$ is proportional to
+$-\alpha\,\nabla f(\mathbf{x}_k)$.
+\end{frame}
+
+% ----- Section 3 -----
+\section{Variants}
+
+% ----- Slide 5: Variants with \only -----
+\begin{frame}{GD Variants}
+\only<1>{
+\textbf{Batch Gradient Descent (GD)}
+\begin{itemize}
+    \item Uses all training examples per update
+    \item Stable convergence
+    \item Slow on large datasets ($O(n)$ per step)
+\end{itemize}
+}
+\only<2>{
+\textbf{Stochastic Gradient Descent (SGD)}
+\begin{itemize}
+    \item Uses a single example per update
+    \item Fast; can escape local minima
+    \item Noisy gradients; needs learning rate schedule
+\end{itemize}
+}
+\only<3>{
+\textbf{Mini-Batch SGD}
+\begin{itemize}
+    \item Uses a small batch (32--512 examples) per update
+    \item Best of both: GPU-friendly, reasonable variance
+    \item Standard in deep learning practice
+\end{itemize}
+}
+\end{frame}
+
+% ----- Slide 6: Summary with \uncover -----
+\begin{frame}{Summary}
+\begin{enumerate}
+    \item<1-> Gradient descent minimises $f$ by following $-\nabla f$
+    \item<2-> Convergence rate is $O\!\left(\left(1-\frac{\mu}{L}\right)^k\right)$
+              for strongly convex $f$
+    \item<3-> Three variants: GD, SGD, mini-batch SGD
+    \item<4-> Choice of step size $\alpha$ is critical
+
+    \uncover<5->{
+    \item[\checkmark] Next: \textbf{momentum methods} (Nesterov, Adam)
+    }
+\end{enumerate}
+\end{frame}
+
+\end{document}
+\end{verbatim}
+
+\medskip
+\noindent
+\textbf{Key techniques demonstrated:}
+\begin{itemize}[noitemsep]
+    \item \texttt{beamer} theme/colour scheme selection
+    \item Overlay specifications: \verb|<1->|, \verb|\only<n>|,
+          \verb|\uncover<n->|, \verb|\pause|
+    \item TikZ diagram embedded in a \texttt{frame}
+    \item \texttt{block} environment for highlighted boxes
+    \item \verb|\tableofcontents| on a dedicated slide
+\end{itemize}
+
+% ============================================================================
+% PROJECT 3: MULTI-FILE REPORT STRUCTURE
+% Problem: A multi-file report with \input / \include.
+% ============================================================================
+
+\section*{Project 3: Multi-File Report Project}
+\addcontentsline{toc}{section}{Project 3: Multi-File Report Structure}
+
+\textbf{Goal:} Organise a report as a \emph{multi-file project}: one main
+file that loads shared preamble settings and individual chapter files via
+\verb|\include|.  The structure should mirror a real-world report where each
+author edits their chapter independently.
+
+\subsection*{Recommended Directory Layout}
+
+\begin{verbatim}
+report/
+├── main.tex            % root file: loads preamble + chapters
+├── preamble.tex        % shared package list and settings
+├── chapters/
+│   ├── 01_intro.tex
+│   ├── 02_methods.tex
+│   ├── 03_results.tex
+│   └── 04_conclusion.tex
+├── figures/
+│   └── diagram.pdf
+└── references.bib
+\end{verbatim}
+
+\subsection*{main.tex}
+
+\begin{verbatim}
+% main.tex — root file
+\documentclass[12pt,a4paper]{report}
+\input{preamble}           % shared settings
+
+\title{Annual Research Report 2024}
+\author{Research Team Alpha}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\pagenumbering{roman}
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+\pagenumbering{arabic}
+
+\include{chapters/01_intro}
+\include{chapters/02_methods}
+\include{chapters/03_results}
+\include{chapters/04_conclusion}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
+\end{verbatim}
+
+\subsection*{preamble.tex}
+
+\begin{verbatim}
+% preamble.tex — shared package declarations
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\slshape\nouppercase{\leftmark}}
+\fancyhead[RE,LO]{\slshape Annual Research Report}
+\fancyfoot[C]{\thepage}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\end{verbatim}
+
+\subsection*{chapters/01\_intro.tex (representative chapter)}
+
+\begin{verbatim}
+% chapters/01_intro.tex
+\chapter{Introduction}
+\label{chap:intro}
+
+This report summarises the research activities of Team Alpha during 2024.
+\cref{chap:methods} describes the experimental setup; \cref{chap:results}
+presents the main findings.
+
+\section{Background}
+\label{sec:background}
+Prior work in this area has established ...
+\end{verbatim}
+
+\medskip
+\noindent
+\textbf{Key techniques demonstrated:}
+\begin{itemize}[noitemsep]
+    \item \verb|\input| for shared preamble (processed inline)
+    \item \verb|\include| for chapters (each gets its own \texttt{.aux} file,
+          enabling partial compilation with \verb|\includeonly{chap1}|)
+    \item Separate \texttt{preamble.tex} — change once, applies everywhere
+    \item Roman + arabic page numbering switch around front matter
+    \item \texttt{fancyhdr} configured centrally for the whole report
+\end{itemize}
+
+\subsection*{Partial Compilation}
+
+To compile only Chapter 2 while still resolving all cross-references from
+the full run:
+
+\begin{verbatim}
+% In main.tex, after \input{preamble}:
+\includeonly{chapters/02_methods}
+\end{verbatim}
+
+\LaTeX{} reads the cached \texttt{.aux} files of the omitted chapters, so
+cross-references and page numbers remain correct.
+
+% ============================================================================
+% PROJECT 4: CV WITH CUSTOM COMMANDS
+% Problem: A one-page CV using custom commands for consistent formatting.
+% ============================================================================
+
+\section*{Project 4: Curriculum Vitae with Custom Commands}
+\addcontentsline{toc}{section}{Project 4: CV with Custom Commands}
+
+\textbf{Goal:} Build a clean one-page CV \emph{without} the \texttt{moderncv}
+package.  Define custom \LaTeX{} commands that encapsulate the formatting so
+that adding a new entry requires only a single macro call.
+
+\subsection*{Solution}
+
+\begin{verbatim}
+% ============================================================
+% cv.tex — custom CV without moderncv
+% Compile: pdflatex cv.tex
+% ============================================================
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[
+    top=1.5cm, bottom=1.5cm,
+    left=2cm,  right=2cm
+]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+% ---------- colour palette ----------
+\definecolor{cvblue}{RGB}{0,56,101}
+\definecolor{cvgray}{RGB}{90,90,90}
+
+% ---------- section heading ----------
+% \cvsection{Title}
+\newcommand{\cvsection}[1]{%
+    \vspace{0.5em}%
+    {\color{cvblue}\large\bfseries #1}%
+    \par\nobreak
+    {\color{cvblue}\rule{\textwidth}{0.6pt}}%
+    \vspace{0.3em}%
+}
+
+% ---------- entry: date, title, organisation, location ----------
+% \cventry{2022--2024}{M.Sc. Computer Science}{MIT}{Cambridge, MA}
+\newcommand{\cventry}[4]{%
+    \noindent
+    \begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}
+        \textbf{#2}, #3 & {\color{cvgray}#1, #4}
+    \end{tabular*}%
+    \par
+}
+
+% ---------- skill row ----------
+% \cvskill{Category}{Value}
+\newcommand{\cvskill}[2]{%
+    \noindent
+    \textbf{#1:} #2\par\smallskip
+}
+
+% ---------- no paragraph indent ----------
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+
+% ============================================================
+\begin{document}
+
+% Name and contact
+\begin{center}
+    {\LARGE\bfseries\color{cvblue} Jane Doe}\\[4pt]
+    {\color{cvgray}
+     \href{mailto:jane@example.com}{jane@example.com} \quad
+     \textbar\quad +1-555-0123 \quad
+     \textbar\quad
+     \href{https://github.com/janedoe}{github.com/janedoe}
+    }
+\end{center}
+
+\bigskip
+
+% --- Education ---
+\cvsection{Education}
+
+\cventry{2022--2024}{M.Sc.\ Computer Science}{MIT}{Cambridge, MA}
+\begin{itemize}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item Thesis: \textit{Convergence of Gradient Methods for Sparse
+          Optimisation}
+    \item GPA: 4.0/4.0
+\end{itemize}
+
+\medskip
+\cventry{2018--2022}{B.Sc.\ Mathematics (Hons.)}{Stanford}{Stanford, CA}
+\begin{itemize}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item Minor in Computer Science
+    \item Dean's List all semesters
+\end{itemize}
+
+% --- Experience ---
+\cvsection{Work Experience}
+
+\cventry{Jun 2024--Present}{Machine Learning Researcher}{DeepMind}{London, UK}
+\begin{itemize}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item Developed novel preconditioning strategies, reducing training
+          time by 30\%
+    \item Co-authored two NeurIPS papers on optimisation for transformers
+\end{itemize}
+
+\medskip
+\cventry{May--Aug 2023}{Research Intern}{Google Research}{Mountain View, CA}
+\begin{itemize}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item Implemented efficient sparse attention kernels in CUDA
+    \item Achieved 2$\times$ inference speedup on long-context benchmarks
+\end{itemize}
+
+% --- Skills ---
+\cvsection{Technical Skills}
+
+\cvskill{Languages}{Python, C++, Rust, Julia, Bash}
+\cvskill{Frameworks}{PyTorch, JAX, TensorFlow, NumPy, SciPy}
+\cvskill{Tools}{Git, Docker, Kubernetes, \LaTeX, Linux}
+
+% --- Publications ---
+\cvsection{Selected Publications}
+
+\begin{enumerate}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item J.\ Doe and J.\ Smith. ``Hierarchical Preconditioning for
+          Large-Scale Optimisation.'' \textit{NeurIPS 2024}.
+    \item J.\ Doe et al. ``Sparse Attention for Long Documents.''
+          \textit{ICML 2023}.
+\end{enumerate}
+
+\end{document}
+\end{verbatim}
+
+\medskip
+\noindent
+\textbf{Key techniques demonstrated:}
+\begin{itemize}[noitemsep]
+    \item Custom commands with arguments: \verb|\cvsection{#1}|,
+          \verb|\cventry{#1}{#2}{#3}{#4}|, \verb|\cvskill{#1}{#2}|
+    \item \texttt{tabular*} with \verb|\extracolsep{\fill}| for flush-right
+          date/location
+    \item \verb|\definecolor| and \verb|\color| for a consistent brand palette
+    \item \texttt{enumitem} options (\texttt{noitemsep}, \texttt{topsep}) to
+          tighten list spacing in a dense one-page layout
+    \item \verb|\hyperref| with \verb|hidelinks| for clickable email/GitHub
+          without visible coloured boxes
+\end{itemize}
+
+\subsection*{Extending the CV Template}
+
+Adding a new work entry requires only:
+
+\begin{verbatim}
+\cventry{Start--End}{Role}{Company}{Location}
+\begin{itemize}[noitemsep, topsep=2pt, leftmargin=1.5em]
+    \item Accomplishment one
+    \item Accomplishment two
+\end{itemize}
+\end{verbatim}
+
+No formatting knowledge is needed once the macros are defined---the caller
+only supplies content.
+
+% ============================================================================
+% CHECKLIST
+% ============================================================================
+
+\bigskip
+\noindent\rule{\textwidth}{0.4pt}
+
+\subsection*{Capstone Checklist}
+
+Before considering each project complete, verify:
+
+\begin{enumerate}
+    \item \textbf{Project 1 (Academic Paper)}
+    \begin{itemize}[noitemsep]
+        \item[$\square$] Compiles with \texttt{pdflatex} $\to$ \texttt{biber} $\to$
+              \texttt{pdflatex} $\to$ \texttt{pdflatex}
+        \item[$\square$] At least one numbered equation with \verb|\label|/\verb|\eqref|
+        \item[$\square$] At least one floating figure and one booktabs table
+        \item[$\square$] At least three bibliography entries cited in text
+        \item[$\square$] All figures, tables, equations, and sections
+              cross-referenced with \verb|\cref|
+    \end{itemize}
+
+    \item \textbf{Project 2 (Beamer)}
+    \begin{itemize}[noitemsep]
+        \item[$\square$] Title slide + TOC slide
+        \item[$\square$] At least two slides with overlay specifications
+        \item[$\square$] At least one slide containing a TikZ diagram
+        \item[$\square$] Summary/conclusion slide
+    \end{itemize}
+
+    \item \textbf{Project 3 (Multi-File Report)}
+    \begin{itemize}[noitemsep]
+        \item[$\square$] Separate \texttt{preamble.tex}, at least three chapter files
+        \item[$\square$] Front matter with roman page numbers; main matter arabic
+        \item[$\square$] Cross-chapter \verb|\cref| references resolve correctly
+        \item[$\square$] Partial compilation with \verb|\includeonly| tested
+    \end{itemize}
+
+    \item \textbf{Project 4 (CV)}
+    \begin{itemize}[noitemsep]
+        \item[$\square$] At least three custom commands (\verb|\cvsection|,
+              \verb|\cventry|, \verb|\cvskill| or equivalents)
+        \item[$\square$] Consistent colour palette via \verb|\definecolor|
+        \item[$\square$] Fits on one page
+        \item[$\square$] All hyperlinks functional (\texttt{hyperref})
+    \end{itemize}
+\end{enumerate}
+
+\end{document}
