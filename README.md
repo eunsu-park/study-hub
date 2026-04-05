@@ -86,6 +86,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Computer_Graphics](./content/en/Computer_Graphics/00_Overview.md) | 렌더링 파이프라인, 셰이딩, 레이 트레이싱, WebGL, GPU 컴퓨팅 | 16 |
 | [Control_Theory](./content/en/Control_Theory/00_Overview.md) | 피드백 제어, PID, 근궤적, 보드/나이퀴스트, 상태공간, 디지털 제어 | 16 |
 | [Signal_Processing](./content/en/Signal_Processing/00_Overview.md) | 신호/시스템, 푸리에, DFT/FFT, 디지털 필터, 적응 필터, 스펙트로그램 | 16 |
+| [Interpretable_AI](./content/en/Interpretable_AI/00_Overview.md) | 그래디언트 어트리뷰션, SHAP, 공정성, 인과 추론, AI 거버넌스 | 16 |
+| [MLOps](./content/en/MLOps/00_Overview.md) | MLflow, W&B, 모델 서빙, 드리프트 감지, LLMOps, DVC | 17 |
+| [Probabilistic_Programming](./content/en/Probabilistic_Programming/00_Overview.md) | 베이지안, MCMC, PyMC, Stan, Pyro, GP, 변분 추론 | 18 |
+| [Prompt_Engineering](./content/en/Prompt_Engineering/00_Overview.md) | 프롬프트 설계, CoT, 구조화 출력, 멀티모달, 에이전트 패턴 | 17 |
 | [Computer_Vision](./content/en/Computer_Vision/00_Overview.md) | OpenCV, 이미지처리, 객체검출, 세그멘테이션, 3D비전, NeRF, SLAM | 31 |
 | [Data_Engineering](./content/en/Data_Engineering/00_Overview.md) | Airflow, Spark, Kafka, dbt, CDC, Lakehouse, 벡터 검색 | 23 |
 | [Deep_Learning](./content/en/Deep_Learning/00_Overview.md) | PyTorch, CNN, RNN, Transformer, GAN, Diffusion, Few-Shot, TTA | 47 |
