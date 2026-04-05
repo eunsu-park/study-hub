@@ -33,6 +33,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Go_Basics](./content/en/Go_Basics/00_Overview.md) | Go 언어 기초: 타입, 함수, 인터페이스, 동시성, 테스팅 | 11 |
 | [IDL_Basics](./content/en/IDL_Basics/00_Overview.md) | IDL 기초: 배열, 플로팅, FITS 파일, 구조체, 태양 데이터 처리 | 15 |
 | [Rust_Basics](./content/en/Rust_Basics/00_Overview.md) | Rust 기초: 소유권, 빌림, 트레이트, 동시성, 비동기, Cargo | 16 |
+| [Claude_Ecosystem](./content/en/Claude_Ecosystem/00_Overview.md) | Claude Code, MCP, Agent SDK, API, 비전, RAG | 25 |
+| [Cloud_Computing](./content/en/Cloud_Computing/00_Overview.md) | 클라우드 서비스, AWS, GCP, 인프라 | 17 |
+| [LaTeX](./content/en/LaTeX/00_Overview.md) | LaTeX 문서 조판, 수식, 그래픽스, 참고문헌 | 16 |
+| [Web_Development](./content/en/Web_Development/00_Overview.md) | HTML, CSS, JS, TypeScript, 접근성, SEO, PWA, 웹 컴포넌트 | 19 |
 | [Git](./content/en/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 14 |
 | [Linux](./content/en/Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 26 |
 | [Programming](./content/en/Programming/00_Overview.md) | 프로그래밍 개념, 패러다임, 디자인 패턴, 클린 코드, 테스팅 | 16 |
