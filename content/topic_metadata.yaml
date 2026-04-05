@@ -161,7 +161,7 @@ topics:
       en: "Claude Code, MCP, Agent SDK, and AI tools"
       ko: "Claude Code, MCP, Agent SDK 및 AI 도구"
 
-  # Tier 2 ��� Intermediate (11 topics)
+  # Tier 2 — Intermediate (15 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
@@ -272,6 +272,34 @@ topics:
     description:
       en: "Advanced IDL: SolarSoft, SDO/AIA/HMI analysis, spectral methods, image processing, and IDL-Python bridge"
       ko: "IDL 고급: SolarSoft, SDO/AIA/HMI 분석, 스펙트럴 방법, 영상 처리 및 IDL-Python 브리지"
+
+  Software_Engineering:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Software engineering practices and methodologies"
+      ko: "소프트웨어 공학 실무 및 방법론"
+
+  Security:
+    tier: intermediate
+    prerequisites: [Networking]
+    description:
+      en: "Cybersecurity principles and practices"
+      ko: "사이버보안 원칙 및 실무"
+
+  Cryptography_Theory:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Cryptographic algorithms, protocols, and mathematical foundations"
+      ko: "암호화 알고리즘, 프로토콜 및 수학적 기초"
+
+  Formal_Languages:
+    tier: intermediate
+    prerequisites: [Programming]
+    description:
+      en: "Automata theory, formal languages, and computability"
+      ko: "오토마타 이론, 형식 언어 및 계산 가능성"
 
   # Tier 3 — Advanced (12 topics)
   Algorithm:
