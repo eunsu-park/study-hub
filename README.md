@@ -35,6 +35,9 @@ From programming fundamentals to plasma physics — curated study materials that
 | [CPP_Basics](./content/en/CPP_Basics/00_Overview.md) | C++ 기초: OOP, STL 컨테이너/알고리즘, 예외 처리, 파일 I/O, CMake | 15 |
 | [CSharp_Basics](./content/en/CSharp_Basics/00_Overview.md) | C# 기초: 문법, 타입, OOP, 컬렉션, 제네릭, 예외 처리, 파일 I/O | 15 |
 | [Docker](./content/en/Docker/00_Overview.md) | Docker, Kubernetes, Helm, CI/CD, 컨테이너 네트워킹 | 16 |
+| [Go_Basics](./content/en/Go_Basics/00_Overview.md) | Go 언어 기초: 타입, 함수, 인터페이스, 동시성, 테스팅 | 11 |
+| [IDL_Basics](./content/en/IDL_Basics/00_Overview.md) | IDL 기초: 배열, 플로팅, FITS 파일, 구조체, 태양 데이터 처리 | 15 |
+| [Rust_Basics](./content/en/Rust_Basics/00_Overview.md) | Rust 기초: 소유권, 빌림, 트레이트, 동시성, 비동기, Cargo | 16 |
 | [Git](./content/en/Git/00_Overview.md) | Git, GitHub, 워크플로우, 모노레포 | 14 |
 | [Linux](./content/en/Linux/00_Overview.md) | Linux 기초 ~ HA 클러스터, 트러블슈팅 | 26 |
 | [Programming](./content/en/Programming/00_Overview.md) | 프로그래밍 개념, 패러다임, 디자인 패턴, 클린 코드, 테스팅 | 16 |
@@ -51,6 +54,8 @@ From programming fundamentals to plasma physics — curated study materials that
 | [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
 | [CSharp_Advanced](./content/en/CSharp_Advanced/00_Overview.md) | 고급 C#: LINQ, async/await, 패턴 매칭, 레코드, Span, DI, .NET 생태계 | 17 |
 | [Data_Science](./content/en/Data_Science/00_Overview.md) | NumPy, Pandas, 시각화, EDA, 확률, 추론, 베이지안, 시계열 | 29 |
+| [Go_Advanced](./content/en/Go_Advanced/00_Overview.md) | Go 고급: HTTP 서버, REST API, DB, 제네릭, 리플렉션, 마이크로서비스 | 11 |
+| [IDL_Advanced](./content/en/IDL_Advanced/00_Overview.md) | IDL 고급: SolarSoft, SDO/AIA/HMI 분석, 영상 처리, IDL-Python 브리지 | 15 |
 | [Database_Theory](./content/en/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
 | [Linear_Algebra](./content/en/Linear_Algebra/00_Overview.md) | 벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용 | 20 |
 | [Machine_Learning](./content/en/Machine_Learning/00_Overview.md) | 회귀, 앙상블, SVM, 클러스터링, SHAP/LIME, AutoML, Symbolic Regression | 24 |
@@ -59,6 +64,7 @@ From programming fundamentals to plasma physics — curated study materials that
 | [PostgreSQL](./content/en/PostgreSQL/00_Overview.md) | SQL, JSON, 복제, 파티셔닝, FTS, 보안/RLS | 20 |
 | [Probability_and_Statistics](./content/en/Probability_and_Statistics/00_Overview.md) | 확률론, 통계적 추론, 이산/연속 분포, 베이지안, 확률 과정 | 18 |
 | [Python_Advanced](./content/en/Python_Advanced/00_Overview.md) | Python 고급: 데코레이터, 메타클래스, async, 디스크립터, 함수형, 성능 최적화 | 14 |
+| [Rust_Advanced](./content/en/Rust_Advanced/00_Overview.md) | Rust 고급: unsafe, 매크로, FFI, WebAssembly, 임베디드, 네트워킹, 성능 | 14 |
 
 ### Tier 3 — Advanced (고급)
 
@@ -92,13 +98,13 @@ From programming fundamentals to plasma physics — curated study materials that
 | Path / 경로 | Topics / 토픽 |
 |---|---|
 | Python Developer / Python 개발자 | Programming → Python_Basics → Python_Advanced |
-| Systems Programmer / 시스템 프로그래머 | Programming → C_Basics → C_Advanced → CPP_Basics → CPP_Advanced |
+| Systems Programmer / 시스템 프로그래머 | Programming → C_Basics → C_Advanced → CPP_Basics → CPP_Advanced → Rust_Basics → Rust_Advanced |
 | .NET Developer / .NET 개발자 | Programming → CSharp_Basics → CSharp_Advanced |
 | CV Engineer / 컴퓨터 비전 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning → Computer_Vision |
 | ML Engineer / 머신러닝 엔지니어 | Programming → Python_Basics → Python_Advanced → Machine_Learning → Deep_Learning |
 | Linux & DevOps | Linux → Shell_Script → Git → Docker |
 | Scientific Computing / 과학 계산 | Calculus → Linear_Algebra → Probability_and_Statistics → Mathematical_Methods → Math_for_AI → Electrodynamics |
-| Space Physics / 우주물리학 | Calculus → Mathematical_Methods → Electrodynamics → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
+| Space Physics / 우주물리학 | Calculus → Mathematical_Methods → Electrodynamics → IDL_Basics → IDL_Advanced → Numerical_Simulation → Plasma_Physics → MHD → Solar_Physics → Space_Weather |
 | Data & AI / 데이터 & AI | Data_Science → Machine_Learning → Deep_Learning → NLP_and_LLM → Foundation_Models → Reinforcement_Learning |
 
 ---
