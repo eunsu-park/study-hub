@@ -43,6 +43,10 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Python_Basics](./content/en/Python_Basics/00_Overview.md) | Python 언어 기초: 변수, 제어문, 함수, 자료구조, OOP, 모듈, 표준 라이브러리 | 14 |
 | [Shell_Script](./content/en/Shell_Script/00_Overview.md) | Bash 심화, 매개변수 확장, 프로세스 관리, 배포 자동화 | 16 |
 | [VIM](./content/en/VIM/00_Overview.md) | 모달 편집, 모션, 매크로, 플러그인, Neovim/LSP | 14 |
+| [Data_Structures](./content/en/Data_Structures/00_Overview.md) | 배열, 연결 리스트, 스택, 큐, 트리, 그래프, 해시 테이블, 정렬, 탐색 | 14 |
+| [Debugging_and_Tools](./content/en/Debugging_and_Tools/00_Overview.md) | 에러 메시지, 디버거, 로깅, 린터, 타입 체킹, 프로파일링 | 12 |
+| [Object_Oriented_Programming](./content/en/Object_Oriented_Programming/00_Overview.md) | OOP 4원칙, SOLID, 디자인 패턴, 매직 메서드, 데이터클래스 | 14 |
+| [Regular_Expressions](./content/en/Regular_Expressions/00_Overview.md) | 정규 표현식, 메타문자, 그룹, 전방탐색, 성능, 실전 활용 | 12 |
 
 ### Tier 2 — Intermediate (중급)
 
@@ -77,6 +81,9 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Kubernetes](./content/en/Kubernetes/00_Overview.md) | 아키텍처, 워크로드, 네트워킹, CRD, 오퍼레이터, 프로덕션 운영 | 19 |
 | [System_Design](./content/en/System_Design/00_Overview.md) | 확장성, 캐싱, DB 스케일링, 메시지 큐, 마이크로서비스, 합의 알고리즘 | 20 |
 | [IoT_Embedded](./content/en/IoT_Embedded/00_Overview.md) | IoT, 라즈베리파이, MQTT, BLE, 엣지 AI, 센서 퓨전 | 14 |
+| [Math_for_DL](./content/en/Math_for_DL/00_Overview.md) | DL을 위한 수학: 행렬 미적분, 역전파, 최적화, 정보 이론, 수치 안정성 | 12 |
+| [Neural_Network_Fundamentals](./content/en/Neural_Network_Fundamentals/00_Overview.md) | 퍼셉트론, 활성화 함수, 역전파, 경사 하강법, 배치 정규화, MLP 구현 | 14 |
+| [PyTorch_Fundamentals](./content/en/PyTorch_Fundamentals/00_Overview.md) | 텐서, 자동 미분, nn.Module, 학습 루프, GPU, TorchScript, 생태계 | 14 |
 
 ### Tier 3 — Advanced (고급)
 
