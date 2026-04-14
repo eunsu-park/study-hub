@@ -50,7 +50,7 @@ tiers:
 # ── Topic assignments ────────────────────────────────────────────────────
 
 topics:
-  # Tier 1 — Beginner (18 topics)
+  # Tier 1 — Beginner (21 topics)
   Programming:
     tier: beginner
     description:
@@ -89,6 +89,20 @@ topics:
     description:
       en: "Modal editing, motions, text objects, plugins, and Neovim"
       ko: "모달 편집, 모션, 텍스트 객체, 플러그인 및 Neovim"
+
+  Debugging_and_Tools:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "Debugging techniques, error reading, linters, type checking, profiling, and developer tools"
+      ko: "디버깅 기법, 에러 읽기, 린터, 타입 체킹, 프로파일링 및 개발 도구"
+
+  Regular_Expressions:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "Pattern matching, text processing, and validation with regex and Python re module"
+      ko: "정규 표현식을 이용한 패턴 매칭, 텍스트 처리, 검증 (Python re 모듈)"
 
   Shell_Script:
     tier: beginner
@@ -155,13 +169,27 @@ topics:
       en: "Document typesetting with LaTeX"
       ko: "LaTeX을 활용한 문서 조판"
 
+  Data_Structures:
+    tier: beginner
+    prerequisites: [Programming, Python_Basics]
+    description:
+      en: "Arrays, linked lists, stacks, queues, trees, graphs, hash tables, sorting, and searching"
+      ko: "배열, 연결 리스트, 스택, 큐, 트리, 그래프, 해시 테이블, 정렬 및 탐색"
+
+  Object_Oriented_Programming:
+    tier: beginner
+    prerequisites: [Programming]
+    description:
+      en: "OOP fundamentals: encapsulation, inheritance, polymorphism, abstraction, SOLID, design patterns"
+      ko: "OOP 기초: 캡슐화, 상속, 다형성, 추상화, SOLID, 디자인 패턴"
+
   Claude_Ecosystem:
     tier: beginner
     description:
       en: "Claude Code, MCP, Agent SDK, and AI tools"
       ko: "Claude Code, MCP, Agent SDK 및 AI 도구"
 
-  # Tier 2 — Intermediate (24 topics)
+  # Tier 2 — Intermediate (33 topics)
   CSharp_Advanced:
     tier: intermediate
     prerequisites: [CSharp_Basics]
@@ -181,6 +209,13 @@ topics:
     description:
       en: "Vector spaces, matrix decompositions, SVD, PCA, numerical methods, ML/DL/CG applications"
       ko: "벡터 공간, 행렬 분해, SVD, PCA, 수치 해법, ML/DL/CG 응용"
+
+  Math_for_DL:
+    tier: intermediate
+    prerequisites: [Linear_Algebra, Calculus_and_Differential_Equations]
+    description:
+      en: "Essential mathematics for deep learning: matrix calculus, backpropagation, optimization, probability, information theory, numerical stability"
+      ko: "딥러닝을 위한 필수 수학: 행렬 미적분, 역전파, 최적화, 확률, 정보 이론, 수치 안정성"
 
   Probability_and_Statistics:
     tier: intermediate
@@ -230,6 +265,20 @@ topics:
     description:
       en: "Classical machine learning algorithms"
       ko: "고전 머신러닝 알고리즘"
+
+  Neural_Network_Fundamentals:
+    tier: intermediate
+    prerequisites: [Machine_Learning, Linear_Algebra]
+    description:
+      en: "Neural network fundamentals bridging ML to deep learning"
+      ko: "ML에서 딥러닝으로의 신경망 기초"
+
+  PyTorch_Fundamentals:
+    tier: intermediate
+    prerequisites: [Python_Advanced]
+    description:
+      en: "Comprehensive PyTorch fundamentals: tensors, autograd, modules, training, and deployment"
+      ko: "PyTorch 기초 완성: 텐서, 자동 미분, 모듈, 학습, 배포"
 
   Networking:
     tier: intermediate
