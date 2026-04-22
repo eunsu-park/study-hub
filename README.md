@@ -43,9 +43,7 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Python_Basics](./content/en/Python_Basics/00_Overview.md) | Python 언어 기초: 변수, 제어문, 함수, 자료구조, OOP, 모듈, 표준 라이브러리 | 14 |
 | [Shell_Script](./content/en/Shell_Script/00_Overview.md) | Bash 심화, 매개변수 확장, 프로세스 관리, 배포 자동화 | 16 |
 | [VIM](./content/en/VIM/00_Overview.md) | 모달 편집, 모션, 매크로, 플러그인, Neovim/LSP | 14 |
-| [Data_Structures](./content/en/Data_Structures/00_Overview.md) | 배열, 연결 리스트, 스택, 큐, 트리, 그래프, 해시 테이블, 정렬, 탐색 | 14 |
 | [Debugging_and_Tools](./content/en/Debugging_and_Tools/00_Overview.md) | 에러 메시지, 디버거, 로깅, 린터, 타입 체킹, 프로파일링 | 12 |
-| [Object_Oriented_Programming](./content/en/Object_Oriented_Programming/00_Overview.md) | OOP 4원칙, SOLID, 디자인 패턴, 매직 메서드, 데이터클래스 | 14 |
 | [Regular_Expressions](./content/en/Regular_Expressions/00_Overview.md) | 정규 표현식, 메타문자, 그룹, 전방탐색, 성능, 실전 활용 | 12 |
 
 ### Tier 2 — Intermediate (중급)
@@ -56,7 +54,9 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Calculus_and_Differential_Equations](./content/en/Calculus_and_Differential_Equations/00_Overview.md) | 미적분학, 다변수 미적분, ODE, PDE, 모델링 | 20 |
 | [CPP_Advanced](./content/en/CPP_Advanced/00_Overview.md) | 고급 C++: 템플릿, 모던 C++11~23, 동시성, 디자인 패턴 | 17 |
 | [CSharp_Advanced](./content/en/CSharp_Advanced/00_Overview.md) | 고급 C#: LINQ, async/await, 패턴 매칭, 레코드, Span, DI, .NET 생태계 | 17 |
+| [Data_Structures](./content/en/Data_Structures/00_Overview.md) | 배열, 연결 리스트, 스택, 큐, 트리, 그래프, 해시 테이블, 정렬, 탐색 | 14 |
 | [Data_Science](./content/en/Data_Science/00_Overview.md) | NumPy, Pandas, 시각화, EDA, 확률, 추론, 베이지안, 시계열 | 29 |
+| [Object_Oriented_Programming](./content/en/Object_Oriented_Programming/00_Overview.md) | OOP 4원칙, SOLID, 디자인 패턴, 매직 메서드, 데이터클래스 | 14 |
 | [Go_Advanced](./content/en/Go_Advanced/00_Overview.md) | Go 고급: HTTP 서버, REST API, DB, 제네릭, 리플렉션, 마이크로서비스 | 11 |
 | [IDL_Advanced](./content/en/IDL_Advanced/00_Overview.md) | IDL 고급: SolarSoft, SDO/AIA/HMI 분석, 영상 처리, IDL-Python 브리지 | 15 |
 | [Database_Theory](./content/en/Database_Theory/00_Overview.md) | 관계형 모델, 정규화, 트랜잭션, 인덱싱, NoSQL, 분산 DB | 16 |
@@ -116,7 +116,6 @@ A public repository of bilingual (EN/KO) technical study materials, from program
 | [Numerical_Simulation](./content/en/Numerical_Simulation/00_Overview.md) | ODE/PDE, CFD, FDTD, MHD, FEM, GPU 가속, PINN | 24 |
 | [Optics](./content/en/Optics/00_Overview.md) | 기하광학, 간섭, 회절, 편광, 레이저, 홀로그래피, 적응광학 | 17 |
 | [Reinforcement_Learning](./content/en/Reinforcement_Learning/00_Overview.md) | MDP, Q-Learning, DQN, PPO, SAC, Offline RL, RLHF, World Models | 27 |
-| [Flagship](./content/en/Flagship/00_Overview.md) | 밑바닥 단일 파일 구현: 오토그래드, GAN, RL, 디퓨전, VAE | 5 |
 
 ### Tier 4 — Expert (전문)
 
