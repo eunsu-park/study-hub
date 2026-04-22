@@ -97,13 +97,6 @@ examples/
 │
 ├── Electrodynamics/       # Electrodynamics Python examples (12 files)
 │
-├── Flagship/              # Flagship projects — self-contained single-file implementations (10 files)
-│   ├── micro_autograd.py  # Autograd engine from scratch (numpy)
-│   ├── tiny_gan.py        # GAN on 2D distributions (torch)
-│   ├── nano_rl.py         # REINFORCE policy gradient gridworld (numpy)
-│   ├── pico_diffusion.py  # Minimal DDPM diffusion model (torch)
-│   └── micro_vae.py       # VAE with 2D latent space viz (torch)
-│
 ├── GraphQL/               # GraphQL examples (12 files)
 │   ├── 01_schema_resolvers.js ~ 07_testing.js  # Schema, DataLoader, Auth, Subscriptions, Testing
 │   ├── 08_persisted_queries.js ~ 10_performance_security.js  # Caching, Federation, Security
@@ -270,7 +263,7 @@ examples/
     │   └── app.js              # Application logic and components
 ```
 
-**Total example files: ~1,157** (55 topics + Flagship)
+**Total example files: ~1,147** (55 topics)
 
 ## How to Build
 
@@ -381,7 +374,6 @@ jupyter notebook
 | System_Design | 13 | Python | Load Balancer, Cache, Sharding, Consistency, Message Queue, Circuit Breaker, Raft |
 | VIM | 16 | Vim script/Config | Vim modes, motions, macros, plugins, vimrc, Neovim |
 | Web_Development | 49 | HTML/CSS/JS/TS | Web projects, TypeScript, SPA router |
-| **Flagship** | **10** | **Python** | **Self-contained single-file projects: autograd, GAN, RL, diffusion, VAE** |
 
 ## Mapping Examples to Study Materials
 
