@@ -6,6 +6,19 @@
 - Identify analogies between physical domains
 - Linearize nonlinear models around equilibrium points
 - Convert physical models to standard forms suitable for control analysis
+- Validate models numerically and recognize when a model has been linearized too aggressively
+
+## 0. The Modeler's Job
+
+Every controller in this course assumes a model. The model is never the system — it is a deliberately simplified mathematical surrogate that captures the dynamics that matter at the time scale and operating range of interest. Picking what to keep and what to discard is the modeling decision, and it has more impact on closed-loop performance than the controller choice in most projects.
+
+Three guiding principles you will reach for repeatedly:
+
+- **Keep the dominant physics.** A car's lateral dynamics are dominated by tire slip, mass, and yaw inertia. The fact that the windshield is curved is irrelevant. The fact that the front and rear axles are different is essential. Modeling fidelity grows by adding the next-most-important physics, not by adding everything.
+- **Linearize at the operating point.** Nonlinear physics ($\sin\theta$, $v^2$ drag, hysteresis) makes design hard. Almost every control design reduces to "linearize, design, simulate the original nonlinear system, iterate." Section 6 below is the workhorse procedure.
+- **Honor the analogy across domains.** A mass on a spring and an LC tank circuit obey identical equations. Recognizing this saves you weeks of derivation when you switch fields. Section 5 is the cheat sheet.
+
+The output of this lesson — a linear ODE for your plant — feeds Lesson 3's transfer function, which feeds every analysis lesson after that. Get this right and the rest of the course is bookkeeping.
 
 ## 1. Why Mathematical Modeling?
 
@@ -168,6 +181,8 @@ The mathematical structure of physical systems is often identical across domains
 
 These analogies allow techniques developed for one domain to be applied directly to another.
 
+> **Why this saves so much time**: PID tuning rules developed for chemical-reactor temperature loops in the 1940s transfer directly to motor speed control today, because both reduce to the same canonical second-order plant. The wisdom from one industry is reusable in another only because the math is identical.
+
 ## 6. Linearization
 
 Most real systems are **nonlinear**. Linear control theory applies only after **linearization** around an **operating point** (equilibrium).
@@ -208,6 +223,14 @@ $$\delta\ddot{\theta} - \frac{g}{l}\delta\theta = \frac{\tau}{ml^2}$$
 
 Note the sign change — the inverted equilibrium is **unstable** (positive coefficient on $\delta\theta$), while the hanging equilibrium is **stable** (negative coefficient).
 
+### 6.4 How Far Does the Linearization Hold?
+
+A useful rule of thumb: linearization is "good enough" while the nonlinear term's relative error is below ~10%. For the pendulum, $\sin\theta = \theta - \theta^3/6 + \cdots$. The relative error is $\theta^2/6$, so a 10% threshold gives $\theta \leq \sqrt{0.6} \approx 0.77$ rad ≈ 44°. Beyond that, the linear model lies and the controller may misbehave.
+
+For a centrifugal speed regulator with $\omega^2$ nonlinearity around $\bar{\omega}$, the local slope is $2\bar{\omega}$ and the second-order term grows quadratically with the perturbation — the same 10% rule says you can perturb by up to ~22% of $\bar{\omega}$ before the linear model fails.
+
+In practice: design with the linear model, simulate with the nonlinear one, plot the divergence. If the simulated response stays within 10% of the linear prediction across your operating envelope, you are safe.
+
 ## 7. From Physical Model to Transfer Function
 
 The standard workflow for obtaining a transfer function:
@@ -224,6 +247,43 @@ The standard workflow for obtaining a transfer function:
 $$ms^2 X(s) + bsX(s) + kX(s) = F(s)$$
 
 $$G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k}$$
+
+### 7.1 Building the Same Model in Python
+
+`sympy` derives the transfer function automatically — useful for catching algebra mistakes:
+
+```python
+import sympy as sp
+
+s, m, b, k = sp.symbols('s m b k', positive=True)
+X, F = sp.symbols('X F')
+
+# Equation: m s^2 X + b s X + k X = F
+eq = sp.Eq(m * s**2 * X + b * s * X + k * X, F)
+G = sp.simplify(sp.solve(eq, X)[0] / F)
+print("G(s) =", G)         # 1 / (m s^2 + b s + k)
+
+# Plug in numerical values: m=1, b=2, k=10
+G_num = G.subs({m: 1, b: 2, k: 10})
+print("Numeric G(s) =", G_num)
+
+# Standard form: omega_n, zeta
+omega_n = sp.sqrt(k / m)
+zeta    = b / (2 * sp.sqrt(m * k))
+print("omega_n =", omega_n.subs({m: 1, k: 10}).evalf())
+print("zeta    =", zeta.subs({m: 1, b: 2, k: 10}).evalf())
+```
+
+The sympy expression `G = 1/(m*s**2 + b*s + k)` matches the hand derivation. For more complex multi-element circuits or motors, this becomes invaluable — sympy will simplify $C(sI-A)^{-1}B$ symbolically without arithmetic mistakes.
+
+## 8. Common Pitfalls
+
+1. **Modeling too much.** Adding the next physical effect always tightens the model — and triples the design complexity. Stop adding effects when their contribution is below the dominant ones by 10× at the relevant frequencies.
+2. **Linearizing at the wrong operating point.** A pendulum linearized at $\theta = 0$ behaves nothing like one linearized at $\theta = \pi$. The signs of physical parameters can FLIP. Always identify the operating point explicitly and verify the equilibrium condition $f(\bar x, \bar u) = 0$.
+3. **Mixing units silently.** SI is mandatory for back-EMF / torque-constant identities ($K_t = K_b$). Mix units (e.g., RPM with rad/s) and the equations no longer balance. Convert everything to SI before deriving.
+4. **Ignoring sensor and actuator dynamics.** Modeling the plant as if you have direct access to its state is fine for a textbook. In real hardware, the sensor has its own time constant (thermocouples are slow, encoders are fast) and the actuator has its own bandwidth (a hydraulic ram is slow, a piezo is fast). Both belong in the model.
+5. **Treating the linearized model as exact.** Within the operating envelope, the linear model is a useful tool. Outside, it is wrong. Always run the nonlinear simulation as the final check before committing the design to hardware.
+6. **Forgetting to honor the analogy.** Engineers often re-derive the same canonical second-order system in five different domains over their career. Recognize the form once and you skip 80% of the algebra forever.
 
 ## Practice Exercises
 
@@ -254,6 +314,14 @@ where $h$ is the water level, $A$ is the cross-sectional area, $q_{\text{in}}$ i
 1. Find the equilibrium $\bar{h}$ as a function of a constant input $\bar{q}_{\text{in}}$
 2. Linearize around this equilibrium
 3. Find the transfer function from $\delta q_{\text{in}}$ to $\delta h$
+
+### Exercise 4: Sympy Drill
+
+Use the Python snippet from Section 7.1 to derive the transfer function $\Theta(s)/V_a(s)$ for the DC motor (Section 4.1). Plug in plausible numerical values ($J = 0.01, B = 0.1, K_t = K_b = 0.05, R_a = 1$) and find the closed-loop poles. Verify they are in the LHP.
+
+### Exercise 5: Linearization Range
+
+For the pendulum equation $\ddot\theta + (g/l)\sin\theta = u$, simulate the nonlinear ODE with initial conditions $\theta_0 \in \{0.1, 0.5, 1.0\}$ rad and zero input. Plot each trajectory against the linear model's prediction $\theta(t) = \theta_0 \cos(\sqrt{g/l}\,t)$. At which $\theta_0$ does the linear prediction diverge from truth by more than 10%? Compare to the rule-of-thumb estimate from Section 6.4.
 
 ---
 
