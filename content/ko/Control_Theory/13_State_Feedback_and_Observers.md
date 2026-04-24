@@ -4,140 +4,174 @@
 
 - 극배치(pole placement)를 이용한 상태 피드백 제어기(state feedback controller)를 설계한다
 - 제어기-관측기 결합 설계를 위한 분리 원리(separation principle)를 이해한다
-- 상태 추정을 위한 완전 차수 루엔버거 관측기(full-order Luenberger observer)를 설계한다
+- 상태 추정을 위한 전차수 Luenberger 관측기를 설계한다
 - 관측기 기반 상태 피드백 제어기를 구현한다
-- SISO 극배치를 위한 아커만 공식(Ackermann's formula)을 적용한다
+- SISO 극배치를 위한 Ackermann 공식을 적용한다
+- 극배치 이득을 수치적으로 계산하고 분리 원리를 코드로 검증한다
 
-## 1. 상태 피드백 제어(State Feedback Control)
+## 0. "출력 읽기"에서 "상태 조작"으로의 전환
 
-### 1.1 완전 상태 피드백(Full State Feedback)
+레슨 4–10은 입출력 전달함수만으로 작업했다. 레슨 11–12는 상태 벡터를 도입했다. 이 레슨은 상태 공간이 보상받는 곳이다: 상태가 손에 있으면(또는 추정되면) 모든 폐루프 극점을 정확히 원하는 곳에 둘 수 있다 — 플랜트가 주는 것과 협상하는 대신.
 
-모든 상태가 측정 가능하다면 **상태 피드백(state feedback)**을 사용할 수 있다:
+이것이 풀어주는 세 가지:
+
+- **임의의 극점 배치.** $(A, B)$가 가제어이면, 폐루프 극점을 복소평면 어디에든 둘 수 있다 — 근궤적이 그러듯 개루프 영점 쪽으로 살짝 미는 것이 아니라. 이는 설계 자유도의 완전한 도약이다.
+- **관측기 기반 제어.** 대부분의 플랜트는 출력에서 전체 상태 벡터를 주지 않는다. Luenberger 관측기는 $y$와 $u$로부터 누락된 상태를 추정한다 — 그리고 **분리 원리**는 제어기와 관측기를 독립적으로 설계할 수 있다고 말한다.
+- **LQR / Kalman / MPC를 위한 플랫폼.** 레슨 14와 그 너머의 모든 고급 제어기는 "귀환 이득 설계" + "상태 추정기 설계"이다. 이 레슨을 마스터하는 것이 이후 모든 것의 전제 조건이다.
+
+머릿속 그림: 상태 귀환은 "플랜트 안으로 손을 뻗어 맞춤형 힘으로 상태를 0으로 미는 것"; 관측기는 "출력을 시간을 따라 보고 내부 상태가 무엇이어야 하는지 추론하는 것".
+
+## 1. 상태 피드백 제어
+
+### 1.1 전체 상태 피드백
+
+모든 상태가 측정 가능하면 **상태 피드백**을 사용할 수 있다:
 
 $$u(t) = -Kx(t) + r(t)$$
 
-여기서 $K \in \mathbb{R}^{m \times n}$은 **피드백 이득 행렬(feedback gain matrix)**이고, $r(t)$는 기준 명령(reference command)이다.
+여기서 $K \in \mathbb{R}^{m \times n}$은 **피드백 이득 행렬**, $r(t)$는 기준 명령.
 
-폐루프(closed-loop) 시스템은 다음과 같이 된다:
+폐루프 시스템:
 
 $$\dot{x} = (A - BK)x + Br$$
 $$y = Cx$$
 
-폐루프 극(closed-loop poles)은 $A - BK$의 고유값이다.
+폐루프 극점은 $A - BK$의 고유값.
 
-### 1.2 극배치 정리(Pole Placement Theorem)
+### 1.2 극배치 정리
 
-**정리:** 시스템 $(A, B)$가 가제어(controllable)하면, $K$의 적절한 선택으로 $A - BK$의 고유값을 **임의의** 원하는 위치에 배치할 수 있다.
+**정리:** 시스템 $(A, B)$가 가제어이면, 적절한 $K$ 선택으로 $A - BK$의 고유값을 **임의의** 원하는 위치에 둘 수 있다.
 
-이것이 핵심 결과이다: 가제어성은 임의의 극배치를 보장한다.
+이것이 기본 결과: 가제어성이 임의의 극배치를 보장.
 
-### 1.3 설계 절차(SISO)
+### 1.3 설계 절차 (SISO)
 
-**주어진 것:** 원하는 폐루프 극 $s_1, s_2, \ldots, s_n$.
+**주어짐:** 원하는 폐루프 극점 $s_1, s_2, \ldots, s_n$.
 
-**원하는 특성 다항식(desired characteristic polynomial):**
+**원하는 특성 다항식:**
 
 $$\Delta_d(s) = (s - s_1)(s - s_2)\cdots(s - s_n) = s^n + \alpha_{n-1}s^{n-1} + \cdots + \alpha_0$$
 
-**방법 1: 직접 비교(Direct comparison)**
+**방법 1: 직접 비교**
 
-1. $\det(sI - A + BK) = s^n + f_{n-1}(K)s^{n-1} + \cdots + f_0(K)$를 계산한다
-2. $i = 0, \ldots, n-1$에 대해 $f_i(K) = \alpha_i$로 놓는다
-3. $K = [k_1 \; k_2 \; \cdots \; k_n]$에 대한 $n$개의 방정식을 풀어 구한다
+1. $\det(sI - A + BK) = s^n + f_{n-1}(K)s^{n-1} + \cdots + f_0(K)$ 계산
+2. $i = 0, \ldots, n-1$에 대해 $f_i(K) = \alpha_i$ 설정
+3. $K = [k_1 \; k_2 \; \cdots \; k_n]$에 대해 $n$개의 방정식 풀이
 
-**방법 2: 가제어 정규형으로 변환(Transform to CCF)**
+**방법 2: CCF로 변환**
 
-시스템이 가제어 정규형(controllable canonical form, CCF)으로 표현되면 이득은 단순히:
+시스템이 가제어 표준형이면, 이득은 단순히:
 
 $$K = [\alpha_0 - a_0 \;\; \alpha_1 - a_1 \;\; \cdots \;\; \alpha_{n-1} - a_{n-1}]$$
 
-여기서 $a_i$는 원래 특성 다항식의 계수이다.
+여기서 $a_i$는 원래 특성 다항식 계수.
 
-### 1.4 아커만 공식(Ackermann's Formula, SISO)
+### 1.4 Ackermann 공식 (SISO)
 
 $$K = \begin{bmatrix} 0 & 0 & \cdots & 0 & 1 \end{bmatrix} \mathcal{C}^{-1} \Delta_d(A)$$
 
-여기서 $\mathcal{C}$는 가제어 행렬(controllability matrix)이고, $\Delta_d(A)$는 원하는 특성 다항식을 행렬 $A$에서 평가한 것이다:
+여기서 $\mathcal{C}$는 가제어성 행렬, $\Delta_d(A)$는 행렬 $A$에서 평가된 원하는 특성 다항식:
 
 $$\Delta_d(A) = A^n + \alpha_{n-1}A^{n-1} + \cdots + \alpha_1 A + \alpha_0 I$$
 
-### 1.5 예시
+### 1.5 예제
 
 $A = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}$, $B = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$
 
-원하는 극: $s = -5, -5$ → $\Delta_d(s) = s^2 + 10s + 25$
+원하는 극점: $s = -5, -5$ → $\Delta_d(s) = s^2 + 10s + 25$
 
 현재: $\Delta(s) = s^2 + 3s + 2$
 
-CCF에서 (이 시스템은 이미 $a_0 = 2, a_1 = 3$인 CCF 형태):
+CCF에서 (이 시스템은 이미 $a_0 = 2, a_1 = 3$의 CCF):
 
 $$K = [25 - 2 \;\; 10 - 3] = [23 \;\; 7]$$
 
-검증: $A - BK = \begin{bmatrix} 0 & 1 \\ -2-23 & -3-7 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -25 & -10 \end{bmatrix}$ 이며 고유값은 $-5, -5$이다. ✓
+검증: $A - BK = \begin{bmatrix} 0 & 1 \\ -2-23 & -3-7 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -25 & -10 \end{bmatrix}$, 고유값 $-5, -5$. ✓
 
-## 2. 상태 피드백을 이용한 기준 추적(Reference Tracking with State Feedback)
+### 1.6 파이썬으로 극배치
 
-상태 피드백 $u = -Kx$는 출력을 영으로 구동할 뿐, 영이 아닌 기준값으로는 추적하지 않는다. 계단 기준(step reference) $r$을 추적하려면:
+`scipy.signal.place_poles`가 작업을 수행한다 — ~30 차수까지의 모든 $n$에 대해 견고하다:
 
-### 2.1 전향 이득(Feedforward Gain)
+```python
+import numpy as np
+from scipy.signal import place_poles
+
+A = np.array([[0, 1], [-2, -3]], dtype=float)
+B = np.array([[0], [1]], dtype=float)
+
+desired = np.array([-5, -5.001])   # 수치적 견고성을 위한 작은 분리 필요
+K = place_poles(A, B, desired).gain_matrix
+print("K =", K)
+print("Closed-loop eigenvalues =", np.linalg.eigvals(A - B @ K))
+```
+
+`1e-3` 분리는 실제 수치 문제다 — `place_poles`는 정확히 중복된 목표를 거부한다(알고리즘이 내부적으로 고유벡터가 $\mathbb{R}^n$를 span해야 하기 때문). 정확히 중복된 극점에 대해서는 Ackermann 공식이나 `python-control`의 `acker` 함수로 후퇴.
+
+## 2. 상태 피드백을 이용한 기준 추적
+
+상태 피드백 $u = -Kx$는 출력을 0으로 끌고 가는 것이지 0이 아닌 기준으로 가는 것이 아니다. 계단 기준 $r$을 추적하려면:
+
+### 2.1 전향(feedforward) 이득
 
 $$u = -Kx + N_r r$$
 
-여기서 $N_r$은 정상 상태에서 $y_{ss} = r$이 되도록 선택한다:
+여기서 $N_r$은 정상 상태에서 $y_{ss} = r$이 되도록 선택:
 
 $$N_r = \frac{1}{C(-A + BK)^{-1}B}$$
 
-동치로, 폐루프의 DC 이득을 이용하면: $N_r = 1/G_{cl}(0)$.
+동등하게, 폐루프의 DC 이득 사용: $N_r = 1/G_{cl}(0)$.
 
-### 2.2 적분 동작(Integral Action)
+### 2.2 적분 작용
 
-적분기 상태 $x_I = \int (r - y) dt$를 추가한다:
+적분기 상태 $x_I = \int (r - y) dt$ 추가:
 
 $$\dot{x}_I = r - Cx$$
 
-증가 시스템(augmented system):
+증강 시스템:
 
 $$\begin{bmatrix} \dot{x} \\ \dot{x}_I \end{bmatrix} = \begin{bmatrix} A & 0 \\ -C & 0 \end{bmatrix} \begin{bmatrix} x \\ x_I \end{bmatrix} + \begin{bmatrix} B \\ 0 \end{bmatrix} u + \begin{bmatrix} 0 \\ 1 \end{bmatrix} r$$
 
-피드백 $u = -[K \; K_I] [x^T \; x_I]^T$를 사용하면 적분기가 계단 기준 및 계단 외란(step disturbance)에 대한 **정상 상태 오차 영(zero steady-state error)**을 보장한다.
+피드백 $u = -[K \; K_I] [x^T \; x_I]^T$로, 적분기는 계단 기준과 계단 외란에 대한 **0 정상상태 오차**를 보장한다.
 
-## 3. 관측기 설계(Observer Design)
+> **전향 단독이 깨지기 쉬운 이유**: $N_r = 1/G_{cl}(0)$은 정확한 플랜트 DC 이득에 의존한다. 모델링 오차(예: 실제 플랜트의 DC 이득이 약간 다름)는 정상 상태 오프셋을 남긴다. 적분 작용이 자동으로 보상한다 — 전향의 강건한 대응물.
+
+## 3. 관측기 설계
 
 ### 3.1 동기
 
-실제 상황에서는 모든 상태가 측정 가능하지 않다. **관측기(observer)** 또는 **추정기(estimator)**는 측정된 출력과 알려진 입력으로부터 상태를 재구성한다.
+실무에서 모든 상태가 측정 가능하지 않다. **관측기(observer / estimator)**는 측정된 출력과 알려진 입력으로부터 상태를 재구성한다.
 
-### 3.2 완전 차수 루엔버거 관측기(Full-Order Luenberger Observer)
+### 3.2 전차수 Luenberger 관측기
 
 $$\dot{\hat{x}} = A\hat{x} + Bu + L(y - C\hat{x})$$
 
-여기서 $\hat{x}$는 추정 상태이고, $L \in \mathbb{R}^{n \times p}$는 **관측기 이득 행렬(observer gain matrix)**이다.
+여기서 $\hat{x}$는 추정 상태, $L \in \mathbb{R}^{n \times p}$은 **관측기 이득 행렬**.
 
-추정 오차(estimation error) $e = x - \hat{x}$는 다음을 만족한다:
+추정 오차 $e = x - \hat{x}$는 다음을 만족:
 
 $$\dot{e} = (A - LC)e$$
 
-$A - LC$의 모든 고유값이 음의 실수부를 가지면 $e(t) \to 0$이 지수적으로 수렴한다.
+$A - LC$의 모든 고유값이 음의 실수부를 가지면 $e(t) \to 0$ 지수적으로.
 
-### 3.3 관측기 극배치(Observer Pole Placement)
+### 3.3 관측기 극배치
 
-**정리:** 시스템 $(A, C)$가 가관측(observable)하면, $L$의 적절한 선택으로 $A - LC$의 고유값을 **임의의** 원하는 위치에 배치할 수 있다.
+**정리:** 시스템 $(A, C)$가 가관측이면, 적절한 $L$ 선택으로 $A - LC$의 고유값을 **임의의** 원하는 위치에 둘 수 있다.
 
-이것은 상태 피드백 극배치 정리의 **쌍대(dual)**이다.
+이는 상태 피드백 극배치 정리의 **쌍대(dual)**이다.
 
-**설계 경험칙:** 관측기 극을 제어기 극보다 3-5배 빠르게 배치한다(추정값이 제어기가 정확한 상태 정보를 필요로 하기 전에 수렴하도록).
+**설계 경험 법칙:** 관측기 극점을 제어기 극점보다 3-5배 빠르게 둠 (제어기가 정확한 상태 정보를 필요로 하기 전에 추정이 수렴하도록).
 
-### 3.4 관측기 이득에 대한 아커만 공식(Ackermann's Formula for Observer Gain)
+### 3.4 관측기 이득에 대한 Ackermann 공식
 
 $$L = \Delta_o(A) \mathcal{O}^{-1} \begin{bmatrix} 0 \\ 0 \\ \vdots \\ 1 \end{bmatrix}$$
 
-여기서 $\mathcal{O}$는 가관측 행렬(observability matrix)이고, $\Delta_o(A)$는 원하는 관측기 특성 다항식을 $A$에서 평가한 것이다.
+여기서 $\mathcal{O}$는 가관측성 행렬, $\Delta_o(A)$는 $A$에서 평가된 원하는 관측기 특성 다항식.
 
-### 3.5 예시
+### 3.5 예제
 
-같은 시스템 사용: $A = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}$, $C = \begin{bmatrix} 1 & 0 \end{bmatrix}$
+같은 시스템: $A = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}$, $C = \begin{bmatrix} 1 & 0 \end{bmatrix}$
 
-원하는 관측기 극: $s = -15, -15$ → $\Delta_o(s) = s^2 + 30s + 225$
+원하는 관측기 극점: $s = -15, -15$ → $\Delta_o(s) = s^2 + 30s + 225$
 
 $$\mathcal{O} = \begin{bmatrix} C \\ CA \end{bmatrix} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$$
 
@@ -147,11 +181,25 @@ $$\Delta_o(A) = A^2 + 30A + 225I = \begin{bmatrix} -2 & -3 \\ 6 & 7 \end{bmatrix
 
 $$L = \begin{bmatrix} 223 & 27 \\ -54 & 142 \end{bmatrix} \begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 27 \\ 142 \end{bmatrix}$$
 
-## 4. 분리 원리(The Separation Principle)
+### 3.6 쌍대성을 통한 관측기 설계
 
-### 4.1 결합 제어기-관측기(Combined Controller-Observer)
+관측기 설계가 상태-귀환 설계에 쌍대(레슨 12)이므로, `place_poles`는 관측기에도 작동한다 — $A$를 전치하고 $C^T$를 "$B$"로 사용:
 
-관측기 기반 상태 피드백 제어기는 추정 상태를 사용한다:
+```python
+C = np.array([[1, 0]], dtype=float)
+desired_obs = np.array([-15, -15.001])
+L = place_poles(A.T, C.T, desired_obs).gain_matrix.T
+print("L =\n", L)
+print("Observer eigenvalues =", np.linalg.eigvals(A - L @ C))
+```
+
+같은 라이브러리 함수가 두 작업 모두를 수행한다 — 개념적 추가 작업 없이 전치 트릭만으로.
+
+## 4. 분리 원리(Separation Principle)
+
+### 4.1 결합된 제어기-관측기
+
+관측기 기반 상태 피드백 제어기는 추정된 상태를 사용:
 
 $$u = -K\hat{x} + N_r r$$
 
@@ -161,79 +209,96 @@ $$u = -K\hat{x} + N_r r$$
                   [-K] ← x̂ ← [Observer] ← y, u
 ```
 
-### 4.2 분리 원리(Separation Principle)
+### 4.2 분리 원리
 
-**정리(분리 원리):** 결합 제어기-관측기 시스템의 폐루프 고유값은 제어기 고유값과 관측기 고유값의 **합집합(union)**이다:
+**정리 (분리 원리):** 결합된 제어기-관측기 시스템의 폐루프 고유값은 제어기 고유값과 관측기 고유값의 **합집합**이다:
 
 $$\sigma(A_{cl}) = \sigma(A - BK) \cup \sigma(A - LC)$$
 
-이것이 의미하는 바:
-- 제어기는 관측기와 **독립적으로** 설계할 수 있다
-- 관측기는 제어기와 **독립적으로** 설계할 수 있다
-- 두 부분 시스템이 모두 안정하면 결합 시스템도 안정하다
+이는 다음을 의미:
+- 제어기를 관측기와 **독립적으로** 설계 가능
+- 관측기를 제어기와 **독립적으로** 설계 가능
+- 두 부분 시스템이 모두 안정하면 결합 시스템은 안정
 
-### 4.3 증명 개요(Proof Sketch)
+### 4.3 증명 스케치
 
-결합 상태는 $e = x - \hat{x}$일 때 $[x^T \; e^T]^T$이다:
+결합 상태는 $[x^T \; e^T]^T$, 여기서 $e = x - \hat{x}$:
 
 $$\begin{bmatrix} \dot{x} \\ \dot{e} \end{bmatrix} = \begin{bmatrix} A-BK & BK \\ 0 & A-LC \end{bmatrix} \begin{bmatrix} x \\ e \end{bmatrix} + \begin{bmatrix} B N_r \\ 0 \end{bmatrix} r$$
 
-블록 삼각 구조(block-triangular structure)에 의해 $2n \times 2n$ 행렬의 고유값은 정확히 $A-BK$와 $A-LC$의 고유값이 된다.
+블록-삼각 구조는 $2n \times 2n$ 행렬의 고유값이 정확히 $A-BK$와 $A-LC$의 고유값임을 의미.
 
-## 5. 축소 차수 관측기(Reduced-Order Observers)
+## 5. 축소차 관측기(Reduced-Order Observers)
 
-일부 상태가 직접 측정된다면, 나머지 상태만 추정하면 된다.
+일부 상태가 직접 측정되면, 나머지 상태만 추정하면 된다.
 
-$y = Cx$에서 $C$가 계수(rank) $p$를 가질 때, $n - p$개의 상태만 추정이 필요하다. **축소 차수 관측기(reduced-order observer)**는 $n$ 대신 $n - p$ 차원을 가져 계산 비용을 줄인다.
+$y = Cx$, $C$가 rank $p$일 때, $n - p$ 상태만 추정 필요. **축소차 관측기**는 $n$ 대신 $n - p$ 차원을 가져 계산 비용을 줄인다.
 
-설계는 측정된 상태와 비측정 상태를 분리하는 변환된 좌표계를 사용한다는 점에서 유사한 원리를 따른다.
+설계는 비슷한 원리를 따르지만 측정된 상태와 미측정 상태를 분리하는 변환된 좌표계를 사용.
 
-## 6. 설계 고려 사항(Design Considerations)
+## 6. 설계 고려사항
 
-### 6.1 극 선택 지침(Pole Selection Guidelines)
+### 6.1 극점 선택 가이드라인
 
-**제어기 극(Controller poles):**
-- 시간 영역 사양(정착 시간, 오버슈트)을 만족해야 한다
-- 과도한 제어 노력을 요구하지 않아야 한다(매우 빠른 극 지양)
-- 복소수 극은 켤레쌍으로 존재한다
+**제어기 극점:**
+- 시간 영역 사양 만족 (정착 시간, 오버슈트)
+- 과도한 제어 노력 요구 안 함 (매우 빠른 극점 회피)
+- 복소 극점은 공액 쌍으로 등장
 
-**관측기 극(Observer poles):**
-- 제어기 극보다 3-5배 빠른 것이 일반적인 규칙
-- 너무 빠르면 → 잡음과 모델링 오차에 민감해진다
-- 너무 느리면 → 과도 상태에서 추정이 부정확해진다
+**관측기 극점:**
+- 제어기 극점보다 3-5배 빠름 (전형적 규칙)
+- 너무 빠름 → 잡음과 모델링 오차에 민감
+- 너무 느림 → 과도 동안 추정 부족
 
-### 6.2 강건성(Robustness)
+### 6.2 강건성
 
-완전 상태 정보를 이용한 상태 피드백은 우수한 강건성(infinite gain margin for SISO)을 가진다. 그러나 관측기 기반 피드백은 **강건성이 낮을 수 있다** — 관측기를 사용하면 LQR의 보장된 여유(margins)가 사라진다.
+전체 상태 지식을 가진 상태 피드백은 우수한 강건성 성질을 가짐 (SISO에 대해 무한 이득 여유). 그러나 관측기 기반 피드백은 **나쁜 강건성**을 가질 수 있다 — LQR의 보장된 여유는 관측기를 사용하면 잃는다.
 
-이로 인해 **LQG/LTR(Loop Transfer Recovery)** 절차의 동기가 생긴다. 여기서 관측기 설계를 수정하여 상태 피드백 설계의 강건성을 회복한다.
+이는 **LQG/LTR**(루프 전송 회복) 절차의 동기다 — 관측기 설계를 수정하여 상태 피드백 설계의 강건성을 회복.
+
+## 7. 흔한 함정
+
+1. **비가제어 모드에 극배치 시도.** $(A, B)$가 가제어가 아니면, 어떤 $K$도 비가제어 모드를 움직이지 않는다. `place_poles`는 오류를 던지거나 가제어 극점만 배치한 $K$를 반환한다. 항상 가제어성을 먼저 확인하라(레슨 12).
+2. **비현실적으로 빠른 극점 배치.** 극배치는 $s = -1000$에 극점을 둘 수 **있다**고 말한다 — **두어야 한다**고 말하지 않는다. 필요한 제어 노력은 극점 변위에 비례한다; 매우 빠른 극점은 액추에이터를 포화시키는 거대한 $|u(t)|$를 의미하며 선형 설계를 깨뜨린다.
+3. **빠른 관측기 극점의 잡음 페널티 무시.** 100배 빠른 관측기는 측정 잡음에도 100배 더 민감하다. "3–5×" 경험 법칙은 수렴 속도와 잡음 증폭의 균형이다.
+4. **중복 극점이 수치 문제 야기.** `place_poles`(와 대부분의 현대 알고리즘)는 서로 다른 목표 극점을 원한다. 진정으로 중복 극점이 필요하면 $10^{-3}$ 상대로 섭동하거나 Ackermann 공식을 직접 사용.
+5. **비선형 플랜트에 분리 원리 사용.** 엄격히 LTI 결과다. 확장 칼만 필터를 가진 비선형 시스템에서는 원리가 성립하지 않는다; 제어기와 관측기가 비명백하게 상호작용. 분리가 아니라 시뮬레이션으로 검증하라.
+6. **관측기 자체가 초기화되어야 하는 동적 시스템임을 잊음.** 진짜 상태가 0에서 멀 때 $\hat{x}(0) = 0$으로 두면 $e(0)$이 큰 긴 과도가 생긴다. 사전 지식이 있다면 $\hat{x}$를 진실에 더 가까이 초기화하라.
 
 ## 연습 문제
 
-### 연습 1: 극배치(Pole Placement)
+### 연습 문제 1: 극배치
 
-$A = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}$, $B = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$ (이중 적분기, double integrator):
+$A = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}$, $B = \begin{bmatrix} 0 \\ 1 \end{bmatrix}$ (이중 적분기):
 
-1. 폐루프 극을 $s = -3 \pm j4$에 배치하도록 $K$를 설계하라
-2. 폐루프 자연 주파수(natural frequency)와 감쇠비(damping ratio)를 계산하라
-3. $C = [1 \; 0]$이면, 정상 상태 추적 오차가 영이 되도록 $N_r$을 계산하라
+1. 폐루프 극점을 $s = -3 \pm j4$에 두는 $K$를 설계하라
+2. 폐루프 고유 진동수와 제동비를 계산하라
+3. $C = [1 \; 0]$이면 0 정상상태 추적 오차를 위한 $N_r$을 계산하라
 
-### 연습 2: 관측기 설계(Observer Design)
+### 연습 문제 2: 관측기 설계
 
-연습 1의 시스템에서 $C = \begin{bmatrix} 1 & 0 \end{bmatrix}$일 때:
+연습 문제 1의 시스템에 $C = \begin{bmatrix} 1 & 0 \end{bmatrix}$:
 
 1. 가관측성을 검증하라
-2. 극을 $s = -15 \pm j20$에 배치하는 관측기를 설계하라
-3. 완전한 관측기 상태 방정식을 작성하라
+2. 극점이 $s = -15 \pm j20$인 관측기를 설계하라
+3. 전체 관측기 상태 방정식을 작성하라
 
-### 연습 3: 분리 원리 검증(Separation Principle Verification)
+### 연습 문제 3: 분리 원리 검증
 
-연습 1의 제어기와 연습 2의 관측기를 사용하여:
+연습 문제 1의 제어기와 연습 문제 2의 관측기 사용:
 
 1. $4 \times 4$ 폐루프 시스템 행렬을 작성하라
-2. 고유값이 제어기 극과 관측기 극의 합집합임을 검증하라
-3. 계단 응답을 시뮬레이션하고 완전 상태 피드백(관측기 없음)과 비교하라
+2. 고유값이 제어기와 관측기 극점의 합집합임을 검증하라
+3. 계단 응답을 시뮬레이션하고 전체 상태 피드백(관측기 없음)과 비교하라
+
+### 연습 문제 4: 수치 극배치 드릴
+
+1.6절 스니펫으로 3차 시스템 $A = \begin{bmatrix}0 & 1 & 0\\0 & 0 & 1\\-1 & -2 & -3\end{bmatrix}$, $B = \begin{bmatrix}0\\0\\1\end{bmatrix}$에 대해 원하는 극점 $\{-2, -3, -4\}$로 제어기를 설계하라. 폐루프 고유값이 일치함을 검증하라. 그 다음 원하는 극점 $\{-2, -2, -4\}$로 다시 — `place_poles`는 거부한다; 이유를 설명하고 Ackermann 공식을 대신 사용하라.
+
+### 연습 문제 5: 극점 속도 절충
+
+연습 문제 1의 제어기에 대해 극점 크기를 $|s| = 1$에서 $|s| = 100$까지 스윕하라(각도는 일정 유지). 각 극점 선택에 대해 단위 계단 응답 동안 최대 $|u(t)|$를 계산하라. 관계를 플로팅하고 액추에이터 포화($|u| \leq 10$ 가정)가 hard limit이 되는 곳을 식별하라.
 
 ---
 
-*이전: [레슨 12 — 가제어성과 가관측성](12_Controllability_and_Observability.md) | 다음: [레슨 14 — 최적 제어: LQR 및 칼만 필터](14_Optimal_Control.md)*
+*이전: [레슨 12 — 가제어성과 가관측성](12_Controllability_and_Observability.md) | 다음: [레슨 14 — 최적 제어: LQR과 칼만 필터](14_Optimal_Control.md)*

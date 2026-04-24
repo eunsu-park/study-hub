@@ -7,6 +7,19 @@
 - Design full-order Luenberger observers for state estimation
 - Implement observer-based state feedback controllers
 - Apply Ackermann's formula for SISO pole placement
+- Compute pole-placement gains numerically and verify the separation principle in code
+
+## 0. The Pivot from "Read Outputs" to "Manipulate States"
+
+Lessons 4–10 worked entirely with input-output transfer functions. Lessons 11–12 introduced the state vector. This lesson is where state space pays off: with the state in hand (or estimated), you can place every closed-loop pole exactly where you want, instead of negotiating with whatever the plant gives you.
+
+Three things this unlocks:
+
+- **Arbitrary pole placement.** If $(A, B)$ is controllable, you can put the closed-loop poles anywhere in the complex plane — not just nudge them toward the open-loop zeros like a root locus would. This is a complete leap in design freedom.
+- **Observer-based control.** Most plants do not give you the full state vector at the output. The Luenberger observer estimates the missing states from $y$ and $u$ — and the **separation principle** says you can design the controller and observer independently.
+- **A platform for LQR / Kalman / MPC.** Every advanced controller in Lesson 14 and beyond is "design feedback gain" + "design state estimator." Mastering this lesson is the prerequisite to everything that follows.
+
+Mental picture: state feedback is "reach inside the plant and push the state toward zero with a custom-shaped force"; the observer is "watch the outputs over time and infer what the inside state must be."
 
 ## 1. State Feedback Control
 
@@ -75,6 +88,25 @@ $$K = [25 - 2 \;\; 10 - 3] = [23 \;\; 7]$$
 
 Verify: $A - BK = \begin{bmatrix} 0 & 1 \\ -2-23 & -3-7 \end{bmatrix} = \begin{bmatrix} 0 & 1 \\ -25 & -10 \end{bmatrix}$ with eigenvalues $-5, -5$. ✓
 
+### 1.6 Pole Placement in Python
+
+`scipy.signal.place_poles` does the work — robust enough for any $n$ up to ~30:
+
+```python
+import numpy as np
+from scipy.signal import place_poles
+
+A = np.array([[0, 1], [-2, -3]], dtype=float)
+B = np.array([[0], [1]], dtype=float)
+
+desired = np.array([-5, -5.001])   # tiny separation needed for numerical robustness
+K = place_poles(A, B, desired).gain_matrix
+print("K =", K)
+print("Closed-loop eigenvalues =", np.linalg.eigvals(A - B @ K))
+```
+
+The `1e-3` separation is a real numerical issue — `place_poles` rejects exactly-repeated targets because the algorithm internally needs the eigenvectors to span $\mathbb{R}^n$. For exactly-repeated poles, fall back to Ackermann's formula or the `acker` function in `python-control`.
+
 ## 2. Reference Tracking with State Feedback
 
 State feedback $u = -Kx$ drives the output to zero, not to a nonzero reference. To track a step reference $r$:
@@ -100,6 +132,8 @@ Augmented system:
 $$\begin{bmatrix} \dot{x} \\ \dot{x}_I \end{bmatrix} = \begin{bmatrix} A & 0 \\ -C & 0 \end{bmatrix} \begin{bmatrix} x \\ x_I \end{bmatrix} + \begin{bmatrix} B \\ 0 \end{bmatrix} u + \begin{bmatrix} 0 \\ 1 \end{bmatrix} r$$
 
 With feedback $u = -[K \; K_I] [x^T \; x_I]^T$, the integrator ensures **zero steady-state error** for step references and step disturbances.
+
+> **Why feedforward alone is fragile**: $N_r = 1/G_{cl}(0)$ depends on the EXACT plant DC gain. Any modeling error (e.g., the actual plant has a slightly different DC gain) leaves a steady-state offset. Integral action compensates automatically — it is the robust counterpart to feedforward.
 
 ## 3. Observer Design
 
@@ -146,6 +180,20 @@ $$L = \Delta_o(A) \mathcal{O}^{-1} \begin{bmatrix} 0 \\ 1 \end{bmatrix}$$
 $$\Delta_o(A) = A^2 + 30A + 225I = \begin{bmatrix} -2 & -3 \\ 6 & 7 \end{bmatrix} + \begin{bmatrix} 0 & 30 \\ -60 & -90 \end{bmatrix} + \begin{bmatrix} 225 & 0 \\ 0 & 225 \end{bmatrix} = \begin{bmatrix} 223 & 27 \\ -54 & 142 \end{bmatrix}$$
 
 $$L = \begin{bmatrix} 223 & 27 \\ -54 & 142 \end{bmatrix} \begin{bmatrix} 0 \\ 1 \end{bmatrix} = \begin{bmatrix} 27 \\ 142 \end{bmatrix}$$
+
+### 3.6 Observer Design via Duality
+
+Because observer design is dual to state-feedback design (Lesson 12), `place_poles` works for observers too — by transposing $A$ and using $C^T$ as the "$B$":
+
+```python
+C = np.array([[1, 0]], dtype=float)
+desired_obs = np.array([-15, -15.001])
+L = place_poles(A.T, C.T, desired_obs).gain_matrix.T
+print("L =\n", L)
+print("Observer eigenvalues =", np.linalg.eigvals(A - L @ C))
+```
+
+The same library function does both jobs, with no conceptual extra work — just the transpose trick.
 
 ## 4. The Separation Principle
 
@@ -208,6 +256,15 @@ State feedback with full state knowledge has excellent robustness properties (in
 
 This motivates the **LQG/LTR** (Loop Transfer Recovery) procedure, where the observer design is modified to recover the robustness of the state feedback design.
 
+## 7. Common Pitfalls
+
+1. **Trying pole placement on an uncontrollable mode.** If $(A, B)$ is not controllable, no $K$ moves the uncontrollable mode. `place_poles` will throw an error or return a $K$ that places only the controllable poles. Always check controllability first (Lesson 12).
+2. **Placing poles unrealistically fast.** Pole placement says you CAN put a pole at $s = -1000$ — it does not say you SHOULD. The required control effort scales with the pole displacement; very fast poles imply huge $|u(t)|$ that saturates the actuator, breaking the linear design.
+3. **Ignoring the noise penalty of fast observer poles.** A 100× faster observer is also 100× more sensitive to measurement noise. The "3–5×" rule of thumb balances convergence speed against noise amplification.
+4. **Repeated poles causing numerical issues.** `place_poles` (and most modern algorithms) wants distinct target poles. If you genuinely need repeated poles, perturb them by $10^{-3}$ relative or use Ackermann's formula directly.
+5. **Using the separation principle on a nonlinear plant.** It is a strictly LTI result. For nonlinear systems with extended Kalman filters, the principle does not hold; controller and observer interact in non-obvious ways. Verify by simulation, not by separation.
+6. **Forgetting the observer is itself a dynamic system that must be initialized.** Setting $\hat{x}(0) = 0$ when the true state is far from zero produces a long transient where $e(0)$ is large. Use any prior knowledge to initialize $\hat{x}$ closer to truth.
+
 ## Practice Exercises
 
 ### Exercise 1: Pole Placement
@@ -233,6 +290,14 @@ Using the controller from Exercise 1 and observer from Exercise 2:
 1. Write the $4 \times 4$ closed-loop system matrix
 2. Verify that the eigenvalues are the union of controller and observer poles
 3. Simulate the step response and compare with full-state-feedback (no observer)
+
+### Exercise 4: Numerical Pole Placement Drill
+
+Using the snippet from Section 1.6, design a controller for the third-order system $A = \begin{bmatrix}0 & 1 & 0\\0 & 0 & 1\\-1 & -2 & -3\end{bmatrix}$, $B = \begin{bmatrix}0\\0\\1\end{bmatrix}$ with desired poles at $\{-2, -3, -4\}$. Verify the closed-loop eigenvalues match. Then re-do with desired poles $\{-2, -2, -4\}$ — `place_poles` will reject; explain why and use Ackermann's formula instead.
+
+### Exercise 5: Pole-Speed Trade-off
+
+For the controller in Exercise 1, sweep the pole magnitude from $|s| = 1$ to $|s| = 100$ (keep the angle constant). For each pole choice, compute the maximum $|u(t)|$ during a unit-step response. Plot the relationship and identify where actuator saturation (assume $|u| \leq 10$) becomes a hard limit.
 
 ---
 
