@@ -7,6 +7,16 @@
 - Use root locus to select gain for desired closed-loop pole locations
 - Analyze the effect of adding poles and zeros to the open-loop transfer function
 - Apply root locus to controller design
+- Compute and plot root loci numerically with Python and recognize common reading mistakes
+
+## 0. Motivation — Why Root Locus in the Age of Computers?
+
+A beginner's objection: a laptop solves $1 + KG(s) = 0$ for any $K$ in microseconds, so why learn a graphical method from the 1950s? Two answers:
+
+- **Root locus tells you what a knob will do before you turn it.** Given an open-loop plant, it answers "how do the closed-loop poles move as I increase gain?" in one picture. That kind of parametric understanding is what separates a technician who tunes by trial and a designer who tunes by reasoning.
+- **It works on problems that optimization does not.** When a plant has parameter uncertainty, actuator limits, or a redesign requirement ("add a zero — where should it go?"), the root locus shows the entire trajectory. Numerical root-finders give one point; root locus gives the family.
+
+Concrete picture: imagine the dominant closed-loop poles as two marbles that start at the open-loop pole locations when $K = 0$ and roll along the locus as you turn up $K$. Your design job is to pick a $K$ at which the marbles sit in the region of the $s$-plane that meets your time-domain specs (from Lesson 4). The locus is the track the marbles are confined to.
 
 ## 1. Introduction to Root Locus
 
@@ -58,6 +68,22 @@ $$\frac{dK}{ds} = 0 \quad \text{where} \quad K = -\frac{1}{G(s)H(s)}$$
 ### Rule 8: Imaginary Axis Crossings
 Found by substituting $s = j\omega$ into the characteristic equation and solving for $\omega$ and $K$ (or using the Routh criterion to find the critical $K$).
 
+### 2.1 How the Rules Fit Together
+
+The rules are not a random checklist. They answer successive questions about the locus in the order you would actually ask them:
+
+| Question | Rule |
+|----------|------|
+| How many curves do I draw? | 2 (number of branches = $n$) |
+| Where do they start and end? | 1 (poles → zeros; extras go to infinity) |
+| Where on the real axis do they live? | 4 (odd-count rule) |
+| Where do they go off to? | 5 (asymptote angles + centroid) |
+| Where do they leave the real axis? | 6 (breakaway) |
+| At what angle do they depart complex poles? | 7 (departure angle) |
+| Do they cross into the right half-plane? | 8 (jω crossing, Routh helper) |
+
+Sketch in that order and you will not miss anything.
+
 ## 3. Root Locus Example
 
 **Example:** $G(s)H(s) = \frac{1}{s(s+1)(s+3)}$
@@ -78,6 +104,30 @@ Found by substituting $s = j\omega$ into the characteristic equation and solving
 5. **Imaginary crossing:** Using Routh on $s^3 + 4s^2 + 3s + K = 0$: critical $K = 12$, $\omega = \sqrt{3}$
 
 The locus shows three branches diverging from the real axis — as $K$ increases from 0, the system becomes unstable at $K = 12$.
+
+### 3.1 What the Sketch Looks Like
+
+A hand-sketch of the locus — indispensable for reading the rest of this lesson:
+
+```
+        jω
+         │
+         │ ┐  ← branch going up to +∞ along 60° asymptote
+         │/
+      ───┼───────── centroid σ_a = -4/3
+        /│
+       / │─ breakaway at -0.451
+  ────●──●──●───── σ  (three open-loop poles: -3, -1, 0)
+       \ │
+        \│
+         │ ┘  ← branch going down to -∞ along 300° asymptote
+         │
+         │  (third branch runs left along the real axis to -∞)
+```
+
+At $K = 0$ the poles are at $\{0, -1, -3\}$ (open-loop). As $K$ rises, the rightmost two poles approach each other on the real axis, meet at $s = -0.451$, and then leave the axis as a complex pair. The pair sweeps through the centroid at $K = 12$ and crosses into the right half-plane, turning the closed loop unstable.
+
+The third branch runs left along the real axis toward $-\infty$; it is always real and always stable.
 
 ## 4. Effect of Adding Poles and Zeros
 
@@ -133,6 +183,52 @@ The root locus is a vertical line at $s = -2$ (breakaway from the real axis midp
 
 At $s = -2 + j3.88$ (satisfying $\zeta = 0.456$): $K = |s(s+4)| = |(-2+j3.88)(-2+j3.88+4)| = 19.4$
 
+### 5.4 Plotting the Locus in Python
+
+The hand-sketch gets you the shape; a quick Python plot confirms exact gains and pole locations. Using `python-control`:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from control import TransferFunction, root_locus
+
+# G(s) = 1 / [s(s+1)(s+3)] — the example from Section 3
+G = TransferFunction([1], [1, 4, 3, 0])
+
+gains = np.linspace(0, 30, 400)
+root_locus(G, kvect=gains, plot=True)
+plt.title("Root locus of 1 / [s(s+1)(s+3)]")
+plt.xlabel("σ")
+plt.ylabel("jω")
+plt.grid(True)
+plt.show()
+```
+
+You should see exactly the sketch from Section 3.1: branches starting on the three real poles, two meeting at the breakaway, and the complex pair sweeping up and into the right half-plane around $K = 12$. The plot lets you hover the cursor over the locus and read off the gain at any point — invaluable when hand-calculating the magnitude condition is tedious.
+
+If `python-control` is unavailable, `scipy` plus a sweep accomplishes the same thing:
+
+```python
+gains = np.linspace(0, 30, 300)
+loci = []
+for K in gains:
+    # characteristic polynomial: s^3 + 4s^2 + 3s + K
+    roots = np.roots([1, 4, 3, K])
+    loci.append(roots)
+loci = np.array(loci)
+
+plt.figure(figsize=(6, 6))
+for j in range(loci.shape[1]):
+    plt.plot(loci[:, j].real, loci[:, j].imag, '.', markersize=2)
+plt.axhline(0, color='gray', linewidth=0.5)
+plt.axvline(0, color='gray', linewidth=0.5)
+plt.xlabel("σ"); plt.ylabel("jω"); plt.title("Root locus (manual sweep)")
+plt.grid(True); plt.axis('equal')
+plt.show()
+```
+
+Either approach is worth building into a habit — the hand rules tell you *why* the locus moves, the plot tells you *exactly where*.
+
 ## 6. Root Locus for Negative $K$ (Complementary Root Locus)
 
 When $K$ varies from $-\infty$ to $0$, the angle condition becomes:
@@ -144,6 +240,15 @@ The complementary root locus uses slightly different rules:
 - Asymptote angles: $\theta_a = \frac{2k \times 180°}{n-m}$
 
 This is relevant for positive feedback systems.
+
+## 7. Common Pitfalls
+
+1. **Confusing "K = 0" with "open-loop poles are closed-loop poles."** At $K = 0$, the feedback vanishes, so the closed loop inherits the open-loop poles. That is the *start* of the locus, not a design point — you will not operate a plant with the loop open.
+2. **Forgetting that asymptote angles use $(2k+1) \cdot 180° / (n-m)$, not $360° / (n-m)$.** A $n - m = 4$ case has asymptotes at $45°, 135°, 225°, 315°$ — NOT at $0°, 90°, 180°, 270°$. Evenly spaced but offset.
+3. **Reading the centroid as "the system becomes unstable when poles cross the centroid."** The centroid is purely the arithmetic intersection of the asymptotes; instability is determined by the jω-axis crossing (Rule 8), which may be to the right of the centroid.
+4. **Assuming breakaway = breakpoint.** Breakaway is where branches leave the real axis; break-in is where they enter. A single locus can have both on opposite sides of a gain range. Both come from $dK/ds = 0$ — check that the candidate is actually on the real-axis segment before accepting it.
+5. **Mis-reading departure angles.** The formula sums angles to OTHER poles and zeros; it does not include the pole you are departing from. Students often include it accidentally, producing answers that are off by $180°$.
+6. **Treating the numerical plot as ground truth when the plot range is cropped.** `python-control`'s default axis may hide branches going to infinity; always sweep $K$ over a wide range and check the real axis extends past all the open-loop poles and the asymptote centroid.
 
 ## Practice Exercises
 
@@ -170,6 +275,14 @@ A system has $G(s) = \frac{K}{s(s+2)}$. Compare the root loci when a compensator
 2. $s = -5$ (to the left of both poles)
 
 Sketch both root loci and discuss how the zero location affects the achievable closed-loop pole positions.
+
+### Exercise 4: Verify with Python
+
+Recreate Exercise 1 numerically using the Python snippet in Section 5.4. Confirm the breakaway points and jω-axis crossing match your hand-sketched values to within 1%. Where they differ, identify whether the error is in your hand work or in the cropped plot range.
+
+### Exercise 5: Departure-Angle Drill
+
+A system has open-loop poles at $-1 \pm j2$ and $-4$, with one zero at $-2$. Compute the departure angle from the upper complex pole. Sketch the direction of the locus near the pole and explain which direction the branch heads (toward or away from the real axis).
 
 ---
 
