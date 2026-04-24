@@ -7,6 +7,19 @@
 - Use the describing function method to predict limit cycles
 - Understand sliding mode control principles
 - Survey model predictive control (MPC) and adaptive control concepts
+- Place each advanced method in the larger control landscape and recognize when each is the right tool
+
+## 0. Where Linear Tools Stop Working
+
+Lessons 1–15 lived almost entirely in linear-time-invariant land. That is not because the world is linear — it isn't — but because near an operating point, most plants are linear ENOUGH that linear methods produce useful answers. This lesson is about the cases where "near an operating point" is not good enough.
+
+Three concrete signs that linear methods are about to fail:
+
+- **The operating envelope is wide.** A pendulum linearized around 0° is fine for ±5°. At ±90°, $\sin\theta \approx \theta$ underestimates the restoring force by a factor of 0.6 — the linear model lies. Aircraft, robots, and chemical reactors all routinely operate over ranges where linearization is suspect.
+- **The nonlinearity is the point.** Saturation, dead zone, relay, hysteresis, friction — these are not bugs to be linearized away. They are essential features of every real actuator and many sensors. A controller that ignores them will hit them in production.
+- **You need GLOBAL guarantees.** "Locally stable" is the answer linear analysis gives. "Stable from any initial condition in a half-meter ball around the equilibrium" requires Lyapunov-style arguments — Section 2 below.
+
+This lesson is necessarily a survey, not a complete treatment. Each section below introduces enough to recognize when the technique applies; full mastery is a graduate course per topic.
 
 ## 1. Why Nonlinear Control?
 
@@ -93,6 +106,8 @@ For $\dot{x} = Ax$ with $V = x^T P x$:
 $$\dot{V} = x^T(A^T P + PA)x = -x^T Q x$$
 
 The Lyapunov equation $A^T P + PA = -Q$ has a unique positive definite solution $P$ for any $Q > 0$ if and only if $A$ is stable (all eigenvalues in the LHP). This is an alternative stability test.
+
+> **Why energy works**: in the pendulum example, $V$ is literally the kinetic + potential energy. Friction dissipates it. The argument generalizes — if you can identify ANY scalar quantity that decreases monotonically along trajectories, you have a Lyapunov function. The art is recognizing the right "energy" for non-mechanical systems.
 
 ## 3. Describing Function Analysis
 
@@ -219,6 +234,8 @@ subject to:
 
 As $N \to \infty$ with no constraints, MPC converges to LQR.
 
+> **MPC's killer feature**: every other technique in this course handles constraints by ignoring them at design time and patching with anti-windup or saturation. MPC is the only one that puts constraints inside the optimization, which means the controller **knows** the actuator can saturate and chooses inputs that respect the limit. For high-performance industrial control with hard limits (chemical reactors, vehicle stability), MPC has become the default.
+
 ## 6. Adaptive Control
 
 ### 6.1 Motivation
@@ -263,6 +280,15 @@ This combines system identification with controller design in a closed loop.
 
 **Key takeaway:** Start with the simplest method that works. PID handles the majority of industrial control problems. Use advanced methods when constraints, MIMO coupling, nonlinearities, or strict performance requirements demand them.
 
+## 8. Common Pitfalls
+
+1. **Trying Lyapunov on the wrong scalar.** Not every positive function works as $V$. The art is choosing one whose derivative along trajectories is negative — energy works for mechanical systems, but other domains need different choices (entropy for thermodynamic, Hamiltonian for conservative systems).
+2. **Trusting the describing function on heavily-distorted output.** The describing function uses ONLY the fundamental harmonic. If the nonlinearity creates strong harmonics that the loop's $G(j\omega)$ does not filter, the prediction can be off — DF is reliable when $G(j\omega)$ is low-pass with a clear cutoff well below the second harmonic.
+3. **Ignoring chattering in real SMC implementations.** "$\text{sign}(\sigma)$" implies infinite switching frequency, which no actuator delivers. Boundary-layer SMC trades a small steady-state error for finite switching — almost always the right trade in practice.
+4. **MPC without recursive feasibility analysis.** A naive MPC formulation can hit a state from which no feasible input sequence exists in $N$ steps — the optimization just fails. Robust MPC and reachability tools (Sections 5.4) prevent this; skipping them is fine for benchtop demos and dangerous in production.
+5. **Adaptive control as a magic answer to model uncertainty.** MRAC and self-tuners assume the structure of the plant is known and only the parameters are unknown. If the structure itself is wrong (e.g., you assumed second-order but the plant is third-order), adaptation can drive parameters in the wrong direction and destabilize the loop.
+6. **Reaching for nonlinear methods too early.** A linear controller designed at the right operating point with sensible robustness margins handles 80%+ of "nonlinear" problems. Reach for SMC, MPC, or feedback linearization only when you have a clear reason that gain-scheduled linear control will not suffice.
+
 ## Practice Exercises
 
 ### Exercise 1: Lyapunov Analysis
@@ -291,6 +317,20 @@ A discrete-time double integrator $x[k+1] = \begin{bmatrix} 1 & T \\ 0 & 1 \end{
 1. With $Q = I$, $R = 0.1$, $N = 10$, formulate the MPC optimization problem
 2. Without constraints, this is finite-horizon LQR — what changes when $|u| \leq 1$?
 3. Explain why receding horizon (applying only $u[k]$ and re-solving) helps with disturbances
+
+### Exercise 4: Pick the Right Tool
+
+For each scenario, pick ONE of (linear gain-scheduled, Lyapunov-based nonlinear, SMC, MPC, adaptive) and justify in one sentence:
+
+1. Quadcopter altitude hold under varying payload mass.
+2. Chemical reactor with hard temperature limits and known dynamics.
+3. Hard disk drive head positioning at nanometer accuracy with friction.
+4. Aircraft autopilot crossing flight regimes from low-speed approach to high-speed cruise.
+5. Inverted pendulum on a cart, swinging up from hanging-down position.
+
+### Exercise 5: Linearization Failure Demonstration
+
+Take the pendulum equation $\ddot{\theta} + (b/ml^2)\dot{\theta} + (g/l)\sin\theta = u$. Design a state-feedback gain that stabilizes the linearization around $\theta = 0$. Simulate the closed loop on the ORIGINAL nonlinear system from initial conditions $\theta_0 \in \{0.1, 0.5, 1.0, 2.0\}$ rad. At what initial angle does the linear controller fail (the pendulum either does not converge or oscillates wildly)? Discuss what nonlinear technique would handle the failing case.
 
 ---
 
