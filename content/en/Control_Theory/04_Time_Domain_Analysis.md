@@ -7,6 +7,19 @@
 - Relate second-order system parameters ($\zeta$, $\omega_n$) to time-domain performance
 - Analyze steady-state error using the final value theorem and system type
 - Apply error constants ($K_p$, $K_v$, $K_a$) to determine tracking accuracy
+- Simulate step responses in Python and recognize common analysis pitfalls
+
+## 0. Motivation — Why Time-Domain Matters
+
+Frequency-domain tools (Bode, Nyquist, root locus) are powerful, but a stakeholder asking "does the elevator stop smoothly?" or "does the drone hold altitude?" cares about **time**, not frequency. Time-domain analysis converts transfer functions into signals you can watch on a scope or an animation.
+
+Three examples where time-domain specs dominate design:
+
+- **Elevator ride**: A 5% overshoot on arriving at floor 10 means the cabin rises a few centimeters past floor 10 before settling back — uncomfortable for passengers. The spec sheet says "$M_p \leq 2\%$," and the designer backs that into a damping ratio $\zeta \geq 0.78$.
+- **Camera autofocus**: A lens driven with $\zeta = 0.3$ looks sharp, then blurry, then sharp — you see visible "hunting." The user expects sharp in under 0.2 seconds: that constrains settling time $t_s$, which in turn pins $\zeta\omega_n$.
+- **Aircraft pitch control**: Too little damping produces pilot-induced oscillation; too much makes the plane feel "mushy." The certification standard specifies $\zeta \in [0.5, 0.9]$ for a reason that can only be expressed in the time domain.
+
+Everything else in this lesson is machinery to answer those three questions quantitatively. Keep one concrete physical system in mind as you read — it makes the formulas less abstract.
 
 ## 1. Standard Test Signals
 
@@ -20,6 +33,8 @@ Control engineers analyze system performance using standard inputs:
 | Parabola $\frac{1}{2}t^2 u(t)$ | $\frac{1}{2}t^2 u(t)$ | $\frac{1}{s^3}$ |
 
 The **step response** is the most commonly used test because it reveals both transient and steady-state behavior.
+
+> **Why each signal?** Step = sudden setpoint change (operator presses a button). Ramp = target moves at constant velocity (camera tracking an airplane). Parabola = constant-acceleration tracking (rare, but some radar systems). Impulse is more of a mathematical probe: its response is the system's "fingerprint" from which every other response can be computed via convolution.
 
 ## 2. First-Order System Response
 
@@ -45,6 +60,23 @@ $$y(t) = K(1 - e^{-t/\tau})$$
 $$y(t) = \frac{K}{\tau}e^{-t/\tau}$$
 
 The impulse response decays exponentially with the same time constant.
+
+### 2.3 Worked Example: RC Low-Pass Filter
+
+A resistor $R = 1\,\text{k}\Omega$ in series with a capacitor $C = 10\,\mu\text{F}$, output measured across the capacitor, forms a first-order low-pass filter:
+
+$$G(s) = \frac{1}{RCs + 1} \quad \Rightarrow \quad \tau = RC = 10\,\text{ms}, \ K = 1$$
+
+Plug in: applying a 5 V step to the input, the capacitor voltage follows $y(t) = 5(1 - e^{-t/0.01})$:
+
+| $t$ | $y(t)$ | % of final |
+|-----|--------|-----------|
+| $0$ | $0\,\text{V}$ | $0\%$ |
+| $1\,\tau = 10\,\text{ms}$ | $3.16\,\text{V}$ | $63.2\%$ |
+| $3\,\tau = 30\,\text{ms}$ | $4.75\,\text{V}$ | $95.0\%$ |
+| $5\,\tau = 50\,\text{ms}$ | $4.97\,\text{V}$ | $99.3\%$ |
+
+The same math describes a thermometer responding to a temperature step, a tank filling to a new level, or a motor winding heating up — any energy-storage-plus-dissipation pair. Recognize the first-order shape and you recognize the underlying structure.
 
 ## 3. Second-Order System Response
 
@@ -77,6 +109,27 @@ Poles: $s = -\zeta\omega_n \pm \omega_n\sqrt{\zeta^2 - 1}$ (two distinct real ne
 $$y(t) = 1 + \frac{1}{2}\left(\frac{e^{s_1 t}}{s_1/\omega_n^2} + \frac{e^{s_2 t}}{s_2/\omega_n^2}\right)$$
 
 Slower than critically damped, no oscillation.
+
+### 3.4 Physical Intuition: Spring-Mass-Damper
+
+A mass $m$ on a spring with stiffness $k$ and viscous damping coefficient $b$ obeys:
+
+$$m\ddot{x} + b\dot{x} + kx = F(t)$$
+
+Taking the Laplace transform with zero initial conditions:
+
+$$G(s) = \frac{X(s)}{F(s)} = \frac{1}{ms^2 + bs + k}$$
+
+Matching the standard form reveals the physical meaning of each parameter:
+
+$$\omega_n = \sqrt{\frac{k}{m}} \qquad \zeta = \frac{b}{2\sqrt{mk}}$$
+
+This is **the** canonical example — you will see it in every control textbook — because it pins abstract parameters to something tangible:
+
+- **Natural frequency $\omega_n$** = how fast the system _wants_ to oscillate (stiffer spring or lighter mass → faster). A car suspension with $\omega_n = 2\pi \cdot 1\,\text{Hz}$ feels springy; a race-car suspension at $\omega_n = 2\pi \cdot 3\,\text{Hz}$ feels stiff.
+- **Damping ratio $\zeta$** = how quickly oscillations die. $\zeta = 0$ is a pure spring (forever ringing); $\zeta = 1$ is a closed-door damper (no overshoot). Cars aim for $\zeta \approx 0.25\text{–}0.35$ so they feel responsive yet stable.
+
+When you see $\zeta = 0.7$ in a textbook, picture a sedan suspension: noticeably smooth, small enough overshoot that the passenger barely feels it.
 
 ## 4. Time-Domain Specifications
 
@@ -113,6 +166,17 @@ $$M_p = e^{-\pi\zeta/\sqrt{1-\zeta^2}} \times 100\%$$
 
 $$t_s \approx \frac{4}{\zeta\omega_n} \quad \text{(2% criterion)} \qquad t_s \approx \frac{3}{\zeta\omega_n} \quad \text{(5% criterion)}$$
 
+A small reference table is worth memorizing because these numbers come up over and over:
+
+| $\zeta$ | $M_p$ | Typical use |
+|---------|-------|-------------|
+| $0.2$ | $52.7\%$ | Never intentional — diagnostic only |
+| $0.4$ | $25.4\%$ | Aggressive servos where slight overshoot is acceptable |
+| $0.5$ | $16.3\%$ | Common compromise |
+| $0.707$ | $4.3\%$ | "Engineering default" — minimum $t_s$ with small overshoot |
+| $0.8$ | $1.5\%$ | Precision positioning |
+| $1.0$ | $0\%$ | Critically damped — no overshoot, fastest non-oscillatory |
+
 ### 4.2 Design Implications
 
 These formulas reveal fundamental trade-offs:
@@ -132,6 +196,34 @@ The second-order specifications map directly to regions in the $s$-plane:
 
 The feasible region is the **intersection** of these constraints.
 
+### 4.4 Worked Example: Positioning Servo
+
+Design specs for a positioning table:
+
+- Settling time $t_s \leq 0.5\,\text{s}$ (2% criterion)
+- Overshoot $M_p \leq 10\%$
+
+**Step 1 — translate $M_p$ to $\zeta$**. From $M_p = e^{-\pi\zeta/\sqrt{1-\zeta^2}}$, inverting gives
+
+$$\zeta = \frac{-\ln(M_p)}{\sqrt{\pi^2 + \ln^2(M_p)}}$$
+
+For $M_p = 0.10$: $\zeta \approx 0.591$. To give margin, choose $\zeta = 0.7$ (corresponds to $M_p \approx 4.6\%$ — comfortably under spec).
+
+**Step 2 — translate $t_s$ to $\omega_n$**. From $t_s \approx 4/(\zeta\omega_n)$:
+
+$$\omega_n \geq \frac{4}{\zeta t_s} = \frac{4}{0.7 \times 0.5} = 11.43\,\text{rad/s}$$
+
+Round up to $\omega_n = 12\,\text{rad/s}$ for margin.
+
+**Step 3 — derived specs**. With $\zeta = 0.7$ and $\omega_n = 12$:
+
+- $t_p = \pi / (\omega_n\sqrt{1-\zeta^2}) = \pi / (12 \cdot 0.714) \approx 0.367\,\text{s}$
+- $t_r \approx 1.8 / \omega_n = 0.15\,\text{s}$
+- $t_s \approx 4 / (0.7 \cdot 12) = 0.476\,\text{s}$ ✓ under spec
+- $M_p \approx 4.6\%$ ✓ under spec
+
+**Step 4 — place poles**. The desired closed-loop poles are at $s = -\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2} = -8.4 \pm j8.57$. Every subsequent design choice (controller gain, compensator structure) aims to put the dominant poles at this location.
+
 ## 5. Effects of Additional Poles and Zeros
 
 ### 5.1 Additional Poles
@@ -147,6 +239,8 @@ A zero at $s = -z$ affects overshoot:
 - **LHP zero close to dominant poles**: increases overshoot and speeds up response
 - **LHP zero far from dominant poles**: negligible effect
 - **RHP zero** ($s = +z$): causes initial undershoot (non-minimum phase behavior)
+
+> **Non-minimum phase in the wild**: boost converters, certain aircraft pitch dynamics, and the inverted pendulum's cart position are all non-minimum phase. The tell-tale symptom is "you push the stick forward and the plane first drops a tiny bit before climbing." No controller tuning can remove the initial wrong-way response — you can only design around it.
 
 ## 6. Steady-State Error Analysis
 
@@ -184,6 +278,71 @@ Given $G(s) = \frac{100}{s(s+5)}$ (Type 1 system):
 - $K_v = \lim_{s\to 0} sG(s) = 100/5 = 20$ → ramp error = $1/20 = 5\%$
 - $K_a = \lim_{s\to 0} s^2 G(s) = 0$ → infinite parabolic error
 
+## 7. Simulation in Python
+
+The formulas above are elegant, but a few lines of `scipy.signal` build intuition faster than any derivation. The snippet below simulates and plots the step responses for the five canonical $\zeta$ values — save it as `step_response.py` and run it:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import signal
+
+omega_n = 1.0
+t = np.linspace(0, 15, 1500)
+
+for zeta in [0.1, 0.4, 0.707, 1.0, 2.0]:
+    num = [omega_n ** 2]
+    den = [1, 2 * zeta * omega_n, omega_n ** 2]
+    sys = signal.TransferFunction(num, den)
+    _, y = signal.step(sys, T=t)
+    plt.plot(t, y, label=f"ζ = {zeta}")
+
+plt.axhline(1.0, color="gray", linestyle="--", linewidth=0.8)
+plt.xlabel("time [s]")
+plt.ylabel("output")
+plt.title(f"Second-order step response (ωₙ = {omega_n} rad/s)")
+plt.legend()
+plt.grid(True)
+plt.show()
+```
+
+Experiment: change $\omega_n$ to 2 and watch every time axis shrink by half — scaling $\omega_n$ just rescales time.
+
+To compute specs numerically from the simulated response:
+
+```python
+def compute_specs(t, y, y_final=1.0):
+    """Return (overshoot%, peak_time, settle_time_2pct, rise_time_10_90)."""
+    y_max = y.max()
+    overshoot = (y_max - y_final) / y_final * 100.0
+
+    peak_idx = int(np.argmax(y))
+    peak_time = t[peak_idx]
+
+    tolerance = 0.02 * y_final
+    outside = np.where(np.abs(y - y_final) > tolerance)[0]
+    settle_time = t[outside[-1]] if len(outside) else t[0]
+
+    t10 = t[np.argmax(y >= 0.1 * y_final)]
+    t90 = t[np.argmax(y >= 0.9 * y_final)]
+    rise_time = t90 - t10
+
+    return overshoot, peak_time, settle_time, rise_time
+```
+
+Computed values agree with the formulas from Section 4.1 to within a few percent — discrepancies come from linear-interpolation vs. analytical extrema.
+
+## 8. Common Pitfalls
+
+A short list of mistakes students (and experienced engineers) repeatedly hit:
+
+1. **Using 2nd-order formulas on a 3rd-order system.** The $M_p = e^{-\pi\zeta/\sqrt{1-\zeta^2}}$ formula assumes exactly one complex-conjugate pole pair and nothing else. If your system has a significant third pole or LHP zero, simulate — don't plug in.
+2. **Confusing rise time conventions.** Textbooks use 0→100% (overdamped), 10→90%, or the time to first reach $y_{\text{final}}$. They can differ by factors of 2. Always check the definition a spec sheet is using before you promise to meet it.
+3. **Forgetting the 2% vs 5% settling distinction.** 2% settling takes ~33% longer than 5% settling. Same system, different number — the criterion matters.
+4. **Final Value Theorem on an unstable system.** The theorem requires all closed-loop poles in the LHP. Applying it to a system with a pole at $s = +2$ gives a nonsense "steady state" when in reality the output diverges.
+5. **Ignoring disturbance error.** The error constants $K_p, K_v, K_a$ describe tracking of a reference; they say nothing about disturbance rejection. A Type 1 system has zero steady-state error to a step reference but may have nonzero error to a constant disturbance — these are different calculations.
+6. **Designing $\omega_n$ with no regard to actuator limits.** A car suspension with $\omega_n = 50\,\text{rad/s}$ looks great on paper until you realize the hydraulic ram cannot move that fast. Always sanity-check the required control effort.
+
 ## Practice Exercises
 
 ### Exercise 1: Second-Order Specifications
@@ -211,6 +370,14 @@ Design a controller $G_c(s) = K(s+a)/s$ such that the system with plant $G_p(s) 
 - Steady-state error $\leq 0.02$ for a unit ramp input
 
 What is the minimum value of $K$ required?
+
+### Exercise 4: Reverse-Engineer from Specs
+
+A positioning servo must satisfy $M_p \leq 5\%$ and $t_s \leq 0.2\,\text{s}$ (2% criterion). Find the allowed region in the $(\zeta, \omega_n)$ plane, pick a pair that lies inside it, and verify using the formulas of Section 4.1.
+
+### Exercise 5: Simulate and Compare
+
+Using the Python snippet in Section 7, simulate step responses for $\zeta \in \{0.3, 0.5, 0.7, 0.9\}$ with $\omega_n = 4$. Measure $M_p$, $t_p$, and $t_s$ from the simulated curves and compare them to the analytical formulas. Explain any discrepancies larger than 5%.
 
 ---
 
