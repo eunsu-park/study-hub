@@ -7,6 +7,17 @@
 - Use asymptotic approximations for quick sketching
 - Read gain margin and phase margin from Bode plots
 - Apply frequency-domain specifications to assess system performance
+- Plot Bode diagrams numerically and recognize the visual cues that signal a problem
+
+## 0. Why Frequency Domain Earns Its Own Lesson
+
+Time-domain analysis (Lesson 4) tells you what a step response looks like. Frequency-domain analysis tells you what every sinusoid does, all at once. Three reasons this is the dominant view in real engineering:
+
+- **Real disturbances are not steps.** Wind gusts, road bumps, electromagnetic interference — none of these is a clean step. They are all sums of sinusoids. The frequency response shows directly which sinusoids the loop attenuates and which it amplifies.
+- **Margins are right there on the chart.** Phase margin and gain margin — the two numbers that sum up "how robust is this loop?" — read off the Bode plot at a glance. Time-domain analysis hides these.
+- **Composition is addition.** Cascade two systems in series and the magnitude plots ADD (in dB) and the phase plots ADD. No multiplication, no convolution. This single property is why Bode chose log-log axes in the 1930s and why everyone still uses them.
+
+Mental picture: a Bode plot is a DJ mixer's EQ for your system. Every frequency knob shows whether that frequency comes out louder, quieter, or shifted in time.
 
 ## 1. Frequency Response Concept
 
@@ -144,6 +155,25 @@ The DC gain (after factoring out the integrator and evaluating at $\omega \to 0$
 - $\omega = 10$: $-90°$ + $84.3°$ + $(-45°)$ ≈ $-51°$
 - $\omega \to \infty$: $-90°$ + $90°$ + $(-90°)$ = $-90°$
 
+### 4.3 Plotting in Python
+
+A few lines confirm the asymptotic sketch and produce the exact curve:
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from control import TransferFunction, bode_plot
+
+# G(s) = 100(s+1) / [s(s+10)]
+G = TransferFunction([100, 100], [1, 10, 0])
+
+omega = np.logspace(-2, 3, 500)
+mag, phase, _ = bode_plot(G, omega=omega, dB=True, plot=True)
+plt.show()
+```
+
+The asymptotic slopes from Section 4.2 should match the actual curve to within ±3 dB at the corner frequencies. If your hand-sketch and the plot diverge by more than 6 dB anywhere, the most common cause is an arithmetic slip in counting integrators (each one shifts the asymptote down 20 dB/decade).
+
 ## 5. Stability Margins from Bode Plots
 
 ### 5.1 Gain Margin (GM)
@@ -185,6 +215,18 @@ $$PM \approx 100\zeta \quad \text{degrees (for } \zeta < 0.7\text{)}$$
 
 More precisely: $\zeta \approx PM/100$ for $PM < 70°$.
 
+### 5.5 Reading Margins Numerically
+
+```python
+from control import margin
+
+gm, pm, wpc, wgc = margin(G)
+print(f"GM = {20*np.log10(gm):.1f} dB at wpc = {wpc:.2f} rad/s")
+print(f"PM = {pm:.1f} deg     at wgc = {wgc:.2f} rad/s")
+```
+
+`gm` is returned as a magnitude ratio (linear), so the dB conversion is explicit. A common bug: comparing `gm` to "6 dB" without taking $20\log_{10}$ first — `gm = 2.0` linearly is 6 dB; if you treat 2.0 as already-in-dB you over-tolerance by a factor of 4.
+
 ## 6. Frequency-Domain Specifications
 
 | Specification | Symbol | Meaning |
@@ -197,6 +239,17 @@ More precisely: $\zeta \approx PM/100$ for $PM < 70°$.
 - Larger $\omega_{BW}$ → faster response (smaller $t_r$)
 - Larger $M_r$ → more overshoot
 - $\omega_{BW} \approx \omega_n\sqrt{(1-2\zeta^2) + \sqrt{4\zeta^4 - 4\zeta^2 + 2}}$ for second-order systems
+
+> **Designer's shortcut**: $\omega_{BW} \approx 1.5 \cdot \omega_{gc}$ is a useful rule of thumb for second-order-dominant systems. If you need bandwidth 100 rad/s, design for crossover near 65-70 rad/s.
+
+## 7. Common Pitfalls
+
+1. **Confusing $\omega_{gc}$ with $\omega_n$.** Gain crossover and natural frequency are usually within a factor of 2 but are NOT the same. The PM-to-damping rule $PM \approx 100\zeta$ uses the relationship at the crossover, not at $\omega_n$.
+2. **Reading margins from the open-loop OR the closed-loop accidentally.** GM and PM are properties of the open-loop $G(s)$ on a Nyquist or Bode plot. Plotting the closed-loop transfer function $T = G/(1+G)$ and reading "phase margin" off it is meaningless — that plot has no notion of margin.
+3. **Asymptotic slopes wrong by 20 dB/decade.** The most common sketch error is forgetting that an integrator already gives $-20$ dB/decade at low frequency, BEFORE any other corners. Always start the sketch from $\omega \to 0$ and track the slope as each corner adds or subtracts 20 dB/decade.
+4. **Phase asymptotes vs. exact phase.** The asymptotic phase is $0° / -90°$ "instantly" at the corner, but the actual phase changes smoothly over a decade. For tight margin work, use the numeric plot, not the asymptote.
+5. **Overlooking right-half-plane zeros and poles.** A non-minimum-phase zero contributes the same magnitude as a minimum-phase zero but the OPPOSITE phase ($-90°$ instead of $+90°$). Sketches that assume all zeros are minimum-phase get phase margin badly wrong.
+6. **Treating Bode and Nyquist as different worlds.** The same $G(j\omega)$ produces both. The Nyquist plot rotation count is exactly what the Bode magnitude/phase encode — switching between views is just a different parameterization.
 
 ## Practice Exercises
 
@@ -228,6 +281,14 @@ For $G(s) = \frac{K}{s(0.1s+1)(0.01s+1)}$:
 1. With $K = 10$, find the gain margin and phase margin
 2. Find the maximum value of $K$ for which the system is stable
 3. What value of $K$ gives a phase margin of $45°$?
+
+### Exercise 4: Numerical Verification
+
+Use the Python snippet from Section 4.3 to plot the Bode diagram for Exercise 1. Compare your asymptotic slopes against the actual curve at each corner. Your hand-sketched magnitude should be within 3 dB of the actual at every corner; if not, redo the sketch with the corner-frequency table from Section 3.
+
+### Exercise 5: PM ↔ ζ Drill
+
+For a second-order system $G(s) = \omega_n^2 / [s(s + 2\zeta\omega_n)]$, sweep $\zeta \in \{0.2, 0.4, 0.6, 0.8\}$ with $\omega_n = 1$. Compute the phase margin numerically (Section 5.5) and verify the rule of thumb $PM \approx 100\zeta$. Report where the rule starts to break down at high $\zeta$.
 
 ---
 
