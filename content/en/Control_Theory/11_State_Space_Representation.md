@@ -7,6 +7,17 @@
 - Identify controllable canonical, observable canonical, and diagonal (modal) forms
 - Understand the relationship between state-space and transfer function representations
 - Compute the state transition matrix and solve state equations
+- Build state-space objects in Python and verify the conversion to/from transfer functions
+
+## 0. Why Switch From Transfer Functions to State Space?
+
+Eight lessons of transfer-function machinery, then a new representation? Three reasons it earns its own toolkit:
+
+- **MIMO is natural here.** A transfer function is a single ratio of polynomials. A state-space model is matrices — a 4-input, 6-output, 12-state aircraft model is `(A: 12×12, B: 12×4, C: 6×12, D: 6×4)` and the math reads no differently than the SISO case.
+- **Internal stability is visible.** Two transfer functions can be identical while one represents an internally unstable system (a hidden RHP pole cancelled by a zero). State space cannot hide it — the eigenvalues of $A$ are the actual closed-loop poles, cancellations or not.
+- **Modern controllers are state-space.** LQR, Kalman filter, model predictive control, $H_\infty$ — every controller designed since the 1960s is formulated in state space. Transfer functions are pedagogically friendly but stop scaling around order 10.
+
+Mental model: a transfer function is a "black box with a frequency response"; a state-space model is "an internal mechanism whose state can be measured, controlled, or estimated." The shift in mindset is from input-output to internal.
 
 ## 1. From Transfer Functions to State Space
 
@@ -79,6 +90,32 @@ Therefore:
 
 $$G(s) = C(sI - A)^{-1}B + D$$
 
+### 3.4 Conversion in Python
+
+A few lines confirm the bidirectional mapping. The 1:1 correspondence is one-way only when $G$ has no pole-zero cancellations — every state-space realization is a valid transfer function, but multiple non-equivalent state-space realizations exist for any given transfer function (canonical forms among them).
+
+```python
+import numpy as np
+from control import tf, ss, ss2tf, tf2ss
+
+# Start from a transfer function
+G = tf([2, 3], [1, 4, 5, 6])
+print("Transfer function:", G)
+
+# Convert to state space (controllable canonical form by default in python-control)
+sys_ss = tf2ss(G)
+print("A =\n", sys_ss.A)
+print("B =\n", sys_ss.B)
+print("C =", sys_ss.C)
+print("D =", sys_ss.D)
+
+# Round-trip back to transfer function
+G_back = ss2tf(sys_ss)
+print("Round-trip TF:", G_back)
+```
+
+The round-trip $G \to (A, B, C, D) \to G$ should match exactly. If it does not, the most common cause is hidden modes — uncontrollable or unobservable states that the conversion silently drops.
+
 ## 4. Canonical Forms
 
 ### 4.1 Controllable Canonical Form (CCF)
@@ -108,6 +145,18 @@ Each state in diagonal form evolves independently — the system is decoupled in
 If $A$ has repeated eigenvalues, the diagonal form may not exist. The **Jordan normal form** handles this:
 
 $$J = \begin{bmatrix} J_1 & & \\ & J_2 & \\ & & \ddots \end{bmatrix}, \quad J_i = \begin{bmatrix} \lambda_i & 1 & \\ & \lambda_i & 1 \\ & & \ddots & 1 \\ & & & \lambda_i \end{bmatrix}$$
+
+### 4.5 Choosing Between Forms
+
+| Form | Best for |
+|------|----------|
+| Controllable canonical | Designing state feedback ($u = -Kx$) — gain placement is direct |
+| Observable canonical | Designing observers — output couples to a single state |
+| Diagonal / modal | Analyzing dominant modes; decoupled simulation; LQR weighting |
+| Jordan | Theoretical analysis with repeated eigenvalues |
+| Physical (e.g. SMD above) | Best for matching the model to a real system; preserves intuition |
+
+In practice, you will usually keep the system in its physical form for modeling, then transform to canonical or modal form for design.
 
 ## 5. State Transition Matrix
 
@@ -151,6 +200,16 @@ $$e^{At} = Te^{\Lambda t}T^{-1} = T \text{diag}(e^{\lambda_1 t}, \ldots, e^{\lam
 
 For an $n \times n$ matrix, $e^{At} = \alpha_0(t)I + \alpha_1(t)A + \cdots + \alpha_{n-1}(t)A^{n-1}$, where the coefficients satisfy $e^{\lambda_i t} = \alpha_0 + \alpha_1\lambda_i + \cdots + \alpha_{n-1}\lambda_i^{n-1}$ for each eigenvalue.
 
+**Method 4 (numeric, default for software): scaling and squaring + Padé approximant**, as implemented in `scipy.linalg.expm`. For matrices up to order ~50 it is essentially perfect; beyond that, use Krylov methods. This is the method to use when programming.
+
+```python
+from scipy.linalg import expm
+import numpy as np
+
+A = np.array([[0, 1], [-2, -3]], dtype=float)
+print("e^(A * 0.5) =\n", expm(A * 0.5))
+```
+
 ## 6. Eigenvalues and Stability
 
 The eigenvalues of $A$ are the poles of the transfer function. The system is:
@@ -165,6 +224,8 @@ $$\det(sI - A) = s^n + a_{n-1}s^{n-1} + \cdots + a_0$$
 
 This is the same characteristic polynomial as in the transfer function approach.
 
+> **Why the state-space test is stricter than the transfer-function test:** if the transfer function has a pole-zero cancellation at $s = +1$, the polynomial $\det(sI - A)$ still has the eigenvalue $\lambda = 1$ — the matrix view does not lose modes. This is the formal reason "internal stability" requires checking eigenvalues of $A$, not just stability of $G(s)$.
+
 ## 7. Similarity Transformations
 
 Two state-space realizations $(A, B, C, D)$ and $(\bar{A}, \bar{B}, \bar{C}, \bar{D})$ represent the same transfer function if and only if they are related by a **similarity transformation** $T$:
@@ -176,6 +237,15 @@ Key properties preserved under similarity transformations:
 - Transfer function
 - Controllability and observability (rank conditions)
 - System order
+
+## 8. Common Pitfalls
+
+1. **Confusing "states" with "outputs".** States are internal variables you choose; outputs are what you measure. A 3rd-order system has 3 states but might output only 1 of them. Beginners often write "the output is the state" — true only when $C = I$.
+2. **Treating CCF as the unique state-space model.** A given transfer function admits infinitely many state-space realizations. CCF is a useful default for design but the physical form is usually more interpretable for modeling.
+3. **Inverting $sI - A$ symbolically when numeric is enough.** For numerical work, $C(sI-A)^{-1}B$ is best computed with `scipy.signal.ss2tf` — it handles ill-conditioned $A$ matrices that hand-inversion mangles.
+4. **Mishandling Jordan blocks.** When $A$ has repeated eigenvalues that lack a full set of eigenvectors, naive diagonalization fails silently (you get wrong results). Use `numpy.linalg.eig` and check the rank of the eigenvector matrix; if it is less than $n$, switch to `scipy.linalg.expm` which handles Jordan structure automatically.
+5. **Hidden modes after a similarity transform.** If $T$ is poorly conditioned, the transformed system may be numerically uncontrollable or unobservable even though the original was not. Always check controllability/observability after a numeric transform (Lesson 12).
+6. **Forgetting that $D \neq 0$ for proper-but-not-strictly-proper transfer functions.** $G(s) = (s+1)/(s+2)$ has DC gain $1/2$ and high-frequency gain $1$ — the difference is encoded in $D = 1$. Setting $D = 0$ silently truncates the high-frequency content.
 
 ## Practice Exercises
 
@@ -205,6 +275,14 @@ For the system $A = \begin{bmatrix} 0 & 1 \\ -2 & -3 \end{bmatrix}$:
 1. Find the eigenvalues
 2. Compute $e^{At}$ using the Laplace transform method
 3. Find $x(t)$ for $x(0) = [1 \; 0]^T$ with no input
+
+### Exercise 4: Numerical Round-Trip
+
+Using `tf2ss` and `ss2tf` from `python-control` (or the equivalent in MATLAB), convert $G(s) = \frac{s+1}{(s+2)(s+3)}$ to state space and back. Verify that the recovered transfer function matches the original to within numerical precision. Repeat for $G(s) = \frac{s+1}{(s+2)^2}$ (repeated poles) and discuss what changes.
+
+### Exercise 5: Similarity Drill
+
+Given the SMD system from Section 3.1 with $m = 1, b = 2, k = 5$, transform to diagonal form using the eigenvector matrix $T$. Verify that the transformed $\bar{A}$ is diagonal with the eigenvalues of the original $A$, and that the input/output behavior (transfer function) is unchanged.
 
 ---
 
