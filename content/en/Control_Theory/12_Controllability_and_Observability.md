@@ -7,6 +7,17 @@
 - Understand the PBH (Popov-Belevitch-Hautus) test
 - Relate controllability/observability to transfer function pole-zero cancellations
 - Decompose systems into controllable/uncontrollable and observable/unobservable parts
+- Compute the rank tests numerically and recognize the rank-deficient cases that hide instability
+
+## 0. Why These Two Properties Underwrite Modern Control
+
+Lesson 11 introduced state space; this lesson introduces the two questions that determine whether you can do anything useful with it. They are the prerequisite for every controller and observer design that follows.
+
+- **Controllability is "can I move the state where I want?"** Without controllability, no choice of $u(t)$ — gain, schedule, optimal — moves a stuck mode. The control engineer's job ends before it begins.
+- **Observability is "can I figure out the state from what I see?"** Without observability, no observer or filter can recover hidden states from measurements. The estimator's job ends before it begins.
+- **Together they define minimality.** A system that is both controllable and observable has the smallest possible state for its input-output behavior. Anything bigger is wasted state — modes that exist mathematically but cannot affect the output or be affected by the input.
+
+These properties also explain a paradox you have already seen: a transfer function and a state-space model can disagree about stability. The state-space view is honest; the transfer function silently drops uncontrollable or unobservable modes via pole-zero cancellation. If a hidden mode is unstable, BIBO stability is a lie.
 
 ## 1. Motivation
 
@@ -99,6 +110,10 @@ $$Av = \lambda v \text{ and } Cv = 0 \implies \text{not observable}$$
 
 **Interpretation:** A mode is unobservable if its eigenvector is in the null space of $C$.
 
+### 4.3 Why Two Tests Exist
+
+The Kalman rank test is faster to compute (one rank, on an $n \times nm$ matrix); the PBH test is faster to interpret (which mode is the problem, identified by its eigenvalue). In practice you use Kalman to detect the problem and PBH to diagnose which mode caused it.
+
 ## 5. Connection to Transfer Functions
 
 ### 5.1 Pole-Zero Cancellations
@@ -125,6 +140,29 @@ The pole at $s = -3$ does not appear in the transfer function. Checking: the sys
 - **Internal stability** depends on the eigenvalues of $A$ (all modes)
 
 A system can be BIBO stable but internally unstable if an unstable mode is hidden by pole-zero cancellation. This is dangerous — the hidden unstable mode will grow unbounded internally.
+
+### 5.4 Numerical Test in Python
+
+```python
+import numpy as np
+from scipy.linalg import matrix_rank
+
+A = np.array([[-1, 0], [0, -3]], dtype=float)
+B = np.array([[1], [1]], dtype=float)
+C = np.array([[1, 0]], dtype=float)
+n = A.shape[0]
+
+# Kalman controllability and observability matrices
+Ctrb = np.hstack([np.linalg.matrix_power(A, k) @ B for k in range(n)])
+Obsv = np.vstack([C @ np.linalg.matrix_power(A, k) for k in range(n)])
+
+print(f"rank(Ctrb) = {matrix_rank(Ctrb)} / {n}  → {'controllable' if matrix_rank(Ctrb) == n else 'NOT controllable'}")
+print(f"rank(Obsv) = {matrix_rank(Obsv)} / {n}  → {'observable' if matrix_rank(Obsv) == n else 'NOT observable'}")
+```
+
+For the example above, you should see `rank(Ctrb) = 2` (controllable) and `rank(Obsv) = 1` (NOT observable). `python-control` provides `ctrb`, `obsv`, and `pole_zero_cancellation` helpers that wrap the same logic with a friendlier API.
+
+> **Numerical caveat**: rank tests on floating-point matrices are sensitive to thresholding. Use `numpy.linalg.matrix_rank(M, tol=...)` with an explicit tolerance based on $\sigma_1 \cdot \epsilon \cdot \max(m,n)$ when the matrix is poorly scaled. Better still, use the SVD directly and look at the singular-value gap — a "rank-deficient" matrix with $\sigma_n / \sigma_1 = 0.001$ is more "barely controllable" than "uncontrollable" and will need more control effort to drive the weak mode.
 
 ## 6. Kalman Decomposition
 
@@ -168,6 +206,15 @@ $(A, C)$ is observable if and only if $W_o(t) > 0$ for some $t > 0$.
 
 The Gramians quantify **how easily** each state can be controlled or observed — they are used in model reduction (balanced truncation).
 
+## 8. Common Pitfalls
+
+1. **Treating "rank-deficient" as a binary verdict in floating point.** Real systems live on a spectrum from "very controllable" (well-conditioned $\mathcal{C}$) to "barely controllable" (almost rank-deficient). Always inspect the smallest singular value of $\mathcal{C}$ — small values mean huge control effort to move the weak mode.
+2. **Forgetting that minimality is per realization, not per transfer function.** Two realizations of the same transfer function can have different state dimensions if one has hidden modes. The minimal realization is the smallest one.
+3. **Ignoring the "uncontrollable but stable" case.** If an uncontrollable mode is in the LHP, you cannot affect it but it decays harmlessly. Many physical systems have such modes (e.g., spring-mass-damper measured at a node — natural mode is invisible there). Detect them, but they are not always a deal-breaker.
+4. **Trusting BIBO stability for safety-critical analysis.** The reason aviation certification requires state-space analysis is exactly this lesson: a hidden RHP mode can crash a plane while the input-output behavior looks fine. Always use the eigenvalues of $A$ for safety arguments.
+5. **Building $\mathcal{C}$ for $n > 30$ naïvely.** $A^k B$ blows up numerically when $A$ has eigenvalues with significant magnitudes. Use the staircase form (`scipy.signal.ss2zpk` plus controllability staircase) for high-order systems instead of computing $A^{n-1}$.
+6. **Confusing the Gramian's positivity with full rank.** $W_c > 0$ (positive definite) is equivalent to controllability for stable systems. For unstable systems use the Kalman/PBH tests directly — the integral that defines $W_c$ may not converge.
+
 ## Practice Exercises
 
 ### Exercise 1: Controllability and Observability Check
@@ -195,6 +242,14 @@ Consider $A = \begin{bmatrix} -1 & 0 \\ 0 & 2 \end{bmatrix}$, $B = \begin{bmatri
 1. Is the system BIBO stable (from the transfer function)?
 2. Is the system internally stable?
 3. What is the danger of this system?
+
+### Exercise 4: Numerical Spot-Check
+
+Use the Python snippet from Section 5.4 to check controllability and observability of all three exercises above. Confirm that the rank-based answers match what you derived by hand. For Exercise 3, additionally print the eigenvalues of $A$ to see the hidden unstable mode that the transfer function does not show.
+
+### Exercise 5: Almost-Uncontrollable Drill
+
+Take $A = \begin{bmatrix} -1 & 0 \\ 0 & -2 \end{bmatrix}$, $B = \begin{bmatrix} 1 \\ \epsilon \end{bmatrix}$ for $\epsilon \in \{1, 0.1, 0.01, 0.001\}$. The system is fully controllable for any $\epsilon > 0$ but the controllability is increasingly weak. Compute the smallest singular value of $\mathcal{C}$ for each $\epsilon$ and explain how that value relates to the control effort needed to move the second mode.
 
 ---
 
