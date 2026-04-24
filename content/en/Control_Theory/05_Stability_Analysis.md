@@ -7,6 +7,19 @@
 - Use the Routh array to find the range of a parameter for stability
 - Identify marginally stable and unstable systems
 - Understand the connection between pole locations and stability
+- Verify stability conclusions numerically and recognize the pitfalls that the Routh criterion is designed to avoid
+
+## 0. Motivation — Why Routh When We Have `numpy.roots`?
+
+A 2026 student reasonably asks: if a three-line Python call factors any polynomial, why spend pages on a tabular algorithm invented in 1875?
+
+Three reasons the Routh array still earns its place:
+
+- **Stability as a function of a parameter.** Root-finding tells you "at $K = 12$ the poles are at …". Routh answers "for what range of $K$ is this system stable?" in a single symbolic pass. That parametric question is the one control engineers ask most often, and Python's numerical root-finder cannot answer it directly.
+- **Analytical insight.** The Routh conditions for a third-order system collapse to $a_2 a_1 > a_0$ — a relationship you can remember and apply from a napkin. The numerical answer for one $K$ gives you no such intuition.
+- **It catches symbolic mistakes.** When you are deriving a characteristic polynomial by hand, a sign error in one coefficient flips the stability conclusion. Routh's necessary condition (all coefficients same sign) is a 10-second sanity check — far faster than setting up a numerical test.
+
+Keep a concrete picture: imagine a ball sitting in the bottom of a bowl vs. balanced on top of a hill. The bowl is stable (push the ball, it returns); the hilltop is unstable. Poles in the left half-plane are bowl-shaped exponentials that decay toward equilibrium; poles in the right half-plane are hilltop exponentials that run away. The imaginary axis is the razor's edge — pure oscillation forever, neither decaying nor growing.
 
 ## 1. Stability Concepts
 
@@ -41,6 +54,8 @@ For LTI systems, both conditions reduce to a simple pole test:
 For closed-loop stability, we analyze the roots of the **characteristic equation**:
 
 $$1 + G(s)H(s) = 0 \quad \Leftrightarrow \quad \Delta(s) = 0$$
+
+> **Caution**: BIBO stability and asymptotic stability are identical for an LTI system's input-output pair *only when* there are no pole-zero cancellations at unstable locations. A hidden RHP pole cancelled by a zero passes the BIBO test but still makes the internal state diverge. This is why modern analysis checks poles of the **state-space** $A$ matrix, not just the transfer function — covered in Lesson 12.
 
 ## 2. The Routh-Hurwitz Criterion
 
@@ -98,6 +113,26 @@ First column: $1, 2, 1, -6, 5$
 
 Sign changes: $1 \to -6$ and $-6 \to 5$ → **2 sign changes** → 2 RHP roots → **Unstable**.
 
+### 2.5 The Array-Filling Recipe, Written Mechanically
+
+Once you see the pattern the array is mechanical. For each new row:
+
+1. Look at the **two rows immediately above** (call them "upper" and "above-upper").
+2. For each column $j$ of the new row, compute a 2×2 determinant built from columns $0$ and $j+1$ of those two upper rows, divided by the pivot (column 0 of "upper"):
+   $$\text{new}_j = \frac{\text{upper}[0] \cdot \text{above-upper}[j+1] - \text{above-upper}[0] \cdot \text{upper}[j+1]}{\text{upper}[0]}$$
+   Notice this is always the **same 2×2 pattern** with "upper" as the denominator.
+3. Stop when a row has only one nonzero column (that is the $s^0$ row).
+
+A worked spreadsheet-style mnemonic:
+
+```
+[above-upper]:   A  B  C
+[upper]:         D  E  F
+[new row]:      (D*B - A*E)/D   (D*C - A*F)/D   ...
+```
+
+If you remember the 2×2 "cross minus cross, divided by the pivot D" pattern, you never need to look up the formula again.
+
 ## 3. Special Cases in the Routh Array
 
 ### 3.1 Zero in the First Column
@@ -126,6 +161,12 @@ If an entire row becomes zero, it indicates that the characteristic polynomial h
 
 The roots of $P(s)$ are the symmetric root pairs and include the imaginary axis roots.
 
+### 3.3 Why the $\epsilon$ Trick Works
+
+The $\epsilon \to 0^+$ substitution is not a hack — it is a limit argument. The Routh conditions are continuous in the polynomial coefficients except right at the singularity where the pivot is zero. Perturbing by a tiny positive $\epsilon$ moves you a hair off the singular locus, the counts remain valid, and the limit recovers the correct sign pattern.
+
+If the sign pattern DIFFERS as $\epsilon \to 0^+$ vs. $\epsilon \to 0^-$, you have a marginally stable system — the polynomial has roots exactly on the imaginary axis. This is the flag Section 3.1 caught implicitly.
+
 ## 4. Stability Ranges Using Routh-Hurwitz
 
 One of the most powerful applications: finding the range of a parameter (typically gain $K$) for which the system is stable.
@@ -152,6 +193,36 @@ For stability, all first-column entries must be positive:
 
 At $K = 30$: the $s^1$ row becomes zero → **marginally stable** with sustained oscillation. The auxiliary polynomial from the $s^2$ row: $6s^2 + 30 = 0 \Rightarrow s = \pm j\sqrt{5}$. The frequency of oscillation is $\omega = \sqrt{5}$ rad/s.
 
+### 4.2 Verification in Python
+
+The symbolic answer above says "stable for $0 < K < 30$." A 20-line numerical sweep confirms this and builds confidence:
+
+```python
+import numpy as np
+
+def is_stable(K):
+    # char poly: s^3 + 6s^2 + 5s + K
+    roots = np.roots([1, 6, 5, K])
+    return np.all(roots.real < 0)
+
+for K in [0.1, 10, 20, 29, 30, 30.01, 100]:
+    print(f"K = {K:>7.2f}  stable = {is_stable(K)}")
+```
+
+Expected output:
+
+```
+K =    0.10  stable = True
+K =   10.00  stable = True
+K =   20.00  stable = True
+K =   29.00  stable = True
+K =   30.00  stable = False   # ← exactly the boundary
+K =   30.01  stable = False
+K =  100.00  stable = False
+```
+
+Notice `K = 30` reports `False`: at the boundary, `numpy.roots` computes poles with tiny-but-nonzero real parts because of floating-point noise. The Routh analysis is the ground truth here — the system is marginally stable (pure oscillation at $\omega = \sqrt{5}$), which is neither "stable" in the asymptotic sense nor RHP-unstable. This mismatch is exactly why the symbolic method is worth knowing: numerical tools blur the boundary, while Routh nails it.
+
 ## 5. Hurwitz Determinants (Alternative Formulation)
 
 The Hurwitz criterion provides the same information through determinants. For $\Delta(s) = a_n s^n + \cdots + a_0$ with $a_n > 0$, all roots have negative real parts if and only if the **Hurwitz determinants** are all positive:
@@ -170,6 +241,17 @@ For low-order systems this can be simpler than the full Routh array.
 
 **Third-order** $s^3 + a_2 s^2 + a_1 s + a_0$: Stable if and only if $a_2 > 0$, $a_0 > 0$, and $a_2 a_1 > a_0$.
 
+### 5.2 Physical Example: Spring-Mass-Damper
+
+For $m\ddot{x} + b\dot{x} + kx = F$, the characteristic polynomial is $ms^2 + bs + k$, i.e. a second-order form with $a_1 = b/m$ and $a_0 = k/m$.
+
+Routh / Hurwitz says stable iff $b > 0$ and $k > 0$. Translated to physical parameters:
+
+- $k > 0$ means the spring pulls back (positive restoring force). A $k = 0$ spring is a free mass; $k < 0$ is a repulsive force (inverted pendulum before linearization) — both unstable.
+- $b > 0$ means the damper dissipates energy. $b = 0$ is a lossless oscillator (imaginary-axis poles, marginally stable); $b < 0$ would be an energy-injecting damper — unstable.
+
+So the Routh criteria map exactly onto the physical intuition: you need a restoring force AND energy dissipation. The mathematics is just bookkeeping for this intuition.
+
 ## 6. Relative Stability
 
 The Routh criterion tells us only if poles are in the LHP. For **relative stability** — how far the poles are from the imaginary axis — we can use a shifted variable.
@@ -177,6 +259,17 @@ The Routh criterion tells us only if poles are in the LHP. For **relative stabil
 **Method:** To determine if all poles have $\text{Re}(p_i) < -\sigma_0$, substitute $s = \hat{s} - \sigma_0$ into $\Delta(s)$ and apply Routh to the new polynomial in $\hat{s}$.
 
 If all entries in the first column of the shifted Routh array are positive, all original poles satisfy $\text{Re}(p_i) < -\sigma_0$.
+
+> Why this matters: a system with all poles just inside the LHP is "technically stable" but will take a very long time to settle and amplifies noise. Engineering rules typically demand $\text{Re}(p_i) < -\sigma_0$ for some explicit $\sigma_0$ — 0.5 or 1.0 for slow processes, 5–10 for servos.
+
+## 7. Common Pitfalls
+
+1. **Using the necessary condition as sufficient.** "All coefficients are positive, therefore stable" is WRONG for $n \geq 3$. It is a quick first check, but the full Routh array must be completed.
+2. **Forgetting that the Routh test assumes $a_n > 0$.** If your leading coefficient is negative, multiply the polynomial by $-1$ first. Omitting this reverses every sign change count.
+3. **Misreading a zero row as "stable because no sign changes".** A zero row signals imaginary-axis roots — marginal stability, not asymptotic stability. Always apply the auxiliary-polynomial procedure.
+4. **Mixing up Routh for $K$ ranges.** Students routinely derive "$K > 0$" and stop, forgetting the upper bound from the row where $K$ enters negatively. Check **every** first-column entry as a function of $K$.
+5. **Over-trusting numerical root finders at the boundary.** As Section 4.2 showed, floating-point errors near marginal stability can give misleading "unstable" verdicts. Use Routh for boundary-of-stability questions.
+6. **Pole-zero cancellation hiding instability.** A transfer-function Routh test cannot see a pole cancelled by a zero at the same RHP location. The state-space eigenvalue test (Lesson 12) is the only safe guarantee; rely on that for safety-critical systems.
 
 ## Practice Exercises
 
@@ -202,6 +295,14 @@ For the characteristic polynomial $s^3 + 10s^2 + 31s + 30$:
 1. Verify that the system is stable
 2. Determine whether all poles satisfy $\text{Re}(p_i) < -1$
 3. Find the actual poles and verify your answers from parts 1 and 2
+
+### Exercise 4: Numerical Sweep
+
+Write a small Python script that sweeps $K$ from $-5$ to $50$ in steps of $0.1$ for the system in Section 4.1 and plots the rightmost-pole real part as a function of $K$. Mark the critical $K$ where the curve crosses zero. Compare to the Routh prediction.
+
+### Exercise 5: Hidden RHP Pole
+
+Construct a closed-loop transfer function that appears stable by the Routh test on its denominator but has a hidden RHP pole canceled by a matching zero. Show the consequence by applying a small disturbance to the state directly (bypass the input) and observing that the output diverges despite the BIBO-stable transfer function.
 
 ---
 
