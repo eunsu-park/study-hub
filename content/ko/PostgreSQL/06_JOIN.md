@@ -20,6 +20,149 @@
 
 현실 세계의 데이터는 하나의 테이블에 저장되는 경우가 거의 없습니다. 고객, 주문, 상품은 각각 자신의 테이블에 존재하며, 관계형 데이터베이스(relational database)의 진정한 힘은 이들을 즉석에서 연결하는 데서 나옵니다. JOIN은 여러 테이블의 관련 데이터를 하나의 의미 있는 결과 집합으로 재조합하는 SQL 메커니즘으로, 매일 사용하게 될 가장 중요한 연산 중 하나입니다.
 
+`JOIN` 문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — PostgreSQL이 join을 실제로 수행하는 세 가지 알고리즘(Nested Loop, Hash Join, Merge Join), planner가 어떤 것을 고르는지, 그리고 semi-join과 anti-join이 무엇인지를 다룹니다.
+
+---
+
+## 이론과 원리
+
+SQL에는 `JOIN`이라는 단어 하나만 등장하지만, PostgreSQL은 그것을 실행하기 위해 *완전히 다른 세 가지 알고리즘* — Nested Loop, Hash Join, Merge Join — 중 하나를 사용할 수 있습니다. cost shape이 극단적으로 다릅니다 — 하나는 O(N·M), 하나는 O(N+M), 하나는 정렬된 입력을 필요로 합니다. 잘못 고르면 50 ms와 50분의 차이가 됩니다. 좋은 소식 — 당신이 고르는 게 아니라 planner가, 테이블 크기와 인덱스, 통계를 바탕으로 고릅니다. 더 좋은 소식 — 세 알고리즘이 어떻게 동작하는지 알면 `EXPLAIN` 출력을 읽고 planner가 *왜* 그 선택을 했는지, 잘못 골랐을 때 어떻게 nudge할지 알 수 있습니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** Nested Loop Join — N·M이 괜찮을 때, 그리고 그것을 저렴하게 만드는 인덱스 기반 버전.
+- **(B)** Hash Join — 한 쪽에 in-memory hash table을 build하고 다른 쪽으로 probe.
+- **(C)** Merge Join — 정렬된 두 스트림을 한 번의 linear pass로 join.
+- **(D)** Semi-join, anti-join, OUTER join — 위 세 알고리즘의 특수 목적 변형.
+
+### A. Nested Loop Join
+
+가장 단순한 join 알고리즘. **outer** 테이블의 각 행에 대해, **inner** 테이블에서 매칭을 스캔:
+
+```
+outer의 각 행 r1에 대해:
+    inner의 각 행 r2에 대해:
+        if r1.key = r2.key:
+            (r1, r2) emit
+```
+
+비용 — N과 M이 행 수일 때 O(N · M). 끔찍해 보이며, 실제로 양쪽이 크면 끔찍합니다. 그러나 두 가지 요인이 구합니다.
+
+#### A.1 인덱스가 있는 inner side
+
+inner 테이블이 join key에 인덱스를 가지고 있으면, 안쪽 루프는 full scan이 *아니라* O(log M) index probe입니다. 총 비용은 O(N · log M)이며, 작은 N에 대해서는 hashing을 이깁니다.
+
+```sql
+SELECT * FROM small_table s JOIN big_table b ON s.id = b.s_id;
+-- Plan: Nested Loop
+--         Outer: Seq Scan on small_table  (10 rows)
+--         Inner: Index Scan on big_table.s_id  (outer 행마다 probe 1번)
+```
+
+전형적인 "작은 테이블을 indexed 큰 테이블에 join" 패턴이며, 이름은 안 좋게 들리지만 PostgreSQL에서 가장 빠른 join인 경우가 많습니다.
+
+#### A.2 Nested Loop이 지는 경우
+
+outer side에 행이 많고 inner side에 사용 가능한 인덱스가 없을 때. 그 경우 planner는 Hash Join으로 전환합니다.
+
+### B. Hash Join
+
+Build 단계 — 더 작은 테이블을 한 번 읽고 각 행을 join 컬럼을 키로 한 in-memory hash table에 삽입. Probe 단계 — 더 큰 테이블을 한 번 읽고, 각 행에 대해 join 컬럼을 hash해서 hash table에서 매칭 lookup.
+
+```
+build:
+    H = {}
+    smaller_table의 각 행 r에 대해:
+        H[hash(r.key)].append(r)
+
+probe:
+    larger_table의 각 행 s에 대해:
+        for r in H[hash(s.key)]:
+            if r.key == s.key:        # hash collision 검사
+                (r, s) emit
+```
+
+비용 — O(N + M), 양쪽에 linear. 양쪽이 크고 출력 순서를 신경 쓰지 않을 때 유리.
+
+#### B.1 메모리와 `work_mem`
+
+hash table은 `work_mem`에 들어가야 합니다. 안 되면 PostgreSQL은 **partitioned hash join**으로 fallback — 양쪽 입력을 hash bucket으로 디스크에 partition한 뒤, partition 쌍마다 별도로 hash-join. 이는 양쪽에 read+write pass 1번씩을 추가합니다. `EXPLAIN ANALYZE`에서 `Batches: N`이 1보다 크다면 partitioned hash라는 뜻 — 그 세션의 `work_mem`을 올리면 큰 속도 향상이 가능합니다.
+
+#### B.2 "더 작은 쪽에 build"하는 이유
+
+hash table은 행마다 고정 overhead + 행 자체. 더 작은 쪽에 build하면 메모리 압박이 줄어듭니다. planner는 row-count 추정으로 이를 결정합니다(그래서 통계가 나쁘면 잘못된 쪽에 build하는 재앙이 일어날 수 있음).
+
+#### B.3 Hash collision
+
+서로 다른 두 키가 같은 bucket에 hash될 수 있습니다. probe는 bucket lookup 후 항상 실제 key를 재검사하므로 정확성은 보존되지만, 충돌이 심하면 linear 비용이 worst case에 quadratic으로 퇴화합니다. PostgreSQL은 32-bit hash에 extendible hashing을 사용해 bucket을 균형 있게 유지합니다.
+
+### C. Merge Join
+
+양쪽 입력이 join key에 대해 *정렬*되어 있다면, 두 sorted list를 merge하듯 single linear pass로 join할 수 있습니다.
+
+```
+i, j = 0, 0
+while i < |A| and j < |B|:
+    if A[i].key < B[j].key: i += 1
+    elif A[i].key > B[j].key: j += 1
+    else:
+        (A[i], B[j]) emit
+        # 양쪽을 advance, 그리고 양쪽의 중복 키 처리
+        ...
+```
+
+비용 — merge 자체는 O(N + M), 입력이 먼저 정렬되어야 한다면 O(N log N + M log M) 추가.
+
+#### C.1 Merge Join이 유리한 경우
+
+- 양쪽이 *이미* 정렬됨(예 — B-tree 인덱스를 key 순으로 읽기). sort 비용이 사라지고 merge가 압도적 우위.
+- 출력이 어차피 join key로 정렬되어야 함(이후 `ORDER BY`).
+- 메모리 빠듯 — merge join은 양쪽 각각의 행 1개 buffer만 필요한 반면, hash join은 `work_mem`에 안 들어갈 수 있음.
+
+#### C.2 Merge Join이 지는 경우
+
+- 입력이 pre-sorted가 아니고 sort 비용이 비쌀 만큼 테이블이 큼.
+- join key cardinality가 매우 낮음 — 동일 키가 많으면 inner side를 "rescan"해야 하고, linear bound가 깨짐.
+
+### D. Semi-join, Anti-join, OUTER join
+
+위 세 알고리즘은 *어떻게* 행을 매칭할지에 관한 것입니다. 매치/비매치를 *어떻게 처리*할지는 join *type*이 결정합니다.
+
+#### D.1 INNER JOIN
+
+양쪽에 매치되는 행만 emit. 기본값.
+
+#### D.2 LEFT OUTER JOIN
+
+왼쪽의 모든 행을 emit, 매칭되는 오른쪽 행이 없는 왼쪽 행에는 오른쪽 컬럼에 `NULL`을 emit. 구현 — INNER와 동일하지만, 어떤 왼쪽 행이 출력을 만들었는지를 추적. 마지막에 매치되지 않은 왼쪽 행을 NULL 오른쪽 컬럼과 함께 emit.
+
+#### D.3 Semi-join — `EXISTS`와 `IN`
+
+`SELECT * FROM A WHERE EXISTS (SELECT 1 FROM B WHERE B.x = A.x);`는 **semi-join**입니다 — A의 각 행을 B의 매치 수와 무관하게 *최대 1번* emit. 결정적으로, 오른쪽은 *probe*되지, join되지 않습니다 — 오른쪽의 중복은 출력을 중복시키지 않습니다.
+
+planner는 semi-join을 hash semi-join(B에 hash build, A로 probe, outer 행마다 첫 매치에서 멈춤)이나 inner에 `LIMIT 1`을 가진 nested loop으로 구현할 수 있습니다. INNER JOIN + DISTINCT보다 훨씬 저렴합니다.
+
+#### D.4 Anti-join — `NOT EXISTS`
+
+`SELECT * FROM A WHERE NOT EXISTS (SELECT 1 FROM B WHERE B.x = A.x);`는 **anti-join**입니다 — B 행이 매치되지 *않는* A 행만 emit. 같은 엔진, 반대 emission 규칙. `NOT IN (subquery)` 대신 이것을 써야 합니다 — anti-join은 NULL을 올바르게 처리하지만 `NOT IN`은 그렇지 않습니다(5번 레슨 §C.1).
+
+#### D.5 FULL OUTER JOIN
+
+대칭 LEFT — 양쪽의 매치되지 않은 행을 모두 emit. 선택된 알고리즘을 두 번(각 방향 1번) 실행하거나, 단일 hash/merge pass 동안 양쪽 매치 여부를 신중히 추적해서 구현.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 알고리즘이 구체화된 형태입니다:
+
+- **`INNER JOIN ... ON`** — 가장 자주 Hash Join(큰 + 큰) 또는 indexed Nested Loop(작은 + indexed-큰)으로 plan됨 (§A, §B).
+- **`LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`** — §D의 outer-emission 규칙이 layer된 동일 알고리즘.
+- **`CROSS JOIN`** — join 조건 없는 순수 Nested Loop, N·M 행 생성.
+- **`USING (col)`, `NATURAL JOIN`** — `ON`에 대한 syntactic sugar, planner는 동일한 조건을 봄.
+- **Self join** — 동일 알고리즘, planner는 양쪽이 동일한 물리 테이블이라는 사실을 모름.
+- **`EXPLAIN ANALYZE`** — 어떤 알고리즘과 어느 쪽이 outer/inner였는지 표시. 튜닝 전 항상 확인.
+
+---
+
 ## 1. JOIN 개념
 
 JOIN은 두 개 이상의 테이블을 연결하여 데이터를 조회하는 방법입니다.

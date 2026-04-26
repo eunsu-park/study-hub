@@ -20,6 +20,116 @@
 
 운영 환경에서는 올바른 SQL을 작성하는 것만큼이나 데이터베이스, 사용자, 권한을 적절히 관리하는 것이 중요합니다. 잘못 구성된 롤(Role)이나 과도하게 허용된 권한은 민감한 데이터를 노출시키거나 우발적인 삭제를 허용할 수 있습니다. 이 레슨에서는 처음부터 안전하고 체계적인 PostgreSQL 환경을 구축하는 데 필요한 관리 명령어들을 다룹니다.
 
+관리 명령어로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — "데이터베이스"란 디스크 위에서 실제로 무엇인지, `pg_catalog`가 자기 자신의 메타데이터를 어떻게 저장하는지, 테이블스페이스(tablespace)의 역할, 그리고 모든 쓰기가 왜 WAL을 먼저 통과해야 하는지를 다룹니다.
+
+---
+
+## 이론과 원리
+
+`CREATE DATABASE` 한 줄은 설정 파일에 이름이 하나 더 추가되는 일이 아닙니다. 물리 디렉터리 트리를 할당하고, 그 안을 template 데이터베이스의 파일로 채우고, 클러스터 전역 카탈로그인 `pg_database`에 행을 삽입하며, 이후 그 데이터베이스의 모든 변경이 영속적으로 남도록 WAL 스트림에 슬롯을 예약합니다. 아래 네 가지 — 클러스터/데이터베이스/스키마 계층, 카탈로그 구조, 물리 저장 계층인 테이블스페이스, WAL — 를 이해하면 "관리 명령어"가 예측 가능하고 검증 가능한 관측 변화로 바뀝니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** 클러스터 → 데이터베이스 → 스키마 → relation 계층과 파일시스템 매핑.
+- **(B)** `pg_catalog`가 클러스터 메타데이터를 저장하는 방식, 그리고 어떤 카탈로그가 어떤 `\` 명령의 backing store인가.
+- **(C)** 테이블스페이스 — 데이터베이스의 위치를 데이터 디렉터리에서 분리하는 물리 계층.
+- **(D)** WAL — `CREATE DATABASE` 같은 DDL을 포함한 모든 변경이 적용되기 전에 먼저 로그에 기록되어야 하는 이유.
+
+### A. 클러스터, 데이터베이스, 스키마, Relation
+
+이 네 단어는 동의어가 아닙니다. 각각 PostgreSQL 네임스페이스 계층의 별개의 층입니다.
+
+| 계층 | 의미 | 조회 방법 |
+|------|------|----------|
+| **클러스터(Cluster)** | 실행 중인 postmaster 하나 + 데이터 디렉터리(`PGDATA`) 하나. 여러 데이터베이스를 담음. | `pg_lsclusters` (Debian) 또는 `SHOW data_directory;` |
+| **데이터베이스(Database)** | 자체 카탈로그 테이블, 인코딩, collation을 가진 격리된 네임스페이스. | `\l` (`pg_database` 조회) |
+| **스키마(Schema)** | 한 데이터베이스 *안에서* relation을 묶는 논리 그룹. 기본값은 `public`. | `\dn` (`pg_namespace` 조회) |
+| **Relation** | 테이블, 인덱스, 뷰, 시퀀스, 머티리얼라이즈드 뷰. | `\dt` (`pg_class WHERE relkind = 'r'` 조회) |
+
+#### A.1 파일시스템 매핑
+
+`PGDATA/base/` 안에서 모든 데이터베이스는 자기 `pg_database` 행의 OID를 이름으로 갖는 디렉터리입니다. 그 안에서 모든 relation은 자기 `pg_class` 행의 OID를 이름으로 갖는 파일(또는 1 GB 단위로 분할된 파일들)입니다. 그래서:
+
+```
+PGDATA/
+├── base/
+│   ├── 16384/        ← database OID
+│   │   ├── 24576     ← relation OID (heap)
+│   │   ├── 24576.1   ← 두 번째 1 GB segment
+│   │   ├── 24579     ← associated index
+│   │   └── ...
+│   └── 1/            ← template1 database
+└── pg_wal/           ← Write-Ahead Log segments
+```
+
+`DROP DATABASE`를 실행하면 PostgreSQL은 두 가지를 합니다 — `pg_database`에서 행을 제거하고, 디렉터리를 `unlink()`합니다. 데이터베이스에는 마법이 없습니다. 본질적으로 디렉터리 하나 + 카탈로그 행 하나입니다.
+
+#### A.2 스키마가 존재하는 이유
+
+만든 모든 것이 `public`에 산다면, 이름 충돌이 금세 문제가 됩니다. 스키마는 하위 네임스페이스를 제공합니다 — `app.users`와 `analytics.users`는 서로 다른 두 테이블입니다. `search_path` 설정은 unqualified 이름을 어떤 스키마에서 찾을지 결정합니다. `SET search_path = app, public;`은 `users`가 `app.users`로 먼저 해석되고, 없으면 `public.users`로 해석된다는 뜻입니다.
+
+### B. `pg_catalog` 내부
+
+`psql`의 모든 관리용 `\` 메타 명령은 `pg_catalog`에 대한 SQL 쿼리의 wrapper입니다. `\set ECHO_HIDDEN on`을 켜면 실제 쿼리를 볼 수 있습니다. 이 레슨에 관련된 카탈로그:
+
+- **`pg_database`** — 데이터베이스 한 행씩. 컬럼: `oid`, `datname`, `datdba`(owner), `encoding`, `datcollate`, `dattablespace`, `datallowconn`, `datistemplate`. `\l`의 backing store.
+- **`pg_authid`** — 클러스터 전역 role 한 행씩. 컬럼: `oid`, `rolname`, `rolsuper`, `rolcanlogin`, `rolpassword`(hash). `\du`의 backing store.
+- **`pg_roles`** — `pg_authid`에 대한 view로, password 컬럼을 숨김. 비-superuser에게 안전.
+- **`pg_tablespace`** — 테이블스페이스 한 행씩. 컬럼: `oid`, `spcname`, `spcowner`, `spcacl`. `\db`의 backing store.
+- **`pg_namespace`** — 스키마 한 행씩. `\dn`의 backing store.
+
+카탈로그 테이블 자체도 일반 테이블입니다 — 다만 다른 모든 쿼리를 plan하기 위해 엔진이 읽는 테이블일 뿐입니다. ACID를 따릅니다. `CREATE ROLE alice;`는 정확히 `INSERT INTO pg_authid`(과 약간의 부수 효과)이며, 둘러싼 트랜잭션이 abort되면 함께 rollback됩니다.
+
+#### B.1 클러스터 전역 vs 데이터베이스 로컬
+
+미묘한 점 하나 — 어떤 카탈로그는 *클러스터 전체에서 공유*되고, 어떤 카탈로그는 *데이터베이스 단위*입니다. role, database, tablespace는 클러스터 전역(어느 데이터베이스에 접속하든 동일한 `alice`로 로그인합니다). 테이블, 스키마, 함수, 인덱스는 데이터베이스 로컬(각 데이터베이스가 자기 `pg_class`를 가짐). 그래서 두 데이터베이스를 `JOIN`할 수 없습니다 — 카탈로그를 공유하지 않기 때문입니다.
+
+### C. 테이블스페이스
+
+기본적으로 모든 데이터베이스는 `PGDATA/base/` 아래에 삽니다. **테이블스페이스**는 "이 데이터베이스(또는 이 테이블, 이 인덱스)는 다른 파일시스템 경로 아래에 저장하라"고 말하게 해 줍니다. 내부적으로는 단지 `PGDATA/pg_tblspc/<oid>`에서 설정된 디렉터리로의 심볼릭 링크입니다.
+
+#### C.1 사용 시나리오
+
+1. **hot 데이터는 SSD, cold 데이터는 HDD.** 파티션 테이블은 빠른 테이블스페이스에, 과거 archive는 느린 테이블스페이스에.
+2. **테넌트별 디스크 quota.** 각 테넌트가 자체 size limit을 가진 자체 파일시스템 위의 테이블스페이스를 가짐.
+3. **I/O를 여러 볼륨에 분산** — 단일 디스크가 병목일 때.
+
+`CREATE TABLESPACE archive LOCATION '/mnt/cold/pg';`는 세 가지를 합니다 — 디렉터리가 존재하고 비어 있는지 검증하고, `pg_tablespace`에 행을 삽입하고, 심볼릭 링크를 생성합니다. 이후 `CREATE TABLE foo (...) TABLESPACE archive;`는 `foo`의 파일들을 그 경로에 둡니다.
+
+#### C.2 하지 않는 것
+
+테이블스페이스는 보안 경계가 *아니고*, 별개의 데이터베이스가 *아니며*, 클러스터 간에 파일을 공유하는 방법도 *아닙니다*. 서로 다른 두 클러스터는 동일한 테이블스페이스 디렉터리를 공유할 수 없습니다 — OID 공간이 충돌하기 때문입니다.
+
+### D. WAL — Write-Ahead Log
+
+근본 내구성 규칙 — **대응되는 로그 레코드가 `pg_wal/`에 디스크로 내려가기 전까지는 어떤 변경도 heap page에 적용되지 않는다**. 이것이 "write-ahead"입니다. 로그가 먼저 쓰이고, 데이터 파일은 lazy하게 갱신됩니다.
+
+이유 — 서버가 충돌하면 재시작 시 마지막 checkpoint부터 WAL을 replay해서, heap 파일에 아직 도달하지 못한 commit된 변경을 복원할 수 있습니다. 로그가 없다면 commit마다 모든 dirty 데이터 페이지를 `fsync()`해야 하는데, 데이터 페이지는 디스크에 흩어져 있는 반면 로그는 sequential하므로 그쪽이 훨씬 느립니다.
+
+#### D.1 WAL 레코드의 내용
+
+WAL 레코드는 *물리적* 변경을 기술합니다 — "relation 24576의 page 17의 32-40 바이트를 이 값으로 설정", 그리고 그 변경을 일으킨 트랜잭션 ID. commit, abort, prepared transaction 상태, full-page image(checkpoint 이후 페이지에 대한 첫 변경은 torn write로 인한 손상에서 복구 가능하도록 페이지 전체를 기록) 같은 논리 레코드도 있습니다.
+
+#### D.2 Checkpoint
+
+주기적으로(매 `checkpoint_timeout`, 기본 5분, 또는 `max_wal_size` 만큼의 WAL이 생성되면) checkpointer 프로세스가 모든 dirty buffer를 데이터 파일로 flush하고, *checkpoint 레코드*를 WAL에 씁니다. 충돌 후 복구는 마지막 checkpoint 이후의 WAL만 replay하면 되며, 그 이전 WAL은 재활용되거나 archive됩니다.
+
+#### D.3 DDL과 `CREATE DATABASE`도 WAL을 거치는 이유
+
+모든 카탈로그 변경은 heap 변경이기도 합니다(`pg_class`, `pg_database` 등에 쓰기). 따라서 WAL을 생성합니다. 그래서 `CREATE DATABASE`가 standby로 복제될 수 있습니다 — standby는 디렉터리 생성과 template 복사 작업까지 포함된 WAL 레코드를 단순히 replay합니다.
+
+### 이론에서 아래 명령으로
+
+이어지는 각 절은 위 개념들이 구체화된 형태입니다:
+
+- **`CREATE DATABASE`, `DROP DATABASE`** — `pg_database`(§B)를 변경하고 `base/` 아래 디렉터리를 생성/제거(§A.1)하며, 그 과정에서 WAL 레코드를 생성(§D.3).
+- **`CREATE ROLE`, `GRANT`** — 클러스터 전역 `pg_authid`와 `pg_class`의 객체별 ACL 컬럼을 변경(§B.1).
+- **`CREATE SCHEMA`, `search_path`** — `pg_namespace`와 세션별 이름 해석 규칙에 대해 동작(§A.2).
+- **`CREATE TABLESPACE`** — `pg_tablespace`에 행을 추가하고 `pg_tblspc/` 아래에 심볼릭 링크 생성(§C).
+- **`pg_dumpall`, `pg_dump`** — `pg_catalog`를 읽어 DDL을 재구성. `pg_dumpall`은 `pg_dump`가 건너뛰는 클러스터 전역 카탈로그(role, tablespace)까지 포함(§B.1).
+
+---
+
 ## 1. 데이터베이스 기본 개념
 
 PostgreSQL에서 데이터베이스는 테이블, 뷰, 함수 등을 담는 최상위 컨테이너입니다.

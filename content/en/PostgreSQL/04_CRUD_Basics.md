@@ -20,6 +20,122 @@ After completing this lesson, you will be able to:
 
 Almost every interaction between an application and its database boils down to one of four operations: creating new records, reading existing ones, updating values, or deleting rows. Mastering CRUD in SQL is like learning the four basic arithmetic operations in math -- everything more advanced builds on top of them.
 
+Before the four statements, read [**Theory & Principles**](#theory--principles) — what INSERT, UPDATE, and DELETE actually do to the on-disk page (hint: UPDATE never overwrites in place), why DELETE leaves dead tuples behind, and how the HOT optimization keeps simple updates cheap.
+
+---
+
+## Theory & Principles
+
+The C, R, U, and D in CRUD all touch the same 8 KB heap pages, but they touch them in surprisingly different ways. Under MVCC, an UPDATE is *not* a write to the existing row — it is an INSERT of a new version plus a flag on the old one. A DELETE does not free space — it marks the row's `xmax` and leaves a tombstone for VACUUM to reclaim later. Understanding this is the difference between writing CRUD that performs and CRUD that quietly bloats the database.
+
+This section covers:
+
+- **(A)** What INSERT does to the page: tuple body, line pointer, and FSM (Free Space Map).
+- **(B)** What UPDATE does — and why it usually creates two row versions, not one.
+- **(C)** The HOT (Heap-Only Tuple) optimization: when UPDATE *can* keep the new version on the same page and skip index updates entirely.
+- **(D)** What DELETE does — and the role of VACUUM in reclaiming the space.
+
+### A. INSERT — Append-Only at Heart
+
+When you `INSERT INTO t (...) VALUES (...)`, PostgreSQL goes through this sequence:
+
+1. **Find a page with enough free space** by consulting the **Free Space Map** (FSM) — a small auxiliary file (`<oid>_fsm`) that summarizes how much free space each page has.
+2. **Acquire a content lock** on that page.
+3. **Construct the tuple** in memory: 23-byte header with `xmin = current_xid`, `xmax = 0`; the column data laid out per §B.3 of lesson 03.
+4. **Place the tuple** at `pd_upper - tuple_size` and the line pointer at `pd_lower`. Update both pointers.
+5. **Write a WAL record** describing the change (`XLOG_HEAP_INSERT`).
+6. **Mark the page dirty** in `shared_buffers`. The actual disk write happens later via the background writer or checkpointer.
+7. **Update every index** on the table to point at the new row's `(page_no, line_pointer_index)`.
+
+If no page has space, PostgreSQL extends the file by 8 KB (or more — `extend_table_with_multiple_blocks` was introduced in PG 16).
+
+#### A.1 Why INSERT is fast
+
+Steps 3-6 are all in-memory or sequential WAL writes. Step 7 (index updates) is the dominant cost — a table with 5 indexes pays for 6 page updates, not 1. This is why "fewer indexes" is not just a storage rule but a write-throughput rule.
+
+### B. UPDATE — Insert + Mark Old as Superseded
+
+PostgreSQL never overwrites a live row. `UPDATE t SET x = 5 WHERE id = 1;` runs:
+
+1. **Find the existing row** (using an index or sequential scan).
+2. **Lock the row** (set `t_infomask` bits).
+3. **Construct a new tuple** with the new column values, `xmin = current_xid`, `xmax = 0`.
+4. **Place the new tuple** in this page if there is room, or another page (consulting the FSM).
+5. **Set the old tuple's `xmax`** to `current_xid` and its `ctid` to point at the new tuple.
+6. **Write WAL** (`XLOG_HEAP_UPDATE`).
+7. **Insert new index entries** for every changed indexed column — and *also* for unchanged indexed columns if the new tuple lives on a different page (because indexes point at `ctid`, not at primary key).
+
+#### B.1 The cost of two versions
+
+After the UPDATE, *both* row versions exist on disk. Both have line pointers. The old version is invisible to new transactions (because their snapshots see `xmax = current_xid` as committed-and-deleted) but cannot be removed yet because some long-running transaction might still need it. **VACUUM** reclaims the space later by setting line pointer status to `LP_UNUSED`.
+
+This is **table bloat** — a table with frequent UPDATEs grows in disk size faster than its live row count would suggest. Heavy-update workloads need autovacuum tuning to keep this in check.
+
+### C. HOT — Heap-Only Tuple
+
+If the UPDATE meets two conditions, PostgreSQL takes a fast path called **HOT**:
+
+1. **No indexed column changed.**
+2. **The new tuple fits on the same page** as the old tuple.
+
+In that case, step 7 from §B (update every index) is **skipped entirely**. The new tuple is placed on the same page, and the old line pointer is converted to a "redirect" pointing at the new line pointer. Indexes still point at the old line pointer, but reads transparently follow the redirect chain.
+
+```
+Before HOT update:
+  index → LP[3] → tuple v1 (id=1, x=4)
+
+After HOT update of x=4 → x=5:
+  index → LP[3] → (redirect to LP[4])
+                  LP[4] → tuple v2 (id=1, x=5)
+```
+
+The benefits stack up:
+
+- **Zero index modifications.** A table with 8 indexes still pays only 1 page update.
+- **The dead tuple can be reclaimed by `HOT pruning`** during ordinary page reads, without VACUUM running. The line pointer is freed immediately on page-level cleanup.
+- **Reduced WAL volume** because no index updates are logged.
+
+#### C.1 The fillfactor knob
+
+HOT only works if the new tuple fits on the same page. PostgreSQL exposes a per-table `fillfactor` setting (`CREATE TABLE ... WITH (fillfactor = 80);`) that says "leave 20% of each page empty for future updates". For update-heavy tables, setting fillfactor below 100 dramatically increases the HOT hit rate.
+
+### D. DELETE — Just a Tombstone
+
+`DELETE FROM t WHERE id = 1;` does *not* free disk space. It runs:
+
+1. **Find the row.**
+2. **Set `xmax = current_xid`** on the tuple header.
+3. **Write WAL** (`XLOG_HEAP_DELETE`).
+
+That is it. The tuple body and line pointer remain in place. New transactions will skip the row (its `xmax` is committed by the time their snapshots check), but the bytes are still on disk.
+
+#### D.1 What VACUUM does
+
+When VACUUM runs over the page, it checks each tuple's visibility against the oldest active transaction in the cluster (`OldestXmin`). If `xmax` is older than `OldestXmin`, the tuple is invisible to *every* current and future transaction — safe to remove. VACUUM:
+
+1. **Frees the tuple body** by compacting the page.
+2. **Marks the line pointer as `LP_UNUSED`** so it can be reused by a future INSERT on this page.
+3. **Records the page in the FSM** so future INSERTs find it.
+4. **Updates indexes** to remove entries pointing at line pointers that have been reclaimed (this is the expensive part — VACUUM has to scan each index).
+
+`VACUUM FULL` is more aggressive: it rewrites the entire table into a new file with no dead tuples, then atomically swaps. It takes an `ACCESS EXCLUSIVE` lock and can be slow, but it actually returns disk to the OS.
+
+#### D.2 TRUNCATE — the bypass
+
+`TRUNCATE TABLE t;` is conceptually `DELETE FROM t;` but does not produce dead tuples. It is implemented by allocating a new empty file and atomically swapping. It is O(1) regardless of table size, but it cannot be `WHERE`-filtered and it takes a strong lock.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`INSERT`** — runs the §A sequence; multi-row `INSERT ... VALUES` amortizes the WAL flush across rows.
+- **`UPDATE`** — runs §B; if your `UPDATE` does not touch any indexed column, §C HOT kicks in.
+- **`DELETE`** — runs §D; the space is reclaimed only by `VACUUM` or `VACUUM FULL`.
+- **`SELECT`** — uses the visibility rules (`xmin`/`xmax` vs snapshot) from §A-D to decide which row versions are visible to your transaction.
+- **`RETURNING` clause** — lets `INSERT`, `UPDATE`, `DELETE` return the affected rows in one round trip; especially useful with `INSERT ... RETURNING id` for serial keys.
+
+---
+
 ## 0. Practice Setup
 
 ```sql

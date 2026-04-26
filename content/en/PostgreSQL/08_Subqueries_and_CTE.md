@@ -21,6 +21,154 @@ After completing this lesson, you will be able to:
 
 As your SQL questions grow more complex, you will often need the answer to one question before you can ask another. Subqueries let you embed one query inside another, while Common Table Expressions (CTEs) let you name and reuse intermediate results. Together, they are the tools that turn a single SQL statement into a structured, multi-step reasoning process.
 
+Before the syntax, read [**Theory & Principles**](#theory--principles) — the difference between correlated and non-correlated subqueries, why CTEs were once optimization fences (and what changed in PostgreSQL 12), and how recursive CTEs implement graph traversal.
+
+---
+
+## Theory & Principles
+
+A subquery is just another `SELECT` written inside parentheses, but the planner treats four very different things — scalar subqueries in the projection, subqueries in `WHERE` (correlated and non-correlated), subqueries in `FROM` (derived tables), and CTEs in `WITH` — by completely different rules. The same data and the same answer can be expressed five different ways with five wildly different runtimes. Understanding which form is "just sugar" (rewritten by the planner into something equivalent) and which form acts as an optimization fence is what separates "I wrote a CTE because it reads better" from "I wrote a CTE and accidentally made the query 100× slower".
+
+This section covers:
+
+- **(A)** Correlated vs non-correlated subqueries: why one becomes a join and the other becomes a constant.
+- **(B)** Subqueries in `FROM`: derived tables, planning, and inlining.
+- **(C)** CTEs (`WITH`): the optimization fence rule pre-PG12, and the new `MATERIALIZED` / `NOT MATERIALIZED` keywords.
+- **(D)** Recursive CTEs (`WITH RECURSIVE`): the iterative algorithm and graph-walk semantics.
+
+### A. Correlated vs Non-Correlated Subqueries
+
+#### A.1 Non-correlated — runs once
+
+A subquery is **non-correlated** if it does not reference any column from the enclosing query:
+
+```sql
+SELECT * FROM orders
+WHERE customer_id IN (SELECT id FROM customers WHERE country = 'KR');
+```
+
+The inner `SELECT id FROM customers WHERE country = 'KR'` does not depend on the row being filtered. The planner treats it as a constant set: run it once, materialize the result, then for each `orders` row check membership. With an index on `customers(country)` the inner runs quickly; with another on `orders(customer_id)` the outer membership check becomes an indexed semi-join.
+
+#### A.2 Correlated — runs (potentially) per outer row
+
+A subquery is **correlated** if it references a column from the enclosing query:
+
+```sql
+SELECT o.* FROM orders o
+WHERE o.amount > (SELECT AVG(amount) FROM orders WHERE customer_id = o.customer_id);
+--                                                                   ^^^^^^^^^^^^^
+```
+
+The naive execution plan would be: for each `o` in `orders`, run the inner aggregate. That is O(N²) and disastrous for large `orders`.
+
+The planner *almost always* rewrites correlated subqueries — turning the example above into a join with a `customer_id` group-by — but the rewrite is sometimes blocked by `LATERAL` semantics, weird types, or volatile functions. When it is blocked you fall back to per-row execution. Always check `EXPLAIN` to confirm correlation has been flattened into a join.
+
+#### A.3 Scalar subqueries
+
+A subquery in the projection (`SELECT (subquery), ...`) must return at most one row and one column. PostgreSQL runs it once per outer row when correlated, once total when not. Scalar subqueries are convenient for "lookup the X for each Y" but watch the per-row cost — `LEFT JOIN` is usually faster.
+
+### B. Subqueries in FROM — Derived Tables
+
+```sql
+SELECT t.region, t.total
+FROM (SELECT region, SUM(sales) AS total FROM orders GROUP BY region) t
+WHERE t.total > 100000;
+```
+
+The subquery in `FROM` is called a **derived table** or **inline view**. The planner is free to **inline** it into the outer query — meaning it does not need to materialize the intermediate result; it just rewrites the whole thing as a single plan that pushes the `total > 100000` predicate as far down as possible (often into a HAVING on the inner aggregate).
+
+This inlining is what makes derived tables performant: the outer `WHERE` reaches into the inner query during planning, not during execution.
+
+### C. CTE (`WITH`) — Optimization Fence Then and Now
+
+```sql
+WITH big_orders AS (
+    SELECT * FROM orders WHERE amount > 1000
+)
+SELECT * FROM big_orders WHERE region = 'KR';
+```
+
+Looks identical to the derived-table version. *Used* to behave very differently.
+
+#### C.1 The pre-PG12 optimization fence
+
+Before PostgreSQL 12, every CTE was an **optimization fence** — the planner materialized the CTE first, then ran the outer query against the materialized result. The outer `WHERE region = 'KR'` was *not* pushed down into the CTE. So the example above scanned every row of `orders` with `amount > 1000`, materialized them all, then filtered for `region = 'KR'`. This was sometimes 100× slower than the equivalent derived-table form.
+
+The fence was sometimes intentional — it gave you control over execution order — but more often it was a performance trap.
+
+#### C.2 PG12+ — `MATERIALIZED` keyword
+
+PostgreSQL 12 changed the default. CTEs are now inlined just like derived tables *unless* the CTE is referenced more than once or contains a `RECURSIVE` or volatile call. Two new keywords give you explicit control:
+
+- `WITH big_orders AS MATERIALIZED (...)` — force the old fence behavior. Useful if you need the CTE to run exactly once because it has side effects (e.g. `INSERT ... RETURNING` in a CTE) or because you know the planner is making the wrong choice.
+- `WITH big_orders AS NOT MATERIALIZED (...)` — explicitly request inlining even when the CTE is referenced multiple times.
+
+#### C.3 Writable CTEs
+
+A CTE can contain `INSERT`, `UPDATE`, `DELETE` with `RETURNING`. This makes "do A then use the result for B" possible in one statement:
+
+```sql
+WITH deleted AS (
+    DELETE FROM orders WHERE created_at < '2025-01-01' RETURNING *
+)
+INSERT INTO orders_archive SELECT * FROM deleted;
+```
+
+Writable CTEs are always materialized — they have side effects and cannot be inlined.
+
+### D. Recursive CTE — Iteration in SQL
+
+```sql
+WITH RECURSIVE descendants AS (
+    -- Base case
+    SELECT id, parent_id, name FROM employees WHERE id = 5
+    UNION ALL
+    -- Recursive case: join the previous result with employees
+    SELECT e.id, e.parent_id, e.name
+    FROM employees e
+    JOIN descendants d ON e.parent_id = d.id
+)
+SELECT * FROM descendants;
+```
+
+#### D.1 The execution algorithm
+
+`WITH RECURSIVE` is iterative, not actually recursive:
+
+```
+working_set = run base_case          # rows from the non-recursive term
+result      = working_set
+while working_set is non-empty:
+    working_set = run recursive_term using working_set as the CTE reference
+    result.append(working_set)
+return result
+```
+
+Each iteration takes the *previous iteration's output* as the CTE input, runs the recursive term, and appends the new rows. The loop terminates when an iteration produces zero rows. (Use `UNION` instead of `UNION ALL` if you need cycle detection — duplicates from cycles are deduplicated.)
+
+#### D.2 What it can express
+
+- **Tree traversal**: descendants/ancestors in an org chart, category tree, comment thread.
+- **Graph walks**: shortest path (with care to avoid cycles), reachability from a node.
+- **Number generation**: `WITH RECURSIVE n AS (SELECT 1 UNION ALL SELECT n+1 FROM n WHERE n < 100) SELECT * FROM n;`
+
+#### D.3 Cost shape
+
+The cost is the cost of the recursive term times the depth of the recursion. For deep trees or broad graphs, this can be expensive — and unlike most queries, the planner cannot estimate the cost without running it (it has no statistics on iteration count). Always cap recursion depth with a `WHERE level < N` predicate when traversing user-supplied graphs.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **Subquery in `WHERE` (`IN`, `EXISTS`, `=`)** — non-correlated runs once; correlated rewritten to join when possible (§A).
+- **Scalar subquery in `SELECT`** — one row, one column; runs per outer row when correlated (§A.3).
+- **Subquery in `FROM`** — derived table; planner inlines and pushes predicates (§B).
+- **`WITH name AS (...)`** — PG12+ inlines by default, fence behavior available via `MATERIALIZED` (§C).
+- **`WITH RECURSIVE`** — base case + recursive case + termination, executed iteratively (§D).
+- **`LATERAL`** — explicit per-row execution of a derived table; complements correlated subqueries.
+
+---
+
 ## 1. What is a Subquery?
 
 A subquery is another query contained within a query.

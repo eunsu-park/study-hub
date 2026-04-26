@@ -21,6 +21,127 @@
 
 데이터베이스가 커질수록 두 가지 문제가 나타납니다. 복잡한 쿼리를 반복 작성하는 번거로움과, 전체 테이블을 순차 스캔하는 속도 저하가 그것입니다. 뷰(View)는 쿼리를 간단한 이름 뒤에 캡슐화하여 첫 번째 문제를 해결하고, 인덱스(Index)는 필요한 행에 대한 빠른 조회 경로를 PostgreSQL에 제공하여 두 번째 문제를 해결합니다. 이 두 도구를 함께 사용하면 유지보수하기 쉽고 성능이 뛰어난 데이터베이스 애플리케이션을 구축할 수 있습니다.
 
+문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — view와 materialized view의 차이, PostgreSQL이 기본 제공하는 네 가지 인덱스 타입(B-tree, Hash, GIN, GiST, BRIN), 그리고 B-tree page split에서 `fillfactor`의 역할을 다룹니다.
+
+---
+
+## 이론과 원리
+
+`CREATE VIEW`는 rule 기반 query rewriting입니다 — view 이름이 planning 중에 정의로 치환됩니다. `CREATE MATERIALIZED VIEW`는 정반대입니다 — 실제 행을 저장하고 on demand로 새로 고칩니다. 인덱스는 또 다른 물리 구조로, planner가 heap 스캔을 건너뛸 수 있게 해 줍니다. 이 셋은 개념적으로 "같은 종류의 것"이 아니며, *언제* 계산되는지(planning vs query vs refresh)와 *무엇*을 저장하는지(아무것도 vs 결과 집합 vs lookup 구조)의 차이가 사용이 win인지 trap인지를 결정합니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** Query rewriting으로서의 view, updatable view, materialized view와 refresh 모델.
+- **(B)** B-tree 내부 — 노드, page split, fillfactor, bloat.
+- **(C)** GIN, GiST, BRIN, Hash — 각각이 B-tree를 이기는 경우.
+- **(D)** Partial, expression, covering 인덱스 — 세 직교 modifier.
+
+### A. View와 Materialized View
+
+#### A.1 일반 view — 순수 rewriting
+
+`CREATE VIEW v AS SELECT ...;`는 쿼리의 SQL 텍스트를 `pg_rewrite`에 저장합니다. 이후 `SELECT * FROM v WHERE x > 5;`를 작성하면, rewriter가 view 정의를 쿼리에 치환한 뒤 planning합니다. 결과는 planner가 전체로서 최적화하는 단일 결합 쿼리 — 술어 push-down이 view 경계를 통과합니다.
+
+이로써 view는 runtime에 본질적으로 무료 — "view 평가" 단계가 없습니다. 비용은 view 없는 등가 쿼리의 비용과 같습니다.
+
+#### A.2 Updatable view
+
+단순한 view(base table 1개, aggregate 없음, DISTINCT 없음, GROUP BY 없음)는 자동으로 updatable입니다 — 그에 대한 `INSERT`, `UPDATE`, `DELETE`가 base table을 수정하는 것처럼 동작합니다. PostgreSQL은 통제된 쓰기 의미론이 필요한 view를 위해 `INSTEAD OF` 트리거와 `WITH CHECK OPTION`도 지원합니다.
+
+#### A.3 Materialized view — 얼린 결과
+
+`CREATE MATERIALIZED VIEW mv AS SELECT ...;`는 쿼리를 *1번* 실행하고, 결과 행을 실제 heap 파일에 저장하고, SQL을 기억합니다. 이후 `SELECT * FROM mv`는 저장된 행을 읽음 — 재계산 없음. 단점 — 행이 stale해짐.
+
+`REFRESH MATERIALIZED VIEW mv;`가 쿼리를 다시 실행해서 저장된 행을 교체. 기본은 `ACCESS EXCLUSIVE` lock을 잡음, `REFRESH MATERIALIZED VIEW CONCURRENTLY mv;`는 새 행을 임시 테이블에 계산하고 atomic하게 교체해서 동시 읽기를 허용 (MV에 unique 인덱스 필요).
+
+materialized view가 빛나는 경우 — 비교적 정적인 데이터에 대한 비싼 집계(분석 대시보드, 월별 요약). 다칠 때 — source 데이터가 refresh보다 빠르게 변하기 시작하는 순간.
+
+### B. B-tree 내부 — 기본 그림 너머
+
+5번 레슨에서 B-tree를 좌우로 연결된 leaf의 정렬된 page들로 소개했습니다. 전체 이야기:
+
+#### B.1 Page split
+
+leaf page가 가득 차고 새 키를 삽입해야 할 때, page가 split됩니다. PostgreSQL은 full leaf를 읽고, 새 page를 할당하고, 키를 대략 반반으로 분배하고, parent page를 양쪽을 가리키도록 갱신하고, 두 leaf를 다시 씁니다. parent도 가득 찼으면 split이 위로 cascade — root 자신이 split될 수 있고, 그러면 트리에 레벨이 추가됩니다.
+
+Page split은 비쌉니다(3+ page 쓰기, 각각의 WAL 레코드). random key(예 — UUID)가 많이 삽입되는 테이블에서는 split이 도처에서 일어납니다. sequential key(예 — SERIAL)에서는 삽입이 항상 rightmost leaf로 가서 split이 거의 없음.
+
+#### B.2 Fillfactor와 split 회피
+
+`CREATE INDEX ... WITH (fillfactor = 70);`은 인덱스가 빌드될 때 각 page의 30%를 비워 두라고 PostgreSQL에 말합니다. 미래 삽입은 split 없이 그 빈 공간에 들어맞을 수 있습니다. B-tree의 기본 fillfactor는 90 — random key 인덱스에 이미 보수적.
+
+monotonic하게 증가하는 키에서는 fillfactor를 100에 가깝게 — page 중간을 target하는 삽입이 없으므로 빈 공간은 낭비.
+
+#### B.3 인덱스 bloat
+
+행이 삭제되어도 인덱스 항목은 즉시 제거되지 않음 — "killed"로 표시되고 인덱스 스캔에서 건너뜀. 결국 leaf의 모든 항목이 killed될 수 있지만, page는 VACUUM(또는 autovacuum)이 실행될 때까지 해제되지 않음. update와 delete가 많은 워크로드는 인덱스를 살아 있는 항목이 정당화하는 것보다 훨씬 크게 만들 수 있음 — 그것이 **인덱스 bloat**.
+
+해결책 — `REINDEX`가 인덱스를 처음부터 다시 빌드. PostgreSQL 12+는 긴 lock을 회피하는 `REINDEX CONCURRENTLY`를 지원.
+
+### C. GIN, GiST, BRIN, Hash — B-tree를 사용하지 않을 때
+
+| 인덱스 | 적합 | 비용 모양 |
+|--------|------|----------|
+| **B-tree** | 스칼라/orderable 타입의 equality + range | O(log N) lookup, O(log N) insert |
+| **Hash** | 어떤 타입에든 equality만 | O(1) lookup, range 미지원 |
+| **GIN** | multi-valued 타입(배열, JSONB, tsvector)의 containment | 삽입 느림, lookup 매우 빠름 |
+| **GiST** | 기하/공간, 풀텍스트, 사용자 도메인 | generic framework — 정확한 비용은 operator class에 따라 다름 |
+| **BRIN** | physical-order correlation이 있는 매우 큰 테이블 | 매우 작은 크기, 낮은 정밀도 |
+| **SP-GiST** | non-balanced 트리 — trie, quadtree, k-d tree | 특수 자료구조 |
+
+#### C.1 GIN — inverted index
+
+GIN(Generalized Inverted Index)은 일반적인 구조를 뒤집습니다. "각 행에 대해 그 컬럼들을 나열" 대신, GIN은 "각 *값*에 대해 그것을 포함하는 행들을 나열"합니다. `{"tags": ["red", "fast"]}` 같은 문서가 있는 JSONB 컬럼에서 GIN은 `red → [row1, row5]`, `fast → [row1, row3, row7]` 같은 항목을 저장합니다.
+
+이로써 containment 쿼리(`@>`, `?`, `?|`, `?&`)가 극도로 빠릅니다. 비용 — 삽입이 느리고(값의 element당 항목 1개), 고-cardinality element에서는 인덱스가 테이블 자체보다 클 수 있음.
+
+`fastupdate` 옵션은 인덱스 갱신을 "pending list"로 미루어 VACUUM이 batch로 flush하게 함 — 삽입은 빨라지지만 lookup이 약간 느려짐(pending 항목이 linear 스캔되므로)이라는 tradeoff.
+
+#### C.2 GiST — generalized search tree
+
+GiST는 *framework*입니다 — 트리 모양, locking, concurrency를 제공하고, operator class가 타입별 술어를 공급합니다. PostGIS 공간 인덱스가 GiST. `LIKE '%substring%'`를 위한 `pg_trgm` 확장의 trigram 인덱스도 GiST. `btree_gist` 확장은 일반 타입을 GiST-index해서 다중 컬럼 인덱스에서 비-B-tree 가능 타입과 합성될 수 있게 함.
+
+#### C.3 BRIN — block-range index
+
+BRIN은 N개 page(기본 128)의 range당 작은 summary(min/max 또는 null bitmap)를 저장합니다. 1 GB 테이블에 대해 BRIN 인덱스는 16 KB일 수 있습니다. lookup은 summary를 참조해 candidate page range를 식별한 뒤 그 range를 풀로 스캔합니다.
+
+BRIN은 **physical-order correlation**이 있을 때만 유리 — indexed 컬럼의 값이 디스크에 대략 정렬되어 있을 때(예 — append-only 로그 테이블의 timestamp). correlation이 없으면 min/max range가 심하게 겹쳐서 BRIN이 prune할 수 없음.
+
+#### C.4 Hash — equality 전용
+
+Hash 인덱스는 PG 10 이전에는 unlogged(crash-safe 아님)였고 사실상 사용 불가였습니다. 이제는 WAL-logged이고 긴 문자열 키의 순수 equality에서는 B-tree보다 빠릅니다. range, ORDER BY, 다중 컬럼은 미지원.
+
+### D. 세 직교 인덱스 modifier
+
+#### D.1 Partial 인덱스
+
+`CREATE INDEX ... WHERE active = true;`는 술어에 매치되는 행만 인덱스. 대부분의 쿼리가 작은 부분집합(예 — 미처리 주문)을 신경 쓸 때 사용. 더 작고 빠르며, 쿼리의 술어가 partial 인덱스의 술어를 논리적으로 함의할 때만 사용됨.
+
+#### D.2 Expression 인덱스
+
+`CREATE INDEX ... ON t (LOWER(email));`은 raw 컬럼이 아니라 expression의 결과를 인덱스. `WHERE LOWER(email) = ?`을 sargable로 만들기 위해 필요(5번 레슨 §B.1). 비용 — 모든 insert와 update에서 expression이 재계산됨.
+
+#### D.3 Covering 인덱스 — `INCLUDE`
+
+`CREATE INDEX ... ON t (a, b) INCLUDE (c, d);`는 `c`와 `d`를 leaf 항목에 추가하지만 search key의 일부로 만들지는 않음. `c` 또는 `d`가 필요하지만 `a, b`에만 필터링하는 쿼리에 대해 index-only scan을 enable. include된 컬럼은 트리 균형에 영향을 주지 않으므로 4-컬럼 인덱스보다 저렴.
+
+세 modifier는 합성 가능 — partial expression covering 인덱스도 완벽히 합법.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
+
+- **`CREATE VIEW`** — query rewriting, runtime 비용 없음 (§A.1).
+- **`CREATE MATERIALIZED VIEW` + `REFRESH`** — 저장된 결과, 수동 refresh (§A.3).
+- **`CREATE INDEX` (기본)** — B-tree (§B).
+- **`CREATE INDEX ... USING gin / gist / brin / hash`** — 데이터 타입과 쿼리 모양으로 선택 (§C).
+- **`CREATE INDEX ... WHERE pred`** — partial (§D.1).
+- **`CREATE INDEX ... ON t (LOWER(col))`** — expression 인덱스 (§D.2).
+- **`CREATE INDEX ... INCLUDE (cols)`** — index-only scan을 위한 covering 인덱스 (§D.3).
+- **`REINDEX [CONCURRENTLY]`** — bloated 인덱스를 rebuild (§B.3).
+
+---
+
 ## 1. 뷰 (VIEW) 개념
 
 뷰는 저장된 쿼리로, 가상의 테이블처럼 사용할 수 있습니다.

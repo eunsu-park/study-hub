@@ -21,6 +21,9 @@ After completing this lesson, you will be able to:
 Downtime costs money and erodes user trust. For any application where availability matters -- which is nearly every production system -- a single PostgreSQL server is a single point of failure. Replication creates copies of your data on standby servers that can serve read traffic, provide disaster recovery, and take over within seconds when the primary fails. This lesson covers the full spectrum from basic streaming replication to production-grade high availability with automatic failover.
 
 ## Table of Contents
+
+Before the configuration commands, read [**Theory & Principles**](#theory--principles) — the WAL streaming protocol, the latency-vs-durability tradeoff in synchronous vs asynchronous replication, the publication/subscription model behind logical replication, and how etcd-Raft (used by Patroni) prevents split-brain.
+
 1. [Replication Overview](#1-replication-overview)
 2. [Physical Replication (Streaming Replication)](#2-physical-replication-streaming-replication)
 3. [Logical Replication](#3-logical-replication)
@@ -28,6 +31,141 @@ Downtime costs money and erodes user trust. For any application where availabili
 5. [Failover and Switchover](#5-failover-and-switchover)
 6. [High Availability Solutions](#6-high-availability-solutions)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+A "replicated PostgreSQL cluster" is really three coordinated systems running together: WAL streaming from primary to standby, a consensus layer (Patroni + etcd/Consul) to decide who is primary at any moment, and a connection router (HAProxy or pgBouncer) that sends clients to the right server. Each layer has its own failure modes and tuning knobs. Understanding the WAL streaming protocol, the synchronous-vs-asynchronous tradeoff, and the Raft consensus that prevents split-brain is what separates "we have a standby" from "we have automatic failover that works during the worst day".
+
+This section covers:
+
+- **(A)** WAL streaming: how the standby's `walreceiver` continuously fetches and replays WAL from the primary's `walsender`.
+- **(B)** Synchronous vs asynchronous: the latency-vs-durability tradeoff, plus the `synchronous_commit` levels.
+- **(C)** Logical replication: publication/subscription, decoding WAL into row-level change events.
+- **(D)** Consensus and Raft: how Patroni + etcd elect a primary and prevent split-brain.
+
+### A. WAL Streaming Replication
+
+#### A.1 The protocol
+
+The primary runs a process called **walsender** for each connected standby. The standby runs a **walreceiver** that connects via the special replication protocol (variant of the libpq frontend protocol).
+
+```
+┌──────────────────────┐                ┌──────────────────────┐
+│ Primary              │                │ Standby              │
+│                      │                │                      │
+│ commit → WAL buffer  │                │  walreceiver         │
+│       → pg_wal/      │  ──────────►   │   ↓                  │
+│       → walsender    │  WAL records   │  startup process     │
+│                      │                │   ↓                  │
+│                      │                │  apply (redo)        │
+│                      │  ◄────────     │                      │
+│                      │  flush LSN     │                      │
+└──────────────────────┘                └──────────────────────┘
+```
+
+The standby's `walreceiver` writes incoming WAL to its local `pg_wal/` and notifies the **startup process** (which is the same code path used during crash recovery) to redo the new records. The startup process applies them, advancing the standby's database state.
+
+The standby periodically sends back its current LSN: how much WAL it has *received*, *flushed* to disk, and *applied*. The primary uses these LSNs to compute replication lag and to decide when synchronous commits can complete.
+
+#### A.2 Replication slots
+
+By default, the primary keeps WAL only as long as it might be needed by the next checkpoint. If a standby falls behind and the primary recycles WAL the standby still needs, the standby breaks and must be rebuilt from a fresh base backup.
+
+A **replication slot** is a primary-side reservation that says "do not recycle WAL beyond LSN X until I (the slot owner) acknowledge". The primary refuses to recycle that WAL even if it fills the disk. This solves the falling-behind problem at the cost of needing disk monitoring — a stuck standby can fill `pg_wal/` and crash the primary.
+
+### B. Synchronous vs Asynchronous
+
+#### B.1 Asynchronous (default)
+
+The primary returns COMMIT to the client as soon as the WAL is on the primary's disk. The standby gets the WAL "soon" (typically milliseconds later). If the primary crashes between commit and the standby receiving the WAL, the committed transaction is lost.
+
+- **Pro**: low latency. Commit time is independent of standby health.
+- **Con**: data loss possible during failover.
+
+#### B.2 Synchronous
+
+The primary waits for at least one (or N) standby to acknowledge before returning COMMIT. The exact behavior depends on `synchronous_commit`:
+
+| `synchronous_commit` | Wait for standby until... |
+|----------------------|---------------------------|
+| `off` | Don't even wait for primary fsync (data loss on primary crash possible) |
+| `local` | Primary fsync only (no wait for standby) |
+| `remote_write` | WAL has reached standby's OS (not necessarily disk) |
+| `on` (default) | WAL has been fsync'd on standby |
+| `remote_apply` | WAL has been applied (visible on standby) |
+
+`synchronous_standby_names` configures which standbys count.
+
+#### B.3 The tradeoff
+
+Synchronous commits guarantee zero data loss on failover but every commit waits for the network round-trip plus the standby's fsync. For a transaction-heavy workload, this can double commit latency. The pragmatic compromise: use `remote_write` (waits for OS-level receipt, not full fsync) on a low-latency network, or run synchronous only for critical transactions via `SET LOCAL synchronous_commit = 'on';`.
+
+### C. Logical Replication
+
+Physical replication ships *byte-level page changes*. Logical replication ships *row-level change events* — INSERT, UPDATE, DELETE statements that can be applied to a different schema, a different major version, or even a different database engine.
+
+#### C.1 The publication/subscription model
+
+```
+Primary side:                         Subscriber side:
+CREATE PUBLICATION pub                CREATE SUBSCRIPTION sub
+  FOR TABLE orders, customers;          CONNECTION 'host=primary ...'
+                                        PUBLICATION pub;
+```
+
+The subscriber connects via the replication protocol, the primary's **logical decoder** reads its WAL and converts each row change into a logical message (INSERT INTO orders VALUES (…), …), and the subscriber applies it as a normal SQL statement.
+
+#### C.2 What you can do with logical that you cannot with physical
+
+- **Replicate a subset of tables** (publication selects which tables).
+- **Replicate to a different schema** (subscriber's table can have extra columns, different defaults).
+- **Replicate across major versions** (PG 14 → PG 16).
+- **Two-way / multi-master** with conflict resolution (with extensions like pglogical).
+- **Capture changes for ETL** (debezium consumes the same logical decoding output to feed Kafka).
+
+#### C.3 Limitations
+
+- **No DDL replication**. Schema changes must be applied to both sides manually (or via tools).
+- **Primary keys required** for UPDATE/DELETE replication (otherwise PostgreSQL doesn't know which row to update on the subscriber).
+- **Higher overhead than physical** because of the per-row decoding step.
+
+### D. Consensus and Split-Brain Prevention
+
+The hardest problem in HA is not "swap to the standby when the primary fails" — it is "all nodes agree on who is currently primary, even when the network is partitioning". This is a **consensus problem**.
+
+#### D.1 Why naive failover splits the brain
+
+If node A (the primary) becomes unreachable, B (a standby) might decide A is dead and promote itself. But A might still be alive and accepting writes from a different network segment. Now both A and B are accepting writes — **split-brain**. Reconciling the two divergent timelines is hard or impossible.
+
+#### D.2 Raft (used by etcd, Consul)
+
+Raft is a consensus protocol where a quorum (majority, e.g., 2 of 3) of nodes must agree on every state change. Decisions cannot be made by a partitioned minority — if A is cut off from B and C, A cannot keep being primary because it can no longer get acknowledgments from a quorum.
+
+The protocol has three roles: **leader**, **follower**, **candidate**. The leader serves all writes. Followers replicate from the leader. If a follower stops hearing from the leader (election timeout), it becomes a candidate, requests votes from others, and the one that gets a majority becomes the new leader.
+
+#### D.3 Patroni
+
+Patroni is a Python daemon that runs alongside each PostgreSQL instance. Each Patroni writes its node's state (primary/standby, last applied LSN, etc.) to a shared key in etcd or Consul. Patroni reads back the cluster state and decides: should I promote myself? should I demote? should I follow a different primary?
+
+Because etcd is itself Raft-backed, the "who is primary" decision is consensus-protected — no Patroni can promote without holding the leader lease in etcd, and the lease is granted only by Raft majority. A partitioned Patroni cannot promote, period.
+
+#### D.4 Fencing
+
+The final layer: when Patroni promotes B, it must ensure A is not still serving writes. Mechanisms include STONITH ("Shoot The Other Node In The Head" via IPMI), virtual IP failover (so clients cannot reach A even if it is up), or VIP-based pool routing (HAProxy reads from etcd to know where the primary is).
+
+### From Theory to the Configuration Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`wal_level`, `max_wal_senders`, `wal_keep_size`** — primary-side configuration for WAL streaming (§A).
+- **`primary_conninfo`, `restore_command`** — standby-side recovery configuration (§A).
+- **`synchronous_standby_names`, `synchronous_commit`** — pick the durability/latency point (§B).
+- **`CREATE PUBLICATION`, `CREATE SUBSCRIPTION`** — logical replication setup (§C).
+- **`pg_create_physical_replication_slot`, `pg_create_logical_replication_slot`** — slot management (§A.2).
+- **Patroni configuration** — DCS (etcd/Consul/ZooKeeper) connection, automatic failover policy (§D.3).
+- **HAProxy / Pgpool / connection router** — direct clients to the current primary; depends on Patroni's DCS state (§D.4).
 
 ---
 

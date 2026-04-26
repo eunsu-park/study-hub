@@ -20,6 +20,167 @@ After completing this lesson, you will be able to:
 
 Tables are the fundamental building blocks of any relational database. Every piece of data your application stores -- user profiles, product catalogs, financial transactions -- ultimately lives inside a table with carefully chosen columns, data types, and constraints. Getting the schema right at design time prevents countless headaches later, from subtle data corruption to slow queries.
 
+Before the `CREATE TABLE` syntax, read [**Theory & Principles**](#theory--principles) — how PostgreSQL physically lays out a row inside an 8 KB page, how big values overflow into the TOAST mechanism, and how every data type's storage size flows from these two facts.
+
+---
+
+## Theory & Principles
+
+A `CREATE TABLE` statement is a contract about more than the column names. The choice of `INTEGER` vs `BIGINT`, `VARCHAR(255)` vs `TEXT`, or `TIMESTAMP` vs `TIMESTAMPTZ` translates directly into bytes per row, alignment padding, page utilization, and whether a value can be stored inline or has to be pushed out to a separate file. Once you understand the page layout, the TOAST mechanism, and the per-type storage cost, schema decisions stop being tribal knowledge and become arithmetic.
+
+This section covers:
+
+- **(A)** The PostgreSQL page: 8 KB pages, page header, line pointers, tuple bodies.
+- **(B)** A tuple from byte 0: header, null bitmap, alignment, and the column data area.
+- **(C)** TOAST — how values larger than ~2 KB are sliced, optionally compressed, and stored out of line.
+- **(D)** Per-type storage costs and the alignment trap that wastes space if columns are ordered carelessly.
+
+### A. The 8 KB Page
+
+PostgreSQL reads and writes the heap in fixed-size **pages** (also called blocks). The default size is **8 KB** and is fixed at compile time — every table file is an integer number of pages, every buffer in `shared_buffers` is one page, every WAL update tracks pages.
+
+```
+┌────────────────────────────────────────────────┐  byte 0
+│ PageHeader (24 bytes)                          │
+│  pd_lsn, pd_checksum, pd_lower, pd_upper, ...  │
+├────────────────────────────────────────────────┤  pd_lower
+│ ItemIdData[]  (4 bytes each, "line pointers")  │
+│  ↓ grows downward                              │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤  free space
+│                                                │
+│ ↑ grows upward                                 │
+│ Tuples (rows)                                  │
+├────────────────────────────────────────────────┤  pd_upper
+│ Special space (used by indexes, not heap)      │
+└────────────────────────────────────────────────┘  byte 8191
+```
+
+Two pointers (`pd_lower` and `pd_upper`) describe the boundary of free space. Inserting a row writes the tuple at `pd_upper - tuple_size` and the line pointer at `pd_lower`. Both pointers move toward each other; when they meet, the page is full and PostgreSQL allocates the next page.
+
+#### A.1 Why line pointers exist
+
+Indexes need stable references to rows, but tuples can be deleted, updated (creating new versions), or moved during VACUUM. A line pointer (`ItemId`) is a 4-byte indirection: index entries point to `(page_number, line_pointer_index)`, and the line pointer points to the actual offset within the page. When a tuple is moved, only the line pointer is updated — every index continues to work.
+
+#### A.2 The `ctid` system column
+
+Every row has a `ctid` you can `SELECT`: it is exactly `(page_number, line_pointer_index)`. `ctid` is *not* stable across updates — an UPDATE that changes a row may relocate it, giving it a new ctid (the old line pointer becomes a "redirect" to the new one).
+
+### B. Tuple Layout
+
+Each row is a **tuple** structured like this:
+
+```
+┌────────────────────────────────────────┐
+│ HeapTupleHeader  (23 bytes minimum)    │
+│  xmin, xmax, cmin, cmax, ctid,         │
+│  t_infomask, t_hoff                    │
+├────────────────────────────────────────┤
+│ Null bitmap (optional, 1 bit/column)   │
+├────────────────────────────────────────┤
+│ Alignment padding to 8-byte boundary   │
+├────────────────────────────────────────┤
+│ Column 1 data                          │
+│ Alignment padding                      │
+│ Column 2 data                          │
+│   ...                                  │
+└────────────────────────────────────────┘
+```
+
+#### B.1 Header — what makes MVCC and visibility possible
+
+The 23-byte header carries the visibility metadata that MVCC needs:
+
+- **`xmin`** — the transaction id that created this row version.
+- **`xmax`** — the transaction id that deleted/superseded it (0 if still live).
+- **`cmin`/`cmax`** — command-id within the transaction (for self-visibility).
+- **`ctid`** — physical location of this tuple (or, if updated, of the next version).
+- **`t_infomask`** — flag bits: row has nulls? was it frozen by VACUUM? is `xmax` actually a multixact?
+
+The header is the same size for a 1-column table and a 100-column table. Many narrow rows have proportionally more overhead than a few wide rows.
+
+#### B.2 Null bitmap — only allocated if at least one column is null
+
+The bitmap has one bit per column, padded to 8 bytes. PostgreSQL does *not* allocate it if every column in the row is non-null (the `HEAP_HASNULL` bit in `t_infomask` is the flag). For tables with many nullable columns where most rows have nulls, this is a noticeable space saver.
+
+#### B.3 Alignment
+
+Every PostgreSQL data type has an **alignment requirement** — `int2` aligns to 2 bytes, `int4` to 4, `int8` and `timestamp` to 8, `text` to 4 (the length word). The tuple builder inserts padding bytes between columns to satisfy alignment. This is the source of one of the most common storage gotchas — see §D.
+
+### C. TOAST — The Oversized-Attribute Storage Technique
+
+A row cannot exceed one page (8 KB). But a `text` or `bytea` value can easily be megabytes. PostgreSQL resolves this with **TOAST** (The Oversized-Attribute Storage Technique).
+
+#### C.1 The TOAST decision tree
+
+When a tuple would exceed the **TOAST threshold** (`TOAST_TUPLE_THRESHOLD`, default ~2 KB, i.e. ~1/4 of the page), the planner runs this loop on the largest TOAST-able column:
+
+1. **Compress** the value (PGLZ or LZ4 in modern versions). If it now fits, write it inline.
+2. If still too large, **slice it into ~2 KB chunks** and write the chunks to the table's TOAST table (a separate relation auto-created at `CREATE TABLE` time, named `pg_toast.pg_toast_<oid>`).
+3. The main row stores a small **TOAST pointer** (18 bytes) referencing the chunks by OID and total length.
+
+Each TOAST-able column has a per-column **storage strategy** you can change with `ALTER TABLE ... SET STORAGE`:
+
+| Strategy | Compress? | Out-of-line? |
+|----------|-----------|--------------|
+| `PLAIN`  | no        | no (only for non-TOAST-able types) |
+| `EXTENDED` (default for TEXT/BYTEA) | yes | yes |
+| `EXTERNAL` | no | yes (faster for `substring` calls) |
+| `MAIN`   | yes | only if still too big after compression |
+
+#### C.2 Why TOAST matters in practice
+
+A `SELECT id FROM big_log_table` is fast even if every row has a 1 MB body, because the body lives in the TOAST table and is not read unless explicitly projected. Conversely, `SELECT body` triggers a join to the TOAST table — invisibly, but it adds I/O. This is the database-level reason why "select only what you need" is not just code style.
+
+### D. Per-Type Storage and the Alignment Trap
+
+A representative subset of PostgreSQL types and their storage:
+
+| Type | Bytes | Alignment | Notes |
+|------|-------|-----------|-------|
+| `boolean` | 1 | 1 | |
+| `smallint` | 2 | 2 | |
+| `integer` | 4 | 4 | |
+| `bigint` | 8 | 8 | |
+| `numeric(p, s)` | variable (~5–8 + 2/digit) | 4 | Arbitrary precision; slower than int |
+| `real` (float4) | 4 | 4 | |
+| `double precision` (float8) | 8 | 8 | |
+| `date` | 4 | 4 | |
+| `time` | 8 | 8 | |
+| `timestamp`/`timestamptz` | 8 | 8 | Both are 8 bytes; tz info is per-session, not stored |
+| `interval` | 16 | 8 | |
+| `uuid` | 16 | 4 | |
+| `text`/`varchar(n)`/`bytea` | 1 byte length header + payload (TOAST-able) | 4 | `varchar(n)` enforces length; storage is identical to `text` |
+| `char(n)` | n bytes (space-padded) | 4 | Almost never the right choice; use `text` |
+| `json` | text + length header | 4 | Stored as raw text |
+| `jsonb` | binary parse tree + length header | 4 | TOAST-able; supports GIN |
+
+#### D.1 The column ordering trap
+
+Because of alignment padding, the *order* of columns in `CREATE TABLE` affects row size. Consider:
+
+```sql
+CREATE TABLE bad  (a int2, b int8, c int2);  -- 2 + 6 pad + 8 + 2 + 6 pad = 24 bytes
+CREATE TABLE good (b int8, a int2, c int2);  -- 8 + 2 + 2 + 4 pad         = 16 bytes
+```
+
+The "bad" version wastes 8 bytes per row to satisfy `int8`'s 8-byte alignment after a 2-byte field. **Order columns from largest alignment to smallest** to minimize padding. For wide tables this can shrink the heap by 10-20% with no schema change beyond column order.
+
+#### D.2 Variable-length types and the 1-byte short header
+
+`text`, `bytea`, and `varchar` use a length prefix. PostgreSQL has a clever optimization — for values up to 126 bytes, it uses a **1-byte short header** instead of the standard 4 bytes. So a column of mostly-short strings is much cheaper than the 4-byte overhead would suggest.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these ideas made concrete:
+
+- **`CREATE TABLE` column list** — declares column types; PostgreSQL computes alignment, padding, and storage strategy from this list (§B.3, §D).
+- **Choosing `TEXT` vs `VARCHAR(n)`** — both use the same TOAST-able storage; `varchar(n)` adds a length check (§C, §D).
+- **`TIMESTAMP` vs `TIMESTAMPTZ`** — both 8 bytes; the difference is interpretation, not storage (§D).
+- **`PRIMARY KEY`, `UNIQUE`, `NOT NULL`** — `NOT NULL` lets PostgreSQL skip the null bitmap (§B.2); `PRIMARY KEY` builds an index whose pages have the same 8 KB layout (§A).
+- **`ALTER TABLE ... SET STORAGE`** — changes the TOAST strategy of one column (§C.1).
+
+---
+
 ## 1. Table Basic Concepts
 
 A table is a structure that stores data organized into rows and columns.

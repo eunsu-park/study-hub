@@ -21,6 +21,9 @@
 테이블이 수백만 행에서 수십억 행으로 증가하면, 인덱스 자체가 방대해지고 VACUUM 및 백업 같은 유지보수 작업이 길어지면서 잘 인덱싱된 쿼리조차 느려질 수 있습니다. 파티셔닝(Partitioning)은 하나의 논리적 테이블을 데이터의 일부를 담는 더 작은 물리적 조각으로 분할합니다. 이를 통해 PostgreSQL은 관련 파티션만 스캔하고, 더 작은 인덱스를 유지하며, 값비싼 DELETE 문 대신 파티션 전체를 즉시 삭제할 수 있습니다. 시계열 데이터, 이벤트 로그, 대용량 트랜잭션 데이터를 다루는 시스템이라면 파티셔닝은 필수적인 확장 전략입니다.
 
 ## 목차
+
+파티셔닝 문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — 세 가지 파티셔닝 전략(range/list/hash), partition pruning이 planning과 execution 시점에 파일을 통째로 어떻게 건너뛰는지, 그리고 modern declarative partitioning과 legacy inheritance의 차이를 다룹니다.
+
 1. [파티셔닝 개요](#1-파티셔닝-개요)
 2. [Range 파티셔닝](#2-range-파티셔닝)
 3. [List 파티셔닝](#3-list-파티셔닝)
@@ -28,6 +31,144 @@
 5. [파티션 프루닝](#5-파티션-프루닝)
 6. [파티션 관리](#6-파티션-관리)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+파티셔닝된 테이블은 *partition key를 기반으로 행을 여러 child 테이블에 물리적으로 나누는 하나의 논리 테이블*입니다. SQL에서는 한 테이블처럼 보이고 파일시스템에서는 여러 테이블처럼 보입니다. 큰 이점은 "더 작은 파일"이 아니라, planner가 보통 쿼리가 *어떤* 파티션을 필요로 하는지 결정하고 나머지를 통째로 건너뛸 수 있다는 점입니다. 그 결정(partition pruning)이 1 TB 시계열 테이블의 올바른 파티션에 대한 쿼리가 5분이 아니라 50 ms에 끝나게 합니다. 거기에 옛 데이터를 archive하기 위한 빠른 `DETACH PARTITION`(데이터 크기와 무관하게 상수 시간)을 더하면, 파티셔닝은 큰 append-mostly 테이블의 표준 확장 패턴이 됩니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** 세 가지 파티셔닝 전략 — range, list, hash, 각각이 어떻게 보이는지.
+- **(B)** Partition pruning — planning-time vs execution-time, 그리고 이를 막는 것.
+- **(C)** Modern declarative partitioning vs legacy inheritance — PG 10+에서 무엇이 바뀌었나.
+- **(D)** 파티션 테이블의 제약, 인덱스, 외래 키 — 무엇이 동작하고 무엇이 안 동작하나.
+
+### A. 세 가지 전략
+
+#### A.1 Range partitioning
+
+값의 연속 범위 위치로 partition. 전형적 사례는 시간:
+
+```sql
+CREATE TABLE events (id bigint, created_at timestamptz, ...) PARTITION BY RANGE (created_at);
+CREATE TABLE events_2026q1 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2026-04-01');
+CREATE TABLE events_2026q2 PARTITION OF events FOR VALUES FROM ('2026-04-01') TO ('2026-07-01');
+```
+
+각 파티션은 key가 연속 범위 `[from, to)`에 들어가는 행을 보관. Pruning은 단순 — `WHERE created_at >= '2026-04-15' AND created_at < '2026-05-01'` 쿼리는 q2 파티션만 만짐.
+
+#### A.2 List partitioning
+
+정확한 값 멤버십으로 partition. key가 작고 알려진 값 집합을 가질 때 사용:
+
+```sql
+CREATE TABLE orders (... region text, ...) PARTITION BY LIST (region);
+CREATE TABLE orders_kr PARTITION OF orders FOR VALUES IN ('KR', 'KR-Seoul');
+CREATE TABLE orders_us PARTITION OF orders FOR VALUES IN ('US');
+CREATE TABLE orders_other PARTITION OF orders DEFAULT;
+```
+
+옵션 `DEFAULT` 파티션은 다른 파티션에 매치되지 않는 행을 잡음.
+
+#### A.3 Hash partitioning
+
+`hash(key) mod N`으로 partition. 자연스러운 range나 list가 없고 단지 행을 고르게 분산하고 싶을 때:
+
+```sql
+CREATE TABLE sessions (... user_id uuid, ...) PARTITION BY HASH (user_id);
+CREATE TABLE sessions_p0 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 0);
+CREATE TABLE sessions_p1 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 1);
+CREATE TABLE sessions_p2 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 2);
+CREATE TABLE sessions_p3 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 3);
+```
+
+Pruning은 `WHERE user_id = ?`에만 동작(planner가 `hash(?) mod 4`를 계산해서 파티션 선택). hash-partitioned 컬럼의 range 쿼리는 prune 불가, 모든 파티션을 스캔.
+
+### B. Partition Pruning — 파티셔닝이 이기는 진짜 이유
+
+#### B.1 Planning-time pruning
+
+실행 전, planner는 각 `WHERE` 술어를 각 파티션의 bound에 대조. bound가 술어를 만족할 수 없는 파티션은 plan에서 통째로 제거 — 열리지도, lock되지도, 스캔되지도 않음.
+
+```sql
+EXPLAIN SELECT * FROM events WHERE created_at = '2026-05-15';
+-- Plan: Append
+--         -> Seq Scan on events_2026q2  (이 child만)
+```
+
+이는 술어 값이 상수이거나 planning 시점에 평가 가능(immutable expression)할 때 동작.
+
+#### B.2 Execution-time pruning (PG 11+)
+
+값이 planning 시점에 *알려지지 않은* 술어 — `WHERE created_at = $1`(매개변수화), 또는 join 술어 `WHERE events.user_id = users.id` — 의 경우, planner는 모든 파티션을 포함하는 plan을 빌드하지만 runtime pruning 단계 추가 — 실행 시작 시(또는 Nested Loop의 outer 행마다), 실제로 스캔할 파티션을 계산하고 나머지는 건너뜀.
+
+#### B.3 Pruning을 막는 것
+
+- **`WHERE date_part('year', created_at) = 2026`** — 함수 호출이 값을 가림, pruning 실패. `WHERE created_at >= '2026-01-01' AND created_at < '2027-01-01'`로 다시 씀.
+- **타입 간 cast** — `WHERE created_at::date = '2026-05-15'`는 prune 안 될 수 있음. 같은 타입 값과 비교.
+- **`WHERE indexed_col = volatile_func()`** — volatile 함수는 미리 평가 불가.
+
+### C. Declarative vs Inheritance
+
+#### C.1 옛 방식 — inheritance + check constraint
+
+PG 10 이전, 파티셔닝은 수동 DIY — 부모로부터 상속하는 child 테이블 생성(`CREATE TABLE events_2026q1 () INHERITS (events)`), `CHECK (created_at >= '2026-01-01' AND created_at < '2026-04-01')` 제약 추가, INSERT를 올바른 child로 라우팅하는 트리거 수동 작성. planner는 CHECK 제약 기반 pruning에 `constraint_exclusion`을 사용.
+
+고통점 — 수동 트리거 유지보수, 모든 행이 valid 파티션에 갔는지 보장 없음(행이 부모 자체에 떨어질 수 있음), 파티션을 가로지르는 primary key 정의 불가, child의 자동 인덱싱 없음.
+
+#### C.2 modern 방식 — `PARTITION BY`
+
+PG 10이 **declarative partitioning**을 도입 — 부모가 partition 전략을 선언하고 child가 bound를 선언. PostgreSQL이 라우팅을 처리하고, 행이 부모에 떨어지는 것을 막고("shell"임), 부모에서 child로 인덱스를 전파(PG 11+).
+
+이전 경로 — legacy inheritance 접근은 여전히 동작(일부 비일상적 사례에 유용), 그러나 새 코드는 항상 declarative partitioning 사용해야 함.
+
+### D. 제약, 인덱스, 외래 키
+
+#### D.1 파티션 테이블의 인덱스
+
+부모에 인덱스를 생성하면 child 인덱스가 자동 생성됨(PG 11+):
+
+```sql
+CREATE INDEX ON events (created_at);   -- 파티션마다 인덱스 1개 + 부모 메타데이터
+```
+
+각 child 인덱스는 자기 child의 데이터만 cover. 모든 파티션을 가로지르는 단일 "global 인덱스"는 없음 — 그것은 파티셔닝의 local-data 우위를 무력화.
+
+#### D.2 Primary key와 unique 제약
+
+Unique 제약은 partition key 컬럼을 포함해야 함. 이유 — PostgreSQL은 모든 insert에 모든 파티션을 스캔하지 않고는 global unique 제약을 효율적으로 강제할 수 없음. partition key 포함은 uniqueness를 한 파티션 안에서 검사하게 함.
+
+```sql
+PRIMARY KEY (id, created_at)   -- OK, partition key 포함
+PRIMARY KEY (id)                -- ERROR — unique 제약은 모든 partition 컬럼을 포함해야 함
+```
+
+#### D.3 외래 키
+
+두 경우:
+
+- **일반 테이블에서 partition 테이블로의 외래 키** — PG 12+에서 완전 지원.
+- **partition 테이블에서 다른 테이블로의 외래 키** — 지원.
+- **partition 테이블에서 partition 테이블로의 외래 키** — 지원, 그러나 참조된 컬럼에 unique 제약 요구 사항 적용.
+
+#### D.4 피해야 할 것
+
+- 너무 많은 파티션 (planner overhead가 파티션 수에 linear, 수백 개는 괜찮고, 수만 개는 나쁨).
+- 한 파티션이 데이터의 90%를 보관할 만큼 불균등하게 크기 정한 range 파티션 (이점 무력화).
+- range 쿼리가 prune되기를 원했는데 hash 파티션.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
+
+- **`CREATE TABLE ... PARTITION BY RANGE/LIST/HASH (key)`** — 부모에 partition 전략 선언 (§A).
+- **`CREATE TABLE child PARTITION OF parent FOR VALUES ...`** — child의 bound 정의.
+- **`ATTACH PARTITION` / `DETACH PARTITION`** — 데이터 재작성 없이 child 추가/제거.
+- **`CREATE INDEX ON parent (col)`** — 모든 현재와 미래 child에 전파 (§D.1).
+- **`PRIMARY KEY (id, partition_key)`** — partition key 포함 필수 (§D.2).
+- **`EXPLAIN`** — pruning 후 살아남은 파티션 표시 (§B).
 
 ---
 

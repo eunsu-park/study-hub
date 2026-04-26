@@ -21,6 +21,153 @@ After completing this lesson, you will be able to:
 
 Triggers let you embed business rules directly into the database layer, ensuring that critical logic -- such as maintaining audit trails, validating data, or updating derived columns -- executes automatically whenever data changes. Instead of relying on every application to remember to call the right function, the database itself enforces consistency. This makes triggers an indispensable tool for data integrity in any production PostgreSQL system.
 
+Before the syntax, read [**Theory & Principles**](#theory--principles) — the row-level vs statement-level distinction, the BEFORE/AFTER timing rules, what `NEW` and `OLD` actually contain, and the transaction scope a trigger inherits from its caller.
+
+---
+
+## Theory & Principles
+
+A trigger looks like a callback in application code, but it runs in a fundamentally different environment. It executes inside the same transaction as the statement that fired it, sees the same MVCC snapshot, can modify the row about to be written (BEFORE) or react to the row that was just written (AFTER), and can either run *once per affected row* or *once per statement* regardless of row count. The choice of timing (BEFORE/AFTER), level (ROW/STATEMENT), and event (INSERT/UPDATE/DELETE/TRUNCATE) gives you 24 distinct trigger flavors — most apparent bugs in trigger code come from picking the wrong combination.
+
+This section covers:
+
+- **(A)** The 12-cell trigger matrix: BEFORE/AFTER × ROW/STATEMENT × INSERT/UPDATE/DELETE.
+- **(B)** What `NEW` and `OLD` are in each cell, and how a BEFORE ROW trigger can change what gets written.
+- **(C)** Trigger and transaction scope: same xact, same snapshot, same locks; deferred vs immediate.
+- **(D)** Trigger order, recursion, and `WHEN` predicates.
+
+### A. The Trigger Matrix
+
+Two timings × two levels × four events = potentially 16 combinations, but TRUNCATE only fires statement-level, leaving 14 valid cells. The 12 most common are:
+
+|       | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|
+| **BEFORE ROW** | NEW exists; can modify NEW; return NULL to skip row | NEW + OLD; can modify NEW | OLD exists; return NULL to abort delete |
+| **AFTER ROW** | NEW frozen | NEW + OLD frozen | OLD frozen |
+| **BEFORE STATEMENT** | runs once before any row | runs once | runs once |
+| **AFTER STATEMENT** | runs once after all rows | runs once | runs once |
+
+#### A.1 BEFORE ROW — the "intercept" trigger
+
+Fires *for each row, before the engine applies the change*. The trigger function receives the row that is about to be written (`NEW`) and, for UPDATE, the row before the change (`OLD`). The function:
+
+- Can **modify `NEW`** in place and `RETURN NEW;` — the modified row is what gets written.
+- Can `RETURN NULL;` — the engine **skips this row entirely** (no INSERT/UPDATE happens).
+- Can `RAISE EXCEPTION` — aborts the entire statement (and, unless caught, the transaction).
+
+Use BEFORE ROW for input validation, derived-column population (`NEW.normalized_email := lower(NEW.email)`), and conditional row suppression.
+
+#### A.2 AFTER ROW — the "react" trigger
+
+Fires *for each row, after the engine has applied the change*. `NEW` and `OLD` are read-only — the row is already on its way to disk. The trigger return value is ignored.
+
+Use AFTER ROW for audit logging (insert into a `change_log` table), cache invalidation, sending NOTIFY, or any side effect that should happen only when the change actually committed-to-write succeeded.
+
+#### A.3 BEFORE/AFTER STATEMENT — once per statement
+
+Fire once regardless of how many rows the statement affected — even if the statement affected zero rows. `NEW` and `OLD` are NULL because there is no specific row. PostgreSQL 10+ exposes the affected row sets through **transition tables**:
+
+```sql
+CREATE TRIGGER ... AFTER UPDATE ON orders
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+FOR EACH STATEMENT
+EXECUTE FUNCTION audit_changes();
+```
+
+Inside the trigger function, `old_rows` and `new_rows` are queryable like temp tables containing all affected rows. Useful for "audit a batch UPDATE in one log entry instead of one per row".
+
+### B. What `NEW` and `OLD` Are
+
+Both are *records* of the same type as the row of the table the trigger is on. They have all the columns plus the system columns (`tableoid`, `xmin`, `xmax`, `ctid`).
+
+| Event | `NEW` | `OLD` |
+|-------|-------|-------|
+| INSERT | row about to be inserted (BEFORE) or just inserted (AFTER) | undefined / NULL |
+| UPDATE | row after change | row before change |
+| DELETE | undefined / NULL | row about to be / just deleted |
+
+#### B.1 BEFORE INSERT example — `NEW` is mutable
+
+```sql
+CREATE FUNCTION normalize_email() RETURNS trigger AS $$
+BEGIN
+    NEW.email := lower(trim(NEW.email));
+    IF NEW.email = '' THEN
+        RETURN NULL;  -- silently skip rows with empty email
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_normalize BEFORE INSERT ON users
+FOR EACH ROW EXECUTE FUNCTION normalize_email();
+```
+
+The row that finally hits disk has the normalized email. The application code did not need to know.
+
+#### B.2 The "must return" rule
+
+BEFORE ROW triggers must `RETURN NEW`, `RETURN OLD` (for DELETE), or `RETURN NULL`. Forgetting the return is one of the most common PL/pgSQL bugs — the engine reads the return as NULL and silently drops the row.
+
+AFTER ROW triggers can `RETURN NULL` or `RETURN NEW` — the value is ignored. Conventional style is `RETURN NEW;` for INSERT/UPDATE and `RETURN OLD;` for DELETE.
+
+### C. Transaction and Locking Scope
+
+A trigger runs **inside the same transaction** as the firing statement. This is non-negotiable.
+
+#### C.1 Same xid, same snapshot
+
+The trigger sees the same MVCC snapshot as the calling statement. Any row visible to the statement is visible to the trigger; any row invisible is invisible. The trigger's writes use the same xid — they commit or roll back together with the calling statement's writes.
+
+This means:
+
+- **A trigger cannot `COMMIT` or `BEGIN`** (it is inside a transaction; see lesson 10 §D.1 for why).
+- **A trigger's writes are atomic with the firing statement's writes**. A failed trigger aborts the whole statement.
+- **A trigger that itself fires another trigger (cascade)** runs within the same transaction. There is no "trigger transaction" boundary.
+
+#### C.2 Constraint triggers — DEFERRED vs IMMEDIATE
+
+Most triggers fire immediately during the statement. **Constraint triggers** can be `DEFERRABLE INITIALLY DEFERRED`, in which case they fire at commit time instead. Used to enforce inter-table invariants that cannot hold mid-transaction (e.g., circular foreign keys that need to be set up in two INSERTs).
+
+#### C.3 Lock acquisition
+
+If the trigger reads or writes other tables, it acquires the appropriate locks within the calling transaction's lock set. Deadlock detection (lesson 11 §D.3) sees the trigger's locks the same as any other lock — a trigger that updates two tables in inconsistent order across firings is a deadlock waiting to happen.
+
+### D. Multiple Triggers, Recursion, and `WHEN`
+
+#### D.1 Trigger ordering
+
+If two triggers fire on the same event of the same table, PostgreSQL fires them **in alphabetical order of trigger name**. Naming triggers `t01_validate`, `t02_normalize`, `t03_audit` is the conventional way to control order without relying on creation order.
+
+#### D.2 Recursion
+
+A trigger's body can issue an INSERT/UPDATE/DELETE that fires the same or another trigger. Unbounded recursion is possible (and is a common bug); PostgreSQL has no built-in recursion depth limit beyond the general statement nesting limit. Defensive code: use `pg_trigger_depth()` to detect re-entry, or maintain a session variable to break the cycle.
+
+#### D.3 `WHEN` clause — skip the trigger entirely
+
+```sql
+CREATE TRIGGER ... AFTER UPDATE ON orders
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)
+EXECUTE FUNCTION on_status_change();
+```
+
+The `WHEN` predicate is evaluated by the trigger system *before* invoking the function, with `NEW` and `OLD` available. If false, the function is not called at all. This is much cheaper than entering the function and immediately returning — useful for triggers that only care about a small subset of changes.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`CREATE FUNCTION ... RETURNS trigger`** — the trigger function, with access to `NEW`/`OLD` (§B).
+- **`CREATE TRIGGER ... BEFORE / AFTER ... FOR EACH ROW / STATEMENT`** — picks one of the §A cells.
+- **`RETURN NEW` / `RETURN NULL`** — controls whether the row is written (§B.2).
+- **`REFERENCING OLD TABLE / NEW TABLE`** — transition tables for STATEMENT-level triggers (§A.3).
+- **`WHEN (...)`** — predicate that skips the function call entirely (§D.3).
+- **`pg_trigger_depth()`** — recursion guard inside trigger functions (§D.2).
+- **`DEFERRABLE INITIALLY DEFERRED`** — constraint triggers that fire at commit (§C.2).
+
+---
+
 ## 1. Trigger Concept
 
 A trigger is a function that automatically executes when a specific event (INSERT, UPDATE, DELETE) occurs.

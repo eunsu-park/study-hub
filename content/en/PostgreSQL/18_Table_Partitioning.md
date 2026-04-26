@@ -21,6 +21,9 @@ After completing this lesson, you will be able to:
 As tables grow from millions to billions of rows, even well-indexed queries can slow down because indexes themselves become large and maintenance operations like VACUUM and backup take longer. Partitioning splits a single logical table into smaller physical pieces, each containing a subset of the data. This lets PostgreSQL scan only the relevant partitions, maintain smaller indexes, and drop entire partitions instantly instead of running expensive DELETE statements. For any system dealing with time-series data, event logs, or high-volume transactional data, partitioning is an essential scaling strategy.
 
 ## Table of Contents
+
+Before the partitioning syntax, read [**Theory & Principles**](#theory--principles) — the three partitioning strategies (range/list/hash), how partition pruning skips entire files at planning and execution time, and the difference between modern declarative partitioning and the legacy inheritance approach.
+
 1. [Partitioning Overview](#1-partitioning-overview)
 2. [Range Partitioning](#2-range-partitioning)
 3. [List Partitioning](#3-list-partitioning)
@@ -28,6 +31,144 @@ As tables grow from millions to billions of rows, even well-indexed queries can 
 5. [Partition Pruning](#5-partition-pruning)
 6. [Partition Management](#6-partition-management)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+A partitioned table is *one logical table that physically splits its rows across multiple child tables* based on a partition key. From SQL it looks like one table; from the filesystem it looks like many. The big win is not "smaller files" — it is that the planner can usually decide *which* partitions a query needs and skip the rest entirely. That decision (partition pruning) is what makes a query against the right partition of a 1 TB time-series table take 50 ms instead of 5 minutes. Add to that fast `DETACH PARTITION` (constant time, regardless of data size) for archiving old data, and partitioning becomes the standard scaling pattern for large append-mostly tables.
+
+This section covers:
+
+- **(A)** The three partitioning strategies: range, list, hash, and what each looks like.
+- **(B)** Partition pruning — planning-time vs execution-time, and what blocks it.
+- **(C)** Modern declarative partitioning vs legacy inheritance — what changed in PG 10+.
+- **(D)** Constraints, indexes, and foreign keys on partitioned tables — what works and what does not.
+
+### A. The Three Strategies
+
+#### A.1 Range partitioning
+
+Partition by a value's position in a continuous range. The classic case is time:
+
+```sql
+CREATE TABLE events (id bigint, created_at timestamptz, ...) PARTITION BY RANGE (created_at);
+CREATE TABLE events_2026q1 PARTITION OF events FOR VALUES FROM ('2026-01-01') TO ('2026-04-01');
+CREATE TABLE events_2026q2 PARTITION OF events FOR VALUES FROM ('2026-04-01') TO ('2026-07-01');
+```
+
+Each partition holds rows whose key falls in a contiguous range `[from, to)`. Pruning is straightforward: a `WHERE created_at >= '2026-04-15' AND created_at < '2026-05-01'` query touches only the q2 partition.
+
+#### A.2 List partitioning
+
+Partition by exact-value membership. Use when the key has a small, known set of values:
+
+```sql
+CREATE TABLE orders (... region text, ...) PARTITION BY LIST (region);
+CREATE TABLE orders_kr PARTITION OF orders FOR VALUES IN ('KR', 'KR-Seoul');
+CREATE TABLE orders_us PARTITION OF orders FOR VALUES IN ('US');
+CREATE TABLE orders_other PARTITION OF orders DEFAULT;
+```
+
+The optional `DEFAULT` partition catches rows that no other partition matches.
+
+#### A.3 Hash partitioning
+
+Partition by `hash(key) mod N`. Used when there is no natural range or list and you just want to spread rows evenly:
+
+```sql
+CREATE TABLE sessions (... user_id uuid, ...) PARTITION BY HASH (user_id);
+CREATE TABLE sessions_p0 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 0);
+CREATE TABLE sessions_p1 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 1);
+CREATE TABLE sessions_p2 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 2);
+CREATE TABLE sessions_p3 PARTITION OF sessions FOR VALUES WITH (modulus 4, remainder 3);
+```
+
+Pruning works only for `WHERE user_id = ?` (planner can compute `hash(?) mod 4` and pick the partition). Range queries on hash-partitioned columns cannot be pruned and scan all partitions.
+
+### B. Partition Pruning — The Real Reason Partitioning Wins
+
+#### B.1 Planning-time pruning
+
+Before execution, the planner inspects each `WHERE` predicate against each partition's bounds. Partitions whose bounds cannot satisfy the predicate are removed from the plan entirely — they will not be opened, locked, or scanned.
+
+```sql
+EXPLAIN SELECT * FROM events WHERE created_at = '2026-05-15';
+-- Plan: Append
+--         -> Seq Scan on events_2026q2  (only this child)
+```
+
+This works when the predicate value is a constant or can be evaluated at planning time (immutable expression).
+
+#### B.2 Execution-time pruning (PG 11+)
+
+For predicates whose value is *not* known at planning time — `WHERE created_at = $1` (parameterized), or a join predicate `WHERE events.user_id = users.id` — the planner builds a plan that includes all partitions but adds a runtime pruning step: at execution start (or per outer row in a Nested Loop), it computes which partitions to actually scan and skips the rest.
+
+#### B.3 What blocks pruning
+
+- **`WHERE date_part('year', created_at) = 2026`** — function call hides the value; pruning fails. Rewrite as `WHERE created_at >= '2026-01-01' AND created_at < '2027-01-01'`.
+- **Casting between types** — `WHERE created_at::date = '2026-05-15'` may not prune. Compare same-type values.
+- **`WHERE indexed_col = volatile_func()`** — volatile functions cannot be pre-evaluated.
+
+### C. Declarative vs Inheritance
+
+#### C.1 The old way — inheritance + check constraints
+
+Before PG 10, partitioning was a manual DIY: create child tables that inherit from a parent (`CREATE TABLE events_2026q1 () INHERITS (events)`), add `CHECK (created_at >= '2026-01-01' AND created_at < '2026-04-01')` constraints, and manually write triggers to route INSERTs to the right child. The planner used `constraint_exclusion` to perform pruning based on the CHECK constraints.
+
+The pain points: manual trigger maintenance, no guarantee that every row went to a valid partition (rows could land in the parent itself), no ability to define a primary key that spans partitions, no automatic indexing of children.
+
+#### C.2 The modern way — `PARTITION BY`
+
+PG 10 introduced **declarative partitioning**: the parent declares its partition strategy and the children declare their bounds. PostgreSQL handles routing, prevents rows from landing in the parent (which is a "shell"), and propagates indexes from parent to children (PG 11+).
+
+Migration path: the legacy inheritance approach still works (it is even useful for some unusual cases), but new code should always use declarative partitioning.
+
+### D. Constraints, Indexes, and Foreign Keys
+
+#### D.1 Indexes on partitioned tables
+
+Creating an index on the parent automatically creates child indexes (PG 11+):
+
+```sql
+CREATE INDEX ON events (created_at);   -- Creates one index per partition + parent metadata
+```
+
+Each child index covers only that child's data. There is no single "global index" spanning all partitions — that would defeat partitioning's local-data advantage.
+
+#### D.2 Primary keys and unique constraints
+
+A unique constraint must include the partition key columns. The reason: PostgreSQL cannot efficiently enforce a global unique constraint without scanning all partitions on every insert. Including the partition key lets uniqueness be checked within one partition.
+
+```sql
+PRIMARY KEY (id, created_at)   -- OK, includes partition key
+PRIMARY KEY (id)                -- ERROR: unique constraint must include all partitioning columns
+```
+
+#### D.3 Foreign keys
+
+Two cases:
+
+- **Foreign key from a normal table to a partitioned table** — fully supported in PG 12+.
+- **Foreign key from a partitioned table to another table** — supported.
+- **Foreign key from a partitioned table to a partitioned table** — supported but the unique-constraint requirement applies to the referenced columns.
+
+#### D.4 What to avoid
+
+- Too many partitions (planner overhead grows linearly with partition count; a few hundred is fine, tens of thousands hurts).
+- Range partitions sized so unevenly that one partition holds 90% of the data (defeats the benefit).
+- Hash partitions where you wanted range queries to prune.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`CREATE TABLE ... PARTITION BY RANGE/LIST/HASH (key)`** — declares the partition strategy on the parent (§A).
+- **`CREATE TABLE child PARTITION OF parent FOR VALUES ...`** — defines a child's bounds.
+- **`ATTACH PARTITION` / `DETACH PARTITION`** — add or remove a child without rewriting data.
+- **`CREATE INDEX ON parent (col)`** — propagates to all current and future children (§D.1).
+- **`PRIMARY KEY (id, partition_key)`** — required to include partition key (§D.2).
+- **`EXPLAIN`** — shows which partitions survived pruning (§B).
 
 ---
 

@@ -21,6 +21,9 @@ After completing this lesson, you will be able to:
 Security is not a feature you bolt on at the end -- it must be designed into your database from the start. A misconfigured PostgreSQL instance can expose sensitive data, allow privilege escalation, or become an entry point for attackers. This lesson walks through PostgreSQL's defense-in-depth security model: from network-level controls and authentication, through fine-grained authorization and row-level security, to encryption and audit logging. Whether you are building a multi-tenant SaaS application or hardening an existing deployment, these techniques form the foundation of a secure PostgreSQL environment.
 
 ## Table of Contents
+
+Before the security configuration, read [**Theory & Principles**](#theory--principles) — the role hierarchy and how `GRANT` checks privileges, the per-row policy evaluation that makes RLS work, and the SCRAM-SHA-256 challenge-response that has replaced MD5 authentication.
+
 1. [Security Overview](#1-security-overview)
 2. [Roles and Privileges](#2-roles-and-privileges)
 3. [Row-Level Security (RLS)](#3-row-level-security-rls)
@@ -29,6 +32,160 @@ Security is not a feature you bolt on at the end -- it must be designed into you
 6. [Audit Logging](#6-audit-logging)
 7. [Security Best Practices](#7-security-best-practices)
 8. [Practice Problems](#8-practice-problems)
+
+---
+
+## Theory & Principles
+
+PostgreSQL's security model is built from three layered mechanisms that combine to answer one question: "is this connection allowed to do this thing on this row?". The first layer (`pg_hba.conf` + authentication) decides whether the connection itself is allowed and which role it gets. The second (roles + GRANT/REVOKE) decides which schemas, tables, and actions the role can touch. The third (Row-Level Security) decides which specific rows the role can see or modify within an allowed table. Each layer has its own evaluation algorithm and own pitfalls — and security holes typically come from misunderstanding one layer's interaction with another.
+
+This section covers:
+
+- **(A)** The role hierarchy and `GRANT` privilege-check algorithm.
+- **(B)** Row-Level Security (RLS): how policies are evaluated and combined.
+- **(C)** SCRAM-SHA-256: why it replaced MD5, and the challenge-response flow.
+- **(D)** `pg_hba.conf`: the rule-matching algorithm that picks an authentication method.
+
+### A. Role Hierarchy and Privilege Checking
+
+#### A.1 Roles, not "users"
+
+PostgreSQL has only **roles** — there is no separate "user" or "group" concept. A role with `LOGIN` attribute can be used to log in (so it acts as a user). A role can be `GRANT`ed to another role (creating membership). This is exactly the same structure as Unix users + groups, just unified.
+
+```sql
+CREATE ROLE app_reader;                               -- a "group"
+CREATE ROLE alice WITH LOGIN PASSWORD '...';          -- a "user"
+GRANT app_reader TO alice;                            -- alice inherits app_reader's privileges
+```
+
+#### A.2 Privileges and the GRANT chain
+
+Privileges are per-object: SELECT/INSERT/UPDATE/DELETE on tables, EXECUTE on functions, USAGE on schemas, etc.
+
+```sql
+GRANT SELECT ON orders TO app_reader;     -- app_reader (and members) can SELECT
+GRANT INSERT ON orders TO app_writer;
+GRANT app_reader, app_writer TO alice;    -- alice has both
+```
+
+#### A.3 The privilege-check algorithm
+
+When alice runs `SELECT * FROM orders;`:
+
+1. Determine the relevant privilege: SELECT.
+2. Check if the table's ACL grants SELECT to alice directly.
+3. If not, check if it grants SELECT to PUBLIC (a virtual role meaning "everyone").
+4. If not, check if it grants SELECT to any role alice is a member of (transitively — `GRANT` is the parent edge in a DAG, and PostgreSQL walks it).
+5. If any path returns yes, allow; otherwise raise `permission denied`.
+
+The walk is recursive but cycle-broken (membership cycles are forbidden). The cost is usually trivial because the membership graph is small.
+
+#### A.4 Owners and the special role
+
+The owner of an object has all privileges on it implicitly — no GRANT needed. Superusers bypass *all* permission checks; this is why production roles should never be superuser. The `BYPASSRLS` attribute lets a role skip Row-Level Security but still respect column privileges — useful for replication users.
+
+### B. Row-Level Security (RLS)
+
+RLS adds a **per-row WHERE clause** that PostgreSQL silently appends to every query against the table.
+
+#### B.1 Enabling RLS
+
+```sql
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON orders
+    FOR ALL
+    USING (tenant_id = current_setting('app.tenant_id')::int);
+```
+
+After this, a `SELECT * FROM orders;` from a non-bypassing role is silently rewritten to `SELECT * FROM orders WHERE tenant_id = current_setting('app.tenant_id')::int;`.
+
+#### B.2 USING vs WITH CHECK
+
+- **`USING (predicate)`** — applied to existing rows during SELECT, UPDATE, DELETE. A row is visible/affectable only if the predicate is TRUE.
+- **`WITH CHECK (predicate)`** — applied to new/modified rows during INSERT and UPDATE. The new row must satisfy the predicate or the operation fails.
+
+For multi-tenant isolation, you typically use the same predicate for both — a tenant cannot see other tenants' rows AND cannot create rows belonging to other tenants.
+
+#### B.3 Multiple policies
+
+You can have several policies on the same table (often one per role or per command). The default combination is **OR**: a row is allowed if *any* policy allows it. PG 10+ also supports `AS RESTRICTIVE` policies that combine with **AND** — a row is allowed only if *all* restrictive policies allow it. Mix permissive and restrictive carefully.
+
+#### B.4 Policy evaluation cost
+
+Each query effectively gains the policy predicate as an extra `WHERE` clause. For a tenant_id-based RLS with an index on `tenant_id`, this is essentially free — the planner uses the index. For complex policies that involve subqueries or function calls, the cost can be substantial.
+
+### C. SCRAM-SHA-256 Authentication
+
+PostgreSQL 10 introduced SCRAM-SHA-256 to replace MD5, which had several known weaknesses.
+
+#### C.1 The MD5 problem
+
+Old MD5 authentication: server stores `MD5(password + username)`. Client computes the same hash and sends it. The server hash is the credential — anyone who steals it from the server can impersonate the user. Also, MD5 itself is cryptographically weak.
+
+#### C.2 The SCRAM challenge-response
+
+SCRAM (Salted Challenge Response Authentication Mechanism) is a proper challenge-response protocol:
+
+1. Client says "I want to log in as alice".
+2. Server generates a random nonce and sends it with the per-user salt and iteration count.
+3. Client computes `SaltedPassword = PBKDF2(password, salt, iterations, SHA-256)` and uses it to construct a `ClientProof` that depends on the nonce.
+4. Server verifies the proof using its stored `StoredKey` (derived from `SaltedPassword` but not equal to it).
+5. Server sends back its own proof so the client can verify the server is genuine.
+
+Properties:
+
+- **Stolen server data is not enough** to impersonate — `StoredKey` cannot derive `SaltedPassword`.
+- **Each session uses a fresh nonce** — replay attacks fail.
+- **Iteration count is tunable** — slows down brute force.
+- **Mutual authentication** — client verifies the server too, defeating MITM.
+
+Set `password_encryption = scram-sha-256` (default in PG 14+) and store passwords using `\password` (which uses the right encoding) instead of `CREATE ROLE ... PASSWORD 'plain'`.
+
+### D. `pg_hba.conf` — Host-Based Authentication
+
+Every connection attempt is matched against rules in `pg_hba.conf`. The first matching rule's authentication method is used (or the connection is rejected if no rule matches).
+
+#### D.1 Rule columns
+
+```
+# TYPE   DATABASE    USER       ADDRESS         METHOD
+local    all         postgres                   peer
+host     mydb        alice      10.0.0.0/8      scram-sha-256
+host     all         all        0.0.0.0/0       reject
+```
+
+Each column is a filter; all must match for the rule to apply. `TYPE` is `local` (Unix socket) or `host`/`hostssl`/`hostnossl` (TCP). `ADDRESS` is a CIDR. `METHOD` is the authentication mechanism.
+
+#### D.2 Common methods
+
+| Method | Use |
+|--------|-----|
+| `trust` | No password — for local development only |
+| `peer` | Use the OS user as the database user — for Unix socket admin connections |
+| `scram-sha-256` | Modern password authentication |
+| `md5` | Legacy password authentication; allowed for backward compat |
+| `cert` | TLS client certificate |
+| `ldap`, `pam`, `radius`, `gss` | External authentication systems |
+| `reject` | Explicitly deny |
+
+#### D.3 The matching algorithm
+
+PostgreSQL reads `pg_hba.conf` top to bottom. The first rule whose TYPE+DATABASE+USER+ADDRESS all match is used. There is **no fall-through** — even if the chosen method then fails (wrong password), no other rule is tried. This means rule order matters enormously — a `trust` rule above a `scram-sha-256` rule effectively disables the password check.
+
+After editing, the file is read by `pg_ctl reload` (no restart needed).
+
+### From Theory to the Configuration Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`CREATE ROLE`, `GRANT`, `REVOKE`** — manage the role hierarchy and per-object ACLs (§A).
+- **`GRANT role_a TO role_b`** — role membership creating the privilege graph.
+- **`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`** — turn on RLS (§B).
+- **`CREATE POLICY ... USING (...) WITH CHECK (...)`** — define a row-level filter (§B.2).
+- **`pg_hba.conf` rules** — first-match authentication routing (§D).
+- **`password_encryption = scram-sha-256`** — modern password storage (§C).
+- **SSL/TLS via `ssl = on`, `sslmode=verify-full` on client** — encrypt and authenticate the connection at transport layer.
+- **`pgaudit` extension** — log every privileged action for compliance.
 
 ---
 

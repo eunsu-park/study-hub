@@ -21,6 +21,9 @@ After completing this lesson, you will be able to:
 Every application with user-generated content eventually needs a search feature. While LIKE queries work for small datasets, they become painfully slow on large tables and cannot understand language -- "running" will not match "run," and there is no way to rank results by relevance. PostgreSQL's built-in full-text search provides linguistic-aware indexing with stemming, stop-word removal, boolean operators, and relevance ranking -- all without an external search engine like Elasticsearch. For many applications, this built-in capability is more than sufficient, and it keeps your architecture simple.
 
 ## Table of Contents
+
+Before the FTS reference, read [**Theory & Principles**](#theory--principles) — what `tsvector` actually stores (an inverted-index-friendly tokenized form), how GIN's posting lists make `@@` queries fast, the math behind `ts_rank`, and how `pg_trgm` extends FTS to fuzzy matching.
+
 1. [Full-Text Search Overview](#1-full-text-search-overview)
 2. [tsvector and tsquery](#2-tsvector-and-tsquery)
 3. [Search Configuration](#3-search-configuration)
@@ -29,6 +32,129 @@ Every application with user-generated content eventually needs a search feature.
 6. [Advanced Search Techniques](#6-advanced-search-techniques)
 7. [pg_trgm for Fuzzy Matching](#7-pg_trgm-for-fuzzy-matching)
 8. [Practice Problems](#8-practice-problems)
+
+---
+
+## Theory & Principles
+
+Full-text search is an entirely different kind of indexing problem from "look up a row by id". You are matching natural-language tokens, possibly stemmed, possibly with fuzzy spelling, and ranking by some notion of relevance. PostgreSQL implements this with **`tsvector`** (a sorted token list with positions), **`tsquery`** (a parsed query expression), the `@@` match operator, GIN as the underlying inverted index, `ts_rank` as the relevance score, and the `pg_trgm` extension for fuzzy/prefix matching that the standard FTS cannot express.
+
+This section covers:
+
+- **(A)** Tokenization: how text becomes a `tsvector` (parser → dictionaries → stemmed lexemes).
+- **(B)** GIN as inverted index for FTS: posting lists, the `@@` operator's evaluation algorithm.
+- **(C)** Ranking: `ts_rank` and `ts_rank_cd`, the cover-density formula, and weights A/B/C/D.
+- **(D)** Trigrams: `pg_trgm`, similarity, and how it accelerates `LIKE '%substring%'`.
+
+### A. Tokenization — From Text to `tsvector`
+
+A `tsvector` is a *sorted, deduplicated list of normalized tokens* (called **lexemes**) with positional metadata. Producing one from raw text goes through three stages controlled by a **text search configuration** (e.g., `english`, `simple`, `korean`).
+
+#### A.1 Parser — text into raw tokens
+
+The parser splits the input into tokens classified by type — `word`, `email`, `url`, `number`, etc. For English, "The quick brown fox" yields four word tokens.
+
+#### A.2 Dictionaries — tokens into lexemes
+
+Each token is processed by an ordered chain of **dictionaries** based on its type. Common operations:
+
+- **stop-word removal** — drop "the", "a", "is" (English `english_stop`).
+- **stemming** — collapse "running", "runs", "ran" to lexeme "run" (English snowball stemmer).
+- **synonyms / thesaurus** — replace "USA" with "united states".
+- **simple lowercase** — for `simple` config that does no stemming.
+
+#### A.3 Result — sorted lexemes with positions
+
+```sql
+SELECT to_tsvector('english', 'The quick brown foxes jumped');
+-- 'brown':3 'fox':4 'jump':5 'quick':2
+```
+
+"The" was dropped (stop word), "foxes" became "fox" (stemmed), "jumped" became "jump". Each lexeme keeps a position number — required for phrase queries.
+
+### B. GIN and the `@@` Match
+
+#### B.1 Storage
+
+A GIN index on a `tsvector` column stores, for each lexeme, the list of row TIDs whose `tsvector` contains that lexeme. This is exactly the JSONB-GIN structure of lesson 14, specialized for text.
+
+#### B.2 The `@@` operator
+
+`tsvector @@ tsquery` evaluates the query expression against the document. For `'fox & jumped'::tsquery`, the executor:
+
+1. Parse the query into an expression tree: `AND(fox, jump)` (after stemming).
+2. For each leaf (lexeme), look up the GIN posting list.
+3. Combine the posting lists per the operator: AND = intersection, OR = union, NOT = difference.
+4. Return the matching TIDs.
+
+`tsquery` supports `&` (AND), `|` (OR), `!` (NOT), `<->` (phrase: tokens adjacent), `<N>` (tokens N positions apart), and grouping with parentheses.
+
+#### B.3 GiST as the alternative
+
+`USING gin (tsv)` is the typical choice — fast lookups, slow inserts. `USING gist (tsv)` is a *signature-based* index that is faster to insert but produces *false positives* requiring recheck against the actual `tsvector`. Useful for very write-heavy workloads where index size or insert latency matters more than lookup speed.
+
+### C. Ranking — `ts_rank` and `ts_rank_cd`
+
+Returning matching rows is only half the job; you usually want them ranked by relevance.
+
+#### C.1 `ts_rank` — frequency-based
+
+```sql
+ts_rank(tsv, query, normalization) → float4
+```
+
+Implements a TF-IDF-flavored score: a lexeme that appears multiple times in the document boosts the score; the score is normalized by document length depending on the `normalization` flag. Default is no length normalization.
+
+#### C.2 `ts_rank_cd` — cover-density
+
+`cd` = cover density. Considers how *close together* the matching lexemes appear: a document where all query terms are clustered in one paragraph scores higher than one where they are scattered. More expensive to compute but generally produces better-feeling rankings for multi-word queries.
+
+#### C.3 Weights — boosting parts of the document
+
+Documents often have structure (title, summary, body, tags). You can store these in one `tsvector` with **weights**:
+
+```sql
+setweight(to_tsvector('english', title), 'A') ||
+setweight(to_tsvector('english', body), 'B')
+```
+
+`A` is the highest weight, `D` the lowest. `ts_rank` accepts a `weights` array (`{0.1, 0.2, 0.4, 1.0}` for D, C, B, A) that multiplies the contribution of lexemes by their weight.
+
+### D. Trigrams — `pg_trgm`
+
+FTS is great for whole-word matching but fails for typos, partial words, and substring search. `pg_trgm` is the standard extension that fills these gaps.
+
+#### D.1 Trigram extraction
+
+A **trigram** is a 3-character substring. `pg_trgm` extracts all trigrams from a string:
+
+```
+'apple' → {'  a', ' ap', 'app', 'ppl', 'ple', 'le '}
+```
+
+Two leading and one trailing space normalize word boundaries.
+
+#### D.2 Similarity
+
+`similarity(s1, s2)` returns the Jaccard similarity of the two trigram sets: `|intersection| / |union|`, in [0, 1]. `'apple' % 'apples'` returns true if their similarity exceeds `pg_trgm.similarity_threshold` (default 0.3).
+
+#### D.3 GIN/GiST on trigrams
+
+`CREATE INDEX ON t USING gin (col gin_trgm_ops);` stores the trigram inverted index. This makes `WHERE col LIKE '%substr%'` (which is non-sargable for normal B-tree, lesson 5 §B.2) sargable: the planner extracts trigrams from `'%substr%'`, looks them up in GIN, intersects, and returns candidate TIDs.
+
+This is the standard solution for accelerating arbitrary `LIKE '%X%'` queries.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **`to_tsvector('english', text)`** — runs the §A pipeline.
+- **`to_tsquery('english', 'fox & jumped')`** — parses query syntax, applies same stemming.
+- **`tsv @@ tsq`** — match operator (§B.2).
+- **`CREATE INDEX ON t USING gin (tsv)`** — accelerates `@@` (§B.1).
+- **`ts_rank`, `ts_rank_cd`** — relevance scores (§C).
+- **`setweight(tsv, 'A')`** — assign weights to document parts (§C.3).
+- **`pg_trgm` extension + `gin_trgm_ops`** — fuzzy/substring matching (§D).
 
 ---
 

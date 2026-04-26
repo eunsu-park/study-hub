@@ -20,6 +20,172 @@
 
 테이블의 원시 데이터는 효율적으로 필터링하고 정렬하고 페이지를 넘길 수 있을 때 비로소 유용해집니다. 실제로 작성하는 거의 모든 쿼리에는 결과를 좁히는 WHERE 절과 의미 있는 순서로 제시하는 ORDER BY가 포함됩니다. 이러한 필터링과 정렬 기술은 데이터를 저장하는 것과 그로부터 실행 가능한 정보를 추출하는 것 사이의 다리 역할을 합니다.
 
+WHERE/ORDER BY 문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — 인덱스가 `WHERE` 술어(predicate)를 어떻게 B-tree range scan으로 변환하는지, `NULL`이 모든 것을 3-valued로 만드는 이유, 그리고 planner가 sequential scan과 index scan 중 어떤 것을 고르는지를 다룹니다.
+
+---
+
+## 이론과 원리
+
+`WHERE` 절은 단순한 필터가 아닙니다. planner가 구조화된 access path — sequential scan, index scan, index-only scan, bitmap heap scan, 또는 이들의 조합 — 로 변환하려고 시도하는 *술어(predicate)*입니다. 쿼리가 3 ms에 끝나느냐 3 s에 끝나느냐는 거의 전적으로 planner가 어떤 path를 고르는지에 달려 있고, 그것은 술어가 **sargable**(Search ARGument-able — 인덱스가 사용할 수 있는)인지, 그리고 얼마나 selective한지에 달려 있습니다. `ORDER BY`에도 동일한 논리가 적용됩니다 — B-tree 인덱스가 이미 요청된 순서로 행을 저장하고 있다면 정렬 단계가 통째로 사라질 수 있습니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** B-tree 내부 — 정렬된 page, range scan, `=`, `<`, `>`, `BETWEEN`이 동일한 자료구조에서 작동하는 이유.
+- **(B)** Sargability — 어떤 `WHERE` 술어가 인덱스를 사용할 수 있고 어떤 것이 못 하는지, 그 이유.
+- **(C)** 3-valued logic — `NULL`이 비교, `AND`, `OR`, `NOT`, `IN`과 어떻게 상호작용하는지.
+- **(D)** sequential vs index vs bitmap scan — planner의 세 가지 옵션과 하나를 고르는 cost model.
+
+### A. B-tree — 기본 인덱스 타입
+
+`CREATE INDEX idx ON t(col);`(`USING` 절 없이)은 **B-tree** — 정확히는 Lehman-Yao concurrent B-tree — 를 만듭니다. 디스크 모양은:
+
+```
+            ┌────────────────┐
+            │  Root page     │   (1 page, internal page들을 가리킴)
+            └───┬─────┬──────┘
+                │     │
+        ┌───────┘     └────────┐
+   ┌────┴──────┐         ┌─────┴──────┐
+   │ Internal  │   ...   │  Internal  │     (depth = log₂(N) / log₂(branch_factor))
+   └─┬───┬─────┘         └─────┬──────┘
+     │   │                     │
+   ┌─┴┐ ┌┴───┐              ┌──┴───┐
+   │L │ │ L  │   ...        │  L   │              (Leaf page — 정렬됨)
+   │  │ │    │              │      │
+   └──┘ └────┘              └──────┘
+   ←────── leaf들의 linked list ──────→
+```
+
+leaf는 **key 정렬 순서**로 있고, 좌→우로 연결되어 있습니다. 따라서 key(또는 key 범위)가 주어지면 PostgreSQL은 root에서 적합한 leaf까지 navigate하고, leaf list를 앞으로(또는 뒤로 — 양방향 연결) 스캔하며 따라갑니다.
+
+#### A.1 B-tree가 `=`, `<`, `>`, `BETWEEN`, `ORDER BY`를 공짜로 처리하는 이유
+
+네 가지 연산 모두 "leaf로 navigate 후 sequential 읽기"로 환원됩니다.
+
+- `WHERE x = 5` — key `5`를 포함하는 첫 leaf로 내려가서, key가 바뀔 때까지 읽음.
+- `WHERE x > 5` — `x > 5`인 첫 leaf로 내려가서, 끝까지 앞으로 읽음.
+- `WHERE x BETWEEN 5 AND 10` — `x ≥ 5`인 첫 leaf로 내려가서, `x > 10`이면 멈춤.
+- `ORDER BY x` — leftmost leaf로 내려가서 앞으로 walk — 별도 정렬 단계 없음.
+- `ORDER BY x DESC` — rightmost leaf로 내려가서 뒤로 walk.
+
+이 때문에 B-tree 하나가 다양한 쿼리를 처리합니다. Hash, GIN, GiST, BRIN — 이후 다룸 — 은 B-tree가 처리할 수 없는 경우를 위해 존재합니다.
+
+#### A.2 다중 컬럼 B-tree와 leftmost-prefix 규칙
+
+`CREATE INDEX idx ON t(a, b, c);`은 행을 `a` 순으로, `a`가 같으면 `b` 순으로, `(a, b)`가 같으면 `c` 순으로 정렬합니다. 따라서 인덱스는 다음에 사용 가능합니다.
+
+- `WHERE a = ?`
+- `WHERE a = ? AND b = ?`
+- `WHERE a = ? AND b = ? AND c = ?`
+- `WHERE a = ? AND b > ?`
+- `WHERE a > ?` (첫 컬럼 range)
+
+그러나 *불가능*(또는 비효율적):
+
+- `WHERE b = ?` 단독 — 인덱스가 `a` 순이라 모든 `a` 값을 스캔해야 함.
+- `WHERE c = ?` 단독 — 같은 이유, 더 깊음.
+
+이것이 **leftmost-prefix 규칙**입니다. 인덱스 컬럼 순서는 어떤 쿼리가 빠른지를 못 박는 설계 선택입니다.
+
+### B. Sargability — 인덱스가 사용할 수 있는 술어
+
+술어가 **sargable**이라는 것은, indexed expression에 대한 key range로 다시 쓰일 수 있다는 뜻입니다. sargable 형태:
+
+```sql
+WHERE x = 10                  -- indexed 컬럼에 =
+WHERE x > 10                  -- range
+WHERE x BETWEEN 10 AND 20     -- 복합 range
+WHERE x IN (1, 2, 3)          -- 여러 equality probe
+WHERE name LIKE 'abc%'        -- prefix LIKE — sargable!
+```
+
+non-sargable 형태 — 인덱스 사용을 막음:
+
+```sql
+WHERE LOWER(name) = 'alice'   -- indexed 컬럼에 함수
+WHERE x + 1 = 10              -- indexed 컬럼에 산술
+WHERE name LIKE '%abc'        -- 선두 wildcard — navigate할 prefix 없음
+WHERE x::text = '10'          -- indexed 컬럼에 cast
+WHERE date_part('year', d) = 2026  -- 함수 호출이 indexable 형태를 가림
+```
+
+#### B.1 함수가 인덱스 사용을 죽이는 이유
+
+`name`에 대한 B-tree는 `name` 값을 저장하지, `LOWER(name)`을 저장하지 않습니다. planner는 `LOWER(name) = 'alice'`인 행을 찾기 위해 `name`의 B-tree를 내려갈 방법이 없습니다 — `LOWER`를 평가하려면 모든 행을 읽어야 합니다. 해결책은 쿼리를 다시 쓰거나, **functional index**를 만드는 것 — `CREATE INDEX ON t (LOWER(name));`. 이제 인덱스는 `LOWER` 값을 저장하고, 술어는 *이 새 인덱스에 대해* sargable이 됩니다.
+
+#### B.2 prefix LIKE는 sargable이지만 suffix LIKE는 아닌 이유
+
+`WHERE name LIKE 'abc%'`은 `WHERE name >= 'abc' AND name < 'abd'`와 동치입니다 — B-tree가 native하게 처리하는 key range. `WHERE name LIKE '%abc'`는 어떤 range로도 환원될 수 없습니다 — matching key가 인덱스 전반에 흩어져 있습니다. suffix나 substring 매치에는 다른 인덱스 타입(`pg_trgm` GIN/GiST — 19번 레슨)이 필요합니다.
+
+### C. 3-valued logic와 NULL
+
+SQL은 *3-valued*입니다 — 모든 boolean 표현식은 TRUE, FALSE, 또는 NULL("UNKNOWN")로 평가됩니다. NULL은 "값을 모름"이라는 뜻이며, 모르는 값이 관여한 어떤 연산도 그 자체로 모름입니다.
+
+| 표현식 | 결과 |
+|--------|------|
+| `5 = NULL` | NULL (FALSE 아님!) |
+| `5 <> NULL` | NULL |
+| `NULL = NULL` | NULL |
+| `NULL AND TRUE` | NULL |
+| `NULL AND FALSE` | FALSE (false absorbs) |
+| `NULL OR TRUE` | TRUE (true absorbs) |
+| `NULL OR FALSE` | NULL |
+| `NOT NULL` | NULL |
+
+`WHERE`는 술어가 TRUE로 평가될 때만 행을 유지합니다 — 따라서 NULL 결과는 걸러집니다. 이로부터 놀라움이 생깁니다.
+
+```sql
+SELECT count(*) FROM users WHERE age <> 30;
+-- age IS NULL인 user는 포함되지 않음!
+```
+
+NULL을 명시적으로 처리하려면 `IS NULL`, `IS NOT NULL`(항상 TRUE 또는 FALSE 반환 — NULL이 절대 아님) 또는 `IS DISTINCT FROM`(NULL-safe `<>`)을 사용합니다.
+
+#### C.1 NULL과 IN
+
+`WHERE x IN (1, 2, NULL)`은 정확히 `WHERE x = 1 OR x = 2 OR x = NULL`입니다. 마지막 항은 항상 NULL. 따라서 표현식은 `x = 1`이거나 `x = 2`이면 TRUE, 아니면 NULL — NULL인 행은 걸러집니다. 이것은 괜찮습니다.
+
+그러나 `WHERE x NOT IN (1, 2, NULL)`은 `WHERE x <> 1 AND x <> 2 AND x <> NULL` — 마지막 AND가 절대 TRUE일 수 없으므로, *전체* 절이 NULL 또는 FALSE이고, *어떤 행도 매치하지 않습니다*. SQL의 가장 유명한 함정입니다 — `NOT IN` 목록에서는 항상 NULL을 제외하거나, 대신 `NOT EXISTS`를 사용합니다.
+
+### D. Sequential, Index, Bitmap Scan
+
+sargable한 술어가 주어지면, planner는 **selectivity**(술어가 매치하는 행의 비율)에 따라 세 가지 access method 중 하나를 고릅니다.
+
+#### D.1 Sequential scan
+
+heap의 모든 page를 처음부터 끝까지 읽고, 행마다 술어를 평가. 비용은 테이블 크기에 비례. selectivity가 높을 때(반환 행 > ~10%) 유리 — random I/O가 필요 없고 page를 큰 prefetch 청크로 읽을 수 있기 때문.
+
+#### D.2 Index scan
+
+B-tree를 walk해서 matching key를 찾고, 각 key마다 heap pointer를 따라 행을 읽음. 비용은 `(matching_rows × random_page_cost) + log B-tree depth`. selectivity가 낮을 때(반환 행 < ~1%) 유리. selectivity가 높으면 random heap 읽기가 sequential 읽기의 4배(`random_page_cost` 기본 4.0, `seq_page_cost` 기본 1.0)이므로 크게 손해.
+
+#### D.3 Bitmap scan
+
+중간 selectivity(1%–10%)에서는 planner가 hybrid를 사용:
+
+1. **Index scan**으로 matching heap page number의 **bitmap**을 만듦.
+2. bitmap을 page number로 **정렬**.
+3. heap page를 순서대로 **sequential 읽기**, 행마다 술어 적용.
+
+이는 random 읽기를 sequential 읽기로 변환합니다 — bitmap을 materialize하는 비용을 치르고. 큰 결과 집합에서 순수 index scan보다 극적으로 빠릅니다.
+
+#### D.4 Index-only scan
+
+쿼리가 필요로 하는 모든 컬럼이 인덱스 안에 있다면("covering index"), PostgreSQL은 heap을 만지지 않고 인덱스만으로 답할 수 있습니다. heap MVCC header를 확인하지 않고도 행이 visible임을 확인하기 위해 **visibility map**이 필요합니다. 이 목적만으로 non-key 컬럼을 추가하려면 `CREATE INDEX ... INCLUDE (col1, col2)`를 사용합니다.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
+
+- **`=`, `<`, `>`을 포함한 `WHERE`** — B-tree 혜택을 받는 sargable 술어 (§A, §B).
+- **`WHERE LIKE 'abc%'`** — sargable, `WHERE LIKE '%abc'`는 아님 (§B.2).
+- **`AND`, `OR`, `NOT`** — 3-valued logic, `NULL`이 유지하거나 제외하려던 행을 가릴 수 있음 (§C).
+- **`IS NULL`, `IS NOT NULL`** — NULL-safe인 유일한 술어 (§C).
+- **`ORDER BY col`, `ORDER BY col DESC`** — 매칭되는 B-tree가 있으면 무료, 아니면 명시적 정렬 단계가 트리거됨 (§A.1).
+- **`LIMIT n`** — `ORDER BY`와 결합해 일찍 스캔을 멈추는 "top-N" 최적화를 enable.
+
+---
+
 ## 1. WHERE 절 기본
 
 WHERE 절은 조건에 맞는 행만 선택합니다.

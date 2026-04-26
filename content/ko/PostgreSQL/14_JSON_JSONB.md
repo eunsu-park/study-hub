@@ -20,6 +20,9 @@
 현대 애플리케이션은 사용자 설정, API 응답, 이벤트 페이로드, 설정 데이터 등 엄격한 관계형 컬럼에 맞지 않는 반구조화 데이터(semi-structured data)를 자주 다룹니다. PostgreSQL의 네이티브 JSON/JSONB 지원을 사용하면 이러한 유연한 데이터를 관계형 테이블과 함께 저장하고 조회할 수 있으며, 완전한 인덱싱과 트랜잭션 보장이 제공됩니다. 이를 통해 많은 아키텍처에서 별도의 문서 데이터베이스가 불필요해지고, SQL의 강력함을 유지하면서 스택을 단순화할 수 있습니다.
 
 ## 목차
+
+연산자와 함수로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — JSONB의 binary parse-tree 표현, containment 쿼리를 위한 GIN의 inverted-index 구조, 그리고 JSON path 언어 의미론을 다룹니다.
+
 1. [JSON vs JSONB](#1-json-vs-jsonb)
 2. [JSON 데이터 저장](#2-json-데이터-저장)
 3. [JSON 연산자](#3-json-연산자)
@@ -27,6 +30,153 @@
 5. [인덱싱과 성능](#5-인덱싱과-성능)
 6. [실전 패턴](#6-실전-패턴)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+PostgreSQL의 JSON 지원은 텍스트의 얇은 wrapper가 아닙니다. JSONB는 문서를 *parsing된 binary tree*로 저장하고, GIN 인덱스는 그 트리를 키별 posting list로 inverted시키며, JSON path 언어(PG 12+)는 트리를 재-parsing 없이 walk하는 executor로 컴파일됩니다. JSONB의 on-disk 모양과 GIN 인덱스의 구조를 이해하는 것이 "테이블 전체를 스캔하는 JSONB 쿼리"와 "마이크로초 안에 인덱스 probe로 끝나는 JSONB 쿼리"의 차이입니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** JSONB의 on-disk 포맷 — header, key-value 쌍, 정렬, TOAST.
+- **(B)** Inverted index로서의 GIN — posting list, `jsonb_ops` vs `jsonb_path_ops` operator class.
+- **(C)** arrow/path 연산자(`->`, `->>`, `#>`, `#>>`)와 containment 연산자(`@>`).
+- **(D)** JSON path 언어와 `jsonb_path_query` — 선언적 트리 traversal.
+
+### A. JSONB On-Disk 포맷
+
+JSON 값(`{"a": 1, "b": [2, 3]}`)은 1번 *parsing*되어 compact binary 포맷의 parse tree로 JSONB로 저장됩니다.
+
+```
+JSONB header (4 바이트)
+├── Type tag — object | array | scalar
+├── Children 수 (count)
+└── Total size
+
+각 child에 대해:
+├── JEntry (4 바이트) — type + offset/length
+└── Key/value 바이트 (object의 경우 key로 정렬)
+```
+
+#### A.1 "binary"가 중요한 이유
+
+JSON-as-text와 비교해, JSONB는:
+
+- 모든 연산자 호출에서 **재-parsing을 건너뜀**. `doc->'a'`는 키 `'a'`의 JEntry를 직접 읽음.
+- parse 시점에 **object key를 정렬**(사전순), key 조회를 linear scan이 아니라 O(log K) binary search로.
+- **중복 key 제거** — `{"a": 1, "a": 2}`는 `{"a": 2}`가 됨. JSON 텍스트는 둘 다 유지.
+- **공백과 key 순서 손실**. 그것을 보존하려면 `jsonb` 대신 `json`(text) 사용.
+
+#### A.2 TOAST와 JSONB
+
+JSONB 컬럼은 TOAST 가능(03번 레슨 §C). ~2 KB보다 큰 문서는 압축되거나 TOAST 테이블로 옮겨짐. 결정적 결과 — 1 MB 문서에서 단일 key를 추출해도 여전히 문서 전체를 읽고 압축 해제해야 함, 부분-트리 접근 없음. 작은 문서를 많이 저장하는 설계가 보통 거대한 문서 하나를 저장하는 설계보다 빠릅니다.
+
+### B. GIN — JSONB를 위한 Inverted Index
+
+JSONB 컬럼에 대한 GIN(Generalized Inverted Index)은 구조를 뒤집음 — "각 행에 무엇이 들어 있나" 대신 "각 값에 대해 어느 행이 그것을 포함하나"를 저장.
+
+#### B.1 두 operator class
+
+PostgreSQL은 JSONB에 두 GIN operator class를 제공:
+
+**`jsonb_ops`** (기본) — 모든 key, 모든 value, 모든 key:value 쌍을 인덱스.
+
+```
+row 5 — {"tags": ["red", "fast"], "color": "red"}에 대해:
+GIN이 항목 삽입 — 'tags', 'red', 'fast', 'color', 'tags':'red', 'tags':'fast', 'color':'red'
+```
+
+`@>`, `?`, `?|`, `?&` 연산자 지원. 인덱스 큼, 쓰기 느림, 그러나 유연.
+
+**`jsonb_path_ops`** — leaf value까지의 완전한 path만 hash해서 인덱스.
+
+```
+row 5 — {"tags": ["red", "fast"], "color": "red"}에 대해:
+GIN이 항목 삽입 — hash('tags'->'red'), hash('tags'->'fast'), hash('color'->'red')
+```
+
+`@>`만 지원(containment). 대략 1/3 크기, `@>` 쿼리에 3× 빠른 lookup — 그러나 "이 행이 key X를 가지나"(`?`)는 답 불가.
+
+#### B.2 Lookup 알고리즘
+
+`WHERE jsonb_col @> '{"color": "red"}'`에 대해:
+
+1. 쿼리 값에서 **검색 가능 항목 추출** — `'color', 'red', 'color':'red'`(또는 `path_ops`의 경우 `hash(color->red)`만).
+2. 각 항목을 GIN B-tree에서 **lookup**해서 row TID의 posting list 획득.
+3. posting list **교집합**.
+4. 살아남은 각 TID에 대해 실제 행을 **recheck**해서 완전한 containment 확인(인덱스는 개별 element에 대한 것이고, AND-of-elements는 containment와 같지 않으므로 검증 필요).
+
+recheck 단계는 GIN이 *후보 집합*을 준다는 뜻 — 보통 충분히 작아서 recheck 비용이 무시할 만함.
+
+### C. Arrow 연산자와 Containment
+
+이 레슨의 연산자는 두 카테고리로 나뉨.
+
+#### C.1 Path 추출 — `->`, `->>`, `#>`, `#>>`
+
+| 연산자 | 반환 타입 | 의미 |
+|--------|----------|------|
+| `->` | jsonb | 키(object) 또는 인덱스(array)로 child 가져오기 |
+| `->>` | text | 같음, 결과를 text로 cast |
+| `#>` | jsonb | path 배열로 descendant 가져오기 |
+| `#>>` | text | `#>`와 같음, text로 cast |
+
+```sql
+'{"a":{"b":1}}'::jsonb -> 'a'           -- {"b":1}    (jsonb)
+'{"a":{"b":1}}'::jsonb -> 'a' ->> 'b'   -- '1'        (text)
+'{"a":{"b":1}}'::jsonb #> '{a,b}'       -- 1          (jsonb)
+'{"a":{"b":1}}'::jsonb #>> '{a,b}'      -- '1'        (text)
+```
+
+이들은 `IMMUTABLE`이고 expression 인덱스로 indexable. `CREATE INDEX ON t ((data->>'email'));`은 `WHERE data->>'email' = ?`이 B-tree를 사용하게 함.
+
+#### C.2 Containment와 existence — `@>`, `?`, `?|`, `?&`
+
+| 연산자 | 의미 |
+|--------|------|
+| `@>` | 좌측이 우측을 포함(deep, 의미적) |
+| `?` | top-level key 존재 |
+| `?|` | 나열된 key 중 하나라도 존재 |
+| `?&` | 나열된 key가 모두 존재 |
+
+Containment `@>`가 일꾼. `'{"a":1, "b":2}'::jsonb @> '{"a":1}'::jsonb`는 좌측이 우측의 모든 것을 포함하므로 true. 속도를 위해 GIN 사용.
+
+### D. JSON Path 언어 — `jsonb_path_query`
+
+PostgreSQL 12가 SQL/JSON path 언어(Oracle과 SQL 표준이 사용하는 동일한 것)를 추가. path 표현식은 JSONB 트리를 walk하는 executor로 컴파일됨.
+
+#### D.1 기본 문법
+
+```sql
+SELECT jsonb_path_query(
+    '{"users":[{"name":"Alice","age":30},{"name":"Bob","age":25}]}',
+    '$.users[*] ? (@.age > 28).name'
+);
+-- 반환 — "Alice"
+```
+
+- `$` — 문서의 root
+- `.users` — key로 child
+- `[*]` — 모든 배열 element
+- `? (predicate)` — 필터
+- `@` — 필터 안에서 현재 항목
+- `.name` — 최종 추출
+
+#### D.2 Arrow 연산자와 비교
+
+Arrow 연산자는 단순하지만 제한적 — 한 번에 한 단계, 필터링 없음. JSON path는 전체 traversal을 하나의 선언적 표현식으로 표현, executor가 단위로 최적화. 깊이 nested되거나 필터링된 쿼리에서 JSON path가 더 짧고 빠름.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
+
+- **`json` vs `jsonb`** — text vs binary parse tree (§A).
+- **`->`, `->>`, `#>`, `#>>`** — path 추출 (§C.1).
+- **`@>`, `?`, `?|`, `?&`** — containment와 existence, GIN으로 가속 (§B, §C.2).
+- **`CREATE INDEX ... USING gin (jsonb_col)`** — 기본 `jsonb_ops`, 유연하지만 큼.
+- **`CREATE INDEX ... USING gin (jsonb_col jsonb_path_ops)`** — 더 작고, `@>`만 지원하지만 더 빠름.
+- **`jsonb_path_query`, `jsonb_path_exists`, `@@`** — 완전한 SQL/JSON path 언어 (§D).
 
 ---
 

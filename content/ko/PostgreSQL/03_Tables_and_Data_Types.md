@@ -20,6 +20,167 @@
 
 테이블은 모든 관계형 데이터베이스의 근본적인 구성 요소입니다. 애플리케이션이 저장하는 모든 데이터 — 사용자 프로필, 상품 카탈로그, 금융 거래 — 는 결국 신중하게 선택된 컬럼, 데이터 타입(Data Type), 제약조건(Constraint)을 갖춘 테이블 안에 존재합니다. 설계 단계에서 스키마를 올바르게 정의하면, 미묘한 데이터 손상부터 느린 쿼리까지 나중에 발생할 수 있는 수많은 문제를 예방할 수 있습니다.
 
+`CREATE TABLE` 문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — PostgreSQL이 8 KB page 안에 행을 물리적으로 어떻게 배치하는지, 큰 값이 TOAST 메커니즘으로 어떻게 빠져나가는지, 그리고 모든 데이터 타입의 저장 크기가 이 두 가지로부터 어떻게 따라 나오는지를 다룹니다.
+
+---
+
+## 이론과 원리
+
+`CREATE TABLE` 문은 컬럼 이름 이상의 계약입니다. `INTEGER`냐 `BIGINT`냐, `VARCHAR(255)`냐 `TEXT`냐, `TIMESTAMP`냐 `TIMESTAMPTZ`냐의 선택은 row당 바이트 수, alignment padding, page 활용률, 그리고 값이 inline으로 저장될지 별도 파일로 밀려날지에 직접 매핑됩니다. page layout과 TOAST 메커니즘, 그리고 타입별 저장 비용을 이해하면, 스키마 결정은 부족 지식이 아니라 산수가 됩니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** PostgreSQL의 page — 8 KB 단위, page header, line pointer, tuple body.
+- **(B)** byte 0부터 본 tuple — header, null bitmap, alignment, 컬럼 데이터 영역.
+- **(C)** TOAST — ~2 KB를 초과하는 값을 어떻게 슬라이스하고 (옵션) 압축해서 라인 외부로 옮기는가.
+- **(D)** 타입별 저장 비용과, 컬럼 순서를 부주의하게 잡으면 공간을 낭비하게 되는 alignment trap.
+
+### A. 8 KB Page
+
+PostgreSQL은 heap을 고정 크기 **page**(block이라고도 함) 단위로 읽고 씁니다. 기본 크기는 **8 KB**이며 컴파일 타임에 고정됩니다 — 모든 테이블 파일은 page 정수배이고, `shared_buffers`의 모든 buffer는 page 하나, WAL 갱신은 page를 추적합니다.
+
+```
+┌────────────────────────────────────────────────┐  byte 0
+│ PageHeader (24 bytes)                          │
+│  pd_lsn, pd_checksum, pd_lower, pd_upper, ...  │
+├────────────────────────────────────────────────┤  pd_lower
+│ ItemIdData[]  (각 4바이트, "line pointer")     │
+│  ↓ 아래로 자람                                 │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤  free space
+│                                                │
+│ ↑ 위로 자람                                    │
+│ Tuple (행)                                      │
+├────────────────────────────────────────────────┤  pd_upper
+│ Special space (인덱스에서 사용, heap에선 미사용)│
+└────────────────────────────────────────────────┘  byte 8191
+```
+
+두 포인터(`pd_lower`와 `pd_upper`)가 free space 경계를 표시합니다. 행을 삽입하면 tuple은 `pd_upper - tuple_size`에 쓰이고 line pointer는 `pd_lower`에 쓰입니다. 두 포인터가 서로를 향해 자라며, 만나면 page가 가득 차서 PostgreSQL이 다음 page를 할당합니다.
+
+#### A.1 line pointer가 존재하는 이유
+
+인덱스는 행에 대한 안정적인 참조가 필요하지만, tuple은 삭제되거나, 갱신(새 버전 생성)되거나, VACUUM에 의해 이동될 수 있습니다. line pointer(`ItemId`)는 4바이트 간접 참조입니다 — 인덱스 항목은 `(page_number, line_pointer_index)`를 가리키고, line pointer는 page 내 실제 offset을 가리킵니다. tuple이 옮겨지면 line pointer만 갱신되고, 모든 인덱스는 계속 동작합니다.
+
+#### A.2 `ctid` 시스템 컬럼
+
+모든 행은 `SELECT`할 수 있는 `ctid`를 가집니다 — 정확히 `(page_number, line_pointer_index)`입니다. `ctid`는 update에 *대해 안정적이지 않습니다* — 행을 변경하는 UPDATE는 행을 재배치할 수 있고, 그러면 새 ctid를 갖게 됩니다(이전 line pointer는 새 line pointer로의 "redirect"가 됩니다).
+
+### B. Tuple Layout
+
+각 행은 다음과 같이 구성된 **tuple**입니다.
+
+```
+┌────────────────────────────────────────┐
+│ HeapTupleHeader  (최소 23 bytes)        │
+│  xmin, xmax, cmin, cmax, ctid,         │
+│  t_infomask, t_hoff                    │
+├────────────────────────────────────────┤
+│ Null bitmap (옵션, 컬럼당 1 bit)        │
+├────────────────────────────────────────┤
+│ 8-byte 경계까지 alignment padding        │
+├────────────────────────────────────────┤
+│ Column 1 데이터                         │
+│ Alignment padding                      │
+│ Column 2 데이터                         │
+│   ...                                  │
+└────────────────────────────────────────┘
+```
+
+#### B.1 Header — MVCC와 visibility를 가능케 하는 부분
+
+23바이트 header는 MVCC가 필요로 하는 visibility 메타데이터를 담습니다.
+
+- **`xmin`** — 이 row version을 만든 트랜잭션 ID.
+- **`xmax`** — 이 row version을 삭제/대체한 트랜잭션 ID(아직 살아 있으면 0).
+- **`cmin`/`cmax`** — 트랜잭션 내부 command-id (자기 자신에 대한 visibility).
+- **`ctid`** — 이 tuple의 물리 위치 (또는 update된 경우 다음 버전의 위치).
+- **`t_infomask`** — 플래그 비트들 — 행에 null이 있나? VACUUM에 의해 frozen되었나? `xmax`가 실제로는 multixact인가?
+
+header는 1-컬럼 테이블이든 100-컬럼 테이블이든 동일한 크기입니다. 좁은 행이 많을수록 넓은 행 몇 개보다 비례적으로 overhead가 큽니다.
+
+#### B.2 Null bitmap — 적어도 한 컬럼이 null일 때만 할당
+
+bitmap은 컬럼당 1 bit이며 8바이트로 패딩됩니다. PostgreSQL은 행의 모든 컬럼이 not-null이면 *할당하지 않습니다*(`t_infomask`의 `HEAP_HASNULL` 비트가 플래그). nullable 컬럼이 많고 대부분의 행에 null이 있는 테이블에서는 눈에 띄는 공간 절약입니다.
+
+#### B.3 Alignment
+
+PostgreSQL의 모든 데이터 타입은 **alignment requirement**를 가집니다 — `int2`는 2바이트, `int4`는 4바이트, `int8`과 `timestamp`는 8바이트, `text`는 4바이트(length word) 정렬. tuple builder는 alignment를 만족시키기 위해 컬럼 사이에 padding 바이트를 삽입합니다. 이것이 가장 흔한 저장 함정 중 하나의 원천입니다 — §D 참조.
+
+### C. TOAST — Oversized-Attribute Storage Technique
+
+행은 page 하나(8 KB)를 넘을 수 없습니다. 그러나 `text`나 `bytea` 값은 쉽게 메가바이트 단위가 될 수 있습니다. PostgreSQL은 이를 **TOAST**(The Oversized-Attribute Storage Technique)로 해결합니다.
+
+#### C.1 TOAST 결정 흐름
+
+tuple이 **TOAST threshold**(`TOAST_TUPLE_THRESHOLD`, 기본 ~2 KB, 즉 page의 ~1/4)를 초과할 때, planner는 가장 큰 TOAST 가능 컬럼에 대해 다음 루프를 돕니다.
+
+1. 값을 **압축**(최신 버전에서는 PGLZ 또는 LZ4). 이제 들어맞으면 inline으로 저장.
+2. 그래도 너무 크면, **~2 KB 청크로 슬라이스**해서 청크들을 테이블의 TOAST 테이블(`CREATE TABLE` 시 자동 생성되며 이름은 `pg_toast.pg_toast_<oid>`)에 저장.
+3. 본 행에는 청크들을 OID와 총 길이로 참조하는 작은 **TOAST pointer**(18바이트)만 저장.
+
+TOAST 가능 컬럼마다 `ALTER TABLE ... SET STORAGE`로 변경할 수 있는 **storage strategy**가 있습니다.
+
+| Strategy | 압축? | Out-of-line? |
+|----------|------|--------------|
+| `PLAIN`  | 아니오 | 아니오 (TOAST 불가능 타입에만) |
+| `EXTENDED` (TEXT/BYTEA의 기본값) | 예 | 예 |
+| `EXTERNAL` | 아니오 | 예 (`substring` 호출이 빠름) |
+| `MAIN`   | 예 | 압축 후에도 너무 크면만 |
+
+#### C.2 실전에서 TOAST가 중요한 이유
+
+`SELECT id FROM big_log_table`은 모든 행에 1 MB body가 있어도 빠릅니다. body는 TOAST 테이블에 살고, 명시적으로 projection되지 않으면 읽히지 않기 때문입니다. 반대로 `SELECT body`는 TOAST 테이블로의 join을 트리거합니다 — 보이지 않게, 그러나 I/O를 추가합니다. "필요한 것만 select하라"가 단순한 코드 스타일이 아닌 데이터베이스 차원의 이유입니다.
+
+### D. 타입별 저장 비용과 alignment trap
+
+PostgreSQL 타입의 대표적 일부와 그 저장 크기:
+
+| 타입 | 바이트 | Alignment | 비고 |
+|------|--------|-----------|------|
+| `boolean` | 1 | 1 | |
+| `smallint` | 2 | 2 | |
+| `integer` | 4 | 4 | |
+| `bigint` | 8 | 8 | |
+| `numeric(p, s)` | 가변 (~5–8 + 자릿수당 2) | 4 | 임의 정밀도, int보다 느림 |
+| `real` (float4) | 4 | 4 | |
+| `double precision` (float8) | 8 | 8 | |
+| `date` | 4 | 4 | |
+| `time` | 8 | 8 | |
+| `timestamp`/`timestamptz` | 8 | 8 | 둘 다 8바이트, tz 정보는 세션 단위로 적용되며 저장되지 않음 |
+| `interval` | 16 | 8 | |
+| `uuid` | 16 | 4 | |
+| `text`/`varchar(n)`/`bytea` | 1바이트 length header + payload (TOAST 가능) | 4 | `varchar(n)`은 길이 강제, 저장은 `text`와 동일 |
+| `char(n)` | n 바이트 (공백 패딩) | 4 | 거의 항상 잘못된 선택, `text` 사용 권장 |
+| `json` | 텍스트 + length header | 4 | 원시 텍스트로 저장 |
+| `jsonb` | 바이너리 parse tree + length header | 4 | TOAST 가능, GIN 지원 |
+
+#### D.1 컬럼 순서 함정
+
+alignment padding 때문에, `CREATE TABLE`에서의 컬럼 *순서*가 행 크기에 영향을 줍니다. 예:
+
+```sql
+CREATE TABLE bad  (a int2, b int8, c int2);  -- 2 + 6 pad + 8 + 2 + 6 pad = 24 bytes
+CREATE TABLE good (b int8, a int2, c int2);  -- 8 + 2 + 2 + 4 pad         = 16 bytes
+```
+
+"bad" 버전은 2바이트 필드 뒤에 오는 `int8`의 8바이트 alignment를 만족시키느라 행당 8바이트를 낭비합니다. **alignment가 큰 것부터 작은 것 순으로 컬럼을 배치**하면 padding을 최소화할 수 있습니다. 넓은 테이블에서는 컬럼 순서 변경만으로 heap을 10-20% 줄일 수 있습니다.
+
+#### D.2 가변 길이 타입과 1바이트 short header
+
+`text`, `bytea`, `varchar`는 length prefix를 사용합니다. PostgreSQL에는 영리한 최적화가 있습니다 — 126바이트까지의 값에는 표준 4바이트 대신 **1바이트 short header**를 사용합니다. 따라서 짧은 문자열이 많은 컬럼은 4바이트 overhead가 시사하는 것보다 훨씬 저렴합니다.
+
+### 이론에서 아래 SQL로
+
+이어지는 각 절은 위 개념들이 구체화된 형태입니다:
+
+- **`CREATE TABLE` 컬럼 목록** — 컬럼 타입을 선언. PostgreSQL이 alignment, padding, storage strategy를 이로부터 계산 (§B.3, §D).
+- **`TEXT` vs `VARCHAR(n)` 선택** — 둘 다 동일한 TOAST 가능 저장. `varchar(n)`은 길이 검사 추가 (§C, §D).
+- **`TIMESTAMP` vs `TIMESTAMPTZ`** — 둘 다 8바이트, 차이는 저장이 아니라 해석 (§D).
+- **`PRIMARY KEY`, `UNIQUE`, `NOT NULL`** — `NOT NULL`은 PostgreSQL이 null bitmap을 건너뛰게 함(§B.2), `PRIMARY KEY`는 동일한 8 KB layout의 page를 가진 인덱스를 생성(§A).
+- **`ALTER TABLE ... SET STORAGE`** — 컬럼 하나의 TOAST 전략 변경 (§C.1).
+
+---
+
 ## 1. 테이블 기본 개념
 
 테이블은 데이터를 행(row)과 열(column)로 구성하여 저장하는 구조입니다.

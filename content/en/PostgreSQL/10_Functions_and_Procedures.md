@@ -21,6 +21,124 @@ After completing this lesson, you will be able to:
 
 Built-in functions handle the most common transformations, but every application eventually needs custom logic that lives inside the database itself. User-defined functions and procedures let you encapsulate business rules -- tax calculations, tier classifications, input validation -- right next to the data, reducing round trips and ensuring that the logic is applied consistently no matter which client connects.
 
+Before writing functions, read [**Theory & Principles**](#theory--principles) — how PL/pgSQL is parsed and cached, the volatility classes (`IMMUTABLE`/`STABLE`/`VOLATILE`) and what they tell the planner, and why a procedure is *not* just a function that returns nothing.
+
+---
+
+## Theory & Principles
+
+A `CREATE FUNCTION` declaration is more than syntax sugar over inline SQL. The function body is parsed and cached, the volatility class you declare changes how the planner can fold the call away, and the language (SQL vs PL/pgSQL vs C) changes whether the body can be inlined at planning time. A `CREATE PROCEDURE` looks similar but has fundamentally different transaction semantics — it can `COMMIT` and `BEGIN` mid-body, while a function cannot. Understanding these four ideas — language, volatility, inlining, and transaction scope — turns "I added a function and it got slow" into a predictable cost analysis.
+
+This section covers:
+
+- **(A)** Function languages: SQL functions vs PL/pgSQL — when each is inlined and when each holds its own scope.
+- **(B)** Volatility classes: `IMMUTABLE`, `STABLE`, `VOLATILE` and the planner optimizations each enables.
+- **(C)** PL/pgSQL: parse, plan caching, and per-statement plan reuse.
+- **(D)** Functions vs procedures — the transaction control distinction.
+
+### A. Function Languages and Inlining
+
+PostgreSQL functions can be written in many languages. The two most common in user code:
+
+#### A.1 SQL functions
+
+`CREATE FUNCTION add_one(x int) RETURNS int LANGUAGE sql AS 'SELECT x + 1';`
+
+The body is a (possibly multi-statement) SQL block. If the function is **simple enough** — single SELECT, IMMUTABLE/STABLE, no complex parameters — the planner can **inline** it: every call is replaced with the body during planning, just like a view. There is then no function-call overhead at runtime.
+
+A SQL function is not always inlinable. Multi-statement bodies, VOLATILE marking, set-returning functions in unusual contexts — any of these blocks inlining and forces real per-call execution.
+
+#### A.2 PL/pgSQL functions
+
+`CREATE FUNCTION ... LANGUAGE plpgsql AS $$ DECLARE ... BEGIN ... END $$;`
+
+PL/pgSQL is a procedural language layered on top of SQL. The body has variables, control flow (`IF`, `LOOP`, `FOR`, `WHILE`), exception handling, and explicit `RETURN`. PL/pgSQL functions are **never inlined** — every call is a real call, with its own variable scope, and its body is parsed once but executed each time.
+
+The cost: function call overhead per invocation (microseconds, but it adds up if called per row). The benefit: anything you cannot express in pure SQL.
+
+### B. Volatility Classes
+
+Every function declares (or defaults) one of three **volatility** classes. This is metadata that tells the planner what optimizations are safe.
+
+#### B.1 IMMUTABLE — same input, same output, forever
+
+`abs(x)`, `length(s)`, `pi()`. The planner is free to:
+
+- **Constant-fold** the call at planning time if all arguments are constants. `WHERE x = abs(-5)` becomes `WHERE x = 5` once.
+- **Use the function in an expression index** (`CREATE INDEX ON t (immutable_func(col))`). PostgreSQL refuses to build an index on a STABLE or VOLATILE function because the index would silently go stale.
+
+#### B.2 STABLE — same input, same output, within one statement
+
+`now()`, `current_user`, `current_setting('foo')`. Inside one query, calling `now()` ten times returns the same value (PostgreSQL guarantees this). Across queries, it does not.
+
+The planner can:
+
+- **Use the function in an index scan as the bound** (`WHERE x > now()`). The function is called once at the start of the scan; the result is treated as a constant for the duration.
+- **Not** constant-fold across statements.
+
+#### B.3 VOLATILE — anything goes
+
+`random()`, `nextval('seq')`, any function that performs `INSERT` or `UPDATE`. The planner must call it every time, in source order, and cannot move it across iteration boundaries.
+
+#### B.4 Why getting this wrong silently breaks things
+
+Marking `now()` as IMMUTABLE would let the planner constant-fold "today" into a value that never changes in your prepared statement — same query, same answer for the rest of the connection's life. Marking `random()` as STABLE would let the planner reuse one random value across an entire SELECT. PostgreSQL trusts your declaration; bad declarations produce wrong answers, not errors.
+
+The default is VOLATILE, which is safe but pessimistic. Always think about the right class when defining a custom function.
+
+### C. PL/pgSQL — Parse, Plan, and Cache
+
+A PL/pgSQL function body is processed in three phases.
+
+#### C.1 First call — full parse
+
+The first time a session calls the function, PL/pgSQL parses the entire body into an internal tree. Every embedded SQL statement (`SELECT`, `INSERT`, `EXECUTE`) becomes a node.
+
+#### C.2 First execution of each SQL statement — plan and cache
+
+Each embedded SQL statement is planned the first time it is executed and the plan is **cached for the lifetime of the session**. The next call to the function reuses the cached plan — no re-planning.
+
+This makes PL/pgSQL fast for repeated calls but creates a subtle trap: the cached plan is built using the parameter values from the *first* call (PostgreSQL uses partial generic-plan logic). If subsequent calls have very different parameter selectivities, the cached plan can be poor for them. PostgreSQL switches between custom and generic plans after a few calls based on cost estimates, but pathological cases exist.
+
+#### C.3 `EXECUTE` — explicit re-planning
+
+Inside PL/pgSQL, plain SQL statements use the cached-plan mechanism. The dynamic form `EXECUTE 'SELECT ...';` re-parses and re-plans every time. Use it for queries where the parameter values radically change selectivity, or where the query text itself is built dynamically.
+
+### D. Functions vs Procedures — Transaction Scope
+
+Until PostgreSQL 11, only functions existed. PG 11 added procedures (`CREATE PROCEDURE`), and the difference is purely about transaction control:
+
+| Feature | Function | Procedure |
+|---------|----------|-----------|
+| Returns a value | Yes (`RETURNS type`) | No (use `OUT` parameters) |
+| Called by | `SELECT func()` (inside expressions) | `CALL proc()` (top-level) |
+| `COMMIT` / `ROLLBACK` inside body | **No** | **Yes** |
+| Can run in parallel queries | If marked `PARALLEL SAFE` | No |
+
+#### D.1 Why a function cannot COMMIT
+
+A function call is part of a SQL statement. The statement is part of a transaction. Allowing the function to commit mid-call would mean the calling statement straddles a commit boundary — incoherent for MVCC visibility, undefined for triggers, impossible for the executor to clean up after on error.
+
+Procedures are called from the top level, not from inside an expression. They can `COMMIT; ... BEGIN;` and start a new transaction inside the body. Use them for batch jobs that need to chunk work across multiple transactions (e.g., "process 1000 rows, commit, repeat").
+
+#### D.2 Anonymous code — `DO` blocks
+
+`DO $$ DECLARE x int; BEGIN ... END $$;` runs an anonymous PL/pgSQL block. Useful for one-off scripts. The block runs in the calling transaction; like functions, it cannot commit.
+
+### From Theory to the SQL Below
+
+Each of the following sections is one of these mechanisms made concrete:
+
+- **Built-in functions** (`UPPER`, `LENGTH`, `NOW`, `RANDOM`) — most are IMMUTABLE or STABLE; the planner exploits this (§B).
+- **`CREATE FUNCTION ... LANGUAGE sql`** — inlinable when simple (§A.1).
+- **`CREATE FUNCTION ... LANGUAGE plpgsql`** — variables, control flow, never inlined (§A.2).
+- **`IMMUTABLE` / `STABLE` / `VOLATILE`** — declares the volatility contract (§B).
+- **`CREATE PROCEDURE` + `CALL`** — top-level invocation, can `COMMIT` mid-body (§D).
+- **`DO $$ ... $$`** — anonymous block, runs in the calling transaction (§D.2).
+- **`EXECUTE 'sql'` inside PL/pgSQL** — bypasses plan cache for dynamic SQL (§C.3).
+
+---
+
 ## 1. Built-in Functions
 
 PostgreSQL provides various built-in functions.

@@ -21,6 +21,9 @@
 다운타임은 비용을 초래하고 사용자의 신뢰를 떨어뜨립니다. 가용성이 중요한 모든 애플리케이션 -- 사실상 거의 모든 프로덕션 시스템 -- 에서 단일 PostgreSQL 서버는 단일 장애 지점(Single Point of Failure)이 됩니다. 복제(Replication)는 스탠바이 서버에 데이터 복사본을 생성하여 읽기 트래픽을 처리하고, 재해 복구(Disaster Recovery)를 제공하며, Primary 장애 발생 시 수 초 내에 역할을 전환할 수 있게 합니다. 이 레슨에서는 기본적인 스트리밍 복제부터 자동 페일오버를 갖춘 프로덕션 수준의 고가용성 구성까지 전체 스펙트럼을 다룹니다.
 
 ## 목차
+
+설정 명령어로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — WAL streaming 프로토콜, synchronous vs asynchronous 복제의 latency-vs-durability tradeoff, logical replication 뒤의 publication/subscription 모델, 그리고 (Patroni가 사용하는) etcd-Raft가 split-brain을 어떻게 막는지를 다룹니다.
+
 1. [복제 개요](#1-복제-개요)
 2. [물리적 복제 (스트리밍 복제)](#2-물리적-복제-스트리밍-복제)
 3. [논리적 복제](#3-논리적-복제)
@@ -28,6 +31,141 @@
 5. [페일오버와 스위치오버](#5-페일오버와-스위치오버)
 6. [고가용성 솔루션](#6-고가용성-솔루션)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+"복제된 PostgreSQL 클러스터"는 사실 함께 동작하는 세 개의 협조 시스템입니다 — primary에서 standby로의 WAL streaming, 어느 시점에 누가 primary인지 결정하는 consensus 계층(Patroni + etcd/Consul), 그리고 클라이언트를 올바른 서버로 보내는 connection router(HAProxy 또는 pgBouncer). 각 계층은 자체 failure mode와 튜닝 노브를 가집니다. WAL streaming 프로토콜, synchronous-vs-asynchronous tradeoff, 그리고 split-brain을 막는 Raft consensus를 이해하는 것이, "standby가 있다"와 "최악의 날에도 동작하는 자동 failover가 있다"의 차이입니다.
+
+이 절에서 다루는 내용:
+
+- **(A)** WAL streaming — standby의 `walreceiver`가 primary의 `walsender`로부터 WAL을 어떻게 연속적으로 fetch하고 replay하는지.
+- **(B)** Synchronous vs asynchronous — latency-vs-durability tradeoff와 `synchronous_commit` level.
+- **(C)** Logical replication — publication/subscription, WAL을 행 수준 변경 이벤트로 decoding.
+- **(D)** Consensus와 Raft — Patroni + etcd가 primary를 선출하고 split-brain을 막는 방식.
+
+### A. WAL Streaming Replication
+
+#### A.1 프로토콜
+
+primary는 연결된 standby마다 **walsender**라는 프로세스를 실행. standby는 특별한 replication 프로토콜(libpq frontend 프로토콜의 변형)로 연결하는 **walreceiver**를 실행.
+
+```
+┌──────────────────────┐                ┌──────────────────────┐
+│ Primary              │                │ Standby              │
+│                      │                │                      │
+│ commit → WAL buffer  │                │  walreceiver         │
+│       → pg_wal/      │  ──────────►   │   ↓                  │
+│       → walsender    │  WAL records   │  startup process     │
+│                      │                │   ↓                  │
+│                      │                │  apply (redo)        │
+│                      │  ◄────────     │                      │
+│                      │  flush LSN     │                      │
+└──────────────────────┘                └──────────────────────┘
+```
+
+standby의 `walreceiver`는 들어오는 WAL을 자신의 로컬 `pg_wal/`에 쓰고, 새 레코드를 redo하라고 **startup process**(crash recovery 동안 사용되는 동일 코드 path)에 알림. startup process가 적용해서 standby의 데이터베이스 상태를 진전시킴.
+
+standby는 주기적으로 자신의 현재 LSN을 돌려보냄 — 얼마나 많은 WAL을 *받았고*, 디스크로 *flush했고*, *적용했는지*. primary는 이 LSN을 사용해 replication lag을 계산하고 synchronous commit이 언제 완료될 수 있는지 결정.
+
+#### A.2 Replication slot
+
+기본적으로 primary는 다음 checkpoint에 필요할 만큼만 WAL을 보관. standby가 뒤처지고 primary가 standby가 여전히 필요로 하는 WAL을 재활용하면, standby가 깨지고 fresh base 백업으로부터 다시 빌드되어야 함.
+
+**replication slot**은 primary 측 예약 — "내(slot 소유자)가 ack할 때까지 LSN X 너머의 WAL을 재활용하지 마라". primary는 그 WAL을 디스크가 가득 차도 재활용 거부. 이는 뒤처짐 문제를 해결하지만 디스크 모니터링이 필요해짐 — 막힌 standby가 `pg_wal/`을 가득 채워 primary를 충돌시킬 수 있음.
+
+### B. Synchronous vs Asynchronous
+
+#### B.1 Asynchronous (기본)
+
+primary는 WAL이 자기 디스크에 닿자마자 클라이언트에 COMMIT 반환. standby는 WAL을 "곧"(보통 ms 후) 받음. primary가 commit과 standby가 WAL 받기 사이에 충돌하면, commit된 트랜잭션이 손실됨.
+
+- **장점** — 낮은 latency. commit 시간이 standby 건강과 무관.
+- **단점** — failover 동안 데이터 손실 가능.
+
+#### B.2 Synchronous
+
+primary는 COMMIT을 반환하기 전에 적어도 1개(또는 N개)의 standby가 ack할 때까지 기다림. 정확한 동작은 `synchronous_commit`에 따라 다름:
+
+| `synchronous_commit` | standby 대기 조건 |
+|----------------------|------------------|
+| `off` | primary fsync도 기다리지 않음 (primary 충돌 시 데이터 손실 가능) |
+| `local` | primary fsync만 (standby 대기 없음) |
+| `remote_write` | WAL이 standby의 OS에 도달 (반드시 디스크는 아님) |
+| `on` (기본) | WAL이 standby에 fsync됨 |
+| `remote_apply` | WAL이 적용됨 (standby에서 visible) |
+
+`synchronous_standby_names`가 어떤 standby를 카운트할지 설정.
+
+#### B.3 Tradeoff
+
+Synchronous commit은 failover 시 zero data loss를 보장하지만, 모든 commit이 네트워크 round-trip + standby의 fsync를 기다림. 트랜잭션이 많은 워크로드에서는 commit latency가 두 배가 될 수 있음. 실용적 타협 — 낮은 latency 네트워크에서 `remote_write`(OS 수준 수신 대기, 완전 fsync 아님) 사용, 또는 `SET LOCAL synchronous_commit = 'on';`으로 중요한 트랜잭션만 synchronous로 실행.
+
+### C. Logical Replication
+
+Physical replication은 *바이트 수준 페이지 변경*을 보냄. Logical replication은 *행 수준 변경 이벤트* — 다른 스키마, 다른 메이저 버전, 또는 다른 데이터베이스 엔진에 적용 가능한 INSERT, UPDATE, DELETE statement를 보냄.
+
+#### C.1 Publication/subscription 모델
+
+```
+Primary 측:                              Subscriber 측:
+CREATE PUBLICATION pub                   CREATE SUBSCRIPTION sub
+  FOR TABLE orders, customers;             CONNECTION 'host=primary ...'
+                                           PUBLICATION pub;
+```
+
+subscriber가 replication 프로토콜로 연결, primary의 **logical decoder**가 WAL을 읽고 각 행 변경을 logical 메시지(INSERT INTO orders VALUES (…), …)로 변환, subscriber가 일반 SQL statement로 적용.
+
+#### C.2 Physical로 못 하지만 Logical로 할 수 있는 것
+
+- **테이블의 부분집합 복제** (publication이 어떤 테이블을 선택).
+- **다른 스키마에 복제** (subscriber의 테이블이 추가 컬럼, 다른 default를 가질 수 있음).
+- **메이저 버전을 가로질러 복제** (PG 14 → PG 16).
+- **양방향 / multi-master** with conflict resolution (pglogical 같은 확장으로).
+- **ETL을 위한 변경 캡처** (debezium이 같은 logical decoding 출력을 사용해 Kafka로 공급).
+
+#### C.3 한계
+
+- **DDL 복제 없음**. 스키마 변경은 양쪽에 수동으로(또는 도구로) 적용해야 함.
+- UPDATE/DELETE 복제에 **primary key 필요** (없으면 PostgreSQL이 subscriber에서 어떤 행을 update할지 모름).
+- 행별 decoding 단계 때문에 **physical보다 overhead 높음**.
+
+### D. Consensus와 Split-Brain 방지
+
+HA에서 가장 어려운 문제는 "primary가 죽으면 standby로 swap"이 아닙니다 — "네트워크가 partition되어도 모든 노드가 현재 누가 primary인지에 동의"하는 것입니다. 이것이 **consensus 문제**.
+
+#### D.1 순진한 failover가 brain을 split하는 이유
+
+노드 A(primary)가 unreachable해지면, B(standby)는 A가 죽었다고 판단하고 자신을 promote할 수 있음. 그러나 A는 다른 네트워크 segment에서 여전히 살아 있고 write를 받고 있을 수 있음. 이제 A와 B 둘 다 write를 받음 — **split-brain**. 두 갈라진 timeline을 화해시키는 것은 어렵거나 불가능.
+
+#### D.2 Raft (etcd, Consul이 사용)
+
+Raft는 모든 state 변경에 정족수(majority, 예 — 3개 중 2개)의 노드가 동의해야 하는 consensus 프로토콜. partitioned minority는 결정 불가 — A가 B와 C로부터 단절되면, A는 더 이상 정족수의 ack를 받을 수 없으므로 primary 유지 불가.
+
+프로토콜은 세 역할 — **leader**, **follower**, **candidate**. leader가 모든 write를 처리. follower는 leader로부터 복제. follower가 leader의 소식이 끊기면(election timeout) candidate가 되어 다른 노드들에게 vote를 요청, majority를 얻은 노드가 새 leader가 됨.
+
+#### D.3 Patroni
+
+Patroni는 각 PostgreSQL 인스턴스 옆에서 실행되는 Python 데몬. 각 Patroni가 자기 노드의 state(primary/standby, 마지막 적용 LSN 등)를 etcd 또는 Consul의 공유 키에 씀. Patroni는 클러스터 state를 다시 읽고 결정 — 자신을 promote할까? demote할까? 다른 primary를 따를까?
+
+etcd 자체가 Raft-backed이므로, "누가 primary인가" 결정은 consensus로 보호됨 — 어떤 Patroni도 etcd의 leader lease를 보유하지 않고는 promote 불가, lease는 Raft majority에 의해서만 부여됨. Partitioned Patroni는 절대 promote 불가.
+
+#### D.4 Fencing
+
+마지막 계층 — Patroni가 B를 promote할 때, A가 더 이상 write를 처리하지 않게 보장해야 함. 메커니즘 — STONITH("Shoot The Other Node In The Head" via IPMI), 가상 IP failover(클라이언트가 A에 도달 못 하게), 또는 VIP 기반 pool routing(HAProxy가 etcd에서 primary 위치를 읽음).
+
+### 이론에서 아래 설정으로
+
+이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
+
+- **`wal_level`, `max_wal_senders`, `wal_keep_size`** — WAL streaming의 primary 측 설정 (§A).
+- **`primary_conninfo`, `restore_command`** — standby 측 복구 설정 (§A).
+- **`synchronous_standby_names`, `synchronous_commit`** — durability/latency 지점 선택 (§B).
+- **`CREATE PUBLICATION`, `CREATE SUBSCRIPTION`** — logical replication 설정 (§C).
+- **`pg_create_physical_replication_slot`, `pg_create_logical_replication_slot`** — slot 관리 (§A.2).
+- **Patroni 설정** — DCS(etcd/Consul/ZooKeeper) 연결, 자동 failover 정책 (§D.3).
+- **HAProxy / Pgpool / connection router** — 클라이언트를 현재 primary로 보냄, Patroni의 DCS state에 의존 (§D.4).
 
 ---
 
