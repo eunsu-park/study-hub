@@ -21,6 +21,8 @@ An edge is a region in an image where brightness changes rapidly, representing o
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — edges as image derivatives, why Sobel is a noise-robust gradient approximation, how Canny's five-step pipeline corresponds to a specific optimality criterion, and the relationship between Laplacian zero-crossings and Difference-of-Gaussians.
+
 1. [Image Gradient Concept](#1-image-gradient-concept)
 2. [Sobel Operator](#2-sobel-operator)
 3. [Scharr Operator](#3-scharr-operator)
@@ -28,6 +30,169 @@ An edge is a region in an image where brightness changes rapidly, representing o
 5. [Canny Edge Detection](#5-canny-edge-detection)
 6. [Gradient Magnitude and Direction](#6-gradient-magnitude-and-direction)
 7. [Exercises](#7-exercises)
+
+---
+
+## Theory & Principles
+
+An "edge" in an image is a location where intensity changes rapidly — the mathematical object behind that intuition is the **derivative of the image**. Every edge detector in this lesson is a discrete approximation of a derivative, combined with decisions about what magnitude counts as an edge and how to thin the response to a single pixel per boundary.
+
+This section covers:
+
+- **(A) Edges as derivatives** — the continuous calculus that classical edge detection approximates.
+- **(B) First-order operators** — Sobel, Scharr, Prewitt: discrete gradient approximations with varying noise behavior.
+- **(C) Second-order operators** — Laplacian and Laplacian-of-Gaussian (LoG), and zero-crossings.
+- **(D) Difference-of-Gaussians** — why it approximates LoG and why it is separable.
+- **(E) Canny's algorithm** — the five-step derivation from the Canny criteria (good detection, good localization, single response).
+
+### A. Edges as Derivatives
+
+Model a 1D intensity profile across an edge as the smoothed step function. An ideal sharp edge is:
+
+```
+I(x) = { I_dark   if x < x_edge
+       { I_bright otherwise
+```
+
+with a discontinuity at `x_edge`. The real world (diffraction, lens blur, sensor PSF) smooths this into a sigmoidal ramp, but the qualitative structure is the same. Three facts about derivatives:
+
+- The **first derivative** `I'(x)` has a peak at the edge — a bright spike for a rising edge, a dark spike for a falling edge. Edges = local extrema of `|I'|`.
+- The **second derivative** `I''(x)` crosses zero at the edge — it is positive on one side and negative on the other. Edges = zero-crossings of `I''`.
+
+Both properties generalize to 2D. For a 2D image `I(x, y)`, the gradient is the vector
+
+```
+∇I = (∂I/∂x, ∂I/∂y)
+```
+
+with magnitude `|∇I|` (edge strength) and direction `θ = atan2(∂I/∂y, ∂I/∂x)` (orientation perpendicular to the edge). The Laplacian `∇²I = ∂²I/∂x² + ∂²I/∂y²` is the 2D second-derivative operator.
+
+### B. First-Order Operators: Sobel and Its Relatives
+
+#### B.1 The naïve forward difference and why it isn't used
+
+The simplest discrete derivative is `I'(x) ≈ I(x+1) - I(x-1)` (central difference). Implemented as a 1×3 kernel `[-1 0 1]`. It gives the right answer on a clean ramp, but it is extremely sensitive to noise — each output pixel depends on only two input pixels.
+
+#### B.2 Sobel: gradient with built-in smoothing
+
+Sobel combines differentiation with low-pass smoothing in the perpendicular direction. The horizontal Sobel kernel is:
+
+```
+S_x = [-1  0  +1]       Reading this as a separable product:
+      [-2  0  +2]       S_x = [1]         · [-1  0  +1]
+      [-1  0  +1]             [2]
+                              [1]
+                        (smoothing across y)   (differencing along x)
+```
+
+The vertical Sobel is its transpose. This smooth-then-differentiate structure makes Sobel robust to the per-pixel noise that would devastate a simple central difference, at the cost of a slightly larger response footprint.
+
+Why the specific `[1, 2, 1]` smoother? It is a 3-tap approximation to a Gaussian (it equals `[1,1] * [1,1]`, the first step of binomial approximation to Gaussian). The derivative `[-1, 0, +1]` is a centered difference.
+
+#### B.3 Scharr: a more isotropic Sobel
+
+Sobel's isotropy — whether it responds equally to edges at all angles — is imperfect for 3×3 kernels. Scharr optimizes the 3×3 coefficients specifically for isotropy:
+
+```
+Sc_x = [ -3   0   +3]
+       [-10   0  +10]
+       [ -3   0   +3]
+```
+
+For 3×3 kernels, Scharr is what you want if angle accuracy matters (e.g. gradient orientation histograms for HOG features). For larger kernels, Sobel-3 is close enough.
+
+#### B.4 Gradient magnitude and direction
+
+Sobel gives `G_x = ∂I/∂x` and `G_y = ∂I/∂y` separately. Combine via:
+
+```
+|∇I| = sqrt(G_x² + G_y²)        (magnitude)
+θ    = atan2(G_y, G_x)           (direction, perpendicular to edge)
+```
+
+For speed, `|∇I| ≈ |G_x| + |G_y|` is often used — it is not rotationally symmetric but fast. The proper `sqrt` form is essential when the magnitude is used downstream (e.g. by Canny or HOG).
+
+### C. Second-Order Operators: Laplacian
+
+The Laplacian `∇²I = ∂²I/∂x² + ∂²I/∂y²` has a 3×3 discrete approximation:
+
+```
+L = [ 0  1  0]     or    [ 1  1  1]     (with diagonals, marginally less isotropic)
+    [ 1 -4  1]           [ 1 -8  1]
+    [ 0  1  0]           [ 1  1  1]
+```
+
+At an ideal step edge, `∇²I` changes sign — it is positive just before the edge, zero at the edge, negative just after (or vice versa). Edges are **zero-crossings** of `∇²I`, *not* extrema.
+
+#### C.1 Why Laplacian is noisy
+
+The second derivative amplifies noise even more than the first. A single-pixel random fluctuation gets four times the weight of its neighbors in the kernel. Using the raw Laplacian on a noisy image produces a sea of spurious zero-crossings.
+
+#### C.2 Laplacian-of-Gaussian (LoG)
+
+Fix the noise problem by smoothing first:
+
+```
+LoG(x, y; σ) = ∇²[G(x, y; σ) * I](x, y)  =  [∇²G(x, y; σ)] * I(x, y)
+```
+
+The Laplacian commutes with linear convolution, so it can be baked into the smoothing kernel. The LoG kernel has a characteristic "Mexican hat" shape — positive in the center, negative in a ring around it, approaching zero at the edges. Zero-crossings of the LoG-filtered image are the edges at scale `σ`.
+
+#### C.3 Difference-of-Gaussians (DoG) ≈ LoG
+
+LoG is expensive to compute directly. A key approximation:
+
+```
+DoG(x, y; σ) = G(x, y; k·σ) - G(x, y; σ)  ≈  (k-1) · σ² · LoG(x, y; σ)
+```
+
+for `k ≈ 1.6`. Two separable Gaussian blurs and a subtraction give the same result as one non-separable LoG. This is the reason SIFT uses DoG (§13) and why most scale-space methods are built on Gaussian differences rather than direct LoG.
+
+### D. Canny's Edge Detector: A Five-Step Pipeline
+
+John Canny (1986) derived his algorithm from three optimality criteria:
+
+1. **Good detection**: real edges should be found and non-edges should not be flagged.
+2. **Good localization**: the detected edge should be close to the true edge.
+3. **Single response**: each edge should produce exactly one detected line, not a thick response.
+
+Optimizing these criteria under a Gaussian noise model leads to a specific filter shape — which, remarkably, is very close to `∂G/∂x` — and a specific post-processing pipeline. The five steps:
+
+#### D.1 Gaussian smoothing
+
+Blur with `GaussianBlur(σ)` to suppress high-frequency noise before differentiation (the reason Sobel already partially does this, but Canny does it explicitly at the chosen scale).
+
+#### D.2 Gradient computation
+
+Apply Sobel to get `G_x`, `G_y`, then compute magnitude `|∇I|` and direction `θ`. Quantize `θ` to four bins: 0° (horizontal), 45°, 90° (vertical), 135°.
+
+#### D.3 Non-maximum suppression
+
+Thin the edges. For each pixel, look at its two neighbors along the gradient direction (perpendicular to the edge). If the pixel's magnitude is not the maximum of those three, zero it out. This addresses the "single response" criterion — without this step, a strong edge produces a wide ridge of high magnitudes.
+
+#### D.4 Double threshold
+
+Classify each surviving pixel into:
+
+- **Strong** (`|∇I| ≥ T_high`): definitely an edge.
+- **Weak** (`T_low ≤ |∇I| < T_high`): maybe an edge.
+- **Zero** (`|∇I| < T_low`): not an edge.
+
+Canny's empirical guidance: `T_high ≈ 2 · T_low` is a good starting point. The two thresholds are what give Canny its robust behavior on both strong clear edges and subtle continuations.
+
+#### D.5 Hysteresis tracking
+
+Turn weak pixels into strong ones if and only if they are connected (8-neighborhood) to a strong pixel, possibly transitively. The final edge map contains the original strong pixels plus all weak pixels reachable from them. This is the same hysteresis idea as §07.E.3 — deciding middle cases based on neighbors.
+
+The result: edges that are thin (thanks to §D.3), near the true edge locations (thanks to the optimized filter), and connected through noisy regions (thanks to §D.5).
+
+### From Theory to the Functions Below
+
+- `cv2.Sobel(img, ddepth, dx, dy, ksize)` — §B.2. `ddepth` usually `CV_64F` to avoid clipping negative gradients; `dx, dy` select the partial derivative direction.
+- `cv2.Scharr(img, ddepth, dx, dy)` — §B.3. 3×3 only, more isotropic than Sobel.
+- `cv2.Laplacian(img, ddepth, ksize)` — §C. Often apply `GaussianBlur` first to get LoG behavior.
+- `cv2.Canny(img, threshold1, threshold2, apertureSize, L2gradient)` — §D. `threshold1, threshold2` are `T_low, T_high`. `L2gradient=True` enables proper `sqrt` magnitude instead of `|G_x| + |G_y|`.
+- `cv2.magnitude`, `cv2.phase` — §B.4 used when you want gradient magnitude/direction maps directly (for HOG, edge histograms, etc.).
 
 ---
 

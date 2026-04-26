@@ -20,6 +20,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — how a continuous scene becomes a discrete array of integers, the pixel coordinate convention OpenCV uses, and why BGR (not RGB) is the default channel order.
+
 1. [Reading Images - imread()](#1-reading-images---imread)
 2. [Displaying Images - imshow()](#2-displaying-images---imshow)
 3. [Saving Images - imwrite()](#3-saving-images---imwrite)
@@ -29,6 +31,143 @@ After completing this lesson, you will be able to:
 7. [Practice Problems](#7-practice-problems)
 8. [Next Steps](#8-next-steps)
 9. [References](#9-references)
+
+---
+
+## Theory & Principles
+
+A "digital image" in OpenCV is a 3D NumPy array of unsigned 8-bit integers. Understanding how a real scene turns into that array — and what the three indices, the integer values, and the channel order actually mean — is the prerequisite for every other operation in this track. This section covers:
+
+- **(A) From continuous scene to discrete array** — sampling, quantization, and where image-processing artifacts ultimately come from.
+- **(B) The pixel coordinate system** — why `img[y, x]` has `y` first, and what the axis directions are.
+- **(C) Bit depth and dynamic range** — why 8-bit is the default, when it hurts, and what `float32` / 16-bit images are for.
+- **(D) Color channels and why OpenCV uses BGR** — the historical accident that keeps biting users.
+
+### A. From a Scene to an Array: Sampling and Quantization
+
+#### A.1 The continuous image model
+
+Before a camera is involved, an image is a **continuous 2D function**
+
+```
+f : ℝ² → ℝᶜ          (grayscale: c = 1; color: c = 3)
+```
+
+that assigns a light intensity (or a color triple) to every point in some region of the image plane. The real world is continuous in both position and intensity. Converting this to something a computer can store requires two discretization steps.
+
+#### A.2 Sampling — making position discrete
+
+A camera's sensor consists of a finite grid of photosites. Each photosite integrates the light arriving over a small rectangular footprint and reports a single number. Mathematically, this is **sampling** the continuous function `f(x, y)` at integer grid points:
+
+```
+I[i, j] = ∫∫ f(x, y) · w(x - j·Δ, y - i·Δ) dx dy
+```
+
+where `Δ` is the pixel pitch and `w` is the sensor's point-spread function. The result is an `H × W` array of grid-aligned samples.
+
+What gets lost in this step: **frequencies above the Nyquist rate** (`1 / 2Δ`). Any detail finer than two pixels cannot be represented faithfully by the samples. If the lens fails to remove these high frequencies before they hit the sensor, they **alias** into visible low-frequency moiré patterns. This is why proper downsampling needs a low-pass filter first (the `INTER_AREA` rule from lesson 04) — and why photographers care about Bayer demosaicing and anti-alias filters.
+
+#### A.3 Quantization — making intensity discrete
+
+The sensor output is still a (noisy) real number. Storing it requires choosing a finite set of levels. For an 8-bit unsigned image, the real-valued signal `s ∈ [0, 1]` is mapped to
+
+```
+I[i, j] = round(s · 255)   ∈   {0, 1, 2, ..., 255}
+```
+
+That round-off is the **quantization error**, bounded by `±0.5 / 255 ≈ ±0.2%`. For most natural-scene photography it is invisible. It becomes visible (as banding) in very smooth gradients — a clear sky, a studio backdrop — where the human eye can detect transitions between adjacent levels.
+
+Two strategies break the banding:
+
+- **Increase bit depth**: 10, 12, or 16 bits per channel. A 16-bit PNG has 65,536 levels per channel instead of 256.
+- **Dither**: add sub-pixel noise before quantization so the banding pattern is broken up into texture (imperceptible at normal viewing distance).
+
+### B. The Pixel Coordinate System
+
+OpenCV — and NumPy, and almost every array-based image library — indexes pixels as `img[row, col]`, with the origin `(0, 0)` at the **top-left** corner:
+
+```
+      col →  0    1    2    ...    W-1
+row    ┌─────────────────────────────┐
+  ↓    │                             │
+  0    │ ●───────→ x                 │
+       │ │                           │
+  1    │ │                           │
+       │ ▼                           │
+  2    │ y                           │
+       │                             │
+  ...  │                             │
+       │                             │
+ H-1   │                             │
+       └─────────────────────────────┘
+```
+
+A few important consequences:
+
+- **`img[y, x]` has `y` first** because `y` is the row index. This reverses from standard mathematical `f(x, y)` notation — a constant source of confusion and bugs. Inside OpenCV function calls that take `(x, y)` tuples (like `cv2.circle(img, (x, y), ...)`), the order is swapped back. **Rule of thumb: arrays are `[y, x]`, function arguments are `(x, y)`.**
+- **`y` increases downward.** This is the opposite of math textbooks but matches raster scan order and screen coordinates. A "positive rotation angle" in OpenCV is therefore counter-clockwise as viewed on screen but clockwise in pure mathematical terms.
+- **Pixel centers vs pixel corners.** Different conventions treat the coordinate `(0, 0)` as the center of the top-left pixel or its top-left corner. OpenCV uses the *center* convention — important when doing sub-pixel interpolation or geometric transforms (see lesson 04).
+
+### C. Bit Depth and Dynamic Range
+
+#### C.1 The default: `uint8`
+
+OpenCV's default image dtype is `numpy.uint8` — 8 bits per channel, 256 levels per channel, range `[0, 255]`. It matches display hardware (most monitors only show 256 levels per channel) and is what every standard image format (JPEG, PNG-8, BMP) stores.
+
+Consequences to remember:
+
+- **Arithmetic saturates at 255.** `cv2.add(200, 100) = 255`, not 300. If you use `+` instead of `cv2.add` on `uint8` arrays, NumPy wraps around: `np.uint8(200) + np.uint8(100) = 44`. Neither is usually what you want.
+- **Subtraction saturates at 0 — or wraps, depending on the operator.** Same rule.
+- **Float operations must be converted back carefully.** Divide by 255 to get `[0, 1]` floats, do the math, then multiply by 255 and clip before casting back to `uint8`. Forgetting the clip produces inverted-looking outputs where pixels wrap past 255.
+
+#### C.2 When 8 bits is not enough
+
+- **Raw camera data** (12-14 bits) contains detail in shadows and highlights that gets clipped by 8-bit conversion.
+- **Medical images** (CT, MRI) are routinely 12-16 bits per channel — the diagnostic information is in the extra bits.
+- **HDR photography** stores linear intensities in `float32` so the tonal range spans multiple orders of magnitude (darkest shadows to brightest sky).
+- **Intermediate computation** (filtering, accumulating Laplacians, etc.) should often be done in `float32` or `float64` even if the input and output are `uint8`, to avoid intermediate overflow and quantization error.
+
+OpenCV supports these via dtypes `uint16`, `int16`, `float32`, `float64`. The convention is that a `float32` image in the `[0, 1]` range represents the same intensity as a `uint8` image in the `[0, 255]` range.
+
+### D. Color Channels — and Why OpenCV Uses BGR
+
+#### D.1 A color image is three grayscale images
+
+A color image stores three values per pixel — typically one each for red, green, and blue channels. These three values form three parallel "grayscale" 2D arrays, stacked along a third axis:
+
+```
+img.shape == (H, W, 3)     # H rows × W cols × 3 channels
+img[y, x]                 # → array of length 3, one value per channel
+img[:, :, 0]              # → the full blue channel  (under OpenCV's BGR order)
+img[:, :, 1]              # → the full green channel
+img[:, :, 2]              # → the full red channel
+```
+
+The idea generalizes: 4-channel images add an alpha channel for transparency (`shape == (H, W, 4)`), and multispectral / hyperspectral images can have dozens or hundreds of channels.
+
+#### D.2 Why BGR instead of RGB
+
+OpenCV's `imread` and `imshow` use **BGR** (blue-green-red) channel order, while almost every other library (PIL, matplotlib, TensorFlow, PyTorch, web standards) uses RGB. The reason is historical: early 24-bit Windows bitmap files stored pixels in the `blue, green, red` byte order (little-endian representation of the 3-byte pixel), and OpenCV mirrored that layout to allow zero-copy loading of BMPs on Windows. Once code depended on it, the convention froze.
+
+The practical result is a bug class:
+
+```python
+img = cv2.imread('cat.jpg')          # BGR
+plt.imshow(img)                      # expects RGB — colors look wrong
+plt.imshow(img[:, :, ::-1])          # fix: reverse channel axis
+plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))   # explicit fix, preferred
+```
+
+The matplotlib-looks-wrong symptom (reds become blues, skies become red-orange) is so common that it is worth internalizing the rule: **cross the OpenCV / non-OpenCV boundary with `cv2.cvtColor`.**
+
+### From Theory to the Functions Below
+
+- `cv2.imread(path, flag)` — reads from disk, producing the `uint8` BGR array described in §D.
+- `cv2.imshow(window, img)` — displays BGR directly (consistent with `imread`), which is why matplotlib requires the swap and `imshow` does not.
+- `cv2.imwrite(path, img)` — writes with the same BGR convention and applies the quantization step of §A.3 when the format demands it (JPEG compression is lossy; PNG is lossless).
+- `img.shape`, `img.dtype`, `img.size` — the dimensions and bit depth of §C.
+- `img[y, x]`, `img[y1:y2, x1:x2]` — NumPy indexing using the `(row, col)` convention of §B.
+- `img[:, :, c]` — channel extraction from §D.1.
 
 ---
 

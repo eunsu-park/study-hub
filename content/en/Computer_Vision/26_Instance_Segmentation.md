@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — instance segmentation as joint detection + mask prediction, Mask R-CNN's RoIAlign contribution, the detection-free alternative (YOLACT/SOLO), and COCO mAP as the standard metric.
+
 1. [Instance vs Semantic Segmentation](#1-instance-vs-semantic-segmentation)
 2. [Mask R-CNN Architecture](#2-mask-r-cnn-architecture)
 3. [YOLACT: Real-Time Instance Segmentation](#3-yolact-real-time-instance-segmentation)
@@ -26,6 +28,124 @@ After completing this lesson, you will be able to:
 6. [Evaluation Metrics (COCO AP)](#6-evaluation-metrics-coco-ap)
 7. [Practical Applications](#7-practical-applications)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+Instance segmentation combines two problems: **detection** (finding each object's bounding box) and **segmentation** (assigning a mask to each object). Unlike semantic segmentation (lesson 25), which merges all pixels of the same class, instance segmentation separates **individual objects** — two adjacent cars produce two separate masks.
+
+This section covers:
+
+- **(A) The instance segmentation problem** — why it is strictly harder than both detection and semantic segmentation.
+- **(B) Mask R-CNN** — the two-stage detect-then-segment approach and RoIAlign.
+- **(C) One-stage detection-free methods** — YOLACT and SOLO's direct per-pixel instance prediction.
+- **(D) Transformer-based methods** — DETR-style approaches that predict instance masks as a set.
+- **(E) Evaluation: COCO-style AP** — how mask quality is measured across IoU thresholds.
+
+### A. The Instance Segmentation Problem
+
+Output: for every object in the image, a **bounding box**, **class label**, and **binary mask**. This is a set-valued output (variable-length) where each element has mixed types (box, label, mask).
+
+Why it is harder than alternatives:
+
+- **Harder than detection**: detection just needs to find the object; instance segmentation needs the object's exact shape.
+- **Harder than semantic segmentation**: semantic segmentation merges all cars into one "car" region; instance segmentation must separate each car from neighboring cars, even when they touch or overlap.
+
+The two architectural approaches:
+
+- **Two-stage**: first detect, then segment within each detection (Mask R-CNN).
+- **One-stage**: directly predict per-pixel instance labels (SOLO) or per-pixel prototype masks + per-instance coefficients (YOLACT).
+
+### B. Mask R-CNN: Detection-Then-Segmentation
+
+Mask R-CNN (He et al., 2017) extends Faster R-CNN (detection) by adding a **mask prediction branch**:
+
+1. **Region Proposal Network (RPN)**: generates candidate object regions from feature maps.
+2. **RoI pooling/align**: extracts a fixed-size feature map for each candidate region.
+3. **Parallel heads**: classification, box regression, and **mask prediction** run in parallel on each RoI feature.
+4. Mask head outputs a `K × 28 × 28` binary mask (one per class); at test time, select the mask for the predicted class.
+
+#### B.1 RoIAlign: the key technical contribution
+
+The original RoI pooling in Faster R-CNN **discretizes** spatial coordinates — it rounds RoI boundaries and quantizes the pooled output. For classification this is fine (small misalignments don't hurt class prediction). For mask prediction it is catastrophic — pixel-level misalignment propagates into the mask shape.
+
+**RoIAlign** replaces discretization with bilinear interpolation: for each cell of the pooled output, sample the feature map at exact fractional positions and interpolate. Preserves precise spatial alignment between features and original pixel coordinates.
+
+This single change (RoIAlign vs RoIPool) was worth ~5 points of mask AP — a huge improvement from what looks like a minor detail, showing how important sub-pixel alignment is for mask quality.
+
+#### B.2 Loss function
+
+Mask R-CNN trains with a multi-task loss:
+
+```
+L = L_classification + L_bbox_regression + L_mask
+```
+
+where `L_mask` is average binary cross-entropy over the `K × 28 × 28` mask output, computed **only for the ground-truth class** (other class channels contribute zero). Decoupling the mask loss from the classification loss lets the network focus on shape without competing class predictions.
+
+### C. One-Stage Detection-Free Methods
+
+Two-stage methods like Mask R-CNN are accurate but slow. One-stage methods aim for real-time inference.
+
+#### C.1 YOLACT: Prototypes + Coefficients
+
+YOLACT (Bolya et al., 2019) factorizes the instance segmentation problem:
+
+- **Prototype branch**: produces a set of `k` (e.g. 32) prototype masks at the full image resolution. These are not instance-specific; they are a shared basis.
+- **Prediction heads**: per anchor, predict class, bounding box, and `k` **coefficients**.
+- **Final mask**: `mask_i = sigmoid( Σ_j  coef_{i,j} · prototype_j )`, cropped by the bounding box.
+
+Because prototypes are image-wide and shared, the heavy computation is done once per image; per-instance work is just a linear combination. Real-time speed (~30 fps) with reasonable accuracy.
+
+#### C.2 SOLO: Per-Pixel Instance Prediction
+
+SOLO (Wang et al., 2020) treats each spatial location on the feature map as a potential instance. At each grid cell, the network predicts:
+
+- **Instance category**: class of the object whose **center** falls in this cell.
+- **Instance mask**: binary mask of that object in full image resolution.
+
+So a `40×40` feature map can have up to `1600` potential instances (most predicted as "no instance"). This decouples instance identity from bounding boxes entirely — SOLO produces masks directly, no box regression needed. SOLOv2 adds dynamic convolution to efficiently produce per-instance masks.
+
+### D. Transformer-Based Instance Segmentation
+
+DETR (Carion et al., 2020) reformulated detection as a **set prediction** problem: output a fixed-size set of `N` predictions (each with class and box), match them to ground-truth via Hungarian algorithm. MaskFormer and Mask2Former extend this to segmentation:
+
+- Each of the `N` queries produces a class + mask.
+- Queries attend to image features via cross-attention.
+- Training uses bipartite matching to assign predictions to ground-truth instances.
+
+Advantages: unified framework for detection, semantic, instance, and panoptic segmentation; no anchors, no NMS, no ROI align. Disadvantages: slower convergence during training, more compute per forward pass.
+
+Mask2Former is currently the state-of-the-art for instance segmentation on COCO and ADE20K.
+
+### E. Evaluation: COCO-Style Average Precision
+
+The standard metric for instance segmentation is **mask AP** (Average Precision), computed similarly to detection AP but using mask IoU instead of box IoU.
+
+Procedure:
+
+1. For each predicted instance with confidence `c` and mask `m`:
+   - Find the ground-truth instance of the same class with the highest mask IoU.
+   - Mark as true positive if IoU ≥ threshold, else false positive.
+2. Sweep through predictions by decreasing confidence, accumulate TP and FP counts, compute precision-recall curve.
+3. AP = area under precision-recall curve.
+
+COCO reports AP averaged over 10 IoU thresholds from 0.5 to 0.95 in 0.05 steps:
+
+- **AP@0.5** (PASCAL-style): lenient, rewards approximate masks.
+- **AP@0.75**: strict, requires precise masks.
+- **AP** (averaged over all thresholds): standard leaderboard metric.
+
+Also reported per size: `AP_small` (mask area < 32²), `AP_medium` (32²-96²), `AP_large` (> 96²). Small objects are consistently the hardest — a fixed-pixel mask error affects small masks more than large ones.
+
+### From Theory to the Functions Below
+
+- **Mask R-CNN**: `torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)` for a one-liner. Inference returns `(boxes, scores, labels, masks)`.
+- **Detectron2**: Meta's framework, state-of-the-art implementations of Mask R-CNN, PointRend, Panoptic FPN.
+- **YOLACT / SOLO / Mask2Former**: original repositories provide reference code; pretrained weights available.
+- **OpenCV DNN**: can run exported ONNX instance segmentation models, though post-processing is custom.
+- **COCO API** (`pycocotools`): canonical implementation of AP evaluation.
 
 ---
 

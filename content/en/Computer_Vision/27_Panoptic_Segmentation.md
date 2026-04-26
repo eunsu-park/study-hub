@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — panoptic segmentation as unified scene understanding, the things-vs-stuff ontology, Panoptic FPN's two-head fusion, and the PQ metric that decomposes into recognition and segmentation quality.
+
 1. [Panoptic Segmentation Overview](#1-panoptic-segmentation-overview)
 2. [Stuff vs Things](#2-stuff-vs-things)
 3. [Panoptic FPN](#3-panoptic-fpn)
@@ -26,6 +28,116 @@ After completing this lesson, you will be able to:
 6. [Post-Processing and Fusion](#6-post-processing-and-fusion)
 7. [Practical Pipeline](#7-practical-pipeline)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+Panoptic segmentation (Kirillov et al., 2019) unifies the two segmentation tasks that came before it: semantic segmentation (§25) assigns a class to every pixel but cannot separate object instances; instance segmentation (§26) separates instances but only segments "things" (countable objects) and ignores "stuff" (amorphous regions like sky, road, grass). Panoptic segmentation demands **a class label and an instance ID for every pixel**, covering both things and stuff uniformly.
+
+This section covers:
+
+- **(A) The unified output format** — what panoptic segmentation returns and why it is useful.
+- **(B) Things vs stuff** — the ontological distinction that is built into the task definition.
+- **(C) Panoptic FPN** — the two-head approach that combines semantic and instance predictions.
+- **(D) Mask2Former as a unified framework** — how transformers eliminate the distinction between task types.
+- **(E) Panoptic Quality (PQ)** — the metric and its decomposition into Recognition Quality and Segmentation Quality.
+
+### A. The Unified Output
+
+Panoptic output: every pixel `(u, v)` gets a pair `(class, instance_id)`:
+
+- For **stuff pixels** (sky, road, building as a category): `class = <stuff class>, instance_id = 0` (no instance separation within stuff).
+- For **thing pixels** (person, car as countable objects): `class = <thing class>, instance_id = <unique ID per object>`.
+
+This is the most complete scene parse: every pixel is assigned, each object is separated, and background stuff is properly categorized. Downstream applications (autonomous driving, AR, image editing) need this complete parse — knowing both "all these pixels are road" and "those pixels are car 1, those are car 2" at the same time.
+
+### B. Things vs Stuff: the Ontology
+
+The things/stuff distinction is not arbitrary; it reflects how humans conceptualize scene elements:
+
+- **Things** are **countable** objects with boundaries: cars, people, chairs, dogs. "Three chairs" makes sense. Each has a distinct shape and can be individually counted or tracked.
+- **Stuff** is **amorphous**: sky, road, grass, water. "Three skies" doesn't make sense. Stuff doesn't have countable instances; it has extent and coverage.
+
+This distinction is useful because the two kinds of content require **different evaluation**: for things, we care about instance separation (was each object found?); for stuff, we just care about spatial coverage (what fraction of the road was labeled road?). The PQ metric (§E) handles both cases uniformly.
+
+The ontology is fixed in the dataset — COCO Panoptic has 80 thing classes and 53 stuff classes, Cityscapes has 8 things and 11 stuff, ADE20K has 100 things and 50 stuff.
+
+### C. Panoptic FPN: Two Heads, One Backbone
+
+Panoptic FPN (Kirillov et al., 2019) was the first effective panoptic architecture. The idea: run **both** a semantic segmentation head and an instance segmentation head on top of the same Feature Pyramid Network backbone, then **fuse** their outputs into the final panoptic map.
+
+Architecture:
+
+1. **Shared backbone + FPN**: extract multi-scale features.
+2. **Semantic head**: dense prediction of stuff classes + thing-class occupancy (say which pixels are "person" even if you don't know which person).
+3. **Instance head** (Mask R-CNN style): detect things, predict per-instance masks.
+4. **Fusion**: combine the two outputs. For each pixel:
+   - If it is inside a confident instance mask, assign that instance's class and ID.
+   - Otherwise, use the semantic head's prediction (stuff class or "unassigned thing").
+
+The fusion step is surprisingly non-trivial because the two heads can disagree (instance mask says "person" at a pixel, semantic head says "wall"). The standard resolution: instance predictions override semantic predictions for things, but only above a confidence threshold.
+
+### D. Mask2Former: One Architecture for All
+
+Mask2Former (Cheng et al., 2022) showed that **the same transformer architecture can do semantic, instance, and panoptic segmentation with only minor changes**. Key observations:
+
+- Any segmentation task can be framed as **predicting a set of binary masks + their class labels**.
+- Semantic segmentation: one mask per class (no instance separation).
+- Instance segmentation: one mask per thing instance.
+- Panoptic segmentation: one mask per stuff class + one mask per thing instance.
+
+The architecture:
+
+1. **Pixel decoder**: extracts multi-scale features from a backbone (Swin Transformer is common).
+2. **Transformer decoder**: produces `N` queries (e.g. 100), each attending to image features via masked attention.
+3. **Per-query prediction**: each query outputs a class probability and a binary mask (via dot product with a per-pixel embedding).
+4. **Training**: bipartite matching between queries and ground-truth instances (Hungarian algorithm), per-mask classification loss + per-mask binary cross-entropy + dice loss.
+
+For panoptic, simply include "stuff" classes as valid predictions alongside "thing" instances — nothing else changes. This unification is the current state-of-the-art direction.
+
+### E. Panoptic Quality (PQ)
+
+The canonical panoptic metric. For each class `c`:
+
+```
+TP_c = set of matched (predicted, ground-truth) pairs with IoU > 0.5 and same class
+FP_c = unmatched predictions
+FN_c = unmatched ground-truth instances
+
+PQ_c = (Σ IoU over TP_c) / (|TP_c| + 0.5·|FP_c| + 0.5·|FN_c|)
+```
+
+Then `PQ = mean(PQ_c over all classes)`.
+
+#### E.1 The SQ × RQ decomposition
+
+PQ can be factored:
+
+```
+PQ = SQ × RQ
+
+SQ = (Σ IoU over TP) / |TP|          Segmentation Quality: how well-aligned are matched masks?
+RQ = |TP| / (|TP| + 0.5·FP + 0.5·FN)  Recognition Quality: what fraction of objects were correctly found?
+```
+
+This decomposition is useful for diagnosis:
+
+- Low **RQ** with high **SQ**: the system finds some objects perfectly but misses many. Improve recall.
+- High **RQ** with low **SQ**: the system finds the right objects but their masks are loose. Improve precision.
+
+For things, RQ is an F1-like score over instance matching; for stuff, each class contributes a single TP/FN (the whole-class mask), so RQ_for_stuff is more about whether the stuff class exists in the prediction than about how many instances there are.
+
+#### E.2 Why PQ is better than just "semantic mIoU + instance AP"
+
+A naïve panoptic metric would be `0.5·mIoU + 0.5·AP`. But that is unsatisfying: mIoU rewards a model that predicts "road everywhere", while AP rewards finding many detections even if masks are loose. PQ instead imposes the same threshold (IoU > 0.5) on everything, so a prediction only counts if it is both correctly localized and correctly classified. This produces a single coherent number that behaves intuitively.
+
+### From Theory to the Models Below
+
+- **Panoptic FPN**: Detectron2's panoptic implementation; input RGB, output panoptic mask + semantic + instance maps.
+- **Mask2Former**: HuggingFace transformers provides pretrained panoptic models. Single-model inference returns panoptic masks directly.
+- **Panoptic DeepLab**: bottom-up approach (semantic head + offset-to-center prediction).
+- **MaskFormer / kMaX-DeepLab**: variants of the transformer approach.
 
 ---
 

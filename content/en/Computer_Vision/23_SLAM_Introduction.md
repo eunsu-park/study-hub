@@ -25,6 +25,8 @@ SLAM (Simultaneous Localization and Mapping) is a technology that enables robots
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the chicken-and-egg structure of SLAM, the pose-graph / factor-graph formulation, loop closure as drift correction, and the tracking-mapping-loop-closure architecture shared by all modern systems.
+
 1. [SLAM Overview](#1-slam-overview)
 2. [Visual Odometry](#2-visual-odometry)
 3. [ORB-SLAM](#3-orb-slam)
@@ -32,6 +34,135 @@ SLAM (Simultaneous Localization and Mapping) is a technology that enables robots
 5. [Loop Closure](#5-loop-closure)
 6. [SLAM Implementation Practice](#6-slam-implementation-practice)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+SLAM (Simultaneous Localization and Mapping) is the problem of a moving sensor figuring out **both** where it is and what the world around it looks like, at the same time, without a prior map. It is a classic chicken-and-egg problem: you need a map to localize (know where you are), but you need to know where you are to build a map. SLAM solves both simultaneously, typically via iterative estimation.
+
+This section covers:
+
+- **(A) The SLAM problem** — why localization and mapping are coupled and how the coupling is resolved.
+- **(B) Visual odometry** — the core frame-to-frame motion estimation, and why it drifts.
+- **(C) Map representations** — sparse points, dense voxels, pose graphs, and what each is useful for.
+- **(D) Loop closure** — how revisiting a previously seen place corrects accumulated drift.
+- **(E) Pose graph and factor graph optimization** — the unified optimization framework behind modern SLAM.
+- **(F) The architecture common to ORB-SLAM, VINS-Mono, and others** — three parallel threads: tracking, mapping, loop closure.
+
+### A. The SLAM Problem: Localization + Mapping
+
+Formally, given a sequence of sensor readings `z_1, z_2, ..., z_t` (images, LiDAR scans, IMU measurements), estimate:
+
+- The **trajectory** `x_1, x_2, ..., x_t` of camera poses over time.
+- The **map** `m` of landmark positions in the world.
+
+Both are unknown. The dependency: estimating `x_t` requires knowing where landmarks in `m` are, but estimating those landmarks requires knowing the poses from which they were observed.
+
+The solution is **iterative**: make an initial guess of camera motion (visual odometry); use that to triangulate landmark positions; use those landmarks to improve pose estimates; repeat. Both the trajectory and the map improve together, which is the "simultaneous" part of SLAM.
+
+### B. Visual Odometry: Frame-to-Frame Motion
+
+The simplest form of SLAM uses only visual data. Visual odometry (VO) estimates the camera's motion between consecutive frames:
+
+1. Detect features in frame `t` and frame `t+1` (§13).
+2. Match features across frames (§14).
+3. Compute the relative transform `[R_{t+1→t}, t_{t+1→t}]` from matched points using the essential matrix and RANSAC (§21.B).
+4. Compose with the accumulated trajectory: `x_{t+1} = x_t · [R, t]`.
+
+#### B.1 Why it drifts
+
+Each frame-to-frame estimate has a small error. Over many frames these errors accumulate — a closed trajectory loop might start and end at different apparent positions even though in reality they were the same. This **drift** is the fundamental failure mode of pure visual odometry and is what loop closure is designed to correct.
+
+Drift growth is roughly proportional to `√(path length)` for random errors, or linear for systematic biases. Over 100 meters of indoor travel, VO drift is typically on the order of 1-5 meters — enough to make large-map applications infeasible without drift correction.
+
+### C. Map Representations
+
+#### C.1 Sparse landmark map
+
+Store only the 3D positions of detected feature points (corners, edges). Each landmark has an associated appearance descriptor for re-recognition later. Compact — thousands of landmarks for a medium room. Used by ORB-SLAM and most visual SLAM systems.
+
+#### C.2 Dense occupancy grid
+
+Voxelize 3D space and mark each voxel as occupied / free / unknown. Used by LiDAR SLAM and OctoMap. Better for path planning (robots care about free space) but much denser to store.
+
+#### C.3 Pose graph
+
+Store only the camera poses, with edges representing relative pose constraints between poses. No explicit landmark map — the underlying 3D structure is implicit in the observations. Minimal memory, good for large-scale mapping.
+
+#### C.4 Factor graph (SLAM++ / iSAM / GTSAM)
+
+Generalizes the pose graph: nodes can be poses, landmarks, or other state variables; edges (factors) can encode any probabilistic constraint (odometry, feature observation, loop closure, IMU integration). Solved efficiently with nonlinear least-squares. This is the modern formulation underlying most SLAM systems.
+
+### D. Loop Closure: Recognizing Revisited Places
+
+When the camera returns to a previously-visited location, the accumulated drift must be detected and corrected. Loop closure has two stages:
+
+#### D.1 Detection
+
+Recognize that the current frame looks like a much earlier frame. Classical approach: **bag-of-visual-words** (BoVW) — describe each image as a histogram of quantized feature descriptors, compare via cosine similarity or TF-IDF weighting. `DBoW2` is the standard implementation and what ORB-SLAM uses.
+
+Modern approach: **learned image embeddings** (NetVLAD, etc.) that explicitly train for place recognition. Better at handling appearance changes (different lighting, season) but heavier.
+
+#### D.2 Verification and correction
+
+After detection, verify geometrically (do the matched features produce a consistent transformation?) to rule out false positives, then add the loop closure constraint to the pose graph: "the current pose equals the earlier pose, up to a small correction". Run pose graph optimization to redistribute the accumulated drift across the whole trajectory.
+
+The visual effect: an open "spiral" trajectory snaps into a properly closed loop, and the map becomes globally consistent.
+
+### E. Pose Graph and Factor Graph Optimization
+
+The mathematical heart of SLAM is a nonlinear optimization:
+
+```
+X* = argmin_X  Σ_i  ‖ residual_i(X) ‖²_Σ⁻¹
+```
+
+where `X` is all the camera poses (and optionally landmarks), and `residual_i` is the discrepancy between observation and prediction for measurement `i`. Each residual has a covariance `Σ` reflecting measurement uncertainty.
+
+Types of residual factors:
+
+- **Odometry factors**: connect consecutive poses with relative-motion estimates from visual odometry.
+- **Landmark factors**: for every time a landmark was observed from a pose, constrain them to be consistent with the projection.
+- **Loop closure factors**: constrain two non-consecutive poses to be close.
+- **Prior factors**: anchor the first pose (otherwise the whole trajectory can freely translate/rotate).
+
+The optimization is solved with Gauss-Newton or Levenberg-Marquardt on the nonlinear system. Modern libraries (g2o, GTSAM, Ceres) solve graphs with millions of variables in seconds by exploiting sparsity — most residuals only connect a handful of variables.
+
+### F. Common Architecture: Three Parallel Threads
+
+Real-time SLAM systems (ORB-SLAM, VINS-Mono, DSO) share a three-thread structure:
+
+```
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  Tracking        │  │  Mapping         │  │  Loop Closure    │
+│  thread          │  │  thread          │  │  thread          │
+│                  │  │                  │  │                  │
+│  • Every frame   │  │  • Every keyframe│  │  • Background    │
+│  • VO (fast)     │  │  • Local bundle  │  │  • BoW detection │
+│  • ~30 fps       │  │    adjustment    │  │  • Global BA on  │
+│                  │  │  • ~5 fps        │  │    detection     │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
+         │                       ↑                       │
+         │                       │                       │
+         └─────── keyframe ──────┘                       │
+                                                         │
+                                           corrects ←────┘
+```
+
+- **Tracking** runs every frame, fast enough to keep up with the camera rate. Uses a local map and predicts camera pose from the previous frame. If tracking fails, run relocalization.
+- **Mapping** runs on every selected keyframe (significantly different from the last), performs local bundle adjustment on a window of recent keyframes, and grows the map.
+- **Loop closure** runs in the background; when a loop is detected it performs global bundle adjustment to redistribute drift.
+
+This structure is what keeps SLAM both accurate (through local + global optimization) and real-time (through concurrent execution).
+
+### From Theory to the Libraries Below
+
+- **ORB-SLAM3**: full visual SLAM system; input is camera stream, output is trajectory + sparse map.
+- **RTAB-Map**: a popular SLAM package with ROS integration, supports RGBD and LiDAR.
+- **OpenVSLAM / Stella VSLAM**: open-source alternatives to ORB-SLAM3.
+- **GTSAM, g2o, Ceres**: factor graph optimization libraries you'd use to build a custom SLAM system.
+- In OpenCV proper: `cv2.findEssentialMat`, `cv2.recoverPose`, `cv2.triangulatePoints` form the building blocks for visual odometry (§B). Full SLAM requires dedicated libraries beyond OpenCV.
 
 ---
 

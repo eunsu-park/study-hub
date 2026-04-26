@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — the domain gap problem, why domain randomization works, the sim-to-real transfer trade-off, and how generative models change the synthetic-data landscape.
+
 1. [Why Synthetic Data?](#1-why-synthetic-data)
 2. [Domain Randomization](#2-domain-randomization)
 3. [Procedural Data Generation](#3-procedural-data-generation)
@@ -26,6 +28,111 @@ After completing this lesson, you will be able to:
 6. [Domain Adaptation](#6-domain-adaptation)
 7. [Practical Synthetic Data Pipeline](#7-practical-synthetic-data-pipeline)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+Synthetic data generation produces training images programmatically — via 3D rendering, procedural composition, augmentation, or generative models — to **supplement or replace** real-world annotated data. Real data is expensive (manual annotation), constrained (rare events are underrepresented), or unavailable (medical imaging privacy, autonomous-driving edge cases). Synthetic data sidesteps these limits but introduces the **domain gap** problem: a model trained on synthetic images may not generalize to real ones.
+
+This section covers:
+
+- **(A) The data problem and why synthetic helps** — the practical motivations.
+- **(B) The domain gap** — what differs between synthetic and real, and why it matters.
+- **(C) Domain randomization** — the surprising insight that *more variation* in training transfers *better* to real.
+- **(D) Procedural generation** — composing scenes from primitives with controlled variation.
+- **(E) Generative models for data** — diffusion-based and GAN-based augmentation.
+- **(F) Domain adaptation** — closing the gap when synthetic alone isn't enough.
+
+### A. Why Synthetic Data Helps
+
+**Annotation cost**: a single human-annotated COCO instance segmentation mask takes 30+ minutes; a synthetic mask is free and pixel-perfect. For tasks where annotation is the bottleneck (segmentation, depth, optical flow ground truth), synthetic data is enabling.
+
+**Coverage of rare events**: collecting examples of "child running into street" or "tumor in early stage" is ethically and practically impossible. Synthetic generation can create these on demand.
+
+**Pixel-perfect labels**: human annotators introduce noise; rendering produces exactly correct ground truth.
+
+**Privacy**: faces, medical records, and other private content can be replaced by synthetic equivalents.
+
+The cost: training entirely on synthetic data and deploying on real data usually fails because of the domain gap.
+
+### B. The Domain Gap
+
+A model trained on synthetic images A then evaluated on real images B performs worse than expected. The reasons:
+
+- **Texture realism**: rendered surfaces look "too clean" — no scratches, dust, weathering.
+- **Lighting and shadows**: simulated lighting is often simplified (no global illumination, no caustics).
+- **Sensor effects**: real images have sensor noise, motion blur, JPEG artifacts; synthetic images don't.
+- **Distribution shift**: object placements, poses, and co-occurrences in synthetic scenes don't match real scene statistics.
+- **Background variability**: real backgrounds are messy and varied; synthetic backgrounds are often constructed and limited.
+
+Each of these creates spurious cues a model can learn ("if the texture is this clean, it's a synthetic chair"). At test time on real images, the model loses these crutches.
+
+### C. Domain Randomization
+
+Domain randomization (Tobin et al., 2017) is a **counterintuitive solution**: instead of trying to make synthetic data look more realistic, deliberately make it **less realistic in many ways**. Vary:
+
+- **Lighting**: random direction, intensity, and color of light sources.
+- **Textures**: replace plausible textures with random patterns, colors, or unrealistic materials.
+- **Object placement**: randomize positions, orientations, scale.
+- **Camera pose**: randomize viewpoint within reasonable ranges.
+- **Distractors**: add random extra objects to the scene.
+- **Background**: random images, random noise, random clutter.
+
+The insight: if the model sees enough variation during training, it learns to **ignore** the variable cues (texture, lighting, background) and focus on **invariant cues** (object shape, geometry). When deployed on real data — which is just one specific point in this varied distribution — the model treats real-world appearance as just another "domain" within its training experience.
+
+This is why domain-randomized synthetic data often transfers to real data better than carefully photorealistic synthetic data: photorealism creates a single training distribution that the model overfits to; randomization forces the model to learn task-essential features.
+
+### D. Procedural Generation Pipelines
+
+Building synthetic datasets typically involves:
+
+1. **3D asset library**: models of objects you want to detect/segment (chairs, cars, people, ...). Sources: ShapeNet, Objaverse, Sketchfab, custom CAD.
+2. **Scene composer**: programmatic placement of objects in 3D environments. Tools: Blender Python API, Unity, Unreal, NVIDIA Isaac Sim.
+3. **Domain randomization controller**: per-image randomization of lighting, materials, camera, distractors.
+4. **Renderer**: path-traced or rasterized rendering. Path tracing (Cycles, Mitsuba) for photorealism; rasterization for speed.
+5. **Annotation extractor**: rendering automatically produces ground truth (depth, masks, normals, optical flow) — no human annotation needed.
+
+A typical pipeline produces 10K-1M annotated images per scenario in a few hours of GPU rendering.
+
+### E. Generative Models for Data Augmentation
+
+Recent shift: instead of building 3D scenes and rendering, **use generative models** to produce synthetic images directly:
+
+#### E.1 Diffusion-based augmentation
+
+Stable Diffusion, ControlNet, and similar models can:
+
+- Generate variations of an existing image while preserving structure ("the same car in different lighting").
+- Inpaint specific regions with prompted content ("add a pedestrian here").
+- Generate from layout/skeleton/depth conditioning, producing new images aligned with given ground truth.
+
+The advantage: photorealistic synthesis without 3D models or rendering pipelines. The disadvantage: less precise ground truth (a generated mask may be slightly wrong) and less diverse variation than 3D-based randomization.
+
+#### E.2 GAN-based augmentation
+
+Earlier era: GANs (StyleGAN, BigGAN) generate realistic images from noise. Used for face / scene augmentation. Largely superseded by diffusion models for general use, but still used in specific domains (medical imaging where GANs are well-tuned).
+
+### F. Domain Adaptation: Closing the Gap
+
+When synthetic alone isn't enough, **domain adaptation** techniques explicitly try to align synthetic and real distributions:
+
+- **Domain-adversarial training**: train a network with two heads, one for the task and one to predict whether the input is synthetic or real. Adversarially train so the features become indistinguishable. The task head then transfers from synthetic to real.
+- **CycleGAN-style translation**: train a GAN to convert synthetic → realistic style, then train downstream models on translated images.
+- **Few-shot fine-tuning**: pretrain on synthetic data, then fine-tune on a small amount of real data. Often the most effective practical approach.
+- **Feature-space alignment**: match feature statistics (BatchNorm running averages, mean and variance) between synthetic and real domains.
+
+The standard recipe today: domain-randomized synthetic data + few-shot real fine-tuning + extensive augmentation. Each component addresses a different aspect of the gap.
+
+### From Theory to the Tools
+
+- **Blender + Python API**: free, fully scriptable, path-traced. Best for photorealistic synthetic datasets at small/medium scale.
+- **NVIDIA Omniverse / Isaac Sim**: physics + rendering for robotics; built-in domain randomization.
+- **Unity Perception / Unreal Engine**: game-engine-based pipelines, often used for autonomous driving (CARLA simulator).
+- **Albumentations / torchvision.transforms**: 2D augmentation libraries (cropping, color jitter, etc.) — the simplest form of synthetic augmentation, applied to existing real images.
+- **Diffusion-based**: Stable Diffusion + ControlNet for conditional generation, prompt engineering for variation.
+
+A typical synthetic data project sequences: build assets → script scene composition → randomize and render at scale → train baseline → measure domain gap → fine-tune on small real set → iterate.
 
 ---
 

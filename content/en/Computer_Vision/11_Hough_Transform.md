@@ -17,12 +17,121 @@ After completing this lesson, you will be able to:
 The Hough Transform is a classical technique used to detect shapes in images. It is primarily used to find lines and circles but can theoretically detect any parametric shape. It works by transforming the image space into parameter space and finding points where many lines intersect.
 
 ## Table of Contents
+
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the duality between image space and parameter space, why the `(ρ, θ)` normal form fixes the vertical-line problem in `y = mx + b`, and how the same voting idea extends from lines to circles to arbitrary shapes.
+
 1. [Hough Transform Principles](#1-hough-transform-principles)
 2. [Line Detection](#2-line-detection)
 3. [Circle Detection](#3-circle-detection)
 4. [Practical Applications](#4-practical-applications)
 5. [Performance Optimization](#5-performance-optimization)
 6. [Practice Problems](#6-practice-problems)
+
+---
+
+## Theory & Principles
+
+The Hough transform solves a specific problem: **given a set of edge points, find the geometric shapes (lines, circles, …) that best explain them**. Naive approaches like RANSAC fit shapes by random sampling; Hough takes a different approach called *voting in parameter space*, which is robust to missing data, handles multiple shapes simultaneously, and has a clean analytical interpretation.
+
+This section covers:
+
+- **(A) The image-space / parameter-space duality** — the core idea that a line in image space corresponds to a point in parameter space, and a point in image space corresponds to a line in parameter space.
+- **(B) Why the normal `(ρ, θ)` parametrization is used** — the vertical-line pathology of `y = mx + b` and how the polar form eliminates it.
+- **(C) The voting procedure** — the discrete algorithm: edge pixels cast votes, peaks in the accumulator are the detected shapes.
+- **(D) Extension to circles** — same idea, higher-dimensional parameter space, with a gradient trick to keep it tractable.
+- **(E) Probabilistic Hough and the Generalized Hough Transform** — runtime optimization and extension to arbitrary shapes.
+
+### A. The Image-Space / Parameter-Space Duality
+
+A line in 2D image space can be written in many forms, but all require **two parameters** to specify — a 2D line has 2 degrees of freedom. Pick any parametrization that uses a pair `(a, b)`. Then:
+
+- Fixing `(a, b)` defines a line in image space (one curve).
+- Fixing a single image point `(x, y)` and asking "which `(a, b)` pairs produce a line passing through me?" gives a *curve in parameter space* — the locus of all lines through that point.
+
+These are dual viewpoints of the same geometry. The Hough insight is that this duality can be used to detect lines:
+
+1. For each edge point in the image, plot the *curve* of parameter values consistent with it.
+2. Where many curves intersect in parameter space, many image edge points lie on the *same line*.
+3. Find the peaks in parameter space. They are the lines.
+
+Instead of searching over continuous parameter space (infinite possibilities), quantize it into a grid of bins — an **accumulator array** — and have each edge point increment the bins whose parameters pass through it. Peaks in the accumulator correspond to lines in the image.
+
+### B. Parametrization: Why `(ρ, θ)` and Not `(m, b)`
+
+The slope-intercept form `y = mx + b` has two parameters `(m, b)`. But:
+
+- **Vertical lines have infinite slope.** A fully vertical edge cannot be represented with finite `m`. Breaking the parameter into two cases (vertical vs non-vertical) is ugly and error-prone.
+- **Slope range is unbounded.** A 45° line has `m = 1`, a 89° line has `m ≈ 57`, and they are "close" in image-space angle but far apart in `m`. Uniform binning of `m` gives wildly non-uniform angular coverage.
+
+The fix is the **normal form** (or polar form):
+
+```
+ρ = x cos θ + y sin θ
+```
+
+Where:
+
+- **`ρ`** (rho) is the perpendicular distance from the origin to the line.
+- **`θ`** (theta) is the angle that this perpendicular makes with the `x` axis.
+
+Every line in the plane has a unique `(ρ, θ)` with `θ ∈ [0, π)` and `ρ ∈ ℝ` (negative `ρ` values correspond to lines on the "other side" of the origin, but are conventionally mapped by taking `θ` into `[0, 2π)` or flipping the sign of `ρ`). Vertical lines have `θ = 0`; horizontal lines have `θ = π/2`. All parameters are bounded and uniform binning gives uniform angular coverage.
+
+For a fixed image point `(x₀, y₀)`, the set of `(ρ, θ)` values for lines through that point is a **sinusoid** in parameter space: `ρ = x₀ cos θ + y₀ sin θ`. The accumulator curve for each edge point is therefore a sine wave.
+
+### C. The Voting Procedure
+
+With `(ρ, θ)` parametrization:
+
+1. **Quantize** the parameter space. Typical resolution: `ρ` bin width = 1 pixel, `θ` bin width = 1°. For an image of diagonal `D`, the `ρ` range is `[-D, D]`, so the accumulator has `~2D × 180` bins.
+2. **Initialize** the accumulator to zero.
+3. **For each edge pixel** `(x, y)` in the binary edge map, loop over all `θ` bins, compute `ρ = x cos θ + y sin θ`, and **increment** the corresponding `(ρ, θ)` bin.
+4. **Find peaks** in the accumulator. Each peak whose value exceeds a threshold corresponds to a line with at least that many supporting edge pixels.
+
+The value in an accumulator bin after all voting equals the number of edge pixels that would lie on the exact line defined by that `(ρ, θ)` — a direct measure of how strongly the data supports that line.
+
+#### C.1 Why this works even with missing/noisy data
+
+Voting is **robust to occlusion and noise** because each edge point contributes independently. If half the pixels of a line are missing, the peak in parameter space is smaller but still exists. If a point is from noise rather than a real line, it contributes to *some* bin but not the peak. Many noisy points with no structure contribute to a low flat background — only genuine lines produce concentrated peaks.
+
+### D. Circle Hough Transform
+
+A circle needs **three parameters**: `(x_c, y_c, r)` for center and radius. Everything from §A–C generalizes:
+
+- Each edge point `(x, y)` is consistent with a **3D surface** in parameter space: all `(x_c, y_c, r)` such that `(x - x_c)² + (y - y_c)² = r²`. That surface is the cone whose apex is at `(x, y, 0)` in `(x_c, y_c, r)` space.
+- The accumulator is now 3D, typically of size `W × H × R_max`.
+- Voting a cone surface for each edge point is expensive.
+
+#### D.1 Gradient-direction optimization
+
+Here is the crucial speedup: for a circle edge pixel, the **gradient direction points along the radius** — toward or away from the center. So if you know the gradient direction at `(x, y)` (from Sobel), the center `(x_c, y_c)` must lie along that gradient line. Instead of voting for all possible centers at all possible radii, vote only for the centers on the line through `(x, y)` in the gradient direction.
+
+This reduces the per-edge-pixel vote from a 2D surface to a 1D set (the gradient line parametrized by distance, i.e. radius). OpenCV's `HoughCircles` implementation uses this trick — it is why you must pass `HOUGH_GRADIENT` as the method.
+
+#### D.2 Two-stage accumulator
+
+OpenCV's implementation is further optimized: first accumulate in 2D `(x_c, y_c)` to find centers, then in 1D `r` at each detected center to find radii. This turns a 3D accumulator search into a 2D + 1D search, a much smaller problem.
+
+### E. Generalizations
+
+#### E.1 Probabilistic Hough Transform (`HoughLinesP`)
+
+Standard Hough is `O(#edge_pixels × #θ_bins)` per image, and it returns only `(ρ, θ)` — the lines, but no endpoints. The Probabilistic Hough Transform fixes both issues:
+
+- Process only a **random subset** of edge pixels (much faster).
+- Stop casting votes for a line once it has enough support.
+- Trace along the detected line to find the **actual endpoints** in the edge image.
+
+OpenCV's `HoughLinesP` returns `(x1, y1, x2, y2)` segments, which is usually what you want in practice.
+
+#### E.2 Generalized Hough Transform
+
+The same voting idea works for **any** parametric shape, not just lines and circles. For a general shape, build an **R-table** encoding the offset from each boundary point to a reference point on the shape. At detection time, each edge point votes for the possible reference-point locations. This handles arbitrary shape templates but at much higher memory cost, which is why it is rarely used today — deep-learning detectors have largely replaced it.
+
+### From Theory to the Functions Below
+
+- `cv2.HoughLines(edges, rho, theta, threshold)` — standard Hough line detection (§B, §C). `rho, theta` are the accumulator bin widths; `threshold` is the minimum vote count for a peak to be declared a line. Returns `(ρ, θ)` pairs.
+- `cv2.HoughLinesP(edges, rho, theta, threshold, minLineLength, maxLineGap)` — probabilistic Hough (§E.1). Returns line **segments** with endpoints, suitable for drawing or lane detection.
+- `cv2.HoughCircles(img, method, dp, minDist, param1, param2, minRadius, maxRadius)` — circle Hough with gradient optimization (§D). `dp` is the accumulator resolution ratio; `param1` is the upper Canny threshold for internal edge detection; `param2` is the accumulator threshold.
 
 ---
 

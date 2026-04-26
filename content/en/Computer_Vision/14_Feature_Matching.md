@@ -21,6 +21,8 @@ Feature matching is the process of finding and connecting identical feature poin
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — descriptor space as a metric space, the choice of L2 vs Hamming distance by descriptor type, Lowe's ratio test as a statistical filter, and RANSAC as a robust estimator for geometric correspondence.
+
 1. [Feature Matching Fundamentals](#1-feature-matching-fundamentals)
 2. [BFMatcher](#2-bfmatcher)
 3. [FLANN-based Matcher](#3-flann-based-matcher)
@@ -29,6 +31,139 @@ Feature matching is the process of finding and connecting identical feature poin
 6. [Homography and RANSAC](#6-homography-and-ransac)
 7. [Image Stitching Basics](#7-image-stitching-basics)
 8. [Practice Problems](#8-practice-problems)
+
+---
+
+## Theory & Principles
+
+Feature matching turns two sets of independent keypoints into a set of **correspondences** — pairs `(kp_i^A, kp_{j(i)}^B)` saying "this point in image A is the same physical point as that point in image B". This is the prerequisite for every geometric vision task: homography estimation, fundamental matrix estimation, 3D triangulation, image stitching, structure-from-motion, visual odometry, SLAM.
+
+The matching problem has two hard parts. The first is **which descriptor is closest** — a nearest-neighbor search in a potentially high-dimensional space, which naïvely costs `O(n_A · n_B)`. The second is **deciding which nearest neighbor is actually correct** — not every keypoint in A has a real match in B (occlusion, different scene content), and descriptors are noisy, so even a best match can be wrong.
+
+This section covers:
+
+- **(A) Descriptor space as a metric space** — what "distance" means for SIFT vs ORB, and why the choice of metric is determined by descriptor type.
+- **(B) Nearest-neighbor search** — brute-force vs approximate (FLANN), and the speed/quality trade-off.
+- **(C) Match filtering** — cross-check, Lowe's ratio test, symmetry; why you need these even with a perfect descriptor.
+- **(D) Geometric verification** — even after filtering, many matches are wrong. RANSAC recovers the true geometric model from a majority of incorrect data.
+- **(E) Homography and fundamental matrix** — the two geometric models most commonly used for verification, with the assumptions each requires.
+
+### A. Descriptor Space and Distance Metrics
+
+Each detected keypoint has a descriptor: a fixed-size vector representing its local appearance. Matching two keypoints means asking whether their descriptors are "close" in the descriptor space. Different descriptor families use different spaces:
+
+#### A.1 Float descriptors and L2 distance
+
+SIFT, SURF, and other histogram-of-gradients descriptors produce 128- or 64-dimensional `float32` vectors. The canonical distance is **Euclidean (L2)**:
+
+```
+d(a, b) = √ Σ_i (a_i - b_i)²
+```
+
+Also commonly used: squared-L2 (skip the sqrt for speed; same ordering), L1 (Manhattan distance, less sensitive to outlier dimensions).
+
+Why L2? SIFT descriptors are approximately Gaussian-distributed around the true location in descriptor space, and L2 is the maximum-likelihood distance under Gaussian noise. Empirically L2 works well even when assumptions are only loosely met.
+
+#### A.2 Binary descriptors and Hamming distance
+
+ORB, BRIEF, BRISK, AKAZE produce binary strings (typically 256 or 512 bits). Each bit compares a pair of pixels and stores which was brighter. The canonical distance is **Hamming distance**:
+
+```
+d(a, b) = popcount(a XOR b)   = number of differing bits
+```
+
+Computed by bitwise XOR then counting set bits (`__builtin_popcount` / `POPCNT` instruction). For 256-bit descriptors, Hamming distance ranges from 0 (identical) to 256 (maximally different); random pairs have expected distance 128.
+
+Hamming distance on binary descriptors is **roughly 100× faster** than L2 on float descriptors — the reason ORB is used in real-time systems where SIFT is too slow.
+
+The rule is: **match the distance metric to the descriptor type**. Using L2 on binary descriptors is wrong (they aren't vectors in a metric space); using Hamming on float descriptors doesn't even make sense.
+
+### B. Nearest-Neighbor Search: Brute-Force vs FLANN
+
+#### B.1 Brute-force (`BFMatcher`)
+
+For each descriptor in set A, compute distance to every descriptor in set B, return the one with minimum distance. `O(n_A · n_B · d)` where `d` is descriptor length. Exact, simple, and the baseline.
+
+Fine for hundreds of keypoints per image. Becomes expensive when each image has 5000+ keypoints and you're matching many image pairs.
+
+#### B.2 FLANN: Fast Library for Approximate Nearest Neighbors
+
+FLANN trades a small amount of accuracy for a large speedup using spatial indexes:
+
+- For **float descriptors**, uses a forest of randomized **KD-trees**. Each tree partitions descriptor space into hyperrectangles; searching a few trees in parallel produces approximately-nearest neighbors much faster than linear scan.
+- For **binary descriptors**, uses **Locality-Sensitive Hashing (LSH)**. Random hyperplane projections produce hash buckets where similar descriptors are likely to collide. Finding the nearest neighbor means checking only candidates that hash to the same bucket.
+
+FLANN's speedup grows with dataset size — typically 10-100× faster than brute-force for large descriptor sets, at the cost of missing a small fraction of true nearest neighbors. For matching-as-a-step-in-a-bigger-pipeline (e.g. stitching), this is almost always a win; every downstream stage has its own noise that dwarfs FLANN's approximation error.
+
+### C. Filtering: Deciding Which Matches to Trust
+
+Even with a perfect descriptor and exact nearest-neighbor search, not every returned match is correct. Two common filters dramatically reduce false matches:
+
+#### C.1 Cross-check
+
+A match `(i, j(i))` is accepted only if:
+
+- `j(i) = argmin_j  d(desc_A[i], desc_B[j])` (B's j is A's i's best match), **and**
+- `i = argmin_i  d(desc_A[i], desc_B[j(i)])` (A's i is B's j(i)'s best match).
+
+Implemented via `BFMatcher(..., crossCheck=True)`. Roughly halves the number of matches but with much higher precision. Incompatible with `knnMatch` (which returns k-nearest-neighbors — cross-check only works for single nearest match).
+
+#### C.2 Lowe's Ratio Test
+
+For each descriptor in A, find the **two** nearest neighbors in B: the best at distance `d₁` and second-best at `d₂`. Accept the match only if `d₁ / d₂ < τ` (typically `τ = 0.7–0.8`).
+
+The idea: if the best match is much closer than the second-best, it's likely correct; if both are similarly close, the descriptor is ambiguous (repeated pattern, or no true match exists) and we should reject. This is a **statistical test** — Lowe showed empirically that a ratio of 0.8 eliminates ~90% of false matches while losing only ~5% of correct ones.
+
+The ratio test is implemented via `knnMatch(k=2)` followed by the ratio check:
+
+```python
+good_matches = [m for m, n in knn_matches if m.distance < 0.75 * n.distance]
+```
+
+This is the standard filter for SIFT/ORB matching pipelines and is one of the most practically important results in classical computer vision.
+
+### D. Geometric Verification: RANSAC
+
+After descriptor-based filtering you still have typically 20–50% outliers — matches that pass descriptor filters but correspond to different physical points. Outliers are caused by repeated patterns, illumination changes, near-identical descriptors from different objects, or simply a point in A having no real match in B.
+
+A **geometric model** says: "all correct matches must be consistent with this transformation". For two images of a planar scene, the transformation is a **homography**; for two views of a rigid 3D scene, it is described by the **fundamental matrix**. Either way, an inlier is a match consistent with the model; an outlier is not.
+
+#### D.1 The RANSAC algorithm
+
+Fitting a model by least squares fails when 30% of the data is wrong — outliers drag the estimate away from truth. RANSAC (Random Sample Consensus, Fischler & Bolles, 1981) solves this by **assuming inliers form a majority consensus**:
+
+1. **Randomly sample** the minimum number of points needed to fit the model (4 for a homography, 7 or 8 for a fundamental matrix).
+2. **Fit the model** to just those points — minimal solver, no least squares.
+3. **Count inliers**: points from the full set whose error under this model is below a threshold.
+4. **Repeat** for many random samples.
+5. **Keep the model with the most inliers**. Optionally re-fit that model to all its inliers using least squares for final polish.
+
+The key insight: even with 50% outliers, randomly drawing 4 correct inliers has probability `(0.5)⁴ = 6.25%` per sample. Do 500 samples and you will almost certainly pick some clean sample, which will get a much larger inlier count than any outlier-contaminated sample.
+
+#### D.2 Why it works as an outlier filter
+
+After RANSAC you don't just get a model — you also get a set of **inlier matches** (those consistent with the chosen model). Discarding outliers this way is typically more effective than any descriptor-based filter, because it uses the whole image's geometric structure rather than local descriptor similarity.
+
+### E. Homography and the Fundamental Matrix
+
+OpenCV's `findHomography(pts1, pts2, method=cv2.RANSAC, threshold=5.0)` runs the RANSAC algorithm with the homography as the model (4 points per sample). Returns the 3×3 homography matrix and a mask indicating which matches were used as inliers.
+
+Two important points about when homography is the right model:
+
+- **Planar scene**. All matched 3D points lie on a single plane. Every pair of images of the plane (from any viewpoints) are related by a homography. Image stitching for flat things (posters, floors) and textbook examples use this.
+- **Pure rotation**. If the camera only rotates (no translation), any 3D scene is related between the two views by a homography. This is the basis of panorama stitching with a tripod-mounted camera.
+
+If the scene has **3D structure with camera translation**, homography is the wrong model — use `findFundamentalMat` instead. The fundamental matrix is 3×3 with rank 2, it relates views via epipolar geometry, and RANSAC finds it the same way (different minimal solver, different inlier test).
+
+### From Theory to the Functions Below
+
+- `cv2.BFMatcher(normType, crossCheck)` — brute-force nearest neighbor (§B.1). `normType = cv2.NORM_L2` for SIFT/SURF (§A.1); `cv2.NORM_HAMMING` for ORB/BRIEF (§A.2).
+- `cv2.FlannBasedMatcher(indexParams, searchParams)` — approximate nearest neighbor (§B.2). Use `KDTREE` index for float descriptors, `LSH` index for binary.
+- `matcher.match(desc1, desc2)` — single best match per query.
+- `matcher.knnMatch(desc1, desc2, k)` — top-k matches per query, required for Lowe's ratio test (§C.2).
+- `cv2.findHomography(src_pts, dst_pts, method, ransacReprojThreshold)` — RANSAC homography estimation (§D + §E).
+- `cv2.findFundamentalMat(pts1, pts2, method, ransacReprojThreshold)` — RANSAC fundamental matrix for non-planar scenes with translation.
+- `cv2.drawMatches(img1, kp1, img2, kp2, matches, ...)` — visualization of correspondences.
 
 ---
 

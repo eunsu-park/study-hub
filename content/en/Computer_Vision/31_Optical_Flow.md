@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the function reference, read [**Theory & Principles**](#theory--principles) — the brightness constancy constraint, why a single pixel's intensity change is underdetermined (the aperture problem), and the two classical families that resolve it: Lucas-Kanade (local least-squares) and Horn-Schunck (global smoothness regularization).
+
 1. [Optical Flow Fundamentals](#1-optical-flow-fundamentals)
 2. [Lucas-Kanade Method](#2-lucas-kanade-method)
 3. [Horn-Schunck Dense Flow](#3-horn-schunck-dense-flow)
@@ -26,6 +28,133 @@ After completing this lesson, you will be able to:
 6. [Flow Visualization and Evaluation](#6-flow-visualization-and-evaluation)
 7. [Applications](#7-applications)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+Optical flow is the **per-pixel velocity field** relating two consecutive video frames. For each pixel `(x, y)` at time `t`, optical flow assigns a 2D vector `(u, v)` meaning "this pixel content moved to `(x + u, y + v)` at time `t + 1`". It is the foundation of motion estimation, video tracking, frame interpolation, video compression, and action recognition.
+
+The problem looks simple but contains a subtlety that took decades to resolve cleanly: **a single pixel's intensity change is not enough information to determine its motion** (the *aperture problem*). Different assumptions for disambiguating the motion led to the two classical families — Lucas-Kanade and Horn-Schunck — and the same fundamental problem still shapes modern deep-learning methods.
+
+This section covers:
+
+- **(A) The brightness constancy constraint** — the single equation that defines optical flow, and why it is underdetermined.
+- **(B) The aperture problem** — the geometric reason a single equation has infinite solutions.
+- **(C) Lucas-Kanade** — assume flow is constant in a small window, stack multiple brightness equations, solve by least squares.
+- **(D) Horn-Schunck** — solve for the whole flow field at once using a global smoothness prior.
+- **(E) Coarse-to-fine pyramids** — the standard trick that extends these methods to handle large motions.
+- **(F) What modern learned methods change** — why deep networks outperform classical methods on benchmarks but the underlying constraints are still present.
+
+### A. The Brightness Constancy Constraint
+
+The fundamental assumption behind optical flow is that **a physical point's brightness does not change between consecutive frames**. If at time `t` a scene point projects to pixel `(x, y)` with intensity `I(x, y, t)`, and at time `t + dt` it has moved to `(x + dx, y + dy)`, then:
+
+```
+I(x + dx, y + dy, t + dt) = I(x, y, t)
+```
+
+A first-order Taylor expansion of the left side around `(x, y, t)`:
+
+```
+I(x, y, t) + (∂I/∂x)·dx + (∂I/∂y)·dy + (∂I/∂t)·dt  =  I(x, y, t)
+```
+
+Canceling `I(x, y, t)` and dividing by `dt`, with velocity `u = dx/dt`, `v = dy/dt`:
+
+```
+(∂I/∂x)·u + (∂I/∂y)·v + (∂I/∂t) = 0       ← brightness constancy constraint equation
+```
+
+Usually written as `I_x · u + I_y · v + I_t = 0` or `∇I · (u, v) + I_t = 0`. This is a **single linear equation in two unknowns** `u` and `v`. One equation per pixel, two unknowns per pixel, so without further information the system is underdetermined.
+
+The brightness constancy assumption is violated in practice by shadows, specular highlights, and changes in ambient lighting. More modern formulations use gradient constancy or learned feature constancy to mitigate, but the basic framework still applies.
+
+### B. The Aperture Problem
+
+Geometrically, the single constraint equation says: **the component of motion along the image gradient** is determined, but the component perpendicular to the gradient is not. From the equation:
+
+```
+component of (u, v) along ∇I  =  -I_t / |∇I|       (determined)
+component of (u, v) perpendicular to ∇I           (undetermined)
+```
+
+This is the **aperture problem**: looking through a small aperture at a moving edge, you can see only how the edge moves *perpendicular to itself*, not parallel. A horizontal edge sliding horizontally looks identical to one that isn't moving at all.
+
+Any useful optical flow algorithm must add extra information to resolve the perpendicular component. The two classical solutions are two different choices of what to add.
+
+### C. Lucas-Kanade: Local Constancy
+
+**Assumption**: pixels in a small window all move the same way. Under this assumption, every pixel in the window contributes one brightness-constancy equation with the *same* `(u, v)`:
+
+```
+For pixel i in window W:
+    I_x(i) · u + I_y(i) · v = -I_t(i)
+```
+
+Stacking all `N` equations from an `N`-pixel window:
+
+```
+⎡ I_x(1)  I_y(1) ⎤ ⎡ u ⎤     ⎡ -I_t(1) ⎤
+⎢ I_x(2)  I_y(2) ⎥ ⎢   ⎥  =  ⎢ -I_t(2) ⎥
+⎢   ...    ...   ⎥ ⎣ v ⎦     ⎢   ...   ⎥
+⎣ I_x(N)  I_y(N) ⎦           ⎣ -I_t(N) ⎦
+
+       A            (u,v)         b
+```
+
+This is an overdetermined linear system. The least-squares solution is `(u, v) = (AᵀA)⁻¹ · Aᵀ · b`. Expanding:
+
+```
+⎡ u ⎤     ⎡ Σ I_x²    Σ I_x·I_y ⎤⁻¹  ⎡ -Σ I_x·I_t ⎤
+⎣ v ⎦  =  ⎣ Σ I_x·I_y  Σ I_y²   ⎦    ⎣ -Σ I_y·I_t ⎦
+```
+
+The matrix on the left is **exactly the structure tensor** from §13.B. Lucas-Kanade's local system is well-conditioned (invertible) exactly when the structure tensor has two large eigenvalues — i.e. at **corners**. At edges one eigenvalue is small and the solution becomes unstable along the edge direction (the aperture problem persists locally). In flat regions both eigenvalues are small and no flow can be recovered.
+
+This explains why Lucas-Kanade is typically applied only to sparse **keypoints** (corners detected by Harris/Shi-Tomasi): it is numerically well-conditioned there, and it would fail elsewhere anyway.
+
+### D. Horn-Schunck: Global Smoothness
+
+**Assumption**: the flow field is globally smooth. Instead of assuming constant flow in each window, Horn-Schunck adds a **smoothness regularization** term to the objective function:
+
+```
+E(u, v) = ∫∫ [ (I_x u + I_y v + I_t)² + α²·( |∇u|² + |∇v|² ) ] dx dy
+          └───────── data term ─────────┘  └── smoothness ──┘
+```
+
+The first term penalizes violations of brightness constancy (from §A); the second penalizes non-smooth flow fields. The weight `α` is a hyperparameter: large `α` forces very smooth flow (good for gentle motions); small `α` allows sharper changes (better at motion boundaries but more noise).
+
+Minimizing `E` gives a coupled system of PDEs; the standard solver is Gauss-Seidel iteration over the discretized image, each iteration updating `(u, v)` at every pixel based on its neighbors. The result is a **dense flow field** — every pixel gets a flow estimate, unlike Lucas-Kanade's sparse corners.
+
+Horn-Schunck produces dense output but over-smooths across motion discontinuities (two adjacent pixels moving differently get averaged toward the middle). Modern variational methods use robust non-quadratic penalties and total-variation regularization to handle discontinuities better.
+
+### E. Coarse-to-Fine Pyramids: Handling Large Motion
+
+The Taylor expansion in §A assumes `(dx, dy)` is small — on the order of one pixel. For motions larger than that, the first-order approximation is invalid, and both Lucas-Kanade and Horn-Schunck fail.
+
+**Fix**: build a Gaussian pyramid of both frames, solve optical flow at the coarsest (most-reduced) level where motion is small, then **propagate** the result to the next finer level (scaling the flow by 2, warping the second frame by this estimate so residual motion becomes small again), and refine. Repeat down to full resolution.
+
+This is why OpenCV's Lucas-Kanade variant is `calcOpticalFlowPyrLK` — the `Pyr` is the pyramid trick — and it is essential for all but the smallest motions.
+
+### F. What Modern Learned Methods Change
+
+Deep learning optical flow (FlowNet, PWC-Net, RAFT) replaces the hand-crafted data and smoothness terms with learned representations, but the underlying structure of the problem is the same:
+
+- **Data term**: learned feature similarity between warped patches (robust to brightness changes, shadows, etc.) instead of raw intensity difference.
+- **Smoothness prior**: implicit in the convolutional architecture (spatial smoothness is a strong inductive bias of CNNs) and in the refinement modules.
+- **Pyramid**: explicit in PWC-Net (pyramid + warping + cost volume), implicit in RAFT (GRU-based iterative refinement).
+- **Aperture problem**: resolved the same way as classical methods — by aggregating information over a neighborhood, just now learned instead of fixed.
+
+The benchmark gap between RAFT and classical variational methods is large, but on domains without training data (scientific imagery, novel sensors) the classical Lucas-Kanade or Horn-Schunck with modern regularizers is still competitive.
+
+### From Theory to the Functions Below
+
+- `cv2.calcOpticalFlowPyrLK(prev, next, prevPts, ...)` — pyramidal Lucas-Kanade (§C + §E). Sparse — you give it points to track (typically from `goodFeaturesToTrack`).
+- `cv2.calcOpticalFlowFarneback(prev, next, ...)` — Farnebäck's dense method (a polynomial-expansion variant in the Horn-Schunck family, §D). Slower than LK but provides flow at every pixel.
+- `cv2.DISOpticalFlow_create(...).calc(prev, next, ...)` — Dense Inverse Search, a newer fast dense method, typically ~5× faster than Farnebäck at similar quality.
+- `cv2.optflow.calcOpticalFlowDenseRLOF` (in `opencv_contrib`) — Robust Local Optical Flow, modern variational method.
+- For RAFT / learned models: use the PyTorch reference implementation or `cv2.dnn` with an exported ONNX model.
 
 ---
 

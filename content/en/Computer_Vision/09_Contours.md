@@ -21,6 +21,8 @@ A contour is a curve of continuous points having the same color or brightness, r
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — how a contour is recovered from a binary image by boundary tracing, what the retrieval modes mean as tree structures, and why the Douglas-Peucker algorithm is the standard way to simplify a contour.
+
 1. [Contour Basics](#1-contour-basics)
 2. [findContours() Function](#2-findcontours-function)
 3. [Contour Hierarchy](#3-contour-hierarchy)
@@ -28,6 +30,107 @@ A contour is a curve of continuous points having the same color or brightness, r
 5. [Calculating Contour Properties](#5-calculating-contour-properties)
 6. [Object Counting and Separation](#6-object-counting-and-separation)
 7. [Exercises](#7-exercises)
+
+---
+
+## Theory & Principles
+
+A contour is the **ordered list of boundary pixels** enclosing a connected foreground region in a binary image. This is a compact, structured representation: the whole region can be reconstructed from its boundary, many shape properties (area, perimeter, moments) can be computed directly on the boundary, and matching or classification can be done on the boundary description alone.
+
+This section covers:
+
+- **(A) What a contour actually is** — the mathematical definition and the boundary-tracing algorithm that finds it.
+- **(B) Retrieval modes as tree structures** — how `RETR_EXTERNAL`, `RETR_LIST`, `RETR_CCOMP`, `RETR_TREE` differ in what hierarchical relationships they preserve.
+- **(C) Chain codes** — the compact internal representation and what `CHAIN_APPROX_SIMPLE` actually drops.
+- **(D) Douglas-Peucker simplification** — how `approxPolyDP` collapses a noisy contour to a few-vertex polygon using recursive point selection.
+- **(E) Moments** — the integral statistics that turn a contour into a shape fingerprint.
+
+### A. What Is a Contour, Formally
+
+Given a binary image, a **connected component** is a maximal set of foreground pixels joined by 4- or 8-connectivity. Every such component is bounded by a closed curve — its **boundary** — which can be represented as an ordered sequence of pixel positions `(x₀, y₀), (x₁, y₁), ..., (x_{n-1}, y_{n-1})` such that consecutive pixels are 8-neighbors.
+
+The classical algorithm for extracting these boundaries is Suzuki-Abe (1985), which is exactly what `cv2.findContours` implements:
+
+1. Scan the image left-to-right, top-to-bottom.
+2. At each transition from background to foreground, mark the boundary start and trace around the component, recording each boundary pixel in order.
+3. Distinguish **outer boundaries** (foreground surrounded by background) from **hole boundaries** (background surrounded by foreground).
+4. Build a tree recording which contour is nested inside which.
+
+The output is one ordered-point-list per contour plus a **hierarchy** describing nesting.
+
+### B. Retrieval Modes as Tree Structures
+
+The four retrieval modes differ in which parts of the hierarchy they preserve:
+
+```
+ RETR_EXTERNAL    Only outermost contours. All holes and nested objects ignored.
+ RETR_LIST        Every contour, no hierarchy. Flat list.
+ RETR_CCOMP       Two-level hierarchy: outer contours + their direct holes.
+                  (objects inside holes are listed as top-level, not nested.)
+ RETR_TREE        Full N-level nesting. Each contour knows parent, child, and siblings.
+```
+
+The hierarchy is returned as an `(N, 4)` integer array where each row has `[next, prev, first_child, parent]` indices (or `-1` if absent). Use `RETR_TREE` for complex documents or fractal-like images; use `RETR_EXTERNAL` when you only care about the outermost objects and want to skip the overhead of tracking nesting.
+
+### C. Chain Codes and CHAIN_APPROX_SIMPLE
+
+Internally, `findContours` traces the boundary by following 8-neighbor directions. This sequence of direction codes (0-7) is the **Freeman chain code** — a compact representation originally used for storage but now mostly internal.
+
+The **approximation mode** controls how the returned contour is compressed:
+
+- **`CHAIN_APPROX_NONE`** — store every boundary pixel. A perfectly horizontal 100-pixel edge stores 100 points.
+- **`CHAIN_APPROX_SIMPLE`** — collapse consecutive colinear points. The same 100-pixel horizontal edge stores 2 points (endpoints). Lossless for straight lines; the resulting polygon has the same edges but far fewer vertices.
+- **`CHAIN_APPROX_TC89_L1`**, **`CHAIN_APPROX_TC89_KCOS`** — Teh-Chin algorithms that keep only dominant points (corners), more aggressive than SIMPLE.
+
+For most applications `CHAIN_APPROX_SIMPLE` is the right default: it is lossless for axis-aligned content and reduces memory by 10-100× for typical shapes.
+
+### D. Douglas-Peucker Simplification
+
+`cv2.approxPolyDP(contour, epsilon, closed)` simplifies a contour to a polygon with fewer vertices, controlled by a tolerance `epsilon` in pixels. The algorithm is recursive:
+
+1. Start with the contour's two endpoints as the current approximation.
+2. Find the contour point farthest from the straight line connecting them.
+3. If the farthest distance exceeds `epsilon`, add that point to the approximation and recurse on the two resulting sub-segments. Otherwise stop — the segment is "straight enough".
+
+The output is a polygon whose vertices are a strict subset of the original contour, with every dropped point lying within `epsilon` of the polygon. Typical use: set `epsilon = 0.02 · arcLength(contour, True)` (2% of perimeter) and check whether the result has exactly 4 vertices to detect a quadrilateral document (see lesson 04.5).
+
+Douglas-Peucker is the standard curve simplification algorithm — the same one used in GIS for map generalization and in GPS trace simplification.
+
+### E. Moments: Shape Fingerprints
+
+A contour's geometric moments compress its shape into a small set of numbers suitable for matching. The **raw moment** of order `(p, q)` of the region enclosed by the contour is:
+
+```
+M_{pq} = ΣΣ  x^p · y^q     over all pixels (x, y) inside the contour
+```
+
+Key derived quantities:
+
+- **Area** = `M_{00}` — the count of interior pixels.
+- **Centroid** = `(M_{10}/M_{00}, M_{01}/M_{00})` — the center of mass of the region.
+- **Central moments** `μ_{pq}` = raw moments computed relative to the centroid. Translation-invariant.
+- **Normalized central moments** `η_{pq}` = `μ_{pq}` scaled by a power of area. Translation- and scale-invariant.
+- **Hu moments** (7 scalars `h₁...h₇`) = specific combinations of `η_{pq}` that are additionally **rotation-invariant** and (with small modifications) reflection-invariant.
+
+Hu moments are the classical way to compare shapes regardless of position, size, or orientation — though modern applications typically use learned descriptors instead. Lesson 10 goes deeper into shape analysis using moments.
+
+Related derived quantities for a contour:
+
+- **Perimeter**: `cv2.arcLength(contour, closed)` — sum of distances between consecutive vertices.
+- **Bounding box** (axis-aligned): `cv2.boundingRect(contour)`, the smallest rectangle aligned with axes containing the contour.
+- **Minimum-area rotated rectangle**: `cv2.minAreaRect(contour)`, allowing rotation.
+- **Minimum enclosing circle**: `cv2.minEnclosingCircle(contour)`.
+- **Convex hull**: `cv2.convexHull(contour)`, the smallest convex polygon enclosing the contour. Useful for checking convexity defects (`cv2.convexityDefects`), which can identify finger gaps in hand gestures.
+
+### From Theory to the Functions Below
+
+- `cv2.findContours(binary, mode, method)` — boundary extraction (§A), returning `(contours, hierarchy)`. `mode` selects retrieval (§B); `method` selects chain-code compression (§C).
+- `cv2.drawContours(img, contours, idx, color, thickness)` — visualization.
+- `cv2.approxPolyDP(contour, epsilon, closed)` — Douglas-Peucker simplification (§D).
+- `cv2.moments(contour)` — raw, central, normalized, and Hu moments of §E in a single dict.
+- `cv2.contourArea`, `cv2.arcLength` — moment-derived quantities computed efficiently.
+- `cv2.boundingRect`, `cv2.minAreaRect`, `cv2.minEnclosingCircle`, `cv2.fitEllipse` — bounding geometries.
+- `cv2.convexHull`, `cv2.convexityDefects` — convexity analysis.
 
 ---
 

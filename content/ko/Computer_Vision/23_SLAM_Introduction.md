@@ -25,6 +25,8 @@ SLAM (Simultaneous Localization and Mapping)은 로봇이나 자율주행 시스
 
 ## 목차
 
+OpenCV 함수 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. SLAM의 닭과 달걀 구조, pose-graph / factor-graph 공식화, drift 보정으로서의 loop closure, 그리고 모든 현대 시스템이 공유하는 tracking-mapping-loop-closure 아키텍처를 다룹니다.
+
 1. [SLAM 개요](#1-slam-개요)
 2. [Visual Odometry](#2-visual-odometry)
 3. [ORB-SLAM](#3-orb-slam)
@@ -32,6 +34,135 @@ SLAM (Simultaneous Localization and Mapping)은 로봇이나 자율주행 시스
 5. [Loop Closure](#5-loop-closure)
 6. [SLAM 구현 실습](#6-slam-구현-실습)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+SLAM(Simultaneous Localization and Mapping)은 움직이는 센서가 **자신의 위치와 주변 세계의 모습 둘 다** 사전 지도 없이 동시에 알아내는 문제. 이는 고전적인 닭과 달걀 문제: 위치 파악(localize)하려면 지도가 필요하고, 지도 만들려면 위치를 알아야 함. SLAM은 둘을 동시에 해결, 보통 반복적 추정을 통해.
+
+이 섹션은 다음을 다룹니다:
+
+- **(A) SLAM 문제** — 위치 추정과 매핑이 결합된 이유와 그 결합이 어떻게 해결되는가.
+- **(B) Visual odometry** — 핵심 프레임 간 동작 추정과 drift하는 이유.
+- **(C) 지도 표현** — 희소 점, 밀집 voxel, pose graph, 그리고 각각이 유용한 때.
+- **(D) Loop closure** — 이전에 본 장소를 재방문하는 것이 누적 drift를 보정하는 방법.
+- **(E) Pose graph와 factor graph 최적화** — 현대 SLAM 뒤의 통합 최적화 프레임워크.
+- **(F) ORB-SLAM, VINS-Mono 등에 공통인 아키텍처** — 세 병렬 스레드: tracking, mapping, loop closure.
+
+### A. SLAM 문제: 위치 추정 + 매핑
+
+형식적으로, 센서 판독 수열 `z_1, z_2, ..., z_t`(이미지, LiDAR 스캔, IMU 측정)가 주어지면 추정:
+
+- 시간에 걸친 카메라 포즈의 **궤적** `x_1, x_2, ..., x_t`.
+- 세계의 랜드마크 위치의 **지도** `m`.
+
+둘 다 미지. 의존성: `x_t` 추정은 `m`의 랜드마크 위치를 알아야 하지만, 그 랜드마크 추정은 관찰된 포즈를 알아야 함.
+
+해결은 **반복적**: 카메라 동작의 초기 추측(visual odometry)을 하고, 그것으로 랜드마크 위치 삼각측량, 그 랜드마크로 포즈 추정 개선, 반복. 궤적과 지도가 함께 개선 — SLAM의 "simultaneous" 부분.
+
+### B. Visual Odometry: 프레임 간 동작
+
+가장 단순한 SLAM 형태는 시각 데이터만 사용. Visual odometry(VO)는 연속 프레임 간 카메라 동작 추정:
+
+1. 프레임 `t`와 프레임 `t+1`에서 특징 검출(§13).
+2. 프레임 간 특징 매칭(§14).
+3. Essential matrix와 RANSAC을 써서 매칭된 점에서 상대 변환 `[R_{t+1→t}, t_{t+1→t}]` 계산(§21.B).
+4. 누적 궤적과 결합: `x_{t+1} = x_t · [R, t]`.
+
+#### B.1 Drift하는 이유
+
+각 프레임 간 추정은 작은 오차를 가짐. 많은 프레임에 걸쳐 이 오차들이 누적 — 닫힌 궤적 루프가 실제로 같은 위치였음에도 다른 apparent 위치에서 시작하고 끝날 수 있음. 이 **drift**는 순수 visual odometry의 근본 실패 모드이며, loop closure가 보정하도록 설계된 것.
+
+Drift 증가는 무작위 오차에 대해 대략 `√(경로 길이)`에 비례하거나, 체계적 편향에 대해 선형. 100미터 실내 이동에서 VO drift는 보통 1-5미터 수준 — drift 보정 없이는 대규모 지도 응용을 실행할 수 없는 수준.
+
+### C. 지도 표현
+
+#### C.1 희소 랜드마크 지도
+
+검출된 특징점(코너, 에지)의 3D 위치만 저장. 각 랜드마크가 이후 재인식을 위한 연관 외관 디스크립터를 가짐. 컴팩트 — 중간 크기 방에 수천 개 랜드마크. ORB-SLAM과 대부분의 visual SLAM 시스템이 사용.
+
+#### C.2 밀집 점유 격자
+
+3D 공간을 voxel화해 각 voxel을 점유/비어있음/미지로 표시. LiDAR SLAM과 OctoMap이 사용. 경로 계획에 더 좋음(로봇이 비어있는 공간에 신경 씀) 하지만 저장에 훨씬 조밀.
+
+#### C.3 Pose graph
+
+카메라 포즈만 저장, 포즈 간 상대 포즈 제약을 나타내는 에지. 명시적 랜드마크 지도 없음 — 기저 3D 구조는 관찰에 암묵적. 최소 메모리, 대규모 매핑에 좋음.
+
+#### C.4 Factor graph (SLAM++ / iSAM / GTSAM)
+
+Pose graph를 일반화: 노드가 포즈, 랜드마크, 또는 다른 상태 변수; 에지(factor)가 어떠한 확률적 제약(odometry, 특징 관찰, loop closure, IMU 통합)도 인코딩 가능. 비선형 최소제곱으로 효율적으로 풀이. 이것이 대부분 SLAM 시스템의 기저인 현대 공식화.
+
+### D. Loop Closure: 재방문 장소 인식
+
+카메라가 이전에 방문한 위치로 돌아오면, 누적 drift를 검출하고 보정해야 함. Loop closure는 두 단계:
+
+#### D.1 검출
+
+현재 프레임이 훨씬 이전 프레임과 비슷해 보이는 것을 인식. 고전적 접근: **bag-of-visual-words**(BoVW) — 각 이미지를 양자화된 특징 디스크립터의 히스토그램으로 기술, cosine 유사도 또는 TF-IDF 가중으로 비교. `DBoW2`가 표준 구현이며 ORB-SLAM이 쓰는 것.
+
+현대 접근: 장소 인식을 위해 명시적으로 훈련된 **학습된 이미지 임베딩**(NetVLAD 등). 외관 변화(다른 조명, 계절) 처리에 더 좋지만 더 무거움.
+
+#### D.2 검증과 보정
+
+검출 후 기하학적으로 검증(매칭된 특징이 일관된 변환을 생성하는가?)해 거짓 양성을 배제, 그 다음 pose graph에 loop closure 제약 추가: "현재 포즈가 이전 포즈와 같음, 작은 보정까지". Pose graph 최적화를 돌려 전체 궤적에 누적 drift를 재분배.
+
+시각 효과: 열린 "나선" 궤적이 적절히 닫힌 루프로 스냅, 지도가 전역적으로 일관됨.
+
+### E. Pose Graph와 Factor Graph 최적화
+
+SLAM의 수학적 핵심은 비선형 최적화:
+
+```
+X* = argmin_X  Σ_i  ‖ residual_i(X) ‖²_Σ⁻¹
+```
+
+여기서 `X`는 모든 카메라 포즈(선택적으로 랜드마크), `residual_i`는 측정 `i`에 대한 관찰과 예측 사이의 불일치. 각 residual은 측정 불확실성을 반영하는 공분산 `Σ`를 가짐.
+
+Residual factor 유형:
+
+- **Odometry factor**: 연속 포즈를 visual odometry의 상대 동작 추정으로 연결.
+- **Landmark factor**: 포즈에서 랜드마크가 관찰될 때마다, 투영과 일관되도록 제약.
+- **Loop closure factor**: 연속이 아닌 두 포즈가 가깝도록 제약.
+- **Prior factor**: 첫 포즈를 앵커(그렇지 않으면 전체 궤적이 자유롭게 이동/회전).
+
+최적화는 비선형 시스템에서 Gauss-Newton 또는 Levenberg-Marquardt로 풀이. 현대 라이브러리(g2o, GTSAM, Ceres)가 희소성을 활용 — 대부분의 residual이 소수 변수만 연결 — 수백만 변수를 가진 그래프를 초 단위로 해결.
+
+### F. 공통 아키텍처: 세 병렬 스레드
+
+실시간 SLAM 시스템(ORB-SLAM, VINS-Mono, DSO)은 세 스레드 구조를 공유:
+
+```
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  Tracking        │  │  Mapping         │  │  Loop Closure    │
+│  스레드           │  │  스레드           │  │  스레드           │
+│                  │  │                  │  │                  │
+│  • 모든 프레임     │  │  • 모든 keyframe │  │  • 백그라운드    │
+│  • VO (빠름)      │  │  • 국소 BA       │  │  • BoW 검출       │
+│  • ~30 fps        │  │  • ~5 fps        │  │  • 검출 시         │
+│                  │  │                  │  │    전역 BA         │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
+         │                       ↑                       │
+         │                       │                       │
+         └─────── keyframe ──────┘                       │
+                                                         │
+                                           보정 ←──────────┘
+```
+
+- **Tracking**은 모든 프레임에서 실행, 카메라 속도를 따라잡을 만큼 빠름. 국소 지도를 쓰고 이전 프레임에서 카메라 포즈 예측. Tracking 실패 시 relocalization 실행.
+- **Mapping**은 선택된 각 keyframe(마지막과 현저히 다른)에서 실행, 최근 keyframe 창에 국소 bundle adjustment 수행, 지도 성장.
+- **Loop closure**는 백그라운드에서 실행; 루프가 검출되면 drift를 재분배하기 위해 전역 bundle adjustment 수행.
+
+이 구조가 SLAM을 정확(국소 + 전역 최적화)하고 실시간(동시 실행)으로 유지.
+
+### 이론에서 아래 라이브러리들로
+
+- **ORB-SLAM3**: 전체 visual SLAM 시스템; 입력은 카메라 스트림, 출력은 궤적 + 희소 지도.
+- **RTAB-Map**: ROS 통합의 인기 있는 SLAM 패키지, RGBD와 LiDAR 지원.
+- **OpenVSLAM / Stella VSLAM**: ORB-SLAM3의 오픈소스 대안.
+- **GTSAM, g2o, Ceres**: 커스텀 SLAM 시스템 구축에 쓰는 factor graph 최적화 라이브러리.
+- OpenCV 본체에서: `cv2.findEssentialMat`, `cv2.recoverPose`, `cv2.triangulatePoints`가 visual odometry의 빌딩 블록 형성(§B). 전체 SLAM은 OpenCV 너머의 전용 라이브러리 필요.
 
 ---
 

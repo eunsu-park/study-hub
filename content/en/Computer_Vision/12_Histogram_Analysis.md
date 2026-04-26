@@ -21,6 +21,8 @@ A histogram is a graph representing the brightness distribution of an image. It 
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the histogram as an estimate of the intensity probability distribution, the CDF-based derivation of histogram equalization, and why CLAHE fixes the local-contrast failure of global equalization.
+
 1. [Histogram Basics](#1-histogram-basics)
 2. [Histogram Calculation](#2-histogram-calculation)
 3. [Histogram Equalization](#3-histogram-equalization)
@@ -28,6 +30,157 @@ A histogram is a graph representing the brightness distribution of an image. It 
 5. [Histogram Comparison](#5-histogram-comparison)
 6. [Backprojection](#6-backprojection)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+An image histogram is a discrete estimate of the **probability distribution** of intensity in the image. Every useful thing you do with histograms — analysis, equalization, comparison, backprojection — is an operation on that distribution. Understanding the probabilistic foundation lets you pick the right tool for each task and predict what each algorithm will do to your specific image.
+
+This section covers:
+
+- **(A) The histogram as a probability distribution** — definition, normalization, what is lost relative to the image.
+- **(B) Histogram equalization** — the derivation from the CDF, why it maps any distribution to uniform, and its failure modes.
+- **(C) CLAHE** — contrast limited adaptive histogram equalization, and what "adaptive" and "contrast limited" actually mean.
+- **(D) Histogram comparison** — the common distance metrics and what each one measures.
+- **(E) Backprojection** — turning a histogram into a likelihood map for object localization.
+
+### A. The Histogram as a Probability Distribution
+
+For an image `I` with `N` pixels and intensity range `[0, L-1]` (typically `L = 256`), the raw histogram `h(r)` counts pixels at each intensity:
+
+```
+h(r) = |{ (x, y) : I(x, y) = r }|       for r = 0, 1, ..., L-1
+```
+
+The **normalized histogram** `p(r) = h(r) / N` is a proper probability mass function:
+
+```
+Σ_r  p(r) = 1
+```
+
+and can be interpreted as: "the probability that a randomly chosen pixel has intensity `r`". The histogram discards all spatial information — any spatial rearrangement of the pixels produces the same histogram — so it captures only the image's tonal character, not its content. This is both its strength (invariance to spatial shifts) and its limitation (cannot distinguish two different scenes with similar tone distributions).
+
+#### A.1 What histogram shape tells you
+
+Reading a histogram diagnoses exposure issues at a glance:
+
+- Most mass pushed to the left → **underexposed** (too dark).
+- Most mass pushed to the right → **overexposed** (too bright).
+- Mass clipped against 0 or 255 → **hard-clipped**, detail irrecoverably lost.
+- Wide, well-spread mass using the full `[0, L-1]` range → **good dynamic range**.
+- Tight, narrow mass → **low contrast**, the image uses only a fraction of the tonal range.
+
+Every histogram enhancement algorithm targets one of these symptoms.
+
+### B. Histogram Equalization
+
+**Goal**: redistribute pixel intensities so the output histogram is (approximately) **uniform** — every intensity level is used equally often. A uniform distribution is the maximum-entropy distribution on a bounded range, which corresponds to "maximum information per pixel" and, in practice, maximum contrast.
+
+#### B.1 The derivation
+
+Let `r` be the original intensity (random variable with pdf `p_r(r)`) and `s` the equalized intensity. We want `s = T(r)` for some transform `T` such that `p_s(s)` is uniform on `[0, L-1]`. A theorem from probability says that if `T(r)` equals the **cumulative distribution function** of `r` (scaled to `[0, L-1]`), then `T(r)` has a uniform distribution:
+
+```
+s = T(r) = (L - 1) · ∫₀ʳ p_r(w) dw
+```
+
+For the discrete case with histogram `h(r)`:
+
+```
+s_k = round( (L - 1) · (1/N) · Σᵢ₌₀ᵏ  h(i) )  =  round( (L - 1) · CDF(k) )
+```
+
+So the equalization procedure is just three steps:
+
+1. Compute the histogram.
+2. Compute its CDF (cumulative sum, then scale so `CDF(L-1) = 1`).
+3. Use `(L - 1) · CDF` as a lookup table to remap each pixel.
+
+#### B.2 Why it works and when it fails
+
+Because the CDF is non-decreasing, the transform is order-preserving — pixel `A` brighter than pixel `B` stays brighter after equalization. Because the CDF stretches regions of high density and compresses regions of low density, densely populated tonal ranges get spread out while sparse ranges get merged. This enhances contrast in the parts of the histogram with the most pixels.
+
+**Failure modes**:
+
+- **Amplified noise.** Flat regions contain low-amplitude sensor noise; equalization can stretch that noise into visible patterns.
+- **Global-only transform.** A single lookup table is applied to every pixel, so local contrast issues get ignored. If part of your image is overexposed and another is underexposed, equalization will not fix them both — it has to optimize an average.
+- **Destroyed absolute intensities.** For tasks where specific intensity values matter (colorimetry, measurement), equalization destroys that information.
+
+### C. CLAHE: Contrast Limited Adaptive Histogram Equalization
+
+CLAHE addresses both of global equalization's main failures:
+
+#### C.1 "Adaptive" — local histograms
+
+Divide the image into a grid of **tiles** (typically 8×8). Compute a separate histogram and equalization LUT for each tile. For each output pixel, use the LUT of its tile — **but bilinear-interpolate between the four nearest tile LUTs** to avoid visible boundaries at tile edges. This means local contrast is optimized separately in each region: a dark corner gets its own stretch, a bright center gets its own.
+
+#### C.2 "Contrast Limited" — clipping the histogram
+
+Before computing the CDF of each tile's histogram, **clip** any bin that exceeds a threshold (the `clipLimit` parameter), and redistribute the clipped excess equally across all bins. This matters because in near-flat regions, the histogram has a tall spike that would produce a very steep local transform — amplifying noise dramatically. Clipping the spike keeps the CDF slope bounded, which bounds noise amplification.
+
+In equation form, if the original histogram is `h(r)` with total `N_tile`, the clipped version is
+
+```
+h_clipped(r) = min(h(r), clipLimit · N_tile / L)
+excess       = Σ max(0, h(r) - clipLimit · N_tile / L)
+h_final(r)   = h_clipped(r) + excess / L
+```
+
+Then CDF and LUT are computed from `h_final`. Typical `clipLimit = 2.0–4.0`.
+
+Result: strong local contrast enhancement without the characteristic noise-amplification artifact of plain equalization. CLAHE is the default choice for preprocessing medical images, license plates, and any content where local detail matters more than global tonality.
+
+### D. Histogram Comparison
+
+Once you have two normalized histograms `p` and `q`, you can compare images by computing a distance or similarity between them. Different metrics answer different questions:
+
+- **Correlation** (`CV_COMP_CORREL`). Pearson correlation coefficient between the two histograms. Range `[-1, 1]`, 1 = perfect match, 0 = uncorrelated. Measures shape similarity invariant to scaling.
+
+  ```
+  d(p, q) = Σ (p(i) - p̄)(q(i) - q̄)  /  √(Σ(p(i) - p̄)² · Σ(q(i) - q̄)²)
+  ```
+
+- **Chi-square** (`CV_COMP_CHISQR`). Asymmetric distance — penalizes bins where the reference `p` has mass but the test `q` does not. Smaller = more similar. Useful when `p` is a template.
+
+  ```
+  d(p, q) = Σ (p(i) - q(i))² / p(i)
+  ```
+
+- **Intersection** (`CV_COMP_INTERSECT`). Minimum shared mass per bin. Larger = more similar.
+
+  ```
+  d(p, q) = Σ min(p(i), q(i))
+  ```
+
+- **Bhattacharyya distance** (`CV_COMP_BHATTACHARYYA`). Measures overlap of two probability distributions; 0 = identical, 1 = disjoint.
+
+  ```
+  d(p, q) = √(1 - (1/√(p̄ · q̄ · N²)) · Σ √(p(i) · q(i)))
+  ```
+
+Pick correlation for general-purpose shape matching, chi-square when comparing against a known template, intersection when you need fast approximate matching, and Bhattacharyya when you need a principled probabilistic distance.
+
+### E. Backprojection: Histogram as Likelihood Map
+
+Forward: an image produces a histogram. **Backprojection reverses this**: given a reference histogram (e.g. the color histogram of an object you want to find), produce a per-pixel map of how likely each pixel's value is under that distribution.
+
+The procedure:
+
+1. Build a reference histogram `p(r)` from a sample region containing the target (e.g. an object's skin color).
+2. For each pixel of the query image, look up `p(I(x, y))` — this value is the "probability this pixel is from the target distribution".
+3. The output is a probability map, usually then thresholded or passed to mean-shift tracking to localize the object.
+
+This is the core of color-based object tracking (e.g. the CAMShift tracker). Typically done in HSV color space using the 2D `(H, S)` histogram, which factors out lighting (§03.C). The result: a heatmap where bright regions = likely target locations.
+
+### From Theory to the Functions Below
+
+- `cv2.calcHist(images, channels, mask, histSize, ranges)` — compute `h(r)` for an image or ROI (§A). `mask` lets you restrict computation to a subregion.
+- `cv2.equalizeHist(img)` — apply §B, grayscale images only. For color, typically apply to the `V` or `Y` channel after converting to HSV or YCrCb.
+- `cv2.createCLAHE(clipLimit, tileGridSize).apply(img)` — apply §C. The two parameters correspond directly to §C.1 and §C.2.
+- `cv2.compareHist(hist1, hist2, method)` — histogram comparison (§D). `method` flag picks which metric.
+- `cv2.calcBackProject(images, channels, hist, ranges, scale)` — backprojection (§E), produces the per-pixel likelihood map.
+- `cv2.normalize(hist, ..., norm_type=cv2.NORM_MINMAX)` — common preprocessing: scale a histogram to `[0, 1]` or another range before comparison.
 
 ---
 

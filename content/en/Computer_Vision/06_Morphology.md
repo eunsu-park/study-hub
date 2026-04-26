@@ -20,6 +20,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the set-theoretic definitions of erosion and dilation, why "opening = erode then dilate" removes small objects, and the duality that makes these operations a complete algebra.
+
 1. [Morphological Operations Overview](#1-morphological-operations-overview)
 2. [Structuring Element - getStructuringElement()](#2-structuring-element---getstructuringelement)
 3. [Erosion - erode()](#3-erosion---erode)
@@ -30,6 +32,168 @@ After completing this lesson, you will be able to:
 8. [Exercises](#8-exercises)
 9. [Next Steps](#9-next-steps)
 10. [References](#10-references)
+
+---
+
+## Theory & Principles
+
+Morphology was developed in the 1960s by Matheron and Serra as a **set-theoretic** framework for analyzing shape. Unlike convolution filters — which treat an image as a signal and apply weighted averaging — morphological operators treat a binary image as a **set of pixel positions** and manipulate that set using a small reference shape called the *structuring element*. The resulting algebra is simple, provable, and has a small number of building blocks that compose into a remarkable variety of shape-processing tools.
+
+This section covers:
+
+- **(A) Images as sets** — why binary morphology is fundamentally different from convolution.
+- **(B) The two primitives: erosion and dilation** — definitions, geometric meaning, duality.
+- **(C) Opening and closing** — the two compound operations that are almost always what you actually want.
+- **(D) Grayscale extension** — how the same ideas generalize from `{0, 1}` images to `[0, 255]` images.
+- **(E) Gradient, top-hat, black-hat** — recombinations that isolate specific structural features.
+
+### A. Images as Sets
+
+In binary morphology, an image `A` is treated as the set of "foreground" pixel positions:
+
+```
+A = { (x, y) : I(x, y) = 1 }
+```
+
+A **structuring element** `B` is a small set (typically 3×3 or 5×5) representing a probe shape — a disk, a cross, a horizontal line, etc. The origin of `B` is one of its pixels (usually the center). Morphological operators combine `A` and `B` using elementary set operations.
+
+This framing makes a crucial distinction from convolution clear. Convolution computes an average — the result at each pixel depends on *all* values in the neighborhood. Morphology asks a geometric question — whether `B` *fits inside* `A` at a given location, or whether `B` *hits* `A`. The answer is binary, and the operation is **non-linear**: the set of LSI tools from lesson 05 does not apply here.
+
+### B. Erosion and Dilation: the Primitives
+
+#### B.1 Erosion (`⊖`)
+
+```
+A ⊖ B = { x : B_x ⊆ A }
+```
+
+where `B_x` is `B` translated so its origin sits at `x`. In words: erosion of `A` by `B` is the set of all positions where `B` fits *entirely inside* `A`. Every pixel near the boundary where at least one of `B`'s members lies outside `A` gets removed.
+
+Geometric intuition:
+
+- Erosion **shrinks** objects, peeling off one layer equal to the radius of `B`.
+- Objects smaller than `B` **disappear entirely** — erosion eliminates noise specks.
+- Narrow connections between blobs **break** when `B` is wider than the connection — erosion separates touching objects.
+
+A second equivalent definition ties erosion directly to OpenCV's local-minimum implementation:
+
+```
+(A ⊖ B)(x) = min_{b ∈ B}  A(x + b)
+```
+
+The output pixel is 1 only if every pixel under the structuring element is 1 — the `min` captures exactly this.
+
+#### B.2 Dilation (`⊕`)
+
+```
+A ⊕ B = { x : B̂_x ∩ A ≠ ∅ }
+```
+
+where `B̂` is the reflection of `B` (for symmetric structuring elements this is the same as `B`, which is the typical case). In words: dilation is the set of positions where `B` *touches* `A` — where at least one of `B`'s members lies inside `A`.
+
+Geometric intuition:
+
+- Dilation **grows** objects by the radius of `B`.
+- Small holes inside objects **get filled** if they are smaller than `B`.
+- Narrow gaps between objects **close up**.
+
+As with erosion, an equivalent local-maximum form:
+
+```
+(A ⊕ B)(x) = max_{b ∈ B}  A(x - b)
+```
+
+#### B.3 The duality
+
+Erosion and dilation are not independent — they are **dual** under complementation:
+
+```
+(A ⊖ B)ᶜ = Aᶜ ⊕ B̂
+```
+
+Eroding the foreground is the same as dilating the background. This is why you can implement dilation by inverting, eroding, and inverting again. It also means that every shape-removal technique built from erosion has a shape-filling counterpart using dilation.
+
+### C. Opening and Closing: What You Usually Want
+
+Raw erosion shrinks everything; raw dilation grows everything. Neither is usually what you want on its own — you want to remove *small* objects (noise) without shrinking *large* ones (real features), or fill *small* holes without growing objects. That is what the compound operators do.
+
+#### C.1 Opening (`∘`)
+
+```
+A ∘ B = (A ⊖ B) ⊕ B
+```
+
+"Erode, then dilate with the same structuring element." The intuition:
+
+- Erosion deletes everything smaller than `B` and peels off one layer of the survivors.
+- Dilation grows the survivors back by the same amount — so features that survived erosion return to approximately their original size.
+- But objects that were killed by erosion cannot be resurrected.
+
+Net effect: **small objects vanish; large objects are preserved (with their boundaries smoothed)**. This is the standard tool for removing salt noise and cleaning up segmentation masks. Mathematically, `A ∘ B` is the largest subset of `A` that can be written as a union of translated copies of `B` — the "`B`-respecting" part of `A`.
+
+#### C.2 Closing (`•`)
+
+```
+A • B = (A ⊕ B) ⊖ B
+```
+
+"Dilate, then erode." By duality with opening:
+
+- Dilation fills in gaps and holes smaller than `B`.
+- Subsequent erosion restores object boundaries to approximately their original positions — but the filled-in regions persist.
+
+Net effect: **small holes inside objects are filled; narrow gaps between objects are closed; main shape is preserved**. This is the standard tool for removing pepper noise and joining fragmented objects. Closing and opening are themselves dual: `(A ∘ B)ᶜ = Aᶜ • B̂`.
+
+#### C.3 Iteration and idempotence
+
+A key property: `(A ∘ B) ∘ B = A ∘ B`. Applying opening twice gives the same result as once — it is **idempotent**. Same for closing. This is useful because it tells you a single pass is enough; repeating does not help.
+
+By contrast, `(A ⊖ B) ⊖ B = A ⊖ (B ⊕ B)` is *not* idempotent. Iterating erosion continues to shrink. This is why OpenCV exposes the `iterations` parameter on `erode`/`dilate` but not on `morphologyEx` for opening/closing — there is no reason to iterate an idempotent op.
+
+### D. Grayscale Morphology
+
+For grayscale images, the set-theoretic view generalizes: the image is viewed as a *surface* `I(x, y)` in 3D, and the structuring element either supports this surface from below (erosion) or from above (dilation). The operational definitions are the local-min and local-max forms from §B:
+
+```
+(I ⊖ B)(x, y) = min_{(i,j) ∈ B}  I(x + i, y + j)
+(I ⊕ B)(x, y) = max_{(i,j) ∈ B}  I(x + i, y + j)
+```
+
+These are sometimes called "min filter" and "max filter". Everything from §B–§C carries over: opening still removes bright structures smaller than `B`, closing fills dark structures smaller than `B`, both are idempotent.
+
+### E. Gradient, Top-hat, Black-hat: Derived Operators
+
+Three compound operators built from the primitives pick out specific structural features:
+
+#### E.1 Morphological gradient
+
+```
+gradient(A) = (A ⊕ B) - (A ⊖ B)
+```
+
+Dilation "thickens" the object, erosion "thins" it, and the difference is exactly the boundary layer. For binary images this gives edge pixels; for grayscale it gives a rough gradient magnitude. Often useful as a simpler alternative to Sobel-based edges for the specific case of sharp boundaries on uniform backgrounds.
+
+#### E.2 Top-hat (white top-hat)
+
+```
+tophat(A) = A - (A ∘ B)
+```
+
+The original image minus its opening. Since opening removes small bright features, this difference **isolates the small bright features themselves** — the things opening threw away. Top-hat is ideal for detecting bright objects smaller than the structuring element (text on a page, stars in an image, bright specks on a dark background), especially when the background is non-uniform — top-hat implicitly normalizes away the background variation.
+
+#### E.3 Black-hat
+
+```
+blackhat(A) = (A • B) - A
+```
+
+The closing of the image minus the original — by duality, this isolates **small dark features on a bright background**. Useful for extracting dark text on a varied-brightness document, dark defects on a bright surface, or any "dark thing smaller than `B`" detection problem.
+
+### From Theory to the Functions Below
+
+- `cv2.getStructuringElement(shape, size)` — build `B`. Shape choices (`MORPH_RECT`, `MORPH_CROSS`, `MORPH_ELLIPSE`) control what geometry the probe respects — use `MORPH_ELLIPSE` when you want isotropic behavior, `MORPH_RECT` for speed, cross or line for directional probing.
+- `cv2.erode(img, kernel, iterations=n)` / `cv2.dilate` — §B.1 / §B.2 primitives. `iterations=n` is equivalent to using a kernel grown by `n` self-dilations.
+- `cv2.morphologyEx(img, op, kernel)` — the unified entry point for compound operations. The `op` flag picks: `MORPH_OPEN` (§C.1), `MORPH_CLOSE` (§C.2), `MORPH_GRADIENT` (§E.1), `MORPH_TOPHAT` (§E.2), `MORPH_BLACKHAT` (§E.3), `MORPH_HITMISS` (hit-or-miss transform, a pattern detector).
 
 ---
 

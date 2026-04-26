@@ -24,6 +24,8 @@ OpenCV's DNN module provides functionality to load and run inference with pre-tr
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the inference graph abstraction, why blobs are 4D tensors, what ONNX actually solves, and the YOLO/SSD anchor-based detection paradigm as a neural extension of sliding windows.
+
 1. [cv2.dnn Module Overview](#1-cv2dnn-module-overview)
 2. [readNet(): Model Loading](#2-readnet-model-loading)
 3. [blobFromImage(): Preprocessing](#3-blobfromimage-preprocessing)
@@ -32,6 +34,133 @@ OpenCV's DNN module provides functionality to load and run inference with pre-tr
 6. [DNN Face Detection](#6-dnn-face-detection)
 7. [Modern Object Detection with ONNX](#7-modern-object-detection-with-onnx)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+OpenCV's `cv2.dnn` module is a **neural network inference engine**: it loads a trained model, runs forward passes, and returns outputs — with no backprop, no optimizer, no training logic. Understanding it requires understanding the inference pipeline at three levels: the **data format** (blobs), the **computation graph** (layers and their connections), and the **post-processing** (turning raw tensor outputs into bounding boxes, segmentation masks, or class labels).
+
+This section covers:
+
+- **(A) The inference graph abstraction** — what a trained model actually is as a data structure.
+- **(B) Blobs** — the 4D tensor layout and why preprocessing is non-trivial.
+- **(C) ONNX and the framework interoperability problem** — why the same model exported from PyTorch vs TensorFlow works.
+- **(D) Anchor-based detection** — YOLO and SSD as learned sliding-window detectors.
+- **(E) Backends and performance** — how `setPreferableBackend` and `setPreferableTarget` route computation.
+
+### A. The Inference Graph
+
+A trained neural network model, stripped of training-time components, is a **directed acyclic graph** where:
+
+- **Nodes** are layers (Conv2D, ReLU, MaxPool, LayerNorm, Attention, ...). Each has weights learned during training.
+- **Edges** are tensors flowing between layers.
+- **Inputs** are data-dependent (the image you want to process).
+- **Outputs** are what you use downstream (detections, features, classifications).
+
+When OpenCV "loads a model", it parses this graph from a model file (Caffe `.prototxt`+`.caffemodel`, TensorFlow `.pb`, Darknet `.cfg`+`.weights`, ONNX `.onnx`) into an internal representation. `forward(input)` then propagates the input through the graph, producing the output.
+
+The same graph can run on different **backends** (CPU, OpenCL, CUDA, VPU for OpenVINO). The framework-original weights remain the same; only the execution target changes.
+
+### B. Blobs: the 4D Tensor Layout
+
+Neural networks operate on 4D tensors in shape **(N, C, H, W)** — batch, channels, height, width. OpenCV images, by contrast, are **(H, W, C)** 3D arrays. Converting between them is what `blobFromImage` does:
+
+1. **Swap channel order** (BGR → RGB, or keep BGR if the model was trained on BGR).
+2. **Resize** to the model's expected input size (e.g. 224×224, 416×416, 640×640).
+3. **Transpose** from `(H, W, C)` to `(C, H, W)`.
+4. **Add a batch dimension** to produce `(1, C, H, W)`.
+5. **Scale** pixel values (typically divide by 255 to get `[0, 1]`, or by 127.5 then subtract 1 to get `[-1, 1]`, depending on how the model was trained).
+6. **Mean subtraction** (per-channel offset, e.g. ImageNet mean `[0.485, 0.456, 0.406]`).
+
+Getting any step wrong — wrong channel order, wrong scale, wrong mean — produces garbage outputs without any error. This is the #1 source of "my model outputs random results" bugs. The rule: **preprocessing must exactly match what the model expected during training**.
+
+`blobFromImage(img, scalefactor, size, mean, swapRB)` handles all six steps but requires you to supply the correct parameters. Common configurations:
+
+- **Caffe/ImageNet models**: `scalefactor=1.0, mean=(104, 117, 123), swapRB=False` (BGR input, no scaling, per-channel mean subtraction).
+- **TensorFlow/MobileNet**: `scalefactor=1/127.5, mean=(127.5, 127.5, 127.5), swapRB=True` (`[-1, 1]` range, RGB input).
+- **YOLO**: `scalefactor=1/255, mean=(0, 0, 0), swapRB=True` (`[0, 1]` range, RGB).
+- **PyTorch/ImageNet with Normalize**: scale to `[0, 1]` first, then use specific ImageNet `mean`/`std`.
+
+### C. ONNX and Framework Interoperability
+
+A model trained in PyTorch is stored as a PyTorch-specific graph. TensorFlow produces a different format. Caffe uses another. Running all of these inside OpenCV was originally implemented by having one parser per framework — a maintenance nightmare.
+
+**ONNX** (Open Neural Network Exchange) is a standardized graph format that all major training frameworks can export to. Export your PyTorch model to ONNX:
+
+```python
+torch.onnx.export(model, dummy_input, 'model.onnx', opset_version=13)
+```
+
+And load it in OpenCV:
+
+```python
+net = cv2.dnn.readNetFromONNX('model.onnx')
+```
+
+ONNX handles two problems:
+
+1. **Interop**: one format per network, no framework coupling.
+2. **Versioning**: opset versions specify which operators are supported. Most OpenCV releases support opset up to some version; newer operators may need recent OpenCV builds.
+
+For most use cases today, **export to ONNX and use `readNetFromONNX`** is the default path. The framework-specific readers (`readNetFromTF`, `readNetFromCaffe`) are legacy.
+
+### D. Anchor-Based Detection: YOLO and SSD
+
+Object detection as done by YOLO and SSD is the neural generalization of §15's sliding window paradigm. Instead of a hand-crafted classifier at every position, **the entire image is fed through a CNN that outputs detections**.
+
+#### D.1 Anchors: learned candidate boxes
+
+The detector doesn't regress arbitrary bounding boxes from pixels — that is too unconstrained. Instead, at each spatial location of a feature map, it checks against a **fixed set of anchor boxes** (typically 3-9, with predefined aspect ratios and sizes). For each anchor, the detector outputs:
+
+- **Offset** (`dx, dy, dw, dh`): how to adjust the anchor to fit the true object.
+- **Objectness score**: is there an object at this anchor?
+- **Class probabilities**: if so, which class?
+
+YOLO divides the image into an `S × S` grid; SSD uses a feature pyramid with different anchor scales at different resolutions. Both output `(S × S × num_anchors × (5 + num_classes))` numbers — one row per anchor with the coordinates, objectness, and class probabilities.
+
+#### D.2 Post-processing
+
+Raw output is redundant: the same object might be detected at multiple anchors with different scores. Standard post-processing:
+
+1. **Filter by objectness**: discard low-score predictions.
+2. **Multiply class probability by objectness** to get per-class confidence.
+3. **Apply NMS** (§15.E) per class to deduplicate.
+4. **Transform from feature-map coordinates back to image coordinates**.
+
+This is what `cv2.dnn.NMSBoxes` helps with, and why every neural detector tutorial looks similar — they all implement this pipeline.
+
+#### D.3 Anchor-free alternatives
+
+Recent detectors (FCOS, CenterNet, DETR) avoid anchors by regressing bounding boxes directly from each feature-map cell. They are simpler, slightly more accurate, and ONNX-exportable — you use them the same way in `cv2.dnn` as anchor-based models, just with different post-processing.
+
+### E. Backends and Targets
+
+OpenCV's DNN module can route computation through different **backends** (which runtime to use) and **targets** (which hardware):
+
+```python
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)       # default
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)            # default
+
+# For OpenVINO-accelerated inference:
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE)
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)  # Intel Neural Compute Stick
+
+# For CUDA GPU inference:
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+```
+
+CUDA backend requires OpenCV built with CUDA support. The performance gap between backends is large — an order of magnitude or more for big models. Always check what your OpenCV was compiled with (`cv2.getBuildInformation()`) before benchmarking.
+
+### From Theory to the Functions Below
+
+- `cv2.dnn.readNetFromONNX('model.onnx')` — the modern default loader (§C).
+- `cv2.dnn.readNetFromCaffe`, `readNetFromTensorflow`, `readNetFromDarknet` — legacy framework-specific loaders (§A).
+- `cv2.dnn.blobFromImage(img, scalefactor, size, mean, swapRB, crop)` — preprocessing pipeline (§B).
+- `net.setInput(blob)` + `net.forward(output_name)` — run inference.
+- `net.setPreferableBackend`, `net.setPreferableTarget` — execution routing (§E).
+- `cv2.dnn.NMSBoxes(boxes, scores, score_thresh, nms_thresh)` — detection post-processing (§D.2).
 
 ---
 

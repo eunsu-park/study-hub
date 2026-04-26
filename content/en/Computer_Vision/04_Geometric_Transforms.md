@@ -20,6 +20,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) for the mathematical foundation — coordinate transformations, interpolation, and forward vs inverse mapping.
+
 1. [Image Resizing - resize()](#1-image-resizing---resize)
 2. [Flipping and Rotation - flip(), rotate()](#2-flipping-and-rotation---flip-rotate)
 3. [Affine Transformation - warpAffine()](#3-affine-transformation---warpaffine)
@@ -28,6 +30,184 @@ After completing this lesson, you will be able to:
 6. [Practice Problems](#6-practice-problems)
 7. [Next Steps](#7-next-steps)
 8. [References](#8-references)
+
+---
+
+## Theory & Principles
+
+Before jumping into the OpenCV functions, it helps to separate what a geometric transform actually is into three independent pieces:
+
+- **(A) Coordinate mapping** — a rule that sends `(x, y)` to `(x', y')`.
+- **(B) Interpolation** — how to produce a value at a non-integer coordinate, since pixel values only exist at integer locations.
+- **(C) Mapping direction** — whether the computation runs forward (source → destination) or inverse (destination → source).
+
+Every OpenCV function in the rest of this lesson is one concrete piece of this framework.
+
+### A. Coordinate Transformations: a Hierarchy by Degrees of Freedom
+
+Geometric transformations form a strict hierarchy. Each level generalizes the previous one by releasing a constraint and adding degrees of freedom:
+
+| Level | DoF | Matrix | What is preserved |
+|-------|-----|--------|-------------------|
+| Translation | 2 | 2×3 `(I, t)` | length, angle, parallelism, straight lines |
+| Rigid (Euclidean) | 3 | 2×3 `(R, t)` | length, angle, parallelism, straight lines |
+| Similarity | 4 | 2×3 `(s·R, t)` | angle, parallelism, straight lines |
+| Affine | 6 | 2×3 | parallelism, straight lines |
+| Projective (homography) | 8 | 3×3 | straight lines only |
+
+`cv2.resize` is a similarity with `R = I`. `cv2.getRotationMatrix2D` builds a similarity. `cv2.getAffineTransform` builds a full affine. `cv2.getPerspectiveTransform` builds a projective. Knowing which rung of the ladder a function sits on tells you exactly which geometric properties it can and cannot change.
+
+#### A.1 Linear vs affine: why the extra column
+
+In 2D, a *linear* transform sends the origin to itself: `[x'; y'] = A · [x; y]` with a 2×2 matrix `A`. Rotation, scaling, and shear are all linear. Translation is not — it moves the origin — so it cannot be written as a 2×2 matrix multiplication.
+
+The standard fix is **homogeneous coordinates**: represent `(x, y)` as `(x, y, 1)`. Translation now fits into a single matrix product:
+
+```
+[x']   [a  b  tx]   [x]
+[y'] = [c  d  ty] × [y]
+                    [1]
+```
+
+The 2×3 matrix is just a 3×3 matrix with the implicit last row `[0 0 1]` dropped. This is why `cv2.warpAffine` takes a 2×3 matrix: the third row never varies, so it is never stored.
+
+A practical consequence: composing several affine transforms is just matrix multiplication. Build each step as its own 3×3 matrix (restoring the implicit row), multiply, and drop the last row — the result is a single `warpAffine` call. No accuracy loss from applying steps one by one.
+
+#### A.2 The rotation matrix, derived
+
+Rotating counter-clockwise by angle `θ` around the origin sends the basis vector `(1, 0)` to `(cos θ, sin θ)` and `(0, 1)` to `(-sin θ, cos θ)`. Stacking these as the columns of a matrix gives
+
+```
+R(θ) = [cos θ  -sin θ]
+       [sin θ   cos θ]
+```
+
+Rotating around an arbitrary center `c = (cx, cy)` is *not* a single linear operation — it is the composition `translate(-c) → rotate → translate(+c)`. Carrying this through, the 2×3 matrix returned by `cv2.getRotationMatrix2D(c, θ, α)` (with scale `α`) is
+
+```
+[α·cos θ   -α·sin θ    (1-α·cos θ)·cx + α·sin θ·cy]
+[α·sin θ    α·cos θ    -α·sin θ·cx + (1-α·cos θ)·cy]
+```
+
+The right column is not "just translation" — it is the correction that puts the rotation center back where it started after the linear part moved it.
+
+#### A.3 Affine = 6 DoF, so 3 point correspondences suffice
+
+An affine matrix has 6 unknowns: `a, b, c, d, tx, ty`. One point correspondence `(x, y) → (x', y')` gives 2 equations. Three non-collinear points give 6 equations — exactly enough for a unique solution. That is why `cv2.getAffineTransform` takes exactly 3 point pairs. With fewer pairs you are underdetermined; with more (and noisy data) you would need a least-squares estimate, which is what `cv2.estimateAffine2D` provides.
+
+#### A.4 Why affine cannot model perspective — and how projective fixes it
+
+An affine transform preserves parallelism: two parallel input lines always come out parallel. Photographs of the real world do the opposite — the two rails of a railway track converge at a vanishing point. No amount of rotation, scale, shear, or translation can model that.
+
+The fix is to move to a 3×3 matrix and introduce a **perspective division**:
+
+```
+[x'·w']   [h11 h12 h13]   [x]
+[y'·w'] = [h21 h22 h23] × [y]
+[w']      [h31 h32 h33]   [1]
+
+x' = (h11·x + h12·y + h13) / (h31·x + h32·y + h33)
+y' = (h21·x + h22·y + h23) / (h31·x + h32·y + h33)
+```
+
+Because the denominator `(h31·x + h32·y + h33)` depends on `(x, y)`, points in different parts of the image get scaled differently — producing the converging-line effect. Straight lines still map to straight lines (that is the defining property), but parallelism, angle, and length are all sacrificed.
+
+The matrix has 9 entries, but multiplying `H` by any nonzero constant produces an equivalent mapping (the same `x'`, `y'` after the division), so one degree of freedom is absorbed by scale. That leaves 8 free parameters. Two equations per point pair, so `cv2.getPerspectiveTransform` needs exactly 4 point correspondences.
+
+### B. Interpolation: Reconstructing Values at Non-Integer Coordinates
+
+Given a coordinate map, for every output pixel you end up asking: "what is the value of the source image at some fractional coordinate `(x, y)`?" Pixel values only exist on the integer grid, so you must estimate a continuous function `f̂(x, y)` that agrees with the samples you have, then read `f̂` at the query point. That estimation *is* interpolation.
+
+Every interpolation method is just a different choice of reconstruction kernel.
+
+#### B.1 Nearest-neighbor — zero-order
+
+```
+f̂(x, y) = f(round(x), round(y))
+```
+
+Take the closest integer pixel and copy it. One indexing operation, no arithmetic. Neighboring output pixels that happen to round to the same source pixel share the same value, which produces blocky staircase artifacts.
+
+The key property is that **the output inherits the source palette exactly**. That matters for label maps, segmentation masks, and pixel art where the set of valid values must stay closed — averaging two label IDs would produce a meaningless intermediate value. Always pick `INTER_NEAREST` for these cases.
+
+#### B.2 Bilinear — first-order, 2×2 neighborhood
+
+Use the four nearest integer grid points `(x0, y0), (x1, y0), (x0, y1), (x1, y1)` with `x1 = x0 + 1`, `y1 = y0 + 1`. Let `dx = x - x0`, `dy = y - y0`. Then
+
+```
+f̂(x, y) = (1-dx)(1-dy) · f(x0, y0) + dx·(1-dy) · f(x1, y0)
+        + (1-dx)·dy   · f(x0, y1) + dx·dy     · f(x1, y1)
+```
+
+This is exactly "linearly interpolate along x at the top row, linearly interpolate along x at the bottom row, then linearly interpolate those two results along y". The operation is *separable*, which implementations exploit for speed. The reconstructed function is continuous (C⁰) but its first derivative has a kink at every grid cell edge. This is OpenCV's `INTER_LINEAR` default and the usual balanced choice for resizing photos.
+
+#### B.3 Bicubic — third-order, 4×4 neighborhood
+
+Define a cubic kernel `k(t)` (Keys' convolution kernel with `a = -0.5` is the OpenCV default):
+
+```
+k(t) = (a+2)|t|³ - (a+3)|t|² + 1         for |t| ≤ 1
+       a|t|³ - 5a|t|² + 8a|t| - 4a        for 1 < |t| ≤ 2
+       0                                  for |t| > 2
+```
+
+and convolve with the 4×4 neighborhood:
+
+```
+f̂(x, y) = Σᵢ Σⱼ  k(x - xᵢ) · k(y - yⱼ) · f(xᵢ, yⱼ)
+```
+
+The extra polynomial degree lets the reconstructed function match both the sample values *and* have a defined first derivative, so edges stay sharper when enlarging. The cost is 16 multiply-adds per output pixel instead of bilinear's 4.
+
+#### B.4 Lanczos — sinc reconstruction with a window
+
+Sampling theory says that if an image is properly band-limited, the mathematically optimal reconstruction filter is the `sinc` function. But `sinc` has infinite support, so in practice it is truncated by a window. The Lanczos kernel is `sinc` multiplied by a wider `sinc` window (OpenCV uses `a = 4`):
+
+```
+L(t) = sinc(t) · sinc(t/a)    for |t| < a
+     = 0                      otherwise
+```
+
+Applied over an 8×8 neighborhood. The frequency response is the flattest of the options listed here, so preserved detail is maximal — at the cost of 64 samples per output pixel. Recommended for high-quality upscaling when speed is not the bottleneck.
+
+#### B.5 Area — anti-aliased downsampling
+
+Shrinking an image throws information away. If you just sample with `INTER_NEAREST` or `INTER_LINEAR`, high-frequency content that cannot be represented at the lower resolution gets **aliased** into low-frequency artifacts — moiré patterns, jagged edges, or frame-to-frame flicker in downscaled video. The sampling theorem says you must low-pass filter *before* resampling below the Nyquist rate.
+
+`INTER_AREA` does exactly that: each output pixel's value is the area-weighted average of the source pixels its footprint covers. That weighted average is a box low-pass filter applied at exactly the right scale — it is a combined anti-alias filter and resampler. Hence the standard rule:
+
+- **Shrinking**: `INTER_AREA` (aliasing is the dominant risk).
+- **Enlarging**: `INTER_CUBIC` or `INTER_LANCZOS4` (no aliasing risk, so sharper higher-order kernels win).
+
+### C. Forward vs Inverse Mapping
+
+The coordinate map is fixed; the interpolation method is chosen. One question remains: in which direction does the pixel loop run?
+
+#### C.1 Forward mapping — and why it fails
+
+The naïve approach: loop over each source pixel `(x, y)`, apply `T` to get `(x', y') = T(x, y)`, and write the source value at the output position. Two things go wrong:
+
+1. **Holes.** If `T` enlarges the image, some output integer coordinates never get hit — no source pixel maps onto them exactly. Visible as scattered missing pixels.
+2. **Collisions.** If `T` shrinks, many source pixels map to the same output pixel and overwrite each other. The final value depends on loop order; anti-aliasing becomes impossible to do correctly.
+
+#### C.2 Inverse mapping — what OpenCV actually does
+
+Loop over each *output* pixel `(x', y')`, apply the inverse `T⁻¹` to get the corresponding source coordinate `(x, y)`, and interpolate the source at that (generally fractional) coordinate using one of the kernels in §B. Two things go right:
+
+1. **Every output pixel is written exactly once.** No holes, no collisions.
+2. **Interpolation becomes a clean subproblem.** For each output pixel, you reconstruct `f̂` locally and read it at one point.
+
+Every `cv2.warpAffine`, `cv2.warpPerspective`, and `cv2.resize` call runs this loop. That is why OpenCV internally needs the inverse of your transform — and why affine inverses are cheap (a 2×2 matrix inversion plus a translation correction).
+
+### From Theory to the Functions Below
+
+Each of the following sections is this framework made concrete:
+
+- `cv2.resize(..., interpolation=...)` — a pure scaling similarity (§A) with the interpolation kernel from §B as a parameter.
+- `cv2.getRotationMatrix2D(center, angle, scale)` — builds the 2×3 matrix of §A.2.
+- `cv2.getAffineTransform(src_pts, dst_pts)` — solves the 6-DoF system of §A.3 from 3 point pairs.
+- `cv2.getPerspectiveTransform(src_pts, dst_pts)` — solves the 8-DoF system of §A.4 from 4 point pairs.
+- `cv2.warpAffine` / `cv2.warpPerspective` — run the inverse-mapping loop of §C.2, calling the interpolation from §B at each step.
 
 ---
 

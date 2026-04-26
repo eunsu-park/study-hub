@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — NeRF as an implicit neural scene representation, the volume rendering integral, positional encoding's role, and the Instant-NGP speedup via hash-encoded features.
+
 1. [Neural Scene Representations](#1-neural-scene-representations)
 2. [NeRF Fundamentals](#2-nerf-fundamentals)
 3. [Volumetric Rendering](#3-volumetric-rendering)
@@ -26,6 +28,135 @@ After completing this lesson, you will be able to:
 6. [Training Pipeline](#6-training-pipeline)
 7. [Applications and Extensions](#7-applications-and-extensions)
 8. [Exercises](#8-exercises)
+
+---
+
+## Theory & Principles
+
+Neural Radiance Fields (NeRF, Mildenhall et al., 2020) represent a 3D scene **not as a mesh, point cloud, or voxel grid, but as a neural network** that maps a 3D coordinate and viewing direction to a color and density. Volume rendering then turns this implicit representation into 2D images. Training: supervise the rendered images against real photographs of the scene. Result: photorealistic novel view synthesis from ~50 photos per scene.
+
+The core ideas are remarkable precisely because they are simple: an MLP with <1M parameters can represent a detailed 3D scene faithfully. This section explains why that works.
+
+This section covers:
+
+- **(A) Implicit vs explicit scene representations** — what changes when you represent 3D with a neural network instead of a geometric primitive.
+- **(B) The NeRF MLP** — the `5D input → 4D output` mapping.
+- **(C) Volume rendering integral** — how you render a pixel from a ray and the density/color field.
+- **(D) Positional encoding** — why an MLP cannot learn high-frequency detail without it.
+- **(E) Training objective and view consistency** — the photometric loss and why it works.
+- **(F) Instant-NGP** — the hash encoding trick that makes NeRF 100× faster.
+
+### A. Implicit vs Explicit Scene Representations
+
+**Explicit**: the scene is stored as geometric primitives — a mesh (vertices + triangles), a point cloud, or a voxel grid. You query "what is at this point?" by looking it up.
+
+**Implicit**: the scene is stored as a function `f: ℝ³ → properties`. You query by **evaluating the function**. If `f` is a neural network, the scene is stored in the network's weights.
+
+Trade-offs:
+
+- **Memory**: explicit grows with resolution (octree voxels at high res explode); implicit has fixed parameter count regardless of resolution.
+- **Rendering**: explicit renders with standard graphics (rasterization); implicit requires sampling the function many times along each ray.
+- **Editing**: explicit is direct (move vertices); implicit is harder (which weights control this region?).
+- **Photorealism**: implicit with volume rendering can represent fuzzy phenomena (hair, fog, translucency) that explicit meshes struggle with.
+
+NeRF picks implicit + volume rendering because that combination handles photorealism best.
+
+### B. The NeRF MLP
+
+The NeRF function:
+
+```
+F_Θ : (x, y, z, θ, φ)  →  (r, g, b, σ)
+
+Input:  3D position (x, y, z) + viewing direction (θ, φ) as a unit vector   [5D]
+Output: RGB color (r, g, b) + density σ ≥ 0                                 [4D]
+```
+
+The MLP has ~8 hidden layers of 256 units each. Two design choices:
+
+- **View-dependent color**: the viewing direction is only fed to the last layer, after density is computed. This enforces **view-dependent color** (specular reflection, Fresnel, etc.) while keeping **density purely geometric** (an object is there or isn't, regardless of viewpoint).
+- **Shared across the scene**: one MLP represents the whole scene. The network has to learn all geometry and appearance in its ~1M weights.
+
+### C. Volume Rendering Integral
+
+Given a ray `r(t) = o + t · d` (origin `o`, direction `d`, parameter `t ≥ 0`), the color of the ray (what goes into the corresponding pixel) is:
+
+```
+C(r) = ∫_{t_n}^{t_f}  T(t) · σ(r(t)) · c(r(t), d) dt
+
+T(t) = exp( -∫_{t_n}^t σ(r(s)) ds )        transmittance: probability a ray reaches t without being blocked
+```
+
+Intuition:
+
+- `σ(x)` is the **density** at point `x` — higher density = more likely to block the ray at that point.
+- `c(x, d)` is the **color** at `x` when viewed from direction `d`.
+- `T(t)` is **how much of the ray's light survives to reach depth `t`** — monotonically decreasing from 1 (at the camera) as it passes through denser regions.
+- The integral is "sum along the ray, weighted by the probability the ray hasn't been absorbed yet".
+
+Discretized for implementation: sample `N` points along the ray, evaluate the MLP at each, compute transmittance as a running product, and sum. Everything is differentiable — gradients flow through the rendering integral back to the MLP weights.
+
+### D. Positional Encoding: Fixing the High-Frequency Problem
+
+A vanilla MLP that takes 3D coordinates directly produces **blurry** renderings — it cannot represent the high-frequency detail of natural scenes. The fix: transform each coordinate through a **positional encoding**:
+
+```
+γ(x) = (sin(2⁰·π·x), cos(2⁰·π·x), sin(2¹·π·x), cos(2¹·π·x), ..., sin(2^{L-1}·π·x), cos(2^{L-1}·π·x))
+```
+
+(L ≈ 10 for position, L ≈ 4 for direction.)
+
+Why it works: neural tangent kernel analysis shows that MLPs have a strong **low-frequency bias** — they naturally fit smooth functions. Positional encoding explicitly injects high-frequency components as input features, so the MLP can combine them linearly to produce high-frequency outputs.
+
+This is one of the most important "simple trick" results in 3D deep learning — without positional encoding, NeRF wouldn't work. The same trick appeared in transformers (rotary / sinusoidal position embeddings) for similar reasons.
+
+### E. Training: Photometric Supervision
+
+The only supervision signal is **rendered color should match the photograph**:
+
+```
+L = Σ_pixels  ‖ C_rendered(r) - C_real(pixel) ‖²
+```
+
+For each training image:
+
+1. Compute the ray through each pixel using the known camera intrinsics + pose.
+2. Sample points along the ray.
+3. Evaluate the NeRF MLP at each point.
+4. Volume-render to get the predicted pixel color.
+5. Compute L2 loss against the real pixel color.
+6. Backpropagate to update MLP weights.
+
+**Why does this learn the 3D geometry?** Because the MLP has to explain **all views simultaneously**. A single view could be explained by many different density distributions — but only the correct 3D geometry is consistent with all views. Multi-view consistency is the implicit supervision that forces the density field to match actual scene geometry.
+
+Training requires **camera poses**, which must be known. Typically these are computed with COLMAP (SFM, §22.F) before NeRF training.
+
+### F. Instant-NGP: Hash-Encoded Features
+
+Original NeRF is slow: ~1 day on a GPU for a single scene, because the MLP must be queried hundreds of times per pixel for volume rendering. Instant-NGP (Müller et al., 2022) achieves **100× speedup** with one big idea:
+
+Replace the heavy positional encoding + deep MLP with:
+
+- **Multi-resolution hash grid**: a set of 3D grids at different resolutions. Each grid cell stores a small feature vector (e.g. 2 dims). The grids are indexed via spatial hashing, so memory stays bounded regardless of grid resolution.
+- **Tiny MLP**: 2-3 layer MLP that takes the concatenated features from all grid levels and produces color + density.
+
+Why it works: the hash grid stores most of the scene information explicitly as features, making the MLP's job trivial. Training becomes a few minutes instead of hours. Rendering also gets fast enough for real-time in many cases.
+
+Instant-NGP made NeRF practical. Follow-ups (Nerfacto, ZipNeRF, Mip-NeRF 360) all build on the hash encoding idea.
+
+### From Theory to the Functions Below
+
+Unlike earlier lessons, NeRF isn't implemented in OpenCV. The standard tools:
+
+- **NerfStudio**: Python framework with Nerfacto, Instant-NGP, and many variants. Best for general use.
+- **Nvidia Instant-NGP**: original fast implementation in C++/CUDA.
+- **3D Gaussian Splatting**: (lesson 29) — a completely different approach that replaced NeRF as the state-of-the-art in 2023.
+
+NeRF training pipeline is:
+1. Capture photos from many viewpoints.
+2. Run COLMAP to estimate camera poses.
+3. Train NeRF with the pose-annotated images.
+4. Render novel views by evaluating the trained MLP on new camera rays.
 
 ---
 

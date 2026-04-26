@@ -24,6 +24,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — epipolar geometry, the disparity-to-depth equation, triangulation from two views, and the point cloud as a discrete sampling of 3D surface.
+
 1. [3D Vision Overview](#1-3d-vision-overview)
 2. [Stereo Vision Principles](#2-stereo-vision-principles)
 3. [Depth Map Generation](#3-depth-map-generation)
@@ -31,6 +33,144 @@ After completing this lesson, you will be able to:
 5. [Open3D Basics](#5-open3d-basics)
 6. [3D Reconstruction](#6-3d-reconstruction)
 7. [Exercises](#7-exercises)
+
+---
+
+## Theory & Principles
+
+A single 2D image loses depth — a point on the image plane could correspond to any 3D point along the ray from the camera's optical center. Recovering 3D from images means **constraining the depth** using additional information: a second viewpoint (stereo), motion (SFM), known geometry (templates), or depth sensors (Kinect, LiDAR). This lesson covers the geometric foundations shared by all of these.
+
+This section covers:
+
+- **(A) The 2D → 3D inversion problem** — why one image is not enough, and why two is.
+- **(B) Epipolar geometry** — the essential and fundamental matrices that relate two views.
+- **(C) Disparity and depth** — the `Z = f·B/d` relationship that makes stereo work.
+- **(D) Triangulation** — recovering a 3D point from two image observations.
+- **(E) Point clouds and meshes** — the discrete representations of 3D surface.
+
+### A. Why One Image Is Not Enough
+
+Given a camera with known intrinsics (§18), each pixel `(u, v)` back-projects to a **ray** in 3D space emanating from the optical center. Every 3D point along that ray projects to the same pixel. There is no way to tell from a single image whether an object is small and close or large and far.
+
+A second image from a different viewpoint breaks the ambiguity. The same 3D point projects to two pixels, one in each image. The two rays — one per image — intersect at the true 3D location (up to noise). This is the fundamental idea of stereo vision, structure-from-motion, SLAM, and multi-view reconstruction.
+
+### B. Epipolar Geometry
+
+Given two calibrated cameras viewing the same scene, the relative position and orientation of the cameras induces a constraint on corresponding image points. This constraint is captured by the **fundamental matrix** `F` or its calibrated counterpart, the **essential matrix** `E`.
+
+#### B.1 The epipolar constraint
+
+For any 3D point observed in both images at pixels `x₁` and `x₂` (in homogeneous coordinates):
+
+```
+x₂ᵀ · F · x₁ = 0
+```
+
+This says: given a point `x₁` in image 1, the corresponding point in image 2 must lie on a specific line, called the **epipolar line** `F · x₁`. The epipolar constraint reduces the search for correspondences from a 2D search over the whole image to a 1D search along a line — a massive computational win.
+
+#### B.2 The essential matrix and camera pose
+
+When the intrinsic matrices are known, normalize pixel coordinates (`x̂ = K⁻¹ · x`) and use the **essential matrix** instead:
+
+```
+x̂₂ᵀ · E · x̂₁ = 0
+```
+
+`E = [t]× · R` factors into the **relative rotation** `R` and the **skew-symmetric matrix of translation** `[t]×`. Decomposing `E` recovers both (up to sign ambiguity, typically resolved by cheirality — both points should have positive depth in both cameras). This is how structure-from-motion recovers camera poses without priors.
+
+#### B.3 Rectification
+
+If you make the two image planes coplanar and align their horizontal axes, epipolar lines become **horizontal** — the corresponding point in image 2 lies on the same scanline as in image 1. This is **stereo rectification**, and it turns stereo matching into 1D row-wise search instead of search along arbitrary epipolar lines.
+
+OpenCV's `stereoRectify` + `initUndistortRectifyMap` + `remap` precomputes the rectification warps for both cameras. After rectification, you can use a simple block-matching algorithm that scans horizontally.
+
+### C. Disparity and Depth
+
+After rectification, the same 3D point appears at `(x_L, y)` in the left image and `(x_R, y)` in the right (same `y`, different `x`). The **disparity** is `d = x_L - x_R`. Geometrically:
+
+```
+Z = f · B / d
+```
+
+where:
+
+- `Z` = depth of the 3D point (distance from camera, in meters).
+- `f` = focal length in pixels (common for both rectified cameras after calibration).
+- `B` = **baseline**, the distance between the two camera centers (in meters).
+- `d` = disparity (in pixels).
+
+**Key properties**:
+
+- Near objects have **large disparity**; far objects have small disparity. A point at infinity has zero disparity.
+- Depth precision **degrades quadratically with distance**: `ΔZ ≈ (Z²/fB) · Δd`. For a fixed disparity resolution, depth error at 10m is 100× the depth error at 1m. This is why stereo doesn't work well far from the camera.
+- Larger baseline `B` gives better far-range precision but narrows the overlap between the two views.
+- Sub-pixel disparity estimation (interpolating the matching cost function) improves depth precision significantly.
+
+### D. Triangulation
+
+Given calibrated camera matrices `P₁`, `P₂` and a correspondence `(x₁, x₂)`, triangulation recovers the 3D point `X`. The forward projection equations:
+
+```
+x₁ = P₁ · X       (projected to image 1)
+x₂ = P₂ · X       (projected to image 2)
+```
+
+are two equations in four unknowns (`X` in homogeneous coordinates, up to scale). In the noise-free case these are consistent and have a unique solution. With noise, the system is overdetermined — solve by least-squares (`cv2.triangulatePoints` uses the DLT algorithm).
+
+The practical workflow:
+
+1. Detect and match features in both images (§13, §14).
+2. Compute fundamental matrix with RANSAC (§14.D).
+3. Extract relative pose (`R`, `t`) from the essential matrix (§B.2).
+4. Triangulate each matched point pair to get a sparse point cloud.
+5. (Optional) Bundle adjustment: jointly refine all camera poses and 3D points by minimizing reprojection error over the whole set.
+
+This is exactly the pipeline used by structure-from-motion software (COLMAP, OpenSfM).
+
+### E. Point Clouds and Meshes
+
+#### E.1 Point clouds
+
+A **point cloud** is a discrete set of 3D points: `{(X_i, Y_i, Z_i)}`, optionally with colors, normals, or other per-point attributes. The natural output of stereo, depth sensors, and SFM. Compact (one tuple per sample), easy to visualize, easy to downsample. But no connectivity — adjacent points aren't explicitly linked.
+
+Common operations:
+
+- **Downsampling**: voxel grid (one point per small 3D cube) to reduce density uniformly.
+- **Outlier removal**: statistical (point has too few neighbors) or radius-based.
+- **Normal estimation**: fit a plane to each point's local neighborhood.
+- **Registration**: align two point clouds using ICP (Iterative Closest Point).
+
+#### E.2 Meshes
+
+A **mesh** adds connectivity: vertices + triangles. It is the standard representation for rendering and physical simulation. Converting point clouds to meshes:
+
+- **Poisson surface reconstruction**: solve a PDE to find an implicit surface that matches given normal directions, then extract an isosurface.
+- **Ball-pivoting**: roll a virtual ball over the point cloud; wherever it touches three points, create a triangle.
+- **Marching cubes**: extract isosurface from an occupancy grid.
+
+Meshes are denser, less noisy, and easier to render than raw points — but they introduce topology choices and can hide localization error.
+
+#### E.3 From depth map to point cloud
+
+If you have a depth map `D(u, v)` and camera intrinsics `K`, each pixel converts to a 3D point:
+
+```
+Z = D(u, v)
+X = (u - c_x) · Z / f_x
+Y = (v - c_y) · Z / f_y
+```
+
+This is just the inverse of §18.A.1 projection. Every depth sensor and stereo algorithm produces a depth map that you convert to a point cloud this way.
+
+### From Theory to the Functions Below
+
+- `cv2.stereoCalibrate`, `cv2.stereoRectify` — §B.3 calibration of stereo rigs.
+- `cv2.StereoBM_create`, `cv2.StereoSGBM_create` — block-matching and semi-global-matching stereo disparity (§C).
+- `cv2.reprojectImageTo3D(disparity, Q)` — convert disparity map to point cloud using rectification matrix `Q` (§E.3).
+- `cv2.findFundamentalMat`, `cv2.findEssentialMat` — recover `F` / `E` with RANSAC (§B).
+- `cv2.recoverPose(E, ...)` — extract `R`, `t` from essential matrix (§B.2).
+- `cv2.triangulatePoints(P1, P2, pts1, pts2)` — DLT triangulation (§D).
+- Open3D (separate library): point cloud I/O, normals, Poisson reconstruction, ICP, visualization.
 
 ---
 

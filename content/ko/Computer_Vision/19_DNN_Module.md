@@ -24,6 +24,8 @@ OpenCV의 DNN 모듈은 사전 학습된 딥러닝 모델을 로드하고 추론
 
 ## 목차
 
+OpenCV 함수 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 추론 그래프 추상화, blob이 4D 텐서인 이유, ONNX가 실제로 해결하는 것, 그리고 YOLO/SSD anchor 기반 검출 패러다임을 sliding window의 신경망 확장으로 보는 관점을 다룹니다.
+
 1. [cv2.dnn 모듈 개요](#1-cv2dnn-모듈-개요)
 2. [readNet(): 모델 로딩](#2-readnet-모델-로딩)
 3. [blobFromImage(): 전처리](#3-blobfromimage-전처리)
@@ -32,6 +34,133 @@ OpenCV의 DNN 모듈은 사전 학습된 딥러닝 모델을 로드하고 추론
 6. [DNN 얼굴 검출](#6-dnn-얼굴-검출)
 7. [ONNX를 이용한 최신 객체 탐지(Object Detection)](#7-onnx를-이용한-최신-객체-탐지object-detection)
 8. [연습 문제](#8-연습-문제)
+
+---
+
+## 이론과 원리
+
+OpenCV의 `cv2.dnn` 모듈은 **신경망 추론 엔진**입니다: 훈련된 모델을 로드하고, 순방향 패스를 실행하고, 출력을 반환 — backprop 없음, 옵티마이저 없음, 훈련 로직 없음. 이를 이해하려면 추론 파이프라인을 세 수준에서 이해해야 합니다: **데이터 포맷**(blob), **계산 그래프**(layer와 그들의 연결), **후처리**(원시 텐서 출력을 경계 상자, 분할 마스크, 클래스 레이블로 바꾸기).
+
+이 섹션은 다음을 다룹니다:
+
+- **(A) 추론 그래프 추상화** — 훈련된 모델이 데이터 구조로서 실제로 무엇인가.
+- **(B) Blob** — 4D 텐서 레이아웃과 전처리가 사소하지 않은 이유.
+- **(C) ONNX와 프레임워크 상호운용성 문제** — PyTorch vs TensorFlow에서 내보낸 같은 모델이 작동하는 이유.
+- **(D) Anchor 기반 검출** — 학습된 sliding-window 검출기로서의 YOLO와 SSD.
+- **(E) 백엔드와 성능** — `setPreferableBackend`와 `setPreferableTarget`이 계산을 라우팅하는 방법.
+
+### A. 추론 그래프
+
+훈련 시 구성 요소를 제거한 훈련된 신경망 모델은 **방향 비순환 그래프(DAG)**:
+
+- **노드**는 layer(Conv2D, ReLU, MaxPool, LayerNorm, Attention, ...). 각각이 훈련 중 학습된 가중치를 가짐.
+- **에지**는 layer 사이 흐르는 텐서.
+- **입력**은 데이터 의존적(처리하려는 이미지).
+- **출력**은 후단에서 쓰는 것(검출, 특징, 분류).
+
+OpenCV가 "모델을 로드"할 때, 모델 파일(Caffe `.prototxt`+`.caffemodel`, TensorFlow `.pb`, Darknet `.cfg`+`.weights`, ONNX `.onnx`)에서 이 그래프를 내부 표현으로 파싱합니다. `forward(input)`가 그러면 입력을 그래프에 전파해 출력을 생성.
+
+같은 그래프가 서로 다른 **백엔드**(CPU, OpenCL, CUDA, OpenVINO용 VPU)에서 실행 가능. 프레임워크 원본 가중치는 그대로 유지; 실행 대상만 변경.
+
+### B. Blob: 4D 텐서 레이아웃
+
+신경망은 **(N, C, H, W)** 모양의 4D 텐서 — batch, channel, height, width — 에 작동. OpenCV 이미지는 대조적으로 **(H, W, C)** 3D 배열. 이들 간 변환이 `blobFromImage`가 하는 일:
+
+1. **채널 순서 교환** (BGR → RGB, 또는 모델이 BGR에서 훈련됐으면 유지).
+2. 모델의 기대 입력 크기(예: 224×224, 416×416, 640×640)로 **리사이즈**.
+3. `(H, W, C)`에서 `(C, H, W)`로 **전치**.
+4. `(1, C, H, W)`를 만들기 위해 **배치 차원 추가**.
+5. 픽셀 값 **스케일**(보통 `[0, 1]`을 얻기 위해 255로 나누거나, `[-1, 1]`을 얻기 위해 127.5로 나누고 1을 빼기; 모델이 어떻게 훈련됐는지에 따라).
+6. **평균 빼기**(채널별 오프셋, 예: ImageNet 평균 `[0.485, 0.456, 0.406]`).
+
+어느 단계든 잘못되면 — 잘못된 채널 순서, 잘못된 스케일, 잘못된 평균 — 에러 없이 쓰레기 출력을 만듭니다. 이것이 "내 모델이 무작위 결과를 출력한다" 버그의 #1 원천. 규칙: **전처리는 모델이 훈련 중 기대한 것과 정확히 일치해야 한다**.
+
+`blobFromImage(img, scalefactor, size, mean, swapRB)`가 여섯 단계 모두 처리하지만 올바른 파라미터를 공급해야 합니다. 흔한 구성:
+
+- **Caffe/ImageNet 모델**: `scalefactor=1.0, mean=(104, 117, 123), swapRB=False` (BGR 입력, 스케일링 없음, 채널별 평균 빼기).
+- **TensorFlow/MobileNet**: `scalefactor=1/127.5, mean=(127.5, 127.5, 127.5), swapRB=True` (`[-1, 1]` 범위, RGB 입력).
+- **YOLO**: `scalefactor=1/255, mean=(0, 0, 0), swapRB=True` (`[0, 1]` 범위, RGB).
+- **Normalize를 쓴 PyTorch/ImageNet**: 먼저 `[0, 1]`로 스케일, 그 다음 특정 ImageNet `mean`/`std` 사용.
+
+### C. ONNX와 프레임워크 상호운용성
+
+PyTorch에서 훈련된 모델은 PyTorch 특정 그래프로 저장됨. TensorFlow는 다른 포맷 생성. Caffe는 또 다른. OpenCV 내에서 이들 모두 실행은 원래 프레임워크당 파서 하나씩 구현했음 — 유지보수 악몽.
+
+**ONNX**(Open Neural Network Exchange)는 모든 주요 훈련 프레임워크가 내보낼 수 있는 표준화된 그래프 포맷. PyTorch 모델을 ONNX로 내보내기:
+
+```python
+torch.onnx.export(model, dummy_input, 'model.onnx', opset_version=13)
+```
+
+OpenCV에서 로드:
+
+```python
+net = cv2.dnn.readNetFromONNX('model.onnx')
+```
+
+ONNX는 두 문제를 처리:
+
+1. **상호운용성**: 네트워크당 하나의 포맷, 프레임워크 결합 없음.
+2. **버전 관리**: opset 버전이 지원되는 연산자 지정. 대부분의 OpenCV 릴리스가 특정 버전까지 opset 지원; 새 연산자는 최근 OpenCV 빌드가 필요할 수 있음.
+
+오늘날 대부분의 용도에 **ONNX로 내보내고 `readNetFromONNX` 사용**이 기본 경로. 프레임워크 특정 리더(`readNetFromTF`, `readNetFromCaffe`)는 레거시.
+
+### D. Anchor 기반 검출: YOLO와 SSD
+
+YOLO와 SSD가 하는 객체 검출은 §15 sliding window 패러다임의 신경망 일반화. 모든 위치에서 수작업 분류기 대신, **전체 이미지를 검출을 출력하는 CNN에 통과**시킵니다.
+
+#### D.1 Anchors: 학습된 후보 상자
+
+검출기는 픽셀에서 임의의 경계 상자를 회귀하지 않음 — 너무 무제약. 대신 특징 맵의 각 공간 위치에서 **고정된 앵커 박스 집합**(보통 3-9, 미리 정의된 종횡비와 크기)에 대해 확인. 각 앵커에 대해 검출기 출력:
+
+- **오프셋**(`dx, dy, dw, dh`): 진짜 객체에 맞게 앵커 조정하는 방법.
+- **Objectness 점수**: 이 앵커에 객체가 있는가?
+- **클래스 확률**: 그렇다면 어떤 클래스?
+
+YOLO는 이미지를 `S × S` 격자로 나눔; SSD는 서로 다른 해상도에서 서로 다른 앵커 스케일을 가진 feature pyramid 사용. 둘 다 `(S × S × num_anchors × (5 + num_classes))` 숫자를 출력 — 좌표, objectness, 클래스 확률을 가진 앵커당 한 행.
+
+#### D.2 후처리
+
+원시 출력은 중복적: 같은 객체가 서로 다른 점수의 여러 앵커에서 검출될 수 있음. 표준 후처리:
+
+1. **Objectness로 필터**: 낮은 점수 예측 버림.
+2. **클래스 확률에 objectness 곱하기**로 클래스별 신뢰도 획득.
+3. 중복 제거를 위해 클래스당 **NMS**(§15.E) 적용.
+4. **특징 맵 좌표를 이미지 좌표로 변환**.
+
+이것이 `cv2.dnn.NMSBoxes`가 돕는 것이며, 모든 신경 검출기 튜토리얼이 비슷하게 보이는 이유 — 모두 이 파이프라인을 구현.
+
+#### D.3 Anchor-free 대안
+
+최근 검출기(FCOS, CenterNet, DETR)는 각 특징 맵 셀에서 경계 상자를 직접 회귀해 앵커를 피합니다. 더 단순, 약간 더 정확, ONNX 내보내기 가능 — `cv2.dnn`에서 anchor 기반 모델과 같은 방식으로 사용, 다만 후처리가 다름.
+
+### E. 백엔드와 타겟
+
+OpenCV DNN 모듈은 서로 다른 **백엔드**(어느 런타임 사용)와 **타겟**(어느 하드웨어)을 통해 계산을 라우팅할 수 있음:
+
+```python
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)       # 기본
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)            # 기본
+
+# OpenVINO 가속 추론:
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE)
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)  # Intel Neural Compute Stick
+
+# CUDA GPU 추론:
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+```
+
+CUDA 백엔드는 CUDA 지원으로 빌드된 OpenCV가 필요. 백엔드 간 성능 격차는 큼 — 큰 모델에 대해 한 자릿수 또는 그 이상. 벤치마킹 전에 항상 OpenCV가 무엇으로 컴파일됐는지(`cv2.getBuildInformation()`) 확인.
+
+### 이론에서 아래 함수들로
+
+- `cv2.dnn.readNetFromONNX('model.onnx')` — 현대 기본 로더(§C).
+- `cv2.dnn.readNetFromCaffe`, `readNetFromTensorflow`, `readNetFromDarknet` — 레거시 프레임워크 특정 로더(§A).
+- `cv2.dnn.blobFromImage(img, scalefactor, size, mean, swapRB, crop)` — 전처리 파이프라인(§B).
+- `net.setInput(blob)` + `net.forward(output_name)` — 추론 실행.
+- `net.setPreferableBackend`, `net.setPreferableTarget` — 실행 라우팅(§E).
+- `cv2.dnn.NMSBoxes(boxes, scores, score_thresh, nms_thresh)` — 검출 후처리(§D.2).
 
 ---
 
