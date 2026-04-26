@@ -18,6 +18,8 @@
 
 ## 목차
 
+패턴 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 세 가지 캐싱 전략(cache-aside, write-through, write-behind)과 일관성 트레이드오프, 유한한 캐시를 제한하는 축출 정책(LRU, LFU, ARC), 그리고 구체적 방어책과 함께 다루는 캐시 스탬피드 / dogpile 문제를 다룹니다.
+
 1. [Redis 기초](#1-redis-기초)
 2. [캐시 어사이드 패턴](#2-캐시-어사이드-패턴)
 3. [라이트스루와 라이트비하인드](#3-라이트스루와-라이트비하인드)
@@ -28,6 +30,205 @@
 8. [Redis Streams](#8-redis-streams)
 9. [프레임워크 통합](#9-프레임워크-통합)
 10. [연습 문제](#10-연습-문제)
+
+---
+
+## 이론과 원리
+
+캐시는 권위 있는 버전이 다른 곳에 있는 데이터의 사본을 보관하는 빠른 저장소입니다. 흥미로운 질문은 "Redis를 어떻게 호출하지?"가 아니라 "캐시와 원천이 의견 차이가 있을 때 무슨 일이 일어나는가?", "캐시가 가득 찼을 때 무엇이 축출되는가?", "많은 클라이언트가 동시에 miss할 때 무슨 일이 일어나는가?"입니다. 세 개념이 영토를 다룹니다.
+
+- **(A) 세 가지 캐싱 전략** — cache-aside, write-through, write-behind, 각각 다른 일관성 / 지연시간 / 복잡성 프로필.
+- **(B) 축출 정책** — LRU, LFU, ARC, 그리고 캐시가 RAM에 의해 제한될 때 그것들이 하는 역할.
+- **(C) 캐시 스탬피드 / dogpile** — 부하 아래 TTL 만료에서 무슨 일이 일어나는지, 데이터베이스가 녹는 것을 막는 방어책.
+
+### A. 세 가지 캐싱 전략
+
+캐시 전략은 본질적으로 *누가 언제 캐시에 쓰는가*에 관한 것입니다. 세 패턴이 지배합니다.
+
+#### A.1 Cache-aside (lazy loading)
+
+애플리케이션이 캐시에서 읽고, miss 시 데이터베이스에서 읽고 캐시를 채웁니다.
+
+```
+읽기:
+  if cache.hit(key):  return cache.get(key)
+  data = db.get(key)
+  cache.set(key, data, ttl=300)
+  return data
+
+쓰기:
+  db.update(key, value)
+  cache.delete(key)   # 또는 새 값으로 set
+```
+
+성질:
+
+- 캐시는 *side cache*입니다 — 애플리케이션이 책임자입니다.
+- 쓰기나 축출 후 첫 읽기는 느립니다(캐시 miss).
+- 강한 일관성은 모든 쓰기에서 캐시를 무효화해야 합니다 — 한 프로세스에서는 쉽고, 서비스 간에는 어렵습니다.
+
+이것이 기본 패턴입니다. cache-aside가 맞지 않을 때만 다른 것에 손을 대세요.
+
+#### A.2 Write-through
+
+쓰기는 캐시를 거쳐 데이터베이스로 갑니다. 읽기는 항상 캐시에서 옵니다.
+
+```
+쓰기:
+  cache.set(key, value)
+  db.update(key, value)  # 동기
+
+읽기:
+  return cache.get(key)  # 항상 채워져 있음
+```
+
+성질:
+
+- 캐시는 항상 데이터베이스와 일관됩니다(둘 다 쓰기에 성공한다고 가정).
+- 쓰기 지연시간은 `cache_write + db_write`입니다(write-behind보다 느림).
+- 캐시 크기가 모든 읽기를 보관해야 합니다 — 큰 데이터셋에는 비쌉니다.
+- 캐시가 차가우면(재시작 후) 채워질 때까지 모든 읽기가 miss합니다. 종종 cache-warming 전략과 짝지어 사용.
+
+읽기가 빨라야 하고 일관성이 쓰기 지연시간보다 더 중요할 때 사용하세요.
+
+#### A.3 Write-behind (write-back)
+
+쓰기는 캐시로 가고, 데이터베이스는 비동기적으로(종종 배치로) 업데이트됩니다.
+
+```
+쓰기:
+  cache.set(key, value)
+  queue.push(("write", key, value))  # async 워커가 이를 읽음
+
+워커 (별도):
+  for 큐의 쓰기 배치:
+    db.bulk_update(batch)
+```
+
+성질:
+
+- 가장 낮은 쓰기 지연시간(요청을 블로킹하는 것은 캐시 쓰기뿐).
+- 가장 높은 처리량(쓰기가 배치됨).
+- 데이터 손실 위험: 큐가 비기 전에 캐시가 충돌하면, 큐된 쓰기가 사라집니다.
+- 결과적 일관성: 지연 창 동안 데이터베이스 읽기는 stale 데이터를 봅니다.
+
+데이터가 교체 가능한(analytics 카운터, 텔레메트리) 또는 캐시가 지속성 있는(AOF persistence를 가진 Redis) 고처리량 쓰기 워크로드에 사용하세요.
+
+#### A.4 전략 고르기
+
+| 전략 | 일관성 | 읽기 지연시간 | 쓰기 지연시간 | 복잡성 |
+|----------|-------------|--------------|---------------|------------|
+| Cache-aside | 결과적 | miss 시 DB | 빠름 | 낮음 |
+| Write-through | 강함 | 캐시만 | 느림 | 중간 |
+| Write-behind | 결과적 | 캐시만 | 가장 빠름 | 높음 |
+
+대부분의 앱이 cache-aside를 씁니다. 특화된 워크로드가 write-through(실시간 대시보드)나 write-behind(카운터, analytics)를 씁니다.
+
+### B. 축출 정책
+
+캐시는 유한한 RAM을 보관합니다. 새 키를 set하는데 캐시가 가득 차 있으면, 무언가가 축출되어야 합니다. 축출 정책이 무엇을 결정합니다.
+
+#### B.1 고전들
+
+- **LRU (Least Recently Used).** 가장 오래 접근되지 않은 키를 축출. 이중 연결 리스트 + 해시맵으로 구현되며, 접근이 노드를 앞으로 이동시킵니다. 단순, 낮은 오버헤드, 최근 사용된 항목이 다시 사용될 가능성이 높은 전형적 접근 패턴에 좋음.
+- **LFU (Least Frequently Used).** 가장 낮은 접근 빈도의 키를 축출. 거의 접근되지 않는 키의 long-tail이 있는 워크로드에서 LRU보다 좋지만, 키당 카운터가 필요. "scan pollution"에 취약 — 차가운 데이터의 일회성 스캔이 빈도를 부풀려 hot 데이터를 축출시킵니다.
+- **FIFO (First In, First Out).** 삽입 시간으로 가장 오래된 키를 축출. 가장 단순; 거의 최선이 아님.
+
+#### B.2 현대 하이브리드
+
+- **ARC (Adaptive Replacement Cache).** 두 개의 LRU 리스트(최근에 한 번 사용, 자주 사용)를 유지하고 동적으로 균형을 맞춥니다. Scan pollution에 저항. 일부 사용에 특허; 메인라인 Redis에 없음.
+- **TinyLFU / W-TinyLFU.** 빈도 스케치(Count-Min)가 새 키의 예측 빈도가 LFU 후보를 초과할 때만 그것을 받아들입니다. Caffeine(Java 캐시 라이브러리)에서 사용, 일반 캐시에 대해 state-of-the-art.
+
+#### B.3 Redis의 축출 정책
+
+Redis는 `maxmemory-policy`를 통해 메뉴를 제공합니다.
+
+```
+allkeys-lru           # 모든 키에 걸친 LRU
+allkeys-lfu           # 모든 키에 걸친 LFU (Redis 4+)
+volatile-lru          # TTL이 설정된 키에만 LRU
+volatile-lfu          # TTL이 설정된 키에만 LFU
+allkeys-random        # 무작위 축출 (거의 유용하지 않음)
+volatile-ttl          # TTL에 가장 가까운 키 축출
+noeviction            # 가득 찼을 때 쓰기 거부 (오류 반환)
+```
+
+선택은 워크로드에 달려 있습니다.
+
+- **순수 캐시** (모든 것이 best-effort): `allkeys-lru` 또는 `allkeys-lfu`.
+- **같은 Redis의 캐시 + 영구 데이터 혼합**: `volatile-lru`(TTL이 있는 키만 축출).
+- **축출 받아들일 수 없음** (예: 세션 저장소): `noeviction`과 RAM 과대 공급.
+
+### C. 캐시 스탬피드 / Dogpile
+
+캐시가 키 X를 TTL 300s로 보관합니다. 300초에 X가 만료됩니다. 301초에 1000개의 동시 요청이 모두 miss합니다. 모두 1000개가 X를 재계산하기 위해 동시에 데이터베이스를 쿼리합니다. 데이터베이스가 녹습니다.
+
+이것이 **캐시 스탬피드**(또는 "dogpile")입니다. 가장 흔한 프로덕션 캐시 실패 모드입니다. 단순한 것부터 정교한 것까지 세 가지 방어.
+
+#### C.1 Locking (single-flight)
+
+첫 요청이 miss하면 `lock:X`로 키된 Redis 락을 잡습니다. miss하는 다른 요청은 그 락에서 블로킹됩니다. 첫 요청이 X를 계산하고, 캐시를 채우고, 락을 해제합니다. 다른 요청이 재시도하고, 캐시에서 X를 찾고, 반환합니다.
+
+```python
+def get(key):
+    val = cache.get(key)
+    if val is not None: return val
+    with redis.lock(f"lock:{key}", timeout=5):
+        # 락 획득 후 더블 체크
+        val = cache.get(key)
+        if val is not None: return val
+        val = db.get(key)
+        cache.set(key, val, ttl=300)
+        return val
+```
+
+락은 N개의 동시 계산을 1개로 만듭니다. 위험: X가 *매우* hot이면 락 contention — 많은 요청이 락에서 직렬화됩니다. 보유자가 죽으면 데드락을 피하기 위해 락 타임아웃을 사용하세요.
+
+#### C.2 확률적 조기 갱신 (XFetch)
+
+TTL이 발화하기를 기다리는 대신, 만료 약간 전에 *확률적으로* 캐시를 갱신합니다. 만료에 가까울수록 확률이 높아집니다.
+
+```python
+def get(key):
+    val, ttl_remaining = cache.get_with_ttl(key)
+    # 만료에 가까울 때 무작위로 재계산
+    if val is None or random() < beta * ttl_remaining_factor:
+        val = db.get(key)
+        cache.set(key, val, ttl=300)
+    return val
+```
+
+XFetch 알고리즘이 이를 형식화합니다. 이득: 캐시가 좀처럼 완전히 만료되지 않으므로 스탬피드가 시작되지 않습니다. 락이 필요 없습니다.
+
+#### C.3 Request coalescing
+
+캐시 라이브러리가 같은 키에 대한 보류 중 lookup을 감지하고 하나의 진행 중 백엔드 호출에 합칩니다. 첫 miss가 데이터베이스 쿼리를 시작하고, 같은 키에 대한 동시 miss가 자체 쿼리를 발행하지 않고 그 결과를 기다립니다.
+
+이것이 Go의 `golang.org/x/sync/singleflight`가 하는 것입니다. Caffeine에 비슷한 `LoadingCache`가 있습니다. 규율은 애플리케이션이 아니라 *캐시 라이브러리*에 있습니다 — 일단 그것이 있으면 모든 캐시 lookup이 스탬피드 안전합니다.
+
+#### C.4 방어책 비교
+
+| 방어 | 복잡성 | 효과 | 사용 시기 |
+|---------|------------|---------------|-------------|
+| Locking | 낮음 | 높음 | 비싼 재계산이 있는 hot 키 |
+| 확률적 조기 갱신 | 중간 | 매우 높음 | 동기 캐시 라이브러리가 뒷받침하는 캐시 |
+| Request coalescing | 라이브러리 수준 | 높음 | 현대 캐시 라이브러리에 내장 |
+
+프로덕션 캐시는 보통 결합합니다: 확률적 갱신이 채워진 상태를 유지하고, coalescing이 잔여 동시 miss를 처리합니다.
+
+### 이론에서 아래 패턴으로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (Redis 기초)는 데이터 타입과 모든 패턴을 뒷받침하는 인메모리 저장소를 다룹니다.
+- §2 (Cache-aside)는 §A.1을 구체적인 코드로.
+- §3 (Write-through / Write-behind)는 §A.2와 §A.3을 프레임워크 통합과 함께.
+- §4 (캐시 무효화)는 cache-aside의 일관성 이야기로, TTL과 이벤트 기반 무효화를 포함.
+- §5 (세션 저장소로서의 Redis)는 §B.3의 `noeviction` 정책으로 Redis를 강하게 일관된 저장소로 사용.
+- §6 (속도 제한)은 Redis 원자적 연산(`INCR`, scripting)을 사용 — §C.1과 같은 single-flight 규율.
+- §7 (Pub/Sub)은 브로드캐스트 메시징 — 서비스 간 캐시 무효화에 올바른 도구.
+- §8 (Streams)는 지속성 로그 스타일 메시징 — 메시지 버스 공간(레슨 21)에서 Kafka와 경쟁하는 Redis.
+- §9 (프레임워크 통합)은 FastAPI, Express, Django에 걸친 각 패턴의 언어 특화 배선을 보여줍니다.
 
 ---
 

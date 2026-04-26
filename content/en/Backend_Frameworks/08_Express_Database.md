@@ -20,6 +20,8 @@ Every serious backend application needs persistent data storage. While you could
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — what an ORM actually does compared to a query builder, why prepared statements are the only real defense against SQL injection, and how transactions, isolation levels, and the connection pool fit together.
+
 1. [Prisma ORM Overview](#1-prisma-orm-overview)
 2. [Project Setup](#2-project-setup)
 3. [Schema Definition](#3-schema-definition)
@@ -30,6 +32,159 @@ Every serious backend application needs persistent data storage. While you could
 8. [Transaction Handling](#8-transaction-handling)
 9. [Connecting to PostgreSQL](#9-connecting-to-postgresql)
 10. [Practice Problems](#10-practice-problems)
+
+---
+
+## Theory & Principles
+
+A database layer in a Node app rests on three orthogonal mechanisms. Prisma's API hides them behind a fluent type-safe surface, but every production debugging session eventually requires you to look beneath the surface.
+
+- **(A) ORM vs query builder vs raw SQL** — three different abstraction levels with different tradeoffs.
+- **(B) Prepared statements as injection defense** — why `${userInput}` interpolation is unsafe and what placeholders do at the protocol level.
+- **(C) Transactions and isolation** — what `BEGIN`/`COMMIT` actually buy and how the four ANSI isolation levels prevent specific anomalies.
+
+### A. ORM, Query Builder, Raw SQL: A Spectrum
+
+Three layers of database access sit at different points on the abstraction-vs-control axis. A real app usually mixes them.
+
+#### A.1 The three levels
+
+| Level | Example | What you write | What runs |
+|-------|---------|----------------|-----------|
+| Raw SQL | `pg.query("SELECT * FROM users WHERE id = $1", [42])` | SQL strings + bind values | Exactly what you typed |
+| Query builder | `knex("users").where("id", 42).first()` | Chainable JS calls | Generated SQL, mostly transparent |
+| ORM | `prisma.user.findUnique({ where: { id: 42 } })` | Object-shaped queries returning model objects | Generated SQL + object hydration + relation graph |
+
+Going down the table, you trade control for convenience. The ORM gives you typed model objects, eager loading, and migration generation; raw SQL gives you exact control over the query plan.
+
+#### A.2 What an ORM adds beyond a query builder
+
+A query builder generates SQL but returns plain row objects. An ORM does more:
+
+1. **Object hydration.** A row becomes a typed model instance (or, in Prisma's case, a typed plain object). The shape matches your schema declaration.
+2. **Relation graphs.** `include: { posts: true }` performs the join (or selectinload-style follow-up query, like SQLAlchemy from Lesson 04 §C.2) and assembles a nested object graph.
+3. **Schema as source of truth.** The schema file drives migrations, the typed client, and validation — change it once, the whole stack updates.
+4. **Identity / change tracking** — Prisma omits this (no identity map), unlike SQLAlchemy. This is a deliberate simplification: each query returns fresh objects.
+
+The cost: ORMs make some patterns awkward (window functions, CTEs, complex aggregations). Most ORMs offer an "escape hatch" — `prisma.$queryRaw` in Prisma — for the cases where SQL is the right tool.
+
+#### A.3 The N+1 problem returns
+
+The same N+1 trap from Lesson 04 §C.1 exists in Prisma:
+
+```javascript
+const users = await prisma.user.findMany();
+for (const user of users) {
+    const posts = await prisma.post.findMany({ where: { userId: user.id } });
+}
+```
+
+This is N+1: one query for users, N queries for posts. The fix is the same as SQLAlchemy's `selectinload`:
+
+```javascript
+const users = await prisma.user.findMany({ include: { posts: true } });
+```
+
+Prisma issues a single follow-up query `WHERE userId IN (...)` and assembles the graph. Two round-trips total, regardless of N.
+
+### B. Prepared Statements and SQL Injection
+
+The single most consequential security property of any database layer is **whether user input can become SQL syntax**. The defense — used by every reputable database driver — is *prepared statements*.
+
+#### B.1 The vulnerability shape
+
+The unsafe pattern, in any language:
+
+```javascript
+const query = `SELECT * FROM users WHERE name = '${req.body.name}'`;
+db.query(query);
+```
+
+If `req.body.name` is `' OR '1'='1`, the resulting SQL is `... WHERE name = '' OR '1'='1'` — which selects every user. If it is `'; DROP TABLE users; --`, you have lost the table. The root cause is that user input was concatenated into SQL syntax; the database parser cannot tell which characters are "data" and which are "code".
+
+#### B.2 What prepared statements do
+
+A prepared statement separates the SQL template from its parameters at the wire-protocol level:
+
+```
+1. Driver sends: "SELECT * FROM users WHERE name = $1"   (PARSE)
+2. Database parses, returns a plan id                    (PARSE COMPLETE)
+3. Driver sends: ["alice"]                               (BIND)
+4. Database executes the cached plan with the bind value (EXECUTE)
+```
+
+The database parses the template *before* it sees the parameter. The parameter is bound to a placeholder slot — there is no syntactic context where it could become SQL. `' OR '1'='1` is a literal string value of `name`, not a piece of code.
+
+This is the defense. Every parameterized query — `pg.query(sql, params)`, `mysql2`'s `?` placeholders, Prisma's `where: { name }` — uses prepared statements under the hood.
+
+#### B.3 Why ORMs are "safe by default"
+
+You cannot accidentally interpolate user input into Prisma's API. `prisma.user.findMany({ where: { name } })` always produces a parameterized query. The escape hatch `$queryRawUnsafe` exists, and it is named exactly that to make you flinch — its safe sibling `$queryRaw` uses tagged-template literal syntax that forces parameterization.
+
+The lesson generalizes: **any query interface that exposes a string-only API is dangerous; any interface that distinguishes template from values is safe**. Prefer the latter.
+
+### C. Transactions and Isolation
+
+A transaction groups multiple SQL statements into one atomic unit: either all succeed and become visible together (`COMMIT`), or none do (`ROLLBACK`). On top of atomicity sits the isolation problem — what should happen when two transactions touch the same data concurrently?
+
+#### C.1 ACID, briefly
+
+- **Atomicity** — all or nothing.
+- **Consistency** — constraints (`UNIQUE`, `FOREIGN KEY`, `CHECK`) hold at every commit boundary.
+- **Isolation** — concurrent transactions appear to run in some serial order (subject to the chosen level).
+- **Durability** — a committed transaction survives a crash.
+
+Atomicity is a wrapper concern: `BEGIN`, run statements, `COMMIT` or `ROLLBACK`. Isolation is the deep one.
+
+#### C.2 The four ANSI isolation levels
+
+Each level prevents a specific class of anomaly that the next-weaker level allows:
+
+| Level | Dirty read | Non-repeatable read | Phantom read |
+|-------|------------|---------------------|--------------|
+| READ UNCOMMITTED | possible | possible | possible |
+| READ COMMITTED (PostgreSQL default) | prevented | possible | possible |
+| REPEATABLE READ (MySQL default) | prevented | prevented | possible (PG: also prevented) |
+| SERIALIZABLE | prevented | prevented | prevented |
+
+- **Dirty read.** Transaction A sees uncommitted writes from B; if B rolls back, A read garbage.
+- **Non-repeatable read.** A reads the same row twice and gets different values because B committed in between.
+- **Phantom read.** A re-runs the same query and sees new rows because B inserted.
+
+Higher isolation is safer but slower (more locking, more aborts in optimistic concurrency control). Most apps run at READ COMMITTED and handle the remaining anomalies explicitly: `SELECT FOR UPDATE` to lock rows, optimistic version checks (`UPDATE ... WHERE version = ?`), or escalating to SERIALIZABLE for known critical paths.
+
+#### C.3 Transactions in Prisma
+
+```javascript
+await prisma.$transaction(async (tx) => {
+    const order = await tx.order.create({ data: { ... } });
+    await tx.inventory.update({ where: { sku }, data: { qty: { decrement: 1 } } });
+});
+```
+
+The callback runs in a single transaction. If anything throws, the whole thing rolls back. The `tx` parameter is a Prisma client scoped to that transaction — using the outer `prisma` inside the callback would run *outside* the transaction, defeating the point.
+
+Prisma also supports an "interactive batch" form (`prisma.$transaction([query1, query2])`) that runs all queries in one transaction without needing a callback. Useful when the queries do not depend on each other's results.
+
+#### C.4 Why the connection pool matters
+
+A transaction holds its connection until commit or rollback. With a `pool_size` of 10, you can have 10 concurrent open transactions. Above that, callers wait. Long-running transactions starve every other request — the same pool exhaustion pattern from Lesson 04 §A.1, but more dangerous because long transactions also hold row locks.
+
+The discipline: keep transactions short. Do not call external HTTP services or wait for user input inside a transaction. If you must, redesign so the transaction wraps only the database work.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Prisma overview) introduces the §A.2 schema-as-source-of-truth model.
+- §2 (Setup) wires Prisma into the §A connection model and bootstraps the type-safe client.
+- §3 (Schema definition) is the declarative source that drives §A.2 generation: types, migrations, validation.
+- §4 (CRUD operations) is the type-safe API that produces the §B.2 prepared statements automatically.
+- §5 (Relations) operationalizes §A.3 — `include` defeats the N+1 trap.
+- §6 (Migrations) is the schema evolution tool: each schema change becomes a versioned migration script.
+- §7 (Query optimization) refines §A.3: `select` to fetch only needed columns, and indexing strategies.
+- §8 (Transactions) is the §C atomicity wrapper, with the §C.4 caveat about pool exhaustion.
+- §9 (Connecting to PostgreSQL) is the §A connection pool configuration discussed in detail in Lesson 04 §A.1.
 
 ---
 

@@ -18,6 +18,8 @@ Django is a high-level Python web framework that encourages rapid development an
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — the WSGI interface that runs Django, the MTV pattern compared to MVC, and the request lifecycle as it travels through middleware, URL resolution, view, and response.
+
 1. [Django Philosophy](#1-django-philosophy)
 2. [Project Structure](#2-project-structure)
 3. [MTV Pattern](#3-mtv-pattern)
@@ -27,6 +29,165 @@ Django is a high-level Python web framework that encourages rapid development an
 7. [Django Admin Interface](#7-django-admin-interface)
 8. [Settings and Configuration](#8-settings-and-configuration)
 9. [Practice Problems](#9-practice-problems)
+
+---
+
+## Theory & Principles
+
+Django is older than FastAPI by 15 years and predates async Python entirely. Its design choices — synchronous WSGI, the unique MTV naming, the convention-heavy project structure — only make sense once you know what they reacted against and what they enabled. Three concepts cover almost every later decision.
+
+- **(A) WSGI: the synchronous server interface Django was built on** — and how Django 4+ added ASGI without breaking the model.
+- **(B) MTV vs MVC** — the same idea with different names, and why Django picked these.
+- **(C) The request lifecycle** — middleware → URL resolver → view → response, with hooks at every stage.
+
+### A. WSGI: The Synchronous Server Interface
+
+WSGI (Web Server Gateway Interface, PEP 3333) is the contract that lets a Python web app talk to a server (Gunicorn, uWSGI, mod_wsgi). It is *the* Python web standard from 2003 to ~2018, and Django was built squarely on it.
+
+#### A.1 The WSGI callable
+
+A WSGI app is one synchronous callable:
+
+```python
+def application(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return [b"Hello"]
+```
+
+- `environ` is a dict containing the request: method, path, headers, the body as a file-like object.
+- `start_response` is a callback the app calls *exactly once* with status and headers, before yielding bytes.
+- The return value is an iterable of bytes — the response body.
+
+That is it. No event loop, no streaming primitives, no WebSocket. The simplicity is what made WSGI ubiquitous; it is also what made the Python web ecosystem need ASGI for the next decade.
+
+#### A.2 What this implies for Django's runtime model
+
+Django's request handler is a WSGI callable. Each request runs to completion on one Gunicorn worker process. Concurrency comes from running N worker processes (typically `2 × CPU + 1`), each handling one request at a time. While a worker is blocked on `db.execute(...)`, no other request makes progress on that worker.
+
+This is the **thread-per-request** model from Lesson 01 §C.1. Throughput is linear in worker count, bounded by RAM. A 4-CPU box might run 9 Gunicorn workers, handling 9 simultaneous requests.
+
+The trade for this simplicity is: no shared in-memory state across requests (workers are separate processes), and any blocking call ties up a whole worker for its full duration. Both are usually fine for the typical CRUD/admin app Django targets.
+
+#### A.3 Async Django (4.x+)
+
+Django 4 introduced ASGI support — handlers can be `async def`, and middleware can be async. The ORM is partially async (with `aget`, `acreate`, etc.). But the framework remains *fundamentally* sync-shaped: most of `django.contrib.*` is still synchronous, and async ORM operations under the hood often hand off to a thread pool.
+
+The pragmatic position: use async Django when you have specific high-concurrency endpoints (chat, SSE, slow upstream calls); stick with sync workers for everything else. Mixing is supported and common.
+
+### B. MTV vs MVC: Same Pattern, Different Names
+
+Most web frameworks use **MVC** (Model-View-Controller). Django's docs call it **MTV** (Model-Template-View). It is not a different pattern — it is the same idea with two names swapped.
+
+#### B.1 The mapping
+
+| MVC term | MTV term | What it does |
+|----------|----------|--------------|
+| Model | Model | Database schema and business logic |
+| View | Template | Rendering layer (HTML, JSON) |
+| Controller | View | The function that handles a request and decides what to render |
+
+So the Django "view" is what other frameworks call the "controller", and the Django "template" is what they call the "view". Confusing only because of the name collision; the data flow is identical:
+
+```
+HTTP request → URL router → View (controller) → Model (database)
+                                    ↓                ↑
+                                 Template (renders)  ┘
+                                    ↓
+                              HTTP response
+```
+
+#### B.2 Why Django picked these names
+
+The Django authors argue: in any framework, the framework itself owns the controller (the URL → handler dispatch). What you write is the *view* — the code that turns model data into a response. The "template" name then captures the rendering layer, which is its own concern (HTML files with substitution markers, separable from the view code).
+
+Whether the rename is a clarification or a tax depends on your background. Either way, when you read Django docs that say "view", read "controller in your head" if it helps.
+
+#### B.3 The MTV separation in practice
+
+Django's standard project structure mirrors MTV:
+
+```
+myapp/
+├── models.py       # M — database schema, querysets, business invariants
+├── views.py        # V (= controller) — handlers for URL routes
+├── templates/      # T — HTML templates, rendered with context dicts
+├── urls.py         # routing, not part of MTV
+├── forms.py        # form rendering and validation, often spans M and T
+└── admin.py        # auto-generated admin UI, derived from models
+```
+
+For an API-only Django app (DRF, Lesson 12), templates collapse to JSON serializers. The pattern still applies; the rendering layer just produces a different output format.
+
+### C. The Request Lifecycle
+
+Every request traverses the same path through Django. Knowing the order of stages explains where each hook fits and what data is available where.
+
+#### C.1 The full chain
+
+```
+WSGI server (Gunicorn)
+    ↓
+WSGIHandler — Django's WSGI app
+    ↓
+Middleware (request phase, top → bottom)
+    ↓
+URL resolver — match URL pattern to view callable
+    ↓
+View — the function/class you wrote
+    ↓
+ORM queries — lazy QuerySets, fired when the result is needed
+    ↓
+Template render — context dict + template = HTML/JSON
+    ↓
+HttpResponse object
+    ↓
+Middleware (response phase, bottom → top)
+    ↓
+WSGI server returns bytes to client
+```
+
+#### C.2 Middleware as the wrapping layer
+
+Django middleware is structurally similar to Express middleware, but with a different shape. Each middleware is a class with `__init__(get_response)` and `__call__(request)`. The `__call__` body has the same onion structure as FastAPI's middleware (Lesson 03 §C):
+
+```python
+class MyMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # before view
+        response = self.get_response(request)  # passes through to next middleware / view
+        # after view
+        return response
+```
+
+The order in `MIDDLEWARE` setting is the request order; response phase runs in reverse. Standard order (top → bottom): `SecurityMiddleware`, `SessionMiddleware`, `AuthenticationMiddleware`, `CsrfViewMiddleware`, `ClickjackingMiddleware`. Each adds attributes to `request` (`request.user`, `request.session`) or modifies the response.
+
+#### C.3 URL resolution: the `urls.py` tree
+
+Django's URL resolver walks a tree of `urlpatterns` lists. The root `urls.py` includes app-level `urls.py`s with `include()`. Each pattern is a `path(...)` (string-based) or `re_path(...)` (regex-based). The first match wins; if no pattern matches, Django returns `404`.
+
+Path converters (`<int:pk>`, `<slug:name>`, `<uuid:id>`) capture URL segments and pass them as kwargs to the view, with type conversion built in.
+
+#### C.4 The view contract
+
+A view is any callable with signature `(request, *args, **kwargs) -> HttpResponse`. Function-based views (FBVs) are plain functions. Class-based views (CBVs) are classes with HTTP method handlers (`get`, `post`, `put`, ...). Django's `as_view()` factory turns a CBV class into a view callable, dispatching to the right method handler.
+
+Both produce an `HttpResponse` (or subclass like `JsonResponse`, `StreamingHttpResponse`, `HttpResponseRedirect`). That object is what middleware's response phase wraps and the WSGI server returns.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Django philosophy) names the design choices that flow from §A's WSGI heritage and §C's middleware-heavy lifecycle.
+- §2 (Project structure) is the directory layout that maps to §B.3 — files for each MTV layer plus the routing files.
+- §3 (MTV pattern) is the §B.1 explicit walkthrough.
+- §4 (URL routing) is §C.3 in concrete code: `path()`, `include()`, path converters.
+- §5 (Views) is the §C.4 view contract — both FBV and CBV variants of "callable returning `HttpResponse`".
+- §6 (Models basics) introduces the M of MTV; the next lesson dives into the ORM internals.
+- §7 (Admin interface) is a §B-style auto-generated rendering layer derived from models.
+- §8 (Settings and configuration) configures the §C.2 middleware list and the WSGI/ASGI deployment from §A.
 
 ---
 

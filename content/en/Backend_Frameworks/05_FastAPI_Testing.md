@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — what TestClient does to ASGI in-process, the four pytest fixture scopes and their lifecycle implications, and why dependency_overrides + transactional rollback give you isolation without throw-away databases.
+
 1. [TestClient for Synchronous Testing](#1-testclient-for-synchronous-testing)
 2. [httpx.AsyncClient for Async Testing](#2-httpxasyncclient-for-async-testing)
 3. [pytest Fixtures and conftest.py](#3-pytest-fixtures-and-conftestpy)
@@ -27,6 +29,139 @@
 7. [Coverage Reporting](#7-coverage-reporting)
 8. [Practice Problems](#8-practice-problems)
 9. [References](#9-references)
+
+---
+
+## Theory & Principles
+
+A test suite for a FastAPI application is not just "calling the endpoints and checking the JSON". It sits on top of three independent mechanisms that must be understood separately for the suite to be fast, isolated, and correct.
+
+- **(A) In-process HTTP via the ASGI transport** — `TestClient` does not open a TCP socket; it speaks ASGI directly to the app object.
+- **(B) Fixture scopes as a lifecycle hierarchy** — `function`, `class`, `module`, `session` decide what gets built once vs rebuilt for every test.
+- **(C) Test isolation strategies** — transactional rollback, database-per-test, and dependency injection together form the contract of "this test cannot see another test's data".
+
+### A. The In-Process ASGI Transport
+
+In production, an HTTP request travels: client → kernel → TCP → kernel → uvicorn → ASGI → FastAPI → handler. In tests, that whole chain is overkill. The `TestClient` (and `httpx.AsyncClient` with `ASGITransport`) collapses it: client → ASGI dict → FastAPI → handler. Same code path inside FastAPI; no socket involved.
+
+#### A.1 What TestClient actually does
+
+`TestClient(app)` is `httpx.Client` configured with a special `WSGITransport`/`ASGITransport` that does not open a network socket. When you call `client.get("/items/")`, the transport:
+
+1. Builds an ASGI `scope` dict from the URL, method, and headers (the same shape from Lesson 02 §A.1).
+2. Calls `await app(scope, receive, send)` directly, where `receive` yields the request body and `send` collects the response messages.
+3. Reassembles the collected messages into an `httpx.Response` object.
+
+The whole exchange runs in the test process, in memory. Round-trip latency is microseconds, not milliseconds. There is no port to allocate, no listener thread, no TLS handshake.
+
+#### A.2 Why this matters for fidelity
+
+The same FastAPI application instance handles the request. All middleware, all `Depends`, all serialization runs. The only thing skipped is the *network*. That makes ASGI in-process tests genuine integration tests — a passing test means the request would also succeed in production, modulo network/TLS issues.
+
+The cost: tests cannot exercise behaviors that depend on the network layer. If you need to test reconnect logic, real timeouts, or proxy behavior, you need a real server. For 99% of API tests, in-process is what you want.
+
+#### A.3 Sync vs async clients: the same transport
+
+`TestClient` is the sync wrapper; under the hood it runs the async app on an internal event loop. For tests of `async def` handlers that await fixtures, you usually want `httpx.AsyncClient` directly with `ASGITransport(app=app)` — that way both your test code and the handler share the same event loop, and you can `await` fixture resources naturally.
+
+The choice is ergonomic, not performance: both flow through the same ASGI mechanism.
+
+### B. Fixture Scopes: A Lifecycle Hierarchy
+
+pytest fixtures have four built-in scopes, ordered from narrowest to widest:
+
+| Scope | Built when | Torn down when | Cost amortized over |
+|-------|------------|----------------|---------------------|
+| `function` (default) | Each test starts | Each test ends | One test |
+| `class` | First test in a class needs it | Last test in the class ends | All tests in the class |
+| `module` | First test in a file needs it | Last test in the file ends | All tests in the file |
+| `session` | First test in the run needs it | The whole run ends | The entire test suite |
+
+The choice is a tradeoff between **isolation** and **speed**:
+
+- Building an entire SQLAlchemy engine on `function` scope is correct but extremely slow — you pay engine setup × N tests.
+- Building it on `session` scope is fast but risks state leaking between tests if you do not reset it.
+
+The conventional pattern: heavyweight, read-only resources at `session` (the engine, the FastAPI app instance). Mutable per-test state at `function` (a database session, an HTTP client, the dependency override). This minimizes setup cost while keeping each test's mutations invisible to its neighbors.
+
+#### B.1 Fixture composition
+
+A fixture can request other fixtures by name:
+
+```python
+@pytest.fixture(scope="session")
+def engine(): ...
+
+@pytest.fixture(scope="function")
+def db_session(engine): ...
+
+@pytest.fixture(scope="function")
+def client(db_session): ...
+```
+
+pytest builds a DAG (just like the FastAPI Depends DAG from Lesson 03), respects scope (`function` cannot depend on a wider scope being narrower than itself, but the reverse is fine), and tears down in reverse build order.
+
+#### B.2 `yield` for setup/teardown
+
+The `yield` pattern in fixtures matches the Depends pattern from Lesson 03:
+
+```python
+@pytest.fixture
+def db_session(engine):
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = SessionLocal(bind=connection)
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+```
+
+Setup before yield, teardown after. The teardown runs even if the test fails. This is the foundation of test isolation in §C.
+
+### C. Test Isolation: The Three Mechanisms
+
+The hardest property to maintain in a test suite is **isolation**: test B should not see anything test A did. Three mechanisms work together to provide it.
+
+#### C.1 Transactional rollback
+
+Instead of dropping and recreating the database for every test, wrap each test in a transaction that is rolled back at the end:
+
+```
+BEGIN
+  ... test runs, INSERTs, UPDATEs ...
+ROLLBACK
+```
+
+The database goes back to its starting state, but you never paid for `CREATE TABLE` per test. This is the standard pattern with SQLAlchemy: pin the session to a connection, begin a transaction, hand the session to the test, roll back when done.
+
+The subtlety: the test code must not call `session.commit()` directly, because that would close the outer transaction. The fix is a **savepoint** (`SAVEPOINT` / `ROLLBACK TO SAVEPOINT`) — a nested transaction. SQLAlchemy provides this with `connection.begin_nested()` and a hook that re-opens a new savepoint after every commit. The test sees normal commit semantics; the outer transaction still gets rolled back.
+
+#### C.2 dependency_overrides for fakes
+
+`app.dependency_overrides[get_db] = override_get_db` (from Lesson 03 §A.4) lets the test substitute a fake implementation of any dependency. For database tests, the override returns the test's transactional session. For external API tests, it returns a fake client. The handler is unmodified, but it now receives the test's controlled doubles.
+
+The override must be set up *before* `TestClient` makes its first request, and torn down after — usually in a fixture's setup/teardown. Otherwise an override leaks into the next test.
+
+#### C.3 Database per worker, not per test
+
+When tests run in parallel (`pytest-xdist`), all workers must not share one SQLite file or one PostgreSQL schema — they will trample each other. The pattern is **one database per worker**: pytest exposes `worker_id` ("gw0", "gw1", ...), and you suffix the database name with it. Within a worker, tests still serialize, so transactional rollback still works.
+
+The combination — session-scoped engine per worker, function-scoped transactional session, dependency-overridden handlers — gives the right balance: each test is isolated, the suite runs in seconds, and parallelism scales linearly with worker count.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (TestClient) is the §A.1 in-process ASGI transport with the sync wrapper.
+- §2 (httpx.AsyncClient) is the same §A.1 transport from an async test, sharing the loop with `async def` fixtures.
+- §3 (pytest fixtures and conftest.py) is the §B scope hierarchy and DAG composition, organized into a shared file.
+- §4 (Database fixtures) implements §C.1 transactional rollback on top of the §B.2 yield pattern.
+- §5 (dependency_overrides) is the §C.2 mechanism: substitute fakes without changing handlers.
+- §6 (Authentication flows) chains a "login → use token" sequence using TestClient — the §A path with auth headers.
+- §7 (Coverage) is the meta-tool that measures which code paths the test suite from §A–§C actually exercises.
 
 ---
 

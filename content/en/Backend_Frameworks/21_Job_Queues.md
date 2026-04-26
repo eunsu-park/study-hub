@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — the producer-consumer pattern at the core of every queue, the three delivery semantics (at-most-once, at-least-once, exactly-once) with the idempotency key that makes the second one practical, and the Kafka-vs-RabbitMQ distributed-queue comparison.
+
 1. [Why Job Queues](#1-why-job-queues)
 2. [Celery with Redis/RabbitMQ](#2-celery-with-redisrabbitmq)
 3. [Bull/BullMQ with Redis](#3-bullbullmq-with-redis)
@@ -29,6 +31,186 @@
 9. [Error Handling and Retry Strategies](#9-error-handling-and-retry-strategies)
 10. [Reliability Patterns](#10-reliability-patterns)
 11. [Practice Exercises](#11-practice-exercises)
+
+---
+
+## Theory & Principles
+
+A job queue is the canonical implementation of the producer-consumer pattern with persistence and retry. Every interesting decision in this lesson — at-most-once vs at-least-once, idempotency keys, dead-letter queues, priority — is downstream of three foundational ideas.
+
+- **(A) Producer-consumer over a durable queue** — the basic shape and the failure modes the queue protects against.
+- **(B) Delivery semantics** — at-most-once, at-least-once, exactly-once, and the idempotency-key pattern that makes "exactly-once" practical.
+- **(C) Distributed queues compared** — Redis (Celery, BullMQ), RabbitMQ, Kafka, and where each fits.
+
+### A. Producer-Consumer Over a Durable Queue
+
+The pattern: a producer puts a job into a queue, a consumer takes a job out, processes it, and acknowledges. The queue between them is *durable* — it survives crashes of either side.
+
+#### A.1 What the queue actually buys you
+
+Without a queue:
+
+```
+Web request → handler → send_email() (10s) → response
+```
+
+The user waits 10 seconds. If `send_email()` raises, the request fails. If the email server is down, every request that needs email fails.
+
+With a queue:
+
+```
+Web request → handler → queue.enqueue("send_email", ...) → response (immediate)
+                                ↓
+                            Worker pulls job, runs send_email, ACK or retry
+```
+
+Three things change:
+
+1. **Latency.** The user sees the response immediately; the email is "in flight" but the request is done.
+2. **Reliability.** If the email server is down, the job stays in the queue and retries. The web request still succeeded.
+3. **Scaling.** Email processing capacity scales independently from web request capacity. Add workers; queue drains faster.
+
+#### A.2 The persistence requirement
+
+For all of this to work, the queue must outlive a worker crash. If the worker pulls a job, starts processing, and crashes before completion, the job *must not* be lost. Two mechanisms achieve this:
+
+- **Acknowledgment (ACK) semantics.** The worker pulls a job and the queue marks it "in flight" — but does not delete it. Only after the worker successfully processes and ACKs does the queue actually delete. If the worker crashes (or fails to ACK within a timeout), the queue redelivers the job to another worker.
+- **Persistent storage.** Jobs survive a queue server restart. RabbitMQ writes to disk; Redis with AOF persistence does too; Kafka writes everything to disk by default.
+
+The combination — ACK + persistence — gives you "no job is lost". But it also gives you "a job might be delivered twice" (next section).
+
+#### A.3 Two-phase visibility
+
+The standard queue lifecycle for one job:
+
+```
+1. enqueued        ← producer pushed it
+2. running         ← worker pulled it, but hasn't ACKed
+3. completed       ← worker ACKed; queue deletes
+   OR
+3'. failed/retry   ← worker NACKed or timed out; queue redelivers
+4. dead letter     ← exhausted retries; moved to a separate queue for inspection
+```
+
+Each transition is durable. Operators can inspect "running" jobs (find stuck workers), "failed" jobs (retry counters), and the "dead letter" queue (jobs that exhausted retries). All three are critical for observability — see Lesson 17 §7.
+
+### B. Delivery Semantics
+
+When a queue redelivers a job, the consumer might process it twice. This is the consequence of crash recovery: there is no way to *know* whether a worker that disappeared mid-job actually completed the work. Three delivery contracts.
+
+#### B.1 At-most-once
+
+The producer fires and forgets; the queue makes no retry guarantees. If the worker crashes, the job is gone.
+
+```
+producer → queue → consumer (crashes) → nothing
+```
+
+Use when losing a job is acceptable: telemetry samples, "best-effort" notifications, low-value events. Never use for payments, orders, anything users see.
+
+#### B.2 At-least-once
+
+The default. The queue redelivers until ACKed. A job *will* succeed — but might be delivered (and processed) more than once.
+
+```
+producer → queue → consumer (crashes) → queue redelivers → consumer (succeeds, ACKs)
+```
+
+This is the right default for almost every workload. It also means **your consumer must be idempotent** — running it twice with the same input must produce the same outcome. Otherwise the user gets two emails, two charges, two records.
+
+#### B.3 Exactly-once: not really — but practically yes
+
+True "exactly-once" delivery is impossible in a distributed system without infinite coordination. What is achievable: **at-least-once delivery + idempotent consumers + idempotency keys**, which behaves like exactly-once from the user's perspective.
+
+The idempotency key pattern:
+
+```python
+def send_email_job(idempotency_key, to, subject, body):
+    if processed_keys.exists(idempotency_key):
+        return  # already done; skip
+    send_email(to, subject, body)
+    processed_keys.add(idempotency_key)
+```
+
+The producer attaches a unique key (UUID) per logical operation. The consumer checks whether that key has been processed; if so, no-op. If the queue redelivers, the second worker sees the key in `processed_keys` and skips. Net result: the email is sent once, no matter how many times the queue delivered.
+
+The idempotency-key pattern is the single most important design discipline in queue-based systems. Every consumer should be designed to be idempotent under at-least-once delivery.
+
+#### B.4 The retry strategy
+
+When a job fails, the queue retries with backoff:
+
+```
+attempt 1: fail, retry in 1s
+attempt 2: fail, retry in 2s
+attempt 3: fail, retry in 4s
+...
+attempt N: fail → move to dead-letter queue
+```
+
+Exponential backoff prevents a flood of retries from a struggling downstream service. After N attempts (typically 5-10), the job moves to a *dead-letter queue* (DLQ) — a separate queue for human inspection. The DLQ is critical operationally: it shows you which jobs are systematically failing without losing them.
+
+### C. Distributed Queues Compared
+
+Three categories of queue dominate the backend ecosystem. Each has a different design center.
+
+#### C.1 Redis-backed queues (Celery, BullMQ, Sidekiq)
+
+Use Redis lists or streams as the queue. Properties:
+
+- **Pros:** simple to operate, low latency, often already deployed for caching.
+- **Cons:** Redis persistence is limited (RDB snapshots, AOF append-only file). A crashed Redis can lose recently-acked jobs. Single-node throughput limit ~100K jobs/s.
+- **Best for:** small-to-medium apps where Redis is already in the stack.
+
+#### C.2 RabbitMQ (AMQP-based)
+
+A purpose-built message broker. Properties:
+
+- **Pros:** strong delivery guarantees, sophisticated routing (exchanges, bindings), per-message ACK, dead-letter exchanges built in. Mature operations tooling.
+- **Cons:** another piece of infrastructure to operate. Cluster setup is non-trivial.
+- **Best for:** apps that need enterprise messaging features, complex routing, or strict delivery guarantees.
+
+The exchange/binding model lets you implement fan-out (one message to many queues), topic-based routing (regex matching), or simple direct queues — all in the same broker.
+
+#### C.3 Kafka (log-based)
+
+Not a traditional queue — a *distributed commit log*. Producers append messages to a *topic*; consumers read from any offset they want. Properties:
+
+- **Pros:** massive throughput (millions of messages/s on a cluster), durable retention (keep messages for days/weeks), reprocessing (rewind to any offset), strict ordering within a partition.
+- **Cons:** higher latency than Redis or RabbitMQ. Operationally complex (ZooKeeper or KRaft, partitioning, consumer groups). Overkill for low-volume workloads.
+- **Best for:** event streaming, audit logs, analytics pipelines, anything where retention and replay matter.
+
+#### C.4 Partitioning vs exchanges
+
+The deepest architectural difference between Kafka and RabbitMQ is *how messages are distributed across consumers*.
+
+- **RabbitMQ exchanges + queues.** A message goes to one or more queues based on routing rules. Each queue has its own consumers. Order is per-queue.
+- **Kafka partitions.** A topic is split into partitions; each partition is consumed by exactly one consumer in a consumer group. Order is per-partition. Scale = add partitions + add consumers.
+
+Kafka's partitioning gives natural horizontal scale at the cost of within-key ordering needing co-located processing. RabbitMQ's exchange model gives flexible routing but no built-in partition concept — you build it yourself with multiple queues.
+
+#### C.5 Picking a queue
+
+| Workload | Queue |
+|----------|-------|
+| Background jobs in an existing Redis-using app | Celery on Redis / BullMQ |
+| Cross-team messaging with rich routing | RabbitMQ |
+| High-volume event streams, retention matters | Kafka |
+| AWS/GCP-native | SQS / Pub/Sub (managed equivalents of the above) |
+
+### From Theory to the Patterns Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Why job queues) sells the §A.1 producer-consumer story.
+- §2 (Celery + Redis/RabbitMQ) and §3 (BullMQ) are §C.1 and §C.2 — concrete framework + broker pairings.
+- §4 (Job lifecycle) walks the §A.3 enqueue → running → completed/dead-letter transitions.
+- §5 (Priority queues and delayed jobs) extends §A with priority (heap data structure) and time (sorted-set data structure).
+- §6 (Worker scaling) is the §C distributed-queue throughput story made concrete.
+- §7 (Monitoring) is the §A.3 in-flight/dead-letter inspection plus Lesson 17's three pillars applied to workers.
+- §8 (Common patterns) is the application-level shape (email, image processing, reports) running on top of §A.
+- §9 (Error handling and retry) is §B.4 backoff + DLQ in concrete code.
+- §10 (Reliability patterns) is §B.3's idempotency-key discipline plus saga / outbox patterns for cross-service correctness.
 
 ---
 

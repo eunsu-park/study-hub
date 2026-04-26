@@ -18,6 +18,8 @@ Express는 Node.js에서 가장 널리 사용되는 웹 프레임워크입니다
 
 ## 목차
 
+프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. Node.js 이벤트 루프(libuv 단계, microtask)가 실제로 무엇인지, Express 미들웨어 체인이 어떻게 continuation-passing style을 표현하는지, Request/Response가 내부적으로 어떻게 Node 스트림인지를 다룹니다.
+
 1. [Node.js와 Express 개요](#1-nodejs와-express-개요)
 2. [Express 애플리케이션 생성](#2-express-애플리케이션-생성)
 3. [라우팅](#3-라우팅)
@@ -26,6 +28,173 @@ Express는 Node.js에서 가장 널리 사용되는 웹 프레임워크입니다
 6. [Request와 Response 객체](#6-request와-response-객체)
 7. [모듈식 라우트를 위한 Router](#7-모듈식-라우트를-위한-router)
 8. [연습 문제](#8-연습-문제)
+
+---
+
+## 이론과 원리
+
+Express는 `node:http` 위의 얇은 계층입니다. "Express가 하는" 거의 모든 것은 사실 Express가 사용성 좋게 합성한 Node.js 프리미티브입니다. 세 개념이 프레임워크와 런타임을 분리하며, 이들을 분리해서 이해하면 Express의 API가 임의적이 아니라 필연적으로 느껴집니다.
+
+- **(A) Node.js 이벤트 루프** — 앱의 모든 콜백을 실행하는 libuv 기반 스케줄러.
+- **(B) Continuation-Passing Style로서의 미들웨어** — `(req, res, next)`는 Express 발명이 아니라 일반적인 CPS 패턴.
+- **(C) 스트림으로서의 Request와 Response** — 둘 다 스트림 인터페이스로 감싸인 EventEmitter이며, 메모리와 타이밍에 결과가 따른다.
+
+### A. Node.js 이벤트 루프
+
+Node.js는 단일 메인 스레드에서 JavaScript를 루프로 실행합니다. 루프는 잘 정의된 6개 단계(libuv 용어)를 가지며, 코드가 큐잉하는 모든 비동기 콜백은 그중 하나에서 실행됩니다. 코드가 어느 단계에 사는지를 알면 "왜 이게 저 순서로 실행됐지?"라는 모든 질문이 설명됩니다.
+
+#### A.1 libuv의 6단계
+
+이벤트 루프의 매 반복마다 libuv는 단계들을 순서대로 처리합니다. 각 단계는 자신의 콜백 큐를 갖습니다.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  ┌──────────┐                                               │
+│  │  timers  │ ← setTimeout / setInterval 콜백              │
+│  └────┬─────┘                                               │
+│       ↓                                                     │
+│  ┌────────────────────┐                                     │
+│  │ pending callbacks  │ ← 지연된 I/O 콜백 (TCP 오류 등)   │
+│  └────┬───────────────┘                                     │
+│       ↓                                                     │
+│  ┌──────────────────────┐                                   │
+│  │ idle, prepare        │ ← libuv 내부 사용                │
+│  └────┬─────────────────┘                                   │
+│       ↓                                                     │
+│  ┌──────┐                                                   │
+│  │ poll │ ← I/O 콜백: net, fs, child_process               │
+│  └──┬───┘                                                   │
+│     ↓                                                       │
+│  ┌────────┐                                                 │
+│  │ check  │ ← setImmediate 콜백                            │
+│  └──┬─────┘                                                 │
+│     ↓                                                       │
+│  ┌────────────────────┐                                     │
+│  │ close callbacks    │ ← socket.on('close', ...)          │
+│  └────────────────────┘                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+매 단계 전환 사이에 Node는 추가로 두 개의 큐를 비웁니다.
+
+- **`process.nextTick` 큐.** `process.nextTick(...)`로 스케줄된 콜백. 최우선.
+- **Microtask 큐.** 해결된 Promise, `await` 이어 받기.
+
+둘 다 다음 단계 전에 끝까지 실행됩니다. 그래서 `Promise.resolve().then(cb)`가 `setTimeout(cb, 0)` 콜백보다 *먼저* 실행됩니다 — 둘 다 "0 지연"인데도 microtask 큐가 그 사이에 비워지기 때문입니다.
+
+#### A.2 "논블로킹"이 여기서 중요한 이유
+
+Node의 모든 I/O 연산 — `fs.readFile`, `http` 요청, `db.query`(드라이버가 비동기일 때) — 은 콜백을 등록하고 즉시 반환합니다. 스레드는 다음 이벤트를 처리하기 위해 해방됩니다. I/O가 완료되면 libuv가 콜백을 `poll` 단계 큐에 넣고, 루프는 다음 반복에서 그것을 실행합니다.
+
+비용은 메인 스레드의 CPU 무거운 동기 함수가 진행 중인 *모든* 요청을 블로킹한다는 것입니다. 50ms 입력에 대한 `bcrypt.hashSync(password)`는 다른 어떤 요청도 50ms 동안 진전하지 못하게 만듭니다. 방어책은 `worker_threads`, 네이티브 비동기 API(`hashSync` 대신 `bcrypt.hash`), 자식 프로세스로의 떠넘기기입니다.
+
+#### A.3 Express에 대한 실용적 결과
+
+Express 핸들러는 그저 이 큐 중 하나에 스케줄된 콜백입니다.
+
+- `res.send("hello")`를 하는 핸들러는 동기적으로 실행되며 같은 I/O 콜백 안에서 끝납니다.
+- `await db.query(...)`를 하는 핸들러는 일시 중지되고, 루프가 다른 이벤트들을 처리하게 두며, 데이터베이스 응답이 도착하면 `poll` 단계에서 재개됩니다.
+- 동기적으로 throw하는 핸들러는 에러 처리 미들웨어가 잡지 *않으면* 프로세스를 죽입니다. `async` 함수 내부에서 throw하는 핸들러는 Promise를 reject합니다 — 잡지 않으면 Node가 `UnhandledPromiseRejection`을 로깅합니다(최신 Node에서는 종료까지).
+
+Express의 모든 성능 문제는 "무엇이 루프를 블로킹하고 있는가?" 또는 "이 콜백이 어느 큐에 앉아 있는가?"로 추적할 수 있습니다.
+
+### B. Continuation-Passing Style로서의 미들웨어
+
+Express 미들웨어 시그니처는 다음과 같습니다.
+
+```javascript
+function middleware(req, res, next) {
+    // 무언가를 하고
+    next();           // 다음 미들웨어에 넘기기
+    // 또는: next(err); // 에러 처리 미들웨어로 점프
+}
+```
+
+이는 *continuation-passing style*(CPS)입니다. 각 함수가 "다음에 무엇을 할 것인가"를 표현하는 콜백(`next`)을 받는 제어 흐름 패턴입니다. 체인은 암묵적으로 합성됩니다. `app.use(...)`의 등록 순서가 연결 리스트를 정의하고 `next()`가 포인터를 전진시킵니다.
+
+#### B.1 체인은 중첩이 아니라 선형
+
+FastAPI의 양파 모양 미들웨어(레슨 03 §C)와 달리, Express 미들웨어는 기본적으로 선형입니다. 각 미들웨어는 들어오는 길에 한 번 실행됩니다. 응답 *이후* 코드를 실행하려면 `res.end`를 감싸거나 `res.on('finish', ...)`를 사용해야 합니다 — 내장된 "after middleware"가 없습니다. (Express 5나 Koa 스타일 프레임워크는 `await next()`를 할 수 있는 비동기 미들웨어로 이를 추가합니다.)
+
+```
+[mw1] → [mw2] → [mw3 = handler] → res.send()
+```
+
+`mw1`이 `next()` 이후에 작업을 한다면, 그 작업은 mw2가 끝나기 *전에* 실행됩니다 — 동기적으로 끼어들지, 응답 후가 아닙니다. FastAPI/Koa에서 이주해 온 사람들에게 자주 혼란의 원천입니다.
+
+#### B.2 에러 처리 미들웨어: 4-인자 변종
+
+Arity 4의 모든 미들웨어 — `(err, req, res, next)` — 는 Express에서 *에러 핸들러*로 인식됩니다. `next(err)`가 호출되면 Express는 다음 4-인자 미들웨어를 찾을 때까지 일반 미들웨어를 모두 건너뜁니다. 이것이 스택 맨 아래의 단일 에러 핸들러가 위쪽의 모든 에러를 잡는 방법입니다.
+
+```javascript
+app.use(routes);
+app.use((err, req, res, next) => {
+    res.status(500).json({ error: err.message });
+});
+```
+
+함정: 비동기 핸들러 내부의 동기 `throw`는 Express 4에서 자동으로 `next(err)`로 라우팅되지 *않습니다* — `try/catch`로 잡거나 `express-async-errors` 같은 헬퍼로 감싸야 합니다. Express 5는 이를 고칩니다.
+
+#### B.3 마운팅: 경로 접두 서브 앱으로서의 미들웨어
+
+`app.use('/api', router)`는 서브 라우터를 접두 아래에 마운트합니다. 그 라우터 내부에서 `req.url`은 마운트 지점 기준으로 재작성되고(`req.baseUrl`이 접두를 보존합니다), 미들웨어가 서브 앱별로 적용됩니다. 이것이 합성입니다. 작고 집중된 라우터들(users, posts, auth)을 만들고 결합할 수 있습니다.
+
+### C. Request와 Response: 스트림 인터페이스
+
+`req`는 `IncomingMessage`, 즉 요청 본문의 *Readable 스트림*입니다. `res`는 `ServerResponse`, 즉 응답 본문의 *Writable 스트림*입니다. 둘 다 `EventEmitter`를 상속합니다. 함의는 깊습니다.
+
+#### C.1 본문은 버퍼가 아니라 스트림
+
+핸들러가 실행되는 시점에 요청 본문은 *아직 수신되지 않았습니다*. 헤더만 알려져 있습니다. 본문은 `data` 이벤트로 도착합니다.
+
+```javascript
+req.on('data', (chunk) => { ... });
+req.on('end', () => { ... });
+```
+
+`express.json()`은 정확히 이것입니다. `data` 청크를 듣고, `Buffer`에 누적하고, `end`가 발화하면 버퍼를 JSON으로 파싱하고, 결과를 `req.body`에 할당하는 미들웨어입니다. `express.json()` 이후 `req.body`는 파싱된 객체이지만, 밑에 깔린 스트림은 소비되어 다시 읽을 수 없습니다.
+
+#### C.2 이것이 중요한 이유: 큰 업로드
+
+`express.json()`을 거치는 1GB 파일 업로드는 핸들러가 실행되기 전에 1GB Buffer를 메모리에 할당합니다. 큰 페이로드의 올바른 패턴은 body-parser 미들웨어를 *쓰지 않고* 스트림을 직접 소비하는 것입니다 — `req`를 청크 단위로 파일이나 업로드 SDK로 pipe하세요. 업로드 크기와 무관하게 메모리는 평탄하게 유지됩니다.
+
+#### C.3 응답 스트리밍과 백 프레셔
+
+`res.write(chunk)`는 커널 쓰기 버퍼가 청크를 받아들이면 `true`, 가득 차 있으면 `false`를 반환합니다. 그 반환값을 무시하고 코드가 데이터를 만드는 만큼 빠르게 쓰면 버퍼가 차고 메모리가 타들어 갑니다. 올바른 패턴:
+
+```javascript
+if (!res.write(chunk)) {
+    res.once('drain', writeNext);
+} else {
+    writeNext();
+}
+```
+
+또는 백 프레셔를 자동 처리하는 `pipe()`를 사용하세요: `readableSource.pipe(res)`. 이것이 Node의 관용적 스트리밍 응답입니다 — 청크 인코딩을 신경 쓸 필요도, 버퍼 회계도 없습니다.
+
+#### C.4 생명주기 이벤트
+
+`req`와 `res` 모두 hook할 수 있는 이벤트를 emit합니다.
+
+- `req.on('close', ...)` — 요청 도중 클라이언트가 끊김. 진행 중인 작업을 취소.
+- `res.on('finish', ...)` — 응답이 커널로 완전히 flush됨. "요청 완료" 로깅에 적합.
+- `res.on('close', ...)` — 밑에 깔린 연결이 닫힘(클라이언트가 끊었다면 `finish`보다 먼저일 수 있음).
+
+오래 실행되는 핸들러는 `req.close`를 듣고 작업을 중단해야 합니다 — 그렇지 않으면 아무도 읽지 않을 응답을 계산하느라 이벤트 루프 시간을 잡아먹습니다.
+
+### 이론에서 아래 코드로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (Node.js와 Express 개요)는 §A의 이벤트 루프를 런타임 기반으로 도입합니다.
+- §2 (앱 생성)은 내부적으로 `http.createServer(app)`입니다 — Express를 요청 콜백으로 등록하는 것.
+- §3 (라우팅)은 메서드 + 경로에 따라 어느 핸들러를 실행할지 선택하는 §B 미들웨어 체인입니다.
+- §4 (미들웨어 개념과 체인)은 §B.1을 구체적인 코드로, §B.2 에러 핸들러 변종까지 다룹니다.
+- §5 (내장 미들웨어)는 `express.json()` / `express.urlencoded()` — §C.1 요청 스트림을 소비하는 본문 파서입니다.
+- §6 (Request와 Response)는 §C 스트림 인터페이스와 그 편의 헬퍼(`res.json`, `res.status`)를 따라갑니다.
+- §7 (모듈식 라우트를 위한 Router)는 §B.3 마운팅 패턴 — 서브 라우터를 접두 아래에 합성하는 것입니다.
 
 ---
 

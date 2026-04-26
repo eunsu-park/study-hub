@@ -18,6 +18,8 @@ Django의 ORM은 **액티브 레코드(Active Record)** 패턴을 따릅니다: 
 
 ## 목차
 
+프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. "lazy QuerySet"이 SQL/Python 경계에서 실제로 무엇을 의미하는지, 언제 SQL이 발화되는지를 결정하는 지연 평가 규칙, 그리고 SQL 실행 횟수로 표현되는 N+1 문제를 다룹니다.
+
 1. [쿼리셋 기초](#1-쿼리셋-기초)
 2. [필드 조회](#2-필드-조회)
 3. [F 객체와 Q 객체](#3-f-객체와-q-객체)
@@ -27,6 +29,165 @@ Django의 ORM은 **액티브 레코드(Active Record)** 패턴을 따릅니다: 
 7. [커스텀 매니저와 쿼리셋](#7-커스텀-매니저와-쿼리셋)
 8. [대량 연산과 트랜잭션](#8-대량-연산과-트랜잭션)
 9. [연습 문제](#9-연습-문제)
+
+---
+
+## 이론과 원리
+
+Django ORM은 평범한 Python 코드처럼 보이지만, 모든 `.filter()` 호출 뒤에 지연된 SQL 파이프라인을 숨기고 있습니다. 세 개념이 "왜 내 쿼리가 느리지?"부터 "왜 list가 아니라 `RelatedManager`가 나오지?"까지 모든 것을 설명합니다.
+
+- **(A) 지연 평가: 지연 SQL로서의 QuerySet** — 무엇이 Python에서 만들어지고, 무엇이 데이터베이스에서 실행되며, 정확히 언제 그 경계가 넘어가는가.
+- **(B) Django 형태의 N+1 문제** — 레슨 04 §C와 레슨 08 §A.3의 같은 함정, Django 특유의 방어책과 함께.
+- **(C) 쿼리 플랜: QuerySet에서 SQL로** — 체이닝, lookup, annotation이 어떻게 하나(또는 몇 개)의 SQL 문으로 합성되는가.
+
+### A. 지연 평가: 지연 SQL로서의 QuerySet
+
+QuerySet은 모델 인스턴스의 *리스트가 아닙니다*. 쿼리를 *기술하는* 객체입니다 — 무언가가 실행을 강제하기 전까지 SQL은 프로세스를 떠나지 않습니다.
+
+#### A.1 만들어지는 것 vs 실행되는 것
+
+```python
+qs = Post.objects.filter(published=True).order_by("-created_at")[:10]
+# 아직 SQL 없음. qs는 다음을 기술하는 QuerySet 객체:
+#   SELECT ... FROM blog_post WHERE published = TRUE ORDER BY created_at DESC LIMIT 10
+```
+
+Python에서 일어나는 일:
+
+1. `Post.objects`가 기본 `Manager`를 반환하고, 그것이 신선한 `QuerySet`을 반환합니다.
+2. `.filter(...)`가 그 WHERE 절이 내부 쿼리 트리에 추가된 *새* QuerySet을 반환합니다.
+3. `.order_by(...)`가 ORDER BY가 추가된 *또 다른* 새 QuerySet을 반환합니다.
+4. `[:10]`이 LIMIT이 있는 *또 또 다른* QuerySet을 반환합니다.
+
+각 QuerySet은 불변입니다. 체이닝이 새 것을 만듭니다. 내부적으로 각각 `Query` 객체를 보유합니다 — Django의 SQL 문 트리 표현입니다. 아직 라운드트립은 없습니다.
+
+#### A.2 평가를 강제하는 트리거들
+
+QuerySet은 다음 중 하나가 일어나는 순간 평가됩니다(즉, SQL을 발행합니다):
+
+- **순회** — `for post in qs:`가 쿼리를 실행하고 결과를 돕니다.
+- **step이 있는 슬라이싱** 또는 **bool 변환** — `if qs:`가 쿼리를 합니다.
+- **`list(qs)`, `len(qs)`, `bool(qs)`** — 명시적 materialization.
+- **`qs.count()`, `qs.exists()`, `qs.first()`, `qs.last()`** — 최적화된 쿼리를 실행합니다.
+- **Pickling, repr, JSON 직렬화** — 결국 순회로 끝납니다.
+
+평가되면 결과는 QuerySet에 캐시됩니다 — 다시 순회해도 쿼리를 다시 돌리지 않습니다. 그러나 평가 후 `qs.filter(...)`를 체이닝하면 캐시가 빈 새 QuerySet이 만들어지고, 새 쿼리는 다시 실행됩니다.
+
+실용적 결과: 같은 queryset을 템플릿에 전달하고 그 위에서 다른 메서드를 호출하면 우연히 데이터베이스를 여러 번 치기 쉽습니다. 해결책은 `list(qs)`를 한 번 한 뒤 materialized 리스트 위에서 작업하는 것입니다.
+
+#### A.3 성능 함의
+
+지연 QuerySet은 아무것도 보내기 전에 Python에서 쿼리를 합성하게 해줍니다. 이것이 기능입니다. 서비스가 베이스 queryset을 만들고 평가 전에 여러 계층의 필터를 통과시킬 수 있는데, 모든 필터가 하나의 SQL 문으로 합쳐집니다. 동시에 발에 쏘는 총입니다. 평가가 조용히 일어나는 순간(템플릿 순회에서, 로깅 문에서)이 "빠른" 함수가 느려지는 순간입니다.
+
+표준 규율: 각 QuerySet이 정확히 어디서 평가되는지를 알 것. 개발에서는 `django-debug-toolbar`를 사용하고, 프로덕션에서는 `connection.queries`나 `pg_stat_statements`를 통해 느린 쿼리를 로깅하세요.
+
+### B. Django의 N+1 문제
+
+레슨 04 §C.1과 레슨 08 §A.3과 같은 N+1 함정이지만, Django의 기제는 다릅니다.
+
+#### B.1 모양
+
+```python
+posts = Post.objects.all()            # 쿼리 1개
+for post in posts:
+    print(post.author.username)       # FK당 post 하나마다 쿼리 1개
+                                      # → 총 N+1
+```
+
+각 `post.author` 접근이 관련된 User 행을 lazy하게 로드합니다. post 100개면 쿼리 101개입니다.
+
+#### B.2 두 가지 방어
+
+Django는 두 개의 구별되는 로더를 제공합니다.
+
+| 메서드 | 메커니즘 | 사용처 |
+|--------|-----------|---------|
+| `select_related("author")` | SQL `INNER JOIN`(nullable FK는 `LEFT JOIN`), 단일 쿼리 | 다대일(FK), 일대일 |
+| `prefetch_related("comments")` | 부모 쿼리 1개, 자식에 대한 추가 `WHERE parent_id IN (...)` 쿼리 1개, Python에서 join | 일대다(역 FK), 다대다 |
+
+`select_related`는 모든 forward foreign key에 대한 올바른 호출입니다 — 관련된 행이 같은 쿼리에 도착합니다. `prefetch_related`는 역 관계와 다대다에 대한 올바른 호출입니다 — Django는 부모 join의 한 행에 다중 행 자식 집합을 표현할 수 없으므로 대신 두 쿼리를 합니다.
+
+```python
+posts = (
+    Post.objects
+        .select_related("author")           # FK → JOIN
+        .prefetch_related("comments")       # 역 FK → IN 쿼리
+)
+for post in posts:
+    print(post.author.username)             # 추가 쿼리 없음
+    for c in post.comments.all():           # post당 추가 쿼리 없음
+        print(c.body)
+```
+
+총 두 쿼리, 101개가 아니라.
+
+#### B.3 체이닝된 prefetch
+
+`prefetch_related`는 계층을 가로질러 체이닝됩니다. `prefetch_related("comments__author")`는 추가 쿼리 각 1개로 comments와 각 comment의 author를 가져옵니다. 복잡한 그래프에서는 `Prefetch(...)`로 안쪽 queryset을 커스터마이즈할 수 있습니다(예: 발행된 comment만).
+
+원리는 일반화됩니다: **쿼리가 필요로 하는 관계를 명시적으로 진술하라, 그러면 Django가 최소 라운드트립 수로 압축한다**. Lazy 접근은 편의이지 전략이 아닙니다.
+
+### C. QuerySet에서 SQL로: 컴파일 파이프라인
+
+`.filter()`, `.annotate()`, `.values()` 체인은 트리를 짓는 DSL입니다. 평가가 트리거되면 Django가 그 트리를 SQL로 컴파일합니다.
+
+#### C.1 컴파일 단계
+
+1. **Build**: 체이닝된 각 메서드가 내부 `Query` 객체에 추가하거나 수정합니다.
+2. **Compile**: 평가 시점에 Django의 `SQLCompiler`가 `Query` 트리를 따라 다음을 만듭니다:
+   - SELECT 절(가져올 컬럼),
+   - FROM 절(모델의 테이블과 join된 테이블들),
+   - WHERE 절(`filter()`와 `Q()`에서 번역됨),
+   - GROUP BY / HAVING (`annotate()` + `aggregate()`에서),
+   - ORDER BY (`order_by()`에서),
+   - LIMIT/OFFSET (슬라이싱에서).
+3. **Parameterize**: 리터럴이 bind placeholder가 됩니다(psycopg는 `%s`, sqlite는 `?`). 레슨 08 §B의 같은 prepared-statement 방어.
+4. **Execute**: 매개변수화된 SQL이 데이터베이스 백엔드를 통해 실행됩니다.
+5. **Hydrate**: 행이 모델 인스턴스(또는 `values()`/`values_list()`의 경우 dict/tuple)가 됩니다.
+
+컴파일러는 결정론적입니다 — 같은 체인이 매번 같은 SQL을 만듭니다. `qs.query`(또는 `str(qs.query)`)를 검사하면 Django가 실행할 SQL을 보여줍니다.
+
+#### C.2 `values()`와 `values_list()`: hydration 건너뛰기
+
+행을 완전한 모델 인스턴스로 hydrate하는 것은 공짜가 아닙니다. 모델 메서드가 필요 없는 집계/리포팅 쿼리에서는 `values()`가 dict를, `values_list()`가 tuple을 반환합니다 — 모델 인스턴스화 없음. 더 빠르고 더 적은 메모리:
+
+```python
+Post.objects.values("status").annotate(n=Count("id"))
+# [{'status': 'draft', 'n': 12}, {'status': 'published', 'n': 84}]
+```
+
+#### C.3 F 객체: 서버 측 계산
+
+`F("price") * 2`는 컬럼을 Python으로 읽지 않고 SQL 수준에서 참조합니다. 비교:
+
+```python
+# 나쁨: 읽고, Python에서 계산하고, 다시 쓰기
+for product in Product.objects.all():
+    product.price *= 2
+    product.save()
+
+# 좋음: 서버에서 단일 UPDATE
+Product.objects.update(price=F("price") * 2)
+```
+
+첫 번째 버전은 N+1에 N개 쓰기. 두 번째는 라운드트립 1개이며 race-free입니다 — 다른 트랜잭션이 다른 가격을 끼워 넣을 수 있는 read-then-write 창이 없습니다.
+
+#### C.4 Q 객체: WHERE 절 합성
+
+`Q(status="published") | Q(featured=True)`는 OR을 만듭니다. `~Q(...)`는 NOT입니다. 이들은 컴파일러가 emit하는 WHERE 트리로 합성되어, 평범한 `.filter(**kwargs)`(암묵적 AND)로는 표현할 수 없는 로직을 표현하게 해줍니다.
+
+### 이론에서 아래 코드로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (쿼리셋 기초)는 §A.1의 지연 체이닝과 §A.2의 평가 트리거를 구체적인 코드로 탐구합니다.
+- §2 (필드 조회)는 §C.1 쿼리 트리에 WHERE 조건을 추가하는 문법(`__gte`, `__contains`, `__in`)입니다.
+- §3 (F와 Q 객체)는 §C.3(서버 측 계산)과 §C.4(합성 가능한 WHERE)입니다.
+- §4 (집계와 어노테이션)은 GROUP BY 쿼리를 생성합니다 — `Sum`, `Avg`, `Count`가 있는 §C.1 stage 2.
+- §5 (N+1 해결)은 §B.2의 `select_related`와 `prefetch_related`를 자세히 다룹니다.
+- §6 (Raw SQL)은 §C 컴파일러가 필요한 것을 표현할 수 없을 때의 탈출구입니다.
+- §7 (커스텀 매니저/QuerySet)는 흔한 체인을 명명된 메서드로 캡슐화하게 해주어 호출 코드를 읽기 쉽게 유지합니다.
+- §8 (대량 연산과 트랜잭션)은 §C.3 서버 측 업데이트 패턴과 레슨 08 §C의 트랜잭션 래퍼입니다.
 
 ---
 

@@ -14,6 +14,8 @@
 
 ## Table of Contents
 
+Before the tools reference, read [**Theory & Principles**](#theory--principles) — the formal definition of the three pillars (metrics/logs/traces), W3C Trace Context and how spans propagate across services, and Prometheus's pull-based metric model with OpenTelemetry's semantic conventions.
+
 1. [Three Pillars of Observability](#1-three-pillars-of-observability)
 2. [Structured Logging](#2-structured-logging)
 3. [Metrics with Prometheus](#3-metrics-with-prometheus)
@@ -22,6 +24,175 @@
 6. [Alerting Strategies](#6-alerting-strategies)
 7. [Error Tracking with Sentry](#7-error-tracking-with-sentry)
 8. [Practice Problems](#8-practice-problems)
+
+---
+
+## Theory & Principles
+
+Observability is *not* "logging plus metrics plus tracing" stacked together. The three pillars exist because each answers a different class of question that the others can't. Understanding the formal split makes the tooling fall into place.
+
+- **(A) The three pillars: metrics, logs, traces** — what each pillar is good at, where it fails, and why you need all three.
+- **(B) Distributed tracing: W3C Trace Context and span propagation** — how a request gets a unique trace ID that survives service boundaries.
+- **(C) Prometheus: pull-based metrics and OpenTelemetry semantic conventions** — the dominant metric model and the standard naming.
+
+### A. The Three Pillars
+
+Each pillar is a different *encoding* of system behavior, optimized for a different question.
+
+#### A.1 Metrics: aggregate numbers over time
+
+Metrics are time series of numeric values: counters, gauges, histograms. The unit of storage is a number per (timestamp, label set) tuple. Cardinality is bounded by the label set size; a metric with millions of unique label combinations is dangerous.
+
+Metrics answer: "How is the system doing right now and trending?"
+
+```
+http_requests_total{method="GET",route="/users",status="200"} = 12847
+http_request_duration_seconds_bucket{le="0.05"} = 11823
+http_request_duration_seconds_bucket{le="0.1"} = 12340
+```
+
+Cheap to store, cheap to query, fast to alert on. Limited by cardinality: you cannot have a metric label per user ID without exploding storage.
+
+#### A.2 Logs: discrete events with context
+
+Logs are timestamped event records — usually one record per logical event. Cost is proportional to event volume.
+
+Logs answer: "What happened to *this specific request*?"
+
+```json
+{"ts":"2025-01-15T15:14:23Z","level":"info","event":"user.login","user_id":42,"ip":"192.168.1.5"}
+```
+
+High-cardinality labels are fine in logs (any field can be unique per event). The cost is volume — at high QPS you log a lot of bytes. Sampling, structured logging (JSON, not free text), and indexed search (Elasticsearch, Loki) are the production toolchain.
+
+#### A.3 Traces: causal chains across services
+
+A trace records the path of a single request through a distributed system: which services it touched, how long each step took, what failed where. Each step is a *span*; spans nest into a tree.
+
+Traces answer: "Why is this request slow / why did it fail?"
+
+```
+trace_id: abc123
+├── span: API gateway       (12ms)
+├── span: auth service       (3ms)
+└── span: order service     (180ms)
+    ├── span: db.query       (45ms)
+    └── span: cache.get      (1ms)
+```
+
+Traces are the only pillar that captures *causality* across services. They are also the most expensive (each request creates many spans), so production systems sample — keep 1% of traces, drop the rest.
+
+#### A.4 The pillars are complementary, not redundant
+
+A common mistake: "we have logs, do we need metrics?" Yes, because metrics aggregate cheaply over millions of requests; logs at that scale are unaffordable to query. Conversely, "we have metrics, do we need logs?" Yes, because metrics tell you something is wrong but not which specific request or user is affected.
+
+The right mental model:
+
+- **Metrics** for monitoring and alerting (continuous, low-cardinality).
+- **Traces** for understanding the path of a single request through services.
+- **Logs** for the full detail of a specific event when you have already narrowed the scope (often via a trace ID).
+
+### B. Distributed Tracing: W3C Trace Context
+
+Traces work because every service speaks a common protocol for *propagating* the trace ID across HTTP boundaries. The W3C Trace Context standard (W3C Recommendation, 2020) replaced the earlier ad-hoc Zipkin / Jaeger headers.
+
+#### B.1 The two headers
+
+```
+traceparent: 00-{trace_id}-{parent_span_id}-{flags}
+tracestate: vendor1=val,vendor2=val
+```
+
+`traceparent` is mandatory and carries:
+
+- `00` — version of the spec.
+- `trace_id` — a 16-byte hex ID identifying the trace (same across all services in the request).
+- `parent_span_id` — the 8-byte span ID of the *parent* span (the upstream caller).
+- `flags` — sampled / not sampled bit.
+
+`tracestate` is vendor-specific extension data.
+
+#### B.2 How propagation works
+
+When service A calls service B over HTTP:
+
+1. A's tracer reads the incoming request headers; if `traceparent` is present, it joins that trace; if not, it starts a new one.
+2. A creates a new span (child of whatever it received).
+3. Before calling B, A injects `traceparent: 00-{trace_id}-{A's_span_id}-01` into the outgoing request headers.
+4. B receives those headers and continues the trace, with B's spans as children of A's span.
+
+The trace tree is built collaboratively by every service. Each contributes its own spans; the IDs link them together. The collected spans are sent (out-of-band, over OTLP/gRPC) to a tracing backend (Jaeger, Tempo, Honeycomb) that stitches them into a complete trace.
+
+#### B.3 Sampling
+
+Tracing every request would multiply your network and storage costs. Production systems sample: keep 1% of traces, or 100% of error traces and 0.1% of success traces. Two main strategies:
+
+- **Head-based sampling.** Decide at the start (in the first service) whether to sample. The decision is in the `flags` byte of `traceparent`. Cheap but cannot make the decision based on what happens later (e.g., "always keep slow traces").
+- **Tail-based sampling.** Buffer all spans, decide after the trace is complete. Can keep all error traces, all slow traces, sample success traces. More expensive (need a sidecar like OpenTelemetry Collector that buffers).
+
+### C. Prometheus and OpenTelemetry
+
+Prometheus is the dominant open-source metrics system. Its model is opinionated and has shaped how the industry thinks about metrics.
+
+#### C.1 Pull-based scraping
+
+Most metric systems are *push*: the app sends metrics to a backend. Prometheus is *pull*: the backend periodically scrapes a `/metrics` endpoint exposed by each app.
+
+```
+Prometheus server                       App
+     │                                   │
+     │── GET /metrics ──────────────────►│
+     │◄── http_requests_total{...} ─────│
+     │   ... (text format) ...           │
+     │ (every 15s)                       │
+```
+
+Pull-based has properties:
+
+- **Service discovery is centralized** in Prometheus, not the app.
+- **Failed scrapes are visible** as a `up{job="..."}` metric — the app being unreachable is itself a signal.
+- **Apps don't know about Prometheus** — they just expose `/metrics`. The same endpoint works for any compatible scraper.
+
+The downside: short-lived jobs (cron, batch) can finish before being scraped. The fix is the *Pushgateway*, an intermediate service that holds metrics until Prometheus collects them.
+
+#### C.2 The four metric types
+
+| Type | What it measures | Example |
+|------|------------------|---------|
+| Counter | Monotonically increasing total | requests_total, errors_total |
+| Gauge | Current value (can go up or down) | memory_bytes, queue_depth |
+| Histogram | Distribution of observations into buckets | request_duration_seconds |
+| Summary | Quantile estimates over a sliding window | response_size_bytes |
+
+Histograms are the most important for SLO work: they let you ask "what fraction of requests were under 100ms?" by reading the bucket count. Summaries compute quantiles client-side, which makes them harder to aggregate across instances; histograms are usually preferred.
+
+#### C.3 OpenTelemetry semantic conventions
+
+OpenTelemetry (OTel) is an emerging standard for both traces and metrics, with vendor-neutral SDKs in every major language. Its biggest contribution is **semantic conventions** — a standard naming scheme for common attributes:
+
+```
+http.request.method = GET
+http.response.status_code = 200
+http.route = /users/{id}
+db.system = postgresql
+db.statement = SELECT * FROM ...
+```
+
+When every service uses the same attribute names, dashboards and alerts work across services. Before semantic conventions, every team invented its own naming and dashboards were per-team. With them, "show me the 95th percentile latency for HTTP requests, grouped by route" is one query that works for any OTel-instrumented service.
+
+The trend is OTel as the *vendor-neutral SDK* on the app side, exporting via OTLP to whatever backend (Jaeger, Tempo, Datadog, Honeycomb) the platform uses. The backend can change; the instrumentation does not.
+
+### From Theory to the Tools Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Three pillars) is §A with concrete examples.
+- §2 (Structured logging) is the §A.2 logs pillar — JSON output, correlation IDs, OTel `trace_id` injection.
+- §3 (Metrics with Prometheus) is §C.1 (pull model) and §C.2 (the four types) in concrete code.
+- §4 (Distributed tracing with OpenTelemetry) is §B (W3C Trace Context) plus §C.3 (semantic conventions) in code.
+- §5 (Grafana dashboards) is the visualization layer reading metrics from §C.1.
+- §6 (Alerting strategies) is built on §C metrics — symptom-based alerting on SLO breaches, not on raw causes.
+- §7 (Error tracking with Sentry) is the §A.2 logs pillar specialized for exceptions, with stack traces and grouping.
 
 ---
 

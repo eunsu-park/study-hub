@@ -14,6 +14,8 @@
 
 ## 목차
 
+패턴 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 인증이 실제로 무엇을 증명하는지, JWT 구조(header/payload/signature)와 HMAC vs RSA 서명, PKCE를 사용하는 OAuth 2.0 authorization-code 흐름, 그리고 비교된 SAML/OIDC를 다룹니다.
+
 1. [세션 기반 인증](#1-세션-기반-인증)
 2. [JWT 인증](#2-jwt-인증)
 3. [API 키](#3-api-키)
@@ -22,6 +24,178 @@
 6. [비밀번호 해싱](#6-비밀번호-해싱)
 7. [다중 인증](#7-다중-인증)
 8. [연습 문제](#8-연습-문제)
+
+---
+
+## 이론과 원리
+
+인증 패턴은 약어 동물원(JWT, OAuth2, OIDC, SAML, PKCE)처럼 보일 수 있지만, 모두 한 질문 — *누가 이 요청을 만들고 있는가?* — 에 다양한 방식으로 결합되는 세 가지 빌딩 블록으로 답합니다.
+
+- **(A) 인증 vs 인가, 그리고 자격 증명 생명주기** — 각 토큰이 실제로 무엇을 얼마나 오래 증명하는가.
+- **(B) JWT 구조와 서명** — 세 부분 `header.payload.signature` 형식, HMAC vs RSA 트레이드오프.
+- **(C) OAuth 2.0 흐름 + OIDC + SAML 비교** — 5개 흐름, 3개 프로토콜, 올바른 것을 고르기.
+
+### A. 인증 vs 인가, 그리고 자격 증명 생명주기
+
+두 단어는 서로 바꿔도 될 것 같지만 다른 것을 의미하며, 이를 혼동하면 실제 보안 버그가 생깁니다.
+
+#### A.1 두 가지 구별되는 성질
+
+- **인증(Authentication, AuthN).** "당신은 누구인가?" 요청자가 자신이 주장하는 사람임을 검증. 사용자명 + 비밀번호, 지문, 하드웨어 키, JWT 서명.
+- **인가(Authorization, AuthZ).** "당신은 무엇을 할 수 있는가?" 인증된 신원이 주어졌을 때 그가 이 작업을 수행할 수 있는지를 결정. 역할, 권한, ACL, RBAC, ABAC.
+
+올바르게 인증된 사용자도 인가에 의해 거부될 수 있습니다(`403 Forbidden`). 인증되지 않은 요청은 인증에 의해 거부됩니다(`401 Unauthorized`). 상태 코드가 정확히 이를 의미합니다.
+
+피해야 할 실수: 인가 로직을 인증 계층에 넣거나, 그 반대. 흔한 버그 패턴은 "사용자가 유효한 세션을 가지면 어떤 게시물이든 편집할 수 있다" — 세션은 신원을 증명하지만 소유권에 대해서는 아무것도 말하지 않습니다.
+
+#### A.2 토큰 생명주기
+
+모든 자격 증명 — 세션 ID, JWT, API 키, refresh token — 은 같은 생명주기를 가집니다.
+
+1. **발급.** 유효한 자격 증명 요청(로그인, OAuth 콜백, 키 생성)이 자격 증명을 만들고 필요한 서버 측 상태를 저장합니다.
+2. **사용.** 자격 증명이 각 요청과 함께 제시됩니다. 서버가 검증합니다.
+3. **갱신 / 연장.** 장기 자격 증명이 신선한 단기 것과 교환될 수 있습니다(refresh token에서 access token).
+4. **취소.** 로그아웃, 비밀번호 변경, 침해 대응 — 자격 증명이 동작을 멈춰야 합니다.
+
+어려운 단계는 #4입니다. 서버 측 저장소(세션)는 취소를 사소하게 만듭니다: 행을 삭제. 무상태 토큰(JWT)은 이를 어렵게 만듭니다: 토큰은 만료까지 유효한데 *블랙리스트*를 유지하지 않으면 그렇고, 블랙리스트는 서버 측 상태를 다시 도입합니다.
+
+#### A.3 단기 access + 장기 refresh
+
+표준 현대 패턴:
+
+- **Access token** — JWT, 수명 15분 – 1시간. 모든 요청과 함께 보냄.
+- **Refresh token** — 서버 측에 저장된 불투명한 무작위 문자열, 수명 7일 – 90일. 새 access token을 얻기 위해 `/auth/refresh`에서만 사용.
+
+Access token이 만료되면 클라이언트는 refresh token을 사용해 새 것을 얻습니다. Refresh token이 취소되면(행 삭제), 사용자는 최대 한 access-token 수명 안에 효과적으로 로그아웃됩니다. 두 세계의 장점: API에는 무상태 요청, 보안에는 상태 기반 취소.
+
+### B. JWT 구조와 서명
+
+JSON Web Tokens(RFC 7519)는 무상태 인증의 지배적 토큰 형식입니다. 구조는 위협적으로 보이지만 기계적입니다.
+
+#### B.1 세 부분
+
+JWT는 `base64(header).base64(payload).base64(signature)`입니다.
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiIsImV4cCI6MTcwMDAwMDAwMH0.k1qV...
+└────────── header ──────────┘.└──────── payload ────────┘.└── signature ──┘
+```
+
+**Header**는 서명 알고리즘과 토큰 타입을 선언합니다.
+
+```json
+{ "alg": "HS256", "typ": "JWT" }
+```
+
+**Payload**는 주체에 대한 클레임 집합입니다. 일부 클레임은 표준(`iss`, `sub`, `aud`, `exp`, `iat`, `nbf`)이고, 다른 것은 애플리케이션 특화입니다.
+
+```json
+{ "sub": "42", "name": "Alice", "role": "admin", "exp": 1700000000 }
+```
+
+**Signature**는 header의 알고리즘과 서버의 서명 키를 사용해 `base64(header) + "." + base64(payload)` 위에서 계산됩니다.
+
+```
+signature = HMAC-SHA256(base64(header) + "." + base64(payload), secret)
+```
+
+#### B.2 검증 규칙 (그리고 유명한 버그 부류)
+
+JWT를 검증하려면 서버는
+
+1. `.`로 세 부분으로 나눕니다.
+2. Header의 알고리즘과 서버의 키로 서명을 다시 계산합니다.
+3. 제공된 서명과 비교합니다.
+4. 클레임을 검증합니다(주로 `exp`, 때로는 `nbf`, `iss`, `aud`).
+
+버그 부류: header의 `alg` 필드를 신뢰하기. 공격자가 `"alg": "none"`(서명 없음)을 설정할 수 있고, 많은 순진한 라이브러리가 서명되지 않은 토큰을 받아들입니다. 해결책은 검증기에 예상 알고리즘을 *하드코딩*하는 것입니다 — 어떤 알고리즘을 쓸지 header에 절대 묻지 마세요.
+
+관련 버그: 비밀을 공개 RSA 키로 발행하는 HMAC 서명 서비스를 가진 공격자가 `alg: RS256`을 `alg: HS256`으로 바꾸고, 공개 키를 HMAC 비밀처럼 사용해 서명하면, 서버(RS256을 기대했지만 header에서 HS256을 자동 감지하는)가 받아들입니다. 같은 해결책: 알고리즘을 하드코딩하세요.
+
+#### B.3 HMAC vs RSA: 대칭 vs 비대칭
+
+| 알고리즘 | 서명 키 | 검증 키 | 사용 시기 |
+|-----------|-------------|---------------|----------|
+| HS256 (HMAC-SHA256) | 공유 비밀 | 같은 공유 비밀 | 한 서비스가 자체 토큰을 서명하고 검증 |
+| RS256 (RSA-SHA256) | 개인 키 | 공개 키 | 발급자와 검증자가 다른 서비스; 검증자 다수 |
+
+HMAC은 더 단순하고 빠르지만 모든 검증자가 서명 키를 가져야 합니다 — 검증자 침해는 공격자가 새 토큰을 위조할 수 있게 한다는 뜻입니다. RSA는 발급자가 개인 키를 보관하고 공개 키를 발행(종종 `/.well-known/jwks.json`의 JWKS 엔드포인트를 통해)하게 해줍니다. 침해된 검증자는 토큰을 읽을 수 있지만 위조할 수는 없습니다.
+
+규칙: **모놀리스 → HS256 괜찮음; 마이크로서비스나 외부 인증 제공자 → RS256**.
+
+### C. OAuth 2.0 흐름 + OIDC + SAML
+
+OAuth 2.0은 인증 프로토콜이 *아닙니다*. 인가 프레임워크입니다 — "사용자가 애플리케이션 X에 자기 대신 서비스 Y를 호출할 권리를 부여한다". OAuth 2.0 위의 인증은 OpenID Connect(OIDC)가 제공합니다.
+
+#### C.1 네 가지 역할
+
+- **Resource Owner** — 데이터를 소유한 사용자.
+- **Client** — 접근을 요청하는 애플리케이션.
+- **Authorization Server** — 토큰의 발급자(Google, Auth0, Okta).
+- **Resource Server** — 클라이언트가 호출하려는 API.
+
+#### C.2 PKCE와 함께하는 authorization code 흐름 (현대의 기본값)
+
+PKCE = Proof Key for Code Exchange. 공개 클라이언트(모바일 앱, single-page app)에 대한 코드 인터셉트 공격 부류를 막습니다.
+
+```
+1. 클라이언트가 code_verifier(무작위)와 code_challenge = SHA256(code_verifier) 생성
+2. 클라이언트가 code_challenge와 함께 사용자를 Authorization Server로 리다이렉트
+3. 사용자 로그인; AS가 auth code와 함께 다시 리다이렉트
+4. 클라이언트가 (auth code + code_verifier)를 /token 엔드포인트에서 교환
+5. AS가 SHA256(code_verifier) == 저장한 code_challenge인지 검증
+6. AS가 access_token(과 refresh_token, OIDC라면 id_token)을 반환
+```
+
+PKCE의 이유: 모바일 앱에서 리다이렉트는 기기의 다른 악성 앱에 인터셉트될 수 있습니다. PKCE 없이는 악성 앱이 인터셉트한 코드를 토큰으로 교환할 수 있습니다. PKCE와 함께라면 `code_verifier`를 가진 원래 클라이언트만 교환을 완료할 수 있습니다.
+
+`code_verifier`는 클라이언트가 만들고 보유합니다. `code_challenge`는 공개 약속입니다. 고전적 암호학적 commitment scheme입니다.
+
+#### C.3 다른 흐름들 (그리고 대부분이 deprecated인 이유)
+
+| 흐름 | 사용처 | 상태 |
+|------|----------|--------|
+| Authorization code + PKCE | 모든 상호작용 앱 | 권장 |
+| Authorization code (PKCE 없음) | client secret이 있는 서버 측 웹 앱 | 받아들일 만함 |
+| Implicit | 백엔드 없는 SPA | Deprecated (code+PKCE 사용) |
+| Resource Owner Password Credentials | 극도의 신뢰가 있는 first-party 앱 | Deprecated |
+| Client Credentials | 서비스 간 (사용자 없음) | 그 경우에 권장 |
+| Device Code | 입력이 제한된 기기(TV, CLI) | 그 경우에 권장 |
+
+지난 10년의 추세: 더 약한 보안의 비용으로 라운드트립이 적은 흐름(Implicit, ROPC)을 deprecate, 안전한 흐름은 유지.
+
+#### C.4 OIDC: OAuth 2.0 위의 인증
+
+OIDC는 OAuth 2.0 응답에 `id_token`을 더합니다. `id_token`은 사용자 신원 클레임(`sub`, `email`, `name`)을 담은 JWT입니다. 이제 갖게 되는 것:
+
+- **Access token** — API 호출용 (OAuth 2.0).
+- **ID token** — 사용자가 누구인지 알기 위한 (OIDC).
+- **Refresh token** — 새 access token을 얻기 위한 (둘 다).
+
+대부분의 "Sign in with Google/Apple/GitHub" 흐름은 OIDC입니다. `id_token`은 신원을 증명하고, `access_token`은 Google API를 호출하게 해줍니다.
+
+#### C.5 SAML: 더 오래된 XML 기반 대안
+
+SAML 2.0은 OIDC 이전의 엔터프라이즈 SSO 표준입니다. XML 기반, 더 장황하지만, 기업 환경(Okta, Ping, ADFS)에 잘 자리 잡고 있습니다. 개념 모델은 비슷합니다: Identity Provider(IdP)가 사용자를 인증하고 Service Provider(SP)가 검증하는 assertion에 서명합니다.
+
+언제 무엇을 쓸지:
+
+- **그린필드, 현대 앱, 소비자 SSO** → OIDC.
+- **레거시 IdP가 있는 엔터프라이즈 SSO** → SAML.
+
+2026년에 둘 다 살아 있습니다. 대부분의 엔터프라이즈 인증 플랫폼은 둘 다 지원합니다.
+
+### 이론에서 아래 패턴으로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (세션 기반)은 가장 단순한 §A.2 생명주기입니다: 서버 측 상태, 사소한 취소.
+- §2 (JWT)는 §B를 구체적인 코드로 구현합니다, §A.3 access + refresh 패턴 포함.
+- §3 (API 키)는 가장 단순한 자격 증명입니다 — 하나의 장기 비밀, 만료 없음, 종종 서비스별.
+- §4 (OAuth2 흐름)은 §C.2 PKCE가 있는 authorization-code 흐름, §C.3 대안, §C.4 OIDC 계층을 따라갑니다.
+- §5 (비교)는 세션/JWT/API 키를 §A.2 생명주기 축(취소, 무상태성, 확장성)에 배치합니다.
+- §6 (비밀번호 해싱)은 bcrypt/argon2 — §A.2의 자격 증명 발급 단계에 받아들일 수 있는 유일한 모양.
+- §7 (다중 인증)은 위의 어느 것 위에든 두 번째 §A.1 요인(TOTP, WebAuthn)을 추가합니다.
 
 ---
 

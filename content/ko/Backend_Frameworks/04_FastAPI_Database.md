@@ -18,6 +18,8 @@
 
 ## 목차
 
+프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 연결 풀(connection pool) 알고리즘, 작업 단위(unit of work)로서의 SQLAlchemy 세션, 그리고 N+1 문제를 일으키는 lazy vs eager 로딩 트레이드오프를 다룹니다.
+
 1. [비동기 지원이 있는 SQLAlchemy 2.0](#1-비동기-지원이-있는-sqlalchemy-20)
 2. [mapped_column으로 모델 정의](#2-mapped_column으로-모델-정의)
 3. [데이터베이스 세션 관리](#3-데이터베이스-세션-관리)
@@ -27,6 +29,131 @@
 7. [연결 풀링(Connection Pooling)](#7-연결-풀링connection-pooling)
 8. [연습 문제](#8-연습-문제)
 9. [참고 자료](#9-참고-자료)
+
+---
+
+## 이론과 원리
+
+웹 앱의 데이터베이스 스택은 초보자가 흔히 하나로 뭉뜽그리는 세 개의 중첩된 관심사로 이루어집니다. 이를 미리 분리하면 이후의 모든 결정 — 풀 크기, 세션 범위, eager vs lazy 로딩 — 이 설명됩니다.
+
+- **(A) 연결 풀(Connection pool)** — 요청 사이에서 공유되는, 데이터베이스로의 유한한 TCP 연결 집합.
+- **(B) 세션 / 작업 단위(Unit of work)** — identity map이 있는 메모리 내 트랜잭션 컨텍스트.
+- **(C) 로딩 전략(Loading strategies)** — 관계가 실제로 데이터베이스를 치는 시점, 그리고 N+1 함정.
+
+### A. 연결 풀링: 유한한 자원
+
+데이터베이스 연결은 공짜가 아닙니다. PostgreSQL 백엔드 연결은 메가바이트 단위 RAM을 가진 fork된 프로세스입니다. MySQL 연결은 OS 스레드입니다. 연결을 여는 데는 TCP 핸드셰이크에 인증까지 필요합니다. 요청마다 새 연결을 만드는 웹 앱은 앱 서버를 포화시키기 한참 전에 데이터베이스를 포화시킵니다.
+
+해결책은 **연결 풀**입니다. 미리 열린 작은 연결 집합을 살아 있게 유지하고, 각 요청에 하나씩 빌려주고, 끝나면 돌려받습니다.
+
+#### A.1 SQLAlchemy의 QueuePool
+
+기본 풀 구현은 `QueuePool`입니다. 다음을 유지합니다.
+
+- `pool_size`개의 연결을 항상 살려둡니다(기본 5).
+- `max_overflow`개의 추가 연결을 임시로 허용합니다(기본 10).
+- `pool_timeout` — 요청이 빈 연결을 기다리는 최대 초(기본 30).
+
+`session.execute(...)`가 실행되면 풀에서 연결을 `acquire()`합니다. 세션이 닫히면 `release()`합니다. `pool_size + max_overflow`개가 모두 사용 중이면 다음 호출자는 최대 `pool_timeout`초 동안 블로킹된 후 `TimeoutError`를 던집니다.
+
+외워두어야 할 산수: **데이터베이스에 가는 총 연결 수 = (pool_size + max_overflow) × 앱 프로세스 수 × 앱 인스턴스 수**. 파드당 Gunicorn 워커 4개, 파드 3개, `pool_size=5, max_overflow=10`이면 데이터베이스는 한 서비스로부터 최대 `15 × 4 × 3 = 180`개의 연결을 봅니다. 많은 프로덕션 장애가 `FATAL: too many connections`로 시작합니다. 의도적으로 상한을 정하세요.
+
+#### A.2 비동기 환경에서의 풀 크기
+
+레슨 03의 FastAPI 비동기 모델에서는 워커 *하나*가 수백 개의 진행 중 요청을 가질 수 있습니다. 풀 크기는 *동시 진행 중인 요청* 수가 아니라 *동시에 실행 중인 SQL 문* 수의 상한입니다. 연결을 이미 반납한(SQL 문 사이에 있는) 요청은 카운트되지 않습니다.
+
+어림짐작: `pool_size ≈ 동시 SQL 피크 = 평균 쿼리 지연시간 × 피크 QPS`. 100 QPS에서 50ms 쿼리는 워커당 약 5개의 동시 연결이 필요합니다.
+
+#### A.3 `pool_pre_ping`이 중요한 이유
+
+풀 안에서 몇 시간 idle 상태였던 연결은 조용히 죽어 있을 수 있습니다 — 데이터베이스가 재시작했거나, 로드 밸런서가 TCP를 끊었거나, 네트워크가 깜빡했거나. 그 연결을 받는 다음 요청은 `OperationalError: server closed connection`을 봅니다.
+
+`pool_pre_ping=True`는 연결을 빌려주기 전에 싸구려 `SELECT 1`을 실행합니다. 지연 비용은 한 라운드트립이고, 이득은 죽은 연결이 조용히 감지되어 교체된다는 점입니다. 프로덕션에서는 거의 항상 켜는 게 좋습니다.
+
+### B. 세션: 작업 단위
+
+SQLAlchemy `Session`(또는 `AsyncSession`)은 연결의 *얇은 래퍼가 아닙니다*. 메모리 내 **작업 단위(unit of work)** — commit하기 전까지 로드되거나 수정된 모든 객체를 추적하는 트랜잭션 컨텍스트입니다.
+
+#### B.1 Identity map
+
+Identity map은 `(클래스, 기본키)`를 키로 하는 dict입니다. `User(id=42)`를 처음 로드할 때 SQLAlchemy는 객체를 만들어 이 map에 저장합니다. 같은 세션 안에서 row id=42를 반환하는 — 관계를 통한 것을 포함한 — 후속 모든 쿼리는 새로 만든 객체가 아니라 *같은* Python 객체를 돌려줍니다. 이를 통해 보장되는 것:
+
+- 객체 동치(equality)가 데이터베이스 identity와 일치합니다.
+- 한 참조의 변경이 모든 참조에서 보입니다.
+- 반복 쿼리가 중복 객체를 만들어 메모리를 낭비하지 않습니다.
+
+결과: 세션은 짧게 살아야 합니다. 오래 사는 세션은 한 번이라도 건드린 모든 객체를 누적하여 메모리 누수처럼 동작합니다. 표준 범위는 **HTTP 요청 1개 = 세션 1개**이며, 이는 정확히 레슨 03 §A.3의 FastAPI `yield` 기반 의존성이 강제하는 것입니다.
+
+#### B.2 작업 단위 commit
+
+세션 안에서 `add(obj)`, 속성 수정, `delete(obj)`를 합니다 — 그러나 아직 SQL이 가지 않습니다. SQLAlchemy는 변경을 모은 뒤 `commit()`에서
+
+1. 의존성 순서로(부모를 자식보다 먼저) `INSERT`/`UPDATE`/`DELETE` 문을 flush합니다.
+2. 데이터베이스 트랜잭션을 닫는 `COMMIT` 한 번을 발행합니다.
+3. 로드된 객체를 만료시켜 다음 접근 시 신선한 데이터를 다시 가져오게 합니다.
+
+요청 핸들러가 `commit()` 이전에 예외를 던지면 세션의 `rollback()`이 모든 미정 변경을 폐기합니다. 그래서 FastAPI 의존성 패턴 `yield session; finally: session.close()`만으로 트랜잭션 안전성에 충분합니다 — commit이 없으면 쓰기도 없습니다, 끝.
+
+#### B.3 Async 세션: 같은 모델, await로
+
+`AsyncSession`은 같은 작업 단위지만, 네트워크를 건드리는 모든 메서드 — `execute()`, `commit()`, `flush()`, `refresh()` — 가 `await`해야 하는 코루틴입니다. Identity map은 그대로이고, 작업 단위 의미도 그대로입니다. 변경되는 것은 세션이 *정확히 한 태스크에서만 동시에* 사용되어야 한다는 점입니다 — 동시 `asyncio.gather` 호출 사이에서 하나를 공유하는 것은 정의되지 않은 동작입니다.
+
+### C. 로딩 전략과 N+1 문제
+
+세 번째 관심사는 관계 속성이 실제로 SQL을 발화하는 시점입니다. 이를 잘못 이해하면 "단순한" 루프가 수백 개의 쿼리가 됩니다.
+
+#### C.1 Lazy 로딩: 기본값의 함정
+
+기본적으로 `user.posts` 같은 관계는 *lazy*입니다. SQLAlchemy는 속성에 처음 접근할 때 별도의 `SELECT * FROM posts WHERE user_id = ?`를 발화합니다. 편리하긴 한데, 이렇게 쓰면
+
+```python
+users = await session.scalars(select(User).limit(100))
+for user in users:
+    print(user.posts)  # 사용자당 추가 쿼리 1개
+```
+
+이것이 **N+1**입니다. 사용자 100명을 위한 쿼리 1개에, 그들의 posts를 위한 N=100개 쿼리. 한두 번이면 끝날 일에 101번의 라운드트립.
+
+비동기는 이를 더 나쁘게 만듭니다. SQLAlchemy의 비동기 관계 접근은 마법처럼 암묵 쿼리를 발화할 수 없습니다 — 대신 `MissingGreenlet`을 던집니다. 그래서 `AsyncSession`에서 N+1은 시끄럽게 실패하는데, 역설적으로 이는 기능입니다. 로딩 전략을 강제로 선택하게 만듭니다.
+
+#### C.2 Eager 로딩 전략
+
+관련된 행을 미리 가져오는 두 가지 주된 전략:
+
+| 전략 | SQL 패턴 | 적합한 경우 |
+|----------|-------------|----------|
+| `selectinload(User.posts)` | 사용자 쿼리 1개, posts에 대한 `WHERE user_id IN (...)` 쿼리 1개 | 일대다; 큰 부모 집합 |
+| `joinedload(User.posts)` | `LEFT OUTER JOIN posts ON ...`이 있는 단일 SQL | 다대일; 작은 결과 집합 |
+
+`selectinload`는 부모 쿼리를 단순하게 유지하고 행 중복을 피합니다. `joinedload`는 라운드트립이 한 번이지만, 양쪽이 모두 크면 폭발할 수 있는 카르테시안 곱 모양의 결과 집합을 만듭니다.
+
+규칙: 일대다나 다대다는 `selectinload`를, 다대일(예: `Post`와 그 단일 `Author` 로드)은 `joinedload`를 선호하세요.
+
+#### C.3 더 깊은 원리: 로드할 것을 선언하라
+
+N+1 문제는 lazy 접근에 의존하지 않는 순간 사라집니다. 모든 `select()`는 필요한 모든 관계를 선언해야 합니다.
+
+```python
+stmt = (
+    select(User)
+    .options(selectinload(User.posts).selectinload(Post.comments))
+    .where(User.active == True)
+)
+```
+
+쿼리는 자기 기술적이 되고(가져오는 것이 무엇인지 명시적), 예측 가능해집니다(결과 수와 무관하게 고정된 라운드트립 수).
+
+### 이론에서 아래 코드로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (SQLAlchemy 2.0 + async)은 §A의 연결 풀을 소유하는 엔진을 설정합니다.
+- §2 (`mapped_column` 모델)은 행을 선언합니다. §B.1의 identity map은 여기서 선언된 기본키로 키를 만듭니다.
+- §3 (Depends를 통한 세션 관리)는 레슨 03 §A.3의 `yield` 기반 의존성을 통해 배관된 §B 작업 단위입니다.
+- §4 (비동기 CRUD)는 §B.2 commit 사이클을 구동하는 `add` / `execute` / `commit`입니다.
+- §5 (관계)는 N+1 함정을 무찌르기 위해 §C.2의 `selectinload`/`joinedload`를 도입합니다.
+- §6 (Alembic)은 `mapped_column` 모델이 기술하는 스키마를 진화시키는 오프라인 도구입니다.
+- §7 (연결 풀링)은 §A.1 `QueuePool` 파라미터의 명시적 구성입니다.
 
 ---
 

@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — the connection pool algorithm, the SQLAlchemy session as a unit of work, and the lazy-vs-eager loading tradeoff that drives the N+1 problem.
+
 1. [SQLAlchemy 2.0 with Async Support](#1-sqlalchemy-20-with-async-support)
 2. [Defining Models with mapped_column](#2-defining-models-with-mapped_column)
 3. [Database Session Management](#3-database-session-management)
@@ -27,6 +29,131 @@
 7. [Connection Pooling](#7-connection-pooling)
 8. [Practice Problems](#8-practice-problems)
 9. [References](#9-references)
+
+---
+
+## Theory & Principles
+
+A web app's database stack is three nested concerns most beginners conflate. Separating them up front explains every later decision — pool size, session scope, eager vs lazy loading.
+
+- **(A) The connection pool** — a finite set of TCP connections to the database, shared across requests.
+- **(B) The session / unit of work** — an in-memory transactional context with an identity map.
+- **(C) Loading strategies** — when relationships actually hit the database, and the N+1 trap.
+
+### A. Connection Pooling: A Bounded Resource
+
+A database connection is not free. Each PostgreSQL backend connection is a forked process with megabytes of RAM. Each MySQL connection is an OS thread. Opening a connection requires a TCP handshake plus authentication. A web app that creates a fresh connection per request will saturate the database long before it saturates the app server.
+
+The fix is the **connection pool**: keep a small set of pre-opened connections alive, hand one out to each request, return it when done.
+
+#### A.1 SQLAlchemy's QueuePool
+
+The default pool implementation is `QueuePool`. It maintains:
+
+- `pool_size` connections kept alive at all times (default 5).
+- `max_overflow` extra connections allowed temporarily (default 10).
+- `pool_timeout` — max seconds a request will wait for a free connection (default 30).
+
+When `session.execute(...)` runs, it `acquire()`s a connection from the pool. When the session is closed, it `release()`s it. If all `pool_size + max_overflow` connections are in use, the next caller blocks for up to `pool_timeout` seconds, then raises `TimeoutError`.
+
+The arithmetic to memorize: **total connections to your database = (pool_size + max_overflow) × number of app processes × number of app instances**. With 4 Gunicorn workers per pod, 3 pods, and `pool_size=5, max_overflow=10`, the database sees up to `15 × 4 × 3 = 180` connections from one service. Many production outages start with `FATAL: too many connections`. Cap deliberately.
+
+#### A.2 Pool sizing under async
+
+Under FastAPI's async model from Lesson 03, *one* worker can have hundreds of in-flight requests. The pool size is the bound on *concurrently executing* SQL statements, not on in-flight requests. A request that has yielded the connection back (between SQL statements) does not count.
+
+Heuristic: `pool_size ≈ peak concurrent SQL = avg query latency × peak QPS`. A 50ms query at 100 QPS needs ~5 concurrent connections per worker.
+
+#### A.3 Why `pool_pre_ping` matters
+
+A connection in the pool that has been idle for hours may be silently dead — the database restarted, the load balancer killed the TCP, the network blipped. The next request that gets that connection sees `OperationalError: server closed connection`.
+
+`pool_pre_ping=True` runs a cheap `SELECT 1` on each connection before handing it out. The latency cost is one round-trip; the benefit is that stale connections are detected and replaced silently. In production you almost always want this on.
+
+### B. The Session: A Unit of Work
+
+The SQLAlchemy `Session` (or `AsyncSession`) is *not* a thin wrapper around a connection. It is an in-memory **unit of work** — a transactional context that tracks every loaded and modified object until you commit.
+
+#### B.1 The identity map
+
+The identity map is a dict keyed by `(class, primary_key)`. The first time you load `User(id=42)`, SQLAlchemy creates the object and stores it in this map. Every subsequent query inside the same session that returns row id=42 — including via a relationship — returns the *same* Python object, not a fresh one. This guarantees:
+
+- Object equality matches database identity.
+- A change to one reference is visible through every reference.
+- Repeated queries do not waste memory creating duplicate objects.
+
+A consequence: a session must be short-lived. A long-lived session accumulates every object it ever touched, behaving like a memory leak. The standard scope is **one HTTP request = one session**, which is exactly what the FastAPI `yield`-based dependency from Lesson 03 §A.3 enforces.
+
+#### B.2 The unit-of-work commit
+
+Inside a session, you `add(obj)`, modify attributes, `delete(obj)` — but no SQL is sent yet. SQLAlchemy collects the changes, then on `commit()`:
+
+1. Flushes pending changes as `INSERT`/`UPDATE`/`DELETE` statements in dependency order (parents before children).
+2. Issues one `COMMIT` to close the database transaction.
+3. Expires loaded objects so the next access re-fetches fresh data.
+
+If the request handler raises before `commit()`, the session's `rollback()` discards every pending change. This is why the FastAPI dep pattern `yield session; finally: session.close()` is sufficient for transactional safety: no commit means no write, full stop.
+
+#### B.3 Async session: the same model, awaited
+
+`AsyncSession` is the same unit of work, but every method that touches the network — `execute()`, `commit()`, `flush()`, `refresh()` — is a coroutine you must `await`. The identity map is unchanged; the unit of work semantics are unchanged. What changes is that the session must be used by *exactly one task at a time* — sharing one across concurrent `asyncio.gather` calls is undefined behavior.
+
+### C. Loading Strategies and the N+1 Problem
+
+The third concern is when a relationship attribute actually fires SQL. Get this wrong and a "simple" loop becomes hundreds of queries.
+
+#### C.1 Lazy loading: the default trap
+
+By default, a relationship like `user.posts` is *lazy*: SQLAlchemy fires a separate `SELECT * FROM posts WHERE user_id = ?` the first time you access the attribute. Convenient — until you write:
+
+```python
+users = await session.scalars(select(User).limit(100))
+for user in users:
+    print(user.posts)  # one extra query per user
+```
+
+That is **N+1**: one query for the 100 users, plus N=100 queries for their posts. 101 round-trips for what should be one or two.
+
+Async makes it worse. SQLAlchemy's async relationship access cannot magically issue an implicit query — it raises `MissingGreenlet` instead. So in `AsyncSession` the N+1 fails loudly, which paradoxically is a feature: you are forced to choose a loading strategy.
+
+#### C.2 Eager loading strategies
+
+Two main strategies for fetching the related rows up front:
+
+| Strategy | SQL pattern | Best for |
+|----------|-------------|----------|
+| `selectinload(User.posts)` | one query for users, one query `WHERE user_id IN (...)` for posts | one-to-many; large parent sets |
+| `joinedload(User.posts)` | a single SQL with `LEFT OUTER JOIN posts ON ...` | many-to-one; small result sets |
+
+`selectinload` keeps the parent query simple and avoids row duplication. `joinedload` is one round-trip but produces a Cartesian-product-shaped result set that can blow up if both sides are big.
+
+The rule: for one-to-many or many-to-many, prefer `selectinload`. For many-to-one (loading a `Post` and its single `Author`), `joinedload` wins.
+
+#### C.3 The deeper principle: declare what you load
+
+The N+1 problem disappears the moment you stop relying on lazy access. Every `select()` should declare every relationship it needs:
+
+```python
+stmt = (
+    select(User)
+    .options(selectinload(User.posts).selectinload(Post.comments))
+    .where(User.active == True)
+)
+```
+
+The query becomes self-documenting (here is what we fetch) and predictable (a fixed number of round-trips, regardless of result count).
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (SQLAlchemy 2.0 + async) sets up the engine that owns the §A connection pool.
+- §2 (`mapped_column` models) declares the rows; the identity map of §B.1 keys on the primary key declared here.
+- §3 (Session management with Depends) is the §B unit of work plumbed through Lesson 03 §A.3's `yield`-based dependency.
+- §4 (Async CRUD) is `add` / `execute` / `commit` driving the §B.2 commit cycle.
+- §5 (Relationships) introduces `selectinload`/`joinedload` from §C.2 to defeat the N+1 trap.
+- §6 (Alembic) is the offline tool that evolves the schema your `mapped_column` models describe.
+- §7 (Connection pooling) is the explicit configuration of the §A.1 `QueuePool` parameters.
 
 ---
 

@@ -14,6 +14,8 @@
 
 ## Table of Contents
 
+Before the project walkthrough, read [**Theory & Principles**](#theory--principles) — the architectural decisions you have to make for any backend, the layered architecture pattern (router → service → repository), and the trade-offs that turn a working prototype into a maintainable system.
+
 1. [Project Overview](#1-project-overview)
 2. [Project Setup](#2-project-setup)
 3. [Data Models](#3-data-models)
@@ -23,6 +25,167 @@
 7. [Testing with pytest](#7-testing-with-pytest)
 8. [Docker Deployment](#8-docker-deployment)
 9. [Extension Ideas](#9-extension-ideas)
+
+---
+
+## Theory & Principles
+
+A capstone project is where the fragments from previous lessons (FastAPI patterns, SQLAlchemy queries, JWT auth, Docker) become a single coherent system. The interesting part is not any individual piece — those are covered in lessons 02–17 — it is the *architectural decisions* that bind them together. Three lenses make those decisions discussable.
+
+- **(A) The architectural decisions every backend project makes** — explicitly named, with their alternatives.
+- **(B) Layered architecture: router / service / repository** — the canonical separation of concerns and what each layer owns.
+- **(C) The build vs buy vs use-managed tradeoff** — most production decisions reduce to this.
+
+### A. The Architectural Decisions Every Backend Makes
+
+When you start a backend project, you implicitly answer these questions. Making them explicit lets you defend each choice rather than copy a template.
+
+#### A.1 The decision matrix
+
+| Decision | Common options | What changes if you pick wrong |
+|----------|----------------|--------------------------------|
+| Sync vs async runtime | WSGI/sync vs ASGI/async | Concurrency model, library choices, debugging shape |
+| Monolith vs microservices | One service vs N services | Deployment complexity, transaction semantics, debugging |
+| ORM vs query builder vs raw SQL | SQLAlchemy ORM vs SQLAlchemy Core vs psycopg | Speed of development vs control over queries |
+| Code-first vs schema-first | Models drive schema vs OpenAPI/SQL drives models | Source of truth, migration strategy |
+| Sessions vs JWT vs cookies | Session in DB vs stateless JWT vs server cookies | Revocation, scaling, browser compatibility |
+| Database type | PostgreSQL vs MySQL vs SQLite vs MongoDB | Transaction guarantees, query power, ops cost |
+
+For this lesson's project, the choices are: ASGI/FastAPI (async, modern), monolith (single service), SQLAlchemy ORM (Lesson 04 patterns), code-first (Pydantic + SQLAlchemy define the contract), JWT (stateless API), PostgreSQL. Each is defensible; each has alternatives that would be defensible too.
+
+#### A.2 The "default stack" trap
+
+Beginners often pick the stack their tutorial used. Senior engineers pick the stack that matches the *actual* constraints. The exercise: for any technology choice in your stack, articulate one scenario where the alternative would win. If you cannot, you do not yet understand the choice.
+
+For example, why FastAPI over Django?
+
+- **For FastAPI:** Async I/O matters (downstream API calls, slow databases, WebSockets). Type-driven validation. OpenAPI generation.
+- **For Django:** "Batteries included" — admin, auth, ORM, forms, migrations all in one. Synchronous workload (CRUD-heavy CMS). Small team that wants opinions baked in.
+
+Neither is universally right. The lesson's project is FastAPI because the curriculum focuses on async patterns; a Django version of the same project would be equally valid.
+
+### B. Layered Architecture: Router / Service / Repository
+
+The mistake every codebase eventually makes: putting all the logic in the route handler.
+
+```python
+# bad: route handler does everything
+@app.post("/posts/")
+async def create_post(post: PostIn, db: Session = Depends(get_db)):
+    if db.query(Post).filter(Post.title == post.title).count() > 0:
+        raise HTTPException(409, "duplicate title")
+    new_post = Post(**post.dict(), author_id=current_user.id)
+    db.add(new_post)
+    db.commit()
+    notify_subscribers(new_post)  # side effect
+    return new_post
+```
+
+This works for one endpoint. By the tenth, you have validation, db access, business rules, side effects all interleaved in every handler. Tests are hard, reuse is impossible.
+
+The conventional fix is three layers, each owning one concern.
+
+#### B.1 The three layers
+
+```
+┌─────────────────────────────────────┐
+│  Router  (HTTP-shaped concerns)      │
+│  - URL parsing, parameter binding    │
+│  - Authentication / authorization    │
+│  - Status codes, response shaping    │
+│  - Calls service, returns response   │
+└─────────────────────────────────────┘
+            ↓ calls
+┌─────────────────────────────────────┐
+│  Service  (Business logic)           │
+│  - Validation beyond field shape     │
+│  - Coordinating multiple repos       │
+│  - Side effects (notify, queue, ... )│
+│  - Returns domain objects            │
+└─────────────────────────────────────┘
+            ↓ calls
+┌─────────────────────────────────────┐
+│  Repository  (Data access)           │
+│  - SQL / ORM queries                 │
+│  - One repository per entity         │
+│  - Returns model instances           │
+└─────────────────────────────────────┘
+```
+
+The same handler refactored:
+
+```python
+@app.post("/posts/")
+async def create_post(post: PostIn, user: User = Depends(get_user), db: Session = Depends(get_db)):
+    new_post = post_service.create_post(db, post, author=user)
+    return new_post
+
+# in post_service.py
+def create_post(db, data, author):
+    if post_repo.exists_by_title(db, data.title):
+        raise DuplicateTitleError()
+    new_post = post_repo.create(db, data, author_id=author.id)
+    notification_service.notify_subscribers(new_post)
+    return new_post
+```
+
+Now the service layer has the business rule, the repository has the SQL, and the router only translates HTTP. Each layer is testable in isolation.
+
+#### B.2 What goes in each layer
+
+A useful question for each piece of code: "if I switched from HTTP to gRPC, what would I rewrite?" Anything in that set belongs in the router. "If I switched from PostgreSQL to MongoDB, what would I rewrite?" That belongs in the repository. Everything else is the service.
+
+This is a heuristic, not a religion. For a small project with simple CRUD, the layers can collapse — having a single `posts.py` is fine. The discipline matters when complexity grows.
+
+#### B.3 Dependency direction
+
+The arrow goes one way: router → service → repository. The repository never imports the service. The service never imports the router. This is what makes layers independently testable: you can mock the repository when testing the service, and mock the service when testing the router.
+
+When the dependency arrow gets reversed (a model knows about HTTP, a repository raises HTTPException), the layers fold into each other and the architecture stops paying off.
+
+### C. Build vs Buy vs Managed Service
+
+Every component of a backend is one of three things:
+
+- **Build** — write it yourself in your codebase.
+- **Buy / use a library** — install an open-source package.
+- **Managed service** — pay AWS/GCP/etc to run it.
+
+#### C.1 The framework for choosing
+
+| Question | Build | Buy | Managed |
+|----------|-------|-----|---------|
+| Cost (eng time + infra) | High eng time, low infra | Medium both | Low eng, high infra |
+| Time to running | Slowest | Medium | Fastest |
+| Customization | Total | Bounded | Limited |
+| Operational burden | All you | Mostly you | Mostly the vendor |
+| Lock-in | None | Low | High |
+
+#### C.2 Where each fits
+
+- **Build** authentication-related logic that encodes your business rules (who can do what), the unique parts of your domain.
+- **Buy** generic infrastructure: web framework, ORM, JSON libraries, JWT signing libraries. These are commoditized and well-tested.
+- **Managed** the truly hard things: databases (RDS, Cloud SQL), object storage (S3, GCS), message queues (SQS, Pub/Sub), email (SES, SendGrid). The cost of running these well is enormous; pay someone else.
+
+#### C.3 The "we don't need it yet" rule
+
+The biggest waste in early projects is building or operating things you don't need yet. A single PostgreSQL instance, no message queue, no Redis cache, no Elasticsearch — most apps work fine until traffic actually demands more. Adding infrastructure pre-emptively multiplies operational complexity without adding value.
+
+The discipline: introduce each new piece of infrastructure when a measurement (latency p99, cost per request, error rate) says you need it. Not before.
+
+### From Theory to the Project Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Project overview) declares the §A.1 architectural choices for this project.
+- §2 (Project setup) follows §A.2 — set up only what you need now (FastAPI + SQLAlchemy + Alembic).
+- §3 (Data models) is the §B repository layer's data shape, plus the Pydantic schemas the router uses.
+- §4 (CRUD endpoints) walks all three §B layers — router calls service calls repository.
+- §5 (JWT authentication) implements Lesson 15 §A.3's access + refresh pattern as a service-layer concern.
+- §6 (Pagination and filtering) is Lesson 14 §4–§5 in concrete code at the §B router/service boundary.
+- §7 (Testing with pytest) follows Lesson 05 §C — fixture-driven, transactional rollback, dependency overrides for the §B service layer.
+- §8 (Docker deployment) is Lesson 16 §5 made concrete: §A.10 dev/prod parity through a single image.
+- §9 (Extension ideas) is the "what next?" — adding caching (Lesson 20), background jobs (Lesson 21), observability (Lesson 17) when measurements justify them per §C.3.
 
 ---
 

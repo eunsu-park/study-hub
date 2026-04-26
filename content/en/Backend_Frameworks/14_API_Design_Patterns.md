@@ -14,6 +14,8 @@
 
 ## Table of Contents
 
+Before the patterns reference, read [**Theory & Principles**](#theory--principles) — the mathematical definition of HTTP idempotency, the RFC 7807 Problem Details specification, and how REST/GraphQL/gRPC compare on the same axes.
+
 1. [RESTful Resource Design](#1-restful-resource-design)
 2. [HTTP Methods and Idempotency](#2-http-methods-and-idempotency)
 3. [Status Code Conventions](#3-status-code-conventions)
@@ -24,6 +26,192 @@
 8. [Error Response Format](#8-error-response-format)
 9. [Rate Limiting Headers](#9-rate-limiting-headers)
 10. [Practice Problems](#10-practice-problems)
+
+---
+
+## Theory & Principles
+
+API design patterns look like a list of conventions, but they are downstream of three deeper ideas. Once you internalize each one, the rest follows mechanically.
+
+- **(A) HTTP method semantics as a mathematical contract** — safe, idempotent, and cacheable are precise properties, not vibes.
+- **(B) RFC 7807 Problem Details and machine-readable errors** — the spec for "structured error responses".
+- **(C) REST vs RPC vs GraphQL vs gRPC** — four architectural styles compared on the same axes.
+
+### A. The Mathematical Definition of Idempotency
+
+The HTTP/1.1 spec (RFC 9110) defines two properties of methods that constrain how middleboxes (proxies, retries, browsers) treat them. Both are mathematical properties of the *server's behavior*, not the wire format.
+
+#### A.1 Safe methods
+
+A method is **safe** if its semantics are essentially read-only — calling it does not modify server state. Formally:
+
+```
+∀ request r: state(server, after r) = state(server, before r)
+```
+
+`GET`, `HEAD`, and `OPTIONS` are safe. `POST`, `PUT`, `PATCH`, `DELETE` are not. The contract matters because:
+
+- Browsers and crawlers freely pre-fetch safe methods.
+- Caches store safe-method responses without asking.
+- Retries on transport errors are unconditionally OK for safe methods.
+
+A "safe" method that secretly logs a write violates the spec — and silently breaks intermediaries. The discipline: a `GET` handler must not modify state. Period.
+
+#### A.2 Idempotent methods
+
+A method is **idempotent** if making the same request multiple times has the same effect on the server as making it once. Formally:
+
+```
+state(server, after [r, r, r, ...]) = state(server, after [r])
+```
+
+Idempotency does not mean "returns the same response every time" — it means the *server state* converges to the same value. `DELETE /users/42` is idempotent: after one call the user is gone; after a hundred calls the user is still gone (subsequent calls return `404`, but the state is the same).
+
+The HTTP method classification:
+
+| Method | Safe | Idempotent |
+|--------|------|-----------|
+| GET, HEAD, OPTIONS | yes | yes |
+| PUT, DELETE | no | yes |
+| POST, PATCH (sometimes) | no | no |
+
+Why it matters: idempotent methods are safe to *retry*. A `PUT` that times out can be re-sent — the worst case is you do the same write twice. A non-idempotent `POST` cannot — retrying might create a second order, charge twice, etc.
+
+#### A.3 Idempotency keys: making POST idempotent at the application layer
+
+Real-world APIs need idempotent payment, order, and message endpoints — but the operations are POST-shaped (creates). The standard solution is the `Idempotency-Key` header (RFC draft, Stripe convention):
+
+```
+POST /payments
+Idempotency-Key: 7e3b1c8d-4f9a-4...
+
+# First call: server processes, stores result keyed by the key
+# Repeat call (same key): server returns the stored result; no new charge
+```
+
+The server must remember the key for at least the request retry window (typically 24 h). This pushes the idempotency property into the application layer where the spec can't help.
+
+### B. RFC 7807: Problem Details for HTTP APIs
+
+Before RFC 7807, every API invented its own error response format: `{"error": "..."}`, `{"errors": [...]}`, `{"code": 42, "message": "..."}`. The spec standardizes a small set of fields with well-defined meanings.
+
+#### B.1 The required fields
+
+```json
+{
+  "type": "https://example.com/probs/out-of-credit",
+  "title": "You do not have enough credit.",
+  "status": 403,
+  "detail": "Your balance is 30, but the requested amount is 50.",
+  "instance": "/account/12345/transactions/67890"
+}
+```
+
+- `type` — A URI identifying the problem class. Two responses with the same `type` mean the same kind of problem. URIs (not opaque codes) so they can be dereferenced for documentation.
+- `title` — A short human-readable summary, ideally constant for a given `type`.
+- `status` — The HTTP status code, duplicated for clients reading only the body.
+- `detail` — The instance-specific human-readable explanation.
+- `instance` — A URI identifying *this specific occurrence* of the problem.
+
+The Content-Type is `application/problem+json` (or `+xml`). Any extension fields are allowed — e.g., `balance: 30, requested: 50` for the example above.
+
+#### B.2 Why `type` is a URI, not a code
+
+The temptation is to invent integer codes (`E001`, `E002`). RFC 7807 chose URIs because:
+
+- URIs are globally unique without coordination.
+- URIs can be dereferenced — pointing a browser at the URI returns documentation.
+- Codes drift across versions; URIs are versioned independently.
+
+In practice, most APIs use a path under their own domain (`https://example.com/probs/out-of-credit`) and serve documentation at that URL.
+
+#### B.3 Validation errors: the structured-array extension
+
+RFC 7807 itself does not specify how to represent *multiple* validation errors. The de facto convention adds an `errors` array:
+
+```json
+{
+  "type": "https://example.com/probs/validation",
+  "title": "Validation failed",
+  "status": 422,
+  "errors": [
+    {"field": "email", "code": "invalid", "message": "Not a valid email address"},
+    {"field": "age", "code": "too_low", "message": "Must be at least 18"}
+  ]
+}
+```
+
+This shape lets clients render per-field error messages on a form without parsing free text.
+
+### C. Four Architectural Styles Compared
+
+REST is one of four widely-used styles for backend APIs. Each is a different point in the design space; choosing intelligently means knowing the axes.
+
+#### C.1 The comparison matrix
+
+| Property | REST | RPC (JSON-RPC) | GraphQL | gRPC |
+|----------|------|---------------|---------|------|
+| Transport | HTTP | HTTP | HTTP | HTTP/2 + Protobuf |
+| Discovery | URL conventions | Method directory | Schema | Protobuf .proto |
+| Over-fetch | Possible | Method per shape | Client picks | Method per shape |
+| Versioning | URL/header | Method name | Schema deprecation | Package version |
+| Streaming | SSE / chunked | Bespoke | Subscriptions | First-class |
+| Tooling | Browser, cURL | OpenRPC | GraphiQL | grpcurl |
+| Browser support | Native | Native | Native | grpc-web (limited) |
+
+#### C.2 REST's strengths and weaknesses
+
+**Strengths:** browser-native (no extra libraries), cacheable at every layer (URL is the cache key), well-understood semantics (every developer knows `GET`/`POST`).
+
+**Weaknesses:** over- and under-fetching (a `GET /users/42` returns the full user; you usually need only the name). N+1 round-trips for nested data. Verb mismatch when the operation does not fit CRUD (`POST /orders/42/cancel/` is a workaround).
+
+#### C.3 GraphQL's pitch
+
+The client sends a query specifying *exactly* the fields it needs:
+
+```graphql
+query {
+  user(id: 42) {
+    name
+    orders(last: 5) {
+      total
+    }
+  }
+}
+```
+
+One round-trip, no over-fetching, no under-fetching. The cost: the server must implement resolvers for every field at every level (with N+1 risk if the resolvers do per-row queries — DataLoader is the standard fix). Caching is harder because the query is the cache key, not the URL.
+
+GraphQL wins when clients are diverse (mobile + web + dashboard) or when data shape varies dramatically per view.
+
+#### C.4 gRPC's pitch
+
+gRPC uses HTTP/2 + Protobuf. The schema lives in `.proto` files; code generation produces typed clients in many languages. Streaming (server-side, client-side, bidirectional) is first-class.
+
+Wins when latency, type safety across languages, and binary efficiency matter — typical for service-to-service communication inside a microservice architecture. Loses for browser clients (gRPC-Web is a partial workaround) and for human-debuggable APIs (Protobuf is binary, not curl-friendly).
+
+#### C.5 The choice principle
+
+Pick the style that minimizes friction for the *primary* consumer:
+
+- **External, public API** → REST (browser-friendly, well-documented, well-cached).
+- **Mobile + web app with rich shared backend** → GraphQL (one schema, many shapes).
+- **Internal microservices** → gRPC (type-safe, fast, streaming).
+- **Action-heavy domains where CRUD is awkward** → JSON-RPC or REST with action endpoints.
+
+### From Theory to the Patterns Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (RESTful resource design) is the noun-over-verb principle from §C.2's "REST as the default" baseline.
+- §2 (HTTP methods and idempotency) is §A.1, §A.2, §A.3 in concrete code.
+- §3 (Status code conventions) is the precise use of the 5 status classes from Lesson 01 §A.2.
+- §4 (Pagination patterns) is over-fetch defense at the list-endpoint level — offset, cursor, keyset.
+- §5 (Filtering, sorting, field selection) is the partial-version of GraphQL's promise (§C.3) in REST-shaped queries.
+- §6 (API versioning) is how to evolve the §C.5 contract without breaking clients (URL prefix, Accept header, parameter).
+- §7 (HATEOAS) is the original REST §uniform-interface constraint expressed as link relations in responses.
+- §8 (Error response format) is RFC 7807 from §B in concrete JSON.
+- §9 (Rate limiting headers) is the convention `X-RateLimit-Remaining`, `Retry-After` for client-side back-off.
 
 ---
 

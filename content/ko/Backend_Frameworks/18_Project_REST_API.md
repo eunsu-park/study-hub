@@ -14,6 +14,8 @@
 
 ## 목차
 
+프로젝트 안내에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 어떤 백엔드든 내려야 하는 아키텍처 결정, 계층 아키텍처 패턴(router → service → repository), 그리고 작동하는 프로토타입을 유지보수 가능한 시스템으로 바꾸는 트레이드오프를 다룹니다.
+
 1. [프로젝트 개요](#1-프로젝트-개요)
 2. [프로젝트 설정](#2-프로젝트-설정)
 3. [데이터 모델](#3-데이터-모델)
@@ -23,6 +25,167 @@
 7. [pytest를 이용한 테스트](#7-pytest를-이용한-테스트)
 8. [Docker 배포](#8-docker-배포)
 9. [확장 아이디어](#9-확장-아이디어)
+
+---
+
+## 이론과 원리
+
+캡스톤 프로젝트는 이전 레슨들의 조각(FastAPI 패턴, SQLAlchemy 쿼리, JWT 인증, Docker)이 하나의 일관된 시스템이 되는 곳입니다. 흥미로운 부분은 개별 조각이 아닙니다 — 그것들은 레슨 02–17에서 다뤘습니다 — 그것들을 묶는 *아키텍처 결정*입니다. 세 가지 렌즈가 그 결정을 논의 가능하게 만듭니다.
+
+- **(A) 모든 백엔드 프로젝트가 내리는 아키텍처 결정** — 그 대안과 함께 명시적으로 명명됨.
+- **(B) 계층 아키텍처: router / service / repository** — 정전적 관심사 분리와 각 계층이 소유하는 것.
+- **(C) Build vs buy vs use-managed 트레이드오프** — 대부분의 프로덕션 결정이 이것으로 환원됩니다.
+
+### A. 모든 백엔드가 내리는 아키텍처 결정
+
+백엔드 프로젝트를 시작할 때 이 질문들에 암묵적으로 답합니다. 그것들을 명시적으로 만들면 템플릿을 복사하는 대신 각 선택을 변호할 수 있게 됩니다.
+
+#### A.1 결정 매트릭스
+
+| 결정 | 흔한 옵션 | 잘못 골랐을 때 바뀌는 것 |
+|----------|----------------|--------------------------------|
+| 동기 vs 비동기 런타임 | WSGI/sync vs ASGI/async | 동시성 모델, 라이브러리 선택, 디버깅 모양 |
+| 모놀리스 vs 마이크로서비스 | 서비스 1개 vs N개 서비스 | 배포 복잡성, 트랜잭션 의미, 디버깅 |
+| ORM vs query builder vs raw SQL | SQLAlchemy ORM vs SQLAlchemy Core vs psycopg | 개발 속도 vs 쿼리 제어 |
+| Code-first vs schema-first | 모델이 스키마를 구동 vs OpenAPI/SQL이 모델을 구동 | 진실 원천, 마이그레이션 전략 |
+| 세션 vs JWT vs 쿠키 | DB의 세션 vs 무상태 JWT vs 서버 쿠키 | 취소, 확장, 브라우저 호환성 |
+| 데이터베이스 타입 | PostgreSQL vs MySQL vs SQLite vs MongoDB | 트랜잭션 보장, 쿼리 능력, 운영 비용 |
+
+이 레슨 프로젝트에서 선택은: ASGI/FastAPI(비동기, 현대적), 모놀리스(단일 서비스), SQLAlchemy ORM(레슨 04 패턴), code-first(Pydantic + SQLAlchemy가 계약 정의), JWT(무상태 API), PostgreSQL. 각각이 변호 가능하며, 변호 가능한 대안도 있습니다.
+
+#### A.2 "기본 스택" 함정
+
+초보자는 종종 자신의 튜토리얼이 사용한 스택을 고릅니다. 시니어 엔지니어는 *실제* 제약에 맞는 스택을 고릅니다. 연습: 스택의 어떤 기술 선택이든 대안이 이길 한 가지 시나리오를 명료하게 표현해 보세요. 못한다면, 그 선택을 아직 이해하지 못한 것입니다.
+
+예를 들어, 왜 Django가 아니라 FastAPI인가?
+
+- **FastAPI를 위해:** 비동기 I/O가 중요(다운스트림 API 호출, 느린 데이터베이스, WebSocket). 타입 주도 검증. OpenAPI 생성.
+- **Django를 위해:** "배터리 포함" — admin, auth, ORM, forms, migration이 모두 한 곳. 동기 워크로드(CRUD 무거운 CMS). 의견이 baked in되기를 원하는 작은 팀.
+
+어느 것도 보편적으로 옳지 않습니다. 레슨의 프로젝트가 FastAPI인 이유는 커리큘럼이 비동기 패턴에 초점을 맞추기 때문입니다. 같은 프로젝트의 Django 버전도 똑같이 유효할 것입니다.
+
+### B. 계층 아키텍처: Router / Service / Repository
+
+모든 코드베이스가 결국 저지르는 실수: 모든 로직을 라우트 핸들러에 넣기.
+
+```python
+# 나쁨: 라우트 핸들러가 모든 것을 함
+@app.post("/posts/")
+async def create_post(post: PostIn, db: Session = Depends(get_db)):
+    if db.query(Post).filter(Post.title == post.title).count() > 0:
+        raise HTTPException(409, "duplicate title")
+    new_post = Post(**post.dict(), author_id=current_user.id)
+    db.add(new_post)
+    db.commit()
+    notify_subscribers(new_post)  # 부수 효과
+    return new_post
+```
+
+이는 엔드포인트 하나에는 작동합니다. 열 번째에 이르면 검증, db 접근, 비즈니스 규칙, 부수 효과가 모든 핸들러에 뒤섞여 있게 됩니다. 테스트가 어렵고 재사용이 불가능합니다.
+
+관용적 해결책은 세 계층, 각각이 한 관심사를 소유합니다.
+
+#### B.1 세 계층
+
+```
+┌─────────────────────────────────────┐
+│  Router (HTTP 모양 관심사)           │
+│  - URL 파싱, 파라미터 바인딩          │
+│  - 인증 / 인가                        │
+│  - 상태 코드, 응답 모양               │
+│  - service 호출, 응답 반환            │
+└─────────────────────────────────────┘
+            ↓ 호출
+┌─────────────────────────────────────┐
+│  Service (비즈니스 로직)             │
+│  - 필드 모양 너머의 검증              │
+│  - 여러 repo 조정                    │
+│  - 부수 효과 (notify, queue, ... )   │
+│  - 도메인 객체 반환                   │
+└─────────────────────────────────────┘
+            ↓ 호출
+┌─────────────────────────────────────┐
+│  Repository (데이터 접근)            │
+│  - SQL / ORM 쿼리                    │
+│  - 엔티티당 repository 1개            │
+│  - 모델 인스턴스 반환                 │
+└─────────────────────────────────────┘
+```
+
+같은 핸들러 리팩터링:
+
+```python
+@app.post("/posts/")
+async def create_post(post: PostIn, user: User = Depends(get_user), db: Session = Depends(get_db)):
+    new_post = post_service.create_post(db, post, author=user)
+    return new_post
+
+# post_service.py에서
+def create_post(db, data, author):
+    if post_repo.exists_by_title(db, data.title):
+        raise DuplicateTitleError()
+    new_post = post_repo.create(db, data, author_id=author.id)
+    notification_service.notify_subscribers(new_post)
+    return new_post
+```
+
+이제 service 계층이 비즈니스 규칙을, repository가 SQL을 가지며, router는 HTTP만 번역합니다. 각 계층이 격리해서 테스트 가능합니다.
+
+#### B.2 각 계층에 무엇이 들어가는가
+
+각 코드 조각에 대한 쓸모 있는 질문: "HTTP에서 gRPC로 바꾸면 무엇을 다시 쓸까?" 그 집합에 있는 모든 것은 router에 속합니다. "PostgreSQL에서 MongoDB로 바꾸면 무엇을 다시 쓸까?" 그것은 repository에 속합니다. 다른 모든 것은 service입니다.
+
+이는 어림짐작이지 종교가 아닙니다. 단순한 CRUD의 작은 프로젝트에서는 계층이 무너질 수 있습니다 — 단일 `posts.py`가 괜찮습니다. 복잡성이 자라면 규율이 중요해집니다.
+
+#### B.3 의존성 방향
+
+화살표는 한 방향으로 갑니다: router → service → repository. Repository는 service를 import하지 않습니다. Service는 router를 import하지 않습니다. 이것이 계층을 독립적으로 테스트 가능하게 만드는 것입니다: service를 테스트할 때 repository를 mock할 수 있고, router를 테스트할 때 service를 mock할 수 있습니다.
+
+의존성 화살표가 뒤집히면(모델이 HTTP를 알거나, repository가 HTTPException을 던지면) 계층이 서로 접히고 아키텍처가 보상을 멈춥니다.
+
+### C. Build vs Buy vs Managed Service
+
+백엔드의 모든 컴포넌트는 셋 중 하나입니다.
+
+- **Build** — 코드베이스에서 직접 작성.
+- **Buy / 라이브러리 사용** — 오픈 소스 패키지 설치.
+- **Managed 서비스** — AWS/GCP/등에 돈을 내고 운영.
+
+#### C.1 선택을 위한 틀
+
+| 질문 | Build | Buy | Managed |
+|----------|-------|-----|---------|
+| 비용 (엔지니어링 시간 + 인프라) | 엔지 시간 높음, 인프라 낮음 | 둘 다 중간 | 엔지 낮음, 인프라 높음 |
+| 실행까지의 시간 | 가장 느림 | 중간 | 가장 빠름 |
+| 커스터마이즈 | 전체 | 제한 | 한정 |
+| 운영 부담 | 모두 당신 | 대부분 당신 | 대부분 벤더 |
+| Lock-in | 없음 | 낮음 | 높음 |
+
+#### C.2 각각이 어디에 맞는가
+
+- **Build**할 것: 비즈니스 규칙을 인코딩하는 인증 관련 로직(누가 무엇을 할 수 있는가), 도메인의 고유한 부분.
+- **Buy**할 것: 일반 인프라 — 웹 프레임워크, ORM, JSON 라이브러리, JWT 서명 라이브러리. 이것들은 상품화되었고 잘 테스트되었습니다.
+- **Managed**할 것: 진짜 어려운 것들 — 데이터베이스(RDS, Cloud SQL), 객체 저장소(S3, GCS), 메시지 큐(SQS, Pub/Sub), 이메일(SES, SendGrid). 이것들을 잘 운영하는 비용은 막대합니다. 다른 사람에게 돈을 내세요.
+
+#### C.3 "아직 필요 없다" 규칙
+
+초기 프로젝트의 가장 큰 낭비는 아직 필요 없는 것을 만들거나 운영하는 것입니다. 단일 PostgreSQL 인스턴스, 메시지 큐 없음, Redis 캐시 없음, Elasticsearch 없음 — 대부분의 앱은 트래픽이 실제로 더 많은 것을 요구할 때까지 잘 작동합니다. 인프라를 선제적으로 추가하는 것은 가치 추가 없이 운영 복잡성을 곱합니다.
+
+규율: 측정(p99 지연시간, 요청당 비용, 오류율)이 필요하다고 말할 때 각 새 인프라 조각을 도입하세요. 그 전이 아니라.
+
+### 이론에서 아래 프로젝트로
+
+뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
+
+- §1 (프로젝트 개요)는 이 프로젝트의 §A.1 아키텍처 선택을 선언합니다.
+- §2 (프로젝트 설정)은 §A.2를 따릅니다 — 지금 필요한 것만 설정(FastAPI + SQLAlchemy + Alembic).
+- §3 (데이터 모델)은 §B repository 계층의 데이터 모양과 router가 사용하는 Pydantic 스키마입니다.
+- §4 (CRUD 엔드포인트)는 §B 세 계층 모두를 거칩니다 — router가 service를 호출, service가 repository를 호출.
+- §5 (JWT 인증)은 레슨 15 §A.3의 access + refresh 패턴을 service 계층 관심사로 구현합니다.
+- §6 (페이지네이션과 필터링)은 레슨 14 §4–§5를 §B router/service 경계의 구체적인 코드로.
+- §7 (pytest를 이용한 테스트)는 레슨 05 §C를 따릅니다 — 픽스처 주도, 트랜잭션 롤백, §B service 계층을 위한 의존성 override.
+- §8 (Docker 배포)는 레슨 16 §5를 구체화합니다: 단일 이미지를 통한 §A.10 dev/prod parity.
+- §9 (확장 아이디어)는 "다음은 무엇?"입니다 — §C.3에 따라 측정이 정당화할 때 캐싱(레슨 20), 백그라운드 작업(레슨 21), 관측성(레슨 17)을 추가하기.
 
 ---
 

@@ -18,6 +18,8 @@ Django's ORM follows the **Active Record** pattern: model instances know how to 
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — what "lazy QuerySet" actually means at the SQL/Python boundary, the deferred-evaluation rules that decide when SQL fires, and the N+1 problem expressed as a SQL execution count.
+
 1. [QuerySet Fundamentals](#1-queryset-fundamentals)
 2. [Field Lookups](#2-field-lookups)
 3. [F and Q Objects](#3-f-and-q-objects)
@@ -27,6 +29,165 @@ Django's ORM follows the **Active Record** pattern: model instances know how to 
 7. [Custom Managers and QuerySets](#7-custom-managers-and-querysets)
 8. [Bulk Operations and Transactions](#8-bulk-operations-and-transactions)
 9. [Practice Problems](#9-practice-problems)
+
+---
+
+## Theory & Principles
+
+The Django ORM looks like normal Python code, but it is hiding a deferred SQL pipeline behind every `.filter()` call. Three concepts explain everything from "why is my query slow?" to "why am I getting `RelatedManager` instead of a list?".
+
+- **(A) Lazy evaluation: the QuerySet as deferred SQL** — what is built in Python, what is executed in the database, and exactly when the boundary is crossed.
+- **(B) The N+1 problem in Django form** — the same trap from Lesson 04 §C and Lesson 08 §A.3, with Django-specific defenses.
+- **(C) The query plan: from QuerySet to SQL** — how chaining, lookups, and annotations compose into one SQL statement (or several).
+
+### A. Lazy Evaluation: QuerySet as Deferred SQL
+
+A QuerySet is *not* a list of model instances. It is an object that *describes* a query — until something forces it to execute, no SQL leaves your process.
+
+#### A.1 What is built vs what is executed
+
+```python
+qs = Post.objects.filter(published=True).order_by("-created_at")[:10]
+# Still no SQL. qs is a QuerySet object describing:
+#   SELECT ... FROM blog_post WHERE published = TRUE ORDER BY created_at DESC LIMIT 10
+```
+
+What happens in Python:
+
+1. `Post.objects` returns the default `Manager`, which returns a fresh `QuerySet`.
+2. `.filter(...)` returns a *new* QuerySet with that WHERE clause appended to its internal query tree.
+3. `.order_by(...)` returns *another* new QuerySet with ORDER BY added.
+4. `[:10]` returns *yet another* QuerySet with LIMIT.
+
+Each QuerySet is immutable; chaining produces new ones. Internally, each holds a `Query` object — Django's tree representation of a SQL statement. No round-trip yet.
+
+#### A.2 The triggers that force evaluation
+
+A QuerySet evaluates (i.e., issues SQL) the moment one of these happens:
+
+- **Iteration** — `for post in qs:` runs the query and walks results.
+- **Slicing with a step** or **bool conversion** — `if qs:` does the query.
+- **`list(qs)`, `len(qs)`, `bool(qs)`** — explicit materialization.
+- **`qs.count()`, `qs.exists()`, `qs.first()`, `qs.last()`** — execute optimized queries.
+- **Pickling, repr, JSON serialization** — these end up iterating.
+
+Once evaluated, the result is cached on the QuerySet — re-iterating does not re-run the query. But chaining `qs.filter(...)` after evaluation creates a new QuerySet whose cache is empty; the new query will execute again.
+
+The practical consequence: it is easy to accidentally hit the database many times in a template by passing the same queryset and calling different methods on it. The fix is `list(qs)` once, then operate on the materialized list.
+
+#### A.3 The performance implication
+
+Lazy QuerySets let you compose queries in Python before sending anything. That is a feature: a service can build a base queryset and pass it through several layers of filters before evaluation, with all filters merged into one SQL statement. It is also a footgun: the moment evaluation happens silently (in a template iteration, in a logging statement) is the moment a "fast" function turns slow.
+
+The standard discipline: know exactly where each QuerySet evaluates. Use `django-debug-toolbar` in development; in production, log slow queries via `connection.queries` or `pg_stat_statements`.
+
+### B. The N+1 Problem in Django
+
+Same N+1 trap as Lesson 04 §C.1 and Lesson 08 §A.3, but Django's mechanics are different.
+
+#### B.1 The shape
+
+```python
+posts = Post.objects.all()            # 1 query
+for post in posts:
+    print(post.author.username)       # 1 query per post for FK
+                                      # → N+1 total
+```
+
+Each `post.author` access lazily loads the related User row. With 100 posts that is 101 queries.
+
+#### B.2 The two defenses
+
+Django provides two distinct loaders:
+
+| Method | Mechanism | Use for |
+|--------|-----------|---------|
+| `select_related("author")` | SQL `INNER JOIN` (or `LEFT JOIN` for nullable FK), single query | many-to-one (FK), one-to-one |
+| `prefetch_related("comments")` | One query for the parents, one extra query `WHERE parent_id IN (...)` for children, joined in Python | one-to-many (reverse FK), many-to-many |
+
+`select_related` is the right call for any forward foreign key — the related row arrives in the same query. `prefetch_related` is the right call for reverse relations and many-to-many — Django can't represent a multi-row child set in a single row of the parent's join, so it does two queries instead.
+
+```python
+posts = (
+    Post.objects
+        .select_related("author")           # FK → JOIN
+        .prefetch_related("comments")       # reverse FK → IN query
+)
+for post in posts:
+    print(post.author.username)             # no extra query
+    for c in post.comments.all():           # no extra query per post
+        print(c.body)
+```
+
+Two queries total instead of 101.
+
+#### B.3 Chained prefetches
+
+`prefetch_related` chains across levels: `prefetch_related("comments__author")` fetches comments and each comment's author with one extra query each. For complex graphs, `Prefetch(...)` lets you customize the inner queryset (e.g., only published comments).
+
+The principle generalizes: **state explicitly what relations a query needs, and Django collapses them into the minimum number of round-trips**. Lazy access is a convenience, not a strategy.
+
+### C. From QuerySet to SQL: The Compilation Pipeline
+
+The `.filter()`, `.annotate()`, `.values()` chain is a tree-building DSL. When evaluation triggers, Django compiles that tree into SQL.
+
+#### C.1 The compile stages
+
+1. **Build**: each chained method appends to or modifies an internal `Query` object.
+2. **Compile**: at evaluation time, Django's `SQLCompiler` walks the `Query` tree and produces:
+   - the SELECT clause (columns to fetch),
+   - the FROM clause (the model's table plus any joined tables),
+   - the WHERE clause (translated from `filter()` and `Q()`),
+   - the GROUP BY / HAVING (from `annotate()` + `aggregate()`),
+   - the ORDER BY (from `order_by()`),
+   - the LIMIT/OFFSET (from slicing).
+3. **Parameterize**: literals become bind placeholders (`%s` for psycopg, `?` for sqlite). Same prepared-statement defense from Lesson 08 §B.
+4. **Execute**: the parameterized SQL runs through the database backend.
+5. **Hydrate**: rows become model instances (or dicts/tuples for `values()`/`values_list()`).
+
+The compiler is deterministic — the same chain produces the same SQL every time. Inspecting `qs.query` (or `str(qs.query)`) shows the SQL Django will run.
+
+#### C.2 `values()` and `values_list()`: skip hydration
+
+Hydrating a row into a full model instance is not free. For aggregation/reporting queries that don't need model methods, `values()` returns dicts and `values_list()` returns tuples — no model instantiation. Faster and lower memory:
+
+```python
+Post.objects.values("status").annotate(n=Count("id"))
+# [{'status': 'draft', 'n': 12}, {'status': 'published', 'n': 84}]
+```
+
+#### C.3 F objects: server-side computation
+
+`F("price") * 2` references the column at SQL level rather than reading it into Python. Compare:
+
+```python
+# Bad: read, compute in Python, write back
+for product in Product.objects.all():
+    product.price *= 2
+    product.save()
+
+# Good: single UPDATE on the server
+Product.objects.update(price=F("price") * 2)
+```
+
+The first version is N+1 plus N writes. The second is one round-trip and is also race-free — no read-then-write window where another transaction could insert a different price.
+
+#### C.4 Q objects: composing WHERE clauses
+
+`Q(status="published") | Q(featured=True)` builds an OR. `~Q(...)` is NOT. These compose into the WHERE tree the compiler emits, letting you express logic that plain `.filter(**kwargs)` cannot (which is implicitly AND).
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (QuerySet fundamentals) explores §A.1's lazy chaining and §A.2's evaluation triggers in concrete code.
+- §2 (Field lookups) is the syntax (`__gte`, `__contains`, `__in`) that adds WHERE conditions to the §C.1 query tree.
+- §3 (F and Q objects) is §C.3 (server-side compute) and §C.4 (composable WHERE).
+- §4 (Aggregation and annotation) generates GROUP BY queries — §C.1 stage 2 with `Sum`, `Avg`, `Count`.
+- §5 (Solving N+1) is §B.2's `select_related` and `prefetch_related` in detail.
+- §6 (Raw SQL) is the escape hatch when the §C compiler cannot express what you need.
+- §7 (Custom managers/QuerySets) lets you encapsulate common chains as named methods, so calling code stays readable.
+- §8 (Bulk operations and transactions) is the §C.3 server-side update pattern plus the transaction wrapper from Lesson 08 §C.
 
 ---
 

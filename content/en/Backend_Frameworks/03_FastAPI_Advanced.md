@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — how dependency injection becomes a graph that FastAPI walks at request time, how `async`/`await` integrates with the ASGI event loop, and how middleware composes as concentric onion layers.
+
 1. [Dependency Injection with Depends()](#1-dependency-injection-with-depends)
 2. [Authentication: OAuth2 with JWT](#2-authentication-oauth2-with-jwt)
 3. [File Uploads](#3-file-uploads)
@@ -28,6 +30,160 @@
 8. [Lifespan Events](#8-lifespan-events)
 9. [Practice Problems](#9-practice-problems)
 10. [References](#10-references)
+
+---
+
+## Theory & Principles
+
+The advanced FastAPI features — Depends, async, middleware, WebSockets, lifespan — look like a grab bag of decorators, but they are all instances of three underlying mechanisms. Once you see them as one mental model, the surface API stops feeling memorized and starts feeling derivable.
+
+- **(A) Dependency injection as a graph** — `Depends()` builds a DAG that FastAPI topologically sorts and resolves once per request.
+- **(B) Async/await on the event loop** — what an `async def` handler actually does to the ASGI worker, and where `def` (sync) handlers run.
+- **(C) Middleware as an onion** — request and response flow through nested layers in mirror-image order.
+
+### A. Dependency Injection: A Graph, Not a Function Call
+
+`Depends(callable)` is FastAPI's marker that says "compute the value of this parameter by calling that callable, and inject the result". The naïve mental model is "call the dependency function and pass the return value". The actual mechanism is more interesting — and explains the cache, override, and yield semantics.
+
+#### A.1 The dependency DAG
+
+Each handler has zero or more `Depends(...)` parameters. Each dependency *itself* is a callable that may have its own `Depends(...)` parameters. The transitive closure of these references forms a directed acyclic graph (DAG):
+
+```
+get_current_user
+    ↓ depends on
+get_token_from_header
+    ↓ depends on
+verify_signing_key
+    ↓ depends on
+settings
+```
+
+When a request arrives, FastAPI:
+
+1. Topologically sorts the DAG so leaves resolve before their dependents.
+2. Walks the sorted list, calling each dependency, awaiting if it is `async`, and stashing the result.
+3. Passes the resolved values into the handler.
+
+The graph is built once at startup (during the type-hint introspection from Lesson 02) and cached. Per-request work is just walking it. There is no reflection per request.
+
+#### A.2 Per-request caching
+
+By default, if the same dependency callable appears in multiple places in a single request's DAG, it is called *once*. The result is cached for the rest of that request and reused. This is what makes patterns like "every endpoint in this router needs the current user" cheap — even if `get_current_user` appears as a transitive dep five places, the JWT is decoded once.
+
+The cache scope is *one request*. Two requests have two independent caches. Override the default with `Depends(callable, use_cache=False)` if a dependency must run every time it appears (rare).
+
+#### A.3 `yield`-based dependencies: setup and teardown
+
+A dependency function can use `yield` instead of `return`:
+
+```python
+async def get_db():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+```
+
+Everything before `yield` runs at dependency resolution. The yielded value is what gets injected. Everything *after* `yield` runs after the response has been sent — a finalizer phase. This is structurally identical to a `contextlib.contextmanager`, and FastAPI implements it that way. It is the right pattern for any resource that must be released: DB sessions, file handles, HTTP clients, cache connections.
+
+The teardown runs even if the handler raises — analogous to `try`/`finally`. If the handler raises an `HTTPException`, the dependency's `finally` block still runs, then the exception is converted to an HTTP response.
+
+#### A.4 Sub-application overrides
+
+For testing, `app.dependency_overrides[real_dep] = fake_dep` rewires a dependency without touching the handler. Because resolution happens at request time through the DAG, the override is picked up automatically — the handler never knew the difference. This is dependency injection's payoff for testing: you can substitute a fake database, fake auth, or fake clock without monkeypatching imports.
+
+### B. Async/Await: Coroutines on the Event Loop
+
+FastAPI handlers can be `async def` or plain `def`. The choice has direct consequences for how the handler runs and what it must not do.
+
+#### B.1 What `async def` actually buys you
+
+An `async def` function is *not* faster than a `def` function. It does not magically parallelize work. What it does is provide *suspension points* — every `await` is a place where the function can pause and let the event loop run something else.
+
+The win is exclusively for **I/O-bound** workloads. While your handler is awaiting `await db.execute(...)`, the event loop can serve other requests on the same worker. With sync code, the worker is blocked end-to-end. So:
+
+```
+async def: 1 worker can serve thousands of concurrent in-flight requests
+def      : 1 worker serves 1 request at a time, sequentially
+```
+
+#### B.2 The cardinal rule: never block the loop
+
+An `async def` handler that does CPU work or calls a *synchronous* blocking I/O function freezes the entire event loop. Other requests on the same worker stop being served. Symptoms: tail latency spikes, mysterious timeouts, "the server hangs under load".
+
+The blocking culprits to watch for:
+
+- `time.sleep(...)` instead of `await asyncio.sleep(...)`
+- `requests.get(...)` instead of `await httpx.AsyncClient().get(...)`
+- `psycopg2.connect(...)` instead of `await asyncpg.connect(...)` or `SQLAlchemy` async engine
+- Heavy NumPy / Pandas / image processing on the main thread
+
+For sync I/O libraries that you cannot replace, declare the handler as `def` (not `async def`). FastAPI will run it in a thread pool — the loop stays free, and one thread blocks instead of the whole worker. The cost is that thread pools are bounded; under heavy load they are still a bottleneck.
+
+#### B.3 The mixed-route pattern
+
+A real FastAPI app routinely has both `async def` and `def` handlers. The framework dispatches them differently:
+
+| Handler | Runs in | Risk |
+|---------|---------|------|
+| `async def` | Event loop directly | Blocking the loop kills concurrency |
+| `def` | `anyio.to_thread.run_sync` thread pool | Thread pool exhaustion under load |
+
+The right rule: `async def` if every I/O dep is async; otherwise `def`. Mixing async and sync I/O in one async handler is the worst case — you pay for async without getting it.
+
+### C. Middleware: The Onion Model
+
+Middleware sits between the ASGI server and your handlers. Each piece of middleware can transform the incoming request, transform the outgoing response, or both. They compose as concentric layers — the request traverses them inward, the response traverses them outward.
+
+#### C.1 The request/response trace
+
+For three middlewares A, B, C registered in that order, one request runs:
+
+```
+        IN                    OUT
+client → A → B → C → handler → C → B → A → client
+```
+
+A sees the request first and the response last. C sees them in the reverse order. The order of `add_middleware()` calls *matters* because it controls the layering. The conventional order, outside-in, is: trusted host → CORS → GZip → session → auth → request id / logging → handler.
+
+#### C.2 The contract: call_next
+
+A Starlette/FastAPI middleware is a callable that receives the `request` and a `call_next` async function. It must `await call_next(request)` to get the response from the inner layer, then return a response — possibly modified, possibly the original:
+
+```python
+@app.middleware("http")
+async def add_request_id(request, call_next):
+    request.state.req_id = uuid.uuid4().hex
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.req_id
+    return response
+```
+
+Anything before `call_next` runs on the way in. Anything after runs on the way out. Returning early without calling `call_next` short-circuits — useful for auth middleware that rejects unauthenticated requests with a `401` before the handler ever runs.
+
+#### C.3 Why middleware is *not* dependency injection
+
+Both can attach data to the request and run before/after handlers. They differ in two crucial ways:
+
+1. **Granularity.** Middleware applies to *every* request to the app. Depends applies to one or many specific endpoints. Choose middleware for cross-cutting concerns (CORS, logging); choose Depends for endpoint-specific logic (auth on protected routes only).
+2. **Type integration.** Depends results are injected as typed parameters with full IDE support. Middleware results live on `request.state` as untyped attributes. This is why "current user" is usually a Depends, not a middleware.
+
+A useful heuristic: if it changes HTTP headers or short-circuits responses, it is middleware; if it produces a typed value the handler needs, it is Depends.
+
+### From Theory to the Code Below
+
+Each section that follows is one piece of this framework made concrete:
+
+- §1 (Depends) is the DAG resolution and yield semantics from §A.
+- §2 (OAuth2 + JWT) is a Depends chain — `get_token_from_header → decode_jwt → load_user` — that returns the current user. Pure §A in action.
+- §3 (File uploads) uses Depends to receive a `UploadFile`, which is a streaming wrapper over the request body from Lesson 02 §A.3.
+- §4 (Background tasks) schedules work on the loop after the response is sent — built on the §B event loop.
+- §5 (WebSocket) replaces the HTTP request/response of Lesson 02 §A.3 with a long-lived bidirectional stream, but still on ASGI.
+- §6 (Custom middleware) is the §C onion layer, written by hand.
+- §7 (APIRouter) is composition: many sub-apps, each with their own Depends and middleware, mounted under a parent.
+- §8 (Lifespan) is the ASGI `lifespan` event from Lesson 02 §A.1, used for startup/shutdown resource management.
 
 ---
 

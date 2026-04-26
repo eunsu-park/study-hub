@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the patterns reference, read [**Theory & Principles**](#theory--principles) — the three caching strategies (cache-aside, write-through, write-behind) and their consistency tradeoffs, the eviction policies (LRU, LFU, ARC) that bound a finite cache, and the cache stampede / dogpile problem with concrete defenses.
+
 1. [Redis Fundamentals](#1-redis-fundamentals)
 2. [Cache-Aside Pattern](#2-cache-aside-pattern)
 3. [Write-Through and Write-Behind](#3-write-through-and-write-behind)
@@ -28,6 +30,205 @@
 8. [Redis Streams](#8-redis-streams)
 9. [Framework Integration](#9-framework-integration)
 10. [Practice Exercises](#10-practice-exercises)
+
+---
+
+## Theory & Principles
+
+A cache is a fast store that holds a copy of data whose authoritative version lives elsewhere. The interesting questions are not "how do I call Redis?" but rather "what happens when the cache and the source disagree?", "what gets evicted when the cache is full?", and "what happens when many clients miss simultaneously?". Three concepts cover the territory.
+
+- **(A) The three caching strategies** — cache-aside, write-through, write-behind, each with a different consistency / latency / complexity profile.
+- **(B) Eviction policies** — LRU, LFU, ARC, and the role they play when the cache is bounded by RAM.
+- **(C) Cache stampede / dogpile** — what happens at TTL expiry under load, and the defenses that prevent the database from melting.
+
+### A. The Three Caching Strategies
+
+Cache strategy is fundamentally about *who writes to the cache and when*. Three patterns dominate.
+
+#### A.1 Cache-aside (lazy loading)
+
+The application reads from the cache; on miss, it reads from the database and populates the cache.
+
+```
+Read:
+  if cache.hit(key):  return cache.get(key)
+  data = db.get(key)
+  cache.set(key, data, ttl=300)
+  return data
+
+Write:
+  db.update(key, value)
+  cache.delete(key)   # or set to new value
+```
+
+Properties:
+
+- The cache is a *side cache* — the application is the one in charge.
+- The first read after a write or eviction is slow (cache miss).
+- Strong consistency requires invalidating the cache on every write — easy in one process, hard across services.
+
+This is the default pattern; reach for the others only when cache-aside doesn't fit.
+
+#### A.2 Write-through
+
+Writes go through the cache to the database. Reads always come from the cache.
+
+```
+Write:
+  cache.set(key, value)
+  db.update(key, value)  # synchronous
+
+Read:
+  return cache.get(key)  # always populated
+```
+
+Properties:
+
+- Cache is always consistent with the database (assuming both writes succeed).
+- Write latency is `cache_write + db_write` (slower than write-behind).
+- Cache size must hold all reads — expensive for large datasets.
+- If the cache is cold (after restart), every read misses until populated. Often paired with cache-warming strategies.
+
+Use when reads must be fast and consistency matters more than write latency.
+
+#### A.3 Write-behind (write-back)
+
+Writes go to the cache; the database is updated asynchronously, often in batches.
+
+```
+Write:
+  cache.set(key, value)
+  queue.push(("write", key, value))  # async worker reads this
+
+Worker (separate):
+  for batch of writes from queue:
+    db.bulk_update(batch)
+```
+
+Properties:
+
+- Lowest write latency (only cache write blocks the request).
+- Highest throughput (writes batched).
+- Risk of data loss: if the cache crashes before the queue drains, queued writes are gone.
+- Eventual consistency: a read of the database during the lag window sees stale data.
+
+Use for high-throughput write workloads where the data is replaceable (analytics counters, telemetry) or where the cache is durable (Redis with AOF persistence).
+
+#### A.4 Picking a strategy
+
+| Strategy | Consistency | Read latency | Write latency | Complexity |
+|----------|-------------|--------------|---------------|------------|
+| Cache-aside | Eventual | DB on miss | Fast | Low |
+| Write-through | Strong | Cache only | Slow | Medium |
+| Write-behind | Eventual | Cache only | Fastest | High |
+
+Most apps use cache-aside; specialized workloads use write-through (real-time dashboards) or write-behind (counters, analytics).
+
+### B. Eviction Policies
+
+A cache holds finite RAM. When you set a new key and the cache is full, something must be evicted. The eviction policy decides what.
+
+#### B.1 The classics
+
+- **LRU (Least Recently Used).** Evict the key that has not been accessed in the longest time. Implemented as a doubly-linked list + hashmap; access moves the node to the front. Simple, low overhead, good for typical access patterns where recently-used items are likely to be used again.
+- **LFU (Least Frequently Used).** Evict the key with the lowest access frequency. Better than LRU for workloads with a long-tail of rarely-accessed keys, but needs a counter per key. Vulnerable to "scan pollution" — a one-time scan of cold data inflates frequencies and evicts hot data.
+- **FIFO (First In, First Out).** Evict the oldest key by insertion time. Simplest; rarely the best.
+
+#### B.2 Modern hybrids
+
+- **ARC (Adaptive Replacement Cache).** Maintains two LRU lists (recently used once, frequently used) and dynamically balances between them. Resists scan pollution. Patented for some uses; not in mainline Redis.
+- **TinyLFU / W-TinyLFU.** Frequency sketch (Count-Min) admits a new key only if its predicted frequency exceeds the LFU candidate. Used in Caffeine (Java cache library), state-of-the-art for general caches.
+
+#### B.3 Redis's eviction policies
+
+Redis offers a menu via `maxmemory-policy`:
+
+```
+allkeys-lru           # LRU across all keys
+allkeys-lfu           # LFU across all keys (Redis 4+)
+volatile-lru          # LRU only on keys with a TTL set
+volatile-lfu          # LFU only on keys with a TTL set
+allkeys-random        # random eviction (rarely useful)
+volatile-ttl          # evict the key closest to its TTL
+noeviction            # refuse writes when full (return error)
+```
+
+The choice depends on your workload:
+
+- **Pure cache** (everything is best-effort): `allkeys-lru` or `allkeys-lfu`.
+- **Mixed cache + persistent data** in the same Redis: `volatile-lru` (only evict TTL-bearing keys).
+- **No eviction acceptable** (e.g., session store): `noeviction` and over-provision RAM.
+
+### C. Cache Stampede / Dogpile
+
+The cache holds key X with TTL 300s. At second 300, X expires. At second 301, 1000 concurrent requests all miss. All 1000 query the database simultaneously to recompute X. The database melts.
+
+This is **cache stampede** (or "dogpile"). It is the single most common production-cache failure mode. Three defenses, ranging from simple to sophisticated.
+
+#### C.1 Locking (single-flight)
+
+When the first request misses, it takes a Redis lock keyed `lock:X`. Other requests that miss block on that lock. The first request computes X, populates the cache, releases the lock. Other requests retry, find X in the cache, return.
+
+```python
+def get(key):
+    val = cache.get(key)
+    if val is not None: return val
+    with redis.lock(f"lock:{key}", timeout=5):
+        # double-check after acquiring lock
+        val = cache.get(key)
+        if val is not None: return val
+        val = db.get(key)
+        cache.set(key, val, ttl=300)
+        return val
+```
+
+The lock turns N concurrent computations into 1. Risk: lock contention if X is *very* hot — many requests serialize on the lock. Use a lock timeout to avoid deadlock if the holder dies.
+
+#### C.2 Probabilistic early refresh (XFetch)
+
+Instead of waiting for TTL to fire, refresh the cache *probabilistically* slightly before expiry. The closer to expiry, the higher the probability:
+
+```python
+def get(key):
+    val, ttl_remaining = cache.get_with_ttl(key)
+    # randomly recompute when close to expiry
+    if val is None or random() < beta * ttl_remaining_factor:
+        val = db.get(key)
+        cache.set(key, val, ttl=300)
+    return val
+```
+
+The XFetch algorithm formalizes this. The benefit: the cache rarely fully expires, so a stampede never starts. No locking needed.
+
+#### C.3 Request coalescing
+
+The cache library detects pending lookups for the same key and joins them onto one in-flight backend call. The first miss starts the database query; concurrent misses for the same key wait for that result instead of issuing their own queries.
+
+This is what Go's `golang.org/x/sync/singleflight` does. Caffeine has a similar `LoadingCache`. The discipline is in the *cache library*, not the application — once you have it, every cache lookup is stampede-safe.
+
+#### C.4 Comparing the defenses
+
+| Defense | Complexity | Effectiveness | When to use |
+|---------|------------|---------------|-------------|
+| Locking | Low | High | Hot keys with expensive recompute |
+| Probabilistic early refresh | Medium | Very high | Cache backed by a synchronous cache library |
+| Request coalescing | Library-level | High | Built into modern cache libraries |
+
+Production caches usually combine: probabilistic refresh keeps things populated; coalescing handles the residual concurrent misses.
+
+### From Theory to the Patterns Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Redis fundamentals) covers data types and the in-memory store that backs all the patterns.
+- §2 (Cache-aside) is §A.1 in concrete code.
+- §3 (Write-through / Write-behind) is §A.2 and §A.3 with framework integrations.
+- §4 (Cache invalidation) is the consistency story for cache-aside, including TTL and event-based invalidation.
+- §5 (Redis as session store) uses Redis as a strongly-consistent store with `noeviction` policy from §B.3.
+- §6 (Rate limiting) uses Redis atomic operations (`INCR`, scripting) — same single-flight discipline as §C.1.
+- §7 (Pub/Sub) is broadcast messaging — the right tool for cross-service cache invalidation.
+- §8 (Streams) is durable log-style messaging — Redis competing with Kafka in the message-bus space (Lesson 21).
+- §9 (Framework integration) shows the language-specific wiring for each pattern across FastAPI, Express, Django.
 
 ---
 

@@ -18,6 +18,8 @@
 
 ## Table of Contents
 
+Before the framework reference, read [**Theory & Principles**](#theory--principles) — what ASGI is, why FastAPI separates Starlette (the HTTP layer) from Pydantic (the data layer), and how type hints become runtime validation through schema introspection.
+
 1. [What is FastAPI](#1-what-is-fastapi)
 2. [Installation and First App](#2-installation-and-first-app)
 3. [Path Parameters and Query Parameters](#3-path-parameters-and-query-parameters)
@@ -27,6 +29,177 @@
 7. [CORS Middleware](#7-cors-middleware)
 8. [Practice Problems](#8-practice-problems)
 9. [References](#9-references)
+
+---
+
+## Theory & Principles
+
+FastAPI is *not* a single framework. It is the deliberate composition of three independent layers: **ASGI** (the wire transport), **Starlette** (HTTP routing and middleware), and **Pydantic v2** (data validation and serialization). Understanding what each layer owns — and what crosses the seams between them — is the difference between treating FastAPI as magic and treating it as glue you can extend.
+
+- **(A) ASGI** — the async-aware Python web server interface that replaces WSGI.
+- **(B) The Starlette + Pydantic separation** — why HTTP and data validation are different concerns.
+- **(C) Type hints as a schema source** — how Python annotations become JSON Schema, OpenAPI, and runtime validators.
+
+### A. ASGI: The Async Server Interface
+
+ASGI (Asynchronous Server Gateway Interface) is the contract that lets a server (Uvicorn, Hypercorn, Daphne) talk to an application (FastAPI, Starlette, Django Channels). It is the spiritual successor to WSGI, with three structural changes that matter:
+
+#### A.1 The single ASGI callable
+
+An ASGI app is one async callable with a fixed three-argument signature:
+
+```python
+async def app(scope, receive, send):
+    ...
+```
+
+- `scope` is a dict describing the connection: `{"type": "http", "method": "GET", "path": "/", "headers": [...], ...}`. The `type` field is the discriminator.
+- `receive` is an async function the app `await`s to get the next event from the client (request body chunks, WebSocket messages, disconnect notifications).
+- `send` is an async function the app `await`s to push events back (response start, response body chunks, WebSocket messages).
+
+The whole protocol — HTTP request/response, WebSocket lifecycle, lifespan startup/shutdown events — is encoded as JSON-shaped Python dicts flowing through `receive` and `send`. There is no callback registration, no event emitter, no threading. Just `await` on one side and `await` on the other.
+
+#### A.2 Why ASGI replaced WSGI
+
+WSGI (PEP 3333) was synchronous by design. The application signature was:
+
+```python
+def app(environ, start_response):
+    start_response("200 OK", [...])
+    return [b"Hello"]
+```
+
+Three things this could not do:
+
+1. **WebSockets.** WSGI only models request/response. WebSocket needs a long-lived bidirectional channel.
+2. **Streaming responses.** WSGI returns an iterable of bytes, but iteration is synchronous. A streaming response that waits on a slow upstream blocks a worker.
+3. **`async def` handlers.** A coroutine function returns a coroutine object, not bytes. WSGI servers do not know how to drive that.
+
+ASGI fixes all three by making the application itself a coroutine and the message exchange explicit. The server can run thousands of ASGI apps concurrently in a single thread because `await receive()` yields control back to the event loop just like any other I/O.
+
+#### A.3 The ASGI request lifecycle for HTTP
+
+For one HTTP request, the server sends and the app receives this sequence:
+
+```
+{"type": "http.request", "body": b"...", "more_body": True}
+{"type": "http.request", "body": b"...", "more_body": False}
+```
+
+The app sends back:
+
+```
+{"type": "http.response.start", "status": 200, "headers": [...]}
+{"type": "http.response.body", "body": b"...", "more_body": True}
+{"type": "http.response.body", "body": b"...", "more_body": False}
+```
+
+Headers must be sent before the first body chunk. The body can be split across many chunks for streaming. This is what enables `StreamingResponse` and Server-Sent Events without any special server cooperation — they are normal ASGI byte chunks emitted in a loop.
+
+### B. The Starlette + Pydantic Separation
+
+FastAPI's most important architectural choice is what it does *not* do itself. The two big jobs of a web framework — handling HTTP and validating data — are owned by two different libraries. FastAPI is a layer that wires them together and exposes them through type hints.
+
+#### B.1 What Starlette owns
+
+Starlette is the ASGI app underneath FastAPI. It owns everything HTTP-shaped:
+
+- **Routing** — matching `request.path` against registered URL patterns.
+- **Middleware** — onion-style request/response transformations (CORS, GZip, sessions, auth).
+- **Request and Response objects** — typed wrappers around the raw ASGI messages.
+- **WebSocket support** — the bidirectional message protocol.
+- **Background tasks** — work scheduled to run after the response is sent.
+- **TestClient** — an in-process HTTP client that skips the network entirely.
+
+You can use Starlette directly without FastAPI; FastAPI just adds a typed layer on top. Conversely, every FastAPI app *is* a Starlette app — `from fastapi import FastAPI; app = FastAPI()` returns a `Starlette` subclass, so all Starlette middleware and primitives work unchanged.
+
+#### B.2 What Pydantic owns
+
+Pydantic v2 is a data validation and serialization library written in Rust (the v2 core, `pydantic-core`, is a Rust crate). It owns:
+
+- **Schema definition** — declaring the shape of data using Python class syntax with type hints.
+- **Parsing** — taking arbitrary input (dicts, JSON bytes, query strings) and producing typed Python objects.
+- **Validation** — rejecting input that does not match the schema, with structured error reporting.
+- **Serialization** — turning typed Python objects back into dicts, JSON, or other forms.
+- **JSON Schema generation** — emitting a JSON Schema document that describes the model.
+
+Pydantic knows nothing about HTTP. You can use it for config files, message queue payloads, ML pipeline I/O — anywhere you need typed data with validation.
+
+#### B.3 What FastAPI itself owns
+
+FastAPI is the *glue*. It takes:
+
+```python
+@app.post("/items/")
+async def create_item(item: Item, q: int | None = None) -> Item:
+    ...
+```
+
+and at startup time inspects this function's type hints with `inspect.signature` and `typing.get_type_hints`. From those hints it builds:
+
+1. A **Starlette route** that calls a generated wrapper.
+2. A **Pydantic validator** for `Item` that parses the request body.
+3. A **query parameter parser** for `q` that converts the string to `int` and applies `Optional` semantics.
+4. A **response serializer** that converts the returned `Item` back to JSON via Pydantic.
+5. An **OpenAPI schema fragment** for this route, including the request body schema and response schema, both derived from the same Pydantic models.
+
+The handler itself sees a fully typed `item: Item` argument — no manual `request.json()`, no manual `dict.get("title")`, no manual error handling for missing fields. The validation, serialization, and documentation all derive from the *same* type annotations the IDE uses for autocomplete.
+
+### C. Type Hints as a Schema Source
+
+The deepest design idea in FastAPI is that the type signature of a function is an executable specification. Python type hints, originally a static-analysis aid (mypy, pyright), become runtime metadata that drives validation, docs, and dependency injection.
+
+#### C.1 The introspection pipeline
+
+When you decorate a handler:
+
+```python
+async def get_item(item_id: int, q: str | None = Query(None, max_length=50)) -> ItemOut:
+    ...
+```
+
+FastAPI runs this pipeline at app startup:
+
+1. `inspect.signature(get_item)` gets a `Signature` object with one `Parameter` per argument.
+2. `typing.get_type_hints(get_item, include_extras=True)` resolves string annotations and PEP 593 `Annotated` extras.
+3. For each parameter, FastAPI inspects its type and any `Param` marker (`Path`, `Query`, `Header`, `Body`, `Depends`):
+   - `int`, `str`, primitive scalars → query/path parameters with type coercion.
+   - Pydantic `BaseModel` → request body, parsed via Pydantic.
+   - `Depends(callable)` → dependency injection node (see Lesson 03).
+4. The return annotation `-> ItemOut` becomes the response model — used for serialization and as the `responses` schema in OpenAPI.
+5. All of this is cached on the route, so per-request work is just "call the cached validator and the cached serializer".
+
+The cost is paid once at startup. Per-request overhead is dominated by Pydantic v2's Rust validators, which are within an order of magnitude of hand-written `if isinstance(...)` checks.
+
+#### C.2 The "compile-time" guarantee — and its limits
+
+Type hints are not really compile-time in Python; they are runtime metadata. But because FastAPI introspects them at startup, an incorrect signature fails at *application boot*, not at first request. If you reference a non-existent dependency or a Pydantic model with a circular import, the app refuses to start. That moves a class of errors from production into CI.
+
+What type hints cannot catch:
+
+- **Cross-field validation.** "`end_date` must be after `start_date`" needs a Pydantic `@model_validator`, not a type.
+- **Business rule violations.** "User cannot create more than 10 items" is a runtime check inside the handler.
+- **External system contracts.** Pydantic validates the shape; it does not know whether the database has a row with that ID.
+
+The right mental model: type hints handle *structural* correctness automatically; semantic correctness is still your job.
+
+#### C.3 OpenAPI: the same schema, two outputs
+
+OpenAPI (formerly Swagger) is a JSON document describing every endpoint, parameter, and response shape. FastAPI generates it on the fly from the same type hints that drive validation. That gives a single source of truth: the moment you change a Pydantic model, the validator, the serializer, the docs at `/docs`, and the generated client SDKs all update together.
+
+This is structurally different from Django REST Framework or Express, where the API and its documentation are separate artifacts that drift apart. The drift is not a process failure — it is the natural consequence of having two sources of truth for the same fact.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (What is FastAPI) names the three layers from §B.
+- §2 (First app) is a literal ASGI callable from §A.1, dressed up in `@app.get` decorators.
+- §3 (Path/query parameters) is the type-hint introspection from §C.1 applied to scalar arguments.
+- §4 (Request body) is `BaseModel` from §B.2 plugged into the Pydantic validator from §C.1.
+- §5 (Response models and status codes) is the return-annotation half of §C.1, plus the §1.A.2 status code semantics from Lesson 01.
+- §6 (OpenAPI docs) is the schema-emission output described in §C.3.
+- §7 (CORS) is one Starlette middleware from §B.1, configured via the FastAPI surface.
 
 ---
 
