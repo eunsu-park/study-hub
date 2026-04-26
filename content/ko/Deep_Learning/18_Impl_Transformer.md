@@ -17,6 +17,79 @@ Transformer는 "Attention Is All You Need" (Vaswani et al., 2017) 논문에서 �
 
 ---
 
+## 이론과 원리
+
+Transformer를 처음부터 구현하는 것은 데이터 흐름을 구체화합니다: 텐서 형상, 마스크 구성, encoder/decoder 분할, 그리고 자기 회귀(autoregressive) 학습 트릭. 수학은 이전 레슨과 동일합니다; 이 섹션은 구현이 실제로 작동할지 결정하는 구현 수준 디테일을 강조합니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** Encoder vs decoder vs encoder-decoder
+- **B.** Causal mask와 상삼각 메커니즘
+- **C.** Teacher forcing과 병렬 학습 지름길
+- **D.** 토큰/위치 임베딩과 형상 관리
+
+### A. 세 Transformer 변형
+
+원래 "Transformer"는 실제로 세 아키텍처 패턴으로 나왔으며, 각각이 작업 부류에 적합합니다:
+
+- **Encoder-only** (BERT 같은): 전체 입력에 대한 양방향 self-attention. 분류, NER, 전체 입력이 한 번에 사용 가능한 모든 것에 사용. 마스크 없음.
+- **Decoder-only** (GPT 같은): 단방향(causal) self-attention. 각 토큰은 자신과 이전 토큰에만 attention. 자기 회귀 생성에 사용.
+- **Encoder-decoder** (원본 Vaswani 2017, T5): encoder가 소스 시퀀스를 처리(마스크 없음), decoder가 자신의 과거 토큰(causal mask)과 encoder 출력(cross-attention, 마스크 없음) 둘 다에 attention하면서 타겟을 생성. 번역, 요약에 사용.
+
+현대 LLM은 decoder-only로 수렴했습니다 — 더 단순하고, 잘 확장되며, 충분히 큰 decoder가 프롬프팅을 통해 대부분 encoder 작업을 할 수 있습니다.
+
+### B. Causal Mask
+
+Decoder의 경우, 위치 `t`는 위치 `> t`에 attention하면 안 됩니다(그렇지 않으면 생성이 미래를 보는 것으로 부정행위). Softmax 전 attention 점수에 마스크를 더해 구현:
+
+```
+mask[i, j] = -inf  if j > i  else  0
+attn = softmax((Q K^T / sqrt(d_k)) + mask)
+```
+
+`-inf`를 더하면 softmax 후 그 위치들이 정확히 0이 됩니다. 마스크는 배치의 모든 예제와 모든 head에 대해 같은 상삼각 패턴이며, 이것이 `torch.triu(...)`로 한 번 구성되어 브로드캐스트되는 이유입니다.
+
+패딩된 시퀀스의 경우, 추가 마스크가 위치와 무관하게 패딩 토큰을 마스킹합니다. 결합: 유효 마스크는 `causal_mask | padding_mask`.
+
+### C. Teacher Forcing
+
+순진한 자기 회귀 학습은 스텝 `t-1`의 모델 자체 출력에서 토큰 `t`를 생성할 것이지만, 이는 학습을 직렬화합니다(각 스텝이 이전에 의존). **Teacher forcing**은 학습 시 모델의 예측을 *정답* 토큰으로 대체합니다:
+
+```
+input  = [<bos>, y_1, y_2, ..., y_{T-1}]
+target = [y_1,  y_2, y_3, ..., y_T]
+```
+
+모델은 모든 `t`에 대해 `[<bos>, y_1, ..., y_{t-1}]`에서 `y_t`를 *병렬로* 예측합니다. 이는 causal mask 때문에 작동합니다 — 위치 `t`가 위치 `> t`를 볼 수 없으므로, 정답을 입력으로 주는 것이 추론에서 사용 가능했을 정보를 넘어 누설하지 않습니다. 학습 비용이 `O(T)` 순차 스텝에서 `O(1)` 병렬 순전파로 떨어집니다.
+
+함정은 **exposure bias**입니다: 추론 시 모델은 자신의 (잘못될 수 있는) 출력에 조건화하지만, 학습 시에는 완벽한 정답에 조건화했습니다. 이 불일치는 실전에서 대체로 허용되지만, 고위험 생성을 위한 scheduled sampling과 reinforcement-learning-from-feedback 같은 기법을 동기 부여합니다.
+
+### D. 임베딩과 형상 관리
+
+Transformer 입력은 다음을 통과합니다:
+
+```
+x: 토큰 ID                    형상 (B, T)
+emb = TokenEmb(x)             형상 (B, T, d_model)
+emb = emb + PosEnc(positions) 형상 (B, T, d_model)         # 배치에 브로드캐스트
+out = TransformerStack(emb)   형상 (B, T, d_model)
+logits = LMHead(out)          형상 (B, T, vocab_size)
+```
+
+토큰 임베딩은 `nn.Embedding(vocab, d_model)`, 단지 룩업 테이블. 위치 인코딩은 더해집니다(연결되지 않음) — 이는 네트워크가 원리적으로 일부 차원에서 위치를 "무시"하고 거기 토큰 정보만 사용하도록 학습할 수 있기 때문에 작동합니다. 흔한 파라미터 절약 트릭은 **LM head의 가중치 행렬을 토큰 임베딩에 묶는 것**(`LMHead.weight = TokenEmb.weight`)으로, 입력/출력의 파라미터를 절반으로 줄이며 대칭으로 정당화됩니다: 임베딩이 토큰을 벡터로 매핑하고, LM head가 벡터를 토큰으로 다시 매핑.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| Encoder vs decoder | `nn.TransformerEncoderLayer` vs `nn.TransformerDecoderLayer` |
+| Causal mask | `torch.triu(torch.ones(T, T), diagonal=1).bool()` |
+| Teacher forcing | 이동된 타겟을 decoder 입력으로 공급 |
+| 임베딩 묶기 | `model.lm_head.weight = model.token_emb.weight` |
+
+---
+
+
 ## 수학적 배경
 
 ### 1. Scaled Dot-Product Attention

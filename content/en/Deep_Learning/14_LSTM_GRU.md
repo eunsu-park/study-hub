@@ -13,6 +13,87 @@
 
 ---
 
+## Theory & Principles
+
+LSTM (Hochreiter & Schmidhuber 1997) and GRU (Cho et al. 2014) are not just "fancier RNNs." They are deliberate architectural answers to the eigenvalue analysis from the previous lesson: the entire design is engineered to *additively* propagate information across time, replacing the multiplicative `W_h^t` that causes vanilla RNNs to vanish or explode. Once you see this — the cell state as a "gradient highway" — every gate's purpose becomes obvious.
+
+This section covers:
+
+- **A.** Cell state vs hidden state and the constant error carousel
+- **B.** The four LSTM gates derived from "what should each control?"
+- **C.** GRU as a parameter-efficient simplification of LSTM
+- **D.** Why LSTM/GRU mostly solved the long-range gradient problem
+
+### A. Cell State and the Constant Error Carousel
+
+LSTM separates two notions of "memory":
+
+- **Cell state `c_t`**: a long-term memory that flows through time with minimal modification. Updates are *additive*: `c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t`.
+- **Hidden state `h_t`**: a short-term, output-facing summary derived from `c_t`.
+
+The cell state's update rule is the key. Differentiating:
+
+```
+dc_t / dc_{t-1} = diag(f_t)
+```
+
+This is a diagonal matrix with entries in `(0, 1)` (because `f_t = sigmoid(...)`). The chain `dc_t / dc_{t-k} = prod_{j=t-k+1}^{t} diag(f_j)` is a product of diagonals — element-wise, so different cell-state dimensions can have different effective time horizons. Critically, *if the network learns `f_j ≈ 1` for the relevant time steps*, the gradient flows through unattenuated. This is Hochreiter & Schmidhuber's **constant error carousel**: a designed-in path for gradients to travel arbitrary distances without decay.
+
+### B. The Four Gates Derived
+
+Why exactly four gates? Each one controls a single, separable decision about the cell state:
+
+1. **Forget gate `f_t = sigmoid(W_f [h_{t-1}, x_t])`**: should we *erase* a dimension of cell state? Sigmoid output near 0 = forget; near 1 = keep.
+2. **Input gate `i_t = sigmoid(W_i [h_{t-1}, x_t])`**: should we *write* to a dimension? Decides which parts of the candidate to admit.
+3. **Candidate `\tilde{c}_t = tanh(W_c [h_{t-1}, x_t])`**: *what* to potentially write. Tanh keeps values in `(-1, 1)`.
+4. **Output gate `o_t = sigmoid(W_o [h_{t-1}, x_t])`**: which parts of the cell state should be exposed as `h_t`.
+
+The full recurrence:
+
+```
+c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t
+h_t = o_t \odot tanh(c_t)
+```
+
+The decoupling is purposeful: the *long-term store* (cell state) is updated additively with multiplicative gates that control which parts change, and the *short-term output* (hidden state) is a gated read of the long-term store. This is the same pattern that later appears in Transformer attention (additive write to a residual stream + gated read).
+
+### C. GRU as Simplification
+
+GRU collapses LSTM's four gates into two while keeping the additive update:
+
+```
+z_t = sigmoid(W_z [h_{t-1}, x_t])               (update gate)
+r_t = sigmoid(W_r [h_{t-1}, x_t])               (reset gate)
+\tilde{h}_t = tanh(W [r_t \odot h_{t-1}, x_t])  (candidate)
+h_t = (1 - z_t) \odot h_{t-1} + z_t \odot \tilde{h}_t   (additive update)
+```
+
+Differences from LSTM:
+
+- **No separate cell state.** Hidden and cell states are merged into one.
+- **Update gate replaces forget + input.** A single `z_t` determines the mixing ratio between old and new state, instead of two independent gates.
+- **Reset gate** controls whether to ignore the past hidden state when computing the candidate.
+
+Total parameters: GRU has 3 gating matrices, LSTM has 4 — about 25% fewer parameters. Empirically the two architectures perform similarly on most tasks, with no consistent winner.
+
+### D. What LSTM/GRU Actually Solve
+
+LSTM/GRU make long-range learning *possible*, not *easy*. The constant error carousel only works if the network *learns* to set the relevant `f_t ≈ 1`. Initialization matters: LSTM's forget bias is often initialized to 1 or 2 (Jozefowicz et al. 2015), so that `sigmoid(bias) ≈ 0.7-0.9` and the carousel is open by default; otherwise the network spends many steps undoing a default-forget behavior.
+
+LSTM/GRU also do not solve the *parallelism* problem — each step still depends on the previous. This is why the entire field eventually moved to attention/Transformers, which decouple sequence position from computation order.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Cell state as gradient highway | The `c_t` variable maintained alongside `h_t` |
+| Four LSTM gates | `i, f, g, o = (W [x, h] + b).chunk(4, dim=-1)` |
+| GRU's two gates | `nn.GRU` or manual `z, r, h_tilde` formulas |
+| Forget bias init = 1 | The bias initialization detail in `nn.LSTM` |
+
+---
+
+
 ## 1. LSTM (Long Short-Term Memory)
 
 The core insight of LSTM is replacing the multiplicative hidden state update of vanilla RNNs (h = W * h) with an **additive** cell state update (C(t) = f * C(t-1) + i * g). During backpropagation, addition means the gradient passes through unchanged — this is the key mechanism that solves the vanishing gradient problem.

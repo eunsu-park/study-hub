@@ -14,6 +14,80 @@
 
 ---
 
+## Theory & Principles
+
+Self-supervised learning (SSL) trains representations from unlabeled data by inventing tasks the data itself can supervise. This was the underlying paradigm shift behind GPT-style language models and CLIP-style vision-language models. The lesson surveys SimCLR, MoCo, BYOL, and MAE — each is a different answer to the same question: "what task can I make up that, when solved, requires the model to learn useful features?"
+
+This section covers:
+
+- **A.** Why SSL: representation learning without labels
+- **B.** Contrastive methods (SimCLR, MoCo) and the negative-sample question
+- **C.** Non-contrastive methods (BYOL, SimSiam) and the collapse problem
+- **D.** Masked image modeling (MAE) as denoising autoencoding
+
+### A. Why SSL
+
+Labeled data is expensive; unlabeled data is essentially free. SSL exploits this by training on pretext tasks that *do not need labels*:
+
+- **Word-level**: predict masked tokens (MLM, used in BERT) or next tokens (causal LM, used in GPT).
+- **Image-level**: predict whether two augmented views of the same image are the same instance (contrastive); reconstruct masked patches (MAE); jigsaw puzzles, colorization, etc.
+
+The hope is that solving the pretext task forces the network to learn features that *transfer* to downstream tasks. Empirically, this works astonishingly well — modern SSL representations on ImageNet match or exceed supervised pretraining for downstream transfer.
+
+### B. Contrastive Methods: SimCLR, MoCo
+
+Both SimCLR (Chen et al. 2020) and MoCo (He et al. 2019) use the InfoNCE loss with augmented views:
+
+```
+- Apply two random augmentations to each image: x_a = aug(x), x_b = aug(x).
+- Encode both: z_a = f(x_a), z_b = f(x_b).
+- Treat (z_a, z_b) as positive pairs; all other examples in the batch as negatives.
+- InfoNCE pulls (z_a, z_b) together, pushes everyone else apart.
+```
+
+SimCLR uses in-batch negatives only — needs huge batches (8192) for enough negatives. MoCo decouples the negatives from the batch by maintaining a **memory bank** (queue of recent features) and using a slow-moving "momentum encoder" for the keys, allowing many more negatives without huge batch size.
+
+The key inductive bias: augmentations preserve the image's *identity* but vary surface details — color, crop, lighting. The contrastive loss therefore implicitly says "these surface features should not matter for identity." The choice of augmentations is critical (SimCLR's recipe: random crop + color jitter + Gaussian blur).
+
+### C. Non-Contrastive: BYOL, SimSiam, and Collapse
+
+BYOL (Grill et al. 2020) and SimSiam (Chen & He 2021) drop negatives entirely. They have only positive pairs and a structural trick to prevent **representation collapse** — the trivial solution where the encoder maps everything to the same vector.
+
+BYOL: two networks (online + target). Online predicts target's output; target is an EMA of online. The asymmetry plus EMA prevent collapse.
+
+SimSiam: simpler — two views, but the prediction-side network has a stop-gradient on the target side. Without the stop-gradient the network collapses to constant outputs; with it, training is stable.
+
+Why collapse does not happen here is somewhat empirical — the theoretical arguments (Tian et al. 2021) show that the asymmetry plus stop-gradient implicitly create something like a contrastive force, even without explicit negatives.
+
+### D. Masked Image Modeling (MAE)
+
+MAE (He et al. 2022) ports BERT's MLM idea to images. Take an image, divide into patches (à la ViT), randomly mask 75% of patches, ask the encoder to encode the visible 25%, then ask a small decoder to reconstruct the masked ones from the encoder's output.
+
+```
+loss = MSE(reconstructed_patches, original_masked_patches)
+```
+
+Key design points:
+
+- **Asymmetric encoder/decoder**: encoder is a full ViT; decoder is small (because most of the work is encoding context). Encoder sees only visible patches, decoder sees the full sequence (with mask tokens for missing ones).
+- **High mask ratio (75%)**: forces the encoder to use *contextual* information — much harder than 15% masking in BERT's MLM. The image domain has more redundancy than text; high masking compensates.
+- **Pixel reconstruction**: simple MSE on raw pixels; no fancy normalization or per-patch loss balancing.
+
+MAE produces extremely strong representations — competitive with contrastive methods at much lower compute, because no negative-sample machinery is needed.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Augmentation pair | `view1, view2 = aug(x), aug(x)` |
+| Contrastive loss | `F.cross_entropy(sim_matrix / temperature, labels)` |
+| Momentum encoder (MoCo) | `target_encoder.params = m * target + (1-m) * online` |
+| BYOL stop-gradient | `target_z.detach()` before MSE |
+| MAE masking | random index selection, gather visible patches, mask token for invisible |
+
+---
+
+
 ## 1. Self-Supervised Learning Overview
 
 ### Definition and Necessity

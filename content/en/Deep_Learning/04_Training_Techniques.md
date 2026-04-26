@@ -13,6 +13,94 @@
 
 ---
 
+## Theory & Principles
+
+The optimizers, regularizers, and normalization tricks introduced below are not a grab-bag of heuristics. Each one targets a specific failure mode of vanilla SGD on deep, high-dimensional, non-convex losses. This section gives the math behind the three biggest ones — momentum-based optimizers, batch normalization, and dropout — so the rest of the lesson reads as engineering choices rather than magic.
+
+This section covers:
+
+- **A.** SGD, Momentum, and Adam derived from first principles
+- **B.** BatchNorm and the internal covariate shift hypothesis
+- **C.** Dropout as an implicit ensemble
+- **D.** Weight decay, L2 regularization, and the (subtle) difference
+
+### A. SGD → Momentum → Adam
+
+**Vanilla SGD** updates parameters with the noisy gradient at each step:
+
+```
+\theta_{t+1} = \theta_t - \eta * g_t,        g_t = \nabla L_{batch}(\theta_t)
+```
+
+This zigzags badly along ravines (directions where the loss is steep) and crawls along plateaus (directions where it is flat). **Momentum** (Polyak 1964) fixes this by accumulating an exponentially weighted average of past gradients:
+
+```
+v_t = \mu v_{t-1} + g_t
+\theta_{t+1} = \theta_t - \eta v_t
+```
+
+with `\mu \in [0, 1)`, typically 0.9. Past gradients in the same direction reinforce; oscillating components cancel.
+
+**Adam** (Kingma & Ba 2014) combines momentum with per-parameter adaptive step sizes by also tracking the second moment:
+
+```
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t                 (1st moment)
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2               (2nd moment)
+hat{m}_t = m_t / (1 - \beta_1^t)                          (bias correction)
+hat{v}_t = v_t / (1 - \beta_2^t)
+\theta_{t+1} = \theta_t - \eta * hat{m}_t / (sqrt{hat{v}_t} + \epsilon)
+```
+
+Defaults `\beta_1=0.9, \beta_2=0.999, \epsilon=10^{-8}` work surprisingly well across domains. Bias correction matters because `m_0 = v_0 = 0` makes early estimates biased toward zero. The `1 / sqrt{v}` factor automatically scales down the step for parameters with consistently large gradients — a per-parameter learning rate.
+
+### B. BatchNorm and Internal Covariate Shift
+
+**BatchNorm** (Ioffe & Szegedy 2015) normalizes each pre-activation across the mini-batch:
+
+```
+\hat{x}_i = (x_i - \mu_B) / sqrt{\sigma_B^2 + \epsilon}
+y_i = \gamma * \hat{x}_i + \beta                          (learnable scale and shift)
+```
+
+The original justification was the **internal covariate shift** hypothesis: as upstream layers train, the input distribution to a downstream layer keeps shifting, forcing it to constantly readapt. Normalizing keeps that distribution stable. Later work (Santurkar et al. 2018) argued the real benefit is that BatchNorm *smooths the loss landscape* — gradients become better behaved, which permits much larger learning rates.
+
+Crucial detail: at inference, batch statistics are replaced by running averages computed during training, which is why BatchNorm has different behavior in `model.train()` vs `model.eval()` mode.
+
+### C. Dropout as Implicit Ensemble
+
+**Dropout** (Srivastava et al. 2014) masks each activation with an i.i.d. Bernoulli(`1-p`) variable during training:
+
+```
+\tilde{h}_i = m_i * h_i / (1 - p),    m_i ~ Bernoulli(1 - p)
+```
+
+The `1 / (1-p)` rescaling keeps the expected output equal to `h_i`, so no calibration is needed at inference (where the mask is removed). Two complementary interpretations:
+
+1. **Ensemble interpretation**: each forward pass samples a different sub-network. There are `2^n` possible sub-networks for `n` units; training trains them with shared weights, and inference effectively averages them.
+2. **Co-adaptation prevention**: a unit cannot rely on any specific other unit being present, so it must learn features that are useful in many contexts. This is a form of regularization that does not appear in the loss function itself.
+
+### D. Weight Decay vs L2 Regularization
+
+These are *not* the same with adaptive optimizers, even though they coincide for plain SGD.
+
+- **L2 regularization** adds `(\lambda / 2) ||\theta||^2` to the loss. The gradient gains a `\lambda \theta` term, which then flows through Adam's adaptive scaling (divided by `sqrt{v_t}`).
+- **Weight decay** (decoupled, AdamW; Loshchilov & Hutter 2019) shrinks weights *outside* the gradient: `\theta <- \theta - \eta * \lambda * \theta` is applied separately, bypassing the adaptive scaling.
+
+For Adam, decoupled weight decay (AdamW) consistently outperforms L2-in-the-loss because the latter under-regularizes parameters with small `v_t` and over-regularizes parameters with large `v_t`.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| SGD with momentum | `torch.optim.SGD(..., momentum=0.9)` |
+| Adam moments and bias correction | `torch.optim.Adam(..., betas=(0.9, 0.999))` |
+| BatchNorm normalization | `nn.BatchNorm1d`, `nn.BatchNorm2d` |
+| Dropout ensemble | `nn.Dropout(p)` |
+| Decoupled weight decay | `torch.optim.AdamW(..., weight_decay=0.01)` |
+
+---
+
+
 ## 1. Gradient Descent
 
 ### Basic Principle

@@ -14,6 +14,80 @@
 
 ---
 
+## 이론과 원리
+
+자기 지도 학습(SSL)은 데이터 자체가 감독할 수 있는 작업을 발명함으로써 비레이블 데이터로부터 표현을 학습합니다. 이것이 GPT 스타일 언어 모델과 CLIP 스타일 비전-언어 모델 뒤의 기저 패러다임 전환이었습니다. 이 레슨은 SimCLR, MoCo, BYOL, MAE를 조사 — 각각이 같은 질문에 대한 다른 답입니다: "내가 만들 수 있는, 풀면 모델이 유용한 특징을 학습하도록 요구하는 작업이 무엇인가?"
+
+이 섹션에서 다루는 내용:
+
+- **A.** 왜 SSL: 라벨 없는 표현 학습
+- **B.** Contrastive 방법(SimCLR, MoCo)과 음성 샘플 질문
+- **C.** 비-contrastive 방법(BYOL, SimSiam)과 붕괴 문제
+- **D.** 노이즈 제거 오토인코딩으로서의 masked image modeling (MAE)
+
+### A. 왜 SSL
+
+레이블 데이터는 비싸고; 비레이블 데이터는 본질적으로 무료. SSL은 *라벨이 필요 없는* pretext 작업으로 학습하여 이를 활용:
+
+- **단어 수준**: 마스킹된 토큰 예측(MLM, BERT에서 사용) 또는 다음 토큰 예측(causal LM, GPT에서 사용).
+- **이미지 수준**: 같은 이미지의 두 증강 뷰가 같은 인스턴스인지 예측(contrastive); 마스킹된 패치 재구성(MAE); 직소 퍼즐, 채색 등.
+
+희망은 pretext 작업 풀이가 네트워크가 다운스트림 작업으로 *전이*되는 특징을 학습하도록 강제하는 것. 실험적으로 이는 놀랍도록 잘 작동 — ImageNet의 현대 SSL 표현이 다운스트림 전이에 대해 지도 사전학습을 일치시키거나 능가.
+
+### B. Contrastive 방법: SimCLR, MoCo
+
+SimCLR (Chen et al. 2020)와 MoCo (He et al. 2019) 둘 다 증강 뷰와 InfoNCE 손실을 사용:
+
+```
+- 각 이미지에 두 무작위 증강 적용: x_a = aug(x), x_b = aug(x).
+- 둘 다 인코딩: z_a = f(x_a), z_b = f(x_b).
+- (z_a, z_b)를 양성 쌍으로 다룸; 배치 내 모든 다른 예제를 음성으로.
+- InfoNCE가 (z_a, z_b)를 함께 끌고, 다른 모두를 멀리 밂.
+```
+
+SimCLR은 배치 내 음성만 사용 — 충분한 음성을 위해 거대한 배치(8192) 필요. MoCo는 **메모리 뱅크**(최근 특징의 큐)를 유지하고 키에 천천히 움직이는 "momentum encoder"를 사용해 음성을 배치에서 분리, 거대한 배치 크기 없이 훨씬 많은 음성 허용.
+
+핵심 귀납 편향: 증강은 이미지의 *정체성*은 보존하지만 표면 디테일은 변경 — 색, 크롭, 조명. 따라서 contrastive 손실은 암묵적으로 "이 표면 특징은 정체성에 중요하지 않아야"라고 말함. 증강 선택이 결정적(SimCLR 레시피: 무작위 크롭 + 색 지터링 + 가우시안 블러).
+
+### C. 비-Contrastive: BYOL, SimSiam, 그리고 붕괴
+
+BYOL (Grill et al. 2020)과 SimSiam (Chen & He 2021)은 음성을 완전히 떨어뜨립니다. 양성 쌍만 가지고 **표현 붕괴**(encoder가 모든 것을 같은 벡터로 매핑하는 사소한 해)를 막는 구조적 트릭을 가짐.
+
+BYOL: 두 네트워크(online + target). Online이 target의 출력을 예측; target은 online의 EMA. 비대칭 + EMA가 붕괴 방지.
+
+SimSiam: 더 단순 — 두 뷰, 하지만 예측 측 네트워크가 target 측에 stop-gradient. Stop-gradient 없이는 네트워크가 상수 출력으로 붕괴; 그것과 함께면 학습이 안정.
+
+여기서 붕괴가 일어나지 않는 이유는 다소 실험적 — 이론적 논증(Tian et al. 2021)은 비대칭 + stop-gradient가 명시적 음성 없이도 contrastive 힘 같은 것을 암묵적으로 만든다는 것을 보임.
+
+### D. Masked Image Modeling (MAE)
+
+MAE (He et al. 2022)는 BERT의 MLM 아이디어를 이미지로 이식. 이미지를 가져와 (ViT 같이) 패치로 나누고, 패치의 75%를 무작위로 마스킹, encoder에게 보이는 25%를 인코딩하도록 요청, 그 다음 작은 decoder에게 encoder 출력에서 마스킹된 것을 재구성하도록 요청.
+
+```
+loss = MSE(reconstructed_patches, original_masked_patches)
+```
+
+핵심 설계 포인트:
+
+- **비대칭 encoder/decoder**: encoder는 전체 ViT; decoder는 작음(대부분 작업이 컨텍스트 인코딩이기 때문). Encoder가 보이는 패치만 보고, decoder는 전체 시퀀스를 봄(누락된 것에 마스크 토큰).
+- **높은 마스크 비율(75%)**: encoder가 *맥락적* 정보를 사용하도록 강제 — BERT의 MLM의 15% 마스킹보다 훨씬 어려움. 이미지 도메인이 텍스트보다 더 많은 중복성을 가짐; 높은 마스킹이 보상.
+- **픽셀 재구성**: 원시 픽셀에 단순 MSE; 화려한 정규화나 패치별 손실 균형 없음.
+
+MAE는 매우 강한 표현을 만듦 — 음성 샘플 메커니즘이 필요 없기 때문에, 훨씬 낮은 계산에서 contrastive 방법과 경쟁력.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| 증강 쌍 | `view1, view2 = aug(x), aug(x)` |
+| Contrastive 손실 | `F.cross_entropy(sim_matrix / temperature, labels)` |
+| Momentum encoder (MoCo) | `target_encoder.params = m * target + (1-m) * online` |
+| BYOL stop-gradient | MSE 전 `target_z.detach()` |
+| MAE 마스킹 | 무작위 인덱스 선택, 보이는 패치 수집, 보이지 않는 것에 마스크 토큰 |
+
+---
+
+
 ## 1. Self-Supervised Learning 개요
 
 ### 정의와 필요성

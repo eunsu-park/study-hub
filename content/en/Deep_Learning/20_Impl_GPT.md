@@ -17,6 +17,84 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+GPT (Radford et al. 2018-2020) is the decoder-only Transformer trained as a left-to-right language model: predict the next token given all previous ones. Architecturally there is little new compared to the original Transformer's decoder; the breakthroughs are *scale* and the discovery that scaling alone, with no task-specific architecture, produces general capability. This section gives the math behind autoregressive LM training, the sampling strategies for generation, and the scaling laws that justify spending billions on a single model.
+
+This section covers:
+
+- **A.** The autoregressive language model factorization
+- **B.** Cross-entropy as the natural loss; perplexity as the metric
+- **C.** Sampling strategies: greedy, top-k, top-p, temperature
+- **D.** Scaling laws and compute-optimal training (Chinchilla)
+
+### A. Autoregressive Factorization
+
+A language model assigns probability to a sequence `x_1, ..., x_T`. By the chain rule of probability:
+
+```
+p(x_1, ..., x_T) = prod_{t=1}^{T} p(x_t | x_1, ..., x_{t-1})
+```
+
+This factorization is *exact* — no approximation. A neural language model parameterizes each conditional `p(x_t | x_{<t}) = softmax(f_\theta(x_{<t}))` where `f_\theta` is the Transformer producing logits over the vocabulary. Training maximizes log-likelihood:
+
+```
+log p(x_1, ..., x_T) = sum_t log p(x_t | x_{<t})
+```
+
+Negating gives the loss; averaging over sequences gives the per-token loss. Because of teacher forcing + causal mask, all `T` conditional probabilities are computed in one forward pass.
+
+### B. Cross-Entropy and Perplexity
+
+The per-token loss is exactly cross-entropy between the predicted distribution and the one-hot truth:
+
+```
+L_t = -log p(x_t | x_{<t}) = -log softmax(logits)[x_t]
+```
+
+This is what `nn.CrossEntropyLoss` computes. Two convenient interpretations:
+
+- **Information-theoretic**: `L_t` is the number of bits (with `log_2`) or nats (with `log_e`) needed to encode `x_t` given the model's distribution. Lower = better compression = better model.
+- **Perplexity**: `PPL = exp(mean L)`. Roughly the "effective number of equally-likely choices" the model considers per token. Vocabulary of 50k means random has `PPL = 50000`; well-trained GPT-2 reaches ~20 on Wikipedia.
+
+Cross-entropy and perplexity are the only meaningful evaluation metrics for an LM as such; downstream task performance is a separate (and often more interesting) question.
+
+### C. Sampling Strategies
+
+Once trained, the model produces `p(x_t | x_{<t})` — but how to choose an actual next token? Four strategies:
+
+- **Greedy / argmax**: `x_t = argmax_v p(v)`. Deterministic, often boring or repetitive (the model gets stuck in loops).
+- **Sampling from full distribution**: `x_t ~ p`. Diverse but sometimes incoherent (low-prob tokens get picked).
+- **Top-k**: keep only the `k` highest-probability tokens, renormalize, sample. Bounds the worst-case bad sample.
+- **Top-p (nucleus)**: keep the smallest set of tokens whose cumulative probability `>= p` (e.g., 0.9), renormalize, sample. Adapts to the distribution's shape — sharp distributions keep few tokens, flat ones keep many.
+- **Temperature**: rescale logits by `1/T` before softmax. `T < 1` sharpens (closer to argmax), `T > 1` flattens (more diverse), `T = 1` is the natural distribution.
+
+Modern LLMs typically combine top-p + temperature for generation, with `T = 0.7-0.9` being a common practical default.
+
+### D. Scaling Laws and Chinchilla
+
+Kaplan et al. (2020) and Hoffmann et al. (2022, "Chinchilla") showed that LM loss follows a predictable power law in **compute (C), parameters (N), and training tokens (D)**:
+
+```
+L(N, D) ≈ L_inf + A / N^\alpha + B / D^\beta
+```
+
+with `\alpha, \beta ≈ 0.3-0.4`. For a fixed compute budget `C ≈ 6 N D`, the loss-minimizing allocation is **N proportional to D** — roughly equal scaling of parameters and tokens. GPT-3 (175B params, 300B tokens) was *under-trained*; Chinchilla (70B params, 1.4T tokens) outperformed it with 2.5x fewer parameters.
+
+The takeaway is that LM quality is not "bigger is better" but "bigger AND more data, in balance, is better." Modern LLMs (LLaMA-2, GPT-4) follow Chinchilla-optimal recipes much more closely.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| AR factorization | Causal mask + per-token cross-entropy loss |
+| LM loss | `F.cross_entropy(logits.view(-1, V), targets.view(-1))` |
+| Perplexity | `torch.exp(loss)` over a held-out set |
+| Top-p sampling | Sort probs, take cumulative sum until threshold, renormalize |
+
+---
+
+
 ## Overview
 
 GPT (Generative Pre-trained Transformer) is an autoregressive language model developed by OpenAI. It generates text **left-to-right** and became the foundation of modern LLMs.

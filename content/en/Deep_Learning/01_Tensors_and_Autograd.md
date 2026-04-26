@@ -22,6 +22,73 @@
 
 ---
 
+## Theory & Principles
+
+Before touching the PyTorch API, it helps to separate what a tensor *is* from what autograd *does*. A tensor is a typed, multi-dimensional buffer with a precise memory layout; autograd is a runtime that records operations on those buffers so that derivatives can be computed by replaying the recording in reverse. Both ideas — the layout and the recording — exist independently of any deep learning framework, and understanding them clarifies why the rest of this lesson looks the way it does.
+
+This section covers:
+
+- **A.** Tensor memory layout: storage, stride, and the contiguity invariant
+- **B.** Reverse-mode automatic differentiation and why it costs O(N)
+- **C.** The computational graph as a directed acyclic graph (DAG)
+- **D.** Forward vs reverse mode and when each one wins
+
+### A. Memory Layout: Storage, Stride, Contiguity
+
+A PyTorch tensor is a *view* over a one-dimensional contiguous block of memory called the **storage**. The same storage can be reinterpreted as a 2D matrix, a 3D image, or a transposed matrix without copying any bytes. Three pieces of metadata translate an n-dimensional index `(i_0, ..., i_{n-1})` into an offset in storage:
+
+```
+offset(i_0, ..., i_{n-1}) = base_offset + sum_k stride[k] * i_k
+```
+
+For a row-major (C-contiguous) tensor of shape `(d_0, d_1, ..., d_{n-1})`, the strides are the cumulative products of trailing dimensions:
+
+```
+stride[k] = prod_{j > k} d_j
+```
+
+A tensor is **contiguous** when its strides match this formula and `base_offset = 0`. Operations like `transpose`, `permute`, and `narrow` produce non-contiguous *views* — the strides become irregular, but the storage is unchanged. This is why `view()` requires contiguity (it assumes the row-major formula) while `reshape()` falls back to a copy when needed. Knowing the difference between a view and a copy is the difference between an O(1) and an O(N) operation.
+
+### B. Reverse-Mode Automatic Differentiation
+
+Given a scalar function `L = f(x_1, ..., x_n)` built as a composition of differentiable primitives, automatic differentiation computes `dL/dx_i` exactly (up to floating-point precision), not numerically. Reverse-mode AD does this by:
+
+1. **Forward pass**: evaluate each primitive `y = g(u, v, ...)` and remember enough of `(u, v, ...)` to compute its local Jacobian later.
+2. **Backward pass**: starting from `dL/dL = 1`, walk the graph in reverse, multiplying by each local Jacobian to accumulate `dL/du`, `dL/dv`, ...
+
+The crucial point is the cost. If the forward pass executes `N` primitive operations to produce one scalar `L`, the backward pass also executes `O(N)` operations — independent of the number of inputs. Computing the gradient of a billion-parameter loss therefore costs roughly the same as one forward pass, which is what makes deep learning practical. (Forward-mode AD has the opposite trade-off; see D.)
+
+### C. The Computational Graph as a DAG
+
+Each tensor with `requires_grad=True` is a node. Each operation creates a new node and records edges to its inputs along with a `grad_fn` that knows how to multiply by the local Jacobian. The result is a **directed acyclic graph** built dynamically as forward operations execute (PyTorch's "define-by-run" model). When `.backward()` is called on a scalar leaf, the graph is traversed in reverse topological order, and the chain rule is applied edge by edge:
+
+```
+dL/du = sum over outgoing edges  dL/dy * dy/du
+```
+
+The DAG structure (no cycles) is what allows a single linear-time backward pass. After `.backward()`, the graph is freed unless `retain_graph=True` is passed — this is why a second `.backward()` on the same graph errors by default.
+
+### D. Forward vs Reverse Mode: When Each Wins
+
+For a function `f: R^n -> R^m`, the full Jacobian has `m * n` entries. The two modes accumulate it differently:
+
+- **Forward mode** propagates a tangent vector `dx` through the graph, costing `O(N)` per input dimension. Best when `n << m` (few inputs, many outputs).
+- **Reverse mode** propagates a cotangent vector `dL` backward through the graph, costing `O(N)` per output dimension. Best when `n >> m` (many inputs, one output).
+
+Deep learning lives at the extreme of `n >> m`: billions of parameters, one scalar loss. Reverse mode is therefore the natural choice, and `loss.backward()` is exactly one reverse-mode sweep with seed `1`. PyTorch 2.x's `torch.func.jacrev` and `torch.func.jacfwd` expose both modes explicitly when you need full Jacobians or higher-order derivatives.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Storage + stride | `tensor.stride()`, `.view()` vs `.reshape()`, `.contiguous()` |
+| Reverse-mode AD | `requires_grad=True`, `.backward()`, `.grad` |
+| Computational graph (DAG) | `grad_fn`, `retain_graph`, `torch.no_grad()` |
+| Mode choice | `torch.func.grad`, `jacrev`, `jacfwd` |
+
+---
+
+
 ## 1. What is a Tensor?
 
 A tensor is a generalized concept of multi-dimensional arrays.

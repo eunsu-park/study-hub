@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — domain shift, batch-norm adaptation, and entropy-minimization-based test-time adaptation (TENT).
+
 1. [The Domain Shift Problem](#1-the-domain-shift-problem)
 2. [Batch Normalization Adaptation](#2-batch-normalization-adaptation)
 3. [TENT: Test-Time Entropy Minimization](#3-tent-test-time-entropy-minimization)
@@ -27,6 +29,77 @@ After completing this lesson, you will be able to:
 7. [Exercises](#7-exercises)
 
 ---
+
+## Theory & Principles
+
+Test-time adaptation (TTA) responds to a fundamental gap in standard ML: the train distribution and the test distribution often differ, and the model has no chance to retrain. TTA techniques update a deployed model *during inference* using only the unlabeled test data — a domain shift mitigation strategy that requires neither labels nor extra training data. This section explains the math behind why batch-norm statistics, entropy, and other unsupervised signals can effectively re-tune a model.
+
+This section covers:
+
+- **A.** Domain shift: the math of train/test distribution mismatch
+- **B.** BatchNorm adaptation as the simplest TTA
+- **C.** TENT: entropy minimization as a self-supervised loss at test time
+- **D.** TTT and CoTTA: more sophisticated adaptation regimes
+
+### A. Domain Shift
+
+Standard supervised learning assumes train and test data are drawn from the same distribution `P(x, y)`. Real deployments break this — the test distribution is `P_T(x, y) \neq P_S(x, y)`. Three flavors:
+
+- **Covariate shift**: `P_T(x) \neq P_S(x)` but `P(y | x)` unchanged. Common: lighting, weather, sensor calibration changes.
+- **Label shift**: `P_T(y) \neq P_S(y)` (class proportions). Common: deploying a medical model in a population with different disease prevalence.
+- **Concept shift**: `P_T(y | x) \neq P_S(y | x)`. The same input means different things. Severe and often fatal for transfer.
+
+For covariate shift, the model's predictions are still meaningful — it just sees inputs whose statistics have shifted. TTA targets exactly this case: tune the model to the new input statistics without changing the underlying classification.
+
+### B. BatchNorm Adaptation
+
+BN computes running statistics `\mu_{run}, \sigma_{run}` during training and uses them at inference. If the test distribution differs, those statistics are wrong. The simplest TTA: **recompute BN statistics on test data**.
+
+```
+\mu_t = mean over batch of test samples
+\sigma_t = std over batch of test samples
+y = (x - \mu_t) / \sigma_t * \gamma + \beta
+```
+
+This is shockingly effective for covariate shift caused by, e.g., test-time noise or contrast change. Cost: zero — just requires processing test inputs in batches and recomputing statistics. Schneider et al. (2020) showed this matches or beats more complex TTA methods on common benchmarks.
+
+The catch: requires reasonably-sized test batches. For online settings (one input at a time), running averages must be maintained over recent test inputs.
+
+### C. TENT: Test-time Entropy Minimization
+
+TENT (Wang et al. 2021) goes further: also update BN's affine parameters `\gamma, \beta` (the only parameters trained at test time) by minimizing prediction entropy:
+
+```
+L_TENT = -sum_i p_i log p_i        (per-batch entropy of softmax outputs)
+```
+
+The intuition: a model that is confident on its (out-of-distribution) inputs is more likely to be correct than one that is uncertain. Entropy minimization sharpens predictions, in effect telling the model "commit to an answer." Empirically this improves accuracy on shifted distributions.
+
+Three design choices that matter:
+
+1. **Only update BN affine params**, not all parameters. Other params would overfit to test data instantly.
+2. **Forward pass uses BN statistics from current batch** (as in BatchNorm Adaptation), not running stats.
+3. **No labels involved** — entropy is a self-supervised signal computable from predictions alone.
+
+### D. TTT and CoTTA
+
+**TTT** (Test-Time Training, Sun et al. 2020) trains an *auxiliary self-supervised task* alongside the main task. At test time, that auxiliary task can be trained on test inputs (no labels needed), and updates flow back to shared layers. This is more general than TENT but requires choosing and training an auxiliary task.
+
+**CoTTA** (Continual TTA, Wang et al. 2022) handles continually shifting distributions: averaging the adapted model with the source model to prevent catastrophic forgetting, with stochastic resets to forget bad adaptations. Designed for long deployment periods where the test distribution drifts over time.
+
+The TTA spectrum: BN adaptation (free, simple, often enough) → TENT (small overhead, often more accurate) → TTT/CoTTA (sophisticated, needed for hard cases).
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| BN-only adaptation | Set `model.eval()` then `for m in model.modules(): if isinstance(m, BatchNorm2d): m.train()` |
+| TENT entropy loss | `loss = -(probs * probs.log()).sum(dim=-1).mean()` |
+| Update only BN params | Only pass BN parameters to optimizer |
+| Online TTA loop | `for batch in test_loader: pred = model(batch); loss = entropy(pred); loss.backward(); opt.step()` |
+
+---
+
 
 ## 1. The Domain Shift Problem
 

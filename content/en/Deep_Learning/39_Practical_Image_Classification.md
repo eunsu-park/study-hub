@@ -13,6 +13,80 @@
 
 ---
 
+## Theory & Principles
+
+A "practical image classification" project on CIFAR-10 is the smallest end-to-end ML system you can build that actually requires every component to work: data pipeline, augmentation, training loop, regularization, evaluation. This section gives the theory behind the augmentation choices that drive accuracy on small datasets, the reason mixup/cutmix work, and the math of test-time augmentation.
+
+This section covers:
+
+- **A.** Why augmentation works: implicit regularization
+- **B.** Standard augmentations: flip, crop, color, RandAugment
+- **C.** Mixup, CutMix, and label smoothing
+- **D.** Test-time augmentation as ensemble averaging
+
+### A. Augmentation as Implicit Regularization
+
+A classifier trained on raw CIFAR-10 (50k images) overfits — train accuracy hits 100% while test accuracy plateaus. Augmentation virtually expands the training set: each epoch sees a different "instance" of each image. Mathematically, you are training on `E_T[L(f(T(x)), y)]` where `T` is a random augmentation, instead of `L(f(x), y)`. Three effects:
+
+1. **Effective dataset size is bigger**: each example is seen many times in many forms, but the model never sees the same exact tensor twice.
+2. **Model is forced to be invariant** to the augmentations: it cannot rely on color, exact position, exact crop. This is a useful inductive bias if those features should not affect class.
+3. **Implicit smoothing**: the loss landscape becomes smoother because nearby augmentations produce nearby losses.
+
+### B. Standard Augmentations
+
+For CIFAR-style natural images:
+
+- **Random crop with padding** (e.g., crop 32x32 from 36x36 padded image): teaches translation invariance.
+- **Random horizontal flip**: teaches mirror-symmetry invariance (correct for most natural object classes).
+- **Color jitter** (brightness, contrast, saturation, hue): teaches color-invariance.
+- **Random erasing** (Zhong et al. 2017): zero-out a random rectangle. Teaches occlusion-robustness.
+- **RandAugment** (Cubuk et al. 2019): randomly apply N transformations from a fixed pool with magnitude M; both N and M are searchable hyperparameters. Removes the need to hand-design augmentation policies.
+
+The order of magnitude of accuracy improvement from good augmentation on small datasets: 3-10%. This is comparable to switching architectures.
+
+### C. Mixup, CutMix, and Label Smoothing
+
+**Mixup** (Zhang et al. 2017): create a new training example by linearly interpolating two:
+
+```
+x = lambda * x_a + (1 - lambda) * x_b
+y = lambda * y_a + (1 - lambda) * y_b               (one-hot interpolation)
+lambda ~ Beta(alpha, alpha)
+```
+
+The model is trained on these convex combinations. Effect: smoother decision boundaries, less overconfidence, better calibration.
+
+**CutMix** (Yun et al. 2019): instead of pixel-blending, *paste* a random rectangle from `x_b` into `x_a`, with the label being a corresponding area-weighted combination. Maintains the per-pixel sharpness of original images while still training on combinations.
+
+**Label smoothing** (Szegedy et al. 2016): replace one-hot targets with a softer distribution: `y_smooth = (1 - \epsilon) * one_hot + \epsilon / K`. Prevents the model from becoming overconfident and improves calibration; small but consistent accuracy gains.
+
+All three techniques achieve a similar effect (smoother decision surfaces, better calibration) by different mechanisms. They often stack productively — mixup + label smoothing is a standard recipe.
+
+### D. Test-Time Augmentation
+
+At inference, average predictions across multiple augmented versions of the same input:
+
+```
+pred = mean over T_1, ..., T_K of softmax(model(T_i(x)))
+```
+
+This is essentially an ensemble where the "model variations" are augmentation variations. Costs `K` forward passes per prediction; gives 0.5-2% accuracy boost typically. Common augmentations: original + horizontal flip + 5 corner crops, totaling 12 evaluations.
+
+The connection to ensembling: TTA is a cheap form of ensembling that requires no additional training. Bayesian deep learning views this as approximating posterior predictive integration over a (data-augmentation-induced) parameter neighborhood.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Random crop + flip | `transforms.RandomCrop(32, padding=4); transforms.RandomHorizontalFlip()` |
+| RandAugment | `transforms.RandAugment(num_ops=2, magnitude=9)` |
+| Mixup | `mixed_x = lam * x[idx] + (1 - lam) * x` |
+| Label smoothing | `nn.CrossEntropyLoss(label_smoothing=0.1)` |
+| TTA | Average `softmax(model(transform(x)))` over multiple `transform`s |
+
+---
+
+
 ## 1. Project Overview
 
 ### CIFAR-10 Dataset

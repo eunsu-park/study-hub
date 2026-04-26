@@ -14,6 +14,89 @@
 
 ---
 
+## 이론과 원리
+
+CLIP (Radford et al. 2021)은 웹 규모의 **contrastive 이미지-텍스트 사전학습**이 *개방형 어휘* 분류 — 학습 시 본 클래스가 아니라 자연어로 묘사 가능한 임의의 클래스 예측 — 를 하는 비전 시스템을 만든다는 것을 처음 입증한 모델입니다. 아키텍처는 두 encoder와 하나의 손실; 그 외 모든 것은 엔지니어링. 이 섹션은 손실이 왜 그것이 하는 일을 하는지 설명합니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** 다중 모드 임베딩과 공유 잠재 공간
+- **B.** CLIP contrastive 손실 (대칭 InfoNCE)
+- **C.** Temperature가 중요한 이유와 그것이 학습되는 방법
+- **D.** 유사도 검색으로서의 zero-shot 분류
+
+### A. 공유 임베딩 공간
+
+CLIP은 두 별도 네트워크를 가짐:
+
+- **이미지 encoder** `f_I`: ViT 또는 ResNet, `image -> R^d` 매핑
+- **텍스트 encoder** `f_T`: Transformer, `caption -> R^d` 매핑
+
+둘 다 *같은* 벡터 공간에 사는 `d`-차원 임베딩을 만듦. 학습 목적은 의미적으로 일치된 (이미지, 캡션) 쌍이 가까운 임베딩을 가지고 일치하지 않는 쌍이 멀리 떨어지도록 강제.
+
+학습 후, 이 공유 공간은 다음을 지원:
+
+- 텍스트로 이미지 검색: 임베딩이 query 텍스트 임베딩에 가까운 이미지 찾기.
+- 이미지로 텍스트 검색: 그 반대.
+- Zero-shot 분류: 후보 클래스 라벨을 텍스트로 인코딩, 테스트 이미지를 인코딩, 가장 가까운 텍스트 선택.
+
+### B. 대칭 Contrastive 손실
+
+`N`개 (이미지, 캡션) 쌍의 배치에 대해 계산:
+
+```
+I = f_I(images)        # (N, d), L2 정규화
+T = f_T(captions)      # (N, d), L2 정규화
+S = (I @ T.T) / tau    # temperature로 스케일된 (N, N) 유사도 행렬
+```
+
+`S_{ij}`는 이미지 `i`와 캡션 `j` 사이의 유사도. 대각 `S_{ii}`가 양성 쌍; 비대각이 음성.
+
+CLIP 손실은 **대칭 InfoNCE**:
+
+```
+L_image = CrossEntropy(S, labels=arange(N))           # 행 방향: 이미지 i가 캡션 i와 일치해야
+L_text  = CrossEntropy(S.T, labels=arange(N))         # 열 방향: 캡션 i가 이미지 i와 일치해야
+L = (L_image + L_text) / 2
+```
+
+각 cross-entropy는 한 방향을 softmax 분류로 다룸: 이미지 `i`가 주어지면, `N`개 캡션 중 어느 것이 일치? 라벨이 정확히 대각이므로, 모델은 "당신의 진정한 양성이 인덱스 `i`인 것인가?"를 묻고 있음. 대칭 정식화는 두 encoder가 일관되게 업데이트되도록 보장 — 이미지와 텍스트가 무엇이 무엇과 일치하는지에 동의해야.
+
+이는 정확히 두 방향의 InfoNCE이며, 각 예제의 음성이 배치 내 모든 다른 예제. 더 큰 배치가 더 많은 음성을 줘 contrastive 신호를 강화 — CLIP은 배치 크기 32,768에서 학습.
+
+### C. Temperature: 고정이 아닌 학습됨
+
+Temperature `\tau`는 softmax가 얼마나 뾰족해지는지 제어. 작은 `\tau`는 softmax를 날카롭게(진정한 양성에 주의 집중); 큰 `\tau`는 평탄하게(모든 일치를 유사하게 다룸).
+
+CLIP은 `\tau`를 *학습 가능한 파라미터*로 만듦: `\log \tau`가 `\log(1/0.07)`로 초기화되고 경사 하강으로 학습. 모델이 contrastive 학습을 가장 효과적으로 만드는 temperature를 찾음 — 이는 비교적 날카로운 softmax(`\tau \approx 0.01-0.05`)를 요구.
+
+`\log \tau`가 임의로 작아지는 것을 막는 클램핑이 흔한 실용 트릭.
+
+### D. Zero-Shot 분류
+
+학습 후, 테스트 이미지를 `K`개 클래스 중 하나로 분류는 다음과 같이 진행:
+
+1. 각 클래스에 텍스트 프롬프트 구성: `"a photo of a {class_name}"`. "프롬프트 템플릿"이 많이 중요 — Radford et al.은 엔지니어링된 프롬프트(`"a photo of a small {class_name}"` 등)가 일관되게 빈 클래스 이름을 능가함을 발견.
+2. 모든 `K`개 프롬프트 인코딩: `T_class = f_T(prompts)`, 정규화.
+3. 테스트 이미지 인코딩: `I_test = f_I(image)`, 정규화.
+4. 유사도 계산 `s = I_test @ T_class.T` (추론 시 temperature 불필요).
+5. 예측 클래스 = `argmax(s)`.
+
+이는 타겟 클래스에 파인튜닝 없이 작동 — 그것들이 사전학습에 나타날 필요 없음. CLIP은 ImageNet zero-shot에서 76% 달성, ImageNet 라벨 전혀 없이 완전 지도 ResNet-50에 비교 가능.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| 듀얼 encoder | `image_encoder`, `text_encoder` 모듈 |
+| L2 정규화 | `F.normalize(embed, dim=-1)` |
+| 유사도 행렬 | `logits = (image_emb @ text_emb.T) / temperature` |
+| 대칭 손실 | `(F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels)) / 2` |
+| 학습된 temperature | `self.logit_scale = nn.Parameter(torch.log(torch.tensor(1/0.07)))` |
+
+---
+
+
 ## 1. 멀티모달 학습 개요
 
 ### 멀티모달이란?

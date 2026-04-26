@@ -14,6 +14,74 @@
 
 ---
 
+## 이론과 원리
+
+정규화 층 — BatchNorm, LayerNorm, GroupNorm, RMSNorm — 은 입력에 한 번이 아닌 모든 층 *사이*에 적용되는, 고전 ML에서 특징 표준화의 딥러닝 등가물입니다. 각 변형은 *어느 축*에 대해 평균하는지에서만 다릅니다. 올바른 것을 고르는 것은 대부분 "당신 설정에서 어떤 통계가 안정적인가?"의 질문 — 배치 차원, 특징 차원, 또는 그 사이의 일부 그룹.
+
+이 섹션에서 다루는 내용:
+
+- **A.** 정규화가 도움 되는 이유: 손실 지형 평활화
+- **B.** BN vs LN vs GN vs IN: 축 선택
+- **C.** RMSNorm과 현대 LLM이 그것을 사용하는 이유
+- **D.** Train vs eval 모드와 running-statistics 함정
+
+### A. 정규화가 도움 되는 이유
+
+정규화 없이는 각 층의 출력 분포가 상류 가중치의 누적 곱에 의존합니다. 작은 상류 변화가 큰 하류 이동을 유발할 수 있어 — 각 층을 움직이는 타겟에 직면시킵니다. 원래 "internal covariate shift" 가설(Ioffe & Szegedy 2015)은 이를 정규화가 해결하는 문제로 구성했습니다.
+
+이후 분석(Santurkar et al. 2018)은 지배적 이점이 **손실 지형 평활화**라고 주장: 정규화된 네트워크는 곡률 변동이 적어, 그래디언트 스텝이 표면 전반에 일관되게 작동. 더 큰 학습률이 안전해짐; 수렴이 가속. 이 관점은 입력 분포가 많이 이동하지 *않을* 때도 BN이 작동한다는 실험적 관찰과 일치.
+
+실전에서, 정규화 *와* 함께 학습되고 *없이는* 학습되지 않을 네트워크(예: 매우 깊은 ResNet)가 어느 이론적 설명을 선호하든 정규화가 진짜 무언가를 해결한다는 충분한 증거입니다.
+
+### B. 축 선택: BN, LN, GN, IN
+
+입력 형상 `(N, C, H, W)`의 경우, 정규화는 `(x - \mu) / sqrt(\sigma^2 + \epsilon)`을 계산하며 `\mu`와 `\sigma`는 다른 축에 대해 계산됩니다:
+
+| 변형 | 평균된 축 | 평균 형상 | 사용 위치 |
+|------|-----------|-----------|-----------|
+| **BatchNorm**  | N, H, W (채널별) | `(C,)`  | CNN |
+| **LayerNorm**  | C, H, W (예제별) | `(N,)`  | Transformer |
+| **GroupNorm**  | (C/G), H, W (그룹별, 예제별) | `(N, G)` | 작은 배치 |
+| **InstanceNorm** | H, W (채널별, 예제별) | `(N, C)` | Style transfer |
+
+**BatchNorm**은 배치에 걸쳐 평균 — 그래서 통계가 배치 크기에 의존하고, 작은 배치(1-4)는 신뢰할 수 없는 통계를 줌. 또한 추론(배치 없음)을 위해 running average 저장이 필요.
+
+**LayerNorm**은 한 예제의 모든 특징에 걸쳐 평균 — 배치 크기와 완전히 독립. 이것이 Transformer가 그것을 사용하는 이유: 가변 길이 시퀀스와 작은 배치가 BN을 비실용적으로 만듦.
+
+**GroupNorm**은 절충: 채널을 `G`개 그룹으로 나누고 각 안에서 정규화. BN 같은 채널 인식과 LN 같은 배치 독립성을 결합.
+
+### C. RMSNorm
+
+LayerNorm은 중심화(평균 빼기)와 스케일(표준편차로 나누기)을 합니다. **RMSNorm** (Zhang & Sennrich 2019)은 중심화를 떨어뜨립니다:
+
+```
+RMSNorm(x) = (x / RMS(x)) * \gamma
+RMS(x) = sqrt(mean(x^2) + \epsilon)
+```
+
+실험적으로, 중심화 단계는 거의 이점을 더하지 않지만 계산과 메모리 비용이 듭니다. 제거하면 품질 손실 없이 ~10-20% 속도 향상. LLaMA, T5, 그리고 대부분 현대 LLM이 기본적으로 RMSNorm을 사용합니다.
+
+### D. Train vs Eval 모드
+
+BN의 running 통계는 학습 중 누적됩니다(`mean_running = (1 - mom) * mean_running + mom * batch_mean`). 추론 시 배치 통계 대신 이 running 통계가 사용됨 — 추론 시에는 한 번에 한 예제를 처리할 수 있고 의미 있는 배치가 없기 때문.
+
+이는 PyTorch의 가장 혼란스러운 버그 중 하나의 원인입니다: `model.eval()` 잊으면 BN이 현재 미니 배치의 통계를 사용하여, `model.train()` 모드 대비 예측을 완전히 변경할 수 있습니다. 검증 루프 후 `model.train()`을 잊으면 BN의 running 통계가 잠겨, 학습이 조용히 실패합니다.
+
+LN, GN, IN, RMSNorm은 *train/eval 구분이 없습니다* — 그들의 통계는 항상 예제별이며 추론 시 계산. 이것이 이 변형들의 실용적 이점 중 하나: 더 적은 모드 관련 버그.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| BatchNorm | `nn.BatchNorm2d(num_features)` |
+| LayerNorm | `nn.LayerNorm(normalized_shape)` |
+| GroupNorm | `nn.GroupNorm(num_groups, num_channels)` |
+| RMSNorm | 커스텀 (`x / x.pow(2).mean(-1, keepdim=True).sqrt() * scale`) |
+| Train vs eval | `model.train()` vs `model.eval()` 호출 |
+
+---
+
+
 ## 1. 왜 정규화가 필요한가?
 
 ### 1.1 문제: 내부 공변량 변화(Internal Covariate Shift)

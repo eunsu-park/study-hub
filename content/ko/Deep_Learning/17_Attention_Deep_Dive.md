@@ -16,6 +16,80 @@
 
 ---
 
+## 이론과 원리
+
+Attention "심층 분석"은 Transformer 블록을 실제로 작동하게 하는 보조 구조를 다룹니다: 위치 인코딩(각 토큰이 어디 있는지 모델이 알도록), 층 정규화(layer normalization; 깊이에 걸쳐 학습이 안정되도록), attention 주변의 잔차 연결(깊은 적층이 붕괴하지 않도록), 그리고 feed-forward 서브 층(모델이 토큰별 비선형 용량을 가지도록). 각각은 수학적 정당화가 있는 의도적 선택입니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** 위치 인코딩: sinusoidal vs learned vs relative
+- **B.** Pre-LN vs Post-LN과 순서가 중요한 이유
+- **C.** Attention 블록의 잔차 연결
+- **D.** 토큰별 MLP로서 feed-forward (FFN) 서브 층
+
+### A. 위치 인코딩
+
+Attention은 구성상 **순열 불변**입니다: 입력 토큰을 섞으면 같은 섞인 출력을 얻습니다. 시퀀스는 위치를 구분할 추가 신호가 필요합니다. 세 가지 접근:
+
+**Sinusoidal (Vaswani 2017)**: 위치의 고정 함수:
+
+```
+PE(pos, 2i)   = sin(pos / 10000^{2i/d_model})
+PE(pos, 2i+1) = cos(pos / 10000^{2i/d_model})
+```
+
+주파수가 `1`에서 `10^{-4}` Hz로 기하 수열을 이룹니다. 각 차원이 다른 속도로 도는 시계처럼 동작합니다. 이점: 상대 위치가 절대 위치의 선형 함수로 표현될 수 있어(`sin(a + b)`와 `cos(a + b)`가 `sin(a), cos(a), sin(b), cos(b)` 조합으로 분해되기 때문에), 모델이 원리적으로 절대 인코딩에서 상대 관계를 학습할 수 있게 합니다.
+
+**Learned**: `nn.Embedding(max_len, d_model)`. 더 단순하고, 분포 내에서 종종 약간 더 좋지만, 학습 시 본 것보다 긴 시퀀스로 외삽할 수 없습니다.
+
+**Relative / Rotary (RoPE)**: query와 key 벡터를 2D 부분공간에서 *회전*시켜 위치를 인코딩. 위치 `m`과 `n`의 두 벡터가 그들의 차이 `m - n`의 함수를 통해 상호작용. 절대 인코딩보다 더 긴 컨텍스트로 훨씬 잘 일반화하기 때문에 현대 LLM(LLaMA, GPT-NeoX)에서 사용됩니다.
+
+### B. Pre-LN vs Post-LN
+
+원래 Transformer는 **Post-LN**이었습니다: `x + Sublayer(x)` 후 LayerNorm. 현대 Transformer는 **Pre-LN**을 사용: LayerNorm 먼저, 그 다음 `x + Sublayer(LN(x))`. 순서는 그래디언트 흐름에 중요합니다.
+
+Post-LN에서는 잔차 스트림이 모든 층에서 LayerNorm을 통과합니다; 그래디언트는 모든 그 LN을 역순으로 통과해야 합니다. 깊은 적층(24+ 층)에서 이는 발산을 피하기 위해 신중한 학습률 워밍업을 요구합니다.
+
+Pre-LN에서는 잔차 스트림이 *건드려지지 않습니다* — `x_{l+1} = x_l + F_l(LN(x_l))`. 그래디언트가 항등 스킵 연결을 통해 바닥으로 직접 흐르며, ResNet과 똑같습니다. 학습이 훨씬 더 안정적이고, 더 큰 학습률이 작동하며, 워밍업이 덜 중요합니다. 이것이 GPT-2 (Pre-LN)가 1.5B 파라미터로 쉽게 학습되었으나 비슷한 규모의 많은 Post-LN 시도는 실패한 한 이유입니다.
+
+### C. Attention 블록의 잔차 연결
+
+모든 Transformer 서브 층은 잔차로 감쌉니다:
+
+```
+y = x + MultiHeadAttention(LN(x))           (attention 블록)
+z = y + FFN(LN(y))                          (FFN 블록)
+```
+
+잔차 스트림은 네트워크를 통한 각 토큰의 지속적 정체성이며; 서브 층이 그것에 정제를 *추가*합니다. 이는 LSTM 및 ResNet과 같은 constant-error-carousel 아이디어입니다 — 그래디언트가 곱셈이 아닌 덧셈을 통해 흘러, 깊은 네트워크 그래디언트 병리를 피합니다.
+
+### D. FFN 서브 층
+
+Multi-head attention 후, 각 토큰이 위치별 feed-forward 네트워크로 독립적으로 변환됩니다:
+
+```
+FFN(x) = max(0, x W_1 + b_1) W_2 + b_2
+```
+
+일반적으로 `W_1 in R^{d_model x 4 d_model}` 그리고 `W_2 in R^{4 d_model x d_model}` — 은닉 너비가 모델 너비의 4배. 이는 단일 선형 층이 *아닙니다*; 중간의 ReLU(또는 GELU)가 토큰별 비선형 용량을 제공합니다. 결정적으로, FFN은 attention과 달리 각 토큰에 *독립적으로 적용*됩니다(토큰 간 혼합 없음). 두 서브 층은 보완적 역할을 가집니다:
+
+- **Attention**: 토큰 간 정보 혼합, softmax 외 토큰별 비선형성 없음.
+- **FFN**: 토큰별 비선형 처리, 토큰 간 혼합 없음.
+
+함께 교대하며, 각 토큰에 컨텍스트 의존 업데이트(attention에서)와 내용 의존 처리(FFN에서) 둘 다를 줍니다. FFN의 4배 은닉 확장은 실험적으로 정당화됩니다: Transformer 파라미터 대부분이 거기 있습니다(일반적 분할은 ~2/3가 FFN, ~1/3가 attention).
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| Sinusoidal PE | `pe = torch.zeros(max_len, d_model); pe[:, 0::2] = sin(...); pe[:, 1::2] = cos(...)` |
+| Pre-LN 순서 | `x + sublayer(self.norm(x))` (`self.norm(x + sublayer(x))`이 아님) |
+| 잔차 스트림 | 모든 블록이 더하는 지속적 `x` |
+| 4배 확장이 있는 FFN | `nn.Linear(d, 4*d) -> ReLU -> nn.Linear(4*d, d)` |
+
+---
+
+
 ## 1. Multi-Head Attention 수학
 
 ### 수식 복습

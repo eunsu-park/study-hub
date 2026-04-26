@@ -13,6 +13,94 @@
 
 ---
 
+## 이론과 원리
+
+아래에서 소개하는 옵티마이저, 정규화, 표준화 트릭은 단순한 휴리스틱 모음이 아닙니다. 각각은 깊고 고차원이며 비볼록인 손실 위 vanilla SGD의 특정 실패 모드를 겨냥합니다. 본 섹션은 가장 큰 세 가지 — momentum 기반 옵티마이저, batch normalization, dropout — 의 수학을 제공하여, 본 레슨의 나머지가 마법이 아닌 엔지니어링 선택으로 읽히도록 합니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** 제1원리에서 유도한 SGD, Momentum, Adam
+- **B.** BatchNorm과 내부 공변량 변화(internal covariate shift) 가설
+- **C.** 암묵적 앙상블로서의 Dropout
+- **D.** Weight decay와 L2 정규화, 그리고 (미묘한) 차이
+
+### A. SGD → Momentum → Adam
+
+**Vanilla SGD**는 각 스텝의 잡음이 있는 그래디언트로 파라미터를 업데이트합니다:
+
+```
+\theta_{t+1} = \theta_t - \eta * g_t,        g_t = \nabla L_{batch}(\theta_t)
+```
+
+이는 협곡(손실이 가파른 방향) 따라 심하게 지그재그하고 평지(평평한 방향) 따라 기어갑니다. **Momentum** (Polyak 1964)은 과거 그래디언트의 지수 가중 평균을 누적하여 이를 해결합니다:
+
+```
+v_t = \mu v_{t-1} + g_t
+\theta_{t+1} = \theta_t - \eta v_t
+```
+
+`\mu \in [0, 1)`이고 보통 0.9입니다. 같은 방향의 과거 그래디언트는 강화되고, 진동 성분은 상쇄됩니다.
+
+**Adam** (Kingma & Ba 2014)은 2차 모멘트도 추적하여 모멘텀과 파라미터별 적응 스텝 크기를 결합합니다:
+
+```
+m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t                 (1차 모멘트)
+v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2               (2차 모멘트)
+hat{m}_t = m_t / (1 - \beta_1^t)                          (편향 보정)
+hat{v}_t = v_t / (1 - \beta_2^t)
+\theta_{t+1} = \theta_t - \eta * hat{m}_t / (sqrt{hat{v}_t} + \epsilon)
+```
+
+기본값 `\beta_1=0.9, \beta_2=0.999, \epsilon=10^{-8}`가 다양한 도메인에서 놀라울 정도로 잘 작동합니다. `m_0 = v_0 = 0`이 초기 추정치를 0 쪽으로 편향시키기 때문에 편향 보정이 중요합니다. `1 / sqrt{v}` 인자는 일관되게 큰 그래디언트를 가진 파라미터의 스텝을 자동으로 줄여줍니다 — 파라미터별 학습률입니다.
+
+### B. BatchNorm과 내부 공변량 변화
+
+**BatchNorm** (Ioffe & Szegedy 2015)은 각 사전 활성화(pre-activation)를 미니배치 전체에 걸쳐 표준화합니다:
+
+```
+\hat{x}_i = (x_i - \mu_B) / sqrt{\sigma_B^2 + \epsilon}
+y_i = \gamma * \hat{x}_i + \beta                          (학습 가능한 스케일과 이동)
+```
+
+원래의 정당화는 **내부 공변량 변화(internal covariate shift)** 가설이었습니다: 상류 층이 학습되면서 하류 층의 입력 분포가 계속 이동하여, 그것이 끊임없이 재적응해야 한다는 것입니다. 표준화는 그 분포를 안정적으로 유지합니다. 이후 연구(Santurkar et al. 2018)는 진짜 이점이 BatchNorm이 *손실 지형을 평활화*한다 — 그래디언트가 더 잘 동작하여 훨씬 큰 학습률을 허용한다 — 는 것이라 주장했습니다.
+
+중요한 디테일: 추론 시 배치 통계는 학습 중 계산된 이동 평균으로 대체되며, 이것이 BatchNorm이 `model.train()`과 `model.eval()` 모드에서 다르게 동작하는 이유입니다.
+
+### C. 암묵적 앙상블로서의 Dropout
+
+**Dropout** (Srivastava et al. 2014)은 학습 중 각 활성화를 i.i.d. Bernoulli(`1-p`) 변수로 마스킹합니다:
+
+```
+\tilde{h}_i = m_i * h_i / (1 - p),    m_i ~ Bernoulli(1 - p)
+```
+
+`1 / (1-p)` 재스케일링은 기댓값을 `h_i`로 유지하여, 추론 시(마스크 제거) 보정이 필요 없게 합니다. 두 가지 상호 보완적 해석:
+
+1. **앙상블 해석**: 각 순전파가 다른 서브 네트워크를 샘플링합니다. `n`개 유닛에 대해 `2^n`개 가능한 서브 네트워크가 있고, 학습은 가중치를 공유하며 그것들을 학습하며, 추론은 사실상 그것들을 평균 냅니다.
+2. **공적응(co-adaptation) 방지**: 한 유닛은 어떤 특정 다른 유닛이 존재한다고 가정할 수 없으므로, 많은 맥락에서 유용한 특징을 학습해야 합니다. 이는 손실 함수 자체에 나타나지 않는 정규화의 한 형태입니다.
+
+### D. Weight Decay vs L2 정규화
+
+이들은 적응형 옵티마이저에서는 *같지 않습니다*. 평범한 SGD에서는 일치하지만요.
+
+- **L2 정규화**는 손실에 `(\lambda / 2) ||\theta||^2`를 더합니다. 그래디언트는 `\lambda \theta` 항을 얻고, 이는 Adam의 적응 스케일링(`sqrt{v_t}`로 나눔)을 통해 흐릅니다.
+- **Weight decay** (디커플드, AdamW; Loshchilov & Hutter 2019)는 가중치를 그래디언트 *외부*에서 줄입니다: `\theta <- \theta - \eta * \lambda * \theta`가 적응 스케일링을 우회하여 별도로 적용됩니다.
+
+Adam의 경우 디커플드 weight decay (AdamW)가 손실 내 L2보다 일관되게 우수한데, 후자는 작은 `v_t`인 파라미터를 과소 정규화하고 큰 `v_t`인 파라미터를 과대 정규화하기 때문입니다.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| Momentum이 있는 SGD | `torch.optim.SGD(..., momentum=0.9)` |
+| Adam 모멘트와 편향 보정 | `torch.optim.Adam(..., betas=(0.9, 0.999))` |
+| BatchNorm 표준화 | `nn.BatchNorm1d`, `nn.BatchNorm2d` |
+| Dropout 앙상블 | `nn.Dropout(p)` |
+| 디커플드 weight decay | `torch.optim.AdamW(..., weight_decay=0.01)` |
+
+---
+
+
 ## 1. 경사 하강법 (Gradient Descent)
 
 ### 기본 원리

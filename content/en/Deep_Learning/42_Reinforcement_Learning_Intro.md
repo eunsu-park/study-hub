@@ -15,6 +15,103 @@
 
 ---
 
+## Theory & Principles
+
+Reinforcement learning differs from supervised learning in one crucial way: there is no labeled "correct action" — only a delayed scalar reward, possibly far in the future, possibly stochastic. The whole RL machinery (MDPs, value functions, policy gradients, DQN) is the toolkit for learning from this much weaker signal. This section gives the math that connects rewards to policy improvement.
+
+This section covers:
+
+- **A.** Markov Decision Process (MDP) formalism
+- **B.** Value functions and the Bellman equation
+- **C.** Q-learning and Deep Q-Networks (DQN)
+- **D.** Policy gradient and the REINFORCE estimator
+
+### A. MDP
+
+An MDP is the formal model of an RL problem:
+
+- **State space S**: what the agent observes.
+- **Action space A**: what the agent can do.
+- **Transition `P(s' | s, a)`**: dynamics of the environment.
+- **Reward `R(s, a, s')`**: immediate scalar reward.
+- **Discount `\gamma in [0, 1)`**: how much future rewards matter relative to current ones.
+
+The Markov property: `P(s_{t+1} | s_t, a_t)` depends only on the current state and action, not on history. This is what makes value functions and dynamic programming tractable.
+
+The agent's goal: maximize expected discounted sum of rewards `E[sum_t \gamma^t R_t]`. The discount factor both reflects time preference and ensures the sum is finite for infinite horizons.
+
+### B. Value Functions and Bellman
+
+Define two value functions:
+
+- **State value** `V^\pi(s) = E_\pi [sum_t \gamma^t R_t | s_0 = s]`: expected return from state `s` following policy `\pi`.
+- **Action value** `Q^\pi(s, a) = E_\pi [sum_t \gamma^t R_t | s_0 = s, a_0 = a]`: expected return from doing action `a` in state `s`, then following `\pi`.
+
+The **Bellman equation** is a recursive characterization:
+
+```
+V^\pi(s) = E_{a ~ \pi(s)} [ R + \gamma E_{s' ~ P(.|s,a)} V^\pi(s') ]
+Q^\pi(s, a) = E_{s' ~ P(.|s,a)} [ R + \gamma E_{a' ~ \pi(s')} Q^\pi(s', a') ]
+```
+
+For the optimal policy `\pi*`, the Bellman *optimality* equation:
+
+```
+Q*(s, a) = E_{s'} [ R + \gamma max_{a'} Q*(s', a') ]
+```
+
+Once you know `Q*`, the optimal policy is `\pi*(s) = argmax_a Q*(s, a)`. So learning `Q*` solves the control problem.
+
+### C. Q-Learning and DQN
+
+Q-learning iteratively updates an estimate of `Q*` using sampled transitions:
+
+```
+Q(s, a) <- Q(s, a) + \alpha * [ R + \gamma max_{a'} Q(s', a') - Q(s, a) ]
+```
+
+The bracketed term is the **TD error**: the difference between the bootstrapped target `R + \gamma max Q(s', a')` and the current estimate. Convergence to `Q*` is guaranteed under tabular settings with sufficient exploration.
+
+**DQN** (Mnih et al. 2015) parameterizes `Q(s, a; \theta)` as a deep CNN — `\theta` is the parameters, `s` is the input (e.g., game frames), output is `Q(s, .)` for each action. Training minimizes squared TD error:
+
+```
+L(\theta) = E_{(s, a, R, s')} [ (R + \gamma max_{a'} Q(s', a'; \theta-) - Q(s, a; \theta))^2 ]
+```
+
+Two critical tricks for stability:
+
+1. **Replay buffer**: store transitions, sample mini-batches uniformly. Breaks the correlation between consecutive samples.
+2. **Target network**: `\theta-` is a slow-moving copy of `\theta`, updated every N steps. Without this, the target moves with each update, causing instability.
+
+DQN was the breakthrough that scaled RL to high-dimensional inputs (Atari games from raw pixels), kicking off modern deep RL.
+
+### D. Policy Gradient
+
+An alternative to learning Q is to directly parameterize the policy `\pi_\theta(a | s)` and optimize its expected return via gradient ascent. The **policy gradient theorem**:
+
+```
+\nabla_\theta J(\theta) = E_\pi [ \sum_t \nabla_\theta log \pi_\theta(a_t | s_t) * G_t ]
+```
+
+where `G_t = \sum_{k >= t} \gamma^{k-t} R_k` is the return from time `t`. The intuition: increase the log-probability of actions that led to high return, decrease those that led to low return.
+
+This is **REINFORCE**, the simplest policy gradient. High variance (one episode = one noisy gradient estimate). Modern algorithms (PPO, A2C, A3C, TRPO) reduce variance via baselines, advantage estimation, trust regions, etc., but the core formula is the same.
+
+For complex problems, modern RL combines policy gradient with value function (actor-critic): the value function reduces variance, the policy outputs the action.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| MDP loop | `s = env.reset(); a = policy(s); s', r, done = env.step(a)` |
+| Q-network | `nn.Sequential(...)` mapping state to Q-values per action |
+| TD loss | `loss = F.mse_loss(Q(s, a), r + gamma * Q_target(s', :).max())` |
+| Replay buffer | `buffer.append((s, a, r, s')); batch = random.sample(buffer, B)` |
+| epsilon-greedy | `if random() < eps: action = random else action = argmax Q(s)` |
+
+---
+
+
 ## 1. Reinforcement Learning Overview
 
 ### Definition and Characteristics

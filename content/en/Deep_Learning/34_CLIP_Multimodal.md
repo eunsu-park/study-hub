@@ -14,6 +14,89 @@
 
 ---
 
+## Theory & Principles
+
+CLIP (Radford et al. 2021) was the first model to demonstrate that **contrastive image-text pretraining** at web scale produces a vision system that does *open-vocabulary* classification — predicting any class describable in natural language, not just classes seen at training time. The architecture is two encoders and one loss; everything else is engineering. This section explains why the loss does what it does.
+
+This section covers:
+
+- **A.** Multimodal embeddings and the shared latent space
+- **B.** The CLIP contrastive loss (symmetric InfoNCE)
+- **C.** Why temperature matters and how it is learned
+- **D.** Zero-shot classification as similarity search
+
+### A. Shared Embedding Space
+
+CLIP has two separate networks:
+
+- **Image encoder** `f_I`: a ViT or ResNet, mapping `image -> R^d`
+- **Text encoder** `f_T`: a Transformer, mapping `caption -> R^d`
+
+Both produce `d`-dimensional embeddings that live in the *same* vector space. The training objective forces semantically matched (image, caption) pairs to have nearby embeddings and unmatched pairs to be far apart.
+
+Once trained, this shared space supports:
+
+- Image search by text: find images whose embeddings are close to a query text's embedding.
+- Text search by image: the reverse.
+- Zero-shot classification: encode candidate class labels as text, encode the test image, pick the closest text.
+
+### B. The Symmetric Contrastive Loss
+
+For a batch of `N` (image, caption) pairs, compute:
+
+```
+I = f_I(images)        # (N, d), L2-normalized
+T = f_T(captions)      # (N, d), L2-normalized
+S = (I @ T.T) / tau    # (N, N) similarity matrix scaled by temperature
+```
+
+`S_{ij}` is the similarity between image `i` and caption `j`. The diagonal `S_{ii}` are positive pairs; off-diagonal are negatives.
+
+The CLIP loss is **symmetric InfoNCE**:
+
+```
+L_image = CrossEntropy(S, labels=arange(N))           # row-wise: image i should match caption i
+L_text  = CrossEntropy(S.T, labels=arange(N))         # col-wise: caption i should match image i
+L = (L_image + L_text) / 2
+```
+
+Each cross-entropy treats one direction as a softmax classification: given image `i`, which of the `N` captions matches? The labels are exactly the diagonal, so the model is asking "is your true positive the one with index `i`?" The symmetric formulation ensures both encoders update consistently — image and text should agree on what matches what.
+
+This is exactly InfoNCE in two directions, where the negatives for each example are all the other examples in the batch. Bigger batches give more negatives, which strengthens the contrastive signal — CLIP was trained at batch size 32,768.
+
+### C. Temperature: Learned, Not Fixed
+
+The temperature `\tau` controls how peaked the softmax becomes. Small `\tau` makes the softmax sharp (concentrating attention on the true positive); large `\tau` makes it flat (treating all matches as similar).
+
+CLIP makes `\tau` a *learnable parameter*: `\log \tau` is initialized to `\log(1/0.07)` and learned via gradient descent. The model finds the temperature that makes contrastive learning most effective — which turns out to require a relatively sharp softmax (`\tau \approx 0.01-0.05`).
+
+Clamping `\log \tau` to prevent it from going arbitrarily small is a common practical trick.
+
+### D. Zero-Shot Classification
+
+Once trained, classifying a test image into one of `K` classes proceeds as:
+
+1. Construct a text prompt for each class: `"a photo of a {class_name}"`. The "prompt template" matters a lot — Radford et al. found that engineered prompts (`"a photo of a small {class_name}"`, etc.) consistently outperform bare class names.
+2. Encode all `K` prompts: `T_class = f_T(prompts)`, normalize.
+3. Encode the test image: `I_test = f_I(image)`, normalize.
+4. Compute similarities `s = I_test @ T_class.T` (no temperature needed at inference).
+5. Predicted class = `argmax(s)`.
+
+This works without ever fine-tuning on the target classes — they need not have appeared in pretraining. CLIP achieved 76% on ImageNet zero-shot, comparable to a fully-supervised ResNet-50, with no ImageNet labels at all.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Dual encoder | `image_encoder`, `text_encoder` modules |
+| L2 normalization | `F.normalize(embed, dim=-1)` |
+| Similarity matrix | `logits = (image_emb @ text_emb.T) / temperature` |
+| Symmetric loss | `(F.cross_entropy(logits, labels) + F.cross_entropy(logits.T, labels)) / 2` |
+| Learned temperature | `self.logit_scale = nn.Parameter(torch.log(torch.tensor(1/0.07)))` |
+
+---
+
+
 ## 1. Multimodal Learning Overview
 
 ### What is Multimodal?

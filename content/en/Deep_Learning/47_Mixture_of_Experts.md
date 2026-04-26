@@ -22,6 +22,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — sparse vs dense models, top-k routing with load balancing, and Switch Transformer / Mixtral architectures.
+
 1. [Sparse vs Dense Models](#1-sparse-vs-dense-models)
 2. [MoE Architecture](#2-moe-architecture)
 3. [Top-k Routing and Load Balancing](#3-top-k-routing-and-load-balancing)
@@ -35,6 +37,85 @@ After completing this lesson, you will be able to:
 11. [Exercises](#11-exercises)
 
 ---
+
+## Theory & Principles
+
+Mixture-of-Experts (MoE) replaces a dense feed-forward layer with `E` smaller "expert" sub-layers and a router that picks `k` of them per token. The result: total parameter count grows by ~Ex, but per-token compute grows only by ~kx. This decoupling is the entire reason GPT-4-class models can have trillions of parameters without trillions of FLOPs per token.
+
+This section covers:
+
+- **A.** Sparse vs dense and the FLOP/parameter decoupling
+- **B.** Top-k routing with a softmax gate
+- **C.** Load balancing and the auxiliary loss
+- **D.** Switch Transformer, GShard, Mixtral
+
+### A. Sparse vs Dense
+
+A dense feed-forward layer has `~ 8 d_model^2` parameters (the standard `d -> 4d -> d` block) and uses all of them on every token. Cost per token: `O(d_model^2)` FLOPs and `O(d_model^2)` memory.
+
+An MoE replaces the FFN with `E` expert FFNs (each `d -> 4d -> d`, parameter count `8 d^2 each`) plus a router. Per token:
+
+- Router picks top-`k` experts (typically `k = 1` or `2`).
+- Token is processed by *only* the chosen experts.
+- Outputs are weighted by the router's gate values and summed.
+
+Total parameters: `E * 8 d^2` (huge). Per-token FLOPs: `k * 8 d^2` (small). With `E = 8, k = 2`: 8x more total parameters, 2x more per-token compute. The model has more *capacity* per token at almost the same compute cost.
+
+This is the trick behind giant LLMs at "modest" inference cost: train a model with billions of parameters but activate only a small fraction per token.
+
+### B. Top-k Routing
+
+The router is a small linear layer mapping each token's representation to a logit per expert:
+
+```
+logits = u @ W_gate         # (N, E)
+weights = softmax(logits)   # (N, E), but most values are wastefully small
+```
+
+Then for top-k routing:
+
+1. For each token, find the `k` experts with the largest logits.
+2. Compute softmax over only those k logits to get gate weights `g_1, ..., g_k`.
+3. Process the token through each chosen expert.
+4. Output = `sum_i g_i * expert_i(token)`.
+
+Implementation challenge: routing creates *imbalanced* loads on experts (some get many tokens, some get few), which destroys GPU efficiency (you cannot fill an expert's batch). This is what load balancing addresses.
+
+### C. Load Balancing and Auxiliary Loss
+
+If the router consistently sends most tokens to a few "popular" experts, the others are wasted parameters and the popular ones become a bottleneck. Two mechanisms force balance:
+
+1. **Capacity factor**: each expert can process at most `C = capacity_factor * (N / E)` tokens per batch. Tokens routed to a full expert are dropped (or routed to a fallback).
+2. **Auxiliary load-balancing loss**:
+   ```
+   L_aux = E * sum_i (f_i * P_i)
+   ```
+   where `f_i` is the fraction of tokens routed to expert `i` (after dispatch) and `P_i` is the average router probability for expert `i` (before dispatch). This penalizes consistently lopsided routing. Coefficient is small (~0.01) but consistently applied during training.
+
+A well-trained MoE has near-uniform expert utilization and only a small fraction of dropped tokens.
+
+### D. Switch Transformer, GShard, Mixtral
+
+**Switch Transformer** (Fedus et al. 2021): top-1 routing — each token goes to *one* expert only. Simpler, often works as well as top-2 with the right load balancing. Scaled to T5-like models with 1.6T parameters.
+
+**GShard** (Lepikhin et al. 2020): top-2 routing with extensive expert-parallelism (experts on different devices). Made MoE practical at scale.
+
+**Mixtral 8x7B** (Mistral 2023): an open-weight MoE LLM with 8 experts of 7B each, top-2 routing. Total ~47B parameters but only ~13B activated per token. Quality matches or exceeds 70B dense models at similar inference cost. Demonstrated MoE is now a real alternative to dense scaling for production LLMs.
+
+The current consensus: dense models are simpler and easier to fine-tune; MoE models are more parameter-efficient but harder to train and serve. The trade-off depends on whether you optimize for training compute (favor MoE) or deployment simplicity (favor dense).
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Router | `gate_logits = self.gate(x)` then `top_k_values, top_k_indices = gate_logits.topk(k, dim=-1)` |
+| Per-expert dispatch | Group tokens by chosen expert index, run each expert |
+| Load-balance loss | `aux_loss = E * (frac_per_expert * avg_prob_per_expert).sum()` |
+| Capacity factor | Drop tokens beyond capacity per expert |
+| Sparse activation | Zero output for non-chosen experts in the weighted sum |
+
+---
+
 
 ## 1. Sparse vs Dense Models
 

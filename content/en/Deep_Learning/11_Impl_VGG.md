@@ -17,6 +17,78 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+VGG (Simonyan & Zisserman 2014) is the architectural commitment to one principle: depth via stacked `3x3` convolutions, with everything else (kernel sizes, pooling factors, channel doubling) standardized. Implementing VGG from scratch is the cleanest way to internalize how a deep CNN's parameter budget actually distributes across layers, and to feel the pain (memory, compute) that motivated every later improvement (BN, residuals, depthwise convolutions).
+
+This section covers:
+
+- **A.** The VGG design principle: small kernels, deep stacks, regular doubling
+- **B.** Why VGG works without batch normalization (and what cost)
+- **C.** Parameter and FLOP analysis: where the cost lives
+- **D.** The VGG family (VGG-11/13/16/19) as a depth ablation
+
+### A. The VGG Principle
+
+VGG's architecture follows three rules:
+
+1. All convolutions are `3x3`, stride 1, padding 1 (output spatial size unchanged).
+2. All pooling is `2x2`, stride 2 (output spatial size halved).
+3. Channel count doubles each time spatial size halves: `64 -> 128 -> 256 -> 512 -> 512`.
+
+The conv blocks come in groups (the "block" structure): repeat `Conv -> ReLU` two or three times, then `MaxPool`. VGG-16 has the pattern `[2, 2, 3, 3, 3]` convs per block, total 13 conv layers + 3 fully-connected layers = 16 weight layers.
+
+Two stacked `3x3` convs produce a `5x5` receptive field with `2 * 9 = 18` weights per channel; one `5x5` conv produces the same RF with `25` weights. Three stacked `3x3` produce `7x7` RF with `27` weights vs `49`. VGG buys *receptive field per parameter* by going deeper rather than wider in the kernel.
+
+### B. VGG Without BatchNorm
+
+VGG predates BatchNorm by a year. It trained successfully (16-19 layers were considered very deep at the time) using:
+
+- **Careful initialization**: pretrain a shallower network, then add layers using its weights as initialization.
+- **Small learning rate** with manual schedule (drop by 10x when validation loss plateaus).
+- **Long training**: 74 epochs on ImageNet, weeks of compute.
+
+When BN was introduced, VGG-BN versions trained much more easily — fewer warm-start tricks, larger learning rates, faster convergence. Modern reimplementations almost always use BN even though the original VGG paper does not. This is a reminder that "the network architecture trained" depends on the contemporaneous toolbox; many old papers' architectures are easier to reproduce today thanks to better training infrastructure.
+
+### C. Parameter and FLOP Analysis
+
+VGG-16 has ~138 million parameters. Where do they live?
+
+- Conv layers (13 total): ~14.7 million params (~10% of total)
+- FC layers (3 total): ~123.6 million params (~90% of total)
+
+The FC layers dominate because the first one maps `7 * 7 * 512 = 25,088` activations to 4,096 units: `25,088 * 4,096 = ~103M` parameters in one matrix. Modern architectures (ResNet, DenseNet, ViT) replaced this with **global average pooling** followed by one small FC layer, dropping the FC parameter cost by 10-100x. VGG's FC dominance is the single biggest reason it has fallen out of favor for deployment.
+
+For FLOPs, the picture inverts: convolutions dominate because they apply at every spatial location. VGG-16 inference is ~15.5 GFLOPs, mostly in the conv layers, with a small contribution from the (huge) FC layers because they only run once.
+
+### D. VGG-11/13/16/19 as Depth Ablation
+
+The original VGG paper compared four depths with the same overall pattern:
+
+| Variant | Conv layers | Params | ImageNet top-5 error |
+|---------|-------------|--------|----------------------|
+| VGG-11  | 8           | 133M   | 10.4% |
+| VGG-13  | 10          | 133M   |  9.9% |
+| VGG-16  | 13          | 138M   |  8.8% |
+| VGG-19  | 16          | 144M   |  9.0% |
+
+Two takeaways:
+
+1. **Depth helps, until it doesn't.** VGG-19 was actually slightly worse than VGG-16, which the authors attributed to optimization difficulty at that depth. ResNet (the next year) addressed exactly this: residual connections let networks go to 152+ layers without optimization breakdown.
+2. **Most parameters are in the FC head**, so deeper conv stacks barely change the total parameter count. This made VGG a clean experimental design but a poor template for parameter-efficient networks.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| 3x3 conv + ReLU block | `nn.Conv2d(c, c, 3, padding=1)` followed by `nn.ReLU(inplace=True)` |
+| MaxPool downsampling | `nn.MaxPool2d(2, 2)` after each block |
+| Channel doubling | `64 -> 128 -> 256 -> 512` channel sequence |
+| FC parameter dominance | The 4096-unit FC layers with ~100M params |
+
+---
+
+
 ## Overview
 
 VGGNet finished 2nd in ILSVRC 2014, proposed by Karen Simonyan and Andrew Zisserman. The paper "Very Deep Convolutional Networks for Large-Scale Image Recognition" demonstrated that **stacking small 3x3 filters deeply** is effective.

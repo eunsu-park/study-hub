@@ -13,6 +13,83 @@
 
 ---
 
+## 이론과 원리
+
+객체 검출은 분류에 두 합병증을 추가합니다: 객체가 *어디* 있는지 예측(위치 측정)하고 *얼마나 많은지*(이미지당 가변 카운트) 예측. 모든 검출 아키텍처가 이 두 질문에 대한 하나의 답입니다. 이 섹션은 bounding box 회귀 수학, 2단계 vs 1단계 설계 분할, anchor 기반 vs anchor 자유, 그리고 DETR의 "집합 예측" 재구성을 다룹니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** Bounding box 매개변수화와 IoU
+- **B.** 2단계 검출기: 제안 + 분류 (Faster R-CNN)
+- **C.** 1단계 검출기: 밀집 예측 (YOLO, RetinaNet)
+- **D.** DETR: 이분 매칭이 있는 집합 예측으로서의 검출
+
+### A. Bounding Box와 IoU
+
+Bounding box는 `(x, y, w, h)` 또는 `(x_1, y_1, x_2, y_2)`. 표준 품질 메트릭은 **Intersection over Union (IoU)**:
+
+```
+IoU(A, B) = area(A intersection B) / area(A union B)
+```
+
+`IoU = 1`이 완벽한 겹침; `IoU = 0`이 서로소. 검출 메트릭은 IoU 임계값 사용: 예: "IoU >= 0.5에서의 평균 정밀도"(PASCAL VOC) 또는 `[0.5, 0.95]`에 걸쳐 평균(COCO mAP).
+
+Box 회귀는 일반적으로 절대 좌표가 아닌 참조 박스에 대한 *오프셋*을 예측:
+
+```
+t_x = (x - x_a) / w_a
+t_y = (y - y_a) / h_a
+t_w = log(w / w_a)
+t_h = log(h / h_a)
+```
+
+`w, h`의 로그는 회귀 스케일을 양수로 유지하고 상대 스케일 변화를 균일하게 다룸(2x나 0.5x 박스 예측이 로그 공간에서 대칭).
+
+### B. 2단계: Faster R-CNN
+
+Faster R-CNN (Ren et al. 2015)은 검출을 두 단계로 인수분해:
+
+1. **Region Proposal Network (RPN)**: 작은 CNN이 특징 맵 위를 슬라이드하며, 각 위치에서 객체가 존재하는지와 거친 박스를 예측. 이미지당 ~2000 제안 출력.
+2. **제안별 분류기**: 각 제안이 고정 크기 특징으로 RoI-Align되고, K+1 클래스(K 객체 + 배경)로 분류되고 더 빠듯한 박스로 정제.
+
+분할은 첫 단계가 클래스 무관("객체인가 아닌가")이고 두 번째 단계가 더 어려운 식별에 집중하게 함. 2단계 검출기는 높은 정확도를 달성하지만 더 느림(~5-15 FPS).
+
+### C. 1단계: YOLO, RetinaNet
+
+YOLO (Redmon et al. 2015)는 두 단계를 하나로 압축: 단일 CNN이 출력 특징 맵의 모든 공간 위치에서 박스와 클래스를 직접 예측. 제안 없음, 영역별 분류기 없음 — 단지 밀집 예측.
+
+도전: 대부분 공간 위치에 객체가 없으므로 손실이 배경에 의해 지배됨. 이것이 **focal loss** (Lin et al. 2017)이 발명된 이유 — RetinaNet의 focal loss `(1 - p_t)^\gamma * log(p_t)`가 잘 분류된 쉬운 예제를 하향 가중하여, 드문 어려운 예제가 그래디언트를 주도하게 함.
+
+YOLO는 많은 버전(v1-v8)을 거쳤으며; 각 세대가 손실, 백본, 데이터 증강을 정제. 기본 레시피(단일 밀집 예측, focal-loss 같은 재가중, 추론 시 겹치는 검출 중복 제거를 위한 NMS)는 놀랍도록 안정적.
+
+### D. DETR: 집합 예측
+
+DETR (Carion et al. 2020)은 검출을 **집합 예측**으로 재구성: 출력은 *집합*의 bounding box(고정 카디널리티 없음, NMS 없음)이며, `N`개 학습된 "객체 query"가 있는 Transformer decoder가 만듦. 각 query가 이미지 특징에 attention하고 (클래스, 박스)를 출력. 패딩 query는 "객체 없음" 클래스를 출력.
+
+학습 손실은 예측을 정답 박스에 매칭하는 것을 요구:
+
+```
+loss = min over permutations sigma of sum_i [ class_loss(pred_{sigma(i)}, gt_i) + box_loss(pred_{sigma(i)}, gt_i) ]
+```
+
+이는 최적 이분 매칭을 위한 **Hungarian 알고리즘**으로 풀림. 매칭 후, 표준 cross-entropy + L1 + GIoU 손실이 매칭된 쌍별로 적용.
+
+DETR의 우아함: anchor 없음, NMS 없음, 제안 없음. 그 초기 약점: 학습이 느림(500+ 에폭)이고 작은 객체 검출이 빈약. 후계자(Deformable DETR, DINO-DETR)가 둘 다 다룸.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| IoU | `IoU = intersection / (area_a + area_b - intersection)` |
+| Box 회귀 | anchor에 대한 `t_x, t_y, t_w, t_h` 오프셋 |
+| Faster R-CNN | RPN + RoIAlign + 분류기 헤드, 두 패스 |
+| YOLO | 밀집 예측 격자가 있는 단일 순전파 |
+| Focal loss | `(1 - p_t).pow(gamma) * F.binary_cross_entropy(...)` |
+| DETR | 객체 query + Hungarian 매칭 + 이분 손실 |
+
+---
+
+
 ## 1. 객체 탐지 개요
 
 ### 1.1 문제 정의

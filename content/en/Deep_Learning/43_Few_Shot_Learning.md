@@ -18,6 +18,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — the few-shot learning problem, meta-learning frameworks, and metric-based vs optimization-based methods.
+
 1. [The Few-Shot Problem](#1-the-few-shot-problem)
 2. [Meta-Learning Framework](#2-meta-learning-framework)
 3. [Metric-Based Methods](#3-metric-based-methods)
@@ -29,6 +31,87 @@ After completing this lesson, you will be able to:
 9. [Exercises](#9-exercises)
 
 ---
+
+## Theory & Principles
+
+Few-shot learning replaces the standard "lots of data per class" assumption with "a handful of examples per class." This requires fundamentally different machinery: meta-learning ("learning to learn") and metric learning (training an embedding space rather than a classifier). The math behind episodic training, prototypical networks, and MAML each falls out of one observation: if you only have 1-5 examples, you cannot do gradient descent the usual way.
+
+This section covers:
+
+- **A.** The few-shot problem and why standard supervised learning fails
+- **B.** Episodic training: simulating few-shot at training time
+- **C.** Prototypical Networks: nearest-neighbor in embedding space
+- **D.** MAML: meta-learn an initialization that adapts in few steps
+
+### A. Why Few-Shot Is Different
+
+Standard supervised learning assumes hundreds to thousands of examples per class. With 1-5 examples, ordinary fine-tuning collapses:
+
+- **Overfitting**: any flexible model perfectly memorizes 5 examples in moments.
+- **Initialization sensitivity**: which 5 examples you pick matters enormously.
+- **No statistical signal**: the empirical mean of 5 samples is a poor estimate of the population mean.
+
+Few-shot methods sidestep this by training on a *distribution of tasks*, not a single task. The model learns "how to be good at any few-shot classification task" rather than learning one specific classification.
+
+### B. Episodic Training
+
+The training set is reorganized into **episodes** that mimic the test condition. An N-way K-shot episode:
+
+1. Sample N classes from the training class pool.
+2. Sample K examples per class for the **support set**.
+3. Sample additional examples per class for the **query set**.
+4. Train the model to use the support set to classify the query set.
+
+The model never sees raw class labels at training time — only the relative structure of "which support example does this query match?" At test time, you sample new classes (unseen at training) and apply the same procedure. The model's job is to generalize the *meta-task* (few-shot classification), not memorize specific classes.
+
+### C. Prototypical Networks
+
+ProtoNets (Snell et al. 2017) is the cleanest few-shot algorithm:
+
+1. **Embed every example** through a shared encoder `f_\theta`.
+2. **Compute prototypes**: average the embeddings of the K support examples per class:
+   ```
+   c_n = (1 / K) sum_{x in S_n} f_\theta(x)         (prototype of class n)
+   ```
+3. **Classify queries** by nearest-prototype:
+   ```
+   p(y = n | x) = exp(-d(f_\theta(x), c_n)) / sum_{n'} exp(-d(f_\theta(x), c_{n'}))
+   ```
+   where `d` is squared Euclidean distance.
+4. **Train** by maximizing log-likelihood of the correct query labels.
+
+The whole algorithm is "learn an embedding such that same-class items cluster, then nearest-prototype the query." Surprisingly competitive with much fancier methods on standard benchmarks (Omniglot, miniImageNet).
+
+### D. MAML
+
+Model-Agnostic Meta-Learning (Finn et al. 2017) takes a different approach: meta-learn an *initialization* `\theta` such that, given any few-shot task with support set `S`, a few SGD steps on `S` produce good performance on the query set.
+
+Inner loop (per task):
+```
+\theta_i' = \theta - \alpha * \nabla_\theta L_S_i(\theta)         (after one or a few SGD steps)
+```
+
+Outer loop (across tasks):
+```
+\theta <- \theta - \beta * \nabla_\theta sum_i L_Q_i(\theta_i')
+```
+
+The outer-loop gradient is the gradient of *post-adaptation* loss with respect to the *pre-adaptation* parameters. This is a **second-order** gradient (gradient through gradient), which is expensive but tractable with autograd.
+
+The result: an initialization that is a "good starting point for many tasks at once," from which a few SGD steps adapt quickly. Conceptually general: works with any model that can be trained by SGD.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Episode sampling | `support, query = sample_episode(dataset, n_way, k_shot, n_query)` |
+| Embedding | `z = encoder(x)` for both support and query |
+| Prototype computation | `proto = z_support.view(N, K, d).mean(dim=1)` |
+| Nearest-prototype softmax | `-(z_query - proto).pow(2).sum(-1)` then softmax |
+| MAML inner loop | `fast_weights = theta - alpha * autograd.grad(loss, theta)` |
+
+---
+
 
 ## 1. The Few-Shot Problem
 

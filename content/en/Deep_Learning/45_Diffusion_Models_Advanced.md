@@ -20,6 +20,8 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — classifier-free guidance, accelerated sampling (DDIM/DPM-Solver), and latent diffusion / Stable Diffusion architecture.
+
 1. [Classifier-Free Guidance](#1-classifier-free-guidance)
 2. [DDIM and Accelerated Sampling](#2-ddim-and-accelerated-sampling)
 3. [Latent Diffusion Models](#3-latent-diffusion-models)
@@ -32,6 +34,78 @@ After completing this lesson, you will be able to:
 10. [Exercises](#10-exercises)
 
 ---
+
+## Theory & Principles
+
+The "advanced" diffusion topics — classifier-free guidance, accelerated sampling, latent diffusion, ControlNet, consistency models — are not separate techniques but a coherent set of answers to the practical questions left by basic DDPM. How do we get higher-quality, more controllable, and faster samples? Each technique modifies one piece of the DDPM pipeline (the conditioning, the sampler, the latent space, or the model) without changing the rest.
+
+This section covers:
+
+- **A.** Classifier-Free Guidance: trading diversity for fidelity
+- **B.** DDIM and DPM-Solver: from O(1000) to O(20) steps
+- **C.** Latent Diffusion: doing diffusion in a small latent space
+- **D.** Score SDE, ControlNet, and LoRA fine-tuning
+
+### A. Classifier-Free Guidance
+
+Conditional diffusion needs to predict noise given both `x_t` and a condition `c` (text prompt, class label):
+
+```
+\epsilon_\theta(x_t, t, c)
+```
+
+**Classifier guidance** (Dhariwal & Nichol 2021) used a separately-trained classifier `p(c | x_t)` to push samples toward the conditioning. **Classifier-Free Guidance (CFG)** (Ho & Salimans 2021) avoids the extra classifier by training a single network to handle both conditional and unconditional cases (with conditioning randomly dropped to a null token during training):
+
+```
+\epsilon_guided = \epsilon_\theta(x_t, t, \emptyset) + w * (\epsilon_\theta(x_t, t, c) - \epsilon_\theta(x_t, t, \emptyset))
+```
+
+`w` is the **guidance scale**. `w = 1` is unguided; `w = 0` ignores the condition; `w > 1` extrapolates *past* the conditioned prediction in the direction of the condition. Higher `w` gives more faithful (more "obeying the prompt") but less diverse samples. Stable Diffusion typically uses `w = 7-10`.
+
+This is the entire mechanism behind text-to-image fidelity: training is unchanged, but sampling extrapolates between conditional and unconditional predictions.
+
+### B. Faster Sampling
+
+DDPM's 1000 steps are way more than needed. Several methods reduce this:
+
+**DDIM** (Song et al. 2020): reformulates the reverse process as a non-Markovian process with a deterministic ODE limit. Same noise predictor, but each step takes a much larger jump along a deterministic trajectory. 50-100 steps give DDPM-comparable quality.
+
+**DPM-Solver / DPM-Solver++** (Lu et al. 2022): higher-order ODE solvers for the same reverse-diffusion ODE. 10-20 steps suffice. Default for most production diffusion models.
+
+**Consistency Models** (Song et al. 2023): train a network that maps any `(x_t, t)` directly to `x_0`, allowing 1-step or few-step sampling. Quality slightly below 50-step DDIM but 50x faster.
+
+The pattern: same trained model, different inference algorithm. This decoupling is one of the biggest practical advantages of diffusion over GANs (where the generator and the sampler are inseparable).
+
+### C. Latent Diffusion / Stable Diffusion
+
+Doing diffusion at full image resolution (e.g., 512x512x3 = 786k dimensions) is computationally extreme. **Latent Diffusion** (Rombach et al. 2022) factorizes the problem:
+
+1. Train a **VAE** to compress images into a small latent space (e.g., 64x64x4).
+2. Train **diffusion in latent space**, not pixel space.
+3. At generation: sample latent, then decode through VAE to pixels.
+
+The latent space throws away perceptually irrelevant detail (high-frequency texture) but keeps semantic structure. Diffusion in latent space is 8-32x faster than at pixel resolution, with comparable visual quality. This is what made *practical* high-resolution text-to-image generation possible — Stable Diffusion is essentially "latent diffusion + CLIP text conditioning + CFG."
+
+### D. Score SDE, ControlNet, LoRA
+
+**Score SDE view** (Song et al. 2021) unifies DDPM/DDIM/DPM-Solver under one stochastic differential equation framework. The reverse process is the same SDE; different samplers are different numerical solvers.
+
+**ControlNet** (Zhang et al. 2023) adds a copy of the encoder branch of the diffusion U-Net, conditioned on extra inputs (edge maps, pose, depth). The copy is initialized from the original encoder and connected to the decoder via zero-initialized `1x1` convs (so initial training behaves exactly like the original). Allows fine-grained spatial control of the generation.
+
+**LoRA** (Hu et al. 2021, applied to diffusion in 2023): instead of fine-tuning all parameters, learn low-rank updates `\Delta W = A B` with `A in R^{d x r}, B in R^{r x d}` and `r << d`. Only the small `(d * r)` parameters of A and B are trained; the rest are frozen. Allows fast personalization (e.g., fine-tuning Stable Diffusion to a specific subject in 100 images).
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| CFG | `eps = eps_uncond + w * (eps_cond - eps_uncond)` |
+| DDIM step | Deterministic update `x_{t-1} = ...` with no `\sigma * z` term |
+| Latent diffusion | `latent = vae_encoder(image); diffusion(latent, ...); image = vae_decoder(latent)` |
+| ControlNet branch | Copy encoder, zero-conv adapters to decoder |
+| LoRA | `W_eff = W_frozen + A @ B` where only `A, B` are trained |
+
+---
+
 
 ## 1. Classifier-Free Guidance
 

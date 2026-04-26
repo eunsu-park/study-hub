@@ -12,6 +12,76 @@
 
 ---
 
+## Theory & Principles
+
+A neural network is, mathematically, a parameterized family of functions. The lesson below shows how to *build* one in PyTorch; this section explains *why* such a thing can approximate any reasonable target function in the first place, and what the components (linear layer, activation, depth) each contribute.
+
+This section covers:
+
+- **A.** Linear layers as affine maps and what activations buy us
+- **B.** The Universal Approximation Theorem (Cybenko 1989, Hornik 1991)
+- **C.** Width vs depth: why deep networks generalize better in practice
+- **D.** Activation functions compared by saturation and gradient flow
+
+### A. Linear Layers and the Need for Nonlinearity
+
+A single linear layer computes `y = W x + b` with `W \in R^{m x n}` and `b \in R^m`. This is an **affine map**, and stacking two affine maps yields another affine map:
+
+```
+W_2 (W_1 x + b_1) + b_2 = (W_2 W_1) x + (W_2 b_1 + b_2)
+```
+
+The compositions collapse. No matter how many linear layers you stack, the result is still a single affine function — which can only model linear separating hyperplanes. The **activation function** σ breaks this collapse:
+
+```
+y = σ(W_2 σ(W_1 x + b_1) + b_2)
+```
+
+Now the composition is genuinely nonlinear and can represent decision boundaries with curvature. This is the entire reason activations exist: not for biological plausibility but to prevent the network from collapsing into a single linear map.
+
+### B. Universal Approximation Theorem
+
+**Cybenko (1989)** proved that a feedforward network with a single hidden layer of sigmoid units can approximate any continuous function on a compact subset of `R^n` to arbitrary precision, given enough hidden units. **Hornik (1991)** generalized this: any non-polynomial activation works.
+
+Formally: for any continuous `f: K -> R` on compact `K` and any `\epsilon > 0`, there exist `N`, weights `w_i, v_i`, biases `b_i`, and a non-polynomial activation `\sigma` such that:
+
+```
+| f(x) - sum_{i=1}^{N} v_i \sigma(w_i^T x + b_i) | < \epsilon  for all x in K
+```
+
+Two important caveats:
+
+1. **Existence, not construction.** The theorem says an approximating network exists; it does not tell you how to find its weights. Training (gradient descent + backprop) is the construction algorithm.
+2. **Width can blow up.** `N` may need to grow exponentially in input dimension. This is the *curse of dimensionality* — it does not forbid a solution but makes shallow solutions impractical.
+
+### C. Width vs Depth
+
+Both wide-shallow and narrow-deep networks are universal approximators in principle, but they trade off differently in practice. Several theoretical results (Telgarsky 2016, Eldan & Shamir 2016) show that there exist functions a deep network can represent with `O(n)` parameters but a shallow network needs `O(2^n)` — an *exponential* depth/width gap. Intuitively, depth lets the network reuse intermediate features hierarchically (edges → textures → parts → objects), while width forces every feature to be expressed independently. The empirical success of deep networks is consistent with this picture: depth is a strong inductive bias for compositional structure.
+
+### D. Activation Functions Compared
+
+| Activation | Formula | Range | Saturation | Gradient at saturation |
+|-----------|---------|-------|------------|------------------------|
+| Sigmoid | `1 / (1 + e^{-x})` | (0, 1) | both ends | ≤ 0.25 |
+| Tanh | `tanh(x)` | (-1, 1) | both ends | → 0 |
+| ReLU | `max(0, x)` | [0, ∞) | left only | exactly 0 |
+| Leaky ReLU | `max(αx, x)` | R | none (small α) | α |
+| GELU | `x · Φ(x)` | R | smooth left | small but nonzero |
+
+Sigmoid and tanh suffer from **vanishing gradients**: when `|x|` is large their derivative is near zero, and stacking many such layers makes backprop signals decay multiplicatively. ReLU (Glorot et al. 2011) avoided this by being non-saturating on the positive side, which is the single biggest reason deep networks became trainable beyond ~5 layers. The trade-off is **dying ReLU** — neurons stuck in the negative region produce zero gradient forever — which Leaky ReLU and GELU address with smoother left-tails.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Affine map | `nn.Linear(in_features, out_features)` |
+| Activation breaking the collapse | `nn.ReLU()`, `nn.Sigmoid()`, `nn.Tanh()` |
+| Universal approximation | The fact that an MLP with one hidden layer can fit XOR |
+| Depth as inductive bias | Stacking multiple `nn.Linear` + activation blocks |
+
+---
+
+
 ## 1. Perceptron
 
 The most basic unit of a neural network. The perceptron is loosely inspired by biological neurons: dendrites receive signals (inputs), the soma performs a weighted sum, the axon hillock applies a threshold (activation function), and the axon transmits the output. While real neurons are far more complex, this analogy captures the core idea — gather information, aggregate it, and fire (or not) based on the result.

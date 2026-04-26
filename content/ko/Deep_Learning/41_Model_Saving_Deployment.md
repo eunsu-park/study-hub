@@ -17,6 +17,86 @@
 
 ---
 
+## 이론과 원리
+
+모델 배포는 근본적으로 *학습 시 관심사를 추론 시 관심사에서 분리하는 것*입니다. 학습 시에는 유연성을 원함(Python, eager 모드, 전체 autograd). 추론 시에는 속도와 이식성을 원함(컴파일된 그래프, 고정 형상, Python 없음). 이 섹션은 각 export와 최적화 단계 아래의 수학/CS를 설명합니다: 그래프 캡처, 양자화, 그리고 속도/정확도 트레이드오프.
+
+이 섹션에서 다루는 내용:
+
+- **A.** State dict vs 전체 체크포인트
+- **B.** 그래프 캡처: TorchScript vs ONNX vs torch.export
+- **C.** 양자화: int8, 혼합 정밀도, 무엇이 희생되는가
+- **D.** 추론 최적화: 컴파일, 배치, 커널 융합
+
+### A. State Dict vs 전체 체크포인트
+
+모델을 저장하는 두 방법:
+
+```python
+# State dict (선호): 파라미터만
+torch.save(model.state_dict(), "model.pt")
+# 로딩: 모델 아키텍처 인스턴스화, 그 다음 파라미터 로딩
+model = MyModel(); model.load_state_dict(torch.load("model.pt"))
+
+# 전체 pickle (권장 안 함): 실제 Python 클래스 저장
+torch.save(model, "model.pt")
+# 로딩: 원래 클래스 정의가 사용 가능해야 함
+model = torch.load("model.pt")
+```
+
+State dict이 이김, 그것이 *미래 보호*되기 때문: 파라미터 이름과 형상이 일치하는 한 Python 클래스 구현을 변경하고, 헬퍼 메서드를 추가하는 등을 할 수 있음. Pickle된 전체 모델은 코드를 재구성하는 순간 깨짐.
+
+파라미터 외에, "체크포인트"는 보통 옵티마이저 상태(`optimizer.state_dict()`), 에폭 번호, 스케줄러 상태, 최고 검증 메트릭을 포함 — 학습을 멈춘 곳에서 *재개*하는 데 필요한 모든 것. 이것이 `torch.save({"model": ..., "opt": ..., "epoch": ...}, "ckpt.pt")`이 일반적으로 보유하는 것.
+
+### B. 그래프 캡처: TorchScript, ONNX, torch.export
+
+PyTorch는 기본적으로 *eager 모드*에서 실행: 모든 연산이 즉시 디스패치되고, Python이 루프 안에 있음. 배포의 경우 보통 *캡처된 그래프*를 원함: 최적화, 직렬화, Python 없이 실행될 수 있는 계산의 정적 표현.
+
+세 캡처 접근:
+
+- **TorchScript 트레이싱** (`torch.jit.trace`): 예제 입력에서 모델 실행, 연산 기록. 데이터 의존 제어 흐름(`if x.sum() > 0:`) 캡처할 수 없음.
+- **TorchScript 스크립팅** (`torch.jit.script`): Python 소스 코드의 정적 분석, 제어 흐름 지원하지만 Python의 부분집합만.
+- **ONNX export** (`torch.onnx.export`): 트레이스하고 크로스 프레임워크 포맷으로 export. ONNX Runtime, TensorRT, 모바일 등에서 실행 가능.
+- **torch.export** (PyTorch 2.x): 새 공식 캡처, FX 그래프 기반, 동적 형상의 더 신뢰할 수 있는 처리.
+
+캡처된 그래프가 당신이 배송하는 것. 그래프를 *만든* Python 스크립트는 추론 시 더 이상 필요 없음.
+
+### C. 양자화
+
+양자화는 파라미터 정밀도를 fp32(4바이트)에서 int8(1바이트) 또는 심지어 int4로 감소. 세 종류:
+
+- **사후 학습 정적 양자화 (PTQ)**: fp32로 학습, 그 다음 가중치와 활성화를 int8로 변환. 활성화 범위를 찾기 위해 작은 데이터셋으로 보정. 보통 0.5-2% 정확도 손실.
+- **양자화 인식 학습 (QAT)**: 학습 중 int8 효과 시뮬레이션(fake-quantize, 그 다음 fp32 업데이트). 일반적으로 PTQ 대비 정확도 손실의 대부분을 회복.
+- **동적 양자화**: 가중치를 int8로 저장, 활성화를 즉석 양자화. 더 적은 메모리 절약, 더 적은 속도 향상, 적용하기 더 쉬움.
+
+수학: int8은 256 값. fp32를 int8에 매핑하려면 `quantize(x) = round(x / scale + zero_point)`. 양자화 오차를 최소화하기 위해 텐서별 또는 채널별 스케일이 선택됨. 현대 하드웨어(NVIDIA Tensor Core, 모바일 NPU)는 fp32보다 int8에서 훨씬 빠름 — 일반적으로 2-4배 추론 속도 향상.
+
+LLM의 경우 **4비트 양자화**(GPTQ, AWQ)가 표준이 됨: fp32 대비 8배 메모리 절약과 매우 작은 품질 손실, 소비자 GPU에서 70B 파라미터 모델 가능.
+
+### D. 추론 최적화
+
+양자화 외에, 여러 기법이 추론을 가속:
+
+- **커널 융합**: 여러 op(예: LayerNorm + Linear + GELU)를 하나의 CUDA 커널로 결합, 메모리 트래픽 감소. `torch.compile()`이 자동으로 함.
+- **배치**: 여러 요청을 함께 처리. 처리량이 GPU 포화까지 배치 크기와 거의 선형으로 스케일.
+- **KV 캐싱** (자기 회귀 LM의 경우): 이전 토큰의 키/값을 캐시하여 재계산되지 않게 함. 토큰당 비용을 O(T^2)에서 O(T)로 감소.
+- **추론 디코딩**: 작은 "초안" 모델이 K 토큰 생성; 큰 모델이 그것들을 병렬로 검증. 수락되면 큰 모델 한 번 패스로 K 토큰을 얻음.
+
+프로덕션의 경우, 중요도 순서는 보통: 배치 먼저(무료), 그 다음 양자화(작은 정확도 비용), 그 다음 컴파일(무료), 그 다음 LM에 KV 캐시(필수), 그 다음 추론 디코딩 같은 고급 트릭.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| State dict 저장/로딩 | `torch.save(model.state_dict(), ...); model.load_state_dict(...)` |
+| TorchScript 트레이스 | `torch.jit.trace(model, example_input)` |
+| ONNX export | `torch.onnx.export(model, example, "model.onnx")` |
+| 동적 양자화 | `torch.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)` |
+| 컴파일 | `model = torch.compile(model)` |
+
+---
+
+
 ## 1. PyTorch 모델 저장
 
 ### state_dict 저장 (권장)

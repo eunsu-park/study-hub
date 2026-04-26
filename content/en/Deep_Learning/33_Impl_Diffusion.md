@@ -17,6 +17,83 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+The DDPM implementation is one of the most rewarding to write from scratch — the math is elegant, the code is short, and you can watch the network learn to denoise progressively. This section emphasizes implementation realities: the noise schedule's effect on sample quality, the U-Net's role and timestep conditioning, and the bookkeeping for sampling vs training.
+
+This section covers:
+
+- **A.** Noise schedule choices: linear vs cosine
+- **B.** U-Net architecture and timestep embedding
+- **C.** Training loop: timestep sampling and the noise-prediction MSE
+- **D.** Sampling: deterministic vs stochastic and DDIM as a shortcut
+
+### A. Noise Schedules
+
+The schedule `\beta_1, ..., \beta_T` controls how quickly information is destroyed. Two common choices:
+
+**Linear**: `\beta_t = \beta_{min} + (\beta_{max} - \beta_{min}) * (t / T)`. Original DDPM used `\beta_{min} = 1e-4, \beta_{max} = 0.02, T = 1000`. Simple but adds noise too quickly at the end (`x_T` becomes pure noise too fast, losing the model's ability to learn fine detail at low noise levels).
+
+**Cosine** (Nichol & Dhariwal 2021): defines `\bar\alpha_t` directly via a cosine curve:
+
+```
+\bar\alpha_t = cos^2( ((t / T) + s) / (1 + s) * pi / 2 )
+```
+
+with small `s` to avoid singularity at `t = 0`. This produces a more gradual destruction of information — `x_t` retains structure longer, and the network spends more capacity on the harder middle-noise levels. Empirically gives noticeably better samples on small images (CIFAR-10), small improvements at higher resolutions.
+
+### B. U-Net + Timestep Embedding
+
+The denoiser `\epsilon_\theta(x_t, t)` is typically a U-Net (Ronneberger et al. 2015): an encoder-decoder with skip connections from each encoder level to the matching decoder level. Three reasons U-Net suits diffusion:
+
+1. **Multi-scale features**: noise destroys structure at multiple scales; the U-Net's encoder captures them, the decoder reconstructs them.
+2. **Skip connections**: low-level details (edges, textures) flow directly from encoder to decoder, so the network does not have to compress and re-expand them through the bottleneck.
+3. **Output shape matches input**: convenient for predicting per-pixel noise.
+
+The timestep `t` is encoded as a sinusoidal embedding (same idea as Transformer positional encoding) and projected through a small MLP. The result is added or AdaGN-modulated into intermediate feature maps, telling the U-Net "you're at noise level t." Without timestep conditioning the same network would have to denoise all noise levels with the same parameters — much harder.
+
+Modern variants add self-attention layers at the lowest-resolution levels to capture long-range dependencies (essential for coherent image generation).
+
+### C. Training Loop
+
+```
+for batch in loader:
+    x_0 = batch
+    t = torch.randint(0, T, (B,))                # uniformly sample timesteps
+    noise = torch.randn_like(x_0)
+    x_t = sqrt(alpha_bar[t]) * x_0 + sqrt(1 - alpha_bar[t]) * noise
+    noise_pred = model(x_t, t)
+    loss = F.mse_loss(noise_pred, noise)
+    loss.backward(); optimizer.step()
+```
+
+Three key choices:
+
+- **Timesteps sampled uniformly**: each example contributes one noise level per step. Some variants weight timesteps non-uniformly (importance sampling) for variance reduction.
+- **MSE on the noise**, not on `x_0`: predicting noise gives clean targets at every noise level.
+- **No normalization terms or KL losses**: the simplified ELBO has them dropped.
+
+### D. Sampling: DDPM vs DDIM
+
+Standard DDPM sampling iterates `T` reverse steps, each adding a tiny bit of stochastic noise. Slow (1000 forward passes per sample on the original DDPM).
+
+**DDIM** (Song et al. 2020) reformulates the reverse process as a deterministic ODE that can be integrated with much larger steps. The math: same noise predictor, different sampler. With `T_sample = 50` instead of 1000, DDIM samples are 20x faster with comparable quality. The sampler can also interpolate between the deterministic (DDIM) and stochastic (DDPM) extremes by a single hyperparameter `\eta`.
+
+DPM-Solver, DPM-Solver++, Euler-A, etc. are all higher-order numerical solvers for the same reverse SDE/ODE, achieving good quality at 10-20 steps.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Schedule precomputation | `betas = linear_schedule(T); alphas = 1 - betas; alpha_bars = torch.cumprod(alphas, 0)` |
+| Noisy sample formula | `x_t = sqrt_ab[t] * x_0 + sqrt_omab[t] * noise` |
+| U-Net with t-embedding | The `t_emb = sinusoidal_embed(t)` added to feature maps |
+| Training MSE | `F.mse_loss(model(x_t, t), noise)` |
+| DDIM sampler | The deterministic update `x_{t-1} = ...` with no `\sigma * z` term |
+
+---
+
+
 ## Overview
 
 Denoising Diffusion Probabilistic Models (DDPM) are powerful generative models that learn to generate data by reversing a gradual noising process. "Denoising Diffusion Probabilistic Models" (Ho et al., 2020)

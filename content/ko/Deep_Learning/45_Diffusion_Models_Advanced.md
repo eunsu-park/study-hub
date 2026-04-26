@@ -20,6 +20,8 @@
 
 ## 목차
 
+참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 분류기 없는 가이던스, 가속 샘플링(DDIM/DPM-Solver), 잠재 diffusion / Stable Diffusion 아키텍처.
+
 1. [분류기 없는 가이던스](#1-분류기-없는-가이던스)
 2. [DDIM과 가속 샘플링](#2-ddim과-가속-샘플링)
 3. [잠재 확산 모델](#3-잠재-확산-모델)
@@ -32,6 +34,78 @@
 10. [연습문제](#10-연습문제)
 
 ---
+
+## 이론과 원리
+
+"고급" diffusion 주제 — 분류기 없는 가이던스, 가속 샘플링, latent diffusion, ControlNet, consistency 모델 — 은 별도 기법이 아니라 기본 DDPM이 남긴 실용적 질문에 대한 일관된 답 집합입니다. 어떻게 더 높은 품질, 더 제어 가능, 더 빠른 샘플을 얻는가? 각 기법은 나머지를 변경하지 않고 DDPM 파이프라인의 한 조각(조건화, 샘플러, 잠재 공간, 또는 모델)을 수정합니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** Classifier-Free Guidance: 다양성을 충실도와 거래
+- **B.** DDIM과 DPM-Solver: O(1000)에서 O(20) 스텝으로
+- **C.** Latent Diffusion: 작은 잠재 공간에서 diffusion
+- **D.** Score SDE, ControlNet, LoRA 파인튜닝
+
+### A. Classifier-Free Guidance
+
+조건부 diffusion은 `x_t`와 조건 `c`(텍스트 프롬프트, 클래스 라벨) 둘 다 주어졌을 때 잡음을 예측:
+
+```
+\epsilon_\theta(x_t, t, c)
+```
+
+**Classifier guidance** (Dhariwal & Nichol 2021)는 별도 학습된 분류기 `p(c | x_t)`를 사용해 샘플을 조건화 쪽으로 밀음. **Classifier-Free Guidance (CFG)** (Ho & Salimans 2021)는 조건부와 비조건부 사례 둘 다를 처리하는 단일 네트워크를 학습하여 추가 분류기를 회피(학습 중 조건화가 무작위로 null 토큰으로 떨어짐):
+
+```
+\epsilon_guided = \epsilon_\theta(x_t, t, \emptyset) + w * (\epsilon_\theta(x_t, t, c) - \epsilon_\theta(x_t, t, \emptyset))
+```
+
+`w`가 **guidance scale**. `w = 1`이 가이드 안 됨; `w = 0`이 조건 무시; `w > 1`이 조건 방향으로 조건부 예측을 *지나서* 외삽. 더 높은 `w`가 더 충실한("프롬프트에 더 복종하는") 그러나 덜 다양한 샘플을 줌. Stable Diffusion이 일반적으로 `w = 7-10` 사용.
+
+이것이 텍스트-이미지 충실도 뒤의 전체 메커니즘: 학습은 변하지 않지만, 샘플링이 조건부와 비조건부 예측 사이를 외삽.
+
+### B. 더 빠른 샘플링
+
+DDPM의 1000 스텝은 필요한 것보다 훨씬 많음. 여러 방법이 이를 감소:
+
+**DDIM** (Song et al. 2020): 결정적 ODE 극한이 있는 비-마르코프 과정으로 역방향 과정 재정식화. 같은 잡음 예측기, 하지만 각 스텝이 결정적 궤적 따라 훨씬 큰 점프 취함. 50-100 스텝이 DDPM 비교 품질을 줌.
+
+**DPM-Solver / DPM-Solver++** (Lu et al. 2022): 같은 역방향 diffusion ODE의 고차 ODE 해법. 10-20 스텝이면 충분. 대부분 프로덕션 diffusion 모델의 기본값.
+
+**Consistency Models** (Song et al. 2023): 임의의 `(x_t, t)`를 `x_0`로 직접 매핑하는 네트워크 학습, 1-스텝 또는 적은-스텝 샘플링 허용. 50-스텝 DDIM보다 약간 낮은 품질이지만 50배 빠름.
+
+패턴: 같은 학습된 모델, 다른 추론 알고리즘. 이 분리가 GAN(생성기와 샘플러가 분리 불가) 대비 diffusion의 가장 큰 실용적 이점 중 하나.
+
+### C. Latent Diffusion / Stable Diffusion
+
+전체 이미지 해상도(예: 512x512x3 = 786k 차원)에서 diffusion하는 것은 계산적으로 극단. **Latent Diffusion** (Rombach et al. 2022)은 문제를 인수분해:
+
+1. 이미지를 작은 잠재 공간으로 압축하는 **VAE** 학습 (예: 64x64x4).
+2. 픽셀 공간이 아닌 **잠재 공간에서 diffusion** 학습.
+3. 생성 시: 잠재 샘플, 그 다음 VAE를 통해 픽셀로 디코딩.
+
+잠재 공간이 지각적으로 무관한 디테일(고주파 텍스처)을 버리지만 의미 구조를 유지. 잠재 공간의 diffusion이 픽셀 해상도보다 8-32배 빠르며, 비교 가능한 시각 품질. 이것이 *실용적* 고해상도 텍스트-이미지 생성을 가능하게 한 것 — Stable Diffusion은 본질적으로 "latent diffusion + CLIP 텍스트 조건화 + CFG."
+
+### D. Score SDE, ControlNet, LoRA
+
+**Score SDE 관점** (Song et al. 2021)은 DDPM/DDIM/DPM-Solver를 하나의 확률 미분 방정식 프레임워크 하에 통합. 역방향 과정은 같은 SDE; 다른 샘플러는 다른 수치 해법.
+
+**ControlNet** (Zhang et al. 2023)은 추가 입력(에지 맵, 자세, 깊이)에 조건화된 diffusion U-Net의 encoder 분기 복사본 추가. 복사본은 원래 encoder에서 초기화되고 0-초기화된 `1x1` conv를 통해 decoder에 연결(초기 학습이 원본과 정확히 같이 동작하도록). 생성의 미세한 공간 제어 허용.
+
+**LoRA** (Hu et al. 2021, 2023년 diffusion에 적용): 모든 파라미터 파인튜닝 대신, `A in R^{d x r}, B in R^{r x d}`이고 `r << d`인 저순위 업데이트 `\Delta W = A B` 학습. A와 B의 작은 `(d * r)` 파라미터만 학습; 나머지는 동결. 빠른 개인화 허용(예: 100 이미지에서 특정 주제로 Stable Diffusion 파인튜닝).
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| CFG | `eps = eps_uncond + w * (eps_cond - eps_uncond)` |
+| DDIM 스텝 | `\sigma * z` 항 없는 결정적 업데이트 `x_{t-1} = ...` |
+| Latent diffusion | `latent = vae_encoder(image); diffusion(latent, ...); image = vae_decoder(latent)` |
+| ControlNet 분기 | encoder 복사, decoder로 zero-conv 어댑터 |
+| LoRA | `A, B`만 학습되는 `W_eff = W_frozen + A @ B` |
+
+---
+
 
 ## 1. 분류기 없는 가이던스
 

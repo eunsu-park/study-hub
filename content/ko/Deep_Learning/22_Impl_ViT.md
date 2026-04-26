@@ -17,6 +17,82 @@
 
 ---
 
+## 이론과 원리
+
+ViT를 처음부터 구현하는 것은 이전 레슨의 개념적 내용을 실제 텐서 형상으로 결정화합니다. 이 섹션은 세 가지 구현 현실을 강조합니다: patch embedding이 어떻게 `Conv2d`와 정렬되는지, 형상 오류 없이 CLS 토큰 연결과 위치 임베딩 덧셈을 처리하는 방법, 그리고 표준 하이퍼파라미터 선택(ViT-Base vs Large vs Huge).
+
+이 섹션에서 다루는 내용:
+
+- **A.** Conv2d를 통한 patch embedding 트릭
+- **B.** CLS 앞 추가와 위치 임베딩 브로드캐스팅
+- **C.** ViT 모델 크기와 너비/깊이/head 수
+- **D.** 하이브리드 모델과 Swin 너머로 가는 길
+
+### A. Conv2d를 통한 Patch Embedding
+
+`Conv2d(in_channels=3, out_channels=d_model, kernel_size=P, stride=P)`는 형상 `(B, d_model, H/P, W/P)`의 출력을 만듭니다. 이 출력의 각 공간 위치가 입력 이미지의 한 패치에 해당하며, 그 `d_model` 채널이 patch embedding입니다. 시퀀스로 reshape:
+
+```
+x = patch_conv(image)                              # (B, d, H/P, W/P)
+x = x.flatten(2).transpose(1, 2)                   # (B, N, d), N = (H/P)*(W/P)
+```
+
+이는 "`P x P` 패치를 추출하고, 각각을 `3 P^2` 벡터로 평탄화하며, 학습된 `3 P^2 x d` 행렬을 곱한다"와 수학적으로 동일합니다 — 하지만 한 번의 융합 합성곱 커널로 구현됩니다. 이유: 합성곱이 매우 최적화되어 있습니다; 동등한 `unfold + reshape + matmul`은 더 느리고 더 장황할 것입니다.
+
+### B. CLS 앞 추가와 위치 임베딩
+
+Patch embedding 후:
+
+```
+B, N, d = x.shape
+cls = self.cls_token.expand(B, -1, -1)             # (B, 1, d)
+x = torch.cat([cls, x], dim=1)                      # (B, N+1, d)
+x = x + self.pos_embed                              # 브로드캐스트: pos_embed는 (1, N+1, d)
+```
+
+두 형상 함정:
+
+1. **CLS 토큰은 형상 `(1, 1, d)`의 학습 가능 파라미터**이며 `nn.Parameter`로 등록되고, 배치 크기 메모리를 할당하지 않도록 `.expand` (`.repeat`이 아님)이 사용됩니다.
+2. **위치 임베딩은 `(1, N+1, d)`**, 배치에 브로드캐스트. CLS를 위한 `+1` 잊는 것이 가장 흔한 버그.
+
+이후, `x`는 형상 `(B, N+1, d)`을 가지며 표준 Transformer encoder로 직접 공급됩니다.
+
+### C. ViT 크기
+
+Dosovitskiy et al.은 깊이, 너비, head 수를 비례적으로 스케일하는 ViT 패밀리를 정의했습니다:
+
+| 모델     | 층 | Hidden d | MLP d | Heads | Params |
+|----------|----|----------|-------|-------|--------|
+| ViT-Base  | 12 | 768      | 3072  | 12    | 86M    |
+| ViT-Large | 24 | 1024     | 4096  | 16    | 307M   |
+| ViT-Huge  | 32 | 1280     | 5120  | 16    | 632M   |
+
+패치 크기 `P = 16`이 가장 흔함; 더 작은 패치(`P = 14` 또는 `P = 8`)은 비례적으로 더 많은 계산으로 더 높은 정확도를 위해 더 많은 토큰을 줍니다(attention의 비용이 `O(N^2)`이므로, `P/2` 패치는 16배 더 비싸집니다).
+
+"Base/Large/Huge" 명명과 대략 4배 MLP 확장은 BERT의 직접 상속 — ViT는 아키텍처적으로 이미지 패치에 적용된 BERT입니다.
+
+### D. 하이브리드 모델과 Swin
+
+순수 ViT는 한계가 있습니다: 이차 attention 비용이 고해상도 입력을 비싸게 만들고, 지역성 편향 부재가 작은 데이터셋에서 해를 끼칩니다. 두 중요한 후계자:
+
+- **Hybrid ViT**: CNN(예: ResNet-50의 초기 단계)을 사용해 특징 맵을 만들고, *그 다음* 그 맵에 ViT를 적용. CNN이 바닥 층의 지역성 편향을 제공; Transformer가 위에서 장거리 혼합을 처리.
+- **Swin Transformer (Liu et al. 2021)**: 지역 윈도 내에서만 attention을 계산하며, 크로스 윈도 정보 흐름을 허용하는 영리한 shifted-window 방식. 복잡도를 `O(N^2)`에서 `O(N * window_size)`로 감소. 밀집 예측 작업(분할, 검출)의 비전 Transformer에 대한 현재 기본값.
+
+교훈 — 아키텍처를 내재화하기 위해 순수 ViT로 시작한 다음, 프로덕션을 위해 하이브리드 또는 윈도 변형으로 이동.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| Conv를 통한 patch embed | `self.patch_embed = nn.Conv2d(3, d, P, stride=P)` |
+| `nn.Parameter`로서 CLS | `self.cls_token = nn.Parameter(torch.zeros(1, 1, d))` |
+| 위치 embed | `self.pos_embed = nn.Parameter(torch.zeros(1, N+1, d))` |
+| Transformer 스택 | `nn.TransformerEncoder(layer, num_layers)` |
+| 분류 헤드 | `x[:, 0]` (CLS) 위 `nn.Linear(d, num_classes)` |
+
+---
+
+
 ## 개요
 
 Vision Transformer (ViT)는 Transformer 아키텍처를 이미지 분류에 적용한 모델입니다. 이미지를 패치로 분할하고, 각 패치를 토큰처럼 처리합니다. "An Image is Worth 16x16 Words" (Dosovitskiy et al., 2020)

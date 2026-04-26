@@ -16,6 +16,100 @@
 
 ---
 
+## Theory & Principles
+
+Diffusion models (Sohl-Dickstein 2015, Ho et al. 2020 DDPM) are now the dominant generative approach for high-quality image synthesis. Their math looks intimidating but reduces to a simple recipe: define a Markov chain that gradually destroys data with Gaussian noise, then train a neural network to reverse one step at a time. Once the closed-form forward process is in hand, everything else follows.
+
+This section covers:
+
+- **A.** Forward process: a Markov chain with closed-form `q(x_t | x_0)`
+- **B.** Reverse process: a neural network parameterizing the denoising step
+- **C.** The simplified DDPM training objective (noise prediction)
+- **D.** Score-based view and the connection to SDEs
+
+### A. Forward Diffusion Process
+
+The forward process gradually adds Gaussian noise to data over `T` steps according to a fixed variance schedule `\beta_1, ..., \beta_T`:
+
+```
+q(x_t | x_{t-1}) = N(x_t ; sqrt(1 - \beta_t) x_{t-1}, \beta_t I)
+```
+
+By the reproductive property of Gaussians (composing many small Gaussian convolutions gives one bigger Gaussian convolution), the distribution at any time `t` given `x_0` has a closed form:
+
+```
+q(x_t | x_0) = N(x_t ; sqrt(\bar\alpha_t) x_0, (1 - \bar\alpha_t) I)
+where \alpha_t = 1 - \beta_t,  \bar\alpha_t = prod_{s=1}^{t} \alpha_s
+```
+
+This means we can sample `x_t` for any `t` directly without iterating:
+
+```
+x_t = sqrt(\bar\alpha_t) x_0 + sqrt(1 - \bar\alpha_t) \epsilon,    \epsilon ~ N(0, I)
+```
+
+For large `T` and a well-chosen schedule (linear or cosine), `\bar\alpha_T \approx 0`, so `x_T \approx N(0, I)` — pure noise. The forward process is fixed, no learning.
+
+### B. Reverse Process
+
+The reverse `q(x_{t-1} | x_t)` is intractable in general, but for small `\beta_t` it is approximately Gaussian. We parameterize it with a neural network:
+
+```
+p_\theta(x_{t-1} | x_t) = N(x_{t-1} ; \mu_\theta(x_t, t), \Sigma_\theta(x_t, t))
+```
+
+In DDPM, `\Sigma_\theta` is fixed (not learned) to either `\beta_t I` or `\tilde\beta_t I` where `\tilde\beta_t` is a known constant. Only `\mu_\theta` is learned.
+
+Generation: start with `x_T ~ N(0, I)` and iterate `x_{t-1} ~ p_\theta(x_{t-1} | x_t)` for `t = T, T-1, ..., 1`. The final `x_0` is a sample.
+
+### C. The Simplified DDPM Training Objective
+
+Maximizing ELBO on the forward/reverse processes gives a complicated loss with `T` terms. Ho et al. derived a dramatically simpler equivalent. The key reparameterization: instead of predicting `\mu_\theta`, predict the noise `\epsilon` that was added:
+
+```
+\mu_\theta(x_t, t) = (1 / sqrt(\alpha_t)) * (x_t - \beta_t / sqrt(1 - \bar\alpha_t) * \epsilon_\theta(x_t, t))
+```
+
+The training loss reduces to:
+
+```
+L_simple = E_{t, x_0, \epsilon} [|| \epsilon - \epsilon_\theta(sqrt(\bar\alpha_t) x_0 + sqrt(1 - \bar\alpha_t) \epsilon, t) ||^2]
+```
+
+That is: pick a random timestep `t`, add noise to a real image to get `x_t`, ask the network to predict the noise that was added, take MSE. Three crucial facts about this loss:
+
+- **No KL terms remain** (in the simplified version they cancel against constants).
+- **The network is just a denoiser** — it predicts what noise to remove, not what image to produce.
+- **MSE is the entire loss function.** No adversarial dynamics, no variational lower bounds to optimize. This is why diffusion models train *much* more stably than GANs.
+
+The network architecture is typically a U-Net with self-attention; the timestep `t` is fed in as a sinusoidal embedding added to internal feature maps.
+
+### D. Score-Based View and SDEs
+
+Song & Ermon (2019) showed an equivalent formulation: train a network to estimate the **score** `\nabla_x log p_t(x)` of the noisy data distribution. Sampling is then Langevin-style — repeatedly nudge in the direction of the score plus some Gaussian noise.
+
+In the continuous-time limit (Song et al. 2021), the forward and reverse processes become **stochastic differential equations**:
+
+```
+forward:  dx = f(x, t) dt + g(t) dW
+reverse:  dx = (f(x, t) - g(t)^2 \nabla_x log p_t(x)) dt + g(t) d\bar W
+```
+
+This SDE perspective unified DDPM, score-matching, and ODE-based sampling under one framework, and led to faster samplers (DPM-Solver, DDIM) by treating the reverse SDE as a numerical integration problem.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Forward sampling | `x_t = sqrt(alpha_bar[t]) * x_0 + sqrt(1 - alpha_bar[t]) * noise` |
+| U-Net noise predictor | `eps_pred = unet(x_t, t)` |
+| Training loss | `F.mse_loss(eps_pred, noise)` |
+| Reverse sampling | `x_{t-1} = (x_t - beta_t / sqrt(1 - alpha_bar) * eps_pred) / sqrt(alpha_t) + sigma * z` |
+| Schedule | linear `beta_t = beta_min + (beta_max - beta_min) * t/T` or cosine |
+
+---
+
+
 ## 1. Diffusion Process Overview
 
 ### Core Idea

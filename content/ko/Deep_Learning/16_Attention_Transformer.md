@@ -13,6 +13,84 @@
 
 ---
 
+## 이론과 원리
+
+Transformer (Vaswani et al. 2017)는 약 2년 안에 NLP에서 전체 RNN 패밀리를 대체했습니다. 그 이유는 attention이 점화식보다 "더 똑똑한" 메커니즘이라서가 아닙니다 — attention이 시퀀스 축에 걸친 완전한 병렬성을 가능하게 하면서 장거리 의존성 모델링을 보존(그리고 개선)하기 때문입니다. 이 섹션은 scaled dot-product attention의 수학, `sqrt(d_k)` 정규화가 선택사항이 아닌 이유, 그리고 multi-head가 단일 attention head를 넘어 무엇을 사는지 설명합니다.
+
+이 섹션에서 다루는 내용:
+
+- **A.** 부드러운, 내용 주소화된 룩업으로서의 attention
+- **B.** Query/key/value에서 유도된 scaled dot-product attention
+- **C.** `sqrt(d_k)`가 중요한 이유: 분산 보존
+- **D.** 부분공간 분해로서의 multi-head attention
+
+### A. 부드러운 룩업으로서의 Attention
+
+해시 테이블은 하드 룩업입니다: `lookup(query) -> value`이며 `query`가 키와 정확히 일치해야 합니다. Attention은 이를 실수값 벡터에 대한 *부드러운* 룩업으로 일반화합니다:
+
+```
+attention(query, keys, values) = sum_i softmax(score(query, k_i)) * v_i
+```
+
+출력은 모든 값의 볼록 결합이며, 각 키가 query와 얼마나 잘 일치하는지로 가중됩니다. `score`가 한 키에 더 날카롭게 정점일수록 attention은 하드 룩업에 가까워지고; 평탄해지면 평균에 가까워집니다. 메커니즘이 완전히 미분 가능하기 때문에, 신경망 안에서 종단간(end-to-end) 학습될 수 있습니다.
+
+이 관점은 Transformer 층이 무엇을 하는지도 명확하게 합니다: 각 토큰이 query를 발행하고, 모든 다른 토큰이 key+value 쌍을 제공하며, 층은 각 토큰을 모든 값의 가중 혼합으로 다시 씁니다.
+
+### B. Scaled Dot-Product Attention
+
+Vaswani et al.은 가능한 가장 단순한 점수 함수를 선택했습니다: scaled dot product. Query, key, value를 행렬로 묶음 `Q in R^{n x d_k}`, `K in R^{n x d_k}`, `V in R^{n x d_v}`. 그러면:
+
+```
+Attention(Q, K, V) = softmax( Q K^T / sqrt(d_k) ) V
+```
+
+차원:
+
+- `Q K^T`는 `n x n`, **attention 점수 행렬**: `(QK^T)_{ij}`는 query `i`가 key `j`와 얼마나 강하게 일치하는지 측정.
+- 행 방향 `softmax(... / sqrt(d_k))`이 **attention 가중치**를 만들며, 각 행이 1로 합쳐짐.
+- `V`를 곱하면 query별 출력: 값 벡터의 가중 합.
+
+전체 계산은 두 번의 행렬 곱과 softmax — GPU에 완벽히 적합하며, (결정적으로) 모든 `n` query 위치에 걸쳐 병렬화 가능. RNN은 본질적으로 순차적; attention은 본질적으로 병렬.
+
+### C. `sqrt(d_k)`인 이유: 분산 보존
+
+`q`와 `k`가 평균 0, 분산 1의 i.i.d. 성분을 가진 벡터라고 가정합니다. 그들의 내적은:
+
+```
+q . k = sum_{i=1}^{d_k} q_i k_i
+```
+
+각 항이 평균 0, 분산 1이므로 `Var(q . k) = d_k` (독립성)이고 `std(q . k) = sqrt(d_k)`. 재스케일링 없이는 attention 점수가 `d_k`에 따라 자라는 표준편차를 가집니다. 일반적인 `d_k = 64`의 경우, 점수가 쉽게 8 이상의 크기에 도달할 수 있습니다.
+
+이제 그것들을 softmax에 넣어보세요: `softmax([8, 0, 0]) ≈ [0.9997, 0.00015, 0.00015]`. Softmax가 가장 큰 점수에서 거의 완전히 포화됩니다. 더 나쁜 것은, 그 그래디언트가 거의 0에 가까워집니다 — softmax 도함수는 `p_i (1 - p_i)`를 포함하며, 이는 `p_i \approx 1`일 때 사라집니다. **포화된 softmax는 죽은 그래디언트를 의미**하며, 이는 attention 층이 학습할 수 없음을 의미합니다.
+
+`sqrt(d_k)`로 나누면 점수가 `d_k`와 무관하게 `O(1)` 표준편차로 다시 스케일되어, softmax를 비포화 영역에 유지합니다. 이는 휴리스틱이 아닙니다; 이는 원본 논문이 정확히 이 분석을 통해 발견한 *필수* 설계 선택입니다.
+
+### D. Multi-Head: 부분공간 분해
+
+단일 head attention은 시퀀스의 모든 관계를 하나의 attention 패턴에 강제합니다. Multi-head attention은 `h`개 병렬 attention 층을 실행하며, 각각이 *투영된 부분공간*에서 작동:
+
+```
+head_i = Attention(Q W_i^Q, K W_i^K, V W_i^V)        W_i^Q, W_i^K in R^{d_model x d_k} 등
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h) W^O
+```
+
+각 head는 입력의 다른 `d_k`-차원 투영을 봅니다. `h` head와 `d_k = d_model / h`로, 총 파라미터 수는 전체 차원의 한 head와 같습니다 — multi-head 구조는 더 많은 파라미터를 추가하는 게 아니라 하나의 큰 attention을 `h`개의 작은 전문화된 것으로 *인수분해*하는 방법입니다.
+
+실험적으로, 다른 head들은 다른 관계를 학습합니다: 일부는 구문 의존성에, 일부는 공참조(coreference)에, 일부는 위치 상대 패턴에 attention합니다. 이 모두를 단일 attention 패턴에 강제하는 것은 별도 head로 공존하게 두는 것보다 엄격히 덜 표현력 있습니다.
+
+### 이론에서 아래 코드로
+
+| 이론 개념 | 본 레슨의 코드 구성 |
+|-----------|---------------------|
+| 부드러운 룩업 | `softmax(QK^T) V` |
+| Scaled dot product | Attention 공식의 `/ sqrt(d_k)` 제수 |
+| 포화 softmax 회피 | `/ sqrt(d_k)`를 제거하면 학습이 깨지는 이유 |
+| Multi-head 부분공간 | `Q.view(B, n, h, d_k).transpose(1, 2)` 후 head별 attention |
+
+---
+
+
 ## 1. Attention의 필요성
 
 ### Seq2Seq의 한계

@@ -17,6 +17,82 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+The DCGAN implementation builds on the GAN theory from the previous lesson. This section focuses on the *implementation* truths: the architectural rules that make GAN training work in practice, the FID metric's mathematical content, and what each WGAN/WGAN-GP code change is actually computing.
+
+This section covers:
+
+- **A.** DCGAN architectural guidelines and why they exist
+- **B.** Strided / transposed convolutions for downsampling and upsampling
+- **C.** FID: comparing distributions via Inception features
+- **D.** WGAN-GP: where the gradient penalty term comes from
+
+### A. DCGAN Architectural Guidelines
+
+Radford et al. (2016) cataloged a handful of architectural rules that empirically make convolutional GANs train stably:
+
+1. **No fully-connected layers**, except input projection in G and output classification in D.
+2. **Use BatchNorm in both G and D**, except at G's output layer and D's input layer.
+3. **In G, replace pooling with strided transposed convolution.** In D, replace pooling with strided convolution. Lets the network learn its own up/down sampling.
+4. **ReLU in G (except output Tanh), Leaky ReLU in D.** Tanh output keeps generator output in `[-1, 1]` matching the normalized image range; Leaky ReLU avoids dying-ReLU in the discriminator under early-training conditions.
+5. **No fully connected hidden layers** anywhere.
+
+These are not derivations; they are consolidated empirical wisdom. Understanding *why* each helps tells you when you can break the rules — for example, BatchNorm in D conflicts with WGAN-GP (because gradient penalty is computed on individual examples), so WGAN-GP uses LayerNorm or no norm there.
+
+### B. Strided and Transposed Convolutions
+
+For downsampling in D: `Conv2d(in, out, kernel=4, stride=2, padding=1)` halves spatial size. For upsampling in G: `ConvTranspose2d(in, out, kernel=4, stride=2, padding=1)` doubles it. Output size formulas:
+
+```
+Strided conv:        H_out = floor((H_in + 2P - K) / S) + 1
+Transposed conv:     H_out = (H_in - 1) * S - 2P + K
+```
+
+A common DCGAN pattern: G upsamples from a `1x1` latent code through `4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64` via a chain of transposed convs; D mirrors this with strided convs going `64 -> 32 -> 16 -> 8 -> 4 -> 1`.
+
+The kernel-4 / stride-2 / padding-1 choice avoids "checkerboard artifacts" that plague kernel-3 / stride-2 transposed convs (because stride doesn't divide kernel size cleanly).
+
+### C. Fréchet Inception Distance (FID)
+
+FID measures GAN output quality without human evaluation:
+
+1. Run a pretrained Inception-v3 on real images and on generated images, extracting the 2048-d feature vector from the final pooling layer.
+2. Fit a multivariate Gaussian to each set's features: `N(\mu_real, \Sigma_real)` and `N(\mu_gen, \Sigma_gen)`.
+3. Compute the **Fréchet distance** between the two Gaussians:
+
+```
+FID = ||\mu_real - \mu_gen||^2 + Tr(\Sigma_real + \Sigma_gen - 2 (\Sigma_real \Sigma_gen)^{1/2})
+```
+
+Lower FID = generated features distribute more like real ones. Reasonable scale: FID < 10 is excellent, > 50 is poor for typical image datasets.
+
+The choice of Inception features is somewhat arbitrary but standardized across the literature. A common criticism: Inception was trained on ImageNet, so FID is biased toward ImageNet-like features. For non-natural images (medical, satellite), domain-specific feature extractors give more meaningful comparisons.
+
+### D. Gradient Penalty Derivation
+
+WGAN-GP enforces the 1-Lipschitz constraint on the critic by penalizing gradient magnitudes:
+
+```
+L_GP = E_{\hat{x}} [(||\nabla_{\hat{x}} D(\hat{x})||_2 - 1)^2]
+```
+
+`\hat{x}` is sampled by interpolating between real and generated samples: `\hat{x} = \alpha x + (1 - \alpha) G(z)` with `\alpha ~ U[0, 1]`. The penalty pushes the gradient norm toward 1 (not just below 1) because the optimal Lipschitz function for the Wasserstein dual has gradient norm exactly 1 almost everywhere.
+
+Implementation note: `torch.autograd.grad(D(x_hat).sum(), x_hat, create_graph=True)` gives the per-input gradient; `create_graph=True` is essential because we need to backpropagate through this gradient when updating D.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| DCGAN G | `ConvTranspose2d` chain with BN + ReLU, Tanh output |
+| DCGAN D | `Conv2d` chain with stride 2 + LeakyReLU, sigmoid (or none for WGAN) |
+| FID | `pytorch_fid` package or manual `mu`/`sigma` computation |
+| Gradient penalty | `(grads.norm(2, dim=1) - 1).pow(2).mean()` |
+
+---
+
+
 ## Overview
 
 Generative Adversarial Networks (GAN) learn to generate realistic data through an adversarial game between a Generator and a Discriminator. "Generative Adversarial Networks" (Goodfellow et al., 2014)

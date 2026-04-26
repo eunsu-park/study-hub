@@ -17,6 +17,79 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+ResNet (He et al. 2015) is, by parameter count of citations, the most influential CNN architecture ever published. Its central idea — the **residual connection** — is one line of code, but the math behind why that line lets a 152-layer network train at all (when a 56-layer plain network *fails*) is worth a careful look. Once you see the gradient picture, you will recognize residual connections everywhere: U-Net, Transformer, BERT, GPT, Stable Diffusion all use them.
+
+This section covers:
+
+- **A.** The degradation problem: why deep plain networks fail
+- **B.** Residual connections as identity-mapping reparameterization
+- **C.** Why residuals fix the vanishing gradient
+- **D.** Bottleneck blocks and the path to ResNet-50/101/152
+
+### A. The Degradation Problem
+
+Before ResNet, the conventional wisdom was that very deep networks should at worst match shallower ones — you can always set extra layers to identity. Empirically, this *did not happen*. He et al. plotted training error of plain networks at 20 vs 56 layers; the 56-layer net had *higher training error*. This was not overfitting (training error was higher, not just test error) and not vanishing gradients alone (BatchNorm should have fixed those). They called this the **degradation problem**: deeper networks are *harder to optimize*, full stop.
+
+The fix had to be architectural, not algorithmic.
+
+### B. Residual Connections
+
+A residual block reparameterizes the layer's function. Instead of computing `H(x)` directly, it computes a *residual* `F(x) = H(x) - x` and adds back the input:
+
+```
+y = F(x; W) + x                  (basic residual block)
+```
+
+The skip connection (also called shortcut or identity mapping) is just an addition — no parameters, no computation. The key insight is that *if the optimal function near a layer is close to identity*, the residual `F(x)` is close to zero, and zero is much easier for SGD to learn than the actual identity matrix. Setting the conv weights to zero gives `y = x` exactly, which is a valid starting point that does no harm. So you can stack many such blocks safely, and each one only has to learn whatever *correction* on top of identity is needed.
+
+When stride or channel count changes, the shortcut needs a `1x1` conv to match shapes. This is the only case where the shortcut has parameters.
+
+### C. Why Residuals Fix Vanishing Gradients
+
+The backward pass through a residual block is equally illuminating. Let `y = F(x) + x`. Then:
+
+```
+dL/dx = dL/dy * d/dx (F(x) + x) = dL/dy * (I + dF/dx)
+```
+
+The `I` term ensures that *gradients always have a direct path back*, regardless of how `F` behaves. If `F` is poorly conditioned and `dF/dx` is small or nearly singular, `dL/dx` still gets `dL/dy` directly through the identity. With L stacked residual blocks:
+
+```
+dL/dx_0 = dL/dx_L * prod_{l=1}^{L} (I + dF_l/dx_{l-1})
+        ≈ dL/dx_L * (I + sum_l dF_l/dx_{l-1})       (when each dF_l is small)
+```
+
+The product expands into a sum of terms — gradient information from any depth can reach the bottom. Plain networks have only the multiplicative product of Jacobians, which decays exponentially with depth. This is why ResNet-152 trains and a plain-152 does not.
+
+### D. Bottleneck Blocks
+
+For deeper ResNets (50+), the basic block (`3x3 -> 3x3`) becomes too expensive. The **bottleneck block** factorizes:
+
+```
+1x1 conv (reduce channels: e.g., 256 -> 64)
+3x3 conv (operate on reduced channels: 64 -> 64)
+1x1 conv (restore channels: 64 -> 256)
++ residual
+```
+
+The `1x1` convs do channel mixing cheaply; the `3x3` does spatial work in the smaller channel space. Total parameters drop from `2 * 9 * 256^2 = 1.18M` for two `3x3` convs to `(256 * 64 + 9 * 64^2 + 64 * 256) = 69k` for the bottleneck — almost 17x fewer parameters for the same input/output dimensions.
+
+ResNet-50, 101, 152 all use bottleneck blocks. The number after the dash is the total weight-layer count: 50 = 1 stem + 16 bottleneck blocks * 3 layers each + 1 FC, etc.
+
+### From Theory to the Code Below
+
+| Theory concept | Code construct in this lesson |
+|----------------|-------------------------------|
+| Residual block `y = F(x) + x` | `out = self.conv2(self.conv1(x)) + x` |
+| Shortcut with shape change | `1x1` conv in `self.shortcut` when stride or channels differ |
+| Identity-mapping init benefit | The fact that `BasicBlock` works even with all-zero conv init |
+| Bottleneck factorization | The `Conv2d(c, c//4, 1) -> Conv2d(c//4, c//4, 3) -> Conv2d(c//4, c, 1)` pattern |
+
+---
+
+
 ## Overview
 
 ResNet (Residual Network) won 1st place in ILSVRC 2015 and is a revolutionary model. Kaiming He et al. proposed **Skip Connections (Residual Connections)** that enable training networks with hundreds of layers.
