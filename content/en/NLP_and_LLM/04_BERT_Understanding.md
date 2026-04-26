@@ -9,6 +9,115 @@
 
 ---
 
+## Theory & Principles
+
+BERT (Bidirectional Encoder Representations from Transformers, Devlin et al., 2018) is a Transformer **encoder** stack pre-trained on two self-supervised objectives. Its central insight: by training a bidirectional model with **masked language modeling (MLM)**, you obtain contextual representations that beat any prior unidirectional language model on understanding tasks. Everything in BERT — input format, special tokens, fine-tuning recipes — exists to make MLM work and to make the resulting encoder reusable.
+
+This section covers:
+
+- **(A) Why bidirectionality** — the fundamental limitation of left-to-right LMs that BERT solves.
+- **(B) Masked Language Modeling (MLM)** — the loss, the 80/10/10 strategy, and what it represents in information-theoretic terms.
+- **(C) Next Sentence Prediction (NSP)** — original motivation, why later models (RoBERTa, ALBERT) dropped it.
+- **(D) Input representation** — token + segment + position embeddings, the role of `[CLS]` and `[SEP]`.
+- **(E) Fine-tuning patterns** — how to attach task heads to a pre-trained encoder.
+- **(F) BERT variants and their design changes** — RoBERTa, ALBERT, DistilBERT, ELECTRA.
+
+### A. Why Bidirectionality
+
+A standard autoregressive LM models `p(w_t | w_{<t})` and is trained by predicting each token from its left context. The hidden state at position `t` only depends on tokens 1...`t`. For *understanding* tasks (classification, NER, QA), the right context is just as informative — knowing the word that follows helps disambiguate the word at `t`.
+
+A naïve fix — train two LMs, one left-to-right and one right-to-left — has been tried (ELMo). But concatenating their hidden states is "shallow" bidirectionality: the left-to-right model never sees the right context *while computing* its representation, and vice versa. **True bidirectionality requires the model to attend to both sides simultaneously while computing every layer.** That breaks autoregressive training: if the model can attend to `w_t` itself when computing the hidden state at `t`, predicting `w_t` is trivial (it would just copy).
+
+MLM solves this by predicting a *masked* token from the surrounding context — the model never sees the answer at the position it must predict, so bidirectional attention becomes safe.
+
+### B. Masked Language Modeling (MLM)
+
+**B.1 The loss.** Choose 15% of tokens at random. Replace them with the `[MASK]` token (most of the time), and train the model to predict the original token at each masked position:
+
+```
+L_MLM = − Σ_{i ∈ M} log p(w_i | w̃)
+```
+
+where `M` is the set of masked positions and `w̃` is the corrupted input.
+
+**B.2 The 80/10/10 strategy.** Of the 15% selected positions:
+
+- 80% are replaced with `[MASK]`.
+- 10% are replaced with a random vocabulary token.
+- 10% are kept unchanged.
+
+Why not always `[MASK]`? Because `[MASK]` never appears at fine-tuning or inference time. If the model only ever sees `[MASK]` at predicted positions during pre-training, it learns to use the presence of `[MASK]` as a signal of "I should produce a contextual prediction here." A model fine-tuned on raw text without `[MASK]` tokens would have no signal to engage that machinery. The 10/10 splits force the model to maintain a strong contextual representation for *every* position, not only for `[MASK]` positions.
+
+**B.3 Information-theoretic reading.** MLM is essentially the *denoising objective* of a denoising autoencoder, but at the token level. Each masked token's loss `−log p(w_i | context)` upper-bounds the conditional entropy `H(w_i | context)`. Minimizing the loss minimizes the model's uncertainty about masked tokens given context — equivalently, maximizes the mutual information between context and target. The encoder is forced to compress all context information necessary to recover any one masked token.
+
+**B.4 Why 15%?** A trade-off: too low and few training signals per sequence; too high and the context is so corrupted the task becomes unsolvable. 15% empirically maximizes useful signal. (RoBERTa later showed dynamic masking — different masks each epoch — beats static masking, increasing effective training signal further.)
+
+### C. Next Sentence Prediction (NSP)
+
+**C.1 The objective.** Given two sentences A and B, predict whether B is the actual next sentence following A in the corpus, or a randomly sampled different sentence. Trained as a binary classification head on the `[CLS]` token's hidden state.
+
+**C.2 Why it was added.** Sentence-pair tasks (NLI, QA) were a major target. The hypothesis was that NSP would teach the model inter-sentence relationships.
+
+**C.3 Why it was dropped.** RoBERTa (Liu et al., 2019) ablated NSP and found that removing it *improved* downstream performance on every task tested. ALBERT replaced it with sentence-order prediction (SOP). The probable cause: NSP is too easy — sentences from different documents are easy to distinguish on topic alone, so the model learns topic classification rather than inter-sentence reasoning. Modern BERT-family models (RoBERTa, DeBERTa, etc.) typically drop NSP entirely.
+
+### D. Input Representation
+
+The input embedding for token `i` is the sum of three embeddings:
+
+```
+E_i = E_token(w_i) + E_segment(s_i) + E_position(i)
+```
+
+- **Token embedding**: WordPiece-tokenized lookup, 30K vocab.
+- **Segment embedding**: `0` for sentence A, `1` for sentence B (used for sentence-pair tasks).
+- **Position embedding**: learned absolute position (max length 512).
+
+**Special tokens:**
+
+- `[CLS]` at position 0. Its final-layer hidden state serves as the sentence-level representation for classification.
+- `[SEP]` separates sentence A from sentence B (also marks end of single sentence).
+- `[MASK]` for MLM training.
+- `[PAD]` for padding.
+- `[UNK]` for tokens absent from the WordPiece vocabulary.
+
+**The `[CLS]` pooling trick.** Why a special "summary" token rather than averaging hidden states? During MLM pre-training, `[CLS]` is the only token that consistently appears in every sequence with no specific predictive task — its hidden state is free to specialize as a global summary. NSP further trains `[CLS]` to encode inter-sentence relationships. After pre-training, fine-tuning a single linear layer on `[CLS]` is enough for classification.
+
+### E. Fine-tuning Patterns
+
+The encoder is the same; only the head and the input format change:
+
+| Task type | Head | Input format |
+|-----------|------|--------------|
+| Sentence classification | Linear on `[CLS]` | `[CLS] sentence [SEP]` |
+| Sentence-pair classification (NLI) | Linear on `[CLS]` | `[CLS] sentA [SEP] sentB [SEP]` |
+| Token classification (NER) | Linear on each token | `[CLS] tokens [SEP]` |
+| Extractive QA (SQuAD) | Two linears (start, end) on each token | `[CLS] question [SEP] passage [SEP]` |
+| Sentence similarity | `[CLS]` + cosine, or Sentence-BERT siamese | both encodings |
+
+Fine-tuning typically uses lower learning rates (`2e-5` to `5e-5`) than from-scratch training (`1e-3`), with 2-4 epochs over the task data. Higher rates damage the pre-trained weights (catastrophic forgetting); fewer epochs suffice because the encoder already has strong general features.
+
+### F. BERT Variants and Their Design Changes
+
+- **RoBERTa**: drops NSP, uses dynamic masking, trains 10× longer on more data, larger batches. Same architecture, much better downstream performance — proves the original BERT was *under*-trained.
+- **ALBERT**: factorizes the embedding matrix (`V × d` → `V × e + e × d` with `e << d`) and shares parameters across layers. Drastically reduces parameter count without losing accuracy.
+- **DistilBERT**: 40% fewer parameters via knowledge distillation from BERT-base; retains 97% of GLUE performance at 60% the speed.
+- **ELECTRA**: replaces MLM with replaced-token detection (RTD). A small generator produces fake tokens, the main discriminator predicts which tokens are real vs fake. Every token contributes a training signal (vs MLM's 15%), giving 4× more sample-efficient pre-training.
+- **DeBERTa**: disentangled attention (separate content and position projections) plus enhanced mask decoder. Currently top of many GLUE leaderboards.
+- **Domain BERTs**: BioBERT (biomedical), SciBERT (scientific), FinBERT (financial), KoBERT/KR-BERT (Korean) — same architecture, domain-specific pre-training corpus.
+
+### From Theory to the Functions Below
+
+- §1 (overview) — situates the encoder block of §A in the BERT context.
+- §2 (input representation) — implements §D's three-embedding sum and special tokens.
+- §3 (pre-training objectives) — codes both §B (MLM) and §C (NSP), with the 80/10/10 mask strategy from §B.2.
+- §4 (architecture) — assembles the encoder stack discussed in §A and §E.
+- §5 (fine-tuning patterns) — implements the table in §E for classification, NER, and QA.
+- §6 (BERT variants) — surveys §F design changes from RoBERTa through ELECTRA.
+- §7 (HuggingFace BERT) — wires the theory above to `BertModel`, `BertForSequenceClassification`, etc.
+- §8 (input formats) — concrete examples of the §D special-token layout for each task type.
+
+---
+
 ## 1. BERT Overview
 
 ### Bidirectional Encoder Representations from Transformers

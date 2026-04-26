@@ -9,6 +9,120 @@
 
 ---
 
+## Theory & Principles
+
+A 70B-parameter LLM at fp16 occupies 140 GB — too large for most GPUs and slow to compute. **Quantization** trades a small amount of accuracy for a large reduction in memory and a speedup in compute, by representing weights (and sometimes activations) in fewer bits than the original 16 or 32. The trick is doing this *without* destroying the model — bare-naked rounding to INT4 fails, while well-designed quantization schemes preserve >99% of the original quality at 1/4 the memory.
+
+This section covers:
+
+- **(A) The basic math** — linear quantization, scale, zero-point, the affine vs symmetric distinction.
+- **(B) Quantization granularity** — per-tensor vs per-channel vs per-group, and why granularity matters.
+- **(C) Post-Training Quantization (PTQ) vs Quantization-Aware Training (QAT)** — the two regimes.
+- **(D) GPTQ** — second-order error correction via Hessian-based weight updates.
+- **(E) AWQ (Activation-aware Weight Quantization)** — protecting weights that interact with large activations.
+- **(F) NF4 and bitsandbytes** — quantile-based 4-bit codes optimized for normally-distributed weights, plus QLoRA's double-quantization.
+- **(G) Quantizing activations** — INT8 SmoothQuant, FP8, and the harder problem of activation outliers.
+
+### A. Basic Quantization Math
+
+The fundamental operation: map an fp32 value `x` to an integer `q` and a scale `s` so that `x ≈ s · q`.
+
+**A.1 Symmetric quantization** (used for weights): pick a range `[-α, α]`, scale `s = α / (2^{b-1} − 1)`. Map `x → q = round(x / s)`, clamp to `[-2^{b-1}, 2^{b-1} − 1]`. Dequantize as `x̂ = s · q`. Symmetric around 0; works well when the distribution is centered (typical for trained weights).
+
+**A.2 Asymmetric (affine) quantization** (used for activations): also stores a zero-point `z`. `q = round(x / s) + z`, dequant `x̂ = s · (q − z)`. Useful when the distribution is skewed (e.g., post-ReLU activations are non-negative).
+
+**A.3 Quantization error.** The error is `x − x̂ = x − s · round(x/s)` — bounded by `s/2` per element (uniform rounding error). The total error per layer scales with the layer's input magnitudes; matrix multiplication with quantized weights produces output error that depends on both weight error and the input vector's magnitude.
+
+For `b = 8` bits (INT8), `s` is small enough that the relative error `s / α ≈ 1/127` is negligible. For `b = 4` (INT4), `s / α ≈ 1/7` — non-negligible, requires care.
+
+### B. Quantization Granularity
+
+A single `(s, z)` per *tensor* is the coarsest. Per-tensor quantization is fast but loses accuracy when different rows/columns have very different value ranges.
+
+- **Per-tensor**: one `(s, z)` for the whole weight matrix. Smallest metadata, lowest accuracy.
+- **Per-channel** (per-row or per-column): one `(s, z)` per output channel. Standard for INT8 weights.
+- **Per-group**: split each row into groups of e.g., 64 or 128 elements, one `(s, z)` per group. Modern 4-bit quantization defaults (used by GPTQ, AWQ, NF4).
+
+Finer granularity = more metadata (more `(s, z)` pairs to store) = better accuracy. The double-quantization trick in QLoRA (§F) re-quantizes the per-group scales themselves to claw back metadata cost.
+
+### C. PTQ vs QAT
+
+**C.1 Post-Training Quantization (PTQ).** Take an already-trained fp16 model, quantize the weights, done. May require a small calibration set to choose ranges. Cheap (no retraining), works well at 8-bit, requires sophisticated tricks at 4-bit (§D, §E, §F).
+
+**C.2 Quantization-Aware Training (QAT).** Insert "fake" quantization (round + dequantize, with straight-through gradient) into the model during training. The model learns weights that are robust to quantization. Higher quality at low bits but requires re-training. Mostly used for edge/mobile deployment.
+
+For LLMs, PTQ dominates because retraining a 70B model is prohibitively expensive. The art is making PTQ work at 4 bits.
+
+### D. GPTQ: Second-Order Error Correction
+
+Naïve PTQ rounds each weight independently. GPTQ (Frantar et al., 2022) recognizes that **error from quantizing one weight can be partially compensated by adjusting other weights**.
+
+**D.1 The math.** For a layer with weights `W` and inputs `X`, output is `Y = WX`. After quantizing `W → Ŵ`, output error is `(W − Ŵ)X`. GPTQ uses the Hessian `H = X X^T` (which captures input-input correlations) to update unquantized weights to absorb the error:
+
+```
+For each weight to quantize (in a chosen order):
+  1. Quantize the weight: w → q
+  2. Distribute the residual error w − q to the remaining unquantized weights
+     using the Hessian inverse: Δw_other = (w − q) · H_inv[col, others]
+```
+
+Algorithmically this is a sequence of rank-1 Hessian updates. The result: the layer's *output* changes much less than the per-weight quantization error would suggest, because the remaining weights have been adjusted to compensate.
+
+GPTQ achieves near-fp16 quality at 4 bits with a small calibration set (~128 samples).
+
+### E. AWQ: Activation-Aware Weight Quantization
+
+AWQ (Lin et al., 2023) starts from a different observation: **not all weights are equal**. Weights that multiply large activations contribute more to the output. Quantization error in those weights costs more.
+
+**The trick.** Identify "salient" weights (those associated with large-magnitude activation channels), and **scale them up before quantization** so they get more bit precision. After quantization, scale them back down. The activation channels are correspondingly scaled to keep the product invariant.
+
+```
+W' = W · diag(s)     # scale up salient weight columns
+X' = diag(1/s) · X   # scale down corresponding activations
+W' X' = W X          # product invariant
+```
+
+Now `W'` has the salient columns numerically larger, so they survive quantization better.
+
+AWQ achieves quality comparable to GPTQ but is faster to apply (no Hessian computation). Used in many production LLM serving stacks.
+
+### F. NF4 and Double Quantization (bitsandbytes / QLoRA)
+
+**F.1 NF4 (NormalFloat 4-bit).** Pre-trained weights empirically follow approximately `N(0, σ²)`. Standard INT4 uses 16 uniformly-spaced levels in `[-α, α]`, wasting precision on the (rare) extreme values. NF4 instead uses 16 levels chosen as the **quantiles** of `N(0, 1)`:
+
+```
+NF4_levels = quantiles of N(0,1) at probabilities 0.5/16, 1.5/16, ..., 15.5/16
+```
+
+This minimizes expected quantization error for a unit-variance Normal distribution — exactly what trained weights look like after per-block normalization.
+
+**F.2 Double quantization.** The per-group scales `s` are themselves stored in fp32 (or fp16), adding overhead — `4 bytes / 64 weights = 0.5 bits/weight`. Double quantization quantizes the scales themselves to 8-bit, with a single fp32 scale-of-scales per super-block, saving ~0.4 bits/weight.
+
+Combined, QLoRA stores a 16-bit weight in ~4.5 bits with negligible quality loss. This is what makes 65B-parameter fine-tuning fit on a single 48 GB GPU.
+
+### G. Quantizing Activations
+
+Weight quantization alone reduces memory but doesn't speed up compute (kernels still dequantize on the fly). To speed up compute, you must quantize *activations* too — INT8 matmul is 2-4× faster than fp16 on modern GPUs.
+
+The challenge: LLM activations have **outliers**. Dettmers et al. (2022, LLM.int8()) discovered that beyond ~6.7B parameters, certain activation channels develop magnitudes 10-100× larger than the rest. Naïve INT8 quantization clips these and destroys the model.
+
+**SmoothQuant** (Xiao et al., 2022): mathematically identical to AWQ but applied to activations — push the outlier magnitude from activations into weights via a per-channel scaling, then quantize both. Re-distributes the difficulty.
+
+**FP8** (NVIDIA H100+): hardware-supported 8-bit floating-point with E4M3 / E5M2 formats. Wider dynamic range than INT8, handles outliers natively. Becoming the standard for inference on H100.
+
+### From Theory to the Functions Below
+
+- §1 (overview) — frames §A's basic math and motivation.
+- §2 (quantization mathematics) — implements §A linear quantization, §B granularity choices.
+- §3 (bitsandbytes) — implements §F NF4 + double quantization.
+- §4 (GPTQ) — implements §D's Hessian-based correction.
+- §5 (AWQ) — implements §E's salient-weight scaling.
+- §6 (QLoRA) — combines §F NF4 quantization with lesson 8's LoRA for memory-efficient fine-tuning.
+- §7 (performance comparison) — benchmarks §D, §E, §F on quality and memory.
+- §8 (practical guide) — deployment recipes, including activation quantization (§G) for inference speed.
+
+---
+
 ## 1. Quantization Overview
 
 ### Why is Quantization Needed?

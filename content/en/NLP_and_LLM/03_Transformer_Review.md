@@ -9,6 +9,122 @@
 
 ---
 
+## Theory & Principles
+
+The Transformer is, at its core, a function `f : ℝ^{L×d} → ℝ^{L×d}` — a sequence of `L` token vectors in, a sequence of `L` token vectors out — built entirely from three reusable primitives: **scaled dot-product attention**, **position-wise feed-forward layers**, and **layer normalization with residual connections**. Every variant in the BERT/GPT/T5/LLaMA family is a recombination of these three pieces with different masking and training objectives.
+
+This section covers:
+
+- **(A) Scaled dot-product attention** — the algorithm, why the `√d_k` divisor exists, and what attention is doing geometrically.
+- **(B) Multi-head attention** — subspace decomposition, why `h` heads of dimension `d/h` are not the same as one head of dimension `d`.
+- **(C) Positional encoding** — sinusoidal vs learned vs RoPE, derivation of the sinusoidal form and what makes it generalize to longer sequences.
+- **(D) Encoder vs decoder** — bidirectional vs causal masking, the cross-attention bridge.
+- **(E) Residuals, LayerNorm, and the deep-network design** — pre-norm vs post-norm, why residuals enable training 100+ layer Transformers.
+- **(F) Computational complexity** — the `O(L²·d)` scaling of attention and what KV-cache buys you.
+
+### A. Scaled Dot-Product Attention
+
+Given query, key, and value matrices `Q ∈ ℝ^{L×d_k}`, `K ∈ ℝ^{L×d_k}`, `V ∈ ℝ^{L×d_v}`:
+
+```
+Attention(Q, K, V) = softmax( Q · K^T / √d_k ) · V
+```
+
+The matrix `S = Q · K^T / √d_k ∈ ℝ^{L×L}` contains a similarity score between every pair of token positions; softmax row-wise turns it into a stochastic mixing matrix; multiplying by `V` mixes value vectors weighted by similarity.
+
+**Why `√d_k`?** Suppose `q` and `k` are independent random vectors with entries drawn from a distribution with mean 0 and variance 1. Then their dot product `q · k = Σᵢ qᵢ kᵢ` has variance `d_k` (sum of `d_k` independent variance-1 terms). At `d_k = 64`, the typical magnitude of `q·k` is `√64 = 8`. Without scaling, softmax on values in `[-8, 8]` saturates — the largest entry becomes ~1, others ~0, and gradients vanish. Dividing by `√d_k` restores unit-variance scores, keeping the softmax in its informative regime.
+
+**Geometric reading.** `softmax(QK^T/√d_k)V` is "for each query, compute a probability distribution over keys, then take that distribution as weights to mix the values." Self-attention is each token saying "given who I am, which other tokens should I gather information from, and how much from each?"
+
+### B. Multi-Head Attention
+
+Project Q, K, V into `h` smaller subspaces and run attention in each independently:
+
+```
+head_i = Attention(Q · W_i^Q, K · W_i^K, V · W_i^V)        with W_i^Q, W_i^K ∈ ℝ^{d × d_k}, W_i^V ∈ ℝ^{d × d_v},  d_k = d_v = d/h
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h) · W^O
+```
+
+A single head computes one mixing pattern per position. Multiple heads compute multiple mixing patterns in parallel, then concatenate. Empirically different heads specialize: some attend to syntactic dependencies, some to coreference, some to positional offsets. With one giant head, the average of all these patterns would have to share one set of `Q, K` projections — the `argmax` of attention can only point one place at a time, so the model would be forced to compromise.
+
+The total parameter count and FLOP count are the *same* as one head of dimension `d` (each `W_i^Q ∈ ℝ^{d × d/h}`, summed over `h` heads gives `ℝ^{d × d}`). The benefit is purely in representational diversity, not capacity.
+
+### C. Positional Encoding
+
+Self-attention is permutation-equivariant: shuffle the input tokens and the output is shuffled identically. Without positional information the Transformer cannot distinguish "dog bites man" from "man bites dog." Positional encodings inject sequence order.
+
+**C.1 Sinusoidal (Vaswani et al., 2017).** For position `pos` and embedding dimension `i`:
+
+```
+PE(pos, 2i)   = sin( pos / 10000^{2i/d} )
+PE(pos, 2i+1) = cos( pos / 10000^{2i/d} )
+```
+
+Why this form? Each pair `(2i, 2i+1)` is a unit vector rotating at frequency `1 / 10000^{2i/d}`. Low-`i` dimensions rotate fast (capture short-range positional differences), high-`i` rotate slowly (capture long-range). Crucially, `PE(pos+k)` can be written as a *linear function* of `PE(pos)` (rotation by angle `k · ωᵢ`), so the model can learn relative-position attention by learning a fixed projection — extrapolation to lengths beyond training is at least possible (though imperfect in practice).
+
+**C.2 Learned absolute.** A learned embedding per position. Simple but cannot generalize beyond the maximum training length.
+
+**C.3 RoPE (Rotary Position Embedding).** Rotates Q and K vectors by angle `m·θ` at position `m`, so `q^T k` automatically encodes relative position `m − n`. Used in LLaMA, GPT-NeoX, PaLM. Combines learned-style flexibility with sinusoidal-style relative-position structure.
+
+### D. Encoder vs Decoder
+
+Two architectural choices control what the attention can see:
+
+**D.1 Encoder (BERT, RoBERTa).** Bidirectional self-attention — every position attends to every other position. Training objective: masked language modeling (predict 15% of tokens that are randomly masked). Suited to *understanding*: classification, NER, extractive QA.
+
+**D.2 Decoder (GPT family).** Causal self-attention — position `i` can only attend to positions `≤ i`. Implemented as `S[i, j] = -∞ for j > i` before softmax. Training objective: next-token prediction. Suited to *generation*: text completion, chat, code synthesis.
+
+**D.3 Encoder-Decoder (T5, BART, original Transformer).** Bidirectional encoder over the source, causal decoder over the target, plus *cross-attention*: decoder queries attend to encoder keys/values. Suited to seq2seq: translation, summarization, structured generation.
+
+The masking matrix is the only architectural difference between BERT and GPT. The weights and training objective are different, but the layer code is essentially identical.
+
+### E. Residuals, LayerNorm, and Why 100+ Layers Train
+
+Each Transformer block is:
+
+```
+x ← x + MultiHeadAttn(LN(x))            (pre-norm)
+x ← x + FFN(LN(x))
+```
+
+Or with the original "post-norm" ordering:
+
+```
+x ← LN( x + MultiHeadAttn(x) )          (post-norm)
+x ← LN( x + FFN(x) )
+```
+
+**Residual connections** make the layer learn a *correction* `Δx`, not the full output. Gradients flow directly through the `+x` path, sidestepping vanishing gradients no matter how deep. Without residuals, training a 12-layer Transformer is hard; with them, 100+ layers are routine.
+
+**LayerNorm** normalizes across the embedding dimension at each position: `LN(x) = γ · (x − μ) / σ + β`. Unlike BatchNorm, it does not depend on batch statistics, so it works at batch size 1 and at variable sequence lengths.
+
+**Pre-norm vs post-norm.** Post-norm (original) often needs warm-up learning rate scheduling to train deep models. Pre-norm trains more stably out of the box and is the modern default (used in GPT-2 onward).
+
+### F. Computational Complexity
+
+Self-attention costs:
+
+- Time: `O(L² · d)` from `QK^T` (the `L × L` matrix) and the subsequent multiplication by `V`.
+- Memory: `O(L²)` for the attention matrix itself.
+
+This `L²` scaling is the primary obstacle to long contexts. At `L = 100K`, the attention matrix alone needs `10¹⁰` entries — 40 GB at fp32. This motivates:
+
+- **KV-cache** (decoder inference): cache `K, V` for past tokens, only compute new query against cached keys. Reduces per-token cost from `O(L² · d)` to `O(L · d)`.
+- **Flash Attention**: computes attention in tiles that fit in SRAM, never materializing the `L × L` matrix in HBM. Same exact result, much less memory traffic.
+- **Sparse / linear attention** (Longformer, BigBird, Performer, Mamba): approximate or restrict attention so cost is `O(L · log L)` or `O(L)`.
+
+### From Theory to the Functions Below
+
+- §2 (self-attention) — the `softmax(QK^T/√d_k)V` of §A wrapped as `nn.MultiheadAttention`, with §B's multi-head split shown in code.
+- §3 (causal masking) — §D.2's `-∞` upper-triangular mask, generated by `torch.triu`.
+- §4 (encoder vs decoder) — §D's three architectural variants implemented with `TransformerEncoderLayer` / `TransformerDecoderLayer`.
+- §5 (positional encoding) — direct implementation of the sinusoidal formula in §C.1.
+- §6 (complete model) — wires together §B, §C, §D, and §E.
+- §7 (training objectives) — connects each architecture to its objective from §D.
+- §8 (built-in module) — PyTorch's high-level wrapper that hides the §A-§E machinery.
+
+---
+
 ## 1. Transformer Overview
 
 ### Architecture Summary

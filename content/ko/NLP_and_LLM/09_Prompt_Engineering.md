@@ -9,6 +9,132 @@
 
 ---
 
+## 이론과 원리
+
+프롬프트는 모델에게 *그저 텍스트*입니다 — 특별한 지위도, 특권 채널도 없습니다. 그렇다면 왜 작은 문구 변경이 어려운 작업에서 정확도를 20+ 점 움직일까요? LLM의 행동이 **조건부 확률** `p(answer | prompt)`이고, 조건 맥락의 작은 시프트가 모델을 학습된 분포의 완전히 다른 영역으로 이동시킬 수 있기 때문입니다. 프롬프트 엔지니어링은 어떤 조건 패턴이 모델을 정확하고, 형식이 맞고, 안전한 완성으로 신뢰성 있게 조종하는지에 대한 경험적 연구입니다.
+
+이 섹션은 다음을 다룹니다:
+
+- **(A) 조건 분포 관점** — 왜 프롬프트 엔지니어링이 작동하며, 프롬프트를 쓸 때 우리가 실제로 무엇을 하는가.
+- **(B) Zero-shot vs few-shot** — 인컨텍스트 학습 메커니즘과 각각 적합한 시점.
+- **(C) Chain-of-Thought (CoT)** — "let's think step by step"이 작동하는 이유와 모델의 계산 그래프에 대한 효과.
+- **(D) Self-consistency, ToT, ReAct** — 프롬프트 위에 표본 추출과 탐색을 감싼 기법들.
+- **(E) 프롬프트 구조와 분해** — 역할(role), 지시, 맥락, 예시, 형식 명세 — 견고한 프롬프트의 "해부".
+- **(F) 실패 모드** — 지시 표류, 프롬프트 인젝션 취약성, 형식 부서짐.
+
+### A. 조건 분포 관점
+
+LLM은 `p(next_token | full_context)`를 모델링합니다. 프롬프트는 그 후 모든 예측을 조건짓는 맥락을 설정합니다. 사람에게 의미적으로 비슷해 보이는 두 프롬프트가 매우 다른 분포에 해당할 수 있습니다:
+
+- "Solve this math problem: 23 × 47 =" — 모델은 학습 데이터에서 "Solve this math problem:" 다음에 오는 것 — 교과서식 설명, 종종 정확 — 에 조건부.
+- "23 × 47 =" — 모델은 원시 산술 다음에 오는 것에 조건부; 종종 잡음 많은 맥락(오타 있는 포럼 글)에서 나타나며 정확도가 떨어집니다.
+
+모델은 정답을 맞히려는 "의도"가 없습니다. 텍스트가 어떻게 이어지는지에 대한 학습된 분포가 있을 뿐입니다. 프롬프트 엔지니어링은 — 높은 확률 완성이 또한 원하는 완성이 되도록 — **조건 짓기를 조종**하는 실천입니다.
+
+이 관점이 많은 경험적 놀라움을 설명합니다:
+- "You are an expert mathematician"이 정확도를 올립니다 — 사전학습의 전문가 작성 콘텐츠가 더 정확하기 때문.
+- Few-shot 예시는 모델이 기계적으로 이어가는 패턴을 설정합니다.
+- "Let's think step by step"은 사전학습 데이터가 정답과 연관 짓는 추론 사슬 텍스트를 유도합니다.
+
+### B. Zero-Shot vs Few-Shot
+
+**B.1 Zero-shot.** 작업 설명과 입력만:
+
+```
+Translate to French: "Hello, how are you?"
+Answer:
+```
+
+사전학습에 잘 표현되어 있고 표준 형식이 있는 작업에 작동. 새로운 작업이나 비표준 형식에는 실패.
+
+**B.2 Few-shot.** `k`개의 예시 입력-출력 쌍을 앞에 붙입니다:
+
+```
+English: "Hello" → French: "Bonjour"
+English: "Thank you" → French: "Merci"
+English: "Goodbye" → French: "
+```
+
+모델이 형식을 패턴 매칭하고 이어갑니다. 예시는 *작업*(무엇을 할지)과 *형식*(어떻게 출력할지)을 모두 가르칩니다. 표준 `k = 3-8`.
+
+**B.3 Induction-head 메커니즘 (메커니즘 해석).** Olsson 등(2022)은 학습된 Transformer에서 "접두사에서 `[A]`의 이전 출현을 찾고, 그 후에 무엇이 왔는지 보고, 지금 같은 것을 예측"하는 특정 어텐션 헤드를 식별했습니다. Few-shot 프롬프트는 이 헤드들을 위한 순수 연료입니다 — 각 예시가 induction head가 복사할 수 있는 `[입력 패턴] → [출력 패턴]` 연관을 만듭니다.
+
+**B.4 언제 선택할지.** Zero-shot: 작업이 일반적, 모델이 큼(10B+), 토큰이 비쌈. Few-shot: 작업이 비표준 형식, 예시가 짧음, 정답 예시 보유.
+
+### C. Chain-of-Thought (CoT)
+
+Wei 등(2022)은 LM에게 최종 답변 전에 중간 추론 단계를 생성하도록 프롬프팅하면 다단계 문제의 정확도가 극적으로 향상됨을 보였습니다:
+
+```
+Q: Roger has 5 tennis balls. He buys 2 more cans of tennis balls. Each can has 3 balls. How many balls does he have?
+A: Roger started with 5 balls. 2 cans of 3 balls each is 6 balls. 5 + 6 = 11. The answer is 11.
+```
+
+**작동 원리.** Transformer는 고정 깊이입니다 — `L` 레이어 각각이 어텐션 + FFN 한 라운드를 수행. `L` 레이어로 모델은 토큰당 *내부적으로* 최대 `L`개의 순차 연산을 계산할 수 있습니다. 다단계 수학 문제는 5+ 순차 연산이 필요할 수 있어 단일 토큰에 대한 모델의 내부 깊이 예산을 초과합니다.
+
+CoT는 계산을 여러 토큰에 걸쳐 외부화합니다. 각 중간 단계는 새 토큰이고, 현재 상태에서 생성됩니다. 전체 추론은 `T`개의 생성 토큰에 걸쳐 펼쳐지며 유효 `L · T` 순차 연산. 모델은 *토큰을 소비*하여 중간 상태에 "소리 내어 생각"합니다.
+
+이것이 또한 CoT가 규모(초기 실험에서 ~60B+)에서만 발현하는 이유입니다 — 작은 모델은 프롬프팅받아도 일관된 중간 단계를 신뢰성 있게 생성할 수 없습니다.
+
+**Zero-shot CoT** (Kojima 등, 2022): 프롬프트에 "Let's think step by step."를 추가만 하면 됩니다. 예시 없이도 대부분의 큰 LLM에서 작동.
+
+### D. Self-Consistency, Tree-of-Thoughts, ReAct
+
+CoT나 LLM 호출을 추가 구조로 감싸는 세 가지 프롬프팅 기법군:
+
+**D.1 Self-consistency** (Wang 등, 2022). 온도 `T > 0`에서 `k`개의 독립 CoT 궤적 표본 추출. 최종 답에 대한 **다수결**. 직관 — 많은 다른 추론 경로가 같은 정답에 도달할 수 있지만, 각 잘못된 경로는 자기 방식으로 잘못됩니다. 투표가 추론 잡음을 한계화합니다. 단일 궤적 CoT 대비 5-10 점 증가가 흔합니다.
+
+**D.2 Tree-of-Thoughts (ToT)** (Yao 등, 2023). 추론을 트리 탐색으로 — 각 단계에서 `b`개의 후보 다음 생각 생성, LLM으로 각각 점수("올바른 길인가?"), 상위 `k`만 확장. 가능한 추론 단계의 트리에 대한 표준 탐색 알고리즘(BFS, DFS, beam). 부분 진척 신호가 명확한 문제에 유용.
+
+**D.3 ReAct** (Yao 등, 2022). 추론 단계("Thought:"), 도구 행동("Action:"), 관측("Observation:")을 교차. 각 도구 결과가 다음 생각의 새 맥락이 됩니다. 현대 에이전트 프레임워크의 토대(레슨 14-15에서 다룸).
+
+### E. 프롬프트 구조: 견고한 프롬프트의 해부
+
+프로덕션 프롬프트는 예측 가능한 구성 요소를 가집니다:
+
+```
+[Role/system]      "You are a careful financial analyst."
+[Task/instruction] "Extract company revenue and growth rate from the report."
+[Context]          "Here is the report: <DOC>...</DOC>"
+[Examples]         "Example 1: ..."
+[Format spec]      "Output JSON with keys: revenue, growth_rate."
+[Constraints]      "If a value is missing, use null. Do not invent numbers."
+[Input]            "Now process: <DOC>actual document</DOC>"
+```
+
+각 부분이 알려진 실패 모드를 다룹니다:
+- 역할(role)이 도메인에 적합한 분포로 조건짓기를 사전 설정.
+- 작업(task)이 고수준 목표를 줍니다.
+- 맥락(context)이 명시적 구분자로 관련 데이터를 격리(모델이 데이터를 지시와 혼동하는 것 방지).
+- 예시가 인컨텍스트 학습 패턴을 설정.
+- 형식 명세가 출력 모양을 제약.
+- 제약이 그렇지 않으면 환각을 일으킬 가장자리 경우를 처리.
+
+순서가 중요합니다 — "지시가 맥락 뒤에 오는" 패턴은 많은 모델에 작동하지만 부서지기 쉽습니다. 많은 제공자(OpenAI, Anthropic)는 입력 데이터 *전*에 지시를 권장합니다.
+
+### F. 실패 모드
+
+**F.1 지시 표류 / 망각.** 긴 맥락에서 모델이 초기 지시를 "놓칩니다". 완화 — 핵심 지시를 끝에 반복("Remember: respond in JSON only.").
+
+**F.2 프롬프트 인젝션.** 악의적 사용자 입력에 "Ignore previous instructions and ..." 같은 텍스트가 포함됩니다. 모델은 특권-vs-사용자 채널이 없어 따를 수 있습니다. 완화 — 입력 정제, 출력 검증, 아키텍처 분리(레슨 21에서 다룸).
+
+**F.3 형식 부서짐.** "Output JSON"은 95%의 시간 JSON을 만들지만 5%에서 실패합니다. 신뢰성 있는 구조화 출력에는 grammar-constrained 디코딩이나 검증+재시도 사용(레슨 22에서 다룸).
+
+**F.4 적대적 민감성.** 작은 문구 변경("Solve" vs "Compute")이 정확도를 몇 점 움직일 수 있습니다. 완화 — 프롬프트 앙상블, 자동 프롬프트 탐색(APE, OPRO).
+
+**F.5 아첨(sycophancy).** RLHF로 학습된 모델은 종종 틀려도 사용자에게 동의합니다. 완화 — 명시적 "be honest, disagree with me if I'm wrong" 지시; 또는 RLHF 튜닝이 덜 된 베이스 모델 사용.
+
+### 이론에서 아래 함수들로
+
+- §1 (기초) — §A 조건 분포 관점의 구체적 예시(재표현, 역할 주입).
+- §2 (zero-shot vs few-shot) — ICL induction-head 직관과 함께 §B 구현.
+- §3 (CoT) — §C 코딩, zero-shot "let's think step by step"과 few-shot CoT 예시 포함.
+- §4 (역할 놀이) — §E 역할/시스템 구성 요소를 주요 레버로.
+- §5 (출력 형식) — §E 형식 명세 구성 요소, §F.3의 형식 부서짐과 함께.
+- §6 (고급 기법) — §D self-consistency 구현과 ToT/ReAct의 시작.
+
+---
+
 ## 1. 프롬프트 기초
 
 ### 프롬프트 구성 요소

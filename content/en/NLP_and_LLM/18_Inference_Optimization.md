@@ -18,6 +18,102 @@ LLM inference optimization is a key technology for reducing costs and latency in
 
 ---
 
+## Theory & Principles
+
+LLM inference is bottlenecked not by raw FLOPs but by **memory bandwidth and KV-cache management**. A modern GPU can do trillions of FLOPs per second, but every generated token requires reading model weights and the KV-cache from memory — and memory bandwidth saturates long before compute does. Inference optimization is essentially the engineering of *not* moving bytes you don't need to move, and *batching* to amortize the bytes you do move across many concurrent requests.
+
+This section covers:
+
+- **(A) The two phases: prefill and decode** — why they have completely different performance profiles.
+- **(B) Why inference is memory-bound** — the arithmetic intensity argument.
+- **(C) KV-cache: structure, memory, and the fragmentation problem** — the dominant memory consumer in serving.
+- **(D) Continuous batching** — why static batching is the wrong primitive for variable-length generation.
+- **(E) PagedAttention (vLLM)** — borrowing virtual memory from operating systems for KV-cache.
+- **(F) Speculative decoding** — using a small "draft" model to accelerate a large model.
+- **(G) Tensor parallelism vs pipeline parallelism** — when one GPU is not enough.
+
+### A. The Two Phases: Prefill and Decode
+
+Every LLM inference call has two phases:
+
+**A.1 Prefill.** Process the *entire prompt* in parallel. Compute Q, K, V for all prompt tokens, run attention, get hidden states for all positions, store K/V in cache. This is **compute-bound**: a long matrix multiply on a tall input. GPU utilization is high, latency is dominated by FLOPs.
+
+**A.2 Decode.** Generate tokens one at a time. Each new token requires: compute Q for the new position, attend to all cached K/V from prefix, append new K/V to cache. This is **memory-bound**: each step reads the entire model weights (~tens of GB) and the KV-cache from memory but does only a small matrix-vector multiply per layer. GPU utilization is *low*, latency is dominated by memory bandwidth.
+
+These have different scaling: prefill scales as `O(prompt_length × d²)` per layer (compute), decode as `O(generated_length × d²)` per token (memory bandwidth × generated length). For long generations, decode dominates total latency.
+
+### B. Why Inference is Memory-Bound
+
+**Arithmetic intensity** is FLOPs per byte read from memory. Modern GPUs (e.g., A100) have ~300 FLOPs per byte of HBM bandwidth in fp16. To use compute fully, your operation needs at least that intensity.
+
+For a single decoded token: read all weights (`P` parameters × 2 bytes), do `2P` FLOPs (one MAC per parameter). Arithmetic intensity = `2P / 2P = 1 FLOP/byte` — orders of magnitude below 300. The GPU is starved on memory.
+
+**The fix is batching.** With batch size `B`, weights are read *once* and used `B` times. Arithmetic intensity becomes `B`. To saturate compute, `B ≥ 300`. Modern serving systems (vLLM, TGI) push toward this regime, often achieving 64-256 effective batch size via continuous batching (§D).
+
+### C. KV-Cache: the Dominant Memory Consumer
+
+For each layer, each generated position stores a `K` vector and a `V` vector, both of dimension `d`. Total per token per layer: `2 · d · sizeof(dtype)` bytes. Across all layers: `2 · d · L · sizeof(dtype)`. For LLaMA-2 70B: `d = 8192, L = 80`, so ~2.5 MB per token at fp16.
+
+For a 4K-token context and 32-batch, that is `4096 × 32 × 2.5 MB = 320 GB` of KV-cache. The weights themselves are 140 GB. **The cache exceeds the model.**
+
+**Fragmentation.** Different requests have different sequence lengths, so the cache for each request takes a variable amount of space. Naïve allocation reserves `max_length × per_token_size` per request and wastes most of it. Vanilla HuggingFace Transformers serving suffers ~70% wasted KV-cache memory.
+
+This single inefficiency motivated the entire vLLM architecture (§E).
+
+### D. Continuous Batching
+
+**Static batching** (the obvious approach): wait until `B` requests arrive, run them all together until the slowest one finishes generation, return all responses. Wastes GPU when fast requests sit idle waiting for slow ones — and GPUs are expensive.
+
+**Continuous batching** (Yu et al., 2022, "Orca"): treat each generation step as the unit. At every step, the batch contains whatever requests are currently in-progress. When one finishes, a new request takes its slot mid-batch. The GPU is always saturated; latency for each request is decoupled from others' lengths.
+
+This is the primary serving-throughput optimization in modern LLM stacks. Combined with PagedAttention, it routinely yields 10-20× throughput vs naïve serving.
+
+### E. PagedAttention (vLLM)
+
+vLLM (Kwon et al., 2023) borrows the **virtual memory** abstraction from operating systems and applies it to KV-cache.
+
+**E.1 The mechanism.** Divide the KV-cache into fixed-size *blocks* (e.g., 16 tokens per block). Each request has a *page table* mapping its logical positions to physical blocks. New blocks are allocated on demand from a global free list. When a request finishes, its blocks return to the free list.
+
+**E.2 Why it works.** No per-request reservation. Memory is allocated in granular blocks. Different requests can share blocks (e.g., common prompt prefix in many requests → shared blocks via copy-on-write). Fragmentation drops from ~70% to <5%.
+
+**E.3 Cost.** A single attention call now needs to traverse the page table to find each block. Implemented as a custom CUDA kernel ("PagedAttention") that does the indirection efficiently.
+
+The result: at the same GPU and model, vLLM serves 2-4× more concurrent requests than HuggingFace Transformers serving. Combined with continuous batching, total throughput increase is 10-20×.
+
+### F. Speculative Decoding
+
+Decoding `T` tokens is `T` sequential model passes — each waits for the previous. Speculative decoding parallelizes this.
+
+**F.1 The pattern.** Use a small **draft model** (10-100× smaller, much faster) to *propose* a sequence of `k` tokens. Run the large **target model** on all `k` tokens at once (a parallel forward pass — same cost as one decode step at batch size `k`). Compare the target's predictions to the draft's: accept the longest matching prefix, discard the rest.
+
+**F.2 Why it works.** If the draft model agrees with the target, you get `k` tokens for the cost of one target-model forward pass. Even at modest agreement rates (50-70%), expected acceleration is 2-3×.
+
+**F.3 Acceptance criterion.** Accept token `i` from the draft if `target_prob(token_i) / draft_prob(token_i) > U(0, 1)`. This rejection sampling guarantees the final sequence is distributed identically to greedy/sampling from the target — speculative decoding is **lossless**.
+
+Variants: Medusa (multi-head speculation), EAGLE (better draft architectures), prompt lookup (use the prompt itself as the draft for repetitive contexts).
+
+### G. Tensor and Pipeline Parallelism
+
+A 70B model in fp16 needs 140 GB — exceeds a single 80 GB GPU. Multi-GPU strategies:
+
+**G.1 Tensor parallelism.** Split each weight matrix across `N` GPUs (e.g., split the columns of `W` in each `Y = WX`). Each GPU computes its slice of the output, then an all-reduce combines. Latency: each layer has an extra communication round; bandwidth-bound. Best on a single node with NVLink (~600 GB/s).
+
+**G.2 Pipeline parallelism.** Split the model *layer-wise* across `N` GPUs (GPU 1 has layers 1-20, GPU 2 has 21-40, etc.). Activations stream from GPU to GPU. Latency: the first token waits for the full pipeline; subsequent tokens can pipeline. Best across nodes (PCIe / network) where tensor-parallel communication would dominate.
+
+**G.3 In practice.** Tensor parallelism within a node, pipeline parallelism across nodes, plus expert parallelism for MoE models. Frameworks (vLLM, TGI, DeepSpeed) automate this given a target model and topology.
+
+### From Theory to the Functions Below
+
+- §1 (bottlenecks) — frames §A's two phases and §B's memory-bound argument.
+- §2 (vLLM) — implements §C-§E (KV-cache + PagedAttention + continuous batching).
+- §3 (TGI) — Text Generation Inference, alternative serving stack with similar optimizations.
+- §4 (speculative decoding) — implements §F's draft+target pattern.
+- §5 (quantization) — pointer to lesson 17.
+- §6 (batch processing) — §D continuous batching strategies.
+- §7 (performance benchmarking) — measures §B arithmetic intensity in practice.
+
+---
+
 ## 1. LLM Inference Bottlenecks
 
 ### 1.1 Memory Bottleneck

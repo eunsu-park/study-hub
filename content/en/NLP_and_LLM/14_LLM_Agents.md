@@ -10,6 +10,139 @@
 
 ---
 
+## Theory & Principles
+
+An LLM agent is a system in which the LLM itself **decides what to do next** — what tool to call, what argument to pass, when to stop — instead of following a fixed pipeline. The defining property is **dynamic control flow**: the program's control flow is determined by the LLM's outputs at runtime, not by static code. This unlocks tasks that no fixed pipeline can solve (open-ended research, multi-step planning, error recovery), but introduces failure modes that fixed pipelines do not have (loops, hallucinated tools, runaway costs).
+
+This section covers:
+
+- **(A) The agent loop** — what minimally constitutes an agent, the perception–reasoning–action cycle.
+- **(B) ReAct (Reasoning + Acting)** — the dominant prompting paradigm, why interleaving thoughts and actions works.
+- **(C) Tool use protocol** — how the LLM emits structured tool calls, how the framework parses and dispatches them.
+- **(D) Function calling** — the modern tool-calling API (OpenAI, Anthropic), why JSON-schema-based dispatch beats text parsing.
+- **(E) Autonomy spectrum** — from copilots (human approves every action) to fully autonomous agents (AutoGPT-style); the trade-offs.
+- **(F) Failure modes** — loops, hallucinated tools, observation truncation, cost runaway, and standard mitigations.
+
+### A. The Agent Loop
+
+At its core, every agent runs a loop:
+
+```
+state ← initial_context (user query, tools available, history)
+while not done:
+    action ← LLM(state)             # decide what to do
+    observation ← execute(action)    # carry it out
+    state ← state + (action, observation)
+done = (action.type == "final_answer") or (steps > max_steps)
+```
+
+Three components:
+
+1. **The LLM** (the brain): outputs a structured action choice given the current state.
+2. **A set of tools** (effectors): functions the agent can call (search, calculator, code execution, file read/write, API call).
+3. **Memory of the trajectory** (state): what has happened so far, accumulated so the LLM can reason over the full history.
+
+This loop is the same whether the framework is LangChain, AutoGen, CrewAI, or hand-rolled. The differences are in how each component is structured and how the loop is observed and controlled.
+
+### B. ReAct: Reasoning + Acting
+
+ReAct (Yao et al., 2022) is the dominant agent prompting pattern. The LLM is prompted to alternate between *thoughts* (free-form reasoning) and *actions* (tool calls):
+
+```
+Thought: I need to find the population of France in 2024.
+Action: search("France population 2024")
+Observation: 68.4 million as of 2024.
+Thought: Now I need to compare to Germany.
+Action: search("Germany population 2024")
+Observation: 84.5 million.
+Thought: France has fewer people than Germany.
+Action: final_answer("France: 68.4M, Germany: 84.5M; Germany has more.")
+```
+
+**Why it works.** The Thought tokens externalize reasoning, just like Chain-of-Thought (lesson 9). The Action tokens commit to a verifiable next step. The Observation tokens ground the LLM in real data, preventing hallucination. The interleaving means each new tool call can incorporate everything learned so far.
+
+ReAct is essentially Chain-of-Thought (lesson 9) extended with **side effects**: the model can not only think but also act on the world and observe results.
+
+### C. Tool Use Protocol
+
+The LLM's output must be structured so the framework can parse "the model wants to call search with arguments X." Two approaches:
+
+**C.1 Text-parsing (older).** The agent prompt instructs the LLM to format actions like `Action: tool_name[argument]`. A regex extracts tool name and argument. Brittle: any deviation breaks parsing.
+
+**C.2 Function calling / tool calling (modern).** The LLM is fine-tuned to emit a structured JSON object specifying tool calls. The API surfaces this as a typed `tool_calls` field. Robust: the structure is enforced at the model level (logit constraints in the API).
+
+Lesson 23 covers tool calling APIs in depth. For agents, the takeaway is: **always use the tool-calling API when the model supports it; reserve text parsing for older or local models that don't.**
+
+### D. Function Calling: JSON-Schema-Based Dispatch
+
+Modern function calling takes a list of tool descriptions in JSON Schema:
+
+```json
+{
+  "name": "search",
+  "description": "Search the web for a query",
+  "parameters": {
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"]
+  }
+}
+```
+
+The LLM's response can include:
+
+```json
+{
+  "tool_calls": [
+    {"id": "call_1", "name": "search", "arguments": {"query": "France population 2024"}}
+  ]
+}
+```
+
+The framework dispatches to `tools["search"](**arguments)`, captures the return value, and feeds it back as a tool message. The schema constrains hallucinations (you can't call a non-existent tool, can't pass unknown arguments). Multiple tool calls in one response enable parallel execution.
+
+### E. The Autonomy Spectrum
+
+Agents differ in how much autonomy they have:
+
+| Level | Pattern | Example |
+|-------|---------|---------|
+| 0 | LLM with no tools | ChatGPT in chat mode |
+| 1 | LLM with retrieval | Single-shot RAG (lesson 10) |
+| 2 | Tool-calling, single action | "answer this query, you may use these tools" |
+| 3 | ReAct loop, bounded steps | "research and answer, max 10 steps" |
+| 4 | Self-planning | LLM produces a plan first, then executes |
+| 5 | Fully autonomous, indefinite loop | AutoGPT, BabyAGI — pursue a goal until done |
+
+Higher autonomy = more capability but more risk. At level 5, costs and failure modes scale fast. Production agents typically sit at levels 2-3 with hard step caps and cost ceilings.
+
+### F. Failure Modes and Mitigations
+
+**F.1 Loops.** The agent calls the same tool with the same arguments repeatedly. Mitigation: detect repeats (cache + comparison), inject "you have already tried this" feedback.
+
+**F.2 Hallucinated tools.** The LLM emits a tool name not in the available list. Mitigation: function calling (§D) makes this nearly impossible. For text-parsing agents, validate against the tool registry and re-prompt.
+
+**F.3 Observation truncation.** A tool returns 50 KB of text; appended to context, this rapidly exhausts the context window. Mitigation: truncate observations, summarize, or store in a separate "scratchpad" referenced by ID.
+
+**F.4 Cost runaway.** Each step calls the LLM (expensive) and possibly tools (also expensive). Mitigation: hard caps on (a) max steps per agent run, (b) max total tokens, (c) max wall-clock time, (d) per-tool cost budgets.
+
+**F.5 Tool errors.** A tool throws an exception or returns an error. Mitigation: catch, format as observation ("Error: <message>"), let the LLM react. Often the agent recovers by trying a different approach.
+
+**F.6 Unsafe actions.** A tool with side effects (file delete, payment, email send) is called with wrong arguments. Mitigation: human-in-the-loop confirmation for destructive actions; sandbox; per-tool allow-lists.
+
+### From Theory to the Functions Below
+
+- §1 (overview) — frames the §A agent loop and §E autonomy spectrum.
+- §2 (ReAct) — implements §B with text-parsing prompts (educational).
+- §3 (Tool use) — covers §C, including the older text-parsing approach.
+- §3.5 (Tool use deep dive) — multi-provider patterns for §D function calling.
+- §4 (LangChain Agent) — wraps §A-§D with `create_tool_calling_agent` and `AgentExecutor`.
+- §5 (autonomous agents) — implements §E level-5 (AutoGPT-style) with the §F failure-mode mitigations.
+- §6 (multi-agent) — pointer to lesson 15.
+- §7 (agent evaluation) — pointer to lesson 26.
+
+---
+
 ## 1. LLM Agent Overview
 
 ### What is an Agent?

@@ -20,6 +20,118 @@
 
 ---
 
+## Theory & Principles
+
+LangChain is a framework for **composing** LLM applications from reusable building blocks. Underneath the syntactic sugar of `prompt | model | parser`, the framework rests on a small set of conceptual abstractions: *Runnables* (anything that takes input and produces output), *composability via piping* (the LCEL operator `|`), *streaming and async by default* (every Runnable supports both), and *observability* (every step is automatically traceable). Once you see how these abstractions click together, the entire LangChain API surface becomes a small set of variations on the same theme.
+
+This section covers:
+
+- **(A) The Runnable abstraction** — what is a Runnable, what interface does it implement, why "everything is a Runnable" matters.
+- **(B) LCEL (LangChain Expression Language)** — `|` as monadic composition, the algebra of pipe.
+- **(C) Streaming, batching, async** — automatic concurrency from a single Runnable definition.
+- **(D) Memory and statefulness** — how a stateless framework supports multi-turn conversations.
+- **(E) Agents and the ReAct paradigm** — how LangChain wraps the agent pattern (full coverage in lessons 14-15).
+- **(F) Observability via LangSmith** — automatic tracing of every Runnable invocation.
+
+### A. The Runnable Abstraction
+
+A `Runnable` is anything that implements:
+
+```
+.invoke(input) → output
+.stream(input) → iterable of chunks
+.batch([input1, input2, ...]) → [output1, output2, ...]
+.ainvoke / .astream / .abatch — async versions
+```
+
+That is the *entire* core interface. Every concrete component — a prompt template, a chat model, an output parser, a tool, a retriever, a chain, even a function you write — implements `Runnable`. This uniformity is the central design choice that everything else rests on.
+
+Why it matters: any code path you build out of Runnables automatically gets streaming, batching, async, retry, fallback, and observability — for free. You write the pure logic; the framework adds the operational concerns through this single interface.
+
+### B. LCEL: `|` as Monadic Composition
+
+`prompt | model | parser` builds a new Runnable whose `invoke` is the function composition. Mathematically, if `f`, `g`, `h` are Runnables of types `A → B`, `B → C`, `C → D`, then `f | g | h` is `A → D`.
+
+This composition has properties analogous to monadic composition in functional programming:
+
+- **Associative**: `(a | b) | c == a | (b | c)`. Grouping does not matter; the resulting Runnable is the same.
+- **Identity**: `RunnablePassthrough()` is the identity (input passes through unchanged).
+- **Effects threaded automatically**: streaming, async, observability propagate through composition without explicit wiring.
+
+Beyond pipe, LCEL provides:
+
+- `RunnableParallel({"a": chainA, "b": chainB})`: run multiple chains concurrently on the same input, return a dict.
+- `RunnableLambda(f)`: lift any Python function into a Runnable.
+- `RunnableBranch([(condition, chain), ...])`: route to different chains based on input.
+
+These four (pipe, parallel, lambda, branch) are sufficient to express most LLM application topologies. More complex flows (loops, retries, human-in-the-loop) graduate to LangGraph, which represents the application as an explicit state machine.
+
+### C. Streaming, Batching, Async — for Free
+
+Because every Runnable implements `stream()`, `.batch()`, and the async variants, composing Runnables automatically inherits these behaviors:
+
+```
+chain = prompt | model | parser
+chain.stream(input)   # streams tokens from model through parser
+await chain.ainvoke(input)  # async, releases the event loop during the model call
+chain.batch([in1, in2, in3])  # parallel execution of three pipelines
+```
+
+You never write threading, asyncio, or token-buffering code yourself. This is the operational payoff of Runnable uniformity (§A).
+
+### D. Memory and Statefulness
+
+LLMs are stateless — each `invoke()` is independent. To support conversation, you must thread prior turns into each subsequent prompt. LangChain's older `ConversationChain` did this implicitly; the modern recommendation is `RunnableWithMessageHistory`:
+
+```
+chain_with_history = RunnableWithMessageHistory(
+    chain,
+    get_session_history,  # callable: session_id → BaseChatMessageHistory
+    input_messages_key="input",
+    history_messages_key="history",
+)
+```
+
+The wrapper:
+1. Looks up the message history for the given `session_id`.
+2. Injects past messages into the prompt under the `history` key.
+3. Calls the underlying chain.
+4. Appends the new user message and assistant response to the history.
+
+State lives in `BaseChatMessageHistory` implementations (in-memory, Redis, Postgres, etc.). The chain itself remains pure; statefulness is a wrapper concern.
+
+### E. Agents and ReAct
+
+An agent is a Runnable that **chooses tools dynamically** based on its reasoning. The standard architecture (ReAct, Yao et al., 2022): the LLM emits "Thought / Action / Observation" cycles, where Action is a tool call. LangChain wraps this loop in a higher-level Runnable that:
+
+1. Sends the prompt + tool descriptions to the LLM.
+2. Parses the LLM's structured output to identify tool calls.
+3. Executes each tool with the requested arguments.
+4. Appends the tool results to the conversation.
+5. Returns to step 1, until the LLM emits "Final Answer".
+
+LangChain's `create_tool_calling_agent` wraps step 2-3 around any tool-calling-capable LLM (modern OpenAI, Anthropic, Google, etc. all support this natively). Lesson 14 covers agents in depth.
+
+### F. Observability via LangSmith
+
+Every `Runnable.invoke()` automatically emits a trace: input, intermediate states, output, latency, errors, token counts. LangSmith is LangChain's hosted backend that collects and visualizes these traces. The instrumentation is opt-in via environment variables — you set `LANGCHAIN_TRACING_V2=true`, and traces start flowing. No code changes.
+
+This solves a real production problem: when a multi-step chain produces a wrong answer, you need to know *which step* went wrong. LangSmith shows you the full trace, with each step's inputs and outputs, in a single UI.
+
+### From Theory to the Functions Below
+
+- §1 (overview) — frames the §A Runnable concept and §B LCEL syntax.
+- §2 (LLM wrappers) — concrete examples of model Runnables.
+- §3 (prompt templates) — `PromptTemplate` and `ChatPromptTemplate` as Runnables.
+- §4 (chains) — §B LCEL composition in action; both legacy `LLMChain` and modern `prompt | model`.
+- §5 (output parsers) — Runnables that turn raw LLM output into structured data.
+- §6 (agents) — §E ReAct pattern wrapped as `AgentExecutor`.
+- §7 (memory) — §D `RunnableWithMessageHistory` and the older `ConversationChain`.
+- §8 (RAG) — composing a retriever Runnable with the chain (§B parallel + pipe).
+- §9 (streaming) — §C automatic streaming via the Runnable interface.
+
+---
+
 ## 1. LangChain Overview
 
 ### Installation

@@ -10,6 +10,155 @@
 
 ---
 
+## Theory & Principles
+
+Function calling (also called "tool use") is the protocol by which an LLM **decides to invoke external code** instead of just generating text. Without it, an LLM is limited to its training data and cannot interact with the world. With it, the LLM becomes an *agent*: a system that can search the web, query databases, run computations, send emails, control APIs. The protocol itself is simple — JSON-schema-based — but the design space around it (tool description quality, parallel calls, choice strategy, error handling) is large.
+
+This section covers:
+
+- **(A) The protocol** — what messages flow between LLM and host, the loop structure.
+- **(B) JSON Schema as the contract** — how a function description becomes a constrained generation grammar.
+- **(C) Tool choice strategies** — auto, required, none, named tool; trade-offs.
+- **(D) Parallel tool calling** — multiple simultaneous calls, dependency analysis.
+- **(E) Provider variations** — OpenAI vs Anthropic vs Gemini, what's portable and what isn't.
+- **(F) Tool description quality** — why writing the description well is more important than writing the function code.
+- **(G) MCP (Model Context Protocol)** — Anthropic's emerging standard for tool servers.
+- **(H) Error handling** — how to communicate tool failures back to the model so it can recover.
+
+### A. The Protocol
+
+The conversation between LLM and host has structured messages:
+
+```
+1. User → Host:  "What's the weather in Tokyo?"
+2. Host → LLM:   user message + tool definitions
+3. LLM → Host:   tool_calls = [{id: "1", name: "get_weather", args: {city: "Tokyo"}}]
+4. Host → tool:  execute get_weather("Tokyo")
+5. tool → Host:  {"temp": 22, "condition": "cloudy"}
+6. Host → LLM:   previous + tool_result message {id: "1", content: "..."}
+7. LLM → Host:   "It's 22°C and cloudy in Tokyo."
+8. Host → User:  "It's 22°C and cloudy in Tokyo."
+```
+
+Steps 3-6 form the **tool loop**. The LLM may emit tool calls multiple times in a single conversation; each tool result feeds back as new context for the next LLM call. Termination: the LLM emits a normal text response with no tool calls.
+
+### B. JSON Schema as the Contract
+
+Each available tool is described with a JSON schema for its parameters:
+
+```json
+{
+  "name": "get_weather",
+  "description": "Get current weather for a city.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "city": {"type": "string", "description": "City name, e.g., 'Tokyo'"},
+      "units": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"}
+    },
+    "required": ["city"]
+  }
+}
+```
+
+This serves two purposes:
+- **For the LLM**: tells it what tools exist and what arguments are valid. The model fine-tuning has internalized the JSON-schema convention, so it understands how to interpret the schema.
+- **For constrained decoding** (in strict-mode APIs): the schema is compiled into a token mask that prevents the model from emitting invalid tool calls.
+
+The strict-mode guarantee is significant: with strict mode on, the API will *never* return a tool call with the wrong arguments. The model can still pick the wrong tool or hallucinate values, but the structure is enforced.
+
+### C. Tool Choice Strategies
+
+How the LLM decides whether to use a tool:
+
+- **`auto`** (default): LLM decides per-message whether to call a tool or respond directly. Standard for chatbots.
+- **`required`** / **`any`**: LLM must call at least one tool. Useful when you know the response requires external data.
+- **`none`**: LLM cannot call tools. Useful when you want to force a final text response.
+- **`{"name": "tool_name"}`**: LLM must call this specific tool. Useful for forced extraction (using the function-calling API as structured output, lesson 22).
+
+Choice of strategy is per-call, not per-conversation. A typical agent flow uses `auto` initially, then `none` to force a final summary.
+
+### D. Parallel Tool Calling
+
+Modern APIs (GPT-4 Turbo+, Claude 3.5+) can return *multiple* tool calls in a single response:
+
+```json
+{
+  "tool_calls": [
+    {"id": "1", "name": "get_weather", "args": {"city": "Tokyo"}},
+    {"id": "2", "name": "get_weather", "args": {"city": "Paris"}}
+  ]
+}
+```
+
+The host executes both in parallel, returns both results in the next user message. Two benefits:
+- **Latency**: parallel I/O instead of serial.
+- **LLM efficiency**: one round-trip instead of two.
+
+The model is trained to identify when calls are independent (Tokyo and Paris weather can be parallel) vs dependent (search → click first result must be serial). Quality varies — assume the model gets this mostly right but verify on your specific tools.
+
+### E. Provider Variations
+
+Three large providers have implemented function calling slightly differently:
+
+- **OpenAI**: `tools` array of function definitions; `tool_calls` in the response. Strict mode available since 2024.
+- **Anthropic**: `tools` array similar to OpenAI; response uses `tool_use` content blocks. Tool result fed back as `tool_result` content blocks.
+- **Google Gemini**: similar `tools` definition; uses `function_call` in response. Slightly different message format.
+
+Wrappers like LangChain, instructor, and `litellm` abstract these differences. For native code, pick one provider and stick with their format; cross-provider is doable but adds complexity.
+
+### F. Tool Description Quality
+
+The most important code in your function-calling system is the **string description** of each tool. The LLM sees the descriptions and decides which tool to call based on them. Quality there directly drives quality everywhere.
+
+Best practices:
+- **Specify what the tool does, not how it works.** "Get current weather" not "Call the weatherapi.com /v1/current.json endpoint".
+- **Specify when to use it.** "Use when the user asks about current weather conditions."
+- **Specify when NOT to use it.** "Do not use for weather forecasts; use `get_forecast` instead."
+- **Show example inputs/outputs.** A line of example usage in the description significantly improves model selection.
+- **Be specific about argument formats.** "City name in English, e.g., 'Tokyo' (not 'JP')."
+
+A tool with a vague description gets called incorrectly; a tool with a precise description gets called when appropriate and skipped otherwise. This is leverage: 30 minutes spent on tool descriptions can outweigh hours of prompt engineering.
+
+### G. MCP (Model Context Protocol)
+
+Anthropic's MCP (2024) is an emerging standard for **tool servers**: external processes that expose tools to LLMs over a standard protocol. Instead of bundling tool implementations into your application, you connect to an MCP server that provides them.
+
+Benefits:
+- **Reusability**: write a tool once (e.g., "search GitHub repos"), use it from any MCP-compatible client.
+- **Separation of concerns**: tool implementation lives in the server, not in your application code.
+- **Security**: the server can enforce its own auth and rate limits; the LLM client doesn't see secrets.
+
+Conceptually similar to LSP (Language Server Protocol) for code editors. Early but gaining traction.
+
+### H. Error Handling
+
+Tool calls fail. The right pattern: **catch errors and feed them back as tool results**, so the LLM can react.
+
+```python
+try:
+    result = execute_tool(name, args)
+except Exception as e:
+    result = {"error": str(e)}
+# Feed `result` back as the tool_result message
+```
+
+The LLM sees the error message and typically either retries with corrected arguments, switches to a different tool, or asks the user for clarification. Throwing the exception up to the user breaks the loop and produces a worse experience.
+
+For unrecoverable errors (auth failures, billing issues), you may want to terminate the loop with a user-facing message. For recoverable errors (timeout, rate limit, malformed args), feeding back to the LLM is the right move.
+
+### From Theory to the Functions Below
+
+- §1 (overview) — frames §A's protocol and §F's tool-description importance.
+- §2 (OpenAI) — implements §A-§E with OpenAI's API.
+- §3 (Anthropic) — implements the same with Anthropic's tool-use blocks (§E variation).
+- §4 (parallel calling) — §D's parallel tool calls with dependency reasoning.
+- §5 (custom tools) — §B's JSON-schema authoring + §F's description best practices.
+- §6 (MCP) — §G's protocol and example servers.
+- §7 (orchestration patterns) — §H error handling, retry, multi-tool workflows that build on the lesson 14 agent loop.
+
+---
+
 ## 1. Function Calling Overview
 
 ### Why Function Calling?

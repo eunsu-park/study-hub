@@ -14,6 +14,8 @@ Previous: [Production LLM Patterns](./24_Production_LLM_Patterns.md) | Next: [Ag
 
 ## Table of Contents
 
+Before the implementation reference, read [**Theory & Principles**](#theory--principles) — memory taxonomy (working / episodic / semantic / procedural), the recall-cost trade-off, and the planner-executor decomposition that underlies modern agent architectures.
+
 1. [Memory Architectures for Agents](#1-memory-architectures-for-agents)
 2. [Short-Term vs Long-Term Memory](#2-short-term-vs-long-term-memory)
 3. [Conversation Buffer Memory](#3-conversation-buffer-memory)
@@ -25,6 +27,131 @@ Previous: [Production LLM Patterns](./24_Production_LLM_Patterns.md) | Next: [Ag
 9. [Self-Reflection for Planning](#9-self-reflection-for-planning)
 10. [Memory-Augmented Generation](#10-memory-augmented-generation)
 11. [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+An LLM is stateless — it has no memory across calls beyond what fits in the context window. An *agent* needs memory to be useful for any task longer than a single turn: to recall what was said earlier in the conversation, what facts were learned during a research task, what plans were made and which steps are done. Memory and planning are the twin abstractions that turn a stateless function-caller into something that resembles a thinking system. This lesson covers the memory taxonomy, the storage architectures that implement each type, and the planning frameworks (plan-then-execute, ReAct, reflexion) that turn long tasks into bounded sequences of LLM calls.
+
+This section covers:
+
+- **(A) The memory taxonomy** — episodic, semantic, procedural, working memory; the cognitive-science-inspired classification.
+- **(B) Short-term vs long-term** — what fits in context vs what must be externalized.
+- **(C) Memory implementations** — buffer, summary, entity, vector — each with their use cases.
+- **(D) Planning frameworks** — task decomposition, hierarchical planning, why "plan first, execute later."
+- **(E) Plan-and-execute** — the architecture, error recovery, dynamic re-planning.
+- **(F) Self-reflection** — Reflexion-style improvement loops, when an agent should second-guess itself.
+- **(G) Memory + planning together** — using past episodes to inform new plans (the foundation of "skill" learning).
+
+### A. The Memory Taxonomy
+
+Cognitive science distinguishes several memory systems, and agent designs roughly map onto them:
+
+| Type | Cognitive analog | Agent implementation |
+|------|-------------------|----------------------|
+| **Working** | Short-term, in active use | The current LLM context window |
+| **Episodic** | Specific past events | Conversation logs, task execution traces |
+| **Semantic** | General knowledge / facts | Vector database of learned facts |
+| **Procedural** | How to do things | Cached successful plans, skills, tool sequences |
+
+Each requires different storage and retrieval. Working memory is automatic (it's just what's in the prompt). Episodic memory is conversational history. Semantic memory is the RAG corpus, but populated from the agent's experience rather than externally. Procedural memory is the most ambitious — caching reusable skills the agent has discovered.
+
+A general agent benefits from all four. Production systems often implement only the first two (working + episodic) and outsource semantic to RAG.
+
+### B. Short-Term vs Long-Term
+
+**Short-term**: anything currently in the LLM's context window. Bounded by the model's context length (8K-1M tokens depending on the model). Cheap to access (just included in the prompt).
+
+**Long-term**: anything outside the context window. Stored in a database, retrieved on demand. Cost: a retrieval call per query.
+
+The key trade-off: how do you decide what to keep short-term and what to push to long-term? Strategies:
+
+- **Always keep recent N turns**: simple, works for casual chat.
+- **Compress to summaries**: replace older turns with a single summary.
+- **Vector store**: index everything; retrieve relevant items per query.
+- **Hybrid**: recent turns verbatim + summary of medium-age + vector retrieval of old.
+
+### C. Memory Implementations
+
+Four common patterns (covered with code in the lesson):
+
+**C.1 Conversation Buffer Memory.** Store every turn verbatim, include all in the next prompt. Simplest, fails when the conversation is long.
+
+**C.2 Conversation Summary Memory.** Periodically use the LLM to summarize old turns. Compresses, but the summary loses detail. Works for chats with linear topic flow.
+
+**C.3 Entity Memory.** Track named entities (people, places, etc.) mentioned in the conversation. Each entity gets a separate "card" with attributes the agent has learned. Useful for relational data.
+
+**C.4 Vector Store Memory.** Embed every turn (or every fact) and store in a vector DB. Per query, retrieve the most relevant items. Scales indefinitely, adds retrieval latency.
+
+These compose. A production agent typically uses buffer (recent N turns) + vector store (older content) + entity (relational facts) simultaneously.
+
+### D. Planning Frameworks
+
+For tasks longer than a single LLM call, the agent must plan: what sub-steps are needed, in what order, with what dependencies?
+
+**D.1 Implicit planning (ReAct).** The agent plans one step at a time, deciding the next action based on the current state. Reactive but myopic — can repeat work or miss long-range structure.
+
+**D.2 Plan-then-execute (BabyAGI, Plan-and-Execute).** First the LLM produces a full plan (a list of sub-tasks). Then a separate executor handles each sub-task, with the original plan as guidance. Cleaner, more efficient when the plan is roughly right.
+
+**D.3 Hierarchical planning.** Decompose into sub-tasks, then decompose each sub-task again, recursively. Suitable for genuinely complex tasks (writing a paper, building software). Most flexible, hardest to implement.
+
+**D.4 Tree-of-thoughts** (Yao et al., 2023). Reasoning as tree search: at each step generate multiple candidate next-thoughts, score them, expand the best. For problems where partial-progress signals are clear (math, puzzles).
+
+### E. Plan-and-Execute
+
+The dominant pattern for long-running tasks:
+
+```
+1. Planner LLM: given the goal, produce a list of sub-tasks (a plan).
+2. For each sub-task in the plan:
+     a. Executor LLM (with tools): perform the sub-task, return result.
+     b. Append result to the working memory.
+3. After all sub-tasks done, Synthesizer LLM: combine results into final answer.
+```
+
+**Re-planning.** When a sub-task fails or reveals new information, optionally call the planner again with the new state. Key trade-off: how often to re-plan. Always re-planning is expensive; never re-planning means errors propagate. Heuristics: re-plan on failure, re-plan if any sub-task surfaces information that contradicts an assumption.
+
+**Why decomposition helps.** A single LLM call has a fixed compute budget — fixed depth of attention. A multi-step plan externalizes the computation across many calls, allowing more total work. Same principle as Chain-of-Thought (lesson 9), at the task level.
+
+### F. Self-Reflection
+
+Agents that finish a task can be asked to evaluate their own output. **Reflexion** (Shinn et al., 2023):
+
+```
+1. Agent attempts the task.
+2. Evaluator (separate LLM or scoring rubric) judges the outcome.
+3. If judgment is negative, the agent reflects: "What went wrong? What would I do differently?"
+4. The reflection is appended to memory.
+5. Agent retries the task with the reflection in context.
+```
+
+This effectively turns failures into learning examples. The reflection adds context that wasn't there before, helping the agent avoid the same mistake on retry. Empirically, Reflexion-style loops improve task success rates by 10-30% on coding and reasoning benchmarks (HumanEval, AlfWorld).
+
+The cost: more LLM calls per task. Use reflection when the task allows multiple attempts and quality matters more than latency.
+
+### G. Memory + Planning Together
+
+The most ambitious pattern: an agent that uses past episodes to inform new plans.
+
+- After completing a task, store the (goal, plan, outcome) triple in episodic memory.
+- For a new task, retrieve similar past episodes; use them as few-shot examples for the planner.
+- Over time, the planner improves at decomposing similar tasks because it has seen what worked before.
+
+This is the boundary between memory and *learning*. The agent's behavior changes over time without weight updates — it just accumulates better episodic memory. Voyager (Wang et al., 2023) demonstrated this for Minecraft: an agent that built a "skill library" of cached procedures and reused them.
+
+### From Theory to the Functions Below
+
+- §1 (memory architectures) — implements §A's four-type taxonomy.
+- §2 (short-term vs long-term) — frames §B's storage trade-off.
+- §3 (buffer memory) — implements §C.1.
+- §4 (summary memory) — implements §C.2.
+- §5 (entity memory) — implements §C.3.
+- §6 (vector store memory) — implements §C.4 (uses lesson 11's vector indexing).
+- §7 (planning frameworks) — surveys §D.
+- §8 (plan-and-execute) — implements §E in code.
+- §9 (self-reflection) — implements §F's Reflexion loop.
+- §10 (memory-augmented generation) — implements §G's episodic memory + planning combination.
 
 ---
 

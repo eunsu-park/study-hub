@@ -10,6 +10,150 @@
 
 ---
 
+## 이론과 원리
+
+자유 텍스트 LLM 응답은 채팅에 작동합니다. 출력을 **파싱**하려는 어떤 다운스트림 시스템에도 실패합니다 — 엔티티를 데이터베이스에 추출, 폼 채우기, 타입화된 파라미터로 행동 트리거. "JSON 출력"은 대부분의 시간 작동하지만 가끔 무효 JSON, 누락 필드, 예상치 못한 타입을 만듭니다 — 그리고 규모에서 "가끔"은 하루에 수천 실패를 의미합니다. 구조화된 출력 기법은 토큰 수준에서 모델 생성을 제약하거나, 생성 후 재시도와 함께 검증하거나, 둘 다를 통해 이 격차를 메웁니다.
+
+이 섹션은 다음을 다룹니다:
+
+- **(A) 제약 생성 문제** — 실제로 어떤 보장이 필요하며 어떤 비용으로.
+- **(B) 프롬프트 수준 구조화** — JSON 모드, 시스템 프롬프트 지시, 정중히 부탁의 한계.
+- **(C) 구조화된 출력으로서의 function calling** — OpenAI/Anthropic의 도구 호출 API가 어떻게 구조를 보장하는가.
+- **(D) 문법 기반 제약 디코딩** — Outlines, LMQL, JSON 스키마 인식 토큰 마스킹.
+- **(E) Pydantic 파싱-그리고-재시도** — 별도 단계로서의 검증, 실패 시 재시도와 함께.
+- **(F) instructor 라이브러리** — 타입 안전 Python 인터페이스, 자동 재시도, 스트리밍을 위한 부분 출력.
+- **(G) 스키마 설계** — 중첩, 선택성, enum, 정밀도와 모델 성공률 사이의 트레이드오프.
+
+### A. 제약 생성 문제
+
+`parse(s)`가 성공하고 파싱된 결과가 어떤 스키마를 만족하는 문자열 `s`를 LLM이 만들기를 원합니다. 세 보장 수준:
+
+- **수준 0 (프롬프트만)** — 모델에 정중히 부탁. 단순 스키마에서 ~95% 성공, 복잡도와 함께 떨어짐.
+- **수준 1 (검증 + 재시도)** — 출력을 파싱; 실패하면 오류와 함께 재프롬프트하고 다시 시도. 1-2 재시도 후 ~99% 성공.
+- **수준 2 (제약 디코딩)** — 각 단계에서 모델의 토큰 선택을 스키마의 유효한 접두사를 유지하는 것으로 제한. 100% 성공 보장(지원될 때).
+
+각 수준이 능력과 비용을 더합니다. 프로덕션 시스템은 수용 가능한 실패율을 주는 가장 낮은 수준을 선택, 지연과 비용을 재시도 빈도와 비교 측정.
+
+### B. 프롬프트 수준 구조화
+
+가장 단순한 접근 — 모델에 무엇을 원하는지 말하기.
+
+```
+"name"(문자열), "age"(정수), "skills"(문자열 배열) 키를 가진 JSON 출력.
+JSON만 출력. 설명 없음.
+```
+
+OpenAI의 "JSON 모드"(`response_format = {"type": "json_object"}`)는 출력을 파싱 가능한 JSON으로 제약하지만 특정 스키마를 강제하지 않습니다. 필드 이름, 타입, 구조는 여전히 모델에 달려 있고 — 모델이 여전히 필드를 환각, 필수 필드를 생략, 또는 타입을 바꿀 수 있습니다.
+
+프로토타이핑이나 위험이 낮은 시스템에 프롬프트 수준 사용. 프로덕션에는 검증(E)과 짝짓기.
+
+### C. 구조화된 출력으로서의 Function Calling
+
+도구 호출(레슨 23)을 위해 설계되었지만, function calling API는 구조화된 출력을 얻는 가장 깔끔한 방법이기도 합니다. 파라미터가 원하는 스키마인 "도구"를 정의; 모델에게 추출된 데이터로 그 도구를 호출하라고 요청:
+
+```
+tool = {
+  "name": "save_person",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string"},
+      "age": {"type": "integer"},
+      "skills": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["name", "age"]
+  }
+}
+# 모델 반환: {"tool_calls": [{"name": "save_person", "arguments": {"name": "...", ...}}]}
+```
+
+인자는 선언된 타입의 유효한 JSON임이 보장됩니다(API가 강제). 실제로 도구를 실행할 필요는 없습니다 — API의 스키마 강제만 사용합니다.
+
+OpenAI의 "Strict 모드" function calling과 Anthropic의 도구 사용 모두 API 수준의 토큰 수준 제약으로 이를 구현 — 무효 토큰은 그저 표본 추출되지 않습니다. ~100% 성공률.
+
+### D. 문법 기반 제약 디코딩
+
+제공자 측 강제가 없는 오픈소스 모델에 대해, **Outlines**(Willard & Louf, 2023)와 **LMQL** 같은 라이브러리가 제약 디코딩을 직접 구현.
+
+**메커니즘.** JSON 스키마(또는 정규식)가 유한 상태 자동기(FSA)로 컴파일됩니다. 각 생성 단계에서 모델이 모든 `V` 토큰에 대한 로짓을 만듭니다; 제약이 FSA를 통한 어떤 유효 경로도 진행시키지 않을 토큰을 마스킹하고, 모델이 나머지에서 표본 추출합니다. 이는 출력이 구성에 의해 스키마와 일치함을 보장합니다.
+
+**비용.** FSA 상태 갱신을 위한 단계당 작은 계산 — 보통 무시할 만함. 일부 제약(특히 복잡한 JSON 스키마)은 컴파일이 느릴 수 있지만 결과는 쿼리 사이 재사용 가능.
+
+이는 API 지원 없는 로컬 모델에 **범주적** 보장을 주는 유일한 접근입니다.
+
+### E. Pydantic 파싱-그리고-재시도
+
+가장 흔한 프로덕션 패턴:
+
+```python
+class Person(BaseModel):
+    name: str
+    age: int
+    skills: list[str]
+
+def extract(text: str, max_retries=3):
+    for _ in range(max_retries):
+        response = llm(prompt + text)
+        try:
+            return Person.model_validate_json(response)
+        except ValidationError as e:
+            prompt = f"{prompt}\n\n이전 시도가 검증 실패: {e}\n수정해서 재시도해 주세요."
+    raise ValueError("최대 재시도 초과")
+```
+
+검증기가 JSON 파싱 오류와 타입/제약 위반 모두를 잡습니다. 오류와 함께 재프롬프트는 보통 다음 시도에서 유효한 출력을 만듭니다. 프롬프트 수준(B)을 검증을 백스톱으로 결합.
+
+이는 적당한 비용으로 ~99%+ 성공을 줍니다(단순 스키마에 평균 ~20 호출당 1 재시도).
+
+### F. instructor 라이브러리
+
+`instructor`(Liu, 2023)는 OpenAI/Anthropic SDK를 감싸 Pydantic 기반 추출을 주 인터페이스로 만듭니다:
+
+```python
+import instructor
+from openai import OpenAI
+
+client = instructor.from_openai(OpenAI())
+person = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": text}],
+    response_model=Person,
+)
+# `person`은 타입화된 Person 인스턴스 — JSON 파싱 없음, 사용자 코드의 검증 없음
+```
+
+배후에서 — instructor가 Pydantic 모델을 function-calling 스키마(C)로 변환, API 호출, 결과 검증, 실패 시 재시도(E). 스트리밍을 위한 부분 검증(타입화된 청크가 도착하면 yield)과 목록 추출을 위한 `Iterable[Person]`도 지원.
+
+이것이 프로덕션 패턴 — 사용자 관점에서 타입 안전성, 배후의 견고한 생성.
+
+### G. 스키마 설계
+
+스키마 설계가 모델의 성공률에 직접 영향을 줍니다.
+
+**G.1 선택적 필드.** 항상 존재하지 않는 필드를 `Optional[T]`로 표시. 모델이 데이터가 존재하는지 고려하도록 강제; 가짜 값의 환각을 줄임.
+
+**G.2 Enum.** 문자열 필드를 닫힌 집합으로 제약 — `Literal["pending", "approved", "rejected"]`. 오타와 발명된 범주를 제거.
+
+**G.3 필드 설명의 예시.** Pydantic의 `Field(description="...")`이 JSON 스키마에 포함됩니다. 예시가 모델이 무엇을 추출할지 이해하는 데 도움 — `Field(description="사람의 전체 법적 이름, 예: 'John Smith'")`.
+
+**G.4 중첩 깊이.** 각 중첩 수준이 실패율을 증가(모델이 자신을 혼란시킬 곳이 더 많음). 가능하면 평탄화 — `customer.name`보다 `customer_name` 선호.
+
+**G.5 수치 제약.** `age`에 `Field(ge=0, le=120)`, 문자열에 `Field(min_length=1, max_length=100)` 사용. 모델이 보통 이를 존중; 검증기가 나머지를 잡음.
+
+일반 원리 — **불변량을 프롬프트가 아닌 스키마에 인코딩.** 스키마 제약은 검사 가능; 프롬프트 지시는 권고적.
+
+### 이론에서 아래 함수들로
+
+- §1 (도전 과제) — §A 세 보장 수준을 틀.
+- §2 (JSON 모드) — OpenAI/Anthropic JSON 모드로 §B 프롬프트 수준 구조화 구현.
+- §3 (function calling) — 구조화된 출력으로서의 §C function calling 구현.
+- §4 (Pydantic) — §E 파싱-재시도 패턴 구현.
+- §5 (instructor 라이브러리) — 타입 안전 추출을 위해 §F 래퍼 사용.
+- §6 (OpenAI Structured Outputs) — 제공자 네이티브 §C/§D 융합(strict 모드 function calling).
+- §7 (프로덕션 파이프라인) — §G 스키마 설계와 함께 §A-§F를 현실적 데이터 추출 파이프라인으로 결합.
+
+---
+
 ## 1. 구조화된 출력의 과제
 
 ### 구조화된 출력이 중요한 이유

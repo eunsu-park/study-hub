@@ -10,6 +10,127 @@
 
 ---
 
+## Theory & Principles
+
+A pre-trained LLM is a *language model* — it predicts plausible next tokens. It is not a *helpful assistant* — it has no preference for being correct, polite, or safe. Alignment is the process of bending a pre-trained model toward producing outputs that humans actually want. The dominant recipe is **RLHF (Reinforcement Learning from Human Feedback)**: collect human preferences over model outputs, train a *reward model* to predict those preferences, then fine-tune the LLM to maximize the predicted reward — using a stability constraint that keeps the model close to the original distribution.
+
+This section covers:
+
+- **(A) Why alignment is needed** — the gap between language modeling and helpful assistance.
+- **(B) Three-stage RLHF pipeline** — SFT → reward model → RL policy optimization.
+- **(C) Reward model and Bradley-Terry** — the preference model, how pairwise human ratings become a scalar reward.
+- **(D) PPO objective in the RLHF context** — KL regularization, the trust-region argument, why PPO over vanilla policy gradient.
+- **(E) DPO (Direct Preference Optimization)** — the closed-form derivation that eliminates the reward model entirely.
+- **(F) Constitutional AI and RLAIF** — replacing some human labels with AI-generated labels.
+
+### A. Why Alignment is Needed
+
+Pre-training optimizes `p(next_token | context)` over web text. The web contains:
+- Helpful tutorials and unhelpful spam.
+- Polite Stack Overflow answers and toxic forum posts.
+- True facts and confident misinformation.
+
+The pre-trained model fits the distribution of this corpus — it knows how to produce all of those, including the bad ones. Asking "How do I make a bomb?" pre-RLHF, the model has no preference for refusing — its job is to produce plausible continuations of that text, and the corpus has examples of both refusal and explanation.
+
+Alignment shifts the model's *output distribution* toward what humans actually prefer: helpful, honest, harmless. The shift is not a one-shot operation — it is a continuous tug-of-war between capability (preserving the model's knowledge) and compliance (steering toward preferred behavior).
+
+### B. Three-Stage RLHF Pipeline
+
+The InstructGPT / ChatGPT recipe (Ouyang et al., 2022):
+
+**B.1 SFT (Supervised Fine-Tuning).** Take human-written demonstrations of (prompt, ideal response) and fine-tune the pre-trained LLM with standard cross-entropy loss. Output: a model that follows instructions reasonably well, but not perfectly.
+
+**B.2 Reward Model (RM) training.** Collect human comparisons: given a prompt and two candidate responses A, B, a human picks the preferred one. Train a model `r_θ(prompt, response) → ℝ` to score responses such that preferred responses get higher scores.
+
+**B.3 RL fine-tuning.** Use PPO (or similar) to update the SFT model so that its outputs maximize the reward model's score, with a KL penalty to prevent drifting too far from the SFT model.
+
+Each stage has a different role: SFT teaches the *format* (how to follow instructions), RM captures *preferences* (which responses are better), RL *optimizes* the policy to those preferences.
+
+### C. Reward Model and Bradley-Terry
+
+The reward model uses the **Bradley-Terry preference model**: the probability that response A is preferred to response B is
+
+```
+P(A > B) = σ(r(prompt, A) − r(prompt, B))
+```
+
+where `σ` is the sigmoid. Equivalently, the *log-odds* of preferring A over B equals the difference in their reward scores. This is the standard model for pairwise comparison data (used in chess Elo ratings, etc.).
+
+**Loss.** Given a dataset of `(prompt, chosen, rejected)` triples:
+
+```
+L_RM = − E [ log σ(r(prompt, chosen) − r(prompt, rejected)) ]
+```
+
+Maximizing this teaches `r` to output higher scores for chosen than rejected, calibrated such that the difference equals the log-odds of preference.
+
+**Architecture.** Take an LLM (often the SFT model itself) and replace the final language head with a scalar regression head on the last-token hidden state. Fine-tune.
+
+### D. PPO in RLHF
+
+Vanilla policy gradient updates `θ ← θ + η · ∇θ E[r(τ)]` directly. For LLMs this is unstable: a single update can shift the policy distribution drastically, breaking subsequent sampling.
+
+**PPO (Proximal Policy Optimization)** adds two safeguards:
+
+**D.1 Clipped surrogate objective.** Use the importance-sampling ratio `r_t = π(a_t | s_t) / π_old(a_t | s_t)`. Clip it to `[1−ε, 1+ε]` (typical `ε = 0.2`) before multiplying by the advantage. Updates that would change the probability ratio too drastically have zero gradient. Empirically, this prevents catastrophic policy updates.
+
+**D.2 KL penalty (RLHF-specific).** Add a penalty term `−β · KL(π_θ ‖ π_SFT)` to the reward. This *explicitly* keeps the policy close to the SFT model, preserving language quality and preventing the model from finding adversarial sequences that fool the reward model:
+
+```
+total_reward(prompt, response) = r_θ(prompt, response) − β · log(π_θ(response | prompt) / π_SFT(response | prompt))
+```
+
+Without the KL term, RL would exploit any reward-model bias — producing weird, repetitive, or off-distribution text that scores well on the (imperfect) reward model. With it, the policy is anchored to the SFT distribution.
+
+The full PPO-RLHF objective combines both. Tuning `β` balances reward maximization against staying-close-to-SFT.
+
+### E. DPO: Direct Preference Optimization
+
+DPO (Rafailov et al., 2023) eliminates the reward model entirely with a beautiful derivation.
+
+**E.1 The insight.** The optimal policy under the PPO objective `r_θ − β · KL(π‖π_ref)` has a known closed form:
+
+```
+π*(y | x) ∝ π_ref(y | x) · exp(r_θ(x, y) / β)
+```
+
+Inverting gives `r_θ(x, y) = β · log(π*(y | x) / π_ref(y | x)) + const`. So the reward is implicitly a function of the *log-ratio* between the optimal policy and the reference.
+
+**E.2 Substituting into Bradley-Terry.** The preference probability becomes
+
+```
+P(y_w > y_l | x) = σ( β · [log(π_θ(y_w|x)/π_ref(y_w|x)) − log(π_θ(y_l|x)/π_ref(y_l|x))] )
+```
+
+Train `π_θ` directly with the Bradley-Terry maximum likelihood loss, using `π_ref` as the SFT model. No reward model. No RL loop. Just supervised cross-entropy on preference pairs.
+
+**E.3 Why it works.** The closed-form solution to the regularized policy optimization is *known*. DPO substitutes that into the preference likelihood, eliminating the intermediate reward model. The optimization is stable (it's just MLE), much cheaper than PPO (no rollouts, no KL estimation in the loop), and empirically matches or beats PPO-RLHF on standard benchmarks.
+
+DPO is now the default for many open-source preference fine-tunes (Zephyr, Mistral-Instruct variants, Llama 3 chat versions).
+
+### F. Constitutional AI and RLAIF
+
+Collecting human preferences is expensive. Two ideas to reduce the cost:
+
+**F.1 Constitutional AI** (Bai et al., 2022). Replace human safety labels with AI labels: write a "constitution" of principles ("be helpful but not harmful"), then have an LLM critique its own outputs against the constitution and revise. The revised outputs become the chosen responses, the original outputs are rejected.
+
+**F.2 RLAIF (RL from AI Feedback).** Generalize: use a strong LLM as the labeler instead of humans. Surprisingly, on many tasks, AI labels are nearly as good as human labels — and orders of magnitude cheaper. Especially effective for capability tasks (math, code) where ground truth is checkable.
+
+Modern alignment pipelines use a mix: human labels for nuanced preferences, AI labels for scale.
+
+### From Theory to the Functions Below
+
+- §1 (alignment overview) — frames §A and §B's pipeline.
+- §2 (SFT) — implements §B.1 with standard fine-tuning.
+- §3 (RLHF pipeline) — overall flow of §B.
+- §4 (reward model) — codes §C's Bradley-Terry RM.
+- §5 (PPO) — implements §D's clipped objective and KL penalty.
+- §6 (DPO) — implements §E's closed-form preference optimization.
+- §7 (Constitutional AI) — implements §F.1's self-critique loop.
+- §8 (advanced) — newer methods (RLAIF, KTO, IPO) building on §C-§F.
+
+---
+
 ## 1. LLM Alignment Overview
 
 ### Why is Alignment Needed?

@@ -9,6 +9,142 @@
 
 ---
 
+## Theory & Principles
+
+The HuggingFace Transformers library is, at its core, a **standardized abstraction layer** over hundreds of different model architectures. Behind the convenient `AutoModel.from_pretrained("bert-base")` call sits a careful design that decouples three orthogonal concerns: **tokenization** (text → tensors), **architecture** (Python class implementing the model), and **weights** (trained parameters stored on the Hub). Understanding how these pieces fit together — and the conventions that make them interoperable — is what lets you go from a research paper to a working model in three lines.
+
+This section covers:
+
+- **(A) The Auto-class abstraction** — how `AutoModel`, `AutoTokenizer`, `AutoConfig` route to the right concrete class based on a model's `config.json`.
+- **(B) Tokenizer internals** — fast (Rust) vs slow (Python), the encoding pipeline, and what `BatchEncoding` actually contains.
+- **(C) Model loading and weight initialization** — `state_dict`, weight tying, partial loads, the `device_map` and quantization options.
+- **(D) The Pipeline API** — how `pipeline("sentiment-analysis")` composes preprocessing, model inference, and postprocessing.
+- **(E) The Datasets / Trainer pipeline** — `datasets` for streaming and caching, `Trainer` for the standard training loop.
+- **(F) The Hub** — model cards, versioning, and the `from_pretrained` resolution algorithm.
+
+### A. The Auto-Class Abstraction
+
+`AutoTokenizer.from_pretrained("bert-base-uncased")` does roughly the following:
+
+```
+1. Resolve the model identifier → URL on the HF Hub.
+2. Download config.json — contains "model_type": "bert" and architecture hyperparameters.
+3. Look up the model_type in a registry mapping bert → BertTokenizer (or BertTokenizerFast).
+4. Instantiate that concrete class with the downloaded config and vocab files.
+```
+
+Same algorithm for `AutoModel`, `AutoConfig`, `AutoFeatureExtractor`, `AutoProcessor`. The benefit is **decoupling user code from model architecture** — switching from `bert-base-uncased` to `roberta-base` or `microsoft/deberta-v3-base` requires only changing one string. The Auto-classes hide ~20 different concrete classes per modality.
+
+Task-specific Auto-classes (`AutoModelForSequenceClassification`, `AutoModelForTokenClassification`, `AutoModelForQuestionAnswering`) wrap the base encoder with the appropriate task head. They handle the head's randomly-initialized weights when no task-specific checkpoint exists.
+
+### B. Tokenizer Internals
+
+**B.1 Fast vs slow.** Python tokenizers (slow) implement BPE/WordPiece in pure Python; fast tokenizers (`tokenizers` library) implement the same algorithms in Rust with parallelism. For BERT-base on a 1M-sentence corpus, fast tokenizers are ~50-100× faster — important because tokenization is often a training bottleneck.
+
+**B.2 The encoding pipeline.** Calling `tokenizer(text)` runs:
+
+```
+text → normalize → pre-tokenize → tokenize (BPE/WordPiece/Unigram) → post-process (add [CLS], [SEP]) → return BatchEncoding
+```
+
+Each stage is configurable. Normalization handles Unicode (NFC/NFD), accent stripping, lowercasing. Pre-tokenization splits on whitespace and punctuation but keeps a record of original character offsets. Post-processing adds special tokens and builds the attention mask.
+
+**B.3 BatchEncoding contents.**
+
+```python
+out = tokenizer(["Hello world", "Hi"], padding=True, return_tensors="pt")
+# out["input_ids"]:        tensor of token IDs, shape (B, L)
+# out["attention_mask"]:   1 for real tokens, 0 for padding, shape (B, L)
+# out["token_type_ids"]:   segment IDs (0/1) for sentence-pair models
+# out.offset_mapping:      char offsets back to the original string (only with fast tokenizers)
+```
+
+The `offset_mapping` is crucial for token-level tasks like NER: it lets you map predicted token labels back to character spans in the original text — a step that is impossible to do correctly without offset tracking.
+
+### C. Model Loading and Weight Initialization
+
+**C.1 What `from_pretrained` does.**
+
+```
+1. Download config.json + tokenizer files + safetensors/pytorch_model.bin.
+2. Instantiate the architecture from config (random weights).
+3. Load the downloaded state_dict, mapping each weight by name.
+4. Report missing keys (architecture expected weights not in the checkpoint)
+   and unexpected keys (checkpoint weights not used by this architecture).
+```
+
+Missing keys are auto-initialized — for `BertForSequenceClassification`, the classification head weights are random because the pre-trained `bert-base-uncased` checkpoint has no such head. The library logs a warning so you know which weights are not pre-trained.
+
+**C.2 Weight tying.** In LMs, the input embedding `E ∈ ℝ^{V × d}` and the output projection `W ∈ ℝ^{d × V}` are usually tied (`W = E^T`). This halves the parameter count on the embedding/output and provides a regularization benefit — both projections must satisfy each role simultaneously. The HF library handles tying automatically during loading.
+
+**C.3 `device_map` and quantization.** Modern LLMs do not fit on a single GPU at full precision. `from_pretrained(..., device_map="auto", load_in_4bit=True)` triggers:
+
+- Architecture instantiation on the meta device (no allocation).
+- Weight-by-weight loading: each tensor is loaded from disk, optionally quantized to NF4/INT8, and placed on the GPU/CPU/disk according to a memory budget.
+- The result: a model that runs end-to-end with each parameter on the device decided automatically.
+
+This is a significant abstraction — without it, you would write hundreds of lines of `accelerate` glue.
+
+### D. The Pipeline API
+
+```python
+nlp = pipeline("sentiment-analysis")
+nlp("I love this!")  # → [{"label": "POSITIVE", "score": 0.99}]
+```
+
+A pipeline is a thin wrapper that composes:
+
+```
+1. Tokenizer (from the model's default).
+2. Model (forward pass with no_grad).
+3. Postprocessor: argmax for classification, decoding for generation, span extraction for QA, etc.
+```
+
+Pipelines are convenience wrappers — they lock you into default tokenization, default decoding strategies, and Python-level batching. For production, drop down to direct tokenizer + model calls; for prototyping or one-off inference, pipelines are perfect.
+
+### E. Datasets and Trainer
+
+**E.1 `datasets`.** A unified API over local files, the Hub, and custom loaders, with three properties that matter for NLP:
+
+- **Memory-mapped storage** (Apache Arrow): a 100 GB dataset is queryable without fitting in RAM.
+- **Streaming**: `load_dataset(..., streaming=True)` returns an iterator that downloads on demand — necessary for datasets like C4 (700 GB+).
+- **`map()` with caching**: `dataset.map(tokenize_fn)` runs once and caches the tokenized output to disk. Re-running picks up the cache.
+
+**E.2 `Trainer`.** Implements the standard training loop:
+
+```
+for epoch in range(num_epochs):
+    for batch in train_loader:
+        loss = model(**batch).loss
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+        if step % eval_steps == 0:
+            evaluate(...)
+```
+
+Built-in: gradient accumulation, mixed-precision training, distributed training, learning-rate scheduling, checkpointing, integration with W&B / TensorBoard. Replacing `Trainer` with hand-written PyTorch is fine for research; for any standard fine-tuning task, `Trainer` saves hundreds of lines.
+
+### F. The Hub
+
+Each model on `huggingface.co/<org>/<model>` is a Git repository containing `config.json`, tokenizer files, weights, and a `README.md` (model card). Model versioning uses Git revisions, so `from_pretrained(..., revision="v1.0")` pins to a specific commit.
+
+The Hub is the dependency mechanism for modern NLP — when a paper releases code, the standard pattern is to also release the trained checkpoint to the Hub, so any reader can reproduce the result with `from_pretrained`. This is structurally why the field's reproducibility is much better than ML overall.
+
+### From Theory to the Functions Below
+
+- §1 (ecosystem) — overview of the §A Auto-class layer and the §F Hub model.
+- §2 (Pipeline API) — the §D wrapper for common tasks.
+- §3 (tokenizers) — direct use of §B's `AutoTokenizer`, with offset_mapping examples.
+- §4 (model loading) — §C's `from_pretrained` mechanics, with `AutoModel` and task-specific heads.
+- §5 (Datasets library) — §E.1's load/map/cache patterns.
+- §6 (Trainer API) — §E.2's standard fine-tuning loop.
+- §7 (saving/loading) — `save_pretrained` / `push_to_hub` (§F).
+- §8 (sentiment classification) — end-to-end project tying §B, §C, §E together.
+
+---
+
 ## 1. HuggingFace Ecosystem
 
 ### Main Components

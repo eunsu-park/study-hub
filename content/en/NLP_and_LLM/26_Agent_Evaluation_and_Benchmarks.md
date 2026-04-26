@@ -15,6 +15,8 @@ Previous: [Agent Memory and Planning](./25_Agent_Memory_and_Planning.md) | Next:
 
 ## Table of Contents
 
+Before the benchmark and methodology reference, read [**Theory & Principles**](#theory--principles) — what makes agent evaluation different from LLM evaluation, the trajectory-vs-outcome distinction, and the cost-quality frontier that all agent benchmarks navigate.
+
 1. [Agent Evaluation Challenges](#1-agent-evaluation-challenges)
 2. [AgentBench](#2-agentbench)
 3. [SWE-bench](#3-swe-bench)
@@ -26,6 +28,117 @@ Previous: [Agent Memory and Planning](./25_Agent_Memory_and_Planning.md) | Next:
 9. [Cost-Quality Analysis](#9-cost-quality-analysis)
 10. [Building Custom Agent Evals](#10-building-custom-agent-evals)
 11. [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Evaluating an agent is harder than evaluating an LLM. An LLM has one input (a prompt) and one output (a response); evaluation compares output against reference. An agent has a *trajectory* — a sequence of (thought, action, observation) tuples — that may take many LLM calls and tool invocations to reach a goal. Two agents can both succeed at a task but with wildly different cost, latency, safety, and trajectory quality. Agent evaluation must measure not just whether the goal was achieved, but how, and at what cost.
+
+This section covers:
+
+- **(A) The trajectory-vs-outcome distinction** — why "did it succeed?" is not enough.
+- **(B) Task success and partial credit** — designing a task is designing a measurement protocol.
+- **(C) Major benchmarks** — AgentBench, SWE-bench, WebArena, GAIA, and what each really tests.
+- **(D) Failure mode taxonomy** — common ways agents fail (loops, hallucination, tool misuse, premature stopping).
+- **(E) Trajectory analysis** — observability, tracing, the value of structured logs.
+- **(F) Cost-quality frontier** — Pareto trade-offs and how to communicate them.
+- **(G) Building custom evals** — task design, ground truth, automatic scoring.
+
+### A. Trajectory vs Outcome
+
+Two perspectives on agent quality:
+
+- **Outcome-only**: did the agent achieve the goal? Pass/fail or score on a final answer. Easy to measure, sometimes deceptive (an agent can stumble into the right answer through a tortured trajectory).
+- **Trajectory**: examine each step. Did each tool call make sense? Did the agent waste cycles? Did it follow safety constraints? Hard to measure automatically, but essential for understanding agent behavior.
+
+Production agent eval needs both: outcome metrics for top-level reporting, trajectory metrics for understanding when (and why) the agent fails.
+
+### B. Task Success and Partial Credit
+
+Defining "success" for an open-ended task is itself a research problem. Three patterns:
+
+- **Binary**: pass or fail. Suitable when there's a clear unambiguous correct outcome (a code patch, a SQL query, a math answer).
+- **Graded**: 0-1 score from a rubric (LLM-as-judge or automated checks). Suitable for nuanced tasks (writing, summarization).
+- **Multi-objective**: separate scores for correctness, efficiency, safety, etc. Combine into a single score only with care — averaging hides trade-offs.
+
+For benchmarks: **automatic verifiability** is what makes a benchmark scalable. SWE-bench works because patches can be tested. WebArena works because final web state is checkable. Tasks where success requires human judgment scale poorly.
+
+### C. Major Benchmarks
+
+**C.1 AgentBench** (Liu et al., 2023). Eight diverse environments (OS, DB, knowledge graph, etc.). Agent must complete tasks in each. Stress-tests generality — an agent that wins on one environment can fail badly on others.
+
+**C.2 SWE-bench** (Jimenez et al., 2023). Real GitHub issues from popular Python repos. Agent must produce a patch that resolves the issue and passes the project's existing tests. Hard, realistic, automatic verification. The reference benchmark for code-agent capability.
+
+**C.3 WebArena** (Zhou et al., 2023). Realistic web tasks (shopping, GitLab, content management) on actual websites running locally. Tests web browsing, form-filling, multi-page reasoning. Reproducible because the websites are containerized.
+
+**C.4 GAIA** (Mialon et al., 2023). General assistant benchmark — questions that require multi-step reasoning, tool use, web search, file processing. Easy for humans (most score >90%); current LLMs (GPT-4 with tools) score 30-50%. Designed to expose the capability gap.
+
+Each benchmark probes a different aspect: AgentBench for breadth, SWE-bench for code, WebArena for web, GAIA for general assistance. No single benchmark captures everything.
+
+### D. Failure Mode Taxonomy
+
+Common ways agents fail:
+
+**D.1 Infinite loops.** Agent calls the same tool with the same args repeatedly. Detection: hash-and-compare past calls, alert on repeats.
+
+**D.2 Hallucinated tools or arguments.** Agent invents a tool name, calls a real tool with imaginary parameters. Detection: schema validation (function calling makes this nearly impossible at the API level).
+
+**D.3 Premature stopping.** Agent declares "task complete" before actually completing the task. Detection: outcome verification, force the agent to justify completion.
+
+**D.4 Tool misuse.** Agent calls the right tool but with wrong arguments — searches for "Python" when the user asked about "Python the language." Detection: harder; usually requires LLM-as-judge on the trajectory.
+
+**D.5 Cost runaway.** Agent gets stuck in unproductive exploration, racking up tokens and tool calls. Detection: hard caps on steps and budget.
+
+**D.6 Safety violation.** Agent calls a destructive tool (delete, send, pay) without proper authorization. Detection: human-in-the-loop for high-stakes tools, output filtering for the rest.
+
+A robust agent eval categorizes each failure into these (or domain-specific) classes, so you can prioritize fixes.
+
+### E. Trajectory Analysis
+
+Logging structure matters. A useful agent log includes, per step:
+
+- Step number and timestamp.
+- Thought (LLM reasoning).
+- Action (tool name + args).
+- Observation (tool result, possibly truncated).
+- Tokens consumed, cost, latency.
+- Optionally: a per-step LLM-as-judge score for "was this step productive?"
+
+Tools like LangSmith, Phoenix, Langfuse, and Helicone (lesson 24) instrument agents with this structure automatically. Without trajectory logs, debugging a failed agent run is essentially impossible.
+
+### F. Cost-Quality Frontier
+
+Two agents with the same success rate can have wildly different cost:
+
+- Agent A: 80% success, $0.10 per task.
+- Agent B: 80% success, $1.50 per task.
+
+Same outcome metric, 15× cost difference. Agent A is strictly better unless B has other advantages (latency, safety, etc.). Agent evaluation should report cost alongside quality.
+
+For each agent, plot success vs cost and find the Pareto frontier. Decisions about which agent to deploy depend on the application's cost sensitivity. A back-office data extraction tool can afford expensive agents; a real-time chat companion cannot.
+
+### G. Building Custom Evals
+
+For a specific application, public benchmarks are necessary but insufficient. Custom evals:
+
+1. **Define tasks** representative of real production traffic. Sample real user queries (with privacy controls) or write synthetic ones based on use cases.
+2. **Establish ground truth.** For each task, what is the correct outcome? Manual labeling (expensive, gold standard) or LLM-as-judge (cheap, good enough for most).
+3. **Run candidate agents** against the eval set.
+4. **Compute metrics**: success rate, cost, latency, failure-mode distribution.
+5. **Track over time.** Re-run on every release to catch regressions.
+
+Standard pattern: a small "smoke test" eval (10-50 tasks, runs in minutes) for every commit; a larger "comprehensive" eval (200-1000 tasks, runs in hours) for releases.
+
+### From Theory to the Functions Below
+
+- §1 (challenges) — frames §A trajectory-vs-outcome and §B success definitions.
+- §2-§5 (AgentBench, SWE-bench, WebArena, GAIA) — implements §C's main benchmarks.
+- §6 (evaluation methodology) — §B graded scoring and §F multi-objective metrics.
+- §7 (failure mode analysis) — implements §D's taxonomy with detectors.
+- §8 (observability and tracing) — §E structured logging with LangSmith/Phoenix.
+- §9 (cost-quality analysis) — §F Pareto frontier visualization.
+- §10 (custom evals) — §G's task-definition + scoring + tracking pipeline.
 
 ---
 

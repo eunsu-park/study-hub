@@ -9,6 +9,115 @@
 
 ---
 
+## Theory & Principles
+
+A production chatbot is the synthesis of nearly every concept in this course: an LLM does the language modeling (lessons 3-5), a tokenizer turns text into IDs (lesson 1), prompt engineering shapes the conversation (lesson 9), RAG injects domain knowledge (lessons 10-12), tool calling enables action (lessons 14, 23), conversation memory threads multi-turn coherence (lesson 13), and serving infrastructure delivers it at scale (lessons 18, 24). The lesson is less about new theory than about **integration**: which components compose well, which trade-offs matter at scale, and the failure modes that only appear in production.
+
+This section covers:
+
+- **(A) The chatbot as a stateful function** — what makes a conversation different from a single query, and the formal model of a turn-based agent.
+- **(B) Conversation memory architectures** — buffer, window, summary, vector — when each fits.
+- **(C) RAG integration** — when to retrieve, the retrieval-decision problem, citation handling.
+- **(D) Streaming and latency budget** — first-token latency vs throughput, why streaming changes UX more than model quality does.
+- **(E) Safety, moderation, and refusal** — the input-LLM-output safety pipeline.
+- **(F) Production concerns** — caching, rate limiting, fallbacks, observability, evaluation in production.
+
+### A. The Chatbot as a Stateful Function
+
+A single LLM call is `f(prompt) → response`. A chatbot is a *stateful* function: each turn `t` takes user input `u_t` and produces assistant output `a_t`, where the state `s_t` carries everything the system has decided to remember so far:
+
+```
+(a_t, s_t) = chatbot(u_t, s_{t-1})
+```
+
+The state typically includes: full message history (or a compressed form), retrieved document store, user preferences/profile, session metadata (auth, tenant), and any tool-call results. The system's job is to construct the prompt for turn `t` from `(s_{t-1}, u_t)` such that the LLM produces a useful `a_t`, then update `s_t`.
+
+This stateful-function view clarifies that everything else in the lesson — memory, RAG, tools — is a way to shape *what goes into `s`* and *how `s` is mapped to the prompt*.
+
+### B. Conversation Memory Architectures
+
+The naïve approach — include the entire message history in every prompt — works for short conversations but explodes cost and eventually exceeds the context window. Four strategies (covered in depth in lesson 25):
+
+**B.1 Buffer.** Just include all turns. Simplest, exact, but `O(n)` tokens per call where `n` is conversation length.
+
+**B.2 Window.** Keep only the last `k` turns. `O(k)` per call but loses early context.
+
+**B.3 Summary.** Periodically replace old turns with an LLM-generated summary. `O(1)` long-term but adds summarization latency and risks information loss.
+
+**B.4 Vector / retrieval-augmented.** Store all past turns in a vector DB, retrieve relevant ones per query. Scales indefinitely but adds retrieval latency and may miss recent unrelated context.
+
+In practice: a hybrid — recent K turns verbatim (window) + summarized older turns (summary) + retrieval for explicitly factual recall (vector). The exact mix is product-specific.
+
+### C. RAG Integration
+
+A chatbot may or may not need RAG per turn. A greeting "hi how are you" should not trigger a vector search; a question about company policy should. Two approaches:
+
+**C.1 Always retrieve.** Run RAG on every turn regardless of content. Simple, sometimes wasteful, but predictable cost.
+
+**C.2 Conditional retrieval.** Use the LLM (or a cheap classifier) to decide if retrieval is needed. Saves cost but adds an extra LLM call per turn for the decision. Variants: function calling (give the model a `search` tool, let it decide), or explicit binary classification.
+
+**C.3 Multi-hop retrieval.** For complex queries, follow the lesson 12 pattern — initial retrieval → LLM reasons → maybe retrieve again.
+
+Citation handling: production chatbots cite sources for every retrieved-fact-based claim. The standard pattern: prompt instructs the model to emit `[1]`, `[2]` markers, then the UI maps markers to source links. Robust systems verify that cited markers match retrieved chunks.
+
+### D. Streaming and Latency Budget
+
+A chat UX feels alive when the response streams token-by-token. Two latencies matter:
+
+- **TTFB (Time-To-First-Byte / first token)**: how long until any response appears. Dominated by retrieval (if RAG) and LLM prefill (the time to process the prompt before generating).
+- **TPS (Tokens-Per-Second / streaming throughput)**: how fast tokens appear after the first. Dominated by model size and decoding.
+
+Users tolerate higher *total* latency if TTFB is fast and TPS is steady. A 10-second response that starts in 0.5s and streams smoothly feels better than a 5-second response with all 5 seconds of silence then a dump.
+
+Concretely:
+- Reduce TTFB by: prompt caching (lesson 24), shorter system prompts, faster retrieval indices, smaller prefill batches.
+- Increase TPS by: smaller model, vLLM/TGI (lesson 18), speculative decoding, FP8/INT4 quantization.
+
+### E. Safety, Moderation, and Refusal
+
+A production chatbot needs guardrails on **input** and **output**:
+
+```
+user input
+    ↓
+[input moderation (PII, banned content, prompt injection)]
+    ↓
+[chatbot core: RAG + LLM]
+    ↓
+[output moderation (PII leaks, toxic content, hallucinated citations)]
+    ↓
+response
+```
+
+Each stage can use rule-based checks (regex for SSNs, profanity lists), classical ML classifiers (toxicity models), or LLM-as-judge for subtle cases. Lesson 21 covers safety in depth.
+
+The **refusal policy** must be encoded somewhere: in the system prompt, in a separate moderator LLM, or in product-level rules. Common: layered defense — system prompt asks for refusal on certain topics, *plus* an output filter that catches model failures to refuse.
+
+### F. Production Concerns
+
+**F.1 Caching.** Identical or near-identical queries should reuse responses. Two layers — exact cache (hash of input) and semantic cache (embed query, look up similar past responses). Lesson 24 covers this.
+
+**F.2 Rate limiting.** Per-user and global rate limits prevent abuse and cost runaway. Token-based, request-based, or both.
+
+**F.3 Fallbacks.** When the primary LLM fails (timeout, error, policy violation), fall back to a different model, a static response, or a "we're having trouble" message. Lesson 24.
+
+**F.4 Observability.** Every turn logs: input, retrieved chunks, prompt sent, model response, latency, token counts, cost, user feedback. Used for debugging and offline evaluation.
+
+**F.5 Online evaluation.** A/B testing (lesson 24): route a fraction of users to a candidate model/prompt, compare engagement metrics. The only way to know if changes actually improve real-world UX.
+
+### From Theory to the Functions Below
+
+- §1 (architecture) — frames §A's stateful-function view.
+- §2 (basic chatbot) — minimal LLM-with-history; the §B.1 buffer pattern.
+- §3 (RAG chatbot) — implements §C with always-retrieve.
+- §4 (advanced conversation management) — implements §B.2-§B.4 (window, summary, vector memory).
+- §5 (streaming) — §D streaming with HuggingFace / OpenAI APIs.
+- §6 (FastAPI server) — wraps the chatbot in a production API with the §F observability hooks.
+- §7 (Gradio UI) — quick web UI for testing.
+- §8 (production considerations) — implements §E safety pipeline and §F caching/fallback patterns.
+
+---
+
 ## 1. Chatbot Architecture
 
 ### Basic Structure
