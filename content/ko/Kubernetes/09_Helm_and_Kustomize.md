@@ -18,8 +18,11 @@ Kubernetes 클러스터가 복잡해짐에 따라 원시 YAML 매니페스트 �
 
 > **템플릿화 vs 패칭:** Helm은 템플릿과 values에서 YAML을 생성합니다 -- 유연하지만 읽기 어려운 템플릿을 만들 수 있습니다. Kustomize는 유효한 YAML을 오버레이로 패치합니다 -- 단순하지만 매개변수화에서 덜 유연합니다. 많은 팀이 둘 다 사용합니다: 서드파티 차트에는 Helm을, 애플리케이션별 오버레이에는 Kustomize를.
 
+차트 구문에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 대규모 YAML이 templating과 patching 중 하나를 강제하는 이유, Helm의 텍스트 치환 모델 vs Kustomize의 구조적 병합 모델의 트레이드오프, Helm의 안전한 롤백을 가능하게 하는 release-라이프사이클 상태 머신, 그리고 의존성 해결의 실제 동작을 다룹니다.
+
 ## 목차
 
+- [이론과 원리](#이론과-원리)
 - [1. Helm 개념](#1-helm-개념)
   - [1.1 차트, 릴리스, 리포지토리](#11-차트-릴리스-리포지토리)
   - [1.2 Helm 아키텍처](#12-helm-아키텍처)
@@ -47,6 +50,121 @@ Kubernetes 클러스터가 복잡해짐에 따라 원시 YAML 매니페스트 �
 - [9. Helm vs Kustomize](#9-helm-vs-kustomize)
 - [10. Helmfile](#10-helmfile)
 - [연습문제](#연습문제)
+
+---
+
+## 이론과 원리
+
+쿠버네티스 service가 몇 개의 리소스 이상이 되면 — Deployment + Service + ConfigMap + HPA + NetworkPolicy + ServiceAccount + 어쩌면 Ingress — 그리고 dev/stage/prod에 다른 레플리카 수, 이미지 태그, DB 호스트명으로 배포해야 하면, 평면 YAML은 무너집니다. 이를 해결하는 두 길에 부딪힙니다 — **templating**(템플릿에 변수를 치환하여 YAML 생성)과 **patching**(유효한 YAML에서 시작해 구조적 변경을 오버레이). Helm은 templating 길을, Kustomize는 patching 길을 갔습니다. 각각 다른 쪽이 근본적으로 복제할 수 없는 속성을 가집니다. 이 섹션은 두 철학, Helm 롤백을 동작하게 만드는 release-as-state-machine 모델, 그리고 Kustomize를 합성 가능하게 만드는 구조적 병합 알고리즘을 설명합니다.
+
+### A. Templating vs Patching — 두 철학
+
+같은 문제 — "환경별 변형으로 50개 매니페스트를 배포해야 한다" — 에 두 가지 정반대 답이 있습니다:
+
+**Templating (Helm).** YAML을 텍스트로 취급. 변수와 제어 흐름(`{{ .Values.image.tag }}`, `{{- if .Values.ingress.enabled }}`)을 소스에 직접 임베드. 렌더러(`helm template`)가 값을 치환하고 최종 YAML을 방출. 장점 — 최대 표현력 — 어떤 문자열이든 매개변수화 가능, 조건 섹션, 리스트 루프, Sprig 함수로 계산 값. 단점 — 템플릿 자체는 유효한 YAML이 아님(YAML로 lint 불가); 공백이 깨지기 쉬움; 복잡한 차트는 읽기 어려워짐; IDE에서 파일을 열어 무엇이 배포되는지 그냥 볼 수 없음.
+
+**Patching (Kustomize).** YAML을 구조적 데이터로 취급. 베이스는 유효한 매니페스트. 오버레이는 베이스에 병합되는 유효 YAML 패치. 렌더러(`kustomize build`)가 패치를 적용하고 최종 YAML을 방출. 장점 — 모든 파일이 유효 YAML — IDE 하이라이팅, 스키마 검증, 베이스만으로 kubectl apply 모두 동작; 배울 템플릿 구문 없음; 예측 가능한 합성. 단점 — 표현력이 적음 — "X를 가진 모든 컨테이너에 이 레이블을 추가" 같은 것을 쉽게 말할 수 없음; 복잡한 변환은 자체 학습 곡선을 가진 JSON Patch 필요; 조건적 포함이 어색.
+
+어느 쪽도 보편적으로 더 낫지 않습니다. 가장 좋은 팀은 둘 다 사용합니다 — **서드파티 차트에는 Helm**(벤더 유지 패키지를 소비하고 그저 값만 오버라이드하고 싶을 때), **내부 매니페스트에는 Kustomize**(템플릿 계층 없이 정확히 무엇이 배포되는지 보고 싶을 때).
+
+미묘한 속성 — Helm의 출력은 Helm 버전 간에 다르게 동작할 수 있는 Go 템플릿 엔진에 의존합니다 — Kustomize의 출력은 스펙으로부터 결정적입니다. 따라서 Kustomize는 렌더링된 YAML이 진실의 원천인 GitOps에서 우세한 경향이 있습니다.
+
+### B. Helm — 상태 머신을 가진 패키지 관리자
+
+Helm은 templating 도구 이상입니다 — **패키지 관리자**입니다. Helm `Chart`는 정의된 구조의 디렉토리(`Chart.yaml` 메타데이터, `values.yaml` 기본값, `templates/` 템플릿 디렉토리, 서브차트용 선택적 `charts/`)입니다. `helm install`을 하면 세 가지가 일어납니다:
+
+1. **Render** — 템플릿과 값을 결합하여 최종 YAML 생성.
+2. **Apply** — 클러스터에 kubectl 스타일 적용.
+3. **Release 기록** — 렌더링된 매니페스트, 버전 번호, 메타데이터를 대상 네임스페이스의 Secret으로 저장.
+
+세 번째 부분이 Helm을 templating 도구와 차별화합니다. **Release**는 버전 이력을 가진 명명된 설치입니다:
+
+```
+$ helm history my-app
+REVISION  STATUS      CHART       APP VERSION  DESCRIPTION
+1         superseded  my-app-1.0  v1.0         Install complete
+2         superseded  my-app-1.1  v1.1         Upgrade complete
+3         deployed    my-app-1.2  v1.2         Upgrade complete
+```
+
+각 업그레이드는 전체 렌더링된 매니페스트를 새 Secret으로 저장합니다. `helm rollback my-app 1`은 revision 1의 매니페스트를 다시 적용합니다. 이것이 Helm 롤백이 안전하고 원자적인 이유입니다 — 변했을 수도 있는 템플릿 시간 재계산이 아니라 저장된 이전 상태를 사용합니다.
+
+훅(`helm.sh/hook: pre-install`, `post-upgrade` 등)이 이 상태 머신을 확장합니다 — 훅 어노테이션은 Helm에게 다음 단계 전에 Job을 실행하라고 지시합니다(예: "설치 전에 db-migrate 실행"). 실패한 훅은 release 전이를 차단합니다.
+
+### C. Helm 템플릿 — Sprig, 파이프라인, 명명된 템플릿
+
+Helm은 Go 템플릿과 [Sprig](http://masterminds.github.io/sprig/) 함수 라이브러리를 사용합니다. 결과는 YAML 안에 사는 작은 함수형 언어입니다:
+
+```yaml
+{{- $fullName := include "myapp.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+spec:
+  replicas: {{ .Values.replicas | default 3 }}
+  template:
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repo }}:{{ .Values.image.tag | required "image.tag is required" }}"
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+```
+
+내재화할 세 패턴:
+
+- **파이프라인(`|`)**은 변환을 체이닝합니다 — `{{ .Values.foo | upper | quote }}`는 `"BAR"`를 생성. Sprig는 수백 개 함수(문자열 조작, 수학, 리스트, dict, 날짜, 암호)를 제공합니다.
+- **명명된 템플릿(`define` / `include`)**은 `_helpers.tpl`에 저장된 재사용 가능 스니펫입니다. 관습은 여러 곳에서 표준 레이블 블록을 방출하기 위해 `{{ include "myapp.labels" . }}`. `include`(vs `template`)가 선호되는 이유는 추가로 파이프 가능하기 때문입니다.
+- **`required`, `default`, `tpl`**은 안전망입니다 — `default`는 fallback 제공, `required`는 값이 없을 때 큰 소리로 에러, `tpl`은 문자열을 템플릿으로 평가(값 자체에 템플릿이 있을 때 유용).
+
+공백은 악명 높게 까다롭습니다. `{{- ... -}}`는 주변 공백을 트림합니다 — `nindent N`은 다중 줄 블록을 N 칸 들여쓰기. 대부분의 Helm 차트 버그는 유효하지 않은 YAML을 생성하는 공백 버그입니다.
+
+`charts/`의 서브차트는 합성을 허용합니다(예: 당신의 앱 차트가 `redis`와 `postgres` 차트에 의존). 부모로부터의 값은 차트 이름을 키로 흘러 내려갑니다(`redis.enabled: false`는 redis 서브차트를 비활성). 이것이 의존성 관리에 대한 Helm의 답입니다.
+
+### D. Kustomize — 구조적 병합과 패치 대수
+
+Kustomize는 유효한 YAML에서 시작합니다 — 당신의 `base/` 디렉토리에는 실제 배포 가능 매니페스트가 있습니다. 오버레이가 구조적 변환을 적용합니다:
+
+```
+base/
+  deployment.yaml      # replicas: 1, image: nginx:1.25
+  service.yaml
+  kustomization.yaml   # 리소스 나열
+
+overlays/prod/
+  kustomization.yaml   # 패치 — 5로 스케일, 이미지 태그 변경, prod 레이블 추가
+  deployment-patch.yaml
+```
+
+세 가지 변환 메커니즘:
+
+**1. Strategic Merge Patch.** 부분 쿠버네티스 매니페스트처럼 보입니다 — Kustomize가 스키마를 알고 지능적으로 병합합니다 — 예: `containers: [{ name: app, image: x }]`를 패치하면, 새 컨테이너를 추가하는 대신 `app`이라는 기존 컨테이너를 수정. 스키마 인식, 흔한 케이스에 직관적.
+
+**2. JSON Patch (RFC 6902).** JSON 경로에 대한 명시적 작업 — `{op: replace, path: /spec/replicas, value: 5}`. 장황하지만 정확 — strategic merge가 변경을 표현할 수 없을 때 필요(예: 인덱스로 배열 요소 편집).
+
+**3. Generator (configMapGenerator, secretGenerator).** 파일, 리터럴, env 파일에서 ConfigMap과 Secret을 빌드. 콘텐츠 해시 접미사(`my-config-h7f4d8`)를 가진 불변 객체 생성 — 콘텐츠가 바뀌면 해시가 바뀌어, 새 config를 가져오는 Pod 재시작을 강제합니다. 이는 "ConfigMap 업데이트가 파드를 재시작하지 않는" 문제를 우아하게 해결합니다.
+
+Kustomize는 잘 합성됩니다 — `base → overlays/staging → overlays/prod-east-1`을 가질 수 있고 각 계층이 더 많은 구체를 추가합니다. 컴포넌트(최신 기능)는 "모니터링 추가"나 "네트워크 정책 추가" 같은 횡단 관심사를 여러 오버레이에 mix-in 할 수 있게 합니다.
+
+멘탈 모델 — **Helm은 매개변수로 템플릿을 렌더링하고, Kustomize는 패치 계층을 합성합니다.** 같은 최종 결과, 매우 다른 사용성.
+
+### 이론에서 아래의 YAML으로
+
+이제 레슨은 이 추상을 적용합니다:
+
+- **섹션 1–2 (Helm 개념, 차트 구조)**는 §B입니다 — 구체적 `Chart.yaml`, `values.yaml`, `templates/`을 가진 패키지와 release 모델.
+- **섹션 3 (Helm 템플릿 심층 분석)**은 §C입니다 — Sprig 함수, 파이프라인, 명명된 템플릿, 서브차트.
+- **섹션 4 (Helm 훅과 테스트)**는 release 라이프사이클 이벤트를 위한 §B의 상태 머신 확장입니다.
+- **섹션 5 (차트 모범 사례)**는 §B와 §C로부터의 운영 가이드라인입니다 — 명명, 레이블, 불변성 우려.
+- **섹션 6–7 (Kustomize 기초, 패치)**는 §D입니다 — 베이스 + 오버레이 + 두 패치 스타일.
+- **섹션 8 (생성기와 변환기)**는 §D의 콘텐츠 해시 트릭입니다.
+- **섹션 9 (Helm vs Kustomize)**는 §A를 운영적으로 만든 것입니다 — 언제 어느 쪽을 고를지.
+- **섹션 10 (Helmfile)**은 함께 관리할 Helm release가 많을 때 하는 일입니다.
+
+templating-vs-patching을 근본적 철학적 분리로 보고 나면, 모든 "Helm을 써야 하나 Kustomize를 써야 하나?" 논쟁은 "매개변수화된 패키지(Helm)를 원하나, 합성 가능한 유효 YAML 계층(Kustomize)을 원하나?"로 환원됩니다.
 
 ---
 

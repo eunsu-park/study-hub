@@ -16,8 +16,11 @@ After completing this lesson, you will be able to:
 
 Every request to the Kubernetes API server passes through a chain of admission controllers before it is persisted to etcd. This chain is one of the most powerful extension points in Kubernetes -- it lets you enforce security policies, inject sidecars, set defaults, validate configurations, and prevent misconfigurations before they reach the cluster. This lesson covers both the built-in admission controllers and the dynamic admission control system that lets you plug in your own logic.
 
+Before the webhook setup, read [**Theory & Principles**](#theory--principles) — where admission sits in the request pipeline (after authn/authz, before persistence), the Mutating-then-Validating ordering that lets you inject defaults safely, why webhooks must be fast, idempotent, and fail-closed-or-open by design, and how policy engines (OPA, Kyverno) layer rules on top of the same webhook plumbing.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. The Admission Controller Pipeline](#1-the-admission-controller-pipeline)
 - [2. Built-in Admission Controllers](#2-built-in-admission-controllers)
 - [3. Dynamic Admission Control](#3-dynamic-admission-control)
@@ -29,6 +32,115 @@ Every request to the Kubernetes API server passes through a chain of admission c
 - [9. Testing Admission Policies](#9-testing-admission-policies)
 - [10. Admission Controller Performance](#10-admission-controller-performance)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Admission control is the third gate of the API request pipeline (lesson 06 §A). After authentication says *who* and authorization says *if*, admission says *should this exact object, as written, be persisted?* This is where policies live: "no privileged pods," "every container must have a CPU limit," "images must come from our registry," "namespaces must have a cost-center label." Anything you can express as "look at the object, decide allow/deny/mutate" goes here. This section explains the place of admission in the pipeline, the mutating-then-validating two-pass design, the operational constraints on webhooks (latency, fail-policy, idempotence), and how OPA Gatekeeper and Kyverno are simply policy engines that plug into this same machinery.
+
+### A. Where Admission Sits and Why That Matters
+
+Recall the four-gate pipeline from lesson 06: **authn → authz → admission → schema validation → persist to etcd**. Each stage answers a specific question:
+
+- **Authn**: who are you?
+- **Authz** (RBAC etc.): are you allowed to do this verb on this resource?
+- **Admission**: should this *specific* request go through?
+- **Schema/CEL validation**: does the object match the registered shape?
+- **Persist**: write to etcd.
+
+Admission is *the* extension point for everything that depends on the *content* of the object, not just on permissions. RBAC can grant "create pods" but cannot say "only non-privileged pods." Schema validation can require a field but cannot enforce "this field's value matches our registry's hostname." Both gaps are admission's job.
+
+Admission also runs **before persistence**, so a rejected request never makes it into etcd, never produces audit-log noise about partial state, never confuses a controller. This is why "policy as admission" is fundamentally different from "policy as a controller that deletes bad objects after the fact": the latter creates a window where bad state exists and can be observed by other controllers; the former makes bad state literally impossible to create.
+
+The trade-off: admission is on the hot path. Every API request — every kubectl apply, every controller create — pays the admission cost. So webhooks have hard performance requirements (§C).
+
+### B. Built-in Admission Plugins and the Two-Pass Webhook Design
+
+Admission has two kinds of plugins: **built-in** (compiled into the API server) and **dynamic** (webhooks you register). Built-in plugins handle the universal cases:
+
+- `LimitRanger` injects default CPU/memory limits if a namespace has a `LimitRange`.
+- `ResourceQuota` rejects requests that would exceed a namespace's `ResourceQuota`.
+- `ServiceAccount` injects the namespace's default ServiceAccount and its token volume.
+- `NamespaceLifecycle` rejects creates in namespaces that don't exist or are terminating.
+- `PodSecurity` (lesson 06) enforces Pod Security Standards.
+- `MutatingAdmissionWebhook` and `ValidatingAdmissionWebhook` are the entry points to dynamic admission.
+
+The two webhook types run in distinct phases:
+
+**Phase 1: Mutating webhooks.** Each registered `MutatingWebhookConfiguration` matched by the request is called with the object. Each may return a JSON patch that the API server applies. Mutating webhooks chain — webhook A's output is webhook B's input — so order can matter (the API server processes them in a non-deterministic order, with `reinvocationPolicy: IfNeeded` to re-run after later mutations). Typical uses: inject sidecars (Istio, Linkerd), add labels/annotations, set defaults the API author forgot.
+
+**Phase 2: Validating webhooks.** After all mutations finish, validating webhooks see the *final* object and return allow or deny (no patches). Multiple validating webhooks all run; if any denies, the request is rejected. Typical uses: enforce policies (no privileged pods, image registries, label requirements).
+
+This ordering is deliberate: validation runs on the final state, so a mutator can add defaults that a validator then verifies, and the user only sees one error message about the final form. Doing them in the other order would let a validator approve a partial object that a later mutator breaks.
+
+A subtlety: mutating webhooks must be careful about idempotence and conflicts. If two webhooks try to inject the same annotation with different values, the API server's reinvocation logic resolves it but the user gets unpredictable behavior. The operational rule is: each mutating webhook should own a non-overlapping concern.
+
+### C. Operational Constraints: Latency, Fail-Policy, Side Effects
+
+Webhooks live on the API hot path. The constraints are nontrivial:
+
+- **Latency**: every API request waits for every matched webhook. The API server has a default 10-second timeout (configurable down). A slow webhook makes every kubectl apply slow. **Recommendation: webhooks must respond within 100ms, p99.**
+- **Fail policy** is `Fail` (default) or `Ignore`. With `Fail`, if the webhook is unreachable, the request is rejected — strict but means a webhook outage breaks deployments. With `Ignore`, the webhook is bypassed on error — graceful but lets policy violations through during outages. Most security webhooks should use `Fail` plus high availability (multiple replicas, PDB, tested rollouts).
+- **Idempotence**: webhooks may be retried, especially mutating ones with `reinvocationPolicy: IfNeeded`. A webhook that sets `metadata.labels.foo = bar` is idempotent. A webhook that *appends* to a list ("add this sidecar to the containers list") needs to first check if it's already there — otherwise duplicate sidecars on retry.
+- **Side effects**: webhooks should not have external side effects (don't post to Slack from a webhook). The API server retries on errors and can call your webhook many times for one logical request. Use `sideEffects: None` (or `NoneOnDryRun`) so the API server knows it can be called freely.
+- **Scope**: configure `rules` precisely so the webhook is only invoked for what it cares about. A webhook that watches `pods` and runs on every CRD apply just adds latency.
+
+These constraints are why production webhooks are usually written with frameworks (kubebuilder for Go, kubewarden for WebAssembly) that handle TLS, request parsing, and the AdmissionReview schema, leaving you with just the policy logic.
+
+### D. Policy Engines: OPA Gatekeeper and Kyverno
+
+Writing webhooks in Go for every policy gets tedious. **Policy engines** are pre-built validating (and sometimes mutating) webhooks that read declarative policies as Kubernetes resources. Two dominant choices:
+
+**OPA Gatekeeper**. Built on the Open Policy Agent runtime; policies are written in **Rego**, a declarative logic language. Two CRDs:
+
+- `ConstraintTemplate`: defines a parameterized policy in Rego. Like a function definition.
+- `Constraint` (a custom kind generated from the template): an instance of the template with parameters. Like a function call.
+
+Example: a `RequiredLabels` template + a constraint that says "all namespaces must have labels `cost-center` and `team`." Gatekeeper compiles these into webhook decisions. Strong audit features (continuous re-evaluation against existing objects, not just admission), and the same Rego policies are reusable outside Kubernetes (Envoy authz, Terraform, custom apps).
+
+**Kyverno**. Native Kubernetes — policies are CRDs (`ClusterPolicy`, `Policy`) written in YAML, no DSL to learn. Three rule types: validate (allow/deny), mutate (set defaults, add labels), generate (create child resources from a template).
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: check-team-label
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+      validate:
+        message: "Namespace must have a 'team' label"
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+```
+
+Kyverno wins on accessibility — your security team can write policies without learning Rego. OPA wins on power — Rego can express policies that are awkward in Kyverno's declarative syntax.
+
+Both engines plug into the same Mutating/ValidatingWebhookConfiguration machinery from §B; you don't choose between webhooks and policy engines, you choose what runs *as* the webhook.
+
+### From Theory to the Code Below
+
+The lesson now applies these abstractions:
+
+- **Section 1 (The Admission Controller Pipeline)** is §A — the place of admission with the full request flow.
+- **Section 2 (Built-in Admission Controllers)** is the §B baseline of plugins that are always on.
+- **Section 3 (Dynamic Admission Control)** introduces the webhook concept.
+- **Sections 4–5 (Validating Webhooks, Mutating Webhooks)** are §B's two phases with concrete YAML and Go code.
+- **Section 6 (Webhook Configuration)** is the `MutatingWebhookConfiguration`/`ValidatingWebhookConfiguration` spec — rules, fail policy, side effects, namespace selectors.
+- **Section 7 (OPA Gatekeeper)** is §D's Rego-based policy engine.
+- **Section 8 (Kyverno)** is §D's YAML-based policy engine.
+- **Section 9 (Testing Admission Policies)** is the dry-run + audit pattern that lets you roll out enforce mode safely.
+- **Section 10 (Performance)** is §C made operational — measuring webhook latency, scaling replicas.
+
+Once you see admission as "the third gate, with webhooks as the extension API and policy engines as preconfigured webhooks," every cluster security/compliance feature reduces to "what policy lives in admission?"
 
 ---
 

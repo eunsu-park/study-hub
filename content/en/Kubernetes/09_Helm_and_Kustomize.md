@@ -18,8 +18,11 @@ As Kubernetes clusters grow in complexity, managing raw YAML manifests becomes u
 
 > **Templating vs Patching:** Helm generates YAML from templates and values -- flexible but can produce hard-to-read templates. Kustomize patches valid YAML with overlays -- simpler but less flexible for parameterization. Many teams use both: Helm for third-party charts, Kustomize for application-specific overlays.
 
+Before the chart syntax, read [**Theory & Principles**](#theory--principles) — why YAML at scale forces a choice between templating and patching, the trade-offs of Helm's text-substitution model versus Kustomize's structured-merge model, the release-lifecycle state machine that lets Helm rollback safely, and how dependency resolution actually works.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. Helm Concepts](#1-helm-concepts)
   - [1.1 Charts, Releases, and Repositories](#11-charts-releases-and-repositories)
   - [1.2 Helm Architecture](#12-helm-architecture)
@@ -50,6 +53,121 @@ As Kubernetes clusters grow in complexity, managing raw YAML manifests becomes u
 - [9. Helm vs Kustomize](#9-helm-vs-kustomize)
 - [10. Helmfile](#10-helmfile)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Once a Kubernetes service is more than a few resources — Deployment + Service + ConfigMap + HPA + NetworkPolicy + ServiceAccount + maybe an Ingress — and you need to deploy it across dev/stage/prod with different replica counts, image tags, and DB hostnames, plain YAML breaks down. You hit two paths to solve this: **templating** (generate YAML by substituting variables into a template) and **patching** (start from valid YAML and overlay structured changes). Helm took the templating path; Kustomize took the patching path. Each has properties the other fundamentally cannot replicate. This section explains both philosophies, the release-as-state-machine model that makes Helm rollback work, and the structured-merge algorithm that makes Kustomize composable.
+
+### A. Templating vs Patching: Two Philosophies
+
+The same problem — "I need to deploy 50 manifests with environment-specific variations" — has two opposite answers:
+
+**Templating (Helm).** Treat YAML as text. Embed variables and control flow (`{{ .Values.image.tag }}`, `{{- if .Values.ingress.enabled }}`) directly in the source. The renderer (`helm template`) substitutes values and emits final YAML. Pros: maximum expressiveness — any string can be parameterized, you can have conditional sections, loops over lists, computed values via Sprig functions. Cons: the templates are not valid YAML themselves (you cannot lint them as YAML); whitespace is fragile; complex charts become unreadable; you cannot just open the file in an IDE and see what gets deployed.
+
+**Patching (Kustomize).** Treat YAML as structured data. The base is a valid manifest. Overlays are valid YAML patches that merge into the base. The renderer (`kustomize build`) applies the patches and emits final YAML. Pros: all files are valid YAML — IDE highlighting, schema validation, kubectl apply on the base alone all work; no template syntax to learn; predictable composition. Cons: less expressive — you cannot easily say "add this label to every container that has X"; complex transformations require JSON Patch which is its own learning curve; conditional inclusion is awkward.
+
+Neither is universally better. The best teams use both: **Helm for third-party charts** (where you want to consume a vendor-maintained package and just override values), **Kustomize for internal manifests** (where you want to see exactly what is deploying without a templating layer).
+
+A subtle property: Helm's output depends on a Go template engine that may behave differently between Helm versions; Kustomize's output is deterministic from the spec. So Kustomize tends to win in GitOps where the rendered YAML is the source of truth.
+
+### B. Helm: A Package Manager With a State Machine
+
+Helm is more than just a templating tool — it is a **package manager**. A Helm `Chart` is a directory with a defined structure (`Chart.yaml` metadata, `values.yaml` defaults, `templates/` directory of templates, optional `charts/` for subcharts). When you `helm install`, three things happen:
+
+1. **Render**: combine templates with values to produce final YAML.
+2. **Apply**: kubectl-style apply to the cluster.
+3. **Record a Release**: store the rendered manifest, version number, and metadata as a Secret in the target namespace.
+
+The third part is what differentiates Helm from a templating tool. A **Release** is a named installation with a version history:
+
+```
+$ helm history my-app
+REVISION  STATUS      CHART       APP VERSION  DESCRIPTION
+1         superseded  my-app-1.0  v1.0         Install complete
+2         superseded  my-app-1.1  v1.1         Upgrade complete
+3         deployed    my-app-1.2  v1.2         Upgrade complete
+```
+
+Each upgrade stores the entire rendered manifest as a new Secret. `helm rollback my-app 1` re-applies the manifest from revision 1. This is why Helm rollbacks are safe and atomic — they use stored prior state, not template-time recomputation that might have changed.
+
+Hooks (`helm.sh/hook: pre-install`, `post-upgrade`, etc.) extend this state machine — a hook annotation tells Helm to run a Job before the next phase, e.g., "run db-migrate before installing." Failed hooks block the release transition.
+
+### C. Helm Templates: Sprig, Pipelines, Named Templates
+
+Helm uses Go templates plus the [Sprig](http://masterminds.github.io/sprig/) function library. The result is a small functional language living inside YAML:
+
+```yaml
+{{- $fullName := include "myapp.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+spec:
+  replicas: {{ .Values.replicas | default 3 }}
+  template:
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.image.repo }}:{{ .Values.image.tag | required "image.tag is required" }}"
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+```
+
+Three patterns to internalize:
+
+- **Pipelines (`|`)** chain transformations: `{{ .Values.foo | upper | quote }}` produces `"BAR"`. Sprig provides hundreds of functions (string manipulation, math, lists, dicts, dates, crypto).
+- **Named templates (`define` / `include`)** are reusable snippets stored in `_helpers.tpl`. The convention is `{{ include "myapp.labels" . }}` to emit a standard label block in many places. `include` (vs `template`) is preferred because it can be piped further.
+- **`required`, `default`, `tpl`** are the safety net: `default` provides fallback, `required` errors loudly when a value is missing, `tpl` evaluates a string as a template (useful when values themselves contain templates).
+
+Whitespace is famously tricky. `{{- ... -}}` trims surrounding whitespace; `nindent N` indents a multi-line block by N spaces. Most Helm chart bugs are whitespace bugs producing invalid YAML.
+
+Subcharts in `charts/` allow composition (e.g., your app chart depends on `redis` and `postgres` charts). Values from the parent flow down via the chart name as a key (`redis.enabled: false` disables the redis subchart). This is the Helm answer to dependency management.
+
+### D. Kustomize: Structured Merge and Patch Algebra
+
+Kustomize starts from valid YAML — your `base/` directory contains real, deployable manifests. Overlays apply structured transformations:
+
+```
+base/
+  deployment.yaml      # replicas: 1, image: nginx:1.25
+  service.yaml
+  kustomization.yaml   # lists the resources
+
+overlays/prod/
+  kustomization.yaml   # patches: scale to 5, change image tag, add prod labels
+  deployment-patch.yaml
+```
+
+Three transformation mechanisms:
+
+**1. Strategic Merge Patch.** Looks like a partial Kubernetes manifest; Kustomize knows the schema and merges intelligently — e.g., if you patch `containers: [{ name: app, image: x }]`, it modifies the existing container named `app` rather than appending a new one. Schema-aware, intuitive for the common case.
+
+**2. JSON Patch (RFC 6902).** Explicit operations on JSON paths: `{op: replace, path: /spec/replicas, value: 5}`. Verbose but precise; required when strategic merge cannot express the change (e.g., editing an array element by index).
+
+**3. Generators (configMapGenerator, secretGenerator).** Build ConfigMaps and Secrets from files, literals, or env files. Produces immutable objects with content-hash suffixes (`my-config-h7f4d8`); when content changes, the hash changes, forcing a Pod restart that picks up the new config. This solves the "ConfigMap update doesn't restart pods" problem elegantly.
+
+Kustomize composes well — you can have `base → overlays/staging → overlays/prod-east-1` with each layer adding more specifics. Components (newer feature) let you mix-in cross-cutting concerns like "add monitoring" or "add network policies" across multiple overlays.
+
+The mental model: **Helm renders templates with parameters; Kustomize composes layers of patches.** Same end result, very different ergonomics.
+
+### From Theory to the YAML Below
+
+The lesson now applies these abstractions:
+
+- **Sections 1–2 (Helm Concepts, Chart Structure)** are §B — the package and release model with concrete `Chart.yaml`, `values.yaml`, `templates/`.
+- **Section 3 (Helm Templates Deep Dive)** is §C — Sprig functions, pipelines, named templates, subcharts.
+- **Section 4 (Helm Hooks and Tests)** is §B's state-machine extension for release lifecycle events.
+- **Section 5 (Chart Best Practices)** are operational guidelines from §B and §C — naming, labels, immutability concerns.
+- **Sections 6–7 (Kustomize Basics, Patches)** are §D — base + overlays + the two patch styles.
+- **Section 8 (Generators and Transformers)** is the §D content-hash trick.
+- **Section 9 (Helm vs Kustomize)** is §A made operational — when to pick which.
+- **Section 10 (Helmfile)** is what you do when you have many Helm releases to manage together.
+
+Once you see templating-vs-patching as the fundamental philosophical split, every "should I use Helm or Kustomize?" debate reduces to "do I want a parameterized package (Helm) or composable layers of valid YAML (Kustomize)?"
 
 ---
 

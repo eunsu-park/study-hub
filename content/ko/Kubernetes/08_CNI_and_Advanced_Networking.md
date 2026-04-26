@@ -18,8 +18,11 @@ Kubernetes 네트워킹은 표면적으로는 간단해 보입니다 -- 모든 �
 
 > **Kubernetes 네트워크 모델:** Kubernetes는 세 가지 기본 요구사항을 부과합니다: (1) 모든 파드가 고유한 IP를 받고, (2) 파드가 NAT 없이 다른 모든 파드와 통신할 수 있으며, (3) 노드의 에이전트가 해당 노드의 모든 파드와 통신할 수 있어야 합니다. 이것이 어떻게 달성되는지는 전적으로 CNI 플러그인에 달려 있습니다.
 
+구성에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 모든 쿠버네티스 네트워크가 구현해야 하는 CNI 플러그인 계약, 데이터 플레인 기법의 네 가지 계열(오버레이, 언더레이/BGP, eBPF, IPVS), eBPF가 네트워킹에서 iptables를 대체하는 이유, 그리고 NetworkPolicy 시맨틱이 커널 규칙으로 어떻게 컴파일되는지를 다룹니다.
+
 ## 목차
 
+- [이론과 원리](#이론과-원리)
 - [1. CNI 명세](#1-cni-명세)
   - [1.1 CNI 작동 방식](#11-cni-작동-방식)
   - [1.2 CNI 플러그인 수명주기](#12-cni-플러그인-수명주기)
@@ -53,6 +56,116 @@ Kubernetes 네트워킹은 표면적으로는 간단해 보입니다 -- 모든 �
   - [9.1 진단 도구](#91-진단-도구)
   - [9.2 일반적인 문제](#92-일반적인-문제)
 - [연습문제](#연습문제)
+
+---
+
+## 이론과 원리
+
+3강은 쿠버네티스 네트워킹의 네 가지 불변 조건을 진술했지만 공리로 다뤘습니다. 이 레슨은 상자를 엽니다 — *누가* 그 불변 조건을 구현하고, *어떻게*, 그리고 트레이드오프는 무엇인지. 답은 **CNI 플러그인**입니다 — kubelet은 Pod에 IP를 부여하거나, 네트워크에 attach하거나, 정책을 강제하는 방법을 모릅니다. 설치된 플러그인에게 그 일을 넘깁니다. Calico, Cilium, Flannel, AWS VPC CNI, Azure CNI — 각각 동일한 CNI 계약을 다르게 구현하며, 성능·확장성·정책 표현력에 결과를 가져옵니다. 이 섹션은 계약, 네 가지 구현 계열, 그리고 데이터 플레인을 재편하고 있는 eBPF 혁명을 설명합니다.
+
+### A. CNI 계약 — 최소한의 플러그인 인터페이스
+
+CNI는 쿠버네티스 전용 스펙이 아닙니다 — 쿠버네티스, Mesos, podman 등이 사용하는 CNCF 프로젝트입니다. 인터페이스는 의도적으로 작습니다 — CNI 플러그인은 컨테이너 런타임이 세 명령과 JSON config로 호출하는 실행 파일일 뿐입니다:
+
+```
+ADD <network> <container-id> <netns>     # 새 컨테이너에 네트워킹 설정
+DEL <network> <container-id> <netns>     # 해체
+CHECK <network> <container-id> <netns>   # 설정 확인
+```
+
+kubelet이 Pod를 만들면, 런타임(containerd/CRI-O)이 구성된 CNI 플러그인의 `ADD`를 호출합니다. 플러그인의 일은 정확히:
+
+1. 클러스터 pod CIDR(또는 구성된 IPAM 스킴)에서 IP 할당.
+2. Pod의 네트워크 네임스페이스 안에 네트워크 인터페이스 생성.
+3. 클러스터 나머지에 트래픽이 도달할 수 있도록 배선(라우트 테이블, 캡슐화 터널, BGP 광고, eBPF 프로그램 — 구현 선택).
+4. IP와 모든 라우트를 JSON으로 런타임에 반환.
+
+그게 전부입니다. kubelet, kube-proxy, 그리고 쿠버네티스 나머지는 네트워크가 *어떻게* 동작하는지에서 완전히 격리됩니다. 이 최소 계약이 풍부한 생태계를 가능하게 했습니다 — 새 네트워킹 모델 추가는 쿠버네티스 코어를 패치하는 것이 아니라 `ADD`/`DEL`/`CHECK`를 다루는 바이너리를 작성하는 것입니다.
+
+트레이드오프는 일부 고급 기능(NetworkPolicy 강제, service 로드 밸런싱, 관측 가능성)이 CNI 스펙의 일부가 아니라는 것 — 플러그인 확장입니다. 따라서 실무에서 "CNI 플러그인"은 "CNI를 하는 바이너리 + 플러그인 작성자가 추가하고 싶었던 모든 것을 하는 데몬"을 의미합니다.
+
+### B. 데이터 플레인의 네 가지 계열
+
+노드 간 Pod-Pod 트래픽은 물리적으로 노드 A의 네트워크에서 노드 B의 네트워크로 가야 합니다. 네 가지 주류 접근:
+
+**1. 오버레이(캡슐화) — VXLAN, Geneve.** Pod 패킷은 destination이 *노드의* IP인 UDP 패킷으로 감싸집니다. 받는 노드가 풀어 정확한 Pod에 전달합니다. 특별한 구성 없이 어떤 L3 네트워크에서도 동작 — 비용은 패킷당 약 50바이트 오버헤드와 두 배의 커널 작업. Flannel(기본 모드), Calico(VXLAN 모드), Weave가 이를 사용. **적합 대상: 시작하는 경우, 멀티 클라우드, 제한된 네트워크.**
+
+**2. 언더레이 / BGP — Calico (BGP 모드), Cilium (BGP).** 각 노드가 자신의 Pod CIDR을 BGP로 인접 라우터(또는 직접 ToR 스위치)에 광고합니다. 패킷은 캡슐화 없이 native하게 이동합니다. 와이어 라인 성능, 그러나 L3 라우팅 패브릭의 통제가 필요 — 보통 온프레미스이거나 명시적으로 지원하는 클라우드 설정(예: AWS의 VPC CNI)에서만 가능. **적합 대상: 베어메탈, 고처리량 워크로드, 네트워크를 통제할 때.**
+
+**3. eBPF — Cilium.** 커널 netfilter 체인의 iptables 규칙 대신, Cilium은 eBPF 프로그램을 네트워크 인터페이스에 부착합니다. 패킷은 iptables 스택에 닿기 *전에* 이 프로그램에 의해 검사·전달되며, 보통 TC ingress 훅 하나만으로. 이는 리눅스 네트워크 스택의 많은 부분을 우회하고 큰 클러스터에서 극적으로 빠릅니다 — L7 인식(HTTP/gRPC 파싱)과 풍부한 관측 가능성(Hubble)도 가능하게 합니다. **적합 대상: 큰 클러스터, 성능에 민감한 워크로드, 현대 배포판.**
+
+**4. 클라우드 네이티브 — AWS VPC CNI, GCP Netd, Azure CNI.** 각 Pod가 실제 클라우드 VPC IP를 받습니다(AWS의 ENI 보조 IP, GCP의 alias IP). 오버레이 없음, BGP 없음 — 클라우드의 기저 SDN이 전달을 처리합니다. 한계 — 실제 IP를 더 빨리 소진하고, 클러스터 간 라우팅에 VPC 피어링이 필요. **적합 대상: 클러스터 크기가 IP 예산에 맞는 클라우드 네이티브 배포.**
+
+선택은 사소하지 않은 결과를 가집니다 — 클러스터 메시 프라이버시를 위한 암호화 오버레이(Calico/Cilium의 WireGuard 모드), kube-proxy 대체를 위한 eBPF(iptables 전혀 없음), sub-millisecond pod-pod 지연을 위한 BGP. CNI 선택은 나중에 되돌리기 어려운 몇 안 되는 클러스터 결정 중 하나입니다.
+
+### C. eBPF — 커널 안의 프로그램, 커널 패치가 아님
+
+eBPF(extended Berkeley Packet Filter)는 수년간 리눅스 네트워킹에서 가장 파괴적인 기술이며, Cilium은 그 대표 쿠버네티스 구현입니다. 기본 아이디어 — 새 네트워킹 동작을 추가하기 위해 **커널을 수정**하는 대신, 커널이 잘 정의된 훅 지점(들어오는 패킷, 나가는 패킷, 시스템 호출, tracepoint)에서 실행하는 **검증된 작은 바이트코드 프로그램**을 컴파일합니다.
+
+핵심 속성:
+
+- **커널 내, 컨텍스트 스위치 없음.** 사용자 공간 프록시는 각 패킷이 커널↔사용자 경계를 두 번 건너야 합니다. eBPF는 패킷 데이터가 이미 있는 커널에서 실행됩니다. 이는 사용자 공간 데이터 플레인 프록시의 가장 큰 비용을 제거합니다.
+- **안전성 검증.** 커널 측 verifier가 영원히 루프하거나, 잘못된 포인터를 역참조하거나, 한정된 스택 사용을 초과할 수 있는 프로그램을 거부합니다. 이것이 "당신 커널에서 임의 코드 실행"을 미친 짓이 아니게 만드는 것입니다.
+- **핫 로드 가능.** 재부팅 없음, 재컴파일 없음. Cilium은 새 정책을 새 eBPF 프로그램으로 푸시합니다 — 진행 중인 옛 패킷은 완료될 때까지 옛 프로그램을 받습니다.
+
+쿠버네티스 네트워킹에서 eBPF는 한 번에 세 가지를 대체합니다:
+
+- **kube-proxy의 iptables**(Service VIP 재작성) — O(N) 선형 체인 대 O(1) 해시 조회.
+- **NetworkPolicy의 iptables**(허용/거부 규칙) — 긴 iptables 체인이 아니라 커널 내 테이블로 컴파일되는 정책.
+- iptables가 근본적으로 할 수 없는 **새 능력 추가** — L7 HTTP 인식 정책, service-to-service 식별, 투명 암호화, 깊은 관측 가능성(Hubble이 pod-pod 흐름을 실시간으로 보여줌).
+
+이것이 "kube-proxy 대체와 함께한 Cilium"이 성능과 관측 가능성을 우선시하는 클러스터에 현대적 기본인 이유입니다. iptables는 내일 사라지지 않지만 호환 모드로 강등되고 있습니다.
+
+### D. NetworkPolicy — 선언적 허용 목록, CNI마다 다르게 컴파일
+
+`NetworkPolicy`는 허용된 pod-pod 및 pod-외부 트래픽의 선언적 진술입니다:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+spec:
+  podSelector: { matchLabels: { app: db } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: api } }
+      ports:
+        - port: 5432
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - port: 53
+          protocol: UDP
+```
+
+처음에 모두가 틀리는 두 가지 시맨틱 규칙:
+
+- **기본은 모두 허용.** *첫* NetworkPolicy가 파드를 선택할 때까지 모든 트래픽이 허용됩니다. 어떤 정책이든 파드를 선택하면, 나열된 policyTypes에 대해 기본 거부가 되고, 명시적으로 허용된 트래픽만 통과합니다.
+- **같은 방향의 정책은 가산형.** 두 ingress 정책이 같은 파드를 선택하면, 그들의 `from` 목록의 합집합이 허용됩니다. RBAC처럼 "거부" 규칙은 없습니다.
+
+CNI 플러그인은 이 YAML 규칙을 자신의 네이티브 강제 메커니즘으로 컴파일합니다:
+
+- iptables 기반 CNI(Calico iptables 모드)는 정책당 iptables 체인을 생성.
+- IPVS 기반 모드는 IPVS 규칙을 생성.
+- eBPF 기반(Cilium)은 인터페이스에 부착된 eBPF 프로그램으로 컴파일.
+
+이것이 동일한 NetworkPolicy YAML을 가진 두 클러스터가 매우 다른 성능과 동작을 가질 수 있는 이유입니다 — 규칙 시맨틱은 표준이지만 강제 구현은 CNI별입니다. 일부 CNI는 L7 규칙, FQDN 기반 egress, 또는 스펙이 다루지 않는 클러스터 전역 정책을 위한 독자 CRD(Cilium의 `CiliumNetworkPolicy`, Calico의 `GlobalNetworkPolicy`)를 추가합니다.
+
+### 이론에서 아래의 구성으로
+
+이제 레슨은 이 추상을 적용합니다:
+
+- **섹션 1 (CNI 명세)**는 §A입니다 — 실제 `ADD`/`DEL`/`CHECK` 인터페이스와 config 형식.
+- **섹션 2 (Calico)와 3 (Cilium)**은 §B/§C 구현 선택을 구체적 플러그인 형태로 보여줍니다.
+- **섹션 4 (eBPF 기본)**은 프로그램과 훅의 예제로 §C를 풀어냅니다.
+- **섹션 5 (고급 NetworkPolicy)**는 §D 규칙을 비자명한 시나리오 — egress, CIDR, port range, DNS-aware (Cilium) — 에 사용합니다.
+- **섹션 6 (Service Mesh 개요)**는 CNI 위의 L7 계층입니다 — Istio, Linkerd, Cilium Service Mesh — §A–§C의 pod-pod 연결 위에 구축.
+- **섹션 7–9 (대역폭, IPv6, 트러블슈팅)**은 데이터 플레인 선택 위의 운영 오버레이입니다.
+
+CNI를 계약으로, eBPF를 현대적 데이터 플레인으로, NetworkPolicy를 컴파일 시간 규칙으로 보고 나면, "왜 내 파드의 트래픽이 떨어지는가?" 질문은 특정 계층으로 매핑됩니다.
 
 ---
 

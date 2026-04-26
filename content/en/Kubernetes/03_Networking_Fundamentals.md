@@ -18,7 +18,10 @@ Kubernetes places networking at the core of its design. This lesson covers
 the networking model, service abstractions, DNS, proxy modes, and debugging
 techniques.
 
+Before the manifests, read [**Theory & Principles**](#theory--principles) — the four invariants of the Kubernetes network model, why a Service is a stable virtual IP that no process ever binds to, how kube-proxy turns Service VIPs into iptables/IPVS rules without ever sitting on the data path, and how DNS ties everything together.
+
 ## Table of Contents
+0. [Theory & Principles](#theory--principles)
 1. [The Kubernetes Networking Model](#1-the-kubernetes-networking-model)
 2. [Service Types](#2-service-types)
 3. [DNS in Kubernetes (CoreDNS)](#3-dns-in-kubernetes-coredns)
@@ -28,6 +31,92 @@ techniques.
 7. [Headless Services](#7-headless-services)
 8. [Network Debugging](#8-network-debugging)
 9. [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Kubernetes networking is one of the most counterintuitive parts of the platform — until you grasp the core trick, which is that **Service IPs are virtual.** Nothing actually listens on a Service's `ClusterIP`. The IP exists only as a target for kernel-level packet rewriting (iptables, IPVS, or eBPF) on every node, and the rewriting redirects traffic to one of the real Pod IPs that backs the Service. Once you internalize that, the rest of Kubernetes networking — DNS, EndpointSlices, traffic policies, kube-proxy modes — becomes a small set of variations on the same theme.
+
+### A. The Four Network Model Invariants
+
+Every CNI plugin must guarantee four properties; these are the contract that lets the rest of Kubernetes treat the network as a black box:
+
+1. **Every Pod gets a unique IP.** No port-mapping juggling like raw Docker. From inside a Pod, the IP it sees is the IP everyone else sees.
+2. **Pod-to-Pod communication works without NAT.** A Pod on Node A talking to a Pod on Node B sends a packet with source = Pod-A-IP, destination = Pod-B-IP, and Pod B sees that exact source. No source IP rewriting in the cross-node path.
+3. **Node-to-Pod communication works without NAT.** A node agent (kubelet, kube-proxy, monitoring) can reach any Pod on its own node by Pod IP.
+4. **The IP a Pod sees itself as is the IP others see it as.** This sounds redundant given (1) and (2), but it specifically forbids designs where a Pod is bound to one address but advertised at another — that breaks logging, distributed tracing, and most service-discovery libraries.
+
+These invariants are deliberately weak about *how* — overlay (VXLAN), BGP routing, or eBPF redirect, the choice belongs to the CNI plugin. But the *what* (flat, NAT-free Pod network) is fixed. Every higher-level abstraction (Service, NetworkPolicy, Ingress) is built assuming this contract holds.
+
+### B. The Service: A Stable Virtual IP for an Ephemeral Set of Pods
+
+Pods are ephemeral and have ephemeral IPs (lesson 02, §A). You cannot give clients a Pod IP — it changes. The **Service** abstraction solves this with three parts:
+
+1. A **stable virtual IP** (the `ClusterIP`) allocated from a cluster-wide range. The IP never changes for the life of the Service.
+2. A **label selector** (`spec.selector: {app: web}`) that picks the backing Pods.
+3. The Endpoints / EndpointSlice controller continuously updating the list of Pod IPs that match the selector and are Ready.
+
+Critical insight: **no process ever `bind()`s the ClusterIP.** It is a routing fiction. When a client sends a packet to `10.96.0.42:80` (a ClusterIP), the kernel on the sender's node intercepts the packet (via iptables/IPVS/eBPF rules programmed by kube-proxy), picks one of the backing Pod IPs from the EndpointSlice, rewrites the destination, and forwards. The Pod sees its own IP as the destination, not the ClusterIP.
+
+This is why a Service has zero startup time, never gets "overwhelmed" as a singleton, and continues working even if kube-proxy crashes (the iptables rules stay programmed). The Service is just an entry in the cluster's "what should the kernel do with this packet?" table.
+
+The four service types are variations on what is at the front:
+
+- **`ClusterIP`** (default): only reachable from inside the cluster. The pure form described above.
+- **`NodePort`**: also opens a high port (30000–32767) on every node; external traffic to `<any-node-IP>:<nodeport>` gets the same iptables rewrite to a backing Pod.
+- **`LoadBalancer`**: NodePort + cloud provider provisions an external L4 load balancer (cloud-controller-manager) pointing at all node NodePorts.
+- **`ExternalName`**: no IP, no proxying — just a CNAME in CoreDNS. Used to give an external system an in-cluster DNS name.
+
+### C. kube-proxy: Programming the Kernel, Not Sitting in the Data Path
+
+Despite the name, kube-proxy is **not** a proxy in the sense that it forwards packets through itself. It is a **rule installer**. It watches Services and EndpointSlices, and for each Service it programs kernel-level rules that say "any packet destined for ClusterIP X gets rewritten to one of these backing Pod IPs."
+
+Three modes exist:
+
+| Mode | Mechanism | Lookup cost | Notes |
+|------|-----------|-------------|-------|
+| `iptables` (default) | Linear chain of iptables rules; one match per backing Pod | O(N) per packet | Simple, mature; rule reload time grows with service count |
+| `IPVS` | In-kernel L4 LB with hash-table lookups | O(1) per packet | Better for clusters with thousands of services; supports more LB algorithms (rr, lc, dh) |
+| `nftables` | Newer iptables successor with set-based lookup | O(log N) | Replacing iptables in modern distros |
+
+The key property is that **kube-proxy is on the control path, not the data path.** Data packets go directly from client to backend Pod, traversing only kernel rules. This is why Service throughput equals Pod throughput minus a few microseconds of rule lookup, regardless of how busy the cluster is.
+
+Selecting a backing Pod is randomized (iptables uses `--probability`; IPVS uses round-robin or `lc`). There is no L7 awareness; this is pure L4 load balancing. For HTTP-aware routing you go to Ingress (lesson 7) or a service mesh.
+
+### D. DNS as the Discovery Layer (CoreDNS)
+
+Hard-coding a ClusterIP in client config defeats the point — the IP is allocated at Service creation time. So Kubernetes runs CoreDNS as a cluster service that resolves a deterministic naming scheme:
+
+```
+<service>.<namespace>.svc.cluster.local
+```
+
+Every Pod's `/etc/resolv.conf` is automatically configured with CoreDNS as the resolver and search paths so that bare names work:
+
+```
+search default.svc.cluster.local svc.cluster.local cluster.local
+nameserver 10.96.0.10
+```
+
+So a Pod in namespace `default` can hit `redis` (resolves to `redis.default.svc.cluster.local` via search path) or `redis.cache` (resolves to `redis.cache.svc.cluster.local`) without knowing the ClusterIP. CoreDNS itself watches the Kubernetes API for Service and Endpoint objects and serves answers from its in-memory mirror — no etcd reads on the resolution hot path.
+
+**Headless Services** (`clusterIP: None`) skip the virtual-IP allocation entirely. CoreDNS instead returns *all* backing Pod IPs as A records. This is what StatefulSets use to give each pod a stable DNS name (`mysql-0.mysql.default.svc.cluster.local` resolves directly to mysql-0's Pod IP). Useful when the client wants pod-level addressing (sharding, gossip protocols) instead of LB-style round-robin.
+
+### From Theory to the YAML/Commands Below
+
+The walkthrough that follows applies these abstractions:
+
+- **Section 1 (Networking Model)** unpacks the four invariants from §A with implementation examples.
+- **Section 2 (Service Types)** shows the four variations from §B as concrete YAML; pay attention to which type allocates a ClusterIP and which adds external reachability.
+- **Section 3 (DNS / CoreDNS)** is §D — see the resolver config and Corefile that implement it.
+- **Section 4 (kube-proxy Modes)** is §C — compare iptables / IPVS / nftables with measurable trade-offs.
+- **Section 5 (Endpoints / EndpointSlices)** shows the data structure that kube-proxy reads to know "which Pod IPs back this Service." EndpointSlices replaced the older Endpoints object specifically to scale past 1,000 backends.
+- **Section 6 (Service Topology / Traffic Policies)** controls *which* backing Pod gets selected — local-only, zone-aware, etc. This is on top of the load-balancing primitive from §C.
+- **Section 7 (Headless Services)** is the §D escape hatch for direct pod addressing.
+- **Section 8 (Debugging)** gives you the lens to see where in §A–§D something is broken: DNS? iptables? CNI? kube-proxy?
+
+Once you see the Service as "an entry in the kernel's NAT table whose backing list is updated by a controller watching label selectors," the entire model collapses into a few moving parts.
 
 ---
 

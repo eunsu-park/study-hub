@@ -18,8 +18,11 @@ Kubernetes의 가장 강력한 기능 중 하나는 확장성(extensibility)입�
 
 > **확장 스펙트럼(Extension Spectrum):** CRD는 Kubernetes API를 확장하는 가장 간단한 방법입니다. 정의하는 데 Go 코드가 필요 없이 YAML 매니페스트만 있으면 됩니다. 더 복잡한 요구사항(커스텀 스토리지 백엔드, 인증, 또는 API 집계)의 경우 집계 API 서버(aggregated API server)를 구축할 수 있습니다. 대부분의 사용 사례는 CRD와 컨트롤러(controller)의 조합으로 잘 처리됩니다(오퍼레이터 레슨에서 다룹니다).
 
+스키마 구문에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. CRD가 쿠버네티스를 재컴파일하지 않고 API 서버를 확장하게 해주는 이유, 어드미션 시점에 오류를 잡는 OpenAPI v3 + CEL 검증 파이프라인, API 진화를 안전하게 만드는 storage-version + conversion-webhook 메커니즘, 그리고 CRD vs aggregated API server를 언제 선택할지를 다룹니다.
+
 ## 목차
 
+- [이론과 원리](#이론과-원리)
 - [1. Kubernetes API 확장](#1-extending-the-kubernetes-api)
   - [1.1 왜 Kubernetes를 확장하는가?](#11-why-extend-kubernetes)
   - [1.2 확장 메커니즘](#12-extension-mechanisms)
@@ -49,6 +52,131 @@ Kubernetes의 가장 강력한 기능 중 하나는 확장성(extensibility)입�
   - [9.1 각각의 사용 시기](#91-when-to-use-each)
   - [9.2 집계 API 서버 예제](#92-aggregated-api-server-example)
 - [연습문제](#exercises)
+
+---
+
+## 이론과 원리
+
+CRD(Custom Resource Definition)는 Go를 작성하지 않고, 쿠버네티스를 재컴파일하지 않으며, 별도의 API 프로세스를 실행하지 않고도 쿠버네티스 API 서버에 새 리소스 유형 — `Database`, `Certificate`, `Workflow`, 무엇이든 — 을 가르치는 메커니즘입니다. CRD 자체는 그저 *스키마 선언*입니다 — 일단 받아들여지면, API 서버는 그 kind에 대한 REST 엔드포인트(`/apis/<group>/<version>/<plural>`)를 제공하기 시작하고, 인스턴스를 etcd에 영속화하며, 내장 리소스에 대한 것과 정확히 동일하게 RBAC, 어드미션, watch 시맨틱을 적용합니다. 이 섹션은 이것이 *왜* 동작하는지, 스키마와 검증 머신너리, 버전 진화 모델, 그리고 더 무거운 대안(aggregated API server)에 대한 훨씬 좁은 케이스를 설명합니다.
+
+### A. CRD가 존재하는 이유 — 확장성 세금
+
+장기 채택을 원하는 플랫폼은 근본적 선택에 직면합니다. 둘 중 하나:
+
+- **코어를 패치하여 기능 추가** — 모든 벤더와 operator 작성자가 코드를 upstream에 보내고, 리뷰를 받고, 쿠버네티스 릴리스를 기다려야 함을 의미. 플랫폼이 병목이자 전쟁터가 됩니다.
+- **확장 메커니즘 추가** — 응집력의 일부 손실을 수용하는 대가로 생태계가 자체 속도로 움직이게 합니다.
+
+쿠버네티스는 두 번째를 선택했습니다. 두 확장 메커니즘은:
+
+- **CRD** (이 레슨) — 선언적 — 새 kind를 기술하는 CRD 객체를 POST하면, API 서버의 CRD 컨트롤러가 동적으로 등록합니다. 새 프로세스 없음, API 표면에 Go 코드 불필요.
+- **Aggregated API server** (§D) — 쿠버네티스 API 관습(list, watch, create 등)을 구현하는 자체 HTTPS 서버를 실행하고, `APIService` 객체로 등록. kube-apiserver가 당신의 group/version에 대한 요청을 당신의 서버로 프록시합니다.
+
+CRD는 실제 사용 사례의 약 95%를 다룹니다. cert-manager의 `Certificate`, ArgoCD의 `Application`, Knative의 `Service`, Istio의 `VirtualService`, 모든 CNCF operator의 리소스 — 모두 CRD입니다. Aggregated API server는 주로 커스텀 스토리지(etcd가 아닌), 커스텀 인증, 또는 CRD 이전의 역사적 이유가 필요한 케이스에 존재합니다(metrics API server가 유명한 예).
+
+CRD의 "세금"은 엄격한 요청/응답 스키마를 넘는 것(커스텀 스토리지, 여러 객체 간 트랜잭션 시맨틱)이 컨트롤러(11강) 형태의 코드를 필요로 한다는 것입니다. CRD가 리소스의 *형태*를 주고, 컨트롤러가 *의미*를 줍니다.
+
+### B. 스키마 파이프라인 — OpenAPI v3 + CEL
+
+검증 없는 CRD는 자유 형식 JSON 블롭에 대한 타입화된 이름입니다. 그것은 거의 원하는 바가 아닙니다. 현대 CRD는 API 서버가 어드미션 시점에 모든 create/update를 검증하는 데 사용하는 **OpenAPI v3 스키마**를 임베드합니다:
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: databases.example.com
+spec:
+  group: example.com
+  names: { kind: Database, listKind: DatabaseList, plural: databases, singular: database }
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [engine, version, replicas]
+              properties:
+                engine:
+                  type: string
+                  enum: [postgres, mysql]
+                version:
+                  type: string
+                  pattern: '^[0-9]+\.[0-9]+$'
+                replicas:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+              x-kubernetes-validations:
+                - rule: "self.engine == 'postgres' || self.replicas <= 10"
+                  message: "MySQL clusters limited to 10 replicas"
+```
+
+스키마는 다음을 강제합니다:
+
+- **타입 구조** (`type`, `properties`, `required`, `additionalProperties`) — 표준 JSON Schema. 필수 속성, 타입 검사, 중첩 객체 형태.
+- **패턴 및 경계 제약** (`pattern`, `minimum`, `maximum`, `enum`, `minLength`) — 단순한 데이터 품질 오류를 컨트롤러가 크래시하는 런타임이 아니라 어드미션 시점에 잡습니다.
+- **CEL 검증 규칙** (`x-kubernetes-validations`) — **Common Expression Language**가 위 예제의 `engine == 'postgres' || replicas <= 10`처럼 여러 필드를 가로지르는 제약을 표현하게 해줍니다. CEL은 또한 transition 규칙("version 필드는 증가만 가능")을 위해 *옛* 객체(`oldSelf`)에 접근할 수 있습니다.
+- **기본값(defaulting)** (`default: ...`) — API 서버가 누락된 필드를 채우므로, 컨트롤러는 그것들이 설정되었다고 가정할 수 있습니다.
+
+이는 도메인 객체를 모델링하기 위해 generic ConfigMap 대신 CRD를 사용하는 주요 이유입니다 — 검증, defaulting, IDE 자동 완성(스키마가 클러스터에 게시되므로)을 무료로 얻습니다.
+
+**Subresource**(`/status`, `/scale`)는 단일 객체를 다른 RBAC와 업데이트 시맨틱을 가진 여러 엔드포인트로 분할합니다. `/status` subresource는 컨트롤러가 spec을 변경할 권한 없이 status를 업데이트하게 해주어, 컨트롤러 버그가 사용자 의도를 실수로 덮어쓰는 것을 방지합니다. `/scale` subresource는 HPA가 내부 형태를 모르고도 커스텀 리소스를 스케일하게 해줍니다 — `scale.spec.replicas`가 표준 위치입니다.
+
+### C. 버전 진화 — Storage Version, Served Versions, Conversion Webhook
+
+CRD는 진화합니다. v1alpha1, 그다음 v1beta1, 그다음 v1을 릴리스합니다. 각 버전은 필드를 추가하거나, 제거하거나, 하위 객체를 재구성할 수 있습니다. 세 개념이 이를 안전하게 만듭니다:
+
+**Served versions vs storage version.** CRD는 여러 버전을 나열합니다 — 각각 `served: true/false`(API가 그것을 제공하는지)이고 정확히 하나가 `storage: true`(실제로 etcd에 있는 정규 버전). 클라이언트가 v1beta1로 리소스를 GET하지만 storage가 v1이면, API 서버는 etcd 객체를 v1beta1로 즉석 변환하여 반환합니다. 반대로, v1beta1의 POST는 저장 전 v1으로 변환됩니다.
+
+**No-op 변환**(기본)은 모든 served 버전이 구조적으로 호환되어야 합니다 — 선택 필드 추가는 OK, 그러나 이름 변경이나 재구성은 안 됩니다. 더 큰 진화에는 **conversion webhook**을 제공합니다:
+
+```yaml
+spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: [v1]
+      clientConfig:
+        service: { name: my-converter, namespace: example, path: /convert }
+        caBundle: <base64-cert>
+```
+
+웹훅은 어떤 served 버전이든 객체를 받아 요청된 버전으로 반환합니다. 이는 옛 클라이언트가 계속 동작하면서도 진짜 리팩토링(필드를 둘로 분할, 열거형의 표현 변경)을 할 수 있게 합니다.
+
+**Storage version 마이그레이션.** `storage: true`를 새 버전으로 변경하면, API 서버는 새 버전으로 쓰기 시작하지만, 기존 etcd 객체는 옛 형식 그대로 남습니다. 별도의 "storage version migrator"(또는 일회성 `kubectl get ... | kubectl apply -f -` 왕복)가 그것들을 새 형식으로 다시 저장합니다. 모든 것이 마이그레이션되면, `served`에서 옛 버전을 제거할 수 있습니다.
+
+이 세 부분 춤(served, storage, conversion)이 CRD가 기존 배포를 깨뜨리지 않고 수년간 진화할 수 있게 하는 것입니다 — 쿠버네티스 자체가 내장 리소스에 사용하는 동일한 기법입니다.
+
+### D. CRD vs Aggregated API Server
+
+언제 CRD로는 부족해질까요? 세 가지 케이스가 aggregated API server로 밀어붙입니다:
+
+- **etcd가 아닌 스토리지.** 모든 CRD는 클러스터의 etcd에 영속화됩니다. 리소스를 관계형 데이터베이스, 외부 서비스, 또는 read 시 생성되는 데이터(metrics API server처럼 — 어디에도 저장되지 않은 노드/파드 메트릭을 노출하며, kubelet에서 라이브로 계산)로 백업해야 한다면 CRD는 잘못된 선택입니다. API 표면을 직접 구현해야 합니다.
+- **JSON CRUD를 넘는 커스텀 프로토콜.** 스트리밍 subresource(`kubectl exec`을 생각하세요), 임의의 HTTP 시맨틱, 또는 쿠버네티스에 부합하지 않는 요청 본문은 aggregated server를 필요로 합니다.
+- **역사적 또는 조직적 이유.** CRD 이전의 일부 쿠버네티스 코어 API(apiregistration, certificates)는 레거시 호환성을 위해 aggregated 됩니다.
+
+Aggregated API server의 비용은 상당합니다 — 실제 HTTPS 서버를 실행(인증, 감사, watch 구현 포함)하고, 자체 RBAC를 유지하며, 또 다른 컨트롤 플레인 컴포넌트의 운영 부담을 처리. 따라서 위 케이스 중 하나에 부딪히지 않는 한, CRD가 단순함에서 이깁니다.
+
+흔한 패턴 — 사용자 대면 객체용 CRD를 출시하고, 실제 일을 하는 **컨트롤러**(11강)를 함께. CRD는 객체를 `kubectl`에서 일급 시민으로 만들고, 컨트롤러는 사용자 의도를 현실로 바꿉니다.
+
+### 이론에서 아래의 YAML으로
+
+이제 레슨은 이 추상을 적용합니다:
+
+- **섹션 1 (Kubernetes API 확장)**은 §A입니다 — CRD가 적합한 때와 대안.
+- **섹션 2 (CRD 명세)**는 §B의 기본 CRD 객체 구조입니다.
+- **섹션 3 (구조적 스키마와 유효성 검증)**은 §B의 OpenAPI + CEL 파이프라인을 깊이 다룹니다.
+- **섹션 4 (CRD 버전 관리)**는 §C입니다 — 다중 버전, storage version, conversion webhook.
+- **섹션 5 (하위 리소스)**는 HPA 같은 내장 패턴과 CRD를 통합하는 `/status`와 `/scale` 메커니즘입니다.
+- **섹션 6–7 (프린터 컬럼, 카테고리, 짧은 이름)**은 CRD를 네이티브처럼 느끼게 만드는 kubectl 사용성입니다(전체 kind 이름 대신 `kubectl get db`).
+- **섹션 8 (모범 사례)**는 §B와 §C로부터의 운영 지침입니다.
+- **섹션 9 (집계 API 서버 vs CRD)**는 §D입니다 — CRD로는 부족할 때.
+
+CRD를 "스키마 + 동적 등록 + 스토리지"로, 컨트롤러(11강)를 스키마에 의미를 부여하는 부분으로 보고 나면, 만나는 모든 operator 패턴은 동일한 두 조각으로 분해됩니다.
 
 ---
 

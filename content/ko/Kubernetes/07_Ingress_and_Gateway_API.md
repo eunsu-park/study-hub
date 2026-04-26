@@ -18,8 +18,11 @@ Kubernetes Service는 클러스터 내에서 애플리케이션을 노출하지�
 
 > **Ingress vs Gateway API:** Ingress는 Kubernetes 1.19부터 안정적이지만 잘 알려진 한계가 있습니다 -- 벤더별 어노테이션, TCP/UDP 라우팅 미지원, 평면적 권한 모델. Gateway API(Kubernetes 1.27부터 코어 리소스 GA)는 역할 중심적이고, 표현력이 풍부하며, 이식 가능한 API로 이러한 문제를 해결합니다. 새 프로젝트는 Gateway API를 선호해야 하지만, Ingress는 여전히 널리 배포되어 있습니다.
 
+YAML에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. Ingress가 "컨트롤러가 nginx/envoy/기타로 컴파일하는 주석 달린 config일 뿐"인 이유, Service-LoadBalancer에서 Ingress로의 이동을 추동한 L4 vs L7 구분, Gateway API를 추동한 역할 중심 모델, 그리고 TLS를 자동으로 만드는 cert-manager 조정 루프를 다룹니다.
+
 ## 목차
 
+- [이론과 원리](#이론과-원리)
 - [1. Ingress 기본](#1-ingress-기본)
   - [1.1 Ingress 리소스 구조](#11-ingress-리소스-구조)
   - [1.2 호스트 기반 라우팅(Host-Based Routing)](#12-호스트-기반-라우팅host-based-routing)
@@ -45,6 +48,96 @@ Kubernetes Service는 클러스터 내에서 애플리케이션을 노출하지�
   - [6.3 트래픽 분할(Traffic Splitting)](#63-트래픽-분할traffic-splitting)
   - [6.4 URL 재작성과 리다이렉트](#64-url-재작성과-리다이렉트)
 - [연습문제](#연습문제)
+
+---
+
+## 이론과 원리
+
+쿠버네티스 클러스터로 들어오는 외부 트래픽은 플랫폼에서 가장 이질적인 부분입니다 — Pod 앞에 공인 IP를 둘 수 있는 객체가 최소 네 가지(`Service: LoadBalancer`, `Service: NodePort`, `Ingress`, `Gateway`)이고, 각각 다른 능력과 소유 모델을 가집니다. 이 복잡성이 존재하는 이유는 L4 로드 밸런싱(TCP/UDP, Service가 하는 것)과 L7 라우팅(HTTP host/path/header 매칭)이 다른 문제이고, 원래의 Service 객체는 첫 번째만 풀었기 때문입니다. 이 섹션은 L4-vs-L7 구분, Ingress를 동작하게 만드는 controller-as-compiler 패턴, Gateway API가 된 역할 중심 재설계, 그리고 cert-manager가 TLS 루프를 닫는 방법을 설명합니다.
+
+### A. L4 vs L7 — Service만으로 부족한 이유
+
+`LoadBalancer` 유형 `Service`는 Pod를 가리키는 외부 L4 로드 밸런서를 제공합니다. 모든 TCP/UDP 워크로드(Postgres, Kafka, gRPC 스트리밍)에는 완벽히 작동합니다 — L4에서는 로드 밸런서가 패킷을 검사하지 않고 그저 분배하기 때문입니다. 그러나 HTTP에서는 L4로 부족합니다:
+
+- 보통 host(`api.example.com` vs `www.example.com`)나 path(`/api/*` vs `/`)로 구분되는 **여러 서비스에 하나의 외부 IP**를 원합니다. 순수 L4 LB는 HTTP `Host` 헤더를 읽지 못합니다.
+- 개별 서비스마다 인증서가 필요하지 않도록 **TLS 종료**를 한곳에서 하고 싶습니다. L4는 복호화하지 못합니다.
+- **HTTP 인식 기능**을 원합니다 — 재작성, 리디렉션, 헤더 조작, 속도 제한, 요청 로깅.
+
+L4는 HTTP 아래에서 동작하므로 이들 중 어느 것도 할 수 없습니다. 그래서 쿠버네티스는 더 높은 계층을 추가했습니다 — **Ingress**는 외부 HTTP 트래픽이 클러스터 내 Service로 어떻게 라우팅되어야 하는지에 대한 선언적 기술이고, **Ingress 컨트롤러**는 그 규칙을 구현하는 실제 리버스 프록시(nginx, Traefik, HAProxy, Istio, AWS ALB, ...)입니다.
+
+멘탈 모델: `Service`는 *목적지* 추상(파드 집합을 위한 안정 VIP 하나), `Ingress`는 *라우팅* 추상(어느 들어오는 HTTP 요청이 어느 Service로). 둘은 합성됩니다 — 하나만 고르지 않습니다.
+
+### B. 컴파일러로서의 Ingress 컨트롤러
+
+Ingress 객체는 그저 타입화된 config 파일입니다:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+spec:
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service: { name: api-v1, port: { number: 8080 } }
+```
+
+Ingress 객체 자체는 *아무것도 하지 않습니다*. 이를 읽는 kubelet도, 이를 구현하는 내장 프록시도 없습니다. 동작하게 만드는 것은 **Ingress 컨트롤러**입니다 — 클러스터에서 실행되는 Pod(또는 DaemonSet)로:
+
+1. 모든 Ingress 객체를 watch.
+2. 그것들을 기저 프록시의 네이티브 config(nginx.conf, Traefik 동적 config, Envoy xDS)로 컴파일.
+3. 새 config로 프록시를 reload하거나 hot-swap.
+4. Service와 EndpointSlice를 watch하여 upstream 풀을 최신으로 유지.
+
+이것이 ingress-nginx Helm chart를 설치하기 전까지 첫 Ingress가 아무것도 하지 않은 이유입니다. 또한 모든 Ingress 컨트롤러가 약간씩 다른 동작을 보이는 이유이기도 합니다 — 모두 다른 프록시로 "컴파일"합니다. 일부 HTTP 기능(속도 제한, 커스텀 인증)은 Ingress 스펙이 표준화하지 않아 벤더 별 어노테이션을 필요로 합니다.
+
+controller-as-compiler 패턴은 쿠버네티스 곳곳에 등장하지만(cert-manager, Argo CD, Deployment 컨트롤러 자체), Ingress는 가장 깔끔한 예시 중 하나입니다 — *config는 이식 가능해 보여도, 데이터 플레인 동작은 전적으로 선택한 컨트롤러의 함수입니다*.
+
+### C. Gateway API — 역할 중심 재설계
+
+Ingress는 동작하지만 부채를 누적해왔습니다:
+
+- 기본 라우팅을 넘는 모든 것에 **벤더 별 어노테이션** — Ingress YAML은 이름만 이식 가능합니다.
+- **L4 미지원** — Ingress로 TCP/UDP를 라우팅할 수 없으므로 비-HTTP 트래픽은 여전히 Service: LoadBalancer를 사용.
+- **평면적 권한 모델** — 자기 네임스페이스에서 Ingress를 편집할 수 있는 누구나 임의의 호스트명을 주장할 수 있어, 다른 테넌트의 트래픽을 가로챌 수 있습니다.
+
+Gateway API(코어 리소스는 K8s 1.27부터 GA)는 동일한 문제를 세 가지 역할 분리 객체로 재설계합니다:
+
+- **GatewayClass** (클러스터 관리자): "이 컨트롤러는 클래스 `aws-alb`/`istio`/`envoy`의 Gateway를 구현한다."
+- **Gateway** (인프라/플랫폼 팀): "나는 `prod-gateway`라는 Gateway를 가지고 있고, 443 포트에 이 TLS 인증서로 listen하며, GatewayClass `aws-alb`에 연결되어 있다."
+- **HTTPRoute / GRPCRoute / TCPRoute / TLSRoute** (앱 팀): "`prod-gateway`에서 `api.example.com/v1/*` 요청을 내 Service로 라우팅하라."
+
+이 분리는 플랫폼 팀이 인프라(어느 로드 밸런서, 어느 인증서)를 소유하고, 앱 팀이 라우팅을 소유하게 합니다 — 앱 팀이 새 외부 IP를 띄우거나 호스트명을 훔칠 수 없게 하면서. 네임스페이스 간 참조는 **ReferenceGrant**를 사용하여, 호스트명의 생산자가 소비자를 명시적으로 허용해야 합니다.
+
+`HTTPRoute`는 헤더 매칭, 가중치 백엔드(canary용으로 v2에 10%), 리디렉션, 재작성, 요청 미러링을 표준화합니다 — 이전에는 벤더 어노테이션이 필요했던 기능들. 새 프로젝트는 Gateway API를 기본으로 해야 하며, Ingress는 여전히 널리 배포되어 버그 수정은 받지만 새 기능은 받지 않습니다.
+
+### D. TLS 자동화 — Reconciler로서의 cert-manager
+
+수동 TLS는 운영적으로 고통스럽습니다 — 인증서가 만료되고, 새벽 3시 갱신은 새벽 6시 디버깅을 남깁니다. **cert-manager**가 표준 해결책이며, 그 자체로 controller-as-compiler입니다:
+
+1. `Certificate` CR을 만듭니다: "`api.example.com`에 대한 90일 유효 인증서를, `letsencrypt-prod`로 발급, Secret `api-tls`에 저장."
+2. cert-manager는 `CertificateRequest`를 만들고 명명된 `Issuer`(ACME, Vault, 내부 CA 등)에게 충족을 요청.
+3. ACME는 도메인 통제 증명을 요구합니다 — cert-manager가 HTTP-01이나 DNS-01 챌린지(임시 Ingress 경로나 DNS 레코드 생성)를 수행하고, CA가 인증서를 발급할 때까지.
+4. cert-manager는 인증서 + 키를 대상 Secret에 씁니다. Ingress / Gateway가 자동으로 가져갑니다.
+5. 만료 전(기본 수명의 1/3 남음), cert-manager가 갱신합니다 — 동일 루프, 인간 개입 없음.
+
+핵심 통찰: cert-manager는 다른 모든 컨트롤러와 동일한 조정 루프 패턴을 실행합니다. 원하는 상태: "Secret X에 만료되지 않은 인증서가 존재." 관찰된 상태: "현재 인증서는 N일 후 만료." 액션: "N < 임계값이면 갱신 요청." 이것이 대규모 TLS를 다룰 만하게 만듭니다 — 그저 또 다른 컨트롤러일 뿐입니다.
+
+### 이론에서 아래의 YAML으로
+
+이제 레슨은 이 추상을 적용합니다:
+
+- **섹션 1 (Ingress 기본)**은 §B를 구체적 Ingress 객체, host와 path 매칭으로 다룹니다.
+- **섹션 2 (Ingress 컨트롤러)**는 §B의 controller-as-compiler를 보여줍니다 — nginx, Traefik 설치, 각각이 무엇으로 컴파일되는지 비교.
+- **섹션 3 (TLS 종료)**는 §D의 수동 베이스라인 후 cert-manager 자동화.
+- **섹션 4 (Gateway API)**는 §C입니다 — `Gateway`, `HTTPRoute`, `GRPCRoute`가 역할 분리 형태로 도입됩니다.
+- **섹션 5 (Gateway API vs Ingress)**는 두 추상 간 마이그레이션 가이드입니다.
+- **섹션 6 (고급 패턴)** — 속도 제한, 게이트웨이 인증, 트래픽 분할 — 은 Ingress가 벤더 어노테이션을 요구하고 Gateway API가 표준화하는 것입니다.
+
+Ingress/Gateway를 "YAML을 프록시 config로 컴파일하는 컨트롤러"로 보고 나면, "왜 nginx에서 이 어노테이션이 동작하지 않는가?"는 "당신의 컨트롤러가 그 방언을 말하지 않으니, 컨트롤러를 바꾸거나 Gateway API로 전환하라"로 환원됩니다.
 
 ---
 

@@ -14,8 +14,11 @@
 
 The Kubernetes API server is the central hub of every cluster. Every `kubectl` command, every controller, and every operator communicates through this single RESTful interface. Understanding how to program against the Kubernetes API unlocks the ability to build custom automation, extend the platform with new behaviors, and integrate Kubernetes into larger systems. This lesson teaches you to write Go programs that interact with the API server — from simple CRUD operations to full-blown controllers that watch resources and reconcile state continuously.
 
+Before the Go code, read [**Theory & Principles**](#theory--principles) — the GVR/GVK system that catalogs every Kubernetes resource, why client-go's typed clientsets and the dynamic client trade compile-time safety against generality, the informer + work queue pattern that powers every controller, and the testing strategies (envtest, fake client) that let you verify reconciliation logic without a real cluster.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. Kubernetes API Structure](#1-kubernetes-api-structure)
 - [2. The client-go Library](#2-the-client-go-library)
 - [3. REST Client and Clientsets](#3-rest-client-and-clientsets)
@@ -27,6 +30,90 @@ The Kubernetes API server is the central hub of every cluster. Every `kubectl` c
 - [9. Watching Resources and Handling Events](#9-watching-resources-and-handling-events)
 - [10. Testing Controllers](#10-testing-controllers)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Programming the Kubernetes API in Go is what every controller, operator, and platform tool you've used (Argo CD, cert-manager, Prometheus Operator, ...) does under the hood. The API server itself is a RESTful HTTP+JSON service — you could call it with `curl` — but production code uses the **client-go** library because it provides typed access, caching (informers), efficient change notification (watches), and a work-queue pattern that makes reconciliation correct under restart and concurrency. This section explains the resource taxonomy (GVR/GVK), the client choices, the informer architecture (which is also the foundation of operator-runtime in lesson 11), and the testing approaches that distinguish hobby code from production controllers.
+
+### A. The Resource Taxonomy: GVR and GVK
+
+Every Kubernetes resource has two parallel identities:
+
+**GVK (Group, Version, Kind)** identifies the *Go type*: e.g., `apps/v1.Deployment`. This is what your code constructs and inspects (`appsv1.Deployment{...}`). Kinds are PascalCase and singular.
+
+**GVR (Group, Version, Resource)** identifies the *REST URL path*: e.g., `apps/v1/deployments`. This is what shows up in URLs (`/apis/apps/v1/namespaces/default/deployments`) and what RBAC rules reference (`apiGroups: ["apps"], resources: ["deployments"]`). Resources are lowercase and plural.
+
+The mapping between them is via the API server's **discovery** endpoint, which lists every registered (group, version) and the kinds and resources within. The library `RESTMapper` does this lookup for you so you can write `meta.RESTMapper.RESTMapping(GroupKind, version)` and get back the right URL fragment.
+
+Why two? Because the wire format and the in-memory representation evolve independently. A `Deployment` Kind always means "the same conceptual object," but its REST resource path could (in principle) change between API versions. Most code uses Kind in Go (`*appsv1.Deployment`) and only touches Resource at the RBAC and dynamic-client layer.
+
+### B. Three Client Styles: Typed, Discovery, Dynamic
+
+client-go offers three ways to talk to the API server:
+
+**1. Typed clientset (`kubernetes.Clientset`)**: a Go-typed interface for built-in resources. You write `clientset.AppsV1().Deployments("default").Get(ctx, "my-app", metav1.GetOptions{})` and get back `*appsv1.Deployment`. Compile-time safety, IDE autocomplete, easy to refactor. **Limitation**: only works for resources whose types were known at clientset compile time — built-ins and CRDs you've generated typed clients for.
+
+**2. Dynamic client (`dynamic.Interface`)**: works on `unstructured.Unstructured` (a `map[string]interface{}`). You construct a GVR, get a `ResourceInterface`, and operate on `*unstructured.Unstructured` objects. Trade compile-time safety for the ability to handle arbitrary CRDs without code generation. **Use when**: writing a generic operator (like Argo CD) that handles user-supplied CRDs unknown at build time.
+
+**3. controller-runtime client (`client.Client`)**: introduced in lesson 11; built on top of clientset but unified for built-in and custom types via runtime registration. The standard for new controllers because it integrates cleanly with the Reconciler pattern.
+
+Behind each is a `rest.RESTClient` that handles the HTTP, auth, content negotiation (JSON vs protobuf), and rate limiting. You rarely interact with this layer directly; the higher-level clients wrap it.
+
+The **discovery client** (`discovery.DiscoveryInterface`) is a fourth, special-purpose client — it returns the API server's list of available groups/versions/resources. Useful for tools that need to enumerate "what can I work with on this cluster?"
+
+### C. Informer Architecture: List-Watch + Cache + Indexed Reads
+
+Every controller needs to watch resources for changes. Doing this naively (a watch HTTP connection per resource per controller) doesn't scale. The **informer** pattern solves this with a shared cache:
+
+```
+API Server ←─watch─ Informer ─→ Indexer (cache) ─→ Lister
+                       │
+                       └─→ Event Handler ─→ Work Queue ─→ Reconciler
+```
+
+**SharedInformerFactory** creates one informer per (resource, namespace) and shares it across all consumers. So if your operator watches Deployments and your CRD controller also watches Deployments, only one watch HTTP connection is opened. The factory tracks reference counts and cleans up when no consumer remains.
+
+**The Indexer** is the local cache. It holds the result of the initial list plus all subsequent watch deltas. Reads (Get, List) hit the indexer, never the API server — which means a controller can list 10,000 pods locally in microseconds rather than make a multi-megabyte API server round trip. Custom indexes can be built on labels, fields, or arbitrary functions for fast lookup ("give me all pods owned by ReplicaSet X" without scanning).
+
+**Event handlers** are user-provided callbacks invoked on `ADDED`/`MODIFIED`/`DELETED`. The standard pattern: handlers do *not* do work; they extract a key (`namespace/name`) and `Add()` it to a work queue. This decouples event speed from work speed — burst events are absorbed by the queue, and work proceeds at the reconciler's pace.
+
+**Work queue** (`workqueue.RateLimitingInterface`) provides three properties critical to correct controllers:
+- **Deduplication**: 100 events for the same key result in one reconcile.
+- **Per-key serialization**: only one worker reconciles a given key at a time.
+- **Rate limiting**: failed reconciles back off exponentially.
+
+The **Reconciler** is your code. It pulls a key from the queue, gets the current object from the indexer, computes the desired state, and acts. On error, it returns the key to the queue for retry; on success, it forgets it. This is the same pattern from lesson 11; here we see it from the lower-level client-go perspective.
+
+### D. Testing Controllers: envtest, Fake Client, and Why Both Exist
+
+Controllers are notoriously hard to test because they depend on the API server's behavior — admission, defaulting, status updates, watch semantics. Two complementary approaches:
+
+**Fake client** (`fake.NewSimpleClientset`): an in-memory implementation of the clientset interface that records actions and returns canned responses. Pros: blazingly fast (microseconds per operation), no external dependencies, easy to assert "controller called Update with X." Cons: doesn't run admission, doesn't enforce schema, doesn't generate watch events properly across goroutines. Best for unit tests of pure reconciler logic.
+
+**envtest** (controller-runtime): boots a real `etcd` and `kube-apiserver` binary in your test process. Pros: exercises real API behavior including admission, validation, defaulting, watches. Your reconciler runs against a real API server. Cons: slower (~5s startup, ~100ms per operation); requires the kubebuilder envtest binaries to be installed. Best for integration tests of controller behavior end-to-end.
+
+A common test layout: fast unit tests on reconciler logic with the fake client (fail-fast in CI), plus a smaller suite of envtest-based integration tests that exercise the full reconciler-API interaction (slow but high confidence).
+
+A subtle point: a controller that passes fake-client tests but fails envtest tests is usually relying on something the fake client doesn't simulate (admission webhooks, server-side apply semantics, watch event ordering). When debugging "works in test, fails in cluster," envtest is closer to truth.
+
+### From Theory to the Code Below
+
+The lesson now applies these abstractions:
+
+- **Section 1 (Kubernetes API Structure)** is §A — GVR/GVK, discovery, the API server's resource graph.
+- **Section 2 (The client-go Library)** is §B's overview — the package layout and high-level design.
+- **Section 3 (REST Client and Clientsets)** is §B's typed client in concrete code.
+- **Section 4 (Dynamic Client and Unstructured Objects)** is §B's dynamic client for generic tools.
+- **Section 5 (Informers and Caching)** is §C's informer architecture in code with `SharedInformerFactory`.
+- **Section 6 (Work Queues)** is §C's queue with rate limiting and per-key serialization.
+- **Section 7 (Building a Custom Controller)** stitches §C together: informer + queue + reconciler in a runnable program.
+- **Section 8 (Controller-Runtime Library)** is the higher-level abstraction (lesson 11) on top of the same primitives.
+- **Section 9 (Watching Resources and Handling Events)** is the event-handler patterns (filter, requeue, owner-reference watches).
+- **Section 10 (Testing Controllers)** is §D — fake client and envtest in practice.
+
+Once you see GVR/GVK as the resource taxonomy, the three client styles as a generality-vs-safety trade-off, and informer + queue + reconciler as the universal controller pattern, every Kubernetes-aware Go program decomposes into the same building blocks.
 
 ---
 

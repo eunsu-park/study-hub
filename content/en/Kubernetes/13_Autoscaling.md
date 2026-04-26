@@ -16,8 +16,11 @@ After completing this lesson, you will be able to:
 
 One of the core promises of Kubernetes is elastic scaling -- the ability to automatically adjust compute resources based on demand. But autoscaling in Kubernetes is not a single feature; it is a layered system with three distinct components that operate at different levels. Horizontal Pod Autoscaling adjusts the number of pod replicas, Vertical Pod Autoscaling adjusts resource requests and limits per container, and Cluster Autoscaling adjusts the number of nodes. Getting these layers to work together smoothly is essential for both cost efficiency and reliability.
 
+Before the YAML, read [**Theory & Principles**](#theory--principles) — why Kubernetes splits scaling into three independent layers (HPA, VPA, Cluster Autoscaler), the closed-loop control formula HPA uses every 15 seconds, why metrics latency dominates real-world scaling lag, and the event-driven extension that KEDA brings to non-CPU workloads.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. Horizontal Pod Autoscaler (HPA) v2](#1-horizontal-pod-autoscaler-hpa-v2)
 - [2. Custom Metrics and External Metrics](#2-custom-metrics-and-external-metrics)
 - [3. Vertical Pod Autoscaler (VPA)](#3-vertical-pod-autoscaler-vpa)
@@ -28,6 +31,117 @@ One of the core promises of Kubernetes is elastic scaling -- the ability to auto
 - [8. Cost-Aware Scaling](#8-cost-aware-scaling)
 - [9. Scaling Best Practices](#9-scaling-best-practices)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Autoscaling in Kubernetes is not one feature; it is **three independent control loops operating at different layers**, each with its own measurement, decision, and actuation:
+
+- **HPA** (Horizontal Pod Autoscaler) decides "how many replicas of this Deployment should exist" based on per-pod metrics.
+- **VPA** (Vertical Pod Autoscaler) decides "how much CPU/memory should each pod request" based on historical usage.
+- **Cluster Autoscaler** decides "how many nodes should the cluster have" based on whether pending pods can be scheduled.
+
+These layers must compose carefully — HPA scales out, more pods become Pending, Cluster Autoscaler adds nodes, the new pods schedule. Get the ordering or the metrics wrong and you get oscillation, capacity loss, or runaway costs. This section explains the HPA control formula, the metrics-pipeline latency that bounds reactivity, the VPA's role in right-sizing, the Cluster Autoscaler's node-group abstraction, and the event-driven model that KEDA adds for queue-bound workloads.
+
+### A. HPA: A Closed-Loop Controller With a Specific Formula
+
+HPA reconciles every 15 seconds (default `--horizontal-pod-autoscaler-sync-period`). Each cycle:
+
+1. Read the current metric values for all pods backing the target Deployment via the Metrics API (default: `metrics.k8s.io` for CPU, `custom.metrics.k8s.io` for app metrics, `external.metrics.k8s.io` for queue length, etc.).
+2. For each metric source, compute:
+   ```
+   desiredReplicas = ceil(currentReplicas × currentMetric / targetMetric)
+   ```
+   For example, if you target 50% CPU, current is 80% across 4 pods: `ceil(4 × 80 / 50) = 7`.
+3. If multiple metrics are configured, take the **maximum** of the per-metric desired replicas (any metric over target → scale up).
+4. Apply tolerance band: if the change is within ±10% of current, do nothing (avoid flapping).
+5. Apply behavior policy: max scale-up rate per minute, stabilization windows, etc.
+6. Write the new replica count to the Deployment.
+
+Two consequences:
+
+- **Scale-up is eager, scale-down is conservative.** The default scale-down stabilization window is 5 minutes — HPA waits to make sure the dip isn't transient before removing pods. Scale-up has a 0-second default — react immediately to load.
+- **The formula is a P-controller (proportional only).** It cannot anticipate or smooth oscillating workloads on its own. Workloads with sharp daily patterns benefit from the `behavior` configuration (introduced in HPA v2) to bound rate of change.
+
+A common gotcha: scaling on CPU when your bottleneck is something else (DB connections, queue depth) means HPA scales pods that are not actually CPU-bound, wasting capacity. Custom metrics (§A continued) or KEDA (§D) address this.
+
+### B. Metrics Pipeline: The Latency That Bounds Reactivity
+
+HPA is only as fast as the metric it watches. The default pipeline:
+
+```
+Pod cgroup → kubelet (every 10s, default --housekeeping-interval)
+          → metrics-server (scrapes kubelets every 60s by default)
+          → Metrics API (HPA reads via aggregated API)
+```
+
+So even with HPA's 15s reconcile, the freshest CPU measurement HPA sees can be **60+ seconds old**. The end-to-end "load arrives → pods scale up" lag in default config is typically 60–120 seconds, not 15.
+
+For tighter loops, you reduce the metrics-server scrape interval (`--metric-resolution=15s`), but at the cost of more API server load. Alternatively, custom metrics adapters (Prometheus Adapter, Datadog) read directly from your monitoring system, which may already have shorter scrape intervals.
+
+For external sources (queue length, DB connection count), the Custom Metrics API or External Metrics API exposes them to HPA. Prometheus Adapter is the most common bridge: write your metric to Prometheus, configure the adapter to expose it as `custom.metrics.k8s.io/v1beta1/<resource>/<metric>`, reference it in HPA. This is how you scale on requests-per-second-per-pod, queue depth, P99 latency, or any business KPI.
+
+### C. VPA and Cluster Autoscaler: The Other Two Layers
+
+**VPA (Vertical Pod Autoscaler)** observes historical resource usage and recommends `requests` and `limits` per container. Three modes:
+
+- `Off`: only computes recommendations (visible via `vpa.status.recommendation`); a human reads them.
+- `Initial`: applies recommendations only at pod creation; existing pods keep their settings.
+- `Auto`: evicts pods to apply new recommendations (with PDB respect). Disruptive but fully automated.
+
+VPA and HPA on the same workload using the same metric (CPU) is a known footgun — they fight each other. Use VPA for memory + HPA for CPU, or use VPA in `Off` mode to inform manual sizing while HPA scales horizontally.
+
+VPA's other role is **right-sizing batch and stateful workloads** that can't horizontally scale. A database that needs 8 GB sometimes and 32 GB during nightly batch is a perfect VPA candidate (in Off + manual mode for prod, or Initial mode if restarts are tolerable).
+
+**Cluster Autoscaler (CA)** watches for unschedulable pods. When the scheduler reports `Pending` because no node has room, CA simulates: "if I added a node from group X, would this pod fit?" If yes, CA asks the cloud provider to provision the node (via the cloud's auto-scaling group / managed node group / VM scale set). When nodes have low utilization for `--scale-down-unneeded-time` (default 10 min) and their pods can fit elsewhere, CA cordons and drains them, then asks the cloud to remove them.
+
+CA does *not* look at CPU or memory directly; it looks at *requests vs allocatable*. So if your pods have low CPU requests but high actual usage, CA won't add nodes — but pods will get throttled because they're pinned to overcommitted nodes. **Right-sizing requests is what makes CA work.**
+
+### D. KEDA: Event-Driven Scaling for the Cases HPA Misses
+
+HPA scales based on metrics that pods *expose* (CPU, memory, custom). But many workloads should scale based on **external events** the pods don't know about:
+
+- A queue has 10,000 messages → spin up consumers.
+- A Kafka topic has consumer lag → add more partitioned consumers.
+- A scheduled batch job needs 100 pods at 02:00 → scale before the work arrives.
+
+KEDA (Kubernetes Event-Driven Autoscaling) is a CRD + controller that bridges these external sources to HPA. You define a `ScaledObject`:
+
+```yaml
+kind: ScaledObject
+metadata: { name: rabbitmq-consumer }
+spec:
+  scaleTargetRef: { name: my-consumer }
+  minReplicaCount: 0
+  maxReplicaCount: 100
+  triggers:
+    - type: rabbitmq
+      metadata:
+        host: amqp://...
+        queueName: jobs
+        queueLength: "5"     # 1 pod per 5 messages
+```
+
+KEDA polls RabbitMQ, computes `desiredReplicas = ceil(queueLength / 5)`, and exposes that to a generated HPA. The crucial extra capability: **scale to zero**. HPA cannot scale below 1; KEDA can scale to 0 when the queue is empty and back up when messages arrive (creating the first pod via the operator pattern). This is huge for cost on bursty workloads — pay only for the time work is actually running.
+
+KEDA has 60+ scalers (RabbitMQ, Kafka, AWS SQS, Postgres queries, Cron, Prometheus, ...). For workloads where load is event-shaped rather than CPU-shaped, KEDA replaces HPA-on-custom-metrics with a vastly simpler config.
+
+### From Theory to the YAML Below
+
+The lesson now applies these abstractions:
+
+- **Section 1 (HPA v2)** is §A — the formula, configuration, behavior policies.
+- **Section 2 (Custom and External Metrics)** is §B — Prometheus Adapter, custom adapters, business KPIs.
+- **Section 3 (VPA)** is §C — the modes and operational use.
+- **Section 4 (Cluster Autoscaler)** is §C's node-level loop with cloud provider integration.
+- **Section 5 (KEDA)** is §D — `ScaledObject`, scalers, scale-to-zero.
+- **Section 6 (Scaling with Prometheus)** combines §B's adapter pattern with real-world signals.
+- **Section 7 (Predictive Autoscaling)** moves from reactive (P-control) to predictive (forecast next-N-minutes from history).
+- **Section 8 (Cost-Aware Scaling)** integrates spot/on-demand mix and node-group selection into scaling decisions.
+- **Section 9 (Best Practices)** is operational composition of the three layers from §A and §C without fighting each other.
+
+Once you see HPA / VPA / CA as three independent control loops with different signals and actuators, "why didn't my pod scale up?" reduces to "which loop, which metric, which lag?"
 
 ---
 

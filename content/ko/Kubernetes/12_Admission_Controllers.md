@@ -16,8 +16,11 @@
 
 Kubernetes API 서버로 들어오는 모든 요청은 etcd에 저장되기 전에 어드미션 컨트롤러(admission controller) 체인을 통과합니다. 이 체인은 Kubernetes에서 가장 강력한 확장 지점 중 하나입니다 -- 보안 정책 적용, 사이드카 주입, 기본값 설정, 구성 유효성 검증, 잘못된 구성이 클러스터에 도달하기 전에 방지할 수 있습니다. 이 레슨에서는 내장 어드미션 컨트롤러와 사용자 정의 로직을 연결할 수 있는 동적 어드미션 제어(dynamic admission control) 시스템을 모두 다룹니다.
 
+웹훅 설정에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 어드미션이 요청 파이프라인의 어디에 있는지(authn/authz 후, 영속화 전), 기본값을 안전하게 주입할 수 있게 하는 Mutating-then-Validating 순서, 웹훅이 빠르고 멱등이며 fail-closed-or-open으로 설계되어야 하는 이유, 그리고 정책 엔진(OPA, Kyverno)이 동일한 웹훅 배관 위에 규칙을 계층화하는 방법을 다룹니다.
+
 ## 목차
 
+- [이론과 원리](#이론과-원리)
 - [1. 어드미션 컨트롤러 파이프라인](#1-the-admission-controller-pipeline)
 - [2. 내장 어드미션 컨트롤러](#2-built-in-admission-controllers)
 - [3. 동적 어드미션 제어](#3-dynamic-admission-control)
@@ -29,6 +32,115 @@ Kubernetes API 서버로 들어오는 모든 요청은 etcd에 저장되기 전�
 - [9. 어드미션 정책 테스팅](#9-testing-admission-policies)
 - [10. 어드미션 컨트롤러 성능](#10-admission-controller-performance)
 - [연습문제](#exercises)
+
+---
+
+## 이론과 원리
+
+어드미션 제어는 API 요청 파이프라인의 세 번째 게이트입니다(6강 §A). 인증이 *누구*를, 인가가 *허용 여부*를 답한 후, 어드미션은 *작성된 그대로의 이 정확한 객체가 영속화되어야 하는가?*를 묻습니다. 이곳이 정책이 사는 곳입니다 — "privileged 파드 금지", "모든 컨테이너는 CPU limit이 있어야 한다", "이미지는 우리 레지스트리에서 와야 한다", "네임스페이스는 cost-center 레이블이 있어야 한다". "객체를 보고 allow/deny/mutate를 결정"으로 표현할 수 있는 모든 것이 여기에 옵니다. 이 섹션은 어드미션이 파이프라인에서 차지하는 자리, mutating-then-validating 2-패스 설계, 웹훅의 운영 제약(지연, fail-policy, 멱등성), 그리고 OPA Gatekeeper와 Kyverno가 동일한 머신너리에 플러그인하는 정책 엔진일 뿐인 방법을 설명합니다.
+
+### A. 어드미션이 어디에 있고 왜 중요한가
+
+6강의 4-게이트 파이프라인을 떠올려보세요 — **authn → authz → admission → schema validation → etcd 영속화**. 각 단계는 특정 질문에 답합니다:
+
+- **Authn** — 당신은 누구인가?
+- **Authz** (RBAC 등) — 이 리소스에 이 verb를 허용받았는가?
+- **Admission** — 이 *특정* 요청이 통과되어야 하는가?
+- **Schema/CEL validation** — 객체가 등록된 형태와 일치하는가?
+- **Persist** — etcd에 쓰기.
+
+어드미션은 권한이 아니라 객체의 *내용*에 의존하는 모든 것에 대한 *바로 그* 확장 지점입니다. RBAC는 "create pods"를 부여할 수 있지만 "non-privileged 파드만"이라 말할 수 없습니다. 스키마 검증은 필드를 요구할 수 있지만 "이 필드의 값이 우리 레지스트리의 호스트명과 일치"를 강제할 수 없습니다. 두 격차 모두 어드미션의 일입니다.
+
+어드미션은 또한 **영속화 전에** 실행되므로, 거부된 요청은 etcd에 들어가지 않고, 부분 상태에 대한 audit 로그 노이즈를 만들지 않으며, 컨트롤러를 혼란시키지 않습니다. 이것이 "어드미션으로서의 정책"이 "사후에 나쁜 객체를 삭제하는 컨트롤러로서의 정책"과 근본적으로 다른 이유입니다 — 후자는 나쁜 상태가 존재하고 다른 컨트롤러가 관찰할 수 있는 창을 만들고, 전자는 나쁜 상태를 문자 그대로 만들 수 없게 합니다.
+
+트레이드오프 — 어드미션은 핫 패스에 있습니다. 모든 API 요청 — 모든 kubectl apply, 모든 컨트롤러 create — 이 어드미션 비용을 지불합니다. 그래서 웹훅은 엄격한 성능 요구사항을 가집니다(§C).
+
+### B. 내장 어드미션 플러그인과 2-패스 웹훅 설계
+
+어드미션은 두 종류의 플러그인을 가집니다 — **내장**(API 서버에 컴파일됨)과 **동적**(등록하는 웹훅). 내장 플러그인은 보편적 케이스를 처리합니다:
+
+- `LimitRanger`는 네임스페이스에 `LimitRange`가 있으면 기본 CPU/메모리 limit을 주입.
+- `ResourceQuota`는 네임스페이스의 `ResourceQuota`를 초과할 요청을 거부.
+- `ServiceAccount`는 네임스페이스의 default ServiceAccount와 그 토큰 볼륨을 주입.
+- `NamespaceLifecycle`은 존재하지 않거나 종료 중인 네임스페이스에서의 create를 거부.
+- `PodSecurity` (6강)는 Pod Security Standards 강제.
+- `MutatingAdmissionWebhook`과 `ValidatingAdmissionWebhook`은 동적 어드미션의 진입점.
+
+두 웹훅 유형은 별개의 단계에서 실행됩니다:
+
+**Phase 1 — Mutating 웹훅.** 요청에 매치되는 등록된 각 `MutatingWebhookConfiguration`이 객체와 함께 호출됩니다. 각각은 API 서버가 적용할 JSON patch를 반환할 수 있습니다. Mutating 웹훅은 체이닝됩니다 — 웹훅 A의 출력이 웹훅 B의 입력 — 그래서 순서가 중요할 수 있습니다(API 서버는 비결정적 순서로 처리하며, 후속 mutation 후 재실행을 위한 `reinvocationPolicy: IfNeeded`). 전형적 사용 — 사이드카 주입(Istio, Linkerd), 레이블/어노테이션 추가, API 작성자가 잊은 기본값 설정.
+
+**Phase 2 — Validating 웹훅.** 모든 mutation이 끝난 후, validating 웹훅이 *최종* 객체를 보고 allow나 deny를 반환(patch 없음). 여러 validating 웹훅이 모두 실행됩니다 — 어느 하나가 거부하면 요청이 거부됩니다. 전형적 사용 — 정책 강제(privileged 파드 금지, 이미지 레지스트리, 레이블 요구사항).
+
+이 순서는 의도적입니다 — 검증은 최종 상태에서 실행되므로, mutator가 기본값을 추가하고 validator가 그것을 검증할 수 있고, 사용자는 최종 형태에 대한 한 번의 오류 메시지만 봅니다. 다른 순서로 하면 validator가 부분 객체를 승인했다가 후속 mutator가 깨뜨릴 수 있습니다.
+
+미묘한 점 — mutating 웹훅은 멱등성과 충돌에 주의해야 합니다. 두 웹훅이 같은 어노테이션을 다른 값으로 주입하려 하면, API 서버의 reinvocation 로직이 해결하지만 사용자는 예측 불가 동작을 얻습니다. 운영 규칙은 — 각 mutating 웹훅은 겹치지 않는 관심사를 소유해야 합니다.
+
+### C. 운영 제약 — 지연, Fail-Policy, Side Effect
+
+웹훅은 API 핫 패스에 삽니다. 제약은 사소하지 않습니다:
+
+- **지연(Latency)** — 모든 API 요청이 모든 매치된 웹훅을 기다립니다. API 서버는 기본 10초 timeout(아래로 구성 가능)을 가집니다. 느린 웹훅은 모든 kubectl apply를 느리게 만듭니다. **권장 — 웹훅은 100ms p99 내에 응답해야 합니다.**
+- **Fail policy**는 `Fail`(기본) 또는 `Ignore`. `Fail`이면 웹훅에 도달할 수 없을 때 요청이 거부됩니다 — 엄격하지만 웹훅 장애가 배포를 깨뜨립니다. `Ignore`이면 오류 시 웹훅을 우회 — 우아하지만 장애 동안 정책 위반을 통과시킵니다. 대부분의 보안 웹훅은 `Fail` + 고가용성(여러 레플리카, PDB, 테스트된 롤아웃)을 사용해야 합니다.
+- **멱등성(Idempotence)** — 웹훅은 재시도될 수 있습니다 — 특히 `reinvocationPolicy: IfNeeded`인 mutating. `metadata.labels.foo = bar`를 설정하는 웹훅은 멱등입니다. 리스트에 *추가*하는 웹훅("이 사이드카를 컨테이너 리스트에 추가")은 먼저 이미 있는지 검사해야 합니다 — 그렇지 않으면 재시도 시 중복 사이드카.
+- **Side effects** — 웹훅은 외부 side effect를 가져서는 안 됩니다(웹훅에서 Slack에 포스팅 금지). API 서버는 오류 시 재시도하고 한 논리적 요청에 대해 웹훅을 여러 번 호출할 수 있습니다. API 서버가 자유롭게 호출할 수 있음을 알도록 `sideEffects: None`(또는 `NoneOnDryRun`)을 사용하세요.
+- **Scope** — 웹훅이 관심 있는 것에만 호출되도록 `rules`를 정확히 구성하세요. `pods`를 watch하면서 모든 CRD apply에서 실행되는 웹훅은 그저 지연만 추가합니다.
+
+이 제약들이 프로덕션 웹훅이 보통 프레임워크(Go용 kubebuilder, WebAssembly용 kubewarden)로 작성되어 TLS, 요청 파싱, AdmissionReview 스키마를 처리하고 정책 로직만 남기는 이유입니다.
+
+### D. 정책 엔진 — OPA Gatekeeper와 Kyverno
+
+모든 정책에 Go로 웹훅을 작성하는 것은 지루해집니다. **정책 엔진**은 선언적 정책을 쿠버네티스 리소스로 읽는 사전 빌드된 validating(때로는 mutating) 웹훅입니다. 두 가지 주류 선택:
+
+**OPA Gatekeeper.** Open Policy Agent 런타임 위에 빌드 — 정책은 선언적 논리 언어인 **Rego**로 작성됩니다. 두 CRD:
+
+- `ConstraintTemplate` — Rego의 매개변수화된 정책 정의. 함수 정의 같은 것.
+- `Constraint`(템플릿에서 생성된 커스텀 kind) — 매개변수와 함께한 템플릿 인스턴스. 함수 호출 같은 것.
+
+예 — `RequiredLabels` 템플릿 + "모든 네임스페이스는 `cost-center`와 `team` 레이블이 있어야 한다"는 constraint. Gatekeeper가 이를 웹훅 결정으로 컴파일합니다. 강력한 audit 기능(어드미션뿐 아니라 기존 객체에 대한 지속적 재평가), 그리고 동일한 Rego 정책이 쿠버네티스 외부(Envoy authz, Terraform, 커스텀 앱)에서 재사용 가능.
+
+**Kyverno.** 네이티브 쿠버네티스 — 정책은 YAML로 작성된 CRD(`ClusterPolicy`, `Policy`), 배울 DSL 없음. 세 규칙 유형 — validate(allow/deny), mutate(기본값 설정, 레이블 추가), generate(템플릿에서 자식 리소스 생성).
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: check-team-label
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+      validate:
+        message: "Namespace must have a 'team' label"
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+```
+
+Kyverno는 접근성에서 이깁니다 — 보안 팀이 Rego를 배우지 않고 정책을 작성할 수 있습니다. OPA는 강력함에서 이깁니다 — Rego는 Kyverno의 선언적 구문에서 어색한 정책을 표현할 수 있습니다.
+
+두 엔진 모두 §B의 동일한 Mutating/ValidatingWebhookConfiguration 머신너리에 플러그인합니다 — 웹훅과 정책 엔진 사이를 선택하는 것이 아니라 웹훅 *으로서* 무엇이 실행되는지를 선택합니다.
+
+### 이론에서 아래의 코드로
+
+이제 레슨은 이 추상을 적용합니다:
+
+- **섹션 1 (어드미션 컨트롤러 파이프라인)**은 §A입니다 — 전체 요청 흐름과 어드미션의 자리.
+- **섹션 2 (내장 어드미션 컨트롤러)**는 항상 켜져 있는 §B의 베이스라인 플러그인입니다.
+- **섹션 3 (동적 어드미션 제어)**는 웹훅 개념을 도입합니다.
+- **섹션 4–5 (검증 웹훅, 변이 웹훅)**는 구체적 YAML과 Go 코드와 함께한 §B의 두 단계입니다.
+- **섹션 6 (웹훅 구성)**은 `MutatingWebhookConfiguration`/`ValidatingWebhookConfiguration` 스펙입니다 — rules, fail policy, side effects, namespace selector.
+- **섹션 7 (OPA Gatekeeper)**는 §D의 Rego 기반 정책 엔진입니다.
+- **섹션 8 (Kyverno)**는 §D의 YAML 기반 정책 엔진입니다.
+- **섹션 9 (어드미션 정책 테스팅)**은 enforce 모드를 안전하게 롤아웃하게 해주는 dry-run + audit 패턴입니다.
+- **섹션 10 (성능)**은 §C를 운영적으로 만든 것입니다 — 웹훅 지연 측정, 레플리카 스케일링.
+
+어드미션을 "세 번째 게이트, 확장 API로서의 웹훅, 사전 구성된 웹훅으로서의 정책 엔진"으로 보고 나면, 모든 클러스터 보안/컴플라이언스 기능은 "어떤 정책이 어드미션에 사는가?"로 환원됩니다.
 
 ---
 

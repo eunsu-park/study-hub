@@ -18,8 +18,11 @@ Kubernetes clusters are multi-tenant platforms that run workloads from different
 
 > **Defense in Depth:** Kubernetes security is not a single feature but a layered approach. Authentication verifies identity, authorization controls access, admission control enforces policies, and runtime security restricts what pods can do. Each layer compensates for failures in other layers.
 
+Before the manifests, read [**Theory & Principles**](#theory--principles) — the four-stage gate every API request passes (authn → authz → admission → schema validation), why RBAC is purely additive, the Role/ClusterRole + Binding combinatorial model, and why Pod Security Standards live in admission rather than RBAC.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. Authentication Methods](#1-authentication-methods)
   - [1.1 X.509 Client Certificates](#11-x509-client-certificates)
   - [1.2 Bearer Tokens](#12-bearer-tokens)
@@ -55,6 +58,104 @@ Kubernetes clusters are multi-tenant platforms that run workloads from different
   - [9.1 Default Deny](#91-default-deny)
   - [9.2 Allow Specific Traffic](#92-allow-specific-traffic)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+Kubernetes security is best understood as a **pipeline of independent gates**: a request must pass authentication, then authorization, then admission, then schema validation, and only then is it persisted to etcd. Each gate has a different job, a different failure mode, and a different extension point. Confusing them ("RBAC denied my pod") is the most common debugging mistake. This section explains the four-gate pipeline, the additive model of RBAC, and why deeper security controls (Pod Security Standards, OPA, network policies) live in admission and runtime rather than in the authorization layer.
+
+### A. The Four-Stage Request Pipeline
+
+Every API request — `kubectl apply`, controller call, sidecar GET, dashboard click — passes through the same chain inside the API server:
+
+1. **Authentication (authn): "Who are you?"** Validates client credentials (X.509 cert, bearer token, OIDC ID token, ServiceAccount JWT). Output is a `user.Info` struct (username, groups, extra). If no authenticator recognizes the credential, the request is anonymous (or rejected if anonymous is disabled).
+2. **Authorization (authz): "Are you allowed to do this?"** Given `(user, verb, resource, namespace, name)`, ask each enabled authorizer (RBAC, ABAC, Webhook, Node) — they return Allow, Deny, or NoOpinion. The first explicit answer wins; **if everyone says NoOpinion, the request is denied** (default deny).
+3. **Admission control: "Should this request, as written, actually happen?"** Mutating webhooks can rewrite the object (inject sidecars, set defaults). Validating webhooks can reject it (block privileged pods, enforce labels). Built-in admission controllers handle quotas, defaults, namespace existence checks, and Pod Security Standards.
+4. **Schema validation and persistence.** OpenAPI/CEL schema check on the object, then write to etcd.
+
+Only after all four gates pass does the object exist. A failure at any gate means the request never lands. Knowing which gate is rejecting you ("forbidden" → authz; "denied by webhook" → admission; "invalid schema" → step 4) makes debugging tractable.
+
+This pipeline is also why "I gave my user all permissions but they still cannot create privileged pods" is not a bug — RBAC said yes, but Pod Security Admission said no.
+
+### B. RBAC as a Pure Allow List
+
+RBAC has four object kinds, organized by scope:
+
+| Kind | Defines | Scope |
+|------|---------|-------|
+| `Role` | a set of `(verb, resource)` permissions | namespaced |
+| `ClusterRole` | same, but cluster-wide | cluster |
+| `RoleBinding` | grants a `Role` (or `ClusterRole`) to subjects in one namespace | namespaced |
+| `ClusterRoleBinding` | grants a `ClusterRole` to subjects cluster-wide | cluster |
+
+Subjects are users, groups, or ServiceAccounts.
+
+The model has three crucial properties:
+
+- **Additive only.** RBAC has no "deny" rule. You build up permissions by binding roles. To take permissions away, you remove a binding — there is no way to write "user X cannot read secrets" once they have a role granting it. This makes the system simple to reason about (no rule-precedence puzzles) but means least-privilege requires careful role construction, not patching.
+- **Verb-resource granularity.** Permissions are at the `(verb, resource)` level: `get pods`, `list deployments`, `create configmaps/myconfig` (resource name optional). Subresources are separate (`pods/exec`, `pods/log`). Wildcards exist (`verbs: ["*"]`, `resources: ["*"]`) but should be avoided in production roles.
+- **No data filtering.** RBAC controls *whether* you can list secrets in a namespace, not *which* secrets you see. If you can list secrets, you can list all of them. Per-row filtering requires admission webhooks or external policy engines.
+
+The Role/ClusterRole + Binding split lets the same `ClusterRole` ("view") be reused: bind it to user A in namespace `dev`, user B in namespace `prod`, and group `oncall` cluster-wide — three bindings, one role definition.
+
+### C. Identity for Workloads: ServiceAccounts and Token Projection
+
+Human users authenticate with certs or OIDC. Pods authenticate with **ServiceAccount tokens** — JWTs signed by the API server, automatically mounted into the Pod at `/var/run/secrets/kubernetes.io/serviceaccount/token`. The `default` ServiceAccount in every namespace is what unconfigured Pods get.
+
+Modern clusters use **bound ServiceAccount tokens** (BoundServiceAccountTokenVolume, on by default since 1.21):
+
+- The token is generated per Pod (not stored in a Secret object).
+- It is bound to the specific Pod's UID and audience — when the Pod is deleted, the token becomes invalid.
+- The kubelet rotates the token before expiry (default 1h).
+
+This eliminates the old "permanent ServiceAccount token sitting in etcd that anyone with read-Secret can grab" failure mode. For external systems, you can issue your own tokens with TokenRequest API, scoped to specific audiences (e.g., a token valid only against an internal Vault).
+
+**Auto-mounting** is on by default but should be off for Pods that don't need the API (`automountServiceAccountToken: false` at Pod or SA level). A pod that does not need to talk to the API server has no business carrying an API credential.
+
+### D. Defense in Depth: Pod Security Standards, NetworkPolicy, OPA
+
+RBAC controls API access; it does *not* control what a running container can do. A container with `privileged: true` and `hostNetwork: true` can read every secret on the node and pivot the cluster — even if its ServiceAccount has zero RBAC permissions. So Kubernetes layers additional controls:
+
+**Pod Security Standards (PSS)** define three profiles enforced by the **Pod Security Admission** controller:
+
+| Profile | What it allows | When to use |
+|---------|----------------|-------------|
+| `privileged` | everything | trusted system workloads (CNI, storage drivers) |
+| `baseline` | minimum container hygiene; blocks `privileged`, hostNetwork, hostPath | most user workloads |
+| `restricted` | strict hardening; non-root, drop ALL capabilities, seccomp RuntimeDefault | apps with no special needs |
+
+Enforcement is per-namespace via labels:
+
+```yaml
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.29
+```
+
+This is **admission-time** enforcement — pods that violate are rejected at gate 3 of §A.
+
+**NetworkPolicy** restricts pod-to-pod traffic at L3/L4. Default Kubernetes networking is "any pod can talk to any pod" (lesson 03 §A). NetworkPolicy lets you say "pods labeled `tier=backend` only accept traffic from pods labeled `tier=frontend` on port 8080." Implementation is delegated to the CNI plugin (lesson 08).
+
+**OPA Gatekeeper / Kyverno** are policy engines that plug into admission (gate 3) via webhooks. They let you write rules like "every namespace must have a cost-center label" or "container images must come from our internal registry" in a domain-specific language (Rego for OPA, YAML for Kyverno). When Pod Security Standards are not enough, these are the next step.
+
+The mental model: **RBAC controls API access; PSS + NetworkPolicy + OPA control workload behavior.** Both are needed. A misconfigured cluster with strict RBAC but `privileged` admission allowed is one container away from a full compromise.
+
+### From Theory to the YAML Below
+
+The lesson now concretizes these abstractions:
+
+- **Section 1 (Authentication)** is gate 1 of §A — the four credential types and how the API server validates each.
+- **Section 2 (Authorization Modes)** introduces the gate 2 plug-ins; you'll usually use RBAC (§B) and Webhook for advanced cases.
+- **Section 3 (RBAC Deep Dive)** is the four-object model from §B with concrete YAML and the aggregation pattern that lets you compose roles.
+- **Section 4 (Service Accounts)** is §C — how Pods get identities and how to lock down auto-mount.
+- **Section 5 (Pod Security Standards)** is the §D PSS layer, enforced via admission labels.
+- **Sections 6–7 (Security Contexts, Seccomp/AppArmor)** are workload-side hardening that PSS enforces.
+- **Sections 8 (OPA Gatekeeper)** is the policy-engine extension of admission control from §D.
+- **Section 9 (Network Policies)** is §D's L3/L4 layer.
+
+Once you see the four-gate pipeline in §A, every "why was this denied?" question maps to a specific gate and a specific extension point.
 
 ---
 

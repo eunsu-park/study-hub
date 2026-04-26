@@ -16,8 +16,11 @@ After completing this lesson, you will be able to:
 
 Running stateless workloads on Kubernetes is straightforward -- Deployments, Services, and Ingresses handle the heavy lifting. But stateful, domain-specific applications (databases, message queues, ML pipelines) require human expertise to install, configure, scale, upgrade, and recover. The Operator pattern encodes that human knowledge into software that runs inside the cluster and continuously drives the system toward the desired state. This lesson covers the full lifecycle of building, deploying, and maintaining Kubernetes operators.
 
+Before the scaffolding, read [**Theory & Principles**](#theory--principles) — why the Operator pattern is just CRD + controller-runtime applied to domain knowledge, the informer + work queue + reconcile loop that is the controller's heartbeat, why finalizers and owner references make ownership explicit, and how leader election prevents two operators from racing each other.
+
 ## Table of Contents
 
+- [Theory & Principles](#theory--principles)
 - [1. The Operator Pattern](#1-the-operator-pattern)
 - [2. Operator Framework and operator-sdk](#2-operator-framework-and-operator-sdk)
 - [3. Kubebuilder](#3-kubebuilder)
@@ -29,6 +32,123 @@ Running stateless workloads on Kubernetes is straightforward -- Deployments, Ser
 - [9. Operator Lifecycle Manager (OLM)](#9-operator-lifecycle-manager-olm)
 - [10. Best Practices and Anti-Patterns](#10-best-practices-and-anti-patterns)
 - [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+The Operator pattern is the answer to a recurring observation: stateful systems (databases, message brokers, ML pipelines) are operated mostly by humans following runbooks. "Initialize the cluster, then add a replica, then wait for it to catch up, then promote it..." Each step is mechanical but requires domain knowledge about *this particular system*. An **Operator** encodes that runbook as a controller running inside the cluster. When you define a custom resource (`PostgresCluster`, lesson 10) and write a controller that knows how to install, upgrade, and recover Postgres, you have made `kubectl apply -f cluster.yaml` produce a managed database. This section explains the controller-runtime architecture that almost every operator builds on, the work-queue pattern that makes reconciliation efficient, finalizers and owner references for cleanup and ownership, and leader election for HA operator deployments.
+
+### A. Operator = Custom Resource + Domain-Aware Controller
+
+An Operator is the composition of two things you already know:
+
+1. **A CRD** (lesson 10) defines the *shape* of the user's intent — a `PostgresCluster` has `spec.replicas`, `spec.version`, `spec.storage`, etc.
+2. **A controller** watches that CRD and reconciles the world to match — actually creating StatefulSets, Services, Secrets, PVCs, configuring streaming replication, monitoring health, performing rolling upgrades.
+
+The CRD by itself is just a typed shape stored in etcd. Without the controller, applying a `PostgresCluster` object does nothing. With the controller, the same apply produces a fully working cluster — because the controller has all the operational knowledge baked in.
+
+The pattern's elegance is that it follows the same *model* as built-in Kubernetes (Deployment, ReplicaSet, ...) but for domain objects Kubernetes itself doesn't know about. Once you adopt this pattern, your platform vocabulary expands: instead of "create the StatefulSet, then configure replication, then ..." you say `kubectl apply -f my-database.yaml`.
+
+The Operator pattern is *not* magic — it is just lesson 10's CRD plus a controller written in Go using **controller-runtime** (or in any language using the Kubernetes API directly, but Go has the best ecosystem). What makes operators powerful is the *encoding of expertise*, not any new framework feature.
+
+### B. The Controller's Heartbeat: Informer + Work Queue + Reconcile
+
+Every operator (and every built-in controller) runs the same architecture, provided by **controller-runtime**:
+
+```
+Watch → Informer (cache) → Event Handler → Work Queue → Reconciler
+```
+
+**Informer** is a long-lived watch on a resource type that maintains a local cache. Why a cache? Because the alternative — every reconcile reads from the API server — is unaffordable. An informer does one initial list and then streams deltas (lesson 01 §A); reads are local and fast.
+
+**Event Handler** sees `ADDED`/`MODIFIED`/`DELETED` events from the informer and decides what to do. Typically: extract the object's namespace/name and enqueue a *reconcile request* for it. Note: handlers do not do the work; they enqueue it.
+
+**Work Queue** is the buffer between event production and reconciliation. It deduplicates (if 100 events for the same object arrive, only one reconcile happens), supports rate limiting (exponential backoff on errors), and enforces sequential processing per key (one reconcile for `default/my-cluster` at a time, no races). controller-runtime gives you a sensible default: a rate-limited queue with exponential-backoff-on-error.
+
+**Reconciler** is the function you write. Its signature is:
+
+```go
+func (r *PostgresReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error)
+```
+
+Inside, you:
+1. Get the desired state: read the CR from the cache.
+2. Get the actual state: read child resources (StatefulSet, Service) and their status.
+3. Compute the diff and act: create/update/delete as needed.
+4. Return: `Result{Requeue: true}` to come back immediately, `Result{RequeueAfter: 30s}` for periodic checking, or `error` to trigger backoff retry.
+
+Two properties that come for free with this pattern:
+
+- **Idempotence by default.** The reconciler is called multiple times for the same object — on initial create, on every change, on resync intervals, on retry. Your code must produce the same outcome each time. The pattern is "create-or-update," not "create" — typically using `controllerutil.CreateOrUpdate`.
+- **Level-triggered, not edge-triggered.** You react to *current state*, not to events. If your controller crashes during a reconcile, the next start sees the same state and continues — no missed events to recover.
+
+This loop is *the* programming model for Kubernetes extension. Everything else (finalizers, owner references, status updates) is a refinement on top.
+
+### C. Owner References and Finalizers: Making Ownership Explicit
+
+A `PostgresCluster` resource owns child objects: a StatefulSet, several Services, Secrets for credentials, PVCs for storage. Two mechanisms tie them together:
+
+**Owner References** are metadata pointing from a child to its parent:
+
+```yaml
+metadata:
+  name: my-cluster-sts
+  ownerReferences:
+    - apiVersion: example.com/v1
+      kind: PostgresCluster
+      name: my-cluster
+      uid: 12345...
+      controller: true
+      blockOwnerDeletion: true
+```
+
+When you delete the `PostgresCluster`, the **garbage collector** controller (built into kube-controller-manager) sees the dangling owner reference and cascade-deletes the children. You don't write deletion logic for your StatefulSet — the GC handles it because you set `ownerReferences` on creation. This is how Deployments delete their ReplicaSets and ReplicaSets delete their Pods, all "for free."
+
+**Finalizers** are the inverse: a list of strings under `metadata.finalizers` that block deletion until removed. When a user runs `kubectl delete postgrescluster my-cluster`:
+
+1. Kubernetes sets `metadata.deletionTimestamp` (a soft-delete marker).
+2. Garbage collection notices but waits because the finalizers list is non-empty.
+3. Your controller's reconciler sees `deletionTimestamp != nil` and runs cleanup (e.g., take a final backup, deregister from monitoring, release the cloud-managed disk).
+4. After cleanup, your controller removes its finalizer from the list.
+5. With finalizers empty, GC actually deletes the object.
+
+Finalizers are the only correct way to do "synchronous cleanup before delete" — without them, the object is gone before you have a chance to react.
+
+A common pattern: register your finalizer on first reconcile (via update), and check `deletionTimestamp` at the top of every reconcile to branch into delete-handling.
+
+### D. Leader Election: One Active, Many Standby
+
+Your operator should run with multiple replicas for HA, but only **one** should reconcile at a time — otherwise two replicas race to create the same StatefulSet. controller-runtime's solution is **leader election**: replicas compete for a `Lease` object in the cluster; whoever holds the Lease is the leader and runs the reconcile loop. Standbys watch the Lease and take over if it expires (default 15s TTL, 10s renew, 2s retry).
+
+```go
+mgr, _ := manager.New(cfg, manager.Options{
+    LeaderElection:   true,
+    LeaderElectionID: "my-operator-lock",
+    LeaderElectionNamespace: "my-operator-system",
+})
+```
+
+The Lease object lives in etcd, so the same consensus that makes etcd safe (lesson 01 §B) makes leader election safe — under network partition, only the side that can reach a quorum of etcd members can hold the lease.
+
+This is the same pattern kube-controller-manager uses for itself. The Deployment controller is highly available: three controller-manager replicas, one elected leader running the reconcile loop, two warm standbys.
+
+### From Theory to the Code Below
+
+The lesson now applies these abstractions:
+
+- **Section 1 (The Operator Pattern)** is §A — why the pattern exists and the canonical examples.
+- **Section 2 (Operator Framework, operator-sdk)** is the higher-level scaffolding around controller-runtime.
+- **Section 3 (Kubebuilder)** is the standard project layout and code generation for Go-based operators.
+- **Section 4 (Controller-Runtime Library)** is §B in Go — Manager, Reconciler, Builder, Client.
+- **Section 5 (Implementing a Reconciliation Loop)** is the §B reconciler pattern with proper Result return values, error handling, and requeue strategies.
+- **Section 6 (Leader Election)** is §D in code.
+- **Section 7 (Finalizers)** is §C's finalizer flow with the `deletionTimestamp` branch.
+- **Section 8 (Owner References)** is §C's parent-child wiring with `SetControllerReference`.
+- **Section 9 (OLM)** is the lifecycle layer for distributing operators through catalogs.
+- **Section 10 (Best Practices and Anti-Patterns)** are operational lessons learned from production operators.
+
+Once you see the operator as "CRD + controller running the watch/queue/reconcile loop," the framework choice (Kubebuilder vs operator-sdk vs Java Operator SDK) becomes a syntax detail. The hard part is the domain knowledge, not the boilerplate.
 
 ---
 
