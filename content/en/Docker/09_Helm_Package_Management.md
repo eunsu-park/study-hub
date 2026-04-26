@@ -18,6 +18,9 @@ After completing this lesson, you will be able to:
 Deploying a Kubernetes application typically involves multiple YAML manifests -- Deployments, Services, ConfigMaps, Secrets, and more. As applications grow, managing these manifests becomes complex and error-prone. Helm is the de facto package manager for Kubernetes, packaging related manifests into reusable, versioned charts with configurable templates. Learning Helm dramatically reduces deployment complexity and enables consistent, repeatable deployments across environments.
 
 ## Table of Contents
+
+Before the chart walkthrough, read [**Theory & Principles**](#theory--principles) — Helm's Go-template engine, the release lifecycle and history machinery, and the dependency-resolution algorithm that lets one chart declare and pull others.
+
 1. [Helm Overview](#1-helm-overview)
 2. [Helm Installation and Setup](#2-helm-installation-and-setup)
 3. [Chart Structure](#3-chart-structure)
@@ -25,6 +28,120 @@ Deploying a Kubernetes application typically involves multiple YAML manifests --
 5. [Values and Configuration](#5-values-and-configuration)
 6. [Chart Management](#6-chart-management)
 7. [Practice Exercises](#7-practice-exercises)
+
+---
+
+## Theory & Principles
+
+Helm is a **client-side templating engine** plus a **release-tracking layer**. It does not run controllers, watch resources, or reconcile in the Kubernetes sense. It renders YAML, sends it to the API server, and remembers what it sent so the next `helm upgrade` knows what to delete or modify. Three pieces are worth understanding deeply: the Go template engine and its idioms, the release lifecycle in etcd, and how dependencies between charts are resolved.
+
+### A. The Templating Engine: Go templates + Sprig
+
+A Helm chart is a directory of files. The `templates/` subdirectory contains files that are run through Go's `text/template` engine before being sent to Kubernetes. The engine has three input sources:
+
+- **`.Values`** — the merged user-supplied values (from `values.yaml` plus `--set` flags plus `-f` overrides).
+- **`.Chart`** — chart metadata from `Chart.yaml` (name, version, appVersion, ...).
+- **`.Release`** — release-time information (`.Release.Name`, `.Release.Namespace`, `.Release.Revision`, ...).
+- **`.Capabilities`** — cluster info (Kubernetes version, available API groups). Used to write conditional templates that adapt to the target cluster.
+- **`.Files`** — non-template files in the chart, accessible via helpers like `.Files.Get` and `.Files.Glob`.
+
+Standard Go template syntax (`{{ .Values.image.repository }}`, `{{ if .Values.ingress.enabled }}`, `{{ range .Values.replicas }}`, `{{ define "name" }}...{{ end }}`) is augmented with the **Sprig** function library (~200 helpers — `default`, `quote`, `lower`, `upper`, `nindent`, `toYaml`, `lookup`, `randAlphaNum`, ...). The two most-used Sprig idioms in production charts:
+
+- **`{{ toYaml .Values.resources | nindent 12 }}`** — splat a YAML structure into the manifest with consistent indentation. The `nindent N` first prepends a newline, then indents `N` spaces — necessary because `toYaml` emits multi-line text that must be indented to be valid under its parent key.
+- **`{{ include "mychart.fullname" . | quote }}`** — invoke a named template (defined in `_helpers.tpl`) and quote the result. `include` lets a template return a value (unlike `template`, which can only emit text directly).
+
+Helpers live in `templates/_helpers.tpl` (any file starting with `_` is treated as a helper, never rendered to the cluster). The convention is to define `mychart.fullname`, `mychart.name`, `mychart.labels`, `mychart.selectorLabels` as named templates and call them everywhere you need consistent naming or labeling.
+
+The template engine is **strict**: undefined values render as `<no value>` and break the YAML downstream. Use `{{ .Values.foo | default "bar" }}` or `{{- if .Values.foo }}{{- end }}` to handle optional fields. `helm template` (offline render) and `helm install --dry-run --debug` (server-side render) are the standard debugging commands.
+
+### B. The Release Lifecycle and the Three-Way Merge
+
+A **release** is "this chart, rendered with these values, applied to this namespace, under this release name." The release name plus namespace is the unique identifier. Helm 3 stores each release as a Secret (or ConfigMap) in the release's namespace, with name `sh.helm.release.v1.<release-name>.v<revision>`. Each `helm install`, `upgrade`, or `rollback` writes a new revision to that history.
+
+The three-revision model is what makes Helm safe:
+
+- **Last applied** — the YAML Helm sent to the cluster last time. Stored in the release secret.
+- **Current cluster state** — what the cluster *actually* has now. Could differ if someone hand-edited a manifest with `kubectl edit` between Helm operations.
+- **Newly rendered** — what Helm wants to send this time, based on the new values.
+
+A `helm upgrade` performs a **three-way strategic merge**: starting from the new rendering, applying the diff between cluster state and last-applied, so that hand edits made via kubectl are *preserved* if Helm's new render does not explicitly override them. This is closer to `kubectl apply` semantics than to a destructive overwrite.
+
+`helm rollback <release> <revision>` reads an older revision from the history and applies it as the new "current." `helm history <release>` lists the revisions. `helm uninstall <release>` removes everything Helm tracked for that release (and, by default, deletes the history; `--keep-history` preserves it for `rollback`).
+
+The Helm 2 → Helm 3 transition removed Tiller (the in-cluster server-side helper) and made Helm purely client-side. That made it RBAC-friendly (Helm uses the user's kubeconfig credentials directly) and removed the cluster-wide privileged service account.
+
+### C. Dependency Resolution
+
+A chart can declare other charts as dependencies in `Chart.yaml`:
+
+```yaml
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+```
+
+`helm dependency update` reads `Chart.yaml`, resolves the version constraints against the listed repositories, downloads each matching chart as a `.tgz`, and stores them in `charts/`. The download is recorded in `Chart.lock` (analogous to `package-lock.json`) so the next install on a different machine resolves to the same exact versions.
+
+The version constraint syntax is **SemVer with operators**: `12.x.x`, `^12.0.0`, `>=12.0.0 <13.0.0`. Helm uses Masterminds/semver for parsing — the same library used elsewhere in the Go ecosystem.
+
+At install time, dependencies are **rendered as part of the parent chart**. There is no recursive `helm install`; the parent and all subcharts are rendered into one YAML stream and sent to the API server as one operation. Subchart values can be overridden from the parent's `values.yaml`:
+
+```yaml
+postgresql:
+  auth:
+    postgresPassword: changeme
+  primary:
+    persistence:
+      size: 10Gi
+```
+
+The `condition` field lets a dependency be enabled or disabled by a value: `postgresql.enabled: false` skips rendering that subchart entirely. This is how umbrella charts (one chart that bundles 5 microservices) become useful — you can deploy just the API or just the worker by toggling conditions.
+
+### D. Hooks and the Order of Operations
+
+Helm has a hook system for running extra resources at specific points in the release lifecycle: `pre-install`, `post-install`, `pre-upgrade`, `post-upgrade`, `pre-delete`, `post-delete`, `pre-rollback`, `post-rollback`, plus `test` (run when `helm test` is invoked).
+
+A hook is just a regular Kubernetes resource (usually a Job or Pod) annotated with `helm.sh/hook`:
+
+```yaml
+metadata:
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+```
+
+Helm waits for hooks to complete (`Job` succeeded or `Pod` exited 0) before proceeding. `hook-weight` orders multiple hooks within the same phase. `hook-delete-policy` controls cleanup.
+
+Hooks are how charts run database migrations before upgrading the app, run verification tests after install, and clean up resources on uninstall. They are *not* meant for the application's own resources — those go in normal templates.
+
+### E. Repositories and OCI Distribution
+
+A Helm **repository** is an HTTP-served `index.yaml` listing chart `.tgz` URLs and their metadata. `helm repo add bitnami https://charts.bitnami.com/bitnami` fetches the index, lets `helm search repo` find charts by name, and `helm install` downloads the chart on demand.
+
+Newer Helm (3.8+) treats **OCI registries** as first-class — the same registries that store Docker images can store Helm charts. `helm push mychart-1.0.0.tgz oci://ghcr.io/myorg` and `helm install myrelease oci://ghcr.io/myorg/mychart --version 1.0.0`. This unifies infrastructure: one registry for images and charts, one set of credentials, one signing/scanning pipeline.
+
+The OCI artifact spec is general enough that the same registry stores arbitrary tarball-with-metadata artifacts (Helm charts, Wasm modules, policy bundles, ...). Helm just happens to be one of the early adopters.
+
+### From Theory to the Chart Below
+
+- **`Chart.yaml`** — chart metadata + dependency declaration (§C).
+- **`values.yaml`** — the default `.Values` available to templates (§A); users override with `-f` or `--set`.
+- **`templates/_helpers.tpl`** — named templates for consistent naming/labeling (§A).
+- **`templates/*.yaml`** — Go templates rendered with `.Values`/`.Chart`/`.Release`, sent as one batch on install/upgrade (§B).
+- **`templates/NOTES.txt`** — printed to stdout after install; templated, used to tell the user how to access their app.
+- **`Chart.lock` and `charts/`** — the dependency lockfile and downloaded subcharts (§C).
+- **Annotations like `helm.sh/hook`** — opt-in to the hook lifecycle (§D).
+- **`helm install`, `helm upgrade`, `helm rollback`, `helm history`, `helm template`** — operations on the release object stored in cluster Secrets (§B).
+- **`helm repo`, `helm push`, `helm pull`** — interaction with classic and OCI repositories (§E).
+
+The remainder of the lesson walks each of these pieces with examples. Whenever a template behaves unexpectedly, run `helm template` to see the rendered YAML before it leaves your machine.
 
 ---
 

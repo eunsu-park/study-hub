@@ -16,6 +16,9 @@ After completing this lesson, you will be able to:
 8. Apply Kubernetes SecurityContext and Pod Security Standards to harden workloads
 
 ## Table of Contents
+
+Before the hardening checklist, read [**Theory & Principles**](#theory--principles) — POSIX capabilities, seccomp syscall filtering, AppArmor/SELinux mandatory access control, and the rootless container model that combines them.
+
 1. [Container Security Overview](#1-container-security-overview)
 2. [Image Security](#2-image-security)
 3. [Dockerfile Best Practices](#3-dockerfile-best-practices)
@@ -32,6 +35,123 @@ After completing this lesson, you will be able to:
 ---
 
 Containers share the host kernel, which means a vulnerability in one container can potentially compromise the entire system. Security must be built into every layer of the container lifecycle -- from building minimal, scanned images to running with least privilege, encrypting network traffic, and continuously monitoring runtime behavior. This lesson provides a comprehensive security framework covering Docker and Kubernetes, helping you move from "it works" to "it works safely in production."
+
+---
+
+## Theory & Principles
+
+A container is a process. The defenses available to harden a container are the same defenses that apply to any Linux process — they are just usually invisible to application developers because the daemon sets them up. To write secure container configurations you must know what each defense actually does at the kernel level: which threat it stops, which it does *not*, and what its trade-offs are. The five defenses worth understanding deeply are POSIX capabilities, seccomp, AppArmor/SELinux, user namespaces, and the rootless model that composes them.
+
+### A. POSIX Capabilities: Splitting Up Root
+
+Traditional UNIX has two privilege classes: UID 0 (root, can do everything) and everyone else (can do almost nothing privileged). This is too coarse — a process that needs to bind to port 80 should not also be able to load kernel modules or read any file on the system.
+
+**POSIX capabilities** split root's powers into ~40 separate rights. A few important ones:
+
+| Capability | What it grants |
+|------------|----------------|
+| `CAP_NET_BIND_SERVICE` | Bind to privileged ports (<1024) |
+| `CAP_NET_ADMIN` | Configure network interfaces, routing, iptables |
+| `CAP_SYS_ADMIN` | A grab-bag — mount, syslog, disk-quota, often called "the new root" |
+| `CAP_SYS_PTRACE` | ptrace any process |
+| `CAP_SYS_MODULE` | Load/unload kernel modules |
+| `CAP_DAC_OVERRIDE` | Bypass discretionary file permissions |
+| `CAP_CHOWN` | Change file ownership |
+| `CAP_KILL` | Send signals to processes owned by other users |
+| `CAP_SETUID`, `CAP_SETGID` | Change UID/GID |
+
+Docker by default drops most caps and keeps a small allowlist (`CHOWN`, `DAC_OVERRIDE`, `FSETID`, `FOWNER`, `MKNOD`, `NET_RAW`, `SETGID`, `SETUID`, `SETFCAP`, `SETPCAP`, `NET_BIND_SERVICE`, `SYS_CHROOT`, `KILL`, `AUDIT_WRITE`). Even this is too many for most apps. Best practice — drop ALL and add back only what you need:
+
+```bash
+docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE nginx
+```
+
+The kernel checks capabilities on each privileged syscall. A process running as UID 0 *with no capabilities* (`--user 0 --cap-drop=ALL`) cannot do anything that requires privilege — it is root in name only. This is a useful intermediate state when an app insists on UID 0 but should not have actual root powers.
+
+`--privileged` is the opposite — it grants ALL capabilities and disables seccomp/AppArmor. Treat it as "container = host" for security purposes. Almost never appropriate outside of building privileged tools.
+
+### B. seccomp: Syscall-Level Filtering
+
+Capabilities check what privileged operations are allowed. **seccomp** (secure computing mode) checks which **syscalls** are even allowed to be made. A seccomp profile is a JSON document listing the rule for each syscall:
+
+```json
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "syscalls": [
+    {"names": ["read", "write", "open", ...], "action": "SCMP_ACT_ALLOW"},
+    {"names": ["mount", "reboot", ...], "action": "SCMP_ACT_KILL_PROCESS"}
+  ]
+}
+```
+
+Actions: `ALLOW` (let it through), `ERRNO` (return an error code without executing), `KILL_PROCESS` (terminate the process), `LOG` (allow but log), `TRACE` (notify a tracer), `TRAP` (deliver SIGSYS).
+
+Docker's **default seccomp profile** blocks ~50 syscalls that are rarely used by applications and are common in privilege-escalation attacks: `mount`, `umount2`, `pivot_root`, `kexec_load`, `init_module`, `clone3` with certain namespace flags, ... Docker applies it automatically unless you pass `--security-opt seccomp=unconfined`.
+
+For high-security workloads, write a custom profile that only allows the syscalls your app actually uses. Tools like `strace` (record observed syscalls) and `oci-seccomp-bpf-hook` (auto-generate a profile from a sample run) help. The trade-off — too tight a profile breaks the app on edge-case syscalls (locale loading, profiling, GC behavior); too loose and you have not gained much over the default.
+
+Kubernetes exposes seccomp via `securityContext.seccompProfile`: `RuntimeDefault` (use the runtime's default profile), `Localhost` (use a profile from `/var/lib/kubelet/seccomp/`), or `Unconfined`. Set it; the K8s default is `Unconfined` unless you explicitly opt in.
+
+### C. AppArmor and SELinux: Mandatory Access Control
+
+DAC (discretionary access control) is the standard "owner can decide who reads this file" model. **MAC (mandatory access control)** is a separate layer that the kernel enforces *regardless* of DAC — even if file permissions allow access, the MAC policy can block it.
+
+Two implementations:
+
+- **AppArmor** (Ubuntu, SUSE) — path-based profiles. A profile says "this binary may read `/etc/nginx/`, may write `/var/log/nginx/`, may bind to TCP port 80, may not access `/home/`." Profiles are loaded into the kernel and enforced at every relevant syscall.
+- **SELinux** (RHEL, Fedora, OpenShift) — type-based. Every file, process, and resource has a *type* label; policy says "process of type `httpd_t` may write files of type `httpd_log_t`." More expressive, much more complex to write.
+
+Docker auto-applies a default AppArmor profile (`docker-default`) on Ubuntu. Custom profiles via `--security-opt apparmor=my-profile`. SELinux integration via `--security-opt label=type:container_t` (default on RHEL family).
+
+In practice, distributions ship reasonable defaults; custom profiles are rare and high-friction. The value of MAC is that it provides *defense in depth*: even if an attacker bypasses capabilities and seccomp, the AppArmor/SELinux profile constrains what they can read or write.
+
+### D. User Namespaces and the Rootless Model
+
+A **user namespace** maps a range of UIDs/GIDs in the namespace to a different range outside. A process can be UID 0 *inside* its namespace and UID 100000 *outside* — root in container, unprivileged user on host.
+
+Two flavors of "rootless":
+
+- **Container runs as non-root.** `USER nobody` in the Dockerfile, `--user 1000:1000` on `docker run`, or `runAsNonRoot: true` in K8s. The container process is just a normal unprivileged user. This is the easy and necessary baseline.
+- **Engine runs as non-root** ("rootless Docker", "rootless Podman"). The Docker/Podman daemon itself runs as your user, not as root. Achieved by having the daemon use user namespaces to grant containers an apparent root that is actually mapped to your unprivileged UID. Networking uses a userspace stack (`slirp4netns`) instead of bridge+iptables (which require root). Major upside — a daemon compromise no longer means host root.
+
+The combination of user namespaces + capabilities + seccomp + MAC means a fully hardened container's process is, from the host's perspective, a UID like 100000 with zero capabilities, a tight seccomp filter, and an AppArmor profile blocking access to anything outside its private filesystem. Even a remote-code-execution exploit yields very little.
+
+### E. Image Provenance: Signing and Verification
+
+The image is the supply-chain attack surface. Two layers of defense at the image level:
+
+- **Signing.** The image (or rather its manifest digest) is signed by a trusted key. Verifiers check the signature before running. **Sigstore / cosign** is the modern standard — `cosign sign --key cosign.key ghcr.io/myorg/myapp@sha256:abcd...` and `cosign verify --key cosign.pub ...` in deployment. Older Docker Content Trust uses Notary v1 (less common today).
+- **Vulnerability scanning.** `trivy`, `grype`, `snyk`, `clair` analyze the image's installed packages against CVE databases and report known vulnerabilities. Run as a CI gate — fail the build if HIGH/CRITICAL CVEs are present.
+
+For Kubernetes, **admission controllers** (`Connaisseur`, `Kyverno`, `OPA Gatekeeper`, `Sigstore Policy Controller`) reject Pods whose images do not have a valid signature from a trusted key. This closes the loop — even if an attacker pushes a malicious image to your registry, the cluster will not run it.
+
+### F. The Threat Model: Where Each Defense Helps
+
+| Threat | Defenses that mitigate |
+|--------|------------------------|
+| Malicious base image | Image scanning, signing, trusted registries |
+| Vulnerable dependency | Image scanning (SBOM), dependency pinning |
+| Container escape via kernel bug | seccomp (limits attack surface), MAC (limits damage), keep kernel patched |
+| Privilege escalation inside container | Drop capabilities, run as non-root, read-only rootfs |
+| Lateral movement on network | NetworkPolicy, mTLS (service mesh), egress firewall |
+| Credential theft from filesystem | Don't bake secrets in image, mount via tmpfs, use secret manager |
+| Compromised CI pushing malicious image | OIDC-based registry auth (no shared keys), image signing in CI, signature verification at deploy |
+| Insider with kubectl access | RBAC (limit who has cluster-admin), audit logging, GitOps (no direct kubectl) |
+
+No single control covers everything. The principle is *defense in depth* — assume each layer can be breached and rely on the next layer to stop the attack from succeeding.
+
+### From Theory to the Hardening Checklist Below
+
+- **`USER`, `--user`, `runAsNonRoot`, `runAsUser`** — the §D non-root baseline.
+- **`--cap-drop=ALL --cap-add=...`, `securityContext.capabilities`** — §A capabilities.
+- **`--security-opt seccomp=...`, `securityContext.seccompProfile`** — §B seccomp.
+- **`--security-opt apparmor=...`, AppArmor annotations in K8s** — §C MAC.
+- **`--read-only` and `readOnlyRootFilesystem: true`** — read-only image layers; writes only to mounted emptyDirs.
+- **`docker scan`, `trivy image`, signed images via `cosign`** — §E provenance.
+- **NetworkPolicy, secrets via mounted files or external manager** — §F lateral movement and credential defenses.
+- **Pod Security Standards (`baseline` / `restricted`) labels** — opinionated bundles of the above for K8s.
+
+The remaining sections walk these defenses with concrete configuration. Whenever you write a "secure" container config, ask which threat it stops — the goal is layers, not a checklist of buzzwords.
 
 ---
 

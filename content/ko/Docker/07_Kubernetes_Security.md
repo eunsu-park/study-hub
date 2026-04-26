@@ -18,6 +18,9 @@
 Kubernetes 클러스터가 성장하여 프로덕션 워크로드를 호스팅하게 되면 보안이 중요한 문제가 됩니다. 잘못 구성된 RBAC 정책은 의도치 않은 접근 권한을 부여할 수 있고, 개방된 네트워크는 서비스 간 측면 이동(lateral movement)을 허용할 수 있으며, 노출된 시크릿은 전체 시스템을 위협할 수 있습니다. 이 레슨에서는 접근 제어, 네트워크 격리, 시크릿 관리, Pod 강화에 이르기까지 Kubernetes에 내장된 핵심 보안 프리미티브를 다루며, 모든 계층에서 클러스터를 방어하는 도구를 제공합니다.
 
 ## 목차
+
+YAML 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. RBAC 권한 모델, NetworkPolicy가 iptables로 컴파일되는 방식, Secrets에 etcd encryption-at-rest가 필요한 이유, 그리고 그 위에 얹히는 Pod Security Standards를 다룹니다.
+
 1. [Kubernetes 보안 개요](#1-kubernetes-보안-개요)
 2. [RBAC (역할 기반 접근 제어)](#2-rbac-역할-기반-접근-제어)
 3. [ServiceAccount](#3-serviceaccount)
@@ -25,6 +28,101 @@ Kubernetes 클러스터가 성장하여 프로덕션 워크로드를 호스팅�
 5. [Secrets 관리](#5-secrets-관리)
 6. [Pod 보안](#6-pod-보안)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+Kubernetes 보안은 *단일 기능이 아닙니다*. 네 개의 다른 계층에서 강제되는 다섯 개의 겹치는 메커니즘입니다. 어느 계층이 무엇을 강제하는지를 이해하는 것이, 정말로 무언가를 방어하는 정책을 쓰는 것과 방어적으로 보이지만 Pod 매니페스트만 한 구멍이 있는 정책을 쓰는 것의 차이입니다.
+
+### A. 인증과 RBAC 권한 모델
+
+모든 API 요청은 순서대로 세 필터를 통과합니다 — **인증(Authentication)**(요청자가 누구인가?), **권한(Authorization)**(허용되는가?), **어드미션 컨트롤(Admission Control)**(추가 정책을 만족하는가?).
+
+인증은 "누구"에 답합니다. K8s에는 내장 사용자 데이터베이스가 없습니다 — 외부 소스에서 정체성을 받습니다 — 클라이언트 인증서(CN을 사용자명으로 하는 X.509), 베어러 토큰(ServiceAccount 토큰, OIDC 토큰), 웹훅 인증자. API 서버가 자격 증명을 검증하고 `(username, groups, extra)` 튜플로 변환합니다.
+
+권한은 "할 수 있는가"에 답합니다. 기본 인증자는 **RBAC(Role-Based Access Control)**이며, 네 리소스 타입으로 모델링됩니다.
+
+- `Role` — *한* 네임스페이스에서 허용된 (verb, resource) 쌍의 목록. verb — `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`. 리소스 — `pods`, `services`, `configmaps` 등 또는 특정 리소스 이름.
+- `ClusterRole` — 같지만 클러스터 스코프. 클러스터 전역 리소스(`nodes`, `clusterroles`)에 사용하거나, 권한 템플릿을 네임스페이스 사이에 공유.
+- `RoleBinding` — `Role`(또는 `ClusterRole`)을 *한* 네임스페이스의 **subject**(사용자, 그룹, ServiceAccount) 목록에 바인딩.
+- `ClusterRoleBinding` — 같지만 전체 클러스터 바인딩.
+
+모델은 *가산적(additive)이고 기본 거부(deny-by-default)*입니다. subject는 자기 바인딩이 허용한 합집합만 할 수 있고, 그 외는 안 됩니다. RBAC에는 거부 규칙이 없습니다. 권한을 "제거"하려면 그것을 부여한 바인딩을 제거합니다.
+
+`kubectl auth can-i get pods --as=alice`는 실제 호출 없이 "이게 동작할까?"를 테스트하는 지원되는 방법입니다. RBAC 질문을 디버깅할 때 추측 대신 이걸 쓰세요.
+
+### B. ServiceAccount: Pod 정체성과 토큰 프로젝션
+
+모든 Pod은 **ServiceAccount**로 동작합니다 — 네임스페이스 스코프 정체성이며 RBAC subject이기도 합니다. 각 네임스페이스의 기본 ServiceAccount 이름은 `default`이며, 보통 워크로드마다 하나를 만들고 실제로 필요한 권한만 바인딩해야 합니다.
+
+Pod이 시작되면 kubelet은 Pod의 ServiceAccount에 대한 JWT 토큰을 `/var/run/secrets/kubernetes.io/serviceaccount/token`에 프로젝션합니다. API 서버와 통신하는 Pod 내 코드(대부분의 오퍼레이터, 컨트롤러, Pod 안의 kubectl)가 그 토큰을 씁니다. 토큰은 자동 회전되며, 옛 "장기 시크릿 토큰" 모델은 audience와 만료가 있는 **bound service account token**으로 단계적 폐기 중입니다.
+
+실용 규칙 두 가지 —
+
+- **워크로드당 ServiceAccount 하나.** 모든 Pod 사이에 기본 ServiceAccount를 공유하면, 한 Pod의 침해가 그 계정이 네임스페이스에서 가진 모든 권한의 합집합을 얻게 됩니다.
+- **워크로드가 API와 통신 안 하면 자동 마운트 비활성화.** `automountServiceAccountToken: false`가 토큰 프로젝션을 제거합니다. 대부분의 앱은 K8s API를 호출할 필요가 없으므로, 안 쓰는 자격 증명은 제거하세요.
+
+### C. NetworkPolicy: 노드별로 iptables로 컴파일
+
+K8s 기본 — **모든 Pod이 다른 모든 Pod에 닿을 수 있습니다**(클러스터 네트워크가 평탄). `NetworkPolicy`는 "셀렉터 X에 매칭되는 Pod이 셀렉터 Y에 매칭되는 Pod에게서 포트 Z로 트래픽을 받을 수 있다/없다"라고 하는 방화벽 규칙을 추가합니다.
+
+정책은 *매칭된 집합 안에서는 가산적*이지만 *적어도 하나의 정책이 매칭되면 기본 거부*입니다 — Pod이 *어떤* NetworkPolicy에 의해서든 선택되는 순간, *어떤* 정책에 의해 명시적으로 허용되지 않은 트래픽은 드롭됩니다. 정책에는 별도의 `ingress`와 `egress` 규칙이 있고, "기본 거부" 네임스페이스는 셀렉터가 비어 있고 허용 규칙이 없는 NetworkPolicy를 배포합니다.
+
+결정적으로, `NetworkPolicy`는 *CNI 플러그인이 구현하지*, API 서버 자체가 구현하지 않습니다. Calico, Cilium, Weave Net, Antrea는 모두 NetworkPolicy를 지원하지만 *강제*는 그들의 데이터플레인에 있습니다 — 보통 iptables/nftables 규칙(고전 Calico)이나 eBPF 프로그램(Cilium). CNI가 NetworkPolicy를 구현 안 하면 YAML이 깔끔히 적용되지만 아무것도 강제되지 않습니다.
+
+iptables 기반 CNI 내부에서는 각 정책이 포워딩 전에 순회되는 `KUBE-NETWORKPOLICY` 체인의 규칙 사슬이 됩니다. Pod IP 출발/목적지, 포트, 프로토콜로 패킷을 매칭, ACCEPT 또는 DROP. 정상 상태에서 클러스터에는 수천 개의 작은 규칙이 생깁니다 — 커널엔 괜찮지만 읽어서 디버깅하긴 매우 어렵습니다. `cilium policy trace`나 `calicoctl get policies` 같은 도구가 필수입니다.
+
+### D. Secrets, etcd, 그리고 encryption-at-rest
+
+`Secret`은 etcd에 객체로 저장되는 base64 인코딩 데이터입니다. **base64는 암호화가 아닙니다** — etcd 파일을 읽거나 권한을 가지고 `kubectl get secret -o yaml`을 호출할 수 있는 누구나 평문을 봅니다. 그 위에 두 보호 계층이 쌓입니다.
+
+- **RBAC가 API로 Secret을 읽을 수 있는 사람을 제한.** 기본 RBAC는 많은 role에 Secret의 `get`/`list`를 부여합니다 — 특정 ServiceAccount만 필요한 Secret을 읽을 수 있도록 좁히세요.
+- **encryption-at-rest가 etcd 안의 Secret을 암호화.** API 서버에 키(AES-CBC, AES-GCM, 또는 KMS 공급자)와 함께 `--encryption-provider-config`를 구성. API 서버가 etcd 쓰기 시 암호화하고 읽기 시 복호화. etcd 백업이나 도난당한 디스크는 암호문만 노출.
+
+가장 강한 모델은 외부 **KMS(Key Management Service)**를 암호화 공급자로 사용 — AWS KMS, GCP Cloud KMS, HashiCorp Vault Transit. 데이터 암호화 키(DEK)가 Secret마다 생성되어 KMS로 암호화되고, 암호문 옆에 저장. etcd만 침해해서는 평문이 안 나오며, 공격자에게 KMS 접근도 필요합니다.
+
+외부 시크릿 매니저(Vault, AWS Secrets Manager) + External Secrets나 Secrets Store CSI driver 같은 오퍼레이터로 시크릿을 K8s 바깥에 두고 필요할 때 Pod에 마운트할 수 있습니다. 이게 프로덕션급 셋업이며, 네이티브 K8s Secret은 편의와 개발에 적합하지 고가치 자격 증명에는 덜 적합합니다.
+
+### E. Pod 보안: capability, seccomp, PSS
+
+컨테이너는 프로세스입니다. 프로세스를 제약하는 커널 기능이 그대로 적용됩니다.
+
+- **리눅스 capability.** 전통 UNIX는 root냐 비-root냐. capability는 root의 권한을 ~40개의 별도 권리(`CAP_NET_BIND_SERVICE`, `CAP_SYS_ADMIN`, ...)로 쪼갭니다. 컨테이너는 기본적으로 모든 capability를 떨어뜨리고 필요한 것만 다시 추가해야 합니다 — `securityContext: {capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}}`.
+- **`runAsNonRoot: true`와 `runAsUser: <uid>`.** 컨테이너를 특정 비영(non-zero) UID로 실행 강제. root 기본 이미지를 방어하며, 대부분의 정책 프레임워크에 필수.
+- **`readOnlyRootFilesystem: true`.** 이미지 레이어를 읽기 전용으로. 쓰기는 명시적으로 마운트된 emptyDir이나 볼륨으로. rootfs에 멀웨어가 영속하는 것을 방어.
+- **seccomp 프로필.** 시스템 콜 필터 — 허용/거부/트랩되는 시스템 콜 목록. Docker 기본 프로필은 ~50개 위험 시스템 콜을 차단. Kubernetes는 `seccompProfile: {type: RuntimeDefault}`를 설정하거나 커스텀 프로필을 제공하지 않으면 기본 "Unconfined".
+- **AppArmor / SELinux.** 표준 임의(discretionary) 권한 위에 얹는 강제 접근 제어(MAC) 계층. AppArmor(Ubuntu, SUSE)는 경로 기반 프로필 언어, SELinux(RHEL, Fedora, OpenShift)는 type enforcement. 둘 다 커널 자체 규칙 위에 파일 접근, 네트워크 접근 등을 추가 제한.
+
+**Pod Security Standards(PSS)**는 사전 구성된 세 등급입니다.
+
+- **Privileged** — 제한 없음. 시스템 Pod의 기본.
+- **Baseline** — 가장 명백한 권한 상승 방지 — `hostPID`, `hostNetwork`, `privileged` 없음, 추가 가능한 위험 capability 없음.
+- **Restricted** — 강화된 기본값 — `runAsNonRoot`, ALL capability 드롭, 호스트 경로 없음, seccomp `RuntimeDefault`.
+
+PSS는 **Pod Security Admission** 컨트롤러가 강제하며, 라벨로 네임스페이스마다 구성합니다 — `pod-security.kubernetes.io/enforce=restricted`. 1.25에서 제거된 옛 PodSecurityPolicy(PSP)를 대체합니다.
+
+### F. 다중 방어(Defense in Depth): 벽이 아닌 계층
+
+4C 모델(Cloud, Cluster, Container, Code)은 각 통제가 속하는 계층을 명명합니다. 체화할 것 — **어떤 단일 메커니즘도 결의에 찬 공격자를 멈추지 못합니다**. RBAC만, NetworkPolicy만, PSS만 모두 우회 방법이 있습니다. 결합하면 —
+
+- 앱 코드(Code 계층)의 CVE를 익스플로잇한 공격자가 비-root로 도는 컨테이너의 셸을 얻음(Container의 PSS Restricted).
+- capability가 떨어졌으므로 root로 권한 상승 불가(PSS).
+- Pod의 ServiceAccount에 `get secrets` 권한이 없으므로 클러스터의 Secret을 읽지 못함(RBAC).
+- NetworkPolicy가 알려진 의존성 외 모든 egress를 거부하므로 네트워크를 스캔할 수 없음(Cluster).
+- seccomp가 알려진 런타임 탈출에 쓰이는 시스템 콜을 차단하므로 컨테이너를 탈출할 수 없음(PSS).
+
+각 계층은 우회 가능합니다. 계층화하면 익스플로잇이 캠페인이 됩니다. 그것이 모델입니다.
+
+### 이론에서 아래의 YAML로
+
+- `Role` / `ClusterRole` / `RoleBinding` / `ClusterRoleBinding` — §A의 네 리소스. 필요한 verb/리소스만 빌드, `kubectl auth can-i`로 검증.
+- `ServiceAccount` + `automountServiceAccountToken: false` — §B의 YAML 형태.
+- `NetworkPolicy` — §C. *매칭 안에서 가산, 선택되는 순간 거부* 의미와 강제에는 지원 CNI가 필요함을 기억.
+- `Secret` + `EncryptionConfiguration` — §D. 편의용 네이티브 Secret, 고가치 자격 증명용 외부 시크릿 매니저.
+- `securityContext`(Pod와 컨테이너 레벨)와 `Pod Security Standards` 라벨 — §E. Pod을 강화하는 실용적 노브.
+
+남은 섹션은 이 원시들을 둘러봅니다. "안전한" 설정이 부족해 보일 때마다, 다섯 계층 중 어느 것이 미커버 상태인지 자문하세요.
 
 ---
 

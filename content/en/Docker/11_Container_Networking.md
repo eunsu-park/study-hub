@@ -15,6 +15,9 @@ After completing this lesson, you will be able to:
 7. Troubleshoot container network connectivity issues using diagnostic tools
 
 ## Table of Contents
+
+Before the driver reference, read [**Theory & Principles**](#theory--principles) — the Linux kernel mechanisms behind each driver (network namespaces, veth pairs, bridges, iptables NAT, VXLAN encapsulation), and the CNI plugin interface that orchestrators like Kubernetes use to call them.
+
 1. [Docker Network Drivers](#1-docker-network-drivers)
 2. [Bridge Network Deep Dive](#2-bridge-network-deep-dive)
 3. [Host and None Networks](#3-host-and-none-networks)
@@ -31,6 +34,130 @@ After completing this lesson, you will be able to:
 ---
 
 Container networking is one of the most complex yet essential aspects of running Docker in production. Every container needs to communicate -- with other containers, with the host, and with the outside world -- and the networking model you choose directly impacts performance, security, and reliability. This lesson takes a deep dive into Docker's network drivers, DNS-based service discovery, and security configurations, equipping you to design and troubleshoot container networks with confidence.
+
+---
+
+## Theory & Principles
+
+Container networking looks like magic until you realize each network driver is a small composition of Linux kernel features that have existed for decades. The "networking" in `docker network create -d bridge` is **network namespaces** + **veth pairs** + a **Linux bridge** + **iptables NAT rules**. Overlay networking adds **VXLAN encapsulation**. Macvlan adds **virtual MAC sub-interfaces**. Once you can name the kernel pieces, every Docker network behavior is traceable.
+
+### A. Network Namespaces: The Per-Container Network Stack
+
+The kernel's **network namespace** isolates everything network-related: interfaces, routing tables, iptables rules, sockets, port assignments. A process inside a network namespace sees only the interfaces and routes that namespace contains.
+
+When Docker starts a container, it asks `runc` to call `clone(CLONE_NEWNET)`, which puts the new process into a fresh, empty network namespace. That namespace has only a `lo` (loopback) interface, no routes, and cannot reach anything. Whatever connectivity the container ends up with is the result of Docker (or `runc`'s setup hooks) reaching into that namespace and configuring it before the container's main process is `exec`'d.
+
+You can list namespaces with `lsns -t net`, enter one with `nsenter -t <pid> -n <command>`, and create one manually with `ip netns add foo`. Everything Docker does network-wise is something you can reproduce by hand with `ip` commands — Docker just automates it.
+
+### B. veth Pairs: The Cable Between Namespaces
+
+A **veth (virtual Ethernet) pair** is two virtual interfaces connected to each other. Anything sent into one end comes out the other, exactly like a physical cable. The interfaces can live in different namespaces, so a veth pair is the standard way to *bridge* the host network namespace and a container's network namespace.
+
+For a container on the default bridge, Docker:
+
+1. Creates `vethXXXX` on the host (one end).
+2. Creates `eth0` inside the container's netns (other end).
+3. Moves `vethXXXX` into the host's network namespace (where it stays attached).
+4. Moves `eth0` into the container's netns and configures it with an IP from `docker0`'s subnet (e.g. `172.17.0.2/16`).
+5. Adds `vethXXXX` as a member of the `docker0` Linux bridge.
+
+Now packets sent from inside the container's `eth0` exit `vethXXXX` on the host, enter the `docker0` bridge, and from there can be forwarded to any other veth attached to the bridge — i.e., any other container on the same network.
+
+### C. The Linux Bridge: Software Switch for veth Endpoints
+
+`docker0` is a **Linux bridge** — a software L2 switch implemented in the kernel. It has a MAC address table just like a hardware switch and forwards Ethernet frames between attached interfaces by destination MAC.
+
+When you create a user-defined bridge network (`docker network create my-net`), Docker creates a new Linux bridge (`br-XXXXXXXXXXXX`) and attaches container veths to it instead of `docker0`. The two key differences vs `docker0`:
+
+- **DNS-based service discovery is enabled.** Docker runs an embedded DNS server (`127.0.0.11` reachable from each container) that knows the names of every container on the user-defined bridge. Containers can resolve each other by container name. The default `docker0` bridge does *not* have this; you would need `--link` (deprecated) for the same.
+- **Inter-container traffic is allowed by default.** This is the same on both, but the user-defined bridge can have `--internal` (no external connectivity at all) and `--icc=false` (block container-to-container traffic) flags.
+
+User-defined bridges are the recommended primitive for any non-trivial setup.
+
+### D. iptables NAT: How Containers Reach the Internet, How Hosts Reach Containers
+
+A container on `docker0` has a private IP (`172.17.0.X`) that is not routable on the host's external network. For outbound traffic, Docker installs a **MASQUERADE** rule:
+
+```
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+```
+
+Translation: any packet sourced from the bridge subnet leaving any interface other than `docker0` itself gets its source IP rewritten to the host's outbound interface IP. The kernel tracks the connection and rewrites the reply on its way back. The container has internet access; the outside world sees the host's IP.
+
+For inbound traffic via `docker run -p 8080:80`, Docker installs a **DNAT** rule:
+
+```
+iptables -t nat -A DOCKER -p tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
+```
+
+Plus a `docker-proxy` userspace process as a fallback for hairpin and certain edge cases. The DNAT rewrites the destination IP/port of incoming packets so they get forwarded to the container; the container responds and the kernel un-rewrites the reply.
+
+`iptables -t nat -L -n -v` on the host shows you every published port and outbound rule Docker has installed. When `docker run -p` doesn't work, this is where to look.
+
+### E. Overlay Networks and VXLAN Encapsulation
+
+For multi-host networking (Swarm, Kubernetes with overlay CNI), containers on different hosts need to talk as if they were on the same L2 segment. The standard mechanism is **VXLAN (Virtual eXtensible LAN) encapsulation**.
+
+The flow:
+
+1. Container A on Host 1 sends an Ethernet frame to Container B on Host 2.
+2. The frame arrives at the overlay bridge on Host 1, which knows Container B is "behind" Host 2.
+3. Host 1's VXLAN driver wraps the entire Ethernet frame in a UDP datagram (VXLAN header + outer IP/UDP), addressed to Host 2.
+4. The UDP packet travels over the underlay network (the real LAN/VPC).
+5. Host 2 receives the UDP, decapsulates the inner Ethernet frame, and delivers it to Container B's veth.
+
+The "L2 segment" is virtual; physically it is just UDP traffic on port 4789. VXLAN allocates a 24-bit **VNI (Virtual Network Identifier)** so multiple overlay networks can share the same underlay. The control plane (which host has which container, and on which VNI) is maintained by the orchestrator — Swarm uses gossip, Kubernetes overlay CNIs (Flannel, Weave, Calico VXLAN) use various mechanisms.
+
+The cost is per-packet overhead (~50 bytes of headers), MTU tuning headaches (the inner MTU must be smaller than the outer to leave room), and harder debugging (`tcpdump` shows VXLAN-wrapped traffic; you need `tcpdump -v vxlan` or to capture inside a container's netns).
+
+### F. macvlan and ipvlan: Skipping the Bridge
+
+Macvlan creates **virtual sub-interfaces with their own MAC addresses** that share a parent physical interface. The container gets an IP directly on the host's L2 network — no NAT, no bridge, no port mapping. From the rest of the network's perspective, each container is a first-class host with its own MAC and IP.
+
+Use cases: legacy applications that need to be on the corporate LAN with their own IP, or applications that monitor MAC-based ACLs. Trade-off: most cloud providers block "promiscuous" mode that macvlan needs (you cannot use it on AWS / GCP / Azure VMs by default), and some switches limit MACs per port.
+
+Ipvlan is similar but the sub-interfaces share the parent's MAC and differ only by IP. Better cloud compatibility, but L3-only (no broadcast/multicast across sub-interfaces).
+
+### G. CNI: The Plugin Interface Kubernetes Uses
+
+Kubernetes does not have a built-in network driver. It defines the **CNI (Container Network Interface)** specification: a JSON schema for "given this network namespace and these parameters, set up the container's networking." The kubelet calls `/opt/cni/bin/<plugin> ADD/DEL` with a JSON config on stdin; the plugin sets up veth, IP allocation, routes, etc., and returns JSON describing what it did.
+
+Standard CNI plugins:
+
+- `bridge` — same idea as Docker's default bridge.
+- `host-local` — IPAM (IP Address Management) that allocates from a static range stored on disk.
+- `flannel` — VXLAN overlay with simple control plane.
+- `calico` — BGP routing (no VXLAN by default), NetworkPolicy implementation.
+- `cilium` — eBPF-based dataplane, NetworkPolicy + Service load balancing in eBPF instead of iptables.
+- `weave` — encrypted VXLAN-like overlay.
+
+The CNI spec means orchestrators do not depend on a specific networking implementation; you swap CNI plugins to change the cluster's networking behavior. Docker engine has its own libnetwork plugin system that predates CNI; in Kubernetes, the only thing that matters is the CNI binary the kubelet finds.
+
+### H. DNS-Based Service Discovery
+
+Docker daemon runs an embedded DNS server inside each user-defined bridge network at `127.0.0.11`. When the container queries `web`, the resolver:
+
+1. Checks `/etc/hosts` (where Docker writes `127.0.0.11 ndots:0` resolver hints and the container's own name).
+2. Forwards the query to `127.0.0.11`.
+3. The Docker DNS looks up `web` in the local network's name table — every container's `--name` (and any aliases) is registered.
+4. Returns the container's IP.
+
+For external names (`google.com`), Docker's DNS forwards to the host's upstream resolvers (typically `/etc/resolv.conf` on the host). You can override with `--dns` on `docker run` or `dns:` in compose.
+
+In Kubernetes, the equivalent is **CoreDNS** running as a Pod, with a Service IP injected as `nameserver` in every Pod's `/etc/resolv.conf`. Service names like `my-svc.my-ns.svc.cluster.local` resolve to ClusterIPs.
+
+### From Theory to the Drivers Below
+
+- **bridge driver** — netns + veth + Linux bridge + iptables MASQUERADE/DNAT (§A–D). User-defined bridges add embedded DNS (§H).
+- **host driver** — skip the network namespace entirely; the container shares the host's network stack. No isolation, no NAT, fastest. Useful for high-throughput sidecars and load balancers.
+- **none driver** — fresh netns with only `lo`. The container can talk to itself; nothing else. Useful for security-sensitive workloads that get networking attached out-of-band.
+- **overlay driver** — Linux bridge + VXLAN tunnel between hosts (§E). The basis of Docker Swarm and many Kubernetes CNIs.
+- **macvlan / ipvlan driver** — sub-interfaces with their own MAC/IP on the host's L2 network (§F). For "container is a first-class network citizen" requirements.
+- **iptables / firewall rules** — every published port (§D), every container-to-host bypass, and every NetworkPolicy (in K8s) lands here. `iptables -L -t nat -n -v` is the universal debugger.
+- **CNI plugins** — orchestrator interface to all of the above (§G).
+- **DNS resolution** — embedded server at `127.0.0.11` for Docker, CoreDNS for K8s (§H).
+
+The remaining sections walk these drivers and the CLI to manage them. Whenever a connectivity problem stumps you, drop to `nsenter -t <pid> -n ip route show && iptables -t nat -L -n` and trace the packet path through the kernel layers above.
 
 ---
 

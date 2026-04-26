@@ -17,9 +17,142 @@ After completing this lesson, you will be able to:
 
 ---
 
+Before the kubectl walkthrough, read [**Theory & Principles**](#theory--principles) — why the Pod (not the container) is the scheduling unit, the control plane vs data plane split, and the declarative reconciliation loop that makes the whole system self-healing.
+
 Docker excels at running containers on a single machine, but production systems typically span many servers and require automated scheduling, self-healing, load balancing, and rolling updates. Kubernetes is the industry-standard platform that solves all of these challenges. Learning Kubernetes fundamentals is the natural next step after mastering Docker, opening the door to scalable, resilient infrastructure that powers the majority of modern cloud-native applications.
 
 > **Analogy -- Airport Control Tower:** Think of Kubernetes as an airport control tower. Individual Docker containers are like aircraft -- each one carries its own payload and can operate independently. But when you have hundreds of flights, you need a control tower (Kubernetes) to decide which runway (node) each plane lands on, reroute traffic when a runway is closed (self-healing), add more gates during peak hours (auto-scaling), and ensure smooth transitions between shifts (rolling updates).
+
+---
+
+## Theory & Principles
+
+Kubernetes is not "Docker but distributed." It is a **declarative state-reconciliation system** that happens to use containers as its execution primitive. Three ideas explain almost everything in the YAML you will write: the **Pod** as the scheduling unit, the **control plane / data plane** split, and the **reconciliation loop** that turns desired state into actual state. Once those click, every resource type (Deployment, Service, Job, StatefulSet, DaemonSet, ...) is just a different desired-state schema riding on the same machinery.
+
+### A. Why the Pod, Not the Container, Is the Atom
+
+A Pod is one or more containers that **share fate**: same node, same network namespace (same IP, same localhost), same IPC, optional shared volumes. They are scheduled together, started together, killed together.
+
+The decision to make Pods (not containers) the atom is deliberate. A bare container is too small a unit for some real patterns:
+
+- **Sidecar.** Main app container plus a log shipper, both reading/writing the same volume. Restarting the log shipper without restarting the app: useful. Scheduling them on different nodes: would defeat the purpose.
+- **Init container.** Runs before the main container to set up state (run DB migrations, wait for a dependency, copy config). Sequenced startup, shared volume.
+- **Adapter.** A second container that translates the main app's metrics format to whatever the cluster's monitoring expects, hiding the protocol behind localhost.
+
+For the common case — one container per Pod — the Pod adds essentially zero overhead and is just "a container with metadata." For the multi-container case, it is exactly the abstraction you would otherwise have to invent. So K8s standardizes on Pod and accepts the redundancy in the simple case.
+
+A consequence: **Pods are ephemeral and have ephemeral IPs.** They are not pets. The IP changes on restart. Anything that needs a stable network identity goes through a Service (which we will see in §C).
+
+### B. Control Plane vs Data Plane
+
+Every K8s cluster has two kinds of machines:
+
+**Control plane nodes** run the brains:
+
+- `kube-apiserver` — the only component anyone else talks to. RESTful HTTP API over the resource graph (Pods, Services, ConfigMaps, ...). Stateless; persists everything in etcd.
+- `etcd` — the consistent key-value store. The source of truth. Lose etcd, lose the cluster (this is why production clusters back it up).
+- `kube-scheduler` — decides which node each unscheduled Pod runs on (see §D).
+- `kube-controller-manager` — runs the built-in controllers (Deployment controller, ReplicaSet controller, Node controller, ...). Each is a reconciliation loop (§E).
+- `cloud-controller-manager` — same idea but for cloud-provider integrations (provisioning load balancers, persistent disks).
+
+**Data plane nodes** (also called "worker nodes") run the workloads:
+
+- `kubelet` — the node agent. Pulls assigned Pods from the API server and tells the local container runtime to run them. Reports node and Pod status back upstream.
+- `kube-proxy` — programs iptables/IPVS rules for Service load balancing on this node.
+- `container runtime` — containerd, CRI-O, or another CRI-compliant runtime. The thing that actually calls runc to spawn containers.
+
+The split matters because **control plane outages do not stop running workloads.** If the API server crashes, your Pods keep serving traffic. Only the ability to *change* the cluster (scale, deploy, recover from failure) is impaired. This is by design — control plane HA is desirable but not on the request hot path.
+
+Almost every interaction (kubectl, controllers, kubelets) ultimately translates to "talk HTTP to the API server, which talks to etcd." Master that mental model and the architecture stops being intimidating.
+
+### C. The Resource Model: Everything Is YAML in etcd
+
+Every Kubernetes object — Pod, Deployment, Service, Secret, custom resource — has the same envelope:
+
+```yaml
+apiVersion: v1               # which API group/version
+kind: Pod                    # which resource type
+metadata:                    # name, namespace, labels, annotations
+  name: my-pod
+  namespace: default
+spec:                        # desired state (what you want)
+  containers:
+    - name: app
+      image: nginx:1.27
+status:                      # actual state (what the controller observes)
+  phase: Running
+  podIP: 10.0.1.5
+```
+
+You write `spec`. Controllers write `status`. The split lets you reason about intent (spec) separately from reality (status), and it makes diffs trivial: the controller's job is to make `status` match `spec`.
+
+`metadata.labels` and `metadata.annotations` are how everything else finds objects. A Deployment selects its Pods by `spec.selector.matchLabels: {app: web}`; the matched Pods carry `metadata.labels: {app: web}`. A Service routes to Pods the same way. Labels are the implicit foreign-key system tying the entire object graph together.
+
+`apiVersion: v1` (core), `apps/v1` (workloads), `networking.k8s.io/v1` (networking), and so on — Kubernetes versions API groups independently so newer features can land without breaking older clients. Custom Resource Definitions (CRDs, covered in the Advanced lesson) let you add your own `apiVersion`s and have controllers reconcile them with the same machinery.
+
+### D. The Reconciliation Loop: Declarative State Made Real
+
+This is the heart of Kubernetes. Every controller runs the same algorithm:
+
+```
+loop forever:
+    desired = read current spec from API server
+    actual  = read current status from API server (or world)
+    diff    = desired - actual
+    if diff is non-empty:
+        take an action that reduces diff
+        update status
+```
+
+Concretely, the **Deployment controller** does this for `replicas: 3`:
+
+1. Watch the Deployment objects in etcd.
+2. For each Deployment, ensure a matching ReplicaSet exists.
+3. The ReplicaSet controller watches ReplicaSets and ensures the number of Pods matches `replicas`.
+4. If a Pod dies, the ReplicaSet sees `actual = 2 < 3 = desired`, so it creates a new Pod object.
+5. The Pod is unscheduled (no `nodeName`), so the **scheduler** picks a node, sets `spec.nodeName`, and writes back.
+6. The kubelet on that node sees a Pod assigned to it, asks the container runtime to start it, reports status back.
+
+Every step is idempotent. Every step writes through the API server (which writes to etcd). If any component crashes mid-step, the next iteration of its loop picks up where things were left. There is no global plan or transactional commit; the system converges by repeated local nudges.
+
+This is also why Kubernetes is **self-healing**: node dies → kubelet stops reporting → node controller marks node `NotReady` → Pods on it are evicted → ReplicaSet sees `actual < desired` → new Pods created on healthy nodes → scheduler binds them → kubelet starts them. No human intervention; the same loop that handled the original deployment handles the failure.
+
+### E. The Scheduler: A Two-Phase Filter and Score
+
+When a Pod is created without `spec.nodeName`, the scheduler picks one. The algorithm is two phases:
+
+1. **Filter (predicates).** From all nodes, eliminate any that cannot run this Pod: insufficient CPU/memory, missing required GPUs, doesn't match `nodeSelector`, taints not tolerated, host port conflict, PVC zone mismatch, ...
+2. **Score (priorities).** For each surviving node, compute a score (typically 0–100). Default scoring includes resource balance (don't pile every Pod on the same node), image locality bonus (the node already has the image cached), inter-Pod affinity/anti-affinity, ...
+
+The highest-scoring node wins (ties are broken randomly). The scheduler then writes `spec.nodeName` back to the API server and the kubelet picks up from there. This entire decision is *advisory* in the sense that nothing prevents you from setting `spec.nodeName` yourself; the scheduler just runs when you don't.
+
+For the Intro lesson, the takeaway is that scheduling is a configurable, pluggable decision based on declared resource requests and constraints. Get the resource requests on your Pods right and most "the scheduler picked a bad node" problems go away on their own.
+
+### F. Services: Stable Names for Ephemeral Pods
+
+Pods come and go and have ephemeral IPs. A **Service** is a stable virtual IP (cluster IP) that load-balances to Pods matching a label selector. Three common types:
+
+- **ClusterIP** (default) — virtual IP reachable only inside the cluster. The standard way for service A to call service B.
+- **NodePort** — exposes the Service on a fixed port on every node's IP. Useful for development, rarely the right choice for production.
+- **LoadBalancer** — asks the cloud provider for an external load balancer pointing at NodePorts. Standard for "internet-facing single service" on cloud K8s.
+
+Under the hood, kube-proxy on each node programs iptables (or IPVS) rules: `if dest_ip == ClusterIP and dest_port == servicePort, DNAT to one of these podIPs:targetPort, chosen randomly per connection`. There is no separate L4 load balancer process; the kernel does it.
+
+DNS is layered on top: the cluster runs a DNS service (CoreDNS) that returns the ClusterIP for service names like `my-svc.my-namespace.svc.cluster.local`. So application code uses hostnames, kube-proxy translates the resulting ClusterIP, and the kernel forwards to one of the matching Pods.
+
+### From Theory to the kubectl Below
+
+- `kubectl apply -f deployment.yaml` — sends YAML to the API server, which writes it to etcd. The Deployment controller's loop sees a new spec, creates a ReplicaSet, which creates Pods, which the scheduler binds to nodes, which kubelets start.
+- `kubectl get pods` — reads Pod objects from the API server. Shows `status.phase`, which the kubelet wrote.
+- `kubectl scale deployment web --replicas=5` — patches `spec.replicas`. The reconciliation loop notices and creates or destroys Pods to match.
+- `kubectl rollout restart deployment web` — bumps a label on the Pod template, which the controller sees as a "new spec." It rolls out new Pods and tears down old ones gracefully.
+- `kubectl expose deployment web --port=80` — creates a Service object. kube-proxy on every node programs iptables rules within seconds.
+- `kubectl exec` and `kubectl port-forward` — open a tunnel through the API server to the kubelet, which forwards into the container.
+- `kubectl describe pod` — pulls events and current status; events are the audit log of "what happened to this Pod" written by various controllers.
+
+The remaining sections walk these primitives in YAML form. Whenever a `kubectl` command surprises you, ask: which controller is reconciling, what spec did it see, what status did it write?
+
+---
 
 ## 1. What is Kubernetes?
 

@@ -15,7 +15,105 @@ After completing this lesson, you will be able to:
 
 ---
 
+Before the recipes, read [**Theory & Principles**](#theory--principles) — the architecture trade-offs that recur across every multi-container application: which boundaries to put in containers, how to handle dependency-readiness, and where state actually lives.
+
 Knowing Docker commands and Compose syntax is only half the picture -- the real skill lies in applying them to actual projects. This lesson walks through four progressively complex real-world scenarios, from a simple API with a database to a full-stack application with React, Node.js, PostgreSQL, and Redis. By building these examples hands-on, you will develop the muscle memory and problem-solving instincts needed to Dockerize your own projects confidently.
+
+---
+
+## Theory & Principles
+
+The four examples in this lesson are not separate recipes — they are the same architectural questions answered with progressively more services. Before walking through any one of them, it is worth naming the recurring trade-offs so you can see them in every recipe instead of re-discovering them each time.
+
+### A. The Container Boundary: One Process or One Service?
+
+The classic guideline is "one process per container." The more useful framing is "one **concern** per container." A web server with a sidecar log shipper is two containers because they have independent lifecycles, independent failure modes, and independent scaling. A web server with its own integrated logger thread is one container because the lifecycle is shared.
+
+Concretely, this leads to common boundaries:
+
+- **App server + database** → two containers. The DB has independent persistence requirements, restart behavior, backup story.
+- **App server + reverse proxy / TLS terminator** → two containers. The proxy can be redeployed for cert renewal without restarting the app; the app can be redeployed for code changes without dropping connections at the proxy.
+- **Frontend SPA + API backend** → two containers. The SPA is just static files served by nginx; the API has its own runtime, dependencies, and update cadence.
+- **Worker queue + scheduler + web** → three containers, even if they share the same source repo. Each one scales differently (web: by request rate; worker: by queue depth; scheduler: never, you want exactly one).
+
+The cost of an extra container is small (a few MB of memory, one cgroup, one namespace set). The cost of a shared lifecycle that should not be shared is large (you cannot scale, restart, or upgrade independently).
+
+### B. Dependency Readiness vs Service Existence
+
+Every multi-service stack has the same race: the API tries to connect to the database before the database is ready. The Compose abstraction `depends_on` only orders *container start*, which happens long before the daemon inside is accepting connections. There are three layers of fix, in increasing order of correctness:
+
+1. **App-level retry with backoff.** The most portable. Wrap the database connection in `retry until success or N attempts, with exponential backoff`. Works under Compose, Kubernetes, bare Docker, anywhere.
+2. **`depends_on: condition: service_healthy`.** Compose waits to start the app until the dependency's `healthcheck` reports healthy. Requires defining a healthcheck — usually `pg_isready` for Postgres, `redis-cli ping` for Redis, `mysqladmin ping` for MySQL.
+3. **Init container or wait-for-it script in the entrypoint.** Useful when the application is opaque (third-party image you cannot modify). Runs before the main process and exits 0 once the dependency is reachable.
+
+Production code should always include layer 1. Layer 2 makes local startup cleaner. Layer 3 is for when you are gluing together third-party images.
+
+### C. Where State Lives — and Where It Does Not
+
+A container's writable layer is *ephemeral*. Anything written to it disappears when `docker rm` runs. State that needs to survive the container has three options:
+
+- **Named volume.** Docker manages the location (`/var/lib/docker/volumes/<name>/_data`). Survives `docker rm`. Recommended for databases — performance is good (it's just a host directory), backups are clean (`docker run --rm -v vol:/src -v $PWD:/dst alpine tar -czf /dst/backup.tgz /src`).
+- **Bind mount.** You specify the host path. Useful for development (mount source code into the container so edits are live), useful for configs (`./config.yml:/etc/app/config.yml:ro`), risky for databases (filesystem semantics may differ across host OSes — Postgres on macOS bind mounts has well-known performance and locking issues).
+- **No persistence.** Caches, search indexes you can rebuild, ephemeral session stores. Living in the writable layer is fine; the container is the cache.
+
+The classic mistake: putting Postgres data in a bind mount on macOS or Windows for "easy access," then watching the database get corrupted by host-OS file locking quirks. Use named volumes for databases unless you are explicitly running on Linux and need host-side access.
+
+### D. Configuration Surface: Environment Variables, Files, Secrets
+
+Every example here passes configuration to its services. Three distinct mechanisms, with different trade-offs:
+
+- **Environment variables.** Set in `docker-compose.yml` or `.env` file, consumed via `process.env` / `os.getenv`. Easy. Visible in `docker inspect`. Stay in the container's `/proc/1/environ` for the life of the process. Fine for non-secret config (DB host, log level, feature flags).
+- **Mounted config files.** Bind-mount `./config/app.yml` into the container. Good for structured config too large for env vars. Reload semantics are the app's responsibility.
+- **Secrets.** Compose has a `secrets:` block that mounts files into `/run/secrets/<name>` from a host file or external source. Not visible in `inspect`, not in env. Stronger than env vars for credentials, weaker than a real secret manager (Vault, AWS Secrets Manager, K8s `Secret` + KMS).
+
+Production rule of thumb: env vars for non-secrets, mounted files (with restrictive perms) for secrets in dev, real secret manager in prod.
+
+### E. Networking Topology: Service-to-Service vs Public-Facing
+
+Compose's default network puts every service on one bridge with name-based DNS. The standard public-facing topology is:
+
+```
+            Internet
+               │
+               ▼
+         (port 80/443 published on host)
+               │
+               ▼
+    ┌──── reverse proxy / nginx ────┐
+    │                                │
+    ▼                                ▼
+  api (no published port)     frontend (no published port)
+    │
+    ▼
+  db (no published port)
+```
+
+Only the reverse proxy publishes ports to the host (`ports: ["80:80", "443:443"]`). Everything else has no `ports:` block and is reachable *only* from other services on the Compose network. This is the implicit security boundary: a service with no published port is not reachable from outside the host.
+
+For larger isolation, define multiple Compose networks: a `frontend` network with the reverse proxy and frontend, a `backend` network with the API and DB, and put the API on both. Now the frontend cannot reach the DB even if compromised.
+
+### F. Image Choice: Base Image as a Trade-Off
+
+For each service you pick a base image. The choice trades off size, attack surface, and debuggability:
+
+| Base | Size | Includes | Debug ergonomics | Attack surface |
+|------|------|----------|------------------|----------------|
+| `ubuntu:22.04` | ~80 MB | Full apt, common tools | Best (bash, ps, curl, ...) | Largest |
+| `debian:slim` | ~30 MB | Minimal apt | Good | Medium |
+| `alpine:3.19` | ~7 MB | musl libc, busybox, apk | OK (busybox tools) | Small, but musl can break some libraries |
+| `gcr.io/distroless/...` | ~20 MB | Just the language runtime | None (no shell) | Smallest |
+| `scratch` | 0 MB | Nothing | None (must be a static binary) | Minimal |
+
+The pattern most production teams converge on: multi-stage builds where the *builder* stage uses a heavy base (full Node, full Go, full JDK) and the *runtime* stage uses distroless or alpine. You get fast iterative builds and a small, hard-to-attack runtime image.
+
+### From Theory to the Examples Below
+
+- **Example 1 (Node + Postgres)** is the simplest 2-tier app. Uses depends_on with healthcheck (§B), named volume for `pgdata` (§C), env vars for DB credentials (§D), no public port for `db` (§E).
+- **Example 2 (React + Nginx)** is a single-tier app with multi-stage build (§F). The `node` builder stage compiles, the `nginx:alpine` stage serves; only the latter ships.
+- **Example 3 (Full stack)** combines all of the above and adds Redis. Each tier has its own concern (§A), the network topology hides the DB and Redis from the public (§E), and the example demonstrates how config and secrets diverge as the stack grows (§D).
+- **Example 4 (WordPress + MySQL)** is the "wire two third-party images together" pattern — neither container is yours, so you rely on env vars exposed by the official images and named volumes for both DB data and uploaded files.
+
+The four examples are deliberately ordered: each adds one concern and one decision over the previous. As you read each one, ask "which trade-off from the theory section is this resolving?" — the rest of this lesson will feel like applied architecture rather than a list of incantations.
 
 ---
 

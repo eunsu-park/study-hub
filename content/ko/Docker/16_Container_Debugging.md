@@ -16,6 +16,9 @@
 8. 멀티 컨테이너 애플리케이션을 디버깅하고 일반적인 컨테이너 문제를 해결한다
 
 ## 목차
+
+도구 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. `docker exec` 아래에서 `setns()`가 하는 일, `/proc`이 컨테이너에 대해 노출하는 것, Kubernetes의 임시 디버그 컨테이너 패턴, 그리고 `strace`/`lsof`/`tcpdump`가 컨테이너 네임스페이스 *안에서* 어떻게 동작하는지 다룹니다.
+
 1. [docker exec를 사용한 대화형 디버깅](#1-docker-exec를-사용한-대화형-디버깅)
 2. [컨테이너 로그와 로그 드라이버](#2-컨테이너-로그와-로그-드라이버)
 3. [docker inspect로 메타데이터 확인](#3-docker-inspect로-메타데이터-확인)
@@ -32,6 +35,162 @@
 ---
 
 컨테이너가 오작동할 때 전통적인 디버깅 접근 방식은 종종 부족합니다. 컨테이너에 SSH로 접속할 수 없고, 많은 이미지에 디버깅 도구가 없으며, 컨테이너의 일시적 특성으로 인해 증거가 사라질 수 있습니다. 이 레슨은 간단한 로그 검사부터 고급 네임스페이스 탐색, 시스템 콜 추적까지 포괄적인 컨테이너 디버깅 도구 키트를 다룹니다. 이러한 기술을 마스터하는 것은 프로덕션에서 컨테이너를 운영하는 모든 사람에게 필수적입니다.
+
+---
+
+## 이론과 원리
+
+컨테이너 디버깅은 항상 해 오던 같은 리눅스 프로세스 디버깅 — `strace`, `lsof`, `tcpdump`, `/proc` 검사 — 을 *알맞은 네임스페이스 안에서* 수행하는 것입니다. 새로운 점은 네임스페이스 배관입니다. 커널의 `setns()` 시스템 콜, `/proc/<pid>/ns/` 심볼릭 링크, Kubernetes의 임시 디버그 컨테이너 패턴 — 이것들이 호스트의 디버깅 도구와 컨테이너의 세계 보기 사이의 다리입니다. 각 도구가 네임스페이스 레벨에서 무엇을 하는지 이름을 댈 수 있게 되면, 컨테이너 디버깅이 신비롭지 않게 되고 "전과 같은 일에 한 단계만 추가"가 됩니다.
+
+### A. `docker exec`와 `setns()` 시스템 콜
+
+`docker exec -it <container> sh`는 새 컨테이너를 *fork하지 않습니다*. 기존 컨테이너의 네임스페이스에 진입합니다. 메커니즘은 커널의 **`setns()`** 시스템 콜 — `/proc/<pid>/ns/<type>`을 가리키는 파일 디스크립터가 주어지면, `setns(fd, 0)`이 호출 프로세스를 그 네임스페이스로 옮깁니다.
+
+실행 중인 모든 프로세스가 `/proc/<pid>/ns/` 아래에 자기 네임스페이스를 노출 —
+
+```
+$ ls -l /proc/1234/ns/
+cgroup -> cgroup:[4026531835]
+ipc    -> ipc:[4026531839]
+mnt    -> mnt:[4026531840]
+net    -> net:[4026532008]
+pid    -> pid:[4026532009]
+user   -> user:[4026531837]
+uts    -> uts:[4026531838]
+```
+
+대괄호 안의 숫자가 네임스페이스 inode. 두 프로세스가 같은 네임스페이스에 있을 필요충분조건은 같은 inode를 가지는 것. "이 두 프로세스가 정말 같은 네트워크 네임스페이스에 있는가?"를 확인하는 방법이 이것 — 둘에 대해 `readlink /proc/<pid>/ns/net` 비교.
+
+`docker exec`(과 `kubectl exec`)이 동작하는 방식 —
+
+1. 컨테이너의 PID 1 조회.
+2. 각 `/proc/<pid1>/ns/<type>` 파일 디스크립터 열기.
+3. 각각에 대해 `setns(fd, 0)` 호출.
+4. 이제 컨테이너 네임스페이스 세계에서 요청된 명령을 `execve()`.
+
+`nsenter`가 같은 작업의 독립 CLI 버전 — `nsenter -t <pid> -p -m -u -n -i <command>`. 일부 네임스페이스만 진입하고 싶을 때 유용(예: `-n`만 — 호스트의 `tcpdump`로 컨테이너 트래픽을 스니핑할 때).
+
+### B. 컨테이너 검사기로서의 `/proc/<pid>/`
+
+모든 리눅스 프로세스가 `/proc/<pid>/` 아래에 상태를 파일로 노출하는 디렉터리를 가짐. *호스트*에서(실제 PID를 봄) 이것들이 컨테이너에 들어가지 않고도 그 프로세스에 대해 거의 모든 것을 알려 줌 —
+
+| 파일 | 알려주는 것 |
+|------|--------------|
+| `/proc/<pid>/status` | UID, GID, capability, 네임스페이스 inode, 부모 PID |
+| `/proc/<pid>/cmdline` | exec된 argv |
+| `/proc/<pid>/environ` | 환경 변수(권한이 있을 때만) |
+| `/proc/<pid>/cgroup` | 프로세스가 속한 cgroup(과 따라서 자원 한도) |
+| `/proc/<pid>/maps` | 메모리 맵 — 로드된 모든 라이브러리, 모든 힙 세그먼트 |
+| `/proc/<pid>/fd/` | 프로세스가 연 파일 디스크립터(소켓, 파일, 파이프) |
+| `/proc/<pid>/root/` | 컨테이너 루트 파일시스템에 대한 마법의 심볼릭 링크(호스트에서 `cat /proc/<pid>/root/etc/passwd` 가능) |
+| `/proc/<pid>/cwd` | 현재 작업 디렉터리 |
+| `/proc/<pid>/net/tcp` | TCP 연결(프로세스의 네트워크 네임스페이스에서) |
+| `/proc/<pid>/limits` | RLIMIT 설정 |
+
+가장 강력한 것이 `/proc/<pid>/root/`. 호스트에서, 컨테이너 안에 셸이 필요 없이, 컨테이너 파일시스템의 어떤 파일이든 읽을 수 있음. 셸이 없는 distroless 컨테이너에 대해 이것이 주된 검사 메커니즘 — `ls /proc/<pid>/root/app/`, `cat /proc/<pid>/root/etc/config`.
+
+`/proc/<pid>/net/tcp`와 `/proc/<pid>/net/udp`는 호스트에서 읽고 있어도 *컨테이너의* 네트워크 네임스페이스에서 연결 상태를 줌.
+
+### C. 로깅: stdout/stderr가 실제로 어디로 가는가
+
+컨테이너의 프로세스가 파일 디스크립터 1(stdout)과 2(stderr)에 씀. 그 FD는 프로세스 자체가 아닌 **컨테이너 모니터**(`containerd-shim`, Podman/CRI-O는 `conmon`)가 소유. 모니터가 그것들을 읽어 **로그 드라이버**로 라우팅 —
+
+| 로그 드라이버 | 로그가 가는 곳 |
+|----------------|------------------|
+| `json-file`(Docker 기본) | `/var/lib/docker/containers/<id>/<id>-json.log` — 디스크의 JSON 라인 |
+| `journald` | systemd-journald(`journalctl`로 쿼리 가능) |
+| `syslog` | 로컬 syslog 데몬 |
+| `fluentd` / `gelf` / `awslogs` / `gcplogs` | 원격 집계기로 스트리밍 |
+| `none` | 폐기 |
+
+`docker logs <container>`가 json-file을 읽거나(또는 journald 쿼리, 또는 어떤 드라이버이든) 출력. `kubectl logs`가 kubelet을 통해 등가 작업.
+
+함의 —
+
+- **`docker logs`는 드라이버가 지원할 때만 동작.** json-file과 journald는 됨, 원격 드라이버는 안 됨.
+- **로깅 볼륨이 가득 차면 컨테이너가 멈춤.** 로테이션 없는 json-file이 고전적 장애. `--log-opt max-size=10m --log-opt max-file=3`을 설정(또는 자체 관리하는 journald 사용).
+- **다중 라인 스택 트레이스가 기본적으로 라인당 한 로그 항목.** 한 이벤트에 속하는 연속 라인을 머지할 줄 아는 로그 시퍼를 쓰거나, 앱이 단일 라인 JSON 로그를 내보내게 하기.
+
+### D. 네트워크 디버깅: 네임스페이스 안과 밖
+
+네트워킹 이슈가 가장 흔하고 가장 혼란스러운 컨테이너 디버깅 작업. 분리 —
+
+- **호스트에 존재하면서 `nsenter`로 컨테이너의 뷰에서 동작하는 도구 —** `tcpdump`, `iptables`, `ip route`, `ss`, `netstat`. 호스트가 가지고 있음. 컨테이너에 없어도.
+- **컨테이너 안에서 돌아야 하는 도구 —** 애플리케이션이 닿을 수 있는 것을 테스트하는 `curl`, 앱이 보는 방식대로 DNS를 테스트하는 `dig`, 같은 용도의 `nslookup`.
+
+컨테이너에 tcpdump를 설치하지 않고 트래픽을 캡처하는 표준 주문 —
+
+```bash
+# 컨테이너 PID 가져오기
+PID=$(docker inspect -f '{{.State.Pid}}' mycontainer)
+# 호스트에서 컨테이너 네트워크 네임스페이스에 있는 tcpdump 실행
+sudo nsenter -t $PID -n tcpdump -i any -w /tmp/cap.pcap
+```
+
+DNS 이슈에 대해 세 곳을 확인 —
+
+1. *컨테이너 안*의 `/etc/resolv.conf` — 리졸버가 쿼리할 네임서버.
+2. (사용자 정의 브리지의) `127.0.0.11` Docker DNS 서버 또는 K8s의 CoreDNS — 이름을 아는가?
+3. 상류 DNS — 호스트가 그 이름을 리졸브할 수 있는가?
+
+"컨테이너가 외부 세계에 못 닿음"엔 iptables MASQUERADE와 라우트 테이블 확인. "호스트가 컨테이너에 못 닿음"엔 iptables DNAT와 브리지의 `forwarding` 설정 확인.
+
+### E. `strace`, `lsof`, 그리고 안에서의 검사
+
+이들이 리눅스 프로세스 디버깅의 일꾼들이며, 모두 컨테이너 안에서 동작 — 단, 설치되어야 하거나(또는 호스트에서 `nsenter`로 실행).
+
+- **`strace -p <pid>`** — 프로세스가 만드는 모든 시스템 콜을 인자와 반환값과 함께 보여 줌. 느림(인터셉트 오버헤드가 큼)이지만 "프로세스가 실제로 무엇을 하려 하는가?"에 답하는 가장 정밀한 방법. `-e trace=network`나 `-e trace=file`로 잡음 줄임. `strace -f`가 멀티 프로세스 앱을 위해 fork 추적.
+- **`lsof -p <pid>`** — 열린 파일 디스크립터를 경로/소켓/파이프와 함께 나열. 파일 누수 찾기, 프로세스가 실제로 바인드한 포트 찾기, 어떤 설정 파일이 열려 있는지 찾기.
+- **`pgrep`, `pkill`, `ps -ef`** — 기본 프로세스 검사. 컨테이너의 PID 네임스페이스 안에서 PID는 1(엔트리포인트)에서 시작.
+- **`top`, `htop`** — 컨테이너의 뷰에서 자원 사용량.
+- **`/proc/self/status`와 `/proc/self/cgroup`** — *현재 도는 셸*의 UID, capability, cgroup 확인. 이게 디버그 명령이 상속하는 것.
+
+이미지가 distroless(셸 없음, `strace` 없음, `lsof` 없음)일 때 워크플로우는 호스트에서 `/proc/<pid>/`로 디버깅하거나 **임시 디버그 컨테이너**를 부착하는 것으로 이동(다음 섹션).
+
+### F. 임시 디버그 컨테이너: 현대 워크플로우
+
+distroless와 scratch 이미지는 프로덕션엔 훌륭, 디버깅엔 끔찍. 현대 Kubernetes(1.23+)가 **임시 컨테이너**(`kubectl debug`)로 해결 —
+
+```bash
+kubectl debug -it mypod --image=busybox --target=mycontainer -- sh
+```
+
+벌어지는 일 —
+
+1. kubelet이 containerd에게 *기존* Pod에 *새* 컨테이너 생성 요청. Pod의 네트워크와 PID 네임스페이스 공유, `--target`을 통해 대상 컨테이너의 프로세스 네임스페이스 공유.
+2. 새 컨테이너는 자체 파일시스템(busybox)을 가지지만 대상 컨테이너의 프로세스를 보고 시그널 보낼 수 있음.
+3. 대상 이미지에 `ps`, `cat`, `curl` 등이 없어도 그것들이 있는 셸을 얻음.
+
+Docker 등가물은 `docker run --network=container:other --pid=container:other --volumes-from=other busybox sh` — 디버그 컨테이너의 네임스페이스를 기존 것에 수동으로 부착. K8s `kubectl debug`는 Pod 인식이 있는 같은 아이디어.
+
+이 패턴이 "프로덕션 이미지를 최소한으로 강화"를 실용적으로 만듦. distroless나 scratch가 *프로덕션* 이미지, *디버그* 이미지는 필요한 도구를 가진 busybox나 alpine, 필요할 때 부착.
+
+### G. 헬스 체크와 재시작 루프
+
+컨테이너의 재시작 정책이 "프로세스가 종료됨"을 "오케스트레이터가 재시작"으로 전환. 이게 자체 의존성에 대한 서비스 거부가 아닌 자가 치유로 동작하려면 —
+
+- **헬스 체크가 "살아 있음"을 정의.** Dockerfile의 `HEALTHCHECK CMD curl -f http://localhost/ || exit 1`, 또는 K8s의 `livenessProbe`. 주기적으로 실행. `start_period`가 처음 N초 스킵(느린 시작용). `retries`가 unhealthy를 선언하기 전 연속 실패 수.
+- **K8s의 Liveness vs Readiness.** Liveness 실패 → 컨테이너 재시작. Readiness 실패 → Service 로드 밸런싱에서 제거하지만 재시작 안 함. 흔한 버그 — 너무 많이 하는 단일 프로브(예: DB 쿼리)를 사용해, DB가 잠깐 느릴 때 건강한 앱을 무너뜨림.
+- **백오프가 중요.** 모든 시작에서 즉시 크래시하는 컨테이너가 백오프 없이 호스트를 잡아먹을 것. Docker와 K8s 모두 지수 백오프 구현(K8s의 `CrashLoopBackOff`) — 즉시 재시작, 그다음 10초, 20초, 40초, ... 최대 5분. 잘못 구성된 Pod이 "CrashLoopBackOff에 갇힌" 이유 — 갇힌 게 아니라 클러스터를 태우지 않게 천천히 재시작 중.
+
+"컨테이너가 계속 재시작됨"을 디버깅할 때 첫 질문 —
+
+1. *종료 코드*가 무엇이었나? `docker inspect -f '{{.State.ExitCode}}' <id>` 또는 `kubectl describe pod`. 0 = 깨끗한 종료(정책이 `always`라 오케스트레이터가 재시작), 0이 아닌 = 크래시, 137 = SIGKILL(아마 OOM), 143 = SIGTERM(보통 셧다운).
+2. *마지막* 컨테이너가 무엇을 로그했나? `docker logs --previous` 또는 `kubectl logs --previous`. 현재 컨테이너는 새것이고, *이전* 것의 로그에 실제 죽음 메시지가 있음.
+3. 호스트의 `dmesg`가 무엇이라고 하나? OOM kill이 거기 죽은 PID와 메모리 합계와 함께 나타남.
+
+### 이론에서 아래의 도구 레퍼런스로
+
+- **`docker exec`** — 컨테이너 네임스페이스로 `setns()`(§A). 셸과 도구가 이미지에 있어야 함.
+- **`docker logs`** — 로그 드라이버가 기록하는 것을 읽음(§C).
+- **`docker inspect`** — 컨테이너 메타데이터 덤프, `nsenter`에 필요한 State.Pid 포함(§A, §B).
+- **`nsenter -t <pid> -n <cmd>`** — 컨테이너 네트워크 네임스페이스에서 호스트 도구 실행(§D).
+- **`strace`, `lsof`, `tcpdump`** — 보편적 리눅스 프로세스 디버거. 컨테이너 안에서(§E) 또는 호스트에서 nsenter로(§D) 사용.
+- **`/proc/<pid>/root/`, `/proc/<pid>/net/tcp`, `/proc/<pid>/fd/`** — 호스트 측 컨테이너 내부 검사(§B).
+- **`HEALTHCHECK`, `--restart`, K8s liveness/readiness 프로브** — 자가 치유 루프(§G).
+- **`kubectl debug --image=...`** — distroless 프로덕션 이미지용 임시 디버그 컨테이너(§F).
+
+남은 본문은 이 도구들을 구체적 예제와 함께 둘러봅니다. 막힐 때마다 자문하세요 — 증상이 어느 네임스페이스에 있나(네트워크? 마운트? PID?), 그리고 내가 지금 있는 곳에서 그 네임스페이스 *안으로* 보는 시야를 주는 도구는 무엇인가?
 
 ---
 

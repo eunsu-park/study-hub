@@ -18,6 +18,9 @@
 Kubernetes 애플리케이션을 배포하려면 일반적으로 Deployment, Service, ConfigMap, Secret 등 여러 YAML 매니페스트가 필요합니다. 애플리케이션이 성장함에 따라 이 매니페스트들을 관리하는 것은 복잡하고 오류가 발생하기 쉽습니다. Helm은 Kubernetes의 사실상 표준 패키지 매니저로, 관련 매니페스트를 설정 가능한 템플릿이 있는 재사용 가능하고 버전이 지정된 차트로 패키징합니다. Helm을 익히면 배포 복잡성이 크게 줄어들고 환경 전반에 걸쳐 일관성 있고 반복 가능한 배포가 가능해집니다.
 
 ## 목차
+
+차트 워크스루 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. Helm의 Go 템플릿 엔진, 릴리스 라이프사이클과 히스토리 기계, 그리고 한 차트가 다른 차트를 선언하고 끌어오게 하는 의존성 해결 알고리즘을 다룹니다.
+
 1. [Helm 개요](#1-helm-개요)
 2. [Helm 설치 및 설정](#2-helm-설치-및-설정)
 3. [차트 구조](#3-차트-구조)
@@ -25,6 +28,120 @@ Kubernetes 애플리케이션을 배포하려면 일반적으로 Deployment, Ser
 5. [Values와 설정](#5-values와-설정)
 6. [차트 관리](#6-차트-관리)
 7. [연습 문제](#7-연습-문제)
+
+---
+
+## 이론과 원리
+
+Helm은 **클라이언트 측 템플릿 엔진** + **릴리스 추적 계층**입니다. Kubernetes 의미의 컨트롤러 실행, 리소스 watch, 조정을 하지 않습니다. YAML을 렌더링하고, API 서버로 보내고, 다음 `helm upgrade`가 무엇을 지우거나 수정해야 할지 알 수 있도록 보낸 것을 기억합니다. 깊이 이해할 가치가 있는 세 조각 — Go 템플릿 엔진과 그 관용구, etcd의 릴리스 라이프사이클, 그리고 차트 사이의 의존성이 어떻게 해결되는가.
+
+### A. 템플릿 엔진: Go 템플릿 + Sprig
+
+Helm 차트는 파일 디렉터리입니다. `templates/` 하위 디렉터리는 Kubernetes로 보내기 전에 Go의 `text/template` 엔진을 통과하는 파일을 담습니다. 엔진의 입력 소스는 셋 —
+
+- **`.Values`** — 사용자 제공 값들이 머지된 것(`values.yaml` + `--set` 플래그 + `-f` 오버라이드).
+- **`.Chart`** — `Chart.yaml`의 차트 메타데이터(name, version, appVersion, ...).
+- **`.Release`** — 릴리스 시점 정보(`.Release.Name`, `.Release.Namespace`, `.Release.Revision`, ...).
+- **`.Capabilities`** — 클러스터 정보(Kubernetes 버전, 사용 가능한 API 그룹). 대상 클러스터에 적응하는 조건 템플릿 작성에 사용.
+- **`.Files`** — 차트의 비템플릿 파일들. `.Files.Get`이나 `.Files.Glob` 같은 헬퍼로 접근.
+
+표준 Go 템플릿 문법(`{{ .Values.image.repository }}`, `{{ if .Values.ingress.enabled }}`, `{{ range .Values.replicas }}`, `{{ define "name" }}...{{ end }}`)에 **Sprig** 함수 라이브러리(~200개 헬퍼 — `default`, `quote`, `lower`, `upper`, `nindent`, `toYaml`, `lookup`, `randAlphaNum`, ...)가 보강됩니다. 프로덕션 차트에서 가장 많이 쓰이는 두 Sprig 관용구 —
+
+- **`{{ toYaml .Values.resources | nindent 12 }}`** — YAML 구조를 일관된 들여쓰기로 매니페스트에 splat. `nindent N`이 먼저 줄바꿈을 추가한 뒤 `N` 칸 들여쓰기 — `toYaml`이 다중 라인 텍스트를 내보내기 때문에 부모 키 아래에서 유효하려면 들여쓰기가 필수.
+- **`{{ include "mychart.fullname" . | quote }}`** — 명명 템플릿(`_helpers.tpl`에 정의)을 호출하고 결과를 quote. `include`는 템플릿이 값을 반환하게 함(텍스트만 직접 내보내는 `template`과 달리).
+
+헬퍼는 `templates/_helpers.tpl`에 삽니다(`_`로 시작하는 파일은 헬퍼로 다뤄지고 클러스터에 렌더되지 않음). 관습 — `mychart.fullname`, `mychart.name`, `mychart.labels`, `mychart.selectorLabels`를 명명 템플릿으로 정의하고, 일관된 명명/라벨링이 필요한 모든 곳에서 호출.
+
+템플릿 엔진은 **엄격**합니다 — 정의되지 않은 값은 `<no value>`로 렌더되어 하류 YAML을 깹니다. 선택적 필드를 다루려면 `{{ .Values.foo | default "bar" }}` 또는 `{{- if .Values.foo }}{{- end }}`을 쓰세요. `helm template`(오프라인 렌더)와 `helm install --dry-run --debug`(서버 측 렌더)이 표준 디버깅 명령.
+
+### B. 릴리스 라이프사이클과 3-way 머지
+
+**릴리스(release)**는 "이 차트, 이 값들로 렌더링, 이 네임스페이스에 적용, 이 릴리스 이름으로"입니다. 릴리스 이름과 네임스페이스가 고유 식별자. Helm 3는 각 릴리스를 릴리스의 네임스페이스에 Secret(또는 ConfigMap)으로 저장하며, 이름은 `sh.helm.release.v1.<release-name>.v<revision>`. 매 `helm install`, `upgrade`, `rollback`이 그 히스토리에 새 리비전을 씁니다.
+
+3 리비전 모델이 Helm을 안전하게 만듭니다.
+
+- **마지막 적용(last applied)** — Helm이 지난번에 클러스터로 보낸 YAML. 릴리스 시크릿에 저장.
+- **현재 클러스터 상태** — 클러스터가 *실제로* 지금 가진 것. Helm 작업 사이에 누가 `kubectl edit`로 수동 편집했다면 다를 수 있음.
+- **새로 렌더링** — Helm이 새 값에 기반해 이번에 보내려 하는 것.
+
+`helm upgrade`가 **3-way strategic merge**를 수행 — 새 렌더링에서 시작해, 클러스터 상태와 마지막 적용의 diff를 적용, 그래서 kubectl로 한 수동 편집이 Helm의 새 렌더가 명시적으로 덮어쓰지 않는 한 *보존*됨. 파괴적 덮어쓰기보다는 `kubectl apply` 의미에 가깝습니다.
+
+`helm rollback <release> <revision>`은 히스토리에서 옛 리비전을 읽어 새 "현재"로 적용. `helm history <release>`가 리비전을 나열. `helm uninstall <release>`는 그 릴리스에 대해 Helm이 추적한 모든 것을 제거(기본적으로 히스토리도 삭제, `--keep-history`로 `rollback` 위해 보존 가능).
+
+Helm 2 → 3 전환에서 Tiller(in-cluster 서버 측 헬퍼)가 제거되고 Helm은 순수 클라이언트 측이 되었습니다. 이로써 RBAC 친화적이 되고(Helm이 사용자의 kubeconfig 자격 증명을 직접 사용) 클러스터 전역 권한 ServiceAccount가 사라졌습니다.
+
+### C. 의존성 해결
+
+차트는 `Chart.yaml`에서 다른 차트를 의존성으로 선언할 수 있습니다.
+
+```yaml
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+```
+
+`helm dependency update`가 `Chart.yaml`을 읽고, 나열된 레포지토리에 대해 버전 제약을 해결하고, 각 매칭 차트를 `.tgz`로 다운로드해 `charts/`에 저장합니다. 다운로드는 `Chart.lock`(`package-lock.json`과 유사)에 기록되어, 다른 머신의 다음 install이 같은 정확한 버전으로 해결되게 합니다.
+
+버전 제약 문법은 **연산자가 있는 SemVer** — `12.x.x`, `^12.0.0`, `>=12.0.0 <13.0.0`. Helm은 Masterminds/semver를 파싱에 사용 — Go 생태계 다른 곳에서도 쓰는 같은 라이브러리.
+
+설치 시 의존성은 **부모 차트의 일부로 렌더링**됩니다. 재귀적 `helm install`은 없습니다 — 부모와 모든 서브차트가 하나의 YAML 스트림으로 렌더되어 한 작업으로 API 서버에 전송. 서브차트 값은 부모의 `values.yaml`에서 오버라이드 가능 —
+
+```yaml
+postgresql:
+  auth:
+    postgresPassword: changeme
+  primary:
+    persistence:
+      size: 10Gi
+```
+
+`condition` 필드로 의존성을 값에 의해 활성화/비활성화 — `postgresql.enabled: false`이면 그 서브차트 렌더링을 통째로 스킵. 우산 차트(5개 마이크로서비스를 묶은 한 차트)가 유용해지는 방법 — 조건 토글로 API만 또는 워커만 배포할 수 있습니다.
+
+### D. 훅(Hooks)과 작업 순서
+
+Helm에는 릴리스 라이프사이클의 특정 시점에 추가 리소스를 실행하는 훅 시스템이 있습니다 — `pre-install`, `post-install`, `pre-upgrade`, `post-upgrade`, `pre-delete`, `post-delete`, `pre-rollback`, `post-rollback`, 그리고 `helm test`로 호출되는 `test`.
+
+훅은 그저 `helm.sh/hook`로 어노테이트된 평범한 Kubernetes 리소스(보통 Job이나 Pod)입니다 —
+
+```yaml
+metadata:
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+```
+
+Helm은 진행하기 전에 훅이 완료될 때까지(`Job` 성공 또는 `Pod` 0으로 종료) 기다립니다. `hook-weight`가 같은 단계 안에서 여러 훅의 순서를 정함. `hook-delete-policy`가 정리를 제어.
+
+훅으로 차트가 앱 업그레이드 전에 데이터베이스 마이그레이션 실행, 설치 후 검증 테스트 실행, 제거 시 리소스 정리 등을 합니다. 애플리케이션 자체의 리소스용은 *아닙니다* — 그건 일반 템플릿에 들어갑니다.
+
+### E. 레포지토리와 OCI 배포
+
+Helm **레포지토리**는 차트 `.tgz` URL과 메타데이터를 나열한 HTTP 서빙 `index.yaml`입니다. `helm repo add bitnami https://charts.bitnami.com/bitnami`가 인덱스를 가져오고, `helm search repo`가 이름으로 차트를 찾고, `helm install`이 필요할 때 차트를 다운로드.
+
+신규 Helm(3.8+)은 **OCI 레지스트리**를 일급으로 다룹니다 — Docker 이미지를 저장하는 같은 레지스트리가 Helm 차트도 저장 가능. `helm push mychart-1.0.0.tgz oci://ghcr.io/myorg`와 `helm install myrelease oci://ghcr.io/myorg/mychart --version 1.0.0`. 인프라 통합 — 이미지와 차트 한 레지스트리, 한 자격 증명 셋, 한 서명/스캐닝 파이프라인.
+
+OCI 아티팩트 스펙은 일반적이라 같은 레지스트리가 임의의 메타데이터 동반 tarball 아티팩트(Helm 차트, Wasm 모듈, 정책 번들, ...)를 저장합니다. Helm은 그저 초기 채택자 중 하나일 뿐.
+
+### 이론에서 아래의 차트로
+
+- **`Chart.yaml`** — 차트 메타데이터 + 의존성 선언(§C).
+- **`values.yaml`** — 템플릿에서 사용 가능한 기본 `.Values`(§A). 사용자는 `-f`나 `--set`으로 오버라이드.
+- **`templates/_helpers.tpl`** — 일관된 명명/라벨링용 명명 템플릿(§A).
+- **`templates/*.yaml`** — `.Values`/`.Chart`/`.Release`로 렌더링된 Go 템플릿. 설치/업그레이드 시 한 배치로 전송(§B).
+- **`templates/NOTES.txt`** — 설치 후 stdout에 출력. 템플릿화되어 사용자에게 앱 접근 방법을 알림.
+- **`Chart.lock`과 `charts/`** — 의존성 락파일과 다운로드된 서브차트(§C).
+- **`helm.sh/hook` 같은 어노테이션** — 훅 라이프사이클에 참여(§D).
+- **`helm install`, `helm upgrade`, `helm rollback`, `helm history`, `helm template`** — 클러스터 Secret에 저장된 릴리스 객체에 대한 작업(§B).
+- **`helm repo`, `helm push`, `helm pull`** — 고전과 OCI 레포지토리 상호작용(§E).
+
+남은 본문은 이 조각들을 예제로 둘러봅니다. 템플릿이 의외로 동작할 때마다 `helm template`을 돌려 머신을 떠나기 전의 렌더된 YAML을 확인하세요.
 
 ---
 

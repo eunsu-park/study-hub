@@ -16,7 +16,114 @@ After completing this lesson, you will be able to:
 
 ---
 
+Before the CLI tour, read [**Theory & Principles**](#theory--principles) — how images are content-addressed layered blobs (manifest + config + layer tarballs) and how the layer cache decides whether `docker pull` or `docker build` actually does work.
+
 Images and containers are the two most fundamental concepts in Docker. An image is a read-only blueprint that captures everything an application needs to run, while a container is a live, running instance of that image. Mastering how to manage images and containers through the Docker CLI is essential for daily development work, from pulling pre-built images off Docker Hub to running, inspecting, and cleaning up containers.
+
+---
+
+## Theory & Principles
+
+A Docker image is *not* a single file. It is a directed acyclic graph of small JSON documents and tar archives, each addressed by the cryptographic hash of its own contents. Once you understand the three pieces — **manifest**, **config**, **layers** — and the rule that "the SHA256 of the bytes is the name of the bytes," everything else (caching, deduplication, multi-arch, content trust) falls out as a consequence.
+
+### A. Layered Storage and OverlayFS
+
+An image is a stack of read-only **layers**. Each layer is a tarball of filesystem changes — files added, files modified, files deleted — relative to the layer below it. When you build an image, every Dockerfile instruction that changes the filesystem produces one new layer.
+
+At runtime, the container engine asks OverlayFS to mount the layers as a unified read-only view, then add a single per-container **writable layer** on top:
+
+```
+   Container writable layer  (upperdir)   <-- per-container, ephemeral
+   ┌────────────────────────────────┐
+   │ Layer N  (e.g. CMD metadata)   │
+   │ Layer 3  (pip install ...)     │
+   │ Layer 2  (apt-get install ...) │   <-- shared image layers (lowerdir)
+   │ Layer 1  (base OS files)       │
+   └────────────────────────────────┘
+```
+
+Reads walk top-down and return the first hit. Writes against a file in a lower layer trigger **copy-on-write**: the file is copied into the writable layer first, then modified there. Deletes against a lower-layer file write a "whiteout" entry in the upper layer that hides the file in the merged view without touching the original.
+
+The consequence: ten containers from the same image share one set of layer files on disk; only the per-container writable layers cost new bytes. Two different images that share a base also share layers — pull `python:3.11-slim` and `node:20-slim`, both built on `debian:slim`, and the Debian layers download exactly once.
+
+This sharing is enforced by the storage driver. `overlay2` is the modern default; `aufs`, `devicemapper`, `btrfs`, and `zfs` are older alternatives. Recent containerd uses **snapshotter** plugins instead of "storage drivers," but the layered-merge model is the same.
+
+### B. Content-Addressable Storage and the SHA256 Identity
+
+Every blob Docker stores — every layer tarball, every config JSON, every manifest — is named by the SHA256 hash of its bytes. The names you read on `docker pull` look like:
+
+```
+sha256:5a3df9a8b2c1...e6f0
+```
+
+This is **content-addressable storage** (CAS), and it has four direct consequences:
+
+1. **The name *is* the integrity check.** If the bytes change by one bit, the digest changes completely. The daemon recomputes hashes on receive and refuses any blob whose actual digest does not match the requested one. There is no separate signature step needed for tamper detection.
+2. **Deduplication is free.** Two layers with byte-identical contents have the same digest, so they are stored once. Whether they came from different repos, different vendors, or different builds is irrelevant.
+3. **Tags are mutable; digests are not.** `nginx:latest` is just a *pointer* to a digest, and the registry can repoint it tomorrow. `nginx@sha256:5a3df9a8...` is a *promise* — the same bytes always, forever (or the registry returns 404). Production deployments should pin to digests for reproducibility.
+4. **The cache key is the digest.** The local daemon already has a layer if it has the digest. `docker pull` fetches only missing digests; on a re-pull where nothing changed, only the manifest is downloaded.
+
+### C. Manifests, Config, and Multi-Arch Index
+
+When you `docker pull nginx:1.27`, the daemon does not download "the image." It walks a small graph:
+
+1. Fetch the **manifest** for `nginx:1.27`. The manifest is a JSON document listing:
+   - The digest of the **config blob**.
+   - An ordered list of **layer digests** (with sizes and media types).
+2. Fetch the **config blob**. This is the JSON describing image metadata: the `CMD`, `ENTRYPOINT`, `ENV`, `WORKDIR`, exposed ports, labels, history of build steps, and the `rootfs.diff_ids` list (the uncompressed digests of each layer, in order).
+3. Fetch each **layer blob** that the local daemon does not already have, by its compressed digest.
+4. Compose: extract layers in order under the snapshotter, and the config tells `docker run` how to actually invoke the program.
+
+For multi-architecture images, the registry serves a **manifest list** (or OCI **image index**) at the tag, with one manifest entry per `(os, architecture, variant)` combination. The Docker client picks the manifest matching the host platform automatically. This is why `docker pull alpine:3.19` works the same on `linux/amd64`, `linux/arm64/v8`, and `linux/arm/v7` — the tag points to an index, the index points to the per-arch manifest, the per-arch manifest points to the per-arch layers.
+
+The OCI image-spec standardizes all of this: the JSON schemas, the media types, the digest algorithm. Docker's own format (Docker Image Manifest V2, Schema 2) is a near-clone of the OCI spec, and registries serve both interchangeably.
+
+### D. The Layer Cache: Why `docker pull` and `docker build` Are Often Cheap
+
+Two distinct caches exploit content-addressable storage:
+
+**Pull cache.** `docker pull` checks each layer digest against the local store before downloading. Pull `python:3.11-slim`, then pull `python:3.12-slim` later — the Debian base layers, compressed apt cache layers, and any other shared bytes are skipped. Bandwidth saved.
+
+**Build cache.** `docker build` walks Dockerfile instructions in order. For each instruction, it computes a cache key from:
+
+- The instruction text itself (`RUN apt-get install -y curl` is one key; adding `git` makes a different key).
+- The digest of the parent layer (so a change earlier in the Dockerfile invalidates everything after).
+- For `COPY` and `ADD`, a hash of the file contents being copied.
+
+If the cache key matches an existing local layer, the instruction is skipped and the cached layer is reused. If it does not, the instruction runs and produces a new layer with a fresh digest. This is why "ordering matters" in Dockerfiles — install OS packages and language dependencies before copying source code, so editing `app.py` does not bust the apt-get cache.
+
+BuildKit (the modern build engine) extends this with mount-based caches (`RUN --mount=type=cache,target=/root/.cache/pip`) that persist between builds *outside* the layer system, and parallel execution of independent stages.
+
+### E. Container Lifecycle: Five States the CLI Hides
+
+When you say `docker run`, two operations happen in sequence:
+
+1. `docker create` — the engine asks the runtime to allocate a writable layer, set up namespaces and cgroups per the image config, and place a container record in `created` state. No process runs yet.
+2. `docker start` — the runtime calls `clone() + execve()` for the entrypoint. The container moves to `running` state.
+
+From `running`, a container can transition to:
+
+- `paused` — `docker pause` uses the freezer cgroup to stop scheduling all PIDs in the container. Memory stays resident; sockets stay open. Useful for snapshots; not used much in practice.
+- `restarting` — the engine is waiting before re-running `start` (per the `--restart` policy).
+- `exited` — the entrypoint returned (or was killed). The writable layer survives. `docker start <name>` resumes from the writable layer's current state. `docker rm` finally deletes the writable layer.
+- `dead` — terminal failure state; the engine could not even cleanup. Rare, but `docker rm -f` is required to clear it.
+
+`docker run --rm` chains `start` with automatic `rm` on exit. `docker run -d` does not attach stdio (the container runs in the background but otherwise follows the same path). Knowing that `run = create + start` is what lets you build images, debug failed startups (`docker create` then `docker start` separately), and reason about what `--rm` actually deletes.
+
+### From Theory to the Commands Below
+
+- `docker pull <image>` — fetch the manifest, then any layer blobs the local store is missing, deduplicated by SHA256.
+- `docker images` — lists local image *manifests* and the digest each tag points to.
+- `docker image inspect <image>` — dumps the **config JSON**: env, cmd, entrypoint, layer history, exposed ports.
+- `docker history <image>` — reads the `history` array from the config to reconstruct which Dockerfile instruction produced which layer.
+- `docker run <image>` — `create` (allocate writable layer + namespaces + cgroups) followed by `start` (`clone() + execve()`).
+- `docker ps` — lists containers in `running` state. `docker ps -a` includes `exited`, `paused`, etc.
+- `docker rmi <image>` — removes a manifest reference. Layers stay on disk until *no* manifest references them.
+- `docker system prune` — garbage-collects unreferenced layers, the storage that the CAS model otherwise never reclaims on its own.
+
+The walkthrough that follows is this model in CLI form. Whenever a command surprises you, ask: which manifest, which config, which layers, which writable layer is it touching?
+
+---
 
 ## 1. Docker Images
 

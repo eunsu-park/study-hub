@@ -18,6 +18,9 @@ After completing this lesson, you will be able to:
 As Kubernetes clusters grow to host production workloads, security becomes a critical concern. A misconfigured RBAC policy can grant unintended access, an open network can allow lateral movement between services, and exposed secrets can compromise entire systems. This lesson covers the essential security primitives built into Kubernetes -- from access control and network isolation to secret management and Pod hardening -- giving you the tools to defend your cluster at every layer.
 
 ## Table of Contents
+
+Before the YAML reference, read [**Theory & Principles**](#theory--principles) — the RBAC permission model, how NetworkPolicy compiles to iptables, why Secrets need etcd encryption-at-rest, and the Pod Security Standards layered on top.
+
 1. [Kubernetes Security Overview](#1-kubernetes-security-overview)
 2. [RBAC (Role-Based Access Control)](#2-rbac-role-based-access-control)
 3. [ServiceAccount](#3-serviceaccount)
@@ -25,6 +28,101 @@ As Kubernetes clusters grow to host production workloads, security becomes a cri
 5. [Secrets Management](#5-secrets-management)
 6. [Pod Security](#6-pod-security)
 7. [Practice Exercises](#7-practice-exercises)
+
+---
+
+## Theory & Principles
+
+Kubernetes security is *not* a single feature. It is five overlapping mechanisms enforced at four different layers. Understanding which layer is enforcing what is the difference between writing policies that actually defend something and writing policies that look defensive but have holes the size of a Pod manifest.
+
+### A. Authentication and the RBAC Authorization Model
+
+Every API request goes through three filters in order: **Authentication** (who is the requester?), **Authorization** (are they allowed to do this?), and **Admission Control** (does this request meet additional policies?).
+
+Authentication answers "who." K8s does not have a built-in user database — it accepts identity from external sources: client certificates (X.509 with CN as username), bearer tokens (ServiceAccount tokens, OIDC tokens), or webhook authenticators. The API server validates the credential and turns it into a `(username, groups, extra)` tuple.
+
+Authorization answers "can they." The default authorizer is **RBAC (Role-Based Access Control)**, modeled as four resource types:
+
+- `Role` — list of allowed (verb, resource) pairs in *one* namespace. Verbs: `get`, `list`, `watch`, `create`, `update`, `patch`, `delete`, `deletecollection`. Resources: `pods`, `services`, `configmaps`, etc., or specific resource names.
+- `ClusterRole` — same but cluster-scoped. Used for cluster-wide resources (`nodes`, `clusterroles`) or to share a permission template across namespaces.
+- `RoleBinding` — binds a `Role` (or `ClusterRole`) to a list of **subjects** (users, groups, ServiceAccounts) in *one* namespace.
+- `ClusterRoleBinding` — same but binds for the entire cluster.
+
+The model is *additive and deny-by-default*. A subject can do exactly the union of what their bindings allow, and nothing else. There are no deny rules in RBAC. To "remove" a permission you remove the binding that granted it.
+
+`kubectl auth can-i get pods --as=alice` is the supported way to test "would this work?" without making the underlying call. Use it to debug RBAC questions instead of guessing.
+
+### B. ServiceAccounts: Pod Identity and Token Projection
+
+Every Pod runs as a **ServiceAccount** — a namespaced identity that is also a subject for RBAC. The default ServiceAccount in each namespace is named `default`; you should usually create one per workload and bind only the permissions it actually needs.
+
+When a Pod starts, the kubelet projects a JWT token for the Pod's ServiceAccount into `/var/run/secrets/kubernetes.io/serviceaccount/token`. Code inside the Pod that talks to the API server (most operators, controllers, kubectl-in-Pod) uses that token. The token is automatically rotated; older "long-lived secret token" model is being phased out for the **bound service account token** with audience and expiration.
+
+Two practical rules:
+
+- **One ServiceAccount per workload.** Sharing the default ServiceAccount across all your Pods means a compromise of one Pod gets the union of all permissions that account has across the namespace.
+- **Disable automounting if the workload doesn't talk to the API.** `automountServiceAccountToken: false` removes the token projection. Most apps don't need to call the K8s API; remove the credential they don't use.
+
+### C. NetworkPolicy: Compiled to iptables Per Node
+
+By default in K8s, **all Pods can reach all other Pods** (the cluster network is flat). `NetworkPolicy` adds firewall rules that say "Pods matching selector X can/cannot receive traffic from Pods matching selector Y on port Z."
+
+The policy is *additive within the matched set* but *deny-by-default once at least one policy matches*: as soon as a Pod is selected by *any* NetworkPolicy, traffic that is not explicitly allowed by *some* policy is dropped. Policies have separate `ingress` and `egress` rules; a "default deny" namespace ships a NetworkPolicy with empty selectors and no allow rules.
+
+Crucially, `NetworkPolicy` is *implemented by the CNI plugin*, not by the API server itself. Calico, Cilium, Weave Net, and Antrea all support NetworkPolicy, but the *enforcement* is in their dataplane: typically iptables/nftables rules (Calico classic) or eBPF programs (Cilium). If your CNI does not implement NetworkPolicy, the YAML applies cleanly but enforces nothing.
+
+Behind the scenes for an iptables-based CNI, each policy becomes a chain of rules in the `KUBE-NETWORKPOLICY` chain that's traversed before forwarding. Match a packet against pod-IP source/destination, port, and protocol; ACCEPT or DROP. The cluster ends up with thousands of small rules in steady state — fine for the kernel, very hard to debug by reading. Tools like `cilium policy trace` or `calicoctl get policies` are essential.
+
+### D. Secrets, etcd, and Encryption-at-Rest
+
+A `Secret` is base64-encoded data stored as an object in etcd. **Base64 is not encryption**; anyone who can read the etcd files (or call `kubectl get secret -o yaml` with permission) sees the plaintext. Two layers of protection stack on top:
+
+- **RBAC restricts who can read Secrets via the API.** Default RBAC grants `get`/`list` on Secrets to many roles; tighten this so only the specific service accounts that need a Secret can read it.
+- **Encryption-at-rest encrypts Secrets in etcd.** Configure `--encryption-provider-config` on the API server with a key (AES-CBC, AES-GCM, or KMS-provider). The API server encrypts on write to etcd and decrypts on read. An etcd backup or a stolen disk reveals only ciphertext.
+
+The strongest model uses an external **KMS (Key Management Service)** as the encryption provider — AWS KMS, GCP Cloud KMS, HashiCorp Vault Transit. The data encryption key (DEK) is generated per Secret, encrypted by the KMS, and stored alongside the ciphertext. Compromising etcd alone does not yield plaintext; the attacker also needs KMS access.
+
+External secret managers (Vault, AWS Secrets Manager) plus operators like External Secrets or the Secrets Store CSI driver let you keep secrets entirely outside K8s, mounting them into Pods on demand. This is the production-grade setup; native K8s Secrets are appropriate for convenience and dev, less so for high-value credentials.
+
+### E. Pod Security: Capabilities, seccomp, and PSS
+
+A container is a process. The kernel features that constrain a process apply directly:
+
+- **Linux capabilities.** Traditional UNIX has root or non-root. Capabilities split root's powers into ~40 distinct rights (`CAP_NET_BIND_SERVICE`, `CAP_SYS_ADMIN`, ...). Containers should drop all capabilities by default and add back only what they need: `securityContext: {capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}}`.
+- **`runAsNonRoot: true` and `runAsUser: <uid>`.** Force the container to run as a specific non-zero UID. Defends against images that default to root, and is required by most policy frameworks.
+- **`readOnlyRootFilesystem: true`.** Makes the image layers read-only. Writes go to explicitly-mounted emptyDirs or volumes. Defends against malware persisting in the rootfs.
+- **seccomp profile.** A syscall filter — list of syscalls that are allowed, denied, or trapped. Docker's default profile blocks ~50 dangerous syscalls; Kubernetes defaults to "Unconfined" unless you set `seccompProfile: {type: RuntimeDefault}` or supply a custom profile.
+- **AppArmor / SELinux.** Mandatory Access Control layers above the standard discretionary permissions. AppArmor (Ubuntu, SUSE) uses a path-based profile language; SELinux (RHEL, Fedora, OpenShift) uses type enforcement. Both let you restrict file access, network access, etc. on top of the kernel's own rules.
+
+**Pod Security Standards (PSS)** are three preconfigured tiers:
+
+- **Privileged** — no restrictions. Default for system Pods.
+- **Baseline** — prevents the most obvious privilege escalations: no `hostPID`, `hostNetwork`, `privileged`, no addable dangerous capabilities.
+- **Restricted** — hardened defaults: `runAsNonRoot`, drop ALL capabilities, no host paths, seccomp `RuntimeDefault`.
+
+PSS is enforced by the **Pod Security Admission** controller, configured per namespace via labels: `pod-security.kubernetes.io/enforce=restricted`. Replaced the older PodSecurityPolicy (PSP) which was removed in 1.25.
+
+### F. Defense in Depth: Layers, Not Walls
+
+The 4C model (Cloud, Cluster, Container, Code) names the layers each control belongs to. The thing to internalize: **no single mechanism stops a determined attacker**. RBAC alone, NetworkPolicy alone, and PSS alone all have ways around them. Combined:
+
+- An attacker who exploits a CVE in your app code (Code layer) gets a shell in a container running as non-root (PSS Restricted at Container).
+- They cannot escalate to root because capabilities are dropped (PSS).
+- They cannot read the cluster's Secrets because the Pod's ServiceAccount has no `get secrets` permission (RBAC).
+- They cannot scan the network because NetworkPolicy denies all egress except to known dependencies (Cluster).
+- They cannot escape the container because seccomp blocks the syscalls used in known runtime escapes (PSS).
+
+Each layer is bypassable; layered, an exploit becomes a campaign. That is the model.
+
+### From Theory to the YAML Below
+
+- `Role` / `ClusterRole` / `RoleBinding` / `ClusterRoleBinding` — the four resources of §A. Build only the verbs/resources you need; verify with `kubectl auth can-i`.
+- `ServiceAccount` + `automountServiceAccountToken: false` — §B in YAML form.
+- `NetworkPolicy` — §C; remember the *additive within match, deny once selected* semantics, and that enforcement requires a CNI that supports it.
+- `Secret` + `EncryptionConfiguration` — §D; native Secrets for convenience, external secret manager for high-value credentials.
+- `securityContext` (Pod and container level) and `Pod Security Standards` labels — §E; the practical knobs that make a Pod hardened.
+
+The remaining sections walk these primitives. Whenever a "secure" config feels insufficient, ask which of the five layers it leaves uncovered.
 
 ---
 

@@ -15,7 +15,129 @@ After completing this lesson, you will be able to:
 
 ---
 
+Before the YAML reference, read [**Theory & Principles**](#theory--principles) — Compose's declarative model, how it builds a dependency DAG to decide service start order, and the project-scoped network it creates so services can talk by name.
+
 Most real-world applications consist of multiple services -- a web server, a database, a cache, perhaps a message queue. Managing each of these as separate docker run commands quickly becomes unwieldy and error-prone. Docker Compose solves this by letting you define your entire application stack in a single YAML file and control it with one command. It is the standard tool for local development environments and simple production deployments.
+
+---
+
+## Theory & Principles
+
+Docker Compose is a thin declarative layer over the same engine that backs `docker run`. The interesting parts are the *model* (declarative state, project scope, dependency graph) and the *defaults Compose silently sets up* (a project network, named volumes, container naming, environment-variable interpolation). Once you see those, the YAML stops looking magical and starts looking like a structured way to call the API.
+
+### A. Declarative Model: State, Not Steps
+
+A `docker run` command is *imperative* — "run this container right now with these flags." `docker-compose.yml` is *declarative* — "this is the set of services, networks, and volumes that should exist." The Compose engine reads the desired state, compares it to the actual state of the engine, and computes the difference.
+
+`docker compose up` reconciles by:
+
+1. Reading the YAML and computing the desired set of services, networks, volumes.
+2. Querying the daemon for what already exists under the same project name.
+3. Creating what is missing (networks first, then volumes, then containers).
+4. Recreating containers whose configuration drifted from the YAML (different image tag, different env, different ports — Compose hashes the config and stores the hash as a label; if the hash changes, the container is replaced).
+5. Leaving in place anything that already matches.
+
+The opposite verb is `docker compose down`, which removes containers (and optionally volumes/networks) for the project. Between `up` and `down` you have `docker compose up -d` (detach), `docker compose restart`, `docker compose stop` (containers stay), `docker compose rm` (containers go but networks/volumes stay).
+
+Because the model is declarative, idempotency is free: running `up` twice on an unchanged YAML does nothing on the second run. This is the property that makes Compose safe in CI and local dev loops.
+
+### B. Project Scope: Naming and Isolation
+
+Every `docker compose` invocation runs under a **project name** — by default the directory name (`my-app`), overridable with `-p projectname` or the `COMPOSE_PROJECT_NAME` env var. The project name is the namespace for everything Compose creates:
+
+- Containers: `<project>-<service>-<replica>` (e.g. `my-app-web-1`).
+- Networks: `<project>_<network>` (default network is `<project>_default`).
+- Volumes: `<project>_<volume>`.
+
+Two projects with different names can coexist on the same engine without colliding — you can run `dev`, `staging`, and `feature-branch-x` copies of the same Compose file in three separate directories simultaneously.
+
+The project name is also how Compose knows which containers belong to it during reconciliation. It does not search by image or by command; it filters by the `com.docker.compose.project=<project>` label that it applies to every resource it creates.
+
+### C. The Dependency DAG and Service Start Order
+
+`depends_on` lets you declare that service B depends on service A. Compose treats these declarations as edges in a directed acyclic graph and uses the graph in two places:
+
+- **Start order.** Services are started in topological order. Dependencies are started first.
+- **Stop order.** Services are stopped in reverse topological order. Dependents are stopped first.
+
+In its simple form, `depends_on: [db]` means "start `db` before me." It does *not* mean "wait until `db` is ready to accept connections." A Postgres container is "started" the instant the postgres process exists, which is well before it has finished initializing the database files and started listening.
+
+The richer form fixes this with `condition`:
+
+```yaml
+depends_on:
+  db:
+    condition: service_healthy   # wait until db's healthcheck reports healthy
+  cache:
+    condition: service_started   # default — just wait until container starts
+```
+
+`service_healthy` requires `db` to define a `healthcheck` (a command Docker runs periodically inside the container; the container is "healthy" once the command succeeds for `start_period + retries × interval` seconds). This is how you express "wait until Postgres is actually accepting queries before starting the API server."
+
+If your application cannot rely on host-side waits (e.g. it must work both under and outside Compose), the standard pattern is a small wait-for-it script in the entrypoint that retries the connection with backoff. Compose's `depends_on` is best-effort orchestration; correctness still belongs in the app.
+
+### D. The Default Network and Service Discovery
+
+For each project, Compose creates a single user-defined bridge network named `<project>_default`. Every service joins it unless told otherwise. On a user-defined bridge, the Docker DNS resolver returns the IP of any container by its **service name**:
+
+```yaml
+services:
+  web:
+    image: myapp
+    environment:
+      - DATABASE_URL=postgres://user:pass@db:5432/mydb   # 'db' resolves
+  db:
+    image: postgres:16
+```
+
+`web` connects to `db` using the hostname `db`. No IP discovery, no env-var injection of host names — it just works because both containers are on the same Compose-managed network and the Docker daemon runs an embedded DNS server (127.0.0.11 inside the container) that knows the names.
+
+You can also define multiple networks and assign services to specific ones, which is how you isolate (e.g.) a `frontend` network from a `backend` network. A service joined to two networks acts as a bridge between them.
+
+This default-network behavior is the most under-appreciated Compose feature. The same setup with raw `docker run` requires `docker network create`, then `--network` on every container, then either knowing IPs or using `--network-alias`.
+
+### E. Environment Variable Interpolation and Multi-File Overrides
+
+The YAML supports `${VAR}` and `${VAR:-default}` interpolation, evaluated *before* the file is parsed. Sources, in order:
+
+1. The `.env` file in the project directory (if present).
+2. The shell environment of the user running `docker compose`.
+
+This is how the same `docker-compose.yml` becomes per-environment configurable: write `image: myapp:${TAG:-latest}` and let CI set `TAG=v1.2.3` while developers leave it unset.
+
+For larger differences (different ports for dev vs prod, extra dev-only services like `mailhog`, different volume mappings), Compose supports **multi-file overrides**:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Compose merges the files in order: later files override scalar values, append to lists, and merge maps key by key. Convention: a base file and one override per environment, or a base + auto-loaded `docker-compose.override.yml` for local dev.
+
+### F. Compose Spec, Not Just a CLI Format
+
+Compose used to be a separate Python tool with its own format. Today, **the Compose Specification** is an open standard maintained by the Compose Community at compose-spec.io. The same YAML is consumed by:
+
+- `docker compose` — the official Go-based plugin, the most common consumer.
+- `docker-compose` (V1) — the legacy Python tool, now deprecated.
+- Other tools like Podman Compose, BuildKit, and various PaaS deployment systems.
+
+The format is no longer Docker-specific. It is the *de facto* standard format for "declare a multi-service local-or-small-prod stack."
+
+### From Theory to the YAML Below
+
+- `version: "3.x"` (optional in modern Compose) — used to be a strict spec version; today the field is informational and the latest schema is always assumed.
+- `services:` — the desired set of containers; the dependency graph is built from `depends_on`.
+- `networks:` — the desired set of project-scoped bridges; the unnamed default is `<project>_default`.
+- `volumes:` — the desired set of named volumes; created once and shared across `up`/`down` cycles unless explicitly removed.
+- `depends_on` with `condition: service_healthy` — wires the start-order DAG to the health-check state machine described in §C.
+- `environment` and `${VAR}` — the interpolation pipeline of §E, evaluated against the merged set of `.env` and shell.
+- `docker compose up -d` — reconcile from current daemon state to YAML state, in detached mode.
+- `docker compose ps` — list project-scoped containers using the `project=<project>` label filter.
+- `docker compose logs -f <service>` — stream JSON logs of all containers belonging to that service.
+
+The remainder of the lesson is the YAML reference. Whenever you wonder why Compose did or did not recreate a container, look at the config hash on its labels and the diff against your edited YAML.
+
+---
 
 ## 1. What is Docker Compose?
 
